@@ -8,6 +8,7 @@ interface
 
 uses
   System.SysUtils,
+  System.StrUtils,
   System.Classes,
   System.JSON,
   System.Rtti,
@@ -50,6 +51,7 @@ type
     FReadOnlyToken: string;      // [local change] second token: read-only access
     FAnonymousReadOnly: Boolean; // [local change] no token = read-only access
     FOnAccessLevel: TAccessLevelEvent; // [local change] per-request RO/RW flag
+    FBindIP: string; // [local change] bind to ONE interface ('' = all)
     FSettings: TMCPSettings;
     FEventIDCounter: Int64;
     procedure ConfigureSSL;
@@ -86,6 +88,10 @@ type
     property ReadOnlyToken: string read FReadOnlyToken write FReadOnlyToken;
     property AnonymousReadOnly: Boolean read FAnonymousReadOnly write FAnonymousReadOnly;
     property OnAccessLevel: TAccessLevelEvent read FOnAccessLevel write FOnAccessLevel;
+    // [local change] bind to a SINGLE interface (settings.ini [Server] BindIP).
+    // Empty = listen on all interfaces (the default; also the source of the
+    // duplicate IPv4+IPv6 firewall prompt). Set e.g. to a LAN/VPN address.
+    property BindIP: string read FBindIP write FBindIP;
     property ManagerRegistry: IMCPManagerRegistry read FManagerRegistry write FManagerRegistry;
     property CoreManager: IMCPCapabilityManager read FCoreManager write FCoreManager;
     property Settings: TMCPSettings read FSettings write FSettings;
@@ -177,10 +183,22 @@ begin
   end;
 
   FHTTPServer.DefaultPort := FPort;
+  // [local change] one explicit binding when BindIP is set: avoids listening
+  // on every interface (and the double IPv4+IPv6 firewall prompt).
+  if FBindIP.Trim <> '' then
+  begin
+    FHTTPServer.Bindings.Clear;
+    with FHTTPServer.Bindings.Add do
+    begin
+      IP := FBindIP.Trim;
+      Port := FPort;
+    end;
+  end;
   FHTTPServer.Active := True;
   FActive := True;
 
-  TLogger.Info('MCP Server started on ' + FSettings.Protocol + '://' + FSettings.Host + ':' + IntToStr(FPort));
+  TLogger.Info('MCP Server started on ' + FSettings.Protocol + '://' +
+    IfThen(FBindIP.Trim <> '', FBindIP.Trim, FSettings.Host) + ':' + IntToStr(FPort));
 end;
 
 procedure TMCPIdHTTPServer.Stop;

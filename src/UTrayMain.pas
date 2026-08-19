@@ -104,6 +104,7 @@ begin
   FServer.AuthToken := Lsp.Guard.AuthToken;
   FServer.ReadOnlyToken := Lsp.Guard.ReadOnlyToken;
   FServer.AnonymousReadOnly := Lsp.Guard.AnonymousReadOnly;
+  FServer.BindIP := Lsp.Guard.BindIP;
   FServer.OnAccessLevel :=
     procedure(AReadOnly: Boolean)
     begin

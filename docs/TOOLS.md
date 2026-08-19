@@ -12,6 +12,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Understand the code (semantic, DelphiLSP-backed)** — [`delphi_symbols`](#delphi_symbols), [`delphi_definition`](#delphi_definition), [`delphi_signature`](#delphi_signature), [`delphi_hover`](#delphi_hover), [`delphi_completion`](#delphi_completion), [`delphi_references`](#delphi_references), [`delphi_diagnostics`](#delphi_diagnostics)
 - **Read files & explore** — [`delphi_read`](#delphi_read), [`delphi_search`](#delphi_search), [`delphi_list`](#delphi_list), [`delphi_projects`](#delphi_projects), [`delphi_installs`](#delphi_installs), [`delphi_workspace`](#delphi_workspace)
 - **Edit code safely  (read-write only)** — [`delphi_edit`](#delphi_edit), [`delphi_textedit`](#delphi_textedit), [`delphi_create`](#delphi_create)
+- **Manage files  (read-write only)** — [`delphi_delete`](#delphi_delete), [`delphi_move`](#delphi_move)
 - **Build, run, package  (read-write only)** — [`delphi_build`](#delphi_build), [`delphi_run`](#delphi_run), [`delphi_package`](#delphi_package)
 - **Cross-platform: build configs & remote platforms** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
@@ -226,6 +227,30 @@ Create a NEW Delphi project (console/VCL/FMX: .dpr + buildable .dproj + main for
 | `name` | string | optional | Projects: project name. Forms: unit name (e.g. UClientes) |
 | `project` | string | optional | Forms: absolute path of the project .dpr to register the form in |
 | `formname` | string | optional | Forms optional: form name without the T (default: Form+unit name) |
+
+
+## Manage files  (read-write only)
+
+### `delphi_delete`
+
+Delete a file or folder inside the workspace. NOT a hard delete: the target is moved to a recoverable trash (__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. Jailed to the workspace roots, refused in read-only mode. Use it to clean up stray files and leftovers.
+
+*Access: read-write.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | **yes** | Absolute path of the file or folder to delete (inside the workspace roots). Moved to a recoverable trash, not hard-deleted |
+
+### `delphi_move`
+
+Move or rename a file or folder inside the workspace. Both source and destination must be inside the workspace roots; parent folders of the destination are created. The source is copied to the recoverable trash first. Jailed, refused in read-only mode.
+
+*Access: read-write.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | **yes** | Absolute path of the file or folder to move (inside the workspace roots) |
+| `dest` | string | **yes** | Destination absolute path (inside the workspace roots). Parent folders are created. Renames when the parent is the same |
 
 
 ## Build, run, package  (read-write only)

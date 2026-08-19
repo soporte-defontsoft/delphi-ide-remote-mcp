@@ -66,8 +66,8 @@ try:
                 'delphi_references', 'delphi_report', 'delphi_run',
                 'delphi_search', 'delphi_signature', 'delphi_symbols',
                 'delphi_textedit', 'delphi_upload', 'delphi_workspace',
-                'delphi_paserver']
-    check('http: tools/list = 25 tools', sorted(names) == sorted(expected), names)
+                'delphi_paserver', 'delphi_delete', 'delphi_move']
+    check('http: tools/list = 27 tools', sorted(names) == sorted(expected), names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",
@@ -221,6 +221,11 @@ try:
         code, body = call('delphi_paserver', {'command': 'platforms'}, RO_TOKEN)
         check('ro: delphi_paserver PERMITIDO en RO', code == 200 and 'SOLO LECTURA' not in body,
               '%s %s' % (code, body[:120]))
+        # delete/move are mutating: refused read-only
+        code, body = call('delphi_delete', {'path': paspath}, RO_TOKEN)
+        check('ro: delphi_delete RECHAZADO en RO', 'SOLO LECTURA' in body, '%s %s' % (code, body[:120]))
+        code, body = call('delphi_move', {'path': paspath, 'dest': paspath + '.x'}, RO_TOKEN)
+        check('ro: delphi_move RECHAZADO en RO', 'SOLO LECTURA' in body, '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'push'},
                           RO_TOKEN)

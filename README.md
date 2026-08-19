@@ -89,6 +89,13 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 
 - **Port**: used by both the console `--http` mode and the tray app. A port given on the
   command line (`DelphiLspMcp --http 3900`) overrides the ini for that run.
+- **BindIP** (`[Server] BindIP` or `DELPHI_MCP_BIND_IP`): listen on a single interface (e.g.
+  your LAN/VPN address) instead of all of them — which also stops the firewall prompting
+  twice (IPv4 + IPv6).
+- **Firewall prompts every start?** Windows keys its prompts to the exe binary, so each
+  rebuild looks new. Run `scripts/firewall-allow.ps1` **once as Administrator** to install a
+  single durable rule keyed to the *port* (covers every rebuild) and clear the accumulated
+  per-binary duplicates: `powershell -ExecutionPolicy Bypass -File scripts\firewall-allow.ps1 -Port 3131`.
 - **AuthToken**: full access. Every HTTP request must carry `Authorization: Bearer <token>`
   or gets 401 (when any token is configured).
 - **ReadOnlyToken**: a second credential for reviewer agents. It can read, search, navigate

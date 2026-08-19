@@ -367,6 +367,26 @@ check('paserver: platforms distingue local vs remoto',
 out = call('delphi_paserver', {"command": "profiles"})
 check('paserver: profiles responde', 'profiles' in out, out[:120])
 
+# ---- delphi_move / delphi_delete with recoverable trash -------------------
+mvsrc = os.path.join(INSIDE, 'Mover.pas')
+open(mvsrc, 'wb').write(SRC.replace('Dentro', 'Mover').encode('cp1252'))
+mvdst = os.path.join(INSIDE, 'movidos', 'Mover.pas')
+out = call('delphi_move', {"path": mvsrc, "dest": mvdst})
+check('move: aceptado y crea carpeta destino', 'MOVIDO' in out and os.path.exists(mvdst)
+      and not os.path.exists(mvsrc), out[:120])
+out = call('delphi_move', {"path": mvdst, "dest": os.path.join(OUTSIDE, 'x.pas')})
+check('move: destino fuera de la jaula rechazado', 'FUERA de los workspaces' in out, out[:120])
+
+out = call('delphi_delete', {"path": mvdst})
+check('delete: mueve a papelera (no borrado duro)', 'BORRADO' in out and not os.path.exists(mvdst), out[:120])
+import glob as _g2
+trash = _g2.glob(os.path.join(INSIDE, '**', '__delphi-patch', '**', 'deleted', '*'), recursive=True)
+check('delete: el fichero esta recuperable en la papelera', len(trash) > 0, trash)
+out = call('delphi_delete', {"path": os.path.join(OUTSIDE, 'Fuera.pas')})
+check('delete: fuera de la jaula rechazado', 'FUERA de los workspaces' in out, out[:120])
+out = call('delphi_delete', {"path": os.path.join(INSIDE, 'movidos', '__delphi-patch')})
+check('delete: no se puede borrar la propia papelera', 'RECHAZADO' in out, out[:120])
+
 # ---- shutdown main server --------------------------------------------------
 proc.stdin.close()
 proc.wait(timeout=15)

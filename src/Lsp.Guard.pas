@@ -46,6 +46,7 @@ function LibraryReadRoots: TArray<string>;
 function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
 function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
 function AnonymousReadOnly: Boolean;// DELPHI_MCP_ANON_READONLY  / AnonymousReadOnly=1
+function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] BindIP ('' = all)
 
 { Read-only mode. Two independent sources, OR-ed together:
   - process-wide: the whole server runs read-only (--readonly flag);
@@ -166,6 +167,26 @@ begin
   Result := GAnonymousReadOnly;
 end;
 
+function BindIP: string;
+var
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  Result := GetEnvironmentVariable('DELPHI_MCP_BIND_IP');
+  if Result <> '' then
+    Exit;
+  IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+  if TFile.Exists(IniPath) then
+  begin
+    Ini := TIniFile.Create(IniPath);
+    try
+      Result := Ini.ReadString('Server', 'BindIP', '');
+    finally
+      Ini.Free;
+    end;
+  end;
+end;
+
 procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
 
 function WriteDenied(const AWhat: string): string;
@@ -222,7 +243,8 @@ begin
     Exit;
   // Fully mutating tools: refused outright in read-only mode.
   if MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
-    'delphi_build', 'delphi_run', 'delphi_package', 'delphi_upload']) then
+    'delphi_build', 'delphi_run', 'delphi_package', 'delphi_upload',
+    'delphi_delete', 'delphi_move']) then
     Exit(WriteDenied(AToolName));
   // delphi_config is mixed: "view" reads, "add-platform" writes the .dproj.
   if SameText(AToolName, 'delphi_config') then

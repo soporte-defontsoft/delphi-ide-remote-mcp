@@ -60,6 +60,7 @@ uses
   Mcp.Tools.DelphiExtra in 'Mcp.Tools.DelphiExtra.pas',
   Mcp.Tools.Config in 'Mcp.Tools.Config.pas',
   Mcp.Tools.PAServer in 'Mcp.Tools.PAServer.pas',
+  Mcp.Tools.FileOps in 'Mcp.Tools.FileOps.pas',
   Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',
   Mcp.Tools.TextEdit in 'Mcp.Tools.TextEdit.pas',
   Mcp.Tools.Workspace in 'Mcp.Tools.Workspace.pas',
@@ -164,6 +165,7 @@ begin
             HttpServer.AuthToken := AuthToken;
             HttpServer.ReadOnlyToken := ReadOnlyToken;
             HttpServer.AnonymousReadOnly := AnonymousReadOnly;
+            HttpServer.BindIP := Lsp.Guard.BindIP;
             HttpServer.OnAccessLevel :=
               procedure(AReadOnly: Boolean)
               begin

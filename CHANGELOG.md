@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.16.0-beta] - 2026-08-19
+
+### Added
+- **`delphi_delete` (tool 26)**: remove a file or folder inside the workspace
+  — NOT a hard delete: the target is moved to a recoverable trash
+  (`__delphi-patch\<date>\deleted\` next to it), so a mistake can be undone.
+  Refuses to delete the trash folder itself. Jailed, read-write only. Cleans
+  up stray files and build leftovers.
+- **`delphi_move` (tool 27)**: move or rename a file/folder inside the
+  workspace; the source is copied to the trash first, destination parents are
+  created, an existing destination is never overwritten. Jailed, read-write.
+- **`[Server] BindIP`** (env `DELPHI_MCP_BIND_IP`): bind the HTTP listener to
+  one interface (e.g. a LAN/VPN address) instead of all interfaces — which
+  also removes the duplicate IPv4+IPv6 firewall prompt.
+
 ## [0.15.0-beta] - 2026-08-19
 
 Cross-platform groundwork: see and manage a project's build configurations,
