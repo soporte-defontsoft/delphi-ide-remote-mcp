@@ -350,6 +350,19 @@ check('config: add-platform Linux64 en VCL RECHAZADO (regla VCL!=FMX)',
       'RECHAZADO' in out and 'VCL' in out, out[:150])
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "Linux64"})
 check('config: add-platform Linux64 en consola aceptado', 'ANADIDA' in out, out[:150])
+
+# R5-B: platform name is whitelisted - XML injection into the .dproj refused
+inj = 'Win64"/><Import Project=' + chr(34) + 'evilshare' + chr(34) + '/><X y='
+out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": inj})
+check('R5-B: inyeccion XML por el nombre de plataforma RECHAZADA',
+      'RECHAZADO' in out and 'no es una plataforma' in out, out[:150])
+check('R5-B: el payload no se escribio en el .dproj',
+      'evilshare' not in open(CON, encoding='utf-8-sig').read(), 'injected!')
+out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "NoExiste99"})
+check('R5-B: plataforma inventada RECHAZADA', 'RECHAZADO' in out, out[:120])
+# R5-C: remove-platform (with backup)
+out = call('delphi_config', {"project": CON, "command": "remove-platform", "platform": "Linux64"})
+check('R5-C: remove-platform deshabilita', 'DESHABILITADA' in out, out[:120])
 out = call('delphi_config', {"project": CON})
 check('config: Linux64 ahora habilitada',
       any(p.get('name') == 'Linux64' and p.get('enabled') for p in json.loads(out).get('platforms', [])), out[:150])
@@ -382,6 +395,14 @@ check('delete: mueve a papelera (no borrado duro)', 'BORRADO' in out and not os.
 import glob as _g2
 trash = _g2.glob(os.path.join(INSIDE, '**', '__delphi-patch', '**', 'deleted', '*'), recursive=True)
 check('delete: el fichero esta recuperable en la papelera', len(trash) > 0, trash)
+# R5-A: restore from the trash via delphi_move (the path delete's message names)
+if trash:
+    rec = os.path.join(INSIDE, 'Recuperado.pas')
+    out = call('delphi_move', {"path": trash[0], "dest": rec})
+    check('R5-A: restaurar desde la papelera con delphi_move PERMITIDO',
+          'MOVIDO' in out and os.path.exists(rec), out[:120])
+    out = call('delphi_move', {"path": rec, "dest": os.path.join(INSIDE, '__delphi-patch', 'x.pas')})
+    check('R5-A: meter ficheros DENTRO de la papelera a mano rechazado', 'RECHAZADO' in out, out[:120])
 out = call('delphi_delete', {"path": os.path.join(OUTSIDE, 'Fuera.pas')})
 check('delete: fuera de la jaula rechazado', 'FUERA de los workspaces' in out, out[:120])
 out = call('delphi_delete', {"path": os.path.join(INSIDE, 'movidos', '__delphi-patch')})

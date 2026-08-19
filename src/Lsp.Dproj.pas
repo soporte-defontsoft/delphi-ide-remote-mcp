@@ -55,6 +55,13 @@ function ReadDproj(const ADprojPath: string): TDprojInfo;
   natively on this Windows host). }
 function IsLocalPlatform(const APlatform: string): Boolean;
 
+{ The CANONICAL set of Delphi target platforms. add-platform validates
+  against this: a platform name is a fixed, known token, so anything else is
+  rejected outright - which also makes it impossible to inject XML into the
+  .dproj through the platform name (measured RCE vector, field round 5).
+  Returns the correctly-cased canonical name, or '' if unknown. }
+function CanonicalPlatform(const AName: string): string;
+
 implementation
 
 uses
@@ -240,6 +247,23 @@ function IsLocalPlatform(const APlatform: string): Boolean;
 begin
   Result := MatchText(APlatform,
     ['Win32', 'Win64', 'Win64x', 'WinARM64EC']);
+end;
+
+const
+  KNOWN_PLATFORMS: array [0 .. 12] of string = (
+    'Win32', 'Win64', 'Win64x', 'WinARM64EC',
+    'OSX64', 'OSXARM64', 'Linux64',
+    'Android', 'Android64',
+    'iOSDevice32', 'iOSDevice64', 'iOSSimARM64', 'iOSSimulator');
+
+function CanonicalPlatform(const AName: string): string;
+var
+  P: string;
+begin
+  Result := '';
+  for P in KNOWN_PLATFORMS do
+    if SameText(P, AName.Trim) then
+      Exit(P); // canonical casing, and proven metachar-free
 end;
 
 end.

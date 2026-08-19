@@ -30,9 +30,9 @@ type
   public
     [SchemaDescription('Absolute path of the project .dproj')]
     property Project: string read FProject write FProject;
-    [SchemaDescription('view (default: list configurations and platforms) | add-platform (enable a platform in the project)')]
+    [SchemaDescription('view (default: list configurations and platforms) | add-platform (enable a platform) | remove-platform (disable it again)')]
     property Command: string read FCommand write FCommand;
-    [SchemaDescription('add-platform: the platform to enable (Win64, Linux64, OSX64, OSXARM64, Android64, iOSDevice64...)')]
+    [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused)')]
     property Platform: string read FPlatform write FPlatform;
   end;
 
@@ -119,15 +119,23 @@ begin
   end;
 end;
 
-function AddPlatform(const ADproj, APlatform: string): string;
+function AddPlatform(const ADproj, ARawPlatform: string): string;
 var
   Info: TDprojInfo;
-  Reason, Enc, Xml, Indent, NewLine: string;
+  Reason, Enc, Xml, Indent, NewLine, APlatform: string;
   P: TDprojPlatform;
   ClosePos, OpenPos, LineStart: Integer;
 begin
-  if APlatform.Trim = '' then
+  if ARawPlatform.Trim = '' then
     Exit('error: add-platform necesita "platform" (Win64, Linux64, OSX64...)');
+  // WHITELIST: a platform name is a fixed, known token. Rejecting anything
+  // else makes it impossible to inject XML into the .dproj through this
+  // parameter (measured RCE via a crafted <Import> - field round 5, R5-B).
+  APlatform := CanonicalPlatform(ARawPlatform);
+  if APlatform = '' then
+    Exit(Format('RECHAZADO: "%s" no es una plataforma Delphi valida. ' +
+      'Validas: Win32, Win64, Win64x, WinARM64EC, OSX64, OSXARM64, Linux64, ' +
+      'Android, Android64, iOSDevice64, iOSSimARM64.', [ARawPlatform.Trim]));
   Info := ReadDproj(ADproj);
   if Info.FrameworkType = '' then
     Exit('error: no puedo leer el framework del .dproj; revisa la ruta.');
@@ -181,6 +189,30 @@ begin
     'delphi_paserver.', [APlatform, APlatform]);
 end;
 
+{ Disable a platform (flip its <Platform value="X">True</Platform> to False).
+  Reversible and non-destructive - the safe inverse of add-platform. }
+function RemovePlatform(const ADproj, ARawPlatform: string): string;
+var
+  Enc, Xml, APlatform: string;
+begin
+  APlatform := CanonicalPlatform(ARawPlatform);
+  if APlatform = '' then
+    Exit(Format('RECHAZADO: "%s" no es una plataforma Delphi valida.', [ARawPlatform.Trim]));
+  Xml := PatchLoadText(ADproj, Enc);
+  var Tag := Format('<Platform value="%s">', [APlatform]);
+  var TagPos := Pos(LowerCase(Tag), LowerCase(Xml));
+  if TagPos = 0 then
+    Exit(Format('La plataforma %s no esta declarada en el proyecto.', [APlatform]));
+  var ValStart := TagPos + Length(Tag);
+  var ValEnd := Pos('<', Xml, ValStart);
+  if ValEnd = 0 then
+    Exit('error: el <Platform> del .dproj tiene una forma inesperada.');
+  Xml := Copy(Xml, 1, ValStart - 1) + 'False' + Copy(Xml, ValEnd, MaxInt);
+  PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+  Result := Format('DESHABILITADA la plataforma %s (queda declarada pero ' +
+    'desactivada; add-platform la reactiva). Copia previa en __delphi-patch.', [APlatform]);
+end;
+
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
 var
   Cmd: string;
@@ -196,9 +228,11 @@ begin
   if (Cmd = '') or (Cmd = 'view') then
     Result := ViewConfig(Params.Project)
   else if Cmd = 'add-platform' then
-    Result := AddPlatform(Params.Project, Params.Platform.Trim)
+    Result := AddPlatform(Params.Project, Params.Platform)
+  else if Cmd = 'remove-platform' then
+    Result := RemovePlatform(Params.Project, Params.Platform)
   else
-    Result := 'error: command debe ser view | add-platform';
+    Result := 'error: command debe ser view | add-platform | remove-platform';
 end;
 
 initialization

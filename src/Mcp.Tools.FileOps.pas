@@ -79,6 +79,15 @@ begin
   Result := N.Contains('\' + BACKUP_SUB + '\') or N.EndsWith('\' + BACKUP_SUB);
 end;
 
+{ The trash/backup folder ITSELF (…\__delphi-patch), not something inside it.
+  Moving/deleting the trash itself is refused; moving an item OUT of it (a
+  restore) is allowed. }
+function IsBackupRoot(const APath: string): Boolean;
+begin
+  Result := ExcludeTrailingPathDelimiter(APath.ToLower.Replace('/', '\'))
+    .EndsWith('\' + BACKUP_SUB);
+end;
+
 procedure MoveToTrash(const APath: string; out ATrash: string);
 begin
   ATrash := TrashPathFor(APath);
@@ -121,7 +130,8 @@ begin
       Exit('ERROR al mover a la papelera: ' + E.Message);
   end;
   Result := Format('BORRADO %s (movido a la papelera recuperable).'#10 +
-    '  copia: %s'#10'  Para recuperarlo, delphi_move desde esa ruta.',
+    '  copia: %s'#10'  Para recuperarlo: delphi_move con path=esa copia y ' +
+    'dest=donde lo quieras (restaurar desde la papelera esta permitido).',
     [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash]);
 end;
 
@@ -149,8 +159,14 @@ begin
   Denied := PathDenied(Params.Dest);
   if Denied <> '' then
     Exit(Denied);
-  if IsBackupPath(Params.Path) or IsBackupPath(Params.Dest) then
-    Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la papelera/copias de esta tool; no se mueve por aqui.');
+  // Moving an item OUT of the trash is a RESTORE - allowed (what delphi_delete
+  // tells the agent to do). What is refused: moving the trash FOLDER itself,
+  // and moving anything INTO the trash by hand.
+  if IsBackupRoot(Params.Path) then
+    Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la carpeta de papelera; no se mueve entera.');
+  if IsBackupPath(Params.Dest) then
+    Exit('RECHAZADO: no muevas ficheros DENTRO de la papelera (' + BACKUP_SUB +
+      '\); es para las copias que hace la tool. Muevelos a una carpeta normal.');
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
     Exit('RECHAZADO: no existe el origen ' + Params.Path);
   if TFile.Exists(Params.Dest) or TDirectory.Exists(Params.Dest) then
