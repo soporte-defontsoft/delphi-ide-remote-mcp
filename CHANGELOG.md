@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.21.0-beta] - 2026-08-19
+
+This release settles the server's posture: it is a **pure development/compile
+server**. It compiles; it does not execute. Testing a binary belongs on the
+client's own machine (or a real target device), not on the build box.
+
+### Changed
+- **`delphi_run` is now OFF by default.** Executing a compiled program on the
+  build server is both pointless (nobody sees the process there) and the main
+  way a runaway agent could do damage, so it is refused for **every**
+  credential — read-write tokens included — enforced in the single entry gate.
+  The rejection points the agent at the intended path instead: download the
+  artifact (`delphi_package` + `delphi_fetch`) and run it on your machine, or
+  deploy to a real target (PAServer on Linux/macOS, or Android) where it runs
+  on the client, not the server. An operator who genuinely needs server-side
+  execution (e.g. a console test runner in CI) can opt in with `[Security]
+  AllowRun=1` (env `DELPHI_MCP_ALLOW_RUN=1`); the low-integrity sandbox and Job
+  Object still apply in that case.
+
+### Added
+- **Startup log now announces the workspace jail (roots).** The single most
+  important operational fact — what the agents can and cannot touch on disk —
+  was absent from the banner. It now prints `Workspace jail (roots, N): …`, or
+  a warning when there is no jail (unrestricted) or the roots are invalid
+  (fail-closed). Same summary in the console and tray hosts.
+- **`docs/AGENT.md`** — a model-facing guide (prefer semantic tools over text
+  search, virtual paths, 0-based positions, safe editing, recoverable trash)
+  to paste into an agent's `CLAUDE.md` / `AGENTS.md`.
+
+6 E2E batteries, **264 checks** (adds a check that `delphi_run` is refused by
+default). See below for the 0.20.0 sandbox this builds on.
+
 ## [0.20.0-beta] - 2026-08-19
 
 ### Security

@@ -124,6 +124,9 @@ begin
   try
     FServer.Start;
     AddLog('Servidor MCP escuchando en ' + FUrl);
+    // The WRITE jail (workspace roots): same summary source as the console host.
+    var JailWarn: Boolean;
+    AddLog(WorkspaceJailSummary(JailWarn));
     if (FServer.AuthToken = '') and (FServer.ReadOnlyToken = '') then
       AddLog('AVISO: sin token Bearer (DELPHI_MCP_TOKEN o settings.ini ' +
         '[Security] AuthToken). Bien en localhost; NO exponer a la red asi.')

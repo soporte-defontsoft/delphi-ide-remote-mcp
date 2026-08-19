@@ -4,7 +4,7 @@ A Model Context Protocol (MCP) server that gives AI agents **real semantic under
 
 Runs as a **resident console host or a tray GUI app** that keeps language-server processes warm across agent sessions, serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP — with a classic stdio mode as well. (A true Windows Service wrapper is on the roadmap, not shipped yet — today it runs as a foreground console or a tray app.)
 
-> **Status: BETA.** Functional and covered by 100+ end-to-end checks against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
+> **Status: BETA.** Functional and covered by 260+ end-to-end checks against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
 
 ## Why
 
@@ -41,7 +41,7 @@ An agent can also be pointed at the **library read zone** (RTL/VCL sources and i
 | `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms (VCL/FMX) with IDE-equivalent skeletons — buildable immediately |
 | `delphi_build` | Real MSBuild builds with structured errors/warnings |
-| `delphi_run` | Run a built executable on the server and capture its output — jailed, no shell, hard timeout, and **sandboxed at Low integrity** so the program cannot write outside its own folder (nor anywhere else on the system) |
+| `delphi_run` | **OFF by default** — this is a compile-only server, it does not execute programs. Download the artifact (`delphi_package` + `delphi_fetch`) and run it on your machine, or deploy to a real target (PAServer / Android). An operator can opt in with `[Security] AllowRun=1` for CI console runners; even then it is jailed, no shell, hard timeout, and Low-integrity sandboxed |
 | `delphi_fetch` | Download files from the server in base64 chunks with whole-file SHA-256 — "get the deploy" to run GUI apps on the client machine |
 | `delphi_upload` | The mirror of fetch: send files TO the server in chunks, SHA-256 verified — for binaries you cannot recreate by editing |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
@@ -71,6 +71,8 @@ claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp --header "Au
 ```
 
 Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom agents): see [docs/CLIENTS.md](docs/CLIENTS.md).
+
+**Getting the best out of the server from an AI agent** — a model-facing guide (prefer semantic tools over text search, virtual paths, 0-based positions, safe editing): [docs/AGENT.md](docs/AGENT.md). Paste it into your agent's `CLAUDE.md` / `AGENTS.md`.
 
 ### Configuration (`settings.ini` next to the exe, or environment variables)
 

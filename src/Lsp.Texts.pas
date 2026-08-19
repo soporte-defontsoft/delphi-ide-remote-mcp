@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.20.0-beta';
+  SERVER_VERSION = '0.21.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -67,6 +67,20 @@ const
     'RECHAZADO: [Workspace] Roots esta configurado pero ninguna de sus ' +
     'rutas es valida (comillas de mas, unidad inexistente...). Por seguridad ' +
     'se rechaza todo hasta corregir settings.ini / DELPHI_MCP_ROOTS.';
+
+  // delphi_run is OFF by design: this is a pure DEVELOPMENT/COMPILE server,
+  // it never executes programs. Running a compiled artifact belongs on the
+  // CLIENT machine (or a real target device), not here - it would be both
+  // pointless (nobody sees the process on the server) and the main way an
+  // agent could do damage. Refused for EVERY credential, read-write included.
+  SR_RUN_DISABLED =
+    'RECHAZADO: la ejecucion en el servidor esta deshabilitada por diseno. ' +
+    'Este es un servidor de compilacion (development): compila, nunca ' +
+    'ejecuta. Para PROBAR un binario, descargalo con delphi_package + ' +
+    'delphi_fetch y ejecutalo en TU maquina, o despliegalo a un target real ' +
+    '(PAServer en Linux/macOS, o Android) - ahi corre en el cliente, no en ' +
+    'el servidor. (El operador puede habilitarlo con [Security] AllowRun=1, ' +
+    'pero no es el uso previsto.)';
 
   // ---------------------------------------------------------------------
   // delphi_report (feedback channel - works at EVERY access level)

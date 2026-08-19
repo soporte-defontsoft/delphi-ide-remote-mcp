@@ -152,6 +152,14 @@ begin
         TLogger.Info('Read-only mode (--readonly): mutating tools disabled.');
       end;
 
+      // Announce the WRITE jail at startup: the single most important
+      // operational fact - what the agents can and cannot touch on disk.
+      begin
+        var JailWarn: Boolean;
+        var JailMsg := WorkspaceJailSummary(JailWarn);
+        if JailWarn then TLogger.Warning(JailMsg) else TLogger.Info(JailMsg);
+      end;
+
       if HasFlag('--http') then
       begin
         TServerStatusResource.Initialize;

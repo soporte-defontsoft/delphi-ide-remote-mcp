@@ -24,6 +24,10 @@ open(os.path.join(OUTSIDE, 'Fuera.pas'), 'wb').write(SRC.replace('Dentro', 'Fuer
 
 env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = INSIDE  # the jail
+# This battery exercises the RUN MECHANISM (jail + low-integrity sandbox), so
+# it opts into execution. Run is OFF by default (a compile-only server); the
+# default-off behaviour is verified separately below with its own instance.
+env['DELPHI_MCP_ALLOW_RUN'] = '1'
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                         text=True, encoding='utf-8')
@@ -125,6 +129,44 @@ os.makedirs(sneaky, exist_ok=True)
 open(os.path.join(sneaky, 'Primo.pas'), 'wb').write(SRC.encode('cp1252'))
 out = call('delphi_read', {"path": os.path.join(sneaky, 'Primo.pas')})
 check('fuera: primo de prefijo (permitido2) vetado', denied(out), out)
+
+# --- delphi_run is OFF BY DEFAULT (compile-only server) ---------------------
+# A fresh instance WITHOUT DELPHI_MCP_ALLOW_RUN must refuse delphi_run even
+# for the full read-write stdio client, pointing to the download path instead.
+def run_disabled_by_default():
+    e = dict(os.environ)
+    e['DELPHI_MCP_ROOTS'] = INSIDE
+    e.pop('DELPHI_MCP_ALLOW_RUN', None)  # default: execution off
+    p = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                         text=True, encoding='utf-8')
+    try:
+        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1,
+            "method": "initialize", "params": {"protocolVersion": "2025-06-18",
+            "capabilities": {}, "clientInfo": {"name": "x", "version": "1"}}}) + '\n')
+        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": {"name": "delphi_run",
+                       "arguments": {"path": os.path.join(INSIDE, 'whatever.exe')}}}) + '\n')
+        p.stdin.flush()
+        dl = time.time() + 20
+        while time.time() < dl:
+            line = p.stdout.readline()
+            if not line:
+                break
+            try:
+                m = json.loads(line)
+            except Exception:
+                continue
+            if m.get('id') == 2:
+                c = m.get('result', {}).get('content', [])
+                return c[0].get('text', '') if c else ''
+        return '(timeout)'
+    finally:
+        p.terminate()
+
+out = run_disabled_by_default()
+check('run: DESHABILITADO por defecto (server de compilacion)',
+      'deshabilitada por diseno' in out and 'delphi_package' in out, out[:200])
 
 # delphi_run: inside allowed (real console exe built on the fly), outside denied
 out = call('delphi_create', {"kind": "project-console", "dir": os.path.join(INSIDE, 'Hola'),

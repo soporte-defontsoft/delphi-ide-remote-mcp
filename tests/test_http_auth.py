@@ -14,6 +14,7 @@ TOKEN = 'test-token-123'
 
 env = dict(os.environ)
 env['DELPHI_MCP_TOKEN'] = TOKEN
+env['DELPHI_MCP_ALLOW_RUN'] = '1'  # so the RO-vs-run check tests the readonly layer
 proc = subprocess.Popen([EXE, '--http', str(PORT)], env=env,
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(3)
@@ -118,7 +119,7 @@ try:
         f.write('unit Sample;\r\ninterface\r\nimplementation\r\nend.\r\n')
     with open(os.path.join(tmpdir3, 'settings.ini'), 'w') as f:
         f.write('[Server]\nPort=%d\n\n[Security]\nAuthToken=%s\n'
-                'ReadOnlyToken=%s\nAnonymousReadOnly=1\n'
+                'ReadOnlyToken=%s\nAnonymousReadOnly=1\nAllowRun=1\n'
                 % (RO_PORT, TOKEN, RO_TOKEN))
     env3 = dict(os.environ)
     env3.pop('DELPHI_MCP_TOKEN', None)

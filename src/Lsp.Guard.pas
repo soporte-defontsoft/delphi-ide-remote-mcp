@@ -36,6 +36,13 @@ function ReadPathDenied(const APath: string): string;
 { The configured roots (empty array = unrestricted). }
 function WorkspaceRoots: TArray<string>;
 
+{ One-line human summary of the WRITE jail for the startup log (the single
+  source of how the jail is described). AWarning is set when the state
+  deserves a warning level: no jail at all (unrestricted) or fail-closed
+  (Roots= had text but resolved to nothing). Paths are shown REAL here - the
+  log goes to the operator's own stderr on the server, not to a client. }
+function WorkspaceJailSummary(out AWarning: Boolean): string;
+
 { The READ-ONLY library zone (RAD Studio installations, IDE library search
   paths, GetIt catalog repositories). Readable by reading tools, never
   writable - exposed so delphi_workspace can tell the agent what it may read
@@ -47,6 +54,12 @@ function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
 function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
 function AnonymousReadOnly: Boolean;// DELPHI_MCP_ANON_READONLY  / AnonymousReadOnly=1
 function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] BindIP ('' = all)
+
+{ Whether delphi_run may execute a compiled program ON THIS SERVER. OFF by
+  design: this is a pure development/compile server - clients download the
+  artifact and run it in their own environment (or a real target via PAServer
+  / Android). Opt in with DELPHI_MCP_ALLOW_RUN=1 or [Security] AllowRun=1. }
+function AllowRun: Boolean;         // DELPHI_MCP_ALLOW_RUN      / AllowRun=1
 
 { Read-only mode. Two independent sources, OR-ed together:
   - process-wide: the whole server runs read-only (--readonly flag);
@@ -102,6 +115,7 @@ var
   GAuthToken: string;
   GReadOnlyToken: string;
   GAnonymousReadOnly: Boolean = False;
+  GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
 
 threadvar
   GRequestReadOnly: Boolean;
@@ -131,6 +145,7 @@ begin
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
   GAnonymousReadOnly := GetEnvironmentVariable('DELPHI_MCP_ANON_READONLY') = '1';
+  GAllowRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_RUN') = '1';
   IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
   if TFile.Exists(IniPath) then
   begin
@@ -142,6 +157,8 @@ begin
         GReadOnlyToken := Ini.ReadString('Security', 'ReadOnlyToken', '');
       if not GAnonymousReadOnly then
         GAnonymousReadOnly := Ini.ReadBool('Security', 'AnonymousReadOnly', False);
+      if not GAllowRun then
+        GAllowRun := Ini.ReadBool('Security', 'AllowRun', False);
     finally
       Ini.Free;
     end;
@@ -165,6 +182,12 @@ function AnonymousReadOnly: Boolean;
 begin
   LoadSecurity;
   Result := GAnonymousReadOnly;
+end;
+
+function AllowRun: Boolean;
+begin
+  LoadSecurity;
+  Result := GAllowRun;
 end;
 
 function BindIP: string;
@@ -241,6 +264,11 @@ begin
     if Result <> '' then
       Exit;
   end;
+  // Universal execution block (BOTH access levels): this is a compile-only
+  // development server; running a program here is off by design. Refused for
+  // every credential unless the operator explicitly opted in (AllowRun).
+  if SameText(AToolName, 'delphi_run') and not AllowRun then
+    Exit(SR_RUN_DISABLED);
   if not (GProcessReadOnly or GRequestReadOnly) then
     Exit;
   // Fully mutating tools: refused outright in read-only mode.
@@ -327,6 +355,37 @@ begin
     GLoaded := True;
   end;
   Result := GRoots;
+end;
+
+function WorkspaceJailSummary(out AWarning: Boolean): string;
+var
+  Roots: TArray<string>;
+  Shown: TArray<string>;
+  I: Integer;
+begin
+  Roots := WorkspaceRoots;
+  if GRootsInvalid then
+  begin
+    AWarning := True;
+    Result := 'Workspace jail: INVALID roots (fail-closed) - every ' +
+      'disk-touching tool is refused. Fix [Workspace] Roots in settings.ini.';
+  end
+  else if Length(Roots) = 0 then
+  begin
+    AWarning := True;
+    Result := 'Workspace jail: NONE - UNRESTRICTED local mode (agents may ' +
+      'touch any path the service account can). Set [Workspace] Roots to confine.';
+  end
+  else
+  begin
+    AWarning := False;
+    // Roots are stored with a trailing delimiter; drop it for readability.
+    SetLength(Shown, Length(Roots));
+    for I := 0 to High(Roots) do
+      Shown[I] := ExcludeTrailingPathDelimiter(Roots[I]);
+    Result := 'Workspace jail (roots, ' + Length(Roots).ToString + '): ' +
+      string.Join('  |  ', Shown);
+  end;
 end;
 
 { Windows silently strips trailing dots/spaces from a file name, so a path

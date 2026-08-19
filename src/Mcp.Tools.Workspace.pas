@@ -832,11 +832,14 @@ constructor TDelphiRunTool.Create;
 begin
   inherited;
   FName := 'delphi_run';
-  FDescription := 'Run a built executable ON THIS MACHINE (the one that ' +
-    'compiled it) and capture its output - the closing step after ' +
-    'delphi_build for console apps and test runners. Jailed to the ' +
-    'workspace roots, no shell, hard timeout (default 30 s, max 5 min), ' +
-    'process killed on expiry. GUI apps will open on the server desktop.';
+  FDescription := 'DISABLED BY DEFAULT. This is a compile-only development ' +
+    'server: it does NOT execute programs. To test a binary, download it ' +
+    '(delphi_package + delphi_fetch) and run it on YOUR machine, or deploy ' +
+    'to a real target (PAServer on Linux/macOS, or Android). The operator ' +
+    'can opt in with [Security] AllowRun=1; only then does this run a built ' +
+    'executable on the server (jailed to the roots, low-integrity sandbox, ' +
+    'no shell, hard timeout, killed on expiry) - intended for console test ' +
+    'runners in CI, never for GUI apps.';
 end;
 
 function TDelphiRunTool.ExecuteWithParams(const Params: TDelphiRunParams): string;

@@ -15,7 +15,9 @@ BASE = os.path.join(tempfile.gettempdir(), 'delphi-scaffold-tests')
 shutil.rmtree(BASE, ignore_errors=True)
 os.makedirs(BASE, exist_ok=True)
 
-proc = subprocess.Popen([EXE], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+env = dict(os.environ)
+env['DELPHI_MCP_ALLOW_RUN'] = '1'  # let the run test reach the "needs roots" path
+proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
 q = queue.Queue()
 
