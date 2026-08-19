@@ -13,6 +13,10 @@ uses
 function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
   ATimeoutMs: Integer = 600000): TJSONObject;
 
+{ Runs a command line with stdout+stderr captured (no shell). }
+function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
+  out AExitCode: Cardinal): string;
+
 implementation
 
 uses

@@ -46,8 +46,8 @@ over MCP Streamable HTTP from anywhere — including Linux clients that have no 
 Windows filesystem.
 - [ ] Workspace Manager: multi-workspace, warm instances, request queue, LRU, idle shutdown, hang kill+respawn
 - [ ] Streamable HTTP transport: localhost by default, configurable LAN bind + **Bearer token auth** (recommended exposure: VPN only)
-- [ ] Remote file toolset so a remote agent needs no share: `delphi_read` (encoding-aware), `delphi_search` (skips `__history/`, build dirs), `delphi_list`
-- [ ] `delphi_git`: whitelisted git operations executed at the project root (status, diff, log, show, add, commit, branch) so remote agents can version their work without shell access
+- [x] Remote file toolset so a remote agent needs no share: `delphi_read` (encoding-aware), `delphi_search` (skips `__history/`, build dirs), `delphi_list` (12/12 battery: tests/test_workspace_tools.py)
+- [x] `delphi_git`: whitelisted git operations (status, diff, log, show, branch, add, commit) with shell-metacharacter rejection — remote agents version their work without shell access
 - [ ] Dual host: Windows service + VCL tray app (starts minimized to tray — the icon is the "it's running" indicator; menu: workspaces, log, reload, exit)
 
 ## Phase 6 — Publication

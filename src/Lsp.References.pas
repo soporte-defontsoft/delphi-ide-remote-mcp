@@ -23,6 +23,9 @@ function FindDelphiReferences(const AFilePath: string;
   ALine, ACharacter: Integer; AMaxFiles: Integer = 40;
   AMaxCandidates: Integer = 400): TJSONObject;
 
+{ True for IDE artifacts that must never be scanned/edited/reasoned about. }
+function SkipIdeArtifacts(const APath: string): Boolean;
+
 implementation
 
 uses
@@ -62,10 +65,11 @@ begin
   Result := Copy(ALineText, S, E - S + 1);
 end;
 
-function SkipPath(const APath: string): Boolean;
+function SkipIdeArtifacts(const APath: string): Boolean;
 const
-  Bad: array [0 .. 7] of string = ('\__history\', '\__recovery\', '\win32\',
-    '\win64\', '\debug\', '\release\', '\dcu\', '\.git\');
+  Bad: array [0 .. 9] of string = ('\__history\', '\__recovery\', '\win32\',
+    '\win64\', '\debug\', '\release\', '\dcu\', '\.git\', '\__pascal-patch\',
+    '\__delphi-patch\');
 var
   B, Low: string;
 begin
@@ -74,6 +78,11 @@ begin
     if Low.Contains(B) then
       Exit(True);
   Result := False;
+end;
+
+function SkipPath(const APath: string): Boolean;
+begin
+  Result := SkipIdeArtifacts(APath);
 end;
 
 function DefinitionLocation(AResp: TJSONObject; out AUri: string;

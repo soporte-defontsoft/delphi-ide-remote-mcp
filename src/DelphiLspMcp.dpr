@@ -37,7 +37,8 @@ uses
   Lsp.Patch in 'Lsp.Patch.pas',
   Mcp.Tools.DelphiLsp in 'Mcp.Tools.DelphiLsp.pas',
   Mcp.Tools.DelphiExtra in 'Mcp.Tools.DelphiExtra.pas',
-  Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas';
+  Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',
+  Mcp.Tools.Workspace in 'Mcp.Tools.Workspace.pas';
 
 var
   Settings: TMCPSettings;
