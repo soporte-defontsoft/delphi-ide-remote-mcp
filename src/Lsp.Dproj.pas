@@ -296,6 +296,23 @@ const
     'Android', 'Android64',
     'iOSDevice32', 'iOSDevice64', 'iOSSimARM64', 'iOSSimulator');
 
+  // MSBuild tasks whose presence turns a build into arbitrary execution or an
+  // out-of-tree file write. A <Target> that uses NONE of these (only Message,
+  // PropertyGroup, ItemGroup, CallTarget...) is inert and allowed to build; one
+  // that uses ANY of these needs [Security] AllowBuildScripts. Local names,
+  // lowercase; HasElement matches them with or without a namespace prefix.
+  //   exec/usingtask/code  -> run a shell / load a task assembly / inline code
+  //   copy..touch          -> plant, move or delete files by arbitrary path
+  //   write*/downloadfile   -> write a file (a payload, a .targets for later)
+  //   unzip/zipdirectory    -> materialise files from an archive
+  //   csc/vbc/fsc/xslt/genres-> invoke a compiler / transform = run a program
+  DANGER_TASKS: array [0 .. 18] of string = (
+    'exec', 'usingtask', 'code',
+    'copy', 'move', 'delete', 'makedir', 'removedir', 'touch',
+    'writelinestofile', 'writecodefragment', 'downloadfile',
+    'unzip', 'zipdirectory',
+    'csc', 'vbc', 'fsc', 'xslttransformation', 'generateresource');
+
 function CanonicalPlatform(const AName: string): string;
 var
   P: string;
@@ -391,14 +408,20 @@ begin
   // in odd casing) and the cost of being wrong is arbitrary execution.
   Low := LowerCase(AXml);
 
-  // Custom MSBuild target / shell task: a stock .dproj has neither. Matched
-  // with or without an XML namespace prefix (<msb:Target> passed a literal
-  // "<Target" check - field round 8; MSBuild happened to reject it, but the
-  // guard must not depend on that).
-  if HasElement(Low, 'target') then
-    Exit('a custom MSBuild <Target> (runs during build)');
-  if HasElement(Low, 'exec') then
-    Exit('an <Exec> task (runs a shell command during build)');
+  // A custom <Target> is NOT a hazard in itself. Real projects legitimately use
+  // targets to copy their OWN output, print a message or set a property after a
+  // build; refusing every target was a false positive as serious as a hole - it
+  // broke legitimate projects, Authenticode signing among them (field round 9).
+  // What turns "build" into "run" is a TASK that executes a program or plants/
+  // deletes files. Scan for THOSE, wherever they sit (inside a target or not),
+  // matched with or without a namespace prefix (<msb:Exec> passed a literal
+  // "<Exec" check in field round 8; MSBuild rejected it, but the guard must not
+  // depend on that). A trusted project that needs one of these enables it with
+  // [Security] AllowBuildScripts (checked by the caller), never here.
+  for var Danger in DANGER_TASKS do
+    if HasElement(Low, Danger) then
+      Exit(Format('a <%s> task (executes a program or writes files during build)',
+        [Danger]));
 
   // RAD Studio build-event commands: only a NON-EMPTY one runs a shell.
   for var Tag in ['prebuildevent', 'postbuildevent', 'prelinkevent',

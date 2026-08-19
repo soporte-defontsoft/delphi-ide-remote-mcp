@@ -272,6 +272,40 @@ def build_no_allowrun(project):
     finally:
         p.terminate()
 
+def oneshot(tool, args, env_extra=None, t=120):
+    """One fresh server instance (AllowRun OFF), one tool call, its text back.
+    env_extra lets a test flip a single security knob (e.g. AllowBuildScripts)."""
+    e = dict(os.environ); e['DELPHI_MCP_ROOTS'] = INSIDE
+    e.pop('DELPHI_MCP_ALLOW_RUN', None)
+    if env_extra:
+        e.update(env_extra)
+    p = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
+    try:
+        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+            "clientInfo": {"name": "x", "version": "1"}}}) + '\n')
+        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": {"name": tool, "arguments": args}}) + '\n')
+        p.stdin.flush()
+        dl = time.time() + t
+        while time.time() < dl:
+            line = p.stdout.readline()
+            if not line:
+                break
+            try:
+                m = json.loads(line)
+            except Exception:
+                continue
+            if m.get('id') == 2:
+                if 'error' in m:
+                    return 'MCPERROR ' + json.dumps(m['error'])[:300]
+                c = m.get('result', {}).get('content', [])
+                return c[0].get('text', '') if c else ''
+        return '(timeout)'
+    finally:
+        p.terminate()
+
 if os.path.exists(_holad):
     _evil = open(_holad, encoding='utf-8-sig').read().replace('</Project>',
         '<Target Name="R7Probe" BeforeTargets="Build"><Exec Command="cmd /c echo '
@@ -355,6 +389,47 @@ if os.path.exists(_holad):
     out = build_no_allowrun(_holad)
     check('R7: un .dproj NORMAL sigue compilando (sin falso positivo)',
           'RECHAZADO' not in out, out[:200])
+
+    # --- R9 (field): the hazard scanner no longer refuses an INERT custom
+    #     <Target>. Refusing EVERY target was a false positive as serious as a
+    #     hole - it broke legitimate projects (post-build copy, Authenticode
+    #     signing). Only tasks that EXECUTE or PLANT/DELETE files are refused. ---
+    upload_dproj(_clean.replace('</Project>',
+        '<Target Name="R9Info" AfterTargets="Build">'
+        '<Message Text="solo un mensaje" Importance="high" /></Target></Project>'))
+    out = build_no_allowrun(_holad)
+    check('R9 FP: <Target> INERTE (solo <Message>) NO se rechaza',
+          'el proyecto contiene' not in out, out[:200])
+    # a <Target> that PLANTS/DELETES a file by arbitrary path IS still refused,
+    # target wrapper or not - those are the real "runs/writes during build".
+    for task, label in (
+        ('<Copy SourceFiles="a.txt" DestinationFolder="C:\\Windows" />', 'copy'),
+        ('<WriteLinesToFile File="C:\\evil.bat" Lines="calc" />', 'writelinestofile'),
+        ('<MakeDir Directories="C:\\pwn" />', 'makedir'),
+        ('<Delete Files="C:\\Windows\\notepad.exe" />', 'delete'),
+    ):
+        upload_dproj(_clean.replace('</Project>',
+            '<Target Name="Plant" BeforeTargets="Build">' + task + '</Target></Project>'))
+        out = build_no_allowrun(_holad)
+        check('R9: <Target> con <%s> (planta/borra) RECHAZADO' % label,
+              'RECHAZADO' in out and 'contiene' in out, out[:180])
+    # AllowBuildScripts is a SEPARATE opt-in from AllowRun: a trusted project
+    # with an <Exec> (e.g. signing) may build WITHOUT enabling delphi_run.
+    _sign = _clean.replace('</Project>',
+        '<Target Name="Sign" AfterTargets="Build">'
+        '<Exec Command="cmd /c echo firmado" /></Target></Project>')
+    upload_dproj(_sign)
+    out = oneshot('delphi_build', {"project": _holad, "platform": "Win64",
+                                   "config": "Debug", "target": "Build"},
+                  {'DELPHI_MCP_ALLOW_BUILD_SCRIPTS': '1'}, 600)
+    check('R9: AllowBuildScripts deja compilar un <Target><Exec> de confianza',
+          'el proyecto contiene' not in out, out[:200])
+    # ...but AllowBuildScripts is NOT AllowRun: delphi_run stays OFF with it.
+    out = oneshot('delphi_run', {"path": os.path.join(INSIDE, 'Hola', 'Win64', 'Debug', 'Hola.exe')},
+                  {'DELPHI_MCP_ALLOW_BUILD_SCRIPTS': '1'}, 30)
+    check('R9: AllowBuildScripts NO enciende delphi_run (sigue deshabilitado)',
+          'deshabilitada por diseno' in out, out[:200])
+    upload_dproj(_clean)  # leave a clean project for later sections
 
 # --- B0c: Windows name-normalization bypasses (trailing dot/space, ADS) ---
 for probe, label in ((INSIDE + '\\Evade.pas.', 'punto final'),

@@ -124,6 +124,8 @@ Port=3000                               ; HTTP listen port (default 3000)
 AuthToken=your-long-random-token        ; full read-write  (or DELPHI_MCP_TOKEN)
 ReadOnlyToken=another-random-token      ; read-only access (or DELPHI_MCP_READONLY_TOKEN)
 AnonymousReadOnly=0                     ; 1 = no token -> read-only access
+AllowRun=0                              ; 1 = allow delphi_run (jailed+sandboxed); default off
+AllowBuildScripts=0                     ; 1 = allow build scripts (custom <Target>/<Exec>) WITHOUT delphi_run
 
 [Workspace]
 Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
@@ -152,6 +154,13 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
   escape.
 - `--readonly` on the command line makes the entire process read-only, whatever the
   transport (useful for a stdio-registered reviewer).
+- **AllowBuildScripts**: `delphi_build` refuses a project whose `.dproj` (or an imported
+  `.targets`) carries a task that *executes a program or plants/deletes files* at build
+  time — the compile-only guarantee, so an uploaded `.dproj` cannot run code through a
+  planted `<Exec>`. An **inert** custom `<Target>` (a `<Message>`, a property) always
+  builds. For a **trusted** project that legitimately signs (Authenticode via `<Exec>`) or
+  copies at build time, set `AllowBuildScripts=1` — this permits its build scripts **without**
+  enabling `delphi_run`. `AllowRun=1` implies it. Both off by default.
 - **Roots** are both discovery (`delphi_projects`) and a **jail**: with roots configured, every
   disk-touching tool (read/edit/create/build/lint/search/list/git/LSP) refuses paths outside
   them — including `..\` escapes and prefix cousins. Paths with spaces need no quoting (the

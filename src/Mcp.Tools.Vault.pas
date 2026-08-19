@@ -142,6 +142,7 @@ implementation
 
 uses
   System.Classes,
+  System.SyncObjs,
   System.IOUtils,
   System.StrUtils,
   System.Masks,
@@ -168,6 +169,15 @@ const
 
 var
   GSessionStamp: string = ''; // one backup folder per server run
+  // Serializes the read->backup->write of ANY note. A knowledge vault is
+  // shared by SEVERAL remote agents (the server's declared architecture), so
+  // two of them appending to the same note at once is normal, not exotic. The
+  // read-modify-write was not atomic: both read the same base and the last save
+  // erased the other's addition, SILENTLY (each got an "ANADIDO ... copia
+  // previa" success) - and two backups of one note in the same second collided
+  // at the copy step (field round 9). One global lock closes both. Writes to a
+  // vault are rare enough that a single lock costs nothing; reads stay lock-free.
+  GVaultWrite: TCriticalSection = nil;
 
 { ---------------------------------------------------------------- helpers -- }
 
@@ -294,6 +304,49 @@ procedure VaultSave(const AFull, AText: string);
 begin
   // UTF-8 WITHOUT BOM: GetBytes omits the preamble that WriteAllText would add.
   TFile.WriteAllBytes(AFull, TEncoding.UTF8.GetBytes(AText));
+end;
+
+type
+  { Turns the CURRENT text of a note into its new text. Returns '' on success
+    (ANewText set) or a ready-to-return error message. It runs INSIDE the write
+    lock, so the text it receives is the text that will be saved - no other
+    writer can slip in between. }
+  TNoteEdit = reference to function(const ACurrent: string; out ANewText: string): string;
+
+{ The one serialized read->transform->backup->write for an existing note, shared
+  by vault_append and vault_patch so the locking, the rule-11 backup and the
+  empty-note guard live in ONE place instead of being copied per verb. The note
+  must already exist (vault_create takes its own path). On success returns '' and
+  sets ABackup to the copy that was kept (or '' if none). }
+function EditNoteLocked(const AFull: string; const ATransform: TNoteEdit;
+  out ABackup: string): string;
+var
+  Text, NewText: string;
+begin
+  ABackup := '';
+  NewText := '';
+  GVaultWrite.Enter;
+  try
+    try
+      Text := VaultLoad(AFull);
+    except
+      on E: Exception do
+        Exit('error: no se pudo leer la nota (' + E.Message + ')');
+    end;
+    Result := ATransform(Text, NewText);
+    if Result <> '' then
+      Exit;
+    // A replacement that leaves nothing behind is a disguised delete, and
+    // deleting knowledge is not on offer here (field round 9). Uniform for both
+    // verbs: append only ever grows, so this never fires for it.
+    if NewText.Trim = '' then
+      Exit(SR_VAULT_WOULD_EMPTY);
+    ABackup := VaultBackup(AFull); // rule 11, inside the lock: no same-second race
+    VaultSave(AFull, NewText);
+    Result := '';
+  finally
+    GVaultWrite.Leave;
+  end;
 end;
 
 { Every .md note under ADir (recursive), excluding the non-knowledge folders.
@@ -524,8 +577,7 @@ end;
 
 function TVaultAppendTool.ExecuteWithParams(const Params: TVaultAppendParams): string;
 var
-  Full, Text, Add, Anchor, Backup: string;
-  P: Integer;
+  Full, Add, Anchor, Backup: string;
 begin
   if not VaultWritable then
     Exit(SR_VAULT_READONLY);
@@ -541,35 +593,40 @@ begin
   Add := Params.Content;
   if Add.Trim = '' then
     Exit('error: falta "content"');
-
-  try
-    Text := VaultLoad(Full);
-  except
-    on E: Exception do
-      Exit('error: no se pudo leer la nota (' + E.Message + ')');
-  end;
-
   Anchor := Params.Anchor;
-  if Anchor.Trim <> '' then
-  begin
-    P := Pos(Anchor, Text);
-    if P = 0 then
-      Exit(Format('error: el anchor no aparece en la nota. Lee la nota con ' +
-        'vault_read y copia un fragmento EXACTO de ella.', []));
-    if Pos(Anchor, Text, P + Length(Anchor)) > 0 then
-      Exit('error: el anchor aparece VARIAS veces; usa un fragmento mas ' +
-        'largo que sea unico en la nota.');
-    Insert(#10 + Add.TrimRight + #10, Text, P + Length(Anchor));
-  end
-  else
-  begin
-    if not Text.EndsWith(#10) then
-      Text := Text + #10;
-    Text := Text + Add.TrimRight + #10;
-  end;
 
-  Backup := VaultBackup(Full); // rule 11, before touching anything
-  VaultSave(Full, Text);
+  // The read, the anchor search and the write happen as one atomic step under
+  // the lock: the base this append reads is the base it writes back.
+  Result := EditNoteLocked(Full,
+    function(const ACurrent: string; out ANewText: string): string
+    var
+      Text: string;
+      P: Integer;
+    begin
+      Result := '';
+      Text := ACurrent;
+      if Anchor.Trim <> '' then
+      begin
+        P := Pos(Anchor, Text);
+        if P = 0 then
+          Exit('error: el anchor no aparece en la nota. Lee la nota con ' +
+            'vault_read y copia un fragmento EXACTO de ella.');
+        if Pos(Anchor, Text, P + Length(Anchor)) > 0 then
+          Exit('error: el anchor aparece VARIAS veces; usa un fragmento mas ' +
+            'largo que sea unico en la nota.');
+        Insert(#10 + Add.TrimRight + #10, Text, P + Length(Anchor));
+      end
+      else
+      begin
+        if not Text.EndsWith(#10) then
+          Text := Text + #10;
+        Text := Text + Add.TrimRight + #10;
+      end;
+      ANewText := Text;
+    end,
+    Backup);
+  if Result <> '' then
+    Exit;
   TLogger.Info('vault_append: ' + VaultRelative(Full));
   Result := Format('ANADIDO a %s (%s). Copia previa en %s.',
     [VaultRelative(Full),
@@ -597,17 +654,24 @@ begin
     Exit;
   if VaultGovernance(Full) then
     Exit(SR_VAULT_GOVERNANCE);
-  if TFile.Exists(Full) then
-    Exit(Format('RECHAZADO: la nota "%s" YA existe. vault_create nunca ' +
-      'sobreescribe: usa vault_append para anadir, o vault_patch para ' +
-      'corregir un fragmento.', [Params.Path.Trim]));
   if Params.Content.Trim = '' then
     Exit('error: falta "content" (la nota nueva no puede estar vacia)');
 
-  Dir := TPath.GetDirectoryName(Full);
-  if (Dir <> '') and not TDirectory.Exists(Dir) then
-    TDirectory.CreateDirectory(Dir);
-  VaultSave(Full, Params.Content.TrimRight + #10);
+  // The exists-check and the save are one atomic step: two agents racing to
+  // create the same note can no longer both pass the check and both "succeed".
+  GVaultWrite.Enter;
+  try
+    if TFile.Exists(Full) then
+      Exit(Format('RECHAZADO: la nota "%s" YA existe. vault_create nunca ' +
+        'sobreescribe: usa vault_append para anadir, o vault_patch para ' +
+        'corregir un fragmento.', [Params.Path.Trim]));
+    Dir := TPath.GetDirectoryName(Full);
+    if (Dir <> '') and not TDirectory.Exists(Dir) then
+      TDirectory.CreateDirectory(Dir);
+    VaultSave(Full, Params.Content.TrimRight + #10);
+  finally
+    GVaultWrite.Leave;
+  end;
   TLogger.Info('vault_create: ' + VaultRelative(Full));
   Result := Format('CREADA la nota %s. Recuerda enlazarla desde el indice ' +
     'que corresponda con [[wikilinks]] (vault_append sobre ese indice).',
@@ -625,8 +689,7 @@ end;
 
 function TVaultPatchTool.ExecuteWithParams(const Params: TVaultPatchParams): string;
 var
-  Full, Text, Backup: string;
-  P: Integer;
+  Full, Backup: string;
 begin
   if not VaultWritable then
     Exit(SR_VAULT_READONLY);
@@ -640,37 +703,36 @@ begin
   if Params.Old_Text = '' then
     Exit('error: falta "old_text"');
 
-  try
-    Text := VaultLoad(Full);
-  except
-    on E: Exception do
-      Exit('error: no se pudo leer la nota (' + E.Message + ')');
-  end;
-
-  P := Pos(Params.Old_Text, Text);
-  if P = 0 then
-    Exit('error: "old_text" no aparece en la nota. Lee la nota con vault_read ' +
-      'y copia el fragmento EXACTO (los numeros de linea NO son parte del texto).');
-  if Pos(Params.Old_Text, Text, P + Length(Params.Old_Text)) > 0 then
-    Exit('error: "old_text" aparece VARIAS veces en la nota; amplia el ' +
-      'fragmento hasta que sea unico.');
-
-  Text := Copy(Text, 1, P - 1) + Params.New_Text +
-    Copy(Text, P + Length(Params.Old_Text), MaxInt);
-  // A patch that leaves nothing behind is a DELETE, and deleting knowledge is
-  // not on offer here (field round 9: old_text = the whole note, new_text = ""
-  // emptied it). Refuse rather than accept a destructive edit dressed as a
-  // replacement - the backup exists for accidents, not as a licence.
-  if Text.Trim = '' then
-    Exit(SR_VAULT_WOULD_EMPTY);
-  Backup := VaultBackup(Full); // rule 11, before touching anything
-  VaultSave(Full, Text);
+  // find-once + replace + empty-note guard all run atomically under the lock;
+  // the empty-note guard lives in EditNoteLocked so both verbs share it.
+  Result := EditNoteLocked(Full,
+    function(const ACurrent: string; out ANewText: string): string
+    var
+      P: Integer;
+    begin
+      Result := '';
+      P := Pos(Params.Old_Text, ACurrent);
+      if P = 0 then
+        Exit('error: "old_text" no aparece en la nota. Lee la nota con vault_read ' +
+          'y copia el fragmento EXACTO (los numeros de linea NO son parte del texto).');
+      if Pos(Params.Old_Text, ACurrent, P + Length(Params.Old_Text)) > 0 then
+        Exit('error: "old_text" aparece VARIAS veces en la nota; amplia el ' +
+          'fragmento hasta que sea unico.');
+      ANewText := Copy(ACurrent, 1, P - 1) + Params.New_Text +
+        Copy(ACurrent, P + Length(Params.Old_Text), MaxInt);
+    end,
+    Backup);
+  if Result <> '' then
+    Exit;
   TLogger.Info('vault_patch: ' + VaultRelative(Full));
   Result := Format('MODIFICADA %s (1 sustitucion). Copia previa en %s.',
     [VaultRelative(Full), IfThen(Backup = '', '(sin copia)', VaultRelative(Backup))]);
 end;
 
 initialization
+  // The write lock exists for the whole process life, whether or not writing is
+  // enabled in this deployment (cheap, and it keeps the write path unconditional).
+  GVaultWrite := TCriticalSection.Create;
   // Conditional registration: no vault configured, no vault tools in
   // tools/list at all. Writing needs [Vault] ReadOnly=0 as well - and, on top
   // of that, a read-write credential (enforced at the gate).
@@ -690,5 +752,8 @@ initialization
         function: IMCPTool begin Result := TVaultPatchTool.Create; end);
     end;
   end;
+
+finalization
+  GVaultWrite.Free;
 
 end.

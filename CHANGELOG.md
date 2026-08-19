@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.28.0-beta] - 2026-08-20
+
+Field round 9, second pass. One confirmed data-loss bug (concurrency) fixed, and
+the build hazard scanner narrowed so it stops rejecting legitimate projects - the
+tester's "a false positive is as serious as a hole".
+
+### Security
+- **CONCURRENT vault writes lost data, silently.** A knowledge vault is shared by
+  several remote agents, so two of them appending to the same note at once is
+  normal - but the read -> backup -> write cycle of `vault_append`/`vault_patch`
+  was not serialized. Both read the same base and the last save erased the
+  other's addition, while BOTH callers got an "ANADIDO ... copia previa" success;
+  and two backups of one note in the same second collided at the copy step. The
+  whole cycle now runs under one process-wide lock (`vault_create` too), so every
+  reported success is really on disk. The append and patch write paths were
+  unified into a single locked helper so the fix lives in one place.
+- **git `clone` now inserts `--` before the URL**, so the URL can never be parsed
+  as an option whatever it contains (defence in depth over the existing
+  leading-`-` check and the gate's dangerous-flag filter). User options still
+  apply - they go before the `--`.
+
+### Changed
+- **The build hazard scanner no longer refuses an INERT custom `<Target>`.**
+  Rejecting *every* `<Target>`/`<Exec>` was a false positive as serious as a
+  hole: it broke real projects with a post-build copy or Authenticode signing.
+  The scanner now refuses only tasks that **execute a program or plant/delete
+  files** (`Exec`, `UsingTask`, inline `Code`, `Copy`/`Move`/`Delete`/`MakeDir`/
+  `WriteLinesToFile`/`WriteCodeFragment`/`DownloadFile`, compilers...). A target
+  that only prints a `<Message>` or sets a property now builds.
+- **New opt-in `[Security] AllowBuildScripts` (env `DELPHI_MCP_ALLOW_BUILD_SCRIPTS`).**
+  A *trusted* project that signs or copies at build time can be enabled WITHOUT
+  turning on `delphi_run` (which `AllowRun` would). `AllowRun` still implies it.
+  Untrusted uploads with no opt-in still hit the scanner. Both default to off.
+
+8 E2E batteries, **416 checks** (new: R9 concurrency burst over HTTP; scanner
+false-positive / opt-in cases).
+
 ## [0.27.0-beta] - 2026-08-20
 
 Field round 9 (Fable), first findings - plus the vault bootstrap redesigned to

@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.27.0-beta';
+  SERVER_VERSION = '0.28.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -74,15 +74,17 @@ const
   // pointless (nobody sees the process on the server) and the main way an
   // agent could do damage. Refused for EVERY credential, read-write included.
   // A build must never EXECUTE code on a compile-only server. If the project
-  // carries shell-running MSBuild constructs, refuse the build (unless the
-  // operator opted into execution with AllowRun) - field round 7: upload could
-  // plant a .dproj whose <Target><Exec> ran arbitrary commands at build time.
+  // carries shell-running / file-planting MSBuild tasks, refuse the build
+  // (unless build scripts were opted into) - field round 7: upload could plant
+  // a .dproj whose <Target><Exec> ran arbitrary commands at build time. An inert
+  // custom <Target> (Message/PropertyGroup only) is NOT refused (field round 9).
   SR_BUILD_HAZARD_FMT =
     'RECHAZADO: el proyecto contiene %s. Este servidor solo COMPILA, nunca ' +
-    'ejecuta, y esos pasos correrian un shell durante el build. Compila un ' +
-    '.dproj estandar (sin <Target>/<Exec>, sin build-events, sin <Import> ' +
-    'externo). El operador puede permitir ejecucion en build con [Security] ' +
-    'AllowRun=1, pero no es el uso previsto.';
+    'ejecuta, y esa tarea correria un programa o escribiria ficheros durante ' +
+    'el build. Compila un .dproj sin tareas de ejecucion (un <Target> que solo ' +
+    'imprime un mensaje o fija una propiedad SI se admite). Si es un proyecto ' +
+    'de confianza que firma o copia en post-build, el operador lo habilita con ' +
+    '[Security] AllowBuildScripts=1 (sin encender delphi_run).';
 
   SR_RUN_DISABLED =
     'RECHAZADO: la ejecucion en el servidor esta deshabilitada por diseno. ' +

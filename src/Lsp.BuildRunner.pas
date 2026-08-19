@@ -321,11 +321,13 @@ begin
   if not FileExists(ADprojPath) then
     raise Exception.CreateFmt('.dproj not found: %s', [ADprojPath]);
   // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
-  // shell-running MSBuild constructs (a planted <Target><Exec>, a build-event,
-  // a foreign <Import>) and refuse unless execution was explicitly enabled.
-  // This is the point-of-execution gate, so it holds however the .dproj got
-  // there - upload, edit, or a pre-existing one (field round 7, CRITICAL).
-  if not AllowRun then
+  // shell-running / file-planting MSBuild tasks (a planted <Target><Exec>, a
+  // build-event, a foreign <Import>) and refuse unless build scripts were
+  // explicitly enabled. This is the point-of-execution gate, so it holds however
+  // the .dproj got there - upload, edit, or a pre-existing one (field round 7,
+  // CRITICAL). AllowBuildScripts (or the broader AllowRun) is the trusted-project
+  // opt-in; an inert custom <Target> now builds without it (field round 9 FP).
+  if not AllowBuildScripts then
   begin
     var ProjXml := '';
     try ProjXml := TFile.ReadAllText(ADprojPath); except end;

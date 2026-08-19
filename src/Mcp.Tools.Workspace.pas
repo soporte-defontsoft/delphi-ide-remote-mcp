@@ -585,8 +585,13 @@ begin
     if TDirectory.Exists(TPath.Combine(Repo, '.git')) then
       Exit('error: "' + Repo + '" ya es un repositorio git. Usa pull para ' +
         'actualizarlo, o clona en otra carpeta.');
-    // clone into "." of the (jailed, existing) destination directory
-    GitArgs := Format('clone "%s" . %s', [Url, Params.Args]);
+    // clone into "." of the (jailed, existing) destination directory. The "--"
+    // separator guarantees the URL is a POSITIONAL, never parsed as an option,
+    // whatever it contains - defence in depth over the leading-"-" check above
+    // (field round 9: git network args travel fairly verbatim). User args go
+    // BEFORE "--" so legitimate options (--depth, --branch) still apply; they
+    // were already vetted for dangerous flags at the single gate (GitArgDenied).
+    GitArgs := Format('clone %s -- "%s" .', [Params.Args, Url]);
   end
   else if Cmd = 'pull' then
     GitArgs := 'pull ' + Params.Args

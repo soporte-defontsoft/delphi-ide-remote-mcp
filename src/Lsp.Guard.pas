@@ -89,6 +89,15 @@ function VaultWritable: Boolean;    // VaultConfigured AND [Vault] ReadOnly=0
   / Android). Opt in with DELPHI_MCP_ALLOW_RUN=1 or [Security] AllowRun=1. }
 function AllowRun: Boolean;         // DELPHI_MCP_ALLOW_RUN      / AllowRun=1
 
+{ Whether delphi_build may run a project's OWN build scripts: a custom <Target>,
+  a post-build step, Authenticode signing via <Exec>. SEPARATE from AllowRun on
+  purpose - a TRUSTED project that signs or copies at build time can be enabled
+  WITHOUT also turning on delphi_run (which would allow running arbitrary
+  compiled programs). AllowRun implies this (full execution is a superset).
+  Untrusted uploads with no opt-in still hit the hazard scanner. Opt in with
+  DELPHI_MCP_ALLOW_BUILD_SCRIPTS=1 or [Security] AllowBuildScripts=1. }
+function AllowBuildScripts: Boolean; // DELPHI_MCP_ALLOW_BUILD_SCRIPTS / AllowBuildScripts=1
+
 { Read-only mode. Two independent sources, OR-ed together:
   - process-wide: the whole server runs read-only (--readonly flag);
   - per-request: the HTTP transport marks the current worker thread according
@@ -144,6 +153,7 @@ var
   GReadOnlyToken: string;
   GAnonymousReadOnly: Boolean = False;
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
+  GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
 
 threadvar
   GRequestReadOnly: Boolean;
@@ -174,6 +184,7 @@ begin
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
   GAnonymousReadOnly := GetEnvironmentVariable('DELPHI_MCP_ANON_READONLY') = '1';
   GAllowRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_RUN') = '1';
+  GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
   IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
   if TFile.Exists(IniPath) then
   begin
@@ -187,6 +198,8 @@ begin
         GAnonymousReadOnly := Ini.ReadBool('Security', 'AnonymousReadOnly', False);
       if not GAllowRun then
         GAllowRun := Ini.ReadBool('Security', 'AllowRun', False);
+      if not GAllowBuildScripts then
+        GAllowBuildScripts := Ini.ReadBool('Security', 'AllowBuildScripts', False);
     finally
       Ini.Free;
     end;
@@ -216,6 +229,14 @@ function AllowRun: Boolean;
 begin
   LoadSecurity;
   Result := GAllowRun;
+end;
+
+function AllowBuildScripts: Boolean;
+begin
+  LoadSecurity;
+  // AllowRun (running arbitrary programs) is a superset of running the project's
+  // own build scripts, so it implies this without a second opt-in.
+  Result := GAllowBuildScripts or GAllowRun;
 end;
 
 function BindIP: string;
