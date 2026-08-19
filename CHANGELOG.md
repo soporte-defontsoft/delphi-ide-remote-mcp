@@ -6,6 +6,58 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.25.0-beta] - 2026-08-19
+
+### Added
+- **Knowledge vault: persistent memory for agents (optional, off by default).**
+  Point `[Vault] Path` at a folder of Markdown notes (an Obsidian vault) and the
+  server exposes it, so an agent working remotely can consult accumulated
+  knowledge — decisions, conventions, project context — and not just source
+  code. Nothing registers unless configured.
+  - `vault_read` — a note by relative path, with line numbers and
+    `offset`/`limit`. **With no path it returns the vault's own rules
+    (`AGENTS-VAULT.md`) plus its index (`MEMORY.md`)**: the bootstrap, because
+    those filenames are a vault convention a remote agent should not have to
+    know. Lazy loading is the protocol — the vault is never read in bulk.
+  - `vault_search` — `target=files` (glob over note names) or `target=content`
+    (regex inside notes → path, line number, line), optionally scoped to a
+    `subfolder`.
+  - **Writing (opt-in, `[Vault] ReadOnly=0`, read-write credential only):**
+    `vault_append` (a dated log entry or progress line, optionally after a
+    unique `anchor`), `vault_create` (new note, **never** overwrites) and
+    `vault_patch` (replace a fragment that appears exactly once). There is
+    deliberately no wholesale rewrite, no delete, no move and no git.
+  - **The rules that can be enforced by code are enforced by the server:** the
+    original of any modified note is copied to `backups/mcp/<timestamp>/` first
+    (no parameter disables it); the governance files (`AGENTS-VAULT.md`,
+    `AGENTS-VAULT-WRITE.md`, `MEMORY.md`) are never writable; a strict jail
+    (relative paths only, no `..`, `.md` only, `backups/`/`.git/`/`.obsidian/`
+    excluded); UTF-8 in and UTF-8 without BOM out; and notes over 100 000
+    characters are truncated with a pointer to `offset`/`limit`.
+  - The *doctrine* stays in the vault itself, not in the code — so two people
+    can point this at two different vaults and each gets their own rules.
+    See **docs/VAULT.md**, which also shows how to start a vault from scratch.
+
+  - **Session wiring, so no agent has to be taught any of this:** when a vault
+    is configured the MCP `initialize` response carries `instructions` (there
+    is a vault, start with `vault_read` and no path — short on purpose, since
+    instructions ride in every prompt), and a `vault` prompt is exposed, which
+    clients surface as an invocable command (`/vault` in Claude Code) to reload
+    rules + index mid-session. A vault can replace that text with its own by
+    placing `VAULT-INSTRUCTIONS.md` at its root — its "skill".
+  - **First run seeds itself:** point `[Vault] Path` at a folder that does not
+    exist or holds no notes and the server creates a working starter vault
+    there (rules, index, write guide, example project). A vault that already
+    has notes is never touched. The same starter kit ships in
+    `examples/vault/` — generic on purpose: the shape, not anyone's content.
+  - The vault is an **independent jail**: it lives outside the workspace roots,
+    the code tools cannot read it and the vault tools cannot serve code.
+  - Vault text is exempt from drive-letter masking, like `delphi_read`: an
+    agent copies fragments of a note verbatim to build the `anchor`/`old_text`
+    of a later write, so the text must match the file on disk byte for byte.
+
+7 E2E batteries, **363 checks** (the vault battery adds 83).
+
 ## [0.24.0-beta] - 2026-08-19
 
 Field round 7 (Fable): the sandbox held again, but the round found the real

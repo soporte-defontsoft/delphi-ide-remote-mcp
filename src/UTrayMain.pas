@@ -9,12 +9,12 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes,
-  System.JSON, Vcl.Graphics, Vcl.Controls, Vcl.Forms,
+  System.StrUtils, System.JSON, Vcl.Graphics, Vcl.Controls, Vcl.Forms,
   Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Menus, Vcl.Clipbrd,
   MCPServer.Types, MCPServer.Settings, MCPServer.Logger,
   MCPServer.ManagerRegistry, MCPServer.CoreManager, MCPServer.ToolsManager,
   MCPServer.ResourcesManager, MCPServer.IdHTTPServer, MCPServer.Resource.Server,
-  Lsp.Guard, Lsp.Session, Lsp.Texts;
+  Lsp.Guard, Lsp.Session, Lsp.Texts, Mcp.Vault.Session, Mcp.Vault.Seed;
 
 type
   TFormTray = class(TForm)
@@ -96,6 +96,17 @@ begin
     begin
       Result := MaskDriveText(ToolName, AText);
     end;
+  // Knowledge vault (optional): same wiring as the console host.
+  TMCPCoreManager.Instructions :=
+    function: string
+    begin
+      Result := VaultInstructions;
+    end;
+  if VaultConfigured then
+  begin
+    TMCPCoreManager.DeclarePrompts := True;
+    FRegistry.RegisterManager(TMCPPromptsManager.Create);
+  end;
 
   FServer := TMCPIdHTTPServer.Create(Self);
   FServer.Settings := FSettings;
@@ -127,6 +138,11 @@ begin
     // The WRITE jail (workspace roots): same summary source as the console host.
     var JailWarn: Boolean;
     AddLog(WorkspaceJailSummary(JailWarn));
+    if VaultSeedNote <> '' then
+      AddLog(VaultSeedNote);
+    if VaultConfigured then
+      AddLog(Format('Vault de conocimiento: %s (%s)',
+        [VaultPath, IfThen(VaultWritable, 'lectura-escritura', 'solo lectura')]));
     if (FServer.AuthToken = '') and (FServer.ReadOnlyToken = '') then
       AddLog('AVISO: sin token Bearer (DELPHI_MCP_TOKEN o settings.ini ' +
         '[Security] AuthToken). Bien en localhost; NO exponer a la red asi.')

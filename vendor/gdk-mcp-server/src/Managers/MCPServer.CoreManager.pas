@@ -12,11 +12,21 @@ uses
   MCPServer.Logger;
 
 type
+  // [local change] Hooks so the host can enrich the initialize response
+  // without this vendored unit knowing anything about it:
+  //  - Instructions: server-level guidance handed to the model at connect
+  //    time (MCP "instructions" field). Empty/unassigned = omitted.
+  //  - DeclarePrompts: advertise the prompts capability when the host
+  //    registers a prompts manager.
+  TMCPInstructionsFunc = reference to function: string;
+
   TMCPCoreManager = class(TInterfacedObject, IMCPCapabilityManager)
   private
     FSessionID: string;
     FSettings: TMCPSettings;
   public
+    class var Instructions: TMCPInstructionsFunc; // [local change]
+    class var DeclarePrompts: Boolean;            // [local change]
     constructor Create(ASettings: TMCPSettings);
     
     function GetCapabilityName: string;
@@ -123,12 +133,32 @@ begin
     ResourcesCap.AddPair('listChanged', TJSONBool.Create(False));
 {$ENDIF}
     
+    // [local change] prompts capability, when the host registered a manager
+    if DeclarePrompts then
+    begin
+      var PromptsCap := TJSONObject.Create;
+      Capabilities.AddPair('prompts', PromptsCap);
+{$IF COMPILERVERSION <= 29}
+      PromptsCap.AddPair('listChanged', TJSONFalse.Create);
+{$ELSE}
+      PromptsCap.AddPair('listChanged', TJSONBool.Create(False));
+{$ENDIF}
+    end;
+
     ResultJSON.AddPair('sessionId', FSessionID);
-    
+
     ServerInfo := TJSONObject.Create;
     ResultJSON.AddPair('serverInfo', ServerInfo);
     ServerInfo.AddPair('name', FSettings.ServerName);
     ServerInfo.AddPair('version', FSettings.ServerVersion);
+
+    // [local change] server instructions handed to the model at connect time
+    if Assigned(Instructions) then
+    begin
+      var Text := Instructions();
+      if Text <> '' then
+        ResultJSON.AddPair('instructions', Text);
+    end;
     
     TLogger.Info('Created new MCP session: ' + FSessionID);
     

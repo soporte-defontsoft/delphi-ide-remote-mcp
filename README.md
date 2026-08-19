@@ -25,6 +25,44 @@ Two credential levels — a full read-write token, and a read-only one (or anony
 
 An agent can also be pointed at the **library read zone** (RTL/VCL sources and installed third-party components) to reason about framework or component internals, still without any write capability.
 
+## Persistent memory for your agents (optional)
+
+Every session, your agent starts from zero. It can read your code, but it does
+not know *why* that unit is built the way it is, which conventions your team
+follows, what was already tried and rejected, or where a project stands today.
+So you explain it again. And the next session, again.
+
+Point `[Vault] Path` at a folder of Markdown notes — an Obsidian vault, or just
+a folder — and that stops. The agent gets **`vault_read` and `vault_search`**:
+a memory it consults before touching the code. Optionally (`ReadOnly=0`) it also
+gets **`vault_append`, `vault_create` and `vault_patch`**, so it records what it
+learned for the next session — and for the next agent.
+
+This matters most in the remote setup this server exists for: an agent on Linux
+has no filesystem access to the Windows machine at all, so without this its
+memory is whatever fits in one conversation.
+
+It works by itself. On connect the agent is told there is a vault and to start
+with `vault_read` (no path); that one call returns the vault's **rules** and its
+**index**, and from the index descriptions it loads only the notes that apply —
+lazy loading, so a memory that grows for years still fits in a context window.
+
+Two design choices worth knowing before you enable it:
+
+- **The doctrine lives in the vault, not in this server.** Your rules are a file
+  *inside* your vault (`AGENTS-VAULT.md`), so two people can point this at two
+  different vaults and each gets their own conventions, in their own language.
+  Nothing about your way of working is hardcoded here.
+- **What can be enforced by code is enforced by the server**, not left to the
+  model to remember: the original of any note is backed up before it changes,
+  the rules and index files are never writable, and there is no rewrite, delete
+  or move — only append, create and anchored replace. A confused model cannot
+  destroy accumulated knowledge.
+
+Off unless you configure it. Point it at an empty folder and the server creates
+a working starter vault for you; there is also a ready-made one in
+[`examples/vault/`](examples/vault/). **Full explanation: [docs/VAULT.md](docs/VAULT.md).**
+
 ## The tools
 
 | Tool | What it does |
@@ -53,6 +91,8 @@ An agent can also be pointed at the **library read zone** (RTL/VCL sources and i
 | `delphi_report` | **Feedback channel**: the agent reports a bug, limitation or suggestion and the server files it as its own dated markdown in `reports/` next to the executable. Works at **every** access level, read-only included |
 | `delphi_config` | See and manage a project's build **configurations, target platforms and output folder**: `view` reports framework/configs/platforms with status; `add-platform`/`remove-platform` enable/disable a platform in the `.dproj` (curated edit), refusing platforms the framework can't target (VCL is Windows-only); `set-output` puts every binary under one folder (e.g. `Compiled`, keeping the per-platform/config subfolders) |
 | `delphi_paserver` | The bridge for building on **Linux/macOS** via the Platform Assistant: `platforms` (what the server can target + profile status), `packages` (the PAServer installers to download and run on the target), `profiles` (registered connection profiles/SDKs) |
+| `vault_read` · `vault_search` | **Optional persistent memory** (off unless configured): read and search a vault of Markdown notes — your decisions, conventions and project context — so a remote agent starts with more than the source tree. Lazy loading: it bootstraps with the vault's own rules + index and pulls only the notes it needs |
+| `vault_append` · `vault_create` · `vault_patch` | Let the agent **record what it learned** (opt-in, read-write credential only): append a log entry, create a note, replace an anchored fragment. No rewrites, no deletes, and the server always backs the original up first. See **[docs/VAULT.md](docs/VAULT.md)** |
 
 **→ Full parameter-by-parameter reference with types, defaults and worked workflows: [docs/TOOLS.md](docs/TOOLS.md)** (generated from the server's own `tools/list`, so it never drifts from the code).
 

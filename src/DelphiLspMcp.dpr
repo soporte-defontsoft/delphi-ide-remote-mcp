@@ -26,6 +26,7 @@ program DelphiLspMcp;
 uses
   System.SysUtils,
   System.SyncObjs,
+  System.StrUtils,
   System.JSON,
   Winapi.Windows,
   MCPServer.Types in '..\vendor\gdk-mcp-server\src\Protocol\MCPServer.Types.pas',
@@ -69,6 +70,9 @@ uses
   Mcp.Tools.TextEdit in 'Mcp.Tools.TextEdit.pas',
   Mcp.Tools.Workspace in 'Mcp.Tools.Workspace.pas',
   Mcp.Tools.Report in 'Mcp.Tools.Report.pas',
+  Mcp.Vault.Seed in 'Mcp.Vault.Seed.pas',
+  Mcp.Vault.Session in 'Mcp.Vault.Session.pas',
+  Mcp.Tools.Vault in 'Mcp.Tools.Vault.pas',
   Lsp.Scaffold in 'Lsp.Scaffold.pas',
   Mcp.Tools.Scaffold in 'Mcp.Tools.Scaffold.pas';
 
@@ -132,6 +136,20 @@ begin
       ManagerRegistry.RegisterManager(ToolsManager);
       ManagerRegistry.RegisterManager(ResourcesManager);
 
+      // Knowledge vault (optional): tell the model it exists and how to start
+      // (MCP "instructions"), and expose the invocable /vault prompt. Both are
+      // inert - and the prompts capability is not advertised - with no vault.
+      TMCPCoreManager.Instructions :=
+        function: string
+        begin
+          Result := VaultInstructions;
+        end;
+      if VaultConfigured then
+      begin
+        TMCPCoreManager.DeclarePrompts := True;
+        ManagerRegistry.RegisterManager(TMCPPromptsManager.Create);
+      end;
+
       // THE single access gate: every tools/call is checked in Lsp.Guard
       // before executing (read-only mode refuses mutating tools there).
       TMCPToolsManager.ToolGate :=
@@ -158,6 +176,12 @@ begin
         var JailWarn: Boolean;
         var JailMsg := WorkspaceJailSummary(JailWarn);
         if JailWarn then TLogger.Warning(JailMsg) else TLogger.Info(JailMsg);
+        // Knowledge vault: what it is, and whether we just created it.
+        if VaultSeedNote <> '' then
+          TLogger.Info(VaultSeedNote);
+        if VaultConfigured then
+          TLogger.Info(Format('Knowledge vault: %s (%s)',
+            [VaultPath, IfThen(VaultWritable, 'read-write', 'read-only')]));
       end;
 
       if HasFlag('--http') then

@@ -18,6 +18,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
 - **Version control** — [`delphi_git`](#delphi_git)
 - **Feedback** — [`delphi_report`](#delphi_report)
+- **Knowledge vault (optional)** — [`vault_read`](#vault_read), [`vault_search`](#vault_search), [`vault_append`](#vault_append), [`vault_create`](#vault_create), [`vault_patch`](#vault_patch)
 
 
 ## Understand the code (semantic, DelphiLSP-backed)
@@ -428,3 +429,81 @@ Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .j
 
 ### Report a problem
 `delphi_report {message, title, kind:"bug"|"limitation"|"suggestion"|"question", from}` — stored as a dated markdown next to the server exe. Works even read-only; use it whenever a tool blocks something you believe is legitimate.
+
+
+## Knowledge vault (optional — only when `[Vault] Path` is configured)
+
+Persistent memory: a folder of Markdown notes linked with `[[wikilinks]]`.
+These tools are **not registered at all** unless a vault is configured, and the
+three write ones need `[Vault] ReadOnly=0` on top of a read-write credential.
+
+- **Start with `vault_read` and NO path**: it returns the vault's rules plus its
+  index, which is how you decide what to load. Lazy loading — never read a vault
+  in bulk.
+- Paths are **relative to the vault** (`projects/x/context.md`), `.md` only. The
+  vault is a separate jail from the workspace roots.
+- Before modifying any note the server copies the original to
+  `backups/mcp/<timestamp>/`. The governance files (`AGENTS-VAULT.md`,
+  `AGENTS-VAULT-WRITE.md`, `MEMORY.md`) are never writable.
+
+Full explanation: [VAULT.md](VAULT.md).
+
+### `vault_read`
+
+Lee una nota del vault de conocimiento por ruta relativa. SIN path devuelve las reglas (AGENTS-VAULT.md) + el indice (MEMORY.md): hazlo al empezar. Los [[wikilinks]] del contenido refieren a otras notas - localizalas con vault_search target=files.
+
+*Access: read-only OK.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | optional | Ruta RELATIVA de la nota dentro del vault (projects/x/context.md). SIN path devuelve las reglas + el indice: hazlo al empezar |
+| `offset` | number | optional | Opcional: primera linea a devolver (1 = principio) |
+| `limit` | number | optional | Opcional: cuantas lineas devolver desde offset |
+
+### `vault_search`
+
+Busca en el vault de conocimiento (notas Markdown enlazadas con [[wikilinks]]). PROTOCOLO: al empezar una tarea, llama primero a vault_read SIN path para obtener las reglas y el indice; decide por las descripciones del indice que notas cargar con vault_read - carga perezosa, nunca leas el vault en masa.
+
+*Access: read-only OK.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `target` | string | **yes** | files (buscar por NOMBRE de nota, patron glob como *reunion*.md) \| content (buscar DENTRO de las notas, pattern es una expresion regular) |
+| `pattern` | string | **yes** | Glob de nombre si target=files (*.md, *delphi*), o expresion regular si target=content |
+| `subfolder` | string | optional | Opcional: carpeta relativa del vault para acotar la busqueda (projects, conventions...) |
+| `maxresults` | number | optional | Maximo de resultados (defecto 50) |
+
+### `vault_append`
+
+Anade contenido a una nota existente del vault (entradas de log, avances de progress). Escribe SIEMPRE en espanol. Formato log: entrada fechada bajo la seccion del dia. En progress.md respeta su estructura snapshot: lineas de estado vivas, el historico va en log - no acumules; si cierras un asunto, elimina su linea con vault_patch en lugar de anadir "hecho". El servidor guarda copia del original antes de escribir.
+
+*Access: read-write only, and [Vault] ReadOnly=0.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | **yes** | Ruta RELATIVA de la nota (debe existir) |
+| `content` | string | **yes** | Contenido markdown a anadir. En espanol |
+| `anchor` | string | optional | Opcional: texto UNICO tras el cual insertar. Sin anchor, anade al final del fichero |
+
+### `vault_create`
+
+Crea una nota nueva en el vault. ANTES de crear: lee AGENTS-VAULT-WRITE.md (arbol de decision de donde va cada cosa y plantillas) y enlaza la nota desde el indice que corresponda con [[wikilinks]]. Escribe en espanol. No reorganices carpetas ni muevas notas existentes - eso requiere OK humano. Nunca sobreescribe: si la nota existe, se rechaza.
+
+*Access: read-write only, and [Vault] ReadOnly=0.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | **yes** | Ruta RELATIVA de la nota nueva (debe NO existir; nunca sobreescribe) |
+| `content` | string | **yes** | Contenido markdown completo, con la estructura/plantilla que pida el vault |
+
+### `vault_patch`
+
+Edicion puntual de una nota: sustituye old_text (UNICO en el fichero) por new_text. Para tachar lineas cerradas de un progress o corregir un dato. Para anadir contenido usa vault_append; para reescrituras grandes, para y consulta al usuario. El servidor guarda copia del original antes de escribir.
+
+*Access: read-write only, and [Vault] ReadOnly=0.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | **yes** | Ruta RELATIVA de la nota |
+| `old_text` | string | **yes** | Texto a sustituir: debe aparecer EXACTAMENTE UNA VEZ en el fichero |
+| `new_text` | string | **yes** | Texto nuevo que lo sustituye |

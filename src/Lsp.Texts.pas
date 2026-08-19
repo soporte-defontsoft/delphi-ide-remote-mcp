@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.24.0-beta';
+  SERVER_VERSION = '0.25.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -92,6 +92,97 @@ const
     '(PAServer en Linux/macOS, o Android) - ahi corre en el cliente, no en ' +
     'el servidor. (El operador puede habilitarlo con [Security] AllowRun=1, ' +
     'pero no es el uso previsto.)';
+
+  // ---------------------------------------------------------------------
+  // vault_* (knowledge vault: Markdown notes linked with [[wikilinks]])
+  // These descriptions ARE the doctrine the agent sees: lazy loading, write
+  // in Spanish, log vs progress discipline, read the write-rules before
+  // creating. What can be enforced by code lives in Mcp.Tools.Vault.
+  // ---------------------------------------------------------------------
+  SD_VAULT_SEARCH =
+    'Busca en el vault de conocimiento (notas Markdown enlazadas con ' +
+    '[[wikilinks]]). PROTOCOLO: al empezar una tarea, llama primero a ' +
+    'vault_read SIN path para obtener las reglas y el indice; decide por las ' +
+    'descripciones del indice que notas cargar con vault_read - carga ' +
+    'perezosa, nunca leas el vault en masa.';
+
+  SD_VAULT_READ =
+    'Lee una nota del vault de conocimiento por ruta relativa. SIN path ' +
+    'devuelve las reglas (AGENTS-VAULT.md) + el indice (MEMORY.md): hazlo al ' +
+    'empezar. Los [[wikilinks]] del contenido refieren a otras notas - ' +
+    'localizalas con vault_search target=files.';
+
+  SD_VAULT_APPEND =
+    'Anade contenido a una nota existente del vault (entradas de log, ' +
+    'avances de progress). Escribe SIEMPRE en espanol. Formato log: entrada ' +
+    'fechada bajo la seccion del dia. En progress.md respeta su estructura ' +
+    'snapshot: lineas de estado vivas, el historico va en log - no acumules; ' +
+    'si cierras un asunto, elimina su linea con vault_patch en lugar de ' +
+    'anadir "hecho". El servidor guarda copia del original antes de escribir.';
+
+  SD_VAULT_CREATE =
+    'Crea una nota nueva en el vault. ANTES de crear: lee ' +
+    'AGENTS-VAULT-WRITE.md (arbol de decision de donde va cada cosa y ' +
+    'plantillas) y enlaza la nota desde el indice que corresponda con ' +
+    '[[wikilinks]]. Escribe en espanol. No reorganices carpetas ni muevas ' +
+    'notas existentes - eso requiere OK humano. Nunca sobreescribe: si la ' +
+    'nota existe, se rechaza.';
+
+  SD_VAULT_PATCH =
+    'Edicion puntual de una nota: sustituye old_text (UNICO en el fichero) ' +
+    'por new_text. Para tachar lineas cerradas de un progress o corregir un ' +
+    'dato. Para anadir contenido usa vault_append; para reescrituras grandes, ' +
+    'para y consulta al usuario. El servidor guarda copia del original antes ' +
+    'de escribir.';
+
+  // Handed to the model in the initialize response when a vault is configured
+  // - unless the vault ships its own VAULT-INSTRUCTIONS.md, which wins. Short
+  // on purpose: instructions travel in EVERY prompt of every client, so the
+  // heavy doctrine stays behind vault_read (no path).
+  SN_VAULT_INSTRUCTIONS =
+    'Este servidor da acceso a un VAULT DE CONOCIMIENTO: notas Markdown ' +
+    'enlazadas con [[wikilinks]] con las convenciones, patrones, decisiones y ' +
+    'el estado de cada proyecto. PROTOCOLO al empezar cualquier tarea: ' +
+    '(1) llama a vault_read SIN path - devuelve las reglas del vault y el ' +
+    'indice de notas; (2) identifica el proyecto sobre el que trabajas y carga ' +
+    'su context.md y su progress.md; (3) el resto de notas, solo bajo demanda ' +
+    'cuando el indice indique que aplican (carga perezosa - nunca leas el ' +
+    'vault en masa). Si el vault permite escritura, lee antes ' +
+    'AGENTS-VAULT-WRITE.md y respeta el idioma del vault.';
+
+  SD_VAULT_PROMPT =
+    'Carga el arranque del vault de conocimiento: sus reglas y el indice de ' +
+    'notas. Uselo al empezar, o para recargar el indice a mitad de una sesion ' +
+    'larga.';
+
+  SN_VAULT_PROMPT_HEADER =
+    'Estas son las reglas y el indice del vault de conocimiento de este ' +
+    'servidor. Trabaja con carga perezosa: carga solo las notas que el indice ' +
+    'indique que aplican a tu tarea, con vault_read.';
+
+  SR_VAULT_UNSET =
+    'error: este servidor no tiene vault de conocimiento configurado ' +
+    '([Vault] Path en settings.ini).';
+
+  SR_VAULT_JAIL_FMT =
+    'RECHAZADO: "%s" sale del vault. Usa una ruta RELATIVA dentro del vault ' +
+    '(projects/x/context.md): sin unidades, sin rutas absolutas y sin "..".';
+
+  SR_VAULT_READONLY =
+    'RECHAZADO: el vault de conocimiento esta en SOLO LECTURA en este ' +
+    'servidor ([Vault] ReadOnly=1). Puedes consultarlo con vault_read y ' +
+    'vault_search.';
+
+  SR_VAULT_GOVERNANCE =
+    'RECHAZADO: AGENTS-VAULT.md, AGENTS-VAULT-WRITE.md y MEMORY.md son los ' +
+    'ficheros de GOBIERNO del vault (sus reglas y su indice) y solo se tocan ' +
+    'con supervision humana. Puedes leerlos (vault_read sin path). Si hace ' +
+    'falta indexar una nota nueva, dilo en tu respuesta para que lo haga una ' +
+    'persona.';
+
+  SR_VAULT_TRUNCATED_FMT =
+    '... (truncado en %d caracteres para no comerse el contexto: pide el ' +
+    'resto con offset/limit)';
 
   // ---------------------------------------------------------------------
   // delphi_report (feedback channel - works at EVERY access level)

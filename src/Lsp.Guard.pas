@@ -55,6 +55,19 @@ function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
 function AnonymousReadOnly: Boolean;// DELPHI_MCP_ANON_READONLY  / AnonymousReadOnly=1
 function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] BindIP ('' = all)
 
+{ The knowledge-vault root (Obsidian notes). Empty when unset.
+  Env DELPHI_MCP_VAULT_PATH, else [Vault] Path. Canonicalized, no trailing
+  delimiter. The vault_read/vault_search tools register only when
+  VaultConfigured is true. }
+function VaultPath: string;         // DELPHI_MCP_VAULT_PATH     / [Vault] Path
+function VaultConfigured: Boolean;  // VaultPath set AND the directory exists
+
+{ Whether the vault WRITE tools (vault_append/create/patch) are enabled:
+  the vault is configured AND [Vault] ReadOnly is 0 (default 1 = read-only).
+  Even when writable, the write tools are refused for a read-only credential
+  at the gate (they are in the mutating list). }
+function VaultWritable: Boolean;    // VaultConfigured AND [Vault] ReadOnly=0
+
 { Whether delphi_run may execute a compiled program ON THIS SERVER. OFF by
   design: this is a pure development/compile server - clients download the
   artifact and run it in their own environment (or a real target via PAServer
@@ -210,6 +223,69 @@ begin
   end;
 end;
 
+function VaultPath: string;
+var
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  Result := GetEnvironmentVariable('DELPHI_MCP_VAULT_PATH');
+  if Result = '' then
+  begin
+    IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+    if TFile.Exists(IniPath) then
+    begin
+      Ini := TIniFile.Create(IniPath);
+      try
+        Result := Ini.ReadString('Vault', 'Path', '');
+      finally
+        Ini.Free;
+      end;
+    end;
+  end;
+  Result := Result.Trim.Trim(['"']).Trim;
+  if Result <> '' then
+    try
+      Result := ExcludeTrailingPathDelimiter(TPath.GetFullPath(Result));
+    except
+      Result := '';
+    end;
+end;
+
+function VaultConfigured: Boolean;
+begin
+  var P := VaultPath;
+  Result := (P <> '') and TDirectory.Exists(P);
+end;
+
+function VaultWritable: Boolean;
+var
+  IniPath: string;
+  Ini: TIniFile;
+  RO: Boolean;
+begin
+  Result := False;
+  if not VaultConfigured then
+    Exit;
+  // Read-only by DEFAULT: writing to the knowledge vault must be opted into.
+  RO := True;
+  if GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY') = '0' then
+    RO := False
+  else
+  begin
+    IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+    if TFile.Exists(IniPath) then
+    begin
+      Ini := TIniFile.Create(IniPath);
+      try
+        RO := Ini.ReadBool('Vault', 'ReadOnly', True);
+      finally
+        Ini.Free;
+      end;
+    end;
+  end;
+  Result := not RO;
+end;
+
 procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
 
 function WriteDenied(const AWhat: string): string;
@@ -274,7 +350,9 @@ begin
   // Fully mutating tools: refused outright in read-only mode.
   if MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
     'delphi_build', 'delphi_run', 'delphi_package', 'delphi_upload',
-    'delphi_delete', 'delphi_move']) then
+    'delphi_delete', 'delphi_move',
+    // The knowledge vault: reading is fine read-only, writing never is.
+    'vault_append', 'vault_create', 'vault_patch']) then
     Exit(WriteDenied(AToolName));
   // delphi_config is mixed: "view" reads, "add-platform" writes the .dproj.
   if SameText(AToolName, 'delphi_config') then
@@ -692,7 +770,13 @@ begin
   // its payload is base64, whose alphabet has neither ':' nor '%', so
   // masking can never corrupt it - while its "path" field must be
   // virtualized like every other path the client sees.
-  if SameText(AToolName, 'delphi_read') and
+  // The vault tools are exempt on the same grounds: their payload is the
+  // TEXT of a note, and an agent copies fragments of it verbatim to build the
+  // "anchor" / "old_text" of a later vault_append / vault_patch. Masking it
+  // would silently break every anchored write (the fragment would no longer
+  // match the file on disk). Vault paths are relative and carry no drive
+  // letter, and the vault is knowledge the operator chose to expose.
+  if MatchText(AToolName, ['delphi_read', 'vault_read', 'vault_search']) and
      not (AText.StartsWith('RECHAZADO') or AText.StartsWith('error')) then
     Exit(AText);
   Letters := ServedDriveLetters;
