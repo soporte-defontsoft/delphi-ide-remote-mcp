@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.20.0-beta] - 2026-08-19
+
+### Security
+- **Real filesystem sandbox for `delphi_run` (closes the B0b write vector).**
+  A program launched by `delphi_run` now runs at **Low integrity** (Windows
+  Mandatory Integrity Control), so it **cannot write** to any object at the
+  normal (Medium) integrity level — the user profile, other projects,
+  `C:\Windows`, anywhere on the system. Its own working directory is labelled
+  Low so it can still write its output there, and there only. Reads are
+  unaffected (read-down is allowed) and stdout is still captured. The response
+  states `sandbox=low-integrity`; if the OS ever refuses the confined launch
+  it says `sandbox=NO` instead of pretending. Verified: a compiled program
+  that tries to write to `C:\Users\Public` is blocked while its local write
+  succeeds. This plus the 0.17.0 Job Object (lifetime/resources) sandboxes
+  run along both axes.
+  *Scope: `delphi_run` only. `delphi_build` still runs the trusted toolchain
+  at normal integrity (it must write .dcu/.exe and read the SDK/registry); a
+  malicious `.dproj` pre/post-build step remains a narrower, documented
+  vector.*
+
 ## [0.19.0-beta] - 2026-08-19
 
 Field round 5 (Fable): one critical injection and two recovery gaps.

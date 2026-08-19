@@ -41,7 +41,7 @@ An agent can also be pointed at the **library read zone** (RTL/VCL sources and i
 | `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms (VCL/FMX) with IDE-equivalent skeletons — buildable immediately |
 | `delphi_build` | Real MSBuild builds with structured errors/warnings |
-| `delphi_run` | Run a built executable on the server and capture its output (jailed to the roots, no shell, hard timeout) |
+| `delphi_run` | Run a built executable on the server and capture its output — jailed, no shell, hard timeout, and **sandboxed at Low integrity** so the program cannot write outside its own folder (nor anywhere else on the system) |
 | `delphi_fetch` | Download files from the server in base64 chunks with whole-file SHA-256 — "get the deploy" to run GUI apps on the client machine |
 | `delphi_upload` | The mirror of fetch: send files TO the server in chunks, SHA-256 verified — for binaries you cannot recreate by editing |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |

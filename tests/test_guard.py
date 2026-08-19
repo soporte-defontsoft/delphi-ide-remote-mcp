@@ -141,6 +141,34 @@ out = call('delphi_run', {"path": os.path.join(INSIDE, 'Hola', 'Win64', 'Debug',
 check('run: dentro ejecuta y captura salida', out.startswith('exit=0') and 'funcionando' in out, out[:150])
 out = call('delphi_run', {"path": os.path.join(OUTSIDE, 'Fuera.exe')})
 check('run: fuera vetado', denied(out), out[:150])
+
+# --- filesystem sandbox (B0b): a run program cannot write outside its folder ---
+_q = chr(39)
+_pub = r'C:\Users\Public\PWNED_guard_test.txt'
+if os.path.exists(_pub):
+    os.remove(_pub)
+call('delphi_create', {"kind": "project-console", "dir": os.path.join(INSIDE, 'Sbx'), "name": "Sbx"})
+_body = ['program Sbx;', '{$APPTYPE CONSOLE}', 'uses System.SysUtils, System.IOUtils;', 'begin',
+         '  try TFile.WriteAllText(' + _q + _pub + _q + ', ' + _q + 'x' + _q + '); Writeln('
+         + _q + 'SYSWRITE-OK' + _q + '); except Writeln(' + _q + 'sys-blocked' + _q + '); end;',
+         '  try TFile.WriteAllText(' + _q + 'out.txt' + _q + ', ' + _q + 'y' + _q + '); Writeln('
+         + _q + 'LOCAL-OK' + _q + '); except Writeln(' + _q + 'local-blocked' + _q + '); end;', 'end.']
+open(os.path.join(INSIDE, 'Sbx', 'Sbx.dpr'), 'w', encoding='utf-8-sig', newline='').write('\r\n'.join(_body) + '\r\n')
+out = call('delphi_build', {"project": os.path.join(INSIDE, 'Sbx', 'Sbx.dproj'),
+                            "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
+try:
+    sbok = json.loads(out)['success']
+except Exception:
+    sbok = False
+check('sandbox: proyecto de prueba compila', sbok, out[:150])
+if sbok:
+    out = call('delphi_run', {"path": os.path.join(INSIDE, 'Sbx', 'Win64', 'Debug', 'Sbx.exe'), "timeoutms": 10000}, 60)
+    check('sandbox: escritura al SISTEMA bloqueada (low integrity)',
+          'sys-blocked' in out and not os.path.exists(_pub), out[:200])
+    check('sandbox: escritura en su propia carpeta permitida', 'LOCAL-OK' in out, out[:200])
+    check('sandbox: la respuesta declara sandbox=low-integrity', 'sandbox=low-integrity' in out, out[:120])
+if os.path.exists(_pub):
+    os.remove(_pub)
 out = call('delphi_fetch', {"path": OUT_PAS})
 check('fetch: fuera vetado', denied(out), out[:150])
 out = call('delphi_upload', {"path": os.path.join(OUTSIDE, 'Subido.bin'),

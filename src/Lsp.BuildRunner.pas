@@ -21,6 +21,13 @@ function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 
+{ Like RunCapturedIn but launches the process at LOW integrity (filesystem
+  write confinement for delphi_run). AWorkDir is labelled Low so the program
+  can write its own output there and nowhere else on the system. ASandboxed
+  reports whether the low-integrity launch actually took effect. }
+function RunCapturedSandboxed(const ACmdLine, AWorkDir: string;
+  ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean): string;
+
 implementation
 
 uses
@@ -30,7 +37,8 @@ uses
   Winapi.Windows,
   MCPServer.Logger,
   Lsp.Discovery,
-  Lsp.Guard;
+  Lsp.Guard,
+  Lsp.Sandbox;
 
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: DWORD): string;
@@ -144,8 +152,8 @@ begin
   Result := HasHigh;
 end;
 
-function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
-  out AExitCode: Cardinal): string;
+function RunCore(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
+  ALowIntegrity: Boolean; out AExitCode: Cardinal; out ASandboxed: Boolean): string;
 var
   SA: TSecurityAttributes;
   ReadH, WriteH: THandle;
@@ -156,7 +164,9 @@ var
   Bytes: TBytes;
   Cmd: string;
   Deadline: UInt64;
+  Launched: Boolean;
 begin
+  ASandboxed := False;
   FillChar(SA, SizeOf(SA), 0);
   SA.nLength := SizeOf(SA);
   SA.bInheritHandle := True;
@@ -181,14 +191,32 @@ begin
   // BEFORE it runs (otherwise a fast child could spawn a grandchild that
   // escapes the job). Then resume.
   var Job: THandle := CreateConfinedJob;
-  if not CreateProcess(nil, PChar(Cmd), nil, nil, True,
-    CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, WorkDirPtr, SI, PI) then
+  Launched := False;
+  if ALowIntegrity then
   begin
-    if Job <> 0 then CloseHandle(Job);
-    CloseHandle(ReadH);
-    CloseHandle(WriteH);
-    raise Exception.CreateFmt('CreateProcess failed (%d)', [GetLastError]);
+    // Label the working directory Low so the confined program can write its
+    // OWN output there (and nowhere else on the system), then launch at Low
+    // integrity. If the OS refuses the lowered launch, fall back to a normal
+    // launch and report ASandboxed=False - never leave the caller thinking a
+    // confinement is in place when it is not.
+    if AWorkDir <> '' then
+      LabelDirLowIntegrity(AWorkDir);
+    if CreateProcessLowIntegrity(Cmd, WorkDirPtr,
+      CREATE_NO_WINDOW or CREATE_SUSPENDED, True, SI, PI) then
+    begin
+      Launched := True;
+      ASandboxed := True;
+    end;
   end;
+  if not Launched then
+    if not CreateProcess(nil, PChar(Cmd), nil, nil, True,
+      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, WorkDirPtr, SI, PI) then
+    begin
+      if Job <> 0 then CloseHandle(Job);
+      CloseHandle(ReadH);
+      CloseHandle(WriteH);
+      raise Exception.CreateFmt('CreateProcess failed (%d)', [GetLastError]);
+    end;
   if Job <> 0 then
     AssignProcessToJobObject(Job, PI.hProcess);
   ResumeThread(PI.hThread);
@@ -255,6 +283,20 @@ begin
     Result := TEncoding.UTF8.GetString(Bytes)
   else
     Result := TEncoding.ANSI.GetString(Bytes);
+end;
+
+function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
+  out AExitCode: Cardinal): string;
+var
+  Ignored: Boolean;
+begin
+  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, False, AExitCode, Ignored);
+end;
+
+function RunCapturedSandboxed(const ACmdLine, AWorkDir: string;
+  ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean): string;
+begin
+  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, True, AExitCode, ASandboxed);
 end;
 
 function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;

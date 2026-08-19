@@ -889,11 +889,19 @@ begin
     TLogger.Warning('delphi_run: EXEC "' + ExePath + '" (hash n/d)');
   end;
 
-  Output := RunCapturedIn(Format('"%s" %s', [ExePath, Params.Args]).Trim,
-    WorkDir, TimeoutMs, ExitCode);
+  var Sandboxed: Boolean;
+  Output := RunCapturedSandboxed(Format('"%s" %s', [ExePath, Params.Args]).Trim,
+    WorkDir, TimeoutMs, ExitCode, Sandboxed);
   if Length(Output) > 30000 then
     Output := Copy(Output, 1, 30000) + #10'... (truncated)';
-  Result := Format('exit=%d'#10'%s', [ExitCode, Output.TrimRight]);
+  var SbNote: string;
+  if Sandboxed then
+    SbNote := 'sandbox=low-integrity (el programa solo pudo escribir en su ' +
+      'carpeta de trabajo; el resto del disco es de solo lectura para el)'
+  else
+    SbNote := 'sandbox=NO (el SO rechazo el lanzamiento confinado; el programa ' +
+      'corrio con integridad normal - avisa en delphi_report)';
+  Result := Format('exit=%d  %s'#10'%s', [ExitCode, SbNote, Output.TrimRight]);
 end;
 
 { TDelphiFetchTool }
