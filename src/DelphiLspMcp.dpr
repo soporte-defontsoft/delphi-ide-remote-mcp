@@ -111,7 +111,7 @@ begin
     Settings := TMCPSettings.Create('', False); // no settings.ini side effects
     try
       Settings.ServerName := 'delphi-lsp-mcp-service';
-      Settings.ServerVersion := '0.9.0-beta';
+      Settings.ServerVersion := '0.9.1-beta';
 
       ManagerRegistry := TMCPManagerRegistry.Create;
       CoreManager := TMCPCoreManager.Create(Settings);

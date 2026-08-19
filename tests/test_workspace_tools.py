@@ -248,6 +248,8 @@ try:
           out[:200])
     out = call('delphi_git', {"repo": tmpgit, "command": "log"})
     check('git: log muestra el commit', 'parentesis' in out, out[:200])
+    check('git: acentos del mensaje SIN mojibake (utf-8 bien decodificado)',
+          '¡signos!' in out and 'Ã' not in out, out[:200])
 finally:
     shutil.rmtree(tmpgit, ignore_errors=True)
 

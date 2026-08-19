@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.9.1-beta] - 2026-08-19
+
+### Fixed
+- **Mojibake in delphi_git output** (second field-test round): git emits
+  UTF-8 but captured console output was decoded as ANSI ("AÃ±ade" for
+  "Añade"). The capture now runs a strict UTF-8 scan over the bytes:
+  well-formed UTF-8 with high bytes decodes as UTF-8, everything else keeps
+  the ANSI fallback (compilers and console programs emit ANSI/OEM). Applies
+  to delphi_git, delphi_run and delphi_build alike. 142 checks.
+
 ## [0.9.0-beta] - 2026-08-19
 
 Everything in this release comes from the first real remote field test: a

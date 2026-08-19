@@ -37,6 +37,43 @@ begin
   Result := RunCapturedIn(ACmdLine, '', ATimeoutMs, AExitCode);
 end;
 
+{ Strict UTF-8 scanner over the captured bytes: only well-formed multi-byte
+  sequences count, and pure ASCII answers False (the ANSI default is fine
+  there). An ANSI accent almost never forms a valid UTF-8 sequence, so a
+  positive here is reliable. }
+function LooksUtf8(const B: TBytes): Boolean;
+var
+  I, J, N: Integer;
+  HasHigh: Boolean;
+begin
+  HasHigh := False;
+  I := 0;
+  while I < Length(B) do
+  begin
+    if B[I] < $80 then
+    begin
+      Inc(I);
+      Continue;
+    end;
+    HasHigh := True;
+    if (B[I] and $E0) = $C0 then
+      N := 1
+    else if (B[I] and $F0) = $E0 then
+      N := 2
+    else if (B[I] and $F8) = $F0 then
+      N := 3
+    else
+      Exit(False);
+    if I + N >= Length(B) then
+      Exit(False);
+    for J := 1 to N do
+      if (B[I + J] and $C0) <> $80 then
+        Exit(False);
+    Inc(I, N + 1);
+  end;
+  Result := HasHigh;
+end;
+
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 var
@@ -104,9 +141,14 @@ begin
     CloseHandle(PI.hProcess);
     CloseHandle(PI.hThread);
   end;
-  // Console output is in the ANSI/OEM codepage; ANSI is close enough for
-  // compiler messages and never throws.
-  Result := TEncoding.ANSI.GetString(Bytes);
+  // git and modern tools emit UTF-8 (measured mojibake in remote field
+  // test: "AÃ±ade" for "Añade"); compilers emit ANSI/OEM. Strictly valid
+  // UTF-8 with high bytes IS UTF-8; anything else stays ANSI, which is
+  // close enough for compiler messages and never throws.
+  if LooksUtf8(Bytes) then
+    Result := TEncoding.UTF8.GetString(Bytes)
+  else
+    Result := TEncoding.ANSI.GetString(Bytes);
 end;
 
 function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
