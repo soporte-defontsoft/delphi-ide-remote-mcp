@@ -300,30 +300,76 @@ end;
 
 function DprojBuildHazard(const AXml: string): string;
 var
-  Low, V, Proj: string;
+  Low, V: string;
+  Scan, TagEnd, CloseP, AttrP, ValStart, ValEnd: Integer;
 begin
   Result := '';
+  // The whole scan is CASE-INSENSITIVE on purpose. MSBuild itself is picky
+  // about element casing, but a guard must not depend on that subtlety: the
+  // cost of being insensitive is nil (no real project has a <PreBuildEvent>
+  // in odd casing) and the cost of being wrong is arbitrary execution.
   Low := LowerCase(AXml);
+
   // Custom MSBuild target / shell task: a stock .dproj has neither.
   if Low.Contains('<target ') or Low.Contains('<target>') then
     Exit('a custom MSBuild <Target> (runs during build)');
   if Low.Contains('<exec ') or Low.Contains('<exec>') then
     Exit('an <Exec> task (runs a shell command during build)');
+
   // RAD Studio build-event commands: only a NON-EMPTY one runs a shell.
-  for var Tag in ['PreBuildEvent', 'PostBuildEvent', 'PreLinkEvent',
-                  'PostLinkEvent', 'BuildEvent'] do
-    for V in AllTagValues(AXml, Tag) do
-      if V.Trim <> '' then
-        Exit(Format('a non-empty <%s> shell command', [Tag]));
-  // <Import> of a foreign targets file: UNC, or an absolute path that is not a
-  // macro-based ($(BDS)...) or relative import. The stock imports use $(...).
-  for Proj in AllTagAttr(AXml, 'Import', 'Project') do
+  for var Tag in ['prebuildevent', 'postbuildevent', 'prelinkevent',
+                  'postlinkevent', 'buildevent'] do
   begin
-    V := Proj.Trim;
-    if V.StartsWith('\\') then
-      Exit('an <Import> from a UNC path (' + V + ')');
-    if (Length(V) >= 2) and (V[2] = ':') and not V.Contains('$(') then
-      Exit('an <Import> from an absolute path (' + V + ')');
+    Scan := 1;
+    while True do
+    begin
+      Scan := Pos('<' + Tag, Low, Scan);
+      if Scan = 0 then
+        Break;
+      TagEnd := Pos('>', Low, Scan);
+      CloseP := Pos('</' + Tag + '>', Low, Scan);
+      if (TagEnd = 0) or (CloseP = 0) then
+        Break;
+      if Copy(AXml, TagEnd + 1, CloseP - TagEnd - 1).Trim <> '' then
+        Exit(Format('a non-empty <%s> shell command', [Tag]));
+      Scan := CloseP + 1;
+    end;
+  end;
+
+  // <Import> brings in another MSBuild file, which can carry its own targets.
+  // Every import in a real .dproj is macro-based ($(BDS)\Bin\CodeGear...,
+  // $(MSBuildProjectName).deployproj), so anything else - a UNC share, an
+  // absolute path, a bare relative file dropped next to the project - is
+  // refused. That also closes the indirect route: a "clean" .dproj importing
+  // an evil .targets sitting beside it.
+  Scan := 1;
+  while True do
+  begin
+    Scan := Pos('<import', Low, Scan);
+    if Scan = 0 then
+      Break;
+    TagEnd := Pos('>', Low, Scan);
+    if TagEnd = 0 then
+      Break;
+    AttrP := Pos('project="', Low, Scan);
+    if (AttrP > 0) and (AttrP < TagEnd) then
+    begin
+      ValStart := AttrP + Length('project="');
+      ValEnd := Pos('"', AXml, ValStart);
+      if (ValEnd > 0) and (ValEnd <= TagEnd) then
+      begin
+        V := Copy(AXml, ValStart, ValEnd - ValStart).Trim;
+        if V.StartsWith('\\') or V.StartsWith('//') then
+          Exit('an <Import> from a UNC path (' + V + ')');
+        if (Length(V) >= 2) and (V[2] = ':') then
+          Exit('an <Import> from an absolute path (' + V + ')');
+        if V.Contains('..') then
+          Exit('an <Import> that climbs out of the project (' + V + ')');
+        if not V.Contains('$(') then
+          Exit('an <Import> of a non-standard targets file (' + V + ')');
+      end;
+    end;
+    Scan := TagEnd + 1;
   end;
 end;
 

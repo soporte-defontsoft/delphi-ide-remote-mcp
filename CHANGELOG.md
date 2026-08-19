@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.25.1-beta] - 2026-08-20
+
+### Security
+- **Hardened the compile-only scan against evasions** (found while writing the
+  next field-test brief, before it shipped). The 0.24.0 guard matched element
+  names case-sensitively and let an `<Import>` name any relative file, so three
+  routes remained: odd casing (`<prebuildevent>`), and — the real one — a
+  *clean-looking* `.dproj` importing an evil `.targets` dropped beside it, which
+  moved the payload one file away from the scan. The whole scan is now
+  case-insensitive, and an `<Import>` is refused unless it is macro-based
+  (`$(BDS)\...`, as every real project's imports are): no UNC, no absolute, no
+  `..`, no bare relative file. Verified: 7 evasion variants refused, and an
+  untouched project still builds.
+
 ## [0.25.0-beta] - 2026-08-19
 
 ### Added
@@ -56,7 +70,7 @@ the MCP `initialize` response (`serverInfo.version`).
     agent copies fragments of a note verbatim to build the `anchor`/`old_text`
     of a later write, so the text must match the file on disk byte for byte.
 
-7 E2E batteries, **363 checks** (the vault battery adds 83).
+7 E2E batteries, **371 checks** (the vault battery adds 83).
 
 ## [0.24.0-beta] - 2026-08-19
 

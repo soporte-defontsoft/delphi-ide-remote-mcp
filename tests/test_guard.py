@@ -292,6 +292,35 @@ if os.path.exists(_holad):
     check('R7 CRITICAL: el <Exec> inyectado NO se ejecuto (sin marcador)',
           not os.path.exists(_marker), _marker)
 
+    # Evasions of the same guard: odd casing, build events, and the INDIRECT
+    # route (a clean .dproj importing an evil .targets dropped beside it).
+    _clean = open(_holad, encoding='utf-8-sig').read().replace(
+        '<Target Name="R7Probe" BeforeTargets="Build"><Exec Command="cmd /c echo '
+        'pwned &gt; R7MARKER.txt" /></Target>', '')
+    def upload_dproj(xml):
+        return call('delphi_upload', {"path": _holad, "offset": 0,
+                                      "chunkbase64": _b64.b64encode(xml.encode()).decode()})
+    for payload, label in (
+        ('<target name="x" beforetargets="Build"><exec command="cmd /c echo x" /></target>',
+         'minusculas'),
+        ('<PropertyGroup><PostBuildEvent>cmd /c echo x &gt; M.txt</PostBuildEvent></PropertyGroup>',
+         'PostBuildEvent'),
+        ('<PropertyGroup><prebuildevent>cmd /c echo x</prebuildevent></PropertyGroup>',
+         'prebuildevent en minusculas'),
+        ('<Import Project="evil.targets" />', 'Import relativo (targets al lado)'),
+        ('<import project="evil.targets" />', 'import relativo en minusculas'),
+        ('<Import Project="$(BDS)\\..\\..\\evil.targets" />', 'Import con .. tras macro'),
+        ('<Import Project="\\\\servidor\\share\\evil.targets" />', 'Import UNC'),
+    ):
+        upload_dproj(_clean.replace('</Project>', payload + '</Project>'))
+        out = build_no_allowrun(_holad)
+        check('R7 evasion (%s): build RECHAZADO' % label, 'RECHAZADO' in out, out[:160])
+    # and the untouched project still builds fine (no false positive)
+    upload_dproj(_clean)
+    out = build_no_allowrun(_holad)
+    check('R7: un .dproj NORMAL sigue compilando (sin falso positivo)',
+          'RECHAZADO' not in out, out[:200])
+
 # --- B0c: Windows name-normalization bypasses (trailing dot/space, ADS) ---
 for probe, label in ((INSIDE + '\\Evade.pas.', 'punto final'),
                      (INSIDE + '\\Evade2.pas ', 'espacio final'),
