@@ -70,6 +70,8 @@ type
     { Document sync }
     procedure DidOpenText(const AUri, AText: string; AVersion: Integer = 1);
     procedure DidOpenFile(const AFilePath: string);
+    { Full-document change (DelphiLSP announces textDocumentSync=1 = full). }
+    procedure DidChangeText(const AUri, AText: string; AVersion: Integer);
 
     { Language features (positions are 0-based, LSP style) }
     function Hover(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
@@ -79,8 +81,11 @@ type
       const ATriggerCharacter: string = ''): TJSONObject;
 
     { Notifications: returns the params object of the first queued notification
-      with AMethod (caller frees), or nil on timeout. }
-    function WaitForNotification(const AMethod: string; ATimeoutMs: Integer): TJSONObject;
+      with AMethod (caller frees), or nil on timeout. When AUriFilter is not
+      empty, only a notification whose params.uri equals it (case-insensitive)
+      is taken - others stay queued. }
+    function WaitForNotification(const AMethod: string; ATimeoutMs: Integer;
+      const AUriFilter: string = ''): TJSONObject;
 
     { Helpers }
     class function PathToUri(const APath: string): string;
@@ -303,6 +308,21 @@ begin
   DidOpenText(PathToUri(AFilePath), LoadSourceText(AFilePath));
 end;
 
+procedure TLspClient.DidChangeText(const AUri, AText: string; AVersion: Integer);
+var
+  Change: TJSONObject;
+begin
+  Change := TJSONObject.Create;
+  try
+    Change.AddPair('text', AText);
+    Notify('textDocument/didChange', Format(
+      '{"textDocument":{"uri":"%s","version":%d},"contentChanges":[%s]}',
+      [AUri, AVersion, Change.ToJSON]));
+  finally
+    Change.Free;
+  end;
+end;
+
 function TLspClient.Hover(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
 begin
   Result := RequestWithRetry('textDocument/hover', Format(
@@ -338,11 +358,11 @@ begin
 end;
 
 function TLspClient.WaitForNotification(const AMethod: string;
-  ATimeoutMs: Integer): TJSONObject;
+  ATimeoutMs: Integer; const AUriFilter: string): TJSONObject;
 var
   Deadline: UInt64;
   I: Integer;
-  MethodVal: TJSONValue;
+  MethodVal, ParamsVal, UriVal: TJSONValue;
   Remaining: Integer;
 begin
   Result := nil;
@@ -353,16 +373,23 @@ begin
       for I := 0 to FNotifications.Count - 1 do
       begin
         MethodVal := FNotifications[I].GetValue('method');
-        if (MethodVal <> nil) and (MethodVal.Value = AMethod) then
+        if (MethodVal = nil) or (MethodVal.Value <> AMethod) then
+          Continue;
+        ParamsVal := FNotifications[I].GetValue('params');
+        if AUriFilter <> '' then
         begin
-          var ParamsVal := FNotifications[I].GetValue('params');
-          if ParamsVal <> nil then
-            Result := ParamsVal.Clone as TJSONObject
-          else
-            Result := TJSONObject.Create;
-          FNotifications.Delete(I);
-          Exit;
+          UriVal := nil;
+          if ParamsVal is TJSONObject then
+            UriVal := TJSONObject(ParamsVal).GetValue('uri');
+          if (UriVal = nil) or not SameText(UriVal.Value, AUriFilter) then
+            Continue;
         end;
+        if ParamsVal <> nil then
+          Result := ParamsVal.Clone as TJSONObject
+        else
+          Result := TJSONObject.Create;
+        FNotifications.Delete(I);
+        Exit;
       end;
     finally
       FLock.Leave;

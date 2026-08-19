@@ -32,7 +32,10 @@ uses
   Lsp.Discovery in 'Lsp.Discovery.pas',
   Lsp.ConfigFabricator in 'Lsp.ConfigFabricator.pas',
   Lsp.Session in 'Lsp.Session.pas',
-  Mcp.Tools.DelphiLsp in 'Mcp.Tools.DelphiLsp.pas';
+  Lsp.References in 'Lsp.References.pas',
+  Lsp.BuildRunner in 'Lsp.BuildRunner.pas',
+  Mcp.Tools.DelphiLsp in 'Mcp.Tools.DelphiLsp.pas',
+  Mcp.Tools.DelphiExtra in 'Mcp.Tools.DelphiExtra.pas';
 
 var
   Settings: TMCPSettings;

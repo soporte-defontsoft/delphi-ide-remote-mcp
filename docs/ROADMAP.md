@@ -21,10 +21,10 @@
 - [x] Use project `.delphilsp.json` when fresh; detect staleness (dead project path, other compiler generation)
 - [x] Fabricate settings from `.dproj` (search paths, defines, platform, namespaces) into a `%LOCALAPPDATA%` cache — user projects are never written to. Verified end-to-end: 5/5 battery and MCP hover on a project with no settings at all
 
-## Phase 4 — The value tools
-- [ ] `delphi_diagnostics` (linter mode; per-file on-demand lint)
-- [ ] `delphi_references` (hybrid: candidate text scan → `definition` validation → compiler-grade result)
-- [ ] `delphi_build` (MSBuild via registry-located `rsvars.bat`, structured output)
+## Phase 4 — The value tools ✔
+- [x] `delphi_diagnostics` (linter mode; per-file on-demand lint via didChange re-lint)
+- [x] `delphi_references` (hybrid: candidate text scan → `definition` validation → compiler-grade result; homonyms rejected, bounded work with explicit unverified leftovers)
+- [x] `delphi_build` (MSBuild via registry-located `rsvars.bat`, structured errors/warnings + output tail)
 
 ## Phase 4.5 — Safe editing (`delphi_patch`)
 Port of an internally battle-tested safe-edit tool (30+ measured test rounds with several
@@ -43,6 +43,7 @@ Windows filesystem.
 - [ ] Workspace Manager: multi-workspace, warm instances, request queue, LRU, idle shutdown, hang kill+respawn
 - [ ] Streamable HTTP transport: localhost by default, configurable LAN bind + **Bearer token auth** (recommended exposure: VPN only)
 - [ ] Remote file toolset so a remote agent needs no share: `delphi_read` (encoding-aware), `delphi_search` (skips `__history/`, build dirs), `delphi_list`
+- [ ] `delphi_git`: whitelisted git operations executed at the project root (status, diff, log, show, add, commit, branch) so remote agents can version their work without shell access
 - [ ] Dual host: Windows service + VCL tray app (starts minimized to tray — the icon is the "it's running" indicator; menu: workspaces, log, reload, exit)
 
 ## Phase 6 — Publication

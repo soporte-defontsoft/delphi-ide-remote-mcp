@@ -19,6 +19,7 @@ uses
   System.Classes,
   System.SyncObjs,
   System.IOUtils,
+  System.JSON,
   System.Generics.Collections,
   Lsp.Transport.Process,
   Lsp.Client,
@@ -34,10 +35,13 @@ type
   private
     FLock: TCriticalSection;
     FClients: TObjectDictionary<string, TLspClient>;
-    FOpenDocs: TDictionary<string, Boolean>;
+    FDocVersions: TDictionary<string, Integer>;
     FLspExe: string;
     function EnsureExe: string;
-    function CreateClient(const ARootDir, ASettingsFile: string): TLspClient;
+    function CreateClient(const ARootDir, ASettingsFile: string;
+      AServerType: TLspServerType): TLspClient;
+    function GetClient(const AFullPath: string; ALinter: Boolean;
+      out ASettingsUsed, AClientKey, ARootDir: string): TLspClient;
   public
     constructor Create;
     destructor Destroy; override;
@@ -59,10 +63,16 @@ type
       PROJECT directory, never the settings cache. }
     function ResolveSettings(const AFilePath: string; out ARootDir: string): string;
 
-    { Returns the warm client for the file's project (creating it if needed)
-      plus the settings file it runs with (''= unconfigured). Also ensures
-      the document is open on that client. Thread-safe. }
+    { Returns the warm agent client for the file's project (creating it if
+      needed) plus the settings file it runs with (''= unconfigured). Also
+      ensures the document is open on that client. Thread-safe. }
     function AcquireFor(const AFilePath: string; out ASettingsUsed: string): TLspClient;
+
+    { Lints AFilePath (disk content) through a warm LINTER client of its
+      project and returns the publishDiagnostics params (caller frees), or
+      nil on timeout. Re-lints on every call via didChange. }
+    function LintFile(const AFilePath: string; ATimeoutMs: Integer;
+      out ASettingsUsed: string): TJSONObject;
   end;
 
 implementation
@@ -87,13 +97,13 @@ begin
   inherited;
   FLock := TCriticalSection.Create;
   FClients := TObjectDictionary<string, TLspClient>.Create([doOwnsValues]);
-  FOpenDocs := TDictionary<string, Boolean>.Create;
+  FDocVersions := TDictionary<string, Integer>.Create;
 end;
 
 destructor TLspSession.Destroy;
 begin
   FClients.Free; // frees clients, which stop their transports (and children)
-  FOpenDocs.Free;
+  FDocVersions.Free;
   FLock.Free;
   inherited;
 end;
@@ -200,7 +210,8 @@ begin
   Result := '';
 end;
 
-function TLspSession.CreateClient(const ARootDir, ASettingsFile: string): TLspClient;
+function TLspSession.CreateClient(const ARootDir, ASettingsFile: string;
+  AServerType: TLspServerType): TLspClient;
 var
   Transport: TLspProcessTransport;
   Resp: TObject;
@@ -209,7 +220,7 @@ begin
   Transport.Start;
   Result := TLspClient.Create(Transport, True);
   try
-    Resp := Result.Initialize(TLspClient.PathToUri(ARootDir), lstAgent);
+    Resp := Result.Initialize(TLspClient.PathToUri(ARootDir), AServerType);
     Resp.Free;
     Result.SendInitialized;
     if ASettingsFile <> '' then
@@ -220,6 +231,27 @@ begin
   except
     Result.Free;
     raise;
+  end;
+end;
+
+function TLspSession.GetClient(const AFullPath: string; ALinter: Boolean;
+  out ASettingsUsed, AClientKey, ARootDir: string): TLspClient;
+const
+  Prefix: array [Boolean] of string = ('agent|', 'linter|');
+begin
+  ASettingsUsed := ResolveSettings(AFullPath, ARootDir);
+  if ASettingsUsed <> '' then
+    AClientKey := Prefix[ALinter] + ASettingsUsed.ToLower
+  else
+    AClientKey := Prefix[ALinter] + '(nosettings)' + ARootDir.ToLower;
+
+  if not FClients.TryGetValue(AClientKey, Result) then
+  begin
+    if ALinter then
+      Result := CreateClient(ARootDir, ASettingsUsed, lstLinter)
+    else
+      Result := CreateClient(ARootDir, ASettingsUsed, lstAgent);
+    FClients.Add(AClientKey, Result);
   end;
 end;
 
@@ -234,28 +266,61 @@ begin
 
   FLock.Enter;
   try
-    ASettingsUsed := ResolveSettings(FullPath, RootDir);
-    if ASettingsUsed <> '' then
-      Key := ASettingsUsed.ToLower
-    else
-      Key := '(nosettings)' + RootDir.ToLower;
-
-    if not FClients.TryGetValue(Key, Result) then
-    begin
-      Result := CreateClient(RootDir, ASettingsUsed);
-      FClients.Add(Key, Result);
-    end;
-
+    Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
     DocKey := Key + '|' + FullPath.ToLower;
-    if not FOpenDocs.ContainsKey(DocKey) then
+    if not FDocVersions.ContainsKey(DocKey) then
     begin
       Result.DidOpenFile(FullPath);
-      FOpenDocs.Add(DocKey, True);
+      FDocVersions.Add(DocKey, 1);
       Sleep(500); // brief head start for indexing; retries cover the rest
     end;
   finally
     FLock.Leave;
   end;
+end;
+
+function TLspSession.LintFile(const AFilePath: string; ATimeoutMs: Integer;
+  out ASettingsUsed: string): TJSONObject;
+var
+  FullPath, Key, DocKey, RootDir, Uri, Text: string;
+  Client: TLspClient;
+  Version: Integer;
+  Stale: TJSONObject;
+begin
+  FullPath := TPath.GetFullPath(AFilePath);
+  if not FileExists(FullPath) then
+    raise ELspSession.CreateFmt('File not found: %s', [AFilePath]);
+
+  FLock.Enter;
+  try
+    Client := GetClient(FullPath, True, ASettingsUsed, Key, RootDir);
+    Uri := TLspClient.PathToUri(FullPath);
+    Text := TLspClient.LoadSourceText(FullPath);
+
+    // Drop any queued diagnostics for this uri from earlier lints.
+    repeat
+      Stale := Client.WaitForNotification('textDocument/publishDiagnostics', 1, Uri);
+      Stale.Free;
+    until Stale = nil;
+
+    DocKey := Key + '|' + FullPath.ToLower;
+    if FDocVersions.TryGetValue(DocKey, Version) then
+    begin
+      Inc(Version);
+      FDocVersions[DocKey] := Version;
+      Client.DidChangeText(Uri, Text, Version);
+    end
+    else
+    begin
+      FDocVersions.Add(DocKey, 1);
+      Client.DidOpenText(Uri, Text);
+    end;
+  finally
+    FLock.Leave;
+  end;
+  // Wait outside the lock: lints can take a while on big units.
+  Result := Client.WaitForNotification('textDocument/publishDiagnostics',
+    ATimeoutMs, Uri);
 end;
 
 initialization
