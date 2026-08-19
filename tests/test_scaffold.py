@@ -120,6 +120,9 @@ out = call('delphi_package', {"dir": os.path.join(VDIR, 'Win64', 'Debug')})
 try:
     d = json.loads(out)
     zp = d['zip']
+    # since v0.12 server paths travel with virtual drive units (srvX: = X:)
+    if zp.lower().startswith('srv'):
+        zp = zp[3].upper() + zp[4:]
     names = zipfile.ZipFile(zp).namelist()
     check('package: zip creado con el exe', 'HolaVcl.exe' in names, names)
     check('package: sin dcu dentro', not any(n.endswith('.dcu') for n in names), names)
@@ -168,7 +171,7 @@ bp = os.path.join(VDIR, 'BlankMe.pas')
 call('delphi_edit', {"path": bp, "createunit": True})
 out = call('delphi_edit', {"path": bp, "old": "interface", "new": ""})
 check('edit: new="" blanquea la linea sin AccessViolation',
-      'ESCRITO' in out and 'AccessViolation' not in out, out[:150])
+      'BLANQUEADA la linea' in out and 'AccessViolation' not in out, out[:150])
 
 # --- scaffold ships a basic .gitignore (remote agent may edit it later) ---
 gi = os.path.join(VDIR, '.gitignore')

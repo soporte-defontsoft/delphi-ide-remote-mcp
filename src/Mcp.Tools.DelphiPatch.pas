@@ -33,6 +33,7 @@ type
     FOld: string;
     FNew: string;
     FAtLine: Integer;
+    FDelete: Boolean;
     FInsert: string;
     FCode: string;
     FInClass: string;
@@ -52,13 +53,15 @@ type
     property New: string read FNew write FNew;
     [SchemaDescription('EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence (the rejection lists the valid numbers)')]
     property AtLine: Integer read FAtLine write FAtLine;
-    [SchemaDescription('INSERT mode (preferred for NEW routines/methods): "rutina-global" or "metodo". The tool places the block at the legal boundary; with "metodo" it also writes the class declaration. Pass code, not old/new')]
+    [SchemaDescription('DELETE mode: true = remove the "old" anchored line ENTIRELY (old+new="" only blanks it). No "new" here')]
+    property Delete: Boolean read FDelete write FDelete;
+    [SchemaDescription('INSERT mode (preferred for NEW routines/methods): "rutina-global" or "metodo". The tool places the block at the legal boundary (in a .dpr: between uses and the main begin; in a unit: before the final end./initialization); with "metodo" it also writes the class declaration. Pass code, not old/new')]
     property Insert: string read FInsert write FInsert;
     [SchemaDescription('INSERT mode: the COMPLETE block (unqualified signature + begin..end;). NEVER include end.')]
     property Code: string read FCode write FCode;
     [SchemaDescription('INSERT "metodo": exact class name (e.g. TFichaPedidos)')]
     property InClass: string read FInClass write FInClass;
-    [SchemaDescription('INSERT "metodo" optional: section for the declaration (private/protected/public/published); empty = end of class')]
+    [SchemaDescription('INSERT "metodo" optional: section for the declaration (private/protected/public/published); empty = end of class. "published" works on form classes even without an explicit keyword: the declaration lands in the implicit published section right after the class header - the place for event handlers')]
     property Visibility: string read FVisibility write FVisibility;
     [SchemaDescription('INSERT "rutina-global" optional: true = also declare it in the interface section (visible outside the unit)')]
     property Visible: Boolean read FVisible write FVisible;
@@ -120,15 +123,18 @@ begin
   FName := 'delphi_edit';
   FDescription := 'SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus ' +
     'text .dfm/.fmx) preserving the real encoding and line endings. Modes: ' +
-    'EDIT (old = ONE full line copied from delphi_read + new), INSERT ' +
+    'EDIT (old = ONE full line copied from delphi_read + new), DELETE ' +
+    '(delete=true + old: removes the line entirely), INSERT ' +
     '(insert="rutina-global"|"metodo" + code: the tool picks the legal spot ' +
-    'and, for methods, writes BOTH halves - declaration and qualified ' +
-    'implementation), CREATE (createunit=true) and RESTORE (restore=true, ' +
-    'two-step). It refuses to rewrite whole files, refuses binary designer ' +
-    'files (TPF0), makes automatic backups, writes atomically, and audits ' +
-    'the result (encoding, EOLs, mojibake, end. structure) reporting the ' +
-    'REAL lines read back from disk - use that as evidence. Never edit ' +
-    'Delphi files with generic tools: CP1252 sources get destroyed.';
+    '- also inside a .dpr - and, for methods, writes BOTH halves: ' +
+    'declaration and qualified implementation), CREATE (createunit=true; ' +
+    'new files honour the encoding configured in the IDE) and RESTORE ' +
+    '(restore=true, two-step). It refuses to rewrite whole files, refuses ' +
+    'binary designer files (TPF0), makes automatic backups, writes ' +
+    'atomically, and audits the result (encoding, EOLs, mojibake, end. ' +
+    'structure) reporting the REAL lines read back from disk - use that as ' +
+    'evidence. Never edit Delphi files with generic tools: CP1252 sources ' +
+    'get destroyed.';
 end;
 
 function TDelphiPatchTool.ExecuteWithParams(const Params: TDelphiPatchParams): string;
@@ -144,6 +150,7 @@ begin
   // is caught by the whole-file-rewrite gate inside the engine.
   A.HasNew := (Params.New <> '') or A.HasOld;
   A.AtLine := Params.AtLine;
+  A.DeleteLine := Params.Delete;
   A.Insert := Params.Insert.Trim.ToLower;
   A.Code := Params.Code;
   A.ClassName_ := Params.InClass;

@@ -51,8 +51,9 @@ begin
   FDescription := 'Create a NEW Delphi project (console/VCL/FMX: .dpr + ' +
     'buildable .dproj + main form) or a NEW form (VCL/FMX: .pas + .dfm/.fmx ' +
     'pair, registered in the .dpr uses and Application.CreateForm). ' +
-    'IDE-equivalent skeletons, UTF-8 with BOM + CRLF, never overwrites ' +
-    'anything. For plain units use delphi_edit with createunit=true.';
+    'IDE-equivalent skeletons, CRLF, source encoding follows the IDE''s ' +
+    'configured default (UTF-8/ANSI), never overwrites anything. For plain ' +
+    'units use delphi_edit with createunit=true.';
 end;
 
 function TDelphiCreateTool.ExecuteWithParams(const Params: TDelphiCreateParams): string;

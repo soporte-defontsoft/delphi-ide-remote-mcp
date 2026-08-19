@@ -73,7 +73,7 @@ begin
   TServerStatusResource.Initialize;
   FSettings := TMCPSettings.Create('', False);
   FSettings.ServerName := 'delphi-lsp-mcp-service';
-  FSettings.ServerVersion := '0.11.0-beta';
+  FSettings.ServerVersion := '0.12.0-beta';
 
   FRegistry := TMCPManagerRegistry.Create;
   FCore := TMCPCoreManager.Create(FSettings);
@@ -88,6 +88,13 @@ begin
     function(const ToolName: string; const Arguments: TJSONObject): string
     begin
       Result := ToolCallDenied(ToolName, Arguments);
+    end;
+  // Outbound twin of the gate: server drive letters leave as virtual
+  // units (D:\x -> srvd:\x) in every textual result.
+  TMCPToolsManager.ResultFilter :=
+    function(const ToolName, AText: string): string
+    begin
+      Result := MaskDriveText(ToolName, AText);
     end;
 
   FServer := TMCPIdHTTPServer.Create(Self);

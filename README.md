@@ -17,14 +17,14 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 | Tool | What it does |
 |---|---|
 | `delphi_symbols` | Document symbol tree of a unit (classes, methods, sections) |
-| `delphi_definition` | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` jumps to the interface declaration instead of the body |
+| `delphi_definition` | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` jumps to the interface declaration of the target symbol (on call sites the tool chains definition→declaration, so you get the callee) |
 | `delphi_signature` | Signature help for the call under the cursor (parameter names/types) — the IDE's Ctrl+Shift+Space |
 | `delphi_hover` | Type/signature of an identifier usage |
 | `delphi_completion` | Code completion candidates |
 | `delphi_references` | Find references (hybrid: text scan + per-candidate `definition` validation — homonyms rejected by the compiler engine) |
 | `delphi_diagnostics` | Error Insight on demand: real compiler codes (E/W/H) with exact positions, no build |
 | `delphi_read` | Encoding-correct numbered reads (CP1252 / UTF-8±BOM detected for real) |
-| `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, semantic INSERT (global routine / method with both halves), TPF0 hard-reject, post-write audit |
+| `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, semantic INSERT (global routine / method with both halves — also inside a `.dpr`, and into the implicit published section of forms), line DELETE mode, TPF0 hard-reject, post-write audit; new units use the encoding configured in the IDE |
 | `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms (VCL/FMX) with IDE-equivalent skeletons — buildable immediately |
 | `delphi_build` | Real MSBuild builds with structured errors/warnings |
@@ -35,7 +35,7 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 | `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style |
 | `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace] Roots=D:\Projects;E:\More`) |
 | `delphi_installs` | List every RAD Studio/Delphi installation discovered on the machine (side-by-side versions), flagging which one is active for the LSP engine |
-| `delphi_workspace` | The lay of the land on the server: the configured workspace roots (your allowed universe — **server paths, not your own**), the access level, and the active Delphi. Call it first |
+| `delphi_workspace` | The lay of the land on the server: the configured workspace roots (your allowed universe), the access level, and the active Delphi. Server paths travel with **virtual drive units** (`srvd:`, `srvc:` — they only exist inside this MCP, never on your local disk). Call it first |
 | `delphi_git` | Whitelisted git operations — including **`clone`/`pull`** (bring a whole repo onto the server in one call, jailed) plus status/diff/log/show/branch/add/commit/init/push/tag/config |
 
 ## Quickstart
@@ -82,8 +82,17 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
   transport (useful for a stdio-registered reviewer).
 - **Roots** are both discovery (`delphi_projects`) and a **jail**: with roots configured, every
   disk-touching tool (read/edit/create/build/lint/search/list/git/LSP) refuses paths outside
-  them — including `..\` escapes and prefix cousins. No roots = unrestricted (local trusted
-  mode). For remote exposure configure BOTH, and expose over VPN/LAN only.
+  them — including `..\` escapes and prefix cousins. Paths with spaces need no quoting (the
+  separator is `;`); quotes around a root are tolerated and stripped. If Roots is configured
+  but no root parses valid, the server **fails closed** (everything refused) rather than
+  silently running unrestricted. No roots = unrestricted (local trusted mode). For remote
+  exposure configure BOTH, and expose over VPN/LAN only.
+- **Virtual drive units**: the server's real drive letters never travel to the client — paths
+  leave as `srvd:\...`, `srvc:\...` and are accepted back in the same form (real paths still
+  work), so an agent can never mistake server paths for its own local disks. One generic rule
+  at the dispatch gate covers every tool's output, compiler/git messages and 8.3 short forms
+  included. Exception: successful `delphi_read`/`delphi_fetch` content is byte-exact by
+  design and travels verbatim.
 - **Library read zone**: READING tools (read/search/list/fetch/LSP navigation) additionally
   accept the RAD Studio installation and the IDE Library Search Path directories — so an
   agent can follow a definition into `System.SysUtils.pas` or read an installed component's
@@ -92,7 +101,7 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 
 ## Tests
 
-`tests/` contains five end-to-end batteries that talk real MCP to the built server (170 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
+`tests/` contains six end-to-end batteries that talk real MCP to the built server (198 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real), `test_guard.py` (workspace jail, including escape attempts) and `test_v012.py` (virtual drive units round trip, delete/blank modes, `.dpr` inserts, implicit published, git messages via `-F`, Roots fail-closed parsing).
 
 ## Key design points
 

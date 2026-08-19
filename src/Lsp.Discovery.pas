@@ -16,6 +16,19 @@ type
     function Found: Boolean;
   end;
 
+{ Generic reader of the IDE's per-user configuration (HKCU\...\BDS\<ver>\...).
+  ASubKey is relative to the version key (e.g. 'Editor', 'PlatformSDKs',
+  'Environment Variables'); '' when the key or value does not exist. The
+  building block for every future IDE setting we need (Android/macOS SDKs,
+  deployment, etc.) - never compose registry paths by hand elsewhere. }
+function IdeConfigValue(const AVersion, ASubKey, AValueName: string): string;
+
+{ The IDE's configured default encoding for new/saved files (Tools > Options
+  > Editor), read from the Editor\DefaultFileFilter value of that install
+  (e.g. 'Borland.FileFilter.UTF8ToUTF8'). True = UTF-8; False = the
+  historical ANSI default (value absent or not UTF8-to-UTF8). }
+function IdeDefaultUtf8(const AVersion: string): Boolean;
+
 { ALL RAD Studio installations on the machine (a machine may host several
   Delphi versions side by side), newest first. Installs WITHOUT DelphiLSP
   are included too: they still build via msbuild. }
@@ -193,6 +206,31 @@ begin
   finally
     Reg.Free;
   end;
+end;
+
+function IdeConfigValue(const AVersion, ASubKey, AValueName: string): string;
+var
+  Reg: TRegistry;
+  Key: string;
+begin
+  Result := '';
+  Reg := TRegistry.Create(KEY_READ);
+  try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    Key := 'SOFTWARE\Embarcadero\BDS\' + AVersion;
+    if ASubKey <> '' then
+      Key := Key + '\' + ASubKey;
+    if Reg.OpenKeyReadOnly(Key) and Reg.ValueExists(AValueName) then
+      Result := Reg.ReadString(AValueName);
+  finally
+    Reg.Free;
+  end;
+end;
+
+function IdeDefaultUtf8(const AVersion: string): Boolean;
+begin
+  Result := IdeConfigValue(AVersion, 'Editor', 'DefaultFileFilter')
+    .ToUpper.Contains('UTF8TOUTF8');
 end;
 
 end.

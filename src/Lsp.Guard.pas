@@ -55,9 +55,24 @@ function IsReadOnlyNow: Boolean;
 { THE single entry gate, consulted by the tools dispatcher before ANY tool
   executes. '' = allowed; otherwise the rejection message returned to the
   agent. In read-only mode every mutating tool is refused; delphi_git is
-  mixed and resolved by its "command" argument (query commands pass). }
+  mixed and resolved by its "command" argument (query commands pass).
+  It also NORMALIZES the arguments in place: virtual drive units
+  (srvd:\x -> D:\x) are expanded here, before any check or tool. }
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
+
+{ Virtual drive units. The drive letters of this SERVER travel to the client
+  as srvd:, srvc:, ... so a model never mistakes server paths for its own
+  local disks (measured confusion in the field test). Round trip:
+  - inbound: the entry gate expands srvX: in tool arguments (whole-value
+    prefix match only, and never inside content-carrying parameters);
+  - outbound: MaskDriveText rewrites every served drive prefix in a tool's
+    textual result - one generic rule, so compiler/git/LSP output and even
+    8.3 short forms (D:\PROYEC~1) are covered - EXCEPT for byte-fidelity
+    tools (delphi_read / delphi_fetch), whose text is file content and must
+    reach the client verbatim (an edit anchor built from masked text would
+    not match the disk). }
+function MaskDriveText(const AToolName, AText: string): string;
 
 implementation
 
@@ -67,11 +82,13 @@ uses
   System.StrUtils,
   System.IniFiles,
   System.IOUtils,
+  System.Generics.Collections,
   Lsp.Discovery;
 
 var
   GLoaded: Boolean = False;
   GRoots: TArray<string>;
+  GRootsInvalid: Boolean = False; // Roots= had text but NO valid root: fail closed
   GProcessReadOnly: Boolean = False;
   GSecLoaded: Boolean = False;
   GAuthToken: string;
@@ -142,6 +159,8 @@ begin
   Result := GAnonymousReadOnly;
 end;
 
+procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
+
 function WriteDenied(const AWhat: string): string;
 begin
   Result := Format('RECHAZADO: acceso de SOLO LECTURA. La operacion "%s" ' +
@@ -155,6 +174,9 @@ function ToolCallDenied(const AToolName: string;
 var
   Cmd, GitArgs: string;
 begin
+  // Normalization first, unconditionally: virtual drive units in the
+  // arguments become real server paths before any check or any tool.
+  ExpandVirtualDrives(AArguments);
   Result := '';
   if not (GProcessReadOnly or GRequestReadOnly) then
     Exit;
@@ -206,13 +228,20 @@ begin
     List := TStringList.Create;
     try
       for R in Raw.Split([';']) do
-        if R.Trim <> '' then
+        // Quotes around a root (Roots="D:\My Projects") are a natural way to
+        // write paths with spaces: tolerated and stripped. Spaces themselves
+        // need no quoting (the separator is ';').
+        if R.Trim.Trim(['"']).Trim <> '' then
         try
-          List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(R.Trim)));
+          List.Add(IncludeTrailingPathDelimiter(
+            TPath.GetFullPath(R.Trim.Trim(['"']).Trim)));
         except
           // an unparseable root is ignored, never crashes the server
         end;
       GRoots := List.ToStringArray;
+      // Fail CLOSED: if Roots was configured but nothing parsed, a typo must
+      // never silently leave the server unrestricted.
+      GRootsInvalid := (Raw.Trim <> '') and (Length(GRoots) = 0);
     finally
       List.Free;
     end;
@@ -260,6 +289,10 @@ begin
   if Result <> '' then
     Exit;
   Roots := WorkspaceRoots;
+  if GRootsInvalid then
+    Exit('RECHAZADO: [Workspace] Roots esta configurado pero ninguna de sus ' +
+      'rutas es valida (comillas de mas, unidad inexistente...). Por seguridad ' +
+      'se rechaza todo hasta corregir settings.ini / DELPHI_MCP_ROOTS.');
   if Length(Roots) = 0 then
     Exit; // no jail configured
   try
@@ -349,6 +382,141 @@ begin
   for R in LibraryRoots do
     if StartsText(R, Full) then
       Exit('');
+end;
+
+// ---------------------------------------------------------------------------
+// Virtual drive units (srvd:, srvc:, ...)
+// ---------------------------------------------------------------------------
+
+var
+  GDrvLoaded: Boolean = False;
+  GDrvLetters: string; // uppercase letters of every served drive, e.g. 'DC'
+
+{ The drives that can legitimately appear in tool output: those hosting the
+  workspace roots and the library zone (RAD Studio + components). Cached. }
+function ServedDriveLetters: string;
+
+  procedure AddDriveOf(const APath: string);
+  begin
+    if (Length(APath) >= 2) and (APath[2] = ':') and
+       CharInSet(APath[1], ['A'..'Z', 'a'..'z']) and
+       (Pos(UpCase(APath[1]), GDrvLetters) = 0) then
+      GDrvLetters := GDrvLetters + UpCase(APath[1]);
+  end;
+
+var
+  R: string;
+begin
+  if not GDrvLoaded then
+  begin
+    GDrvLetters := '';
+    for R in WorkspaceRoots do
+      AddDriveOf(R);
+    for R in LibraryRoots do
+      AddDriveOf(R);
+    GDrvLoaded := True;
+  end;
+  Result := GDrvLetters;
+end;
+
+{ 'srvd:\x' / 'srvd:/x' / bare 'srvd:' -> 'D:\x' ... Whole-value prefix match
+  only; anything else comes back untouched (real paths keep working). }
+function ExpandDriveValue(const AValue: string): string;
+begin
+  Result := AValue;
+  if (Length(AValue) >= 5) and StartsText('srv', AValue) and
+     CharInSet(AValue[4], ['A'..'Z', 'a'..'z']) and (AValue[5] = ':') then
+    if (Length(AValue) = 5) or CharInSet(AValue[6], ['\', '/']) then
+      Result := UpCase(AValue[4]) + Copy(AValue, 5, MaxInt);
+end;
+
+{ Rewrites the string arguments of a tools/call in place. Content-carrying
+  parameters are never touched: their text belongs to files/messages, not to
+  the path namespace. }
+procedure ExpandVirtualDrives(const AArguments: TJSONObject);
+var
+  I: Integer;
+  P: TJSONPair;
+  Names, Vals: TStringList;
+  V, N: string;
+begin
+  if not Assigned(AArguments) then
+    Exit;
+  Names := TStringList.Create;
+  Vals := TStringList.Create;
+  try
+    for I := 0 to AArguments.Count - 1 do
+    begin
+      P := AArguments.Pairs[I];
+      if not (P.JsonValue is TJSONString) then
+        Continue;
+      if MatchText(P.JsonString.Value,
+        ['new', 'old', 'content', 'data', 'message', 'code', 'args']) then
+        Continue;
+      V := TJSONString(P.JsonValue).Value;
+      N := ExpandDriveValue(V);
+      if N <> V then
+      begin
+        Names.Add(P.JsonString.Value);
+        Vals.Add(N);
+      end;
+    end;
+    for I := 0 to Names.Count - 1 do
+    begin
+      AArguments.RemovePair(Names[I]).Free;
+      AArguments.AddPair(Names[I], Vals[I]);
+    end;
+  finally
+    Names.Free;
+    Vals.Free;
+  end;
+end;
+
+function MaskDriveText(const AToolName, AText: string): string;
+var
+  Sb: TStringBuilder;
+  Letters: string;
+  I, L: Integer;
+  C, PrevC: Char;
+begin
+  // Byte-fidelity tools: file CONTENT travels verbatim. Their rejections
+  // carry no content, only paths - those are masked like everything else.
+  if MatchText(AToolName, ['delphi_read', 'delphi_fetch']) and
+     not (AText.StartsWith('RECHAZADO') or AText.StartsWith('error')) then
+    Exit(AText);
+  Letters := ServedDriveLetters;
+  if (Letters = '') or (AText = '') then
+    Exit(AText);
+  Sb := TStringBuilder.Create(Length(AText) + 64);
+  try
+    I := 1;
+    L := Length(AText);
+    while I <= L do
+    begin
+      C := AText[I];
+      // <letter>:<separator> not preceded by a letter/digit = a path start.
+      // The boundary check keeps things like git's "HEAD:" intact.
+      if (Pos(UpCase(C), Letters) > 0) and (I + 2 <= L) and
+         (AText[I + 1] = ':') and CharInSet(AText[I + 2], ['\', '/']) then
+      begin
+        if I = 1 then
+          PrevC := #0
+        else
+          PrevC := AText[I - 1];
+        if not CharInSet(PrevC, ['A'..'Z', 'a'..'z', '0'..'9']) then
+        begin
+          Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32)).Append(':');
+          Inc(I, 2);
+          Continue;
+        end;
+      end;
+      Sb.Append(C);
+      Inc(I);
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
 end;
 
 end.

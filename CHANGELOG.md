@@ -6,6 +6,63 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.12.0-beta] - 2026-08-19
+
+Virtual drive units — server paths stop looking like the client's own disks —
+plus every finding from the second field round (the "Agenda" end-to-end run:
+2 projects, 7 commits, 16/16 tests, ~86 MCP calls).
+
+### Added
+- **Virtual drive units (`srvd:`, `srvc:`, ...)**: the server's real drive
+  letters never travel to the client. One generic prefix rule at the single
+  dispatch gate handles both directions — arguments are expanded on the way
+  in (`srvd:\x` → `D:\x`; real paths still accepted), and every textual
+  result is masked on the way out, INCLUDING compiler/git/LSP output and 8.3
+  short forms (`D:\PROYEC~1`). Byte-fidelity exemption: successful
+  `delphi_read`/`delphi_fetch` content travels verbatim (an edit anchor
+  built from masked text would not match the disk); their rejections are
+  masked like everything else. Measured origin: remote agents mistaking
+  server paths for their own local disks.
+- **`delphi_edit delete:true`**: removes the anchored line ENTIRELY
+  (`new:""` only blanks it — and now says so: `BLANQUEADA la linea N ...
+  para eliminarla del todo usa delete:true`).
+- **IDE settings read at runtime** (`IdeConfigValue`, generic HKCU reader —
+  the building block for future Android/macOS/SDK configuration): new
+  units/forms/projects are created with the encoding the IDE is configured
+  to use (`Editor\DefaultFileFilter`: UTF-8 → utf8-bom, ANSI → cp1252), and
+  BOM-less pure-ASCII files get their first accents written in that same
+  standard.
+
+### Fixed
+- **B3 (blocker): `insert:"rutina-global"` in a `.dpr`** placed the routine
+  before `end.` — legal in a unit, E2070 + 2×E2029 in a program. In a `.dpr`
+  the routine now lands between the `uses` clause and the main `begin`;
+  `insert:"metodo"` on a `.dpr` is refused with guidance.
+- **C1: `insert:"metodo"` with `visibility:"published"`** now works on form
+  classes with no explicit section keyword: the declaration lands in the
+  implicit published section right after the class header — the event
+  handler case, the most common VCL edit.
+- **B1: `delphi_git commit`/`tag` messages** now reach git via `-F <file>`
+  (byte-exact): embedding them in the command line turned every `"` into
+  `''`.
+- **B5: `delphi_definition kind=declaration` on a call site** returned the
+  declaration of the ENCLOSING method; the tool now chains
+  definition→declaration at the target's own position, so it answers the
+  callee.
+- **B2: `acentos=` counted the UTF-8 BOM** as 3 phantom high bytes.
+- **B4: mojibake in `delphi_create form-vcl` response messages**: a handful
+  of message literals carried non-ASCII bytes that the compiler mangles when
+  the IDE's default encoding disagrees with the file; all server messages
+  are now pure ASCII by construction.
+- Scaffolded `.gitignore` no longer carries a UTF-8 BOM (git does not strip
+  it, which silently broke the first ignore rule).
+
+### Security
+- **`[Workspace] Roots` parsing fails CLOSED**: quotes around a root are
+  tolerated and stripped (paths with spaces need no quoting — the separator
+  is `;`), and if Roots is configured but NO root parses valid, every path
+  is refused instead of silently running unrestricted.
+
 ## [0.11.0-beta] - 2026-08-19
 
 The transfer batch, plus the addendum findings from the replication run.

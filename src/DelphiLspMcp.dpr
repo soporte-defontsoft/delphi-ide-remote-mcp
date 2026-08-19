@@ -111,7 +111,7 @@ begin
     Settings := TMCPSettings.Create('', False); // no settings.ini side effects
     try
       Settings.ServerName := 'delphi-lsp-mcp-service';
-      Settings.ServerVersion := '0.11.0-beta';
+      Settings.ServerVersion := '0.12.0-beta';
 
       ManagerRegistry := TMCPManagerRegistry.Create;
       CoreManager := TMCPCoreManager.Create(Settings);
@@ -128,6 +128,13 @@ begin
         function(const ToolName: string; const Arguments: TJSONObject): string
         begin
           Result := ToolCallDenied(ToolName, Arguments);
+        end;
+      // Outbound twin of the gate: server drive letters leave as virtual
+      // units (D:\x -> srvd:\x) in every textual result.
+      TMCPToolsManager.ResultFilter :=
+        function(const ToolName, AText: string): string
+        begin
+          Result := MaskDriveText(ToolName, AText);
         end;
       if HasFlag('--readonly') then
       begin

@@ -19,6 +19,12 @@ type
   TToolGateFunc = reference to function(const ToolName: string;
     const Arguments: TJSONObject): string;
 
+  // [local change] optional filter applied to every TEXTUAL tool result and
+  // to gate denials, so the host can rewrite server-specific data (e.g.
+  // virtual drive units) in one single place.
+  TToolResultFilter = reference to function(const ToolName: string;
+    const AText: string): string;
+
   TMCPToolsManager = class(TInterfacedObject, IMCPCapabilityManager)
   strict private
     function ExtractToolNameAndArguments(const Params: System.JSON.TJSONObject; out ToolName: string; out Arguments: TJSONObject): Boolean;
@@ -43,6 +49,8 @@ type
 
     // [local change] single entry gate for every tools/call (see TToolGateFunc)
     class var ToolGate: TToolGateFunc;
+    // [local change] outbound filter for every textual result (see TToolResultFilter)
+    class var ResultFilter: TToolResultFilter;
   end;
 
 implementation
@@ -256,14 +264,22 @@ begin
   begin
     var GateMsg := ToolGate(ToolName, Arguments);
     if GateMsg <> '' then
+    begin
+      if Assigned(ResultFilter) then
+        GateMsg := ResultFilter(ToolName, GateMsg);
       Exit(TValue.From<TJSONObject>(BuildToolCallResponse(GateMsg)));
+    end;
   end;
 
   if FTools.TryGetValue(ToolName, Tool) then
     resultValue := ExecuteTool(Tool, Arguments)
   else
     ResultValue := TValue.From('Error: Tool not found: ' + ToolName);
-    
+
+  // [local change] outbound filter: one place to rewrite textual results.
+  if Assigned(ResultFilter) and ResultValue.IsType<string> then
+    ResultValue := TValue.From<string>(ResultFilter(ToolName, ResultValue.AsString));
+
   Result := TValue.From<TJSONObject>(BuildToolCallResponse(ResultValue));
 end;
 

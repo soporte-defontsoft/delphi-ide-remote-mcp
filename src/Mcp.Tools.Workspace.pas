@@ -438,10 +438,11 @@ function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): strin
 const
   BadChars: array [0 .. 8] of string = (';', '|', '&', '`', '$', '<', '>', #13, #10);
 var
-  Cmd, GitArgs, Repo, Output: string;
+  Cmd, GitArgs, Repo, Output, MsgFile: string;
   ExitCode: Cardinal;
   B: string;
 begin
+  MsgFile := '';
   Repo := Params.Repo;
   if Repo = '' then
     Exit('error: missing repo');
@@ -495,8 +496,12 @@ begin
   begin
     if Params.Message.Trim = '' then
       Exit('error: commit needs the "message" parameter');
-    GitArgs := Format('commit -m "%s" %s',
-      [Params.Message.Replace('"', ''''''), Params.Args]);
+    // -F <file>: the message reaches git byte-exact. Embedding it in the
+    // command line mangled double quotes (measured in the field: " -> '').
+    MsgFile := TPath.Combine(TPath.GetTempPath,
+      'delphi-mcp-msg-' + TGUID.NewGuid.ToString + '.txt');
+    TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
+    GitArgs := Format('commit -F "%s" %s', [MsgFile, Params.Args]);
   end
   else if Cmd = 'clone' then
   begin
@@ -547,9 +552,14 @@ begin
   else if Cmd = 'tag' then
   begin
     if Params.Message.Trim <> '' then
-      // -m makes it annotated; args = tag name (and options)
-      GitArgs := Format('tag -m "%s" %s',
-        [Params.Message.Replace('"', ''''''), Params.Args])
+    begin
+      // -F makes it annotated (like -m) and keeps quotes byte-exact;
+      // args = tag name (and options)
+      MsgFile := TPath.Combine(TPath.GetTempPath,
+        'delphi-mcp-msg-' + TGUID.NewGuid.ToString + '.txt');
+      TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
+      GitArgs := Format('tag -F "%s" %s', [MsgFile, Params.Args]);
+    end
     else
       GitArgs := 'tag ' + Params.Args; // no args = list tags
   end
@@ -562,9 +572,14 @@ begin
     TLogger.Warning(Format('delphi_git: NETWORK %s repo=%s %s',
       [Cmd, Repo, Params.Message]));
 
-  Output := RunCaptured(Format('git.exe -C "%s" %s', [Repo, GitArgs]),
-    IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch']), 600000, 60000),
-    ExitCode);
+  try
+    Output := RunCaptured(Format('git.exe -C "%s" %s', [Repo, GitArgs]),
+      IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch']), 600000, 60000),
+      ExitCode);
+  finally
+    if (MsgFile <> '') and TFile.Exists(MsgFile) then
+      TFile.Delete(MsgFile);
+  end;
   if Length(Output) > 30000 then
     Output := Copy(Output, 1, 30000) + #10'... (truncated)';
   Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
@@ -623,11 +638,12 @@ begin
   inherited;
   FName := 'delphi_workspace';
   FDescription := 'The lay of the land on the SERVER: the workspace roots ' +
-    'this server operates within (your entire allowed universe here - these ' +
-    'are paths on the REMOTE Delphi machine, NOT your own local disk; call ' +
-    'this FIRST so you never confuse the two), the access level ' +
-    '(read-write / read-only), and the active RAD Studio. Read-only, no ' +
-    'parameters.';
+    'this server operates within (your entire allowed universe here), the ' +
+    'access level (read-write / read-only), and the active RAD Studio. ' +
+    'Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only ' +
+    'exist inside this MCP: use them verbatim in every path argument and ' +
+    'you will receive them back in results. They are NEVER your own local ' +
+    'disks. Call this FIRST. Read-only, no parameters.';
 end;
 
 function TDelphiWorkspaceTool.ExecuteWithParams(const Params: TDelphiWorkspaceParams): string;
@@ -641,8 +657,10 @@ begin
   Return := TJSONObject.Create;
   try
     Return.AddPair('note', 'These are paths on the REMOTE server that runs ' +
-      'Delphi, not your local machine. Work only inside "roots"; anything ' +
-      'outside is refused. Paths you receive from tools are server paths.');
+      'Delphi, not your local machine. Server drive letters travel as ' +
+      'VIRTUAL units (srvd:, srvc:, ...): use them verbatim in every path ' +
+      'argument - they only resolve inside this MCP, never on your disk. ' +
+      'Work only inside "roots"; anything outside is refused.');
     Roots := WorkspaceRoots;
     RootsArr := TJSONArray.Create;
     Return.AddPair('roots', RootsArr);

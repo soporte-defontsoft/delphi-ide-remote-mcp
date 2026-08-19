@@ -36,11 +36,20 @@ begin
 end;
 
 procedure WriteNewFile(const APath, AText: string);
+var
+  Enc, Ext: string;
 begin
   if TFile.Exists(APath) then
     raise Exception.CreateFmt('%s YA EXISTE - el scaffolder jamas sobreescribe.', [APath]);
   TDirectory.CreateDirectory(TPath.GetDirectoryName(TPath.GetFullPath(APath)));
-  PatchSaveText(APath, AText, 'utf8-bom');
+  Ext := LowerCase(TPath.GetExtension(APath));
+  if Ext = '.dproj' then
+    Enc := 'utf8-bom' // MSBuild XML declares utf-8: not subject to IDE taste
+  else if TPath.GetFileName(APath).ToLower = '.gitignore' then
+    Enc := 'utf8'     // git does NOT strip a BOM: it would break the 1st rule
+  else
+    Enc := NewFileEncName; // sources honour the IDE's configured default
+  PatchSaveText(APath, AText, Enc);
 end;
 
 function DprojTemplate(const AName, AGuid, AAppType, AFramework,
@@ -314,9 +323,9 @@ begin
     end;
 
     Result := Format('CREADO proyecto %s (%s) en %s'#10'  ficheros: %s'#10 +
-      'Todo UTF-8 con BOM + CRLF. Compilable ya con delphi_build (el IDE ' +
-      'enriquecera el .dproj al abrirlo).',
-      [AName, Kind, Dir, string.Join(', ', Files.ToStringArray)]);
+      'Fuentes en %s (el encoding configurado en el IDE) + CRLF. Compilable ' +
+      'ya con delphi_build (el IDE enriquecera el .dproj al abrirlo).',
+      [AName, Kind, Dir, string.Join(', ', Files.ToStringArray), NewFileEncName]);
   finally
     Files.Free;
   end;
@@ -396,19 +405,19 @@ begin
     if Lines[I].Trim.StartsWith('Application.Run', True) then
     begin
       Lines[I] := '  Application.CreateForm(T' + FormName + ', ' + FormName + ');' + #10 + Lines[I];
-      RunAnchor := 'CreateForm añadido antes de Application.Run';
+      RunAnchor := 'CreateForm anadido antes de Application.Run';
       Break;
     end;
 
   PatchSaveText(ADprPath, string.Join(#10, Lines).Replace(#10, #13#10), Enc);
 
   Result := Format('CREADO form %s (T%s, %s) con su %s y ALTA en %s (%s).'#10 +
-    'El <DCCReference> del .dproj lo añadira el IDE al abrir el proyecto; ' +
+    'El <DCCReference> del .dproj lo anadira el IDE al abrir el proyecto; ' +
     'MSBuild ya lo compila igualmente porque el uses del .dpr lo arrastra.',
     [AUnitName, FormName, Kind,
      IfThen(Kind = 'vcl', AUnitName + '.dfm', AUnitName + '.fmx'),
      TPath.GetFileName(ADprPath),
-     IfThen(RunAnchor <> '', RunAnchor, 'sin Application.Run: añade el CreateForm a mano si procede')]);
+     IfThen(RunAnchor <> '', RunAnchor, 'sin Application.Run: anade el CreateForm a mano si procede')]);
 end;
 
 end.

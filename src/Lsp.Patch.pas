@@ -27,6 +27,7 @@ type
     NewText: string;      // replacement (may be multi-line)
     HasOld, HasNew: Boolean;
     AtLine: Integer;      // 1-based disambiguation; 0 = unset
+    DeleteLine: Boolean;  // true = remove the anchored line entirely
     Insert: string;       // '', 'rutina-global', 'metodo'
     Code: string;
     ClassName_: string;
@@ -50,6 +51,11 @@ function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
 function PatchLoadText(const APath: string; out AEncName: string): string;
 procedure PatchSaveText(const APath, AText, AEncName: string);
 
+{ Encoding for NEW Delphi files, honouring the IDE's configured default
+  (Tools > Options > Editor): 'utf8-bom' when the IDE is set to UTF-8,
+  'cp1252' when ANSI. }
+function NewFileEncName: string;
+
 implementation
 
 uses
@@ -61,7 +67,8 @@ uses
   System.Generics.Collections,
   System.RegularExpressions,
   Winapi.Windows,
-  Lsp.Guard;
+  Lsp.Guard,
+  Lsp.Discovery;
 
 const
   BACKUP_SUB = '__delphi-patch';
@@ -90,6 +97,33 @@ begin
   else
     Result := 'cp1252';
   end;
+end;
+
+var
+  GIdeUtf8Loaded: Boolean = False;
+  GIdeUtf8: Boolean = False;
+
+{ The IDE's configured default encoding, cached (registry, active install). }
+function IdeWantsUtf8: Boolean;
+var
+  Info: TRadStudioInfo;
+begin
+  if not GIdeUtf8Loaded then
+  begin
+    Info := DiscoverRadStudio;
+    if Info.Found then
+      GIdeUtf8 := IdeDefaultUtf8(Info.Version);
+    GIdeUtf8Loaded := True;
+  end;
+  Result := GIdeUtf8;
+end;
+
+function NewFileEncName: string;
+begin
+  if IdeWantsUtf8 then
+    Result := 'utf8-bom'
+  else
+    Result := 'cp1252';
 end;
 
 function ValidUtf8(const B: TBytes; AOffset: Integer): Boolean;
@@ -136,11 +170,16 @@ begin
       HasHigh := True;
       Break;
     end;
-  // Pure ASCII without BOM: for Delphi that is ANSI (CP1252). Assuming UTF-8
-  // would write the first new accent as multibyte and the IDE would show
-  // mojibake.
+  // Pure ASCII without BOM is ambiguous: honour the encoding the IDE is
+  // configured to use (Tools > Options > Editor). Guessing the other way
+  // writes the first new accent in the wrong codec and the IDE shows
+  // mojibake - in BOTH directions (measured).
   if not HasHigh then
+  begin
+    if IdeWantsUtf8 then
+      Exit(ekUtf8);
     Exit(ekCp1252);
+  end;
   // Only UTF-8 when EVERY high byte forms valid sequences (strict).
   if ValidUtf8(B, 0) then
     Result := ekUtf8
@@ -195,11 +234,16 @@ end;
 
 function Measure(const B: TBytes): TMetrics;
 var
-  I: Integer;
+  I, Start: Integer;
 begin
   Result := Default(TMetrics);
   Result.Bytes := Length(B);
-  for I := 0 to High(B) do
+  // The UTF-8 BOM is filesystem plumbing, not text: counting its 3 bytes as
+  // "acentos" confused the accounting shown to the agent (measured).
+  Start := 0;
+  if (Length(B) >= 3) and (B[0] = $EF) and (B[1] = $BB) and (B[2] = $BF) then
+    Start := 3;
+  for I := Start to High(B) do
   begin
     if B[I] = 13 then
       Inc(Result.CR)
@@ -406,7 +450,7 @@ end;
 // -------------------------------------------------------------------------
 
 function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
-  AIsDesigner: Boolean): string; forward;
+  AIsDesigner: Boolean; ADelete: Boolean = False): string; forward;
 
 function FindUniqueLine(const Lines: TArray<string>;
   const APred: TFunc<string, Boolean>; out AIdx: Integer): Boolean;
@@ -492,19 +536,23 @@ begin
           Note := 'esqueleto estandar del IDE';
         end;
         TDirectory.CreateDirectory(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
+        // New files honour the encoding the IDE is configured to use.
+        var NewK := ekCp1252;
+        if IdeWantsUtf8 then
+          NewK := ekUtf8Bom;
         try
-          AtomicWrite(A.Path, EncodeText(Skel, ekUtf8Bom));
+          AtomicWrite(A.Path, EncodeText(Skel, NewK));
         except
           on E: Exception do
             Exit('RECHAZADO al codificar el contenido: ' + E.Message +
               #10'Usa literales Pascal nativos (#$XXXX) para caracteres fuera del juego.');
         end;
         var CM := Measure(TFile.ReadAllBytes(A.Path));
-        Exit(Format('CREADA %s (unit %s) - %s, UTF-8 con BOM, %s.'#10 +
+        Exit(Format('CREADA %s (unit %s) - %s, encoding %s (el configurado en el IDE), %s.'#10 +
           'Verificacion (releido de disco): %s'#10 +
           'SIGUIENTE PASO - el ALTA en el uses del .dpr (sin alta, la unit no forma parte del proyecto). ' +
           'El .dproj lo mantiene el IDE: no lo edites.',
-          [TPath.GetFileName(A.Path), UnitName, Note,
+          [TPath.GetFileName(A.Path), UnitName, Note, EncName(NewK),
            IfThen(SameText(A.Eol, 'lf'), 'LF', 'CRLF'), Summary(CM)]));
       end;
 
@@ -520,7 +568,7 @@ begin
 
       K := DetectEnc(B);
       if (K = ekUtf8Bom) and not ValidUtf8(B, 3) then
-        Exit(Format('RECHAZADO: %s tiene BOM UTF-8 pero su contenido no es UTF-8 valido (fichero mezclado o dañado). No lo toco.',
+        Exit(Format('RECHAZADO: %s tiene BOM UTF-8 pero su contenido no es UTF-8 valido (fichero mezclado o danado). No lo toco.',
           [TPath.GetFileName(A.Path)]));
       Text := DecodeBytes(B, K);
 
@@ -623,7 +671,7 @@ begin
            not TRegEx.IsMatch(NoComment, '(^|[^\w])end\s*;$', [roIgnoreCase]) then
         begin
           if TRegEx.IsMatch(NoComment, '(^|[^\w])end$', [roIgnoreCase]) then
-            Exit('RECHAZADO: el bloque termina en ''end'' SIN punto y coma (E2029). Añade el '';'' al end final.');
+            Exit('RECHAZADO: el bloque termina en ''end'' SIN punto y coma (E2029). Anade el '';'' al end final.');
           Exit(Format('RECHAZADO: la ultima linea del bloque es |%s| y una rutina COMPLETA termina en ''end;''.',
             [Copy(LastLine, 1, 80)]));
         end;
@@ -643,6 +691,56 @@ begin
           Exit('RECHAZADO: la firma viene CUALIFICADA con clase. Pasala SIN cualificar; con insert:"metodo" la tool pone el prefijo.');
 
         Lines := SplitToLines(Text);
+
+        // A program/library (.dpr) has no interface/implementation: a routine
+        // is legal only BETWEEN the uses clause and the main begin..end.
+        // Measured in the field (round 2, B3): inserting before 'end.' left
+        // the .dpr uncompilable (E2070 + 2xE2029) - the post-write audit sees
+        // structure, not grammar, so the placement must be right by design.
+        if Ext = '.dpr' then
+        begin
+          if A.Insert = 'metodo' then
+            Exit('RECHAZADO: insert:"metodo" no aplica a un .dpr (las clases ' +
+              'van en units). Crea la unit con createunit e inserta alli.');
+          var IUses := -1;
+          var IAfter := -1;
+          for I := 0 to High(Lines) do
+            if TRegEx.IsMatch(Lines[I], '^[ \t]*uses\b', [roIgnoreCase]) then
+            begin
+              IUses := I;
+              Break;
+            end;
+          if IUses >= 0 then
+          begin
+            for I := IUses to High(Lines) do
+              if TRegEx.Replace(Lines[I], '//.*$', '').TrimRight.EndsWith(';') then
+              begin
+                IAfter := I;
+                Break;
+              end;
+          end
+          else
+            for I := 0 to High(Lines) do
+              if TRegEx.IsMatch(Lines[I], '^[ \t]*(program|library)\b', [roIgnoreCase]) and
+                 TRegEx.Replace(Lines[I], '//.*$', '').TrimRight.EndsWith(';') then
+              begin
+                IAfter := I;
+                Break;
+              end;
+          if IAfter = -1 then
+            Exit('RECHAZADO: no encuentro el final de la cabecera/uses del .dpr ' +
+              'para colocar la rutina.');
+          var AnclaDpr := Lines[IAfter];
+          var RDpr := DoEdit(A.Path, AnclaDpr,
+            AnclaDpr + #10#10 + string.Join(#10, CodeLines), IAfter + 1, False);
+          var NotaVis := '';
+          if A.Visible then
+            NotaVis := #10'(visible ignorado: un program no tiene seccion interface)';
+          Exit(Format('INSERT rutina-global (.dpr): colocada DESPUES de la linea %d ' +
+            '(|%s|), entre el uses y el bloque principal - la frontera legal en un program.'#10'%s%s',
+            [IAfter + 1, AnclaDpr.Trim, RDpr, NotaVis]));
+        end;
+
         var FrontIdx: Integer;
         var FoundFront := FindUniqueLine(Lines,
           function(L: string): Boolean
@@ -677,12 +775,12 @@ begin
               if not Decl.EndsWith(';') then Decl := Decl + ';';
               var R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
               if R2.StartsWith('ESCRITO') then
-                Extra := #10'--- visible: declaracion ''' + Decl + ''' añadida al final del interface ---'#10 + R2
+                Extra := #10'--- visible: declaracion ''' + Decl + ''' anadida al final del interface ---'#10 + R2
               else
-                Extra := #10'*** visible: NO pude añadir la declaracion en interface - hazla con old/new. ***'#10 + R2;
+                Extra := #10'*** visible: NO pude anadir la declaracion en interface - hazla con old/new. ***'#10 + R2;
             end
             else
-              Extra := #10'*** visible: no encuentro una linea ''implementation'' unica; añade la declaracion con old/new. ***';
+              Extra := #10'*** visible: no encuentro una linea ''implementation'' unica; anade la declaracion con old/new. ***';
           end;
           Exit(Format('INSERT rutina-global: colocada ANTES de la linea %d (|%s|), la frontera legal elegida por la tool.'#10'%s%s',
             [FrontIdx + 1, FrontLine.Trim, R, Extra]));
@@ -715,6 +813,8 @@ begin
           'strict private', 'strict protected');
         var IDecl := IFin;
         var Vis := A.Visibility.Trim.ToLower;
+        if Vis = 'default' then
+          Vis := 'published';
         if Vis <> '' then
         begin
           var IVis := -1;
@@ -725,19 +825,31 @@ begin
               Break;
             end;
           if IVis = -1 then
-            Exit(Format('RECHAZADO: la clase %s no tiene seccion ''%s''. Omite visibility o usa una que exista.',
-              [A.ClassName_, Vis]));
-          IDecl := IFin;
-          for I := IVis + 1 to IFin - 1 do
           begin
-            var TrimL := Lines[I].Trim.ToLower;
-            var IsSec := False;
-            for var S2 in Secs do
-              if S2 = TrimL then IsSec := True;
-            if IsSec then
+            // A form class keeps components and event handlers in the
+            // IMPLICIT published section right after the class header, with
+            // no keyword line to find. 'published' must land there - the
+            // single most common VCL case (measured gap: round 2, C1).
+            if Vis = 'published' then
+              IDecl := IClase + 1
+            else
+              Exit(Format('RECHAZADO: la clase %s no tiene seccion ''%s''. Omite visibility o usa una que exista.',
+                [A.ClassName_, Vis]));
+          end
+          else
+          begin
+            IDecl := IFin;
+            for I := IVis + 1 to IFin - 1 do
             begin
-              IDecl := I;
-              Break;
+              var TrimL := Lines[I].Trim.ToLower;
+              var IsSec := False;
+              for var S2 in Secs do
+                if S2 = TrimL then IsSec := True;
+              if IsSec then
+              begin
+                IDecl := I;
+                Break;
+              end;
             end;
           end;
         end;
@@ -779,6 +891,16 @@ begin
           [A.ClassName_, DeclLinea.Trim, R1, Copy(FirmaCual, 1, 70), R2]));
       end;
 
+      // ---------- DELETE LINE ----------
+      if A.DeleteLine then
+      begin
+        if not A.HasOld or (A.OldLine = '') then
+          Exit('RECHAZADO: delete:true necesita "old" con la linea exacta a borrar (copiada de delphi_read).');
+        if A.NewText <> '' then
+          Exit('RECHAZADO: delete:true no lleva "new": elimina la linea del ancla entera. Para sustituirla usa old+new sin delete.');
+        Exit(DoEdit(A.Path, A.OldLine, '', A.AtLine, IsDesigner, True));
+      end;
+
       // new without anchor: measured pattern where generic edit tools rewrite
       // the whole file. Explicit rejection, never creative interpretation.
       if (not A.HasOld or (A.OldLine = '')) and A.HasNew then
@@ -801,7 +923,7 @@ begin
 end;
 
 function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
-  AIsDesigner: Boolean): string;
+  AIsDesigner: Boolean; ADelete: Boolean = False): string;
 var
   B, NewBytes, After: TBytes;
   K: TEncKind;
@@ -938,11 +1060,18 @@ begin
     Replacement := ANew.Replace(#13#10, #10).Replace(#13, #10);
     // Empty replacement (old given + new='') blanks the line - a legitimate
     // edit. Never index Split()[0] on it: '' yields an empty array (measured
-    // Access Violation in the field test). Line DELETION is a separate mode.
+    // Access Violation in the field test). Line DELETION is delete:true.
     var NewFirst := '';
     if Replacement <> '' then
       NewFirst := Replacement.Split([#10])[0];
-    Lines[HitIdx] := Prefix + Replacement;
+    if ADelete then
+    begin
+      for I := HitIdx to High(Lines) - 1 do
+        Lines[I] := Lines[I + 1];
+      SetLength(Lines, Length(Lines) - 1);
+    end
+    else
+      Lines[HitIdx] := Prefix + Replacement;
 
     var Joined: string;
     var EolSep: string;
@@ -974,12 +1103,23 @@ begin
 
     var Ctx := '(no he sabido localizar la linea nueva)';
     var Idx := -1;
-    for I := 0 to High(AfterLines) do
-      if (NewFirst <> '') and AfterLines[I].Contains(NewFirst) then
-      begin
-        Idx := I;
-        Break;
-      end;
+    if NewFirst <> '' then
+    begin
+      for I := 0 to High(AfterLines) do
+        if AfterLines[I].Contains(NewFirst) then
+        begin
+          Idx := I;
+          Break;
+        end;
+    end
+    else
+    begin
+      // Blanked or deleted line: the spot is exactly known - show it instead
+      // of the confusing "no he sabido localizar" (measured, round 2 C2).
+      Idx := HitIdx;
+      if Idx > High(AfterLines) then
+        Idx := High(AfterLines);
+    end;
     if Idx >= 0 then
     begin
       var IniC := Idx - 1;
@@ -999,7 +1139,9 @@ begin
     if D.Corruption > M.Corruption then
       Warnings.Add('*** HAN APARECIDO CARACTERES DE CORRUPCION. Restaura con restore:true y PARA. ***');
     if (M.High = 0) and (D.High > 0) then
-      Warnings.Add('(el fichero era ASCII puro y he escrito los caracteres nuevos en CP1252, el estandar Delphi sin BOM. Si este proyecto usa UTF-8 sin BOM, dilo en tu informe.)');
+      Warnings.Add(Format('(el fichero era ASCII puro y he escrito los caracteres ' +
+        'nuevos en %s, el encoding que el IDE tiene configurado para ficheros ' +
+        'sin BOM. Si este proyecto usa otro, dilo en tu informe.)', [EncName(K)]));
     var Salen := HighCount(AOld);
     var Entran := HighCount(Prefix + Replacement) - HighCount(Prefix);
     if (Salen >= 0) and (Entran >= 0) and (D.High <> M.High - Salen + Entran) then
@@ -1053,9 +1195,17 @@ begin
       end;
     end;
 
-    Result := Format('ESCRITO en %s'#10'  encoding=%s  finales=%s  copia=%s'#10 +
+    var Accion := 'ESCRITO en ' + TPath.GetFileName(APath);
+    if ADelete then
+      Accion := Format('BORRADA la linea %d de %s (la linea ya no existe)',
+        [HitIdx + 1, TPath.GetFileName(APath)])
+    else if Replacement = '' then
+      Accion := Format('BLANQUEADA la linea %d de %s (sigue existiendo, vacia; ' +
+        'para eliminarla del todo usa delete:true)',
+        [HitIdx + 1, TPath.GetFileName(APath)]);
+    Result := Format('%s'#10'  encoding=%s  finales=%s  copia=%s'#10 +
       '  antes:   %s'#10'  despues: %s'#10'  lineas resultantes leidas del disco:'#10'%s',
-      [TPath.GetFileName(APath), EncName(K), Eol, CopyNote, Summary(M), Summary(D), Ctx]);
+      [Accion, EncName(K), Eol, CopyNote, Summary(M), Summary(D), Ctx]);
     if Warnings.Count > 0 then
       Result := Result + #10 + Warnings.Text.TrimRight;
   finally

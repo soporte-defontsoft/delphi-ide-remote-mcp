@@ -9,6 +9,7 @@ interface
 uses
   System.SysUtils,
   System.JSON,
+  System.Generics.Collections,
   MCPServer.Tool.Base,
   MCPServer.Types,
   Lsp.Client,
@@ -158,7 +159,9 @@ begin
     '(compiler-grade, cross-unit, including RTL/VCL sources). Point INSIDE ' +
     'the identifier. kind selects the half of the unit (a Delphi method ' +
     'exists in BOTH): definition (default) = the BODY in the ' +
-    'implementation section; declaration = the interface declaration. ' +
+    'implementation section; declaration = the interface declaration OF THE ' +
+    'TARGET SYMBOL (on a call site the tool chains definition->declaration, ' +
+    'so you get the callee, never the enclosing method). ' +
     '(kind=implementation is accepted but DelphiLSP answers it like ' +
     'declaration - measured.) Requires project settings for full answers.';
 end;
@@ -175,7 +178,38 @@ begin
     Exit('RECHAZADO: kind debe ser definition | declaration | implementation.');
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
   if Kind = 'declaration' then
-    Resp := Client.Declaration(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character)
+  begin
+    // Measured (field round 2, B5): declaration straight on a CALL SITE
+    // answers with the ENCLOSING method's declaration, not the target
+    // symbol's. Chain instead: definition first (correct on call sites),
+    // then declaration AT the definition's own position - that pair returns
+    // the callee's interface declaration.
+    Resp := Client.Definition(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
+    var DefUri := '';
+    var DefLine := -1;
+    var DefChar := 0;
+    var V := Resp.GetValue('result');
+    if (V is TJSONArray) and (TJSONArray(V).Count > 0) and
+       (TJSONArray(V).Items[0] is TJSONObject) then
+    begin
+      var L0 := TJSONObject(TJSONArray(V).Items[0]);
+      L0.TryGetValue<string>('uri', DefUri);
+      L0.TryGetValue<Integer>('range.start.line', DefLine);
+      L0.TryGetValue<Integer>('range.start.character', DefChar);
+    end;
+    if (DefUri <> '') and (DefLine >= 0) then
+    begin
+      Resp.Free;
+      Client := TLspSession.Instance.AcquireFor(TLspClient.UriToPath(DefUri), Settings);
+      Resp := Client.Declaration(DefUri, DefLine, DefChar);
+    end
+    else
+    begin
+      // no definition to chain from: keep the direct behaviour
+      Resp.Free;
+      Resp := Client.Declaration(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
+    end;
+  end
   else if Kind = 'implementation' then
     Resp := Client.Implementation_(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character)
   else

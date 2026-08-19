@@ -1,0 +1,288 @@
+"""E2E battery for v0.12.0-beta:
+- virtual drive units (srvX:) round trip, byte-fidelity exemptions, masking
+  of jail rejections, 8.3-immune single rule, boundary false positives;
+- delphi_edit: delete mode, blank-line message, insert rutina-global in .dpr
+  (between uses and the main begin), insert metodo into the implicit
+  published section of a form class;
+- acentos= metric without the BOM;
+- git commit/tag messages via -F (double quotes survive);
+- Roots parsing: surrounding quotes tolerated, invalid roots fail CLOSED.
+
+Usage:  python tests/test_v012.py [path-to-DelphiLspMcp.exe]
+"""
+import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.abspath(os.path.join(HERE, '..'))
+EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+    REPO, 'src', 'Win64', 'Debug', 'DelphiLspMcp.exe')
+
+BASE = os.path.join(tempfile.gettempdir(), 'delphi-v012-tests')
+shutil.rmtree(BASE, ignore_errors=True)
+INSIDE = os.path.join(BASE, 'permitido')
+os.makedirs(INSIDE, exist_ok=True)
+
+DRIVE = INSIDE[0].upper()            # the real drive of the jail
+VJAIL = 'srv' + DRIVE.lower() + INSIDE[1:]   # its virtual form
+
+SRC = ('unit Dentro;\r\n\r\ninterface\r\n\r\nprocedure Uno;\r\n\r\n'
+       'implementation\r\n\r\nprocedure Uno;\r\nbegin\r\nend;\r\n\r\nend.\r\n')
+open(os.path.join(INSIDE, 'Dentro.pas'), 'wb').write(SRC.encode('cp1252'))
+
+# file whose CONTENT carries a real path + a boundary false-positive bait
+BAIT = ('linea con ruta real ' + DRIVE + ':\\carpeta\\f.txt\r\n'
+        'refspec HEA' + DRIVE + ':\\no-es-ruta\r\n')
+open(os.path.join(INSIDE, 'contenido.txt'), 'wb').write(BAIT.encode('cp1252'))
+
+DPR = ('program Mini;\r\n\r\n'
+       "{$APPTYPE CONSOLE}\r\n\r\n"
+       'uses\r\n  System.SysUtils;\r\n\r\n'
+       'begin\r\n  Writeln(1);\r\nend.\r\n')
+open(os.path.join(INSIDE, 'Mini.dpr'), 'wb').write(DPR.encode('cp1252'))
+
+FORM = ('unit UF;\r\n\r\ninterface\r\n\r\nuses\r\n  System.Classes;\r\n\r\n'
+        'type\r\n  TFormPrueba = class(TObject)\r\n'
+        '    Nombre: string;\r\n'
+        '  private\r\n    FDato: Integer;\r\n'
+        '  end;\r\n\r\nimplementation\r\n\r\nend.\r\n')
+open(os.path.join(INSIDE, 'UF.pas'), 'wb').write(FORM.encode('cp1252'))
+
+
+def start(envroots):
+    env = dict(os.environ)
+    env['DELPHI_MCP_ROOTS'] = envroots
+    p = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                         text=True, encoding='utf-8')
+    qq = queue.Queue()
+
+    def reader():
+        for line in p.stdout:
+            line = line.strip()
+            if line:
+                qq.put(line)
+    threading.Thread(target=reader, daemon=True).start()
+    return p, qq
+
+
+proc, q = start(INSIDE)
+rid = [10]
+
+
+def send(o):
+    proc.stdin.write(json.dumps(o) + '\n')
+    proc.stdin.flush()
+
+
+def recv(r, t=90):
+    dl = time.time() + t
+    while time.time() < dl:
+        try:
+            line = q.get(timeout=1)
+        except queue.Empty:
+            continue
+        try:
+            m = json.loads(line)
+        except Exception:
+            continue
+        if m.get('id') == r:
+            return m
+    return None
+
+
+def call(name, args, t=90):
+    rid[0] += 1
+    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
+          "params": {"name": name, "arguments": args}})
+    r = recv(rid[0], t)
+    if r is None:
+        return '(timeout)'
+    if 'error' in r:
+        return 'MCPERROR ' + json.dumps(r['error'])[:200]
+    c = r['result'].get('content', [])
+    return c[0].get('text', '') if c else '(no content)'
+
+
+def handshake():
+    send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2025-06-18", "capabilities": {},
+        "clientInfo": {"name": "v012-battery", "version": "1"}}})
+    assert recv(1, 20), 'no initialize response'
+    send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+
+handshake()
+
+P = F = 0
+
+
+def check(name, cond, detail=''):
+    global P, F
+    if cond:
+        P += 1
+        print('PASS -', name)
+    else:
+        F += 1
+        print('FAIL -', name, '|', str(detail)[:200])
+
+
+IN_PAS = os.path.join(INSIDE, 'Dentro.pas')
+V_PAS = 'srv' + DRIVE.lower() + IN_PAS[1:]
+
+# ---- virtual drive units: outbound masking -------------------------------
+out = call('delphi_workspace', {})
+ws = json.loads(out)
+check('workspace: roots salen con unidad virtual',
+      ws['roots'] and ws['roots'][0].lower().startswith('srv' + DRIVE.lower() + ':'), out)
+check('workspace: la unidad real no viaja', (DRIVE + ':\\') not in out, out)
+check('workspace: la nota explica las unidades virtuales', 'srv' in ws.get('note', ''), out)
+
+out = call('delphi_read', {"path": os.path.join(INSIDE, 'nada.pas')})
+check('read: rechazo "no existe" enmascarado (la exencion es solo para contenido)',
+      'srv' + DRIVE.lower() + ':' in out and (DRIVE + ':\\') not in out, out)
+
+OUTSIDE = os.path.join(BASE, 'prohibido')
+os.makedirs(OUTSIDE, exist_ok=True)
+out = call('delphi_edit', {"path": os.path.join(OUTSIDE, 'x.pas'),
+                           "old": "a", "new": "b"})
+check('rechazo enjaulado: roots del mensaje enmascarados',
+      'FUERA de los workspaces' in out and 'srv' + DRIVE.lower() + ':' in out
+      and (DRIVE + ':\\') not in out, out)
+
+# ---- inbound expansion: whole cycle through the virtual unit --------------
+out = call('delphi_read', {"path": V_PAS})
+check('read por unidad virtual', 'unit Dentro' in out, out)
+
+out = call('delphi_edit', {"path": V_PAS, "old": "unit Dentro;",
+                           "new": "unit Dentro; // virtual"})
+check('edit por unidad virtual', out.startswith('ESCRITO'), out)
+
+# ---- byte fidelity: read/fetch content is NEVER masked --------------------
+out = call('delphi_read', {"path": os.path.join(INSIDE, 'contenido.txt')})
+check('read: contenido con ruta real intacto (sin enmascarar)',
+      (DRIVE + ':\\carpeta\\f.txt') in out, out)
+check('read: cebo de falso positivo intacto',
+      ('HEA' + DRIVE + ':\\no-es-ruta') in out, out)
+
+# search DOES mask its result lines, but must not touch the bait (letter
+# before the drive letter = not a path start)
+out = call('delphi_search', {"root": INSIDE, "query": "refspec"})
+check('search: falso positivo NO enmascarado', 'HEAsrv' not in out, out)
+
+# ---- delete / blank ------------------------------------------------------
+out = call('delphi_edit', {"path": V_PAS, "old": "procedure Uno;",
+                           "new": "", "atline": 5})
+check('blanquear linea: mensaje claro', 'BLANQUEADA la linea 5' in out, out)
+
+out = call('delphi_edit', {"path": V_PAS, "old": "  Nombre: string;", "delete": True})
+check('delete: rechaza ancla inexistente en este fichero',
+      'RECHAZADO' in out and 'no aparece' in out, out)
+
+out = call('delphi_read', {"path": V_PAS})
+lines_before = out.count('\n')
+out = call('delphi_edit', {"path": V_PAS, "old": "unit Dentro; // virtual",
+                           "delete": True})
+check('delete: borra la linea entera', 'BORRADA la linea 1' in out, out)
+out = call('delphi_read', {"path": V_PAS})
+check('delete: la linea ya no existe', 'unit Dentro; // virtual' not in out
+      and out.count('\n') == lines_before - 1, out)
+# restore sanity: put the unit header back so the file stays a unit
+call('delphi_edit', {"path": V_PAS, "old": "interface",
+                     "new": "unit Dentro;\ninterface", "atline": 2})
+
+out = call('delphi_edit', {"path": V_PAS, "old": "implementation",
+                           "new": "algo", "delete": True})
+check('delete: new junto a delete rechazado', 'RECHAZADO' in out and 'delete:true no lleva' in out, out)
+
+# ---- B3: rutina-global inside a .dpr -------------------------------------
+DPR_PATH = os.path.join(INSIDE, 'Mini.dpr')
+out = call('delphi_edit', {"path": DPR_PATH, "insert": "rutina-global",
+                           "code": "procedure Saluda;\nbegin\n  Writeln('hola');\nend;"})
+check('dpr: insert rutina-global aceptado', 'INSERT rutina-global (.dpr)' in out, out)
+raw = open(DPR_PATH, 'rb').read().decode('cp1252')
+iuses = raw.find('System.SysUtils;')
+iproc = raw.find('procedure Saluda;')
+imain = raw.find('begin\r\n  Writeln(1);')
+check('dpr: rutina entre uses y begin principal',
+      -1 < iuses < iproc < imain, f'uses={iuses} proc={iproc} main={imain}')
+
+out = call('delphi_edit', {"path": DPR_PATH, "insert": "metodo",
+                           "inclass": "TX", "code": "procedure Nada;\nbegin\nend;"})
+check('dpr: insert metodo rechazado con guia', 'no aplica a un .dpr' in out, out)
+
+# ---- C1: metodo en la seccion published implicita -------------------------
+UF = os.path.join(INSIDE, 'UF.pas')
+out = call('delphi_edit', {"path": UF, "insert": "metodo", "inclass": "TFormPrueba",
+                           "visibility": "published",
+                           "code": "procedure BotonClick(Sender: TObject);\nbegin\n  FDato := 1;\nend;"})
+check('published implicita: aceptado', 'INSERT metodo' in out and 'DOS mitades' in out, out)
+raw = open(UF, 'rb').read().decode('cp1252')
+icls = raw.find('TFormPrueba = class(TObject)')
+idecl = raw.find('procedure BotonClick(Sender: TObject);')
+ipriv = raw.find('private')
+check('published implicita: declaracion tras la cabecera de la clase',
+      -1 < icls < idecl < ipriv, f'cls={icls} decl={idecl} priv={ipriv}')
+iimpl = raw.find('procedure TFormPrueba.BotonClick')
+check('published implicita: implementacion cualificada presente', iimpl > ipriv, raw[-200:])
+
+out = call('delphi_edit', {"path": UF, "insert": "metodo", "inclass": "TFormPrueba",
+                           "visibility": "protected",
+                           "code": "procedure Otra;\nbegin\nend;"})
+check('visibility inexistente distinta de published: sigue rechazada',
+      'RECHAZADO' in out and "no tiene seccion 'protected'" in out, out)
+
+# ---- B2: acentos= sin contar el BOM ---------------------------------------
+NU = os.path.join(INSIDE, 'Nueva.Unidad.pas')
+out = call('delphi_edit', {"path": NU, "createunit": True})
+check('createunit: informa el encoding del IDE', 'el configurado en el IDE' in out, out)
+out = call('delphi_read', {"path": NU})
+check('acentos=0 en unit nueva sin acentos (BOM fuera de la cuenta)',
+      'acentos=0' in out, out)
+
+# ---- B1: git commit con comillas ------------------------------------------
+GITDIR = os.path.join(INSIDE, 'repo')
+os.makedirs(GITDIR, exist_ok=True)
+out = call('delphi_git', {"repo": GITDIR, "command": "init", "args": ""})
+if 'exit=0' in out:
+    call('delphi_git', {"repo": GITDIR, "command": "config", "args": "user.name", "message": "Test Bot"})
+    call('delphi_git', {"repo": GITDIR, "command": "config", "args": "user.email", "message": "bot@test.local"})
+    call('delphi_textedit', {"path": os.path.join(GITDIR, 'a.txt'), "create": True, "content": "hola\n"})
+    call('delphi_git', {"repo": GITDIR, "command": "add", "args": "-A"})
+    MSG = 'fix: "comillas dobles" y \'simples\' con acentos (ó)'
+    out = call('delphi_git', {"repo": GITDIR, "command": "commit", "args": "", "message": MSG})
+    check('commit con comillas: exit=0', 'exit=0' in out, out)
+    out = call('delphi_git', {"repo": GITDIR, "command": "log", "args": "--format=%B -1"})
+    check('commit con comillas: el mensaje sobrevive byte a byte',
+          '"comillas dobles"' in out and '(ó)' in out, out)
+else:
+    check('git disponible para la prueba de commit', False, out)
+
+# ---- shutdown main server --------------------------------------------------
+proc.stdin.close()
+proc.wait(timeout=15)
+
+# ---- Roots con comillas / roots invalidos (servidores propios) -------------
+def one_shot(envroots, tool, args):
+    global proc, q
+    proc, q = start(envroots)
+    handshake()
+    out = call(tool, args)
+    proc.stdin.close()
+    proc.wait(timeout=15)
+    return out
+
+
+QDIR = os.path.join(BASE, 'con espacios en nombre')
+os.makedirs(QDIR, exist_ok=True)
+open(os.path.join(QDIR, 'X.pas'), 'wb').write(SRC.replace('Dentro', 'X').encode('cp1252'))
+
+out = one_shot('"' + QDIR + '"', 'delphi_read', {"path": os.path.join(QDIR, 'X.pas')})
+check('roots entrecomillados + espacios: jaula funcional', 'unit X;' in out, out)
+
+out = one_shot('C:\\<invalido>|malo', 'delphi_read', {"path": os.path.join(QDIR, 'X.pas')})
+check('roots invalidos: fallo CERRADO (todo rechazado)',
+      'ninguna de sus rutas es valida' in out, out)
+
+print()
+print(f'RESULT: {P} passed, {F} failed')
+sys.exit(1 if F else 0)
