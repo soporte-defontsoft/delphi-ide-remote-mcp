@@ -211,8 +211,26 @@ check('read: acentos/UTF-8 intactos', 'compilacion, gestoria, accion' in out, ou
 out = s.call('vault_read', {"path": "projects/delphi/context.md", "offset": 6, "limit": 2})
 check('read: offset/limit acota', '6|' in out and '1|# Contexto' not in out, out[:200])
 out = s.call('vault_read', {"path": "projects/delphi/grande.md"})
-check('read: nota enorme TRUNCADA con aviso de offset/limit',
-      'truncado' in out.lower() and 'offset' in out, out[-200:])
+check('read: nota enorme PAGINADA con el offset exacto de continuacion',
+      'Mostradas las lineas' in out and 'offset' in out, out[-220:])
+check('read: la pagina cabe en el presupuesto por-resultado (<50K)',
+      len(out) < 50000, len(out))
+# the continuation offset the server hands back must actually work
+import re as _re
+_m = _re.search(r'offset:\s*(\d+)', out)
+if _m:
+    nxt = int(_m.group(1))
+    out2 = s.call('vault_read', {"path": "projects/delphi/grande.md", "offset": nxt})
+    check('read: continuar con ese offset devuelve la linea siguiente',
+          ('\n%d|' % nxt) in out2 or out2.startswith('%d|' % nxt) or ('%d|' % nxt) in out2,
+          out2[:150])
+
+# R8: the BOOTSTRAP is paged too - a real vault's rules+index overflow a client
+out = s.call('vault_read', {})
+check('R8: el arranque cabe en una respuesta (paginado, no 85 KB de golpe)',
+      len(out) < 50000, len(out))
+check('R8: el arranque va numerado (se puede continuar por offset)',
+      '1|' in out, out[:120])
 
 # barra invertida y barra normal valen igual
 out = s.call('vault_read', {"path": r"projects\delphi\log.md"})

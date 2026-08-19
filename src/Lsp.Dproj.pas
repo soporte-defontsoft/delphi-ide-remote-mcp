@@ -62,16 +62,24 @@ function IsLocalPlatform(const APlatform: string): Boolean;
   Returns the correctly-cased canonical name, or '' if unknown. }
 function CanonicalPlatform(const AName: string): string;
 
-{ Whether a project file's XML carries constructs that would EXECUTE a shell
-  during a build: a custom MSBuild <Target> or <Exec> task, a non-empty RAD
-  Studio build-event command (Pre/PostBuildEvent, Pre/PostLinkEvent), or an
-  <Import> of a foreign targets file (UNC or an absolute path with no $(...)
-  macro). A stock RAD Studio project has NONE of these. Their presence turns
-  "build" into "run", which a compile-only server must refuse unless the
-  operator opted into execution (field round 7: delphi_upload could plant such
-  a .dproj and delphi_build would run it). Returns the offending construct, or
-  '' when the project is safe to build. }
-function DprojBuildHazard(const AXml: string): string;
+{ Whether a project would EXECUTE a shell during a build: a custom MSBuild
+  <Target> or <Exec> task (with or without an XML namespace prefix), a
+  non-empty RAD Studio build-event command, or an <Import> of anything that is
+  not one of the IDE's own targets files. A stock RAD Studio project has none
+  of these. Their presence turns "build" into "run", which a compile-only
+  server must refuse unless the operator opted into execution.
+
+  Imports are FOLLOWED: an import that resolves to a readable file inside the
+  project is scanned too, recursively. Field round 8 defeated a rule that only
+  looked at the .dproj by importing "$(MSBuildProjectDirectory)\payload.targets"
+  - macro-based, so it passed a naive macro check, while resolving to a file
+  uploaded right next to the project. Only the IDE's own imports are trusted
+  without reading them; anything unresolvable is refused rather than assumed
+  harmless.
+
+  AProjectPath is the .dproj being built (used to resolve the imports).
+  Returns the offending construct, or '' when the project is safe to build. }
+function DprojBuildHazard(const AXml, AProjectPath: string): string;
 
 implementation
 
@@ -298,9 +306,82 @@ begin
       Exit(P); // canonical casing, and proven metachar-free
 end;
 
-function DprojBuildHazard(const AXml: string): string;
+{ True when the XML contains an element whose LOCAL name is AName, with or
+  without a namespace prefix (<Target>, <msb:Target>, <Target ...>). ALow must
+  already be lowercase. A prefix is [A-Za-z0-9_.-]* before a ':'. }
+function HasElement(const ALow, AName: string): Boolean;
 var
-  Low, V: string;
+  P, After: Integer;
+begin
+  Result := False;
+  P := 1;
+  while True do
+  begin
+    P := Pos(AName, ALow, P);
+    if P = 0 then
+      Exit;
+    After := P + Length(AName);
+    // Opened by '<' directly, or by a namespace prefix ("<msb:target"), and
+    // closed by whitespace, '>' or '/' - so "targets" or "myTarget" do not match.
+    if (P > 1) and CharInSet(ALow[P - 1], ['<', ':']) and
+       ((After > Length(ALow)) or
+        CharInSet(ALow[After], [' ', '>', #9, #13, #10, '/'])) then
+      Exit(True);
+    Inc(P);
+  end;
+end;
+
+{ Expands the few MSBuild macros that point INSIDE the project, so an import
+  written with them can be resolved and read. Returns '' when the path still
+  carries a macro we cannot resolve (which the caller then refuses). }
+function ResolveImportPath(const APath, AProjectFile: string): string;
+var
+  Dir, Name: string;
+begin
+  Dir := ExtractFileDir(AProjectFile);
+  Name := TPath.GetFileNameWithoutExtension(AProjectFile);
+  Result := APath;
+  Result := Result.Replace('$(MSBuildProjectDirectory)', Dir, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(MSBuildThisFileDirectory)',
+    IncludeTrailingPathDelimiter(Dir), [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(MSBuildProjectName)', Name, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(ProjectDir)', Dir, [rfReplaceAll, rfIgnoreCase]);
+  if Result.Contains('$(') then
+    Exit(''); // still macro-based: not resolvable here
+  if not TPath.IsPathRooted(Result) then
+    Result := TPath.Combine(Dir, Result);
+  try
+    Result := TPath.GetFullPath(Result);
+  except
+    Result := '';
+  end;
+end;
+
+{ The IDE's OWN imports, trusted without reading them: they live in the RAD
+  Studio installation or the user's IDE profile, not in the project. }
+function IsStockImport(const APathLow: string): Boolean;
+begin
+  // A traversal disqualifies it outright: "$(BDS)\..\..\evil.targets" is
+  // macro-based AND ends in .targets, and a looser rule trusted it (caught by
+  // our own evasion test while fixing field round 8).
+  if APathLow.Contains('..') then
+    Exit(False);
+  Result := (APathLow.Contains('$(bds)') and APathLow.Contains('\bin\codegear')
+             and APathLow.EndsWith('.targets')) or
+            APathLow.Contains('usertools.proj') or
+            APathLow.EndsWith('.deployproj');
+end;
+
+function HazardScan(const AXml, AProjectFile: string; ADepth: Integer): string; forward;
+
+function DprojBuildHazard(const AXml, AProjectPath: string): string;
+begin
+  Result := HazardScan(AXml, AProjectPath, 0);
+end;
+
+function HazardScan(const AXml, AProjectFile: string; ADepth: Integer): string;
+var
+  Low, V, Resolved, Imported: string;
   Scan, TagEnd, CloseP, AttrP, ValStart, ValEnd: Integer;
 begin
   Result := '';
@@ -310,10 +391,13 @@ begin
   // in odd casing) and the cost of being wrong is arbitrary execution.
   Low := LowerCase(AXml);
 
-  // Custom MSBuild target / shell task: a stock .dproj has neither.
-  if Low.Contains('<target ') or Low.Contains('<target>') then
+  // Custom MSBuild target / shell task: a stock .dproj has neither. Matched
+  // with or without an XML namespace prefix (<msb:Target> passed a literal
+  // "<Target" check - field round 8; MSBuild happened to reject it, but the
+  // guard must not depend on that).
+  if HasElement(Low, 'target') then
     Exit('a custom MSBuild <Target> (runs during build)');
-  if Low.Contains('<exec ') or Low.Contains('<exec>') then
+  if HasElement(Low, 'exec') then
     Exit('an <Exec> task (runs a shell command during build)');
 
   // RAD Studio build-event commands: only a NON-EMPTY one runs a shell.
@@ -336,12 +420,12 @@ begin
     end;
   end;
 
-  // <Import> brings in another MSBuild file, which can carry its own targets.
-  // Every import in a real .dproj is macro-based ($(BDS)\Bin\CodeGear...,
-  // $(MSBuildProjectName).deployproj), so anything else - a UNC share, an
-  // absolute path, a bare relative file dropped next to the project - is
-  // refused. That also closes the indirect route: a "clean" .dproj importing
-  // an evil .targets sitting beside it.
+  // <Import> brings in another MSBuild file, which carries its own targets -
+  // so the payload can sit one file away from the project. Being macro-based
+  // proves nothing: "$(MSBuildProjectDirectory)\payload.targets" is a macro
+  // AND resolves next to the project (field round 8, confirmed execution).
+  // Rule: trust ONLY the IDE's own imports without reading them; resolve and
+  // SCAN anything else; refuse what cannot be resolved.
   Scan := 1;
   while True do
   begin
@@ -361,12 +445,28 @@ begin
         V := Copy(AXml, ValStart, ValEnd - ValStart).Trim;
         if V.StartsWith('\\') or V.StartsWith('//') then
           Exit('an <Import> from a UNC path (' + V + ')');
-        if (Length(V) >= 2) and (V[2] = ':') then
-          Exit('an <Import> from an absolute path (' + V + ')');
-        if V.Contains('..') then
-          Exit('an <Import> that climbs out of the project (' + V + ')');
-        if not V.Contains('$(') then
-          Exit('an <Import> of a non-standard targets file (' + V + ')');
+        if IsStockImport(LowerCase(V)) then
+        begin
+          Scan := TagEnd + 1;
+          Continue; // the IDE's own targets: trusted, not read
+        end;
+        if ADepth >= 4 then
+          Exit('an <Import> chain too deep to verify (' + V + ')');
+        Resolved := ResolveImportPath(V, AProjectFile);
+        if Resolved = '' then
+          Exit('an <Import> whose path cannot be verified (' + V + ')');
+        if not TFile.Exists(Resolved) then
+          Exit('an <Import> of a file that is not there to be checked (' + V + ')');
+        Imported := '';
+        try
+          Imported := TFile.ReadAllText(Resolved);
+        except
+          Exit('an <Import> that cannot be read to be checked (' + V + ')');
+        end;
+        // Recurse: the imported file is held to exactly the same standard.
+        Result := HazardScan(Imported, Resolved, ADepth + 1);
+        if Result <> '' then
+          Exit(Format('%s, brought in by <Import> "%s"', [Result, V]));
       end;
     end;
     Scan := TagEnd + 1;

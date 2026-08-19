@@ -6,6 +6,41 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.26.0-beta] - 2026-08-20
+
+Field round 8 (Fable): the vault passed its security review untouched, but the
+round broke the compile-only guard again and found the bootstrap unusable.
+
+### Security
+- **CRITICAL: the build guard was evadable through a macro-based `<Import>`.**
+  0.25.1 trusted any import written with an MSBuild macro, but
+  `$(MSBuildProjectDirectory)\payload.targets` is *both* macro-based and
+  resolves right next to the project - so uploading a `.targets` there and
+  importing it ran its `<Exec>` at build time. Confirmed end to end.
+  Imports are now **followed and scanned recursively** (depth-capped): only the
+  IDE's own targets are trusted without being read, anything else must resolve
+  to a readable file that passes the same scan, and what cannot be resolved is
+  refused. `<Target>`/`<Exec>` are also matched with an XML namespace prefix
+  (`<msb:Target>` slipped past a literal match; MSBuild happened to reject it,
+  which is not a guarantee to rely on). A traversal now disqualifies an import
+  outright - `$(BDS)\..\..\evil.targets` was macro-based and ended in
+  `.targets`, and the previous whitelist trusted it.
+
+### Fixed
+- **The vault bootstrap did not fit in one answer.** `vault_read` with no path
+  returned rules + index whole - 85 KB against a real vault, past a client's
+  per-result cap, forcing it to spill to disk and read the result back in
+  pieces. Reads are now **paged by line** with a per-result budget, and every
+  truncated answer states the exact continuation offset
+  (`Mostradas las lineas 1..271 de 379. Pide el resto con {offset: 272}`).
+  Verified against the real vault: 40 KB first page, continuation works.
+- **A rejected path came back rewritten.** Asking for `C:/Windows/win.ini` was
+  refused with `"srvc:/Windows/win.ini"` - the outbound drive filter rewriting
+  an echo of the caller's own text, confusing to debug. The rejection no longer
+  echoes the path; it states the rule.
+
+7 E2E batteries, **383 checks**.
+
 ## [0.25.1-beta] - 2026-08-20
 
 ### Security

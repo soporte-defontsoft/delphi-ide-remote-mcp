@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.25.1-beta';
+  SERVER_VERSION = '0.26.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -164,9 +164,24 @@ const
     'error: este servidor no tiene vault de conocimiento configurado ' +
     '([Vault] Path en settings.ini).';
 
-  SR_VAULT_JAIL_FMT =
-    'RECHAZADO: "%s" sale del vault. Usa una ruta RELATIVA dentro del vault ' +
-    '(projects/x/context.md): sin unidades, sin rutas absolutas y sin "..".';
+  // No echo of the offending path on purpose: the outbound filter rewrites
+  // server drive letters, so echoing "C:/Windows/win.ini" came back as
+  // "srvc:/Windows/win.ini" - something the agent never sent, confusing to
+  // debug (field round 8). The rule itself is what the agent needs.
+  SR_VAULT_JAIL =
+    'RECHAZADO: esa ruta sale del vault. Usa una ruta RELATIVA dentro del ' +
+    'vault (projects/x/context.md): sin unidades, sin rutas absolutas y sin ' +
+    '"..". Localiza notas con vault_search target=files.';
+
+  SR_VAULT_MORE_FMT =
+    #10'--- Mostradas las lineas 1..%d de %d. Pide el resto con ' +
+    'vault_read {offset: %d} (y limit si quieres trozos mas pequenos).';
+
+  SN_VAULT_BOOTSTRAP_FMT =
+    '# Arranque del vault: reglas (AGENTS-VAULT.md) + indice (MEMORY.md), ' +
+    '%d lineas en total.'#10 +
+    'Carga perezosa: usa el indice para decidir que notas abrir con ' +
+    'vault_read; no leas el vault entero.'#10#10;
 
   SR_VAULT_READONLY =
     'RECHAZADO: el vault de conocimiento esta en SOLO LECTURA en este ' +
@@ -180,9 +195,6 @@ const
     'falta indexar una nota nueva, dilo en tu respuesta para que lo haga una ' +
     'persona.';
 
-  SR_VAULT_TRUNCATED_FMT =
-    '... (truncado en %d caracteres para no comerse el contexto: pide el ' +
-    'resto con offset/limit)';
 
   // ---------------------------------------------------------------------
   // delphi_report (feedback channel - works at EVERY access level)

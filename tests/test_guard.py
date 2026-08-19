@@ -315,6 +315,41 @@ if os.path.exists(_holad):
         upload_dproj(_clean.replace('</Project>', payload + '</Project>'))
         out = build_no_allowrun(_holad)
         check('R7 evasion (%s): build RECHAZADO' % label, 'RECHAZADO' in out, out[:160])
+    # R8 CRITICAL (Fable): the payload one file away. A macro-based <Import>
+    # that resolves NEXT TO the project - macro-based, so a naive macro check
+    # passed it - pulling in a .targets uploaded there. Imports are now
+    # followed and scanned recursively.
+    _tgt = os.path.join(INSIDE, 'Hola', 'r8payload.targets')
+    _m8 = os.path.join(INSIDE, 'Hola', 'R8MARKER.txt')
+    for _f in (_m8,):
+        if os.path.exists(_f):
+            os.remove(_f)
+    _payload_xml = ('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'
+                    '<Target Name="R8Payload" BeforeTargets="Build">'
+                    '<Exec Command="cmd /c echo pwned &gt; R8MARKER.txt" /></Target></Project>')
+    call('delphi_upload', {"path": _tgt, "offset": 0,
+                           "chunkbase64": _b64.b64encode(_payload_xml.encode()).decode()})
+    check('R8: el .targets con el payload se sube (upload no filtra extensiones)',
+          os.path.exists(_tgt), _tgt)
+    for macro, label in (
+        ('$(MSBuildProjectDirectory)\\r8payload.targets', 'MSBuildProjectDirectory'),
+        ('$(MSBuildThisFileDirectory)r8payload.targets', 'MSBuildThisFileDirectory'),
+        ('r8payload.targets', 'relativo simple'),
+    ):
+        upload_dproj(_clean.replace('</Project>',
+            '<Import Project="%s" />' % macro + '</Project>'))
+        out = build_no_allowrun(_holad)
+        check('R8 CRITICAL (%s): build RECHAZADO' % label, 'RECHAZADO' in out, out[:180])
+        check('R8 CRITICAL (%s): el payload importado NO se ejecuto' % label,
+              not os.path.exists(_m8), _m8)
+    # namespace-prefixed element must not slip past the literal check
+    upload_dproj(_clean.replace('</Project>',
+        '<msb:Target xmlns:msb="http://schemas.microsoft.com/developer/msbuild/2003" '
+        'Name="X" BeforeTargets="Build"><msb:Exec Command="cmd /c echo x" /></msb:Target></Project>'))
+    out = build_no_allowrun(_holad)
+    check('R8: <msb:Target> con namespace tambien RECHAZADO', 'RECHAZADO' in out, out[:180])
+    os.remove(_tgt)
+
     # and the untouched project still builds fine (no false positive)
     upload_dproj(_clean)
     out = build_no_allowrun(_holad)

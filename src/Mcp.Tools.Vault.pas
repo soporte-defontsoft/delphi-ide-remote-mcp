@@ -154,7 +154,11 @@ uses
   Mcp.Vault.Session;
 
 const
-  MAX_READ_CHARS = 100000; // ~25-35K tokens: protects a small model's context
+  // Per-result budget. A client caps what one tool result may carry (~25K
+  // tokens in Claude Code); 100K characters overflowed it and forced the
+  // client to spill the answer to disk (field round 8). 40K sits comfortably
+  // inside, and paging by line makes the rest one call away.
+  MAX_READ_CHARS = 40000;
   BOOT_RULES = 'AGENTS-VAULT.md';
   BOOT_INDEX = 'MEMORY.md';
   BACKUP_SUB = 'backups';
@@ -207,10 +211,10 @@ begin
   while Rel.StartsWith('\') do
     Rel := Rel.Substring(1);
   if Rel.Contains(':') then
-    Exit(Format(SR_VAULT_JAIL_FMT, [ARel]));
+    Exit(SR_VAULT_JAIL);
   for var Seg in Rel.Split(['\']) do
     if Seg.Trim = '..' then
-      Exit(Format(SR_VAULT_JAIL_FMT, [ARel]));
+      Exit(SR_VAULT_JAIL);
   if not SameText(TPath.GetExtension(Rel), '.md') then
     Exit(Format('RECHAZADO: "%s" no es una nota .md. El vault solo sirve ' +
       'notas Markdown.', [ARel]));
@@ -221,11 +225,11 @@ begin
   try
     Full := TPath.GetFullPath(TPath.Combine(Root, Rel));
   except
-    Exit(Format(SR_VAULT_JAIL_FMT, [ARel]));
+    Exit(SR_VAULT_JAIL);
   end;
   // Belt and braces: whatever the input did, the result must live in the vault.
   if not StartsText(IncludeTrailingPathDelimiter(Root), Full) then
-    Exit(Format(SR_VAULT_JAIL_FMT, [ARel]));
+    Exit(SR_VAULT_JAIL);
   AFull := Full;
   Result := '';
 end;
@@ -292,9 +296,12 @@ begin
   end;
 end;
 
-{ Numbered rendering, same shape as delphi_read: "N|line". }
+{ Numbered rendering, same shape as delphi_read: "N|line". Stops early once
+  the character budget is spent, and reports the last line actually included
+  so the caller can tell the agent exactly where to continue. Paging by LINE
+  (not by character) is what makes the continuation offset usable. }
 function Numbered(const AText: string; AOffset, ALimit: Integer;
-  out ATotalLines: Integer): string;
+  out ATotalLines, ALastLine: Integer): string;
 var
   Lines: TArray<string>;
   Sb: TStringBuilder;
@@ -314,10 +321,16 @@ begin
     Last := First + ALimit - 1;
   if Last > ATotalLines then
     Last := ATotalLines;
+  ALastLine := First - 1;
   Sb := TStringBuilder.Create;
   try
     for I := First to Last do
+    begin
+      if (Sb.Length > 0) and (Sb.Length + Length(Lines[I - 1]) > MAX_READ_CHARS) then
+        Break; // budget spent: stop on a line boundary
       Sb.AppendLine(I.ToString + '|' + Lines[I - 1]);
+      ALastLine := I;
+    end;
     Result := Sb.ToString;
   finally
     Sb.Free;
@@ -443,7 +456,7 @@ end;
 function TVaultReadTool.ExecuteWithParams(const Params: TVaultReadParams): string;
 var
   Full, Text, Rel: string;
-  Total: Integer;
+  Total, LastLine: Integer;
 begin
   if not VaultConfigured then
     Exit(SR_VAULT_UNSET);
@@ -453,10 +466,16 @@ begin
   // agent should have to know.
   if Params.Path.Trim = '' then
   begin
-    Result := VaultBootstrapText; // shared with the /vault prompt
-    if Length(Result) > MAX_READ_CHARS then
-      Result := Copy(Result, 1, MAX_READ_CHARS) + #10#10 +
-        Format(SR_VAULT_TRUNCATED_FMT, [MAX_READ_CHARS]);
+    // Paged like any other read: a real vault's rules + index can run to tens
+    // of thousands of characters, which overflows a client's per-result cap
+    // and forces it to spill the answer to disk (measured, field round 8:
+    // 85 KB in one call). Numbered and budgeted, with the exact continuation
+    // offset, so the agent can walk it.
+    Result := Numbered(VaultBootstrapText, Params.Offset, Params.Limit,
+      Total, LastLine);
+    Result := Format(SN_VAULT_BOOTSTRAP_FMT, [Total]) + Result;
+    if LastLine < Total then
+      Result := Result + #10 + Format(SR_VAULT_MORE_FMT, [LastLine, Total, LastLine + 1]);
     Exit;
   end;
 
@@ -473,11 +492,10 @@ begin
       Exit('error: no se pudo leer la nota (' + E.Message + ')');
   end;
   Rel := VaultRelative(Full);
-  Result := Numbered(Text, Params.Offset, Params.Limit, Total);
-  if Length(Result) > MAX_READ_CHARS then
-    Result := Copy(Result, 1, MAX_READ_CHARS) + #10#10 +
-      Format(SR_VAULT_TRUNCATED_FMT, [MAX_READ_CHARS]);
+  Result := Numbered(Text, Params.Offset, Params.Limit, Total, LastLine);
   Result := Format('# %s (%d lineas)'#10#10, [Rel, Total]) + Result;
+  if LastLine < Total then
+    Result := Result + #10 + Format(SR_VAULT_MORE_FMT, [LastLine, Total, LastLine + 1]);
 end;
 
 { ------------------------------------------------------------ vault_append - }

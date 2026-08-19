@@ -329,7 +329,7 @@ begin
   begin
     var ProjXml := '';
     try ProjXml := TFile.ReadAllText(ADprojPath); except end;
-    var Hazard := DprojBuildHazard(ProjXml);
+    var Hazard := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath));
     if Hazard <> '' then
     begin
       TLogger.Warning(Format('delphi_build: REFUSED "%s" - %s',
