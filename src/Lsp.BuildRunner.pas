@@ -38,6 +38,75 @@ begin
   Result := RunCapturedIn(ACmdLine, '', ATimeoutMs, AExitCode);
 end;
 
+{ A Job Object that confines a launched process TREE. What it guarantees:
+  - kill-on-close: when we close the job, the whole tree dies - no orphaned
+    compiler/child processes survive a timeout or the server shutdown
+    (measured concern B0b: build spawns cmd->msbuild->dcc);
+  - a process count cap (fork-bomb protection) and a per-process memory cap
+    (runaway protection);
+  - UI restrictions: the tree cannot change system-wide settings, exit
+    Windows, or touch the display.
+  It does NOT sandbox the filesystem - a compiled program can still write
+  wherever the service account can. True per-directory confinement
+  (AppContainer / a restricted token) is a separate, larger step; the jail
+  plus this Job Object bound the DAMAGE, not the file access. }
+{$IF not declared(JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)}
+const
+  JOB_OBJECT_LIMIT_ACTIVE_PROCESS = $00000008;
+  JOB_OBJECT_LIMIT_PROCESS_MEMORY = $00000100;
+  JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = $00002000;
+  JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION = $00000400;
+  JOB_OBJECT_UILIMIT_EXITWINDOWS = $00000080;
+  JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS = $00000004;
+  JOB_OBJECT_UILIMIT_DISPLAYSETTINGS = $00000010;
+  JobObjectExtendedLimitInformation = 9;
+  JobObjectBasicUIRestrictions = 4;
+{$ENDIF}
+
+function CreateConfinedJob: THandle;
+type
+  TIoCounters = record
+    ReadOperationCount, WriteOperationCount, OtherOperationCount: UInt64;
+    ReadTransferCount, WriteTransferCount, OtherTransferCount: UInt64;
+  end;
+  TBasicLimit = record
+    PerProcessUserTimeLimit, PerJobUserTimeLimit: Int64;
+    LimitFlags: DWORD;
+    MinimumWorkingSetSize, MaximumWorkingSetSize: NativeUInt;
+    ActiveProcessLimit: DWORD;
+    Affinity: NativeUInt;
+    PriorityClass, SchedulingClass: DWORD;
+  end;
+  TExtLimit = record
+    BasicLimitInformation: TBasicLimit;
+    IoInfo: TIoCounters;
+    ProcessMemoryLimit, JobMemoryLimit: NativeUInt;
+    PeakProcessMemoryUsed, PeakJobMemoryUsed: NativeUInt;
+  end;
+  TUiRestrictions = record
+    UIRestrictionsClass: DWORD;
+  end;
+var
+  Ext: TExtLimit;
+  Ui: TUiRestrictions;
+begin
+  Result := CreateJobObject(nil, nil);
+  if Result = 0 then
+    Exit;
+  FillChar(Ext, SizeOf(Ext), 0);
+  Ext.BasicLimitInformation.LimitFlags :=
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE or
+    JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION or
+    JOB_OBJECT_LIMIT_ACTIVE_PROCESS or
+    JOB_OBJECT_LIMIT_PROCESS_MEMORY;
+  Ext.BasicLimitInformation.ActiveProcessLimit := 128;
+  Ext.ProcessMemoryLimit := NativeUInt(3) * 1024 * 1024 * 1024; // 3 GB/process
+  SetInformationJobObject(Result, JobObjectExtendedLimitInformation, @Ext, SizeOf(Ext));
+  Ui.UIRestrictionsClass := JOB_OBJECT_UILIMIT_EXITWINDOWS or
+    JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS or JOB_OBJECT_UILIMIT_DISPLAYSETTINGS;
+  SetInformationJobObject(Result, JobObjectBasicUIRestrictions, @Ui, SizeOf(Ui));
+end;
+
 { Strict UTF-8 scanner over the captured bytes: only well-formed multi-byte
   sequences count, and pure ASCII answers False (the ANSI default is fine
   there). An ANSI accent almost never forms a valid UTF-8 sequence, so a
@@ -108,13 +177,21 @@ begin
   var WorkDirPtr: PChar := nil;
   if AWorkDir <> '' then
     WorkDirPtr := PChar(AWorkDir);
-  if not CreateProcess(nil, PChar(Cmd), nil, nil, True, CREATE_NO_WINDOW,
-    nil, WorkDirPtr, SI, PI) then
+  // Create SUSPENDED so we can put the process into a confining Job Object
+  // BEFORE it runs (otherwise a fast child could spawn a grandchild that
+  // escapes the job). Then resume.
+  var Job: THandle := CreateConfinedJob;
+  if not CreateProcess(nil, PChar(Cmd), nil, nil, True,
+    CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, WorkDirPtr, SI, PI) then
   begin
+    if Job <> 0 then CloseHandle(Job);
     CloseHandle(ReadH);
     CloseHandle(WriteH);
     raise Exception.CreateFmt('CreateProcess failed (%d)', [GetLastError]);
   end;
+  if Job <> 0 then
+    AssignProcessToJobObject(Job, PI.hProcess);
+  ResumeThread(PI.hThread);
   CloseHandle(WriteH); // ours no more; EOF arrives when the child exits
 
   SetLength(Bytes, 0);
@@ -141,6 +218,10 @@ begin
     CloseHandle(ReadH);
     CloseHandle(PI.hProcess);
     CloseHandle(PI.hThread);
+    // Closing the job kills any process in the tree still alive (e.g. children
+    // orphaned by a timeout): kill-on-close leaves nothing running behind us.
+    if Job <> 0 then
+      CloseHandle(Job);
   end;
   // git and modern tools emit UTF-8 (measured mojibake in remote field
   // test: "AÃ±ade" for "Añade"); compilers emit ANSI/OEM. Strictly valid

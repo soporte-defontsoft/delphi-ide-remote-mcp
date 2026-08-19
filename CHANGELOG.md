@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.17.0-beta] - 2026-08-19
+
+### Security
+- **Build/run processes are confined in a Windows Job Object** (B0b): the
+  whole spawned tree (cmd → msbuild → dcc, or a launched exe) is now
+  **killed on job close**, so a timeout or the server shutting down never
+  leaves orphaned compiler/child processes behind; a process-count cap guards
+  against fork bombs and a per-process memory cap against runaways; UI
+  restrictions block the tree from exiting Windows or changing system
+  settings. Applied at the single process-launch point, so it covers build,
+  run and git. **Honest scope**: this bounds process lifetime and resources,
+  not filesystem access — a compiled program can still write where the
+  service account can. Full per-directory confinement (AppContainer / a
+  restricted token) remains future work; the workspace jail plus this Job
+  Object bound the damage.
+
 ## [0.16.0-beta] - 2026-08-19
 
 ### Added
