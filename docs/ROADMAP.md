@@ -26,6 +26,16 @@
 - [ ] `delphi_references` (hybrid: candidate text scan → `definition` validation → compiler-grade result)
 - [ ] `delphi_build` (MSBuild via registry-located `rsvars.bat`, structured output)
 
+## Phase 4.5 — Safe editing (`delphi_patch`)
+Port of an internally battle-tested safe-edit tool (30+ measured test rounds with several
+LLMs), so that ANY model — large or small — can modify Delphi sources through the MCP
+without corrupting them:
+- [ ] Single-full-line unique anchors (with real-line hint on mismatch), never whole-file rewrites
+- [ ] Strict encoding validation (CP1252/UTF-8 BOM detection, mojibake rejection, byte-level round-trip)
+- [ ] Atomic writes + per-file operation queue (anti-race)
+- [ ] Automatic pre-edit backups with 2-step restore
+- [ ] Hard rejection of binary designer files (TPF0), `__history/`/`__recovery/` artifacts
+
 ## Phase 5 — Resident service + GUI
 - [ ] Workspace Manager: multi-workspace, warm instances, request queue, LRU, idle shutdown, hang kill+respawn
 - [ ] Streamable HTTP transport (localhost by default)

@@ -39,7 +39,7 @@ REM ============================================================================
 setlocal
 
 REM ----------------- CONFIGURACION DEL PROYECTO (rellenar) --------------------
-set PROYECTO=%~dp0LspCoreTest.dproj
+set PROYECTO=%~dp0DelphiLspMcp.dproj
 set RSVARS=C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat
 REM ----------------------------------------------------------------------------
 
