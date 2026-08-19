@@ -139,6 +139,32 @@ check('create: proyecto FMX', out.startswith('CREADO'), out)
 ok, err = build_ok(os.path.join(FDIR, 'HolaFmx.dproj'))
 check('build: proyecto FMX COMPILA', ok, err)
 
+# --- scaffold ships a basic .gitignore (remote agent may edit it later) ---
+gi = os.path.join(VDIR, '.gitignore')
+check('gitignore: creado por el scaffold', os.path.exists(gi)
+      and '__delphi-patch/' in open(gi).read(), gi)
+
+# --- BOM audit false positive: accents into a UTF8-BOM unit must NOT warn ---
+out = call('delphi_edit', {"path": os.path.join(VDIR, 'UMain.pas'),
+    "insert": "metodo", "inclass": "TFormMain", "visibility": "public",
+    "code": "function Saludar: string;\r\nbegin\r\n  Result := '¡Bienvenida, gestoría!';\r\nend;"})
+check('edit: acentos en fichero utf8-bom SIN falso positivo',
+      'ESCRITO' in out and 'FUERA DE CUADRO' not in out, out[:300])
+body = open(os.path.join(VDIR, 'UMain.pas'), 'rb').read().decode('utf-8-sig')
+check('edit: literal con acentos intacto en disco',
+      '¡Bienvenida, gestoría!' in body, body[-200:])
+
+# --- stale-buffer fix: the LSP must see edits made AFTER its didOpen ---
+out = call('delphi_symbols', {"path": os.path.join(VDIR, 'UMain.pas')}, 300)
+check('lsp: symbols inicial (didOpen)', 'TFormMain' in out, out[:150])
+out = call('delphi_edit', {"path": os.path.join(VDIR, 'UMain.pas'),
+    "insert": "metodo", "inclass": "TFormMain", "visibility": "public",
+    "code": "procedure Despedir;\r\nbegin\r\n  Caption := 'adios';\r\nend;"})
+check('lsp: insert posterior al didOpen', 'ESCRITO' in out, out[:200])
+out = call('delphi_symbols', {"path": os.path.join(VDIR, 'UMain.pas')}, 300)
+check('lsp: symbols VE el metodo nuevo (buffer refrescado, no rancio)',
+      'Despedir' in out, out[:300])
+
 print()
 print('== scaffold battery: %d PASS / %d FAIL ==' % (P, F))
 proc.stdin.close()

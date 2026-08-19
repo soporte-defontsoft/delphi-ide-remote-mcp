@@ -227,6 +227,27 @@ try:
     out = call('delphi_git', {"repo": tmpgit, "command": "push"})
     check('git: push permitido (falla sin remote, pero NO por whitelist)',
           out.startswith('exit=') and 'unknown command' not in out, out[:150])
+
+    # identity via whitelisted config + commit with normal punctuation
+    out = call('delphi_git', {"repo": tmpgit, "command": "config",
+                              "args": "user.name", "message": "Agente Remoto"})
+    check('git: config user.name', out.startswith('exit=0'), out[:150])
+    out = call('delphi_git', {"repo": tmpgit, "command": "config",
+                              "args": "user.email", "message": "agente@test.local"})
+    check('git: config user.email', out.startswith('exit=0'), out[:150])
+    out = call('delphi_git', {"repo": tmpgit, "command": "config",
+                              "args": "core.sshCommand", "message": "evil"})
+    check('git: config fuera de user.name/email rechazado',
+          out.startswith('error:'), out[:150])
+    with open(os.path.join(tmpgit, 'nota.txt'), 'w') as f:
+        f.write('hola\n')
+    call('delphi_git', {"repo": tmpgit, "command": "add", "args": "."})
+    out = call('delphi_git', {"repo": tmpgit, "command": "commit",
+        "message": "Commit de prueba (con parentesis), 'comillas' y ¡signos!"})
+    check('git: commit con puntuacion normal en message', out.startswith('exit=0'),
+          out[:200])
+    out = call('delphi_git', {"repo": tmpgit, "command": "log"})
+    check('git: log muestra el commit', 'parentesis' in out, out[:200])
 finally:
     shutil.rmtree(tmpgit, ignore_errors=True)
 

@@ -782,10 +782,17 @@ var
   function HighCount(const S: string): Integer;
   var
     X: Byte;
+    KH: TEncKind;
   begin
     Result := 0;
+    // The BOM belongs to the FILE, not to any line of text: encoding a text
+    // fragment as utf8-bom would smuggle 3 phantom high bytes into the
+    // accounting (measured false positive: "expected 0, got 3").
+    KH := K;
+    if KH = ekUtf8Bom then
+      KH := ekUtf8;
     try
-      for X in EncodeText(S, K) do
+      for X in EncodeText(S, KH) do
         if X > 127 then
           Inc(Result);
     except

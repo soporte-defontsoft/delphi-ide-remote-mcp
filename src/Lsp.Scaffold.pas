@@ -300,6 +300,19 @@ begin
       Files.Add(MainUnit + '.pas');
       if Kind = 'vcl' then Files.Add(MainUnit + '.dfm') else Files.Add(MainUnit + '.fmx');
     end;
+
+    // A basic .gitignore so the first commit stays clean of build artifacts
+    // and tool backups; the agent may edit it later with delphi_textedit.
+    if not TFile.Exists(TPath.Combine(Dir, '.gitignore')) then
+    begin
+      WriteNewFile(TPath.Combine(Dir, '.gitignore'),
+        'Win32/' + CRLF + 'Win64/' + CRLF + '*.dcu' + CRLF +
+        '*.local' + CRLF + '*.identcache' + CRLF + '*.stat' + CRLF +
+        '__delphi-patch/' + CRLF + '__history/' + CRLF + '__recovery/' + CRLF +
+        '*-deploy.zip' + CRLF + '*.delphilsp.json' + CRLF);
+      Files.Add('.gitignore');
+    end;
+
     Result := Format('CREADO proyecto %s (%s) en %s'#10'  ficheros: %s'#10 +
       'Todo UTF-8 con BOM + CRLF. Compilable ya con delphi_build (el IDE ' +
       'enriquecera el .dproj al abrirlo).',

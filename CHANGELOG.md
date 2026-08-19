@@ -6,6 +6,39 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.9.0-beta] - 2026-08-19
+
+Everything in this release comes from the first real remote field test: a
+Claude Desktop agent on another machine drove the full cycle over HTTP and
+its report exposed four issues. All four are fixed and test-locked.
+
+### Fixed
+- **Stale LSP buffer** (the big one): the language server saw each file as
+  it was when first opened; edits made afterwards (delphi_edit, scaffolding,
+  external editors) were invisible to completion/signature/definition. Now
+  every acquire compares a disk fingerprint (mtime+size) and refreshes the
+  buffer via didChange - the LSP always answers about the CURRENT source.
+- **BOM false positive in the delphi_edit audit**: on UTF-8+BOM files the
+  high-byte accounting smuggled 3 phantom bytes (the BOM) into the "leaving"
+  side, producing "ACENTOS FUERA DE CUADRO: esperaba 0 y hay 3" on perfectly
+  healthy writes (and scaring agents into restoring). Text fragments are now
+  encoded BOM-less for accounting.
+
+### Changed
+- **delphi_git `message`**: normal punctuation is welcome (the message never
+  goes through a shell - git is spawned with a direct command line); only
+  line breaks are refused. Shell-metacharacter screening stays on `args`.
+- **delphi_git `config`** added to the whitelist, restricted to `user.name`
+  / `user.email` (value in `message`), so a remote agent can commit on a
+  fresh repo/machine. Refused in read-only mode like every write.
+- **delphi_create** ships a basic `.gitignore` with every new project
+  (build artifacts, tool backups, `.delphilsp.json`); the agent may edit it
+  later with delphi_textedit.
+
+### Tests
+- 141 checks across the 5 batteries (stale-buffer refresh, BOM accounting
+  on utf8-bom, git config identity + free punctuation, scaffold .gitignore).
+
 ## [0.8.0-beta] - 2026-08-19
 
 Closes the gap found by the full capability inventory of DelphiLSP 37.0

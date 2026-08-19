@@ -73,7 +73,7 @@ type
   public
     [SchemaDescription('Path of the git repository (or any path inside it)')]
     property Repo: string read FRepo write FRepo;
-    [SchemaDescription('One of: status | diff | log | show | branch | add | commit | init | push | tag')]
+    [SchemaDescription('One of: status | diff | log | show | branch | add | commit | init | push | tag | config (config: args=user.name|user.email, value in message)')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected')]
     property Args: string read FArgs write FArgs;
@@ -389,9 +389,11 @@ begin
   FName := 'delphi_git';
   FDescription := 'Whitelisted git operations on a repository of this ' +
     'machine, so a remote agent can inspect and version its work: status, ' +
-    'diff, log, show, branch, add, commit, init, push, tag (commit/tag ' +
-    'message goes in the "message" parameter; push uses the credentials and ' +
-    'remotes stored on the server). No arbitrary git commands, no shell.';
+    'diff, log, show, branch, add, commit, init, push, tag, config ' +
+    '(commit/tag message goes in the "message" parameter; config only sets ' +
+    'user.name/user.email for the commit identity; push uses the ' +
+    'credentials and remotes stored on the server). No arbitrary git ' +
+    'commands, no shell.';
 end;
 
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
@@ -414,8 +416,13 @@ begin
     Exit('error: directory not found: ' + Repo);
 
   for B in BadChars do
-    if Params.Args.Contains(B) or Params.Message.Contains(B) then
-      Exit('error: shell metacharacters are not allowed in args/message');
+    if Params.Args.Contains(B) then
+      Exit('error: shell metacharacters are not allowed in args');
+  // The message never goes through a shell (git is spawned with a direct
+  // command line): normal punctuation is welcome. Only line breaks are
+  // refused, and double quotes are neutralized where it is embedded.
+  if Params.Message.Contains(#13) or Params.Message.Contains(#10) then
+    Exit('error: line breaks are not allowed in message');
   if Params.Args.Contains('--upload-pack') or Params.Args.Contains('--exec') or
      Params.Args.StartsWith('-c') or Params.Args.Contains(' -c ') then
     Exit('error: that git option is not allowed here');
@@ -448,6 +455,19 @@ begin
   end
   else if Cmd = 'init' then
     GitArgs := 'init ' + Params.Args
+  else if Cmd = 'config' then
+  begin
+    // Only the commit identity, so a remote agent can commit on a fresh
+    // repo/machine. Anything else in git config stays off-limits.
+    if not (SameText(Params.Args.Trim, 'user.name') or
+            SameText(Params.Args.Trim, 'user.email')) then
+      Exit('error: config only accepts user.name or user.email in args ' +
+        '(the value goes in the "message" parameter)');
+    if Params.Message.Trim = '' then
+      Exit('error: config needs the value in the "message" parameter');
+    GitArgs := Format('config %s "%s"',
+      [Params.Args.Trim.ToLower, Params.Message.Replace('"', '''''')]);
+  end
   else if Cmd = 'push' then
     // uses the SERVER's stored credentials/remotes - consistent with the
     // centralized model (the repo lives next to the compiler)
@@ -463,7 +483,7 @@ begin
   end
   else
     Exit('error: unknown command "' + Params.Command +
-      '". Allowed: status | diff | log | show | branch | add | commit | init | push | tag');
+      '". Allowed: status | diff | log | show | branch | add | commit | init | push | tag | config');
 
   Output := RunCaptured(Format('git.exe -C "%s" %s', [Repo, GitArgs]),
     IfThen(Cmd = 'push', 180000, 60000), ExitCode);

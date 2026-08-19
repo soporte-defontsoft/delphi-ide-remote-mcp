@@ -37,6 +37,10 @@ type
     FLock: TCriticalSection;
     FClients: TObjectDictionary<string, TLspClient>;
     FDocVersions: TDictionary<string, Integer>;
+    // disk fingerprint (mtime|size) at the moment the LSP last saw the file:
+    // when it changes, the buffer is refreshed with didChange (the LSP must
+    // always see the CURRENT disk truth, e.g. after a delphi_edit).
+    FDocStamps: TDictionary<string, string>;
     FLspExe: string;
     function EnsureExe: string;
     function CreateClient(const ARootDir, ASettingsFile: string;
@@ -99,14 +103,27 @@ begin
   FLock := TCriticalSection.Create;
   FClients := TObjectDictionary<string, TLspClient>.Create([doOwnsValues]);
   FDocVersions := TDictionary<string, Integer>.Create;
+  FDocStamps := TDictionary<string, string>.Create;
 end;
 
 destructor TLspSession.Destroy;
 begin
   FClients.Free; // frees clients, which stop their transports (and children)
   FDocVersions.Free;
+  FDocStamps.Free;
   FLock.Free;
   inherited;
+end;
+
+{ mtime ticks + size: cheap fingerprint of the file's disk state. }
+function DiskStamp(const APath: string): string;
+begin
+  try
+    Result := FloatToStr(TFile.GetLastWriteTimeUtc(APath)) + '|' +
+      IntToStr(TFile.GetSize(APath));
+  except
+    Result := '?';
+  end;
 end;
 
 class function TLspSession.Instance: TLspSession;
@@ -272,11 +289,26 @@ begin
   try
     Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
     DocKey := Key + '|' + FullPath.ToLower;
+    var Stamp := DiskStamp(FullPath);
+    var Old := '';
     if not FDocVersions.ContainsKey(DocKey) then
     begin
       Result.DidOpenFile(FullPath);
       FDocVersions.Add(DocKey, 1);
+      FDocStamps.AddOrSetValue(DocKey, Stamp);
       Sleep(500); // brief head start for indexing; retries cover the rest
+    end
+    else if FDocStamps.TryGetValue(DocKey, Old) and (Old <> Stamp) then
+    begin
+      // The disk changed since the LSP last saw this file (delphi_edit,
+      // scaffolding, an external editor...): refresh the buffer so every
+      // answer reflects the CURRENT source, never a stale snapshot.
+      var Version := FDocVersions[DocKey] + 1;
+      FDocVersions[DocKey] := Version;
+      Result.DidChangeText(TLspClient.PathToUri(FullPath),
+        TLspClient.LoadSourceText(FullPath), Version);
+      FDocStamps[DocKey] := Stamp;
+      Sleep(500); // brief head start for re-indexing
     end;
   finally
     FLock.Leave;
