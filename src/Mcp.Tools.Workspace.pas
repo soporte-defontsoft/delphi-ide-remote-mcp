@@ -119,6 +119,16 @@ type
     constructor Create; override;
   end;
 
+  TDelphiWorkspaceParams = class
+  end;
+
+  TDelphiWorkspaceTool = class(TMCPToolBase<TDelphiWorkspaceParams>)
+  protected
+    function ExecuteWithParams(const Params: TDelphiWorkspaceParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
   TDelphiRunParams = class
   private
     FPath: string;
@@ -186,6 +196,7 @@ implementation
 
 uses
   MCPServer.Registration,
+  MCPServer.Logger,
   Lsp.Client,
   Lsp.Discovery,
   Lsp.References,
@@ -538,6 +549,58 @@ begin
   end;
 end;
 
+{ TDelphiWorkspaceTool }
+
+constructor TDelphiWorkspaceTool.Create;
+begin
+  inherited;
+  FName := 'delphi_workspace';
+  FDescription := 'The lay of the land on the SERVER: the workspace roots ' +
+    'this server operates within (your entire allowed universe here - these ' +
+    'are paths on the REMOTE Delphi machine, NOT your own local disk; call ' +
+    'this FIRST so you never confuse the two), the access level ' +
+    '(read-write / read-only), and the active RAD Studio. Read-only, no ' +
+    'parameters.';
+end;
+
+function TDelphiWorkspaceTool.ExecuteWithParams(const Params: TDelphiWorkspaceParams): string;
+var
+  Return: TJSONObject;
+  RootsArr: TJSONArray;
+  R: string;
+  Roots: TArray<string>;
+  Info: TRadStudioInfo;
+begin
+  Return := TJSONObject.Create;
+  try
+    Return.AddPair('note', 'These are paths on the REMOTE server that runs ' +
+      'Delphi, not your local machine. Work only inside "roots"; anything ' +
+      'outside is refused. Paths you receive from tools are server paths.');
+    Roots := WorkspaceRoots;
+    RootsArr := TJSONArray.Create;
+    Return.AddPair('roots', RootsArr);
+    for R in Roots do
+      RootsArr.Add(ExcludeTrailingPathDelimiter(R));
+    if Length(Roots) = 0 then
+      Return.AddPair('jail', 'none (unrestricted local mode - no [Workspace] ' +
+        'Roots configured)')
+    else
+      Return.AddPair('jail', 'active');
+    if IsReadOnlyNow then
+      Return.AddPair('access', 'read-only')
+    else
+      Return.AddPair('access', 'read-write');
+    Info := DiscoverRadStudio;
+    if Info.Found then
+      Return.AddPair('activeDelphi', Info.Version)
+    else
+      Return.AddPair('activeDelphi', '');
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
 { TDelphiProjectsTool }
 
 constructor TDelphiProjectsTool.Create;
@@ -675,6 +738,16 @@ begin
     TimeoutMs := 30000;
   if TimeoutMs > 300000 then
     TimeoutMs := 300000;
+
+  // Security audit trail (delphi_run is arbitrary execution by design):
+  // log WHAT ran with the binary's hash, so every execution is accountable.
+  try
+    TLogger.Warning(Format('delphi_run: EXEC "%s" sha256=%s args=[%s] workdir=%s',
+      [ExePath, THashSHA2.GetHashStringFromFile(ExePath),
+       Params.Args, WorkDir]));
+  except
+    TLogger.Warning('delphi_run: EXEC "' + ExePath + '" (hash n/d)');
+  end;
 
   Output := RunCapturedIn(Format('"%s" %s', [ExePath, Params.Args]).Trim,
     WorkDir, TimeoutMs, ExitCode);
@@ -858,6 +931,8 @@ initialization
     function: IMCPTool begin Result := TDelphiProjectsTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_installs',
     function: IMCPTool begin Result := TDelphiInstallsTool.Create; end);
+  TMCPRegistry.RegisterTool('delphi_workspace',
+    function: IMCPTool begin Result := TDelphiWorkspaceTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_run',
     function: IMCPTool begin Result := TDelphiRunTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_list',

@@ -28,6 +28,7 @@ uses
   System.Classes,
   System.IOUtils,
   Winapi.Windows,
+  MCPServer.Logger,
   Lsp.Discovery,
   Lsp.Guard;
 
@@ -182,6 +183,11 @@ begin
   Target := ATarget;
   if Target = '' then
     Target := 'Build';
+
+  // Security audit trail: a build can run arbitrary pre/post-build steps
+  // declared in the .dproj, so record every one.
+  TLogger.Warning(Format('delphi_build: BUILD "%s" %s/%s target=%s',
+    [TPath.GetFullPath(ADprojPath), Plat, Cfg, Target]));
 
   Output := RunCaptured(Format(
     'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s /v:minimal /nologo"',

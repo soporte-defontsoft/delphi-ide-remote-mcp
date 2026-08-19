@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.10.0-beta] - 2026-08-19
+
+More field-test findings from the full-repo replication run. Two were real
+bugs (one an outright blocker), one a new tool, one a security hardening.
+
+### Fixed
+- **Dotted unit names** (blocker): `delphi_edit createunit` and scaffolded
+  form units rejected names like `Lsp.BuildRunner` — the tool could not
+  create the very units of the project it is part of. Namespaced names
+  (`Ident(.Ident)*`) are now accepted.
+- **Access Violation on `delphi_edit` with `new=""`**: blanking a line
+  crashed the handler (indexing an empty split). Empty replacement now
+  blanks the line cleanly.
+
+### Added
+- **`delphi_workspace` (tool 21)**: the server's lay of the land — the
+  configured workspace roots (made explicit so a remote agent never
+  confuses SERVER paths with its own local disk), the access level
+  (read-write / read-only) and the active Delphi. Read-only; call it first.
+
+### Security
+- Every `delphi_run` (arbitrary execution by design) and `delphi_build`
+  (can run pre/post-build steps from the .dproj) now writes an audit line
+  to the log — for run, the executed binary's SHA-256. (Build and run
+  remain refused under a read-only credential.) OS-level sandboxing of the
+  spawned process is tracked as future work.
+
 ## [0.9.1-beta] - 2026-08-19
 
 ### Fixed

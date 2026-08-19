@@ -139,6 +139,19 @@ check('create: proyecto FMX', out.startswith('CREADO'), out)
 ok, err = build_ok(os.path.join(FDIR, 'HolaFmx.dproj'))
 check('build: proyecto FMX COMPILA', ok, err)
 
+# --- B0: createunit accepts DOTTED namespace unit names ---
+out = call('delphi_edit', {"path": os.path.join(VDIR, 'Lsp.BuildRunner.pas'),
+                           "createunit": True})
+check('createunit: nombre dotted (Lsp.BuildRunner) aceptado',
+      out.startswith('CREADA') and 'Lsp.BuildRunner' in out, out[:150])
+
+# --- B1: old given + new="" blanks the line (no Access Violation) ---
+bp = os.path.join(VDIR, 'BlankMe.pas')
+call('delphi_edit', {"path": bp, "createunit": True})
+out = call('delphi_edit', {"path": bp, "old": "interface", "new": ""})
+check('edit: new="" blanquea la linea sin AccessViolation',
+      'ESCRITO' in out and 'AccessViolation' not in out, out[:150])
+
 # --- scaffold ships a basic .gitignore (remote agent may edit it later) ---
 gi = os.path.join(VDIR, '.gitignore')
 check('gitignore: creado por el scaffold', os.path.exists(gi)

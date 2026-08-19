@@ -336,7 +336,8 @@ begin
     Exit;
   if not TFile.Exists(ADprPath) then
     Exit('RECHAZADO: no existe el .dpr ' + ADprPath);
-  if not TRegEx.IsMatch(AUnitName, '^[A-Za-z_]\w*$') then
+  // Dotted namespaces are legal Delphi (e.g. MyApp.Forms.Main): Ident(.Ident)*.
+  if not TRegEx.IsMatch(AUnitName, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
     Exit('RECHAZADO: ''' + AUnitName + ''' no es un identificador valido de unit.');
   FormName := AFormName.Trim;
   if FormName = '' then

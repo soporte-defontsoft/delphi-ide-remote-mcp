@@ -49,6 +49,9 @@ function AnonymousReadOnly: Boolean;// DELPHI_MCP_ANON_READONLY  / AnonymousRead
 procedure SetProcessReadOnly(AValue: Boolean);
 procedure SetRequestReadOnly(AValue: Boolean);
 
+{ Whether the CURRENT request/process is read-only (for delphi_workspace). }
+function IsReadOnlyNow: Boolean;
+
 { THE single entry gate, consulted by the tools dispatcher before ANY tool
   executes. '' = allowed; otherwise the rejection message returned to the
   agent. In read-only mode every mutating tool is refused; delphi_git is
@@ -86,6 +89,11 @@ end;
 procedure SetRequestReadOnly(AValue: Boolean);
 begin
   GRequestReadOnly := AValue;
+end;
+
+function IsReadOnlyNow: Boolean;
+begin
+  Result := GProcessReadOnly or GRequestReadOnly;
 end;
 
 procedure LoadSecurity;

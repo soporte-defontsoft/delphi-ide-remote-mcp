@@ -463,7 +463,9 @@ begin
         if TFile.Exists(A.Path) then
           Exit(Format('RECHAZADO: %s YA EXISTE. createunit jamas sobreescribe.', [TPath.GetFileName(A.Path)]));
         var UnitName := TPath.GetFileNameWithoutExtension(A.Path);
-        if not TRegEx.IsMatch(UnitName, '^[A-Za-z_]\w*$') then
+        // Dotted namespaces are legal Delphi and REQUIRED by modern projects
+        // (Lsp.BuildRunner, System.SysUtils...): allow Ident(.Ident)*.
+        if not TRegEx.IsMatch(UnitName, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
           Exit(Format('RECHAZADO: ''%s'' no es un identificador Pascal valido para nombre de unit.', [UnitName]));
         var Skel := Format('unit %s;'#13#10#13#10'interface'#13#10#13#10 +
           'implementation'#13#10#13#10'end.'#13#10, [UnitName]);
@@ -902,7 +904,12 @@ begin
     // has beyond the anchor is preserved in front of the new text.
     Prefix := Copy(Lines[HitIdx], 1, Length(Lines[HitIdx]) - Length(AOld));
     Replacement := ANew.Replace(#13#10, #10).Replace(#13, #10);
-    var NewFirst := Replacement.Split([#10])[0];
+    // Empty replacement (old given + new='') blanks the line - a legitimate
+    // edit. Never index Split()[0] on it: '' yields an empty array (measured
+    // Access Violation in the field test). Line DELETION is a separate mode.
+    var NewFirst := '';
+    if Replacement <> '' then
+      NewFirst := Replacement.Split([#10])[0];
     Lines[HitIdx] := Prefix + Replacement;
 
     var Joined: string;

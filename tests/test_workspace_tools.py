@@ -201,6 +201,19 @@ if m_line >= 0:
 else:
     check('definition: ancla de metodo encontrada en Lsp.Client.pas', False, 'no anchor')
 
+# --- workspace: roots as the round-trip variable (server vs own paths) ---
+out = call('delphi_workspace', {})
+try:
+    d = json.loads(out)
+    check('workspace: expone roots', isinstance(d.get('roots'), list), out[:200])
+    check('workspace: avisa que son rutas del servidor',
+          'REMOTE' in d.get('note', '') or 'server' in d.get('note', '').lower(),
+          out[:200])
+    check('workspace: nivel de acceso', d.get('access') in ('read-write', 'read-only'),
+          out[:200])
+except Exception:
+    check('workspace: parsea', False, out[:200])
+
 # --- installs: every Delphi on the machine, as a list ---
 out = call('delphi_installs', {})
 try:
