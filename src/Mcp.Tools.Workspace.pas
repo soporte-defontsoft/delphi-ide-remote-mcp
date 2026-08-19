@@ -14,6 +14,8 @@ uses
   System.IniFiles,
   System.IOUtils,
   System.JSON,
+  System.Hash,
+  System.NetEncoding,
   MCPServer.Tool.Base,
   MCPServer.Types;
 
@@ -125,6 +127,27 @@ type
   TDelphiRunTool = class(TMCPToolBase<TDelphiRunParams>)
   protected
     function ExecuteWithParams(const Params: TDelphiRunParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
+  TDelphiFetchParams = class
+  private
+    FPath: string;
+    FOffset: Integer;
+    FMaxBytes: Integer;
+  public
+    [SchemaDescription('Absolute path of the file to download from the server')]
+    property Path: string read FPath write FPath;
+    [SchemaDescription('Byte offset to start from (0 = beginning). Loop increasing it until eof=true and reassemble')]
+    property Offset: Integer read FOffset write FOffset;
+    [SchemaDescription('Bytes per chunk (default and cap: 8388608 = 8 MB)')]
+    property MaxBytes: Integer read FMaxBytes write FMaxBytes;
+  end;
+
+  TDelphiFetchTool = class(TMCPToolBase<TDelphiFetchParams>)
+  protected
+    function ExecuteWithParams(const Params: TDelphiFetchParams): string; override;
   public
     constructor Create; override;
   end;
@@ -546,7 +569,99 @@ begin
   Result := Format('exit=%d'#10'%s', [ExitCode, Output.TrimRight]);
 end;
 
+{ TDelphiFetchTool }
+
+constructor TDelphiFetchTool.Create;
+begin
+  inherited;
+  FName := 'delphi_fetch';
+  FDescription := 'Download a file FROM the server in base64 chunks - the ' +
+    '"get the deploy" tool: after delphi_build, fetch the exe (and any ' +
+    'companion files listed with delphi_list) to run GUI apps on YOUR ' +
+    'machine. Loop offset until eof=true, concatenate the decoded chunks, ' +
+    'and verify the sha256 (computed over the whole file, returned on the ' +
+    'offset=0 call). Jailed to the workspace roots.';
+end;
+
+function TDelphiFetchTool.ExecuteWithParams(const Params: TDelphiFetchParams): string;
+const
+  MAX_CHUNK = 8 * 1024 * 1024;
+var
+  FullPath, Sha: string;
+  Stream: TFileStream;
+  Size, ChunkLen: Int64;
+  MaxB: Integer;
+  Buf: TBytes;
+  Return: TJSONObject;
+  B64: TBase64Encoding;
+  Hasher: THashSHA2;
+begin
+  FullPath := TPath.GetFullPath(Params.Path);
+  Result := PathDenied(FullPath);
+  if Result <> '' then
+    Exit;
+  if not TFile.Exists(FullPath) then
+    Exit('error: no existe ' + FullPath);
+  MaxB := Params.MaxBytes;
+  if (MaxB <= 0) or (MaxB > MAX_CHUNK) then
+    MaxB := MAX_CHUNK;
+  if Params.Offset < 0 then
+    Exit('error: offset negativo');
+
+  Stream := TFileStream.Create(FullPath, fmOpenRead or fmShareDenyWrite);
+  try
+    Size := Stream.Size;
+    Sha := '';
+    if Params.Offset = 0 then
+    begin
+      // Whole-file hash so the client can verify the reassembly.
+      Hasher := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);
+      SetLength(Buf, 1024 * 1024);
+      while True do
+      begin
+        ChunkLen := Stream.Read(Buf[0], Length(Buf));
+        if ChunkLen <= 0 then
+          Break;
+        Hasher.Update(Buf, ChunkLen);
+      end;
+      Sha := Hasher.HashAsString;
+      Stream.Position := 0;
+    end;
+
+    if Params.Offset > Size then
+      Exit('error: offset mas alla del final (size=' + IntToStr(Size) + ')');
+    Stream.Position := Params.Offset;
+    ChunkLen := Size - Params.Offset;
+    if ChunkLen > MaxB then
+      ChunkLen := MaxB;
+    SetLength(Buf, ChunkLen);
+    if ChunkLen > 0 then
+      Stream.ReadBuffer(Buf[0], ChunkLen);
+
+    Return := TJSONObject.Create;
+    B64 := TBase64Encoding.Create(0); // no line breaks
+    try
+      Return.AddPair('path', FullPath);
+      Return.AddPair('size', TJSONNumber.Create(Size));
+      Return.AddPair('offset', TJSONNumber.Create(Params.Offset));
+      Return.AddPair('bytes', TJSONNumber.Create(ChunkLen));
+      Return.AddPair('eof', TJSONBool.Create(Params.Offset + ChunkLen >= Size));
+      if Sha <> '' then
+        Return.AddPair('sha256', Sha);
+      Return.AddPair('chunkBase64', B64.EncodeBytesToString(Buf));
+      Result := Return.ToJSON;
+    finally
+      B64.Free;
+      Return.Free;
+    end;
+  finally
+    Stream.Free;
+  end;
+end;
+
 initialization
+  TMCPRegistry.RegisterTool('delphi_fetch',
+    function: IMCPTool begin Result := TDelphiFetchTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_search',
     function: IMCPTool begin Result := TDelphiSearchTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_projects',

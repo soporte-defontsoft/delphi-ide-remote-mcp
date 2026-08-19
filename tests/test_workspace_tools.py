@@ -3,7 +3,7 @@
 Usage:  python tests/test_workspace_tools.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Uses this very repository as the git fixture.
 """
-import json, subprocess, threading, queue, time, os, sys
+import json, subprocess, threading, queue, time, os, sys, base64, hashlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
@@ -121,6 +121,25 @@ d = json.loads(out)
 check('projects: filtro por nombre', d['total'] == 1 and d['projects'][0]['name'] == 'DelphiLspMcpTray', out[:150])
 out = call('delphi_projects', {})
 check('projects: sin root ni ini configurado avisa', out.startswith('error:') and 'Roots' in out, out[:150])
+
+# --- fetch (chunked download with sha256) ---
+LIC = os.path.join(REPO, 'LICENSE')
+blob = b''
+off = 0
+sha = None
+while True:
+    out = call('delphi_fetch', {"path": LIC, "offset": off, "maxbytes": 400})
+    d = json.loads(out)
+    if off == 0:
+        sha = d.get('sha256')
+    blob += base64.b64decode(d['chunkBase64'])
+    if d['eof']:
+        break
+    off += d['bytes']
+local = open(LIC, 'rb').read()
+check('fetch: reensamblado identico byte a byte', blob == local, '%d vs %d' % (len(blob), len(local)))
+check('fetch: sha256 cuadra', sha and sha.lower() == hashlib.sha256(local).hexdigest(), sha)
+check('fetch: fue en varios chunks', len(local) > 400, len(local))
 
 # --- git (this repo as fixture) ---
 out = call('delphi_git', {"repo": REPO, "command": "status"})

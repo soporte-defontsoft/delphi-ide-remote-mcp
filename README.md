@@ -25,6 +25,7 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms (VCL/FMX) with IDE-equivalent skeletons — buildable immediately |
 | `delphi_build` | Real MSBuild builds with structured errors/warnings |
 | `delphi_run` | Run a built executable on the server and capture its output (jailed to the roots, no shell, hard timeout) |
+| `delphi_fetch` | Download files from the server in base64 chunks with whole-file SHA-256 — "get the deploy" to run GUI apps on the client machine |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
 | `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style |
 | `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace] Roots=D:\Projects;E:\More`) |
@@ -64,7 +65,7 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 
 ## Tests
 
-`tests/` contains five end-to-end batteries that talk real MCP to the built server (76 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py`, `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
+`tests/` contains five end-to-end batteries that talk real MCP to the built server (86 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py`, `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
 
 ## Key design points
 

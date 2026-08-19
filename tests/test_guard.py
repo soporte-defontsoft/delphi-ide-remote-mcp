@@ -141,6 +141,10 @@ out = call('delphi_run', {"path": os.path.join(INSIDE, 'Hola', 'Win64', 'Debug',
 check('run: dentro ejecuta y captura salida', out.startswith('exit=0') and 'funcionando' in out, out[:150])
 out = call('delphi_run', {"path": os.path.join(OUTSIDE, 'Fuera.exe')})
 check('run: fuera vetado', denied(out), out[:150])
+out = call('delphi_fetch', {"path": OUT_PAS})
+check('fetch: fuera vetado', denied(out), out[:150])
+out = call('delphi_fetch', {"path": IN_PAS})
+check('fetch: dentro permitido', 'chunkBase64' in out, out[:120])
 
 print()
 print('== guard battery: %d PASS / %d FAIL ==' % (P, F))
