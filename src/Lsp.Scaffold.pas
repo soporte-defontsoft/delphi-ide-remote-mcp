@@ -21,7 +21,8 @@ uses
   System.StrUtils,
   System.IOUtils,
   System.RegularExpressions,
-  Lsp.Patch;
+  Lsp.Patch,
+  Lsp.Guard;
 
 const
   CRLF = #13#10;
@@ -222,6 +223,9 @@ begin
     Exit('RECHAZADO: ''' + AName + ''' no es un identificador Pascal valido para nombre de proyecto.');
 
   Dir := TPath.GetFullPath(ADir);
+  Result := PathDenied(Dir);
+  if Result <> '' then
+    Exit;
   TDirectory.CreateDirectory(Dir);
   Dpr := TPath.Combine(Dir, AName + '.dpr');
   if TFile.Exists(Dpr) or TFile.Exists(TPath.Combine(Dir, AName + '.dproj')) then
@@ -314,6 +318,9 @@ begin
   Kind := AKind.Trim.ToLower;
   if (Kind <> 'vcl') and (Kind <> 'fmx') then
     Exit('RECHAZADO: kind debe ser vcl | fmx.');
+  Result := PathDenied(ADprPath);
+  if Result <> '' then
+    Exit;
   if not TFile.Exists(ADprPath) then
     Exit('RECHAZADO: no existe el .dpr ' + ADprPath);
   if not TRegEx.IsMatch(AUnitName, '^[A-Za-z_]\w*$') then

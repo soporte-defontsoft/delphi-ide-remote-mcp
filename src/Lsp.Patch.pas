@@ -57,7 +57,8 @@ uses
   System.SyncObjs,
   System.Generics.Collections,
   System.RegularExpressions,
-  Winapi.Windows;
+  Winapi.Windows,
+  Lsp.Guard;
 
 const
   BACKUP_SUB = '__delphi-patch';
@@ -351,11 +352,15 @@ var
   K: TEncKind;
   M: TMetrics;
   Text, Eol, Body: string;
+  Denied: string;
   Lines: TArray<string>;
   IniL, FinL, I: Integer;
   Sb: TStringBuilder;
   Cut: string;
 begin
+  Denied := PathDenied(APath);
+  if Denied <> '' then
+    Exit(Denied);
   if not TFile.Exists(APath) then
     Exit('RECHAZADO: no existe ' + APath);
   B := TFile.ReadAllBytes(APath);
@@ -429,6 +434,9 @@ begin
   GLock.Enter;
   try
     try
+      Result := PathDenied(A.Path);
+      if Result <> '' then
+        Exit;
       Ext := LowerCase(TPath.GetExtension(A.Path));
       IsSource := False;
       for var E in SOURCE_EXTS do

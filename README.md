@@ -43,11 +43,25 @@ claude mcp add delphi -- C:/path/to/DelphiLspMcp.exe
 claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp --header "Authorization: Bearer YOUR_TOKEN"
 ```
 
-Token: `DELPHI_MCP_TOKEN` environment variable or `settings.ini` next to the exe (`[Security] AuthToken=...`). Requests without it get 401. Expose over VPN/LAN only.
+### Security (`settings.ini` next to the exe, or environment variables)
+
+```ini
+[Security]
+AuthToken=your-long-random-token        ; or DELPHI_MCP_TOKEN env var
+
+[Workspace]
+Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
+```
+
+- **AuthToken**: every HTTP request must carry `Authorization: Bearer <token>` or gets 401.
+- **Roots** are both discovery (`delphi_projects`) and a **jail**: with roots configured, every
+  disk-touching tool (read/edit/create/build/lint/search/list/git/LSP) refuses paths outside
+  them — including `..\` escapes and prefix cousins. No roots = unrestricted (local trusted
+  mode). For remote exposure configure BOTH, and expose over VPN/LAN only.
 
 ## Tests
 
-`tests/` contains four end-to-end batteries that talk real MCP to the built server (57 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py`, `test_scaffold.py` — the latter scaffolds console/VCL/FMX projects and builds them for real.
+`tests/` contains five end-to-end batteries that talk real MCP to the built server (76 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py`, `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
 
 ## Key design points
 

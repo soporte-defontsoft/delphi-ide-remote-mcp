@@ -111,7 +111,8 @@ uses
   MCPServer.Registration,
   Lsp.Client,
   Lsp.References,
-  Lsp.BuildRunner;
+  Lsp.BuildRunner,
+  Lsp.Guard;
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =
@@ -146,6 +147,9 @@ var
   Mask: string;
   Entry: TJSONObject;
 begin
+  Result := PathDenied(Params.Root);
+  if Result <> '' then
+    Exit;
   if not TDirectory.Exists(Params.Root) then
     Exit('error: directory not found: ' + Params.Root);
   if Params.Query = '' then
@@ -231,6 +235,9 @@ var
   Entry: TJSONObject;
   Total: Integer;
 begin
+  Result := PathDenied(Params.Root);
+  if Result <> '' then
+    Exit;
   if not TDirectory.Exists(Params.Root) then
     Exit('error: directory not found: ' + Params.Root);
 
@@ -319,6 +326,9 @@ begin
   Repo := Params.Repo;
   if Repo = '' then
     Exit('error: missing repo');
+  Result := PathDenied(Repo);
+  if Result <> '' then
+    Exit;
   if TFile.Exists(Repo) then
     Repo := TPath.GetDirectoryName(Repo);
   if not TDirectory.Exists(Repo) then
@@ -391,7 +401,12 @@ var
   Mask: string;
 begin
   if Params.Root <> '' then
-    Roots := TArray<string>.Create(Params.Root)
+  begin
+    Result := PathDenied(Params.Root);
+    if Result <> '' then
+      Exit;
+    Roots := TArray<string>.Create(Params.Root);
+  end
   else
   begin
     IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');

@@ -24,7 +24,8 @@ uses
   Lsp.Transport.Process,
   Lsp.Client,
   Lsp.Discovery,
-  Lsp.ConfigFabricator;
+  Lsp.ConfigFabricator,
+  Lsp.Guard;
 
 type
   ELspSession = class(Exception);
@@ -261,6 +262,9 @@ var
   FullPath, Key, DocKey, RootDir: string;
 begin
   FullPath := TPath.GetFullPath(AFilePath);
+  var Denied := PathDenied(FullPath);
+  if Denied <> '' then
+    raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then
     raise ELspSession.CreateFmt('File not found: %s', [AFilePath]);
 
@@ -288,6 +292,9 @@ var
   Stale: TJSONObject;
 begin
   FullPath := TPath.GetFullPath(AFilePath);
+  var Denied := PathDenied(FullPath);
+  if Denied <> '' then
+    raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then
     raise ELspSession.CreateFmt('File not found: %s', [AFilePath]);
 

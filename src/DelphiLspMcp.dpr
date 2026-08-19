@@ -42,6 +42,7 @@ uses
   Lsp.Transport.Process in 'Lsp.Transport.Process.pas',
   Lsp.Client in 'Lsp.Client.pas',
   Lsp.Discovery in 'Lsp.Discovery.pas',
+  Lsp.Guard in 'Lsp.Guard.pas',
   Lsp.ConfigFabricator in 'Lsp.ConfigFabricator.pas',
   Lsp.Session in 'Lsp.Session.pas',
   Lsp.References in 'Lsp.References.pas',

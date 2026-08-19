@@ -24,7 +24,8 @@ uses
   System.Classes,
   System.IOUtils,
   Winapi.Windows,
-  Lsp.Discovery;
+  Lsp.Discovery,
+  Lsp.Guard;
 
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: DWORD): string;
@@ -106,6 +107,9 @@ var
   Lines: TArray<string>;
   I, TailFrom: Integer;
 begin
+  var Denied := PathDenied(ADprojPath);
+  if Denied <> '' then
+    raise Exception.Create(Denied);
   if not FileExists(ADprojPath) then
     raise Exception.CreateFmt('.dproj not found: %s', [ADprojPath]);
   Info := DiscoverRadStudio;
