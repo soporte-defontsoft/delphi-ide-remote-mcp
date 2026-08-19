@@ -1,0 +1,37 @@
+# --- Local reference material (not part of this project) ---
+skybuck-mcp/
+
+# --- Delphi / RAD Studio build artifacts ---
+Win32/
+Win64/
+Linux64/
+Android/
+Android64/
+OSX64/
+Debug/
+Release/
+__history/
+__recovery/
+*.dcu
+*.dcp
+*.bpl
+*.exe
+*.dll
+*.map
+*.drc
+*.rsm
+*.local
+*.identcache
+*.projdata
+*.tvsconfig
+*.stat
+*.~*
+
+# --- LSP / machine-local configs (contain absolute local paths) ---
+*.delphilsp.json
+*.lsif
+
+# --- Logs and temp ---
+*.log
+*.trace
+tmp/
