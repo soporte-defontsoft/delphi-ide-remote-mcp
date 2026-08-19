@@ -42,6 +42,12 @@ function ExecutePatch(const A: TPatchArgs): string;
 { Encoding-correct numbered read (also serves the remote file toolset). }
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
 
+{ Encoding-preserving load/save for other engines (scaffolder): text is
+  decoded with the real encoding; save re-encodes with the SAME one, makes
+  the pre-edit backup and writes atomically. AEncName as in delphi_read. }
+function PatchLoadText(const APath: string; out AEncName: string): string;
+procedure PatchSaveText(const APath, AText, AEncName: string);
+
 implementation
 
 uses
@@ -313,6 +319,32 @@ begin
   Result := True;
 end;
 
+function PatchLoadText(const APath: string; out AEncName: string): string;
+var
+  B: TBytes;
+  K: TEncKind;
+begin
+  B := TFile.ReadAllBytes(APath);
+  K := DetectEnc(B);
+  AEncName := EncName(K);
+  Result := DecodeBytes(B, K);
+end;
+
+procedure PatchSaveText(const APath, AText, AEncName: string);
+var
+  K: TEncKind;
+begin
+  if AEncName = 'utf8-bom' then
+    K := ekUtf8Bom
+  else if AEncName = 'utf8' then
+    K := ekUtf8
+  else
+    K := ekCp1252;
+  if TFile.Exists(APath) then
+    BackupFile(APath); // new files have nothing to back up
+  AtomicWrite(APath, EncodeText(AText, K));
+end;
+
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
 var
   B: TBytes;
@@ -425,6 +457,7 @@ begin
           Exit(Format('RECHAZADO: ''%s'' no es un identificador Pascal valido para nombre de unit.', [UnitName]));
         var Skel := Format('unit %s;'#13#10#13#10'interface'#13#10#13#10 +
           'implementation'#13#10#13#10'end.'#13#10, [UnitName]);
+        TDirectory.CreateDirectory(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
         AtomicWrite(A.Path, EncodeText(Skel, ekUtf8Bom));
         Exit(Format('CREADA %s (unit %s) - esqueleto estandar del IDE, UTF-8 con BOM, CRLF.'#10 +
           'SIGUIENTE PASO - el ALTA en el uses del .dpr (sin alta, la unit no forma parte del proyecto). ' +

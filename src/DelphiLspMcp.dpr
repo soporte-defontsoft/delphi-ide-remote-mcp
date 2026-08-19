@@ -50,7 +50,9 @@ uses
   Mcp.Tools.DelphiLsp in 'Mcp.Tools.DelphiLsp.pas',
   Mcp.Tools.DelphiExtra in 'Mcp.Tools.DelphiExtra.pas',
   Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',
-  Mcp.Tools.Workspace in 'Mcp.Tools.Workspace.pas';
+  Mcp.Tools.Workspace in 'Mcp.Tools.Workspace.pas',
+  Lsp.Scaffold in 'Lsp.Scaffold.pas',
+  Mcp.Tools.Scaffold in 'Mcp.Tools.Scaffold.pas';
 
 var
   Settings: TMCPSettings;

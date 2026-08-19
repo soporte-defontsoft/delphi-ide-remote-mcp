@@ -8,14 +8,45 @@ Runs as a **resident Windows service (or GUI app)** that keeps language-server i
 
 ## Why
 
-AI agents working on Delphi codebases are usually limited to text search (grep). This server lets them ask the *real* compiler front-end instead:
+AI agents working on Delphi codebases are usually limited to text search (grep). This server gives them **total control of Delphi and its projects from a remote machine** — understand, edit safely, verify and build, through the real compiler front-end.
 
-- *What is this symbol?* → `delphi_hover`
-- *Where is it defined / implemented?* → `delphi_definition`
-- *What is the structure of this unit?* → `delphi_symbols`
-- *Does this code have errors right now?* → `delphi_diagnostics` (Error Insight via LSP linter mode — no build needed)
-- *Who uses this method?* → `delphi_references` (hybrid grep + definition-validation, since DelphiLSP does not implement LSP `references`)
-- *Build it for real* → `delphi_build` (MSBuild)
+## The tools
+
+| Tool | What it does |
+|---|---|
+| `delphi_symbols` | Document symbol tree of a unit (classes, methods, sections) |
+| `delphi_definition` | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources |
+| `delphi_hover` | Type/signature of an identifier usage |
+| `delphi_completion` | Code completion candidates |
+| `delphi_references` | Find references (hybrid: text scan + per-candidate `definition` validation — homonyms rejected by the compiler engine) |
+| `delphi_diagnostics` | Error Insight on demand: real compiler codes (E/W/H) with exact positions, no build |
+| `delphi_read` | Encoding-correct numbered reads (CP1252 / UTF-8±BOM detected for real) |
+| `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, semantic INSERT (global routine / method with both halves), TPF0 hard-reject, post-write audit |
+| `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms (VCL/FMX) with IDE-equivalent skeletons — buildable immediately |
+| `delphi_build` | Real MSBuild builds with structured errors/warnings |
+| `delphi_search` | Recursive literal search, IDE artifacts skipped |
+| `delphi_list` | Recursive file listing with size/mtime |
+| `delphi_git` | Whitelisted git operations (status/diff/log/show/branch/add/commit) |
+
+## Quickstart
+
+**Local (stdio)** — register in Claude Code on the Windows machine:
+
+```bash
+claude mcp add delphi -- C:/path/to/DelphiLspMcp.exe
+```
+
+**Remote (Streamable HTTP)** — run on the Windows machine that owns RAD Studio (console `DelphiLspMcp --http 3000`, or the tray app `DelphiLspMcpTray`, which starts minimized to the tray), set a token, and register from any client machine (Linux included):
+
+```bash
+claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp --header "Authorization: Bearer YOUR_TOKEN"
+```
+
+Token: `DELPHI_MCP_TOKEN` environment variable or `settings.ini` next to the exe (`[Security] AuthToken=...`). Requests without it get 401. Expose over VPN/LAN only.
+
+## Tests
+
+`tests/` contains four end-to-end batteries that talk real MCP to the built server (57 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py`, `test_scaffold.py` — the latter scaffolds console/VCL/FMX projects and builds them for real.
 
 ## Key design points
 
