@@ -136,9 +136,16 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 ## Credits
 
 Designed and directed by **David Fontanet ([Defontsoft](https://www.defontsoft.com))**.
-**Programmed by Claude** working as the implementing engineer under David's direction —
-across Anthropic's Claude Code with the models **Claude Fable 5, Claude Opus 5 and
-Claude Opus 4.8**, which alternate within a session; every commit carries its co-author tag.
+**Programmed by Claude** working as the implementing engineer under David's direction, in
+Anthropic's Claude Code.
+
+Which Claude model actually did the work was *not* the author's choice. Anthropic's systems
+swap the active model mid-session on their own — in this project's experience, every time
+their content classifier trips over some word in an ordinary technical conversation — so the
+model kept changing under our feet, often in the middle of a task. **Claude Fable 5, Claude
+Opus 5 and Claude Opus 4.8** all took part for that reason, and all three are credited; every
+commit carries its co-author tag.
+
 The safe-editing tool ports an internally battle-tested design measured over 30+ test
 rounds against several LLMs.
 
