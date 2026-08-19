@@ -203,11 +203,12 @@ end;
 
 function ReadDproj(const ADprojPath: string): TDprojInfo;
 var
-  Xml: string;
-  Names, Vals: TArray<string>;
+  Xml, Low: string;
   Plats: TList<TDprojPlatform>;
-  I: Integer;
   P: TDprojPlatform;
+  Scan, Op, NameStart, NameEnd, TagEnd, CloseP: Integer;
+const
+  Needle = '<platform value="';
 begin
   Result := Default(TDprojInfo);
   if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
@@ -225,17 +226,37 @@ begin
     Result.AppType := At[0].Trim;
   // Build configurations: <BuildConfiguration Include="Debug">
   Result.Configs := AllTagAttr(Xml, 'BuildConfiguration', 'Include');
-  // Platforms: <Platform value="Win64">True</Platform>
-  Names := AllTagAttr(Xml, 'Platform', 'value');
-  Vals := AllTagValues(Xml, 'Platform');
+  // Platforms: <Platform value="Win64">True</Platform> under <Platforms>.
+  // Parse each tag as a UNIT so the name (value attr) and enabled (inner text)
+  // always come from the SAME element. A separate attr-list + value-list drift
+  // apart because the .dproj also carries a selector
+  // <Platform Condition="'$(Platform)'==''">Win64</Platform> that has NO value
+  // attribute but DOES have inner text, shifting the value list by one and
+  // mislabelling every platform's enabled flag (field round 6, R6-A). Matching
+  // only '<Platform value="' also ignores that selector cleanly.
+  Low := LowerCase(Xml);
   Plats := TList<TDprojPlatform>.Create;
   try
-    for I := 0 to High(Names) do
+    Scan := 1;
+    while True do
     begin
-      P.Name := Names[I].Trim;
-      P.Enabled := (I < Length(Vals)) and SameText(Vals[I].Trim, 'True');
+      Op := Pos(Needle, Low, Scan);
+      if Op = 0 then
+        Break;
+      NameStart := Op + Length(Needle);
+      NameEnd := Pos('"', Xml, NameStart);
+      TagEnd := Pos('>', Xml, NameStart);
+      if (NameEnd = 0) or (TagEnd = 0) then
+        Break;
+      CloseP := Pos('</platform>', Low, TagEnd);
+      P.Name := Copy(Xml, NameStart, NameEnd - NameStart).Trim;
+      if CloseP > 0 then
+        P.Enabled := SameText(Copy(Xml, TagEnd + 1, CloseP - TagEnd - 1).Trim, 'True')
+      else
+        P.Enabled := False;
       if P.Name <> '' then
         Plats.Add(P);
+      Scan := TagEnd + 1;
     end;
     Result.Platforms := Plats.ToArray;
   finally

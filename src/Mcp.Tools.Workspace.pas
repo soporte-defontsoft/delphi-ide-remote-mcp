@@ -45,6 +45,7 @@ type
     FRoot: string;
     FPattern: string;
     FDirs: Boolean;
+    FIncludeTrash: Boolean;
   public
     [SchemaDescription('Directory to list recursively')]
     property Root: string read FRoot write FRoot;
@@ -52,6 +53,8 @@ type
     property Pattern: string read FPattern write FPattern;
     [SchemaDescription('true = list SUBDIRECTORIES of root (one level, explorer-style) instead of files')]
     property Dirs: Boolean read FDirs write FDirs;
+    [SchemaDescription('true = also show the recoverable trash (__delphi-patch, where delphi_delete moves files) so you can find and restore a deleted file with delphi_move. Default false (trash hidden).')]
+    property IncludeTrash: Boolean read FIncludeTrash write FIncludeTrash;
   end;
 
   TDelphiProjectsParams = class
@@ -375,7 +378,9 @@ begin
     'artifacts. Returns path, size and last-write time. Capped at 500 ' +
     'entries. With dirs=true it lists the SUBDIRECTORIES of root instead ' +
     '(one level, explorer-style) - use that to browse the machine and ' +
-    'decide where to create or look for projects.';
+    'decide where to create or look for projects. With includeTrash=true it ' +
+    'also shows the recoverable trash (__delphi-patch) so you can find a ' +
+    'file deleted by delphi_delete and restore it with delphi_move.';
 end;
 
 function TDelphiListTool.ExecuteWithParams(const Params: TDelphiListParams): string;
@@ -408,9 +413,12 @@ begin
     try
       for F in TDirectory.GetDirectories(Root) do
       begin
-        if SkipIdeArtifacts(F + '\') or
+        var IsTrash := SameText(TPath.GetFileName(F), '__delphi-patch') or
+                       SameText(TPath.GetFileName(F), '__pascal-patch');
+        if SkipIdeArtifacts(F + '\', Params.IncludeTrash) or
            TPath.GetFileName(F).StartsWith('.') or
-           TPath.GetFileName(F).StartsWith('__') then
+           (TPath.GetFileName(F).StartsWith('__') and
+            not (Params.IncludeTrash and IsTrash)) then
           Continue;
         Inc(Total);
         if Arr.Count < 500 then
@@ -440,7 +448,7 @@ begin
     for Mask in Masks do
       for F in WalkFiles(Root, Mask.Trim) do
       begin
-        if SkipIdeArtifacts(F) then
+        if SkipIdeArtifacts(F, Params.IncludeTrash) then
           Continue;
         Inc(Total);
         if Arr.Count < 500 then

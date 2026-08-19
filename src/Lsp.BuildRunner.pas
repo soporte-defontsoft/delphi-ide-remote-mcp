@@ -196,11 +196,14 @@ begin
   begin
     // Label the working directory Low so the confined program can write its
     // OWN output there (and nowhere else on the system), then launch at Low
-    // integrity. If the OS refuses the lowered launch, fall back to a normal
-    // launch and report ASandboxed=False - never leave the caller thinking a
-    // confinement is in place when it is not.
+    // integrity. Relabel EXISTING entries too, so a file created earlier at
+    // Medium (a log/csv/ini next to the exe) stays writable by the confined
+    // run instead of an unexplained "Acceso denegado" (field round 6, R6-C).
+    // If the OS refuses the lowered launch, fall back to a normal launch and
+    // report ASandboxed=False - never leave the caller thinking a confinement
+    // is in place when it is not.
     if AWorkDir <> '' then
-      LabelDirLowIntegrity(AWorkDir);
+      LabelDirTreeLowIntegrity(AWorkDir);
     if CreateProcessLowIntegrity(Cmd, WorkDirPtr,
       CREATE_NO_WINDOW or CREATE_SUSPENDED, True, SI, PI) then
     begin

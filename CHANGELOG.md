@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.23.0-beta] - 2026-08-19
+
+Field round 6 (Fable): the filesystem sandbox held against every attack; the
+three findings left are behaviour/UX papercuts, none a security hole.
+
+### Fixed
+- **R6-A: `delphi_config view` reported the wrong enabled/disabled per platform.**
+  The `.dproj` platform list was parsed with a separate attribute list (`value`)
+  and value list (inner text); the file's `<Platform Condition="…">Win64</Platform>`
+  selector — inner text but no `value` — shifted the value list by one, so every
+  platform's `enabled` flag was mislabelled. Each `<Platform value="X">V</Platform>`
+  is now parsed as a unit, so name and enabled always come from the same element.
+- **R6-C: a low-integrity `delphi_run` could not overwrite a pre-existing file**
+  in its own working folder (a log/csv/ini created earlier at Medium integrity)
+  — an unexplained "Acceso denegado". The inherited Low label only reached new
+  children; existing entries are now relabelled too, so the confined run can
+  update its own outputs and nothing else. (Only reachable with `AllowRun=1`.)
+
+### Added
+- **R6-B: `delphi_list includeTrash=true`** surfaces the recoverable trash
+  (`__delphi-patch`, where `delphi_delete` moves files) so a deleted file can be
+  found and restored with `delphi_move`. Hidden by default, as before.
+
+6 E2E batteries, **276 checks**.
+
 ## [0.22.0-beta] - 2026-08-19
 
 ### Added

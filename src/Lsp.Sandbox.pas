@@ -21,7 +21,9 @@ unit Lsp.Sandbox;
 interface
 
 uses
-  Winapi.Windows;
+  Winapi.Windows,
+  System.SysUtils,
+  System.IOUtils;
 
 { Launches ACmdLine at LOW integrity, like CreateProcess (suspended-capable,
   handle-inheriting, CREATE_NO_WINDOW). AWorkDir may be nil. Returns True and
@@ -36,6 +38,14 @@ function CreateProcessLowIntegrity(const ACmdLine: string; AWorkDir: PChar;
   may write inside it. Non-destructive: it only lowers the write requirement,
   medium/high writers are unaffected. Best-effort. }
 function LabelDirLowIntegrity(const ADir: string): Boolean;
+
+{ Like LabelDirLowIntegrity but ALSO relabels the files and subfolders that
+  ALREADY exist in ADir. The inherited (OICI) label only reaches NEW children,
+  so a file created earlier at Medium integrity (a log/csv/ini next to the exe)
+  would otherwise be un-writable by the confined process - "Acceso denegado"
+  with no hint (field round 6, R6-C). This makes the whole working tree
+  writable by the low-IL run, and only that tree. Best-effort, bounded depth. }
+procedure LabelDirTreeLowIntegrity(const ADir: string);
 
 implementation
 
@@ -147,6 +157,43 @@ begin
     Result := SetFileSecurityW(PWideChar(ADir), LABEL_SECURITY_INFORMATION_, SD);
   finally
     LocalFree(HLOCAL(SD));
+  end;
+end;
+
+{ Apply the Low mandatory label to one existing entry (file or directory). }
+function LabelEntryLow(const APath: string): Boolean;
+var
+  SD: PSECURITY_DESCRIPTOR;
+begin
+  Result := False;
+  SD := nil;
+  if ConvertStringSecurityDescriptorToSecurityDescriptorW(
+    'S:(ML;OICI;NW;;;LW)', 1, SD, nil) then
+  try
+    Result := SetFileSecurityW(PWideChar(APath), LABEL_SECURITY_INFORMATION_, SD);
+  finally
+    LocalFree(HLOCAL(SD));
+  end;
+end;
+
+procedure LabelDirTreeLowIntegrity(const ADir: string);
+var
+  Entry: string;
+begin
+  if (ADir = '') or not TDirectory.Exists(ADir) then
+    Exit;
+  LabelEntryLow(ADir);
+  // Relabel existing children. Best-effort and bounded: an unreadable subtree
+  // is skipped, never fatal (same tolerance as the rest of the server).
+  try
+    for Entry in TDirectory.GetFiles(ADir, '*', TSearchOption.soAllDirectories) do
+      LabelEntryLow(Entry);
+  except
+  end;
+  try
+    for Entry in TDirectory.GetDirectories(ADir, '*', TSearchOption.soAllDirectories) do
+      LabelEntryLow(Entry);
+  except
   end;
 end;
 

@@ -204,10 +204,17 @@ except Exception:
     sbok = False
 check('sandbox: proyecto de prueba compila', sbok, out[:150])
 if sbok:
-    out = call('delphi_run', {"path": os.path.join(INSIDE, 'Sbx', 'Win64', 'Debug', 'Sbx.exe'), "timeoutms": 10000}, 60)
+    # R6-C: pre-create out.txt at MEDIUM integrity (this test process) in the
+    # run's own folder. Without the tree relabel, the low-IL run cannot
+    # overwrite a pre-existing medium file -> "local-blocked".
+    _rundir = os.path.join(INSIDE, 'Sbx', 'Win64', 'Debug')
+    os.makedirs(_rundir, exist_ok=True)
+    open(os.path.join(_rundir, 'out.txt'), 'w').write('preexisting-medium-integrity')
+    out = call('delphi_run', {"path": os.path.join(_rundir, 'Sbx.exe'), "timeoutms": 10000}, 60)
     check('sandbox: escritura al SISTEMA bloqueada (low integrity)',
           'sys-blocked' in out and not os.path.exists(_pub), out[:200])
     check('sandbox: escritura en su propia carpeta permitida', 'LOCAL-OK' in out, out[:200])
+    check('R6-C: sobrescribe un fichero MEDIO pre-existente en su cwd', 'LOCAL-OK' in out, out[:200])
     check('sandbox: la respuesta declara sandbox=low-integrity', 'sandbox=low-integrity' in out, out[:120])
 if os.path.exists(_pub):
     os.remove(_pub)

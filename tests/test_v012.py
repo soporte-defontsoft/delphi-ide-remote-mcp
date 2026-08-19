@@ -360,12 +360,19 @@ check('R5-B: el payload no se escribio en el .dproj',
       'evilshare' not in open(CON, encoding='utf-8-sig').read(), 'injected!')
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "NoExiste99"})
 check('R5-B: plataforma inventada RECHAZADA', 'RECHAZADO' in out, out[:120])
+# before removing: R6-A - view must report Linux64 as ENABLED (it was just added)
+_plats = {p['name']: p.get('enabled') for p in json.loads(call('delphi_config', {"project": CON})).get('platforms', [])}
+check('R6-A: view reporta enabled=True para una plataforma activa (Linux64)',
+      _plats.get('Linux64') is True, _plats)
+check('R6-A: view reporta enabled=True para Win64 (value=True en el .dproj)',
+      _plats.get('Win64') is True, _plats)
 # R5-C: remove-platform (with backup)
 out = call('delphi_config', {"project": CON, "command": "remove-platform", "platform": "Linux64"})
 check('R5-C: remove-platform deshabilita', 'DESHABILITADA' in out, out[:120])
 out = call('delphi_config', {"project": CON})
-check('config: Linux64 ahora habilitada',
-      any(p.get('name') == 'Linux64' and p.get('enabled') for p in json.loads(out).get('platforms', [])), out[:150])
+_plats = {p['name']: p.get('enabled') for p in json.loads(out).get('platforms', [])}
+check('R6-A: Linux64 queda DECLARADA pero enabled=False tras remove-platform',
+      'Linux64' in _plats and _plats['Linux64'] is False, _plats)
 
 # ---- delphi_config set-output: all binaries under one folder ---------------
 out = call('delphi_config', {"project": CON, "command": "set-output", "output": "Compiled"})
@@ -430,6 +437,15 @@ out = call('delphi_delete', {"path": os.path.join(OUTSIDE, 'Fuera.pas')})
 check('delete: fuera de la jaula rechazado', 'FUERA de los workspaces' in out, out[:120])
 out = call('delphi_delete', {"path": os.path.join(INSIDE, 'movidos', '__delphi-patch')})
 check('delete: no se puede borrar la propia papelera', 'RECHAZADO' in out, out[:120])
+
+# R6-B: the trash is hidden from delphi_list by default, but discoverable with
+# includeTrash=true so a deleted file can be found and restored.
+out = call('delphi_list', {"root": INSIDE, "pattern": "*.pas"})
+check('R6-B: delphi_list normal NO muestra __delphi-patch',
+      not any('__delphi-patch' in e.get('path', '') for e in json.loads(out).get('files', [])), out[:200])
+out = call('delphi_list', {"root": INSIDE, "pattern": "*.pas", "includeTrash": True})
+check('R6-B: delphi_list includeTrash=true SI muestra la papelera',
+      any('__delphi-patch' in e.get('path', '') for e in json.loads(out).get('files', [])), out[:200])
 
 # ---- shutdown main server --------------------------------------------------
 proc.stdin.close()

@@ -24,7 +24,13 @@ function FindDelphiReferences(const AFilePath: string;
   AMaxCandidates: Integer = 400): TJSONObject;
 
 { True for IDE artifacts that must never be scanned/edited/reasoned about. }
-function SkipIdeArtifacts(const APath: string): Boolean;
+function SkipIdeArtifacts(const APath: string): Boolean; overload;
+
+{ Same, but when AAllowTrash the recoverable-trash folders (__delphi-patch /
+  __pascal-patch) are NOT treated as skip reasons - so delphi_list can, on
+  explicit request, show what was deleted for a restore (field round 6, R6-B).
+  Every other artifact (__history, Win32/Win64, .git...) is still skipped. }
+function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean; overload;
 
 implementation
 
@@ -65,11 +71,11 @@ begin
   Result := Copy(ALineText, S, E - S + 1);
 end;
 
-function SkipIdeArtifacts(const APath: string): Boolean;
+function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean;
 const
-  Bad: array [0 .. 9] of string = ('\__history\', '\__recovery\', '\win32\',
-    '\win64\', '\debug\', '\release\', '\dcu\', '\.git\', '\__pascal-patch\',
-    '\__delphi-patch\');
+  Bad: array [0 .. 7] of string = ('\__history\', '\__recovery\', '\win32\',
+    '\win64\', '\debug\', '\release\', '\dcu\', '\.git\');
+  Trash: array [0 .. 1] of string = ('\__pascal-patch\', '\__delphi-patch\');
 var
   B, Low: string;
 begin
@@ -77,7 +83,16 @@ begin
   for B in Bad do
     if Low.Contains(B) then
       Exit(True);
+  if not AAllowTrash then
+    for B in Trash do
+      if Low.Contains(B) then
+        Exit(True);
   Result := False;
+end;
+
+function SkipIdeArtifacts(const APath: string): Boolean;
+begin
+  Result := SkipIdeArtifacts(APath, False);
 end;
 
 function SkipPath(const APath: string): Boolean;
