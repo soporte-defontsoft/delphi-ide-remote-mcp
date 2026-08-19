@@ -39,6 +39,8 @@ type
     FVisibility: string;
     FVisible: Boolean;
     FCreateUnit: Boolean;
+    FContent: string;
+    FEol: string;
     FRestore: Boolean;
     FConfirm: Boolean;
   public
@@ -60,8 +62,12 @@ type
     property Visibility: string read FVisibility write FVisibility;
     [SchemaDescription('INSERT "rutina-global" optional: true = also declare it in the interface section (visible outside the unit)')]
     property Visible: Boolean read FVisible write FVisible;
-    [SchemaDescription('CREATE mode: true = create the .pas with the standard IDE skeleton (never overwrites). Then register it in the .dpr uses clause')]
+    [SchemaDescription('CREATE mode: true = create the .pas (never overwrites). Then register it in the .dpr uses clause')]
     property CreateUnit: Boolean read FCreateUnit write FCreateUnit;
+    [SchemaDescription('CREATE mode: the COMPLETE file content in one call (empty = standard IDE skeleton). Use this when you already know the whole unit: one call instead of create + N patches')]
+    property Content: string read FContent write FContent;
+    [SchemaDescription('CREATE mode: line endings, "crlf" (default, Delphi standard) or "lf"')]
+    property Eol: string read FEol write FEol;
     [SchemaDescription('RESTORE mode: true = restore the file from this tool''s backup. First call shows what would be LOST; repeat with confirm=true to execute')]
     property Restore: Boolean read FRestore write FRestore;
     [SchemaDescription('Only with restore: execute after having seen the losses')]
@@ -144,6 +150,8 @@ begin
   A.Visibility := Params.Visibility;
   A.Visible := Params.Visible;
   A.CreateUnit_ := Params.CreateUnit;
+  A.Content := Params.Content;
+  A.Eol := Params.Eol;
   A.Restore := Params.Restore;
   A.Confirm := Params.Confirm;
   Result := ExecutePatch(A);

@@ -33,6 +33,8 @@ type
     Visibility: string;
     Visible: Boolean;
     CreateUnit_: Boolean;
+    Content: string;      // createunit: whole file content in one call
+    Eol: string;          // 'lf' = LF endings; anything else = CRLF (default)
     Restore: Boolean;
     Confirm: Boolean;
   end;
@@ -53,6 +55,7 @@ implementation
 uses
   System.SysUtils,
   System.Classes,
+  System.StrUtils,
   System.IOUtils,
   System.SyncObjs,
   System.Generics.Collections,
@@ -467,13 +470,42 @@ begin
         // (Lsp.BuildRunner, System.SysUtils...): allow Ident(.Ident)*.
         if not TRegEx.IsMatch(UnitName, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
           Exit(Format('RECHAZADO: ''%s'' no es un identificador Pascal valido para nombre de unit.', [UnitName]));
-        var Skel := Format('unit %s;'#13#10#13#10'interface'#13#10#13#10 +
-          'implementation'#13#10#13#10'end.'#13#10, [UnitName]);
+        var Skel: string;
+        var Note: string;
+        if A.Content <> '' then
+        begin
+          // Whole known content in ONE call (replicating a file you already
+          // have beats a create + N anchored patches). EOL normalized to
+          // CRLF - the JSON channel often arrives LF-only - and the result
+          // is audited below like any other write.
+          Skel := A.Content.Replace(#13#10, #10).Replace(#13, #10);
+          if not SameText(A.Eol, 'lf') then
+            Skel := Skel.Replace(#10, #13#10);
+          if not Skel.EndsWith(#10) then
+            if SameText(A.Eol, 'lf') then Skel := Skel + #10 else Skel := Skel + #13#10;
+          Note := 'contenido aportado';
+        end
+        else
+        begin
+          Skel := Format('unit %s;'#13#10#13#10'interface'#13#10#13#10 +
+            'implementation'#13#10#13#10'end.'#13#10, [UnitName]);
+          Note := 'esqueleto estandar del IDE';
+        end;
         TDirectory.CreateDirectory(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
-        AtomicWrite(A.Path, EncodeText(Skel, ekUtf8Bom));
-        Exit(Format('CREADA %s (unit %s) - esqueleto estandar del IDE, UTF-8 con BOM, CRLF.'#10 +
+        try
+          AtomicWrite(A.Path, EncodeText(Skel, ekUtf8Bom));
+        except
+          on E: Exception do
+            Exit('RECHAZADO al codificar el contenido: ' + E.Message +
+              #10'Usa literales Pascal nativos (#$XXXX) para caracteres fuera del juego.');
+        end;
+        var CM := Measure(TFile.ReadAllBytes(A.Path));
+        Exit(Format('CREADA %s (unit %s) - %s, UTF-8 con BOM, %s.'#10 +
+          'Verificacion (releido de disco): %s'#10 +
           'SIGUIENTE PASO - el ALTA en el uses del .dpr (sin alta, la unit no forma parte del proyecto). ' +
-          'El .dproj lo mantiene el IDE: no lo edites.', [TPath.GetFileName(A.Path), UnitName]));
+          'El .dproj lo mantiene el IDE: no lo edites.',
+          [TPath.GetFileName(A.Path), UnitName, Note,
+           IfThen(SameText(A.Eol, 'lf'), 'LF', 'CRLF'), Summary(CM)]));
       end;
 
       if not TFile.Exists(A.Path) then

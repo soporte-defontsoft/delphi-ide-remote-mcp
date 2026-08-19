@@ -30,12 +30,13 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 | `delphi_build` | Real MSBuild builds with structured errors/warnings |
 | `delphi_run` | Run a built executable on the server and capture its output (jailed to the roots, no shell, hard timeout) |
 | `delphi_fetch` | Download files from the server in base64 chunks with whole-file SHA-256 — "get the deploy" to run GUI apps on the client machine |
+| `delphi_upload` | The mirror of fetch: send files TO the server in chunks, SHA-256 verified — for binaries you cannot recreate by editing |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
 | `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style |
 | `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace] Roots=D:\Projects;E:\More`) |
 | `delphi_installs` | List every RAD Studio/Delphi installation discovered on the machine (side-by-side versions), flagging which one is active for the LSP engine |
 | `delphi_workspace` | The lay of the land on the server: the configured workspace roots (your allowed universe — **server paths, not your own**), the access level, and the active Delphi. Call it first |
-| `delphi_git` | Whitelisted git operations (status/diff/log/show/branch/add/commit/init/push/tag — push uses the server's stored credentials) |
+| `delphi_git` | Whitelisted git operations — including **`clone`/`pull`** (bring a whole repo onto the server in one call, jailed) plus status/diff/log/show/branch/add/commit/init/push/tag/config |
 
 ## Quickstart
 
@@ -91,7 +92,7 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 
 ## Tests
 
-`tests/` contains five end-to-end batteries that talk real MCP to the built server (147 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
+`tests/` contains five end-to-end batteries that talk real MCP to the built server (170 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
 
 ## Key design points
 

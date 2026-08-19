@@ -15,6 +15,7 @@ uses
   System.IOUtils,
   System.JSON,
   System.Math,
+  System.StrUtils,
   System.Hash,
   System.NetEncoding,
   System.Zip,
@@ -71,13 +72,13 @@ type
     FArgs: string;
     FMessage: string;
   public
-    [SchemaDescription('Path of the git repository (or any path inside it)')]
+    [SchemaDescription('Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots)')]
     property Repo: string read FRepo write FRepo;
-    [SchemaDescription('One of: status | diff | log | show | branch | add | commit | init | push | tag | config (config: args=user.name|user.email, value in message)')]
+    [SchemaDescription('One of: status | diff | log | show | branch | add | commit | init | push | tag | config | clone | pull | fetch (config: args=user.name|user.email + value in message; clone: URL in message, destination in repo)')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected')]
     property Args: string read FArgs write FArgs;
-    [SchemaDescription('commit: the commit message. tag: makes the tag annotated with this message')]
+    [SchemaDescription('commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL')]
     property Message: string read FMessage write FMessage;
   end;
 
@@ -170,6 +171,30 @@ type
   TDelphiFetchTool = class(TMCPToolBase<TDelphiFetchParams>)
   protected
     function ExecuteWithParams(const Params: TDelphiFetchParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
+  TDelphiUploadParams = class
+  private
+    FPath: string;
+    FChunkBase64: string;
+    FOffset: Integer;
+    FSha256: string;
+  public
+    [SchemaDescription('Absolute path of the file to write ON the server (inside the workspace roots)')]
+    property Path: string read FPath write FPath;
+    [SchemaDescription('One chunk of the file, base64-encoded. offset=0 truncates/creates; later offsets append')]
+    property ChunkBase64: string read FChunkBase64 write FChunkBase64;
+    [SchemaDescription('Byte offset this chunk starts at (0 = beginning). Send chunks in order, increasing offset by the bytes written')]
+    property Offset: Integer read FOffset write FOffset;
+    [SchemaDescription('Optional: on the LAST chunk, the whole-file SHA-256; the server verifies the assembled file and reports verified true/false')]
+    property Sha256: string read FSha256 write FSha256;
+  end;
+
+  TDelphiUploadTool = class(TMCPToolBase<TDelphiUploadParams>)
+  protected
+    function ExecuteWithParams(const Params: TDelphiUploadParams): string; override;
   public
     constructor Create; override;
   end;
@@ -399,12 +424,14 @@ begin
   inherited;
   FName := 'delphi_git';
   FDescription := 'Whitelisted git operations on a repository of this ' +
-    'machine, so a remote agent can inspect and version its work: status, ' +
-    'diff, log, show, branch, add, commit, init, push, tag, config ' +
-    '(commit/tag message goes in the "message" parameter; config only sets ' +
-    'user.name/user.email for the commit identity; push uses the ' +
-    'credentials and remotes stored on the server). No arbitrary git ' +
-    'commands, no shell.';
+    'machine, so a remote agent can bring in code and version its work: ' +
+    'status, diff, log, show, branch, add, commit, init, push, tag, config, ' +
+    'clone, pull, fetch. **clone** is the fast way to get a whole repo onto ' +
+    'the server (URL in "message", destination directory in "repo", jailed ' +
+    'to the workspace roots) - far better than recreating files one by one. ' +
+    'commit/tag messages and config values also travel in "message"; push/' +
+    'pull use the credentials and remotes stored on the server. No arbitrary ' +
+    'git commands, no shell.';
 end;
 
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
@@ -423,7 +450,14 @@ begin
     Exit;
   if TFile.Exists(Repo) then
     Repo := TPath.GetDirectoryName(Repo);
-  if not TDirectory.Exists(Repo) then
+  // clone is the one command whose target directory does not exist yet: it
+  // is created (inside the jail, already checked above).
+  if SameText(Params.Command.Trim, 'clone') then
+  begin
+    if not TDirectory.Exists(Repo) then
+      TDirectory.CreateDirectory(Repo);
+  end
+  else if not TDirectory.Exists(Repo) then
     Exit('error: directory not found: ' + Repo);
 
   for B in BadChars do
@@ -464,6 +498,33 @@ begin
     GitArgs := Format('commit -m "%s" %s',
       [Params.Message.Replace('"', ''''''), Params.Args]);
   end
+  else if Cmd = 'clone' then
+  begin
+    // The URL travels in "message" (args screens metacharacters, and a URL
+    // legitimately carries ':' '/' '@'). Destination = repo (jailed).
+    var Url := Params.Message.Trim;
+    if Url = '' then
+      Exit('error: clone needs the repository URL in the "message" parameter ' +
+        '(the destination directory is "repo")');
+    if not (Url.StartsWith('https://') or Url.StartsWith('http://') or
+            Url.StartsWith('git://') or Url.StartsWith('ssh://')) then
+      Exit('error: only https/http/git/ssh URLs are accepted for clone');
+    for B in BadChars do
+      if Url.Contains(B) then
+        Exit('error: shell metacharacters are not allowed in the URL');
+    if Url.Contains('--upload-pack') or Url.Contains('--config') or
+       Url.StartsWith('-') then
+      Exit('error: that URL is not allowed');
+    if TDirectory.Exists(TPath.Combine(Repo, '.git')) then
+      Exit('error: "' + Repo + '" ya es un repositorio git. Usa pull para ' +
+        'actualizarlo, o clona en otra carpeta.');
+    // clone into "." of the (jailed, existing) destination directory
+    GitArgs := Format('clone "%s" . %s', [Url, Params.Args]);
+  end
+  else if Cmd = 'pull' then
+    GitArgs := 'pull ' + Params.Args
+  else if Cmd = 'fetch' then
+    GitArgs := 'fetch ' + Params.Args
   else if Cmd = 'init' then
     GitArgs := 'init ' + Params.Args
   else if Cmd = 'config' then
@@ -494,10 +555,16 @@ begin
   end
   else
     Exit('error: unknown command "' + Params.Command +
-      '". Allowed: status | diff | log | show | branch | add | commit | init | push | tag | config');
+      '". Allowed: status | diff | log | show | branch | add | commit | init | ' +
+      'push | tag | config | clone | pull | fetch');
+
+  if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push']) then
+    TLogger.Warning(Format('delphi_git: NETWORK %s repo=%s %s',
+      [Cmd, Repo, Params.Message]));
 
   Output := RunCaptured(Format('git.exe -C "%s" %s', [Repo, GitArgs]),
-    IfThen(Cmd = 'push', 180000, 60000), ExitCode);
+    IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch']), 600000, 60000),
+    ExitCode);
   if Length(Output) > 30000 then
     Output := Copy(Output, 1, 30000) + #10'... (truncated)';
   Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
@@ -846,6 +913,106 @@ begin
   end;
 end;
 
+{ TDelphiUploadTool }
+
+constructor TDelphiUploadTool.Create;
+begin
+  inherited;
+  FName := 'delphi_upload';
+  FDescription := 'Upload a file TO the server in base64 chunks - the mirror ' +
+    'of delphi_fetch, for material you cannot recreate by editing: binaries ' +
+    '(.res, icons, images), binary designer files, archives, reference ' +
+    'material. Send chunks in order: offset=0 creates/truncates, later ' +
+    'offsets append and must match the current size. Pass sha256 on the LAST ' +
+    'chunk to have the server verify the assembled file. Jailed to the ' +
+    'workspace roots; parent directories are created. For SOURCE CODE prefer ' +
+    'delphi_edit / delphi_textedit (they audit encoding and keep backups).';
+end;
+
+function TDelphiUploadTool.ExecuteWithParams(const Params: TDelphiUploadParams): string;
+var
+  FullPath, Dir, Sha: string;
+  Bytes: TBytes;
+  Stream: TFileStream;
+  Return: TJSONObject;
+  B64: TBase64Encoding;
+  Size: Int64;
+begin
+  FullPath := TPath.GetFullPath(Params.Path);
+  Result := PathDenied(FullPath); // writing: the strict jail, never the library zone
+  if Result <> '' then
+    Exit;
+  if Params.Offset < 0 then
+    Exit('error: offset negativo');
+  if SkipIdeArtifacts(FullPath) then
+    Exit('error: ruta de artefactos del IDE (__history, __recovery, Win32, ' +
+      'dcu...): no se sube ahi.');
+
+  // Delphi's decoder SKIPS invalid characters instead of failing, which would
+  // silently write a corrupt file: validate the alphabet ourselves first.
+  for var Ch in Params.ChunkBase64 do
+    if not (CharInSet(Ch, ['A' .. 'Z', 'a' .. 'z', '0' .. '9', '+', '/', '=',
+      #13, #10, ' '])) then
+      Exit('error: chunkBase64 contiene caracteres que no son base64');
+  B64 := TBase64Encoding.Create(0);
+  try
+    try
+      Bytes := B64.DecodeStringToBytes(Params.ChunkBase64);
+    except
+      on E: Exception do
+        Exit('error: chunkBase64 no es base64 valido (' + E.Message + ')');
+    end;
+  finally
+    B64.Free;
+  end;
+
+  Dir := TPath.GetDirectoryName(FullPath);
+  if (Dir <> '') and not TDirectory.Exists(Dir) then
+    TDirectory.CreateDirectory(Dir);
+
+  if Params.Offset = 0 then
+    Stream := TFileStream.Create(FullPath, fmCreate)
+  else
+  begin
+    if not TFile.Exists(FullPath) then
+      Exit('error: offset>0 pero el fichero no existe todavia; empieza por offset=0');
+    Stream := TFileStream.Create(FullPath, fmOpenReadWrite or fmShareDenyWrite);
+  end;
+  try
+    if Params.Offset > Stream.Size then
+      Exit(Format('error: offset %d mas alla del final actual (size=%d); ' +
+        'envia los trozos EN ORDEN', [Params.Offset, Stream.Size]));
+    Stream.Position := Params.Offset;
+    if Length(Bytes) > 0 then
+      Stream.WriteBuffer(Bytes[0], Length(Bytes));
+    Stream.Size := Stream.Position; // truncate any leftover from a previous file
+    Size := Stream.Size;
+  finally
+    Stream.Free;
+  end;
+
+  Return := TJSONObject.Create;
+  try
+    Return.AddPair('path', FullPath);
+    Return.AddPair('written', TJSONNumber.Create(Length(Bytes)));
+    Return.AddPair('size', TJSONNumber.Create(Size));
+    Return.AddPair('nextOffset', TJSONNumber.Create(Size));
+    if Params.Sha256.Trim <> '' then
+    begin
+      Sha := THashSHA2.GetHashStringFromFile(FullPath);
+      Return.AddPair('sha256', Sha);
+      Return.AddPair('verified', TJSONBool.Create(
+        SameText(Sha, Params.Sha256.Trim)));
+      if not SameText(Sha, Params.Sha256.Trim) then
+        Return.AddPair('warning', 'el sha256 NO coincide: el fichero ' +
+          'ensamblado difiere del origen. Reenvia desde offset=0.');
+    end;
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
 { TDelphiPackageTool }
 
 constructor TDelphiPackageTool.Create;
@@ -925,6 +1092,8 @@ initialization
     function: IMCPTool begin Result := TDelphiPackageTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_fetch',
     function: IMCPTool begin Result := TDelphiFetchTool.Create; end);
+  TMCPRegistry.RegisterTool('delphi_upload',
+    function: IMCPTool begin Result := TDelphiUploadTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_search',
     function: IMCPTool begin Result := TDelphiSearchTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_projects',

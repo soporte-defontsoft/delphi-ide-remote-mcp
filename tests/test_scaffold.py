@@ -145,6 +145,24 @@ out = call('delphi_edit', {"path": os.path.join(VDIR, 'Lsp.BuildRunner.pas'),
 check('createunit: nombre dotted (Lsp.BuildRunner) aceptado',
       out.startswith('CREADA') and 'Lsp.BuildRunner' in out, out[:150])
 
+# --- M1: whole unit content in ONE call (create-with-content) + eol ---
+uc = ("unit Mi.Unidad.Nueva;\n\ninterface\n\nfunction Saluda: string;\n\n"
+      "implementation\n\nfunction Saluda: string;\nbegin\n"
+      "  Result := '¡hola gestoría!';\nend;\n\nend.")
+up = os.path.join(VDIR, 'Mi.Unidad.Nueva.pas')
+out = call('delphi_edit', {"path": up, "createunit": True, "content": uc})
+check('createunit: unit COMPLETA en una llamada', out.startswith('CREADA'), out[:200])
+raw = open(up, 'rb').read()
+check('createunit content: UTF-8 con BOM y CRLF (sin LF sueltos)',
+      raw[:3] == b'\xef\xbb\xbf' and raw.count(b'\n') == raw.count(b'\r\n'),
+      repr(raw[:40]))
+check('createunit content: acentos intactos',
+      '¡hola gestoría!' in raw.decode('utf-8-sig'), raw[-120:])
+out = call('delphi_textedit', {"path": os.path.join(VDIR, 'unix.md'),
+                               "create": True, "content": "a\nb\n", "eol": "lf"})
+check('textedit: eol=lf produce LF puro',
+      b'\r' not in open(os.path.join(VDIR, 'unix.md'), 'rb').read(), out[:120])
+
 # --- B1: old given + new="" blanks the line (no Access Violation) ---
 bp = os.path.join(VDIR, 'BlankMe.pas')
 call('delphi_edit', {"path": bp, "createunit": True})

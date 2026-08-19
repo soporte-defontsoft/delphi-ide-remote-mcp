@@ -143,6 +143,26 @@ out = call('delphi_run', {"path": os.path.join(OUTSIDE, 'Fuera.exe')})
 check('run: fuera vetado', denied(out), out[:150])
 out = call('delphi_fetch', {"path": OUT_PAS})
 check('fetch: fuera vetado', denied(out), out[:150])
+out = call('delphi_upload', {"path": os.path.join(OUTSIDE, 'Subido.bin'),
+                             "offset": 0, "chunkbase64": "AAAA"})
+check('upload: fuera vetado', denied(out), out[:150])
+out = call('delphi_upload', {"path": os.path.join(INSIDE, 'Subido.bin'),
+                             "offset": 0, "chunkbase64": "AAAA"})
+check('upload: dentro permitido', 'written' in out, out[:150])
+out = call('delphi_git', {"repo": os.path.join(OUTSIDE, 'clonado'),
+                          "command": "clone",
+                          "message": "https://example.com/x.git"})
+check('clone: destino fuera vetado', denied(out), out[:150])
+
+# --- B0c: Windows name-normalization bypasses (trailing dot/space, ADS) ---
+for probe, label in ((INSIDE + '\\Evade.pas.', 'punto final'),
+                     (INSIDE + '\\Evade2.pas ', 'espacio final'),
+                     (INSIDE + '\\Evade3.pas::$DATA', 'flujo ADS')):
+    out = call('delphi_textedit', {"path": probe, "create": True, "content": "x"})
+    check('bypass %s: textedit lo rechaza' % label, 'RECHAZADO' in out, out[:120])
+check('bypass: ningun .pas colado en disco',
+      not any(f.startswith('Evade') for f in os.listdir(INSIDE)),
+      os.listdir(INSIDE))
 out = call('delphi_fetch', {"path": IN_PAS})
 check('fetch: dentro permitido', 'chunkBase64' in out, out[:120])
 

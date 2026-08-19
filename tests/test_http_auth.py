@@ -64,8 +64,9 @@ try:
                 'delphi_installs', 'delphi_list', 'delphi_package',
                 'delphi_projects', 'delphi_read', 'delphi_references',
                 'delphi_run', 'delphi_search', 'delphi_signature',
-                'delphi_symbols', 'delphi_textedit', 'delphi_workspace']
-    check('http: tools/list = 21 tools', names == expected, names)
+                'delphi_symbols', 'delphi_textedit', 'delphi_upload',
+                'delphi_workspace']
+    check('http: tools/list = 22 tools', names == expected, names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",
@@ -180,6 +181,18 @@ try:
         code, body = call('delphi_git', {'repo': REPO, 'command': 'push'},
                           RO_TOKEN)
         check('ro: git push RECHAZADO en RO', 'SOLO LECTURA' in body,
+              '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_upload', {'path': tmpdir3 + '\\x.bin',
+                                            'offset': 0,
+                                            'chunkbase64': 'AAAA'}, RO_TOKEN)
+        check('ro: delphi_upload RECHAZADO en RO', 'SOLO LECTURA' in body,
+              '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'clone',
+                                         'message': 'https://example.com/x.git'},
+                          RO_TOKEN)
+        check('ro: git clone RECHAZADO en RO', 'SOLO LECTURA' in body,
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',

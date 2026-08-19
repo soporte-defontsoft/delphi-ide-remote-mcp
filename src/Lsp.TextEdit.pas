@@ -21,6 +21,7 @@ type
     AtLine: Integer;   // tie-break when the anchor repeats
     CreateFile_: Boolean; // CREATE: new file (never overwrites)
     Content: string;      // CREATE: initial content (may be empty)
+    Eol: string;          // CREATE: 'lf' = LF; anything else = CRLF (default)
   end;
 
 function ExecuteTextEdit(const A: TTextEditArgs): string;
@@ -40,6 +41,16 @@ const
   // project files to the IDE / delphi_create.
   DELPHI_EXTS: array [0 .. 7] of string = ('.pas', '.dpr', '.dpk', '.inc',
     '.dfm', '.fmx', '.dproj', '.groupproj');
+
+function IsAscii(const S: string): Boolean;
+var
+  C: Char;
+begin
+  for C in S do
+    if Ord(C) > 127 then
+      Exit(False);
+  Result := True;
+end;
 
 function LooksBinary(const APath: string): Boolean;
 var
@@ -99,7 +110,7 @@ end;
 
 function DoCreate(const A: TTextEditArgs): string;
 var
-  Dir: string;
+  Dir, Text, EolName: string;
 begin
   if TFile.Exists(A.Path) then
     Exit('RECHAZADO: ' + A.Path + ' ya existe. Esta tool nunca sobreescribe; ' +
@@ -107,10 +118,24 @@ begin
   Dir := TPath.GetDirectoryName(A.Path);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
     TDirectory.CreateDirectory(Dir);
-  // New text files are UTF-8 without BOM; the agent's line breaks are kept.
-  PatchSaveText(A.Path, A.Content, 'utf8');
-  Result := Format('CREADO %s  encoding=utf8  bytes=%d',
-    [A.Path, Length(TFile.ReadAllBytes(A.Path))]);
+  // Line endings are explicit: the JSON channel often delivers LF-only text,
+  // so CRLF (the Windows default here) is applied unless 'lf' is asked for.
+  Text := A.Content.Replace(#13#10, #10).Replace(#13, #10);
+  if SameText(A.Eol, 'lf') then
+    EolName := 'LF'
+  else
+  begin
+    Text := Text.Replace(#10, #13#10);
+    EolName := 'CRLF';
+  end;
+  // New text files are UTF-8 without BOM.
+  PatchSaveText(A.Path, Text, 'utf8');
+  // Report the encoding as a later delphi_read will DETECT it: pure ASCII
+  // content is indistinguishable from CP1252 (no high bytes to tell them
+  // apart), and claiming "utf8" there confused agents in the field test.
+  Result := Format('CREADO %s  encoding=%s  finales=%s  bytes=%d',
+    [A.Path, IfThen(IsAscii(Text), 'ascii (utf8/cp1252 compatibles)', 'utf8'),
+     EolName, Length(TFile.ReadAllBytes(A.Path))]);
 end;
 
 function DoEditLine(const A: TTextEditArgs): string;

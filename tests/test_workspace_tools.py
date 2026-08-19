@@ -266,6 +266,66 @@ try:
 finally:
     shutil.rmtree(tmpgit, ignore_errors=True)
 
+# --- delphi_upload: mirror of fetch, byte-identical reassembly ---
+import base64, secrets
+tmpup = tempfile.mkdtemp(prefix='mcp-up-')
+try:
+    blob = secrets.token_bytes(120000)
+    sha = hashlib.sha256(blob).hexdigest()
+    dst = os.path.join(tmpup, 'sub', 'Artefacto.res')
+    half = len(blob) // 2
+    o1 = call('delphi_upload', {"path": dst, "offset": 0,
+                                "chunkbase64": base64.b64encode(blob[:half]).decode()})
+    try:
+        d1 = json.loads(o1)
+        o2 = call('delphi_upload', {"path": dst, "offset": d1['nextOffset'],
+                                    "chunkbase64": base64.b64encode(blob[half:]).decode(),
+                                    "sha256": sha})
+        d2 = json.loads(o2)
+        check('upload: dos chunks, tamano final correcto',
+              d2['size'] == len(blob), o2[:150])
+        check('upload: sha256 verificado por el servidor',
+              d2.get('verified') is True, o2[:150])
+        check('upload: fichero byte-identico en disco',
+              open(dst, 'rb').read() == blob, 'mismatch')
+        check('upload: crea subcarpetas', os.path.isdir(os.path.dirname(dst)), dst)
+    except Exception as e:
+        check('upload: parsea', False, '%s | %s' % (e, o1[:150]))
+    out = call('delphi_upload', {"path": os.path.join(tmpup, 'X.bin'), "offset": 99,
+                                 "chunkbase64": "AAAA"})
+    check('upload: offset>0 sobre fichero inexistente rechaza',
+          out.startswith('error:'), out[:120])
+    out = call('delphi_upload', {"path": os.path.join(tmpup, 'Y.bin'), "offset": 0,
+                                 "chunkbase64": "no-es-base64!!"})
+    check('upload: base64 invalido rechaza (no escribe basura)',
+          out.startswith('error:') and not os.path.exists(os.path.join(tmpup, 'Y.bin')),
+          out[:120])
+finally:
+    shutil.rmtree(tmpup, ignore_errors=True)
+
+# --- git clone: whole repo in one call (network; skipped if offline) ---
+tmpcl = tempfile.mkdtemp(prefix='mcp-clone-')
+try:
+    dest = os.path.join(tmpcl, 'repo')
+    out = call('delphi_git', {"repo": dest, "command": "clone",
+        "message": "https://github.com/soporte-defontsoft/delphi-lsp-mcp-service.git"}, 600)
+    if 'exit=0' in out:
+        check('git clone: repo entero en una llamada',
+              os.path.isdir(os.path.join(dest, 'src')), out[:150])
+        out2 = call('delphi_git', {"repo": dest, "command": "clone",
+            "message": "https://github.com/soporte-defontsoft/delphi-lsp-mcp-service.git"})
+        check('git clone: no re-clona sobre un repo existente',
+              out2.startswith('error:'), out2[:120])
+        out3 = call('delphi_git', {"repo": dest, "command": "pull"}, 300)
+        check('git pull: permitido', out3.startswith('exit='), out3[:120])
+    else:
+        print('SKIP - git clone (sin red o repo inaccesible):', out[:100])
+    out = call('delphi_git', {"repo": dest, "command": "clone",
+                              "message": "file:///C:/Windows"})
+    check('git clone: URL no http/ssh rechazada', out.startswith('error:'), out[:120])
+finally:
+    shutil.rmtree(tmpcl, ignore_errors=True)
+
 # --- delphi_textedit (non-Delphi text files) ---
 tmptxt = tempfile.mkdtemp(prefix='mcp-txt-')
 try:

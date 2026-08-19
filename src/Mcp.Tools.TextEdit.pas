@@ -22,6 +22,7 @@ type
     FAtLine: Integer;
     FCreate: Boolean;
     FContent: string;
+    FEol: string;
   public
     [SchemaDescription('Absolute path of the text file (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml ... any plain text - Delphi files are refused, use delphi_edit)')]
     property Path: string read FPath write FPath;
@@ -35,6 +36,8 @@ type
     property Create_: Boolean read FCreate write FCreate;
     [SchemaDescription('CREATE mode: the initial content of the new file (may be empty)')]
     property Content: string read FContent write FContent;
+    [SchemaDescription('CREATE mode: line endings, "crlf" (default) or "lf"')]
+    property Eol: string read FEol write FEol;
   end;
 
   TDelphiTextEditTool = class(TMCPToolBase<TDelphiTextEditParams>)
@@ -80,6 +83,7 @@ begin
   A.AtLine := Params.AtLine;
   A.CreateFile_ := Params.Create_;
   A.Content := Params.Content;
+  A.Eol := Params.Eol;
   Result := ExecuteTextEdit(A);
 end;
 

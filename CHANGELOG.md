@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.11.0-beta] - 2026-08-19
+
+The transfer batch, plus the addendum findings from the replication run.
+Bringing a repository in no longer means recreating it file by file.
+
+### Added
+- **`delphi_git clone` / `pull` / `fetch`**: a whole repository onto the
+  server in ONE call, jailed to the workspace roots (URL in `message`,
+  destination in `repo`; only http/https/git/ssh URLs; refuses to clone
+  over an existing repo). Measured: the full public repo cloned in 1.2 s
+  versus ~200 MCP calls to recreate it.
+- **`delphi_upload` (tool 22)**: the mirror of `delphi_fetch` — chunked
+  base64 upload with whole-file SHA-256 verification, for material that
+  cannot be recreated by editing (`.res`, icons, binary designer files).
+  Jailed, creates parent directories, refuses out-of-order offsets.
+- **Create-with-content**: `delphi_edit createunit` accepts `content` (the
+  whole unit in one call instead of create + N anchored patches — the
+  measured friction #1: 6 calls per file down to 1), both it and
+  `delphi_textedit` accept `eol` (`crlf` default / `lf`), because the JSON
+  channel usually delivers LF-only text.
+
+### Security
+- **Windows name-normalization bypass closed** (found in the field): a path
+  ending in a dot or space ("X.pas.") passes any literal extension check
+  while Windows creates "X.pas" — it defeated the `.pas` guard of
+  `delphi_textedit`. Alternate Data Streams ("X.pas::$DATA") did the same.
+  Both are now refused at the single write gate, so the fix covers EVERY
+  writing tool, not just the one where it was found.
+- `delphi_upload` validates the base64 alphabet itself: Delphi's decoder
+  skips invalid characters instead of failing, which would have written a
+  silently corrupt file.
+
+### Fixed
+- `delphi_textedit` create reported `encoding=utf8` for pure-ASCII content
+  that a later `delphi_read` detects as cp1252; it now says what detection
+  will say.
+
 ## [0.10.0-beta] - 2026-08-19
 
 More field-test findings from the full-repo replication run. Two were real

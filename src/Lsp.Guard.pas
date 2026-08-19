@@ -160,7 +160,7 @@ begin
     Exit;
   // Fully mutating tools: refused outright in read-only mode.
   if MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
-    'delphi_build', 'delphi_run', 'delphi_package']) then
+    'delphi_build', 'delphi_run', 'delphi_package', 'delphi_upload']) then
     Exit(WriteDenied(AToolName));
   // delphi_git is mixed: query commands pass, anything that can change the
   // repo or the remote is refused ("branch"/"tag" only LIST when called
@@ -221,12 +221,44 @@ begin
   Result := GRoots;
 end;
 
+{ Windows silently strips trailing dots/spaces from a file name, so a path
+  like "X.pas." creates "X.pas" while any check on the literal string sees a
+  different extension. Alternate Data Streams ("X.pas::$DATA") play the same
+  trick. Measured bypass in the field test: both defeated the .pas guard of
+  delphi_textedit. Any path whose final name would be normalized by the OS
+  is refused outright - it is never a legitimate request. }
+function PathAnomaly(const APath: string): string;
+var
+  Name, Rest: string;
+begin
+  Result := '';
+  // ':' is legal only as the drive separator (C:\...): anywhere else it
+  // opens an Alternate Data Stream, which hides content from every check.
+  Rest := APath;
+  if (Length(Rest) >= 2) and (Rest[2] = ':') then
+    Rest := Copy(Rest, 3, MaxInt);
+  if Rest.Contains(':') then
+    Exit(Format('RECHAZADO: la ruta "%s" contiene ":" fuera de la unidad ' +
+      '(flujo alternativo de datos). Usa un nombre de fichero normal.', [APath]));
+  Name := TPath.GetFileName(ExcludeTrailingPathDelimiter(APath));
+  if Name = '' then
+    Exit;
+  if Name.TrimRight([' ', '.']) <> Name then
+    Exit(Format('RECHAZADO: el nombre "%s" termina en punto o espacio; ' +
+      'Windows los recorta al crear el fichero, asi que el nombre real seria ' +
+      'otro ("%s"). Pide el nombre exacto, sin adornos.',
+      [Name, Name.TrimRight([' ', '.'])]));
+end;
+
 function PathDenied(const APath: string): string;
 var
   Roots: TArray<string>;
   Full, R: string;
 begin
-  Result := '';
+  // Name normalization first: it applies with or without a jail configured.
+  Result := PathAnomaly(APath);
+  if Result <> '' then
+    Exit;
   Roots := WorkspaceRoots;
   if Length(Roots) = 0 then
     Exit; // no jail configured
