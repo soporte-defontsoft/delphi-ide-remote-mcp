@@ -30,6 +30,18 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 - Windows
 - A **licensed installation of RAD Studio / Delphi 11+** (`DelphiLSP.exe` ships with it and is **not redistributable** — this project does not include or replace it)
 
+## Credits
+
+Designed and directed by **David Fontanet ([Defontsoft](https://www.defontsoft.com))**.
+**Programmed by Claude** (Anthropic's Claude Code, model Claude Fable 5) working as the
+implementing engineer under David's direction — every commit carries its co-author tag.
+The safe-editing tool ports an internally battle-tested design measured over 30+ test
+rounds against several LLMs.
+
+Related projects worth knowing: [GDK Software's Delphi MCP framework](https://github.com/gdksoftware/delphi-mcp-server)
+(vendored here, MIT), the official [DelphiLSP VS Code extension](https://marketplace.visualstudio.com/items?itemName=EmbarcaderoTechnologies.delphilsp),
+and [EditInVsCodeDelphiPlugin](https://github.com/csm101/EditInVsCodeDelphiPlugin).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

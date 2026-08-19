@@ -34,8 +34,10 @@ uses
   Lsp.Session in 'Lsp.Session.pas',
   Lsp.References in 'Lsp.References.pas',
   Lsp.BuildRunner in 'Lsp.BuildRunner.pas',
+  Lsp.Patch in 'Lsp.Patch.pas',
   Mcp.Tools.DelphiLsp in 'Mcp.Tools.DelphiLsp.pas',
-  Mcp.Tools.DelphiExtra in 'Mcp.Tools.DelphiExtra.pas';
+  Mcp.Tools.DelphiExtra in 'Mcp.Tools.DelphiExtra.pas',
+  Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas';
 
 var
   Settings: TMCPSettings;

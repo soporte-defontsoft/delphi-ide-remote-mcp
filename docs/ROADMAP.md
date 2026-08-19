@@ -26,15 +26,19 @@
 - [x] `delphi_references` (hybrid: candidate text scan → `definition` validation → compiler-grade result; homonyms rejected, bounded work with explicit unverified leftovers)
 - [x] `delphi_build` (MSBuild via registry-located `rsvars.bat`, structured errors/warnings + output tail)
 
-## Phase 4.5 — Safe editing (`delphi_patch`)
+## Phase 4.5 — Safe editing (`delphi_patch` + `delphi_read`) ✔
 Port of an internally battle-tested safe-edit tool (30+ measured test rounds with several
 LLMs), so that ANY model — large or small — can modify Delphi sources through the MCP
 without corrupting them:
-- [ ] Single-full-line unique anchors (with real-line hint on mismatch), never whole-file rewrites
-- [ ] Strict encoding validation (CP1252/UTF-8 BOM detection, mojibake rejection, byte-level round-trip)
-- [ ] Atomic writes + per-file operation queue (anti-race)
-- [ ] Automatic pre-edit backups with 2-step restore
-- [ ] Hard rejection of binary designer files (TPF0), `__history/`/`__recovery/` artifacts
+- [x] Single-full-line unique anchors (line-number hints on mismatch/repeats, atline tie-break), never whole-file rewrites
+- [x] Strict encoding handling (CP1252/UTF-8±BOM detection with strict UTF-8 validation; characters that don't fit REJECT with the native Pascal literal alternative; mojibake-signature warnings)
+- [x] Atomic writes + global edit lock; post-write audit re-read from disk (high-byte accounting, alien EOLs, corruption marks, `end.` structure, insert-inside-method heuristic)
+- [x] Automatic pre-edit backups (`__delphi-patch/<day>/`, 15-day retention) with 2-step restore (loss preview first)
+- [x] Hard rejection of binary designer files (TPF0), `__history/`/`__recovery/` artifacts
+- [x] Semantic INSERT: `rutina-global` (tool picks the legal boundary) and `metodo` (tool writes BOTH halves: class declaration + qualified implementation)
+- [x] `createunit`: standard IDE skeleton, never overwrites
+- [x] `delphi_read`: encoding-correct numbered reads (the anchor source of truth)
+- [x] Battery: 30/30 checks green over real MCP stdio, byte-level verification (tests/test_delphi_patch.py)
 
 ## Phase 5 — Resident service + GUI (the remote-work host)
 Primary use case: the Windows machine (with RAD Studio) stays on as a server; agents connect
