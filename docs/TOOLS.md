@@ -13,6 +13,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Read files & explore** — [`delphi_read`](#delphi_read), [`delphi_search`](#delphi_search), [`delphi_list`](#delphi_list), [`delphi_projects`](#delphi_projects), [`delphi_installs`](#delphi_installs), [`delphi_workspace`](#delphi_workspace)
 - **Edit code safely  (read-write only)** — [`delphi_edit`](#delphi_edit), [`delphi_textedit`](#delphi_textedit), [`delphi_create`](#delphi_create)
 - **Build, run, package  (read-write only)** — [`delphi_build`](#delphi_build), [`delphi_run`](#delphi_run), [`delphi_package`](#delphi_package)
+- **Cross-platform: build configs & remote platforms** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
 - **Version control** — [`delphi_git`](#delphi_git)
 - **Feedback** — [`delphi_report`](#delphi_report)
@@ -238,7 +239,7 @@ Build a Delphi project for real with MSBuild on this machine (rsvars located via
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string | **yes** | Absolute path of the .dproj to build |
-| `platform` | string | optional | Win32 or Win64 (default Win32) |
+| `platform` | string | optional | Target platform (default Win32): Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and a PAServer profile (delphi_paserver) |
 | `config` | string | optional | Debug or Release (default Debug) |
 | `target` | string | optional | Build (full, default) or Make (incremental). After switching platforms use Build |
 
@@ -265,6 +266,31 @@ Zip a build-output directory ON the server into a single deploy artifact (recurs
 |---|---|---|---|
 | `dir` | string | **yes** | Directory to package (e.g. the build output Win64\Debug). Recursive; *.dcu and dcu\ intermediates excluded |
 | `outfile` | string | optional | Optional zip path (default: sibling of dir, named <dirname>-deploy.zip). Must be inside the workspace roots |
+
+
+## Cross-platform: build configs & remote platforms
+
+### `delphi_config`
+
+See and manage a project's build configurations and target PLATFORMS. command=view (read-only) reports the framework (VCL is Windows-only; FMX and console cross platforms), the build configurations (Debug/Release/custom) and every platform with whether it is enabled, whether THIS project can target it, and whether it needs a remote PAServer profile. command=add-platform enables a platform in the .dproj (a curated edit of the <Platforms> block only). To BUILD a specific combination use delphi_build with platform+config.
+
+*Access: mixed (view read-only; add-platform read-write).*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string | **yes** | Absolute path of the project .dproj |
+| `command` | string | optional | view (default: list configurations and platforms) \| add-platform (enable a platform in the project) |
+| `platform` | string | optional | add-platform: the platform to enable (Win64, Linux64, OSX64, OSXARM64, Android64, iOSDevice64...) |
+
+### `delphi_paserver`
+
+The bridge for building and running on OTHER platforms (Linux, macOS) through the Platform Assistant (PAServer). command=packages lists the PAServer installers that ship with each Delphi install (download them with delphi_fetch and run them on the target machine); command=platforms shows which platforms this server can target and whether each already has a connection profile and SDK; command=profiles lists the registered connection profiles and platform SDKs. Read-only. Building for a platform is delphi_build once its profile exists; enabling a platform in a project is delphi_config.
+
+*Access: read-only OK.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | packages (PAServer installers to download and run on the target) \| platforms (what this server can target + profile/SDK status) \| profiles (registered connection profiles and SDKs). Default: platforms |
 
 
 ## Transfer files
@@ -367,6 +393,13 @@ Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .j
 
 ### Send a file TO the server
 `delphi_upload {path, offset:0, chunkbase64:"..."}` per chunk (increasing `offset`); on the last chunk pass the whole-file `sha256` to have the server verify the reassembly. For binaries you cannot recreate by editing (`.res`, icons).
+
+### Build for another platform (Linux/macOS)
+1. `delphi_config {project}` — see the framework and platforms. **VCL is Windows-only**; only FMX or console apps cross.
+2. `delphi_config {project, command:"add-platform", platform:"Linux64"}` — enable the platform in the project (refused on a VCL project, with the reason).
+3. `delphi_paserver {command:"packages"}` — get the PAServer installer for the target; download it with `delphi_fetch` and run it on your Linux/Mac (it listens on port 64211).
+4. `delphi_paserver {command:"platforms"}` — check the platform's profile/SDK status.
+5. `delphi_build {project, platform:"Linux64", config:"Debug"}` — once the profile/SDK is in place. (Creating the profile against a live PAServer target is the next piece of `delphi_paserver`.)
 
 ### Report a problem
 `delphi_report {message, title, kind:"bug"|"limitation"|"suggestion"|"question", from}` — stored as a dated markdown next to the server exe. Works even read-only; use it whenever a tool blocks something you believe is legitimate.

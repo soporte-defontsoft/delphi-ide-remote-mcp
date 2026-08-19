@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.15.0-beta] - 2026-08-19
+
+Cross-platform groundwork: see and manage a project's build configurations,
+and discover the Platform Assistant so an agent can target Linux/macOS.
+
+### Added
+- **`delphi_config` (tool 24)**: see and manage a project's build
+  configurations and target platforms. `view` (read-only) reports the
+  framework, the configurations (Debug/Release/custom) and every platform
+  with whether it is enabled, whether the project **can** target it, and
+  whether it needs a remote profile. `add-platform` (read-write) enables a
+  platform in the `.dproj` — a **curated** edit of the `<Platforms>` block
+  only. It refuses a platform the framework cannot target: **VCL is Windows
+  only** (`Vcl.Forms` does not exist on Linux/macOS/mobile); FMX and console
+  cross platforms.
+- **`delphi_paserver` (tool 25, read-only)**: the bridge for building on
+  other platforms via the Platform Assistant. `platforms` lists what this
+  server can target and each platform's profile/SDK status; `packages` lists
+  the PAServer installers that ship with each Delphi install (download with
+  `delphi_fetch`, run on the Linux/Mac target); `profiles` lists the
+  registered connection profiles and SDKs. The write/network half (create a
+  profile against the target, deploy+run remotely) builds on this once a live
+  PAServer target exists.
+- **`Lsp.Dproj`**: the single tolerant `.dproj` parser, now shared by the LSP
+  config fabricator and these tools — no second parser (house rule).
+- `delphi_build` accepts any declared platform, not just Win32/Win64.
+
 ## [0.14.0-beta] - 2026-08-19
 
 The library read zone finally covers what it always promised, plus the

@@ -46,7 +46,7 @@ type
   public
     [SchemaDescription('Absolute path of the .dproj to build')]
     property Project: string read FProject write FProject;
-    [SchemaDescription('Win32 or Win64 (default Win32)')]
+    [SchemaDescription('Target platform (default Win32): Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and a PAServer profile (delphi_paserver)')]
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription('Debug or Release (default Debug)')]
     property Config: string read FConfig write FConfig;

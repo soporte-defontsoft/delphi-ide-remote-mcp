@@ -39,7 +39,8 @@ uses
   System.JSON,
   System.Hash,
   System.Generics.Collections,
-  Lsp.Client; // PathToUri / UriToPath
+  Lsp.Client, // PathToUri / UriToPath
+  Lsp.Dproj;  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
 
 const
   STANDARD_ALIASES =
@@ -58,70 +59,7 @@ const
     'source\data\ado', 'source\data\firedac', 'source\data\rest',
     'source\Internet', 'source\soap', 'source\xml', 'source\indy10\Core');
 
-{ ---- tolerant XML scanning ---- }
-
-{ All inner texts of <ATag ...>...</ATag>, in document order. }
-function AllTagValues(const AXml, ATag: string): TArray<string>;
-var
-  List: TList<string>;
-  P, TagEnd, CloseP: Integer;
-  Open1, Open2, CloseTag: string;
-begin
-  List := TList<string>.Create;
-  try
-    Open1 := '<' + ATag + '>';
-    Open2 := '<' + ATag + ' ';
-    CloseTag := '</' + ATag + '>';
-    P := 1;
-    while P <= Length(AXml) do
-    begin
-      var P1 := Pos(Open1, AXml, P);
-      var P2 := Pos(Open2, AXml, P);
-      if (P1 = 0) and (P2 = 0) then
-        Break;
-      if (P1 = 0) or ((P2 > 0) and (P2 < P1)) then
-      begin
-        // tag with attributes: skip to '>'
-        TagEnd := Pos('>', AXml, P2);
-        if TagEnd = 0 then
-          Break;
-        if AXml[TagEnd - 1] = '/' then // self-closing
-        begin
-          P := TagEnd + 1;
-          Continue;
-        end;
-        P := TagEnd + 1;
-      end
-      else
-        P := P1 + Length(Open1);
-      CloseP := Pos(CloseTag, AXml, P);
-      if CloseP = 0 then
-        Break;
-      List.Add(Copy(AXml, P, CloseP - P));
-      P := CloseP + Length(CloseTag);
-    end;
-    Result := List.ToArray;
-  finally
-    List.Free;
-  end;
-end;
-
-{ Merge the occurrences of an accumulating MSBuild property: each value may
-  embed $(PropName) meaning "the accumulated value so far". }
-function MergeProperty(const AXml, APropName: string): string;
-var
-  V: string;
-begin
-  Result := '';
-  for V in AllTagValues(AXml, APropName) do
-    Result := V.Replace('$(' + APropName + ')', Result, [rfReplaceAll, rfIgnoreCase]);
-end;
-
-function XmlUnescape(const S: string): string;
-begin
-  Result := S.Replace('&amp;', '&').Replace('&lt;', '<').Replace('&gt;', '>')
-    .Replace('&quot;', '"').Replace('&apos;', '''');
-end;
+{ AllTagValues / MergeProperty / XmlUnescape now live in Lsp.Dproj (shared). }
 
 { Split a ;-list, expand variables, drop unexpanded/$-laden or empty entries,
   absolutize relative entries against ABaseDir, keep only unique. }

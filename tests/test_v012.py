@@ -332,6 +332,41 @@ check('R4-B: readableExtra tambien virtualizado', (DRIVE + ':\\') not in out, ou
 out = call('delphi_list', {"root": os.path.join(INSIDE, 'sub', '..'), "pattern": "*.pas"})
 check('R4-C: la salida de list no arrastra ".."', '..' not in out, out[:150])
 
+# ---- delphi_config: view + add-platform with the VCL/FMX rule -------------
+import shutil as _sh
+CON = os.path.join(INSIDE, 'ConfProj.dproj')
+_sh.copy(os.path.join(REPO, 'src', 'DelphiLspMcp.dproj'), CON)   # console (FrameworkType None)
+VCLP = os.path.join(INSIDE, 'VclProj.dproj')
+_sh.copy(os.path.join(REPO, 'src', 'DelphiLspMcpTray.dproj'), VCLP)  # VCL
+
+out = call('delphi_config', {"project": CON})
+cfg = json.loads(out)
+check('config: view lista configuraciones', 'Debug' in cfg.get('configurations', []), out[:150])
+check('config: view lista plataformas con estado',
+      any(p.get('name') == 'Win64' for p in cfg.get('platforms', [])), out[:150])
+
+out = call('delphi_config', {"project": VCLP, "command": "add-platform", "platform": "Linux64"})
+check('config: add-platform Linux64 en VCL RECHAZADO (regla VCL!=FMX)',
+      'RECHAZADO' in out and 'VCL' in out, out[:150])
+out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "Linux64"})
+check('config: add-platform Linux64 en consola aceptado', 'ANADIDA' in out, out[:150])
+out = call('delphi_config', {"project": CON})
+check('config: Linux64 ahora habilitada',
+      any(p.get('name') == 'Linux64' and p.get('enabled') for p in json.loads(out).get('platforms', [])), out[:150])
+
+# ---- delphi_paserver: read subcommands ------------------------------------
+out = call('delphi_paserver', {"command": "packages"})
+pk = json.loads(out)
+check('paserver: packages lista los instaladores',
+      any('linux' in p.get('path', '').lower() for p in pk.get('packages', [])), out[:150])
+out = call('delphi_paserver', {"command": "platforms"})
+pf = json.loads(out)
+check('paserver: platforms distingue local vs remoto',
+      any(p['platform'] == 'Win64' and p['buildsLocally'] for p in pf.get('platforms', []))
+      and any(not p['buildsLocally'] for p in pf.get('platforms', [])), out[:150])
+out = call('delphi_paserver', {"command": "profiles"})
+check('paserver: profiles responde', 'profiles' in out, out[:120])
+
 # ---- shutdown main server --------------------------------------------------
 proc.stdin.close()
 proc.wait(timeout=15)

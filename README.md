@@ -51,6 +51,8 @@ An agent can also be pointed at the **library read zone** (RTL/VCL sources and i
 | `delphi_workspace` | The lay of the land on the server: the configured workspace roots (your allowed universe), the access level, and the active Delphi. Server paths travel with **virtual drive units** (`srvd:`, `srvc:` — they only exist inside this MCP, never on your local disk). Call it first |
 | `delphi_git` | Whitelisted git operations — including **`clone`/`pull`** (bring a whole repo onto the server in one call, jailed) plus status/diff/log/show/branch/add/commit/init/push/tag/config. Options that write files or read outside the repo (`--output`, `--no-index`, `-c`…) are refused at the gate |
 | `delphi_report` | **Feedback channel**: the agent reports a bug, limitation or suggestion and the server files it as its own dated markdown in `reports/` next to the executable. Works at **every** access level, read-only included |
+| `delphi_config` | See and manage a project's build **configurations and target platforms**: `view` reports framework/configs/platforms with status; `add-platform` enables a platform in the `.dproj` (curated edit), refusing platforms the framework can't target (VCL is Windows-only) |
+| `delphi_paserver` | The bridge for building on **Linux/macOS** via the Platform Assistant: `platforms` (what the server can target + profile status), `packages` (the PAServer installers to download and run on the target), `profiles` (registered connection profiles/SDKs) |
 
 **→ Full parameter-by-parameter reference with types, defaults and worked workflows: [docs/TOOLS.md](docs/TOOLS.md)** (generated from the server's own `tools/list`, so it never drifts from the code).
 

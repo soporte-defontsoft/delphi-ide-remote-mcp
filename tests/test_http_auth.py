@@ -62,11 +62,12 @@ try:
                 'delphi_definition', 'delphi_diagnostics', 'delphi_edit',
                 'delphi_fetch', 'delphi_git', 'delphi_hover',
                 'delphi_installs', 'delphi_list', 'delphi_package',
-                'delphi_projects', 'delphi_read', 'delphi_references',
-                'delphi_report', 'delphi_run', 'delphi_search',
-                'delphi_signature', 'delphi_symbols', 'delphi_textedit',
-                'delphi_upload', 'delphi_workspace']
-    check('http: tools/list = 23 tools', names == expected, names)
+                'delphi_config', 'delphi_projects', 'delphi_read',
+                'delphi_references', 'delphi_report', 'delphi_run',
+                'delphi_search', 'delphi_signature', 'delphi_symbols',
+                'delphi_textedit', 'delphi_upload', 'delphi_workspace',
+                'delphi_paserver']
+    check('http: tools/list = 25 tools', sorted(names) == sorted(expected), names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",
@@ -203,6 +204,23 @@ try:
                           RO_TOKEN)
         check('ro: delphi_report PERMITIDO en RO (canal de feedback)',
               code == 200 and 'GRACIAS' in body, '%s %s' % (code, body[:150]))
+
+        # delphi_config: view reads (OK in RO), add-platform writes (refused)
+        code, body = call('delphi_config', {'repo': REPO, 'command': 'view',
+                                            'project': paspath.replace('.pas', '.dproj')},
+                          RO_TOKEN)
+        check('ro: delphi_config view NO da SOLO LECTURA', 'SOLO LECTURA' not in body,
+              '%s %s' % (code, body[:120]))
+        code, body = call('delphi_config', {'command': 'add-platform',
+                                            'platform': 'Linux64',
+                                            'project': paspath.replace('.pas', '.dproj')},
+                          RO_TOKEN)
+        check('ro: delphi_config add-platform RECHAZADO en RO', 'SOLO LECTURA' in body,
+              '%s %s' % (code, body[:120]))
+        # delphi_paserver is read-only, always available
+        code, body = call('delphi_paserver', {'command': 'platforms'}, RO_TOKEN)
+        check('ro: delphi_paserver PERMITIDO en RO', code == 200 and 'SOLO LECTURA' not in body,
+              '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'push'},
                           RO_TOKEN)

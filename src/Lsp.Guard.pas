@@ -224,6 +224,16 @@ begin
   if MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
     'delphi_build', 'delphi_run', 'delphi_package', 'delphi_upload']) then
     Exit(WriteDenied(AToolName));
+  // delphi_config is mixed: "view" reads, "add-platform" writes the .dproj.
+  if SameText(AToolName, 'delphi_config') then
+  begin
+    Cmd := '';
+    if Assigned(AArguments) then
+      AArguments.TryGetValue<string>('command', Cmd);
+    if (Trim(Cmd) = '') or SameText(Trim(Cmd), 'view') then
+      Exit;
+    Exit(WriteDenied('delphi_config ' + Cmd));
+  end;
   // delphi_git is mixed: query commands pass, anything that can change the
   // repo or the remote is refused ("branch"/"tag" only LIST when called
   // without arguments; with arguments they create -> write).
