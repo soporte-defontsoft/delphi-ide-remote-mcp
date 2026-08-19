@@ -111,14 +111,18 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
   included. Exception: successful `delphi_read`/`delphi_fetch` content is byte-exact by
   design and travels verbatim.
 - **Library read zone**: READING tools (read/search/list/fetch/LSP navigation) additionally
-  accept the RAD Studio installation and the IDE Library Search Path directories — so an
-  agent can follow a definition into `System.SysUtils.pas` or read an installed component's
-  source. Writing tools can never touch that zone. The Config Fabricator also merges the IDE
-  Library Search Path, so symbols of installed (third-party) components resolve.
+  accept, for **every installed Delphi**, its installation directory, the Library Search Path
+  of **every registered platform** (Win, Linux64, macOS, Android, iOS…) and the **GetIt
+  catalog repositories** — so an agent can follow a definition into `System.SysUtils.pas`,
+  read the source of an installed component (FMXLinux, LockBox…) or inspect the Android SDK.
+  Macros like `$(BDSCatalogRepositoryAllUsers)` are expanded from the IDE's own registry
+  table, never hardcoded. Writing tools can never touch that zone, and `delphi_workspace`
+  reports it as `readableExtra`. The Config Fabricator also merges the IDE Library Search
+  Path, so symbols of installed (third-party) components resolve.
 
 ## Tests
 
-`tests/` contains six end-to-end batteries that talk real MCP to the built server (221 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real), `test_guard.py` (workspace jail, including escape attempts) and `test_v012.py` (virtual drive units round trip, delete/blank modes, `.dpr` inserts, implicit published, git messages via `-F`, Roots fail-closed parsing).
+`tests/` contains six end-to-end batteries that talk real MCP to the built server (229 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real), `test_guard.py` (workspace jail, including escape attempts) and `test_v012.py` (virtual drive units round trip, delete/blank modes, `.dpr` inserts, implicit published, git messages via `-F`, Roots fail-closed parsing).
 
 ## Key design points
 

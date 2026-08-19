@@ -6,6 +6,47 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.14.0-beta] - 2026-08-19
+
+The library read zone finally covers what it always promised, plus the
+fourth field round's findings.
+
+### Fixed
+- **The read zone was missing most of the machine's Delphi material**, a gap
+  in a feature shipped back in 0.6.0:
+  - it walked only `Win32`/`Win64`, while an install registers a Library
+    Search Path for **every** platform (13 here: Linux64, OSX64, OSXARM64,
+    Android ×2, iOS ×4, Win64x, WinARM64EC…);
+  - it expanded a hardcoded handful of macros, so every entry using
+    `$(BDSCatalogRepository…)` was silently dropped — i.e. **every GetIt
+    package** (FmxLinux, LockBox…) and the Android SDKs.
+  Macros are now expanded against the IDE's own authoritative table
+  (`HKCU\…\BDS\<ver>\Environment Variables`), all registered platforms are
+  walked, the catalog repositories are included whole (the search path points
+  at compiled `Lib\`, while the useful material is the sibling `source\`),
+  and it is done **per installation** — each Delphi owns its packages.
+- **`delphi_list` aborted entirely on one unreadable subdirectory**
+  (`TDirectory.GetFiles` recursive is all-or-nothing) and again when asking
+  size/date of a file whose path exceeds the classic length limit. Measured
+  on the Android NDK, which killed a whole listing; it now walks tolerantly
+  and lists 19,436 files there.
+- **R4-A**: `delphi_fetch` returned the server's real path. The byte-fidelity
+  exemption was wrong for it: its payload is base64, an alphabet with neither
+  `:` nor `%`, so masking cannot corrupt it. Only `delphi_read` stays exempt
+  (its payload is file text an edit anchor must match).
+- **R4-C**: `delphi_list` echoed `..\` segments back in every returned path;
+  the root is canonicalized first.
+- Paths whose last segment is `.` or `..` are no longer refused as
+  "name ending in a dot": they are ordinary navigation, and the jail already
+  canonicalizes before deciding (escape attempts through `..` remain caught —
+  verified in the field round).
+
+### Added
+- **R4-B**: `delphi_workspace` publishes `readableExtra` — the read-only
+  library zone (installations, library paths, catalog repositories), so the
+  agent knows what it may read besides the roots instead of being told
+  "anything outside is refused".
+
 ## [0.13.0-beta] - 2026-08-19
 
 Read-only becomes airtight, a feedback channel for the agents that use the

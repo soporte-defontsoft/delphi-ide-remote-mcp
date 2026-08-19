@@ -36,6 +36,12 @@ function ReadPathDenied(const APath: string): string;
 { The configured roots (empty array = unrestricted). }
 function WorkspaceRoots: TArray<string>;
 
+{ The READ-ONLY library zone (RAD Studio installations, IDE library search
+  paths, GetIt catalog repositories). Readable by reading tools, never
+  writable - exposed so delphi_workspace can tell the agent what it may read
+  besides the roots (field round 4, R4-B). }
+function LibraryReadRoots: TArray<string>;
+
 { Credentials (env var first, then settings.ini [Security] next to the exe). }
 function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
 function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
@@ -311,6 +317,11 @@ begin
   Name := TPath.GetFileName(ExcludeTrailingPathDelimiter(APath));
   if Name = '' then
     Exit;
+  // "." and ".." are standard navigation, not a normalization trick: the jail
+  // canonicalizes before deciding, so an escape via ".." is caught there.
+  // Rejecting them here refused legitimate parent-directory paths.
+  if (Name = '.') or (Name = '..') then
+    Exit;
   if Name.TrimRight([' ', '.']) <> Name then
     Exit(Format('RECHAZADO: el nombre "%s" termina en punto o espacio; ' +
       'Windows los recorta al crear el fichero, asi que el nombre real seria ' +
@@ -349,47 +360,110 @@ var
 
 { The read-only library zone: RAD Studio installation + IDE Library Search
   Path directories (installed components), canonicalized. Cached. }
+{ Expands $(MACRO) against the IDE's own macro table (plus the few values
+  that live outside it), repeatedly, since macros nest. Case-insensitive. }
+function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
+var
+  Pass, I: Integer;
+  Name: string;
+begin
+  Result := AText;
+  for Pass := 1 to 4 do
+  begin
+    if not Result.Contains('$(') then
+      Break;
+    for I := 0 to AVars.Count - 1 do
+    begin
+      Name := AVars.Names[I];
+      if Name <> '' then
+        Result := Result.Replace('$(' + Name + ')', AVars.ValueFromIndex[I],
+          [rfReplaceAll, rfIgnoreCase]);
+    end;
+  end;
+end;
+
 function LibraryRoots: TArray<string>;
 var
+  Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
-  List: TStringList;
-  Plat, Raw, Item, UserDocs, CommonDocs, Expanded: string;
+  List, Vars: TStringList;
+  Plat, Raw, Item, Expanded, UserDocs, CommonDocs: string;
 begin
   if not GLibLoaded then
   begin
     List := TStringList.Create;
     try
-      Info := DiscoverRadStudio;
-      if Info.Found then
+      // EVERY installation: reading the sources of any installed Delphi is
+      // legitimate, and each one owns its packages and its catalog.
+      Installs := DiscoverAllRadStudios;
+      for Info in Installs do
       begin
+        if not Info.Found then
+          Continue;
         List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(Info.RootDir)));
-        // Authoritative values (rsvars.bat), NEVER composed by hand: the
-        // Documents branding changes between eras. Empty = entry dropped.
-        UserDocs := BdsUserDir(Info);
-        CommonDocs := BdsCommonDir(Info);
-        for Plat in TArray<string>.Create('Win32', 'Win64') do
-        begin
-          Raw := IdeLibrarySearchPath(Info.Version, Plat);
-          for Item in Raw.Split([';']) do
-          begin
-            Expanded := Item.Trim
-              .Replace('$(BDS)', ExcludeTrailingPathDelimiter(Info.RootDir), [rfReplaceAll, rfIgnoreCase])
-              .Replace('$(BDSLIB)', ExcludeTrailingPathDelimiter(Info.RootDir) + '\lib', [rfReplaceAll, rfIgnoreCase])
-              .Replace('$(Platform)', Plat, [rfReplaceAll, rfIgnoreCase]);
-            if UserDocs <> '' then
-              Expanded := Expanded.Replace('$(BDSUSERDIR)', UserDocs, [rfReplaceAll, rfIgnoreCase]);
-            if CommonDocs <> '' then
-              Expanded := Expanded.Replace('$(BDSCOMMONDIR)', CommonDocs, [rfReplaceAll, rfIgnoreCase]);
-            if (Expanded <> '') and not Expanded.Contains('$(') and
-               TPath.IsPathRooted(Expanded) then
+        Vars := TStringList.Create;
+        try
+          // The IDE's own macro table is authoritative: it carries
+          // $(BDSCatalogRepositoryAllUsers), where the GetIt packages live
+          // (FmxLinux, Android SDKs, PAServer installers). Without it those
+          // paths were silently dropped - measured 2026-08-19.
+          IdeEnvironmentVars(Info.Version, Vars);
+          // Values that are NOT in that key (authoritative from rsvars.bat /
+          // the install itself), added without overwriting the IDE's own.
+          if Vars.Values['BDS'] = '' then
+            Vars.Values['BDS'] := ExcludeTrailingPathDelimiter(Info.RootDir);
+          if Vars.Values['BDSLIB'] = '' then
+            Vars.Values['BDSLIB'] := ExcludeTrailingPathDelimiter(Info.RootDir) + '\lib';
+          UserDocs := BdsUserDir(Info);
+          if (UserDocs <> '') and (Vars.Values['BDSUSERDIR'] = '') then
+            Vars.Values['BDSUSERDIR'] := UserDocs;
+          CommonDocs := BdsCommonDir(Info);
+          if (CommonDocs <> '') and (Vars.Values['BDSCOMMONDIR'] = '') then
+            Vars.Values['BDSCOMMONDIR'] := CommonDocs;
+          // Per-user catalog repository: sibling of the common one, under the
+          // user's own documents root (the IDE exposes only the AllUsers one).
+          if (Vars.Values['BDSCatalogRepository'] = '') and (UserDocs <> '') then
+            Vars.Values['BDSCatalogRepository'] :=
+              IncludeTrailingPathDelimiter(UserDocs) + 'CatalogRepository';
+
+          // The catalog repositories THEMSELVES, whole: every GetIt package
+          // lives there (FmxLinux, LockBox...), and the Library Search Path
+          // only points at its compiled Lib\ folder - what an agent actually
+          // wants to read is the sibling source\. Also covers the Android
+          // SDKs and the PAServer installers.
+          for Item in TArray<string>.Create(Vars.Values['BDSCatalogRepositoryAllUsers'],
+            Vars.Values['BDSCatalogRepository']) do
+            if (Item <> '') and TPath.IsPathRooted(Item) then
             try
-              Expanded := IncludeTrailingPathDelimiter(TPath.GetFullPath(Expanded));
+              Expanded := IncludeTrailingPathDelimiter(TPath.GetFullPath(Item));
               if List.IndexOf(Expanded) < 0 then
                 List.Add(Expanded);
             except
-              // an unparseable entry never breaks the server
+              // never breaks the server
+            end;
+
+          // ALL platforms registered for this install, never a fixed pair:
+          // Linux64, OSX64, Android64, iOSDevice64... each has its own path.
+          for Plat in IdeLibraryPlatforms(Info.Version) do
+          begin
+            Vars.Values['Platform'] := Plat;
+            Raw := IdeLibrarySearchPath(Info.Version, Plat);
+            for Item in Raw.Split([';']) do
+            begin
+              Expanded := ExpandIdeMacros(Item.Trim, Vars);
+              if (Expanded <> '') and not Expanded.Contains('$(') and
+                 TPath.IsPathRooted(Expanded) then
+              try
+                Expanded := IncludeTrailingPathDelimiter(TPath.GetFullPath(Expanded));
+                if List.IndexOf(Expanded) < 0 then
+                  List.Add(Expanded);
+              except
+                // an unparseable entry never breaks the server
+              end;
             end;
           end;
+        finally
+          Vars.Free;
         end;
       end;
       GLibRoots := List.ToStringArray;
@@ -399,6 +473,11 @@ begin
     GLibLoaded := True;
   end;
   Result := GLibRoots;
+end;
+
+function LibraryReadRoots: TArray<string>;
+begin
+  Result := LibraryRoots;
 end;
 
 function ReadPathDenied(const APath: string): string;
@@ -514,9 +593,13 @@ var
   I, L: Integer;
   C, PrevC: Char;
 begin
-  // Byte-fidelity tools: file CONTENT travels verbatim. Their rejections
-  // carry no content, only paths - those are masked like everything else.
-  if MatchText(AToolName, ['delphi_read', 'delphi_fetch']) and
+  // delphi_read is the ONE exemption: its payload is the file's TEXT, which
+  // may legitimately contain "D:\..." that an edit anchor must match
+  // byte-for-byte. delphi_fetch is NOT exempt (fixed after field round 4):
+  // its payload is base64, whose alphabet has neither ':' nor '%', so
+  // masking can never corrupt it - while its "path" field must be
+  // virtualized like every other path the client sees.
+  if SameText(AToolName, 'delphi_read') and
      not (AText.StartsWith('RECHAZADO') or AText.StartsWith('error')) then
     Exit(AText);
   Letters := ServedDriveLetters;

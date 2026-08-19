@@ -233,6 +233,43 @@ const
   DEFAULT_MASKS: array [0 .. 7] of string =
     ('*.pas', '*.dpr', '*.dpk', '*.inc', '*.dfm', '*.fmx', '*.dproj', '*.groupproj');
 
+{ Recursive file walk that TOLERATES unreadable subdirectories. Delphi's
+  TDirectory.GetFiles(soAllDirectories) aborts the WHOLE enumeration on the
+  first failure - measured on the Android NDK, whose deep paths exceed the
+  classic limit and killed an entire delphi_list. One bad folder must never
+  hide the rest of the tree. }
+function WalkFiles(const ADir, AMask: string): TArray<string>;
+var
+  Acc: TStringList;
+
+  procedure Recurse(const D: string);
+  var
+    F, Sub: string;
+  begin
+    try
+      for F in TDirectory.GetFiles(D, AMask, TSearchOption.soTopDirectoryOnly) do
+        Acc.Add(F);
+    except
+      // unreadable folder: skip its files, still try its children
+    end;
+    try
+      for Sub in TDirectory.GetDirectories(D) do
+        Recurse(Sub);
+    except
+      // cannot enumerate children: nothing else to do here
+    end;
+  end;
+
+begin
+  Acc := TStringList.Create;
+  try
+    Recurse(ADir);
+    Result := Acc.ToStringArray;
+  finally
+    Acc.Free;
+  end;
+end;
+
 function IsIdentChar(C: Char): Boolean; inline;
 begin
   Result := ((C >= 'a') and (C <= 'z')) or ((C >= 'A') and (C <= 'Z')) or
@@ -280,7 +317,7 @@ begin
   FilesScanned := 0;
   try
     for Mask in DEFAULT_MASKS do
-      for F in TDirectory.GetFiles(Params.Root, Mask, TSearchOption.soAllDirectories) do
+      for F in WalkFiles(Params.Root, Mask) do
       begin
         if SkipIdeArtifacts(F) then
           Continue;
@@ -345,7 +382,7 @@ function TDelphiListTool.ExecuteWithParams(const Params: TDelphiListParams): str
 var
   Return: TJSONObject;
   Arr: TJSONArray;
-  F, Mask: string;
+  F, Mask, Root: string;
   Masks: TArray<string>;
   Entry: TJSONObject;
   Total: Integer;
@@ -353,8 +390,15 @@ begin
   Result := ReadPathDenied(Params.Root); // listing may enter the library zone
   if Result <> '' then
     Exit;
-  if not TDirectory.Exists(Params.Root) then
-    Exit('error: directory not found: ' + Params.Root);
+  // Canonicalize before walking: otherwise a root carrying "..\" segments is
+  // echoed literally in every returned path (field round 4, R4-C).
+  try
+    Root := TPath.GetFullPath(Params.Root);
+  except
+    Root := Params.Root;
+  end;
+  if not TDirectory.Exists(Root) then
+    Exit('error: directory not found: ' + Root);
 
   if Params.Dirs then
   begin
@@ -362,7 +406,7 @@ begin
     Arr := TJSONArray.Create;
     Total := 0;
     try
-      for F in TDirectory.GetDirectories(Params.Root) do
+      for F in TDirectory.GetDirectories(Root) do
       begin
         if SkipIdeArtifacts(F + '\') or
            TPath.GetFileName(F).StartsWith('.') or
@@ -394,7 +438,7 @@ begin
   Total := 0;
   try
     for Mask in Masks do
-      for F in TDirectory.GetFiles(Params.Root, Mask.Trim, TSearchOption.soAllDirectories) do
+      for F in WalkFiles(Root, Mask.Trim) do
       begin
         if SkipIdeArtifacts(F) then
           Continue;
@@ -404,9 +448,16 @@ begin
           Entry := TJSONObject.Create;
           Arr.Add(Entry);
           Entry.AddPair('path', F);
-          Entry.AddPair('size', TJSONNumber.Create(TFile.GetSize(F)));
-          Entry.AddPair('modified',
-            FormatDateTime('yyyy-mm-dd hh:nn:ss', TFile.GetLastWriteTime(F)));
+          // Size/date can fail on paths past the classic length limit (the
+          // Android NDK is full of them) - measured: one such file aborted
+          // the whole listing. The entry still goes out, just without them.
+          try
+            Entry.AddPair('size', TJSONNumber.Create(TFile.GetSize(F)));
+            Entry.AddPair('modified',
+              FormatDateTime('yyyy-mm-dd hh:nn:ss', TFile.GetLastWriteTime(F)));
+          except
+            Entry.AddPair('note', 'size/date unavailable (path too long?)');
+          end;
         end;
       end;
     Return.AddPair('total', TJSONNumber.Create(Total));
@@ -664,6 +715,17 @@ begin
         'Roots configured)')
     else
       Return.AddPair('jail', 'active');
+    // What may be READ beyond the roots: the RAD Studio installations, the
+    // IDE library search paths and the GetIt catalog repositories. Announced
+    // because "anything outside is refused" was not the whole truth for
+    // reading tools (field round 4, R4-B).
+    var ExtraArr := TJSONArray.Create;
+    Return.AddPair('readableExtra', ExtraArr);
+    for R in LibraryReadRoots do
+      ExtraArr.Add(ExcludeTrailingPathDelimiter(R));
+    Return.AddPair('readableExtraNote', 'Read-only territory: RTL/VCL/FMX ' +
+      'sources, installed components and SDKs. Reading tools may enter it; ' +
+      'writing tools never can.');
     if IsReadOnlyNow then
       Return.AddPair('access', 'read-only')
     else
@@ -737,7 +799,7 @@ begin
       if (RootDir.Trim = '') or not TDirectory.Exists(RootDir.Trim) then
         Continue;
       for Mask in TArray<string>.Create('*.dproj', '*.groupproj') do
-        for F in TDirectory.GetFiles(RootDir.Trim, Mask, TSearchOption.soAllDirectories) do
+        for F in WalkFiles(RootDir.Trim, Mask) do
         begin
           if SkipIdeArtifacts(F) then
             Continue;
@@ -1067,7 +1129,7 @@ begin
   Zip := TZipFile.Create;
   try
     Zip.Open(OutZip, zmWrite);
-    for F in TDirectory.GetFiles(Dir, '*', TSearchOption.soAllDirectories) do
+    for F in WalkFiles(Dir, '*') do
     begin
       if SameText(TPath.GetExtension(F), '.dcu') then
         Continue;

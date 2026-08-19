@@ -185,6 +185,35 @@ if RTL:
 else:
     print('SKIP - lib: fuentes RTL no encontradas en esta maquina')
 
+# --- GetIt packages / catalog repository: the library zone must cover them
+#     (the Library Search Path uses $(BDSCatalogRepository*) macros, and the
+#     useful material - sources, SDKs - hangs off the repository root) ---
+CAT = None
+for cand in (r'C:\Users\Public\Documents\Embarcadero\Studio\37.0\CatalogRepository',
+             r'C:\Users\Public\Documents\Embarcadero\Studio\23.0\CatalogRepository'):
+    if os.path.isdir(cand):
+        CAT = cand
+        break
+if CAT:
+    out = call('delphi_list', {"root": CAT, "pattern": "*"})
+    check('lib: repositorio de catalogo (paquetes GetIt) legible', not denied(out), out[:150])
+    pkg = None
+    for d in os.listdir(CAT):
+        src = os.path.join(CAT, d)
+        if os.path.isdir(src) and d.lower().startswith('fmxlinux'):
+            pkg = src
+            break
+    if pkg:
+        out = call('delphi_list', {"root": pkg, "pattern": "*.pas"})
+        check('lib: fuentes de un paquete GetIt (FmxLinux) legibles',
+              not denied(out) and '.pas' in out, out[:150])
+        out = call('delphi_edit', {"path": os.path.join(pkg, 'x.pas'), "createunit": True})
+        check('lib: ESCRIBIR en un paquete GetIt vetado', denied(out), out[:150])
+    else:
+        print('SKIP - lib: FmxLinux no instalado en esta maquina')
+else:
+    print('SKIP - lib: repositorio de catalogo no encontrado')
+
 # --- git args: file-writing / path-reading options rejected on read commands
 #     (a jail escape usable even read-only; found in the field audit) ---
 def gitclean(out):

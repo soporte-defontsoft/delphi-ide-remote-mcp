@@ -304,6 +304,34 @@ out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -
 check('git: log normal sigue funcionando (sin falso positivo)',
       'RECHAZADO' not in out, out[:120])
 
+# ---- R4-A: fetch virtualizes its path, base64 payload untouched -----------
+import base64 as _b64
+out = call('delphi_fetch', {"path": V_PAS, "offset": 0, "maxbytes": 64})
+try:
+    fd = json.loads(out)
+except Exception:
+    fd = {}
+check('R4-A: fetch devuelve el path virtualizado',
+      fd.get('path', '').lower().startswith('srv' + DRIVE.lower() + ':'), out[:150])
+ok_b64 = False
+try:
+    _b64.b64decode(fd.get('chunkBase64', ''), validate=True)
+    ok_b64 = True
+except Exception:
+    pass
+check('R4-A: el base64 sigue siendo decodificable (mascara inocua)', ok_b64, out[:120])
+
+# ---- R4-B: workspace announces the readable library zone ------------------
+out = call('delphi_workspace', {})
+ws2 = json.loads(out)
+check('R4-B: workspace publica readableExtra',
+      isinstance(ws2.get('readableExtra'), list) and len(ws2['readableExtra']) > 0, out[:200])
+check('R4-B: readableExtra tambien virtualizado', (DRIVE + ':\\') not in out, out[:200])
+
+# ---- R4-C: list canonicalizes, no '..' echoed back ------------------------
+out = call('delphi_list', {"root": os.path.join(INSIDE, 'sub', '..'), "pattern": "*.pas"})
+check('R4-C: la salida de list no arrastra ".."', '..' not in out, out[:150])
+
 # ---- shutdown main server --------------------------------------------------
 proc.stdin.close()
 proc.wait(timeout=15)

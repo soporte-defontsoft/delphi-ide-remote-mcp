@@ -7,6 +7,9 @@ unit Lsp.Discovery;
 
 interface
 
+uses
+  System.Classes;
+
 type
   TRadStudioInfo = record
     Version: string;   // e.g. '37.0'
@@ -15,6 +18,18 @@ type
     RsVarsBat: string;    // '' when rsvars.bat is missing
     function Found: Boolean;
   end;
+
+{ The IDE's macro table for an install: HKCU\...\BDS\<ver>\Environment
+  Variables, filled into ADest as NAME=VALUE. This is the AUTHORITATIVE
+  source for macros used in library paths - notably
+  $(BDSCatalogRepositoryAllUsers), where every GetIt package lives (FmxLinux,
+  Android SDKs, the PAServer installers). Never hardcode a macro list. }
+procedure IdeEnvironmentVars(const AVersion: string; ADest: TStrings);
+
+{ Platforms with a Library Search Path registered for that install (Win32,
+  Win64, Linux64, OSX64, Android64, iOSDevice64...). Enumerated, never a
+  fixed list: each installation exposes its own set. }
+function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
 
 { Generic reader of the IDE's per-user configuration (HKCU\...\BDS\<ver>\...).
   ASubKey is relative to the version key (e.g. 'Editor', 'PlatformSDKs',
@@ -60,7 +75,6 @@ implementation
 
 uses
   System.SysUtils,
-  System.Classes,
   System.StrUtils,
   System.Math,
   System.IOUtils,
@@ -204,6 +218,55 @@ begin
       [AVersion, APlatform])) and Reg.ValueExists('Search Path') then
       Result := Reg.ReadString('Search Path');
   finally
+    Reg.Free;
+  end;
+end;
+
+procedure IdeEnvironmentVars(const AVersion: string; ADest: TStrings);
+var
+  Reg: TRegistry;
+  Names: TStringList;
+  N: string;
+begin
+  if ADest = nil then
+    Exit;
+  Reg := TRegistry.Create(KEY_READ);
+  Names := TStringList.Create;
+  try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    if not Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\Environment Variables',
+      [AVersion])) then
+      Exit;
+    Reg.GetValueNames(Names);
+    for N in Names do
+      try
+        ADest.Values[N] := Reg.ReadString(N);
+      except
+        // a non-string value is simply not a macro
+      end;
+  finally
+    Names.Free;
+    Reg.Free;
+  end;
+end;
+
+function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
+var
+  Reg: TRegistry;
+  Keys: TStringList;
+begin
+  Result := nil;
+  Reg := TRegistry.Create(KEY_READ);
+  Keys := TStringList.Create;
+  try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    if not Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\Library',
+      [AVersion])) then
+      Exit;
+    Reg.GetKeyNames(Keys);
+    Result := Keys.ToStringArray;
+  finally
+    Keys.Free;
     Reg.Free;
   end;
 end;
