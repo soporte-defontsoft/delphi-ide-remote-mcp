@@ -36,10 +36,14 @@ without corrupting them:
 - [ ] Automatic pre-edit backups with 2-step restore
 - [ ] Hard rejection of binary designer files (TPF0), `__history/`/`__recovery/` artifacts
 
-## Phase 5 — Resident service + GUI
+## Phase 5 — Resident service + GUI (the remote-work host)
+Primary use case: the Windows machine (with RAD Studio) stays on as a server; agents connect
+over MCP Streamable HTTP from anywhere — including Linux clients that have no access to the
+Windows filesystem.
 - [ ] Workspace Manager: multi-workspace, warm instances, request queue, LRU, idle shutdown, hang kill+respawn
-- [ ] Streamable HTTP transport (localhost by default)
-- [ ] Dual host: Windows service + VCL GUI monitor (log, workspaces, memory, manual reload)
+- [ ] Streamable HTTP transport: localhost by default, configurable LAN bind + **Bearer token auth** (recommended exposure: VPN only)
+- [ ] Remote file toolset so a remote agent needs no share: `delphi_read` (encoding-aware), `delphi_search` (skips `__history/`, build dirs), `delphi_list`
+- [ ] Dual host: Windows service + VCL tray app (starts minimized to tray — the icon is the "it's running" indicator; menu: workspaces, log, reload, exit)
 
 ## Phase 6 — Publication
 - [ ] English docs pass, config examples (Claude Code / Claude Desktop), demo project
