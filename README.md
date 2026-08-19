@@ -4,7 +4,7 @@ A Model Context Protocol (MCP) server that gives AI agents **real semantic under
 
 Runs as a **resident Windows service (or GUI app)** that keeps language-server indexes warm across agent sessions, serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP — with a classic stdio mode as well.
 
-> **Status: design phase.** Architecture validated end-to-end against DelphiLSP 37.0 (RAD Studio 13). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on.
+> **Status: BETA.** Functional and covered by 80+ end-to-end checks against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
 
 ## Why
 

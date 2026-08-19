@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.4.0-beta] - 2026-08-19
+
+The project is now explicitly labeled **beta**: functional and test-covered,
+but young — expect rough edges and breaking changes between minor versions.
+
+### Added
+- `delphi_package` (tool 17): zip a build-output directory on the server
+  into a single deploy artifact (recursive, `.dcu` intermediates excluded),
+  ready to download with one `delphi_fetch`. The standard route to run GUI
+  apps on the client machine: `delphi_build` → `delphi_package` →
+  `delphi_fetch`.
+
 ## [0.3.0] - 2026-08-19
 
 First complete release: total control of Delphi and its projects from a

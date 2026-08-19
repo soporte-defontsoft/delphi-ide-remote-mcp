@@ -114,6 +114,18 @@ check('form: registrado en uses y CreateForm',
 ok, err = build_ok(os.path.join(VDIR, 'HolaVcl.dproj'))
 check('build: VCL con form nuevo COMPILA', ok, err)
 
+# --- package the deploy and verify the zip ---
+import zipfile
+out = call('delphi_package', {"dir": os.path.join(VDIR, 'Win64', 'Debug')})
+try:
+    d = json.loads(out)
+    zp = d['zip']
+    names = zipfile.ZipFile(zp).namelist()
+    check('package: zip creado con el exe', 'HolaVcl.exe' in names, names)
+    check('package: sin dcu dentro', not any(n.endswith('.dcu') for n in names), names)
+except Exception:
+    check('package: parsea', False, out[:200])
+
 # --- new unit in a NEW subfolder of an existing project ---
 out = call('delphi_edit', {"path": os.path.join(VDIR, 'nucleo', 'UUtilidades.pas'),
                            "createunit": True})

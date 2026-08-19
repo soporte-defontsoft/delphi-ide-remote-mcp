@@ -16,6 +16,7 @@ uses
   System.JSON,
   System.Hash,
   System.NetEncoding,
+  System.Zip,
   MCPServer.Tool.Base,
   MCPServer.Types;
 
@@ -148,6 +149,24 @@ type
   TDelphiFetchTool = class(TMCPToolBase<TDelphiFetchParams>)
   protected
     function ExecuteWithParams(const Params: TDelphiFetchParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
+  TDelphiPackageParams = class
+  private
+    FDir: string;
+    FOutFile: string;
+  public
+    [SchemaDescription('Directory to package (e.g. the build output Win64\Debug). Recursive; *.dcu and dcu\ intermediates excluded')]
+    property Dir: string read FDir write FDir;
+    [SchemaDescription('Optional zip path (default: sibling of dir, named <dirname>-deploy.zip). Must be inside the workspace roots')]
+    property OutFile: string read FOutFile write FOutFile;
+  end;
+
+  TDelphiPackageTool = class(TMCPToolBase<TDelphiPackageParams>)
+  protected
+    function ExecuteWithParams(const Params: TDelphiPackageParams): string; override;
   public
     constructor Create; override;
   end;
@@ -659,7 +678,83 @@ begin
   end;
 end;
 
+{ TDelphiPackageTool }
+
+constructor TDelphiPackageTool.Create;
+begin
+  inherited;
+  FName := 'delphi_package';
+  FDescription := 'Zip a build-output directory ON the server into a single ' +
+    'deploy artifact (recursive, *.dcu intermediates excluded), ready to ' +
+    'download with ONE delphi_fetch. The standard way to bring a GUI app to ' +
+    'the client machine: delphi_build -> delphi_package -> delphi_fetch.';
+end;
+
+function TDelphiPackageTool.ExecuteWithParams(const Params: TDelphiPackageParams): string;
+var
+  Dir, OutZip, F, Rel: string;
+  Zip: TZipFile;
+  Return: TJSONObject;
+  Count: Integer;
+  TotalBytes: Int64;
+begin
+  Dir := TPath.GetFullPath(Params.Dir);
+  Result := PathDenied(Dir);
+  if Result <> '' then
+    Exit;
+  if not TDirectory.Exists(Dir) then
+    Exit('error: directory not found: ' + Dir);
+
+  if Params.OutFile <> '' then
+    OutZip := TPath.GetFullPath(Params.OutFile)
+  else
+    OutZip := TPath.Combine(TPath.GetDirectoryName(ExcludeTrailingPathDelimiter(Dir)),
+      TPath.GetFileName(ExcludeTrailingPathDelimiter(Dir)) + '-deploy.zip');
+  Result := PathDenied(OutZip);
+  if Result <> '' then
+    Exit;
+  if TFile.Exists(OutZip) then
+    TFile.Delete(OutZip); // packages are disposable artifacts, always fresh
+
+  Count := 0;
+  TotalBytes := 0;
+  Zip := TZipFile.Create;
+  try
+    Zip.Open(OutZip, zmWrite);
+    for F in TDirectory.GetFiles(Dir, '*', TSearchOption.soAllDirectories) do
+    begin
+      if SameText(TPath.GetExtension(F), '.dcu') then
+        Continue;
+      if F.ToLower.Contains('\dcu\') then
+        Continue;
+      if SameText(TPath.GetFullPath(F), OutZip) then
+        Continue;
+      Rel := F.Substring(Length(IncludeTrailingPathDelimiter(Dir))).Replace('\', '/');
+      Zip.Add(F, Rel);
+      Inc(Count);
+      Inc(TotalBytes, TFile.GetSize(F));
+    end;
+    Zip.Close;
+  finally
+    Zip.Free;
+  end;
+
+  Return := TJSONObject.Create;
+  try
+    Return.AddPair('zip', OutZip);
+    Return.AddPair('files', TJSONNumber.Create(Count));
+    Return.AddPair('uncompressedBytes', TJSONNumber.Create(TotalBytes));
+    Return.AddPair('zipBytes', TJSONNumber.Create(TFile.GetSize(OutZip)));
+    Return.AddPair('next', 'download it with delphi_fetch (chunked, sha256-verified)');
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
 initialization
+  TMCPRegistry.RegisterTool('delphi_package',
+    function: IMCPTool begin Result := TDelphiPackageTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_fetch',
     function: IMCPTool begin Result := TDelphiFetchTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_search',
