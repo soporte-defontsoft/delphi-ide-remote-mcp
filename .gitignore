@@ -35,3 +35,6 @@ __recovery/
 *.log
 *.trace
 tmp/
+
+# Reference clones (not part of this project)
+gdk-mcp/
