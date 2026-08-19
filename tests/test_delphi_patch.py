@@ -10,7 +10,7 @@ Exit code 0 = all green.
 import json, subprocess, threading, queue, time, os, sys, tempfile
 
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    os.path.dirname(__file__), '..', 'src', 'Win64', 'Debug', 'DelphiLspMcp.exe')
+    os.path.dirname(__file__), '..', 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
 DIR = os.path.join(tempfile.gettempdir(), 'delphi-patch-tests')
 os.makedirs(DIR, exist_ok=True)

@@ -289,9 +289,16 @@ begin
   if not VaultConfigured then
     Exit;
   // Read-only by DEFAULT: writing to the knowledge vault must be opted into.
+  // The env var wins in BOTH directions - it only overrode the ini when set to
+  // "0", so a settings.ini with ReadOnly=0 could not be forced back to
+  // read-only from the environment (which is how the test batteries ask for a
+  // read-only vault).
   RO := True;
-  if GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY') = '0' then
+  var EnvRO := GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY');
+  if EnvRO = '0' then
     RO := False
+  else if EnvRO <> '' then
+    RO := True
   else
   begin
     IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');

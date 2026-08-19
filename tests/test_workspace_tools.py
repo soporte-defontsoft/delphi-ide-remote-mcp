@@ -8,7 +8,7 @@ import json, subprocess, threading, queue, time, os, sys, base64, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 SRC = os.path.join(REPO, 'src')
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SRC, 'Win64', 'Debug', 'DelphiLspMcp.exe')
+EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SRC, 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
 proc = subprocess.Popen([EXE], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')

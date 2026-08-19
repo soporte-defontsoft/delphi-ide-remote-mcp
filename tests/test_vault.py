@@ -13,7 +13,7 @@ import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, glob
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Win64', 'Debug', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
 VAULT = os.path.join(tempfile.gettempdir(), 'delphi-vault-tests-%d' % os.getpid())
 shutil.rmtree(VAULT, ignore_errors=True)

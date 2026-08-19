@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.26.2-beta] - 2026-08-20
+
+### Changed
+- **All build output now lands under `Compiled/`** (`Compiled/<Platform>/<Config>`
+  for binaries, `Compiled/Dcu/...` for units) instead of scattering
+  `Win32/`/`Win64/` folders through the source tree - the layout `delphi_config
+  set-output` produces, now applied to this project itself. `Compiled/` added to
+  `.gitignore` (binaries and `settings.ini` were already ignored by name).
+
+### Fixed
+- **`DELPHI_MCP_VAULT_READONLY` only overrode the ini when set to `0`.** Setting
+  it to `1` fell through to `settings.ini`, so a writable vault could not be
+  forced back to read-only from the environment. The variable now wins in both
+  directions.
+- The test batteries defaulted to the **Debug** executable, which sits next to
+  the operator's production `settings.ini` and so inherited its jail and vault.
+  They now default to the **Release** build, which carries no configuration -
+  the convention that was already in use, now the default so the batteries run
+  with no arguments.
+
+7 E2E batteries, **390 checks**.
+
 ## [0.26.1-beta] - 2026-08-20
 
 ### Security

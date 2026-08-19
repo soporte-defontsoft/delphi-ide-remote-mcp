@@ -7,7 +7,7 @@ import json, subprocess, time, os, sys, urllib.request, urllib.error
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    HERE, '..', 'src', 'Win64', 'Debug', 'DelphiLspMcp.exe')
+    HERE, '..', 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 PORT = 3999
 URL = 'http://127.0.0.1:%d/mcp' % PORT
 TOKEN = 'test-token-123'
