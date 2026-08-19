@@ -150,10 +150,68 @@ out = call('delphi_git', {"repo": REPO, "command": "branch"})
 check('git: branch', out.startswith('exit=0') and 'main' in out, out[:150])
 out = call('delphi_git', {"repo": REPO, "command": "diff", "args": "--stat"})
 check('git: diff --stat', out.startswith('exit='), out[:120])
-out = call('delphi_git', {"repo": REPO, "command": "push"})
+out = call('delphi_git', {"repo": REPO, "command": "rebase"})
 check('git: comando fuera de whitelist rechaza', out.startswith('error: unknown command'), out[:120])
 out = call('delphi_git', {"repo": REPO, "command": "log", "args": "; del *"})
 check('git: metacaracteres rechazados', out.startswith('error: shell metacharacters'), out[:120])
+
+# --- git init / tag / push (in a THROWAWAY dir - never against this repo) ---
+import tempfile, shutil
+tmpgit = tempfile.mkdtemp(prefix='mcp-git-')
+try:
+    out = call('delphi_git', {"repo": tmpgit, "command": "init"})
+    check('git: init crea repo', out.startswith('exit=0'), out[:150])
+    out = call('delphi_git', {"repo": tmpgit, "command": "status"})
+    check('git: status tras init', out.startswith('exit=0'), out[:150])
+    out = call('delphi_git', {"repo": tmpgit, "command": "tag"})
+    check('git: tag sin args lista (permitido)', out.startswith('exit=0'), out[:150])
+    out = call('delphi_git', {"repo": tmpgit, "command": "push"})
+    check('git: push permitido (falla sin remote, pero NO por whitelist)',
+          out.startswith('exit=') and 'unknown command' not in out, out[:150])
+finally:
+    shutil.rmtree(tmpgit, ignore_errors=True)
+
+# --- delphi_textedit (non-Delphi text files) ---
+tmptxt = tempfile.mkdtemp(prefix='mcp-txt-')
+try:
+    md = os.path.join(tmptxt, 'README.md')
+    out = call('delphi_textedit', {"path": md, "create": True,
+        "content": "# Titulo\r\nlinea con acentos: gestoria admision\r\nfin\r\n"})
+    check('textedit: create .md', out.startswith('CREADO'), out[:150])
+    out = call('delphi_textedit', {"path": md, "create": True, "content": "x"})
+    check('textedit: create nunca sobreescribe', 'RECHAZADO' in out, out[:150])
+    out = call('delphi_textedit', {"path": md,
+        "old": "linea con acentos: gestoria admision",
+        "new": "linea EDITADA por MCP"})
+    check('textedit: edit con ancla', out.startswith('OK'), out[:200])
+    body = open(md, 'rb').read().decode('utf-8')
+    check('textedit: contenido correcto en disco',
+          'linea EDITADA por MCP' in body and '# Titulo' in body and 'fin' in body, body[:120])
+    check('textedit: CRLF preservado', '\r\n' in body, repr(body[:40]))
+    out = call('delphi_textedit', {"path": md, "old": "no existe esta linea",
+                                   "new": "x"})
+    check('textedit: ancla inexistente rechaza', 'RECHAZADO' in out, out[:150])
+    out = call('delphi_textedit', {"path": md, "new": "reescritura entera"})
+    check('textedit: reescritura sin ancla rechaza', 'RECHAZADO' in out, out[:150])
+    out = call('delphi_textedit', {"path": os.path.join(SRC, 'Lsp.Guard.pas'),
+                                   "old": "interface", "new": "x"})
+    check('textedit: .pas vetado (usa delphi_edit)', 'RECHAZADO' in out and 'delphi_edit' in out, out[:150])
+    out = call('delphi_textedit', {"path": os.path.join(SRC, 'DelphiLspMcp.dproj'),
+                                   "old": "x", "new": "y"})
+    check('textedit: .dproj vetado', 'RECHAZADO' in out, out[:150])
+    html = os.path.join(tmptxt, 'index.html')
+    out = call('delphi_textedit', {"path": html, "create": True,
+        "content": "<html><body>hola</body></html>\r\n"})
+    check('textedit: crea .html (proyectos web)', out.startswith('CREADO'), out[:120])
+    out = call('delphi_textedit', {"path": html,
+        "old": "<html><body>hola</body></html>",
+        "new": "<html><body>hola MCP</body></html>"})
+    check('textedit: edita .html', out.startswith('OK'), out[:150])
+    # backup exists next to the file
+    bdir = os.path.join(tmptxt, '__delphi-patch')
+    check('textedit: backup automatico creado', os.path.isdir(bdir), bdir)
+finally:
+    shutil.rmtree(tmptxt, ignore_errors=True)
 out = call('delphi_git', {"repo": REPO, "command": "commit"})
 check('git: commit sin message rechaza', 'needs the "message"' in out, out[:120])
 

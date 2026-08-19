@@ -146,6 +146,25 @@ check('fetch: fuera vetado', denied(out), out[:150])
 out = call('delphi_fetch', {"path": IN_PAS})
 check('fetch: dentro permitido', 'chunkBase64' in out, out[:120])
 
+# --- library read zone: RTL/component sources are READABLE despite the jail,
+#     but NEVER writable ---
+RTL = None
+for cand in (r'C:\Program Files (x86)\Embarcadero\Studio\37.0\source\rtl\sys\System.SysUtils.pas',
+             r'C:\Program Files (x86)\Embarcadero\Studio\23.0\source\rtl\sys\System.SysUtils.pas'):
+    if os.path.exists(cand):
+        RTL = cand
+        break
+if RTL:
+    out = call('delphi_read', {"path": RTL, "fromline": 1, "toline": 5})
+    check('lib: leer fuente RTL permitido pese a la jaula', not denied(out) and '|' in out, out[:150])
+    out = call('delphi_edit', {"path": RTL, "old": "interface", "new": "x"})
+    check('lib: EDITAR fuente RTL vetado siempre', denied(out), out[:150])
+    out = call('delphi_search', {"root": os.path.dirname(RTL), "query": "SysUtils",
+                                 "maxresults": 3})
+    check('lib: buscar en fuentes RTL permitido', not denied(out), out[:150])
+else:
+    print('SKIP - lib: fuentes RTL no encontradas en esta maquina')
+
 print()
 print('== guard battery: %d PASS / %d FAIL ==' % (P, F))
 proc.stdin.close()

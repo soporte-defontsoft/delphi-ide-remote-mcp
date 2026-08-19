@@ -63,8 +63,8 @@ try:
                 'delphi_fetch', 'delphi_git', 'delphi_hover', 'delphi_list',
                 'delphi_package', 'delphi_projects', 'delphi_read',
                 'delphi_references', 'delphi_run', 'delphi_search',
-                'delphi_symbols']
-    check('http: tools/list = 17 tools', names == expected, names)
+                'delphi_symbols', 'delphi_textedit']
+    check('http: tools/list = 18 tools', names == expected, names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",
@@ -162,6 +162,23 @@ try:
         code, body = call('delphi_git', {'repo': REPO, 'command': 'branch',
                                          'args': 'nueva-rama'}, RO_TOKEN)
         check('ro: git branch con args RECHAZADO en RO', 'SOLO LECTURA' in body,
+              '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_textedit', {'path': tmpdir3 + '\\x.md',
+                                              'create': True,
+                                              'content': 'nope'}, RO_TOKEN)
+        check('ro: delphi_textedit RECHAZADO en RO', 'SOLO LECTURA' in body,
+              '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'tag'},
+                          RO_TOKEN)
+        check('ro: git tag sin args (listar) permitido en RO',
+              code == 200 and 'SOLO LECTURA' not in body,
+              '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'push'},
+                          RO_TOKEN)
+        check('ro: git push RECHAZADO en RO', 'SOLO LECTURA' in body,
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',

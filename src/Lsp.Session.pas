@@ -262,7 +262,7 @@ var
   FullPath, Key, DocKey, RootDir: string;
 begin
   FullPath := TPath.GetFullPath(AFilePath);
-  var Denied := PathDenied(FullPath);
+  var Denied := ReadPathDenied(FullPath); // navigating RTL/components is reading
   if Denied <> '' then
     raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then
@@ -292,7 +292,7 @@ var
   Stale: TJSONObject;
 begin
   FullPath := TPath.GetFullPath(AFilePath);
-  var Denied := PathDenied(FullPath);
+  var Denied := ReadPathDenied(FullPath); // linting never writes the file
   if Denied <> '' then
     raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then

@@ -6,6 +6,39 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.6.0-beta] - 2026-08-19
+
+Born from a dogfooding audit: "could this MCP have built its own project?"
+The Delphi cycle could; docs, tests and release engineering could not. Now
+they can.
+
+### Added
+- **`delphi_textedit` (tool 18)**: safe editing of plain-text NON-Delphi
+  files (.md .html .js .css .sql .py .bat .ini .json ... any plain text,
+  denylist not whitelist) with the same discipline as `delphi_edit` —
+  one-full-line unique anchor with hints and atline tie-break, encoding and
+  EOL preserved, automatic backup, atomic write, no whole-file rewrites —
+  plus a CREATE mode that never overwrites. Delphi sources/designers/.dproj
+  and binaries are refused.
+- **`delphi_git`: `init`, `push`, `tag`** added to the whitelist (push uses
+  the credentials/remotes stored on the server — consistent with the
+  centralized model; tag is annotated when "message" is given). In read-only
+  mode `tag`/`branch` without arguments (pure listing) pass; everything else
+  that writes stays refused.
+- **Library read zone**: with a jail configured, READING tools (read /
+  search / list / fetch / LSP navigation) also accept the RAD Studio
+  installation and the IDE Library Search Path directories, so agents can
+  follow definitions into RTL/VCL sources and read installed components'
+  code. Writing tools can never touch that zone.
+- **Config Fabricator**: merges the IDE's global Library Search Path
+  (registry) into fabricated settings, so symbols of installed third-party
+  components resolve without the project repeating their paths.
+
+### Tests
+- 124 checks across the same five batteries (textedit lifecycle including
+  .html, git init/tag/push against a throwaway repo, library-zone
+  read-vs-write, read-only classification of the new tools).
+
 ## [0.5.0-beta] - 2026-08-19
 
 ### Added

@@ -86,9 +86,11 @@
         <DCCReference Include="Lsp.References.pas"/>
         <DCCReference Include="Lsp.BuildRunner.pas"/>
         <DCCReference Include="Lsp.Patch.pas"/>
+        <DCCReference Include="Lsp.TextEdit.pas"/>
         <DCCReference Include="Mcp.Tools.DelphiLsp.pas"/>
         <DCCReference Include="Mcp.Tools.DelphiExtra.pas"/>
         <DCCReference Include="Mcp.Tools.DelphiPatch.pas"/>
+        <DCCReference Include="Mcp.Tools.TextEdit.pas"/>
         <DCCReference Include="Mcp.Tools.Workspace.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

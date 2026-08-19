@@ -14,6 +14,7 @@ uses
   System.IniFiles,
   System.IOUtils,
   System.JSON,
+  System.Math,
   System.Hash,
   System.NetEncoding,
   System.Zip,
@@ -72,11 +73,11 @@ type
   public
     [SchemaDescription('Path of the git repository (or any path inside it)')]
     property Repo: string read FRepo write FRepo;
-    [SchemaDescription('One of: status | diff | log | show | branch | add | commit')]
+    [SchemaDescription('One of: status | diff | log | show | branch | add | commit | init | push | tag')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected')]
     property Args: string read FArgs write FArgs;
-    [SchemaDescription('commit only: the commit message')]
+    [SchemaDescription('commit: the commit message. tag: makes the tag annotated with this message')]
     property Message: string read FMessage write FMessage;
   end;
 
@@ -213,7 +214,7 @@ var
   Mask: string;
   Entry: TJSONObject;
 begin
-  Result := PathDenied(Params.Root);
+  Result := ReadPathDenied(Params.Root); // searching may enter the library zone
   if Result <> '' then
     Exit;
   if not TDirectory.Exists(Params.Root) then
@@ -301,7 +302,7 @@ var
   Entry: TJSONObject;
   Total: Integer;
 begin
-  Result := PathDenied(Params.Root);
+  Result := ReadPathDenied(Params.Root); // listing may enter the library zone
   if Result <> '' then
     Exit;
   if not TDirectory.Exists(Params.Root) then
@@ -377,8 +378,9 @@ begin
   FName := 'delphi_git';
   FDescription := 'Whitelisted git operations on a repository of this ' +
     'machine, so a remote agent can inspect and version its work: status, ' +
-    'diff, log, show, branch, add, commit (message goes in the "message" ' +
-    'parameter). No arbitrary git commands, no shell.';
+    'diff, log, show, branch, add, commit, init, push, tag (commit/tag ' +
+    'message goes in the "message" parameter; push uses the credentials and ' +
+    'remotes stored on the server). No arbitrary git commands, no shell.';
 end;
 
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
@@ -433,11 +435,27 @@ begin
     GitArgs := Format('commit -m "%s" %s',
       [Params.Message.Replace('"', ''''''), Params.Args]);
   end
+  else if Cmd = 'init' then
+    GitArgs := 'init ' + Params.Args
+  else if Cmd = 'push' then
+    // uses the SERVER's stored credentials/remotes - consistent with the
+    // centralized model (the repo lives next to the compiler)
+    GitArgs := 'push ' + Params.Args
+  else if Cmd = 'tag' then
+  begin
+    if Params.Message.Trim <> '' then
+      // -m makes it annotated; args = tag name (and options)
+      GitArgs := Format('tag -m "%s" %s',
+        [Params.Message.Replace('"', ''''''), Params.Args])
+    else
+      GitArgs := 'tag ' + Params.Args; // no args = list tags
+  end
   else
     Exit('error: unknown command "' + Params.Command +
-      '". Allowed: status | diff | log | show | branch | add | commit');
+      '". Allowed: status | diff | log | show | branch | add | commit | init | push | tag');
 
-  Output := RunCaptured(Format('git.exe -C "%s" %s', [Repo, GitArgs]), 60000, ExitCode);
+  Output := RunCaptured(Format('git.exe -C "%s" %s', [Repo, GitArgs]),
+    IfThen(Cmd = 'push', 180000, 60000), ExitCode);
   if Length(Output) > 30000 then
     Output := Copy(Output, 1, 30000) + #10'... (truncated)';
   Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
@@ -616,7 +634,7 @@ var
   Hasher: THashSHA2;
 begin
   FullPath := TPath.GetFullPath(Params.Path);
-  Result := PathDenied(FullPath);
+  Result := ReadPathDenied(FullPath); // downloading is reading
   if Result <> '' then
     Exit;
   if not TFile.Exists(FullPath) then

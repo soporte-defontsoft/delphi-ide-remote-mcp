@@ -358,7 +358,7 @@ var
   Sb: TStringBuilder;
   Cut: string;
 begin
-  Denied := PathDenied(APath);
+  Denied := ReadPathDenied(APath); // reading may enter the library zone
   if Denied <> '' then
     Exit(Denied);
   if not TFile.Exists(APath) then
@@ -445,7 +445,9 @@ begin
       for var E in DESIGNER_EXTS do
         if E = Ext then IsDesigner := True;
       if not IsSource and not IsDesigner then
-        Exit(Format('RECHAZADO: extension "%s" no soportada. Esta tool es solo para ficheros Delphi.', [Ext]));
+        Exit(Format('RECHAZADO: extension "%s" no soportada. Esta tool es solo ' +
+          'para ficheros Delphi; para texto no-Delphi (.md .py .html .js .ini ...) ' +
+          'usa delphi_textedit.', [Ext]));
 
       PLower := A.Path.ToLower.Replace('/', '\');
       if PLower.Contains('\' + BACKUP_SUB + '\') then

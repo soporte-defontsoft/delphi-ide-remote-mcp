@@ -21,8 +21,17 @@ interface
 uses
   System.JSON;
 
-{ '' = allowed; otherwise the rejection message to return to the agent. }
+{ '' = allowed; otherwise the rejection message to return to the agent.
+  This is the WRITE jail: only the configured workspace roots. }
 function PathDenied(const APath: string): string;
+
+{ Like PathDenied but for READING tools (read/search/list/fetch/LSP
+  navigation): the jail is extended with the LIBRARY ZONE - the RAD Studio
+  installation (RTL/VCL sources) and the IDE Library Search Path directories
+  (installed components) - so an agent can follow a definition into
+  System.Classes.pas or read a component's source. Read-only territory:
+  writing tools keep using PathDenied and can never touch it. }
+function ReadPathDenied(const APath: string): string;
 
 { The configured roots (empty array = unrestricted). }
 function WorkspaceRoots: TArray<string>;
@@ -54,7 +63,8 @@ uses
   System.Classes,
   System.StrUtils,
   System.IniFiles,
-  System.IOUtils;
+  System.IOUtils,
+  Lsp.Discovery;
 
 var
   GLoaded: Boolean = False;
@@ -141,11 +151,12 @@ begin
   if not (GProcessReadOnly or GRequestReadOnly) then
     Exit;
   // Fully mutating tools: refused outright in read-only mode.
-  if MatchText(AToolName, ['delphi_edit', 'delphi_create', 'delphi_build',
-    'delphi_run', 'delphi_package']) then
+  if MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
+    'delphi_build', 'delphi_run', 'delphi_package']) then
     Exit(WriteDenied(AToolName));
   // delphi_git is mixed: query commands pass, anything that can change the
-  // repo is refused ("branch" only lists when called without arguments).
+  // repo or the remote is refused ("branch"/"tag" only LIST when called
+  // without arguments; with arguments they create -> write).
   if SameText(AToolName, 'delphi_git') then
   begin
     Cmd := '';
@@ -156,7 +167,7 @@ begin
       AArguments.TryGetValue<string>('args', GitArgs);
     end;
     if MatchText(Cmd, ['status', 'diff', 'log', 'show']) or
-       (SameText(Cmd, 'branch') and (Trim(GitArgs) = '')) then
+       (MatchText(Cmd, ['branch', 'tag']) and (Trim(GitArgs) = '')) then
       Exit;
     Exit(WriteDenied(Trim('delphi_git ' + Cmd)));
   end;
@@ -222,6 +233,80 @@ begin
   Result := Format('RECHAZADO: "%s" esta FUERA de los workspaces permitidos. ' +
     'Este servidor solo opera dentro de: %s (configurado en DELPHI_MCP_ROOTS ' +
     'o settings.ini [Workspace] Roots).', [APath, string.Join(' | ', Roots)]);
+end;
+
+var
+  GLibLoaded: Boolean = False;
+  GLibRoots: TArray<string>;
+
+{ The read-only library zone: RAD Studio installation + IDE Library Search
+  Path directories (installed components), canonicalized. Cached. }
+function LibraryRoots: TArray<string>;
+var
+  Info: TRadStudioInfo;
+  List: TStringList;
+  Plat, Raw, Item, UserDocs, CommonDocs, Expanded: string;
+begin
+  if not GLibLoaded then
+  begin
+    List := TStringList.Create;
+    try
+      Info := DiscoverRadStudio;
+      if Info.Found then
+      begin
+        List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(Info.RootDir)));
+        UserDocs := TPath.Combine(TPath.GetDocumentsPath,
+          'Embarcadero\Studio\' + Info.Version);
+        CommonDocs := TPath.Combine(TPath.GetSharedDocumentsPath,
+          'Embarcadero\Studio\' + Info.Version);
+        for Plat in TArray<string>.Create('Win32', 'Win64') do
+        begin
+          Raw := IdeLibrarySearchPath(Info.Version, Plat);
+          for Item in Raw.Split([';']) do
+          begin
+            Expanded := Item.Trim
+              .Replace('$(BDS)', ExcludeTrailingPathDelimiter(Info.RootDir), [rfReplaceAll, rfIgnoreCase])
+              .Replace('$(BDSLIB)', ExcludeTrailingPathDelimiter(Info.RootDir) + '\lib', [rfReplaceAll, rfIgnoreCase])
+              .Replace('$(BDSUSERDIR)', UserDocs, [rfReplaceAll, rfIgnoreCase])
+              .Replace('$(BDSCOMMONDIR)', CommonDocs, [rfReplaceAll, rfIgnoreCase])
+              .Replace('$(Platform)', Plat, [rfReplaceAll, rfIgnoreCase]);
+            if (Expanded <> '') and not Expanded.Contains('$(') and
+               TPath.IsPathRooted(Expanded) then
+            try
+              Expanded := IncludeTrailingPathDelimiter(TPath.GetFullPath(Expanded));
+              if List.IndexOf(Expanded) < 0 then
+                List.Add(Expanded);
+            except
+              // an unparseable entry never breaks the server
+            end;
+          end;
+        end;
+      end;
+      GLibRoots := List.ToStringArray;
+    finally
+      List.Free;
+    end;
+    GLibLoaded := True;
+  end;
+  Result := GLibRoots;
+end;
+
+function ReadPathDenied(const APath: string): string;
+var
+  Full, R: string;
+begin
+  Result := PathDenied(APath);
+  if Result = '' then
+    Exit;
+  // Outside the jail - but READING library territory is legitimate.
+  try
+    Full := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
+  except
+    Exit; // keep the invalid-path rejection
+  end;
+  for R in LibraryRoots do
+    if StartsText(R, Full) then
+      Exit('');
 end;
 
 end.

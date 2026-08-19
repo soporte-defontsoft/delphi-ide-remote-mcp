@@ -24,6 +24,7 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 | `delphi_diagnostics` | Error Insight on demand: real compiler codes (E/W/H) with exact positions, no build |
 | `delphi_read` | Encoding-correct numbered reads (CP1252 / UTF-8±BOM detected for real) |
 | `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, semantic INSERT (global routine / method with both halves), TPF0 hard-reject, post-write audit |
+| `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms (VCL/FMX) with IDE-equivalent skeletons — buildable immediately |
 | `delphi_build` | Real MSBuild builds with structured errors/warnings |
 | `delphi_run` | Run a built executable on the server and capture its output (jailed to the roots, no shell, hard timeout) |
@@ -31,7 +32,7 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
 | `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style |
 | `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace] Roots=D:\Projects;E:\More`) |
-| `delphi_git` | Whitelisted git operations (status/diff/log/show/branch/add/commit) |
+| `delphi_git` | Whitelisted git operations (status/diff/log/show/branch/add/commit/init/push/tag — push uses the server's stored credentials) |
 
 ## Quickstart
 
@@ -79,10 +80,15 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
   disk-touching tool (read/edit/create/build/lint/search/list/git/LSP) refuses paths outside
   them — including `..\` escapes and prefix cousins. No roots = unrestricted (local trusted
   mode). For remote exposure configure BOTH, and expose over VPN/LAN only.
+- **Library read zone**: READING tools (read/search/list/fetch/LSP navigation) additionally
+  accept the RAD Studio installation and the IDE Library Search Path directories — so an
+  agent can follow a definition into `System.SysUtils.pas` or read an installed component's
+  source. Writing tools can never touch that zone. The Config Fabricator also merges the IDE
+  Library Search Path, so symbols of installed (third-party) components resolve.
 
 ## Tests
 
-`tests/` contains five end-to-end batteries that talk real MCP to the built server (102 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
+`tests/` contains five end-to-end batteries that talk real MCP to the built server (124 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
 
 ## Key design points
 

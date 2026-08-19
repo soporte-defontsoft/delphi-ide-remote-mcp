@@ -18,6 +18,13 @@ type
 
 function DiscoverRadStudio: TRadStudioInfo;
 
+{ The IDE's global Library Search Path for a platform ('Win32'/'Win64'),
+  raw, with its $() variables unexpanded. This is where INSTALLED COMPONENT
+  packages (third-party) register their source/dcu paths - a project using
+  them usually does not repeat those paths in its .dproj, so the Config
+  Fabricator must merge this list to resolve their symbols. '' if absent. }
+function IdeLibrarySearchPath(const AVersion, APlatform: string): string;
+
 implementation
 
 uses
@@ -92,6 +99,23 @@ begin
   if TryRoot(HKEY_LOCAL_MACHINE, 0, Result) then Exit;
   if TryRoot(HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY, Result) then Exit;
   Result := Default(TRadStudioInfo);
+end;
+
+function IdeLibrarySearchPath(const AVersion, APlatform: string): string;
+var
+  Reg: TRegistry;
+begin
+  Result := '';
+  // Library settings are per-user: HKCU only (both registry views).
+  Reg := TRegistry.Create(KEY_READ);
+  try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\Library\%s',
+      [AVersion, APlatform])) and Reg.ValueExists('Search Path') then
+      Result := Reg.ReadString('Search Path');
+  finally
+    Reg.Free;
+  end;
 end;
 
 end.

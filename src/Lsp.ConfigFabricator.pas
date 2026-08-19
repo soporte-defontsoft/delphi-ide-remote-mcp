@@ -252,6 +252,24 @@ begin
   Lib := ExcludeTrailingPathDelimiter(AInfo.RootDir) + '\lib\' + Plat + '\release';
 
   SearchRaw := MergeProperty(Xml, 'DCC_UnitSearchPath');
+
+  // Merge the IDE's global Library Search Path (registry): INSTALLED
+  // COMPONENT packages (third-party) register their paths there, and
+  // projects rarely repeat them in the .dproj. Expand the user-dir
+  // variables here; CleanPathList expands the BDS ones and drops leftovers.
+  var IdeLib := IdeLibrarySearchPath(AInfo.Version, Plat);
+  if IdeLib <> '' then
+  begin
+    var UserDocs := TPath.Combine(TPath.GetDocumentsPath,
+      'Embarcadero\Studio\' + AInfo.Version);
+    var CommonDocs := TPath.Combine(
+      TPath.GetSharedDocumentsPath, 'Embarcadero\Studio\' + AInfo.Version);
+    IdeLib := IdeLib
+      .Replace('$(BDSUSERDIR)', UserDocs, [rfReplaceAll, rfIgnoreCase])
+      .Replace('$(BDSCOMMONDIR)', CommonDocs, [rfReplaceAll, rfIgnoreCase]);
+    SearchRaw := SearchRaw + ';' + IdeLib;
+  end;
+
   SearchPaths := CleanPathList(SearchRaw, DprojDir, AInfo.RootDir, Plat);
 
   // Defines: keep simple identifiers only (unexpanded $() and junk dropped).

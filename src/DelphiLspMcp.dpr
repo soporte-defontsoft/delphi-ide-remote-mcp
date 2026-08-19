@@ -53,9 +53,11 @@ uses
   Lsp.References in 'Lsp.References.pas',
   Lsp.BuildRunner in 'Lsp.BuildRunner.pas',
   Lsp.Patch in 'Lsp.Patch.pas',
+  Lsp.TextEdit in 'Lsp.TextEdit.pas',
   Mcp.Tools.DelphiLsp in 'Mcp.Tools.DelphiLsp.pas',
   Mcp.Tools.DelphiExtra in 'Mcp.Tools.DelphiExtra.pas',
   Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',
+  Mcp.Tools.TextEdit in 'Mcp.Tools.TextEdit.pas',
   Mcp.Tools.Workspace in 'Mcp.Tools.Workspace.pas',
   Lsp.Scaffold in 'Lsp.Scaffold.pas',
   Mcp.Tools.Scaffold in 'Mcp.Tools.Scaffold.pas';
@@ -109,7 +111,7 @@ begin
     Settings := TMCPSettings.Create('', False); // no settings.ini side effects
     try
       Settings.ServerName := 'delphi-lsp-mcp-service';
-      Settings.ServerVersion := '0.5.0-beta';
+      Settings.ServerVersion := '0.6.0-beta';
 
       ManagerRegistry := TMCPManagerRegistry.Create;
       CoreManager := TMCPCoreManager.Create(Settings);
