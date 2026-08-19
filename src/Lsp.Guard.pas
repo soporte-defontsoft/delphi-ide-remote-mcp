@@ -255,10 +255,10 @@ begin
       if Info.Found then
       begin
         List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(Info.RootDir)));
-        UserDocs := TPath.Combine(TPath.GetDocumentsPath,
-          'Embarcadero\Studio\' + Info.Version);
-        CommonDocs := TPath.Combine(TPath.GetSharedDocumentsPath,
-          'Embarcadero\Studio\' + Info.Version);
+        // Authoritative values (rsvars.bat), NEVER composed by hand: the
+        // Documents branding changes between eras. Empty = entry dropped.
+        UserDocs := BdsUserDir(Info);
+        CommonDocs := BdsCommonDir(Info);
         for Plat in TArray<string>.Create('Win32', 'Win64') do
         begin
           Raw := IdeLibrarySearchPath(Info.Version, Plat);
@@ -267,9 +267,11 @@ begin
             Expanded := Item.Trim
               .Replace('$(BDS)', ExcludeTrailingPathDelimiter(Info.RootDir), [rfReplaceAll, rfIgnoreCase])
               .Replace('$(BDSLIB)', ExcludeTrailingPathDelimiter(Info.RootDir) + '\lib', [rfReplaceAll, rfIgnoreCase])
-              .Replace('$(BDSUSERDIR)', UserDocs, [rfReplaceAll, rfIgnoreCase])
-              .Replace('$(BDSCOMMONDIR)', CommonDocs, [rfReplaceAll, rfIgnoreCase])
               .Replace('$(Platform)', Plat, [rfReplaceAll, rfIgnoreCase]);
+            if UserDocs <> '' then
+              Expanded := Expanded.Replace('$(BDSUSERDIR)', UserDocs, [rfReplaceAll, rfIgnoreCase]);
+            if CommonDocs <> '' then
+              Expanded := Expanded.Replace('$(BDSCOMMONDIR)', CommonDocs, [rfReplaceAll, rfIgnoreCase]);
             if (Expanded <> '') and not Expanded.Contains('$(') and
                TPath.IsPathRooted(Expanded) then
             try

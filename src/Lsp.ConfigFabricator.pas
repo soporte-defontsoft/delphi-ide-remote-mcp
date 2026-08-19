@@ -260,13 +260,15 @@ begin
   var IdeLib := IdeLibrarySearchPath(AInfo.Version, Plat);
   if IdeLib <> '' then
   begin
-    var UserDocs := TPath.Combine(TPath.GetDocumentsPath,
-      'Embarcadero\Studio\' + AInfo.Version);
-    var CommonDocs := TPath.Combine(
-      TPath.GetSharedDocumentsPath, 'Embarcadero\Studio\' + AInfo.Version);
-    IdeLib := IdeLib
-      .Replace('$(BDSUSERDIR)', UserDocs, [rfReplaceAll, rfIgnoreCase])
-      .Replace('$(BDSCOMMONDIR)', CommonDocs, [rfReplaceAll, rfIgnoreCase]);
+    // Authoritative dirs from rsvars.bat (never composed by hand: the
+    // Documents branding changes between eras). Unresolved $() entries
+    // are dropped by CleanPathList.
+    var UserDocs := BdsUserDir(AInfo);
+    var CommonDocs := BdsCommonDir(AInfo);
+    if UserDocs <> '' then
+      IdeLib := IdeLib.Replace('$(BDSUSERDIR)', UserDocs, [rfReplaceAll, rfIgnoreCase]);
+    if CommonDocs <> '' then
+      IdeLib := IdeLib.Replace('$(BDSCOMMONDIR)', CommonDocs, [rfReplaceAll, rfIgnoreCase]);
     SearchRaw := SearchRaw + ';' + IdeLib;
   end;
 

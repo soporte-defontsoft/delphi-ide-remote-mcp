@@ -155,6 +155,19 @@ check('git: comando fuera de whitelist rechaza', out.startswith('error: unknown 
 out = call('delphi_git', {"repo": REPO, "command": "log", "args": "; del *"})
 check('git: metacaracteres rechazados', out.startswith('error: shell metacharacters'), out[:120])
 
+# --- installs: every Delphi on the machine, as a list ---
+out = call('delphi_installs', {})
+try:
+    d = json.loads(out)
+    check('installs: al menos una instalacion', d['total'] >= 1, out[:200])
+    check('installs: la activa tiene DelphiLSP',
+          d['activeForLsp'] != '' and any(
+              i['active'] and i['delphilsp'] for i in d['installs']), out[:200])
+    check('installs: rootdir descubierto no vacio',
+          all(i['rootdir'] for i in d['installs']), out[:200])
+except Exception:
+    check('installs: parsea', False, out[:200])
+
 # --- git init / tag / push (in a THROWAWAY dir - never against this repo) ---
 import tempfile, shutil
 tmpgit = tempfile.mkdtemp(prefix='mcp-git-')

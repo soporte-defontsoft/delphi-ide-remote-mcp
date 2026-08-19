@@ -11,11 +11,18 @@ type
   TRadStudioInfo = record
     Version: string;   // e.g. '37.0'
     RootDir: string;   // e.g. 'C:\Program Files (x86)\Embarcadero\Studio\37.0\'
-    DelphiLspExe: string;
-    RsVarsBat: string;
+    DelphiLspExe: string; // '' when that install ships no DelphiLSP.exe
+    RsVarsBat: string;    // '' when rsvars.bat is missing
     function Found: Boolean;
   end;
 
+{ ALL RAD Studio installations on the machine (a machine may host several
+  Delphi versions side by side), newest first. Installs WITHOUT DelphiLSP
+  are included too: they still build via msbuild. }
+function DiscoverAllRadStudios: TArray<TRadStudioInfo>;
+
+{ The ACTIVE install for the LSP engine: the highest version that ships a
+  DelphiLSP.exe. }
 function DiscoverRadStudio: TRadStudioInfo;
 
 { The IDE's global Library Search Path for a platform ('Win32'/'Win64'),
@@ -25,11 +32,27 @@ function DiscoverRadStudio: TRadStudioInfo;
   Fabricator must merge this list to resolve their symbols. '' if absent. }
 function IdeLibrarySearchPath(const AVersion, APlatform: string): string;
 
+{ $(BDSCOMMONDIR) as written by the installer in rsvars.bat - the
+  AUTHORITATIVE value (no branding names composed by hand: Embarcadero
+  renames its Documents folder between eras, e.g. "RAD Studio" ->
+  "Embarcadero\Studio"; rsvars always carries the current one).
+  '' when it cannot be read - callers must then DROP the entry. }
+function BdsCommonDir(const AInfo: TRadStudioInfo): string;
+
+{ $(BDSUSERDIR): the user-documents twin of BDSCOMMONDIR (same branding
+  suffix, user Documents instead of Public Documents). '' when underivable. }
+function BdsUserDir(const AInfo: TRadStudioInfo): string;
+
 implementation
 
 uses
   System.SysUtils,
   System.Classes,
+  System.StrUtils,
+  System.Math,
+  System.IOUtils,
+  System.Generics.Collections,
+  System.Generics.Defaults,
   System.Win.Registry,
   Winapi.Windows;
 
@@ -38,21 +61,15 @@ begin
   Result := DelphiLspExe <> '';
 end;
 
-function TryRoot(ARootKey: HKEY; AAccess: LongWord; out AInfo: TRadStudioInfo): Boolean;
+procedure CollectRoot(ARootKey: HKEY; AAccess: LongWord;
+  AMap: TDictionary<string, TRadStudioInfo>);
 var
   Reg: TRegistry;
   Keys: TStringList;
   I: Integer;
-  Best: Double;
-  Ver, RootDir, Exe: string;
-  VerNum: Double;
-  Fmt: TFormatSettings;
+  Ver, RootDir, Exe, Bat: string;
+  Info: TRadStudioInfo;
 begin
-  Result := False;
-  AInfo := Default(TRadStudioInfo);
-  Best := -1;
-  Fmt := TFormatSettings.Invariant;
-
   Reg := TRegistry.Create(KEY_READ or AAccess);
   Keys := TStringList.Create;
   try
@@ -65,25 +82,24 @@ begin
     for I := 0 to Keys.Count - 1 do
     begin
       Ver := Keys[I];
-      VerNum := StrToFloatDef(Ver, -1, Fmt);
-      if VerNum <= Best then
-        Continue;
+      if AMap.ContainsKey(Ver) then
+        Continue; // an earlier (higher-priority) hive already provided it
       if not Reg.OpenKeyReadOnly('SOFTWARE\Embarcadero\BDS\' + Ver) then
         Continue;
       RootDir := Reg.ReadString('RootDir');
       Reg.CloseKey;
-      if RootDir = '' then
+      if (RootDir = '') or not DirectoryExists(RootDir) then
         Continue;
-      Exe := IncludeTrailingPathDelimiter(RootDir) + 'bin\DelphiLSP.exe';
+      Info := Default(TRadStudioInfo);
+      Info.Version := Ver;
+      Info.RootDir := IncludeTrailingPathDelimiter(RootDir);
+      Exe := Info.RootDir + 'bin\DelphiLSP.exe';
       if FileExists(Exe) then
-      begin
-        Best := VerNum;
-        AInfo.Version := Ver;
-        AInfo.RootDir := IncludeTrailingPathDelimiter(RootDir);
-        AInfo.DelphiLspExe := Exe;
-        AInfo.RsVarsBat := AInfo.RootDir + 'bin\rsvars.bat';
-        Result := True;
-      end;
+        Info.DelphiLspExe := Exe;
+      Bat := Info.RootDir + 'bin\rsvars.bat';
+      if FileExists(Bat) then
+        Info.RsVarsBat := Bat;
+      AMap.Add(Ver, Info);
     end;
   finally
     Keys.Free;
@@ -91,14 +107,75 @@ begin
   end;
 end;
 
-function DiscoverRadStudio: TRadStudioInfo;
+function DiscoverAllRadStudios: TArray<TRadStudioInfo>;
+var
+  Map: TDictionary<string, TRadStudioInfo>;
+  Fmt: TFormatSettings;
 begin
-  // Order matters: user hive first, then machine hive; each in both views.
-  if TryRoot(HKEY_CURRENT_USER, 0, Result) then Exit;
-  if TryRoot(HKEY_CURRENT_USER, KEY_WOW64_32KEY, Result) then Exit;
-  if TryRoot(HKEY_LOCAL_MACHINE, 0, Result) then Exit;
-  if TryRoot(HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY, Result) then Exit;
+  Fmt := TFormatSettings.Invariant;
+  Map := TDictionary<string, TRadStudioInfo>.Create;
+  try
+    // Order matters: user hive first, then machine hive; each in both views.
+    CollectRoot(HKEY_CURRENT_USER, 0, Map);
+    CollectRoot(HKEY_CURRENT_USER, KEY_WOW64_32KEY, Map);
+    CollectRoot(HKEY_LOCAL_MACHINE, 0, Map);
+    CollectRoot(HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY, Map);
+    Result := Map.Values.ToArray;
+  finally
+    Map.Free;
+  end;
+  TArray.Sort<TRadStudioInfo>(Result, TComparer<TRadStudioInfo>.Construct(
+    function(const A, B: TRadStudioInfo): Integer
+    begin
+      // newest first
+      Result := CompareValue(StrToFloatDef(B.Version, -1, Fmt),
+        StrToFloatDef(A.Version, -1, Fmt));
+    end));
+end;
+
+function DiscoverRadStudio: TRadStudioInfo;
+var
+  Info: TRadStudioInfo;
+begin
+  for Info in DiscoverAllRadStudios do // newest first
+    if Info.DelphiLspExe <> '' then
+      Exit(Info);
   Result := Default(TRadStudioInfo);
+end;
+
+function BdsCommonDir(const AInfo: TRadStudioInfo): string;
+var
+  Line: string;
+const
+  SETCMD = 'SET BDSCOMMONDIR=';
+begin
+  Result := '';
+  if not AInfo.Found or not FileExists(AInfo.RsVarsBat) then
+    Exit;
+  try
+    for Line in TFile.ReadAllLines(AInfo.RsVarsBat) do
+    begin
+      var L := Line.Trim.TrimLeft(['@']);
+      if StartsText(SETCMD, L) then
+        Exit(L.Substring(Length(SETCMD)).Trim);
+    end;
+  except
+    // unreadable rsvars: return '' and let callers drop the entry
+  end;
+end;
+
+function BdsUserDir(const AInfo: TRadStudioInfo): string;
+var
+  Common, Shared: string;
+begin
+  Result := '';
+  Common := BdsCommonDir(AInfo);
+  if Common = '' then
+    Exit;
+  Shared := ExcludeTrailingPathDelimiter(TPath.GetSharedDocumentsPath);
+  if StartsText(IncludeTrailingPathDelimiter(Shared), Common) then
+    Result := TPath.Combine(TPath.GetDocumentsPath,
+      Common.Substring(Length(Shared) + 1));
 end;
 
 function IdeLibrarySearchPath(const AVersion, APlatform: string): string;

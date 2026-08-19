@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.7.0-beta] - 2026-08-19
+
+### Added
+- **`delphi_installs` (tool 19)**: list every RAD Studio/Delphi installation
+  discovered on the machine (side-by-side versions are common), with root
+  directory, DelphiLSP/msbuild availability, and which one is ACTIVE for the
+  LSP engine (the newest shipping DelphiLSP.exe). Installs without DelphiLSP
+  are listed too: they still build via msbuild.
+
+### Fixed
+- **No composed branding paths**: `$(BDSUSERDIR)`/`$(BDSCOMMONDIR)` are now
+  resolved from the authoritative `rsvars.bat` written by the installer
+  (Embarcadero renames its Documents folder between eras — e.g. "RAD
+  Studio" vs "Embarcadero\Studio"), never composed by hand. Entries that
+  cannot be resolved are dropped instead of guessed.
+
 ## [0.6.0-beta] - 2026-08-19
 
 Born from a dogfooding audit: "could this MCP have built its own project?"

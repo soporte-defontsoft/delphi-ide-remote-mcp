@@ -109,6 +109,16 @@ type
     constructor Create; override;
   end;
 
+  TDelphiInstallsParams = class
+  end;
+
+  TDelphiInstallsTool = class(TMCPToolBase<TDelphiInstallsParams>)
+  protected
+    function ExecuteWithParams(const Params: TDelphiInstallsParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
   TDelphiRunParams = class
   private
     FPath: string;
@@ -177,6 +187,7 @@ implementation
 uses
   MCPServer.Registration,
   Lsp.Client,
+  Lsp.Discovery,
   Lsp.References,
   Lsp.BuildRunner,
   Lsp.Guard;
@@ -459,6 +470,52 @@ begin
   if Length(Output) > 30000 then
     Output := Copy(Output, 1, 30000) + #10'... (truncated)';
   Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
+end;
+
+{ TDelphiInstallsTool }
+
+constructor TDelphiInstallsTool.Create;
+begin
+  inherited;
+  FName := 'delphi_installs';
+  FDescription := 'List EVERY RAD Studio / Delphi installation discovered on ' +
+    'this machine (a machine may host several versions side by side): ' +
+    'version, root directory, whether it ships DelphiLSP.exe (semantic ' +
+    'engine) and rsvars.bat (msbuild). Also reports which one is ACTIVE for ' +
+    'the LSP tools (the newest with DelphiLSP). Read-only, no parameters.';
+end;
+
+function TDelphiInstallsTool.ExecuteWithParams(const Params: TDelphiInstallsParams): string;
+var
+  Return: TJSONObject;
+  Arr: TJSONArray;
+  Entry: TJSONObject;
+  Info, Active: TRadStudioInfo;
+  All: TArray<TRadStudioInfo>;
+begin
+  All := DiscoverAllRadStudios;
+  Active := DiscoverRadStudio;
+  Return := TJSONObject.Create;
+  try
+    Return.AddPair('total', TJSONNumber.Create(Length(All)));
+    Return.AddPair('activeForLsp', Active.Version); // '' = none has DelphiLSP
+    Arr := TJSONArray.Create;
+    Return.AddPair('installs', Arr);
+    for Info in All do
+    begin
+      Entry := TJSONObject.Create;
+      Arr.AddElement(Entry);
+      Entry.AddPair('version', Info.Version);
+      Entry.AddPair('rootdir', Info.RootDir);
+      Entry.AddPair('delphilsp', TJSONBool.Create(Info.DelphiLspExe <> ''));
+      Entry.AddPair('msbuild', TJSONBool.Create(Info.RsVarsBat <> ''));
+      Entry.AddPair('active', TJSONBool.Create(
+        (Info.Version = Active.Version) and (Info.Version <> '')));
+    end;
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
 end;
 
 { TDelphiProjectsTool }
@@ -779,6 +836,8 @@ initialization
     function: IMCPTool begin Result := TDelphiSearchTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_projects',
     function: IMCPTool begin Result := TDelphiProjectsTool.Create; end);
+  TMCPRegistry.RegisterTool('delphi_installs',
+    function: IMCPTool begin Result := TDelphiInstallsTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_run',
     function: IMCPTool begin Result := TDelphiRunTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_list',
