@@ -63,9 +63,9 @@ try:
                 'delphi_fetch', 'delphi_git', 'delphi_hover',
                 'delphi_installs', 'delphi_list', 'delphi_package',
                 'delphi_projects', 'delphi_read', 'delphi_references',
-                'delphi_run', 'delphi_search', 'delphi_symbols',
-                'delphi_textedit']
-    check('http: tools/list = 19 tools', names == expected, names)
+                'delphi_run', 'delphi_search', 'delphi_signature',
+                'delphi_symbols', 'delphi_textedit']
+    check('http: tools/list = 20 tools', names == expected, names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",

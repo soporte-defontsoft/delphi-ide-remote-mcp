@@ -42,6 +42,14 @@ type
     property Trigger: string read FTrigger write FTrigger;
   end;
 
+  TDelphiDefinitionParams = class(TDelphiPositionParams)
+  private
+    FKind: string;
+  public
+    [SchemaDescription('Optional: definition (default) | declaration (jump to the interface declaration) | implementation (jump to the method body)')]
+    property Kind: string read FKind write FKind;
+  end;
+
   TDelphiSymbolsTool = class(TMCPToolBase<TDelphiFileParams>)
   protected
     function ExecuteWithParams(const Params: TDelphiFileParams): string; override;
@@ -49,7 +57,14 @@ type
     constructor Create; override;
   end;
 
-  TDelphiDefinitionTool = class(TMCPToolBase<TDelphiPositionParams>)
+  TDelphiDefinitionTool = class(TMCPToolBase<TDelphiDefinitionParams>)
+  protected
+    function ExecuteWithParams(const Params: TDelphiDefinitionParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
+  TDelphiSignatureTool = class(TMCPToolBase<TDelphiPositionParams>)
   protected
     function ExecuteWithParams(const Params: TDelphiPositionParams): string; override;
   public
@@ -138,22 +153,64 @@ constructor TDelphiDefinitionTool.Create;
 begin
   inherited;
   FName := 'delphi_definition';
-  FDescription := 'Resolve the definition/implementation of the identifier at ' +
-    'a 0-based line:character position in a Delphi source file, using the ' +
-    'official DelphiLSP engine (compiler-grade, cross-unit, including RTL/VCL ' +
-    'sources). Point INSIDE the identifier. Requires project settings ' +
-    '(.delphilsp.json) for full answers.';
+  FDescription := 'Resolve the identifier at a 0-based line:character ' +
+    'position in a Delphi source file, using the official DelphiLSP engine ' +
+    '(compiler-grade, cross-unit, including RTL/VCL sources). Point INSIDE ' +
+    'the identifier. kind selects the half of the unit (a Delphi method ' +
+    'exists in BOTH): definition (default) = the BODY in the ' +
+    'implementation section; declaration = the interface declaration. ' +
+    '(kind=implementation is accepted but DelphiLSP answers it like ' +
+    'declaration - measured.) Requires project settings for full answers.';
 end;
 
-function TDelphiDefinitionTool.ExecuteWithParams(const Params: TDelphiPositionParams): string;
+function TDelphiDefinitionTool.ExecuteWithParams(const Params: TDelphiDefinitionParams): string;
+var
+  Client: TLspClient;
+  Settings, Kind: string;
+  Resp: TJSONObject;
+begin
+  Kind := Params.Kind.Trim.ToLower;
+  if (Kind <> '') and (Kind <> 'definition') and (Kind <> 'declaration') and
+     (Kind <> 'implementation') then
+    Exit('RECHAZADO: kind debe ser definition | declaration | implementation.');
+  Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
+  if Kind = 'declaration' then
+    Resp := Client.Declaration(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character)
+  else if Kind = 'implementation' then
+    Resp := Client.Implementation_(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character)
+  else
+    Resp := Client.Definition(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
+  Result := RenderResult(Resp, NoSettingsNote(Settings));
+end;
+
+{ TDelphiSignatureTool }
+
+constructor TDelphiSignatureTool.Create;
+begin
+  inherited;
+  FName := 'delphi_signature';
+  FDescription := 'Signature help (parameter completion) for the call under ' +
+    'a 0-based line:character position: the routine signatures with their ' +
+    'parameter list, from the official DelphiLSP engine - the IDE''s ' +
+    'Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right ' +
+    'after "(" or a ","). Requires project settings for full answers.';
+end;
+
+function TDelphiSignatureTool.ExecuteWithParams(const Params: TDelphiPositionParams): string;
 var
   Client: TLspClient;
   Settings: string;
+  Resp: TJSONObject;
+  V: TJSONValue;
 begin
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
-  Result := RenderResult(
-    Client.Definition(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character),
-    NoSettingsNote(Settings));
+  Resp := Client.SignatureHelp(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
+  V := Resp.GetValue('result');
+  if (V = nil) or (V is TJSONNull) then
+    Result := RenderResult(Resp, NoSettingsNote(Settings) +
+      ' [hint: the position must be INSIDE the call parentheses, right after ( or ,]')
+  else
+    Result := RenderResult(Resp, NoSettingsNote(Settings));
 end;
 
 { TDelphiHoverTool }
@@ -253,5 +310,7 @@ initialization
     function: IMCPTool begin Result := TDelphiHoverTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_completion',
     function: IMCPTool begin Result := TDelphiCompletionTool.Create; end);
+  TMCPRegistry.RegisterTool('delphi_signature',
+    function: IMCPTool begin Result := TDelphiSignatureTool.Create; end);
 
 end.

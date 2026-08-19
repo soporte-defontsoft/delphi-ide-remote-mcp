@@ -17,7 +17,8 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 | Tool | What it does |
 |---|---|
 | `delphi_symbols` | Document symbol tree of a unit (classes, methods, sections) |
-| `delphi_definition` | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources |
+| `delphi_definition` | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` jumps to the interface declaration instead of the body |
+| `delphi_signature` | Signature help for the call under the cursor (parameter names/types) — the IDE's Ctrl+Shift+Space |
 | `delphi_hover` | Type/signature of an identifier usage |
 | `delphi_completion` | Code completion candidates |
 | `delphi_references` | Find references (hybrid: text scan + per-candidate `definition` validation — homonyms rejected by the compiler engine) |
@@ -89,7 +90,7 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 
 ## Tests
 
-`tests/` contains five end-to-end batteries that talk real MCP to the built server (127 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
+`tests/` contains five end-to-end batteries that talk real MCP to the built server (130 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
 
 ## Key design points
 

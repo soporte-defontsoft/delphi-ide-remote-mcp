@@ -155,6 +155,52 @@ check('git: comando fuera de whitelist rechaza', out.startswith('error: unknown 
 out = call('delphi_git', {"repo": REPO, "command": "log", "args": "; del *"})
 check('git: metacaracteres rechazados', out.startswith('error: shell metacharacters'), out[:120])
 
+# --- delphi_signature + definition kind variants (real LSP semantics) ---
+GUARD = os.path.join(SRC, 'Lsp.Guard.pas')
+lines = open(GUARD, 'rb').read().decode('utf-8-sig', 'replace').replace('\r\n', '\n').split('\n')
+sig_line = ident_line = -1
+for i, ln in enumerate(lines):
+    if 'Result := PathDenied(APath);' in ln:
+        sig_line = ident_line = i
+        paren_char = ln.index('PathDenied(') + len('PathDenied(')
+        ident_char = ln.index('PathDenied') + 3
+        break
+if sig_line >= 0:
+    out = call('delphi_signature', {"path": GUARD, "line": sig_line,
+                                    "character": paren_char}, 180)
+    check('signature: firma de PathDenied en la llamada',
+          'PathDenied' in out or 'APath' in out, out[:200])
+    out = call('delphi_definition', {"path": GUARD, "line": ident_line,
+                                     "character": ident_char, "kind": "xx"})
+    check('definition: kind invalido rechaza', 'RECHAZADO' in out, out[:120])
+else:
+    check('signature: ancla de test encontrada en Lsp.Guard.pas', False, 'no anchor')
+
+# decl vs impl only split for METHODS (measured: for global routines both
+# return the interface declaration) - so test on a TLspClient method usage.
+CLIENT = os.path.join(SRC, 'Lsp.Client.pas')
+clines = open(CLIENT, 'rb').read().decode('utf-8-sig', 'replace').replace('\r\n', '\n').split('\n')
+m_line = -1
+for i, ln in enumerate(clines):
+    if "Result := RequestWithRetry('textDocument/hover'" in ln:
+        m_line = i
+        m_char = ln.index('RequestWithRetry') + 4
+        break
+if m_line >= 0:
+    out_decl = call('delphi_definition', {"path": CLIENT, "line": m_line,
+                                          "character": m_char,
+                                          "kind": "declaration"}, 180)
+    out_def = call('delphi_definition', {"path": CLIENT, "line": m_line,
+                                         "character": m_char}, 180)
+    # measured semantics: definition = the body, declaration = the
+    # interface declaration (two different lines of the same unit)
+    ok = ('Lsp.Client.pas' in out_decl and 'Lsp.Client.pas' in out_def
+          and out_decl != out_def and 'null' not in out_decl[:6])
+    check('definition: kind declaration vs default (las dos mitades)',
+          ok, ('decl=%s | def=%s' % (out_decl[:90], out_def[:90])))
+else:
+    check('definition: ancla de metodo encontrada en Lsp.Client.pas', False, 'no anchor')
+
 # --- installs: every Delphi on the machine, as a list ---
 out = call('delphi_installs', {})
 try:

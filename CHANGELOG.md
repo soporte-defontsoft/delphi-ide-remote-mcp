@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.8.0-beta] - 2026-08-19
+
+Closes the gap found by the full capability inventory of DelphiLSP 37.0
+(docs/DELPHILSP-NOTES.md): the engine announced signatureHelp and
+declaration/implementation providers that no tool exposed.
+
+### Added
+- **`delphi_signature` (tool 20)**: signature help for the call under a
+  position — routine signatures with parameter names/types, the IDE's
+  Ctrl+Shift+Space. Position must be inside the call parentheses.
+- **`delphi_definition` `kind` parameter**: `definition` (default) = the
+  body in the implementation section; `declaration` = the interface
+  declaration — the two halves of a Delphi unit. (`implementation` is
+  accepted but the engine answers it like declaration — measured.)
+
+### Docs
+- DELPHILSP-NOTES: measured navigation semantics (definition=body,
+  declaration=interface, implementation≡declaration), LSIF conditions and
+  kill-switch, `$Y` requirement, DelphiLSPLog registry logging.
+
 ## [0.7.0-beta] - 2026-08-19
 
 ### Added

@@ -76,6 +76,9 @@ type
     { Language features (positions are 0-based, LSP style) }
     function Hover(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
     function Definition(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
+    function Declaration(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
+    function Implementation_(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
+    function SignatureHelp(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
     function DocumentSymbols(const AUri: string): TJSONObject;
     function Completion(const AUri: string; ALine, ACharacter: Integer;
       const ATriggerCharacter: string = ''): TJSONObject;
@@ -333,6 +336,27 @@ end;
 function TLspClient.Definition(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
 begin
   Result := RequestWithRetry('textDocument/definition', Format(
+    '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}}',
+    [AUri, ALine, ACharacter]), 30000);
+end;
+
+function TLspClient.Declaration(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
+begin
+  Result := RequestWithRetry('textDocument/declaration', Format(
+    '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}}',
+    [AUri, ALine, ACharacter]), 30000);
+end;
+
+function TLspClient.Implementation_(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
+begin
+  Result := RequestWithRetry('textDocument/implementation', Format(
+    '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}}',
+    [AUri, ALine, ACharacter]), 30000);
+end;
+
+function TLspClient.SignatureHelp(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
+begin
+  Result := RequestWithRetry('textDocument/signatureHelp', Format(
     '{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}}',
     [AUri, ALine, ACharacter]), 30000);
 end;

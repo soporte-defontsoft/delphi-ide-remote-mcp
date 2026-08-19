@@ -73,7 +73,7 @@ begin
   TServerStatusResource.Initialize;
   FSettings := TMCPSettings.Create('', False);
   FSettings.ServerName := 'delphi-lsp-mcp-service';
-  FSettings.ServerVersion := '0.7.0-beta';
+  FSettings.ServerVersion := '0.8.0-beta';
 
   FRegistry := TMCPManagerRegistry.Create;
   FCore := TMCPCoreManager.Create(FSettings);

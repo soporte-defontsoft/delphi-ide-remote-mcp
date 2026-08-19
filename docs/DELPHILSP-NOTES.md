@@ -92,7 +92,27 @@ Not present at all: `rename`, `codeAction`, `formatting`,
 `initializationOptions` (binary-verified set): `serverType`
 (agent/linter/controller), `agentCount`, `returnDccFlags`,
 `returnHoverModel`, `storeProjectSettings`, `enableFileWatcher`, and
-**`enableLsif`** (Florence-era, undocumented in the Alexandria page).
+**`enableLsif`** (Florence-era, undocumented as an option; the documented
+counterpart is the registry switch below).
+
+Navigation semantics (measured on 37.0):
+
+- `definition` = the **body** in the implementation section.
+- `declaration` = the **interface declaration**.
+- `implementation` answers **like declaration** (redundant in this engine).
+- For **global routines**, `declaration` also returns the interface entry
+  and only `definition` reaches the body — the decl/def pair is how you
+  jump between the two halves for globals and methods alike.
+
+Troubleshooting facts (docwiki "Troubleshooting: Delphi LSP"):
+
+- definition/Ctrl+Click requires symbol reference info (`$Y`) on, and the
+  declaring source reachable via search/browsing path when DCUs shadow it.
+- DelphiLSP only works inside **active** IFDEF branches.
+- Files need **consistent line endings** (mixed EOLs break it).
+- Server-side logging: registry `HKCU\Software\Embarcadero\BDS\<ver>\LSP`,
+  DWORD `DelphiLSPLog` = 255 → logs in `%LOCALAPPDATA%\Temp\DelphiLSP`
+  (log files may include source code).
 
 ## LSIF (measured)
 
@@ -107,6 +127,12 @@ Not present at all: `rename`, `codeAction`, `formatting`,
 - `enableLsif: true` in `initializationOptions` changes NOTHING in the
   announced capabilities and does not wake the dead methods; it appears to
   accelerate definition/hover internally.
+- Docwiki ("Delphi LSIF"): LSIF is used only when BOTH the referenced
+  package and the navigating file have LSIF; otherwise silent fallback to
+  the compiler. Generation = Linking option "Output .lsif file" (the
+  `--lsif` switch). Global kill-switch: registry
+  `HKCU\Software\Embarcadero\BDS\<ver>\LSP`, REG_SZ `EnableLsif` = false.
+  Third-party libraries can generate their own LSIF from source.
 - **Open opportunity**: since the format is standard, an external tool can
   parse the `.lsif` files directly — including for symbols of the RTL/VCL —
   and a project can index itself with `--lsif` at build time. LSIF result
