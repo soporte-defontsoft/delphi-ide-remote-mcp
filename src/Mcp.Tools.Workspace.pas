@@ -105,6 +105,30 @@ type
     constructor Create; override;
   end;
 
+  TDelphiRunParams = class
+  private
+    FPath: string;
+    FArgs: string;
+    FWorkDir: string;
+    FTimeoutMs: Integer;
+  public
+    [SchemaDescription('Absolute path of the .exe to run (must be inside the workspace roots)')]
+    property Path: string read FPath write FPath;
+    [SchemaDescription('Optional command-line arguments (shell metacharacters rejected)')]
+    property Args: string read FArgs write FArgs;
+    [SchemaDescription('Optional working directory (default: the exe directory; must be inside the roots)')]
+    property WorkDir: string read FWorkDir write FWorkDir;
+    [SchemaDescription('Timeout in milliseconds (default 30000, max 300000); the process is killed on expiry')]
+    property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
+  end;
+
+  TDelphiRunTool = class(TMCPToolBase<TDelphiRunParams>)
+  protected
+    function ExecuteWithParams(const Params: TDelphiRunParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
 implementation
 
 uses
@@ -462,11 +486,73 @@ begin
   end;
 end;
 
+{ TDelphiRunTool }
+
+constructor TDelphiRunTool.Create;
+begin
+  inherited;
+  FName := 'delphi_run';
+  FDescription := 'Run a built executable ON THIS MACHINE (the one that ' +
+    'compiled it) and capture its output - the closing step after ' +
+    'delphi_build for console apps and test runners. Jailed to the ' +
+    'workspace roots, no shell, hard timeout (default 30 s, max 5 min), ' +
+    'process killed on expiry. GUI apps will open on the server desktop.';
+end;
+
+function TDelphiRunTool.ExecuteWithParams(const Params: TDelphiRunParams): string;
+const
+  BadChars: array [0 .. 8] of string = (';', '|', '&', '`', '$', '<', '>', #13, #10);
+var
+  ExePath, WorkDir, Output, B: string;
+  TimeoutMs: Integer;
+  ExitCode: Cardinal;
+begin
+  ExePath := TPath.GetFullPath(Params.Path);
+  Result := PathDenied(ExePath);
+  if Result <> '' then
+    Exit;
+  if Length(WorkspaceRoots) = 0 then
+    Exit('error: delphi_run requiere workspace roots configurados ' +
+      '(DELPHI_MCP_ROOTS o settings.ini [Workspace] Roots) - ejecutar ' +
+      'binarios sin jaula no esta permitido.');
+  if not TFile.Exists(ExePath) then
+    Exit('error: no existe ' + ExePath);
+  if not SameText(TPath.GetExtension(ExePath), '.exe') then
+    Exit('error: solo ejecutables .exe');
+  for B in BadChars do
+    if Params.Args.Contains(B) then
+      Exit('error: shell metacharacters are not allowed in args');
+
+  WorkDir := Params.WorkDir;
+  if WorkDir = '' then
+    WorkDir := TPath.GetDirectoryName(ExePath)
+  else
+  begin
+    Result := PathDenied(WorkDir);
+    if Result <> '' then
+      Exit;
+  end;
+
+  TimeoutMs := Params.TimeoutMs;
+  if TimeoutMs <= 0 then
+    TimeoutMs := 30000;
+  if TimeoutMs > 300000 then
+    TimeoutMs := 300000;
+
+  Output := RunCapturedIn(Format('"%s" %s', [ExePath, Params.Args]).Trim,
+    WorkDir, TimeoutMs, ExitCode);
+  if Length(Output) > 30000 then
+    Output := Copy(Output, 1, 30000) + #10'... (truncated)';
+  Result := Format('exit=%d'#10'%s', [ExitCode, Output.TrimRight]);
+end;
+
 initialization
   TMCPRegistry.RegisterTool('delphi_search',
     function: IMCPTool begin Result := TDelphiSearchTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_projects',
     function: IMCPTool begin Result := TDelphiProjectsTool.Create; end);
+  TMCPRegistry.RegisterTool('delphi_run',
+    function: IMCPTool begin Result := TDelphiRunTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_list',
     function: IMCPTool begin Result := TDelphiListTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_git',

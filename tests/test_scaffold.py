@@ -93,6 +93,11 @@ check('build: proyecto console COMPILA', ok, err)
 out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "HolaConsola"})
 check('create: jamas sobreescribe', 'RECHAZADO' in out, out)
 
+# run the freshly built console exe (needs roots configured -> restart not
+# needed: this battery runs unrestricted, so delphi_run must REFUSE)
+out = call('delphi_run', {"path": os.path.join(CDIR, 'Win64', 'Debug', 'HolaConsola.exe')})
+check('run: sin jaula configurada rechaza', out.startswith('error:') and 'roots' in out.lower(), out[:150])
+
 # --- VCL project + extra form ---
 VDIR = os.path.join(BASE, 'HolaVcl')
 out = call('delphi_create', {"kind": "project-vcl", "dir": VDIR, "name": "HolaVcl"})

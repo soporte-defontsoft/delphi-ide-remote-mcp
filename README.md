@@ -24,6 +24,7 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 | `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, semantic INSERT (global routine / method with both halves), TPF0 hard-reject, post-write audit |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms (VCL/FMX) with IDE-equivalent skeletons — buildable immediately |
 | `delphi_build` | Real MSBuild builds with structured errors/warnings |
+| `delphi_run` | Run a built executable on the server and capture its output (jailed to the roots, no shell, hard timeout) |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
 | `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style |
 | `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace] Roots=D:\Projects;E:\More`) |
@@ -42,6 +43,8 @@ claude mcp add delphi -- C:/path/to/DelphiLspMcp.exe
 ```bash
 claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp --header "Authorization: Bearer YOUR_TOKEN"
 ```
+
+Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom agents): see [docs/CLIENTS.md](docs/CLIENTS.md).
 
 ### Security (`settings.ini` next to the exe, or environment variables)
 

@@ -17,6 +17,10 @@ function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 
+{ Same, with an explicit working directory ('' = inherit). }
+function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
+  out AExitCode: Cardinal): string;
+
 implementation
 
 uses
@@ -29,6 +33,12 @@ uses
 
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: DWORD): string;
+begin
+  Result := RunCapturedIn(ACmdLine, '', ATimeoutMs, AExitCode);
+end;
+
+function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
+  out AExitCode: Cardinal): string;
 var
   SA: TSecurityAttributes;
   ReadH, WriteH: THandle;
@@ -57,8 +67,11 @@ begin
   Cmd := ACmdLine;
   UniqueString(Cmd);
   FillChar(PI, SizeOf(PI), 0);
+  var WorkDirPtr: PChar := nil;
+  if AWorkDir <> '' then
+    WorkDirPtr := PChar(AWorkDir);
   if not CreateProcess(nil, PChar(Cmd), nil, nil, True, CREATE_NO_WINDOW,
-    nil, nil, SI, PI) then
+    nil, WorkDirPtr, SI, PI) then
   begin
     CloseHandle(ReadH);
     CloseHandle(WriteH);

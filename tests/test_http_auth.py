@@ -61,9 +61,9 @@ try:
     expected = ['delphi_build', 'delphi_completion', 'delphi_create',
                 'delphi_definition', 'delphi_diagnostics', 'delphi_edit',
                 'delphi_git', 'delphi_hover', 'delphi_list', 'delphi_projects',
-                'delphi_read', 'delphi_references', 'delphi_search',
-                'delphi_symbols']
-    check('http: tools/list = 14 tools', names == expected, names)
+                'delphi_read', 'delphi_references', 'delphi_run',
+                'delphi_search', 'delphi_symbols']
+    check('http: tools/list = 15 tools', names == expected, names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",

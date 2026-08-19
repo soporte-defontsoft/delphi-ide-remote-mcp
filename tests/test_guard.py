@@ -126,6 +126,22 @@ open(os.path.join(sneaky, 'Primo.pas'), 'wb').write(SRC.encode('cp1252'))
 out = call('delphi_read', {"path": os.path.join(sneaky, 'Primo.pas')})
 check('fuera: primo de prefijo (permitido2) vetado', denied(out), out)
 
+# delphi_run: inside allowed (real console exe built on the fly), outside denied
+out = call('delphi_create', {"kind": "project-console", "dir": os.path.join(INSIDE, 'Hola'),
+                             "name": "Hola"})
+check('run: proyecto de prueba creado', out.startswith('CREADO'), out)
+out = call('delphi_build', {"project": os.path.join(INSIDE, 'Hola', 'Hola.dproj'),
+                            "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
+try:
+    ok = json.loads(out)['success']
+except Exception:
+    ok = False
+check('run: proyecto de prueba compila', ok, out[:150])
+out = call('delphi_run', {"path": os.path.join(INSIDE, 'Hola', 'Win64', 'Debug', 'Hola.exe')}, 120)
+check('run: dentro ejecuta y captura salida', out.startswith('exit=0') and 'funcionando' in out, out[:150])
+out = call('delphi_run', {"path": os.path.join(OUTSIDE, 'Fuera.exe')})
+check('run: fuera vetado', denied(out), out[:150])
+
 print()
 print('== guard battery: %d PASS / %d FAIL ==' % (P, F))
 proc.stdin.close()
