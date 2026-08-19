@@ -26,7 +26,7 @@
 - [x] `delphi_references` (hybrid: candidate text scan → `definition` validation → compiler-grade result; homonyms rejected, bounded work with explicit unverified leftovers)
 - [x] `delphi_build` (MSBuild via registry-located `rsvars.bat`, structured errors/warnings + output tail)
 
-## Phase 4.5 — Safe editing (`delphi_patch` + `delphi_read`) ✔
+## Phase 4.5 — Safe editing (`delphi_edit` + `delphi_read`) ✔
 Port of an internally battle-tested safe-edit tool (30+ measured test rounds with several
 LLMs), so that ANY model — large or small — can modify Delphi sources through the MCP
 without corrupting them:
@@ -38,14 +38,14 @@ without corrupting them:
 - [x] Semantic INSERT: `rutina-global` (tool picks the legal boundary) and `metodo` (tool writes BOTH halves: class declaration + qualified implementation)
 - [x] `createunit`: standard IDE skeleton, never overwrites
 - [x] `delphi_read`: encoding-correct numbered reads (the anchor source of truth)
-- [x] Battery: 30/30 checks green over real MCP stdio, byte-level verification (tests/test_delphi_patch.py)
+- [x] Battery: 30/30 checks green over real MCP stdio, byte-level verification (tests/test_delphi_edit.py)
 
 ## Phase 5 — Resident service + GUI (the remote-work host)
 Primary use case: the Windows machine (with RAD Studio) stays on as a server; agents connect
 over MCP Streamable HTTP from anywhere — including Linux clients that have no access to the
 Windows filesystem.
 - [ ] Workspace Manager: multi-workspace, warm instances, request queue, LRU, idle shutdown, hang kill+respawn
-- [ ] Streamable HTTP transport: localhost by default, configurable LAN bind + **Bearer token auth** (recommended exposure: VPN only)
+- [x] Streamable HTTP transport (`--http [port]`) with **Bearer token auth** (DELPHI_MCP_TOKEN env var or settings.ini [Security] AuthToken; 5/5 battery: tests/test_http_auth.py). Recommended exposure: VPN only
 - [x] Remote file toolset so a remote agent needs no share: `delphi_read` (encoding-aware), `delphi_search` (skips `__history/`, build dirs), `delphi_list` (12/12 battery: tests/test_workspace_tools.py)
 - [x] `delphi_git`: whitelisted git operations (status, diff, log, show, branch, add, commit) with shell-metacharacter rejection — remote agents version their work without shell access
 - [ ] Dual host: Windows service + VCL tray app (starts minimized to tray — the icon is the "it's running" indicator; menu: workspaces, log, reload, exit)

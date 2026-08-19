@@ -4,7 +4,7 @@ interface
 
 // TaurusTLS provides OpenSSL 3.x support with modern ECDHE cipher suites
 // Install via GetIt Package Manager: Search for "TaurusTLS" or get from https://github.com/JPeterMugaas/TaurusTLS
-{$DEFINE USE_TAURUS_TLS}  // Comment this line to use standard Indy SSL (OpenSSL 1.0.2)
+{ $DEFINE USE_TAURUS_TLS}  // [local change] disabled: standard Indy SSL, no TaurusTLS dependency
 
 uses
   System.SysUtils,
@@ -42,11 +42,17 @@ type
     FJsonRpcProcessor: TMCPJsonRpcProcessor;
     FPort: Word;
     FActive: Boolean;
+    FAuthToken: string; // [local change] optional Bearer token for remote use
     FSettings: TMCPSettings;
     FEventIDCounter: Int64;
     procedure ConfigureSSL;
     procedure HandleQuerySSLPort(APort: Word; var VUseSSL: Boolean);
     procedure HandleHTTPRequest(Context: TIdContext; RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo);
+    // [local change] accept the Bearer scheme (Indy rejects unknown schemes
+    // with 401 "Unsupported authorization scheme" before our handler runs)
+    procedure HandleParseAuthentication(AContext: TIdContext;
+      const AAuthType, AAuthData: string; var VUsername, VPassword: string;
+      var VHandled: Boolean);
     function VerifyAndSetCORSHeaders(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo): Boolean;
     procedure HandleOptionsRequest(ResponseInfo: TIdHTTPResponseInfo);
     procedure HandleGetRequest(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo);
@@ -63,6 +69,9 @@ type
     procedure Stop;
     property Port: Word read FPort write FPort;
     property Active: Boolean read FActive;
+    // [local change] when non-empty, every request must carry
+    // "Authorization: Bearer <token>" or it is answered 401.
+    property AuthToken: string read FAuthToken write FAuthToken;
     property ManagerRegistry: IMCPManagerRegistry read FManagerRegistry write FManagerRegistry;
     property CoreManager: IMCPCapabilityManager read FCoreManager write FCoreManager;
     property Settings: TMCPSettings read FSettings write FSettings;
@@ -119,6 +128,7 @@ begin
   FHTTPServer.OnCommandGet := HandleHTTPRequest;
   FHTTPServer.OnCommandOther := HandleHTTPRequest;
   FHTTPServer.OnQuerySSLPort := HandleQuerySSLPort;
+  FHTTPServer.OnParseAuthentication := HandleParseAuthentication; // [local change]
   FSSLHandler := nil;
 end;
 
@@ -169,7 +179,20 @@ begin
   TLogger.Info('MCP Server stopped');
 end;
 
-procedure TMCPIdHTTPServer.HandleHTTPRequest(Context: TIdContext; 
+// [local change]
+procedure TMCPIdHTTPServer.HandleParseAuthentication(AContext: TIdContext;
+  const AAuthType, AAuthData: string; var VUsername, VPassword: string;
+  var VHandled: Boolean);
+begin
+  if SameText(AAuthType, 'Bearer') then
+  begin
+    VUsername := '';
+    VPassword := AAuthData;
+    VHandled := True; // the real check happens in HandleHTTPRequest
+  end;
+end;
+
+procedure TMCPIdHTTPServer.HandleHTTPRequest(Context: TIdContext;
   RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo);
 var
   RequestPath: string;
@@ -180,6 +203,18 @@ begin
 
     if not VerifyAndSetCORSHeaders(RequestInfo, ResponseInfo) then
       Exit; // CORS blocked the request
+
+    // [local change] Bearer auth for remote exposure (OPTIONS preflight is
+    // exempt: it carries no credentials by design).
+    if (FAuthToken <> '') and (RequestInfo.Command <> 'OPTIONS') and
+       (RequestInfo.RawHeaders.Values['Authorization'] <> 'Bearer ' + FAuthToken) then
+    begin
+      ResponseInfo.ResponseNo := 401;
+      ResponseInfo.ResponseText := 'Unauthorized';
+      ResponseInfo.ContentType := 'application/json';
+      ResponseInfo.ContentText := '{"error":"missing or invalid bearer token"}';
+      Exit;
+    end;
 
     RequestPath := RequestInfo.Document;
 

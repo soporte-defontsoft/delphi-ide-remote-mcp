@@ -1,7 +1,7 @@
 unit Mcp.Tools.Workspace;
 
 { Remote-work toolset: delphi_search, delphi_list, delphi_git. Together with
-  delphi_read/delphi_patch/delphi_build they give an agent on ANOTHER machine
+  delphi_read/delphi_edit/delphi_build they give an agent on ANOTHER machine
   (e.g. Linux) full control of the Delphi projects living on this Windows box
   - no file share, no shell access. Paths in results are 1-based lines to
   match delphi_read numbering. }

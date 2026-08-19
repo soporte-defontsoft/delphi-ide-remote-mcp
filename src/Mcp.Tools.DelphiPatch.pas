@@ -1,6 +1,6 @@
 unit Mcp.Tools.DelphiPatch;
 
-{ delphi_read + delphi_patch: encoding-correct reading and SAFE editing of
+{ delphi_read + delphi_edit: encoding-correct reading and SAFE editing of
   Delphi sources, so any model - large or small - can modify code through
   this MCP without corrupting it. Engine in Lsp.Patch. }
 
@@ -95,7 +95,7 @@ begin
   FName := 'delphi_read';
   FDescription := 'Read a Delphi source file DECODED CORRECTLY (CP1252 / ' +
     'UTF-8 with or without BOM detected for real). Returns numbered lines in ' +
-    'the format number|content - to build a delphi_patch anchor, copy ' +
+    'the format number|content - to build a delphi_edit anchor, copy ' +
     'everything after the bar, exactly. ALWAYS use this instead of a generic ' +
     'read for Delphi files: generic reads turn CP1252 accents into U+FFFD ' +
     'and poison every anchor built from them.';
@@ -111,7 +111,7 @@ end;
 constructor TDelphiPatchTool.Create;
 begin
   inherited;
-  FName := 'delphi_patch';
+  FName := 'delphi_edit';
   FDescription := 'SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus ' +
     'text .dfm/.fmx) preserving the real encoding and line endings. Modes: ' +
     'EDIT (old = ONE full line copied from delphi_read + new), INSERT ' +
@@ -152,7 +152,7 @@ end;
 initialization
   TMCPRegistry.RegisterTool('delphi_read',
     function: IMCPTool begin Result := TDelphiReadTool.Create; end);
-  TMCPRegistry.RegisterTool('delphi_patch',
+  TMCPRegistry.RegisterTool('delphi_edit',
     function: IMCPTool begin Result := TDelphiPatchTool.Create; end);
 
 end.
