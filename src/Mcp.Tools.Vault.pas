@@ -155,10 +155,13 @@ uses
 
 const
   // Per-result budget. A client caps what one tool result may carry (~25K
-  // tokens in Claude Code); 100K characters overflowed it and forced the
-  // client to spill the answer to disk (field round 8). 40K sits comfortably
-  // inside, and paging by line makes the rest one call away.
-  MAX_READ_CHARS = 40000;
+  // tokens in Claude Code). Measured against a real vault: the rules (22 KB)
+  // and the index (63 KB) each fit comfortably on their own; the two
+  // CONCATENATED (85 KB) did not, and the client had to spill the answer to
+  // disk (field round 8). So the budget is sized to pass a whole note, and
+  // the bootstrap splits BETWEEN FILES rather than mid-file - which is also
+  // how the same vault is read locally: one complete file per read.
+  MAX_READ_CHARS = 70000;
   BOOT_RULES = 'AGENTS-VAULT.md';
   BOOT_INDEX = 'MEMORY.md';
   BACKUP_SUB = 'backups';
@@ -187,12 +190,19 @@ begin
 end;
 
 { The vault's own governance files: its rules and its index. A human curates
-  these; an agent may READ them (that is the bootstrap) but never write them. }
-function VaultGovernance(const ARel: string): Boolean;
+  these; an agent may READ them (that is the bootstrap) but never write them.
+
+  Takes the RESOLVED full path, never the caller's raw string. Asking for
+  "MEMORY.md " (trailing space) used to slip through: the path resolution
+  trimmed it and opened the real file, while this check compared the untrimmed
+  text and saw a different name (field round 9, critical). Deciding on the
+  resolved path means the comparison is made against the file that will
+  actually be written. }
+function VaultGovernance(const AFullPath: string): Boolean;
 var
   Name: string;
 begin
-  Name := TPath.GetFileName(ARel.Replace('/', '\'));
+  Name := TPath.GetFileName(AFullPath);
   Result := SameText(Name, BOOT_RULES) or SameText(Name, BOOT_INDEX) or
     SameText(Name, 'AGENTS-VAULT-WRITE.md');
 end;
@@ -205,8 +215,12 @@ var
   Rel, Full, Root: string;
 begin
   AFull := '';
-  Rel := ARel.Trim.Trim(['"']).Trim.Replace('/', '\');
-  if Rel = '' then
+  // Quotes only - do NOT trim whitespace yet. Trimming first is precisely
+  // what hid the attack: "MEMORY.md " became "MEMORY.md" here, opened the
+  // real governance file, while the caller's raw string still read as a
+  // different name to every later check (field round 9, critical).
+  Rel := ARel.Trim(['"']).Replace('/', '\');
+  if Rel.Trim = '' then
     Exit('error: falta "path" (ruta relativa dentro del vault)');
   while Rel.StartsWith('\') do
     Rel := Rel.Substring(1);
@@ -215,6 +229,12 @@ begin
   for var Seg in Rel.Split(['\']) do
     if Seg.Trim = '..' then
       Exit(SR_VAULT_JAIL);
+  // The Windows name rule lives in Lsp.Guard and is shared with the workspace
+  // jail: a segment ending in a dot or a space normalizes to a DIFFERENT file
+  // when opened. One rule, one place - not re-derived per toolset.
+  Result := PathAnomaly(Rel);
+  if Result <> '' then
+    Exit;
   if not SameText(TPath.GetExtension(Rel), '.md') then
     Exit(Format('RECHAZADO: "%s" no es una nota .md. El vault solo sirve ' +
       'notas Markdown.', [ARel]));
@@ -466,16 +486,11 @@ begin
   // agent should have to know.
   if Params.Path.Trim = '' then
   begin
-    // Paged like any other read: a real vault's rules + index can run to tens
-    // of thousands of characters, which overflows a client's per-result cap
-    // and forces it to spill the answer to disk (measured, field round 8:
-    // 85 KB in one call). Numbered and budgeted, with the exact continuation
-    // offset, so the agent can walk it.
-    Result := Numbered(VaultBootstrapText, Params.Offset, Params.Limit,
-      Total, LastLine);
-    Result := Format(SN_VAULT_BOOTSTRAP_FMT, [Total]) + Result;
-    if LastLine < Total then
-      Result := Result + #10 + Format(SR_VAULT_MORE_FMT, [LastLine, Total, LastLine + 1]);
+    // Verbatim, NOT numbered: this is documentation to be read, not a file to
+    // be edited by anchor - and reading it whole is what the same vault gives
+    // you locally. If the two files do not fit in one result, the split
+    // happens between them (the second is fetched by name), never mid-file.
+    Result := SN_VAULT_BOOTSTRAP + VaultBootstrapText(MAX_READ_CHARS);
     Exit;
   end;
 
@@ -517,7 +532,7 @@ begin
   Result := VaultResolve(Params.Path, Full);
   if Result <> '' then
     Exit;
-  if VaultGovernance(Params.Path) then
+  if VaultGovernance(Full) then
     Exit(SR_VAULT_GOVERNANCE);
   if not TFile.Exists(Full) then
     Exit(Format('error: la nota "%s" no existe. vault_append solo anade a ' +
@@ -580,7 +595,7 @@ begin
   Result := VaultResolve(Params.Path, Full);
   if Result <> '' then
     Exit;
-  if VaultGovernance(Params.Path) then
+  if VaultGovernance(Full) then
     Exit(SR_VAULT_GOVERNANCE);
   if TFile.Exists(Full) then
     Exit(Format('RECHAZADO: la nota "%s" YA existe. vault_create nunca ' +
@@ -618,7 +633,7 @@ begin
   Result := VaultResolve(Params.Path, Full);
   if Result <> '' then
     Exit;
-  if VaultGovernance(Params.Path) then
+  if VaultGovernance(Full) then
     Exit(SR_VAULT_GOVERNANCE);
   if not TFile.Exists(Full) then
     Exit(Format('error: la nota "%s" no existe.', [Params.Path.Trim]));
@@ -642,6 +657,12 @@ begin
 
   Text := Copy(Text, 1, P - 1) + Params.New_Text +
     Copy(Text, P + Length(Params.Old_Text), MaxInt);
+  // A patch that leaves nothing behind is a DELETE, and deleting knowledge is
+  // not on offer here (field round 9: old_text = the whole note, new_text = ""
+  // emptied it). Refuse rather than accept a destructive edit dressed as a
+  // replacement - the backup exists for accidents, not as a licence.
+  if Text.Trim = '' then
+    Exit(SR_VAULT_WOULD_EMPTY);
   Backup := VaultBackup(Full); // rule 11, before touching anything
   VaultSave(Full, Text);
   TLogger.Info('vault_patch: ' + VaultRelative(Full));

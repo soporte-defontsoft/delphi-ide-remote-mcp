@@ -160,39 +160,23 @@ begin
   end;
 end;
 
-{ Apply the Low mandatory label to one existing entry (file or directory). }
-function LabelEntryLow(const APath: string): Boolean;
-var
-  SD: PSECURITY_DESCRIPTOR;
-begin
-  Result := False;
-  SD := nil;
-  if ConvertStringSecurityDescriptorToSecurityDescriptorW(
-    'S:(ML;OICI;NW;;;LW)', 1, SD, nil) then
-  try
-    Result := SetFileSecurityW(PWideChar(APath), LABEL_SECURITY_INFORMATION_, SD);
-  finally
-    LocalFree(HLOCAL(SD));
-  end;
-end;
-
 procedure LabelDirTreeLowIntegrity(const ADir: string);
 var
   Entry: string;
 begin
   if (ADir = '') or not TDirectory.Exists(ADir) then
     Exit;
-  LabelEntryLow(ADir);
+  LabelDirLowIntegrity(ADir);
   // Relabel existing children. Best-effort and bounded: an unreadable subtree
   // is skipped, never fatal (same tolerance as the rest of the server).
   try
     for Entry in TDirectory.GetFiles(ADir, '*', TSearchOption.soAllDirectories) do
-      LabelEntryLow(Entry);
+      LabelDirLowIntegrity(Entry);
   except
   end;
   try
     for Entry in TDirectory.GetDirectories(ADir, '*', TSearchOption.soAllDirectories) do
-      LabelEntryLow(Entry);
+      LabelDirLowIntegrity(Entry);
   except
   end;
 end;

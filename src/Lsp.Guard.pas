@@ -68,6 +68,15 @@ function VaultConfigured: Boolean;  // VaultPath set AND the directory exists
   an agent to edit them behind the vault's back. }
 function InVault(const APath: string): Boolean;
 
+{ THE Windows name rule, in one place: a path segment ending in a dot or a
+  space, or carrying an Alternate Data Stream (":"), is refused - Windows
+  normalizes those away when opening, so what a check sees and what gets
+  written are different files. Used by the workspace jail AND by the vault
+  resolver: the same trick defeated both (delphi_textedit in an early round,
+  the vault governance files in round 9), so the rule lives here once instead
+  of being re-derived per toolset. '' = the name is fine. }
+function PathAnomaly(const APath: string): string;
+
 { Whether the vault WRITE tools (vault_append/create/patch) are enabled:
   the vault is configured AND [Vault] ReadOnly is 0 (default 1 = read-only).
   Even when writable, the write tools are refused for a read-only credential
@@ -514,19 +523,24 @@ begin
   if Rest.Contains(':') then
     Exit(Format('RECHAZADO: la ruta "%s" contiene ":" fuera de la unidad ' +
       '(flujo alternativo de datos). Usa un nombre de fichero normal.', [APath]));
-  Name := TPath.GetFileName(ExcludeTrailingPathDelimiter(APath));
-  if Name = '' then
-    Exit;
-  // "." and ".." are standard navigation, not a normalization trick: the jail
-  // canonicalizes before deciding, so an escape via ".." is caught there.
-  // Rejecting them here refused legitimate parent-directory paths.
-  if (Name = '.') or (Name = '..') then
-    Exit;
-  if Name.TrimRight([' ', '.']) <> Name then
-    Exit(Format('RECHAZADO: el nombre "%s" termina en punto o espacio; ' +
-      'Windows los recorta al crear el fichero, asi que el nombre real seria ' +
-      'otro ("%s"). Pide el nombre exacto, sin adornos.',
-      [Name, Name.TrimRight([' ', '.'])]));
+  // EVERY segment, not just the last: a folder named "notas " normalizes the
+  // same way, and checking only the file name left the rest of the path to
+  // slip through (field round 9 hit the same class in the vault resolver).
+  for Name in ExcludeTrailingPathDelimiter(Rest).Split(['\', '/']) do
+  begin
+    if Name = '' then
+      Continue;
+    // "." and ".." are standard navigation, not a normalization trick: the
+    // jail canonicalizes before deciding, so an escape via ".." is caught
+    // there. Rejecting them here refused legitimate parent-directory paths.
+    if (Name = '.') or (Name = '..') then
+      Continue;
+    if Name.Trim([' ']).TrimRight([' ', '.']) <> Name then
+      Exit(Format('RECHAZADO: el nombre "%s" empieza o termina en punto o ' +
+        'espacio; Windows los recorta al abrir el fichero, asi que el nombre ' +
+        'real seria otro ("%s"). Pide el nombre exacto, sin adornos.',
+        [Name, Name.Trim([' ']).TrimRight([' ', '.'])]));
+  end;
 end;
 
 function PathDenied(const APath: string): string;

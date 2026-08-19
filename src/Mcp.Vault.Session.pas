@@ -36,9 +36,12 @@ uses
 { The initialize "instructions" text ('' when no vault is configured). }
 function VaultInstructions: string;
 
-{ The bootstrap content: the vault's rules + its index, as one document.
-  Shared by the /vault prompt and vault_read-with-no-path. }
-function VaultBootstrapText: string;
+{ The bootstrap content: the vault's rules + its index. Shared by the /vault
+  prompt and vault_read-with-no-path. ABudget caps one result (0 = no cap):
+  when both files do not fit, the FIRST is returned whole and the caller is
+  told to read the other by name - the split happens between files, never
+  inside one. }
+function VaultBootstrapText(ABudget: Integer): string;
 
 type
   TMCPPromptsManager = class(TInterfacedObject, IMCPCapabilityManager)
@@ -60,30 +63,46 @@ uses
 const
   INSTRUCTIONS_FILE = 'VAULT-INSTRUCTIONS.md';
   MAX_INSTRUCTIONS = 8000; // instructions ride in every prompt: keep them sane
+  BOOTSTRAP_BUDGET = 70000; // same per-result cap as vault_read (see there)
 
-function VaultBootstrapText: string;
+function VaultBootstrapText(ABudget: Integer): string;
 var
   Sb: TStringBuilder;
-  Full: string;
+  Full, Body: string;
+  Pending: string;
 begin
   Sb := TStringBuilder.Create;
   try
+    Pending := '';
     for var Boot in ['AGENTS-VAULT.md', 'MEMORY.md'] do
     begin
       Full := TPath.Combine(VaultPath, Boot);
-      Sb.AppendLine('===== ' + Boot + ' =====');
-      Sb.AppendLine;
+      Body := '';
       if TFile.Exists(Full) then
         try
-          Sb.AppendLine(TFile.ReadAllText(Full, TEncoding.UTF8).TrimRight);
+          Body := TFile.ReadAllText(Full, TEncoding.UTF8).TrimRight;
         except
           on E: Exception do
-            Sb.AppendLine('(no se pudo leer: ' + E.Message + ')');
+            Body := '(no se pudo leer: ' + E.Message + ')';
         end
       else
-        Sb.AppendLine('(este vault no tiene ' + Boot + ')');
+        Body := '(este vault no tiene ' + Boot + ')';
+      // Split BETWEEN files, never inside one: half a rules file is worse
+      // than a second call, and a whole file is what the same vault gives
+      // you when read locally.
+      if (ABudget > 0) and (Sb.Length > 0) and
+         (Sb.Length + Length(Body) > ABudget) then
+      begin
+        Pending := Boot;
+        Break;
+      end;
+      Sb.AppendLine('===== ' + Boot + ' =====');
+      Sb.AppendLine;
+      Sb.AppendLine(Body);
       Sb.AppendLine;
     end;
+    if Pending <> '' then
+      Sb.AppendLine(Format(SN_VAULT_BOOTSTRAP_NEXT_FMT, [Pending, Pending]));
     Result := Sb.ToString;
   finally
     Sb.Free;
@@ -173,7 +192,7 @@ begin
       Msg.AddPair('content', Content);
       Content.AddPair('type', 'text');
       Content.AddPair('text', SN_VAULT_PROMPT_HEADER + sLineBreak + sLineBreak +
-        VaultBootstrapText);
+        VaultBootstrapText(BOOTSTRAP_BUDGET));
     end;
     Result := TValue.From<TJSONObject>(Res);
   except

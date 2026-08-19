@@ -6,6 +6,41 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.27.0-beta] - 2026-08-20
+
+Field round 9 (Fable), first findings - plus the vault bootstrap redesigned to
+match how the same vault is read locally.
+
+### Security
+- **CRITICAL: the vault's governance files could be written through a trailing
+  space.** `vault_append` with `"MEMORY.md "` reached the real file: Windows
+  trims the space when opening, while the governance check compared the raw
+  string and saw a different name. The check now decides on the **resolved**
+  path, and the Windows name rule (segment ending in a dot or space, or
+  carrying an ADS) is enforced by **one shared helper** - the same one the
+  workspace jail uses, now covering every path segment rather than only the
+  last. The same trick had defeated `delphi_textedit` in an earlier round; it
+  is now a single rule in a single place instead of one per toolset.
+- **`vault_patch` could empty a note** (`old_text` = the whole content,
+  `new_text` = `""`). Deleting knowledge is not an operation this server
+  offers, so a replacement that would leave the note blank is refused - the
+  automatic backup is there for accidents, not as a licence.
+
+### Changed
+- **The vault bootstrap serves WHOLE FILES again.** Concatenating rules + index
+  into one 85 KB result overflowed a client, and paging it by line meant
+  reading documentation in fragments - which is not how the vault is read
+  locally. Now each file arrives complete, and when the two do not fit
+  together the second is fetched by name (`vault_read {path: "MEMORY.md"}`):
+  the split happens between files, never inside one. Measured on a real vault:
+  22 KB then 63 KB, two calls, both whole.
+
+### Fixed
+- Removed a duplicated implementation of the Low-integrity labelling helper in
+  `Lsp.Sandbox` (the same function body under two names).
+
+7 E2E batteries, **401 checks**.
+
 ## [0.26.2-beta] - 2026-08-20
 
 ### Changed

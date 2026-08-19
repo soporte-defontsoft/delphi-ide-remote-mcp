@@ -213,8 +213,8 @@ check('read: offset/limit acota', '6|' in out and '1|# Contexto' not in out, out
 out = s.call('vault_read', {"path": "projects/delphi/grande.md"})
 check('read: nota enorme PAGINADA con el offset exacto de continuacion',
       'Mostradas las lineas' in out and 'offset' in out, out[-220:])
-check('read: la pagina cabe en el presupuesto por-resultado (<50K)',
-      len(out) < 50000, len(out))
+check('read: la pagina cabe en el presupuesto por-resultado',
+      len(out) < 75000, len(out))
 # the continuation offset the server hands back must actually work
 import re as _re
 _m = _re.search(r'offset:\s*(\d+)', out)
@@ -225,12 +225,16 @@ if _m:
           ('\n%d|' % nxt) in out2 or out2.startswith('%d|' % nxt) or ('%d|' % nxt) in out2,
           out2[:150])
 
-# R8: the BOOTSTRAP is paged too - a real vault's rules+index overflow a client
+# R8/R9: the BOOTSTRAP is served as WHOLE FILES - the same thing you get
+# reading the vault locally. It never cuts a file in half; when rules + index
+# do not fit together, the second is asked for by name.
 out = s.call('vault_read', {})
-check('R8: el arranque cabe en una respuesta (paginado, no 85 KB de golpe)',
-      len(out) < 50000, len(out))
-check('R8: el arranque va numerado (se puede continuar por offset)',
-      '1|' in out, out[:120])
+check('R8: el arranque cabe en una respuesta', len(out) < 75000, len(out))
+check('R9: el arranque NO va numerado (es documentacion, se lee entera)',
+      '1|# ' not in out and 'Carga perezosa' in out, out[:150])
+check('R9: el arranque trae los ficheros ENTEROS (no cortados a media linea)',
+      open(os.path.join(VAULT, 'AGENTS-VAULT.md'), encoding='utf-8').read().strip() in out,
+      out[:200])
 
 # barra invertida y barra normal valen igual
 out = s.call('vault_read', {"path": r"projects\delphi\log.md"})
@@ -297,6 +301,22 @@ for gov in ('MEMORY.md', 'AGENTS-VAULT.md', 'AGENTS-VAULT-WRITE.md'):
           'RECHAZADO' in out and 'GOBIERNO' in out.upper(), out[:150])
 check('gobierno: MEMORY.md intacto en disco',
       'intruso' not in open(os.path.join(VAULT, 'MEMORY.md'), encoding='utf-8').read())
+
+# R9 CRITICAL: Windows trims trailing/leading spaces and dots when opening, so
+# "MEMORY.md " reached the REAL governance file while the check compared the
+# untrimmed name. Every variant of the trick must be refused.
+for probe, label in (('MEMORY.md ', 'espacio final'),
+                     (' MEMORY.md', 'espacio inicial'),
+                     ('MEMORY.md.', 'punto final'),
+                     ('MEMORY.md  ', 'dos espacios'),
+                     ('notas /idea.md', 'espacio en la carpeta')):
+    out = s.call('vault_append', {"path": probe, "content": "- intruso\n"})
+    check('R9 CRITICAL: gobierno/nombre con %s RECHAZADO' % label, 'RECHAZADO' in out, out[:130])
+check('R9 CRITICAL: ningun intruso llego a MEMORY.md',
+      'intruso' not in open(os.path.join(VAULT, 'MEMORY.md'), encoding='utf-8').read())
+for probe in ('MEMORY.md ', 'MEMORY.md.'):
+    out = s.call('vault_create', {"path": probe, "content": "x"})
+    check('R9: create con "%s" tambien RECHAZADO' % probe, 'RECHAZADO' in out, out[:130])
 out = s.call('vault_append', {"path": "backups/mcp/vieja/secreto.md", "content": "x"})
 check('gobierno: escribir en backups/ rechazado', 'RECHAZADO' in out, out[:150])
 
@@ -374,6 +394,16 @@ check('patch: old_text ausente da error', out.startswith('error') and 'no aparec
 out = s.call('vault_patch', {"path": "projects/delphi/log.md",
                              "old_text": "\n", "new_text": "x"})
 check('patch: old_text duplicado se rechaza', 'VARIAS veces' in out, out[:150])
+
+# R9: a patch that empties the note is a DELETE, and there is no delete here
+VACIA = os.path.join(VAULT, 'conventions', 'vaciable.md')
+w('conventions/vaciable.md', '# Unica\n')
+_todo = open(VACIA, encoding='utf-8').read()
+out = s.call('vault_patch', {"path": "conventions/vaciable.md",
+                             "old_text": _todo.strip(), "new_text": ""})
+check('R9: patch que VACIARIA la nota rechazado', 'RECHAZADO' in out, out[:150])
+check('R9: la nota conserva su contenido',
+      open(VACIA, encoding='utf-8').read().strip() != '', 'quedo vacia')
 
 # ===========================================================================
 # 10. Read-only vault ([Vault] ReadOnly=1): only the 2 read tools exist

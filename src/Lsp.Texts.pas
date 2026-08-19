@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.26.2-beta';
+  SERVER_VERSION = '0.27.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -178,6 +178,12 @@ const
     '(y vault_append / vault_create / vault_patch si este servidor permite ' +
     'escribir en el): asi queda copia de seguridad y se respetan sus reglas.';
 
+  SR_VAULT_WOULD_EMPTY =
+    'RECHAZADO: esa sustitucion dejaria la nota VACIA, y borrar conocimiento ' +
+    'no es una operacion de este servidor (no hay delete ni reescritura ' +
+    'total por diseno). Si de verdad hay que retirar la nota, diselo al ' +
+    'usuario y que lo haga una persona.';
+
   SR_VAULT_JAIL =
     'RECHAZADO: esa ruta sale del vault. Usa una ruta RELATIVA dentro del ' +
     'vault (projects/x/context.md): sin unidades, sin rutas absolutas y sin ' +
@@ -187,11 +193,18 @@ const
     #10'--- Mostradas las lineas 1..%d de %d. Pide el resto con ' +
     'vault_read {offset: %d} (y limit si quieres trozos mas pequenos).';
 
-  SN_VAULT_BOOTSTRAP_FMT =
-    '# Arranque del vault: reglas (AGENTS-VAULT.md) + indice (MEMORY.md), ' +
-    '%d lineas en total.'#10 +
+  SN_VAULT_BOOTSTRAP =
+    '# Arranque del vault: las reglas (AGENTS-VAULT.md) y el indice ' +
+    '(MEMORY.md).'#10 +
     'Carga perezosa: usa el indice para decidir que notas abrir con ' +
     'vault_read; no leas el vault entero.'#10#10;
+
+  // When rules + index do not fit in one result, the split is between FILES:
+  // the first arrives whole and the second is asked for by name. Never half a
+  // file - and it mirrors how the vault is read locally, one file per read.
+  SN_VAULT_BOOTSTRAP_NEXT_FMT =
+    #10'--- Falta %s (no cabe junto con lo anterior en una sola respuesta). ' +
+    'Pidelo entero con vault_read {path: "%s"}.';
 
   SR_VAULT_READONLY =
     'RECHAZADO: el vault de conocimiento esta en SOLO LECTURA en este ' +
