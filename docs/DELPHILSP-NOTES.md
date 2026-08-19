@@ -133,8 +133,24 @@ Troubleshooting facts (docwiki "Troubleshooting: Delphi LSP"):
   `--lsif` switch). Global kill-switch: registry
   `HKCU\Software\Embarcadero\BDS\<ver>\LSP`, REG_SZ `EnableLsif` = false.
   Third-party libraries can generate their own LSIF from source.
-- **Open opportunity**: since the format is standard, an external tool can
-  parse the `.lsif` files directly — including for symbols of the RTL/VCL —
-  and a project can index itself with `--lsif` at build time. LSIF result
-  sets include reference relationships, which the public LSP surface never
-  exposes.
+- **Measured content of the shipped indexes**: rtl.lsif (321 MB), vcl.lsif
+  (108 MB) etc. contain `document`/`range`/`resultSet`/`definitionResult`/
+  `hoverResult`/`moniker` — and **zero `referenceResult`**. They serve
+  definition + hover + symbolic identity, not find-references.
+- **BUT references can be computed by inverting the graph.** A
+  project-level index generated with `dcc64 --lsif <dpr>` (plus the
+  project's usual options) records a `range` for identifier USAGES too,
+  each linked `range -next-> resultSet -textDocument/definition->
+  definitionResult -item-> [definition ranges]`. Grouping usage ranges by
+  their definition range IS find-references — compiler-exact, homonym-free.
+  Measured on a real 34-unit project: 3.9 MB index generated in 0.5 s of
+  compilation; graph load 0.08 s; a symbol used from 6 different units
+  returned all 13 usages instantly and correctly.
+- **Monikers give cross-package identity**: usages of external symbols
+  carry `{"kind":"import","scheme":"Delphi","identifier":
+  "*/System.SysUtils.Exception"}`; a package's own symbols get export
+  monikers (`MyProj/MyUnit.MyFunc`). Joining indexes by moniker identifier
+  links references across projects and into the RTL.
+- Caveats: the index reflects the last successful compilation (stale after
+  edits until rebuilt), and only covers units the compiler actually
+  compiled.
