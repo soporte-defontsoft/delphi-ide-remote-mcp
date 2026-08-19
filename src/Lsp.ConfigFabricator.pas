@@ -1,0 +1,311 @@
+unit Lsp.ConfigFabricator;
+
+{ Fabricates a .delphilsp.json settings file for a project that has none (or
+  a stale one), by mining the .dproj. The fabricated file is written to a
+  cache under %LOCALAPPDATA% - user projects are never written to.
+
+  The .dproj is MSBuild XML; instead of a full MSBuild evaluation we do a
+  tolerant scan: collect every occurrence of the DCC_* properties across all
+  PropertyGroups, accumulate self-references ($(DCC_UnitSearchPath) inside a
+  value means "what previous groups said"), expand the handful of variables
+  that matter ($(BDS), $(Platform), $(Config)) and drop whatever still has
+  unexpanded $() after that. Good enough for Code Insight paths - the
+  compiler never runs from these settings. }
+
+interface
+
+uses
+  System.SysUtils,
+  Lsp.Discovery;
+
+type
+  ELspConfigFabricator = class(Exception);
+
+{ True when an existing .delphilsp.json is unusable: its project file no
+  longer exists, or it was generated for a different compiler generation. }
+function IsSettingsStale(const ASettingsFile: string;
+  const AInfo: TRadStudioInfo): Boolean;
+
+{ Builds (or reuses from cache) a settings file for ADprojPath. Returns the
+  cached .delphilsp.json path. Raises if the .dproj cannot be mined. }
+function FabricateSettings(const ADprojPath: string;
+  const AInfo: TRadStudioInfo): string;
+
+implementation
+
+uses
+  System.Classes,
+  System.IOUtils,
+  System.JSON,
+  System.Hash,
+  System.Generics.Collections,
+  Lsp.Client; // PathToUri / UriToPath
+
+const
+  STANDARD_ALIASES =
+    'Generics.Collections=System.Generics.Collections;' +
+    'Generics.Defaults=System.Generics.Defaults;' +
+    'WinTypes=Winapi.Windows;WinProcs=Winapi.Windows;' +
+    'DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE';
+
+  DEFAULT_NAMESPACES =
+    'Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;' +
+    'System;Xml;Data;Datasnap;Web;Soap';
+
+  BROWSING_SUBDIRS: array [0 .. 13] of string = (
+    'source\rtl\common', 'source\rtl\sys', 'source\rtl\win',
+    'source\rtl\net', 'source\vcl', 'source\fmx', 'source\data',
+    'source\data\ado', 'source\data\firedac', 'source\data\rest',
+    'source\Internet', 'source\soap', 'source\xml', 'source\indy10\Core');
+
+{ ---- tolerant XML scanning ---- }
+
+{ All inner texts of <ATag ...>...</ATag>, in document order. }
+function AllTagValues(const AXml, ATag: string): TArray<string>;
+var
+  List: TList<string>;
+  P, TagEnd, CloseP: Integer;
+  Open1, Open2, CloseTag: string;
+begin
+  List := TList<string>.Create;
+  try
+    Open1 := '<' + ATag + '>';
+    Open2 := '<' + ATag + ' ';
+    CloseTag := '</' + ATag + '>';
+    P := 1;
+    while P <= Length(AXml) do
+    begin
+      var P1 := Pos(Open1, AXml, P);
+      var P2 := Pos(Open2, AXml, P);
+      if (P1 = 0) and (P2 = 0) then
+        Break;
+      if (P1 = 0) or ((P2 > 0) and (P2 < P1)) then
+      begin
+        // tag with attributes: skip to '>'
+        TagEnd := Pos('>', AXml, P2);
+        if TagEnd = 0 then
+          Break;
+        if AXml[TagEnd - 1] = '/' then // self-closing
+        begin
+          P := TagEnd + 1;
+          Continue;
+        end;
+        P := TagEnd + 1;
+      end
+      else
+        P := P1 + Length(Open1);
+      CloseP := Pos(CloseTag, AXml, P);
+      if CloseP = 0 then
+        Break;
+      List.Add(Copy(AXml, P, CloseP - P));
+      P := CloseP + Length(CloseTag);
+    end;
+    Result := List.ToArray;
+  finally
+    List.Free;
+  end;
+end;
+
+{ Merge the occurrences of an accumulating MSBuild property: each value may
+  embed $(PropName) meaning "the accumulated value so far". }
+function MergeProperty(const AXml, APropName: string): string;
+var
+  V: string;
+begin
+  Result := '';
+  for V in AllTagValues(AXml, APropName) do
+    Result := V.Replace('$(' + APropName + ')', Result, [rfReplaceAll, rfIgnoreCase]);
+end;
+
+function XmlUnescape(const S: string): string;
+begin
+  Result := S.Replace('&amp;', '&').Replace('&lt;', '<').Replace('&gt;', '>')
+    .Replace('&quot;', '"').Replace('&apos;', '''');
+end;
+
+{ Split a ;-list, expand variables, drop unexpanded/$-laden or empty entries,
+  absolutize relative entries against ABaseDir, keep only unique. }
+function CleanPathList(const ARaw, ABaseDir, ABdsRoot, APlatform: string): TArray<string>;
+var
+  List: TList<string>;
+  Item, Expanded: string;
+begin
+  List := TList<string>.Create;
+  try
+    for Item in XmlUnescape(ARaw).Split([';']) do
+    begin
+      Expanded := Item.Trim
+        .Replace('$(BDS)', ExcludeTrailingPathDelimiter(ABdsRoot), [rfReplaceAll, rfIgnoreCase])
+        .Replace('$(BDSLIB)', ExcludeTrailingPathDelimiter(ABdsRoot) + '\lib', [rfReplaceAll, rfIgnoreCase])
+        .Replace('$(Platform)', APlatform, [rfReplaceAll, rfIgnoreCase])
+        .Replace('$(Config)', 'Release', [rfReplaceAll, rfIgnoreCase]);
+      if (Expanded = '') or Expanded.Contains('$(') then
+        Continue;
+      if not TPath.IsPathRooted(Expanded) then
+      try
+        Expanded := TPath.GetFullPath(TPath.Combine(ABaseDir, Expanded));
+      except
+        Continue;
+      end;
+      if not List.Contains(Expanded) then
+        List.Add(Expanded);
+    end;
+    Result := List.ToArray;
+  finally
+    List.Free;
+  end;
+end;
+
+{ ---- public API ---- }
+
+function IsSettingsStale(const ASettingsFile: string;
+  const AInfo: TRadStudioInfo): Boolean;
+var
+  Root: TJSONObject;
+  ProjUri, Dll, Suffix: string;
+begin
+  Result := True; // unreadable = stale
+  if not FileExists(ASettingsFile) then
+    Exit;
+  Root := TJSONObject.ParseJSONValue(TFile.ReadAllText(ASettingsFile)) as TJSONObject;
+  if Root = nil then
+    Exit;
+  try
+    var Settings := Root.GetValue('settings') as TJSONObject;
+    if Settings = nil then
+      Exit;
+    var ProjVal := Settings.GetValue('project');
+    if ProjVal = nil then
+      Exit;
+    ProjUri := ProjVal.Value;
+    if not FileExists(TLspClient.UriToPath(ProjUri)) then
+      Exit; // points at a project that is gone (old drive, moved tree)
+    var DllVal := Settings.GetValue('dllname');
+    Dll := '';
+    if DllVal <> nil then
+      Dll := DllVal.Value;
+    Suffix := AInfo.Version.Replace('.0', '0').Replace('.', ''); // '37.0'->'370'
+    if (Dll <> '') and not Dll.Contains(Suffix) then
+      Exit; // generated by another compiler generation
+    Result := False;
+  finally
+    Root.Free;
+  end;
+end;
+
+function FabricateSettings(const ADprojPath: string;
+  const AInfo: TRadStudioInfo): string;
+var
+  Xml, DprojDir, MainSource, DprPath, Plat, Suffix, DllName, Lib: string;
+  SearchRaw, Defines, Namespaces: string;
+  SearchPaths: TArray<string>;
+  CacheDir, CacheFile: string;
+  Root, Settings: TJSONObject;
+  Browsing: TJSONArray;
+  Sub, P, PathsJoined, Opts: string;
+  Values: TArray<string>;
+begin
+  if not FileExists(ADprojPath) then
+    raise ELspConfigFabricator.CreateFmt('.dproj not found: %s', [ADprojPath]);
+  if not AInfo.Found then
+    raise ELspConfigFabricator.Create('No RAD Studio installation discovered.');
+
+  DprojDir := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
+
+  // Cache: <name>-<pathhash>.delphilsp.json under LOCALAPPDATA. Reuse when
+  // newer than the .dproj (and same tool generation baked into the name).
+  CacheDir := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'),
+    'DelphiLspMcp\configs');
+  TDirectory.CreateDirectory(CacheDir);
+  CacheFile := TPath.Combine(CacheDir, Format('%s-%x-%s.delphilsp.json',
+    [TPath.GetFileNameWithoutExtension(ADprojPath),
+     THashFNV1a32.GetHashValue(TPath.GetFullPath(ADprojPath).ToLower),
+     AInfo.Version.Replace('.', '_')]));
+  if FileExists(CacheFile) and
+     (TFile.GetLastWriteTime(CacheFile) > TFile.GetLastWriteTime(ADprojPath)) then
+    Exit(CacheFile);
+
+  Xml := TFile.ReadAllText(ADprojPath);
+
+  Values := AllTagValues(Xml, 'MainSource');
+  if Length(Values) > 0 then
+    MainSource := Values[0]
+  else
+    MainSource := TPath.GetFileNameWithoutExtension(ADprojPath) + '.dpr';
+  DprPath := TPath.GetFullPath(TPath.Combine(DprojDir, MainSource));
+
+  Values := AllTagValues(Xml, 'Platform');
+  if Length(Values) > 0 then
+    Plat := Values[0].Trim
+  else
+    Plat := 'Win32';
+  if not SameText(Plat, 'Win32') and not SameText(Plat, 'Win64') then
+    Plat := 'Win32'; // Code Insight itself is a Windows front-end
+
+  Suffix := AInfo.Version.Replace('.', ''); // '37.0' -> '370'
+  Suffix := Suffix.Replace('00', '0');
+  if SameText(Plat, 'Win64') then
+    DllName := 'dcc64' + Suffix + '.dll'
+  else
+    DllName := 'dcc32' + Suffix + '.dll';
+
+  Lib := ExcludeTrailingPathDelimiter(AInfo.RootDir) + '\lib\' + Plat + '\release';
+
+  SearchRaw := MergeProperty(Xml, 'DCC_UnitSearchPath');
+  SearchPaths := CleanPathList(SearchRaw, DprojDir, AInfo.RootDir, Plat);
+
+  // Defines: keep simple identifiers only (unexpanded $() and junk dropped).
+  Defines := '';
+  for P in XmlUnescape(MergeProperty(Xml, 'DCC_Define')).Split([';']) do
+    if (P.Trim <> '') and not P.Contains('$(') and not P.Contains('\') then
+      if Defines = '' then
+        Defines := P.Trim
+      else if not (';' + Defines + ';').Contains(';' + P.Trim + ';') then
+        Defines := Defines + ';' + P.Trim;
+
+  Namespaces := XmlUnescape(MergeProperty(Xml, 'DCC_Namespace'))
+    .Replace('$(DCC_Namespace)', '', [rfReplaceAll, rfIgnoreCase]).Trim([';']);
+  if Namespaces = '' then
+    Namespaces := DEFAULT_NAMESPACES;
+
+  PathsJoined := Lib;
+  for P in SearchPaths do
+    PathsJoined := PathsJoined + ';' + P;
+
+  Opts := '--no-config -A' + STANDARD_ALIASES;
+  if Defines <> '' then
+    Opts := Opts + ' -D' + Defines;
+  Opts := Opts + ' -NS' + Namespaces + ';';
+  Opts := Opts + Format(' -U"%s" -O"%s" -R"%s" -I"%s"',
+    [PathsJoined, PathsJoined, PathsJoined, PathsJoined]);
+
+  Root := TJSONObject.Create;
+  try
+    Settings := TJSONObject.Create;
+    Root.AddPair('settings', Settings);
+    Settings.AddPair('project', TLspClient.PathToUri(DprPath));
+    Settings.AddPair('dllname', DllName);
+    Settings.AddPair('dccOptions', Opts);
+    Settings.AddPair('projectFiles', TJSONArray.Create);
+    Settings.AddPair('includeDCUsInUsesCompletion', TJSONBool.Create(True));
+    Settings.AddPair('enableKeyWordCompletion', TJSONBool.Create(True));
+    Browsing := TJSONArray.Create;
+    Settings.AddPair('browsingPaths', Browsing);
+    for Sub in BROWSING_SUBDIRS do
+    begin
+      P := ExcludeTrailingPathDelimiter(AInfo.RootDir) + '\' + Sub;
+      if TDirectory.Exists(P) then
+        Browsing.Add(TLspClient.PathToUri(P));
+    end;
+    for P in SearchPaths do
+      if TDirectory.Exists(P) then
+        Browsing.Add(TLspClient.PathToUri(P));
+
+    TFile.WriteAllText(CacheFile, Root.Format(1), TEncoding.UTF8);
+  finally
+    Root.Free;
+  end;
+  Result := CacheFile;
+end;
+
+end.

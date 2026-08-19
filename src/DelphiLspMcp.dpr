@@ -30,6 +30,7 @@ uses
   Lsp.Transport.Process in 'Lsp.Transport.Process.pas',
   Lsp.Client in 'Lsp.Client.pas',
   Lsp.Discovery in 'Lsp.Discovery.pas',
+  Lsp.ConfigFabricator in 'Lsp.ConfigFabricator.pas',
   Lsp.Session in 'Lsp.Session.pas',
   Mcp.Tools.DelphiLsp in 'Mcp.Tools.DelphiLsp.pas';
 

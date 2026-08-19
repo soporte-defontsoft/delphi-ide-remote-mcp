@@ -6,20 +6,20 @@
 - [ ] Decide MCP plumbing: adopt an existing Delphi MCP framework vs. minimal own implementation
 - [ ] CI-less build script (`BuildWithParams`-style) and test project fixtures
 
-## Phase 1 — LSP core (console, no MCP yet)
-- [ ] `Lsp.Transport.Process`: spawn DelphiLSP, Content-Length framing, reader thread, clean shutdown
-- [ ] `Lsp.Client`: initialize (controller+2), didChangeConfiguration(settingsFile), didOpen (encoding-safe), request/response correlation, retry on `-32800`
-- [ ] Console harness reproducing the validation battery (hover, definition intra/cross-unit, documentSymbol, diagnostics)
+## Phase 1 — LSP core (console, no MCP yet) ✔
+- [x] `Lsp.Transport.Process`: spawn DelphiLSP, Content-Length framing, reader thread, clean shutdown
+- [x] `Lsp.Client`: initialize, didChangeConfiguration(settingsFile), didOpen (encoding-safe), request/response correlation, retry on `-32800`
+- [x] Console harness reproducing the validation battery (5/5 PASS on a real-world project)
 
-## Phase 2 — MCP stdio minimum
-- [ ] Tools: `delphi_definition`, `delphi_hover`, `delphi_symbols`, `delphi_completion`
-- [ ] Auto-didOpen with per-document cache
-- [ ] Verified against Claude Code (stdio MCP registration)
+## Phase 2 — MCP stdio minimum ✔
+- [x] Tools: `delphi_definition`, `delphi_hover`, `delphi_symbols`, `delphi_completion`
+- [x] Auto-didOpen with per-document cache; warm per-project LSP clients
+- [x] Verified against Claude Code (registered; CLI health check: Connected)
 
-## Phase 3 — Config Fabricator
-- [ ] RAD Studio discovery via registry (multi-version, pick highest / configurable)
-- [ ] Use project `.delphilsp.json` when fresh; detect staleness (paths, dll version)
-- [ ] Fabricate settings from `.dproj` (search paths, defines, platform, namespaces)
+## Phase 3 — Config Fabricator ✔
+- [x] RAD Studio discovery via registry (multi-version, pick highest)
+- [x] Use project `.delphilsp.json` when fresh; detect staleness (dead project path, other compiler generation)
+- [x] Fabricate settings from `.dproj` (search paths, defines, platform, namespaces) into a `%LOCALAPPDATA%` cache — user projects are never written to. Verified end-to-end: 5/5 battery and MCP hover on a project with no settings at all
 
 ## Phase 4 — The value tools
 - [ ] `delphi_diagnostics` (linter mode; per-file on-demand lint)

@@ -81,6 +81,7 @@
         <DCCReference Include="Lsp.Transport.Process.pas"/>
         <DCCReference Include="Lsp.Client.pas"/>
         <DCCReference Include="Lsp.Discovery.pas"/>
+        <DCCReference Include="Lsp.ConfigFabricator.pas"/>
         <DCCReference Include="Lsp.Session.pas"/>
         <DCCReference Include="Mcp.Tools.DelphiLsp.pas"/>
         <BuildConfiguration Include="Base">

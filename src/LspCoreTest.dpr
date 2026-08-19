@@ -28,7 +28,8 @@ uses
   System.JSON,
   Lsp.Transport.Process in 'Lsp.Transport.Process.pas',
   Lsp.Client in 'Lsp.Client.pas',
-  Lsp.Discovery in 'Lsp.Discovery.pas';
+  Lsp.Discovery in 'Lsp.Discovery.pas',
+  Lsp.ConfigFabricator in 'Lsp.ConfigFabricator.pas';
 
 var
   GOpts: TDictionary<string, string>;
@@ -318,6 +319,20 @@ end;
 
 // ---------------------------------------------------------------- commands
 
+procedure CmdFabricate;
+var
+  Dproj, OutFile: string;
+  Info: TRadStudioInfo;
+begin
+  Dproj := Opt('dproj');
+  if (Dproj = '') or not FileExists(Dproj) then
+    raise Exception.Create('Missing or not found: --dproj <project.dproj>');
+  Info := DiscoverRadStudio;
+  OutFile := FabricateSettings(TPath.GetFullPath(Dproj), Info);
+  Writeln('# fabricated settings: ', OutFile);
+  Writeln(TFile.ReadAllText(OutFile));
+end;
+
 procedure CmdCapabilities;
 var
   Transport: TLspProcessTransport;
@@ -561,10 +576,12 @@ begin
         CmdLint
       else if GCommand = 'battery' then
         CmdBattery
+      else if GCommand = 'fabricate' then
+        CmdFabricate
       else
       begin
         Writeln('Unknown or missing command.');
-        Writeln('Commands: capabilities | symbols | hover | def | lint | battery');
+        Writeln('Commands: capabilities | symbols | hover | def | lint | battery | fabricate');
         ExitCode := 2;
       end;
       if GFailures > 0 then

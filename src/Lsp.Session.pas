@@ -22,7 +22,8 @@ uses
   System.Generics.Collections,
   Lsp.Transport.Process,
   Lsp.Client,
-  Lsp.Discovery;
+  Lsp.Discovery,
+  Lsp.ConfigFabricator;
 
 type
   ELspSession = class(Exception);
@@ -45,6 +46,18 @@ type
 
     { Finds the project settings for a source file ('' if none). }
     function FindSettingsFile(const AFilePath: string): string;
+
+    { Finds the .dproj that governs a source file ('' if none): walks up the
+      directory tree; when a directory has several, prefers one whose text
+      references the file's base name, then one matching the directory name,
+      then the first. }
+    function FindDproj(const AFilePath: string): string;
+
+    { Full resolution: fresh IDE settings win; stale/missing settings are
+      replaced by a fabricated one when a .dproj is available; '' otherwise.
+      ARootDir is the workspace root to initialize the LSP with - always a
+      PROJECT directory, never the settings cache. }
+    function ResolveSettings(const AFilePath: string; out ARootDir: string): string;
 
     { Returns the warm client for the file's project (creating it if needed)
       plus the settings file it runs with (''= unconfigured). Also ensures
@@ -128,6 +141,65 @@ begin
   end;
 end;
 
+function TLspSession.FindDproj(const AFilePath: string): string;
+var
+  Dir, BaseName, C: string;
+  Matches: TArray<string>;
+  Depth: Integer;
+begin
+  Result := '';
+  BaseName := TPath.GetFileNameWithoutExtension(AFilePath);
+  Dir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
+  for Depth := 1 to 8 do
+  begin
+    if Dir = '' then
+      Exit;
+    Matches := TDirectory.GetFiles(Dir, '*.dproj');
+    if Length(Matches) > 0 then
+    begin
+      if Length(Matches) = 1 then
+        Exit(Matches[0]);
+      for C in Matches do
+        if TFile.ReadAllText(C).ToLower.Contains(BaseName.ToLower) then
+          Exit(C);
+      for C in Matches do
+        if SameText(TPath.GetFileNameWithoutExtension(C),
+          TPath.GetFileName(Dir)) then
+          Exit(C);
+      Exit(Matches[0]);
+    end;
+    var Parent := TPath.GetDirectoryName(Dir);
+    if SameText(Parent, Dir) then
+      Exit;
+    Dir := Parent;
+  end;
+end;
+
+function TLspSession.ResolveSettings(const AFilePath: string;
+  out ARootDir: string): string;
+var
+  Info: TRadStudioInfo;
+  Dproj: string;
+begin
+  Info := DiscoverRadStudio;
+  Result := FindSettingsFile(AFilePath);
+  if (Result <> '') and not IsSettingsStale(Result, Info) then
+  begin
+    ARootDir := TPath.GetDirectoryName(Result);
+    Exit; // fresh IDE-generated settings: best possible source
+  end;
+  Dproj := FindDproj(AFilePath);
+  if Dproj <> '' then
+  begin
+    ARootDir := TPath.GetDirectoryName(TPath.GetFullPath(Dproj));
+    Exit(FabricateSettings(Dproj, Info));
+  end;
+  // No .dproj anywhere: a stale settings file is worse than none (its paths
+  // point at machines/drives gone by), so fall back to unconfigured.
+  ARootDir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
+  Result := '';
+end;
+
 function TLspSession.CreateClient(const ARootDir, ASettingsFile: string): TLspClient;
 var
   Transport: TLspProcessTransport;
@@ -162,17 +234,11 @@ begin
 
   FLock.Enter;
   try
-    ASettingsUsed := FindSettingsFile(FullPath);
+    ASettingsUsed := ResolveSettings(FullPath, RootDir);
     if ASettingsUsed <> '' then
-    begin
-      Key := ASettingsUsed.ToLower;
-      RootDir := TPath.GetDirectoryName(ASettingsUsed);
-    end
+      Key := ASettingsUsed.ToLower
     else
-    begin
-      RootDir := TPath.GetDirectoryName(FullPath);
       Key := '(nosettings)' + RootDir.ToLower;
-    end;
 
     if not FClients.TryGetValue(Key, Result) then
     begin
