@@ -257,6 +257,53 @@ if 'exit=0' in out:
 else:
     check('git disponible para la prueba de commit', False, out)
 
+# ---- R3-1: LSP URIs must not leak the real drive (file:///D%3A/...) --------
+out = call('delphi_symbols', {"path": V_PAS})
+check('LSP: la URI no filtra la unidad real (%3A)',
+      (DRIVE + '%3A') not in out and (DRIVE + '%3a') not in out, out[:200])
+
+# ---- C1-bis: published declaration AFTER the fields, never before ----------
+FORM2 = os.path.join(INSIDE, 'UF2.pas')
+open(FORM2, 'wb').write(FORM.replace('TFormPrueba', 'TFormDos').encode('cp1252'))
+out = call('delphi_edit', {"path": FORM2, "insert": "metodo", "inclass": "TFormDos",
+                           "visibility": "published",
+                           "code": "procedure BotonClick(Sender: TObject);\nbegin\nend;"})
+check('C1-bis: insert aceptado', 'INSERT metodo' in out, out[:150])
+raw = open(FORM2, 'rb').read().decode('cp1252')
+icampo = raw.find('Nombre: string;')
+idecl = raw.find('procedure BotonClick(Sender: TObject);')
+ipriv = raw.find('private')
+check('C1-bis: declaracion DESPUES del campo y antes de private (no E2169)',
+      -1 < icampo < idecl < ipriv, f'campo={icampo} decl={idecl} priv={ipriv}')
+
+# ---- delphi_report: works at every level, one .md per report ---------------
+import glob as _glob
+RDIR = os.path.join(os.path.dirname(EXE), 'reports')
+before = set(_glob.glob(os.path.join(RDIR, '*.md')))
+out = call('delphi_report', {"message": "Al usar delphi_x paso Y, esperaba Z.",
+                             "title": "Prueba de la bateria",
+                             "kind": "bug", "from": "test_v012"})
+check('report: aceptado y guardado', 'GRACIAS' in out and '.md' in out, out[:150])
+after = set(_glob.glob(os.path.join(RDIR, '*.md')))
+new_files = after - before
+check('report: creo exactamente 1 fichero .md', len(new_files) == 1, new_files)
+if new_files:
+    txt = open(list(new_files)[0], encoding='utf-8-sig').read()
+    check('report: lleva version, fecha y mensaje',
+          'Server version' in txt and 'Date' in txt and 'esperaba Z' in txt, txt[:200])
+out = call('delphi_report', {"message": ""})
+check('report: mensaje vacio rechazado', 'RECHAZADO' in out, out[:120])
+
+# ---- git dangerous options refused at the GATE (both access levels) --------
+PWN = os.path.join(INSIDE, 'PWNED.txt')
+out = call('delphi_git', {"repo": INSIDE, "command": "diff", "args": "--output=" + PWN})
+check('git: --output rechazado en el gate (aun con token RW)',
+      'RECHAZADO' in out and 'git' in out, out[:150])
+check('git: --output no escribio nada', not os.path.exists(PWN), PWN)
+out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -3"})
+check('git: log normal sigue funcionando (sin falso positivo)',
+      'RECHAZADO' not in out, out[:120])
+
 # ---- shutdown main server --------------------------------------------------
 proc.stdin.close()
 proc.wait(timeout=15)

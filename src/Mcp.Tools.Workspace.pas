@@ -226,7 +226,8 @@ uses
   Lsp.Discovery,
   Lsp.References,
   Lsp.BuildRunner,
-  Lsp.Guard;
+  Lsp.Guard,
+  Lsp.Texts;
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =
@@ -469,9 +470,8 @@ begin
   // refused, and double quotes are neutralized where it is embedded.
   if Params.Message.Contains(#13) or Params.Message.Contains(#10) then
     Exit('error: line breaks are not allowed in message');
-  if Params.Args.Contains('--upload-pack') or Params.Args.Contains('--exec') or
-     Params.Args.StartsWith('-c') or Params.Args.Contains(' -c ') then
-    Exit('error: that git option is not allowed here');
+  // Dangerous git options (--output, --no-index, -c, ...) are filtered at the
+  // single gate (Lsp.Guard.ToolCallDenied), before this handler runs.
 
   Cmd := Params.Command.Trim.ToLower;
   if Cmd = 'status' then
@@ -640,10 +640,7 @@ begin
   FDescription := 'The lay of the land on the SERVER: the workspace roots ' +
     'this server operates within (your entire allowed universe here), the ' +
     'access level (read-write / read-only), and the active RAD Studio. ' +
-    'Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only ' +
-    'exist inside this MCP: use them verbatim in every path argument and ' +
-    'you will receive them back in results. They are NEVER your own local ' +
-    'disks. Call this FIRST. Read-only, no parameters.';
+    SN_VIRTUAL_DRIVES + ' Call this FIRST. Read-only, no parameters.';
 end;
 
 function TDelphiWorkspaceTool.ExecuteWithParams(const Params: TDelphiWorkspaceParams): string;
@@ -656,11 +653,7 @@ var
 begin
   Return := TJSONObject.Create;
   try
-    Return.AddPair('note', 'These are paths on the REMOTE server that runs ' +
-      'Delphi, not your local machine. Server drive letters travel as ' +
-      'VIRTUAL units (srvd:, srvc:, ...): use them verbatim in every path ' +
-      'argument - they only resolve inside this MCP, never on your disk. ' +
-      'Work only inside "roots"; anything outside is refused.');
+    Return.AddPair('note', SN_WORKSPACE_NOTE);
     Roots := WorkspaceRoots;
     RootsArr := TJSONArray.Create;
     Return.AddPair('roots', RootsArr);

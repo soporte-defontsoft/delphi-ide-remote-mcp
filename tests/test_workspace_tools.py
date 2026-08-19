@@ -145,7 +145,10 @@ check('fetch: fue en varios chunks', len(local) > 400, len(local))
 out = call('delphi_git', {"repo": REPO, "command": "status"})
 check('git: status', out.startswith('exit=0') and '## main' in out, out[:150])
 out = call('delphi_git', {"repo": REPO, "command": "log"})
-check('git: log', out.startswith('exit=0') and 'Phase' in out, out[:150])
+# --oneline -20: assert on the SHAPE (hash + subject lines), never on a
+# specific old commit message - it scrolls out of the window as we release.
+check('git: log', out.startswith('exit=0')
+      and len([l for l in out.splitlines()[1:] if l.strip()]) >= 5, out[:150])
 out = call('delphi_git', {"repo": REPO, "command": "branch"})
 check('git: branch', out.startswith('exit=0') and 'main' in out, out[:150])
 out = call('delphi_git', {"repo": REPO, "command": "diff", "args": "--stat"})

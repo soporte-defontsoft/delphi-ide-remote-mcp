@@ -185,6 +185,35 @@ if RTL:
 else:
     print('SKIP - lib: fuentes RTL no encontradas en esta maquina')
 
+# --- git args: file-writing / path-reading options rejected on read commands
+#     (a jail escape usable even read-only; found in the field audit) ---
+def gitclean(out):
+    return 'RECHAZADO' in out and 'opcion de git' in out
+
+# --output writes a file: even a "read" command (diff/show) must refuse it,
+# whether the target is inside the jail or an absolute path outside it.
+for tgt, label in ((os.path.join(INSIDE, 'PWNED.txt'), 'dentro jaula'),
+                   (os.path.join(OUTSIDE, 'PWNED.txt'), 'fuera jaula (absoluto)')):
+    out = call('delphi_git', {"repo": INSIDE, "command": "diff",
+                              "args": "--output=" + tgt})
+    check('git escape: diff --output %s rechazado' % label, gitclean(out), out[:150])
+    check('git escape: %s no se escribio' % label, not os.path.exists(tgt), tgt)
+out = call('delphi_git', {"repo": INSIDE, "command": "show",
+                          "args": "--output=" + os.path.join(INSIDE, 'PWNED2.txt')})
+check('git escape: show --output rechazado', gitclean(out), out[:150])
+check('git escape: show output no escrito',
+      not os.path.exists(os.path.join(INSIDE, 'PWNED2.txt')), 'PWNED2')
+# --no-index reads two arbitrary paths (content leak outside the repo)
+out = call('delphi_git', {"repo": INSIDE, "command": "diff",
+                          "args": "--no-index " + OUT_PAS + " " + IN_PAS})
+check('git escape: diff --no-index rechazado', gitclean(out), out[:150])
+# -c arbitrary config (core.pager/sshCommand -> RCE) stays refused
+out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "-c core.pager=calc"})
+check('git escape: -c config rechazado', gitclean(out), out[:150])
+# a legitimate read still works (no false positive)
+out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -5"})
+check('git: log --oneline sigue permitido (sin falso positivo)', not gitclean(out), out[:120])
+
 print()
 print('== guard battery: %d PASS / %d FAIL ==' % (P, F))
 proc.stdin.close()

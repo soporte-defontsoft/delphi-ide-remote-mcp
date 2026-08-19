@@ -49,7 +49,8 @@ An agent can also be pointed at the **library read zone** (RTL/VCL sources and i
 | `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace] Roots=D:\Projects;E:\More`) |
 | `delphi_installs` | List every RAD Studio/Delphi installation discovered on the machine (side-by-side versions), flagging which one is active for the LSP engine |
 | `delphi_workspace` | The lay of the land on the server: the configured workspace roots (your allowed universe), the access level, and the active Delphi. Server paths travel with **virtual drive units** (`srvd:`, `srvc:` — they only exist inside this MCP, never on your local disk). Call it first |
-| `delphi_git` | Whitelisted git operations — including **`clone`/`pull`** (bring a whole repo onto the server in one call, jailed) plus status/diff/log/show/branch/add/commit/init/push/tag/config |
+| `delphi_git` | Whitelisted git operations — including **`clone`/`pull`** (bring a whole repo onto the server in one call, jailed) plus status/diff/log/show/branch/add/commit/init/push/tag/config. Options that write files or read outside the repo (`--output`, `--no-index`, `-c`…) are refused at the gate |
+| `delphi_report` | **Feedback channel**: the agent reports a bug, limitation or suggestion and the server files it as its own dated markdown in `reports/` next to the executable. Works at **every** access level, read-only included |
 
 ## Quickstart
 
@@ -87,10 +88,13 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 - **AuthToken**: full access. Every HTTP request must carry `Authorization: Bearer <token>`
   or gets 401 (when any token is configured).
 - **ReadOnlyToken**: a second credential for reviewer agents. It can read, search, navigate
-  symbols, get diagnostics, download and run query git commands — but `delphi_edit`,
-  `delphi_create`, `delphi_build`, `delphi_run`, `delphi_package` and git write commands are
-  refused. `AnonymousReadOnly=1` grants the same read-only level to tokenless requests.
-  The whole classification is enforced at a **single gate** in front of every `tools/call`.
+  symbols, get diagnostics, download, run query git commands and file reports — but
+  `delphi_edit`, `delphi_create`, `delphi_build`, `delphi_run`, `delphi_package`,
+  `delphi_upload` and git write commands are refused. `AnonymousReadOnly=1` grants the same
+  read-only level to tokenless requests. The whole classification is enforced at a **single
+  gate** in front of every `tools/call` — including the git argument filter, so no option can
+  turn a "read" command into a write. Audited by running the server anonymously and trying to
+  escape.
 - `--readonly` on the command line makes the entire process read-only, whatever the
   transport (useful for a stdio-registered reviewer).
 - **Roots** are both discovery (`delphi_projects`) and a **jail**: with roots configured, every
@@ -114,7 +118,7 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 
 ## Tests
 
-`tests/` contains six end-to-end batteries that talk real MCP to the built server (198 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real), `test_guard.py` (workspace jail, including escape attempts) and `test_v012.py` (virtual drive units round trip, delete/blank modes, `.dpr` inserts, implicit published, git messages via `-F`, Roots fail-closed parsing).
+`tests/` contains six end-to-end batteries that talk real MCP to the built server (221 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real), `test_guard.py` (workspace jail, including escape attempts) and `test_v012.py` (virtual drive units round trip, delete/blank modes, `.dpr` inserts, implicit published, git messages via `-F`, Roots fail-closed parsing).
 
 ## Key design points
 

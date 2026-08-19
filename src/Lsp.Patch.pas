@@ -828,10 +828,26 @@ begin
           begin
             // A form class keeps components and event handlers in the
             // IMPLICIT published section right after the class header, with
-            // no keyword line to find. 'published' must land there - the
-            // single most common VCL case (measured gap: round 2, C1).
+            // no keyword line. 'published' must land there - the most common
+            // VCL case (round 2, C1). But it must go AFTER the last member of
+            // that section (after the component fields), never right after the
+            // header: a method before a field is E2169 (round 3, C1-bis).
             if Vis = 'published' then
-              IDecl := IClase + 1
+            begin
+              IDecl := IFin;
+              for I := IClase + 1 to IFin - 1 do
+              begin
+                var TrimL := Lines[I].Trim.ToLower;
+                var IsSec := False;
+                for var S2 in Secs do
+                  if S2 = TrimL then IsSec := True;
+                if IsSec then // first explicit visibility specifier = end of
+                begin         // the implicit published section
+                  IDecl := I;
+                  Break;
+                end;
+              end;
+            end
             else
               Exit(Format('RECHAZADO: la clase %s no tiene seccion ''%s''. Omite visibility o usa una que exista.',
                 [A.ClassName_, Vis]));

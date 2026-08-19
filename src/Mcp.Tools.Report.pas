@@ -1,0 +1,158 @@
+unit Mcp.Tools.Report;
+
+{ delphi_report: the feedback channel of this server. A client (usually an AI
+  agent) reports a problem, a limitation or a suggestion, and the server
+  stores it as ONE markdown file per report - version, date, origin and the
+  message - inside a "reports" folder next to the executable, so the whole
+  history can be read later and worked through.
+
+  Deliberately available at EVERY access level, read-only included: the
+  agents most likely to hit a wall are precisely the restricted ones. It is
+  safe by construction - the client never supplies a path: the folder is
+  fixed and the file name is generated here. }
+
+interface
+
+uses
+  System.SysUtils,
+  MCPServer.Tool.Base,
+  MCPServer.Types;
+
+type
+  TDelphiReportParams = class
+  private
+    FMessage: string;
+    FTitle: string;
+    FKind: string;
+    FFrom: string;
+  public
+    [SchemaDescription('The report itself: what you tried, what happened, what you expected. Markdown welcome, several paragraphs are fine')]
+    property Message: string read FMessage write FMessage;
+    [SchemaDescription('Optional one-line summary (becomes part of the file name)')]
+    property Title: string read FTitle write FTitle;
+    [SchemaDescription('Optional: bug | limitation | suggestion | question (default: bug)')]
+    property Kind: string read FKind write FKind;
+    [SchemaDescription('Optional: who is reporting (agent/model name, project) - helps us read the history later')]
+    property From: string read FFrom write FFrom;
+  end;
+
+  TDelphiReportTool = class(TMCPToolBase<TDelphiReportParams>)
+  protected
+    function ExecuteWithParams(const Params: TDelphiReportParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
+implementation
+
+uses
+  System.IOUtils,
+  System.Classes,
+  System.StrUtils,
+  MCPServer.Registration,
+  MCPServer.Logger,
+  Lsp.Texts;
+
+const
+  REPORTS_DIR = 'reports';
+
+{ File-name-safe slug of the title (ASCII letters/digits/dashes, capped). }
+function Slug(const S: string): string;
+var
+  C: Char;
+  Prev: Char;
+begin
+  Result := '';
+  Prev := '-';
+  for C in S do
+  begin
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
+    begin
+      Result := Result + C;
+      Prev := C;
+    end
+    else if Prev <> '-' then
+    begin
+      Result := Result + '-';
+      Prev := '-';
+    end;
+    if Length(Result) >= 40 then
+      Break;
+  end;
+  Result := Result.Trim(['-']).ToLower;
+end;
+
+{ TDelphiReportTool }
+
+constructor TDelphiReportTool.Create;
+begin
+  inherited;
+  FName := 'delphi_report';
+  FDescription := SD_REPORT;
+end;
+
+function TDelphiReportTool.ExecuteWithParams(const Params: TDelphiReportParams): string;
+var
+  Dir, FileName, Path, Kind, Title, Body: string;
+  Stamp: TDateTime;
+  Sb: TStringBuilder;
+  I: Integer;
+begin
+  if Params.Message.Trim = '' then
+    Exit(SR_REPORT_EMPTY);
+
+  Kind := Params.Kind.Trim.ToLower;
+  if not MatchText(Kind, ['bug', 'limitation', 'suggestion', 'question']) then
+    Kind := 'bug';
+  Title := Params.Title.Trim;
+
+  Dir := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), REPORTS_DIR);
+  TDirectory.CreateDirectory(Dir);
+
+  Stamp := Now;
+  FileName := FormatDateTime('yyyymmdd-hhnnss', Stamp) + '-' + Kind;
+  if Slug(Title) <> '' then
+    FileName := FileName + '-' + Slug(Title);
+  // never overwrite a previous report, even within the same second
+  Path := TPath.Combine(Dir, FileName + '.md');
+  I := 1;
+  while TFile.Exists(Path) do
+  begin
+    Inc(I);
+    Path := TPath.Combine(Dir, Format('%s-%d.md', [FileName, I]));
+  end;
+
+  Sb := TStringBuilder.Create;
+  try
+    if Title <> '' then
+      Sb.AppendLine('# ' + Title)
+    else
+      Sb.AppendLine('# ' + Kind + ' report');
+    Sb.AppendLine;
+    Sb.AppendLine('- **Date**: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Stamp));
+    Sb.AppendLine('- **Server version**: ' + SERVER_VERSION);
+    Sb.AppendLine('- **Kind**: ' + Kind);
+    if Params.From.Trim <> '' then
+      Sb.AppendLine('- **From**: ' + Params.From.Trim);
+    Sb.AppendLine;
+    Sb.AppendLine('---');
+    Sb.AppendLine;
+    Sb.AppendLine(Params.Message.TrimRight);
+    Body := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+
+  // UTF-8 with BOM: these are documents for humans, not Delphi sources.
+  TFile.WriteAllText(Path, Body, TEncoding.UTF8);
+  TLogger.Info(Format('delphi_report: %s (%s) from "%s"',
+    [TPath.GetFileName(Path), Kind, Params.From.Trim]));
+
+  Result := Format(SN_REPORT_OK_FMT, [TPath.GetFileName(Path), SERVER_VERSION]);
+end;
+
+initialization
+  TMCPRegistry.RegisterTool('delphi_report',
+    function: IMCPTool begin Result := TDelphiReportTool.Create; end);
+
+end.

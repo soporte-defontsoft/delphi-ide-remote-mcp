@@ -44,6 +44,7 @@ uses
   MCPServer.CoreManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.CoreManager.pas',
   MCPServer.ToolsManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ToolsManager.pas',
   MCPServer.ResourcesManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ResourcesManager.pas',
+  Lsp.Texts in 'Lsp.Texts.pas',
   Lsp.Transport.Process in 'Lsp.Transport.Process.pas',
   Lsp.Client in 'Lsp.Client.pas',
   Lsp.Discovery in 'Lsp.Discovery.pas',
@@ -59,6 +60,7 @@ uses
   Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',
   Mcp.Tools.TextEdit in 'Mcp.Tools.TextEdit.pas',
   Mcp.Tools.Workspace in 'Mcp.Tools.Workspace.pas',
+  Mcp.Tools.Report in 'Mcp.Tools.Report.pas',
   Lsp.Scaffold in 'Lsp.Scaffold.pas',
   Mcp.Tools.Scaffold in 'Mcp.Tools.Scaffold.pas';
 
@@ -110,8 +112,8 @@ begin
   try
     Settings := TMCPSettings.Create('', False); // no settings.ini side effects
     try
-      Settings.ServerName := 'delphi-lsp-mcp-service';
-      Settings.ServerVersion := '0.12.0-beta';
+      Settings.ServerName := SERVER_NAME;
+      Settings.ServerVersion := SERVER_VERSION;
 
       ManagerRegistry := TMCPManagerRegistry.Create;
       CoreManager := TMCPCoreManager.Create(Settings);

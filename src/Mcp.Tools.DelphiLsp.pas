@@ -89,10 +89,88 @@ type
 implementation
 
 uses
-  MCPServer.Registration;
+  System.RegularExpressions,
+  MCPServer.Registration,
+  Lsp.Patch;
 
 const
   MAX_COMPLETION_ITEMS = 50;
+
+type
+  TLoc = record
+    Uri: string;
+    Line, Ch: Integer;
+  end;
+
+{ Pulls the first Location (or LocationLink) out of a textDocument/* result,
+  which DelphiLSP returns either as a single object OR as a one-item array
+  (measured: definition answers a bare object). False = nothing usable. }
+function ParseLoc(AResult: TJSONValue; out ALoc: TLoc): Boolean;
+var
+  Obj, Rng, St: TJSONValue;
+begin
+  ALoc.Uri := '';
+  ALoc.Line := -1;
+  ALoc.Ch := 0;
+  Result := False;
+  Obj := AResult;
+  if Obj is TJSONArray then
+  begin
+    if TJSONArray(Obj).Count = 0 then
+      Exit;
+    Obj := TJSONArray(Obj).Items[0];
+  end;
+  if not (Obj is TJSONObject) then
+    Exit;
+  if not TJSONObject(Obj).TryGetValue<string>('uri', ALoc.Uri) then
+    TJSONObject(Obj).TryGetValue<string>('targetUri', ALoc.Uri);
+  Rng := TJSONObject(Obj).GetValue('range');
+  if Rng = nil then
+    Rng := TJSONObject(Obj).GetValue('targetSelectionRange');
+  if Rng = nil then
+    Rng := TJSONObject(Obj).GetValue('targetRange');
+  if Rng is TJSONObject then
+  begin
+    St := TJSONObject(Rng).GetValue('start');
+    if St is TJSONObject then
+    begin
+      TJSONObject(St).TryGetValue<Integer>('line', ALoc.Line);
+      TJSONObject(St).TryGetValue<Integer>('character', ALoc.Ch);
+    end;
+  end;
+  Result := (ALoc.Uri <> '') and (ALoc.Line >= 0);
+end;
+
+{ 0-based column of the routine name on a header line ("procedure
+  TClass.Name(...)" -> the column of Name). DelphiLSP's definition range
+  starts at column 0 (the keyword), so to chain a second lookup we must aim
+  at the identifier ourselves. Falls back to the first identifier. }
+function RoutineIdentCol(const APath: string; ALine: Integer): Integer;
+var
+  Enc, L: string;
+  Lines: TArray<string>;
+  M: TMatch;
+begin
+  Result := 0;
+  try
+    L := PatchLoadText(APath, Enc);
+  except
+    Exit;
+  end;
+  Lines := L.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
+  if (ALine < 0) or (ALine > High(Lines)) then
+    Exit;
+  L := Lines[ALine];
+  M := TRegEx.Match(L, '^\s*(?:procedure|function|constructor|destructor|property)\s+(?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*)', [roIgnoreCase]);
+  if M.Success then
+    Result := M.Groups[1].Index - 1 // TMatch is 1-based; LSP columns 0-based
+  else
+  begin
+    M := TRegEx.Match(L, '[A-Za-z_]\w*');
+    if M.Success then
+      Result := M.Groups[0].Index - 1;
+  end;
+end;
 
 { Shared helpers }
 
@@ -179,34 +257,39 @@ begin
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
   if Kind = 'declaration' then
   begin
-    // Measured (field round 2, B5): declaration straight on a CALL SITE
-    // answers with the ENCLOSING method's declaration, not the target
-    // symbol's. Chain instead: definition first (correct on call sites),
-    // then declaration AT the definition's own position - that pair returns
-    // the callee's interface declaration.
-    Resp := Client.Definition(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
-    var DefUri := '';
-    var DefLine := -1;
-    var DefChar := 0;
-    var V := Resp.GetValue('result');
-    if (V is TJSONArray) and (TJSONArray(V).Count > 0) and
-       (TJSONArray(V).Items[0] is TJSONObject) then
+    // Measured (field rounds 2-3, B5): declaration straight on a CALL SITE
+    // answers with the ENCLOSING method's declaration, not the target's, and
+    // definition answers a bare Location object with column 0. Chain: run
+    // definition (correct at a call site) to reach the body, then declaration
+    // AT the body's identifier column to reach the interface declaration.
+    var DefResp := Client.Definition(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
+    var DefLoc: TLoc;
+    if ParseLoc(DefResp.GetValue('result'), DefLoc) then
     begin
-      var L0 := TJSONObject(TJSONArray(V).Items[0]);
-      L0.TryGetValue<string>('uri', DefUri);
-      L0.TryGetValue<Integer>('range.start.line', DefLine);
-      L0.TryGetValue<Integer>('range.start.character', DefChar);
-    end;
-    if (DefUri <> '') and (DefLine >= 0) then
-    begin
-      Resp.Free;
-      Client := TLspSession.Instance.AcquireFor(TLspClient.UriToPath(DefUri), Settings);
-      Resp := Client.Declaration(DefUri, DefLine, DefChar);
+      var TgtPath := TLspClient.UriToPath(DefLoc.Uri);
+      var Col := RoutineIdentCol(TgtPath, DefLoc.Line);
+      var C2 := TLspSession.Instance.AcquireFor(TgtPath, Settings);
+      var DeclResp := C2.Declaration(DefLoc.Uri, DefLoc.Line, Col);
+      var DeclLoc: TLoc;
+      if ParseLoc(DeclResp.GetValue('result'), DeclLoc) and
+         not ((DeclLoc.Line = DefLoc.Line) and SameText(DeclLoc.Uri, DefLoc.Uri)) then
+      begin
+        // declaration moved elsewhere = the interface declaration we want
+        DefResp.Free;
+        Resp := DeclResp;
+      end
+      else
+      begin
+        // declaration stayed on the body (or failed): return the body - far
+        // more useful than the enclosing-scope answer of a direct call
+        DeclResp.Free;
+        Resp := DefResp;
+      end;
     end
     else
     begin
-      // no definition to chain from: keep the direct behaviour
-      Resp.Free;
+      // no definition to chain from: fall back to a direct declaration
+      DefResp.Free;
       Resp := Client.Declaration(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
     end;
   end

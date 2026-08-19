@@ -38,3 +38,8 @@ tmp/
 
 # Reference clones (not part of this project)
 gdk-mcp/
+
+# --- Runtime data next to the executable (never versioned) ---
+reports/
+settings.ini
+__delphi-patch/

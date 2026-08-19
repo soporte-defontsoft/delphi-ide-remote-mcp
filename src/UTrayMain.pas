@@ -14,7 +14,7 @@ uses
   MCPServer.Types, MCPServer.Settings, MCPServer.Logger,
   MCPServer.ManagerRegistry, MCPServer.CoreManager, MCPServer.ToolsManager,
   MCPServer.ResourcesManager, MCPServer.IdHTTPServer, MCPServer.Resource.Server,
-  Lsp.Guard, Lsp.Session;
+  Lsp.Guard, Lsp.Session, Lsp.Texts;
 
 type
   TFormTray = class(TForm)
@@ -72,8 +72,8 @@ begin
 
   TServerStatusResource.Initialize;
   FSettings := TMCPSettings.Create('', False);
-  FSettings.ServerName := 'delphi-lsp-mcp-service';
-  FSettings.ServerVersion := '0.12.0-beta';
+  FSettings.ServerName := SERVER_NAME;
+  FSettings.ServerVersion := SERVER_VERSION;
 
   FRegistry := TMCPManagerRegistry.Create;
   FCore := TMCPCoreManager.Create(FSettings);

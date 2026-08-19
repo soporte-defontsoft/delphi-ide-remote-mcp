@@ -63,10 +63,10 @@ try:
                 'delphi_fetch', 'delphi_git', 'delphi_hover',
                 'delphi_installs', 'delphi_list', 'delphi_package',
                 'delphi_projects', 'delphi_read', 'delphi_references',
-                'delphi_run', 'delphi_search', 'delphi_signature',
-                'delphi_symbols', 'delphi_textedit', 'delphi_upload',
-                'delphi_workspace']
-    check('http: tools/list = 22 tools', names == expected, names)
+                'delphi_report', 'delphi_run', 'delphi_search',
+                'delphi_signature', 'delphi_symbols', 'delphi_textedit',
+                'delphi_upload', 'delphi_workspace']
+    check('http: tools/list = 23 tools', names == expected, names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",
@@ -177,6 +177,32 @@ try:
         check('ro: git tag sin args (listar) permitido en RO',
               code == 200 and 'SOLO LECTURA' not in body,
               '%s %s' % (code, body[:120]))
+
+        # tag with a message = annotated tag = a WRITE. The gate must catch it
+        # even with empty args (it only looked at args before — field audit).
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'tag',
+                                         'message': 'v1'}, RO_TOKEN)
+        check('ro: git tag con message (anotado) RECHAZADO en RO',
+              'SOLO LECTURA' in body, '%s %s' % (code, body[:120]))
+
+        # jail/file-write escape: diff --output must be refused (would let a
+        # read-only client write a file anywhere on disk).
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'diff',
+                                         'args': '--output=' + tmpdir3 + '\\PWN.txt'},
+                          RO_TOKEN)
+        check('ro: git diff --output RECHAZADO en RO', 'RECHAZADO' in body,
+              '%s %s' % (code, body[:120]))
+        check('ro: git diff --output no escribio el fichero',
+              not os.path.exists(tmpdir3 + '\\PWN.txt'), tmpdir3)
+
+        # delphi_report is the ONE write available read-only, by design: the
+        # restricted agents are the ones most likely to hit a wall.
+        code, body = call('delphi_report',
+                          {'message': 'Reporte desde credencial de solo lectura.',
+                           'title': 'RO puede reportar', 'from': 'test_http_auth'},
+                          RO_TOKEN)
+        check('ro: delphi_report PERMITIDO en RO (canal de feedback)',
+              code == 200 and 'GRACIAS' in body, '%s %s' % (code, body[:150]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'push'},
                           RO_TOKEN)

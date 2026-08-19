@@ -83,7 +83,8 @@ uses
   System.IniFiles,
   System.IOUtils,
   System.Generics.Collections,
-  Lsp.Discovery;
+  Lsp.Discovery,
+  Lsp.Texts;
 
 var
   GLoaded: Boolean = False;
@@ -163,21 +164,54 @@ procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
 
 function WriteDenied(const AWhat: string): string;
 begin
-  Result := Format('RECHAZADO: acceso de SOLO LECTURA. La operacion "%s" ' +
-    'modifica la maquina servidora y esta credencial no lo permite. ' +
-    'Disponibles en este modo: leer, buscar, listar, navegar simbolos, ' +
-    'diagnosticos, referencias, descargar y git de consulta.', [AWhat]);
+  Result := Format(SR_READ_ONLY_FMT, [AWhat]);
+end;
+
+{ git "read" commands (diff/show/log...) still take FREEFORM args, and git has
+  options that write files, read paths OUTSIDE the repository, or run a
+  command - a jail/write escape usable even by a read-only client (measured:
+  `diff --output=<abs path>` wrote a file anywhere on disk). Filtered HERE, at
+  the single gate, so it applies to EVERY git call in BOTH access levels (the
+  -C <repo> confinement does not stop an absolute --output). '' = clean. }
+function GitArgDenied(const AArgs: string): string;
+var
+  Tok, T: string;
+begin
+  Result := '';
+  for Tok in AArgs.Split([' ', #9], TStringSplitOptions.ExcludeEmpty) do
+  begin
+    T := Tok.ToLower;
+    if T.StartsWith('--output') or          // writes a file (diff/show)
+       T.StartsWith('--no-index') or        // reads arbitrary paths, any dir
+       T.StartsWith('--upload-pack') or T.StartsWith('--receive-pack') or
+       T.StartsWith('--exec') or            // runs a remote/local command
+       T.StartsWith('--ext-diff') or T.StartsWith('--textconv') or // ext program
+       T.StartsWith('--config-env') or T.StartsWith('-c') or       // arbitrary config -> RCE
+       (T = '-o') or T.StartsWith('-o=') or T.StartsWith('-o/') or T.StartsWith('-o\') then
+      Exit(Format(SR_GIT_OPTION_FMT, [Tok]));
+  end;
 end;
 
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
-  Cmd, GitArgs: string;
+  Cmd, GitArgs, GitMsg: string;
 begin
   // Normalization first, unconditionally: virtual drive units in the
   // arguments become real server paths before any check or any tool.
   ExpandVirtualDrives(AArguments);
   Result := '';
+  // Universal git-argument filter (BOTH access levels): a dangerous option
+  // would let even a read-write client escape the jail. The single place git
+  // freeform args are vetted.
+  if SameText(AToolName, 'delphi_git') and Assigned(AArguments) then
+  begin
+    GitArgs := '';
+    AArguments.TryGetValue<string>('args', GitArgs);
+    Result := GitArgDenied(GitArgs);
+    if Result <> '' then
+      Exit;
+  end;
   if not (GProcessReadOnly or GRequestReadOnly) then
     Exit;
   // Fully mutating tools: refused outright in read-only mode.
@@ -191,13 +225,18 @@ begin
   begin
     Cmd := '';
     GitArgs := '';
+    GitMsg := '';
     if Assigned(AArguments) then
     begin
       AArguments.TryGetValue<string>('command', Cmd);
       AArguments.TryGetValue<string>('args', GitArgs);
+      AArguments.TryGetValue<string>('message', GitMsg);
     end;
+    // Pure query commands pass. branch/tag only LIST when called with NO args
+    // AND no message (a message makes tag annotated = a write).
     if MatchText(Cmd, ['status', 'diff', 'log', 'show']) or
-       (MatchText(Cmd, ['branch', 'tag']) and (Trim(GitArgs) = '')) then
+       (MatchText(Cmd, ['branch', 'tag']) and (Trim(GitArgs) = '') and
+        (Trim(GitMsg) = '')) then
       Exit;
     Exit(WriteDenied(Trim('delphi_git ' + Cmd)));
   end;
@@ -290,9 +329,7 @@ begin
     Exit;
   Roots := WorkspaceRoots;
   if GRootsInvalid then
-    Exit('RECHAZADO: [Workspace] Roots esta configurado pero ninguna de sus ' +
-      'rutas es valida (comillas de mas, unidad inexistente...). Por seguridad ' +
-      'se rechaza todo hasta corregir settings.ini / DELPHI_MCP_ROOTS.');
+    Exit(SR_ROOTS_INVALID);
   if Length(Roots) = 0 then
     Exit; // no jail configured
   try
@@ -303,9 +340,7 @@ begin
   for R in Roots do
     if StartsText(R, IncludeTrailingPathDelimiter(Full)) then
       Exit;
-  Result := Format('RECHAZADO: "%s" esta FUERA de los workspaces permitidos. ' +
-    'Este servidor solo opera dentro de: %s (configurado en DELPHI_MCP_ROOTS ' +
-    'o settings.ini [Workspace] Roots).', [APath, string.Join(' | ', Roots)]);
+  Result := Format(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;
 
 var
@@ -494,20 +529,34 @@ begin
     while I <= L do
     begin
       C := AText[I];
-      // <letter>:<separator> not preceded by a letter/digit = a path start.
-      // The boundary check keeps things like git's "HEAD:" intact.
-      if (Pos(UpCase(C), Letters) > 0) and (I + 2 <= L) and
-         (AText[I + 1] = ':') and CharInSet(AText[I + 2], ['\', '/']) then
+      if (Pos(UpCase(C), Letters) > 0) then
       begin
         if I = 1 then
           PrevC := #0
         else
           PrevC := AText[I - 1];
+        // A drive prefix only starts where the previous char is not a
+        // letter/digit (keeps git's "HEAD:" and words intact).
         if not CharInSet(PrevC, ['A'..'Z', 'a'..'z', '0'..'9']) then
         begin
-          Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32)).Append(':');
-          Inc(I, 2);
-          Continue;
+          // form A - plain path: <letter>:<separator> (D:\ or D:/)
+          if (I + 2 <= L) and (AText[I + 1] = ':') and
+             CharInSet(AText[I + 2], ['\', '/']) then
+          begin
+            Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32)).Append(':');
+            Inc(I, 2);
+            Continue;
+          end;
+          // form B - percent-encoded colon in a file URI: <letter>%3A/ ...
+          // (DelphiLSP answers with file:///D%3A/... - measured, R3-1).
+          if (I + 4 <= L) and (AText[I + 1] = '%') and (AText[I + 2] = '3') and
+             ((AText[I + 3] = 'A') or (AText[I + 3] = 'a')) and (AText[I + 4] = '/') then
+          begin
+            Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32))
+              .Append(AText[I + 1]).Append(AText[I + 2]).Append(AText[I + 3]);
+            Inc(I, 4);
+            Continue;
+          end;
         end;
       end;
       Sb.Append(C);

@@ -6,6 +6,59 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.13.0-beta] - 2026-08-19
+
+Read-only becomes airtight, a feedback channel for the agents that use the
+server, and the third field round's findings.
+
+### Added
+- **`delphi_report` (tool 23)**: agents report bugs, limitations or
+  suggestions **directly to the server**, which stores each one as its own
+  timestamped markdown file (version, date, kind, origin, message) in a
+  `reports/` folder next to the executable — a history that can be read and
+  worked through later. Deliberately **available at every access level,
+  read-only included**: the restricted agents are the ones most likely to hit
+  a wall. Safe by construction — the client never supplies a path: the folder
+  is fixed and the file name is generated server-side.
+- **`Lsp.Texts`**: every model-facing text (tool/parameter descriptions,
+  rejections, notices) and the version string now live in ONE unit. These
+  texts are the server's real user interface; scattered they drift and
+  contradict each other. Pure ASCII by convention — the encoding rule that
+  produced the mojibake bug is now a property of the file.
+
+### Security
+- **Read-only is now airtight** (found by an internal audit that ran the
+  server anonymously and tried to escape):
+  - `delphi_git diff|show --output=<path>` let ANY client — including
+    anonymous/read-only — write files anywhere on disk, **outside the
+    workspace roots included** (an absolute `--output` ignores `-C <repo>`).
+    Dangerous git options (`--output`, `--no-index`, `--exec`,
+    `--upload-pack`, `--receive-pack`, `--ext-diff`, `--textconv`,
+    `--config-env`, `-c`, `-o`) are now refused **at the single gate**, so the
+    rule applies to every git call at BOTH access levels.
+  - `delphi_git tag` with a `message` (annotated tag = a write) passed the
+    read-only gate when `args` was empty: the gate only looked at `args`.
+- Verified in the same audit and left unchanged (they were already correct):
+  401 for a missing token when one is configured, and the per-request
+  read-only flag being re-set on every request (no leakage between pooled
+  Indy threads).
+
+### Fixed
+- **C1-bis**: `insert:"metodo"` with `visibility:"published"` placed the
+  declaration right after the class header — i.e. BEFORE the component
+  fields, which is E2169 ("field definition not allowed after methods").
+  It now lands after the last member of the implicit published section.
+- **B5** (root cause found by measuring the live JSON): `definition` answers a
+  bare Location **object**, not an array, so the chaining added in 0.12.0
+  never triggered and `kind=declaration` still returned the enclosing scope.
+  The parser now accepts object/array/LocationLink and aims the second lookup
+  at the routine's identifier column.
+- **R3-1**: LSP tools leaked the real drive in their URIs
+  (`file:///D%3A/...`) because the percent-encoded colon dodged the mask.
+  Virtual drive units now cover that form too.
+- `delphi_git log` regression test no longer asserts on a specific old commit
+  message (it scrolled out of the 20-line window).
+
 ## [0.12.0-beta] - 2026-08-19
 
 Virtual drive units — server paths stop looking like the client's own disks —
