@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.26.1-beta] - 2026-08-20
+
+### Security
+- **The knowledge vault now belongs to the `vault_*` tools alone, wherever it
+  sits.** Putting a vault *inside* a workspace root used to expose it to the
+  code tools: `delphi_edit` could rewrite a note behind the vault's back -
+  skipping the automatic backup and the protection of the governance files -
+  and `delphi_list` served the notes as if they were source. Any path inside
+  the vault is now refused by the code tools with a message pointing at
+  `vault_read`/`vault_append`, and the vault is skipped in the `delphi_list`,
+  `delphi_search` and `delphi_projects` walks. The isolation no longer depends
+  on where the operator happens to put the folder.
+
+7 E2E batteries, **390 checks**.
+
 ## [0.26.0-beta] - 2026-08-20
 
 Field round 8 (Fable): the vault passed its security review untouched, but the

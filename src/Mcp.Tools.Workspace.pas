@@ -323,7 +323,7 @@ begin
     for Mask in DEFAULT_MASKS do
       for F in WalkFiles(Params.Root, Mask) do
       begin
-        if SkipIdeArtifacts(F) then
+        if SkipIdeArtifacts(F) or InVault(F) then
           Continue;
         Inc(FilesScanned);
         Text := TLspClient.LoadSourceText(F);
@@ -416,7 +416,7 @@ begin
       begin
         var IsTrash := SameText(TPath.GetFileName(F), '__delphi-patch') or
                        SameText(TPath.GetFileName(F), '__pascal-patch');
-        if SkipIdeArtifacts(F + '\', Params.IncludeTrash) or
+        if SkipIdeArtifacts(F + '\', Params.IncludeTrash) or InVault(F) or
            TPath.GetFileName(F).StartsWith('.') or
            (TPath.GetFileName(F).StartsWith('__') and
             not (Params.IncludeTrash and IsTrash)) then
@@ -449,7 +449,9 @@ begin
     for Mask in Masks do
       for F in WalkFiles(Root, Mask.Trim) do
       begin
-        if SkipIdeArtifacts(F, Params.IncludeTrash) then
+        // The vault is the vault_* tools' business, even when it sits inside a
+        // root: listing its notes would invite edits behind its back.
+        if SkipIdeArtifacts(F, Params.IncludeTrash) or InVault(F) then
           Continue;
         Inc(Total);
         if Arr.Count < 500 then
@@ -810,7 +812,7 @@ begin
       for Mask in TArray<string>.Create('*.dproj', '*.groupproj') do
         for F in WalkFiles(RootDir.Trim, Mask) do
         begin
-          if SkipIdeArtifacts(F) then
+          if SkipIdeArtifacts(F) or InVault(F) then
             Continue;
           if (Filt <> '') and not TPath.GetFileName(F).ToLower.Contains(Filt) then
             Continue;

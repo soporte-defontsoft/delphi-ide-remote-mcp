@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.26.0-beta';
+  SERVER_VERSION = '0.26.1-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -168,6 +168,16 @@ const
   // server drive letters, so echoing "C:/Windows/win.ini" came back as
   // "srvc:/Windows/win.ini" - something the agent never sent, confusing to
   // debug (field round 8). The rule itself is what the agent needs.
+  // The vault is reachable ONLY through the vault_* tools, wherever it lives -
+  // including inside a workspace root. Otherwise delphi_edit could rewrite a
+  // note behind the vault's back: no automatic backup, and the governance
+  // files (rules and index) would stop being protected.
+  SR_VAULT_NOT_CODE =
+    'RECHAZADO: esa ruta pertenece al VAULT DE CONOCIMIENTO, que no se toca ' +
+    'con las tools de codigo. Usa vault_read / vault_search para consultarlo ' +
+    '(y vault_append / vault_create / vault_patch si este servidor permite ' +
+    'escribir en el): asi queda copia de seguridad y se respetan sus reglas.';
+
   SR_VAULT_JAIL =
     'RECHAZADO: esa ruta sale del vault. Usa una ruta RELATIVA dentro del ' +
     'vault (projects/x/context.md): sin unidades, sin rutas absolutas y sin ' +

@@ -186,7 +186,7 @@ check('aislamiento: vault_read llega al vault aunque este fuera de los roots',
       'Estilo' in out, out[:150])
 out = s.call('delphi_read', {"path": os.path.join(VAULT, 'MEMORY.md')})
 check('aislamiento: las tools de CODIGO no pueden leer el vault',
-      'FUERA de los workspaces' in out, out[:150])
+      'RECHAZADO' in out, out[:150])
 out = s.call('vault_read', {"path": "Codigo.pas"})
 check('aislamiento: las tools de VAULT no sirven codigo (.md only)',
       'RECHAZADO' in out, out[:150])
@@ -457,6 +457,44 @@ check('siembra: un vault YA existente no se vuelve a sembrar (no pisa MEMORY.md)
       open(marker, encoding='utf-8').read() == mine, 'MEMORY.md fue modificado')
 s6.close()
 shutil.rmtree(FRESH, ignore_errors=True)
+
+# ===========================================================================
+# 14. The vault INSIDE a workspace root: it still belongs to the vault_* tools
+#     alone. Otherwise delphi_edit could rewrite a note behind the vault's
+#     back - no backup, and the governance files unprotected.
+# ===========================================================================
+INROOT = os.path.join(WORK, 'AI-Memory')            # vault inside the code jail
+os.makedirs(INROOT, exist_ok=True)
+for rel, txt in (('MEMORY.md', '# MEMORY\n\n- indice\n'),
+                 ('AGENTS-VAULT.md', '# Reglas\n\n1. Carga perezosa.\n'),
+                 ('notas/idea.md', '# Idea\n\ncontenido original\n')):
+    p_ = os.path.join(INROOT, rel.replace('/', os.sep))
+    os.makedirs(os.path.dirname(p_), exist_ok=True)
+    open(p_, 'wb').write(txt.encode('utf-8'))
+
+s7 = Server(vault=INROOT)                            # roots = WORK, vault inside it
+out = s7.call('vault_read', {"path": "notas/idea.md"})
+check('dentro-del-root: vault_read SI llega a la nota', 'contenido original' in out, out[:150])
+_note = os.path.join(INROOT, 'notas', 'idea.md')
+out = s7.call('delphi_read', {"path": _note})
+check('dentro-del-root: delphi_read NO puede leer el vault',
+      'VAULT DE CONOCIMIENTO' in out, out[:180])
+out = s7.call('delphi_edit', {"path": _note, "old": "contenido original", "new": "pisado"})
+check('dentro-del-root: delphi_edit NO puede reescribir una nota',
+      'VAULT DE CONOCIMIENTO' in out, out[:180])
+check('dentro-del-root: la nota sigue intacta en disco',
+      'contenido original' in open(_note, encoding='utf-8').read())
+out = s7.call('delphi_textedit', {"path": os.path.join(INROOT, 'MEMORY.md'),
+                                  "create": True, "content": "intruso"})
+check('dentro-del-root: delphi_textedit NO puede tocar el indice',
+      'VAULT DE CONOCIMIENTO' in out, out[:180])
+out = s7.call('delphi_list', {"root": WORK, "pattern": "*.md"})
+check('dentro-del-root: delphi_list no sirve notas del vault',
+      'idea.md' not in out, out[:250])
+out = s7.call('delphi_read', {"path": os.path.join(WORK, 'Codigo.pas')})
+check('dentro-del-root: el codigo del workspace sigue accesible',
+      'unit Codigo' in out, out[:120])
+s7.close()
 
 print('\n== vault battery: %d PASS / %d FAIL ==' % (PASS, FAIL))
 shutil.rmtree(VAULT, ignore_errors=True)

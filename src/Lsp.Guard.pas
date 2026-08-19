@@ -62,6 +62,12 @@ function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] Bind
 function VaultPath: string;         // DELPHI_MCP_VAULT_PATH     / [Vault] Path
 function VaultConfigured: Boolean;  // VaultPath set AND the directory exists
 
+{ Whether APath is inside the knowledge vault. The vault belongs to the
+  vault_* tools alone, so the code tools skip it in their walks even when it
+  sits inside a workspace root - a listing that showed the notes would invite
+  an agent to edit them behind the vault's back. }
+function InVault(const APath: string): Boolean;
+
 { Whether the vault WRITE tools (vault_append/create/patch) are enabled:
   the vault is configured AND [Vault] ReadOnly is 0 (default 1 = read-only).
   Even when writable, the write tools are refused for a read-only credential
@@ -255,6 +261,22 @@ function VaultConfigured: Boolean;
 begin
   var P := VaultPath;
   Result := (P <> '') and TDirectory.Exists(P);
+end;
+
+function InVault(const APath: string): Boolean;
+var
+  Vault: string;
+begin
+  Result := False;
+  Vault := VaultPath;
+  if Vault = '' then
+    Exit;
+  try
+    Result := StartsText(IncludeTrailingPathDelimiter(Vault),
+      IncludeTrailingPathDelimiter(TPath.GetFullPath(APath)));
+  except
+    Result := False;
+  end;
 end;
 
 function VaultWritable: Boolean;
@@ -509,6 +531,12 @@ begin
   Result := PathAnomaly(APath);
   if Result <> '' then
     Exit;
+  // The knowledge vault belongs to the vault_* tools ALONE, wherever it sits.
+  // If it happens to live inside a workspace root, the code tools must still
+  // keep out - otherwise delphi_edit could rewrite a note behind the vault's
+  // back, skipping its automatic backup and its protected governance files.
+  if InVault(APath) then
+    Exit(SR_VAULT_NOT_CODE);
   Roots := WorkspaceRoots;
   if GRootsInvalid then
     Exit(SR_ROOTS_INVALID);
