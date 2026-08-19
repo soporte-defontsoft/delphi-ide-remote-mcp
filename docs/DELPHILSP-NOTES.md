@@ -70,6 +70,45 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
 - An external DelphiLSP instance coexists fine with the IDE's own instances; each agent holds hundreds of MB on a mid-size project.
 - The LSP reads **disk state**; unsaved IDE editor buffers are invisible to it.
 
-## LSIF (open research)
+## Complete capability inventory (measured on 37.0, 2026-08)
 
-RAD Studio 13 added LSIF (Language Server Index Format) support to the LSP engine to reduce compiler dependence. LSIF as a format covers references — potentially closing the biggest gap above. Generation workflow and index content not yet investigated.
+Announced by `initialize` (and verified working): `textDocument/definition`,
+`declaration`, `implementation`, `documentSymbol`, `hover`, `completion` +
+`completionItem/resolve` (triggers `.` `(` `<` `[`), `signatureHelp`
+(triggers `(` `,` `<`), `publishDiagnostics` (with deprecated/unnecessary
+tags), `textDocumentSync` = 1 (full), `workspace/didChangeConfiguration`.
+
+**Present as strings in the binary but DEAD over stdio** — measured
+`-32601 Method not found` in `agent` and `controller` modes, with and
+without `enableLsif`: `textDocument/references`, `typeDefinition`,
+`foldingRange`, `documentLink`, `textDocument/diagnostic` (pull model).
+These appear to be IDE-internal code paths (the IDE's Find References does
+not go through the public LSP surface). Do not trust the binary strings:
+probe.
+
+Not present at all: `rename`, `codeAction`, `formatting`,
+`workspace/symbol`, `semanticTokens`, `callHierarchy`, `inlayHint`.
+
+`initializationOptions` (binary-verified set): `serverType`
+(agent/linter/controller), `agentCount`, `returnDccFlags`,
+`returnHoverModel`, `storeProjectSettings`, `enableFileWatcher`, and
+**`enableLsif`** (Florence-era, undocumented in the Alexandria page).
+
+## LSIF (measured)
+
+- The compiler generates the indexes: `dcc32 --lsif` / `dcc64 --lsif`
+  ("output LSIF files", listed in `dcc32 --help` on 13.x).
+- RAD Studio 13.1 ships pre-generated indexes for the core libraries:
+  `lib\win32\release` (114 files) / `lib\win64\release` (118) /
+  `lib\*\debug` — one `.lsif` per package (rtl.lsif, vcl.lsif...).
+- The files are **standard LSIF**: JSON Lines with `vertex`/`edge` records
+  per the Microsoft LSIF spec (`{"id":1,"type":"vertex","label":"document",
+  ...}`), `languageId: "Delphi"`.
+- `enableLsif: true` in `initializationOptions` changes NOTHING in the
+  announced capabilities and does not wake the dead methods; it appears to
+  accelerate definition/hover internally.
+- **Open opportunity**: since the format is standard, an external tool can
+  parse the `.lsif` files directly — including for symbols of the RTL/VCL —
+  and a project can index itself with `--lsif` at build time. LSIF result
+  sets include reference relationships, which the public LSP surface never
+  exposes.
