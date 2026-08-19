@@ -179,7 +179,10 @@ begin
   FDescription := 'Build a Delphi project for real with MSBuild on this ' +
     'machine (rsvars located via registry). Returns success flag, compiler ' +
     'errors/warnings and the output tail. Use this as the closing ' +
-    'verification after editing - the linter does not link nor produce binaries.';
+    'verification after editing - the linter does not link nor produce ' +
+    'binaries. Compile-only: a project that would EXECUTE a shell during build ' +
+    '(a custom <Target>/<Exec>, a build-event, a foreign <Import>) is refused ' +
+    'unless the operator set [Security] AllowRun=1.';
 end;
 
 function TDelphiBuildTool.ExecuteWithParams(const Params: TDelphiBuildParams): string;

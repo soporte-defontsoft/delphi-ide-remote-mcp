@@ -56,6 +56,11 @@ procedure PatchSaveText(const APath, AText, AEncName: string);
   'cp1252' when ANSI. }
 function NewFileEncName: string;
 
+{ Makes a recoverable copy of a file into __delphi-patch\<date>\ before it is
+  overwritten (once per file per day). Returns a note / the backup path.
+  Exposed so binary writers (delphi_upload) can be non-destructive too. }
+function BackupFile(const APath: string): string;
+
 implementation
 
 uses

@@ -231,6 +231,67 @@ out = call('delphi_git', {"repo": os.path.join(OUTSIDE, 'clonado'),
                           "message": "https://example.com/x.git"})
 check('clone: destino fuera vetado', denied(out), out[:150])
 
+# --- R7 CRITICAL: upload a .dproj with an <Exec> hook, then build must NOT run
+#     it (the "compile-only, never execute" guarantee). Reproduces Fable's R7.
+#     The build refusal is the DEFAULT posture (AllowRun off), so the build half
+#     runs in a fresh instance WITHOUT AllowRun - this battery sets AllowRun=1 to
+#     exercise the sandbox, which by design also permits build hooks. ---
+import base64 as _b64, glob as _glob
+_holad = os.path.join(INSIDE, 'Hola', 'Hola.dproj')
+_marker = os.path.join(INSIDE, 'Hola', 'R7MARKER.txt')
+if os.path.exists(_marker):
+    os.remove(_marker)
+
+def build_no_allowrun(project):
+    e = dict(os.environ); e['DELPHI_MCP_ROOTS'] = INSIDE; e.pop('DELPHI_MCP_ALLOW_RUN', None)
+    p = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
+    try:
+        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+            "clientInfo": {"name": "x", "version": "1"}}}) + '\n')
+        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": {"name": "delphi_build", "arguments": {"project": project,
+            "platform": "Win64", "config": "Debug", "target": "Build"}}}) + '\n')
+        p.stdin.flush()
+        dl = time.time() + 120
+        while time.time() < dl:
+            line = p.stdout.readline()
+            if not line:
+                break
+            try:
+                m = json.loads(line)
+            except Exception:
+                continue
+            if m.get('id') == 2:
+                if 'error' in m:
+                    return 'MCPERROR ' + json.dumps(m['error'])[:300]
+                c = m.get('result', {}).get('content', [])
+                return c[0].get('text', '') if c else ''
+        return '(timeout)'
+    finally:
+        p.terminate()
+
+if os.path.exists(_holad):
+    _evil = open(_holad, encoding='utf-8-sig').read().replace('</Project>',
+        '<Target Name="R7Probe" BeforeTargets="Build"><Exec Command="cmd /c echo '
+        'pwned &gt; R7MARKER.txt" /></Target></Project>')
+    _b = _b64.b64encode(_evil.encode('utf-8')).decode()
+    out = call('delphi_upload', {"path": _holad, "offset": 0, "chunkbase64": _b})
+    check('R7: upload del .dproj llega (no hay filtro de extension)', 'written' in out, out[:150])
+    # R7 HIGH: upload backed the original up before truncating it
+    _bk = _glob.glob(os.path.join(INSIDE, 'Hola', '__delphi-patch', '**', 'Hola.dproj'), recursive=True)
+    check('R7 HIGH: upload respaldo el .dproj antes de pisarlo', len(_bk) > 0, _bk)
+    # R7 CRITICAL: a compile-only server (no AllowRun) refuses the hazardous
+    # project and never runs the injected <Exec>.
+    if os.path.exists(_marker):
+        os.remove(_marker)
+    out = build_no_allowrun(_holad)
+    check('R7 CRITICAL: build (sin AllowRun) RECHAZA un .dproj con <Target>/<Exec>',
+          'RECHAZADO' in out, out[:200])
+    check('R7 CRITICAL: el <Exec> inyectado NO se ejecuto (sin marcador)',
+          not os.path.exists(_marker), _marker)
+
 # --- B0c: Windows name-normalization bypasses (trailing dot/space, ADS) ---
 for probe, label in ((INSIDE + '\\Evade.pas.', 'punto final'),
                      (INSIDE + '\\Evade2.pas ', 'espacio final'),

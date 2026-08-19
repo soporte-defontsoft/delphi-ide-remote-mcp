@@ -230,6 +230,7 @@ uses
   Lsp.References,
   Lsp.BuildRunner,
   Lsp.Guard,
+  Lsp.Patch,
   Lsp.Texts;
 
 const
@@ -1017,8 +1018,10 @@ begin
     'material. Send chunks in order: offset=0 creates/truncates, later ' +
     'offsets append and must match the current size. Pass sha256 on the LAST ' +
     'chunk to have the server verify the assembled file. Jailed to the ' +
-    'workspace roots; parent directories are created. For SOURCE CODE prefer ' +
-    'delphi_edit / delphi_textedit (they audit encoding and keep backups).';
+    'workspace roots; parent directories are created. A fresh upload over an ' +
+    'existing file backs the old one up to the recoverable trash first. For ' +
+    'SOURCE CODE prefer delphi_edit / delphi_textedit (they audit encoding and ' +
+    'keep backups).';
 end;
 
 function TDelphiUploadTool.ExecuteWithParams(const Params: TDelphiUploadParams): string;
@@ -1061,6 +1064,18 @@ begin
   Dir := TPath.GetDirectoryName(FullPath);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
     TDirectory.CreateDirectory(Dir);
+
+  // Non-destructive: a fresh upload (offset 0) TRUNCATES the target. If a file
+  // is already there, copy it to the recoverable trash first - upload was the
+  // only writer that could overwrite with no undo (field round 7). Skip the
+  // trash's own tree so a backup never triggers another backup.
+  if (Params.Offset = 0) and TFile.Exists(FullPath) and
+     not SkipIdeArtifacts(FullPath, False) then
+    try
+      BackupFile(FullPath);
+    except
+      // best-effort: a failed backup must not block a legitimate upload
+    end;
 
   if Params.Offset = 0 then
     Stream := TFileStream.Create(FullPath, fmCreate)

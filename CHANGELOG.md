@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.24.0-beta] - 2026-08-19
+
+Field round 7 (Fable): the sandbox held again, but the round found the real
+hole — the "compile-only, never execute" posture had a build-time escape.
+
+### Security
+- **CRITICAL: code execution via `delphi_upload` + `delphi_build`.** `delphi_upload`
+  writes any path with no extension filter, so a `.dproj` could be planted whose
+  MSBuild `<Target><Exec>` ran an arbitrary shell command on the next
+  `delphi_build` — at normal integrity, defeating "this server only compiles".
+  The narrow, documented pre/post-build vector turned out to be trivial to reach.
+  Fixed at the point of execution: before running MSBuild, the project is scanned
+  and a build that would **execute a shell** — a custom `<Target>`/`<Exec>`, a
+  non-empty Pre/PostBuild/Link event, or an `<Import>` of a foreign (UNC or
+  absolute non-macro) targets file — is **refused**, unless the operator opted
+  into execution with `[Security] AllowRun=1` (the same switch that gates
+  `delphi_run`). The scan holds however the `.dproj` arrived (upload, edit, or
+  pre-existing). A stock RAD Studio project has none of these and builds normally.
+- **HIGH: `delphi_upload` overwrote with no undo.** A fresh upload (offset 0)
+  truncates the target; it was the only writer that could destroy a file with no
+  backup (a 1-byte upload wiped a real `.dproj` in testing). Upload now copies
+  the existing file to the recoverable trash (`__delphi-patch`) before truncating.
+
+6 E2E batteries, **280 checks** (adds the upload+build exploit, now blocked, and
+the upload backup).
+
 ## [0.23.0-beta] - 2026-08-19
 
 Field round 6 (Fable): the filesystem sandbox held against every attack; the

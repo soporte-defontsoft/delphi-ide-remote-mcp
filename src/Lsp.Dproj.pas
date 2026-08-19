@@ -62,6 +62,17 @@ function IsLocalPlatform(const APlatform: string): Boolean;
   Returns the correctly-cased canonical name, or '' if unknown. }
 function CanonicalPlatform(const AName: string): string;
 
+{ Whether a project file's XML carries constructs that would EXECUTE a shell
+  during a build: a custom MSBuild <Target> or <Exec> task, a non-empty RAD
+  Studio build-event command (Pre/PostBuildEvent, Pre/PostLinkEvent), or an
+  <Import> of a foreign targets file (UNC or an absolute path with no $(...)
+  macro). A stock RAD Studio project has NONE of these. Their presence turns
+  "build" into "run", which a compile-only server must refuse unless the
+  operator opted into execution (field round 7: delphi_upload could plant such
+  a .dproj and delphi_build would run it). Returns the offending construct, or
+  '' when the project is safe to build. }
+function DprojBuildHazard(const AXml: string): string;
+
 implementation
 
 uses
@@ -285,6 +296,35 @@ begin
   for P in KNOWN_PLATFORMS do
     if SameText(P, AName.Trim) then
       Exit(P); // canonical casing, and proven metachar-free
+end;
+
+function DprojBuildHazard(const AXml: string): string;
+var
+  Low, V, Proj: string;
+begin
+  Result := '';
+  Low := LowerCase(AXml);
+  // Custom MSBuild target / shell task: a stock .dproj has neither.
+  if Low.Contains('<target ') or Low.Contains('<target>') then
+    Exit('a custom MSBuild <Target> (runs during build)');
+  if Low.Contains('<exec ') or Low.Contains('<exec>') then
+    Exit('an <Exec> task (runs a shell command during build)');
+  // RAD Studio build-event commands: only a NON-EMPTY one runs a shell.
+  for var Tag in ['PreBuildEvent', 'PostBuildEvent', 'PreLinkEvent',
+                  'PostLinkEvent', 'BuildEvent'] do
+    for V in AllTagValues(AXml, Tag) do
+      if V.Trim <> '' then
+        Exit(Format('a non-empty <%s> shell command', [Tag]));
+  // <Import> of a foreign targets file: UNC, or an absolute path that is not a
+  // macro-based ($(BDS)...) or relative import. The stock imports use $(...).
+  for Proj in AllTagAttr(AXml, 'Import', 'Project') do
+  begin
+    V := Proj.Trim;
+    if V.StartsWith('\\') then
+      Exit('an <Import> from a UNC path (' + V + ')');
+    if (Length(V) >= 2) and (V[2] = ':') and not V.Contains('$(') then
+      Exit('an <Import> from an absolute path (' + V + ')');
+  end;
 end;
 
 end.

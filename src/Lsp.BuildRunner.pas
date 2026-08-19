@@ -38,6 +38,8 @@ uses
   MCPServer.Logger,
   Lsp.Discovery,
   Lsp.Guard,
+  Lsp.Dproj,
+  Lsp.Texts,
   Lsp.Sandbox;
 
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
@@ -318,6 +320,23 @@ begin
     raise Exception.Create(Denied);
   if not FileExists(ADprojPath) then
     raise Exception.CreateFmt('.dproj not found: %s', [ADprojPath]);
+  // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
+  // shell-running MSBuild constructs (a planted <Target><Exec>, a build-event,
+  // a foreign <Import>) and refuse unless execution was explicitly enabled.
+  // This is the point-of-execution gate, so it holds however the .dproj got
+  // there - upload, edit, or a pre-existing one (field round 7, CRITICAL).
+  if not AllowRun then
+  begin
+    var ProjXml := '';
+    try ProjXml := TFile.ReadAllText(ADprojPath); except end;
+    var Hazard := DprojBuildHazard(ProjXml);
+    if Hazard <> '' then
+    begin
+      TLogger.Warning(Format('delphi_build: REFUSED "%s" - %s',
+        [TPath.GetFullPath(ADprojPath), Hazard]));
+      raise Exception.Create(Format(SR_BUILD_HAZARD_FMT, [Hazard]));
+    end;
+  end;
   Info := DiscoverRadStudio;
   if not Info.Found then
     raise Exception.Create('No RAD Studio installation discovered.');

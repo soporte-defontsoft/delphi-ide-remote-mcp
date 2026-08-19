@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.23.0-beta';
+  SERVER_VERSION = '0.24.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -73,6 +73,17 @@ const
   // CLIENT machine (or a real target device), not here - it would be both
   // pointless (nobody sees the process on the server) and the main way an
   // agent could do damage. Refused for EVERY credential, read-write included.
+  // A build must never EXECUTE code on a compile-only server. If the project
+  // carries shell-running MSBuild constructs, refuse the build (unless the
+  // operator opted into execution with AllowRun) - field round 7: upload could
+  // plant a .dproj whose <Target><Exec> ran arbitrary commands at build time.
+  SR_BUILD_HAZARD_FMT =
+    'RECHAZADO: el proyecto contiene %s. Este servidor solo COMPILA, nunca ' +
+    'ejecuta, y esos pasos correrian un shell durante el build. Compila un ' +
+    '.dproj estandar (sin <Target>/<Exec>, sin build-events, sin <Import> ' +
+    'externo). El operador puede permitir ejecucion en build con [Security] ' +
+    'AllowRun=1, pero no es el uso previsto.';
+
   SR_RUN_DISABLED =
     'RECHAZADO: la ejecucion en el servidor esta deshabilitada por diseno. ' +
     'Este es un servidor de compilacion (development): compila, nunca ' +
