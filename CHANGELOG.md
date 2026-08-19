@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.5.0-beta] - 2026-08-19
+
+### Added
+- **Read-only access level**, enforced at a single gate in front of every
+  `tools/call`: `[Security] ReadOnlyToken` (second Bearer credential),
+  `AnonymousReadOnly=1` (tokenless requests get read-only), and a
+  `--readonly` flag (whole process read-only, any transport). Read-only
+  clients can read, search, navigate symbols, get diagnostics, download and
+  run query git commands; `delphi_edit`, `delphi_create`, `delphi_build`,
+  `delphi_run`, `delphi_package` and git write commands are refused. Made
+  for reviewer agents (e.g. a wiki agent cross-checking the sources).
+- `settings.example.ini` configuration template.
+
+### Changed
+- Documented that the HTTP listen port is configurable via
+  `settings.ini [Server] Port` (default 3000; `--http <port>` overrides),
+  and locked the behavior with a test.
+- Token/credential reading centralized in one unit (was duplicated in the
+  console and tray hosts).
+
 ## [0.4.0-beta] - 2026-08-19
 
 The project is now explicitly labeled **beta**: functional and test-covered,

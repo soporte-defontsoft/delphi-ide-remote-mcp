@@ -10,7 +10,13 @@ program DelphiLspMcp;
                          running anywhere, Linux included. Set a Bearer token
                          via the DELPHI_MCP_TOKEN environment variable or
                          settings.ini [Security] AuthToken; expose over
-                         VPN/LAN only.
+                         VPN/LAN only. A second [Security] ReadOnlyToken
+                         grants read-only access (code review agents), and
+                         AnonymousReadOnly=1 lets tokenless requests in as
+                         read-only.
+    --readonly           Whole process read-only, whatever the transport:
+                         mutating tools (edit/create/build/run/package and
+                         git write commands) are refused.
 
   Logging goes to stderr; stdout carries only protocol messages (stdio mode).
   MCP plumbing: vendored gdksoftware/delphi-mcp-server (MIT), see vendor/. }
@@ -20,8 +26,7 @@ program DelphiLspMcp;
 uses
   System.SysUtils,
   System.SyncObjs,
-  System.IniFiles,
-  System.IOUtils,
+  System.JSON,
   Winapi.Windows,
   MCPServer.Types in '..\vendor\gdk-mcp-server\src\Protocol\MCPServer.Types.pas',
   MCPServer.Serializer in '..\vendor\gdk-mcp-server\src\Protocol\MCPServer.Serializer.pas',
@@ -85,26 +90,6 @@ begin
       Exit(StrToIntDef(ParamStr(I + 1), ADefault));
 end;
 
-function ReadAuthToken: string;
-var
-  Ini: TIniFile;
-  IniPath: string;
-begin
-  Result := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
-  if Result <> '' then
-    Exit;
-  IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
-  if TFile.Exists(IniPath) then
-  begin
-    Ini := TIniFile.Create(IniPath);
-    try
-      Result := Ini.ReadString('Security', 'AuthToken', '');
-    finally
-      Ini.Free;
-    end;
-  end;
-end;
-
 function ConsoleCtrl(dwCtrlType: DWORD): BOOL; stdcall;
 begin
   Result := True;
@@ -124,7 +109,7 @@ begin
     Settings := TMCPSettings.Create('', False); // no settings.ini side effects
     try
       Settings.ServerName := 'delphi-lsp-mcp-service';
-      Settings.ServerVersion := '0.4.0-beta';
+      Settings.ServerVersion := '0.5.0-beta';
 
       ManagerRegistry := TMCPManagerRegistry.Create;
       CoreManager := TMCPCoreManager.Create(Settings);
@@ -134,6 +119,19 @@ begin
       ManagerRegistry.RegisterManager(CoreManager);
       ManagerRegistry.RegisterManager(ToolsManager);
       ManagerRegistry.RegisterManager(ResourcesManager);
+
+      // THE single access gate: every tools/call is checked in Lsp.Guard
+      // before executing (read-only mode refuses mutating tools there).
+      TMCPToolsManager.ToolGate :=
+        function(const ToolName: string; const Arguments: TJSONObject): string
+        begin
+          Result := ToolCallDenied(ToolName, Arguments);
+        end;
+      if HasFlag('--readonly') then
+      begin
+        SetProcessReadOnly(True);
+        TLogger.Info('Read-only mode (--readonly): mutating tools disabled.');
+      end;
 
       if HasFlag('--http') then
       begin
@@ -149,13 +147,24 @@ begin
             HttpServer.Settings := Settings;
             HttpServer.ManagerRegistry := ManagerRegistry;
             HttpServer.CoreManager := CoreManager;
-            HttpServer.AuthToken := ReadAuthToken;
-            if HttpServer.AuthToken = '' then
+            HttpServer.AuthToken := AuthToken;
+            HttpServer.ReadOnlyToken := ReadOnlyToken;
+            HttpServer.AnonymousReadOnly := AnonymousReadOnly;
+            HttpServer.OnAccessLevel :=
+              procedure(AReadOnly: Boolean)
+              begin
+                SetRequestReadOnly(AReadOnly);
+              end;
+            if (HttpServer.AuthToken = '') and (HttpServer.ReadOnlyToken = '') then
               TLogger.Warning('No Bearer token configured (DELPHI_MCP_TOKEN or ' +
                 'settings.ini [Security] AuthToken). Fine on localhost; do NOT ' +
                 'expose to the network without one.')
             else
               TLogger.Info('Bearer auth enabled.');
+            if HttpServer.ReadOnlyToken <> '' then
+              TLogger.Info('Read-only token configured (second credential).');
+            if HttpServer.AnonymousReadOnly then
+              TLogger.Info('AnonymousReadOnly: tokenless requests get read-only access.');
             HttpServer.Start;
             TLogger.Info('Ready. Ctrl+C to stop.');
             ShutdownEvent.WaitFor(INFINITE);

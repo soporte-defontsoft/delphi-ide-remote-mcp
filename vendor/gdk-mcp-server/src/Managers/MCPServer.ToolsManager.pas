@@ -13,6 +13,12 @@ uses
   MCPServer.Tool.Base;
 
 type
+  // [local change] optional gate consulted before ANY tool executes.
+  // Returns '' to allow, or the message returned to the client instead of
+  // running the tool (access control lives host-side, in one single place).
+  TToolGateFunc = reference to function(const ToolName: string;
+    const Arguments: TJSONObject): string;
+
   TMCPToolsManager = class(TInterfacedObject, IMCPCapabilityManager)
   strict private
     function ExtractToolNameAndArguments(const Params: System.JSON.TJSONObject; out ToolName: string; out Arguments: TJSONObject): Boolean;
@@ -34,6 +40,9 @@ type
     
     function ListTools: TValue;
     function CallTool(const Params: System.JSON.TJSONObject): TValue;
+
+    // [local change] single entry gate for every tools/call (see TToolGateFunc)
+    class var ToolGate: TToolGateFunc;
   end;
 
 implementation
@@ -241,6 +250,14 @@ begin
   end;
 
   TLogger.Info('MCP CallTool called for tool: ' + ToolName);
+
+  // [local change] the host's access-control gate runs before ANY tool.
+  if Assigned(ToolGate) then
+  begin
+    var GateMsg := ToolGate(ToolName, Arguments);
+    if GateMsg <> '' then
+      Exit(TValue.From<TJSONObject>(BuildToolCallResponse(GateMsg)));
+  end;
 
   if FTools.TryGetValue(ToolName, Tool) then
     resultValue := ExecuteTool(Tool, Arguments)

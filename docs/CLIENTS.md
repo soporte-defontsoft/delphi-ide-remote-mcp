@@ -9,7 +9,14 @@ MCP-capable agent can use this server. Two transports:
   connect from anywhere (Linux included) with the Bearer token.
 
 For remote use, configure BOTH security knobs in `settings.ini` next to the
-exe (see README): `[Security] AuthToken` and `[Workspace] Roots`.
+exe (see README): `[Security] AuthToken` and `[Workspace] Roots`. The listen
+port is `[Server] Port` in the same file (default 3000; a `--http <port>`
+argument overrides it for that run) — the `3000` in the examples below is
+whatever you configured.
+
+Reviewer agents (read but never modify) can be given `[Security]
+ReadOnlyToken` instead of the full token — same configuration snippets,
+different Bearer value. See the README's Configuration section.
 
 ## Claude Code
 

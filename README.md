@@ -4,11 +4,13 @@ A Model Context Protocol (MCP) server that gives AI agents **real semantic under
 
 Runs as a **resident Windows service (or GUI app)** that keeps language-server indexes warm across agent sessions, serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP — with a classic stdio mode as well.
 
-> **Status: BETA.** Functional and covered by 80+ end-to-end checks against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
+> **Status: BETA.** Functional and covered by 100+ end-to-end checks against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
 
 ## Why
 
 AI agents working on Delphi codebases are usually limited to text search (grep). This server gives them **total control of Delphi and its projects from a remote machine** — understand, edit safely, verify and build, through the real compiler front-end.
+
+**The core idea: centralize Delphi, work from anywhere.** One Windows PC or VM holds the RAD Studio installation and the projects; this server runs there. Everything else — your laptop, a Linux box, a CI runner, an agent in the cloud — connects over MCP HTTP and gets the full development cycle (locate a project, read, edit, scaffold, build, run, download the binaries, commit) **without installing Delphi, or anything at all, on the client side**. Credentials decide what each client may do: a full read-write token for the agent that programs, a read-only token (or anonymous read-only) for agents that only review or cross-check code — e.g. an agent working on your project's wiki that wants to confirm in the sources what it is documenting.
 
 ## The tools
 
@@ -47,17 +49,32 @@ claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp --header "Au
 
 Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom agents): see [docs/CLIENTS.md](docs/CLIENTS.md).
 
-### Security (`settings.ini` next to the exe, or environment variables)
+### Configuration (`settings.ini` next to the exe, or environment variables)
 
 ```ini
+[Server]
+Port=3000                               ; HTTP listen port (default 3000)
+
 [Security]
-AuthToken=your-long-random-token        ; or DELPHI_MCP_TOKEN env var
+AuthToken=your-long-random-token        ; full read-write  (or DELPHI_MCP_TOKEN)
+ReadOnlyToken=another-random-token      ; read-only access (or DELPHI_MCP_READONLY_TOKEN)
+AnonymousReadOnly=0                     ; 1 = no token -> read-only access
 
 [Workspace]
 Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 ```
 
-- **AuthToken**: every HTTP request must carry `Authorization: Bearer <token>` or gets 401.
+- **Port**: used by both the console `--http` mode and the tray app. A port given on the
+  command line (`DelphiLspMcp --http 3900`) overrides the ini for that run.
+- **AuthToken**: full access. Every HTTP request must carry `Authorization: Bearer <token>`
+  or gets 401 (when any token is configured).
+- **ReadOnlyToken**: a second credential for reviewer agents. It can read, search, navigate
+  symbols, get diagnostics, download and run query git commands — but `delphi_edit`,
+  `delphi_create`, `delphi_build`, `delphi_run`, `delphi_package` and git write commands are
+  refused. `AnonymousReadOnly=1` grants the same read-only level to tokenless requests.
+  The whole classification is enforced at a **single gate** in front of every `tools/call`.
+- `--readonly` on the command line makes the entire process read-only, whatever the
+  transport (useful for a stdio-registered reviewer).
 - **Roots** are both discovery (`delphi_projects`) and a **jail**: with roots configured, every
   disk-touching tool (read/edit/create/build/lint/search/list/git/LSP) refuses paths outside
   them — including `..\` escapes and prefix cousins. No roots = unrestricted (local trusted
@@ -65,7 +82,7 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 
 ## Tests
 
-`tests/` contains five end-to-end batteries that talk real MCP to the built server (86 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py`, `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
+`tests/` contains five end-to-end batteries that talk real MCP to the built server (102 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real) and `test_guard.py` (workspace jail, including escape attempts).
 
 ## Key design points
 

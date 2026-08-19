@@ -9,12 +9,12 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes,
-  System.IniFiles, System.IOUtils, Vcl.Graphics, Vcl.Controls, Vcl.Forms,
+  System.JSON, Vcl.Graphics, Vcl.Controls, Vcl.Forms,
   Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Menus, Vcl.Clipbrd,
   MCPServer.Types, MCPServer.Settings, MCPServer.Logger,
   MCPServer.ManagerRegistry, MCPServer.CoreManager, MCPServer.ToolsManager,
   MCPServer.ResourcesManager, MCPServer.IdHTTPServer, MCPServer.Resource.Server,
-  Lsp.Session;
+  Lsp.Guard, Lsp.Session;
 
 type
   TFormTray = class(TForm)
@@ -38,7 +38,6 @@ type
     FUrl: string;
     FExiting: Boolean;
     procedure AddLog(const S: string);
-    function ReadAuthToken: string;
   public
   end;
 
@@ -54,26 +53,6 @@ begin
   if MemoLog.Lines.Count > 2000 then
     MemoLog.Lines.Clear;
   MemoLog.Lines.Add(FormatDateTime('hh:nn:ss', Now) + '  ' + S);
-end;
-
-function TFormTray.ReadAuthToken: string;
-var
-  Ini: TIniFile;
-  IniPath: string;
-begin
-  Result := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
-  if Result <> '' then
-    Exit;
-  IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
-  if TFile.Exists(IniPath) then
-  begin
-    Ini := TIniFile.Create(IniPath);
-    try
-      Result := Ini.ReadString('Security', 'AuthToken', '');
-    finally
-      Ini.Free;
-    end;
-  end;
 end;
 
 procedure TFormTray.FormCreate(Sender: TObject);
@@ -94,7 +73,7 @@ begin
   TServerStatusResource.Initialize;
   FSettings := TMCPSettings.Create('', False);
   FSettings.ServerName := 'delphi-lsp-mcp-service';
-  FSettings.ServerVersion := '0.4.0-beta';
+  FSettings.ServerVersion := '0.5.0-beta';
 
   FRegistry := TMCPManagerRegistry.Create;
   FCore := TMCPCoreManager.Create(FSettings);
@@ -104,11 +83,25 @@ begin
   FRegistry.RegisterManager(FTools);
   FRegistry.RegisterManager(FResources);
 
+  // THE single access gate: every tools/call is checked in Lsp.Guard.
+  TMCPToolsManager.ToolGate :=
+    function(const ToolName: string; const Arguments: TJSONObject): string
+    begin
+      Result := ToolCallDenied(ToolName, Arguments);
+    end;
+
   FServer := TMCPIdHTTPServer.Create(Self);
   FServer.Settings := FSettings;
   FServer.ManagerRegistry := FRegistry;
   FServer.CoreManager := FCore;
-  FServer.AuthToken := ReadAuthToken;
+  FServer.AuthToken := Lsp.Guard.AuthToken;
+  FServer.ReadOnlyToken := Lsp.Guard.ReadOnlyToken;
+  FServer.AnonymousReadOnly := Lsp.Guard.AnonymousReadOnly;
+  FServer.OnAccessLevel :=
+    procedure(AReadOnly: Boolean)
+    begin
+      SetRequestReadOnly(AReadOnly);
+    end;
 
   FUrl := Format('http://%s:%d%s',
     [FSettings.Host, FSettings.Port, FSettings.Endpoint]);
@@ -118,11 +111,15 @@ begin
   try
     FServer.Start;
     AddLog('Servidor MCP escuchando en ' + FUrl);
-    if FServer.AuthToken = '' then
+    if (FServer.AuthToken = '') and (FServer.ReadOnlyToken = '') then
       AddLog('AVISO: sin token Bearer (DELPHI_MCP_TOKEN o settings.ini ' +
         '[Security] AuthToken). Bien en localhost; NO exponer a la red asi.')
     else
       AddLog('Autenticacion Bearer activada.');
+    if FServer.ReadOnlyToken <> '' then
+      AddLog('Segunda credencial de SOLO LECTURA configurada (ReadOnlyToken).');
+    if FServer.AnonymousReadOnly then
+      AddLog('AnonymousReadOnly: peticiones sin token entran en solo lectura.');
     AddLog('Icono en la bandeja = servicio encendido. Doble clic para este log.');
   except
     on E: Exception do

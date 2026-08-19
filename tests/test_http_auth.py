@@ -75,6 +75,120 @@ try:
 finally:
     proc.kill()
 
+# --- settings.ini [Server] Port: the port must be configurable, not fixed ---
+import shutil, tempfile
+INI_PORT = 4123
+tmpdir = tempfile.mkdtemp(prefix='mcp-ini-port-')
+try:
+    exe2 = os.path.join(tmpdir, 'DelphiLspMcp.exe')
+    shutil.copyfile(EXE, exe2)
+    with open(os.path.join(tmpdir, 'settings.ini'), 'w') as f:
+        f.write('[Server]\nPort=%d\n\n[Security]\nAuthToken=%s\n' % (INI_PORT, TOKEN))
+    env2 = dict(os.environ)
+    env2.pop('DELPHI_MCP_TOKEN', None)  # the ini must supply the token too
+    proc2 = subprocess.Popen([exe2, '--http'],  # no port argument: ini decides
+                             env=env2,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(3)
+    try:
+        URL = 'http://127.0.0.1:%d/mcp' % INI_PORT
+        code, body = post(INIT, TOKEN)
+        check('ini: [Server] Port respetado sin --http <puerto>',
+              code == 200 and 'delphi-lsp-mcp-service' in body,
+              '%s %s' % (code, body[:120]))
+    finally:
+        proc2.kill()
+        proc2.wait()
+finally:
+    shutil.rmtree(tmpdir, ignore_errors=True)
+
+# --- read-only access: ReadOnlyToken + AnonymousReadOnly ---------------------
+RO_PORT = 4241
+RO_TOKEN = 'ro-token-456'
+REPO = os.path.abspath(os.path.join(HERE, '..'))
+tmpdir3 = tempfile.mkdtemp(prefix='mcp-ro-')
+try:
+    exe3 = os.path.join(tmpdir3, 'DelphiLspMcp.exe')
+    shutil.copyfile(EXE, exe3)
+    paspath = os.path.join(tmpdir3, 'Sample.pas')
+    with open(paspath, 'w') as f:
+        f.write('unit Sample;\r\ninterface\r\nimplementation\r\nend.\r\n')
+    with open(os.path.join(tmpdir3, 'settings.ini'), 'w') as f:
+        f.write('[Server]\nPort=%d\n\n[Security]\nAuthToken=%s\n'
+                'ReadOnlyToken=%s\nAnonymousReadOnly=1\n'
+                % (RO_PORT, TOKEN, RO_TOKEN))
+    env3 = dict(os.environ)
+    env3.pop('DELPHI_MCP_TOKEN', None)
+    proc3 = subprocess.Popen([exe3, '--http'], env=env3,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(3)
+    try:
+        URL = 'http://127.0.0.1:%d/mcp' % RO_PORT
+
+        def call(tool, args, token):
+            return post({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                         "params": {"name": tool, "arguments": args}}, token)
+
+        code, body = call('delphi_list', {'root': os.path.join(REPO, 'src'),
+                                          'pattern': '*.pas'}, RO_TOKEN)
+        check('ro: token RO puede leer (delphi_list)',
+              code == 200 and 'Lsp.Guard.pas' in body, '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',
+                                          'new': 'interface // x'}, RO_TOKEN)
+        check('ro: token RO NO puede editar', 'SOLO LECTURA' in body,
+              '%s %s' % (code, body[:150]))
+
+        for tool, args in (('delphi_build', {'project': 'x.dproj'}),
+                           ('delphi_run', {'path': 'x.exe'}),
+                           ('delphi_package', {'dir': tmpdir3}),
+                           ('delphi_create', {'kind': 'project-console',
+                                              'dir': tmpdir3, 'name': 'X'})):
+            code, body = call(tool, args, RO_TOKEN)
+            check('ro: token RO NO puede %s' % tool, 'SOLO LECTURA' in body,
+                  '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'status'},
+                          RO_TOKEN)
+        check('ro: git status permitido en RO',
+              code == 200 and 'SOLO LECTURA' not in body,
+              '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'commit',
+                                         'message': 'nope'}, RO_TOKEN)
+        check('ro: git commit RECHAZADO en RO', 'SOLO LECTURA' in body,
+              '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'branch',
+                                         'args': 'nueva-rama'}, RO_TOKEN)
+        check('ro: git branch con args RECHAZADO en RO', 'SOLO LECTURA' in body,
+              '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',
+                                          'new': 'interface'}, TOKEN)
+        check('ro: token completo SI pasa la puerta',
+              code == 200 and 'SOLO LECTURA' not in body,
+              '%s %s' % (code, body[:150]))
+
+        code, body = call('delphi_list', {'root': os.path.join(REPO, 'src'),
+                                          'pattern': '*.pas'}, None)
+        check('ro: anonimo (AnonymousReadOnly=1) puede leer',
+              code == 200 and 'Lsp.Guard.pas' in body, '%s %s' % (code, body[:120]))
+
+        code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',
+                                          'new': 'interface // y'}, None)
+        check('ro: anonimo NO puede editar', 'SOLO LECTURA' in body,
+              '%s %s' % (code, body[:150]))
+
+        code, body = call('delphi_list', {'root': REPO}, 'wrong-token')
+        check('ro: token erroneo sigue siendo 401', code == 401,
+              '%s %s' % (code, body[:100]))
+    finally:
+        proc3.kill()
+        proc3.wait()
+finally:
+    shutil.rmtree(tmpdir3, ignore_errors=True)
+
 print()
 print('== http battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

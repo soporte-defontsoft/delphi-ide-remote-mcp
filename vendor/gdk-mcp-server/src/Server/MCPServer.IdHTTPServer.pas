@@ -29,6 +29,10 @@ uses
   MCPServer.JsonRpcProcessor;
 
 type
+  // [local change] tells the host which access level the current request
+  // authenticated at, so it can flag the worker thread (read-only vs full).
+  TAccessLevelEvent = reference to procedure(AReadOnly: Boolean);
+
   TMCPIdHTTPServer = class(TComponent)
   private
     FHTTPServer: TIdHTTPServer;
@@ -43,6 +47,9 @@ type
     FPort: Word;
     FActive: Boolean;
     FAuthToken: string; // [local change] optional Bearer token for remote use
+    FReadOnlyToken: string;      // [local change] second token: read-only access
+    FAnonymousReadOnly: Boolean; // [local change] no token = read-only access
+    FOnAccessLevel: TAccessLevelEvent; // [local change] per-request RO/RW flag
     FSettings: TMCPSettings;
     FEventIDCounter: Int64;
     procedure ConfigureSSL;
@@ -69,9 +76,16 @@ type
     procedure Stop;
     property Port: Word read FPort write FPort;
     property Active: Boolean read FActive;
-    // [local change] when non-empty, every request must carry
-    // "Authorization: Bearer <token>" or it is answered 401.
+    // [local change] two-tier Bearer auth. AuthToken grants read-write;
+    // ReadOnlyToken grants read-only; AnonymousReadOnly lets tokenless
+    // requests in as read-only. With any token configured, everything else
+    // is answered 401. With nothing configured: open, read-write (local
+    // trusted mode). OnAccessLevel fires on every accepted request so the
+    // host can flag the worker thread (threads are reused: always fired).
     property AuthToken: string read FAuthToken write FAuthToken;
+    property ReadOnlyToken: string read FReadOnlyToken write FReadOnlyToken;
+    property AnonymousReadOnly: Boolean read FAnonymousReadOnly write FAnonymousReadOnly;
+    property OnAccessLevel: TAccessLevelEvent read FOnAccessLevel write FOnAccessLevel;
     property ManagerRegistry: IMCPManagerRegistry read FManagerRegistry write FManagerRegistry;
     property CoreManager: IMCPCapabilityManager read FCoreManager write FCoreManager;
     property Settings: TMCPSettings read FSettings write FSettings;
@@ -204,16 +218,43 @@ begin
     if not VerifyAndSetCORSHeaders(RequestInfo, ResponseInfo) then
       Exit; // CORS blocked the request
 
-    // [local change] Bearer auth for remote exposure (OPTIONS preflight is
-    // exempt: it carries no credentials by design).
-    if (FAuthToken <> '') and (RequestInfo.Command <> 'OPTIONS') and
-       (RequestInfo.RawHeaders.Values['Authorization'] <> 'Bearer ' + FAuthToken) then
+    // [local change] two-tier Bearer auth for remote exposure (OPTIONS
+    // preflight is exempt: it carries no credentials by design).
+    if RequestInfo.Command <> 'OPTIONS' then
     begin
-      ResponseInfo.ResponseNo := 401;
-      ResponseInfo.ResponseText := 'Unauthorized';
-      ResponseInfo.ContentType := 'application/json';
-      ResponseInfo.ContentText := '{"error":"missing or invalid bearer token"}';
-      Exit;
+      var Auth := RequestInfo.RawHeaders.Values['Authorization'];
+      var ReadOnly := False;
+      var Allowed := False;
+      if (FAuthToken = '') and (FReadOnlyToken = '') then
+      begin
+        // no tokens configured: open access (local trusted mode); with
+        // AnonymousReadOnly the whole open server is read-only instead.
+        Allowed := True;
+        ReadOnly := FAnonymousReadOnly;
+      end
+      else if (FAuthToken <> '') and (Auth = 'Bearer ' + FAuthToken) then
+        Allowed := True // full read-write
+      else if (FReadOnlyToken <> '') and (Auth = 'Bearer ' + FReadOnlyToken) then
+      begin
+        Allowed := True;
+        ReadOnly := True;
+      end
+      else if FAnonymousReadOnly and (Auth = '') then
+      begin
+        Allowed := True; // no credentials presented: read-only access
+        ReadOnly := True;
+      end;
+      if not Allowed then
+      begin
+        ResponseInfo.ResponseNo := 401;
+        ResponseInfo.ResponseText := 'Unauthorized';
+        ResponseInfo.ContentType := 'application/json';
+        ResponseInfo.ContentText := '{"error":"missing or invalid bearer token"}';
+        Exit;
+      end;
+      // Worker threads are reused: flag the access level on EVERY request.
+      if Assigned(FOnAccessLevel) then
+        FOnAccessLevel(ReadOnly);
     end;
 
     RequestPath := RequestInfo.Document;
