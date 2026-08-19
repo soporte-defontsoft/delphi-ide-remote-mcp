@@ -105,6 +105,11 @@ begin
   FServer.ReadOnlyToken := Lsp.Guard.ReadOnlyToken;
   FServer.AnonymousReadOnly := Lsp.Guard.AnonymousReadOnly;
   FServer.BindIP := Lsp.Guard.BindIP;
+  // Fail SAFE: no credential configured -> localhost only, never all
+  // interfaces (an unconfigured server must not be open to the network).
+  if (FServer.AuthToken = '') and (FServer.ReadOnlyToken = '') and
+     (not FServer.AnonymousReadOnly) and (FServer.BindIP = '') then
+    FServer.BindIP := '127.0.0.1';
   FServer.OnAccessLevel :=
     procedure(AReadOnly: Boolean)
     begin

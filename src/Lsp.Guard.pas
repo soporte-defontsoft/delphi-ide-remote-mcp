@@ -213,7 +213,9 @@ begin
        T.StartsWith('--upload-pack') or T.StartsWith('--receive-pack') or
        T.StartsWith('--exec') or            // runs a remote/local command
        T.StartsWith('--ext-diff') or T.StartsWith('--textconv') or // ext program
-       T.StartsWith('--config-env') or T.StartsWith('-c') or       // arbitrary config -> RCE
+       T.StartsWith('--config') or T.StartsWith('-c') or  // arbitrary config -> RCE (--config is -c's long form on clone)
+       T.StartsWith('--separate-git-dir') or T.StartsWith('--template') or // write/read outside the dest
+       T.StartsWith('--git-dir') or T.StartsWith('--work-tree') or // redirect where git operates -> jail escape
        (T = '-o') or T.StartsWith('-o=') or T.StartsWith('-o/') or T.StartsWith('-o\') then
       Exit(Format(SR_GIT_OPTION_FMT, [Tok]));
   end;

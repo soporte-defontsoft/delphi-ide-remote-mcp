@@ -21,10 +21,15 @@ uses
   MCPServer.CoreManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.CoreManager.pas',
   MCPServer.ToolsManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ToolsManager.pas',
   MCPServer.ResourcesManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ResourcesManager.pas',
+  // KEEP THIS TOOL-UNIT LIST IN SYNC WITH DelphiLspMcp.dpr: a tool is only
+  // registered if its unit is LINKED, so a unit present in one host and not
+  // the other means that host silently exposes fewer tools (found in review).
+  Lsp.Texts in 'Lsp.Texts.pas',
   Lsp.Transport.Process in 'Lsp.Transport.Process.pas',
   Lsp.Client in 'Lsp.Client.pas',
   Lsp.Discovery in 'Lsp.Discovery.pas',
   Lsp.Guard in 'Lsp.Guard.pas',
+  Lsp.Dproj in 'Lsp.Dproj.pas',
   Lsp.ConfigFabricator in 'Lsp.ConfigFabricator.pas',
   Lsp.Session in 'Lsp.Session.pas',
   Lsp.References in 'Lsp.References.pas',
@@ -36,6 +41,10 @@ uses
   Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',
   Mcp.Tools.TextEdit in 'Mcp.Tools.TextEdit.pas',
   Mcp.Tools.Workspace in 'Mcp.Tools.Workspace.pas',
+  Mcp.Tools.Report in 'Mcp.Tools.Report.pas',
+  Mcp.Tools.Config in 'Mcp.Tools.Config.pas',
+  Mcp.Tools.PAServer in 'Mcp.Tools.PAServer.pas',
+  Mcp.Tools.FileOps in 'Mcp.Tools.FileOps.pas',
   Lsp.Scaffold in 'Lsp.Scaffold.pas',
   Mcp.Tools.Scaffold in 'Mcp.Tools.Scaffold.pas',
   UTrayMain in 'UTrayMain.pas' {FormTray};

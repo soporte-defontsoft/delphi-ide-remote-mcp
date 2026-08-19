@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server that gives AI agents **real semantic understanding of Delphi code**, powered by Embarcadero's official `DelphiLSP.exe` — the same engine behind Code Insight in the RAD Studio IDE.
 
-Runs as a **resident Windows service (or GUI app)** that keeps language-server indexes warm across agent sessions, serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP — with a classic stdio mode as well.
+Runs as a **resident console host or a tray GUI app** that keeps language-server processes warm across agent sessions, serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP — with a classic stdio mode as well. (A true Windows Service wrapper is on the roadmap, not shipped yet — today it runs as a foreground console or a tray app.)
 
 > **Status: BETA.** Functional and covered by 100+ end-to-end checks against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
 
@@ -97,7 +97,9 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
   single durable rule keyed to the *port* (covers every rebuild) and clear the accumulated
   per-binary duplicates: `powershell -ExecutionPolicy Bypass -File scripts\firewall-allow.ps1 -Port 3131`.
 - **AuthToken**: full access. Every HTTP request must carry `Authorization: Bearer <token>`
-  or gets 401 (when any token is configured).
+  or gets 401 (when any token is configured). **With NO credential configured at all, the
+  server binds to `127.0.0.1` only** — an unconfigured server is never silently open to the
+  network; remote access requires a token (or an explicit `AnonymousReadOnly=1`).
 - **ReadOnlyToken**: a second credential for reviewer agents. It can read, search, navigate
   symbols, get diagnostics, download, run query git commands and file reports — but
   `delphi_edit`, `delphi_create`, `delphi_build`, `delphi_run`, `delphi_package`,
@@ -139,9 +141,9 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 
 - **Zero hardcoded paths** — RAD Studio installation (11/12/13+) is discovered via the Windows registry.
 - **Project config made automatic** — uses the IDE-generated `.delphilsp.json` when fresh, and can **fabricate one from the `.dproj`** when absent or stale (validated experimentally).
-- **Warm indexes** — one supervised `DelphiLSP` (controller + agents) per workspace, kept alive between agent sessions. LRU eviction and idle shutdown are configurable.
+- **Warm processes** — one `DelphiLSP` (controller + agents; DelphiLSP replaces its own dead/hung children) per workspace, kept alive between agent sessions and refreshed against disk on each use. (LRU eviction and idle-shutdown of idle workspaces are roadmap, not yet implemented — processes stay warm until the host exits.)
 - **Correct source encoding** — BOM detection with configurable ANSI fallback; legacy CP1252 sources are not corrupted.
-- **Dual host** — same core runs as a Windows service (headless) or as a VCL GUI app (live log, workspace monitor).
+- **Dual host** — the same core and the same 27 tools run as a headless console (`--http`/stdio) or as a VCL tray app (live log). (Both hosts are kept in lockstep; a Windows Service wrapper is roadmap.)
 
 ## Requirements
 

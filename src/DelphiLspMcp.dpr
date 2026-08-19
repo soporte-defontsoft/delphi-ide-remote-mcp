@@ -44,6 +44,9 @@ uses
   MCPServer.CoreManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.CoreManager.pas',
   MCPServer.ToolsManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ToolsManager.pas',
   MCPServer.ResourcesManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ResourcesManager.pas',
+  // KEEP THIS TOOL-UNIT LIST IN SYNC WITH DelphiLspMcpTray.dpr: a tool is only
+  // registered if its unit is LINKED (its initialization runs), so a unit in
+  // one host and not the other means that host exposes fewer tools.
   Lsp.Texts in 'Lsp.Texts.pas',
   Lsp.Transport.Process in 'Lsp.Transport.Process.pas',
   Lsp.Client in 'Lsp.Client.pas',
@@ -166,6 +169,18 @@ begin
             HttpServer.ReadOnlyToken := ReadOnlyToken;
             HttpServer.AnonymousReadOnly := AnonymousReadOnly;
             HttpServer.BindIP := Lsp.Guard.BindIP;
+            // Fail SAFE: with NO credential of any kind configured, never
+            // listen on every interface - bind to localhost so an unconfigured
+            // server is not silently open to the whole network. Remote access
+            // requires a token (or an explicit AnonymousReadOnly opt-in).
+            if (AuthToken = '') and (ReadOnlyToken = '') and
+               (not AnonymousReadOnly) and (HttpServer.BindIP = '') then
+            begin
+              HttpServer.BindIP := '127.0.0.1';
+              TLogger.Warning('No credential configured: binding to localhost ' +
+                'only. Set [Security] AuthToken (and [Server] BindIP) to expose ' +
+                'to the network.');
+            end;
             HttpServer.OnAccessLevel :=
               procedure(AReadOnly: Boolean)
               begin

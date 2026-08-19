@@ -6,6 +6,39 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.18.0-beta] - 2026-08-19
+
+Four issues from an external code review, all fixed and regression-tested.
+
+### Security
+- **No-credential server binds to localhost only.** With NO token and no
+  `AnonymousReadOnly`, the HTTP host would listen on every interface — an
+  unconfigured server silently open to the network. It now binds `127.0.0.1`
+  only in that case; remote access requires a token (or an explicit
+  `AnonymousReadOnly=1`).
+- **More git options refused at the gate.** `--config` is `-c`'s long form on
+  `clone` and slipped through (`git clone --config core.sshCommand=… ` →
+  RCE); also `--separate-git-dir`, `--template`, `--git-dir` and `--work-tree`
+  redirect where git writes/reads and could escape the jail. All now refused
+  alongside the existing `-c`/`--output`/`--no-index` set.
+
+### Fixed
+- **Build/run no longer hangs on a silent process.** The output pipe was
+  drained with a blocking `ReadFile`, so a child that produced no output
+  blocked forever and the timeout never fired. It now polls with
+  `PeekNamedPipe`, honouring the deadline even on a silent hang (verified: a
+  mute 60 s process with a 3 s timeout returns in ~3 s).
+- **The tray app now registers all 27 tools.** Five units added in 0.15–0.16
+  (`delphi_config`, `delphi_paserver`, `delphi_delete`, `delphi_move`,
+  `delphi_report`) were linked into the console host but not the tray, so the
+  tray silently exposed fewer tools. Both host unit-lists are now kept in
+  sync (with a comment on each to keep it that way).
+
+### Docs
+- README no longer claims a Windows Service, LRU eviction or idle-shutdown as
+  shipped — they are marked roadmap. What runs today (console + tray, warm
+  DelphiLSP per workspace) is described as it is.
+
 ## [0.17.0-beta] - 2026-08-19
 
 ### Security

@@ -197,21 +197,45 @@ begin
   SetLength(Bytes, 0);
   Deadline := GetTickCount64 + UInt64(ATimeoutMs);
   try
+    // Drain the pipe by POLLING, never a blocking ReadFile: a child that
+    // hangs WITHOUT producing output would block ReadFile forever and the
+    // deadline check would never run (measured concern in third-party
+    // review). PeekNamedPipe tells us if there is data before we read, so the
+    // timeout is honoured even on a silent hang.
+    var TimedOut := False;
     repeat
-      if not ReadFile(ReadH, Buffer, SizeOf(Buffer), BytesRead, nil) then
-        Break;
-      if BytesRead = 0 then
-        Break;
-      var Prev := Length(Bytes);
-      SetLength(Bytes, Prev + Integer(BytesRead));
-      Move(Buffer[0], Bytes[Prev], BytesRead);
+      Avail := 0;
+      if not PeekNamedPipe(ReadH, nil, 0, nil, @Avail, nil) then
+        Break; // write end closed -> child exited, EOF
+      if Avail > 0 then
+      begin
+        if not ReadFile(ReadH, Buffer, SizeOf(Buffer), BytesRead, nil) then
+          Break;
+        if BytesRead = 0 then
+          Break;
+        var Prev := Length(Bytes);
+        SetLength(Bytes, Prev + Integer(BytesRead));
+        Move(Buffer[0], Bytes[Prev], BytesRead);
+      end
+      else
+      begin
+        // no data right now: has the process finished, or timed out?
+        if WaitForSingleObject(PI.hProcess, 50) = WAIT_OBJECT_0 then
+        begin
+          // drain whatever is still buffered, then stop
+          if PeekNamedPipe(ReadH, nil, 0, nil, @Avail, nil) and (Avail = 0) then
+            Break;
+        end;
+      end;
       if GetTickCount64 > Deadline then
       begin
+        TimedOut := True;
         TerminateProcess(PI.hProcess, 1);
         Break;
       end;
     until False;
-    WaitForSingleObject(PI.hProcess, 10000);
+    if not TimedOut then
+      WaitForSingleObject(PI.hProcess, 10000);
     if not GetExitCodeProcess(PI.hProcess, AExitCode) then
       AExitCode := DWORD(-1);
   finally

@@ -239,6 +239,17 @@ check('git escape: diff --no-index rechazado', gitclean(out), out[:150])
 # -c arbitrary config (core.pager/sshCommand -> RCE) stays refused
 out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "-c core.pager=calc"})
 check('git escape: -c config rechazado', gitclean(out), out[:150])
+# --config is -c's long form on clone: must be refused too (third-party review)
+out = call('delphi_git', {"repo": INSIDE, "command": "clone",
+                          "message": "https://example.com/x.git",
+                          "args": "--config core.sshCommand=calc.exe"})
+check('git escape: clone --config rechazado', gitclean(out), out[:150])
+# --separate-git-dir / --template / --git-dir / --work-tree redirect git I/O
+for opt in ('--separate-git-dir=C:\\evil', '--template=C:\\evil',
+            '--git-dir=C:\\evil', '--work-tree=C:\\evil'):
+    out = call('delphi_git', {"repo": INSIDE, "command": "clone",
+                              "message": "https://example.com/x.git", "args": opt})
+    check('git escape: %s rechazado' % opt.split('=')[0], gitclean(out), out[:120])
 # a legitimate read still works (no false positive)
 out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -5"})
 check('git: log --oneline sigue permitido (sin falso positivo)', not gitclean(out), out[:120])
