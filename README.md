@@ -25,7 +25,8 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms (VCL/FMX) with IDE-equivalent skeletons — buildable immediately |
 | `delphi_build` | Real MSBuild builds with structured errors/warnings |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
-| `delphi_list` | Recursive file listing with size/mtime |
+| `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style |
+| `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace] Roots=D:\Projects;E:\More`) |
 | `delphi_git` | Whitelisted git operations (status/diff/log/show/branch/add/commit) |
 
 ## Quickstart

@@ -96,6 +96,32 @@ try:
 except Exception:
     check('list: parsea', False, out[:200])
 
+# --- list dirs (explorer mode) ---
+out = call('delphi_list', {"root": REPO, "dirs": True})
+try:
+    d = json.loads(out)
+    names = [os.path.basename(x) for x in d['dirs']]
+    check('list dirs: carpetas de primer nivel', 'src' in names and 'docs' in names
+          and 'vendor' in names, names)
+    check('list dirs: oculta artefactos', '.git' not in names, names)
+except Exception:
+    check('list dirs: parsea', False, out[:200])
+
+# --- projects locator ---
+out = call('delphi_projects', {"root": REPO})
+try:
+    d = json.loads(out)
+    names = sorted(p['name'] for p in d['projects'])
+    check('projects: encuentra los del repo',
+          'DelphiLspMcp' in names and 'LspCoreTest' in names and 'DelphiLspMcpTray' in names, names)
+except Exception:
+    check('projects: parsea', False, out[:200])
+out = call('delphi_projects', {"root": REPO, "name": "tray"})
+d = json.loads(out)
+check('projects: filtro por nombre', d['total'] == 1 and d['projects'][0]['name'] == 'DelphiLspMcpTray', out[:150])
+out = call('delphi_projects', {})
+check('projects: sin root ni ini configurado avisa', out.startswith('error:') and 'Roots' in out, out[:150])
+
 # --- git (this repo as fixture) ---
 out = call('delphi_git', {"repo": REPO, "command": "status"})
 check('git: status', out.startswith('exit=0') and '## main' in out, out[:150])

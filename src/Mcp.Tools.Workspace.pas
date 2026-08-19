@@ -11,6 +11,7 @@ interface
 uses
   System.SysUtils,
   System.Classes,
+  System.IniFiles,
   System.IOUtils,
   System.JSON,
   MCPServer.Tool.Base,
@@ -38,11 +39,25 @@ type
   private
     FRoot: string;
     FPattern: string;
+    FDirs: Boolean;
   public
     [SchemaDescription('Directory to list recursively')]
     property Root: string read FRoot write FRoot;
     [SchemaDescription('Filename mask, e.g. *.pas (default: Delphi source and project files)')]
     property Pattern: string read FPattern write FPattern;
+    [SchemaDescription('true = list SUBDIRECTORIES of root (one level, explorer-style) instead of files')]
+    property Dirs: Boolean read FDirs write FDirs;
+  end;
+
+  TDelphiProjectsParams = class
+  private
+    FRoot: string;
+    FName: string;
+  public
+    [SchemaDescription('Directory to search under. Empty = the roots configured in settings.ini [Workspace] Roots (semicolon-separated)')]
+    property Root: string read FRoot write FRoot;
+    [SchemaDescription('Optional name filter (substring, case-insensitive), e.g. "comunicador"')]
+    property Name: string read FName write FName;
   end;
 
   TDelphiGitParams = class
@@ -79,6 +94,13 @@ type
   TDelphiGitTool = class(TMCPToolBase<TDelphiGitParams>)
   protected
     function ExecuteWithParams(const Params: TDelphiGitParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
+  TDelphiProjectsTool = class(TMCPToolBase<TDelphiProjectsParams>)
+  protected
+    function ExecuteWithParams(const Params: TDelphiProjectsParams): string; override;
   public
     constructor Create; override;
   end;
@@ -194,7 +216,10 @@ begin
   FName := 'delphi_list';
   FDescription := 'List Delphi files under a directory recursively (sources ' +
     'and project files by default, or a custom mask), skipping IDE ' +
-    'artifacts. Returns path, size and last-write time. Capped at 500 entries.';
+    'artifacts. Returns path, size and last-write time. Capped at 500 ' +
+    'entries. With dirs=true it lists the SUBDIRECTORIES of root instead ' +
+    '(one level, explorer-style) - use that to browse the machine and ' +
+    'decide where to create or look for projects.';
 end;
 
 function TDelphiListTool.ExecuteWithParams(const Params: TDelphiListParams): string;
@@ -208,6 +233,31 @@ var
 begin
   if not TDirectory.Exists(Params.Root) then
     Exit('error: directory not found: ' + Params.Root);
+
+  if Params.Dirs then
+  begin
+    Return := TJSONObject.Create;
+    Arr := TJSONArray.Create;
+    Total := 0;
+    try
+      for F in TDirectory.GetDirectories(Params.Root) do
+      begin
+        if SkipIdeArtifacts(F + '\') or
+           TPath.GetFileName(F).StartsWith('.') or
+           TPath.GetFileName(F).StartsWith('__') then
+          Continue;
+        Inc(Total);
+        if Arr.Count < 500 then
+          Arr.Add(F);
+      end;
+      Return.AddPair('total', TJSONNumber.Create(Total));
+      Return.AddPair('dirs', Arr);
+      Result := Return.ToJSON;
+    finally
+      Return.Free;
+    end;
+    Exit;
+  end;
   if Params.Pattern <> '' then
     Masks := Params.Pattern.Split([';'])
   else
@@ -317,9 +367,91 @@ begin
   Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
 end;
 
+{ TDelphiProjectsTool }
+
+constructor TDelphiProjectsTool.Create;
+begin
+  inherited;
+  FName := 'delphi_projects';
+  FDescription := 'Locate Delphi projects (.dproj/.groupproj) under a ' +
+    'directory - or under the workspace roots configured in settings.ini ' +
+    '[Workspace] Roots when root is empty. Optional name filter. Use this ' +
+    'to answer "open project X" without knowing the disk layout.';
+end;
+
+function TDelphiProjectsTool.ExecuteWithParams(const Params: TDelphiProjectsParams): string;
+var
+  Return: TJSONObject;
+  Arr: TJSONArray;
+  Roots: TArray<string>;
+  RootDir, F, Filt, IniPath: string;
+  Entry: TJSONObject;
+  Total: Integer;
+  Ini: TIniFile;
+  Mask: string;
+begin
+  if Params.Root <> '' then
+    Roots := TArray<string>.Create(Params.Root)
+  else
+  begin
+    IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+    if TFile.Exists(IniPath) then
+    begin
+      Ini := TIniFile.Create(IniPath);
+      try
+        Roots := Ini.ReadString('Workspace', 'Roots', '').Split([';']);
+      finally
+        Ini.Free;
+      end;
+    end;
+    if (Length(Roots) = 0) or ((Length(Roots) = 1) and (Roots[0].Trim = '')) then
+      Exit('error: no root given and no workspace roots configured. Pass ' +
+        '"root", or configure settings.ini next to the server exe: ' +
+        '[Workspace] Roots=D:\Proyectos;E:\Otros (semicolon-separated).');
+  end;
+
+  Filt := Params.Name.Trim.ToLower;
+  Return := TJSONObject.Create;
+  Arr := TJSONArray.Create;
+  Total := 0;
+  try
+    for RootDir in Roots do
+    begin
+      if (RootDir.Trim = '') or not TDirectory.Exists(RootDir.Trim) then
+        Continue;
+      for Mask in TArray<string>.Create('*.dproj', '*.groupproj') do
+        for F in TDirectory.GetFiles(RootDir.Trim, Mask, TSearchOption.soAllDirectories) do
+        begin
+          if SkipIdeArtifacts(F) then
+            Continue;
+          if (Filt <> '') and not TPath.GetFileName(F).ToLower.Contains(Filt) then
+            Continue;
+          Inc(Total);
+          if Arr.Count < 300 then
+          begin
+            Entry := TJSONObject.Create;
+            Arr.Add(Entry);
+            Entry.AddPair('name', TPath.GetFileNameWithoutExtension(F));
+            Entry.AddPair('project', F);
+            Entry.AddPair('dir', TPath.GetDirectoryName(F));
+            Entry.AddPair('kind', LowerCase(TPath.GetExtension(F)).Substring(1));
+          end;
+        end;
+    end;
+    Return.AddPair('total', TJSONNumber.Create(Total));
+    Return.AddPair('shown', TJSONNumber.Create(Arr.Count));
+    Return.AddPair('projects', Arr);
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
 initialization
   TMCPRegistry.RegisterTool('delphi_search',
     function: IMCPTool begin Result := TDelphiSearchTool.Create; end);
+  TMCPRegistry.RegisterTool('delphi_projects',
+    function: IMCPTool begin Result := TDelphiProjectsTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_list',
     function: IMCPTool begin Result := TDelphiListTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_git',
