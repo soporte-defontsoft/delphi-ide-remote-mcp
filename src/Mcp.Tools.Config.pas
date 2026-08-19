@@ -27,13 +27,16 @@ type
     FProject: string;
     FCommand: string;
     FPlatform: string;
+    FOutput: string;
   public
     [SchemaDescription('Absolute path of the project .dproj')]
     property Project: string read FProject write FProject;
-    [SchemaDescription('view (default: list configurations and platforms) | add-platform (enable a platform) | remove-platform (disable it again)')]
+    [SchemaDescription('view (default: list configurations and platforms) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled)')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused)')]
     property Platform: string read FPlatform write FPlatform;
+    [SchemaDescription('set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to <folder>\$(Platform)\$(Config) and .dcu to <folder>\Dcu\$(Platform)\$(Config). Use "default" to restore the RAD Studio layout. No absolute paths, no "..".')]
+    property Output: string read FOutput write FOutput;
   end;
 
   TDelphiConfigTool = class(TMCPToolBase<TDelphiConfigParams>)
@@ -64,8 +67,11 @@ begin
     'configurations (Debug/Release/custom) and every platform with whether ' +
     'it is enabled, whether THIS project can target it, and whether it needs ' +
     'a remote PAServer profile. command=add-platform enables a platform in ' +
-    'the .dproj (a curated edit of the <Platforms> block only). To BUILD a ' +
-    'specific combination use delphi_build with platform+config.';
+    'the .dproj (a curated edit of the <Platforms> block only); ' +
+    'remove-platform disables it again. command=set-output puts every binary ' +
+    'under one folder (output=Compiled by default): a curated edit that sets ' +
+    'DCC_ExeOutput/DCC_DcuOutput, keeping the per-platform/config subfolders. ' +
+    'To BUILD a specific combination use delphi_build with platform+config.';
 end;
 
 function PlatformNeedsProfile(const APlatform: string): Boolean;
@@ -213,6 +219,130 @@ begin
     'desactivada; add-platform la reactiva). Copia previa en __delphi-patch.', [APlatform]);
 end;
 
+{ A binary output folder must be a SIMPLE relative name (Compiled, or
+  bin\out): no XML metacharacters (so nothing can be injected into the .dproj
+  the way R5-B did), no drive/absolute path, no ".." escape. Returns the
+  cleaned token in AClean. }
+function ValidOutputFolder(const AFolder: string; out AClean: string): Boolean;
+var
+  C: Char;
+  Seg: string;
+begin
+  Result := False;
+  AClean := AFolder.Trim.Trim(['"']).Trim;
+  AClean := AClean.Replace('/', '\');
+  while AClean.StartsWith('\') do AClean := AClean.Substring(1);
+  while AClean.EndsWith('\') do AClean := AClean.Substring(0, AClean.Length - 1);
+  if AClean = '' then Exit;
+  if AClean.Contains('..') or AClean.Contains(':') then Exit; // no escape, no drive
+  for C in AClean do
+    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.', ' ', '\']) then
+      Exit;
+  for Seg in AClean.Split(['\']) do
+    if Seg.Trim = '' then Exit; // no empty segments (\\ , trailing, etc.)
+  Result := True;
+end;
+
+{ Inner text currently between <ATag>..</ATag> ('' if the tag is absent). }
+function TagInner(const AXml, ATag: string): string;
+var
+  Low: string;
+  OpenPos, InnerStart, ClosePos: Integer;
+begin
+  Result := '';
+  Low := LowerCase(AXml);
+  OpenPos := Pos('<' + LowerCase(ATag) + '>', Low);
+  if OpenPos = 0 then Exit;
+  InnerStart := OpenPos + Length(ATag) + 2;
+  ClosePos := Pos('</' + LowerCase(ATag) + '>', Low, InnerStart);
+  if ClosePos = 0 then Exit;
+  Result := Copy(AXml, InnerStart, ClosePos - InnerStart);
+end;
+
+{ Replace the inner text of an existing <ATag>..</ATag>. True if it existed. }
+function SetTagInner(var AXml: string; const ATag, ANewInner: string): Boolean;
+var
+  Low: string;
+  OpenPos, InnerStart, ClosePos: Integer;
+begin
+  Result := False;
+  Low := LowerCase(AXml);
+  OpenPos := Pos('<' + LowerCase(ATag) + '>', Low);
+  if OpenPos = 0 then Exit;
+  InnerStart := OpenPos + Length(ATag) + 2;
+  ClosePos := Pos('</' + LowerCase(ATag) + '>', Low, InnerStart);
+  if ClosePos = 0 then Exit;
+  AXml := Copy(AXml, 1, InnerStart - 1) + ANewInner + Copy(AXml, ClosePos, MaxInt);
+  Result := True;
+end;
+
+{ Put every build artifact of the project under one folder (default Compiled),
+  matching the common RAD Studio convention:
+    DCC_ExeOutput = .\<folder>\$(Platform)\$(Config)
+    DCC_DcuOutput = .\<folder>\Dcu\$(Platform)\$(Config)
+  A curated edit of the base PropertyGroup only; the .dproj is backed up. }
+function SetOutput(const ADproj, ARawFolder: string): string;
+var
+  Enc, Xml, Clean, ExeInner, DcuInner, OldExe, OldDcu: string;
+  BasePos, InsertAt: Integer;
+  Restore: Boolean;
+begin
+  Restore := SameText(ARawFolder.Trim, 'default') or SameText(ARawFolder.Trim, 'reset');
+  if Restore then
+  begin
+    Clean := '(RAD Studio default)';
+    ExeInner := '.\$(Platform)\$(Config)';
+    DcuInner := '.\$(Platform)\$(Config)\dcu';
+  end
+  else
+  begin
+    if ARawFolder.Trim = '' then
+      Clean := 'Compiled' // sensible default
+    else if not ValidOutputFolder(ARawFolder, Clean) then
+      Exit(Format('RECHAZADO: "%s" no es una carpeta de salida valida. Usa un ' +
+        'nombre relativo simple como Compiled (sin ruta absoluta, sin "..", ' +
+        'sin caracteres especiales).', [ARawFolder.Trim]));
+    ExeInner := '.\' + Clean + '\$(Platform)\$(Config)';
+    DcuInner := '.\' + Clean + '\Dcu\$(Platform)\$(Config)';
+  end;
+
+  Xml := PatchLoadText(ADproj, Enc);
+  OldExe := TagInner(Xml, 'DCC_ExeOutput');
+  OldDcu := TagInner(Xml, 'DCC_DcuOutput');
+
+  // Replace existing tags in place (both real projects have them).
+  SetTagInner(Xml, 'DCC_ExeOutput', ExeInner);
+  SetTagInner(Xml, 'DCC_DcuOutput', DcuInner);
+
+  // If either tag was missing, insert it into the base PropertyGroup.
+  if (OldExe = '') or (OldDcu = '') then
+  begin
+    BasePos := Pos(LowerCase('<PropertyGroup Condition="''$(Base)''!=''''">'),
+                   LowerCase(Xml));
+    if BasePos = 0 then
+      Exit('error: no encuentro el PropertyGroup base ("$(Base)") del .dproj; ' +
+        'abre el proyecto una vez en el IDE y reintenta.');
+    InsertAt := Pos('>', Xml, BasePos) + 1;
+    if OldDcu = '' then
+      Xml := Copy(Xml, 1, InsertAt - 1) + sLineBreak +
+        '        <DCC_DcuOutput>' + DcuInner + '</DCC_DcuOutput>' +
+        Copy(Xml, InsertAt, MaxInt);
+    if OldExe = '' then
+      Xml := Copy(Xml, 1, InsertAt - 1) + sLineBreak +
+        '        <DCC_ExeOutput>' + ExeInner + '</DCC_ExeOutput>' +
+        Copy(Xml, InsertAt, MaxInt);
+  end;
+
+  PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+  Result := Format('Salida de binarios fijada en "%s". Ahora:%s' +
+    '  DCC_ExeOutput = %s (antes: %s)%s' +
+    '  DCC_DcuOutput = %s (antes: %s)%s' +
+    'Copia previa en __delphi-patch. Verifica con delphi_build; el IDE lo ' +
+    'respeta al abrir el proyecto.',
+    [Clean, sLineBreak, ExeInner, IfThen(OldExe = '', '(sin definir)', OldExe),
+     sLineBreak, DcuInner, IfThen(OldDcu = '', '(sin definir)', OldDcu), sLineBreak]);
+end;
+
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
 var
   Cmd: string;
@@ -231,8 +361,10 @@ begin
     Result := AddPlatform(Params.Project, Params.Platform)
   else if Cmd = 'remove-platform' then
     Result := RemovePlatform(Params.Project, Params.Platform)
+  else if Cmd = 'set-output' then
+    Result := SetOutput(Params.Project, Params.Output)
   else
-    Result := 'error: command debe ser view | add-platform | remove-platform';
+    Result := 'error: command debe ser view | add-platform | remove-platform | set-output';
 end;
 
 initialization

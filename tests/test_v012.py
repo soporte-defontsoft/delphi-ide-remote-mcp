@@ -367,6 +367,29 @@ out = call('delphi_config', {"project": CON})
 check('config: Linux64 ahora habilitada',
       any(p.get('name') == 'Linux64' and p.get('enabled') for p in json.loads(out).get('platforms', [])), out[:150])
 
+# ---- delphi_config set-output: all binaries under one folder ---------------
+out = call('delphi_config', {"project": CON, "command": "set-output", "output": "Compiled"})
+check('set-output: fija la carpeta Compiled',
+      'DCC_ExeOutput' in out and r'.\Compiled\$(Platform)\$(Config)' in out, out[:150])
+_dproj = open(CON, encoding='utf-8-sig').read()
+check('set-output: DCC_ExeOutput escrito en el .dproj',
+      r'<DCC_ExeOutput>.\Compiled\$(Platform)\$(Config)</DCC_ExeOutput>' in _dproj, 'not written')
+check('set-output: DCC_DcuOutput bajo Compiled\\Dcu',
+      r'<DCC_DcuOutput>.\Compiled\Dcu\$(Platform)\$(Config)</DCC_DcuOutput>' in _dproj, 'not written')
+# injection through the folder name is refused (no XML metacharacters reach the file)
+out = call('delphi_config', {"project": CON, "command": "set-output",
+                             "output": 'x</DCC_ExeOutput><Import Project=' + chr(34) + 'evilshare' + chr(34) + '/>'})
+check('set-output: inyeccion por el nombre de carpeta RECHAZADA', out.startswith('RECHAZADO'), out[:120])
+check('set-output: el payload no se escribio en el .dproj',
+      'evilshare' not in open(CON, encoding='utf-8-sig').read(), 'injected!')
+# absolute path refused
+out = call('delphi_config', {"project": CON, "command": "set-output", "output": r"C:\Temp\out"})
+check('set-output: ruta absoluta RECHAZADA', out.startswith('RECHAZADO'), out[:120])
+# restore to the RAD Studio default layout
+out = call('delphi_config', {"project": CON, "command": "set-output", "output": "default"})
+check('set-output: restaurar default',
+      r'<DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>' in open(CON, encoding='utf-8-sig').read(), out[:150])
+
 # ---- delphi_paserver: read subcommands ------------------------------------
 out = call('delphi_paserver', {"command": "packages"})
 pk = json.loads(out)

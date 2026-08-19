@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.22.0-beta] - 2026-08-19
+
+### Added
+- **`delphi_config set-output`: put every binary under one folder.** A curated
+  edit of the `.dproj` (same pipeline as `add-platform`: shared `Lsp.Dproj`
+  read, encoding-preserving write, automatic `__delphi-patch` backup) that sets
+  `DCC_ExeOutput` to `.\<folder>\$(Platform)\$(Config)` and `DCC_DcuOutput` to
+  `.\<folder>\Dcu\$(Platform)\$(Config)` — the common RAD Studio convention,
+  keeping the per-platform/config subfolders so Win32 and Win64 never collide.
+  Default folder `Compiled`; `output=default` restores the stock layout. The
+  folder name is validated (simple relative token only — no XML metacharacters,
+  no absolute path, no `..`), so it cannot inject into the project the way the
+  0.19.0 platform name could. A write op: refused for read-only credentials.
+  Verified end-to-end: after `set-output Compiled`, a real build lands its
+  `.exe` in `Compiled\Win64\Debug\`. 6 batteries, **271 checks**.
+
 ## [0.21.0-beta] - 2026-08-19
 
 This release settles the server's posture: it is a **pure development/compile
