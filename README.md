@@ -1,4 +1,4 @@
-# DelphiLSP MCP Service
+# Delphi Remote MCP Server
 
 **An MCP server to control Delphi remotely — so you can develop in Delphi from any platform.**
 
@@ -31,7 +31,13 @@ An agent can also be pointed at the **library read zone** (RTL/VCL sources and i
 
 ## What each tool actually runs on
 
-The name says LSP because the language server is the hardest part to get right, not because it is most of the server. Of the 27 core tools, seven ask `DelphiLSP.exe` and twenty never touch it (plus five optional `vault_*` tools, registered only when you configure a vault). Worth knowing, because the LSP-backed ones are the only ones that need a resolvable project configuration — the rest work on any folder inside the roots.
+The language server is the hardest part to get right, but it is not most of the server. Of the 27 core tools, **exactly 7 are backed by DelphiLSP**; the other 20 never touch it (plus 5 optional `vault_*` tools, registered only when you configure a vault). This matters in practice: the LSP-backed tools are the only ones that need a resolvable project configuration — the rest work on any folder inside the roots.
+
+**Backed by DelphiLSP (7):** `delphi_symbols`, `delphi_definition`, `delphi_hover`, `delphi_completion`, `delphi_signature`, `delphi_diagnostics`, and `delphi_references` (hybrid — LSP-validated, see the table).
+
+**NOT DelphiLSP (the other 20):** `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create`, `delphi_build`, `delphi_run`, `delphi_list`, `delphi_search`, `delphi_projects`, `delphi_workspace`, `delphi_move`, `delphi_delete`, `delphi_fetch`, `delphi_upload`, `delphi_package`, `delphi_git`, `delphi_installs`, `delphi_config`, `delphi_paserver`, `delphi_report` — plus the 5 `vault_*` tools. These run on MSBuild, git, the filesystem, the registry, the safe-editing engine and your vault.
+
+The table below says which engine each one uses and why it matters:
 
 | Engine | Tools | What that means for you |
 |---|---|---|

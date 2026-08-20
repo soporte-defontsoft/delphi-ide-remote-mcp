@@ -6,7 +6,7 @@
                      ┌───────────────────────────────────┐
   Claude Code ───────┤  HTTP (MCP Streamable)            │
   Claude Desktop ────┤                                   │
-  other MCP client ──┤     DelphiLSP MCP Service         │
+  other MCP client ──┤     Delphi Remote MCP Server      │
                      │  ┌─────────────────────────────┐  │
    (--stdio mode     │  │ MCP layer (tools, routing)  │  │
     for classic      │  ├─────────────────────────────┤  │

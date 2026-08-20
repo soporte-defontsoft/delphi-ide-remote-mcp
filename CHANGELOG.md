@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+- **Renamed to "Delphi Remote MCP Server"** (repo slug `delphi-remote-mcp`). The
+  old "DelphiLSP" name implied a language-server bridge; this is an MCP server to
+  control Delphi remotely, and DelphiLSP backs only 7 of the 27 tools. GitHub
+  keeps the old URL redirecting. The README now lists, by name, exactly which 7
+  tools use DelphiLSP and which 20 do not.
+- Deliberately **unchanged** (to not break configured clients): the MCP
+  `serverInfo.name` (`delphi-lsp-mcp-service`), the Windows service name and the
+  executable name (`DelphiLspMcp.exe`). Those are identifiers, not branding.
+
 ## [0.31.0-beta] - 2026-08-20
 
 It can finally run the way a server is supposed to run: as a Windows Service,
