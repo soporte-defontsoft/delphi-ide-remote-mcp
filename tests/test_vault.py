@@ -15,11 +15,11 @@ REPO = os.path.abspath(os.path.join(HERE, '..'))
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
-VAULT = os.path.join(tempfile.gettempdir(), 'delphi-vault-tests-%d' % os.getpid())
+VAULT = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'vault')
 shutil.rmtree(VAULT, ignore_errors=True)
 # The vault lives in its OWN isolated folder, deliberately NOT inside the
 # workspace roots: the two jails are independent.
-WORK = os.path.join(tempfile.gettempdir(), 'delphi-vault-work-%d' % os.getpid())
+WORK = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'vault-work')
 shutil.rmtree(WORK, ignore_errors=True)
 os.makedirs(WORK, exist_ok=True)
 with open(os.path.join(WORK, 'Codigo.pas'), 'wb') as f:
@@ -457,7 +457,7 @@ s4.close()
 # 13. First run on a new machine: a configured path that does not exist yet is
 #     SEEDED with the starter templates; an existing vault is never touched.
 # ===========================================================================
-FRESH = os.path.join(tempfile.gettempdir(), 'delphi-vault-fresh-%d' % os.getpid())
+FRESH = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'vault-fresh')
 shutil.rmtree(FRESH, ignore_errors=True)
 check('siembra: la carpeta no existe antes de arrancar', not os.path.exists(FRESH))
 s5 = Server(vault=FRESH)

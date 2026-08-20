@@ -4,6 +4,18 @@ Usage:  python tests/test_workspace_tools.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Uses this very repository as the git fixture.
 """
 import json, subprocess, threading, queue, time, os, sys, base64, hashlib
+import tempfile, shutil
+
+# Every scratch folder this battery needs lives under ONE parent with a FIXED
+# name. mkdtemp gave each run a new random path, which scatters leftovers all
+# over %TEMP% and - for anything that opens a port - makes Windows Firewall
+# treat each run as a brand-new program and ask again.
+def _fixed(name):
+    d = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', name)
+    shutil.rmtree(d, ignore_errors=True)
+    os.makedirs(d, exist_ok=True)
+    return d
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
@@ -273,7 +285,7 @@ except Exception:
 
 # --- git init / tag / push (in a THROWAWAY dir - never against this repo) ---
 import tempfile, shutil
-tmpgit = tempfile.mkdtemp(prefix='mcp-git-')
+tmpgit = _fixed('git')
 try:
     out = call('delphi_git', {"repo": tmpgit, "command": "init"})
     check('git: init crea repo', out.startswith('exit=0'), out[:150])
@@ -312,7 +324,7 @@ finally:
 
 # --- delphi_upload: mirror of fetch, byte-identical reassembly ---
 import base64, secrets
-tmpup = tempfile.mkdtemp(prefix='mcp-up-')
+tmpup = _fixed('upload')
 try:
     blob = secrets.token_bytes(120000)
     sha = hashlib.sha256(blob).hexdigest()
@@ -348,7 +360,7 @@ finally:
     shutil.rmtree(tmpup, ignore_errors=True)
 
 # --- git clone: whole repo in one call (network; skipped if offline) ---
-tmpcl = tempfile.mkdtemp(prefix='mcp-clone-')
+tmpcl = _fixed('clone')
 try:
     dest = os.path.join(tmpcl, 'repo')
     out = call('delphi_git', {"repo": dest, "command": "clone",
@@ -371,7 +383,7 @@ finally:
     shutil.rmtree(tmpcl, ignore_errors=True)
 
 # --- delphi_textedit (non-Delphi text files) ---
-tmptxt = tempfile.mkdtemp(prefix='mcp-txt-')
+tmptxt = _fixed('textedit')
 try:
     md = os.path.join(tmptxt, 'README.md')
     out = call('delphi_textedit', {"path": md, "create": True,

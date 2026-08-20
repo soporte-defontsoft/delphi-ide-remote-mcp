@@ -89,7 +89,14 @@ finally:
 # --- settings.ini [Server] Port: the port must be configurable, not fixed ---
 import shutil, tempfile
 INI_PORT = 4123
-tmpdir = tempfile.mkdtemp(prefix='mcp-ini-port-')
+# A FIXED folder, like every other battery uses (delphi-guard-tests,
+# delphi-v012-tests...). It used to be mkdtemp, i.e. a new random path on every
+# run - and Windows Firewall decides per program PATH, so each run looked like
+# a brand-new program and asked again. Same name every time = asked at most
+# once, ever.
+tmpdir = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'http-ini-port')
+shutil.rmtree(tmpdir, ignore_errors=True)
+os.makedirs(tmpdir, exist_ok=True)
 try:
     exe2 = os.path.join(tmpdir, 'DelphiLspMcp.exe')
     shutil.copyfile(EXE, exe2)
@@ -121,7 +128,9 @@ finally:
 RO_PORT = 4241
 RO_TOKEN = 'ro-token-456'
 REPO = os.path.abspath(os.path.join(HERE, '..'))
-tmpdir3 = tempfile.mkdtemp(prefix='mcp-ro-')
+tmpdir3 = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'http-ro')  # fixed, see above
+shutil.rmtree(tmpdir3, ignore_errors=True)
+os.makedirs(tmpdir3, exist_ok=True)
 try:
     exe3 = os.path.join(tmpdir3, 'DelphiLspMcp.exe')
     shutil.copyfile(EXE, exe3)

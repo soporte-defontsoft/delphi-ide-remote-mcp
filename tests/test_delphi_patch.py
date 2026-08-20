@@ -12,7 +12,7 @@ import json, subprocess, threading, queue, time, os, sys, tempfile
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     os.path.dirname(__file__), '..', 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
-DIR = os.path.join(tempfile.gettempdir(), 'delphi-patch-tests')
+DIR = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'patch')
 os.makedirs(DIR, exist_ok=True)
 PAS = os.path.join(DIR, 'Dummy.pas')
 DFM = os.path.join(DIR, 'Bin.dfm')

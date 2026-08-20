@@ -11,7 +11,7 @@ REPO = os.path.abspath(os.path.join(HERE, '..'))
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-guard-tests')
+BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'guard')
 shutil.rmtree(BASE, ignore_errors=True)
 INSIDE = os.path.join(BASE, 'permitido')
 OUTSIDE = os.path.join(BASE, 'prohibido')

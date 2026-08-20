@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     HERE, '..', 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-scaffold-tests')
+BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'scaffold')
 shutil.rmtree(BASE, ignore_errors=True)
 os.makedirs(BASE, exist_ok=True)
 

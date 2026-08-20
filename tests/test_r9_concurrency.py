@@ -23,8 +23,8 @@ URL = 'http://127.0.0.1:%d/mcp' % PORT
 TOKEN = 'conc-token'
 N = 16  # writers firing at once
 
-VAULT = os.path.join(tempfile.gettempdir(), 'delphi-r9conc-vault-%d' % os.getpid())
-WORK = os.path.join(tempfile.gettempdir(), 'delphi-r9conc-work-%d' % os.getpid())
+VAULT = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'r9-vault')
+WORK = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'r9-work')
 for d in (VAULT, WORK):
     shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d, exist_ok=True)

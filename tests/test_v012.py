@@ -17,7 +17,7 @@ REPO = os.path.abspath(os.path.join(HERE, '..'))
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-v012-tests')
+BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'v012')
 shutil.rmtree(BASE, ignore_errors=True)
 INSIDE = os.path.join(BASE, 'permitido')
 os.makedirs(INSIDE, exist_ok=True)
