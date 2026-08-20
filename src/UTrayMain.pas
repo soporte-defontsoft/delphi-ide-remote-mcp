@@ -129,12 +129,13 @@ begin
 
   FUrl := Format('http://%s:%d%s',
     [FSettings.Host, FSettings.Port, FSettings.Endpoint]);
-  Caption := 'DelphiLSP MCP Service - ' + FUrl;
-  TrayIcon.Hint := 'DelphiLSP MCP Service' + sLineBreak + FUrl;
+  Caption := 'DelphiLSP MCP Service v' + SERVER_VERSION + ' - ' + FUrl;
+  TrayIcon.Hint := 'DelphiLSP MCP Service v' + SERVER_VERSION + sLineBreak + FUrl;
 
   try
     FServer.Start;
-    AddLog('Servidor MCP escuchando en ' + FUrl);
+    AddLog(Format('Servidor MCP escuchando en %s (%s v%s)',
+      [FUrl, SERVER_NAME, SERVER_VERSION]));
     // The WRITE jail (workspace roots): same summary source as the console host.
     var JailWarn: Boolean;
     AddLog(WorkspaceJailSummary(JailWarn));

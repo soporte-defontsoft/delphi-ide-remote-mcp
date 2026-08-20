@@ -81,6 +81,14 @@ function CanonicalPlatform(const AName: string): string;
   Returns the offending construct, or '' when the project is safe to build. }
 function DprojBuildHazard(const AXml, AProjectPath: string): string;
 
+{ The artifact a build just produced, found ON DISK (truth of the moment,
+  never an index): candidate output dirs are every DCC_ExeOutput /
+  DCC_BplOutput declared in the .dproj plus the IDE default
+  .\$(Platform)\$(Config), with the common macros expanded; the newest
+  existing <project>.exe/.dll/.bpl among them wins. Returns '' when nothing
+  is there (build failed, macro we cannot resolve, unusual layout). }
+function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
+
 implementation
 
 uses
@@ -387,6 +395,78 @@ begin
              and APathLow.EndsWith('.targets')) or
             APathLow.Contains('usertools.proj') or
             APathLow.EndsWith('.deployproj');
+end;
+
+function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
+const
+  ArtifactExts: array [0 .. 2] of string = ('.exe', '.dll', '.bpl');
+var
+  Xml, Dir, Base, D, Cand, Ext, Artifact: string;
+  Dirs: TList<string>;
+  Best: string;
+  BestTime, T: TDateTime;
+
+  function Expand(const AValue: string): string;
+  begin
+    Result := AValue;
+    Result := Result.Replace('$(Platform)', APlatform, [rfReplaceAll, rfIgnoreCase]);
+    Result := Result.Replace('$(Config)', AConfig, [rfReplaceAll, rfIgnoreCase]);
+    Result := Result.Replace('$(MSBuildProjectDirectory)', Dir, [rfReplaceAll, rfIgnoreCase]);
+    Result := Result.Replace('$(ProjectDir)', Dir, [rfReplaceAll, rfIgnoreCase]);
+    Result := Result.Replace('$(MSBuildProjectName)', Base, [rfReplaceAll, rfIgnoreCase]);
+    Result := Result.Replace('$(SanitizedProjectName)', Base, [rfReplaceAll, rfIgnoreCase]);
+  end;
+
+begin
+  Result := '';
+  if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
+    Exit;
+  try
+    Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
+    Xml := TFile.ReadAllText(ADprojPath);
+  except
+    Exit;
+  end;
+  Base := TPath.GetFileNameWithoutExtension(ADprojPath);
+  Best := '';
+  BestTime := 0;
+  Dirs := TList<string>.Create;
+  try
+    for D in AllTagValues(Xml, 'DCC_ExeOutput') do
+      Dirs.Add(D.Trim);
+    for D in AllTagValues(Xml, 'DCC_BplOutput') do
+      Dirs.Add(D.Trim);
+    Dirs.Add('.\$(Platform)\$(Config)'); // the IDE default when unset
+    for D in Dirs do
+    begin
+      Cand := Expand(XmlUnescape(D));
+      if (Cand = '') or Cand.Contains('$(') then
+        Continue; // still macro-based: not resolvable here
+      if not TPath.IsPathRooted(Cand) then
+        Cand := TPath.Combine(Dir, Cand);
+      try
+        Cand := TPath.GetFullPath(Cand);
+      except
+        Continue;
+      end;
+      for Ext in ArtifactExts do
+      begin
+        Artifact := TPath.Combine(Cand, Base + Ext);
+        if TFile.Exists(Artifact) then
+        begin
+          T := TFile.GetLastWriteTime(Artifact);
+          if (Best = '') or (T > BestTime) then
+          begin
+            Best := Artifact;
+            BestTime := T;
+          end;
+        end;
+      end;
+    end;
+  finally
+    Dirs.Free;
+  end;
+  Result := Best;
 end;
 
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer): string; forward;

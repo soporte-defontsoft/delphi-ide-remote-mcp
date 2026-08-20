@@ -398,6 +398,24 @@ begin
     Result.AddPair('errors', Errors);
     Result.AddPair('warnings', Warnings);
     Result.AddPair('outputTail', Tail.ToString);
+    // A stateless protocol means the agent only knows what each result tells
+    // it: say WHERE the artifact landed, or it has to hunt the disk for it
+    // (measured in the field: 20 calls chasing a fresh exe that delphi_list
+    // kept hidden as build output).
+    if (ExitCode = 0) and not SameText(Target, 'Clean') then
+    begin
+      var Artifact := ResolveBuildOutput(TPath.GetFullPath(ADprojPath), Plat, Cfg);
+      if Artifact <> '' then
+      begin
+        Result.AddPair('output', Artifact);
+        try
+          Result.AddPair('outputSize', TJSONNumber.Create(TFile.GetSize(Artifact)));
+        except
+          // size is a courtesy: the path alone is already the answer
+        end;
+        Result.AddPair('outputNote', SN_BUILD_OUTPUT);
+      end;
+    end;
   finally
     Tail.Free;
   end;

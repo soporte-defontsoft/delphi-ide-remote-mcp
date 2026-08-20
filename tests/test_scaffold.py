@@ -92,6 +92,25 @@ out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "Ho
 check('create: proyecto console', out.startswith('CREADO'), out)
 ok, err = build_ok(os.path.join(CDIR, 'HolaConsola.dproj'))
 check('build: proyecto console COMPILA', ok, err)
+
+# v0.29: a successful build DECLARES the artifact it produced (stateless
+# protocol: the agent must not have to hunt the disk for its own output)
+out = call('delphi_build', {"project": os.path.join(CDIR, 'HolaConsola.dproj'),
+                            "platform": "Win64", "config": "Debug",
+                            "target": "Build"}, 600)
+try:
+    d = json.loads(out)
+    outp = d.get('output', '')
+    if outp.lower().startswith('srv'):
+        outp = outp[3].upper() + outp[4:]
+    check('build: resultado declara el artefacto (output)',
+          outp.lower().endswith('holaconsola.exe') and os.path.isfile(outp),
+          d.get('output', '(sin output)'))
+    check('build: outputSize > 0', d.get('outputSize', 0) > 0, out[:200])
+    check('build: outputNote guia package+fetch',
+          'delphi_package' in d.get('outputNote', ''), out[:200])
+except Exception as e:
+    check('build: output parsea', False, '%s | %s' % (e, out[:200]))
 out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "HolaConsola"})
 check('create: jamas sobreescribe', 'RECHAZADO' in out, out)
 

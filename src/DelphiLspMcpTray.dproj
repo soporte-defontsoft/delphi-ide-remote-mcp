@@ -1,9 +1,9 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{B54E9D71-2F8C-4A3B-9E60-1C7D4F82A511}</ProjectGuid>
         <MainSource>DelphiLspMcpTray.dpr</MainSource>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <ProjectName Condition="'$(ProjectName)'==''">DelphiLspMcpTray</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Application</AppType>
@@ -14,16 +14,6 @@
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
     </PropertyGroup>
-    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Base)'=='true') or '$(Base_Win32)'!=''">
-        <Base_Win32>true</Base_Win32>
-        <CfgParent>Base</CfgParent>
-        <Base>true</Base>
-    </PropertyGroup>
-    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Base)'=='true') or '$(Base_Win64)'!=''">
-        <Base_Win64>true</Base_Win64>
-        <CfgParent>Base</CfgParent>
-        <Base>true</Base>
-    </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_1)'!=''">
         <Cfg_1>true</Cfg_1>
         <CfgParent>Base</CfgParent>
@@ -32,6 +22,18 @@
     <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_2)'!=''">
         <Cfg_2>true</Cfg_2>
         <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win32)'!=''">
+        <Cfg_2_Win32>true</Cfg_2_Win32>
+        <CfgParent>Cfg_2</CfgParent>
+        <Cfg_2>true</Cfg_2>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win64)'!=''">
+        <Cfg_2_Win64>true</Cfg_2_Win64>
+        <CfgParent>Cfg_2</CfgParent>
+        <Cfg_2>true</Cfg_2>
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
@@ -60,6 +62,12 @@
         <DCC_Optimize>false</DCC_Optimize>
         <DCC_GenerateStackFrames>true</DCC_GenerateStackFrames>
     </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
+        <BT_BuildType>Debug</BT_BuildType>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
+        <BT_BuildType>Debug</BT_BuildType>
+    </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
@@ -79,12 +87,16 @@
         <DCCReference Include="..\vendor\gdk-mcp-server\src\Managers\MCPServer.CoreManager.pas"/>
         <DCCReference Include="..\vendor\gdk-mcp-server\src\Managers\MCPServer.ToolsManager.pas"/>
         <DCCReference Include="..\vendor\gdk-mcp-server\src\Managers\MCPServer.ResourcesManager.pas"/>
+        <DCCReference Include="Lsp.Texts.pas"/>
         <DCCReference Include="Lsp.Transport.Process.pas"/>
         <DCCReference Include="Lsp.Client.pas"/>
         <DCCReference Include="Lsp.Discovery.pas"/>
+        <DCCReference Include="Lsp.Guard.pas"/>
+        <DCCReference Include="Lsp.Dproj.pas"/>
         <DCCReference Include="Lsp.ConfigFabricator.pas"/>
         <DCCReference Include="Lsp.Session.pas"/>
         <DCCReference Include="Lsp.References.pas"/>
+        <DCCReference Include="Lsp.Sandbox.pas"/>
         <DCCReference Include="Lsp.BuildRunner.pas"/>
         <DCCReference Include="Lsp.Patch.pas"/>
         <DCCReference Include="Lsp.TextEdit.pas"/>
@@ -93,6 +105,15 @@
         <DCCReference Include="Mcp.Tools.DelphiPatch.pas"/>
         <DCCReference Include="Mcp.Tools.TextEdit.pas"/>
         <DCCReference Include="Mcp.Tools.Workspace.pas"/>
+        <DCCReference Include="Mcp.Tools.Report.pas"/>
+        <DCCReference Include="Mcp.Vault.Seed.pas"/>
+        <DCCReference Include="Mcp.Vault.Session.pas"/>
+        <DCCReference Include="Mcp.Tools.Vault.pas"/>
+        <DCCReference Include="Mcp.Tools.Config.pas"/>
+        <DCCReference Include="Mcp.Tools.PAServer.pas"/>
+        <DCCReference Include="Mcp.Tools.FileOps.pas"/>
+        <DCCReference Include="Lsp.Scaffold.pas"/>
+        <DCCReference Include="Mcp.Tools.Scaffold.pas"/>
         <DCCReference Include="UTrayMain.pas">
             <Form>FormTray</Form>
             <FormType>dfm</FormType>
@@ -123,6 +144,7 @@
                 <Platform value="Win64">True</Platform>
             </Platforms>
         </BorlandProject>
+        <ProjectFileVersion>12</ProjectFileVersion>
     </ProjectExtensions>
     <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
     <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>

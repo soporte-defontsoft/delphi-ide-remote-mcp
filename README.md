@@ -78,12 +78,12 @@ a working starter vault for you; there is also a ready-made one in
 | `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, semantic INSERT (global routine / method with both halves — also inside a `.dpr`, and into the implicit published section of forms), line DELETE mode, TPF0 hard-reject, post-write audit; new units use the encoding configured in the IDE |
 | `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms (VCL/FMX) with IDE-equivalent skeletons — buildable immediately |
-| `delphi_build` | Real MSBuild builds with structured errors/warnings |
+| `delphi_build` | Real MSBuild builds with structured errors/warnings; on success it declares the artifact it produced (`output`) |
 | `delphi_run` | **OFF by default** — this is a compile-only server, it does not execute programs. Download the artifact (`delphi_package` + `delphi_fetch`) and run it on your machine, or deploy to a real target (PAServer / Android). An operator can opt in with `[Security] AllowRun=1` for CI console runners; even then it is jailed, no shell, hard timeout, and Low-integrity sandboxed |
 | `delphi_fetch` | Download files from the server in base64 chunks with whole-file SHA-256 — "get the deploy" to run GUI apps on the client machine |
 | `delphi_upload` | The mirror of fetch: send files TO the server in chunks, SHA-256 verified — for binaries you cannot recreate by editing |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
-| `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style |
+| `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style; IDE artifacts are filtered relative to the root and the result says how many entries it hid |
 | `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace] Roots=D:\Projects;E:\More`) |
 | `delphi_installs` | List every RAD Studio/Delphi installation discovered on the machine (side-by-side versions), flagging which one is active for the LSP engine |
 | `delphi_workspace` | The lay of the land on the server: the configured workspace roots (your allowed universe), the access level, and the active Delphi. Server paths travel with **virtual drive units** (`srvd:`, `srvc:` — they only exist inside this MCP, never on your local disk). Call it first |

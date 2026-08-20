@@ -107,6 +107,43 @@ try:
 except Exception:
     check('list dirs: parsea', False, out[:200])
 
+# --- list: artifact filtering is RELATIVE to the root (v0.29) ---
+# from above, build output stays hidden but the result SAYS so
+out = call('delphi_list', {"root": SRC, "pattern": "*.exe"})
+try:
+    d = json.loads(out)
+    check('list: build output oculto pero DECLARADO (hidden+note)',
+          d.get('hidden', 0) >= 1 and 'delphi_package' in d.get('note', ''), out[:200])
+except Exception:
+    check('list: parsea (hidden)', False, out[:200])
+# naming the build-output folder itself as root serves its contents
+RELDIR = os.path.dirname(os.path.abspath(EXE))
+out = call('delphi_list', {"root": RELDIR, "pattern": "*.exe"})
+try:
+    d = json.loads(out)
+    check('list: root explicito DENTRO de build output lista el exe',
+          any(os.path.basename(EXE).lower() == os.path.basename(f['path']).lower()
+              for f in d['files']), out[:200])
+except Exception:
+    check('list: parsea (root en build output)', False, out[:200])
+# dirs browse of the folder holding the platform dirs: hidden children counted
+out = call('delphi_list', {"root": os.path.join(SRC, 'Compiled'), "dirs": True})
+try:
+    d = json.loads(out)
+    check('list dirs: hijos de build output contados en hidden con nota',
+          d.get('hidden', 0) >= 1 and 'note' in d, out[:200])
+except Exception:
+    check('list dirs: parsea (hidden)', False, out[:200])
+# dirs browse INSIDE artifact territory serves the children (explicit root)
+out = call('delphi_list', {"root": os.path.dirname(RELDIR), "dirs": True})
+try:
+    d = json.loads(out)
+    names = [os.path.basename(x) for x in d['dirs']]
+    check('list dirs: root dentro de build output muestra sus hijos',
+          os.path.basename(RELDIR) in names, out[:200])
+except Exception:
+    check('list dirs: parsea (root en build output)', False, out[:200])
+
 # --- projects locator ---
 out = call('delphi_projects', {"root": REPO})
 try:

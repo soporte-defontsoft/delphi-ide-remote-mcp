@@ -349,7 +349,11 @@ out = call('delphi_config', {"project": VCLP, "command": "add-platform", "platfo
 check('config: add-platform Linux64 en VCL RECHAZADO (regla VCL!=FMX)',
       'RECHAZADO' in out and 'VCL' in out, out[:150])
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "Linux64"})
-check('config: add-platform Linux64 en consola aceptado', 'ANADIDA' in out, out[:150])
+# shape, not data: the fixture is a copy of the live .dproj, so Linux64 may
+# arrive undeclared (ANADIDA) or declared-but-disabled (HABILITADA) - both
+# mean "the console project accepted the platform"
+check('config: add-platform Linux64 en consola aceptado',
+      ('ANADIDA' in out) or ('HABILITADA' in out), out[:150])
 
 # R5-B: platform name is whitelisted - XML injection into the .dproj refused
 inj = 'Win64"/><Import Project=' + chr(34) + 'evilshare' + chr(34) + '/><X y='

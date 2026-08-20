@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.29.0-beta] - 2026-08-20
+
+Field lesson from the first remote deploy (OpenCode agent bringing a freshly
+built exe to its own machine): the build succeeded in seconds, then the agent
+spent ~20 calls hunting the exe, because `delphi_list` hid the build-output
+folders it had every reason to look in. A stateless protocol means the agent
+only knows what each result tells it - so results must leave it ready for the
+next step, the same way a rejection offers the legitimate path.
+
+### Changed
+- **`delphi_list` filters IDE artifacts RELATIVE to the requested root.**
+  Naming a build-output folder (`Compiled\Win32\Release`...) as `root` is
+  explicit consent to see inside it: its files and subdirectories are now
+  listed. Listings from above still hide build output, but the result now
+  carries `hidden` (how many entries the artifact filter removed) and a
+  `note` telling the agent how to see them - before, the folder simply
+  answered empty while `delphi_fetch` served the same path, and the
+  contradiction cost the field agent four minutes of blind guessing.
+- **`delphi_build` declares the artifact it produced.** On success the result
+  now carries `output` (the built .exe/.dll/.bpl, resolved from the .dproj's
+  `DCC_ExeOutput`/`DCC_BplOutput` or the IDE default and verified ON DISK),
+  `outputSize`, and an `outputNote` pointing at `delphi_package` +
+  `delphi_fetch` for retrieval.
+- **The tray host announces its version** in the startup log line, the window
+  caption and the tray icon hint (before, no way to tell WHICH build was
+  serving without calling `initialize`).
+
+### Docs
+- `docs/CLIENTS.md`: how to receive `delphi_fetch` chunks through OpenCode,
+  whose client truncates oversized tool output to a local spool file - the
+  spool IS the transport (one-line PowerShell decode included), plus the
+  recommended `build` -> `package` -> `fetch` flow for binaries.
+
+8 E2E batteries, **423 checks** (new: relative artifact filtering with
+`hidden`+`note`, explicit root inside build output, `delphi_build`
+`output`/`outputSize`/`outputNote`).
+
 ## [0.28.0-beta] - 2026-08-20
 
 Field round 9, second pass. One confirmed data-loss bug (concurrency) fixed, and

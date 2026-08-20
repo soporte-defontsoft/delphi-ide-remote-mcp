@@ -376,12 +376,32 @@ begin
   FName := 'delphi_list';
   FDescription := 'List Delphi files under a directory recursively (sources ' +
     'and project files by default, or a custom mask), skipping IDE ' +
-    'artifacts. Returns path, size and last-write time. Capped at 500 ' +
-    'entries. With dirs=true it lists the SUBDIRECTORIES of root instead ' +
-    '(one level, explorer-style) - use that to browse the machine and ' +
-    'decide where to create or look for projects. With includeTrash=true it ' +
-    'also shows the recoverable trash (__delphi-patch) so you can find a ' +
-    'file deleted by delphi_delete and restore it with delphi_move.';
+    'artifacts BELOW the root: naming a build-output folder (Win32/Win64/' +
+    'Debug/Release...) as root lists inside it, and when entries are ' +
+    'hidden the result says how many. Returns path, size and last-write ' +
+    'time. Capped at 500 entries. With dirs=true it lists the ' +
+    'SUBDIRECTORIES of root instead (one level, explorer-style) - use that ' +
+    'to browse the machine and decide where to create or look for ' +
+    'projects. With includeTrash=true it also shows the recoverable trash ' +
+    '(__delphi-patch) so you can find a file deleted by delphi_delete and ' +
+    'restore it with delphi_move.';
+end;
+
+{ Path relative to the listing root, in the '\seg\' shape SkipIdeArtifacts
+  expects. Artifact filtering for delphi_list happens on THIS, not on the
+  absolute path: naming a build-output folder as root is explicit consent to
+  see inside it (field: an agent chased a freshly built exe for 20 calls
+  because Compiled\Win32\Release answered empty), while listings from above
+  still hide build output - and now say how much they hid. }
+function RelToRoot(const AFull, ARoot: string): string;
+var
+  R: string;
+begin
+  R := IncludeTrailingPathDelimiter(ARoot);
+  if AFull.ToLower.StartsWith(R.ToLower) then
+    Result := '\' + Copy(AFull, Length(R) + 1, MaxInt)
+  else
+    Result := AFull;
 end;
 
 function TDelphiListTool.ExecuteWithParams(const Params: TDelphiListParams): string;
@@ -391,7 +411,7 @@ var
   F, Mask, Root: string;
   Masks: TArray<string>;
   Entry: TJSONObject;
-  Total: Integer;
+  Total, Hidden: Integer;
 begin
   Result := ReadPathDenied(Params.Root); // listing may enter the library zone
   if Result <> '' then
@@ -411,21 +431,36 @@ begin
     Return := TJSONObject.Create;
     Arr := TJSONArray.Create;
     Total := 0;
+    Hidden := 0;
     try
+      // A root already inside artifact territory was asked for by name:
+      // hiding its Debug/Release children would recreate the trap.
+      var RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
       for F in TDirectory.GetDirectories(Root) do
       begin
         var IsTrash := SameText(TPath.GetFileName(F), '__delphi-patch') or
                        SameText(TPath.GetFileName(F), '__pascal-patch');
-        if SkipIdeArtifacts(F + '\', Params.IncludeTrash) or InVault(F) or
+        if InVault(F) or
            TPath.GetFileName(F).StartsWith('.') or
            (TPath.GetFileName(F).StartsWith('__') and
             not (Params.IncludeTrash and IsTrash)) then
           Continue;
+        if (not RootInArtifacts) and
+           SkipIdeArtifacts(RelToRoot(F, Root) + '\', Params.IncludeTrash) then
+        begin
+          Inc(Hidden);
+          Continue;
+        end;
         Inc(Total);
         if Arr.Count < 500 then
           Arr.Add(F);
       end;
       Return.AddPair('total', TJSONNumber.Create(Total));
+      if Hidden > 0 then
+      begin
+        Return.AddPair('hidden', TJSONNumber.Create(Hidden));
+        Return.AddPair('note', Format(SN_LIST_HIDDEN_FMT, [Hidden]));
+      end;
       Return.AddPair('dirs', Arr);
       Result := Return.ToJSON;
     finally
@@ -445,14 +480,20 @@ begin
   Return := TJSONObject.Create;
   Arr := TJSONArray.Create;
   Total := 0;
+  Hidden := 0;
   try
     for Mask in Masks do
       for F in WalkFiles(Root, Mask.Trim) do
       begin
         // The vault is the vault_* tools' business, even when it sits inside a
         // root: listing its notes would invite edits behind its back.
-        if SkipIdeArtifacts(F, Params.IncludeTrash) or InVault(F) then
+        if InVault(F) then
           Continue;
+        if SkipIdeArtifacts(RelToRoot(F, Root), Params.IncludeTrash) then
+        begin
+          Inc(Hidden);
+          Continue;
+        end;
         Inc(Total);
         if Arr.Count < 500 then
         begin
@@ -473,6 +514,11 @@ begin
       end;
     Return.AddPair('total', TJSONNumber.Create(Total));
     Return.AddPair('shown', TJSONNumber.Create(Arr.Count));
+    if Hidden > 0 then
+    begin
+      Return.AddPair('hidden', TJSONNumber.Create(Hidden));
+      Return.AddPair('note', Format(SN_LIST_HIDDEN_FMT, [Hidden]));
+    end;
     Return.AddPair('files', Arr);
     Result := Return.ToJSON;
   finally

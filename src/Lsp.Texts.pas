@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.28.0-beta';
+  SERVER_VERSION = '0.29.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -43,6 +43,23 @@ const
     '...): use them verbatim in every path argument - they only resolve ' +
     'inside this MCP, never on your disk. Work only inside "roots"; ' +
     'anything outside is refused.';
+
+  // ---------------------------------------------------------------------
+  // Listing and build results (a stateless protocol means the agent only
+  // knows what each result tells it - so results must leave it ready for
+  // the next step, the same way a rejection offers the legitimate path)
+  // ---------------------------------------------------------------------
+  // No '..' anywhere in this text: results are asserted to carry no
+  // traversal residue (R4-C), so even a cosmetic ellipsis is banned here.
+  SN_LIST_HIDDEN_FMT =
+    '%d entries inside IDE build/artifact folders (Win32, Win64, Debug, ' +
+    'Release, dcu, __history) are not listed. They exist on disk: pass ' +
+    'that folder itself as root to list its contents, or retrieve build ' +
+    'output with delphi_package + delphi_fetch.';
+
+  SN_BUILD_OUTPUT =
+    'Retrieve it with delphi_package (zips its folder, dcu excluded) + ' +
+    'delphi_fetch (chunked download with sha256).';
 
   // ---------------------------------------------------------------------
   // Access control
