@@ -48,7 +48,7 @@ Windows filesystem.
 - [x] Streamable HTTP transport (`--http [port]`) with **Bearer token auth** (DELPHI_MCP_TOKEN env var or settings.ini [Security] AuthToken; 5/5 battery: tests/test_http_auth.py). Recommended exposure: VPN only
 - [x] Remote file toolset so a remote agent needs no share: `delphi_read` (encoding-aware), `delphi_search` (skips `__history/`, build dirs), `delphi_list` (12/12 battery: tests/test_workspace_tools.py)
 - [x] `delphi_git`: whitelisted git operations (status, diff, log, show, branch, add, commit) with shell-metacharacter rejection — remote agents version their work without shell access
-- [ ] Dual host: Windows service + VCL tray app (starts minimized to tray — the icon is the "it's running" indicator; menu: workspaces, log, reload, exit)
+- [x] Hosts: ONE executable with three modes — Windows Service (`-install`/`-uninstall`, the switch baked into the registered ImagePath), terminal (stdio or `--http`) and VCL tray (starts minimized; the icon is the "it is running" indicator; menu: log, copy URL, exit). Wiring shared in `Lsp.Host`; verified install→start→serve→tool call→stop→uninstall
 
 ## Phase 6 — Publication
 - [ ] English docs pass, config examples (Claude Code / Claude Desktop), demo project

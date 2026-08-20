@@ -29,9 +29,12 @@ if (-not $admin) {
   exit 1
 }
 
-# 1) remove the per-binary duplicates Windows created for our exe(s)
+# 1) remove the per-binary rules the "allow this app?" dialog left behind.
+# Windows decides per program PATH, so every copy of the exe in a different
+# folder is a separate rule - and a rule survives the folder being deleted.
+# The right rule is the port one created below, not these.
 $stale = Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue |
-  Where-Object { $_.Program -match 'DelphiLspMcp(Tray)?\.exe$' }
+  Where-Object { $_.Program -match 'DelphiLspMcp\.exe$' }
 $removed = 0
 foreach ($f in $stale) {
   try { $f | Get-NetFirewallRule | Remove-NetFirewallRule -ErrorAction Stop; $removed++ } catch {}

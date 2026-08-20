@@ -19,7 +19,7 @@
                      │  │ LSP Client                  │  │  JSON-RPC framing, retries,
                      │  │                             │  │  encoding-safe didOpen
                      │  └─────────────────────────────┘  │
-                     │   Host: Windows service ─or─ GUI  │
+                     │  Host: service / terminal / tray  │
                      └───────────────┬───────────────────┘
                                      │ stdio (LSP JSON-RPC)
                              ┌───────▼────────┐
@@ -36,7 +36,7 @@
 | **Workspace Manager** | Lifecycle of one DelphiLSP per workspace: spawn on first request, keep warm, request queue (the LSP agent is single-request), LRU eviction, idle shutdown, kill+respawn on hang |
 | **Config Fabricator** | Locate RAD Studio via registry (highest installed version); use project's `.delphilsp.json` if fresh; otherwise generate settings from the `.dproj` (search paths, defines, platform, namespaces) |
 | **LSP Client** | `Content-Length` framing over child stdio, request/response correlation, retry with escalating delays (indexing returns `-32800 Request removed`), document sync (`didOpen` with correct encoding) |
-| **Host** | Same core hosted two ways: Windows service (headless) or VCL GUI (live log, workspace/memory monitor, manual reload) |
+| **Host** | ONE executable, three modes of the same core: Windows Service (headless, `-install`), terminal (stdio, or `--http`) and VCL tray (live log). All three share `Lsp.Host`, which builds the managers, the single access gate and its outbound filter — never copied per mode. |
 
 ## Why a resident service (and not per-session stdio)
 

@@ -4,7 +4,7 @@ Usage:  python tests/test_workspace_tools.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Uses this very repository as the git fixture.
 """
 import json, subprocess, threading, queue, time, os, sys, base64, hashlib
-import tempfile, shutil
+import tempfile, shutil, stat
 
 # Every scratch folder this battery needs lives under ONE parent with a FIXED
 # name. mkdtemp gave each run a new random path, which scatters leftovers all
@@ -12,7 +12,22 @@ import tempfile, shutil
 # treat each run as a brand-new program and ask again.
 def _fixed(name):
     d = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', name)
-    shutil.rmtree(d, ignore_errors=True)
+    # rmtree(ignore_errors=True) is NOT enough here and failing silently is the
+    # worst outcome: a cloned repo leaves read-only files under .git\objects, so
+    # the folder survives, the next run finds a repo already there, git clone
+    # refuses and three checks quietly stop running. Clear the read-only bit and
+    # try again, then assert the folder is really gone.
+    for _ in range(3):
+        shutil.rmtree(d, ignore_errors=True)
+        if not os.path.isdir(d):
+            break
+        for root, _dirs, files in os.walk(d):
+            for f in files:
+                try:
+                    os.chmod(os.path.join(root, f), stat.S_IWRITE)
+                except OSError:
+                    pass
+    assert not os.path.isdir(d), 'no se pudo limpiar la carpeta de scratch: ' + d
     os.makedirs(d, exist_ok=True)
     return d
 
