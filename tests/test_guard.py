@@ -531,6 +531,70 @@ for opt in ('--separate-git-dir=C:\\evil', '--template=C:\\evil',
 out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -5"})
 check('git: log --oneline sigue permitido (sin falso positivo)', not gitclean(out), out[:120])
 
+# --- the gate must read an argument the way the BINDER resolves it ----------
+# The gate used TJSONObject.TryGetValue (case-SENSITIVE) while the RTTI binder
+# normalizes (lower-case, '_' ignored): sending "Args" made the gate inspect
+# nothing and the handler receive the real value. Every gate decision was
+# bypassable by spelling the parameter differently.
+for spelling in ('Args', 'ARGS', 'a_rgs'):
+    _p = os.path.join(INSIDE, 'PWNED_case_%s.txt' % spelling)
+    out = call('delphi_git', {"repo": INSIDE, "command": "diff",
+                              spelling: "--output=" + _p})
+    check('gate: escape por mayusculas en "%s" rechazado' % spelling,
+          gitclean(out), out[:130])
+    check('gate: "%s" no escribio el fichero' % spelling,
+          not os.path.exists(_p), _p)
+
+# Two keys that normalize the SAME: the binder probes the declared casing
+# first, so one value gets vetted and the other executed. Refused outright.
+_dup = os.path.join(INSIDE, 'PWNED_dup.txt')
+out = call('delphi_git', {"repo": INSIDE, "command": "diff",
+                          "args": "--oneline", "Args": "--output=" + _dup})
+check('gate: parametro duplicado (args + Args) rechazado',
+      'RECHAZADO' in out and 'dos veces' in out, out[:150])
+check('gate: el duplicado no escribio el fichero', not os.path.exists(_dup), _dup)
+
+# --- delphi_build: platform/config/target reach a cmd.exe line -------------
+# Unquoted in "rsvars.bat && msbuild ... /p:Platform=%s", so a metacharacter
+# there is arbitrary execution that skips AllowRun, the jail AND the sandbox.
+_holad = os.path.join(INSIDE, 'Hola', 'Hola.dproj')
+for param, payload in (('platform', 'Win64 && cmd /c echo x > '),
+                       ('config', 'Debug > '),
+                       ('target', 'Build & cmd /c echo x > ')):
+    _m = os.path.join(INSIDE, 'PWNED_build_%s.txt' % param)
+    args = {"project": _holad, "platform": "Win64", "config": "Debug",
+            "target": "Build"}
+    args[param] = payload + _m
+    out = call('delphi_build', args, 300)
+    check('build: inyeccion por "%s" rechazada' % param, 'RECHAZADO' in out, out[:130])
+    check('build: inyeccion por "%s" no ejecuto nada' % param,
+          not os.path.exists(_m), _m)
+
+# anti-over-tightening: a project may declare its OWN configuration names
+out = call('delphi_build', {"project": _holad, "platform": "Win64",
+                            "config": "Release Demo", "target": "Make"}, 300)
+check('build: una configuracion propia con espacio NO se rechaza',
+      'RECHAZADO' not in out, out[:130])
+
+# --- the workspace ROOT is the jail, not a file ----------------------------
+# delete/move park their target in a trash folder created NEXT TO it: for a
+# root that lands in the root's PARENT, outside the jail, taking the whole
+# workspace with it.
+for tool, args in (('delphi_delete', {"path": INSIDE}),
+                   ('delphi_move', {"path": INSIDE, "dest": INSIDE + '2'})):
+    out = call(tool, args)
+    check('%s: el root mismo rechazado' % tool,
+          'RECHAZADO' in out and 'WORKSPACE ROOT' in out, out[:150])
+check('root: el workspace sigue existiendo', os.path.isdir(INSIDE), INSIDE)
+check('root: no se creo papelera FUERA de la jaula',
+      not os.path.exists(os.path.join(BASE, '__delphi-patch')), BASE)
+# and deleting something INSIDE still works (no over-refusal)
+_victim = os.path.join(INSIDE, 'Borrame.pas')
+open(_victim, 'wb').write(SRC.replace('Dentro', 'Borrame').encode('cp1252'))
+out = call('delphi_delete', {"path": _victim})
+check('root: borrar un fichero DENTRO sigue permitido',
+      'RECHAZADO' not in out and not os.path.exists(_victim), out[:130])
+
 print()
 print('== guard battery: %d PASS / %d FAIL ==' % (P, F))
 proc.stdin.close()

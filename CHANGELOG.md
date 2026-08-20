@@ -6,6 +6,85 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.30.0-beta] - 2026-08-20
+
+A security release. The field audit that opened round 10 reported one real
+issue; auditing our own answer to it turned up four more, three of them worse
+than the original. Every one belongs to the same family: **two pieces of the
+server disagreeing about what a request says**. The gate read an argument name
+one way and the binder another; a drive letter counted as "served" on the way
+out but not on the way in; a value was a number to the client and a shell
+fragment to `cmd.exe`. Where two readings existed, there is now one.
+
+### Security
+- **The entry gate now reads arguments exactly as the binder resolves them.**
+  It used `TJSONObject.TryGetValue` (case-sensitive) while the RTTI binder
+  normalizes case and `_`, so a parameter spelled `Args` or `Com_mand` was
+  invisible to the gate and fully visible to the tool: every decision the gate
+  makes - read-only status, git option whitelist - could be walked past by
+  respelling. One shared rule now (`TMCPSerializer.NormalizeKey`, exposed as a
+  marked local change), read through a single `ArgStr` helper.
+- **Duplicate parameter names are refused.** Two keys that normalize to the
+  same name let the gate vet one value while the binder passed the tool the
+  other. No client emits duplicates; the ambiguity is refused rather than
+  resolved by guessing.
+- **`delphi_build` validates `platform`, `config` and `target`.** They reached
+  an unquoted `cmd.exe` line (`rsvars.bat && msbuild ...`), so a metacharacter
+  was arbitrary execution - past `AllowRun`, the workspace jail, the
+  low-integrity sandbox and the `.dproj` hazard scanner at once, defeating the
+  server's central promise that it compiles and never runs. `platform` reuses
+  the whitelist that already existed for the `.dproj` XML sink; `target` is a
+  fixed trio; `config` stays open to project-defined names but admits no shell
+  metacharacter.
+- **A workspace root can no longer be deleted or moved.** `delphi_delete` and
+  `delphi_move` park their target in a trash folder created next to it - for a
+  root that lands in the root's *parent*, a write outside the jail, taking the
+  whole workspace with it. Refused for every credential.
+- **An exception escaping a tool no longer bypasses drive masking.** The
+  dispatcher wraps any exception as `Error executing tool: <message>`, and a
+  Delphi I/O exception embeds the real absolute path. The three byte-fidelity
+  exemptions (`delphi_read`, `vault_read`, `vault_search`) only cancelled on a
+  lower-case `error`, so that wrapper travelled unmasked. Matched by exact
+  token, case-sensitively: a loose test would mask real file content and break
+  anchored writes.
+- **An unserved virtual unit never reaches the filesystem.** `srvz:\x` was
+  expanded to the real `Z:\x` and echoed in the rejection, so probing
+  `srva:`..`srvz:` enumerated the host's drives. Only served letters expand
+  now; anything else is refused by name, listing the units that do work.
+- **The knowledge vault is a served root of its own.** Its drive joins the
+  served set alongside the workspace roots and the library zone; a vault on
+  another letter used to leak that letter unmasked and its `srvX:` form did not
+  resolve inbound.
+
+### Changed
+- **A wrong argument value is an error, not a silent default.** A string that
+  is not a number became `0` and any boolean but `true` became `False`, so an
+  agent believed it had filtered when it had not - a plausible wrong answer,
+  the worst failure for a client that cannot see the server. Unreadable values
+  now name the parameter and what was expected. Values that parse cleanly are
+  still accepted whatever their JSON type (`"5"`, `"TRUE"`), so lenient clients
+  keep working.
+- **JSON `null` means "not provided".** It used to reach the binder's string
+  path, where `TJSONAncestor.Value` yields the literal `'null'`: a null number
+  became `0` and a null string became the four characters `null`.
+- **`delphi_report` is bounded** (256 KB per report, counted over message,
+  title and from). It is the only write a read-only - even anonymous -
+  credential may perform, so it was also the only way such a client could grow
+  the server's disk. A folder quota with a retention policy is roadmap.
+- The virtual-unit shape is recognized in exactly one place
+  (`VirtualUnitLetter`), used by both the inbound expansion and the rejection.
+
+### Documentation
+- `settings.example.ini` documents `AllowBuildScripts`, which existed and was
+  described in the README but was missing from the template.
+
+### Tests
+- 468 checks across 8 batteries (was 423), every new fix paired with the vector
+  it closes *and* with a counter-test that proves it did not over-tighten: a
+  project-defined configuration name with a space still builds, content that
+  merely starts with "Error" is still returned verbatim, numeric strings still
+  bind, and deleting a file inside a root still works.
+
 ## [0.29.0-beta] - 2026-08-20
 
 Field lesson from the first remote deploy (OpenCode agent bringing a freshly

@@ -140,6 +140,8 @@ uses
   System.IniFiles,
   System.IOUtils,
   System.Generics.Collections,
+  MCPServer.Serializer, // NormalizeKey: ONE rule for argument names
+  Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
   Lsp.Discovery,
   Lsp.Texts;
 
@@ -346,6 +348,8 @@ begin
 end;
 
 procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
+function ServedDriveLetters: string; forward;
+function VirtualUnitLetter(const AValue: string): Char; forward;
 
 function WriteDenied(const AWhat: string): string;
 begin
@@ -379,12 +383,108 @@ begin
   end;
 end;
 
+{ Reads a tools/call argument the SAME WAY the RTTI binder resolves it
+  (TMCPSerializer.NormalizeKey: case-insensitive AND ignoring '_').
+  TJSONObject.TryGetValue is case-SENSITIVE, so the gate saw '' for an argument
+  sent as "Args" or "com_mand" while the handler received its real value - a
+  bypass of EVERY decision made here. The gate never calls TryGetValue on an
+  argument again. Objects, arrays and null yield '' (TJSONAncestor.Value). }
+function ArgStr(const AArguments: TJSONObject; const AName: string): string;
+var
+  P: TJSONPair;
+  Want: string;
+begin
+  Result := '';
+  if not Assigned(AArguments) then
+    Exit;
+  Want := TMCPSerializer.NormalizeKey(AName);
+  for P in AArguments do
+    if TMCPSerializer.NormalizeKey(P.JsonString.Value) = Want then
+      Exit(P.JsonValue.Value);
+end;
+
+{ Two keys that normalize to the SAME parameter make the gate and the binder
+  read different values: the binder probes the exact declared casing FIRST, so
+  sending "args" with a harmless value AND "Args" with a dangerous one gets the
+  first one vetted and the second one executed. Refusing the ambiguity removes
+  the whole class instead of guessing which spelling wins. Runs BEFORE
+  ExpandVirtualDrives, whose RemovePair also picks the first exact match.
+  '' = clean. }
+function DuplicateArgDenied(const AArguments: TJSONObject): string;
+var
+  I, J: Integer;
+begin
+  Result := '';
+  if not Assigned(AArguments) then
+    Exit;
+  for I := 0 to AArguments.Count - 2 do
+    for J := I + 1 to AArguments.Count - 1 do
+      if TMCPSerializer.NormalizeKey(AArguments.Pairs[I].JsonString.Value) =
+         TMCPSerializer.NormalizeKey(AArguments.Pairs[J].JsonString.Value) then
+        Exit(Format(SR_ARG_DUPLICATE_FMT,
+          [AArguments.Pairs[I].JsonString.Value]));
+end;
+
+{ delphi_build's platform/config/target reach a cmd.exe line UNQUOTED
+  (rsvars.bat && msbuild ...), so a metacharacter there is arbitrary execution
+  that sails past AllowRun, the jail, the low-integrity sandbox and the .dproj
+  hazard scanner at once. platform reuses the whitelist that ALREADY exists for
+  the .dproj XML sink (Lsp.Dproj.CanonicalPlatform) instead of a second, weaker
+  charset test; target is a fixed trio; config is NOT a fixed list - a project
+  may declare its own configurations (parity with the IDE), so it is bounded by
+  a charset that admits no shell metacharacter. '' = clean. }
+function BuildArgDenied(const AArguments: TJSONObject): string;
+var
+  V: string;
+  C: Char;
+begin
+  Result := '';
+  V := ArgStr(AArguments, 'platform').Trim;
+  if (V <> '') and (CanonicalPlatform(V) = '') then
+    Exit(Format(SR_BUILD_PLATFORM_FMT, [V]));
+  V := ArgStr(AArguments, 'target').Trim;
+  if (V <> '') and not MatchText(V, ['Build', 'Make', 'Clean']) then
+    Exit(Format(SR_BUILD_TARGET_FMT, [V]));
+  V := ArgStr(AArguments, 'config');
+  if V <> '' then
+    for C in V do
+      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.', ' ']) then
+        Exit(Format(SR_BUILD_CONFIG_FMT, [V]));
+end;
+
+{ '' unless APath IS one of the configured roots (the jail itself). With no
+  roots configured (unrestricted local mode) there is no jail to protect and
+  nothing is refused - same model as PathDenied. }
+function RootItselfDenied(const APath: string): string;
+var
+  R, Full: string;
+begin
+  Result := '';
+  if APath.Trim = '' then
+    Exit;
+  try
+    Full := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
+  except
+    Exit; // an unparseable path is PathDenied's business, not ours
+  end;
+  for R in WorkspaceRoots do
+    if SameText(R, Full) then
+      Exit(Format(SR_ROOT_ITSELF_FMT, [ExcludeTrailingPathDelimiter(R)]));
+end;
+
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
   Cmd, GitArgs, GitMsg: string;
 begin
-  // Normalization first, unconditionally: virtual drive units in the
+  // Duplicate parameter names FIRST, before normalization and before any other
+  // check: two keys that normalize the same would let the gate inspect one
+  // value while the binder hands the tool the other, and ExpandVirtualDrives
+  // below rewrites by first exact name. Fail closed on the ambiguity.
+  Result := DuplicateArgDenied(AArguments);
+  if Result <> '' then
+    Exit;
+  // Normalization second, unconditionally: virtual drive units in the
   // arguments become real server paths before any check or any tool.
   ExpandVirtualDrives(AArguments);
   Result := '';
@@ -393,9 +493,28 @@ begin
   // freeform args are vetted.
   if SameText(AToolName, 'delphi_git') and Assigned(AArguments) then
   begin
-    GitArgs := '';
-    AArguments.TryGetValue<string>('args', GitArgs);
+    GitArgs := ArgStr(AArguments, 'args');
     Result := GitArgDenied(GitArgs);
+    if Result <> '' then
+      Exit;
+  end;
+  // Universal build-argument filter (BOTH access levels): platform, config and
+  // target land in a cmd.exe line, so a metacharacter there is arbitrary
+  // execution - and it would sail past AllowRun, the jail, the sandbox and the
+  // .dproj hazard scanner in a single call.
+  if SameText(AToolName, 'delphi_build') then
+  begin
+    Result := BuildArgDenied(AArguments);
+    if Result <> '' then
+      Exit;
+  end;
+  // The workspace ROOT is the jail, not a file: delete/move would relocate the
+  // whole workspace and write its recoverable copy in the root's PARENT,
+  // outside the roots. Refused for EVERY credential - a read-write agent does
+  // it just as thoroughly as a read-only one would like to.
+  if MatchText(AToolName, ['delphi_delete', 'delphi_move']) then
+  begin
+    Result := RootItselfDenied(ArgStr(AArguments, 'path'));
     if Result <> '' then
       Exit;
   end;
@@ -416,9 +535,7 @@ begin
   // delphi_config is mixed: "view" reads, "add-platform" writes the .dproj.
   if SameText(AToolName, 'delphi_config') then
   begin
-    Cmd := '';
-    if Assigned(AArguments) then
-      AArguments.TryGetValue<string>('command', Cmd);
+    Cmd := ArgStr(AArguments, 'command');
     if (Trim(Cmd) = '') or SameText(Trim(Cmd), 'view') then
       Exit;
     Exit(WriteDenied('delphi_config ' + Cmd));
@@ -428,15 +545,9 @@ begin
   // without arguments; with arguments they create -> write).
   if SameText(AToolName, 'delphi_git') then
   begin
-    Cmd := '';
-    GitArgs := '';
-    GitMsg := '';
-    if Assigned(AArguments) then
-    begin
-      AArguments.TryGetValue<string>('command', Cmd);
-      AArguments.TryGetValue<string>('args', GitArgs);
-      AArguments.TryGetValue<string>('message', GitMsg);
-    end;
+    Cmd := ArgStr(AArguments, 'command');
+    GitArgs := ArgStr(AArguments, 'args');
+    GitMsg := ArgStr(AArguments, 'message');
     // Pure query commands pass. branch/tag only LIST when called with NO args
     // AND no message (a message makes tag annotated = a write).
     if MatchText(Cmd, ['status', 'diff', 'log', 'show']) or
@@ -533,9 +644,27 @@ end;
   is refused outright - it is never a legitimate request. }
 function PathAnomaly(const APath: string): string;
 var
-  Name, Rest: string;
+  Name, Rest, Units, List: string;
+  C: Char;
 begin
   Result := '';
+  // A virtual unit that survived the inbound expansion is one this server does
+  // not serve: it must be refused BY NAME, never resolved against the real
+  // filesystem (that is what leaked the host's drive letters). Only when a
+  // virtual namespace exists at all - with no served drive there is nothing to
+  // mask and nothing to name.
+  Units := ServedDriveLetters;
+  C := VirtualUnitLetter(APath);
+  if (Units <> '') and (C <> #0) and (Pos(C, Units) = 0) then
+  begin
+    for C in Units do
+    begin
+      if List <> '' then
+        List := List + ', ';
+      List := List + 'srv' + Char(Ord(C) + 32) + ':';
+    end;
+    Exit(Format(SR_UNIT_UNKNOWN_FMT, [APath, List]));
+  end;
   // ':' is legal only as the drive separator (C:\...): anywhere else it
   // opens an Alternate Data Stream, which hides content from every check.
   Rest := APath;
@@ -748,7 +877,8 @@ var
   GDrvLetters: string; // uppercase letters of every served drive, e.g. 'DC'
 
 { The drives that can legitimately appear in tool output: those hosting the
-  workspace roots and the library zone (RAD Studio + components). Cached. }
+  workspace roots, the library zone (RAD Studio + components) and the
+  knowledge vault. Cached. }
 function ServedDriveLetters: string;
 
   procedure AddDriveOf(const APath: string);
@@ -769,20 +899,45 @@ begin
       AddDriveOf(R);
     for R in LibraryRoots do
       AddDriveOf(R);
+    // The vault is a served root of its OWN: it sits deliberately outside the
+    // code jail and outside the library zone, so neither list carries it. A
+    // vault on another letter used to leak that letter unmasked, and its
+    // srvX: form did not resolve on the way in - it goes through the same
+    // door as everybody else.
+    AddDriveOf(VaultPath);
     GDrvLoaded := True;
   end;
   Result := GDrvLetters;
 end;
 
-{ 'srvd:\x' / 'srvd:/x' / bare 'srvd:' -> 'D:\x' ... Whole-value prefix match
-  only; anything else comes back untouched (real paths keep working). }
-function ExpandDriveValue(const AValue: string): string;
+{ The ONE place that recognizes the virtual-unit shape: 'srvd:', 'srvd:\x',
+  'srvd:/x'. Returns the upper-case letter, or #0 when the value is not a
+  virtual unit at all. Both the inbound expansion and the rejection of an
+  unserved unit ask this - the shape is never re-tested by hand. }
+function VirtualUnitLetter(const AValue: string): Char;
 begin
-  Result := AValue;
+  Result := #0;
   if (Length(AValue) >= 5) and StartsText('srv', AValue) and
      CharInSet(AValue[4], ['A'..'Z', 'a'..'z']) and (AValue[5] = ':') then
     if (Length(AValue) = 5) or CharInSet(AValue[6], ['\', '/']) then
-      Result := UpCase(AValue[4]) + Copy(AValue, 5, MaxInt);
+      Result := UpCase(AValue[4]);
+end;
+
+{ 'srvd:\x' / 'srvd:/x' / bare 'srvd:' -> 'D:\x' ... Whole-value prefix match
+  only; anything else comes back untouched (real paths keep working).
+  Only a SERVED letter expands. Mapping an unserved 'srvz:' to the real 'Z:\'
+  put a drive of the host into the rejection echo, and the outbound mask
+  covers served letters only, so it travelled back raw: probing srva: .. srvz:
+  enumerated the machine's drives (field round 10). An unserved unit now stays
+  literal and PathAnomaly refuses it by name, without ever reaching disk. }
+function ExpandDriveValue(const AValue: string): string;
+var
+  Letter: Char;
+begin
+  Result := AValue;
+  Letter := VirtualUnitLetter(AValue);
+  if (Letter <> #0) and (Pos(Letter, ServedDriveLetters) > 0) then
+    Result := Letter + Copy(AValue, 5, MaxInt);
 end;
 
 { Rewrites the string arguments of a tools/call in place. Content-carrying
@@ -846,8 +1001,18 @@ begin
   // would silently break every anchored write (the fragment would no longer
   // match the file on disk). Vault paths are relative and carry no drive
   // letter, and the vault is knowledge the operator chose to expose.
+  // ...and an exception that ESCAPED a tool is not content either. The
+  // dispatcher wraps ANY exception as "Error executing tool: <E.Message>", and
+  // a Delphi I/O exception embeds the REAL absolute path (EFOpenError: 'Cannot
+  // open file "D:\..."'), reachable on a locked or ACL-denied file - the read
+  // paths have no try/except of their own. Case-SENSITIVE and the exact
+  // wrapper token on purpose: a delphi_read result starts with the FILE NAME
+  // and a note may start with "Error", so a loose case-insensitive 'error'
+  // test would silently mask real content and break every anchored write built
+  // on it.
   if MatchText(AToolName, ['delphi_read', 'vault_read', 'vault_search']) and
-     not (AText.StartsWith('RECHAZADO') or AText.StartsWith('error')) then
+     not (AText.StartsWith('RECHAZADO') or AText.StartsWith('error') or
+          AText.StartsWith('Error executing tool: ')) then
     Exit(AText);
   Letters := ServedDriveLetters;
   if (Letters = '') or (AText = '') then

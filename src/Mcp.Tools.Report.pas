@@ -55,6 +55,13 @@ uses
 
 const
   REPORTS_DIR = 'reports';
+  // delphi_report is the ONE write a read-only (even anonymous) credential may
+  // perform, so it is also the only way such a client could grow the server's
+  // disk. Generous on purpose - the field audit's longest genuine report was
+  // 45 KB - so no honest reporter ever meets it, while "fill the disk in a
+  // single call" stops being free. Bounded HERE, next to the empty-message
+  // check: it is this tool's own input contract, not an access decision.
+  MAX_REPORT_BYTES = 256 * 1024;
 
 { File-name-safe slug of the title (ASCII letters/digits/dashes, capped). }
 function Slug(const S: string): string;
@@ -96,10 +103,18 @@ var
   Dir, FileName, Path, Kind, Title, Body: string;
   Stamp: TDateTime;
   Sb: TStringBuilder;
-  I: Integer;
+  I, Size: Integer;
 begin
   if Params.Message.Trim = '' then
     Exit(SR_REPORT_EMPTY);
+
+  // Measured on the WHOLE payload the client controls (title and from travel
+  // into the body too), in bytes of the encoding actually written to disk.
+  Size := TEncoding.UTF8.GetByteCount(
+    Params.Message + Params.Title + Params.From);
+  if Size > MAX_REPORT_BYTES then
+    Exit(Format(SR_REPORT_TOO_BIG_FMT,
+      [Size div 1024, MAX_REPORT_BYTES div 1024]));
 
   Kind := Params.Kind.Trim.ToLower;
   if not MatchText(Kind, ['bug', 'limitation', 'suggestion', 'question']) then

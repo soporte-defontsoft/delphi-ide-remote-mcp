@@ -33,9 +33,15 @@ type
     // Case-insensitive JSON value lookup
     class function GetJsonValueCaseInsensitive(const Json: TJSONObject; const PropName: string): TJSONValue;
 
+  public
+    // [local change] exposed: the host's single entry gate must match a
+    // tools/call argument to its parameter with EXACTLY the rule this binder
+    // uses, or a client can spell a parameter in a way only one of the two
+    // recognizes - the gate then inspects one value while the tool receives
+    // another. One rule, one place.
     // Single normalization rule shared by lookup and validation
     class function NormalizeKey(const Name: string): string; inline;
-  public
+
     class constructor Create;
     class destructor Destroy;
 
@@ -189,34 +195,69 @@ end;
 class function TMCPSerializer.ConvertJsonToValue(const JsonValue: TJSONValue; const RttiType: TRttiType): TValue;
 var
   NestedInstance: TObject;
+  I64: Int64;
+  Dbl: Double;
+  Txt: string;
 begin
   Result := TValue.Empty;
-  
+
   if not Assigned(JsonValue) then
     Exit;
-    
+
+  // [local change] JSON null means "not provided", never a value. It used to
+  // fall through to the branches below, where TJSONAncestor.Value hands back
+  // the literal string 'null': a null number became 0 and a null string became
+  // the four characters "null" (a path, a query, a file name...). Leaving the
+  // result empty makes the caller skip the property, so the parameter keeps
+  // its default exactly as if it had been omitted.
+  if JsonValue is TJSONNull then
+    Exit;
+
+  // [local change] Numbers and booleans used to be coerced SILENTLY: a string
+  // that is not a number became 0 (StrToIntDef) and a boolean spelled anything
+  // other than "true" became False. The tool then worked on a value the client
+  // never sent - a plausible WRONG answer instead of an error, which is the
+  // worst failure mode for an agent that cannot see the server. Garbage now
+  // raises EArgumentException, which DeserializeObject reports as
+  // 'Parameter "<name>": <reason>'.
+  // A value that PARSES cleanly is still accepted whatever its JSON type
+  // ("5" for 5, "true" for true): many clients send everything as text, and
+  // accepting what reads unambiguously costs nothing. Only the unreadable is
+  // refused.
+  Txt := Trim(JsonValue.Value);
+
   case RttiType.TypeKind of
     tkInteger:
-      if JsonValue is TJSONNumber then
-        Result := (JsonValue as TJSONNumber).AsInt
-      else
-        Result := StrToIntDef(JsonValue.Value, 0);
+      begin
+        if not TryStrToInt64(Txt, I64) then
+          raise EArgumentException.CreateFmt(
+            'expected a whole number, got "%s".', [JsonValue.Value]);
+        if (I64 < Low(Integer)) or (I64 > High(Integer)) then
+          raise EArgumentException.CreateFmt(
+            'the number %s is outside the accepted range (%d..%d).',
+            [Txt, Low(Integer), High(Integer)]);
+        Result := Integer(I64);
+      end;
 
     tkInt64:
-      if JsonValue is TJSONNumber then
-        Result := (JsonValue as TJSONNumber).AsInt64
-      else
-        Result := StrToInt64Def(JsonValue.Value, 0);
-        
+      begin
+        if not TryStrToInt64(Txt, I64) then
+          raise EArgumentException.CreateFmt(
+            'expected a whole number, got "%s".', [JsonValue.Value]);
+        Result := I64;
+      end;
+
     tkFloat:
-      if JsonValue is TJSONNumber then
-        Result := (JsonValue as TJSONNumber).AsDouble
-      else
+      begin
 {$IF COMPILERVERSION <= 28}
-        Result := StrToFloatDef(JsonValue.Value, 0, TFormatSettings.Create('en-US'));
+        if not TryStrToFloat(Txt, Dbl, TFormatSettings.Create('en-US')) then
 {$ELSE}
-        Result := StrToFloatDef(JsonValue.Value, 0, FormatSettings.Invariant);
+        if not TryStrToFloat(Txt, Dbl, FormatSettings.Invariant) then
 {$ENDIF}
+          raise EArgumentException.CreateFmt(
+            'expected a number, got "%s".', [JsonValue.Value]);
+        Result := Dbl;
+      end;
 
     tkString, tkLString, tkWString, tkUString:
       Result := JsonValue.Value;
@@ -231,8 +272,16 @@ begin
         if JsonValue is TJSONBool then
           Result := (JsonValue as TJSONBool).AsBoolean
 {$ENDIF}
+        // [local change] anything but the two spellings is a mistake, not a
+        // False: "yes", "1" or a typo used to switch the flag OFF in silence,
+        // so the client believed it had asked for something it never got.
+        else if SameText(Txt, 'true') then
+          Result := True
+        else if SameText(Txt, 'false') then
+          Result := False
         else
-          Result := LowerCase(JsonValue.Value) = 'true';
+          raise EArgumentException.CreateFmt(
+            'expected true or false, got "%s".', [JsonValue.Value]);
       end
       else
       begin

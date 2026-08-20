@@ -197,6 +197,29 @@ try:
         check('ro: git diff --output no escribio el fichero',
               not os.path.exists(tmpdir3 + '\\PWN.txt'), tmpdir3)
 
+        # The read-only decision itself was bypassable by SPELLING: the gate
+        # read 'command' case-sensitively while the RTTI binder resolves it
+        # ignoring case and '_', so "Command" made the gate see no command at
+        # all (delphi_config -> treated as "view", a read) while the handler
+        # received add-platform and wrote the .dproj.
+        _dproj = paspath.replace('.pas', '.dproj')
+        _before = os.path.getmtime(_dproj) if os.path.exists(_dproj) else None
+        for spelling in ('Command', 'COMMAND', 'com_mand'):
+            code, body = call('delphi_config', {'repo': REPO, 'project': _dproj,
+                                                spelling: 'add-platform',
+                                                'platform': 'Linux64'}, RO_TOKEN)
+            check('ro: delphi_config con "%s" sigue siendo SOLO LECTURA' % spelling,
+                  'SOLO LECTURA' in body, '%s %s' % (code, body[:130]))
+        if _before is not None:
+            check('ro: el .dproj no fue modificado por el escape de mayusculas',
+                  os.path.getmtime(_dproj) == _before, _dproj)
+        # same class on git: an annotated tag hidden behind "Message"
+        code, body = call('delphi_git', {'repo': REPO, 'command': 'tag',
+                                         'args': 'v9', 'Message': 'x'}, RO_TOKEN)
+        check('ro: git tag anotado via "Message" RECHAZADO en RO',
+              'SOLO LECTURA' in body or 'RECHAZADO' in body,
+              '%s %s' % (code, body[:130]))
+
         # delphi_report is the ONE write available read-only, by design: the
         # restricted agents are the ones most likely to hit a wall.
         code, body = call('delphi_report',

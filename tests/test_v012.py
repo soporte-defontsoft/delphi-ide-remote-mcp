@@ -10,7 +10,7 @@
 
 Usage:  python tests/test_v012.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+import json, subprocess, threading, queue, time, os, re, sys, tempfile, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
@@ -48,9 +48,10 @@ FORM = ('unit UF;\r\n\r\ninterface\r\n\r\nuses\r\n  System.Classes;\r\n\r\n'
 open(os.path.join(INSIDE, 'UF.pas'), 'wb').write(FORM.encode('cp1252'))
 
 
-def start(envroots):
+def start(envroots, extra_env=None):
     env = dict(os.environ)
     env['DELPHI_MCP_ROOTS'] = envroots
+    env.update(extra_env or {})
     p = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                          text=True, encoding='utf-8')
@@ -451,14 +452,103 @@ out = call('delphi_list', {"root": INSIDE, "pattern": "*.pas", "includeTrash": T
 check('R6-B: delphi_list includeTrash=true SI muestra la papelera',
       any('__delphi-patch' in e.get('path', '') for e in json.loads(out).get('files', [])), out[:200])
 
+# ---- an exception that escapes a tool is NOT content ----------------------
+# delphi_read/vault_read/vault_search are exempt from drive masking so their
+# payload keeps byte fidelity for anchors. But the dispatcher wraps any escaped
+# exception as "Error executing tool: <msg>", and a Delphi I/O exception embeds
+# the REAL absolute path - which the exemption used to let through unmasked
+# (the exemption only cancelled on lower-case 'error').
+import ctypes
+LOCKED = os.path.join(INSIDE, 'Bloqueado.pas')
+open(LOCKED, 'wb').write(SRC.replace('Dentro', 'Bloqueado').encode('cp1252'))
+GENERIC_READ, OPEN_EXISTING = 0x80000000, 3
+h = ctypes.windll.kernel32.CreateFileW(LOCKED, GENERIC_READ, 0, None,
+                                       OPEN_EXISTING, 0, None)
+check('fichero bloqueado para la prueba', h != -1, h)
+if h != -1:
+    try:
+        out = call('delphi_read', {"path": LOCKED})
+        # either it fails (the interesting case) or it read anyway; in BOTH
+        # cases the real drive letter must not appear
+        check('read de fichero bloqueado: la unidad real NO viaja',
+              (DRIVE + ':\\') not in out, out[:200])
+    finally:
+        ctypes.windll.kernel32.CloseHandle(h)
+
+# ...and the fence in the other direction: real CONTENT that merely starts
+# with "Error" must stay verbatim (a case-insensitive test would mask it and
+# silently break every anchored write built on that text).
+ERRPAS = os.path.join(INSIDE, 'Error.txt')
+open(ERRPAS, 'wb').write(('Error: algo fallo en ' + DRIVE + ':\\carpeta\\f.txt\r\n').encode('cp1252'))
+out = call('delphi_read', {"path": ERRPAS})
+check('read: contenido que empieza por "Error" sigue verbatim',
+      (DRIVE + ':\\carpeta\\f.txt') in out and 'srv' + DRIVE.lower() not in out, out[:200])
+
+# ---- argument types: a wrong value is an ERROR, never a silent default ----
+# 'abc' used to become 0 (StrToIntDef) and any boolean but "true" became False:
+# the agent believed it had filtered and had not.
+out = call('delphi_read', {"path": IN_PAS, "fromline": "abc"})
+check('tipos: fromline no numerico rechazado con el nombre del parametro',
+      'fromline' in out.lower() and 'whole number' in out, out[:200])
+out = call('delphi_list', {"root": INSIDE, "dirs": "quiza"})
+check('tipos: booleano invalido rechazado',
+      'true or false' in out, out[:200])
+# ...but what parses cleanly is still accepted (clients that send text)
+out = call('delphi_read', {"path": IN_PAS, "fromline": "2", "toline": "4"})
+check('tipos: numero en texto ("2") sigue valiendo',
+      'RECHAZADO' not in out and 'Error executing tool' not in out, out[:200])
+out = call('delphi_list', {"root": INSIDE, "dirs": "TRUE"})
+check('tipos: booleano en texto ("TRUE") sigue valiendo',
+      '"dirs"' in out and 'Error executing tool' not in out, out[:150])
+# JSON null means "not provided", never the string 'null' nor 0
+out = call('delphi_read', {"path": IN_PAS, "fromline": None})
+check('tipos: null se trata como ausente (no como 0 ni "null")',
+      'unit Dentro' in out, out[:150])
+
+# ---- delphi_report: the only write a read-only client may do, now bounded -
+out = call('delphi_report', {"kind": "bug", "title": "cap", "message": "x" * (300 * 1024)})
+check('report: un reporte gigante se rechaza',
+      'RECHAZADO' in out and 'KB' in out, out[:200])
+out = call('delphi_report', {"kind": "bug", "title": "cap-ok", "message": "prueba de la bateria"})
+check('report: un reporte normal sigue pasando', out.startswith('GRACIAS'), out[:150])
+
+# ---- unserved virtual units: no drive enumeration (field round 10) -------
+# "srvz:" used to expand to the REAL "Z:\", so the rejection echoed a drive of
+# the host - and the outbound mask covers SERVED letters only, so it came back
+# raw. Probing srva: .. srvz: told the client which drives the machine has.
+FREE = [c for c in 'zyxwvuts' if not os.path.exists(c + ':\\')]
+check('prueba viable: quedan letras sin unidad real', len(FREE) >= 2, FREE)
+GHOST = FREE[0] if FREE else None
+if GHOST:
+    GV = 'srv' + GHOST + ':\\secreto\\x.pas'
+    REAL = re.compile(r'(?<!srv)' + GHOST + r':\\', re.I)  # the real form only
+    for tool, args in (('delphi_read', {"path": GV}),
+                       ('delphi_edit', {"path": GV, "old": "a", "new": "b"}),
+                       # delphi_list with dirs=true was the exact vector of the
+                       # field report - the parameter is 'root', not 'path'
+                       ('delphi_list', {"root": GV, "dirs": True})):
+        out = call(tool, args)
+        check(tool + ': unidad no servida rechazada por nombre',
+              'no es una unidad de este servidor' in out, out)
+        check(tool + ': la letra real NO viaja de vuelta',
+              REAL.search(out) is None, out)
+    # rule 4: a rejection always names the legitimate way in
+    out = call('delphi_read', {"path": GV})
+    check('unidad no servida: el rechazo ofrece las unidades validas',
+          'srv' + DRIVE.lower() + ':' in out, out)
+    # and a SERVED unit keeps working (the fix must not close the door)
+    out = call('delphi_read', {"path": V_PAS})
+    check('unidad servida: sigue resolviendo (sin falso positivo)',
+          'unit Dentro' in out, out)
+
 # ---- shutdown main server --------------------------------------------------
 proc.stdin.close()
 proc.wait(timeout=15)
 
 # ---- Roots con comillas / roots invalidos (servidores propios) -------------
-def one_shot(envroots, tool, args):
+def one_shot(envroots, tool, args, extra_env=None):
     global proc, q
-    proc, q = start(envroots)
+    proc, q = start(envroots, extra_env)
     handshake()
     out = call(tool, args)
     proc.stdin.close()
@@ -476,6 +566,29 @@ check('roots entrecomillados + espacios: jaula funcional', 'unit X;' in out, out
 out = one_shot('C:\\<invalido>|malo', 'delphi_read', {"path": os.path.join(QDIR, 'X.pas')})
 check('roots invalidos: fallo CERRADO (todo rechazado)',
       'ninguna de sus rutas es valida' in out, out)
+
+# ---- the vault is a served root of its OWN ------------------------------
+# subst gives a drive that is neither workspace root nor library zone, so the
+# only thing that can make it served is the vault itself.
+VDRV = FREE[1] if len(FREE) > 1 else None
+if VDRV:
+    VROOT = os.path.join(BASE, 'vault-en-otra-unidad')
+    os.makedirs(VROOT, exist_ok=True)
+    subst = subprocess.run('subst %s: "%s"' % (VDRV, VROOT), shell=True,
+                           capture_output=True)
+    if subst.returncode == 0:
+        try:
+            out = one_shot(INSIDE, 'delphi_read',
+                           {"path": 'srv' + VDRV + ':\\nota.md'},
+                           {'DELPHI_MCP_VAULT_PATH': VDRV + ':\\'})
+            check('vault en otra unidad: su letra ES una unidad servida',
+                  'no es una unidad de este servidor' not in out, out)
+            check('vault en otra unidad: la letra real no viaja',
+                  re.search(r'(?<!srv)' + VDRV + r':\\', out, re.I) is None, out)
+        finally:
+            subprocess.run('subst %s: /d' % VDRV, shell=True, capture_output=True)
+    else:
+        print('SKIP - subst no disponible, no se prueba el vault en otra unidad')
 
 print()
 print(f'RESULT: {P} passed, {F} failed')

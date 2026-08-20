@@ -253,6 +253,11 @@ Move or rename a file or folder inside the workspace. Both source and destinatio
 | `path` | string | **yes** | Absolute path of the file or folder to move (inside the workspace roots) |
 | `dest` | string | **yes** | Destination absolute path (inside the workspace roots). Parent folders are created. Renames when the parent is the same |
 
+Both refuse a workspace **root** itself: the trash folder is created next to the
+target, so for a root it would land in the root's parent - a write outside the
+jail - and take the whole workspace with it. Delete or move what lives *inside*
+a root. Changing the roots is the operator's job, in `settings.ini`.
+
 
 ## Build, run, package  (read-write only)
 
@@ -266,8 +271,13 @@ Build a Delphi project for real with MSBuild on this machine (rsvars located via
 |---|---|---|---|
 | `project` | string | **yes** | Absolute path of the .dproj to build |
 | `platform` | string | optional | Target platform (default Win32): Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and a PAServer profile (delphi_paserver) |
-| `config` | string | optional | Debug or Release (default Debug) |
-| `target` | string | optional | Build (full, default) or Make (incremental). After switching platforms use Build |
+| `config` | string | optional | Debug or Release (default Debug), or any configuration the project declares. A simple name: letters, digits, space, `.`, `_`, `-` |
+| `target` | string | optional | Build (full, default), Make (incremental) or Clean. After switching platforms use Build |
+
+These three reach an MSBuild command line, so they are validated at the gate:
+`platform` must be one Delphi knows (see it with `delphi_config command=view`),
+`target` is one of the three above, and `config` admits no character a shell
+would interpret. A rejected value names what is valid instead.
 
 ### `delphi_run`
 
@@ -373,7 +383,7 @@ Report a problem, limitation or suggestion about THIS MCP server directly to its
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `message` | string | **yes** | The report itself: what you tried, what happened, what you expected. Markdown welcome, several paragraphs are fine |
+| `message` | string | **yes** | The report itself: what you tried, what happened, what you expected. Markdown welcome, several paragraphs are fine. Up to 256 KB per report - split a longer one, reports accumulate and are never overwritten |
 | `title` | string | optional | Optional one-line summary (becomes part of the file name) |
 | `kind` | string | optional | Optional: bug \| limitation \| suggestion \| question (default: bug) |
 | `from` | string | optional | Optional: who is reporting (agent/model name, project) - helps us read the history later |

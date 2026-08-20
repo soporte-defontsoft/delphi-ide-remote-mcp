@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.29.0-beta';
+  SERVER_VERSION = '0.30.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -75,6 +75,46 @@ const
     'RECHAZADO: la opcion de git "%s" no esta permitida (puede escribir ' +
     'ficheros, leer fuera del repositorio o ejecutar un comando).';
 
+  // The gate used to read an argument with an exact, case-SENSITIVE name while
+  // the RTTI binder resolves it ignoring case and "_". Two keys that differ
+  // only in those made the gate inspect one value and the tool receive the
+  // other. Duplicates are never legitimate - no client emits them - so they
+  // are refused instead of guessing which one wins.
+  SR_ARG_DUPLICATE_FMT =
+    'RECHAZADO: has mandado dos veces el parametro "%s" (las mayusculas y ' +
+    'los "_" no lo hacen distinto). Manda cada parametro UNA sola vez, con ' +
+    'el nombre exacto que da tools/list en "inputSchema".';
+
+  // delphi_build composes a cmd.exe line (rsvars.bat && msbuild ...) and
+  // platform/config/target travel through it UNQUOTED: a metacharacter there
+  // IS a shell, and it would sail past AllowRun, the jail, the low-integrity
+  // sandbox and the .dproj hazard scanner in a single call. delphi_config
+  // already armoured the same token for the XML sink; this is its twin mouth.
+  SR_BUILD_PLATFORM_FMT =
+    'RECHAZADO: "%s" no es una plataforma Delphi valida. Mira las que tiene ' +
+    'el proyecto con delphi_config command=view, y usa una de ellas tal cual.';
+
+  SR_BUILD_TARGET_FMT =
+    'RECHAZADO: "%s" no es un target valido. Usa Build (completo), Make ' +
+    '(incremental) o Clean. Tras cambiar de plataforma usa Build.';
+
+  SR_BUILD_CONFIG_FMT =
+    'RECHAZADO: la configuracion "%s" lleva caracteres que el shell del ' +
+    'build interpretaria. Una configuracion es un nombre simple (letras, ' +
+    'digitos, espacio, ".", "_" y "-"): Debug, Release, o la que declare tu ' +
+    'proyecto. Mira las declaradas con delphi_config command=view.';
+
+  // delphi_delete/delphi_move park their target in a trash folder created
+  // NEXT TO it. For a ROOT that folder lands in the root's PARENT - a write
+  // OUTSIDE the jail - and the whole workspace disappears in one call. The
+  // root is the jail, not content.
+  SR_ROOT_ITSELF_FMT =
+    'RECHAZADO: "%s" es un WORKSPACE ROOT (la jaula misma), no un fichero de ' +
+    'trabajo: borrarlo o moverlo se llevaria el proyecto entero y dejaria la ' +
+    'copia de seguridad FUERA de la jaula. Borra o mueve lo que hay DENTRO ' +
+    '(delphi_list te lo ensena). Cambiar los roots es cosa del operador, en ' +
+    'settings.ini [Workspace] Roots.';
+
   SR_JAIL_FMT =
     'RECHAZADO: "%s" esta FUERA de los workspaces permitidos. Este servidor ' +
     'solo opera dentro de: %s (configurado en DELPHI_MCP_ROOTS o ' +
@@ -84,6 +124,17 @@ const
     'RECHAZADO: [Workspace] Roots esta configurado pero ninguna de sus ' +
     'rutas es valida (comillas de mas, unidad inexistente...). Por seguridad ' +
     'se rechaza todo hasta corregir settings.ini / DELPHI_MCP_ROOTS.';
+
+  // An unserved "srvz:" used to be expanded to the REAL "Z:\", so the
+  // rejection echoed a drive letter of the host - and the outbound mask only
+  // covers served letters, so it came back raw. Probing srva: .. srvz: told
+  // the client which drives the machine has (field round 10). Unserved units
+  // never touch the filesystem now; this says so without naming anything the
+  // client cannot already get from delphi_workspace.
+  SR_UNIT_UNKNOWN_FMT =
+    'RECHAZADO: "%s" no es una unidad de este servidor. Las unidades ' +
+    'validas son: %s. Pide las rutas con delphi_workspace y usalas tal ' +
+    'como te las devuelve el servidor.';
 
   // delphi_run is OFF by design: this is a pure DEVELOPMENT/COMPILE server,
   // it never executes programs. Running a compiled artifact belongs on the
@@ -266,6 +317,16 @@ const
   SR_REPORT_EMPTY =
     'RECHAZADO: delphi_report necesita "message" con la descripcion del ' +
     'problema. Cuenta que intentaste, que paso y que esperabas.';
+
+  // delphi_report is the ONE write a read-only (even anonymous) credential may
+  // perform, so it is also the one place such a client could grow the server's
+  // disk. A report is prose written by an agent: a generous cap still fits any
+  // honest report - the field audit's longest was 45 KB - while turning "fill
+  // the disk in one call" into something the operator would notice.
+  SR_REPORT_TOO_BIG_FMT =
+    'RECHAZADO: el reporte ocupa %d KB y el limite son %d KB. Cuenta lo ' +
+    'esencial (que intentaste, que paso, que esperabas) y parte lo demas en ' +
+    'varios reportes: se acumulan, no se sobreescriben.';
 
   SN_REPORT_OK_FMT =
     'GRACIAS - reporte guardado como %s (v%s).'#10 +
