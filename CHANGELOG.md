@@ -51,6 +51,23 @@ and forgotten in the other silently gave that host fewer tools.
   language-server bridge, and adds a table of **what each tool actually runs
   on**: 7 of the 27 tools are backed by DelphiLSP, the other 20 are MSBuild,
   git, the safe editing engine, the filesystem and the vault.
+- `ARCHITECTURE.md`, `ROADMAP.md` and `firewall-allow.ps1` brought in line with
+  the merge: they still described two hosts and matched a tray exe that no
+  longer exists.
+
+### Tests
+- **The batteries no longer trigger a Windows Firewall prompt on every run.**
+  It was never the server: `test_http_auth` copied the exe into a fresh random
+  temp folder each run and let it listen on all interfaces, and the firewall
+  decides per program path - so every run looked like a new program and asked
+  again, leaving a dead rule behind (forty had piled up). The tests bind
+  loopback now, where they already connect.
+- **One scratch folder with fixed names**, `%TEMP%\delphi-mcp-tests\<battery>`,
+  instead of eleven differently-named ones (several with the pid in the name).
+  A stable path is also what stops the firewall prompt above. The cleanup now
+  clears the read-only bit git leaves under `.git\objects` and asserts the
+  folder is really gone - a cleanup that fails silently had been skipping three
+  clone/pull checks with no failure to show for it.
 
 ## [0.30.0-beta] - 2026-08-20
 
