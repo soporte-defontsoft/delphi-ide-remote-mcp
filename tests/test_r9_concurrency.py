@@ -41,6 +41,11 @@ w('MEMORY.md', '# MEMORY\n\n- nota de concurrencia\n')
 w('conc/base.md', '# Concurrencia\n\nlinea base.\n')
 
 env = dict(os.environ)
+# Loopback ONLY. Listening on every interface makes Windows Firewall pop its
+# "allow this app?" prompt, and it asks once per program PATH - so a battery
+# that runs the exe from a fresh temp folder asks again on every single run.
+# The tests only ever talk to 127.0.0.1, so there is nothing to expose.
+env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'
 env['DELPHI_MCP_TOKEN'] = TOKEN
 env['DELPHI_MCP_ROOTS'] = WORK
 env['DELPHI_MCP_VAULT_PATH'] = VAULT

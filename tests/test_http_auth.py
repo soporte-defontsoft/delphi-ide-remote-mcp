@@ -13,6 +13,13 @@ URL = 'http://127.0.0.1:%d/mcp' % PORT
 TOKEN = 'test-token-123'
 
 env = dict(os.environ)
+# Loopback ONLY, for every server this battery starts. Listening on all
+# interfaces makes Windows Firewall pop its "allow this app?" prompt, and the
+# firewall remembers a decision per program PATH - so the instances below, which
+# run the exe from a FRESH random temp folder each time, asked again on every
+# single run (twice: IPv4 and IPv6) and left a dead rule behind each time. The
+# tests only ever talk to 127.0.0.1.
+env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'
 env['DELPHI_MCP_TOKEN'] = TOKEN
 env['DELPHI_MCP_ALLOW_RUN'] = '1'  # so the RO-vs-run check tests the readonly layer
 proc = subprocess.Popen([EXE, '--http', str(PORT)], env=env,
@@ -87,7 +94,11 @@ try:
     exe2 = os.path.join(tmpdir, 'DelphiLspMcp.exe')
     shutil.copyfile(EXE, exe2)
     with open(os.path.join(tmpdir, 'settings.ini'), 'w') as f:
-        f.write('[Server]\nPort=%d\n\n[Security]\nAuthToken=%s\n' % (INI_PORT, TOKEN))
+        # BindIP: loopback only - see the note at the top. This instance runs
+        # from a fresh temp folder, so without it the firewall asks again on
+        # every run of this battery.
+        f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n[Security]\nAuthToken=%s\n'
+                % (INI_PORT, TOKEN))
     env2 = dict(os.environ)
     env2.pop('DELPHI_MCP_TOKEN', None)  # the ini must supply the token too
     proc2 = subprocess.Popen([exe2, '--http'],  # no port argument: ini decides
@@ -118,7 +129,7 @@ try:
     with open(paspath, 'w') as f:
         f.write('unit Sample;\r\ninterface\r\nimplementation\r\nend.\r\n')
     with open(os.path.join(tmpdir3, 'settings.ini'), 'w') as f:
-        f.write('[Server]\nPort=%d\n\n[Security]\nAuthToken=%s\n'
+        f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n[Security]\nAuthToken=%s\n'
                 'ReadOnlyToken=%s\nAnonymousReadOnly=1\nAllowRun=1\n'
                 % (RO_PORT, TOKEN, RO_TOKEN))
     env3 = dict(os.environ)
