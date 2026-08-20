@@ -1,6 +1,10 @@
 # DelphiLSP MCP Service
 
-A Model Context Protocol (MCP) server that gives AI agents **real semantic understanding of Delphi code**, powered by Embarcadero's official `DelphiLSP.exe` — the same engine behind Code Insight in the RAD Studio IDE.
+**An MCP server to control Delphi remotely — so you can develop in Delphi from any platform.**
+
+The Windows machine holds RAD Studio and the projects. You work from wherever you actually want to be: a Linux laptop, a Mac, a cloud agent, a CI runner. Understand the code, edit it safely, scaffold, build, run, package, fetch the binaries, commit — the whole cycle over MCP, with Delphi installed on **neither** the client nor the agent.
+
+It is not a language-server bridge. Semantic understanding is one capability of many, and it is the one that is genuinely hard, so it runs on Embarcadero's official `DelphiLSP.exe` — the same engine behind Code Insight in the RAD Studio IDE. But the language server backs **7 of the 27 tools**; the other 20 are the working day: the safe editing engine, MSBuild, git, the file tools, the project scaffolder, the knowledge vault. See [What each tool actually runs on](#what-each-tool-actually-runs-on) for the exact split.
 
 Runs as a **resident console host or a tray GUI app** that keeps language-server processes warm across agent sessions, serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP — with a classic stdio mode as well. (A true Windows Service wrapper is on the roadmap, not shipped yet — today it runs as a foreground console or a tray app.)
 
@@ -24,6 +28,23 @@ Two credential levels — a full read-write token, and a read-only one (or anony
 - **A CI / release runner.** Read-write on a locked-down VM: pull, build Release, package the deploy, upload/fetch artifacts, tag — all over MCP, no interactive IDE.
 
 An agent can also be pointed at the **library read zone** (RTL/VCL sources and installed third-party components) to reason about framework or component internals, still without any write capability.
+
+## What each tool actually runs on
+
+The name says LSP because the language server is the hardest part to get right, not because it is most of the server. Of the 27 core tools, seven ask `DelphiLSP.exe` and twenty never touch it (plus five optional `vault_*` tools, registered only when you configure a vault). Worth knowing, because the LSP-backed ones are the only ones that need a resolvable project configuration — the rest work on any folder inside the roots.
+
+| Engine | Tools | What that means for you |
+|---|---|---|
+| **DelphiLSP** (official, compiler-grade) | `delphi_symbols`, `delphi_definition`, `delphi_hover`, `delphi_completion`, `delphi_signature`, `delphi_diagnostics` | Real semantic answers, not grep: resolves inheritance, `with`, overloads, and follows into RTL/VCL. Needs a `.delphilsp.json` (used when fresh, fabricated from the `.dproj` when not). |
+| **DelphiLSP + disk scan** (hybrid) | `delphi_references` | The LSP has no `references`, so candidates are scanned from disk and then each one is *validated* by asking the LSP where it resolves to. Verified against the live compiler, never an index. |
+| **Own safe-editing engine** | `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create` | Anchored edits with encoding preserved (CP1252 vs UTF-8), atomic writes, automatic backups, designer-file awareness. No LSP involved. |
+| **MSBuild** (`rsvars.bat`, located via the registry) | `delphi_build` | The real compiler and linker. The LSP cannot build — it has no such operation. |
+| **The filesystem, jailed** | `delphi_list`, `delphi_search`, `delphi_projects`, `delphi_workspace`, `delphi_move`, `delphi_delete`, `delphi_fetch`, `delphi_upload`, `delphi_package` | Navigation, transfer and housekeeping inside the workspace roots. |
+| **`git.exe`**, arguments composed by the server | `delphi_git` | Query commands at every level; writes only read-write. Never a shell. |
+| **Registry / IDE configuration** | `delphi_installs`, `delphi_config`, `delphi_paserver` | Which RAD Studio versions exist, project platforms and output paths, remote-target profiles and SDKs. |
+| **A separate process, sandboxed** | `delphi_run` | Off by design (`AllowRun`): this is a compile server. |
+| **Your Markdown vault** | `vault_read`, `vault_search`, `vault_append`, `vault_create`, `vault_patch` | Persistent memory, isolated from the code tools (see below). |
+| **A folder the server owns** | `delphi_report` | The feedback channel back to us; the one write a read-only client may perform. |
 
 ## Persistent memory for your agents (optional)
 

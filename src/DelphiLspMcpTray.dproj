@@ -44,6 +44,7 @@
         <DCC_S>false</DCC_S>
         <DCC_ImageBase>00400000</DCC_ImageBase>
         <SanitizedProjectName>DelphiLspMcpTray</SanitizedProjectName>
+        <Icon_MainIcon>DelphiLspMcp.ico</Icon_MainIcon>
         <DCC_ExeOutput>.\Compiled\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_DcuOutput>.\Compiled\Dcu\$(Platform)\$(Config)</DCC_DcuOutput>
         <VerInfo_Locale>1033</VerInfo_Locale>

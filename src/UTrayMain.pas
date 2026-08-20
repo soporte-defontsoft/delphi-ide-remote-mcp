@@ -131,6 +131,10 @@ begin
     [FSettings.Host, FSettings.Port, FSettings.Endpoint]);
   Caption := 'DelphiLSP MCP Service v' + SERVER_VERSION + ' - ' + FUrl;
   TrayIcon.Hint := 'DelphiLSP MCP Service v' + SERVER_VERSION + sLineBreak + FUrl;
+  // A TTrayIcon with an empty Icon draws NOTHING - not even a default one, so
+  // the notification area just showed a blank slot. The application icon is
+  // the project's own (Icon_MainIcon), so the tray and the taskbar agree.
+  TrayIcon.Icon.Assign(Application.Icon);
 
   try
     FServer.Start;
