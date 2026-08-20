@@ -73,12 +73,56 @@ type
     class property UseStdErr: Boolean read GetUseStdErr write SetUseStdErr;
   end;
 
+// [local change] Values of secret-named JSON keys ("password", "passkey",
+// "passfile", "token") never reach the log: the HTTP and stdio transports log
+// the whole request body BEFORE the tool gate runs, and delphi_paserver
+// add-profile carries the PAServer password in its arguments. One masker,
+// called by every transport line that logs a raw request.
+function MaskSecretValues(const S: string): string;
+
 implementation
 
 {$IFDEF MSWINDOWS}
 uses
   Winapi.Windows;
 {$ENDIF}
+
+// [local change] See the interface comment. String-scan on purpose (no regex
+// dependency in the vendor): finds each secret key, walks to its quoted JSON
+// value (escapes respected) and replaces the value with ***.
+function MaskSecretValues(const S: string): string;
+const
+  KEYS: array[0..3] of string = ('"password"', '"passkey"', '"passfile"',
+    '"token"');
+var
+  Key: string;
+  I, J, K: Integer;
+begin
+  Result := S;
+  for Key in KEYS do
+  begin
+    I := 1;
+    repeat
+      I := Pos(Key, LowerCase(Result), I);
+      if I = 0 then Break;
+      J := I + Length(Key);
+      while (J <= Length(Result)) and CharInSet(Result[J], [' ', #9, ':']) do
+        Inc(J);
+      if (J <= Length(Result)) and (Result[J] = '"') then
+      begin
+        K := J + 1;
+        while (K <= Length(Result)) and (Result[K] <> '"') do
+        begin
+          if Result[K] = '\' then
+            Inc(K); // an escaped character never closes the value
+          Inc(K);
+        end;
+        Result := Copy(Result, 1, J) + '***' + Copy(Result, K, MaxInt);
+      end;
+      Inc(I);
+    until False;
+  end;
+end;
 
 const
   LOG_LEVEL_NAMES: array[TLogLevel] of string = ('DEBUG', 'INFO', 'WARN', 'ERROR');

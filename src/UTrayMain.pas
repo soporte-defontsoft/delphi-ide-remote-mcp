@@ -36,6 +36,7 @@ type
     FUrl: string;
     FExiting: Boolean;
     procedure AddLog(const S: string);
+    procedure WMSysCommand(var Msg: TWMSysCommand); message WM_SYSCOMMAND;
   public
   end;
 
@@ -101,6 +102,19 @@ begin
       TrayIcon.Hint := 'DelphiLSP MCP Service - ERROR: ' + E.Message;
     end;
   end;
+end;
+
+{ Minimize = back to the tray. With MainFormOnTaskbar=False a VCL minimize
+  targets the hidden Application window, so the form neither minimized nor
+  returned to the tray (field report 2026-08-21: the window just stayed put).
+  The tray IS this app's minimized state - same policy as close-to-tray in
+  FormCloseQuery. }
+procedure TFormTray.WMSysCommand(var Msg: TWMSysCommand);
+begin
+  if (Msg.CmdType and $FFF0) = SC_MINIMIZE then
+    Hide
+  else
+    inherited;
 end;
 
 procedure TFormTray.FormCloseQuery(Sender: TObject; var CanClose: Boolean);

@@ -59,7 +59,8 @@ begin
       if InputLine.Trim = '' then
         Continue;
 
-      TLogger.Info('Received: ' + InputLine);
+      // [local change] secrets in arguments never reach the log
+      TLogger.Info('Received: ' + MaskSecretValues(InputLine));
 
       Response := FJsonRpcProcessor.ProcessRequest(InputLine, '');
 

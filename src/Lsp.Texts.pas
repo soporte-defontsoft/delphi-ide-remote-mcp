@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.31.0-beta';
+  SERVER_VERSION = '0.32.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -288,6 +288,118 @@ const
     'falta indexar una nota nueva, dilo en tu respuesta para que lo haga una ' +
     'persona.';
 
+
+  // ---------------------------------------------------------------------
+  // delphi_paserver (connection profiles against a live PAServer)
+  // The profile file is written by paclient.exe itself (--local), so the
+  // format - password encrypted included - is always the IDE's own, never
+  // invented here. --passfile was measured and REJECTED for add-profile:
+  // it stores the passfile PATH in the profile, leaving the password in
+  // plain text on disk forever; --password stores it encrypted inside.
+  // ---------------------------------------------------------------------
+  SD_PASERVER =
+    'The bridge for building and running on OTHER platforms (Linux, macOS) ' +
+    'through the Platform Assistant (PAServer). command=packages lists the ' +
+    'PAServer installers that ship with each Delphi install (download them ' +
+    'with delphi_fetch and run them on the target machine); ' +
+    'command=platforms shows which platforms this server can target; ' +
+    'command=profiles lists the registered connection profiles and SDKs; ' +
+    'command=add-profile registers a connection profile against a live ' +
+    'PAServer (name, host, password; optional port, platform) with the ' +
+    'password stored encrypted; command=test-connection with name dials ' +
+    'the PAServer of that profile (full handshake, credentials included), ' +
+    'and with host+port and NO name it is a raw TCP reachability probe - ' +
+    'the quick "does this server reach my PAServer at all?" answer, no ' +
+    'credentials involved. Building for the platform is delphi_build once ' +
+    'its profile exists; enabling a platform in a project is delphi_config.';
+
+  SP_PASERVER_COMMAND =
+    'platforms (what this server can target + profile/SDK status) | ' +
+    'packages (PAServer installers to download and run on the target) | ' +
+    'profiles (registered connection profiles and SDKs) | add-profile ' +
+    '(register a connection profile: name, host, password; optional port, ' +
+    'platform) | test-connection (with name: full handshake against that ' +
+    'profile; with host+port and no name: raw TCP reachability probe). ' +
+    'Default: platforms';
+  SP_PASERVER_NAME =
+    'Profile name (letters, digits, "_", "-"): add-profile creates it, ' +
+    'test-connection dials it';
+  SP_PASERVER_HOST =
+    'Host or IP where the target PAServer listens (add-profile, or ' +
+    'test-connection without name for a raw TCP probe)';
+  SP_PASERVER_PORT =
+    'Port of the target PAServer (add-profile / test-connection). ' +
+    'Default: 64211';
+  SP_PASERVER_PASSWORD =
+    'The PAServer password (add-profile). Used once to create the profile, ' +
+    'stored encrypted, never shown back';
+  SP_PASERVER_PLATFORM =
+    'Platform of the profile: Win32 | Win64 | WinARM64EC | OSX64 | ' +
+    'Linux64. Default: Linux64';
+
+  SR_PASERVER_CMD =
+    'error: command debe ser platforms | packages | profiles | add-profile ' +
+    '| test-connection';
+
+  SR_PASERVER_NAME_FMT =
+    'RECHAZADO: "%s" no vale como nombre de perfil. Usa letras, digitos, ' +
+    '"_" o "-" (max 64): el nombre se convierte en un fichero ' +
+    '<nombre>.profile en el servidor.';
+
+  SR_PASERVER_HOST_FMT =
+    'RECHAZADO: "%s" no vale como host. Usa un hostname o una IP (letras, ' +
+    'digitos, ".", "-" y ":" para IPv6), sin espacios ni comillas.';
+
+  SR_PASERVER_PORT_FMT =
+    'RECHAZADO: "%s" no es un puerto valido (1-65535). El PAServer escucha ' +
+    'por defecto en el 64211.';
+
+  SR_PASERVER_PLATFORM_FMT =
+    'RECHAZADO: "%s" no es una plataforma de paclient. Validas: Win32, ' +
+    'Win64, WinARM64EC, OSX64, Linux64.';
+
+  SR_PASERVER_PASSWORD =
+    'RECHAZADO: la password lleva comillas dobles o caracteres de control, ' +
+    'que romperian la linea de comandos de paclient. Configura en el ' +
+    'PAServer una password sin esos caracteres y vuelve a llamar.';
+
+  SR_PASERVER_NO_PACLIENT =
+    'error: ninguna instalacion de RAD Studio de este servidor trae ' +
+    'bin\paclient.exe, necesario para gestionar perfiles PAServer.';
+
+  SR_PASERVER_NEED_FMT =
+    'RECHAZADO: add-profile necesita "%s". Parametros: name (nombre del ' +
+    'perfil), host (IP o hostname del PAServer), password (la del ' +
+    'PAServer); opcionales port (default 64211) y platform (default ' +
+    'Linux64).';
+
+  SR_PASERVER_NO_PROFILE_FMT =
+    'RECHAZADO: no existe el perfil "%s". Lista los registrados con ' +
+    'command=profiles, o crea uno con command=add-profile (name, host, ' +
+    'password; opcionales port y platform). Para saber solo si HAY RUTA ' +
+    'hasta tu PAServer, llama a test-connection con host y port SIN name ' +
+    '(sondeo TCP, sin credenciales).';
+
+  SN_PASERVER_PROFILE_OK =
+    'Profile stored with the password encrypted inside. Verify the link ' +
+    'with command=test-connection, then delphi_build with this platform ' +
+    'builds against the target PAServer.';
+
+  SN_PASERVER_CONNECTED =
+    'PAServer alive and credentials accepted. delphi_build can now target ' +
+    'this platform through the profile.';
+
+  SN_PASERVER_TCP_OK =
+    'TCP route open: this server reaches that host:port. This only proves ' +
+    'the route - the full PAServer handshake with credentials is ' +
+    'test-connection with a profile name (add-profile first).';
+
+  SN_PASERVER_TCP_FAIL =
+    'No TCP route from this server to that host:port. Check, in order: the ' +
+    'PAServer is running and listening there; if the target is a container ' +
+    'or behind NAT, the port is published/forwarded on the reachable host ' +
+    '(and then use THAT host ip here); firewalls on both sides allow the ' +
+    'port.';
 
   // ---------------------------------------------------------------------
   // delphi_report (feedback channel - works at EVERY access level)

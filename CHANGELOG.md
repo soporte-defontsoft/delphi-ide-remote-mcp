@@ -8,6 +8,56 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.32.0-beta] - 2026-08-21
+
+The network half of PAServer, built the day the first live PAServer existed to
+test it against: a field agent installed PAServer on its Linux machine using
+only this server's tools (locate installer, chunked fetch with sha256, run),
+then reported - through `delphi_report` - that no tool could register the
+connection profile on the Windows side. This release closes exactly that gap.
+
+### Added
+- **`delphi_paserver command=add-profile`** - registers a connection profile
+  against a live PAServer (`name`, `host`, `password`; optional `port` default
+  64211, `platform` default Linux64). The profile file is written by RAD
+  Studio's own `paclient.exe --local`, so the on-disk format - password
+  encrypted included - is always the IDE's, never invented. `--passfile` was
+  measured and rejected: it stores the passfile PATH in the profile, leaving
+  the password in plain text on disk forever.
+- **`delphi_paserver command=test-connection`** - two forms. With `name`: the
+  full PAServer handshake (connect + authenticate) through that profile, exit
+  code and paclient output included. With `host`+`port` and NO name: a raw
+  TCP reachability probe with elapsed time - the quick "does this server
+  reach my PAServer at all?" answer an agent needs before chasing
+  credentials, requested from the field (the agent behind NAT had no way to
+  ask whether the server could reach it).
+- **Secret masking in the transport logs.** The HTTP and stdio transports log
+  each raw request body before the tool gate runs, so the PAServer password
+  in `add-profile` arguments would have landed in the server log. A masker in
+  the vendored logger (`MaskSecretValues`, `[local change]`) now blanks the
+  values of `password`/`passkey`/`passfile`/`token` keys in every logged
+  request line. Verified by the new battery: the password never appears in
+  the log, the masked request does.
+- New E2E battery `tests/test_paserver.py` (29 checks): the three read
+  commands, gate vetting of every argument, a real profile written and
+  encrypted, both test-connection forms, read-only refusals, log masking,
+  cleanup. Total across batteries: 498 checks.
+
+### Fixed
+- **Tray mode: minimize now goes to the tray.** With `MainFormOnTaskbar` off,
+  a VCL minimize targets the hidden application window - the log window
+  neither minimized nor returned to the tray. Minimize is now intercepted
+  (`SC_MINIMIZE`) and hides the window, matching the close button's
+  close-to-tray behaviour.
+
+### Security
+- `add-profile`/`test-connection` are write-gated: read-only credentials keep
+  the three listing commands only. All five arguments are vetted at the
+  single gate (`PAServerArgDenied`): profile name doubles as a file name
+  (strict charset, max 64), host/port/platform whitelisted, password may not
+  carry quotes or control characters. The platform list is paclient's own
+  (`PACLIENT_PLATFORMS`), narrower than the .dproj whitelist.
+
 ### Changed
 - **Renamed to "Delphi Remote MCP Server"** (repo slug `delphi-remote-mcp`). The
   old "DelphiLSP" name implied a language-server bridge; this is an MCP server to

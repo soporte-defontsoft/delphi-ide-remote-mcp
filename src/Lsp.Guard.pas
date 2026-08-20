@@ -452,6 +452,48 @@ begin
         Exit(Format(SR_BUILD_CONFIG_FMT, [V]));
 end;
 
+{ delphi_paserver's add-profile/test-connection compose a paclient.exe command
+  line (direct CreateProcess, no shell - but a double quote would re-split the
+  argument list) and the profile NAME doubles as a file name in %APPDATA%.
+  Vetted here for BOTH access levels: one place, same lesson as the git and
+  build argument filters. The platform whitelist is paclient's own
+  (PACLIENT_PLATFORMS, Lsp.Dproj) - narrower than CanonicalPlatform. The
+  password may not carry quotes or control characters; everything else is the
+  PAServer's business. '' = clean. }
+function PAServerArgDenied(const AArguments: TJSONObject): string;
+var
+  V: string;
+  C: Char;
+  N: Integer;
+begin
+  Result := '';
+  V := ArgStr(AArguments, 'name').Trim;
+  if V <> '' then
+  begin
+    if Length(V) > 64 then
+      Exit(Format(SR_PASERVER_NAME_FMT, [V]));
+    for C in V do
+      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-']) then
+        Exit(Format(SR_PASERVER_NAME_FMT, [V]));
+  end;
+  V := ArgStr(AArguments, 'host').Trim;
+  if V <> '' then
+    for C in V do
+      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '.', '-', ':']) then
+        Exit(Format(SR_PASERVER_HOST_FMT, [V]));
+  V := ArgStr(AArguments, 'port').Trim;
+  if V <> '' then
+    if not TryStrToInt(V, N) or (N < 1) or (N > 65535) then
+      Exit(Format(SR_PASERVER_PORT_FMT, [V]));
+  V := ArgStr(AArguments, 'platform').Trim;
+  if (V <> '') and not MatchText(V, PACLIENT_PLATFORMS) then
+    Exit(Format(SR_PASERVER_PLATFORM_FMT, [V]));
+  V := ArgStr(AArguments, 'password');
+  for C in V do
+    if (C < ' ') or (C = '"') then
+      Exit(SR_PASERVER_PASSWORD);
+end;
+
 { '' unless APath IS one of the configured roots (the jail itself). With no
   roots configured (unrestricted local mode) there is no jail to protect and
   nothing is refused - same model as PathDenied. }
@@ -523,6 +565,15 @@ begin
   // every credential unless the operator explicitly opted in (AllowRun).
   if SameText(AToolName, 'delphi_run') and not AllowRun then
     Exit(SR_RUN_DISABLED);
+  // Universal PAServer-argument filter (BOTH access levels): profile name,
+  // host, port, platform and password land on the paclient command line, and
+  // the name becomes a file in %APPDATA%.
+  if SameText(AToolName, 'delphi_paserver') then
+  begin
+    Result := PAServerArgDenied(AArguments);
+    if Result <> '' then
+      Exit;
+  end;
   if not (GProcessReadOnly or GRequestReadOnly) then
     Exit;
   // Fully mutating tools: refused outright in read-only mode.
@@ -539,6 +590,16 @@ begin
     if (Trim(Cmd) = '') or SameText(Trim(Cmd), 'view') then
       Exit;
     Exit(WriteDenied('delphi_config ' + Cmd));
+  end;
+  // delphi_paserver is mixed: the listing commands read; add-profile writes a
+  // connection profile on the server and test-connection dials the target
+  // with its stored credential.
+  if SameText(AToolName, 'delphi_paserver') then
+  begin
+    Cmd := Trim(ArgStr(AArguments, 'command'));
+    if (Cmd = '') or MatchText(Cmd, ['platforms', 'packages', 'profiles']) then
+      Exit;
+    Exit(WriteDenied('delphi_paserver ' + Cmd));
   end;
   // delphi_git is mixed: query commands pass, anything that can change the
   // repo or the remote is refused ("branch"/"tag" only LIST when called

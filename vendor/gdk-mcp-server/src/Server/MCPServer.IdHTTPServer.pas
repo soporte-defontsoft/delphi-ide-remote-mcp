@@ -422,7 +422,8 @@ begin
     RequestBody := ReadStringFromStream(RequestInfo.PostStream, -1, IndyTextEncoding_UTF8);
   end;
 
-  TLogger.Info('Request: ' + RequestBody);
+  // [local change] secrets in arguments (PAServer password) never reach the log
+  TLogger.Info('Request: ' + MaskSecretValues(RequestBody));
 
   SessionID := RequestInfo.RawHeaders.Values['Mcp-Session-Id'];
   if SessionID <> '' then

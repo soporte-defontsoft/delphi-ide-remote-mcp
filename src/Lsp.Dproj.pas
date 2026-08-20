@@ -62,6 +62,13 @@ function IsLocalPlatform(const APlatform: string): Boolean;
   Returns the correctly-cased canonical name, or '' if unknown. }
 function CanonicalPlatform(const AName: string): string;
 
+const
+  { The platforms paclient.exe accepts for --platform= (its own help lists
+    exactly these). Narrower than CanonicalPlatform - Android deploys without
+    PAServer. One definition, shared by the gate and delphi_paserver. }
+  PACLIENT_PLATFORMS: array[0..4] of string =
+    ('Win32', 'Win64', 'WinARM64EC', 'OSX64', 'Linux64');
+
 { Whether a project would EXECUTE a shell during a build: a custom MSBuild
   <Target> or <Exec> task (with or without an XML namespace prefix), a
   non-empty RAD Studio build-event command, or an <Import> of anything that is
