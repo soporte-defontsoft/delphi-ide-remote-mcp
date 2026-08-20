@@ -6,7 +6,7 @@ The Windows machine holds RAD Studio and the projects. You work from wherever yo
 
 It is not a language-server bridge. Semantic understanding is one capability of many, and it is the one that is genuinely hard, so it runs on Embarcadero's official `DelphiLSP.exe` — the same engine behind Code Insight in the RAD Studio IDE. But the language server backs **7 of the 27 tools**; the other 20 are the working day: the safe editing engine, MSBuild, git, the file tools, the project scaffolder, the knowledge vault. See [What each tool actually runs on](#what-each-tool-actually-runs-on) for the exact split.
 
-Runs as a **resident console host or a tray GUI app** that keeps language-server processes warm across agent sessions, serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP — with a classic stdio mode as well. (A true Windows Service wrapper is on the roadmap, not shipped yet — today it runs as a foreground console or a tray app.)
+Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
 > **Status: BETA.** Functional and covered by 460+ end-to-end checks against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
 
@@ -125,11 +125,22 @@ a working starter vault for you; there is also a ready-made one in
 claude mcp add delphi -- C:/path/to/DelphiLspMcp.exe
 ```
 
-**Remote (Streamable HTTP)** — run on the Windows machine that owns RAD Studio (console `DelphiLspMcp --http 3000`, or the tray app `DelphiLspMcpTray`, which starts minimized to the tray), set a token, and register from any client machine (Linux included):
+**Remote (Streamable HTTP)** — run it on the Windows machine that owns RAD Studio, set a token, and register from any client machine (Linux included):
 
 ```bash
 claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp --header "Authorization: Bearer YOUR_TOKEN"
 ```
+
+### One executable, three ways to run it
+
+| You want | Run | Notes |
+|---|---|---|
+| A local client to spawn it | `DelphiLspMcp.exe` | No switch: MCP over stdio. |
+| The remote server, in a terminal | `DelphiLspMcp.exe --http 3000` | Ctrl+C stops it. Good for trying things out. |
+| The remote server, permanently | `DelphiLspMcp.exe -install` | **How you should actually deploy it**: a Windows Service, started by the machine, with nobody logged in. Needs an elevated prompt; `-uninstall` removes it. |
+| An eye on it while you work | `DelphiLspMcp.exe -gui` | Tray app: starts iconized, double-click for the live log. |
+
+Each switch is accepted as `/x`, `-x` or `--x`. The service reads the same `settings.ini` next to the executable as every other mode.
 
 Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom agents): see [docs/CLIENTS.md](docs/CLIENTS.md).
 
@@ -152,7 +163,7 @@ AllowBuildScripts=0                     ; 1 = allow build scripts (custom <Targe
 Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
 ```
 
-- **Port**: used by both the console `--http` mode and the tray app. A port given on the
+- **Port**: used by the service, the terminal `--http` mode and the tray app alike. A port given on the
   command line (`DelphiLspMcp --http 3900`) overrides the ini for that run.
 - **BindIP** (`[Server] BindIP` or `DELPHI_MCP_BIND_IP`): listen on a single interface (e.g.
   your LAN/VPN address) instead of all of them — which also stops the firewall prompting
@@ -217,7 +228,7 @@ Each security fix is paired with the vector it closes **and** with a counter-tes
 - **Project config made automatic** — uses the IDE-generated `.delphilsp.json` when fresh, and can **fabricate one from the `.dproj`** when absent or stale (validated experimentally).
 - **Warm processes** — one `DelphiLSP` (controller + agents; DelphiLSP replaces its own dead/hung children) per workspace, kept alive between agent sessions and refreshed against disk on each use. (LRU eviction and idle-shutdown of idle workspaces are roadmap, not yet implemented — processes stay warm until the host exits.)
 - **Correct source encoding** — BOM detection with configurable ANSI fallback; legacy CP1252 sources are not corrupted.
-- **Dual host** — the same core and the same 27 tools run as a headless console (`--http`/stdio) or as a VCL tray app (live log). (Both hosts are kept in lockstep; a Windows Service wrapper is roadmap.)
+- **One executable, three modes** — Windows Service, terminal (`--http`/stdio) and VCL tray app (live log) are the same binary and the same 27 tools. They cannot drift: one project, one unit list, and the server itself is built once in `Lsp.Host` for all three.
 
 ## Requirements
 

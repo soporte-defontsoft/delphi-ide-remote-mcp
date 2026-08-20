@@ -7,7 +7,7 @@
         <ProjectName Condition="'$(ProjectName)'==''">DelphiLspMcp</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Console</AppType>
-        <FrameworkType>None</FrameworkType>
+        <FrameworkType>VCL</FrameworkType>
         <ProjectVersion>20.4</ProjectVersion>
         <Platform Condition="'$(Platform)'==''">Win64</Platform>
     </PropertyGroup>
@@ -194,6 +194,12 @@
         <DCCReference Include="Mcp.Tools.Vault.pas"/>
         <DCCReference Include="Lsp.Scaffold.pas"/>
         <DCCReference Include="Mcp.Tools.Scaffold.pas"/>
+        <DCCReference Include="Lsp.Host.pas"/>
+        <DCCReference Include="Lsp.Service.pas"/>
+        <DCCReference Include="UTrayMain.pas">
+            <Form>FormTray</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

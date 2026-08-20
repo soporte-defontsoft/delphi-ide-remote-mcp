@@ -335,10 +335,17 @@ check('R4-C: la salida de list no arrastra ".."', '..' not in out, out[:150])
 
 # ---- delphi_config: view + add-platform with the VCL/FMX rule -------------
 import shutil as _sh
-CON = os.path.join(INSIDE, 'ConfProj.dproj')
-_sh.copy(os.path.join(REPO, 'src', 'DelphiLspMcp.dproj'), CON)   # console (FrameworkType None)
+# Both fixtures are derived from the ONE real project (there is a single one
+# since the hosts merged): the VCL copy verbatim, and a FrameworkType=None copy
+# for the non-VCL case. Deriving them keeps the test honest about the real
+# .dproj shape without needing a second project to exist just to be test data.
+_real = open(os.path.join(REPO, 'src', 'DelphiLspMcp.dproj'), encoding='utf-8').read()
 VCLP = os.path.join(INSIDE, 'VclProj.dproj')
-_sh.copy(os.path.join(REPO, 'src', 'DelphiLspMcpTray.dproj'), VCLP)  # VCL
+open(VCLP, 'w', encoding='utf-8').write(_real)                       # VCL
+CON = os.path.join(INSIDE, 'ConfProj.dproj')
+open(CON, 'w', encoding='utf-8').write(
+    _real.replace('<FrameworkType>VCL</FrameworkType>',
+                  '<FrameworkType>None</FrameworkType>'))            # no framework
 
 out = call('delphi_config', {"project": CON})
 cfg = json.loads(out)

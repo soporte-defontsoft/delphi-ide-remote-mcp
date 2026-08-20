@@ -14,7 +14,7 @@ uses
   MCPServer.Types, MCPServer.Settings, MCPServer.Logger,
   MCPServer.ManagerRegistry, MCPServer.CoreManager, MCPServer.ToolsManager,
   MCPServer.ResourcesManager, MCPServer.IdHTTPServer, MCPServer.Resource.Server,
-  Lsp.Guard, Lsp.Session, Lsp.Texts, Mcp.Vault.Session, Mcp.Vault.Seed;
+  Lsp.Guard, Lsp.Host, Lsp.Session, Lsp.Texts, Mcp.Vault.Session, Mcp.Vault.Seed;
 
 type
   TFormTray = class(TForm)
@@ -31,10 +31,8 @@ type
     procedure MiCopyClick(Sender: TObject);
     procedure MiExitClick(Sender: TObject);
   private
-    FSettings: TMCPSettings;
+    FHost: TMcpHost;
     FServer: TMCPIdHTTPServer;
-    FRegistry: IMCPManagerRegistry;
-    FCore, FTools, FResources: IMCPCapabilityManager;
     FUrl: string;
     FExiting: Boolean;
     procedure AddLog(const S: string);
@@ -70,65 +68,16 @@ begin
         end);
     end;
 
-  TServerStatusResource.Initialize;
-  FSettings := TMCPSettings.Create('', False);
-  FSettings.ServerName := SERVER_NAME;
-  FSettings.ServerVersion := SERVER_VERSION;
-
-  FRegistry := TMCPManagerRegistry.Create;
-  FCore := TMCPCoreManager.Create(FSettings);
-  FTools := TMCPToolsManager.Create;
-  FResources := TMCPResourcesManager.Create;
-  FRegistry.RegisterManager(FCore);
-  FRegistry.RegisterManager(FTools);
-  FRegistry.RegisterManager(FResources);
-
-  // THE single access gate: every tools/call is checked in Lsp.Guard.
-  TMCPToolsManager.ToolGate :=
-    function(const ToolName: string; const Arguments: TJSONObject): string
-    begin
-      Result := ToolCallDenied(ToolName, Arguments);
-    end;
-  // Outbound twin of the gate: server drive letters leave as virtual
-  // units (D:\x -> srvd:\x) in every textual result.
-  TMCPToolsManager.ResultFilter :=
-    function(const ToolName, AText: string): string
-    begin
-      Result := MaskDriveText(ToolName, AText);
-    end;
-  // Knowledge vault (optional): same wiring as the console host.
-  TMCPCoreManager.Instructions :=
-    function: string
-    begin
-      Result := VaultInstructions;
-    end;
-  if VaultConfigured then
-  begin
-    TMCPCoreManager.DeclarePrompts := True;
-    FRegistry.RegisterManager(TMCPPromptsManager.Create);
-  end;
-
-  FServer := TMCPIdHTTPServer.Create(Self);
-  FServer.Settings := FSettings;
-  FServer.ManagerRegistry := FRegistry;
-  FServer.CoreManager := FCore;
-  FServer.AuthToken := Lsp.Guard.AuthToken;
-  FServer.ReadOnlyToken := Lsp.Guard.ReadOnlyToken;
-  FServer.AnonymousReadOnly := Lsp.Guard.AnonymousReadOnly;
-  FServer.BindIP := Lsp.Guard.BindIP;
-  // Fail SAFE: no credential configured -> localhost only, never all
-  // interfaces (an unconfigured server must not be open to the network).
-  if (FServer.AuthToken = '') and (FServer.ReadOnlyToken = '') and
-     (not FServer.AnonymousReadOnly) and (FServer.BindIP = '') then
-    FServer.BindIP := '127.0.0.1';
-  FServer.OnAccessLevel :=
-    procedure(AReadOnly: Boolean)
-    begin
-      SetRequestReadOnly(AReadOnly);
-    end;
+  // The wiring is NOT written out here: the terminal, the service and this
+  // tray must build exactly the same server, and a policy added to one copy
+  // and forgotten in another is a hole that exists on one host only. Lsp.Host
+  // builds it once for all three.
+  FHost := TMcpHost.Create;
+  FHost.Wire;
+  FServer := FHost.CreateHttpServer(0);
 
   FUrl := Format('http://%s:%d%s',
-    [FSettings.Host, FSettings.Port, FSettings.Endpoint]);
+    [FHost.Settings.Host, FHost.Settings.Port, FHost.Settings.Endpoint]);
   Caption := 'DelphiLSP MCP Service v' + SERVER_VERSION + ' - ' + FUrl;
   TrayIcon.Hint := 'DelphiLSP MCP Service v' + SERVER_VERSION + sLineBreak + FUrl;
   // A TTrayIcon with an empty Icon draws NOTHING - not even a default one, so
@@ -140,23 +89,10 @@ begin
     FServer.Start;
     AddLog(Format('Servidor MCP escuchando en %s (%s v%s)',
       [FUrl, SERVER_NAME, SERVER_VERSION]));
-    // The WRITE jail (workspace roots): same summary source as the console host.
-    var JailWarn: Boolean;
-    AddLog(WorkspaceJailSummary(JailWarn));
-    if VaultSeedNote <> '' then
-      AddLog(VaultSeedNote);
-    if VaultConfigured then
-      AddLog(Format('Vault de conocimiento: %s (%s)',
-        [VaultPath, IfThen(VaultWritable, 'lectura-escritura', 'solo lectura')]));
-    if (FServer.AuthToken = '') and (FServer.ReadOnlyToken = '') then
-      AddLog('AVISO: sin token Bearer (DELPHI_MCP_TOKEN o settings.ini ' +
-        '[Security] AuthToken). Bien en localhost; NO exponer a la red asi.')
-    else
-      AddLog('Autenticacion Bearer activada.');
-    if FServer.ReadOnlyToken <> '' then
-      AddLog('Segunda credencial de SOLO LECTURA configurada (ReadOnlyToken).');
-    if FServer.AnonymousReadOnly then
-      AddLog('AnonymousReadOnly: peticiones sin token entran en solo lectura.');
+    // The operational facts (jail, vault, credentials) come from the SAME
+    // place the terminal and the service read them - one truth, three sinks.
+    for var Note in FHost.StartupNotes do
+      AddLog(Note);
     AddLog('Icono en la bandeja = servicio encendido. Doble clic para este log.');
   except
     on E: Exception do
@@ -203,7 +139,8 @@ begin
   except
   end;
   TLspSession.Shutdown; // stop every DelphiLSP child
-  FSettings.Free;
+  FreeAndNil(FServer);
+  FreeAndNil(FHost); // frees the settings and the managers it built
   Application.Terminate;
 end;
 

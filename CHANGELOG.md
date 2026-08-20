@@ -6,6 +6,52 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [0.31.0-beta] - 2026-08-20
+
+It can finally run the way a server is supposed to run: as a Windows Service,
+started by the machine, with no one logged in. Getting there meant collapsing
+the two projects into one, which was overdue for its own reasons - two projects
+meant two `uses` clauses to keep in sync by hand, and a tool unit added to one
+and forgotten in the other silently gave that host fewer tools.
+
+### Added
+- **Windows Service mode.** `DelphiLspMcp.exe -install` (elevated) registers it,
+  `-uninstall` removes it, and the SCM starts it like any service. The install
+  bakes the mode switch into the registered `ImagePath`, because running with
+  no arguments is the terminal mode - without that the SCM would launch a
+  console that never answers it. Verified end to end: install, start, serve MCP,
+  a real tool call, stop, uninstall.
+- **One executable, three modes.** No switch = terminal (stdio, or `--http` for
+  the remote mode); `-service` = Windows Service; `-gui` = the tray app. Each
+  spelling is accepted as `/x`, `-x` or `--x`.
+
+### Changed
+- **The two projects are now one.** `DelphiLspMcpTray.dproj` is gone: the tray
+  is a mode of the single project. A host can no longer expose fewer tools than
+  another, because there is only one unit list.
+- **`Lsp.Host` builds the server for every mode.** The manager registry, the
+  single access gate, its outbound filter and the vault declaration were
+  written out inline in the console host AND again in the tray - a policy added
+  to one copy and forgotten in the other is a hole that exists on one host
+  only. Built once now; the service was never going to be a third copy.
+- The startup facts an operator needs (the write jail, the vault, the
+  credential situation) come from one place and are reported by all three
+  modes, instead of each host deciding for itself what was worth saying.
+
+### Fixed
+- **The tray had no icon at all** - not even a stock one. `TTrayIcon` had
+  `Visible=True` with nothing assigned, the repo shipped no `.ico`, and neither
+  project declared an application icon, so the notification area showed a blank
+  slot. Two original icons now ship (running and stopped), the project declares
+  one, and the tray assigns it.
+
+### Documentation
+- The README leads with what this is - an MCP server to control Delphi
+  remotely, so you can develop from any platform - instead of implying a
+  language-server bridge, and adds a table of **what each tool actually runs
+  on**: 7 of the 27 tools are backed by DelphiLSP, the other 20 are MSBuild,
+  git, the safe editing engine, the filesystem and the vault.
+
 ## [0.30.0-beta] - 2026-08-20
 
 A security release. The field audit that opened round 10 reported one real

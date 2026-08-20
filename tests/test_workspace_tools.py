@@ -149,13 +149,17 @@ out = call('delphi_projects', {"root": REPO})
 try:
     d = json.loads(out)
     names = sorted(p['name'] for p in d['projects'])
+    # ONE server project now: the terminal, the service and the tray are three
+    # modes of the same executable, not three projects.
     check('projects: encuentra los del repo',
-          'DelphiLspMcp' in names and 'LspCoreTest' in names and 'DelphiLspMcpTray' in names, names)
+          'DelphiLspMcp' in names and 'LspCoreTest' in names, names)
+    check('projects: el proyecto del tray ya no existe por separado',
+          'DelphiLspMcpTray' not in names, names)
 except Exception:
     check('projects: parsea', False, out[:200])
-out = call('delphi_projects', {"root": REPO, "name": "tray"})
+out = call('delphi_projects', {"root": REPO, "name": "core"})
 d = json.loads(out)
-check('projects: filtro por nombre', d['total'] == 1 and d['projects'][0]['name'] == 'DelphiLspMcpTray', out[:150])
+check('projects: filtro por nombre', d['total'] == 1 and d['projects'][0]['name'] == 'LspCoreTest', out[:150])
 out = call('delphi_projects', {})
 check('projects: sin root ni ini configurado avisa', out.startswith('error:') and 'Roots' in out, out[:150])
 

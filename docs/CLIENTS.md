@@ -5,7 +5,7 @@ MCP-capable agent can use this server. Two transports:
 
 - **stdio** — the client spawns `DelphiLspMcp.exe` on the same Windows machine.
 - **Streamable HTTP** — the server runs resident on the Windows machine
-  (`DelphiLspMcp --http 3000` or the `DelphiLspMcpTray` tray app) and clients
+  (as a Windows Service, `DelphiLspMcp --http 3000`, or `DelphiLspMcp -gui`) and clients
   connect from anywhere (Linux included) with the Bearer token.
 
 For remote use, configure BOTH security knobs in `settings.ini` next to the
