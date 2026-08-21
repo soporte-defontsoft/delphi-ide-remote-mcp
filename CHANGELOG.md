@@ -8,6 +8,13 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Changed
+- **Renamed to "Delphi IDE Remote MCP Server"** (repo slug
+  `delphi-ide-remote-mcp`, previously `delphi-remote-mcp`): the name now
+  says WHAT is being remote-controlled - the Delphi IDE's toolchain
+  (RAD Studio: language server, MSBuild, GetIt packages, the SDK's adb),
+  not the Delphi language in the abstract. GitHub redirects the old URL.
+
 ## [0.38.1-beta] - 2026-08-21
 
 ### Fixed

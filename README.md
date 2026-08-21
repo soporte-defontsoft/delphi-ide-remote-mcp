@@ -1,6 +1,6 @@
-# Delphi Remote MCP Server
+# Delphi IDE Remote MCP Server
 
-**An MCP server to control Delphi remotely — so you can develop in Delphi from any platform.**
+**An MCP server that remote-controls a full RAD Studio (Delphi IDE) installation — language server, build system, deploy chain — so you can develop in Delphi from any platform.**
 
 The Windows machine holds RAD Studio and the projects. You work from wherever you actually want to be: a Linux laptop, a Mac, a cloud agent, a CI runner. Understand the code, edit it safely, scaffold, build, run, package, fetch the binaries, commit — the whole cycle over MCP, with Delphi installed on **neither** the client nor the agent.
 
