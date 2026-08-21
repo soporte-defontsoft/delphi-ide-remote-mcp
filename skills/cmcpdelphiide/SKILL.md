@@ -1,0 +1,109 @@
+---
+name: cmcpdelphiide
+description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb) and how to keep your own context alive.
+---
+
+# Delphi IDE Remote MCP - field guide for agents
+
+You are talking to a Windows machine that has RAD Studio installed. The
+projects, the compiler, the devices and the files all live THERE. You
+build, edit, deploy and drive apps through tools; you never need Delphi
+on your side.
+
+## First contact (always, in this order)
+
+1. `delphi_workspace` - your allowed roots, your access level, and the
+   path model. **Server paths use virtual drive units**: `srvd:\...`,
+   `srvc:\...`. They only exist inside this MCP. Always send paths in
+   that form; never invent local-looking paths of your own.
+2. `delphi_components` - what the server's RAD Studio has installed to
+   program with (design packages, any install channel). Check BEFORE
+   writing uses clauses for third-party libraries. Base RTL/VCL/FMX are
+   always available and not listed. `filter=` narrows (e.g. `filter=FMX`).
+3. If a vault is announced in the instructions, `vault_read` its index -
+   it holds the operator's conventions and project context.
+
+## Reading without drowning yourself
+
+- `delphi_read` pages at 400 lines per call - read in RANGES.
+- `delphi_search` / `delphi_list` to locate; never read whole trees.
+- NEVER pull thousands of lines into your context. Every big-dump tool
+  has a file-mode escape (`out=`); use it, then read the file in ranges.
+
+## Editing safely (`delphi_edit`)
+
+- Anchor edits: `old` must be copied EXACTLY from a fresh `delphi_read`,
+  as small and unique as possible. An edit error is a diagnosis - re-read
+  and fix the anchor; do not retry blindly.
+- Pascal traps: a method signature exists TWICE (interface +
+  implementation); there are TWO uses clauses; one single `end.` at the
+  file end. Half an edit is not an edit.
+- `.fmx`/`.dfm` are DATA, not code. The compiler only checks their text
+  grammar - a wrong property name or enum value compiles fine and then
+  **crashes the form at load time on the target, silently**. The server
+  lints designer edits against tables generated from the framework's own
+  metadata: an `AVISO DESIGNER` warning in the edit result is measured
+  truth - fix it before building. FMX property spelling is not VCL:
+  `Size.Width` (not `Size.X`), `TextSettings.Font.Size` (not
+  `Font.Size`), `TextSettings.HorzAlign = Center` (not `taCenter`).
+- Binary designer files (TPF0 stream or `$FF` resource wrapper) are
+  refused - they belong to the IDE. Do not try to work around it.
+- Prefer `Align`/anchors over absolute Position/Size in forms: absolute
+  coordinates designed on a desktop form overflow phone screens.
+
+## Create and build
+
+- `delphi_create` scaffolds console/VCL/FMX projects and forms that
+  compile at birth. Then `delphi_config command=add-platform` for extra
+  targets. The `.dproj` is otherwise the IDE's - do not hand-edit it.
+- `delphi_build` runs MSBuild. The result declares the real `output`
+  path - trust it, do not guess. `target=Deploy` on Android builds the
+  full `.apk` (the server generates the deployment manifest if missing).
+
+## Linux (PAServer)
+
+`delphi_paserver` end to end: `platforms` -> `add-profile` (against a
+live PAServer on the target) -> `get-sdk` once (pulls the sysroot; can
+take minutes) -> `delphi_build platform=Linux64` -> `delphi_package` ->
+`delphi_fetch` (chunked, sha256) -> run the ELF on YOUR machine.
+
+## Android (`delphi_adb`) - eyes and hands
+
+Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
+`delphi_build target=Deploy` -> `install` -> `run` -> `logcat` ->
+`screenshot` -> `tap`/`key`.
+
+- An allowlist may be active: name your `device=` explicitly.
+- `logcat`: default 300 lines, inline answers cap at the newest 400.
+  For big dumps pass `out=srvd:\...\dump.txt` and read it in ranges -
+  a full inline dump has drowned an agent's context in the field.
+  Validate app behaviour by logging from your app and filtering on your
+  own tag: `filter=MyTag`.
+- `screenshot` writes a PNG **on the server** (`out=...png`); download
+  with `delphi_fetch` if you can actually view images. If you cannot,
+  do not guess from pixel heuristics - a nearly-empty FMX form is a
+  uniform (238,238,238) gray that looks like a launcher. Prefer logcat
+  evidence.
+- `tap` coordinates are PHYSICAL pixels as measured on the screenshot -
+  not your .fmx logical coordinates. Phones scale (a 360-logical-wide
+  form is 720 physical at scale 2.0). If your taps land nowhere, your
+  layout probably overflowed the screen: fix the form with `Align`.
+- A wifi-adb device can drop its connection by itself. A `SIN CONEXION`
+  answer tells you the recovery path; reconnecting may need a human hand
+  on the device - say so instead of looping.
+
+## When you hit a wall
+
+`delphi_report` files your report (bug / limitation / suggestion /
+question) on the server for the operator - it works at EVERY access
+level and it is the correct move when a tool refuses you, something
+looks broken, or a package you need is missing. One honest report beats
+twenty blind retries.
+
+## Access levels
+
+A read-only credential can read, search, navigate, diagnose, list
+components, fetch files, take screenshots and file reports - but every
+mutating tool (edit/create/build/run/install/tap...) is refused at the
+gate. If you are read-only and need a change, report it; do not fish
+for bypasses (there are none).

@@ -127,6 +127,8 @@ a working starter vault for you; there is also a ready-made one in
 
 **→ Full parameter-by-parameter reference with types, defaults and worked workflows: [docs/TOOLS.md](docs/TOOLS.md)** (generated from the server's own `tools/list`, so it never drifts from the code).
 
+**→ Handing this server to an AI agent?** Give it [skills/cmcpdelphiide/SKILL.md](skills/cmcpdelphiide/SKILL.md) — a field-tested agent skill (drop it into the agent's skills folder or paste it as instructions) covering the path model, the safe-editing contract, the deploy chains and how not to drown its own context.
+
 ## Quickstart
 
 **Local (stdio)** — register in Claude Code on the Windows machine:
