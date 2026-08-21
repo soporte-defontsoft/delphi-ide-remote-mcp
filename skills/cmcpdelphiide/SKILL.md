@@ -69,6 +69,15 @@ on your side.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess. `target=Deploy` on Android builds the
   full `.apk` (the server generates the deployment manifest if missing).
+- **"Unit 'X' not found" on a platform you just added** (and only
+  there): the unit belongs to an installed component whose folder is in
+  the IDE's library path for the other platforms only. Find its source
+  folder (`delphi_search` / `delphi_list` in the library zone), then
+  `delphi_config command=add-searchpath platform=<the one> path=<folder>`
+  and build again; repeat per library (a fat app may need 3-4). `view`
+  shows the paths per platform. Native libraries a component loads at
+  runtime (a `.so`/`.dll` next to the binary) still travel with your
+  build - download them with `/files`.
 
 ## Linux (PAServer)
 

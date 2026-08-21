@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.39.0-beta';
+  SERVER_VERSION = '0.40.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -643,6 +643,62 @@ const
 
   SR_FILES_MISSING =
     'No existe el fichero pedido.';
+
+  // Appended to a READ refusal outside the jail: the library zone exists,
+  // but only the folders the IDE registers (and their subfolders) - not their
+  // parents.
+  SN_READ_ZONE_HINT =
+    'Para LEER, ademas de los roots vale la zona de biblioteca: las carpetas ' +
+    'que el IDE registra en su Library Path (fuentes RTL/VCL/FMX y de ' +
+    'componentes instalados) y sus subcarpetas - no sus carpetas padre. ' +
+    'delphi_workspace las enumera.';
+
+  // ---- delphi_config: search paths ----
+
+  SP_CONFIG_PATH =
+    'add/remove-searchpath: the unit search path to add or remove - a ' +
+    'folder where the compiler looks for .pas/.dcu, e.g. the Source folder ' +
+    'of an installed component (delphi_workspace lists the readable library ' +
+    'zone). IDE macros like $(BDS) are accepted; relative paths resolve from ' +
+    'the project folder. Must resolve inside the workspace or the library ' +
+    'zone and exist.';
+
+  SR_CONFIG_NEED_PATH =
+    'Falta "path": la carpeta a anadir/quitar del search path (p.ej. la ' +
+    'carpeta Source de un componente instalado).';
+
+  SR_CONFIG_PATH_CHARS =
+    'RECHAZADO: el path lleva caracteres no permitidos (< > " ; & | o de ' +
+    'control) o es demasiado largo. Una ruta por llamada, sin ";".';
+
+  SR_CONFIG_PATH_MACRO_FMT =
+    'RECHAZADO: no puedo resolver "%s" (macro desconocida o ruta invalida). ' +
+    'Usa una ruta real o una macro del IDE como $(BDS).';
+
+  SR_CONFIG_PATH_MISSING_FMT =
+    'RECHAZADO: la carpeta "%s" no existe en el servidor. Busca la ' +
+    'correcta con delphi_list (zona de biblioteca) antes de anadirla.';
+
+  SN_CONFIG_PATH_ADDED_FMT =
+    'ANADIDO "%s" al search path de %s (resuelve a %s). Los PropertyGroup de ' +
+    'la plataforma se crearon como lo haria el IDE si no existian; copia ' +
+    'previa del .dproj en __delphi-patch. Verifica con delphi_build ' +
+    '{platform:"%s"}.';
+
+  SN_CONFIG_PATH_PRESENT_FMT =
+    '"%s" ya estaba en el search path de %s. Nada que cambiar.';
+
+  SN_CONFIG_PATH_REMOVED_FMT =
+    'QUITADO "%s" del search path de %s. Copia previa del .dproj en __delphi-patch.';
+
+  SN_CONFIG_PATH_ABSENT_FMT =
+    '"%s" no esta en el search path de %s. Mira los actuales con command=view.';
+
+  SN_CONFIG_NO_PATHS =
+    'The project declares no unit search paths of its own: the compiler ' +
+    'finds units through the IDE library path of each platform. A platform ' +
+    'added later gets none of that - add-searchpath fixes "unit not found" ' +
+    'on one platform only.';
 
   // ---- delphi_components ----
 

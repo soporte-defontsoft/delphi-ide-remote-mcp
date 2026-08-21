@@ -19,7 +19,8 @@ interface
 uses
   System.SysUtils,
   MCPServer.Tool.Base,
-  MCPServer.Types;
+  MCPServer.Types,
+  Lsp.Texts;
 
 type
   TDelphiConfigParams = class
@@ -28,13 +29,16 @@ type
     FCommand: string;
     FPlatform: string;
     FOutput: string;
+    FPath: string;
   public
     [SchemaDescription('Absolute path of the project .dproj')]
     property Project: string read FProject write FProject;
-    [SchemaDescription('view (default: list configurations and platforms) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled)')]
+    [SchemaDescription('view (default: list configurations, platforms and search paths) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again)')]
     property Command: string read FCommand write FCommand;
-    [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused)')]
+    [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform)')]
     property Platform: string read FPlatform write FPlatform;
+    [SchemaDescription(SP_CONFIG_PATH)]
+    property Path: string read FPath write FPath;
     [SchemaDescription('set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to <folder>\$(Platform)\$(Config) and .dcu to <folder>\Dcu\$(Platform)\$(Config). Use "default" to restore the RAD Studio layout. No absolute paths, no "..".')]
     property Output: string read FOutput write FOutput;
   end;
@@ -52,8 +56,12 @@ uses
   System.JSON,
   System.IOUtils,
   System.StrUtils,
+  System.Classes,
+  System.Generics.Collections,
+  System.RegularExpressions,
   MCPServer.Registration,
   Lsp.Guard,
+  Lsp.Discovery,
   Lsp.Dproj,
   Lsp.Patch;
 
@@ -71,8 +79,17 @@ begin
     'remove-platform disables it again. command=set-output puts every binary ' +
     'under one folder (output=Compiled by default): a curated edit that sets ' +
     'DCC_ExeOutput/DCC_DcuOutput, keeping the per-platform/config subfolders. ' +
-    'To BUILD a specific combination use delphi_build with platform+config.';
+    'command=add-searchpath adds a unit search path (where the compiler looks ' +
+    'for .pas/.dcu, e.g. the Source folder of an installed component) to ONE ' +
+    'platform - the IDE''s Project Options > Search path - creating the ' +
+    'platform''s property groups exactly as the IDE would; a platform added ' +
+    'to a project inherits NO search paths from the others, which is the usual ' +
+    'reason a unit is "not found" on the new platform only. remove-searchpath ' +
+    'takes it out again. To BUILD a specific combination use delphi_build ' +
+    'with platform+config.';
 end;
+
+procedure AddSearchPathsView(const AXml: string; AReturn: TJSONObject); forward;
 
 function PlatformNeedsProfile(const APlatform: string): Boolean;
 begin
@@ -116,6 +133,7 @@ begin
         Obj.AddPair('reason', Reason);
       Obj.AddPair('needsRemoteProfile', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
     end;
+    AddSearchPathsView(TFile.ReadAllText(ADproj), Return);
     Return.AddPair('note', 'To build: delphi_build {project, platform, ' +
       'config}. Platforms with needsRemoteProfile=true also need a PAServer ' +
       'profile - see delphi_paserver.');
@@ -343,6 +361,337 @@ begin
      sLineBreak, DcuInner, IfThen(OldDcu = '', '(sin definir)', OldDcu), sLineBreak]);
 end;
 
+{ ---- unit search paths ---------------------------------------------------
+  The IDE's Project Options > Search path, per platform. Field 2026-08-21: a
+  real FMX app (41 units) built for Linux64 except ONE unit - the installed
+  component's folder was registered in the IDE's library path for Win/Android
+  only, and a platform added to a project inherits no search path from the
+  others. The .dproj had NO DCC_UnitSearchPath and NO Base_Linux64 groups at
+  all (add-platform only touches <Platforms>), so the edit must create the
+  platform's property groups exactly as the IDE lays them out:
+
+    <PropertyGroup Condition="('$(Platform)'=='X' and '$(Base)'=='true') or '$(Base_X)'!=''">
+        <Base_X>true</Base_X>   <CfgParent>Base</CfgParent>   <Base>true</Base>
+    </PropertyGroup>                                 (the DEFINER, after its siblings)
+    <PropertyGroup Condition="'$(Base_X)'!=''">
+        <DCC_UnitSearchPath>path;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+    </PropertyGroup>                                 (the VALUES, after the Base values)
+
+  MSBuild evaluates property groups in order, which is why the definer sits
+  before the values and the values after the base values (so the macro
+  $(DCC_UnitSearchPath) picks up the base list). Paths are vetted like any
+  read: they must resolve (macros expanded with the IDE's own environment
+  table) inside the workspace roots or the read-only library zone, and exist. }
+
+function GroupCondition(const APlatform: string): string;
+begin
+  if APlatform = '' then
+    Result := '''$(Base)''!='''''
+  else
+    Result := '''$(Base_' + APlatform + ')''!=''''';
+end;
+
+function DefinerCondition(const APlatform: string): string;
+begin
+  Result := '(''$(Platform)''==''' + APlatform + ''' and ''$(Base)''==''true'') or ' +
+    '''$(Base_' + APlatform + ')''!=''''';
+end;
+
+{ <PropertyGroup Condition="ACondition"> ... </PropertyGroup>: AOpen = start of
+  the open tag, AInner = first char after it, AClose = start of the close tag.
+  False when the group does not exist. Conditions are matched verbatim. }
+function FindGroup(const AXml, ACondition: string; out AOpen, AInner, AClose: Integer): Boolean;
+var
+  Low, Tag: string;
+begin
+  Result := False;
+  Tag := LowerCase('<PropertyGroup Condition="' + ACondition + '">');
+  Low := LowerCase(AXml);
+  AOpen := Pos(Tag, Low);
+  if AOpen = 0 then
+    Exit;
+  AInner := AOpen + Length(Tag);
+  AClose := Pos('</propertygroup>', Low, AInner);
+  Result := AClose > 0;
+end;
+
+{ Creates the definer and values groups of a platform when the .dproj lacks
+  them (the IDE writes both the first time a platform option is touched). }
+procedure EnsurePlatformGroups(var AXml: string; const APlatform: string);
+var
+  O, I, C, LastDef, At: Integer;
+  Low, Needle: string;
+begin
+  if not FindGroup(AXml, DefinerCondition(APlatform), O, I, C) then
+  begin
+    // after the last platform definer (any platform), else after the Base one
+    Low := LowerCase(AXml);
+    Needle := LowerCase(' or ''$(Base_');
+    LastDef := 0;
+    At := Pos(Needle, Low);
+    while At > 0 do
+    begin
+      LastDef := At;
+      At := Pos(Needle, Low, At + 1);
+    end;
+    if LastDef = 0 then
+      LastDef := Pos(LowerCase('<PropertyGroup Condition="''$(Config)''==''Base'' or ''$(Base)''!=''''">'), Low);
+    if LastDef = 0 then
+      raise Exception.Create('no encuentro los PropertyGroup de configuracion base del .dproj; ' +
+        'abre el proyecto una vez en el IDE y reintenta.');
+    At := Pos('</propertygroup>', Low, LastDef);
+    At := At + Length('</PropertyGroup>');
+    AXml := Copy(AXml, 1, At - 1) + sLineBreak +
+      '    <PropertyGroup Condition="' + DefinerCondition(APlatform) + '">' + sLineBreak +
+      '        <Base_' + APlatform + '>true</Base_' + APlatform + '>' + sLineBreak +
+      '        <CfgParent>Base</CfgParent>' + sLineBreak +
+      '        <Base>true</Base>' + sLineBreak +
+      '    </PropertyGroup>' + Copy(AXml, At, MaxInt);
+  end;
+  if not FindGroup(AXml, GroupCondition(APlatform), O, I, C) then
+  begin
+    if not FindGroup(AXml, GroupCondition(''), O, I, C) then
+      raise Exception.Create('no encuentro el PropertyGroup base ("$(Base)") del .dproj; ' +
+        'abre el proyecto una vez en el IDE y reintenta.');
+    At := C + Length('</PropertyGroup>');
+    AXml := Copy(AXml, 1, At - 1) + sLineBreak +
+      '    <PropertyGroup Condition="' + GroupCondition(APlatform) + '">' + sLineBreak +
+      '    </PropertyGroup>' + Copy(AXml, At, MaxInt);
+  end;
+end;
+
+{ The <DCC_UnitSearchPath> element INSIDE one group: positions of the value
+  (AValStart..AValEnd-1) and of the whole element (AElStart..AElEnd-1). }
+function FindSearchTag(const AXml: string; AInner, AClose: Integer;
+  out AElStart, AValStart, AValEnd, AElEnd: Integer): Boolean;
+const
+  OpenTag = '<DCC_UnitSearchPath>';
+  CloseTag = '</DCC_UnitSearchPath>';
+var
+  Low: string;
+begin
+  Result := False;
+  Low := LowerCase(AXml);
+  AElStart := Pos(LowerCase(OpenTag), Low, AInner);
+  if (AElStart = 0) or (AElStart > AClose) then
+    Exit;
+  AValStart := AElStart + Length(OpenTag);
+  AValEnd := Pos(LowerCase(CloseTag), Low, AValStart);
+  if (AValEnd = 0) or (AValEnd > AClose) then
+    Exit;
+  AElEnd := AValEnd + Length(CloseTag);
+  Result := True;
+end;
+
+function SplitPaths(const AList: string): TArray<string>;
+var
+  L: TList<string>;
+  P: string;
+begin
+  L := TList<string>.Create;
+  try
+    for P in AList.Split([';']) do
+      if P.Trim <> '' then
+        L.Add(P.Trim);
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
+{ Vets a search path the way every read is vetted: expand the IDE's macros,
+  resolve relative to the project, then the read jail (roots + library zone)
+  and existence. Returns '' when fine, else the refusal. AShow is the
+  resolved path for messages. }
+function SearchPathDenied(const ADproj, ARaw: string; out AShow: string): string;
+var
+  Info: TRadStudioInfo;
+  Vars: TStringList;
+  Expanded: string;
+  C: Char;
+begin
+  AShow := '';
+  if ARaw.Trim = '' then
+    Exit(SR_CONFIG_NEED_PATH);
+  if Length(ARaw) > 400 then
+    Exit(SR_CONFIG_PATH_CHARS);
+  for C in ARaw do
+    if (Ord(C) < 32) or CharInSet(C, ['<', '>', '"', ';', '&', '|']) then
+      Exit(SR_CONFIG_PATH_CHARS);
+  Expanded := ARaw.Trim;
+  if Expanded.Contains('$(') then
+  begin
+    Info := DiscoverRadStudio;
+    Vars := TStringList.Create;
+    try
+      if Info.Found then
+        IdeEnvironmentVars(Info.Version, Vars);
+      Expanded := ExpandIdeMacros(Expanded, Vars);
+    finally
+      Vars.Free;
+    end;
+    if Expanded.Contains('$(') then
+      Exit(Format(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
+  end;
+  if not TPath.IsPathRooted(Expanded) then
+    Expanded := TPath.Combine(TPath.GetDirectoryName(ADproj), Expanded);
+  try
+    Expanded := TPath.GetFullPath(Expanded);
+  except
+    on E: Exception do
+      Exit(Format(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
+  end;
+  AShow := Expanded;
+  Result := ReadPathDenied(Expanded);
+  if Result <> '' then
+    Exit;
+  if not TDirectory.Exists(Expanded) then
+    Exit(Format(SR_CONFIG_PATH_MISSING_FMT, [Expanded]));
+end;
+
+function AddSearchPath(const ADproj, ARawPlatform, ARawPath: string): string;
+var
+  Enc, Xml, Plat, Show, Path, NewInner, P: string;
+  O, I, C, ElS, VS, VE, ElE: Integer;
+begin
+  Plat := '';
+  if ARawPlatform.Trim <> '' then
+  begin
+    Plat := CanonicalPlatform(ARawPlatform);
+    if Plat = '' then
+      Exit(Format('RECHAZADO: "%s" no es una plataforma Delphi valida. ' +
+        'Validas: Win32, Win64, Win64x, WinARM64EC, OSX64, OSXARM64, Linux64, ' +
+        'Android, Android64, iOSDevice64, iOSSimARM64 (o vacia = todas).', [ARawPlatform.Trim]));
+  end;
+  Result := SearchPathDenied(ADproj, ARawPath, Show);
+  if Result <> '' then
+    Exit;
+  Path := ARawPath.Trim;
+
+  Xml := PatchLoadText(ADproj, Enc);
+  try
+    if Plat <> '' then
+      EnsurePlatformGroups(Xml, Plat);
+  except
+    on E: Exception do
+      Exit('error: ' + E.Message);
+  end;
+  if not FindGroup(Xml, GroupCondition(Plat), O, I, C) then
+    Exit('error: no encuentro el PropertyGroup ' + GroupCondition(Plat) + ' del .dproj.');
+  if FindSearchTag(Xml, I, C, ElS, VS, VE, ElE) then
+  begin
+    for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
+      if SameText(P, Path) then
+        Exit(Format(SN_CONFIG_PATH_PRESENT_FMT,
+          [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
+    NewInner := Path + ';' + Copy(Xml, VS, VE - VS);
+    Xml := Copy(Xml, 1, VS - 1) + NewInner + Copy(Xml, VE, MaxInt);
+  end
+  else
+    Xml := Copy(Xml, 1, I - 1) + sLineBreak +
+      '        <DCC_UnitSearchPath>' + Path + ';$(DCC_UnitSearchPath)</DCC_UnitSearchPath>' +
+      Copy(Xml, I, MaxInt);
+  PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+  Result := Format(SN_CONFIG_PATH_ADDED_FMT,
+    [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat), Show,
+     IfThen(Plat = '', 'Win64', Plat)]);
+end;
+
+function RemoveSearchPath(const ADproj, ARawPlatform, ARawPath: string): string;
+var
+  Enc, Xml, Plat, Path, Rest, P: string;
+  O, I, C, ElS, VS, VE, ElE, LineStart: Integer;
+  Found: Boolean;
+  Keep: TList<string>;
+begin
+  Plat := '';
+  if ARawPlatform.Trim <> '' then
+  begin
+    Plat := CanonicalPlatform(ARawPlatform);
+    if Plat = '' then
+      Exit(Format('RECHAZADO: "%s" no es una plataforma Delphi valida.', [ARawPlatform.Trim]));
+  end;
+  Path := ARawPath.Trim;
+  if Path = '' then
+    Exit(SR_CONFIG_NEED_PATH);
+  Xml := PatchLoadText(ADproj, Enc);
+  if not FindGroup(Xml, GroupCondition(Plat), O, I, C) or
+     not FindSearchTag(Xml, I, C, ElS, VS, VE, ElE) then
+    Exit(Format(SN_CONFIG_PATH_ABSENT_FMT,
+      [Path, IfThen(Plat = '', 'el grupo base', Plat)]));
+  Found := False;
+  Keep := TList<string>.Create;
+  try
+    for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
+      if SameText(P, Path) then
+        Found := True
+      else
+        Keep.Add(P);
+    if not Found then
+      Exit(Format(SN_CONFIG_PATH_ABSENT_FMT,
+        [Path, IfThen(Plat = '', 'el grupo base', Plat)]));
+    Rest := string.Join(';', Keep.ToArray);
+  finally
+    Keep.Free;
+  end;
+  if (Rest = '') or SameText(Rest, '$(DCC_UnitSearchPath)') then
+  begin
+    // nothing of ours left: drop the whole element, its line included
+    LineStart := ElS;
+    while (LineStart > 1) and not CharInSet(Xml[LineStart - 1], [#10, #13]) do
+      Dec(LineStart);
+    if Copy(Xml, LineStart, ElS - LineStart).Trim = '' then
+    begin
+      if (LineStart > 1) and (Xml[LineStart - 1] = #10) then
+        Dec(LineStart);
+      if (LineStart > 1) and (Xml[LineStart - 1] = #13) then
+        Dec(LineStart);
+      Xml := Copy(Xml, 1, LineStart - 1) + Copy(Xml, ElE, MaxInt);
+    end
+    else
+      Xml := Copy(Xml, 1, ElS - 1) + Copy(Xml, ElE, MaxInt);
+  end
+  else
+    Xml := Copy(Xml, 1, VS - 1) + Rest + Copy(Xml, VE, MaxInt);
+  PatchSaveText(ADproj, Xml, Enc);
+  Result := Format(SN_CONFIG_PATH_REMOVED_FMT,
+    [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]);
+end;
+
+{ view: the search paths per group, as the .dproj states them (macros kept). }
+procedure AddSearchPathsView(const AXml: string; AReturn: TJSONObject);
+var
+  Obj: TJSONObject;
+  Arr: TJSONArray;
+  M, TagM: TMatch;
+  Name, P: string;
+  Any: Boolean;
+begin
+  Obj := TJSONObject.Create;
+  Any := False;
+  for M in TRegEx.Matches(AXml,
+    '<PropertyGroup Condition="''\$\((Base(?:_(\w+))?)\)''!=''''">(.*?)</PropertyGroup>',
+    [roIgnoreCase, roSingleLine]) do
+  begin
+    TagM := TRegEx.Match(M.Groups[3].Value,
+      '<DCC_UnitSearchPath>(.*?)</DCC_UnitSearchPath>', [roIgnoreCase, roSingleLine]);
+    if not TagM.Success then
+      Continue;
+    if M.Groups[2].Success and (M.Groups[2].Value <> '') then
+      Name := M.Groups[2].Value
+    else
+      Name := 'base';
+    Arr := TJSONArray.Create;
+    for P in SplitPaths(XmlUnescape(TagM.Groups[1].Value)) do
+      Arr.Add(P);
+    Obj.AddPair(Name, Arr);
+    Any := True;
+  end;
+  AReturn.AddPair('searchPaths', Obj);
+  if not Any then
+    AReturn.AddPair('searchPathsNote', SN_CONFIG_NO_PATHS);
+end;
+
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
 var
   Cmd: string;
@@ -363,8 +712,13 @@ begin
     Result := RemovePlatform(Params.Project, Params.Platform)
   else if Cmd = 'set-output' then
     Result := SetOutput(Params.Project, Params.Output)
+  else if Cmd = 'add-searchpath' then
+    Result := AddSearchPath(Params.Project, Params.Platform, Params.Path)
+  else if Cmd = 'remove-searchpath' then
+    Result := RemoveSearchPath(Params.Project, Params.Platform, Params.Path)
   else
-    Result := 'error: command debe ser view | add-platform | remove-platform | set-output';
+    Result := 'error: command debe ser view | add-platform | remove-platform | ' +
+      'set-output | add-searchpath | remove-searchpath';
 end;
 
 initialization

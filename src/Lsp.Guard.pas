@@ -19,6 +19,7 @@ unit Lsp.Guard;
 interface
 
 uses
+  System.Classes,
   System.JSON;
 
 { '' = allowed; otherwise the rejection message to return to the agent.
@@ -142,11 +143,16 @@ function ExpandDriveValue(const AValue: string): string;
   unit: refuse it by name, never let it near GetFullPath. }
 function VirtualUnitLetter(const AValue: string): Char;
 
+{ Expands $(NAME) macros with the IDE's environment table (AVars as
+  NAME=VALUE, see Lsp.Discovery.IdeEnvironmentVars). Exposed for the search
+  path vetting of delphi_config: a path with macros must resolve before the
+  jail can judge it. }
+function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
+
 implementation
 
 uses
   System.SysUtils,
-  System.Classes,
   System.StrUtils,
   System.IniFiles,
   System.IOUtils,
@@ -1086,6 +1092,11 @@ begin
   for R in LibraryRoots do
     if StartsText(R, Full) then
       Exit('');
+  // Refused for reading: say that a library zone exists and how to see it.
+  // Field 2026-08-22: an agent listed the PARENT of a registered component
+  // folder, got the plain jail refusal, and concluded list and read disagreed.
+  if Result.StartsWith('RECHAZADO') then
+    Result := Result + ' ' + SN_READ_ZONE_HINT;
 end;
 
 // ---------------------------------------------------------------------------

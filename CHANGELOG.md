@@ -8,6 +8,38 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.40.0-beta] - 2026-08-22
+
+Born from the first "fat" project the field agent built for Linux: a real
+FMX app (41 units, FireDAC, REST, third-party components) compiled for
+Linux64 except for ONE unit per library - the components' folders were
+registered in the IDE's library path for Windows/Android only, and a
+platform added to a project inherits no search path from the others. No
+tool could add one; the agent reported the wall and proposed exactly
+this.
+
+### Added
+- **`delphi_config add-searchpath` / `remove-searchpath`**: the IDE's
+  Project Options > Search path, per platform (or for every platform with
+  `platform` empty). A curated edit of the `.dproj` that creates the
+  platform's property groups exactly as the IDE lays them out (definer +
+  values group) when they are missing, writes `DCC_UnitSearchPath` (the
+  real, SINGULAR property name - measured: the plural is silently
+  ignored by the targets), keeps the `$(DCC_UnitSearchPath)` chain, and
+  backs the file up first. Paths are vetted like any read: macros
+  expanded with the IDE's environment table, resolved from the project
+  folder, inside the workspace or the read-only library zone, and
+  existing. `view` now lists the search paths per platform group.
+  Measured: the 41-unit app built and linked for Linux64 in 12 s after
+  four calls (OBR for FireMonkey from source; TeeGrid Sources/FMX/Linux).
+
+### Changed
+- A read refused outside the jail now says that the library zone exists
+  and what it covers (the folders the IDE registers and their subfolders,
+  not their parents) - an agent listed a component's parent folder, got
+  the plain jail refusal, and concluded list and read disagreed.
+
+
 ## [0.39.0-beta] - 2026-08-21
 
 Born in the field: the Linux agent had to pull the 72 MB PAServer

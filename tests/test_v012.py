@@ -433,6 +433,51 @@ out = call('delphi_config', {"project": CON, "command": "set-output", "output": 
 check('set-output: restaurar default',
       r'<DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>' in open(CON, encoding='utf-8-sig').read(), out[:150])
 
+# ---- delphi_config add-searchpath / remove-searchpath ----------------------
+# Field 2026-08-21: a real FMX app built for Linux64 except ONE unit - the
+# component's folder was in the IDE library path for Win/Android only. The
+# .dproj had no DCC_UnitSearchPath and no Base_Linux64 groups at all.
+_spdir = os.path.join(INSIDE, 'libs-extra')
+os.makedirs(_spdir, exist_ok=True)
+out = call('delphi_config', {"project": CON, "command": "add-searchpath",
+                             "platform": "Linux64", "path": _spdir})
+check('searchpath: anadido a Linux64', out.startswith('ANADIDO'), out[:160])
+_x = open(CON, encoding='utf-8-sig').read()
+check('searchpath: grupo DEFINER Base_Linux64 creado como el IDE',
+      "('$(Platform)'=='Linux64' and '$(Base)'=='true') or '$(Base_Linux64)'!=''" in _x
+      and '<Base_Linux64>true</Base_Linux64>' in _x, 'definer missing')
+check('searchpath: DCC_UnitSearchPath (SINGULAR, el nombre real) en el grupo de valores',
+      '<DCC_UnitSearchPath>' + _spdir + ';$(DCC_UnitSearchPath)</DCC_UnitSearchPath>' in _x
+      and 'DCC_UnitSearchPaths' not in _x, 'tag missing or misspelt')
+out = call('delphi_config', {"project": CON, "command": "add-searchpath",
+                             "platform": "Linux64", "path": _spdir})
+check('searchpath: repetir = ya estaba, sin cambios', 'ya estaba' in out, out[:120])
+_v = json.loads(call('delphi_config', {"project": CON}))
+check('searchpath: view lo ensena por plataforma (ruta enmascarada srvX:)',
+      any(e.lower().endswith('libs-extra') and e.lower().startswith('srv')
+          for e in (_v.get('searchPaths') or {}).get('Linux64', [])), str(_v.get('searchPaths'))[:160])
+out = call('delphi_config', {"project": CON, "command": "add-searchpath",
+                             "platform": "Linux64", "path": os.path.join(INSIDE, 'no-existe-zz')})
+check('searchpath: carpeta inexistente RECHAZADA', out.startswith('RECHAZADO') and 'no existe' in out, out[:140])
+out = call('delphi_config', {"project": CON, "command": "add-searchpath",
+                             "platform": "Linux64", "path": r'C:\Windows\System32'})
+check('searchpath: fuera de la jaula RECHAZADO', out.startswith('RECHAZADO') and 'FUERA' in out, out[:140])
+out = call('delphi_config', {"project": CON, "command": "add-searchpath",
+                             "platform": "Linux64", "path": _spdir + '"><Import Project="evil"/>'})
+check('searchpath: inyeccion XML por el path RECHAZADA', out.startswith('RECHAZADO'), out[:140])
+check('searchpath: el payload no toco el .dproj', 'evil' not in open(CON, encoding='utf-8-sig').read(), 'injected!')
+out = call('delphi_config', {"project": CON, "command": "add-searchpath",
+                             "platform": "Commodore64", "path": _spdir})
+check('searchpath: plataforma invalida RECHAZADA', out.startswith('RECHAZADO'), out[:120])
+out = call('delphi_config', {"project": CON, "command": "remove-searchpath",
+                             "platform": "Linux64", "path": _spdir})
+check('searchpath: quitado', out.startswith('QUITADO'), out[:120])
+check('searchpath: elemento eliminado del .dproj',
+      'DCC_UnitSearchPath' not in open(CON, encoding='utf-8-sig').read(), 'still there')
+out = call('delphi_config', {"project": CON, "command": "remove-searchpath",
+                             "platform": "Linux64", "path": _spdir})
+check('searchpath: quitar lo que no esta responde honesto', 'no esta' in out, out[:120])
+
 # ---- delphi_paserver: read subcommands ------------------------------------
 out = call('delphi_paserver', {"command": "packages"})
 pk = json.loads(out)
