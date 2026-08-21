@@ -34,6 +34,11 @@ type
   private
     FSettings: TMCPSettings;
     FRegistry: TMCPManagerRegistry;
+    // TMCPManagerRegistry is a TInterfacedObject: the HTTP server (and the
+    // stdio transport) hold it as IMCPManagerRegistry, so the LAST interface
+    // release destroys it. This field pins the host's own counted reference;
+    // see Destroy for the double-free this replaces.
+    FRegistryIntf: IMCPManagerRegistry;
     FCore: TMCPCoreManager;
   public
     constructor Create;
@@ -84,7 +89,17 @@ end;
 
 destructor TMcpHost.Destroy;
 begin
-  FRegistry.Free; // owns the managers it was given
+  // The manual FRegistry.Free that lived here double-freed the registry the
+  // moment any interface reference existed: freeing the HTTP server released
+  // the last IMCPManagerRegistry ref, the registry destroyed itself, and this
+  // destructor then freed dead memory - the "Invalid pointer operation" every
+  // tray close showed (field 2026-08-21; present for many versions, in all
+  // three host modes). Reference counting owns the registry now: dropping the
+  // pinned ref below destroys it here when no server outlives the host, or
+  // lets the last holder do it otherwise. The managers inside it were always
+  // interface-owned by its list - nothing else changes.
+  FRegistry := nil;
+  FRegistryIntf := nil;
   FSettings.Free;
   inherited;
 end;
@@ -92,6 +107,7 @@ end;
 procedure TMcpHost.Wire;
 begin
   FRegistry := TMCPManagerRegistry.Create;
+  FRegistryIntf := FRegistry; // pin: from here, reference counting owns it
   FCore := TMCPCoreManager.Create(FSettings);
   FRegistry.RegisterManager(FCore);
   FRegistry.RegisterManager(TMCPToolsManager.Create);

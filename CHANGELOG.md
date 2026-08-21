@@ -8,6 +8,19 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.38.1-beta] - 2026-08-21
+
+### Fixed
+- **"Invalid pointer operation" on every shutdown** (operator field report;
+  present for many versions, all three host modes): `TMCPManagerRegistry`
+  is a reference-counted `TInterfacedObject`, and the HTTP server / stdio
+  transport hold it as `IMCPManagerRegistry` - so freeing the server
+  released the last reference and the registry destroyed ITSELF, after
+  which `TMcpHost.Destroy`'s manual `FRegistry.Free` freed dead memory.
+  The host now pins its own counted reference and lets reference counting
+  own the registry. Measured A/B over stdio EOF teardown: pre-fix exit
+  code 1, post-fix exit code 0.
+
 ## [0.38.0-beta] - 2026-08-21
 
 Born from a hands-on sweep of the IDE's own `bin\` folder (operator's
