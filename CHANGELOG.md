@@ -8,6 +8,88 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.34.0-beta] - 2026-08-21
+
+The deploy half of the remote-target chain, closing the doctrine of the
+whole feature: **the deploy target is always a parameter** - a PAServer
+profile, an Android device hanging off the server - never implicitly the
+agent's machine. The agent programs from anywhere; the devices live here.
+
+### Added
+- **`delphi_build target=Deploy`** with the `profile` parameter: compiles
+  and deploys to the PAServer of a connection profile (Linux/macOS).
+  `Deploy` always runs as `Build;Deploy` - a bare `/t:Deploy` re-ships the
+  *previous* binary with today's date (the measured half-a-session trap).
+  When the project has no `.deployproj`, a minimal one (the project output,
+  exec bit on) is generated in the IDE's own format and the `.dproj` gains
+  the import line the IDE writes - without that import msbuild fails
+  MSB4057 with the manifest sitting right there (measured). An IDE-written
+  manifest is always used as-is. Field-proven: Linux64 deploy to a live
+  remote PAServer, binary landing in its scratch dir with the exec bit.
+- **Android deploy without opening the IDE** - the apk chain from the
+  command line, measured piece by piece against Embarcadero's own
+  deployment targets: for `platform=Android*`, `target=Deploy` generates
+  the complete staging-map `.deployproj` (the generated AndroidManifest and
+  res XML, the default artwork, the libnative stubs, the compiled library -
+  the same list the IDE's Deployment Manager writes), seeds
+  `AndroidManifest.template.xml` from the product's ObjRepos, and adds
+  fallback version properties (package `com.embarcadero.<project>`,
+  minSdk 23) and the pre-dexed system-jar list (`EnabledSysJars`,
+  enumerated from the product's `lib\android` - measured 88-of-88 identical
+  to an IDE-written project; without it the apk assembles WITHOUT
+  `classes.dex` and the device refuses it with "code is missing") to the
+  `.dproj` - every property conditioned on being empty so anything the IDE
+  ever writes wins, and existing files are never touched.
+  The apk assembly itself (manifest merge, aapt2, dex, packaging, debug
+  signing) is Embarcadero's own pipeline - nothing reinvented. On success
+  the result declares the `.apk` as `output` with the install note.
+- **`delphi_build` parameter `deviceid`** (`/p:DeviceId=`) - measured: the
+  deployment targets only auto-install on iOS (`_InstallIpa`); an Android
+  install is `delphi_adb`'s job with the built `.apk`.
+- **New tool `delphi_adb`** (28 tools now) - the Android side of the
+  doctrine: the devices hang off the SERVER machine while the agent
+  programs from anywhere. `discover` (devices announcing wireless
+  debugging on the server's network via mDNS, each with its `ip:port` - or
+  the developer reads it off the device screen and hands it over),
+  `devices` (adb's attached list - the IDE's deploy targets), `connect` /
+  `disconnect` (attach over the network; the device asks to authorize the
+  first time), `install` (a built `.apk`, path jailed), `run` (launch the
+  installed app - the IDE's "Deploy and Run": `am start` on the FMX native
+  activity, executing on the DEVICE, sandboxed by Android - `AllowRun`
+  governs the server machine, not this), `logcat` (bounded dump `-d -t N`,
+  optional in-server filter - remote debugging of the deployed app),
+  `screenshot` (the device screen to a PNG on the server, downloaded with
+  `delphi_fetch` - the agent's remote EYES; a direct `exec-out` redirect
+  mangles the binary through the console, measured, so it captures on the
+  device and pulls), `tap` (touch the screen at x,y measured on a
+  screenshot) and `key` (a whitelisted navigation key -
+  back/home/enter/appswitch/wakeup/arrows/tab, no free keycodes, no text
+  injection - the remote HANDS). The adb binary is the IDE's own Android
+  SDK's (`SDKAdbPath` in the `.sdk` files), discovered per install, never
+  hardcoded. `discover`/`devices`/`logcat`/`screenshot` are read-level
+  (looking changes nothing); `connect`/`disconnect`/`install`/`run`/
+  `tap`/`key` are write-level (they mutate or execute). **Field-proven end
+  to end on a real device**: an FMX app created entirely by tools
+  (scaffold + exit button wired into `.pas` and `.fmx`), built, installed,
+  launched, SEEN (screenshot with the app on screen), operated (tap on its
+  own button) and exited (launcher on the next screenshot) on a Honeywell
+  EDA51 over wifi adb - no IDE anywhere in the loop.
+- Gate: one identifier rule (`BadDeviceToken`, charset of what adb itself
+  prints) shared by `delphi_adb` `address`/`device` and `delphi_build`
+  `deviceid`; `Deploy` joins the build target whitelist; build `profile`
+  vetted by the same single rule as PAServer profile names; tap coordinates
+  digits-only; the key name whitelisted in the tool and charset-vetted at
+  the gate.
+- **`[Adb] AllowedDevices` allowlist** (settings.ini, or
+  `DELPHI_MCP_ADB_DEVICES`): when configured, the ONLY devices this server
+  will address - outside the list, nothing, at BOTH access levels. An IP
+  entry covers whatever port wifi debugging negotiates; a USB serial is
+  listed as-is. With the list active every device-addressing command must
+  name its `device` explicitly (an implicit target could be an unlisted
+  device that happens to be the only one attached). Absent = unrestricted.
+- New battery `tests/test_deploy_adb.py` (57 checks). **10 batteries,
+  563 checks, 0 failures.**
+
 ## [0.33.0-beta] - 2026-08-21
 
 The last link of the remote-target chain, built and field-proven the same

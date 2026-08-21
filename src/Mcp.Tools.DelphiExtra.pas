@@ -43,6 +43,8 @@ type
     FPlatform: string;
     FConfig: string;
     FTarget: string;
+    FProfile: string;
+    FDeviceId: string;
   public
     [SchemaDescription('Absolute path of the .dproj to build')]
     property Project: string read FProject write FProject;
@@ -50,8 +52,12 @@ type
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription('Debug or Release (default Debug)')]
     property Config: string read FConfig write FConfig;
-    [SchemaDescription('Build (full, default) or Make (incremental). After switching platforms use Build')]
+    [SchemaDescription('Build (full, default), Make (incremental), Clean, or Deploy (always builds first, then deploys: to the PAServer of "profile" for Linux/macOS, or packages the app for Android). After switching platforms use Build')]
     property Target: string read FTarget write FTarget;
+    [SchemaDescription('Connection profile name for target=Deploy on a PAServer platform (see delphi_paserver command=profiles). The deployed files land on the target under its PAServer scratch dir, in <profile>/<project name>/')]
+    property Profile: string read FProfile write FProfile;
+    [SchemaDescription('Android device serial for target=Deploy on Android platforms (see delphi_adb command=devices; attach one over wifi with command=connect)')]
+    property DeviceId: string read FDeviceId write FDeviceId;
   end;
 
   TDelphiDiagnosticsTool = class(TMCPToolBase<TDelphiDiagnosticsParams>)
@@ -189,7 +195,8 @@ function TDelphiBuildTool.ExecuteWithParams(const Params: TDelphiBuildParams): s
 var
   R: TJSONObject;
 begin
-  R := RunMsBuild(Params.Project, Params.Platform, Params.Config, Params.Target);
+  R := RunMsBuild(Params.Project, Params.Platform, Params.Config, Params.Target,
+    Params.Profile, Params.DeviceId);
   try
     Result := R.ToJSON;
   finally

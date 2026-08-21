@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.33.0-beta';
+  SERVER_VERSION = '0.34.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -96,7 +96,21 @@ const
 
   SR_BUILD_TARGET_FMT =
     'RECHAZADO: "%s" no es un target valido. Usa Build (completo), Make ' +
-    '(incremental) o Clean. Tras cambiar de plataforma usa Build.';
+    '(incremental), Clean o Deploy (compila y despliega: al PAServer del ' +
+    'parametro profile en Linux/macOS, o empaqueta la app en Android). ' +
+    'Tras cambiar de plataforma usa Build.';
+
+  SN_BUILD_MANIFEST_NEW =
+    'No .deployproj existed, so a MINIMAL deployment manifest was generated ' +
+    'next to the project (the project output only, exec bit on). GUI apps ' +
+    'need the richer manifest the IDE Deployment Manager writes (shared ' +
+    'libraries, assets); this one covers console/simple binaries.';
+
+  SN_BUILD_DEPLOYED_FMT =
+    'Deployed through profile "%s". On the target machine the files are ' +
+    'under the PAServer scratch directory (default ~/PAServer/scratch-dir' +
+    ') in %s/%s/ - executables arrive with their exec bit set, ready to run ' +
+    'there.';
 
   SR_BUILD_CONFIG_FMT =
     'RECHAZADO: la configuracion "%s" lleva caracteres que el shell del ' +
@@ -422,6 +436,169 @@ const
     'or behind NAT, the port is published/forwarded on the reachable host ' +
     '(and then use THAT host ip here); firewalls on both sides allow the ' +
     'port.';
+
+  // ---------------------------------------------------------------------
+  // delphi_adb (Android devices hanging off THIS server's machine/network)
+  // ---------------------------------------------------------------------
+  SD_ADB =
+    'Android devices for remote development: the phones/tablets hang off ' +
+    'THIS server (USB or wifi adb), while you program from anywhere. ' +
+    'command=discover finds devices ANNOUNCING wireless debugging on the ' +
+    'server''s network (mDNS) and hands you each one''s ip:port - so you ' +
+    'never need to know the address up front; command=devices lists what ' +
+    'adb has ATTACHED (the same list the IDE shows as deploy targets); ' +
+    'command=connect attaches one over the network (address ip:port from ' +
+    'discover; the device shows an authorize prompt the first time); ' +
+    'command=disconnect detaches it; command=install installs a built .apk ' +
+    'on a device (apk path inside the workspace; optional device serial ' +
+    'when several are attached). The adb used is the one from the IDE''s ' +
+    'own Android SDK, discovered per install. Building the .apk is ' +
+    'delphi_build target=Deploy (the deployment manifest is generated ' +
+    'when the project has none). command=logcat hands ' +
+    'you the device log (a bounded dump - the last lines, optionally ' +
+    'filtered), so you can debug what your deployed app did on the device ' +
+    'from anywhere. command=screenshot (the device screen to a PNG you ' +
+    'then fetch) plus command=tap and command=key are your remote eyes and ' +
+    'hands on the device - enough to drive the deployed app. Typical ' +
+    'flow: discover -> connect -> devices -> delphi_build target=Deploy ' +
+    '-> install -> run -> screenshot -> tap -> logcat.';
+
+  SP_ADB_COMMAND =
+    'discover (find devices announcing wireless debugging by mDNS, with ' +
+    'their ip:port) | devices (list attached devices; default) | connect ' +
+    '(attach over the network: address) | disconnect (detach: address) | ' +
+    'install (put an .apk on a device: apk, optional device) | run ' +
+    '(launch an installed app on the device: app, optional device - the ' +
+    'IDE''s "Deploy and Run") | logcat (the device log, bounded dump: ' +
+    'optional device, filter, lines) | screenshot (grab the device screen ' +
+    'to a PNG on the server: out, optional device - then delphi_fetch it: ' +
+    'your remote eyes) | tap (touch the screen: x, y in pixels measured on ' +
+    'a screenshot, optional device) | key (press a navigation key: key, ' +
+    'optional device)';
+  SP_ADB_ADDRESS =
+    'ip:port of the device for connect/disconnect (from command=discover, ' +
+    'or the device''s wireless-debugging screen)';
+  SP_ADB_DEVICE =
+    'Device serial (from command=devices) when several are attached ' +
+    '(connect/disconnect/install/logcat)';
+  SP_ADB_APK =
+    'Path of the .apk to install (inside the workspace)';
+  SP_ADB_APP =
+    'run: package name of the installed app to launch (e.g. ' +
+    'com.embarcadero.MiApp - the build/install results state it)';
+  SP_ADB_OUT =
+    'screenshot: server path of the .png to write (inside the workspace), ' +
+    'then download it with delphi_fetch';
+  SP_ADB_X =
+    'tap: X coordinate in pixels (measure on a screenshot)';
+  SP_ADB_Y =
+    'tap: Y coordinate in pixels (measure on a screenshot)';
+  SP_ADB_KEY =
+    'key: back | home | enter | appswitch | wakeup | up | down | left | ' +
+    'right | tab';
+  SP_ADB_FILTER =
+    'logcat: only lines containing this text (e.g. your app tag or package). ' +
+    'Optional';
+  SP_ADB_LINES =
+    'logcat: how many recent lines to return (default 300, max 5000). ' +
+    'Optional';
+
+  SR_ADB_CMD =
+    'error: command debe ser discover | devices | connect | disconnect | ' +
+    'install | run | logcat | screenshot | tap | key';
+
+  SR_ADB_NEED_OUT =
+    'RECHAZADO: screenshot necesita "out" (ruta .png dentro del workspace ' +
+    'donde dejar la captura; despues se descarga con delphi_fetch).';
+
+  SR_ADB_OUT_PNG =
+    'RECHAZADO: "out" debe terminar en .png.';
+
+  SR_ADB_NEED_XY =
+    'RECHAZADO: tap necesita "x" e "y" (pixeles de pantalla; midelos sobre ' +
+    'un command=screenshot).';
+
+  SR_ADB_XY_FMT =
+    'RECHAZADO: "%s" no vale como coordenada de pantalla (solo digitos).';
+
+  SR_ADB_KEY_FMT =
+    'RECHAZADO: "%s" no es una tecla permitida. Usa back | home | enter | ' +
+    'appswitch | wakeup | up | down | left | right | tab.';
+
+  SR_ADB_ALLOWLIST_FMT =
+    'RECHAZADO: el dispositivo "%s" no esta en la lista permitida de este ' +
+    'servidor ([Adb] AllowedDevices en settings.ini). Fuera de esa lista, ' +
+    'nada. El operador la amplia si procede.';
+
+  SR_ADB_ALLOWLIST_DEVICE =
+    'RECHAZADO: este servidor tiene lista de dispositivos permitidos ' +
+    '([Adb] AllowedDevices): indica "device" explicitamente con uno de la ' +
+    'lista (command=devices los enseña).';
+
+  SN_ADB_SCREENSHOT =
+    'The device screen is in this PNG on the server - download it with ' +
+    'delphi_fetch. Coordinates measured on it are exactly what ' +
+    'command=tap takes.';
+
+  SR_ADB_NEED_APP =
+    'RECHAZADO: run necesita "app" (el nombre del paquete instalado, p.ej. ' +
+    'com.embarcadero.MiApp - lo declaran los resultados de build e install).';
+
+  SR_ADB_APP_FMT =
+    'RECHAZADO: "%s" no vale como nombre de paquete Android. Letras, ' +
+    'digitos, ".", "_" y "-" (p.ej. com.embarcadero.MiApp).';
+
+  SR_ADB_NO_SDK =
+    'error: este servidor no tiene un SDK de Android configurado (no hay ' +
+    'ningun .sdk con SDKAdbPath). Se instala una vez con el SDK Manager ' +
+    'del IDE; despues esta tool usa su adb.';
+
+  SR_ADB_NEED_ADDRESS =
+    'RECHAZADO: connect/disconnect necesitan "address" (ip:puerto del ' +
+    'dispositivo con depuracion inalambrica activa, p.ej. 192.168.1.50:5555).';
+
+  SR_ADB_NEED_APK =
+    'RECHAZADO: install necesita "apk" (ruta del .apk compilado, dentro del ' +
+    'workspace). Compila con delphi_build platform=Android64 target=Deploy ' +
+    '(el resultado declara donde queda el .apk).';
+
+  SR_ADB_TARGET_FMT =
+    'RECHAZADO: "%s" no vale como direccion o serial de dispositivo. Usa ' +
+    'letras, digitos, ".", ":", "_" y "-" (como los que lista ' +
+    'command=devices).';
+
+  SN_ADB_DEVICES =
+    'These devices hang off the SERVER machine. Attach one over the ' +
+    'network with command=connect address=ip:port. Deploy an app to one: ' +
+    'delphi_build platform=Android64 target=Deploy builds the .apk ' +
+    '(generating the deployment manifest if the project has none), then ' +
+    'command=install puts it on the device.';
+
+  SN_ADB_DISCOVER =
+    'Devices announcing wireless debugging on the server''s network. Take ' +
+    'an ip:port and command=connect to it (the device shows an authorize ' +
+    'prompt the first time). Nothing here means none is announcing - the ' +
+    'device''s wireless-debugging screen must be OPEN, or the developer can ' +
+    'read the ip:port off it and give it to you directly.';
+
+  SR_ADB_LINES_FMT =
+    'RECHAZADO: "%s" no es un numero de lineas valido para logcat (1-5000).';
+
+  SN_BUILD_ANDROID_NEW =
+    'No .deployproj existed, so the standard Android deployment manifest ' +
+    'was generated next to the project (generated AndroidManifest + styles/' +
+    'strings/colors, default icons and splash artwork, the compiled ' +
+    'library), plus an AndroidManifest.template.xml seed and fallback ' +
+    'version properties in the .dproj (package com.embarcadero.<project>, ' +
+    'minSdk 23) when the project had none. Files the IDE Deployment ' +
+    'Manager already wrote are never overwritten.';
+
+  SN_BUILD_APK_NOTE =
+    'This is the built .apk (debug-signed, sideloadable). msbuild does not ' +
+    'install Android apps (DeviceId only auto-installs on iOS): put it on ' +
+    'a device hanging off this server with delphi_adb command=install ' +
+    'apk=<path> (optional device=<serial>), open it with command=run ' +
+    'app=<package>, and watch it with command=logcat.';
 
   // ---------------------------------------------------------------------
   // delphi_report (feedback channel - works at EVERY access level)

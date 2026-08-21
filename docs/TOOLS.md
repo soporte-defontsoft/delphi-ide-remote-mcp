@@ -14,7 +14,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Edit code safely  (read-write only)** — [`delphi_edit`](#delphi_edit), [`delphi_textedit`](#delphi_textedit), [`delphi_create`](#delphi_create)
 - **Manage files  (read-write only)** — [`delphi_delete`](#delphi_delete), [`delphi_move`](#delphi_move)
 - **Build, run, package  (read-write only)** — [`delphi_build`](#delphi_build), [`delphi_run`](#delphi_run), [`delphi_package`](#delphi_package)
-- **Cross-platform: build configs & remote platforms** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver)
+- **Cross-platform: build configs, remote platforms & devices** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver), [`delphi_adb`](#delphi_adb)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
 - **Version control** — [`delphi_git`](#delphi_git)
 - **Feedback** — [`delphi_report`](#delphi_report)
@@ -263,7 +263,7 @@ a root. Changing the roots is the operator's job, in `settings.ini`.
 
 ### `delphi_build`
 
-Build a Delphi project for real with MSBuild on this machine (rsvars located via registry). Returns success flag, compiler errors/warnings and the output tail. Use this as the closing verification after editing - the linter does not link nor produce binaries.
+Build a Delphi project for real with MSBuild on this machine (rsvars located via registry). Returns success flag, compiler errors/warnings and the output tail. Use this as the closing verification after editing - the linter does not link nor produce binaries. Compile-only: a project that would EXECUTE a shell during build (a custom `<Target>`/`<Exec>`, a build-event, a foreign `<Import>`) is refused unless the operator set `[Security] AllowRun=1`.
 
 *Access: read-write.*
 
@@ -272,12 +272,22 @@ Build a Delphi project for real with MSBuild on this machine (rsvars located via
 | `project` | string | **yes** | Absolute path of the .dproj to build |
 | `platform` | string | optional | Target platform (default Win32): Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and a PAServer profile (delphi_paserver) |
 | `config` | string | optional | Debug or Release (default Debug), or any configuration the project declares. A simple name: letters, digits, space, `.`, `_`, `-` |
-| `target` | string | optional | Build (full, default), Make (incremental) or Clean. After switching platforms use Build |
+| `target` | string | optional | Build (full, default), Make (incremental), Clean, or Deploy (always builds first, then deploys: to the PAServer of `profile` for Linux/macOS, or packages the app for Android). After switching platforms use Build |
+| `profile` | string | optional | Connection profile name for target=Deploy on a PAServer platform (see `delphi_paserver command=profiles`). The deployed files land on the target under its PAServer scratch dir, in `<profile>/<project name>/` |
+| `deviceid` | string | optional | Android device serial for target=Deploy on Android platforms (see `delphi_adb command=devices`) — measured: msbuild only auto-installs on iOS; on Android install the built .apk with `delphi_adb command=install` |
 
-These three reach an MSBuild command line, so they are validated at the gate:
-`platform` must be one Delphi knows (see it with `delphi_config command=view`),
-`target` is one of the three above, and `config` admits no character a shell
-would interpret. A rejected value names what is valid instead.
+Everything above reaches an MSBuild command line, so it is validated at the
+gate: `platform` must be one Delphi knows, `target` is one of the four,
+`config` admits no character a shell would interpret, `profile` follows the
+PAServer profile-name rule and `deviceid` the adb device rule. A rejected
+value names what is valid instead.
+
+On `target=Deploy` with no `.deployproj` in the project, the server generates
+the deployment manifest (minimal for PAServer platforms; the full apk staging
+map for Android, plus an `AndroidManifest.template.xml` seed and fallback
+version/jar properties in the `.dproj`, each conditioned so IDE-written values
+always win). Files the IDE wrote are never overwritten. A successful Android
+Deploy declares the built `.apk` as `output`.
 
 ### `delphi_run`
 
@@ -304,29 +314,56 @@ Zip a build-output directory ON the server into a single deploy artifact (recurs
 | `outfile` | string | optional | Optional zip path (default: sibling of dir, named <dirname>-deploy.zip). Must be inside the workspace roots |
 
 
-## Cross-platform: build configs & remote platforms
+## Cross-platform: build configs, remote platforms & devices
 
 ### `delphi_config`
 
-See and manage a project's build configurations and target PLATFORMS. command=view (read-only) reports the framework (VCL is Windows-only; FMX and console cross platforms), the build configurations (Debug/Release/custom) and every platform with whether it is enabled, whether THIS project can target it, and whether it needs a remote PAServer profile. command=add-platform enables a platform in the .dproj (a curated edit of the <Platforms> block only). To BUILD a specific combination use delphi_build with platform+config.
+See and manage a project's build configurations and target PLATFORMS. command=view (read-only) reports the framework (VCL is Windows-only; FMX and console cross platforms), the build configurations (Debug/Release/custom) and every platform with whether it is enabled, whether THIS project can target it, and whether it needs a remote PAServer profile. command=add-platform enables a platform in the .dproj (a curated edit of the `<Platforms>` block only); remove-platform disables it again. command=set-output puts every binary under one folder (output=Compiled by default): a curated edit that sets DCC_ExeOutput/DCC_DcuOutput, keeping the per-platform/config subfolders. To BUILD a specific combination use delphi_build with platform+config.
 
-*Access: mixed (view read-only; add-platform read-write).*
+*Access: mixed (view read-only; add-platform / remove-platform / set-output read-write).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string | **yes** | Absolute path of the project .dproj |
-| `command` | string | optional | view (default: list configurations and platforms) \| add-platform (enable a platform in the project) |
-| `platform` | string | optional | add-platform: the platform to enable (Win64, Linux64, OSX64, OSXARM64, Android64, iOSDevice64...) |
+| `command` | string | optional | view (default: list configurations and platforms) \| add-platform (enable a platform) \| remove-platform (disable it again) \| set-output (put every binary under one folder, e.g. Compiled) |
+| `platform` | string | optional | add/remove-platform: the platform, from the fixed set Win32\|Win64\|Win64x\|WinARM64EC\|OSX64\|OSXARM64\|Linux64\|Android\|Android64\|iOSDevice64\|iOSSimARM64 (anything else is refused) |
+| `output` | string | optional | set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to `<folder>\$(Platform)\$(Config)` and .dcu to `<folder>\Dcu\$(Platform)\$(Config)`. Use "default" to restore the RAD Studio layout. No absolute paths, no ".." |
 
 ### `delphi_paserver`
 
-The bridge for building and running on OTHER platforms (Linux, macOS) through the Platform Assistant (PAServer). command=packages lists the PAServer installers that ship with each Delphi install (download them with delphi_fetch and run them on the target machine); command=platforms shows which platforms this server can target and whether each already has a connection profile and SDK; command=profiles lists the registered connection profiles and platform SDKs. Read-only. Building for a platform is delphi_build once its profile exists; enabling a platform in a project is delphi_config.
+The bridge for building and running on OTHER platforms (Linux, macOS) through the Platform Assistant (PAServer). command=packages lists the PAServer installers that ship with each Delphi install (download them with delphi_fetch and run them on the target machine); command=platforms shows which platforms this server can target; command=profiles lists the registered connection profiles and SDKs; command=add-profile registers a connection profile against a live PAServer (the password is used once by `paclient` to write the profile and stored ENCRYPTED, never shown back); command=test-connection with name dials the PAServer of that profile (full handshake, credentials included), and with host+port and NO name it is a raw TCP reachability probe - the quick "does this server reach my PAServer at all?" answer, no credentials involved; command=get-sdk pulls the platform SDK/sysroot (the libraries the linker needs) from the PAServer of profile `name` and registers it, so delphi_build can link for that platform - run it once per target (can take minutes; re-run after OS upgrades on the target). Building for the platform is delphi_build once profile and SDK exist.
 
-*Access: read-only OK.*
+*Access: mixed (platforms / packages / profiles read-only; add-profile / test-connection / get-sdk read-write).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | packages (PAServer installers to download and run on the target) \| platforms (what this server can target + profile/SDK status) \| profiles (registered connection profiles and SDKs). Default: platforms |
+| `command` | string | optional | platforms (what this server can target + profile/SDK status) \| packages (PAServer installers) \| profiles (registered profiles and SDKs) \| add-profile (register a profile: name, host, password; optional port, platform) \| test-connection (with name: full handshake; with host+port and no name: raw TCP probe) \| get-sdk (pull the SDK/sysroot of profile "name"). Default: platforms |
+| `name` | string | optional | Profile name (letters, digits, `_`, `-`): add-profile creates it, test-connection dials it, get-sdk pulls from it |
+| `host` | string | optional | Host or IP where the target PAServer listens (add-profile, or test-connection without name for the raw TCP probe) |
+| `port` | string | optional | Port of the target PAServer (add-profile / test-connection). Default: 64211 |
+| `password` | string | optional | The PAServer password (add-profile). Used once to create the profile, stored encrypted, never shown back - and masked in the server logs |
+| `platform` | string | optional | Platform of the profile: Win32 \| Win64 \| WinARM64EC \| OSX64 \| Linux64. Default: Linux64 |
+
+### `delphi_adb`
+
+Android devices for remote development: the phones/tablets hang off THIS server (USB or wifi adb), while you program from anywhere. command=discover finds devices ANNOUNCING wireless debugging on the server's network (mDNS) and hands you each one's ip:port; command=devices lists what adb has ATTACHED (the same list the IDE shows as deploy targets); command=connect attaches one over the network (the device shows an authorize prompt the first time); command=disconnect detaches it; command=install installs a built .apk; command=run launches the installed app (the IDE's "Deploy and Run"); command=logcat hands you the device log (a bounded dump, optionally filtered) - remote debugging of the deployed app; command=screenshot grabs the device screen to a PNG you then `delphi_fetch` (your remote EYES) and command=tap / command=key touch the screen and press navigation keys (your remote HANDS) - enough to drive the deployed app end to end. The adb used is the IDE's own Android SDK's, discovered per install. Typical flow: discover → connect → devices → `delphi_build target=Deploy` → install → run → screenshot → tap → logcat.
+
+*Access: mixed (discover / devices / logcat / screenshot read-only; connect / disconnect / install / run / tap / key read-write).*
+
+The operator can pin an allowlist in `settings.ini` — `[Adb] AllowedDevices=192.168.1.163;SERIAL123` (semicolon list; an IP entry covers any port wifi debugging negotiates). When configured, targets outside the list are refused at BOTH access levels, and every device-addressing command must name its `device` explicitly.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | discover \| devices (default) \| connect \| disconnect \| install \| run \| logcat \| screenshot \| tap \| key |
+| `address` | string | optional | ip:port of the device for connect/disconnect (from command=discover, or the device's wireless-debugging screen) |
+| `device` | string | optional | Device serial (from command=devices) when several are attached (install/run/logcat/screenshot/tap/key; mandatory when the allowlist is configured) |
+| `apk` | string | optional | install: path of the .apk (inside the workspace). Build it with `delphi_build target=Deploy` |
+| `app` | string | optional | run: package name of the installed app (e.g. com.embarcadero.MiApp - the build/install results state it) |
+| `out` | string | optional | screenshot: server path of the .png to write (inside the workspace), then download it with delphi_fetch |
+| `x` / `y` | string | optional | tap: coordinates in pixels, measured on a screenshot |
+| `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |
+| `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package) |
+| `lines` | string | optional | logcat: how many recent lines to return (default 300, max 5000) |
 
 
 ## Transfer files
@@ -377,7 +414,7 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 
 ### `delphi_report`
 
-Report a problem, limitation or suggestion about THIS MCP server directly to its maintainers. Use it whenever a tool refuses something you believe is legitimate, an answer looks wrong, a message is confusing, or you had to work around a missing capability - that feedback is what fixes the server. Each report is stored as its own timestamped markdown file in a reports folder next to the server executable, with the server version and the date. Available at EVERY access level, read-only included. Be concrete: what you tried, what happened, what you expected.
+Report a problem, limitation or suggestion about THIS MCP server directly to its maintainers. Use it whenever a tool refuses something you believe is legitimate, an answer looks wrong, a message is confusing, or you had to work around a missing capability - that feedback is what fixes the server. Each report is stored as its own timestamped markdown file in a reports folder next to the server executable, with the server version and the date; pass a short stable `agent` id and your reports get their own subfolder, separate from other agents. Available at EVERY access level, read-only included. Be concrete: what you tried, what happened, what you expected.
 
 *Access: read-only OK.*
 
@@ -387,6 +424,7 @@ Report a problem, limitation or suggestion about THIS MCP server directly to its
 | `title` | string | optional | Optional one-line summary (becomes part of the file name) |
 | `kind` | string | optional | Optional: bug \| limitation \| suggestion \| question (default: bug) |
 | `from` | string | optional | Optional: who is reporting (agent/model name, project) - helps us read the history later |
+| `agent` | string | optional | Optional short id of the reporting agent (e.g. "hermes"): its reports are stored in a folder of that name, separate from other agents. Keep it STABLE across your reports. Letters, digits and dashes |
 
 ---
 
@@ -430,12 +468,20 @@ Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .j
 ### Send a file TO the server
 `delphi_upload {path, offset:0, chunkbase64:"..."}` per chunk (increasing `offset`); on the last chunk pass the whole-file `sha256` to have the server verify the reassembly. For binaries you cannot recreate by editing (`.res`, icons).
 
-### Build for another platform (Linux/macOS)
+### Build, deploy and run on another platform (Linux/macOS via PAServer)
 1. `delphi_config {project}` — see the framework and platforms. **VCL is Windows-only**; only FMX or console apps cross.
-2. `delphi_config {project, command:"add-platform", platform:"Linux64"}` — enable the platform in the project (refused on a VCL project, with the reason).
-3. `delphi_paserver {command:"packages"}` — get the PAServer installer for the target; download it with `delphi_fetch` and run it on your Linux/Mac (it listens on port 64211).
-4. `delphi_paserver {command:"platforms"}` — check the platform's profile/SDK status.
-5. `delphi_build {project, platform:"Linux64", config:"Debug"}` — once the profile/SDK is in place. (Creating the profile against a live PAServer target is the next piece of `delphi_paserver`.)
+2. `delphi_config {project, command:"add-platform", platform:"Linux64"}` — enable the platform (refused on a VCL project, with the reason).
+3. `delphi_paserver {command:"packages"}` — get the PAServer installer; download it with `delphi_fetch` and run it on the target (it listens on port 64211).
+4. `delphi_paserver {command:"test-connection", host:"...", port:"64211"}` — raw TCP probe: does this server reach your PAServer at all? Then `{command:"add-profile", name:"mi-linux", host, password}` and `{command:"test-connection", name:"mi-linux"}` — full handshake.
+5. `delphi_paserver {command:"get-sdk", name:"mi-linux"}` — pull the SDK/sysroot once (can take minutes); after this the linker works.
+6. `delphi_build {project, platform:"Linux64", config:"Debug"}` — build; add `target:"Deploy", profile:"mi-linux"` to build **and ship** to the target's PAServer scratch dir, exec bit set.
+
+### Deploy and drive an app on an Android device (the device hangs off the server)
+1. `delphi_adb {command:"discover"}` — devices announcing wireless debugging on the server's network, each with its ip:port (or the developer reads it off the device screen and hands it to you).
+2. `delphi_adb {command:"connect", address:"192.168.1.163:5556"}` — attach it (the device asks to authorize the first time); `{command:"devices"}` lists what is attached.
+3. `delphi_config {project, command:"add-platform", platform:"Android64"}` then `delphi_build {project, platform:"Android64", config:"Debug", target:"Deploy"}` — the server generates the deployment manifest if the project has none and the result declares the built `.apk`.
+4. `delphi_adb {command:"install", apk:"...\bin\App.apk", device:"..."}` → `{command:"run", app:"com.embarcadero.App", device:"..."}` — the IDE's "Deploy and Run", by tools.
+5. `delphi_adb {command:"screenshot", out:"...\pantalla.png", device:"..."}` (then `delphi_fetch` it), `{command:"tap", x, y}`, `{command:"key", key:"back"}`, `{command:"logcat", filter:"MiApp"}` — your remote eyes and hands to drive and debug it.
 
 ### Report a problem
 `delphi_report {message, title, kind:"bug"|"limitation"|"suggestion"|"question", from}` — stored as a dated markdown next to the server exe. Works even read-only; use it whenever a tool blocks something you believe is legitimate.

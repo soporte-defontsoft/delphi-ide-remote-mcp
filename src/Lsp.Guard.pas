@@ -156,6 +156,8 @@ var
   GAnonymousReadOnly: Boolean = False;
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
+  GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
+  GAdbDevicesSet: Boolean = False;  // configured at all? absent = unrestricted
 
 threadvar
   GRequestReadOnly: Boolean;
@@ -175,6 +177,18 @@ begin
   Result := GProcessReadOnly or GRequestReadOnly;
 end;
 
+procedure ParseAdbDevices(const ARaw: string);
+var
+  E: string;
+begin
+  if ARaw.Trim = '' then
+    Exit;
+  GAdbDevicesSet := True;
+  for E in ARaw.Split([';']) do
+    if E.Trim <> '' then
+      GAdbDevices := GAdbDevices + [E.Trim];
+end;
+
 procedure LoadSecurity;
 var
   IniPath: string;
@@ -182,6 +196,7 @@ var
 begin
   if GSecLoaded then
     Exit;
+  ParseAdbDevices(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'));
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
   GAnonymousReadOnly := GetEnvironmentVariable('DELPHI_MCP_ANON_READONLY') = '1';
@@ -202,6 +217,8 @@ begin
         GAllowRun := Ini.ReadBool('Security', 'AllowRun', False);
       if not GAllowBuildScripts then
         GAllowBuildScripts := Ini.ReadBool('Security', 'AllowBuildScripts', False);
+      if not GAdbDevicesSet then
+        ParseAdbDevices(Ini.ReadString('Adb', 'AllowedDevices', ''));
     finally
       Ini.Free;
     end;
@@ -433,6 +450,112 @@ end;
   charset test; target is a fixed trio; config is NOT a fixed list - a project
   may declare its own configurations (parity with the IDE), so it is bounded by
   a charset that admits no shell metacharacter. '' = clean. }
+{ The identifier rule for a PAServer profile name: it becomes a file name in
+  %APPDATA% and travels on command lines (paclient and msbuild /p:Profile=).
+  ONE definition - PAServerArgDenied (name) and BuildArgDenied (profile) both
+  read it, so the two mouths cannot drift. True = refuse. }
+function BadProfileName(const V: string): Boolean;
+var
+  C: Char;
+begin
+  Result := Length(V) > 64;
+  if not Result then
+    for C in V do
+      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-']) then
+        Exit(True);
+end;
+
+{ The identifier rule for a device address or serial (adb's ip:port or a
+  serial like emulator-5554 / R58M...): what adb itself prints. ONE
+  definition - AdbArgDenied (address/device) and BuildArgDenied (deviceid)
+  both read it. True = refuse. }
+function BadDeviceToken(const V: string): Boolean;
+var
+  C: Char;
+begin
+  Result := Length(V) > 64;
+  if not Result then
+    for C in V do
+      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '.', ':', '_', '-']) then
+        Exit(True);
+end;
+
+{ The adb device allowlist ([Adb] AllowedDevices / DELPHI_MCP_ADB_DEVICES,
+  semicolon list): when configured, the ONLY devices this server will
+  address - outside it, nothing, at BOTH access levels (David's rule). An
+  entry matches the target exactly, or matches its host part (the text
+  before ':'), so '192.168.1.163' covers whatever port wifi debugging
+  negotiates and a USB serial is listed as-is. Absent = unrestricted (a dev
+  machine). }
+function AdbTargetAllowed(const ATarget: string): Boolean;
+var
+  E, Host: string;
+  P: Integer;
+begin
+  if not GAdbDevicesSet then
+    Exit(True);
+  Host := ATarget;
+  P := Pos(':', ATarget);
+  if P > 0 then
+    Host := Copy(ATarget, 1, P - 1);
+  for E in GAdbDevices do
+    if SameText(E, ATarget) or SameText(E, Host) then
+      Exit(True);
+  Result := False;
+end;
+
+{ delphi_adb's address/device land on the adb command line. Same lesson as
+  git/build/paserver: one vetting place for both access levels. The apk path
+  is a filesystem argument vetted by the tool through ReadPathDenied. }
+function AdbArgDenied(const AArguments: TJSONObject): string;
+var
+  V: string;
+begin
+  Result := '';
+  LoadSecurity;
+  V := ArgStr(AArguments, 'address').Trim;
+  if V <> '' then
+  begin
+    if BadDeviceToken(V) then
+      Exit(Format(SR_ADB_TARGET_FMT, [V]));
+    if not AdbTargetAllowed(V) then
+      Exit(Format(SR_ADB_ALLOWLIST_FMT, [V]));
+  end;
+  V := ArgStr(AArguments, 'device').Trim;
+  if V <> '' then
+  begin
+    if BadDeviceToken(V) then
+      Exit(Format(SR_ADB_TARGET_FMT, [V]));
+    if not AdbTargetAllowed(V) then
+      Exit(Format(SR_ADB_ALLOWLIST_FMT, [V]));
+  end
+  else if GAdbDevicesSet and MatchText(Trim(ArgStr(AArguments, 'command')),
+    ['install', 'run', 'tap', 'key', 'logcat', 'screenshot']) then
+    // With the allowlist active, an implicit target could be an UNLISTED
+    // device that happens to be the only one attached: name it or nothing.
+    Exit(SR_ADB_ALLOWLIST_DEVICE);
+  // "app" is a package name reaching adb shell am start - same charset rule
+  // (a package is letters/digits/dots/underscores), own message.
+  V := ArgStr(AArguments, 'app').Trim;
+  if (V <> '') and BadDeviceToken(V) then
+    Exit(Format(SR_ADB_APP_FMT, [V]));
+  // tap coordinates reach adb shell input - digits only. The key name is
+  // whitelisted in the tool; here only its charset (letters).
+  for var Coord in TArray<string>.Create('x', 'y') do
+  begin
+    V := ArgStr(AArguments, Coord).Trim;
+    if V <> '' then
+      for var C in V do
+        if not CharInSet(C, ['0'..'9']) then
+          Exit(Format(SR_ADB_XY_FMT, [V]));
+  end;
+  V := ArgStr(AArguments, 'key').Trim;
+  if V <> '' then
+    for var C in V do
+      if not CharInSet(C, ['A'..'Z', 'a'..'z']) then
+        Exit(Format(SR_ADB_KEY_FMT, [V]));
+end;
+
 function BuildArgDenied(const AArguments: TJSONObject): string;
 var
   V: string;
@@ -443,8 +566,19 @@ begin
   if (V <> '') and (CanonicalPlatform(V) = '') then
     Exit(Format(SR_BUILD_PLATFORM_FMT, [V]));
   V := ArgStr(AArguments, 'target').Trim;
-  if (V <> '') and not MatchText(V, ['Build', 'Make', 'Clean']) then
+  if (V <> '') and not MatchText(V, ['Build', 'Make', 'Clean', 'Deploy']) then
     Exit(Format(SR_BUILD_TARGET_FMT, [V]));
+  // "profile" is a PAServer profile name reaching the msbuild command line
+  // (/p:Profile=) - the same identifier rule as delphi_paserver's "name",
+  // ONE definition for both mouths.
+  V := ArgStr(AArguments, 'profile').Trim;
+  if (V <> '') and BadProfileName(V) then
+    Exit(Format(SR_PASERVER_NAME_FMT, [V]));
+  // "deviceid" is an adb serial reaching msbuild (/p:DeviceId=) - the same
+  // rule as delphi_adb's address/device.
+  V := ArgStr(AArguments, 'deviceid').Trim;
+  if (V <> '') and BadDeviceToken(V) then
+    Exit(Format(SR_ADB_TARGET_FMT, [V]));
   V := ArgStr(AArguments, 'config');
   if V <> '' then
     for C in V do
@@ -468,14 +602,8 @@ var
 begin
   Result := '';
   V := ArgStr(AArguments, 'name').Trim;
-  if V <> '' then
-  begin
-    if Length(V) > 64 then
-      Exit(Format(SR_PASERVER_NAME_FMT, [V]));
-    for C in V do
-      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-']) then
-        Exit(Format(SR_PASERVER_NAME_FMT, [V]));
-  end;
+  if (V <> '') and BadProfileName(V) then
+    Exit(Format(SR_PASERVER_NAME_FMT, [V]));
   V := ArgStr(AArguments, 'host').Trim;
   if V <> '' then
     for C in V do
@@ -574,6 +702,14 @@ begin
     if Result <> '' then
       Exit;
   end;
+  // Universal adb-argument filter (BOTH access levels): address and serial
+  // land on the adb command line.
+  if SameText(AToolName, 'delphi_adb') then
+  begin
+    Result := AdbArgDenied(AArguments);
+    if Result <> '' then
+      Exit;
+  end;
   if not (GProcessReadOnly or GRequestReadOnly) then
     Exit;
   // Fully mutating tools: refused outright in read-only mode.
@@ -600,6 +736,18 @@ begin
     if (Cmd = '') or MatchText(Cmd, ['platforms', 'packages', 'profiles']) then
       Exit;
     Exit(WriteDenied('delphi_paserver ' + Cmd));
+  end;
+  // delphi_adb is mixed: discovering, listing and reading the device log are
+  // reads; attaching/detaching a device or installing an app are writes.
+  if SameText(AToolName, 'delphi_adb') then
+  begin
+    Cmd := Trim(ArgStr(AArguments, 'command'));
+    // Reads: looking at the device (list, log, screen) changes nothing.
+    // connect/disconnect/install/run/tap/key mutate or execute -> write.
+    if (Cmd = '') or MatchText(Cmd, ['discover', 'devices', 'logcat',
+      'screenshot']) then
+      Exit;
+    Exit(WriteDenied('delphi_adb ' + Cmd));
   end;
   // delphi_git is mixed: query commands pass, anything that can change the
   // repo or the remote is refused ("branch"/"tag" only LIST when called

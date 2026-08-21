@@ -473,21 +473,6 @@ begin
   end;
 end;
 
-{ Value of <ATag>...</ATag> in a small trusted XML (our own .profile files,
-  written by paclient). Not a general parser on purpose. }
-function TagValue(const AXml, ATag: string): string;
-var
-  P, Q: Integer;
-begin
-  Result := '';
-  P := Pos('<' + ATag + '>', AXml);
-  if P = 0 then Exit;
-  P := P + Length(ATag) + 2;
-  Q := Pos('</' + ATag + '>', AXml);
-  if Q > P then
-    Result := Copy(AXml, P, Q - P).Trim;
-end;
-
 { One pull of get-sdk: a remote directory mirrored under the local sysroot.
   Optional entries cover layout differences between distros (Ubuntu vs
   RedHat vs /lib symlinked) - a missing one is normal, not a failure. }

@@ -81,6 +81,7 @@ uses
   Mcp.Tools.DelphiExtra in 'Mcp.Tools.DelphiExtra.pas',
   Mcp.Tools.Config in 'Mcp.Tools.Config.pas',
   Mcp.Tools.PAServer in 'Mcp.Tools.PAServer.pas',
+  Mcp.Tools.Adb in 'Mcp.Tools.Adb.pas',
   Mcp.Tools.FileOps in 'Mcp.Tools.FileOps.pas',
   Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',
   Mcp.Tools.TextEdit in 'Mcp.Tools.TextEdit.pas',

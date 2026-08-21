@@ -69,6 +69,11 @@ const
   PACLIENT_PLATFORMS: array[0..4] of string =
     ('Win32', 'Win64', 'WinARM64EC', 'OSX64', 'Linux64');
 
+{ Value of <ATag>...</ATag> in a small TRUSTED XML (our own .profile/.sdk
+  files, written by paclient or by this server). Not a general parser on
+  purpose. One definition, shared by delphi_paserver and delphi_adb. }
+function TagValue(const AXml, ATag: string): string;
+
 { Whether a project would EXECUTE a shell during a build: a custom MSBuild
   <Target> or <Exec> task (with or without an XML namespace prefix), a
   non-empty RAD Studio build-event command, or an <Import> of anything that is
@@ -336,6 +341,19 @@ begin
   for P in KNOWN_PLATFORMS do
     if SameText(P, AName.Trim) then
       Exit(P); // canonical casing, and proven metachar-free
+end;
+
+function TagValue(const AXml, ATag: string): string;
+var
+  P, Q: Integer;
+begin
+  Result := '';
+  P := Pos('<' + ATag + '>', AXml);
+  if P = 0 then Exit;
+  P := P + Length(ATag) + 2;
+  Q := Pos('</' + ATag + '>', AXml);
+  if Q > P then
+    Result := Copy(AXml, P, Q - P).Trim;
 end;
 
 { True when the XML contains an element whose LOCAL name is AName, with or

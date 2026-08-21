@@ -184,6 +184,7 @@
         <DCCReference Include="Mcp.Tools.DelphiExtra.pas"/>
         <DCCReference Include="Mcp.Tools.Config.pas"/>
         <DCCReference Include="Mcp.Tools.PAServer.pas"/>
+        <DCCReference Include="Mcp.Tools.Adb.pas"/>
         <DCCReference Include="Mcp.Tools.FileOps.pas"/>
         <DCCReference Include="Mcp.Tools.DelphiPatch.pas"/>
         <DCCReference Include="Mcp.Tools.TextEdit.pas"/>
