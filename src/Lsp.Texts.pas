@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.40.0-beta';
+  SERVER_VERSION = '0.41.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -650,7 +650,8 @@ const
   SN_READ_ZONE_HINT =
     'Para LEER, ademas de los roots vale la zona de biblioteca: las carpetas ' +
     'que el IDE registra en su Library Path (fuentes RTL/VCL/FMX y de ' +
-    'componentes instalados) y sus subcarpetas - no sus carpetas padre. ' +
+    'componentes instalados), la raiz de instalacion de cada componente (un ' +
+    'nivel por encima: Library, Redist, Examples) y sus subcarpetas. ' +
     'delphi_workspace las enumera.';
 
   // ---- delphi_config: search paths ----
@@ -665,7 +666,9 @@ const
 
   SR_CONFIG_NEED_PATH =
     'Falta "path": la carpeta a anadir/quitar del search path (p.ej. la ' +
-    'carpeta Source de un componente instalado).';
+    'carpeta Source de un componente instalado). Si tu esquema de tools no ' +
+    'tiene el parametro "path", el servidor se actualizo despues de tu ' +
+    'conexion: reconecta la sesion MCP para recibir el esquema nuevo.';
 
   SR_CONFIG_PATH_CHARS =
     'RECHAZADO: el path lleva caracteres no permitidos (< > " ; & | o de ' +
@@ -699,6 +702,58 @@ const
     'finds units through the IDE library path of each platform. A platform ' +
     'added later gets none of that - add-searchpath fixes "unit not found" ' +
     'on one platform only.';
+
+  // ---- delphi_config: deployment files ----
+
+  SP_CONFIG_REMOTEDIR =
+    'add-deployfile: destination folder on the target, relative to the ' +
+    'deployment root (the IDE''s RemoteDir). Default: the project folder, ' +
+    'next to the binary - or, for a .so on Android, the apk''s ' +
+    'library\lib\<abi>\. No absolute paths, no "..".';
+
+  SR_CONFIG_DEPLOY_NEED_PATH =
+    'Falta "path": el fichero que debe viajar con el despliegue (p.ej. la ' +
+    'libreria nativa que un componente carga en runtime). Si tu esquema de ' +
+    'tools no tiene "path" ni "remotedir", el servidor se actualizo despues ' +
+    'de tu conexion: reconecta la sesion MCP para recibir el esquema nuevo.';
+
+  SR_CONFIG_DEPLOY_PLATFORM_FMT =
+    'RECHAZADO: "%s" no es una plataforma Delphi valida (add/remove-deployfile ' +
+    'la necesita: Linux64, OSX64, Android64...).';
+
+  SR_CONFIG_DEPLOY_NOT_FILE_FMT =
+    'RECHAZADO: "%s" es una carpeta. add-deployfile lleva FICHEROS, uno por llamada.';
+
+  SR_CONFIG_DEPLOY_MISSING_FMT =
+    'RECHAZADO: el fichero "%s" no existe en el servidor. Localizalo con ' +
+    'delphi_list (zona de biblioteca) antes de anadirlo.';
+
+  SR_CONFIG_REMOTEDIR_CHARS =
+    'RECHAZADO: remotedir debe ser una carpeta relativa simple (sin "..", ' +
+    'sin ":", sin barra inicial ni caracteres especiales), p.ej. MiApp\lib\.';
+
+  SN_CONFIG_DEPLOY_ADDED_FMT =
+    'ANADIDO al despliegue de %s: "%s" -> %s%s (Debug y Release). %sCopia ' +
+    'previa del .deployproj en __delphi-patch. Despliega con delphi_build ' +
+    'target=Deploy platform=%s.';
+
+  SN_CONFIG_DEPLOY_GENERATED =
+    'El proyecto no tenia manifiesto de despliegue: se genero el estandar ' +
+    '(el binario) antes de anadir el fichero.';
+
+  SN_CONFIG_DEPLOY_PRESENT_FMT =
+    '"%s" ya viaja en el despliegue de %s. Nada que cambiar.';
+
+  SN_CONFIG_DEPLOY_REMOVED_FMT =
+    'QUITADO "%s" del despliegue de %s (%d entradas). Copia previa en __delphi-patch.';
+
+  SN_CONFIG_DEPLOY_ABSENT_FMT =
+    '"%s" no esta en el despliegue de %s. Mira las entradas con command=view.';
+
+  SN_CONFIG_NO_DEPLOYPROJ =
+    'No deployment manifest (.deployproj) next to the project yet: ' +
+    'delphi_build target=Deploy generates the standard one (the binary), ' +
+    'and add-deployfile adds extra files to it.';
 
   // ---- delphi_components ----
 

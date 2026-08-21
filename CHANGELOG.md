@@ -8,6 +8,41 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.41.0-beta] - 2026-08-22
+
+The second half of the "fat project on Linux" story: compiling was solved
+by add-searchpath; RUNNING needs the native library a component loads at
+runtime to travel with the binary. OBR for FireMonkey is static on
+Android/iOS (that is why the project's manifest never mentioned it) but a
+runtime `libzbar.so` on Linux and `.dylib` on macOS - and the manifest
+had no Linux64 entries because the app had never been deployed there.
+
+### Added
+- **`delphi_config add-deployfile` / `remove-deployfile`**: the IDE's
+  Deployment Manager, per platform. Adds a file to the `.deployproj` in
+  the IDE's own shape (one ItemGroup per platform, one DeployFile per
+  configuration, DeployClass File), generating the standard manifest
+  first when the project has none (and its import line in the `.dproj`).
+  `remotedir` defaults to the project folder on the target - next to the
+  binary - or to the apk's `library\lib\<abi>\` for a `.so` on Android;
+  it must be a simple relative folder. The file is vetted like any read
+  and must exist. `view` lists the deployment entries per platform.
+
+### Changed
+- **Library read zone widened to component install roots**: the IDE
+  registers a component's `Source\` (or per-platform `Lib\`), and next
+  to it live `Library\`, `Redist\`, `Examples\` - the native runtime
+  libraries a deployment must ship. One level above each registered
+  folder is readable now (never a drive root). Measured: OBR's
+  `Library\Linux64\libzbar.so` was unreadable before.
+- **After a server update, live MCP sessions must reconnect** (field
+  agent's report): clients cache `tools/list` at connect time, so a
+  parameter added by the update is invisible to a session opened before
+  it - the tool refuses with "Falta path" while the agent cannot send
+  it. The refusals for the new parameters now say so; the operator's
+  deploy ritual includes telling the agents to reconnect.
+
+
 ## [0.40.0-beta] - 2026-08-22
 
 Born from the first "fat" project the field agent built for Linux: a real

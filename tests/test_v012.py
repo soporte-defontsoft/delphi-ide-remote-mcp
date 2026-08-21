@@ -478,6 +478,62 @@ out = call('delphi_config', {"project": CON, "command": "remove-searchpath",
                              "platform": "Linux64", "path": _spdir})
 check('searchpath: quitar lo que no esta responde honesto', 'no esta' in out, out[:120])
 
+# ---- delphi_config add-deployfile / remove-deployfile -----------------------
+# Field 2026-08-22: a component's runtime library (OBR's libzbar.so on Linux)
+# must travel with the binary - the IDE's Deployment Manager. CON has no
+# .deployproj: the standard one must be generated first.
+_dep = os.path.join(INSIDE, 'libs-extra', 'libfake.so')
+with open(_dep, 'wb') as f:
+    f.write(b'\x7fELF fake')
+_deployproj = CON[:-6] + '.deployproj'
+check('deployfile: CON no tiene manifiesto de despliegue al empezar', not os.path.exists(_deployproj), _deployproj)
+out = call('delphi_config', {"project": CON, "command": "add-deployfile",
+                             "platform": "Linux64", "path": _dep})
+check('deployfile: anadido (manifiesto generado primero)', out.startswith('ANADIDO') and 'genero el estandar' in out, out[:200])
+_x = open(_deployproj, encoding='utf-8-sig').read()
+check('deployfile: entrada Debug y Release con la forma del IDE',
+      _x.count('<DeployFile Include="' + _dep + '"') == 2 and '<DeployClass>File</DeployClass>' in _x
+      and '<RemoteDir>ConfProj' + chr(92) + '</RemoteDir>' in _x and "'$(Config)'=='Release'" in _x, 'shape mismatch')
+check('deployfile: el .dproj importa el manifiesto',
+      '$(MSBuildProjectName).deployproj' in open(CON, encoding='utf-8-sig').read(), 'import line missing')
+out = call('delphi_config', {"project": CON, "command": "add-deployfile",
+                             "platform": "Linux64", "path": _dep})
+check('deployfile: repetir = ya viaja, sin cambios', 'ya viaja' in out, out[:120])
+_v = json.loads(call('delphi_config', {"project": CON}))
+check('deployfile: view lo ensena por plataforma (una linea por fichero, junto al binario)',
+      sum('libfake.so' in e for e in (_v.get('deployFiles') or {}).get('Linux64', [])) == 1
+      and any('ConfProj ->' in e for e in (_v.get('deployFiles') or {}).get('Linux64', [])),
+      str(_v.get('deployFiles'))[:160])
+out = call('delphi_config', {"project": CON, "command": "add-deployfile",
+                             "platform": "Android64", "path": _dep})
+check('deployfile: .so en Android64 va a library/lib/arm64-v8a por defecto',
+      'arm64-v8a' in out, out[:200])
+out = call('delphi_config', {"project": CON, "command": "add-deployfile",
+                             "platform": "Linux64", "path": os.path.join(INSIDE, 'libs-extra')})
+check('deployfile: una carpeta RECHAZADA', out.startswith('RECHAZADO') and 'carpeta' in out, out[:120])
+out = call('delphi_config', {"project": CON, "command": "add-deployfile",
+                             "platform": "Linux64", "path": _dep + '.nope'})
+check('deployfile: fichero inexistente RECHAZADO', out.startswith('RECHAZADO') and 'no existe' in out, out[:120])
+out = call('delphi_config', {"project": CON, "command": "add-deployfile",
+                             "platform": "Linux64", "path": r'C:\Windows\System32\kernel32.dll'})
+check('deployfile: fuera de la jaula RECHAZADO', out.startswith('RECHAZADO') and 'FUERA' in out, out[:120])
+out = call('delphi_config', {"project": CON, "command": "add-deployfile",
+                             "platform": "Linux64", "path": _dep, "remotedir": '..' + chr(92) + '..' + chr(92) + 'etc' + chr(92)})
+check('deployfile: remotedir con .. RECHAZADO', out.startswith('RECHAZADO') and 'remotedir' in out, out[:120])
+out = call('delphi_config', {"project": CON, "command": "add-deployfile",
+                             "platform": "", "path": _dep})
+check('deployfile: sin plataforma RECHAZADO', out.startswith('RECHAZADO'), out[:120])
+out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
+                             "platform": "Linux64", "path": _dep})
+check('deployfile: quitado (2 entradas)', out.startswith('QUITADO') and '2 entradas' in out, out[:120])
+_x = open(_deployproj, encoding='utf-8-sig').read()
+check('deployfile: Linux64 limpio, Android64 intacto',
+      ('libfake.so' in _x) and _x.count('<DeployFile Include="' + _dep + '"') == 2
+      and "'$(Platform)'=='Android64'" in _x, 'unexpected manifest state')
+out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
+                             "platform": "Linux64", "path": _dep})
+check('deployfile: quitar lo que no esta responde honesto', 'no esta' in out, out[:120])
+
 # ---- delphi_paserver: read subcommands ------------------------------------
 out = call('delphi_paserver', {"command": "packages"})
 pk = json.loads(out)

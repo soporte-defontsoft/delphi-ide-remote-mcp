@@ -30,15 +30,18 @@ type
     FPlatform: string;
     FOutput: string;
     FPath: string;
+    FRemoteDir: string;
   public
     [SchemaDescription('Absolute path of the project .dproj')]
     property Project: string read FProject write FProject;
-    [SchemaDescription('view (default: list configurations, platforms and search paths) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again)')]
+    [SchemaDescription('view (default: list configurations, platforms, search paths and deployment files) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again)')]
     property Command: string read FCommand write FCommand;
-    [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform)')]
+    [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required)')]
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription(SP_CONFIG_PATH)]
     property Path: string read FPath write FPath;
+    [SchemaDescription(SP_CONFIG_REMOTEDIR)]
+    property RemoteDir: string read FRemoteDir write FRemoteDir;
     [SchemaDescription('set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to <folder>\$(Platform)\$(Config) and .dcu to <folder>\Dcu\$(Platform)\$(Config). Use "default" to restore the RAD Studio layout. No absolute paths, no "..".')]
     property Output: string read FOutput write FOutput;
   end;
@@ -63,6 +66,7 @@ uses
   Lsp.Guard,
   Lsp.Discovery,
   Lsp.Dproj,
+  Lsp.BuildRunner,
   Lsp.Patch;
 
 constructor TDelphiConfigTool.Create;
@@ -85,11 +89,17 @@ begin
     'platform''s property groups exactly as the IDE would; a platform added ' +
     'to a project inherits NO search paths from the others, which is the usual ' +
     'reason a unit is "not found" on the new platform only. remove-searchpath ' +
-    'takes it out again. To BUILD a specific combination use delphi_build ' +
-    'with platform+config.';
+    'takes it out again. command=add-deployfile ships an extra file with the ' +
+    'build on ONE platform - the IDE''s Deployment Manager: the native ' +
+    'library a component loads at runtime (.so/.dylib/.dll), data files - ' +
+    'written into the .deployproj as the IDE does (Debug and Release), ' +
+    'generating the standard manifest first if the project has none; ' +
+    'remove-deployfile takes it out again. To BUILD a specific combination ' +
+    'use delphi_build with platform+config.';
 end;
 
 procedure AddSearchPathsView(const AXml: string; AReturn: TJSONObject); forward;
+procedure AddDeployFilesView(const ADproj: string; AReturn: TJSONObject); forward;
 
 function PlatformNeedsProfile(const APlatform: string): Boolean;
 begin
@@ -134,6 +144,7 @@ begin
       Obj.AddPair('needsRemoteProfile', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
     end;
     AddSearchPathsView(TFile.ReadAllText(ADproj), Return);
+    AddDeployFilesView(ADproj, Return);
     Return.AddPair('note', 'To build: delphi_build {project, platform, ' +
       'config}. Platforms with needsRemoteProfile=true also need a PAServer ' +
       'profile - see delphi_paserver.');
@@ -692,6 +703,293 @@ begin
     AReturn.AddPair('searchPathsNote', SN_CONFIG_NO_PATHS);
 end;
 
+{ ---- deployment files ---------------------------------------------------
+  The IDE's Deployment Manager, per platform: files that must travel with
+  the binary - the native library a component loads at runtime (field
+  2026-08-22: OBR for FireMonkey is STATIC on Android/iOS but a runtime
+  libzbar.so on Linux / .dylib on macOS, and the project's .deployproj had
+  no Linux64 entries because it had never been deployed there).
+
+  Entries follow the IDE's own shape, one ItemGroup per platform:
+    <ItemGroup Condition="'$(Platform)'=='Linux64'">
+        <DeployFile Include="<server path>" Condition="'$(Config)'=='Debug'">
+            <RemoteDir>Project\</RemoteDir>  <RemoteName>libzbar.so</RemoteName>
+            <DeployClass>File</DeployClass>  <Operation>0</Operation> ...
+  One entry per configuration (Debug and Release), as the IDE writes them.
+  A project without a manifest gets the standard one generated first
+  (EnsureDeployManifest). The file is vetted like any read: workspace or
+  library zone, and it must exist. RemoteDir defaults to the project folder
+  on the target (next to the binary); on Android a .so defaults to the apk's
+  library\lib\<abi>\ folder. }
+
+function DeployProjPath(const ADproj: string): string;
+begin
+  Result := TPath.Combine(TPath.GetDirectoryName(ADproj),
+    TPath.GetFileNameWithoutExtension(ADproj) + '.deployproj');
+end;
+
+function DefaultRemoteDir(const AProjectName, APlatform, AFile: string): string;
+begin
+  Result := AProjectName + '\';
+  if SameText(TPath.GetExtension(AFile), '.so') then
+  begin
+    if SameText(APlatform, 'Android64') then
+      Result := Result + 'library\lib\arm64-v8a\'
+    else if SameText(APlatform, 'Android') then
+      Result := Result + 'library\lib\armeabi-v7a\';
+  end;
+end;
+
+{ '' = fine; else the refusal. AFull receives the resolved file. }
+function DeployFileDenied(const ADproj, ARaw: string; out AFull: string): string;
+var
+  C: Char;
+  P: string;
+begin
+  AFull := '';
+  if ARaw.Trim = '' then
+    Exit(SR_CONFIG_DEPLOY_NEED_PATH);
+  if Length(ARaw) > 400 then
+    Exit(SR_CONFIG_PATH_CHARS);
+  for C in ARaw do
+    if (Ord(C) < 32) or CharInSet(C, ['<', '>', '"', ';', '&', '|']) then
+      Exit(SR_CONFIG_PATH_CHARS);
+  P := ARaw.Trim;
+  if not TPath.IsPathRooted(P) then
+    P := TPath.Combine(TPath.GetDirectoryName(ADproj), P);
+  try
+    P := TPath.GetFullPath(P);
+  except
+    on E: Exception do
+      Exit(Format(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
+  end;
+  AFull := P;
+  Result := ReadPathDenied(P);
+  if Result <> '' then
+    Exit;
+  if TDirectory.Exists(P) then
+    Exit(Format(SR_CONFIG_DEPLOY_NOT_FILE_FMT, [P]));
+  if not TFile.Exists(P) then
+    Exit(Format(SR_CONFIG_DEPLOY_MISSING_FMT, [P]));
+end;
+
+function RemoteDirDenied(const ARaw: string): string;
+var
+  C: Char;
+begin
+  Result := '';
+  if Length(ARaw) > 200 then
+    Exit(SR_CONFIG_REMOTEDIR_CHARS);
+  for C in ARaw do
+    if (Ord(C) < 32) or CharInSet(C, ['<', '>', '"', ';', '&', '|', ':']) then
+      Exit(SR_CONFIG_REMOTEDIR_CHARS);
+  if ARaw.Contains('..') or ARaw.StartsWith('\') or ARaw.StartsWith('/') then
+    Exit(SR_CONFIG_REMOTEDIR_CHARS);
+end;
+
+{ Every DeployFile element of the manifest whose Include matches AFile
+  (case-insensitive) inside an ItemGroup of APlatform: their spans. }
+function FindDeployEntries(const AXml, APlatform, AFile: string): TArray<TPair<Integer, Integer>>;
+var
+  M: TMatch;
+  L: TList<TPair<Integer, Integer>>;
+  GroupStart: Integer;
+  Low, Cond: string;
+begin
+  L := TList<TPair<Integer, Integer>>.Create;
+  try
+    Low := LowerCase(AXml);
+    for M in TRegEx.Matches(AXml, '<DeployFile\s+Include="([^"]*)"[^>]*>.*?</DeployFile>',
+      [roIgnoreCase, roSingleLine]) do
+    begin
+      if not SameText(M.Groups[1].Value, AFile) then
+        Continue;
+      // the enclosing ItemGroup decides the platform
+      GroupStart := Low.LastIndexOf('<itemgroup', M.Index - 1) + 1;
+      if GroupStart <= 0 then
+        Continue;
+      Cond := Copy(AXml, GroupStart, Pos('>', AXml, GroupStart) - GroupStart);
+      if ContainsText(Cond, '''$(Platform)''==''' + APlatform + '''') then
+        L.Add(TPair<Integer, Integer>.Create(M.Index, M.Length));
+    end;
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
+function DeployEntryXml(const AFile, ARemoteDir, AConfig: string): string;
+begin
+  Result :=
+    '        <DeployFile Include="' + AFile + '" Condition="''$(Config)''==''' + AConfig + '''">' + sLineBreak +
+    '            <RemoteDir>' + ARemoteDir + '</RemoteDir>' + sLineBreak +
+    '            <RemoteName>' + TPath.GetFileName(AFile) + '</RemoteName>' + sLineBreak +
+    '            <DeployClass>File</DeployClass>' + sLineBreak +
+    '            <Operation>0</Operation>' + sLineBreak +
+    '            <LocalCommand/>' + sLineBreak +
+    '            <RemoteCommand/>' + sLineBreak +
+    '            <Overwrite>True</Overwrite>' + sLineBreak +
+    '            <Required>True</Required>' + sLineBreak +
+    '        </DeployFile>' + sLineBreak;
+end;
+
+function AddDeployFile(const ADproj, ARawPlatform, ARawPath, ARawRemoteDir: string): string;
+var
+  Plat, Full, RemoteDir, DeployProj, Enc, Xml, Block: string;
+  Info: TRadStudioInfo;
+  Generated: Boolean;
+  ClosePos: Integer;
+begin
+  Plat := CanonicalPlatform(ARawPlatform);
+  if Plat = '' then
+    Exit(Format(SR_CONFIG_DEPLOY_PLATFORM_FMT, [ARawPlatform.Trim]));
+  Result := DeployFileDenied(ADproj, ARawPath, Full);
+  if Result <> '' then
+    Exit;
+  RemoteDir := ARawRemoteDir.Trim;
+  if RemoteDir = '' then
+    RemoteDir := DefaultRemoteDir(TPath.GetFileNameWithoutExtension(ADproj), Plat, Full)
+  else
+  begin
+    Result := RemoteDirDenied(RemoteDir);
+    if Result <> '' then
+      Exit;
+    RemoteDir := RemoteDir.Replace('/', '\');
+    if not RemoteDir.EndsWith('\') then
+      RemoteDir := RemoteDir + '\';
+  end;
+
+  DeployProj := DeployProjPath(ADproj);
+  Generated := False;
+  if not TFile.Exists(DeployProj) then
+  begin
+    Info := DiscoverRadStudio;
+    if not Info.Found then
+      Exit(SR_COMPONENTS_MISSING);
+    try
+      EnsureDeployManifest(ADproj, Plat, Info.RootDir, Generated);
+    except
+      on E: Exception do
+        Exit('error: no pude generar el manifiesto de despliegue: ' + E.Message);
+    end;
+    if not TFile.Exists(DeployProj) then
+      Exit('error: no existe ' + DeployProj + ' y no se pudo generar.');
+  end;
+
+  Xml := PatchLoadText(DeployProj, Enc);
+  if Length(FindDeployEntries(Xml, Plat, Full)) > 0 then
+    Exit(Format(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat]));
+  ClosePos := Pos('</project>', LowerCase(Xml));
+  if ClosePos = 0 then
+    Exit('error: el .deployproj no tiene </Project>; abrelo en el IDE y reintenta.');
+  Block := '    <ItemGroup Condition="''$(Platform)''==''' + Plat + '''">' + sLineBreak +
+    DeployEntryXml(Full, RemoteDir, 'Debug') +
+    DeployEntryXml(Full, RemoteDir, 'Release') +
+    '    </ItemGroup>' + sLineBreak;
+  Xml := Copy(Xml, 1, ClosePos - 1) + Block + Copy(Xml, ClosePos, MaxInt);
+  PatchSaveText(DeployProj, Xml, Enc); // __delphi-patch copy first
+  Result := Format(SN_CONFIG_DEPLOY_ADDED_FMT,
+    [Plat, Full, RemoteDir, TPath.GetFileName(Full),
+     IfThen(Generated, SN_CONFIG_DEPLOY_GENERATED + ' ', ''), Plat]);
+end;
+
+function RemoveDeployFile(const ADproj, ARawPlatform, ARawPath: string): string;
+var
+  Plat, Full, DeployProj, Enc, Xml: string;
+  Spans: TArray<TPair<Integer, Integer>>;
+  I: Integer;
+begin
+  Plat := CanonicalPlatform(ARawPlatform);
+  if Plat = '' then
+    Exit(Format(SR_CONFIG_DEPLOY_PLATFORM_FMT, [ARawPlatform.Trim]));
+  if ARawPath.Trim = '' then
+    Exit(SR_CONFIG_DEPLOY_NEED_PATH);
+  Full := ARawPath.Trim;
+  if not TPath.IsPathRooted(Full) then
+    Full := TPath.Combine(TPath.GetDirectoryName(ADproj), Full);
+  try
+    Full := TPath.GetFullPath(Full);
+  except
+    on E: Exception do
+      Exit(Format(SR_CONFIG_PATH_MACRO_FMT, [ARawPath.Trim]));
+  end;
+  DeployProj := DeployProjPath(ADproj);
+  if not TFile.Exists(DeployProj) then
+    Exit(Format(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
+  Xml := PatchLoadText(DeployProj, Enc);
+  Spans := FindDeployEntries(Xml, Plat, Full);
+  if Length(Spans) = 0 then
+    Exit(Format(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
+  // remove from the end so earlier spans stay valid; eat the element's line
+  for I := High(Spans) downto 0 do
+  begin
+    var S := Spans[I].Key;
+    var E := S + Spans[I].Value;
+    while (S > 1) and CharInSet(Xml[S - 1], [' ', #9]) do
+      Dec(S);
+    while (E <= Length(Xml)) and CharInSet(Xml[E], [#13, #10]) do
+      Inc(E);
+    Xml := Copy(Xml, 1, S - 1) + Copy(Xml, E, MaxInt);
+  end;
+  // an ItemGroup left empty is dropped too (the IDE keeps empty ones, but
+  // ours were added by us)
+  Xml := TRegEx.Replace(Xml,
+    '[ \t]*<ItemGroup Condition="''\$\(Platform\)''==''' + Plat + '''">\s*</ItemGroup>\r?\n?', '',
+    [roIgnoreCase]);
+  PatchSaveText(DeployProj, Xml, Enc);
+  Result := Format(SN_CONFIG_DEPLOY_REMOVED_FMT, [Full, Plat, Length(Spans)]);
+end;
+
+{ view: the deployment entries per platform (Include + RemoteDir), from the
+  manifest next to the project - '' when there is none. }
+procedure AddDeployFilesView(const ADproj: string; AReturn: TJSONObject);
+var
+  DeployProj, Xml, Low, Cond, Plat: string;
+  Obj: TJSONObject;
+  Arr: TJSONArray;
+  M, RM: TMatch;
+  GroupStart: Integer;
+  PM: TMatch;
+begin
+  DeployProj := DeployProjPath(ADproj);
+  if not TFile.Exists(DeployProj) then
+  begin
+    AReturn.AddPair('deployFilesNote', SN_CONFIG_NO_DEPLOYPROJ);
+    Exit;
+  end;
+  Xml := TFile.ReadAllText(DeployProj);
+  Low := LowerCase(Xml);
+  Obj := TJSONObject.Create;
+  for M in TRegEx.Matches(Xml, '<DeployFile\s+Include="([^"]*)"[^>]*>(.*?)</DeployFile>',
+    [roIgnoreCase, roSingleLine]) do
+  begin
+    GroupStart := Low.LastIndexOf('<itemgroup', M.Index - 1) + 1;
+    if GroupStart <= 0 then
+      Continue;
+    Cond := Copy(Xml, GroupStart, Pos('>', Xml, GroupStart) - GroupStart);
+    PM := TRegEx.Match(Cond, '''\$\(Platform\)''==''(\w+)''');
+    if not PM.Success then
+      Continue;
+    Plat := PM.Groups[1].Value;
+    RM := TRegEx.Match(M.Groups[2].Value, '<RemoteDir>([^<]*)</RemoteDir>', [roIgnoreCase]);
+    if Obj.GetValue(Plat) = nil then
+      Obj.AddPair(Plat, TJSONArray.Create);
+    Arr := Obj.GetValue(Plat) as TJSONArray;
+    // one line per file (the IDE writes one entry per configuration)
+    var Line := M.Groups[1].Value + ' -> ' + IfThen(RM.Success, RM.Groups[1].Value, '');
+    var Dup := False;
+    for var V in Arr do
+      if SameText(V.Value, Line) then
+      begin
+        Dup := True;
+        Break;
+      end;
+    if not Dup then
+      Arr.Add(Line);
+  end;
+  AReturn.AddPair('deployFiles', Obj);
+end;
+
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
 var
   Cmd: string;
@@ -716,9 +1014,13 @@ begin
     Result := AddSearchPath(Params.Project, Params.Platform, Params.Path)
   else if Cmd = 'remove-searchpath' then
     Result := RemoveSearchPath(Params.Project, Params.Platform, Params.Path)
+  else if Cmd = 'add-deployfile' then
+    Result := AddDeployFile(Params.Project, Params.Platform, Params.Path, Params.RemoteDir)
+  else if Cmd = 'remove-deployfile' then
+    Result := RemoveDeployFile(Params.Project, Params.Platform, Params.Path)
   else
     Result := 'error: command debe ser view | add-platform | remove-platform | ' +
-      'set-output | add-searchpath | remove-searchpath';
+      'set-output | add-searchpath | remove-searchpath | add-deployfile | remove-deployfile';
 end;
 
 initialization

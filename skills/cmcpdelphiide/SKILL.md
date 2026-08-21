@@ -75,9 +75,15 @@ on your side.
   folder (`delphi_search` / `delphi_list` in the library zone), then
   `delphi_config command=add-searchpath platform=<the one> path=<folder>`
   and build again; repeat per library (a fat app may need 3-4). `view`
-  shows the paths per platform. Native libraries a component loads at
-  runtime (a `.so`/`.dll` next to the binary) still travel with your
-  build - download them with `/files`.
+  shows the paths per platform.
+- **A component that loads a native library at runtime** (a `.so` on
+  Linux, `.dylib` on macOS, `.dll` on Windows - OBR's `libzbar`, for
+  instance) needs that file shipped with the binary:
+  `delphi_config command=add-deployfile platform=<one> path=<the .so>`
+  (found under the component's `Library\<platform>\` folder), then
+  `delphi_build target=Deploy`. The file lands next to the binary on the
+  target; `view` lists the deployment entries. If you run the binary by
+  hand instead, put the library next to it (`LD_LIBRARY_PATH=.`).
 
 ## Linux (PAServer)
 
@@ -111,6 +117,14 @@ Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
 - A wifi-adb device can drop its connection by itself. A `SIN CONEXION`
   answer tells you the recovery path; reconnecting may need a human hand
   on the device - say so instead of looping.
+
+## After the server is updated
+
+Your client caches the tool schemas when it connects. If a refusal asks
+for a parameter your schema does not have (e.g. "Falta path"), the
+server was updated after you connected: reconnect the MCP session (or
+restart your client) and fetch the tools again. `initialize` tells you
+the server version.
 
 ## When you hit a wall
 

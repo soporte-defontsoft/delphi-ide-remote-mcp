@@ -15,6 +15,13 @@ function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
   ATimeoutMs: Integer = 600000): TJSONObject;
 
 { Runs a command line with stdout+stderr captured (no shell). }
+{ Generates the deployment manifest (.deployproj + its import line in the
+  .dproj) when the project has none - minimal for PAServer platforms, the full
+  staging map for Android; never touches an existing one. Exposed for
+  delphi_config add-deployfile, which needs a manifest to add entries to. }
+procedure EnsureDeployManifest(const ADprojPath, APlat, ABdsRoot: string;
+  out AGenerated: Boolean);
+
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 

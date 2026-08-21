@@ -1053,6 +1053,22 @@ begin
                 Expanded := IncludeTrailingPathDelimiter(TPath.GetFullPath(Expanded));
                 if List.IndexOf(Expanded) < 0 then
                   List.Add(Expanded);
+                // A component's INSTALL ROOT is library territory too: the IDE
+                // registers its Source\ (or a per-platform Lib\), and next to
+                // it live Library\, Redist\, Examples\ - the native runtime
+                // libraries a deployment must ship (field 2026-08-22: OBR's
+                // libzbar.so in Library\Linux64, unreadable because only
+                // Source\ was registered). One level up, never a drive root,
+                // never above the IDE's own documents trees.
+                Expanded := ExcludeTrailingPathDelimiter(Expanded);
+                Expanded := TPath.GetDirectoryName(Expanded);
+                if (Expanded <> '') and (Length(Expanded) > 3) and
+                   (TPath.GetDirectoryName(Expanded) <> '') then
+                begin
+                  Expanded := IncludeTrailingPathDelimiter(Expanded);
+                  if List.IndexOf(Expanded) < 0 then
+                    List.Add(Expanded);
+                end;
               except
                 // an unparseable entry never breaks the server
               end;
