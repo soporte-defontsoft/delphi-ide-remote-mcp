@@ -231,6 +231,7 @@ uses
   Lsp.BuildRunner,
   Lsp.Guard,
   Lsp.Patch,
+  Lsp.Files,
   Lsp.Texts;
 
 const
@@ -975,17 +976,19 @@ constructor TDelphiFetchTool.Create;
 begin
   inherited;
   FName := 'delphi_fetch';
-  FDescription := 'Download a file FROM the server in base64 chunks - the ' +
-    '"get the deploy" tool: after delphi_build, fetch the exe (and any ' +
-    'companion files listed with delphi_list) to run GUI apps on YOUR ' +
-    'machine. Loop offset until eof=true, concatenate the decoded chunks, ' +
-    'and verify the sha256 (computed over the whole file, returned on the ' +
-    'offset=0 call). Jailed to the workspace roots.';
+  FDescription := SD_FETCH;
 end;
 
 function TDelphiFetchTool.ExecuteWithParams(const Params: TDelphiFetchParams): string;
 const
   MAX_CHUNK = 8 * 1024 * 1024;
+  // Above BIG_FILE the offset=0 answer carries the download link and NO
+  // chunk (field 2026-08-21: a 72 MB installer pulled as base64 through a
+  // 262K-token context). An explicit maxbytes <= SMALL_CHUNK is the opt-in
+  // for inline chunks anyway (a client without a shell) - the parameter that
+  // already exists doubles as the switch; nothing new to learn.
+  BIG_FILE = 4 * 1024 * 1024;
+  SMALL_CHUNK = 1024 * 1024;
 var
   FullPath, Sha: string;
   Stream: TFileStream;
@@ -995,6 +998,7 @@ var
   Return: TJSONObject;
   B64: TBase64Encoding;
   Hasher: THashSHA2;
+  LinkOnly: Boolean;
 begin
   FullPath := TPath.GetFullPath(Params.Path);
   Result := ReadPathDenied(FullPath); // downloading is reading
@@ -1030,10 +1034,14 @@ begin
 
     if Params.Offset > Size then
       Exit('error: offset mas alla del final (size=' + IntToStr(Size) + ')');
+    LinkOnly := GFilesServed and (Size > BIG_FILE) and (Params.Offset = 0) and
+      ((Params.MaxBytes <= 0) or (Params.MaxBytes > SMALL_CHUNK));
     Stream.Position := Params.Offset;
     ChunkLen := Size - Params.Offset;
     if ChunkLen > MaxB then
       ChunkLen := MaxB;
+    if LinkOnly then
+      ChunkLen := 0;
     SetLength(Buf, ChunkLen);
     if ChunkLen > 0 then
       Stream.ReadBuffer(Buf[0], ChunkLen);
@@ -1048,7 +1056,21 @@ begin
       Return.AddPair('eof', TJSONBool.Create(Params.Offset + ChunkLen >= Size));
       if Sha <> '' then
         Return.AddPair('sha256', Sha);
-      Return.AddPair('chunkBase64', B64.EncodeBytesToString(Buf));
+      if GFilesServed then
+      begin
+        // Relative on purpose: the client already knows the host:port it
+        // talks to, and the server never guesses its own public address.
+        // The path travels in its VIRTUAL form, URL-encoded (no real drive
+        // letter ever leaves, encoded or not).
+        Return.AddPair('download', FILES_ROUTE + '?path=' +
+          TNetEncoding.URL.Encode(MaskDriveText(FName, FullPath)));
+        Return.AddPair('downloadNote', SN_FETCH_DOWNLOAD);
+      end;
+      if LinkOnly then
+        Return.AddPair('note', Format(SN_FETCH_BIG_FMT,
+          [FormatFloat('0.0', Size / (1024 * 1024), TFormatSettings.Invariant) + ' MB']))
+      else
+        Return.AddPair('chunkBase64', B64.EncodeBytesToString(Buf));
       Result := Return.ToJSON;
     finally
       B64.Free;

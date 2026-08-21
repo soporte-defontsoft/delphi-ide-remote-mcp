@@ -336,6 +336,120 @@ try:
 finally:
     shutil.rmtree(tmpdir3, ignore_errors=True)
 
+# --- /files: direct download route + delphi_fetch link-only for big files ----
+# Born in the field (2026-08-21): a 72 MB PAServer installer pulled as base64
+# chunks through an agent's context. Bytes travel as HTTP now - same exe,
+# same port, same Bearer gate, same read jail.
+import hashlib, urllib.parse
+FILES_PORT = 4317
+tmpdir4 = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'http-files')  # fixed, see above
+shutil.rmtree(tmpdir4, ignore_errors=True)
+jail4 = os.path.join(tmpdir4, 'jail')
+os.makedirs(os.path.join(jail4, 'sub'), exist_ok=True)
+os.makedirs(os.path.join(tmpdir4, 'outside'), exist_ok=True)
+try:
+    exe4 = os.path.join(tmpdir4, 'DelphiLspMcp.exe')
+    shutil.copyfile(EXE, exe4)
+    small = os.path.join(jail4, 'small.txt')
+    with open(small, 'wb') as f:
+        f.write(b'hola mundo\r\n')
+    bigdata = os.urandom(5 * 1024 * 1024 + 17)          # > 4 MB threshold
+    big = os.path.join(jail4, 'big.bin')
+    with open(big, 'wb') as f:
+        f.write(bigdata)
+    big_sha = hashlib.sha256(bigdata).hexdigest()
+    with open(os.path.join(tmpdir4, 'outside', 'secret.txt'), 'wb') as f:
+        f.write(b'no me bajes')
+    with open(os.path.join(tmpdir4, 'settings.ini'), 'w') as f:
+        f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n[Security]\nAuthToken=%s\n'
+                'ReadOnlyToken=%s\n\n[Workspace]\nRoots=%s\n'
+                % (FILES_PORT, TOKEN, RO_TOKEN, jail4))
+    env4 = dict(os.environ)
+    env4.pop('DELPHI_MCP_TOKEN', None)
+    env4.pop('DELPHI_MCP_ROOTS', None)
+    proc4 = subprocess.Popen([exe4, '--http'], env=env4,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(3)
+    try:
+        URL = 'http://127.0.0.1:%d/mcp' % FILES_PORT
+        BASE = 'http://127.0.0.1:%d' % FILES_PORT
+        drive = jail4[0].lower()
+        vjail = 'srv%s:%s' % (drive, jail4[2:])          # D:\x -> srvd:\x
+
+        def get(path_value, token, method='GET', raw_url=None):
+            url = raw_url or (BASE + '/files?path=' + urllib.parse.quote(path_value, safe=''))
+            req = urllib.request.Request(url, method=method)
+            if token:
+                req.add_header('Authorization', 'Bearer ' + token)
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    return r.status, dict(r.headers), r.read()
+            except urllib.error.HTTPError as e:
+                return e.code, dict(e.headers), e.read()
+
+        def call(tool, args, token):
+            return post({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+                         "params": {"name": tool, "arguments": args}}, token)
+
+        code, hdr, data = get(vjail + '\\small.txt', None)
+        check('files: sin token -> 401', code == 401, code)
+        code, hdr, data = get(vjail + '\\small.txt', RO_TOKEN)
+        check('files: token RO descarga el fichero (bytes identicos)',
+              code == 200 and data == b'hola mundo\r\n', '%s %r' % (code, data[:40]))
+        check('files: Content-Disposition con el nombre',
+              'small.txt' in hdr.get('Content-Disposition', ''), hdr.get('Content-Disposition'))
+        check('files: X-File-SHA256 correcto',
+              hdr.get('X-File-SHA256', '').lower() == hashlib.sha256(b'hola mundo\r\n').hexdigest(),
+              hdr.get('X-File-SHA256'))
+        code, hdr, data = get('srv%s:%s' % (drive, os.path.join(tmpdir4, 'outside', 'secret.txt')[2:]), TOKEN)
+        check('files: fuera de la jaula -> 403 FUERA', code == 403 and b'FUERA' in data,
+              '%s %r' % (code, data[:120]))
+        check('files: el rechazo no ensena letras reales', b'"' + jail4[:2].encode() not in data, data[:160])
+        code, hdr, data = get(vjail + '\\sub', TOKEN)
+        check('files: directorio -> 403', code == 403 and b'directorio' in data, '%s %r' % (code, data[:100]))
+        code, hdr, data = get(vjail + '\\nada.bin', TOKEN)
+        check('files: no existe -> 404', code == 404, '%s %r' % (code, data[:100]))
+        code, hdr, data = get('', TOKEN, raw_url=BASE + '/files')
+        check('files: sin path -> 400', code == 400, '%s %r' % (code, data[:100]))
+        code, hdr, data = get(vjail + '\\small.txt', TOKEN, method='POST')
+        check('files: POST -> 405', code == 405, code)
+        code, hdr, data = get('srvz:\\Windows\\win.ini', TOKEN)
+        check('files: unidad no servida rechazada POR NOMBRE (sin tocar disco)',
+              code == 403 and b'no servida' in data and b'Windows' not in data.split(b'srvz:')[0],
+              '%s %r' % (code, data[:140]))
+        code, hdr, data = get('sub\\x.txt', TOKEN)
+        check('files: ruta relativa -> 400 absoluta', code == 400 and b'absoluta' in data,
+              '%s %r' % (code, data[:100]))
+
+        # delphi_fetch: small file = chunk + link; big file = link ONLY
+        code, body = call('delphi_fetch', {'path': vjail + '\\small.txt'}, TOKEN)
+        js = json.loads(json.loads(body)['result']['content'][0]['text'])
+        check('fetch: fichero pequeno trae chunkBase64 Y download',
+              'chunkBase64' in js and js.get('download', '').startswith('/files?path=srv'),
+              body[:200])
+        code, body = call('delphi_fetch', {'path': vjail + '\\big.bin'}, TOKEN)
+        js = json.loads(json.loads(body)['result']['content'][0]['text'])
+        check('fetch: fichero > 4 MB responde SOLO enlace (sin chunk, con sha256)',
+              'chunkBase64' not in js and js.get('bytes') == 0 and js.get('sha256') == big_sha
+              and 'download' in js and 'too big' in js.get('note', ''),
+              body[:300])
+        check('fetch: la respuesta del fichero grande es corta',
+              len(body) < 4000, len(body))
+        code, hdr, data = get('', RO_TOKEN, raw_url=BASE + js['download'])
+        check('files: el enlace de fetch baja el fichero grande integro (sha256 OK)',
+              code == 200 and hashlib.sha256(data).hexdigest() == big_sha
+              and hdr.get('X-File-SHA256', '').lower() == big_sha,
+              '%s %d bytes' % (code, len(data)))
+        code, body = call('delphi_fetch', {'path': vjail + '\\big.bin', 'maxbytes': 1048576}, TOKEN)
+        js = json.loads(json.loads(body)['result']['content'][0]['text'])
+        check('fetch: maxbytes<=1MB explicito SI trae chunk del fichero grande (opt-in)',
+              'chunkBase64' in js and js.get('bytes') == 1048576, body[:200])
+    finally:
+        proc4.kill()
+        proc4.wait()
+finally:
+    shutil.rmtree(tmpdir4, ignore_errors=True)
+
 print()
 print('== http battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

@@ -131,6 +131,17 @@ function ToolCallDenied(const AToolName: string;
     not match the disk). }
 function MaskDriveText(const AToolName, AText: string): string;
 
+{ Inbound expansion of ONE value ('srvd:\x' -> 'D:\x'; anything else
+  untouched, an unserved unit stays literal). Exposed for the /files download
+  route, which receives its path as a query parameter, not as a tools/call
+  argument - the same door, entered from HTTP. }
+function ExpandDriveValue(const AValue: string): string;
+
+{ The letter of a value shaped like a virtual unit ('srvd:', 'srvd:\x'),
+  #0 otherwise. After ExpandDriveValue a non-#0 answer means an UNSERVED
+  unit: refuse it by name, never let it near GetFullPath. }
+function VirtualUnitLetter(const AValue: string): Char;
+
 implementation
 
 uses
@@ -366,7 +377,7 @@ end;
 
 procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
 function ServedDriveLetters: string; forward;
-function VirtualUnitLetter(const AValue: string): Char; forward;
+// VirtualUnitLetter is declared in the interface now (used by /files too).
 
 function WriteDenied(const AWhat: string): string;
 begin

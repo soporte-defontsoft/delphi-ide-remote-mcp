@@ -380,7 +380,7 @@ What this server's RAD Studio has INSTALLED to program with: every component/des
 
 ### `delphi_fetch`
 
-Download a file FROM the server in base64 chunks - the "get the deploy" tool: after delphi_build, fetch the exe (and any companion files listed with delphi_list) to run GUI apps on YOUR machine. Loop offset until eof=true, concatenate the decoded chunks, and verify the sha256 (computed over the whole file, returned on the offset=0 call). Jailed to the workspace roots.
+Download a file FROM the server - the "get the deploy" tool: after delphi_build, fetch the exe (and any companion files listed with delphi_list) to run GUI apps on YOUR machine. Two ways: (1) the `download` field of the answer is a direct HTTP GET on this same server (`/files?path=...`) - curl it with your same Bearer token: bytes travel as HTTP, not as tokens, so a 70 MB installer costs you nothing; (2) base64 chunks inline for small files or clients without a shell: loop offset until eof=true, concatenate the decoded chunks, verify the sha256 (whole file, returned on the offset=0 call). Files over 4 MB answer with the download link only unless you pass maxbytes<=1048576 explicitly. Jailed to the workspace roots and the read-only library zone.
 
 *Access: read-only OK.*
 
@@ -388,7 +388,18 @@ Download a file FROM the server in base64 chunks - the "get the deploy" tool: af
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the file to download from the server |
 | `offset` | integer | optional | Byte offset to start from (0 = beginning). Loop increasing it until eof=true and reassemble |
-| `maxbytes` | integer | optional | Bytes per chunk (default and cap: 8388608 = 8 MB) |
+| `maxbytes` | integer | optional | Bytes per chunk (default and cap: 8388608 = 8 MB). On a file over 4 MB, an explicit value ≤ 1048576 is the opt-in for inline chunks instead of the link-only answer |
+
+**Answer fields** (HTTP hosts): `path`, `size`, `offset`, `bytes`, `eof`, `sha256` (offset=0), `chunkBase64` (omitted on the link-only answer), **`download`** (relative URL, e.g. `/files?path=srvd%3A%5C...`), `downloadNote` (the exact `curl`), `note` (on the link-only answer).
+
+#### The `/files` download route
+
+`GET http://<host>:<port>/files?path=srvd:\...\file` with the same `Authorization: Bearer` header you use for `/mcp` (both tokens work — downloading is reading). Streams the file with `Content-Disposition` and an **`X-File-SHA256`** header to verify with `sha256sum`. Same read jail as `delphi_read`: outside the roots/library zone → 403; directories → 403 (never a listing); unserved virtual units and relative paths are refused by name without touching disk; missing → 404; other methods → 405. Example:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" -o LinuxPAServer37.0.tar.gz \
+  "http://192.168.1.79:3131/files?path=srvc%3A%5CProgram%20Files%20(x86)%5CEmbarcadero%5CStudio%5C37.0%5CPAServer%5CLinuxPAServer37.0.tar.gz"
+```
 
 ### `delphi_upload`
 

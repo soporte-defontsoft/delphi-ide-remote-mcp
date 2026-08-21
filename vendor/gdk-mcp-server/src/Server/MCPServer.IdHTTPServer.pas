@@ -33,6 +33,10 @@ type
   // [local change] tells the host which access level the current request
   // authenticated at, so it can flag the worker thread (read-only vs full).
   TAccessLevelEvent = reference to procedure(AReadOnly: Boolean);
+  // [local change] a second route next to the MCP endpoint (direct file
+  // download): the host serves it; this class only authenticates and routes.
+  TRouteEvent = reference to procedure(RequestInfo: TIdHTTPRequestInfo;
+    ResponseInfo: TIdHTTPResponseInfo);
 
   TMCPIdHTTPServer = class(TComponent)
   private
@@ -52,6 +56,8 @@ type
     FAnonymousReadOnly: Boolean; // [local change] no token = read-only access
     FOnAccessLevel: TAccessLevelEvent; // [local change] per-request RO/RW flag
     FBindIP: string; // [local change] bind to ONE interface ('' = all)
+    FFilesRoute: string;        // [local change] '' = no download route
+    FOnFileRequest: TRouteEvent; // [local change] GET handler for FFilesRoute
     FSettings: TMCPSettings;
     FEventIDCounter: Int64;
     procedure ConfigureSSL;
@@ -92,6 +98,11 @@ type
     // Empty = listen on all interfaces (the default; also the source of the
     // duplicate IPv4+IPv6 firewall prompt). Set e.g. to a LAN/VPN address.
     property BindIP: string read FBindIP write FBindIP;
+    // [local change] direct download route (e.g. '/files'): GET requests to
+    // this document, once past the SAME Bearer gate as the MCP endpoint, go
+    // to OnFileRequest. Other methods on it answer 405. Empty = not served.
+    property FilesRoute: string read FFilesRoute write FFilesRoute;
+    property OnFileRequest: TRouteEvent read FOnFileRequest write FOnFileRequest;
     property ManagerRegistry: IMCPManagerRegistry read FManagerRegistry write FManagerRegistry;
     property CoreManager: IMCPCapabilityManager read FCoreManager write FCoreManager;
     property Settings: TMCPSettings read FSettings write FSettings;
@@ -276,6 +287,21 @@ begin
     end;
 
     RequestPath := RequestInfo.Document;
+
+    // [local change] direct download route: same Bearer gate (already passed
+    // above), the host decides jail, existence and streaming.
+    if (FFilesRoute <> '') and Assigned(FOnFileRequest) and
+       SameText(RequestPath, FFilesRoute) then
+    begin
+      if RequestInfo.CommandType = hcGET then
+        FOnFileRequest(RequestInfo, ResponseInfo)
+      else
+      begin
+        ResponseInfo.ResponseNo := HTTP_METHOD_NOT_ALLOWED;
+        ResponseInfo.ResponseText := 'Method Not Allowed';
+      end;
+      Exit;
+    end;
 
     // Only handle requests to the configured MCP endpoint
     if (RequestPath <> FSettings.Endpoint) then

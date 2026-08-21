@@ -94,6 +94,7 @@ uses
   Lsp.Scaffold in 'Lsp.Scaffold.pas',
   Mcp.Tools.Scaffold in 'Mcp.Tools.Scaffold.pas',
   Lsp.Host in 'Lsp.Host.pas',
+  Lsp.Files in 'Lsp.Files.pas',
   Lsp.Service in 'Lsp.Service.pas',
   UTrayMain in 'UTrayMain.pas' {FormTray};
 

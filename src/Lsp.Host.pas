@@ -76,6 +76,7 @@ uses
   MCPServer.Resource.Server,
   Lsp.Guard,
   Lsp.Texts,
+  Lsp.Files,
   Mcp.Vault.Session,
   Mcp.Vault.Seed;
 
@@ -204,6 +205,12 @@ begin
     begin
       SetRequestReadOnly(AReadOnly);
     end;
+  // Direct download route on the same host, behind the same gate: big
+  // binaries travel as HTTP bytes, never as base64 through a model's context
+  // (field 2026-08-21: the 72 MB PAServer installer through delphi_fetch).
+  Result.FilesRoute := FILES_ROUTE;
+  Result.OnFileRequest := ServeFile;
+  GFilesServed := True; // delphi_fetch may now hand out the link
 end;
 
 end.

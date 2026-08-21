@@ -8,6 +8,32 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.39.0-beta] - 2026-08-21
+
+Born in the field: the Linux agent had to pull the 72 MB PAServer
+installer with `delphi_fetch` - nine 11 MB base64 chunks, ~24M tokens
+against a 262K context - and only survived by abusing a client-side
+quirk. Bytes belong to HTTP, not to a model's context window.
+
+### Added
+- **`GET /files?path=srvd:\...` - direct download route** on the SAME
+  HTTP host that serves `/mcp`: same port, same Bearer gate (both tokens -
+  downloading is reading; `AnonymousReadOnly` applies), same read jail
+  as `delphi_read`/`delphi_fetch` (workspace roots + read-only library
+  zone). Streams the file with `Content-Disposition` and an
+  **`X-File-SHA256`** header to verify with `sha256sum`. Directories,
+  files outside the jail and unserved virtual units are refused by name
+  (403) without touching disk; relative paths 400; other methods 405.
+  Still "MCP only": one exe, no SMB, no SSH, no side door. Measured: the
+  72 MB installer in 0.8 s with matching hashes.
+- `delphi_fetch` hands out the link: every answer carries **`download`**
+  (relative `/files?path=...`, the path URL-encoded in its virtual form)
+  and `downloadNote` (the exact `curl`). **Files over 4 MB answer with
+  the link only** - size, sha256, no chunk - unless the client opts into
+  inline chunks explicitly with `maxbytes<=1048576` (a client without a
+  shell). No new parameter to learn: the one that exists is the switch.
+  In stdio mode (no HTTP host) nothing changes.
+
 ### Changed
 - **Renamed to "Delphi IDE Remote MCP Server"** (repo slug
   `delphi-ide-remote-mcp`, previously `delphi-remote-mcp`): the name now

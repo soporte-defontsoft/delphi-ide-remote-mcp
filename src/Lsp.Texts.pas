@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.38.1-beta';
+  SERVER_VERSION = '0.39.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -608,6 +608,43 @@ const
 
   SR_ADB_LINES_FMT =
     'RECHAZADO: "%s" no es un numero de lineas valido para logcat (1-5000).';
+
+  // ---- /files download route + delphi_fetch ----
+
+  SD_FETCH =
+    'Download a file FROM the server - the "get the deploy" tool: after ' +
+    'delphi_build, fetch the exe (and any companion files listed with ' +
+    'delphi_list) to run GUI apps on YOUR machine. Two ways: (1) the ' +
+    '"download" field of the answer is a direct HTTP GET on this same ' +
+    'server (/files?path=...) - curl it with your same Bearer token: bytes ' +
+    'travel as HTTP, not as tokens, so a 70 MB installer costs you nothing; ' +
+    '(2) base64 chunks inline for small files or clients without a shell: ' +
+    'loop offset until eof=true, concatenate the decoded chunks, verify the ' +
+    'sha256 (whole file, returned on the offset=0 call). Files over 4 MB ' +
+    'answer with the download link only unless you pass maxbytes<=1048576 ' +
+    'explicitly. Jailed to the workspace roots and the read-only library zone.';
+
+  SN_FETCH_DOWNLOAD =
+    'Direct download: GET this path on the SAME host:port you use for /mcp, ' +
+    'with the SAME Authorization: Bearer header, e.g. ' +
+    'curl -H "Authorization: Bearer <token>" -o <file> "http://<host>:<port><download>". ' +
+    'The response carries X-File-SHA256 to verify with sha256sum. Bytes ' +
+    'travel as HTTP - nothing enters your context.';
+
+  SN_FETCH_BIG_FMT =
+    'This file is %s - too big to pull through your context as base64 ' +
+    'chunks. No chunk was included: use the "download" link (curl) instead. ' +
+    'If you really have no shell, pass maxbytes=1048576 (or less) to get ' +
+    'inline chunks anyway and loop offset until eof=true.';
+
+  SR_FILES_NEED_PATH =
+    'Falta el parametro path: GET /files?path=srvd:\...\fichero';
+
+  SR_FILES_DIR =
+    'RECHAZADO: es un directorio. /files descarga ficheros, nunca lista carpetas.';
+
+  SR_FILES_MISSING =
+    'No existe el fichero pedido.';
 
   // ---- delphi_components ----
 

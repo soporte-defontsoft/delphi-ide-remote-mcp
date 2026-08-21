@@ -29,6 +29,16 @@ on your side.
 - `delphi_search` / `delphi_list` to locate; never read whole trees.
 - NEVER pull thousands of lines into your context. Every big-dump tool
   has a file-mode escape (`out=`); use it, then read the file in ranges.
+- **Bytes are HTTP's job, not your context's.** Any file you want on
+  YOUR machine (an installer, an .apk, a screenshot PNG, a 5000-line
+  unit to grep locally): call `delphi_fetch` once and use the `download`
+  field it returns - a `GET /files?path=...` on the same host:port as
+  `/mcp`, with the same `Authorization: Bearer` header:
+  `curl -H "Authorization: Bearer $TOKEN" -o file "http://host:port/files?path=..."`.
+  Verify with `sha256sum` against the `X-File-SHA256` header. Files over
+  4 MB come back as link-only on purpose; inline base64 chunks
+  (`maxbytes<=1048576`, loop `offset` until `eof`) are the fallback for a
+  client that truly has no shell - never the default.
 
 ## Editing safely (`delphi_edit`)
 
@@ -62,10 +72,12 @@ on your side.
 
 ## Linux (PAServer)
 
-`delphi_paserver` end to end: `platforms` -> `add-profile` (against a
-live PAServer on the target) -> `get-sdk` once (pulls the sysroot; can
-take minutes) -> `delphi_build platform=Linux64` -> `delphi_package` ->
-`delphi_fetch` (chunked, sha256) -> run the ELF on YOUR machine.
+`delphi_paserver` end to end: `packages` (the PAServer installer ships
+with the IDE - `delphi_fetch` its path and `curl` the `download` link, it
+is ~70 MB) -> install and start it on the target -> `add-profile` ->
+`test-connection` -> `get-sdk` once (pulls the sysroot; can take minutes)
+-> `delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
+(`download` link, sha256) -> run the ELF on YOUR machine.
 
 ## Android (`delphi_adb`) - eyes and hands
 
