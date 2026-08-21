@@ -190,6 +190,13 @@ check('adb logcat lines=0: tratado como default (no rechazo de rango)',
 out = srv.call('delphi_adb', {"command": "logcat", "lines": "99999"})
 check('adb logcat lines=99999: rechazado', 'RECHAZADO' in out, out[:200])
 
+# logcat out= dumps to a file the agent reads in ranges (field lesson: an
+# inline dump of thousands of lines drowned a 200k-context client)
+out = srv.call('delphi_adb', {"command": "logcat",
+                              "out": os.path.join(BASE, 'volcado.md')})
+check('adb logcat out sin .txt/.log: rechazado', 'RECHAZADO' in out
+      and '.txt' in out, out[:200])
+
 # ====================== gate: the device-token rule (both sinks) ==========
 out = srv.call('delphi_adb', {"command": "connect", "address": "10.0.0.1:5555; rm -rf /"})
 check('gate: address con metacaracteres rechazada',

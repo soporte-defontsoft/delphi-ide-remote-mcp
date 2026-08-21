@@ -359,11 +359,11 @@ The operator can pin an allowlist in `settings.ini` — `[Adb] AllowedDevices=19
 | `device` | string | optional | Device serial (from command=devices) when several are attached (install/run/logcat/screenshot/tap/key; mandatory when the allowlist is configured) |
 | `apk` | string | optional | install: path of the .apk (inside the workspace). Build it with `delphi_build target=Deploy` |
 | `app` | string | optional | run: package name of the installed app (e.g. com.embarcadero.MiApp - the build/install results state it) |
-| `out` | string | optional | screenshot: server path of the .png to write (inside the workspace), then download it with delphi_fetch |
+| `out` | string | optional | screenshot: server path of the .png to write (then delphi_fetch it). logcat: optional .txt/.log path to dump into instead of answering inline — then read it in RANGES with `delphi_read` (400 lines/call). Inside the workspace |
 | `x` / `y` | string | optional | tap: coordinates in pixels, measured on a screenshot |
 | `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |
 | `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package) |
-| `lines` | string | optional | logcat: how many recent lines to return (default 300, max 5000) |
+| `lines` | string | optional | logcat: how many recent lines to capture (default 300, max 5000; 0 = default). Inline answers carry at most the newest 400 — bigger dumps via `out=` |
 
 
 ## Transfer files

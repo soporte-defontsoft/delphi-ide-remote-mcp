@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.34.2-beta';
+  SERVER_VERSION = '0.35.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -487,8 +487,9 @@ const
     'run: package name of the installed app to launch (e.g. ' +
     'com.embarcadero.MiApp - the build/install results state it)';
   SP_ADB_OUT =
-    'screenshot: server path of the .png to write (inside the workspace), ' +
-    'then download it with delphi_fetch';
+    'screenshot: server path of the .png to write (then delphi_fetch it). ' +
+    'logcat: optional .txt/.log path to dump into INSTEAD of answering ' +
+    'inline - then read it in ranges with delphi_read. Inside the workspace';
   SP_ADB_X =
     'tap: X coordinate in pixels (measure on a screenshot)';
   SP_ADB_Y =
@@ -500,8 +501,9 @@ const
     'logcat: only lines containing this text (e.g. your app tag or package). ' +
     'Optional';
   SP_ADB_LINES =
-    'logcat: how many recent lines to return (default 300, max 5000; 0 = ' +
-    'the default). Optional';
+    'logcat: how many recent lines to capture (default 300, max 5000; 0 = ' +
+    'the default). Inline answers carry at most the newest 400 - for a ' +
+    'bigger dump pass out=<file.txt> and read it in ranges. Optional';
 
   SR_ADB_CMD =
     'error: command debe ser discover | devices | connect | disconnect | ' +
@@ -543,6 +545,20 @@ const
     'reactive la depuracion inalambrica en el aparato y busca el puerto ' +
     'nuevo con command=discover (Android 11+ lo aleatoriza al reactivar). ' +
     'command=devices dice que hay enganchado AHORA MISMO.';
+
+  SR_ADB_OUT_LOG =
+    'RECHAZADO: el "out" de logcat debe terminar en .txt o .log.';
+
+  SN_ADB_LOGFILE =
+    'The dump is in this file ON THE SERVER. Read it in RANGES with ' +
+    'delphi_read (it pages at 400 lines per call) or search it with ' +
+    'delphi_search - never pull thousands of lines into your context: a ' +
+    'full inline dump has drowned a small-context client in the field.';
+
+  SN_ADB_TAIL_FMT =
+    '(logcat: %d lineas capturadas; van las %d MAS RECIENTES para proteger ' +
+    'tu contexto. Volcado completo: repite con out=<fichero.txt> y leelo ' +
+    'por rangos con delphi_read, o acota con filter.)';
 
   SN_ADB_SCREENSHOT =
     'The device screen is in this PNG on the server - download it with ' +

@@ -214,6 +214,16 @@ begin
     if Params.Lines.Trim <> '' then
       if (N < 1) or (N > 5000) then
         Exit(Format(SR_ADB_LINES_FMT, [Params.Lines.Trim]));
+    // out= vetted BEFORE touching adb (fail fast)
+    if Params.Out.Trim <> '' then
+    begin
+      Denied := PathDenied(Params.Out);
+      if Denied <> '' then
+        Exit(Denied);
+      if not (Params.Out.Trim.ToLower.EndsWith('.txt') or
+              Params.Out.Trim.ToLower.EndsWith('.log')) then
+        Exit(SR_ADB_OUT_LOG);
+    end;
     // logcat on a missing device WAITS instead of erroring (measured:
     // "- waiting for device -" until the timeout); get-state answers the
     // absence instantly.
@@ -228,6 +238,7 @@ begin
     // a lost device must say so, not hide as "(logcat vacio)"
     if DeviceGone(Output) then
       Exit(GoneHint(Output));
+    var Txt: string;
     if Params.Filter.Trim <> '' then
     begin
       var Filtered := TStringBuilder.Create;
@@ -235,17 +246,58 @@ begin
         for L in Output.Split([#13#10, #10]) do
           if L.Contains(Params.Filter.Trim) then
             Filtered.AppendLine(L.TrimRight);
-        Result := Filtered.ToString;
+        Txt := Filtered.ToString.TrimRight;
       finally
         Filtered.Free;
       end;
     end
     else
-      Result := Output.TrimRight;
-    if Result.Trim = '' then
-      Result := '(logcat vacio: sin lineas' +
+      Txt := Output.TrimRight;
+    if Txt.Trim = '' then
+      Txt := '(logcat vacio: sin lineas' +
         IfThen(Params.Filter.Trim <> '', ' que contengan "' +
           Params.Filter.Trim + '"', '') + ')';
+    if Params.Out.Trim <> '' then
+    begin
+      // The dump goes to a FILE the agent reads in ranges (delphi_read
+      // pages at 400): a thousands-of-lines inline dump drowned a
+      // 200k-context client in the field (312k tokens, 4 compressions).
+      var OutDir := TPath.GetDirectoryName(Params.Out.Trim);
+      if OutDir <> '' then
+        TDirectory.CreateDirectory(OutDir);
+      TFile.WriteAllText(Params.Out.Trim, Txt, TEncoding.UTF8);
+      Return := TJSONObject.Create;
+      try
+        Return.AddPair('logfile', Params.Out.Trim);
+        Return.AddPair('lines',
+          TJSONNumber.Create(Length(Txt.Split([#13#10, #10]))));
+        Return.AddPair('size', TJSONNumber.Create(TFile.GetSize(Params.Out.Trim)));
+        Return.AddPair('note', SN_ADB_LOGFILE);
+        Result := Return.ToJSON;
+      finally
+        Return.Free;
+      end;
+    end
+    else
+    begin
+      // inline: never more than the newest 400 lines - protecting the
+      // client's context is the server's job too
+      var Ls := Txt.Split([#13#10, #10]);
+      if Length(Ls) > 400 then
+      begin
+        var Tail := TStringBuilder.Create;
+        try
+          Tail.AppendLine(Format(SN_ADB_TAIL_FMT, [Length(Ls), 400]));
+          for var I := Length(Ls) - 400 to High(Ls) do
+            Tail.AppendLine(Ls[I].TrimRight);
+          Result := Tail.ToString.TrimRight;
+        finally
+          Tail.Free;
+        end;
+      end
+      else
+        Result := Txt;
+    end;
   end
   else if (Cmd = 'connect') or (Cmd = 'disconnect') then
   begin

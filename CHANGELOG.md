@@ -8,6 +8,27 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.35.0-beta] - 2026-08-21
+
+Field lesson from the first small-model Android run: the server must
+protect the CLIENT's context window, not just its own machine. The field
+agent (a local 27B) drowned its 200k-token session by pulling a
+2,400-line logcat inline - 312k tokens, four compressions, 13-minute
+calls.
+
+### Added
+- **`delphi_adb logcat out=<file.txt|.log>`** - the dump goes to a file
+  on the server (jailed, parents created, UTF-8) and the answer is a
+  small JSON (`logfile`, `lines`, `size`) pointing the agent at
+  `delphi_read` (which pages at 400 lines per call) and `delphi_search` -
+  the same read-in-ranges pattern as `screenshot`+`delphi_fetch`.
+
+### Changed
+- **Inline logcat answers are capped at the newest 400 lines**, with an
+  honest heading saying how many were captured and how to get the full
+  dump (`out=` or a tighter `filter`). A small-context client can no
+  longer sink itself with one call.
+
 ## [0.34.2-beta] - 2026-08-21
 
 ### Fixed
