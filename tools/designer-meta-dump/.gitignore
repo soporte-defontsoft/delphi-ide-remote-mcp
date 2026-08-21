@@ -1,0 +1,11 @@
+Win32/
+Win64/
+*.dcu
+*.local
+*.identcache
+*.stat
+__delphi-patch/
+__history/
+__recovery/
+*-deploy.zip
+*.delphilsp.json

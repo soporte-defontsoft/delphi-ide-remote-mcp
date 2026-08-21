@@ -207,6 +207,61 @@ check('createunit: UTF-8 BOM + CRLF + esqueleto',
 out = call('delphi_edit', {"path": NU, "createunit": True})
 check('createunit: jamas sobreescribe', 'RECHAZADO' in out and 'YA EXISTE' in out, out)
 
+# --- designer lint: known cross-framework property mistakes warn at edit
+# time (field, Fase 3: they crash the app at form-load, silently on Android;
+# the build only checks the text grammar and packages them without a word) ---
+FMX = os.path.join(DIR, 'Lint.fmx')
+with open(FMX, 'wb') as f:
+    f.write(('object FormMain: TFormMain\r\n'
+             "  Caption = 'FormMain'\r\n"
+             '  object Lbl: TLabel\r\n'
+             '    Position.X = 10.000000000000000000\r\n'
+             '  end\r\n'
+             'end\r\n').encode('ascii'))
+out = call('delphi_edit', {"path": FMX,
+    "old": "    Position.X = 10.000000000000000000",
+    "new": "    Position.X = 10.000000000000000000\r\n"
+           "    Size.X = 100.000000\r\n"
+           "    Font.Size = 24.000000\r\n"
+           "    TextSettings.HorzAlignment = Center\r\n"
+           "    TextSettings.HorzAlign = taCenter"})
+check('lint fmx: defectos resueltos contra las tablas GENERADAS del framework',
+      'AVISO DESIGNER' in out and 'TControlSize' in out and 'Width' in out
+      and 'TextSettings' in out and 'HorzAlign' in out
+      and 'Leading' in out and 'CRASHEA' in out, out[-900:])
+out = call('delphi_edit', {"path": FMX,
+    "old": "    Size.X = 100.000000",
+    "new": "    Size.Width = 100.000000000000000000"})
+check('lint fmx: cubre el fichero ENTERO (los defectos restantes siguen avisando)',
+      'AVISO DESIGNER' in out and 'no existe en TLabel' in out, out[-600:])
+FMX2 = os.path.join(DIR, 'Limpio.fmx')
+with open(FMX2, 'wb') as f:
+    f.write(('object FormMain: TFormMain\r\n'
+             "  Caption = 'FormMain'\r\n"
+             '  object Btn: TButton\r\n'
+             '    Position.X = 20.000000000000000000\r\n'
+             "    Text = 'Salir'\r\n"
+             '  end\r\n'
+             'end\r\n').encode('ascii'))
+out = call('delphi_edit', {"path": FMX2,
+    "old": "    Text = 'Salir'", "new": "    Text = 'Cerrar'"})
+check('lint fmx: un designer LIMPIO no genera aviso',
+      'ESCRITO' in out and 'AVISO DESIGNER' not in out, out[-300:])
+VDFM = os.path.join(DIR, 'LintV.dfm')
+with open(VDFM, 'wb') as f:
+    f.write(('object Form1: TForm1\r\n'
+             "  Caption = 'Form1'\r\n"
+             '  object Boton1: TButton\r\n'
+             '    Left = 8\r\n'
+             '  end\r\n'
+             'end\r\n').encode('ascii'))
+out = call('delphi_edit', {"path": VDFM,
+    "old": "    Left = 8",
+    "new": "    Left = 8\r\n    Position.X = 20.000000\r\n    Align = Client"})
+check('lint dfm: FMX-ismos avisados en el sentido inverso',
+      'AVISO DESIGNER' in out and 'no existe en TButton' in out
+      and 'alClient' in out, out[-600:])
+
 # --- restore: two steps, byte-identical ---
 out = call('delphi_edit', {"path": PAS, "restore": True})
 check('restore: paso 1 solo avisa', 'NO he hecho nada' in out and 'SE PERDERAN' in out, out)

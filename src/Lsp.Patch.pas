@@ -73,7 +73,8 @@ uses
   System.RegularExpressions,
   Winapi.Windows,
   Lsp.Guard,
-  Lsp.Discovery;
+  Lsp.Discovery,
+  Lsp.DesignerMeta;
 
 const
   BACKUP_SUB = '__delphi-patch';
@@ -943,6 +944,52 @@ begin
   end;
 end;
 
+{ Designer lint: every property line of the RESULTING file resolved against
+  the GENERATED framework tables (Lsp.DesignerMeta - classes, published
+  properties, enum/set members and instance aliases dumped from the
+  framework's own metadata by tools\designer-meta-dump). The framework
+  describes itself; no hand-written error rules. Field origin (Fase 3): a
+  hand-edited .fmx crashed at form-load on the device with no trace - the
+  build only checks a form resource's text grammar. Warnings, not
+  refusals. }
+function DesignerLint(const APath: string;
+  const ALines: TArray<string>): TArray<string>;
+var
+  Raw: TArray<string>;
+  Res: TStringList;
+  I: Integer;
+  ExtName: string;
+begin
+  Result := [];
+  Raw := DesignerMetaLint(APath.ToLower.EndsWith('.fmx'), ALines);
+  if Length(Raw) = 0 then
+    Exit;
+  Res := TStringList.Create;
+  try
+    for I := 0 to High(Raw) do
+    begin
+      if I >= 8 then
+      begin
+        Res.Add(Format('  ... y %d mas', [Length(Raw) - 8]));
+        Break;
+      end;
+      Res.Add(Raw[I]);
+    end;
+    if APath.ToLower.EndsWith('.fmx') then
+      ExtName := '.fmx'
+    else
+      ExtName := '.dfm';
+    Res.Insert(0, '*** AVISO DESIGNER: propiedades que el streaming del ' +
+      ExtName + ' NO conoce (contrastado con las tablas generadas del ' +
+      'propio framework). El build las empaqueta igual (solo valida ' +
+      'gramatica) y la app CRASHEA al cargar el form en runtime - en ' +
+      'Android muere sin mensaje. Corrigelas antes de desplegar: ***');
+    Result := Res.ToStringArray;
+  finally
+    Res.Free;
+  end;
+end;
+
 function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
   AIsDesigner: Boolean; ADelete: Boolean = False): string;
 var
@@ -1176,7 +1223,11 @@ begin
     if (Length(FmNew) > 0) and (Length(MojibakeLines(AOld)) = 0) then
       Warnings.Add('*** FIRMA DE MOJIBAKE EN TU TEXTO NUEVO. Si querias escribir un acento, pon el caracter LIMPIO; si copias adrede una corrupcion existente, declaralo. ***');
     if AIsDesigner then
+    begin
       Warnings.Add('(fichero del designer en formato texto: editado, pero lo gobierna el IDE. MENCIONALO en tu informe.)');
+      for var LintW in DesignerLint(APath, AfterLines) do
+        Warnings.Add(LintW);
+    end;
 
     if not AIsDesigner then
     begin

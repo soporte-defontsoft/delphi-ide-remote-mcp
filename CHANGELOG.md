@@ -8,6 +8,45 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.36.0-beta] - 2026-08-21
+
+Born from the field agent's first Phase-3 bug report: it hand-edited a
+`.fmx` with VCL-isms, the build packaged it without a word (the compiler
+only checks a form resource's TEXT GRAMMAR, never its semantics), and the
+app died at form-load on the device - "exited cleanly", no stack trace,
+hours of blind debugging.
+
+### Added
+- **Designer lint in `delphi_edit`** for text `.fmx`/`.dfm` - and no
+  hand-written error rules (the operator's bar: "sin hardcodear"): every
+  property line of the resulting file is resolved against **tables
+  generated from the framework's own metadata**. Two offline dumpers
+  (`tools\designer-meta-dump`, our release tools - the server never runs
+  them) walk every linked TPersistent class with `{$STRONGLINKTYPES ON}`
+  and classic published typinfo (`GetPropList` - the SAME metadata
+  `TReader` streams against; `System.Rtti` hides properties under
+  restricted `$RTTI`, measured), emitting classes, published properties
+  (inheritance resolved), enum members and set elements into generated
+  units (`Lsp.DesignerMeta.Fmx/Vcl.pas`, ~22k facts / 850+ classes,
+  regenerate after a RAD upgrade). A second pass INSTANTIATES each
+  component - allowed in the offline tool, never server-side - to record
+  the class every class-typed property REALLY holds (`TLabel.TextSettings`
+  declares `TTextSettings`, public-only; it holds `TLabelTextSettings`,
+  which re-publishes - measured), because that is what the streaming
+  resolves against.
+- The resulting warnings speak the framework's own words: `Size.X` →
+  *"X" no existe en TControlSize (publica: Width, Height,
+  PlatformDefault)*; `taCenter` → *no es un valor de TTextAlign; validos:
+  Center, Leading, Trailing*. Silence policy: unknown classes
+  (third-party, user forms), classes without table data, collection
+  items, binary blocks and list values are never judged - a lint false
+  positive would poison trust. Warnings in the edit audit, not refusals;
+  the build still cannot catch these (it only checks a form resource's
+  text grammar) and at runtime the app dies at form load - on Android,
+  silently (the Fase 3 field lesson that started this).
+
+10 batteries / 572 checks / 0 failures.
+
 ## [0.35.0-beta] - 2026-08-21
 
 Field lesson from the first small-model Android run: the server must
