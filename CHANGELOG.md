@@ -8,6 +8,51 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.33.0-beta] - 2026-08-21
+
+The last link of the remote-target chain, built and field-proven the same
+night: the SDK/sysroot pull. With it, the full cycle ran for the first time -
+an agent's PAServer on Linux, its connection profile, the sysroot pulled to
+the Windows side, and the very project that died at link the day before
+producing a valid Linux64 ELF.
+
+### Added
+- **`delphi_paserver command=get-sdk`** - the last link of the remote-target
+  chain: pulls the platform SDK/sysroot (the libraries the linker needs)
+  from the live PAServer of a connection profile and registers it, so
+  `delphi_build` links for that platform. Measured end to end against a real
+  target the day it was built: 1,678 files / 1.9 GB pulled, GCC version
+  auto-detected from the tree, `Linux64.sdk` written fully resolved (the
+  IDE's own format - no MSBuild macros), and the very project whose build
+  died at link (`cannot find -lgcc_s`) produced a valid ELF on the next try.
+  C++ headers are deliberately not pulled (this server links Delphi);
+  distro-layout differences (Ubuntu vs RedHat vs merged /lib) are optional
+  pulls that skip when absent. Linux64 today; other platforms report their
+  absence honestly.
+- **`delphi_build` passes the SDK automatically**: for a remote platform,
+  when `<Platform>.sdk` exists (written by get-sdk) it goes to msbuild as
+  `/p:PlatformSDK=...` - EnvOptions.proj has no default for platforms the
+  IDE's SDK Manager never configured. No behaviour change for Win/Android.
+- Measured for the .sdk generator (the piece the docs do not tell): the
+  Delphi Linux64 targets read `$(Profile_LibraryPath)` - a PROPERTY resolved
+  at project-load - not the `ProfileLibrary` ITEMS (those feed a build-time
+  target on the C++ side). An .sdk without that property imports cleanly,
+  collapses paths in the debug target, and still fails the link.
+- **`delphi_report` grows an `agent` id**: pass a short stable id (e.g.
+  "hermes") and your reports land in their own subfolder under `reports/`,
+  separate from other agents on the same server. The value is slugged by the
+  server before touching the filesystem (the client still never supplies a
+  path); without it, reports stay in the root folder as before. Also the
+  seed of a wider per-client identity later.
+
+### Changed
+- The Linux install hint of `delphi_paserver command=packages` now carries
+  two field-measured warnings from the first real remote PAServer install:
+  a headless `paserver` whose stdin hits EOF spins its prompt at ~100% CPU
+  (keep stdin open: `sleep infinity | ./paserver ...`), and `-passfile` with
+  a plain-text password was rejected on login while `-password=<pwd>` inline
+  authenticated - prefer the latter for ad-hoc runs.
+
 ## [0.32.0-beta] - 2026-08-21
 
 The network half of PAServer, built the day the first live PAServer existed to

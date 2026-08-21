@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.32.0-beta';
+  SERVER_VERSION = '0.33.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -310,8 +310,12 @@ const
     'the PAServer of that profile (full handshake, credentials included), ' +
     'and with host+port and NO name it is a raw TCP reachability probe - ' +
     'the quick "does this server reach my PAServer at all?" answer, no ' +
-    'credentials involved. Building for the platform is delphi_build once ' +
-    'its profile exists; enabling a platform in a project is delphi_config.';
+    'credentials involved; command=get-sdk pulls the platform SDK/sysroot ' +
+    '(the libraries the linker needs) from the PAServer of profile "name" ' +
+    'and registers it, so delphi_build can link for that platform - run it ' +
+    'once per target (can take minutes; re-run after OS upgrades on the ' +
+    'target). Building for the platform is delphi_build once profile and ' +
+    'SDK exist; enabling a platform in a project is delphi_config.';
 
   SP_PASERVER_COMMAND =
     'platforms (what this server can target + profile/SDK status) | ' +
@@ -319,8 +323,9 @@ const
     'profiles (registered connection profiles and SDKs) | add-profile ' +
     '(register a connection profile: name, host, password; optional port, ' +
     'platform) | test-connection (with name: full handshake against that ' +
-    'profile; with host+port and no name: raw TCP reachability probe). ' +
-    'Default: platforms';
+    'profile; with host+port and no name: raw TCP reachability probe) | ' +
+    'get-sdk (pull the SDK/sysroot from the PAServer of profile "name" and ' +
+    'register it for delphi_build; can take minutes). Default: platforms';
   SP_PASERVER_NAME =
     'Profile name (letters, digits, "_", "-"): add-profile creates it, ' +
     'test-connection dials it';
@@ -339,7 +344,24 @@ const
 
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | add-profile ' +
-    '| test-connection';
+    '| test-connection | get-sdk';
+
+  SR_PASERVER_SDK_PLATFORM_FMT =
+    'RECHAZADO: get-sdk cubre hoy la plataforma Linux64 y el perfil "%s" es ' +
+    'de %s. Para otras plataformas (macOS necesita un Mac real con PAServer) ' +
+    'reportalo con delphi_report: es la senal para construirlas.';
+
+  SR_PASERVER_SDK_PULL_FMT =
+    'error: fallo el pull del SDK en "%s" (paclient exit %d): %s -- El ' +
+    'sysroot puede haber quedado a medias; corrige la causa (PAServer vivo? ' +
+    'ruta existente en el target?) y vuelve a lanzar get-sdk: los pulls son ' +
+    'reanudables.';
+
+  SN_PASERVER_SDK_OK =
+    'SDK provisioned: the target libraries now live on this server and the ' +
+    'platform SDK is registered. delphi_build picks it up automatically for ' +
+    'this platform. Note: C++ headers are NOT pulled (this server links ' +
+    'Delphi); re-run get-sdk after OS/toolchain upgrades on the target.';
 
   SR_PASERVER_NAME_FMT =
     'RECHAZADO: "%s" no vale como nombre de perfil. Usa letras, digitos, ' +
@@ -411,9 +433,10 @@ const
     'confusing, or you had to work around a missing capability - that ' +
     'feedback is what fixes the server. Each report is stored as its own ' +
     'timestamped markdown file in a reports folder next to the server ' +
-    'executable, with the server version and the date. Available at EVERY ' +
-    'access level, read-only included. Be concrete: what you tried, what ' +
-    'happened, what you expected.';
+    'executable, with the server version and the date; pass a short stable ' +
+    '"agent" id and your reports get their own subfolder, separate from ' +
+    'other agents. Available at EVERY access level, read-only included. Be ' +
+    'concrete: what you tried, what happened, what you expected.';
 
   SP_REPORT_MESSAGE =
     'The report itself: what you tried, what happened, what you expected. ' +
@@ -425,6 +448,14 @@ const
   SP_REPORT_FROM =
     'Optional: who is reporting (agent/model name, project) - helps us read ' +
     'the history later';
+  // The client still never supplies a path: the value is slugged to ASCII
+  // letters/digits/dashes before it becomes a folder name, same normalizer
+  // as the title. Also the seed of a wider client identity (future use).
+  SP_REPORT_AGENT =
+    'Optional short id of the reporting agent (e.g. "hermes"): its reports ' +
+    'are stored in a folder of that name, separate from other agents. Keep ' +
+    'it STABLE across your reports. Letters, digits and dashes; anything ' +
+    'else is normalized away';
 
   SR_REPORT_EMPTY =
     'RECHAZADO: delphi_report necesita "message" con la descripcion del ' +

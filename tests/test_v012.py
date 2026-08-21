@@ -295,6 +295,30 @@ if new_files:
 out = call('delphi_report', {"message": ""})
 check('report: mensaje vacio rechazado', 'RECHAZADO' in out, out[:120])
 
+# ---- delphi_report: "agent" groups reports in a folder per emitter ---------
+ADIR = os.path.join(RDIR, 'bateria-v012')
+out = call('delphi_report', {"message": "reporte con carpeta de agente",
+                             "title": "agente", "kind": "question",
+                             "agent": "Bateria V012!"})
+check('report agent: aceptado y cita la subcarpeta',
+      'GRACIAS' in out and 'bateria-v012/' in out, out[:150])
+afiles = _glob.glob(os.path.join(ADIR, '*.md'))
+check('report agent: el .md cae en reports/<agente>/ (slug normalizado)',
+      len(afiles) == 1, afiles)
+if afiles:
+    txt = open(afiles[0], encoding='utf-8-sig').read()
+    check('report agent: la cabecera lleva Agent', '**Agent**: bateria-v012' in txt, txt[:250])
+    os.remove(afiles[0])
+try:
+    os.rmdir(ADIR)
+except OSError:
+    pass
+out = call('delphi_report', {"message": "sin agente sigue en la raiz",
+                             "title": "raiz", "kind": "question"})
+saved_name = out.split('como ')[-1].split(' (v')[0] if 'como ' in out else '?'
+check('report sin agent: sigue en la raiz de reports',
+      'GRACIAS' in out and '/' not in saved_name, out[:150])
+
 # ---- git dangerous options refused at the GATE (both access levels) --------
 PWN = os.path.join(INSIDE, 'PWNED.txt')
 out = call('delphi_git', {"repo": INSIDE, "command": "diff", "args": "--output=" + PWN})

@@ -44,6 +44,11 @@ function IdeConfigValue(const AVersion, ASubKey, AValueName: string): string;
   historical ANSI default (value absent or not UTF8-to-UTF8). }
 function IdeDefaultUtf8(const AVersion: string): Boolean;
 
+{ The per-user IDE data folder %APPDATA%\Embarcadero\BDS\<ver> - where the
+  connection profiles (<name>.profile) and platform SDKs (<name>.sdk) live.
+  ONE definition, shared by delphi_paserver and the build runner. }
+function IdeProfilesDir(const AVersion: string): string;
+
 { ALL RAD Studio installations on the machine (a machine may host several
   Delphi versions side by side), newest first. Installs WITHOUT DelphiLSP
   are included too: they still build via msbuild. }
@@ -294,6 +299,12 @@ function IdeDefaultUtf8(const AVersion: string): Boolean;
 begin
   Result := IdeConfigValue(AVersion, 'Editor', 'DefaultFileFilter')
     .ToUpper.Contains('UTF8TOUTF8');
+end;
+
+function IdeProfilesDir(const AVersion: string): string;
+begin
+  Result := TPath.Combine(TPath.Combine(TPath.Combine(
+    GetEnvironmentVariable('APPDATA'), 'Embarcadero'), 'BDS'), AVersion);
 end;
 
 end.

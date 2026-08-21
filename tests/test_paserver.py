@@ -131,6 +131,9 @@ except Exception:
 
 out = srv.call('delphi_paserver', {"command": "packages"})
 check('packages: lista el PAServer de Linux', 'LinuxPAServer' in out, out[:200])
+check('packages: el hint de Linux avisa del bucle de stdin y del passfile',
+      'sleep infinity' in out and '-password' in out and 'passfile' in out,
+      out[:400])
 
 out = srv.call('delphi_paserver', {"command": "profiles"})
 try:
@@ -139,10 +142,18 @@ try:
 except Exception:
     check('profiles: parsea', False, out[:200])
 
-# --- dispatcher: unknown command names the two new ones ---
+# --- dispatcher: unknown command names the new ones ---
 out = srv.call('delphi_paserver', {"command": "nonsense"})
-check('command invalido: menciona add-profile y test-connection',
-      'add-profile' in out and 'test-connection' in out, out[:200])
+check('command invalido: menciona add-profile, test-connection y get-sdk',
+      'add-profile' in out and 'test-connection' in out and 'get-sdk' in out,
+      out[:200])
+
+# --- get-sdk: functional validation (the happy path needs a live PAServer,
+# exercised in the field; here the refusal paths and the gate) ---
+out = srv.call('delphi_paserver', {"command": "get-sdk"})
+check('get-sdk sin name: rechazo con camino', 'RECHAZADO' in out and 'add-profile' in out, out[:250])
+out = srv.call('delphi_paserver', {"command": "get-sdk", "name": "no-such-profile"})
+check('get-sdk perfil inexistente: rechazado', 'RECHAZADO' in out and 'no-such-profile' in out, out[:250])
 
 # --- gate vetting (argument filter, BOTH access levels) ---
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": "bad name!",
@@ -258,6 +269,8 @@ check('readonly: add-profile rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' i
 out = ro.call('delphi_paserver', {"command": "test-connection", "host": "127.0.0.1",
                                   "port": DEAD_PORT})
 check('readonly: test-connection rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
+out = ro.call('delphi_paserver', {"command": "get-sdk", "name": PROF_NAME})
+check('readonly: get-sdk rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
 ro.close()
 
 cleanup_profile()

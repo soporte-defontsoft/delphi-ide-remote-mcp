@@ -355,14 +355,29 @@ begin
   if Target = '' then
     Target := 'Build';
 
+  // Remote platforms (Linux64...) link against a locally provisioned
+  // SDK/sysroot. The IDE keeps its default in EnvOptions.proj, but for a
+  // platform the SDK Manager never configured that default is EMPTY - so
+  // when delphi_paserver get-sdk has written <Platform>.sdk, pass it. A
+  // command-line /p: overrides any imported default; when no such file
+  // exists nothing changes (Android's SDK arrives via its own default).
+  var SdkArg := '';
+  if not IsLocalPlatform(Plat) then
+  begin
+    var SdkName := CanonicalPlatform(Plat) + '.sdk';
+    if (CanonicalPlatform(Plat) <> '') and
+       TFile.Exists(TPath.Combine(IdeProfilesDir(Info.Version), SdkName)) then
+      SdkArg := ' /p:PlatformSDK=' + SdkName;
+  end;
+
   // Security audit trail: a build can run arbitrary pre/post-build steps
   // declared in the .dproj, so record every one.
-  TLogger.Warning(Format('delphi_build: BUILD "%s" %s/%s target=%s',
-    [TPath.GetFullPath(ADprojPath), Plat, Cfg, Target]));
+  TLogger.Warning(Format('delphi_build: BUILD "%s" %s/%s target=%s%s',
+    [TPath.GetFullPath(ADprojPath), Plat, Cfg, Target, SdkArg]));
 
   Output := RunCaptured(Format(
-    'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s /v:minimal /nologo"',
-    [Info.RsVarsBat, TPath.GetFullPath(ADprojPath), Target, Cfg, Plat]),
+    'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s%s /v:minimal /nologo"',
+    [Info.RsVarsBat, TPath.GetFullPath(ADprojPath), Target, Cfg, Plat, SdkArg]),
     ATimeoutMs, ExitCode);
 
   Errors := TJSONArray.Create;

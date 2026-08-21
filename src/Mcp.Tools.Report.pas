@@ -9,14 +9,19 @@ unit Mcp.Tools.Report;
   Deliberately available at EVERY access level, read-only included: the
   agents most likely to hit a wall are precisely the restricted ones. It is
   safe by construction - the client never supplies a path: the folder is
-  fixed and the file name is generated here. }
+  fixed and the file name is generated here. The optional "agent" id groups
+  reports in one subfolder per emitter (several agents share one server);
+  it is SLUGGED before touching the filesystem, so the path stays
+  server-generated. Self-declared for now - if per-agent credentials ever
+  exist, the folder should derive from the credential instead. }
 
 interface
 
 uses
   System.SysUtils,
   MCPServer.Tool.Base,
-  MCPServer.Types;
+  MCPServer.Types,
+  Lsp.Texts;
 
 type
   TDelphiReportParams = class
@@ -25,6 +30,7 @@ type
     FTitle: string;
     FKind: string;
     FFrom: string;
+    FAgent: string;
   public
     [SchemaDescription('The report itself: what you tried, what happened, what you expected. Markdown welcome, several paragraphs are fine')]
     property Message: string read FMessage write FMessage;
@@ -34,6 +40,8 @@ type
     property Kind: string read FKind write FKind;
     [SchemaDescription('Optional: who is reporting (agent/model name, project) - helps us read the history later')]
     property From: string read FFrom write FFrom;
+    [SchemaDescription(SP_REPORT_AGENT)]
+    property Agent: string read FAgent write FAgent;
   end;
 
   TDelphiReportTool = class(TMCPToolBase<TDelphiReportParams>)
@@ -50,8 +58,7 @@ uses
   System.Classes,
   System.StrUtils,
   MCPServer.Registration,
-  MCPServer.Logger,
-  Lsp.Texts;
+  MCPServer.Logger;
 
 const
   REPORTS_DIR = 'reports';
@@ -100,7 +107,7 @@ end;
 
 function TDelphiReportTool.ExecuteWithParams(const Params: TDelphiReportParams): string;
 var
-  Dir, FileName, Path, Kind, Title, Body: string;
+  Dir, FileName, Path, Kind, Title, Agent, Body: string;
   Stamp: TDateTime;
   Sb: TStringBuilder;
   I, Size: Integer;
@@ -108,10 +115,10 @@ begin
   if Params.Message.Trim = '' then
     Exit(SR_REPORT_EMPTY);
 
-  // Measured on the WHOLE payload the client controls (title and from travel
-  // into the body too), in bytes of the encoding actually written to disk.
+  // Measured on the WHOLE payload the client controls (title, from and agent
+  // travel into the body too), in bytes of the encoding written to disk.
   Size := TEncoding.UTF8.GetByteCount(
-    Params.Message + Params.Title + Params.From);
+    Params.Message + Params.Title + Params.From + Params.Agent);
   if Size > MAX_REPORT_BYTES then
     Exit(Format(SR_REPORT_TOO_BIG_FMT,
       [Size div 1024, MAX_REPORT_BYTES div 1024]));
@@ -120,8 +127,15 @@ begin
   if not MatchText(Kind, ['bug', 'limitation', 'suggestion', 'question']) then
     Kind := 'bug';
   Title := Params.Title.Trim;
+  // One subfolder per emitter. Slug() - the same normalizer as the title -
+  // is what keeps this a server-generated path: nothing of the raw client
+  // value reaches the filesystem. Empty (or slugged-to-empty) = the root
+  // reports folder, exactly as before the parameter existed.
+  Agent := Slug(Params.Agent);
 
   Dir := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), REPORTS_DIR);
+  if Agent <> '' then
+    Dir := TPath.Combine(Dir, Agent);
   TDirectory.CreateDirectory(Dir);
 
   Stamp := Now;
@@ -147,6 +161,8 @@ begin
     Sb.AppendLine('- **Date**: ' + FormatDateTime('yyyy-mm-dd hh:nn:ss', Stamp));
     Sb.AppendLine('- **Server version**: ' + SERVER_VERSION);
     Sb.AppendLine('- **Kind**: ' + Kind);
+    if Agent <> '' then
+      Sb.AppendLine('- **Agent**: ' + Agent);
     if Params.From.Trim <> '' then
       Sb.AppendLine('- **From**: ' + Params.From.Trim);
     Sb.AppendLine;
@@ -161,9 +177,14 @@ begin
   // UTF-8 with BOM: these are documents for humans, not Delphi sources.
   TFile.WriteAllText(Path, Body, TEncoding.UTF8);
   TLogger.Info(Format('delphi_report: %s (%s) from "%s"',
-    [TPath.GetFileName(Path), Kind, Params.From.Trim]));
+    [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path), Kind,
+     Params.From.Trim]));
 
-  Result := Format(SN_REPORT_OK_FMT, [TPath.GetFileName(Path), SERVER_VERSION]);
+  // The confirmation names the folder too, so the agent knows where its
+  // history accumulates.
+  Result := Format(SN_REPORT_OK_FMT,
+    [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path),
+     SERVER_VERSION]);
 end;
 
 initialization

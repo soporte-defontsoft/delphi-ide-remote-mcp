@@ -89,8 +89,20 @@ var
 begin
   N := LowerCase(TPath.GetFileName(AFile));
   if N.EndsWith('.tar.gz') then
+    // Both warnings are field-measured (2026-08-21). (1) A headless paserver
+    // whose stdin hits EOF spins its ">>>" prompt in a tight loop - 99.8%
+    // CPU and a log growing 295 MB in 20 min; the sleep pipe keeps stdin
+    // open. (2) -passfile with the password in PLAIN TEXT made the server
+    // reject that exact string on login, while -password=<pwd> inline
+    // authenticated first try - the passfile does not seem to be read as
+    // plain text, so prefer -password for ad-hoc runs (mind `ps` shows it).
     Result := 'Linux: fetch, then `tar xzf ' + TPath.GetFileName(AFile) +
-      ' && cd PAServer-* && ./paserver` (listens on 64211).'
+      ' && cd PAServer-*` and run it KEEPING STDIN OPEN if headless: ' +
+      '`sh -c ''sleep infinity | ./paserver -port=64211 -password=<pwd>''` ' +
+      '(listens on 64211). Warnings: `./paserver &` with stdin at EOF spins ' +
+      'its prompt at 100% CPU (keep the sleep pipe); and -passfile with a ' +
+      'plain-text password was rejected on login in the field - pass ' +
+      '-password inline instead, and keep the process supervised.'
   else if N.EndsWith('.pkg') then
     Result := 'macOS: fetch, then open the .pkg to install, and run PAServer (port 64211).'
   else if N.Contains('arm') then
@@ -196,11 +208,11 @@ begin
   end;
 end;
 
-{ Profiles + SDKs registered for an install, in %APPDATA%\Embarcadero\BDS\<ver>. }
+{ Profiles + SDKs live in %APPDATA%\Embarcadero\BDS\<ver> - the shared
+  definition is Lsp.Discovery.IdeProfilesDir (the build runner reads it too). }
 function ProfilesDir(const AVersion: string): string;
 begin
-  Result := TPath.Combine(TPath.Combine(TPath.Combine(
-    GetEnvironmentVariable('APPDATA'), 'Embarcadero'), 'BDS'), AVersion);
+  Result := IdeProfilesDir(AVersion);
 end;
 
 function ListProfiles: string;
@@ -461,6 +473,243 @@ begin
   end;
 end;
 
+{ Value of <ATag>...</ATag> in a small trusted XML (our own .profile files,
+  written by paclient). Not a general parser on purpose. }
+function TagValue(const AXml, ATag: string): string;
+var
+  P, Q: Integer;
+begin
+  Result := '';
+  P := Pos('<' + ATag + '>', AXml);
+  if P = 0 then Exit;
+  P := P + Length(ATag) + 2;
+  Q := Pos('</' + ATag + '>', AXml);
+  if Q > P then
+    Result := Copy(AXml, P, Q - P).Trim;
+end;
+
+{ One pull of get-sdk: a remote directory mirrored under the local sysroot.
+  Optional entries cover layout differences between distros (Ubuntu vs
+  RedHat vs /lib symlinked) - a missing one is normal, not a failure. }
+type
+  TSdkPull = record
+    RemoteBase: string;   // POSIX dir on the target
+    Recursive: Boolean;   // whole subtree (**) vs direct files (*)
+    Optional: Boolean;
+  end;
+
+const
+  { What the LINKER needs, from $(BDS)\bin\Linux64.defaultsdkpaths - the
+    ProfileLibrary entries plus the gcc tree (crt*/libgcc live there). The
+    ProfileInclude entries (C++ headers, tens of thousands of small files)
+    are deliberately NOT pulled: this server links Delphi. }
+  LINUX64_PULLS: array[0..5] of TSdkPull = (
+    (RemoteBase: '/usr/lib/gcc/x86_64-linux-gnu'; Recursive: True; Optional: False),
+    (RemoteBase: '/usr/lib/x86_64-linux-gnu'; Recursive: False; Optional: False),
+    (RemoteBase: '/lib/x86_64-linux-gnu'; Recursive: False; Optional: True),
+    (RemoteBase: '/usr/lib/gcc/x86_64-redhat-linux'; Recursive: True; Optional: True),
+    (RemoteBase: '/usr/lib64'; Recursive: False; Optional: True),
+    (RemoteBase: '/lib64'; Recursive: False; Optional: True));
+
+{ "Total file(s) copied: 196 file(s)  62.099.159 bytes" -> 196 and 62099159.
+  The byte count carries locale thousands separators - digits only. }
+procedure ParseCopied(const AOutput: string; out AFiles: Integer; out ABytes: Int64);
+var
+  L, Digits: string;
+  C: Char;
+  Parts: TArray<string>;
+begin
+  AFiles := 0;
+  ABytes := 0;
+  for L in AOutput.Split([#13#10, #10]) do
+    if L.Contains('Total file(s) copied:') then
+    begin
+      Parts := L.Split([' '], TStringSplitOptions.ExcludeEmpty);
+      // "Total file(s) copied: <N> file(s) <bytes> bytes"
+      if Length(Parts) >= 4 then
+        AFiles := StrToIntDef(Parts[3], 0);
+      if Length(Parts) >= 6 then
+      begin
+        Digits := '';
+        for C in Parts[5] do
+          if CharInSet(C, ['0'..'9']) then
+            Digits := Digits + C;
+        ABytes := StrToInt64Def(Digits, 0);
+      end;
+      Exit;
+    end;
+end;
+
+{ get-sdk: provision the platform SDK/sysroot locally from the live PAServer
+  of a profile, then register it so delphi_build links. Mirrors what the
+  IDE's SDK Manager does, measured piece by piece (2026-08-21):
+  - paclient --get=<base>/**/*,<dest> recreates the subtree under <dest>
+    (verified against a live PAServer: the gcc version dir arrived intact);
+  - the IDE-written .sdk file is fully RESOLVED MSBuild XML (no $(SDKROOT)/
+    $(GCCVERSION) macros - the Android .sdk on this machine proves it), and
+    CodeGear.Delphi.Targets feeds $(Profile_sysroot) to the compiler as its
+    --syslibroot, so a sysroot mirror with standard layout is what links;
+  - CodeGear.Profiles.Targets imports the .sdk via $(PlatformSDK), which the
+    build runner now passes when <Platform>.sdk exists (EnvOptions.proj has
+    no command-line default for platforms the SDK Manager never touched). }
+function GetSdk(const Params: TDelphiPAServerParams): string;
+var
+  Info: TRadStudioInfo;
+  PaClient, ProfName, ProfileFile, ProfXml, Plat, SysRoot: string;
+  Cmd, Output, Pattern, DestDir, GccVer, SdkFile, D: string;
+  ExitCode: Cardinal;
+  Pull: TSdkPull;
+  Return, PullObj: TJSONObject;
+  Pulls: TJSONArray;
+  NFiles, TotalFiles: Integer;
+  NBytes, TotalBytes: Int64;
+  Sb: TStringBuilder;
+  LibDirs: TStringList;
+begin
+  ProfName := Params.Name.Trim;
+  if ProfName = '' then
+    Exit(Format(SR_PASERVER_NO_PROFILE_FMT, ['(sin name)']));
+  PaClient := FindPaClient(Info);
+  if PaClient = '' then Exit(SR_PASERVER_NO_PACLIENT);
+  ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
+  if not TFile.Exists(ProfileFile) then
+    Exit(Format(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+  ProfXml := TFile.ReadAllText(ProfileFile);
+  Plat := TagValue(ProfXml, 'Profile_platform');
+  if not SameText(Plat, 'Linux64') then
+    Exit(Format(SR_PASERVER_SDK_PLATFORM_FMT, [ProfName, Plat]));
+
+  // The IDE's default SDK root: Documents\Embarcadero\Studio\SDKs, with the
+  // sysroot folder named <Platform>.sdk (the Linux64.defaultsdkpaths default).
+  SysRoot := TPath.Combine(TPath.Combine(TPath.GetDocumentsPath,
+    'Embarcadero\Studio\SDKs'), 'Linux64.sdk');
+  TDirectory.CreateDirectory(SysRoot);
+
+  Return := TJSONObject.Create;
+  Pulls := TJSONArray.Create;
+  Return.AddPair('pulls', Pulls);
+  TotalFiles := 0;
+  TotalBytes := 0;
+  try
+    for Pull in LINUX64_PULLS do
+    begin
+      if Pull.Recursive then
+        Pattern := Pull.RemoteBase + '/**/*'
+      else
+        Pattern := Pull.RemoteBase + '/*';
+      DestDir := TPath.Combine(SysRoot,
+        Pull.RemoteBase.TrimLeft(['/']).Replace('/', '\'));
+      TDirectory.CreateDirectory(DestDir);
+      Cmd := '"' + PaClient + '" --timeout=30 "--get=' + Pattern + ',' +
+        DestDir + '" "' + ProfName + '"';
+      Output := RunCaptured(Cmd, 1200000, ExitCode);
+      ParseCopied(Output, NFiles, NBytes);
+      PullObj := TJSONObject.Create;
+      Pulls.AddElement(PullObj);
+      PullObj.AddPair('dir', Pull.RemoteBase);
+      PullObj.AddPair('files', TJSONNumber.Create(NFiles));
+      PullObj.AddPair('bytes', TJSONNumber.Create(NBytes));
+      if ExitCode = 0 then
+        PullObj.AddPair('status', 'ok')
+      else if Pull.Optional then
+        PullObj.AddPair('status', 'skipped (not on this target)')
+      else
+      begin
+        PullObj.AddPair('status', 'FAILED');
+        // last non-empty line carries paclient's error (the first is its banner)
+        var ErrLine := '';
+        for var L in Output.Split([#13#10, #10]) do
+          if L.Trim <> '' then
+            ErrLine := L.Trim;
+        Return.AddPair('error', Format(SR_PASERVER_SDK_PULL_FMT,
+          [Pull.RemoteBase, ExitCode, ErrLine]));
+        Exit(Return.ToJSON);
+      end;
+      Inc(TotalFiles, NFiles);
+      Inc(TotalBytes, NBytes);
+    end;
+
+    // GCC version = the version folder that arrived in the gcc tree.
+    GccVer := '';
+    for D in TArray<string>.Create('x86_64-linux-gnu', 'x86_64-redhat-linux') do
+    begin
+      DestDir := TPath.Combine(SysRoot, 'usr\lib\gcc\' + D);
+      if TDirectory.Exists(DestDir) then
+        for var Sub in TDirectory.GetDirectories(DestDir) do
+          if GccVer = '' then
+            GccVer := TPath.GetFileName(Sub);
+    end;
+
+    // Library search dirs for the .sdk: every pulled dir that exists locally,
+    // plus the versioned gcc dir. Fully resolved paths - the IDE-written
+    // .sdk files carry no macros and neither does this one.
+    LibDirs := TStringList.Create;
+    Sb := TStringBuilder.Create;
+    try
+      for D in TArray<string>.Create(
+        'usr\lib\gcc\x86_64-linux-gnu\' + GccVer,
+        'usr\lib\x86_64-linux-gnu',
+        'lib\x86_64-linux-gnu',
+        'usr\lib\gcc\x86_64-redhat-linux\' + GccVer,
+        'usr\lib64', 'lib64') do
+        if (GccVer <> '') or not D.Contains('\gcc\') then
+          if TDirectory.Exists(TPath.Combine(SysRoot, D)) then
+            LibDirs.Add(TPath.Combine(SysRoot, D));
+
+      Sb.AppendLine('<?xml version="1.0" encoding="utf-8"?>');
+      Sb.AppendLine('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="">');
+      Sb.AppendLine('  <PropertyGroup>');
+      Sb.AppendLine('    <Profile_platform>Linux64</Profile_platform>');
+      Sb.AppendLine('    <Profile_host>' + TagValue(ProfXml, 'Profile_host') + '</Profile_host>');
+      Sb.AppendLine('    <Profile_port>' + TagValue(ProfXml, 'Profile_port') + '</Profile_port>');
+      Sb.AppendLine('    <Profile_sdkname>Linux64.sdk</Profile_sdkname>');
+      Sb.AppendLine('    <Profile_displayname>Linux64 (delphi_paserver get-sdk, profile ' + ProfName + ')</Profile_displayname>');
+      Sb.AppendLine('    <Profile_sysroot>' + SysRoot + '</Profile_sysroot>');
+      Sb.AppendLine('    <Profile_startupobj>crt1.o;crti.o;crtbegin.o</Profile_startupobj>');
+      Sb.AppendLine('    <Profile_endcodeobj>crtend.o;crtn.o</Profile_endcodeobj>');
+      Sb.AppendLine('    <Profile_startupobjS>crti.o;crtbeginS.o</Profile_startupobjS>');
+      Sb.AppendLine('    <Profile_endcodeobjS>crtendS.o;crtn.o</Profile_endcodeobjS>');
+      // The Delphi Linux64 block reads $(Profile_LibraryPath) - a PROPERTY,
+      // resolved at project-load time - to build DCC_LibraryPath for the
+      // linker. The ProfileLibrary ITEMS below only feed _CollapsePaths (a
+      // build-time target, Cpp side). Without this property the link dies
+      // with "cannot find -lgcc_s" even though the .sdk imports fine
+      // (measured against the first live sysroot).
+      Sb.AppendLine('    <Profile_LibraryPath>' + string.Join(';', LibDirs.ToStringArray) + '</Profile_LibraryPath>');
+      if TagValue(ProfXml, 'Profile_password') <> '' then
+        Sb.AppendLine('    <Profile_password>' + TagValue(ProfXml, 'Profile_password') + '</Profile_password>');
+      Sb.AppendLine('  </PropertyGroup>');
+      Sb.AppendLine('  <ItemGroup>');
+      for D in LibDirs do
+      begin
+        Sb.AppendLine('    <ProfileLibrary Include="' + D + '">');
+        Sb.AppendLine('      <FileMask>*</FileMask>');
+        Sb.AppendLine('      <SubDirs>False</SubDirs>');
+        Sb.AppendLine('    </ProfileLibrary>');
+      end;
+      Sb.AppendLine('  </ItemGroup>');
+      Sb.AppendLine('</Project>');
+
+      SdkFile := TPath.Combine(ProfilesDir(Info.Version), 'Linux64.sdk');
+      TFile.WriteAllText(SdkFile, Sb.ToString, TEncoding.UTF8);
+    finally
+      Sb.Free;
+      LibDirs.Free;
+    end;
+
+    Return.AddPair('sdkFile', SdkFile);
+    Return.AddPair('sysroot', SysRoot);
+    if GccVer <> '' then
+      Return.AddPair('gccVersion', GccVer);
+    Return.AddPair('totalFiles', TJSONNumber.Create(TotalFiles));
+    Return.AddPair('totalBytes', TJSONNumber.Create(TotalBytes));
+    Return.AddPair('note', SN_PASERVER_SDK_OK);
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
 function TDelphiPAServerTool.ExecuteWithParams(const Params: TDelphiPAServerParams): string;
 var
   Cmd: string;
@@ -476,6 +725,8 @@ begin
     Result := AddProfile(Params)
   else if Cmd = 'test-connection' then
     Result := TestConnection(Params)
+  else if Cmd = 'get-sdk' then
+    Result := GetSdk(Params)
   else
     Result := SR_PASERVER_CMD;
 end;
