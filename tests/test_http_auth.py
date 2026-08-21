@@ -431,7 +431,7 @@ try:
         js = json.loads(json.loads(body)['result']['content'][0]['text'])
         check('fetch: fichero > 4 MB responde SOLO enlace (sin chunk, con sha256)',
               'chunkBase64' not in js and js.get('bytes') == 0 and js.get('sha256') == big_sha
-              and 'download' in js and 'too big' in js.get('note', ''),
+              and 'download' in js and '"download" link' in js.get('note', ''),
               body[:300])
         check('fetch: la respuesta del fichero grande es corta',
               len(body) < 4000, len(body))

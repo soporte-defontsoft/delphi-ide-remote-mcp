@@ -380,7 +380,7 @@ What this server's RAD Studio has INSTALLED to program with: every component/des
 
 ### `delphi_fetch`
 
-Download a file FROM the server - the "get the deploy" tool: after delphi_build, fetch the exe (and any companion files listed with delphi_list) to run GUI apps on YOUR machine. Two ways: (1) the `download` field of the answer is a direct HTTP GET on this same server (`/files?path=...`) - curl it with your same Bearer token: bytes travel as HTTP, not as tokens, so a 70 MB installer costs you nothing; (2) base64 chunks inline for small files or clients without a shell: loop offset until eof=true, concatenate the decoded chunks, verify the sha256 (whole file, returned on the offset=0 call). Files over 4 MB answer with the download link only unless you pass maxbytes<=1048576 explicitly. Jailed to the workspace roots and the read-only library zone.
+Download a file FROM the server - the "get the deploy" tool: after delphi_build, fetch the exe (and any companion files listed with delphi_list) to run GUI apps on YOUR machine. Two ways: (1) the `download` field of the answer is a direct HTTP GET on this same server (`/files?path=...`) - run it with curl and your same Bearer token - the standard way for any file, installers and binaries included; (2) base64 chunks inline, for small files or clients without a shell: loop offset until eof=true, concatenate the decoded chunks, verify the sha256 (whole file, returned on the offset=0 call). Files over 4 MB answer with the download link only; pass maxbytes<=1048576 explicitly to get inline chunks instead. Jailed to the workspace roots and the read-only library zone.
 
 *Access: read-only OK.*
 

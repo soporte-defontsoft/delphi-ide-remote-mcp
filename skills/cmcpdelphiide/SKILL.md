@@ -1,6 +1,6 @@
 ---
 name: cmcpdelphiide
-description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb) and how to keep your own context alive.
+description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb) and how to move files and logs the right way.
 ---
 
 # Delphi IDE Remote MCP - field guide for agents
@@ -23,22 +23,22 @@ on your side.
 3. If a vault is announced in the instructions, `vault_read` its index -
    it holds the operator's conventions and project context.
 
-## Reading without drowning yourself
+## Reading files and logs
 
 - `delphi_read` pages at 400 lines per call - read in RANGES.
 - `delphi_search` / `delphi_list` to locate; never read whole trees.
-- NEVER pull thousands of lines into your context. Every big-dump tool
-  has a file-mode escape (`out=`); use it, then read the file in ranges.
-- **Bytes are HTTP's job, not your context's.** Any file you want on
-  YOUR machine (an installer, an .apk, a screenshot PNG, a 5000-line
-  unit to grep locally): call `delphi_fetch` once and use the `download`
-  field it returns - a `GET /files?path=...` on the same host:port as
-  `/mcp`, with the same `Authorization: Bearer` header:
+- Big dumps (logcat, long outputs) have a file mode (`out=`): use it,
+  then read the file in ranges or download it.
+- **Getting a file onto YOUR machine** (an installer, an .apk, a
+  screenshot PNG, a long unit to grep locally): call `delphi_fetch` once
+  and use the `download` field it returns - a `GET /files?path=...` on
+  the same host:port as `/mcp`, with the same `Authorization: Bearer`
+  header:
   `curl -H "Authorization: Bearer $TOKEN" -o file "http://host:port/files?path=..."`.
-  Verify with `sha256sum` against the `X-File-SHA256` header. Files over
-  4 MB come back as link-only on purpose; inline base64 chunks
-  (`maxbytes<=1048576`, loop `offset` until `eof`) are the fallback for a
-  client that truly has no shell - never the default.
+  Verify with `sha256sum` against the `X-File-SHA256` header. This is the
+  standard way for any size; files over 4 MB answer with the link only.
+  Inline base64 chunks (`maxbytes<=1048576`, loop `offset` until `eof`)
+  are for clients without a shell.
 
 ## Editing safely (`delphi_edit`)
 
@@ -86,11 +86,10 @@ Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
 `screenshot` -> `tap`/`key`.
 
 - An allowlist may be active: name your `device=` explicitly.
-- `logcat`: default 300 lines, inline answers cap at the newest 400.
-  For big dumps pass `out=srvd:\...\dump.txt` and read it in ranges -
-  a full inline dump has drowned an agent's context in the field.
-  Validate app behaviour by logging from your app and filtering on your
-  own tag: `filter=MyTag`.
+- `logcat`: default 300 lines, inline answers carry the newest 400.
+  For the full dump pass `out=srvd:\...\dump.txt`, then read it in
+  ranges or download it. Validate app behaviour by logging from your app
+  and filtering on your own tag: `filter=MyTag`.
 - `screenshot` writes a PNG **on the server** (`out=...png`); download
   with `delphi_fetch` if you can actually view images. If you cannot,
   do not guess from pixel heuristics - a nearly-empty FMX form is a

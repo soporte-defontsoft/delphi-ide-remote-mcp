@@ -550,15 +550,14 @@ const
     'RECHAZADO: el "out" de logcat debe terminar en .txt o .log.';
 
   SN_ADB_LOGFILE =
-    'The dump is in this file ON THE SERVER. Read it in RANGES with ' +
-    'delphi_read (it pages at 400 lines per call) or search it with ' +
-    'delphi_search - never pull thousands of lines into your context: a ' +
-    'full inline dump has drowned a small-context client in the field.';
+    'The dump is in this file ON THE SERVER. Read it in ranges with ' +
+    'delphi_read (400 lines per call), search it with delphi_search, or ' +
+    'download it to your machine with delphi_fetch.';
 
   SN_ADB_TAIL_FMT =
-    '(logcat: %d lineas capturadas; van las %d MAS RECIENTES para proteger ' +
-    'tu contexto. Volcado completo: repite con out=<fichero.txt> y leelo ' +
-    'por rangos con delphi_read, o acota con filter.)';
+    '(logcat: %d lineas capturadas; van las %d MAS RECIENTES. Para el ' +
+    'volcado completo repite con out=<fichero.txt> y leelo por rangos con ' +
+    'delphi_read, o acota con filter.)';
 
   SN_ADB_SCREENSHOT =
     'The device screen is in this PNG on the server - download it with ' +
@@ -616,26 +615,25 @@ const
     'delphi_build, fetch the exe (and any companion files listed with ' +
     'delphi_list) to run GUI apps on YOUR machine. Two ways: (1) the ' +
     '"download" field of the answer is a direct HTTP GET on this same ' +
-    'server (/files?path=...) - curl it with your same Bearer token: bytes ' +
-    'travel as HTTP, not as tokens, so a 70 MB installer costs you nothing; ' +
-    '(2) base64 chunks inline for small files or clients without a shell: ' +
+    'server (/files?path=...): run it with curl and your same Bearer token - ' +
+    'the standard way for any file, installers and binaries included; ' +
+    '(2) base64 chunks inline, for small files or clients without a shell: ' +
     'loop offset until eof=true, concatenate the decoded chunks, verify the ' +
     'sha256 (whole file, returned on the offset=0 call). Files over 4 MB ' +
-    'answer with the download link only unless you pass maxbytes<=1048576 ' +
-    'explicitly. Jailed to the workspace roots and the read-only library zone.';
+    'answer with the download link only; pass maxbytes<=1048576 explicitly ' +
+    'to get inline chunks instead. Jailed to the workspace roots and the ' +
+    'read-only library zone.';
 
   SN_FETCH_DOWNLOAD =
     'Direct download: GET this path on the SAME host:port you use for /mcp, ' +
     'with the SAME Authorization: Bearer header, e.g. ' +
     'curl -H "Authorization: Bearer <token>" -o <file> "http://<host>:<port><download>". ' +
-    'The response carries X-File-SHA256 to verify with sha256sum. Bytes ' +
-    'travel as HTTP - nothing enters your context.';
+    'The response carries X-File-SHA256 to verify with sha256sum.';
 
   SN_FETCH_BIG_FMT =
-    'This file is %s - too big to pull through your context as base64 ' +
-    'chunks. No chunk was included: use the "download" link (curl) instead. ' +
-    'If you really have no shell, pass maxbytes=1048576 (or less) to get ' +
-    'inline chunks anyway and loop offset until eof=true.';
+    'This file is %s: use the "download" link (curl) - no chunk was ' +
+    'included. For inline base64 chunks instead, pass maxbytes=1048576 (or ' +
+    'less) and loop offset until eof=true.';
 
   SR_FILES_NEED_PATH =
     'Falta el parametro path: GET /files?path=srvd:\...\fichero';
