@@ -116,6 +116,28 @@ begin
   Result := RunCaptured('"' + AAdb + '" ' + AArgs, ATimeoutMs, AExitCode);
 end;
 
+{ Field report (EDA51): Android switches wireless debugging OFF on its own
+  after a while, and the port changes on re-enable. Nothing to auto-reconnect
+  server-side - it takes a hand on the device - so the honest move is to
+  RECOGNIZE adb's device-loss messages and append the recovery path. }
+function DeviceGone(const AOutput: string): Boolean;
+var
+  L: string;
+begin
+  L := AOutput.ToLower;
+  Result := L.Contains('not found') or L.Contains('offline') or
+    L.Contains('no devices/emulators') or L.Contains('failed to connect') or
+    L.Contains('cannot connect') or L.Contains('connection refused') or
+    L.Contains('waiting for device');
+end;
+
+function GoneHint(const AOutput: string): string;
+begin
+  Result := AOutput.Trim;
+  if DeviceGone(Result) then
+    Result := Result + sLineBreak + SN_ADB_GONE;
+end;
+
 const
   // command=key: the whole vocabulary - fixed navigation keys, no free
   // keycodes, no text injection.
@@ -187,8 +209,20 @@ begin
     if Params.Lines.Trim <> '' then
       if (N < 1) or (N > 5000) then
         Exit(Format(SR_ADB_LINES_FMT, [Params.Lines.Trim]));
+    // logcat on a missing device WAITS instead of erroring (measured:
+    // "- waiting for device -" until the timeout); get-state answers the
+    // absence instantly.
+    if DevArg <> '' then
+    begin
+      Output := RunAdb(Adb, DevArg + 'get-state', 10000, ExitCode);
+      if DeviceGone(Output) or (ExitCode <> 0) then
+        Exit(GoneHint(Output));
+    end;
     Output := RunAdb(Adb, DevArg + 'logcat -d -v time -t ' + IntToStr(N),
       45000, ExitCode);
+    // a lost device must say so, not hide as "(logcat vacio)"
+    if DeviceGone(Output) then
+      Exit(GoneHint(Output));
     if Params.Filter.Trim <> '' then
     begin
       var Filtered := TStringBuilder.Create;
@@ -214,7 +248,7 @@ begin
       Exit(SR_ADB_NEED_ADDRESS);
     // adb's own output line already says connected/failed - pass it through
     Output := RunAdb(Adb, Cmd + ' ' + Params.Address.Trim, 30000, ExitCode);
-    Result := Output.Trim;
+    Result := GoneHint(Output);
   end
   else if Cmd = 'install' then
   begin
@@ -227,7 +261,7 @@ begin
       Exit('error: no existe el .apk: ' + Params.Apk);
     Output := RunAdb(Adb, DevArg + 'install -r "' + Params.Apk + '"',
       180000, ExitCode);
-    Result := Output.Trim;
+    Result := GoneHint(Output);
   end
   else if Cmd = 'run' then
   begin
@@ -239,7 +273,7 @@ begin
     // execution on the server machine, not here. Vetted at the gate.
     Output := RunAdb(Adb, DevArg + 'shell am start -n ' + Params.App.Trim +
       '/com.embarcadero.firemonkey.FMXNativeActivity', 30000, ExitCode);
-    Result := Output.Trim;
+    Result := GoneHint(Output);
   end
   else if Cmd = 'screenshot' then
   begin
@@ -256,13 +290,13 @@ begin
     const DevPng = '/sdcard/delphi_mcp_screen.png';
     Output := RunAdb(Adb, DevArg + 'shell screencap -p ' + DevPng, 30000,
       ExitCode);
-    if ExitCode <> 0 then
-      Exit(Output.Trim);
+    if (ExitCode <> 0) or DeviceGone(Output) then
+      Exit(GoneHint(Output));
     Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
       Params.Out.Trim + '"', 60000, ExitCode);
     RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitCode);
     if not TFile.Exists(Params.Out.Trim) then
-      Exit(Output.Trim);
+      Exit(GoneHint(Output));
     Return := TJSONObject.Create;
     try
       Return.AddPair('screenshot', Params.Out.Trim);
@@ -280,8 +314,8 @@ begin
     // coordinates vetted digits-only at the gate
     Output := RunAdb(Adb, DevArg + 'shell input tap ' + Params.X.Trim + ' ' +
       Params.Y.Trim, 15000, ExitCode);
-    Result := ('TAP en (' + Params.X.Trim + ',' + Params.Y.Trim + ') ' +
-      Output.Trim).Trim;
+    Result := GoneHint(('TAP en (' + Params.X.Trim + ',' + Params.Y.Trim +
+      ') ' + Output.Trim).Trim);
   end
   else if Cmd = 'key' then
   begin
@@ -290,7 +324,7 @@ begin
       Exit(Format(SR_ADB_KEY_FMT, [Params.Key.Trim]));
     Output := RunAdb(Adb, DevArg + 'shell input keyevent ' + KEY_CODES[N],
       15000, ExitCode);
-    Result := ('KEY ' + KEY_NAMES[N] + ' ' + Output.Trim).Trim;
+    Result := GoneHint(('KEY ' + KEY_NAMES[N] + ' ' + Output.Trim).Trim);
   end
   else
     Result := SR_ADB_CMD;

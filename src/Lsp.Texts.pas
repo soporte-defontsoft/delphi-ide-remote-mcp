@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.34.0-beta';
+  SERVER_VERSION = '0.34.1-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -534,6 +534,15 @@ const
     'RECHAZADO: este servidor tiene lista de dispositivos permitidos ' +
     '([Adb] AllowedDevices): indica "device" explicitamente con uno de la ' +
     'lista (command=devices los enseña).';
+
+  SN_ADB_GONE =
+    'SIN CONEXION CON EL DISPOSITIVO. El adb por wifi se cae solo tras un ' +
+    'rato de inactividad - es cosa del aparato, no de este servidor. ' +
+    'Camino: reintenta command=connect al MISMO ip:port (en muchos ' +
+    'dispositivos el puerto persiste); si no entra, que el developer ' +
+    'reactive la depuracion inalambrica en el aparato y busca el puerto ' +
+    'nuevo con command=discover (Android 11+ lo aleatoriza al reactivar). ' +
+    'command=devices dice que hay enganchado AHORA MISMO.';
 
   SN_ADB_SCREENSHOT =
     'The device screen is in this PNG on the server - download it with ' +

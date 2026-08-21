@@ -173,6 +173,14 @@ out = srv.call('delphi_adb', {"command": "install",
 check('adb install apk inexistente: error honesto',
       'no existe el .apk' in out, out[:250])
 
+# a lost/absent device must SAY so with the recovery path, never look like
+# an empty log (field: the EDA51's wifi adb drops itself after idle)
+out = srv.call('delphi_adb', {"command": "logcat", "device": "ZZZ-NO-EXISTE",
+                              "lines": "5"}, t=60)
+check('adb dispositivo perdido: aviso SIN CONEXION con camino de reconexion',
+      'SIN CONEXION' in out and 'connect' in out and 'discover' in out,
+      out[:300])
+
 out = srv.call('delphi_adb', {"command": "logcat", "lines": "0"})
 check('adb logcat lines=0: rechazado (1-5000)', 'RECHAZADO' in out and '5000' in out,
       out[:200])

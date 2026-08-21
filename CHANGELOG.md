@@ -8,6 +8,22 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.34.1-beta] - 2026-08-21
+
+### Fixed
+- **`delphi_adb` says so when the device is gone** (field, minutes after
+  0.34.0: the EDA51's wifi adb dropped itself after idle). Every
+  device-addressing command now recognizes adb's device-loss messages
+  ("not found", "offline", "failed to connect"...) and appends the recovery
+  path: retry `connect` to the SAME ip:port first (many devices keep the
+  port - the EDA51 does, measured), else re-enable wireless debugging on
+  the device and `discover` the new port (Android 11+ randomizes it). A
+  lost device can no longer masquerade as an empty logcat - and since
+  `logcat` on a missing device WAITS instead of erroring (measured:
+  "- waiting for device -" until the timeout), it now pre-checks
+  `get-state` and answers the absence instantly. Battery grows to 58
+  checks; 10 batteries / 564 / 0.
+
 ## [0.34.0-beta] - 2026-08-21
 
 The deploy half of the remote-target chain, closing the doctrine of the
