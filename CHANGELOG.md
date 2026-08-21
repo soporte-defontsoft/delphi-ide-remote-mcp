@@ -8,6 +8,25 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.34.2-beta] - 2026-08-21
+
+### Fixed
+- **Malformed `arguments` no longer crashes the binder.** A `tools/call`
+  with `arguments` absent, as an array (`[]`) or as a string reached
+  `Tool.Execute` as nil and the parameter binder dereferenced it - an
+  access violation on ANY tool (found via the production tray log: a
+  client-side serialization slip sent `"arguments":[]`, and the AV
+  reproduced deterministically). The MCP spec marks `arguments` optional:
+  it is now normalized to `{}` at the single choke point (vendor
+  `[local change]`, `TMCPToolsManager.ExecuteTool`), so parameter
+  defaults apply. Regression in the HTTP battery: array, absent and
+  string forms must answer without an AV.
+- **`logcat lines=0` means the default** (300), not a range rejection -
+  measured in the field: clients that type every parameter (hermes')
+  send `0` for "unset".
+
+10 batteries / 567 checks / 0 failures.
+
 ## [0.34.1-beta] - 2026-08-21
 
 ### Fixed

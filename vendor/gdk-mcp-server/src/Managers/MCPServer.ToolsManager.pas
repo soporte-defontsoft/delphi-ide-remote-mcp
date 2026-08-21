@@ -135,12 +135,31 @@ begin
 end;
 
 function TMCPToolsManager.ExecuteTool(const Tool: IMCPTool; const Arguments: TJSONObject): TValue;
+var
+  Args, Owned: TJSONObject; // [local change]
 begin
+  // [local change] The MCP spec marks "arguments" as optional, but an absent
+  // or malformed value (array, string...) reached Tool.Execute as nil and
+  // the parameter binder dereferenced it - an access violation on ANY tool,
+  // measured with {"arguments":[]}. Normalize to an empty object here, the
+  // single choke point, so every tool sees valid JSON and its parameter
+  // defaults apply.
+  Owned := nil;
+  Args := Arguments;
+  if not Assigned(Args) then
+  begin
+    Owned := TJSONObject.Create;
+    Args := Owned;
+  end;
   try
-    Result := Tool.Execute(Arguments);
-  except
-    on E: Exception do
-      Result := 'Error executing tool: ' + E.Message;
+    try
+      Result := Tool.Execute(Args);
+    except
+      on E: Exception do
+        Result := 'Error executing tool: ' + E.Message;
+    end;
+  finally
+    Owned.Free;
   end;
 end;
 

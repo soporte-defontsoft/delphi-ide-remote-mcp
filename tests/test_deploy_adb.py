@@ -181,9 +181,12 @@ check('adb dispositivo perdido: aviso SIN CONEXION con camino de reconexion',
       'SIN CONEXION' in out and 'connect' in out and 'discover' in out,
       out[:300])
 
-out = srv.call('delphi_adb', {"command": "logcat", "lines": "0"})
-check('adb logcat lines=0: rechazado (1-5000)', 'RECHAZADO' in out and '5000' in out,
-      out[:200])
+# clients that type every param send lines=0 for "unset" (hermes' client,
+# measured): 0 must mean the default, never a rejection
+out = srv.call('delphi_adb', {"command": "logcat", "lines": "0",
+                              "device": "ZZZ-NO-EXISTE"}, t=60)
+check('adb logcat lines=0: tratado como default (no rechazo de rango)',
+      '5000' not in out and 'SIN CONEXION' in out, out[:250])
 out = srv.call('delphi_adb', {"command": "logcat", "lines": "99999"})
 check('adb logcat lines=99999: rechazado', 'RECHAZADO' in out, out[:200])
 

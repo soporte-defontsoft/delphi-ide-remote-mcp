@@ -206,6 +206,11 @@ begin
     // tail. -t N is the last N lines; filter is applied here, not as an adb
     // tag spec, so it matches anywhere in the line.
     N := StrToIntDef(Params.Lines.Trim, 300);
+    // clients that type every parameter send lines=0 for "unset" (measured
+    // in the field: hermes' client fills all fields with zero defaults) -
+    // 0 means the default, same as an absent param
+    if N = 0 then
+      N := 300;
     if Params.Lines.Trim <> '' then
       if (N < 1) or (N > 5000) then
         Exit(Format(SR_ADB_LINES_FMT, [Params.Lines.Trim]));

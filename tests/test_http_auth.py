@@ -84,6 +84,18 @@ try:
                                   "pattern": "*.pas"}}}, TOKEN)
     check('http: tools/call funciona', code == 200 and 'Lsp.Patch.pas' in body,
           '%s %s' % (code, body[:150]))
+
+    # --- malformed "arguments" must NEVER crash the binder (measured AV:
+    # arguments as [], absent, or a string reached Tool.Execute as nil) ---
+    for label, params in [('array', {"name": "delphi_installs", "arguments": []}),
+                          ('ausente', {"name": "delphi_installs"}),
+                          ('string', {"name": "delphi_installs",
+                                      "arguments": "hola"})]:
+        code, body = post({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+                           "params": params}, TOKEN)
+        check('http: arguments malformado (%s) sin Access violation' % label,
+              code == 200 and 'Access violation' not in body
+              and 'installs' in body, '%s %s' % (code, body[:200]))
 finally:
     proc.kill()
 

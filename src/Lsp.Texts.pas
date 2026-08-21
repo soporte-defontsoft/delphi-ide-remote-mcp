@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.34.1-beta';
+  SERVER_VERSION = '0.34.2-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -500,8 +500,8 @@ const
     'logcat: only lines containing this text (e.g. your app tag or package). ' +
     'Optional';
   SP_ADB_LINES =
-    'logcat: how many recent lines to return (default 300, max 5000). ' +
-    'Optional';
+    'logcat: how many recent lines to return (default 300, max 5000; 0 = ' +
+    'the default). Optional';
 
   SR_ADB_CMD =
     'error: command debe ser discover | devices | connect | disconnect | ' +
