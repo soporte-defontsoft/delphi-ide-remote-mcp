@@ -44,3 +44,6 @@ gdk-mcp/
 reports/
 settings.ini
 __delphi-patch/
+
+__pycache__/
+*.pyc
