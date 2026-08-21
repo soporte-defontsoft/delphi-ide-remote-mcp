@@ -15,14 +15,18 @@ lead): measuring `convert.exe` revealed that the REAL on-disk binary
 `.dfm`/`.fmx` is not what our guard was looking for.
 
 ### Added
-- **`delphi_getit`** (29th tool, read level): lists the GetIt packages
-  installed in the server's RAD Studio through the IDE's own
-  `GetItCmd.exe -l= -f=installed` - so a remote agent knows which
-  component libraries it can lean on before writing uses clauses that
-  will not compile. Optional `sort` (name/vendor/date, whitelisted).
-  **No install/uninstall by design** (operator decision): installing
-  packages mutates the whole IDE and stays a human decision; a missing
-  package is reported with `delphi_report`.
+- **`delphi_components`** (29th tool, read level): the GENERAL answer to
+  "what does this server have installed to program with" - every design
+  package REGISTERED in the IDE (registry Known Packages + x64 + HKLM,
+  the same list RAD Studio loads into its palette), whatever the install
+  channel: GetIt, a vendor installer or manual. A GetIt-only listing
+  (the first draft of this tool) misses everything installed outside
+  GetIt; this one cannot. Description + `.bpl` per line, disabled
+  packages marked, IDE-plumbing packages excluded, optional substring
+  `filter`. A registry read - no process is even spawned. **No install
+  by design** (operator decision): installing packages mutates the whole
+  IDE and stays a human decision; a missing library is reported with
+  `delphi_report`.
 
 ### Fixed
 - **Binary designer detection was incomplete**: `delphi_edit` recognized

@@ -82,7 +82,7 @@ uses
   Mcp.Tools.Config in 'Mcp.Tools.Config.pas',
   Mcp.Tools.PAServer in 'Mcp.Tools.PAServer.pas',
   Mcp.Tools.Adb in 'Mcp.Tools.Adb.pas',
-  Mcp.Tools.GetIt in 'Mcp.Tools.GetIt.pas',
+  Mcp.Tools.Components in 'Mcp.Tools.Components.pas',
   Mcp.Tools.FileOps in 'Mcp.Tools.FileOps.pas',
   Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',
   Mcp.Tools.TextEdit in 'Mcp.Tools.TextEdit.pas',

@@ -14,7 +14,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Edit code safely  (read-write only)** — [`delphi_edit`](#delphi_edit), [`delphi_textedit`](#delphi_textedit), [`delphi_create`](#delphi_create)
 - **Manage files  (read-write only)** — [`delphi_delete`](#delphi_delete), [`delphi_move`](#delphi_move)
 - **Build, run, package  (read-write only)** — [`delphi_build`](#delphi_build), [`delphi_run`](#delphi_run), [`delphi_package`](#delphi_package)
-- **Cross-platform: build configs, remote platforms & devices** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver), [`delphi_adb`](#delphi_adb), [`delphi_getit`](#delphi_getit)
+- **Cross-platform: build configs, remote platforms & devices** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver), [`delphi_adb`](#delphi_adb), [`delphi_components`](#delphi_components)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
 - **Version control** — [`delphi_git`](#delphi_git)
 - **Feedback** — [`delphi_report`](#delphi_report)
@@ -365,15 +365,15 @@ The operator can pin an allowlist in `settings.ini` — `[Adb] AllowedDevices=19
 | `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package) |
 | `lines` | string | optional | logcat: how many recent lines to capture (default 300, max 5000; 0 = default). Inline answers carry at most the newest 400 — bigger dumps via `out=` |
 
-### `delphi_getit`
+### `delphi_components`
 
-What this server's RAD Studio has INSTALLED to program with: the GetIt packages (component libraries, styles, SDK add-ons) present in the IDE, listed with the IDE's own GetItCmd. Read-only by design — there is no install/uninstall command; if a package you need is missing, say so with delphi_report. The base RTL/VCL/FMX frameworks are always available and never appear in this list.
+What this server's RAD Studio has INSTALLED to program with: every component/design package REGISTERED in the IDE (Known Packages — the same list the IDE loads into its palette), whatever the install channel: GetIt, a vendor installer or manual. Each line is the package's description plus its `.bpl` file; disabled packages are marked, IDE-plumbing packages are excluded. Read-only by design — there is no install command; if a library you need is missing, say so with delphi_report. The base RTL units are always available and never appear here.
 
 *Access: read-only (always available).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `sort` | string | optional | Sort the listing by name (default), vendor or date |
+| `filter` | string | optional | Only entries whose description or file name contains this text (case-insensitive), e.g. "FMX", "TMS", "JEDI" |
 
 
 ## Transfer files

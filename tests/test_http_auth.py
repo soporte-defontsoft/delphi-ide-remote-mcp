@@ -75,7 +75,7 @@ try:
                 'delphi_search', 'delphi_signature', 'delphi_symbols',
                 'delphi_textedit', 'delphi_upload', 'delphi_workspace',
                 'delphi_paserver', 'delphi_delete', 'delphi_move',
-                'delphi_adb', 'delphi_getit']
+                'delphi_adb', 'delphi_components']
     check('http: tools/list = 29 tools', sorted(names) == sorted(expected), names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
@@ -278,14 +278,16 @@ try:
         code, body = call('delphi_paserver', {'command': 'platforms'}, RO_TOKEN)
         check('ro: delphi_paserver PERMITIDO en RO', code == 200 and 'SOLO LECTURA' not in body,
               '%s %s' % (code, body[:120]))
-        # delphi_getit is pure read (installed-packages listing): fine in RO,
-        # and a bad sort value hits its whitelist, not the command line
-        code, body = call('delphi_getit', {}, RO_TOKEN)
-        check('ro: delphi_getit PERMITIDO en RO', code == 200 and 'SOLO LECTURA' not in body,
-              '%s %s' % (code, body[:120]))
-        code, body = call('delphi_getit', {'sort': 'evil; del *'}, RO_TOKEN)
-        check('ro: delphi_getit sort invalido RECHAZADO por whitelist',
-              'RECHAZADO' in body and 'orden valido' in body, '%s %s' % (code, body[:150]))
+        # delphi_components is pure read (a registry listing, no process
+        # spawned): fine in RO, and any RAD install registers Embarcadero's
+        # own design packages, so the unfiltered list always mentions them
+        code, body = call('delphi_components', {}, RO_TOKEN)
+        check('ro: delphi_components PERMITIDO en RO y lista packages',
+              code == 200 and 'SOLO LECTURA' not in body and 'Embarcadero' in body,
+              '%s %s' % (code, body[:150]))
+        code, body = call('delphi_components', {'filter': 'zz-no-existe-zz'}, RO_TOKEN)
+        check('ro: delphi_components filter sin resultados responde honesto',
+              'Ningun package' in body, '%s %s' % (code, body[:150]))
         # delete/move are mutating: refused read-only
         code, body = call('delphi_delete', {'path': paspath}, RO_TOKEN)
         check('ro: delphi_delete RECHAZADO en RO', 'SOLO LECTURA' in body, '%s %s' % (code, body[:120]))

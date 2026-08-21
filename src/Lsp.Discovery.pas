@@ -65,6 +65,23 @@ function DiscoverRadStudio: TRadStudioInfo;
   Fabricator must merge this list to resolve their symbols. '' if absent. }
 function IdeLibrarySearchPath(const AVersion, APlatform: string): string;
 
+type
+  TIdePackage = record
+    Description: string;  // what the IDE shows ("Embarcadero FMX Standard Components")
+    BplFile: string;      // file name only, macros and folders stripped
+    Disabled: Boolean;    // present in Disabled Packages (registered but off)
+  end;
+
+{ The design packages REGISTERED in the IDE - the authoritative "what is
+  installed to program with", whatever the install channel (GetIt, vendor
+  installers, manual). Read from Known Packages + Known Packages x64
+  (HKCU, plus HKLM in both registry views), deduplicated by file name;
+  Known IDE Packages (IDE plumbing, no components) are deliberately NOT
+  included; Disabled Packages mark their entry instead of hiding it.
+  Measured 2026-08-21: 152 HKCU + 118 x64 + 83 HKLM on the reference
+  machine, 3 disabled. }
+function IdeKnownPackages(const AVersion: string): TArray<TIdePackage>;
+
 { $(BDSCOMMONDIR) as written by the installer in rsvars.bat - the
   AUTHORITATIVE value (no branding names composed by hand: Embarcadero
   renames its Documents folder between eras, e.g. "RAD Studio" ->
@@ -273,6 +290,96 @@ begin
   finally
     Keys.Free;
     Reg.Free;
+  end;
+end;
+
+function IdeKnownPackages(const AVersion: string): TArray<TIdePackage>;
+var
+  Map: TDictionary<string, TIdePackage>;
+  Off: TDictionary<string, Boolean>; // a set: filename(lower) -> present
+  List: TList<TIdePackage>;
+
+  // One registry key's values into ADest as filename(lower) -> entry.
+  // AsNames=True collects only the file names (the Disabled set).
+  procedure Collect(ARoot: HKEY; AAccess: Cardinal; const ASubKey: string;
+    AsNames: Boolean);
+  var
+    Reg: TRegistry;
+    Names: TStringList;
+    N, FileKey: string;
+    P: TIdePackage;
+  begin
+    Reg := TRegistry.Create(KEY_READ or AAccess);
+    Names := TStringList.Create;
+    try
+      Reg.RootKey := ARoot;
+      if not Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\%s',
+        [AVersion, ASubKey])) then
+        Exit;
+      Reg.GetValueNames(Names);
+      for N in Names do
+      begin
+        // The value NAME is the bpl path ($(BDSBIN)\dclx370.bpl or absolute);
+        // the DATA is the description the IDE shows.
+        FileKey := TPath.GetFileName(
+          N.Replace('/', '\'));
+        if FileKey = '' then
+          Continue;
+        if AsNames then
+          Off.AddOrSetValue(FileKey.ToLower, True)
+        else if not Map.ContainsKey(FileKey.ToLower) then
+        begin
+          P.Description := Reg.ReadString(N).Trim;
+          if P.Description = '' then
+            P.Description := FileKey;
+          P.BplFile := FileKey;
+          P.Disabled := False;
+          Map.Add(FileKey.ToLower, P);
+        end;
+      end;
+    finally
+      Names.Free;
+      Reg.Free;
+    end;
+  end;
+
+var
+  P: TIdePackage;
+  Key: string;
+begin
+  Result := nil;
+  Map := TDictionary<string, TIdePackage>.Create;
+  Off := TDictionary<string, Boolean>.Create;
+  List := TList<TIdePackage>.Create;
+  try
+    for var SubKey in TArray<string>.Create('Known Packages',
+      'Known Packages x64') do
+    begin
+      Collect(HKEY_CURRENT_USER, 0, SubKey, False);
+      Collect(HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY, SubKey, False);
+      Collect(HKEY_LOCAL_MACHINE, KEY_WOW64_64KEY, SubKey, False);
+    end;
+    for var SubKey in TArray<string>.Create('Disabled Packages',
+      'Disabled Packages x64') do
+      Collect(HKEY_CURRENT_USER, 0, SubKey, True);
+    for Key in Map.Keys do
+    begin
+      P := Map[Key];
+      P.Disabled := Off.ContainsKey(Key);
+      List.Add(P);
+    end;
+    List.Sort(TComparer<TIdePackage>.Construct(
+      function(const L, R: TIdePackage): Integer
+      begin
+        Result := CompareText(L.Description, R.Description);
+        if Result = 0 then
+          Result := CompareText(L.BplFile, R.BplFile);
+      end));
+    Result := List.ToArray;
+  finally
+    List.Free;
+    Off.Free;
+    Map.Free;
   end;
 end;
 

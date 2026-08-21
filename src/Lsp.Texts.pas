@@ -609,31 +609,35 @@ const
   SR_ADB_LINES_FMT =
     'RECHAZADO: "%s" no es un numero de lineas valido para logcat (1-5000).';
 
-  // ---- delphi_getit ----
+  // ---- delphi_components ----
 
-  SD_GETIT =
-    'What this server''s RAD Studio has INSTALLED to program with: the ' +
-    'GetIt packages (component libraries, styles, SDK add-ons) present in ' +
-    'the IDE, listed with the IDE''s own GetItCmd. Read-only by design - ' +
-    'there is no install/uninstall command; if a package you need is ' +
-    'missing, say so with delphi_report. The base RTL/VCL/FMX frameworks ' +
-    'are always available and never appear in this list.';
+  SD_COMPONENTS =
+    'What this server''s RAD Studio has INSTALLED to program with: every ' +
+    'component/design package REGISTERED in the IDE (Known Packages - the ' +
+    'same list the IDE loads into its palette), whatever the install ' +
+    'channel: GetIt, a vendor installer or manual. Each line is the ' +
+    'package''s description plus its .bpl file; disabled packages are ' +
+    'marked, IDE-plumbing packages are excluded. Read-only by design - ' +
+    'there is no install command; if a library you need is missing, say ' +
+    'so with delphi_report. The base RTL units are always available and ' +
+    'never appear here.';
 
-  SP_GETIT_SORT =
-    'Optional: sort the listing by name (default), vendor or date.';
+  SP_COMPONENTS_FILTER =
+    'Optional: only entries whose description or file name contains this ' +
+    'text (case-insensitive), e.g. "FMX", "TMS", "JEDI".';
 
-  SR_GETIT_SORT_FMT =
-    'RECHAZADO: "%s" no es un orden valido para el listado (name, vendor o date).';
+  SR_COMPONENTS_MISSING =
+    'No se encontro ninguna instalacion de RAD Studio en el servidor - ' +
+    'sin IDE no hay packages que listar.';
 
-  SR_GETIT_MISSING =
-    'GetItCmd.exe no existe en la instalacion de RAD Studio del servidor ' +
-    '(carpeta bin) - sin el no hay listado de packages.';
+  SN_COMPONENTS_NONE_FMT =
+    'Ningun package registrado contiene "%s". Lista completa: llama sin filter.';
 
-  SN_GETIT_NOTE =
-    'These packages are installed in the SERVER''s RAD Studio: their units ' +
-    'and components are available to any project built here. Base RTL/VCL/' +
-    'FMX are always present and not listed. No install command exists by ' +
-    'design - report a missing package with delphi_report.';
+  SN_COMPONENTS_NOTE =
+    'These design packages are registered in the SERVER''s RAD Studio: ' +
+    'their components and units are available to projects built here. ' +
+    'Base RTL/VCL/FMX are always present and not listed. No install ' +
+    'command exists by design - report a missing library with delphi_report.';
 
   SN_BUILD_ANDROID_NEW =
     'No .deployproj existed, so the standard Android deployment manifest ' +
