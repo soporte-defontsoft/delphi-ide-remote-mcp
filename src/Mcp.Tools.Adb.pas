@@ -235,8 +235,14 @@ begin
     end;
     Output := RunAdb(Adb, DevArg + 'logcat -d -v time -t ' + IntToStr(N),
       45000, ExitCode);
-    // a lost device must say so, not hide as "(logcat vacio)"
-    if DeviceGone(Output) then
+    // a lost device must say so, not hide as "(logcat vacio)" - but only
+    // when adb ITSELF failed. The dump's content is the device's own system
+    // log, which naturally carries "failed to connect"/"offline" noise:
+    // field 2026-08-21 (hermes report), a 5000-line dump false-positived
+    // the marker scan and Exit'ed the RAW dump inline - 611KB past the
+    // filter, the out= file and the 400-line cap in one move. The get-state
+    // precheck above already answers for a device gone BEFORE the call.
+    if (ExitCode <> 0) and DeviceGone(Output) then
       Exit(GoneHint(Output));
     var Txt: string;
     if Params.Filter.Trim <> '' then

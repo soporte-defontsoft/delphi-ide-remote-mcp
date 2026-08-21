@@ -169,6 +169,10 @@ AllowBuildScripts=0                     ; 1 = allow build scripts (custom <Targe
 
 [Workspace]
 Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
+
+[Log]
+LinesPerFile=2000                       ; tray log: persist a block every N lines (min 100)
+MaxFiles=10                             ; rotation: keep the newest N block files
 ```
 
 - **Port**: used by the service, the terminal `--http` mode and the tray app alike. A port given on the
@@ -207,6 +211,12 @@ Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
   and every device-addressing command must name its `device` explicitly (an implicit target could
   be an unlisted device that happens to be the only one attached). Absent = unrestricted, for a
   dev machine.
+- **`[Log]`** (tray mode): the live log window keeps at most `LinesPerFile` lines in memory —
+  on reaching the cap the block is saved to `logs\yyyymmdd-hhnnss.log` next to the exe and the
+  window restarts at zero; rotation keeps the newest `MaxFiles` files. A controlled exit
+  flushes the partial block, so the tail of a session survives for post-mortems. Memory is
+  bounded end to end: the producer buffer caps at 5000 lines (beyond that, lines are counted
+  and reported as dropped, never accumulated).
 - **Roots** are both discovery (`delphi_projects`) and a **jail**: with roots configured, every
   disk-touching tool (read/edit/create/build/lint/search/list/git/LSP) refuses paths outside
   them — including `..\` escapes and prefix cousins. Paths with spaces need no quoting (the

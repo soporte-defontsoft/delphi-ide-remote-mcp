@@ -8,6 +8,41 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.37.0-beta] - 2026-08-21
+
+Born from an operator observation on the live tray: sixteen minutes of
+request lines landed in the log window in ONE burst, all stamped with the
+drain time - the old path queued one `TThread.Queue` closure per log line
+with no cap, growing unbounded whenever the main thread failed to drain,
+and nothing was ever persisted (that morning's post-mortem depended on the
+operator copy-pasting the window by hand).
+
+### Added
+- **Persistent tray log with bounded memory** (`[Log]` in settings.ini):
+  the live window stays as it was, but every `LinesPerFile` lines
+  (default 2000) the block is saved to `logs\yyyymmdd-hhnnss.log` next to
+  the exe and the memo restarts at zero. Rotation keeps the newest
+  `MaxFiles` files (default 10). A controlled exit - tray menu or Windows
+  logoff/shutdown - flushes the partial block too: the tail of a session
+  is exactly what a post-mortem needs most.
+
+### Changed
+- Log producer rebuilt: any thread appends straight into a bounded buffer
+  (5000 lines, drop-and-count beyond) under a critical section; a 500 ms
+  timer drains it to the window on the main thread. Timestamps are taken
+  when the line is PRODUCED, so the log tells when things happened, not
+  when the window got to paint them.
+
+### Fixed
+- **`delphi_adb logcat` false "device lost" on big dumps** (field agent's
+  report, reproduced 1:1 against the live device): the device-gone marker
+  scan (v0.34.1) ran over the DUMP CONTENT - and a 5000-line Android
+  system log naturally contains "failed to connect"/"offline" noise, so
+  the scan false-positived and exited with the RAW dump inline (611KB),
+  bypassing `filter`, the `out=` file and the 400-line cap in one move.
+  The scan now runs only when adb itself exits nonzero; a device gone
+  BEFORE the call was already answered by the `get-state` precheck.
+
 ## [0.36.0-beta] - 2026-08-21
 
 Born from the field agent's first Phase-3 bug report: it hand-edited a
