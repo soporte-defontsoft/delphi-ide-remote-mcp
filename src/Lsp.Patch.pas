@@ -566,9 +566,16 @@ begin
         Exit('RECHAZADO: no existe ' + A.Path);
 
       B := TFile.ReadAllBytes(A.Path);
-      if IsDesigner and (Length(B) >= 4) and (B[0] = $54) and (B[1] = $50) and
-         (B[2] = $46) and (B[3] = $30) then
-        Exit(Format('RECHAZADO: %s es un %s BINARIO (firma TPF0). No es texto y no se puede editar asi. ' +
+      // Two binary shapes exist (measured with the IDE's own convert.exe):
+      // a raw stream starts 'TPF0'; the REAL on-disk binary .dfm/.fmx wraps
+      // that stream in a 16-bit resource header whose first byte is $FF
+      // (FF 0A 00 + UPPERCASED name + the TPF0 stream at ~offset 19). A text
+      // form always begins with object/inherited/inline - never $FF.
+      if IsDesigner and (Length(B) >= 4) and
+         (((B[0] = $54) and (B[1] = $50) and (B[2] = $46) and (B[3] = $30)) or
+          (B[0] = $FF)) then
+        Exit(Format('RECHAZADO: %s es un %s BINARIO (firma TPF0 o envoltorio de recurso $FF). ' +
+          'No es texto y no se puede editar asi. ' +
           'Abrelo en el IDE ("View as Text") o entrega el cambio a una persona.',
           [TPath.GetFileName(A.Path), Ext]));
 

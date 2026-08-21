@@ -16,6 +16,10 @@ DIR = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'patch')
 os.makedirs(DIR, exist_ok=True)
 PAS = os.path.join(DIR, 'Dummy.pas')
 DFM = os.path.join(DIR, 'Bin.dfm')
+# The REAL on-disk binary form (IDE / convert.exe, measured 2026-08-21):
+# a 16-bit resource wrapper - $FF, word len, UPPERCASED name, NUL, size,
+# then the TPF0 stream. TPF0 is NOT at offset 0 in this shape.
+DFM_FF = os.path.join(DIR, 'BinRes.dfm')
 
 CRLF = '\r\n'
 SRC = CRLF.join([
@@ -38,6 +42,8 @@ with open(PAS, 'wb') as f:
     f.write(SRC.encode('cp1252'))
 with open(DFM, 'wb') as f:
     f.write(b'TPF0' + b'binarydata')
+with open(DFM_FF, 'wb') as f:
+    f.write(b'\xff\x0a\x00TFORMX\x00\x30\x10\x86\x03\x00\x00TPF0binarydata')
 ORIG = open(PAS, 'rb').read()
 
 proc = subprocess.Popen([EXE], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -134,6 +140,9 @@ out = call('delphi_edit', {"path": PAS, "old": "linea con �", "new": "x"})
 check('gate: U+FFFD en ancla', 'RECHAZADO' in out and 'U+FFFD' in out, out)
 out = call('delphi_edit', {"path": DFM, "old": "a", "new": "b"})
 check('gate: designer binario TPF0', 'RECHAZADO' in out and 'TPF0' in out, out)
+out = call('delphi_edit', {"path": DFM_FF, "old": "a", "new": "b"})
+check('gate: designer binario con envoltorio $FF (formato real del IDE)',
+      'RECHAZADO' in out and 'BINARIO' in out, out)
 out = call('delphi_edit', {"path": os.path.join(DIR, '__history', 'x.pas'),
                             "old": "a", "new": "b"})
 check('gate: __history vetado', 'RECHAZADO' in out and '__history' in out, out)

@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.37.0-beta';
+  SERVER_VERSION = '0.38.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -608,6 +608,32 @@ const
 
   SR_ADB_LINES_FMT =
     'RECHAZADO: "%s" no es un numero de lineas valido para logcat (1-5000).';
+
+  // ---- delphi_getit ----
+
+  SD_GETIT =
+    'What this server''s RAD Studio has INSTALLED to program with: the ' +
+    'GetIt packages (component libraries, styles, SDK add-ons) present in ' +
+    'the IDE, listed with the IDE''s own GetItCmd. Read-only by design - ' +
+    'there is no install/uninstall command; if a package you need is ' +
+    'missing, say so with delphi_report. The base RTL/VCL/FMX frameworks ' +
+    'are always available and never appear in this list.';
+
+  SP_GETIT_SORT =
+    'Optional: sort the listing by name (default), vendor or date.';
+
+  SR_GETIT_SORT_FMT =
+    'RECHAZADO: "%s" no es un orden valido para el listado (name, vendor o date).';
+
+  SR_GETIT_MISSING =
+    'GetItCmd.exe no existe en la instalacion de RAD Studio del servidor ' +
+    '(carpeta bin) - sin el no hay listado de packages.';
+
+  SN_GETIT_NOTE =
+    'These packages are installed in the SERVER''s RAD Studio: their units ' +
+    'and components are available to any project built here. Base RTL/VCL/' +
+    'FMX are always present and not listed. No install command exists by ' +
+    'design - report a missing package with delphi_report.';
 
   SN_BUILD_ANDROID_NEW =
     'No .deployproj existed, so the standard Android deployment manifest ' +

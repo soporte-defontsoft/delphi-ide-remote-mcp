@@ -8,6 +8,31 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.38.0-beta] - 2026-08-21
+
+Born from a hands-on sweep of the IDE's own `bin\` folder (operator's
+lead): measuring `convert.exe` revealed that the REAL on-disk binary
+`.dfm`/`.fmx` is not what our guard was looking for.
+
+### Added
+- **`delphi_getit`** (29th tool, read level): lists the GetIt packages
+  installed in the server's RAD Studio through the IDE's own
+  `GetItCmd.exe -l= -f=installed` - so a remote agent knows which
+  component libraries it can lean on before writing uses clauses that
+  will not compile. Optional `sort` (name/vendor/date, whitelisted).
+  **No install/uninstall by design** (operator decision): installing
+  packages mutates the whole IDE and stays a human decision; a missing
+  package is reported with `delphi_report`.
+
+### Fixed
+- **Binary designer detection was incomplete**: `delphi_edit` recognized
+  only a raw `TPF0` stream at offset 0, but the real binary form written
+  by the IDE (and `convert.exe`, measured byte by byte) wraps that stream
+  in a 16-bit resource header starting with `$FF` - such a file passed
+  the check and would have been treated as text. Designer files whose
+  first byte is `$FF` are now refused as binary too (a text form always
+  begins with object/inherited/inline, never `$FF`).
+
 ## [0.37.0-beta] - 2026-08-21
 
 Born from an operator observation on the live tray: sixteen minutes of
