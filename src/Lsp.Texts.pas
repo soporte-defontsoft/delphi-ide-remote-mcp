@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.42.1-beta';
+  SERVER_VERSION = '0.42.2-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -842,6 +842,14 @@ const
 
   SN_FILE_DESIGNER_TOO_FMT =
     '  designer %s: %s';
+
+  // ---- delphi_diagnostics ----
+
+  SN_DIAG_IN_PROGRESS =
+    '{"status":"in-progress","note":"El lint sigue en marcha en el LSP (las ' +
+    'units grandes tardan mas de un minuto la primera vez). Vuelve a llamar a ' +
+    'delphi_diagnostics con el mismo fichero: el lint NO se reinicia mientras ' +
+    'el fichero no cambie y la siguiente llamada devuelve el resultado."}';
 
   // ---- delphi_components ----
 

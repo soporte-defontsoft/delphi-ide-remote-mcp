@@ -8,6 +8,27 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.42.2-beta] - 2026-08-22
+
+Field report from the DSH agent: `delphi_diagnostics` timed out on a
+714-line unit. Three causes, all measured on that unit (2.2 s now):
+
+### Fixed
+- **Units in a sibling folder of the project** (`SharedSource\` next to
+  `codigofuente\`) were linted without settings - the `.dproj` lookup only
+  walked up the tree - so the LSP never published. The lookup now also
+  finds the `.dproj` one level down that references the unit.
+- **GetIt packages were missing from the fabricated settings**: the IDE's
+  library path entries under `$(BDSCatalogRepository)` were dropped as
+  unexpanded macros (LockBox, Abbrevia, ICS... -> `F2063 could not compile
+  used unit`). The fabricator now expands the IDE's environment table.
+- Fabricated settings carry a generation in the cache name, so a rule
+  change invalidates old caches.
+- `delphi_diagnostics` answers within 40 s: a slow lint keeps running and
+  the next call on the same unchanged file returns its result (the lint is
+  no longer restarted on retry).
+
+
 ## [0.42.1-beta] - 2026-08-22
 
 Code review of 0.42.0 (8 angles, 10 confirmed findings), all applied.

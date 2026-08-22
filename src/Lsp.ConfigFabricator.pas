@@ -40,6 +40,7 @@ uses
   System.Hash,
   System.Generics.Collections,
   Lsp.Client, // PathToUri / UriToPath
+  Lsp.Guard,  // ExpandIdeMacros
   Lsp.Dproj;  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
 
 const
@@ -93,6 +94,11 @@ begin
     List.Free;
   end;
 end;
+
+const
+  // Bump when the fabrication rules change: cached settings older than the
+  // rule are otherwise reused as long as they are newer than the .dproj.
+  FABRICATOR_GEN = 2; // 2 = GetIt catalog macros expanded (v0.42.2)
 
 { ---- public API ---- }
 
@@ -155,10 +161,10 @@ begin
   CacheDir := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'),
     'DelphiLspMcp\configs');
   TDirectory.CreateDirectory(CacheDir);
-  CacheFile := TPath.Combine(CacheDir, Format('%s-%x-%s.delphilsp.json',
+  CacheFile := TPath.Combine(CacheDir, Format('%s-%x-%s-g%d.delphilsp.json',
     [TPath.GetFileNameWithoutExtension(ADprojPath),
      THashFNV1a32.GetHashValue(TPath.GetFullPath(ADprojPath).ToLower),
-     AInfo.Version.Replace('.', '_')]));
+     AInfo.Version.Replace('.', '_'), FABRICATOR_GEN]));
   if FileExists(CacheFile) and
      (TFile.GetLastWriteTime(CacheFile) > TFile.GetLastWriteTime(ADprojPath)) then
     Exit(CacheFile);
@@ -207,6 +213,22 @@ begin
       IdeLib := IdeLib.Replace('$(BDSUSERDIR)', UserDocs, [rfReplaceAll, rfIgnoreCase]);
     if CommonDocs <> '' then
       IdeLib := IdeLib.Replace('$(BDSCOMMONDIR)', CommonDocs, [rfReplaceAll, rfIgnoreCase]);
+    // The rest of the IDE's table ($(BDSCatalogRepository) and its AllUsers
+    // twin are where EVERY GetIt package lives - LockBox, FmxLinux...; a unit
+    // using one of them lints as 'could not compile used unit' otherwise).
+    var Vars := TStringList.Create;
+    try
+      IdeEnvironmentVars(AInfo.Version, Vars);
+      if (Vars.Values['BDSCatalogRepository'] = '') and (UserDocs <> '') then
+        Vars.Values['BDSCatalogRepository'] :=
+          IncludeTrailingPathDelimiter(UserDocs) + 'CatalogRepository';
+      if (Vars.Values['BDSCatalogRepositoryAllUsers'] = '') and (CommonDocs <> '') then
+        Vars.Values['BDSCatalogRepositoryAllUsers'] :=
+          IncludeTrailingPathDelimiter(CommonDocs) + 'CatalogRepository';
+      IdeLib := ExpandIdeMacros(IdeLib, Vars);
+    finally
+      Vars.Free;
+    end;
     SearchRaw := SearchRaw + ';' + IdeLib;
   end;
 

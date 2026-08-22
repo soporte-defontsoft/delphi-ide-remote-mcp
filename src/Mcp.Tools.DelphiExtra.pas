@@ -84,9 +84,13 @@ type
 implementation
 
 uses
+  Lsp.Texts,
   MCPServer.Registration,
   Lsp.References,
   Lsp.BuildRunner;
+
+const
+  DIAG_WAIT_MS = 40000; // under the 60 s most MCP clients allow per call
 
 { TDelphiDiagnosticsTool }
 
@@ -97,7 +101,10 @@ begin
   FDescription := 'Compiler-grade errors/warnings/hints for one Delphi source ' +
     'file (Error Insight via the official DelphiLSP linter), WITHOUT building. ' +
     'Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions. ' +
-    'Severity: 1=error, 2=warning, 3=hint. Lints the CURRENT on-disk content.';
+    'Severity: 1=error, 2=warning, 3=hint. Lints the CURRENT on-disk content. ' +
+    'A big unit can take over a minute the first time: the answer then says ' +
+    'the lint is in progress - call again with the same file and the result ' +
+    'is returned (the lint is not restarted while the file is unchanged).';
 end;
 
 function TDelphiDiagnosticsTool.ExecuteWithParams(
@@ -110,10 +117,11 @@ var
   Errors, WarningsC, Hints: Integer;
   Sev: Integer;
 begin
-  P := TLspSession.Instance.LintFile(Params.Path, 120000, Settings);
+  // Answer well inside the usual MCP client timeout (60 s): a slow lint keeps
+  // running on the LSP, and the next call on the same text collects it.
+  P := TLspSession.Instance.LintFile(Params.Path, DIAG_WAIT_MS, Settings);
   if P = nil then
-    Exit('timeout: no diagnostics arrived within 120 s' +
-      ' [hint: very large units take a while on first lint; retry once]');
+    Exit(SN_DIAG_IN_PROGRESS);
   try
     Diags := P.GetValue('diagnostics') as TJSONArray;
     Return := TJSONObject.Create;

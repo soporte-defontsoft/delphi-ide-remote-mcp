@@ -37,6 +37,9 @@ type
     FLock: TCriticalSection;
     FClients: TObjectDictionary<string, TLspClient>;
     FDocVersions: TDictionary<string, Integer>;
+    // text the LSP is linting per doc: a retry with the same text must NOT
+    // restart the lint, just wait for (or collect) the pending diagnostics
+    FLintText: TDictionary<string, string>;
     // disk fingerprint (mtime|size) at the moment the LSP last saw the file:
     // when it changes, the buffer is refreshed with didChange (the LSP must
     // always see the CURRENT disk truth, e.g. after a delphi_edit).
@@ -104,6 +107,7 @@ begin
   FClients := TObjectDictionary<string, TLspClient>.Create([doOwnsValues]);
   FDocVersions := TDictionary<string, Integer>.Create;
   FDocStamps := TDictionary<string, string>.Create;
+  FLintText := TDictionary<string, string>.Create;
 end;
 
 destructor TLspSession.Destroy;
@@ -111,6 +115,7 @@ begin
   FClients.Free; // frees clients, which stop their transports (and children)
   FDocVersions.Free;
   FDocStamps.Free;
+  FLintText.Free;
   FLock.Free;
   inherited;
 end;
@@ -196,6 +201,13 @@ begin
           Exit(C);
       Exit(Matches[0]);
     end;
+    // No .dproj here: a unit in a SIBLING folder of the project (SharedSource
+    // next to codigofuente, the usual shared-units layout) belongs to the
+    // .dproj one level down that REFERENCES it (DCCReference or search path).
+    if Depth <= 3 then
+      for C in TDirectory.GetFiles(Dir, '*.dproj', TSearchOption.soAllDirectories) do
+        if TFile.ReadAllText(C).ToLower.Contains(BaseName.ToLower) then
+          Exit(C);
     var Parent := TPath.GetDirectoryName(Dir);
     if SameText(Parent, Dir) then
       Exit;
@@ -322,6 +334,8 @@ var
   Client: TLspClient;
   Version: Integer;
   Stale: TJSONObject;
+  Prev: string;
+  SameText_: Boolean;
 begin
   FullPath := TPath.GetFullPath(AFilePath);
   var Denied := ReadPathDenied(FullPath); // linting never writes the file
@@ -335,24 +349,32 @@ begin
     Client := GetClient(FullPath, True, ASettingsUsed, Key, RootDir);
     Uri := TLspClient.PathToUri(FullPath);
     Text := TLspClient.LoadSourceText(FullPath);
-
-    // Drop any queued diagnostics for this uri from earlier lints.
-    repeat
-      Stale := Client.WaitForNotification('textDocument/publishDiagnostics', 1, Uri);
-      Stale.Free;
-    until Stale = nil;
-
     DocKey := Key + '|' + FullPath.ToLower;
-    if FDocVersions.TryGetValue(DocKey, Version) then
+
+    // A retry on the SAME text (the client timed out before a slow lint
+    // finished) must not restart the lint: the LSP is still working, or the
+    // diagnostics are already queued - just wait for them below.
+    SameText_ := FLintText.TryGetValue(DocKey, Prev) and (Prev = Text);
+    if not SameText_ then
     begin
-      Inc(Version);
-      FDocVersions[DocKey] := Version;
-      Client.DidChangeText(Uri, Text, Version);
-    end
-    else
-    begin
-      FDocVersions.Add(DocKey, 1);
-      Client.DidOpenText(Uri, Text);
+      // Drop any queued diagnostics for this uri from earlier lints.
+      repeat
+        Stale := Client.WaitForNotification('textDocument/publishDiagnostics', 1, Uri);
+        Stale.Free;
+      until Stale = nil;
+
+      if FDocVersions.TryGetValue(DocKey, Version) then
+      begin
+        Inc(Version);
+        FDocVersions[DocKey] := Version;
+        Client.DidChangeText(Uri, Text, Version);
+      end
+      else
+      begin
+        FDocVersions.Add(DocKey, 1);
+        Client.DidOpenText(Uri, Text);
+      end;
+      FLintText.AddOrSetValue(DocKey, Text);
     end;
   finally
     FLock.Leave;
