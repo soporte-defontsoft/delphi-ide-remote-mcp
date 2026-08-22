@@ -105,11 +105,13 @@ on your side.
   full `.apk` (the server generates the deployment manifest if missing).
 - **"Unit 'X' not found" on a platform you just added** (and only
   there): the unit belongs to an installed component whose folder is in
-  the IDE's library path for the other platforms only. Find its source
-  folder (`delphi_search` / `delphi_list` in the library zone), then
+  the IDE's library path for the other platforms only. The failed build
+  already says where: `missingUnits[].sourceFolders` - run the
   `delphi_config command=add-searchpath platform=<the one> path=<folder>`
-  and build again; repeat per library (a fat app may need 3-4). `view`
-  shows the paths per platform.
+  it names and build again (one round per library, not two). Before the
+  first build on a new platform, `delphi_components platform=<the one>`
+  lists the components registered elsewhere and not there. An empty
+  `sourceFolders` means no source for that platform: `delphi_report`.
 - **A component that loads a native library at runtime** (a `.so` on
   Linux, `.dylib` on macOS, `.dll` on Windows - OBR's `libzbar`, for
   instance) needs that file shipped with the binary:

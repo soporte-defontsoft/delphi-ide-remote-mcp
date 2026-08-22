@@ -20,7 +20,8 @@ interface
 
 uses
   System.Classes,
-  System.JSON;
+  System.JSON,
+  Lsp.Discovery; // TRadStudioInfo for IdeMacroVars
 
 { '' = allowed; otherwise the rejection message to return to the agent.
   This is the WRITE jail: only the configured workspace roots. }
@@ -49,6 +50,18 @@ function WorkspaceJailSummary(out AWarning: Boolean): string;
   writable - exposed so delphi_workspace can tell the agent what it may read
   besides the roots (field round 4, R4-B). }
 function LibraryReadRoots: TArray<string>;
+
+{ The IDE's macro table for one installation ($(BDS), $(BDSLIB),
+  $(BDSUSERDIR), $(BDSCOMMONDIR), $(BDSCatalogRepository)...), the same one
+  the library zone is built from. ADest receives Name=Value pairs. }
+procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
+
+{ The IDE's Library Search Path of ONE platform, every entry expanded to a
+  real folder (macros resolved, no trailing delimiter), in registry order.
+  Entries that still carry an unresolved macro or are not rooted are left
+  out. What "delphi_components platform=X" shows and what the F2613 helper
+  of delphi_build compares against. }
+function IdePlatformLibraryPaths(const AVersion, APlatform: string): TArray<string>;
 
 { Credentials (env var first, then settings.ini [Security] next to the exe). }
 function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
@@ -159,7 +172,6 @@ uses
   System.Generics.Collections,
   MCPServer.Serializer, // NormalizeKey: ONE rule for argument names
   Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
-  Lsp.Discovery,
   Lsp.Texts;
 
 var
@@ -986,12 +998,81 @@ begin
   end;
 end;
 
+procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
+var
+  UserDocs, CommonDocs: string;
+begin
+  // The IDE's own macro table is authoritative: it carries
+  // $(BDSCatalogRepositoryAllUsers), where the GetIt packages live
+  // (FmxLinux, Android SDKs, PAServer installers). Without it those
+  // paths were silently dropped - measured 2026-08-19.
+  IdeEnvironmentVars(AInfo.Version, ADest);
+  // Values that are NOT in that key (authoritative from rsvars.bat /
+  // the install itself), added without overwriting the IDE's own.
+  if ADest.Values['BDS'] = '' then
+    ADest.Values['BDS'] := ExcludeTrailingPathDelimiter(AInfo.RootDir);
+  if ADest.Values['BDSLIB'] = '' then
+    ADest.Values['BDSLIB'] := ExcludeTrailingPathDelimiter(AInfo.RootDir) + '\lib';
+  UserDocs := BdsUserDir(AInfo);
+  if (UserDocs <> '') and (ADest.Values['BDSUSERDIR'] = '') then
+    ADest.Values['BDSUSERDIR'] := UserDocs;
+  CommonDocs := BdsCommonDir(AInfo);
+  if (CommonDocs <> '') and (ADest.Values['BDSCOMMONDIR'] = '') then
+    ADest.Values['BDSCOMMONDIR'] := CommonDocs;
+  // Per-user catalog repository: sibling of the common one, under the
+  // user's own documents root (the IDE exposes only the AllUsers one).
+  if (ADest.Values['BDSCatalogRepository'] = '') and (UserDocs <> '') then
+    ADest.Values['BDSCatalogRepository'] :=
+      IncludeTrailingPathDelimiter(UserDocs) + 'CatalogRepository';
+end;
+
+function IdePlatformLibraryPaths(const AVersion, APlatform: string): TArray<string>;
+var
+  Installs: TArray<TRadStudioInfo>;
+  Info: TRadStudioInfo;
+  Vars, List: TStringList;
+  Item, Expanded: string;
+begin
+  Result := nil;
+  Installs := DiscoverAllRadStudios;
+  for Info in Installs do
+  begin
+    if not Info.Found or not SameText(Info.Version, AVersion) then
+      Continue;
+    Vars := TStringList.Create;
+    List := TStringList.Create;
+    try
+      IdeMacroVars(Info, Vars);
+      Vars.Values['Platform'] := APlatform;
+      for Item in IdeLibrarySearchPath(Info.Version, APlatform).Split([';']) do
+      begin
+        Expanded := ExpandIdeMacros(Item.Trim, Vars);
+        if (Expanded = '') or Expanded.Contains('$(') or
+           not TPath.IsPathRooted(Expanded) then
+          Continue;
+        try
+          Expanded := ExcludeTrailingPathDelimiter(TPath.GetFullPath(Expanded));
+        except
+          Continue;
+        end;
+        if List.IndexOf(Expanded) < 0 then
+          List.Add(Expanded);
+      end;
+      Result := List.ToStringArray;
+    finally
+      List.Free;
+      Vars.Free;
+    end;
+    Exit;
+  end;
+end;
+
 function LibraryRoots: TArray<string>;
 var
   Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   List, Vars: TStringList;
-  Plat, Raw, Item, Expanded, UserDocs, CommonDocs: string;
+  Plat, Raw, Item, Expanded: string;
 begin
   if not GLibLoaded then
   begin
@@ -1007,28 +1088,7 @@ begin
         List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(Info.RootDir)));
         Vars := TStringList.Create;
         try
-          // The IDE's own macro table is authoritative: it carries
-          // $(BDSCatalogRepositoryAllUsers), where the GetIt packages live
-          // (FmxLinux, Android SDKs, PAServer installers). Without it those
-          // paths were silently dropped - measured 2026-08-19.
-          IdeEnvironmentVars(Info.Version, Vars);
-          // Values that are NOT in that key (authoritative from rsvars.bat /
-          // the install itself), added without overwriting the IDE's own.
-          if Vars.Values['BDS'] = '' then
-            Vars.Values['BDS'] := ExcludeTrailingPathDelimiter(Info.RootDir);
-          if Vars.Values['BDSLIB'] = '' then
-            Vars.Values['BDSLIB'] := ExcludeTrailingPathDelimiter(Info.RootDir) + '\lib';
-          UserDocs := BdsUserDir(Info);
-          if (UserDocs <> '') and (Vars.Values['BDSUSERDIR'] = '') then
-            Vars.Values['BDSUSERDIR'] := UserDocs;
-          CommonDocs := BdsCommonDir(Info);
-          if (CommonDocs <> '') and (Vars.Values['BDSCOMMONDIR'] = '') then
-            Vars.Values['BDSCOMMONDIR'] := CommonDocs;
-          // Per-user catalog repository: sibling of the common one, under the
-          // user's own documents root (the IDE exposes only the AllUsers one).
-          if (Vars.Values['BDSCatalogRepository'] = '') and (UserDocs <> '') then
-            Vars.Values['BDSCatalogRepository'] :=
-              IncludeTrailingPathDelimiter(UserDocs) + 'CatalogRepository';
+          IdeMacroVars(Info, Vars);
 
           // The catalog repositories THEMSELVES, whole: every GetIt package
           // lives there (FmxLinux, LockBox...), and the Library Search Path

@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.44.0-beta';
+  SERVER_VERSION = '0.45.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1005,6 +1005,16 @@ const
     '(entregados; no volveran a aparecer. Si piden algo, hazlo y, si ' +
     'procede, responde con delphi_report.)';
 
+  // ---- delphi_build: F2613 helper ----
+
+  SN_BUILD_MISSING_UNITS_NOTE =
+    'Unidades que el compilador no encuentra y donde vive su .pas en la zona ' +
+    'de biblioteca del servidor. Registra la carpeta para esta plataforma con ' +
+    'delphi_config command=add-searchpath platform=<plataforma> path=<carpeta> ' +
+    'y repite la build. Sin candidatos: el componente no esta instalado o no ' +
+    'trae fuente para esta plataforma (delphi_components platform=<plataforma>, ' +
+    'y si falta, delphi_report).';
+
   // ---- delphi_components ----
 
   SD_COMPONENTS =
@@ -1021,6 +1031,33 @@ const
   SP_COMPONENTS_FILTER =
     'Optional: only entries whose description or file name contains this ' +
     'text (case-insensitive), e.g. "FMX", "TMS", "JEDI".';
+
+  SP_COMPONENTS_PLATFORM =
+    'Optional: a platform (Win32|Win64|Linux64|Android64|OSX64|iOSDevice64...) ' +
+    'to see instead the IDE''s Library Search Path FOR THAT PLATFORM, expanded, ' +
+    'plus the component install roots other platforms register and this one ' +
+    'does not - the list to walk when a build on a new platform fails with ' +
+    'F2613 (unit not found): delphi_config add-searchpath to the Source folder.';
+
+  SR_COMPONENTS_PLATFORM_FMT =
+    'Plataforma "%s" no reconocida. Validas: Win32, Win64, Win64x, WinARM64EC, ' +
+    'OSX64, OSXARM64, Linux64, Android, Android64, iOSDevice64, iOSSimARM64.';
+
+  SN_COMPONENTS_PLATFORM_HEAD_FMT =
+    'Library Search Path del IDE para %s (RAD Studio %s): %d carpetas registradas';
+
+  SN_COMPONENTS_PLATFORM_COMPLETE_FMT =
+    'Todos los componentes registrados en otras plataformas lo estan tambien en %s.';
+
+  SN_COMPONENTS_PLATFORM_MISSING_FMT =
+    '%d componentes registrados en otras plataformas y NO en %s (candidatos ' +
+    'cuando una build falle con F2613 "Unit X not found"):';
+
+  SN_COMPONENTS_PLATFORM_HINT =
+    'Un componente sin Lib\<plataforma> compila desde fuente: delphi_config ' +
+    'command=add-searchpath platform=<plataforma> path=<raiz>\Source (la ' +
+    'carpeta que contenga los .pas; mirala con delphi_list). Si solo trae ' +
+    '.dcu/.so de otras plataformas, no sirve para esta: delphi_report.';
 
   SR_COMPONENTS_MISSING =
     'No se encontro ninguna instalacion de RAD Studio en el servidor - ' +

@@ -278,6 +278,8 @@ Build a Delphi project for real with MSBuild on this machine (rsvars located via
 | `profile` | string | optional | Connection profile name for target=Deploy on a PAServer platform (see `delphi_paserver command=profiles`). The deployed files land on the target under its PAServer scratch dir, in `<profile>/<project name>/` |
 | `deviceid` | string | optional | Android device serial for target=Deploy on Android platforms (see `delphi_adb command=devices`) — measured: msbuild only auto-installs on iOS; on Android install the built .apk with `delphi_adb command=install` |
 
+When the build fails with F2613 (`Unit 'X' not found`) or F1026, the result carries `missingUnits`: each unit with the `sourceFolders` of the library zone where its `.pas` lives (shortest first, at most 6) and a note with the `delphi_config command=add-searchpath platform=<platform> path=<folder>` to run. An empty list means the component is not installed or brings no source for that platform (`delphi_components platform=<platform>`, then `delphi_report`).
+
 Everything above reaches an MSBuild command line, so it is validated at the
 gate: `platform` must be one Delphi knows, `target` is one of the four,
 `config` admits no character a shell would interpret, `profile` follows the
@@ -378,6 +380,7 @@ What this server's RAD Studio has INSTALLED to program with: every component/des
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `filter` | string | optional | Only entries whose description or file name contains this text (case-insensitive), e.g. "FMX", "TMS", "JEDI" |
+| `platform` | string | optional | A platform (Win32, Win64, Linux64, Android64, OSX64, iOSDevice64...) to see instead the IDE's Library Search Path FOR THAT PLATFORM, expanded, plus the component install roots other platforms register and this one does not — the list to walk when a build on a new platform fails with F2613 (unit not found): `delphi_config add-searchpath` to the Source folder |
 
 
 ## FMX styles

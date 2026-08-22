@@ -48,6 +48,9 @@ uses
   Lsp.Guard,
   Lsp.Dproj,
   System.RegularExpressions,
+  System.StrUtils,
+  System.Generics.Collections,
+  System.Generics.Defaults,
   Lsp.Patch,
   Lsp.Texts,
   Lsp.Sandbox;
@@ -656,6 +659,83 @@ begin
   AGenerated := True;
 end;
 
+{ F2613 "Unit 'X' not found" / F1026 "File not found: 'X.dcu'": the unit
+  names the compiler could not resolve, in order, without duplicates. }
+function MissingUnitsOf(const AErrors: TJSONArray): TArray<string>;
+var
+  I: Integer;
+  M: TMatch;
+  L: TList<string>;
+  Name: string;
+begin
+  L := TList<string>.Create;
+  try
+    for I := 0 to AErrors.Count - 1 do
+    begin
+      M := TRegEx.Match(AErrors.Items[I].Value,
+        'F2613:? Unit ''([^'']+)'' not found|F1026:? File not found: ''([^'']+)\.dcu''',
+        [roIgnoreCase]);
+      if not M.Success then
+        Continue;
+      Name := M.Groups[1].Value;
+      if Name = '' then
+        Name := M.Groups[2].Value;
+      if (Name <> '') and not L.Contains(Name) then
+        L.Add(Name);
+      if L.Count >= 10 then
+        Break;
+    end;
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
+{ Where a unit's .pas lives inside the library zone (RAD Studio installs,
+  registered components, GetIt catalog): the folders to add-searchpath.
+  Field 2026-08-22: a Linux64 build needed 2 failed builds per component to
+  locate OBR's and Steema's Source folders by hand. Shortest paths first,
+  at most 6; __history/__recovery/backup copies are skipped. }
+function UnitSourceFolders(const AUnit: string): TArray<string>;
+var
+  Root, F, Dir: string;
+  L: TList<string>;
+  Files: TArray<string>;
+begin
+  L := TList<string>.Create;
+  try
+    for Root in LibraryReadRoots do
+    begin
+      try
+        Files := TDirectory.GetFiles(Root, AUnit + '.pas', TSearchOption.soAllDirectories);
+      except
+        Continue; // an unreadable root is not the agent's problem
+      end;
+      for F in Files do
+      begin
+        Dir := TPath.GetDirectoryName(F);
+        if Dir.Contains('__history') or Dir.Contains('__recovery') or
+           ContainsText(Dir, 'ackup') then
+          Continue;
+        if not L.Contains(Dir) then
+          L.Add(Dir);
+      end;
+    end;
+    L.Sort(TComparer<string>.Construct(
+      function(const A, B: string): Integer
+      begin
+        Result := Length(A) - Length(B);
+        if Result = 0 then
+          Result := CompareText(A, B);
+      end));
+    if L.Count > 6 then
+      L.Count := 6;
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
 function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
   const AProfile, ADeviceId: string; ATimeoutMs: Integer): TJSONObject;
 var
@@ -794,6 +874,28 @@ begin
     Result.AddPair('target', Target);
     Result.AddPair('errors', Errors);
     Result.AddPair('warnings', Warnings);
+    // Units the compiler could not find: say where their source lives, so
+    // the next call is the add-searchpath and not another failed build.
+    if ExitCode <> 0 then
+    begin
+      var Missing := MissingUnitsOf(Errors);
+      if Length(Missing) > 0 then
+      begin
+        var MArr := TJSONArray.Create;
+        Result.AddPair('missingUnits', MArr);
+        for var U in Missing do
+        begin
+          var MObj := TJSONObject.Create;
+          MArr.AddElement(MObj);
+          MObj.AddPair('unit', U);
+          var CArr := TJSONArray.Create;
+          MObj.AddPair('sourceFolders', CArr);
+          for var D in UnitSourceFolders(U) do
+            CArr.Add(D);
+        end;
+        Result.AddPair('missingUnitsNote', SN_BUILD_MISSING_UNITS_NOTE);
+      end;
+    end;
     Result.AddPair('outputTail', Tail.ToString);
     // A stateless protocol means the agent only knows what each result tells
     // it: say WHERE the artifact landed, or it has to hunt the disk for it

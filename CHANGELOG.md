@@ -8,6 +8,25 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.45.0-beta] - 2026-08-23
+
+The "new platform" loop, closed from the agent's own report: a Linux64
+build of a fat FMX app took two failed builds per component to locate the
+Source folders that only Windows had registered.
+
+### Added
+- **`delphi_build` → `missingUnits`** - when a build fails with F2613
+  (`Unit 'X' not found`) or F1026, the result names each missing unit and
+  the folders of the library zone (RAD Studio installs, registered
+  components, GetIt catalog) where its `.pas` lives, shortest first, plus
+  the `delphi_config add-searchpath` to run. No candidates = the component
+  is not installed or brings no source for that platform.
+- **`delphi_components platform=X`** - the IDE's Library Search Path for
+  ONE platform, expanded to real folders, and the component install roots
+  the other platforms register that this one does not (with who has them):
+  the matrix to walk before porting a project to Linux64/Android/macOS.
+
+
 ## [0.44.0-beta] - 2026-08-23
 
 The way back of `delphi_report`.
