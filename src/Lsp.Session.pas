@@ -382,6 +382,18 @@ begin
   // Wait outside the lock: lints can take a while on big units.
   Result := Client.WaitForNotification('textDocument/publishDiagnostics',
     ATimeoutMs, Uri);
+  // Delivered: the next call on the same text is a NEW lint, not a retry
+  // (measured: without this, an identical second call waited forever for a
+  // notification already consumed).
+  if Result <> nil then
+  begin
+    FLock.Enter;
+    try
+      FLintText.Remove(DocKey);
+    finally
+      FLock.Leave;
+    end;
+  end;
 end;
 
 initialization
