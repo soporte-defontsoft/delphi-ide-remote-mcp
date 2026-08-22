@@ -744,6 +744,14 @@ begin
       Exit;
     Exit(WriteDenied('delphi_config ' + Cmd));
   end;
+  // delphi_styles is mixed: view/get/lint read; set/clone/build write.
+  if SameText(AToolName, 'delphi_styles') then
+  begin
+    Cmd := Trim(ArgStr(AArguments, 'command'));
+    if (Cmd = '') or MatchText(Cmd, ['view', 'get', 'lint']) then
+      Exit;
+    Exit(WriteDenied('delphi_styles ' + Cmd));
+  end;
   // delphi_paserver is mixed: the listing commands read; add-profile writes a
   // connection profile on the server and test-connection dials the target
   // with its stored credential.

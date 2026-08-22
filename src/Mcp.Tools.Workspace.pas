@@ -29,6 +29,7 @@ type
     FQuery: string;
     FMaxResults: Integer;
     FWholeWord: Boolean;
+    FPattern: string;
   public
     [SchemaDescription('Directory to search recursively (project root)')]
     property Root: string read FRoot write FRoot;
@@ -38,6 +39,8 @@ type
     property MaxResults: Integer read FMaxResults write FMaxResults;
     [SchemaDescription('true = match whole identifiers only (word boundaries)')]
     property WholeWord: Boolean read FWholeWord write FWholeWord;
+    [SchemaDescription('Optional file mask to search instead of the Delphi set, e.g. *.style, *.ini, *.md, *.rc (one mask)')]
+    property Pattern: string read FPattern write FPattern;
   end;
 
   TDelphiListParams = class
@@ -223,6 +226,7 @@ type
 implementation
 
 uses
+  System.RegularExpressions,
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Client,
@@ -321,7 +325,16 @@ begin
   Total := 0;
   FilesScanned := 0;
   try
+    var Masks: TArray<string> := [];
     for Mask in DEFAULT_MASKS do
+      Masks := Masks + [Mask];
+    if Params.Pattern.Trim <> '' then
+    begin
+      if not TRegEx.IsMatch(Params.Pattern.Trim, '^[\w*?.\-]+$') then
+        Exit('RECHAZADO: pattern debe ser UNA mascara simple (*.style, *.ini, Galatea*.rc).');
+      Masks := [Params.Pattern.Trim];
+    end;
+    for Mask in Masks do
       for F in WalkFiles(Params.Root, Mask) do
       begin
         if SkipIdeArtifacts(F) or InVault(F) then

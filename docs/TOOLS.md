@@ -15,6 +15,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Manage files  (read-write only)** — [`delphi_delete`](#delphi_delete), [`delphi_move`](#delphi_move)
 - **Build, run, package  (read-write only)** — [`delphi_build`](#delphi_build), [`delphi_run`](#delphi_run), [`delphi_package`](#delphi_package)
 - **Cross-platform: build configs, remote platforms & devices** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver), [`delphi_adb`](#delphi_adb), [`delphi_components`](#delphi_components)
+- **FMX styles** — [`delphi_styles`](#delphi_styles)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
 - **Version control** — [`delphi_git`](#delphi_git)
 - **Feedback** — [`delphi_report`](#delphi_report)
@@ -132,6 +133,7 @@ Search Delphi sources recursively for a literal text (case-insensitive), skippin
 | `query` | string | **yes** | Literal text to find (case-insensitive - it is Pascal) |
 | `maxresults` | integer | optional | Maximum hits to return (default 100, cap 500) |
 | `wholeword` | boolean | optional | true = match whole identifiers only (word boundaries) |
+| `pattern` | string | optional | Optional file mask to search instead of the Delphi set, e.g. *.style, *.ini, *.md, *.rc (one mask) |
 
 ### `delphi_list`
 
@@ -377,6 +379,29 @@ What this server's RAD Studio has INSTALLED to program with: every component/des
 |---|---|---|---|
 | `filter` | string | optional | Only entries whose description or file name contains this text (case-insensitive), e.g. "FMX", "TMS", "JEDI" |
 
+
+## FMX styles
+
+### `delphi_styles`
+
+FMX STYLES of a project, by StyleName: the text .style files (what the Bitmap Style Designer exports and a style pipeline keeps as source of truth). command=view lists the styles of a file (StyleName, class, lines, parts); get shows one whole; set changes or adds ONE property of a style or of a part inside it (child=background/text), value written exactly as the file does (xAARRGGBB colors, floats with 18 decimals, quoted strings); clone copies a style under a new StyleName - the way to add a variant; lint checks the whole thing: duplicated StyleNames, StyleLookup values in the project's .fmx/.pas that NO style defines (the platform default style counts), design tokens missing in a theme of a *Tokens.ini, .rc entries whose file is missing; build converts every text .style of the folder to .bin.style (the form an app embeds: embedded TEXT loads but does not resolve StyleLookup) and compiles the folder's .rc to .res with brcc32. Binary styles are never edited. Edits keep encoding and leave a __delphi-patch copy.
+
+*Access: mixed (view / get / lint read-only; set / clone / build read-write).*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | view (styles of a .style file: StyleName, class, lines) \| get (one style, whole text) \| set (one property of a style or of one of its parts) \| clone (a new style copied from an existing one) \| lint (duplicated StyleNames, StyleLookup values of the project's .fmx that no style defines, design tokens missing in a theme, .rc entries without file) \| build (every text .style of the folder -> .bin.style, then the .rc -> .res with brcc32) |
+| `path` | string | **yes** | The text .style file (view/get/set/clone) or the styles FOLDER (lint/build; a file is accepted too). Binary styles (FMX_STYLE / .bin.style) are refused for editing: edit the text one and run build |
+| `project` | string | optional | lint: the project .dproj (or a folder) whose .fmx/.pas files are scanned for StyleLookup. Default: the parent folder of the styles folder |
+| `style` | string | optional | get/set/clone: the StyleName of the style (top-level object of the container), e.g. buttonstyle or cardstyle |
+| `child` | string | optional | set optional: a part inside the style, by StyleName or object name, as a path: background or background/text |
+| `prop` | string | optional | set: the property, as written in the file: Fill.Color, Size.Height, Visible, TextSettings.Font.Size... |
+| `value` | string | optional | set: the value EXACTLY as it appears in a .style file: xFFF6ECDB (colors AARRGGBB), 44.000000000000000000 (floats), True/False, 'text' (strings quoted), Center (enums) |
+| `name` | string | optional | clone: the StyleName of the new style |
+| `filter` | string | optional | view optional: substring the StyleName must contain |
+| `delete` | boolean | optional | set: true = remove the property instead of setting it |
+
+The server ships `DelphiStyleConvert.exe` next to its own exe for `build` and for the platform default style names used by `lint`.
 
 ## Transfer files
 

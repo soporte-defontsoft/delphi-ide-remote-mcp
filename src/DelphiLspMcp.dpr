@@ -96,6 +96,8 @@ uses
   Lsp.Host in 'Lsp.Host.pas',
   Lsp.Files in 'Lsp.Files.pas',
   Lsp.ProjectUnits in 'Lsp.ProjectUnits.pas',
+  Lsp.Styles in 'Lsp.Styles.pas',
+  Mcp.Tools.Styles in 'Mcp.Tools.Styles.pas',
   Lsp.Service in 'Lsp.Service.pas',
   UTrayMain in 'UTrayMain.pas' {FormTray};
 

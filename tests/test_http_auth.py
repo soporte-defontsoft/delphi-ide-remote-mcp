@@ -75,8 +75,8 @@ try:
                 'delphi_search', 'delphi_signature', 'delphi_symbols',
                 'delphi_textedit', 'delphi_upload', 'delphi_workspace',
                 'delphi_paserver', 'delphi_delete', 'delphi_move',
-                'delphi_adb', 'delphi_components']
-    check('http: tools/list = 29 tools', sorted(names) == sorted(expected), names)
+                'delphi_adb', 'delphi_components', 'delphi_styles']
+    check('http: tools/list = 30 tools', sorted(names) == sorted(expected), names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",
@@ -183,6 +183,16 @@ try:
                                               'dir': tmpdir3, 'name': 'X'})):
             code, body = call(tool, args, RO_TOKEN)
             check('ro: token RO NO puede %s' % tool, 'SOLO LECTURA' in body,
+                  '%s %s' % (code, body[:120]))
+
+        # delphi_styles is mixed: view/get/lint read, set/clone/build write
+        code, body = call('delphi_styles', {'path': tmpdir3, 'command': 'lint'}, RO_TOKEN)
+        check('ro: delphi_styles lint permitido en RO', 'SOLO LECTURA' not in body,
+              '%s %s' % (code, body[:120]))
+        for cmd in ('set', 'clone', 'build'):
+            code, body = call('delphi_styles', {'path': tmpdir3, 'command': cmd,
+                                                'style': 'x', 'prop': 'y', 'value': 'z', 'name': 'n'}, RO_TOKEN)
+            check('ro: delphi_styles %s RECHAZADO en RO' % cmd, 'SOLO LECTURA' in body,
                   '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'status'},

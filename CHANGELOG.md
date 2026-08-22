@@ -8,6 +8,33 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.43.0-beta] - 2026-08-22
+
+FMX styles as a first-class thing for a remote agent. Measured on a real
+pipeline (one text master `.style`, a `Tokens.ini`, an `.rc`, three themes):
+the agent could read and line-edit the files but not search them, verify
+them, or regenerate the binaries the app embeds.
+
+### Added
+- **`delphi_styles`** - `view` (the styles of a text `.style`: StyleName,
+  class, lines, parts), `get` (one style or a part of it), `set` (one
+  property of a style or of a part, by StyleName - never by line; add,
+  change or `delete`), `clone` (a new style from an existing one, the way
+  to add a variant), `lint` (duplicated StyleNames, `StyleLookup` values of
+  the project's `.fmx`/`.pas` that no style defines - the platform default
+  style counts -, design tokens missing in a theme of a `*Tokens.ini`, `.rc`
+  entries whose file is missing) and `build` (every text `.style` of the
+  folder to `.bin.style`, then the folder's `.rc` to `.res` with brcc32).
+  Binary styles are refused for editing. `set`/`clone`/`build` are refused
+  in read-only mode. Parser tolerates collections (`<item...end>`) and
+  binary blocks.
+- **`DelphiStyleConvert.exe`** - a small helper shipped next to the server
+  (FMX stays out of the service exe): text<->binary conversion and the
+  extraction of the Windows platform default style names (cached once).
+- **`delphi_search pattern`** - one file mask (`*.style`, `*.ini`, `*.md`,
+  `*.rc`) to search files outside the Delphi set.
+
+
 ## [0.42.3-beta] - 2026-08-22
 
 Field report from the DSH agent: `target=Deploy` to Linux said success and

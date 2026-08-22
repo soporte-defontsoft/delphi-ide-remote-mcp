@@ -61,6 +61,23 @@ on your side.
 - Prefer `Align`/anchors over absolute Position/Size in forms: absolute
   coordinates designed on a desktop form overflow phone screens.
 
+## FMX styles
+
+- A project's look lives in text `.style` files (one master per theme, or a
+  master plus a tokens `.ini`). Treat them BY NAME with `delphi_styles`,
+  never by line: `view` lists the StyleNames a `StyleLookup` can use, `get`
+  shows one, `set style=cardstyle child=background prop=Fill.Color
+  value=xFF112233` changes one property (value exactly as the file writes
+  it), `clone style=cardstyle name=cardstyle_alt` adds a variant.
+- Before and after touching a `.fmx`: `delphi_styles command=lint
+  path=<Styles folder> project=<.dproj>` - a `StyleLookup` that no style
+  defines renders with the default look and nobody tells you.
+- After editing styles: `command=build path=<Styles folder>` (text ->
+  `.bin.style` -> `.res`), then `delphi_build target=Build`: the app embeds
+  the binary form; the text form loads but does not resolve `StyleLookup`.
+- `delphi_search pattern=*.style` (or `*.ini`, `*.md`) searches files
+  outside the Delphi set.
+
 ## Create and build
 
 - `delphi_create` scaffolds console/VCL/FMX projects, and inside a

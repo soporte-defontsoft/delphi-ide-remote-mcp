@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.42.3-beta';
+  SERVER_VERSION = '0.43.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -864,6 +864,119 @@ const
     'units grandes tardan mas de un minuto la primera vez). Vuelve a llamar a ' +
     'delphi_diagnostics con el mismo fichero: el lint NO se reinicia mientras ' +
     'el fichero no cambie y la siguiente llamada devuelve el resultado."}';
+
+  // ---- delphi_styles ----
+
+  SD_STYLES =
+    'FMX STYLES of a project, by StyleName: the text .style files (what the ' +
+    'Bitmap Style Designer exports and a style pipeline keeps as source of ' +
+    'truth). command=view lists the styles of a file (StyleName, class, ' +
+    'lines, parts); get shows one whole; set changes or adds ONE property of ' +
+    'a style or of a part inside it (child=background/text), value written ' +
+    'exactly as the file does (xAARRGGBB colors, floats with 18 decimals, ' +
+    'quoted strings); clone copies a style under a new StyleName - the way to ' +
+    'add a variant; lint checks the whole thing: duplicated StyleNames, ' +
+    'StyleLookup values in the project''s .fmx/.pas that NO style defines ' +
+    '(the platform default style counts), design tokens missing in a theme ' +
+    'of a *Tokens.ini, .rc entries whose file is missing; build converts ' +
+    'every text .style of the folder to .bin.style (the form an app embeds: ' +
+    'embedded TEXT loads but does not resolve StyleLookup) and compiles the ' +
+    'folder''s .rc to .res with brcc32. Binary styles are never edited. ' +
+    'Edits keep encoding and leave a __delphi-patch copy.';
+
+  SP_STYLES_PATH =
+    'The text .style file (view/get/set/clone) or the styles FOLDER (lint/' +
+    'build; a file is accepted too). Binary styles (FMX_STYLE / .bin.style) ' +
+    'are refused for editing: edit the text one and run build.';
+
+  SR_STYLES_NEED_PATH =
+    'Falta "path": el .style de texto (view/get/set/clone) o la carpeta de ' +
+    'estilos (lint/build). Si tu cliente no muestra el parametro, reconecta ' +
+    'la sesion MCP (el servidor se actualizo).';
+
+  SR_STYLES_MISSING_FMT =
+    'RECHAZADO: no existe %s. Localiza los estilos con delphi_list pattern=*.style.';
+
+  SR_STYLES_NEED_FILE =
+    'RECHAZADO: view/get/set/clone necesitan UN fichero .style de texto, no una ' +
+    'carpeta (delphi_list pattern=*.style la lista).';
+
+  SR_STYLES_BINARY_FMT =
+    'RECHAZADO: %s es un estilo BINARIO (producto de build). Edita el .style de ' +
+    'texto del que sale y vuelve a ejecutar command=build.';
+
+  SR_STYLES_NEED_STYLE =
+    'Falta "style": el StyleName del estilo (command=view los lista).';
+
+  SR_STYLES_NEED_PROP =
+    'Falta "prop": la propiedad a cambiar, como aparece en el fichero ' +
+    '(Fill.Color, Size.Height, Visible...). command=get muestra el estilo.';
+
+  SR_STYLES_PROP_CHARS_FMT =
+    'RECHAZADO: "%s" no es un nombre de propiedad (letras, digitos, puntos).';
+
+  SR_STYLES_NEED_VALUE =
+    'Falta "value": el valor tal como se escribe en un .style (xFFF6ECDB, ' +
+    '44.000000000000000000, True, ''texto'', Center). Para quitar la propiedad ' +
+    'usa delete=true.';
+
+  SR_STYLES_VALUE_LINE =
+    'RECHAZADO: value debe ser UNA linea. Los valores multilinea (colecciones, ' +
+    'binarios) se editan con delphi_textedit sobre el fichero.';
+
+  SR_STYLES_NEED_NAME =
+    'Falta "name": el StyleName del estilo nuevo.';
+
+  SR_STYLES_NAME_CHARS_FMT =
+    'RECHAZADO: "%s" no vale como StyleName (letras, digitos, punto, guion).';
+
+  SR_STYLES_NAME_TAKEN_FMT =
+    'RECHAZADO: ya existe un estilo ''%s'' en el fichero. Elige otro nombre o ' +
+    'cambia el existente con set.';
+
+  SR_STYLES_NO_TEXT_FMT =
+    'RECHAZADO: no hay ningun .style de TEXTO en %s (los .bin.style y los ' +
+    'binarios no cuentan). Exporta el estilo como texto desde el Bitmap Style ' +
+    'Designer o apunta a la carpeta correcta.';
+
+  SR_STYLES_NO_CONVERTER =
+    'RECHAZADO: falta DelphiStyleConvert.exe junto al servidor (el conversor ' +
+    'texto<->binario). Avisa al operador: se despliega con el servidor.';
+
+  SN_STYLES_VIEW_NOTE =
+    'StyleLookup of a control resolves to one of these StyleNames (case-' +
+    'insensitive). get shows a style; set changes one property; clone adds a ' +
+    'variant. After editing run command=build so the app embeds the change.';
+
+  SN_STYLES_PROP_SET_FMT =
+    '%s: %s (estilo %s%s, %s). Copia previa en __delphi-patch. Recuerda ' +
+    'command=build para regenerar el binario que embebe la app.';
+
+  SN_STYLES_PROP_DELETED_FMT =
+    'QUITADA la propiedad %s del estilo %s%s (%s). Copia previa en __delphi-patch.';
+
+  SN_STYLES_PROP_ABSENT_FMT =
+    'La propiedad %s no esta en el estilo %s%s (nada que quitar; command=get lo muestra).';
+
+  SN_STYLES_CLONED_FMT =
+    'CLONADO: nuevo estilo ''%s'' a partir de ''%s'' (lineas %d-%d de %s). ' +
+    'Ajusta sus propiedades con set y regenera con build; en el .fmx se usa ' +
+    'con StyleLookup = ''%0:s''.';
+
+  SN_STYLES_LINT_NOTE =
+    'lookupsWithoutStyle: a control with that StyleLookup will render with ' +
+    'the default look (no error at runtime) - define the style (clone) or fix ' +
+    'the name. duplicatedStyleNames: the last one wins silently. ' +
+    'lookupsStandard are names the platform default style provides.';
+
+  SN_STYLES_NO_DEFAULTS =
+    'The platform default style names could not be extracted (converter ' +
+    'missing): standard lookups such as buttonstyle may appear as missing.';
+
+  SN_STYLES_BUILD_NOTE =
+    'The .bin.style files are what the app embeds (.rc RCDATA -> .res). ' +
+    'Rebuild the project afterwards (delphi_build target=Build) so the new ' +
+    '.res goes in; MSBuild reuses an old .res otherwise.';
 
   // ---- delphi_components ----
 
