@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.42.2-beta';
+  SERVER_VERSION = '0.42.3-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -109,8 +109,22 @@ const
   SN_BUILD_DEPLOYED_FMT =
     'Deployed through profile "%s". On the target machine the files are ' +
     'under the PAServer scratch directory (default ~/PAServer/scratch-dir' +
-    ') in %s/%s/ - executables arrive with their exec bit set, ready to run ' +
-    'there.';
+    ') in %s-%s/%s/ (PAServer names the folder <windows user>-<profile>) - ' +
+    'executables arrive with their exec bit set, ready to run there. ' +
+    'deployedFiles counts what this run shipped; if it is missing, nothing ' +
+    'was sent: check the manifest with delphi_config command=view ' +
+    '(deployFiles) and add the missing entries with add-deployfile.';
+
+  SN_BUILD_DEPLOY_EMPTY_ENTRY =
+    'The deployment manifest has an entry with an EMPTY local file for this ' +
+    'platform (msbuild: Local file "" not found, skipped). Open it with ' +
+    'delphi_config command=view (deployFiles) and fix or remove that entry.';
+
+  SN_BUILD_MANIFEST_FILLED_FMT =
+    'The project''s .deployproj had NO files for %s (the IDE writes an empty ' +
+    'group for a platform it never deployed): the project output was added ' +
+    'for Debug and Release, like the IDE''s Deployment Manager would. Extra ' +
+    'files (a component''s .so) go in with delphi_config add-deployfile.';
 
   SR_BUILD_CONFIG_FMT =
     'RECHAZADO: la configuracion "%s" lleva caracteres que el shell del ' +

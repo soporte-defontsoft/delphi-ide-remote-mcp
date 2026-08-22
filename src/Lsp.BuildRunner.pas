@@ -47,6 +47,7 @@ uses
   Lsp.Discovery,
   Lsp.Guard,
   Lsp.Dproj,
+  System.RegularExpressions,
   Lsp.Patch,
   Lsp.Texts,
   Lsp.Sandbox;
@@ -450,6 +451,86 @@ end;
   (that one is the IDE's). For Android it also seeds the
   AndroidManifest.template.xml the IDE would write (copied from the
   product's ObjRepos, not invented) and the fallback version properties. }
+{ The IDE's DeployFile block for the project output of one config. The
+  Include follows the project's real DCC_ExeOutput (Compiled\Linux64\Debug\X
+  when delphi_config set-output was used), like the IDE writes it. }
+function OutputDeployEntry(const ADprojXml, APlat, ACfg, AName: string): string;
+var
+  OutDir, Ext, Include: string;
+begin
+  OutDir := MergeProperty(ADprojXml, 'DCC_ExeOutput');
+  if OutDir.Trim = '' then
+    OutDir := '$(Platform)\$(Config)';
+  OutDir := OutDir.Replace('$(Platform)', APlat, [rfReplaceAll, rfIgnoreCase])
+    .Replace('$(Config)', ACfg, [rfReplaceAll, rfIgnoreCase]).Trim;
+  if OutDir.StartsWith('.\') then
+    OutDir := OutDir.Substring(2);
+  Ext := '';
+  if APlat.StartsWith('Win', True) then
+    Ext := '.exe';
+  Include := IncludeTrailingPathDelimiter(OutDir) + AName + Ext;
+  Result :=
+    '        <DeployFile Include="' + Include + '" Condition="''$(Config)''==''' + ACfg + '''">'#13#10 +
+    '            <RemoteDir>' + AName + '\</RemoteDir>'#13#10 +
+    '            <RemoteName>' + AName + Ext + '</RemoteName>'#13#10 +
+    '            <DeployClass>ProjectOutput</DeployClass>'#13#10 +
+    '            <Operation>1</Operation>'#13#10 +
+    '            <LocalCommand/>'#13#10 +
+    '            <RemoteCommand/>'#13#10 +
+    '            <Overwrite>True</Overwrite>'#13#10 +
+    '            <Required>True</Required>'#13#10 +
+    '        </DeployFile>'#13#10;
+end;
+
+{ Adds the ProjectOutput entries for APlat to an existing manifest that has
+  none for it (empty or missing platform group). True when it changed. }
+function EnsurePlatformOutputEntries(const ADeployProj, ADprojPath, APlat,
+  AName: string): Boolean;
+var
+  Enc, Xml, DprojXml, Cond, Entries: string;
+  M: TMatch;
+  Cfg: string;
+begin
+  Result := False;
+  Xml := PatchLoadText(ADeployProj, Enc);
+  Cond := '''$(Platform)''==''' + APlat + '''';
+  // any DeployFile with ProjectOutput inside a group of this platform?
+  for M in TRegEx.Matches(Xml, '<ItemGroup\s+Condition="([^"]*)"\s*>(.*?)</ItemGroup>',
+    [roIgnoreCase, roSingleline]) do
+    if M.Groups[1].Value.Contains(Cond) and
+       M.Groups[2].Value.Contains('ProjectOutput') then
+      Exit;
+  DprojXml := TFile.ReadAllText(ADprojPath);
+  Entries := '';
+  for Cfg in TArray<string>.Create('Debug', 'Release') do
+    Entries := Entries + OutputDeployEntry(DprojXml, APlat, Cfg, AName);
+  // an empty self-closing group for the platform: fill it
+  M := TRegEx.Match(Xml, '[ \t]*<ItemGroup\s+Condition="' + TRegEx.Escape(Cond) +
+    '"\s*/>[ \t]*\r?\n?', [roIgnoreCase]);
+  if M.Success then
+    Xml := Copy(Xml, 1, M.Index - 1) +
+      '    <ItemGroup Condition="' + Cond + '">'#13#10 + Entries +
+      '    </ItemGroup>'#13#10 + Copy(Xml, M.Index + M.Length, MaxInt)
+  else
+  begin
+    // a group with other files but no output, or no group at all
+    M := TRegEx.Match(Xml, '<ItemGroup\s+Condition="' + TRegEx.Escape(Cond) + '"\s*>', [roIgnoreCase]);
+    if M.Success then
+      Xml := Copy(Xml, 1, M.Index + M.Length - 1) + #13#10 + Entries +
+        Copy(Xml, M.Index + M.Length, MaxInt).TrimLeft([#13, #10])
+    else
+    begin
+      var P := Xml.ToLower.LastIndexOf('</project>');
+      if P < 0 then
+        Exit;
+      Xml := Copy(Xml, 1, P) + '    <ItemGroup Condition="' + Cond + '">'#13#10 +
+        Entries + '    </ItemGroup>'#13#10 + Copy(Xml, P + 1, MaxInt);
+    end;
+  end;
+  PatchSaveText(ADeployProj, Xml, Enc);
+  Result := True;
+end;
+
 procedure EnsureDeployManifest(const ADprojPath, APlat, ABdsRoot: string;
   out AGenerated: Boolean);
 const
@@ -528,10 +609,18 @@ begin
     if (not TFile.Exists(Tpl)) and TFile.Exists(Seed) then
       TFile.Copy(Seed, Tpl);
   end;
-  // 2) the manifest itself, only when the project has none.
+  // 2) the manifest itself, only when the project has none - BUT an IDE
+  //    manifest written before the platform was ever deployed from the IDE
+  //    carries an EMPTY group for it (<ItemGroup Condition="'$(Platform)'==
+  //    'Linux64'"/>, measured on GalateaFMX): msbuild then deploys nothing
+  //    and still succeeds. The project output is added to such a group.
   F := TPath.ChangeExtension(ADprojPath, '.deployproj');
   if TFile.Exists(F) then
+  begin
+    if not APlat.StartsWith('Android', True) then
+      AGenerated := EnsurePlatformOutputEntries(F, ADprojPath, APlat, N);
     Exit;
+  end;
   if APlat.StartsWith('Android', True) then
   begin
     TFile.WriteAllText(F, AndroidDeployXml(N, APlat, ABdsRoot), TEncoding.ASCII);
@@ -633,9 +722,14 @@ begin
   // minimal (the project output) for PAServer targets, the full measured
   // apk staging map for Android. An IDE-written .deployproj is used as-is.
   var ManifestNew := False;
+  var ManifestFilled := False;
   if Target.Contains('Deploy') and not IsLocalPlatform(Plat) then
+  begin
+    ManifestFilled := TFile.Exists(TPath.ChangeExtension(TPath.GetFullPath(ADprojPath), '.deployproj'));
     EnsureDeployManifest(TPath.GetFullPath(ADprojPath), Plat, Info.RootDir,
       ManifestNew);
+    ManifestFilled := ManifestFilled and ManifestNew;
+  end;
   // /p:DeviceId= reaches the deployment targets, but measured they only
   // auto-install on iOS (_InstallIpa); an Android install is delphi_adb's
   // job with the built .apk. The param stays for the iOS day.
@@ -736,15 +830,25 @@ begin
       // Same statelessness rule for a remote deploy: say where the files
       // landed ON THE TARGET, or the agent has to guess PAServer's layout.
       if (ProfileArg <> '') and Target.Contains('Deploy') then
+      begin
+        var Shipped := TRegEx.Matches(Output, 'Deploying\s+"([^"]+)"', [roIgnoreCase]).Count +
+          TRegEx.Matches(Output, 'Copying\s+"?([^"\r\n]+?)"?\s+to\s+remote', [roIgnoreCase]).Count;
         Result.AddPair('deployNote', Format(SN_BUILD_DEPLOYED_FMT,
-          [AProfile.Trim, AProfile.Trim,
+          [AProfile.Trim, GetEnvironmentVariable('USERNAME'), AProfile.Trim,
            TPath.GetFileNameWithoutExtension(ADprojPath)]));
+        if Output.Contains('Local file "" not found') then
+          Result.AddPair('deployWarning', SN_BUILD_DEPLOY_EMPTY_ENTRY);
+        if Shipped > 0 then
+          Result.AddPair('deployedFiles', TJSONNumber.Create(Shipped));
+      end;
     end;
     // The agent should know its project just gained a manifest whether or
     // not this particular msbuild run succeeded.
     if ManifestNew then
       if Plat.StartsWith('Android', True) then
         Result.AddPair('deployManifest', SN_BUILD_ANDROID_NEW)
+      else if ManifestFilled then
+        Result.AddPair('deployManifest', Format(SN_BUILD_MANIFEST_FILLED_FMT, [Plat]))
       else
         Result.AddPair('deployManifest', SN_BUILD_MANIFEST_NEW);
   finally

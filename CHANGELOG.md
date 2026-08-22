@@ -8,6 +8,23 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.42.3-beta] - 2026-08-22
+
+Field report from the DSH agent: `target=Deploy` to Linux said success and
+shipped nothing.
+
+### Fixed
+- **IDE manifests with an empty platform group**: the Deployment Manager
+  writes `<ItemGroup Condition="'$(Platform)'=='Linux64'"/>` for a platform
+  the project was never deployed to from the IDE; msbuild then deploys no
+  file and still succeeds. The project output (Debug and Release, Include
+  following the project's real `DCC_ExeOutput`) is now added to such a
+  group, in the IDE's shape; `deployManifest` says so.
+- `deployNote` names the real target folder (`<windows user>-<profile>/`),
+  reports `deployedFiles` when the run shipped something, and surfaces the
+  `Local file "" not found` manifest warning as `deployWarning`.
+
+
 ## [0.42.2-beta] - 2026-08-22
 
 Field report from the DSH agent: `delphi_diagnostics` timed out on a
