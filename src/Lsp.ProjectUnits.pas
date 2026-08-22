@@ -63,7 +63,10 @@ function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): st
 
 { The units a project lists (from the .dpr uses, cross-checked with the
   .dproj). Never raises; empty on unreadable input. }
-function ProjectUnits(const AProject: string): TArray<TProjectUnit>;
+function ProjectUnits(const AProject: string): TArray<TProjectUnit>; overload;
+{ ANeedDproj=False skips the .dproj read (InDproj is then True): for callers
+  that only need the .dpr's list. }
+function ProjectUnits(const AProject: string; ANeedDproj: Boolean): TArray<TProjectUnit>; overload;
 
 { Adds a "units" array to AReturn (for delphi_config view). }
 procedure AddUnitsView(const ADproj: string; AReturn: TJSONObject);
@@ -76,6 +79,7 @@ implementation
 
 uses
   System.IOUtils, System.StrUtils, System.RegularExpressions,
+  System.Generics.Collections, System.Character,
   Lsp.Patch, Lsp.Texts;
 
 { TUnitInfo }
@@ -130,8 +134,10 @@ begin
   Full := TPath.GetFullPath(APas);
   if Full.ToLower.StartsWith(Base.ToLower) then
     Result := Full.Substring(Length(Base))
+  else if SameText(TPath.GetPathRoot(Full), TPath.GetPathRoot(Base)) then
+    Result := ExtractRelativePath(Base, Full) // ..\..\shared\X.pas, the IDE's form
   else
-    Result := Full;
+    Result := Full; // another drive: no relative form exists
 end;
 
 { ---- unit inspection ---- }
@@ -165,6 +171,44 @@ begin
     if Line.Trim <> '' then
       Break; // the first non-blank line is the root object
   end;
+end;
+
+{ The IDE's DesignClass for an ancestor: TFrame / TDataModule (unit-qualified
+  accepted), a class declared in the same unit is followed up the chain, and
+  a custom base living elsewhere is classified by its NAME SUFFIX only
+  (TBaseFrame -> frame, TDMBase -> form: the form side is the safe default
+  because a spurious CreateForm on a frame breaks the build, a missing
+  DesignClass on a data module only changes the IDE's icon). }
+function DesignClassOf(const ASrc, AAncestor: string): string;
+var
+  Name: string;
+  M: TMatch;
+  Hops: Integer;
+begin
+  Result := '';
+  Name := AAncestor;
+  Hops := 0;
+  while (Name <> '') and (Hops < 8) do
+  begin
+    if Name.Contains('.') then
+      Name := Name.Substring(Name.LastIndexOf('.') + 1);
+    if SameText(Name, 'TFrame') or SameText(Name, 'TCustomFrame') then
+      Exit('TFrame');
+    if SameText(Name, 'TDataModule') then
+      Exit('TDataModule');
+    if SameText(Name, 'TForm') or SameText(Name, 'TCustomForm') or SameText(Name, 'TForm3D') then
+      Exit('');
+    // declared in this unit? follow its ancestor
+    M := TRegEx.Match(ASrc, '\b' + TRegEx.Escape(Name) + '\s*=\s*class\s*\(\s*([\w.]+)', [roIgnoreCase]);
+    if not M.Success then
+      Break;
+    Name := M.Groups[1].Value;
+    Inc(Hops);
+  end;
+  if Name.EndsWith('Frame', True) then
+    Result := 'TFrame'
+  else if Name.EndsWith('DataModule', True) then
+    Result := 'TDataModule';
 end;
 
 function InspectUnit(const APasPath: string; out AInfo: TUnitInfo): string;
@@ -207,12 +251,12 @@ begin
   begin
     AInfo.FormName := DName;
     AInfo.ClassName := DClass;
-    M := TRegEx.Match(Src, '\b' + TRegEx.Escape(DClass) + '\s*=\s*class\s*\(\s*(\w+)', [roIgnoreCase]);
+    M := TRegEx.Match(Src, '\b' + TRegEx.Escape(DClass) + '\s*=\s*class\s*\(\s*([\w.]+)', [roIgnoreCase]);
   end
   else
   begin
     // binary designer: the first designer class in the .pas, then its variable
-    M := TRegEx.Match(Src, '\b(T\w+)\s*=\s*class\s*\(\s*(T(?:Form|DataModule|Frame)\w*)', [roIgnoreCase]);
+    M := TRegEx.Match(Src, '\b(T\w+)\s*=\s*class\s*\(\s*((?:\w+\.)*T(?:Form|DataModule|Frame)\w*)', [roIgnoreCase]);
     if M.Success then
     begin
       AInfo.ClassName := M.Groups[1].Value;
@@ -224,10 +268,7 @@ begin
   end;
   if M.Success then
     AInfo.Ancestor := M.Groups[M.Groups.Count - 1].Value;
-  if SameText(AInfo.Ancestor, 'TDataModule') or AInfo.Ancestor.ToLower.Contains('datamodule') then
-    AInfo.DesignClass := 'TDataModule'
-  else if SameText(AInfo.Ancestor, 'TFrame') or AInfo.Ancestor.ToLower.Contains('frame') then
-    AInfo.DesignClass := 'TFrame';
+  AInfo.DesignClass := DesignClassOf(Src, AInfo.Ancestor);
 end;
 
 { ---- .dpr uses clause ---- }
@@ -240,27 +281,88 @@ type
     Entries: TArray<string>; // raw entry texts, trimmed
   end;
 
-{ Splits the clause body on top-level commas (outside quotes and braces). }
+// Length of the comment or directive starting at S[I] (0 when none): the
+// slash-slash line comment, the paren-star block and the brace block
+// (compiler directives included - the compiler treats them as comments
+// inside a uses clause).
+function CommentLen(const S: string; I: Integer): Integer;
+var
+  J: Integer;
+begin
+  Result := 0;
+  if I > Length(S) then
+    Exit;
+  if (S[I] = '/') and (I < Length(S)) and (S[I + 1] = '/') then
+  begin
+    J := I;
+    while (J <= Length(S)) and (S[J] <> #10) and (S[J] <> #13) do
+      Inc(J);
+    Exit(J - I);
+  end;
+  if (S[I] = '(') and (I < Length(S)) and (S[I + 1] = '*') then
+  begin
+    J := Pos('*)', S, I + 2);
+    if J = 0 then
+      Exit(Length(S) - I + 1);
+    Exit(J + 2 - I);
+  end;
+  if S[I] = '{' then
+  begin
+    J := Pos('}', S, I + 1);
+    if J = 0 then
+      Exit(Length(S) - I + 1);
+    Exit(J + 1 - I);
+  end;
+end;
+
+{ Length of the quoted string starting at S[I] ('' escapes), 0 when none. }
+function QuoteLen(const S: string; I: Integer): Integer;
+var
+  J: Integer;
+begin
+  Result := 0;
+  if (I > Length(S)) or (S[I] <> '''') then
+    Exit;
+  J := I + 1;
+  while J <= Length(S) do
+  begin
+    if S[J] = '''' then
+    begin
+      if (J < Length(S)) and (S[J + 1] = '''') then
+        Inc(J, 2)
+      else
+        Exit(J + 1 - I);
+    end
+    else
+      Inc(J);
+  end;
+  Result := Length(S) - I + 1;
+end;
+
+{ Splits the clause body on top-level commas (outside quotes, comments and
+  directives; those stay glued to the entry they precede or follow). }
 function SplitEntries(const Body: string): TArray<string>;
 var
-  I, Depth: Integer;
-  InQ: Boolean;
+  I, N: Integer;
   Cur: string;
   L: TStringList;
 begin
   L := TStringList.Create;
   try
-    InQ := False;
-    Depth := 0;
     Cur := '';
-    for I := 1 to Length(Body) do
+    I := 1;
+    while I <= Length(Body) do
     begin
-      case Body[I] of
-        '''': InQ := not InQ;
-        '{': if not InQ then Inc(Depth);
-        '}': if not InQ and (Depth > 0) then Dec(Depth);
+      N := CommentLen(Body, I);
+      if N = 0 then
+        N := QuoteLen(Body, I);
+      if N > 0 then
+      begin
+        Cur := Cur + Copy(Body, I, N);
+        Inc(I, N);
+        Continue;
       end;
-      if (Body[I] = ',') and not InQ and (Depth = 0) then
+      if Body[I] = ',' then
       begin
         if Cur.Trim <> '' then
           L.Add(Cur.Trim);
@@ -268,6 +370,7 @@ begin
       end
       else
         Cur := Cur + Body[I];
+      Inc(I);
     end;
     if Cur.Trim <> '' then
       L.Add(Cur.Trim);
@@ -277,53 +380,123 @@ begin
   end;
 end;
 
+function IsIdentChar(C: Char): Boolean;
+begin
+  Result := C.IsLetterOrDigit or (C = '_');
+end;
+
+{ The program's uses clause: the `uses` keyword after `program X;` (never
+  one inside a comment), closed by the first `;` outside quotes/comments. }
 function FindUses(const Dpr: string): TUsesClause;
 var
+  I, N, Start: Integer;
   M: TMatch;
-  I, Depth: Integer;
-  InQ: Boolean;
+  SeenProgram: Boolean;
 begin
   Result := Default(TUsesClause);
-  // the program's uses: first 'uses' keyword at line start after 'program'
-  M := TRegEx.Match(Dpr, '^\s*uses\b', [roIgnoreCase, roMultiline]);
-  if not M.Success then
-    Exit;
-  Result.StartPos := M.Index + (Length(M.Value) - Length(M.Value.TrimLeft));
-  InQ := False;
-  Depth := 0;
-  for I := M.Index + M.Length to Length(Dpr) do
+  M := TRegEx.Match(Dpr, '^\s*program\b', [roIgnoreCase, roMultiline]);
+  I := 1;
+  if M.Success then
+    I := M.Index + M.Length;
+  SeenProgram := not M.Success;
+  Start := 0;
+  while I <= Length(Dpr) do
   begin
-    case Dpr[I] of
-      '''': InQ := not InQ;
-      '{': if not InQ then Inc(Depth);
-      '}': if not InQ and (Depth > 0) then Dec(Depth);
-      ';': if not InQ and (Depth = 0) then
-        begin
-          Result.EndPos := I;
-          Result.Found := True;
-          Result.Entries := SplitEntries(Copy(Dpr, M.Index + M.Length, I - (M.Index + M.Length)));
-          Exit;
-        end;
+    N := CommentLen(Dpr, I);
+    if N = 0 then
+      N := QuoteLen(Dpr, I);
+    if N > 0 then
+    begin
+      Inc(I, N);
+      Continue;
     end;
+    if not SeenProgram then
+    begin
+      if Dpr[I] = ';' then
+        SeenProgram := True; // end of `program X;`
+      Inc(I);
+      Continue;
+    end;
+    if Start = 0 then
+    begin
+      if ((I = 1) or not IsIdentChar(Dpr[I - 1])) and (I + 3 <= Length(Dpr)) and
+         SameText(Copy(Dpr, I, 4), 'uses') and
+         ((I + 4 > Length(Dpr)) or not IsIdentChar(Dpr[I + 4])) then
+      begin
+        Start := I;
+        Inc(I, 4);
+        Continue;
+      end;
+      if IsIdentChar(Dpr[I]) then
+      begin
+        // another token before `uses` (const, type, begin...): no clause
+        while (I <= Length(Dpr)) and IsIdentChar(Dpr[I]) do
+          Inc(I);
+        if not SameText(Copy(Dpr, I - 4, 4), 'uses') then
+          Exit;
+        Start := I - 4;
+      end
+      else
+        Inc(I);
+      Continue;
+    end;
+    if Dpr[I] = ';' then
+    begin
+      Result.StartPos := Start;
+      Result.EndPos := I;
+      Result.Found := True;
+      Result.Entries := SplitEntries(Copy(Dpr, Start + 4, I - (Start + 4)));
+      Exit;
+    end;
+    Inc(I);
   end;
+end;
+
+// Leading comments/directives of an entry (kept when the entry is dropped so
+// a conditional directive around it stays balanced) and the bare entry text.
+procedure SplitEntryPrefix(const Entry: string; out APrefix, ACore: string);
+var
+  I, N: Integer;
+begin
+  I := 1;
+  while I <= Length(Entry) do
+  begin
+    N := CommentLen(Entry, I);
+    if N > 0 then
+      Inc(I, N)
+    else if Entry[I].IsWhiteSpace then
+      Inc(I)
+    else
+      Break;
+  end;
+  APrefix := Copy(Entry, 1, I - 1).Trim;
+  ACore := Copy(Entry, I, MaxInt).Trim;
 end;
 
 function EntryUnitName(const Entry: string): string;
 var
   M: TMatch;
+  Prefix, Core: string;
 begin
-  M := TRegEx.Match(Entry, '^([A-Za-z_][\w.]*)');
+  SplitEntryPrefix(Entry, Prefix, Core);
+  M := TRegEx.Match(Core, '^([A-Za-z_][\w.]*)');
   if M.Success then
     Result := M.Groups[1].Value
   else
-    Result := Entry;
+    Result := Core;
 end;
 
 function EntryInclude(const Entry: string): string;
 var
   M: TMatch;
 begin
-  M := TRegEx.Match(Entry, '\bin\s*''([^'']+)''', [roIgnoreCase]);
+  M := TRegEx.Match(Entry, '^\s*[A-Za-z_][\w.]*\s+in\s*''([^'']+)''', [roIgnoreCase]);
+  if not M.Success then
+  begin
+    var Prefix, Core: string;
+    SplitEntryPrefix(Entry, Prefix, Core);
+    M := TRegEx.Match(Core, '^[A-Za-z_][\w.]*\s+in\s*''([^'']+)''', [roIgnoreCase]);
+  end;
   if M.Success then
     Result := M.Groups[1].Value
   else
@@ -333,8 +506,10 @@ end;
 function EntryFormName(const Entry: string): string;
 var
   M: TMatch;
+  Prefix, Core: string;
 begin
-  M := TRegEx.Match(Entry, '\{\s*(\w+)');
+  SplitEntryPrefix(Entry, Prefix, Core);
+  M := TRegEx.Match(Core, '''\s*\{\s*(\w+)');
   if M.Success then
     Result := M.Groups[1].Value
   else
@@ -361,6 +536,8 @@ var
 begin
   NL := IfThen(Dpr.Contains(#13#10), #13#10, #10);
   Body := 'uses' + NL + '  ' + string.Join(',' + NL + '  ', AEntries) + ';';
+  Body := Body.Replace(#13#10, #10).Replace(#10, NL + '  ').Replace(NL + '  ' + NL, NL + NL);
+  Body := TRegEx.Replace(Body, '[ \t]+(\r?\n)', '$1'); // no trailing blanks
   Result := Copy(Dpr, 1, U.StartPos - 1) + Body + Copy(Dpr, U.EndPos + 1, MaxInt);
 end;
 
@@ -397,15 +574,17 @@ begin
   L := TStringList.Create;
   try
     L.AddStrings(Lines);
-    if Last <> -1 then
-    begin
-      Indent := Copy(Lines[Last], 1, Length(Lines[Last]) - Length(Lines[Last].TrimLeft));
-      L.Insert(Last + 1, Indent + CreateFormLine(AInfo));
-    end
-    else
+    // right before Application.Run, like the IDE: a CreateForm placed after
+    // the last one could land inside that one's conditional block
+    if RunAt <> -1 then
     begin
       Indent := Copy(Lines[RunAt], 1, Length(Lines[RunAt]) - Length(Lines[RunAt].TrimLeft));
       L.Insert(RunAt, Indent + CreateFormLine(AInfo));
+    end
+    else
+    begin
+      Indent := Copy(Lines[Last], 1, Length(Lines[Last]) - Length(Lines[Last].TrimLeft));
+      L.Insert(Last + 1, Indent + CreateFormLine(AInfo));
     end;
     Dpr := string.Join(NL, L.ToStringArray);
   finally
@@ -426,12 +605,16 @@ begin
   Result := 0;
   NL := IfThen(Dpr.Contains(#13#10), #13#10, #10);
   Lines := Dpr.Replace(#13#10, #10).Split([#10]);
-  Pat := '^\s*Application\.CreateForm\s*\(\s*(' + TRegEx.Escape(AClassName) + '\s*,|\w+\s*,\s*' +
-    TRegEx.Escape(AFormName) + '\s*\))';
+  if AClassName <> '' then
+    Pat := '^\s*Application\.CreateForm\s*\(\s*' + TRegEx.Escape(AClassName) + '\s*,'
+  else if AFormName <> '' then
+    Pat := '^\s*Application\.CreateForm\s*\(\s*\w+\s*,\s*' + TRegEx.Escape(AFormName) + '\s*\)'
+  else
+    Exit;
   L := TStringList.Create;
   try
     for I := 0 to High(Lines) do
-      if (AClassName <> '') and TRegEx.IsMatch(Lines[I], Pat, [roIgnoreCase]) then
+      if TRegEx.IsMatch(Lines[I], Pat, [roIgnoreCase]) then
         Inc(Result)
       else
         L.Add(Lines[I]);
@@ -540,7 +723,11 @@ begin
   Present := False;
   for E in U.Entries do
     if SameText(EntryUnitName(E), Info.UnitName) then
+    begin
       Present := True;
+      if EntryInclude(E) <> '' then
+        Include := EntryInclude(E); // the .dproj element follows the .dpr entry
+    end;
   Note := '';
   if not Present then
   begin
@@ -606,6 +793,7 @@ end;
 function RemoveProjectUnit(const AProject, APasPath: string): string;
 var
   Dpr, Dproj, Enc, Text, UnitName, Entry, Include, FormName, ClassName: string;
+  Carry, Prefix, Core: string;
   U: TUsesClause;
   Entries: TArray<string>;
   E: string;
@@ -641,12 +829,25 @@ begin
     if FormName = '' then
       FormName := EntryFormName(Entry);
     Entries := [];
+    Carry := '';
     for E in U.Entries do
       if not SameText(EntryUnitName(E), UnitName) then
-        Entries := Entries + [E];
+      begin
+        if Carry <> '' then
+          Entries := Entries + [Carry + #10 + E]
+        else
+          Entries := Entries + [E];
+        Carry := '';
+      end
+      else
+      begin
+        SplitEntryPrefix(E, Prefix, Core);
+        Carry := Prefix; // its directive/comment stays, glued to the next entry
+      end;
+    if (Carry <> '') and (Length(Entries) > 0) then
+      Entries[High(Entries)] := Entries[High(Entries)] + #10 + Carry;
     Text := ReplaceUses(Text, U, Entries);
-    if (ClassName = '') and (FormName <> '') then
-      ClassName := 'T' + FormName; // the usual pairing when the .pas is gone
+    // the .pas gone: only the {Form} variable is known, match on it
     N := RemoveCreateForm(Text, ClassName, FormName);
     PatchSaveText(Dpr, Text, Enc);
   end
@@ -674,7 +875,7 @@ end;
 
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
 var
-  Dpr, Dproj, Enc, Text, OldName, OldInclude, Entry, NewInclude: string;
+  Dpr, Dproj, Enc, Text, OldName, OldInclude, Entry, NewInclude, Prefix, Core: string;
   U: TUsesClause;
   Entries: TArray<string>;
   E: string;
@@ -704,7 +905,12 @@ begin
   Entries := U.Entries;
   for I := 0 to High(Entries) do
     if SameText(EntryUnitName(Entries[I]), OldName) then
+    begin
+      SplitEntryPrefix(Entries[I], Prefix, Core);
       Entries[I] := BuildEntry(Info, NewInclude);
+      if Prefix <> '' then
+        Entries[I] := Prefix + #10 + Entries[I];
+    end;
   Text := ReplaceUses(Text, U, Entries);
   PatchSaveText(Dpr, Text, Enc);
 
@@ -724,37 +930,49 @@ begin
     TPath.GetFileName(Dpr)]);
 end;
 
-function ProjectUnits(const AProject: string): TArray<TProjectUnit>;
+function ProjectUnits(const AProject: string; ANeedDproj: Boolean): TArray<TProjectUnit>;
 var
-  Dpr, Dproj, Enc, Text, Xml, E: string;
+  Dpr, Dproj, Enc, Text, E: string;
   U: TUsesClause;
   P: TProjectUnit;
-  S, L: Integer;
+  Includes: TDictionary<string, Boolean>;
+  M: TMatch;
 begin
   Result := [];
   if ResolveProjectPair(AProject, Dpr, Dproj) <> '' then
     Exit;
+  Includes := TDictionary<string, Boolean>.Create;
   try
-    Text := PatchLoadText(Dpr, Enc);
-    U := FindUses(Text);
-    if not U.Found then
-      Exit;
-    Xml := '';
-    if TFile.Exists(Dproj) then
-      Xml := PatchLoadText(Dproj, Enc);
-    for E in U.Entries do
-    begin
-      P.Include := EntryInclude(E);
-      if P.Include = '' then
-        Continue; // library units (no `in`) are not project files
-      P.UnitName := EntryUnitName(E);
-      P.FormName := EntryFormName(E);
-      P.InDproj := (Xml <> '') and FindDccRef(Xml, P.Include, S, L);
-      Result := Result + [P];
+    try
+      Text := PatchLoadText(Dpr, Enc);
+      U := FindUses(Text);
+      if not U.Found then
+        Exit;
+      if ANeedDproj and TFile.Exists(Dproj) then
+        // one sweep of the .dproj, then O(1) per entry
+        for M in TRegEx.Matches(PatchLoadText(Dproj, Enc), '<DCCReference\s+Include="([^"]*)"', [roIgnoreCase]) do
+          Includes.AddOrSetValue(M.Groups[1].Value.Replace('/', '\').ToLower, True);
+      for E in U.Entries do
+      begin
+        P.Include := EntryInclude(E);
+        if P.Include = '' then
+          Continue; // library units (no `in`) are not project files
+        P.UnitName := EntryUnitName(E);
+        P.FormName := EntryFormName(E);
+        P.InDproj := (not ANeedDproj) or Includes.ContainsKey(P.Include.Replace('/', '\').ToLower);
+        Result := Result + [P];
+      end;
+    except
+      Result := [];
     end;
-  except
-    Result := [];
+  finally
+    Includes.Free;
   end;
+end;
+
+function ProjectUnits(const AProject: string): TArray<TProjectUnit>;
+begin
+  Result := ProjectUnits(AProject, True);
 end;
 
 procedure AddUnitsView(const ADproj: string; AReturn: TJSONObject);
@@ -796,7 +1014,7 @@ begin
     if not TDirectory.Exists(D) then
       Continue;
     for F in TDirectory.GetFiles(D, '*.dpr') do
-      for P in ProjectUnits(F) do
+      for P in ProjectUnits(F, False) do // the .dpr decides; no .dproj read
         if SameText(P.UnitName, Stem) and
           (NormPath(TPath.Combine(TPath.GetDirectoryName(F), P.Include)) = NormPath(APasPath)) then
         begin

@@ -142,7 +142,17 @@ begin
     Projects := ProjectsUsingUnit(Params.Path);
     for P in Projects do
     begin
-      R := RemoveProjectUnit(P, Params.Path);
+      if PathDenied(P) <> '' then
+      begin
+        ProjNote := ProjNote + #10 + Format(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)]);
+        Continue;
+      end;
+      try
+        R := RemoveProjectUnit(P, Params.Path);
+      except
+        on E: Exception do
+          R := 'ERROR ' + E.Message;
+      end;
       ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
     end;
     if Length(Projects) > 0 then
@@ -166,7 +176,12 @@ begin
     MoveToTrash(Params.Path, Trash);
   except
     on E: Exception do
+    begin
+      if (ProjNote <> '') or (DesignerNote <> '') then
+        Exit(Format(SN_FILE_PARTIAL_FMT, ['al mover a la papelera', E.Message,
+          #10 + DesignerNote + #10 + ProjNote]));
       Exit('ERROR al mover a la papelera: ' + E.Message);
+    end;
   end;
   Result := Format('BORRADO %s (movido a la papelera recuperable).'#10 +
     '  copia: %s'#10'  Para recuperarlo: delphi_move con path=esa copia y ' +
@@ -276,18 +291,32 @@ begin
 
   // a rename: the header must follow the file name
   if not SameText(OldStem, NewStem) then
-  begin
+  try
     Src := PatchLoadText(Params.Dest, Enc);
     Src := TRegEx.Replace(Src, '^(\s*unit\s+)' + TRegEx.Escape(OldStem) + '(\s*;)',
       '${1}' + NewStem + '${2}', [roIgnoreCase, roMultiline]);
     PatchSaveText(Params.Dest, Src, Enc);
     Result := Result + #10 + '  cabecera reescrita: unit ' + NewStem + ';';
+  except
+    on E: Exception do
+      Result := Result + #10 + '  ERROR al reescribir la cabecera (sigue diciendo unit ' +
+        OldStem + ';): ' + E.Message;
   end;
 
   ProjNote := '';
   for P in Projects do
   begin
-    R := RenameProjectUnit(P, Params.Path, Params.Dest);
+    if PathDenied(P) <> '' then
+    begin
+      ProjNote := ProjNote + #10 + Format(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)]);
+      Continue;
+    end;
+    try
+      R := RenameProjectUnit(P, Params.Path, Params.Dest);
+    except
+      on E: Exception do
+        R := 'ERROR ' + E.Message;
+    end;
     ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
   end;
   if Length(Projects) > 0 then

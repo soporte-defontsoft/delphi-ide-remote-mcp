@@ -497,7 +497,7 @@ begin
   // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference)
   Result := AddProjectUnit(ADprPath, PasPath);
   if Result.StartsWith('RECHAZADO') then
-    Result := 'CREADOS ' + AUnitName + '.pas' + DesignerExt + ' pero NO se pudo registrar: ' + Result
+    Result := 'CREADOS ' + AUnitName + '.pas/' + DesignerExt + ' pero NO se pudo registrar: ' + Result
   else
     Result := Format('CREADO %s %s (T%s, %s) con su %s.'#10'%s',
       [IfThen(Kind.StartsWith('frame'), 'frame', IfThen(Kind = 'datamodule', 'data module', 'form')),

@@ -333,6 +333,99 @@ check('form-fmx: CREADO', out.startswith('CREADO form'), out[:200])
 ok, err = build_ok(FDPROJ)
 check('build: FMX con frame + datamodule + form COMPILA', ok, err)
 
+# ---- v0.42.1: review fixes ----
+# (2) comment/directive-aware uses parser
+RDIR = os.path.join(BASE, 'Rev')
+os.makedirs(RDIR, exist_ok=True)
+RDPR = os.path.join(RDIR, 'Rev.dpr')
+open(RDPR, 'wb').write(("{\r\n  header comment\r\n  uses nothing, really; honest\r\n}\r\n"
+    "program Rev;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nuses\r\n  System.SysUtils, // it's the RTL, see; below\r\n"
+    "  {$IFDEF DEBUG}\r\n  UDebug in 'UDebug.pas',\r\n  {$ENDIF}\r\n  UMain in 'UMain.pas';\r\n\r\n"
+    "begin\r\n  Writeln('hola');\r\nend.\r\n").encode('utf-8-sig'))
+for u in ('UDebug', 'UMain', 'UNueva'):
+    open(os.path.join(RDIR, u + '.pas'), 'wb').write(('unit %s;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n' % u).encode('utf-8-sig'))
+out = call('delphi_config', {"project": RDPR, "command": "add-unit", "path": os.path.join(RDIR, 'UDebug.pas')})
+check('parser: unit dentro de {$IFDEF} reconocida como presente', 'ya estaba' in out, out[:200])
+out = call('delphi_config', {"project": RDPR, "command": "add-unit", "path": os.path.join(RDIR, 'UNueva.pas')})
+check('parser: add-unit con comentarios // y directivas', out.startswith('ANADIDA'), out[:200])
+dpr = rd(RDPR)
+check('parser: cabecera con "uses" en comentario intacta', dpr.startswith('{\r\n  header comment\r\n  uses nothing, really; honest\r\n}'), dpr[:80])
+check('parser: program Rev; intacto', 'program Rev;' in dpr, dpr)
+check('parser: comentario // intacto (sin "stuff" suelto)', "// it's the RTL, see; below" in dpr, dpr)
+check('parser: {$IFDEF}/{$ENDIF} conservados', dpr.count('{$IFDEF DEBUG}') == 1 and dpr.count('{$ENDIF}') == 1, dpr)
+check('parser: UNueva anadida una vez', dpr.count("UNueva in 'UNueva.pas'") == 1 and dpr.count('UDebug in') == 1, dpr)
+out = call('delphi_config', {"project": RDPR})
+units = {u['unit']: u for u in json.loads(out).get('units', [])}
+check('parser: view sin blobs', set(units) == {'UDebug', 'UMain', 'UNueva'}, list(units))
+out = call('delphi_config', {"project": RDPR, "command": "remove-unit", "path": os.path.join(RDIR, 'UDebug.pas')})
+dpr = rd(RDPR)
+check('parser: remove-unit dentro de IFDEF mantiene las directivas balanceadas',
+      out.startswith('QUITADA') and 'UDebug' not in dpr and dpr.count('{$IFDEF DEBUG}') == 1 and dpr.count('{$ENDIF}') == 1, dpr)
+check('parser: UMain sigue', "UMain in 'UMain.pas'" in dpr, dpr)
+
+# (3) qualified ancestor + suffix heuristics
+open(os.path.join(VDIR, 'UPanel.pas'), 'wb').write(("unit UPanel;\r\n\r\ninterface\r\n\r\nuses\r\n  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,\r\n"
+    "  System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs;\r\n\r\ntype\r\n  TFramePanel = class(Vcl.Forms.TFrame)\r\n  private\r\n  public\r\n  end;\r\n\r\n"
+    "implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n").encode('utf-8-sig'))
+open(os.path.join(VDIR, 'UPanel.dfm'), 'wb').write(b'object FramePanel: TFramePanel\r\n  Left = 0\r\n  Top = 0\r\n  Width = 320\r\n  Height = 240\r\n  TabOrder = 0\r\nend\r\n')
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": os.path.join(VDIR, 'UPanel.pas')})
+dpr = rd(DPR)
+check('ancestro cualificado: frame sin CreateForm', out.startswith('ANADIDA') and 'CreateForm(TFramePanel' not in dpr, out[:200] + dpr)
+check('ancestro cualificado: {FramePanel: TFrame} + DesignClass', '{FramePanel: TFrame}' in dpr and '<DesignClass>TFrame</DesignClass>' in rd(DPROJ), dpr)
+open(os.path.join(VDIR, 'UHost.pas'), 'wb').write(("unit UHost;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Forms;\r\n\r\ntype\r\n  TMainframeForm = class(TForm)\r\n  end;\r\n  TFormHost = class(TMainframeForm)\r\n  end;\r\n\r\nvar\r\n  FormHost: TFormHost;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n").encode('utf-8-sig'))
+open(os.path.join(VDIR, 'UHost.dfm'), 'wb').write(b'object FormHost: TFormHost\r\n  Left = 0\r\n  Top = 0\r\n  ClientHeight = 100\r\n  ClientWidth = 100\r\nend\r\n')
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": os.path.join(VDIR, 'UHost.pas')})
+dpr = rd(DPR)
+check('ancestro "Mainframe": es un form (CreateForm, sin DesignClass)', 'CreateForm(TFormHost, FormHost)' in dpr and '{FormHost}' in dpr, dpr)
+ok, err = build_ok(DPROJ)
+check('build: frame cualificado + form heredado COMPILAN', ok, err)
+
+# (5) CreateForm right before Application.Run even with an {$IFDEF} CreateForm
+dpr = rd(DPR).replace('  Application.CreateForm(TFormHost, FormHost);\r\n', '')
+dpr = dpr.replace('  Application.Run;', '{$IFDEF DEBUG}\r\n  Application.CreateForm(TFormHost, FormHost);\r\n{$ENDIF}\r\n  Application.Run;')
+open(DPR, 'wb').write(dpr.encode('utf-8-sig'))
+out = call('delphi_create', {"kind": "form-vcl", "name": "UTardia", "project": DPR})
+dpr = rd(DPR)
+i_new = dpr.index('CreateForm(TFormUTardia'); i_endif = dpr.index('{$ENDIF}'); i_run = dpr.index('Application.Run')
+check('CreateForm: fuera del {$IFDEF}, justo antes de Application.Run', i_endif < i_new < i_run, dpr)
+
+# (6) out-of-tree unit -> ..\ relative include
+SH = os.path.join(BASE, 'shared')
+os.makedirs(SH, exist_ok=True)
+open(os.path.join(SH, 'UCommon.pas'), 'wb').write('unit UCommon;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n'.encode('utf-8-sig'))
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": os.path.join(SH, 'UCommon.pas')})
+dpr = rd(DPR)
+check('fuera del arbol: include relativo ..\\shared', "UCommon in '..\\shared\\UCommon.pas'" in dpr, dpr)
+check('fuera del arbol: DCCReference relativo', 'Include="..\\shared\\UCommon.pas"' in rd(DPROJ), '')
+out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": os.path.join(SH, 'UCommon.pas')})
+check('fuera del arbol: remove limpia .dpr y .dproj', 'UCommon' not in rd(DPR) and 'UCommon' not in rd(DPROJ), out[:200])
+
+# (7) present by name from another path -> no second DCCReference
+os.makedirs(os.path.join(VDIR, 'old'), exist_ok=True)
+open(os.path.join(VDIR, 'old', 'UUtil.pas'), 'wb').write('unit UUtil;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n'.encode('utf-8-sig'))
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": os.path.join(VDIR, 'old', 'UUtil.pas')})
+check('presente por nombre: sin DCCReference duplicado', 'ya estaba' in out and rd(DPROJ).count('UUtil.pas"') == 1 and 'old\\UUtil' not in rd(DPROJ), rd(DPROJ)[-800:])
+
+# (8) remove by class, not by variable name alone
+dpr = rd(DPR).replace('  Application.Run;', '  Application.CreateForm(TSplashMain, FormHost);\r\n  Application.Run;')
+open(DPR, 'wb').write(dpr.encode('utf-8-sig'))
+out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": os.path.join(VDIR, 'UHost.pas')})
+dpr = rd(DPR)
+check('remove por clase: CreateForm de otra unit con la misma variable sobrevive',
+      'CreateForm(TFormHost' not in dpr and 'CreateForm(TSplashMain, FormHost)' in dpr, dpr)
+dpr = rd(DPR).replace('  Application.CreateForm(TSplashMain, FormHost);\r\n', '')
+open(DPR, 'wb').write(dpr.encode('utf-8-sig'))
+
+# (1) a project in the parent folder INSIDE the jail is still handled (BASE is the
+# root here); the outside-jail refusal text is exercised by the guard path
+PDPR = os.path.join(VDIR, 'Padre.dpr')
+open(PDPR, 'wb').write(("program Padre;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nuses\r\n  System.SysUtils,\r\n  UOtra in 'src\\UOtra.pas';\r\n\r\nbegin\r\nend.\r\n").encode('utf-8-sig'))
+out = call('delphi_delete', {"path": os.path.join(sub, 'UOtra.pas')})
+check('padre dentro de la jaula: proyectos actualizados (2)', 'proyectos actualizados (2)' in out, out[:400])
+check('padre dentro de la jaula: Padre.dpr limpio', 'UOtra' not in rd(PDPR), rd(PDPR))
+ok, err = build_ok(DPROJ)
+check('build: tras las correcciones COMPILA', ok, err)
+
 # ---- delete of a plain (non-unit) file untouched by all this ----
 txt = os.path.join(VDIR, 'notas.txt')
 open(txt, 'wb').write(b'x')

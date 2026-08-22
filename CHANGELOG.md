@@ -8,6 +8,39 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.42.1-beta] - 2026-08-22
+
+Code review of 0.42.0 (8 angles, 10 confirmed findings), all applied.
+
+### Fixed
+- **Jail**: projects found in the unit's parent folder are now vetted with
+  the write jail before `delphi_delete`/`delphi_move` touch them; a denied
+  project is reported and left alone.
+- **Uses-clause parser** understands `//`, `(* *)` and `{ }` comments and
+  compiler directives: entries keep their leading `{$IFDEF}`/comment when
+  dropped (directives stay balanced), a comma/`;`/apostrophe inside a
+  comment no longer splits or ends the clause, and the `uses` keyword is
+  looked up after `program X;`, never inside a header comment.
+- **Designer kind**: unit-qualified ancestors (`Vcl.Forms.TFrame`) are
+  recognised; ancestors declared in the same unit are followed up the chain;
+  a base living elsewhere is classified by NAME SUFFIX (`...Frame`,
+  `...DataModule`), never by substring (`TMainframeForm` is a form).
+- **CreateForm placement**: right before `Application.Run`, like the IDE -
+  never after a `CreateForm` that may sit inside a conditional block.
+- **Out-of-tree units** get a `..\` relative include (same drive), the
+  IDE's form, instead of an absolute path.
+- **add-unit on a unit already listed from another path** refreshes the
+  existing `<DCCReference>` instead of inserting a second one.
+- **remove-unit** drops `CreateForm` by CLASS when the `.pas` is readable;
+  the form-variable fallback is used only when the class is unknown.
+- **delete/move** report the project and designer changes already applied
+  when a later step fails; per-project errors are captured, not fatal.
+- `view`/`ProjectsUsingUnit` sweep the `.dproj` once (dictionary) instead
+  of one regex pass per unit; the read-only scan skips the `.dproj`.
+- ASCII-only rejection text (em-dash removed); scaffold failure message
+  names the pair as `X.pas/.dfm`.
+
+
 ## [0.42.0-beta] - 2026-08-22
 
 Project membership, done by the server. Until now the agent could scaffold

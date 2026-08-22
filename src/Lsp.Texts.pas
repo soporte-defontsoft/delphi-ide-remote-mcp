@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.42.0-beta';
+  SERVER_VERSION = '0.42.1-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -780,7 +780,7 @@ const
     'RECHAZADO: "%s" no es una unit .pas.';
 
   SR_UNIT_NO_HEADER_FMT =
-    'RECHAZADO: %s no tiene cabecera "unit X;" — no es una unit Delphi.';
+    'RECHAZADO: %s no tiene cabecera "unit X;" - no es una unit Delphi.';
 
   SR_UNIT_HEADER_MISMATCH_FMT =
     'RECHAZADO: la cabecera dice "unit %s;" pero el fichero se llama %s. En ' +
@@ -831,6 +831,14 @@ const
   SN_FILE_PROJECTS_NONE =
     '  (ningun .dpr en la carpeta ni en la superior lo listaba; si otro ' +
     'proyecto lo usa, quitalo con delphi_config command=remove-unit)';
+
+  SN_FILE_PROJECT_DENIED_FMT =
+    '    %s: fuera de los workspaces permitidos, NO tocado (quita la unit ' +
+    'con delphi_config command=remove-unit desde un proyecto dentro de la jaula).';
+
+  SN_FILE_PARTIAL_FMT =
+    'ERROR %s: %s'#10'ATENCION: antes del fallo ya se habian aplicado estos ' +
+    'cambios (copias en __delphi-patch):%s';
 
   SN_FILE_DESIGNER_TOO_FMT =
     '  designer %s: %s';
