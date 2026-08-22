@@ -63,9 +63,18 @@ on your side.
 
 ## Create and build
 
-- `delphi_create` scaffolds console/VCL/FMX projects and forms that
-  compile at birth. Then `delphi_config command=add-platform` for extra
-  targets. The `.dproj` is otherwise the IDE's - do not hand-edit it.
+- `delphi_create` scaffolds console/VCL/FMX projects, and inside a
+  project: `form-vcl`/`form-fmx`, `frame-vcl`/`frame-fmx`, `datamodule`
+  and `unit` (a plain .pas). Everything compiles at birth and is already
+  registered in the `.dpr` and the `.dproj`. Then `delphi_config
+  command=add-platform` for extra targets.
+- **Project membership is the server's job, never a hand edit of the
+  `.dpr`/`.dproj`**: an existing `.pas` joins with `delphi_config
+  command=add-unit path=<.pas>` (forms get their `CreateForm`, frames do
+  not), `remove-unit` drops it from the project and keeps the file,
+  `delphi_delete` on a unit trashes its designer pair and updates the
+  projects that list it, `delphi_move` renames/moves a unit with its pair,
+  header and project entries. `view` lists the project's `units`.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess. `target=Deploy` on Android builds the
   full `.apk` (the server generates the deployment manifest if missing).

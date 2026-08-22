@@ -34,7 +34,7 @@ type
   public
     [SchemaDescription('Absolute path of the project .dproj')]
     property Project: string read FProject write FProject;
-    [SchemaDescription('view (default: list configurations, platforms, search paths and deployment files) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again)')]
+    [SchemaDescription('view (default: list configurations, platforms, search paths, deployment files and units) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk)')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required)')]
     property Platform: string read FPlatform write FPlatform;
@@ -67,6 +67,7 @@ uses
   Lsp.Discovery,
   Lsp.Dproj,
   Lsp.BuildRunner,
+  Lsp.ProjectUnits,
   Lsp.Patch;
 
 constructor TDelphiConfigTool.Create;
@@ -94,7 +95,10 @@ begin
     'library a component loads at runtime (.so/.dylib/.dll), data files - ' +
     'written into the .deployproj as the IDE does (Debug and Release), ' +
     'generating the standard manifest first if the project has none; ' +
-    'remove-deployfile takes it out again. To BUILD a specific combination ' +
+    'remove-deployfile takes it out again. command=add-unit / remove-unit is the ' +
+    'IDE''s Add to project / Remove from project for an EXISTING .pas (uses of the ' +
+    '.dpr, CreateForm for forms, DCCReference of the .dproj); the file stays on ' +
+    'disk. To BUILD a specific combination ' +
     'use delphi_build with platform+config.';
 end;
 
@@ -145,6 +149,7 @@ begin
     end;
     AddSearchPathsView(TFile.ReadAllText(ADproj), Return);
     AddDeployFilesView(ADproj, Return);
+    AddUnitsView(ADproj, Return);
     Return.AddPair('note', 'To build: delphi_build {project, platform, ' +
       'config}. Platforms with needsRemoteProfile=true also need a PAServer ' +
       'profile - see delphi_paserver.');
@@ -1018,9 +1023,24 @@ begin
     Result := AddDeployFile(Params.Project, Params.Platform, Params.Path, Params.RemoteDir)
   else if Cmd = 'remove-deployfile' then
     Result := RemoveDeployFile(Params.Project, Params.Platform, Params.Path)
+  else if (Cmd = 'add-unit') or (Cmd = 'remove-unit') then
+  begin
+    if Params.Path.Trim = '' then
+      Exit(SR_UNIT_NEED_PATH);
+    Result := PathDenied(Params.Project);
+    if Result = '' then
+      Result := PathDenied(Params.Path);
+    if Result <> '' then
+      Exit;
+    if Cmd = 'add-unit' then
+      Result := AddProjectUnit(Params.Project, Params.Path)
+    else
+      Result := RemoveProjectUnit(Params.Project, Params.Path);
+  end
   else
     Result := 'error: command debe ser view | add-platform | remove-platform | ' +
-      'set-output | add-searchpath | remove-searchpath | add-deployfile | remove-deployfile';
+      'set-output | add-searchpath | remove-searchpath | add-deployfile | remove-deployfile | ' +
+      'add-unit | remove-unit';
 end;
 
 initialization

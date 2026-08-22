@@ -11,7 +11,10 @@ unit Lsp.Scaffold;
 interface
 
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
+{ AKind: vcl | fmx (forms) | frame-vcl | frame-fmx | datamodule. }
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string): string;
+{ A plain unit (interface/implementation skeleton) registered in the project. }
+function CreateDelphiUnit(const ADprPath, AUnitName: string): string;
 
 implementation
 
@@ -22,6 +25,8 @@ uses
   System.IOUtils,
   System.RegularExpressions,
   Lsp.Patch,
+  Lsp.Dproj,
+  Lsp.ProjectUnits,
   Lsp.Guard;
 
 const
@@ -220,6 +225,95 @@ begin
     'end' + CRLF;
 end;
 
+function VclFramePas(const AUnitName, AFrameName: string): string;
+begin
+  Result :=
+    'unit ' + AUnitName + ';' + CRLF + CRLF +
+    'interface' + CRLF + CRLF +
+    'uses' + CRLF +
+    '  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,' + CRLF +
+    '  System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs;' + CRLF + CRLF +
+    'type' + CRLF +
+    '  T' + AFrameName + ' = class(TFrame)' + CRLF +
+    '  private' + CRLF +
+    '  public' + CRLF +
+    '  end;' + CRLF + CRLF +
+    'implementation' + CRLF + CRLF +
+    '{$R *.dfm}' + CRLF + CRLF +
+    'end.' + CRLF;
+end;
+
+function VclFrameDfm(const AFrameName: string): string;
+begin
+  Result :=
+    'object ' + AFrameName + ': T' + AFrameName + CRLF +
+    '  Left = 0' + CRLF +
+    '  Top = 0' + CRLF +
+    '  Width = 320' + CRLF +
+    '  Height = 240' + CRLF +
+    '  TabOrder = 0' + CRLF +
+    'end' + CRLF;
+end;
+
+function FmxFramePas(const AUnitName, AFrameName: string): string;
+begin
+  Result :=
+    'unit ' + AUnitName + ';' + CRLF + CRLF +
+    'interface' + CRLF + CRLF +
+    'uses' + CRLF +
+    '  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,' + CRLF +
+    '  FMX.Types, FMX.Graphics, FMX.Controls, FMX.Forms, FMX.Dialogs, FMX.StdCtrls;' + CRLF + CRLF +
+    'type' + CRLF +
+    '  T' + AFrameName + ' = class(TFrame)' + CRLF +
+    '  private' + CRLF +
+    '  public' + CRLF +
+    '  end;' + CRLF + CRLF +
+    'implementation' + CRLF + CRLF +
+    '{$R *.fmx}' + CRLF + CRLF +
+    'end.' + CRLF;
+end;
+
+function FmxFrameFmx(const AFrameName: string): string;
+begin
+  Result :=
+    'object ' + AFrameName + ': T' + AFrameName + CRLF +
+    '  Size.Width = 320.000000000000000000' + CRLF +
+    '  Size.Height = 240.000000000000000000' + CRLF +
+    '  Size.PlatformDefault = False' + CRLF +
+    'end' + CRLF;
+end;
+
+{ A data module is framework-neutral Pascal; only the class group differs
+  (it tells the designer which control set the module belongs to). }
+function DataModulePas(const AUnitName, AModuleName: string; AFmx: Boolean): string;
+begin
+  Result :=
+    'unit ' + AUnitName + ';' + CRLF + CRLF +
+    'interface' + CRLF + CRLF +
+    'uses' + CRLF +
+    '  System.SysUtils, System.Classes;' + CRLF + CRLF +
+    'type' + CRLF +
+    '  T' + AModuleName + ' = class(TDataModule)' + CRLF +
+    '  private' + CRLF +
+    '  public' + CRLF +
+    '  end;' + CRLF + CRLF +
+    'var' + CRLF +
+    '  ' + AModuleName + ': T' + AModuleName + ';' + CRLF + CRLF +
+    'implementation' + CRLF + CRLF +
+    IfThen(AFmx, '{%CLASSGROUP ''FMX.Controls.TControl''}', '{%CLASSGROUP ''Vcl.Controls.TControl''}') + CRLF + CRLF +
+    '{$R *.dfm}' + CRLF + CRLF +
+    'end.' + CRLF;
+end;
+
+function DataModuleDfm(const AModuleName: string): string;
+begin
+  Result :=
+    'object ' + AModuleName + ': T' + AModuleName + CRLF +
+    '  Height = 480' + CRLF +
+    '  Width = 640' + CRLF +
+    'end' + CRLF;
+end;
+
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
 var
   Kind, Dir, Dpr, MainUnit, MainForm: string;
@@ -333,13 +427,13 @@ end;
 
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string): string;
 var
-  Kind, Dir, Enc, Dpr, FormName, PasPath, UsesLine, NewUses, RunAnchor: string;
-  Lines: TArray<string>;
-  I, UsesEnd: Integer;
+  Kind, Dir, FormName, PasPath, DesignerExt: string;
+  Fmx: Boolean;
 begin
   Kind := AKind.Trim.ToLower;
-  if (Kind <> 'vcl') and (Kind <> 'fmx') then
-    Exit('RECHAZADO: kind debe ser vcl | fmx.');
+  if (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'frame-vcl') and
+     (Kind <> 'frame-fmx') and (Kind <> 'datamodule') then
+    Exit('RECHAZADO: kind debe ser form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule.');
   Result := PathDenied(ADprPath);
   if Result <> '' then
     Exit;
@@ -350,7 +444,14 @@ begin
     Exit('RECHAZADO: ''' + AUnitName + ''' no es un identificador valido de unit.');
   FormName := AFormName.Trim;
   if FormName = '' then
-    FormName := 'Form' + AUnitName;
+  begin
+    if Kind.StartsWith('frame') then
+      FormName := 'Frame' + AUnitName
+    else if Kind = 'datamodule' then
+      FormName := 'DM' + AUnitName
+    else
+      FormName := 'Form' + AUnitName;
+  end;
   if FormName.StartsWith('T') and (Length(FormName) > 1) and CharInSet(FormName[2], ['A'..'Z']) then
     FormName := FormName.Substring(1); // the T prefix goes on the class only
   if not TRegEx.IsMatch(FormName, '^[A-Za-z_]\w*$') then
@@ -362,62 +463,73 @@ begin
     Exit('RECHAZADO: ' + PasPath + ' ya existe. El scaffolder jamas sobreescribe.');
 
   // 1) the pair of files
+  DesignerExt := '.dfm';
   if Kind = 'vcl' then
   begin
     WriteNewFile(PasPath, VclFormPas(AUnitName, FormName));
     WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), VclFormDfm(FormName));
   end
-  else
+  else if Kind = 'fmx' then
   begin
+    DesignerExt := '.fmx';
     WriteNewFile(PasPath, FmxFormPas(AUnitName, FormName));
     WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FmxFormFmx(FormName));
+  end
+  else if Kind = 'frame-vcl' then
+  begin
+    WriteNewFile(PasPath, VclFramePas(AUnitName, FormName));
+    WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), VclFrameDfm(FormName));
+  end
+  else if Kind = 'frame-fmx' then
+  begin
+    DesignerExt := '.fmx';
+    WriteNewFile(PasPath, FmxFramePas(AUnitName, FormName));
+    WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FmxFrameFmx(FormName));
+  end
+  else
+  begin
+    // data module: the designer file is a .dfm on BOTH frameworks
+    Fmx := SameText(ReadDproj(ChangeFileExt(TPath.GetFullPath(ADprPath), '.dproj')).FrameworkType, 'FMX');
+    WriteNewFile(PasPath, DataModulePas(AUnitName, FormName, Fmx));
+    WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), DataModuleDfm(FormName));
   end;
 
-  // 2) register in the .dpr: uses entry + Application.CreateForm
-  Dpr := PatchLoadText(ADprPath, Enc);
-  Lines := Dpr.Replace(#13#10, #10).Split([#10]);
-  UsesEnd := -1;
-  for I := 0 to High(Lines) do
-    if (UsesEnd = -1) and Lines[I].TrimRight.EndsWith(';') and (I > 0) then
-    begin
-      // first ';' after the 'uses' line closes the uses clause
-      var J := I;
-      while (J >= 0) and not SameText(Lines[J].Trim, 'uses') do
-        Dec(J);
-      if J >= 0 then
-      begin
-        UsesEnd := I;
-        Break;
-      end;
-    end;
-  if UsesEnd = -1 then
-    Exit('CREADOS ' + AUnitName + '.pas/.' + Kind + ' pero NO encuentro la clausula uses del .dpr: ' +
-      'registra la unit a mano con delphi_edit.');
+  // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference)
+  Result := AddProjectUnit(ADprPath, PasPath);
+  if Result.StartsWith('RECHAZADO') then
+    Result := 'CREADOS ' + AUnitName + '.pas' + DesignerExt + ' pero NO se pudo registrar: ' + Result
+  else
+    Result := Format('CREADO %s %s (T%s, %s) con su %s.'#10'%s',
+      [IfThen(Kind.StartsWith('frame'), 'frame', IfThen(Kind = 'datamodule', 'data module', 'form')),
+       AUnitName, FormName, Kind, AUnitName + DesignerExt, Result]);
+end;
 
-  UsesLine := Lines[UsesEnd];
-  NewUses := UsesLine.TrimRight;
-  SetLength(NewUses, Length(NewUses) - 1); // drop the ';'
-  Lines[UsesEnd] := NewUses + ',' + #10 +
-    '  ' + AUnitName + ' in ''' + AUnitName + '.pas'' {' + FormName + '};';
-
-  RunAnchor := '';
-  for I := 0 to High(Lines) do
-    if Lines[I].Trim.StartsWith('Application.Run', True) then
-    begin
-      Lines[I] := '  Application.CreateForm(T' + FormName + ', ' + FormName + ');' + #10 + Lines[I];
-      RunAnchor := 'CreateForm anadido antes de Application.Run';
-      Break;
-    end;
-
-  PatchSaveText(ADprPath, string.Join(#10, Lines).Replace(#10, #13#10), Enc);
-
-  Result := Format('CREADO form %s (T%s, %s) con su %s y ALTA en %s (%s).'#10 +
-    'El <DCCReference> del .dproj lo anadira el IDE al abrir el proyecto; ' +
-    'MSBuild ya lo compila igualmente porque el uses del .dpr lo arrastra.',
-    [AUnitName, FormName, Kind,
-     IfThen(Kind = 'vcl', AUnitName + '.dfm', AUnitName + '.fmx'),
-     TPath.GetFileName(ADprPath),
-     IfThen(RunAnchor <> '', RunAnchor, 'sin Application.Run: anade el CreateForm a mano si procede')]);
+function CreateDelphiUnit(const ADprPath, AUnitName: string): string;
+var
+  Dir, PasPath: string;
+begin
+  Result := PathDenied(ADprPath);
+  if Result <> '' then
+    Exit;
+  if not TFile.Exists(ADprPath) then
+    Exit('RECHAZADO: no existe el proyecto ' + ADprPath);
+  if not TRegEx.IsMatch(AUnitName, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+    Exit('RECHAZADO: ''' + AUnitName + ''' no es un identificador valido de unit.');
+  Dir := TPath.GetDirectoryName(TPath.GetFullPath(ADprPath));
+  PasPath := TPath.Combine(Dir, AUnitName + '.pas');
+  if TFile.Exists(PasPath) then
+    Exit('RECHAZADO: ' + PasPath + ' ya existe. El scaffolder jamas sobreescribe. ' +
+      'Para registrarla en el proyecto usa delphi_config command=add-unit.');
+  WriteNewFile(PasPath,
+    'unit ' + AUnitName + ';' + CRLF + CRLF +
+    'interface' + CRLF + CRLF +
+    'implementation' + CRLF + CRLF +
+    'end.' + CRLF);
+  Result := AddProjectUnit(ADprPath, PasPath);
+  if Result.StartsWith('RECHAZADO') then
+    Result := 'CREADA ' + AUnitName + '.pas pero NO se pudo registrar: ' + Result
+  else
+    Result := Format('CREADA la unit %s (%s).'#10'%s', [AUnitName, PasPath, Result]);
 end;
 
 end.

@@ -8,6 +8,41 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.42.0-beta] - 2026-08-22
+
+Project membership, done by the server. Until now the agent could scaffold
+a project or a form, but a plain unit was a bare file, a new form never
+reached the `.dproj`, and deleting or renaming a unit left its `uses`,
+`CreateForm` and `<DCCReference>` orphaned - the agent patched the `.dpr`
+by hand. Now the IDE's "Add to project" / "Remove from project" / rename
+are one operation, shared by every tool that touches a unit.
+
+### Added
+- **`delphi_config add-unit` / `remove-unit`**: register an EXISTING
+  `.pas` in the project (uses of the `.dpr` with the `{Form}` /
+  `{DM: TDataModule}` / `{Frame: TFrame}` comment, `Application.CreateForm`
+  for forms and data modules - never frames -, `<DCCReference>` with
+  `Form`/`FormType`/`DesignClass` in the `.dproj`, the IDE's exact shape)
+  or take it out again; the file stays on disk. Idempotent. The designer
+  kind is read from the `.dfm`/`.fmx` root object and the class ancestor;
+  binary designers fall back to the `.pas` declarations. `view` now lists
+  `units` (name, file, form, and `dproj:false` when the `.dproj` lags).
+- **`delphi_create kind=unit | frame-vcl | frame-fmx | datamodule`**: a
+  plain unit, a frame (VCL/FMX) or a data module (its `{%CLASSGROUP}`
+  follows the project's framework; the designer is a `.dfm` on both), each
+  registered on creation. `form-vcl`/`form-fmx` now write their
+  `<DCCReference>` too, so the Project Manager lists them at once.
+- **`delphi_delete` of a unit** trashes its `.dfm`/`.fmx` with it and takes
+  it out of every project in its folder or the parent folder that lists it.
+- **`delphi_move` of a unit** moves the designer pair, rewrites the
+  `unit X;` header on a rename, and re-points the projects that list it
+  (relative include with backslash, form comment and `DCCReference` kept).
+
+### Changed
+- `Lsp.ProjectUnits` is the single place that edits project membership;
+  `Lsp.Scaffold` no longer has its own `.dpr` registration code.
+
+
 ## [0.41.0-beta] - 2026-08-22
 
 The second half of the "fat project on Linux" story: compiling was solved

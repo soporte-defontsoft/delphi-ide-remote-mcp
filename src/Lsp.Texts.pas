@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.41.0-beta';
+  SERVER_VERSION = '0.42.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -662,7 +662,8 @@ const
     'of an installed component (delphi_workspace lists the readable library ' +
     'zone). IDE macros like $(BDS) are accepted; relative paths resolve from ' +
     'the project folder. Must resolve inside the workspace or the library ' +
-    'zone and exist.';
+    'zone and exist. add/remove-unit: the .pas to register in / take out of ' +
+    'the project (add/remove-deployfile: the file to ship).';
 
   SR_CONFIG_NEED_PATH =
     'Falta "path": la carpeta a anadir/quitar del search path (p.ej. la ' +
@@ -754,6 +755,85 @@ const
     'No deployment manifest (.deployproj) next to the project yet: ' +
     'delphi_build target=Deploy generates the standard one (the binary), ' +
     'and add-deployfile adds extra files to it.';
+
+  // ---- project units (Lsp.ProjectUnits: add-unit / remove-unit / create / delete / move) ----
+
+  SR_UNIT_NEED_PROJECT =
+    'Falta "project": el .dproj (o .dpr) del proyecto.';
+
+  SR_UNIT_PROJECT_EXT_FMT =
+    'RECHAZADO: "%s" no es un proyecto (.dproj o .dpr).';
+
+  SR_UNIT_NO_DPR_FMT =
+    'RECHAZADO: no existe el .dpr del proyecto (%s); las units se registran ' +
+    'en el .dpr y sin el no hay programa.';
+
+  SR_UNIT_NEED_PATH =
+    'Falta "path": la unit .pas a registrar o quitar. Si tu cliente no ' +
+    'muestra el parametro, reconecta la sesion MCP (el servidor se actualizo).';
+
+  SR_UNIT_PAS_MISSING_FMT =
+    'RECHAZADO: no existe %s. Para crear una unit nueva usa delphi_create ' +
+    'kind=unit (o form-vcl / form-fmx).';
+
+  SR_UNIT_NOT_PAS_FMT =
+    'RECHAZADO: "%s" no es una unit .pas.';
+
+  SR_UNIT_NO_HEADER_FMT =
+    'RECHAZADO: %s no tiene cabecera "unit X;" — no es una unit Delphi.';
+
+  SR_UNIT_HEADER_MISMATCH_FMT =
+    'RECHAZADO: la cabecera dice "unit %s;" pero el fichero se llama %s. En ' +
+    'Delphi deben coincidir; arregla uno de los dos con delphi_edit / delphi_move.';
+
+  SR_UNIT_NO_USES_FMT =
+    'RECHAZADO: no encuentro la clausula uses de %s.';
+
+  SN_UNIT_ADDED_FMT =
+    'ANADIDA la unit %s (%s) al proyecto %s: uses del .dpr + DCCReference ' +
+    'del .dproj. Copias previas en __delphi-patch.';
+
+  SN_UNIT_ADDED_FORM_FMT =
+    'ANADIDA la unit %s (%s) con su form %s: %s al proyecto %s: uses del ' +
+    '.dpr%s + DCCReference del .dproj. Copias previas en __delphi-patch.';
+
+  SN_UNIT_CREATEFORM = ' + Application.CreateForm';
+
+  SN_UNIT_PRESENT_FMT =
+    'La unit %s ya estaba en %s. Nada que cambiar (entrada del .dproj refrescada).';
+
+  SN_UNIT_NO_RUN_ANCHOR =
+    'No hay Application.Run ni otro CreateForm en el .dpr: crea la instancia ' +
+    'del form donde proceda (delphi_edit).';
+
+  SN_UNIT_NO_ITEMGROUP =
+    'El .dproj no tiene ItemGroup donde colgar el DCCReference; el IDE lo ' +
+    'completara al abrir el proyecto (MSBuild compila igual por el uses).';
+
+  SN_UNIT_NO_DPROJ =
+    'El proyecto no tiene .dproj: solo se actualizo el .dpr.';
+
+  SN_UNIT_REMOVED_FMT =
+    'QUITADA la unit %s del proyecto %s (%s%s%s). El fichero %s sigue en ' +
+    'disco; borralo con delphi_delete si ya no lo quieres. Copias previas en ' +
+    '__delphi-patch.';
+
+  SN_UNIT_ABSENT_FMT =
+    'La unit %s no esta en el proyecto %s. Mira las units con command=view.';
+
+  SN_UNIT_RENAMED_FMT =
+    'REAPUNTADA la unit %s (%s) -> %s (%s) en el proyecto %s (uses del .dpr + ' +
+    'DCCReference del .dproj).';
+
+  SN_FILE_PROJECTS_UPDATED_FMT =
+    '  proyectos actualizados (%d): %s';
+
+  SN_FILE_PROJECTS_NONE =
+    '  (ningun .dpr en la carpeta ni en la superior lo listaba; si otro ' +
+    'proyecto lo usa, quitalo con delphi_config command=remove-unit)';
+
+  SN_FILE_DESIGNER_TOO_FMT =
+    '  designer %s: %s';
 
   // ---- delphi_components ----
 

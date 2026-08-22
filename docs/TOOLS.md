@@ -217,24 +217,24 @@ SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .b
 
 ### `delphi_create`
 
-Create a NEW Delphi project (console/VCL/FMX: .dpr + buildable .dproj + main form) or a NEW form (VCL/FMX: .pas + .dfm/.fmx pair, registered in the .dpr uses and Application.CreateForm). IDE-equivalent skeletons, CRLF, source encoding follows the IDE's configured default (UTF-8/ANSI), never overwrites anything. For plain units use delphi_edit with createunit=true.
+Create a NEW Delphi project (console/VCL/FMX: .dpr + buildable .dproj + main form) or a NEW form, frame or data module (VCL/FMX: .pas + .dfm/.fmx pair, registered in the .dpr uses - with Application.CreateForm for forms and data modules - and in the .dproj). IDE-equivalent skeletons, CRLF, source encoding follows the IDE's configured default (UTF-8/ANSI), never overwrites anything. kind=unit creates a plain .pas and registers it in the project (uses of the .dpr + DCCReference of the .dproj); forms get their Application.CreateForm too. An EXISTING .pas joins a project with delphi_config command=add-unit.
 
 *Access: read-write.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | **yes** | What to create: project-console \| project-vcl \| project-fmx \| form-vcl \| form-fmx |
+| `kind` | string | **yes** | What to create: project-console \| project-vcl \| project-fmx \| form-vcl \| form-fmx \| frame-vcl \| frame-fmx \| datamodule \| unit (a plain .pas). Everything but projects is registered in the project given |
 | `dir` | string | optional | Projects: target directory (created if missing) |
-| `name` | string | optional | Projects: project name. Forms: unit name (e.g. UClientes) |
-| `project` | string | optional | Forms: absolute path of the project .dpr to register the form in |
-| `formname` | string | optional | Forms optional: form name without the T (default: Form+unit name) |
+| `name` | string | optional | Projects: project name. Forms, frames, data modules and units: unit name (e.g. UClientes) |
+| `project` | string | optional | Everything but projects: absolute path of the project .dpr (or .dproj) to register the new unit in |
+| `formname` | string | optional | Forms/frames/data modules optional: instance name without the T (default: Form+unit, Frame+unit, DM+unit) |
 
 
 ## Manage files  (read-write only)
 
 ### `delphi_delete`
 
-Delete a file or folder inside the workspace. NOT a hard delete: the target is moved to a recoverable trash (__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. Jailed to the workspace roots, refused in read-only mode. Use it to clean up stray files and leftovers.
+Delete a file or folder inside the workspace. NOT a hard delete: the target is moved to a recoverable trash (__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. Jailed to the workspace roots, refused in read-only mode. Use it to clean up stray files and leftovers. Deleting a unit (.pas) also trashes its .dfm/.fmx and takes it out of every project in its folder or the parent folder that lists it (uses, CreateForm, DCCReference). To keep the file but drop it from a project use delphi_config command=remove-unit.
 
 *Access: read-write.*
 
@@ -244,7 +244,7 @@ Delete a file or folder inside the workspace. NOT a hard delete: the target is m
 
 ### `delphi_move`
 
-Move or rename a file or folder inside the workspace. Both source and destination must be inside the workspace roots; parent folders of the destination are created. The source is copied to the recoverable trash first. Jailed, refused in read-only mode.
+Move or rename a file or folder inside the workspace. Both source and destination must be inside the workspace roots; parent folders of the destination are created. The source is copied to the recoverable trash first. Jailed, refused in read-only mode. Moving or renaming a unit (.pas) moves its .dfm/.fmx with it, rewrites its "unit X;" header on a rename, and re-points every project in its folder or the parent folder that lists it (uses + DCCReference).
 
 *Access: read-write.*
 
@@ -318,16 +318,16 @@ Zip a build-output directory ON the server into a single deploy artifact (recurs
 
 ### `delphi_config`
 
-See and manage a project's build configurations and target PLATFORMS. command=view (read-only) reports the framework (VCL is Windows-only; FMX and console cross platforms), the build configurations (Debug/Release/custom), every platform with whether it is enabled, whether THIS project can target it, and whether it needs a remote PAServer profile, and the unit search paths per platform group. command=add-platform enables a platform in the .dproj (a curated edit of the `<Platforms>` block only); remove-platform disables it again. command=set-output puts every binary under one folder (output=Compiled by default): a curated edit that sets DCC_ExeOutput/DCC_DcuOutput, keeping the per-platform/config subfolders. command=add-searchpath adds a unit search path (where the compiler looks for .pas/.dcu, e.g. the Source folder of an installed component) to ONE platform - the IDE's Project Options > Search path - creating the platform's property groups exactly as the IDE would; a platform added to a project inherits NO search paths from the others, which is the usual reason a unit is "not found" on the new platform only. remove-searchpath takes it out again. command=add-deployfile ships an extra file with the build on ONE platform - the IDE's Deployment Manager: the native library a component loads at runtime (.so/.dylib/.dll), data files - written into the .deployproj as the IDE does (Debug and Release), generating the standard manifest first if the project has none; remove-deployfile takes it out again. To BUILD a specific combination use delphi_build with platform+config.
+See and manage a project's build configurations and target PLATFORMS. command=view (read-only) reports the framework (VCL is Windows-only; FMX and console cross platforms), the build configurations (Debug/Release/custom), every platform with whether it is enabled, whether THIS project can target it, and whether it needs a remote PAServer profile, and the unit search paths per platform group. command=add-platform enables a platform in the .dproj (a curated edit of the `<Platforms>` block only); remove-platform disables it again. command=set-output puts every binary under one folder (output=Compiled by default): a curated edit that sets DCC_ExeOutput/DCC_DcuOutput, keeping the per-platform/config subfolders. command=add-searchpath adds a unit search path (where the compiler looks for .pas/.dcu, e.g. the Source folder of an installed component) to ONE platform - the IDE's Project Options > Search path - creating the platform's property groups exactly as the IDE would; a platform added to a project inherits NO search paths from the others, which is the usual reason a unit is "not found" on the new platform only. remove-searchpath takes it out again. command=add-deployfile ships an extra file with the build on ONE platform - the IDE's Deployment Manager: the native library a component loads at runtime (.so/.dylib/.dll), data files - written into the .deployproj as the IDE does (Debug and Release), generating the standard manifest first if the project has none; remove-deployfile takes it out again. command=add-unit / remove-unit is the IDE's Add to project / Remove from project for an EXISTING .pas (uses of the .dpr, CreateForm for forms, DCCReference of the .dproj); the file stays on disk. To BUILD a specific combination use delphi_build with platform+config.
 
 *Access: mixed (view read-only; every other command read-write).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string | **yes** | Absolute path of the project .dproj |
-| `command` | string | optional | view (default: list configurations, platforms and search paths) \| add-platform (enable a platform) \| remove-platform (disable it again) \| set-output (put every binary under one folder, e.g. Compiled) \| add-searchpath (add a unit search path for one platform, or for all) \| remove-searchpath (take it out again) \| add-deployfile (ship an extra file with the build on one platform: a component's runtime .so/.dll/.dylib) \| remove-deployfile (take it out again) |
+| `command` | string | optional | view (default: list configurations, platforms and search paths) \| add-platform (enable a platform) \| remove-platform (disable it again) \| set-output (put every binary under one folder, e.g. Compiled) \| add-searchpath (add a unit search path for one platform, or for all) \| remove-searchpath (take it out again) \| add-deployfile (ship an extra file with the build on one platform: a component's runtime .so/.dll/.dylib) \| remove-deployfile (take it out again) \| add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) \| remove-unit (take it out of the project; the file stays on disk) |
 | `platform` | string | optional | add/remove-platform: the platform, from the fixed set Win32\|Win64\|Win64x\|WinARM64EC\|OSX64\|OSXARM64\|Linux64\|Android\|Android64\|iOSDevice64\|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required) |
-| `path` | string | optional | add/remove-searchpath: the unit search path to add or remove - a folder where the compiler looks for .pas/.dcu, e.g. the Source folder of an installed component. IDE macros like `$(BDS)` accepted; relative paths resolve from the project folder. Must resolve inside the workspace or the library zone and exist. add/remove-deployfile: the file to ship (e.g. a component's `Library\Linux64\libzbar.so`) |
+| `path` | string | optional | add/remove-searchpath: the unit search path to add or remove - a folder where the compiler looks for .pas/.dcu, e.g. the Source folder of an installed component. IDE macros like `$(BDS)` accepted; relative paths resolve from the project folder. Must resolve inside the workspace or the library zone and exist. add/remove-unit: the .pas to register in / take out of the project. add/remove-deployfile: the file to ship (e.g. a component's `Library\Linux64\libzbar.so`) |
 | `remotedir` | string | optional | add-deployfile: destination folder on the target, relative to the deployment root (the IDE's RemoteDir). Default: the project folder, next to the binary - or, for a .so on Android, the apk's `library\lib\<abi>\`. No absolute paths, no `..` |
 | `output` | string | optional | set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to `<folder>\$(Platform)\$(Config)` and .dcu to `<folder>\Dcu\$(Platform)\$(Config)`. Use "default" to restore the RAD Studio layout. No absolute paths, no ".." |
 
@@ -476,7 +476,7 @@ Concrete sequences that string the tools together. Paths shown as `srvd:\...` ar
 Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .js .css .py .ini ...`. `delphi_edit` refuses them on purpose.
 
 ### Scaffold a new project or form
-`delphi_create {kind:"project-vcl"|"project-fmx"|"project-console", dir, name}`, or `{kind:"form-vcl"|"form-fmx", project, name}` (registers it in the `.dpr`). For a plain unit prefer `delphi_edit {createunit:true}`.
+`delphi_create {kind:"project-vcl"|"project-fmx"|"project-console", dir, name}`, or `{kind:"form-vcl"|"form-fmx"|"frame-vcl"|"frame-fmx"|"datamodule"|"unit", project, name}` (registered in the `.dpr` and the `.dproj` on creation). An existing `.pas` joins with `delphi_config {project, command:"add-unit", path}`; `remove-unit` takes it out and keeps the file. `delphi_delete`/`delphi_move` on a unit keep the projects that list it consistent (designer pair included).
 
 ### Build and get the binary onto your machine
 1. `delphi_build {project, platform:"Win64", config:"Debug", target:"Build"}` — structured errors/warnings.
