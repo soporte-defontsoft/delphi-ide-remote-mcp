@@ -78,6 +78,14 @@ on your side.
 - `delphi_search pattern=*.style` (or `*.ini`, `*.md`) searches files
   outside the Delphi set.
 
+## Mail from the operator
+
+- Any tool answer may end with `MENSAJES PENDIENTES: N`. When it does, call
+  `delphi_messages command=read agent=<your id>` before going on: the
+  operator answered a report of yours or changed the plan. Messages are
+  delivered once; act on them and, when an answer is due, reply with
+  `delphi_report`. Use the same `agent` id in both tools.
+
 ## Create and build
 
 - `delphi_create` scaffolds console/VCL/FMX projects, and inside a

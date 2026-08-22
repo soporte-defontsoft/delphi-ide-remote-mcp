@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.43.1-beta';
+  SERVER_VERSION = '0.44.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -977,6 +977,33 @@ const
     'The .bin.style files are what the app embeds (.rc RCDATA -> .res). ' +
     'Rebuild the project afterwards (delphi_build target=Build) so the new ' +
     '.res goes in; MSBuild reuses an old .res otherwise.';
+
+  // ---- delphi_messages ----
+
+  SD_MESSAGES =
+    'Your MAILBOX: messages the operator leaves for you (the way back of ' +
+    'delphi_report). command=read delivers every pending message addressed ' +
+    'to your agent id or to everyone, once; check only lists what waits. ' +
+    'While mail waits, every tool answer ends with a MENSAJES PENDIENTES ' +
+    'line - read it then: it may change what you are doing.';
+
+  SN_MESSAGES_PENDING_FMT =
+    #10'MENSAJES PENDIENTES: %d (buzon: %s). Leelos con delphi_messages ' +
+    'command=read agent=<tu id>.';
+
+  SN_MESSAGES_NONE_FMT =
+    'Sin mensajes para "%s" ni para todos.';
+
+  SN_MESSAGES_NONE_NO_AGENT =
+    'Sin mensajes para todos. Si tienes un id de agente (el "agent" de ' +
+    'delphi_report), pasalo en agent= para ver tu buzon propio.';
+
+  SN_MESSAGES_CHECK_FMT =
+    'Mensajes pendientes: %d (command=read los entrega):';
+
+  SN_MESSAGES_DELIVERED =
+    '(entregados; no volveran a aparecer. Si piden algo, hazlo y, si ' +
+    'procede, responde con delphi_report.)';
 
   // ---- delphi_components ----
 

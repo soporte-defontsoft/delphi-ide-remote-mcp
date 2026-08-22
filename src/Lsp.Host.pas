@@ -77,6 +77,7 @@ uses
   Lsp.Guard,
   Lsp.Texts,
   Lsp.Files,
+  Mcp.Tools.Messages,
   Mcp.Vault.Session,
   Mcp.Vault.Seed;
 
@@ -141,6 +142,10 @@ begin
     function(const ToolName, AText: string): string
     begin
       Result := MaskDriveText(ToolName, AText);
+      // the operator's mailbox: there is no push in MCP clients, so every
+      // tool answer carries the notice while a message waits
+      if ToolName <> 'delphi_messages' then
+        Result := Result + PendingMessagesNote;
     end;
 end;
 

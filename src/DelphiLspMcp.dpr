@@ -98,6 +98,7 @@ uses
   Lsp.ProjectUnits in 'Lsp.ProjectUnits.pas',
   Lsp.Styles in 'Lsp.Styles.pas',
   Mcp.Tools.Styles in 'Mcp.Tools.Styles.pas',
+  Mcp.Tools.Messages in 'Mcp.Tools.Messages.pas',
   Lsp.Service in 'Lsp.Service.pas',
   UTrayMain in 'UTrayMain.pas' {FormTray};
 

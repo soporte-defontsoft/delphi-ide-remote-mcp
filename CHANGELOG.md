@@ -8,6 +8,28 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.44.0-beta] - 2026-08-23
+
+The way back of `delphi_report`.
+
+### Added
+- **`delphi_messages`** - the operator's mailbox. A Markdown file dropped
+  in `messages\<agent>\` (one agent, the id it gives `delphi_report`) or in
+  `messages\` (everyone) next to the server exe is delivered by
+  `command=read` once (moved to `messages\_entregados\`); `check` lists
+  what waits. MCP clients have no usable push, so while a message waits
+  EVERY tool answer ends with a `MENSAJES PENDIENTES` line. A broadcast is
+  consumed by the first agent that reads it: with several agents, drop one
+  file per agent folder. `scripts\Enviar-Mensaje.ps1` writes one from the
+  operator's shell.
+
+## [0.43.1-beta] - 2026-08-23
+
+### Fixed
+- `delphi_diagnostics`: after a lint was delivered, an identical second
+  call waited forever (the in-progress mark was never cleared).
+
+
 ## [0.43.0-beta] - 2026-08-22
 
 FMX styles as a first-class thing for a remote agent. Measured on a real

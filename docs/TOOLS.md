@@ -18,7 +18,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **FMX styles** — [`delphi_styles`](#delphi_styles)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
 - **Version control** — [`delphi_git`](#delphi_git)
-- **Feedback** — [`delphi_report`](#delphi_report)
+- **Feedback** — [`delphi_report`](#delphi_report), [`delphi_messages`](#delphi_messages)
 - **Knowledge vault (optional)** — [`vault_read`](#vault_read), [`vault_search`](#vault_search), [`vault_append`](#vault_append), [`vault_create`](#vault_create), [`vault_patch`](#vault_patch)
 
 
@@ -534,6 +534,19 @@ Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .j
 ### Report a problem
 `delphi_report {message, title, kind:"bug"|"limitation"|"suggestion"|"question", from}` — stored as a dated markdown next to the server exe. Works even read-only; use it whenever a tool blocks something you believe is legitimate.
 
+
+### `delphi_messages`
+
+Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message addressed to your agent id or to everyone, once; check only lists what waits. While mail waits, every tool answer ends with a MENSAJES PENDIENTES line - read it then: it may change what you are doing.
+
+*Access: read-only.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | read (default: deliver every pending message for this agent, then mark it delivered) \| check (titles and dates of what is pending, nothing consumed) |
+| `agent` | string | optional | Your agent id - the same value you give delphi_report as "agent" (e.g. dsh, hermes). Messages addressed to everyone are delivered too |
+
+Operator side: drop a `.md` in `messages\<agent>\` or `messages\` next to the server exe (`scripts\Enviar-Mensaje.ps1 -Agente dsh -Titulo ... -Texto ...`). Delivered files move to `messages\_entregados\<agent>\`.
 
 ## Knowledge vault (optional — only when `[Vault] Path` is configured)
 
