@@ -8,6 +8,24 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.46.3-beta] - 2026-08-24
+
+A 5-probes-per-tool sweep over all 36 tools (180 probes): four fixes.
+
+### Fixed
+- **`delphi_projects` ignored the environment jail**: it re-read
+  `settings.ini` itself, so a server jailed via `DELPHI_MCP_ROOTS` answered
+  "no workspace roots configured" while every other tool was correctly
+  confined. It now asks the jail (one source of truth).
+- **`delphi_read` swallowed binaries**: an `.exe` came back as 9 MB of
+  CP1252 mojibake. A NUL byte in the first 4 KB now refuses with a pointer
+  to `delphi_fetch`.
+- **`git commit` in a fresh repo** died with "Author identity unknown"
+  (exit 128) and no way out: the answer now names the whitelisted fix
+  (`command=config args=user.name/user.email`).
+- `vault_read linecount` accepted as alias of `limit`.
+
+
 ## [0.46.2-beta] - 2026-08-23
 
 Two bugs found by working a real project through the MCP alone.

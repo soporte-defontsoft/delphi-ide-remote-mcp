@@ -680,7 +680,7 @@ end;
 procedure ApplyArgAliases(const AToolName: string; AArguments: TJSONObject);
 const
   // tool, alias, real
-  Aliases: array [0 .. 8, 0 .. 2] of string = (
+  Aliases: array [0 .. 9, 0 .. 2] of string = (
     ('vault_search', 'query', 'pattern'),
     ('vault_search', 'filter', 'pattern'),
     ('delphi_list', 'filter', 'pattern'),
@@ -689,7 +689,8 @@ const
     ('delphi_components', 'query', 'filter'),
     ('delphi_read', 'startline', 'fromline'),
     ('delphi_read', 'endline', 'toline'),
-    ('delphi_search', 'text', 'query'));
+    ('delphi_search', 'text', 'query'),
+    ('vault_read', 'linecount', 'limit'));
 var
   I: Integer;
   P: TJSONPair;

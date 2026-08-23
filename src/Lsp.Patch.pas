@@ -64,6 +64,7 @@ function BackupFile(const APath: string): string;
 implementation
 
 uses
+  System.Math,
   System.SysUtils,
   System.Classes,
   System.StrUtils,
@@ -417,6 +418,14 @@ begin
   if not TFile.Exists(APath) then
     Exit('RECHAZADO: no existe ' + APath);
   B := TFile.ReadAllBytes(APath);
+  // A binary (an exe, a .res, a .bin.style) is not a text to number: 9 MB
+  // of mojibake burned a context for nothing (measured 2026-08-24). NUL
+  // bytes in the first 4 KB = binary.
+  for I := 0 to Min(Length(B), 4096) - 1 do
+    if B[I] = 0 then
+      Exit('RECHAZADO: ' + APath + ' es un fichero BINARIO (byte NUL en los ' +
+        'primeros 4 KB): no se puede leer como texto numerado. Para bajarlo ' +
+        'usa delphi_fetch (o el campo download de /files).');
   K := DetectEnc(B);
   Text := DecodeBytes(B, K);
   M := Measure(B);

@@ -11,7 +11,6 @@ interface
 uses
   System.SysUtils,
   System.Classes,
-  System.IniFiles,
   System.IOUtils,
   System.JSON,
   System.Math,
@@ -723,6 +722,13 @@ begin
   if Length(Output) > 30000 then
     Output := Copy(Output, 1, 30000) + #10'... (truncated)';
   Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
+  // A fresh repo has no author identity and commit dies with exit 128:
+  // the fix is already whitelisted, say so (measured 2026-08-24).
+  if (ExitCode <> 0) and Output.Contains('Author identity unknown') then
+    Result := Result + #10 +
+      'Pista: configura la identidad del repo y repite: delphi_git ' +
+      'command=config args=user.name message=<nombre> y despues ' +
+      'command=config args=user.email message=<email>.';
 end;
 
 { TDelphiInstallsTool }
@@ -847,10 +853,9 @@ var
   Return: TJSONObject;
   Arr: TJSONArray;
   Roots: TArray<string>;
-  RootDir, F, Filt, IniPath: string;
+  RootDir, F, Filt: string;
   Entry: TJSONObject;
   Total: Integer;
-  Ini: TIniFile;
   Mask: string;
 begin
   if Params.Root <> '' then
@@ -862,20 +867,15 @@ begin
   end
   else
   begin
-    IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
-    if TFile.Exists(IniPath) then
-    begin
-      Ini := TIniFile.Create(IniPath);
-      try
-        Roots := Ini.ReadString('Workspace', 'Roots', '').Split([';']);
-      finally
-        Ini.Free;
-      end;
-    end;
-    if (Length(Roots) = 0) or ((Length(Roots) = 1) and (Roots[0].Trim = '')) then
+    // The jail's own list (env DELPHI_MCP_ROOTS or settings.ini) - the ONE
+    // source of truth. This tool used to re-read the ini itself and a server
+    // configured by environment variable answered "no roots configured"
+    // while every other tool was correctly jailed (measured 2026-08-24).
+    Roots := WorkspaceRoots;
+    if Length(Roots) = 0 then
       Exit('error: no root given and no workspace roots configured. Pass ' +
-        '"root", or configure settings.ini next to the server exe: ' +
-        '[Workspace] Roots=D:\Proyectos;E:\Otros (semicolon-separated).');
+        '"root", or configure [Workspace] Roots in settings.ini next to the ' +
+        'server exe (or the DELPHI_MCP_ROOTS environment variable).');
   end;
 
   Filt := Params.Name.Trim.ToLower;
