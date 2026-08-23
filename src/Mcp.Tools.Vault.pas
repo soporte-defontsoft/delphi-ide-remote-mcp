@@ -506,8 +506,10 @@ begin
     end;
     if Hits = 0 then
       Result := Format('Sin resultados para "%s" (%s). Recuerda: el indice ' +
-        '(vault_read sin path) dice que notas existen y para que sirven.',
-        [Pat, IfThen(ByContent, 'contenido', 'nombres')])
+        '(vault_read sin path) dice que notas existen y para que sirven.%s',
+        [Pat, IfThen(ByContent, 'contenido', 'nombres'),
+         IfThen(ByContent, '', ' Solo se han mirado los NOMBRES de las notas: ' +
+           'para buscar dentro del texto repite con target=content.')])
     else
       Result := Format('%d resultado(s)%s:'#10#10, [Hits,
         IfThen(Hits >= Max, ' (tope alcanzado)', '')]) + Sb.ToString;

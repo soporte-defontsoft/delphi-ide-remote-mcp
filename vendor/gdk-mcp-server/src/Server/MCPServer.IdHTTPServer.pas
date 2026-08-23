@@ -9,6 +9,7 @@ interface
 uses
   System.SysUtils,
   System.StrUtils,
+  System.RegularExpressions, // [local change] Mcp-Session-Id on SSE initialize
   System.Classes,
   System.JSON,
   System.Rtti,
@@ -607,6 +608,16 @@ begin
     ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionID;
 
   JSONResponse := FJsonRpcProcessor.ProcessRequest(RequestBody, SessionID);
+
+  // [local change] initialize over SSE must ALSO announce the session in the
+  // Mcp-Session-Id header (the JSON path already did): a client strict with
+  // the streamable-HTTP spec never reads result.sessionId (field 2026-08-23).
+  if (SessionID = '') and (Pos('"sessionId"', JSONResponse) > 0) then
+  begin
+    var M := TRegEx.Match(JSONResponse, '"sessionId"\s*:\s*"([^"]+)"');
+    if M.Success then
+      ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := M.Groups[1].Value;
+  end;
 
   if JSONResponse <> '' then
   begin

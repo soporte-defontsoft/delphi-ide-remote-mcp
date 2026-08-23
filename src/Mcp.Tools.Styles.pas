@@ -27,7 +27,7 @@ type
     FFilter: string;
     FDelete: Boolean;
   public
-    [SchemaDescription('view (styles of a .style file: StyleName, class, lines) | get (one style, whole text) | set (one property of a style or of one of its parts) | clone (a new style copied from an existing one) | lint (duplicated StyleNames, StyleLookup values of the project''s .fmx that no style defines, design tokens missing in a theme, .rc entries without file) | build (every text .style of the folder -> .bin.style, then the .rc -> .res with brcc32)')]
+    [SchemaDescription('view (styles of a .style file: StyleName, class, lines) | get (one style, whole text) | set (one property of a style or of one of its parts) | clone (a new style copied from an existing one) | delete (remove a whole style by StyleName; the __delphi-patch copy is the way back) | lint (duplicated StyleNames, StyleLookup values of the project''s .fmx that no style defines, design tokens missing in a theme, .rc entries without file) | build (every text .style of the folder -> .bin.style, then the .rc -> .res with brcc32)')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_STYLES_PATH)]
     property Path: string read FPath write FPath;
@@ -71,6 +71,7 @@ uses
   Lsp.Discovery,
   Lsp.BuildRunner,
   Lsp.Patch,
+  Lsp.ProjectUnits,
   Lsp.Styles;
 
 constructor TDelphiStylesTool.Create;
@@ -216,6 +217,36 @@ begin
   end;
 end;
 
+{ ---- delete ---- }
+
+{ A whole style out of the file. The copy PatchSaveText leaves in
+  __delphi-patch is the way back (delphi_move it over the file). Field
+  2026-08-23: cleaning a test clone took delphi_delete of the .style plus a
+  delphi_move of the backup - two calls and a whole-file swap for one block. }
+function DeleteStyle(const APath, AStyle: string): string;
+var
+  Doc: TStyleDoc;
+  Src: TStyleObj;
+  First, Last, N: Integer;
+begin
+  Doc := TStyleDoc.Create(APath);
+  try
+    Src := Doc.FindStyle(AStyle);
+    if Src = nil then
+      Exit(Format('RECHAZADO: no hay ningun estilo ''%s'' en %s (command=view los lista).',
+        [AStyle, TPath.GetFileName(Doc.Path)]));
+    First := Src.StartLine;
+    Last := Src.EndLine;
+    N := Length(Doc.Styles);
+    Doc.DeleteStyle(Src);
+    Doc.Save;
+    Result := Format(SN_STYLES_DELETED_FMT, [AStyle, First, Last,
+      TPath.GetFileName(Doc.Path), N - 1]);
+  finally
+    Doc.Free;
+  end;
+end;
+
 { ---- lint ---- }
 
 function LintStyles(const APath, AProject: string): string;
@@ -302,6 +333,8 @@ begin
         if ReadPathDenied(F) <> '' then
           Continue;
         Text := TEncoding.UTF8.GetString(TFile.ReadAllBytes(F)); // lookups are ASCII
+        if F.EndsWith('.pas', True) then
+          Text := BlankComments(Text); // a lookup in a comment is not a lookup
         Lines := Text.Replace(#13#10, #10).Split([#10]);
         for I := 0 to High(Lines) do
         begin
@@ -488,7 +521,7 @@ begin
     Cmd := 'view';
   if Params.Path.Trim = '' then
     Exit(SR_STYLES_NEED_PATH);
-  if MatchText(Cmd, ['set', 'clone', 'build']) then
+  if MatchText(Cmd, ['set', 'clone', 'delete', 'build']) then
     Denied := PathDenied(Params.Path)
   else
     Denied := ReadPathDenied(Params.Path);
@@ -496,14 +529,14 @@ begin
     Exit(Denied);
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
     Exit(Format(SR_STYLES_MISSING_FMT, [Params.Path]));
-  if MatchText(Cmd, ['view', 'get', 'set', 'clone']) then
+  if MatchText(Cmd, ['view', 'get', 'set', 'clone', 'delete']) then
   begin
     if TDirectory.Exists(Params.Path) then
       Exit(SR_STYLES_NEED_FILE);
     if IsBinaryStyle(Params.Path) then
       Exit(Format(SR_STYLES_BINARY_FMT, [TPath.GetFileName(Params.Path)]));
   end;
-  if MatchText(Cmd, ['get', 'set', 'clone']) and (Params.Style.Trim = '') then
+  if MatchText(Cmd, ['get', 'set', 'clone', 'delete']) and (Params.Style.Trim = '') then
     Exit(SR_STYLES_NEED_STYLE);
   try
     if Cmd = 'view' then
@@ -515,12 +548,14 @@ begin
         Params.Prop, Params.Value, Params.Delete)
     else if Cmd = 'clone' then
       Result := CloneStyle(Params.Path, Params.Style.Trim, Params.Name)
+    else if Cmd = 'delete' then
+      Result := DeleteStyle(Params.Path, Params.Style.Trim)
     else if Cmd = 'lint' then
       Result := LintStyles(Params.Path, Params.Project.Trim)
     else if Cmd = 'build' then
       Result := BuildStyles(Params.Path)
     else
-      Result := 'error: command debe ser view | get | set | clone | lint | build';
+      Result := 'error: command debe ser view | get | set | clone | delete | lint | build';
   except
     on E: Exception do
       Result := 'ERROR ' + E.ClassName + ': ' + E.Message;

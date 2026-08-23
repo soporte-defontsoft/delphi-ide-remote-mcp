@@ -423,10 +423,9 @@ begin
 end;
 
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
-const
-  ArtifactExts: array [0 .. 2] of string = ('.exe', '.dll', '.bpl');
 var
   Xml, Dir, Base, D, Cand, Ext, Artifact: string;
+  ArtifactExts: TArray<string>;
   Dirs: TList<string>;
   Best: string;
   BestTime, T: TDateTime;
@@ -453,6 +452,18 @@ begin
     Exit;
   end;
   Base := TPath.GetFileNameWithoutExtension(ADprojPath);
+  // What a build leaves per platform family: Windows .exe/.dll/.bpl, Linux
+  // an ELF WITHOUT extension (plus .so), macOS the same (plus .dylib),
+  // Android/iOS a .so. Measured 2026-08-23: a Linux64 build declared no
+  // output at all and the agent had to hunt the ELF with delphi_list.
+  if APlatform.StartsWith('Win', True) then
+    ArtifactExts := ['.exe', '.dll', '.bpl']
+  else if APlatform.StartsWith('Linux', True) then
+    ArtifactExts := ['', '.so']
+  else if APlatform.StartsWith('OSX', True) then
+    ArtifactExts := ['', '.dylib']
+  else
+    ArtifactExts := ['.so', ''];
   Best := '';
   BestTime := 0;
   Dirs := TList<string>.Create;

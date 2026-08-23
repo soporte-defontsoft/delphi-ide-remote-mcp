@@ -8,6 +8,35 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.46.0-beta] - 2026-08-23
+
+Seven frictions measured in one sitting by running the agent's closing
+tasks with nothing but the MCP (and the agent's own reports), fixed where
+the fix was clear.
+
+### Fixed
+- **`delphi_styles lint` read comments**: a `StyleLookup` mentioned in a
+  `//`, `{ }` or `(* *)` comment of a `.pas` became a "lookup without
+  style" (a documented non-issue of a real project was reported as a
+  finding). Comments and directives are now blanked before scanning.
+- **Non-Windows builds declared no `output`**: a Linux64 build leaves an ELF
+  without extension (macOS too); `delphi_build` now declares it (plus `.so`
+  / `.dylib`), as it already did for `.exe`/`.dll`/`.bpl`.
+- **`initialize` over SSE omitted the `Mcp-Session-Id` header** (the id was
+  only in `result.sessionId`); a client strict with the streamable-HTTP
+  spec found no session. The header is emitted on both paths now.
+
+### Added
+- **`delphi_styles command=delete`** - removes a whole style by StyleName
+  (the `__delphi-patch` copy is the way back). Cleaning a test clone used
+  to take a `delphi_delete` of the file plus a `delphi_move` of the backup.
+- **`deployNote` warns that the PAServer scratch folder is rewritten** on
+  every deploy - whatever the app stored next to its binary (data folder,
+  local database, key file) goes with it.
+- **`vault_search` with no hits on names** now says it only looked at note
+  names and points at `target=content`.
+
+
 ## [0.45.0-beta] - 2026-08-23
 
 The "new platform" loop, closed from the agent's own report: a Linux64

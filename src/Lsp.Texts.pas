@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.45.0-beta';
+  SERVER_VERSION = '0.46.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -111,6 +111,9 @@ const
     'under the PAServer scratch directory (default ~/PAServer/scratch-dir' +
     ') in %s-%s/%s/ (PAServer names the folder <windows user>-<profile>) - ' +
     'executables arrive with their exec bit set, ready to run there. ' +
+    'That folder is REWRITTEN on every deploy: whatever the app stored next ' +
+    'to its binary (a data\ folder, a local database, a key file) is gone ' +
+    'with it - copy it elsewhere before redeploying if a test needs it. ' +
     'deployedFiles counts what this run shipped; if it is missing, nothing ' +
     'was sent: check the manifest with delphi_config command=view ' +
     '(deployFiles) and add the missing entries with add-deployfile.';
@@ -962,6 +965,13 @@ const
     'CLONADO: nuevo estilo ''%s'' a partir de ''%s'' (lineas %d-%d de %s). ' +
     'Ajusta sus propiedades con set y regenera con build; en el .fmx se usa ' +
     'con StyleLookup = ''%0:s''.';
+
+  SN_STYLES_DELETED_FMT =
+    'BORRADO el estilo ''%s'' (lineas %d-%d de %s; quedan %d estilos). La ' +
+    'copia previa del fichero esta en __delphi-patch (delphi_list la ' +
+    'muestra): para deshacer, delphi_move de esa copia sobre el fichero. ' +
+    'Regenera con build; un StyleLookup que lo usara queda sin estilo ' +
+    '(command=lint lo dira).';
 
   SN_STYLES_LINT_NOTE =
     'lookupsWithoutStyle: a control with that StyleLookup will render with ' +

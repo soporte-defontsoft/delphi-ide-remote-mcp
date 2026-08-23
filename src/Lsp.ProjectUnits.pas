@@ -75,6 +75,13 @@ procedure AddUnitsView(const ADproj: string; AReturn: TJSONObject);
   file tools: delete/move a unit keeps the projects that use it consistent. }
 function ProjectsUsingUnit(const APasPath: string): TArray<string>;
 
+// The Pascal text with every comment (brace, paren-star, slash-slash) and
+// compiler directive replaced by spaces - same length, same line breaks, so
+// positions and line numbers survive. String literals are left intact. For
+// scanners that must not read commented-out code (field 2026-08-23: a
+// StyleLookup mentioned in a comment became a lint "finding").
+function BlankComments(const S: string): string;
+
 implementation
 
 uses
@@ -337,6 +344,43 @@ begin
       Inc(J);
   end;
   Result := Length(S) - I + 1;
+end;
+
+function BlankComments(const S: string): string;
+var
+  I, N, K: Integer;
+  Sb: TStringBuilder;
+begin
+  Sb := TStringBuilder.Create(Length(S));
+  try
+    I := 1;
+    while I <= Length(S) do
+    begin
+      N := QuoteLen(S, I);
+      if N > 0 then
+      begin
+        Sb.Append(S, I - 1, N);
+        Inc(I, N);
+        Continue;
+      end;
+      N := CommentLen(S, I);
+      if N > 0 then
+      begin
+        for K := I to I + N - 1 do
+          if CharInSet(S[K], [#10, #13]) then
+            Sb.Append(S[K])
+          else
+            Sb.Append(' ');
+        Inc(I, N);
+        Continue;
+      end;
+      Sb.Append(S[I]);
+      Inc(I);
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
 end;
 
 { Splits the clause body on top-level commas (outside quotes, comments and

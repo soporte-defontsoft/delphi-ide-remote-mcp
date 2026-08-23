@@ -68,6 +68,8 @@ type
     function DeleteProp(AObj: TStyleObj; const AProp: string): Boolean;
     { Copies ASrc right after itself with the new StyleName. }
     procedure CloneStyle(ASrc: TStyleObj; const ANewName: string);
+    { Removes a whole top-level style (its block, object..end). }
+    procedure DeleteStyle(AObj: TStyleObj);
     procedure Save;
     { Re-parses after an edit (line numbers moved). }
     procedure Reload;
@@ -385,6 +387,20 @@ begin
   finally
     L.Free;
     Block.Free;
+  end;
+end;
+
+procedure TStyleDoc.DeleteStyle(AObj: TStyleObj);
+var
+  L: TList<string>;
+begin
+  L := TList<string>.Create;
+  try
+    L.AddRange(FLines);
+    L.DeleteRange(AObj.StartLine - 1, AObj.EndLine - AObj.StartLine + 1);
+    FLines := L.ToArray;
+  finally
+    L.Free;
   end;
 end;
 

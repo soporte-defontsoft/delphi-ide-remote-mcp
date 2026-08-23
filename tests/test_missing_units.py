@@ -123,6 +123,13 @@ r = call('delphi_build', {'project': dproj, 'platform': 'Win64', 'config': 'Debu
 try: j = json.loads(r)
 except Exception: j = {}
 check('clean build succeeds', j.get('success') is True, r[:300])
+r = call('delphi_build', {'project': dproj, 'platform': 'Linux64', 'config': 'Debug'})
+try: j = json.loads(r)
+except Exception: j = {}
+check('Linux64 clean build succeeds', j.get('success') is True, r[:300])
+out = j.get('output') or ''
+check('Linux64 build declares output (ELF without extension, v0.46)',
+      out.endswith(os.sep + 'MissU') and 'Linux64' in out, r[:300])
 check('no missingUnits on success', 'missingUnits' not in j, r[:300])
 
 proc.kill()

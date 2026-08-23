@@ -94,7 +94,7 @@ open(os.path.join(PRJ, 'UMain.fmx'), 'w', encoding='utf-8').write(
     "  object Button1: TButton\n    StyleLookup = 'buttonstyle'\n  end\n"
     "  object Label1: TLabel\n    StyleLookup = 'labelinventado'\n  end\nend\n")
 open(os.path.join(PRJ, 'UMain.pas'), 'w', encoding='utf-8').write(
-    "unit UMain;\ninterface\nimplementation\nprocedure X;\nbegin\n  Btn.StyleLookup := 'formheader';\n  Lbl.StyleLookup := 'otroinventado';\nend;\nend.\n")
+    "unit UMain;\ninterface\nimplementation\n// NOTA: no usar Lbl.StyleLookup := 'comentado1' aqui\n{ ni StyleLookup := 'comentado2' }\n(* StyleLookup := 'comentado3' *)\nprocedure X;\nbegin\n  Btn.StyleLookup := 'formheader';\n  Lbl.StyleLookup := 'otroinventado'; // StyleLookup := 'comentado4'\nend;\nend.\n")
 # a binary style (signature only) to test the refusal
 open(os.path.join(STY, 'Battery.bin.style'), 'wb').write(b'FMX_STYLE\x00\x01\x02' + b'\x00' * 40)
 
@@ -239,6 +239,7 @@ check('lint: parsea', d.get('styleFiles') == 1 and d['styleNames'] >= 5, out[:30
 check('lint: StyleName duplicado detectado', len(d['duplicatedStyleNames']) == 1 and d['duplicatedStyleNames'][0]['style'] == 'duplicado', d['duplicatedStyleNames'])
 missing = sorted(x['lookup'] for x in d['lookupsWithoutStyle'])
 check('lint: lookups sin estilo (fmx y pas), no los del proyecto', missing == ['labelinventado', 'otroinventado'], missing)
+check('lint: los StyleLookup en COMENTARIOS del .pas no cuentan (//, llaves, paren-star, fin de linea)', not any(m.startswith('comentado') for m in missing), missing)
 check('lint: buttonstyle es estandar (estilo por defecto de la plataforma)', d['lookupsStandard'] == 1, d)
 check('lint: token ausente en un tema', len(d['tokensMissing']) == 1 and d['tokensMissing'][0]['theme'] == 'oscuro' and d['tokensMissing'][0]['token'] == 'accent', d['tokensMissing'])
 check('lint: .rc con fichero ausente', len(d['rcMissingFiles']) == 1 and d['rcMissingFiles'][0]['missing'] == 'NoExiste.bin.style', d['rcMissingFiles'])
@@ -278,6 +279,18 @@ out = call('delphi_search', {"root": STY, "query": "cardstyle", "maxresults": 5}
 check('search sin pattern: sigue sin barrer .style', json.loads(out)['filesScanned'] == 0, out[:200])
 out = call('delphi_search', {"root": STY, "query": "x", "pattern": "*.style;*.ini"})
 check('search pattern compuesto rechazado', 'RECHAZADO' in out, out[:200])
+
+# ---- delete ----
+out = call('delphi_styles', {"path": S, "command": "delete", "style": "cardstyle_alt"})
+check('delete: BORRADO con lineas y contador', out.startswith('BORRADO') and 'quedan' in out, out[:200])
+d = json.loads(call('delphi_styles', {"path": S}))
+names = [x['style'] for x in d['styles']]
+check('delete: el estilo ya no esta y el origen sigue', 'cardstyle_alt' not in names and 'cardstyle' in names, names)
+check('delete: el resto del fichero intacto (formheader 7-29)', [x for x in d['styles'] if x['style'] == 'formheader'][0]['lines'] == '7-29', d['styles'])
+out = call('delphi_styles', {"path": S, "command": "delete", "style": "noexiste"})
+check('delete: estilo inexistente rechazado', 'RECHAZADO' in out, out)
+out = call('delphi_styles', {"path": S, "command": "delete"})
+check('delete: sin style pide style', 'style' in out.lower() and not out.startswith('BORRADO'), out)
 
 proc.stdin.close(); time.sleep(1); proc.kill()
 

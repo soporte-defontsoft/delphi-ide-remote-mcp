@@ -59,6 +59,15 @@ try:
     code, body = post(INIT, TOKEN)
     ok = code == 200 and 'delphi-lsp-mcp-service' in body
     check('http: initialize con token', ok, '%s %s' % (code, body[:150]))
+    # streamable-HTTP clients ask with Accept: text/event-stream and read the
+    # session from the Mcp-Session-Id header (v0.46: the SSE path emits it too)
+    req = urllib.request.Request(URL, json.dumps(INIT).encode('utf-8'),
+        {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream',
+         'Authorization': 'Bearer ' + TOKEN})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        sid = r.headers.get('Mcp-Session-Id'); sse = r.read().decode('utf-8', 'replace')
+    check('http: initialize por SSE devuelve la cabecera Mcp-Session-Id', bool(sid) and sid in sse,
+          'header=%s body=%s' % (sid, sse[:120]))
 
     code, body = post({"jsonrpc": "2.0", "id": 2, "method": "tools/list",
                        "params": {}}, TOKEN)
@@ -189,7 +198,7 @@ try:
         code, body = call('delphi_styles', {'path': tmpdir3, 'command': 'lint'}, RO_TOKEN)
         check('ro: delphi_styles lint permitido en RO', 'SOLO LECTURA' not in body,
               '%s %s' % (code, body[:120]))
-        for cmd in ('set', 'clone', 'build'):
+        for cmd in ('set', 'clone', 'delete', 'build'):
             code, body = call('delphi_styles', {'path': tmpdir3, 'command': cmd,
                                                 'style': 'x', 'prop': 'y', 'value': 'z', 'name': 'n'}, RO_TOKEN)
             check('ro: delphi_styles %s RECHAZADO en RO' % cmd, 'SOLO LECTURA' in body,
