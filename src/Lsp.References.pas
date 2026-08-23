@@ -38,9 +38,12 @@ uses
   System.SysUtils,
   System.Classes,
   System.IOUtils,
+  System.StrUtils,
   System.Generics.Collections,
   Lsp.Client,
-  Lsp.Session;
+  Lsp.Session,
+  Lsp.Guard,
+  Lsp.ProjectUnits;
 
 type
   TCandidate = record
@@ -190,10 +193,46 @@ begin
   Candidates := TList<TCandidate>.Create;
   AllFiles := TList<string>.Create;
   try
-    for Ext in TArray<string>.Create('*.pas', '*.dpr', '*.inc') do
-      for F in TDirectory.GetFiles(RootDir, Ext, TSearchOption.soAllDirectories) do
-        if not SkipPath(F) then
-          AllFiles.Add(F);
+    // The project folder is not the whole project: units living in sibling
+    // folders (SharedSource\ next to codigofuente\, measured 2026-08-23 on a
+    // real project) were never scanned, so a symbol used twice in its own
+    // file reported zero references. Scan the project folder, the folder of
+    // the file itself and the folder of every unit the .dpr lists.
+    var Dirs := TList<string>.Create;
+    try
+      Dirs.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(RootDir)));
+      var Extra: TArray<string> := [TPath.GetDirectoryName(FullPath)];
+      var Dproj := Session.FindDproj(FullPath);
+      if Dproj <> '' then
+        for var PU in ProjectUnits(Dproj, False) do
+          if TPath.IsPathRooted(PU.Include) then
+            Extra := Extra + [TPath.GetDirectoryName(PU.Include)]
+          else
+            Extra := Extra + [TPath.GetDirectoryName(TPath.GetFullPath(
+              TPath.Combine(TPath.GetDirectoryName(Dproj), PU.Include)))];
+      for var D in Extra do
+      begin
+        if (D = '') or not TDirectory.Exists(D) then
+          Continue;
+        var DD := IncludeTrailingPathDelimiter(TPath.GetFullPath(D));
+        var Covered := False;
+        for var K in Dirs do
+          if StartsText(K, DD) then
+          begin
+            Covered := True;
+            Break;
+          end;
+        if not Covered and (ReadPathDenied(DD) = '') then
+          Dirs.Add(DD);
+      end;
+      for var D in Dirs do
+        for Ext in TArray<string>.Create('*.pas', '*.dpr', '*.inc') do
+          for F in TDirectory.GetFiles(D, Ext, TSearchOption.soAllDirectories) do
+            if not SkipPath(F) and not AllFiles.Contains(F) then
+              AllFiles.Add(F);
+    finally
+      Dirs.Free;
+    end;
     Scanned := AllFiles.Count;
 
     for F in AllFiles do

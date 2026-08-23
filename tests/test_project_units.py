@@ -124,6 +124,10 @@ check('create unit: fichero esqueleto', os.path.exists(os.path.join(VDIR, 'UUtil
 dpr = rd(DPR)
 check('create unit: uses del .dpr', "UUtil in 'UUtil.pas'" in dpr, dpr)
 check('create unit: sin CreateForm (no es form)', 'CreateForm(TUUtil' not in dpr, dpr)
+# v0.46.2: the clause keeps its indent (it was re-indented to 4 spaces on every edit)
+_u = dpr[dpr.index('uses'):dpr.index(';', dpr.index('uses'))]
+_lines = [l for l in _u.split('\n')[1:] if l.strip()]
+check('uses: cada entrada con DOS espacios (sin reindentar)', all(l.startswith('  ') and not l.startswith('   ') for l in _lines), _u[:300])
 xml = rd(DPROJ)
 check('create unit: DCCReference autocerrado en el .dproj', '<DCCReference Include="UUtil.pas"/>' in xml, xml[-900:])
 out = call('delphi_create', {"kind": "unit", "name": "UUtil", "project": DPR})

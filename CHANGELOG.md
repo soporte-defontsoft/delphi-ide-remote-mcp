@@ -8,6 +8,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.46.2-beta] - 2026-08-23
+
+Two bugs found by working a real project through the MCP alone.
+
+### Fixed
+- **`add-unit` / `remove-unit` re-indented the whole `uses` clause of the
+  `.dpr`** to four spaces (the indent was applied twice): a 40-line cosmetic
+  diff on every registration. The clause keeps the indent it already had.
+- **`delphi_references` never scanned sibling folders**: units living next to
+  the project folder (`SharedSource\` beside `codigofuente\`) were not
+  walked, so a symbol used twice in its own file reported zero references.
+  The scan now covers the project folder, the file's own folder and the
+  folder of every unit the `.dpr` lists (inside the read zone).
+
+
 ## [0.46.1-beta] - 2026-08-23
 
 The rest of the agent-side frictions.

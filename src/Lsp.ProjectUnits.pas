@@ -573,14 +573,33 @@ begin
 end;
 
 { Rewrites the clause with AEntries, keeping the text before/after intact.
-  Entries go one per line, two-space indent, like the IDE. }
+  Entries go one per line with the indent the clause already used (the IDE's
+  two spaces when it had none). Measured 2026-08-23: the indent was applied
+  TWICE (join + a second replace) and every add/remove-unit re-indented the
+  whole clause to four spaces - a 40-line cosmetic diff on a real project. }
 function ReplaceUses(const Dpr: string; const U: TUsesClause; const AEntries: TArray<string>): string;
 var
-  Body, NL: string;
+  Body, NL, Indent, Clause, E: string;
+  M: TMatch;
+  Parts: TArray<string>;
+  I: Integer;
 begin
   NL := IfThen(Dpr.Contains(#13#10), #13#10, #10);
-  Body := 'uses' + NL + '  ' + string.Join(',' + NL + '  ', AEntries) + ';';
-  Body := Body.Replace(#13#10, #10).Replace(#10, NL + '  ').Replace(NL + '  ' + NL, NL + NL);
+  // the indent of the first entry line of the existing clause
+  Clause := Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1);
+  M := TRegEx.Match(Clause, '\n([ \t]+)\S');
+  if M.Success then
+    Indent := M.Groups[1].Value
+  else
+    Indent := '  ';
+  SetLength(Parts, Length(AEntries));
+  for I := 0 to High(AEntries) do
+  begin
+    // a multi-line entry (directives around it) keeps its lines indented too
+    E := AEntries[I].Replace(#13#10, #10).Replace(#10, NL + Indent);
+    Parts[I] := Indent + E;
+  end;
+  Body := 'uses' + NL + string.Join(',' + NL, Parts) + ';';
   Body := TRegEx.Replace(Body, '[ \t]+(\r?\n)', '$1'); // no trailing blanks
   Result := Copy(Dpr, 1, U.StartPos - 1) + Body + Copy(Dpr, U.EndPos + 1, MaxInt);
 end;
