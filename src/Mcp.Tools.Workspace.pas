@@ -31,7 +31,7 @@ type
     FWholeWord: Boolean;
     FPattern: string;
   public
-    [SchemaDescription('Directory to search recursively (project root)')]
+    [SchemaDescription('Directory to search recursively (project root) - or ONE file (a .dproj, .dpr, .inc, .xml...) to search inside it in a single call')]
     property Root: string read FRoot write FRoot;
     [SchemaDescription('Literal text to find (case-insensitive - it is Pascal)')]
     property Query: string read FQuery write FQuery;
@@ -311,7 +311,10 @@ begin
   Result := ReadPathDenied(Params.Root); // searching may enter the library zone
   if Result <> '' then
     Exit;
-  if not TDirectory.Exists(Params.Root) then
+  // A single FILE as root: "find X in this .dproj" used to cost 3-6
+  // delphi_read calls of 400 lines (field 2026-08-22, a 1909-line .dproj).
+  var SingleFile := TFile.Exists(Params.Root) and not TDirectory.Exists(Params.Root);
+  if not SingleFile and not TDirectory.Exists(Params.Root) then
     Exit('error: directory not found: ' + Params.Root);
   if Params.Query = '' then
     Exit('error: empty query');
@@ -334,10 +337,15 @@ begin
         Exit('RECHAZADO: pattern debe ser UNA mascara simple (*.style, *.ini, Galatea*.rc).');
       Masks := [Params.Pattern.Trim];
     end;
-    for Mask in Masks do
-      for F in WalkFiles(Params.Root, Mask) do
+    var Targets: TArray<string> := [];
+    if SingleFile then
+      Targets := [Params.Root]
+    else
+      for Mask in Masks do
+        Targets := Targets + WalkFiles(Params.Root, Mask);
+    for F in Targets do
       begin
-        if SkipIdeArtifacts(F) or InVault(F) then
+        if not SingleFile and (SkipIdeArtifacts(F) or InVault(F)) then
           Continue;
         Inc(FilesScanned);
         Text := TLspClient.LoadSourceText(F);
@@ -439,6 +447,11 @@ begin
   end;
   if not TDirectory.Exists(Root) then
     Exit('error: directory not found: ' + Root);
+  // Shell-style brace expansion is NOT a mask: *.{pas,dfm} matched nothing
+  // silently (field 2026-08-22). Say so instead of returning an empty list.
+  if Params.Pattern.Contains('{') or Params.Pattern.Contains('}') then
+    Exit('RECHAZADO: pattern no admite llaves {a,b} (expansion de shell). Usa UNA ' +
+      'mascara (*.pas) o varias separadas por ";" (*.pas;*.dfm).');
 
   if Params.Dirs then
   begin

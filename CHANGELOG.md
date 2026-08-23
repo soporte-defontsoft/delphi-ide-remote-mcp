@@ -8,6 +8,34 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.46.1-beta] - 2026-08-23
+
+The rest of the agent-side frictions.
+
+### Added
+- **Parameter aliases at the gate** - the same idea was spelled `query` /
+  `pattern` / `filter` across tools and each spelling learned on one tool
+  cost an "Unknown parameter" on the next. Accepted now, only where the tool
+  does not already declare the name with another meaning: `vault_search
+  query|filter` → `pattern`, `delphi_list filter|mask` → `pattern`,
+  `delphi_components pattern|query` → `filter`, `delphi_read
+  startline|endline` → `fromline|toline`, `delphi_search text` → `query`.
+  The declared name always wins; an alias sent next to it is dropped.
+- **`delphi_search root=<file>`** - one file (a `.dproj`, `.dpr`, `.inc`,
+  `.xml`) is searched in a single call; a 1900-line `.dproj` used to cost
+  five `delphi_read` calls.
+- **`delphi_list` refuses `{a,b}`** with the `;` alternative instead of
+  returning an empty list.
+- **Tray: `logsctual.log`** - the live tail of the block not yet
+  persisted (the memo reaches a file every `LinesPerFile` lines; a server
+  stopped from outside lost hours of log). Removed when the block is saved.
+
+### Fixed
+- Vault backups: one folder per WORK session (a new stamp after 4 h without
+  writes), not per server run - a tray lives for days.
+- Vendor logger flushes per line when file logging is on.
+
+
 ## [0.46.0-beta] - 2026-08-23
 
 Seven frictions measured in one sitting by running the agent's closing

@@ -168,7 +168,8 @@ const
   BACKUP_SUB = 'backups';
 
 var
-  GSessionStamp: string = ''; // one backup folder per server run
+  GSessionStamp: string = ''; // one backup folder per work session (4 h idle rolls it)
+  GLastBackup: TDateTime = 0;
   // Serializes the read->backup->write of ANY note. A knowledge vault is
   // shared by SEVERAL remote agents (the server's declared architecture), so
   // two of them appending to the same note at once is normal, not exotic. The
@@ -281,8 +282,12 @@ begin
   Result := '';
   if not TFile.Exists(AFull) then
     Exit; // nothing to preserve (vault_create)
-  if GSessionStamp = '' then
+  // One backup folder per WORK SESSION, not per server run: a tray server
+  // lives for days and a folder stamped at 06:00 confuses whoever checks a
+  // 14:25 backup (field 2026-08-23). A new stamp after 4 h without writes.
+  if (GSessionStamp = '') or (Now - GLastBackup > 4 / 24) then
     GSessionStamp := FormatDateTime('yyyymmdd_hhnnss', Now);
+  GLastBackup := Now;
   Dest := TPath.Combine(TPath.Combine(TPath.Combine(VaultPath, BACKUP_SUB),
     'mcp\' + GSessionStamp), VaultRelative(AFull));
   if TFile.Exists(Dest) then

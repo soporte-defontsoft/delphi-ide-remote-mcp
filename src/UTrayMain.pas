@@ -65,6 +65,7 @@ const
   // requests piled up unseen and landed in the memo in one burst, all stamped
   // with the drain time. Lines beyond the cap are counted, not stored.
   LOG_BUF_CAP = 5000;
+  LIVE_LOG_NAME = 'actual.log'; // live tail of the block not yet persisted
 
 { Producer side - safe from any thread. The timestamp is taken HERE, so the
   log tells when things happened, not when the window got to paint them. }
@@ -110,6 +111,18 @@ begin
     finally
       MemoLog.Lines.EndUpdate;
     end;
+    // The live tail on disk: what the memo holds and has not persisted yet.
+    // The memo only reaches a file every FLinesPerFile lines, so a server
+    // stopped from outside (Stop-Process) lost hours of log (2026-08-23:
+    // nothing after 11:54 for a 14:00 diagnosis). Appended per drain,
+    // removed when the block is persisted - never a second copy.
+    try
+      TDirectory.CreateDirectory(FLogDir);
+      TFile.AppendAllText(TPath.Combine(FLogDir, LIVE_LOG_NAME),
+        Chunk.Text, TEncoding.UTF8);
+    except
+      // a disk problem must never take the tray down with it
+    end;
   finally
     Chunk.Free;
   end;
@@ -137,6 +150,8 @@ begin
     end;
     MemoLog.Lines.SaveToFile(FileName, TEncoding.UTF8);
     MemoLog.Lines.Clear;
+    if TFile.Exists(TPath.Combine(FLogDir, LIVE_LOG_NAME)) then
+      TFile.Delete(TPath.Combine(FLogDir, LIVE_LOG_NAME)); // now inside the block file
     // Names are timestamps, so lexicographic order IS chronological order.
     Files := TDirectory.GetFiles(FLogDir, '*.log');
     TArray.Sort<string>(Files);

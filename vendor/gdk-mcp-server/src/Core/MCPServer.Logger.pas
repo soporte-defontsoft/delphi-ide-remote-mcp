@@ -232,7 +232,13 @@ begin
     begin
       EnsureLogFile;
       if Assigned(FLogFile) then
+      begin
         FLogFile.WriteLine(LogLine);
+        // [local change] flush per line: the tray host has no console and
+        // never closes the writer on Stop-Process, so a buffered log showed
+        // nothing of the last hours (field 2026-08-23, 11:54 -> 14:00 blank).
+        FLogFile.Flush;
+      end;
     end;
     
     if Assigned(FOnLogMessage) then

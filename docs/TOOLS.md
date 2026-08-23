@@ -7,6 +7,9 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Access**: with a read-only credential (or `AnonymousReadOnly`) only the read-only tools run; mutating ones are refused at the gate.
 - **Required column**: the MCP schema marks every field required (a limitation of the vendor's schema generator); the table below reflects what each tool *actually* needs — the rest are optional and have sensible defaults, as their descriptions note.
 
+
+> **Parameter aliases.** Some spellings are accepted as aliases and mapped to the declared name when it is absent: `vault_search query|filter` → `pattern`, `delphi_list filter|mask` → `pattern`, `delphi_components pattern|query` → `filter`, `delphi_read startline|endline` → `fromline|toline`, `delphi_search text` → `query`. The declared name always wins.
+
 ## Index
 
 - **Understand the code (semantic, DelphiLSP-backed)** — [`delphi_symbols`](#delphi_symbols), [`delphi_definition`](#delphi_definition), [`delphi_signature`](#delphi_signature), [`delphi_hover`](#delphi_hover), [`delphi_completion`](#delphi_completion), [`delphi_references`](#delphi_references), [`delphi_diagnostics`](#delphi_diagnostics)
@@ -129,7 +132,7 @@ Search Delphi sources recursively for a literal text (case-insensitive), skippin
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `root` | string | **yes** | Directory to search recursively (project root) |
+| `root` | string | **yes** | Directory to search recursively (project root) - or ONE file (a .dproj, .dpr, .inc, .xml...) to search inside it in a single call |
 | `query` | string | **yes** | Literal text to find (case-insensitive - it is Pascal) |
 | `maxresults` | integer | optional | Maximum hits to return (default 100, cap 500) |
 | `wholeword` | boolean | optional | true = match whole identifiers only (word boundaries) |

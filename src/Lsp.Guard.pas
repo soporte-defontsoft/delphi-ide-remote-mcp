@@ -671,6 +671,57 @@ begin
       Exit(Format(SR_ROOT_ITSELF_FMT, [ExcludeTrailingPathDelimiter(R)]));
 end;
 
+// Parameter ALIASES, per tool, applied only when the real name is absent:
+// the same idea is spelled query / pattern / filter across tools and an
+// agent that learned one spelling loses a call ("Unknown parameter") on the
+// next tool (measured 2026-08-23: three in a 25-minute session). Never an
+// alias that the tool already declares with another meaning (delphi_search
+// has both query and pattern). The declared name stays the documented one.
+procedure ApplyArgAliases(const AToolName: string; AArguments: TJSONObject);
+const
+  // tool, alias, real
+  Aliases: array [0 .. 8, 0 .. 2] of string = (
+    ('vault_search', 'query', 'pattern'),
+    ('vault_search', 'filter', 'pattern'),
+    ('delphi_list', 'filter', 'pattern'),
+    ('delphi_list', 'mask', 'pattern'),
+    ('delphi_components', 'pattern', 'filter'),
+    ('delphi_components', 'query', 'filter'),
+    ('delphi_read', 'startline', 'fromline'),
+    ('delphi_read', 'endline', 'toline'),
+    ('delphi_search', 'text', 'query'));
+var
+  I: Integer;
+  P: TJSONPair;
+begin
+  if not Assigned(AArguments) then
+    Exit;
+  for I := Low(Aliases) to High(Aliases) do
+  begin
+    if not SameText(Aliases[I, 0], AToolName) then
+      Continue;
+    P := nil;
+    for var Q in AArguments do
+      if TMCPSerializer.NormalizeKey(Q.JsonString.Value) =
+         TMCPSerializer.NormalizeKey(Aliases[I, 1]) then
+      begin
+        P := Q;
+        Break;
+      end;
+    if P = nil then
+      Continue;
+    if ArgStr(AArguments, Aliases[I, 2]) <> '' then
+    begin
+      // the real name is there: it wins; the alias is dropped, not refused
+      AArguments.RemovePair(P.JsonString.Value).Free;
+      Continue;
+    end;
+    var V := P.JsonValue.Clone as TJSONValue;
+    AArguments.RemovePair(P.JsonString.Value).Free;
+    AArguments.AddPair(Aliases[I, 2], V);
+  end;
+end;
+
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
@@ -686,6 +737,7 @@ begin
   // Normalization second, unconditionally: virtual drive units in the
   // arguments become real server paths before any check or any tool.
   ExpandVirtualDrives(AArguments);
+  ApplyArgAliases(AToolName, AArguments);
   Result := '';
   // Universal git-argument filter (BOTH access levels): a dangerous option
   // would let even a read-write client escape the jail. The single place git
