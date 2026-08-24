@@ -57,7 +57,7 @@ proc.kill()
 vault_tools = [t for t in tools if t.startswith('vault_')]
 lsp_backed = ['delphi_symbols', 'delphi_definition', 'delphi_hover',
               'delphi_completion', 'delphi_signature', 'delphi_diagnostics',
-              'delphi_references']
+              'delphi_references', 'delphi_rename_symbol']
 manifest = {
     "generatedBy": "scripts/gen-capabilities.py (from the live tools/list)",
     "version": version,

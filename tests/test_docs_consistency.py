@@ -58,7 +58,7 @@ VAULT_TOOLS = sorted(t for t in TOOLS if t.startswith('vault_'))
 CORE = TOTAL - len(VAULT_TOOLS)
 LSP_BACKED = ['delphi_symbols', 'delphi_definition', 'delphi_hover',
               'delphi_completion', 'delphi_signature', 'delphi_diagnostics',
-              'delphi_references']
+              'delphi_references', 'delphi_rename_symbol']
 NON_LSP_CORE = CORE - len(LSP_BACKED)
 
 P = F = 0

@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/gen-capabilities.py (from the live tools/list)",
-  "version": "0.52.0-beta",
-  "tools": 38,
-  "coreTools": 33,
+  "version": "0.53.0-beta",
+  "tools": 39,
+  "coreTools": 34,
   "optionalTools": 5,
   "toolNames": [
     "delphi_adb",
@@ -29,6 +29,7 @@
     "delphi_projects",
     "delphi_read",
     "delphi_references",
+    "delphi_rename_symbol",
     "delphi_report",
     "delphi_run",
     "delphi_search",
@@ -58,7 +59,8 @@
     "delphi_completion",
     "delphi_signature",
     "delphi_diagnostics",
-    "delphi_references"
+    "delphi_references",
+    "delphi_rename_symbol"
   ],
   "engines": {
     "semantics": "DelphiLSP.exe (Embarcadero, kept warm per workspace)",

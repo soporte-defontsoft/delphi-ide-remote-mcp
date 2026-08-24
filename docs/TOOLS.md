@@ -410,6 +410,20 @@ What this server's RAD Studio has INSTALLED to program with: every component/des
 | `platform` | string | optional | A platform (Win32, Win64, Linux64, Android64, OSX64, iOSDevice64...) to see instead the IDE's Library Search Path FOR THAT PLATFORM, expanded, plus the component install roots other platforms register and this one does not — the list to walk when a build on a new platform fails with F2613 (unit not found): `delphi_config add-searchpath` to the Source folder |
 
 
+### `delphi_rename_symbol`
+
+SEMANTIC RENAME, preview only in this version — by design. Point at the identifier (path + 0-based line/character, same convention as delphi_definition) and give `newname`: the answer lists every CONFIRMED occurrence (each one re-resolved against the same definition), the files touched, and whether the rename is APPLICABLE. The rule is strict on purpose: one single unverified reference, a hit in a `.dfm`/`.fmx` (form bindings break), a hit inside a string literal (FindComponent/RTTI/StyleLookup by name), a symbol whose definition lives outside the workspace (RTL/components), or a collision with the new name = `applicable=false` with the reasons. `mode=apply` is refused for now: it will arrive over `delphi_changeset` once preview has been validated in the field; meanwhile an applicable preview gives you the exact change list to stage yourself.
+
+*Access: read-only (preview never writes).*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | **yes** | The .pas/.dpr with the symbol (any occurrence works) |
+| `line` | integer | **yes** | Zero-based line of the identifier |
+| `character` | integer | **yes** | Zero-based column inside the identifier |
+| `newname` | string | **yes** | The new identifier (legal Delphi name, no reserved words) |
+| `mode` | string | optional | preview (default; never writes) \| apply (refused for now) |
+
 ### `delphi_designer`
 
 FORMS AND COMPONENTS, structured — never guess what a class publishes or what a form contains. `info class=TButton`: every property the framework really publishes for that class (kind and type, events apart), from RTTI tables generated at release time (`tools/designer-meta-dump`). `prop class=X prop=Y`: one property in detail, with the legal members when it is an enum/set and the runtime class of class-typed properties. `tree path=<.dfm|.fmx>`: the component tree (name, class, line). `get path=... component=<Name>`: that component's block verbatim. `lint path=...`: properties the class does not publish, enum values that do not exist — an UNKNOWN class is deliberately not a warning (third-party components are not in the tables and are legitimate). Text designers only (binary TPF0 refused). Read-only: editing a form is phase 2 and will go through `delphi_changeset`.

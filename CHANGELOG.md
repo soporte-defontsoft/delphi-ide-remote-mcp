@@ -8,6 +8,33 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.53.0-beta] - 2026-08-24
+
+Semantic rename, PREVIEW ONLY - the refactoring DelphiLSP 37 does not
+provide, built from the pieces this server already trusts, with a rule
+strict on purpose.
+
+### Added
+- **`delphi_rename_symbol`** (path + 0-based line/character + `newname`,
+  `mode=preview`) - lists every CONFIRMED occurrence (each one re-resolved
+  against the same definition), the files touched, and whether the rename is
+  APPLICABLE. One single unverified reference, a hit in a `.dfm`/`.fmx`
+  (form bindings), a hit inside a string literal (FindComponent/RTTI/
+  StyleLookup by name), a definition outside the workspace (RTL/components),
+  a reserved word or a collision with the new name = `applicable=false` with
+  the reasons. `mode=apply` is refused for now: it will arrive over
+  `delphi_changeset` once preview is field-validated; meanwhile an
+  applicable preview IS the change list to stage there yourself.
+- `tests/test_rename.py` (12 checks): the acceptance criteria as tests,
+  including "the tool never writes".
+
+### Fixed
+- The string-literal scan is a LINEAR walk: the obvious `'(...|'')*'` regex
+  backtracked catastrophically on a 1 MB RTL unit (stack overflow, found by
+  the battery's own RTL case). A definition outside the jail is never
+  scanned further at all.
+
+
 ## [0.52.0-beta] - 2026-08-24
 
 The designer, structured (phase 1: read + lint) - the roadmap step ahead of

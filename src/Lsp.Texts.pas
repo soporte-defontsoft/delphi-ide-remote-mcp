@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.52.0-beta';
+  SERVER_VERSION = '0.53.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1131,6 +1131,96 @@ const
     'y repite la build. Sin candidatos: el componente no esta instalado o no ' +
     'trae fuente para esta plataforma (delphi_components platform=<plataforma>, ' +
     'y si falta, delphi_report).';
+
+  // ---- delphi_rename_symbol ----
+
+  SD_RENAME =
+    'SEMANTIC RENAME of a Delphi symbol - PREVIEW ONLY in this version, by ' +
+    'design. Point at the identifier (path + 0-based line/character, same ' +
+    'convention as delphi_definition) and give newname: the answer lists ' +
+    'every CONFIRMED occurrence (each one re-resolved against the same ' +
+    'definition), the files touched, and whether the rename is APPLICABLE. ' +
+    'The rule is strict on purpose: one single unverified reference, a hit ' +
+    'in a .dfm/.fmx (form bindings break), a hit inside a string literal ' +
+    '(FindComponent/RTTI/StyleLookup by name), a symbol whose definition ' +
+    'lives outside the workspace (RTL/components), or a collision with the ' +
+    'new name = applicable=false with the reasons. mode=apply is refused ' +
+    'for now: it will arrive over delphi_changeset once preview has been ' +
+    'validated in the field. Meanwhile, an applicable=true preview gives ' +
+    'you the exact change list to stage yourself with delphi_changeset.';
+
+  SP_RENAME_PATH =
+    'The .pas/.dpr with the symbol (any occurrence works)';
+
+  SP_RENAME_LINE =
+    'Zero-based line of the identifier (same convention as delphi_definition)';
+
+  SP_RENAME_CHARACTER =
+    'Zero-based column inside the identifier';
+
+  SP_RENAME_NEWNAME =
+    'The new identifier (legal Delphi name, no reserved words)';
+
+  SP_RENAME_MODE =
+    'preview (default; never writes) | apply (refused for now - arrives ' +
+    'over delphi_changeset after field validation)';
+
+  SR_RENAME_MODE =
+    'error: mode debe ser preview (apply llegara sobre delphi_changeset).';
+
+  SR_RENAME_NEED_PATH =
+    'RECHAZADO: falta "path" (el fichero con el simbolo).';
+
+  SR_RENAME_NEED_NEWNAME =
+    'RECHAZADO: falta "newname" (el identificador nuevo).';
+
+  SR_RENAME_APPLY_NOT_YET =
+    'RECHAZADO: mode=apply aun no existe, a proposito: el preview tiene que ' +
+    'validarse en campo antes de escribir nada. Si el preview te da ' +
+    'applicable=true, su lista changes es exactamente lo que puedes montar ' +
+    'tu mismo con delphi_changeset (stage edit por linea + preview + commit).';
+
+  SR_RENAME_BAD_IDENT_FMT =
+    '"%s" no es un identificador Delphi valido (letra o _ inicial, luego ' +
+    'letras/digitos/_).';
+
+  SR_RENAME_RESERVED_FMT =
+    '"%s" es una palabra reservada de Delphi.';
+
+  SR_RENAME_SAME_NAME =
+    'El nombre nuevo es igual al actual.';
+
+  SR_RENAME_LIBRARY =
+    'La definicion del simbolo vive FUERA de los workspace roots (RTL o ' +
+    'componente instalado): eso no se renombra desde aqui.';
+
+  SR_RENAME_UNVERIFIED_FMT =
+    '%d referencias candidatas NO confirmadas semanticamente. La regla es ' +
+    'estricta: una sola sin confirmar = no aplicable (un falso positivo ' +
+    'renombrado es un homonimo roto en silencio).';
+
+  SR_RENAME_DESIGNER_FMT =
+    '%d apariciones en designers (.dfm/.fmx): renombrar un miembro publicado ' +
+    'rompe el binding del form (el IDE solo lo repara interactivamente).';
+
+  SR_RENAME_STRINGS_FMT =
+    '%d apariciones dentro de literales de cadena (FindComponent, RTTI por ' +
+    'nombre, StyleLookup...): un rename textual las dejaria apuntando a un ' +
+    'nombre que ya no existe y el compilador no avisa.';
+
+  SR_RENAME_COLLISION_FMT =
+    'El nombre nuevo "%s" ya aparece %d veces en los ficheros afectados: ' +
+    'posible colision u homonimo.';
+
+  SN_RENAME_DESIGNER_HIT_FMT =
+    '%d apariciones en %s';
+
+  SN_RENAME_PREVIEW_NOTE =
+    'Preview: NOTHING was written. applicable=true means every occurrence ' +
+    'is semantically confirmed and no designer/string/collision hit exists; ' +
+    'stage the changes with delphi_changeset (one edit per line, then ' +
+    'preview + commit there). applicable=false lists the blockers - fix ' +
+    'them or do the rename by hand with the evidence given.';
 
   // ---- delphi_designer ----
 

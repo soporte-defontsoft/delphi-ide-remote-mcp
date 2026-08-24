@@ -101,6 +101,8 @@ uses
   Mcp.Tools.Messages in 'Mcp.Tools.Messages.pas',
   Mcp.Tools.Changeset in 'Mcp.Tools.Changeset.pas',
   Mcp.Tools.Designer in 'Mcp.Tools.Designer.pas',
+  Mcp.Tools.Rename in 'Mcp.Tools.Rename.pas',
+  Lsp.Rename in 'Lsp.Rename.pas',
   Lsp.Changeset in 'Lsp.Changeset.pas',
   Lsp.Service in 'Lsp.Service.pas',
   UTrayMain in 'UTrayMain.pas' {FormTray};

@@ -61,6 +61,18 @@ on your side.
 - Prefer `Align`/anchors over absolute Position/Size in forms: absolute
   coordinates designed on a desktop form overflow phone screens.
 
+## Renaming a symbol
+
+- `delphi_rename_symbol path=<unit> line=<0-based> character=<0-based>
+  newname=<NewName>` previews a semantic rename: every occurrence
+  re-confirmed, and `applicable` tells you if it is safe. NEVER rename by
+  search-and-replace: the preview exists precisely because designers,
+  string literals (FindComponent/RTTI/StyleLookup) and homonyms break
+  silently.
+- If `applicable=true`, stage the `changes` list with `delphi_changeset`
+  (one edit per line, preview, commit). If false, the blockers say exactly
+  why - fix them or leave the name alone.
+
 ## Forms (.dfm/.fmx)
 
 - Never guess what a class publishes: `delphi_designer info class=TButton`
