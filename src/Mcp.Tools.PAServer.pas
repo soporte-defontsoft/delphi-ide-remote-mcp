@@ -40,6 +40,7 @@ type
     FPassword: string;
     FPlatform: string;
     FExe: string;
+    FProject: string;
     FArgs: string;
     FTimeoutMs: Integer;
   public
@@ -55,6 +56,8 @@ type
     property Password: string read FPassword write FPassword;
     [SchemaDescription(SP_PASERVER_PLATFORM)]
     property Platform: string read FPlatform write FPlatform;
+    [SchemaDescription(SP_PASERVER_PROJECT)]
+    property Project: string read FProject write FProject;
     [SchemaDescription(SP_PASERVER_EXE)]
     property Exe: string read FExe write FExe;
     [SchemaDescription(SP_PASERVER_ARGS)]
@@ -566,19 +569,28 @@ end;
 
 function RemoteRunCmd(const Params: TDelphiPAServerParams): string;
 var
-  Prof, Exe, Denied: string;
+  Prof, Proj, ExeName, Denied: string;
   Res: TJSONObject;
 begin
   Prof := Params.Name.Trim;
-  Exe := Params.Exe.Trim;
-  if (Prof = '') or (Exe = '') then
+  Proj := Params.Project.Trim;
+  ExeName := Params.Exe.Trim;
+  if (Prof = '') or (Proj = '') then
     Exit(SR_PASERVER_RUN_NEEDS);
-  // the profile name and the remote exe/args land on the paclient command
-  // line: veto the shell metacharacters the build/git filters already ban
-  Denied := ShellArgDenied(Prof + ' ' + Exe + ' ' + Params.Args);
+  // the project must be one this server may touch, and must exist
+  Denied := PathDenied(Proj);
   if Denied <> '' then
     Exit(Denied);
-  Res := RemoteRun(Prof, Exe, Params.Args.Trim, Params.TimeoutMs);
+  if not TFile.Exists(Proj) then
+    Exit(Format(SR_PASERVER_RUN_NOPROJ_FMT, [Proj]));
+  // exe, when given, is a FILE NAME of the deploy folder - never a path
+  if (ExeName <> '') and (ExeName.Contains('/') or ExeName.Contains(chr(92)) or
+     ExeName.Contains('..')) then
+    Exit(SR_PASERVER_RUN_EXENAME);
+  Denied := ShellArgDenied(Prof + ' ' + ExeName + ' ' + Params.Args);
+  if Denied <> '' then
+    Exit(Denied);
+  Res := RemoteRun(Prof, Proj, ExeName, Params.Args.Trim, Params.TimeoutMs);
   try
     Result := Res.ToJSON;
   finally

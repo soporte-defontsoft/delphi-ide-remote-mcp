@@ -24,10 +24,23 @@ _rd = os.path.join(os.path.dirname(os.path.abspath(EXE)), 'runner')
 os.makedirs(_rd, exist_ok=True)
 shutil.copy(os.path.join(REPO, 'runner', 'mcp-runner.py'), _rd)
 
-# a tiny "app" the runner will execute on the "target" (here, same box)
-APP = os.path.join(SCRATCH, 'saluda.py')
-open(APP, 'w', encoding='utf-8').write(
+# the deploy folder the server derives: <windows user>-<profile>/<Project>/
+PROFILE = 'perfil'
+PROJNAME = 'Saluda'
+DEPLOY = os.path.join(SCRATCH, '%s-%s' % (os.environ.get('USERNAME', 'user'), PROFILE), PROJNAME)
+os.makedirs(DEPLOY)
+# the "deployed binary": a real native executable (python itself, copied), so
+# the runner's ELF/PE check passes; it prints and exits 7 through a wrapper
+APP = os.path.join(DEPLOY, PROJNAME + '.exe')
+shutil.copy(sys.executable, APP)
+SCRIPT = os.path.join(DEPLOY, 'run.py')
+open(SCRIPT, 'w', encoding='utf-8').write(
     'import sys\nprint("hola desde el target, args=", sys.argv[1:])\nsys.exit(7)\n')
+# a script sitting in the same folder: must be REFUSED (not a native binary)
+# the project on THIS server (remote-run takes the .dproj, not a path)
+PRJDIR = os.path.join(BASE, 'proj'); os.makedirs(PRJDIR)
+DPROJ = os.path.join(PRJDIR, PROJNAME + '.dproj')
+open(DPROJ, 'w', encoding='utf-8').write('<Project/>')
 
 # paclient stub: a .cmd that calls python on the stub script
 STUB = os.path.join(BASE, 'paclient.cmd')
@@ -36,10 +49,6 @@ open(STUB, 'w').write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'p
 # the runner, watching the scratch (its folder is <scratch>/_mcp-runner)
 RUNNER_DIR = os.path.join(SCRATCH, '_mcp-runner'); os.makedirs(RUNNER_DIR)
 shutil.copy(os.path.join(REPO, 'runner', 'mcp-runner.py'), RUNNER_DIR)
-# runner runs 'saluda.py' directly -> make the job exe a python invocation via a wrapper
-# simplest: the app IS a python script; give the runner a shell wrapper so exitCode flows
-WRAP = os.path.join(SCRATCH, 'saluda.cmd')
-open(WRAP, 'w').write('@echo off\r\npython "%s" %%*\r\n' % APP)
 
 renv = dict(os.environ)
 runner = subprocess.Popen([sys.executable, os.path.join(RUNNER_DIR, 'mcp-runner.py')],
@@ -90,7 +99,7 @@ def check(n, ok, d=''):
 r = call('delphi_paserver', {'command': 'remote-run'})
 check('sin name/exe rechazado', 'RECHAZADO' in r, r[:150])
 # 2) shell metachar refused
-r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': 'saluda.cmd', 'args': 'a; rm -rf /'})
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'args': 'a; rm -rf /'})
 check('metacaracter rechazado', 'RECHAZADO' in r and ';' in r, r[:150])
 # 2b) install-runner copies the script to the target
 os.remove(os.path.join(RUNNER_DIR, 'mcp-runner.py'))
@@ -101,29 +110,49 @@ r = call('delphi_paserver', {'command': 'install-runner'})
 check('install-runner sin name rechazado', 'RECHAZADO' in r, r[:150])
 
 # 3) happy path
-r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': 'saluda.cmd', 'args': 'uno dos', 'timeoutms': 20000})
+# exe=<nombre simple> de la MISMA carpeta de despliegue (en Linux el binario
+# no lleva extension y basta project; aqui el "binario" es un .exe de Windows)
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                             'exe': PROJNAME + '.exe',
+                             'args': '"%s" uno dos' % SCRIPT.replace(chr(92), '/'),
+                             'timeoutms': 30000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('exitCode del programa (7)', j.get('exitCode') == 7, r[:300])
 check('output capturado', 'hola desde el target' in (j.get('output') or ''), r[:300])
 check('note explica el mecanismo', 'PAServer' in (j.get('note') or ''), r[:200])
 # 4) exe fuera de la scratch -> runnerError
-r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': '..\\..\\fuera.cmd', 'timeoutms': 20000})
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': '..\\..\\fuera.exe', 'timeoutms': 20000})
 j = json.loads(r) if r.startswith('{') else {}
-check('exe fuera de scratch rechazado por el runner', 'fuera de la scratch' in (json.dumps(j)), r[:250])
+check('exe con separadores rechazado por el server', 'RECHAZADO' in r, r[:250])
 # 5) exe inexistente -> runnerError
-r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': 'noexiste.cmd', 'timeoutms': 20000})
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'noexiste.exe', 'timeoutms': 20000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('exe inexistente en target', 'no existe' in json.dumps(j), r[:250])
+
+# 5b) un SCRIPT de la misma carpeta de despliegue: rechazado (no es nativo)
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                             'exe': 'run.py', 'timeoutms': 20000}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+check('script en la carpeta de deploy rechazado (solo binario nativo)',
+      'ejecutable nativo' in json.dumps(j), r[:300])
+# 5c) proyecto inexistente
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE,
+                             'project': os.path.join(PRJDIR, 'NoHay.dproj')})
+check('proyecto inexistente rechazado', 'RECHAZADO' in r, r[:200])
+# 5d) proyecto fuera de la jaula
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE,
+                             'project': 'C:\\Windows\\x.dproj'})
+check('proyecto fuera de la jaula rechazado', 'RECHAZADO' in r, r[:200])
 
 # 6) runner copiado pero NO arrancado: mensaje distinto de "no instalado"
 runner.kill(); time.sleep(1)
 for f in os.listdir(os.path.join(RUNNER_DIR, 'jobs')):
     os.remove(os.path.join(RUNNER_DIR, 'jobs', f))
-r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': 'saluda.cmd', 'timeoutms': 1000}, t=180)
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'timeoutms': 1000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('runner parado: dice que falta ARRANCARLO', j.get('runnerInstalled') is True and 'ARRANCARLO' in (j.get('error') or ''), r[:300])
 os.remove(os.path.join(RUNNER_DIR, 'mcp-runner.py'))
-r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': 'saluda.cmd', 'timeoutms': 1000}, t=180)
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'timeoutms': 1000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('runner ausente: dice que NO esta instalado', j.get('runnerInstalled') is False and 'NO tiene el runner' in (j.get('error') or ''), r[:300])
 

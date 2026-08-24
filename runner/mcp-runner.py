@@ -22,10 +22,18 @@ Install on the target (one time), from the scratch dir:
     # copy this file into _mcp-runner/  (delphi_fetch it from the server)
     nohup python3 _mcp-runner/mcp-runner.py >> _mcp-runner/runner.log 2>&1 &
 
-A job is {"id","exe","args","timeoutMs"}. exe is resolved against the scratch
-dir (the parent of _mcp-runner) and MUST stay inside it. The result is
-{"id","exitCode","durationMs"} (+ "error" on a rejection); the program's
-combined stdout/stderr goes to result-<id>.out.
+A job is {"id","exe","allowDir","args","timeoutMs"}. TWO rules decide whether
+anything runs at all, and both are enforced here, not by the sender:
+
+  1. the exe must live inside <scratch>/<allowDir>/ - the folder ONE project's
+     deploy writes. Nothing else of the scratch dir is reachable, and neither
+     is the rest of the machine (symlinks resolved before comparing).
+  2. it must be a NATIVE executable (ELF / Mach-O / PE magic bytes). Scripts
+     are refused: a shebang would turn "run the deployed program" into "run
+     any interpreter with any arguments".
+
+The result is {"id","exitCode","durationMs"} (+ "error" on a rejection); the
+program's combined stdout/stderr goes to result-<id>.out.
 """
 import json, os, subprocess, sys, time, shlex
 
@@ -44,18 +52,43 @@ def inside_scratch(path):
     return (ap + os.sep).startswith(root)
 
 
+NATIVE_MAGIC = (b'\x7fELF',            # Linux
+                b'\xcf\xfa\xed\xfe', b'\xce\xfa\xed\xfe',   # Mach-O 64/32
+                b'\xca\xfe\xba\xbe',                        # Mach-O fat
+                b'MZ')                 # Windows targets
+
+
+def is_native_executable(path):
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(4)
+    except OSError:
+        return False
+    return any(head.startswith(m) for m in NATIVE_MAGIC)
+
+
 def run_job(job):
     jid = job.get('id', 'noid')
     exe = job.get('exe', '')
+    allow = job.get('allowDir', '')
     args = job.get('args', '')
     timeout = max(1, min(300, int(job.get('timeoutMs', 30000)) // 1000))
     res = {'id': jid, 'exitCode': -1, 'durationMs': 0}
     out_text = ''
     target = exe if os.path.isabs(exe) else os.path.join(SCRATCH, exe)
+    allow_root = os.path.realpath(os.path.join(SCRATCH, allow)) + os.sep if allow else ''
     if not inside_scratch(target):
         res['error'] = 'exe fuera de la scratch dir de PAServer: %s' % exe
+    elif not allow_root:
+        res['error'] = 'job sin allowDir: solo se ejecuta el programa desplegado de un proyecto'
+    elif not (os.path.realpath(target) + os.sep).startswith(allow_root):
+        res['error'] = ('exe fuera de la carpeta de despliegue del proyecto (%s): %s'
+                        % (allow, exe))
     elif not os.path.isfile(target):
         res['error'] = 'no existe en el target: %s' % target
+    elif not is_native_executable(target):
+        res['error'] = ('no es un ejecutable nativo (ELF/Mach-O/PE): %s. Solo se ejecuta '
+                        'el binario que produce delphi_build, nunca scripts.' % exe)
     else:
         try:
             os.chmod(target, 0o755)

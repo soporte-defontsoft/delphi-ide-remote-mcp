@@ -91,9 +91,11 @@ on your side.
 ## Running on the target (not on this server)
 
 - `delphi_build target=Deploy` ships the binary; to RUN it there use
-  `delphi_paserver command=remote-run name=<profile> exe=<path inside the
-  scratch dir> args=... timeoutms=...`. It returns `exitCode` and the
-  program's output.
+  `delphi_paserver command=remote-run name=<profile> project=<the .dproj>
+  args=... timeoutms=...`. It returns `exitCode` and the program's output.
+  You never give a remote path: the server runs what THAT project deployed
+  and nothing else on that machine (a script in the same folder is refused
+  too - only native binaries).
 - It needs the runner installed ONCE on the target: `delphi_paserver
   command=install-runner name=<profile>` copies it there and answers with
   the single line somebody with a shell on that machine must run (`nohup

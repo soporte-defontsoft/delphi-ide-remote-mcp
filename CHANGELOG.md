@@ -8,6 +8,25 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.48.0-beta] - 2026-08-24
+
+### Changed - BREAKING (remote-run, one day old)
+- **`remote-run` no longer takes a remote path: it takes the PROJECT.** The
+  rule is now "the only thing that runs on the target is the program that
+  project deployed" (operator's call): the server derives
+  `<user>-<profile>/<Project>/<Project>` itself, so nothing else of the
+  remote machine - not even another file of the scratch dir - is reachable.
+  `exe` survives as an OPTIONAL plain file name of that same deploy folder
+  (no separators, no `..`) for a deploy with more than one binary.
+- **The runner enforces the same rule on its side**: the job carries the
+  allowed folder and the runner refuses anything resolving outside it
+  (symlinks included), and refuses anything that is not a NATIVE executable
+  (ELF / Mach-O / PE magic) - a script would turn "run the deployed program"
+  into "run any interpreter with any arguments".
+- `tests/test_remoterun.py`: 15 checks (script of the same folder refused,
+  path separators refused, project outside the jail refused).
+
+
 ## [0.47.2-beta] - 2026-08-24
 
 ### Fixed

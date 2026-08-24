@@ -30,11 +30,13 @@ uses
   target). Returns '' plus the launch line in AHowTo, or a refusal. }
 function InstallRunner(const AProfile: string; out AHowTo: string): string;
 
-{ Runs ARemoteExe on the machine of PAServer profile AProfile. ARemoteExe is
-  a path ON THE TARGET, absolute or relative to the scratch dir (the
-  deployNote of delphi_build target=Deploy names the folder). Returns the
-  JSON the tool hands back (success, exitCode, output tail...). }
-function RemoteRun(const AProfile, ARemoteExe, AArgs: string;
+{ Runs the program DEPLOYED for ADprojPath on the machine of PAServer profile
+  AProfile. The remote path is DERIVED here, never taken from the caller:
+  <windows user>-<profile>/<Project>/<Project> - the folder delphi_build
+  target=Deploy writes and announces in its deployNote. AExeName, when given,
+  picks another file of THAT SAME folder (a helper binary of the deploy) and
+  may not contain path separators. Returns the JSON the tool hands back. }
+function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
   ATimeoutMs: Integer): TJSONObject;
 
 implementation
@@ -132,9 +134,10 @@ begin
   AHowTo := SN_REMOTERUN_INSTALLED;
 end;
 
-function RemoteRun(const AProfile, ARemoteExe, AArgs: string;
+function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
   ATimeoutMs: Integer): TJSONObject;
 var
+  ProjName, DeployRel, ARemoteExe: string;
   Pc, JobId, TmpDir, JobFile, ResFile, OutFile, Ops, Output, ResText: string;
   Rc: Integer;
   Sw: TStopwatch;
@@ -154,6 +157,18 @@ begin
   if ATimeoutMs > 300000 then
     ATimeoutMs := 300000;
 
+  // The ONE thing that may run: what THIS project deployed, in its own
+  // folder of the scratch dir. The caller never names a path (David's rule
+  // 2026-08-24: "no se debe poder ejecutar otra cosa que no sea el programa
+  // desplegado"), so a script or any other binary sitting in the scratch is
+  // out of reach even for a full-access token.
+  ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
+  DeployRel := GetEnvironmentVariable('USERNAME') + '-' + AProfile + '/' + ProjName;
+  if AExeName = '' then
+    ARemoteExe := DeployRel + '/' + ProjName
+  else
+    ARemoteExe := DeployRel + '/' + AExeName;
+
   JobId := FormatDateTime('yyyymmdd"-"hhnnsszzz', Now);
   TmpDir := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-remoterun');
   TDirectory.CreateDirectory(TmpDir);
@@ -163,8 +178,9 @@ begin
   var Enc := TUTF8Encoding.Create(False);
   try
     TFile.WriteAllText(JobFile, Format(
-      '{"id":%s,"exe":%s,"args":%s,"timeoutMs":%d}',
-      [JsonEsc(JobId), JsonEsc(ARemoteExe), JsonEsc(AArgs), ATimeoutMs]), Enc);
+      '{"id":%s,"exe":%s,"allowDir":%s,"args":%s,"timeoutMs":%d}',
+      [JsonEsc(JobId), JsonEsc(ARemoteExe), JsonEsc(DeployRel),
+       JsonEsc(AArgs), ATimeoutMs]), Enc);
   finally
     Enc.Free;
   end;
@@ -260,6 +276,7 @@ begin
 
   Result.AddPair('profile', AProfile);
   Result.AddPair('remoteExe', ARemoteExe);
+  Result.AddPair('project', ProjName);
   Result.AddPair('note', SN_REMOTERUN_NOTE);
 end;
 

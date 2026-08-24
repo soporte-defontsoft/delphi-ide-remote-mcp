@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.47.2-beta';
+  SERVER_VERSION = '0.48.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -359,13 +359,19 @@ const
     'register it for delphi_build; can take minutes) | remote-run (execute ' +
     '"exe" on the target of profile "name" and return its exit code and ' +
     'output - needs the mcp-runner script installed on the target; see the ' +
-    'note it returns) | install-runner (copy the runner to the target of ' +
+    'note it returns; it runs the program THAT PROJECT deployed and nothing ' +
+    'else on that machine) | install-runner (copy the runner to the target of ' +
     'profile "name" so remote-run can work; it then needs ONE manual launch ' +
     'on the target - the answer gives the exact line). Default: platforms';
+  SP_PASERVER_PROJECT =
+    'remote-run: the .dproj whose DEPLOYED program you want to run. The ' +
+    'server derives the path on the target itself ' +
+    '(<user>-<profile>/<Project>/<Project>, what target=Deploy wrote): ' +
+    'nothing else of the remote machine can be executed';
   SP_PASERVER_EXE =
-    'remote-run: the program to run ON THE TARGET, absolute or relative to ' +
-    'the PAServer scratch dir (the deployNote of delphi_build target=Deploy ' +
-    'names the folder, e.g. <user>-<profile>/<Project>/<Project>)';
+    'remote-run OPTIONAL: another file OF THAT SAME deploy folder to run ' +
+    'instead of the project binary - a plain file name, no path separators. ' +
+    'Default: the project binary';
   SP_PASERVER_ARGS =
     'remote-run: optional command-line arguments for the program (no shell ' +
     'metacharacters)';
@@ -393,8 +399,20 @@ const
     '| test-connection | get-sdk | install-runner | remote-run';
 
   SR_PASERVER_RUN_NEEDS =
-    'RECHAZADO: remote-run necesita "name" (el perfil PAServer) y "exe" (el ' +
-    'programa a ejecutar en el target, relativo a la scratch dir o absoluto).';
+    'RECHAZADO: remote-run necesita "name" (el perfil PAServer) y "project" ' +
+    '(el .dproj cuyo programa desplegado quieres ejecutar). El servidor ' +
+    'deriva la ruta en el target: <usuario>-<perfil>/<Proyecto>/<Proyecto>. ' +
+    'No se ejecuta ninguna otra cosa de la maquina remota. install-runner ' +
+    'solo necesita "name".';
+
+  SR_PASERVER_RUN_NOPROJ_FMT =
+    'RECHAZADO: no existe el proyecto %s en este servidor. remote-run ' +
+    'ejecuta lo que ese .dproj haya desplegado (delphi_build target=Deploy).';
+
+  SR_PASERVER_RUN_EXENAME =
+    'RECHAZADO: "exe" es opcional y, si se da, debe ser un NOMBRE de fichero ' +
+    'de la carpeta de despliegue de ese proyecto (sin "/", sin "\\" y sin ' +
+    '".."). Por defecto se ejecuta el binario del proyecto.';
 
   SR_REMOTERUN_NO_PACLIENT =
     'error: ninguna instalacion de RAD Studio de este servidor trae ' +

@@ -346,13 +346,14 @@ The bridge for building and running on OTHER platforms (Linux, macOS) through th
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | platforms (what this server can target + profile/SDK status) \| packages (PAServer installers) \| profiles (registered profiles and SDKs) \| add-profile (register a profile: name, host, password; optional port, platform) \| test-connection (with name: full handshake; with host+port and no name: raw TCP probe) \| get-sdk (pull the SDK/sysroot of profile "name"). \| install-runner (copy the runner to the target of profile "name") \| remote-run (execute `exe` on the target of profile "name"; needs the runner installed and running there). Default: platforms |
+| `command` | string | optional | platforms (what this server can target + profile/SDK status) \| packages (PAServer installers) \| profiles (registered profiles and SDKs) \| add-profile (register a profile: name, host, password; optional port, platform) \| test-connection (with name: full handshake; with host+port and no name: raw TCP probe) \| get-sdk (pull the SDK/sysroot of profile "name"). \| install-runner (copy the runner to the target of profile "name") \| remote-run (run the program `project` DEPLOYED on the target of profile "name"; the remote path is derived by the server, never given; needs the runner installed and running there). Default: platforms |
 | `name` | string | optional | Profile name (letters, digits, `_`, `-`): add-profile creates it, test-connection dials it, get-sdk pulls from it |
 | `host` | string | optional | Host or IP where the target PAServer listens (add-profile, or test-connection without name for the raw TCP probe) |
 | `port` | string | optional | Port of the target PAServer (add-profile / test-connection). Default: 64211 |
 | `password` | string | optional | The PAServer password (add-profile). Used once to create the profile, stored encrypted, never shown back - and masked in the server logs |
 | `platform` | string | optional | Platform of the profile: Win32 \| Win64 \| WinARM64EC \| OSX64 \| Linux64. Default: Linux64 |
-| `exe` | string | optional | remote-run: the program to run ON THE TARGET, absolute or relative to the PAServer scratch dir (the `deployNote` of `delphi_build target=Deploy` names the folder) |
+| `project` | string | optional | remote-run: the `.dproj` whose DEPLOYED program you want to run. The server derives the remote path (`<user>-<profile>/<Project>/<Project>`) — nothing else of the target can be executed |
+| `exe` | string | optional | remote-run: another file OF THAT SAME deploy folder instead of the project binary — a plain file name, no separators, no `..` |
 | `args` | string | optional | remote-run: command-line arguments for the program (no shell metacharacters) |
 | `timeoutms` | integer | optional | remote-run: max milliseconds to wait for the program (default 30000, max 300000) |
 
