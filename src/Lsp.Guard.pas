@@ -122,6 +122,21 @@ function AllowBuildScripts: Boolean; // DELPHI_MCP_ALLOW_BUILD_SCRIPTS / AllowBu
   executes nothing. }
 function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemoteRun=1
 
+{ Whether the READ-ONLY library zone exists at all. Default True (reading the
+  RTL and the installed components is what makes an agent competent here).
+  [Security] LibraryZone=0 cuts it: reads are then confined to the workspace
+  roots, exactly like writes. Field 2026-08-24: an agent noted that the zone
+  GROWS by itself with every component or SDK installed, so the operator
+  deserves a way to say no. }
+function LibraryZoneEnabled: Boolean; // DELPHI_MCP_LIBRARY_ZONE=0 / LibraryZone=0
+
+{ '' when APath (a .dproj) may be executed remotely, else a refusal. With
+  [Security] RemoteRunProjects empty ANY project of the jail qualifies (the
+  historical behaviour); with a semicolon list of project names or full
+  paths, only those. Field 2026-08-24: an agent working on project A could
+  run the deployed binary of project B. }
+function RemoteRunProjectDenied(const APath: string): string;
+
 { Read-only mode. Two independent sources, OR-ed together:
   - process-wide: the whole server runs read-only (--readonly flag);
   - per-request: the HTTP transport marks the current worker thread according
@@ -200,6 +215,8 @@ var
   GAnonymousReadOnly: Boolean = False;
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
+  GLibraryZone: Boolean = True;     // the read-only library zone, on by default
+  GRemoteProjects: TArray<string>;  // [Security] RemoteRunProjects, '' = any
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
   GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
   GAdbDevicesSet: Boolean = False;  // configured at all? absent = unrestricted
@@ -247,6 +264,7 @@ begin
   GAnonymousReadOnly := GetEnvironmentVariable('DELPHI_MCP_ANON_READONLY') = '1';
   GAllowRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_RUN') = '1';
   GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
+  GLibraryZone := GetEnvironmentVariable('DELPHI_MCP_LIBRARY_ZONE') <> '0';
   GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
   IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
   if TFile.Exists(IniPath) then
@@ -263,6 +281,10 @@ begin
         GAllowRun := Ini.ReadBool('Security', 'AllowRun', False);
       if not GAllowRemoteRun then
         GAllowRemoteRun := Ini.ReadBool('Security', 'AllowRemoteRun', False);
+      if GLibraryZone then
+        GLibraryZone := Ini.ReadBool('Security', 'LibraryZone', True);
+      GRemoteProjects := Ini.ReadString('Security', 'RemoteRunProjects', '')
+        .Split([';'], TStringSplitOptions.ExcludeEmpty);
       if not GAllowBuildScripts then
         GAllowBuildScripts := Ini.ReadBool('Security', 'AllowBuildScripts', False);
       if not GAdbDevicesSet then
@@ -303,6 +325,33 @@ begin
   LoadSecurity;
   // NOT implied by AllowRun: that one is about THIS machine.
   Result := GAllowRemoteRun;
+end;
+
+function LibraryZoneEnabled: Boolean;
+begin
+  LoadSecurity;
+  Result := GLibraryZone;
+end;
+
+function RemoteRunProjectDenied(const APath: string): string;
+var
+  E, Full, Name: string;
+begin
+  LoadSecurity;
+  Result := '';
+  if Length(GRemoteProjects) = 0 then
+    Exit; // not configured: any project of the jail, as before
+  try
+    Full := TPath.GetFullPath(APath);
+  except
+    Full := APath;
+  end;
+  Name := TPath.GetFileNameWithoutExtension(Full);
+  for E in GRemoteProjects do
+    if (E.Trim <> '') and (SameText(E.Trim, Name) or SameText(E.Trim, Full)) then
+      Exit;
+  Result := Format(SR_REMOTERUN_PROJECT_DENIED_FMT,
+    [Name, string.Join(', ', GRemoteProjects)]);
 end;
 
 function AllowBuildScripts: Boolean;
@@ -1248,6 +1297,8 @@ end;
 
 function LibraryReadRoots: TArray<string>;
 begin
+  if not LibraryZoneEnabled then
+    Exit(nil); // announced as it is enforced: no zone, nothing to announce
   Result := LibraryRoots;
 end;
 
@@ -1264,9 +1315,10 @@ begin
   except
     Exit; // keep the invalid-path rejection
   end;
-  for R in LibraryRoots do
-    if StartsText(R, Full) then
-      Exit('');
+  if LibraryZoneEnabled then
+    for R in LibraryRoots do
+      if StartsText(R, Full) then
+        Exit('');
   // Refused for reading: say that a library zone exists and how to see it.
   // Field 2026-08-22: an agent listed the PARENT of a registered component
   // folder, got the plain jail refusal, and concluded list and read disagreed.

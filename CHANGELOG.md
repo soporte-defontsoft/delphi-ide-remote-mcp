@@ -8,6 +8,25 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.49.0-beta] - 2026-08-24
+
+Two scope controls, both from an agent's security review of its own reach.
+
+### Added
+- **`[Security] RemoteRunProjects`** - semicolon list of project names (or
+  full `.dproj` paths) `remote-run` may execute on a target. Empty (the
+  default) keeps the current behaviour, any project of the jail; with several
+  projects of different trust it stops an agent working on A from running the
+  deployed binary of B.
+- **`[Security] LibraryZone`** (env `DELPHI_MCP_LIBRARY_ZONE`) - `0` cuts the
+  read-only library zone: reads are then confined to the workspace roots,
+  exactly like writes. Default `1` (reading the RTL and the installed
+  components is what lets an agent check an API instead of guessing), but the
+  zone GROWS by itself with every component or SDK installed, so the operator
+  now has a way to say no. `delphi_workspace` announces the off state and
+  returns an empty `readableExtra`.
+
+
 ## [0.48.1-beta] - 2026-08-24
 
 ### Added

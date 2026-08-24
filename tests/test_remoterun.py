@@ -197,6 +197,90 @@ r = call_off('delphi_paserver', {'command': 'platforms'})
 check('sin AllowRemoteRun: el resto del tool intacto', 'platforms' in r, r[:150])
 proc_off.kill()
 
+# 8) RemoteRunProjects: lista blanca de proyectos ejecutables
+env_wl = dict(env); env_wl['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'
+ini = os.path.join(os.path.dirname(os.path.abspath(EXE)), 'settings.ini')
+had_ini = os.path.exists(ini)
+if had_ini:
+    shutil.copy(ini, ini + '.bak')
+open(ini, 'w', encoding='utf-8').write(
+    '[Security]\nAllowRemoteRun=1\nRemoteRunProjects=OtroProyecto\n[Workspace]\nRoots=%s\n' % BASE)
+proc_wl = subprocess.Popen([EXE], env=env_wl, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
+q_wl = queue.Queue()
+def rdr_wl():
+    for line in proc_wl.stdout:
+        line = line.strip()
+        if line: q_wl.put(line)
+threading.Thread(target=rdr_wl, daemon=True).start()
+proc_wl.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+    "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "wl", "version": "1"}}}) + '\n')
+proc_wl.stdin.flush(); time.sleep(1)
+while not q_wl.empty(): q_wl.get()
+proc_wl.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + '\n')
+proc_wl.stdin.flush()
+def call_wl(name, args, t=60):
+    proc_wl.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 98, "method": "tools/call",
+                                    "params": {"name": name, "arguments": args}}) + '\n')
+    proc_wl.stdin.flush()
+    dl = time.time() + t
+    while time.time() < dl:
+        try: line = q_wl.get(timeout=1)
+        except queue.Empty: continue
+        try: m = json.loads(line)
+        except Exception: continue
+        if m.get('id') == 98:
+            c = m.get('result', {}).get('content', [])
+            return c[0].get('text', '') if c else json.dumps(m)[:200]
+    return '(timeout)'
+r = call_wl('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ})
+check('proyecto fuera de RemoteRunProjects rechazado', 'RECHAZADO' in r and 'RemoteRunProjects' in r, r[:250])
+r = call_wl('delphi_workspace', {})
+check('LibraryZone=1 por defecto: zona anunciada', 'readableExtra' in r and 'RTL' in r, r[:200])
+proc_wl.kill()
+os.remove(ini)
+if had_ini:
+    shutil.move(ini + '.bak', ini)
+
+# 9) LibraryZone=0: la lectura se limita a los roots
+env_lz = dict(env); env_lz['DELPHI_MCP_LIBRARY_ZONE'] = '0'
+proc_lz = subprocess.Popen([EXE], env=env_lz, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
+q_lz = queue.Queue()
+def rdr_lz():
+    for line in proc_lz.stdout:
+        line = line.strip()
+        if line: q_lz.put(line)
+threading.Thread(target=rdr_lz, daemon=True).start()
+proc_lz.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+    "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "lz", "version": "1"}}}) + '\n')
+proc_lz.stdin.flush(); time.sleep(1)
+while not q_lz.empty(): q_lz.get()
+proc_lz.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + '\n')
+proc_lz.stdin.flush()
+def call_lz(name, args, t=60):
+    proc_lz.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 97, "method": "tools/call",
+                                    "params": {"name": name, "arguments": args}}) + '\n')
+    proc_lz.stdin.flush()
+    dl = time.time() + t
+    while time.time() < dl:
+        try: line = q_lz.get(timeout=1)
+        except queue.Empty: continue
+        try: m = json.loads(line)
+        except Exception: continue
+        if m.get('id') == 97:
+            c = m.get('result', {}).get('content', [])
+            return c[0].get('text', '') if c else json.dumps(m)[:200]
+    return '(timeout)'
+RTL = r'C:\Program Files (x86)\Embarcadero\Studio\37.0\source\rtl\sys\System.SysUtils.pas'
+r = call_lz('delphi_read', {'path': RTL, 'fromline': 1, 'toline': 2})
+check('LibraryZone=0: la RTL deja de ser legible', 'RECHAZADO' in r, r[:200])
+r = call_lz('delphi_workspace', {})
+check('LibraryZone=0: se anuncia apagada y sin carpetas', 'APAGADA' in r and '"readableExtra":[]' in r.replace(' ', ''), r[:300])
+r = call_lz('delphi_read', {'path': os.path.join(SCRATCH, '_mcp-runner', 'mcp-runner.py'), 'fromline': 1, 'toline': 1})
+check('LibraryZone=0: el root sigue legible', 'RECHAZADO' not in r, r[:200])
+proc_lz.kill()
+
 proc.kill(); runner.kill()
 print('\n== remote-run: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

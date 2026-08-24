@@ -585,6 +585,9 @@ begin
     Exit(Denied);
   if not TFile.Exists(Proj) then
     Exit(Format(SR_PASERVER_RUN_NOPROJ_FMT, [Proj]));
+  Denied := RemoteRunProjectDenied(Proj);
+  if Denied <> '' then
+    Exit(Denied);
   // exe, when given, is a FILE NAME of the deploy folder - never a path
   if (ExeName <> '') and (ExeName.Contains('/') or ExeName.Contains(chr(92)) or
      ExeName.Contains('..')) then

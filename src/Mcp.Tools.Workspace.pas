@@ -818,9 +818,12 @@ begin
     Return.AddPair('readableExtra', ExtraArr);
     for R in LibraryReadRoots do
       ExtraArr.Add(ExcludeTrailingPathDelimiter(R));
-    Return.AddPair('readableExtraNote', 'Read-only territory: RTL/VCL/FMX ' +
-      'sources, installed components and SDKs. Reading tools may enter it; ' +
-      'writing tools never can.');
+    if LibraryZoneEnabled then
+      Return.AddPair('readableExtraNote', 'Read-only territory: RTL/VCL/FMX ' +
+        'sources, installed components and SDKs. Reading tools may enter it; ' +
+        'writing tools never can.')
+    else
+      Return.AddPair('readableExtraNote', SN_WORKSPACE_LIBZONE_OFF);
     if IsReadOnlyNow then
       Return.AddPair('access', 'read-only')
     else

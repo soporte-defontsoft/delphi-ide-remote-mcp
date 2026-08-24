@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.48.1-beta';
+  SERVER_VERSION = '0.49.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -36,6 +36,12 @@ const
     'exist inside this MCP: use them verbatim in every path argument and ' +
     'you will receive them back in results. They are NEVER your own local ' +
     'disks.';
+
+  SN_WORKSPACE_LIBZONE_OFF =
+    'La zona de biblioteca esta APAGADA en este servidor ([Security] ' +
+    'LibraryZone=0): la lectura se limita a los roots, igual que la ' +
+    'escritura. Las fuentes de la RTL y de los componentes NO son legibles ' +
+    'desde aqui.';
 
   SN_WORKSPACE_NOTE =
     'These are paths on the REMOTE server that runs Delphi, not your local ' +
@@ -397,6 +403,11 @@ const
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | add-profile ' +
     '| test-connection | get-sdk | install-runner | remote-run';
+
+  SR_REMOTERUN_PROJECT_DENIED_FMT =
+    'RECHAZADO: el proyecto "%s" no esta en la lista de proyectos que este ' +
+    'servidor permite ejecutar en un target ([Security] RemoteRunProjects). ' +
+    'Permitidos: %s.';
 
   SR_PASERVER_RUN_DISABLED =
     'RECHAZADO: la ejecucion remota esta APAGADA en este servidor. El ' +
