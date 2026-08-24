@@ -18,6 +18,7 @@ uses
   System.Hash,
   System.NetEncoding,
   System.Zip,
+  System.Generics.Collections,
   MCPServer.Tool.Base,
   MCPServer.Types;
 
@@ -814,10 +815,52 @@ begin
     // IDE library search paths and the GetIt catalog repositories. Announced
     // because "anything outside is refused" was not the whole truth for
     // reading tools (field round 4, R4-B).
+    // COMPRESSED to the unique top-level trees: the raw list is ~145
+    // registered folders and cost every agent ~3.5k tokens on its FIRST
+    // call of every session (measured 2026-08-24 while hunting what filled
+    // a local model's context). Subfolders of an announced tree add a
+    // counter, not a line.
     var ExtraArr := TJSONArray.Create;
     Return.AddPair('readableExtra', ExtraArr);
-    for R in LibraryReadRoots do
-      ExtraArr.Add(ExcludeTrailingPathDelimiter(R));
+    var Tops := TList<string>.Create;
+    var Counts := TList<Integer>.Create;
+    try
+      for R in LibraryReadRoots do
+      begin
+        var Full := IncludeTrailingPathDelimiter(R);
+        var Found := -1;
+        for var I := 0 to Tops.Count - 1 do
+          if StartsText(Tops[I], Full) then
+          begin
+            Found := I;
+            Break;
+          end;
+        if Found >= 0 then
+          Counts[Found] := Counts[Found] + 1
+        else
+        begin
+          // a new candidate may itself be the parent of already-listed ones
+          for var I := Tops.Count - 1 downto 0 do
+            if StartsText(Full, Tops[I]) then
+            begin
+              Counts[Tops.Count - 1] := 0; // placeholder, fixed below
+              Tops.Delete(I);
+              Counts.Delete(I);
+            end;
+          Tops.Add(Full);
+          Counts.Add(0);
+        end;
+      end;
+      for var I := 0 to Tops.Count - 1 do
+        if Counts[I] > 0 then
+          ExtraArr.Add(Format('%s  (+%d subcarpetas registradas)',
+            [ExcludeTrailingPathDelimiter(Tops[I]), Counts[I]]))
+        else
+          ExtraArr.Add(ExcludeTrailingPathDelimiter(Tops[I]));
+    finally
+      Counts.Free;
+      Tops.Free;
+    end;
     if LibraryZoneEnabled then
       Return.AddPair('readableExtraNote', 'Read-only territory: RTL/VCL/FMX ' +
         'sources, installed components and SDKs. Reading tools may enter it; ' +

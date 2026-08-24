@@ -8,6 +8,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.53.1-beta] - 2026-08-24
+
+### Fixed
+- **`delphi_workspace` cost every session ~3.5k tokens**: `readableExtra`
+  listed the ~145 registered library folders one by one, on the call every
+  agent makes FIRST. Compressed to the unique top-level trees with a
+  subfolder counter (measured while hunting what filled a local model's
+  context; the other thief is the tools/list catalog itself - ~14k tokens
+  per reconnect - so the operator's deploy policy is now batch-and-notify
+  instead of one reconnect per version).
+
+
 ## [0.53.0-beta] - 2026-08-24
 
 Semantic rename, PREVIEW ONLY - the refactoring DelphiLSP 37 does not
