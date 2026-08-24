@@ -883,6 +883,7 @@ begin
     Exit;
   // Fully mutating tools: refused outright in read-only mode.
   if MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
+    'delphi_changeset',
     'delphi_build', 'delphi_run', 'delphi_package', 'delphi_upload',
     'delphi_delete', 'delphi_move',
     // The knowledge vault: reading is fine read-only, writing never is.

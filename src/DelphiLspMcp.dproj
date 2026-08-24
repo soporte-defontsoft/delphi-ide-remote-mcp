@@ -179,6 +179,8 @@
         <DCCReference Include="Lsp.Sandbox.pas"/>
         <DCCReference Include="Lsp.BuildRunner.pas"/>
         <DCCReference Include="Lsp.RemoteRun.pas"/>
+        <DCCReference Include="Lsp.Changeset.pas"/>
+        <DCCReference Include="Mcp.Tools.Changeset.pas"/>
         <DCCReference Include="Lsp.Patch.pas"/>
         <DCCReference Include="Lsp.TextEdit.pas"/>
         <DCCReference Include="Mcp.Tools.DelphiLsp.pas"/>

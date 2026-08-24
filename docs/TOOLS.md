@@ -204,6 +204,24 @@ SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx) preser
 | `restore` | boolean | optional | RESTORE mode: true = restore the file from this tool's backup. First call shows what would be LOST; repeat with confirm=true to execute |
 | `confirm` | boolean | optional | Only with restore: execute after having seen the losses |
 
+### `delphi_changeset`
+
+MULTI-FILE TRANSACTIONS: when one change touches several files, either the whole batch lands or none of it. Flow: `begin` (returns an id) → `stage` one operation per call (kind=edit|create|delete|move; nothing touches disk yet) → `preview` (resolves every edit anchor and fingerprints every file the batch will touch) → `commit` (fingerprints re-checked — a file changed since preview refuses the WHOLE batch —, byte snapshots taken, operations applied in order; any failure restores every file byte-exact and reports which operation failed). `rollback` discards a staged batch; `status` lists open changesets. Edits use the delphi_edit contract (old = ONE full line, unique; `atline` pins a duplicate). A changeset expires after 30 minutes unused.
+
+*Access: read-write only.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | begin (new changeset → id) \| stage (add ONE operation) \| preview (resolve anchors + fingerprint files; required before commit) \| commit (apply all or nothing) \| rollback (discard) \| status (list open ones) |
+| `id` | string | optional | The changeset id returned by begin (every command except begin/status) |
+| `kind` | string | optional | stage: edit (replace ONE line by anchor) \| create (new file, never overwrites) \| delete \| move (destination must not exist) |
+| `path` | string | optional | stage: the file the operation touches (inside the workspace roots) |
+| `dest` | string | optional | stage kind=move: the destination path |
+| `old` | string | optional | stage kind=edit: the anchor — ONE full line copied verbatim from delphi_read, unique in the file |
+| `new` | string | optional | stage kind=edit: the replacement text (may span several lines) |
+| `content` | string | optional | stage kind=create: the whole content of the new file |
+| `atline` | integer | optional | stage kind=edit: 1-based line number to pin the anchor when the same line appears more than once |
+
 ### `delphi_textedit`
 
 SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, web assets, tests, scripts, config. Same discipline as delphi_edit - one-full-line unique anchor (old/new, atline tie-break), real encoding preserved (UTF-8 +/- BOM / CP1252), line endings preserved, automatic backup, atomic write - without the Pascal gates. CREATE mode (create=true + content) for new files, never overwrites. Whole-file rewrites are refused. Delphi sources/designers are refused (use delphi_edit) and so are .dproj and binaries. Read first with delphi_read and copy the anchor exactly.

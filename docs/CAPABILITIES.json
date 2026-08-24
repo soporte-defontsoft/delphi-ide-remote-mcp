@@ -1,12 +1,13 @@
 {
   "generatedBy": "scripts/gen-capabilities.py (from the live tools/list)",
-  "version": "0.49.0-beta",
-  "tools": 36,
-  "coreTools": 31,
+  "version": "0.51.0-beta",
+  "tools": 37,
+  "coreTools": 32,
   "optionalTools": 5,
   "toolNames": [
     "delphi_adb",
     "delphi_build",
+    "delphi_changeset",
     "delphi_completion",
     "delphi_components",
     "delphi_config",

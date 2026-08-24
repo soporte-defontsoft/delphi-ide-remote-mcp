@@ -99,6 +99,8 @@ uses
   Lsp.Styles in 'Lsp.Styles.pas',
   Mcp.Tools.Styles in 'Mcp.Tools.Styles.pas',
   Mcp.Tools.Messages in 'Mcp.Tools.Messages.pas',
+  Mcp.Tools.Changeset in 'Mcp.Tools.Changeset.pas',
+  Lsp.Changeset in 'Lsp.Changeset.pas',
   Lsp.Service in 'Lsp.Service.pas',
   UTrayMain in 'UTrayMain.pas' {FormTray};
 

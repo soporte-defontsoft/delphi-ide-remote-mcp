@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.49.0-beta';
+  SERVER_VERSION = '0.51.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1131,6 +1131,121 @@ const
     'y repite la build. Sin candidatos: el componente no esta instalado o no ' +
     'trae fuente para esta plataforma (delphi_components platform=<plataforma>, ' +
     'y si falta, delphi_report).';
+
+  // ---- delphi_changeset ----
+
+  SD_CHANGESET =
+    'MULTI-FILE TRANSACTIONS: when one change touches several files, either ' +
+    'the whole batch lands or none of it. Flow: command=begin (returns an ' +
+    'id) -> stage one operation per call (kind=edit|create|delete|move; ' +
+    'nothing touches disk yet) -> preview (resolves every edit anchor and ' +
+    'fingerprints every file the batch will touch) -> commit (fingerprints ' +
+    're-checked - a file changed since preview refuses the WHOLE batch -, ' +
+    'byte snapshots taken, operations applied in order; any failure restores ' +
+    'every file byte-exact and reports which operation failed). rollback ' +
+    'discards a staged batch; status lists open changesets. Edits use the ' +
+    'delphi_edit contract: old = ONE full line, unique in the file (atline ' +
+    'pins a duplicate). A changeset expires after 30 minutes unused. Use it ' +
+    'for renames, refactors and any change where a half-applied batch would ' +
+    'leave the project broken; for one file, plain delphi_edit is simpler.';
+
+  SP_CHANGESET_COMMAND =
+    'begin (new changeset -> id) | stage (add ONE operation) | preview ' +
+    '(resolve anchors + fingerprint files; required before commit) | commit ' +
+    '(apply all or nothing) | rollback (discard) | status (list open ones)';
+
+  SP_CHANGESET_ID =
+    'The changeset id returned by begin (every command except begin/status)';
+
+  SP_CHANGESET_KIND =
+    'stage: edit (replace ONE line by anchor) | create (new file, never ' +
+    'overwrites) | delete (file removed; the snapshot is the way back) | ' +
+    'move (rename/move, destination must not exist)';
+
+  SP_CHANGESET_PATH =
+    'stage: the file the operation touches (inside the workspace roots)';
+
+  SP_CHANGESET_DEST =
+    'stage kind=move: the destination path';
+
+  SP_CHANGESET_OLD =
+    'stage kind=edit: the anchor - ONE full line copied verbatim from ' +
+    'delphi_read, unique in the file';
+
+  SP_CHANGESET_NEW =
+    'stage kind=edit: the replacement text (may span several lines)';
+
+  SP_CHANGESET_CONTENT =
+    'stage kind=create: the whole content of the new file';
+
+  SP_CHANGESET_ATLINE =
+    'stage kind=edit optional: 1-based line number to pin the anchor when ' +
+    'the same line appears more than once';
+
+  SR_CHANGESET_CMD =
+    'error: command debe ser begin | stage | preview | commit | rollback | status';
+
+  SR_CHANGESET_TOO_MANY =
+    'RECHAZADO: ya hay 8 changesets abiertos. Cierra alguno (commit o ' +
+    'rollback) o espera a que caduquen (30 min sin uso).';
+
+  SR_CHANGESET_UNKNOWN =
+    'RECHAZADO: ese changeset no existe (o caduco a los 30 min sin uso). ' +
+    'command=status lista los abiertos; command=begin abre uno nuevo.';
+
+  SR_CHANGESET_KIND =
+    'RECHAZADO: kind debe ser edit | create | delete | move.';
+
+  SR_CHANGESET_NEED_PATH =
+    'RECHAZADO: stage necesita "path" (el fichero que toca la operacion).';
+
+  SR_CHANGESET_NEED_DEST =
+    'RECHAZADO: kind=move necesita "dest" (el destino).';
+
+  SR_CHANGESET_EDIT_NEEDS =
+    'RECHAZADO: kind=edit necesita "old" (UNA linea completa copiada de ' +
+    'delphi_read) y opcionalmente "new" (el reemplazo) y "atline".';
+
+  SR_CHANGESET_EMPTY =
+    'RECHAZADO: el changeset no tiene operaciones. stage anade una por llamada.';
+
+  SR_CHANGESET_NOT_PREVIEWED =
+    'RECHAZADO: commit exige un preview LIMPIO previo (unresolved=0) y ' +
+    'posterior al ultimo stage. Llama a command=preview y revisa el resultado.';
+
+  SR_CHANGESET_FILE_CHANGED_FMT =
+    'RECHAZADO: FILE_CHANGED - estos ficheros cambiaron despues del preview: ' +
+    '%s. Nada se ha tocado. Repite preview (los fingerprints se recalculan) ' +
+    'y vuelve a commit.';
+
+  SR_CHANGESET_ROLLED_BACK_FMT =
+    'ROLLBACK COMPLETO: fallo la operacion %d de %d y TODOS los ficheros han ' +
+    'vuelto byte a byte a como estaban antes del commit. Causa: %s -- El ' +
+    'changeset queda cerrado; corrige y monta otro.';
+
+  SN_CHANGESET_BEGUN_FMT =
+    'CHANGESET %s abierto. stage anade operaciones (una por llamada), ' +
+    'preview las resuelve, commit aplica todo o nada.';
+
+  SN_CHANGESET_STAGED_FMT =
+    'STAGED %s de %s (operacion %d del changeset). Nada tocado aun: preview ' +
+    'cuando termines de anadir.';
+
+  SN_CHANGESET_DISCARDED =
+    'Changeset descartado. No se habia tocado ningun fichero.';
+
+  SN_CHANGESET_PREVIEW_OK =
+    'Preview limpio: todas las anclas resuelven. commit aplica todo o nada; ' +
+    'si un fichero cambia antes del commit, se rechaza entero.';
+
+  SN_CHANGESET_PREVIEW_BAD =
+    'Hay operaciones sin resolver (anchor NO ENCONTRADA o AMBIGUA): ' +
+    'corrigelas (rollback y re-stage, o fija atline). commit esta bloqueado ' +
+    'hasta un preview limpio.';
+
+  SN_CHANGESET_COMMITTED_FMT =
+    'COMMIT COMPLETO: %d operaciones aplicadas sobre %d ficheros. Los ' +
+    'backups por fichero de __delphi-patch siguen existiendo como siempre.';
 
   // ---- delphi_components ----
 

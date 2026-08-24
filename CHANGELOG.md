@@ -8,6 +8,27 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.51.0-beta] - 2026-08-24
+
+Multi-file transactions - the foundation piece of the adopted roadmap
+(changeset -> designer -> rename), and the close of a real debt: the project
+tools could only REPORT a partial change when one file of a batch failed.
+
+### Added
+- **`delphi_changeset`** - `begin` -> `stage` (edit/create/delete/move, one
+  per call, nothing touches disk) -> `preview` (resolves every anchor and
+  fingerprints every file the batch will touch, SHA-256) -> `commit`
+  (fingerprints re-checked: a file changed since preview refuses the WHOLE
+  batch; byte snapshots first, then apply in order; ANY failure restores
+  every file byte-exact and names the failing operation). `rollback`
+  discards; `status` lists. Edits use the delphi_edit contract. Changesets
+  expire after 30 minutes unused; at most 8 open.
+- `tests/test_changeset.py` (22 checks) - the external review's acceptance
+  criteria as tests: batch of 10 with a failure at op 7 -> ZERO net changes;
+  FILE_CHANGED between preview and commit -> refused untouched; CP1252+CRLF
+  intact; commit without a clean preview blocked.
+
+
 ## [0.50.0] - 2026-08-24 (docs/tests only, no server change)
 
 Doc hygiene, from an external technical review that caught the README still

@@ -84,8 +84,9 @@ try:
                 'delphi_search', 'delphi_signature', 'delphi_symbols',
                 'delphi_textedit', 'delphi_upload', 'delphi_workspace',
                 'delphi_paserver', 'delphi_delete', 'delphi_move',
-                'delphi_adb', 'delphi_components', 'delphi_styles', 'delphi_messages']
-    check('http: tools/list = 31 tools', sorted(names) == sorted(expected), names)
+                'delphi_adb', 'delphi_components', 'delphi_styles', 'delphi_messages',
+                'delphi_changeset']
+    check('http: tools/list = 32 tools', sorted(names) == sorted(expected), names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",
@@ -185,7 +186,8 @@ try:
         check('ro: token RO NO puede editar', 'SOLO LECTURA' in body,
               '%s %s' % (code, body[:150]))
 
-        for tool, args in (('delphi_build', {'project': 'x.dproj'}),
+        for tool, args in (('delphi_changeset', {'command': 'begin'}),
+                           ('delphi_build', {'project': 'x.dproj'}),
                            ('delphi_run', {'path': 'x.exe'}),
                            ('delphi_package', {'dir': tmpdir3}),
                            ('delphi_create', {'kind': 'project-console',
