@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-08-24 (docs/tests only, no server change)
+
+Doc hygiene, from an external technical review that caught the README still
+claiming 29/28 tools while the server registers 36.
+
+### Fixed
+- README counts corrected (36 tools, 31 core, 24 non-LSP core) and the
+  non-LSP tool list completed (`delphi_components`, `delphi_styles`,
+  `delphi_messages` were missing).
+
+### Added
+- **`docs/CAPABILITIES.json`** - capability manifest generated from the LIVE
+  `tools/list` by `scripts/gen-capabilities.py` (run it after each release).
+- **`tests/test_docs_consistency.py`** (16 checks) - every figure the README
+  claims, every `### tool` section of TOOLS.md and the manifest are compared
+  against the real `tools/list`; drift is now a test failure. It already
+  caught its own first bug: with a read-only vault only 2 of the 5 vault
+  tools register, so the full-surface run needs the vault writable.
+
+
 ## [0.49.0-beta] - 2026-08-24
 
 Two scope controls, both from an agent's security review of its own reach.
