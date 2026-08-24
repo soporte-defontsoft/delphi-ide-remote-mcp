@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.48.0-beta';
+  SERVER_VERSION = '0.48.1-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -397,6 +397,15 @@ const
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | add-profile ' +
     '| test-connection | get-sdk | install-runner | remote-run';
+
+  SR_PASERVER_RUN_DISABLED =
+    'RECHAZADO: la ejecucion remota esta APAGADA en este servidor. El ' +
+    'operador la enciende con [Security] AllowRemoteRun=1 en el settings.ini ' +
+    'que hay junto al ejecutable (o la variable DELPHI_MCP_ALLOW_REMOTE_RUN=1) ' +
+    'y reinicia el servidor. Son dos cerrojos en serie y a proposito: este, y ' +
+    'el runner que alguien tiene que arrancar en la maquina destino. ' +
+    'install-runner y el resto de comandos siguen funcionando: copiar el ' +
+    'script no ejecuta nada.';
 
   SR_PASERVER_RUN_NEEDS =
     'RECHAZADO: remote-run necesita "name" (el perfil PAServer) y "project" ' +

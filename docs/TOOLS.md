@@ -357,6 +357,8 @@ The bridge for building and running on OTHER platforms (Linux, macOS) through th
 | `args` | string | optional | remote-run: command-line arguments for the program (no shell metacharacters) |
 | `timeoutms` | integer | optional | remote-run: max milliseconds to wait for the program (default 30000, max 300000) |
 
+`remote-run` also needs the operator's opt-in on this server: `[Security] AllowRemoteRun=1` in `settings.ini` (or `DELPHI_MCP_ALLOW_REMOTE_RUN=1`), OFF by default and independent of `AllowRun`. `install-runner` does not need it.
+
 ### `delphi_adb`
 
 Android devices for remote development: the phones/tablets hang off THIS server (USB or wifi adb), while you program from anywhere. command=discover finds devices ANNOUNCING wireless debugging on the server's network (mDNS) and hands you each one's ip:port; command=devices lists what adb has ATTACHED (the same list the IDE shows as deploy targets); command=connect attaches one over the network (the device shows an authorize prompt the first time); command=disconnect detaches it; command=install installs a built .apk; command=run launches the installed app (the IDE's "Deploy and Run"); command=logcat hands you the device log (a bounded dump, optionally filtered) - remote debugging of the deployed app; command=screenshot grabs the device screen to a PNG you then `delphi_fetch` (your remote EYES) and command=tap / command=key touch the screen and press navigation keys (your remote HANDS) - enough to drive the deployed app end to end. The adb used is the IDE's own Android SDK's, discovered per install. Typical flow: discover → connect → devices → `delphi_build target=Deploy` → install → run → screenshot → tap → logcat.

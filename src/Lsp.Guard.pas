@@ -112,6 +112,16 @@ function AllowRun: Boolean;         // DELPHI_MCP_ALLOW_RUN      / AllowRun=1
   DELPHI_MCP_ALLOW_BUILD_SCRIPTS=1 or [Security] AllowBuildScripts=1. }
 function AllowBuildScripts: Boolean; // DELPHI_MCP_ALLOW_BUILD_SCRIPTS / AllowBuildScripts=1
 
+{ Whether delphi_paserver may EXECUTE the deployed program on a PAServer
+  target (command=remote-run). OFF by design and INDEPENDENT of AllowRun:
+  running on the target is not running here, and the operator of this server
+  is not necessarily the owner of that machine. Two locks in series, on
+  purpose: this switch (server side) and the runner someone has to launch on
+  the target. Opt in with DELPHI_MCP_ALLOW_REMOTE_RUN=1 or [Security]
+  AllowRemoteRun=1. install-runner does NOT need it: copying the script
+  executes nothing. }
+function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemoteRun=1
+
 { Read-only mode. Two independent sources, OR-ed together:
   - process-wide: the whole server runs read-only (--readonly flag);
   - per-request: the HTTP transport marks the current worker thread according
@@ -189,6 +199,7 @@ var
   GReadOnlyToken: string;
   GAnonymousReadOnly: Boolean = False;
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
+  GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
   GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
   GAdbDevicesSet: Boolean = False;  // configured at all? absent = unrestricted
@@ -235,6 +246,7 @@ begin
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
   GAnonymousReadOnly := GetEnvironmentVariable('DELPHI_MCP_ANON_READONLY') = '1';
   GAllowRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_RUN') = '1';
+  GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
   GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
   IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
   if TFile.Exists(IniPath) then
@@ -249,6 +261,8 @@ begin
         GAnonymousReadOnly := Ini.ReadBool('Security', 'AnonymousReadOnly', False);
       if not GAllowRun then
         GAllowRun := Ini.ReadBool('Security', 'AllowRun', False);
+      if not GAllowRemoteRun then
+        GAllowRemoteRun := Ini.ReadBool('Security', 'AllowRemoteRun', False);
       if not GAllowBuildScripts then
         GAllowBuildScripts := Ini.ReadBool('Security', 'AllowBuildScripts', False);
       if not GAdbDevicesSet then
@@ -282,6 +296,13 @@ function AllowRun: Boolean;
 begin
   LoadSecurity;
   Result := GAllowRun;
+end;
+
+function AllowRemoteRun: Boolean;
+begin
+  LoadSecurity;
+  // NOT implied by AllowRun: that one is about THIS machine.
+  Result := GAllowRemoteRun;
 end;
 
 function AllowBuildScripts: Boolean;

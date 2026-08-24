@@ -572,6 +572,8 @@ var
   Prof, Proj, ExeName, Denied: string;
   Res: TJSONObject;
 begin
+  if not AllowRemoteRun then
+    Exit(SR_PASERVER_RUN_DISABLED);
   Prof := Params.Name.Trim;
   Proj := Params.Project.Trim;
   ExeName := Params.Exe.Trim;

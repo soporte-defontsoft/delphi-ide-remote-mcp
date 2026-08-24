@@ -59,6 +59,7 @@ env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = BASE
 env['DELPHI_MCP_PACLIENT'] = STUB
 env['MCP_STUB_SCRATCH'] = SCRATCH
+env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'   # v0.48.1: remote execution is opt-in
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
 q = queue.Queue()
@@ -88,6 +89,37 @@ def call(name, args, t=120):
     return c[0].get('text', '') if c else '(no content)'
 send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "rr", "version": "1"}}}); recv(1)
 send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+# ---- the opt-in switch (a server without AllowRemoteRun) ----
+env_off = dict(env); env_off.pop('DELPHI_MCP_ALLOW_REMOTE_RUN', None)
+proc_off = subprocess.Popen([EXE], env=env_off, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
+q_off = queue.Queue()
+def rdr_off():
+    for line in proc_off.stdout:
+        line = line.strip()
+        if line: q_off.put(line)
+threading.Thread(target=rdr_off, daemon=True).start()
+def call_off(name, args, t=60):
+    proc_off.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 99, "method": "tools/call",
+                                     "params": {"name": name, "arguments": args}}) + '\n')
+    proc_off.stdin.flush()
+    dl = time.time() + t
+    while time.time() < dl:
+        try: line = q_off.get(timeout=1)
+        except queue.Empty: continue
+        try: m = json.loads(line)
+        except Exception: continue
+        if m.get('id') == 99:
+            c = m.get('result', {}).get('content', [])
+            return c[0].get('text', '') if c else json.dumps(m)[:200]
+    return '(timeout)'
+proc_off.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+    "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "off", "version": "1"}}}) + '\n')
+proc_off.stdin.flush(); time.sleep(1)
+while not q_off.empty(): q_off.get()
+proc_off.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + '\n')
+proc_off.stdin.flush()
 
 P = F = 0
 def check(n, ok, d=''):
@@ -155,6 +187,15 @@ os.remove(os.path.join(RUNNER_DIR, 'mcp-runner.py'))
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'timeoutms': 1000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('runner ausente: dice que NO esta instalado', j.get('runnerInstalled') is False and 'NO tiene el runner' in (j.get('error') or ''), r[:300])
+
+# 7) sin AllowRemoteRun: remote-run RECHAZADO, install-runner permitido
+r = call_off('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ})
+check('sin AllowRemoteRun: remote-run rechazado', 'RECHAZADO' in r and 'AllowRemoteRun' in r, r[:250])
+r = call_off('delphi_paserver', {'command': 'install-runner', 'name': PROFILE})
+check('sin AllowRemoteRun: install-runner sigue permitido', 'RUNNER COPIADO' in r, r[:200])
+r = call_off('delphi_paserver', {'command': 'platforms'})
+check('sin AllowRemoteRun: el resto del tool intacto', 'platforms' in r, r[:150])
+proc_off.kill()
 
 proc.kill(); runner.kill()
 print('\n== remote-run: %d PASS / %d FAIL ==' % (P, F))

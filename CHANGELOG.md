@@ -8,6 +8,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.48.1-beta] - 2026-08-24
+
+### Added
+- **`[Security] AllowRemoteRun`** (env `DELPHI_MCP_ALLOW_REMOTE_RUN`) - the
+  operator's switch for `remote-run`, OFF by default and INDEPENDENT of
+  `AllowRun`: running on a target is not running here, and whoever runs this
+  server does not necessarily own that machine. Two locks in series now: this
+  switch on the server side, and the runner somebody has to launch on the
+  target. `install-runner` does not need it - copying a script executes
+  nothing. Documented in `settings.example.ini`.
+
+
 ## [0.48.0-beta] - 2026-08-24
 
 ### Changed - BREAKING (remote-run, one day old)
