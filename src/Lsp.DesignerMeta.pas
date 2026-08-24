@@ -19,15 +19,8 @@ unit Lsp.DesignerMeta;
 
 interface
 
-function DesignerMetaLint(const AIsFmx: Boolean;
-  const ALines: TArray<string>): TArray<string>;
-
-implementation
-
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
-  System.RegularExpressions,
-  Lsp.DesignerMeta.Fmx, Lsp.DesignerMeta.Vcl;
+  System.Generics.Collections;
 
 type
   TPropRec = record
@@ -44,12 +37,34 @@ type
     EnumShow: TDictionary<string, string>;   // enum lower -> 'A, B, C'
     Sets: TDictionary<string, string>;       // set lower -> ',a,b,' lower
     Alias: TDictionary<string, string>;      // 'class.prop' lower -> runtime
+    PropShow: TDictionary<string, string>;   // 'class.prop' lower -> Prop original
     constructor Create(const AFacts: array of string);
     destructor Destroy; override;
   end;
 
+function DesignerMetaLint(const AIsFmx: Boolean;
+  const ALines: TArray<string>): TArray<string>;
+
+{ The generated framework table itself - what delphi_designer asks about
+  classes, published properties and enum members. Never nil. }
+function MetaTable(const AIsFmx: Boolean): TMetaTable;
+
+implementation
+
+uses
+  System.SysUtils, System.Classes, System.RegularExpressions,
+  Lsp.DesignerMeta.Fmx, Lsp.DesignerMeta.Vcl;
+
 var
   GFmx, GVcl: TMetaTable;
+
+function MetaTable(const AIsFmx: Boolean): TMetaTable;
+begin
+  if AIsFmx then
+    Result := GFmx
+  else
+    Result := GVcl;
+end;
 
 constructor TMetaTable.Create(const AFacts: array of string);
 var
@@ -65,6 +80,7 @@ begin
   EnumShow := TDictionary<string, string>.Create;
   Sets := TDictionary<string, string>.Create;
   Alias := TDictionary<string, string>.Create;
+  PropShow := TDictionary<string, string>.Create;
   for F in AFacts do
   begin
     P := F.Split([' ']);
@@ -80,6 +96,7 @@ begin
       else
         R.TypeName := '?';
       Props.AddOrSetValue(P[1].ToLower + '.' + P[2].ToLower, R);
+      PropShow.AddOrSetValue(P[1].ToLower + '.' + P[2].ToLower, P[2]);
       if PropNames.TryGetValue(P[1].ToLower, Names) then
       begin
         if Length(Names) < 200 then
@@ -104,6 +121,7 @@ end;
 
 destructor TMetaTable.Destroy;
 begin
+  PropShow.Free;
   Alias.Free;
   Sets.Free;
   EnumShow.Free;

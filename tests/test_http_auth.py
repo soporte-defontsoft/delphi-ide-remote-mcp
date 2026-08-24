@@ -85,8 +85,8 @@ try:
                 'delphi_textedit', 'delphi_upload', 'delphi_workspace',
                 'delphi_paserver', 'delphi_delete', 'delphi_move',
                 'delphi_adb', 'delphi_components', 'delphi_styles', 'delphi_messages',
-                'delphi_changeset']
-    check('http: tools/list = 32 tools', sorted(names) == sorted(expected), names)
+                'delphi_changeset', 'delphi_designer']
+    check('http: tools/list = 33 tools', sorted(names) == sorted(expected), names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",

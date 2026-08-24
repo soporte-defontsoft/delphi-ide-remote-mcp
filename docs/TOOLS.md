@@ -410,6 +410,22 @@ What this server's RAD Studio has INSTALLED to program with: every component/des
 | `platform` | string | optional | A platform (Win32, Win64, Linux64, Android64, OSX64, iOSDevice64...) to see instead the IDE's Library Search Path FOR THAT PLATFORM, expanded, plus the component install roots other platforms register and this one does not — the list to walk when a build on a new platform fails with F2613 (unit not found): `delphi_config add-searchpath` to the Source folder |
 
 
+### `delphi_designer`
+
+FORMS AND COMPONENTS, structured — never guess what a class publishes or what a form contains. `info class=TButton`: every property the framework really publishes for that class (kind and type, events apart), from RTTI tables generated at release time (`tools/designer-meta-dump`). `prop class=X prop=Y`: one property in detail, with the legal members when it is an enum/set and the runtime class of class-typed properties. `tree path=<.dfm|.fmx>`: the component tree (name, class, line). `get path=... component=<Name>`: that component's block verbatim. `lint path=...`: properties the class does not publish, enum values that do not exist — an UNKNOWN class is deliberately not a warning (third-party components are not in the tables and are legitimate). Text designers only (binary TPF0 refused). Read-only: editing a form is phase 2 and will go through `delphi_changeset`.
+
+*Access: read-only (always available).*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | info (what a class publishes) \| prop (one property in detail) \| tree (component tree of a text .dfm/.fmx) \| get (one component's block) \| lint (designer lint on demand). Default: info |
+| `path` | string | optional | tree/get/lint: the .dfm or .fmx file (text form; binary TPF0 refused) |
+| `classname` | string | optional | info/prop: the component class, e.g. TButton, TEdit, TLayout (`class` accepted as alias) |
+| `prop` | string | optional | prop: the property name, e.g. Align, Caption, TextSettings |
+| `component` | string | optional | get: the component Name as it appears in the form |
+| `framework` | string | optional | info/prop: vcl \| fmx. Optional when path is given (.dfm=vcl, .fmx=fmx); default vcl |
+| `filter` | string | optional | info: only properties whose name contains this text |
+
 ## FMX styles
 
 ### `delphi_styles`

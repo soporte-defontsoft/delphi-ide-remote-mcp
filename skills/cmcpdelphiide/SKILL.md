@@ -61,6 +61,18 @@ on your side.
 - Prefer `Align`/anchors over absolute Position/Size in forms: absolute
   coordinates designed on a desktop form overflow phone screens.
 
+## Forms (.dfm/.fmx)
+
+- Never guess what a class publishes: `delphi_designer info class=TButton`
+  (add `framework=fmx` for FMX) lists the REAL published properties and
+  events; `prop class=TPanel prop=Align` gives the legal enum members.
+- `tree path=<form>` shows the component tree; `get component=<Name>` one
+  block. After editing a form with `delphi_edit`, run `delphi_designer lint
+  path=<form>`: a property the class does not publish or an enum value that
+  does not exist will not stream, and nobody tells you at build time.
+- Binary designers (TPF0) are refused everywhere: have a person save the
+  form as text from the IDE first.
+
 ## FMX styles
 
 - A project's look lives in text `.style` files (one master per theme, or a

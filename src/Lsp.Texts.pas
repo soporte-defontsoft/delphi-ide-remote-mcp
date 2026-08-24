@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.51.0-beta';
+  SERVER_VERSION = '0.52.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1131,6 +1131,105 @@ const
     'y repite la build. Sin candidatos: el componente no esta instalado o no ' +
     'trae fuente para esta plataforma (delphi_components platform=<plataforma>, ' +
     'y si falta, delphi_report).';
+
+  // ---- delphi_designer ----
+
+  SD_DESIGNER =
+    'FORMS AND COMPONENTS, structured - never guess what a class publishes ' +
+    'or what a form contains. command=info class=TButton: every property ' +
+    'the framework really publishes for that class (kind and type; events ' +
+    'apart), from RTTI tables generated at release time. prop class=X ' +
+    'prop=Y: one property in detail, with the legal members when it is an ' +
+    'enum/set. tree path=<.dfm|.fmx>: the component tree (name, class, ' +
+    'line). get path=... component=<Name>: that component''s block verbatim. ' +
+    'lint path=...: unknown classes, properties the class does not publish, ' +
+    'enum values that do not exist. Text designers only (binary TPF0 is ' +
+    'refused, as everywhere). Read-only: editing a form is phase 2 and will ' +
+    'go through delphi_changeset; today use delphi_edit on the .dfm/.fmx ' +
+    'with the property line as anchor, then this lint to verify.';
+
+  SP_DESIGNER_COMMAND =
+    'info (what a class publishes) | prop (one property in detail) | tree ' +
+    '(component tree of a text .dfm/.fmx) | get (one component''s block) | ' +
+    'lint (designer lint on demand). Default: info';
+
+  SP_DESIGNER_PATH =
+    'tree/get/lint: the .dfm or .fmx file (text form; binary TPF0 refused)';
+
+  SP_DESIGNER_CLASS =
+    'info/prop: the component class, e.g. TButton, TEdit, TLayout';
+
+  SP_DESIGNER_PROP =
+    'prop: the property name, e.g. Align, Caption, TextSettings';
+
+  SP_DESIGNER_COMPONENT =
+    'get: the component Name as it appears in the form (object <Name>: <Class>)';
+
+  SP_DESIGNER_FRAMEWORK =
+    'info/prop: vcl | fmx. Optional when path is given (.dfm=vcl, .fmx=fmx); ' +
+    'default vcl';
+
+  SP_DESIGNER_FILTER =
+    'info optional: only properties whose name contains this text';
+
+  SR_DESIGNER_CMD =
+    'error: command debe ser info | prop | tree | get | lint';
+
+  SR_DESIGNER_FRAMEWORK =
+    'RECHAZADO: framework debe ser vcl o fmx.';
+
+  SR_DESIGNER_NEED_CLASS =
+    'RECHAZADO: falta "class" (la clase del componente, p.ej. TButton).';
+
+  SR_DESIGNER_NEED_PROP =
+    'RECHAZADO: falta "prop" (la propiedad, p.ej. Align).';
+
+  SR_DESIGNER_NEED_PATH =
+    'RECHAZADO: falta "path" (el .dfm o .fmx).';
+
+  SR_DESIGNER_NEED_COMPONENT =
+    'RECHAZADO: falta "component" (el Name del componente en el form).';
+
+  SR_DESIGNER_NOT_FORM =
+    'RECHAZADO: eso no es un designer (.dfm/.fmx).';
+
+  SR_DESIGNER_BINARY =
+    'RECHAZADO: designer BINARIO (TPF0). Este servidor no lo toca ni lo ' +
+    'interpreta: abrelo en el IDE y guardalo como texto si quieres operarlo ' +
+    'desde aqui.';
+
+  SR_DESIGNER_EMPTY =
+    'RECHAZADO: el fichero no contiene ningun object.';
+
+  SR_DESIGNER_CLASS_FMT =
+    'RECHAZADO: la clase "%s" no esta en la tabla %s de este servidor (no ' +
+    'la publica el framework o el componente no esta enlazado en las tablas ' +
+    'generadas). delphi_components lista los packages instalados.';
+
+  SR_DESIGNER_PROP_FMT =
+    'RECHAZADO: %s no es una propiedad publicada de %s. command=info la ' +
+    'lista entera.';
+
+  SR_DESIGNER_COMPONENT_FMT =
+    'RECHAZADO: no hay ningun componente "%s" en ese form (command=tree los ' +
+    'lista).';
+
+  SN_DESIGNER_INFO_NOTE =
+    'Published properties from the framework''s own RTTI (inherited ' +
+    'included). A property absent here does NOT stream in a .dfm/.fmx: do ' +
+    'not write it.';
+
+  SN_DESIGNER_TREE_NOTE =
+    'Component tree of the TEXT designer. get shows one component; lint ' +
+    'checks classes, properties and enum values against the framework tables.';
+
+  SN_DESIGNER_LINT_OK_FMT =
+    'LINT LIMPIO: %s no tiene clases desconocidas, propiedades no publicadas ' +
+    'ni valores de enum invalidos.';
+
+  SN_DESIGNER_LINT_BAD_FMT =
+    '%d avisos del designer en %s (clase desconocida, propiedad no publicada ' +
+    'o valor de enum inexistente):';
 
   // ---- delphi_changeset ----
 

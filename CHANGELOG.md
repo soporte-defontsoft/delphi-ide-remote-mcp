@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.52.0-beta] - 2026-08-24
+
+The designer, structured (phase 1: read + lint) - the roadmap step ahead of
+rename, on the generated RTTI tables the post-edit lint already used.
+
+### Added
+- **`delphi_designer`** - `info class=TButton` (every property the framework
+  REALLY publishes, kind and type, events apart; `filter` narrows), `prop
+  class=TPanel prop=Align` (one property in detail, with the legal enum/set
+  members and the runtime class of class-typed properties), `tree
+  path=<.dfm|.fmx>` (the component tree: name, class, line), `get ...
+  component=<Name>` (that component's block verbatim), `lint path=...` (the
+  designer lint on demand: properties the class does not publish, enum
+  values that do not exist; an UNKNOWN class is deliberately not a warning -
+  third-party components are not in the tables and are legitimate). Binary
+  TPF0 designers refused, as everywhere. Editing commands are phase 2 and
+  will go through `delphi_changeset`.
+- `tests/test_designer.py` (20 checks).
+
+
 ## [0.51.0-beta] - 2026-08-24
 
 Multi-file transactions - the foundation piece of the adopted roadmap
