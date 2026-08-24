@@ -8,6 +8,28 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.47.0-beta] - 2026-08-24
+
+Remote RUN: an agent that is not sitting on the target machine can now
+execute what it just deployed there.
+
+### Added
+- **`delphi_paserver command=remote-run`** - runs a program on the machine
+  of a PAServer profile and returns its exit code and output. `paclient.exe`
+  has no exec operation (its whole surface is file copy, codesign and
+  Android packaging - launching processes is the IDE<->PAServer private
+  protocol), so the run travels as a job file: the server `--put`s the order
+  in `<scratch>/_mcp-runner/jobs/`, the target's runner executes it and
+  writes the result, the server `--get`s it. Parameters: `name` (profile),
+  `exe` (relative to the scratch dir or absolute), `args`, `timeoutms`.
+- **`runner/mcp-runner.py`** - the target half, installed once inside
+  PAServer's scratch dir. It is the OPT-IN: no runner, no remote execution
+  (the call times out saying exactly that). It only executes binaries inside
+  the scratch dir - the deploy zone - never the rest of the machine.
+- `tests/test_remoterun.py` (7 checks) with `tests/paclient_stub.py`: the
+  whole cycle without a real PAServer.
+
+
 ## [0.46.3-beta] - 2026-08-24
 
 A 5-probes-per-tool sweep over all 36 tools (180 probes): four fixes.

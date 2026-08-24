@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.46.3-beta';
+  SERVER_VERSION = '0.47.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -356,7 +356,20 @@ const
     'platform) | test-connection (with name: full handshake against that ' +
     'profile; with host+port and no name: raw TCP reachability probe) | ' +
     'get-sdk (pull the SDK/sysroot from the PAServer of profile "name" and ' +
-    'register it for delphi_build; can take minutes). Default: platforms';
+    'register it for delphi_build; can take minutes) | remote-run (execute ' +
+    '"exe" on the target of profile "name" and return its exit code and ' +
+    'output - needs the mcp-runner script installed on the target; see the ' +
+    'note it returns). Default: platforms';
+  SP_PASERVER_EXE =
+    'remote-run: the program to run ON THE TARGET, absolute or relative to ' +
+    'the PAServer scratch dir (the deployNote of delphi_build target=Deploy ' +
+    'names the folder, e.g. <user>-<profile>/<Project>/<Project>)';
+  SP_PASERVER_ARGS =
+    'remote-run: optional command-line arguments for the program (no shell ' +
+    'metacharacters)';
+  SP_PASERVER_TIMEOUT =
+    'remote-run: max milliseconds to wait for the program (default 30000, ' +
+    'max 300000)';
   SP_PASERVER_NAME =
     'Profile name (letters, digits, "_", "-"): add-profile creates it, ' +
     'test-connection dials it';
@@ -375,7 +388,37 @@ const
 
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | add-profile ' +
-    '| test-connection | get-sdk';
+    '| test-connection | get-sdk | remote-run';
+
+  SR_PASERVER_RUN_NEEDS =
+    'RECHAZADO: remote-run necesita "name" (el perfil PAServer) y "exe" (el ' +
+    'programa a ejecutar en el target, relativo a la scratch dir o absoluto).';
+
+  SR_REMOTERUN_NO_PACLIENT =
+    'error: ninguna instalacion de RAD Studio de este servidor trae ' +
+    'bin\paclient.exe: sin el no hay transporte a PAServer.';
+
+  SR_REMOTERUN_PUT_FMT =
+    'error: no se pudo enviar el trabajo al target (paclient exit %d): %s. ' +
+    'PAServer esta vivo? El perfil apunta al host correcto?';
+
+  SR_REMOTERUN_TIMEOUT_FMT =
+    'error: el target no devolvio resultado en %d s. Casi seguro NO tiene el ' +
+    'runner instalado: en el target, dentro de la scratch dir de PAServer, ' +
+    'debe existir "%s/mcp-runner" ejecutandose (script Python que lee ' +
+    'jobs/*.json y escribe out/result-*.json). Sin runner no hay ejecucion ' +
+    'remota: instalalo (te lo damos con delphi_fetch) y reintenta.';
+
+  SN_REMOTERUN_NOTE =
+    'Ejecutado en el target via PAServer (buzon de ficheros: paclient no ' +
+    'tiene exec propio). El runner solo ejecuta binarios dentro de la ' +
+    'scratch dir del PAServer - la zona del deploy - nunca el resto de la ' +
+    'maquina. exitCode/output vienen del programa; runnerError, si aparece, ' +
+    'es un rechazo del runner (ruta fuera de la scratch, binario inexistente).';
+
+  SR_SHELL_META_FMT =
+    'RECHAZADO: el argumento contiene "%s", un metacaracter de shell que ' +
+    'romperia la linea de comandos. Quitalo.';
 
   SR_PASERVER_SDK_PLATFORM_FMT =
     'RECHAZADO: get-sdk cubre hoy la plataforma Linux64 y el perfil "%s" es ' +

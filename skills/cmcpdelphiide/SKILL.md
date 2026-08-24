@@ -88,6 +88,20 @@ on your side.
   delivered once; act on them and, when an answer is due, reply with
   `delphi_report`. Use the same `agent` id in both tools.
 
+## Running on the target (not on this server)
+
+- `delphi_build target=Deploy` ships the binary; to RUN it there use
+  `delphi_paserver command=remote-run name=<profile> exe=<path inside the
+  scratch dir> args=... timeoutms=...`. It returns `exitCode` and the
+  program's output.
+- It needs the runner installed ONCE on the target (`runner/mcp-runner.py`
+  of this repo, inside PAServer's scratch dir, launched with `nohup python3
+  _mcp-runner/mcp-runner.py &`). Without it the call times out and tells you
+  so - that is the opt-in, not a bug.
+- The runner refuses anything outside the scratch dir. Remember
+  `target=Deploy` REWRITES that folder: copy state you need before
+  redeploying.
+
 ## Create and build
 
 - `delphi_create` scaffolds console/VCL/FMX projects, and inside a

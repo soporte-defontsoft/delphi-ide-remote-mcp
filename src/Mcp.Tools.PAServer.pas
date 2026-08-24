@@ -39,6 +39,9 @@ type
     FPort: string;
     FPassword: string;
     FPlatform: string;
+    FExe: string;
+    FArgs: string;
+    FTimeoutMs: Integer;
   public
     [SchemaDescription(SP_PASERVER_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -52,6 +55,12 @@ type
     property Password: string read FPassword write FPassword;
     [SchemaDescription(SP_PASERVER_PLATFORM)]
     property Platform: string read FPlatform write FPlatform;
+    [SchemaDescription(SP_PASERVER_EXE)]
+    property Exe: string read FExe write FExe;
+    [SchemaDescription(SP_PASERVER_ARGS)]
+    property Args: string read FArgs write FArgs;
+    [SchemaDescription(SP_PASERVER_TIMEOUT)]
+    property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
   end;
 
   TDelphiPAServerTool = class(TMCPToolBase<TDelphiPAServerParams>)
@@ -68,6 +77,8 @@ uses
   System.JSON,
   System.IOUtils,
   System.StrUtils,
+  Lsp.RemoteRun,
+  Lsp.Guard,
   System.Diagnostics,
   IdTCPClient,
   MCPServer.Registration,
@@ -537,6 +548,28 @@ end;
   - CodeGear.Profiles.Targets imports the .sdk via $(PlatformSDK), which the
     build runner now passes when <Platform>.sdk exists (EnvOptions.proj has
     no command-line default for platforms the SDK Manager never touched). }
+function RemoteRunCmd(const Params: TDelphiPAServerParams): string;
+var
+  Prof, Exe, Denied: string;
+  Res: TJSONObject;
+begin
+  Prof := Params.Name.Trim;
+  Exe := Params.Exe.Trim;
+  if (Prof = '') or (Exe = '') then
+    Exit(SR_PASERVER_RUN_NEEDS);
+  // the profile name and the remote exe/args land on the paclient command
+  // line: veto the shell metacharacters the build/git filters already ban
+  Denied := ShellArgDenied(Prof + ' ' + Exe + ' ' + Params.Args);
+  if Denied <> '' then
+    Exit(Denied);
+  Res := RemoteRun(Prof, Exe, Params.Args.Trim, Params.TimeoutMs);
+  try
+    Result := Res.ToJSON;
+  finally
+    Res.Free;
+  end;
+end;
+
 function GetSdk(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
@@ -712,6 +745,8 @@ begin
     Result := TestConnection(Params)
   else if Cmd = 'get-sdk' then
     Result := GetSdk(Params)
+  else if Cmd = 'remote-run' then
+    Result := RemoteRunCmd(Params)
   else
     Result := SR_PASERVER_CMD;
 end;

@@ -162,6 +162,11 @@ function VirtualUnitLetter(const AValue: string): Char;
   jail can judge it. }
 function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
 
+{ '' when AText carries none of the shell metacharacters that would break a
+  command line ( ; | & ` $ < > and newlines ), otherwise a refusal. For tool
+  arguments that end up on a paclient/msbuild command line. }
+function ShellArgDenied(const AText: string): string;
+
 implementation
 
 uses
@@ -427,6 +432,18 @@ begin
        (T = '-o') or T.StartsWith('-o=') or T.StartsWith('-o/') or T.StartsWith('-o\') then
       Exit(Format(SR_GIT_OPTION_FMT, [Tok]));
   end;
+end;
+
+function ShellArgDenied(const AText: string): string;
+const
+  Bad: array [0 .. 8] of string = (';', '|', '&', '`', '$', '<', '>', #13, #10);
+var
+  B: string;
+begin
+  Result := '';
+  for B in Bad do
+    if AText.Contains(B) then
+      Exit(Format(SR_SHELL_META_FMT, [B]));
 end;
 
 { Reads a tools/call argument the SAME WAY the RTTI binder resolves it
