@@ -171,17 +171,24 @@ begin
       for I := 0 to Arr.Count - 1 do
       begin
         Item := Arr.Items[I] as TJSONObject;
-        Chg := TJSONObject.Create;
-        Changes.AddElement(Chg);
-        Chg.AddPair('path', Item.GetValue('path').Value);
-        Chg.AddPair('line', TJSONNumber.Create(
-          Item.GetValue('line').GetValue<Integer>));
-        Chg.AddPair('text', Item.GetValue('text').Value);
         P := Item.GetValue('path').Value;
         if not Touched.Contains(P) then
           Touched.Add(P);
+        // the change list is capped: a symbol with hundreds of uses must
+        // not flood a small client's context (measured 2026-08-24). The
+        // caps protect the transport; occurrences/files carry the truth.
+        if I >= 100 then
+          Continue;
+        Chg := TJSONObject.Create;
+        Changes.AddElement(Chg);
+        Chg.AddPair('path', P);
+        Chg.AddPair('line', TJSONNumber.Create(
+          Item.GetValue('line').GetValue<Integer>));
+        Chg.AddPair('text', Item.GetValue('text').Value);
       end;
       Result.AddPair('occurrences', TJSONNumber.Create(Arr.Count));
+      if Arr.Count > 100 then
+        Result.AddPair('changesTruncated', TJSONBool.Create(True));
 
       // one unverified candidate = not applicable, the adopted rule
       Arr := Refs.GetValue('unverified') as TJSONArray;

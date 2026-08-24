@@ -8,6 +8,14 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.53.2-beta] - 2026-08-24
+
+### Fixed
+- `delphi_rename_symbol`: the `changes` list is capped at 100 entries with
+  `changesTruncated` (a symbol with hundreds of uses must not flood a small
+  client's context; `occurrences`/`files` carry the full truth).
+
+
 ## [0.53.1-beta] - 2026-08-24
 
 ### Fixed
