@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.53.2-beta';
+  SERVER_VERSION = '0.54.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1348,8 +1348,10 @@ const
 
   SP_CHANGESET_KIND =
     'stage: edit (replace ONE line by anchor) | create (new file, never ' +
-    'overwrites) | delete (file removed; the snapshot is the way back) | ' +
-    'move (rename/move, destination must not exist)';
+    'overwrites) | delete (the WHOLE FILE is removed; the snapshot is the ' +
+    'way back) | delete-line (remove ONE line by atline - the only way to ' +
+    'remove a BLANK line, which has no usable anchor) | move (rename/move, ' +
+    'destination must not exist)';
 
   SP_CHANGESET_PATH =
     'stage: the file the operation touches (inside the workspace roots)';
@@ -1369,7 +1371,9 @@ const
 
   SP_CHANGESET_ATLINE =
     'stage kind=edit optional: 1-based line number to pin the anchor when ' +
-    'the same line appears more than once';
+    'the same line appears more than once. REQUIRED for kind=delete-line. ' +
+    'Line numbers are rebased automatically against what earlier operations ' +
+    'of the same changeset did to that file';
 
   SR_CHANGESET_CMD =
     'error: command debe ser begin | stage | preview | commit | rollback | status';
@@ -1394,6 +1398,11 @@ const
   SR_CHANGESET_EDIT_NEEDS =
     'RECHAZADO: kind=edit necesita "old" (UNA linea completa copiada de ' +
     'delphi_read) y opcionalmente "new" (el reemplazo) y "atline".';
+
+  SR_CHANGESET_DELLINE_NEEDS =
+    'RECHAZADO: kind=delete-line necesita "atline" (el numero de linea, ' +
+    '1-based) porque una linea EN BLANCO no tiene ancla usable. "old" es ' +
+    'opcional y, si lo das, tiene que coincidir con esa linea.';
 
   SR_CHANGESET_EMPTY =
     'RECHAZADO: el changeset no tiene operaciones. stage anade una por llamada.';

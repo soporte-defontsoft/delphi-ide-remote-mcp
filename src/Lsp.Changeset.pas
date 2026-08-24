@@ -50,10 +50,11 @@ uses
   System.Generics.Collections,
   Lsp.Guard,
   Lsp.Patch,
+  Lsp.TextEdit,
   Lsp.Texts;
 
 type
-  TOpKind = (opEdit, opCreate, opDelete, opMove);
+  TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
 
   TStagedOp = record
     Kind: TOpKind;
@@ -158,12 +159,23 @@ begin
   end;
 end;
 
+{ Physical line count, '' when the file is gone (a delete op). }
+function LineCountOf(const APath: string): Integer;
+var
+  Enc: string;
+begin
+  if not TFile.Exists(APath) then
+    Exit(0);
+  Result := Length(PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]));
+end;
+
 function KindName(K: TOpKind): string;
 begin
   case K of
     opEdit: Result := 'edit';
     opCreate: Result := 'create';
     opDelete: Result := 'delete';
+    opDeleteLine: Result := 'delete-line';
   else
     Result := 'move';
   end;
@@ -192,6 +204,7 @@ end;
 function ApplyOne(const Op: TStagedOp; out AError: string): Boolean;
 var
   A: TPatchArgs;
+  T: TTextEditArgs;
   R, Enc: string;
 begin
   AError := '';
@@ -199,14 +212,33 @@ begin
   case Op.Kind of
     opEdit:
       begin
-        FillChar(A, SizeOf(A), 0);
-        A.Path := Op.Path;
-        A.OldLine := Op.OldLine;
-        A.NewText := Op.NewText;
-        A.HasOld := True;
-        A.HasNew := True;
-        A.AtLine := Op.AtLine;
-        R := ExecutePatch(A);
+        // Delphi sources go through the pascal engine; anything else through
+        // the plain-text one - a transaction that could not touch a .md or a
+        // .json next to the code would be half a transaction (field
+        // 2026-08-24).
+        if MatchText(TPath.GetExtension(Op.Path),
+          ['.pas', '.dpr', '.dpk', '.inc', '.dfm', '.fmx']) then
+        begin
+          FillChar(A, SizeOf(A), 0);
+          A.Path := Op.Path;
+          A.OldLine := Op.OldLine;
+          A.NewText := Op.NewText;
+          A.HasOld := True;
+          A.HasNew := True;
+          A.AtLine := Op.AtLine;
+          R := ExecutePatch(A);
+        end
+        else
+        begin
+          FillChar(T, SizeOf(T), 0);
+          T.Path := Op.Path;
+          T.OldLine := Op.OldLine;
+          T.NewText := Op.NewText;
+          T.HasOld := True;
+          T.HasNew := True;
+          T.AtLine := Op.AtLine;
+          R := ExecuteTextEdit(T);
+        end;
         Result := not (R.StartsWith('RECHAZADO') or R.StartsWith('ERROR') or
           R.StartsWith('error'));
         if not Result then
@@ -235,6 +267,32 @@ begin
           Exit;
         end;
         TFile.Delete(Op.Path); // the snapshot is the way back
+        Result := True;
+      end;
+    opDeleteLine:
+      begin
+        if not TFile.Exists(Op.Path) then
+        begin
+          AError := 'no existe ' + Op.Path;
+          Exit;
+        end;
+        var Txt := PatchLoadText(Op.Path, Enc);
+        var Eol := IfThen(Txt.Contains(#13#10), #13#10, #10);
+        var Ls := Txt.Replace(#13#10, #10).Split([#10]);
+        if (Op.AtLine < 1) or (Op.AtLine > Length(Ls)) then
+        begin
+          AError := Format('la linea %d no existe (%s tiene %d)',
+            [Op.AtLine, TPath.GetFileName(Op.Path), Length(Ls)]);
+          Exit;
+        end;
+        if (Op.OldLine <> '') and (Ls[Op.AtLine - 1] <> Op.OldLine) then
+        begin
+          AError := Format('la linea %d no es la esperada (es "%s")',
+            [Op.AtLine, Ls[Op.AtLine - 1]]);
+          Exit;
+        end;
+        Delete(Ls, Op.AtLine - 1, 1);
+        PatchSaveText(Op.Path, string.Join(Eol, Ls), Enc);
         Result := True;
       end;
     opMove:
@@ -270,6 +328,8 @@ var
   Snap: TSnapshot;
   Changed: TList<string>;
   Applied: Boolean;
+  OpCount, FileCount, Before, After: Integer;
+  Deltas: TDictionary<string, Integer>;
 begin
   Cmd := ACommand.Trim.ToLower;
   GLock.Enter;
@@ -325,6 +385,7 @@ begin
       if AKind = 'edit' then Op.Kind := opEdit
       else if AKind = 'create' then Op.Kind := opCreate
       else if AKind = 'delete' then Op.Kind := opDelete
+      else if (AKind = 'delete-line') or (AKind = 'deleteline') then Op.Kind := opDeleteLine
       else if AKind = 'move' then Op.Kind := opMove
       else
         Exit(SR_CHANGESET_KIND);
@@ -354,6 +415,18 @@ begin
         opDelete:
           if not TFile.Exists(Op.Path) then
             Exit('RECHAZADO: no existe ' + Op.Path);
+        opDeleteLine:
+          begin
+            // a BLANK line has no usable anchor, so atline decides; old is
+            // optional and, when given, must match that line (field
+            // 2026-08-24: no way to remove the blank lines a cleanup leaves)
+            if not TFile.Exists(Op.Path) then
+              Exit('RECHAZADO: no existe ' + Op.Path);
+            if AAtLine <= 0 then
+              Exit(SR_CHANGESET_DELLINE_NEEDS);
+            Op.AtLine := AAtLine;
+            Op.OldLine := AOldLine;
+          end;
         opMove:
           begin
             if ADest.Trim = '' then
@@ -453,15 +526,41 @@ begin
         Applied := True;
         Err := '';
         N := 0;
-        for I := 0 to C.Ops.Count - 1 do
-        begin
-          if not ApplyOne(C.Ops[I], Err) then
+        // Earlier operations MOVE the lines later ones pin with atline: the
+        // preview resolves against the original text, the commit applies
+        // against the mutated one (field 2026-08-24). Every op is rebased
+        // by what the previous ones did to ITS file.
+        Deltas := TDictionary<string, Integer>.Create;
+        try
+          for I := 0 to C.Ops.Count - 1 do
           begin
-            Applied := False;
-            N := I + 1;
-            Break;
+            Op := C.Ops[I];
+            if (Op.AtLine > 0) and Deltas.ContainsKey(Op.Path.ToLower) then
+              Op.AtLine := Op.AtLine + Deltas[Op.Path.ToLower];
+            Before := LineCountOf(Op.Path);
+            if not ApplyOne(Op, Err) then
+            begin
+              Applied := False;
+              N := I + 1;
+              Break;
+            end;
+            After := LineCountOf(Op.Path);
+            if After <> Before then
+            begin
+              var Acc := 0;
+              Deltas.TryGetValue(Op.Path.ToLower, Acc);
+              Deltas.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
+            end;
           end;
+        finally
+          Deltas.Free;
         end;
+        // Counts BEFORE dropping the changeset: GSets owns it, so Remove
+        // FREES C and reading C.Ops.Count afterwards returned 0 - the
+        // commit said "0 operaciones aplicadas" having applied 16 (field
+        // report 2026-08-24). Never read a freed object.
+        OpCount := C.Ops.Count;
+        FileCount := Snaps.Count;
         if not Applied then
         begin
           for Snap in Snaps do
@@ -470,11 +569,10 @@ begin
             else if TFile.Exists(Snap.Path) then
               TFile.Delete(Snap.Path);
           GSets.Remove(Id);
-          Exit(Format(SR_CHANGESET_ROLLED_BACK_FMT,
-            [N, C.Ops.Count, Err]));
+          Exit(Format(SR_CHANGESET_ROLLED_BACK_FMT, [N, OpCount, Err]));
         end;
         GSets.Remove(Id);
-        Exit(Format(SN_CHANGESET_COMMITTED_FMT, [C.Ops.Count, Snaps.Count]));
+        Exit(Format(SN_CHANGESET_COMMITTED_FMT, [OpCount, FileCount]));
       finally
         Snaps.Free;
         Changed.Free;

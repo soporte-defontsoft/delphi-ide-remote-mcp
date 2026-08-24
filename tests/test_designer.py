@@ -84,6 +84,10 @@ open(BAD, 'w', encoding='utf-8', newline='\r\n').write(
   object Raro: TClaseInventada
     Color = clRed
   end
+  object ImagenesLista: TImageList
+    Left = 320
+    Top = 200
+  end
 end
 """)
 BIN = os.path.join(BASE, 'Bin.dfm')
@@ -131,6 +135,10 @@ r = call('delphi_designer', {'command': 'lint', 'path': BAD})
 check('lint NO inventa avisos dentro de la clase desconocida', 'clRed' not in r and 'Color' not in r, r[:400])
 check('lint pilla la propiedad no publicada', 'Alineacion' in r, r[:400])
 check('lint pilla el valor de enum inexistente', 'alMarte' in r, r[:400])
+# field report 2026-08-24: Left/Top on non-visual components are the form
+# designer's own placement - the IDE writes them in every form with a
+# TImageList/TPopupMenu and no class publishes them: pure noise
+check('lint NO avisa de Left/Top de componentes no visuales', '"Left"' not in r and '"Top"' not in r, r[:400])
 
 # ---- doctrina ----
 r = call('delphi_designer', {'command': 'tree', 'path': BIN})

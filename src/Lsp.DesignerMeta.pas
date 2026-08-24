@@ -52,7 +52,7 @@ function MetaTable(const AIsFmx: Boolean): TMetaTable;
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.RegularExpressions,
+  System.SysUtils, System.Classes, System.StrUtils, System.RegularExpressions,
   Lsp.DesignerMeta.Fmx, Lsp.DesignerMeta.Vcl;
 
 var
@@ -240,6 +240,13 @@ begin
         begin
           if not M.PropNames.TryGetValue(Cur, Have) then
             Break; // class without data: silence, never guess
+          // Left/Top on a NON-VISUAL component are the designer's own
+          // placement in the form editor: the IDE writes them in every
+          // .dfm/.fmx carrying a TImageList or a TPopupMenu, and no class
+          // publishes them. Warning about those is pure noise (field
+          // report 2026-08-24: 6 of 6 warnings on a real form were these).
+          if (SIdx = 0) and MatchText(Segs[SIdx], ['Left', 'Top']) then
+            Break;
           Warn(Format('"%s" no existe en %s segun el framework (publica: %s)',
             [Segs[SIdx], CurShow, Have]));
           Break;

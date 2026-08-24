@@ -8,6 +8,35 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.54.0-beta] - 2026-08-24
+
+Four field frictions from an agent using the new tools on a real change (16
+edits over 2 files of a live FMX project).
+
+### Fixed
+- **`delphi_changeset commit` reported "0 operaciones aplicadas" having
+  applied 16**: the owning dictionary FREES the changeset on `Remove`, and
+  the message read `C.Ops.Count` afterwards. Counts are captured before.
+  Same root cause as the "fallo la operacion 2 de 0" in rollbacks.
+- **`atline` is now rebased against what earlier operations of the same
+  changeset did to that file**: the preview resolves against the original
+  text and the commit applies against the mutated one, so a batch that
+  ADDED lines broke the pinned line of a later operation.
+- **`delphi_designer lint` no longer warns about `Left`/`Top`** of
+  non-visual components: the form designer writes them in every form
+  carrying a TImageList/TPopupMenu and no class publishes them (6 of 6
+  warnings on a real form were this).
+
+### Added
+- **`delphi_changeset kind=delete-line`** (`atline` required, `old`
+  optional) - the only way to remove a BLANK line, which has no usable
+  anchor; exactly what a cleanup leaves behind. `kind=delete` keeps meaning
+  the WHOLE FILE, now said so in the schema.
+- Changeset edits on NON-Delphi files (`.md`, `.json`, `.ini`...) now go
+  through the plain-text engine instead of being refused: a transaction that
+  could not touch a doc next to the code was half a transaction.
+
+
 ## [0.53.2-beta] - 2026-08-24
 
 ### Fixed

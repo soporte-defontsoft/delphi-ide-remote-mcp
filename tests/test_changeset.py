@@ -145,6 +145,52 @@ r = cs({'command': 'commit', 'id': cid})
 check('commit bloqueado sin preview limpio', 'RECHAZADO' in r and 'preview' in r.lower(), r[:200])
 cs({'command': 'rollback', 'id': cid})
 
+# ---- 6. fricciones de campo (report hermes 2026-08-24) ----
+# F1: el commit debe decir el NUMERO REAL de operaciones (era 0 por leer un
+# changeset ya liberado por el diccionario que lo posee)
+f1 = os.path.join(BASE, 'f1.txt')
+open(f1, 'wb').write(b'uno\r\ndos\r\ntres\r\ncuatro\r\n')
+cid = begin()
+for n, w in ((1, 'uno'), (2, 'dos'), (3, 'tres')):
+    cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': f1,
+        'old': w, 'new': w + ' cambiado'})
+cs({'command': 'preview', 'id': cid})
+r = cs({'command': 'commit', 'id': cid})
+check('F1: el commit cuenta las operaciones reales (3, no 0)', '3 operaciones' in r, r[:200])
+check('F1: y los cambios estan en disco', open(f1, 'rb').read().count(b'cambiado') == 3, open(f1, 'rb').read())
+
+# F2: delete-line borra una linea EN BLANCO (que no tiene ancla usable)
+f2 = os.path.join(BASE, 'f2.txt')
+open(f2, 'wb').write(b'alfa\r\n\r\nbeta\r\n')
+cid = begin()
+r = cs({'command': 'stage', 'id': cid, 'kind': 'delete-line', 'path': f2, 'atline': 2})
+check('F2: stage delete-line', 'STAGED delete-line' in r, r[:150])
+cs({'command': 'preview', 'id': cid})
+r = cs({'command': 'commit', 'id': cid})
+check('F2: la linea en blanco desaparece', open(f2, 'rb').read() == b'alfa\r\nbeta\r\n', open(f2, 'rb').read())
+cid = begin()
+r = cs({'command': 'stage', 'id': cid, 'kind': 'delete-line', 'path': f2})
+check('F2: delete-line sin atline rechazado con el motivo', 'RECHAZADO' in r and 'atline' in r, r[:200])
+cs({'command': 'rollback', 'id': cid})
+
+# F3: las atline se rebasan contra lo que hicieron las ops anteriores
+f3 = os.path.join(BASE, 'f3.txt')
+open(f3, 'wb').write(b'L1\r\nL2\r\nL3\r\nL4\r\n')
+cid = begin()
+# op 1 mete DOS lineas donde habia una -> L3 pasa de la linea 3 a la 4
+cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': f3, 'old': 'L1',
+    'new': 'L1a\nL1b'})
+# op 2 fija la linea 3 (la de L3 en el fichero ORIGINAL, que el preview ve)
+cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': f3, 'old': 'L3',
+    'new': 'L3 cambiada', 'atline': 3})
+r = cs({'command': 'preview', 'id': cid})
+j = json.loads(r)
+check('F3: preview limpio', j.get('unresolved') == 0, r[:250])
+r = cs({'command': 'commit', 'id': cid})
+check('F3: commit aplica las dos (atline rebasada, no ROLLBACK)', 'COMMIT COMPLETO' in r and '2 operaciones' in r, r[:250])
+disk = open(f3, 'rb').read()
+check('F3: resultado correcto en disco', b'L1a' in disk and b'L1b' in disk and b'L3 cambiada' in disk, disk)
+
 # ---- 5. jaula y contratos ----
 cid = begin()
 r = cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': 'C:\\Windows\\win.ini', 'old': 'x', 'new': 'y'})

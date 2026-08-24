@@ -214,13 +214,13 @@ MULTI-FILE TRANSACTIONS: when one change touches several files, either the whole
 |---|---|---|---|
 | `command` | string | optional | begin (new changeset → id) \| stage (add ONE operation) \| preview (resolve anchors + fingerprint files; required before commit) \| commit (apply all or nothing) \| rollback (discard) \| status (list open ones) |
 | `id` | string | optional | The changeset id returned by begin (every command except begin/status) |
-| `kind` | string | optional | stage: edit (replace ONE line by anchor) \| create (new file, never overwrites) \| delete \| move (destination must not exist) |
+| `kind` | string | optional | stage: edit (replace ONE line by anchor; Delphi sources and plain text alike) \| create (new file, never overwrites) \| delete (the WHOLE FILE) \| delete-line (remove ONE line by `atline` — the only way to remove a BLANK line) \| move (destination must not exist) |
 | `path` | string | optional | stage: the file the operation touches (inside the workspace roots) |
 | `dest` | string | optional | stage kind=move: the destination path |
 | `old` | string | optional | stage kind=edit: the anchor — ONE full line copied verbatim from delphi_read, unique in the file |
 | `new` | string | optional | stage kind=edit: the replacement text (may span several lines) |
 | `content` | string | optional | stage kind=create: the whole content of the new file |
-| `atline` | integer | optional | stage kind=edit: 1-based line number to pin the anchor when the same line appears more than once |
+| `atline` | integer | optional | stage kind=edit: 1-based line number to pin the anchor when the same line appears more than once. REQUIRED for kind=delete-line. Line numbers are rebased automatically against what earlier operations of the same changeset did to that file |
 
 ### `delphi_textedit`
 
