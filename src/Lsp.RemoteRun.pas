@@ -24,6 +24,12 @@ interface
 uses
   System.JSON;
 
+{ Copies runner/mcp-runner.py to <scratch>/_mcp-runner/ on the target of
+  AProfile (the agent asking for remote-run usually has no other way in:
+  measured 2026-08-24, Hermes lives in a container with no route to the
+  target). Returns '' plus the launch line in AHowTo, or a refusal. }
+function InstallRunner(const AProfile: string; out AHowTo: string): string;
+
 { Runs ARemoteExe on the machine of PAServer profile AProfile. ARemoteExe is
   a path ON THE TARGET, absolute or relative to the scratch dir (the
   deployNote of delphi_build target=Deploy names the folder). Returns the
@@ -90,6 +96,40 @@ begin
   finally
     J.Free;
   end;
+end;
+
+function RunnerScriptPath: string;
+begin
+  // next to the exe in a deployment, or in the repo when running from src
+  Result := TPath.Combine(TPath.Combine(
+    TPath.GetDirectoryName(ParamStr(0)), 'runner'), 'mcp-runner.py');
+  if TFile.Exists(Result) then
+    Exit;
+  Result := TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(ParamStr(0)),
+    '..' + PathDelim + '..' + PathDelim + '..' + PathDelim + '..' + PathDelim +
+    'runner' + PathDelim + 'mcp-runner.py'));
+  if not TFile.Exists(Result) then
+    Result := '';
+end;
+
+function InstallRunner(const AProfile: string; out AHowTo: string): string;
+var
+  Pc, Script, Ops, Output: string;
+  Rc: Integer;
+begin
+  AHowTo := '';
+  Pc := PaClientPath;
+  if Pc = '' then
+    Exit(SR_REMOTERUN_NO_PACLIENT);
+  Script := RunnerScriptPath;
+  if Script = '' then
+    Exit(SR_REMOTERUN_NO_SCRIPT);
+  // flag 5 = script: PAServer marks it executable on the target
+  Ops := Format('"--put=%s,%s,5,mcp-runner.py"', [Script, RUNNER_DIR]);
+  Rc := Paclient(Pc, Ops, AProfile, Output);
+  if Rc <> 0 then
+    Exit(Format(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
+  AHowTo := SN_REMOTERUN_INSTALLED;
 end;
 
 function RemoteRun(const AProfile, ARemoteExe, AArgs: string;

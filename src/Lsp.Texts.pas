@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.47.0-beta';
+  SERVER_VERSION = '0.47.1-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -359,7 +359,9 @@ const
     'register it for delphi_build; can take minutes) | remote-run (execute ' +
     '"exe" on the target of profile "name" and return its exit code and ' +
     'output - needs the mcp-runner script installed on the target; see the ' +
-    'note it returns). Default: platforms';
+    'note it returns) | install-runner (copy the runner to the target of ' +
+    'profile "name" so remote-run can work; it then needs ONE manual launch ' +
+    'on the target - the answer gives the exact line). Default: platforms';
   SP_PASERVER_EXE =
     'remote-run: the program to run ON THE TARGET, absolute or relative to ' +
     'the PAServer scratch dir (the deployNote of delphi_build target=Deploy ' +
@@ -388,7 +390,7 @@ const
 
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | add-profile ' +
-    '| test-connection | get-sdk | remote-run';
+    '| test-connection | get-sdk | install-runner | remote-run';
 
   SR_PASERVER_RUN_NEEDS =
     'RECHAZADO: remote-run necesita "name" (el perfil PAServer) y "exe" (el ' +
@@ -397,6 +399,21 @@ const
   SR_REMOTERUN_NO_PACLIENT =
     'error: ninguna instalacion de RAD Studio de este servidor trae ' +
     'bin\paclient.exe: sin el no hay transporte a PAServer.';
+
+  SR_REMOTERUN_NO_SCRIPT =
+    'error: no encuentro runner\mcp-runner.py junto al ejecutable del ' +
+    'servidor. El operador debe copiar la carpeta "runner" del repositorio ' +
+    'al lado del exe y repetir install-runner.';
+
+  SN_REMOTERUN_INSTALLED =
+    'RUNNER COPIADO al target, en <scratch-dir>/_mcp-runner/mcp-runner.py. ' +
+    'FALTA ARRANCARLO una vez: en la maquina destino, dentro de la scratch ' +
+    'dir de PAServer (por defecto ~/PAServer/scratch-dir), ejecuta: ' +
+    'nohup python3 _mcp-runner/mcp-runner.py >> _mcp-runner/runner.log 2>&1 &' +
+    ' -- El runner crea sus carpetas (jobs, out, done) al arrancar y se ' +
+    'queda vigilando; despues, remote-run ya funciona. Ese unico paso ' +
+    'necesita una shell en el destino (una persona, o un agente que viva ' +
+    'alli): es el opt-in a la ejecucion remota, deliberado.';
 
   SR_REMOTERUN_PUT_FMT =
     'error: no se pudo enviar el trabajo al target (paclient exit %d): %s. ' +

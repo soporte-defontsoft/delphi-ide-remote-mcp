@@ -548,6 +548,22 @@ end;
   - CodeGear.Profiles.Targets imports the .sdk via $(PlatformSDK), which the
     build runner now passes when <Platform>.sdk exists (EnvOptions.proj has
     no command-line default for platforms the SDK Manager never touched). }
+function InstallRunnerCmd(const Params: TDelphiPAServerParams): string;
+var
+  Prof, Err, HowTo: string;
+begin
+  Prof := Params.Name.Trim;
+  if Prof = '' then
+    Exit(SR_PASERVER_RUN_NEEDS);
+  Err := ShellArgDenied(Prof);
+  if Err <> '' then
+    Exit(Err);
+  Err := InstallRunner(Prof, HowTo);
+  if Err <> '' then
+    Exit(Err);
+  Result := HowTo;
+end;
+
 function RemoteRunCmd(const Params: TDelphiPAServerParams): string;
 var
   Prof, Exe, Denied: string;
@@ -745,6 +761,8 @@ begin
     Result := TestConnection(Params)
   else if Cmd = 'get-sdk' then
     Result := GetSdk(Params)
+  else if Cmd = 'install-runner' then
+    Result := InstallRunnerCmd(Params)
   else if Cmd = 'remote-run' then
     Result := RemoteRunCmd(Params)
   else

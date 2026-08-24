@@ -8,6 +8,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.47.1-beta] - 2026-08-24
+
+### Added
+- **`delphi_paserver command=install-runner name=<profile>`** - copies
+  `runner/mcp-runner.py` to the target's `_mcp-runner/` through paclient, and
+  answers with the single line to launch it there. Field 2026-08-24: the
+  agent that needs `remote-run` (a container with no route to the target) has
+  no other way to put the file on that machine; installing it by hand was
+  never going to be its job.
+
+
 ## [0.47.0-beta] - 2026-08-24
 
 Remote RUN: an agent that is not sitting on the target machine can now

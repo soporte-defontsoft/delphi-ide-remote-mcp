@@ -18,6 +18,12 @@ BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'remoterun')
 shutil.rmtree(BASE, ignore_errors=True); os.makedirs(BASE)
 SCRATCH = os.path.join(BASE, 'scratch'); os.makedirs(SCRATCH)
 
+# the server ships runner/mcp-runner.py next to its exe (that is how it is
+# deployed); install-runner picks it up from there
+_rd = os.path.join(os.path.dirname(os.path.abspath(EXE)), 'runner')
+os.makedirs(_rd, exist_ok=True)
+shutil.copy(os.path.join(REPO, 'runner', 'mcp-runner.py'), _rd)
+
 # a tiny "app" the runner will execute on the "target" (here, same box)
 APP = os.path.join(SCRATCH, 'saluda.py')
 open(APP, 'w', encoding='utf-8').write(
@@ -86,6 +92,14 @@ check('sin name/exe rechazado', 'RECHAZADO' in r, r[:150])
 # 2) shell metachar refused
 r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': 'saluda.cmd', 'args': 'a; rm -rf /'})
 check('metacaracter rechazado', 'RECHAZADO' in r and ';' in r, r[:150])
+# 2b) install-runner copies the script to the target
+os.remove(os.path.join(RUNNER_DIR, 'mcp-runner.py'))
+r = call('delphi_paserver', {'command': 'install-runner', 'name': 'perfil'})
+check('install-runner copia el script', 'RUNNER COPIADO' in r and os.path.isfile(os.path.join(RUNNER_DIR, 'mcp-runner.py')), r[:200])
+check('install-runner explica el arranque manual', 'nohup python3' in r, r[:250])
+r = call('delphi_paserver', {'command': 'install-runner'})
+check('install-runner sin name rechazado', 'RECHAZADO' in r, r[:150])
+
 # 3) happy path
 r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': 'saluda.cmd', 'args': 'uno dos', 'timeoutms': 20000})
 j = json.loads(r) if r.startswith('{') else {}
