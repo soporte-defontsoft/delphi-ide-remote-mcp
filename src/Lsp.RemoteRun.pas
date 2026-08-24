@@ -198,9 +198,24 @@ begin
 
   if not Waited then
   begin
+    // Copied but never launched is a DIFFERENT problem from not installed,
+    // and the agent cannot tell them apart (field 2026-08-24, Hermes). One
+    // extra paclient call, only on this failure path: is the script there?
+    var Probe := TPath.Combine(TmpDir, 'mcp-runner.py');
+    if TFile.Exists(Probe) then
+      TFile.Delete(Probe);
+    Ops := Format('"--get=%s/mcp-runner.py,%s"', [RUNNER_DIR, TmpDir]);
+    var Installed := (Paclient(Pc, Ops, AProfile, Output) = 0) and TFile.Exists(Probe);
+    if Installed then
+      TFile.Delete(Probe);
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', Format(SR_REMOTERUN_TIMEOUT_FMT,
-      [(ATimeoutMs + GRACE_MS) div 1000, RUNNER_DIR]));
+    if Installed then
+      Result.AddPair('error', Format(SR_REMOTERUN_NOT_STARTED_FMT,
+        [(ATimeoutMs + GRACE_MS) div 1000, RUNNER_DIR]))
+    else
+      Result.AddPair('error', Format(SR_REMOTERUN_TIMEOUT_FMT,
+        [(ATimeoutMs + GRACE_MS) div 1000, RUNNER_DIR]));
+    Result.AddPair('runnerInstalled', TJSONBool.Create(Installed));
     Result.AddPair('jobId', JobId);
     Exit;
   end;

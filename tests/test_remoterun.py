@@ -115,6 +115,18 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': '
 j = json.loads(r) if r.startswith('{') else {}
 check('exe inexistente en target', 'no existe' in json.dumps(j), r[:250])
 
+# 6) runner copiado pero NO arrancado: mensaje distinto de "no instalado"
+runner.kill(); time.sleep(1)
+for f in os.listdir(os.path.join(RUNNER_DIR, 'jobs')):
+    os.remove(os.path.join(RUNNER_DIR, 'jobs', f))
+r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': 'saluda.cmd', 'timeoutms': 1000}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+check('runner parado: dice que falta ARRANCARLO', j.get('runnerInstalled') is True and 'ARRANCARLO' in (j.get('error') or ''), r[:300])
+os.remove(os.path.join(RUNNER_DIR, 'mcp-runner.py'))
+r = call('delphi_paserver', {'command': 'remote-run', 'name': 'perfil', 'exe': 'saluda.cmd', 'timeoutms': 1000}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+check('runner ausente: dice que NO esta instalado', j.get('runnerInstalled') is False and 'NO tiene el runner' in (j.get('error') or ''), r[:300])
+
 proc.kill(); runner.kill()
 print('\n== remote-run: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

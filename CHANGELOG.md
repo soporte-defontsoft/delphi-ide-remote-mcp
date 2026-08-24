@@ -8,6 +8,16 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.47.2-beta] - 2026-08-24
+
+### Fixed
+- **`remote-run` said "no runner installed" when the runner WAS installed and
+  simply not launched** (reported by an agent that had just run
+  `install-runner`). On the timeout path the server now asks the target
+  whether the script is there and answers accordingly, with the launch line;
+  the result carries `runnerInstalled` so the two cases are told apart.
+
+
 ## [0.47.1-beta] - 2026-08-24
 
 ### Added

@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.47.1-beta';
+  SERVER_VERSION = '0.47.2-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -425,6 +425,15 @@ const
     'debe existir "%s/mcp-runner" ejecutandose (script Python que lee ' +
     'jobs/*.json y escribe out/result-*.json). Sin runner no hay ejecucion ' +
     'remota: instalalo (te lo damos con delphi_fetch) y reintenta.';
+
+  SR_REMOTERUN_NOT_STARTED_FMT =
+    'error: el target no devolvio resultado en %d s, pero el runner SI esta ' +
+    'copiado alli: falta ARRANCARLO. En la maquina destino, dentro de la ' +
+    'scratch dir de PAServer: nohup python3 %s/mcp-runner.py >> ' +
+    '%1:s/runner.log 2>&1 & -- Ese arranque necesita una shell en el destino ' +
+    '(una persona o un agente que viva alli) y es el opt-in a la ejecucion ' +
+    'remota. Si crees que si esta corriendo, mira %1:s/runner.log en el ' +
+    'target: ahi se registra cada job.';
 
   SN_REMOTERUN_NOTE =
     'Ejecutado en el target via PAServer (buzon de ficheros: paclient no ' +
