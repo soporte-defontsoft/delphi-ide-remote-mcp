@@ -313,6 +313,8 @@ var
   GRemoteHosts: string = '';        // hosts a raw TCP probe may dial
   GRemoteProjects: TArray<string>;  // [Security] RemoteRunProjects, '' = any
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
+  GAgentConfinement: Boolean = False; // each agent to its own subfolder: OFF by default
+  GSharedFolders: TArray<string>;     // subfolders any agent may write (opt-in)
   GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
   GAdbDevicesSet: Boolean = False;  // configured at all? absent = unrestricted
 
@@ -365,6 +367,9 @@ begin
   GGitRemotes := GetEnvironmentVariable('DELPHI_MCP_GIT_REMOTES');
   GRemoteHosts := GetEnvironmentVariable('DELPHI_MCP_REMOTE_HOSTS');
   GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
+  GAgentConfinement := GetEnvironmentVariable('DELPHI_MCP_AGENT_CONFINEMENT') = '1';
+  GSharedFolders := LowerCase(GetEnvironmentVariable('DELPHI_MCP_SHARED_FOLDERS'))
+    .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
   IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
   if TFile.Exists(IniPath) then
   begin
@@ -392,6 +397,11 @@ begin
         .Split([';'], TStringSplitOptions.ExcludeEmpty);
       if not GAllowBuildScripts then
         GAllowBuildScripts := Ini.ReadBool('Security', 'AllowBuildScripts', False);
+      if not GAgentConfinement then
+        GAgentConfinement := Ini.ReadBool('Security', 'AgentConfinement', False);
+      if Length(GSharedFolders) = 0 then
+        GSharedFolders := LowerCase(Ini.ReadString('Security', 'SharedFolders', ''))
+          .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
       if not GAdbDevicesSet then
         ParseAdbDevices(Ini.ReadString('Adb', 'AllowedDevices', ''));
     finally
@@ -1447,6 +1457,37 @@ begin
   end;
 end;
 
+{ Optional per-agent write confinement (OFF by default). When on, an identified
+  agent may write only inside <root>\<its-name>\... or an explicitly shared
+  subfolder - so several agents can share one workspace root without stepping on
+  each other. A caller with no identity (stdio, the operator's own console) is
+  trusted with everything, the same rule the recoverable trash already uses.
+  Reading is never confined: an agent still sees the whole tree. }
+function AgentConfineDenied(const AFull, ARoot: string): string;
+var
+  Me, Rel, Seg, Sh: string;
+  P: Integer;
+begin
+  Result := '';
+  if not GAgentConfinement then
+    Exit;
+  Me := CurrentAgent;
+  if Me = '' then
+    Exit; // stdio / operator: not confined
+  Rel := AFull.Substring(Length(IncludeTrailingPathDelimiter(ARoot))).Replace('/', '\');
+  P := Rel.IndexOf('\');
+  if P < 0 then
+    Seg := Rel
+  else
+    Seg := Rel.Substring(0, P);
+  if SameText(Seg, Me) then
+    Exit; // your own folder
+  for Sh in GSharedFolders do
+    if SameText(Seg, Sh) then
+      Exit; // a folder the operator marked shared
+  Result := Format(SR_AGENT_CONFINED_FMT, [Me, Me]);
+end;
+
 function PathDenied(const APath: string): string;
 var
   Roots: TArray<string>;
@@ -1474,7 +1515,7 @@ begin
   end;
   for R in Roots do
     if StartsText(R, IncludeTrailingPathDelimiter(Full)) then
-      Exit;
+      Exit(AgentConfineDenied(Full, R));
   Result := Format(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;
 
@@ -1675,6 +1716,11 @@ var
   Full, R: string;
 begin
   Result := PathDenied(APath);
+  // Confinement is a WRITE rule. A read that trips ONLY it is inside the jail
+  // and merely belongs to another agent - and reading the whole tree is
+  // allowed even under confinement (you see everything, you write only yours).
+  if (Result <> '') and Result.Contains('modo confinado') then
+    Exit('');
   if Result = '' then
     Exit;
   // Outside the jail - but READING library territory is legitimate.

@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.74.0-beta';
+  SERVER_VERSION = '0.75.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -324,6 +324,13 @@ const
     'copia de seguridad FUERA de la jaula. Borra o mueve lo que hay DENTRO ' +
     '(delphi_list te lo ensena). Cambiar los roots es cosa del operador, en ' +
     'settings.ini [Workspace] Roots.';
+
+  SR_AGENT_CONFINED_FMT =
+    'RECHAZADO: el servidor esta en modo confinado y tu (agente "%s") solo ' +
+    'puedes ESCRIBIR dentro de tu carpeta <root>\%s\... (o en una carpeta ' +
+    'compartida que haya declarado el operador). Leer puedes leerlo todo; ' +
+    'escribir, solo lo tuyo. Crea/edita bajo tu carpeta, o pide al operador que ' +
+    'marque esa carpeta como compartida.';
 
   SR_JAIL_FMT =
     'RECHAZADO: "%s" esta FUERA de los workspaces permitidos. Este servidor ' +

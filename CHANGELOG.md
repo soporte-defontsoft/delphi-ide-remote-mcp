@@ -8,6 +8,19 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.75.0-beta] - 2026-08-25
+
+### Added
+- **Optional per-agent write confinement** (`AgentConfinement`, OFF by default).
+  sweep10 confirmed the jail is per-ROOT, not per-agent: any agent could write
+  into another's folder in a shared workspace. With confinement on, an identified
+  agent may WRITE only inside `<root>\<its-name>\...` or a folder the operator
+  marked shared (`SharedFolders=`); reading the whole tree stays open, and a
+  caller with no identity (stdio, the operator's own console) is unconfined - the
+  same trust rule the recoverable trash already uses. Enforced at the single
+  write gate (`PathDenied`), so every write tool honours it at once; reads that
+  trip only confinement are allowed through. Off by default changes nothing.
+
 ## [0.74.0-beta] - 2026-08-25
 
 ### Fixed
