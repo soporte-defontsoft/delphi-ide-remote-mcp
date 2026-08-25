@@ -57,6 +57,7 @@ type
 implementation
 
 uses
+  System.Classes,
   System.IOUtils,
   System.StrUtils,
   System.RegularExpressions,
@@ -180,6 +181,51 @@ begin
   end;
 end;
 
+{ Who else's work is inside this purge, '' when none.
+
+  Measured 2026-08-25 by a probe agent: the per-FILE check below worked, so it
+  purged the DATE FOLDER instead and took every agent's copies inside with it -
+  the check asked for "<folder>.by", which never exists, read that as "nobody's"
+  and deleted the tree. A guard that only looks at the path it was handed is no
+  guard on a recursive delete. Now a folder is refused if it holds a single
+  marker belonging to somebody else, and it names them. }
+function PurgeOwnershipDenied(const APath: string): string;
+var
+  Me, Owner, F: string;
+  Others: TStringList;
+begin
+  Result := '';
+  Me := CurrentAgent;
+  // No identity (stdio, the operator's own console) is trusted with everything.
+  if Me = '' then
+    Exit;
+  if TFile.Exists(APath) then
+  begin
+    Owner := TrashOwner(APath);
+    if (Owner <> '') and not SameText(Owner, Me) then
+      Result := Format(SR_FILE_PURGE_NOT_YOURS_FMT, [Owner]);
+    Exit;
+  end;
+  if not TDirectory.Exists(APath) then
+    Exit;
+  Others := TStringList.Create;
+  try
+    Others.Duplicates := dupIgnore;
+    Others.Sorted := True;
+    for F in TDirectory.GetFiles(APath, '*.by', TSearchOption.soAllDirectories) do
+    begin
+      Owner := TrashOwner(Copy(F, 1, Length(F) - 3));
+      if (Owner <> '') and not SameText(Owner, Me) then
+        Others.Add(Owner);
+    end;
+    if Others.Count > 0 then
+      Result := Format(SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT,
+        [Others.Count, Others.CommaText]);
+  finally
+    Others.Free;
+  end;
+end;
+
 { Whether anything is still standing where the caller asked us to delete. }
 function StillThere(const APath: string): Boolean;
 begin
@@ -225,13 +271,14 @@ begin
       Exit(SR_FILE_PURGE_NOT_ROOT);
     if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
       Exit('RECHAZADO: no existe ' + Params.Path);
-    // Yours only, unless you have no identity (stdio, or the operator's own
-    // console) - then you are trusted with everything. An item nobody owns is
-    // fair game too.
-    var Owner := TrashOwner(Params.Path);
-    var Me := CurrentAgent;
-    if (Me <> '') and (Owner <> '') and not SameText(Owner, Me) then
-      Exit(Format(SR_FILE_PURGE_NOT_YOURS_FMT, [Owner]));
+    // The marker goes with the item it marks: purging it alone would leave the
+    // copy unowned, which is the cheapest way to launder somebody else's trash.
+    if Params.Path.ToLower.EndsWith('.by') then
+      Exit(SR_GUARD_OWNER_MARKER);
+    // Yours only - and on a folder, that means everything inside it too.
+    Denied := PurgeOwnershipDenied(Params.Path);
+    if Denied <> '' then
+      Exit(Denied);
     try
       if TDirectory.Exists(Params.Path) then
       begin

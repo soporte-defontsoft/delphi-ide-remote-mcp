@@ -987,10 +987,15 @@ begin
     // file, and the pile made it look like a threading problem. The compiler
     // stops making sense after the first refusal, so name the first one and
     // say the rest may be its shadow.
-    if Errors.Count > 1 then
+    // firstError goes out whenever there IS an error - it was documented as
+    // unconditional and then vanished on single-error builds, which is exactly
+    // when a caller scanning for one key finds nothing. The "the rest may be
+    // its shadow" note only makes sense when there IS a rest.
+    if Errors.Count > 0 then
     begin
       Result.AddPair('firstError', Errors.Items[0].Value);
-      Result.AddPair('firstErrorNote', SN_BUILD_FIRST_ERROR);
+      if Errors.Count > 1 then
+        Result.AddPair('firstErrorNote', SN_BUILD_FIRST_ERROR);
     end;
     // F2039 is almost never a code problem: the binary this build is about to
     // write is OPEN - the previous run still alive, the IDE holding it, a

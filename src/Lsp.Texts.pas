@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.68.0-beta';
+  SERVER_VERSION = '0.69.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1069,7 +1069,7 @@ const
     'falta un PERFIL DE CONEXION del IDE: delphi_build target=Deploy ' +
     'platform=%s solo funciona si el usuario de este servidor tiene uno ' +
     'configurado (si no, msbuild responde "Missing profile name" hasta en ' +
-    'Win32). En remoto, delphi_paclient hace el despliegue de verdad; en ' +
+    'Win32). En remoto, delphi_paserver hace el despliegue de verdad; en ' +
     'local, el .deployproj queda escrito y el IDE lo usara al abrir el ' +
     'proyecto.';
 
@@ -1091,7 +1091,7 @@ const
     'add-deployfile writes one (with the binary in it) and adds your file. ' +
     'Note that RUNNING a deployment needs an IDE connection profile on this ' +
     'machine: without one, delphi_build target=Deploy fails with "Missing ' +
-    'profile name" even for Win32. delphi_paclient is what deploys remotely.';
+    'profile name" even for Win32. delphi_paserver is what deploys remotely.';
 
   // ---- project units (Lsp.ProjectUnits: add-unit / remove-unit / create / delete / move) ----
 
@@ -1558,7 +1558,7 @@ const
     'LLEVARSELO Y DESPLEGAR'#10 +
     '  bajarse un fichero ................. delphi_fetch'#10 +
     '  empaquetar una carpeta ............. delphi_package'#10 +
-    '  desplegar y ejecutar en un target .. delphi_paclient, delphi_remoterun'#10 +
+    '  desplegar y ejecutar en un target .. delphi_paserver, delphi_adb'#10 +
     '  Android ............................ delphi_adb'#10 +
     #10 +
     'GIT Y MEMORIA'#10 +
@@ -1729,7 +1729,7 @@ const
   SR_TEST_PLATFORM_FMT =
     'RECHAZADO: %s no se puede EJECUTAR en esta maquina, y ejecutar es de lo ' +
     'que va esta tool. Compila para esa plataforma con delphi_build y ' +
-    'llevatelo con delphi_paclient / delphi_adb.';
+    'llevatelo con delphi_paserver / delphi_adb.';
 
   SN_TEST_TIMEOUT_NOTE =
     'SE ACABO EL TIEMPO y he MATADO el proceso: no es que los tests fallen, ' +
@@ -1740,6 +1740,13 @@ const
     'se guarda en un buffer y solo se vuelca al terminar, asi que al matarlo ' +
     'se pierde; con Flush(Output) despues de cada linea la veras. Si esperas ' +
     'que tarde, sube "timeoutms".';
+
+  SN_TEST_NO_COUNTS_FAILED_FMT =
+    'FALLO. No he sabido contar los tests (el runner no imprime un formato ' +
+    'que yo entienda), pero ha devuelto codigo de salida %d, y eso es el ' +
+    'propio runner diciendo que algo ha ido mal: NO lo des por bueno. Mira ' +
+    'outputTail para ver que fallo, y si quieres el recuento pasa ' +
+    'countsFormat (primera palabra PASS/OK/FAIL/ERROR por linea).';
 
   SN_TEST_NO_COUNTS =
     'Ha terminado bien pero NO he sabido contar ni un solo test, asi que no ' +
@@ -1848,7 +1855,11 @@ const
   SP_DESIGNER_COMMAND =
     'info (what a class publishes) | prop (one property in detail) | tree ' +
     '(component tree of a text .dfm/.fmx) | get (one component''s block) | ' +
-    'lint (designer lint on demand). Default: info';
+    'lint (designer lint on demand) | check-binding (does the .dfm agree ' +
+    'with the class in the .pas: components with no published field, events ' +
+    'naming a method that is not published, published fields with no ' +
+    'component, duplicate names - all of which COMPILE and then throw when ' +
+    'the form is created). Default: info';
 
   SP_DESIGNER_PATH =
     'tree/get/lint: the .dfm or .fmx file (text form; binary TPF0 refused)';
@@ -1870,7 +1881,7 @@ const
     'info optional: only properties whose name contains this text';
 
   SR_DESIGNER_CMD =
-    'error: command debe ser info | prop | tree | get | lint';
+    'error: command debe ser info | prop | tree | get | lint | check-binding';
 
   SR_DESIGNER_FRAMEWORK =
     'RECHAZADO: framework debe ser vcl o fmx.';
@@ -1975,6 +1986,32 @@ const
   SR_DESIGNER_NO_UNIT_FMT =
     'RECHAZADO: no encuentro la unit del form (%s). Si se llama de otra ' +
     'forma, pasala en "unit".';
+
+  SR_DESIGNER_BINDING_NOT_FORM =
+    'RECHAZADO: check-binding compara un FORM con su clase, asi que "path" ' +
+    'tiene que ser el .dfm/.fmx. La unit va en "unit" (y si se llama igual ' +
+    'que el form no hace falta pasarla).';
+
+  SR_DESIGNER_BINDING_UNIT_EXT =
+    'RECHAZADO: "unit" tiene que ser un .pas. Esta tool lee la clase del ' +
+    'form, no cualquier fichero de texto.';
+
+  SR_DESIGNER_BINDING_NO_ROOT =
+    'RECHAZADO: este fichero no empieza por un objeto de designer ("object ' +
+    '<Nombre>: <TClase>"), asi que no es un form que yo pueda comparar.';
+
+  SN_DESIGNER_BINDING_NOCLASS_FMT =
+    'OJO: el .dfm dice que este form es de clase %s, pero esa clase NO esta ' +
+    'declarada en %s. O el .dfm apunta a otra unit, o la clase se renombro ' +
+    'solo en un sitio. No comparo nada mas hasta que eso cuadre: seria ' +
+    'inventarme el resultado.';
+
+  SN_DESIGNER_BINDING_PARTIAL_FMT =
+    'PARCIAL: la herencia sale de esta unit (%s), asi que los componentes y ' +
+    'metodos heredados no los veo desde aqui. Lo que te digo que SOBRA o que ' +
+    'FALTA seria mentira, asi que no lo listo; si te sale ok:true, leelo ' +
+    'como "no he encontrado nada malo en lo que SI puedo ver". Para revisar ' +
+    'lo heredado, pasa check-binding tambien al form padre.';
 
   SN_DESIGNER_BINDING_OK =
     'El form y su clase CUADRAN: cada objeto del .dfm tiene su campo ' +
@@ -2159,6 +2196,13 @@ const
     'actual: usa offset=%d. Para reemplazar el fichero entero, offset=0 (esa ' +
     'si deja copia).';
 
+  SR_UPLOAD_BINARY_DESIGNER =
+    'RECHAZADO: eso es un .dfm/.fmx BINARIO (firma TPF0 o envoltorio de ' +
+    'recurso $FF) y este servidor no interpreta designers binarios: si lo ' +
+    'subes, ninguna tool de aqui podra volver a leerlo ni arreglarlo, y si ' +
+    'encima pisa un designer de texto vivo te quedas sin el original legible. ' +
+    'Sube el designer como TEXTO (empieza por "object <Nombre>: <TClase>").';
+
   SR_UPLOAD_BAD_SHA_FMT =
     'RECHAZADO: "%s" no tiene forma de sha256 (son 64 digitos hexadecimales). ' +
     'No he subido nada. Antes daba la subida por mala y apartaba el fichero ' +
@@ -2199,6 +2243,24 @@ const
     '(__delphi-patch). Para un fichero vivo, borralo normal: va a la ' +
     'papelera, y si de verdad quieres que desaparezca, purgalo desde alli. ' +
     'Ese doble paso es la red de la que dependen todas las demas tools.';
+
+  SR_GUARD_OWNER_MARKER =
+    'RECHAZADO: los ficheros ".by" son el marcador de quien mando algo a la ' +
+    'papelera. Los escribe el servidor y no se editan: reescribir uno es ' +
+    'adjudicarse el trabajo de otro agente.';
+  SR_GUARD_DEAD_TRASH =
+    'RECHAZADO: __delphi-patch\\ es la papelera de copias recuperables. Se lee ' +
+    'y se restaura, pero no se escribe dentro: esa copia es la ULTIMA version ' +
+    'buena de un fichero y pisarla destruye justo lo que la papelera existe ' +
+    'para conservar. El fichero vivo esta un nivel mas arriba.';
+  SR_GUARD_DEAD_IDE =
+    'RECHAZADO: __history\\ y __recovery\\ son las copias muertas del IDE. No ' +
+    'se escribe en ellas; el fichero vivo esta en la carpeta del proyecto.';
+
+  SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT =
+    'RECHAZADO: dentro de esa carpeta hay %d copia(s) que mandaron a la ' +
+    'papelera otros agentes (%s). Una carpeta se purga entera o no se purga: ' +
+    'purga tus copias una a una, o pidele al operador que limpie la carpeta.';
 
   SR_FILE_PURGE_NOT_YOURS_FMT =
     'RECHAZADO: esa copia la mando a la papelera OTRO agente (%s), asi que no ' +

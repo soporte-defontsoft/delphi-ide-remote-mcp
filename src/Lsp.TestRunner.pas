@@ -407,9 +407,25 @@ begin
   begin
     // Zero tests is not a pass. "It compiles" was being reported as "it
     // works" whenever the runner printed nothing this parser understood.
+    //
+    // And zero tests is not "it ended fine" either: this branch used to
+    // overwrite the verdict the EXIT CODE had already given, so a runner that
+    // returned 1 after printing "1 failed" in a format nobody here parses came
+    // back as no-tests with a note saying it had ended well (measured
+    // 2026-08-25). Not knowing how to count is my problem; the exit code is
+    // still the runner telling me it failed, and it wins.
     Result.RemovePair('result').Free;
-    Result.AddPair('result', 'no-tests');
-    Result.AddPair('noTestsNote', SN_TEST_NO_COUNTS);
+    if ExitCode <> 0 then
+    begin
+      Result.AddPair('result', 'fail');
+      Result.AddPair('noTestsNote', Format(SN_TEST_NO_COUNTS_FAILED_FMT,
+        [ExitCode]));
+    end
+    else
+    begin
+      Result.AddPair('result', 'no-tests');
+      Result.AddPair('noTestsNote', SN_TEST_NO_COUNTS);
+    end;
   end;
   Tail := Output.Replace(#13#10, #10).Split([#10]);
   From := Length(Tail) - 40;

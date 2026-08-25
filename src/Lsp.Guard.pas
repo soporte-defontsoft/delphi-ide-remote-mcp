@@ -155,6 +155,22 @@ procedure ClearThreadIdentity;
 function CurrentAgent: string;               // '' = unknown
 function CurrentAgentOr(const ADefault: string): string;
 
+{ Dead copies are not a scratchpad. The recoverable trash, and the IDE's own
+  __history/__recovery, hold the LAST GOOD version of somebody's work - the
+  whole reason every write here is safe. Writing into them destroys exactly
+  what they exist to preserve, and it does not even need a purge: overwrite
+  the copy and the original is gone for good.
+
+  Measured 2026-08-25 by a probe agent: delphi_edit refused the trash, so the
+  agent went through delphi_textedit (which handles NON-Delphi text and had no
+  such rule) and (a) rewrote another agent's recoverable copy, and (b) edited
+  the ".by" owner marker of a copy that was not its own, from "bob" to its own
+  name, and then purged it legitimately. A guard one tool wide is not a guard.
+
+  Reading a dead copy is fine (that is how you decide whether to restore it);
+  moving one OUT is the restore itself. Only writing IN is refused. }
+function DeadCopyWriteDenied(const APath: string): string;
+
 { Host names git may talk to when an agent writes an explicit URL, comma
   separated; '' (the default) means none - see GitRemoteDenied. }
 function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
@@ -487,6 +503,24 @@ begin
     Result := TCurrentAgent
   else
     Result := ADefault;
+end;
+
+function DeadCopyWriteDenied(const APath: string): string;
+var
+  P: string;
+begin
+  Result := '';
+  // Pascal has no string escapes: '\' here would be TWO literal backslashes
+  // and no path on earth contains them. Written that way once (a Python habit
+  // leaking into Delphi) and the whole guard matched nothing while looking
+  // perfectly correct - the ".by" rule passed only because it has no slash.
+  P := APath.ToLower.Replace('/', '\');
+  if P.EndsWith('.by') then
+    Exit(SR_GUARD_OWNER_MARKER);
+  if P.Contains('\__delphi-patch\') or P.EndsWith('\__delphi-patch') then
+    Exit(SR_GUARD_DEAD_TRASH);
+  if P.Contains('\__history\') or P.Contains('\__recovery\') then
+    Exit(SR_GUARD_DEAD_IDE);
 end;
 
 function GitRemoteHosts: string;

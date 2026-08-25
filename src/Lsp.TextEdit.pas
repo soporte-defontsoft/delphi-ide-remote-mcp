@@ -269,6 +269,11 @@ begin
     Result := ExtGate(A.Path);
     if Result <> '' then
       Exit;
+    // delphi_edit refused the trash and sent non-Delphi text here; this tool
+    // did not know the rule, so the trash was writable after all.
+    Result := DeadCopyWriteDenied(A.Path);
+    if Result <> '' then
+      Exit;
     if A.CreateFile_ then
       Exit(DoCreate(A));
     if not A.HasOld then

@@ -1457,6 +1457,9 @@ begin
   if SkipIdeArtifacts(FullPath) then
     Exit('error: ruta de artefactos del IDE (__history, __recovery, Win32, ' +
       'dcu...): no se sube ahi.');
+  Result := DeadCopyWriteDenied(FullPath);
+  if Result <> '' then
+    Exit;
   // An upload with no bytes is not an upload: the schema only demanded "path",
   // so a half-typed call landed here, opened the file with fmCreate and left
   // it at 0 bytes reporting success (field round 8). Nothing destructive may
@@ -1488,6 +1491,18 @@ begin
   finally
     B64.Free;
   end;
+
+  // A designer this server cannot read is a designer nobody here can fix.
+  // Measured 2026-08-25: upload was the one writer with no designer rule, and
+  // an agent replaced a LIVE text .dfm of a compiling project with a 19-byte
+  // TPF0 stream - lint then refused the file it had just written and the build
+  // died in RLINK32. Every other writer refuses both binary shapes; this one
+  // shipped them.
+  if MatchText(TPath.GetExtension(FullPath), ['.dfm', '.fmx']) and
+     (Length(Bytes) >= 4) and
+     (((Bytes[0] = $54) and (Bytes[1] = $50) and (Bytes[2] = $46) and
+       (Bytes[3] = $30)) or (Bytes[0] = $FF)) then
+    Exit(SR_UPLOAD_BINARY_DESIGNER);
 
   Dir := TPath.GetDirectoryName(FullPath);
   if (Dir <> '') and not TDirectory.Exists(Dir) then

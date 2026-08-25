@@ -8,6 +8,71 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.69.0-beta] - 2026-08-25
+
+Round 8 of adversarial agent probing: three agents attacked the live server at
+once - one on security, one on VCL forms, one comparing the README with reality.
+Everything below is something they broke.
+
+### Fixed
+- **Purging a trash FOLDER destroyed every agent's copies inside it.** The
+  ownership check asked for `<folder>.by`, which never exists, read that as
+  "nobody's" and deleted the tree. Two agents hit it independently; one lost
+  another agent's entire backup folder. A folder is now refused if it holds a
+  single copy belonging to somebody else, and it names them.
+- **The trash was writable, so the guard could be walked around.** `delphi_edit`
+  refused it and sent non-Delphi text to `delphi_textedit`, which had never
+  heard of the rule: an agent rewrote another agent's recoverable copy, and
+  edited a `.by` owner marker from `bob` to its own name to purge what was not
+  its own. Writes into `__delphi-patch`, `__history`, `__recovery` and any `.by`
+  are now refused at one shared gate. Reading and restoring still work.
+- **`delphi_upload` replaced a live text `.dfm` with a binary one.** It was the
+  only writer with no designer rule; the file it wrote could not be read back by
+  any tool here, and the build died in RLINK32.
+- **`delphi_test` called a red suite "ha terminado bien".** A runner whose output
+  this server cannot count returned exit code 1, and the zero-tests branch
+  overwrote the verdict the exit code had already given. Not knowing how to
+  count is our problem; the exit code is the runner saying it failed, and it wins.
+- **`check-binding` shipped yesterday with a jail escape and four false answers.**
+  `unit` never went through the read jail (a file oracle over the whole machine,
+  and it parsed what it found). It read the whole `.pas` instead of the form's
+  own class, so a second class vouched for components that did not exist. It
+  accepted a handler declared `private`/`public` - the exact runtime failure it
+  promises to catch, since the form loader only sees PUBLISHED methods. It could
+  not read `A, B: TButton;` or a qualified type, reported the children of an
+  inline frame as missing, and called every inherited member of a form whose
+  ancestor lives in another unit missing. Now it follows the ancestry as far as
+  the unit goes and says what it cannot see instead of inventing it, and it also
+  catches duplicate component names (`EComponentError` at load) and an event
+  left with no value (an invalid `.dfm` the linker rejects without naming a line).
+- **`firstError` vanished on single-error builds**, documented as unconditional.
+- **`delphi_help` pointed at two tools that do not exist** (`delphi_paclient`,
+  `delphi_remoterun`); the real one is `delphi_paserver`.
+- A `.dfm` guard written as `'\'` matched nothing: **Pascal has no string
+  escapes**, so that is two literal backslashes and no path contains them.
+
+### Added
+- **`tests/run_all.py`** - runs the 28 batteries against a CLEAN copy of the
+  server. The server reads a `settings.ini` next to its executable, and a dev
+  machine has one there, so five batteries were failing for reasons that had
+  nothing to do with the code. 1011 checks.
+- **README: the seven tools that had no row** (`delphi_help`, `delphi_test`,
+  `delphi_delete`, `delphi_move`, `delphi_package`, `delphi_styles`,
+  `delphi_messages`), and `delphi_help` promoted to the first row - it is the
+  map, and it was mentioned once in the whole document.
+- **`check-binding` in the `command` schema.** It was documented in the README
+  and missing from the enum agents actually read, so nobody would ever call it.
+
+### Changed
+- **The four-questions section was re-checked claim by claim and corrected.**
+  It said errors carry a column field (they do not), named `delphi_projects
+  add-searchpath` (it is `delphi_config`, and paths are per PLATFORM, not per
+  configuration), and promised a `compilesAgainst` that does not exist. What is
+  missing is now stated: no form rendering, no structural `.dfm` editing,
+  inactive `{$IFDEF}` counted as live code, no check of component class against
+  field type or of handler signatures, and no way to convert a binary designer
+  to text from here.
+
 ## [0.68.0-beta] - 2026-08-25
 
 ### Added

@@ -99,48 +99,70 @@ a working starter vault for you; there is also a ready-made one in
 
 Not "what tools are there" — that is the table below. These are the objections a Delphi person
 raises before letting any agent near their tree, and the honest state of each. Every claim here
-is measured, and where something is *not* solved it says so.
+was re-checked against the running server by an agent whose job was to disprove it; where
+something is *not* solved, or only half solved, it says so.
 
 **"An AI will corrupt my `.dfm`."** The likeliest failure. Three defences, in order: a **binary**
-`.dfm`/`.fmx` is refused outright, by every tool that writes — no text tool may touch a
-length-prefixed format. A **text** one is validated by `delphi_designer lint` against the
-framework's real RTTI tables (what the class actually publishes, not a guessed list): invalid
-properties, non-published properties, bad enum values and bad set members, each with its line,
-*before* MSBuild ever sees the file. And `delphi_designer check-binding` answers the question the
-compiler never asks — does the `.dfm` agree with the class? A component with no published field,
-or `OnClick = SomeMethodThatIsNotThere`, **builds perfectly and throws at form-load**, on a
-machine where nobody is watching. That gap is where hand-written forms actually break.
-*Not solved:* no tool renders a form. An agent can prove a form is consistent, not that it
-looks right.
+`.dfm`/`.fmx` is refused by every tool that reads or writes one — both shapes, the raw `TPF0`
+stream and the resource-wrapped form it actually takes on disk. A **text** one is validated by
+`delphi_designer lint` against the framework's real RTTI tables (what the class actually
+publishes, not a guessed list): properties that do not exist, properties that exist but are not
+published, bad enum values and bad set members, each with its line, *before* MSBuild ever sees
+the file. And `delphi_designer check-binding` answers the question the compiler never asks — does
+the `.dfm` agree with the class? A component with no published field, an `OnClick` naming a method
+that is not there **or one declared outside `published`** (the form loader only sees published
+methods), a duplicate component name, an event left without a value: every one of those **builds
+perfectly and throws when the form is created**, on a machine where nobody is watching. It follows
+inheritance as far as the unit goes and says so when the ancestor lives elsewhere, rather than
+reporting inherited members as missing.
+*Not solved:* no tool renders a form — an agent can prove a form is consistent, not that it looks
+right. Nothing here edits a `.dfm` structurally (add/move/remove a component is hand-anchored text
+editing). Members inside an inactive `{$IFDEF}` are counted as if they compiled. Neither `lint`
+nor `check-binding` checks that a component's class matches its field's type, that a handler's
+signature fits the event, or that `Action = X` points at something real. And a binary designer
+cannot be converted to text from here: that one still needs the IDE.
 
-**"MSBuild output will flood the context."** `delphi_build` never returns raw log. It returns
-structured `errors[]` and `warnings[]` (file, line, column, code, message), an `outputTail`
-capped at ~25 lines, and `firstError` — because one `E2009` can spawn seven `E2250` that look
-like unrelated failures, and an agent that chases the last error chases noise. Same for
-`delphi_test`: total/passed/failed and the failing lines, not a console dump. A red suite is
-reported red — a green-looking failing suite was a real bug here once, and has its own
-regression test.
+**"MSBuild output will flood the context."** `delphi_build` never returns raw log. It returns one
+already-extracted line per problem in `errors[]` and `warnings[]` — file, line, code and message,
+though **not** a separate column field — plus an `outputTail` capped at ~25 lines and `firstError`,
+because one `E2009` can spawn seven `E2250` that look like unrelated failures, and an agent that
+chases the last error chases noise. `errors[]` itself is **not** capped: a build with forty errors
+returns forty, deliberately, since truncating the list is how "it only had one problem" gets
+believed. Same shape for `delphi_test`: total/passed/failed and the failing lines, not a console
+dump — and when the runner prints a format this server cannot count, a non-zero exit code is
+reported as a failure, never as "it ended fine".
 
 **"Files get locked — by the IDE, by a hung exe — and everything dies with Access Denied."**
 Real, and it surfaces cleanly: a locked output is one `F2039 Could not create output file`,
 already parsed into `errors[]`, with a hint naming the likely cause (the app still running, the
 IDE holding the target, an antivirus). **This server will not kill processes on the host** — that
 is deliberate, not missing: a human may be sitting at that IDE. Test runs are the exception and
-kill only their own child, on their own timeout.
+kill only their own child, on their own timeout. *Not solved:* an agent cannot confirm **which**
+of those causes it is — there is no process or handle listing here, by the same decision.
 
 **"What about my third-party packages — Boss, GetIt, submodules?"** Search paths are first-class:
-`delphi_projects add-searchpath` edits them per-configuration, `compilesAgainst` reports what a
-project actually resolves against, `delphi_components` lists what is installed in the IDE, and
-the library read zone lets an agent read RTL/VCL and component sources without any write rights.
+`delphi_config command=add-searchpath` edits them **per platform** (Delphi keeps unit search paths
+per platform, not per Debug/Release configuration), `delphi_config command=view` reports what a
+project resolves against, `delphi_components` lists what is installed in the IDE, and the library
+read zone lets an agent read RTL/VCL and component sources without any write rights. A failed
+build reports `missingUnits` with the folders that do hold each unit — *though it looks through
+the installed component sources, not through your own workspace.*
 *Deliberately absent:* running `boss install` / package managers. That is arbitrary code
 downloaded from the internet and executed on the build host — exactly what `AllowRun`, the git
 remote allowlist and the host allowlist exist to gate. If you want it, it needs its own opt-in
 switch and its own allowlist; it will not arrive by accident.
 
+> **Start here, whoever you are.** `delphi_help` is the map: `command=tasks` gives a
+> task→tool table, `command=tool name=<x>` explains one tool and every parameter it takes, and
+> `command=conventions` is the house rules — what `RECHAZADO:` means versus `error:`, how the
+> recoverable trash works, how agents identify themselves and share a mailbox. An agent that
+> calls it first stops guessing.
+
 ## The tools
 
 | Tool | What it does |
 |---|---|
+| `delphi_help` | **The map — call this first.** `command=tasks` gives a task -> tool table ("I need to change a form", "the build failed"), `command=tool name=<x>` explains one tool and every parameter it really takes, and `command=conventions` is the house rules: what `RECHAZADO:` means versus `error:`, how the recoverable trash and `purge` work, how agents identify themselves and share the mailbox |
 | `delphi_symbols` | Document symbol tree of a unit (classes, methods, sections) |
 | `delphi_definition` | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` jumps to the interface declaration of the target symbol (on call sites the tool chains definition→declaration, so you get the callee) |
 | `delphi_signature` | Signature help for the call under the cursor (parameter names/types) — the IDE's Ctrl+Shift+Space |
@@ -170,6 +192,12 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_paserver` (incl. `remote-run`: execute on the target through PAServer, with `runner/mcp-runner.py` installed there) | The bridge for building on **Linux/macOS** via the Platform Assistant: `platforms` (what the server can target + profile status), `packages` (the PAServer installers to download and run on the target), `profiles` (registered connection profiles/SDKs), `add-profile` (register a connection profile against a live PAServer - the password is stored encrypted by `paclient` itself), `test-connection` (full handshake against a profile, or a raw TCP reachability probe with `host`+`port` and no name), `get-sdk` (pull the platform SDK/sysroot from the live PAServer and register it - after this, `delphi_build` links for the platform) |
 | `delphi_adb` | **Android devices for remote development** — the phones/tablets hang off the *server*, you program from anywhere: `discover` (devices announcing wireless debugging on the server's network, via mDNS, each with its `ip:port`), `devices` (what adb has attached — the IDE's deploy-target list), `connect`/`disconnect` (attach one over the network), `install` (put a built `.apk` on a device), `run` (launch the installed app — the IDE's "Deploy and Run"), `logcat` (bounded dump of the device log, optional filter), `screenshot` (the device screen to a PNG you then fetch — your remote **eyes**) and `tap`/`key` (touch and navigation keys — your remote **hands**): enough to deploy, drive and debug the app end to end. Uses the IDE's own Android SDK `adb`, discovered per install |
 | `delphi_components` | **What the server has installed to program with**: every design package registered in the IDE (the list the palette loads), whatever the install channel — GetIt, vendor installers, manual. Description + `.bpl` per entry, disabled ones marked, optional `filter`. Read-only by design — no install (that stays a human decision); a missing library is reported with `delphi_report`. `platform=Linux64` shows instead the IDE's Library Search Path of that platform and the components registered only elsewhere — the porting matrix |
+| `delphi_test` | **Does it WORK, not just compile**: `discover` finds the test projects (DUnitX, or console runners named *Test*), `run` builds and runs one in the same low-integrity sandbox and answers structured — total/passed/failed, the failing lines, `exitCode`, duration. A runner whose output cannot be counted is still reported FAILED when its exit code says so. `nobuild`, `timeoutms`, and `countsFormat` for a hand-rolled runner. Own opt-in (`AllowTests`); runs Win64 by default |
+| `delphi_delete` | Delete a file or folder — into a **recoverable trash** next to it (`__delphi-patch\<date>\deleted\`), not a hard delete; it also drops the unit from the projects that list it. `purge=true` is the one hard delete, allowed only INSIDE that trash, and only for what you put there: every trashed item records who trashed it, and a folder holding somebody else's copies is refused, naming them |
+| `delphi_move` | Move or rename a file or folder inside the workspace — and, for a unit, rename it everywhere it is referenced (`.dpr`, `.dproj`, uses clauses, its `.dfm`). Moving an item OUT of the trash is how you restore it |
+| `delphi_package` | Zip a build output folder for download (recursive, `.dcu` and intermediates excluded) — the last step of "build on the server, run it here" |
+| `delphi_styles` | **FMX styles by `StyleName`**: view/get/set/clone a style member, `lint` it, and `build` a `.style` into the binary the app loads. The `.rc` include chain is walked so a style cannot pull in a file from outside the jail |
+| `delphi_messages` | The agents' mailbox: `check` lists what is pending for you, `read` delivers it. Notes from the operator to one agent or to everyone (a restart, a new tool, a convention); your identity comes from the handshake, so you do not type it |
 | `vault_read` · `vault_search` | **Optional persistent memory** (off unless configured): read and search a vault of Markdown notes — your decisions, conventions and project context — so a remote agent starts with more than the source tree. Lazy loading: it bootstraps with the vault's own rules + index and pulls only the notes it needs |
 | `vault_append` · `vault_create` · `vault_patch` | Let the agent **record what it learned** (opt-in, read-write credential only): append a log entry, create a note, replace an anchored fragment. No rewrites, no deletes, and the server always backs the original up first. See **[docs/VAULT.md](docs/VAULT.md)** |
 
