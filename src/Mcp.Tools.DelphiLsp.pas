@@ -93,9 +93,11 @@ type
 implementation
 
 uses
+  System.Math,
   System.RegularExpressions,
   System.StrUtils,
   System.IOUtils,
+  System.Generics.Defaults,
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.References,
@@ -680,41 +682,101 @@ end;
 function TDelphiCompletionTool.ExecuteWithParams(const Params: TDelphiCompletionParams): string;
 var
   Client: TLspClient;
-  Settings: string;
+  Settings, AdjNote: string;
   Resp, Return, ItemObj: TJSONObject;
   Items, OutItems: TJSONArray;
-  I: Integer;
+  I, EffChar: Integer;
 begin
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
+
+  // Member completion happens AFTER the dot, and "after ServicioEventos." is
+  // the column past the dot, not the last letter of the name. An agent that
+  // cannot see the cursor lands a column or two short and gets the whole global
+  // scope (5157 symbols) with no hint it aimed at the wrong place - measured
+  // 2026-08-25 by a frontier agent dogfooding a real FMX form. When the caller
+  // says trigger='.', snap the position to just past the nearest dot and say so.
+  EffChar := Params.Character;
+  AdjNote := '';
+  if Params.Trigger = '.' then
+  begin
+    var Enc: string;
+    var Lines := PatchLoadText(Params.Path, Enc).Replace(#13#10, #10).Split([#10]);
+    if (Params.Line >= 0) and (Params.Line <= High(Lines)) then
+    begin
+      var LineTxt := Lines[Params.Line];
+      // already just after a dot? (char before the 0-based cursor is '.')
+      var AfterDot := (EffChar >= 1) and (EffChar <= Length(LineTxt)) and
+        (LineTxt[EffChar] = '.');
+      if not AfterDot then
+      begin
+        var Best := -1;
+        for var K := Max(1, EffChar - 3) to Min(Length(LineTxt), EffChar + 2) do
+          if (LineTxt[K] = '.') and
+             ((Best < 0) or (Abs(K - EffChar) < Abs(Best - EffChar))) then
+            Best := K;
+        if (Best >= 1) and (Best <> EffChar) then
+        begin
+          AdjNote := Format(SN_COMPLETION_SNAPPED_FMT, [Params.Character, Best]);
+          EffChar := Best; // 0-based col past the dot = 1-based index of the dot
+        end;
+      end;
+    end;
+  end;
+
   Resp := Client.Completion(TLspClient.PathToUri(Params.Path), Params.Line,
-    Params.Character, Params.Trigger);
+    EffChar, Params.Trigger);
   try
     Items := Resp.FindValue('result.items') as TJSONArray;
     if Items = nil then
       Exit(RenderResult(Resp.Clone as TJSONObject, NoSettingsNote(Settings)));
 
+    // Order by the LSP sortText (then label): DelphiLSP marks the relevant
+    // candidates to sort first, and slicing the top 50 in raw order buried them.
+    var Order := TList<Integer>.Create;
+    try
+      for I := 0 to Items.Count - 1 do Order.Add(I);
+      Order.Sort(TComparer<Integer>.Construct(
+        function(const L, R: Integer): Integer
+        var LO, RO: TJSONObject; LS, RS: TJSONValue; LK, RK: string;
+        begin
+          LO := Items.Items[L] as TJSONObject; RO := Items.Items[R] as TJSONObject;
+          LS := LO.GetValue('sortText'); if LS = nil then LS := LO.GetValue('label');
+          RS := RO.GetValue('sortText'); if RS = nil then RS := RO.GetValue('label');
+          LK := ''; if LS <> nil then LK := LS.Value;
+          RK := ''; if RS <> nil then RK := RS.Value;
+          Result := CompareStr(LK, RK);
+          if Result = 0 then Result := CompareText(
+            LO.GetValue('label').Value, RO.GetValue('label').Value);
+        end));
+
     Return := TJSONObject.Create;
     try
       Return.AddPair('total', TJSONNumber.Create(Items.Count));
+      if AdjNote <> '' then
+        Return.AddPair('positionNote', AdjNote);
       OutItems := TJSONArray.Create;
       Return.AddPair('items', OutItems);
       for I := 0 to Items.Count - 1 do
       begin
         if I >= MAX_COMPLETION_ITEMS then
           Break;
+        var Src := Items.Items[Order[I]] as TJSONObject;
         ItemObj := TJSONObject.Create;
         OutItems.Add(ItemObj);
-        ItemObj.AddPair('label', (Items.Items[I] as TJSONObject).GetValue('label').Value);
-        var Kind := (Items.Items[I] as TJSONObject).GetValue('kind');
+        ItemObj.AddPair('label', Src.GetValue('label').Value);
+        var Kind := Src.GetValue('kind');
         if Kind <> nil then
           ItemObj.AddPair('kind', Kind.Clone as TJSONValue);
-        var Detail := (Items.Items[I] as TJSONObject).GetValue('detail');
+        var Detail := Src.GetValue('detail');
         if (Detail <> nil) and (Detail.Value <> '') then
           ItemObj.AddPair('detail', Detail.Value);
       end;
       Result := Return.ToJSON + NoSettingsNote(Settings);
     finally
       Return.Free;
+    end;
+    finally
+      Order.Free;
     end;
   finally
     Resp.Free;

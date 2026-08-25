@@ -411,6 +411,24 @@ check('FN3 un form sin ClientWidth se estima y lo declara',
       o.get('clientEstimated') is True and 'estimatedNote' in o, o)
 
 
+o = layout('PC', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object PageControl1: TPageControl\n    Align = alClient\n    Width = 400\n    Height = 300\n    object TabSheet1: TTabSheet\n    end\n    object TabSheet2: TTabSheet\n    end\n    object TabSheet3: TTabSheet\n    end\n  end\nend\n")
+check('R10 un TPageControl con varias TTabSheet NO es solape', o.get('ok') is True, o)
+
+o = layout('Flow', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 200\n  object FlowPanel1: TFlowPanel\n    Align = alClient\n    Width = 400\n    Height = 200\n    object B1: TButton\n      Left = 1\n      Top = 1\n      Width = 100\n      Height = 40\n    end\n    object B2: TButton\n      Left = 1\n      Top = 1\n      Width = 100\n      Height = 40\n    end\n  end\nend\n")
+check('R10 los hijos de un TFlowPanel no se juzgan por Left/Top', o.get('ok') is True, o)
+
+o = layout('Rel', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 200\n  object RelativePanel1: TRelativePanel\n    Align = alClient\n    Width = 400\n    Height = 200\n    object E1: TEdit\n      Left = 0\n      Top = 0\n      Width = 100\n      Height = 23\n    end\n    object E2: TEdit\n      Left = 0\n      Top = 0\n      Width = 100\n      Height = 23\n    end\n  end\nend\n")
+check('R10 los hijos de un TRelativePanel tampoco', o.get('ok') is True, o)
+
+o = layout('Custom', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 200\n  object P1: TPanel\n    Align = alCustom\n    Left = 0\n    Top = 0\n    Width = 100\n    Height = 100\n  end\n  object P2: TPanel\n    Align = alCustom\n    Left = 0\n    Top = 0\n    Width = 100\n    Height = 100\n  end\nend\n")
+check('R10 alCustom no se juzga por coordenadas de diseno', o.get('ok') is True, o)
+
+o = layout('Margins', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object PanelTop: TPanel\n    AlignWithMargins = True\n    Align = alTop\n    Width = 400\n    Height = 50\n  end\n  object PanelClient: TPanel\n    Align = alClient\n    Width = 400\n    Height = 244\n  end\nend\n")
+bx = {b['name']: b for b in o.get('boxes', [])}
+check('R10 AlignWithMargins desplaza el rectangulo (boxes exactos)',
+      bx['PanelTop']['x'] == 3 and bx['PanelTop']['y'] == 3 and bx['PanelTop']['w'] == 394
+      and bx['PanelClient']['y'] == 56 and bx['PanelClient']['h'] == 244, o)
+
 proc.kill()
 print('\n== layout battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

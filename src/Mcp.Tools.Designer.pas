@@ -730,6 +730,23 @@ begin
   Result := MatchText(ACls, ['TGridPanel', 'TGridLayout']);
 end;
 
+{ Containers that arrange their children by rules at runtime, ignoring the
+  Left/Top written at design time: a TFlowPanel reflows into rows, a
+  TRelativePanel places by constraints. Judging their children by design
+  coordinates is a guaranteed false positive. }
+function IsAutoLayout(const ACls: string): Boolean;
+begin
+  Result := MatchText(ACls, ['TFlowPanel', 'TRelativePanel', 'TGridLayout',
+    'TFlowLayout']);
+end;
+
+{ Page containers keep every page as an alClient child and show one at a time:
+  the pages "overlap 100%" by design, which is not a defect. }
+function IsPageContainer(const ACls: string): Boolean;
+begin
+  Result := MatchText(ACls, ['TPageControl', 'TTabControl', 'TPageScroller']);
+end;
+
 { WHERE things actually end up, which is the one thing an agent building a form
   cannot see. It has the numbers - it wrote them - but not the arithmetic that
   turns Left/Top/Width/Height plus Align into a screen, and a form that binds
@@ -798,13 +815,19 @@ var
   var
     Kids: array of TBox;
     Cnt, K, J, RL, RT, RR, RB, W, H, X, Y, ClientN: Integer;
+    MgnL, MgnT, MgnR, MgnB: Integer;
     Kid: TStyleObj;
     Align, Nm, Cls: string;
-    HasW, HasH, HasL, HasT: Boolean;
-    Grid, NeedW, NeedH: Boolean;
-    ix, iy, ax, ay: Integer;
+    HasW, HasH, HasL, HasT, AWM, IsInh, InhUnknown: Boolean;
+    Grid, Managed, NeedW, NeedH: Boolean;
+    ix, iy: Integer;
   begin
     Grid := IsGridPanel(AParent.ClassName_);
+    // "managed" = the parent places its children itself (grid cells, flow
+    // reflow, relative rules, page tabs): design Left/Top and sibling overlap
+    // mean nothing there, so we do not judge them.
+    Managed := Grid or IsAutoLayout(AParent.ClassName_) or
+      IsPageContainer(AParent.ClassName_);
     RL := 0; RT := 0; RR := AClientW; RB := AClientH;
     ClientN := 0;
     SetLength(Kids, AParent.Children.Count);
@@ -822,72 +845,104 @@ var
       H := PropInt(Doc, Kid, 'Height', -1, HasH);
       X := PropInt(Doc, Kid, 'Left', 0, HasL);
       Y := PropInt(Doc, Kid, 'Top', 0, HasT);
-      // which dimension the align actually needs written
-      NeedW := MatchText(Align, ['alNone', 'alTop', 'alBottom', 'alCustom']);
-      NeedH := MatchText(Align, ['alNone', 'alLeft', 'alRight', 'alCustom']);
-      if (HasW and (W = 0)) or (HasH and (H = 0)) then
-        Zero.Add(Format('%s: %s (linea %d) mide %s x %s: con un lado a cero no ' +
-          'se ve, aunque el form cargue', [Nm, Cls, Kid.StartLine,
-          IfThen(HasW, IntToStr(W), '?'), IfThen(HasH, IntToStr(H), '?')]));
-      if (NeedW and not HasW) or (NeedH and not HasH) then
-        Unknown.Add(Format('%s: %s (linea %d) no lleva %s en el .dfm; con align ' +
-          '%s hace falta para saber donde acaba', [Nm, Cls, Kid.StartLine,
-          IfThen(NeedW and not HasW, 'Width', 'Height'), Align]));
+      // AlignWithMargins insets an aligned control inside its band; without it
+      // the resolved rectangle is off by the margin width, exactly for the
+      // "place the next one" case.
+      AWM := SameText(PropRaw(Doc, Kid, 'AlignWithMargins', Found).Trim, 'True');
+      MgnL := 0; MgnT := 0; MgnR := 0; MgnB := 0;
+      if AWM then
+      begin
+        MgnL := PropInt(Doc, Kid, 'Margins.Left', 3, Found);
+        MgnT := PropInt(Doc, Kid, 'Margins.Top', 3, Found);
+        MgnR := PropInt(Doc, Kid, 'Margins.Right', 3, Found);
+        MgnB := PropInt(Doc, Kid, 'Margins.Bottom', 3, Found);
+      end;
+      // An inherited control takes its Align and size from the ANCESTOR form,
+      // which lives in another .dfm we do not merge. If the child overrides
+      // neither Align nor a full size, we cannot know where it lands - so we say
+      // so once and do not invent an alNone/zero-height box for it.
+      IsInh := (Kid.StartLine >= 1) and (Kid.StartLine <= Length(Doc.Lines)) and
+        TRegEx.IsMatch(Doc.Lines[Kid.StartLine - 1].Trim, '(?i)^inherited\b');
+      InhUnknown := IsInh and
+        (PropRaw(Doc, Kid, 'Align', Found) = '') and not (HasW and HasH);
+
+      NeedW := MatchText(Align, ['alNone', 'alLeft', 'alRight', 'alCustom']);
+      NeedH := MatchText(Align, ['alNone', 'alTop', 'alBottom', 'alCustom']);
+      if not InhUnknown then
+      begin
+        if (HasW and (W = 0)) or (HasH and (H = 0)) then
+          Zero.Add(Format('%s: %s (linea %d) mide %s x %s: con un lado a cero no ' +
+            'se ve, aunque el form cargue', [Nm, Cls, Kid.StartLine,
+            IfThen(HasW, IntToStr(W), '?'), IfThen(HasH, IntToStr(H), '?')]));
+        if (NeedW and not HasW) or (NeedH and not HasH) then
+          Unknown.Add(Format('%s: %s (linea %d) no lleva %s en el .dfm; con ' +
+            'align %s hace falta para saber donde acaba', [Nm, Cls, Kid.StartLine,
+            IfThen(NeedW and not HasW, 'Width', 'Height'), Align]));
+      end;
       if W < 0 then W := 0;
       if H < 0 then H := 0;
 
       Kids[Cnt].Nm := Nm; Kids[Cnt].Cls := Cls; Kids[Cnt].Align := Align;
       Kids[Cnt].Line := Kid.StartLine; Kids[Cnt].HasW := HasW; Kids[Cnt].HasH := HasH;
-      Kids[Cnt].Deco := IsDecoration(Cls); Kids[Cnt].Free_ := False;
+      // decoration, alCustom (runtime position), and an unresolved inherited
+      // control are all left OUT of overlap: none of them is "one hides another".
+      Kids[Cnt].Deco := IsDecoration(Cls) or SameText(Align, 'alCustom') or InhUnknown;
+      Kids[Cnt].Free_ := False;
       Kids[Cnt].Client := False;
+      if InhUnknown then
+        Kids[Cnt].Align := 'inherited?';
 
-      if Grid then
+      if Grid or Managed and not (SameText(Align, 'alTop') or
+        SameText(Align, 'alBottom') or SameText(Align, 'alLeft') or
+        SameText(Align, 'alRight') or SameText(Align, 'alClient')) then
       begin
-        // a cell child: we cannot place it, so no band math and no overlap.
+        // the parent places it; we record the parent rect as a placeholder and
+        // do not judge it.
         Kids[Cnt].X1 := RL; Kids[Cnt].Y1 := RT; Kids[Cnt].X2 := RR; Kids[Cnt].Y2 := RB;
       end
       else if SameText(Align, 'alTop') then
       begin
-        Kids[Cnt].X1 := RL; Kids[Cnt].Y1 := RT; Kids[Cnt].X2 := RR;
-        Kids[Cnt].Y2 := RT + H;
-        if AKnown and (RT + H > RB) then
+        Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := RT + MgnT;
+        Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RT + MgnT + H;
+        if AKnown and (RT + MgnT + H + MgnB > RB) then
           NoRoom.Add(Format('%s (linea %d) no cabe entero en "%s": de %d px de ' +
             'alto solo se ven %d, el resto queda fuera', [Nm, Kid.StartLine,
-            AWhere, H, Max(0, RB - RT)]));
-        RT := Min(RB, RT + H);
+            AWhere, H, Max(0, RB - RT - MgnT)]));
+        RT := Min(RB, RT + MgnT + H + MgnB);
       end
       else if SameText(Align, 'alBottom') then
       begin
-        Kids[Cnt].X1 := RL; Kids[Cnt].Y1 := Max(RT, RB - H);
-        Kids[Cnt].X2 := RR; Kids[Cnt].Y2 := RB;
-        if AKnown and (RB - H < RT) then
+        Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := Max(RT, RB - MgnB - H);
+        Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RB - MgnB;
+        if AKnown and (RB - MgnB - H - MgnT < RT) then
           NoRoom.Add(Format('%s (linea %d) no cabe entero en "%s": de %d px de ' +
-            'alto solo se ven %d', [Nm, Kid.StartLine, AWhere, H, Max(0, RB - RT)]));
-        RB := Max(RT, RB - H);
+            'alto solo se ven %d', [Nm, Kid.StartLine, AWhere, H, Max(0, RB - RT - MgnB)]));
+        RB := Max(RT, RB - MgnB - H - MgnT);
       end
       else if SameText(Align, 'alLeft') then
       begin
-        Kids[Cnt].X1 := RL; Kids[Cnt].Y1 := RT; Kids[Cnt].X2 := RL + W;
-        Kids[Cnt].Y2 := RB;
-        if AKnown and (RL + W > RR) then
+        Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := RT + MgnT;
+        Kids[Cnt].X2 := RL + MgnL + W; Kids[Cnt].Y2 := RB - MgnB;
+        if AKnown and (RL + MgnL + W + MgnR > RR) then
           NoRoom.Add(Format('%s (linea %d) no cabe entero en "%s": de %d px de ' +
-            'ancho solo se ven %d', [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL)]));
-        RL := Min(RR, RL + W);
+            'ancho solo se ven %d', [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL - MgnL)]));
+        RL := Min(RR, RL + MgnL + W + MgnR);
       end
       else if SameText(Align, 'alRight') then
       begin
-        Kids[Cnt].X1 := Max(RL, RR - W); Kids[Cnt].Y1 := RT;
-        Kids[Cnt].X2 := RR; Kids[Cnt].Y2 := RB;
-        if AKnown and (RR - W < RL) then
+        Kids[Cnt].X1 := Max(RL, RR - MgnR - W); Kids[Cnt].Y1 := RT + MgnT;
+        Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RB - MgnB;
+        if AKnown and (RR - MgnR - W - MgnL < RL) then
           NoRoom.Add(Format('%s (linea %d) no cabe entero en "%s": de %d px de ' +
-            'ancho solo se ven %d', [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL)]));
-        RR := Max(RL, RR - W);
+            'ancho solo se ven %d', [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL - MgnR)]));
+        RR := Max(RL, RR - MgnR - W - MgnL);
       end
       else if SameText(Align, 'alClient') then
       begin
-        // alClient does NOT consume the remaining rect: it takes ALL of it, and
-        // so does the next alClient - which is why two of them overlap 100%.
-        Kids[Cnt].X1 := RL; Kids[Cnt].Y1 := RT; Kids[Cnt].X2 := RR; Kids[Cnt].Y2 := RB;
+        // alClient does NOT consume the remaining rect: it takes ALL of it (less
+        // its own margins), and so does the next alClient - two overlap 100%.
+        Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := RT + MgnT;
+        Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RB - MgnB;
         Kids[Cnt].Client := True;
         Inc(ClientN);
       end
@@ -896,7 +951,8 @@ var
         // alNone / alCustom: placed by its own Left/Top.
         Kids[Cnt].X1 := X; Kids[Cnt].Y1 := Y; Kids[Cnt].X2 := X + W; Kids[Cnt].Y2 := Y + H;
         Kids[Cnt].Free_ := True;
-        if AKnown and not AScroll and SameText(Align, 'alNone') and
+        if AKnown and not AScroll and not Managed and not InhUnknown and
+           SameText(Align, 'alNone') and
            ((X < 0) or (Y < 0) or (X + W > AClientW) or (Y + H > AClientH)) then
           Outside.Add(Format('%s: %s (linea %d) ocupa de (%d,%d) a (%d,%d), y ' +
             '"%s" solo mide %d x %d: se sale y esa parte no se ve', [Nm, Cls,
@@ -934,10 +990,11 @@ var
       Boxes.AddElement(Bx);
     end;
 
-    // overlap: any two whose rectangles share area, decoration excluded, grid
-    // children excluded (their cells are placed by the collection). Adjacent
-    // aligned bands share only an edge (area 0) and never trip this.
-    if not Grid then
+    // overlap: any two whose rectangles share area, decoration/alCustom/
+    // inherited excluded. A parent that manages its own children (grid, flow,
+    // relative, page tabs) is skipped whole. Adjacent aligned bands share only
+    // an edge (area 0) and never trip this.
+    if not Managed then
       for K := 0 to Cnt - 1 do
         if not Kids[K].Deco then
           for J := K + 1 to Cnt - 1 do

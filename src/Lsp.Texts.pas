@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.72.0-beta';
+  SERVER_VERSION = '0.73.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -2018,6 +2018,13 @@ const
     'acaba cada cosa, para colocar la siguiente sin ver la pantalla. Es ' +
     'aproximado: el area util de un contenedor la tomo como su Width/Height, y ' +
     'Anchors (que gobiernan el REDIMENSIONADO) no es lo que mido.';
+
+  SN_COMPLETION_SNAPPED_FMT =
+    'He ajustado la posicion de la columna %d a la %d: pediste completion de ' +
+    'miembro (trigger ".") pero la columna caia sobre el identificador, no ' +
+    'DESPUES del punto. "despues de Foo." es la columna del punto + 1; sobre el ' +
+    'nombre, el LSP te devuelve el ambito global entero. Estos son los miembros ' +
+    'del tipo.';
 
   SR_DESIGNER_LAYOUT_FMX =
     'RECHAZADO: command=layout es solo para .dfm (VCL). Un .fmx coloca con otro ' +

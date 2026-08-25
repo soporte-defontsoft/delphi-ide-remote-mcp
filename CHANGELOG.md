@@ -8,6 +8,36 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.73.0-beta] - 2026-08-25
+
+First live dogfooding by a frontier agent (Hermes / GPT-5.6 Sol) on a real FMX
+release, plus a second layout adversarial pass. Both landed real bugs.
+
+### Fixed
+- **`delphi_completion` after a dot returned the whole global scope.** Member
+  completion happens in the column PAST the dot ("after `Foo.`" is dot-col + 1),
+  and an agent that cannot see the cursor lands a column short and gets 5157
+  globals with no hint. When `trigger='.'`, the position now snaps to just past
+  the nearest dot and a `positionNote` explains it - Hermes' exact failing call
+  (`ServicioEventos.` at char 18) now returns the four interface members.
+  Results are also ordered by the LSP `sortText`, so the top 50 are the relevant
+  candidates, not a raw-order slice.
+- **`layout` false-positived every tabbed form.** A `TPageControl`'s `TTabSheet`
+  children are all `alClient` and "overlap 100%" BY DESIGN (one page shown at a
+  time); so do the children of a `TFlowPanel`/`TRelativePanel` (arranged at
+  runtime, not by `Left`/`Top`) and `alCustom` controls. All of these are now
+  recognised as parent-managed and left unjudged, alongside the `TGridPanel`
+  already handled.
+- **`AlignWithMargins`/`Margins` are modelled**, so the resolved `boxes` are
+  correct to the pixel for margined layouts (they were off by the margin width -
+  exactly the "place the next control" case).
+- **Inherited controls** whose ancestor lives in another `.dfm` are no longer
+  reported as `alNone`, height 0, "missing Height"; they are marked
+  `align: "inherited?"` and left out of the geometry checks, since their real
+  size comes from a form this pass does not merge.
+- `sizeNotWritten` now asks only for the dimension the align actually needs (an
+  `alTop` control takes its width from the parent, so no more "missing Width").
+
 ## [0.72.0-beta] - 2026-08-25
 
 `delphi_designer command=layout`, one day old, taken apart by a probe agent that
