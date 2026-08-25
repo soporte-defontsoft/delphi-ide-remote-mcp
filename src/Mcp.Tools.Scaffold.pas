@@ -20,10 +20,12 @@ type
     FFormName: string;
   public
     [SchemaDescription('What to create: project-console | project-vcl | project-fmx | form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit (a plain .pas). Everything but projects is registered in the project given')]
+    [Required]
     property Kind: string read FKind write FKind;
     [SchemaDescription('Projects: target directory (created if missing)')]
     property Dir: string read FDir write FDir;
     [SchemaDescription('Projects: project name. Forms, frames, data modules and units: unit name (e.g. UClientes)')]
+    [Required]
     property Name: string read FName write FName;
     [SchemaDescription('Everything but projects: absolute path of the project .dpr (or .dproj) to register the new unit in')]
     property Project: string read FProject write FProject;

@@ -33,6 +33,7 @@ type
     FAgent: string;
   public
     [SchemaDescription('The report itself: what you tried, what happened, what you expected. Markdown welcome, several paragraphs are fine')]
+    [Required]
     property Message: string read FMessage write FMessage;
     [SchemaDescription('Optional one-line summary (becomes part of the file name)')]
     property Title: string read FTitle write FTitle;

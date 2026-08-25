@@ -14,6 +14,16 @@ type
   OptionalAttribute = class(TCustomAttribute)
   end;
 
+  // [local change] Explicit "this one really is required". Upstream treated
+  // EVERY property as required unless marked Optional, so every tool
+  // advertised its whole parameter list as mandatory - a lie the server
+  // itself contradicted (it accepts partial calls and answers with a helpful
+  // refusal), and a wall for any client that validates the schema before
+  // sending (field report 2026-08-25). Now the default is optional and this
+  // attribute marks the few parameters a tool cannot work without.
+  RequiredAttribute = class(TCustomAttribute)
+  end;
+
   SchemaDescriptionAttribute = class(TCustomAttribute)
   private
     FDescription: string;

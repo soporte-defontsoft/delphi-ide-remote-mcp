@@ -141,12 +141,14 @@ class function TMCPSchemaGenerator.IsRequiredProperty(Prop: TRttiProperty): Bool
 var
   Attr: TCustomAttribute;
 begin
+  // [local change] Required only when it says so. Upstream had it the other
+  // way round (required unless [Optional]), which published every parameter
+  // of every tool as mandatory while the server happily accepted partial
+  // calls - clients that validate the schema could not call anything.
   for Attr in Prop.GetAttributes do
-  begin
-    if Attr is OptionalAttribute then
-      Exit(False);
-  end;
-  Result := True;
+    if Attr is RequiredAttribute then
+      Exit(True);
+  Result := False;
 end;
 
 class function TMCPSchemaGenerator.CreateEnumValuesArray(RttiType: TRttiType): TJSONArray;

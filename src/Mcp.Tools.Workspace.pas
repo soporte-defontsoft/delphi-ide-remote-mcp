@@ -32,8 +32,10 @@ type
     FPattern: string;
   public
     [SchemaDescription('Directory to search recursively (project root) - or ONE file (a .dproj, .dpr, .inc, .xml...) to search inside it in a single call')]
+    [Required]
     property Root: string read FRoot write FRoot;
     [SchemaDescription('Literal text to find (case-insensitive - it is Pascal)')]
+    [Required]
     property Query: string read FQuery write FQuery;
     [SchemaDescription('Maximum hits to return (default 100, cap 500)')]
     property MaxResults: Integer read FMaxResults write FMaxResults;
@@ -51,6 +53,7 @@ type
     FIncludeTrash: Boolean;
   public
     [SchemaDescription('Directory to list recursively')]
+    [Required]
     property Root: string read FRoot write FRoot;
     [SchemaDescription('Filename mask, e.g. *.pas (default: Delphi source and project files)')]
     property Pattern: string read FPattern write FPattern;
@@ -80,8 +83,10 @@ type
     FMessage: string;
   public
     [SchemaDescription('Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots)')]
+    [Required]
     property Repo: string read FRepo write FRepo;
     [SchemaDescription('One of: status | diff | log | show | branch | switch | merge | stash | add | commit | init | push | tag | config | clone | pull | fetch. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push|pop|list (never drop). config: args=user.name|user.email + value in message. clone: URL in message, destination in repo')]
+    [Required]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected')]
     property Args: string read FArgs write FArgs;
@@ -147,6 +152,7 @@ type
     FTimeoutMs: Integer;
   public
     [SchemaDescription('Absolute path of the .exe to run (must be inside the workspace roots)')]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription('Optional command-line arguments (shell metacharacters rejected)')]
     property Args: string read FArgs write FArgs;
@@ -170,6 +176,7 @@ type
     FMaxBytes: Integer;
   public
     [SchemaDescription('Absolute path of the file to download from the server')]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription('Byte offset to start from (0 = beginning). Loop increasing it until eof=true and reassemble')]
     property Offset: Integer read FOffset write FOffset;
@@ -192,6 +199,7 @@ type
     FSha256: string;
   public
     [SchemaDescription('Absolute path of the file to write ON the server (inside the workspace roots)')]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription('One chunk of the file, base64-encoded. offset=0 truncates/creates; later offsets append')]
     property ChunkBase64: string read FChunkBase64 write FChunkBase64;
@@ -375,7 +383,14 @@ begin
                 Hits.Add(Entry);
                 Entry.AddPair('path', F);
                 Entry.AddPair('line', TJSONNumber.Create(I + 1));
-                Entry.AddPair('text', LineText.Trim);
+                // The LSP tools want a 0-based line:character, and the hit
+                // used to arrive Trim'ed - so the column could not be derived
+                // and every navigation cost an extra delphi_read just to
+                // count spaces (field 2026-08-25). Now the line travels
+                // VERBATIM and the position of the match comes with it.
+                Entry.AddPair('line0', TJSONNumber.Create(I));
+                Entry.AddPair('character0', TJSONNumber.Create(P - 1));
+                Entry.AddPair('text', LineText);
               end;
               Break; // one hit per line is enough
             end;

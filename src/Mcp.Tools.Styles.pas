@@ -30,6 +30,7 @@ type
     [SchemaDescription('view (styles of a .style file: StyleName, class, lines) | get (one style, whole text) | set (one property of a style or of one of its parts) | clone (a new style copied from an existing one) | delete (remove a whole style by StyleName; the __delphi-patch copy is the way back) | lint (duplicated StyleNames, StyleLookup values of the project''s .fmx that no style defines, design tokens missing in a theme, .rc entries without file) | build (every text .style of the folder -> .bin.style, then the .rc -> .res with brcc32)')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_STYLES_PATH)]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription('lint: the project .dproj (or a folder) whose .fmx/.pas files are scanned for StyleLookup. Default: the parent folder of the styles folder')]
     property Project: string read FProject write FProject;

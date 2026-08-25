@@ -21,12 +21,16 @@ type
     FMode: string;
   public
     [SchemaDescription(SP_RENAME_PATH)]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_RENAME_LINE)]
+    [Required]
     property Line: Integer read FLine write FLine;
     [SchemaDescription(SP_RENAME_CHARACTER)]
+    [Required]
     property Character: Integer read FCharacter write FCharacter;
     [SchemaDescription(SP_RENAME_NEWNAME)]
+    [Required]
     property NewName: string read FNewName write FNewName;
     [SchemaDescription(SP_RENAME_MODE)]
     property Mode: string read FMode write FMode;

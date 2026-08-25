@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.57.0-beta';
+  SERVER_VERSION = '0.58.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1228,6 +1228,10 @@ const
 
   SN_RENAME_DESIGNER_HIT_FMT =
     '%d apariciones en %s';
+
+  SN_RENAME_QUALIFIED_FMT =
+    'La definicion es una cabecera CUALIFICADA ("%s"): al renombrarla cambia ' +
+    'SOLO la parte del metodo, nunca el nombre de la clase.';
 
   SN_RENAME_PREVIEW_NOTE =
     'Preview: NOTHING was written. applicable=true means every occurrence ' +

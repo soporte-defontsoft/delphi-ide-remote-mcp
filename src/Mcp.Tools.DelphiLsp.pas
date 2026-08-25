@@ -21,6 +21,7 @@ type
     FPath: string;
   public
     [SchemaDescription('Absolute path of the Delphi source file (.pas/.dpr)')]
+    [Required]
     property Path: string read FPath write FPath;
   end;
 
@@ -30,8 +31,10 @@ type
     FCharacter: Integer;
   public
     [SchemaDescription('Zero-based line number of the identifier')]
+    [Required]
     property Line: Integer read FLine write FLine;
     [SchemaDescription('Zero-based character (column) inside the identifier')]
+    [Required]
     property Character: Integer read FCharacter write FCharacter;
   end;
 
@@ -184,6 +187,48 @@ begin
     Result := '';
 end;
 
+{ Every object carrying a "uri" also gets the path in the format the rest of
+  this server speaks, and the 1-based line next to the LSP 0-based one.
+  Field 2026-08-25: definition was the ONE tool answering
+  file:///srvd%3A/... with forward slashes, so an agent had to un-escape and
+  re-slash by hand before it could chain the next call; and hover printed
+  1-based lines while definition printed 0-based ones, in the same session. }
+procedure DecorateLocations(V: TJSONValue);
+var
+  Obj: TJSONObject;
+  Pair: TJSONPair;
+  Item: TJSONValue;
+  Rng, Start: TJSONObject;
+  L: TJSONValue;
+begin
+  if V is TJSONArray then
+  begin
+    for Item in TJSONArray(V) do
+      DecorateLocations(Item);
+    Exit;
+  end;
+  if not (V is TJSONObject) then
+    Exit;
+  Obj := TJSONObject(V);
+  if (Obj.GetValue('uri') <> nil) and (Obj.GetValue('path') = nil) then
+  begin
+    Obj.AddPair('path', TLspClient.UriToPath(Obj.GetValue('uri').Value));
+    Rng := Obj.GetValue('range') as TJSONObject;
+    if Rng <> nil then
+    begin
+      Start := Rng.GetValue('start') as TJSONObject;
+      if Start <> nil then
+      begin
+        L := Start.GetValue('line');
+        if L <> nil then
+          Obj.AddPair('line1', TJSONNumber.Create(L.GetValue<Integer> + 1));
+      end;
+    end;
+  end;
+  for Pair in Obj do
+    DecorateLocations(Pair.JsonValue);
+end;
+
 { Extracts "result" from a full JSON-RPC response and renders it, adding a
   filesystem path next to any "uri" for agent convenience. Frees AResp. }
 function RenderResult(AResp: TJSONObject; const ANote: string): string;
@@ -198,6 +243,7 @@ begin
     V := AResp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
       Exit('null' + ANote);
+    DecorateLocations(V);
     Result := V.ToJSON + ANote;
   finally
     AResp.Free;

@@ -20,6 +20,7 @@ type
     FPath: string;
   public
     [SchemaDescription('Absolute path of the Delphi source file to lint (.pas/.dpr)')]
+    [Required]
     property Path: string read FPath write FPath;
   end;
 
@@ -30,10 +31,13 @@ type
     FCharacter: Integer;
   public
     [SchemaDescription('Absolute path of the Delphi source file')]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription('Zero-based line of the identifier to find references for')]
+    [Required]
     property Line: Integer read FLine write FLine;
     [SchemaDescription('Zero-based character inside the identifier')]
+    [Required]
     property Character: Integer read FCharacter write FCharacter;
   end;
 
@@ -47,6 +51,7 @@ type
     FDeviceId: string;
   public
     [SchemaDescription('Absolute path of the .dproj to build')]
+    [Required]
     property Project: string read FProject write FProject;
     [SchemaDescription('Target platform (default Win32): Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and a PAServer profile (delphi_paserver)')]
     property Platform: string read FPlatform write FPlatform;

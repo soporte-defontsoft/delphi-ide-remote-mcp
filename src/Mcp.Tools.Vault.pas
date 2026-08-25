@@ -43,6 +43,7 @@ type
     [SchemaDescription('files (buscar por NOMBRE de nota, patron glob como *reunion*.md) | content (buscar DENTRO de las notas, pattern es una expresion regular)')]
     property Target: string read FTarget write FTarget;
     [SchemaDescription('Glob de nombre si target=files (*.md, *delphi*), o expresion regular si target=content')]
+    [Required]
     property Pattern: string read FPattern write FPattern;
     [SchemaDescription('Opcional: carpeta relativa del vault para acotar la busqueda (projects, conventions...)')]
     property Subfolder: string read FSubfolder write FSubfolder;
@@ -71,8 +72,10 @@ type
     FAnchor: string;
   public
     [SchemaDescription('Ruta RELATIVA de la nota (debe existir)')]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription('Contenido markdown a anadir. En espanol')]
+    [Required]
     property Content: string read FContent write FContent;
     [SchemaDescription('Opcional: texto UNICO tras el cual insertar. Sin anchor, anade al final del fichero')]
     property Anchor: string read FAnchor write FAnchor;
@@ -84,8 +87,10 @@ type
     FContent: string;
   public
     [SchemaDescription('Ruta RELATIVA de la nota nueva (debe NO existir; nunca sobreescribe)')]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription('Contenido markdown completo, con la estructura/plantilla que pida el vault')]
+    [Required]
     property Content: string read FContent write FContent;
   end;
 
@@ -96,10 +101,13 @@ type
     FNewText: string;
   public
     [SchemaDescription('Ruta RELATIVA de la nota')]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription('Texto a sustituir: debe aparecer EXACTAMENTE UNA VEZ en el fichero')]
+    [Required]
     property Old_Text: string read FOldText write FOldText;
     [SchemaDescription('Texto nuevo que lo sustituye')]
+    [Required]
     property New_Text: string read FNewText write FNewText;
   end;
 

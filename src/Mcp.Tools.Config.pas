@@ -33,6 +33,7 @@ type
     FRemoteDir: string;
   public
     [SchemaDescription('Absolute path of the project .dproj')]
+    [Required]
     property Project: string read FProject write FProject;
     [SchemaDescription('view (default: list configurations, platforms, search paths, deployment files and units) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk)')]
     property Command: string read FCommand write FCommand;

@@ -118,7 +118,9 @@ var
   Blockers, Warnings, Changes: TJSONArray;
   Ident, DefPath, EncName, Text, P, Root: string;
   Arr: TJSONArray;
-  I, N, Files: Integer;
+  I, N, Files, DefLine: Integer;
+  HasDef: Boolean;
+  Lines: TArray<string>;
   Touched: TList<string>;
   Item, Chg: TJSONObject;
   DesignerHits, StringHits: Integer;
@@ -158,6 +160,7 @@ begin
         Blockers.Add(SR_RENAME_SAME_NAME);
       DefObj := Refs.GetValue('definition') as TJSONObject;
       DefPath := DefObj.GetValue('path').Value;
+      DefLine := DefObj.GetValue('line').GetValue<Integer>;
       Result.AddPair('definition', TJSONObject(DefObj.Clone));
       // the definition must be OURS to rename - and a definition outside
       // the jail (an RTL unit can be 1 MB) is NEVER scanned further
@@ -189,6 +192,44 @@ begin
       Result.AddPair('occurrences', TJSONNumber.Create(Arr.Count));
       if Arr.Count > 100 then
         Result.AddPair('changesTruncated', TJSONBool.Create(True));
+
+      // The DEFINITION line itself is not a "reference", so it never came in
+      // the confirmed list - and changes IS the contract an agent stages.
+      // Measured 2026-08-25 by an agent that did exactly what the note said:
+      // renaming everything listed left the implementation header untouched
+      // and the unit stopped compiling (E2065 Unsatisfied forward). Add it.
+      if (DefLine >= 0) and (PathDenied(DefPath) = '') and TFile.Exists(DefPath) then
+      begin
+        HasDef := False;
+        for I := 0 to Changes.Count - 1 do
+        begin
+          Item := Changes.Items[I] as TJSONObject;
+          if SameText(Item.GetValue('path').Value, DefPath) and
+             (Item.GetValue('line').GetValue<Integer> = DefLine) then
+          begin
+            HasDef := True;
+            Break;
+          end;
+        end;
+        if not HasDef then
+        begin
+          Lines := PatchLoadText(DefPath, EncName).Replace(#13#10, #10).Split([#10]);
+          if (DefLine >= 0) and (DefLine < Length(Lines)) then
+          begin
+            Chg := TJSONObject.Create;
+            Changes.AddElement(Chg);
+            Chg.AddPair('path', DefPath);
+            Chg.AddPair('line', TJSONNumber.Create(DefLine));
+            Chg.AddPair('text', Lines[DefLine].Trim);
+            Chg.AddPair('kind', 'definition');
+            // a qualified implementation header (TClass.Method) must keep the
+            // class part: say it instead of letting the agent replace the lot
+            if TRegEx.IsMatch(Lines[DefLine],
+              '(?i)\b\w+\.' + TRegEx.Escape(Ident) + '\b') then
+              Warnings.Add(Format(SN_RENAME_QUALIFIED_FMT, [Lines[DefLine].Trim]));
+          end;
+        end;
+      end;
 
       // one unverified candidate = not applicable, the adopted rule
       Arr := Refs.GetValue('unverified') as TJSONArray;

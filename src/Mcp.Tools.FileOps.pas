@@ -19,6 +19,7 @@ type
     FPath: string;
   public
     [SchemaDescription('Absolute path of the file or folder to delete (inside the workspace roots). Moved to a recoverable trash, not hard-deleted')]
+    [Required]
     property Path: string read FPath write FPath;
   end;
 
@@ -28,8 +29,10 @@ type
     FDest: string;
   public
     [SchemaDescription('Absolute path of the file or folder to move (inside the workspace roots)')]
+    [Required]
     property Path: string read FPath write FPath;
     [SchemaDescription('Destination absolute path (inside the workspace roots). Parent folders are created. Renames when the parent is the same')]
+    [Required]
     property Dest: string read FDest write FDest;
   end;
 

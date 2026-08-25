@@ -114,6 +114,14 @@ j = J(r)
 check('preview aplicable (Doble -> Duplica)', j.get('applicable') is True, r[:400])
 check('ocurrencias >= 2 y ficheros >= 2', j.get('occurrences', 0) >= 2 and j.get('files', 0) >= 2, r[:300])
 check('changes con path/line/text', bool(j.get('changes')) and all('path' in c and 'line' in c for c in j.get('changes', [])), str(j.get('changes'))[:250])
+# field 2026-08-25: 'changes' omitia la CABECERA DE LA IMPLEMENTACION (la
+# linea que el propio campo definition señala), y un agente que aplicara solo
+# lo listado rompia la unit (E2065 Unsatisfied forward declaration)
+_def = j.get('definition') or {}
+_chg = j.get('changes') or []
+check('changes INCLUYE la linea de la definicion',
+      any(c.get('line') == _def.get('line') and c.get('path') == _def.get('path') for c in _chg),
+      'definition=%s changes=%s' % (_def, [(c.get('path','')[-20:], c.get('line')) for c in _chg]))
 check('cero sin confirmar', j.get('unverified') == 0, r[:200])
 
 # 2. invalid ident / reserved

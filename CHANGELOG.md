@@ -8,6 +8,36 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.58.0-beta] - 2026-08-25
+
+Four fixes from a full session run by an agent that worked ONLY through the
+MCP (72 calls, no local filesystem, no shell) - the dogfooding the review
+asked for, done properly.
+
+### Fixed
+- **`delphi_rename_symbol` left the definition out of `changes`** - and
+  `changes` is the contract an agent stages. The implementation header (the
+  very line the `definition` field points at) is not a "reference", so it
+  never came in the list: applying exactly what the tool listed broke the
+  unit with `E2065 Unsatisfied forward declaration`. The agent measured it,
+  it was not a guess. Now the definition line is always there (with its
+  text and `kind: definition`), plus a warning when the header is qualified
+  (`TClass.Method`), where only the method half may change.
+- **Every tool advertised ALL its parameters as `required`** (a vendor
+  default: required unless marked `[Optional]`, and nothing was). The server
+  happily accepts partial calls, so the schema was lying - and a client that
+  validates before sending could not call anything. Inverted (`[Required]`
+  marks the few that are), and marked across the 39 tools.
+- **`delphi_search` returned the line trimmed and no column**, so the hit
+  could not be turned into a `line:character` for the LSP tools without an
+  extra `delphi_read` just to count spaces. Now the text is verbatim and the
+  hit carries `line0`/`character0` ready to chain.
+- **The LSP family spoke two dialects**: `definition` answered a
+  `file:///srvd%3A/...` URL with 0-based lines while `hover` printed 1-based
+  ones. Every location now also carries `path` (the format the rest of the
+  server uses) and `line1` next to the LSP `line`.
+
+
 ## [0.57.0-beta] - 2026-08-25
 
 First fix out of the deep review (`docs/REVIEW-2026-08.md`): an agent could
