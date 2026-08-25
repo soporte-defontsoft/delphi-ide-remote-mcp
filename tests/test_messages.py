@@ -1,4 +1,4 @@
-"""E2E battery for v0.44.0-beta - delphi_messages: the operator's mailbox
+r"""E2E battery for v0.44.0-beta - delphi_messages: the operator's mailbox
 (the way back of delphi_report). Messages are .md files in messages\ next to
 the server exe (messages\<agent>\ for one agent, messages\ for everyone);
 while one waits EVERY tool answer ends with a MENSAJES PENDIENTES line;
@@ -93,7 +93,7 @@ t = call('delphi_messages', {"command": "x"})
 check('command invalido', t.startswith('error:'), t)
 # the agent id is slugged like delphi_report: no path tricks
 open(os.path.join(MSG, 'dsh', 'otro.md'), 'w', encoding='utf-8').write('# Otro\n\nhola\n')
-t = call('delphi_messages', {"agent": "..\dsh"})
+t = call('delphi_messages', {"agent": "..\\dsh"})
 check('agent se normaliza (sin ..)', 'MENSAJE 1/1' in t and 'hola' in t, t)
 t = call('delphi_messages', {"command": "read", "agent": "dsh"})
 check('tras leer, vacio', t.startswith('Sin mensajes'), t)

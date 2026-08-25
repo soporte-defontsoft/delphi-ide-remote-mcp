@@ -55,7 +55,7 @@ def check(name, ok, detail=''):
 
 # --- fixtures
 open(os.path.join(BASE, 'Big.dproj'), 'w', encoding='utf-8').write(
-    '<Project>\n' + '  <Line/>\n' * 600 + '  <DCC_UnitSearchPath>..\Lib</DCC_UnitSearchPath>\n' + '  <Line/>\n' * 600 + '</Project>\n')
+    '<Project>\n' + '  <Line/>\n' * 600 + '  <DCC_UnitSearchPath>..\\Lib</DCC_UnitSearchPath>\n' + '  <Line/>\n' * 600 + '</Project>\n')
 open(os.path.join(BASE, 'U1.pas'), 'w', encoding='utf-8').write('unit U1;\ninterface\nimplementation\nend.\n')
 open(os.path.join(BASE, 'U1.dfm'), 'w', encoding='utf-8').write('object F: TF\nend\n')
 

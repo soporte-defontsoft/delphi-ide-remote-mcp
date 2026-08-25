@@ -68,7 +68,7 @@ def check(name, ok, detail=''):
     else: F += 1; print('FAIL', name, '--', str(detail)[:300])
 
 check('tools/list responde', TOTAL > 0, TOTAL)
-check('las 7 LSP-backed existen todas', all(t in TOOLS for t in LSP_BACKED),
+check('las LSP-backed existen todas', all(t in TOOLS for t in LSP_BACKED),
       [t for t in LSP_BACKED if t not in TOOLS])
 
 # ---- README ------------------------------------------------------------

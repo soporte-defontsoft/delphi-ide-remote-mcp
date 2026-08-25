@@ -8,6 +8,38 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.76.0-beta] - 2026-08-26
+
+Hermes' release-readiness audit (runtime measurements over GalateaFMX), P0 items
+plus the search wall from the supplement.
+
+### Fixed
+- **Builds are now serialized server-wide** (P0.1). Indy serves each request on
+  its own thread, and `delphi_build`/`delphi_test`/deploy all enter MSBuild:
+  two agents building at once collided DCUs, outputs and the `.deployproj`.
+  Now one msbuild runs at a time (global queue in `RunMsBuild`, the safe shape);
+  a call that waited 500ms+ reports `queuedMs` + `queuedNote`, so queue time is
+  never mistaken for compiler time. Battery: two concurrent builds both succeed,
+  exactly one waited (tests/test_round15.py E2).
+- **`TLspSession.Instance` is thread-safe** (P0.3). Two FIRST concurrent LSP
+  calls could both see nil and build two sessions - two sets of LSP clients, one
+  leaked. Lock-free publish with `TInterlocked.CompareExchange`: the loser frees
+  its candidate.
+- Python 3.13 `SyntaxWarning`s in two test batteries (invalid `\`-escapes);
+  `compileall tests/` is clean again.
+
+### Added
+- **`delphi_search` pagination** (supplement #3): new `offset` parameter plus
+  `hasMore`/`nextOffset` in the result. A truncated search was a wall - the next
+  page was unreachable no matter what the caller did. Pages never overlap and
+  walking `nextOffset` visits every hit exactly once (tests/test_round15.py E1).
+
+### Docs
+- README's Tests section described 8 batteries/468 checks from months ago; now
+  points at `tests/run_all.py` and the real scale. ROADMAP: phase-0 decisions
+  and the build-queue part of the Workspace Manager marked done; what remains
+  of it (LRU/idle shutdown, hang respawn) stays open, credited to the audit.
+
 ## [0.75.0-beta] - 2026-08-25
 
 ### Added

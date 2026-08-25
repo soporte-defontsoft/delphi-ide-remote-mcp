@@ -323,7 +323,7 @@ MaxFiles=10                             ; rotation: keep the newest N block file
 
 ## Tests
 
-`tests/` contains eight end-to-end batteries that talk real MCP to the built server (468 checks, byte-level verification for the editing tool): `test_delphi_patch.py`, `test_workspace_tools.py`, `test_http_auth.py` (auth, configurable port, read-only access level), `test_scaffold.py` (scaffolds console/VCL/FMX projects and builds them for real), `test_guard.py` (workspace jail, escape attempts, argument-injection vectors), `test_v012.py` (virtual drive units round trip, delete/blank modes, `.dpr` inserts, implicit published, git messages via `-F`, Roots fail-closed parsing, argument typing), `test_vault.py` (the knowledge vault, including its governance rules) and `test_r9_concurrency.py` (simultaneous vault writers).
+`tests/` contains 33 end-to-end batteries that talk real MCP (stdio and HTTP) to the built server — over 1,000 checks, with byte-level verification for the editing tools. `python tests/run_all.py` runs them all against a clean copy of the built exe and prints the totals. Highlights: safe editing (`test_delphi_patch.py`), workspace jail and escape attempts (`test_guard.py`), auth and access levels (`test_http_auth.py`), real project scaffolding + builds (`test_scaffold.py`), the recoverable trash and its ownership rules, the designer tools (layout semantics measured against the VCL), concurrency (simultaneous vault writers, serialized builds) and docs/runtime consistency (`test_docs_consistency.py`).
 
 Each security fix is paired with the vector it closes **and** with a counter-test proving it did not over-tighten — a fix that refuses too much is a bug too.
 

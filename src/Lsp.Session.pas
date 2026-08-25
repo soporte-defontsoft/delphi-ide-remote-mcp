@@ -132,9 +132,19 @@ begin
 end;
 
 class function TLspSession.Instance: TLspSession;
+var
+  Fresh: TLspSession;
 begin
+  // Two FIRST requests arriving together (Indy serves each on its own
+  // thread) used to both see nil and build two sessions - two sets of LSP
+  // clients, one leaked (hermes, release audit 2026-08-26). Lock-free
+  // publish: build a candidate, install it only if nobody won the race.
   if FInstance = nil then
-    FInstance := TLspSession.Create;
+  begin
+    Fresh := TLspSession.Create;
+    if TInterlocked.CompareExchange<TLspSession>(FInstance, Fresh, nil) <> nil then
+      Fresh.Free; // lost the race: the winner's instance is already public
+  end;
   Result := FInstance;
 end;
 

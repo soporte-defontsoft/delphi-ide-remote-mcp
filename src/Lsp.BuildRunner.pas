@@ -58,9 +58,15 @@ uses
   System.StrUtils,
   System.Generics.Collections,
   System.Generics.Defaults,
+  System.SyncObjs,
+  System.Diagnostics,
   Lsp.Patch,
   Lsp.Texts,
   Lsp.Sandbox;
+
+var
+  // Serializes every msbuild the server runs (see RunMsBuild).
+  GBuildLock: TCriticalSection;
 
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: DWORD): string;
@@ -904,6 +910,15 @@ begin
   // apk staging map for Android. An IDE-written .deployproj is used as-is.
   var ManifestNew := False;
   var ManifestFilled := False;
+  // One msbuild at a time, server-wide: two concurrent builds (two agents,
+  // or a build racing delphi_test's compile) share DCU/output dirs and the
+  // .deployproj, and silently corrupt each other (hermes, release audit
+  // 2026-08-26). A global queue is the safe shape; the wait is reported so
+  // a queued caller can tell compiler time from queue time.
+  var QueueSW := TStopwatch.StartNew;
+  GBuildLock.Enter;
+  var QueuedMs := QueueSW.ElapsedMilliseconds;
+  try
   if Target.Contains('Deploy') and not IsLocalPlatform(Plat) then
   begin
     ManifestFilled := TFile.Exists(TPath.ChangeExtension(TPath.GetFullPath(ADprojPath), '.deployproj'));
@@ -942,6 +957,9 @@ begin
     'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s%s%s%s /v:minimal /nologo"',
     [Info.RsVarsBat, TPath.GetFullPath(ADprojPath), Target, Cfg, Plat, SdkArg,
      ProfileArg, DeviceArg]), ATimeoutMs, ExitCode);
+  finally
+    GBuildLock.Leave;
+  end;
 
   Errors := TJSONArray.Create;
   Warnings := TJSONArray.Create;
@@ -969,6 +987,11 @@ begin
     Result := TJSONObject.Create;
     Result.AddPair('success', TJSONBool.Create(ExitCode = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Integer(ExitCode)));
+    if QueuedMs >= 500 then
+    begin
+      Result.AddPair('queuedMs', TJSONNumber.Create(QueuedMs));
+      Result.AddPair('queuedNote', SN_BUILD_QUEUED);
+    end;
     Result.AddPair('project', TPath.GetFullPath(ADprojPath));
     Result.AddPair('platform', Plat);
     // Two tools, two defaults: this one builds Win32 when nobody says, and
@@ -1088,5 +1111,11 @@ begin
     Tail.Free;
   end;
 end;
+
+initialization
+  GBuildLock := TCriticalSection.Create;
+
+finalization
+  GBuildLock.Free;
 
 end.

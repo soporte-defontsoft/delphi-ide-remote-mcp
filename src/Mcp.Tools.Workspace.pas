@@ -29,6 +29,7 @@ type
     FRoot: string;
     FQuery: string;
     FMaxResults: Integer;
+    FOffset: Integer;
     FWholeWord: Boolean;
     FPattern: string;
   public
@@ -40,6 +41,8 @@ type
     property Query: string read FQuery write FQuery;
     [SchemaDescription('Maximum hits to return (default 100, cap 500)')]
     property MaxResults: Integer read FMaxResults write FMaxResults;
+    [SchemaDescription('Skip the first N matches - pagination: pass the nextOffset of the previous call to get the next page')]
+    property Offset: Integer read FOffset write FOffset;
     [SchemaDescription('true = match whole identifiers only (word boundaries)')]
     property WholeWord: Boolean read FWholeWord write FWholeWord;
     [SchemaDescription('Optional file mask to search instead of the Delphi set, e.g. *.style, *.ini, *.md, *.rc (one mask)')]
@@ -333,6 +336,8 @@ begin
   if Max <= 0 then Max := 100;
   if Max > 500 then Max := 500;
   Q := Params.Query.ToLower;
+  var Ofs := Params.Offset;
+  if Ofs < 0 then Ofs := 0;
 
   Return := TJSONObject.Create;
   Hits := TJSONArray.Create;
@@ -377,7 +382,7 @@ begin
                  not IsIdentChar(LineText[P + Length(Q)]))) then
             begin
               Inc(Total);
-              if Hits.Count < Max then
+              if (Total > Ofs) and (Hits.Count < Max) then
               begin
                 Entry := TJSONObject.Create;
                 Hits.Add(Entry);
@@ -400,6 +405,14 @@ begin
       end;
     Return.AddPair('total', TJSONNumber.Create(Total));
     Return.AddPair('shown', TJSONNumber.Create(Hits.Count));
+    if Ofs > 0 then
+      Return.AddPair('offset', TJSONNumber.Create(Ofs));
+    // Truncated searches used to be a wall: maxresults hit, no way to ask
+    // for the rest (hermes, release audit 2026-08-26). hasMore + nextOffset
+    // make the next page one deterministic call away.
+    Return.AddPair('hasMore', TJSONBool.Create(Total > Ofs + Hits.Count));
+    if Total > Ofs + Hits.Count then
+      Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Hits.Count));
     Return.AddPair('filesScanned', TJSONNumber.Create(FilesScanned));
     Return.AddPair('hits', Hits);
     Result := Return.ToJSON;

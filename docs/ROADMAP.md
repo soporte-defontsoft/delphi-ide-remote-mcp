@@ -3,8 +3,8 @@
 ## Phase 0 — Foundations (design ✔ / decisions)
 - [x] Validate DelphiLSP capabilities end-to-end (see [DELPHILSP-NOTES.md](DELPHILSP-NOTES.md))
 - [x] Architecture (see [ARCHITECTURE.md](ARCHITECTURE.md))
-- [ ] Decide MCP plumbing: adopt an existing Delphi MCP framework vs. minimal own implementation
-- [ ] CI-less build script (`BuildWithParams`-style) and test project fixtures
+- [x] Decide MCP plumbing: adopted gdk-mcp-server (vendored under `vendor/`, locally patched)
+- [x] CI-less build script and test project fixtures: `tests/run_all.py` runs every battery against a clean copy of the built exe; batteries scaffold their own disposable projects
 
 ## Phase 1 — LSP core (console, no MCP yet) ✔
 - [x] `Lsp.Transport.Process`: spawn DelphiLSP, Content-Length framing, reader thread, clean shutdown
@@ -44,7 +44,8 @@ without corrupting them:
 Primary use case: the Windows machine (with RAD Studio) stays on as a server; agents connect
 over MCP Streamable HTTP from anywhere — including Linux clients that have no access to the
 Windows filesystem.
-- [ ] Workspace Manager: multi-workspace, warm instances, request queue, LRU, idle shutdown, hang kill+respawn
+- [x] Workspace Manager, the parts that earn their keep: warm per-project LSP instances (lazy, kept alive), a global build queue (one msbuild at a time, `queuedMs` reported — v0.76)
+- [ ] Workspace Manager, still open: LRU/idle shutdown of warm clients, hang kill+respawn, bounded notification queues (hermes' release audit P1.6)
 - [x] Streamable HTTP transport (`--http [port]`) with **Bearer token auth** (DELPHI_MCP_TOKEN env var or settings.ini [Security] AuthToken; 5/5 battery: tests/test_http_auth.py). Recommended exposure: VPN only
 - [x] Remote file toolset so a remote agent needs no share: `delphi_read` (encoding-aware), `delphi_search` (skips `__history/`, build dirs), `delphi_list` (12/12 battery: tests/test_workspace_tools.py)
 - [x] `delphi_git`: whitelisted git operations (status, diff, log, show, branch, add, commit) with shell-metacharacter rejection — remote agents version their work without shell access

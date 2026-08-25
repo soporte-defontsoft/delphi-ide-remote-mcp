@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.75.0-beta';
+  SERVER_VERSION = '0.76.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1983,6 +1983,12 @@ const
     'esta tool. OJO: delphi_test ejecuta Win64 por defecto, asi que si vas a ' +
     'pasar los tests despues, compila Win64 (platform=Win64) o dejale a ' +
     'delphi_test que compile el solo.';
+
+  SN_BUILD_QUEUED =
+    'Este build ha esperado su turno: el servidor compila DE UNO EN UNO ' +
+    'porque dos msbuild simultaneos se pisan los .dcu, los outputs y el ' +
+    '.deployproj. "queuedMs" es lo que esperaste en cola, no lo que ' +
+    'tardo el compilador.';
 
   SN_BUILD_FIRST_ERROR =
     'Empieza por "firstError": un solo error puede parir a los demas. Un ' +
