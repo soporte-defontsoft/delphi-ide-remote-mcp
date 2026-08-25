@@ -71,6 +71,7 @@ implementation
 
 uses
   System.Classes,
+  System.Math,
   System.IOUtils,
   System.StrUtils,
   System.JSON,
@@ -647,6 +648,264 @@ begin
   end;
 end;
 
+{ One property of ONE object, ignoring the properties of its children. }
+function PropRaw(ADoc: TStyleDoc; AObj: TStyleObj; const AName: string;
+  out AFound: Boolean): string;
+var
+  I, J: Integer;
+  Line: string;
+  Mt: TMatch;
+  Skip: Boolean;
+begin
+  Result := '';
+  AFound := False;
+  for I := AObj.StartLine + 1 to AObj.EndLine - 1 do
+  begin
+    if (I < 1) or (I > Length(ADoc.Lines)) then
+      Continue;
+    Skip := False;
+    for J := 0 to AObj.Children.Count - 1 do
+      if (I >= AObj.Children[J].StartLine) and (I <= AObj.Children[J].EndLine) then
+        Skip := True;
+    if Skip then
+      Continue;
+    Line := ADoc.Lines[I - 1].Trim;
+    Mt := TRegEx.Match(Line, '^([A-Za-z_][\w.]*)\s*=\s*(.*)$');
+    if Mt.Success and SameText(Mt.Groups[1].Value, AName) then
+    begin
+      AFound := True;
+      Exit(Mt.Groups[2].Value.Trim);
+    end;
+  end;
+end;
+
+function PropInt(ADoc: TStyleDoc; AObj: TStyleObj; const AName: string;
+  ADefault: Integer; out AFound: Boolean): Integer;
+var
+  S: string;
+begin
+  S := PropRaw(ADoc, AObj, AName, AFound);
+  if not AFound or not TryStrToInt(S, Result) then
+  begin
+    Result := ADefault;
+    if not TryStrToInt(S, ADefault) then
+      AFound := AFound and False;
+  end;
+end;
+
+{ WHERE things actually end up, which is the one thing an agent building a form
+  cannot see. It has the numbers - it wrote them - but not the arithmetic that
+  turns Left/Top/Width/Height plus Align into a screen, and a form that binds
+  perfectly can still be a stack of controls on top of each other, a button of
+  size zero, or a panel hanging off the edge of the window. Nothing in the
+  build says a word about any of that: it compiles, it loads, it looks wrong.
+
+  Align is resolved the way the VCL does it: each aligned child eats its band
+  off the parent's remaining client rectangle, in the order the .dfm lists
+  them, and what is left over is what alClient gets. Only alNone children can
+  overlap or fall outside, because the aligned ones are placed by construction.
+
+  Deliberately approximate, and it says so: a container's client area is taken
+  as its Width/Height (bevels, borders and margins shave a few pixels), a
+  control with no explicit Width/Height is reported as unknown rather than
+  guessed at, and Anchors describe what happens when the window is RESIZED,
+  which is not what this measures. }
+function LayoutOf(const APath: string): string;
+var
+  Doc: TStyleDoc;
+  Ret: TJSONObject;
+  Zero, Outside, Overlap, NoRoom, Unknown: TJSONArray;
+  RootW, RootH: Integer;
+  Found: Boolean;
+
+  function IsVisual(AObj: TStyleObj): Boolean;
+  var
+    HasW, HasH: Boolean;
+  begin
+    PropRaw(Doc, AObj, 'Width', HasW);
+    PropRaw(Doc, AObj, 'Height', HasH);
+    // A TTimer/TPopupMenu/TImageList carries only the designer's icon position
+    // (Left/Top) and no size: it is not on screen and has no geometry to check.
+    Result := HasW or HasH;
+  end;
+
+  procedure Walk(AParent: TStyleObj; AClientW, AClientH: Integer;
+    const AWhere: string);
+  var
+    I, J, Cnt: Integer;
+    L, T, R, Bo: Integer;                       // remaining client rectangle
+    Kid: TStyleObj;
+    Align, Nm: string;
+    HasW, HasH, HasL, HasT: Boolean;
+    W, H, X, Y: Integer;
+    Boxes: array of record
+      Nm, Cls: string;
+      X1, Y1, X2, Y2, Line: Integer;
+      Free_: Boolean;                           // alNone: it can collide
+    end;
+    ClientTaken: Boolean;
+  begin
+    L := 0;
+    T := 0;
+    R := AClientW;
+    Bo := AClientH;
+    Cnt := 0;
+    ClientTaken := False;
+    SetLength(Boxes, AParent.Children.Count);
+    for I := 0 to AParent.Children.Count - 1 do
+    begin
+      Kid := AParent.Children[I];
+      if not IsVisual(Kid) then
+        Continue;
+      Nm := Kid.ObjName;
+      if Nm = '' then
+        Nm := Kid.ClassName_;
+      Align := PropRaw(Doc, Kid, 'Align', Found);
+      if not Found then
+        Align := 'alNone';
+      W := PropInt(Doc, Kid, 'Width', -1, HasW);
+      H := PropInt(Doc, Kid, 'Height', -1, HasH);
+      X := PropInt(Doc, Kid, 'Left', 0, HasL);
+      Y := PropInt(Doc, Kid, 'Top', 0, HasT);
+      if (HasW and (W = 0)) or (HasH and (H = 0)) then
+        Zero.Add(Format('%s: %s (linea %d) mide %s x %s: con un lado a cero no se ve nada, aunque el form cargue perfectamente', [Nm, Kid.ClassName_, Kid.StartLine,
+          IfThen(HasW, IntToStr(W), '?'), IfThen(HasH, IntToStr(H), '?')]));
+      if (not HasW) or (not HasH) then
+        Unknown.Add(Format('%s: %s (linea %d) no lleva Width/Height escritos en el .dfm, asi que su tamano lo pone la clase y yo no lo puedo comprobar', [Nm, Kid.ClassName_, Kid.StartLine]));
+      if W < 0 then
+        W := 0;
+      if H < 0 then
+        H := 0;
+
+      if SameText(Align, 'alTop') then
+      begin
+        Boxes[Cnt].X1 := L; Boxes[Cnt].Y1 := T;
+        Boxes[Cnt].X2 := R; Boxes[Cnt].Y2 := T + H;
+        Boxes[Cnt].Free_ := False;
+        T := T + H;
+      end
+      else if SameText(Align, 'alBottom') then
+      begin
+        Boxes[Cnt].X1 := L; Boxes[Cnt].Y1 := Bo - H;
+        Boxes[Cnt].X2 := R; Boxes[Cnt].Y2 := Bo;
+        Boxes[Cnt].Free_ := False;
+        Bo := Bo - H;
+      end
+      else if SameText(Align, 'alLeft') then
+      begin
+        Boxes[Cnt].X1 := L; Boxes[Cnt].Y1 := T;
+        Boxes[Cnt].X2 := L + W; Boxes[Cnt].Y2 := Bo;
+        Boxes[Cnt].Free_ := False;
+        L := L + W;
+      end
+      else if SameText(Align, 'alRight') then
+      begin
+        Boxes[Cnt].X1 := R - W; Boxes[Cnt].Y1 := T;
+        Boxes[Cnt].X2 := R; Boxes[Cnt].Y2 := Bo;
+        Boxes[Cnt].Free_ := False;
+        R := R - W;
+      end
+      else if SameText(Align, 'alClient') then
+      begin
+        if ClientTaken then
+          NoRoom.Add(Format('%s (linea %d) es el SEGUNDO alClient de su contenedor: el primero se queda con todo el hueco y este no recibe nada', [Nm, Kid.StartLine]));
+        ClientTaken := True;
+        Boxes[Cnt].X1 := L; Boxes[Cnt].Y1 := T;
+        Boxes[Cnt].X2 := R; Boxes[Cnt].Y2 := Bo;
+        Boxes[Cnt].Free_ := False;
+      end
+      else
+      begin
+        Boxes[Cnt].X1 := X; Boxes[Cnt].Y1 := Y;
+        Boxes[Cnt].X2 := X + W; Boxes[Cnt].Y2 := Y + H;
+        Boxes[Cnt].Free_ := True;
+        // Only a free control can hang off the edge: the aligned ones are
+        // placed against it.
+        if (X < 0) or (Y < 0) or (X + W > AClientW) or (Y + H > AClientH) then
+          Outside.Add(Format('%s: %s (linea %d) ocupa de (%d,%d) a (%d,%d), y "%s" solo mide %d x %d: se sale del contenedor y esa parte no se ve',
+            [Nm, Kid.ClassName_, Kid.StartLine, X, Y, X + W, Y + H,
+             AWhere, AClientW, AClientH]));
+      end;
+      if (T > Bo) or (L > R) then
+        NoRoom.Add(Format('%s (linea %d) ya no cabe: los componentes alineados de "%s" han consumido el espacio disponible (%d x %d)', [Nm, Kid.StartLine, AWhere,
+          AClientW, AClientH]));
+      Boxes[Cnt].Nm := Nm;
+      Boxes[Cnt].Cls := Kid.ClassName_;
+      Boxes[Cnt].Line := Kid.StartLine;
+      Inc(Cnt);
+
+      // and down into the container, with ITS client area
+      if Kid.Children.Count > 0 then
+        Walk(Kid, Boxes[Cnt - 1].X2 - Boxes[Cnt - 1].X1,
+          Boxes[Cnt - 1].Y2 - Boxes[Cnt - 1].Y1, Nm);
+    end;
+
+    // two free siblings sharing pixels: one of them is hidden behind the other
+    for I := 0 to Cnt - 1 do
+      if Boxes[I].Free_ then
+        for J := I + 1 to Cnt - 1 do
+          if Boxes[J].Free_ and
+             (Boxes[I].X1 < Boxes[J].X2) and (Boxes[J].X1 < Boxes[I].X2) and
+             (Boxes[I].Y1 < Boxes[J].Y2) and (Boxes[J].Y1 < Boxes[I].Y2) then
+            Overlap.Add(Format('%s (linea %d) y %s (linea %d) se solapan dentro de "%s": comparten de (%d,%d) a (%d,%d), asi que uno tapa al otro',
+              [Boxes[I].Nm, Boxes[I].Line, Boxes[J].Nm, Boxes[J].Line, AWhere,
+               Max(Boxes[I].X1, Boxes[J].X1), Max(Boxes[I].Y1, Boxes[J].Y1),
+               Min(Boxes[I].X2, Boxes[J].X2), Min(Boxes[I].Y2, Boxes[J].Y2)]));
+  end;
+
+begin
+  Doc := nil;
+  Result := LoadDoc(APath, Doc);
+  if Result <> '' then
+    Exit;
+  try
+    if Doc.Root = nil then
+      Exit(SR_DESIGNER_BINDING_NO_ROOT);
+    Ret := TJSONObject.Create;
+    try
+      Ret.AddPair('form', Doc.Root.ObjName);
+      Ret.AddPair('class', Doc.Root.ClassName_);
+      // a form reports the area INSIDE its frame; fall back to the outer size
+      RootW := PropInt(Doc, Doc.Root, 'ClientWidth', -1, Found);
+      if not Found then
+        RootW := PropInt(Doc, Doc.Root, 'Width', 0, Found);
+      RootH := PropInt(Doc, Doc.Root, 'ClientHeight', -1, Found);
+      if not Found then
+        RootH := PropInt(Doc, Doc.Root, 'Height', 0, Found);
+      Ret.AddPair('clientWidth', TJSONNumber.Create(RootW));
+      Ret.AddPair('clientHeight', TJSONNumber.Create(RootH));
+
+      Zero := TJSONArray.Create;
+      Ret.AddPair('zeroSize', Zero);
+      Outside := TJSONArray.Create;
+      Ret.AddPair('outsideParent', Outside);
+      Overlap := TJSONArray.Create;
+      Ret.AddPair('overlapping', Overlap);
+      NoRoom := TJSONArray.Create;
+      Ret.AddPair('noRoomLeft', NoRoom);
+      Unknown := TJSONArray.Create;
+      Ret.AddPair('sizeNotWritten', Unknown);
+
+      if (RootW <= 0) or (RootH <= 0) then
+        NoRoom.Add(Format('%s no dice cuanto mide (ClientWidth/ClientHeight %d x %d): sin el tamano del form no puedo comprobar nada de lo que hay dentro', [Doc.Root.ObjName, RootW, RootH]))
+      else
+        Walk(Doc.Root, RootW, RootH, Doc.Root.ObjName);
+
+      Ret.AddPair('ok', TJSONBool.Create((Zero.Count = 0) and
+        (Outside.Count = 0) and (Overlap.Count = 0) and (NoRoom.Count = 0)));
+      Ret.AddPair('note', IfThen((Zero.Count = 0) and (Outside.Count = 0) and
+        (Overlap.Count = 0) and (NoRoom.Count = 0), SN_DESIGNER_LAYOUT_OK,
+        SN_DESIGNER_LAYOUT_BAD));
+      Ret.AddPair('howMeasured', SN_DESIGNER_LAYOUT_HOW);
+      Result := Ret.ToJSON;
+    finally
+      Ret.Free;
+    end;
+  finally
+    Doc.Free;
+  end;
+end;
+
 function LintForm(const APath: string): string;
 var
   Denied, EncName, Text: string;
@@ -705,12 +964,15 @@ begin
     else
       Result := PropInfo(Fw, Params.ClassName_, Params.Prop);
   end
-  else if MatchText(Cmd, ['tree', 'get', 'lint', 'check-binding', 'binding']) then
+  else if MatchText(Cmd, ['tree', 'get', 'lint', 'check-binding', 'binding',
+    'layout']) then
   begin
     if Params.Path.Trim = '' then
       Exit(SR_DESIGNER_NEED_PATH);
     if MatchText(Cmd, ['check-binding', 'binding']) then
       Result := CheckBinding(Params.Path, Params.Unit_)
+    else if Cmd = 'layout' then
+      Result := LayoutOf(Params.Path)
     else if Cmd = 'tree' then
       Result := TreeOf(Params.Path)
     else if Cmd = 'lint' then

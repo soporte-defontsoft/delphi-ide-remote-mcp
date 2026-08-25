@@ -8,6 +8,31 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.70.0-beta] - 2026-08-25
+
+### Added
+- **`delphi_designer command=layout` - WHERE things actually end up.** An agent
+  building a form has the numbers (it wrote them) but not the arithmetic that
+  turns `Left`/`Top`/`Width`/`Height` plus `Align` into a screen. `check-binding`
+  proves a form BINDS; this proves it can be SEEN. It resolves `Align` the way
+  the VCL does - each aligned child eats its band off the parent's remaining
+  client rectangle, in `.dfm` order, and `alClient` takes what is left - and
+  then reports:
+  - **controls that overlap** (one hides the other), only between free
+    (`alNone`) siblings, since aligned ones are placed by construction;
+  - **controls with a side of zero** - present, loadable, invisible;
+  - **controls that fall outside their container**, at any nesting depth, with
+    the container's real size next to the control's rectangle;
+  - **aligned children that ran out of room**, and a **second `alClient`**,
+    which receives nothing;
+  - sizes the `.dfm` never wrote, declared unknown rather than guessed at.
+  Non-visual components (a `TTimer`, a `TPopupMenu`: `Left`/`Top` only, no size)
+  carry no geometry and are not judged. Verified against four real forms with
+  zero false positives, and against a form broken four ways on purpose.
+  It says how it measures: a container's client area is taken as its
+  `Width`/`Height` (bevels and borders shave a few pixels) and `Anchors`
+  describes what happens on RESIZE, which is not what this measures.
+
 ## [0.69.0-beta] - 2026-08-25
 
 Round 8 of adversarial agent probing: three agents attacked the live server at

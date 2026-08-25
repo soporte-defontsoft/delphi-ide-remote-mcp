@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.69.0-beta';
+  SERVER_VERSION = '0.70.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1859,7 +1859,10 @@ const
     'with the class in the .pas: components with no published field, events ' +
     'naming a method that is not published, published fields with no ' +
     'component, duplicate names - all of which COMPILE and then throw when ' +
-    'the form is created). Default: info';
+    'the form is created) | layout (WHERE things end up: resolves Align and ' +
+    'reports controls of size zero, controls that fall outside their ' +
+    'container and controls that overlap each other - a form can bind ' +
+    'perfectly and still be unusable). Default: info';
 
   SP_DESIGNER_PATH =
     'tree/get/lint: the .dfm or .fmx file (text form; binary TPF0 refused)';
@@ -1881,7 +1884,7 @@ const
     'info optional: only properties whose name contains this text';
 
   SR_DESIGNER_CMD =
-    'error: command debe ser info | prop | tree | get | lint | check-binding';
+    'error: command debe ser info | prop | tree | get | lint | check-binding | layout';
 
   SR_DESIGNER_FRAMEWORK =
     'RECHAZADO: framework debe ser vcl o fmx.';
@@ -1986,6 +1989,29 @@ const
   SR_DESIGNER_NO_UNIT_FMT =
     'RECHAZADO: no encuentro la unit del form (%s). Si se llama de otra ' +
     'forma, pasala en "unit".';
+
+  SN_DESIGNER_LAYOUT_OK =
+    'La geometria CUADRA: nada mide cero, nada se sale de su contenedor, ' +
+    'nada se solapa y a todos los alineados les queda hueco. Eso es lo que ' +
+    'no se ve desde aqui: un form puede enlazar perfecto y ser una pila de ' +
+    'controles unos encima de otros.';
+
+  SN_DESIGNER_LAYOUT_BAD =
+    'OJO: esto CARGA pero no se ve como crees. Nada de lo de abajo lo dice ' +
+    'el compilador ni el enlazador: un control de tamano cero esta ahi y no ' +
+    'se ve, uno que se sale del contenedor aparece recortado, y dos que se ' +
+    'solapan hacen que el de arriba tape al de abajo. Arreglalo antes de ' +
+    'dar el formulario por bueno.';
+
+  SN_DESIGNER_LAYOUT_HOW =
+    'Como lo mido: resuelvo Align como la VCL (cada alineado se come su ' +
+    'banda del hueco que queda, en el orden en que estan en el .dfm; ' +
+    'alClient se queda con el resto), y solo los alNone pueden solaparse o ' +
+    'salirse. Es aproximado a proposito: el area util de un contenedor la ' +
+    'tomo como su Width/Height (bordes y bevels se comen unos pixeles), un ' +
+    'control sin Width/Height escritos lo declaro desconocido en vez de ' +
+    'inventarmelo, y Anchors describe que pasa al REDIMENSIONAR la ventana, ' +
+    'que no es lo que estoy midiendo.';
 
   SR_DESIGNER_BINDING_NOT_FORM =
     'RECHAZADO: check-binding compara un FORM con su clase, asi que "path" ' +
