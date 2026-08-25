@@ -12,6 +12,7 @@ uses
   System.Generics.Collections,
   MCPServer.Tool.Base,
   MCPServer.Types,
+  Lsp.Texts,   // SchemaDescription texts: attributes live in the interface
   Lsp.Client,
   Lsp.Session;
 
@@ -20,7 +21,7 @@ type
   private
     FPath: string;
   public
-    [SchemaDescription('Absolute path of the Delphi source file (.pas/.dpr)')]
+    [SchemaDescription(SP_SYMBOLS_PATH)]
     [Required]
     property Path: string read FPath write FPath;
   end;
@@ -96,7 +97,8 @@ uses
   System.StrUtils,
   System.IOUtils,
   MCPServer.Registration,
-  Lsp.Texts,
+  Lsp.Guard,
+  Lsp.References,
   Lsp.Patch;
 
 const
@@ -305,11 +307,115 @@ begin
       [TPath.GetFileName(APath), TPath.GetExtension(APath)]);
 end;
 
+{ What a unit OFFERS, from its interface section alone: the declarations a
+  caller can use, without a single body. Read as text, no language server
+  involved - it has to stay cheap enough to run over a whole folder.
+
+  Why: orienting yourself in somebody else's code cost one delphi_read per
+  file, and 90% of what you need is in the interface sections (measured
+  2026-08-25, a maintenance job on another agent's project: 12 calls to get
+  the picture, 7 of them reads). }
+function InterfaceDigest(const APath: string): TJSONObject;
+var
+  Text, Enc, L, Section: string;
+  Lines: TArray<string>;
+  Arr: TJSONArray;
+  I, Kept: Integer;
+begin
+  Result := TJSONObject.Create;
+  Result.AddPair('unit', TPath.GetFileNameWithoutExtension(APath));
+  Result.AddPair('path', APath);
+  try
+    Text := PatchLoadText(APath, Enc);
+  except
+    Result.AddPair('error', 'no se puede leer');
+    Exit;
+  end;
+  Lines := Text.Replace(#13#10, #10).Split([#10]);
+  Arr := TJSONArray.Create;
+  Result.AddPair('declares', Arr);
+  Section := '';
+  Kept := 0;
+  for I := 0 to High(Lines) do
+  begin
+    L := Lines[I].Trim;
+    if TRegEx.IsMatch(L, '(?i)^interface\s*$') then
+    begin
+      Section := 'interface';
+      Continue;
+    end;
+    if TRegEx.IsMatch(L, '(?i)^implementation\s*$') then
+      Break;
+    if Section <> 'interface' then
+      Continue;
+    // uses clause of the interface: the unit's own dependencies, worth one line
+    if TRegEx.IsMatch(L, '(?i)^uses\b') then
+    begin
+      var U := L;
+      var J := I;
+      while (J < High(Lines)) and not U.Contains(';') do
+      begin
+        Inc(J);
+        U := U + ' ' + Lines[J].Trim;
+      end;
+      Result.AddPair('uses', U.Substring(4).Replace(';', '').Trim);
+      Continue;
+    end;
+    // what a reader is looking for: types, routines, constants
+    if TRegEx.IsMatch(L, '(?i)^(type|const|var|resourcestring)\s*$') then
+      Continue;
+    if TRegEx.IsMatch(L,
+      '(?i)^(class\s+)?(function|procedure|constructor|destructor|property)\b') or
+       TRegEx.IsMatch(L, '^[A-Za-z_]\w*\s*=\s*(class|record|interface|packed|\()') or
+       TRegEx.IsMatch(L, '(?i)^[A-Za-z_]\w*\s*=\s*(type\s+)?[A-Za-z_][\w.<>, ]*;\s*(//.*)?$') then
+    begin
+      Inc(Kept);
+      if Arr.Count < 200 then
+        Arr.Add(L);
+    end;
+  end;
+  Result.AddPair('total', TJSONNumber.Create(Kept));
+  if Kept > Arr.Count then
+    Result.AddPair('truncated', TJSONBool.Create(True));
+end;
+
 function TDelphiSymbolsTool.ExecuteWithParams(const Params: TDelphiFileParams): string;
 var
   Client: TLspClient;
   Settings: string;
 begin
+  // A FOLDER means "what is in here", answered from the interface sections of
+  // every unit at once: the question somebody arriving at unfamiliar code
+  // actually has, and it used to cost one call per file.
+  if TDirectory.Exists(Params.Path) then
+  begin
+    Result := ReadPathDenied(Params.Path);
+    if Result <> '' then
+      Exit;
+    var Ret := TJSONObject.Create;
+    try
+      var Units := TJSONArray.Create;
+      Ret.AddPair('folder', Params.Path);
+      Ret.AddPair('units', Units);
+      var N := 0;
+      for var F in TDirectory.GetFiles(Params.Path, '*.pas',
+        TSearchOption.soAllDirectories) do
+      begin
+        if SkipIdeArtifacts(F) then
+          Continue;
+        Inc(N);
+        if Units.Count < 60 then
+          Units.AddElement(InterfaceDigest(F));
+      end;
+      Ret.AddPair('total', TJSONNumber.Create(N));
+      if N > Units.Count then
+        Ret.AddPair('truncated', TJSONBool.Create(True));
+      Ret.AddPair('note', SN_SYMBOLS_DIGEST_NOTE);
+      Exit(Ret.ToJSON);
+    finally
+      Ret.Free;
+    end;
+  end;
   Result := NotDelphiSource(Params.Path);
   if (Result = '') and not TFile.Exists(Params.Path) then
     Result := Format(SR_LSP_NO_FILE_FMT, [Params.Path]);

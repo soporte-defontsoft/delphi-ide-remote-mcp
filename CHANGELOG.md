@@ -8,6 +8,37 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.65.0-beta] - 2026-08-25
+
+The two walls the field kept naming. Neither was a bug: both were the shape
+of the tools making the safe road the expensive one.
+
+### Added
+- **`delphi_edit edits=[...]`** - several anchored edits on ONE file, in one
+  call, all or nothing. Stitching a new unit into an existing class took
+  thirteen separate calls (uses, a field, two declarations, a property,
+  constructor, destructor, four bodies), every anchor resolving first time:
+  the anchor contract was never the problem, the granularity was. A changeset
+  gives atomicity but costs `begin` + N stages + `preview` + `commit`, so for
+  a single file the choice was "thirteen fast calls with no net" or "sixteen
+  with one". Now it is one call WITH the net: the file is snapshotted first
+  and restored byte for byte if any edit fails, and the answer says which one
+  failed and why. Each entry keeps exactly the single-edit contract.
+- **`delphi_symbols path=<folder>`** - what every unit in a folder OFFERS,
+  from its interface section: types, classes, members, properties and its
+  `uses`, no bodies. Orienting yourself in code somebody else wrote cost one
+  `delphi_read` per file, and 90% of what you need is in the interfaces
+  (measured: 12 calls to get the picture of a 700-line project, 7 of them
+  reads). One call now, ~4.5 KB for four units.
+
+### Fixed
+- `delphi_symbols`' folder digest missed everything a class declares: a
+  regex written with `` reached the source as a backspace character, so
+  every word-boundary pattern silently matched nothing. Same trap that bit
+  the drive mask two rounds ago - worth remembering that a `` in a
+  generated Pascal literal is not a word boundary unless you make it one.
+
+
 ## [0.64.0-beta] - 2026-08-25
 
 Field round 11: an audit of the surfaces nobody had attacked yet, and a

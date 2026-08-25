@@ -200,6 +200,37 @@ mit = [p for p in j.get('projects', []) if p.get('name') == 'MiTest']
 check('C3 delphi_projects dice contra que carpetas compila',
       bool(mit) and bool(mit[0].get('compilesAgainst')), str(mit)[:300])
 
+# ------------------------------------------------ los dos MUROS derribados --
+# W1: coser un cambio que toca N sitios del MISMO fichero era N llamadas sin
+# atomicidad, o N+3 con ella. Ahora es una, y con red.
+W = os.path.join(BASE, 'UCose.pas')
+open(W, 'w', encoding='utf-8', newline='\r\n').write(
+    'unit UCose;\ninterface\ntype\n  TCosa = class\n  private\n    FA: Integer;\n'
+    '  public\n    procedure Uno;\n    procedure Dos;\n  end;\nimplementation\nend.\n')
+edits = json.dumps([{"old": "    FA: Integer;", "new": "    FA: Integer;\r\n    FB: string;"},
+                    {"old": "    procedure Uno;", "new": "    procedure Uno(A: Integer);"},
+                    {"old": "    procedure Dos;", "new": "    procedure Dos(B: string);"}])
+r = call(A, 'delphi_edit', {'path': W, 'edits': edits})
+disk = open(W, encoding='utf-8').read()
+check('W1 tres ediciones sobre un fichero en UNA llamada',
+      'APLICADAS 3' in r and 'FB: string;' in disk and 'Uno(A: Integer)' in disk, r[:250])
+bad = json.dumps([{"old": "    procedure Uno(A: Integer);", "new": "    procedure Uno(A, C: Integer);"},
+                  {"old": "ESTA LINEA NO EXISTE", "new": "x"}])
+r = call(A, 'delphi_edit', {'path': W, 'edits': bad})
+check('W1 si una falla, se deshacen TODAS (byte a byte)',
+      'ROLLBACK' in r and open(W, encoding='utf-8').read() == disk, r[:250])
+r = call(A, 'delphi_edit', {'path': W, 'edits': 'esto no es json'})
+check('W1 un "edits" que no es JSON se explica', 'RECHAZADO' in r and 'JSON' in r, r[:200])
+
+# W2: orientarse en codigo ajeno costaba un delphi_read por fichero
+jd = J(call(A, 'delphi_symbols', {'path': P1}))
+check('W2 delphi_symbols sobre una CARPETA resume todas sus units',
+      jd.get('total', 0) >= 1 and bool(jd.get('units')), str(jd)[:250])
+ucalc = [u for u in jd.get('units', []) if u.get('unit') == 'UCalc']
+check('W2 ...con lo que cada una declara, miembros incluidos',
+      bool(ucalc) and any(('Doble' in d) or ('Triple' in d)
+                          for d in ucalc[0].get('declares', [])), str(ucalc)[:250])
+
 A['p'].kill()
 print('\n== round-11 battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

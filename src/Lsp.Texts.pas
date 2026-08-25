@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.64.0-beta';
+  SERVER_VERSION = '0.65.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -114,6 +114,20 @@ const
   SR_LSP_NEGATIVE_FMT =
     'error: linea %d y columna %d: no hay posiciones negativas.';
 
+  SP_SYMBOLS_PATH =
+    'Un fichero Delphi (.pas/.dpr) para sus simbolos completos... o una ' +
+    'CARPETA, y entonces te doy de golpe lo que OFRECE cada unit de ahi ' +
+    'dentro (su seccion interface: tipos, clases, rutinas, propiedades y su ' +
+    'uses), sin cuerpos. Eso es lo que hace falta para orientarse en codigo ' +
+    'que no has escrito tu, y cuesta UNA llamada en vez de una por fichero.';
+
+  SN_SYMBOLS_DIGEST_NOTE =
+    'Esto es el RESUMEN: solo lo que cada unit declara en su interface, leido ' +
+    'como texto y sin el motor semantico. Para el detalle de una unit (con ' +
+    'rangos y anidamiento) llama con el fichero; para leerla entera, ' +
+    'delphi_read. Si una unit no aparece o algo sale raro, no te fies del ' +
+    'resumen para editar: lee el fichero.';
+
   SR_LSP_NO_FILE_FMT =
     'RECHAZADO: no existe %s. (Antes esto salia como "Error executing ' +
     'tool", que en este servidor significa "me he roto por dentro" y no era ' +
@@ -123,6 +137,45 @@ const
     'RECHAZADO: %s no es un fuente Delphi (%s), asi que no hay simbolos que ' +
     'sacar; antes te devolvia una lista vacia, que parecia decir que la unit ' +
     'no tiene nada. Esta tool trabaja sobre .pas, .dpr, .dpk e .inc.';
+
+  SP_PATCH_EDITS =
+    'VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O ' +
+    'NADA: un array JSON [{"old":"...","new":"...","atline":12}, ...] que se ' +
+    'aplica EN ORDEN, cada entrada con exactamente el mismo contrato que una ' +
+    'edicion suelta (old = UNA linea entera copiada literal y unica; atline ' +
+    'para desempatar; delete:true para quitar la linea). Si una falla, el ' +
+    'fichero vuelve byte a byte a como estaba y te digo cual fallo. Para ' +
+    'coser un cambio que toca diez sitios del mismo fichero esto es UNA ' +
+    'llamada en vez de diez sin red. Si el cambio toca VARIOS ficheros, eso ' +
+    'es delphi_changeset. Cuando mandas "edits" se ignoran old/new/atline.';
+
+  SR_PATCH_EDITS_JSON =
+    'RECHAZADO: "edits" tiene que ser un array JSON de objetos, por ejemplo ' +
+    '[{"old":"  FLista: TList;","new":"  FLista: TObjectList<TCosa>;"}]. Si ' +
+    'lo mandas desde una linea de comandos, metelo en un fichero y usa la ' +
+    'forma @fichero, que la consola no te lo destroce.';
+
+  SR_PATCH_EDITS_EMPTY =
+    'RECHAZADO: "edits" viene vacio. Sin operaciones no hay nada que aplicar.';
+
+  SR_PATCH_EDITS_TOOMANY =
+    'RECHAZADO: son demasiadas ediciones de una vez (el tope es 50). Si de ' +
+    'verdad hay que tocar tantas lineas del mismo fichero, casi seguro que lo ' +
+    'que quieres es reescribirlo entero: delphi_changeset con delete + create.';
+
+  SR_PATCH_EDITS_NOFILE_FMT =
+    'RECHAZADO: no existe %s.';
+
+  SR_PATCH_EDITS_ROLLED_FMT =
+    'ROLLBACK: fallo la edicion %d de %d y el fichero ha vuelto byte a byte a ' +
+    'como estaba. NADA se ha aplicado, ni siquiera las anteriores. Esto es lo ' +
+    'que paso:'#10'%s'#10'Corrige esa entrada (relee el fichero con ' +
+    'delphi_read y copia el ancla literal) y vuelve a mandarlas todas.';
+
+  SN_PATCH_EDITS_OK_FMT =
+    'APLICADAS %d ediciones sobre %s, todas o ninguna:'#10'%s'#10'Copia ' +
+    'previa del fichero en __delphi-patch (una por dia y fichero: la primera ' +
+    'del dia es el original de antes de todo esto).';
 
   SN_EDIT_DUP_ABOVE_FMT =
     'OJO: la linea %d (justo ENCIMA) es identica a la primera que acabas de ' +
