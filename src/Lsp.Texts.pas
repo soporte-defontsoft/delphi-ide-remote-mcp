@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.56.0-beta';
+  SERVER_VERSION = '0.57.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1334,6 +1334,24 @@ const
   SN_DESIGNER_LINT_BAD_FMT =
     '%d avisos del designer en %s (clase desconocida, propiedad no publicada ' +
     'o valor de enum inexistente):';
+
+  // ---- delphi_git: ramas ----
+
+  SR_GIT_SWITCH_NEEDS =
+    'RECHAZADO: switch necesita "args" con el nombre de la rama. Para crear ' +
+    'una nueva y saltar a ella: args=<rama> create=true. Los cambios sin ' +
+    'commitear viajan contigo; si git se queja, guardalos antes con ' +
+    'command=stash args=push.';
+
+  SR_GIT_MERGE_NEEDS =
+    'RECHAZADO: merge necesita "args" con la rama a integrar. Siempre se ' +
+    'hace --ff-only: si hiciera falta un commit de merge (o hubiera ' +
+    'conflictos), se rechaza en vez de dejarlo a medias. Eso es cosa de una ' +
+    'persona, no de un agente adivinando.';
+
+  SR_GIT_STASH_ARGS =
+    'RECHAZADO: stash admite push (guardar, por defecto), pop (recuperar) o ' +
+    'list. "drop" no esta: destruye trabajo sin vuelta atras.';
 
   // ---- delphi_changeset ----
 

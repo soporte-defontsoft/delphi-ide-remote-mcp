@@ -76,14 +76,17 @@ type
     FRepo: string;
     FCommand: string;
     FArgs: string;
+    FCreate: Boolean;
     FMessage: string;
   public
     [SchemaDescription('Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots)')]
     property Repo: string read FRepo write FRepo;
-    [SchemaDescription('One of: status | diff | log | show | branch | add | commit | init | push | tag | config | clone | pull | fetch (config: args=user.name|user.email + value in message; clone: URL in message, destination in repo)')]
+    [SchemaDescription('One of: status | diff | log | show | branch | switch | merge | stash | add | commit | init | push | tag | config | clone | pull | fetch. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push|pop|list (never drop). config: args=user.name|user.email + value in message. clone: URL in message, destination in repo')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected')]
     property Args: string read FArgs write FArgs;
+    [SchemaDescription('switch: true = create the branch and move to it (git switch -c). Ignored by every other command')]
+    property Create: Boolean read FCreate write FCreate;
     [SchemaDescription('commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL')]
     property Message: string read FMessage write FMessage;
   end;
@@ -684,6 +687,41 @@ begin
       Exit('error: config needs the value in the "message" parameter');
     GitArgs := Format('config %s "%s"',
       [Params.Args.Trim.ToLower, Params.Message.Replace('"', '''''')]);
+  end
+  else if Cmd = 'switch' then
+  begin
+    // Changing branch is what a real workflow needs and what was missing:
+    // an agent could CREATE a branch and never move to it (review
+    // 2026-08-25). Only the branch form: "switch <branch>" or, with
+    // create=true, "switch -c <branch>". The file-restoring forms of
+    // checkout (checkout -- <path>) are NOT here on purpose - those DISCARD
+    // work, and discarding has its own command with its own words.
+    if Params.Args.Trim = '' then
+      Exit(SR_GIT_SWITCH_NEEDS);
+    if Params.Create then
+      GitArgs := 'switch -c ' + Params.Args
+    else
+      GitArgs := 'switch ' + Params.Args;
+  end
+  else if Cmd = 'merge' then
+  begin
+    if Params.Args.Trim = '' then
+      Exit(SR_GIT_MERGE_NEEDS);
+    // --ff-only: a merge that would need a commit (and could conflict half
+    // way) is refused rather than left half-done. Real conflicts are a
+    // human's business, not an agent's guess.
+    GitArgs := 'merge --ff-only ' + Params.Args;
+  end
+  else if Cmd = 'stash' then
+  begin
+    // push (default) / pop / list: park work to change branch and get it
+    // back. Never "stash drop" - that destroys.
+    if Params.Args.Trim = '' then
+      GitArgs := 'stash push'
+    else if MatchText(Params.Args.Trim.ToLower, ['push', 'pop', 'list']) then
+      GitArgs := 'stash ' + Params.Args.Trim.ToLower
+    else
+      Exit(SR_GIT_STASH_ARGS);
   end
   else if Cmd = 'push' then
     // uses the SERVER's stored credentials/remotes - consistent with the

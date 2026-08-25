@@ -8,6 +8,23 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.57.0-beta] - 2026-08-25
+
+First fix out of the deep review (`docs/REVIEW-2026-08.md`): an agent could
+CREATE a branch and never move to it, so it could not work the way a
+programmer does - branch per task, commit, back to main.
+
+### Added
+- **`delphi_git switch`** (`args=<branch>`, `create=true` for a new one),
+  **`merge`** (always `--ff-only`: a merge that would need a commit, or
+  conflict, is REFUSED rather than left half-done - that is a person's call)
+  and **`stash`** (`push`/`pop`/`list`; `drop` deliberately absent, it
+  destroys). The file-restoring forms of `checkout` stay out: discarding
+  work needs its own command with its own words, not a flag.
+- `tests/test_git_branches.py` (15 checks): branch per task, work, switch
+  back, ff-only merge, a divergent merge refused, stash round-trip.
+
+
 ## [0.56.0-beta] - 2026-08-25
 
 Remote execution CLOSED end to end: an agent with no route to the target

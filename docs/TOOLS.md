@@ -513,8 +513,9 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `repo` | string | **yes** | Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots) |
-| `command` | string | **yes** | One of: status \| diff \| log \| show \| branch \| add \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch (config: args=user.name\|user.email + value in message; clone: URL in message, destination in repo) |
+| `command` | string | **yes** | One of: status \| diff \| log \| show \| branch \| switch \| merge \| stash \| add \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch (config: args=user.name\|user.email + value in message; clone: URL in message, destination in repo) |
 | `args` | string | optional | Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected |
+| `create` | boolean | optional | `switch`: true = create the branch and move to it (`git switch -c`). Ignored by every other command |
 | `message` | string | optional | commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL |
 
 
