@@ -874,6 +874,17 @@ begin
     Result.AddPair('target', Target);
     Result.AddPair('errors', Errors);
     Result.AddPair('warnings', Warnings);
+    // ONE error can father a dozen. Measured in the field (2026-08-25): a
+    // single E2009 - assigning a plain procedure to a TNotifyEvent - produced
+    // seven E2250 "no overloaded version of Synchronize/Queue" in the same
+    // file, and the pile made it look like a threading problem. The compiler
+    // stops making sense after the first refusal, so name the first one and
+    // say the rest may be its shadow.
+    if Errors.Count > 1 then
+    begin
+      Result.AddPair('firstError', Errors.Items[0].Value);
+      Result.AddPair('firstErrorNote', SN_BUILD_FIRST_ERROR);
+    end;
     // Units the compiler could not find: say where their source lives, so
     // the next call is the add-searchpath and not another failed build.
     if ExitCode <> 0 then

@@ -952,6 +952,45 @@ begin
     'to answer "open project X" without knowing the disk layout.';
 end;
 
+{ The git repository a path belongs to (the folder holding .git), '' when
+  none, plus the branch checked out there. An agent arriving cold has to know
+  whether what it is about to edit is under version control and on which
+  branch BEFORE it edits: asking for it cost a call and some guessing (field
+  round 7). Read straight from .git/HEAD - no git process, no shell. }
+function RepoOf(const APath: string; out ABranch: string): string;
+var
+  Dir, Head: string;
+begin
+  Result := '';
+  ABranch := '';
+  Dir := APath;
+  if TFile.Exists(Dir) then
+    Dir := TPath.GetDirectoryName(Dir);
+  while (Dir <> '') and TDirectory.Exists(Dir) do
+  begin
+    if TDirectory.Exists(TPath.Combine(Dir, '.git')) or
+       TFile.Exists(TPath.Combine(Dir, '.git')) then
+    begin
+      Result := Dir;
+      Head := TPath.Combine(Dir, '.git\HEAD');
+      if TFile.Exists(Head) then
+        try
+          ABranch := TFile.ReadAllText(Head).Trim;
+          if ABranch.StartsWith('ref:') then
+            ABranch := ABranch.Substring(ABranch.LastIndexOf('/') + 1)
+          else
+            ABranch := ABranch.Substring(0, 8) + ' (detached)';
+        except
+          ABranch := '';
+        end;
+      Exit;
+    end;
+    if TPath.GetDirectoryName(Dir) = Dir then
+      Break;
+    Dir := TPath.GetDirectoryName(Dir);
+  end;
+end;
+
 function TDelphiProjectsTool.ExecuteWithParams(const Params: TDelphiProjectsParams): string;
 var
   Return: TJSONObject;
@@ -960,7 +999,7 @@ var
   RootDir, F, Filt: string;
   Entry: TJSONObject;
   Total: Integer;
-  Mask: string;
+  Mask, Repo, Branch: string;
 begin
   if Params.Root <> '' then
   begin
@@ -1007,6 +1046,13 @@ begin
             Entry.AddPair('project', F);
             Entry.AddPair('dir', TPath.GetDirectoryName(F));
             Entry.AddPair('kind', LowerCase(TPath.GetExtension(F)).Substring(1));
+            Repo := RepoOf(F, Branch);
+            if Repo <> '' then
+            begin
+              Entry.AddPair('repo', Repo);
+              if Branch <> '' then
+                Entry.AddPair('branch', Branch);
+            end;
           end;
         end;
     end;

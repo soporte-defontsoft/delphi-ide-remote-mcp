@@ -314,6 +314,17 @@ version/jar properties in the `.dproj`, each conditioned so IDE-written values
 always win). Files the IDE wrote are never overwritten. A successful Android
 Deploy declares the built `.apk` as `output`.
 
+### `delphi_help`
+
+THE MAP of this server, so an agent does not have to spend context working it out. `command=tasks` (the default) gives the task → tool table, one line each: what do I use to read, to edit, to compile, to change several files at once, to rename, to test, to deploy. `command=tool name=<tool>` gives ONE tool in full (description + parameters) without asking for `tools/list`, which returns all 41 at once. `command=conventions` gives the rules that hold for every tool: paths and virtual drives, the jail, anchored editing, the backups, encodings. Start here after connecting.
+
+*Access: read-only.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | tasks (task → tool table; the default) \| tool (one tool in full, with `name`) \| conventions (the rules common to all) |
+| `name` | string | optional | `command=tool`: the tool's name (`delphi_edit`, or just `edit`) |
+
 ### `delphi_test`
 
 TESTS — the difference between "it compiles" and "it works". `discover path=<folder or project>` lists the test projects underneath (a `.dpr` using DUnitX, or a console one whose name says test/tests/spec). `run project=<the test .dproj>` builds and runs that runner and answers STRUCTURED: `total`, `passed`, `failed`, the failing lines, `exitCode`, `durationMs` and a bounded tail of what it printed. Two dialects are understood: DUnitX's own summary and the plain `PASS`/`FAIL` + ExitCode convention of a hand-written console runner. The verdict says where it came from (`verdictFrom: counts | exitCode`) and never guesses. Running tests IS execution: its own switch `[Security] AllowTests` (or `AllowRun`, which implies it); the binary is built here, comes from a project of the jail, and runs in the same low-integrity sandbox as `delphi_run`, with a timeout. Without the switch, `discover` still works and `run` is refused.

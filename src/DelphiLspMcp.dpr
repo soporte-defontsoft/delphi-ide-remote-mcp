@@ -103,6 +103,7 @@ uses
   Mcp.Tools.Designer in 'Mcp.Tools.Designer.pas',
   Mcp.Tools.Rename in 'Mcp.Tools.Rename.pas',
   Mcp.Tools.Test in 'Mcp.Tools.Test.pas',
+  Mcp.Tools.Help in 'Mcp.Tools.Help.pas',
   Lsp.TestRunner in 'Lsp.TestRunner.pas',
   Lsp.Rename in 'Lsp.Rename.pas',
   Lsp.Changeset in 'Lsp.Changeset.pas',

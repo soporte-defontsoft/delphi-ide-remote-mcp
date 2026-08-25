@@ -184,6 +184,7 @@
         <DCCReference Include="Mcp.Tools.Designer.pas"/>
         <DCCReference Include="Mcp.Tools.Rename.pas"/>
         <DCCReference Include="Mcp.Tools.Test.pas"/>
+        <DCCReference Include="Mcp.Tools.Help.pas"/>
         <DCCReference Include="Lsp.TestRunner.pas"/>
         <DCCReference Include="Lsp.Rename.pas"/>
         <DCCReference Include="Lsp.Patch.pas"/>

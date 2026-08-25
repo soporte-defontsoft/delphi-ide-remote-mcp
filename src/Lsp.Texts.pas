@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.60.0-beta';
+  SERVER_VERSION = '0.61.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1275,6 +1275,143 @@ const
     'preview + commit there). applicable=false lists the blockers - fix ' +
     'them or do the rename by hand with the evidence given.';
 
+  // ---- delphi_help ----
+
+  SD_HELP =
+    'EL MAPA de este servidor, para no gastar contexto averiguandolo. ' +
+    'command=tasks (por defecto) da la tabla tarea -> tool en una linea cada ' +
+    'una: que uso para leer, para editar, para compilar, para varios ficheros ' +
+    'a la vez, para renombrar, para tests, para desplegar. command=tool ' +
+    'name=<tool> da UNA tool entera (descripcion + parametros) sin volver a ' +
+    'pedir tools/list, que trae las 40 de golpe. command=conventions da las ' +
+    'reglas que valen para todas: rutas y unidades virtuales, la jaula, como ' +
+    'se edita por ancla, las copias de seguridad y los encodings. Empieza ' +
+    'por aqui si acabas de conectarte.';
+
+  SP_HELP_COMMAND =
+    'tasks (tabla tarea -> tool; por defecto) | tool (una tool entera, con ' +
+    '"name") | conventions (las reglas comunes a todas)';
+
+  SP_HELP_NAME =
+    'command=tool: nombre de la tool (delphi_edit, o solo "edit")';
+
+  SR_HELP_CMD =
+    'error: command debe ser tasks | tool | conventions.';
+
+  SR_HELP_NEED_NAME =
+    'RECHAZADO: command=tool necesita "name". Las que hay:';
+
+  SR_HELP_NO_TOOL_ALL_FMT =
+    'RECHAZADO: no existe ninguna tool "%s", ni nada que se le parezca. ' +
+    'Estas son TODAS las que hay: %s';
+
+  SR_HELP_NO_TOOL_FMT =
+    'RECHAZADO: no existe ninguna tool "%s". Se parecen a lo que pides: %s';
+
+  SN_HELP_TOOL_NOTE =
+    'Lo que manda es la descripcion de la tool: esta es la misma que sirve ' +
+    'tools/list, solo que suelta. Si algo no casa con lo que hace de verdad, ' +
+    'dilo con delphi_report: los contratos se corrigen con casos reales.';
+
+  SN_HELP_TASKS =
+    'QUE USO PARA CADA COSA (el detalle, en la descripcion de cada tool)'#10 +
+    #10 +
+    'ORIENTARSE'#10 +
+    '  donde estoy, que puedo tocar ....... delphi_workspace'#10 +
+    '  que proyectos hay (y su repo/rama) . delphi_projects'#10 +
+    '  buscar texto en el codigo .......... delphi_search'#10 +
+    '  listar ficheros de una carpeta ..... delphi_list'#10 +
+    #10 +
+    'LEER Y ENTENDER'#10 +
+    '  leer un fichero (o un rango) ....... delphi_read'#10 +
+    '  simbolos de una unit ............... delphi_symbols'#10 +
+    '  donde se define / donde se usa ..... delphi_definition, delphi_references'#10 +
+    '  errores sin compilar ............... delphi_diagnostics'#10 +
+    '  que componentes hay instalados ..... delphi_components'#10 +
+    #10 +
+    'ESCRIBIR'#10 +
+    '  cambiar Pascal por ANCLA ........... delphi_edit'#10 +
+    '  cambiar texto que no es Pascal ..... delphi_textedit'#10 +
+    '  varios ficheros TODO-O-NADA ........ delphi_changeset'#10 +
+    '  crear proyecto/unit/form/frame ..... delphi_create'#10 +
+    '  borrar / mover un fichero .......... delphi_delete, delphi_move'#10 +
+    '  subir un binario o un trozo ........ delphi_upload'#10 +
+    '  ver el impacto de un rename ........ delphi_rename_symbol (solo preview)'#10 +
+    #10 +
+    'PROYECTO'#10 +
+    '  framework, plataformas, search path  delphi_config'#10 +
+    '  meter/quitar una unit del proyecto . delphi_config add-unit / remove-unit'#10 +
+    '  compilar ........................... delphi_build'#10 +
+    '  saber si FUNCIONA .................. delphi_test'#10 +
+    '  ejecutar aqui ...................... delphi_run (apagado por defecto)'#10 +
+    #10 +
+    'FORMS Y ESTILOS'#10 +
+    '  que publica una clase .............. delphi_designer info / prop'#10 +
+    '  revisar un .dfm/.fmx ............... delphi_designer lint / tree / get'#10 +
+    '  estilos FMX ........................ delphi_styles'#10 +
+    #10 +
+    'LLEVARSELO Y DESPLEGAR'#10 +
+    '  bajarse un fichero ................. delphi_fetch'#10 +
+    '  empaquetar una carpeta ............. delphi_package'#10 +
+    '  desplegar y ejecutar en un target .. delphi_paclient, delphi_remoterun'#10 +
+    '  Android ............................ delphi_adb'#10 +
+    #10 +
+    'GIT Y MEMORIA'#10 +
+    '  ramas, commit, diff, stash ......... delphi_git'#10 +
+    '  memoria del proyecto ............... vault_read, vault_search'#10 +
+    '  escribir en la memoria ............. vault_append, vault_patch, vault_create'#10 +
+    #10 +
+    'HABLAR CON QUIEN LLEVA EL SERVIDOR'#10 +
+    '  contar un fallo o una friccion ..... delphi_report'#10 +
+    '  leer lo que te han dejado .......... delphi_messages'#10 +
+    #10 +
+    'Y las reglas comunes: delphi_help command=conventions.';
+
+  SN_HELP_CONVENTIONS =
+    'REGLAS DE LA CASA (valen para todas las tools)'#10 +
+    #10 +
+    '1. RUTAS. Las unidades del servidor viajan VIRTUALES: srvd:, srvc:... ' +
+    'Usalas tal cual en cualquier parametro de ruta; solo existen dentro de ' +
+    'este MCP y nunca resuelven en tu disco. Nunca te llegara una letra real.'#10 +
+    #10 +
+    '2. LA JAULA. Escribir, solo dentro de los "roots" que dice ' +
+    'delphi_workspace. Leer, ademas, en la zona de biblioteca (fuentes de la ' +
+    'RTL/VCL/FMX, componentes, SDK): mirar si, tocar no. Lo de fuera se ' +
+    'rechaza siempre con el motivo.'#10 +
+    #10 +
+    '3. EDITAR ES POR ANCLA, no por numero de linea. "old" es UNA linea ' +
+    'entera, copiada literal de lo que acabas de leer, y tiene que ser unica; ' +
+    'si aparece dos veces, acota con "atline". Nunca reescribas un fichero ' +
+    'entero para cambiar tres lineas: si el ancla falla, el fichero se queda ' +
+    'como estaba y el error te dice por que.'#10 +
+    #10 +
+    '4. COPIAS. Toda tool que escribe deja copia del original en la papelera ' +
+    '__delphi-patch junto al fichero, ANTES de tocarlo, una por dia y fichero ' +
+    '(la primera del dia es la original, que es la que vale). Esa carpeta no ' +
+    'se lista ni se borra desde aqui: es la red.'#10 +
+    #10 +
+    '5. ENCODING Y FINALES DE LINEA se respetan como estan. No conviertas un ' +
+    'fichero de paso; si necesitas un caracter que no cabe en su codepage, ' +
+    'usa el literal Pascal (#$2714) FUERA de las comillas, concatenado.'#10 +
+    #10 +
+    '6. VARIOS FICHEROS A LA VEZ: delphi_changeset. Apila (stage), mira ' +
+    '(preview), aplica (commit). O entra todo o no entra nada, y si algo ' +
+    'falla a mitad se deshace lo ya hecho. unstage quita una operacion suelta.'#10 +
+    #10 +
+    '7. QUE COMPILE NO ES QUE FUNCIONE: delphi_build dice "0 errores", ' +
+    'delphi_test dice "17 pasan, 1 falla". Termina por el segundo.'#10 +
+    #10 +
+    '8. UN ERROR PARE A LOS DEMAS. En un build fallido empieza por ' +
+    '"firstError": lo de detras suele ser su sombra.'#10 +
+    #10 +
+    '9. EJECUTAR ES OPCIONAL Y ESTA APAGADO salvo que el operador lo ' +
+    'encienda (AllowRun, AllowTests, AllowRemoteRun). Si te lo rechaza, no ' +
+    'insistas: dilo con delphi_report y sigue con otra cosa.'#10 +
+    #10 +
+    '10. SI ALGO NO SE PUEDE HACER POR AQUI, ESO ES UN HALLAZGO. Cuentalo con ' +
+    'delphi_report (kind=limitation) con la llamada exacta y lo que ' +
+    'esperabas: este servidor se ha hecho entero con esos informes.';
+
   // ---- delphi_test ----
 
   SD_TEST =
@@ -1471,6 +1608,12 @@ const
     'o valor de enum inexistente):';
 
   // ---- delphi_git: ramas ----
+
+  SN_BUILD_FIRST_ERROR =
+    'Empieza por "firstError": un solo error puede parir a los demas. Un ' +
+    'E2009 (asignar un procedimiento suelto a un evento) provoca detras ' +
+    'siete E2250 de Synchronize/Queue que parecen un problema de hilos y no ' +
+    'lo son. Arregla el primero y vuelve a compilar antes de tocar nada mas.';
 
   SN_LINT_UNKNOWN_CLASS_FMT =
     '"%s" no esta en la tabla %s de este servidor (sera de un paquete de ' +
@@ -1781,8 +1924,9 @@ const
     'hasta un preview limpio.';
 
   SN_CHANGESET_COMMITTED_FMT =
-    'COMMIT COMPLETO: %d operaciones aplicadas sobre %d ficheros. Los ' +
-    'backups por fichero de __delphi-patch siguen existiendo como siempre.';
+    'COMMIT COMPLETO: %d operaciones aplicadas sobre %d ficheros. Esto es lo ' +
+    'que ha cambiado:'#10'%s'#10'Los backups por fichero de __delphi-patch ' +
+    'siguen existiendo como siempre.';
 
   // ---- delphi_components ----
 

@@ -106,6 +106,35 @@ begin
   inherited;
 end;
 
+{ Attach the mailbox notice WITHOUT breaking the answer. Half the tools reply
+  with a JSON object, and gluing a line of prose behind it made that JSON
+  unparseable for as long as a message sat waiting - a client doing the
+  obvious json.loads() got a syntax error out of nowhere, and only while
+  there was mail (measured 2026-08-25). Inside the object it goes, as one
+  more field; only a prose answer gets it appended. }
+function WithMailboxNote(const AText, ANote: string): string;
+var
+  Obj: TJSONObject;
+  T: string;
+begin
+  Result := AText;
+  if ANote = '' then
+    Exit;
+  T := AText.TrimRight;
+  if T.StartsWith('{') and T.EndsWith('}') then
+  begin
+    Obj := TJSONObject.ParseJSONValue(T) as TJSONObject;
+    if Assigned(Obj) then
+      try
+        Obj.AddPair('mailbox', ANote.Trim);
+        Exit(Obj.ToJSON);
+      finally
+        Obj.Free;
+      end;
+  end;
+  Result := AText + ANote;
+end;
+
 procedure TMcpHost.Wire;
 begin
   FRegistry := TMCPManagerRegistry.Create;
@@ -143,9 +172,9 @@ begin
     begin
       Result := MaskDriveText(ToolName, AText);
       // the operator's mailbox: there is no push in MCP clients, so every
-      // tool answer carries the notice while a message waits
+      // tool answer carries the notice while a message waits.
       if ToolName <> 'delphi_messages' then
-        Result := Result + PendingMessagesNote;
+        Result := WithMailboxNote(Result, PendingMessagesNote);
     end;
 end;
 

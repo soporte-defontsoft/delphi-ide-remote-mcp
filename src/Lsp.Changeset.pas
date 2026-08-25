@@ -352,6 +352,9 @@ var
   Applied: Boolean;
   OpCount, FileCount, Before, After: Integer;
   Deltas: TDictionary<string, Integer>;
+  Deltas2: TDictionary<string, Integer>;  // survives the block that frees Deltas
+  Audit: TStringBuilder;
+  AuditText: string;
 begin
   Cmd := ACommand.Trim.ToLower;
   GLock.Enter;
@@ -580,6 +583,7 @@ begin
         // against the mutated one (field 2026-08-24). Every op is rebased
         // by what the previous ones did to ITS file.
         Deltas := TDictionary<string, Integer>.Create;
+        Deltas2 := TDictionary<string, Integer>.Create;
         try
           for I := 0 to C.Ops.Count - 1 do
           begin
@@ -599,6 +603,7 @@ begin
               var Acc := 0;
               Deltas.TryGetValue(Op.Path.ToLower, Acc);
               Deltas.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
+              Deltas2.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
             end;
           end;
         finally
@@ -610,6 +615,25 @@ begin
         // report 2026-08-24). Never read a freed object.
         OpCount := C.Ops.Count;
         FileCount := Snaps.Count;
+        // What actually changed, file by file. delphi_edit has always
+        // answered with an audit of its own edit; commit answered with two
+        // numbers, so after a 16-operation batch nobody could tell WHICH
+        // files moved without going to look (field round 7).
+        Audit := TStringBuilder.Create;
+        try
+          for Op in C.Ops do
+          begin
+            var D := 0;
+            Deltas2.TryGetValue(Op.Path.ToLower, D);
+            Audit.AppendLine(Format('  %s %s%s', [KindName(Op.Kind),
+              MaskDriveText('delphi_changeset', Op.Path),
+              IfThen(D = 0, '', Format('  (%s%d lineas)',
+                [IfThen(D > 0, '+', ''), D]))]));
+          end;
+          AuditText := Audit.ToString.TrimRight;
+        finally
+          Audit.Free;
+        end;
         if not Applied then
         begin
           for Snap in Snaps do
@@ -621,10 +645,12 @@ begin
           Exit(Format(SR_CHANGESET_ROLLED_BACK_FMT, [N, OpCount, Err]));
         end;
         GSets.Remove(Id);
-        Exit(Format(SN_CHANGESET_COMMITTED_FMT, [OpCount, FileCount]));
+        Exit(Format(SN_CHANGESET_COMMITTED_FMT,
+          [OpCount, FileCount, AuditText]));
       finally
         Snaps.Free;
         Changed.Free;
+        Deltas2.Free;
       end;
     end;
 

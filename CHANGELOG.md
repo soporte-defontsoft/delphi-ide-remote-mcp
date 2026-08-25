@@ -8,6 +8,44 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.61.0-beta] - 2026-08-25
+
+The other half of round 8: what the agents asked FOR, rather than what they
+found broken.
+
+### Added
+- **`delphi_help`** - the map an agent arriving cold does not have. An agent
+  said it plainly after doing a real job through nothing but this server:
+  "no hay forma de preguntarle al servidor como se usa". `command=tasks`
+  (the default) is the task -> tool table, one line each; `command=tool
+  name=<tool>` is ONE tool in full without asking for `tools/list` (which
+  returns all 41 at once, about 14k tokens); `command=conventions` is the
+  ten rules that hold for every tool - virtual drives, the jail, anchored
+  editing, the backups, encodings, compile-is-not-works, and that anything
+  impossible through MCP is itself a finding worth reporting.
+- **`delphi_changeset commit` says what it changed**, file by file with the
+  line delta, the way `delphi_edit` always has. Two numbers after a
+  16-operation batch left nobody able to tell WHICH files moved.
+- **`delphi_projects` reports the git repository and the branch** each
+  project sits in (read straight from `.git/HEAD`, no git process). An agent
+  needs to know whether what it is about to edit is under version control,
+  and on which branch, BEFORE it edits.
+- **`delphi_build` names the FIRST error** (`firstError`) and says the rest
+  may be its shadow. Measured in the field: one E2009 - a plain procedure
+  assigned to a `TNotifyEvent` - produced seven E2250 "no overloaded version
+  of Synchronize/Queue" in the same file, and the pile read like a threading
+  problem it was not.
+
+### Fixed
+- **The mailbox notice broke JSON.** It was appended behind the answer, so
+  while a message sat waiting, every JSON-returning tool answered something
+  `json.loads()` could not parse - a syntax error out of nowhere, and only
+  while there was mail. It now goes INSIDE the object as a `mailbox` field;
+  only prose answers get it appended.
+- `delphi_help` with a name that matches nothing lists every tool and says
+  so, instead of claiming they all "look like" what was asked.
+
+
 ## [0.60.0-beta] - 2026-08-25
 
 Field round 8. Three agents worked the server through nothing but MCP (a

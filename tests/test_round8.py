@@ -426,7 +426,47 @@ open(os.path.join(MBOX, '20260825-general.md'), 'w', encoding='utf-8').write(
 t = call(MSG, 'delphi_workspace', {})
 check('#9 el correo para TODOS si se anuncia como tuyo',
       'para TODOS' in t, t[-250:])
+# El aviso se pegaba DETRAS del resultado: con correo esperando, cualquier
+# respuesta JSON dejaba de poder parsearse (json.loads reventaba de la nada,
+# y solo mientras hubiera correo). Ahora entra DENTRO del objeto.
+jw = J(t)
+check('#9 con correo esperando, una respuesta JSON SIGUE siendo JSON',
+      jw != {} and 'roots' in jw, t[:120])
+check('#9 ...y el aviso viaja dentro, en "mailbox"',
+      'para TODOS' in jw.get('mailbox', ''), str(jw.get('mailbox'))[:150])
 MSG['p'].kill()
+
+# ------------------------------------------------- M4: delphi_help ---------
+r = call(A, 'delphi_help', {})
+check('M4 help por defecto: la tabla tarea -> tool',
+      'delphi_edit' in r and 'delphi_test' in r and 'delphi_changeset' in r, r[:200])
+check('M4 ...y cabe en poco: es un atajo, no el catalogo', len(r) < 4000, len(r))
+r = call(A, 'delphi_help', {'command': 'conventions'})
+check('M4 conventions dice lo que vale para todas',
+      'srvd:' in r and 'ancla' in r.lower() and '__delphi-patch' in r, r[:200])
+j = J(call(A, 'delphi_help', {'command': 'tool', 'name': 'edit'}))
+check('M4 una tool suelta: descripcion + parametros',
+      j.get('tool') == 'delphi_edit' and 'properties' in j.get('parameters', {}), str(j)[:200])
+j = J(call(A, 'delphi_help', {'name': 'delphi_changeset'}))
+check('M4 con solo name, la intencion es obvia', j.get('tool') == 'delphi_changeset', str(j)[:200])
+r = call(A, 'delphi_help', {'command': 'tool', 'name': 'noexiste'})
+check('M4 tool inventada: RECHAZADO diciendo cuales hay',
+      'RECHAZADO' in r and 'delphi_edit' in r, r[:200])
+r = call(A, 'delphi_help', {'command': 'volar'})
+check('M4 command invalido: los tres validos', 'tasks' in r and 'conventions' in r, r[:200])
+
+# ------------------------------------------------ C2/C4/F2 del campo -------
+j = J(call(A, 'delphi_projects', {}))
+proj = [p for p in j.get('projects', []) if p.get('name') == 'Sano']
+check('C2 delphi_projects dice el repo y la rama cuando los hay',
+      all(('repo' in p) == ('branch' in p) for p in j.get('projects', [])), str(j)[:200])
+raw = raw_result(A, 'delphi_build', {'project': os.path.join(PROJ, 'FugaTest.dproj'),
+                                     'platform': 'Win64', 'config': 'Debug'}, t=900)
+b = json.loads(raw)['result']['content'][0]['text']
+jb = J(b)
+check('F2 un build con varios errores nombra el PRIMERO',
+      (len(jb.get('errors', [])) < 2) or (bool(jb.get('firstError')) and bool(jb.get('firstErrorNote'))),
+      str(jb)[:250])
 
 A['p'].kill()
 print('\n== round-8 battery: %d PASS / %d FAIL ==' % (P, F))
