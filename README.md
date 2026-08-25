@@ -115,8 +115,9 @@ methods), a duplicate component name, an event left without a value: every one o
 perfectly and throws when the form is created**, on a machine where nobody is watching. It follows
 inheritance as far as the unit goes and says so when the ancestor lives elsewhere, rather than
 reporting inherited members as missing.
-*Not solved:* no tool renders a form — an agent can prove a form is consistent, not that it looks
-right. Nothing here edits a `.dfm` structurally (add/move/remove a component is hand-anchored text
+*Not solved:* no tool renders a form — `layout` resolves the geometry and catches overlaps, zero-size
+controls and anything falling outside its container, but it cannot tell you the result is *pretty*.
+Nothing here edits a `.dfm` structurally (add/move/remove a component is hand-anchored text
 editing). Members inside an inactive `{$IFDEF}` are counted as if they compiled. Neither `lint`
 nor `check-binding` checks that a component's class matches its field's type, that a handler's
 signature fits the event, or that `Action = X` points at something real. And a binary designer
@@ -173,7 +174,7 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_read` | Encoding-correct numbered reads (CP1252 / UTF-8±BOM detected for real) |
 | `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, semantic INSERT (global routine / method with both halves — also inside a `.dpr`, and into the implicit published section of forms), line DELETE mode, TPF0 hard-reject, post-write audit; new units use the encoding configured in the IDE |
 | `delphi_changeset` | **Multi-file transactions**: stage edit/create/delete/move, `preview` resolves every anchor and fingerprints every file, `commit` applies all or nothing — a file changed since preview refuses the batch, any failure restores every file byte-exact |
-| `delphi_designer` | **Forms and components, structured**: `info`/`prop` answer what a class REALLY publishes (generated RTTI tables), `tree`/`get` walk a text `.dfm`/`.fmx`, `lint` catches non-published properties and invalid enum values before the IDE ever opens the form, and `check-binding` answers what the compiler never asks - whether the `.dfm` and the class agree (a component with no published field, or an event naming a method that is not declared, builds fine and throws at form-load) |
+| `delphi_designer` | **Forms and components, structured**: `info`/`prop` answer what a class REALLY publishes (generated RTTI tables), `tree`/`get` walk a text `.dfm`/`.fmx`, `lint` catches non-published properties and invalid enum values before the IDE ever opens the form, and two checks the compiler never makes: `check-binding` (does the `.dfm` agree with the class - a component with no published field, an event naming a method that is not declared **or not published**, a duplicate name; all of which build fine and throw when the form is created) and `layout` (**where things actually end up**: resolves `Align` and reports controls that overlap, controls with a side of zero and controls that fall outside their container - a form can bind perfectly and still be unusable) |
 | `delphi_rename_symbol` | **Semantic rename, preview only**: every occurrence re-confirmed against the same definition; one unverified reference, a designer or string-literal hit, an RTL symbol or a collision = not applicable, with the reasons. Apply will arrive over `delphi_changeset` |
 | `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms, frames, data modules and plain units (VCL/FMX) with IDE-equivalent skeletons, registered in the `.dpr` **and** the `.dproj` on creation — buildable immediately |
