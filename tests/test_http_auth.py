@@ -69,6 +69,29 @@ try:
     check('http: initialize por SSE devuelve la cabecera Mcp-Session-Id', bool(sid) and sid in sse,
           'header=%s body=%s' % (sid, sse[:120]))
 
+    # v0.55: una sesion que este proceso NUNCA emitio esta MUERTA (el caso
+    # real: el cliente la persiste y el server se reinicia). 404 claro para
+    # que el cliente re-inicialice, en vez de trabajar contra un fantasma.
+    def post_sid(payload, session, token=TOKEN):
+        req = urllib.request.Request(URL, json.dumps(payload).encode('utf-8'),
+            {'Content-Type': 'application/json', 'Accept': 'application/json',
+             'Authorization': 'Bearer ' + token, 'Mcp-Session-Id': session})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.status, r.read().decode('utf-8', 'replace')
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode('utf-8', 'replace')
+    code, body = post_sid({"jsonrpc": "2.0", "id": 9, "method": "tools/list", "params": {}},
+                          '{BASURA-NO-EMITIDA-JAMAS}')
+    check('http: sesion desconocida -> 404 con motivo', code == 404 and 'Session not found' in body,
+          '%s %s' % (code, body[:160]))
+    code, body = post_sid(INIT, '{BASURA-NO-EMITIDA-JAMAS}')
+    check('http: initialize con sesion vieja SI pasa (es el arreglo)',
+          code == 200 and 'delphi-lsp-mcp-service' in body, '%s %s' % (code, body[:120]))
+    code, body = post_sid({"jsonrpc": "2.0", "id": 10, "method": "tools/list", "params": {}}, sid)
+    check('http: la sesion emitida por este proceso sigue valiendo', code == 200 and 'delphi_build' in body,
+          '%s %s' % (code, body[:120]))
+
     code, body = post({"jsonrpc": "2.0", "id": 2, "method": "tools/list",
                        "params": {}}, TOKEN)
     try:

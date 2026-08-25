@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.55.0-beta] - 2026-08-25
+
+### Fixed
+- **An `Mcp-Session-Id` this process never issued is now refused with 404**
+  (`[local change]` in the vendored HTTP server, which echoed whatever the
+  client sent and never checked it). Reported by an agent that had just
+  taught its client to PERSIST the session: after a server restart the
+  stored id is dead, and silently accepting it leaves the client working
+  against a ghost. An `initialize` carrying a stale id still passes - that
+  request IS the fix. Auth was never affected (the Bearer token decides
+  everything); this is protocol correctness, and it is what lets a
+  persistent-session client detect a restart.
+
+
 ## [0.54.0-beta] - 2026-08-24
 
 Four field frictions from an agent using the new tools on a real change (16

@@ -11,6 +11,7 @@ uses
   System.StrUtils,
   System.RegularExpressions, // [local change] Mcp-Session-Id on SSE initialize
   System.Classes,
+  System.SyncObjs, // [local change] session registry lock
   System.JSON,
   System.Rtti,
   System.IOUtils,
@@ -115,6 +116,47 @@ uses
   MCPServer.Resource.Server,
   MCPServer.CoreManager,
   MCPServer.Logger;
+
+// [local change] Issued session ids. The upstream server echoes whatever
+// Mcp-Session-Id a client sends and never checks it, so a client that
+// persists its session across a SERVER RESTART keeps using a dead id and is
+// never told (field report 2026-08-25: a garbage id was accepted). Auth is
+// the Bearer token, so this was never a security hole - but the streamable
+// HTTP contract says an unknown session must answer 404 so the client
+// re-initializes. Bounded ring: the last SESSION_KEEP ids of this process.
+const
+  SESSION_KEEP = 64;
+
+var
+  GSessLock: TCriticalSection;
+  GSessions: TStringList;
+
+procedure RememberSession(const AId: string);
+begin
+  if AId = '' then
+    Exit;
+  GSessLock.Enter;
+  try
+    if GSessions.IndexOf(AId) < 0 then
+    begin
+      GSessions.Add(AId);
+      while GSessions.Count > SESSION_KEEP do
+        GSessions.Delete(0);
+    end;
+  finally
+    GSessLock.Leave;
+  end;
+end;
+
+function KnownSession(const AId: string): Boolean;
+begin
+  GSessLock.Enter;
+  try
+    Result := GSessions.IndexOf(AId) >= 0;
+  finally
+    GSessLock.Leave;
+  end;
+end;
 
 const
   KEEP_ALIVE_TIMEOUT = 300;
@@ -455,6 +497,23 @@ begin
   SessionID := RequestInfo.RawHeaders.Values['Mcp-Session-Id'];
   if SessionID <> '' then
     TLogger.Info('Session ID from header: ' + SessionID);
+  // [local change] an id this process never issued is a DEAD session (most
+  // often: the client persisted it and the server was restarted). Say so
+  // with 404, the answer the streamable-HTTP contract defines, so the
+  // client re-initializes instead of working against a ghost. An
+  // initialize request carrying a stale id is welcome: it is the fix.
+  if (SessionID <> '') and not KnownSession(SessionID) and
+     (Pos('"initialize"', RequestBody) = 0) then
+  begin
+    ResponseInfo.ResponseNo := 404;
+    ResponseInfo.ContentType := 'application/json';
+    ResponseInfo.ContentText :=
+      '{"jsonrpc":"2.0","error":{"code":-32001,"message":"Session not found: ' +
+      'this server never issued that Mcp-Session-Id (it was probably ' +
+      'restarted). Send initialize again and use the new session id."}}';
+    TLogger.Info('Refused unknown session id: ' + SessionID);
+    Exit;
+  end;
 
   AcceptHeader := RequestInfo.RawHeaders.Values['Accept'];
 
@@ -616,7 +675,10 @@ begin
   begin
     var M := TRegEx.Match(JSONResponse, '"sessionId"\s*:\s*"([^"]+)"');
     if M.Success then
+    begin
       ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := M.Groups[1].Value;
+      RememberSession(M.Groups[1].Value); // [local change]
+    end;
   end;
 
   if JSONResponse <> '' then
@@ -671,7 +733,10 @@ begin
       begin
         SessionValue := ResultObj.GetValue('sessionId');
         if Assigned(SessionValue) then
+        begin
           ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionValue.Value;
+          RememberSession(SessionValue.Value); // [local change]
+        end;
       end;
     finally
       ResponseJSON.Free;
@@ -686,5 +751,14 @@ begin
 
   TLogger.Info('Response: ' + ResponseBody);
 end;
+
+
+initialization
+  GSessLock := TCriticalSection.Create;  // [local change]
+  GSessions := TStringList.Create;
+
+finalization
+  GSessions.Free;
+  GSessLock.Free;
 
 end.
