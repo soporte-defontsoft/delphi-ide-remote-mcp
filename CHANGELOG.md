@@ -8,6 +8,99 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.63.0-beta] - 2026-08-25
+
+Field round 10. The fourth wave of agents went at 0.62 through nothing but
+MCP. New battery `tests/test_round10.py` (35 checks).
+
+### The one that matters
+- **A red test suite came back green.** The counter demanded EXACTLY
+  uppercase `PASS`/`OK`/`FAIL`/`ERROR` while the documentation promised "the
+  first word decides", so a runner printing `Fail: email invalido` or
+  `FAILED seis` scored nothing at all: two real failures, `result: "pass"`.
+  Counting is case-insensitive now, `PASSED`/`FAILED` count, and any line
+  that LOOKS like a result but did not count is declared in
+  `linesNotCounted`. This is the only time this server has called broken code
+  working, and it is the reason the whole exercise is worth doing.
+
+### Security
+- **The SSRF that `GitRemotes` closed was still open through
+  `delphi_paserver test-connection`**: `host=127.0.0.1 port=3131` made the
+  server dial its own MCP port, and any host:port answered reachable /
+  refused / timed out - a port scanner run from inside this machine's
+  network, with no execution permission needed. Hosts now come from the IDE's
+  own connection profiles plus **`[Security] RemoteHosts`**.
+- An IPv6 git URL parsed its host as `[`. Fail-safe, but now correct.
+- `delphi_test` runs a compiled binary, and Windows low integrity confines
+  writes, not reads: a test can read anything the token can read and print
+  it. That is inherent to running code; `AllowTests` now says so plainly
+  instead of promising a confinement it does not provide.
+
+### Fixed - crashes and false reports
+- **`commit` crashed with an access violation** on the "a file changed since
+  the preview" path: a local freed in the `finally` was only created further
+  down, so freeing it depended on what the stack happened to hold. Introduced
+  in 0.61 by the commit-audit feature; the data was never at risk, but a
+  crash is a crash.
+- **`delphi_create kind=unit name=System.SysUtils` hijacked the RTL.** The
+  guard only looked at bare names, and its own refusal recommended "use a
+  namespace with a dot" - which was the hole. An empty `System.SysUtils.pas`
+  next to the project makes `Exception` stop existing.
+- **Deleting a folder left an empty shell that no retry could remove**, while
+  each retry copied the whole tree to the trash again (five copies of the
+  same folder). The cause was git's read-only object files; the message also
+  said "the original could not be taken away" when in fact everything had
+  already moved out.
+- `commit` reported the file's whole delta next to EVERY operation that
+  touched it, and put a `+79` next to a `delete`. One line per file now.
+
+### Fixed - answers that were not true
+- Naming a build folder (`Win64`) as `root` in `delphi_list` still hid
+  everything, while the note said to do exactly that; only the deepest folder
+  worked.
+- Without `pattern`, `delphi_list` shows only Delphi files - a filter nobody
+  mentioned, which reads as "there is nothing else here".
+- The timeout note said "the numbers come back at zero" while the same answer
+  carried real counts (following its own advice about `Flush` gets you
+  there).
+- `nobuild=true` with no binary said "not found after compiling" - it had not
+  compiled anything, as asked. It now also warns when the source is NEWER
+  than the binary it just ran.
+- A test `platform` nobody recognises ran Win64 in silence.
+- `hover` and `definition` on a non-Delphi file answered a canned hint and a
+  bare `null`; a file that is not there came back as `Error executing tool:`,
+  which this server's own rules define as an internal failure worth
+  reporting. Both are refusals now, like `delphi_symbols` already was.
+- An unknown parameter was also dressed as an internal failure.
+- The `changeset` kind refusal forgot `delete-line`, `delphi_create`'s
+  project-kind refusal listed values that do not work (`console` for
+  `project-console`), and `delphi_help` claimed a tool count instead of
+  counting.
+
+### Added
+- `delphi_rename_symbol` gives an `anchor` (the line WITH its indentation,
+  ready to paste into an edit) and a `character` for each change: the trimmed
+  `text` was useless as an anchor, and two occurrences on one line came back
+  as two identical entries.
+- `changeset preview` says which line each anchor resolved to (`atline`) -
+  it was the only one of the three line-numbering tools that never showed its
+  own.
+- `changeset kind=create` normalises line endings like `delphi_create`, so
+  one project does not end up with both conventions.
+- `delphi_help command=tool` resolves a one-letter typo when exactly one name
+  is closest, instead of handing back a list.
+- A malformed `sha256` is refused as a bad parameter instead of quarantining
+  a file that was uploaded perfectly.
+- A refused `clone` no longer leaves its destination folder behind, and
+  git's own hints (`--no-ff`, `rebase`, "specify the URL") get a line saying
+  this tool refuses exactly those.
+- `delphi_projects` with a `name` that matches nothing says how many there
+  are, instead of a bare `{"total":0}`.
+- The mailbox says plainly what it is: a shared noticeboard where anyone
+  holding the token can read - and consume - any box. Nothing secret goes
+  through it.
+
+
 ## [0.62.0-beta] - 2026-08-25
 
 Field round 9. Three more agents worked the 0.60 server through nothing but

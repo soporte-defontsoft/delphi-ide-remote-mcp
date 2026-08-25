@@ -50,6 +50,7 @@ implementation
 
 uses
   System.StrUtils,
+  System.Math,
   System.JSON,
   MCPServer.Registration;
 
@@ -60,6 +61,37 @@ begin
   FDescription := SD_HELP;
 end;
 
+function OneTool(const AName: string): string; forward;
+
+{ Levenshtein distance, capped: enough to tell "delphi_edt" from
+  "delphi_edit" without pretending to be a spell checker. }
+function EditDistance(const A, B: string): Integer;
+var
+  I, J, Cost, Prev, Cur: Integer;
+  Row: TArray<Integer>;
+begin
+  if A = B then
+    Exit(0);
+  if (A = '') or (B = '') then
+    Exit(Max(Length(A), Length(B)));
+  SetLength(Row, Length(B) + 1);
+  for J := 0 to Length(B) do
+    Row[J] := J;
+  for I := 1 to Length(A) do
+  begin
+    Prev := Row[0];
+    Row[0] := I;
+    for J := 1 to Length(B) do
+    begin
+      Cost := IfThen(A[I] = B[J], 0, 1);
+      Cur := Row[J];
+      Row[J] := Min(Min(Row[J] + 1, Row[J - 1] + 1), Prev + Cost);
+      Prev := Cur;
+    end;
+  end;
+  Result := Row[Length(B)];
+end;
+
 { One tool in full: what tools/list would say about it, alone. }
 function OneTool(const AName: string): string;
 var
@@ -67,9 +99,10 @@ var
   Ret: TJSONObject;
   Schema: TJSONObject;
   Names: TArray<string>;
-  N, Close: string;
+  N, Close, BestName: string;
+  Best, Ties: Integer;
 begin
-  N := AName.Trim.ToLower;
+  N := AName.Trim.ToLower.Replace(' ', '_').Replace('-', '_');
   if (N <> '') and not N.StartsWith('delphi_') and not N.StartsWith('vault_') then
     N := 'delphi_' + N;
   if not TMCPRegistry.HasTool(N) then
@@ -81,6 +114,33 @@ begin
     for var Cand in Names do
       if (N <> '') and (Cand.Contains(N) or N.Contains(Cand)) then
         Close := Close + IfThen(Close <> '', ', ', '') + Cand;
+    // Substring matching finds "buil" but not "delphi_edt", and a slip of one
+    // letter on a name you almost got right is the commonest miss there is
+    // (field round 10). When ONE name is closer than every other, that is
+    // what was meant: answer it and say so, instead of handing back a list
+    // and charging another call for the obvious.
+    Best := MaxInt;
+    BestName := '';
+    Ties := 0;
+    for var Cand in Names do
+    begin
+      var D := EditDistance(N, Cand);
+      if D < Best then
+      begin
+        Best := D;
+        BestName := Cand;
+        Ties := 1;
+      end
+      else if D = Best then
+        Inc(Ties);
+    end;
+    if (Best <= 2) and (Ties = 1) then
+      Exit(Format(SN_HELP_ASSUMED_FMT, [AName.Trim, BestName]) + #10 +
+        OneTool(BestName));
+    if Close = '' then
+      for var Cand in Names do
+        if EditDistance(N, Cand) <= 2 then
+          Close := Close + IfThen(Close <> '', ', ', '') + Cand;
     if Close = '' then
       Exit(Format(SR_HELP_NO_TOOL_ALL_FMT,
         [AName.Trim, string.Join(', ', Names)]));

@@ -343,6 +343,11 @@ const
     'Graphics', 'Dialogs', 'StdCtrls', 'ExtCtrls', 'ComCtrls', 'Menus',
     'Buttons', 'DB', 'IniFiles', 'Registry', 'StrUtils', 'DateUtils',
     'IOUtils', 'Character', 'Generics', 'Threading', 'JSON', 'Contnrs');
+  // The namespaces the compiler itself owns: anything under them belongs to
+  // Embarcadero, and a file of ours with that name wins over theirs.
+  NAMESPACES: array [0 .. 13] of string = ('System', 'Vcl', 'FMX', 'Data',
+    'Datasnap', 'Web', 'Soap', 'Xml', 'Bde', 'IBX', 'REST', 'Winapi',
+    'Posix', 'FireDAC');
 var
   W, Head: string;
 begin
@@ -354,11 +359,19 @@ begin
     for W in RESERVED do
       if SameText(Head, W) then
         Exit(Format(SR_CREATE_RESERVED_FMT, [Head, AName]));
-  if AName.Contains('.') then
-    Exit; // System.Foo, Vcl.Bar: a namespaced name shadows nothing
   for W in RTL do
     if SameText(AName, W) then
       Exit(Format(SR_CREATE_RTLNAME_FMT, [AName, AName, AName]));
+  // "a namespaced name shadows nothing" was wrong, and the refusal above even
+  // RECOMMENDED adding a dot: `name=System.SysUtils` was accepted and planted
+  // an empty System.SysUtils.pas next to the .dpr, after which `Exception`
+  // stopped existing (measured 2026-08-25). A first segment that IS an RTL
+  // namespace is the same hijack with more letters.
+  Head := AName.Split(['.'])[0];
+  if AName.Contains('.') then
+    for W in NAMESPACES do
+      if SameText(Head, W) then
+        Exit(Format(SR_CREATE_RTLNS_FMT, [AName, Head, Head]));
 end;
 
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
@@ -368,7 +381,10 @@ var
 begin
   Kind := AKind.Trim.ToLower;
   if (Kind <> 'console') and (Kind <> 'vcl') and (Kind <> 'fmx') then
-    Exit('RECHAZADO: kind debe ser console | vcl | fmx.');
+    // The caller wrote "project-web": answering "console | vcl | fmx" sends
+    // them to write kind=console, which is refused too. Name the values that
+    // work (field round 10).
+    Exit(SR_CREATE_PROJECT_KIND);
   if not TRegEx.IsMatch(AName, '^[A-Za-z_]\w*$') then
     Exit('RECHAZADO: ''' + AName + ''' no es un identificador Pascal valido para nombre de proyecto.');
 

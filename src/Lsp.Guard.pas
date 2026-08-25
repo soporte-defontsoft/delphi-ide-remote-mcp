@@ -134,6 +134,11 @@ function AllowTests: Boolean;      // DELPHI_MCP_ALLOW_TESTS / AllowTests=1
   separated; '' (the default) means none - see GitRemoteDenied. }
 function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
 
+{ Host names delphi_paserver may DIAL when the caller names one by hand
+  (test-connection host=...), comma separated. The hosts of the IDE's own
+  connection profiles are always allowed and do not need listing. }
+function RemoteProbeHosts: string; // DELPHI_MCP_REMOTE_HOSTS / RemoteHosts=
+
 { Whether the READ-ONLY library zone exists at all. Default True (reading the
   RTL and the installed components is what makes an agent competent here).
   [Security] LibraryZone=0 cuts it: reads are then confined to the workspace
@@ -248,6 +253,7 @@ var
   GLibraryZone: Boolean = True;     // the read-only library zone, on by default
   GAllowTests: Boolean = False;     // running test suites is opt-in too
   GGitRemotes: string = '';         // hosts an explicit git URL may name
+  GRemoteHosts: string = '';        // hosts a raw TCP probe may dial
   GRemoteProjects: TArray<string>;  // [Security] RemoteRunProjects, '' = any
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
   GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
@@ -299,6 +305,7 @@ begin
   GLibraryZone := GetEnvironmentVariable('DELPHI_MCP_LIBRARY_ZONE') <> '0';
   GAllowTests := GetEnvironmentVariable('DELPHI_MCP_ALLOW_TESTS') = '1';
   GGitRemotes := GetEnvironmentVariable('DELPHI_MCP_GIT_REMOTES');
+  GRemoteHosts := GetEnvironmentVariable('DELPHI_MCP_REMOTE_HOSTS');
   GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
   IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
   if TFile.Exists(IniPath) then
@@ -321,6 +328,8 @@ begin
         GAllowTests := Ini.ReadBool('Security', 'AllowTests', False);
       if GGitRemotes = '' then
         GGitRemotes := Ini.ReadString('Security', 'GitRemotes', '');
+      if GRemoteHosts = '' then
+        GRemoteHosts := Ini.ReadString('Security', 'RemoteHosts', '');
       GRemoteProjects := Ini.ReadString('Security', 'RemoteRunProjects', '')
         .Split([';'], TStringSplitOptions.ExcludeEmpty);
       if not GAllowBuildScripts then
@@ -381,6 +390,12 @@ function GitRemoteHosts: string;
 begin
   LoadSecurity;
   Result := GGitRemotes.Trim;
+end;
+
+function RemoteProbeHosts: string;
+begin
+  LoadSecurity;
+  Result := GRemoteHosts.Trim;
 end;
 
 function RemoteRunProjectDenied(const APath: string): string;
@@ -574,6 +589,14 @@ begin
   P := Pos('@', T);
   if P > 0 then
     T := Copy(T, P + 1, MaxInt);
+  // [::1]:3131 - the host is what the brackets hold, not the bracket
+  if T.StartsWith('[') then
+  begin
+    P := Pos(']', T);
+    if P > 1 then
+      Exit(Copy(T, 2, P - 2).Trim.ToLower);
+    Exit('[' + T); // malformed: keep it unrecognisable so it cannot match
+  end;
   for P := 1 to Length(T) do
     if CharInSet(T[P], ['/', ':', '\']) then
     begin

@@ -169,11 +169,13 @@ var
   L: string;
   Found, Passed, Failed: Integer;
   HasNumbers: Boolean;
+  Near: TStringList;
 begin
   Found := -1; Passed := -1; Failed := -1;
   HasNumbers := False;
   Fails := TJSONArray.Create;
   ARet.AddPair('failures', Fails);
+  Near := TStringList.Create;
   if AKind = tkDUnitX then
   begin
     M := TRegEx.Match(AOutput, '(?i)Tests?\s+Found\s*:\s*(\d+)');
@@ -187,16 +189,26 @@ begin
   begin
     // plain PASS/FAIL lines (also present in many DUnitX console outputs)
     Passed := 0; Failed := 0;
+    // Case-insensitive, and the common English past forms count too. The old
+    // rule was "exactly PASS/OK/FAIL/ERROR, uppercase", while the note said
+    // "the first word decides": a runner printing "Fail: email invalido" or
+    // "FAILED seis" scored NOTHING, so a red suite came back green (measured
+    // 2026-08-25 - the only place this server called broken code working).
+    // A word boundary still protects PASSABLE and OKAY from counting.
     for L in AOutput.Replace(#13#10, #10).Split([#10]) do
     begin
-      if TRegEx.IsMatch(L, '^\s*(PASS|OK)\b') then
+      if TRegEx.IsMatch(L, '(?i)^\s*(PASS|PASSED|OK)\b') then
         Inc(Passed)
-      else if TRegEx.IsMatch(L, '^\s*(FAIL|ERROR)\b') then
+      else if TRegEx.IsMatch(L, '(?i)^\s*(FAIL|FAILED|ERROR)\b') then
       begin
         Inc(Failed);
         if Fails.Count < 50 then
           Fails.Add(L.Trim);
-      end;
+      end
+      else if TRegEx.IsMatch(L, '(?i)^\s*[\[\(<*-]*\s*(PASS|FAIL|OK|ERROR)') then
+        // looks like a result and is NOT in the shape that counts: a silent
+        // miscount is the worst outcome here, so it gets said out loud
+        Near.Add(L.Trim);
     end;
     Found := Passed + Failed;
     HasNumbers := Found > 0;
@@ -209,6 +221,16 @@ begin
     ARet.AddPair('failed', TJSONNumber.Create(Failed));
   // The verdict never guesses: with numbers, they decide; without them, the
   // exit code does (0 = green), and we say which one spoke.
+  try
+    if Near.Count > 0 then
+    begin
+      ARet.AddPair('linesNotCounted', TJSONNumber.Create(Near.Count));
+      ARet.AddPair('linesNotCountedNote', Format(SN_TEST_NEAR_MISS_FMT,
+        [Near.Count, Near[0]]));
+    end;
+  finally
+    Near.Free;
+  end;
   if HasNumbers and (Failed >= 0) then
   begin
     ARet.AddPair('result', IfThen(Failed = 0, 'pass', 'fail'));
@@ -278,6 +300,14 @@ begin
   // it did not recognise (field round 9). It is said now, and it can be
   // chosen; whatever it is, the build and the run use the SAME one.
   Plat := CanonicalPlatform(APlatform);
+  if (Plat = '') and (APlatform.Trim <> '') then
+  begin
+    // platform=Marte used to run Win64 without a word, while config=Turbo and
+    // platform=Android64 were both refused properly (measured 2026-08-25).
+    Result.AddPair('error', Format(SR_TEST_PLATFORM_UNKNOWN_FMT,
+      [APlatform.Trim]));
+    Exit;
+  end;
   if Plat = '' then
     Plat := 'Win64';
   if not IsLocalPlatform(Plat) then
@@ -314,7 +344,8 @@ begin
     Exe := ResolveBuildOutput(Dproj, Plat, Cfg);
   if (Exe = '') or not TFile.Exists(Exe) then
   begin
-    Result.AddPair('error', SR_TEST_NOBINARY);
+    Result.AddPair('error', IfThen(ANoBuild, SR_TEST_NOBINARY_NOBUILD,
+      SR_TEST_NOBINARY));
     Exit;
   end;
   Result.AddPair('binary', Exe);
@@ -325,6 +356,14 @@ begin
     // no longer compiled (measured 2026-08-25). Say how old it is.
     Result.AddPair('builtAt', DateTimeToStr(TFile.GetLastWriteTime(Exe)));
     Result.AddPair('noBuildNote', SN_TEST_NOBUILD_NOTE);
+    // We hold both dates: comparing them is free, and "the source is newer
+    // than the binary" is the whole reason nobuild is dangerous.
+    try
+      if TFile.GetLastWriteTime(Dpr) > TFile.GetLastWriteTime(Exe) then
+        Result.AddPair('staleBinary', Format(SN_TEST_STALE_FMT,
+          [TPath.GetFileName(Dpr)]));
+    except
+    end;
   end;
 
   // 2. run it, sandboxed and bounded

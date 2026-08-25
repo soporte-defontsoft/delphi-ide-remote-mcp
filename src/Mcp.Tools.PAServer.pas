@@ -80,6 +80,7 @@ uses
   System.JSON,
   System.IOUtils,
   System.StrUtils,
+  System.RegularExpressions,
   Lsp.RemoteRun,
   Lsp.Guard,
   System.Diagnostics,
@@ -402,6 +403,77 @@ end;
   chasing credentials (field request from the first live PAServer session:
   the agent had no way to ask whether we reached it). Route only, no
   credentials involved, so a failure here is ALWAYS network/NAT/firewall. }
+{ Every host the IDE already has a connection profile for. Those are targets
+  the operator set up, so dialling them is the job; anything else has to be
+  allowed on purpose. }
+function ProfileHosts: TArray<string>;
+var
+  Installs: TArray<TRadStudioInfo>;
+  Info: TRadStudioInfo;
+  Dir, F, Xml, H: string;
+  L: TStringList;
+  M: TMatch;
+begin
+  L := TStringList.Create;
+  try
+    L.Duplicates := dupIgnore;
+    L.Sorted := True;
+    Installs := DiscoverAllRadStudios;
+    for Info in Installs do
+    begin
+      if not Info.Found then
+        Continue;
+      Dir := ProfilesDir(Info.Version);
+      if not TDirectory.Exists(Dir) then
+        Continue;
+      for F in TDirectory.GetFiles(Dir, '*.profile') do
+        try
+          Xml := TFile.ReadAllText(F);
+          M := TRegEx.Match(Xml, '(?i)<Profile_host>\s*([^<]+?)\s*</Profile_host>');
+          if M.Success then
+          begin
+            H := M.Groups[1].Value.Trim.ToLower;
+            if H <> '' then
+              L.Add(H);
+          end;
+        except
+          // an unreadable profile is not a reason to fail the whole check
+        end;
+    end;
+    Result := L.ToStringArray;
+  finally
+    L.Free;
+  end;
+end;
+
+{ Whether this server may open a TCP connection to AHost. '' = it may.
+
+  Measured 2026-08-25: the whitelist that closed the git hole left this door
+  wide open. `test-connection host=127.0.0.1 port=3131` made the server dial
+  its own MCP port, and any host:port answered "reachable / refused / timed
+  out" - a port scanner run from inside this machine's network, behind its
+  firewall, with no execution permission needed. Same primitive, same rule:
+  the hosts of the IDE's own profiles, plus whatever the operator wrote in
+  [Security] RemoteHosts. Nothing else. }
+function ProbeHostDenied(const AHost: string): string;
+var
+  H, Allowed: string;
+begin
+  Result := '';
+  H := AHost.Trim.ToLower;
+  if H = '' then
+    Exit;
+  for var P in ProfileHosts do
+    if SameText(P, H) then
+      Exit;
+  Allowed := RemoteProbeHosts;
+  for var A in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
+    if SameText(A.Trim, H) then
+      Exit;
+  Result := Format(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim,
+    IfThen(Allowed <> '', Allowed, '(ninguno)')]);
+end;
+
 function TcpProbe(const AHost, APort: string): string;
 var
   Client: TIdTCPClient;
@@ -463,8 +535,13 @@ begin
   begin
     // no profile named: with a host this is the raw reachability probe
     if Params.Host.Trim <> '' then
+    begin
+      Result := ProbeHostDenied(Params.Host.Trim);
+      if Result <> '' then
+        Exit;
       Exit(TcpProbe(Params.Host.Trim,
         IfThen(Params.Port.Trim <> '', Params.Port.Trim, '64211')));
+    end;
     Exit(Format(SR_PASERVER_NO_PROFILE_FMT, ['(sin name)']));
   end;
   PaClient := FindPaClient(Info);

@@ -155,6 +155,14 @@ begin
     try
       Result := Tool.Execute(Args);
     except
+      // [local change] "Error executing tool:" is this server's word for "I
+      // broke inside", and its own conventions tell agents to report one as a
+      // bug. Argument validation is not that: a misspelled parameter is the
+      // caller's, and dressing it as an internal failure sent agents chasing
+      // ghosts (measured 2026-08-25). EArgumentException is the deserializer
+      // saying the call was wrong, so it goes out as a plain refusal.
+      on E: EArgumentException do
+        Result := 'error: ' + E.Message;
       on E: Exception do
         Result := 'Error executing tool: ' + E.Message;
     end;

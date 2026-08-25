@@ -89,7 +89,7 @@ type
     [SchemaDescription('One of: status | diff | log | show | branch | switch | merge | stash | add | commit | init | push | tag | config | clone | pull | fetch. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push|pop|list (never drop). config: args=user.name|user.email + value in message. clone: URL in message, destination in repo')]
     [Required]
     property Command: string read FCommand write FCommand;
-    [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected')]
+    [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). They are SPLIT ON SPACES into argv, so a path with spaces goes in double quotes: args="mis notas.txt". There is no shell involved, but shell metacharacters (; | & ` $ < >) are rejected anyway - if a legitimate git option needs one (--pretty=format:...), ask for it with delphi_report instead of trying to smuggle it')]
     property Args: string read FArgs write FArgs;
     [SchemaDescription('switch: true = create the branch and move to it (git switch -c). Ignored by every other command')]
     property Create: Boolean read FCreate write FCreate;
@@ -452,6 +452,7 @@ var
   Masks: TArray<string>;
   Entry: TJSONObject;
   Total, Hidden, HiddenArt, HiddenGit, HiddenTrash: Integer;
+  RootInArtifacts: Boolean;
 begin
   Result := ReadPathDenied(Params.Root); // listing may enter the library zone
   if Result <> '' then
@@ -482,7 +483,7 @@ begin
     try
       // A root already inside artifact territory was asked for by name:
       // hiding its Debug/Release children would recreate the trap.
-      var RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
+      RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
       for F in TDirectory.GetDirectories(Root) do
       begin
         var IsTrash := SameText(TPath.GetFileName(F), '__delphi-patch') or
@@ -543,6 +544,7 @@ begin
   Arr := TJSONArray.Create;
   Total := 0;
   Hidden := 0; HiddenArt := 0; HiddenGit := 0; HiddenTrash := 0;
+  RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
   try
     for Mask in Masks do
       for F in WalkFiles(Root, Mask.Trim) do
@@ -551,7 +553,14 @@ begin
         // root: listing its notes would invite edits behind its back.
         if InVault(F) then
           Continue;
-        Reason := SkipReason(RelToRoot(F, Root), Params.IncludeTrash);
+        // The advice was "pass that folder as root", and it only worked for
+        // the DEEPEST one: asking for Win64 still hid everything, because the
+        // path relative to the root still said "\debug\". If the caller
+        // named a build folder, the caller means it (measured 2026-08-25).
+        if RootInArtifacts then
+          Reason := ''
+        else
+          Reason := SkipReason(RelToRoot(F, Root), Params.IncludeTrash);
         if Reason <> '' then
         begin
           Inc(Hidden);
@@ -602,6 +611,10 @@ begin
     end;
     if Arr.Count >= 500 then
       Return.AddPair('shownNote', SN_LIST_CAPPED);
+    // Without "pattern" only Delphi files are listed. That is a filter, and a
+    // filter nobody mentioned reads as "there is nothing else here".
+    if Params.Pattern.Trim = '' then
+      Return.AddPair('maskNote', SN_LIST_DEFAULT_MASK);
     Return.AddPair('files', Arr);
     Result := Return.ToJSON;
   finally
@@ -720,6 +733,10 @@ begin
     if TDirectory.Exists(TPath.Combine(Repo, '.git')) then
       Exit('error: "' + Repo + '" ya es un repositorio git. Usa pull para ' +
         'actualizarlo, o clona en otra carpeta.');
+    // The destination is created before we get here, so a refusal left an
+    // empty folder lying around that the caller had to clean up by hand.
+    // (the destination folder is created above; if the clone fails it is
+    // removed again below, so a refusal leaves nothing behind)
     // clone into "." of the (jailed, existing) destination directory. The "--"
     // separator guarantees the URL is a POSITIONAL, never parsed as an option,
     // whatever it contains - defence in depth over the leading-"-" check above
@@ -831,7 +848,22 @@ begin
   end;
   if Length(Output) > 30000 then
     Output := Copy(Output, 1, 30000) + #10'... (truncated)';
+  // A clone that did not happen must not leave its empty destination lying
+  // around for the caller to clean up by hand (field round 10).
+  if (ExitCode <> 0) and SameText(Cmd, 'clone') and TDirectory.Exists(Repo) then
+    try
+      if Length(TDirectory.GetFileSystemEntries(Repo)) = 0 then
+        TDirectory.Delete(Repo, False);
+    except
+      // it was not ours to remove after all: leave it
+    end;
   Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
+  // git's own hints recommend exactly what this tool refuses (--no-ff,
+  // rebase, "specify the URL from the command-line"): say so, or the reader
+  // follows the advice printed last (field round 10).
+  if (ExitCode <> 0) and (Output.Contains('--no-ff') or Output.Contains('rebase') or
+     Output.Contains('specify the URL')) then
+    Result := Result + #10 + SN_GIT_HINT_OVERRIDE;
   // A fresh repo has no author identity and commit dies with exit 128:
   // the fix is already whitelisted, say so (measured 2026-08-24).
   if (ExitCode <> 0) and Output.Contains('Author identity unknown') then
@@ -1051,6 +1083,7 @@ var
   Entry: TJSONObject;
   Total: Integer;
   Mask, Repo, Branch: string;
+  AllCount: Integer;
 begin
   if Params.Root <> '' then
   begin
@@ -1115,6 +1148,21 @@ begin
     end;
     Return.AddPair('total', TJSONNumber.Create(Total));
     Return.AddPair('shown', TJSONNumber.Create(Arr.Count));
+    if (Total = 0) and (Filt <> '') then
+    begin
+      // {"total":0} for a name that matches nothing reads as "this server has
+      // no projects" (field round 10). Count them without the filter and say
+      // which of the two it is.
+      AllCount := 0;
+      for RootDir in Roots do
+        if (RootDir.Trim <> '') and TDirectory.Exists(RootDir.Trim) then
+          for Mask in TArray<string>.Create('*.dproj', '*.groupproj') do
+            for F in WalkFiles(RootDir.Trim, Mask) do
+              if not (SkipIdeArtifacts(F) or InVault(F)) then
+                Inc(AllCount);
+      Return.AddPair('note', Format(SN_PROJECTS_NO_MATCH_FMT,
+        [Params.Name.Trim, AllCount]));
+    end;
     Return.AddPair('projects', Arr);
     Result := Return.ToJSON;
   finally
@@ -1357,6 +1405,9 @@ begin
   // so a half-typed call landed here, opened the file with fmCreate and left
   // it at 0 bytes reporting success (field round 8). Nothing destructive may
   // ride on a call that carries no content.
+  if (Params.Sha256.Trim <> '') and
+     not TRegEx.IsMatch(Params.Sha256.Trim, '^[0-9A-Fa-f]{64}$') then
+    Exit(Format(SR_UPLOAD_BAD_SHA_FMT, [Params.Sha256.Trim]));
   if Params.ChunkBase64.Trim = '' then
   begin
     if TFile.Exists(FullPath) then

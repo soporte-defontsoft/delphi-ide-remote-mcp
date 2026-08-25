@@ -277,8 +277,11 @@ begin
   Result := '';
   if (ALine < 0) or (AChar < 0) then
     Exit(Format(SR_LSP_NEGATIVE_FMT, [ALine, AChar]));
+  // A path that is not there reached the language server and came back as
+  // "Error executing tool: File not found", which this server's own rules
+  // define as an internal failure worth reporting as a bug (2026-08-25).
   if not TFile.Exists(APath) then
-    Exit;
+    Exit(Format(SR_LSP_NO_FILE_FMT, [APath]));
   try
     Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
   except
@@ -308,6 +311,8 @@ var
   Settings: string;
 begin
   Result := NotDelphiSource(Params.Path);
+  if (Result = '') and not TFile.Exists(Params.Path) then
+    Result := Format(SR_LSP_NO_FILE_FMT, [Params.Path]);
   if Result <> '' then
     Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
@@ -340,7 +345,9 @@ var
   Settings, Kind: string;
   Resp: TJSONObject;
 begin
-  Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  Result := NotDelphiSource(Params.Path);
+  if Result = '' then
+    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
   if Result <> '' then
     Exit;
   Kind := Params.Kind.Trim.ToLower;
@@ -442,7 +449,9 @@ var
   Resp: TJSONObject;
   V: TJSONValue;
 begin
-  Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  Result := NotDelphiSource(Params.Path);
+  if Result = '' then
+    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
   if Result <> '' then
     Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);

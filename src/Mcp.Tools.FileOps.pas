@@ -96,6 +96,28 @@ begin
     .EndsWith('\' + BACKUP_SUB);
 end;
 
+{ Clear the read-only bit on a whole tree. Git marks every object file
+  read-only, and Windows refuses to delete one - which is why deleting a
+  folder holding a .git left an empty shell behind that no retry could ever
+  remove, while every attempt copied the tree to the trash again (measured
+  2026-08-25: five copies of the same folder). }
+procedure ClearReadOnlyTree(const ADir: string);
+var
+  F: string;
+begin
+  try
+    for F in TDirectory.GetFiles(ADir, '*', TSearchOption.soAllDirectories) do
+      try
+        if (TFile.GetAttributes(F) * [TFileAttribute.faReadOnly]) <> [] then
+          TFile.SetAttributes(F, TFile.GetAttributes(F) - [TFileAttribute.faReadOnly]);
+      except
+        // one stubborn file must not stop the rest
+      end;
+  except
+    // an unreadable tree is handled by the caller, which checks the result
+  end;
+end;
+
 procedure MoveToTrash(const APath: string; out ATrash: string);
 begin
   ATrash := TrashPathFor(APath);
@@ -110,6 +132,7 @@ begin
       TDirectory.Move(APath, ATrash);
     except
       TDirectory.Copy(APath, ATrash);
+      ClearReadOnlyTree(APath);
       try
         TDirectory.Delete(APath, True);
       except
@@ -156,6 +179,23 @@ begin
       'No se borra desde aqui (purgala manualmente si de verdad quieres).');
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
     Exit('RECHAZADO: no existe ' + Params.Path);
+  // An empty folder needs no copy: retrying a half-finished delete used to
+  // dump the (empty) tree into the trash again on every attempt.
+  if TDirectory.Exists(Params.Path) and
+     (Length(TDirectory.GetFileSystemEntries(Params.Path)) = 0) then
+  begin
+    ClearReadOnlyTree(Params.Path);
+    try
+      TDirectory.Delete(Params.Path, False);
+    except
+      // fall through to the honest report below
+    end;
+    if not TDirectory.Exists(Params.Path) then
+      Exit(Format(SN_FILE_DELETE_EMPTY_OK_FMT,
+        [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
+    Exit(Format(SR_FILE_DELETE_STUCK_FMT,
+      [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
+  end;
   ProjNote := '';
   DesignerNote := '';
   if TFile.Exists(Params.Path) and (TPath.GetExtension(Params.Path).ToLower = '.pas') then
@@ -214,8 +254,16 @@ begin
   // delete that half-happened.
   if StillThere(Params.Path) then
   begin
-    Result := Format(SR_FILE_DELETE_PARTIAL_FMT,
-      [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash]);
+    // "the original could NOT be taken away" read as "nothing happened",
+    // while in fact the whole content had already moved out and only the
+    // empty shell was left (measured 2026-08-25). Say which of the two it is.
+    if TDirectory.Exists(Params.Path) and
+       (Length(TDirectory.GetFileSystemEntries(Params.Path)) = 0) then
+      Result := Format(SR_FILE_DELETE_EMPTY_SHELL_FMT,
+        [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash])
+    else
+      Result := Format(SR_FILE_DELETE_PARTIAL_FMT,
+        [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash]);
     if DesignerNote <> '' then
       Result := Result + #10 + DesignerNote;
     if ProjNote <> '' then

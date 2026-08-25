@@ -115,7 +115,7 @@ function RenamePreview(const AFilePath: string; ALine, ACharacter: Integer;
   const ANewName: string): TJSONObject;
 var
   Refs, DefObj: TJSONObject;
-  Blockers, Warnings, Changes: TJSONArray;
+  Blockers, Warnings, Changes, UnvArr: TJSONArray;
   Ident, DefPath, EncName, Text, P, Root: string;
   Arr: TJSONArray;
   I, N, Files, DefLine: Integer;
@@ -205,6 +205,15 @@ begin
         Chg.AddPair('line0', TJSONNumber.Create(
           Item.GetValue('line').GetValue<Integer>));
         Chg.AddPair('text', Item.GetValue('text').Value);
+        if Item.GetValue('anchor') <> nil then
+          Chg.AddPair('anchor', Item.GetValue('anchor').Value);
+        // Two occurrences on ONE line came out as two identical entries with
+        // no column, and "one edit per line" then staged the same line twice
+        // (measured 2026-08-25). The column tells them apart, and the count
+        // says a single edit has to replace both.
+        if Item.GetValue('character') <> nil then
+          Chg.AddPair('character', TJSONNumber.Create(
+            Item.GetValue('character').GetValue<Integer>));
       end;
       Result.AddPair('occurrences', TJSONNumber.Create(Arr.Count));
       if Arr.Count > 100 then
@@ -254,6 +263,35 @@ begin
       if Arr.Count > 0 then
         Blockers.Add(Format(SR_RENAME_UNVERIFIED_FMT, [Arr.Count]));
       Result.AddPair('unverified', TJSONNumber.Create(Arr.Count));
+      // A COUNT of unverified references blocks the rename and tells you
+      // nothing about which ones they are, so there is no way to go and look
+      // (measured 2026-08-25). Name them - that is the whole point of a
+      // blocker: it has to be actionable.
+      if Arr.Count > 0 then
+      begin
+        UnvArr := TJSONArray.Create;
+        Result.AddPair('unverifiedRefs', UnvArr);
+        for I := 0 to Arr.Count - 1 do
+        begin
+          if I >= 50 then
+            Break;
+          Item := Arr.Items[I] as TJSONObject;
+          Chg := TJSONObject.Create;
+          UnvArr.AddElement(Chg);
+          Chg.AddPair('path', Item.GetValue('path').Value);
+          if Item.GetValue('line') <> nil then
+          begin
+            Chg.AddPair('line', TJSONNumber.Create(
+              Item.GetValue('line').GetValue<Integer> + 1));
+            Chg.AddPair('line0', TJSONNumber.Create(
+              Item.GetValue('line').GetValue<Integer>));
+          end;
+          if Item.GetValue('text') <> nil then
+            Chg.AddPair('text', Item.GetValue('text').Value);
+          if Item.GetValue('why') <> nil then
+            Chg.AddPair('why', Item.GetValue('why').Value);
+        end;
+      end;
       Result.AddPair('filesScanned', Refs.GetValue('filesScanned').Clone as TJSONNumber);
     finally
       Refs.Free;

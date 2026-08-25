@@ -50,6 +50,7 @@ uses
   Lsp.Client,
   Lsp.Session,
   Lsp.Guard,
+  Lsp.Texts,
   Lsp.ProjectUnits;
 
 type
@@ -186,6 +187,10 @@ var
     Result.AddPair('line', TJSONNumber.Create(C.Line));
     Result.AddPair('character', TJSONNumber.Create(C.Col));
     Result.AddPair('text', C.Text.Trim);
+    // The trimmed text reads well but is NOT an anchor: delphi_edit wants the
+    // WHOLE line, indentation included, so every caller had to go and read
+    // the file again (measured 2026-08-25, five wasted calls). Give both.
+    Result.AddPair('anchor', C.Text.TrimRight([#13, #10]));
   end;
 
 begin
@@ -211,8 +216,12 @@ begin
   Resp := Client.Definition(TLspClient.PathToUri(FullPath), ALine, ACharacter);
   try
     if not DefinitionLocation(Resp, TargetUri, TargetLine) then
-      raise Exception.Create('definition() returned null for the target - ' +
-        'cannot anchor references (are project settings available?)');
+      // This fires whenever the position is not on something the compiler
+      // can resolve - inside a string literal, in a comment, on a keyword -
+      // and it used to blame "project settings" and quote the name of an
+      // internal function, which sent the reader looking in the wrong place
+      // (measured 2026-08-25).
+      raise Exception.CreateFmt(SR_REFS_NO_DEFINITION_FMT, [Ident]);
   finally
     Resp.Free;
   end;

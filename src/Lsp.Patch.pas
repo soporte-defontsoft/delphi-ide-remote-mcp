@@ -271,7 +271,12 @@ end;
 
 function Summary(const M: TMetrics): string;
 begin
-  Result := Format('bytes=%d lineas=%d CRLF=%d LFsueltos=%d acentos=%d corrupcion=%d',
+  // "saltos" and not "lineas": this counts LINE BREAKS, and a file whose last
+  // line ends in one has one more line than it has breaks. Calling it lines
+  // put "lineas=38" three words away from "Lineas 1-39 de 39" in the same
+  // answer, and the reader had to decide which of the two was lying
+  // (measured 2026-08-25). Neither was: they counted different things.
+  Result := Format('bytes=%d saltos=%d CRLF=%d LFsueltos=%d acentos=%d corrupcion=%d',
     [M.Bytes, M.LF, M.CRLF, M.Loose, M.High, M.Corruption]);
 end;
 

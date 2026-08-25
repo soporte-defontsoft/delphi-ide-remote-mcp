@@ -196,6 +196,26 @@ end;
 
 { Resolves one edit anchor against the CURRENT text: 1 = unique, 0 = absent,
   >1 = ambiguous (AtLine may pin it). }
+{ The 1-based line an anchor resolves to, 0 when it does not resolve. }
+function AnchorLine(const AText, ALine: string; AAtLine: Integer): Integer;
+var
+  Lines: TArray<string>;
+  I: Integer;
+begin
+  Result := 0;
+  Lines := AText.Replace(#13#10, #10).Split([#10]);
+  if (AAtLine > 0) and (AAtLine <= Length(Lines)) and
+     (Lines[AAtLine - 1].Trim = ALine.Trim) then
+    Exit(AAtLine);
+  for I := 0 to High(Lines) do
+    if Lines[I].Trim = ALine.Trim then
+    begin
+      if Result <> 0 then
+        Exit(0); // more than one: ambiguous, no single line to name
+      Result := I + 1;
+    end;
+end;
+
 function AnchorCount(const AText, ALine: string; AAtLine: Integer): Integer;
 var
   Lines: TArray<string>;
@@ -405,6 +425,7 @@ var
   Deltas: TDictionary<string, Integer>;
   Deltas2: TDictionary<string, Integer>;  // survives the block that frees Deltas
   Audit: TStringBuilder;
+  Seen: TStringList;
   AuditText: string;
 begin
   Cmd := ACommand.Trim.ToLower;
@@ -500,7 +521,13 @@ begin
           end;
         opCreate:
           begin
-            Op.Content := AContent;
+            // delphi_create writes CRLF; a create inside a changeset wrote
+            // whatever arrived, so the same source produced a CRLF file one
+            // way and an LF one the other (measured 2026-08-25). One project,
+            // one convention.
+            Op.Content := AContent.Replace(#13#10, #10).Replace(#10, #13#10);
+            if (Op.Content <> '') and not Op.Content.EndsWith(#13#10) then
+              Op.Content := Op.Content + #13#10;
             if WillExist(C, Op.Path) then
               Exit(Format(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
           end;
@@ -594,6 +621,13 @@ begin
           if Op.Kind = opEdit then
           begin
             Text := PatchLoadText(Op.Path, EncName);
+            // The line the anchor landed on. delphi_read numbers lines,
+            // delphi_rename_symbol numbers lines, and the changeset was the
+            // only one of the three that never showed its own (field round
+            // 10) - which is also the earliest warning that an anchor
+            // resolved somewhere unexpected.
+            Obj.AddPair('atline', TJSONNumber.Create(
+              AnchorLine(Text, Op.OldLine, Op.AtLine)));
             case AnchorCount(Text, Op.OldLine, Op.AtLine) of
               1: Obj.AddPair('anchor', 'ok');
               0: begin
@@ -629,6 +663,13 @@ begin
       if not C.Previewed then
         Exit(SR_CHANGESET_NOT_PREVIEWED);
       // 1. nothing may have moved since the preview
+      // Deltas2 is created further down, but the finally below frees it, and
+      // the FILE_CHANGED exit above jumps straight there: an uninitialised
+      // local was being freed, which is an access violation whenever the
+      // stack happens not to hold nil. That is exactly the shape of the crash
+      // an auditor hit on the TOCTOU rejection path (2026-08-25) and could
+      // not always reproduce. A local is nil because we say so, never by luck.
+      Deltas2 := nil;
       Changed := TList<string>.Create;
       Snaps := TList<TSnapshot>.Create;
       try
@@ -694,19 +735,37 @@ begin
         // answered with an audit of its own edit; commit answered with two
         // numbers, so after a 16-operation batch nobody could tell WHICH
         // files moved without going to look (field round 7).
+        // Per FILE, not per operation. The delta belongs to the file, and
+        // printing it next to every operation that touched it made two edits
+        // of one file look like twice the change - and put a "+79" next to a
+        // DELETE (measured 2026-08-25). Operations are listed, the numbers
+        // are the file's.
         Audit := TStringBuilder.Create;
+        Seen := TStringList.Create;
         try
+          Seen.CaseSensitive := False;
           for Op in C.Ops do
           begin
+            if Seen.IndexOf(Op.Path) < 0 then
+              Seen.Add(Op.Path);
+          end;
+          for var FPath in Seen do
+          begin
+            var Kinds := '';
+            for Op in C.Ops do
+              if SameText(Op.Path, FPath) then
+                Kinds := Kinds + IfThen(Kinds <> '', ' + ', '') + KindName(Op.Kind);
             var D := 0;
-            Deltas2.TryGetValue(Op.Path.ToLower, D);
-            Audit.AppendLine(Format('  %s %s%s', [KindName(Op.Kind),
-              MaskDriveText('delphi_changeset', Op.Path),
-              IfThen(D = 0, '', Format('  (%s%d lineas)',
-                [IfThen(D > 0, '+', ''), D]))]));
+            Deltas2.TryGetValue(FPath.ToLower, D);
+            Audit.AppendLine(Format('  %s: %s%s',
+              [MaskDriveText('delphi_changeset', FPath), Kinds,
+               IfThen(D = 0, '  (mismo numero de lineas)',
+                 Format('  (%s%d lineas en total)',
+                   [IfThen(D > 0, '+', ''), D]))]));
           end;
           AuditText := Audit.ToString.TrimRight;
         finally
+          Seen.Free;
           Audit.Free;
         end;
         if not Applied then
@@ -725,7 +784,7 @@ begin
       finally
         Snaps.Free;
         Changed.Free;
-        Deltas2.Free;
+        Deltas2.Free; // nil-safe: TObject.Free checks Self
       end;
     end;
 

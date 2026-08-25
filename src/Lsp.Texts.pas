@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.62.0-beta';
+  SERVER_VERSION = '0.63.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -57,6 +57,10 @@ const
   // ---------------------------------------------------------------------
   // No '..' anywhere in this text: results are asserted to carry no
   // traversal residue (R4-C), so even a cosmetic ellipsis is banned here.
+  SN_PROJECTS_NO_MATCH_FMT =
+    'Ningun proyecto se llama asi ("%s"). Hay %d en el workspace; llama sin ' +
+    '"name" para verlos todos.';
+
   SR_PROJECTS_NO_ROOT_FMT =
     'error: la carpeta de trabajo "%s" no existe en este servidor. No es que ' +
     'no haya proyectos: es que ahi no hay nada. Mira delphi_workspace para ' +
@@ -87,6 +91,16 @@ const
     'en marcha, vuelve a llamar" para siempre, y eso era mentira: no iba a ' +
     'terminar nunca.';
 
+  SR_REFS_NO_DEFINITION_FMT =
+    'RECHAZADO: el compilador no resuelve "%s" en esa posicion, asi que no ' +
+    'hay nada contra lo que anclar las referencias. Casi siempre es porque ' +
+    'estas apuntando a texto que no es un simbolo: dentro de una cadena, en ' +
+    'un comentario, sobre una palabra reservada, o a un identificador de ' +
+    'otra unit que este proyecto no compila. Apunta DENTRO del identificador ' +
+    'en una linea de codigo de verdad (delphi_read te da linea y columna). Y ' +
+    'si el proyecto no tiene configuracion utilizable, tambien puede pasar: ' +
+    'delphi_config command=view te dice si la tiene.';
+
   SR_LSP_LINE_RANGE_FMT =
     'error: la linea %d no existe en %s, que tiene %d lineas. Recuerda que ' +
     'aqui las lineas van desde 0 (la ultima es la %d), mientras que ' +
@@ -99,6 +113,11 @@ const
 
   SR_LSP_NEGATIVE_FMT =
     'error: linea %d y columna %d: no hay posiciones negativas.';
+
+  SR_LSP_NO_FILE_FMT =
+    'RECHAZADO: no existe %s. (Antes esto salia como "Error executing ' +
+    'tool", que en este servidor significa "me he roto por dentro" y no era ' +
+    'el caso: el fichero simplemente no esta.)';
 
   SR_LSP_NOT_SOURCE_FMT =
     'RECHAZADO: %s no es un fuente Delphi (%s), asi que no hay simbolos que ' +
@@ -118,6 +137,11 @@ const
     '(__delphi-patch). Existen en el disco: para ver las de compilacion pasa ' +
     'esa carpeta como root, o baja el resultado con delphi_package + ' +
     'delphi_fetch; para ver la papelera, includetrash=true.';
+
+  SN_LIST_DEFAULT_MASK =
+    'Sin "pattern" solo se listan ficheros de Delphi (*.pas, *.dpr, *.dpk, ' +
+    '*.inc, *.dfm, *.fmx, *.dproj, *.groupproj). Si hay .txt, .json, .bat o ' +
+    'lo que sea, estan ahi pero no salen: pide pattern=* para verlo todo.';
 
   SN_LIST_CAPPED =
     'La lista viene recortada a 500 entradas ("total" dice cuantas hay). ' +
@@ -1212,7 +1236,15 @@ const
     'delphi_report). command=read delivers every pending message addressed ' +
     'to your agent id or to everyone, once; check only lists what waits. ' +
     'While mail waits, every tool answer ends with a MENSAJES PENDIENTES ' +
-    'line - read it then: it may change what you are doing.';
+    'line - read it then: it may change what you are doing.'#10 +
+    'HONESTLY, ABOUT PRIVACY: the box is indexed by the agent id YOU declare, ' +
+    'and nothing ties that id to whoever is calling - everyone here shares ' +
+    'one token. So anyone using this server can list, and consume, the mail ' +
+    'of any id they can guess, and a consumed message does not reach the one ' +
+    'it was for (it is still in messages\_entregados, so the operator can ' +
+    'put it back). Treat this as a shared noticeboard, not as private post: ' +
+    'read YOUR id, and do not go through other people''s. Nothing secret ' +
+    'should be sent through here.';
 
   SN_MESSAGES_PENDING_ALL_FMT =
     #10#10'MENSAJES PENDIENTES: %d para TODOS los agentes (te incluye). ' +
@@ -1355,7 +1387,7 @@ const
     'una: que uso para leer, para editar, para compilar, para varios ficheros ' +
     'a la vez, para renombrar, para tests, para desplegar. command=tool ' +
     'name=<tool> da UNA tool entera (descripcion + parametros) sin volver a ' +
-    'pedir tools/list, que trae las 40 de golpe. command=conventions da las ' +
+    'pedir tools/list, que las trae TODAS de golpe. command=conventions da las ' +
     'reglas que valen para todas: rutas y unidades virtuales, la jaula, como ' +
     'se edita por ancla, las copias de seguridad y los encodings. Empieza ' +
     'por aqui si acabas de conectarte.';
@@ -1372,6 +1404,11 @@ const
 
   SR_HELP_NEED_NAME =
     'RECHAZADO: command=tool necesita "name". Las que hay:';
+
+  SN_HELP_ASSUMED_FMT =
+    '(No existe ninguna tool "%s"; he entendido que querias %s, que es la ' +
+    'unica que se le parece. Si no era esa, delphi_help command=tasks las ' +
+    'lista todas.)';
 
   SR_HELP_NO_TOOL_ALL_FMT =
     'RECHAZADO: no existe ninguna tool "%s", ni nada que se le parezca. ' +
@@ -1480,13 +1517,19 @@ const
     'encienda (AllowRun, AllowTests, AllowRemoteRun). Si te lo rechaza, no ' +
     'insistas: dilo con delphi_report y sigue con otra cosa.'#10 +
     #10 +
-    '10. COMO LEER UNA NEGATIVA. "RECHAZADO:" = te lo he denegado a ' +
+    '10. EL BUZON ES UN TABLON, NO CORREO PRIVADO. Se indexa por el id que ' +
+    'declaras tu, y todos los que trabajais aqui compartis el mismo token: ' +
+    'cualquiera puede leer, y CONSUMIR, el correo de un id que adivine. Lee ' +
+    'el tuyo y no hurgues en el de otros; el operador no manda nada secreto ' +
+    'por aqui, y tu tampoco.'#10 +
+    #10 +
+    '11. COMO LEER UNA NEGATIVA. "RECHAZADO:" = te lo he denegado a ' +
     'proposito y el motivo va detras: no insistas, cambia de camino. ' +
     '"error:" = no he podido (no existe, no cuadra, falta un parametro): ' +
     'corrige y repite. "Error executing tool:" = me he roto yo por dentro; ' +
     'eso SIEMPRE es un fallo mio, cuentalo con delphi_report.'#10 +
     #10 +
-    '11. SI ALGO NO SE PUEDE HACER POR AQUI, ESO ES UN HALLAZGO. Cuentalo con ' +
+    '12. SI ALGO NO SE PUEDE HACER POR AQUI, ESO ES UN HALLAZGO. Cuentalo con ' +
     'delphi_report (kind=limitation) con la llamada exacta y lo que ' +
     'esperabas: este servidor se ha hecho entero con esos informes.';
 
@@ -1537,6 +1580,28 @@ const
     'run opcional: plataforma a compilar y ejecutar (Win64 por defecto). ' +
     'Solo plataformas de ESTA maquina: el binario corre aqui';
 
+  SR_TEST_PLATFORM_UNKNOWN_FMT =
+    'RECHAZADO: "%s" no es una plataforma de Delphi. Antes te la aceptaba y ' +
+    'ejecutaba Win64 sin decir nada. Validas para ejecutar aqui: Win32 y ' +
+    'Win64.';
+
+  SR_TEST_NOBINARY_NOBUILD =
+    'error: me pediste nobuild=true (no compilar) y ahi no hay ningun ' +
+    'binario que ejecutar. O compilas antes (quita nobuild, o delphi_build ' +
+    'con esa MISMA plataforma y config), o apuntas a la config que si tiene ' +
+    'binario.';
+
+  SN_TEST_STALE_FMT =
+    'OJO: %s es MAS NUEVO que el binario que acabo de ejecutar. Has tocado ' +
+    'el codigo despues de compilarlo, asi que estos numeros son de la ' +
+    'version anterior. Quita nobuild=true y vuelve a lanzarlo.';
+
+  SN_TEST_NEAR_MISS_FMT =
+    'OJO: hay %d linea(s) que PARECEN un resultado y NO he contado, la ' +
+    'primera es "%s". Mira el formato en command=discover ("countsFormat"): ' +
+    'la primera palabra tiene que ser PASS/PASSED/OK o FAIL/FAILED/ERROR. Si ' +
+    'esas lineas eran fallos tuyos, el veredicto de arriba se queda corto.';
+
   SR_TEST_CONFIG_FMT =
     'RECHAZADO: la configuracion "%s" no existe en este proyecto. Tiene ' +
     'estas: %s. (Antes te la aceptaba y compilaba en una carpeta con ese ' +
@@ -1549,13 +1614,13 @@ const
 
   SN_TEST_TIMEOUT_NOTE =
     'SE ACABO EL TIEMPO y he MATADO el proceso: no es que los tests fallen, ' +
-    'es que no terminaron. Por eso exitCode viene a 1 y los numeros a cero. ' +
-    'Y por eso "outputTail" suele venir VACIO aunque el programa hubiera ' +
-    'impreso cosas: la salida de un programa de consola va a un buffer y ' +
-    'solo se vuelca al terminar, asi que al matarlo se pierde. Si esperas ' +
-    'que tarde, sube "timeoutms"; si sospechas un cuelgue, mete Flush(Output) ' +
-    'despues de cada linea en tu runner y vuelve a lanzarlo: asi veras por ' +
-    'donde se quedo.';
+    'es que no terminaron. Por eso exitCode viene a 1. Los numeros que veas ' +
+    'son los de lo que alcanzo a imprimir ANTES de morir, asi que estan ' +
+    'incompletos aunque parezcan buenos: no los tomes por el resultado. Y si ' +
+    '"outputTail" viene vacio es porque la salida de un programa de consola ' +
+    'se guarda en un buffer y solo se vuelca al terminar, asi que al matarlo ' +
+    'se pierde; con Flush(Output) despues de cada linea la veras. Si esperas ' +
+    'que tarde, sube "timeoutms".';
 
   SN_TEST_NO_COUNTS =
     'Ha terminado bien pero NO he sabido contar ni un solo test, asi que no ' +
@@ -1565,13 +1630,16 @@ const
     'command=discover).';
 
   SN_TEST_CONSOLE_FORMAT =
-    'Para que pueda contarte los tests, imprime UNA LINEA POR ' +
-    'COMPROBACION que EMPIECE por PASS o por OK cuando va bien, y por FAIL o ' +
-    'por ERROR cuando va mal, seguida de la descripcion: "PASS suma de dos ' +
-    'enteros" / "FAIL email invalido: esperaba False". Se admite lo que ' +
-    'venga detras, pero la primera palabra manda (un "[ OK ] 12 algo" NO se ' +
-    'cuenta: empieza por corchete). Y termina con ExitCode distinto de 0 si ' +
-    'algo fallo. Con DUnitX no hace falta nada de esto: se lee su resumen.';
+    'Para que pueda contarte los tests, imprime UNA LINEA POR COMPROBACION ' +
+    'cuya PRIMERA PALABRA sea PASS, PASSED u OK cuando va bien, y FAIL, ' +
+    'FAILED o ERROR cuando va mal, seguida de la descripcion: "PASS suma de ' +
+    'dos enteros" / "FAIL email invalido: esperaba False". Mayusculas o ' +
+    'minusculas da igual, y los espacios de delante tampoco importan; lo que ' +
+    'tiene que ser exacto es la PALABRA: "PASSABLE" no cuenta (no es PASS), y ' +
+    '"[ OK ] 12 algo" tampoco (empieza por corchete). Si imprimes lineas que ' +
+    'se le parecen y no cuentan, te lo digo en "linesNotCounted". Y termina ' +
+    'con ExitCode distinto de 0 si algo fallo. Con DUnitX no hace falta nada ' +
+    'de esto: se lee su resumen.';
 
   SN_TEST_RUNS_ON =
     'command=run compila Y ejecuta la MISMA plataforma: Win64 salvo que ' +
@@ -1834,8 +1902,23 @@ const
   SR_CREATE_RTLNAME_FMT =
     'RECHAZADO: "%s" es el nombre de una unit de la RTL/VCL. Un fichero con ' +
     'ese nombre junto al proyecto SECUESTRA a la de verdad y los errores que ' +
-    'salen luego apuntan a cualquier sitio menos a esto. Usa un nombre ' +
-    'propio (U%s, MiApp.%s) o un espacio de nombres con punto.';
+    'salen luego apuntan a cualquier sitio menos a esto. Ponle un prefijo ' +
+    'tuyo (U%s) o un espacio de nombres TUYO (MiApp.%s): lo que no vale es ' +
+    'colgarlo de uno de Embarcadero (System., Vcl., FMX., Data...).';
+
+  SR_CREATE_RTLNS_FMT =
+    'RECHAZADO: "%s" cuelga de "%s", que es un espacio de nombres de ' +
+    'Embarcadero. Crear ahi una unit tuya secuestra a la del compilador ' +
+    'exactamente igual que usar el nombre a secas: en cuanto exista, la suya ' +
+    'deja de encontrarse y el error que ves es que ha desaparecido algo tan ' +
+    'basico como Exception. Usa un espacio de nombres tuyo (MiApp.%s no, ' +
+    'pero MiEmpresa.MiApp.LoQueSea si).';
+
+  SR_CREATE_PROJECT_KIND =
+    'RECHAZADO: de proyectos solo se yo hacer tres: kind=project-console, ' +
+    'kind=project-vcl y kind=project-fmx. (Y luego form-vcl, form-fmx, ' +
+    'frame-vcl, frame-fmx, datamodule y unit, que van DENTRO de un proyecto ' +
+    'que ya existe.)';
 
   SR_CREATE_NEED_DIR =
     'RECHAZADO: falta "dir", la carpeta donde crear el proyecto. Debe estar ' +
@@ -1901,6 +1984,11 @@ const
     'actual: usa offset=%d. Para reemplazar el fichero entero, offset=0 (esa ' +
     'si deja copia).';
 
+  SR_UPLOAD_BAD_SHA_FMT =
+    'RECHAZADO: "%s" no tiene forma de sha256 (son 64 digitos hexadecimales). ' +
+    'No he subido nada. Antes daba la subida por mala y apartaba el fichero ' +
+    'como .corrupto, castigando al fichero por un error del parametro.';
+
   SR_UPLOAD_NO_CHUNK_FMT =
     'RECHAZADO: no mandas "chunkbase64", asi que no hay nada que subir, y ahi ' +
     'ya hay un fichero de %d bytes. Una llamada a medias NO lo vacia. Si ' +
@@ -1925,6 +2013,24 @@ const
     'la que vale). Si querias anadir al final y no reemplazar, usa offset=<el ' +
     'tamano actual>, no offset=0.';
 
+  SR_FILE_DELETE_EMPTY_SHELL_FMT =
+    'CASI: TODO el contenido de %s esta ya fuera (copia recuperable en %s), ' +
+    'y lo unico que queda es la carpeta VACIA, que no me deja quitarla ' +
+    '(algun proceso la tiene como directorio actual). No te digo BORRADO ' +
+    'porque el cascaron sigue ahi, pero no vuelvas a lanzar el borrado: no ' +
+    'queda nada que copiar y cada intento solo ensucia la papelera. Que la ' +
+    'quite el operador, o dejala: esta vacia.';
+
+  SN_FILE_DELETE_EMPTY_OK_FMT =
+    'BORRADA la carpeta vacia %s. No he hecho copia: no habia nada dentro ' +
+    'que copiar.';
+
+  SR_FILE_DELETE_STUCK_FMT =
+    'RECHAZADO: %s esta vacia pero no puedo quitarla: algo la tiene abierta ' +
+    '(suele ser que es el directorio actual de algun proceso). No hay nada ' +
+    'dentro, asi que no se pierde nada dejandola; si molesta, la quita el ' +
+    'operador.';
+
   SR_FILE_DELETE_PARTIAL_FMT =
     'A MEDIAS: la copia recuperable de %s SI esta hecha (%s), pero el ' +
     'original NO se ha podido quitar del sitio: algo lo tiene abierto (una ' +
@@ -1932,6 +2038,14 @@ const
     'actual de algun proceso). No te digo BORRADO porque no lo esta. ' +
     'Reintentalo dentro de un momento; si sigue igual, tiene que quitarlo el ' +
     'operador a mano.';
+
+  SR_PASERVER_HOST_DENIED_FMT =
+    'RECHAZADO: no marco a "%s". Un test-connection es una conexion que abre ' +
+    'ESTE servidor, asi que decidir a donde no te toca a ti: valen los hosts ' +
+    'de los perfiles de conexion que ya tiene el IDE (command=profiles te ' +
+    'los lista) y los que el operador haya escrito en [Security] RemoteHosts ' +
+    '(ahora mismo: %s). Si lo que quieres es comprobar un target de verdad, ' +
+    'usa su PERFIL por nombre: test-connection name=<perfil>.';
 
   SR_GIT_REMOTE_OFF_FMT =
     'RECHAZADO: este servidor no habla con "%s". Una URL explicita en un ' +
@@ -1945,6 +2059,13 @@ const
     'RECHAZADO: "%s" no esta entre los hosts que este servidor tiene ' +
     'permitidos (%s). Si hace falta uno mas, pidelo con delphi_report: lo ' +
     'anade el operador.';
+
+  SN_GIT_HINT_OVERRIDE =
+    'OJO con los "hint:" de ahi arriba: los escribe git, no yo, y algunos ' +
+    'recomiendan justo lo que esta tool no deja hacer (--no-ff, rebase, dar ' +
+    'la URL en la linea de comandos). Aqui la salida de un merge divergente ' +
+    'es dejarlo estar y avisar a un humano, o merge args=--abort si te ' +
+    'quedaste a medias; y para un remoto, su NOMBRE, no su URL.';
 
   SR_GIT_MERGE_ARGS =
     'RECHAZADO: merge solo acepta el NOMBRE de una rama, o "--abort" para ' +
@@ -2048,7 +2169,7 @@ const
     'command=status lista los abiertos; command=begin abre uno nuevo.';
 
   SR_CHANGESET_KIND =
-    'RECHAZADO: kind debe ser edit | create | delete | move.';
+    'RECHAZADO: kind debe ser edit | create | delete | delete-line | move.';
 
   SR_CHANGESET_NEED_PATH =
     'RECHAZADO: stage necesita "path" (el fichero que toca la operacion).';
@@ -2070,7 +2191,7 @@ const
 
   SR_CHANGESET_NOT_PREVIEWED =
     'RECHAZADO: commit exige un preview LIMPIO previo (unresolved=0) y ' +
-    'posterior al ultimo stage. Llama a command=preview y revisa el resultado.';
+    'posterior a la ultima operacion que apilaste o quitaste (stage o unstage). Llama a command=preview y revisa el resultado.';
 
   SR_CHANGESET_FILE_CHANGED_FMT =
     'RECHAZADO: FILE_CHANGED - estos ficheros cambiaron despues del preview: ' +
