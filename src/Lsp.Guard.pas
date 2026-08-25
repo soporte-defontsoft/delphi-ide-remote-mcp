@@ -171,6 +171,18 @@ function CurrentAgentOr(const ADefault: string): string;
   moving one OUT is the restore itself. Only writing IN is refused. }
 function DeadCopyWriteDenied(const APath: string): string;
 
+{ The SAME directory can be named more than one way, and a guard that matches a
+  path segment literally is blind to every alias. NTFS keeps an 8.3 short name
+  for each entry ("__delphi-patch" also answers to "__DELP~1"), and it resolves
+  to the identical folder - so a path through "__DELP~1" walked straight past
+  the trash guard and reopened writing into the recoverable copies (measured
+  2026-08-25).
+
+  This expands the longest existing prefix of a path back to its real names
+  before any segment guard looks at it. It cannot blanket-reject "~": the
+  server's own scratch and home paths legitimately contain one (DFONTA~1). }
+function LongCanonical(const APath: string): string;
+
 { Host names git may talk to when an agent writes an explicit URL, comma
   separated; '' (the default) means none - see GitRemoteDenied. }
 function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
@@ -271,6 +283,7 @@ function GitRemoteDenied(const AText: string): string;
 implementation
 
 uses
+  Winapi.Windows,
   System.SysUtils,
   System.StrUtils,
   System.IniFiles,
@@ -514,13 +527,49 @@ begin
   // and no path on earth contains them. Written that way once (a Python habit
   // leaking into Delphi) and the whole guard matched nothing while looking
   // perfectly correct - the ".by" rule passed only because it has no slash.
-  P := APath.ToLower.Replace('/', '\');
+  // canonical first: an 8.3 alias like __DELP~1 IS the trash
+  P := LongCanonical(APath).ToLower.Replace('/', '\');
   if P.EndsWith('.by') then
     Exit(SR_GUARD_OWNER_MARKER);
   if P.Contains('\__delphi-patch\') or P.EndsWith('\__delphi-patch') then
     Exit(SR_GUARD_DEAD_TRASH);
   if P.Contains('\__history\') or P.Contains('\__recovery\') then
     Exit(SR_GUARD_DEAD_IDE);
+end;
+
+function LongCanonical(const APath: string): string;
+var
+  Full, Dir, Tail, Parent: string;
+  Buf: array [0 .. 2047] of Char;
+  N: DWORD;
+begin
+  Full := TPath.GetFullPath(APath).Replace('/', '\\');
+  if Full.IndexOf('~') < 0 then
+    Exit(Full);
+  // Walk up until GetLongPathName resolves an ANCESTOR that exists (the leaf of
+  // a create/upload does not yet), then re-attach the part below it.
+  Dir := Full;
+  Tail := '';
+  while Dir <> '' do
+  begin
+    N := GetLongPathName(PChar(Dir), @Buf[0], Length(Buf));
+    if (N > 0) and (N < DWORD(Length(Buf))) then
+    begin
+      SetString(Result, PChar(@Buf[0]), N);
+      if Tail <> '' then
+        Result := IncludeTrailingPathDelimiter(Result) + Tail;
+      Exit;
+    end;
+    Parent := TPath.GetDirectoryName(Dir);
+    if (Parent = '') or SameText(Parent, Dir) then
+      Break;
+    if Tail = '' then
+      Tail := TPath.GetFileName(Dir)
+    else
+      Tail := TPath.GetFileName(Dir) + '\\' + Tail;
+    Dir := Parent;
+  end;
+  Result := Full; // a ~ that maps to nothing existing: leave it, it is not real
 end;
 
 function GitRemoteHosts: string;

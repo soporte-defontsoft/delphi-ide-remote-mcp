@@ -189,12 +189,13 @@ end;
   and deleted the tree. A guard that only looks at the path it was handed is no
   guard on a recursive delete. Now a folder is refused if it holds a single
   marker belonging to somebody else, and it names them. }
-function PurgeOwnershipDenied(const APath: string): string;
+function PurgeOwnershipDenied(const APathIn: string): string;
 var
-  Me, Owner, F: string;
+  Me, Owner, F, Sib, APath: string;
   Others: TStringList;
 begin
   Result := '';
+  APath := LongCanonical(APathIn);
   Me := CurrentAgent;
   // No identity (stdio, the operator's own console) is trusted with everything.
   if Me = '' then
@@ -214,7 +215,14 @@ begin
     Others.Sorted := True;
     for F in TDirectory.GetFiles(APath, '*.by', TSearchOption.soAllDirectories) do
     begin
-      Owner := TrashOwner(Copy(F, 1, Length(F) - 3));
+      // A marker only OWNS the copy sitting next to it. An orphan .by (its copy
+      // already restored or purged) or a file someone just renamed to .by marks
+      // nothing - counting its content as an owner let a planted .by make a
+      // whole folder unpurgeable by anyone (measured 2026-08-25).
+      Sib := Copy(F, 1, Length(F) - 3);
+      if not (TFile.Exists(Sib) or TDirectory.Exists(Sib)) then
+        Continue;
+      Owner := TrashOwner(Sib);
       if (Owner <> '') and not SameText(Owner, Me) then
         Others.Add(Owner);
     end;
@@ -271,14 +279,26 @@ begin
       Exit(SR_FILE_PURGE_NOT_ROOT);
     if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
       Exit('RECHAZADO: no existe ' + Params.Path);
-    // The marker goes with the item it marks: purging it alone would leave the
-    // copy unowned, which is the cheapest way to launder somebody else's trash.
-    if Params.Path.ToLower.EndsWith('.by') then
-      Exit(SR_GUARD_OWNER_MARKER);
-    // Yours only - and on a folder, that means everything inside it too.
-    Denied := PurgeOwnershipDenied(Params.Path);
-    if Denied <> '' then
-      Exit(Denied);
+    var CanonPurge := LongCanonical(Params.Path);
+    if CanonPurge.ToLower.EndsWith('.by') then
+    begin
+      // A live marker for someone else's copy is off limits - removing it would
+      // orphan their copy for the taking. But an orphan marker (copy already
+      // restored/purged) or your own is yours to sweep: otherwise the trash
+      // could never be left clean by the agent that made it.
+      var SibMk := Copy(CanonPurge, 1, Length(CanonPurge) - 3);
+      var Mk := TrashOwner(SibMk); // owner is THIS marker's content
+      if (TFile.Exists(SibMk) or TDirectory.Exists(SibMk)) and
+         (CurrentAgent <> '') and (Mk <> '') and not SameText(Mk, CurrentAgent) then
+        Exit(Format(SR_FILE_PURGE_NOT_YOURS_FMT, [Mk]));
+    end
+    else
+    begin
+      // Yours only - and on a folder, that means everything inside it too.
+      Denied := PurgeOwnershipDenied(Params.Path);
+      if Denied <> '' then
+        Exit(Denied);
+    end;
     try
       if TDirectory.Exists(Params.Path) then
       begin
@@ -486,6 +506,14 @@ begin
       TDirectory.Move(Params.Path, Params.Dest)
     else
       TFile.Move(Params.Path, Params.Dest);
+    // Restoring a copy OUT of the trash leaves its owner marker behind with
+    // nothing to mark: sweep it, so the agent that restores can leave the
+    // trash clean instead of a litter of .by files only the operator can lift.
+    if IsBackupPath(Params.Path) and TFile.Exists(Params.Path + '.by') then
+      try
+        TFile.Delete(Params.Path + '.by');
+      except
+      end;
   except
     on E: Exception do
       Exit('ERROR al mover: ' + E.Message);

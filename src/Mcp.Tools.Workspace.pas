@@ -1454,7 +1454,7 @@ begin
     Exit;
   if Params.Offset < 0 then
     Exit('error: offset negativo');
-  if SkipIdeArtifacts(FullPath) then
+  if SkipIdeArtifacts(LongCanonical(FullPath)) then
     Exit('error: ruta de artefactos del IDE (__history, __recovery, Win32, ' +
       'dcu...): no se sube ahi.');
   Result := DeadCopyWriteDenied(FullPath);

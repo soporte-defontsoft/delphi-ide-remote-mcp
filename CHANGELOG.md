@@ -8,6 +8,34 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.71.0-beta] - 2026-08-25
+
+Round 9 security re-audit (agent sec9). The round-8 trash fixes were real but
+bypassable, and the ownership check could be turned into a denial-of-cleanup.
+
+### Fixed
+- **The trash guard was defeated by an NTFS 8.3 short name.** The guards matched
+  the literal segment `\__delphi-patch\`, but `__DELP~1` resolves to the same
+  folder and slipped straight past - reopening writes into another agent's
+  recoverable copies through both `delphi_textedit` and `delphi_upload`, and
+  moving files INTO the trash. Every segment guard now canonicalises the path
+  first (`GetLongPathName` over the longest existing prefix). The jail itself is
+  deliberately left on the non-expanded path, because a workspace root can
+  legitimately BE a short name.
+- **A planted `.by` made a folder unpurgeable and showed invented owners.** Any
+  file renamed to `<x>.by` had its content read as an owner name. A marker now
+  owns only the copy sitting next to it; an orphan or planted `.by` marks
+  nothing. (A bug in the same fix briefly let anyone purge another agent's live
+  marker - owner was read one `.by` too deep; corrected.)
+- **An agent could not leave the trash clean.** It could not purge its own or an
+  orphaned `.by`, so restores left a litter only the operator could sweep. An
+  orphan or own marker is now purgeable, and restoring a copy with `delphi_move`
+  takes its marker with it.
+
+Every fix ships with the counter-test proving it did not over-tighten: the
+literal-path guards, the jail, purging another agent's live copy/marker (still
+refused), and the normal delete/restore/purge flow all still behave.
+
 ## [0.70.0-beta] - 2026-08-25
 
 ### Added

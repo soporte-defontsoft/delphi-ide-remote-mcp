@@ -522,7 +522,7 @@ begin
           'para ficheros Delphi; para texto no-Delphi (.md .py .html .js .ini ...) ' +
           'usa delphi_textedit.', [Ext]));
 
-      PLower := A.Path.ToLower.Replace('/', '\');
+      PLower := LongCanonical(A.Path).ToLower.Replace('/', '\');
       if PLower.Contains('\' + BACKUP_SUB + '\') then
         Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la carpeta de copias de seguridad de esta tool. Copias muertas: no se leen, no se editan. El fichero vivo esta un nivel mas arriba.');
       if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
