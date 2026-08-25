@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.65.0-beta';
+  SERVER_VERSION = '0.66.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -141,13 +141,35 @@ const
   SP_PATCH_EDITS =
     'VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O ' +
     'NADA: un array JSON [{"old":"...","new":"...","atline":12}, ...] que se ' +
-    'aplica EN ORDEN, cada entrada con exactamente el mismo contrato que una ' +
-    'edicion suelta (old = UNA linea entera copiada literal y unica; atline ' +
-    'para desempatar; delete:true para quitar la linea). Si una falla, el ' +
-    'fichero vuelve byte a byte a como estaba y te digo cual fallo. Para ' +
-    'coser un cambio que toca diez sitios del mismo fichero esto es UNA ' +
-    'llamada en vez de diez sin red. Si el cambio toca VARIOS ficheros, eso ' +
-    'es delphi_changeset. Cuando mandas "edits" se ignoran old/new/atline.';
+    'aplica EN ORDEN. Cada entrada admite dos formas de ancla: UNA LINEA ' +
+    '(igual que una edicion suelta) o un BLOQUE de varias lineas seguidas en ' +
+    '"old", que se busca entero y en orden - util para sustituir el cuerpo de ' +
+    'un metodo de una pieza. Si el ancla aparece mas de una vez, desempata ' +
+    'con "occurrence": 1, 2... (mejor que "atline" dentro de una tanda: los ' +
+    'numeros de linea SE MUEVEN segun las entradas anteriores anaden o quitan ' +
+    'lineas, y "occurrence" no). "delete": true quita la linea. Si una ' +
+    'entrada falla, el fichero vuelve byte a byte a como estaba y te digo ' +
+    'cual fallo. Si el cambio toca VARIOS ficheros, eso es delphi_changeset. ' +
+    'Cuando mandas "edits" se ignoran old/new/atline.';
+
+  SR_PATCH_BLOCK_SHORT =
+    'RECHAZADO: ese "old" de varias lineas se queda en una sola despues de ' +
+    'quitarle el salto final. Para una linea suelta no hace falta nada ' +
+    'especial: mandala tal cual.';
+
+  SR_PATCH_BLOCK_MISSING_FMT =
+    'RECHAZADO: no encuentro ese bloque de %d lineas. La primera que busco ' +
+    'es "%s". El bloque se compara ENTERO y en orden (los espacios de los ' +
+    'extremos de cada linea dan igual, el contenido no): reelee con ' +
+    'delphi_read y copialo de ahi.';
+
+  SR_PATCH_BLOCK_AMBIGUOUS_FMT =
+    'RECHAZADO: ese bloque aparece %d veces (empieza por "%s"), asi que no se ' +
+    'a cual te refieres. Anade "occurrence": 1, 2... a esa entrada, o alarga ' +
+    'el bloque hasta que sea unico.';
+
+  SN_PATCH_BLOCK_OK_FMT =
+    'bloque de %d lineas sustituido (empezaba en la linea %d)';
 
   SR_PATCH_EDITS_JSON =
     'RECHAZADO: "edits" tiene que ser un array JSON de objetos, por ejemplo ' +
@@ -1548,6 +1570,12 @@ const
     '  contar un fallo o una friccion ..... delphi_report'#10 +
     '  leer lo que te han dejado .......... delphi_messages'#10 +
     #10 +
+    'COMO SE LLAMA CADA UNA se responde aqui; COMO SE LLAMA A UNA, con ' +
+    'delphi_help command=tool name=<la que sea>, que te da su descripcion ' +
+    'entera y TODOS sus parametros. Eso es lo que evita descubrir a golpes ' +
+    'que delphi_create acepta "content" con el fuente entero, o que ' +
+    'delphi_edit acepta "edits" con varias ediciones de una vez.'#10 +
+    #10 +
     'Y las reglas comunes: delphi_help command=conventions.';
 
   SN_HELP_CONVENTIONS =
@@ -1675,6 +1703,12 @@ const
     'primera es "%s". Mira el formato en command=discover ("countsFormat"): ' +
     'la primera palabra tiene que ser PASS/PASSED/OK o FAIL/FAILED/ERROR. Si ' +
     'esas lineas eran fallos tuyos, el veredicto de arriba se queda corto.';
+
+  SR_TEST_NAME_NOT_PATH_FMT =
+    'RECHAZADO: "%s" parece el NOMBRE del proyecto, y aqui hace falta su ' +
+    'RUTA completa (la que te da delphi_projects en el campo "project"). ' +
+    'Antes esto te contestaba que estaba fuera de los workspaces permitidos, ' +
+    'que es verdad de cualquier nombre suelto y no aclaraba nada.';
 
   SR_TEST_CONFIG_FMT =
     'RECHAZADO: la configuracion "%s" no existe en este proyecto. Tiene ' +
@@ -1884,6 +1918,15 @@ const
     'o valor de enum inexistente):';
 
   // ---- delphi_git: ramas ----
+
+  SR_BUILD_INCLUDE_OUTSIDE_FMT =
+    'RECHAZADO: no compilo esto. La directiva %s de %s mete en la ' +
+    'compilacion un fichero que esta FUERA de lo que este servidor deja ' +
+    'leer. El compilador lo abre con los permisos del servidor, y lo que ' +
+    'entra vuelve a salir por dos sitios: dentro del binario (que luego se ' +
+    'descarga) y citado palabra por palabra en los errores cuando el fichero ' +
+    'no es Pascal. Las rutas de {$I} y {$R} tienen que quedarse dentro del ' +
+    'workspace.';
 
   SN_BUILD_DEFAULT_PLATFORM =
     'No me diste "platform", asi que he compilado Win32, que es el defecto de ' +
@@ -2135,6 +2178,10 @@ const
     'desde el win.ini hasta el fichero de configuracion con el token. Las ' +
     'rutas del .rc tienen que quedarse dentro del workspace, y mejor ' +
     'relativas a la carpeta de estilos.';
+
+  SR_STYLES_RC_DEEP =
+    'RECHAZADO: los #include del manifiesto se anidan demasiado (mas de 8). ' +
+    'Aplana el .rc: si hace falta esa profundidad, algo raro pasa.';
 
   SR_STYLES_RC_BADPATH_FMT =
     'RECHAZADO: no puedo resolver la ruta %s del .rc. Usa rutas relativas a ' +

@@ -32,6 +32,11 @@ shutil.rmtree(BASE, ignore_errors=True)
 os.makedirs(BASE)
 EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
 shutil.copy(SRC, EXE)
+# el conversor de estilos vive junto al servidor: sin el, command=build para
+# antes de llegar al .rc y no se puede comprobar su jaula
+_conv = os.path.join(os.path.dirname(SRC), 'DelphiStyleConvert.exe')
+if os.path.exists(_conv):
+    shutil.copy(_conv, os.path.join(BASE, 'DelphiStyleConvert.exe'))
 
 
 def spawn(extra_env=None):
@@ -227,9 +232,98 @@ jd = J(call(A, 'delphi_symbols', {'path': P1}))
 check('W2 delphi_symbols sobre una CARPETA resume todas sus units',
       jd.get('total', 0) >= 1 and bool(jd.get('units')), str(jd)[:250])
 ucalc = [u for u in jd.get('units', []) if u.get('unit') == 'UCalc']
+# Cada declaracion es un objeto: el texto ENTERO (aunque ocupe varias lineas),
+# a que clase pertenece y en que linea esta.
+_decls = ucalc[0].get('declares', []) if ucalc else []
 check('W2 ...con lo que cada una declara, miembros incluidos',
-      bool(ucalc) and any(('Doble' in d) or ('Triple' in d)
-                          for d in ucalc[0].get('declares', [])), str(ucalc)[:250])
+      any(('Doble' in d.get('decl', '')) or ('Triple' in d.get('decl', ''))
+          for d in _decls), str(ucalc)[:250])
+check('W2 ...diciendo de que clase es cada miembro y en que linea',
+      any(d.get('of') == 'TCalc' and d.get('line') for d in _decls), str(_decls)[:250])
+
+# ------------------------------------ S4: la MISMA puerta, otro compilador --
+# {$I} y {$R} meten un fichero en la compilacion. El compilador lo abre con los
+# permisos del servidor, y lo que entra sale por dos sitios: dentro del binario
+# (que se descarga) y citado palabra por palabra en los errores si no es
+# Pascal. Medido: un .txt de fuera volvio como "Undeclared identifier: 'esto'".
+FUERA = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'FUERA-R11.inc')
+open(FUERA, 'w', encoding='utf-8').write('SECRETO_UNO = 1;\n')
+PF = os.path.join(BASE, 'Incl')
+r = call(A, 'delphi_create', {'kind': 'project-console', 'name': 'Incl', 'dir': PF})
+assert 'CREADO' in r, r
+open(os.path.join(PF, 'Incl.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
+    "program Incl;\n\n{$APPTYPE CONSOLE}\n\nconst\n{$I '" + FUERA + "'}\n\n"
+    "begin\n  Writeln(SECRETO_UNO);\nend.\n")
+r = call(A, 'delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
+                             'platform': 'Win64', 'config': 'Debug'}, t=900)
+check('S4 un {$I} que apunta FUERA de la jaula: no se compila',
+      r.startswith('RECHAZADO') and '{$I' in r, r[:250])
+check('S4 ...y no viene ni una palabra del fichero de fuera',
+      'SECRETO_UNO' not in r, r[:250])
+check('S4 ...y es un RECHAZO, no un "Error executing tool"',
+      not r.startswith('Error executing tool'), r[:120])
+# lo normal sigue compilando: {$R *.res} y un include de dentro
+open(os.path.join(PF, 'dentro.inc'), 'w', encoding='utf-8', newline='\r\n').write(
+    'SECRETO_UNO = 1;\n')
+open(os.path.join(PF, 'Incl.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
+    "program Incl;\n\n{$APPTYPE CONSOLE}\n{$R *.res}\n\nconst\n"
+    "{$I 'dentro.inc'}\n\nbegin\n  Writeln(SECRETO_UNO);\nend.\n")
+r = call(A, 'delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
+                             'platform': 'Win64', 'config': 'Debug'}, t=900)
+check('S4 un include de DENTRO, y el {$R *.res} de siempre, compilan igual',
+      not r.startswith('RECHAZADO'), r[:250])
+
+# ------------------------------------- lo que pidio el refactor (ronda 12) --
+BLK = os.path.join(BASE, 'UBloque.pas')
+open(BLK, 'w', encoding='utf-8', newline='\r\n').write(
+    'unit UBloque;\ninterface\nimplementation\n\nprocedure Uno;\nbegin\n'
+    '  Writeln(1);\n  Writeln(2);\nend;\n\nprocedure Dos;\nbegin\n'
+    '  Writeln(1);\n  Writeln(2);\nend;\n\nend.\n')
+blk = json.dumps([{"old": "  Writeln(1);\n  Writeln(2);", "new": "  Writeln(9);",
+                   "occurrence": 2}])
+r = call(A, 'delphi_edit', {'path': BLK, 'edits': blk})
+disk = open(BLK, encoding='utf-8').read()
+check('M1 un ancla de VARIAS lineas dentro de edits',
+      'APLICADAS 1' in r and disk.count('Writeln(9);') == 1, r[:200])
+check('M1 ...y "occurrence" elige cual, sin contar lineas',
+      disk.index('Writeln(9);') > disk.index('procedure Dos;'), disk)
+amb = json.dumps([{"old": "procedure Uno;\nbegin", "new": "procedure Uno;\nbegin"},
+                  {"old": "  ESTO(1);\n  NO EXISTE(2);", "new": "x"}])
+r = call(A, 'delphi_edit', {'path': BLK, 'edits': amb})
+check('M1 un bloque que no existe se rechaza y se deshace todo',
+      'ROLLBACK' in r or 'RECHAZADO' in r, r[:200])
+r = call(A, 'delphi_help', {})
+check('M3 el mapa dice COMO averiguar los parametros de una tool',
+      'command=tool' in r and 'content' in r, r[-400:])
+r = call(A, 'delphi_test', {'command': 'run', 'project': 'MiTest'})
+check('C9 un NOMBRE de proyecto se explica como tal, no como jaula',
+      'RUTA' in r and 'delphi_projects' in r, r[:250])
+
+# ------------------------------- la MISMA raiz, dos puertas mas (ronda 12) --
+# S5: el guard del .rc miraba solo las lineas del fichero de arriba. Un .rc
+# legal que hace #include de otro colaba cualquier fichero - y por ahi salio
+# el settings.ini del servidor, con el token, dentro de un .res descargable.
+ST2 = os.path.join(BASE, 'styles2')
+os.makedirs(ST2, exist_ok=True)
+open(os.path.join(ST2, 'b.style'), 'w', encoding='utf-8', newline='\r\n').write(
+    "object TStyleContainer\r\n  object TRectangle\r\n"
+    "    StyleName = 'x'\r\n  end\r\nend\r\n")
+open(os.path.join(ST2, 'inner.txt'), 'w', encoding='utf-8', newline='\r\n').write(
+    'ROBADO RCDATA "C:\\Windows\\win.ini"\r\n')
+open(os.path.join(ST2, 'b.rc'), 'w', encoding='utf-8', newline='\r\n').write(
+    'LEGIT RCDATA "b.bin.style"\r\n#include "inner.txt"\r\n')
+r = call(A, 'delphi_styles', {'command': 'build', 'path': ST2}, t=300)
+check('S5 un #include que trae una ruta de fuera: RECHAZADO',
+      'RECHAZADO' in r and 'inner.txt' in r, r[:300])
+check('S5 ...y no queda .res con nada dentro',
+      not os.path.exists(os.path.join(ST2, 'b.res')), os.listdir(ST2))
+
+# S6: symbols distinguia "existe fuera" de "no existe" - un mapa del disco,
+# una llamada cada vez. Ahora el rechazo de jaula es el mismo en los dos casos.
+r1 = call(A, 'delphi_symbols', {'path': 'C:\\Windows\\NoExisteJamas.pas'})
+r2 = call(A, 'delphi_symbols', {'path': SRC})
+check('S6 fuera de la jaula: el MISMO rechazo exista o no',
+      ('FUERA' in r1) and ('FUERA' in r2), (r1[:90], r2[:90]))
 
 A['p'].kill()
 print('\n== round-11 battery: %d PASS / %d FAIL ==' % (P, F))

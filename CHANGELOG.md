@@ -8,6 +8,67 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.66.0-beta] - 2026-08-25
+
+Field round 12. An auditor put the finding of the previous round in one
+sentence: **the fix closed one call site, but the problem is systemic** -
+brcc32 and the compiler both receive paths and open files with the server's
+own access, and neither asks the jail. Both remaining doors are shut here.
+
+### Security
+- **The `.rc` guard did not follow `#include`.** A manifest whose own lines
+  are all legal, including a second file whose lines are not, compiled - and
+  the server's `settings.ini`, **with the AuthToken in it**, came back inside
+  a downloadable `.res`. The guard now walks the whole include closure
+  (cycle-safe, depth-capped) and names the file the offending path came from.
+- **`{$I}` in any source made the compiler read outside the jail**, and its
+  error messages quote what it found, identifier by identifier - measured
+  independently here before the audit arrived, on a text file whose words
+  came back as `Undeclared identifier: 'esto'`. Every `{$I}`, `{$INCLUDE}`,
+  `{$R}`, `{$RESOURCE}`, `{$L}` and `{$LINK}` in the project's sources is
+  resolved and checked before msbuild starts. The refusal is a refusal, not
+  an `Error executing tool:` - which this server's own rules define as an
+  internal failure worth reporting as a bug.
+- **`delphi_symbols` was an existence oracle for the whole disk**: a Delphi
+  file outside the jail that EXISTS answered "outside the workspaces", one
+  that does not answered "does not exist". Same refusal either way now, like
+  `delphi_read` has always done.
+
+### Added - what the refactor asked for
+- **A multi-line anchor inside `edits`.** The one-line rule protects a lone
+  edit, where a long anchor is a long chance to mistype; inside a batch,
+  replacing a method body you just read, it was pure bookkeeping - six lines
+  meant six entries to line up by hand. A block is matched whole and exactly,
+  which is its own protection.
+- **`occurrence` instead of counting lines.** Line numbers MOVE inside a
+  batch as earlier entries add or remove lines, so an `atline` taken from the
+  original file drifts - one agent had to work out a running +13 offset by
+  hand, which is exactly the bookkeeping the batch was meant to remove.
+  Which of the N identical lines you meant does not drift.
+- `delphi_symbols`' folder digest now gives what it was asked for: whole
+  declarations (a `;` inside a parameter list is a separator, not an end, so
+  signatures were being cut before their return type), the `const` and
+  `resourcestring` an interface offers, private fields, which class each
+  member belongs to, and the line it is on. A trailing separator is a folder.
+- `delphi_help`'s map says how to get a tool's PARAMETERS, which is how
+  somebody spent three calls discovering that `delphi_create` takes `content`.
+- Aliases for the names that cost a call every time: `from`/`to` on
+  `delphi_read`, `path` on `delphi_search`, `body`/`text` on `delphi_report`.
+- `delphi_test` given a project NAME says so, instead of answering with the
+  jail message that is true of any relative name and explains nothing.
+
+### Fixed
+- A character an old scripted edit ate back in v0.45: `'ackup'` had been
+  living as `'ackup'` in the build scanner's skip list.
+
+### Known, and the operator's call
+- Nothing in MCP deletes for real: `delphi_delete` is a recoverable trash and
+  `delphi_upload` backs up before overwriting. During this round that meant a
+  `.res` carrying the token survived a delete, inside the jail and
+  downloadable. It has been purged by hand. A hard-delete path (or a trash
+  the tools cannot read back) is the open question this leaves.
+
+
 ## [0.65.0-beta] - 2026-08-25
 
 The two walls the field kept naming. Neither was a bug: both were the shape

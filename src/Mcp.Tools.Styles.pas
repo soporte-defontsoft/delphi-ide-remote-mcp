@@ -573,37 +573,66 @@ end;
   and then the server's own settings.ini with the token in it. '' = clean. }
 function RcPathsDenied(const ARc: string): string;
 var
-  Txt, Enc, Cand, Denied: string;
-  M: TMatch;
-  Base: string;
-begin
-  Result := '';
-  Base := TPath.GetDirectoryName(TPath.GetFullPath(ARc));
-  try
-    Txt := PatchLoadText(ARc, Enc);
-  except
-    Exit(Format(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(ARc)]));
-  end;
-  for M in TRegEx.Matches(Txt,
-    '(?im)^\s*(?:#include\s+|[A-Za-z_][\w]*\s+[A-Za-z_][\w]*\s+)("[^"]+"|\S+)\s*$') do
+  Seen: TStringList;
+
+  // One file of the closure. Recurses through #include, because a .rc whose
+  // own lines are all legal can still pull in a second file that is not -
+  // and that is exactly how the guard was walked around the day after it was
+  // written (measured 2026-08-25: settings.ini, with the token, embedded in a
+  // downloadable .res through an #include of a .txt).
+  function Walk(const AFile: string; ADepth: Integer): string;
+  var
+    Txt, Enc, Cand, Base, Raw: string;
+    M: TMatch;
   begin
-    Cand := M.Groups[1].Value.Trim.Trim(['"']);
-    if Cand = '' then
-      Continue;
-    // a plain identifier (BEGIN/END blocks, inline data) is not a file
-    if not (Cand.Contains('.') or Cand.Contains('\\') or Cand.Contains('/')) then
-      Continue;
-    if not TPath.IsPathRooted(Cand) then
-      Cand := TPath.Combine(Base, Cand);
-    try
-      Cand := TPath.GetFullPath(Cand);
-    except
-      Exit(Format(SR_STYLES_RC_BADPATH_FMT, [M.Groups[1].Value.Trim]));
-    end;
-    Denied := ReadPathDenied(Cand);
-    if Denied <> '' then
+    Result := '';
+    if ADepth > 8 then
+      Exit(SR_STYLES_RC_DEEP);
+    if Seen.IndexOf(AFile.ToLower) >= 0 then
+      Exit; // already checked (and it stops an include cycle dead)
+    Seen.Add(AFile.ToLower);
+    if ReadPathDenied(AFile) <> '' then
       Exit(Format(SR_STYLES_RC_OUTSIDE_FMT,
-        [M.Groups[1].Value.Trim, TPath.GetFileName(ARc)]));
+        [TPath.GetFileName(AFile), TPath.GetFileName(ARc)]));
+    try
+      Txt := PatchLoadText(AFile, Enc);
+    except
+      Exit(Format(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(AFile)]));
+    end;
+    Base := TPath.GetDirectoryName(TPath.GetFullPath(AFile));
+    for M in TRegEx.Matches(Txt, '(?im)^\s*(?:#include\s+|[A-Za-z_]\w*\s+[A-Za-z_]\w*\s+)("[^"]+"|\S+)\s*$') do
+    begin
+      Raw := M.Groups[1].Value.Trim;
+      Cand := Raw.Trim(['''', '"']);
+      if Cand = '' then
+        Continue;
+      if not (Cand.Contains('.') or Cand.Contains('\') or Cand.Contains('/')) then
+        Continue;
+      if not TPath.IsPathRooted(Cand) then
+        Cand := TPath.Combine(Base, Cand);
+      try
+        Cand := TPath.GetFullPath(Cand);
+      except
+        Exit(Format(SR_STYLES_RC_BADPATH_FMT, [Raw]));
+      end;
+      if ReadPathDenied(Cand) <> '' then
+        Exit(Format(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
+      // an #include brings a whole new file's worth of references with it
+      if M.Value.TrimLeft.ToLower.StartsWith('#include') and TFile.Exists(Cand) then
+      begin
+        Result := Walk(Cand, ADepth + 1);
+        if Result <> '' then
+          Exit;
+      end;
+    end;
+  end;
+
+begin
+  Seen := TStringList.Create;
+  try
+    Result := Walk(TPath.GetFullPath(ARc), 0);
+  finally
+    Seen.Free;
   end;
 end;
 

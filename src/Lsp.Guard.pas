@@ -895,7 +895,7 @@ end;
 procedure ApplyArgAliases(const AToolName: string; AArguments: TJSONObject);
 const
   // tool, alias, real
-  Aliases: array [0 .. 15, 0 .. 2] of string = (
+  Aliases: array [0 .. 20, 0 .. 2] of string = (
     // "path" is what almost every other tool calls it; delphi_list calls it
     // "root" and delphi_projects too. Each spelling cost a wasted call
     // (measured 2026-08-25), and the fix is free: accept both.
@@ -905,6 +905,12 @@ const
     // add-unit/remove-unit take "path"; "unit" is what everybody types first.
     ('delphi_config', 'unit', 'path'),
     ('delphi_config', 'file', 'path'),
+    // Names that cost a call every time somebody guessed the obvious one.
+    ('delphi_read', 'from', 'fromline'),
+    ('delphi_read', 'to', 'toline'),
+    ('delphi_search', 'path', 'root'),
+    ('delphi_report', 'body', 'message'),
+    ('delphi_report', 'text', 'message'),
     ('vault_search', 'query', 'pattern'),
     ('vault_search', 'filter', 'pattern'),
     ('delphi_list', 'filter', 'pattern'),

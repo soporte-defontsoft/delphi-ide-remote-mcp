@@ -221,8 +221,21 @@ function TDelphiBuildTool.ExecuteWithParams(const Params: TDelphiBuildParams): s
 var
   R: TJSONObject;
 begin
-  R := RunMsBuild(Params.Project, Params.Platform, Params.Config, Params.Target,
-    Params.Profile, Params.DeviceId);
+  // The engine refuses two things by POLICY (a project that would run a shell
+  // during the build, and a {$I}/{$R} pointing outside the jail) and it does
+  // it by raising. Raising means the dispatcher labels it "Error executing
+  // tool", which this server's own rules define as an internal failure worth
+  // reporting as a bug. A refusal is not a crash: it goes out as itself.
+  try
+    R := RunMsBuild(Params.Project, Params.Platform, Params.Config, Params.Target,
+      Params.Profile, Params.DeviceId);
+  except
+    on E: Exception do
+      if E.Message.StartsWith('RECHAZADO') then
+        Exit(E.Message)
+      else
+        raise;
+  end;
   try
     Result := R.ToJSON;
   finally

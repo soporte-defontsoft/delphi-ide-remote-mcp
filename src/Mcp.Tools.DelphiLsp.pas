@@ -317,10 +317,60 @@ end;
   the picture, 7 of them reads). }
 function InterfaceDigest(const APath: string): TJSONObject;
 var
-  Text, Enc, L, Section: string;
+  Text, Enc, L, Cur, Owner: string;
   Lines: TArray<string>;
   Arr: TJSONArray;
-  I, Kept: Integer;
+  Obj: TJSONObject;
+  I, J, Kept, Depth: Integer;
+
+  // How many '(' are still open in AText.
+  function Unbalanced(const AText: string): Integer;
+  var
+    C: Char;
+  begin
+    Result := 0;
+    for C in AText do
+      if C = '(' then
+        Inc(Result)
+      else if C = ')' then
+        Dec(Result);
+    if Result < 0 then
+      Result := 0;
+  end;
+
+  // A declaration can span several lines; the reader needs the WHOLE thing.
+  // "function Alta(const A, B: string; C: Integer;" told nobody what it
+  // returns or that the last parameter has a default (field round 12).
+  function WholeStatement(var AIdx: Integer): string;
+  var
+    K: Integer;
+  begin
+    Result := Lines[AIdx].Trim;
+    K := AIdx;
+    // A class/record/interface header OPENS a block; it is not an unfinished
+    // statement, and joining what comes after it glued the first field onto
+    // the class line (caught the same day it was written).
+    if TRegEx.IsMatch(Result,
+      '(?i)^[A-Za-z_]\w*[ ]*=[ ]*(packed[ ]+)?(class|record|interface)\b') and
+       not Result.EndsWith(';') then
+      Exit;
+    // A ';' INSIDE a parameter list is a separator, not the end of anything:
+    // "function Alta(const A, B: string; C: Integer;" looks finished and is
+    // not, so the return type and the default value were being dropped -
+    // exactly the signature somebody had to respect (field round 12). Count
+    // the brackets: the statement ends at a ';' with none open.
+    while (K < High(Lines)) and (K - AIdx < 8) and
+          (not Result.EndsWith(';') or (Unbalanced(Result) > 0)) and
+          not Result.EndsWith('=') do
+    begin
+      Inc(K);
+      if Lines[K].Trim = '' then
+        Break;
+      Result := Result + ' ' + Lines[K].Trim;
+    end;
+    AIdx := K;
+  end;
+
 begin
   Result := TJSONObject.Create;
   Result.AddPair('unit', TPath.GetFileNameWithoutExtension(APath));
@@ -334,45 +384,74 @@ begin
   Lines := Text.Replace(#13#10, #10).Split([#10]);
   Arr := TJSONArray.Create;
   Result.AddPair('declares', Arr);
-  Section := '';
+  Cur := '';
+  Owner := '';
+  Depth := 0;
   Kept := 0;
-  for I := 0 to High(Lines) do
+  I := 0;
+  while I <= High(Lines) do
   begin
     L := Lines[I].Trim;
-    if TRegEx.IsMatch(L, '(?i)^interface\s*$') then
+    if TRegEx.IsMatch(L, '(?i)^interface[ ]*$') then
     begin
-      Section := 'interface';
+      Cur := 'interface';
+      Inc(I);
       Continue;
     end;
-    if TRegEx.IsMatch(L, '(?i)^implementation\s*$') then
+    if TRegEx.IsMatch(L, '(?i)^implementation[ ]*$') then
       Break;
-    if Section <> 'interface' then
+    if Cur <> 'interface' then
+    begin
+      Inc(I);
       Continue;
-    // uses clause of the interface: the unit's own dependencies, worth one line
+    end;
     if TRegEx.IsMatch(L, '(?i)^uses\b') then
     begin
-      var U := L;
-      var J := I;
-      while (J < High(Lines)) and not U.Contains(';') do
-      begin
-        Inc(J);
-        U := U + ' ' + Lines[J].Trim;
-      end;
-      Result.AddPair('uses', U.Substring(4).Replace(';', '').Trim);
+      J := I;
+      Result.AddPair('uses', WholeStatement(J).Substring(4).Replace(';', '').Trim);
+      I := J + 1;
       Continue;
     end;
-    // what a reader is looking for: types, routines, constants
-    if TRegEx.IsMatch(L, '(?i)^(type|const|var|resourcestring)\s*$') then
+    if TRegEx.IsMatch(L, '(?i)^(type|const|var|resourcestring)[ ]*$') then
+    begin
+      Inc(I);
       Continue;
-    if TRegEx.IsMatch(L,
-      '(?i)^(class\s+)?(function|procedure|constructor|destructor|property)\b') or
-       TRegEx.IsMatch(L, '^[A-Za-z_]\w*\s*=\s*(class|record|interface|packed|\()') or
-       TRegEx.IsMatch(L, '(?i)^[A-Za-z_]\w*\s*=\s*(type\s+)?[A-Za-z_][\w.<>, ]*;\s*(//.*)?$') then
+    end;
+    // which class we are inside, and where it ends: a flat list left the
+    // reader guessing which member belonged to which class, and hid the
+    // private fields entirely - one of them being the subject of a refactor.
+    if TRegEx.IsMatch(L, '^[A-Za-z_]\w*[ ]*=[ ]*(class|record|interface)\b') then
+    begin
+      Owner := L.Split(['='])[0].Trim;
+      Depth := 1;
+    end
+    else if (Owner <> '') and TRegEx.IsMatch(L, '(?i)^end;') then
+    begin
+      Owner := '';
+      Depth := 0;
+    end;
+    J := I;
+    if TRegEx.IsMatch(L, '(?i)^(class[ ]+)?(function|procedure|constructor|destructor|property)\b') or
+       TRegEx.IsMatch(L, '^[A-Za-z_]\w*[ ]*=[ ]*(class|record|interface|packed|\()') or
+       TRegEx.IsMatch(L, '(?i)^[A-Za-z_]\w*[ ]*=[ ]*') or
+       ((Depth > 0) and TRegEx.IsMatch(L, '^[A-Za-z_]\w*[ ]*:[ ]*[A-Za-z_]')) then
     begin
       Inc(Kept);
-      if Arr.Count < 200 then
-        Arr.Add(L);
+      if Arr.Count < 300 then
+      begin
+        Obj := TJSONObject.Create;
+        Arr.AddElement(Obj);
+        Obj.AddPair('decl', WholeStatement(J));
+        if (Owner <> '') and not L.StartsWith(Owner) then
+          Obj.AddPair('of', Owner);
+        Obj.AddPair('line', TJSONNumber.Create(I + 1));
+      end
+      else
+        J := I;
     end;
+    if J > I then
+      I := J;
+    Inc(I);
   end;
   Result.AddPair('total', TJSONNumber.Create(Kept));
   if Kept > Arr.Count then
@@ -382,23 +461,28 @@ end;
 function TDelphiSymbolsTool.ExecuteWithParams(const Params: TDelphiFileParams): string;
 var
   Client: TLspClient;
-  Settings: string;
+  Settings, Folder: string;
 begin
   // A FOLDER means "what is in here", answered from the interface sections of
   // every unit at once: the question somebody arriving at unfamiliar code
   // actually has, and it used to cost one call per file.
-  if TDirectory.Exists(Params.Path) then
+  // "...\dev4\" is the same folder as "...\dev4": answering "no es un fuente
+  // Delphi ()" - with an empty extension - for a trailing separator cost a
+  // call and read as "folders are not supported", which is the opposite of
+  // what this now does (field round 12).
+  Folder := ExcludeTrailingPathDelimiter(Params.Path.Trim);
+  if TDirectory.Exists(Folder) then
   begin
-    Result := ReadPathDenied(Params.Path);
+    Result := ReadPathDenied(Folder);
     if Result <> '' then
       Exit;
     var Ret := TJSONObject.Create;
     try
       var Units := TJSONArray.Create;
-      Ret.AddPair('folder', Params.Path);
+      Ret.AddPair('folder', Folder);
       Ret.AddPair('units', Units);
       var N := 0;
-      for var F in TDirectory.GetFiles(Params.Path, '*.pas',
+      for var F in TDirectory.GetFiles(Folder, '*.pas',
         TSearchOption.soAllDirectories) do
       begin
         if SkipIdeArtifacts(F) then
@@ -416,7 +500,15 @@ begin
       Ret.Free;
     end;
   end;
-  Result := NotDelphiSource(Params.Path);
+  // The JAIL first, and the same refusal whether the file is there or not.
+  // Checking existence first told a caller which Delphi files exist anywhere
+  // on the disk: "outside the workspaces" for one that is there, "does not
+  // exist" for one that is not - a map of the machine, one call at a time
+  // (measured 2026-08-25). delphi_read has always answered the same either
+  // way; this now does too.
+  Result := ReadPathDenied(Params.Path);
+  if Result = '' then
+    Result := NotDelphiSource(Params.Path);
   if (Result = '') and not TFile.Exists(Params.Path) then
     Result := Format(SR_LSP_NO_FILE_FMT, [Params.Path]);
   if Result <> '' then

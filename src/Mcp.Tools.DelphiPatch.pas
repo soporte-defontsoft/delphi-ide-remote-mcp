@@ -160,6 +160,111 @@ end;
 //
 // Format: a JSON array, [{"old": "...", "new": "...", "atline": 12}, ...],
 // applied IN ORDER, each one with exactly the semantics of a single edit.
+// The 1-based line of the Nth line equal to AAnchor, 0 when there is no
+// such thing. Resolved at the moment the entry runs, so it follows the file
+// as the batch reshapes it.
+function NthOccurrenceLine(const APath, AAnchor: string; AN: Integer): Integer;
+var
+  Lines: TArray<string>;
+  Enc: string;
+  I, Seen: Integer;
+begin
+  Result := 0;
+  if (AN <= 0) or (AAnchor.Trim = '') then
+    Exit;
+  try
+    Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
+  except
+    Exit;
+  end;
+  Seen := 0;
+  for I := 0 to High(Lines) do
+    if Lines[I].Trim = AAnchor.Trim then
+    begin
+      Inc(Seen);
+      if Seen = AN then
+        Exit(I + 1);
+    end;
+end;
+
+// Replace a CONTIGUOUS BLOCK of lines, matched whole. Encoding and line
+// endings are the file's, untouched, exactly as a single-line edit leaves
+// them.
+function ApplyBlockEdit(const APath, AOld, ANew: string;
+  AOccurrence: Integer): string;
+var
+  Enc, Text, Eol: string;
+  Lines, OldLines, NewLines: TArray<string>;
+  I, J, Hit, Count, Seen: Integer;
+  Ok: Boolean;
+  Sb: TStringBuilder;
+begin
+  Text := PatchLoadText(APath, Enc);
+  if Text.Contains(#13#10) then
+    Eol := #13#10
+  else
+    Eol := #10;
+  Lines := Text.Replace(#13#10, #10).Split([#10]);
+  OldLines := AOld.Replace(#13#10, #10).Split([#10]);
+  // a trailing newline in the anchor is the caller's editor, not a line
+  while (Length(OldLines) > 1) and (OldLines[High(OldLines)].Trim = '') do
+    SetLength(OldLines, Length(OldLines) - 1);
+  if Length(OldLines) < 2 then
+    Exit(SR_PATCH_BLOCK_SHORT);
+  Hit := -1;
+  Count := 0;
+  Seen := 0;
+  for I := 0 to Length(Lines) - Length(OldLines) do
+  begin
+    Ok := True;
+    for J := 0 to High(OldLines) do
+      if Lines[I + J].Trim <> OldLines[J].Trim then
+      begin
+        Ok := False;
+        Break;
+      end;
+    if Ok then
+    begin
+      Inc(Count);
+      Inc(Seen);
+      if (AOccurrence > 0) and (Seen = AOccurrence) then
+      begin
+        Hit := I;
+        Count := 1;
+        Break;
+      end;
+      if AOccurrence = 0 then
+        Hit := I;
+    end;
+  end;
+  if Hit < 0 then
+    Exit(Format(SR_PATCH_BLOCK_MISSING_FMT,
+      [Length(OldLines), OldLines[0].Trim]));
+  if Count > 1 then
+    Exit(Format(SR_PATCH_BLOCK_AMBIGUOUS_FMT, [Count, OldLines[0].Trim]));
+  NewLines := ANew.Replace(#13#10, #10).Split([#10]);
+  while (Length(NewLines) > 1) and (NewLines[High(NewLines)].Trim = '') do
+    SetLength(NewLines, Length(NewLines) - 1);
+  Sb := TStringBuilder.Create;
+  try
+    for I := 0 to Hit - 1 do
+      Sb.Append(Lines[I]).Append(Eol);
+    if not ((Length(NewLines) = 1) and (NewLines[0] = '')) then
+      for I := 0 to High(NewLines) do
+        Sb.Append(NewLines[I]).Append(Eol);
+    for I := Hit + Length(OldLines) to High(Lines) do
+    begin
+      Sb.Append(Lines[I]);
+      if I < High(Lines) then
+        Sb.Append(Eol);
+    end;
+    PatchSaveText(APath, Sb.ToString, Enc);
+  finally
+    Sb.Free;
+  end;
+  Result := Format(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
+end;
+
 function ApplyEdits(const APath, AEditsJson: string): string;
 var
   Arr: TJSONArray;
@@ -202,6 +307,27 @@ begin
           Break;
         end;
         Obj := TJSONObject(V);
+        // A MULTI-LINE anchor. The one-line rule protects a lone edit, where
+        // a long anchor is a long chance to mistype; inside a batch, where
+        // the caller is replacing a whole method body it just copied, it was
+        // pure work: six lines meant six entries to line up by hand (field
+        // round 12). Here the block is matched WHOLE and exactly, which is
+        // its own protection, and it must appear once (or "occurrence" says
+        // which one).
+        if Obj.GetValue<string>('old', '').Contains(#10) then
+        begin
+          One := ApplyBlockEdit(APath, Obj.GetValue<string>('old', ''),
+            Obj.GetValue<string>('new', ''), Obj.GetValue<Integer>('occurrence', 0));
+          if One.StartsWith('RECHAZADO') or One.StartsWith('error') then
+          begin
+            Failed := N;
+            Sb.AppendLine(Format('  %d: %s', [N, One.Replace(#10, ' ')]));
+            Break;
+          end;
+          Sb.AppendLine(Format('  %d OK (bloque de %d lineas)',
+            [N, Length(Obj.GetValue<string>('old', '').Split([#10]))]));
+          Continue;
+        end;
         A := Default(TPatchArgs);
         A.Path := APath;
         A.OldLine := Obj.GetValue<string>('old', '');
@@ -209,6 +335,13 @@ begin
         A.HasOld := A.OldLine <> '';
         A.HasNew := (A.NewText <> '') or A.HasOld;
         A.AtLine := Obj.GetValue<Integer>('atline', 0);
+        // "occurrence" instead of counting lines: inside a batch the line
+        // numbers MOVE as earlier entries add or remove lines, so an atline
+        // taken from the original file drifts. Which of the N identical
+        // lines you meant does not drift (field round 12).
+        if (A.AtLine = 0) and (Obj.GetValue<Integer>('occurrence', 0) > 0) then
+          A.AtLine := NthOccurrenceLine(APath, A.OldLine,
+            Obj.GetValue<Integer>('occurrence', 0));
         A.DeleteLine := Obj.GetValue<Boolean>('delete', False);
         One := ExecutePatch(A);
         // The engine says RECHAZADO / error when it refused; anything else is

@@ -258,6 +258,16 @@ var
   Sb: TStringBuilder;
 begin
   Result := TJSONObject.Create;
+  // A bare name ("InventarioTest") is what delphi_projects lists, so it is
+  // the obvious thing to send - and it came back as "outside the allowed
+  // workspaces", which is true of any relative name and explains nothing
+  // (field round 12).
+  if (AProject.Trim <> '') and not TPath.IsPathRooted(AProject.Trim) and
+     not AProject.Contains('') and not AProject.Contains('/') then
+  begin
+    Result.AddPair('error', Format(SR_TEST_NAME_NOT_PATH_FMT, [AProject.Trim]));
+    Exit;
+  end;
   Denied := PathDenied(AProject); // running what a project built is a write-side act
   if Denied <> '' then
   begin

@@ -736,7 +736,7 @@ begin
       begin
         Dir := TPath.GetDirectoryName(F);
         if Dir.Contains('__history') or Dir.Contains('__recovery') or
-           ContainsText(Dir, 'ackup') then
+           ContainsText(Dir, '\backup') then
           Continue;
         if not L.Contains(Dir) then
           L.Add(Dir);
@@ -754,6 +754,77 @@ begin
     Result := L.ToArray;
   finally
     L.Free;
+  end;
+end;
+
+// Compiler directives that pull a FILE into the build: {$I}/{$INCLUDE} for
+// source, {$R}/{$RESOURCE} for resources. The compiler opens whatever they
+// name with the SERVER's own access, and what comes in leaves again two ways:
+// baked into the binary (which delphi_package + delphi_fetch hand over) and
+// quoted word by word in the compiler's errors when the file is not Pascal -
+// measured 2026-08-25 with a text file outside every root, whose words came
+// back as "Undeclared identifier: 'esto'", "'secreto'"...
+//
+// Same hole as the .rc of delphi_styles, different door, same answer: every
+// path they name is resolved and checked against the read jail BEFORE msbuild
+// starts. Wildcards ({$R *.res}, {$R *.dfm}) and relative names that stay
+// inside are untouched - that is what an ordinary project uses.
+function IncludeDirectivesDenied(const ADprojPath: string): string;
+var
+  Dpr, Txt, Enc, Cand, Base: string;
+  Files: TList<string>;
+  M: TMatch;
+begin
+  Result := '';
+  Dpr := TPath.ChangeExtension(ADprojPath, '.dpr');
+  Files := TList<string>.Create;
+  try
+    if TFile.Exists(Dpr) then
+      Files.Add(Dpr);
+    // Everything the compiler could reach from the project's own folder. Not
+    // the .dproj's unit list: a unit can be pulled in by a search path and
+    // still carry a directive, and this check is cheap enough to be broad.
+    Base := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
+    if TDirectory.Exists(Base) then
+      for var Ext in TArray<string>.Create('*.pas', '*.dpr', '*.inc', '*.dpk') do
+        for var SF in TDirectory.GetFiles(Base, Ext, TSearchOption.soAllDirectories) do
+          if not Files.Contains(SF) then
+            Files.Add(SF);
+    for var F in Files do
+    begin
+      try
+        Txt := PatchLoadText(F, Enc);
+      except
+        Continue;
+      end;
+      Base := TPath.GetDirectoryName(F);
+      for M in TRegEx.Matches(Txt, '(?i)\{\$(I|INCLUDE|R|RESOURCE|L|LINK)\s+([^}]+)\}') do
+      begin
+        Cand := M.Groups[2].Value.Trim.Trim(['''', '"']);
+        // a wildcard is the IDE's own boilerplate ({$R *.res}, {$R *.dfm})
+        if (Cand = '') or Cand.Contains('*') then
+          Continue;
+        // {$I+} / {$I-} and friends are switches, not files
+        if (Length(Cand) <= 1) or CharInSet(Cand[1], ['+', '-']) then
+          Continue;
+        // {$R file.res name}: only the first token is a path
+        Cand := Cand.Split([' ', #9])[0].Trim(['''', '"']);
+        if Cand = '' then
+          Continue;
+        if not TPath.IsPathRooted(Cand) then
+          Cand := TPath.Combine(Base, Cand);
+        try
+          Cand := TPath.GetFullPath(Cand);
+        except
+          Continue;
+        end;
+        if ReadPathDenied(Cand) <> '' then
+          Exit(Format(SR_BUILD_INCLUDE_OUTSIDE_FMT,
+            [M.Groups[0].Value.Trim, TPath.GetFileName(F)]));
+      end;
+    end;
+  finally
+    Files.Free;
   end;
 end;
 
@@ -791,6 +862,15 @@ begin
         [TPath.GetFullPath(ADprojPath), Hazard]));
       raise Exception.Create(Format(SR_BUILD_HAZARD_FMT, [Hazard]));
     end;
+  end;
+  // Before a single line is compiled: what does this project pull in from
+  // outside, and is it allowed to? Same shape as the hazard check above.
+  var IncBad := IncludeDirectivesDenied(ADprojPath);
+  if IncBad <> '' then
+  begin
+    TLogger.Warning(Format('delphi_build: REFUSED "%s" - %s',
+      [TPath.GetFullPath(ADprojPath), IncBad]));
+    raise Exception.Create(IncBad);
   end;
   Info := DiscoverRadStudio;
   if not Info.Found then
