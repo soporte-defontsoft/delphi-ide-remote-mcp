@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.66.0-beta';
+  SERVER_VERSION = '0.67.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -2143,6 +2143,31 @@ const
     'ese fichero hoy, la copia que hay es la ORIGINAL de esta manana, que es ' +
     'la que vale). Si querias anadir al final y no reemplazar, usa offset=<el ' +
     'tamano actual>, no offset=0.';
+
+  SP_DELETE_PURGE =
+    'true = BORRAR DE VERDAD, sin vuelta atras. Solo vale DENTRO de la ' +
+    'papelera (__delphi-patch): sirve para limpiar tus propias copias cuando ' +
+    'ya no las necesitas, no para saltarte la papelera. Un fichero vivo ' +
+    'siempre pasa por ella primero, y eso no se puede desactivar.';
+
+  SR_FILE_PURGE_ONLY_TRASH =
+    'RECHAZADO: purge=true solo se puede usar DENTRO de la papelera ' +
+    '(__delphi-patch). Para un fichero vivo, borralo normal: va a la ' +
+    'papelera, y si de verdad quieres que desaparezca, purgalo desde alli. ' +
+    'Ese doble paso es la red de la que dependen todas las demas tools.';
+
+  SR_FILE_PURGE_NOT_ROOT =
+    'RECHAZADO: eso es la carpeta __delphi-patch ENTERA, y ahi dentro hay ' +
+    'copias de otros. Purga lo tuyo: la subcarpeta del dia, o la copia ' +
+    'concreta que quieras quitar de en medio.';
+
+  SR_FILE_PURGE_FAILED_FMT =
+    'RECHAZADO: no he podido purgar %s (%s). Si algo lo tiene abierto, ' +
+    'reintenta en un momento.';
+
+  SN_FILE_PURGED_FMT =
+    'PURGADO %s. Esto no tiene vuelta atras: era una copia de la papelera y ' +
+    'ya no esta.';
 
   SR_FILE_DELETE_EMPTY_SHELL_FMT =
     'CASI: TODO el contenido de %s esta ya fuera (copia recuperable en %s), ' +

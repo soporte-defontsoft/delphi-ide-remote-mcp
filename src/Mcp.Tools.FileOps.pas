@@ -11,16 +11,20 @@ interface
 uses
   System.SysUtils,
   MCPServer.Tool.Base,
-  MCPServer.Types;
+  MCPServer.Types,
+  Lsp.Texts;   // SchemaDescription texts: attributes are interface-level
 
 type
   TDelphiDeleteParams = class
   private
     FPath: string;
+    FPurge: Boolean;
   public
     [SchemaDescription('Absolute path of the file or folder to delete (inside the workspace roots). Moved to a recoverable trash, not hard-deleted')]
     [Required]
     property Path: string read FPath write FPath;
+    [SchemaDescription(SP_DELETE_PURGE)]
+    property Purge: Boolean read FPurge write FPurge;
   end;
 
   TDelphiMoveParams = class
@@ -59,7 +63,6 @@ uses
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.Patch,
-  Lsp.Texts,
   Lsp.ProjectUnits;
 
 const
@@ -174,6 +177,46 @@ begin
   Denied := PathDenied(Params.Path);
   if Denied <> '' then
     Exit(Denied);
+  // PURGE: the one way anything leaves for good, and it only reaches INSIDE
+  // the trash. The rule that a live file always goes to the recoverable copy
+  // first is what makes every other write safe, so it does not bend; but an
+  // agent that made a mess had no way to clean it up, and five of them in one
+  // day left 112 MB of copies nobody could remove through MCP (measured
+  // 2026-08-25). Worse, a file that should never have existed survived its
+  // own delete, still inside the jail and still downloadable.
+  if Params.Purge then
+  begin
+    if not IsBackupPath(Params.Path) then
+      Exit(SR_FILE_PURGE_ONLY_TRASH);
+    if IsBackupRoot(Params.Path) then
+      Exit(SR_FILE_PURGE_NOT_ROOT);
+    if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
+      Exit('RECHAZADO: no existe ' + Params.Path);
+    try
+      if TDirectory.Exists(Params.Path) then
+      begin
+        ClearReadOnlyTree(Params.Path);
+        TDirectory.Delete(Params.Path, True);
+      end
+      else
+      begin
+        if (TFile.GetAttributes(Params.Path) * [TFileAttribute.faReadOnly]) <> [] then
+          TFile.SetAttributes(Params.Path,
+            TFile.GetAttributes(Params.Path) - [TFileAttribute.faReadOnly]);
+        TFile.Delete(Params.Path);
+      end;
+    except
+      on E: Exception do
+        Exit(Format(SR_FILE_PURGE_FAILED_FMT,
+          [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), E.Message]));
+    end;
+    if StillThere(Params.Path) then
+      Exit(Format(SR_FILE_PURGE_FAILED_FMT,
+        [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
+         'sigue ahi despues de borrarlo']));
+    Exit(Format(SN_FILE_PURGED_FMT,
+      [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
+  end;
   if IsBackupPath(Params.Path) then
     Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la papelera/copias de esta tool. ' +
       'No se borra desde aqui (purgala manualmente si de verdad quieres).');

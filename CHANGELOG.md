@@ -8,6 +8,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.67.0-beta] - 2026-08-25
+
+The last wall the field named: nothing here deleted for real.
+
+### Added
+- **`delphi_delete purge=true`** - the one way something leaves for good, and
+  it only reaches INSIDE the trash. Five agents in one day left 112 MB of
+  copies none of them could remove through MCP, and during a security audit a
+  `.res` that should never have existed survived its own delete - still
+  inside the jail, still downloadable. The rule that a live file always goes
+  to the recoverable copy first does not bend (that is what makes every other
+  write safe): purge refuses on anything live, and refuses on the trash root
+  as a whole, because other people's copies are in there too.
+
+
 ## [0.66.0-beta] - 2026-08-25
 
 Field round 12. An auditor put the finding of the previous round in one

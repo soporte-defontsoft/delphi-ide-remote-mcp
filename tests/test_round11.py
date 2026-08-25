@@ -325,6 +325,28 @@ r2 = call(A, 'delphi_symbols', {'path': SRC})
 check('S6 fuera de la jaula: el MISMO rechazo exista o no',
       ('FUERA' in r1) and ('FUERA' in r2), (r1[:90], r2[:90]))
 
+# ---------------------------------------- el ultimo muro: borrar de verdad --
+# Cinco agentes en un dia dejaron 112 MB de copias que ninguno podia quitar, y
+# un .res que no debia existir sobrevivio a su propio borrado, dentro de la
+# jaula y descargable. purge=true borra de verdad, y SOLO dentro de la papelera.
+PU = os.path.join(BASE, 'purgar.txt')
+open(PU, 'w', encoding='utf-8').write('x')
+r = call(A, 'delphi_delete', {'path': PU, 'purge': True})
+check('P1 purge sobre un fichero VIVO: RECHAZADO (la papelera no se salta)',
+      'RECHAZADO' in r and os.path.exists(PU), r[:200])
+r = call(A, 'delphi_delete', {'path': PU})
+import glob as _glob
+_cop = _glob.glob(os.path.join(BASE, '__delphi-patch', '*', 'deleted', 'purgar.txt-*'))
+check('P1 el borrado normal sigue dejando copia', len(_cop) == 1, r[:150])
+if _cop:
+    r = call(A, 'delphi_delete', {'path': _cop[0], 'purge': True})
+    check('P2 purge de la copia: se va de verdad',
+          'PURGADO' in r and not os.path.exists(_cop[0]), r[:200])
+r = call(A, 'delphi_delete', {'path': os.path.join(BASE, '__delphi-patch'),
+                              'purge': True})
+check('P3 la papelera ENTERA no se purga de una (ahi hay copias de otros)',
+      'RECHAZADO' in r, r[:200])
+
 A['p'].kill()
 print('\n== round-11 battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)
