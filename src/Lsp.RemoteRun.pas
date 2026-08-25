@@ -30,6 +30,14 @@ uses
   target). Returns '' plus the launch line in AHowTo, or a refusal. }
 function InstallRunner(const AProfile: string; out AHowTo: string): string;
 
+{ Starts (or confirms) the runner on the target of AProfile. Measured
+  2026-08-25: paclient's --put FLAGS are not just permissions - flag 5 makes
+  PAServer EXECUTE the file with /bin/sh on the target, and flag 3 executes
+  it directly. So the launch needs no human shell: we send a small sh script
+  that sets the runner going with setsid (surviving PAServer's cleanup) and
+  writes what it saw. }
+function StartRunner(const AProfile: string; out AStatus: string): string;
+
 { Runs the program DEPLOYED for ADprojPath on the machine of PAServer profile
   AProfile. The remote path is DERIVED here, never taken from the caller:
   <windows user>-<profile>/<Project>/<Project> - the folder delphi_build
@@ -126,12 +134,67 @@ begin
   Script := RunnerScriptPath;
   if Script = '' then
     Exit(SR_REMOTERUN_NO_SCRIPT);
-  // flag 5 = script: PAServer marks it executable on the target
-  Ops := Format('"--put=%s,%s,5,mcp-runner.py"', [Script, RUNNER_DIR]);
+  // flag 0 = plain data. NOT 5: measured 2026-08-25, PAServer EXECUTES a
+  // flag-5 file (with /bin/sh, so a .py dies) and the copy does not stay.
+  Ops := Format('"--put=%s,%s,0,mcp-runner.py"', [Script, RUNNER_DIR]);
   Rc := Paclient(Pc, Ops, AProfile, Output);
   if Rc <> 0 then
     Exit(Format(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
   AHowTo := SN_REMOTERUN_INSTALLED;
+end;
+
+function StartRunner(const AProfile: string; out AStatus: string): string;
+var
+  Pc, TmpDir, ShPath, StatusPath, Ops, Output, Sh: string;
+  Enc: TEncoding;
+begin
+  AStatus := '';
+  Pc := PaClientPath;
+  if Pc = '' then
+    Exit(SR_REMOTERUN_NO_PACLIENT);
+  TmpDir := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-remoterun');
+  TDirectory.CreateDirectory(TmpDir);
+  ShPath := TPath.Combine(TmpDir, 'start-runner.sh');
+  StatusPath := TPath.Combine(TmpDir, 'mcp-runner-status.txt');
+  if TFile.Exists(StatusPath) then
+    TFile.Delete(StatusPath);
+  // POSIX script, LF endings, no BOM: /bin/sh chokes on CRLF and on a BOM
+  Sh :=
+    '#!/bin/sh'#10 +
+    'D="$(cd "$(dirname "$0")" && pwd)"'#10 +
+    '{'#10 +
+    '  if pgrep -f "python3 .*mcp-runner.py" >/dev/null 2>&1; then'#10 +
+    '    echo "RUNNER YA VIVO"'#10 +
+    '  else'#10 +
+    '    cd "$D" && setsid /usr/bin/python3 "$D/mcp-runner.py" >> "$D/runner.log" 2>&1 < /dev/null &'#10 +
+    '    sleep 2'#10 +
+    '  fi'#10 +
+    '  pgrep -af "mcp-runner.py" || echo "NO ARRANCO - mira runner.log"'#10 +
+    '  tail -3 "$D/runner.log" 2>/dev/null'#10 +
+    '} > /tmp/mcp-runner-status.txt 2>&1'#10 +
+    'exit 0'#10;
+  Enc := TUTF8Encoding.Create(False);
+  try
+    TFile.WriteAllText(ShPath, Sh, Enc);
+  finally
+    Enc.Free;
+  end;
+  // flag 5: PAServer RUNS it on the target (this is the whole trick)
+  Ops := Format('"--put=%s,%s,5,start-runner.sh"', [ShPath, RUNNER_DIR]);
+  Paclient(Pc, Ops, AProfile, Output); // a non-zero exit is the script's own
+  TFile.Delete(ShPath);
+  Sleep(1500);
+  Ops := Format('"--get=/tmp/mcp-runner-status.txt,%s"', [TmpDir]);
+  if (Paclient(Pc, Ops, AProfile, Output) = 0) and TFile.Exists(StatusPath) then
+  begin
+    AStatus := TFile.ReadAllText(StatusPath, TEncoding.UTF8).TrimRight;
+    TFile.Delete(StatusPath);
+  end;
+  if AStatus = '' then
+    Exit(SR_REMOTERUN_START_NOSTATUS);
+  if not AStatus.Contains('mcp-runner.py') then
+    Exit(Format(SR_REMOTERUN_START_FAILED_FMT, [AStatus]));
+  AStatus := Format(SN_REMOTERUN_STARTED_FMT, [AProfile, AStatus]);
 end;
 
 function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
@@ -162,8 +225,12 @@ begin
   // 2026-08-24: "no se debe poder ejecutar otra cosa que no sea el programa
   // desplegado"), so a script or any other binary sitting in the scratch is
   // out of reach even for a full-access token.
+  // The runner lives in <scratch>/<user>-<profile>/_mcp-runner, so ITS root
+  // is already the profile folder: the path we send is relative to THAT,
+  // just <Project>/<Project>. Sending the <user>-<profile> segment too
+  // doubled it (measured end to end 2026-08-25 - the first real remote run).
   ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
-  DeployRel := GetEnvironmentVariable('USERNAME') + '-' + AProfile + '/' + ProjName;
+  DeployRel := ProjName;
   if AExeName = '' then
     ARemoteExe := DeployRel + '/' + ProjName
   else

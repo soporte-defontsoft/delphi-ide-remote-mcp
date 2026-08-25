@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.55.0-beta';
+  SERVER_VERSION = '0.56.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -366,7 +366,9 @@ const
     '"exe" on the target of profile "name" and return its exit code and ' +
     'output - needs the mcp-runner script installed on the target; see the ' +
     'note it returns; it runs the program THAT PROJECT deployed and nothing ' +
-    'else on that machine) | install-runner (copy the runner to the target of ' +
+    'else on that machine) | start-runner (start the runner on the target of ' +
+    'profile "name" - no shell needed there: PAServer runs the launcher) | ' +
+    'install-runner (copy the runner to the target of ' +
     'profile "name" so remote-run can work; it then needs ONE manual launch ' +
     'on the target - the answer gives the exact line). Default: platforms';
   SP_PASERVER_PROJECT =
@@ -402,7 +404,7 @@ const
 
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | add-profile ' +
-    '| test-connection | get-sdk | install-runner | remote-run';
+    '| test-connection | get-sdk | install-runner | start-runner | remote-run';
 
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     'RECHAZADO: el proyecto "%s" no esta en la lista de proyectos que este ' +
@@ -445,13 +447,25 @@ const
 
   SN_REMOTERUN_INSTALLED =
     'RUNNER COPIADO al target, en <scratch-dir>/_mcp-runner/mcp-runner.py. ' +
-    'FALTA ARRANCARLO una vez: en la maquina destino, dentro de la scratch ' +
-    'dir de PAServer (por defecto ~/PAServer/scratch-dir), ejecuta: ' +
-    'nohup python3 _mcp-runner/mcp-runner.py >> _mcp-runner/runner.log 2>&1 &' +
-    ' -- El runner crea sus carpetas (jobs, out, done) al arrancar y se ' +
-    'queda vigilando; despues, remote-run ya funciona. Ese unico paso ' +
-    'necesita una shell en el destino (una persona, o un agente que viva ' +
-    'alli): es el opt-in a la ejecucion remota, deliberado.';
+    'Ahora arrancalo con command=start-runner (mismo perfil): no hace falta ' +
+    'shell en el destino, PAServer ejecuta el lanzador. El runner crea sus ' +
+    'carpetas (jobs, out, done), se queda vigilando y sobrevive a la sesion; ' +
+    'despues, remote-run ya funciona.';
+
+  SR_REMOTERUN_START_NOSTATUS =
+    'error: el target no devolvio estado del arranque. PAServer esta vivo? ' +
+    'Prueba delphi_paserver command=install-runner y repite start-runner.';
+
+  SR_REMOTERUN_START_FAILED_FMT =
+    'error: el runner NO arranco en el target. Lo que dijo la maquina: %s -- ' +
+    'Comprueba que existe python3 alli y que install-runner dejo ' +
+    'mcp-runner.py en _mcp-runner.';
+
+  SN_REMOTERUN_STARTED_FMT =
+    'RUNNER EN MARCHA en el target del perfil "%s". Estado que devolvio la ' +
+    'maquina: %s -- Ya puedes usar command=remote-run. El runner sobrevive a ' +
+    'la sesion (setsid) pero NO a un reinicio del target: si el target se ' +
+    'reinicia, vuelve a lanzar start-runner.';
 
   SR_REMOTERUN_PUT_FMT =
     'error: no se pudo enviar el trabajo al target (paclient exit %d): %s. ' +

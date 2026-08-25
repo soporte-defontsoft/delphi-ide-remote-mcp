@@ -8,6 +8,33 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.56.0-beta] - 2026-08-25
+
+Remote execution CLOSED end to end: an agent with no route to the target
+machine started the runner there and ran the app it had deployed, all
+through MCP. Measured against the real Zorin box, not a stub.
+
+### Added
+- **`delphi_paserver command=start-runner`** - starts the runner on the
+  target, no shell needed there. The discovery that makes it possible:
+  paclient's `--put` FLAGS are not permissions, they are actions - flag 5
+  makes PAServer EXECUTE the file with `/bin/sh` on the target and flag 3
+  executes it directly. So the server sends a small POSIX launcher (LF, no
+  BOM) that starts the runner with `setsid` (surviving PAServer's cleanup)
+  and reports what it saw. Gated by `AllowRemoteRun` exactly like remote-run:
+  starting the runner IS enabling execution.
+
+### Fixed
+- **`install-runner` shipped the runner with flag 5**, so PAServer tried to
+  run a Python file through `/bin/sh` and the copy did not stay. Now flag 0
+  (plain data).
+- **`remote-run` doubled the `<user>-<profile>` segment**: the runner lives
+  in `<scratch>/<user>-<profile>/_mcp-runner`, so ITS root already IS the
+  profile folder and the path must be just `<Project>/<Project>`. The test
+  battery had encoded the same wrong assumption; fixture corrected against
+  the real layout.
+
+
 ## [0.55.0-beta] - 2026-08-25
 
 ### Fixed

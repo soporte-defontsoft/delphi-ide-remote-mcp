@@ -27,7 +27,10 @@ shutil.copy(os.path.join(REPO, 'runner', 'mcp-runner.py'), _rd)
 # the deploy folder the server derives: <windows user>-<profile>/<Project>/
 PROFILE = 'perfil'
 PROJNAME = 'Saluda'
-DEPLOY = os.path.join(SCRATCH, '%s-%s' % (os.environ.get('USERNAME', 'user'), PROFILE), PROJNAME)
+# the runner's root IS the profile scratch folder (that is where _mcp-runner
+# lives), so a deploy sits at <scratch>/<Project>/ - measured end to end
+# against a real PAServer 2026-08-25
+DEPLOY = os.path.join(SCRATCH, PROJNAME)
 os.makedirs(DEPLOY)
 # the "deployed binary": a real native executable (python itself, copied), so
 # the runner's ELF/PE check passes; it prints and exits 7 through a wrapper
@@ -137,7 +140,7 @@ check('metacaracter rechazado', 'RECHAZADO' in r and ';' in r, r[:150])
 os.remove(os.path.join(RUNNER_DIR, 'mcp-runner.py'))
 r = call('delphi_paserver', {'command': 'install-runner', 'name': 'perfil'})
 check('install-runner copia el script', 'RUNNER COPIADO' in r and os.path.isfile(os.path.join(RUNNER_DIR, 'mcp-runner.py')), r[:200])
-check('install-runner explica el arranque manual', 'nohup python3' in r, r[:250])
+check('install-runner remite a start-runner', 'start-runner' in r, r[:250])
 r = call('delphi_paserver', {'command': 'install-runner'})
 check('install-runner sin name rechazado', 'RECHAZADO' in r, r[:150])
 
