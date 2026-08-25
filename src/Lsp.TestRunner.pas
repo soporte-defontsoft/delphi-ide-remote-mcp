@@ -37,7 +37,7 @@ function TestDiscover(const APath: string): TJSONObject;
 
 { Builds (unless ANoBuild) and runs the test project, returning the
   structured outcome. AFilter, when the framework supports it, narrows. }
-function TestRun(const AProject, AConfig, AFilter: string;
+function TestRun(const AProject, AConfig, AFilter, APlatform: string;
   ATimeoutMs: Integer; ANoBuild: Boolean): TJSONObject;
 
 implementation
@@ -140,12 +140,17 @@ begin
     Obj.AddPair('why', Why);
     Obj.AddPair('hasDproj', TJSONBool.Create(
       TFile.Exists(TPath.ChangeExtension(F, '.dproj'))));
+    if K = tkConsole then
+      Obj.AddPair('countsFormat', SN_TEST_CONSOLE_FORMAT);
   end;
   Result.AddPair('total', TJSONNumber.Create(N));
   if N = 0 then
     Result.AddPair('note', SN_TEST_NONE)
   else
+  begin
     Result.AddPair('note', SN_TEST_DISCOVER_NOTE);
+    Result.AddPair('runsOn', SN_TEST_RUNS_ON);
+  end;
 end;
 
 { DUnitX prints, among other things:
@@ -216,14 +221,15 @@ begin
   end;
 end;
 
-function TestRun(const AProject, AConfig, AFilter: string;
+function TestRun(const AProject, AConfig, AFilter, APlatform: string;
   ATimeoutMs: Integer; ANoBuild: Boolean): TJSONObject;
 var
-  Denied, Dpr, Dproj, Why, Cfg, Exe, Output, Args: string;
+  Denied, Dpr, Dproj, Why, Cfg, Exe, Output, Args, Plat: string;
   K: TTestKind;
   Build: TJSONObject;
+  Info: TDprojInfo;
   ExitCode: Cardinal;
-  Sandboxed: Boolean;
+  Sandboxed, TimedOut: Boolean;
   T0: TDateTime;
   Tail: TArray<string>;
   I, From: Integer;
@@ -257,6 +263,30 @@ begin
   Cfg := AConfig;
   if Cfg = '' then
     Cfg := 'Debug';
+  // A configuration the project does not have used to be accepted in silence
+  // and built into Win64\Inventada\ (measured 2026-08-25). Say the ones
+  // that exist instead.
+  Info := ReadDproj(Dproj);
+  if (Length(Info.Configs) > 0) and not Info.HasConfig(Cfg) then
+  begin
+    Result.AddPair('error', Format(SR_TEST_CONFIG_FMT,
+      [Cfg, string.Join(', ', Info.Configs)]));
+    Exit;
+  end;
+  // Which platform this runs on was hardcoded and never said out loud, so an
+  // agent that had built Win32 by hand watched delphi_test run a Win64 binary
+  // it did not recognise (field round 9). It is said now, and it can be
+  // chosen; whatever it is, the build and the run use the SAME one.
+  Plat := CanonicalPlatform(APlatform);
+  if Plat = '' then
+    Plat := 'Win64';
+  if not IsLocalPlatform(Plat) then
+  begin
+    Result.AddPair('error', Format(SR_TEST_PLATFORM_FMT, [Plat]));
+    Exit;
+  end;
+  Result.AddPair('platform', Plat);
+  Result.AddPair('config', Cfg);
   if ATimeoutMs <= 0 then
     ATimeoutMs := 120000;
   if ATimeoutMs > 600000 then
@@ -265,7 +295,7 @@ begin
   // 1. build, unless told not to: running a stale binary is a lie
   if not ANoBuild then
   begin
-    Build := RunMsBuild(Dproj, 'Win64', Cfg, 'Build', '', '', 600000);
+    Build := RunMsBuild(Dproj, Plat, Cfg, 'Build', '', '', 600000);
     try
       if not Build.GetValue('success').GetValue<Boolean> then
       begin
@@ -281,21 +311,29 @@ begin
     end;
   end;
   if Exe = '' then
-    Exe := ResolveBuildOutput(Dproj, 'Win64', Cfg);
+    Exe := ResolveBuildOutput(Dproj, Plat, Cfg);
   if (Exe = '') or not TFile.Exists(Exe) then
   begin
     Result.AddPair('error', SR_TEST_NOBINARY);
     Exit;
   end;
   Result.AddPair('binary', Exe);
+  if ANoBuild then
+  begin
+    // nobuild=true ran whatever was lying there and reported its numbers as
+    // if they were today's: 200000 passing tests out of a binary whose source
+    // no longer compiled (measured 2026-08-25). Say how old it is.
+    Result.AddPair('builtAt', DateTimeToStr(TFile.GetLastWriteTime(Exe)));
+    Result.AddPair('noBuildNote', SN_TEST_NOBUILD_NOTE);
+  end;
 
   // 2. run it, sandboxed and bounded
   Args := '';
   if AFilter <> '' then
     Args := ' --run:' + AFilter; // DUnitX honours it; a plain runner ignores it
   T0 := Now;
-  Output := RunCapturedSandboxed(Format('"%s"%s', [Exe, Args]),
-    TPath.GetDirectoryName(Exe), ATimeoutMs, ExitCode, Sandboxed);
+  Output := RunCapturedSandboxedT(Format('"%s"%s', [Exe, Args]),
+    TPath.GetDirectoryName(Exe), ATimeoutMs, ExitCode, Sandboxed, TimedOut);
   Result.AddPair('durationMs', TJSONNumber.Create(
     Round((Now - T0) * 24 * 60 * 60 * 1000)));
   Result.AddPair('exitCode', TJSONNumber.Create(Integer(ExitCode)));
@@ -303,6 +341,27 @@ begin
 
   // 3. structured outcome + a bounded tail of what it printed
   ParseOutcome(Output, K, Integer(ExitCode), Result);
+  if TimedOut then
+  begin
+    // A killed suite used to look exactly like one that dies on startup:
+    // exitCode 1, no output, everything at zero. Now it says so, and says
+    // why the output is missing - a console program's stdout is buffered, so
+    // what it printed before the kill never reached the pipe.
+    Result.RemovePair('result').Free;
+    Result.AddPair('result', 'timeout');
+    Result.AddPair('timedOut', TJSONBool.Create(True));
+    Result.AddPair('timeoutMs', TJSONNumber.Create(ATimeoutMs));
+    Result.AddPair('timeoutNote', SN_TEST_TIMEOUT_NOTE);
+  end
+  else if (Result.GetValue('total') <> nil) and
+          (Result.GetValue('total').GetValue<Integer> = 0) then
+  begin
+    // Zero tests is not a pass. "It compiles" was being reported as "it
+    // works" whenever the runner printed nothing this parser understood.
+    Result.RemovePair('result').Free;
+    Result.AddPair('result', 'no-tests');
+    Result.AddPair('noTestsNote', SN_TEST_NO_COUNTS);
+  end;
   Tail := Output.Replace(#13#10, #10).Split([#10]);
   From := Length(Tail) - 40;
   if From < 0 then

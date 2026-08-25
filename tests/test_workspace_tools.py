@@ -37,7 +37,12 @@ REPO = os.path.abspath(os.path.join(HERE, '..'))
 SRC = os.path.join(REPO, 'src')
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SRC, 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
-proc = subprocess.Popen([EXE], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+# Explicit git URLs need the operator's allowlist since v0.62 (an arbitrary URL
+# made the SERVER open the connection). The clone check below is about cloning,
+# not about the allowlist, so allow the host it uses.
+_env = dict(os.environ)
+_env['DELPHI_MCP_GIT_REMOTES'] = 'github.com'
+proc = subprocess.Popen([EXE], env=_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
 q = queue.Queue()
 

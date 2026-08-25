@@ -181,7 +181,17 @@ begin
   if not Info.Found then
     Exit(SR_COMPONENTS_MISSING);
   if Params.Platform.Trim <> '' then
-    Exit(PlatformPathsView(Info, Params.Platform.Trim));
+  begin
+    // platform= switches to a completely different view (the library paths of
+    // that platform), where "filter" means nothing. It used to be dropped
+    // without a word, so a caller who sent both got an answer that ignored
+    // half the question and never said so (measured 2026-08-25).
+    Result := PlatformPathsView(Info, Params.Platform.Trim);
+    if Params.Filter.Trim <> '' then
+      Result := Result + #10#10 + Format(SN_COMPONENTS_FILTER_IGNORED_FMT,
+        [Params.Filter.Trim]);
+    Exit;
+  end;
 
   Packages := IdeKnownPackages(Info.Version);
   Filter := Params.Filter.Trim;

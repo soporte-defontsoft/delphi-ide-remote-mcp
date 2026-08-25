@@ -89,6 +89,8 @@ type
 implementation
 
 uses
+  System.StrUtils,
+  System.IOUtils,
   Lsp.Texts,
   MCPServer.Registration,
   Lsp.References,
@@ -122,6 +124,17 @@ var
   Errors, WarningsC, Hints: Integer;
   Sev: Integer;
 begin
+  // A file the linter will never have an opinion about (a .txt, a .json) used
+  // to answer "in progress, call again" forever, and the note SAID the next
+  // call would bring the result. An obedient agent stayed in that loop until
+  // it ran out of budget (measured 2026-08-25). It never was a Delphi source:
+  // say so once.
+  if not TFile.Exists(Params.Path) then
+    Exit(Format('RECHAZADO: no existe %s.', [Params.Path]));
+  if not MatchText(TPath.GetExtension(Params.Path),
+       ['.pas', '.dpr', '.dpk', '.inc']) then
+    Exit(Format(SR_DIAG_NOT_SOURCE_FMT,
+      [TPath.GetFileName(Params.Path), TPath.GetExtension(Params.Path)]));
   // Answer well inside the usual MCP client timeout (60 s): a slow lint keeps
   // running on the LSP, and the next call on the same text collects it.
   P := TLspSession.Instance.LintFile(Params.Path, DIAG_WAIT_MS, Settings);

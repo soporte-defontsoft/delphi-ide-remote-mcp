@@ -71,7 +71,7 @@ t = call('delphi_workspace', {})
 check('aviso al final de cualquier tool', 'MENSAJES PENDIENTES: 1 para TODOS' in t, t[-200:])
 check('el aviso NO nombra el buzon de otro agente', 'dsh' not in t, t[-200:])
 check('el correo dirigido a otro se cuenta sin decir a quien',
-      '1 mensaje(s) dirigidos a agentes concretos' in t, t[-200:])
+      '1 mensaje(s) para agentes concretos' in t, t[-200:])
 t = call('delphi_messages', {"command": "check", "agent": "dsh"})
 check('check lista sin consumir', 'pendientes: 2' in t and 'Reconecta' in t and 'para todos' in t, t)
 t = call('delphi_messages', {"command": "check", "agent": "hermes"})

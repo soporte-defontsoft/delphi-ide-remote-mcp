@@ -28,6 +28,11 @@ env['DELPHI_MCP_ROOTS'] = INSIDE  # the jail
 # it opts into execution. Run is OFF by default (a compile-only server); the
 # default-off behaviour is verified separately below with its own instance.
 env['DELPHI_MCP_ALLOW_RUN'] = '1'
+# Explicit git URLs need the operator's allowlist since v0.62 (an arbitrary
+# URL made the SERVER open the connection: SSRF + exfiltration). The clone
+# checks below are about the JAIL, not about the allowlist, so this battery
+# allows the host it uses and keeps testing what it means to test.
+env['DELPHI_MCP_GIT_REMOTES'] = 'github.com,example.com'
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                         text=True, encoding='utf-8')

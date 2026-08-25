@@ -135,6 +135,16 @@ end;
 class function TMCPSchemaGenerator.GetPropertyJsonName(Prop: TRttiProperty; RType: TRttiType): string;
 begin
   Result := LowerCase(Prop.Name);
+  // [local change] A trailing underscore is a PASCAL problem, not part of the
+  // parameter's name: `ClassName_` and `Create_` exist only because ClassName
+  // and Create are taken in Delphi. Advertising them with the underscore made
+  // the schema contradict every description, which says class= and
+  // create=true (measured 2026-08-25: a client reading only the schema writes
+  // classname_, one reading only the prose writes class). Deserialization
+  // ignores underscores anyway - NormalizeKey strips them - so all spellings
+  // keep working; this only stops the schema from teaching the ugly one.
+  while Result.EndsWith('_') do
+    Result := Result.Substring(0, Result.Length - 1);
 end;
 
 class function TMCPSchemaGenerator.IsRequiredProperty(Prop: TRttiProperty): Boolean;

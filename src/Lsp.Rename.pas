@@ -161,7 +161,16 @@ begin
       DefObj := Refs.GetValue('definition') as TJSONObject;
       DefPath := DefObj.GetValue('path').Value;
       DefLine := DefObj.GetValue('line').GetValue<Integer>;
-      Result.AddPair('definition', TJSONObject(DefObj.Clone));
+      // Same two conventions as "changes", and for the same reason: the
+      // number a reader compares them by has to mean the same thing in both.
+      var DefOut := TJSONObject(DefObj.Clone);
+      if DefOut.GetValue('line') <> nil then
+      begin
+        DefOut.RemovePair('line').Free;
+        DefOut.AddPair('line', TJSONNumber.Create(DefLine + 1));
+        DefOut.AddPair('line0', TJSONNumber.Create(DefLine));
+      end;
+      Result.AddPair('definition', DefOut);
       // the definition must be OURS to rename - and a definition outside
       // the jail (an RTL unit can be 1 MB) is NEVER scanned further
       if PathDenied(DefPath) <> '' then
@@ -185,7 +194,15 @@ begin
         Chg := TJSONObject.Create;
         Changes.AddElement(Chg);
         Chg.AddPair('path', P);
+        // BOTH conventions, spelled out. "line" used to be the language
+        // server's 0-based number while the note told the reader to feed it
+        // to delphi_changeset, whose atline is 1-based: a guaranteed
+        // off-by-one, and worst exactly where an anchor repeats (a method's
+        // declaration and its implementation). delphi_search already answers
+        // like this; now so does rename.
         Chg.AddPair('line', TJSONNumber.Create(
+          Item.GetValue('line').GetValue<Integer> + 1));
+        Chg.AddPair('line0', TJSONNumber.Create(
           Item.GetValue('line').GetValue<Integer>));
         Chg.AddPair('text', Item.GetValue('text').Value);
       end;
@@ -219,7 +236,8 @@ begin
             Chg := TJSONObject.Create;
             Changes.AddElement(Chg);
             Chg.AddPair('path', DefPath);
-            Chg.AddPair('line', TJSONNumber.Create(DefLine));
+            Chg.AddPair('line', TJSONNumber.Create(DefLine + 1));
+            Chg.AddPair('line0', TJSONNumber.Create(DefLine));
             Chg.AddPair('text', Lines[DefLine].Trim);
             Chg.AddPair('kind', 'definition');
             // a qualified implementation header (TClass.Method) must keep the

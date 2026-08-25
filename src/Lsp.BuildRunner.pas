@@ -36,6 +36,13 @@ function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
 function RunCapturedSandboxed(const ACmdLine, AWorkDir: string;
   ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean): string;
 
+{ Same, and says whether the process was KILLED for running out of time.
+  Without this a killed process was indistinguishable from one that failed
+  instantly: same exitCode 1, same empty output (measured 2026-08-25). }
+function RunCapturedSandboxedT(const ACmdLine, AWorkDir: string;
+  ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean;
+  out ATimedOut: Boolean): string;
+
 implementation
 
 uses
@@ -168,7 +175,8 @@ begin
 end;
 
 function RunCore(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
-  ALowIntegrity: Boolean; out AExitCode: Cardinal; out ASandboxed: Boolean): string;
+  ALowIntegrity: Boolean; out AExitCode: Cardinal; out ASandboxed: Boolean;
+  out ATimedOut: Boolean): string;
 var
   SA: TSecurityAttributes;
   ReadH, WriteH: THandle;
@@ -284,6 +292,7 @@ begin
       WaitForSingleObject(PI.hProcess, 10000);
     if not GetExitCodeProcess(PI.hProcess, AExitCode) then
       AExitCode := DWORD(-1);
+    ATimedOut := TimedOut;
   finally
     CloseHandle(ReadH);
     CloseHandle(PI.hProcess);
@@ -306,15 +315,27 @@ end;
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 var
-  Ignored: Boolean;
+  Ignored, IgnoredToo: Boolean;
 begin
-  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, False, AExitCode, Ignored);
+  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, False, AExitCode, Ignored,
+    IgnoredToo);
 end;
 
 function RunCapturedSandboxed(const ACmdLine, AWorkDir: string;
   ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean): string;
+var
+  Ignored: Boolean;
 begin
-  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, True, AExitCode, ASandboxed);
+  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, True, AExitCode, ASandboxed,
+    Ignored);
+end;
+
+function RunCapturedSandboxedT(const ACmdLine, AWorkDir: string;
+  ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean;
+  out ATimedOut: Boolean): string;
+begin
+  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, True, AExitCode, ASandboxed,
+    ATimedOut);
 end;
 
 { The Android staging map, measured against an IDE-written .deployproj

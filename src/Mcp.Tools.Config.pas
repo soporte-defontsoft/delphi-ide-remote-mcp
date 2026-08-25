@@ -376,9 +376,11 @@ begin
     if ARawFolder.Trim = '' then
       Clean := 'Compiled' // sensible default
     else if not ValidOutputFolder(ARawFolder, Clean) then
-      Exit(Format('RECHAZADO: "%s" no es una carpeta de salida valida. Usa un ' +
-        'nombre relativo simple como Compiled (sin ruta absoluta, sin "..", ' +
-        'sin caracteres especiales).', [ARawFolder.Trim]));
+      // NOT echoing what was sent: whatever comes back goes through the
+        // drive mask, so writing C:\Temp\Salida got answered about
+        // "srvc:\Temp\Salida" and read like a different error entirely
+        // (field round 8). Say the RULE instead of the value.
+      Exit(SR_CONFIG_OUTPUT_INVALID);
     ExeInner := '.\' + Clean + '\$(Platform)\$(Config)';
     DcuInner := '.\' + Clean + '\Dcu\$(Platform)\$(Config)';
   end;
@@ -841,7 +843,29 @@ end;
 
 { Every DeployFile element of the manifest whose Include matches AFile
   (case-insensitive) inside an ItemGroup of APlatform: their spans. }
-function FindDeployEntries(const AXml, APlatform, AFile: string): TArray<TPair<Integer, Integer>>;
+{ Resolve a .deployproj Include the way the IDE reads it: relative entries
+  hang off the project folder. Without this, remove-deployfile could not find
+  the very entries the server itself had generated (they are relative), and
+  add-deployfile could add a second copy of a file already there under the
+  other spelling (field round 8). }
+function SameDeployFile(const AInclude, ABaseDir, AFullPath: string): Boolean;
+var
+  Resolved: string;
+begin
+  Resolved := AInclude.Trim;
+  if Resolved = '' then
+    Exit(False);
+  if not TPath.IsPathRooted(Resolved) then
+    Resolved := TPath.Combine(ABaseDir, Resolved);
+  try
+    Resolved := TPath.GetFullPath(Resolved);
+  except
+    Exit(SameText(AInclude, AFullPath));
+  end;
+  Result := SameText(Resolved, AFullPath);
+end;
+
+function FindDeployEntries(const AXml, APlatform, AFile, ABaseDir: string): TArray<TPair<Integer, Integer>>;
 var
   M: TMatch;
   L: TList<TPair<Integer, Integer>>;
@@ -854,7 +878,7 @@ begin
     for M in TRegEx.Matches(AXml, '<DeployFile\s+Include="([^"]*)"[^>]*>.*?</DeployFile>',
       [roIgnoreCase, roSingleLine]) do
     begin
-      if not SameText(M.Groups[1].Value, AFile) then
+      if not SameDeployFile(M.Groups[1].Value, ABaseDir, AFile) then
         Continue;
       // the enclosing ItemGroup decides the platform
       GroupStart := Low.LastIndexOf('<itemgroup', M.Index - 1) + 1;
@@ -887,7 +911,7 @@ end;
 
 function AddDeployFile(const ADproj, ARawPlatform, ARawPath, ARawRemoteDir: string): string;
 var
-  Plat, Full, RemoteDir, DeployProj, Enc, Xml, Block: string;
+  Plat, Full, RemoteDir, DeployProj, Enc, Xml, Block, Include, BaseDir: string;
   Info: TRadStudioInfo;
   Generated: Boolean;
   ClosePos: Integer;
@@ -929,14 +953,23 @@ begin
   end;
 
   Xml := PatchLoadText(DeployProj, Enc);
-  if Length(FindDeployEntries(Xml, Plat, Full)) > 0 then
+  if Length(FindDeployEntries(Xml, Plat, Full,
+       TPath.GetDirectoryName(TPath.GetFullPath(DeployProj)))) > 0 then
     Exit(Format(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat]));
   ClosePos := Pos('</project>', LowerCase(Xml));
   if ClosePos = 0 then
     Exit('error: el .deployproj no tiene </Project>; abrelo en el IDE y reintenta.');
+  // The IDE writes `UMain.pas`, not `D:\proyectos\x\UMain.pas`: an absolute
+  // Include makes the .deployproj stop being portable and stop matching what
+  // the IDE itself generates for the same file (field round 8). Relative
+  // whenever the file lives under the project; absolute only when it does not.
+  Include := Full;
+  BaseDir := TPath.GetDirectoryName(TPath.GetFullPath(DeployProj));
+  if Full.ToLower.StartsWith(IncludeTrailingPathDelimiter(BaseDir).ToLower) then
+    Include := Full.Substring(Length(IncludeTrailingPathDelimiter(BaseDir)));
   Block := '    <ItemGroup Condition="''$(Platform)''==''' + Plat + '''">' + sLineBreak +
-    DeployEntryXml(Full, RemoteDir, 'Debug') +
-    DeployEntryXml(Full, RemoteDir, 'Release') +
+    DeployEntryXml(Include, RemoteDir, 'Debug') +
+    DeployEntryXml(Include, RemoteDir, 'Release') +
     '    </ItemGroup>' + sLineBreak;
   Xml := Copy(Xml, 1, ClosePos - 1) + Block + Copy(Xml, ClosePos, MaxInt);
   PatchSaveText(DeployProj, Xml, Enc); // __delphi-patch copy first
@@ -969,7 +1002,8 @@ begin
   if not TFile.Exists(DeployProj) then
     Exit(Format(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
   Xml := PatchLoadText(DeployProj, Enc);
-  Spans := FindDeployEntries(Xml, Plat, Full);
+  Spans := FindDeployEntries(Xml, Plat, Full,
+    TPath.GetDirectoryName(TPath.GetFullPath(DeployProj)));
   if Length(Spans) = 0 then
     Exit(Format(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
   // remove from the end so earlier spans stay valid; eat the element's line

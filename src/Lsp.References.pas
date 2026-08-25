@@ -26,6 +26,13 @@ function FindDelphiReferences(const AFilePath: string;
 { True for IDE artifacts that must never be scanned/edited/reasoned about. }
 function SkipIdeArtifacts(const APath: string): Boolean; overload;
 
+{ WHY a path is skipped: 'artifacts' (build output, __history), 'git' (the
+  repository's own plumbing), 'trash' (this tool's recoverable copies) or ''
+  when it is not skipped at all. delphi_list used to count every one of them
+  as "IDE build/artifact folders", so a listing that hid 42 files of .git
+  sent the reader looking for build output that did not exist (2026-08-25). }
+function SkipReason(const APath: string; AAllowTrash: Boolean): string;
+
 { Same, but when AAllowTrash the recoverable-trash folders (__delphi-patch /
   __pascal-patch) are NOT treated as skip reasons - so delphi_list can, on
   explicit request, show what was deleted for a restore (field round 6, R6-B).
@@ -96,6 +103,27 @@ end;
 function SkipIdeArtifacts(const APath: string): Boolean;
 begin
   Result := SkipIdeArtifacts(APath, False);
+end;
+
+function SkipReason(const APath: string; AAllowTrash: Boolean): string;
+const
+  Art: array [0 .. 6] of string = ('\__history\', '\__recovery\', '\win32\',
+    '\win64\', '\debug\', '\release\', '\dcu\');
+  Trash: array [0 .. 1] of string = ('\__pascal-patch\', '\__delphi-patch\');
+var
+  B, Low: string;
+begin
+  Result := '';
+  Low := APath.ToLower;
+  if Low.Contains('\.git\') then
+    Exit('git');
+  for B in Art do
+    if Low.Contains(B) then
+      Exit('artifacts');
+  if not AAllowTrash then
+    for B in Trash do
+      if Low.Contains(B) then
+        Exit('trash');
 end;
 
 function SkipPath(const APath: string): Boolean;

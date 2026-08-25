@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.61.0-beta';
+  SERVER_VERSION = '0.62.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -57,11 +57,76 @@ const
   // ---------------------------------------------------------------------
   // No '..' anywhere in this text: results are asserted to carry no
   // traversal residue (R4-C), so even a cosmetic ellipsis is banned here.
+  SR_PROJECTS_NO_ROOT_FMT =
+    'error: la carpeta de trabajo "%s" no existe en este servidor. No es que ' +
+    'no haya proyectos: es que ahi no hay nada. Mira delphi_workspace para ' +
+    'ver cuales son las carpetas de verdad.';
+
+  SN_SEARCH_CAPPED_FMT =
+    'Te doy %d de %d coincidencias: el resto NO se listan. Afina la busqueda ' +
+    '(un patron mas concreto, o "path" a una subcarpeta) antes de sacar ' +
+    'conclusiones de este listado.';
+
+  SR_CREATE_UNIT_NEED_PROJECT =
+    'RECHAZADO: kind=unit necesita "project" (la ruta del .dpr o .dproj al ' +
+    'que anadir la unit); la carpeta sale de ahi, NO de "dir". Ojo: "dir" si ' +
+    'lo usan los kind=project-*, que es lo que despista.';
+
+  SN_COMPONENTS_FILTER_IGNORED_FMT =
+    '(He IGNORADO filter="%s": con platform= esto te da las rutas de ' +
+    'biblioteca de esa plataforma, que es otra pregunta. Para buscar entre ' +
+    'los paquetes instalados, llama sin platform.)';
+
+  SN_REPORT_KIND_FMT =
+    #10'(OJO: "%s" no es un kind de los que manejo, asi que lo he archivado ' +
+    'como "bug". Los que hay: bug, limitation, suggestion, question.)';
+
+  SR_DIAG_NOT_SOURCE_FMT =
+    'RECHAZADO: %s no es un fuente Delphi (%s). El linter solo opina sobre ' +
+    '.pas, .dpr, .dpk e .inc; sobre cualquier otra cosa te contestaba "sigue ' +
+    'en marcha, vuelve a llamar" para siempre, y eso era mentira: no iba a ' +
+    'terminar nunca.';
+
+  SR_LSP_LINE_RANGE_FMT =
+    'error: la linea %d no existe en %s, que tiene %d lineas. Recuerda que ' +
+    'aqui las lineas van desde 0 (la ultima es la %d), mientras que ' +
+    'delphi_read las numera desde 1.';
+
+  SR_LSP_CHAR_RANGE_FMT =
+    'error: la columna %d no existe en la linea %d, que tiene %d caracteres: ' +
+    '"%s". Las columnas tambien van desde 0, y hay que apuntar DENTRO del ' +
+    'identificador.';
+
+  SR_LSP_NEGATIVE_FMT =
+    'error: linea %d y columna %d: no hay posiciones negativas.';
+
+  SR_LSP_NOT_SOURCE_FMT =
+    'RECHAZADO: %s no es un fuente Delphi (%s), asi que no hay simbolos que ' +
+    'sacar; antes te devolvia una lista vacia, que parecia decir que la unit ' +
+    'no tiene nada. Esta tool trabaja sobre .pas, .dpr, .dpk e .inc.';
+
+  SR_READ_RANGE_FMT =
+    'RECHAZADO: el rango va al reves (desde=%d, hasta=%d) y el fichero tiene ' +
+    '%d lineas, asi que no hay nada que devolver. Antes te contestaba con el ' +
+    'cuerpo vacio, que parecia decir que ese tramo estaba en blanco. ' +
+    'Intercambia los dos numeros.';
+
   SN_LIST_HIDDEN_FMT =
-    '%d entries inside IDE build/artifact folders (Win32, Win64, Debug, ' +
-    'Release, dcu, __history) are not listed. They exist on disk: pass ' +
-    'that folder itself as root to list its contents, or retrieve build ' +
-    'output with delphi_package + delphi_fetch.';
+    '%d entradas no se listan, y no todas por el mismo motivo: %d estan en ' +
+    'carpetas de compilacion (Win32, Win64, Debug, Release, dcu, __history), ' +
+    '%d son de la fontaneria de git (.git) y %d son copias de la papelera ' +
+    '(__delphi-patch). Existen en el disco: para ver las de compilacion pasa ' +
+    'esa carpeta como root, o baja el resultado con delphi_package + ' +
+    'delphi_fetch; para ver la papelera, includetrash=true.';
+
+  SN_LIST_CAPPED =
+    'La lista viene recortada a 500 entradas ("total" dice cuantas hay). ' +
+    'Acota con pattern (*.pas) o baja a una subcarpeta.';
+
+  SR_LIST_ROOT_IS_FILE_FMT =
+    'RECHAZADO: "%s" es un FICHERO, no una carpeta, asi que no hay nada que ' +
+    'listar. Para verlo por dentro usa delphi_read; para su carpeta, pasa la ' +
+    'carpeta.';
 
   SN_BUILD_OUTPUT =
     'Retrieve it with delphi_package (zips its folder, dcu excluded) + ' +
@@ -978,6 +1043,10 @@ const
     'disco; borralo con delphi_delete si ya no lo quieres. Copias previas en ' +
     '__delphi-patch.';
 
+  SN_UNIT_REMOVED_GONE_FMT =
+    'QUITADA la unit %s del proyecto %s (%s%s%s). El fichero %s va a la ' +
+    'papelera con este mismo borrado. Copias previas en __delphi-patch.';
+
   SN_UNIT_ABSENT_FMT =
     'La unit %s no esta en el proyecto %s. Mira las units con command=view.';
 
@@ -1150,8 +1219,8 @@ const
     'Leelos con delphi_messages command=read agent=<tu id>.';
 
   SN_MESSAGES_PENDING_SOME_FMT =
-    #10#10'(Hay ademas %d mensaje(s) dirigidos a agentes concretos. No digo a ' +
-    'quien: si esperas correo, delphi_messages command=check agent=<tu id>.)';
+    #10'(Hay ademas %d mensaje(s) para agentes concretos; si esperas correo: ' +
+    'delphi_messages command=check agent=<tu id>.)';
 
   SN_MESSAGES_PENDING_FMT =
     #10'MENSAJES PENDIENTES: %d (buzon: %s). Leelos con delphi_messages ' +
@@ -1273,7 +1342,10 @@ const
     'is semantically confirmed and no designer/string/collision hit exists; ' +
     'stage the changes with delphi_changeset (one edit per line, then ' +
     'preview + commit there). applicable=false lists the blockers - fix ' +
-    'them or do the rename by hand with the evidence given.';
+    'them or do the rename by hand with the evidence given. Each change ' +
+    'carries BOTH line numbers: "line" is 1-based (what delphi_read shows ' +
+    'and what delphi_changeset''s atline expects) and "line0" is the ' +
+    'language server''s 0-based one. Use "line".';
 
   // ---- delphi_help ----
 
@@ -1408,7 +1480,13 @@ const
     'encienda (AllowRun, AllowTests, AllowRemoteRun). Si te lo rechaza, no ' +
     'insistas: dilo con delphi_report y sigue con otra cosa.'#10 +
     #10 +
-    '10. SI ALGO NO SE PUEDE HACER POR AQUI, ESO ES UN HALLAZGO. Cuentalo con ' +
+    '10. COMO LEER UNA NEGATIVA. "RECHAZADO:" = te lo he denegado a ' +
+    'proposito y el motivo va detras: no insistas, cambia de camino. ' +
+    '"error:" = no he podido (no existe, no cuadra, falta un parametro): ' +
+    'corrige y repite. "Error executing tool:" = me he roto yo por dentro; ' +
+    'eso SIEMPRE es un fallo mio, cuentalo con delphi_report.'#10 +
+    #10 +
+    '11. SI ALGO NO SE PUEDE HACER POR AQUI, ESO ES UN HALLAZGO. Cuentalo con ' +
     'delphi_report (kind=limitation) con la llamada exacta y lo que ' +
     'esperabas: este servidor se ha hecho entero con esos informes.';
 
@@ -1454,6 +1532,60 @@ const
   SP_TEST_NOBUILD =
     'run opcional: true = NO compilar antes, ejecutar el binario que ya ' +
     'existe. Por defecto se compila (ejecutar un binario viejo es mentir)';
+
+  SP_TEST_PLATFORM =
+    'run opcional: plataforma a compilar y ejecutar (Win64 por defecto). ' +
+    'Solo plataformas de ESTA maquina: el binario corre aqui';
+
+  SR_TEST_CONFIG_FMT =
+    'RECHAZADO: la configuracion "%s" no existe en este proyecto. Tiene ' +
+    'estas: %s. (Antes te la aceptaba y compilaba en una carpeta con ese ' +
+    'nombre, que no es lo que querias.)';
+
+  SR_TEST_PLATFORM_FMT =
+    'RECHAZADO: %s no se puede EJECUTAR en esta maquina, y ejecutar es de lo ' +
+    'que va esta tool. Compila para esa plataforma con delphi_build y ' +
+    'llevatelo con delphi_paclient / delphi_adb.';
+
+  SN_TEST_TIMEOUT_NOTE =
+    'SE ACABO EL TIEMPO y he MATADO el proceso: no es que los tests fallen, ' +
+    'es que no terminaron. Por eso exitCode viene a 1 y los numeros a cero. ' +
+    'Y por eso "outputTail" suele venir VACIO aunque el programa hubiera ' +
+    'impreso cosas: la salida de un programa de consola va a un buffer y ' +
+    'solo se vuelca al terminar, asi que al matarlo se pierde. Si esperas ' +
+    'que tarde, sube "timeoutms"; si sospechas un cuelgue, mete Flush(Output) ' +
+    'despues de cada linea en tu runner y vuelve a lanzarlo: asi veras por ' +
+    'donde se quedo.';
+
+  SN_TEST_NO_COUNTS =
+    'Ha terminado bien pero NO he sabido contar ni un solo test, asi que no ' +
+    'te digo "pass": que un binario acabe con exitCode 0 no demuestra que ' +
+    'haya probado nada. O el proyecto no ejecuta tests, o su salida no sigue ' +
+    'ninguno de los dos formatos que se leer (mira "countsFormat" en ' +
+    'command=discover).';
+
+  SN_TEST_CONSOLE_FORMAT =
+    'Para que pueda contarte los tests, imprime UNA LINEA POR ' +
+    'COMPROBACION que EMPIECE por PASS o por OK cuando va bien, y por FAIL o ' +
+    'por ERROR cuando va mal, seguida de la descripcion: "PASS suma de dos ' +
+    'enteros" / "FAIL email invalido: esperaba False". Se admite lo que ' +
+    'venga detras, pero la primera palabra manda (un "[ OK ] 12 algo" NO se ' +
+    'cuenta: empieza por corchete). Y termina con ExitCode distinto de 0 si ' +
+    'algo fallo. Con DUnitX no hace falta nada de esto: se lee su resumen.';
+
+  SN_TEST_RUNS_ON =
+    'command=run compila Y ejecuta la MISMA plataforma: Win64 salvo que ' +
+    'pases platform=. Ojo si compilaste a mano con delphi_build, que por ' +
+    'defecto usa Win32: son binarios distintos. El programa corre en su ' +
+    'propia carpeta de salida y con ella como directorio actual; ESA carpeta ' +
+    'es el unico sitio donde puede ESCRIBIR (el sandbox de baja integridad ' +
+    'le niega %TEMP% y el resto del disco). Si tus tests tocan ficheros, ' +
+    'usalos con rutas RELATIVAS.';
+
+  SN_TEST_NOBUILD_NOTE =
+    'nobuild=true: NO he compilado nada, he ejecutado el binario que ya ' +
+    'estaba ahi ("builtAt" dice de cuando es). Si has tocado el codigo ' +
+    'despues de esa fecha, estos numeros son de otro programa.';
 
   SR_TEST_CMD =
     'error: command debe ser discover | run';
@@ -1503,10 +1635,12 @@ const
 
   SN_TEST_RUN_NOTE =
     'result=pass|fail sale de "verdictFrom": counts (los numeros del ' +
-    'framework) o exitCode (0 = verde) cuando el runner no da numeros. ' +
-    'failures lista las lineas de fallo tal cual las imprimio. El binario ' +
-    'corrio en sandbox de baja integridad, con timeout, en su carpeta de ' +
-    'salida.';
+    'framework) o exitCode (0 = verde) cuando el runner no da numeros; ' +
+    'result=timeout es que lo mate por tiempo y result=no-tests es que ' +
+    'termino bien sin que yo pudiera contar nada. failures lista las lineas ' +
+    'de fallo tal cual las imprimio. Corrio en sandbox de baja integridad, ' +
+    'con timeout, en su carpeta de salida, que es lo unico donde puede ' +
+    'escribir.';
 
   // ---- delphi_designer ----
 
@@ -1664,6 +1798,13 @@ const
     'proyecto sin ninguna no se puede compilar desde el IDE. Habilita antes ' +
     'otra con add-platform y luego quita esta.';
 
+  SR_CONFIG_OUTPUT_INVALID =
+    'RECHAZADO: eso no vale como carpeta de salida. Tiene que ser un nombre ' +
+    'RELATIVO y simple, como Compiled o bin\out: sin unidad ni ruta ' +
+    'absoluta, sin ".." y sin caracteres especiales (los espacios si valen). ' +
+    'Con ' +
+    'output=default se restaura el reparto estandar de RAD Studio.';
+
   SN_CONFIG_DPR_ONLY =
     'Esto es el .dpr y a su lado no hay .dproj, asi que solo puedo decirte ' +
     'sus UNITS. El framework (VCL/FMX), las plataformas, las configuraciones, ' +
@@ -1753,6 +1894,13 @@ const
     'misma tanda, asi que el ancla no se puede comprobar hasta el commit. Si ' +
     'falla, el commit deshace la tanda entera como siempre.';
 
+  SR_UPLOAD_OFFSET_INSIDE_FMT =
+    'RECHAZADO: offset %d cae DENTRO del fichero (tiene %d bytes) y escribir ' +
+    'ahi se llevaria por delante todo lo que viene detras, sin copia ' +
+    'recuperable. Para continuar una subida a trozos, el offset es el FINAL ' +
+    'actual: usa offset=%d. Para reemplazar el fichero entero, offset=0 (esa ' +
+    'si deja copia).';
+
   SR_UPLOAD_NO_CHUNK_FMT =
     'RECHAZADO: no mandas "chunkbase64", asi que no hay nada que subir, y ahi ' +
     'ya hay un fichero de %d bytes. Una llamada a medias NO lo vacia. Si ' +
@@ -1776,6 +1924,37 @@ const
     'ese fichero hoy, la copia que hay es la ORIGINAL de esta manana, que es ' +
     'la que vale). Si querias anadir al final y no reemplazar, usa offset=<el ' +
     'tamano actual>, no offset=0.';
+
+  SR_FILE_DELETE_PARTIAL_FMT =
+    'A MEDIAS: la copia recuperable de %s SI esta hecha (%s), pero el ' +
+    'original NO se ha podido quitar del sitio: algo lo tiene abierto (una ' +
+    'compilacion en marcha, el IDE, o una carpeta que es el directorio ' +
+    'actual de algun proceso). No te digo BORRADO porque no lo esta. ' +
+    'Reintentalo dentro de un momento; si sigue igual, tiene que quitarlo el ' +
+    'operador a mano.';
+
+  SR_GIT_REMOTE_OFF_FMT =
+    'RECHAZADO: este servidor no habla con "%s". Una URL explicita en un ' +
+    'comando de git hace que sea EL SERVIDOR quien abre la conexion, asi que ' +
+    'decidir con quien la abre no te toca a ti: el operador escribe los hosts ' +
+    'permitidos en [Security] GitRemotes del settings.ini. Los remotos que el ' +
+    'ya haya configurado en el repositorio SI funcionan: usa el nombre del ' +
+    'remoto (push origin main), no la URL.';
+
+  SR_GIT_REMOTE_HOST_FMT =
+    'RECHAZADO: "%s" no esta entre los hosts que este servidor tiene ' +
+    'permitidos (%s). Si hace falta uno mas, pidelo con delphi_report: lo ' +
+    'anade el operador.';
+
+  SR_GIT_MERGE_ARGS =
+    'RECHAZADO: merge solo acepta el NOMBRE de una rama, o "--abort" para ' +
+    'salir de un merge a medias. Nada de opciones: --no-ff (y cualquier otra ' +
+    'que anule el --ff-only con el que se lanza) deja el repositorio en ' +
+    'MERGING con conflictos a medio resolver, que es justo lo que este ' +
+    'comando promete que no puede pasar.';
+
+  SN_GIT_MERGE_ABORTED =
+    'MERGE ABORTADO: el repositorio vuelve a como estaba antes de intentarlo.';
 
   SR_GIT_MESSAGE_LINES =
     'error: "message" no admite saltos de linea en este comando (va en la ' +
@@ -1903,13 +2082,27 @@ const
     'vuelto byte a byte a como estaban antes del commit. Causa: %s -- El ' +
     'changeset queda cerrado; corrige y monta otro.';
 
+  SR_CHANGESET_PROJECT_FILE_FMT =
+    'RECHAZADO: %s es un fichero de proyecto y lo mantiene el IDE; el commit ' +
+    'lo iba a rechazar de todas formas, y te habria tirado la tanda entera. ' +
+    'Para tocar el proyecto usa delphi_config (add-unit, remove-unit, ' +
+    'add-platform, add-searchpath, set-output).';
+
+  SN_CHANGESET_STATUS_NOTE =
+    'Los ids salen recortados a proposito: los changesets se ven pero no se ' +
+    'tocan sin el id completo, que solo tiene quien lo abrio. Si has perdido ' +
+    'el tuyo, abre otro; el viejo caduca solo a la media hora.';
+
   SN_CHANGESET_BEGUN_FMT =
     'CHANGESET %s abierto. stage anade operaciones (una por llamada), ' +
     'preview las resuelve, commit aplica todo o nada.';
 
   SN_CHANGESET_STAGED_FMT =
-    'STAGED %s de %s (operacion %d del changeset). Nada tocado aun: preview ' +
-    'cuando termines de anadir.';
+    'STAGED %s de %s (operacion %d del changeset). Nada tocado aun. ' +
+    'command=preview es OBLIGATORIO antes del commit, y tiene que ser ' +
+    'POSTERIOR a la ultima operacion que apiles: si apilas algo mas despues ' +
+    'del preview, hay que volver a previsualizar. Si te equivocas en una, ' +
+    'command=unstage n=<numero> la quita sin tirar la tanda.';
 
   SN_CHANGESET_DISCARDED =
     'Changeset descartado. No se habia tocado ningun fichero.';
@@ -1919,9 +2112,11 @@ const
     'si un fichero cambia antes del commit, se rechaza entero.';
 
   SN_CHANGESET_PREVIEW_BAD =
-    'Hay operaciones sin resolver (anchor NO ENCONTRADA o AMBIGUA): ' +
-    'corrigelas (rollback y re-stage, o fija atline). commit esta bloqueado ' +
-    'hasta un preview limpio.';
+    'Hay operaciones sin resolver (anchor NO ENCONTRADA o AMBIGUA). Quita la ' +
+    'que falla con command=unstage n=<el numero que ves arriba> y vuelve a ' +
+    'apilarla bien (con atline si el ancla sale mas de una vez): NO hace ' +
+    'falta tirar la tanda entera. commit sigue bloqueado hasta un preview ' +
+    'limpio.';
 
   SN_CHANGESET_COMMITTED_FMT =
     'COMMIT COMPLETO: %d operaciones aplicadas sobre %d ficheros. Esto es lo ' +

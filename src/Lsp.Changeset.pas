@@ -160,6 +160,19 @@ begin
 end;
 
 { Physical line count, '' when the file is gone (a delete op). }
+{ The half of a changeset id that may be shown to anyone: everything before
+  the random tail. Seeing it tells you a batch exists; it does not let you
+  operate on it. }
+function PublicId(const AId: string): string;
+var
+  P: Integer;
+begin
+  Result := AId;
+  P := AId.LastIndexOf('-');
+  if (P > 0) and (Length(AId) - P - 1 = 8) then
+    Result := Copy(AId, 1, P) + '...';
+end;
+
 function LineCountOf(const APath: string): Integer;
 var
   Enc: string;
@@ -336,6 +349,44 @@ begin
   end;
 end;
 
+{ Walks the staged operations in order, keeping the virtual state in mind,
+  and returns the first contradiction ('' when the plan still holds). }
+function PlanConflict(C: TChangeset): string;
+var
+  I, J: Integer;
+  Op: TStagedOp;
+  Sub: TChangeset;
+begin
+  Result := '';
+  Sub := TChangeset.Create('probe');
+  try
+    for I := 0 to C.Ops.Count - 1 do
+    begin
+      Op := C.Ops[I];
+      case Op.Kind of
+        opCreate:
+          if WillExist(Sub, Op.Path) then
+            Exit(Format(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
+        opEdit, opDeleteLine, opDelete:
+          if not WillExist(Sub, Op.Path) then
+            Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+        opMove:
+          begin
+            if not WillExist(Sub, Op.Path) then
+              Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+            if WillExist(Sub, Op.Dest) then
+              Exit(Format(SR_CHANGESET_VIRT_DEST_FMT, [Op.Dest]));
+          end;
+      end;
+      Sub.Ops.Add(Op);
+    end;
+    J := 0; // keeps the compiler quiet about an unused counter
+    Inc(J);
+  finally
+    Sub.Free;
+  end;
+end;
+
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer): string;
 var
@@ -366,7 +417,14 @@ begin
       if GSets.Count >= MAX_SETS then
         Exit(SR_CHANGESET_TOO_MANY);
       Inc(GSeq); // Now has ~16 ms granularity: two begins can share it
-      Id := FormatDateTime('hhnnss', Now) + '-' + IntToStr(GSeq);
+      // The id is also the CAPABILITY. Nothing bound a changeset to whoever
+      // opened it, and `status` printed every open id: anybody holding the
+      // token could commit or roll back somebody else's half-built batch
+      // (found 2026-08-25 while auditing through MCP). So the id gets a
+      // random tail, and status shows only the part before it - enough to
+      // see that a batch exists and how big it is, not enough to touch it.
+      Id := FormatDateTime('hhnnss', Now) + '-' + IntToStr(GSeq) + '-' +
+        IntToHex(Random($10000), 4) + IntToHex(Random($10000), 4);
       GSets.Add(Id, TChangeset.Create(Id));
       Exit(Format(SN_CHANGESET_BEGUN_FMT, [Id]));
     end;
@@ -381,10 +439,11 @@ begin
         begin
           Obj := TJSONObject.Create;
           Arr.AddElement(Obj);
-          Obj.AddPair('id', Id);
+          Obj.AddPair('id', PublicId(Id));
           Obj.AddPair('ops', TJSONNumber.Create(GSets[Id].Ops.Count));
           Obj.AddPair('previewed', TJSONBool.Create(GSets[Id].Previewed));
         end;
+        Ret.AddPair('note', SN_CHANGESET_STATUS_NOTE);
         Exit(Ret.ToJSON);
       finally
         Ret.Free;
@@ -420,6 +479,14 @@ begin
       if Denied <> '' then
         Exit(Denied);
       Op.Path := TPath.GetFullPath(APath);
+      // What the commit is going to refuse, refuse now. A .dproj staged
+      // happily, previewed "clean" and then blew up at commit, taking the
+      // three good operations of the batch down with it (measured
+      // 2026-08-25): a preview that says clean about something the commit
+      // will reject is a preview that lies.
+      if MatchText(TPath.GetExtension(Op.Path), ['.dproj', '.groupproj', '.dpk']) and
+         (Op.Kind in [opEdit, opDeleteLine]) then
+        Exit(Format(SR_CHANGESET_PROJECT_FILE_FMT, [TPath.GetFileName(Op.Path)]));
       case Op.Kind of
         opEdit:
           begin
@@ -494,6 +561,14 @@ begin
     begin
       if C.Ops.Count = 0 then
         Exit(SR_CHANGESET_EMPTY);
+      // The plan can stop being valid AFTER an operation was staged - unstage
+      // the delete of X and the create of X behind it is suddenly a create
+      // over a file that exists. It failed safe (commit refused, byte-exact
+      // rollback) but preview had said "clean" (measured 2026-08-25).
+      // Re-validate the whole plan here, in order, against the disk.
+      Err := PlanConflict(C);
+      if Err <> '' then
+        Exit(Err);
       Ret := TJSONObject.Create;
       try
         Ret.AddPair('id', Id);

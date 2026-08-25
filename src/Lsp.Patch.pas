@@ -75,6 +75,7 @@ uses
   Winapi.Windows,
   Lsp.Guard,
   Lsp.Discovery,
+  Lsp.Texts,
   Lsp.DesignerMeta;
 
 const
@@ -439,6 +440,11 @@ begin
       [TPath.GetFileName(APath), EncName(K), Eol, Summary(M), Length(Lines), IniL]));
   FinL := ATo;
   if (FinL <= 0) or (FinL > Length(Lines)) then FinL := Length(Lines);
+  // A range that runs backwards used to answer with a header and an EMPTY
+  // body, which reads as "that stretch of the file is empty" (measured
+  // 2026-08-25). It is a typo, and it gets told so.
+  if FinL < IniL then
+    Exit(Format(SR_READ_RANGE_FMT, [IniL, ATo, Length(Lines)]));
   Cut := '';
   if FinL - IniL + 1 > MAX_READ_LINES then
   begin

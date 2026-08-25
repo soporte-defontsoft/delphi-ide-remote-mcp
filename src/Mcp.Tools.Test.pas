@@ -22,6 +22,7 @@ type
     FFilter: string;
     FTimeoutMs: Integer;
     FNoBuild: Boolean;
+    FPlatform: string;
   public
     [SchemaDescription(SP_TEST_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -35,6 +36,8 @@ type
     property Filter: string read FFilter write FFilter;
     [SchemaDescription(SP_TEST_TIMEOUT)]
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
+    [SchemaDescription(SP_TEST_PLATFORM)]
+    property Platform: string read FPlatform write FPlatform;
     [SchemaDescription(SP_TEST_NOBUILD)]
     property NoBuild: Boolean read FNoBuild write FNoBuild;
   end;
@@ -88,7 +91,8 @@ begin
       if Params.Project.Trim = '' then
         Exit(SR_TEST_NEED_PROJECT);
       Ret := TestRun(Params.Project.Trim, Params.Config.Trim,
-        Params.Filter.Trim, Params.TimeoutMs, Params.NoBuild);
+        Params.Filter.Trim, Params.Platform.Trim, Params.TimeoutMs,
+        Params.NoBuild);
     end;
     try
       Result := Ret.ToJSON;

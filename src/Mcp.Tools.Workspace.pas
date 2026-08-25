@@ -448,10 +448,10 @@ function TDelphiListTool.ExecuteWithParams(const Params: TDelphiListParams): str
 var
   Return: TJSONObject;
   Arr: TJSONArray;
-  F, Mask, Root: string;
+  F, Mask, Root, Reason: string;
   Masks: TArray<string>;
   Entry: TJSONObject;
-  Total, Hidden: Integer;
+  Total, Hidden, HiddenArt, HiddenGit, HiddenTrash: Integer;
 begin
   Result := ReadPathDenied(Params.Root); // listing may enter the library zone
   if Result <> '' then
@@ -471,12 +471,14 @@ begin
     Exit('RECHAZADO: pattern no admite llaves {a,b} (expansion de shell). Usa UNA ' +
       'mascara (*.pas) o varias separadas por ";" (*.pas;*.dfm).');
 
+  if TFile.Exists(Root) then
+    Exit(Format(SR_LIST_ROOT_IS_FILE_FMT, [TPath.GetFileName(Root)]));
   if Params.Dirs then
   begin
     Return := TJSONObject.Create;
     Arr := TJSONArray.Create;
     Total := 0;
-    Hidden := 0;
+    Hidden := 0; HiddenArt := 0; HiddenGit := 0; HiddenTrash := 0;
     try
       // A root already inside artifact territory was asked for by name:
       // hiding its Debug/Release children would recreate the trap.
@@ -485,11 +487,25 @@ begin
       begin
         var IsTrash := SameText(TPath.GetFileName(F), '__delphi-patch') or
                        SameText(TPath.GetFileName(F), '__pascal-patch');
-        if InVault(F) or
-           TPath.GetFileName(F).StartsWith('.') or
-           (TPath.GetFileName(F).StartsWith('__') and
-            not (Params.IncludeTrash and IsTrash)) then
+        if InVault(F) then
           Continue;
+        // These were skipped WITHOUT being counted, so a folder holding .git
+        // and __delphi-patch answered "total: 1" and said nothing about the
+        // other two (measured 2026-08-25). Silence is not the same as saying
+        // there is nothing there.
+        if TPath.GetFileName(F).StartsWith('.') then
+        begin
+          Inc(Hidden);
+          Inc(HiddenGit);
+          Continue;
+        end;
+        if TPath.GetFileName(F).StartsWith('__') and
+           not (Params.IncludeTrash and IsTrash) then
+        begin
+          Inc(Hidden);
+          Inc(HiddenTrash);
+          Continue;
+        end;
         if (not RootInArtifacts) and
            SkipIdeArtifacts(RelToRoot(F, Root) + '\', Params.IncludeTrash) then
         begin
@@ -504,7 +520,8 @@ begin
       if Hidden > 0 then
       begin
         Return.AddPair('hidden', TJSONNumber.Create(Hidden));
-        Return.AddPair('note', Format(SN_LIST_HIDDEN_FMT, [Hidden]));
+        Return.AddPair('note', Format(SN_LIST_HIDDEN_FMT,
+          [Hidden, HiddenArt, HiddenGit, HiddenTrash]));
       end;
       Return.AddPair('dirs', Arr);
       Result := Return.ToJSON;
@@ -525,7 +542,7 @@ begin
   Return := TJSONObject.Create;
   Arr := TJSONArray.Create;
   Total := 0;
-  Hidden := 0;
+  Hidden := 0; HiddenArt := 0; HiddenGit := 0; HiddenTrash := 0;
   try
     for Mask in Masks do
       for F in WalkFiles(Root, Mask.Trim) do
@@ -534,9 +551,16 @@ begin
         // root: listing its notes would invite edits behind its back.
         if InVault(F) then
           Continue;
-        if SkipIdeArtifacts(RelToRoot(F, Root), Params.IncludeTrash) then
+        Reason := SkipReason(RelToRoot(F, Root), Params.IncludeTrash);
+        if Reason <> '' then
         begin
           Inc(Hidden);
+          if Reason = 'git' then
+            Inc(HiddenGit)
+          else if Reason = 'trash' then
+            Inc(HiddenTrash)
+          else
+            Inc(HiddenArt);
           Continue;
         end;
         Inc(Total);
@@ -559,11 +583,25 @@ begin
       end;
     Return.AddPair('total', TJSONNumber.Create(Total));
     Return.AddPair('shown', TJSONNumber.Create(Arr.Count));
+    if Total > Arr.Count then
+      Return.AddPair('shownNote', Format(SN_SEARCH_CAPPED_FMT,
+        [Arr.Count, Total]));
     if Hidden > 0 then
     begin
       Return.AddPair('hidden', TJSONNumber.Create(Hidden));
-      Return.AddPair('note', Format(SN_LIST_HIDDEN_FMT, [Hidden]));
+      // Say WHICH, because "42 hidden" plus the wrong reason sends the reader
+      // hunting for build output that is not there (measured 2026-08-25).
+      if HiddenArt > 0 then
+        Return.AddPair('hiddenBuildArtifacts', TJSONNumber.Create(HiddenArt));
+      if HiddenGit > 0 then
+        Return.AddPair('hiddenGitInternals', TJSONNumber.Create(HiddenGit));
+      if HiddenTrash > 0 then
+        Return.AddPair('hiddenTrash', TJSONNumber.Create(HiddenTrash));
+      Return.AddPair('note', Format(SN_LIST_HIDDEN_FMT,
+        [Hidden, HiddenArt, HiddenGit, HiddenTrash]));
     end;
+    if Arr.Count >= 500 then
+      Return.AddPair('shownNote', SN_LIST_CAPPED);
     Return.AddPair('files', Arr);
     Result := Return.ToJSON;
   finally
@@ -579,8 +617,9 @@ begin
   FName := 'delphi_git';
   FDescription := 'Whitelisted git operations on a repository of this ' +
     'machine, so a remote agent can bring in code and version its work: ' +
-    'status, diff, log, show, branch, add, commit, init, push, tag, config, ' +
-    'clone, pull, fetch. **clone** is the fast way to get a whole repo onto ' +
+    'status, diff, log, show, branch, switch, merge, stash, add, commit, ' +
+    'init, push, tag, config, clone, pull, fetch. **clone** is the fast way ' +
+    'to get a whole repo onto ' +
     'the server (URL in "message", destination directory in "repo", jailed ' +
     'to the workspace roots) - far better than recreating files one by one. ' +
     'commit/tag messages and config values also travel in "message"; push/' +
@@ -730,7 +769,18 @@ begin
     // --ff-only: a merge that would need a commit (and could conflict half
     // way) is refused rather than left half-done. Real conflicts are a
     // human's business, not an agent's guess.
-    GitArgs := 'merge --ff-only ' + Params.Args;
+    // ...which only held while the caller could not ADD options: user args
+    // landed after --ff-only, so `--no-ff <branch>` won and left the repo in
+    // MERGING with conflict markers and no way back through this tool
+    // (measured 2026-08-25). A branch name, or --abort. Nothing else.
+    if SameText(Params.Args.Trim, '--abort') then
+      GitArgs := 'merge --abort'
+    else if Params.Args.Trim.StartsWith('-') or
+            (Params.Args.Trim.Split([' ', #9],
+              TStringSplitOptions.ExcludeEmpty)[0] <> Params.Args.Trim) then
+      Exit(SR_GIT_MERGE_ARGS)
+    else
+      GitArgs := 'merge --ff-only ' + Params.Args.Trim;
   end
   else if Cmd = 'stash' then
   begin
@@ -763,8 +813,9 @@ begin
   end
   else
     Exit('error: unknown command "' + Params.Command +
-      '". Allowed: status | diff | log | show | branch | add | commit | init | ' +
-      'push | tag | config | clone | pull | fetch');
+      '". Allowed: status | diff | log | show | branch | switch | merge | ' +
+      'stash | add | commit | init | push | tag | config | clone | pull | ' +
+      'fetch');
 
   if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push']) then
     TLogger.Warning(Format('delphi_git: NETWORK %s repo=%s %s',
@@ -1021,6 +1072,12 @@ begin
         'server exe (or the DELPHI_MCP_ROOTS environment variable).');
   end;
 
+  // A root that is not there answered {"total":0}, which reads as "there are
+  // no projects" instead of "you mistyped the path" - delphi_list says
+  // "directory not found" for the same thing (measured 2026-08-25).
+  for RootDir in Roots do
+    if (RootDir.Trim <> '') and not TDirectory.Exists(RootDir.Trim) then
+      Exit(Format(SR_PROJECTS_NO_ROOT_FMT, [RootDir.Trim]));
   Filt := Params.Name.Trim.ToLower;
   Return := TJSONObject.Create;
   Arr := TJSONArray.Create;
@@ -1363,6 +1420,14 @@ begin
     if Params.Offset > Stream.Size then
       Exit(Format('error: offset %d mas alla del final actual (size=%d); ' +
         'envia los trozos EN ORDEN', [Params.Offset, Stream.Size]));
+    // ...and an offset that lands INSIDE the file is just as wrong: the write
+    // truncates whatever came after it, with no copy taken (this is not
+    // offset=0, so the backup above did not run). Measured 2026-08-25: a
+    // 14-byte file resumed at offset 5 came back 8 bytes long, six of them
+    // gone and unrecoverable. Resuming means continuing at the END.
+    if (Params.Offset > 0) and (Params.Offset < Stream.Size) then
+      Exit(Format(SR_UPLOAD_OFFSET_INSIDE_FMT,
+        [Params.Offset, Stream.Size, Stream.Size]));
     Stream.Position := Params.Offset;
     if Length(Bytes) > 0 then
       Stream.WriteBuffer(Bytes[0], Length(Bytes));
@@ -1402,8 +1467,17 @@ begin
         // park it aside and say where (field round 8).
         Quarantine := FullPath + '.corrupto';
         try
+          // A second failed upload used to overwrite the first quarantine
+          // with no copy at all - the one write path that did not respect
+          // the trash (2026-08-25). Park the older one properly first.
           if TFile.Exists(Quarantine) then
+          begin
+            try
+              BackupFile(Quarantine);
+            except
+            end;
             TFile.Delete(Quarantine);
+          end;
           TFile.Move(FullPath, Quarantine);
           Return.AddPair('quarantined', Quarantine);
         except

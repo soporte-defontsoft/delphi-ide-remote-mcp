@@ -108,7 +108,7 @@ end;
 
 function TDelphiReportTool.ExecuteWithParams(const Params: TDelphiReportParams): string;
 var
-  Dir, FileName, Path, Kind, Title, Agent, Body: string;
+  Dir, FileName, Path, Kind, Title, Agent, Body, KindNote: string;
   Stamp: TDateTime;
   Sb: TStringBuilder;
   I, Size: Integer;
@@ -125,8 +125,17 @@ begin
       [Size div 1024, MAX_REPORT_BYTES div 1024]));
 
   Kind := Params.Kind.Trim.ToLower;
+  // A kind nobody recognises used to become "bug" in silence, so a report
+  // filed as something else was quietly refiled and the sender never knew
+  // (measured 2026-08-25). It still goes through - losing a report over a
+  // typo would be worse - but the answer says what it did.
+  KindNote := '';
   if not MatchText(Kind, ['bug', 'limitation', 'suggestion', 'question']) then
+  begin
+    if Kind <> '' then
+      KindNote := Format(SN_REPORT_KIND_FMT, [Params.Kind.Trim]);
     Kind := 'bug';
+  end;
   Title := Params.Title.Trim;
   // One subfolder per emitter. Slug() - the same normalizer as the title -
   // is what keeps this a server-generated path: nothing of the raw client
@@ -185,7 +194,7 @@ begin
   // history accumulates.
   Result := Format(SN_REPORT_OK_FMT,
     [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path),
-     SERVER_VERSION]);
+     SERVER_VERSION]) + KindNote;
 end;
 
 initialization

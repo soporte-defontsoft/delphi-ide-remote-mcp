@@ -93,7 +93,10 @@ implementation
 
 uses
   System.RegularExpressions,
+  System.StrUtils,
+  System.IOUtils,
   MCPServer.Registration,
+  Lsp.Texts,
   Lsp.Patch;
 
 const
@@ -261,11 +264,52 @@ begin
     'DelphiLSP engine. Works even without project settings.';
 end;
 
+{ A position nobody could point at. delphi_references said "Line 9999 out of
+  range"; hover answered `null [hint: hover only answers on usages]` and
+  definition answered a bare `null` - two canned answers that hid a typo and
+  sent the reader looking for the wrong thing (measured 2026-08-25). '' when
+  the position is real. }
+function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
+var
+  Lines: TArray<string>;
+  Enc: string;
+begin
+  Result := '';
+  if (ALine < 0) or (AChar < 0) then
+    Exit(Format(SR_LSP_NEGATIVE_FMT, [ALine, AChar]));
+  if not TFile.Exists(APath) then
+    Exit;
+  try
+    Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
+  except
+    Exit;
+  end;
+  if ALine >= Length(Lines) then
+    Exit(Format(SR_LSP_LINE_RANGE_FMT,
+      [ALine, TPath.GetFileName(APath), Length(Lines), Length(Lines) - 1]))
+  else if AChar > Length(Lines[ALine]) then
+    Exit(Format(SR_LSP_CHAR_RANGE_FMT,
+      [AChar, ALine, Length(Lines[ALine]), Lines[ALine].Trim]));
+end;
+
+{ Whether this is a file DelphiLSP can say anything about at all. Answering
+  `[]` for a .txt reads as "this unit has no symbols" (measured 2026-08-25). }
+function NotDelphiSource(const APath: string): string;
+begin
+  Result := '';
+  if not MatchText(TPath.GetExtension(APath), ['.pas', '.dpr', '.dpk', '.inc']) then
+    Result := Format(SR_LSP_NOT_SOURCE_FMT,
+      [TPath.GetFileName(APath), TPath.GetExtension(APath)]);
+end;
+
 function TDelphiSymbolsTool.ExecuteWithParams(const Params: TDelphiFileParams): string;
 var
   Client: TLspClient;
   Settings: string;
 begin
+  Result := NotDelphiSource(Params.Path);
+  if Result <> '' then
+    Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
   Result := RenderResult(
     Client.DocumentSymbols(TLspClient.PathToUri(Params.Path)),
@@ -296,6 +340,9 @@ var
   Settings, Kind: string;
   Resp: TJSONObject;
 begin
+  Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  if Result <> '' then
+    Exit;
   Kind := Params.Kind.Trim.ToLower;
   if (Kind <> '') and (Kind <> 'definition') and (Kind <> 'declaration') and
      (Kind <> 'implementation') then
@@ -395,6 +442,9 @@ var
   Resp: TJSONObject;
   V: TJSONValue;
 begin
+  Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  if Result <> '' then
+    Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
   Resp := Client.Hover(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
   // Prefer the markdown payload alone: it is what an agent wants to read.

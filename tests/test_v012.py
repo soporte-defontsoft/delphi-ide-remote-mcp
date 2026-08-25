@@ -491,8 +491,13 @@ out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Linux64", "path": _dep})
 check('deployfile: anadido (manifiesto generado primero)', out.startswith('ANADIDO') and 'genero el estandar' in out, out[:200])
 _x = open(_deployproj, encoding='utf-8-sig').read()
+# v0.62: la entrada va RELATIVA al proyecto cuando el fichero cuelga de el, y
+# absoluta cuando no; el IDE hace lo mismo. Cuenta las dos formas.
+def _deps_in(xml):
+    rel = os.path.relpath(_dep, os.path.dirname(_deployproj))
+    return xml.count('<DeployFile Include="' + _dep + '"') +            xml.count('<DeployFile Include="' + rel + '"')
 check('deployfile: entrada Debug y Release con la forma del IDE',
-      _x.count('<DeployFile Include="' + _dep + '"') == 2 and '<DeployClass>File</DeployClass>' in _x
+      _deps_in(_x) == 2 and '<DeployClass>File</DeployClass>' in _x
       and '<RemoteDir>ConfProj' + chr(92) + '</RemoteDir>' in _x and "'$(Config)'=='Release'" in _x, 'shape mismatch')
 check('deployfile: el .dproj importa el manifiesto',
       '$(MSBuildProjectName).deployproj' in open(CON, encoding='utf-8-sig').read(), 'import line missing')
@@ -527,9 +532,16 @@ out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
                              "platform": "Linux64", "path": _dep})
 check('deployfile: quitado (2 entradas)', out.startswith('QUITADO') and '2 entradas' in out, out[:120])
 _x = open(_deployproj, encoding='utf-8-sig').read()
+# Desde v0.62 la entrada se escribe RELATIVA al proyecto, como la escribe el
+# IDE (una ruta absoluta hacia que el .deployproj no fuese portable, y ademas
+# remove-deployfile no encontraba sus propias entradas).
+_relname = os.path.basename(_dep)
 check('deployfile: Linux64 limpio, Android64 intacto',
-      ('libfake.so' in _x) and _x.count('<DeployFile Include="' + _dep + '"') == 2
+      ('libfake.so' in _x) and
+      (_deps_in(_x) == 2)
       and "'$(Platform)'=='Android64'" in _x, 'unexpected manifest state')
+check('deployfile: la entrada NO lleva ruta absoluta (portable)',
+      ('<DeployFile Include="' + _dep + '"') not in _x, _x[-300:])
 out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
                              "platform": "Linux64", "path": _dep})
 check('deployfile: quitar lo que no esta responde honesto', 'no esta' in out, out[:120])

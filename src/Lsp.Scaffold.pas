@@ -617,6 +617,11 @@ var
   Dir, PasPath, Body: string;
   M: TMatch;
 begin
+  // kind=unit takes "project", not "dir" - the folder comes from the project.
+  // Passing dir= answered "RECHAZADO: ruta invalida: " with an empty path and
+  // cost four calls to decode (measured 2026-08-25).
+  if ADprPath.Trim = '' then
+    Exit(SR_CREATE_UNIT_NEED_PROJECT);
   Result := PathDenied(ADprPath);
   if Result <> '' then
     Exit;

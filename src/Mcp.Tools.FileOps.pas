@@ -101,9 +101,30 @@ begin
   ATrash := TrashPathFor(APath);
   TDirectory.CreateDirectory(TPath.GetDirectoryName(ATrash));
   if TDirectory.Exists(APath) then
-    TDirectory.Move(APath, ATrash)
+  begin
+    // A rename can fail for reasons nobody here can see - a handle somebody
+    // else holds, a subfolder that is somebody's working directory. When it
+    // does, copy the tree to the trash and then take away what CAN be taken
+    // away, so the recoverable copy exists either way.
+    try
+      TDirectory.Move(APath, ATrash);
+    except
+      TDirectory.Copy(APath, ATrash);
+      try
+        TDirectory.Delete(APath, True);
+      except
+        // leave it: the caller checks and REPORTS what is still there
+      end;
+    end;
+  end
   else
     TFile.Move(APath, ATrash);
+end;
+
+{ Whether anything is still standing where the caller asked us to delete. }
+function StillThere(const APath: string): Boolean;
+begin
+  Result := TFile.Exists(APath) or TDirectory.Exists(APath);
 end;
 
 { TDelphiDeleteTool }
@@ -151,7 +172,7 @@ begin
         Continue;
       end;
       try
-        R := RemoveProjectUnit(P, Params.Path);
+        R := RemoveProjectUnit(P, Params.Path, True);
       except
         on E: Exception do
           R := 'ERROR ' + E.Message;
@@ -185,6 +206,21 @@ begin
           #10 + DesignerNote + #10 + ProjNote]));
       Exit('ERROR al mover a la papelera: ' + E.Message);
     end;
+  end;
+  // Say BORRADO only if it is gone. An auditor working through MCP found a
+  // folder still standing after a cheerful "BORRADO ... movido a la papelera"
+  // (2026-08-25): the copy had been made, the original had not gone, and
+  // nothing in the answer said so. A delete that half-happened must read as a
+  // delete that half-happened.
+  if StillThere(Params.Path) then
+  begin
+    Result := Format(SR_FILE_DELETE_PARTIAL_FMT,
+      [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash]);
+    if DesignerNote <> '' then
+      Result := Result + #10 + DesignerNote;
+    if ProjNote <> '' then
+      Result := Result + #10 + ProjNote;
+    Exit;
   end;
   Result := Format('BORRADO %s (movido a la papelera recuperable).'#10 +
     '  copia: %s'#10'  Para recuperarlo: delphi_move con path=esa copia y ' +

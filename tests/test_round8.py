@@ -420,7 +420,7 @@ MSG = spawn()
 t = call(MSG, 'delphi_workspace', {})
 check('#9 el aviso NO nombra el buzon ajeno', 'otro' not in t, t[-250:])
 check('#9 ...pero SI dice que hay correo dirigido a alguien',
-      'dirigidos a agentes concretos' in t, t[-250:])
+      'para agentes concretos' in t, t[-250:])
 open(os.path.join(MBOX, '20260825-general.md'), 'w', encoding='utf-8').write(
     '# general\n\npara todos\n')
 t = call(MSG, 'delphi_workspace', {})
@@ -435,6 +435,24 @@ check('#9 con correo esperando, una respuesta JSON SIGUE siendo JSON',
 check('#9 ...y el aviso viaja dentro, en "mailbox"',
       'para TODOS' in jw.get('mailbox', ''), str(jw.get('mailbox'))[:150])
 MSG['p'].kill()
+
+# ------------------------------------------------------------------- #19 --
+# add-deployfile escribia rutas ABSOLUTAS donde el IDE escribe relativas, y
+# luego remove-deployfile no encontraba sus propias entradas.
+EXTRA = os.path.join(SANO, 'datos.txt')
+open(EXTRA, 'w', encoding='utf-8').write('x' + chr(10))
+r = call(A, 'delphi_config', {'project': SANODPROJ, 'command': 'add-deployfile',
+                              'platform': 'Win32', 'path': EXTRA}, t=600)
+if 'RECHAZADO' in r or r.startswith('error'):
+    check('#19 add-deployfile disponible en esta maquina', False, r[:200])
+else:
+    dep = os.path.join(SANO, 'Sano.deployproj')
+    xml = open(dep, encoding='utf-8-sig', errors='replace').read() if os.path.exists(dep) else ''
+    check('#19 la entrada se escribe RELATIVA, como el IDE',
+          'Include="datos.txt"' in xml and SANO not in xml, xml[-400:] if xml else '(sin .deployproj)')
+    r2 = call(A, 'delphi_config', {'project': SANODPROJ, 'command': 'remove-deployfile',
+                                   'platform': 'Win32', 'path': EXTRA})
+    check('#19 ...y remove-deployfile la encuentra', 'QUITADO' in r2, r2[:200])
 
 # ------------------------------------------------- M4: delphi_help ---------
 r = call(A, 'delphi_help', {})
@@ -452,6 +470,14 @@ check('M4 con solo name, la intencion es obvia', j.get('tool') == 'delphi_change
 r = call(A, 'delphi_help', {'command': 'tool', 'name': 'noexiste'})
 check('M4 tool inventada: RECHAZADO diciendo cuales hay',
       'RECHAZADO' in r and 'delphi_edit' in r, r[:200])
+# #24 el schema decia classname_/create_ y la prosa class=/create=true
+sc = tools_schema(A)
+props = set(sc['delphi_designer']['inputSchema']['properties']) |         set(sc['delphi_textedit']['inputSchema']['properties'])
+check('#24 ningun parametro se anuncia con guion bajo final',
+      not any(k.endswith('_') for k in props), sorted(props))
+check('#24 ...y los nombres son los de la prosa',
+      'classname' in props and 'create' in props, sorted(props))
+
 r = call(A, 'delphi_help', {'command': 'volar'})
 check('M4 command invalido: los tres validos', 'tasks' in r and 'conventions' in r, r[:200])
 

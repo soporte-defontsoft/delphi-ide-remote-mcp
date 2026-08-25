@@ -55,7 +55,8 @@ function AddProjectUnit(const AProject, APasPath: string): string;
 
 { Takes the unit out of the .dpr (uses + CreateForm) and the .dproj. The
   file itself stays on disk. }
-function RemoveProjectUnit(const AProject, APasPath: string): string;
+function RemoveProjectUnit(const AProject, APasPath: string;
+  AFileGoesToo: Boolean = False): string;
 
 { Re-points an existing entry to a new path/name (the file was already moved
   or renamed by the caller; the new file's header decides the unit name). }
@@ -853,7 +854,8 @@ begin
   Result := False;
 end;
 
-function RemoveProjectUnit(const AProject, APasPath: string): string;
+function RemoveProjectUnit(const AProject, APasPath: string;
+  AFileGoesToo: Boolean): string;
 var
   Dpr, Dproj, Enc, Text, UnitName, Entry, Include, FormName, ClassName: string;
   Carry, Prefix, Core: string;
@@ -931,7 +933,12 @@ begin
 
   if not (InDpr or InDproj) then
     Exit(Format(SN_UNIT_ABSENT_FMT, [UnitName, TPath.GetFileName(Dpr)]));
-  Result := Format(SN_UNIT_REMOVED_FMT, [UnitName, TPath.GetFileName(Dpr),
+  // The "the file is still on disk, delete it if you no longer want it" tail
+  // belongs to command=remove-unit. It was also landing inside delphi_delete's
+  // own answer, three lines under "BORRADO ... moved to the trash", and made
+  // the reader doubt what had happened (measured 2026-08-25).
+  Result := Format(IfThen(AFileGoesToo, SN_UNIT_REMOVED_GONE_FMT,
+    SN_UNIT_REMOVED_FMT), [UnitName, TPath.GetFileName(Dpr),
     IfThen(InDpr, 'uses', '-'), IfThen(N > 0, ' + CreateForm', ''),
     IfThen(InDproj, ', DCCReference del .dproj', ''), TPath.GetFileName(APasPath)]);
 end;
