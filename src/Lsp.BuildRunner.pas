@@ -992,6 +992,14 @@ begin
       Result.AddPair('firstError', Errors.Items[0].Value);
       Result.AddPair('firstErrorNote', SN_BUILD_FIRST_ERROR);
     end;
+    // F2039 is almost never a code problem: the binary this build is about to
+    // write is OPEN - the previous run still alive, the IDE holding it, a
+    // debugger attached. It reads like a compiler error and it is not, so it
+    // gets the one sentence that turns it into an action.
+    if (ExitCode <> 0) and Output.Contains('F2039') then
+    begin
+      Result.AddPair('lockedOutputNote', SN_BUILD_LOCKED_OUTPUT);
+    end;
     // Units the compiler could not find: say where their source lives, so
     // the next call is the add-searchpath and not another failed build.
     if ExitCode <> 0 then

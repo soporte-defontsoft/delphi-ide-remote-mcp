@@ -84,8 +84,11 @@ t = call('delphi_messages', {"agent": "dsh"})
 check('segunda lectura: nada', t.startswith('Sin mensajes para "dsh"'), t)
 t = call('delphi_workspace', {})
 check('sin aviso cuando no hay nada', 'MENSAJES PENDIENTES' not in t, t[-80:])
+# Desde v0.68 el buzon toma tu identidad del handshake (clientInfo.name), asi
+# que "read" sin agent lee TU correo sin teclearlo. Este cliente se llama
+# "messages-battery", que no tiene correo -> lo dice, nombrandote.
 t = call('delphi_messages', {})
-check('sin agent: pista', 'Sin mensajes para todos' in t and 'agent=' in t, t)
+check('sin agent: usa la identidad del handshake', 'messages-battery' in t, t)
 t = call('delphi_messages', {"command": "x"})
 check('command invalido', t.startswith('error:'), t)
 # the agent id is slugged like delphi_report: no path tricks

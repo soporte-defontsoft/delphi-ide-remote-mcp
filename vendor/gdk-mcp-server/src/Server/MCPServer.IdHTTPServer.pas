@@ -115,6 +115,7 @@ implementation
 uses
   MCPServer.Resource.Server,
   MCPServer.CoreManager,
+  Lsp.Guard, // [local change] per-session agent identity
   MCPServer.Logger;
 
 // [local change] Issued session ids. The upstream server echoes whatever
@@ -130,6 +131,35 @@ const
 var
   GSessLock: TCriticalSection;
   GSessions: TStringList;
+
+// [local change] Bind the handshake's clientInfo.name to the session id the
+// server just issued, so later calls on that session carry an identity the
+// caller cannot re-forge per request (it would need this id, a secret).
+procedure BindInitializeIdentity(const ARequestBody, ANewId: string);
+var
+  V, Root, Params, CInfo, NameV: TJSONValue;
+begin
+  if (ANewId = '') then Exit;
+  V := nil;
+  try
+    try
+      V := TJSONObject.ParseJSONValue(ARequestBody);
+      if not (V is TJSONObject) then Exit;
+      Root := V;
+      Params := (Root as TJSONObject).GetValue('params');
+      if not (Params is TJSONObject) then Exit;
+      CInfo := (Params as TJSONObject).GetValue('clientInfo');
+      if not (CInfo is TJSONObject) then Exit;
+      NameV := (CInfo as TJSONObject).GetValue('name');
+      if Assigned(NameV) then
+        BindSessionIdentity(ANewId, NameV.Value);
+    except
+      // a malformed handshake just means no identity; never fatal
+    end;
+  finally
+    V.Free;
+  end;
+end;
 
 procedure RememberSession(const AId: string);
 begin
@@ -532,10 +562,18 @@ begin
       Exit;
     end;
 
-    if AcceptsSSE(AcceptHeader) then
-      HandlePostRequestSSE(RequestInfo, ResponseInfo, RequestBody, SessionID)
-    else
-      HandlePostRequestJSON(RequestInfo, ResponseInfo, RequestBody, SessionID);
+    // [local change] whoever this session belongs to is who these tools run
+    // as. Cleared afterwards because Indy reuses the thread for the next
+    // client.
+    SetThreadIdentityBySession(SessionID);
+    try
+      if AcceptsSSE(AcceptHeader) then
+        HandlePostRequestSSE(RequestInfo, ResponseInfo, RequestBody, SessionID)
+      else
+        HandlePostRequestJSON(RequestInfo, ResponseInfo, RequestBody, SessionID);
+    finally
+      ClearThreadIdentity;
+    end;
 
   finally
     JSONRequest.Free;
@@ -678,6 +716,7 @@ begin
     begin
       ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := M.Groups[1].Value;
       RememberSession(M.Groups[1].Value); // [local change]
+      BindInitializeIdentity(RequestBody, M.Groups[1].Value); // [local change]
     end;
   end;
 
@@ -736,6 +775,7 @@ begin
         begin
           ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionValue.Value;
           RememberSession(SessionValue.Value); // [local change]
+          BindInitializeIdentity(RequestBody, SessionValue.Value); // [local change]
         end;
       end;
     finally

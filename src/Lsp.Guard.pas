@@ -130,6 +130,31 @@ function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemote
   DELPHI_MCP_ALLOW_TESTS=1 or [Security] AllowTests=1. }
 function AllowTests: Boolean;      // DELPHI_MCP_ALLOW_TESTS / AllowTests=1
 
+{ WHO is calling - as far as this server can honestly know.
+
+  Two-phase, the way the operator asked: the SHARED token (Bearer) is the door,
+  the same for everyone. Then the handshake's clientInfo.name is bound to the
+  session id the server issues in `initialize` - and that id is a secret the
+  server generated, returned once, and the client echoes on every request. So
+  the NAME is fixed at connect time and cannot be re-declared per call: to be
+  taken for another agent you would have to steal their session id, not just
+  type their name. That is the whole gain over the old self-declared 'agent'
+  string.
+
+  Not authentication (one token still lets anyone connect), but enough to keep
+  agents working in different projects from stepping on each other, and to
+  stop casual impersonation. A real per-agent token is the next rung.
+
+  Bound at initialize; read on every tool call via the per-thread context the
+  HTTP layer sets before dispatch. '' when unknown (stdio with no name, or a
+  request before initialize) - callers treat that as 'anon'. }
+procedure BindSessionIdentity(const ASessionId, AName: string);
+procedure SetThreadIdentityBySession(const ASessionId: string);
+procedure SetThreadIdentity(const AName: string); // stdio: one process, one name
+procedure ClearThreadIdentity;
+function CurrentAgent: string;               // '' = unknown
+function CurrentAgentOr(const ADefault: string): string;
+
 { Host names git may talk to when an agent writes an explicit URL, comma
   separated; '' (the default) means none - see GitRemoteDenied. }
 function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
@@ -234,6 +259,7 @@ uses
   System.StrUtils,
   System.IniFiles,
   System.IOUtils,
+  System.SyncObjs,
   System.Generics.Collections,
   MCPServer.Serializer, // NormalizeKey: ONE rule for argument names
   Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
@@ -246,6 +272,8 @@ var
   GProcessReadOnly: Boolean = False;
   GSecLoaded: Boolean = False;
   GAuthToken: string;
+  GIdentLock: TCriticalSection;
+  GSessionNames: TStringList; // sessionId=name, bound at initialize
   GReadOnlyToken: string;
   GAnonymousReadOnly: Boolean = False;
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
@@ -260,6 +288,7 @@ var
   GAdbDevicesSet: Boolean = False;  // configured at all? absent = unrestricted
 
 threadvar
+  TCurrentAgent: string; // WHO is calling on THIS thread (the HTTP request)
   GRequestReadOnly: Boolean;
 
 procedure SetProcessReadOnly(AValue: Boolean);
@@ -384,6 +413,80 @@ function AllowTests: Boolean;
 begin
   LoadSecurity;
   Result := GAllowTests;
+end;
+
+{ A name safe to use as a folder tag: letters, digits, dash, underscore, dot.
+  Anything else collapses to '-', so a declared name can never traverse. }
+function SanitizeAgent(const AName: string): string;
+var
+  C: Char;
+begin
+  Result := '';
+  for C in AName.Trim do
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
+      Result := Result + C
+    else
+      Result := Result + '-';
+  Result := Result.Trim(['-', '.']);
+  if Length(Result) > 40 then
+    Result := Copy(Result, 1, 40);
+end;
+
+procedure BindSessionIdentity(const ASessionId, AName: string);
+var
+  Clean: string;
+begin
+  if ASessionId.Trim = '' then
+    Exit;
+  Clean := SanitizeAgent(AName);
+  if Clean = '' then
+    Exit;
+  GIdentLock.Enter;
+  try
+    GSessionNames.Values[ASessionId.Trim] := Clean;
+    while GSessionNames.Count > 256 do
+      GSessionNames.Delete(0);
+  finally
+    GIdentLock.Leave;
+  end;
+end;
+
+procedure SetThreadIdentityBySession(const ASessionId: string);
+begin
+  if ASessionId.Trim = '' then
+  begin
+    TCurrentAgent := '';
+    Exit;
+  end;
+  GIdentLock.Enter;
+  try
+    TCurrentAgent := GSessionNames.Values[ASessionId.Trim];
+  finally
+    GIdentLock.Leave;
+  end;
+end;
+
+procedure SetThreadIdentity(const AName: string);
+begin
+  TCurrentAgent := SanitizeAgent(AName);
+end;
+
+procedure ClearThreadIdentity;
+begin
+  TCurrentAgent := '';
+end;
+
+function CurrentAgent: string;
+begin
+  Result := TCurrentAgent;
+end;
+
+function CurrentAgentOr(const ADefault: string): string;
+begin
+  if TCurrentAgent <> '' then
+    Result := TCurrentAgent
+  else
+    Result := ADefault;
 end;
 
 function GitRemoteHosts: string;
@@ -1754,5 +1857,14 @@ begin
     Sb.Free;
   end;
 end;
+
+
+initialization
+  GIdentLock := TCriticalSection.Create;
+  GSessionNames := TStringList.Create;
+
+finalization
+  GSessionNames.Free;
+  GIdentLock.Free;
 
 end.

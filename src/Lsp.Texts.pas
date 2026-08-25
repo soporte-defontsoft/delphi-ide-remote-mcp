@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.67.0-beta';
+  SERVER_VERSION = '0.68.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -865,7 +865,7 @@ const
   SR_ADB_ALLOWLIST_DEVICE =
     'RECHAZADO: este servidor tiene lista de dispositivos permitidos ' +
     '([Adb] AllowedDevices): indica "device" explicitamente con uno de la ' +
-    'lista (command=devices los enseña).';
+    'lista (command=devices los enumera).';
 
   SN_ADB_GONE =
     'SIN CONEXION CON EL DISPOSITIVO. El adb por wifi se cae solo tras un ' +
@@ -1598,8 +1598,10 @@ const
     #10 +
     '4. COPIAS. Toda tool que escribe deja copia del original en la papelera ' +
     '__delphi-patch junto al fichero, ANTES de tocarlo, una por dia y fichero ' +
-    '(la primera del dia es la original, que es la que vale). Esa carpeta no ' +
-    'se lista ni se borra desde aqui: es la red.'#10 +
+    '(la primera del dia es la original, que es la que vale). Un fichero vivo ' +
+    'SIEMPRE pasa por ahi primero: eso es la red. Cuando ya no necesites una ' +
+    'copia, delphi_delete con purge=true la borra de verdad, pero SOLO dentro ' +
+    'de la papelera y solo la TUYA (ver regla 12).'#10 +
     #10 +
     '5. ENCODING Y FINALES DE LINEA se respetan como estan. No conviertas un ' +
     'fichero de paso; si necesitas un caracter que no cabe en su codepage, ' +
@@ -1631,7 +1633,16 @@ const
     'corrige y repite. "Error executing tool:" = me he roto yo por dentro; ' +
     'eso SIEMPRE es un fallo mio, cuentalo con delphi_report.'#10 +
     #10 +
-    '12. SI ALGO NO SE PUEDE HACER POR AQUI, ESO ES UN HALLAZGO. Cuentalo con ' +
+    '12. QUIEN ERES. Te identificas UNA VEZ, en el handshake, con ' +
+    'clientInfo.name; el servidor lo ata a tu sesion y a partir de ahi sabe ' +
+    'quien eres en cada peticion sin que lo repitas. Con eso: delphi_messages ' +
+    'lee TU correo sin teclear el id, y lo que TU mandas a la papelera solo ' +
+    'lo purgas tu (otro agente que lo intente se lleva un RECHAZADO). No es ' +
+    'una contrasena -el token es comun a todos-, pero para hacerse pasar por ' +
+    'ti hay que robarte la sesion, no basta con escribir tu nombre. Trabaja ' +
+    'en TU carpeta de proyecto y no pisaras a nadie.'#10 +
+    #10 +
+    '13. SI ALGO NO SE PUEDE HACER POR AQUI, ESO ES UN HALLAZGO. Cuentalo con ' +
     'delphi_report (kind=limitation) con la llamada exacta y lo que ' +
     'esperabas: este servidor se ha hecho entero con esos informes.';
 
@@ -1928,6 +1939,15 @@ const
     'no es Pascal. Las rutas de {$I} y {$R} tienen que quedarse dentro del ' +
     'workspace.';
 
+  SN_BUILD_LOCKED_OUTPUT =
+    'F2039 "Could not create output file" casi nunca es un fallo de tu ' +
+    'codigo: el binario que este build quiere escribir esta ABIERTO. Suele ' +
+    'ser la ejecucion anterior todavia viva, el IDE con el proyecto abierto o ' +
+    'un depurador enganchado. Espera a que termine lo que este corriendo y ' +
+    'repite; si es delphi_test quien lo dejo colgado, tiene timeout y se mata ' +
+    'solo. Yo NO mato procesos de esta maquina: puede haber alguien ' +
+    'trabajando con el IDE al otro lado.';
+
   SN_BUILD_DEFAULT_PLATFORM =
     'No me diste "platform", asi que he compilado Win32, que es el defecto de ' +
     'esta tool. OJO: delphi_test ejecuta Win64 por defecto, asi que si vas a ' +
@@ -1944,6 +1964,30 @@ const
     '"%s" no esta en la tabla %s de este servidor (sera de un paquete de ' +
     'terceros, o no existe). No es un error por si mismo, pero NO he revisado ' +
     'ninguna propiedad de ese objeto ni de lo que lleva dentro.';
+
+  SP_DESIGNER_UNIT =
+    'check-binding opcional: el .pas con la clase del form. Por defecto, el ' +
+    'que se llama igual que el .dfm.';
+
+  SR_DESIGNER_NO_FORM_FMT =
+    'RECHAZADO: no existe el fichero de form %s.';
+
+  SR_DESIGNER_NO_UNIT_FMT =
+    'RECHAZADO: no encuentro la unit del form (%s). Si se llama de otra ' +
+    'forma, pasala en "unit".';
+
+  SN_DESIGNER_BINDING_OK =
+    'El form y su clase CUADRAN: cada objeto del .dfm tiene su campo ' +
+    'publicado, cada evento apunta a un metodo que existe, y no sobra ningun ' +
+    'campo. Eso es lo que el compilador NO comprueba: un desajuste aqui ' +
+    'compila igual y revienta al crear la ventana.';
+
+  SN_DESIGNER_BINDING_BAD =
+    'OJO: el .dfm y la clase NO cuadran. Esto compila igual y falla al CREAR ' +
+    'el form, en ejecucion, con un mensaje que no senala aqui. Un objeto sin ' +
+    'campo publicado llega a nil; un evento cuyo metodo no existe hace que ' +
+    'el form no cargue. Arregla los tres listados antes de dar nada por ' +
+    'bueno.';
 
   SN_DESIGNER_SET_NOTE =
     'Es un SET: en el .dfm/.fmx se escribe entre corchetes y separado por ' +
@@ -2155,6 +2199,12 @@ const
     '(__delphi-patch). Para un fichero vivo, borralo normal: va a la ' +
     'papelera, y si de verdad quieres que desaparezca, purgalo desde alli. ' +
     'Ese doble paso es la red de la que dependen todas las demas tools.';
+
+  SR_FILE_PURGE_NOT_YOURS_FMT =
+    'RECHAZADO: esa copia la mando a la papelera OTRO agente (%s), asi que no ' +
+    'es tuya para purgarla. Limpia lo tuyo; lo de los demas lo quita su ' +
+    'dueno o el operador. (Si de verdad esto lo llevas tu, conectate con el ' +
+    'mismo clientInfo.name con el que lo borraste.)';
 
   SR_FILE_PURGE_NOT_ROOT =
     'RECHAZADO: eso es la carpeta __delphi-patch ENTERA, y ahi dentro hay ' +

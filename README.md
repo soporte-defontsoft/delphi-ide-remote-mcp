@@ -95,6 +95,48 @@ Off unless you configure it. Point it at an empty folder and the server creates
 a working starter vault for you; there is also a ready-made one in
 [`examples/vault/`](examples/vault/). **Full explanation: [docs/VAULT.md](docs/VAULT.md).**
 
+## The four questions every Delphi developer asks first
+
+Not "what tools are there" — that is the table below. These are the objections a Delphi person
+raises before letting any agent near their tree, and the honest state of each. Every claim here
+is measured, and where something is *not* solved it says so.
+
+**"An AI will corrupt my `.dfm`."** The likeliest failure. Three defences, in order: a **binary**
+`.dfm`/`.fmx` is refused outright, by every tool that writes — no text tool may touch a
+length-prefixed format. A **text** one is validated by `delphi_designer lint` against the
+framework's real RTTI tables (what the class actually publishes, not a guessed list): invalid
+properties, non-published properties, bad enum values and bad set members, each with its line,
+*before* MSBuild ever sees the file. And `delphi_designer check-binding` answers the question the
+compiler never asks — does the `.dfm` agree with the class? A component with no published field,
+or `OnClick = SomeMethodThatIsNotThere`, **builds perfectly and throws at form-load**, on a
+machine where nobody is watching. That gap is where hand-written forms actually break.
+*Not solved:* no tool renders a form. An agent can prove a form is consistent, not that it
+looks right.
+
+**"MSBuild output will flood the context."** `delphi_build` never returns raw log. It returns
+structured `errors[]` and `warnings[]` (file, line, column, code, message), an `outputTail`
+capped at ~25 lines, and `firstError` — because one `E2009` can spawn seven `E2250` that look
+like unrelated failures, and an agent that chases the last error chases noise. Same for
+`delphi_test`: total/passed/failed and the failing lines, not a console dump. A red suite is
+reported red — a green-looking failing suite was a real bug here once, and has its own
+regression test.
+
+**"Files get locked — by the IDE, by a hung exe — and everything dies with Access Denied."**
+Real, and it surfaces cleanly: a locked output is one `F2039 Could not create output file`,
+already parsed into `errors[]`, with a hint naming the likely cause (the app still running, the
+IDE holding the target, an antivirus). **This server will not kill processes on the host** — that
+is deliberate, not missing: a human may be sitting at that IDE. Test runs are the exception and
+kill only their own child, on their own timeout.
+
+**"What about my third-party packages — Boss, GetIt, submodules?"** Search paths are first-class:
+`delphi_projects add-searchpath` edits them per-configuration, `compilesAgainst` reports what a
+project actually resolves against, `delphi_components` lists what is installed in the IDE, and
+the library read zone lets an agent read RTL/VCL and component sources without any write rights.
+*Deliberately absent:* running `boss install` / package managers. That is arbitrary code
+downloaded from the internet and executed on the build host — exactly what `AllowRun`, the git
+remote allowlist and the host allowlist exist to gate. If you want it, it needs its own opt-in
+switch and its own allowlist; it will not arrive by accident.
+
 ## The tools
 
 | Tool | What it does |
@@ -109,7 +151,7 @@ a working starter vault for you; there is also a ready-made one in
 | `delphi_read` | Encoding-correct numbered reads (CP1252 / UTF-8±BOM detected for real) |
 | `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, semantic INSERT (global routine / method with both halves — also inside a `.dpr`, and into the implicit published section of forms), line DELETE mode, TPF0 hard-reject, post-write audit; new units use the encoding configured in the IDE |
 | `delphi_changeset` | **Multi-file transactions**: stage edit/create/delete/move, `preview` resolves every anchor and fingerprints every file, `commit` applies all or nothing — a file changed since preview refuses the batch, any failure restores every file byte-exact |
-| `delphi_designer` | **Forms and components, structured**: `info`/`prop` answer what a class REALLY publishes (generated RTTI tables), `tree`/`get` walk a text `.dfm`/`.fmx`, `lint` catches non-published properties and invalid enum values before the IDE ever opens the form |
+| `delphi_designer` | **Forms and components, structured**: `info`/`prop` answer what a class REALLY publishes (generated RTTI tables), `tree`/`get` walk a text `.dfm`/`.fmx`, `lint` catches non-published properties and invalid enum values before the IDE ever opens the form, and `check-binding` answers what the compiler never asks - whether the `.dfm` and the class agree (a component with no published field, or an event naming a method that is not declared, builds fine and throws at form-load) |
 | `delphi_rename_symbol` | **Semantic rename, preview only**: every occurrence re-confirmed against the same definition; one unverified reference, a designer or string-literal hit, an RTL symbol or a collision = not applicable, with the reasons. Apply will arrive over `delphi_changeset` |
 | `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms, frames, data modules and plain units (VCL/FMX) with IDE-equivalent skeletons, registered in the `.dpr` **and** the `.dproj` on creation — buildable immediately |

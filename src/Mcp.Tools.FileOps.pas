@@ -121,6 +121,8 @@ begin
   end;
 end;
 
+procedure WriteOwnerMarker(const ATrash: string); forward;
+
 procedure MoveToTrash(const APath: string; out ATrash: string);
 begin
   ATrash := TrashPathFor(APath);
@@ -145,6 +147,37 @@ begin
   end
   else
     TFile.Move(APath, ATrash);
+  // Who trashed it, so a later purge can be told "yours only". A file with no
+  // marker (or an unknown agent) is nobody's in particular and any caller may
+  // purge it - which keeps the operator's own cleanup, and stdio, working.
+  WriteOwnerMarker(ATrash);
+end;
+
+{ Drop "<trashpath>.by" holding the agent that trashed it, best-effort. }
+procedure WriteOwnerMarker(const ATrash: string);
+var
+  Who: string;
+begin
+  Who := CurrentAgent;
+  if Who = '' then
+    Exit;
+  try
+    TFile.WriteAllText(ATrash + '.by', Who, TEncoding.ASCII);
+  except
+    // a missing marker just means "nobody's": never fatal
+  end;
+end;
+
+{ The agent that owns a trashed item, '' when nobody is recorded. }
+function TrashOwner(const APath: string): string;
+begin
+  Result := '';
+  try
+    if TFile.Exists(APath + '.by') then
+      Result := TFile.ReadAllText(APath + '.by').Trim([' ', #9, #13, #10, #$FEFF]);
+  except
+    Result := '';
+  end;
 end;
 
 { Whether anything is still standing where the caller asked us to delete. }
@@ -192,6 +225,13 @@ begin
       Exit(SR_FILE_PURGE_NOT_ROOT);
     if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
       Exit('RECHAZADO: no existe ' + Params.Path);
+    // Yours only, unless you have no identity (stdio, or the operator's own
+    // console) - then you are trusted with everything. An item nobody owns is
+    // fair game too.
+    var Owner := TrashOwner(Params.Path);
+    var Me := CurrentAgent;
+    if (Me <> '') and (Owner <> '') and not SameText(Owner, Me) then
+      Exit(Format(SR_FILE_PURGE_NOT_YOURS_FMT, [Owner]));
     try
       if TDirectory.Exists(Params.Path) then
       begin
@@ -214,6 +254,11 @@ begin
       Exit(Format(SR_FILE_PURGE_FAILED_FMT,
         [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
          'sigue ahi despues de borrarlo']));
+    try
+      if TFile.Exists(Params.Path + '.by') then
+        TFile.Delete(Params.Path + '.by');
+    except
+    end;
     Exit(Format(SN_FILE_PURGED_FMT,
       [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
   end;

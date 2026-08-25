@@ -8,6 +8,46 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.68.0-beta] - 2026-08-25
+
+### Added
+- **Per-session agent identity.** The handshake's `clientInfo.name` is bound to
+  the `Mcp-Session-Id` the server issues and the client echoes on every request,
+  so the name is fixed at connect time and cannot be re-declared per call. Two
+  phases: the shared Bearer token is the door, the session id is who you are.
+  Not authentication - enough to keep agents in different projects off each
+  other's work, and to stop casual impersonation.
+- **Trash ownership.** Anything moved to the recoverable trash records who
+  trashed it; `purge=true` refuses someone else's copy and names the owner. A
+  caller with no identity (stdio, the operator's own console) is still trusted
+  with everything, and an unowned item is fair game.
+- **`delphi_designer check-binding`** - the question the compiler never asks:
+  does the `.dfm` agree with its class? Reports components with no published
+  field, events naming methods that are not declared, and published fields with
+  no component. Text-based on purpose: it has to work on a form that does not
+  compile yet, which is exactly when it is needed. Only the published area of
+  the class counts (private fields are the programmer's own - counting them gave
+  two false positives on the first real form it ran against).
+- **`F2039` hint** on a locked output naming the likely cause (the app still
+  running, the IDE holding the target, an antivirus). The server does not kill
+  processes on the host: a human may be at that IDE.
+- **README: "The four questions every Delphi developer asks first"** - `.dfm`
+  corruption, MSBuild noise, file locks and package managers, each with what is
+  measured and what is deliberately absent. Written because a reviewer reading
+  the repo proposed four improvements of which three already existed, buried in
+  a 41-row tool table: undocumented is indistinguishable from missing.
+
+### Fixed
+- **`delphi_designer` treated real binary `.dfm`/`.fmx` as text.** It only
+  recognised a raw `TPF0` stream, but the on-disk shape wraps that stream in a
+  resource header starting `$FF` - the commonest binary form went straight past
+  the guard and `lint`, `tree`, `get` and `check-binding` answered about
+  garbage. The write layer had always refused both shapes; the read side now
+  matches it. Lint answering about garbage is worse than lint refusing.
+- **`check-binding` reported "cannot find the unit" for a binary form**, sending
+  the caller hunting for a file that was never the problem. The binary check now
+  comes first.
+
 ## [0.67.0-beta] - 2026-08-25
 
 The last wall the field named: nothing here deleted for real.

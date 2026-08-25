@@ -53,6 +53,7 @@ uses
   System.StrUtils,
   System.Generics.Collections,
   MCPServer.Registration,
+  Lsp.Guard,
   Lsp.Texts;
 
 const
@@ -177,7 +178,13 @@ begin
     Cmd := 'read';
   if not MatchText(Cmd, ['read', 'check']) then
     Exit('error: command debe ser read | check');
+  // Your id, without typing it: the handshake bound clientInfo.name to this
+  // session, so the box knows who is asking. An explicit agent= still wins
+  // (an operator reading a specific box, an agent whose name differs from its
+  // id), but the common case - "read my mail" - needs no argument now.
   Agent := Slug(Params.Agent);
+  if Agent = '' then
+    Agent := Slug(CurrentAgent);
   Root := MessagesRoot;
   Files := PendingIn(Root);
   if Agent <> '' then

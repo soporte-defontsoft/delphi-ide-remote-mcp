@@ -41,6 +41,9 @@ type
 
 implementation
 
+uses
+  Lsp.Guard; // [local change] per-session agent identity
+
 { TMCPCoreManager }
 
 constructor TMCPCoreManager.Create(ASettings: TMCPSettings);
@@ -105,6 +108,15 @@ begin
   end;
   
   FSessionID := TGuid.NewGuid.ToString;
+  // [local change] stdio is one process = one client: no session header ever
+  // arrives, so bind the identity here and now, for the life of the process.
+  // Over HTTP this thread's identity is reset per request anyway, and the
+  // real binding is session id -> name in the HTTP layer.
+  if Assigned(ClientName) then
+  begin
+    BindSessionIdentity(FSessionID, ClientName.Value);
+    SetThreadIdentity(ClientName.Value);
+  end;
   
   ResultJSON := TJSONObject.Create;
   try

@@ -92,6 +92,15 @@ end
 """)
 BIN = os.path.join(BASE, 'Bin.dfm')
 open(BIN, 'wb').write(b'TPF0\x08TFormBin\x00')
+# The REAL on-disk shape of a binary .dfm is NOT a raw TPF0 stream: the IDE
+# wraps it in a 16-bit resource header starting $FF (FF 0A 00 + the UPPERCASED
+# form name + the TPF0 stream around offset 19). Measured 2026-08-25: the write
+# layer refused both shapes, but delphi_designer only knew TPF0 - so lint, tree
+# and check-binding happily parsed the commonest binary form as if it were
+# text. Lint answering about garbage is worse than lint refusing.
+RESBIN = os.path.join(BASE, 'ResBin.dfm')
+open(RESBIN, 'wb').write(b'\xff\x0a\x00FORMBIN\x00\x00\x00\x00'
+                         b'TPF0\x08TFormBin\x00')
 
 # ---- info ----
 j = J(call('delphi_designer', {'command': 'info', 'class': 'TButton', 'framework': 'vcl'}))
@@ -143,6 +152,13 @@ check('lint NO avisa de Left/Top de componentes no visuales', '"Left"' not in r 
 # ---- doctrina ----
 r = call('delphi_designer', {'command': 'tree', 'path': BIN})
 check('designer binario (TPF0) rechazado', 'RECHAZADO' in r and 'BINARIO' in r, r[:200])
+for cmd in ('tree', 'get', 'lint', 'check-binding'):
+    args = {'command': cmd, 'path': RESBIN}
+    if cmd == 'get':
+        args['component'] = 'X'
+    r = call('delphi_designer', args)
+    check('binario envuelto en recurso ($FF) rechazado por ' + cmd,
+          'RECHAZADO' in r and 'BINARIO' in r, r[:200])
 r = call('delphi_designer', {'command': 'tree', 'path': os.path.join(BASE, 'nx.dfm')})
 check('fichero inexistente', 'RECHAZADO' in r or 'no existe' in r, r[:150])
 r = call('delphi_designer', {'command': 'tree', 'path': 'C:\\Windows\\win.ini'})
