@@ -8,6 +8,51 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.72.0-beta] - 2026-08-25
+
+`delphi_designer command=layout`, one day old, taken apart by a probe agent that
+built forms the way the IDE writes them. Seven false positives on CORRECT forms
+(the most expensive kind - an agent learns to ignore a tool that cries wolf),
+three real bugs it missed, and six smaller defects. Rewritten around the VCL's
+actual layout semantics.
+
+### Fixed
+- **`alClient` is resolved LAST and does NOT shrink the remaining rectangle.**
+  The first was a false positive (an `alClient` grid declared before an
+  `alBottom` panel "overlapped" it); the second was a missed bug (two visible
+  `alClient` siblings get the WHOLE rectangle each and cover each other 100%,
+  exactly as the IDE writes them). Both now correct.
+- **`Visible = False` controls are skipped**, as the VCL neither lays out nor
+  draws them. Wizard-style stacks (N `alClient` panels, one shown) and
+  swap-in-place edit/combo pairs no longer read as overlaps.
+- **Class default `Align` is applied** when the `.dfm` omits it: `TStatusBar`
+  is `alBottom`, `TToolBar` `alTop`, `TSplitter` `alLeft`, `TTabSheet`
+  `alClient`. The status-bar/tool-bar/memo trio - the exact form an agent writes
+  blind - is three bands now, not a pile.
+- **`TScrollBox`** content is allowed to exceed the box (that is what it is for);
+  **`TGridPanel`** children (`alClient` per cell) are left alone; a
+  **`TBevel`/`TShape`/`TImage`** frame is decoration and does not "cover".
+- **A `TTabSheet`/`TCategoryPanel` and its contents are checked.** They write no
+  `Width`/`Height` (they fill the parent), so the old code skipped them as
+  non-visual and hid everything inside; a container is visual if it has children
+  or a non-`alNone` class default.
+- **Overflow no longer cascades.** A band that does not fit is clipped once, with
+  the visible pixels named; sizes are clamped at zero, so one overflow stops
+  producing a negative-size error at every level below it.
+- **`.fmx` is refused, not answered wrongly.** Its geometry model (`Size.Width`,
+  `Position.X`) is different; layout is VCL/`.dfm` only, and says so instead of
+  returning a false `ok`.
+- A form with only `Width`/`Height` (Delphi 5/7 `.dfm`, no `ClientWidth`) is
+  measured against an estimated client area with the estimate declared, instead
+  of taking the whole window as client. A **truncated `.dfm`** is flagged.
+  `sizeNotWritten` names the missing dimension, and only the one the align needs.
+
+### Added
+- **`boxes`** in the layout result: the resolved rectangle of every control, in
+  FORM coordinates, whether or not the form has a problem. This is the "where
+  things actually end up" the tool's name promises - and what lets an agent
+  place the next control without seeing the screen (the muro the probe named).
+
 ## [0.71.0-beta] - 2026-08-25
 
 Round 9 security re-audit (agent sec9). The round-8 trash fixes were real but

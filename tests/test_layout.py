@@ -165,7 +165,7 @@ check('L5 Align resuelto: el alClient recibe el hueco que queda',
       o.get('clientWidth') == 500 and o.get('clientHeight') == 300, o)
 check('L7 un TTimer no tiene geometria que juzgar',
       'Timer1' not in all_text(o, 'zeroSize', 'outsideParent', 'overlapping',
-                               'noRoomLeft', 'sizeNotWritten'), o)
+                               'clipped', 'sizeNotWritten'), o)
 
 # L2 - two free controls sharing pixels
 OVER = """object F: TF
@@ -270,7 +270,7 @@ end
 """
 o = layout('NoRoom', NOROOM)
 check('L5 los alineados consumen el form y al siguiente no le queda sitio',
-      o.get('ok') is False and len(o.get('noRoomLeft', [])) >= 1, o)
+      o.get('ok') is False and len(o.get('clipped', [])) >= 1, o)
 
 # L6 - a second alClient
 TWOCLIENT = """object F: TF
@@ -320,7 +320,7 @@ end
 """
 o = layout('NoForm', NOFORM)
 check('un form sin tamano se dice, no se adivina',
-      o.get('ok') is False and len(o.get('noRoomLeft', [])) == 1, o)
+      o.get('ok') is False and len(o.get('clipped', [])) == 1, o)
 
 # L9 - doctrine
 r = call({'command': 'layout', 'path': 'C:\\Windows\\win.ini'})
@@ -336,6 +336,80 @@ r = call({'command': 'layout', 'path': p})
 check('L9 un .pas no es un designer', 'RECHAZADO' in r, r[:160])
 r = call({'command': 'volar', 'path': 'x'})
 check('layout aparece en el error de comando', 'layout' in r, r[:200])
+
+# ============================================================
+# Round-8 report (agent layout9): VCL semantics correct forms need.
+# ============================================================
+DFMS = {}
+DFMS['Scroll'] = 'object F: TF\n  ClientWidth = 200\n  ClientHeight = 100\n  object ScrollBox1: TScrollBox\n    Align = alClient\n    Width = 200\n    Height = 100\n    object Memo1: TMemo\n      Left = 8\n      Top = 8\n      Width = 300\n      Height = 300\n    end\n  end\nend\n'
+DFMS['Hidden'] = 'object F: TF\n  ClientWidth = 200\n  ClientHeight = 100\n  object pnl1: TPanel\n    Align = alClient\n    Width = 200\n    Height = 100\n  end\n  object pnl2: TPanel\n    Align = alClient\n    Width = 200\n    Height = 100\n    Visible = False\n  end\nend\n'
+DFMS['Swap'] = 'object F: TF\n  ClientWidth = 300\n  ClientHeight = 100\n  object edtTexto: TEdit\n    Left = 16\n    Top = 16\n    Width = 200\n    Height = 23\n  end\n  object cbLista: TComboBox\n    Left = 16\n    Top = 16\n    Width = 200\n    Height = 23\n    Visible = False\n  end\nend\n'
+DFMS['Deco'] = 'object F: TF\n  ClientWidth = 460\n  ClientHeight = 200\n  object Bevel1: TBevel\n    Left = 16\n    Top = 16\n    Width = 428\n    Height = 145\n  end\n  object edtNombre: TEdit\n    Left = 176\n    Top = 61\n    Width = 240\n    Height = 23\n  end\nend\n'
+DFMS['Defaults'] = 'object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object StatusBar1: TStatusBar\n    Left = 0\n    Top = 0\n    Width = 400\n    Height = 19\n  end\n  object ToolBar1: TToolBar\n    Left = 0\n    Top = 0\n    Width = 400\n    Height = 29\n  end\n  object Memo1: TMemo\n    Align = alClient\n    Width = 400\n    Height = 300\n  end\nend\n'
+DFMS['Grid'] = 'object F: TF\n  ClientWidth = 400\n  ClientHeight = 200\n  object GridPanel1: TGridPanel\n    Align = alClient\n    Width = 400\n    Height = 200\n    object btnUno: TButton\n      Align = alClient\n      Width = 200\n      Height = 100\n    end\n    object btnDos: TButton\n      Align = alClient\n      Width = 200\n      Height = 100\n    end\n  end\nend\n'
+DFMS['Cover'] = 'object F: TF\n  ClientWidth = 400\n  ClientHeight = 200\n  object btnOculto: TButton\n    Left = 16\n    Top = 16\n    Width = 75\n    Height = 25\n  end\n  object MemoTapa: TMemo\n    Align = alClient\n    Width = 400\n    Height = 200\n  end\nend\n'
+DFMS['TwoClient'] = 'object F: TF\n  ClientWidth = 400\n  ClientHeight = 200\n  object M1: TMemo\n    Align = alClient\n    Width = 400\n    Height = 200\n  end\n  object M2: TMemo\n    Align = alClient\n    Width = 400\n    Height = 200\n  end\nend\n'
+DFMS['ClientFirst'] = 'object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object Grid: TStringGrid\n    Align = alClient\n    Width = 400\n    Height = 300\n  end\n  object PanelBottom: TPanel\n    Align = alBottom\n    Width = 400\n    Height = 40\n  end\nend\n'
+DFMS['Tab'] = "object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object pc: TPageControl\n    Align = alClient\n    Width = 400\n    Height = 300\n    object ts1: TTabSheet\n      Caption = 'Uno'\n      object edtCero: TEdit\n        Left = 8\n        Top = 8\n        Width = 0\n        Height = 23\n      end\n      object edtA: TEdit\n        Left = 8\n        Top = 40\n        Width = 100\n        Height = 23\n      end\n      object edtB: TEdit\n        Left = 50\n        Top = 45\n        Width = 100\n        Height = 23\n      end\n    end\n  end\nend\n"
+DFMS['Boxes'] = 'object F: TF\n  ClientWidth = 500\n  ClientHeight = 300\n  object Barra: TPanel\n    Align = alTop\n    Width = 500\n    Height = 40\n    object Btn: TButton\n      Left = 8\n      Top = 8\n      Width = 75\n      Height = 25\n    end\n  end\n  object Grid: TStringGrid\n    Align = alClient\n    Width = 500\n    Height = 260\n  end\nend\n'
+DFMS['Overflow'] = 'object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object pnlL: TPanel\n    Align = alLeft\n    Width = 250\n    Height = 300\n  end\n  object pnlR: TPanel\n    Align = alRight\n    Width = 250\n    Height = 300\n    object hijo: TButton\n      Left = 10\n      Top = 10\n      Width = 50\n      Height = 25\n    end\n  end\nend\n'
+DFMS['Trunc'] = 'object F: TF\n  ClientWidth = 100\n  ClientHeight = 100\n  object P: TPanel\n    Width = 100\n    Height = 100\n'
+DFMS['OldForm'] = 'object F: TF\n  Width = 544\n  Height = 375\n  object btnAbajo: TButton\n    Left = 16\n    Top = 345\n    Width = 75\n    Height = 25\n  end\nend\n'
+
+o = layout('Scroll', DFMS['Scroll'])
+check('S1 un TScrollBox con contenido mayor NO es error', o.get('ok') is True, o)
+
+o = layout('Hidden', DFMS['Hidden'])
+check('S2 un panel Visible=False no cuenta (ni como segundo alClient)', o.get('ok') is True, o)
+o = layout('Swap', DFMS['Swap'])
+check('S2 dos controles en el mismo hueco, uno oculto: sin solape', o.get('ok') is True, o)
+
+o = layout('Deco', DFMS['Deco'])
+check('S4 un TBevel de marco no "tapa" a los controles de dentro', o.get('ok') is True, o)
+
+o = layout('Defaults', DFMS['Defaults'])
+check('S6 StatusBar/ToolBar por defecto van a su banda, no se solapan', o.get('ok') is True, o)
+
+o = layout('Grid', DFMS['Grid'])
+check('S3 los hijos alClient de un TGridPanel no se marcan como solape', o.get('ok') is True, o)
+
+o = layout('Cover', DFMS['Cover'])
+check('FN2 un alClient que tapa a un alNone SI se detecta',
+      o.get('ok') is False and len(o.get('overlapping', [])) == 1, o)
+
+o = layout('TwoClient', DFMS['TwoClient'])
+check('Bug3 dos alClient visibles se tapan al 100%',
+      o.get('ok') is False and len(o.get('overlapping', [])) == 1 and '100%' in json.dumps(o), o)
+
+o = layout('ClientFirst', DFMS['ClientFirst'])
+check('alClient declarado ANTES de un alBottom no se solapa con el', o.get('ok') is True, o)
+
+o = layout('Tab', DFMS['Tab'])
+check('FN1 el contenido de un TTabSheet SI se revisa',
+      o.get('ok') is False and len(o.get('zeroSize', [])) == 1 and len(o.get('overlapping', [])) == 1, o)
+
+o = layout('Boxes', DFMS['Boxes'])
+bx = {b['name']: b for b in o.get('boxes', [])}
+check('MURO boxes: el rectangulo resuelto de cada control, en coords del form',
+      o.get('ok') is True and len(bx) == 3 and bx['Grid']['y'] == 40 and bx['Grid']['h'] == 260
+      and bx['Btn']['x'] == 8 and bx['Btn']['y'] == 8 and bx['Btn']['parent'] == 'Barra', o)
+
+o = layout('Overflow', DFMS['Overflow'])
+check('Bug1 un desbordamiento no cascadea tamanos negativos',
+      len(o.get('clipped', [])) == 1 and '-' not in json.dumps(o.get('clipped')), o)
+
+o = layout('Trunc', DFMS['Trunc'])
+check('Bug4 un .dfm truncado se avisa', 'truncatedNote' in o, o)
+
+p_fmx = os.path.join(BASE, 'F.fmx')
+open(p_fmx, 'w', newline='').write('object F: TF\n  object R: TRectangle\n  end\nend\n')
+r = call({'command': 'layout', 'path': p_fmx})
+check('FP7 un .fmx se rechaza (no se contesta ok en falso)', 'RECHAZADO' in r, r[:120])
+
+o = layout('OldForm', DFMS['OldForm'])
+check('FN3 un form sin ClientWidth se estima y lo declara',
+      o.get('clientEstimated') is True and 'estimatedNote' in o, o)
+
 
 proc.kill()
 print('\n== layout battery: %d PASS / %d FAIL ==' % (P, F))

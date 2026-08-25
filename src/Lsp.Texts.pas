@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.71.0-beta';
+  SERVER_VERSION = '0.72.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1859,10 +1859,11 @@ const
     'with the class in the .pas: components with no published field, events ' +
     'naming a method that is not published, published fields with no ' +
     'component, duplicate names - all of which COMPILE and then throw when ' +
-    'the form is created) | layout (WHERE things end up: resolves Align and ' +
-    'reports controls of size zero, controls that fall outside their ' +
-    'container and controls that overlap each other - a form can bind ' +
-    'perfectly and still be unusable). Default: info';
+    'the form is created) | layout (WHERE things end up on a VCL .dfm: ' +
+    'resolves Align and returns the resolved rectangle of every control plus ' +
+    'controls of size zero, outside their container, overlapping, or clipped ' +
+    'by the bands around them - a form can bind perfectly and still be ' +
+    'unusable). Default: info';
 
   SP_DESIGNER_PATH =
     'tree/get/lint: the .dfm or .fmx file (text form; binary TPF0 refused)';
@@ -2004,14 +2005,36 @@ const
     'dar el formulario por bueno.';
 
   SN_DESIGNER_LAYOUT_HOW =
-    'Como lo mido: resuelvo Align como la VCL (cada alineado se come su ' +
-    'banda del hueco que queda, en el orden en que estan en el .dfm; ' +
-    'alClient se queda con el resto), y solo los alNone pueden solaparse o ' +
-    'salirse. Es aproximado a proposito: el area util de un contenedor la ' +
-    'tomo como su Width/Height (bordes y bevels se comen unos pixeles), un ' +
-    'control sin Width/Height escritos lo declaro desconocido en vez de ' +
-    'inventarmelo, y Anchors describe que pasa al REDIMENSIONAR la ventana, ' +
-    'que no es lo que estoy midiendo.';
+    'Como lo mido: resuelvo Align como TWinControl.AlignControls (cada ' +
+    'alineado se come su banda del hueco que queda, en orden del .dfm), con un ' +
+    'detalle clave: alClient NO recorta el rectangulo, asi que dos alClient ' +
+    'reciben el hueco ENTERO y se tapan al 100%. Aplico el Align por defecto de ' +
+    'la clase cuando el .dfm no lo escribe (TStatusBar=alBottom, TToolBar=alTop, ' +
+    'TSplitter=alLeft, TTabSheet=alClient...). Salto lo invisible (Visible= ' +
+    'False), no juzgo los hijos de un TGridPanel (van por celdas) ni trato un ' +
+    'TBevel/TShape/TImage como que tapa a nadie (es decoracion), y un TScrollBox ' +
+    'puede tener el contenido mas grande a proposito. En "boxes" te doy el ' +
+    'rectangulo resuelto de cada control en coordenadas del form: eso es donde ' +
+    'acaba cada cosa, para colocar la siguiente sin ver la pantalla. Es ' +
+    'aproximado: el area util de un contenedor la tomo como su Width/Height, y ' +
+    'Anchors (que gobiernan el REDIMENSIONADO) no es lo que mido.';
+
+  SR_DESIGNER_LAYOUT_FMX =
+    'RECHAZADO: command=layout es solo para .dfm (VCL). Un .fmx coloca con otro ' +
+    'modelo (Size.Width, Position.X, Align distinto) que este servidor todavia ' +
+    'no resuelve; contestar "ok" sobre un .fmx seria mentir. Para .fmx usa de ' +
+    'momento tree/get/lint.';
+
+  SR_DESIGNER_LAYOUT_TRUNC =
+    'OJO: el .dfm parece TRUNCADO (hay mas objetos abiertos que "end" que los ' +
+    'cierran). Lo que te diga de la geometria puede estar incompleto: revisa ' +
+    'que el fichero termina en el "end" del form.';
+
+  SN_DESIGNER_LAYOUT_ESTIMATED =
+    'OJO: el form no trae ClientWidth/ClientHeight, solo Width/Height (el tamano ' +
+    'de la VENTANA). He restado un marco nominal a 96 dpi para estimar el area ' +
+    'util; cerca del borde derecho o inferior el recorte real puede variar unos ' +
+    'pixeles segun el BorderStyle.';
 
   SR_DESIGNER_BINDING_NOT_FORM =
     'RECHAZADO: check-binding compara un FORM con su clase, asi que "path" ' +
