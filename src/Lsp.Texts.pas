@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.58.0-beta';
+  SERVER_VERSION = '0.59.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1239,6 +1239,102 @@ const
     'stage the changes with delphi_changeset (one edit per line, then ' +
     'preview + commit there). applicable=false lists the blockers - fix ' +
     'them or do the rename by hand with the evidence given.';
+
+  // ---- delphi_test ----
+
+  SD_TEST =
+    'TESTS: la diferencia entre "compila" y "funciona". command=discover ' +
+    'path=<carpeta o proyecto> lista los proyectos de test que hay debajo ' +
+    '(un .dpr que use DUnitX, o uno de consola cuyo nombre diga test/spec). ' +
+    'command=run project=<.dproj del test> compila y ejecuta ese runner y ' +
+    'devuelve el resultado ESTRUCTURADO: total, passed, failed, la lista de ' +
+    'fallos, exitCode, duracion y la cola de lo que imprimio. Entiende dos ' +
+    'dialectos: el resumen de DUnitX y la convencion PASS/FAIL + ExitCode de ' +
+    'un runner de consola escrito a mano. El veredicto dice de donde sale ' +
+    '(verdictFrom: counts o exitCode) y nunca se lo inventa. Ejecutar tests ' +
+    'es EJECUTAR: tiene su propio interruptor [Security] AllowTests (o ' +
+    'AllowRun, que lo implica); el binario se compila aqui, sale de un ' +
+    'proyecto de la jaula y corre en el mismo sandbox de baja integridad que ' +
+    'delphi_run, con timeout. Sin ese interruptor, discover funciona y run ' +
+    'se rechaza.';
+
+  SP_TEST_COMMAND =
+    'discover (listar proyectos de test bajo "path") | run (compilar y ' +
+    'ejecutar el de "project"). Por defecto: discover';
+
+  SP_TEST_PATH =
+    'discover: carpeta (o proyecto) bajo la que buscar proyectos de test';
+
+  SP_TEST_PROJECT =
+    'run: el .dproj (o .dpr) del proyecto de test a ejecutar';
+
+  SP_TEST_CONFIG =
+    'run: configuracion a compilar y ejecutar (Debug por defecto)';
+
+  SP_TEST_FILTER =
+    'run opcional: filtro de tests para frameworks que lo admiten (DUnitX ' +
+    '--run:); un runner de consola a mano lo ignora';
+
+  SP_TEST_TIMEOUT =
+    'run opcional: milisegundos maximos de ejecucion (120000 por defecto, ' +
+    'maximo 600000). Un test que se cuelga se corta y se dice';
+
+  SP_TEST_NOBUILD =
+    'run opcional: true = NO compilar antes, ejecutar el binario que ya ' +
+    'existe. Por defecto se compila (ejecutar un binario viejo es mentir)';
+
+  SR_TEST_CMD =
+    'error: command debe ser discover | run';
+
+  SR_TEST_NEED_PATH =
+    'RECHAZADO: discover necesita "path" (la carpeta o el proyecto bajo el ' +
+    'que buscar).';
+
+  SR_TEST_NEED_PROJECT =
+    'RECHAZADO: run necesita "project" (el .dproj del proyecto de test). ' +
+    'command=discover te los lista.';
+
+  SR_TEST_NOPATH_FMT =
+    'RECHAZADO: no existe %s.';
+
+  SR_TEST_NOTATEST_FMT =
+    'RECHAZADO: %s no parece un proyecto de test. Cuenta como tal un .dpr ' +
+    'que use DUnitX, o uno con {$APPTYPE CONSOLE} cuyo nombre diga ' +
+    'test/tests/spec. Si el tuyo lo es y no lo detecto, dilo con ' +
+    'delphi_report: el criterio se afina con casos reales.';
+
+  SR_TEST_NOBINARY =
+    'error: no encuentro el binario del proyecto de test despues de ' +
+    'compilar. Compila a mano con delphi_build y mira que declara en ' +
+    '"output".';
+
+  SR_TEST_DISABLED =
+    'RECHAZADO: ejecutar tests esta APAGADO en este servidor. El operador lo ' +
+    'enciende con [Security] AllowTests=1 en el settings.ini junto al ' +
+    'ejecutable (o DELPHI_MCP_ALLOW_TESTS=1) y reinicia. Es un interruptor ' +
+    'propio, separado de AllowRun a proposito: permitir una bateria de tests ' +
+    'no es lo mismo que permitir ejecutar binarios cualesquiera (AllowRun, ' +
+    'si esta encendido, ya lo implica). command=discover si funciona sin el.';
+
+  SN_TEST_NONE =
+    'No hay proyectos de test ahi debajo. Cuenta como tal un .dpr con DUnitX ' +
+    'o uno de consola cuyo nombre diga test/spec.';
+
+  SN_TEST_DISCOVER_NOTE =
+    'Ejecutalos con command=run project=<el .dproj de la lista>. Si alguno ' +
+    'trae hasDproj=false, compilalo antes con delphi_build sobre su .dpr.';
+
+  SN_TEST_BUILD_FAILED =
+    'El proyecto de test NO compila, asi que no hay nada que ejecutar: mira ' +
+    '"build.errors" (y "missingUnits" si falta alguna unidad). Arregla eso ' +
+    'primero.';
+
+  SN_TEST_RUN_NOTE =
+    'result=pass|fail sale de "verdictFrom": counts (los numeros del ' +
+    'framework) o exitCode (0 = verde) cuando el runner no da numeros. ' +
+    'failures lista las lineas de fallo tal cual las imprimio. El binario ' +
+    'corrio en sandbox de baja integridad, con timeout, en su carpeta de ' +
+    'salida.';
 
   // ---- delphi_designer ----
 

@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/gen-capabilities.py (from the live tools/list)",
-  "version": "0.57.0-beta",
-  "tools": 39,
-  "coreTools": 34,
+  "version": "0.59.0-beta",
+  "tools": 40,
+  "coreTools": 35,
   "optionalTools": 5,
   "toolNames": [
     "delphi_adb",
@@ -36,6 +36,7 @@
     "delphi_signature",
     "delphi_styles",
     "delphi_symbols",
+    "delphi_test",
     "delphi_textedit",
     "delphi_upload",
     "delphi_workspace",

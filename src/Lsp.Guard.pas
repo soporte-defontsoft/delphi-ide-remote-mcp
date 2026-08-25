@@ -122,6 +122,14 @@ function AllowBuildScripts: Boolean; // DELPHI_MCP_ALLOW_BUILD_SCRIPTS / AllowBu
   executes nothing. }
 function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemoteRun=1
 
+{ Whether delphi_test may RUN a test project's binary on this server. OFF by
+  default and separate from AllowRun on purpose: letting a test suite run is
+  a narrower decision than letting any compiled program run (the binary comes
+  from a project of the jail, is built here, and goes through the same
+  low-integrity sandbox). AllowRun implies this one. Opt in with
+  DELPHI_MCP_ALLOW_TESTS=1 or [Security] AllowTests=1. }
+function AllowTests: Boolean;      // DELPHI_MCP_ALLOW_TESTS / AllowTests=1
+
 { Whether the READ-ONLY library zone exists at all. Default True (reading the
   RTL and the installed components is what makes an agent competent here).
   [Security] LibraryZone=0 cuts it: reads are then confined to the workspace
@@ -216,6 +224,7 @@ var
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
   GLibraryZone: Boolean = True;     // the read-only library zone, on by default
+  GAllowTests: Boolean = False;     // running test suites is opt-in too
   GRemoteProjects: TArray<string>;  // [Security] RemoteRunProjects, '' = any
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
   GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
@@ -265,6 +274,7 @@ begin
   GAllowRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_RUN') = '1';
   GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
   GLibraryZone := GetEnvironmentVariable('DELPHI_MCP_LIBRARY_ZONE') <> '0';
+  GAllowTests := GetEnvironmentVariable('DELPHI_MCP_ALLOW_TESTS') = '1';
   GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
   IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
   if TFile.Exists(IniPath) then
@@ -283,6 +293,8 @@ begin
         GAllowRemoteRun := Ini.ReadBool('Security', 'AllowRemoteRun', False);
       if GLibraryZone then
         GLibraryZone := Ini.ReadBool('Security', 'LibraryZone', True);
+      if not GAllowTests then
+        GAllowTests := Ini.ReadBool('Security', 'AllowTests', False);
       GRemoteProjects := Ini.ReadString('Security', 'RemoteRunProjects', '')
         .Split([';'], TStringSplitOptions.ExcludeEmpty);
       if not GAllowBuildScripts then
@@ -331,6 +343,12 @@ function LibraryZoneEnabled: Boolean;
 begin
   LoadSecurity;
   Result := GLibraryZone;
+end;
+
+function AllowTests: Boolean;
+begin
+  LoadSecurity;
+  Result := GAllowTests;
 end;
 
 function RemoteRunProjectDenied(const APath: string): string;
@@ -897,6 +915,14 @@ begin
     if (Trim(Cmd) = '') or SameText(Trim(Cmd), 'view') then
       Exit;
     Exit(WriteDenied('delphi_config ' + Cmd));
+  end;
+  // delphi_test is mixed: discover only looks; run builds and EXECUTES.
+  if SameText(AToolName, 'delphi_test') then
+  begin
+    Cmd := Trim(ArgStr(AArguments, 'command'));
+    if (Cmd = '') or SameText(Cmd, 'discover') then
+      Exit;
+    Exit(WriteDenied('delphi_test ' + Cmd));
   end;
   // delphi_styles is mixed: view/get/lint read; set/clone/build write.
   if SameText(AToolName, 'delphi_styles') then

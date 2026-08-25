@@ -61,6 +61,15 @@ on your side.
 - Prefer `Align`/anchors over absolute Position/Size in forms: absolute
   coordinates designed on a desktop form overflow phone screens.
 
+## Tests: does it WORK, not just compile
+
+- `delphi_test command=discover path=<folder>` finds the test projects;
+  `command=run project=<the test .dproj>` builds and runs one and answers
+  `total`/`passed`/`failed` with the failing lines. That is your red-green
+  loop: edit -> diagnostics -> build -> **test** -> commit.
+- It needs the operator's `[Security] AllowTests=1` on the server. Without
+  it `discover` works and `run` says so - that is a switch, not a bug.
+
 ## Renaming a symbol
 
 - `delphi_rename_symbol path=<unit> line=<0-based> character=<0-based>

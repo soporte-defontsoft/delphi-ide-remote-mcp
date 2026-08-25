@@ -8,6 +8,31 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.59.0-beta] - 2026-08-25
+
+The biggest wall left, named independently by both reviews: an agent could
+write code and never learn whether it WORKS.
+
+### Added
+- **`delphi_test`** - `discover path=<folder>` lists the test projects
+  underneath (a `.dpr` using DUnitX, or a console one whose name says
+  test/spec); `run project=<test .dproj>` builds it and runs it, answering
+  **structured**: total / passed / failed, the failing lines, exitCode,
+  duration and a bounded tail. Two dialects understood (DUnitX's summary and
+  the plain PASS/FAIL + ExitCode of a hand-written runner), and the verdict
+  says which one spoke (`verdictFrom`) instead of guessing. A suite that does
+  not compile answers `build-failed` with the compiler errors - it never runs
+  a stale binary.
+- **`[Security] AllowTests`** (env `DELPHI_MCP_ALLOW_TESTS`) - its own
+  switch, separate from `AllowRun` on purpose: allowing a test suite to run
+  is a narrower decision than allowing arbitrary binaries (`AllowRun` implies
+  it). The binary is built here, comes from a project of the jail and runs in
+  the same low-integrity sandbox with a timeout. `discover` works without it.
+- `tests/test_delphi_test.py` (19 checks): a green suite and a red one, the
+  switch refusing `run` while `discover` still answers, a non-test project
+  refused, and a suite that does not compile.
+
+
 ## [0.58.0-beta] - 2026-08-25
 
 Four fixes from a full session run by an agent that worked ONLY through the

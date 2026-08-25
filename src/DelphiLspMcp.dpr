@@ -102,6 +102,8 @@ uses
   Mcp.Tools.Changeset in 'Mcp.Tools.Changeset.pas',
   Mcp.Tools.Designer in 'Mcp.Tools.Designer.pas',
   Mcp.Tools.Rename in 'Mcp.Tools.Rename.pas',
+  Mcp.Tools.Test in 'Mcp.Tools.Test.pas',
+  Lsp.TestRunner in 'Lsp.TestRunner.pas',
   Lsp.Rename in 'Lsp.Rename.pas',
   Lsp.Changeset in 'Lsp.Changeset.pas',
   Lsp.Service in 'Lsp.Service.pas',

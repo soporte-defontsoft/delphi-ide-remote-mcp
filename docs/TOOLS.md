@@ -314,6 +314,22 @@ version/jar properties in the `.dproj`, each conditioned so IDE-written values
 always win). Files the IDE wrote are never overwritten. A successful Android
 Deploy declares the built `.apk` as `output`.
 
+### `delphi_test`
+
+TESTS — the difference between "it compiles" and "it works". `discover path=<folder or project>` lists the test projects underneath (a `.dpr` using DUnitX, or a console one whose name says test/tests/spec). `run project=<the test .dproj>` builds and runs that runner and answers STRUCTURED: `total`, `passed`, `failed`, the failing lines, `exitCode`, `durationMs` and a bounded tail of what it printed. Two dialects are understood: DUnitX's own summary and the plain `PASS`/`FAIL` + ExitCode convention of a hand-written console runner. The verdict says where it came from (`verdictFrom: counts | exitCode`) and never guesses. Running tests IS execution: its own switch `[Security] AllowTests` (or `AllowRun`, which implies it); the binary is built here, comes from a project of the jail, and runs in the same low-integrity sandbox as `delphi_run`, with a timeout. Without the switch, `discover` still works and `run` is refused.
+
+*Access: mixed (discover read-only; run read-write + AllowTests).*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | discover (list test projects under `path`) \| run (build and run the one in `project`). Default: discover |
+| `path` | string | optional | discover: folder (or project) to search under |
+| `project` | string | optional | run: the `.dproj` (or `.dpr`) of the test project |
+| `config` | string | optional | run: configuration to build and run (Debug by default) |
+| `filter` | string | optional | run: test filter for frameworks that support it (DUnitX `--run:`); a hand-written runner ignores it |
+| `timeoutms` | integer | optional | run: max milliseconds (120000 default, 600000 max). A hanging test is cut and said so |
+| `nobuild` | boolean | optional | run: true = do not build first, run the existing binary. By default it builds (running a stale binary is a lie) |
+
 ### `delphi_run`
 
 Run a built executable ON THIS MACHINE (the one that compiled it) and capture its output - the closing step after delphi_build for console apps and test runners. Jailed to the workspace roots, no shell, hard timeout (default 30 s, max 5 min), process killed on expiry. GUI apps will open on the server desktop.
