@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.73.0-beta';
+  SERVER_VERSION = '0.74.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1176,6 +1176,14 @@ const
   SN_FILE_PROJECT_DENIED_FMT =
     '    %s: fuera de los workspaces permitidos, NO tocado (quita la unit ' +
     'con delphi_config command=remove-unit desde un proyecto dentro de la jaula).';
+
+  SR_FILE_DELETE_LOCKED_FMT =
+    'NO he borrado "%s" y NO he tocado NADA: algo tiene la carpeta abierta y ' +
+    'moverla entera ha fallado (%s). El contenido sigue INTACTO en su sitio; no ' +
+    'hay copia a medias en la papelera que pueda confundirte. Suele ser un .exe ' +
+    'de un build anterior todavia corriendo, el IDE con el proyecto abierto, o ' +
+    'un proceso git. Cierra lo que la bloquea y reintenta. (Yo no mato procesos ' +
+    'de esta maquina: puede haber alguien trabajando al otro lado.)';
 
   SN_FILE_PARTIAL_FMT =
     'ERROR %s: %s'#10'ATENCION: antes del fallo ya se habian aplicado estos ' +

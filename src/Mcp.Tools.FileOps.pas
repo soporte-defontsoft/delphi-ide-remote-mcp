@@ -57,6 +57,7 @@ type
 implementation
 
 uses
+  Winapi.Windows,
   System.Classes,
   System.IOUtils,
   System.StrUtils,
@@ -130,21 +131,16 @@ begin
   TDirectory.CreateDirectory(TPath.GetDirectoryName(ATrash));
   if TDirectory.Exists(APath) then
   begin
-    // A rename can fail for reasons nobody here can see - a handle somebody
-    // else holds, a subfolder that is somebody's working directory. When it
-    // does, copy the tree to the trash and then take away what CAN be taken
-    // away, so the recoverable copy exists either way.
-    try
-      TDirectory.Move(APath, ATrash);
-    except
-      TDirectory.Copy(APath, ATrash);
-      ClearReadOnlyTree(APath);
-      try
-        TDirectory.Delete(APath, True);
-      except
-        // leave it: the caller checks and REPORTS what is still there
-      end;
-    end;
+    // The RAW Windows rename, on purpose: TDirectory.Move falls back to a
+    // recursive copy+delete of its OWN accord when the atomic rename fails, and
+    // that fallback GUTTED a locked folder INTO the trash while the caller said
+    // "half done" - a human who then purged those "leftover" copies lost real
+    // code, and every retry made another full copy (measured 2026-08-25 by a
+    // probe agent deleting a folder with a locked build output). MoveFile does
+    // NOT copy: same-volume it renames atomically, and if a handle inside is
+    // held it returns False and the whole tree stays intact. Move or nothing.
+    if not MoveFile(PChar(APath), PChar(ATrash)) then
+      RaiseLastOSError;
   end
   else
     TFile.Move(APath, ATrash);
@@ -396,6 +392,12 @@ begin
   except
     on E: Exception do
     begin
+      // A locked FOLDER move fails as a whole and leaves the tree intact: say so
+      // plainly, because "error" used to read as "and who knows what it did".
+      if TDirectory.Exists(Params.Path) then
+        Exit(Format(SR_FILE_DELETE_LOCKED_FMT,
+          [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
+           E.Message]));
       if (ProjNote <> '') or (DesignerNote <> '') then
         Exit(Format(SN_FILE_PARTIAL_FMT, ['al mover a la papelera', E.Message,
           #10 + DesignerNote + #10 + ProjNote]));

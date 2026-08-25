@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.74.0-beta] - 2026-08-25
+
+### Fixed
+- **Deleting a LOCKED folder gutted it into the trash while reporting "half
+  done" - a data-loss trap.** `TDirectory.Move` falls back to a recursive
+  copy+delete of its own accord when the atomic rename fails, so a folder with a
+  running `.exe` or a git process inside had its content moved into a recoverable
+  copy and the original emptied, under a message that said the original "could
+  not be removed" - and every retry made another full copy. A human who purged
+  those "leftover" copies deleted real code. Now the trash move uses the raw
+  Windows `MoveFile` (never copies): same-volume it renames atomically, and on a
+  locked tree it fails with **everything untouched** and says so plainly. Found
+  by a probe agent (sweep10) sweeping the remote dev cycle.
+
 ## [0.73.0-beta] - 2026-08-25
 
 First live dogfooding by a frontier agent (Hermes / GPT-5.6 Sol) on a real FMX
