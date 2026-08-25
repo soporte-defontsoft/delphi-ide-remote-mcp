@@ -40,7 +40,14 @@ def cleanup_profile():
 class Server:
     """One stdio MCP server process with its stderr captured for log checks."""
     def __init__(self, extra_args=None):
-        self.proc = subprocess.Popen([EXE] + (extra_args or []),
+        # Since v0.64 naming a host by hand (add-profile / the raw probe) needs
+        # the operator's allowlist: writing a profile to any host and then
+        # "testing" it was a port scanner. This battery exercises the MECHANISM
+        # against loopback, so it opts into loopback the way the guard battery
+        # opts into execution.
+        _env = dict(os.environ)
+        _env['DELPHI_MCP_REMOTE_HOSTS'] = '127.0.0.1,localhost'
+        self.proc = subprocess.Popen([EXE] + (extra_args or []), env=_env,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, text=True, encoding='utf-8')
         self.q = queue.Queue()

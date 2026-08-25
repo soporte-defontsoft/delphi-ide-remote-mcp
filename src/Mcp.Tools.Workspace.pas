@@ -1074,6 +1074,47 @@ begin
   end;
 end;
 
+{ The folders a .dproj adds to its unit search path, resolved and only when
+  they exist. Not the whole compiler path - just what makes a project see
+  sources that are not its own. }
+function ProjectSearchDirs(const ADproj: string): TArray<string>;
+var
+  Xml, Resolved: string;
+  M: TMatch;
+  L: TStringList;
+begin
+  Result := nil;
+  try
+    Xml := TFile.ReadAllText(ADproj);
+  except
+    Exit;
+  end;
+  L := TStringList.Create;
+  try
+    L.Duplicates := dupIgnore;
+    L.Sorted := True;
+    for M in TRegEx.Matches(Xml, '(?i)<DCC_UnitSearchPath>([^<]*)</DCC_UnitSearchPath>') do
+      for var Seg in M.Groups[1].Value.Split([';']) do
+      begin
+        if (Seg.Trim = '') or Seg.Contains('$(') then
+          Continue;
+        try
+          Resolved := Seg.Trim;
+          if not TPath.IsPathRooted(Resolved) then
+            Resolved := TPath.Combine(TPath.GetDirectoryName(ADproj), Resolved);
+          Resolved := TPath.GetFullPath(Resolved);
+        except
+          Continue;
+        end;
+        if TDirectory.Exists(Resolved) and (ReadPathDenied(Resolved) = '') then
+          L.Add(Resolved);
+      end;
+    Result := L.ToStringArray;
+  finally
+    L.Free;
+  end;
+end;
+
 function TDelphiProjectsTool.ExecuteWithParams(const Params: TDelphiProjectsParams): string;
 var
   Return: TJSONObject;
@@ -1136,6 +1177,21 @@ begin
             Entry.AddPair('project', F);
             Entry.AddPair('dir', TPath.GetDirectoryName(F));
             Entry.AddPair('kind', LowerCase(TPath.GetExtension(F)).Substring(1));
+            // Which OTHER folders this project compiles against. Without it
+            // nobody can explain how a test project with two units in its
+            // uses builds against three from next door - it cost an agent a
+            // call to delphi_config to find out (field round 11).
+            if SameText(TPath.GetExtension(F), '.dproj') then
+            begin
+              var SP := ProjectSearchDirs(F);
+              if Length(SP) > 0 then
+              begin
+                var SPArr := TJSONArray.Create;
+                Entry.AddPair('compilesAgainst', SPArr);
+                for var SDir in SP do
+                  SPArr.Add(SDir);
+              end;
+            end;
             Repo := RepoOf(F, Branch);
             if Repo <> '' then
             begin

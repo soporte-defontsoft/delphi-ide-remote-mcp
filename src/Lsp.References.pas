@@ -51,6 +51,7 @@ uses
   Lsp.Session,
   Lsp.Guard,
   Lsp.Texts,
+  System.RegularExpressions,
   Lsp.ProjectUnits;
 
 type
@@ -80,6 +81,61 @@ begin
   while (E < Length(ALineText)) and IsIdentChar(ALineText[E + 1]) do
     Inc(E);
   Result := Copy(ALineText, S, E - S + 1);
+end;
+
+{ Folders of projects whose SEARCH PATH points at ADir - i.e. projects that
+  compile against the units living there, even though they do not list them.
+  A test project beside the code it exercises is the everyday case. }
+function ProjectsSearching(const ADir: string): TArray<string>;
+var
+  L: TStringList;
+  Target, Root, Xml, Resolved: string;
+  M: TMatch;
+begin
+  Result := nil;
+  if ADir = '' then
+    Exit;
+  Target := IncludeTrailingPathDelimiter(TPath.GetFullPath(ADir)).ToLower;
+  L := TStringList.Create;
+  try
+    L.Duplicates := dupIgnore;
+    L.Sorted := True;
+    for Root in WorkspaceRoots do
+    begin
+      if (Root.Trim = '') or not TDirectory.Exists(Root.Trim) then
+        Continue;
+      for var Dproj in TDirectory.GetFiles(Root.Trim, '*.dproj',
+        TSearchOption.soAllDirectories) do
+      begin
+        if SkipIdeArtifacts(Dproj) then
+          Continue;
+        try
+          Xml := TFile.ReadAllText(Dproj);
+        except
+          Continue;
+        end;
+        for M in TRegEx.Matches(Xml, '(?i)<DCC_UnitSearchPath>([^<]*)</DCC_UnitSearchPath>') do
+          for var Seg in M.Groups[1].Value.Split([';']) do
+          begin
+            if (Seg.Trim = '') or Seg.Contains('$(') then
+              Continue;
+            try
+              Resolved := Seg.Trim;
+              if not TPath.IsPathRooted(Resolved) then
+                Resolved := TPath.Combine(TPath.GetDirectoryName(Dproj), Resolved);
+              Resolved := IncludeTrailingPathDelimiter(TPath.GetFullPath(Resolved)).ToLower;
+            except
+              Continue;
+            end;
+            if Resolved = Target then
+              L.Add(TPath.GetDirectoryName(Dproj));
+          end;
+      end;
+    end;
+    Result := L.ToStringArray;
+  finally
+    L.Free;
+  end;
 end;
 
 function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean;
@@ -177,6 +233,8 @@ var
   I, P, ScanCol, FilesOpened: Integer;
   Confirmed, Unverified: TJSONArray;
   Rejected, Scanned: Integer;
+  RejectedArr: TJSONArray;
+  ScopeDirs: TArray<string>;
   OpenedFiles: TDictionary<string, Boolean>;
   Entry: TJSONObject;
 
@@ -262,11 +320,33 @@ begin
         if not Covered and (ReadPathDenied(DD) = '') then
           Dirs.Add(DD);
       end;
+      // ...and the projects that CONSUME this folder. A test project sitting
+      // next door with `..\Inventario` in its search path is not "somewhere
+      // else": it compiles against these very units, and a rename that
+      // ignores it breaks its build. Measured 2026-08-25: the reference in
+      // the sibling test WAS seen and then filed as a homonym, so the rename
+      // came back applicable and the next build failed.
+      for var Sib in ProjectsSearching(TPath.GetDirectoryName(FullPath)) do
+      begin
+        var SD := IncludeTrailingPathDelimiter(TPath.GetFullPath(Sib));
+        var Have := False;
+        for var K in Dirs do
+          if StartsText(K, SD) then
+          begin
+            Have := True;
+            Break;
+          end;
+        if not Have and (ReadPathDenied(SD) = '') then
+          Dirs.Add(SD);
+      end;
       for var D in Dirs do
+      begin
+        ScopeDirs := ScopeDirs + [D];
         for Ext in TArray<string>.Create('*.pas', '*.dpr', '*.inc') do
           for F in TDirectory.GetFiles(D, Ext, TSearchOption.soAllDirectories) do
             if not SkipPath(F) and not AllFiles.Contains(F) then
               AllFiles.Add(F);
+      end;
     finally
       Dirs.Free;
     end;
@@ -315,6 +395,7 @@ begin
     Confirmed := TJSONArray.Create;
     Unverified := TJSONArray.Create;
     Rejected := 0;
+    RejectedArr := TJSONArray.Create;
     FilesOpened := 0;
     OpenedFiles := TDictionary<string, Boolean>.Create;
     try
@@ -340,7 +421,27 @@ begin
           else if CandUri = '' then
             Unverified.Add(CandidateJson(Cand))
           else
+          begin
             Inc(Rejected);
+            // A "homonym" is only a homonym if the engine really resolved it
+            // somewhere else. When the file belongs to ANOTHER project, the
+            // engine resolves it against the wrong settings and the real
+            // reference lands here - which is how a rename came back
+            // applicable while leaving a caller broken (measured 2026-08-25).
+            // Keep them, with where they resolved instead, so the caller can
+            // look rather than trust a count.
+            // Only when it resolves to ANOTHER unit. A symbol declared in
+            // the interface and implemented below resolves to two different
+            // lines of its own file, and treating that as a lookalike made
+            // every single rename inapplicable (caught by the battery).
+            if not SameText(CandUri, TargetUri) then
+            begin
+              var RObj := CandidateJson(Cand);
+              RObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
+              RObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine));
+              RejectedArr.AddElement(RObj);
+            end;
+          end;
         finally
           Resp.Free;
         end;
@@ -355,8 +456,16 @@ begin
       Result.AddPair('confirmed', Confirmed);
       Result.AddPair('unverified', Unverified);
       Result.AddPair('rejectedHomonyms', TJSONNumber.Create(Rejected));
+      Result.AddPair('rejected', RejectedArr);
       Result.AddPair('filesScanned', TJSONNumber.Create(Scanned));
       Result.AddPair('candidates', TJSONNumber.Create(Candidates.Count));
+      // WHERE we looked. "filesScanned: 4" says how many, never which, and a
+      // caller cannot tell a complete answer from one that stopped at the
+      // project's own folder (field round 11).
+      var ScopeArr := TJSONArray.Create;
+      Result.AddPair('scope', ScopeArr);
+      for var SD in ScopeDirs do
+        ScopeArr.Add(SD);
     finally
       OpenedFiles.Free;
     end;

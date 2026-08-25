@@ -1153,6 +1153,14 @@ begin
     // has beyond the anchor is preserved in front of the new text.
     Prefix := Copy(Lines[HitIdx], 1, Length(Lines[HitIdx]) - Length(AOld));
     Replacement := ANew.Replace(#13#10, #10).Replace(#13, #10);
+    // ONE trailing line break is dropped. "new" replaces a LINE, so the break
+    // that ends it is the file's business, not the caller's: a block read from
+    // a file (the recommended way to send code without the console eating
+    // backslashes) always carries one, and it was landing as a blank line in
+    // the middle of the code (measured 2026-08-25). Two or more are kept:
+    // asking for a blank line after the replacement is a legitimate thing.
+    if Replacement.EndsWith(#10) and not Replacement.EndsWith(#10#10) then
+      Replacement := Replacement.Substring(0, Replacement.Length - 1);
     // Empty replacement (old given + new='') blanks the line - a legitimate
     // edit. Never index Split()[0] on it: '' yields an empty array (measured
     // Access Violation in the field test). Line DELETION is delete:true.
@@ -1166,7 +1174,27 @@ begin
       SetLength(Lines, Length(Lines) - 1);
     end
     else
+    begin
+      // An insert that repeats the line above or below is almost always the
+      // anchor line sent twice by mistake: it compiles, it is invisible, and
+      // it cost an agent eight calls to find and undo (field round 10).
+      if not ADelete and (Replacement <> '') then
+      begin
+        var LastNew := Replacement;
+        if Replacement.Contains(#10) then
+        begin
+          var Parts := Replacement.Split([#10]);
+          LastNew := Parts[High(Parts)];
+        end;
+        if (HitIdx > 0) and (Lines[HitIdx - 1].Trim <> '') and
+           (Lines[HitIdx - 1].Trim = NewFirst.Trim) then
+          Warnings.Add(Format(SN_EDIT_DUP_ABOVE_FMT, [HitIdx, NewFirst.Trim]));
+        if (HitIdx < High(Lines)) and (Lines[HitIdx + 1].Trim <> '') and
+           (Lines[HitIdx + 1].Trim = LastNew.Trim) then
+          Warnings.Add(Format(SN_EDIT_DUP_BELOW_FMT, [HitIdx + 2, LastNew.Trim]));
+      end;
       Lines[HitIdx] := Prefix + Replacement;
+    end;
 
     var Joined: string;
     var EolSep: string;

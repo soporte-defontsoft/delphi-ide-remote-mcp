@@ -475,9 +475,11 @@ end;
 
 { ---- build ---- }
 
+function RcPathsDenied(const ARc: string): string; forward;
+
 function BuildStyles(const APath: string): string;
 var
-  Dir, Exe, F, Bin, Out, Rc, Res, Brcc: string;
+  Dir, Exe, F, Bin, Out, Rc, Res, Brcc, RcDenied: string;
   Files: TArray<string>;
   Ret, E: TJSONObject;
   Arr: TJSONArray;
@@ -529,6 +531,16 @@ begin
         AllOk := False;
         Break;
       end;
+      // Every file this .rc pulls in, checked against the same jail that
+      // delphi_read applies. brcc32 has no idea where it may look.
+      RcDenied := RcPathsDenied(Rc);
+      if RcDenied <> '' then
+      begin
+        Ret.AddPair('rc', TPath.GetFileName(Rc));
+        Ret.AddPair('rcError', RcDenied);
+        AllOk := False;
+        Break;
+      end;
       Res := TPath.ChangeExtension(Rc, '.res');
       Out := RunCapturedIn('"' + Brcc + '" -fo"' + Res + '" "' + Rc + '"', Dir, 120000, Code);
       Ret.AddPair('rc', TPath.GetFileName(Rc));
@@ -548,6 +560,50 @@ begin
     Result := Ret.ToJSON;
   finally
     Ret.Free;
+  end;
+end;
+
+{ Every path a .rc refers to, checked against the read jail before the
+  resource compiler is allowed anywhere near it.
+
+  A .rc line is `NAME TYPE "file"` (or with the file unquoted), plus
+  #include. brcc32 resolves those with the SERVER's file access: an absolute
+  path outside the workspace opens fine and its bytes end up inside the .res,
+  which delphi_fetch will happily hand over. Measured 2026-08-25: win.ini,
+  and then the server's own settings.ini with the token in it. '' = clean. }
+function RcPathsDenied(const ARc: string): string;
+var
+  Txt, Enc, Cand, Denied: string;
+  M: TMatch;
+  Base: string;
+begin
+  Result := '';
+  Base := TPath.GetDirectoryName(TPath.GetFullPath(ARc));
+  try
+    Txt := PatchLoadText(ARc, Enc);
+  except
+    Exit(Format(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(ARc)]));
+  end;
+  for M in TRegEx.Matches(Txt,
+    '(?im)^\s*(?:#include\s+|[A-Za-z_][\w]*\s+[A-Za-z_][\w]*\s+)("[^"]+"|\S+)\s*$') do
+  begin
+    Cand := M.Groups[1].Value.Trim.Trim(['"']);
+    if Cand = '' then
+      Continue;
+    // a plain identifier (BEGIN/END blocks, inline data) is not a file
+    if not (Cand.Contains('.') or Cand.Contains('\\') or Cand.Contains('/')) then
+      Continue;
+    if not TPath.IsPathRooted(Cand) then
+      Cand := TPath.Combine(Base, Cand);
+    try
+      Cand := TPath.GetFullPath(Cand);
+    except
+      Exit(Format(SR_STYLES_RC_BADPATH_FMT, [M.Groups[1].Value.Trim]));
+    end;
+    Denied := ReadPathDenied(Cand);
+    if Denied <> '' then
+      Exit(Format(SR_STYLES_RC_OUTSIDE_FMT,
+        [M.Groups[1].Value.Trim, TPath.GetFileName(ARc)]));
   end;
 end;
 

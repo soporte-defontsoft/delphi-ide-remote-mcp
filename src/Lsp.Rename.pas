@@ -115,7 +115,7 @@ function RenamePreview(const AFilePath: string; ALine, ACharacter: Integer;
   const ANewName: string): TJSONObject;
 var
   Refs, DefObj: TJSONObject;
-  Blockers, Warnings, Changes, UnvArr: TJSONArray;
+  Blockers, Warnings, Changes, UnvArr, RejArr: TJSONArray;
   Ident, DefPath, EncName, Text, P, Root: string;
   Arr: TJSONArray;
   I, N, Files, DefLine: Integer;
@@ -248,6 +248,10 @@ begin
             Chg.AddPair('line', TJSONNumber.Create(DefLine + 1));
             Chg.AddPair('line0', TJSONNumber.Create(DefLine));
             Chg.AddPair('text', Lines[DefLine].Trim);
+            // ...and the anchor, which is the line as it IS. Giving it for
+            // every occurrence except the definition meant one last trip to
+            // delphi_read for no reason (field round 11).
+            Chg.AddPair('anchor', Lines[DefLine].TrimRight([#13, #10]));
             Chg.AddPair('kind', 'definition');
             // a qualified implementation header (TClass.Method) must keep the
             // class part: say it instead of letting the agent replace the lot
@@ -263,6 +267,22 @@ begin
       if Arr.Count > 0 then
         Blockers.Add(Format(SR_RENAME_UNVERIFIED_FMT, [Arr.Count]));
       Result.AddPair('unverified', TJSONNumber.Create(Arr.Count));
+      // A "homonym" the engine resolved somewhere else may be the real thing
+      // seen through another project's settings - which is exactly how a
+      // rename came back applicable and broke a sibling's build (measured
+      // 2026-08-25). We cannot tell the two apart from here, so they are
+      // BLOCKERS with their location: the caller looks and decides.
+      if Refs.GetValue('rejected') <> nil then
+      begin
+        RejArr := Refs.GetValue('rejected') as TJSONArray;
+        if RejArr.Count > 0 then
+        begin
+          Blockers.Add(Format(SR_RENAME_HOMONYMS_FMT, [RejArr.Count]));
+          Result.AddPair('lookalikes', TJSONArray(RejArr.Clone));
+        end;
+      end;
+      if Refs.GetValue('scope') <> nil then
+        Result.AddPair('scope', TJSONArray(Refs.GetValue('scope').Clone));
       // A COUNT of unverified references blocks the rename and tells you
       // nothing about which ones they are, so there is no way to go and look
       // (measured 2026-08-25). Name them - that is the whole point of a

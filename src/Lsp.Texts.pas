@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.63.0-beta';
+  SERVER_VERSION = '0.64.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -123,6 +123,15 @@ const
     'RECHAZADO: %s no es un fuente Delphi (%s), asi que no hay simbolos que ' +
     'sacar; antes te devolvia una lista vacia, que parecia decir que la unit ' +
     'no tiene nada. Esta tool trabaja sobre .pas, .dpr, .dpk e .inc.';
+
+  SN_EDIT_DUP_ABOVE_FMT =
+    'OJO: la linea %d (justo ENCIMA) es identica a la primera que acabas de ' +
+    'insertar: "%s". Casi siempre significa que has mandado el ancla ' +
+    'repetida dentro de "new". Compila igual y no se ve; mira el fichero.';
+
+  SN_EDIT_DUP_BELOW_FMT =
+    'OJO: la linea %d (justo DEBAJO) es identica a la ultima que acabas de ' +
+    'insertar: "%s". Suele ser el ancla mandada dos veces dentro de "new".';
 
   SR_READ_RANGE_FMT =
     'RECHAZADO: el rango va al reves (desde=%d, hasta=%d) y el fichero tiene ' +
@@ -463,8 +472,12 @@ const
     'packages (PAServer installers to download and run on the target) | ' +
     'profiles (registered connection profiles and SDKs) | add-profile ' +
     '(register a connection profile: name, host, password; optional port, ' +
-    'platform) | test-connection (with name: full handshake against that ' +
-    'profile; with host+port and no name: raw TCP reachability probe) | ' +
+    'platform - the host must be one the operator allows in [Security] ' +
+    'RemoteHosts, because registering a profile IS declaring where this ' +
+    'machine may connect) | remove-profile (delete a profile by name; they ' +
+    'live outside the workspace, so there is no trash for them) | ' +
+    'test-connection (with name: full handshake against that profile; with ' +
+    'host+port and no name: raw TCP reachability probe, same host rule) | ' +
     'get-sdk (pull the SDK/sysroot from the PAServer of profile "name" and ' +
     'register it for delphi_build; can take minutes) | remote-run (execute ' +
     '"exe" on the target of profile "name" and return its exit code and ' +
@@ -1344,6 +1357,14 @@ const
     'La definicion del simbolo vive FUERA de los workspace roots (RTL o ' +
     'componente instalado): eso no se renombra desde aqui.';
 
+  SR_RENAME_HOMONYMS_FMT =
+    'Hay %d aparicion(es) del mismo nombre que el motor resuelve a OTRA ' +
+    'definicion (mira "lookalikes"). Puede que sean de verdad otra cosa y no ' +
+    'haya que tocarlas... o puede que sean ESTA, vista desde un proyecto ' +
+    'distinto con otra configuracion: eso es lo que paso en el campo, y el ' +
+    'rename dijo que si mientras dejaba un proyecto sin compilar. Mira una ' +
+    'por una antes de aplicar nada; "scope" te dice donde he buscado.';
+
   SR_RENAME_UNVERIFIED_FMT =
     '%d referencias candidatas NO confirmadas semanticamente. La regla es ' +
     'estricta: una sola sin confirmar = no aplicable (un falso positivo ' +
@@ -1811,6 +1832,12 @@ const
 
   // ---- delphi_git: ramas ----
 
+  SN_BUILD_DEFAULT_PLATFORM =
+    'No me diste "platform", asi que he compilado Win32, que es el defecto de ' +
+    'esta tool. OJO: delphi_test ejecuta Win64 por defecto, asi que si vas a ' +
+    'pasar los tests despues, compila Win64 (platform=Win64) o dejale a ' +
+    'delphi_test que compile el solo.';
+
   SN_BUILD_FIRST_ERROR =
     'Empieza por "firstError": un solo error puede parir a los demas. Un ' +
     'E2009 (asignar un procedimiento suelto a un evento) provoca detras ' +
@@ -1929,6 +1956,14 @@ const
     'No he creado NADA: %s sigue sin existir. Un proyecto nuevo quiere su ' +
     'propia carpeta; pon "dir" en una subcarpeta.';
 
+  SN_CREATE_CONSOLE_FORM =
+    'OJO: ese proyecto es de CONSOLA (no usa Vcl.Forms ni FMX.Forms), asi que ' +
+    'el form entra y compila pero no lo va a ver nadie: no hay Application ' +
+    'que lo cree ni bucle de mensajes que lo muestre. Si de verdad quieres ' +
+    'convertirlo en una aplicacion con ventana, hace falta cambiar el .dpr ' +
+    '(uses del framework, Application.Initialize/CreateForm/Run) y quitar el ' +
+    '{$APPTYPE CONSOLE}.';
+
   SR_CREATE_FRAMEWORK_FMT =
     'RECHAZADO: pides un %s pero %s es un proyecto %s. Mezclarlos compila mal ' +
     'y tarde: el form iria con su Application.CreateForm a un .dpr que usa el ' +
@@ -2038,6 +2073,32 @@ const
     'actual de algun proceso). No te digo BORRADO porque no lo esta. ' +
     'Reintentalo dentro de un momento; si sigue igual, tiene que quitarlo el ' +
     'operador a mano.';
+
+  SR_STYLES_RC_OUTSIDE_FMT =
+    'RECHAZADO: el manifiesto %s de %s apunta a un fichero que esta FUERA de ' +
+    'lo que este servidor deja leer. No lo compilo: el compilador de recursos ' +
+    'abre lo que le pongas con los permisos del servidor y mete el contenido ' +
+    'dentro del .res, que luego se puede descargar; por ahi se ha sacado ' +
+    'desde el win.ini hasta el fichero de configuracion con el token. Las ' +
+    'rutas del .rc tienen que quedarse dentro del workspace, y mejor ' +
+    'relativas a la carpeta de estilos.';
+
+  SR_STYLES_RC_BADPATH_FMT =
+    'RECHAZADO: no puedo resolver la ruta %s del .rc. Usa rutas relativas a ' +
+    'la carpeta del propio .rc.';
+
+  SR_STYLES_RC_UNREADABLE_FMT =
+    'RECHAZADO: no puedo leer el .rc (%s) para comprobar a que ficheros ' +
+    'apunta, asi que no lo compilo.';
+
+  SR_PASERVER_PROFILE_NAME =
+    'RECHAZADO: el nombre del perfil solo admite letras, digitos, punto, ' +
+    'guion y guion bajo.';
+
+  SN_PASERVER_PROFILE_REMOVED_FMT =
+    'BORRADO el perfil de conexion "%s". Ojo: los perfiles viven fuera del ' +
+    'workspace (donde los guarda el IDE), asi que esto NO tiene papelera: no ' +
+    'hay vuelta atras salvo volver a crearlo con add-profile.';
 
   SR_PASERVER_HOST_DENIED_FMT =
     'RECHAZADO: no marco a "%s". Un test-connection es una conexion que abre ' +

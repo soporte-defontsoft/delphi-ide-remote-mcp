@@ -351,6 +351,8 @@ end;
   the link is verified separately with test-connection. The command line runs
   with no shell and is never logged, so the password only lives in this one
   process argument. }
+function ProbeHostDenied(const AHost: string): string; forward;
+
 function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
@@ -363,6 +365,14 @@ begin
   if ProfName = '' then Exit(Format(SR_PASERVER_NEED_FMT, ['name']));
   if Host = '' then Exit(Format(SR_PASERVER_NEED_FMT, ['host']));
   if Params.Password = '' then Exit(Format(SR_PASERVER_NEED_FMT, ['password']));
+  // Creating a profile IS declaring where this machine may connect, so it
+  // goes through the same door as the raw probe. Without this the whitelist
+  // was theatre: an agent wrote a profile pointing at any host:port and then
+  // "tested the connection" to it - a port scanner with a reliable oracle
+  // (measured 2026-08-25, on this very server, while it was being audited).
+  Result := ProbeHostDenied(Host);
+  if Result <> '' then
+    Exit;
   Port := Params.Port.Trim;
   if Port = '' then Port := '64211';
   // the gate already refused anything outside PACLIENT_PLATFORMS; this loop
@@ -523,6 +533,35 @@ end;
 
 { test-connection: paclient with ONLY the profile name connects, authenticates
   and exits - exit 0 = the PAServer answered and took the credentials. }
+{ Take a connection profile out again. It lives outside the workspace (the
+  IDE keeps them under the user's profile), so no other tool here can remove
+  it: an agent that created one for a test had no way to clean up after
+  itself and left three behind for the operator (field round 11). }
+function RemoveProfile(const Params: TDelphiPAServerParams): string;
+var
+  Info: TRadStudioInfo;
+  ProfName, ProfileFile: string;
+begin
+  ProfName := Params.Name.Trim;
+  if ProfName = '' then
+    Exit(Format(SR_PASERVER_NEED_FMT, ['name']));
+  if not TRegEx.IsMatch(ProfName, '^[A-Za-z0-9_.-]+$') then
+    Exit(SR_PASERVER_PROFILE_NAME);
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit(SR_COMPONENTS_MISSING);
+  ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
+  if not TFile.Exists(ProfileFile) then
+    Exit(Format(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+  try
+    TFile.Delete(ProfileFile);
+  except
+    on E: Exception do
+      Exit('error: no pude borrar el perfil: ' + E.Message);
+  end;
+  Result := Format(SN_PASERVER_PROFILE_REMOVED_FMT, [ProfName]);
+end;
+
 function TestConnection(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
@@ -871,6 +910,8 @@ begin
     Result := ListProfiles
   else if Cmd = 'add-profile' then
     Result := AddProfile(Params)
+  else if Cmd = 'remove-profile' then
+    Result := RemoveProfile(Params)
   else if Cmd = 'test-connection' then
     Result := TestConnection(Params)
   else if Cmd = 'get-sdk' then

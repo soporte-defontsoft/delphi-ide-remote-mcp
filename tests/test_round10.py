@@ -125,17 +125,17 @@ def J(t):
 A = spawn()
 
 # ------------------------------------------------------------ R1: paserver --
-j = J(call(A, 'delphi_paserver', {'command': 'test-connection', 'host': '127.0.0.1',
-                                  'port': '3131'}, t=120))
-r = call(A, 'delphi_paserver', {'command': 'test-connection', 'host': '127.0.0.1',
+# 198.51.100.x es rango de documentacion: ninguna maquina real tiene un perfil ahi,
+# asi que el test mide la puerta y no el estado de este ordenador.
+r = call(A, 'delphi_paserver', {'command': 'test-connection', 'host': '198.51.100.9',
                                 'port': '3131'}, t=120)
 check('R1 sondear un host a mano: RECHAZADO (era el mismo SSRF que git)',
       'RECHAZADO' in r and 'RemoteHosts' in r, r[:250])
 r = call(A, 'delphi_paserver', {'command': 'test-connection', 'host': 'example.com',
                                 'port': '80'}, t=120)
 check('R1 ...y a Internet tambien', 'RECHAZADO' in r, r[:200])
-B = spawn({'DELPHI_MCP_REMOTE_HOSTS': '127.0.0.1'})
-r = call(B, 'delphi_paserver', {'command': 'test-connection', 'host': '127.0.0.1',
+B = spawn({'DELPHI_MCP_REMOTE_HOSTS': '198.51.100.9'})
+r = call(B, 'delphi_paserver', {'command': 'test-connection', 'host': '198.51.100.9',
                                 'port': '59999'}, t=120)
 check('R1 el host que el operador permite SI se sondea',
       'RECHAZADO' not in r and 'tcpReachable' in r, r[:200])

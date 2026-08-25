@@ -8,6 +8,66 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.64.0-beta] - 2026-08-25
+
+Field round 11: an audit of the surfaces nobody had attacked yet, and a
+MAINTENANCE job on code another agent had written. New battery
+`tests/test_round11.py` (13 checks).
+
+### Security - the same mistake in two places
+Both findings are a tool doing work on the caller's behalf without asking the
+jail first.
+
+- **A `.rc` turned the resource compiler into an arbitrary file reader.**
+  `delphi_styles command=build` handed the manifest to brcc32, which opens
+  whatever it names with the SERVER's own access and embeds it in the `.res` -
+  which `delphi_fetch` then hands over. An auditor read `C:\Windows\win.ini`
+  that way and measured that **the server's own `settings.ini`, where the
+  AuthToken lives, went in too**. Every path a `.rc` mentions is now checked
+  against the read jail before brcc32 sees it. `view`/`get` had always been
+  jailed; `build` was the hole.
+- **`add-profile` bypassed the host allowlist that 0.63 had just added.**
+  Writing a connection profile to any host:port and then "testing the
+  connection" to it was a port scanner with a reliable open/closed oracle -
+  measured on this very server while it was being audited. Registering a
+  profile IS declaring where this machine may connect, so it goes through the
+  same gate.
+- **`remove-profile`** exists now: profiles live outside the workspace, so an
+  agent that created one for a test had no way to clean up after itself.
+
+### Fixed - the rename lied
+- **`delphi_rename_symbol` answered `applicable:true` for a rename that broke
+  the build.** A test project next door, with `..\Inventario` in its search
+  path, holds real references - and the engine, resolving them against the
+  wrong project's settings, filed them as "homonyms" and counted them in a
+  number nobody could act on. Three things changed: the scan now reaches the
+  projects whose search path points at the symbol's folder; a lookalike that
+  resolves to ANOTHER unit is a **blocker** with its location listed
+  (`lookalikes`); and the answer says where it looked (`scope`). The word
+  "applicable" means "the evidence is complete", so a partial scan may not
+  say it.
+- The definition change carries an `anchor` like every other change - it was
+  the one occurrence still forcing a trip back to `delphi_read`.
+
+### Fixed - frictions from the maintenance job
+- `delphi_edit` drops ONE trailing line break from `new`: a block read from a
+  file (the recommended way to send code) always carries one, and it landed
+  as a blank line inside the code. Two or more are kept.
+- `delphi_edit` warns when what you insert repeats the line above or below -
+  almost always the anchor sent twice, invisible, and it cost an agent eight
+  calls to find.
+- `delphi_build` says which platform it used when nobody chose (it defaults to
+  Win32 while `delphi_test` runs Win64: two different binaries).
+- A form created in a CONSOLE project is announced instead of going in
+  silently: it compiles and nobody will ever see it.
+- `delphi_test` with only `project` means `run` (it fell to `discover` and
+  then complained about a parameter that only `discover` has).
+- `delphi_config` accepts `unit=` as well as `path=` for add-unit/remove-unit.
+- `delphi_projects` says which folders each project **compiles against** -
+  the search paths are how a test project sees the code it exercises, and
+  finding that out took a separate call.
+
+
 ## [0.63.0-beta] - 2026-08-25
 
 Field round 10. The fourth wave of agents went at 0.62 through nothing but

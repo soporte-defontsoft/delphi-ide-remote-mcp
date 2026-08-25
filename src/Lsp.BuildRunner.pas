@@ -891,6 +891,12 @@ begin
     Result.AddPair('exitCode', TJSONNumber.Create(Integer(ExitCode)));
     Result.AddPair('project', TPath.GetFullPath(ADprojPath));
     Result.AddPair('platform', Plat);
+    // Two tools, two defaults: this one builds Win32 when nobody says, and
+    // delphi_test runs Win64. An agent that built by hand and then ran the
+    // tests was looking at two different binaries and could not see why
+    // (field round 10). Say which one this was, when nobody chose.
+    if APlatform = '' then
+      Result.AddPair('platformNote', SN_BUILD_DEFAULT_PLATFORM);
     Result.AddPair('config', Cfg);
     Result.AddPair('target', Target);
     Result.AddPair('errors', Errors);

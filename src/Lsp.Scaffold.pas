@@ -540,7 +540,7 @@ end;
 
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string): string;
 var
-  Kind, Dir, FormName, PasPath, DesignerExt, Have, Want: string;
+  Kind, Dir, FormName, PasPath, DesignerExt, Have, Want, FrameworkNote: string;
   Fmx: Boolean;
 begin
   Kind := AKind.Trim.ToLower;
@@ -565,6 +565,13 @@ begin
     if (Have <> '') and (Have <> Want) then
       Exit(Format(SR_CREATE_FRAMEWORK_FMT,
         [AKind, TPath.GetFileName(ADprPath), UpperCase(Have)]));
+    // A CONSOLE project has no framework at all, so the mismatch check above
+    // says nothing - and a form went in without a word (field round 10). It
+    // compiles; it just never shows, because there is no Application to run
+    // it. Allowed, because turning a console project into a GUI one is a
+    // real thing to do, but never silently.
+    if Have = '' then
+      FrameworkNote := SN_CREATE_CONSOLE_FORM;
   end;
   FormName := AFormName.Trim;
   if FormName = '' then
@@ -623,9 +630,10 @@ begin
   if Result.StartsWith('RECHAZADO') then
     Result := 'CREADOS ' + AUnitName + '.pas/' + DesignerExt + ' pero NO se pudo registrar: ' + Result
   else
-    Result := Format('CREADO %s %s (T%s, %s) con su %s.'#10'%s',
+    Result := Format('CREADO %s %s (T%s, %s) con su %s.'#10'%s%s',
       [IfThen(Kind.StartsWith('frame'), 'frame', IfThen(Kind = 'datamodule', 'data module', 'form')),
-       AUnitName, FormName, Kind, AUnitName + DesignerExt, Result]);
+       AUnitName, FormName, Kind, AUnitName + DesignerExt, Result,
+       IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]);
 end;
 
 function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string): string;
