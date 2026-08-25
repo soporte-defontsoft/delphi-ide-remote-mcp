@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.59.0-beta';
+  SERVER_VERSION = '0.60.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -217,7 +217,10 @@ const
     'Lee una nota del vault de conocimiento por ruta relativa. SIN path ' +
     'devuelve las reglas (AGENTS-VAULT.md) + el indice (MEMORY.md): hazlo al ' +
     'empezar. Los [[wikilinks]] del contenido refieren a otras notas - ' +
-    'localizalas con vault_search target=files.';
+    'localizalas con vault_search target=files. OJO: el vault que sirve este ' +
+    'servidor es el que su operador ha expuesto (VaultRoot del settings.ini), ' +
+    'que puede ser una COPIA y no la carpeta viva del usuario: si algo suena ' +
+    'desactualizado, preguntalo antes de darlo por bueno.';
 
   SD_VAULT_APPEND =
     'Anade contenido a una nota existente del vault (entradas de log, ' +
@@ -297,8 +300,20 @@ const
     '"..". Localiza notas con vault_search target=files.';
 
   SR_VAULT_MORE_FMT =
-    #10'--- Mostradas las lineas 1..%d de %d. Pide el resto con ' +
+    #10'--- Mostradas las lineas %d..%d de %d. Pide el resto con ' +
     'vault_read {offset: %d} (y limit si quieres trozos mas pequenos).';
+
+  SR_VAULT_TARGET_FMT =
+    'error: target="%s" no existe. Solo hay dos: files (busca en los NOMBRES ' +
+    'de las notas, con glob: *.md, *delphi*) y content (busca DENTRO del ' +
+    'texto, con expresion regular). Por defecto, files.';
+
+  SR_VAULT_SHOWN_FMT =
+    #10'--- Mostradas las lineas %d..%d de %d (hasta el final).';
+
+  SR_VAULT_PAST_END_FMT =
+    'error: offset %d mas alla del final: "%s" tiene %d lineas. Pide desde ' +
+    'offset=1 o desde una linea que exista.';
 
   SN_VAULT_BOOTSTRAP =
     '# Arranque del vault: las reglas (AGENTS-VAULT.md) y el indice ' +
@@ -873,8 +888,13 @@ const
 
   SN_CONFIG_DEPLOY_ADDED_FMT =
     'ANADIDO al despliegue de %s: "%s" -> %s%s (Debug y Release). %sCopia ' +
-    'previa del .deployproj en __delphi-patch. Despliega con delphi_build ' +
-    'target=Deploy platform=%s.';
+    'previa del .deployproj en __delphi-patch. Para desplegar de verdad hace ' +
+    'falta un PERFIL DE CONEXION del IDE: delphi_build target=Deploy ' +
+    'platform=%s solo funciona si el usuario de este servidor tiene uno ' +
+    'configurado (si no, msbuild responde "Missing profile name" hasta en ' +
+    'Win32). En remoto, delphi_paclient hace el despliegue de verdad; en ' +
+    'local, el .deployproj queda escrito y el IDE lo usara al abrir el ' +
+    'proyecto.';
 
   SN_CONFIG_DEPLOY_GENERATED =
     'El proyecto no tenia manifiesto de despliegue: se genero el estandar ' +
@@ -891,8 +911,10 @@ const
 
   SN_CONFIG_NO_DEPLOYPROJ =
     'No deployment manifest (.deployproj) next to the project yet: ' +
-    'delphi_build target=Deploy generates the standard one (the binary), ' +
-    'and add-deployfile adds extra files to it.';
+    'add-deployfile writes one (with the binary in it) and adds your file. ' +
+    'Note that RUNNING a deployment needs an IDE connection profile on this ' +
+    'machine: without one, delphi_build target=Deploy fails with "Missing ' +
+    'profile name" even for Win32. delphi_paclient is what deploys remotely.';
 
   // ---- project units (Lsp.ProjectUnits: add-unit / remove-unit / create / delete / move) ----
 
@@ -999,7 +1021,9 @@ const
     'a style or of a part inside it (child=background/text), value written ' +
     'exactly as the file does (xAARRGGBB colors, floats with 18 decimals, ' +
     'quoted strings); clone copies a style under a new StyleName - the way to ' +
-    'add a variant; lint checks the whole thing: duplicated StyleNames, ' +
+    'add a variant; delete removes a whole style by StyleName (the copy in ' +
+    '__delphi-patch is the way back); lint checks the whole thing: ' +
+    'duplicated StyleNames, ' +
     'StyleLookup values in the project''s .fmx/.pas that NO style defines ' +
     '(the platform default style counts), design tokens missing in a theme ' +
     'of a *Tokens.ini, .rc entries whose file is missing; build converts ' +
@@ -1026,8 +1050,11 @@ const
     'carpeta (delphi_list pattern=*.style la lista).';
 
   SR_STYLES_BINARY_FMT =
-    'RECHAZADO: %s es un estilo BINARIO (producto de build). Edita el .style de ' +
-    'texto del que sale y vuelve a ejecutar command=build.';
+    'RECHAZADO: %s es un estilo BINARIO (el producto de command=build), y ' +
+    'este servidor no sabe LEERLO: el formato es un DFM compilado, no texto, ' +
+    'asi que no puedo ni listarte sus StyleName. Trabaja sobre el .style de ' +
+    'texto del que sale (mismo nombre sin el .bin) y vuelve a ejecutar ' +
+    'command=build. Si tu unica copia es el binario, dilo con delphi_report.';
 
   SR_STYLES_NEED_STYLE =
     'Falta "style": el StyleName del estilo (command=view los lista).';
@@ -1117,6 +1144,14 @@ const
     'to your agent id or to everyone, once; check only lists what waits. ' +
     'While mail waits, every tool answer ends with a MENSAJES PENDIENTES ' +
     'line - read it then: it may change what you are doing.';
+
+  SN_MESSAGES_PENDING_ALL_FMT =
+    #10#10'MENSAJES PENDIENTES: %d para TODOS los agentes (te incluye). ' +
+    'Leelos con delphi_messages command=read agent=<tu id>.';
+
+  SN_MESSAGES_PENDING_SOME_FMT =
+    #10#10'(Hay ademas %d mensaje(s) dirigidos a agentes concretos. No digo a ' +
+    'quien: si esperas correo, delphi_messages command=check agent=<tu id>.)';
 
   SN_MESSAGES_PENDING_FMT =
     #10'MENSAJES PENDIENTES: %d (buzon: %s). Leelos con delphi_messages ' +
@@ -1437,6 +1472,173 @@ const
 
   // ---- delphi_git: ramas ----
 
+  SN_LINT_UNKNOWN_CLASS_FMT =
+    '"%s" no esta en la tabla %s de este servidor (sera de un paquete de ' +
+    'terceros, o no existe). No es un error por si mismo, pero NO he revisado ' +
+    'ninguna propiedad de ese objeto ni de lo que lleva dentro.';
+
+  SN_DESIGNER_SET_NOTE =
+    'Es un SET: en el .dfm/.fmx se escribe entre corchetes y separado por ' +
+    'comas, [goEditing, goTabs], y vacio es [].';
+
+  SR_PACKAGE_NEED_DIR =
+    'error: delphi_package necesita "dir" (la carpeta a comprimir).';
+
+  SP_FETCH_MAXBYTES =
+    'Bytes por trozo, tope 8388608 (8 MB). OJO con los ficheros grandes: por ' +
+    'encima de 4 MB la respuesta trae el ENLACE de descarga y ningun trozo ' +
+    'inline ("inline":false, "bytes":0) - bajarlos por base64 se come el ' +
+    'contexto. Para forzar trozos inline de todas formas, pide ' +
+    'maxbytes<=1048576 (1 MB): ese es el interruptor.';
+
+  SR_STYLES_VALUE_GRAMMAR_FMT =
+    'RECHAZADO: "%s" no es un valor que un .style pueda guardar. Un fichero ' +
+    'de estilos es un DFM de texto: numero (12, -3.5), color en hexadecimal ' +
+    '($FF2A2A2A), identificador (claRed, True, TAlignLayout.Top), texto entre ' +
+    'comillas simples (''Aceptar'') o conjunto ([a, b]). Si lo escribo tal ' +
+    'cual, el fichero deja de poder leerse y solo te enterarias en ' +
+    'command=build.';
+
+  SR_STYLES_RENAME_EMPTY =
+    'RECHAZADO: StyleName vacio. Un estilo sin nombre no lo encuentra nadie.';
+
+  SR_STYLES_RENAME_DUP_FMT =
+    'RECHAZADO: en ese fichero ya hay un estilo llamado "%s". Dos estilos con ' +
+    'el mismo StyleName es justo lo que caza el lint, y a partir de ahi ' +
+    'delete/get trabajan con el primero que encuentran. Elige otro nombre.';
+
+  SN_STYLES_RENAMED_FMT =
+    'RENOMBRADO el estilo "%s" a "%s" en %s. OJO: los StyleLookup de tus ' +
+    '.fmx que apuntaban al nombre viejo ya no encuentran nada; pasa ' +
+    'command=lint para ver cuales.';
+
+  SN_CONFIG_PLAT_ALREADY_FMT =
+    'La plataforma %s YA estaba deshabilitada: no he tocado nada (ni copia de ' +
+    'seguridad, que seria de un fichero identico). add-platform la reactiva.';
+
+  SR_CONFIG_PLAT_LAST_FMT =
+    'RECHAZADO: %s es la ULTIMA plataforma habilitada del proyecto y un ' +
+    'proyecto sin ninguna no se puede compilar desde el IDE. Habilita antes ' +
+    'otra con add-platform y luego quita esta.';
+
+  SN_CONFIG_DPR_ONLY =
+    'Esto es el .dpr y a su lado no hay .dproj, asi que solo puedo decirte ' +
+    'sus UNITS. El framework (VCL/FMX), las plataformas, las configuraciones, ' +
+    'los search path y el despliegue viven en el .dproj: no los se, y no me ' +
+    'los invento. add-unit y remove-unit si funcionan aqui; el resto de ' +
+    'comandos necesitan un .dproj.';
+
+  SR_CONFIG_NO_DPROJ_FMT =
+    'RECHAZADO: %s es el .dpr (el fuente), y la configuracion del proyecto ' +
+    '(framework, plataformas, rutas de busqueda, salida) vive en el .dproj. ' +
+    'Ahi al lado no hay ningun %s. Si el proyecto no tiene .dproj, este ' +
+    'servidor no puede configurarlo: creale uno con delphi_create o abrelo ' +
+    'una vez en el IDE. (add-unit y remove-unit si funcionan sobre el .dpr.)';
+
+  SR_CREATE_BADNAME_FMT =
+    'RECHAZADO: "%s" no es un identificador Pascal valido. Un nombre de unit ' +
+    'es Letra/_ seguido de letras, digitos o _, con puntos entre segmentos si ' +
+    'quieres espacio de nombres (MiApp.Datos.Clientes).';
+
+  SR_CREATE_RESERVED_FMT =
+    'RECHAZADO: "%s" es una palabra reservada de Delphi, asi que "%s" no ' +
+    'puede llamarse asi: en cuanto entre en el uses del .dpr el compilador ' +
+    'da E2029 y detras van 15 errores en cascada que no apuntan aqui. ' +
+    'Ponle un prefijo (UBegin, MiApp.Begin no vale tampoco: el segmento debe ' +
+    'ser limpio).';
+
+  SR_CREATE_RTLNAME_FMT =
+    'RECHAZADO: "%s" es el nombre de una unit de la RTL/VCL. Un fichero con ' +
+    'ese nombre junto al proyecto SECUESTRA a la de verdad y los errores que ' +
+    'salen luego apuntan a cualquier sitio menos a esto. Usa un nombre ' +
+    'propio (U%s, MiApp.%s) o un espacio de nombres con punto.';
+
+  SR_CREATE_NEED_DIR =
+    'RECHAZADO: falta "dir", la carpeta donde crear el proyecto. Debe estar ' +
+    'dentro del workspace; delphi_workspace te dice cual es.';
+
+  SR_CREATE_CLASH_FMT =
+    'RECHAZADO: ahi ya hay un %s (en %s) y el scaffolder jamas sobreescribe. ' +
+    'No he creado NADA: %s sigue sin existir. Un proyecto nuevo quiere su ' +
+    'propia carpeta; pon "dir" en una subcarpeta.';
+
+  SR_CREATE_FRAMEWORK_FMT =
+    'RECHAZADO: pides un %s pero %s es un proyecto %s. Mezclarlos compila mal ' +
+    'y tarde: el form iria con su Application.CreateForm a un .dpr que usa el ' +
+    'otro framework. Usa el kind que toca, o crea el form en un proyecto de ' +
+    'su tipo.';
+
+  SR_CREATE_CONTENT_NOUNIT =
+    'RECHAZADO: el "content" que mandas no empieza por "unit <nombre>;", asi ' +
+    'que no es una unit de Pascal. Manda el fuente COMPLETO (unit / ' +
+    'interface / implementation / end.) o no mandes content y te dejo el ' +
+    'esqueleto vacio.';
+
+  SR_CREATE_CONTENT_NAME_FMT =
+    'RECHAZADO: el fuente dice "unit %s" pero el fichero se llamaria %s.pas. ' +
+    'Delphi exige que coincidan. Corrige uno de los dos.';
+
+  SR_CREATE_CONTENT_NOEND =
+    'RECHAZADO: el "content" no termina en "end." - parece cortado. Manda la ' +
+    'unit entera; si es larga, usa delphi_upload por trozos y luego ' +
+    'delphi_config command=add-unit para registrarla.';
+
+  SR_CHANGESET_VIRT_MISSING_FMT =
+    'RECHAZADO: no existe %s, ni lo crea ninguna operacion anterior de esta ' +
+    'misma tanda. Si lo va a crear una posterior, ordena las operaciones: se ' +
+    'aplican en el orden en que las apilas.';
+
+  SR_CHANGESET_VIRT_EXISTS_FMT =
+    'RECHAZADO: %s ya existe (create jamas sobreescribe). Si lo que quieres ' +
+    'es rehacerlo entero, apila primero kind=delete de ese mismo fichero y ' +
+    'luego el create: la tanda cuenta con lo que apilas, no solo con el disco.';
+
+  SR_CHANGESET_VIRT_DEST_FMT =
+    'RECHAZADO: el destino %s ya existe (o lo crea una operacion anterior de ' +
+    'esta tanda). Elige otro nombre o borra ese primero.';
+
+  SR_CHANGESET_UNSTAGE_N_FMT =
+    'RECHAZADO: n=%d no vale; hay %d operaciones apiladas. Usa el numero que ' +
+    'te da command=preview, o n=0 para quitar la ultima.';
+
+  SN_CHANGESET_UNSTAGED_FMT =
+    'Quitada la operacion %d (%s %s). Quedan %d apiladas. Nada se ha tocado ' +
+    'en disco: la tanda sigue viva.';
+
+  SN_CHANGESET_PREVIEW_VIRTUAL =
+    'Ese fichero todavia no existe: lo crea una operacion anterior de esta ' +
+    'misma tanda, asi que el ancla no se puede comprobar hasta el commit. Si ' +
+    'falla, el commit deshace la tanda entera como siempre.';
+
+  SR_UPLOAD_NO_CHUNK_FMT =
+    'RECHAZADO: no mandas "chunkbase64", asi que no hay nada que subir, y ahi ' +
+    'ya hay un fichero de %d bytes. Una llamada a medias NO lo vacia. Si ' +
+    'quieres reemplazarlo, manda su contenido en base64; si quieres borrarlo, ' +
+    'delphi_delete.';
+
+  SR_UPLOAD_NO_CHUNK_NEW =
+    'RECHAZADO: falta "chunkbase64", el contenido en base64. Para un fichero ' +
+    'de texto vacio o con contenido, delphi_create / delphi_edit son mejor ' +
+    'herramienta; delphi_upload es para binarios y para trozos.';
+
+  SR_UPLOAD_SHA_MISMATCH_FMT =
+    'el sha256 NO coincide: lo ensamblado difiere del origen, asi que NO lo ' +
+    'dejo publicado con su nombre. Lo he apartado en %s. Reenvia desde ' +
+    'offset=0.';
+
+  SN_UPLOAD_REPLACED_FMT =
+    'OJO: ahi ya habia un fichero (%d bytes) y esta subida lo ha SUSTITUIDO ' +
+    'entero. La copia del contenido anterior esta en "backup" (papelera ' +
+    '__delphi-patch junto al fichero, una por dia: si ya habias sustituido ' +
+    'ese fichero hoy, la copia que hay es la ORIGINAL de esta manana, que es ' +
+    'la que vale). Si querias anadir al final y no reemplazar, usa offset=<el ' +
+    'tamano actual>, no offset=0.';
+
+  SR_GIT_MESSAGE_LINES =
+    'error: "message" no admite saltos de linea en este comando (va en la ' +
+    'linea de ordenes). commit y tag SI los admiten: ahi el mensaje se pasa ' +
+    'por fichero (-F) y puedes escribir asunto, linea en blanco y cuerpo.';
+
   SR_GIT_SWITCH_NEEDS =
     'RECHAZADO: switch necesita "args" con el nombre de la rama. Para crear ' +
     'una nueva y saltar a ella: args=<rama> create=true. Los cambios sin ' +
@@ -1471,9 +1673,14 @@ const
     'leave the project broken; for one file, plain delphi_edit is simpler.';
 
   SP_CHANGESET_COMMAND =
-    'begin (new changeset -> id) | stage (add ONE operation) | preview ' +
-    '(resolve anchors + fingerprint files; required before commit) | commit ' +
-    '(apply all or nothing) | rollback (discard) | status (list open ones)';
+    'begin (new changeset -> id) | stage (add ONE operation) | unstage (take ' +
+    'operation "n" back out; n=0 = the last one) | preview (resolve anchors + ' +
+    'fingerprint files; required before commit) | commit (apply all or ' +
+    'nothing) | rollback (discard) | status (list open ones)';
+
+  SP_CHANGESET_N =
+    'unstage: numero de la operacion a quitar, el que da preview (0 o vacio ' +
+    '= la ultima apilada)';
 
   SP_CHANGESET_ID =
     'The changeset id returned by begin (every command except begin/status)';

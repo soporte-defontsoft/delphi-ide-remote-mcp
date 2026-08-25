@@ -65,7 +65,13 @@ def check(name, cond, detail=''):
 
 print('== messages battery ==')
 t = call('delphi_workspace', {})
-check('aviso al final de cualquier tool', 'MENSAJES PENDIENTES: 2 (buzon: todos, dsh)' in t, t[-120:])
+# El aviso NO nombra buzones ajenos (v0.60): el correo "para todos" se anuncia
+# porque es del que lee; el dirigido a otro solo se cuenta. Tres agentes
+# distintos reportaron el ruido y la fuga del id ajeno.
+check('aviso al final de cualquier tool', 'MENSAJES PENDIENTES: 1 para TODOS' in t, t[-200:])
+check('el aviso NO nombra el buzon de otro agente', 'dsh' not in t, t[-200:])
+check('el correo dirigido a otro se cuenta sin decir a quien',
+      '1 mensaje(s) dirigidos a agentes concretos' in t, t[-200:])
 t = call('delphi_messages', {"command": "check", "agent": "dsh"})
 check('check lista sin consumir', 'pendientes: 2' in t and 'Reconecta' in t and 'para todos' in t, t)
 t = call('delphi_messages', {"command": "check", "agent": "hermes"})

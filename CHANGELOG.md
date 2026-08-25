@@ -8,6 +8,103 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.60.0-beta] - 2026-08-25
+
+Field round 8. Three agents worked the server through nothing but MCP (a
+security auditor, a contract prober, and one doing a real programming job)
+and came back with 30+ findings. This release is those findings, fixed. New
+battery `tests/test_round8.py` (57 checks) pins every one of them.
+
+### Fixed - data loss and leaks
+- **`delphi_upload` with no `chunkbase64` truncated an existing file to 0
+  bytes and reported success.** The schema only demanded `path`, so a
+  half-typed call opened the target with `fmCreate` and emptied it. Now
+  refused, with the current size named. An upload that legitimately REPLACES
+  a file now says so (`replaced`, `previousSize`) and where the recoverable
+  copy is (`backup`) - the copy was already being made, and saying nothing
+  about it is why an auditor concluded there was none.
+- **An upload whose `sha256` did not match stayed published under its real
+  name.** The bytes are known to be wrong: they are moved aside to
+  `<file>.corrupto` and the answer says where.
+- **The real drive letter leaked in every multi-line field.** By the time
+  the mask runs the text is JSON, where a line break is the two characters
+  `\` and `n` - so the letter `n` looked like the end of a word and the
+  guard let `C:\Program Files...` through untouched. Single-line fields
+  masked fine, which is why it survived this long: `errors[]` was virtual
+  and `outputTail` was not.
+
+### Fixed - answers that were not true
+- **`delphi_config view` on a bare `.dpr`** answered with an empty
+  framework, no platforms, no configurations and a cheerful
+  `crossPlatform: yes`. It now resolves the sibling `.dproj` when there is
+  one, and when there is not it returns the units it CAN read plus
+  `hasDproj: false` and what it cannot know.
+- **`$(BDS)` and friends never resolved** although the schema promised them:
+  the search-path validator was reading the IDE's registry key instead of
+  the full macro table, so the refusal recommended exactly what it had just
+  refused.
+- **`delphi_designer prop`** now gives the members of a **set**, not only of
+  an enum, as its description always claimed.
+- **`delphi_designer lint`** names the classes it does not know (it stayed
+  silent, which read as "checked and fine") and no longer denounces
+  `Viewport.*` or `Explicit*` - properties the IDE itself writes that
+  classic RTTI never lists. Five false positives on real `.fmx` forms were
+  telling agents to delete good properties.
+- **`delphi_fetch`'s `maxbytes`** documented a cap of 8 MB while anything
+  over 4 MB came back as a link with no inline chunk; the parameter now
+  describes the real rule and the answer carries `inline: false`.
+- **`vault_read`'s footer** said "lines 1..N" whatever the offset was, so a
+  reader asking for 20..21 was told it had seen 1..21 and stopped asking.
+  An offset past the end is now explained instead of answering with a bare
+  header.
+- The `target=Deploy` both `add-deployfile` and `view` recommended needs an
+  IDE connection profile and fails with "Missing profile name" without one,
+  Win32 included. Said plainly now, pointing at `delphi_paclient`.
+
+### Fixed - dangerous or dead ends
+- **`delphi_create` is atomic.** A collision on the third file left an
+  orphan `.dpr` pointing at another project's unit, with no `.dproj`, and
+  the retry refused with "ya existe un proyecto": a dead end. Every target
+  is checked before anything is written.
+- **Unit names**: reserved words (`begin` - E2029 plus 16 cascading errors)
+  and RTL unit names (`System` - hijacks the compiler's own) are refused
+  with the reason.
+- **A form of the wrong framework** is refused instead of landing an FMX
+  form and its `Application.CreateForm` in a `.dpr` that uses `Vcl.Forms`.
+- **`delphi_styles set`** validates the value against the streaming grammar
+  instead of writing anything at all and leaving the `.style` unreadable
+  until `build` failed. `prop=StyleName` is a rename: refused when the name
+  is taken (it was silently producing duplicates), announced as a rename
+  when clean.
+- **`remove-platform`** is idempotent (it was taking a backup of a no-op)
+  and refuses to disable the last enabled platform.
+- **A missing required parameter** is a refusal with the parameter's name,
+  not `Error executing tool: Invalid characters in path`.
+
+### Added
+- **`delphi_changeset` validates against the BATCH, not just the disk.**
+  Staging `delete X` + `create X` - the natural way to rewrite a unit - was
+  refused because the delete had not run yet. A changeset is a plan, so the
+  plan decides.
+- **`delphi_changeset command=unstage`** (`n` = the number `preview` prints,
+  0 = the last one): one mistyped anchor no longer means rolling the whole
+  batch back and staging it all again.
+- **`delphi_create kind=unit content=...`** creates the unit WITH its source
+  and registers it in one call. The `unit X;` must match the file name and
+  it must end in `end.` - registering `UFoo.pas` whose source says
+  `unit UBar` is a lie the compiler finds much later.
+- The mailbox notice **no longer names another agent's box**. Three agents
+  reported reading `MENSAJES PENDIENTES (buzon: dsh)` on nearly every
+  answer, being unable to do anything about it, and learning another id for
+  free. Mail for everyone is announced as theirs; mail for a named agent is
+  counted, never named.
+- `delphi_build` finds the `lib<Project>.so` Android and iOS actually
+  produce, so `output` is no longer absent on those platforms.
+- `vault_search` refuses a `target` it does not know instead of silently
+  falling back to `files` (`target=contents` answered with note NAMES and
+  the caller concluded the vault was empty inside).
+
+
 ## [0.59.0-beta] - 2026-08-25
 
 The biggest wall left, named independently by both reviews: an agent could

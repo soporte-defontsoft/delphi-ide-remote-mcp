@@ -36,6 +36,7 @@ type
     Enums: TDictionary<string, string>;      // enum lower -> ',a,b,' lower
     EnumShow: TDictionary<string, string>;   // enum lower -> 'A, B, C'
     Sets: TDictionary<string, string>;       // set lower -> ',a,b,' lower
+    SetShow: TDictionary<string, string>;    // set lower -> 'A, B, C'
     Alias: TDictionary<string, string>;      // 'class.prop' lower -> runtime
     PropShow: TDictionary<string, string>;   // 'class.prop' lower -> Prop original
     constructor Create(const AFacts: array of string);
@@ -53,7 +54,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.StrUtils, System.RegularExpressions,
-  Lsp.DesignerMeta.Fmx, Lsp.DesignerMeta.Vcl;
+  Lsp.DesignerMeta.Fmx, Lsp.DesignerMeta.Vcl, Lsp.Texts;
 
 var
   GFmx, GVcl: TMetaTable;
@@ -79,6 +80,7 @@ begin
   Enums := TDictionary<string, string>.Create;
   EnumShow := TDictionary<string, string>.Create;
   Sets := TDictionary<string, string>.Create;
+  SetShow := TDictionary<string, string>.Create;
   Alias := TDictionary<string, string>.Create;
   PropShow := TDictionary<string, string>.Create;
   for F in AFacts do
@@ -113,7 +115,10 @@ begin
       EnumShow.AddOrSetValue(P[1].ToLower, P[2].Replace(',', ', '));
     end
     else if (P[0] = 'S') and (Length(P) >= 3) then
-      Sets.AddOrSetValue(P[1].ToLower, ',' + P[2].ToLower + ',')
+    begin
+      Sets.AddOrSetValue(P[1].ToLower, ',' + P[2].ToLower + ',');
+      SetShow.AddOrSetValue(P[1].ToLower, P[2].Replace(',', ', '));
+    end
     else if (P[0] = 'A') and (Length(P) >= 3) then
       Alias.AddOrSetValue(P[1].ToLower, P[2]);
   end;
@@ -124,6 +129,7 @@ begin
   PropShow.Free;
   Alias.Free;
   Sets.Free;
+  SetShow.Free;
   EnumShow.Free;
   Enums.Free;
   PropNames.Free;
@@ -145,6 +151,7 @@ var
   R: TPropRec;
   InBlock: Boolean;
   BlockCh: Char;
+  Unknown: string;
 
   procedure Warn(const AMsg: string);
   begin
@@ -160,6 +167,7 @@ begin
   Stack := TStack<string>.Create;
   Warns := TStringList.Create;
   CollDepth := 0;
+  Unknown := ',';
   InBlock := False;
   BlockCh := ' ';
   try
@@ -189,7 +197,25 @@ begin
       begin
         Cur := Mt.Groups[2].Value.ToLower;
         if not M.Classes.ContainsKey(Cur) then
+        begin
+          // Not judging an unknown class is right (a user form or a
+          // third-party component is not an error), but saying NOTHING was
+          // read as "checked and fine" - and lint's own description promises
+          // unknown classes (field round 8). One honest line, no verdict:
+          // it says why that whole subtree went unchecked.
+          // ...but NOT for the root object, nor for inherited/inline: a form,
+          // a frame and a data module are user classes by definition and no
+          // table will ever hold them. Only a nested `object` of an unknown
+          // class is worth a word (a third-party component, or a typo).
+          if (Stack.Count > 0) and SameText(Mt.Groups[1].Value, 'object') and
+             not Unknown.Contains(',' + Cur + ',') then
+          begin
+            Unknown := Unknown + Cur + ',';
+            Warn(Format(SN_LINT_UNKNOWN_CLASS_FMT,
+              [Mt.Groups[2].Value, IfThen(AIsFmx, 'FMX', 'VCL')]));
+          end;
           Cur := '';
+        end;
         Stack.Push(Cur);
         Continue;
       end;
@@ -246,6 +272,15 @@ begin
           // publishes them. Warning about those is pure noise (field
           // report 2026-08-24: 6 of 6 warnings on a real form were these).
           if (SIdx = 0) and MatchText(Segs[SIdx], ['Left', 'Top']) then
+            Break;
+          // Properties the DESIGNER writes that classic RTTI never lists:
+          // FMX's Viewport.* on the scrolling controls is streamed by hand
+          // (DefineProperties), and the VCL's Explicit* are the anchors'
+          // bookkeeping. Both are written by the IDE into forms that load and
+          // compile - warning about them told an agent to DELETE good
+          // properties (field round 8, 5 false positives on real .fmx).
+          if (SIdx = 0) and MatchText(Segs[SIdx], ['Viewport', 'ExplicitLeft',
+            'ExplicitTop', 'ExplicitWidth', 'ExplicitHeight', 'DesignSize']) then
             Break;
           Warn(Format('"%s" no existe en %s segun el framework (publica: %s)',
             [Segs[SIdx], CurShow, Have]));

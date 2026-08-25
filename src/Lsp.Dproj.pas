@@ -487,7 +487,13 @@ begin
       end;
       for Ext in ArtifactExts do
       begin
+        // Android and iOS name the artifact lib<Project>.so, not <Project>.so,
+        // so the search used to come up empty and delphi_build answered
+        // success with no "output" at all - the agent had to guess the path
+        // (field round 8).
         Artifact := TPath.Combine(Cand, Base + Ext);
+        if not TFile.Exists(Artifact) and (Ext = '.so') then
+          Artifact := TPath.Combine(Cand, 'lib' + Base + Ext);
         if TFile.Exists(Artifact) then
         begin
           T := TFile.GetLastWriteTime(Artifact);

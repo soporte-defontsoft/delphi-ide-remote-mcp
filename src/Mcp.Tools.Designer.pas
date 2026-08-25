@@ -191,8 +191,14 @@ begin
     Ret.AddPair('property', AProp.Trim);
     Ret.AddPair('kind', KindWord(R.Kind));
     Ret.AddPair('type', R.TypeName);
-    if M.EnumShow.TryGetValue(R.TypeName.ToLower, Members) then
+    // Enums had their members; SETS did not, though the description promised
+    // "the legal members when it is an enum/set" and lint could already name
+    // them (field round 8).
+    if M.EnumShow.TryGetValue(R.TypeName.ToLower, Members) or
+       M.SetShow.TryGetValue(R.TypeName.ToLower, Members) then
       Ret.AddPair('members', Members);
+    if R.Kind = 's' then
+      Ret.AddPair('membersNote', SN_DESIGNER_SET_NOTE);
     if M.Alias.TryGetValue(AClass.Trim.ToLower + '.' + AProp.Trim.ToLower, Runtime) then
       Ret.AddPair('runtimeClass', Runtime);
     Result := Ret.ToJSON;

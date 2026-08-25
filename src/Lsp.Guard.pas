@@ -1516,6 +1516,15 @@ begin
           PrevC := #0
         else
           PrevC := AText[I - 1];
+        // ...but by the time this runs the text is already JSON, where a line
+        // break is the two characters \ and n. That made the LETTER 'n' the
+        // previous char for every path that starts a line, and the guard below
+        // let it through unmasked: the real C:\Program Files... leaked in
+        // multi-line fields (build outputTail) while the same path masked fine
+        // inside single-line ones (errors[]). Measured, field round 8.
+        if (I >= 3) and CharInSet(PrevC, ['n', 'r', 't']) and
+           (AText[I - 2] = '\') then
+          PrevC := #10;
         // A drive prefix only starts where the previous char is not a
         // letter/digit (keeps git's "HEAD:" and words intact).
         if not CharInSet(PrevC, ['A'..'Z', 'a'..'z', '0'..'9']) then

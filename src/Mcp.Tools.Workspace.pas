@@ -20,7 +20,8 @@ uses
   System.Zip,
   System.Generics.Collections,
   MCPServer.Tool.Base,
-  MCPServer.Types;
+  MCPServer.Types,
+  Lsp.Texts;   // SchemaDescription texts live there, and attributes are interface-level
 
 type
   TDelphiSearchParams = class
@@ -180,7 +181,7 @@ type
     property Path: string read FPath write FPath;
     [SchemaDescription('Byte offset to start from (0 = beginning). Loop increasing it until eof=true and reassemble')]
     property Offset: Integer read FOffset write FOffset;
-    [SchemaDescription('Bytes per chunk (default and cap: 8388608 = 8 MB)')]
+    [SchemaDescription(SP_FETCH_MAXBYTES)]
     property MaxBytes: Integer read FMaxBytes write FMaxBytes;
   end;
 
@@ -246,8 +247,7 @@ uses
   Lsp.BuildRunner,
   Lsp.Guard,
   Lsp.Patch,
-  Lsp.Files,
-  Lsp.Texts;
+  Lsp.Files;
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =
@@ -619,10 +619,15 @@ begin
     if Params.Args.Contains(B) then
       Exit('error: shell metacharacters are not allowed in args');
   // The message never goes through a shell (git is spawned with a direct
-  // command line): normal punctuation is welcome. Only line breaks are
-  // refused, and double quotes are neutralized where it is embedded.
-  if Params.Message.Contains(#13) or Params.Message.Contains(#10) then
-    Exit('error: line breaks are not allowed in message');
+  // command line): normal punctuation is welcome. Line breaks are refused
+  // ONLY for the commands that embed the message in the command line -
+  // commit and tag write it to a file and pass -F, so there a multi-line
+  // message is exactly what you want: subject, blank line, body with the
+  // WHY. Refusing it left every agent-made history as one-line subjects
+  // (field report 2026-08-25).
+  if (Params.Message.Contains(#13) or Params.Message.Contains(#10)) and
+     not MatchText(Params.Command.Trim, ['commit', 'tag']) then
+    Exit(SR_GIT_MESSAGE_LINES);
   // Dangerous git options (--output, --no-index, -c, ...) are filtered at the
   // single gate (Lsp.Guard.ToolCallDenied), before this handler runs.
 
@@ -1192,6 +1197,8 @@ begin
         Return.AddPair('downloadNote', SN_FETCH_DOWNLOAD);
       end;
       if LinkOnly then
+        Return.AddPair('inline', TJSONBool.Create(False));
+      if LinkOnly then
         Return.AddPair('note', Format(SN_FETCH_BIG_FMT,
           [FormatFloat('0.0', Size / (1024 * 1024), TFormatSettings.Invariant) + ' MB']))
       else
@@ -1226,12 +1233,13 @@ end;
 
 function TDelphiUploadTool.ExecuteWithParams(const Params: TDelphiUploadParams): string;
 var
-  FullPath, Dir, Sha: string;
+  FullPath, Dir, Sha, Backup, Quarantine: string;
   Bytes: TBytes;
   Stream: TFileStream;
   Return: TJSONObject;
   B64: TBase64Encoding;
-  Size: Int64;
+  Size, OldSize: Int64;
+  Replaced: Boolean;
 begin
   FullPath := TPath.GetFullPath(Params.Path);
   Result := PathDenied(FullPath); // writing: the strict jail, never the library zone
@@ -1242,6 +1250,16 @@ begin
   if SkipIdeArtifacts(FullPath) then
     Exit('error: ruta de artefactos del IDE (__history, __recovery, Win32, ' +
       'dcu...): no se sube ahi.');
+  // An upload with no bytes is not an upload: the schema only demanded "path",
+  // so a half-typed call landed here, opened the file with fmCreate and left
+  // it at 0 bytes reporting success (field round 8). Nothing destructive may
+  // ride on a call that carries no content.
+  if Params.ChunkBase64.Trim = '' then
+  begin
+    if TFile.Exists(FullPath) then
+      Exit(Format(SR_UPLOAD_NO_CHUNK_FMT, [TFile.GetSize(FullPath)]));
+    Exit(SR_UPLOAD_NO_CHUNK_NEW);
+  end;
 
   // Delphi's decoder SKIPS invalid characters instead of failing, which would
   // silently write a corrupt file: validate the alphabet ourselves first.
@@ -1269,13 +1287,23 @@ begin
   // is already there, copy it to the recoverable trash first - upload was the
   // only writer that could overwrite with no undo (field round 7). Skip the
   // trash's own tree so a backup never triggers another backup.
-  if (Params.Offset = 0) and TFile.Exists(FullPath) and
-     not SkipIdeArtifacts(FullPath, False) then
+  Backup := '';
+  if (Params.Offset = 0) and TFile.Exists(FullPath) then
+  begin
+    Replaced := True;
+    OldSize := 0;
     try
-      BackupFile(FullPath);
+      OldSize := TFile.GetSize(FullPath);
     except
-      // best-effort: a failed backup must not block a legitimate upload
     end;
+    if not SkipIdeArtifacts(FullPath, False) then
+      try
+        Backup := BackupFile(FullPath);
+      except
+        on E: Exception do
+          Backup := 'FALLO la copia de seguridad: ' + E.Message;
+      end;
+  end;
 
   if Params.Offset = 0 then
     Stream := TFileStream.Create(FullPath, fmCreate)
@@ -1304,6 +1332,17 @@ begin
     Return.AddPair('written', TJSONNumber.Create(Length(Bytes)));
     Return.AddPair('size', TJSONNumber.Create(Size));
     Return.AddPair('nextOffset', TJSONNumber.Create(Size));
+    // A fresh upload over an existing file REPLACES it. Say so, and say where
+    // the previous content went: an agent that cannot see the copy assumes
+    // there is none (measured, field round 8).
+    if Replaced then
+    begin
+      Return.AddPair('replaced', TJSONBool.Create(True));
+      Return.AddPair('previousSize', TJSONNumber.Create(OldSize));
+      if Backup <> '' then
+        Return.AddPair('backup', Backup);
+      Return.AddPair('note', Format(SN_UPLOAD_REPLACED_FMT, [OldSize]));
+    end;
     if Params.Sha256.Trim <> '' then
     begin
       Sha := THashSHA2.GetHashStringFromFile(FullPath);
@@ -1311,8 +1350,23 @@ begin
       Return.AddPair('verified', TJSONBool.Create(
         SameText(Sha, Params.Sha256.Trim)));
       if not SameText(Sha, Params.Sha256.Trim) then
-        Return.AddPair('warning', 'el sha256 NO coincide: el fichero ' +
-          'ensamblado difiere del origen. Reenvia desde offset=0.');
+      begin
+        // The file on disk is now KNOWN to be wrong. Leaving it in place under
+        // its real name means the next reader takes corruption for content:
+        // park it aside and say where (field round 8).
+        Quarantine := FullPath + '.corrupto';
+        try
+          if TFile.Exists(Quarantine) then
+            TFile.Delete(Quarantine);
+          TFile.Move(FullPath, Quarantine);
+          Return.AddPair('quarantined', Quarantine);
+        except
+          Quarantine := '';
+        end;
+        if Quarantine = '' then
+          Quarantine := FullPath;
+        Return.AddPair('warning', Format(SR_UPLOAD_SHA_MISMATCH_FMT, [Quarantine]));
+      end;
     end;
     Result := Return.ToJSON;
   finally
@@ -1340,6 +1394,11 @@ var
   Count: Integer;
   TotalBytes: Int64;
 begin
+  // Without this the empty string reached TPath.GetFullPath and the dispatcher
+  // wrapped an EArgumentException as "Error executing tool: Invalid characters
+  // in path" - a crash where a missing parameter belonged (field round 8).
+  if Params.Dir.Trim = '' then
+    Exit(SR_PACKAGE_NEED_DIR);
   Dir := TPath.GetFullPath(Params.Dir);
   Result := PathDenied(Dir);
   if Result <> '' then

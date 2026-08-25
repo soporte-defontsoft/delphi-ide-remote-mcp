@@ -447,6 +447,11 @@ begin
   Pat := Params.Pattern.Trim;
   if Pat = '' then
     Exit('error: falta "pattern"');
+  // A target nobody recognises used to fall back to "files" in silence, so
+  // `target=contents` (plural) answered with a list of note NAMES and the
+  // caller concluded the vault had nothing inside (field round 8).
+  if not MatchText(Params.Target.Trim, ['', 'files', 'content']) then
+    Exit(Format(SR_VAULT_TARGET_FMT, [Params.Target.Trim]));
   ByContent := SameText(Params.Target.Trim, 'content');
   Max := Params.MaxResults;
   if Max <= 0 then
@@ -544,7 +549,7 @@ end;
 function TVaultReadTool.ExecuteWithParams(const Params: TVaultReadParams): string;
 var
   Full, Text, Rel: string;
-  Total, LastLine: Integer;
+  Total, LastLine, First: Integer;
 begin
   if not VaultConfigured then
     Exit(SR_VAULT_UNSET);
@@ -575,10 +580,24 @@ begin
       Exit('error: no se pudo leer la nota (' + E.Message + ')');
   end;
   Rel := VaultRelative(Full);
+  // An offset past the end used to answer with a header and NOTHING else -
+  // no body, no explanation - while delphi_fetch says so plainly in the same
+  // situation (field round 8).
+  First := Params.Offset;
+  if First < 1 then
+    First := 1;
   Result := Numbered(Text, Params.Offset, Params.Limit, Total, LastLine);
+  if (First > 1) and (First > Total) then
+    Exit(Format(SR_VAULT_PAST_END_FMT, [First, Rel, Total]));
   Result := Format('# %s (%d lineas)'#10#10, [Rel, Total]) + Result;
+  // The footer used to say "lineas 1..N" whatever the offset was, so a reader
+  // asking for 20..21 was told it had seen 1..21 and stopped asking for the
+  // rest. It reports what it actually showed.
   if LastLine < Total then
-    Result := Result + #10 + Format(SR_VAULT_MORE_FMT, [LastLine, Total, LastLine + 1]);
+    Result := Result + #10 + Format(SR_VAULT_MORE_FMT,
+      [First, LastLine, Total, LastLine + 1])
+  else if First > 1 then
+    Result := Result + #10 + Format(SR_VAULT_SHOWN_FMT, [First, LastLine, Total]);
 end;
 
 { ------------------------------------------------------------ vault_append - }

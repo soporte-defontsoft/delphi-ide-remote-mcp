@@ -14,7 +14,7 @@ function CreateDelphiProject(const ADir, AName, AKind: string): string;
 { AKind: vcl | fmx (forms) | frame-vcl | frame-fmx | datamodule. }
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string): string;
 { A plain unit (interface/implementation skeleton) registered in the project. }
-function CreateDelphiUnit(const ADprPath, AUnitName: string): string;
+function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string): string;
 
 implementation
 
@@ -27,10 +27,13 @@ uses
   Lsp.Patch,
   Lsp.Dproj,
   Lsp.ProjectUnits,
+  Lsp.Texts,
   Lsp.Guard;
 
 const
   CRLF = #13#10;
+  // Ident(.Ident)*: dotted namespaces are legal Delphi (MyApp.Forms.Main)
+  IDENT_RE = '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$';
 
 function NewGuidStr: string;
 var
@@ -314,9 +317,53 @@ begin
     'end' + CRLF;
 end;
 
+{ Why a syntactically valid identifier can still be a terrible unit name.
+  Measured, field round 8: `delphi_create kind=unit name=begin` was accepted
+  and the next build died with 17 cascading errors on the .dpr; `name=System`
+  was accepted and quietly hijacked the RTL's own unit. The old check only
+  asked "is this an identifier", which both of those pass. }
+function BadUnitName(const AName: string): string;
+const
+  // Delphi reserved words: a .dpr uses clause with one of these is E2029.
+  RESERVED: array [0 .. 64] of string = ('and', 'array', 'as', 'asm', 'begin',
+    'case', 'class', 'const', 'constructor', 'destructor', 'dispinterface',
+    'div', 'do', 'downto', 'else', 'end', 'except', 'exports', 'file',
+    'finalization', 'finally', 'for', 'function', 'goto', 'if',
+    'implementation', 'in', 'inherited', 'initialization', 'inline',
+    'interface', 'is', 'label', 'library', 'mod', 'nil', 'not', 'object',
+    'of', 'or', 'out', 'packed', 'procedure', 'program', 'property',
+    'raise', 'record', 'repeat', 'resourcestring', 'set', 'shl', 'shr',
+    'string', 'then', 'threadvar', 'to', 'try', 'type', 'unit', 'until',
+    'uses', 'var', 'while', 'with', 'xor');
+  // Units of the RTL/VCL/FMX habitually reached unqualified. A file with one
+  // of these names next to the project shadows the real one, and the error
+  // the compiler then gives points anywhere but here.
+  RTL: array [0 .. 27] of string = ('System', 'SysUtils', 'Classes', 'Types',
+    'Variants', 'Math', 'Windows', 'Messages', 'Forms', 'Controls',
+    'Graphics', 'Dialogs', 'StdCtrls', 'ExtCtrls', 'ComCtrls', 'Menus',
+    'Buttons', 'DB', 'IniFiles', 'Registry', 'StrUtils', 'DateUtils',
+    'IOUtils', 'Character', 'Generics', 'Threading', 'JSON', 'Contnrs');
+var
+  W, Head: string;
+begin
+  Result := '';
+  if not TRegEx.IsMatch(AName, IDENT_RE) then
+    Exit(Format(SR_CREATE_BADNAME_FMT, [AName]));
+  // every dotted segment must be clean, not just the whole thing
+  for Head in AName.Split(['.']) do
+    for W in RESERVED do
+      if SameText(Head, W) then
+        Exit(Format(SR_CREATE_RESERVED_FMT, [Head, AName]));
+  if AName.Contains('.') then
+    Exit; // System.Foo, Vcl.Bar: a namespaced name shadows nothing
+  for W in RTL do
+    if SameText(AName, W) then
+      Exit(Format(SR_CREATE_RTLNAME_FMT, [AName, AName, AName]));
+end;
+
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
 var
-  Kind, Dir, Dpr, MainUnit, MainForm: string;
+  Kind, Dir, Dpr, MainUnit, MainForm, Clash: string;
   Files: TStringList;
 begin
   Kind := AKind.Trim.ToLower;
@@ -325,14 +372,40 @@ begin
   if not TRegEx.IsMatch(AName, '^[A-Za-z_]\w*$') then
     Exit('RECHAZADO: ''' + AName + ''' no es un identificador Pascal valido para nombre de proyecto.');
 
+  Result := BadUnitName(AName);
+  if Result <> '' then
+    Exit;
+  if ADir.Trim = '' then
+    Exit(SR_CREATE_NEED_DIR);
+
   Dir := TPath.GetFullPath(ADir);
   Result := PathDenied(Dir);
   if Result <> '' then
     Exit;
-  TDirectory.CreateDirectory(Dir);
   Dpr := TPath.Combine(Dir, AName + '.dpr');
   if TFile.Exists(Dpr) or TFile.Exists(TPath.Combine(Dir, AName + '.dproj')) then
     Exit('RECHAZADO: ya existe un proyecto ' + AName + ' en ' + Dir + '. El scaffolder jamas sobreescribe.');
+  // All or nothing. The files used to be written one by one, so a collision
+  // on the THIRD of them (the UMain.pas of a project already living in that
+  // folder) left an orphan .dpr behind - pointing at somebody else's unit,
+  // with no .dproj, and blocking the retry with "ya existe un proyecto".
+  // Measured, field round 8. Every target is checked BEFORE anything is
+  // written, and the folder is not even created when the answer is no.
+  MainUnit := 'UMain';
+  MainForm := 'FormMain';
+  if Kind <> 'console' then
+  begin
+    Clash := '';
+    if TFile.Exists(TPath.Combine(Dir, MainUnit + '.pas')) then
+      Clash := MainUnit + '.pas'
+    else if (Kind = 'vcl') and TFile.Exists(TPath.Combine(Dir, MainUnit + '.dfm')) then
+      Clash := MainUnit + '.dfm'
+    else if (Kind = 'fmx') and TFile.Exists(TPath.Combine(Dir, MainUnit + '.fmx')) then
+      Clash := MainUnit + '.fmx';
+    if Clash <> '' then
+      Exit(Format(SR_CREATE_CLASH_FMT, [Clash, Dir, AName]));
+  end;
+  TDirectory.CreateDirectory(Dir);
 
   Files := TStringList.Create;
   try
@@ -425,9 +498,33 @@ begin
   end;
 end;
 
+{ Which framework a project belongs to, read from its own source ('vcl',
+  'fmx', or '' when it cannot be told). The .dpr says it plainly in its uses
+  clause, and the .dpr is the file a new form gets registered in. }
+function ProjectFramework(const APath: string): string;
+var
+  Dpr, Txt, Enc: string;
+begin
+  Result := '';
+  Dpr := APath;
+  if SameText(TPath.GetExtension(Dpr), '.dproj') then
+    Dpr := TPath.ChangeExtension(Dpr, '.dpr');
+  if not TFile.Exists(Dpr) then
+    Exit;
+  try
+    Txt := PatchLoadText(Dpr, Enc);
+  except
+    Exit;
+  end;
+  if TRegEx.IsMatch(Txt, '(?i)\bFMX\.Forms\b') then
+    Result := 'fmx'
+  else if TRegEx.IsMatch(Txt, '(?i)\bVcl\.Forms\b') then
+    Result := 'vcl';
+end;
+
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string): string;
 var
-  Kind, Dir, FormName, PasPath, DesignerExt: string;
+  Kind, Dir, FormName, PasPath, DesignerExt, Have, Want: string;
   Fmx: Boolean;
 begin
   Kind := AKind.Trim.ToLower;
@@ -439,9 +536,20 @@ begin
     Exit;
   if not TFile.Exists(ADprPath) then
     Exit('RECHAZADO: no existe el .dpr ' + ADprPath);
-  // Dotted namespaces are legal Delphi (e.g. MyApp.Forms.Main): Ident(.Ident)*.
-  if not TRegEx.IsMatch(AUnitName, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
-    Exit('RECHAZADO: ''' + AUnitName + ''' no es un identificador valido de unit.');
+  Result := BadUnitName(AUnitName);
+  if Result <> '' then
+    Exit;
+  // A form of the OTHER framework used to be accepted silently, which put an
+  // FMX form and its Application.CreateForm inside a .dpr that uses Vcl.Forms
+  // (field round 8). The project says which one it is in its own uses clause.
+  if Kind <> 'datamodule' then
+  begin
+    Have := ProjectFramework(ADprPath);
+    Want := IfThen(Kind.EndsWith('fmx'), 'fmx', 'vcl');
+    if (Have <> '') and (Have <> Want) then
+      Exit(Format(SR_CREATE_FRAMEWORK_FMT,
+        [AKind, TPath.GetFileName(ADprPath), UpperCase(Have)]));
+  end;
   FormName := AFormName.Trim;
   if FormName = '' then
   begin
@@ -504,32 +612,57 @@ begin
        AUnitName, FormName, Kind, AUnitName + DesignerExt, Result]);
 end;
 
-function CreateDelphiUnit(const ADprPath, AUnitName: string): string;
+function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string): string;
 var
-  Dir, PasPath: string;
+  Dir, PasPath, Body: string;
+  M: TMatch;
 begin
   Result := PathDenied(ADprPath);
   if Result <> '' then
     Exit;
   if not TFile.Exists(ADprPath) then
     Exit('RECHAZADO: no existe el proyecto ' + ADprPath);
-  if not TRegEx.IsMatch(AUnitName, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
-    Exit('RECHAZADO: ''' + AUnitName + ''' no es un identificador valido de unit.');
+  Result := BadUnitName(AUnitName);
+  if Result <> '' then
+    Exit;
   Dir := TPath.GetDirectoryName(TPath.GetFullPath(ADprPath));
   PasPath := TPath.Combine(Dir, AUnitName + '.pas');
   if TFile.Exists(PasPath) then
     Exit('RECHAZADO: ' + PasPath + ' ya existe. El scaffolder jamas sobreescribe. ' +
       'Para registrarla en el proyecto usa delphi_config command=add-unit.');
-  WriteNewFile(PasPath,
-    'unit ' + AUnitName + ';' + CRLF + CRLF +
-    'interface' + CRLF + CRLF +
-    'implementation' + CRLF + CRLF +
-    'end.' + CRLF);
+  // With content: create AND fill in one call. Two calls (create the skeleton,
+  // then rewrite it whole) was the commonest sequence of all and the one an
+  // anchor-based editor serves worst - there is nothing to anchor to in an
+  // empty unit (field round 8). The name still has to agree with the file:
+  // registering UFoo.pas whose source says `unit UBar` is a lie the compiler
+  // discovers much later.
+  Body := AContent;
+  if Body.Trim <> '' then
+  begin
+    M := TRegEx.Match(Body, '(?im)^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;');
+    if not M.Success then
+      Exit(SR_CREATE_CONTENT_NOUNIT);
+    if not SameText(M.Groups[1].Value, AUnitName) then
+      Exit(Format(SR_CREATE_CONTENT_NAME_FMT, [M.Groups[1].Value, AUnitName]));
+    if not TRegEx.IsMatch(Body, '(?im)^\s*end\s*\.') then
+      Exit(SR_CREATE_CONTENT_NOEND);
+    Body := Body.Replace(#13#10, #10).Replace(#13, #10).Replace(#10, CRLF);
+    if not Body.EndsWith(CRLF) then
+      Body := Body + CRLF;
+  end
+  else
+    Body :=
+      'unit ' + AUnitName + ';' + CRLF + CRLF +
+      'interface' + CRLF + CRLF +
+      'implementation' + CRLF + CRLF +
+      'end.' + CRLF;
+  WriteNewFile(PasPath, Body);
   Result := AddProjectUnit(ADprPath, PasPath);
   if Result.StartsWith('RECHAZADO') then
     Result := 'CREADA ' + AUnitName + '.pas pero NO se pudo registrar: ' + Result
   else
-    Result := Format('CREADA la unit %s (%s).'#10'%s', [AUnitName, PasPath, Result]);
+    Result := Format('CREADA la unit %s (%s), %d lineas.'#10'%s',
+      [AUnitName, PasPath, Length(Body.Split([CRLF])), Result]);
 end;
 
 end.

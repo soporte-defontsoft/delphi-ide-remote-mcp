@@ -18,6 +18,7 @@ type
     FName: string;
     FProject: string;
     FFormName: string;
+    FContent: string;
   public
     [SchemaDescription('What to create: project-console | project-vcl | project-fmx | form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit (a plain .pas). Everything but projects is registered in the project given')]
     [Required]
@@ -31,6 +32,8 @@ type
     property Project: string read FProject write FProject;
     [SchemaDescription('Forms/frames/data modules optional: instance name without the T (default: Form+unit, Frame+unit, DM+unit)')]
     property FormName: string read FFormName write FFormName;
+    [SchemaDescription('kind=unit optional: the FULL source of the unit. It is written as it comes (CRLF) and registered in the project in the same call - no need to create an empty skeleton and then rewrite it. Its `unit X;` must match "name", and it must end in `end.`. Without this, a standard empty skeleton is written')]
+    property Content: string read FContent write FContent;
   end;
 
   TDelphiCreateTool = class(TMCPToolBase<TDelphiCreateParams>)
@@ -73,7 +76,7 @@ begin
   else if K.StartsWith('frame-') or (K = 'datamodule') then
     Result := CreateDelphiForm(Params.Project, Params.Name, Params.FormName, K)
   else if K = 'unit' then
-    Result := CreateDelphiUnit(Params.Project, Params.Name)
+    Result := CreateDelphiUnit(Params.Project, Params.Name, Params.Content)
   else
     Result := 'RECHAZADO: kind debe ser project-console | project-vcl | project-fmx | ' +
       'form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit.';

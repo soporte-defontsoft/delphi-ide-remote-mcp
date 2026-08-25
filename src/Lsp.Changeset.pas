@@ -35,7 +35,7 @@ uses
   System.JSON;
 
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
-  AOldLine, ANewText, AContent: string; AAtLine: Integer): string;
+  AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer = 0): string;
 
 implementation
 
@@ -201,6 +201,28 @@ begin
       Inc(Result);
 end;
 
+{ Whether APath will be there when its turn comes, GIVEN the ops already
+  staged. `stage` used to ask the disk, which made the most natural sequence
+  of all impossible: delete a unit and create it again in the same batch was
+  refused ("ya existe") because the delete had not run yet. A changeset is a
+  PLAN, so the plan is what decides; the disk is only its starting point. }
+function WillExist(C: TChangeset; const APath: string): Boolean;
+var
+  Op: TStagedOp;
+begin
+  Result := TFile.Exists(APath);
+  for Op in C.Ops do
+  begin
+    if SameText(Op.Path, APath) then
+      case Op.Kind of
+        opCreate: Result := True;
+        opDelete, opMove: Result := False;
+      end;
+    if (Op.Kind = opMove) and SameText(Op.Dest, APath) then
+      Result := True;
+  end;
+end;
+
 function ApplyOne(const Op: TStagedOp; out AError: string): Boolean;
 var
   A: TPatchArgs;
@@ -315,7 +337,7 @@ begin
 end;
 
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
-  AOldLine, ANewText, AContent: string; AAtLine: Integer): string;
+  AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer): string;
 var
   Cmd, Id, Denied, EncName, Text, Err: string;
   C: TChangeset;
@@ -403,25 +425,25 @@ begin
             Op.OldLine := AOldLine;
             Op.NewText := ANewText;
             Op.AtLine := AAtLine;
-            if not TFile.Exists(Op.Path) then
-              Exit('RECHAZADO: no existe ' + Op.Path);
+            if not WillExist(C, Op.Path) then
+              Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
           end;
         opCreate:
           begin
             Op.Content := AContent;
-            if TFile.Exists(Op.Path) then
-              Exit('RECHAZADO: ya existe ' + Op.Path + ' (create jamas sobreescribe).');
+            if WillExist(C, Op.Path) then
+              Exit(Format(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
           end;
         opDelete:
-          if not TFile.Exists(Op.Path) then
-            Exit('RECHAZADO: no existe ' + Op.Path);
+          if not WillExist(C, Op.Path) then
+            Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
         opDeleteLine:
           begin
             // a BLANK line has no usable anchor, so atline decides; old is
             // optional and, when given, must match that line (field
             // 2026-08-24: no way to remove the blank lines a cleanup leaves)
-            if not TFile.Exists(Op.Path) then
-              Exit('RECHAZADO: no existe ' + Op.Path);
+            if not WillExist(C, Op.Path) then
+              Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
             if AAtLine <= 0 then
               Exit(SR_CHANGESET_DELLINE_NEEDS);
             Op.AtLine := AAtLine;
@@ -435,15 +457,34 @@ begin
             if Denied <> '' then
               Exit(Denied);
             Op.Dest := TPath.GetFullPath(ADest);
-            if not TFile.Exists(Op.Path) then
-              Exit('RECHAZADO: no existe ' + Op.Path);
-            if TFile.Exists(Op.Dest) then
-              Exit('RECHAZADO: el destino ya existe: ' + Op.Dest);
+            if not WillExist(C, Op.Path) then
+              Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+            if WillExist(C, Op.Dest) then
+              Exit(Format(SR_CHANGESET_VIRT_DEST_FMT, [Op.Dest]));
           end;
       end;
       C.Ops.Add(Op);
       Exit(Format(SN_CHANGESET_STAGED_FMT,
         [KindName(Op.Kind), Op.Path, C.Ops.Count]));
+    end;
+
+    // Taking one operation back out. Without this, a single mistyped anchor
+    // meant rolling back the whole batch and staging everything again
+    // (field round 8). n = the number `preview` prints; 0 = the last one.
+    if (Cmd = 'unstage') or (Cmd = 'undo') then
+    begin
+      if C.Ops.Count = 0 then
+        Exit(SR_CHANGESET_EMPTY);
+      N := AN;
+      if N = 0 then
+        N := C.Ops.Count;
+      if (N < 1) or (N > C.Ops.Count) then
+        Exit(Format(SR_CHANGESET_UNSTAGE_N_FMT, [N, C.Ops.Count]));
+      Op := C.Ops[N - 1];
+      C.Ops.Delete(N - 1);
+      C.Previewed := False;
+      Exit(Format(SN_CHANGESET_UNSTAGED_FMT,
+        [N, KindName(Op.Kind), Op.Path, C.Ops.Count]));
     end;
 
     if Cmd = 'preview' then
@@ -464,6 +505,14 @@ begin
           Obj.AddPair('n', TJSONNumber.Create(I + 1));
           Obj.AddPair('kind', KindName(Op.Kind));
           Obj.AddPair('path', Op.Path);
+          if (Op.Kind in [opEdit, opDeleteLine]) and not TFile.Exists(Op.Path) then
+          begin
+            // staged over a file an earlier op of this same batch creates:
+            // there is nothing to anchor against until commit runs
+            Obj.AddPair('anchor', 'pendiente');
+            Obj.AddPair('note', SN_CHANGESET_PREVIEW_VIRTUAL);
+            Continue;
+          end;
           if Op.Kind = opEdit then
           begin
             Text := PatchLoadText(Op.Path, EncName);

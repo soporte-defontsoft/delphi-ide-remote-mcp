@@ -154,11 +154,32 @@ end;
 
 { ---- set / clone ---- }
 
+{ Does this look like a value a .style (a text DFM) can hold? Measured field
+  round 8: `Fill.Color = no soy un color` was written happily and only
+  surfaced later as `EParserError: ''='' expected on line 16` from command=build,
+  with the .style unreadable in between. The grammar here is the streaming
+  one - number, $hex, 'string', identifier, [set], and the block forms the
+  caller has already handled. }
+function ValidStyleValue(const AValue: string): Boolean;
+var
+  V: string;
+begin
+  V := AValue.Trim;
+  Result := (V <> '') and (
+    TRegEx.IsMatch(V, '^-?\d+(\.\d+)?$') or                    // 12   -3.5
+    TRegEx.IsMatch(V, '^\$[0-9A-Fa-f]+$') or                   // $FF00FF00
+    TRegEx.IsMatch(V, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') or    // claRed  True  TAlignLayout.Top
+    TRegEx.IsMatch(V, '^\[.*\]$') or                           // [a, b]
+    TRegEx.IsMatch(V, '^<.*>$') or                             // inline collection
+    V.StartsWith('''') or V.StartsWith('#') or                 // 'text'  #13#10
+    CharInSet(V[1], ['{', '(']));                              // binary / list block
+end;
+
 function SetStyleProp(const APath, AStyle, AChild, AProp, AValue: string; ADelete: Boolean): string;
 var
   Doc: TStyleDoc;
   O: TStyleObj;
-  Err, Line: string;
+  Err, Line, NewName: string;
   WasThere: Boolean;
 begin
   if AProp.Trim = '' then
@@ -169,11 +190,30 @@ begin
     Exit(SR_STYLES_NEED_VALUE);
   if AValue.Contains(#10) or AValue.Contains(#13) then
     Exit(SR_STYLES_VALUE_LINE);
+  if (not ADelete) and not ValidStyleValue(AValue) then
+    Exit(Format(SR_STYLES_VALUE_GRAMMAR_FMT, [AValue.Trim]));
   Doc := TStyleDoc.Create(APath);
   try
     O := Doc.Resolve(AStyle, AChild, Err);
     if O = nil then
       Exit('RECHAZADO: ' + Err);
+    // StyleName is not a property like the others: writing it RENAMES the
+    // style. Done blind it produced two styles with the same name in one
+    // file, and after that `delete` silently took the first of the two
+    // (field round 8). A rename that collides is refused; a clean one is
+    // allowed and says what it really did.
+    if (not ADelete) and SameText(AProp.Trim, 'StyleName') then
+    begin
+      NewName := AValue.Trim.Trim(['''']).Trim;
+      if NewName = '' then
+        Exit(SR_STYLES_RENAME_EMPTY);
+      if Doc.FindStyle(NewName) <> nil then
+        Exit(Format(SR_STYLES_RENAME_DUP_FMT, [NewName]));
+      Line := Doc.SetProp(O, AProp.Trim, '''' + NewName + '''', WasThere);
+      Doc.Save;
+      Exit(Format(SN_STYLES_RENAMED_FMT,
+        [AStyle, NewName, TPath.GetFileName(Doc.Path)]));
+    end;
     if ADelete then
     begin
       if not Doc.DeleteProp(O, AProp.Trim) then

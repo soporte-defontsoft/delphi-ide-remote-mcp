@@ -120,6 +120,24 @@ var
   P: TDprojPlatform;
   Obj: TJSONObject;
 begin
+  // A bare .dpr with no .dproj beside it: the units CAN be read (they are in
+  // the .dpr itself) but the framework, the platforms and the configurations
+  // cannot - they live in the .dproj. Answering with all of them empty plus
+  // a cheerful crossPlatform "yes" was an answer shaped like knowledge that
+  // was not (field round 8). Say what is readable, and say what is not.
+  if SameText(TPath.GetExtension(ADproj), '.dpr') then
+  begin
+    Return := TJSONObject.Create;
+    try
+      Return.AddPair('project', ADproj);
+      Return.AddPair('hasDproj', TJSONBool.Create(False));
+      AddUnitsView(ADproj, Return);
+      Return.AddPair('note', SN_CONFIG_DPR_ONLY);
+      Exit(Return.ToJSON);
+    finally
+      Return.Free;
+    end;
+  end;
   Info := ReadDproj(ADproj);
   Return := TJSONObject.Create;
   try
@@ -232,6 +250,20 @@ end;
 
 { Disable a platform (flip its <Platform value="X">True</Platform> to False).
   Reversible and non-destructive - the safe inverse of add-platform. }
+{ How many <Platform value="X">True</Platform> the .dproj still has on. }
+function EnabledPlatformCount(const AXml: string): Integer;
+var
+  M: TMatch;
+begin
+  Result := 0;
+  M := TRegEx.Match(AXml, '(?i)<Platform\s+value="[^"]+"\s*>\s*True\s*</Platform>');
+  while M.Success do
+  begin
+    Inc(Result);
+    M := M.NextMatch;
+  end;
+end;
+
 function RemovePlatform(const ADproj, ARawPlatform: string): string;
 var
   Enc, Xml, APlatform: string;
@@ -248,6 +280,16 @@ begin
   var ValEnd := Pos('<', Xml, ValStart);
   if ValEnd = 0 then
     Exit('error: el <Platform> del .dproj tiene una forma inesperada.');
+  // Idempotence, like add-platform already had: repeating the call used to
+  // answer "DESHABILITADA" again and take a backup of a no-op, filling the
+  // trash with identical copies of an unchanged .dproj (field round 8).
+  if SameText(Trim(Copy(Xml, ValStart, ValEnd - ValStart)), 'False') then
+    Exit(Format(SN_CONFIG_PLAT_ALREADY_FMT, [APlatform]));
+  // ...and never leave a project with nothing to build for. Three calls in a
+  // row used to disable every platform, and the next delphi_build compiled
+  // anyway without a word, so nothing ever pointed back here.
+  if EnabledPlatformCount(Xml) <= 1 then
+    Exit(Format(SR_CONFIG_PLAT_LAST_FMT, [APlatform]));
   Xml := Copy(Xml, 1, ValStart - 1) + 'False' + Copy(Xml, ValEnd, MaxInt);
   PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := Format('DESHABILITADA la plataforma %s (queda declarada pero ' +
@@ -541,8 +583,12 @@ begin
     Info := DiscoverRadStudio;
     Vars := TStringList.Create;
     try
+      // IdeMacroVars, NOT IdeEnvironmentVars: the registry key alone does not
+      // carry $(BDS), $(BDSLIB) or $(BDSUSERDIR) - the ones the schema
+      // promises and an agent reaches for first. Every $(BDS...) path was
+      // refused with a message that recommended $(BDS) (field round 8).
       if Info.Found then
-        IdeEnvironmentVars(Info.Version, Vars);
+        IdeMacroVars(Info, Vars);
       Expanded := ExpandIdeMacros(Expanded, Vars);
     finally
       Vars.Free;
@@ -635,7 +681,7 @@ begin
   if not FindGroup(Xml, GroupCondition(Plat), O, I, C) or
      not FindSearchTag(Xml, I, C, ElS, VS, VE, ElE) then
     Exit(Format(SN_CONFIG_PATH_ABSENT_FMT,
-      [Path, IfThen(Plat = '', 'el grupo base', Plat)]));
+      [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
   Found := False;
   Keep := TList<string>.Create;
   try
@@ -646,7 +692,7 @@ begin
         Keep.Add(P);
     if not Found then
       Exit(Format(SN_CONFIG_PATH_ABSENT_FMT,
-        [Path, IfThen(Plat = '', 'el grupo base', Plat)]));
+        [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
     Rest := string.Join(';', Keep.ToArray);
   finally
     Keep.Free;
@@ -998,7 +1044,7 @@ end;
 
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
 var
-  Cmd: string;
+  Cmd, Proj, Sibling: string;
 begin
   if Params.Project.Trim = '' then
     Exit('error: delphi_config necesita "project" (ruta del .dproj)');
@@ -1006,24 +1052,40 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(Params.Project) then
-    Exit('error: no existe el .dproj ' + Params.Project);
+    Exit('error: no existe el proyecto ' + Params.Project);
   Cmd := Params.Command.Trim.ToLower;
+  // Arriving with the .dpr in hand is the common case - delphi_create's own
+  // schema says its "project" takes ".dpr (or .dproj)". `view` used to answer
+  // for it anyway, with an empty framework, no platforms, no configurations
+  // and a cheerful crossPlatform "yes": an answer shaped like knowledge that
+  // was not (field round 8). Configuration lives in the .dproj, so resolve
+  // the sibling - and when there is none, say that instead of inventing.
+  Proj := Params.Project;
+  if SameText(TPath.GetExtension(Proj), '.dpr') then
+  begin
+    Sibling := TPath.ChangeExtension(Proj, '.dproj');
+    if TFile.Exists(Sibling) then
+      Proj := Sibling
+    else if not MatchText(Cmd, ['', 'view', 'add-unit', 'remove-unit']) then
+      Exit(Format(SR_CONFIG_NO_DPROJ_FMT,
+        [TPath.GetFileName(Proj), TPath.GetFileName(Sibling)]));
+  end;
   if (Cmd = '') or (Cmd = 'view') then
-    Result := ViewConfig(Params.Project)
+    Result := ViewConfig(Proj)
   else if Cmd = 'add-platform' then
-    Result := AddPlatform(Params.Project, Params.Platform)
+    Result := AddPlatform(Proj, Params.Platform)
   else if Cmd = 'remove-platform' then
-    Result := RemovePlatform(Params.Project, Params.Platform)
+    Result := RemovePlatform(Proj, Params.Platform)
   else if Cmd = 'set-output' then
-    Result := SetOutput(Params.Project, Params.Output)
+    Result := SetOutput(Proj, Params.Output)
   else if Cmd = 'add-searchpath' then
-    Result := AddSearchPath(Params.Project, Params.Platform, Params.Path)
+    Result := AddSearchPath(Proj, Params.Platform, Params.Path)
   else if Cmd = 'remove-searchpath' then
-    Result := RemoveSearchPath(Params.Project, Params.Platform, Params.Path)
+    Result := RemoveSearchPath(Proj, Params.Platform, Params.Path)
   else if Cmd = 'add-deployfile' then
-    Result := AddDeployFile(Params.Project, Params.Platform, Params.Path, Params.RemoteDir)
+    Result := AddDeployFile(Proj, Params.Platform, Params.Path, Params.RemoteDir)
   else if Cmd = 'remove-deployfile' then
-    Result := RemoveDeployFile(Params.Project, Params.Platform, Params.Path)
+    Result := RemoveDeployFile(Proj, Params.Platform, Params.Path)
   else if (Cmd = 'add-unit') or (Cmd = 'remove-unit') then
   begin
     if Params.Path.Trim = '' then

@@ -109,30 +109,34 @@ end;
 
 function PendingMessagesNote: string;
 var
-  Root, D, Where: string;
-  N, K: Integer;
+  Root, D: string;
+  Broadcast, Directed: Integer;
 begin
   Result := '';
   Root := MessagesRoot;
   if not TDirectory.Exists(Root) then
     Exit;
-  N := Length(PendingIn(Root));
-  Where := '';
-  if N > 0 then
-    Where := 'todos';
+  // MCP has no session identity here, so this notice cannot know WHO is
+  // asking. It used to name every box with mail waiting - which meant an
+  // agent read "MENSAJES PENDIENTES (buzon: dsh)" on nearly every answer,
+  // could do nothing about it, and learned another agent's id for free
+  // (three agents reported it; measured field round 8). So now:
+  // - mail addressed to "todos" IS for whoever is reading: announced, and it
+  //   is the only thing that names itself.
+  // - mail addressed to a named agent is only COUNTED, never named. Whoever
+  //   is waiting for post checks their own box; nobody else learns anything.
+  Broadcast := Length(PendingIn(Root));
+  Directed := 0;
   for D in TDirectory.GetDirectories(Root) do
   begin
     if SameText(TPath.GetFileName(D), DELIVERED_DIR) then
       Continue;
-    K := Length(PendingIn(D));
-    if K > 0 then
-    begin
-      Inc(N, K);
-      Where := Where + IfThen(Where <> '', ', ', '') + TPath.GetFileName(D);
-    end;
+    Inc(Directed, Length(PendingIn(D)));
   end;
-  if N > 0 then
-    Result := Format(SN_MESSAGES_PENDING_FMT, [N, Where]);
+  if Broadcast > 0 then
+    Result := Format(SN_MESSAGES_PENDING_ALL_FMT, [Broadcast]);
+  if Directed > 0 then
+    Result := Result + Format(SN_MESSAGES_PENDING_SOME_FMT, [Directed]);
 end;
 
 function FirstLine(const APath: string): string;
