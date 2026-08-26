@@ -164,6 +164,27 @@ check('R5 delphi_config: section default summary; delphi_test: platform Win64',
       prop('delphi_test', 'platform').get('default') == 'Win64',
       (prop('delphi_config', 'section'), prop('delphi_test', 'platform')))
 
+# v0.79 - hermes' blind eval: the two texts that misled small models.
+check('R6 build.platform dice que Build local NO usa profile',
+      'NOT use profile' in prop('delphi_build', 'platform').get('description', ''),
+      prop('delphi_build', 'platform').get('description', '')[:150])
+check('R6 fetch.maxbytes ABRE con el aviso de que <=1MB fuerza base64',
+      prop('delphi_fetch', 'maxbytes').get('description', '').startswith('OJO'),
+      prop('delphi_fetch', 'maxbytes').get('description', '')[:120])
+
+# R7 (v0.79): package hands the exact next call - a model invented the zip
+# name when it was prose (hermes' blind eval).
+sub = os.path.join(BASE, 'paquete')
+os.makedirs(sub)
+open(os.path.join(sub, 'a.txt'), 'w').write('x' * 100)
+r = call('delphi_package', {'dir': sub})
+body = json.loads(r.get('content', [{}])[0].get('text', '{}'))
+nc = body.get('nextCall', {})
+check('R7 package devuelve nextCall exacto para delphi_fetch',
+      nc.get('tool') == 'delphi_fetch' and
+      nc.get('arguments', {}).get('path') == body.get('zip') and
+      body.get('zip', '').endswith('-deploy.zip'), body)
+
 proc.kill()
 print('\n== round-17 battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

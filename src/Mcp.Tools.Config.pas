@@ -185,7 +185,12 @@ begin
         Obj.AddPair('canTarget', TJSONBool.Create(Info.CanTarget(P.Name, Reason)));
         if not Info.CanTarget(P.Name, Reason) then
           Obj.AddPair('reason', Reason);
-        Obj.AddPair('needsRemoteProfile', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
+        // One flag asked two questions and small models heard "a Build
+        // needs a profile" (hermes' blind eval, 2026-08-26): building for a
+        // remote platform is LOCAL against the SDK; the profile is only for
+        // shipping. Two names, two questions.
+        Obj.AddPair('needsSDKForBuild', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
+        Obj.AddPair('needsProfileForDeploy', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
       end;
     end
     else if Sec = 'summary' then
@@ -247,8 +252,9 @@ begin
     end;
     if (Sec = 'summary') or (Sec = 'all') or (Sec = 'platforms') then
       Return.AddPair('note', 'To build: delphi_build {project, platform, ' +
-        'config}. Platforms with needsRemoteProfile=true also need a PAServer ' +
-        'profile - see delphi_paserver.');
+        'config}. needsSDKForBuild=true: pull the SDK once with delphi_paserver ' +
+        'get-sdk and build locally - no profile involved. needsProfileForDeploy=' +
+        'true: a PAServer profile is needed only for target=Deploy.');
     Result := Return.ToJSON;
   finally
     Return.Free;

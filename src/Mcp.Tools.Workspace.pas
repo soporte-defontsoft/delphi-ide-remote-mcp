@@ -1703,7 +1703,16 @@ begin
     Return.AddPair('files', TJSONNumber.Create(Count));
     Return.AddPair('uncompressedBytes', TJSONNumber.Create(TotalBytes));
     Return.AddPair('zipBytes', TJSONNumber.Create(TFile.GetSize(OutZip)));
-    Return.AddPair('next', 'download it with delphi_fetch (chunked, sha256-verified)');
+    // The next step used to be prose and a model had to GUESS the zip
+    // name (one invented Win64-Release-deploy.zip - hermes' blind eval).
+    // Hand it the exact call instead.
+    var NextCall := TJSONObject.Create;
+    Return.AddPair('nextCall', NextCall);
+    NextCall.AddPair('tool', 'delphi_fetch');
+    var NextArgs := TJSONObject.Create;
+    NextCall.AddPair('arguments', NextArgs);
+    NextArgs.AddPair('path', OutZip);
+    Return.AddPair('next', 'download it with delphi_fetch (chunked, sha256-verified); big zips answer a download link - do NOT set maxbytes');
     Result := Return.ToJSON;
   finally
     Return.Free;

@@ -295,7 +295,7 @@ Build a Delphi project for real with MSBuild on this machine (rsvars located via
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string | **yes** | Absolute path of the .dproj to build |
-| `platform` | string | optional | Target platform (default Win32): Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and a PAServer profile (delphi_paserver) |
+| `platform` | string | optional | Target platform (default Win32): Win32/Win64 build natively here. Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and their SDK pulled once (delphi_paserver get-sdk). Building is LOCAL against that SDK and does NOT use profile — a PAServer profile is only needed for target=Deploy |
 | `config` | string | optional | Debug or Release (default Debug), or any configuration the project declares. A simple name: letters, digits, space, `.`, `_`, `-` |
 | `target` | string | optional | Build (full, default), Make (incremental), Clean, or Deploy (always builds first, then deploys: to the PAServer of `profile` for Linux/macOS, or packages the app for Android). After switching platforms use Build |
 | `profile` | string | optional | Connection profile name for target=Deploy on a PAServer platform (see `delphi_paserver command=profiles`). The deployed files land on the target under its PAServer scratch dir, in `<profile>/<project name>/` |

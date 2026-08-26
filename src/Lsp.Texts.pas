@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.78.0-beta';
+  SERVER_VERSION = '0.79.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -2145,11 +2145,12 @@ const
     'error: delphi_package necesita "dir" (la carpeta a comprimir).';
 
   SP_FETCH_MAXBYTES =
-    'Bytes por trozo, tope 8388608 (8 MB). OJO con los ficheros grandes: por ' +
-    'encima de 4 MB la respuesta trae el ENLACE de descarga y ningun trozo ' +
-    'inline ("inline":false, "bytes":0) - bajarlos por base64 se come el ' +
-    'contexto. Para forzar trozos inline de todas formas, pide ' +
-    'maxbytes<=1048576 (1 MB): ese es el interruptor.';
+    'OJO: pedir maxbytes<=1048576 (1 MB) FUERZA trozos base64 inline - justo ' +
+    'lo contrario de lo que quieres con un fichero grande. Para un download ' +
+    'grande OMITE este parametro: por encima de 4 MB la respuesta trae el ' +
+    'ENLACE de descarga y ningun trozo inline ("inline":false, "bytes":0), ' +
+    'que es lo barato. maxbytes solo ajusta el tamano de trozo (tope 8388608) ' +
+    'cuando el contenido va inline.';
 
   SR_STYLES_VALUE_GRAMMAR_FMT =
     'RECHAZADO: "%s" no es un valor que un .style pueda guardar. Un fichero ' +

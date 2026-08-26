@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.79.0-beta] - 2026-08-26
+
+Hermes' blind clarity evaluation: three small models solved 10 tasks from the
+raw `tools/list` alone - 83.3%, with two repeated confusions. Both fixed:
+
+### Changed
+- **Build vs profile untangled** (2/3 failed to even try a Linux64 build): the
+  `delphi_build.platform` description now says building a remote platform is
+  LOCAL against the SDK (`delphi_paserver get-sdk`, once) and never uses
+  `profile` - a PAServer profile is only for `target=Deploy`. The config
+  platforms view splits the merged `needsRemoteProfile` flag into
+  `needsSDKForBuild` + `needsProfileForDeploy` - one flag was answering two
+  different questions.
+- **Big downloads no longer bait base64** (2/3 set `maxbytes:1MB` on a 20MB
+  zip, forcing inline chunks - the exact opposite of cheap): the `maxbytes`
+  description now OPENS with the warning that <=1MB forces base64 and that
+  large downloads should omit the parameter. And `delphi_package` returns a
+  structured `nextCall {tool, arguments}` with the exact zip path - a model
+  had invented the zip name when the next step was prose.
+
 ## [0.78.0-beta] - 2026-08-26
 
 Hermes' supplement #1 and #2: programmatically distinguishable outcomes and

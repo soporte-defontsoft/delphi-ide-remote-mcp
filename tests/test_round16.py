@@ -132,6 +132,13 @@ check('C3 section=platforms trae el detalle por plataforma',
       isinstance(j.get('platforms'), list) and
       all('enabled' in p and 'canTarget' in p for p in j['platforms']),
       list(j.keys()))
+# hermes' blind eval (v0.79): one merged flag asked two questions and a small
+# model heard "a Build needs a profile". Now two names, two questions.
+check('C3b needsSDKForBuild y needsProfileForDeploy sustituyen al flag mezclado',
+      j.get('platforms') and
+      all('needsSDKForBuild' in p and 'needsProfileForDeploy' in p and
+          'needsRemoteProfile' not in p for p in j['platforms']),
+      j.get('platforms', [{}])[0])
 
 j = jload(call('delphi_config', {'project': dproj, 'section': 'searchpaths'}))
 check('C4 section=searchpaths responde su area',

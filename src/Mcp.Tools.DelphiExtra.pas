@@ -53,7 +53,7 @@ type
     [SchemaDescription('Absolute path of the .dproj to build')]
     [Required]
     property Project: string read FProject write FProject;
-    [SchemaDescription('Target platform (default Win32): Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and a PAServer profile (delphi_paserver)')]
+    [SchemaDescription('Target platform (default Win32): Win32/Win64 build natively here. Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and their SDK pulled once (delphi_paserver get-sdk). Building is LOCAL against that SDK and does NOT use profile - a PAServer profile is only needed for target=Deploy')]
     [SchemaDefault('Win32')]
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription('Debug or Release (default Debug)')]
