@@ -8,6 +8,24 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.86.0-beta] - 2026-08-26
+
+The last open bug from the field: sweep10's "Linux64 outputTail collapses
+into srvhost". Reproduced under control (a real Linux64 link: 227 masks in
+one tail) before touching the security masker.
+
+### Fixed
+- **Linux64 build tails are legible again**: the Linux64 linker echoes its
+  command line with backslashes ALREADY doubled; JSON encoding doubles them
+  again, and the masker's JSON-UNC rule (four backslashes + letter) fired on
+  EVERY re-doubled separator because its look-behind only required "not a
+  backslash". A genuine UNC never starts glued to a letter, so the rule now
+  requires a delimiter before it - same contract as the raw form. Battery
+  (tests/test_round22.py): linker-shaped text survives with ZERO masks, a
+  genuine UNC host still disappears, drive letters still mask, and - on
+  machines holding the Linux64 SDK - a real link's outputTail is verified
+  clean end to end.
+
 ### Tests
 - New `tests/test_docs_static.py` (hermes' P2.10): the docs gate that needs
   NO built executable - tool census from docs/CAPABILITIES.json, README/

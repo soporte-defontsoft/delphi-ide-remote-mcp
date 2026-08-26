@@ -1976,10 +1976,18 @@ begin
       // the rest of the path (caught by the battery, same day).
       //   raw text: \\host\share   - two, after a delimiter, then a letter
       //   inside JSON: \\\\host   - four, then a letter
+      // The JSON form fires ONLY after a delimiter, like the raw form: the
+      // Linux64 linker echoes its command line with backslashes ALREADY
+      // doubled, which the JSON encoding doubles again - so mid-path every
+      // re-doubled separator looked like a UNC opener and the whole tail
+      // collapsed into srvhost after srvhost (sweep10's report, reproduced
+      // 2026-08-26: 227 masks in one outputTail). A genuine UNC never starts
+      // glued to a letter; a re-doubled path separator always does.
       if (C = '\') and (I + 4 <= L) and (AText[I + 1] = '\') and
          (AText[I + 2] = '\') and (AText[I + 3] = '\') and
          CharInSet(AText[I + 4], ['A'..'Z', 'a'..'z', '0'..'9']) and
-         ((I = 1) or (AText[I - 1] <> '\')) then
+         ((I = 1) or CharInSet(AText[I - 1],
+            [' ', #9, '"', '''', '(', ',', '=', #10, #13])) then
       begin
         Sb.Append('\\\\srvhost');
         Inc(I, 4);
