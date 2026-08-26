@@ -167,6 +167,14 @@ begin
     end;
   // Outbound twin of the gate: server drive letters leave as virtual units
   // (D:\x -> srvd:\x) in every textual result.
+  // Surface trim, not a permission: a [Tools] profile or allowlist hides
+  // tools from tools/list so a small model is not buried under 41 schemas
+  // (hermes, release audit 2026-08-26, P1.4). Hidden tools stay callable.
+  TMCPToolsManager.ListFilter :=
+    function(const ToolName: string): Boolean
+    begin
+      Result := ToolHiddenFromList(ToolName);
+    end;
   TMCPToolsManager.ResultFilter :=
     function(const ToolName, AText: string): string
     begin

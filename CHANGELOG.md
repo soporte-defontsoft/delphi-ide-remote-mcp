@@ -8,6 +8,25 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.83.0-beta] - 2026-08-26
+
+Hermes' P1.4, the last big item of the release audit: tools/list measured
+62.7k chars / 41 tools (~15k tokens) before an agent had done anything - the
+number-one wall for small models.
+
+### Added
+- **Tool-surface profiles, opt-in and OFF by default** (`[Tools] Profile=`
+  or env `DELPHI_MCP_TOOLS_PROFILE`): `full` (default, unchanged), `coder`
+  (hides the shipping trio: adb, paserver, package), `reader` (only
+  understanding/navigation: read/list/search/fetch, the LSP seven,
+  projects/installs/workspace, vault_read/search). `Only=` is an explicit
+  allowlist that overrides the profile. This trims what tools/list ADVERTISES
+  - every tool stays callable, real permissions remain the access levels and
+  the jail, and an unknown profile name hides nothing (it is not security).
+  `delphi_help`/`delphi_messages`/`delphi_report` are always listed.
+  Implemented as a `ListFilter` hook next to the existing ToolGate/
+  ResultFilter pair. Battery tests/test_round20.py (6 checks).
+
 ## [0.82.0-beta] - 2026-08-26
 
 Hermes' P1.6: the LSP session lifecycle. The global session lock was held

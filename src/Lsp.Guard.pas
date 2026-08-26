@@ -25,6 +25,11 @@ uses
 
 { '' = allowed; otherwise the rejection message to return to the agent.
   This is the WRITE jail: only the configured workspace roots. }
+{ True = leave this tool OUT of tools/list under the active [Tools] profile
+  or allowlist. Listing only - the tool stays callable; permissions are
+  ToolCallDenied's job. delphi_help/messages/report always stay listed. }
+function ToolHiddenFromList(const AToolName: string): Boolean;
+
 function PathDenied(const APath: string): string;
 
 { Like PathDenied but for READING tools (read/search/list/fetch/LSP
@@ -314,6 +319,11 @@ var
   GRemoteProjects: TArray<string>;  // [Security] RemoteRunProjects, '' = any
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
   GAgentConfinement: Boolean = False; // each agent to its own subfolder: OFF by default
+  // [Tools] Profile: which tools appear in tools/list (all stay callable).
+  // full (default) | coder (hides the deploy trio) | reader (LSP + reading).
+  // GToolsOnly (Only=) is an explicit allowlist that overrides the profile.
+  GToolsProfile: string = 'full';
+  GToolsOnly: TArray<string>;
   GSharedFolders: TArray<string>;     // subfolders any agent may write (opt-in)
   GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
   GAdbDevicesSet: Boolean = False;  // configured at all? absent = unrestricted
@@ -368,6 +378,11 @@ begin
   GRemoteHosts := GetEnvironmentVariable('DELPHI_MCP_REMOTE_HOSTS');
   GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
   GAgentConfinement := GetEnvironmentVariable('DELPHI_MCP_AGENT_CONFINEMENT') = '1';
+  GToolsProfile := LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_PROFILE').Trim);
+  if GToolsProfile = '' then
+    GToolsProfile := 'full';
+  GToolsOnly := LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_ONLY'))
+    .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
   GSharedFolders := LowerCase(GetEnvironmentVariable('DELPHI_MCP_SHARED_FOLDERS'))
     .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
   IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
@@ -399,6 +414,11 @@ begin
         GAllowBuildScripts := Ini.ReadBool('Security', 'AllowBuildScripts', False);
       if not GAgentConfinement then
         GAgentConfinement := Ini.ReadBool('Security', 'AgentConfinement', False);
+      if GToolsProfile = 'full' then
+        GToolsProfile := LowerCase(Ini.ReadString('Tools', 'Profile', 'full').Trim);
+      if Length(GToolsOnly) = 0 then
+        GToolsOnly := LowerCase(Ini.ReadString('Tools', 'Only', ''))
+          .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
       if Length(GSharedFolders) = 0 then
         GSharedFolders := LowerCase(Ini.ReadString('Security', 'SharedFolders', ''))
           .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
@@ -1987,6 +2007,37 @@ begin
   end;
 end;
 
+
+function ToolHiddenFromList(const AToolName: string): Boolean;
+const
+  // the mailbox and the manual never disappear: they are how an agent asks
+  // for help and how it reports that something is missing
+  ALWAYS: array [0 .. 2] of string = ('delphi_help', 'delphi_messages',
+    'delphi_report');
+  // reader: understand and navigate, nothing that writes or ships
+  READER: array [0 .. 18] of string = ('delphi_read', 'delphi_list',
+    'delphi_search', 'delphi_symbols', 'delphi_definition', 'delphi_hover',
+    'delphi_signature', 'delphi_completion', 'delphi_diagnostics',
+    'delphi_references', 'delphi_projects', 'delphi_installs',
+    'delphi_workspace', 'delphi_fetch', 'delphi_help', 'delphi_messages',
+    'delphi_report', 'vault_read', 'vault_search');
+  // coder hides only the shipping trio; everything else is a coder's tool
+  DEPLOY_ONLY: array [0 .. 2] of string = ('delphi_adb', 'delphi_paserver',
+    'delphi_package');
+var
+  N: string;
+begin
+  N := AToolName.Trim.ToLower;
+  if MatchText(N, ALWAYS) then
+    Exit(False);
+  if Length(GToolsOnly) > 0 then
+    Exit(not MatchText(N, GToolsOnly));
+  if GToolsProfile = 'reader' then
+    Exit(not MatchText(N, READER));
+  if GToolsProfile = 'coder' then
+    Exit(MatchText(N, DEPLOY_ONLY));
+  Result := False; // full, or an unknown profile name: hide nothing
+end;
 
 initialization
   GIdentLock := TCriticalSection.Create;

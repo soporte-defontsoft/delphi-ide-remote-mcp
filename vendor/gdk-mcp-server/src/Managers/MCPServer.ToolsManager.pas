@@ -25,6 +25,9 @@ type
   TToolResultFilter = reference to function(const ToolName: string;
     const AText: string): string;
 
+  // [local change] see ListFilter
+  TToolListFilter = reference to function(const ToolName: string): Boolean;
+
   TMCPToolsManager = class(TInterfacedObject, IMCPCapabilityManager)
   strict private
     function ExtractToolNameAndArguments(const Params: System.JSON.TJSONObject; out ToolName: string; out Arguments: TJSONObject): Boolean;
@@ -51,6 +54,10 @@ type
     class var ToolGate: TToolGateFunc;
     // [local change] outbound filter for every textual result (see TToolResultFilter)
     class var ResultFilter: TToolResultFilter;
+    // [local change] optional tools/list filter: True = omit the tool from
+    // the listing (it stays CALLABLE - this trims token surface for small
+    // models, it is not a permission; permissions live in ToolGate).
+    class var ListFilter: TToolListFilter;
   end;
 
 implementation
@@ -304,6 +311,9 @@ begin
 
   for Tool in FTools.Values do
   begin
+    // [local change] profile/allowlist surface trim (see ListFilter)
+    if Assigned(ListFilter) and ListFilter(Tool.Name) then
+      Continue;
     ToolJSON := CreateToolJSON(Tool);
     ToolsArray.AddElement(ToolJSON);
   end;
