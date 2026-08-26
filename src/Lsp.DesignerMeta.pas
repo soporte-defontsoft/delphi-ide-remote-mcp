@@ -58,9 +58,28 @@ uses
 
 var
   GFmx, GVcl: TMetaTable;
+  GMetaLock: TObject;
 
 function MetaTable(const AIsFmx: Boolean): TMetaTable;
 begin
+  // Lazy: the two tables parse ~14k measured facts into 14 dictionaries, and
+  // they used to be built in initialization even when no designer tool was
+  // ever called (hermes, release audit 2026-08-26, P2.9). Built once, on the
+  // first designer call, under a lock; GFmx is assigned LAST and acts as the
+  // "ready" flag for the unlocked fast path.
+  if GFmx = nil then
+  begin
+    TMonitor.Enter(GMetaLock);
+    try
+      if GFmx = nil then
+      begin
+        GVcl := TMetaTable.Create(Lsp.DesignerMeta.Vcl.META);
+        GFmx := TMetaTable.Create(Lsp.DesignerMeta.Fmx.META);
+      end;
+    finally
+      TMonitor.Exit(GMetaLock);
+    end;
+  end;
   if AIsFmx then
     Result := GFmx
   else
@@ -160,10 +179,7 @@ var
   end;
 
 begin
-  if AIsFmx then
-    M := GFmx
-  else
-    M := GVcl;
+  M := MetaTable(AIsFmx);
   Stack := TStack<string>.Create;
   Warns := TStringList.Create;
   CollDepth := 0;
@@ -344,10 +360,10 @@ begin
 end;
 
 initialization
-  GFmx := TMetaTable.Create(Lsp.DesignerMeta.Fmx.META);
-  GVcl := TMetaTable.Create(Lsp.DesignerMeta.Vcl.META);
+  GMetaLock := TObject.Create;
 
 finalization
+  GMetaLock.Free;
   GVcl.Free;
   GFmx.Free;
 

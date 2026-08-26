@@ -8,6 +8,23 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.84.0-beta] - 2026-08-26
+
+Hermes' P2.9: repeated and eager internal work.
+
+### Changed
+- **Low-integrity labeling cached per root**: the sandbox relabeled the whole
+  workdir tree on EVERY `delphi_run`. Now once per root per process - the
+  SDDL label carries OICI inheritance, so children created after the first
+  pass are born Low. The one risk this introduces (a MEDIUM file created
+  BETWEEN runs by the server) is MEASURED, not assumed: run #2 overwrites it
+  without a relabel (tests/test_round21.py Z3). A failed root labeling is
+  never cached.
+- **Designer fact tables built lazily**: ~14k facts into 14 dictionaries used
+  to load in `initialization` even when no designer tool was ever called.
+  Now built once, on the first designer call, under a lock (battery: the very
+  first call of a fresh process is delphi_designer, Z1).
+
 ## [0.83.0-beta] - 2026-08-26
 
 Hermes' P1.4, the last big item of the release audit: tools/list measured

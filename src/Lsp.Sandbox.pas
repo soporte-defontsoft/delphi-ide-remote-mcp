@@ -49,6 +49,13 @@ procedure LabelDirTreeLowIntegrity(const ADir: string);
 
 implementation
 
+uses
+  System.Classes;
+
+var
+  GLabeled: TStringList; // canonical roots already tree-labeled this process
+  GLabeledLock: TObject;
+
 const
   SE_GROUP_INTEGRITY_ = $00000020;
   SECURITY_MANDATORY_LOW_RID_ = $00001000;
@@ -162,11 +169,25 @@ end;
 
 procedure LabelDirTreeLowIntegrity(const ADir: string);
 var
-  Entry: string;
+  Entry, Key: string;
+  RootOk: Boolean;
 begin
   if (ADir = '') or not TDirectory.Exists(ADir) then
     Exit;
-  LabelDirLowIntegrity(ADir);
+  // Once per root per process: the SDDL label carries OICI inheritance, so
+  // children created AFTER the first labeling are born Low already - only the
+  // first pass needs the full-tree sweep, which re-walked and re-labeled the
+  // whole workdir on EVERY run (hermes, release audit 2026-08-26, P2.9). A
+  // failed root labeling is never cached, so the next run retries in full.
+  Key := TPath.GetFullPath(ADir).ToLower;
+  System.TMonitor.Enter(GLabeledLock);
+  try
+    if GLabeled.IndexOf(Key) >= 0 then
+      Exit;
+  finally
+    System.TMonitor.Exit(GLabeledLock);
+  end;
+  RootOk := LabelDirLowIntegrity(ADir);
   // Relabel existing children. Best-effort and bounded: an unreadable subtree
   // is skipped, never fatal (same tolerance as the rest of the server).
   try
@@ -179,6 +200,25 @@ begin
       LabelDirLowIntegrity(Entry);
   except
   end;
+  if RootOk then
+  begin
+    System.TMonitor.Enter(GLabeledLock);
+    try
+      GLabeled.Add(Key);
+    finally
+      System.TMonitor.Exit(GLabeledLock);
+    end;
+  end;
 end;
+
+initialization
+  GLabeledLock := TObject.Create;
+  GLabeled := TStringList.Create;
+  GLabeled.Sorted := True;
+  GLabeled.Duplicates := dupIgnore;
+
+finalization
+  GLabeled.Free;
+  GLabeledLock.Free;
 
 end.
