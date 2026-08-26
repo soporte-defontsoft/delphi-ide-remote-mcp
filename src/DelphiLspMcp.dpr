@@ -1,4 +1,4 @@
-program DelphiLspMcp;
+﻿program DelphiLspMcp;
 
 { DelphiLSP MCP Service - ONE project, one executable, three ways to run it.
 
@@ -95,6 +95,7 @@ uses
   Mcp.Tools.Scaffold in 'Mcp.Tools.Scaffold.pas',
   Lsp.Host in 'Lsp.Host.pas',
   Lsp.Files in 'Lsp.Files.pas',
+  Lsp.ShaCache in 'Lsp.ShaCache.pas',
   Lsp.ProjectUnits in 'Lsp.ProjectUnits.pas',
   Lsp.Styles in 'Lsp.Styles.pas',
   Mcp.Tools.Styles in 'Mcp.Tools.Styles.pas',

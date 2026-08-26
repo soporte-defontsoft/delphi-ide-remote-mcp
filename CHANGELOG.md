@@ -8,6 +8,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.81.0-beta] - 2026-08-26
+
+Hermes' P1.7. Post-release-candidate work: v0.80.0-beta stays the frozen
+first-release candidate; this only removes repeated I/O.
+
+### Changed
+- **Shared SHA-256 cache** (`Lsp.ShaCache`, keyed by path + mtime + size):
+  `delphi_fetch` offset=0 hashed the whole file, the `/files` download hashed
+  it AGAIN before streaming, and `delphi_run`/`delphi_upload` hashed too - one
+  big zip was read end-to-end three times for a single download. Now hashed
+  once per (path, mtime, size); the stamp invalidates the entry the moment the
+  file changes, so the contract is untouched. Battery tests/test_round18.py:
+  hash equals a locally computed sha256, `/files` header equals the fetch sha,
+  and mutating the file yields the new hash (no staleness).
+
 ## [0.80.0-beta] - 2026-08-26
 
 Hermes' blind rerun over v0.79 confirmed both target patterns fixed 3/3

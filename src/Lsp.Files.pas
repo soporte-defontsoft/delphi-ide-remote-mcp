@@ -42,7 +42,8 @@ uses
   System.JSON,
   MCPServer.Logger,
   Lsp.Guard,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.ShaCache;
 
 procedure Answer(ResponseInfo: TIdHTTPResponseInfo; ACode: Integer;
   const AMessage: string);
@@ -121,7 +122,7 @@ begin
 
     // Whole-file hash in a header: the client verifies with sha256sum, the
     // same contract delphi_fetch offers on its offset=0 answer.
-    Sha := THashSHA2.GetHashStringFromFile(Full, THashSHA2.TSHA2Version.SHA256);
+    Sha := CachedFileSha256(Full); // shared with delphi_fetch: hashed once per (path, mtime, size)
     Stream := TFileStream.Create(Full, fmOpenRead or fmShareDenyWrite);
     ResponseInfo.ResponseNo := 200;
     ResponseInfo.ContentType := 'application/octet-stream';

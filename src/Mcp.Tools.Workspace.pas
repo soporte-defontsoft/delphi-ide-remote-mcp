@@ -15,7 +15,6 @@ uses
   System.JSON,
   System.Math,
   System.StrUtils,
-  System.Hash,
   System.NetEncoding,
   System.Zip,
   System.Generics.Collections,
@@ -252,6 +251,7 @@ uses
   Lsp.BuildRunner,
   Lsp.Guard,
   Lsp.Patch,
+  Lsp.ShaCache,
   Lsp.Files;
 
 const
@@ -1301,7 +1301,7 @@ begin
   // log WHAT ran with the binary's hash, so every execution is accountable.
   try
     TLogger.Warning(Format('delphi_run: EXEC "%s" sha256=%s args=[%s] workdir=%s',
-      [ExePath, THashSHA2.GetHashStringFromFile(ExePath),
+      [ExePath, CachedFileSha256(ExePath),
        Params.Args, WorkDir]));
   except
     TLogger.Warning('delphi_run: EXEC "' + ExePath + '" (hash n/d)');
@@ -1349,7 +1349,6 @@ var
   Buf: TBytes;
   Return: TJSONObject;
   B64: TBase64Encoding;
-  Hasher: THashSHA2;
   LinkOnly: Boolean;
 begin
   FullPath := TPath.GetFullPath(Params.Path);
@@ -1369,20 +1368,11 @@ begin
     Size := Stream.Size;
     Sha := '';
     if Params.Offset = 0 then
-    begin
-      // Whole-file hash so the client can verify the reassembly.
-      Hasher := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);
-      SetLength(Buf, 1024 * 1024);
-      while True do
-      begin
-        ChunkLen := Stream.Read(Buf[0], Length(Buf));
-        if ChunkLen <= 0 then
-          Break;
-        Hasher.Update(Buf, ChunkLen);
-      end;
-      Sha := Hasher.HashAsString;
-      Stream.Position := 0;
-    end;
+      // Whole-file hash so the client can verify the reassembly. Cached by
+      // (path, mtime, size): the /files download recomputed this same hash
+      // right after, so one big zip was read end-to-end three times for one
+      // download (hermes, release audit 2026-08-26).
+      Sha := CachedFileSha256(FullPath);
 
     if Params.Offset > Size then
       Exit('error: offset mas alla del final (size=' + IntToStr(Size) + ')');
@@ -1593,7 +1583,7 @@ begin
     end;
     if Params.Sha256.Trim <> '' then
     begin
-      Sha := THashSHA2.GetHashStringFromFile(FullPath);
+      Sha := CachedFileSha256(FullPath);
       Return.AddPair('sha256', Sha);
       Return.AddPair('verified', TJSONBool.Create(
         SameText(Sha, Params.Sha256.Trim)));
