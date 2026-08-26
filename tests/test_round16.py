@@ -166,6 +166,12 @@ check('S2 mode=full conserva el arbol completo con rangos',
       rfull.lstrip().startswith('[') and 'selectionRange' in rfull and
       len(rfull) > 20000, len(rfull))
 
+# hermes (2026-08-26): full must stay byte-stable on an unchanged unit - the
+# compaction is additive, never a rewrite of the full tree.
+rfull2 = call('delphi_symbols', {'path': big, 'mode': 'full'})
+check('S2b mode=full es byte-estable sobre una unit invariante',
+      rfull2 == rfull, (len(rfull), len(rfull2)))
+
 rsmall = call('delphi_symbols', {'path': small})
 check('S3 un arbol pequeno sigue viniendo entero sin pedirlo',
       rsmall.lstrip().startswith('[') and 'selectionRange' in rsmall, rsmall[:200])
