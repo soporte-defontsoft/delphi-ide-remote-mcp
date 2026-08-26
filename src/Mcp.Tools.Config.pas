@@ -37,12 +37,14 @@ type
     [Required]
     property Project: string read FProject write FProject;
     [SchemaDescription('view (default: project summary; section= brings the detail per area) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk)')]
+    [SchemaDefault('view')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required)')]
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription(SP_CONFIG_PATH)]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_CONFIG_SECTION)]
+    [SchemaDefault('summary')]
     property Section: string read FSection write FSection;
     [SchemaDescription(SP_CONFIG_REMOTEDIR)]
     property RemoteDir: string read FRemoteDir write FRemoteDir;

@@ -202,6 +202,44 @@ begin
     ContentItem.AddPair('type', 'text');
     ContentItem.AddPair('text', TextValue);
 
+    // [local change] Programmatically distinguishable outcomes (hermes,
+    // release audit 2026-08-26): the human text stays the contract verbatim,
+    // but the result now ALSO carries structuredContent {ok, code} so a
+    // client or a small model never has to parse Spanish prefixes.
+    //   DENIED        refused by policy (jail, guard, ownership, read-only)
+    //   NOT_FOUND     the named file/project/thing is not there
+    //   INVALID_PARAM the call itself was wrong (bad command, bad value)
+    //   INTERNAL      this server broke inside - worth a delphi_report
+    // The jail's anti-probing property survives: outside-the-jail answers use
+    // one fixed text whether the target exists or not, so they all map to
+    // DENIED; NOT_FOUND only ever comes from in-jail "no existe" texts.
+    var OutcomeCode := '';
+    var LowText := TextValue.ToLower;
+    if TextValue.StartsWith('RECHAZADO') then
+    begin
+      if LowText.Contains('no existe') then
+        OutcomeCode := 'NOT_FOUND'
+      else
+        OutcomeCode := 'DENIED';
+    end
+    else if TextValue.StartsWith('error:') then
+    begin
+      if LowText.Contains('no existe') or LowText.Contains('not found') then
+        OutcomeCode := 'NOT_FOUND'
+      else
+        OutcomeCode := 'INVALID_PARAM';
+    end
+    else if HasError or TextValue.StartsWith('LSP error:') then
+      OutcomeCode := 'INTERNAL';
+    var Structured := TJSONObject.Create;
+    Result.AddPair('structuredContent', Structured);
+    Structured.AddPair('ok', TJSONBool.Create(OutcomeCode = ''));
+    if OutcomeCode <> '' then
+    begin
+      Structured.AddPair('code', OutcomeCode);
+      HasError := True;
+    end;
+
     if HasError then
 {$IF COMPILERVERSION <= 29}
       Result.AddPair('isError', TJSONTrue.Create);

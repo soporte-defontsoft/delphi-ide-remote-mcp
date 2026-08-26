@@ -54,10 +54,13 @@ type
     [Required]
     property Project: string read FProject write FProject;
     [SchemaDescription('Target platform (default Win32): Win32/Win64 build natively here; Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and a PAServer profile (delphi_paserver)')]
+    [SchemaDefault('Win32')]
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription('Debug or Release (default Debug)')]
+    [SchemaDefault('Debug')]
     property Config: string read FConfig write FConfig;
     [SchemaDescription('Build (full, default), Make (incremental), Clean, or Deploy (always builds first, then deploys: to the PAServer of "profile" for Linux/macOS, or packages the app for Android). After switching platforms use Build')]
+    [SchemaDefault('Build')]
     property Target: string read FTarget write FTarget;
     [SchemaDescription('Connection profile name for target=Deploy on a PAServer platform (see delphi_paserver command=profiles). The deployed files land on the target under its PAServer scratch dir, in <profile>/<project name>/')]
     property Profile: string read FProfile write FProfile;

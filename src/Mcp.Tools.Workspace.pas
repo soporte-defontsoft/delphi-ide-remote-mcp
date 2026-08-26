@@ -40,8 +40,10 @@ type
     [Required]
     property Query: string read FQuery write FQuery;
     [SchemaDescription('Maximum hits to return (default 100, cap 500)')]
+    [SchemaDefault('100')]
     property MaxResults: Integer read FMaxResults write FMaxResults;
     [SchemaDescription('Skip the first N matches - pagination: pass the nextOffset of the previous call to get the next page')]
+    [SchemaDefault('0')]
     property Offset: Integer read FOffset write FOffset;
     [SchemaDescription('true = match whole identifiers only (word boundaries)')]
     property WholeWord: Boolean read FWholeWord write FWholeWord;

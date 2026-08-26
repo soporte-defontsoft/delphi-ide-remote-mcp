@@ -76,6 +76,18 @@ begin
           begin
             PropSchema.AddPair('description', SchemaDescriptionAttribute(Attr).Description);
           end
+          else if Attr is SchemaDefaultAttribute then
+          begin
+            // [local change] typed by the property's JSON type
+            if (JsonType = 'integer') or (JsonType = 'number') then
+              PropSchema.AddPair('default',
+                TJSONNumber.Create(StrToIntDef(SchemaDefaultAttribute(Attr).Value, 0)))
+            else if JsonType = 'boolean' then
+              PropSchema.AddPair('default',
+                TJSONBool.Create(SameText(SchemaDefaultAttribute(Attr).Value, 'true')))
+            else
+              PropSchema.AddPair('default', SchemaDefaultAttribute(Attr).Value);
+          end
           else if Attr is SchemaEnumAttribute then
           begin
             EnumArray := TJSONArray.Create;

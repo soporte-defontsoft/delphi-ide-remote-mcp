@@ -32,6 +32,19 @@ type
     property Description: string read FDescription;
   end;
 
+  // [local change] Emits a real JSON Schema "default" for an optional
+  // parameter (hermes, release audit 2026-08-26): the prose said "default
+  // Win32" but the schema carried nothing a machine could read, so models
+  // invented values. Stored as text; the generator types it by the
+  // property's JSON type (integer/boolean/string).
+  SchemaDefaultAttribute = class(TCustomAttribute)
+  private
+    FValue: string;
+  public
+    constructor Create(const AValue: string);
+    property Value: string read FValue;
+  end;
+
   SchemaEnumAttribute = class(TCustomAttribute)
   private
     FValues: TArray<string>;
@@ -121,6 +134,14 @@ type
   end;
 
 implementation
+
+{ SchemaDefaultAttribute }
+
+constructor SchemaDefaultAttribute.Create(const AValue: string);
+begin
+  inherited Create;
+  FValue := AValue;
+end;
 
 { SchemaDescriptionAttribute }
 

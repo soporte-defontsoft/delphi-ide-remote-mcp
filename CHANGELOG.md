@@ -8,6 +8,32 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.78.0-beta] - 2026-08-26
+
+Hermes' supplement #1 and #2: programmatically distinguishable outcomes and
+real JSON Schema defaults. Measured gap: a `delphi_read` on a missing path
+answered only prose - `isError` absent, `structuredContent` absent - so
+clients had to parse Spanish prefixes.
+
+### Added
+- **Structured outcomes on every string-answering tool** (framework layer,
+  `BuildToolCallResponse`): the MCP result now carries
+  `structuredContent {ok, code}` plus `isError` on failures. The human text
+  stays byte-identical - the change is additive. Codes: `DENIED` (policy:
+  jail, guard, ownership, read-only), `NOT_FOUND` (the named thing is not
+  there), `INVALID_PARAM` (the call was wrong), `INTERNAL` (the server broke -
+  report it). The jail's anti-probing property survives: outside-the-jail
+  refusals use one fixed text whether the target exists or not, so both map
+  to DENIED (verified by battery).
+- **`SchemaDefault` attribute** in the schema generator: optional parameters
+  with a measured default now emit a typed JSON Schema `default` (string,
+  integer/number, boolean) instead of prose only. Annotated where it matters:
+  `delphi_build` (platform Win32, config Debug, target Build), `delphi_test`
+  (platform Win64, config Debug), `delphi_search` (maxresults 100, offset 0),
+  `delphi_config` (command view, section summary).
+- Battery tests/test_round17.py (8 checks), including the anti-probing
+  equality check outside the jail.
+
 ## [0.77.0-beta] - 2026-08-26
 
 Hermes' release audit P1.5: the two measured output walls. `delphi_config view`

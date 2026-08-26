@@ -31,12 +31,14 @@ type
     [SchemaDescription(SP_TEST_PROJECT)]
     property Project: string read FProject write FProject;
     [SchemaDescription(SP_TEST_CONFIG)]
+    [SchemaDefault('Debug')]
     property Config: string read FConfig write FConfig;
     [SchemaDescription(SP_TEST_FILTER)]
     property Filter: string read FFilter write FFilter;
     [SchemaDescription(SP_TEST_TIMEOUT)]
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
     [SchemaDescription(SP_TEST_PLATFORM)]
+    [SchemaDefault('Win64')]
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription(SP_TEST_NOBUILD)]
     property NoBuild: Boolean read FNoBuild write FNoBuild;
