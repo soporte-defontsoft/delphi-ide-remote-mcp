@@ -154,8 +154,12 @@ begin
     Exit(SR_REMOTERUN_NO_PACLIENT);
   TmpDir := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-remoterun');
   TDirectory.CreateDirectory(TmpDir);
-  ShPath := TPath.Combine(TmpDir, 'start-runner.sh');
-  StatusPath := TPath.Combine(TmpDir, 'mcp-runner-status.txt');
+  // Unique per call, local AND remote: two concurrent install-runner calls
+  // used to share one sh name and one /tmp status file and could read each
+  // other's outcome (hermes, release audit 2026-08-26, P2.8).
+  var Uniq := LowerCase(TGUID.NewGuid.ToString.Substring(1, 8));
+  ShPath := TPath.Combine(TmpDir, 'start-runner-' + Uniq + '.sh');
+  StatusPath := TPath.Combine(TmpDir, 'mcp-runner-status-' + Uniq + '.txt');
   if TFile.Exists(StatusPath) then
     TFile.Delete(StatusPath);
   // POSIX script, LF endings, no BOM: /bin/sh chokes on CRLF and on a BOM
@@ -171,7 +175,7 @@ begin
     '  fi'#10 +
     '  pgrep -af "mcp-runner.py" || echo "NO ARRANCO - mira runner.log"'#10 +
     '  tail -3 "$D/runner.log" 2>/dev/null'#10 +
-    '} > /tmp/mcp-runner-status.txt 2>&1'#10 +
+    '} > /tmp/mcp-runner-status-' + Uniq + '.txt 2>&1'#10 +
     'exit 0'#10;
   Enc := TUTF8Encoding.Create(False);
   try
@@ -180,11 +184,11 @@ begin
     Enc.Free;
   end;
   // flag 5: PAServer RUNS it on the target (this is the whole trick)
-  Ops := Format('"--put=%s,%s,5,start-runner.sh"', [ShPath, RUNNER_DIR]);
+  Ops := Format('"--put=%s,%s,5,start-runner-%s.sh"', [ShPath, RUNNER_DIR, Uniq]);
   Paclient(Pc, Ops, AProfile, Output); // a non-zero exit is the script's own
   TFile.Delete(ShPath);
   Sleep(1500);
-  Ops := Format('"--get=/tmp/mcp-runner-status.txt,%s"', [TmpDir]);
+  Ops := Format('"--get=/tmp/mcp-runner-status-%s.txt,%s"', [Uniq, TmpDir]);
   if (Paclient(Pc, Ops, AProfile, Output) = 0) and TFile.Exists(StatusPath) then
   begin
     AStatus := TFile.ReadAllText(StatusPath, TEncoding.UTF8).TrimRight;
@@ -236,7 +240,12 @@ begin
   else
     ARemoteExe := DeployRel + '/' + AExeName;
 
-  JobId := FormatDateTime('yyyymmdd"-"hhnnsszzz', Now);
+  // Timestamp alone collided when two agents fired remote-run in the same
+  // millisecond: same job file, mixed results (hermes, release audit
+  // 2026-08-26, P2.8). The GUID fragment makes each operation's files unique
+  // while the prefix stays human-sortable.
+  JobId := FormatDateTime('yyyymmdd"-"hhnnsszzz', Now) + '-' +
+    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8));
   TmpDir := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-remoterun');
   TDirectory.CreateDirectory(TmpDir);
   JobFile := TPath.Combine(TmpDir, 'job-' + JobId + '.json');
@@ -314,6 +323,7 @@ begin
     Exit;
   end;
   try
+    Result.AddPair('jobId', JobId); // the job's name in the target's audit trail
     Result.AddPair('success', TJSONBool.Create(
       (Res.GetValue('exitCode') <> nil) and
       (Res.GetValue('exitCode').GetValue<Integer> = 0)));

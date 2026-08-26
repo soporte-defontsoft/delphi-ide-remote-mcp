@@ -155,6 +155,12 @@ j = json.loads(r) if r.startswith('{') else {}
 check('exitCode del programa (7)', j.get('exitCode') == 7, r[:300])
 check('output capturado', 'hola desde el target' in (j.get('output') or ''), r[:300])
 check('note explica el mecanismo', 'PAServer' in (j.get('note') or ''), r[:200])
+# v0.85: two agents firing in the same millisecond used to collide on a
+# timestamp-only jobId; now it carries a GUID fragment
+import re as _re
+check('jobId lleva fragmento GUID (timestamp-only colisionaba)',
+      bool(_re.match(r'^\d{8}-\d{9}-[0-9a-f]{8}$', j.get('jobId') or '')),
+      j.get('jobId'))
 # 4) exe fuera de la scratch -> runnerError
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': '..\\..\\fuera.exe', 'timeoutms': 20000})
 j = json.loads(r) if r.startswith('{') else {}

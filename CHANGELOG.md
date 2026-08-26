@@ -8,6 +8,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.85.0-beta] - 2026-08-26
+
+Hermes' P2.8: concurrent remote-run names.
+
+### Fixed
+- **remote-run job identity is collision-proof**: the jobId was a
+  millisecond timestamp, so two agents firing remote-run in the same
+  millisecond shared one job file and mixed results. Now
+  `<timestamp>-<guid8>`; every local and remote per-job file derives from it.
+  The successful result now reports `jobId` too (it only appeared on the
+  timeout branch before).
+- **install-runner status files unique per call**, local AND remote
+  (`start-runner-<id>.sh`, `/tmp/mcp-runner-status-<id>.txt`): two concurrent
+  installs could read each other's outcome through the fixed shared names.
+
 ## [0.84.0-beta] - 2026-08-26
 
 Hermes' P2.9: repeated and eager internal work.
