@@ -371,7 +371,7 @@ open(CON, 'w', encoding='utf-8').write(
     _real.replace('<FrameworkType>VCL</FrameworkType>',
                   '<FrameworkType>None</FrameworkType>'))            # no framework
 
-out = call('delphi_config', {"project": CON})
+out = call('delphi_config', {"project": CON, "section": "all"})
 cfg = json.loads(out)
 check('config: view lista configuraciones', 'Debug' in cfg.get('configurations', []), out[:150])
 check('config: view lista plataformas con estado',
@@ -397,7 +397,7 @@ check('R5-B: el payload no se escribio en el .dproj',
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "NoExiste99"})
 check('R5-B: plataforma inventada RECHAZADA', 'RECHAZADO' in out, out[:120])
 # before removing: R6-A - view must report Linux64 as ENABLED (it was just added)
-_plats = {p['name']: p.get('enabled') for p in json.loads(call('delphi_config', {"project": CON})).get('platforms', [])}
+_plats = {p['name']: p.get('enabled') for p in json.loads(call('delphi_config', {"project": CON, "section": "all"})).get('platforms', [])}
 check('R6-A: view reporta enabled=True para una plataforma activa (Linux64)',
       _plats.get('Linux64') is True, _plats)
 check('R6-A: view reporta enabled=True para Win64 (value=True en el .dproj)',
@@ -405,7 +405,7 @@ check('R6-A: view reporta enabled=True para Win64 (value=True en el .dproj)',
 # R5-C: remove-platform (with backup)
 out = call('delphi_config', {"project": CON, "command": "remove-platform", "platform": "Linux64"})
 check('R5-C: remove-platform deshabilita', 'DESHABILITADA' in out, out[:120])
-out = call('delphi_config', {"project": CON})
+out = call('delphi_config', {"project": CON, "section": "all"})
 _plats = {p['name']: p.get('enabled') for p in json.loads(out).get('platforms', [])}
 check('R6-A: Linux64 queda DECLARADA pero enabled=False tras remove-platform',
       'Linux64' in _plats and _plats['Linux64'] is False, _plats)
@@ -452,7 +452,7 @@ check('searchpath: DCC_UnitSearchPath (SINGULAR, el nombre real) en el grupo de 
 out = call('delphi_config', {"project": CON, "command": "add-searchpath",
                              "platform": "Linux64", "path": _spdir})
 check('searchpath: repetir = ya estaba, sin cambios', 'ya estaba' in out, out[:120])
-_v = json.loads(call('delphi_config', {"project": CON}))
+_v = json.loads(call('delphi_config', {"project": CON, "section": "all"}))
 check('searchpath: view lo ensena por plataforma (ruta enmascarada srvX:)',
       any(e.lower().endswith('libs-extra') and e.lower().startswith('srv')
           for e in (_v.get('searchPaths') or {}).get('Linux64', [])), str(_v.get('searchPaths'))[:160])
@@ -504,7 +504,7 @@ check('deployfile: el .dproj importa el manifiesto',
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Linux64", "path": _dep})
 check('deployfile: repetir = ya viaja, sin cambios', 'ya viaja' in out, out[:120])
-_v = json.loads(call('delphi_config', {"project": CON}))
+_v = json.loads(call('delphi_config', {"project": CON, "section": "all"}))
 check('deployfile: view lo ensena por plataforma (una linea por fichero, junto al binario)',
       sum('libfake.so' in e for e in (_v.get('deployFiles') or {}).get('Linux64', [])) == 1
       and any('ConfProj ->' in e for e in (_v.get('deployFiles') or {}).get('Linux64', [])),

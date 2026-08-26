@@ -31,16 +31,19 @@ type
     FOutput: string;
     FPath: string;
     FRemoteDir: string;
+    FSection: string;
   public
     [SchemaDescription('Absolute path of the project .dproj')]
     [Required]
     property Project: string read FProject write FProject;
-    [SchemaDescription('view (default: list configurations, platforms, search paths, deployment files and units) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk)')]
+    [SchemaDescription('view (default: project summary; section= brings the detail per area) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk)')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required)')]
     property Platform: string read FPlatform write FPlatform;
     [SchemaDescription(SP_CONFIG_PATH)]
     property Path: string read FPath write FPath;
+    [SchemaDescription(SP_CONFIG_SECTION)]
+    property Section: string read FSection write FSection;
     [SchemaDescription(SP_CONFIG_REMOTEDIR)]
     property RemoteDir: string read FRemoteDir write FRemoteDir;
     [SchemaDescription('set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to <folder>\$(Platform)\$(Config) and .dcu to <folder>\Dcu\$(Platform)\$(Config). Use "default" to restore the RAD Studio layout. No absolute paths, no "..".')]
@@ -111,7 +114,7 @@ begin
   Result := not IsLocalPlatform(APlatform);
 end;
 
-function ViewConfig(const ADproj: string): string;
+function ViewConfig(const ADproj, ASection: string): string;
 var
   Info: TDprojInfo;
   Return: TJSONObject;
@@ -119,7 +122,15 @@ var
   C, Reason: string;
   P: TDprojPlatform;
   Obj: TJSONObject;
+  Sec: string;
 begin
+  Sec := ASection.Trim.ToLower;
+  if Sec = '' then
+    Sec := 'summary';
+  if not MatchText(Sec, ['summary', 'platforms', 'searchpaths', 'deploy',
+    'units', 'all']) then
+    Exit('error: section debe ser summary | platforms | searchpaths | ' +
+      'deploy | units | all');
   // A bare .dpr with no .dproj beside it: the units CAN be read (they are in
   // the .dpr itself) but the framework, the platforms and the configurations
   // cannot - they live in the .dproj. Answering with all of them empty plus
@@ -142,36 +153,100 @@ begin
   Return := TJSONObject.Create;
   try
     Return.AddPair('project', ADproj);
-    Return.AddPair('frameworkType', Info.FrameworkType);
-    Return.AddPair('appType', Info.AppType);
-    if SameText(Info.FrameworkType, 'VCL') then
-      Return.AddPair('crossPlatform', 'no (VCL = Windows only; use FMX or a ' +
-        'console app to target Linux/macOS/mobile)')
-    else
-      Return.AddPair('crossPlatform', 'yes (FMX/console can target other platforms)');
-    Cfgs := TJSONArray.Create;
-    Return.AddPair('configurations', Cfgs);
-    for C in Info.Configs do
-      Cfgs.Add(C);
-    Plats := TJSONArray.Create;
-    Return.AddPair('platforms', Plats);
-    for P in Info.Platforms do
+    if (Sec = 'summary') or (Sec = 'all') then
     begin
-      Obj := TJSONObject.Create;
-      Plats.AddElement(Obj);
-      Obj.AddPair('name', P.Name);
-      Obj.AddPair('enabled', TJSONBool.Create(P.Enabled));
-      Obj.AddPair('canTarget', TJSONBool.Create(Info.CanTarget(P.Name, Reason)));
-      if not Info.CanTarget(P.Name, Reason) then
-        Obj.AddPair('reason', Reason);
-      Obj.AddPair('needsRemoteProfile', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
+      Return.AddPair('frameworkType', Info.FrameworkType);
+      Return.AddPair('appType', Info.AppType);
+      if SameText(Info.FrameworkType, 'VCL') then
+        Return.AddPair('crossPlatform', 'no (VCL = Windows only; use FMX or a ' +
+          'console app to target Linux/macOS/mobile)')
+      else
+        Return.AddPair('crossPlatform', 'yes (FMX/console can target other platforms)');
     end;
-    AddSearchPathsView(TFile.ReadAllText(ADproj), Return);
-    AddDeployFilesView(ADproj, Return);
-    AddUnitsView(ADproj, Return);
-    Return.AddPair('note', 'To build: delphi_build {project, platform, ' +
-      'config}. Platforms with needsRemoteProfile=true also need a PAServer ' +
-      'profile - see delphi_paserver.');
+    if (Sec = 'summary') or (Sec = 'all') or (Sec = 'platforms') then
+    begin
+      Cfgs := TJSONArray.Create;
+      Return.AddPair('configurations', Cfgs);
+      for C in Info.Configs do
+        Cfgs.Add(C);
+    end;
+    if (Sec = 'all') or (Sec = 'platforms') then
+    begin
+      Plats := TJSONArray.Create;
+      Return.AddPair('platforms', Plats);
+      for P in Info.Platforms do
+      begin
+        Obj := TJSONObject.Create;
+        Plats.AddElement(Obj);
+        Obj.AddPair('name', P.Name);
+        Obj.AddPair('enabled', TJSONBool.Create(P.Enabled));
+        Obj.AddPair('canTarget', TJSONBool.Create(Info.CanTarget(P.Name, Reason)));
+        if not Info.CanTarget(P.Name, Reason) then
+          Obj.AddPair('reason', Reason);
+        Obj.AddPair('needsRemoteProfile', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
+      end;
+    end
+    else if Sec = 'summary' then
+    begin
+      // enabled platforms by name; state and reasons are one section= away
+      Plats := TJSONArray.Create;
+      Return.AddPair('platformsEnabled', Plats);
+      var Disabled := 0;
+      for P in Info.Platforms do
+        if P.Enabled then
+          Plats.Add(P.Name)
+        else
+          Inc(Disabled);
+      if Disabled > 0 then
+        Return.AddPair('platformsDisabled', TJSONNumber.Create(Disabled));
+    end;
+    if (Sec = 'all') or (Sec = 'searchpaths') then
+      AddSearchPathsView(TFile.ReadAllText(ADproj), Return);
+    if (Sec = 'all') or (Sec = 'deploy') then
+      AddDeployFilesView(ADproj, Return);
+    if (Sec = 'all') or (Sec = 'units') then
+      AddUnitsView(ADproj, Return);
+    if Sec = 'summary' then
+    begin
+      // Counts only - the detail of each area is one section= away. The old
+      // all-in-one view measured 11.7k chars on a real project (hermes,
+      // release audit 2026-08-26): it drowned small models before they had
+      // done anything with it.
+      var Tmp := TJSONObject.Create;
+      try
+        AddSearchPathsView(TFile.ReadAllText(ADproj), Tmp);
+        AddDeployFilesView(ADproj, Tmp);
+        AddUnitsView(ADproj, Tmp);
+        var Counts := TJSONObject.Create;
+        Return.AddPair('counts', Counts);
+        var N := 0;
+        var SPObj := Tmp.GetValue('searchPaths');
+        if SPObj is TJSONObject then
+          for var Pair in TJSONObject(SPObj) do
+            if Pair.JsonValue is TJSONArray then
+              N := N + TJSONArray(Pair.JsonValue).Count;
+        Counts.AddPair('searchPaths', TJSONNumber.Create(N));
+        N := 0;
+        var DFObj := Tmp.GetValue('deployFiles');
+        if DFObj is TJSONObject then
+          for var Pair in TJSONObject(DFObj) do
+            if Pair.JsonValue is TJSONArray then
+              N := N + TJSONArray(Pair.JsonValue).Count;
+        Counts.AddPair('deployFiles', TJSONNumber.Create(N));
+        N := 0;
+        var UArr := Tmp.GetValue('units');
+        if UArr is TJSONArray then
+          N := TJSONArray(UArr).Count;
+        Counts.AddPair('units', TJSONNumber.Create(N));
+      finally
+        Tmp.Free;
+      end;
+      Return.AddPair('sections', SN_CONFIG_SECTIONS);
+    end;
+    if (Sec = 'summary') or (Sec = 'all') or (Sec = 'platforms') then
+      Return.AddPair('note', 'To build: delphi_build {project, platform, ' +
+        'config}. Platforms with needsRemoteProfile=true also need a PAServer ' +
+        'profile - see delphi_paserver.');
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -1105,7 +1180,7 @@ begin
         [TPath.GetFileName(Proj), TPath.GetFileName(Sibling)]));
   end;
   if (Cmd = '') or (Cmd = 'view') then
-    Result := ViewConfig(Proj)
+    Result := ViewConfig(Proj, Params.Section)
   else if Cmd = 'add-platform' then
     Result := AddPlatform(Proj, Params.Platform)
   else if Cmd = 'remove-platform' then

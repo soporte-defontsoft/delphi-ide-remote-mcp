@@ -8,6 +8,30 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.77.0-beta] - 2026-08-26
+
+Hermes' release audit P1.5: the two measured output walls. `delphi_config view`
+answered 11.7k chars and `delphi_symbols` 37.5k for a 912-line unit - a small
+model drowned before doing anything with either.
+
+### Changed
+- **`delphi_config view` defaults to a summary**: framework, configurations,
+  enabled platforms, and counts of search paths / deploy files / units. The new
+  `section=platforms|searchpaths|deploy|units` parameter brings each detail on
+  demand; `section=all` is the old everything-at-once view. The `.dpr`-only
+  view (small) is unchanged.
+- **`delphi_symbols` on a file compacts big trees**: above 6k chars of full
+  tree the answer is the skeleton - each section with its members as one-line
+  labels (`function X(...) @line`, containers with `+N dentro`), a total, and
+  a note saying how to get more. `mode=full` keeps the complete tree with
+  ranges; `mode=summary` forces the skeleton; small trees keep answering full
+  with nothing asked. New `filter=` finds symbols by name inside the tree
+  (kind, 0-based line, container) without carrying the tree at all. The folder
+  digest is untouched.
+- Batteries that consumed the old full view now ask for their section
+  explicitly (test_v012, test_project_units) - which also exercises the new
+  parameter. New battery tests/test_round16.py (15 checks) covers both tools.
+
 ## [0.76.0-beta] - 2026-08-26
 
 Hermes' release-readiness audit (runtime measurements over GalateaFMX), P0 items

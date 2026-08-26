@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.76.0-beta';
+  SERVER_VERSION = '0.77.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -127,6 +127,40 @@ const
     'rangos y anidamiento) llama con el fichero; para leerla entera, ' +
     'delphi_read. Si una unit no aparece o algo sale raro, no te fies del ' +
     'resumen para editar: lee el fichero.';
+
+  SP_SYMBOLS_MODE =
+    'Solo para un FICHERO: "summary" = el esqueleto (cada seccion con sus ' +
+    'miembros y su linea; los contenedores dicen cuantos llevan dentro), ' +
+    '"full" = el arbol LSP completo con rangos. Vacio = automatico: full ' +
+    'si el arbol es pequeno, summary si es grande (la respuesta dice cual ' +
+    'toco y cuanto pesaba el completo).';
+
+  SP_SYMBOLS_FILTER =
+    'Busca por nombre dentro del arbol de un fichero (subcadena, da igual ' +
+    'mayusculas): devuelve SOLO los simbolos que casan, con su kind, su ' +
+    'linea 0-based y en que contenedor viven. Ignora mode. Es la forma ' +
+    'barata de encontrar un metodo sin traerte el arbol entero.';
+
+  SN_SYMBOLS_SUMMARY_NOTE =
+    'Esto es el RESUMEN del arbol (lineas 0-based). Los contenedores dicen ' +
+    'cuantos miembros llevan (+N dentro): pide filter="nombre" para dar ' +
+    'con uno concreto, o mode="full" para el arbol completo con rangos.';
+
+  SN_SYMBOLS_AUTO_FMT =
+    'El arbol completo pesaba %d caracteres, asi que te doy el resumen. ' +
+    'Con mode="full" lo tienes entero; con filter="nombre" solo lo que ' +
+    'buscas.';
+
+  SP_CONFIG_SECTION =
+    'Solo para view: summary (defecto: marco, configuraciones, plataformas ' +
+    'activas y recuentos) | platforms (cada plataforma con su estado y sus ' +
+    'motivos) | searchpaths (rutas por grupo) | deploy (ficheros por ' +
+    'plataforma) | units (todas las units del proyecto) | all (todo junto, ' +
+    'grande).';
+
+  SN_CONFIG_SECTIONS =
+    'Esto es el resumen. El detalle, por secciones: section=platforms | ' +
+    'searchpaths | deploy | units. section=all lo trae todo junto (grande).';
 
   SR_LSP_NO_FILE_FMT =
     'RECHAZADO: no existe %s. (Antes esto salia como "Error executing ' +

@@ -26,6 +26,17 @@ type
     property Path: string read FPath write FPath;
   end;
 
+  TDelphiSymbolsParams = class(TDelphiFileParams)
+  private
+    FMode: string;
+    FFilter: string;
+  public
+    [SchemaDescription(SP_SYMBOLS_MODE)]
+    property Mode: string read FMode write FMode;
+    [SchemaDescription(SP_SYMBOLS_FILTER)]
+    property Filter: string read FFilter write FFilter;
+  end;
+
   TDelphiPositionParams = class(TDelphiFileParams)
   private
     FLine: Integer;
@@ -55,9 +66,9 @@ type
     property Kind: string read FKind write FKind;
   end;
 
-  TDelphiSymbolsTool = class(TMCPToolBase<TDelphiFileParams>)
+  TDelphiSymbolsTool = class(TMCPToolBase<TDelphiSymbolsParams>)
   protected
-    function ExecuteWithParams(const Params: TDelphiFileParams): string; override;
+    function ExecuteWithParams(const Params: TDelphiSymbolsParams): string; override;
   public
     constructor Create; override;
   end;
@@ -257,6 +268,189 @@ begin
   end;
 end;
 
+const
+  // LSP SymbolKind 1..26, as short lower-case labels
+  SYMBOL_KIND_NAMES: array[1..26] of string = (
+    'file', 'module', 'namespace', 'package', 'class', 'method', 'property',
+    'field', 'constructor', 'enum', 'interface', 'function', 'variable',
+    'constant', 'string', 'number', 'boolean', 'array', 'object', 'key',
+    'null', 'enum-member', 'struct', 'event', 'operator', 'type-param');
+
+function SymKindName(const ANode: TJSONObject): string;
+var
+  K: Integer;
+begin
+  K := ANode.GetValue<Integer>('kind', 0);
+  if (K >= Low(SYMBOL_KIND_NAMES)) and (K <= High(SYMBOL_KIND_NAMES)) then
+    Result := SYMBOL_KIND_NAMES[K]
+  else
+    Result := 'symbol';
+end;
+
+function SymChildren(const ANode: TJSONObject): TJSONArray;
+var
+  C: TJSONValue;
+begin
+  C := ANode.GetValue('children');
+  if C is TJSONArray then
+    Result := TJSONArray(C)
+  else
+    Result := nil;
+end;
+
+function SymLine(const ANode: TJSONObject): Integer;
+var
+  R, S: TJSONValue;
+begin
+  Result := -1;
+  R := ANode.GetValue('selectionRange');
+  if R = nil then
+    R := ANode.GetValue('range');
+  if R is TJSONObject then
+  begin
+    S := TJSONObject(R).GetValue('start');
+    if S is TJSONObject then
+      Result := TJSONObject(S).GetValue<Integer>('line', -1);
+  end;
+end;
+
+function SymCountDeep(const AArr: TJSONArray): Integer;
+var
+  V: TJSONValue;
+begin
+  Result := 0;
+  if AArr = nil then
+    Exit;
+  for V in AArr do
+    if V is TJSONObject then
+      Result := Result + 1 + SymCountDeep(SymChildren(TJSONObject(V)));
+end;
+
+{ 'function PathDenied(const APath: string): string @40', containers add
+  ' (+N dentro)', a uses clause collapses to 'uses (12 units) @1'. }
+function SymLabel(const ANode: TJSONObject): string;
+var
+  Ch: TJSONArray;
+  Nm: string;
+begin
+  Nm := ANode.GetValue<string>('name', '?');
+  Ch := SymChildren(ANode);
+  if SameText(Nm, 'uses') and (Ch <> nil) then
+    Exit(Format('uses (%d units) @%d', [Ch.Count, SymLine(ANode)]));
+  Result := Format('%s %s @%d', [SymKindName(ANode), Nm, SymLine(ANode)]);
+  if (Ch <> nil) and (Ch.Count > 0) then
+    Result := Result + Format(' (+%d dentro)', [Ch.Count]);
+end;
+
+{ The compact skeleton: each top-level section with its direct members as
+  one-line labels; grandchildren stay as counts. }
+function SummaryOfSymbols(const AArr: TJSONArray; AFullLen: Integer;
+  AAuto: Boolean): string;
+var
+  Ret, SecObj: TJSONObject;
+  Sections, Syms: TJSONArray;
+  V, CV: TJSONValue;
+  N: TJSONObject;
+begin
+  Ret := TJSONObject.Create;
+  try
+    Ret.AddPair('mode', 'summary');
+    Sections := TJSONArray.Create;
+    Ret.AddPair('sections', Sections);
+    for V in AArr do
+    begin
+      if not (V is TJSONObject) then
+        Continue;
+      N := TJSONObject(V);
+      SecObj := TJSONObject.Create;
+      Sections.AddElement(SecObj);
+      SecObj.AddPair('section', N.GetValue<string>('name', '?'));
+      SecObj.AddPair('line', TJSONNumber.Create(SymLine(N)));
+      Syms := TJSONArray.Create;
+      SecObj.AddPair('symbols', Syms);
+      if SymChildren(N) <> nil then
+        for CV in SymChildren(N) do
+          if CV is TJSONObject then
+            Syms.Add(SymLabel(TJSONObject(CV)));
+    end;
+    Ret.AddPair('totalSymbols', TJSONNumber.Create(SymCountDeep(AArr)));
+    if AAuto then
+      Ret.AddPair('autoNote', Format(SN_SYMBOLS_AUTO_FMT, [AFullLen]));
+    Ret.AddPair('note', SN_SYMBOLS_SUMMARY_NOTE);
+    Result := Ret.ToJSON;
+  finally
+    Ret.Free;
+  end;
+end;
+
+{ Name search inside the tree: only what matches, with kind, line and the
+  container it lives in. AFilter arrives lower-case. }
+function FilterSymbols(const AArr: TJSONArray; const AFilter: string): string;
+var
+  Ret: TJSONObject;
+  Hits: TJSONArray;
+  Total: Integer;
+
+  procedure Walk(const Arr: TJSONArray; const APath: string);
+  var
+    V: TJSONValue;
+    N, H: TJSONObject;
+    Nm, Sub: string;
+    Ch: TJSONArray;
+  begin
+    if Arr = nil then
+      Exit;
+    for V in Arr do
+    begin
+      if not (V is TJSONObject) then
+        Continue;
+      N := TJSONObject(V);
+      Nm := N.GetValue<string>('name', '');
+      Ch := SymChildren(N);
+      if Nm.ToLower.Contains(AFilter) then
+      begin
+        Inc(Total);
+        if Hits.Count < 100 then
+        begin
+          H := TJSONObject.Create;
+          Hits.AddElement(H);
+          H.AddPair('name', Nm);
+          H.AddPair('kind', SymKindName(N));
+          H.AddPair('line', TJSONNumber.Create(SymLine(N)));
+          if APath <> '' then
+            H.AddPair('in', APath);
+          if (Ch <> nil) and (Ch.Count > 0) then
+            H.AddPair('members', TJSONNumber.Create(Ch.Count));
+        end;
+      end;
+      if APath = '' then
+        Sub := Nm
+      else
+        Sub := APath + ' > ' + Nm;
+      Walk(Ch, Sub);
+    end;
+  end;
+
+begin
+  Total := 0;
+  Ret := TJSONObject.Create;
+  try
+    Hits := TJSONArray.Create;
+    Ret.AddPair('filter', AFilter);
+    Ret.AddPair('matches', Hits);
+    Walk(AArr, '');
+    Ret.AddPair('total', TJSONNumber.Create(Total));
+    if Total > Hits.Count then
+      Ret.AddPair('truncated', TJSONBool.Create(True));
+    if Total = 0 then
+      Ret.AddPair('note',
+        'sin coincidencias; mode="summary" te da el esqueleto para orientarte');
+    Result := Ret.ToJSON;
+  finally
+    Ret.Free;
+  end;
+end;
+
 { TDelphiSymbolsTool }
 
 constructor TDelphiSymbolsTool.Create;
@@ -265,7 +459,9 @@ begin
   FName := 'delphi_symbols';
   FDescription := 'Document symbol tree of a Delphi unit (classes, methods, ' +
     'properties, sections) with 0-based ranges, straight from the official ' +
-    'DelphiLSP engine. Works even without project settings.';
+    'DelphiLSP engine. Works even without project settings. Big trees come ' +
+    'back as a compact summary by default (mode/filter control it); a ' +
+    'FOLDER answers with the interface digest of every unit inside.';
 end;
 
 { A position nobody could point at. delphi_references said "Line 9999 out of
@@ -460,7 +656,7 @@ begin
     Result.AddPair('truncated', TJSONBool.Create(True));
 end;
 
-function TDelphiSymbolsTool.ExecuteWithParams(const Params: TDelphiFileParams): string;
+function TDelphiSymbolsTool.ExecuteWithParams(const Params: TDelphiSymbolsParams): string;
 var
   Client: TLspClient;
   Settings, Folder: string;
@@ -515,10 +711,35 @@ begin
     Result := Format(SR_LSP_NO_FILE_FMT, [Params.Path]);
   if Result <> '' then
     Exit;
+  var Mode := Params.Mode.Trim.ToLower;
+  if (Mode <> '') and (Mode <> 'summary') and (Mode <> 'full') then
+    Exit('error: mode debe ser "summary", "full" o vacio (automatico).');
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
-  Result := RenderResult(
-    Client.DocumentSymbols(TLspClient.PathToUri(Params.Path)),
-    NoSettingsNote(Settings));
+  var Resp := Client.DocumentSymbols(TLspClient.PathToUri(Params.Path));
+  var Note := NoSettingsNote(Settings);
+  // The full tree of a real unit measured 37.5k chars (hermes, release audit
+  // 2026-08-26): the ranges are the fat, the names are the value. Big trees
+  // now answer with the skeleton unless full is asked for by name.
+  try
+    var Err := Resp.GetValue('error');
+    if Err <> nil then
+      Exit('LSP error: ' + Err.ToJSON + Note);
+    var V := Resp.GetValue('result');
+    if (V = nil) or (V is TJSONNull) then
+      Exit('null' + Note);
+    DecorateLocations(V);
+    if not (V is TJSONArray) then
+      Exit(V.ToJSON + Note);
+    var Filt := Params.Filter.Trim.ToLower;
+    if Filt <> '' then
+      Exit(FilterSymbols(TJSONArray(V), Filt) + Note);
+    var Full := V.ToJSON;
+    if (Mode = 'full') or ((Mode = '') and (Length(Full) <= 6000)) then
+      Exit(Full + Note);
+    Result := SummaryOfSymbols(TJSONArray(V), Length(Full), Mode = '') + Note;
+  finally
+    Resp.Free;
+  end;
 end;
 
 { TDelphiDefinitionTool }

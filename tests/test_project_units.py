@@ -158,7 +158,7 @@ i_cli = dpr.index('CreateForm(TFormUClientes')
 check('create form: CreateForm despues del form principal', i_main < i_cli, dpr)
 
 # ---- view lists units ----
-out = call('delphi_config', {"project": DPROJ})
+out = call('delphi_config', {"project": DPROJ, "section": "units"})
 try:
     d = json.loads(out)
     units = {u['unit']: u for u in d.get('units', [])}
