@@ -30,6 +30,14 @@ uses
 type
   ELspSession = class(Exception);
 
+  { What ResolveSettings answered for a directory, plus the file that
+    justified the answer and its disk stamp: while that file is unchanged the
+    walk (directory scans + settings fabrication) is skipped entirely
+    (hermes, release audit 2026-08-26, P1.6). }
+  TSettingsEntry = record
+    Settings, RootDir, SourceFile, SourceStamp: string;
+  end;
+
   TLspSession = class
   private
     class var FInstance: TLspSession;
@@ -45,7 +53,10 @@ type
     // always see the CURRENT disk truth, e.g. after a delphi_edit).
     FDocStamps: TDictionary<string, string>;
     FLspExe: string;
+    FSettingsCache: TDictionary<string, TSettingsEntry>;
     function EnsureExe: string;
+    function ResolveSettingsWalk(const AFilePath: string;
+      out ARootDir, ASource: string): string;
     function CreateClient(const ARootDir, ASettingsFile: string;
       AServerType: TLspServerType): TLspClient;
     function GetClient(const AFullPath: string; ALinter: Boolean;
@@ -104,6 +115,7 @@ constructor TLspSession.Create;
 begin
   inherited;
   FLock := TCriticalSection.Create;
+  FSettingsCache := TDictionary<string, TSettingsEntry>.Create;
   FClients := TObjectDictionary<string, TLspClient>.Create([doOwnsValues]);
   FDocVersions := TDictionary<string, Integer>.Create;
   FDocStamps := TDictionary<string, string>.Create;
@@ -116,6 +128,7 @@ begin
   FDocVersions.Free;
   FDocStamps.Free;
   FLintText.Free;
+  FSettingsCache.Free;
   FLock.Free;
   inherited;
 end;
@@ -225,29 +238,72 @@ begin
   end;
 end;
 
-function TLspSession.ResolveSettings(const AFilePath: string;
-  out ARootDir: string): string;
+function TLspSession.ResolveSettingsWalk(const AFilePath: string;
+  out ARootDir, ASource: string): string;
 var
   Info: TRadStudioInfo;
   Dproj: string;
 begin
+  ASource := '';
   Info := DiscoverRadStudio;
   Result := FindSettingsFile(AFilePath);
   if (Result <> '') and not IsSettingsStale(Result, Info) then
   begin
     ARootDir := TPath.GetDirectoryName(Result);
+    ASource := Result;
     Exit; // fresh IDE-generated settings: best possible source
   end;
   Dproj := FindDproj(AFilePath);
   if Dproj <> '' then
   begin
     ARootDir := TPath.GetDirectoryName(TPath.GetFullPath(Dproj));
+    ASource := TPath.GetFullPath(Dproj);
     Exit(FabricateSettings(Dproj, Info));
   end;
   // No .dproj anywhere: a stale settings file is worse than none (its paths
   // point at machines/drives gone by), so fall back to unconfigured.
   ARootDir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
   Result := '';
+end;
+
+function TLspSession.ResolveSettings(const AFilePath: string;
+  out ARootDir: string): string;
+var
+  Dir, Src: string;
+  E: TSettingsEntry;
+begin
+  // Cached per directory, invalidated by the stamp of the file that decided
+  // the answer (.delphilsp.json or .dproj): editing search paths touches the
+  // .dproj, which changes the stamp, which re-fabricates. The no-source case
+  // is never cached - a project file could appear at any moment.
+  Dir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath)).ToLower;
+  FLock.Enter;
+  try
+    if FSettingsCache.TryGetValue(Dir, E) and (E.SourceFile <> '') and
+       (DiskStamp(E.SourceFile) = E.SourceStamp) then
+    begin
+      ARootDir := E.RootDir;
+      Exit(E.Settings);
+    end;
+  finally
+    FLock.Leave;
+  end;
+  Result := ResolveSettingsWalk(AFilePath, ARootDir, Src);
+  if Src <> '' then
+  begin
+    E.Settings := Result;
+    E.RootDir := ARootDir;
+    E.SourceFile := Src;
+    E.SourceStamp := DiskStamp(Src);
+    FLock.Enter;
+    try
+      if FSettingsCache.Count > 256 then
+        FSettingsCache.Clear; // tiny map of project dirs; a clear is fine
+      FSettingsCache.AddOrSetValue(Dir, E);
+    finally
+      FLock.Leave;
+    end;
+  end;
 end;
 
 function TLspSession.CreateClient(const ARootDir, ASettingsFile: string;
@@ -285,14 +341,35 @@ begin
   else
     AClientKey := Prefix[ALinter] + '(nosettings)' + ARootDir.ToLower;
 
-  if not FClients.TryGetValue(AClientKey, Result) then
-  begin
-    if ALinter then
-      Result := CreateClient(ARootDir, ASettingsUsed, lstLinter)
-    else
-      Result := CreateClient(ARootDir, ASettingsUsed, lstAgent);
-    FClients.Add(AClientKey, Result);
+  // Fast path under the lock; the SLOW path (spawn DelphiLSP + initialize +
+  // settings load, seconds) runs UNLOCKED, so warming one project no longer
+  // stalls every other agent's LSP call server-wide (hermes, release audit
+  // 2026-08-26, P1.6 - the lock used to be held across those sleeps). Two
+  // racers may both build a client for the same key; the loser's is retired.
+  FLock.Enter;
+  try
+    if FClients.TryGetValue(AClientKey, Result) then
+      Exit;
+  finally
+    FLock.Leave;
   end;
+  var Fresh: TLspClient;
+  if ALinter then
+    Fresh := CreateClient(ARootDir, ASettingsUsed, lstLinter)
+  else
+    Fresh := CreateClient(ARootDir, ASettingsUsed, lstAgent);
+  FLock.Enter;
+  try
+    if not FClients.TryGetValue(AClientKey, Result) then
+    begin
+      FClients.Add(AClientKey, Fresh);
+      Exit(Fresh);
+    end;
+    // lost the race: the winner's client is already public
+  finally
+    FLock.Leave;
+  end;
+  Fresh.Free;
 end;
 
 function TLspSession.AcquireFor(const AFilePath: string;
@@ -307,18 +384,19 @@ begin
   if not FileExists(FullPath) then
     raise ELspSession.CreateFmt('File not found: %s', [AFilePath]);
 
+  Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
+  DocKey := Key + '|' + FullPath.ToLower;
+  var Stamp := DiskStamp(FullPath);
+  var Old := '';
+  var HeadStart := False;
   FLock.Enter;
   try
-    Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
-    DocKey := Key + '|' + FullPath.ToLower;
-    var Stamp := DiskStamp(FullPath);
-    var Old := '';
     if not FDocVersions.ContainsKey(DocKey) then
     begin
       Result.DidOpenFile(FullPath);
       FDocVersions.Add(DocKey, 1);
       FDocStamps.AddOrSetValue(DocKey, Stamp);
-      Sleep(500); // brief head start for indexing; retries cover the rest
+      HeadStart := True;
     end
     else if FDocStamps.TryGetValue(DocKey, Old) and (Old <> Stamp) then
     begin
@@ -330,11 +408,16 @@ begin
       Result.DidChangeText(TLspClient.PathToUri(FullPath),
         TLspClient.LoadSourceText(FullPath), Version);
       FDocStamps[DocKey] := Stamp;
-      Sleep(500); // brief head start for re-indexing
+      HeadStart := True;
     end;
   finally
     FLock.Leave;
   end;
+  // The indexing head start sleeps OUTSIDE the lock: it buys answer quality
+  // for THIS caller's first question and must not stall everyone else
+  // (retries on -32800 cover whatever 500ms does not).
+  if HeadStart then
+    Sleep(500);
 end;
 
 function TLspSession.LintFile(const AFilePath: string; ATimeoutMs: Integer;
@@ -354,12 +437,12 @@ begin
   if not FileExists(FullPath) then
     raise ELspSession.CreateFmt('File not found: %s', [AFilePath]);
 
+  Client := GetClient(FullPath, True, ASettingsUsed, Key, RootDir);
+  Uri := TLspClient.PathToUri(FullPath);
+  Text := TLspClient.LoadSourceText(FullPath);
+  DocKey := Key + '|' + FullPath.ToLower;
   FLock.Enter;
   try
-    Client := GetClient(FullPath, True, ASettingsUsed, Key, RootDir);
-    Uri := TLspClient.PathToUri(FullPath);
-    Text := TLspClient.LoadSourceText(FullPath);
-    DocKey := Key + '|' + FullPath.ToLower;
 
     // A retry on the SAME text (the client timed out before a slow lint
     // finished) must not restart the lint: the LSP is still working, or the

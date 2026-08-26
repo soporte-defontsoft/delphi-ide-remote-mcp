@@ -8,6 +8,31 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.82.0-beta] - 2026-08-26
+
+Hermes' P1.6: the LSP session lifecycle. The global session lock was held
+across the SLOW parts - spawning DelphiLSP + initialize + the settings-load
+sleep (seconds), plus the 500ms indexing head starts - so one agent warming
+one project stalled every other agent's LSP call server-wide.
+
+### Changed
+- **Client creation runs unlocked** (double-checked): the lock now only
+  guards the dictionaries. Two racers may both build a client for the same
+  project; the loser's is retired - rare and cheap next to a server-wide
+  stall. Battery: warming two different projects concurrently is parallel,
+  not serial (tests/test_round19.py L1).
+- **Head-start sleeps moved outside the lock**: they buy answer quality for
+  the caller's first question and no longer stall anyone else (`-32800`
+  retries cover the rest, as they always did).
+- **Settings/dproj resolution cached** per directory, invalidated by the
+  stamp of the file that decided the answer (.delphilsp.json or .dproj):
+  the walk (directory scans + settings fabrication) no longer re-runs on
+  every call. Editing search paths touches the .dproj, which changes the
+  stamp, which re-fabricates (battery L2). The "no source found" case is
+  never cached - a project file could appear at any moment.
+- **Per-client notification queue bounded** (200, oldest dropped first):
+  diagnostics nobody collects used to accumulate for the life of the client.
+
 ## [0.81.0-beta] - 2026-08-26
 
 Hermes' P1.7. Post-release-candidate work: v0.80.0-beta stays the frozen

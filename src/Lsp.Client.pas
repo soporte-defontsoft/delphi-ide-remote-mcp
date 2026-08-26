@@ -184,6 +184,11 @@ begin
     // Notification.
     FLock.Enter;
     try
+      // Bounded: diagnostics nobody ever collects used to pile up for
+      // the life of the client (hermes, release audit 2026-08-26, P1.6).
+      // 200 is far above any real burst; the oldest go first.
+      while FNotifications.Count >= 200 do
+        FNotifications.Delete(0);
       FNotifications.Add(Msg.Clone as TJSONObject);
     finally
       FLock.Leave;
