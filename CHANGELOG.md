@@ -8,6 +8,13 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Tests
+- New `tests/test_docs_static.py` (hermes' P2.10): the docs gate that needs
+  NO built executable - tool census from docs/CAPABILITIES.json, README/
+  TOOLS.md figures, CHANGELOG-head == SERVER_VERSION, and tests/ compiling
+  without SyntaxWarnings. Runs on a bare Linux CI box; the live battery
+  (test_docs_consistency.py) keeps proving the manifest matches the runtime.
+
 ## [0.85.0-beta] - 2026-08-26
 
 Hermes' P2.8: concurrent remote-run names.
