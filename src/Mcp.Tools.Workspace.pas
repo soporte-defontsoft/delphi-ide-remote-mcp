@@ -39,10 +39,10 @@ type
     [SchemaDescription('Literal text to find (case-insensitive - it is Pascal)')]
     [Required]
     property Query: string read FQuery write FQuery;
-    [SchemaDescription('Maximum hits to return (default 100, cap 500)')]
+    [SchemaDescription('Maximum hits to return PER PAGE (default 100, cap 500 PER PAGE - it is not a global limit: the offset walk covers the FULL hit list)')]
     [SchemaDefault('100')]
     property MaxResults: Integer read FMaxResults write FMaxResults;
-    [SchemaDescription('Skip the first N matches - pagination: pass the nextOffset of the previous call to get the next page')]
+    [SchemaDescription('Skip the first N matches of the FULL hit list (not of the current page) - pagination: pass the nextOffset of the previous answer to get the next page; walking nextOffset until hasMore=false reaches every hit, however many')]
     [SchemaDefault('0')]
     property Offset: Integer read FOffset write FOffset;
     [SchemaDescription('true = match whole identifiers only (word boundaries)')]

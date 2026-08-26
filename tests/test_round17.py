@@ -172,6 +172,15 @@ check('R6 fetch.maxbytes ABRE con el aviso de que <=1MB fuerza base64',
       prop('delphi_fetch', 'maxbytes').get('description', '').startswith('OJO'),
       prop('delphi_fetch', 'maxbytes').get('description', '')[:120])
 
+# v0.80 - blind rerun S10: "cap 500" read as a GLOBAL limit. Per page, and
+# offset walks the full hit list.
+check('R6b search.maxresults dice PER PAGE, no tope global',
+      'PER PAGE' in prop('delphi_search', 'maxresults').get('description', ''),
+      prop('delphi_search', 'maxresults').get('description', '')[:120])
+check('R6b search.offset dice que recorre la lista COMPLETA',
+      'FULL hit list' in prop('delphi_search', 'offset').get('description', ''),
+      prop('delphi_search', 'offset').get('description', '')[:120])
+
 # R7 (v0.79): package hands the exact next call - a model invented the zip
 # name when it was prose (hermes' blind eval).
 sub = os.path.join(BASE, 'paquete')

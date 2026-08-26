@@ -8,6 +8,19 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.80.0-beta] - 2026-08-26
+
+Hermes' blind rerun over v0.79 confirmed both target patterns fixed 3/3
+(Linux64 build without profile; big download without base64 - nobody invented
+the zip name either). One real clarity friction remained: `delphi_search`'s
+"cap 500" read as a GLOBAL limit, so a model declared >500 hits unreachable.
+
+### Changed
+- `delphi_search.maxresults` now says the cap is PER PAGE, not a global limit;
+  `offset` says it walks the FULL hit list (pass `nextOffset` until
+  `hasMore=false` to reach every hit, however many). Hermes' two lines,
+  almost verbatim. Battery pins both texts (round17 R6b).
+
 ## [0.79.0-beta] - 2026-08-26
 
 Hermes' blind clarity evaluation: three small models solved 10 tasks from the
