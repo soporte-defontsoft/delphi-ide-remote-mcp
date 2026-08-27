@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.87.0-beta] - 2026-08-27
+
+The first EXTERNAL user issue (GitHub #1, thanks @limelect) - and the release
+candidate for the first public release.
+
+### Fixed
+- **Win32 builds of the server itself compile again**: the job-object memory
+  limit was written as `NativeUInt(3) * 1024 * 1024 * 1024`, which overflows
+  dcc32's SIGNED 32-bit constant evaluation (E2099 at Lsp.BuildRunner, the
+  F2063 after it is cascade) even though 3 GB fits an unsigned 32-bit value.
+  Now a plain hex constant, `NativeUInt($C0000000)` - same limit on both
+  platforms. Verified by real compiles: Win32 Debug (the reporter's exact
+  config), Win32 Release and Win64 Release.
+
 ## [0.86.0-beta] - 2026-08-26
 
 The last open bug from the field: sweep10's "Linux64 outputTail collapses
@@ -25,6 +39,14 @@ one tail) before touching the security masker.
   genuine UNC host still disappears, drive letters still mask, and - on
   machines holding the Linux64 SDK - a real link's outputTail is verified
   clean end to end.
+
+### Release engineering
+- The Windows exe now EMBEDS its VERSIONINFO (it carried none; the .dproj
+  still said 0.2.0.0 from the project's first week - hermes' P0.2 finding)
+  and it tracks SERVER_VERSION. New `tests/release_check.py`: one command
+  that verifies SERVER_VERSION == CHANGELOG == .dproj == built exe ==
+  CAPABILITIES, runs the full regression, packages the win64 zip and prints
+  its SHA-256 (also written to release-out/release-check.json).
 
 ### Tests
 - New `tests/test_docs_static.py` (hermes' P2.10): the docs gate that needs

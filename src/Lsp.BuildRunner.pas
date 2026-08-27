@@ -136,7 +136,11 @@ begin
     JOB_OBJECT_LIMIT_ACTIVE_PROCESS or
     JOB_OBJECT_LIMIT_PROCESS_MEMORY;
   Ext.BasicLimitInformation.ActiveProcessLimit := 128;
-  Ext.ProcessMemoryLimit := NativeUInt(3) * 1024 * 1024 * 1024; // 3 GB/process
+  // 3 GB/process as a plain hex constant: the arithmetic form
+  // NativeUInt(3)*1024*1024*1024 overflowed dcc32's SIGNED 32-bit constant
+  // evaluation (E2099) even though $C0000000 fits NativeUInt fine - the
+  // first external user issue (GitHub #1, limelect, Delphi 13 Win32 Debug).
+  Ext.ProcessMemoryLimit := NativeUInt($C0000000);
   SetInformationJobObject(Result, JobObjectExtendedLimitInformation, @Ext, SizeOf(Ext));
   Ui.UIRestrictionsClass := JOB_OBJECT_UILIMIT_EXITWINDOWS or
     JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS or JOB_OBJECT_UILIMIT_DISPLAYSETTINGS;

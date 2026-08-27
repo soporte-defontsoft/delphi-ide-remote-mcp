@@ -47,3 +47,4 @@ __delphi-patch/
 
 __pycache__/
 *.pyc
+release-out/
