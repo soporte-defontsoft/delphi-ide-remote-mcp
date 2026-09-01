@@ -43,6 +43,29 @@ function ReadPathDenied(const APath: string): string;
 { The configured roots (empty array = unrestricted). }
 function WorkspaceRoots: TArray<string>;
 
+{ Bearer authorization - the ONE place that knows every credential: the
+  global pair, AnonymousReadOnly, and the per-workspace tokens from
+  [Workspace.<name>] sections (Token= read-write inside its Roots,
+  ReadOnlyToken= read-only inside its Roots). True = allowed; AReadOnly and
+  AWorkspaceIx (-1 = every root, the operator) describe the scope the request
+  gets. A workspace whose Roots failed to parse admits NOBODY (fail closed).
+  Workspaces may OVERLAP - one can hold a whole tree and another a subfolder
+  of it: each token's jail is the union of ITS OWN roots and nothing is ever
+  subtracted for belonging to another workspace too. }
+function AuthorizeBearer(const AAuth: string; out AReadOnly: Boolean;
+  out AWorkspaceIx: Integer): Boolean;
+
+{ Scopes THIS worker thread to a workspace (-1 = none: operator/stdio).
+  Worker threads are reused, so the host calls this on EVERY request. }
+procedure SetRequestWorkspace(AIx: Integer);
+
+{ The active workspace's name ('' = none) - for delphi_workspace and logs. }
+function CurrentWorkspaceName: string;
+
+{ True when any [Workspace.*] token is configured (counts as a credential
+  for the fail-safe bind decision). }
+function WorkspaceTokensConfigured: Boolean;
+
 { One-line human summary of the WRITE jail for the startup log (the single
   source of how the jail is described). AWarning is set when the state
   deserves a warning level: no jail at all (unrestricted) or fail-closed
@@ -299,6 +322,14 @@ uses
   Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
   Lsp.Texts;
 
+type
+  { A token-scoped sandbox from a [Workspace.<name>] section. }
+  TWorkspaceDef = record
+    Name, Token, ReadOnlyToken, Profile: string;
+    Roots: TArray<string>;
+    Invalid: Boolean; // Roots= had text but nothing parsed: fail closed
+  end;
+
 var
   GLoaded: Boolean = False;
   GRoots: TArray<string>;
@@ -325,12 +356,111 @@ var
   GToolsProfile: string = 'full';
   GToolsOnly: TArray<string>;
   GSharedFolders: TArray<string>;     // subfolders any agent may write (opt-in)
+  GWorkspaces: TArray<TWorkspaceDef>; // [Workspace.*]: token -> its own jail
   GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
   GAdbDevicesSet: Boolean = False;  // configured at all? absent = unrestricted
 
 threadvar
   TCurrentAgent: string; // WHO is calling on THIS thread (the HTTP request)
   GRequestReadOnly: Boolean;
+  TWorkspaceIx1: Integer; // active workspace index + 1; 0 = none (threadvars zero-init)
+
+{ 'a;b;c' -> resolved roots with trailing delimiter; quotes tolerated,
+  unparseable entries ignored. Shared by the global Roots= and every
+  [Workspace.*] Roots=. }
+function ParseRootsList(const ARaw: string): TArray<string>;
+var
+  List: TStringList;
+  R: string;
+begin
+  List := TStringList.Create;
+  try
+    for R in ARaw.Split([';']) do
+      if R.Trim.Trim(['"']).Trim <> '' then
+      try
+        List.Add(IncludeTrailingPathDelimiter(
+          TPath.GetFullPath(R.Trim.Trim(['"']).Trim)));
+      except
+        // an unparseable root is ignored, never crashes the server
+      end;
+    Result := List.ToStringArray;
+  finally
+    List.Free;
+  end;
+end;
+
+procedure SetRequestWorkspace(AIx: Integer);
+begin
+  TWorkspaceIx1 := AIx + 1;
+end;
+
+function CurrentWorkspaceName: string;
+begin
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Result := GWorkspaces[TWorkspaceIx1 - 1].Name
+  else
+    Result := '';
+end;
+
+function WorkspaceTokensConfigured: Boolean;
+var
+  W: TWorkspaceDef;
+begin
+  for W in GWorkspaces do
+    if (W.Token <> '') or (W.ReadOnlyToken <> '') then
+      Exit(True);
+  Result := False;
+end;
+
+function AuthorizeBearer(const AAuth: string; out AReadOnly: Boolean;
+  out AWorkspaceIx: Integer): Boolean;
+var
+  I: Integer;
+begin
+  AReadOnly := False;
+  AWorkspaceIx := -1;
+  // no credential of any kind configured: open local trusted mode, as always
+  if (GAuthToken = '') and (GReadOnlyToken = '') and
+     not WorkspaceTokensConfigured then
+  begin
+    AReadOnly := GAnonymousReadOnly;
+    Exit(True);
+  end;
+  // the operator's global pair: every root
+  if (GAuthToken <> '') and (AAuth = 'Bearer ' + GAuthToken) then
+    Exit(True);
+  if (GReadOnlyToken <> '') and (AAuth = 'Bearer ' + GReadOnlyToken) then
+  begin
+    AReadOnly := True;
+    Exit(True);
+  end;
+  // workspace tokens: the secret decides the jail, not the declared name
+  for I := 0 to High(GWorkspaces) do
+  begin
+    // fail closed: a workspace without a valid jail admits nobody
+    if GWorkspaces[I].Invalid or (Length(GWorkspaces[I].Roots) = 0) then
+      Continue;
+    if (GWorkspaces[I].Token <> '') and
+       (AAuth = 'Bearer ' + GWorkspaces[I].Token) then
+    begin
+      AWorkspaceIx := I;
+      Exit(True);
+    end;
+    if (GWorkspaces[I].ReadOnlyToken <> '') and
+       (AAuth = 'Bearer ' + GWorkspaces[I].ReadOnlyToken) then
+    begin
+      AWorkspaceIx := I;
+      AReadOnly := True;
+      Exit(True);
+    end;
+  end;
+  if GAnonymousReadOnly and (AAuth = '') then
+  begin
+    AReadOnly := True;
+    Exit(True);
+  end;
+  Result := False;
+end;
 
 procedure SetProcessReadOnly(AValue: Boolean);
 begin
@@ -422,6 +552,28 @@ begin
       if Length(GSharedFolders) = 0 then
         GSharedFolders := LowerCase(Ini.ReadString('Security', 'SharedFolders', ''))
           .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+      // [Workspace.<name>] sections: token-scoped sandboxes. Parsed once,
+      // here, so AuthorizeBearer never touches the disk per request.
+      var Secs := TStringList.Create;
+      try
+        Ini.ReadSections(Secs);
+        for var S in Secs do
+          if S.StartsWith('Workspace.', True) and (S.Length > Length('Workspace.')) then
+          begin
+            var W: TWorkspaceDef;
+            W.Name := S.Substring(Length('Workspace.')).Trim;
+            W.Token := Ini.ReadString(S, 'Token', '').Trim;
+            W.ReadOnlyToken := Ini.ReadString(S, 'ReadOnlyToken', '').Trim;
+            W.Profile := LowerCase(Ini.ReadString(S, 'Profile', '').Trim);
+            var RawRoots := Ini.ReadString(S, 'Roots', '');
+            W.Roots := ParseRootsList(RawRoots);
+            W.Invalid := (RawRoots.Trim <> '') and (Length(W.Roots) = 0);
+            if (W.Token <> '') or (W.ReadOnlyToken <> '') then
+              GWorkspaces := GWorkspaces + [W];
+          end;
+      finally
+        Secs.Free;
+      end;
       if not GAdbDevicesSet then
         ParseAdbDevices(Ini.ReadString('Adb', 'AllowedDevices', ''));
     finally
@@ -1344,10 +1496,16 @@ end;
 
 function WorkspaceRoots: TArray<string>;
 var
-  Raw, IniPath, R: string;
+  Raw, IniPath: string;
   Ini: TIniFile;
-  List: TStringList;
 begin
+  // A token-scoped session sees ITS workspace's roots as the whole world:
+  // every jail check, listing and scan downstream of this ONE function
+  // inherits the boundary. Overlap is deliberate and never subtracts - the
+  // wide workspace still sees a subtree that is also some other workspace's
+  // root (operator decision 2026-08-28, v0.88).
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].Roots);
   if not GLoaded then
   begin
     Raw := GetEnvironmentVariable('DELPHI_MCP_ROOTS');
@@ -1364,26 +1522,12 @@ begin
         end;
       end;
     end;
-    List := TStringList.Create;
-    try
-      for R in Raw.Split([';']) do
-        // Quotes around a root (Roots="D:\My Projects") are a natural way to
-        // write paths with spaces: tolerated and stripped. Spaces themselves
-        // need no quoting (the separator is ';').
-        if R.Trim.Trim(['"']).Trim <> '' then
-        try
-          List.Add(IncludeTrailingPathDelimiter(
-            TPath.GetFullPath(R.Trim.Trim(['"']).Trim)));
-        except
-          // an unparseable root is ignored, never crashes the server
-        end;
-      GRoots := List.ToStringArray;
-      // Fail CLOSED: if Roots was configured but nothing parsed, a typo must
-      // never silently leave the server unrestricted.
-      GRootsInvalid := (Raw.Trim <> '') and (Length(GRoots) = 0);
-    finally
-      List.Free;
-    end;
+    // Quotes around a root (Roots="D:\My Projects") are tolerated; see
+    // ParseRootsList (shared with the [Workspace.*] sections).
+    GRoots := ParseRootsList(Raw);
+    // Fail CLOSED: if Roots was configured but nothing parsed, a typo must
+    // never silently leave the server unrestricted.
+    GRootsInvalid := (Raw.Trim <> '') and (Length(GRoots) = 0);
     GLoaded := True;
   end;
   Result := GRoots;
@@ -2033,16 +2177,21 @@ const
   DEPLOY_ONLY: array [0 .. 2] of string = ('delphi_adb', 'delphi_paserver',
     'delphi_package');
 var
-  N: string;
+  N, Prof: string;
 begin
   N := AToolName.Trim.ToLower;
   if MatchText(N, ALWAYS) then
     Exit(False);
   if Length(GToolsOnly) > 0 then
     Exit(not MatchText(N, GToolsOnly));
-  if GToolsProfile = 'reader' then
+  // a workspace may carry its own profile; it wins over the global one
+  Prof := GToolsProfile;
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
+     (GWorkspaces[TWorkspaceIx1 - 1].Profile <> '') then
+    Prof := GWorkspaces[TWorkspaceIx1 - 1].Profile;
+  if Prof = 'reader' then
     Exit(not MatchText(N, READER));
-  if GToolsProfile = 'coder' then
+  if Prof = 'coder' then
     Exit(MatchText(N, DEPLOY_ONLY));
   Result := False; // full, or an unknown profile name: hide nothing
 end;

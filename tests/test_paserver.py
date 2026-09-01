@@ -197,35 +197,43 @@ out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1", "port": DEAD_PORT,
                                    "password": PROF_PASSWORD, "platform": "Linux64"},
                t=60)
-try:
-    d = json.loads(out)
-    check('add-profile: responde JSON con profile/platform',
-          d.get('profile') == PROF_NAME and d.get('platform') == 'Linux64', out[:250])
-    check('add-profile: note guia el siguiente paso', 'test-connection' in d.get('note', ''), out[:250])
-except Exception:
-    check('add-profile: parsea', False, out[:300])
+# With the IDE open on the server, paclient CANNOT save profiles (W0013 with
+# exit 0; the server now answers a clear refusal naming bds.exe). A human may
+# be working - the whole profile-dependent block degrades to SKIP.
+ide_open = 'bds.exe' in out
+if ide_open:
+    print('SKIP bloque de perfil real: el IDE esta abierto en este servidor '
+          '(paclient no puede guardar perfiles; el server lo explica)')
+if not ide_open:
+    try:
+        d = json.loads(out)
+        check('add-profile: responde JSON con profile/platform',
+              d.get('profile') == PROF_NAME and d.get('platform') == 'Linux64', out[:250])
+        check('add-profile: note guia el siguiente paso', 'test-connection' in d.get('note', ''), out[:250])
+    except Exception:
+        check('add-profile: parsea', False, out[:300])
 
-files = profile_files()
-check('add-profile: el .profile existe en APPDATA', len(files) == 1, files)
-if files:
-    content = open(files[0], encoding='utf-8-sig').read()
-    check('add-profile: password CIFRADA (no plaintext)',
-          PROF_PASSWORD not in content and 'Profile_password' in content, content[:300])
-    check('add-profile: host y puerto en el perfil',
-          '127.0.0.1' in content and DEAD_PORT in content, content[:300])
+    files = profile_files()
+    check('add-profile: el .profile existe en APPDATA', len(files) == 1, files)
+    if files:
+        content = open(files[0], encoding='utf-8-sig').read()
+        check('add-profile: password CIFRADA (no plaintext)',
+              PROF_PASSWORD not in content and 'Profile_password' in content, content[:300])
+        check('add-profile: host y puerto en el perfil',
+              '127.0.0.1' in content and DEAD_PORT in content, content[:300])
 
-# --- profiles now lists it ---
-out = srv.call('delphi_paserver', {"command": "profiles"})
-check('profiles: lista el perfil nuevo', PROF_NAME in out, out[:200])
+    # --- profiles now lists it ---
+    out = srv.call('delphi_paserver', {"command": "profiles"})
+    check('profiles: lista el perfil nuevo', PROF_NAME in out, out[:200])
 
-# --- test-connection with profile: dead port -> connected false, E0003 ---
-out = srv.call('delphi_paserver', {"command": "test-connection", "name": PROF_NAME}, t=90)
-try:
-    d = json.loads(out)
-    check('test-connection perfil muerto: connected=false', d.get('connected') is False, out[:250])
-    check('test-connection: trae el output de paclient', 'E0003' in d.get('paclientOutput', ''), out[:300])
-except Exception:
-    check('test-connection: parsea', False, out[:300])
+    # --- test-connection with profile: dead port -> connected false, E0003 ---
+    out = srv.call('delphi_paserver', {"command": "test-connection", "name": PROF_NAME}, t=90)
+    try:
+        d = json.loads(out)
+        check('test-connection perfil muerto: connected=false', d.get('connected') is False, out[:250])
+        check('test-connection: trae el output de paclient', 'E0003' in d.get('paclientOutput', ''), out[:300])
+    except Exception:
+        check('test-connection: parsea', False, out[:300])
 
 # --- test-connection with unknown profile ---
 out = srv.call('delphi_paserver', {"command": "test-connection", "name": "no-such-profile"})

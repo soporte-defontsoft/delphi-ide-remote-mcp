@@ -156,8 +156,11 @@ B = spawn({'DELPHI_MCP_REMOTE_HOSTS': '198.51.100.9'})
 r = call(B, 'delphi_paserver', {'command': 'add-profile', 'name': 'r11probe',
                                 'host': '198.51.100.9', 'port': '64211',
                                 'password': 'x', 'platform': 'Linux64'}, t=300)
-created = 'RECHAZADO' not in r
-check('S2 con el host permitido, el perfil SI se crea', created, r[:250])
+# with the IDE open on the server, paclient cannot save profiles (W0013,
+# now answered as a clear refusal): tolerate it - a human may be working
+created = ('RECHAZADO' not in r) and ('W0013' not in r) and ('bds.exe' not in r)
+check('S2 con el host permitido, el perfil SI se crea (o el IDE abierto se explica)',
+      created or 'bds.exe' in r, r[:250])
 if created:
     r = call(B, 'delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
     check('S3 y se puede volver a borrar desde aqui', 'BORRADO' in r, r[:200])

@@ -8,6 +8,42 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.88.0-beta] - 2026-08-28
+
+Token-scoped workspaces: the SECRET decides the jail, not the self-declared
+agent name (operator decision, 2026-08-28).
+
+### Added
+- **`[Workspace.<name>]` sections in settings.ini**: each defines a sandbox
+  with its own `Token=` (read-write inside its `Roots=`), optional
+  `ReadOnlyToken=` (read-only reviewer credential for that space) and
+  optional `Profile=` (per-token tools/list trim, reusing v0.83's profiles).
+  HARD boundary: other workspaces' roots are not even READABLE (the shared
+  read-only library zone stays available). The global `AuthToken` remains
+  the operator - every root, unchanged - and `AgentConfinement` still
+  subdivides INSIDE a workspace. A workspace whose Roots fail to parse
+  admits NOBODY (fail closed), and workspace tokens count as credentials
+  for the fail-safe bind decision.
+- **Overlap is deliberate and never subtracts**: one workspace can hold a
+  whole tree and another just a third-level subfolder of the same tree; each
+  token's jail is the union of its OWN roots. The wide token still sees the
+  subfolder; the narrow one never leaves it. Pinned by battery with exactly
+  that shape (tests/test_round23.py, 15 checks).
+- Architecture: authorization now lives in ONE place (`AuthorizeBearer` in
+  Lsp.Guard, delegated from the HTTP gate via a new `OnAuthorize` hook), and
+  the session scope flows through the single `WorkspaceRoots` source - every
+  jail check, listing and scan inherits the boundary with no per-tool code.
+
+### Fixed
+- **`add-profile` with the IDE open now refuses clearly**: paclient answers
+  exit 0 + "W0013 Cannot save profile while bds.exe is running ... ignored"
+  and saves NOTHING - the caller believed the profile existed and chased a
+  ghost (measured live, the operator was working in the IDE). The tool now
+  names the real cause and the real fix. Batteries degrade to SKIP for the
+  profile-dependent block when the IDE is open on the test machine.
+- tests/test_round15.py made load-proof: client-side barrier plus fattened
+  projects (~100k lines) so the build overlap is guaranteed by construction.
+
 ## [0.87.0-beta] - 2026-08-27
 
 The first EXTERNAL user issue (GitHub #1, thanks @limelect) - and the release

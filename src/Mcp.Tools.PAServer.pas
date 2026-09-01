@@ -403,6 +403,13 @@ begin
       Return.Free;
     end;
   end
+  else if Output.Contains('W0013') then
+    // paclient LIES here: exit 0 + "Cannot save profile while bds.exe process
+    // is running ... ignored" and no profile on disk. Measured live
+    // 2026-08-28 (the operator had the IDE open): the caller believed the
+    // profile existed and every later call chased a ghost. Name the real
+    // cause and the real fix.
+    Result := SR_PASERVER_IDE_OPEN
   else
     // paclient's output never carries the password (it echoes it encrypted).
     Result := 'error: paclient exit ' + IntToStr(ExitCode) + ': ' + Output.Trim;

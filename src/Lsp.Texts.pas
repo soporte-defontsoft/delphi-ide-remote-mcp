@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.87.0-beta';
+  SERVER_VERSION = '0.88.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -2017,6 +2017,13 @@ const
     'esta tool. OJO: delphi_test ejecuta Win64 por defecto, asi que si vas a ' +
     'pasar los tests despues, compila Win64 (platform=Win64) o dejale a ' +
     'delphi_test que compile el solo.';
+
+  SR_PASERVER_IDE_OPEN =
+    'RECHAZADO: el IDE (bds.exe) esta ABIERTO en el servidor y paclient no ' +
+    'puede guardar perfiles mientras tanto (avisa W0013 pero sale con exit ' +
+    '0 y NO guarda nada). El perfil NO se ha creado. Reintenta cuando el ' +
+    'operador cierre el IDE, o pidele que cree el perfil desde el propio ' +
+    'IDE. Yo NO cierro el IDE: puede haber alguien trabajando con el.';
 
   SN_BUILD_QUEUED =
     'Este build ha esperado su turno: el servidor compila DE UNO EN UNO ' +

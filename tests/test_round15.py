@@ -143,11 +143,36 @@ try:
     dprojs = {n: glob.glob(os.path.join(BASE, '**', n + '.dproj'), recursive=True)[0]
               for n in ('BQa', 'BQb')}
 
+    # Fatten both projects so each build takes SECONDS, not sub-second: warm
+    # builds of the bare scaffold were so fast that OS scheduling skew under
+    # load could finish one before the other's request landed - flaky. With
+    # ~100k generated lines per project, overlap (and a queue wait well over
+    # the 500ms reporting floor) is guaranteed by construction.
+    for n in ('BQa', 'BQb'):
+        dpr = dprojs[n][:-6] + '.dpr'
+        folder = os.path.dirname(dpr)
+        body = ['unit Gordo%s;' % n, 'interface', 'implementation']
+        for i in range(2500):
+            body += ['procedure P%d;' % i, 'var A: Integer;', 'begin',
+                     '  A := %d;' % i, '  if A > 0 then A := A - 1;',
+                     '  if A < 0 then A := 0;', 'end;']
+        body.append('end.')
+        open(os.path.join(folder, 'Gordo%s.pas' % n), 'w').write(
+            '\n'.join(body) + '\n')
+        s = open(dpr, encoding='utf-8-sig').read()
+        s = s.replace('uses', 'uses\n  Gordo%s,' % n, 1)
+        open(dpr, 'w', encoding='utf-8').write(s)
+
     results = {}
+    # sessions OUTSIDE the threads and a barrier right before the call, so
+    # both builds truly hit the server together (session setup used to skew
+    # the start enough for the fast one to finish first - flaky on a busy box)
+    sess = {'alice': session('alice'), 'bob': session('bob')}
+    gate = threading.Barrier(2)
 
     def build(agent, proj):
-        s = session(agent)
-        results[agent] = call(s, 'delphi_build',
+        gate.wait()
+        results[agent] = call(sess[agent], 'delphi_build',
                               {'project': proj, 'platform': 'Win64', 'config': 'Debug'})
 
     t1 = threading.Thread(target=build, args=('alice', dprojs['BQa']))

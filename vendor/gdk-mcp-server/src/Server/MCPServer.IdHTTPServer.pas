@@ -35,6 +35,12 @@ type
   // [local change] tells the host which access level the current request
   // authenticated at, so it can flag the worker thread (read-only vs full).
   TAccessLevelEvent = reference to procedure(AReadOnly: Boolean);
+
+  // [local change] full bearer authorization delegated to the host: ONE place
+  // (the host's guard) knows every credential - the global pair AND the
+  // per-workspace tokens. When assigned it REPLACES the built-in two-tier
+  // check; the host sets its own per-thread scope flags inside the callback.
+  TAuthorizeFunc = reference to function(const AAuth: string): Boolean;
   // [local change] a second route next to the MCP endpoint (direct file
   // download): the host serves it; this class only authenticates and routes.
   TRouteEvent = reference to procedure(RequestInfo: TIdHTTPRequestInfo;
@@ -57,6 +63,7 @@ type
     FReadOnlyToken: string;      // [local change] second token: read-only access
     FAnonymousReadOnly: Boolean; // [local change] no token = read-only access
     FOnAccessLevel: TAccessLevelEvent; // [local change] per-request RO/RW flag
+    FOnAuthorize: TAuthorizeFunc; // [local change] full bearer check by the host
     FBindIP: string; // [local change] bind to ONE interface ('' = all)
     FFilesRoute: string;        // [local change] '' = no download route
     FOnFileRequest: TRouteEvent; // [local change] GET handler for FFilesRoute
@@ -96,6 +103,8 @@ type
     property ReadOnlyToken: string read FReadOnlyToken write FReadOnlyToken;
     property AnonymousReadOnly: Boolean read FAnonymousReadOnly write FAnonymousReadOnly;
     property OnAccessLevel: TAccessLevelEvent read FOnAccessLevel write FOnAccessLevel;
+    // [local change] see TAuthorizeFunc
+    property OnAuthorize: TAuthorizeFunc read FOnAuthorize write FOnAuthorize;
     // [local change] bind to a SINGLE interface (settings.ini [Server] BindIP).
     // Empty = listen on all interfaces (the default; also the source of the
     // duplicate IPv4+IPv6 firewall prompt). Set e.g. to a LAN/VPN address.
@@ -327,6 +336,22 @@ begin
       var Auth := RequestInfo.RawHeaders.Values['Authorization'];
       var ReadOnly := False;
       var Allowed := False;
+      if Assigned(FOnAuthorize) then
+      begin
+        // [local change] host-side authorization (global + workspace tokens);
+        // the host already scoped this worker thread inside the callback.
+        Allowed := FOnAuthorize(Auth);
+        if not Allowed then
+        begin
+          ResponseInfo.ResponseNo := 401;
+          ResponseInfo.ResponseText := 'Unauthorized';
+          ResponseInfo.ContentType := 'application/json';
+          ResponseInfo.ContentText := '{"error":"missing or invalid bearer token"}';
+          Exit;
+        end;
+      end
+      else
+      begin
       if (FAuthToken = '') and (FReadOnlyToken = '') then
       begin
         // no tokens configured: open access (local trusted mode); with
@@ -357,6 +382,7 @@ begin
       // Worker threads are reused: flag the access level on EVERY request.
       if Assigned(FOnAccessLevel) then
         FOnAccessLevel(ReadOnly);
+      end;
     end;
 
     RequestPath := RequestInfo.Document;

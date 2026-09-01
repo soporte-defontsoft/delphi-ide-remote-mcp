@@ -240,12 +240,30 @@ begin
   // silently open to the whole network. Remote access requires a token (or an
   // explicit AnonymousReadOnly opt-in).
   if (Result.AuthToken = '') and (Result.ReadOnlyToken = '') and
+     (not WorkspaceTokensConfigured) and
      (not Result.AnonymousReadOnly) and (Result.BindIP = '') then
     Result.BindIP := '127.0.0.1';
   Result.OnAccessLevel :=
     procedure(AReadOnly: Boolean)
     begin
       SetRequestReadOnly(AReadOnly);
+    end;
+  // Full bearer authorization lives in ONE place (Lsp.Guard): the global
+  // pair, AnonymousReadOnly, and the [Workspace.*] tokens - the secret
+  // decides the jail (operator decision 2026-08-28, v0.88). Worker threads
+  // are reused, so BOTH per-thread flags are set on every request.
+  Result.OnAuthorize :=
+    function(const AAuth: string): Boolean
+    var
+      RO: Boolean;
+      WsIx: Integer;
+    begin
+      Result := AuthorizeBearer(AAuth, RO, WsIx);
+      if Result then
+      begin
+        SetRequestReadOnly(RO);
+        SetRequestWorkspace(WsIx);
+      end;
     end;
   // Direct download route on the same host, behind the same gate: big
   // binaries travel as HTTP bytes, never as base64 through a model's context

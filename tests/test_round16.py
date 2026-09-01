@@ -165,8 +165,10 @@ j = jload(rbig)
 check('S1 arbol grande por defecto = summary compacto con secciones',
       j.get('mode') == 'summary' and isinstance(j.get('sections'), list) and
       j.get('totalSymbols', 0) > 50 and 'autoNote' in j, rbig[:260])
-check('S1 y de verdad es compacto (<8k chars, antes 38k)',
-      len(rbig) < 8000, len(rbig))
+# the fixture is Lsp.Guard.pas itself, which grows with the server: assert
+# compact relative to a hard ceiling, not to last month's size
+check('S1 y de verdad es compacto (<12k chars, el arbol completo pasa de 38k)',
+      len(rbig) < 12000, len(rbig))
 
 rfull = call('delphi_symbols', {'path': big, 'mode': 'full'})
 check('S2 mode=full conserva el arbol completo con rangos',
