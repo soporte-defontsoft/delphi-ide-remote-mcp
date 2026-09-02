@@ -87,6 +87,27 @@ check('CHANGELOG mas reciente == SERVER_VERSION (%s)' % (mv and mv.group(1)),
       bool(mv and mc) and mv.group(1) == mc.group(1),
       (mv and mv.group(1), mc and mc.group(1)))
 
+# ---- settings.example.ini vs README ------------------------------------
+# Operator rule (2026-09-01): updating the README is PART of every repo
+# update - and it gets forgotten. So it is a gate: every section and every
+# ACTIVE key of settings.example.ini must be mentioned in the README. A new
+# config key without its README mention turns this red.
+ini_text = open(os.path.join(REPO, 'settings.example.ini'), encoding='utf-8').read()
+need = set()
+for ln in ini_text.splitlines():
+    s = ln.strip()
+    m = re.match(r'\[([A-Za-z0-9_.<>]+)\]', s)
+    if m:
+        need.add(m.group(1).split('.')[0])
+        continue
+    m = re.match(r'([A-Za-z][A-Za-z0-9_]*)=', s)
+    if m:
+        need.add(m.group(1))
+missing_cfg = sorted(k for k in need if k not in readme)
+check('README menciona TODA seccion y clave activa de settings.example.ini '
+      '(regla: el README forma parte de cada actualizacion)',
+      not missing_cfg, missing_cfg)
+
 # ---- Python escape hygiene ---------------------------------------------
 warnings.simplefilter('error', SyntaxWarning)
 bad = []

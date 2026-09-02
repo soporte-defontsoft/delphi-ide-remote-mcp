@@ -377,7 +377,8 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   at the dispatch gate covers every tool's output, compiler/git messages and 8.3 short forms
   included. Exception: successful `delphi_read`/`delphi_fetch` content is byte-exact by
   design and travels verbatim.
-- **Library read zone**: READING tools (read/search/list/fetch/LSP navigation) additionally
+- **Library read zone** (`LibraryZone=1` by default; `0` confines reads to the roots exactly
+  like writes): READING tools (read/search/list/fetch/LSP navigation) additionally
   accept, for **every installed Delphi**, its installation directory, the Library Search Path
   of **every registered platform** (Win, Linux64, macOS, Android, iOS…) and the **GetIt
   catalog repositories** — so an agent can follow a definition into `System.SysUtils.pas`,
