@@ -237,24 +237,57 @@ Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom
 
 ### Configuration (`settings.ini` next to the exe, or environment variables)
 
+The configuration is **four layers**, safest-by-default at every one:
+
+1. **The door** — credentials: the operator's global pair (`AuthToken` /
+   `ReadOnlyToken`), or a per-sandbox token (`[Workspace.<name>]` sections).
+2. **The jail** — where each credential may touch disk: the global
+   `[Workspace] Roots` for the operator, a smaller world per workspace token.
+3. **Capabilities** — what the server may *do* beyond compiling (run, test,
+   remote-run, build scripts, reach git hosts). All off until you opt in.
+4. **Surface** — what `tools/list` *advertises* (`[Tools]` profiles). Helps
+   small models; never a permission.
+
 ```ini
 [Server]
-Port=3000                               ; HTTP listen port (default 3000)
+Port=3000                               ; HTTP port for --http and the tray (-gui)
 
 [Security]
-AuthToken=your-long-random-token        ; full read-write  (or DELPHI_MCP_TOKEN)
-ReadOnlyToken=another-random-token      ; read-only access (or DELPHI_MCP_READONLY_TOKEN)
-AnonymousReadOnly=0                     ; 1 = no token -> read-only access
-AllowRun=0                              ; 1 = allow delphi_run (jailed+sandboxed); default off
-AllowBuildScripts=0                     ; 1 = allow build scripts (custom <Target>/<Exec>) WITHOUT delphi_run
+AuthToken=your-long-random-token        ; the OPERATOR: read-write over every root
+ReadOnlyToken=another-random-token      ; reviewer credential, read-only everywhere
+AnonymousReadOnly=0                     ; 1 = no token -> read-only instead of 401
+AllowRun=0                              ; 1 = delphi_run may execute here (sandboxed)
+AllowTests=0                            ; 1 = delphi_test may build+run test suites
+AllowRemoteRun=0                        ; 1 = remote-run on a PAServer target
+AllowBuildScripts=0                     ; 1 = builds may run custom MSBuild <Exec>
+GitRemotes=                             ; hosts explicit git URLs may reach (empty = none)
 
 [Workspace]
-Roots=D:\Projects;E:\MoreProjects       ; or DELPHI_MCP_ROOTS env var
+Roots=D:\Projects;E:\MoreProjects       ; the operator's jail (or DELPHI_MCP_ROOTS)
+
+; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
+; workspaces' roots are not even readable. Overlap is allowed and never
+; subtracts (note Audit's root is a subfolder of Galatea's):
+[Workspace.Galatea]
+Token=galatea-secret                    ; read-write, but only inside THESE roots
+ReadOnlyToken=galatea-reviewer-secret   ; optional read-only twin, same roots
+Roots=D:\Projects\Galatea;D:\Projects\Shared
+Profile=coder                           ; optional: trims tools/list for this token
+
+[Workspace.Audit]
+Token=audit-secret
+Roots=D:\Projects\Galatea\src\Forms     ; a SUBFOLDER of Galatea - deliberate
+Profile=reader                          ; navigation tools only in its listing
+
+[Tools]
+Profile=full                            ; global surface: full | coder | reader
 
 [Log]
-LinesPerFile=2000                       ; tray log: persist a block every N lines (min 100)
+LinesPerFile=2000                       ; tray log: persist a block every N lines
 MaxFiles=10                             ; rotation: keep the newest N block files
 ```
+
+Every key is documented in depth in [`settings.example.ini`](settings.example.ini).
 
 - **Port**: used by the service, the terminal `--http` mode and the tray app alike. A port given on the
   command line (`DelphiLspMcp --http 3900`) overrides the ini for that run.
@@ -279,6 +312,39 @@ MaxFiles=10                             ; rotation: keep the newest N block file
   escape.
 - `--readonly` on the command line makes the entire process read-only, whatever the
   transport (useful for a stdio-registered reviewer).
+- **`[Workspace.<name>]` token-scoped sandboxes**: each section defines its own credential(s)
+  and its own jail. Whoever presents that `Token` works read-write inside *its* `Roots` and
+  nowhere else — other workspaces' roots are not even **readable** (the library read zone
+  below stays available to everyone). Workspaces may **overlap**: one can hold a whole tree
+  and another just a subfolder of it; each token's jail is the union of its *own* roots and
+  nothing is subtracted for belonging to another workspace too. A workspace whose `Roots`
+  fail to parse admits nobody (fail closed). The global `AuthToken` remains the operator —
+  every root, unchanged.
+- **AgentConfinement** (`[Security]`): *cooperative* subdivision inside one credential's
+  jail — each agent (by its self-declared `clientInfo.name`) writes only under
+  `<root>\<name>\`, plus any `SharedFolders`. Useful for teams sharing one token; for a
+  boundary an agent cannot cross, use a workspace token instead (the name is self-declared,
+  the secret is not).
+- **AllowTests**: lets `delphi_test` build and run a workspace test project here (sandboxed,
+  timeout) — deliberately separate from `AllowRun`: allowing a test suite is a narrower
+  decision than allowing arbitrary binaries, and without it an agent can write code but never
+  learn whether it works. `AllowRun=1` implies it.
+- **AllowRemoteRun**: lets `delphi_paserver remote-run` execute, on a PAServer target, the
+  binary *that project deployed there* — never anything else on that machine. Independent of
+  `AllowRun` (running on the target is not running here), and gated twice: this switch plus
+  the runner someone has to launch on the target. `RemoteRunProjects` narrows it to named
+  projects.
+- **Network whitelists**: `GitRemotes` limits which hosts an *explicit* git URL may reach
+  (clone/fetch/pull/push; configured remotes keep working by name) — measured to close an
+  SSRF/exfiltration primitive. `RemoteHosts` does the same for hand-named PAServer dials
+  (profile hosts are always allowed) — measured to close a port-scanning primitive.
+- **`[Tools]` profiles**: `full` / `coder` / `reader` (or an explicit `Only=` allowlist) trim
+  what `tools/list` advertises — ~15k tokens of schemas drown a small model. Listing only:
+  hidden tools stay callable, permissions live in the layers above. A workspace can carry its
+  own `Profile=`.
+- **`[Vault]`**: optional persistent memory for agents (a folder of Markdown notes). Read-only
+  by default; writes, when enabled, are append/create/anchored-replace only, always backed up
+  first. See `docs/VAULT.md`.
 - **AllowBuildScripts**: `delphi_build` refuses a project whose `.dproj` (or an imported
   `.targets`) carries a task that *executes a program or plants/deletes files* at build
   time — the compile-only guarantee, so an uploaded `.dproj` cannot run code through a
