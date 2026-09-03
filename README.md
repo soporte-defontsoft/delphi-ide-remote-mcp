@@ -208,6 +208,15 @@ switch and its own allowlist; it will not arrive by accident.
 
 ## Quickstart
 
+**No Delphi installed, or don't want to compile?** Download the ready-made
+Windows binary from **[Releases](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)** —
+the zip carries `DelphiLspMcp.exe`, `settings.example.ini`, the remote runner
+and the docs, plus a SHA-256 to verify the download (`certutil -hashfile
+DelphiLspMcp-*.zip SHA256` on Windows, `sha256sum` elsewhere). Note the
+*server* machine still needs its own licensed RAD Studio at runtime — the
+binary talks to *your* DelphiLSP and MSBuild; nothing of Embarcadero's is
+redistributed.
+
 **Local (stdio)** — register in Claude Code on the Windows machine:
 
 ```bash
