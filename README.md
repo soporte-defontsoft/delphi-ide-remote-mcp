@@ -253,8 +253,11 @@ Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom
 
 The configuration is **four layers**, safest-by-default at every one:
 
-1. **The door** — credentials: the operator's global pair (`AuthToken` /
-   `ReadOnlyToken`), or a per-sandbox token (`[Workspace.<name>]` sections).
+1. **The door** — credentials, and there is ONE mechanism: workspaces. The
+   legacy `[Security]` pair (`AuthToken` / `ReadOnlyToken`) *is* a workspace
+   too — the **default** one, jailed to the global roots — which is how every
+   pre-v0.89 config keeps working unchanged. New sandboxes are
+   `[Workspace.<name>]` sections.
 2. **The jail** — where each credential may touch disk: the global
    `[Workspace] Roots` for the operator, a smaller world per workspace token.
 3. **Capabilities** — what the server may *do* beyond compiling (run, test,
@@ -333,7 +336,11 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   and another just a subfolder of it; each token's jail is the union of its *own* roots and
   nothing is subtracted for belonging to another workspace too. A workspace whose `Roots`
   fail to parse admits nobody (fail closed). The global `AuthToken` remains the operator —
-  every root, unchanged.
+  every root, unchanged — reported at startup as the **default** workspace. Inside a
+  workspace section the credential key is `Token=`, and `AuthToken=` is accepted as an
+  alias; the startup log lists every workspace it loaded and **warns** about misspelled
+  sections (`[Workopenclaw]`…), tokenless workspaces and unparseable roots, so a config
+  mistake never fails silently.
 - **AgentConfinement** (`[Security]`): *cooperative* subdivision inside one credential's
   jail — each agent (by its self-declared `clientInfo.name`) writes only under
   `<root>\<name>\`, plus any `SharedFolders`. Useful for teams sharing one token; for a

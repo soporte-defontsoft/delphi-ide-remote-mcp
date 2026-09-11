@@ -8,6 +8,27 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.89.0-beta] - 2026-09-11
+
+One auth mechanism: workspaces. Born from a real operator mistake (a
+[Workopenclaw] section with AuthToken= vanished silently and its token
+answered 401 with no clue anywhere).
+
+### Changed
+- **The legacy [Security] pair is now documented and reported as what it
+  is**: the "default" workspace, jailed to the global roots - which is why
+  every pre-v0.89 config keeps working unchanged. Docs (settings.example.ini,
+  README) teach workspaces as THE mechanism.
+- **`AuthToken=` works as an alias of `Token=` inside a [Workspace.<name>]
+  section** (canonical stays Token=): everyone has already typed [Security]
+  AuthToken once, so the hand repeats it - measured, the operator himself.
+- **Config mistakes stop failing silently**: the startup log now LISTS the
+  loaded workspaces ("Workspaces: default (...), Sandbox.Tests, ...") and
+  WARNS about misspelled sections ([Workopenclaw]-style, naming the right
+  format), tokenless workspaces (IGNORADA, naming the key) and unparseable
+  roots (fail closed). Battery tests/test_round24.py (7 checks).
+
+
 ## [0.88.0-beta] - 2026-08-28
 
 Token-scoped workspaces: the SECRET decides the jail, not the self-declared

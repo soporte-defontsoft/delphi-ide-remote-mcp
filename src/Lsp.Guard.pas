@@ -66,6 +66,13 @@ function CurrentWorkspaceName: string;
   for the fail-safe bind decision). }
 function WorkspaceTokensConfigured: Boolean;
 
+{ Startup lines about the workspace config: which workspaces loaded (the
+  legacy [Security] pair reported as the "default" workspace over the global
+  roots - one mechanism, two spellings) plus a warning per misconfiguration
+  (misspelled section, tokenless workspace, unparseable roots). Empty when
+  there is nothing to say. }
+function WorkspaceStartupNotes: TArray<string>;
+
 { One-line human summary of the WRITE jail for the startup log (the single
   source of how the jail is described). AWarning is set when the state
   deserves a warning level: no jail at all (unrestricted) or fail-closed
@@ -357,6 +364,7 @@ var
   GToolsOnly: TArray<string>;
   GSharedFolders: TArray<string>;     // subfolders any agent may write (opt-in)
   GWorkspaces: TArray<TWorkspaceDef>; // [Workspace.*]: token -> its own jail
+  GWorkspaceNotes: TArray<string>;    // startup findings about that config
   GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
   GAdbDevicesSet: Boolean = False;  // configured at all? absent = unrestricted
 
@@ -410,6 +418,26 @@ begin
     if (W.Token <> '') or (W.ReadOnlyToken <> '') then
       Exit(True);
   Result := False;
+end;
+
+function WorkspaceStartupNotes: TArray<string>;
+var
+  Names: string;
+  W: TWorkspaceDef;
+begin
+  Result := [];
+  Names := '';
+  if AuthToken <> '' then
+    Names := 'default (par [Security], todas las roots)';
+  for W in GWorkspaces do
+  begin
+    if Names <> '' then
+      Names := Names + ', ';
+    Names := Names + W.Name;
+  end;
+  if Names <> '' then
+    Result := Result + ['Workspaces: ' + Names];
+  Result := Result + GWorkspaceNotes;
 end;
 
 function AuthorizeBearer(const AAuth: string; out AReadOnly: Boolean;
@@ -563,14 +591,38 @@ begin
             var W: TWorkspaceDef;
             W.Name := S.Substring(Length('Workspace.')).Trim;
             W.Token := Ini.ReadString(S, 'Token', '').Trim;
+            // Everyone has already typed [Security] AuthToken= once, so the
+            // hand writes it again inside a workspace (measured: the operator
+            // himself, 2026-09-10, and the server swallowed it silently).
+            // Token= is canonical; AuthToken= works as an alias.
+            if W.Token = '' then
+              W.Token := Ini.ReadString(S, 'AuthToken', '').Trim;
             W.ReadOnlyToken := Ini.ReadString(S, 'ReadOnlyToken', '').Trim;
             W.Profile := LowerCase(Ini.ReadString(S, 'Profile', '').Trim);
             var RawRoots := Ini.ReadString(S, 'Roots', '');
             W.Roots := ParseRootsList(RawRoots);
             W.Invalid := (RawRoots.Trim <> '') and (Length(W.Roots) = 0);
+            if W.Invalid then
+              GWorkspaceNotes := GWorkspaceNotes +
+                ['AVISO: [Workspace.' + W.Name + '] Roots= no parsea: ese ' +
+                 'workspace no admite a NADIE (fail closed). Revisa la ruta.'];
             if (W.Token <> '') or (W.ReadOnlyToken <> '') then
-              GWorkspaces := GWorkspaces + [W];
-          end;
+              GWorkspaces := GWorkspaces + [W]
+            else
+              GWorkspaceNotes := GWorkspaceNotes +
+                ['AVISO: [Workspace.' + W.Name + '] sin Token= ni ' +
+                 'ReadOnlyToken=: seccion IGNORADA. La clave es Token= ' +
+                 '(AuthToken= tambien vale como alias).'];
+          end
+          else if S.ToLower.StartsWith('work') and
+                  not SameText(S, 'Workspace') then
+            // [Workopenclaw], [WorkspaceX]... a workspace section spelled
+            // wrong used to vanish silently and its token answered 401 with
+            // no clue anywhere (measured 2026-09-10). Name the fix.
+            GWorkspaceNotes := GWorkspaceNotes +
+              ['AVISO: la seccion [' + S + '] parece un workspace mal ' +
+               'escrito y se IGNORA. El formato es [Workspace.<nombre>] ' +
+               '(con el punto).'];
       finally
         Secs.Free;
       end;

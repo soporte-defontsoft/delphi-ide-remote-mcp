@@ -217,6 +217,14 @@ begin
     Add('Bearer auth enabled.');
   if ReadOnlyToken <> '' then
     Add('Read-only token configured (second credential).');
+  // One auth mechanism: workspaces. The legacy [Security] pair shows up
+  // here as the "default" workspace; misconfigured sections stop vanishing
+  // silently (operator decision 2026-09-11).
+  for var WsNote in WorkspaceStartupNotes do
+    if WsNote.StartsWith('AVISO') then
+      Add(NOTE_WARNING_PREFIX + WsNote)
+    else
+      Add(WsNote);
   if AnonymousReadOnly then
     Add('AnonymousReadOnly: tokenless requests get read-only access.');
   Result := Notes;
