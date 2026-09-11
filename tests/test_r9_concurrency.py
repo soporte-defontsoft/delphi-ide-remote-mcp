@@ -46,7 +46,8 @@ env = dict(os.environ)
 # that runs the exe from a fresh temp folder asks again on every single run.
 # The tests only ever talk to 127.0.0.1, so there is nothing to expose.
 env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'
-env['DELPHI_MCP_TOKEN'] = TOKEN
+# v0.91: workspace o nada - this battery tests vault concurrency, not auth:
+# run in open local mode (no credentials configured)
 env['DELPHI_MCP_ROOTS'] = WORK
 env['DELPHI_MCP_VAULT_PATH'] = VAULT
 env['DELPHI_MCP_VAULT_READONLY'] = '0'

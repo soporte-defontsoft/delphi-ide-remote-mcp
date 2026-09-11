@@ -12,17 +12,24 @@ PORT = 3999
 URL = 'http://127.0.0.1:%d/mcp' % PORT
 TOKEN = 'test-token-123'
 
+import shutil as _sh, tempfile as _tf
+# v0.91: workspace o nada - the token lives in a [Workspace.*] section, so
+# the main server runs from its own folder with its own settings.ini (fixed
+# name: the firewall decides per program PATH; we only talk to 127.0.0.1).
+REPOROOT = os.path.abspath(os.path.join(HERE, '..'))
+_maindir = os.path.join(_tf.gettempdir(), 'delphi-mcp-tests', 'http-main')
+_sh.rmtree(_maindir, ignore_errors=True)
+os.makedirs(_maindir, exist_ok=True)
+_mainexe = os.path.join(_maindir, 'DelphiLspMcp.exe')
+_sh.copyfile(EXE, _mainexe)
+with open(os.path.join(_maindir, 'settings.ini'), 'w') as f:
+    f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)*2
+            + '[Security]' + chr(10) + 'AllowRun=1' + chr(10)*2
+            + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
+            + 'Roots=%s' % REPOROOT + chr(10))
 env = dict(os.environ)
-# Loopback ONLY, for every server this battery starts. Listening on all
-# interfaces makes Windows Firewall pop its "allow this app?" prompt, and the
-# firewall remembers a decision per program PATH - so the instances below, which
-# run the exe from a FRESH random temp folder each time, asked again on every
-# single run (twice: IPv4 and IPv6) and left a dead rule behind each time. The
-# tests only ever talk to 127.0.0.1.
-env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'
-env['DELPHI_MCP_TOKEN'] = TOKEN
-env['DELPHI_MCP_ALLOW_RUN'] = '1'  # so the RO-vs-run check tests the readonly layer
-proc = subprocess.Popen([EXE, '--http', str(PORT)], env=env,
+env.pop('DELPHI_MCP_TOKEN', None)
+proc = subprocess.Popen([_mainexe, '--http'], env=env,
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(3)
 
@@ -151,8 +158,9 @@ try:
         # BindIP: loopback only - see the note at the top. This instance runs
         # from a fresh temp folder, so without it the firewall asks again on
         # every run of this battery.
-        f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n[Security]\nAuthToken=%s\n'
-                % (INI_PORT, TOKEN))
+        f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
+                '[Workspace.Op]\nToken=%s\nRoots=%s\n'
+                % (INI_PORT, TOKEN, tmpdir))
     env2 = dict(os.environ)
     env2.pop('DELPHI_MCP_TOKEN', None)  # the ini must supply the token too
     proc2 = subprocess.Popen([exe2, '--http'],  # no port argument: ini decides
@@ -185,9 +193,10 @@ try:
     with open(paspath, 'w') as f:
         f.write('unit Sample;\r\ninterface\r\nimplementation\r\nend.\r\n')
     with open(os.path.join(tmpdir3, 'settings.ini'), 'w') as f:
-        f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n[Security]\nAuthToken=%s\n'
-                'ReadOnlyToken=%s\nAnonymousReadOnly=1\nAllowRun=1\n'
-                % (RO_PORT, TOKEN, RO_TOKEN))
+        f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
+                '[Security]\nAnonymousReadOnly=1\nAllowRun=1\n\n'
+                '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\n'
+                % (RO_PORT, TOKEN, RO_TOKEN, tmpdir3))
     env3 = dict(os.environ)
     env3.pop('DELPHI_MCP_TOKEN', None)
     proc3 = subprocess.Popen([exe3, '--http'], env=env3,
@@ -200,10 +209,12 @@ try:
             return post({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
                          "params": {"name": tool, "arguments": args}}, token)
 
-        code, body = call('delphi_list', {'root': os.path.join(REPO, 'src'),
+        # v0.91: the RO token is a workspace credential too - it reads inside
+        # ITS workspace roots (tmpdir3), not the repo
+        code, body = call('delphi_list', {'root': tmpdir3,
                                           'pattern': '*.pas'}, RO_TOKEN)
         check('ro: token RO puede leer (delphi_list)',
-              code == 200 and 'Lsp.Guard.pas' in body, '%s %s' % (code, body[:120]))
+              code == 200 and 'Sample.pas' in body, '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',
                                           'new': 'interface // x'}, RO_TOKEN)
@@ -406,9 +417,10 @@ try:
     with open(os.path.join(tmpdir4, 'outside', 'secret.txt'), 'wb') as f:
         f.write(b'no me bajes')
     with open(os.path.join(tmpdir4, 'settings.ini'), 'w') as f:
-        f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n[Security]\nAuthToken=%s\n'
-                'ReadOnlyToken=%s\n\n[Workspace]\nRoots=%s\n'
-                % (FILES_PORT, TOKEN, RO_TOKEN, jail4))
+        f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
+                '[Workspace]\nRoots=%s\n\n'
+                '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\n'
+                % (FILES_PORT, jail4, TOKEN, RO_TOKEN, jail4))
     env4 = dict(os.environ)
     env4.pop('DELPHI_MCP_TOKEN', None)
     env4.pop('DELPHI_MCP_ROOTS', None)

@@ -47,11 +47,13 @@ shutil.copy(SRC, EXE)
 
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Security]',
-    'AuthToken=op-25',
     'AllowRun=0',                       # default: no execution
     'AllowTests=1',                     # default: tests allowed
     'AgentConfinement=0', '',
     '[Workspace]', 'Roots=%s' % JAIL, '',
+    '[Workspace.Operador]',             # the widest workspace: inherits all
+    'Token=op-25',
+    'Roots=%s' % JAIL, '',
     '[Workspace.Runner]',               # may run, may NOT test, confined
     'Token=runner-25',
     'Roots=%s' % JAIL,

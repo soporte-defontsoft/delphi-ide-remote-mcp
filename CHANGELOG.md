@@ -8,6 +8,28 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.91.0-beta] - 2026-09-11
+
+**BREAKING** - workspace or nothing (the operator's final word on the access
+model): a token authenticates ONLY through a [Workspace.<name>] section.
+
+### Changed
+- **The [Security] AuthToken/ReadOnlyToken pair no longer authenticates**,
+  and neither does the DELPHI_MCP_TOKEN env var. Migration is one move:
+  put the SAME values into a [Workspace.<name>] section with your Roots -
+  transparent for every configured client. Fail safe: a legacy pair left in
+  [Security] still counts as "configured", so everything answers 401 (with a
+  startup AVISO spelling out the migration) instead of falling open; and a
+  server with truly no workspace token binds to 127.0.0.1 only.
+- The startup log stops lying about credentials: "Bearer auth enabled
+  (tokens por workspace)" when workspaces exist (the old note cried "no
+  token configured" the moment tokens moved into sections - measured on the
+  fully migrated production), and there is no "default" workspace anywhere.
+- Batteries rewritten to the pure model (http_auth, round23-25,
+  r9_concurrency); round24 now proves the legacy pair gets 401 plus the
+  migration AVISO. AnonymousReadOnly stays as the only [Security] credential
+  switch (tokenless read-only over the global roots).
+
 ## [0.90.0-beta] - 2026-09-11
 
 The operator's model, completed: NO global pair as a concept - a workspace

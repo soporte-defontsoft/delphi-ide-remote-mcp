@@ -5,7 +5,7 @@ The secret decides the jail, not the self-declared agent name: each
 [Workspace.<name>] section carries its own Token (read-write inside its
 Roots), optional ReadOnlyToken, and optional Profile. HARD boundary by
 operator decision (2026-08-28): other workspaces' roots are not even
-READABLE. The global AuthToken stays the operator - every root, unchanged.
+READABLE. The operator is just the widest workspace (v0.91: workspace o nada).
 
 Overlap is deliberate and must never subtract: here Workspace.Ancho holds a
 whole tree and Workspace.Fino holds a THIRD-LEVEL subfolder of that same
@@ -59,7 +59,7 @@ EXE = os.path.join(EXEDIR, 'DelphiLspMcp.exe')
 shutil.copy(SRC, EXE)
 OP, TA, TF, TFRO = 'op-token-23', 'tok-ancho-23', 'tok-fino-23', 'tok-fino-ro-23'
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
-    '[Security]', 'AuthToken=%s' % OP, '',
+    '[Workspace.Operador]', 'Token=%s' % OP, 'Roots=%s' % JAIL, '',
     '[Workspace]', 'Roots=%s' % JAIL, '',
     '[Workspace.Ancho]', 'Token=%s' % TA, 'Roots=%s' % ANCHO, '',
     '[Workspace.Fino]', 'Token=%s' % TF, 'ReadOnlyToken=%s' % TFRO,

@@ -253,11 +253,12 @@ Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom
 
 The configuration is **four layers**, safest-by-default at every one:
 
-1. **The door** — credentials, and there is ONE mechanism: workspaces. The
-   legacy `[Security]` pair (`AuthToken` / `ReadOnlyToken`) *is* a workspace
-   too — the **default** one, jailed to the global roots — which is how every
-   pre-v0.89 config keeps working unchanged. New sandboxes are
-   `[Workspace.<name>]` sections.
+1. **The door** — credentials: **workspace or nothing** (v0.91). A token
+   authenticates *only* through a `[Workspace.<name>]` section — its own
+   `Token`, optional `ReadOnlyToken`, its `Roots` and its configs. The old
+   `[Security]` `AuthToken`/`ReadOnlyToken` pair no longer authenticates:
+   migrate by moving the same values into a workspace section (transparent
+   for every configured client; the startup log spells it out).
 2. **The jail** — where each credential may touch disk: the global
    `[Workspace] Roots` for the operator, a smaller world per workspace token.
 3. **Capabilities** — what the server may *do* beyond compiling (run, test,
@@ -269,9 +270,7 @@ The configuration is **four layers**, safest-by-default at every one:
 [Server]
 Port=3000                               ; HTTP port for --http and the tray (-gui)
 
-[Security]
-AuthToken=your-long-random-token        ; the OPERATOR: read-write over every root
-ReadOnlyToken=another-random-token      ; reviewer credential, read-only everywhere
+[Security]                              ; NO tokens here (v0.91) - only defaults
 AnonymousReadOnly=0                     ; 1 = no token -> read-only instead of 401
 AllowRun=0                              ; 1 = delphi_run may execute here (sandboxed)
 AllowTests=0                            ; 1 = delphi_test may build+run test suites
@@ -315,18 +314,21 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   rebuild looks new. Run `scripts/firewall-allow.ps1` **once as Administrator** to install a
   single durable rule keyed to the *port* (covers every rebuild) and clear the accumulated
   per-binary duplicates: `powershell -ExecutionPolicy Bypass -File scripts\firewall-allow.ps1 -Port 3131`.
-- **AuthToken**: full access. Every HTTP request must carry `Authorization: Bearer <token>`
-  or gets 401 (when any token is configured). **With NO credential configured at all, the
-  server binds to `127.0.0.1` only** — an unconfigured server is never silently open to the
-  network; remote access requires a token (or an explicit `AnonymousReadOnly=1`).
-- **ReadOnlyToken**: a second credential for reviewer agents. It can read, search, navigate
-  symbols, get diagnostics, download, run query git commands and file reports — but
-  `delphi_edit`, `delphi_create`, `delphi_build`, `delphi_run`, `delphi_package`,
-  `delphi_upload` and git write commands are refused. `AnonymousReadOnly=1` grants the same
-  read-only level to tokenless requests. The whole classification is enforced at a **single
-  gate** in front of every `tools/call` — including the git argument filter, so no option can
-  turn a "read" command into a write. Audited by running the server anonymously and trying to
-  escape.
+- **Tokens (workspace or nothing, v0.91)**: every HTTP request must carry
+  `Authorization: Bearer <token>` where the token is some workspace's `Token=` (read-write
+  inside its roots) or `ReadOnlyToken=` (read-only inside the same roots: it can read,
+  search, navigate symbols, get diagnostics, download, run query git commands and file
+  reports — but `delphi_edit`, `delphi_create`, `delphi_build`, `delphi_run`,
+  `delphi_package`, `delphi_upload` and git write commands are refused).
+  `AnonymousReadOnly=1` grants that same read-only level to tokenless requests over the
+  global roots. The whole classification is enforced at a **single gate** in front of every
+  `tools/call` — including the git argument filter, so no option can turn a "read" command
+  into a write. **With NO workspace token configured at all, the server binds to
+  `127.0.0.1` only** — an unconfigured server is never silently open to the network.
+- **BREAKING — migrating from ≤ v0.90**: an `AuthToken`/`ReadOnlyToken` left in `[Security]`
+  no longer authenticates (and, fail safe, still counts as "configured": everything answers
+  401 rather than falling open). Move the same values into a `[Workspace.<name>]` section
+  with your roots — transparent for every configured client; the startup log spells it out.
 - `--readonly` on the command line makes the entire process read-only, whatever the
   transport (useful for a stdio-registered reviewer).
 - **`[Workspace.<name>]` token-scoped sandboxes**: each section defines its own credential(s)

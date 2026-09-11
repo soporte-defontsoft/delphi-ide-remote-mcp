@@ -462,8 +462,13 @@ var
 begin
   Result := [];
   Names := '';
-  if AuthToken <> '' then
-    Names := 'default (par [Security], todas las roots)';
+  if (AuthToken <> '') or (ReadOnlyToken <> '') then
+    Result := Result +
+      ['AVISO: AuthToken/ReadOnlyToken en [Security] ya NO autentican ' +
+       '(v0.91: o hay workspace configurado o nada). Crea un ' +
+       '[Workspace.<nombre>] con Token= (mismo valor si quieres, es ' +
+       'transparente para los clientes), Roots= y, si procede, ' +
+       'ReadOnlyToken=. Hasta entonces esas credenciales reciben 401.'];
   for W in GWorkspaces do
   begin
     if Names <> '' then
@@ -482,19 +487,18 @@ var
 begin
   AReadOnly := False;
   AWorkspaceIx := -1;
-  // no credential of any kind configured: open local trusted mode, as always
-  if (GAuthToken = '') and (GReadOnlyToken = '') and
-     not WorkspaceTokensConfigured then
+  // O WORKSPACE O NADA (operator decision 2026-09-11, v0.91): a token
+  // authenticates ONLY through a [Workspace.<name>] section. The legacy
+  // [Security] pair no longer opens anything - and, fail SAFE, its mere
+  // presence does NOT count as "nothing configured" either: an outdated
+  // config believing it has auth must never find the server silently open.
+  // The startup log says exactly how to migrate.
+  if not WorkspaceTokensConfigured then
   begin
+    if (GAuthToken <> '') or (GReadOnlyToken <> '') then
+      Exit(False); // legacy-only config: everything 401s until migrated
+    // truly nothing configured: open local trusted mode, as always
     AReadOnly := GAnonymousReadOnly;
-    Exit(True);
-  end;
-  // the operator's global pair: every root
-  if (GAuthToken <> '') and (AAuth = 'Bearer ' + GAuthToken) then
-    Exit(True);
-  if (GReadOnlyToken <> '') and (AAuth = 'Bearer ' + GReadOnlyToken) then
-  begin
-    AReadOnly := True;
     Exit(True);
   end;
   // workspace tokens: the secret decides the jail, not the declared name

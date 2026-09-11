@@ -209,14 +209,15 @@ begin
   if VaultConfigured then
     Add(Format('Knowledge vault: %s (%s)',
       [VaultPath, IfThen(VaultWritable, 'read-write', 'read-only')]));
-  if (AuthToken = '') and (ReadOnlyToken = '') then
-    Add(NOTE_WARNING_PREFIX + 'No Bearer token configured (DELPHI_MCP_TOKEN ' +
-      'or settings.ini [Security] AuthToken). Fine on localhost; do NOT ' +
-      'expose to the network without one.')
-  else
-    Add('Bearer auth enabled.');
-  if ReadOnlyToken <> '' then
-    Add('Read-only token configured (second credential).');
+  // v0.91: authentication is workspaces or nothing. The old note lied the
+  // moment tokens moved into [Workspace.*] sections (measured 2026-09-11:
+  // production fully migrated and the log still cried "no token").
+  if WorkspaceTokensConfigured then
+    Add('Bearer auth enabled (tokens por workspace).')
+  else if not AnonymousReadOnly then
+    Add(NOTE_WARNING_PREFIX + 'Sin credenciales: no hay ningun ' +
+      '[Workspace.<nombre>] con Token=. Bien en localhost; NO expongas el ' +
+      'servidor a la red asi.');
   // One auth mechanism: workspaces. The legacy [Security] pair shows up
   // here as the "default" workspace; misconfigured sections stop vanishing
   // silently (operator decision 2026-09-11).
@@ -247,8 +248,9 @@ begin
   // every interface - bind to localhost so an unconfigured server is not
   // silently open to the whole network. Remote access requires a token (or an
   // explicit AnonymousReadOnly opt-in).
-  if (Result.AuthToken = '') and (Result.ReadOnlyToken = '') and
-     (not WorkspaceTokensConfigured) and
+  // v0.91: only workspace tokens are credentials; a legacy-only [Security]
+  // pair neither authenticates nor earns a wide bind.
+  if (not WorkspaceTokensConfigured) and
      (not Result.AnonymousReadOnly) and (Result.BindIP = '') then
     Result.BindIP := '127.0.0.1';
   Result.OnAccessLevel :=

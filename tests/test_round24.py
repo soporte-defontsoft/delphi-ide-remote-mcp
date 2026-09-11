@@ -117,10 +117,13 @@ try:
     except urllib.error.HTTPError as e:
         check('A2 el token de [Workopenclaw] (mal escrita) da 401', e.code == 401, e.code)
 
-    # operator still fine
-    m, _ = init('op-24', 'op')
-    check('A4a el par [Security] sigue entrando (workspace default)',
-          bool(m and m[0].get('result')), m)
+    # v0.91: workspace o nada - the legacy [Security] pair gets 401
+    try:
+        init('op-24', 'op')
+        check('A4a el par [Security] ya NO autentica (workspace o nada)', False, 'entro')
+    except urllib.error.HTTPError as e:
+        check('A4a el par [Security] ya NO autentica (workspace o nada)',
+              e.code == 401, e.code)
 finally:
     proc.kill()
 
@@ -129,8 +132,10 @@ check('A2b el arranque AVISA de la seccion mal escrita, por su nombre',
       'Workopenclaw' in out and 'Workspace.<nombre>' in out, out[-400:])
 check('A3 el arranque AVISA del workspace sin token (IGNORADA, clave Token=)',
       'SinToken' in out and 'IGNORADA' in out and 'Token=' in out, out[-400:])
-check('A4 el arranque LISTA los workspaces con el default del par [Security]',
-      'Workspaces:' in out and 'default' in out and 'Alias' in out, out[-500:])
+check('A4 el arranque LISTA los workspaces (sin ningun "default")',
+      'Workspaces:' in out and 'Alias' in out and 'default' not in out, out[-500:])
+check('A4b el arranque AVISA de que el par [Security] ya no autentica y como migrar',
+      'ya NO autentican' in out and 'Workspace.<nombre>' in out, out[-600:])
 
 print('\n== round-24 battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)
