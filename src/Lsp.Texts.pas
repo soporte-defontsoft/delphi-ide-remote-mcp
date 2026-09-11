@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.92.0-beta';
+  SERVER_VERSION = '0.93.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -444,11 +444,19 @@ const
     'si cierras un asunto, elimina su linea con vault_patch en lugar de ' +
     'anadir "hecho". El servidor guarda copia del original antes de escribir.';
 
+  // "el indice que corresponda" sent agents straight into the governance
+  // wall: they read it as MEMORY.md, vault_patch refused it every time, and
+  // the note was left created but unlinked (defontsito's field report,
+  // 2026-09-11). The instruction now names the ONLY index they can edit
+  // (the project's own notes) and spells out the human path for MEMORY.md.
   SD_VAULT_CREATE =
     'Crea una nota nueva en el vault. ANTES de crear: lee ' +
     'AGENTS-VAULT-WRITE.md (arbol de decision de donde va cada cosa y ' +
-    'plantillas) y enlaza la nota desde el indice que corresponda con ' +
-    '[[wikilinks]]. Escribe en espanol. No reorganices carpetas ni muevas ' +
+    'plantillas) y enlaza la nota con [[wikilinks]] desde las notas del ' +
+    'proyecto (context.md, log.md, progress.md) - NO desde MEMORY.md: ese ' +
+    'indice raiz es de gobierno y se rechaza siempre; si la nota merece ' +
+    'entrada ahi, pidelo en tu respuesta o en un delphi_report y lo hara ' +
+    'una persona. Escribe en espanol. No reorganices carpetas ni muevas ' +
     'notas existentes - eso requiere OK humano. Nunca sobreescribe: si la ' +
     'nota existe, se rechaza.';
 
@@ -551,8 +559,9 @@ const
     'RECHAZADO: AGENTS-VAULT.md, AGENTS-VAULT-WRITE.md y MEMORY.md son los ' +
     'ficheros de GOBIERNO del vault (sus reglas y su indice) y solo se tocan ' +
     'con supervision humana. Puedes leerlos (vault_read sin path). Si hace ' +
-    'falta indexar una nota nueva, dilo en tu respuesta para que lo haga una ' +
-    'persona.';
+    'falta indexar una nota nueva, dilo en tu respuesta o mandalo en un ' +
+    'delphi_report para que lo haga una persona; tu nota creada vale ' +
+    'igualmente aunque aun no este en el indice.';
 
 
   // ---------------------------------------------------------------------

@@ -8,6 +8,27 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.93.0-beta] - 2026-09-11
+
+The vault write protocol stops sending agents into the governance wall
+(defontsito's field report: a note created, its index link refused).
+
+### Fixed
+- **vault_create no longer instructs a move the server always rejects**:
+  "enlaza la nota desde el indice que corresponda" read as MEMORY.md, and
+  MEMORY.md is a governance file - every vault_patch on it is refused. The
+  instruction now names the only index agents can edit (the project's own
+  notes: context.md, log.md, progress.md), forbids MEMORY.md explicitly,
+  and spells out the human path (ask in your reply or a delphi_report; a
+  person applies it).
+- The governance refusal adds the same path and makes clear the created
+  note stands even while unindexed - no work lost, no retry loop.
+
+### Added
+- Battery round 27: static coherence gate between SD_VAULT_CREATE and
+  SR_VAULT_GOVERNANCE, so an instruction demanding what the guard refuses
+  cannot come back.
+
 ## [0.92.0-beta] - 2026-09-11
 
 `delphi_paserver get-sdk` learns that the GCC triplet is the distro's
