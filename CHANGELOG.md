@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.90.0-beta] - 2026-09-11
+
+The operator's model, completed: NO global pair as a concept - a workspace
+carries its pair, its roots AND ITS CONFIGS. [Security] holds the defaults
+(and the default workspace's pair); everything else lives per workspace.
+
+### Added
+- **Per-workspace capability overrides**: AllowRun, AllowTests,
+  AllowRemoteRun, AllowBuildScripts, LibraryZone, AgentConfinement and
+  SharedFolders may appear inside a [Workspace.<name>] section and override
+  the [Security] defaults for the sessions its tokens open (absent key =
+  inherit; Profile already worked this way). One workspace can be a CI space
+  that executes while every other space stays compile-only. Enforced at the
+  same single gate as everything else - the Guard getters became
+  session-aware, so every tool inherited the behavior with no per-tool code.
+  Network whitelists (GitRemotes, RemoteHosts, RemoteRunProjects) stay
+  machine-wide on purpose: where THIS machine may talk is the operator's
+  decision, never a workspace's. Battery tests/test_round25.py (7 checks,
+  both inheritance directions, and the AllowRun-implies-tests superset).
+
 ## [0.89.0-beta] - 2026-09-11
 
 One auth mechanism: workspaces. Born from a real operator mistake (a

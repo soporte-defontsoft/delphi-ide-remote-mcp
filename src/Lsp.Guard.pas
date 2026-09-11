@@ -335,6 +335,13 @@ type
     Name, Token, ReadOnlyToken, Profile: string;
     Roots: TArray<string>;
     Invalid: Boolean; // Roots= had text but nothing parsed: fail closed
+    // Per-workspace capability overrides: -1 = inherit the [Security]
+    // defaults (operator decision 2026-09-11: each workspace carries its
+    // pair, its roots AND its configs).
+    OvAllowRun, OvAllowTests, OvAllowRemoteRun, OvAllowBuildScripts,
+      OvLibraryZone, OvAgentConfinement: Integer;
+    OvSharedSet: Boolean;             // SharedFolders= present in the section
+    OvSharedFolders: TArray<string>;
   end;
 
 var
@@ -395,6 +402,34 @@ begin
   finally
     List.Free;
   end;
+end;
+
+{ Confinement and shared folders, workspace override first. }
+function AgentConfinementNow: Boolean;
+begin
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
+     (GWorkspaces[TWorkspaceIx1 - 1].OvAgentConfinement >= 0) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAgentConfinement = 1);
+  Result := GAgentConfinement;
+end;
+
+function SharedFoldersNow: TArray<string>;
+begin
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
+     GWorkspaces[TWorkspaceIx1 - 1].OvSharedSet then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvSharedFolders);
+  Result := GSharedFolders;
+end;
+
+{ 1 / 0 when the key is present in the section, -1 (inherit) when absent. }
+function ReadTriState(AIni: TIniFile; const ASection, AKey: string): Integer;
+begin
+  if not AIni.ValueExists(ASection, AKey) then
+    Exit(-1);
+  if AIni.ReadBool(ASection, AKey, False) then
+    Result := 1
+  else
+    Result := 0;
 end;
 
 procedure SetRequestWorkspace(AIx: Integer);
@@ -570,7 +605,7 @@ begin
         .Split([';'], TStringSplitOptions.ExcludeEmpty);
       if not GAllowBuildScripts then
         GAllowBuildScripts := Ini.ReadBool('Security', 'AllowBuildScripts', False);
-      if not GAgentConfinement then
+      if not AgentConfinementNow then
         GAgentConfinement := Ini.ReadBool('Security', 'AgentConfinement', False);
       if GToolsProfile = 'full' then
         GToolsProfile := LowerCase(Ini.ReadString('Tools', 'Profile', 'full').Trim);
@@ -602,6 +637,17 @@ begin
             var RawRoots := Ini.ReadString(S, 'Roots', '');
             W.Roots := ParseRootsList(RawRoots);
             W.Invalid := (RawRoots.Trim <> '') and (Length(W.Roots) = 0);
+            // capability overrides; absent key = inherit the default
+            W.OvAllowRun := ReadTriState(Ini, S, 'AllowRun');
+            W.OvAllowTests := ReadTriState(Ini, S, 'AllowTests');
+            W.OvAllowRemoteRun := ReadTriState(Ini, S, 'AllowRemoteRun');
+            W.OvAllowBuildScripts := ReadTriState(Ini, S, 'AllowBuildScripts');
+            W.OvLibraryZone := ReadTriState(Ini, S, 'LibraryZone');
+            W.OvAgentConfinement := ReadTriState(Ini, S, 'AgentConfinement');
+            W.OvSharedSet := Ini.ValueExists(S, 'SharedFolders');
+            if W.OvSharedSet then
+              W.OvSharedFolders := LowerCase(Ini.ReadString(S, 'SharedFolders', ''))
+                .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
             if W.Invalid then
               GWorkspaceNotes := GWorkspaceNotes +
                 ['AVISO: [Workspace.' + W.Name + '] Roots= no parsea: ese ' +
@@ -655,26 +701,37 @@ end;
 
 function AllowRun: Boolean;
 begin
-  LoadSecurity;
+  // the active workspace may override the [Security] default
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
+     (GWorkspaces[TWorkspaceIx1 - 1].OvAllowRun >= 0) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowRun = 1);
   Result := GAllowRun;
 end;
 
 function AllowRemoteRun: Boolean;
 begin
-  LoadSecurity;
-  // NOT implied by AllowRun: that one is about THIS machine.
+  // the active workspace may override the [Security] default
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
+     (GWorkspaces[TWorkspaceIx1 - 1].OvAllowRemoteRun >= 0) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowRemoteRun = 1);
   Result := GAllowRemoteRun;
 end;
 
 function LibraryZoneEnabled: Boolean;
 begin
-  LoadSecurity;
+  // the active workspace may override the [Security] default
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
+     (GWorkspaces[TWorkspaceIx1 - 1].OvLibraryZone >= 0) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvLibraryZone = 1);
   Result := GLibraryZone;
 end;
 
 function AllowTests: Boolean;
 begin
-  LoadSecurity;
+  // the active workspace may override the [Security] default
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
+     (GWorkspaces[TWorkspaceIx1 - 1].OvAllowTests >= 0) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowTests = 1);
   Result := GAllowTests;
 end;
 
@@ -841,9 +898,10 @@ end;
 
 function AllowBuildScripts: Boolean;
 begin
-  LoadSecurity;
-  // AllowRun (running arbitrary programs) is a superset of running the project's
-  // own build scripts, so it implies this without a second opt-in.
+  // the active workspace may override the [Security] default
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
+     (GWorkspaces[TWorkspaceIx1 - 1].OvAllowBuildScripts >= 0) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowBuildScripts = 1);
   Result := GAllowBuildScripts or GAllowRun;
 end;
 
@@ -1685,7 +1743,7 @@ var
   P: Integer;
 begin
   Result := '';
-  if not GAgentConfinement then
+  if not AgentConfinementNow then
     Exit;
   Me := CurrentAgent;
   if Me = '' then
@@ -1698,7 +1756,7 @@ begin
     Seg := Rel.Substring(0, P);
   if SameText(Seg, Me) then
     Exit; // your own folder
-  for Sh in GSharedFolders do
+  for Sh in SharedFoldersNow do
     if SameText(Seg, Sh) then
       Exit; // a folder the operator marked shared
   Result := Format(SR_AGENT_CONFINED_FMT, [Me, Me]);

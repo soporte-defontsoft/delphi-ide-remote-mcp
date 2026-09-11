@@ -340,7 +340,12 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   workspace section the credential key is `Token=`, and `AuthToken=` is accepted as an
   alias; the startup log lists every workspace it loaded and **warns** about misspelled
   sections (`[Workopenclaw]`…), tokenless workspaces and unparseable roots, so a config
-  mistake never fails silently.
+  mistake never fails silently. And a workspace carries **its configs** too: `AllowRun`,
+  `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`, `LibraryZone`, `AgentConfinement`,
+  `SharedFolders` and `Profile` may appear inside the section and override the `[Security]`
+  defaults for the sessions its tokens open (absent key = inherit) — one workspace can be a
+  CI space that executes while every other space stays compile-only. Network whitelists stay
+  machine-wide on purpose.
 - **AgentConfinement** (`[Security]`): *cooperative* subdivision inside one credential's
   jail — each agent (by its self-declared `clientInfo.name`) writes only under
   `<root>\<name>\`, plus any `SharedFolders`. Useful for teams sharing one token; for a
