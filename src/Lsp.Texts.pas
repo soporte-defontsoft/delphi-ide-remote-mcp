@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.91.0-beta';
+  SERVER_VERSION = '0.92.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -2024,6 +2024,13 @@ const
     '0 y NO guarda nada). El perfil NO se ha creado. Reintenta cuando el ' +
     'operador cierre el IDE, o pidele que cree el perfil desde el propio ' +
     'IDE. Yo NO cierro el IDE: puede haber alguien trabajando con el.';
+
+  SR_PASERVER_SDK_NOGROUP_FMT =
+    'RECHAZADO: el sysroot del target de "%s" no encaja con ninguna ' +
+    'distribucion que conozco. Probe los arboles gcc (%s) y las carpetas ' +
+    'de librerias (%s) y ninguna variante entrego ficheros. Manda un ' +
+    'delphi_report con la tripleta de tu distro (ls /usr/lib/gcc/) y la ' +
+    'anadimos.';
 
   SN_BUILD_QUEUED =
     'Este build ha esperado su turno: el servidor compila DE UNO EN UNO ' +

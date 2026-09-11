@@ -617,21 +617,29 @@ type
   TSdkPull = record
     RemoteBase: string;   // POSIX dir on the target
     Recursive: Boolean;   // whole subtree (**) vs direct files (*)
-    Optional: Boolean;
+    Group: string;        // 'gcc'/'libc': ONE of the group must land; '' = extra
   end;
 
 const
   { What the LINKER needs, from $(BDS)\bin\Linux64.defaultsdkpaths - the
     ProfileLibrary entries plus the gcc tree (crt*/libgcc live there). The
     ProfileInclude entries (C++ headers, tens of thousands of small files)
-    are deliberately NOT pulled: this server links Delphi. }
+    are deliberately NOT pulled: this server links Delphi.
+
+    GROUP semantics, not per-entry requiredness: the GCC triplet path is the
+    distro's choice - Debian/Ubuntu use x86_64-linux-gnu, Fedora/RHEL use
+    x86_64-redhat-linux + /usr/lib64 - so every variant is TRIED and what is
+    required is that at least one 'gcc' tree and one 'libc' dir actually
+    landed. Marking the Debian path required aborted the whole pull on
+    Fedora 44 even though the RedHat tree was there (openclaw, live Fedora
+    target, 2026-09-11). }
   LINUX64_PULLS: array[0..5] of TSdkPull = (
-    (RemoteBase: '/usr/lib/gcc/x86_64-linux-gnu'; Recursive: True; Optional: False),
-    (RemoteBase: '/usr/lib/x86_64-linux-gnu'; Recursive: False; Optional: False),
-    (RemoteBase: '/lib/x86_64-linux-gnu'; Recursive: False; Optional: True),
-    (RemoteBase: '/usr/lib/gcc/x86_64-redhat-linux'; Recursive: True; Optional: True),
-    (RemoteBase: '/usr/lib64'; Recursive: False; Optional: True),
-    (RemoteBase: '/lib64'; Recursive: False; Optional: True));
+    (RemoteBase: '/usr/lib/gcc/x86_64-linux-gnu'; Recursive: True; Group: 'gcc'),
+    (RemoteBase: '/usr/lib/x86_64-linux-gnu'; Recursive: False; Group: 'libc'),
+    (RemoteBase: '/lib/x86_64-linux-gnu'; Recursive: False; Group: ''),
+    (RemoteBase: '/usr/lib/gcc/x86_64-redhat-linux'; Recursive: True; Group: 'gcc'),
+    (RemoteBase: '/usr/lib64'; Recursive: False; Group: 'libc'),
+    (RemoteBase: '/lib64'; Recursive: False; Group: ''));
 
 { "Total file(s) copied: 196 file(s)  62.099.159 bytes" -> 196 and 62099159.
   The byte count carries locale thousands separators - digits only. }
@@ -756,6 +764,7 @@ var
   Return, PullObj: TJSONObject;
   Pulls: TJSONArray;
   NFiles, TotalFiles: Integer;
+  GotGcc, GotLibc: Boolean;
   NBytes, TotalBytes: Int64;
   Sb: TStringBuilder;
   LibDirs: TStringList;
@@ -784,6 +793,8 @@ begin
   Return.AddPair('pulls', Pulls);
   TotalFiles := 0;
   TotalBytes := 0;
+  GotGcc := False;
+  GotLibc := False;
   try
     for Pull in LINUX64_PULLS do
     begin
@@ -803,24 +814,29 @@ begin
       PullObj.AddPair('dir', Pull.RemoteBase);
       PullObj.AddPair('files', TJSONNumber.Create(NFiles));
       PullObj.AddPair('bytes', TJSONNumber.Create(NBytes));
-      if ExitCode = 0 then
-        PullObj.AddPair('status', 'ok')
-      else if Pull.Optional then
-        PullObj.AddPair('status', 'skipped (not on this target)')
-      else
+      if (ExitCode = 0) and (NFiles > 0) then
       begin
-        PullObj.AddPair('status', 'FAILED');
-        // last non-empty line carries paclient's error (the first is its banner)
-        var ErrLine := '';
-        for var L in Output.Split([#13#10, #10]) do
-          if L.Trim <> '' then
-            ErrLine := L.Trim;
-        Return.AddPair('error', Format(SR_PASERVER_SDK_PULL_FMT,
-          [Pull.RemoteBase, ExitCode, ErrLine]));
-        Exit(Return.ToJSON);
-      end;
+        PullObj.AddPair('status', 'ok');
+        if Pull.Group = 'gcc' then
+          GotGcc := True
+        else if Pull.Group = 'libc' then
+          GotLibc := True;
+      end
+      else
+        // a distro simply does not have this variant: normal, keep going -
+        // the GROUP check below decides whether the pull as a whole worked
+        PullObj.AddPair('status', 'skipped (not on this target)');
       Inc(TotalFiles, NFiles);
       Inc(TotalBytes, NBytes);
+    end;
+
+    if not (GotGcc and GotLibc) then
+    begin
+      Return.AddPair('error', Format(SR_PASERVER_SDK_NOGROUP_FMT,
+        [ProfName,
+         '/usr/lib/gcc/x86_64-linux-gnu | /usr/lib/gcc/x86_64-redhat-linux',
+         '/usr/lib/x86_64-linux-gnu | /usr/lib64']));
+      Exit(Return.ToJSON);
     end;
 
     // GCC version = the version folder that arrived in the gcc tree.

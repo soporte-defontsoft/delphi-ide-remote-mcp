@@ -8,6 +8,30 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.92.0-beta] - 2026-09-11
+
+`delphi_paserver get-sdk` learns that the GCC triplet is the distro's
+choice (openclaw's field report from a live Fedora 44 target).
+
+### Fixed
+- **get-sdk no longer aborts on non-Debian targets**: the pull table used
+  per-entry requiredness with the Debian/Ubuntu paths marked required, so a
+  Fedora/RHEL target (gcc under `/usr/lib/gcc/x86_64-redhat-linux`, libs
+  under `/usr/lib64`) failed hard on `/usr/lib/gcc/x86_64-linux-gnu` even
+  though its own tree was right there in the same table. Now every variant
+  is tried and the requirement is GROUP-wise: at least one gcc tree and one
+  libc dir must actually land - whichever triplet the target has. A target
+  matching no known layout gets a clear refusal (SR_PASERVER_SDK_NOGROUP_FMT)
+  asking for its triplet via delphi_report, instead of a half-built sysroot.
+- An entry that exits 0 but copies 0 files now counts as "skipped", not
+  "ok" - it can no longer satisfy the group requirement by accident.
+
+### Added
+- Battery round 26: parses the real LINUX64_PULLS table out of the source
+  and simulates Ubuntu, Fedora 44 and an unknown-musl target against the
+  group rule, so losing a distro variant (or regressing to per-entry
+  Optional flags) fails in CI before it fails in the field.
+
 ## [0.91.0-beta] - 2026-09-11
 
 **BREAKING** - workspace or nothing (the operator's final word on the access
