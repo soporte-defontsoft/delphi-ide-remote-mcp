@@ -842,6 +842,51 @@ begin
         if IFin = -1 then
           Exit(Format('RECHAZADO: no encuentro el ''end;'' de cierre de la clase %s.', [A.ClassName_]));
 
+        // COLISION (campo, hermes 17-sep): la firma de un metodo vive DOS
+        // veces (interface + implementation) y la tool escribia las dos a
+        // ciegas - si la clase YA declaraba el metodo, la segunda declaracion
+        // es E2254/E2537 seguro. Se mira cada mitad por separado y solo se
+        // escribe la que falta; entero = rechazo con el camino.
+        var Nombre := MF.Groups[2].Value;
+        var DeclRe := TRegEx.Create('^\s*(class\s+)?(procedure|function|constructor|destructor)\s+' +
+          TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
+        var IDeclExiste := -1;
+        for I := IClase + 1 to IFin - 1 do
+          if DeclRe.IsMatch(Lines[I]) then
+          begin
+            IDeclExiste := I;
+            Break;
+          end;
+        var ImplRe := TRegEx.Create('^\s*(class\s+)?(procedure|function|constructor|destructor)\s+' +
+          TRegEx.Escape(A.ClassName_) + '\.' + TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
+        var IImplExiste := -1;
+        for I := 0 to High(Lines) do
+          if ImplRe.IsMatch(Lines[I]) then
+          begin
+            IImplExiste := I;
+            Break;
+          end;
+        if (IDeclExiste >= 0) and (IImplExiste >= 0) then
+          Exit(Format('RECHAZADO: %s.%s ya existe ENTERO (declaracion en linea %d, ' +
+            'implementacion en linea %d). insert:"metodo" no duplica: para cambiar ' +
+            'su cuerpo usa old/new anclando en una linea del metodo; si querias un ' +
+            'OVERLOAD, anade sus dos mitades con old/new.',
+            [A.ClassName_, Nombre, IDeclExiste + 1, IImplExiste + 1]));
+        if IImplExiste >= 0 then
+          Exit(Format('RECHAZADO: existe la implementacion %s.%s (linea %d) pero la ' +
+            'clase no la declara - fichero incoherente. Revisalo y anade la ' +
+            'declaracion con old/new.',
+            [A.ClassName_, Nombre, IImplExiste + 1]));
+
+        var R1 := '';
+        var DeclLinea := '';
+        var DeclNota := '';
+        if IDeclExiste >= 0 then
+          DeclNota := Format('la clase YA declaraba ''%s'' (linea %d) y NO se anade ' +
+            'segunda declaracion (si querias un OVERLOAD, su declaracion va con old/new)',
+            [Nombre, IDeclExiste + 1])
+        else
+        begin
         var Secs := TArray<string>.Create('private', 'protected', 'public', 'published',
           'strict private', 'strict protected');
         var IDecl := IFin;
@@ -915,12 +960,13 @@ begin
             Break;
           end;
         end;
-        var DeclLinea := Sangria + Firma;
+        DeclLinea := Sangria + Firma;
         if not DeclLinea.EndsWith(';') then DeclLinea := DeclLinea + ';';
         var AnclaDecl := Lines[IDecl - 1];
-        var R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
+        R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
         if not R1.StartsWith('ESCRITO') then
           Exit(Format('INSERT metodo - FALLO en la mitad 1 (declaracion en la clase %s):'#10'%s', [A.ClassName_, R1]));
+        end;
         var FirmaCual := TRegEx.Replace(Firma,
           '^(procedure|function|constructor|destructor)(\s+)', '$1$2' + A.ClassName_ + '.', [roIgnoreCase]);
         var Primera := True;
@@ -932,8 +978,17 @@ begin
           end;
         var R2 := DoEdit(A.Path, FrontLine, string.Join(#10, CodeLines) + #10#10 + FrontLine, 0, False);
         if not R2.StartsWith('ESCRITO') then
+        begin
+          if DeclNota <> '' then
+            Exit('INSERT metodo - FALLO en la implementacion (la declaracion ya ' +
+              'existia y no se toco; el fichero NO ha cambiado).'#10 + R2);
           Exit('INSERT metodo - mitad 1 (declaracion) ESCRITA pero FALLO en la mitad 2 (implementacion). ' +
             'El fichero ha quedado A MEDIAS: restaura con restore:true y reintenta.'#10 + R2);
+        end;
+        if DeclNota <> '' then
+          Exit(Format('INSERT metodo en %s: %s. Solo se ha escrito la implementacion.'#10 +
+            '--- Implementacion ''%s'' en la frontera legal ---'#10'%s',
+            [A.ClassName_, DeclNota, Copy(FirmaCual, 1, 70), R2]));
         Exit(Format('INSERT metodo en %s: la tool ha hecho las DOS mitades.'#10 +
           '--- Mitad 1: declaracion ''%s'' dentro de la clase ---'#10'%s'#10 +
           '--- Mitad 2: implementacion ''%s'' en la frontera legal ---'#10'%s',

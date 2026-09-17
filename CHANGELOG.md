@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.94.0-beta] - 2026-09-17
+
+insert:"metodo" stops writing blind (hermes' field report: a class that
+already had the declaration prepared ended up with it duplicated or broken,
+E2254/E2067).
+
+### Fixed
+- **delphi_edit insert:"metodo" now checks each half before writing** - the
+  signature of a method lives TWICE (interface + implementation), and the
+  tool wrote both unconditionally. Now: declaration already in the class ->
+  it is not duplicated, only the implementation is written and the answer
+  says so (with the overload path spelled out); method fully exists ->
+  clear refusal naming both line numbers and pointing at old/new; orphan
+  implementation without declaration -> honest refusal (incoherent file).
+
+### Added
+- Battery round 28: the four cases (fresh method, prepared declaration,
+  fully existing, orphan implementation) against the real exe over stdio,
+  verifying the file bytes, not just the answers.
+
 ## [0.93.0-beta] - 2026-09-11
 
 The vault write protocol stops sending agents into the governance wall
