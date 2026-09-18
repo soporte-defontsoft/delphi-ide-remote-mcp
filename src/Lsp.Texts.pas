@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.95.0-beta';
+  SERVER_VERSION = '0.96.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -820,6 +820,63 @@ const
   // ---------------------------------------------------------------------
   // delphi_adb (Android devices hanging off THIS server's machine/network)
   // ---------------------------------------------------------------------
+  SR_FETCHTARGET_BADPATH =
+    'RECHAZADO: el fichero a traer se nombra RELATIVO a la carpeta que el ' +
+    'proyecto desplego (p.ej. "captura.png"). Nada de rutas absolutas ni "..".';
+  SR_FETCHTARGET_FAIL_FMT =
+    'no pude traer el fichero del target (paclient %d): %s';
+  SR_FETCHTARGET_NOFILE_FMT =
+    'el target no dejo "%s" donde se esperaba: ¿corrio el programa que lo escribe?';
+
+  SD_ADBLINUX =
+    'The Linux desktop of a target, the way adb gives you an Android one: ' +
+    'SEE the screen and ACT on it. The machine hangs off a PAServer profile ' +
+    '(the same profiles delphi_paserver builds and deploys with) and runs a ' +
+    'small Delphi node that this server deployed there - nothing else is ' +
+    'installed on it. THE FLOW, and it is the whole trick: command=screenshot ' +
+    'brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel ' +
+    'you want, and command=tap presses exactly there (x, y measured on that ' +
+    'screenshot - the node converts the screen scale itself, you never deal ' +
+    'with logical vs physical coordinates). command=key types one key by its ' +
+    'Linux code (Escape 1, Tab 15, Enter 28) and command=windows shows EVERY ' +
+    'window as a thumbnail (the Super key) - which is how you reach a window ' +
+    'that another one covers: show them all, then tap the one you want. ' +
+    'command=status says whether the desktop is reachable at all and, when it ' +
+    'is not, what to ask the operator for. The target needs a graphical ' +
+    'session open; a headless box has nothing to show.';
+  SP_ADBLINUX_COMMAND =
+    'screenshot (the whole desktop, brought here as a PNG; default) | tap ' +
+    '(press at x,y MEASURED ON THAT SCREENSHOT) | key (one key by Linux code: ' +
+    'code) | windows (show every window as a thumbnail, to reach a covered ' +
+    'one) | status (is the desktop reachable, and what to ask for if not)';
+  SP_ADBLINUX_PROFILE =
+    'PAServer profile of the target machine (delphi_paserver command=profiles ' +
+    'lists them). The desktop is THAT machine''s, never the agent''s.';
+  SP_ADBLINUX_PROJECT =
+    'Absolute path of the node''s .dproj (the Delphi program this server ' +
+    'deployed to the target). Build and deploy it first with delphi_build ' +
+    'target=Deploy.';
+  SP_ADBLINUX_X =
+    'tap: horizontal pixel MEASURED ON THE SCREENSHOT this tool returned';
+  SP_ADBLINUX_Y =
+    'tap: vertical pixel MEASURED ON THE SCREENSHOT this tool returned';
+  SP_ADBLINUX_CODE =
+    'key: the Linux key code (evdev), NOT an X11 keycode: Escape 1, Tab 15, ' +
+    'Enter 28, left Alt 56, Super 125';
+  SP_ADBLINUX_OUT =
+    'screenshot: folder where the PNG lands (default: the server''s temp ' +
+    'folder). Retrieve it with delphi_fetch.';
+  SR_ADBLINUX_CMD =
+    'RECHAZADO: command debe ser screenshot, tap, key, windows o status.';
+  SR_ADBLINUX_NEEDXY =
+    'RECHAZADO: tap necesita x e y, medidos sobre la captura que devuelve ' +
+    'command=screenshot.';
+  SR_ADBLINUX_NEEDCODE =
+    'RECHAZADO: key necesita "code", el codigo Linux de la tecla (Escape 1, ' +
+    'Tab 15, Enter 28).';
+  SR_ADBLINUX_NOSHOT =
+    'el nodo no dijo donde dejo la captura: mira su salida.';
+
   SD_ADB =
     'Android devices for remote development: the phones/tablets hang off ' +
     'THIS server (USB or wifi adb), while you program from anywhere. ' +

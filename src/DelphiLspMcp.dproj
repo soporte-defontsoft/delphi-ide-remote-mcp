@@ -92,8 +92,8 @@
         <VerInfo_Locale>1033</VerInfo_Locale>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>0</VerInfo_MajorVer>
-        <VerInfo_MinorVer>95</VerInfo_MinorVer>
-        <VerInfo_Keys>CompanyName=;FileDescription=DelphiLSP MCP Service (stdio host);FileVersion=0.95.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=DelphiLSP MCP Service;ProductVersion=0.95.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_MinorVer>96</VerInfo_MinorVer>
+        <VerInfo_Keys>CompanyName=;FileDescription=DelphiLSP MCP Service (stdio host);FileVersion=0.96.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=DelphiLSP MCP Service;ProductVersion=0.96.0.0;Comments=</VerInfo_Keys>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Winapi;System.Win;$(DCC_Namespace)</DCC_Namespace>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android)'!=''">
@@ -197,6 +197,7 @@
         <DCCReference Include="Mcp.Tools.Config.pas"/>
         <DCCReference Include="Mcp.Tools.PAServer.pas"/>
         <DCCReference Include="Mcp.Tools.Adb.pas"/>
+        <DCCReference Include="Mcp.Tools.DesktopLinux.pas"/>
         <DCCReference Include="Mcp.Tools.FileOps.pas"/>
         <DCCReference Include="Mcp.Tools.DelphiPatch.pas"/>
         <DCCReference Include="Mcp.Tools.TextEdit.pas"/>

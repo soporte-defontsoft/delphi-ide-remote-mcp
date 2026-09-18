@@ -47,6 +47,13 @@ function StartRunner(const AProfile: string; out AStatus: string): string;
 function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
   ATimeoutMs: Integer): TJSONObject;
 
+{ Trae AQUI un fichero que el programa desplegado dejo en SU carpeta del
+  target. ARelPath es relativo a esa carpeta ('captura.png'), nunca una ruta
+  del sistema: igual que la ejecucion remota, esto solo alcanza lo que ESE
+  proyecto desplego. Devuelve '' si todo fue bien, y el motivo si no. }
+function FetchFromTarget(const AProfile, ADprojPath, ARelPath, ADestDir: string;
+  out ALocalFile: string): string;
+
 implementation
 
 uses
@@ -120,6 +127,34 @@ begin
     'runner' + PathDelim + 'mcp-runner.py'));
   if not TFile.Exists(Result) then
     Result := '';
+end;
+
+function FetchFromTarget(const AProfile, ADprojPath, ARelPath, ADestDir: string;
+  out ALocalFile: string): string;
+var
+  Pc, ProjName, Ops, Output: string;
+  Rc: Integer;
+begin
+  ALocalFile := '';
+  Pc := PaClientPath;
+  if Pc = '' then
+    Exit(SR_REMOTERUN_NO_PACLIENT);
+  if (ARelPath = '') or ARelPath.Contains('..') or
+     ARelPath.StartsWith('/') or ARelPath.Contains('\') then
+    Exit(SR_FETCHTARGET_BADPATH);
+  ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
+  TDirectory.CreateDirectory(ADestDir);
+  Ops := Format('"--get=%s/%s,%s"', [ProjName, ARelPath, ADestDir]);
+  Rc := Paclient(Pc, Ops, AProfile, Output);
+  if Rc <> 0 then
+    Exit(Format(SR_FETCHTARGET_FAIL_FMT, [Rc, Output.Trim]));
+  ALocalFile := TPath.Combine(ADestDir, TPath.GetFileName(ARelPath));
+  if not TFile.Exists(ALocalFile) then
+  begin
+    ALocalFile := '';
+    Exit(Format(SR_FETCHTARGET_NOFILE_FMT, [ARelPath]));
+  end;
+  Result := '';
 end;
 
 function InstallRunner(const AProfile: string; out AHowTo: string): string;

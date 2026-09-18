@@ -99,7 +99,7 @@ def run_job(job):
         try:
             p = subprocess.run(cmd, cwd=os.path.dirname(target),
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                               timeout=timeout)
+                               env=entorno_grafico(), timeout=timeout)
             res['exitCode'] = p.returncode
             out_text = p.stdout.decode('utf-8', 'replace')
         except subprocess.TimeoutExpired as e:
@@ -115,6 +115,38 @@ def run_job(job):
         f.write(out_text)
     with open(os.path.join(OUT, 'result-%s.json' % jid), 'w', encoding='utf-8') as f:
         json.dump(res, f)
+
+
+def entorno_grafico():
+    """El entorno con el que lanzar el binario.
+
+    PAServer corre como servicio de usuario: HEREDA XDG_RUNTIME_DIR y
+    DBUS_SESSION_BUS_ADDRESS, pero NO DISPLAY ni XAUTHORITY. Sin ellas una
+    aplicacion grafica no arranca - medido 18-sep: GalateaFMX aborto con
+    "gdk_screen_get_resolution: assertion GDK_IS_SCREEN (screen) failed".
+    Una app de consola no las necesita y no le molestan, asi que se ponen
+    siempre que falten y exista sesion grafica.
+    """
+    env = dict(os.environ)
+    if sys.platform.startswith('win') or sys.platform == 'darwin':
+        return env
+    rt = env.get('XDG_RUNTIME_DIR') or '/run/user/%d' % os.getuid()
+    env.setdefault('DISPLAY', ':0')
+    if not env.get('XAUTHORITY'):
+        mejor, fecha = None, -1.0
+        try:
+            for n2 in os.listdir(rt):
+                if n2.startswith('.mutter-Xwaylandauth.'):
+                    f = os.path.join(rt, n2)
+                    m = os.path.getmtime(f)
+                    if m > fecha:
+                        mejor, fecha = f, m
+        except OSError:
+            pass
+        if mejor:
+            env['XAUTHORITY'] = mejor
+    env.setdefault('XDG_RUNTIME_DIR', rt)
+    return env
 
 
 MAX_EDAD_S = 300   # Un job mas viejo que esto NO se ejecuta: quien lo pidio ya

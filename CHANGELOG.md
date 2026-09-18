@@ -8,6 +8,44 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.96.0-beta] - 2026-09-18
+
+`delphi_adb_linux`: the Linux desktop of a target, the way `delphi_adb`
+gives you an Android one.
+
+The shape is adb's, all the way down: the agent talks to ONE place - this
+server - and this server drives a small Delphi node that it deployed on the
+target itself. Nothing else is installed over there: the node leans only on
+libraries the GNOME desktop already ships.
+
+The flow is the whole point, and it is deliberately the simple one:
+`command=screenshot` brings the WHOLE desktop here as a PNG, you look at it,
+measure the pixel you want, and `command=tap` presses exactly there. The node
+converts the screen scale itself, so an agent never deals with logical versus
+physical coordinates - it acts on what it sees. `command=windows` shows every
+window as a thumbnail, which is how you reach a window another one covers:
+show them all, then tap the one you want. `command=key` presses one key by
+its Linux code, and `command=status` says whether the desktop is reachable
+and, when it is not, what to ask the operator for.
+
+- New `FetchFromTarget` in the remote-run plumbing: brings back a file the
+  deployed program left in ITS folder on the target, named relative to that
+  folder. Absolute paths and `..` are refused - same reach as remote
+  execution, which is to say only what that project deployed.
+- The tool refuses with the reason and the way out: an invented command
+  lists the real ones, `tap` without coordinates says where they come from,
+  `key` without a code gives examples, and a project outside the workspace
+  is turned away by the gate like everywhere else.
+- tests/test_round30.py (17 checks) covers the contract an agent sees before
+  it has a target: that the tool is there, that its description TEACHES the
+  flow, and that every refusal names its reason.
+- The runner now gives what it launches a graphical environment. PAServer
+  runs as a user service: it inherits the session bus and the runtime dir,
+  but NOT `DISPLAY` or `XAUTHORITY` - so a GUI app died on the spot
+  (`gdk_screen_get_resolution: assertion GDK_IS_SCREEN (screen) failed`,
+  measured with a real FMX app). The runner sets them when they are missing;
+  a console program neither needs them nor minds them.
+
 ## [0.95.0-beta] - 2026-09-18
 
 insert now reads the WHOLE signature, however many lines it takes, and

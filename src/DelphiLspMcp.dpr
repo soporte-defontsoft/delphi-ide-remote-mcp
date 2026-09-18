@@ -82,6 +82,7 @@ uses
   Mcp.Tools.Config in 'Mcp.Tools.Config.pas',
   Mcp.Tools.PAServer in 'Mcp.Tools.PAServer.pas',
   Mcp.Tools.Adb in 'Mcp.Tools.Adb.pas',
+  Mcp.Tools.DesktopLinux in 'Mcp.Tools.DesktopLinux.pas',
   Mcp.Tools.Components in 'Mcp.Tools.Components.pas',
   Mcp.Tools.FileOps in 'Mcp.Tools.FileOps.pas',
   Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',

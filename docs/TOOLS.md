@@ -17,7 +17,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Edit code safely  (read-write only)** — [`delphi_edit`](#delphi_edit), [`delphi_textedit`](#delphi_textedit), [`delphi_create`](#delphi_create)
 - **Manage files  (read-write only)** — [`delphi_delete`](#delphi_delete), [`delphi_move`](#delphi_move)
 - **Build, run, package  (read-write only)** — [`delphi_build`](#delphi_build), [`delphi_run`](#delphi_run), [`delphi_package`](#delphi_package)
-- **Cross-platform: build configs, remote platforms & devices** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver), [`delphi_adb`](#delphi_adb), [`delphi_components`](#delphi_components)
+- **Cross-platform: build configs, remote platforms & devices** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver), [`delphi_adb`](#delphi_adb), [`delphi_adb_linux`](#delphi_adb_linux), [`delphi_components`](#delphi_components)
 - **FMX styles** — [`delphi_styles`](#delphi_styles)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
 - **Version control** — [`delphi_git`](#delphi_git)
@@ -426,6 +426,25 @@ The operator can pin an allowlist in `settings.ini` — `[Adb] AllowedDevices=19
 | `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |
 | `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package) |
 | `lines` | string | optional | logcat: how many recent lines to capture (default 300, max 5000; 0 = default). Inline answers carry at most the newest 400 — bigger dumps via `out=` |
+
+### `delphi_adb_linux`
+
+The Linux desktop of a target, the way `delphi_adb` gives you an Android one: SEE the screen and ACT on it. The machine hangs off a PAServer profile (the same profiles `delphi_paserver` builds and deploys with) and runs a small Delphi node this server deployed there — nothing else is installed on it: the node leans only on libraries the GNOME desktop already ships.
+
+THE FLOW, and it is the whole trick: `command=screenshot` brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel you want, and `command=tap` presses exactly there — x and y measured *on that screenshot*, because the node converts the screen scale itself. An agent never deals with logical versus physical coordinates: it acts on what it sees. `command=windows` shows EVERY window as a thumbnail (the Super key), which is how you reach a window another one covers — show them all, then tap the one you want. `command=key` presses one key by its Linux code (evdev, NOT X11 keycodes: Escape 1, Tab 15, Enter 28) and `command=status` says whether the desktop is reachable and, when it is not, what to ask the operator for.
+
+The target needs a graphical session open — a headless box has nothing to show. Deploy the node first with `delphi_build target=Deploy` against the same profile.
+
+*Access: read-write (tap and key act on the target's desktop; screenshot and status are read-only in spirit but travel the same path).*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | screenshot (default) \| tap \| key \| windows \| status |
+| `profile` | string | required | PAServer profile of the target machine (`delphi_paserver command=profiles` lists them). The desktop is THAT machine's, never the agent's |
+| `project` | string | required | Absolute path of the node's .dproj — the Delphi program this server deployed to the target |
+| `x` / `y` | string | optional | tap: the pixel MEASURED ON THE SCREENSHOT this tool returned |
+| `code` | string | optional | key: the Linux (evdev) key code — Escape 1, Tab 15, Enter 28, left Alt 56, Super 125 |
+| `out` | string | optional | screenshot: folder where the PNG lands (default: the server's temp folder). Retrieve it with `delphi_fetch` |
 
 ### `delphi_components`
 
