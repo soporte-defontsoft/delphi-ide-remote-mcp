@@ -35,7 +35,7 @@ anything runs at all, and both are enforced here, not by the sender:
 The result is {"id","exitCode","durationMs"} (+ "error" on a rejection); the
 program's combined stdout/stderr goes to result-<id>.out.
 """
-import json, os, subprocess, sys, time, shlex
+import datetime, json, os, re, subprocess, sys, time, shlex
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRATCH = os.path.dirname(HERE)                 # the deploy root
@@ -117,6 +117,44 @@ def run_job(job):
         json.dump(res, f)
 
 
+MAX_EDAD_S = 300   # Un job mas viejo que esto NO se ejecuta: quien lo pidio ya
+                   # se canso (remote-run espera 50 s). Medido 18-sep en campo:
+                   # al arrancar, el runner ejecutaba TODA la cola encontrada -
+                   # corrio un job de hacia CINCO DIAS y repitio uno que el
+                   # cliente ya habia dado por caducado (el programa se ejecuto
+                   # dos veces). Una orden vieja ejecutada tarde sorprende a
+                   # quien ya no la espera.
+
+
+def edad_segundos(job, path):
+    """Segundos desde que se creo el job. Manda el id (YYYYMMDD-HHMMSSmmm-hash);
+    si no se puede leer, la fecha del fichero."""
+    m = re.match(r'^(\d{8})-(\d{6})', str(job.get('id') or ''))
+    if m:
+        try:
+            t = datetime.datetime.strptime(m.group(1) + m.group(2), '%Y%m%d%H%M%S')
+            return (datetime.datetime.now() - t).total_seconds()
+        except ValueError:
+            pass
+    try:
+        return time.time() - os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
+def marcar_caducado(job, edad):
+    """Deja un resultado explicando por que no se ejecuto, por si alguien mira."""
+    jid = job.get('id')
+    res = {'id': jid, 'success': False, 'exitCode': -1,
+           'runnerError': 'job CADUCADO: %.0f s en la cola (limite %d s). '
+                          'El runner no ejecuta ordenes viejas.' % (edad, MAX_EDAD_S)}
+    try:
+        with open(os.path.join(OUT, 'result-%s.json' % jid), 'w', encoding='utf-8') as f:
+            json.dump(res, f)
+    except OSError:
+        pass
+
+
 def main():
     print('mcp-runner vigilando %s (scratch=%s)' % (JOBS, SCRATCH), flush=True)
     while True:
@@ -129,6 +167,13 @@ def main():
                     job = json.load(f)
             except Exception as e:        # noqa
                 print('job ilegible %s: %s' % (name, e), flush=True)
+                os.replace(path, os.path.join(DONE, name))
+                continue
+            edad = edad_segundos(job, path)
+            if edad > MAX_EDAD_S:
+                print('job CADUCADO %s (%.0f s en cola): NO se ejecuta'
+                      % (job.get('id'), edad), flush=True)
+                marcar_caducado(job, edad)
                 os.replace(path, os.path.join(DONE, name))
                 continue
             print('ejecutando job %s: %s' % (job.get('id'), job.get('exe')), flush=True)

@@ -8,6 +8,38 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.95.0-beta] - 2026-09-18
+
+insert now reads the WHOLE signature, however many lines it takes, and
+accepts a doc comment above it.
+
+Both came out of building a new Delphi project THROUGH this server (the
+Linux node spike): a signature split over two lines was written TRUNCATED
+into the class - only its first line. And because that line ends in `;`
+(the separator between parameter groups), the "does it close?" guard was
+fooled and the report still announced "both halves". The compiler answered
+with E2029 + E2037 and a cascade of undeclared-identifier errors far from
+the real place, which is the expensive kind of wrong.
+
+- `insert:"metodo"` and `insert:"rutina-global"` now scan the signature to
+  the `;` that CLOSES it, counting parentheses (and ignoring quotes), then
+  write it complete - re-indented under the class for the declaration,
+  qualified for the implementation. The interface declaration that
+  `visible:true` adds for a global routine was truncated the same way and
+  is fixed too.
+- A signature that never closes is refused with its first line quoted,
+  instead of writing something broken.
+- A `{ }`, `(* *)` or `//` comment above the signature is now accepted: it
+  travels with the implementation (where it documents) and does not go into
+  the class declaration. Before, the whole block was refused for "not
+  starting with a routine signature" - against the house style, which
+  documents methods exactly that way.
+- Remote-run jobs older than 5 minutes are no longer executed: the runner
+  was running everything it found in the queue at startup, and a job from
+  five days earlier ran on a restart (plus a client-side-expired one ran
+  afterwards, so the program ran twice). Stale orders are moved aside with
+  a result explaining why.
+
 ## [0.94.0-beta] - 2026-09-17
 
 insert:"metodo" stops writing blind (hermes' field report: a class that

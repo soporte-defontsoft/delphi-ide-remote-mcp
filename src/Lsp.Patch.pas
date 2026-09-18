@@ -709,19 +709,88 @@ begin
             [Copy(LastLine, 1, 80)]));
         end;
 
-        var Firma := '';
-        for var L in CodeLines do
-          if L.Trim <> '' then
+        // La firma puede ocupar VARIAS lineas y venir precedida de un
+        // comentario de documentacion (el estilo de la casa lo hace). Se busca
+        // la primera linea que ES una firma - saltando blancos y comentarios -
+        // y se sigue hasta el ';' que la CIERRA a profundidad de parentesis 0:
+        // dentro de los parentesis el ';' solo separa grupos de parametros.
+        // Medido en campo (18-sep): quedarse con la primera linea escribia la
+        // declaracion TRUNCADA en la clase y, como esa linea acaba en ';', la
+        // comprobacion de cierre la daba por buena - E2029 y cascada de
+        // "identificador no declarado" lejos del sitio real, con el informe
+        // diciendo "las DOS mitades".
+        var IFirmaIni := -1;
+        var EnComentario := False;
+        for I := 0 to High(CodeLines) do
+        begin
+          var T := CodeLines[I].Trim;
+          if EnComentario then
           begin
-            Firma := L.Trim;
-            Break;
+            if T.Contains('}') or T.Contains('*)') then
+              EnComentario := False;
+            Continue;
           end;
+          if (T = '') or T.StartsWith('//') then
+            Continue;
+          if T.StartsWith('{') or T.StartsWith('(*') then
+          begin
+            if not (T.Contains('}') or T.Contains('*)')) then
+              EnComentario := True;
+            Continue;
+          end;
+          IFirmaIni := I;
+          Break;
+        end;
+        var Firma := '';
+        if IFirmaIni >= 0 then
+          Firma := CodeLines[IFirmaIni].Trim;
         var MF := TRegEx.Match(Firma,
           '^(procedure|function|constructor|destructor)\s+([A-Za-z_]\w*)\s*([.(;:])?', [roIgnoreCase]);
         if not MF.Success then
-          Exit(Format('RECHAZADO: el bloque no empieza por una firma de rutina. Primera linea: |%s|', [Copy(Firma, 1, 80)]));
+          Exit(Format('RECHAZADO: el bloque no empieza por una firma de rutina (puede llevar comentario encima). Primera linea util: |%s|', [Copy(Firma, 1, 80)]));
         if MF.Groups[3].Value = '.' then
           Exit('RECHAZADO: la firma viene CUALIFICADA con clase. Pasala SIN cualificar; con insert:"metodo" la tool pone el prefijo.');
+        var IFirmaFin := IFirmaIni;
+        var PosCierre := 0;
+        var FirmaCerrada := False;
+        var ProfPar := 0;
+        var EnCadena := False;
+        for I := IFirmaIni to High(CodeLines) do
+        begin
+          var Ln := TRegEx.Replace(CodeLines[I], '//.*$', '');
+          var Col := 0;
+          for var Ch in Ln do
+          begin
+            Inc(Col);
+            if Ch = '''' then
+              EnCadena := not EnCadena
+            else if not EnCadena then
+            begin
+              if Ch = '(' then
+                Inc(ProfPar)
+              else if Ch = ')' then
+                Dec(ProfPar)
+              else if (Ch = ';') and (ProfPar <= 0) then
+              begin
+                FirmaCerrada := True;
+                PosCierre := Col;
+              end;
+            end;
+            if FirmaCerrada then
+              Break;
+          end;
+          IFirmaFin := I;
+          if FirmaCerrada then
+            Break;
+        end;
+        if not FirmaCerrada then
+          Exit(Format('RECHAZADO: la firma no llega a cerrarse con '';''. Empieza en |%s|', [Copy(Firma, 1, 80)]));
+        var FirmaLineas := TArray<string>.Create();
+        for I := IFirmaIni to IFirmaFin do
+          if I = IFirmaFin then
+            FirmaLineas := FirmaLineas + [Copy(CodeLines[I], 1, PosCierre).Trim]
+          else
+            FirmaLineas := FirmaLineas + [CodeLines[I].Trim];
 
         Lines := SplitToLines(Text);
 
@@ -804,7 +873,7 @@ begin
                 Result := L.Trim.ToLower = 'implementation';
               end, ImpIdx) then
             begin
-              var Decl := Firma;
+              var Decl := string.Join(#10, FirmaLineas);
               if not Decl.EndsWith(';') then Decl := Decl + ';';
               var R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
               if R2.StartsWith('ESCRITO') then
@@ -960,7 +1029,9 @@ begin
             Break;
           end;
         end;
-        DeclLinea := Sangria + Firma;
+        DeclLinea := Sangria + FirmaLineas[0];
+        for I := 1 to High(FirmaLineas) do
+          DeclLinea := DeclLinea + #10 + Sangria + '  ' + FirmaLineas[I];
         if not DeclLinea.EndsWith(';') then DeclLinea := DeclLinea + ';';
         var AnclaDecl := Lines[IDecl - 1];
         R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
@@ -969,13 +1040,7 @@ begin
         end;
         var FirmaCual := TRegEx.Replace(Firma,
           '^(procedure|function|constructor|destructor)(\s+)', '$1$2' + A.ClassName_ + '.', [roIgnoreCase]);
-        var Primera := True;
-        for I := 0 to High(CodeLines) do
-          if Primera and (CodeLines[I].Trim = Firma) then
-          begin
-            CodeLines[I] := FirmaCual;
-            Primera := False;
-          end;
+        CodeLines[IFirmaIni] := FirmaCual;
         var R2 := DoEdit(A.Path, FrontLine, string.Join(#10, CodeLines) + #10#10 + FrontLine, 0, False);
         if not R2.StartsWith('ESCRITO') then
         begin
