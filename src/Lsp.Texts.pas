@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.96.0-beta';
+  SERVER_VERSION = '0.97.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -837,7 +837,10 @@ const
     'brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel ' +
     'you want, and command=tap presses exactly there (x, y measured on that ' +
     'screenshot - the node converts the screen scale itself, you never deal ' +
-    'with logical vs physical coordinates). command=key types one key by its ' +
+    'with logical vs physical coordinates). command=type writes text, and ' +
+    'given x and y it presses there FIRST - the real gesture is "write this ' +
+    'here", and one trip pays the startup once instead of twice. ' +
+    'command=key types one key by its ' +
     'Linux code (Escape 1, Tab 15, Enter 28) and command=windows shows EVERY ' +
     'window as a thumbnail (the Super key) - which is how you reach a window ' +
     'that another one covers: show them all, then tap the one you want. ' +
@@ -846,9 +849,11 @@ const
     'session open; a headless box has nothing to show.';
   SP_ADBLINUX_COMMAND =
     'screenshot (the whole desktop, brought here as a PNG; default) | tap ' +
-    '(press at x,y MEASURED ON THAT SCREENSHOT) | key (one key by Linux code: ' +
-    'code) | windows (show every window as a thumbnail, to reach a covered ' +
-    'one) | status (is the desktop reachable, and what to ask for if not)';
+    '(press at x,y MEASURED ON THAT SCREENSHOT) | type (write "text" - with ' +
+    'x,y it presses there FIRST, which is the real gesture: "write this ' +
+    'here", and pays the startup once) | key (one key by Linux code: code) | ' +
+    'windows (show every window as a thumbnail, to reach a covered one) | ' +
+    'status (is the desktop reachable, and what to ask for if not)';
   SP_ADBLINUX_PROFILE =
     'PAServer profile of the target machine (delphi_paserver command=profiles ' +
     'lists them). The desktop is THAT machine''s, never the agent''s.';
@@ -863,6 +868,13 @@ const
   SP_ADBLINUX_CODE =
     'key: the Linux key code (evdev), NOT an X11 keycode: Escape 1, Tab 15, ' +
     'Enter 28, left Alt 56, Super 125';
+  SP_ADBLINUX_TEXT =
+    'type: the text to write, key by key. Letters, digits, space and - . , / ' +
+    'only: a character it cannot type is refused by name instead of writing ' +
+    'something else. With x,y it presses there first to focus the field.';
+  SR_ADBLINUX_NEEDTEXT =
+    'RECHAZADO: type necesita "text". Si ademas pasas x e y, pulsa ahi antes ' +
+    'de escribir: es el gesto real, "escribe esto aqui", y arranca una sola vez.';
   SP_ADBLINUX_OUT =
     'screenshot: folder where the PNG lands (default: the server''s temp ' +
     'folder). Retrieve it with delphi_fetch.';

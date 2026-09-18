@@ -37,6 +37,7 @@ type
     FX: string;
     FY: string;
     FCode: string;
+    FText: string;
     FOut: string;
   public
     [SchemaDescription(SP_ADBLINUX_COMMAND)]
@@ -51,6 +52,8 @@ type
     property Y: string read FY write FY;
     [SchemaDescription(SP_ADBLINUX_CODE)]
     property Code: string read FCode write FCode;
+    [SchemaDescription(SP_ADBLINUX_TEXT)]
+    property Text: string read FText write FText;
     [SchemaDescription(SP_ADBLINUX_OUT)]
     property Out_: string read FOut write FOut;
   end;
@@ -99,7 +102,7 @@ begin
   Cmd := Params.Command.Trim.ToLower;
   if Cmd = '' then
     Cmd := 'screenshot';
-  if not MatchStr(Cmd, ['screenshot', 'tap', 'key', 'windows', 'status']) then
+  if not MatchStr(Cmd, ['screenshot', 'tap', 'type', 'key', 'windows', 'status']) then
     Exit(SR_ADBLINUX_CMD);
 
   { El jail decide si este token puede tocar ese proyecto, igual que en
@@ -115,6 +118,17 @@ begin
       Exit(SR_ADBLINUX_NEEDXY);
     Args := Format('%d %d', [StrToIntDef(Params.X.Trim, -1),
       StrToIntDef(Params.Y.Trim, -1)]);
+  end
+  else if Cmd = 'type' then
+  begin
+    if Params.Text.Trim = '' then
+      Exit(SR_ADBLINUX_NEEDTEXT);
+    { Con coordenadas es UN solo viaje: pulsa para dar el foco y escribe. }
+    if (Params.X.Trim <> '') and (Params.Y.Trim <> '') then
+      Args := Format('escribe %d %d %s', [StrToIntDef(Params.X.Trim, -1),
+        StrToIntDef(Params.Y.Trim, -1), Params.Text.Trim])
+    else
+      Args := 'texto ' + Params.Text.Trim;
   end
   else if Cmd = 'key' then
   begin

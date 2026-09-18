@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.97.0-beta] - 2026-09-18
+
+`delphi_adb_linux command=type`: write text on the target's desktop - and,
+with `x` and `y`, press there first.
+
+That second half is the point, and it came out of the obvious question once
+typing existed: the real gesture is not "focus a field" and then "type", it
+is **"write this here"**. Passing coordinates makes it one trip, which also
+means the node pays its startup ONCE instead of twice. Measured against a
+real app: a bare click costs 3.3s and a click-plus-six-letters costs the
+same 3.3s, because the letters ride along for free. That is the argument for
+letting one invocation do a whole step rather than a single gesture - and it
+is why the node stays a tool you invoke, not a service you leave running.
+
+- Letters, digits, space and `- . , /`, with capitals. A character it cannot
+  type is refused BY NAME instead of writing something else: in a data field
+  the difference between a visible failure and a silent one.
+- Without `x`/`y` it types wherever the focus already is.
+- tests/test_round30.py grew to cover the new command and its parameter.
+
 ## [0.96.0-beta] - 2026-09-18
 
 `delphi_adb_linux`: the Linux desktop of a target, the way `delphi_adb`

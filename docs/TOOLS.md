@@ -431,7 +431,7 @@ The operator can pin an allowlist in `settings.ini` — `[Adb] AllowedDevices=19
 
 The Linux desktop of a target, the way `delphi_adb` gives you an Android one: SEE the screen and ACT on it. The machine hangs off a PAServer profile (the same profiles `delphi_paserver` builds and deploys with) and runs a small Delphi node this server deployed there — nothing else is installed on it: the node leans only on libraries the GNOME desktop already ships.
 
-THE FLOW, and it is the whole trick: `command=screenshot` brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel you want, and `command=tap` presses exactly there — x and y measured *on that screenshot*, because the node converts the screen scale itself. An agent never deals with logical versus physical coordinates: it acts on what it sees. `command=windows` shows EVERY window as a thumbnail (the Super key), which is how you reach a window another one covers — show them all, then tap the one you want. `command=key` presses one key by its Linux code (evdev, NOT X11 keycodes: Escape 1, Tab 15, Enter 28) and `command=status` says whether the desktop is reachable and, when it is not, what to ask the operator for.
+THE FLOW, and it is the whole trick: `command=screenshot` brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel you want, `command=tap` presses exactly there and `command=type` writes text (with `x`,`y` it presses there first — the real gesture is "write this here", and it pays the startup once) — x and y measured *on that screenshot*, because the node converts the screen scale itself. An agent never deals with logical versus physical coordinates: it acts on what it sees. `command=windows` shows EVERY window as a thumbnail (the Super key), which is how you reach a window another one covers — show them all, then tap the one you want. `command=key` presses one key by its Linux code (evdev, NOT X11 keycodes: Escape 1, Tab 15, Enter 28) and `command=status` says whether the desktop is reachable and, when it is not, what to ask the operator for.
 
 The target needs a graphical session open — a headless box has nothing to show. Deploy the node first with `delphi_build target=Deploy` against the same profile.
 
@@ -439,10 +439,11 @@ The target needs a graphical session open — a headless box has nothing to show
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | screenshot (default) \| tap \| key \| windows \| status |
+| `command` | string | optional | screenshot (default) \| tap \| type \| key \| windows \| status |
 | `profile` | string | required | PAServer profile of the target machine (`delphi_paserver command=profiles` lists them). The desktop is THAT machine's, never the agent's |
 | `project` | string | required | Absolute path of the node's .dproj — the Delphi program this server deployed to the target |
 | `x` / `y` | string | optional | tap: the pixel MEASURED ON THE SCREENSHOT this tool returned |
+| `text` | string | optional | type: the text to write, key by key. Letters, digits, space and `- . , /` only — a character it cannot type is refused BY NAME instead of writing something else. With `x`,`y` it presses there first to focus the field: one trip, one startup |
 | `code` | string | optional | key: the Linux (evdev) key code — Escape 1, Tab 15, Enter 28, left Alt 56, Super 125 |
 | `out` | string | optional | screenshot: folder where the PNG lands (default: the server's temp folder). Retrieve it with `delphi_fetch` |
 

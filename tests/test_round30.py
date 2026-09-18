@@ -127,10 +127,15 @@ check('cuenta como alcanzar una ventana tapada',
       'covers' in desc.lower() or 'covered' in desc.lower(), desc[:240])
 
 props = (T or {}).get('inputSchema', {}).get('properties', {})
-for p in ('command', 'profile', 'project', 'x', 'y', 'code'):
+for p in ('command', 'profile', 'project', 'x', 'y', 'code', 'text'):
     check('el esquema declara "%s"' % p, p in props, sorted(props))
 check('el parametro x dice que se mide SOBRE la captura',
       'SCREENSHOT' in props.get('x', {}).get('description', '').upper(), props.get('x'))
+check('el parametro text avisa de que con x,y pulsa antes',
+      'presses there first' in props.get('text', {}).get('description', ''), props.get('text'))
+check('el command cuenta que type con x,y es UN solo viaje',
+      'pays the startup once' in desc, desc[:300])
+
 check('el parametro code avisa de que son codigos Linux, no X11',
       'X11' in props.get('code', {}).get('description', ''), props.get('code'))
 
@@ -144,6 +149,10 @@ check('un command inventado se rechaza con la lista buena',
 r = call('delphi_adb_linux', {"command": "tap", "profile": "x", "project": PROJ})
 check('tap sin coordenadas se rechaza diciendo de donde salen',
       r.startswith('RECHAZADO') and 'screenshot' in r, r[:160])
+
+r = call('delphi_adb_linux', {"command": "type", "profile": "x", "project": PROJ})
+check('type sin texto se rechaza y explica el gesto de un solo viaje',
+      r.startswith('RECHAZADO') and 'x e y' in r, r[:200])
 
 r = call('delphi_adb_linux', {"command": "key", "profile": "x", "project": PROJ})
 check('key sin codigo se rechaza con ejemplos',
