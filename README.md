@@ -213,6 +213,31 @@ switch and its own allowlist; it will not arrive by accident.
 
 **→ Handing this server to an AI agent?** Give it [skills/cmcpdelphiide/SKILL.md](skills/cmcpdelphiide/SKILL.md) — a field-tested agent skill (drop it into the agent's skills folder or paste it as instructions) covering the path model, the safe-editing contract, the deploy chains and how to move files and logs the right way.
 
+## The Linux desktop node (`src_linux_desktop_node/`)
+
+`delphi_adb_linux` works through a tiny Delphi console program - the **node** -
+that lives on the Linux target and is the server's eyes and hands there: it
+captures the desktop through the XDG portal, converts the screen scale, and
+injects clicks and keys. This repository carries BOTH halves:
+
+- **`node/McpLinuxDesktop`** - the compiled Linux binary, shipped inside every
+  release zip. Nothing to build and nothing to install: the server pushes it to
+  each target on first use and keeps it current BY ITSELF (a `node.ver` stamp
+  with the binary's SHA-256, checked once per profile and session - upgrade the
+  server and every provisioned target heals on its next gesture; measured:
+  3.0 s for a gesture that also updated the node, 1.4 s warm).
+- **`src_linux_desktop_node/`** - its Delphi sources (five units and the
+  project), for whoever wants to read exactly what runs on their machine, or
+  extend it. Build with `delphi_build platform=Linux64` (the tool passes the
+  SDK by itself) or by hand with msbuild plus `/p:PlatformSDK=Linux64.sdk`.
+
+**Today the node speaks GNOME only** (measured live on Zorin 18 and Fedora):
+the capture goes through the XDG desktop portal, the window overview uses
+GNOME's Super gesture and the screen scale comes from Mutter. KDE and other
+desktops are not supported yet - the portal half would travel, the rest would
+not. On a GNOME target it leans only on libraries the desktop already ships
+(libdbus, libei): nothing to install, ever.
+
 ## Quickstart
 
 **No Delphi installed, or don't want to compile?** Download the ready-made
