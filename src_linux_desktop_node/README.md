@@ -1,4 +1,4 @@
-# `src_linux_desktop_node/` — sources of the Linux desktop node
+# `src_linux_desktop_node/` — sources of the desktop node
 
 The **node** is the tiny Delphi console program that `delphi_adb_linux` runs on
 the Linux target: the server's eyes and hands there. One short-lived process
@@ -13,18 +13,31 @@ headers (the portal's mute timeout, libei's handshake, the PNG written by
 hand) was measured through that same remote loop. Dogfooding, start to
 finish.
 
-**GNOME only for today** (measured live on Zorin 18 and Fedora): capture goes
-through the XDG desktop portal, input through libei, the scale comes from
-Mutter. Nothing gets installed on the target: every system library is opened
-at runtime.
+**One program, two desktops.** The same `.dpr` and the same commands build
+for Linux and for Windows; an `{$IFDEF}` picks who it talks to underneath, and
+adding a third system means writing its unit plus its `Ejecutar<System>` and
+hanging it off the same dispatch:
+
+- **Linux** (GNOME only for today, measured live on Zorin 18 and Fedora):
+  capture through the XDG desktop portal, input through libei, scale from
+  Mutter, every system library opened at runtime.
+- **Windows** (`Mld.Win.pas`): GDI for the eyes and `SendInput` for the hands,
+  both already in the system — nothing to load, nothing to install. It grabs
+  the whole virtual desktop (every monitor), so the caller still measures on
+  the image and knows nothing about monitors or scaling.
+
+Nothing gets installed on the target in either case, and the output contract
+is identical: coordinates are pixels OF THE CAPTURE and the node answers with
+`CAPTURA=<path>`.
 
 | Unit | Role |
 |---|---|
 | `Mld.Dyn.pas` | Dynamic loading (`dlopen`/`dlsym`) — the node links NOTHING of the desktop at compile time |
 | `Mld.DBus.pas` | The D-Bus session bus conversation: portals (screenshot, input) over `libdbus-1.so.3` |
-| `Mld.Captura.pas` | The eyes, part two: grab the content and write the PNG **by hand** (no ImageMagick, no external tools) |
+| `Mld.Captura.pas` | The eyes, part two: write the PNG **by hand** (no ImageMagick, no external tools). The writer is SHARED: X11 and a Windows DIB both hand over BGR pixels |
 | `Mld.Eis.pas` | The hands: input injection through libei, fed by the descriptor D-Bus negotiated |
 | `Mld.X11.pas` | The eyes, part one: enumerate windows via libX11 at runtime (replaces xdotool — one dependency fewer) |
+| `Mld.Win.pas` | Windows: eyes (GDI capture of the virtual desktop), hands (`SendInput`: click, Unicode typing, key combos) and the window list, with DPI awareness asked for at runtime |
 
 **You normally never build this.** The compiled Release ships as
 [`node/McpLinuxDesktop`](../node) inside every release zip, and the server

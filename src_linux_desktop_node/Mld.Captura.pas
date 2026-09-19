@@ -13,9 +13,20 @@
 
 interface
 
+{$IFDEF LINUX}
 uses
   Mld.X11;
+{$ENDIF}
 
+{ El escritor de PNG es COMUN a los dos sistemas: tanto X11 como un DIB de
+  Windows entregan los canales en orden BGR, asi que la misma rutina sirve
+  para el escritorio Linux y para el de Windows ([Mld.Win]).
+  ADatos apunta al primer pixel de la primera fila; ABytesPorLinea es el
+  salto real entre filas (puede llevar relleno). }
+function GuardarPNG(const ARuta: string; ADatos: PByte;
+  AAncho, AAlto, ABytesPorLinea, ABpp: Integer): Boolean;
+
+{$IFDEF LINUX}
 type
   TCamara = class
   private
@@ -28,6 +39,7 @@ type
     function Capturar(AVentana: NativeUInt; const ARuta: string): Boolean;
     property Error: string read FError;
   end;
+{$ENDIF}
 
 implementation
 
@@ -97,6 +109,88 @@ begin
   EscribirBE(AStream, Crc32(Buf, 0, Length(Buf)));
 end;
 
+{ ------------------------------------------------------- PNG desde pixeles }
+function GuardarPNG(const ARuta: string; ADatos: PByte;
+  AAncho, AAlto, ABytesPorLinea, ABpp: Integer): Boolean;
+var
+  Fila, Col, Destino: Integer;
+  Crudo, Comprimido, Cab: TBytes;
+  Origen: PByte;
+  MS: TMemoryStream;
+  Z: TZCompressionStream;
+  Fich: TFileStream;
+begin
+  Result := False;
+  if (ADatos = nil) or (AAncho <= 0) or (AAlto <= 0) then
+    Exit;
+  if (ABpp <> 32) and (ABpp <> 24) then
+    Exit;
+
+  { Lineas sin filtrar: un byte de filtro (0) y despues RGB. En memoria los
+    canales llegan en orden BGR (little-endian), asi que se reordenan. }
+  SetLength(Crudo, AAlto * (1 + AAncho * 3));
+  Destino := 0;
+  for Fila := 0 to AAlto - 1 do
+  begin
+    Crudo[Destino] := 0;
+    Inc(Destino);
+    Origen := ADatos + NativeInt(Fila) * ABytesPorLinea;
+    for Col := 0 to AAncho - 1 do
+    begin
+      Crudo[Destino] := PByte(Origen + 2)^;      // R
+      Crudo[Destino + 1] := PByte(Origen + 1)^;  // G
+      Crudo[Destino + 2] := PByte(Origen)^;      // B
+      Inc(Destino, 3);
+      Inc(Origen, ABpp div 8);
+    end;
+  end;
+
+  MS := TMemoryStream.Create;
+  try
+    Z := TZCompressionStream.Create(clDefault, MS);
+    try
+      Z.WriteBuffer(Crudo[0], Length(Crudo));
+    finally
+      Z.Free;
+    end;
+    SetLength(Comprimido, MS.Size);
+    if MS.Size > 0 then
+    begin
+      MS.Position := 0;
+      MS.ReadBuffer(Comprimido[0], MS.Size);
+    end;
+  finally
+    MS.Free;
+  end;
+
+  Fich := TFileStream.Create(ARuta, fmCreate);
+  try
+    SetLength(Cab, 8);
+    Cab[0] := $89; Cab[1] := $50; Cab[2] := $4E; Cab[3] := $47;
+    Cab[4] := $0D; Cab[5] := $0A; Cab[6] := $1A; Cab[7] := $0A;
+    Fich.WriteBuffer(Cab[0], 8);
+
+    SetLength(Cab, 13);
+    Cab[0] := Byte(AAncho shr 24); Cab[1] := Byte(AAncho shr 16);
+    Cab[2] := Byte(AAncho shr 8);  Cab[3] := Byte(AAncho);
+    Cab[4] := Byte(AAlto shr 24);  Cab[5] := Byte(AAlto shr 16);
+    Cab[6] := Byte(AAlto shr 8);   Cab[7] := Byte(AAlto);
+    Cab[8] := 8;   // 8 bits por canal
+    Cab[9] := 2;   // color verdadero RGB
+    Cab[10] := 0;  // compresion deflate
+    Cab[11] := 0;  // filtrado estandar
+    Cab[12] := 0;  // sin entrelazado
+    EscribirTrozo(Fich, 'IHDR', Cab);
+    EscribirTrozo(Fich, 'IDAT', Comprimido);
+    SetLength(Cab, 0);
+    EscribirTrozo(Fich, 'IEND', Cab);
+  finally
+    Fich.Free;
+  end;
+  Result := True;
+end;
+
+{$IFDEF LINUX}
 { ---------------------------------------------------------------- camara }
 constructor TCamara.Create(AOjos: TOjos);
 begin
@@ -107,13 +201,7 @@ end;
 function TCamara.Capturar(AVentana: NativeUInt; const ARuta: string): Boolean;
 var
   Img: PXImage;
-  Fila, Col, Ancho, Alto, Bpp: Integer;
-  Crudo, Comprimido, Cab: TBytes;
-  Origen: PByte;
-  Destino: Integer;
-  MS: TMemoryStream;
-  Z: TZCompressionStream;
-  Fich: TFileStream;
+  Ancho, Alto, Bpp: Integer;
 begin
   Result := False;
   FError := '';
@@ -138,71 +226,14 @@ begin
       Exit;
     end;
 
-    { Lineas sin filtrar: un byte de filtro (0) y despues RGB. En memoria X11
-      entrega los canales en orden BGR (little-endian), asi que se reordenan. }
-    SetLength(Crudo, Alto * (1 + Ancho * 3));
-    Destino := 0;
-    for Fila := 0 to Alto - 1 do
-    begin
-      Crudo[Destino] := 0;
-      Inc(Destino);
-      Origen := Img.Datos + NativeInt(Fila) * Img.BytesPerLine;
-      for Col := 0 to Ancho - 1 do
-      begin
-        Crudo[Destino] := PByte(Origen + 2)^;      // R
-        Crudo[Destino + 1] := PByte(Origen + 1)^;  // G
-        Crudo[Destino + 2] := PByte(Origen)^;      // B
-        Inc(Destino, 3);
-        Inc(Origen, Bpp div 8);
-      end;
-    end;
-
-    MS := TMemoryStream.Create;
-    try
-      Z := TZCompressionStream.Create(clDefault, MS);
-      try
-        Z.WriteBuffer(Crudo[0], Length(Crudo));
-      finally
-        Z.Free;
-      end;
-      SetLength(Comprimido, MS.Size);
-      if MS.Size > 0 then
-      begin
-        MS.Position := 0;
-        MS.ReadBuffer(Comprimido[0], MS.Size);
-      end;
-    finally
-      MS.Free;
-    end;
-
-    Fich := TFileStream.Create(ARuta, fmCreate);
-    try
-      SetLength(Cab, 8);
-      Cab[0] := $89; Cab[1] := $50; Cab[2] := $4E; Cab[3] := $47;
-      Cab[4] := $0D; Cab[5] := $0A; Cab[6] := $1A; Cab[7] := $0A;
-      Fich.WriteBuffer(Cab[0], 8);
-
-      SetLength(Cab, 13);
-      Cab[0] := Byte(Ancho shr 24); Cab[1] := Byte(Ancho shr 16);
-      Cab[2] := Byte(Ancho shr 8);  Cab[3] := Byte(Ancho);
-      Cab[4] := Byte(Alto shr 24);  Cab[5] := Byte(Alto shr 16);
-      Cab[6] := Byte(Alto shr 8);   Cab[7] := Byte(Alto);
-      Cab[8] := 8;   // 8 bits por canal
-      Cab[9] := 2;   // color verdadero RGB
-      Cab[10] := 0;  // compresion deflate
-      Cab[11] := 0;  // filtrado estandar
-      Cab[12] := 0;  // sin entrelazado
-      EscribirTrozo(Fich, 'IHDR', Cab);
-      EscribirTrozo(Fich, 'IDAT', Comprimido);
-      SetLength(Cab, 0);
-      EscribirTrozo(Fich, 'IEND', Cab);
-    finally
-      Fich.Free;
-    end;
-    Result := True;
+    Result := GuardarPNG(ARuta, PByte(Img.Datos), Ancho, Alto,
+      Img.BytesPerLine, Bpp);
+    if not Result then
+      FError := 'no pude escribir el PNG en ' + ARuta;
   finally
     FOjos.LiberarImagen(Img);
   end;
 end;
+{$ENDIF}
 
 end.

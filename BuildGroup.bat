@@ -2,8 +2,9 @@
 REM ============================================================================
 REM  BuildGroup.bat - compila el GRUPO entero (MCP-delphi.groupproj):
 REM  el servidor (DelphiLspMcp), DelphiStyleConvert, LspCoreTest y el nodo
-REM  Linux (McpLinuxDesktop). Cada proyecto compila en SU plataforma por
-REM  defecto (Win64 los tres primeros, Linux64 el nodo).
+REM  de escritorio. Cada proyecto compila en SU plataforma por defecto
+REM  (Win64 los tres primeros, Linux64 el nodo) y ADEMAS, en Release, el
+REM  nodo se compila TAMBIEN para Win64: un mismo codigo, dos escritorios.
 REM
 REM  USO:  BuildGroup.bat [quiet^|normal^|verbose] [make^|build] [Debug^|Release]
 REM        (sin parametros = quiet make Debug)
@@ -72,6 +73,23 @@ if /I "%BCONFIG%"=="Release" (
     exit /b 1
   )
   echo [BuildGroup] node\McpLinuxDesktop actualizado desde el build Release.
+
+  REM El grupo compila cada proyecto en su plataforma por defecto, asi que
+  REM la version Windows del nodo se pide aparte. Mismo .dpr, mismas ordenes:
+  REM lo que cambia es con quien habla por debajo (GDI+SendInput en vez de
+  REM portal+libei), elegido con IFDEF en tiempo de compilacion.
+  echo [BuildGroup] Compilando el nodo tambien para Win64...
+  msbuild "%~dp0src_linux_desktop_node\McpLinuxDesktop.dproj" /t:%MSBTARGET% /p:Config=Release /p:Platform=Win64 %VERBOSITY%
+  if errorlevel 1 (
+    echo [BuildGroup] AVISO: el nodo no compilo para Win64
+    exit /b 1
+  )
+  copy /Y "%~dp0src_linux_desktop_node\Win64\Release\McpLinuxDesktop.exe" "%~dp0node\McpWinDesktop.exe" >nul
+  if errorlevel 1 (
+    echo [BuildGroup] AVISO: no pude copiar el nodo Windows a node\McpWinDesktop.exe
+    exit /b 1
+  )
+  echo [BuildGroup] node\McpWinDesktop.exe actualizado desde el build Release.
 )
 
 echo [BuildGroup] Grupo completo OK.

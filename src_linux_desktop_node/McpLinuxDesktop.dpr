@@ -2,14 +2,163 @@
 
 {$APPTYPE CONSOLE}
 
+{ UN NODO, DOS ESCRITORIOS. El mismo programa y las MISMAS ordenes sirven en
+  Linux y en Windows; lo que cambia es con quien habla por debajo:
+    Linux   -> portal XDG + libei + X11, cargados en caliente ([Mld.DBus],
+               [Mld.Eis], [Mld.X11]). Hoy GNOME.
+    Windows -> GDI y SendInput, que ya vienen con el sistema ([Mld.Win]).
+  El escritor de PNG y el contrato de salida (CAPTURA=<ruta>) son comunes. }
+
 uses
   System.SysUtils,
   System.IOUtils,
   System.StrUtils,
+{$IFDEF MSWINDOWS}
+  Mld.Captura in 'Mld.Captura.pas',
+  Mld.Win in 'Mld.Win.pas';
+{$ELSE}
   Mld.Dyn in 'Mld.Dyn.pas',
   Mld.DBus in 'Mld.DBus.pas',
   Mld.Eis in 'Mld.Eis.pas';
+{$ENDIF}
 
+{$IFDEF MSWINDOWS}
+{ ------------------------------------------------------------- WINDOWS --- }
+procedure EjecutarWindows;
+var
+  Escritorio: TEscritorioWin;
+  Ruta, Orden, Frase: string;
+  ObjX, ObjY, I: Integer;
+  Tecla: Word;
+  Hizo: Boolean;
+  Lista: TArray<TVentanaWin>;
+  V: TVentanaWin;
+
+  procedure Instantanea;
+  begin
+    if Escritorio.Capturar(Ruta) then
+      Writeln('CAPTURA=', Ruta)
+    else
+      Writeln('  NO pude capturar: ', Escritorio.Error);
+  end;
+
+begin
+  Ruta := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'captura.png');
+  Escritorio := TEscritorioWin.Create;
+  try
+    Writeln('McpDesktop - nodo de control del escritorio Windows');
+    Writeln('  ', TOSVersion.ToString);
+    Writeln(Format('  escritorio %dx%d pixeles, escala %.2f',
+      [Escritorio.Ancho, Escritorio.Alto, Escritorio.Escala]));
+    Writeln;
+
+    { Mismas ordenes que en Linux y mismas coordenadas: las de LA CAPTURA. }
+    Orden := LowerCase(ParamStr(1));
+    Hizo := False;
+    if Orden = 'ventanas' then
+    begin
+      { En Windows no hace falta pedirle al escritorio que las ensene: se
+        pueden enumerar con titulo y sitio, que es mas util que una vista
+        de miniaturas. Quien llama ya sabe donde pulsar. }
+      Lista := Escritorio.Ventanas;
+      Writeln(Format('  %d ventanas visibles:', [Length(Lista)]));
+      for V in Lista do
+        Writeln(Format('  VENTANA %d %d %d %d %s',
+          [V.X, V.Y, V.Ancho, V.Alto, V.Titulo]));
+      Hizo := Length(Lista) > 0;
+    end
+    else if (Orden = 'escribe') and (ParamCount >= 4) then
+    begin
+      ObjX := StrToIntDef(ParamStr(2), -1);
+      ObjY := StrToIntDef(ParamStr(3), -1);
+      Frase := '';
+      for I := 4 to ParamCount do
+        Frase := Frase + IfThen(Frase = '', '', ' ') + ParamStr(I);
+      Hizo := Escritorio.Pulsar(ObjX, ObjY);
+      if not Hizo then
+        Writeln('  no pude pulsar en el campo: ', Escritorio.Error)
+      else
+      begin
+        Sleep(250);
+        Hizo := Escritorio.Escribir(Frase);
+        if Hizo then
+          Writeln(Format('  ESCRITO "%s" en el pixel (%d,%d)', [Frase, ObjX, ObjY]))
+        else
+          Writeln('  pulse bien pero no pude escribir: ', Escritorio.Error);
+      end;
+    end
+    else if (Orden = 'texto') and (ParamCount >= 2) then
+    begin
+      Frase := '';
+      for I := 2 to ParamCount do
+        Frase := Frase + IfThen(Frase = '', '', ' ') + ParamStr(I);
+      Hizo := Escritorio.Escribir(Frase);
+      if Hizo then
+        Writeln('  ESCRITO: ', Frase)
+      else
+        Writeln('  no pude escribir: ', Escritorio.Error);
+    end
+    else if (Orden = 'tecla') and (ParamCount >= 2) then
+    begin
+      { Por NOMBRE ('escape', 'enter'), que es lo mismo en los dos sistemas;
+        un numero se toma como codigo virtual de Windows. }
+      Tecla := TeclaPorNombre(ParamStr(2));
+      if Tecla = 0 then
+        Tecla := Word(StrToIntDef(ParamStr(2), 0));
+      if Tecla = 0 then
+        Writeln('  no conozco la tecla ', ParamStr(2))
+      else
+      begin
+        Hizo := Escritorio.Combinacion([Tecla]);
+        if Hizo then
+          Writeln('  TECLA ', ParamStr(2), ' enviada')
+        else
+          Writeln('  no pude enviar la tecla: ', Escritorio.Error);
+      end;
+    end
+    else if Orden = 'altab' then
+    begin
+      Hizo := Escritorio.Combinacion([TeclaPorNombre('alt'), TeclaPorNombre('tab')]);
+      if Hizo then
+        Writeln('  ALT+TAB enviado')
+      else
+        Writeln('  no pude enviar Alt+Tab: ', Escritorio.Error);
+    end
+    else if ParamCount >= 2 then
+    begin
+      ObjX := StrToIntDef(ParamStr(1), -1);
+      ObjY := StrToIntDef(ParamStr(2), -1);
+      if (ObjX >= 0) and (ObjY >= 0) then
+      begin
+        Hizo := Escritorio.Pulsar(ObjX, ObjY);
+        if Hizo then
+          Writeln(Format('  CLIC en el pixel (%d,%d) de la captura', [ObjX, ObjY]))
+        else
+          Writeln('  no pude pulsar: ', Escritorio.Error);
+      end;
+    end
+    else
+    begin
+      Writeln('  uso: <x> <y>   pulsa en ese pixel de la captura');
+      Writeln('       altab     cambia de ventana con el teclado');
+      Writeln('       tecla <t> pulsa una tecla (escape, enter, tab, super...)');
+      Writeln('       texto <t> escribe ese texto donde este el foco');
+      Writeln('       escribe <x> <y> <t>  pulsa ahi Y escribe: un solo viaje');
+      Writeln('       ventanas  enumera las ventanas visibles con su sitio');
+    end;
+
+    if Hizo then
+      Sleep(400);
+    Instantanea;
+    Writeln;
+    Writeln('nodo listo');
+  finally
+    Escritorio.Free;
+  end;
+end;
+{$ENDIF}
+
+{$IFDEF LINUX}
 function RecogerCaptura(const AOrigen: string): string;
 begin
   { El portal escribe en ~/Imagenes del operador. El nodo se la lleva a SU
@@ -62,6 +211,8 @@ begin
   end;
 end;
 
+{ --------------------------------------------------------------- LINUX --- }
+procedure EjecutarLinux;
 var
   Bus: TConexionBus;
   Manos: TManos;
@@ -73,8 +224,7 @@ var
   I: Integer;
   Hizo: Boolean;
 begin
-  try
-    Writeln('McpLinuxDesktop - nodo de control del escritorio Linux');
+    Writeln('McpDesktop - nodo de control del escritorio Linux');
     Writeln;
 
     Writeln('-- 1. librerias del sistema (nada que instalar) --');
@@ -249,6 +399,22 @@ begin
 
     Writeln;
     Writeln('nodo listo');
+end;
+{$ENDIF}
+
+{ El nodo elige manos segun el sistema con el que se compilo. Anadir macOS
+  (o cualquier otro) es escribir su unidad y su Ejecutar<Sistema>, y colgarlo
+  de este mismo reparto: el protocolo de ordenes no cambia. }
+begin
+  try
+{$IF DEFINED(MSWINDOWS)}
+    EjecutarWindows;
+{$ELSEIF DEFINED(LINUX)}
+    EjecutarLinux;
+{$ELSE}
+    Writeln('McpDesktop - este sistema todavia no tiene manos en el nodo');
+    Writeln('  (hoy: Linux con GNOME y Windows; macOS seria el siguiente)');
+{$ENDIF}
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);
