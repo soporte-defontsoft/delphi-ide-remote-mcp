@@ -29,10 +29,47 @@ def profile_files():
     return glob.glob(os.path.join(base, '*', PROF_NAME + '.profile'))
 
 
+def profile_seats():
+    """Asientos del perfil de prueba en el registro del IDE.
+
+    Desde v0.98 add-profile no solo escribe el .profile: tambien siembra
+    RemoteProfiles (la clave de la que el IDE saca SU lista al arrancar). Si
+    la bateria no lo borra, cada pasada le deja al operador un perfil
+    fantasma en el Connection Profile Manager - medido en vivo el 19-sep.
+    """
+    import winreg
+    base = r'Software\Embarcadero\BDS'
+    encontrados = []
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, base) as k:
+            i = 0
+            while True:
+                try:
+                    ver = winreg.EnumKey(k, i)
+                except OSError:
+                    break
+                i += 1
+                sub = base + '\\' + ver + '\\RemoteProfiles\\' + PROF_NAME
+                try:
+                    winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub).Close()
+                    encontrados.append(sub)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return encontrados
+
+
 def cleanup_profile():
+    import winreg
     for f in profile_files():
         try:
             os.remove(f)
+        except OSError:
+            pass
+    for sub in profile_seats():
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, sub)
         except OSError:
             pass
 
@@ -291,6 +328,7 @@ ro.close()
 
 cleanup_profile()
 check('cleanup: perfil de prueba eliminado', not profile_files(), profile_files())
+check('cleanup: asiento en el IDE eliminado (no ensuciamos la lista del operador)', not profile_seats(), profile_seats())
 
 print()
 print('TOTAL: %d PASS, %d FAIL' % (P, F))
