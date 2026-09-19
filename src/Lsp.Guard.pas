@@ -8,7 +8,7 @@ unit Lsp.Guard;
      paths are canonicalized so ..\ tricks and prefix cousins do not escape.
      No roots = unrestricted (local trusted mode).
 
-  2. Credentials - [Security] AuthToken (full read-write) and ReadOnlyToken
+  2. Credentials - [Workspace] AuthToken (full read-write) and ReadOnlyToken
      (read-only), plus AnonymousReadOnly=1 (no token = read-only). Enforced
      by the HTTP transport; this unit only reads and caches them.
 
@@ -67,7 +67,7 @@ function CurrentWorkspaceName: string;
 function WorkspaceTokensConfigured: Boolean;
 
 { Startup lines about the workspace config: which workspaces loaded (the
-  legacy [Security] pair reported as the "default" workspace over the global
+  workspaces listed by name over the global
   roots - one mechanism, two spellings) plus a warning per misconfiguration
   (misspelled section, tokenless workspace, unparseable roots). Empty when
   there is nothing to say. }
@@ -98,7 +98,7 @@ procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
   of delphi_build compares against. }
 function IdePlatformLibraryPaths(const AVersion, APlatform: string): TArray<string>;
 
-{ Credentials (env var first, then settings.ini [Security] next to the exe). }
+{ Credentials (env var first, then settings.ini [Workspace] next to the exe). }
 function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
 function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
 function AnonymousReadOnly: Boolean;// DELPHI_MCP_ANON_READONLY  / AnonymousReadOnly=1
@@ -135,7 +135,7 @@ function VaultWritable: Boolean;    // VaultConfigured AND [Vault] ReadOnly=0
 { Whether delphi_run may execute a compiled program ON THIS SERVER. OFF by
   design: this is a pure development/compile server - clients download the
   artifact and run it in their own environment (or a real target via PAServer
-  / Android). Opt in with DELPHI_MCP_ALLOW_RUN=1 or [Security] AllowRun=1. }
+  / Android). Opt in with DELPHI_MCP_ALLOW_RUN=1 or AllowRun=1 en el workspace. }
 function AllowRun: Boolean;         // DELPHI_MCP_ALLOW_RUN      / AllowRun=1
 
 { Whether delphi_build may run a project's OWN build scripts: a custom <Target>,
@@ -144,7 +144,7 @@ function AllowRun: Boolean;         // DELPHI_MCP_ALLOW_RUN      / AllowRun=1
   WITHOUT also turning on delphi_run (which would allow running arbitrary
   compiled programs). AllowRun implies this (full execution is a superset).
   Untrusted uploads with no opt-in still hit the hazard scanner. Opt in with
-  DELPHI_MCP_ALLOW_BUILD_SCRIPTS=1 or [Security] AllowBuildScripts=1. }
+  DELPHI_MCP_ALLOW_BUILD_SCRIPTS=1 or AllowBuildScripts=1 en el workspace. }
 function AllowBuildScripts: Boolean; // DELPHI_MCP_ALLOW_BUILD_SCRIPTS / AllowBuildScripts=1
 
 { Whether delphi_paserver may EXECUTE the deployed program on a PAServer
@@ -152,7 +152,7 @@ function AllowBuildScripts: Boolean; // DELPHI_MCP_ALLOW_BUILD_SCRIPTS / AllowBu
   running on the target is not running here, and the operator of this server
   is not necessarily the owner of that machine. Two locks in series, on
   purpose: this switch (server side) and the runner someone has to launch on
-  the target. Opt in with DELPHI_MCP_ALLOW_REMOTE_RUN=1 or [Security]
+  the target. Opt in with DELPHI_MCP_ALLOW_REMOTE_RUN=1 or
   AllowRemoteRun=1. install-runner does NOT need it: copying the script
   executes nothing. }
 function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemoteRun=1
@@ -162,7 +162,7 @@ function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemote
   a narrower decision than letting any compiled program run (the binary comes
   from a project of the jail, is built here, and goes through the same
   low-integrity sandbox). AllowRun implies this one. Opt in with
-  DELPHI_MCP_ALLOW_TESTS=1 or [Security] AllowTests=1. }
+  DELPHI_MCP_ALLOW_TESTS=1 or AllowTests=1 en el workspace. }
 function AllowTests: Boolean;      // DELPHI_MCP_ALLOW_TESTS / AllowTests=1
 
 { WHO is calling - as far as this server can honestly know.
@@ -229,16 +229,17 @@ function RemoteProbeHosts: string; // DELPHI_MCP_REMOTE_HOSTS / RemoteHosts=
 
 { Whether the READ-ONLY library zone exists at all. Default True (reading the
   RTL and the installed components is what makes an agent competent here).
-  [Security] LibraryZone=0 cuts it: reads are then confined to the workspace
+  LibraryZone=0 en el workspace lo corta: reads are then confined to the workspace
   roots, exactly like writes. Field 2026-08-24: an agent noted that the zone
   GROWS by itself with every component or SDK installed, so the operator
   deserves a way to say no. }
 function LibraryZoneEnabled: Boolean; // DELPHI_MCP_LIBRARY_ZONE=0 / LibraryZone=0
 
-{ '' when APath (a .dproj) may be executed remotely, else a refusal. With
-  [Security] RemoteRunProjects empty ANY project of the jail qualifies (the
-  historical behaviour); with a semicolon list of project names or full
-  paths, only those. Field 2026-08-24: an agent working on project A could
+{ '' when APath (a .dproj) may be executed remotely, else a refusal. La
+  lista es la del workspace ACTIVO (RemoteRunProjects= en su seccion), sin
+  herencia, y VACIA significa NADA ejecutable: fallar abierto aqui era la
+  excepcion de todo el servidor y se retiro el 19-sep-2026 (v0.98: nada
+  global, ni seccion global). Field 2026-08-24: an agent working on project A could
   run the deployed binary of project B. }
 function RemoteRunProjectDenied(const APath: string): string;
 
@@ -307,7 +308,8 @@ function ShellArgDenied(const AText: string): string;
   a proxy into its own network (localhost, internal services, metadata
   endpoints) and into an exfiltration channel.
 
-  So: an EXPLICIT url in a git argument must match [Security] GitRemotes, a
+  So: an EXPLICIT url in a git argument must match GitRemotes= del workspace
+  activo, a
   comma-separated list of host names the operator wrote down. With that
   setting empty - the default - explicit URLs are refused outright. The remotes
   the OPERATOR configured in the repository keep working untouched (`push
@@ -335,13 +337,20 @@ type
     Name, Token, ReadOnlyToken, Profile: string;
     Roots: TArray<string>;
     Invalid: Boolean; // Roots= had text but nothing parsed: fail closed
-    // Per-workspace capability overrides: -1 = inherit the [Security]
-    // defaults (operator decision 2026-09-11: each workspace carries its
-    // pair, its roots AND its configs).
+    // Capacidades del workspace. Desde el 19-sep-2026 (v0.98) NO se
+    // hereda NADA de ningun sitio (decision David, rematando la del
+    // 2026-09-11: "cada workspace lleva su par, sus roots Y sus configs").
+    // Un workspace con nombre tiene EXACTAMENTE lo que declara: tri-estado
+    // ausente (-1) = APAGADO, lista ausente = VACIA = nada permitido. Solo
+    // el workspace por defecto ([Workspace]) usa las G* de este modulo.
     OvAllowRun, OvAllowTests, OvAllowRemoteRun, OvAllowBuildScripts,
       OvLibraryZone, OvAgentConfinement: Integer;
     OvSharedSet: Boolean;             // SharedFolders= present in the section
     OvSharedFolders: TArray<string>;
+    // A donde puede llegar ESTE workspace: sin declarar = a ninguna parte.
+    GitRemotes: string;               // hosts que un git clone/push puede nombrar
+    RemoteHosts: string;              // hosts que un dial PAServer puede marcar
+    RemoteProjects: TArray<string>;   // proyectos ejecutables en un target
   end;
 
 var
@@ -361,7 +370,7 @@ var
   GAllowTests: Boolean = False;     // running test suites is opt-in too
   GGitRemotes: string = '';         // hosts an explicit git URL may name
   GRemoteHosts: string = '';        // hosts a raw TCP probe may dial
-  GRemoteProjects: TArray<string>;  // [Security] RemoteRunProjects, '' = any
+  GRemoteProjects: TArray<string>;  // RemoteRunProjects del [Workspace] por defecto
   GAllowBuildScripts: Boolean = False; // build scripts OFF unless explicitly opted in
   GAgentConfinement: Boolean = False; // each agent to its own subfolder: OFF by default
   // [Tools] Profile: which tools appear in tools/list (all stay callable).
@@ -404,20 +413,18 @@ begin
   end;
 end;
 
-{ Confinement and shared folders, workspace override first. }
+{ Confinamiento y carpetas compartidas: la declaracion del workspace, sin herencia. }
 function AgentConfinementNow: Boolean;
 begin
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
-     (GWorkspaces[TWorkspaceIx1 - 1].OvAgentConfinement >= 0) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAgentConfinement = 1);
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAgentConfinement = 1); // ausente = apagado
   Result := GAgentConfinement;
 end;
 
 function SharedFoldersNow: TArray<string>;
 begin
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
-     GWorkspaces[TWorkspaceIx1 - 1].OvSharedSet then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvSharedFolders);
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvSharedFolders); // ausente = ninguna
   Result := GSharedFolders;
 end;
 
@@ -462,13 +469,6 @@ var
 begin
   Result := [];
   Names := '';
-  if (AuthToken <> '') or (ReadOnlyToken <> '') then
-    Result := Result +
-      ['AVISO: AuthToken/ReadOnlyToken en [Security] ya NO autentican ' +
-       '(v0.91: o hay workspace configurado o nada). Crea un ' +
-       '[Workspace.<nombre>] con Token= (mismo valor si quieres, es ' +
-       'transparente para los clientes), Roots= y, si procede, ' +
-       'ReadOnlyToken=. Hasta entonces esas credenciales reciben 401.'];
   for W in GWorkspaces do
   begin
     if Names <> '' then
@@ -488,11 +488,9 @@ begin
   AReadOnly := False;
   AWorkspaceIx := -1;
   // O WORKSPACE O NADA (operator decision 2026-09-11, v0.91): a token
-  // authenticates ONLY through a [Workspace.<name>] section. The legacy
-  // [Security] pair no longer opens anything - and, fail SAFE, its mere
-  // presence does NOT count as "nothing configured" either: an outdated
-  // config believing it has auth must never find the server silently open.
-  // The startup log says exactly how to migrate.
+  // authenticates ONLY through a [Workspace.<name>] section. A legacy env
+  // pair (DELPHI_MCP_TOKEN) no longer opens anything - and, fail SAFE, its
+  // mere presence does NOT count as "nothing configured" either.
   if not WorkspaceTokensConfigured then
   begin
     if (GAuthToken <> '') or (GReadOnlyToken <> '') then
@@ -573,6 +571,8 @@ begin
   GAllowTests := GetEnvironmentVariable('DELPHI_MCP_ALLOW_TESTS') = '1';
   GGitRemotes := GetEnvironmentVariable('DELPHI_MCP_GIT_REMOTES');
   GRemoteHosts := GetEnvironmentVariable('DELPHI_MCP_REMOTE_HOSTS');
+  GRemoteProjects := GetEnvironmentVariable('DELPHI_MCP_REMOTE_RUN_PROJECTS')
+    .Split([';'], TStringSplitOptions.ExcludeEmpty);
   GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
   GAgentConfinement := GetEnvironmentVariable('DELPHI_MCP_AGENT_CONFINEMENT') = '1';
   GToolsProfile := LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_PROFILE').Trim);
@@ -587,37 +587,34 @@ begin
   begin
     Ini := TIniFile.Create(IniPath);
     try
-      if GAuthToken = '' then
-        GAuthToken := Ini.ReadString('Security', 'AuthToken', '');
-      if GReadOnlyToken = '' then
-        GReadOnlyToken := Ini.ReadString('Security', 'ReadOnlyToken', '');
       if not GAnonymousReadOnly then
-        GAnonymousReadOnly := Ini.ReadBool('Security', 'AnonymousReadOnly', False);
+        GAnonymousReadOnly := Ini.ReadBool('Workspace', 'AnonymousReadOnly', False);
       if not GAllowRun then
-        GAllowRun := Ini.ReadBool('Security', 'AllowRun', False);
+        GAllowRun := Ini.ReadBool('Workspace', 'AllowRun', False);
       if not GAllowRemoteRun then
-        GAllowRemoteRun := Ini.ReadBool('Security', 'AllowRemoteRun', False);
+        GAllowRemoteRun := Ini.ReadBool('Workspace', 'AllowRemoteRun', False);
       if GLibraryZone then
-        GLibraryZone := Ini.ReadBool('Security', 'LibraryZone', True);
+        GLibraryZone := Ini.ReadBool('Workspace', 'LibraryZone', True);
       if not GAllowTests then
-        GAllowTests := Ini.ReadBool('Security', 'AllowTests', False);
+        GAllowTests := Ini.ReadBool('Workspace', 'AllowTests', False);
       if GGitRemotes = '' then
-        GGitRemotes := Ini.ReadString('Security', 'GitRemotes', '');
+        GGitRemotes := Ini.ReadString('Workspace', 'GitRemotes', '');
       if GRemoteHosts = '' then
-        GRemoteHosts := Ini.ReadString('Security', 'RemoteHosts', '');
-      GRemoteProjects := Ini.ReadString('Security', 'RemoteRunProjects', '')
-        .Split([';'], TStringSplitOptions.ExcludeEmpty);
+        GRemoteHosts := Ini.ReadString('Workspace', 'RemoteHosts', '');
+      if Length(GRemoteProjects) = 0 then
+        GRemoteProjects := Ini.ReadString('Workspace', 'RemoteRunProjects', '')
+          .Split([';'], TStringSplitOptions.ExcludeEmpty);
       if not GAllowBuildScripts then
-        GAllowBuildScripts := Ini.ReadBool('Security', 'AllowBuildScripts', False);
+        GAllowBuildScripts := Ini.ReadBool('Workspace', 'AllowBuildScripts', False);
       if not AgentConfinementNow then
-        GAgentConfinement := Ini.ReadBool('Security', 'AgentConfinement', False);
+        GAgentConfinement := Ini.ReadBool('Workspace', 'AgentConfinement', False);
       if GToolsProfile = 'full' then
         GToolsProfile := LowerCase(Ini.ReadString('Tools', 'Profile', 'full').Trim);
       if Length(GToolsOnly) = 0 then
         GToolsOnly := LowerCase(Ini.ReadString('Tools', 'Only', ''))
           .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
       if Length(GSharedFolders) = 0 then
-        GSharedFolders := LowerCase(Ini.ReadString('Security', 'SharedFolders', ''))
+        GSharedFolders := LowerCase(Ini.ReadString('Workspace', 'SharedFolders', ''))
           .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
       // [Workspace.<name>] sections: token-scoped sandboxes. Parsed once,
       // here, so AuthorizeBearer never touches the disk per request.
@@ -630,7 +627,7 @@ begin
             var W: TWorkspaceDef;
             W.Name := S.Substring(Length('Workspace.')).Trim;
             W.Token := Ini.ReadString(S, 'Token', '').Trim;
-            // Everyone has already typed [Security] AuthToken= once, so the
+            // Everyone had typed AuthToken= for years, so the
             // hand writes it again inside a workspace (measured: the operator
             // himself, 2026-09-10, and the server swallowed it silently).
             // Token= is canonical; AuthToken= works as an alias.
@@ -648,6 +645,10 @@ begin
             W.OvAllowBuildScripts := ReadTriState(Ini, S, 'AllowBuildScripts');
             W.OvLibraryZone := ReadTriState(Ini, S, 'LibraryZone');
             W.OvAgentConfinement := ReadTriState(Ini, S, 'AgentConfinement');
+            W.GitRemotes := Ini.ReadString(S, 'GitRemotes', '').Trim;
+            W.RemoteHosts := Ini.ReadString(S, 'RemoteHosts', '').Trim;
+            W.RemoteProjects := Ini.ReadString(S, 'RemoteRunProjects', '')
+              .Split([';'], TStringSplitOptions.ExcludeEmpty);
             W.OvSharedSet := Ini.ValueExists(S, 'SharedFolders');
             if W.OvSharedSet then
               W.OvSharedFolders := LowerCase(Ini.ReadString(S, 'SharedFolders', ''))
@@ -705,37 +706,33 @@ end;
 
 function AllowRun: Boolean;
 begin
-  // the active workspace may override the [Security] default
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
-     (GWorkspaces[TWorkspaceIx1 - 1].OvAllowRun >= 0) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowRun = 1);
+  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowRun = 1); // ausente = apagado
   Result := GAllowRun;
 end;
 
 function AllowRemoteRun: Boolean;
 begin
-  // the active workspace may override the [Security] default
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
-     (GWorkspaces[TWorkspaceIx1 - 1].OvAllowRemoteRun >= 0) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowRemoteRun = 1);
+  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowRemoteRun = 1); // ausente = apagado
   Result := GAllowRemoteRun;
 end;
 
 function LibraryZoneEnabled: Boolean;
 begin
-  // the active workspace may override the [Security] default
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
-     (GWorkspaces[TWorkspaceIx1 - 1].OvLibraryZone >= 0) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvLibraryZone = 1);
+  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvLibraryZone = 1); // ausente = apagado
   Result := GLibraryZone;
 end;
 
 function AllowTests: Boolean;
 begin
-  // the active workspace may override the [Security] default
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
-     (GWorkspaces[TWorkspaceIx1 - 1].OvAllowTests >= 0) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowTests = 1);
+  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowTests = 1); // ausente = apagado
   Result := GAllowTests;
 end;
 
@@ -870,42 +867,59 @@ end;
 function GitRemoteHosts: string;
 begin
   LoadSecurity;
+  // workspace con nombre: SUS remotos declarados, sin herencia
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].GitRemotes);
   Result := GGitRemotes.Trim;
 end;
 
 function RemoteProbeHosts: string;
 begin
   LoadSecurity;
+  // workspace con nombre: SUS hosts declarados, sin herencia
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].RemoteHosts);
   Result := GRemoteHosts.Trim;
 end;
 
 function RemoteRunProjectDenied(const APath: string): string;
 var
+  Lista: TArray<string>;
   E, Full, Name: string;
 begin
   LoadSecurity;
+  // La lista del workspace ACTIVO, sin herencia. Y desde el 19-sep-2026 la
+  // lista vacia ya no significa "cualquiera de la jaula" sino NADA: era el
+  // unico permiso que fallaba abierto, al reves que todo el resto del
+  // servidor. Lo que no se declara no existe.
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Lista := GWorkspaces[TWorkspaceIx1 - 1].RemoteProjects
+  else
+    Lista := GRemoteProjects;
+  if Length(Lista) = 0 then
+    Exit(SR_REMOTERUN_NOPROJLIST);
   Result := '';
-  if Length(GRemoteProjects) = 0 then
-    Exit; // not configured: any project of the jail, as before
   try
     Full := TPath.GetFullPath(APath);
   except
     Full := APath;
   end;
   Name := TPath.GetFileNameWithoutExtension(Full);
-  for E in GRemoteProjects do
+  for E in Lista do
     if (E.Trim <> '') and (SameText(E.Trim, Name) or SameText(E.Trim, Full)) then
       Exit;
   Result := Format(SR_REMOTERUN_PROJECT_DENIED_FMT,
-    [Name, string.Join(', ', GRemoteProjects)]);
+    [Name, string.Join(', ', Lista)]);
 end;
 
 function AllowBuildScripts: Boolean;
 begin
-  // the active workspace may override the [Security] default
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
-     (GWorkspaces[TWorkspaceIx1 - 1].OvAllowBuildScripts >= 0) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowBuildScripts = 1);
+  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    // ausente = apagado; y AllowRun implica build scripts, como siempre,
+    // pero dentro de las declaraciones de ESTE workspace
+    Exit((GWorkspaces[TWorkspaceIx1 - 1].OvAllowBuildScripts = 1) or
+         (GWorkspaces[TWorkspaceIx1 - 1].OvAllowRun = 1));
   Result := GAllowBuildScripts or GAllowRun;
 end;
 

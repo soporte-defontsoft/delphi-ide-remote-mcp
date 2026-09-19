@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '0.97.0-beta';
+  SERVER_VERSION = '0.98.0-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -38,7 +38,7 @@ const
     'disks.';
 
   SN_WORKSPACE_LIBZONE_OFF =
-    'La zona de biblioteca esta APAGADA en este servidor ([Security] ' +
+    'La zona de biblioteca esta APAGADA en este servidor ([Workspace] ' +
     'LibraryZone=0): la lectura se limita a los roots, igual que la ' +
     'escritura. Las fuentes de la RTL y de los componentes NO son legibles ' +
     'desde aqui.';
@@ -403,7 +403,7 @@ const
     'el build. Compila un .dproj sin tareas de ejecucion (un <Target> que solo ' +
     'imprime un mensaje o fija una propiedad SI se admite). Si es un proyecto ' +
     'de confianza que firma o copia en post-build, el operador lo habilita con ' +
-    '[Security] AllowBuildScripts=1 (sin encender delphi_run).';
+    '[Workspace] AllowBuildScripts=1 (sin encender delphi_run).';
 
   SR_RUN_DISABLED =
     'RECHAZADO: la ejecucion en el servidor esta deshabilitada por diseno. ' +
@@ -411,7 +411,7 @@ const
     'ejecuta. Para PROBAR un binario, descargalo con delphi_package + ' +
     'delphi_fetch y ejecutalo en TU maquina, o despliegalo a un target real ' +
     '(PAServer en Linux/macOS, o Android) - ahi corre en el cliente, no en ' +
-    'el servidor. (El operador puede habilitarlo con [Security] AllowRun=1, ' +
+    'el servidor. (El operador puede habilitarlo con [Workspace] AllowRun=1, ' +
     'pero no es el uso previsto.)';
 
   // ---------------------------------------------------------------------
@@ -597,7 +597,7 @@ const
     'packages (PAServer installers to download and run on the target) | ' +
     'profiles (registered connection profiles and SDKs) | add-profile ' +
     '(register a connection profile: name, host, password; optional port, ' +
-    'platform - the host must be one the operator allows in [Security] ' +
+    'platform - the host must be one the operator allows in [Workspace] ' +
     'RemoteHosts, because registering a profile IS declaring where this ' +
     'machine may connect) | remove-profile (delete a profile by name; they ' +
     'live outside the workspace, so there is no trash for them) | ' +
@@ -606,13 +606,11 @@ const
     'get-sdk (pull the SDK/sysroot from the PAServer of profile "name" and ' +
     'register it for delphi_build; can take minutes) | remote-run (execute ' +
     '"exe" on the target of profile "name" and return its exit code and ' +
-    'output - needs the mcp-runner script installed on the target; see the ' +
-    'note it returns; it runs the program THAT PROJECT deployed and nothing ' +
-    'else on that machine) | start-runner (start the runner on the target of ' +
-    'profile "name" - no shell needed there: PAServer runs the launcher) | ' +
-    'install-runner (copy the runner to the target of ' +
-    'profile "name" so remote-run can work; it then needs ONE manual launch ' +
-    'on the target - the answer gives the exact line). Default: platforms';
+    'output - NOTHING has to be installed there: PAServer itself runs it. It ' +
+    'runs the program THAT PROJECT deployed and nothing else on that ' +
+    'machine, and it does NOT kill what has not finished when the timeout ' +
+    'expires - a program with a window is meant to stay up, so you get its ' +
+    'partial output and stillRunning=true). Default: platforms';
   SP_PASERVER_PROJECT =
     'remote-run: the .dproj whose DEPLOYED program you want to run. The ' +
     'server derives the path on the target itself ' +
@@ -646,28 +644,26 @@ const
 
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | add-profile ' +
-    '| test-connection | get-sdk | install-runner | start-runner | remote-run';
+    '| remove-profile | test-connection | get-sdk | remote-run';
 
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     'RECHAZADO: el proyecto "%s" no esta en la lista de proyectos que este ' +
-    'servidor permite ejecutar en un target ([Security] RemoteRunProjects). ' +
+    'servidor permite ejecutar en un target ([Workspace] RemoteRunProjects). ' +
     'Permitidos: %s.';
 
   SR_PASERVER_RUN_DISABLED =
     'RECHAZADO: la ejecucion remota esta APAGADA en este servidor. El ' +
-    'operador la enciende con [Security] AllowRemoteRun=1 en el settings.ini ' +
+    'operador la enciende con [Workspace] AllowRemoteRun=1 en el settings.ini ' +
     'que hay junto al ejecutable (o la variable DELPHI_MCP_ALLOW_REMOTE_RUN=1) ' +
-    'y reinicia el servidor. Son dos cerrojos en serie y a proposito: este, y ' +
-    'el runner que alguien tiene que arrancar en la maquina destino. ' +
-    'install-runner y el resto de comandos siguen funcionando: copiar el ' +
-    'script no ejecuta nada.';
+    'y reinicia el servidor. Ademas, solo se ejecuta el binario que ese ' +
+    'proyecto desplego, y solo si el proyecto esta en ' +
+    '[Workspace] RemoteRunProjects.';
 
   SR_PASERVER_RUN_NEEDS =
     'RECHAZADO: remote-run necesita "name" (el perfil PAServer) y "project" ' +
     '(el .dproj cuyo programa desplegado quieres ejecutar). El servidor ' +
     'deriva la ruta en el target: <usuario>-<perfil>/<Proyecto>/<Proyecto>. ' +
-    'No se ejecuta ninguna otra cosa de la maquina remota. install-runner ' +
-    'solo necesita "name".';
+    'No se ejecuta ninguna otra cosa de la maquina remota.';
 
   SR_PASERVER_RUN_NOPROJ_FMT =
     'RECHAZADO: no existe el proyecto %s en este servidor. remote-run ' +
@@ -682,59 +678,30 @@ const
     'error: ninguna instalacion de RAD Studio de este servidor trae ' +
     'bin\paclient.exe: sin el no hay transporte a PAServer.';
 
-  SR_REMOTERUN_NO_SCRIPT =
-    'error: no encuentro runner\mcp-runner.py junto al ejecutable del ' +
-    'servidor. El operador debe copiar la carpeta "runner" del repositorio ' +
-    'al lado del exe y repetir install-runner.';
-
-  SN_REMOTERUN_INSTALLED =
-    'RUNNER COPIADO al target, en <scratch-dir>/_mcp-runner/mcp-runner.py. ' +
-    'Ahora arrancalo con command=start-runner (mismo perfil): no hace falta ' +
-    'shell en el destino, PAServer ejecuta el lanzador. El runner crea sus ' +
-    'carpetas (jobs, out, done), se queda vigilando y sobrevive a la sesion; ' +
-    'despues, remote-run ya funciona.';
-
-  SR_REMOTERUN_START_NOSTATUS =
-    'error: el target no devolvio estado del arranque. PAServer esta vivo? ' +
-    'Prueba delphi_paserver command=install-runner y repite start-runner.';
-
-  SR_REMOTERUN_START_FAILED_FMT =
-    'error: el runner NO arranco en el target. Lo que dijo la maquina: %s -- ' +
-    'Comprueba que existe python3 alli y que install-runner dejo ' +
-    'mcp-runner.py en _mcp-runner.';
-
-  SN_REMOTERUN_STARTED_FMT =
-    'RUNNER EN MARCHA en el target del perfil "%s". Estado que devolvio la ' +
-    'maquina: %s -- Ya puedes usar command=remote-run. El runner sobrevive a ' +
-    'la sesion (setsid) pero NO a un reinicio del target: si el target se ' +
-    'reinicia, vuelve a lanzar start-runner.';
+  SR_REMOTERUN_NOPROJLIST =
+    'RECHAZADO: este workspace no declara RemoteRunProjects, asi que no '
+    + 'puede ejecutar NADA en un target (se falla cerrado: lo que no se '
+    + 'declara no existe). El operador anade RemoteRunProjects=<proy1>;'
+    + '<proy2> a la seccion de este workspace en el settings.ini.';
 
   SR_REMOTERUN_PUT_FMT =
     'error: no se pudo enviar el trabajo al target (paclient exit %d): %s. ' +
     'PAServer esta vivo? El perfil apunta al host correcto?';
-
   SR_REMOTERUN_TIMEOUT_FMT =
-    'error: el target no devolvio resultado en %d s. Casi seguro NO tiene el ' +
-    'runner instalado: en el target, dentro de la scratch dir de PAServer, ' +
-    'debe existir "%s/mcp-runner" ejecutandose (script Python que lee ' +
-    'jobs/*.json y escribe out/result-*.json). Sin runner no hay ejecucion ' +
-    'remota: instalalo (te lo damos con delphi_fetch) y reintenta.';
-
-  SR_REMOTERUN_NOT_STARTED_FMT =
-    'error: el target no devolvio resultado en %d s, pero el runner SI esta ' +
-    'copiado alli: falta ARRANCARLO. En la maquina destino, dentro de la ' +
-    'scratch dir de PAServer: nohup python3 %s/mcp-runner.py >> ' +
-    '%1:s/runner.log 2>&1 & -- Ese arranque necesita una shell en el destino ' +
-    '(una persona o un agente que viva alli) y es el opt-in a la ejecucion ' +
-    'remota. Si crees que si esta corriendo, mira %1:s/runner.log en el ' +
-    'target: ahi se registra cada job.';
+    'el programa SIGUE CORRIENDO en el target: no habia terminado a los %d s ' +
+    'y NO se le mata, porque una aplicacion con ventana esta para quedarse. ' +
+    'En "output" tienes lo que llevaba escrito hasta ahora. Si esperabas algo ' +
+    'que termina, dale mas plazo con timeoutms; si es una GUI, ya esta en ' +
+    'marcha y puedes manejarla con delphi_adb_linux (carpeta %s del target).';
 
   SN_REMOTERUN_NOTE =
-    'Ejecutado en el target via PAServer (buzon de ficheros: paclient no ' +
-    'tiene exec propio). El runner solo ejecuta binarios dentro de la ' +
-    'scratch dir del PAServer - la zona del deploy - nunca el resto de la ' +
-    'maquina. exitCode/output vienen del programa; runnerError, si aparece, ' +
-    'es un rechazo del runner (ruta fuera de la scratch, binario inexistente).';
+    'Ejecutado en el target por PAServer, sin nada instalado alli. Solo se ' +
+    'ejecuta el BINARIO NATIVO que ese proyecto desplego, en su carpeta de ' +
+    'la scratch dir - nunca el resto de la maquina, y nunca un script que ' +
+    'haya en esa carpeta (se comprueba la firma del fichero, no su ' +
+    'extension). exitCode/output vienen del programa. Si aparece ' +
+    'stillRunning=true, no termino a tiempo y sigue vivo: "output" trae su ' +
+    'salida PARCIAL.';
 
   SR_SHELL_META_FMT =
     'RECHAZADO: el argumento contiene "%s", un metacaracter de shell que ' +
@@ -1785,7 +1752,7 @@ const
     'dialectos: el resumen de DUnitX y la convencion PASS/FAIL + ExitCode de ' +
     'un runner de consola escrito a mano. El veredicto dice de donde sale ' +
     '(verdictFrom: counts o exitCode) y nunca se lo inventa. Ejecutar tests ' +
-    'es EJECUTAR: tiene su propio interruptor [Security] AllowTests (o ' +
+    'es EJECUTAR: tiene su propio interruptor [Workspace] AllowTests (o ' +
     'AllowRun, que lo implica); el binario se compila aqui, sale de un ' +
     'proyecto de la jaula y corre en el mismo sandbox de baja integridad que ' +
     'delphi_run, con timeout. Sin ese interruptor, discover funciona y run ' +
@@ -1935,7 +1902,7 @@ const
 
   SR_TEST_DISABLED =
     'RECHAZADO: ejecutar tests esta APAGADO en este servidor. El operador lo ' +
-    'enciende con [Security] AllowTests=1 en el settings.ini junto al ' +
+    'enciende con [Workspace] AllowTests=1 en el settings.ini junto al ' +
     'ejecutable (o DELPHI_MCP_ALLOW_TESTS=1) y reinicia. Es un interruptor ' +
     'propio, separado de AllowRun a proposito: permitir una bateria de tests ' +
     'no es lo mismo que permitir ejecutar binarios cualesquiera (AllowRun, ' +
@@ -2545,7 +2512,7 @@ const
     'RECHAZADO: no marco a "%s". Un test-connection es una conexion que abre ' +
     'ESTE servidor, asi que decidir a donde no te toca a ti: valen los hosts ' +
     'de los perfiles de conexion que ya tiene el IDE (command=profiles te ' +
-    'los lista) y los que el operador haya escrito en [Security] RemoteHosts ' +
+    'los lista) y los que el operador haya escrito en [Workspace] RemoteHosts ' +
     '(ahora mismo: %s). Si lo que quieres es comprobar un target de verdad, ' +
     'usa su PERFIL por nombre: test-connection name=<perfil>.';
 
@@ -2553,7 +2520,7 @@ const
     'RECHAZADO: este servidor no habla con "%s". Una URL explicita en un ' +
     'comando de git hace que sea EL SERVIDOR quien abre la conexion, asi que ' +
     'decidir con quien la abre no te toca a ti: el operador escribe los hosts ' +
-    'permitidos en [Security] GitRemotes del settings.ini. Los remotos que el ' +
+    'permitidos en [Workspace] GitRemotes del settings.ini. Los remotos que el ' +
     'ya haya configurado en el repositorio SI funcionan: usa el nombre del ' +
     'remoto (push origin main), no la URL.';
 

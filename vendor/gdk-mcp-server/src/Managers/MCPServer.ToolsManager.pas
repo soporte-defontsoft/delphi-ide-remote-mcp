@@ -238,12 +238,29 @@ begin
     end
     else if HasError or TextValue.StartsWith('LSP error:') then
       OutcomeCode := 'INTERNAL';
-    var Structured := TJSONObject.Create;
+    // [local change 2026-09-19] structuredContent ES la salida de la tool para
+    // el protocolo, asi que un cliente que lo entienda ENSEÑA ESO Y ESCONDE
+    // 'content'. Publicando aqui solo {ok, code} el agente recibia
+    // {"ok":true} en TODAS las llamadas y no veia el resultado: medido contra
+    // el exe de produccion por stdio, y es lo que ve cualquier cliente MCP
+    // (Claude Desktop, Claude Code). Casi todas las tools devuelven su JSON
+    // como TEXTO, o sea que caen aqui, no en la rama TJsonObject de abajo.
+    // Arreglo que conserva la intencion de la auditoria: si el texto ES un
+    // objeto JSON, ese objeto va a structuredContent y el ok/code se le añade
+    // dentro (sin pisar claves que ya traiga). Si no lo es, se queda el
+    // {ok, code} de siempre y el texto viaja entero en 'content'.
+    var Structured: TJSONObject := nil;
+    if TextValue.TrimLeft.StartsWith('{') then
+      Structured := TJSONObject.ParseJSONValue(TextValue) as TJSONObject;
+    if Structured = nil then
+      Structured := TJSONObject.Create;
     Result.AddPair('structuredContent', Structured);
-    Structured.AddPair('ok', TJSONBool.Create(OutcomeCode = ''));
+    if Structured.GetValue('ok') = nil then
+      Structured.AddPair('ok', TJSONBool.Create(OutcomeCode = ''));
     if OutcomeCode <> '' then
     begin
-      Structured.AddPair('code', OutcomeCode);
+      if Structured.GetValue('code') = nil then
+        Structured.AddPair('code', OutcomeCode);
       HasError := True;
     end;
 

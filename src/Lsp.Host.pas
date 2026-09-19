@@ -218,7 +218,7 @@ begin
     Add(NOTE_WARNING_PREFIX + 'Sin credenciales: no hay ningun ' +
       '[Workspace.<nombre>] con Token=. Bien en localhost; NO expongas el ' +
       'servidor a la red asi.');
-  // One auth mechanism: workspaces. The legacy [Security] pair shows up
+  // One auth mechanism: workspaces. A legacy env pair shows up
   // here as the "default" workspace; misconfigured sections stop vanishing
   // silently (operator decision 2026-09-11).
   for var WsNote in WorkspaceStartupNotes do
@@ -248,7 +248,7 @@ begin
   // every interface - bind to localhost so an unconfigured server is not
   // silently open to the whole network. Remote access requires a token (or an
   // explicit AnonymousReadOnly opt-in).
-  // v0.91: only workspace tokens are credentials; a legacy-only [Security]
+  // v0.91: only workspace tokens are credentials; a legacy-only env
   // pair neither authenticates nor earns a wide bind.
   if (not WorkspaceTokensConfigured) and
      (not Result.AnonymousReadOnly) and (Result.BindIP = '') then

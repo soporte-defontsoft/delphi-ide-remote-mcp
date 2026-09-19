@@ -5,12 +5,11 @@ Operator decision (2026-09-11, after his own [Workopenclaw]+AuthToken= section
 vanished silently and its token answered 401 with no clue anywhere):
 
   - inside a [Workspace.<name>] section, AuthToken= works as an ALIAS of
-    Token= (everyone has already typed [Security] AuthToken once; the hand
-    repeats it);
-  - the startup log LISTS the loaded workspaces - with the legacy [Security]
-    pair reported as the "default" workspace over the global roots - and
-    WARNS about misconfigurations: misspelled sections ([Workopenclaw]),
-    tokenless workspaces, unparseable roots.
+    Token= (everyone had typed AuthToken= for years; the hand repeats it);
+  - the startup log LISTS the loaded workspaces and WARNS about
+    misconfigurations: misspelled sections ([Workopenclaw]), tokenless
+    workspaces, unparseable roots. La vieja seccion global de seguridad es
+    INERTE desde v0.98: ni autentica, ni avisa, ni existe (A4a/A4b).
 
   A1  AuthToken= inside a workspace section authenticates (alias)
   A2  a misspelled [Workopenclaw] section: token 401 AND a startup AVISO
@@ -117,12 +116,12 @@ try:
     except urllib.error.HTTPError as e:
         check('A2 el token de [Workopenclaw] (mal escrita) da 401', e.code == 401, e.code)
 
-    # v0.91: workspace o nada - the legacy [Security] pair gets 401
+    # v0.98: la seccion [Security] del ini es INERTE - ni autentica ni existe
     try:
         init('op-24', 'op')
-        check('A4a el par [Security] ya NO autentica (workspace o nada)', False, 'entro')
+        check('A4a un AuthToken en la vieja seccion global es INERTE: 401', False, 'entro')
     except urllib.error.HTTPError as e:
-        check('A4a el par [Security] ya NO autentica (workspace o nada)',
+        check('A4a un AuthToken en la vieja seccion global es INERTE: 401',
               e.code == 401, e.code)
 finally:
     proc.kill()
@@ -134,8 +133,8 @@ check('A3 el arranque AVISA del workspace sin token (IGNORADA, clave Token=)',
       'SinToken' in out and 'IGNORADA' in out and 'Token=' in out, out[-400:])
 check('A4 el arranque LISTA los workspaces (sin ningun "default")',
       'Workspaces:' in out and 'Alias' in out and 'default' not in out, out[-500:])
-check('A4b el arranque AVISA de que el par [Security] ya no autentica y como migrar',
-      'ya NO autentican' in out and 'Workspace.<nombre>' in out, out[-600:])
+check('A4b el arranque NO menciona la seccion retirada para nada (v0.98)',
+      'Security' not in out, out[-600:])
 
 print('\n== round-24 battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

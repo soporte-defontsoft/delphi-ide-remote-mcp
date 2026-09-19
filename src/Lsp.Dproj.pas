@@ -319,7 +319,7 @@ const
   // MSBuild tasks whose presence turns a build into arbitrary execution or an
   // out-of-tree file write. A <Target> that uses NONE of these (only Message,
   // PropertyGroup, ItemGroup, CallTarget...) is inert and allowed to build; one
-  // that uses ANY of these needs [Security] AllowBuildScripts. Local names,
+  // that uses ANY of these needs AllowBuildScripts en su workspace. Local names,
   // lowercase; HasElement matches them with or without a namespace prefix.
   //   exec/usingtask/code  -> run a shell / load a task assembly / inline code
   //   copy..touch          -> plant, move or delete files by arbitrary path
@@ -539,7 +539,7 @@ begin
   // matched with or without a namespace prefix (<msb:Exec> passed a literal
   // "<Exec" check in field round 8; MSBuild rejected it, but the guard must not
   // depend on that). A trusted project that needs one of these enables it with
-  // [Security] AllowBuildScripts (checked by the caller), never here.
+  // AllowBuildScripts del workspace (checked by the caller), never here.
   for var Danger in DANGER_TASKS do
     if HasElement(Low, Danger) then
       Exit(Format('a <%s> task (executes a program or writes files during build)',

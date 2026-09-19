@@ -217,7 +217,7 @@ begin
     'verification after editing - the linter does not link nor produce ' +
     'binaries. Compile-only: a project that would EXECUTE a shell during build ' +
     '(a custom <Target>/<Exec>, a build-event, a foreign <Import>) is refused ' +
-    'unless the operator set [Security] AllowRun=1.';
+    'unless the operator set AllowRun=1 in the workspace.';
 end;
 
 function TDelphiBuildTool.ExecuteWithParams(const Params: TDelphiBuildParams): string;

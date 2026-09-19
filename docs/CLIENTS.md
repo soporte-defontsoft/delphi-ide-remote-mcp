@@ -8,14 +8,15 @@ MCP-capable agent can use this server. Two transports:
   (as a Windows Service, `DelphiLspMcp --http 3000`, or `DelphiLspMcp -gui`) and clients
   connect from anywhere (Linux included) with the Bearer token.
 
-For remote use, configure BOTH security knobs in `settings.ini` next to the
-exe (see README): `[Security] AuthToken` and `[Workspace] Roots`. The listen
+For remote use, configure a `[Workspace.<name>]` section in `settings.ini`
+next to the exe (see README): its `Token=` is the credential and its `Roots=`
+the jail - nothing is global since v0.98. The listen
 port is `[Server] Port` in the same file (default 3000; a `--http <port>`
 argument overrides it for that run) — the `3000` in the examples below is
 whatever you configured.
 
-Reviewer agents (read but never modify) can be given `[Security]
-ReadOnlyToken` instead of the full token — same configuration snippets,
+Reviewer agents (read but never modify) can be given the workspace's
+`ReadOnlyToken=` instead of its full token — same configuration snippets,
 different Bearer value. See the README's Configuration section.
 
 ## Claude Code

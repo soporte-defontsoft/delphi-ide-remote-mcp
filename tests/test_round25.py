@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 """E2E battery for v0.90.0-beta - per-workspace configs.
 
-Operator decision (2026-09-11): a workspace carries its PAIR, its ROOTS and
-its CONFIGS. The [Security] switches become inheritable DEFAULTS; a
-[Workspace.<name>] section may override AllowRun, AllowTests, AllowRemoteRun,
-AllowBuildScripts, LibraryZone, AgentConfinement and SharedFolders for the
-sessions its tokens open. Absent key = inherit.
+Contrato v0.98 (decision David 19-sep-2026, rematando la del 11-sep): NADA
+es global. Cada [Workspace.<name>] tiene EXACTAMENTE lo que declara: un
+interruptor ausente esta APAGADO, una lista ausente esta VACIA. No existe
+la seccion [Security] ni ninguna herencia.
 
-  C1  global AllowRun=0 but the workspace says AllowRun=1: delphi_run stops
-      being "deshabilitada" for THAT token (fails later for other reasons)
-  C2  ...and stays disabled for the default-workspace token (inheritance)
-  C3  global AllowTests=1 but the workspace says AllowTests=0: refused there
-  C4  AgentConfinement=1 only in the workspace: its agent is confined to
-      <root>\\<name>\\, while the default token roams free (global off)
+  C1  el workspace declara AllowRun=1: delphi_run deja de estar
+      "deshabilitada" para SU token (falla despues por otras razones)
+  C2  otro workspace NO lo declara: apagado (nada que heredar)
+  C3  AllowTests=0 declarado: rechazado alli. Y quien no declara nada de
+      tests tampoco los tiene (C3b), salvo que su AllowRun=1 los implique
+  C4  AgentConfinement=1 solo en su workspace: su agente queda confinado a
+      <root>\\<name>\\, y quien no lo declara campa libre
 
 Usage:  python tests/test_round25.py [path-to-DelphiLspMcp.exe]
 """
@@ -46,12 +46,8 @@ EXE = os.path.join(EXEDIR, 'DelphiLspMcp.exe')
 shutil.copy(SRC, EXE)
 
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
-    '[Security]',
-    'AllowRun=0',                       # default: no execution
-    'AllowTests=1',                     # default: tests allowed
-    'AgentConfinement=0', '',
     '[Workspace]', 'Roots=%s' % JAIL, '',
-    '[Workspace.Operador]',             # the widest workspace: inherits all
+    '[Workspace.Operador]',             # no declara capacidades: no las tiene
     'Token=op-25',
     'Roots=%s' % JAIL, '',
     '[Workspace.Runner]',               # may run, may NOT test, confined
@@ -128,21 +124,25 @@ try:
     check('C1 AllowRun=1 del workspace: delphi_run deja de estar deshabilitada',
           'deshabilitada' not in r and 'no existe' in r, r[:200])
 
-    # C2: the default workspace still inherits the global 0
+    # C2: un workspace que no declara AllowRun no lo tiene (nada se hereda)
     r = call('op-25', s_op, 'delphi_run', {'path': ghost})
-    check('C2 el token default sigue con run deshabilitada (hereda el 0 global)',
+    check('C2 Operador no declara AllowRun: deshabilitada (nada se hereda)',
           'deshabilitada' in r, r[:200])
 
-    # C3: a workspace whose ONLY override is AllowTests=0 (its AllowRun is
-    # inherited 0, so the AllowRun-implies-tests superset does not apply)
+    # C3: declarar AllowTests=0 y no declararlo dan lo mismo (apagado), y
+    # la implicacion AllowRun=>AllowTests sigue viva DENTRO del workspace
     s_nt = session('notest-25', 'probador')
     r = call('notest-25', s_nt, 'delphi_test',
              {'command': 'run', 'project': os.path.join(JAIL, 'X.dproj')})
-    check('C3 AllowTests=0 del workspace gana al 1 global: tests rechazados',
+    check('C3 AllowTests=0 declarado: tests rechazados',
           'AllowTests' in r or 'deshabilitad' in r, r[:200])
     r = call('op-25', s_op, 'delphi_test',
              {'command': 'run', 'project': os.path.join(JAIL, 'X.dproj')})
-    check('C3b el token default hereda AllowTests=1 (pasa el gate, falla despues)',
+    check('C3b Operador no declara tests: rechazados tambien (nada se hereda)',
+          'AllowTests' in r or 'deshabilitad' in r, r[:200])
+    r = call('runner-25', s_run, 'delphi_test',
+             {'command': 'run', 'project': os.path.join(JAIL, 'X.dproj')})
+    check('C3c Runner declara AllowRun=1: los tests pasan el gate (implicacion)',
           'AllowTests' not in r and 'deshabilitad' not in r, r[:200])
 
     # C4: confinement only inside the workspace
@@ -157,7 +157,7 @@ try:
           os.path.exists(os.path.join(JAIL, 'agente', 'mio.txt')), r[:200])
     r = call('op-25', s_op, 'delphi_textedit',
              {'path': os.path.join(JAIL, 'libre.txt'), 'create': True, 'content': 'x'})
-    check('C4c el token default roams free (confinamiento global apagado)',
+    check('C4c Operador no declara confinamiento: campa libre',
           os.path.exists(os.path.join(JAIL, 'libre.txt')), r[:200])
 finally:
     proc.kill()

@@ -46,7 +46,7 @@ over MCP Streamable HTTP from anywhere — including Linux clients that have no 
 Windows filesystem.
 - [x] Workspace Manager, the parts that earn their keep: warm per-project LSP instances (lazy, kept alive), a global build queue (one msbuild at a time, `queuedMs` reported — v0.76)
 - [ ] Workspace Manager, still open: LRU/idle shutdown of warm clients, hang kill+respawn, bounded notification queues (hermes' release audit P1.6)
-- [x] Streamable HTTP transport (`--http [port]`) with **Bearer token auth** (DELPHI_MCP_TOKEN env var or settings.ini [Security] AuthToken; 5/5 battery: tests/test_http_auth.py). Recommended exposure: VPN only
+- [x] Streamable HTTP transport (`--http [port]`) with **Bearer token auth** (5/5 battery: tests/test_http_auth.py; auth model superseded twice: workspace-or-nothing in v0.91, and NOTHING global since v0.98 - each workspace declares its whole config). Recommended exposure: VPN only
 - [x] Remote file toolset so a remote agent needs no share: `delphi_read` (encoding-aware), `delphi_search` (skips `__history/`, build dirs), `delphi_list` (12/12 battery: tests/test_workspace_tools.py)
 - [x] `delphi_git`: whitelisted git operations (status, diff, log, show, branch, add, commit) with shell-metacharacter rejection — remote agents version their work without shell access
 - [x] Hosts: ONE executable with three modes — Windows Service (`-install`/`-uninstall`, the switch baked into the registered ImagePath), terminal (stdio or `--http`) and VCL tray (starts minimized; the icon is the "it is running" indicator; menu: log, copy URL, exit). Wiring shared in `Lsp.Host`; verified install→start→serve→tool call→stop→uninstall

@@ -185,7 +185,7 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX) and NEW forms, frames, data modules and plain units (VCL/FMX) with IDE-equivalent skeletons, registered in the `.dpr` **and** the `.dproj` on creation — buildable immediately |
 | `delphi_build` | Real MSBuild builds with structured errors/warnings; on success it declares the artifact it produced (`output`). `target=Deploy` compiles **and ships**: to the PAServer of the `profile` param on Linux/macOS, or assembling the **Android `.apk`** — the deployment manifest, manifest template and version fallbacks are generated when the project has none (the IDE's own files always win) |
-| `delphi_run` | **OFF by default** — this is a compile-only server, it does not execute programs. Download the artifact (`delphi_package` + `delphi_fetch`) and run it on your machine, or deploy to a real target (PAServer / Android). An operator can opt in with `[Security] AllowRun=1` for CI console runners; even then it is jailed, no shell, hard timeout, and Low-integrity sandboxed |
+| `delphi_run` | **OFF by default** — this is a compile-only server, it does not execute programs. Download the artifact (`delphi_package` + `delphi_fetch`) and run it on your machine, or deploy to a real target (PAServer / Android). An operator can opt in with `AllowRun=1` in a workspace for CI console runners; even then it is jailed, no shell, hard timeout, and Low-integrity sandboxed |
 | `delphi_fetch` | Download files from the server — "get the deploy" to run GUI apps on the client machine. Every answer carries a **`download` link** (`GET /files?path=...` on the same host, same Bearer, `X-File-SHA256` header): bytes travel as HTTP — a 70 MB installer is one `curl`. Base64 chunks inline remain for small files and clients without a shell; files over 4 MB answer with the link only unless `maxbytes<=1048576` is passed explicitly |
 | `delphi_upload` | The mirror of fetch: send files TO the server in chunks, SHA-256 verified — for binaries you cannot recreate by editing |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
@@ -196,9 +196,9 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_git` | Whitelisted git operations — including **`clone`/`pull`** (bring a whole repo onto the server in one call, jailed) plus status/diff/log/show/branch/add/commit/init/push/tag/config. Options that write files or read outside the repo (`--output`, `--no-index`, `-c`…) are refused at the gate |
 | `delphi_report` | **Feedback channel**: the agent reports a bug, limitation or suggestion and the server files it as its own dated markdown in `reports/` next to the executable. Works at **every** access level, read-only included |
 | `delphi_config` | See and manage a project's build **configurations, target platforms, output folder and search paths**: `view` reports framework/configs/platforms with status and the search paths per platform; `add-platform`/`remove-platform` enable/disable a platform in the `.dproj` (curated edit), refusing platforms the framework can't target (VCL is Windows-only); `set-output` puts every binary under one folder (e.g. `Compiled`); `add-searchpath`/`remove-searchpath` manage a platform's unit search path - the IDE's Project Options > Search path - creating the platform's property groups as the IDE would (the usual fix for "unit not found" on a newly added platform: its third-party components' folders are registered for the other platforms only); `add-deployfile`/`remove-deployfile` ship an extra file with the build on one platform - the IDE's Deployment Manager - for the native library a component loads at runtime; `add-unit`/`remove-unit` are the IDE's Add to project / Remove from project for an existing `.pas` (uses, CreateForm, DCCReference; the file stays on disk) |
-| `delphi_paserver` (incl. `remote-run`: execute on the target through PAServer, with `runner/mcp-runner.py` installed there) | The bridge for building on **Linux/macOS** via the Platform Assistant: `platforms` (what the server can target + profile status), `packages` (the PAServer installers to download and run on the target), `profiles` (registered connection profiles/SDKs), `add-profile` (register a connection profile against a live PAServer - the password is stored encrypted by `paclient` itself), `test-connection` (full handshake against a profile, or a raw TCP reachability probe with `host`+`port` and no name), `get-sdk` (pull the platform SDK/sysroot from the live PAServer and register it - after this, `delphi_build` links for the platform; distro-aware since v0.92: it tries every known GCC triplet - Debian/Ubuntu `x86_64-linux-gnu`, Fedora/RHEL `x86_64-redhat-linux` + `/usr/lib64` - and requires that ONE of each group lands, instead of failing hard on the Debian path) |
+| `delphi_paserver` (incl. `remote-run`: execute on the target through PAServer itself - nothing installed there) | The bridge for building on **Linux/macOS** via the Platform Assistant. **PAServer is the channel, and lighting the first one needs hands ON the target — a person's or a local AI agent's** (an agent running on the machine, e.g. OpenCode, bootstraps it autonomously through this same MCP: `packages` → `delphi_fetch` the installer → start it inside the graphical session); with nothing listening there is no way in, the same bootstrap adb has until USB debugging is enabled on the phone itself. **Exactly two things happen on the machine, once** — start PAServer inside the graphical session and grant the screen-capture permission — and everything else is this server's job, execution included (v0.98: the on-target Python runner is gone; PAServer itself launches what this server sends); the table in [TOOLS.md](docs/TOOLS.md#setting-up-a-new-linux-target-what-happens-on-the-machine-and-what-this-server-does) says why each one cannot come from here. Commands: `platforms` (what the server can target + profile status), `packages` (the PAServer installers to download and run on the target), `profiles` (registered connection profiles/SDKs), `add-profile` (register a connection profile against a live PAServer - the password is stored encrypted by `paclient` itself), `test-connection` (full handshake against a profile, or a raw TCP reachability probe with `host`+`port` and no name), `get-sdk` (pull the platform SDK/sysroot from the live PAServer and register it - after this, `delphi_build` links for the platform; distro-aware since v0.92: it tries every known GCC triplet - Debian/Ubuntu `x86_64-linux-gnu`, Fedora/RHEL `x86_64-redhat-linux` + `/usr/lib64` - and requires that ONE of each group lands, instead of failing hard on the Debian path) |
 | `delphi_adb` | **Android devices for remote development** — the phones/tablets hang off the *server*, you program from anywhere: `discover` (devices announcing wireless debugging on the server's network, via mDNS, each with its `ip:port`), `devices` (what adb has attached — the IDE's deploy-target list), `connect`/`disconnect` (attach one over the network), `install` (put a built `.apk` on a device), `run` (launch the installed app — the IDE's "Deploy and Run"), `logcat` (bounded dump of the device log, optional filter), `screenshot` (the device screen to a PNG you then fetch — your remote **eyes**) and `tap`/`key` (touch and navigation keys — your remote **hands**): enough to deploy, drive and debug the app end to end. Uses the IDE's own Android SDK `adb`, discovered per install |
-| `delphi_adb_linux` | **The Linux desktop of a target**, the way `delphi_adb` gives you an Android one. The machine hangs off a PAServer profile and runs a small Delphi node this server deployed there — nothing else is installed on it. The flow is the whole trick: `screenshot` brings the **whole desktop** here as a PNG, you look at it, measure the pixel you want, `tap` presses exactly there and `type` writes text (with x, y it presses there first — the real gesture, "write this here", and it pays the startup once) — all measured *on that screenshot* — the node converts the screen scale itself, so you never deal with logical versus physical coordinates). `key` presses one key by its Linux code, `windows` shows every window as a thumbnail (how you reach a window another one covers: show them all, then tap the one you want), and `status` says whether the desktop is reachable and what to ask the operator for when it is not. The target needs a graphical session open |
+| `delphi_adb_linux` | **The Linux desktop of a target**, the way `delphi_adb` gives you an Android one. The machine hangs off a PAServer profile and runs a small Delphi node this server deployed there — nothing else is installed on it. The flow is the whole trick: `screenshot` brings the **whole desktop** here as a PNG, you look at it, measure the pixel you want, `tap` presses exactly there and `type` writes text (with x, y it presses there first — the real gesture, "write this here", and it pays the startup once) — all measured *on that screenshot* — the node converts the screen scale itself, so you never deal with logical versus physical coordinates). `key` presses one key by its Linux code, `windows` shows every window as a thumbnail (how you reach a window another one covers: show them all, then tap the one you want), and `status` says whether the desktop is reachable and what to ask the operator for when it is not. The target needs a graphical session open, with its PAServer running **inside** that session (the node needs the session's D-Bus and inherits it from PAServer) and the **screen-capture permission granted once** — part of setting the machine up, next to starting PAServer: without it the portal tries to ask, cannot paint its dialog in a remote or locked session, and answers nothing at all, so the call dies on a mute timeout that names no cause |
 | `delphi_components` | **What the server has installed to program with**: every design package registered in the IDE (the list the palette loads), whatever the install channel — GetIt, vendor installers, manual. Description + `.bpl` per entry, disabled ones marked, optional `filter`. Read-only by design — no install (that stays a human decision); a missing library is reported with `delphi_report`. `platform=Linux64` shows instead the IDE's Library Search Path of that platform and the components registered only elsewhere — the porting matrix |
 | `delphi_test` | **Does it WORK, not just compile**: `discover` finds the test projects (DUnitX, or console runners named *Test*), `run` builds and runs one in the same low-integrity sandbox and answers structured — total/passed/failed, the failing lines, `exitCode`, duration. A runner whose output cannot be counted is still reported FAILED when its exit code says so. `nobuild`, `timeoutms`, and `countsFormat` for a hand-rolled runner. Own opt-in (`AllowTests`); runs Win64 by default |
 | `delphi_delete` | Delete a file or folder — into a **recoverable trash** next to it (`__delphi-patch\<date>\deleted\`), not a hard delete; it also drops the unit from the projects that list it. `purge=true` is the one hard delete, allowed only INSIDE that trash, and only for what you put there: every trashed item records who trashed it, and a folder holding somebody else's copies is refused, naming them |
@@ -255,16 +255,20 @@ Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom
 
 The configuration is **four layers**, safest-by-default at every one:
 
+**One principle above the layers (v0.98): NOTHING IS GLOBAL.** Every
+permission, whitelist and capability belongs to ONE workspace, and a
+workspace has exactly what its section declares — an absent switch is OFF,
+an absent list is EMPTY. There is no `[Security]` section any more; if an
+old ini still carries one, it is completely inert.
+
 1. **The door** — credentials: **workspace or nothing** (v0.91). A token
    authenticates *only* through a `[Workspace.<name>]` section — its own
-   `Token`, optional `ReadOnlyToken`, its `Roots` and its configs. The old
-   `[Security]` `AuthToken`/`ReadOnlyToken` pair no longer authenticates:
-   migrate by moving the same values into a workspace section (transparent
-   for every configured client; the startup log spells it out).
-2. **The jail** — where each credential may touch disk: the global
-   `[Workspace] Roots` for the operator, a smaller world per workspace token.
-3. **Capabilities** — what the server may *do* beyond compiling (run, test,
-   remote-run, build scripts, reach git hosts). All off until you opt in.
+   `Token`, optional `ReadOnlyToken`, its `Roots` and its configs.
+2. **The jail** — where each credential may touch disk: `[Workspace] Roots`
+   for the tokenless local mode, a world of its own per workspace token.
+3. **Capabilities** — what each workspace may *do* beyond compiling (run,
+   test, remote-run, build scripts, reach git hosts or PAServer machines).
+   All off until that workspace declares them.
 4. **Surface** — what `tools/list` *advertises* (`[Tools]` profiles). Helps
    small models; never a permission.
 
@@ -272,30 +276,29 @@ The configuration is **four layers**, safest-by-default at every one:
 [Server]
 Port=3000                               ; HTTP port for --http and the tray (-gui)
 
-[Security]                              ; NO tokens here (v0.91) - only defaults
-AnonymousReadOnly=0                     ; 1 = no token -> read-only instead of 401
-AllowRun=0                              ; 1 = delphi_run may execute here (sandboxed)
-AllowTests=0                            ; 1 = delphi_test may build+run test suites
-AllowRemoteRun=0                        ; 1 = remote-run on a PAServer target
-AllowBuildScripts=0                     ; 1 = builds may run custom MSBuild <Exec>
-GitRemotes=                             ; hosts explicit git URLs may reach (empty = none)
-
-[Workspace]
-Roots=D:\Projects;E:\MoreProjects       ; the operator's jail (or DELPHI_MCP_ROOTS)
+[Workspace]                             ; the DEFAULT workspace: tokenless local mode
+Roots=D:\Projects;E:\MoreProjects       ; its jail (or DELPHI_MCP_ROOTS)
+AnonymousReadOnly=0                     ; 1 = tokenless HTTP -> read-only, not 401
+LibraryZone=1                           ; may read RTL/VCL sources (its declaration)
+AllowRun=0                              ; like every workspace: only what it declares
 
 ; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
 ; workspaces' roots are not even readable. Overlap is allowed and never
-; subtracts (note Audit's root is a subfolder of Galatea's):
+; subtracts (note Audit's root is a subfolder of Galatea's). EACH SECTION IS
+; COMPLETE IN ITSELF: absent switch = off, absent list = empty.
 [Workspace.Galatea]
 Token=galatea-secret                    ; read-write, but only inside THESE roots
 ReadOnlyToken=galatea-reviewer-secret   ; optional read-only twin, same roots
 Roots=D:\Projects\Galatea;D:\Projects\Shared
+LibraryZone=1                           ; ITS declaration - nothing is inherited
+AllowTests=1                            ; may build+run ITS test suites
 Profile=coder                           ; optional: trims tools/list for this token
 
 [Workspace.Audit]
 Token=audit-secret
 Roots=D:\Projects\Galatea\src\Forms     ; a SUBFOLDER of Galatea - deliberate
 Profile=reader                          ; navigation tools only in its listing
+                                        ; (declares nothing else: it HAS nothing else)
 
 [Tools]
 Profile=full                            ; global surface: full | coder | reader
@@ -327,10 +330,13 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   `tools/call` — including the git argument filter, so no option can turn a "read" command
   into a write. **With NO workspace token configured at all, the server binds to
   `127.0.0.1` only** — an unconfigured server is never silently open to the network.
-- **BREAKING — migrating from ≤ v0.90**: an `AuthToken`/`ReadOnlyToken` left in `[Security]`
-  no longer authenticates (and, fail safe, still counts as "configured": everything answers
-  401 rather than falling open). Move the same values into a `[Workspace.<name>]` section
-  with your roots — transparent for every configured client; the startup log spells it out.
+- **BREAKING — migrating from ≤ v0.97**: the `[Security]` section is GONE and completely
+  inert — the server neither reads it, nor warns about it, nor knows it existed. Move every
+  key you had there into `[Workspace]` (the default workspace) and/or into each
+  `[Workspace.<name>]` that deserves it — same names, same values, one decision per
+  workspace. Old `AuthToken`/`ReadOnlyToken` values become a workspace's `Token=`/
+  `ReadOnlyToken=` (that part has been true since v0.91). Fail safe is preserved the
+  blunt way: a stale config authenticates nothing and earns a `127.0.0.1`-only bind.
 - `--readonly` on the command line makes the entire process read-only, whatever the
   transport (useful for a stdio-registered reviewer).
 - **`[Workspace.<name>]` token-scoped sandboxes**: each section defines its own credential(s)
@@ -339,18 +345,17 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   below stays available to everyone). Workspaces may **overlap**: one can hold a whole tree
   and another just a subfolder of it; each token's jail is the union of its *own* roots and
   nothing is subtracted for belonging to another workspace too. A workspace whose `Roots`
-  fail to parse admits nobody (fail closed). The global `AuthToken` remains the operator —
-  every root, unchanged — reported at startup as the **default** workspace. Inside a
+  fail to parse admits nobody (fail closed). Inside a
   workspace section the credential key is `Token=`, and `AuthToken=` is accepted as an
   alias; the startup log lists every workspace it loaded and **warns** about misspelled
   sections (`[Workopenclaw]`…), tokenless workspaces and unparseable roots, so a config
-  mistake never fails silently. And a workspace carries **its configs** too: `AllowRun`,
-  `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`, `LibraryZone`, `AgentConfinement`,
-  `SharedFolders` and `Profile` may appear inside the section and override the `[Security]`
-  defaults for the sessions its tokens open (absent key = inherit) — one workspace can be a
-  CI space that executes while every other space stays compile-only. Network whitelists stay
-  machine-wide on purpose.
-- **AgentConfinement** (`[Security]`): *cooperative* subdivision inside one credential's
+  mistake never fails silently. And a workspace carries **everything else** too:
+  `AllowRun`, `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`, `LibraryZone`,
+  `AgentConfinement`, `SharedFolders`, `Profile` — and the reach lists `GitRemotes`,
+  `RemoteHosts`, `RemoteRunProjects`. Nothing is inherited from anywhere: an absent switch
+  is off, an absent list is empty — one workspace can be a CI space that executes and dials
+  its build machine while every other space stays compile-only and offline.
+- **AgentConfinement**: *cooperative* subdivision inside one credential's
   jail — each agent (by its self-declared `clientInfo.name`) writes only under
   `<root>\<name>\`, plus any `SharedFolders`. Useful for teams sharing one token; for a
   boundary an agent cannot cross, use a workspace token instead (the name is self-declared,
@@ -360,14 +365,16 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   decision than allowing arbitrary binaries, and without it an agent can write code but never
   learn whether it works. `AllowRun=1` implies it.
 - **AllowRemoteRun**: lets `delphi_paserver remote-run` execute, on a PAServer target, the
-  binary *that project deployed there* — never anything else on that machine. Independent of
-  `AllowRun` (running on the target is not running here), and gated twice: this switch plus
-  the runner someone has to launch on the target. `RemoteRunProjects` narrows it to named
-  projects.
-- **Network whitelists**: `GitRemotes` limits which hosts an *explicit* git URL may reach
-  (clone/fetch/pull/push; configured remotes keep working by name) — measured to close an
-  SSRF/exfiltration primitive. `RemoteHosts` does the same for hand-named PAServer dials
-  (profile hosts are always allowed) — measured to close a port-scanning primitive.
+  binary *that project deployed there* — never anything else on that machine: the server
+  derives the remote path itself and its launch script verifies the file's signature
+  (ELF/Mach-O/PE), so only a native binary ever runs. Independent of `AllowRun` (running on
+  the target is not running here). It takes TWO declarations: this switch and
+  `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98).
+- **Reach lists (per workspace)**: `GitRemotes` limits which hosts an *explicit* git URL may
+  reach (clone/fetch/pull/push; configured remotes keep working by name) — measured to close
+  an SSRF/exfiltration primitive. `RemoteHosts` does the same for hand-named PAServer dials
+  (profile hosts are always allowed) — measured to close a port-scanning primitive. Where
+  each workspace may talk to is its own declaration, like everything else.
 - **`[Tools]` profiles**: `full` / `coder` / `reader` (or an explicit `Only=` allowlist) trim
   what `tools/list` advertises — ~15k tokens of schemas drown a small model. Listing only:
   hidden tools stay callable, permissions live in the layers above. A workspace can carry its

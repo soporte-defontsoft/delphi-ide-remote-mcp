@@ -24,9 +24,9 @@ _mainexe = os.path.join(_maindir, 'DelphiLspMcp.exe')
 _sh.copyfile(EXE, _mainexe)
 with open(os.path.join(_maindir, 'settings.ini'), 'w') as f:
     f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)*2
-            + '[Security]' + chr(10) + 'AllowRun=1' + chr(10)*2
             + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
-            + 'Roots=%s' % REPOROOT + chr(10))
+            + 'Roots=%s' % REPOROOT + chr(10)
+            + 'AllowRun=1' + chr(10) + 'LibraryZone=1' + chr(10))
 env = dict(os.environ)
 env.pop('DELPHI_MCP_TOKEN', None)
 proc = subprocess.Popen([_mainexe, '--http'], env=env,
@@ -195,9 +195,9 @@ try:
         f.write('unit Sample;\r\ninterface\r\nimplementation\r\nend.\r\n')
     with open(os.path.join(tmpdir3, 'settings.ini'), 'w') as f:
         f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
-                '[Security]\nAnonymousReadOnly=1\nAllowRun=1\n\n'
-                '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\n'
-                % (RO_PORT, TOKEN, RO_TOKEN, tmpdir3))
+                '[Workspace]\nAnonymousReadOnly=1\nRoots=%s\n\n'
+                '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\nAllowRun=1\n'
+                % (RO_PORT, tmpdir3, TOKEN, RO_TOKEN, tmpdir3))
     env3 = dict(os.environ)
     env3.pop('DELPHI_MCP_TOKEN', None)
     proc3 = subprocess.Popen([exe3, '--http'], env=env3,
@@ -374,10 +374,17 @@ try:
               code == 200 and 'SOLO LECTURA' not in body,
               '%s %s' % (code, body[:150]))
 
+        # v0.98: el anonimo vive en el workspace por defecto y SU jaula son
+        # los Roots de [Workspace] (tmpdir3 en este ini) - ya no campa por
+        # el repo entero
+        code, body = call('delphi_list', {'root': tmpdir3,
+                                          'pattern': '*.pas'}, None)
+        check('ro: anonimo (AnonymousReadOnly=1) puede leer SU jaula',
+              code == 200 and 'Sample.pas' in body, '%s %s' % (code, body[:120]))
         code, body = call('delphi_list', {'root': os.path.join(REPO, 'src'),
                                           'pattern': '*.pas'}, None)
-        check('ro: anonimo (AnonymousReadOnly=1) puede leer',
-              code == 200 and 'Lsp.Guard.pas' in body, '%s %s' % (code, body[:120]))
+        check('ro: y fuera de sus Roots, RECHAZADO (nada global)',
+              'RECHAZADO' in body, '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',
                                           'new': 'interface // y'}, None)

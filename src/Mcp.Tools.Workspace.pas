@@ -1251,7 +1251,7 @@ begin
     'server: it does NOT execute programs. To test a binary, download it ' +
     '(delphi_package + delphi_fetch) and run it on YOUR machine, or deploy ' +
     'to a real target (PAServer on Linux/macOS, or Android). The operator ' +
-    'can opt in with [Security] AllowRun=1; only then does this run a built ' +
+    'can opt in with AllowRun=1 in the workspace; only then does this run a built ' +
     'executable on the server (jailed to the roots, low-integrity sandbox, ' +
     'no shell, hard timeout, killed on expiry) - intended for console test ' +
     'runners in CI, never for GUI apps.';

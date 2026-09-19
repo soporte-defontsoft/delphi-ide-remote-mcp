@@ -288,7 +288,7 @@ a root. Changing the roots is the operator's job, in `settings.ini`.
 
 ### `delphi_build`
 
-Build a Delphi project for real with MSBuild on this machine (rsvars located via registry). Returns success flag, compiler errors/warnings and the output tail. Use this as the closing verification after editing - the linter does not link nor produce binaries. Compile-only: a project that would EXECUTE a shell during build (a custom `<Target>`/`<Exec>`, a build-event, a foreign `<Import>`) is refused unless the operator set `[Security] AllowRun=1`.
+Build a Delphi project for real with MSBuild on this machine (rsvars located via registry). Returns success flag, compiler errors/warnings and the output tail. Use this as the closing verification after editing - the linter does not link nor produce binaries. Compile-only: a project that would EXECUTE a shell during build (a custom `<Target>`/`<Exec>`, a build-event, a foreign `<Import>`) is refused unless the workspace declares `AllowBuildScripts=1` (or `AllowRun=1`, which implies it).
 
 *Access: read-write.*
 
@@ -329,7 +329,7 @@ THE MAP of this server, so an agent does not have to spend context working it ou
 
 ### `delphi_test`
 
-TESTS — the difference between "it compiles" and "it works". `discover path=<folder or project>` lists the test projects underneath (a `.dpr` using DUnitX, or a console one whose name says test/tests/spec). `run project=<the test .dproj>` builds and runs that runner and answers STRUCTURED: `total`, `passed`, `failed`, the failing lines, `exitCode`, `durationMs` and a bounded tail of what it printed. Two dialects are understood: DUnitX's own summary and the plain `PASS`/`FAIL` + ExitCode convention of a hand-written console runner. The verdict says where it came from (`verdictFrom: counts | exitCode`) and never guesses. Running tests IS execution: its own switch `[Security] AllowTests` (or `AllowRun`, which implies it); the binary is built here, comes from a project of the jail, and runs in the same low-integrity sandbox as `delphi_run`, with a timeout. Without the switch, `discover` still works and `run` is refused.
+TESTS — the difference between "it compiles" and "it works". `discover path=<folder or project>` lists the test projects underneath (a `.dpr` using DUnitX, or a console one whose name says test/tests/spec). `run project=<the test .dproj>` builds and runs that runner and answers STRUCTURED: `total`, `passed`, `failed`, the failing lines, `exitCode`, `durationMs` and a bounded tail of what it printed. Two dialects are understood: DUnitX's own summary and the plain `PASS`/`FAIL` + ExitCode convention of a hand-written console runner. The verdict says where it came from (`verdictFrom: counts | exitCode`) and never guesses. Running tests IS execution: its own switch, `AllowTests=1` declared in the calling workspace (or `AllowRun=1`, which implies it); the binary is built here, comes from a project of the jail, and runs in the same low-integrity sandbox as `delphi_run`, with a timeout. Without the switch, `discover` still works and `run` is refused.
 
 *Access: mixed (discover read-only; run read-write + AllowTests).*
 
@@ -387,13 +387,13 @@ See and manage a project's build configurations and target PLATFORMS. command=vi
 
 ### `delphi_paserver`
 
-The bridge for building and running on OTHER platforms (Linux, macOS) through the Platform Assistant (PAServer). command=packages lists the PAServer installers that ship with each Delphi install (download them with delphi_fetch and run them on the target machine); command=platforms shows which platforms this server can target; command=profiles lists the registered connection profiles and SDKs; command=add-profile registers a connection profile against a live PAServer (the password is used once by `paclient` to write the profile and stored ENCRYPTED, never shown back); command=test-connection with name dials the PAServer of that profile (full handshake, credentials included), and with host+port and NO name it is a raw TCP reachability probe - the quick "does this server reach my PAServer at all?" answer, no credentials involved; command=get-sdk pulls the platform SDK/sysroot (the libraries the linker needs) from the PAServer of profile `name` and registers it, so delphi_build can link for that platform - run it once per target (can take minutes; re-run after OS upgrades on the target). Building for the platform is delphi_build once profile and SDK exist. command=remote-run EXECUTES a program on the target of profile `name` and returns its exit code and output (`exe` relative to PAServer's scratch dir or absolute, optional `args` and `timeoutms`): `paclient.exe` has no exec operation, so the order travels as a job file to `<scratch>/_mcp-runner/jobs/` and the target's runner (`runner/mcp-runner.py` of this repo, installed there once and left running) executes it and writes the result back. No runner installed, no remote execution - the call times out saying so. The runner only executes binaries INSIDE the scratch dir (the deploy zone), never the rest of the machine.
+The bridge for building and running on OTHER platforms (Linux, macOS) through the Platform Assistant (PAServer). command=packages lists the PAServer installers that ship with each Delphi install (download them with delphi_fetch and run them on the target machine); command=platforms shows which platforms this server can target; command=profiles lists the registered connection profiles and SDKs; command=add-profile registers a connection profile against a live PAServer (the password is used once by `paclient` to write the profile and stored ENCRYPTED, never shown back); command=test-connection with name dials the PAServer of that profile (full handshake, credentials included), and with host+port and NO name it is a raw TCP reachability probe - the quick "does this server reach my PAServer at all?" answer, no credentials involved; command=get-sdk pulls the platform SDK/sysroot (the libraries the linker needs) from the PAServer of profile `name` and registers it, so delphi_build can link for that platform - run it once per target (can take minutes; re-run after OS upgrades on the target). Building for the platform is delphi_build once profile and SDK exist. command=remote-run EXECUTES a program on the target of profile `name` and returns its exit code and output (optional `exe` naming another file of the SAME deploy folder, `args` and `timeoutms`) - and NOTHING has to be installed on the target: PAServer itself runs a small launch script this server generates per call (paclient's put flag 5; the copy does not stay). The script verifies the file signature (ELF/Mach-O/PE) so only the NATIVE BINARY that project deployed ever runs - never another file of the machine, never a script sitting in the folder. The program's output lands in a file ending in an `___RC=<code>` sentinel; while the sentinel is missing the program is still running, and when the timeout expires it is NOT killed: you get `stillRunning: true` plus its PARTIAL output (a GUI app is meant to stay up - drive it with delphi_adb_linux).
 
-*Access: mixed (platforms / packages / profiles read-only; add-profile / test-connection / get-sdk / install-runner / remote-run read-write).*
+*Access: mixed (platforms / packages / profiles read-only; add-profile / remove-profile / test-connection / get-sdk / remote-run read-write).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | platforms (what this server can target + profile/SDK status) \| packages (PAServer installers) \| profiles (registered profiles and SDKs) \| add-profile (register a profile: name, host, password; optional port, platform) \| test-connection (with name: full handshake; with host+port and no name: raw TCP probe) \| get-sdk (pull the SDK/sysroot of profile "name"). \| install-runner (copy the runner to the target of profile "name") \| remote-run (run the program `project` DEPLOYED on the target of profile "name"; the remote path is derived by the server, never given; needs the runner installed and running there). Default: platforms |
+| `command` | string | optional | platforms (what this server can target + profile/SDK status) \| packages (PAServer installers) \| profiles (registered profiles and SDKs) \| add-profile (register a profile: name, host, password; optional port, platform) \| remove-profile (delete one by name) \| test-connection (with name: full handshake; with host+port and no name: raw TCP probe) \| get-sdk (pull the SDK/sysroot of profile "name") \| remote-run (run the program `project` DEPLOYED on the target of profile "name"; the remote path is derived by the server, never given; nothing installed on the target - PAServer itself launches it). Default: platforms |
 | `name` | string | optional | Profile name (letters, digits, `_`, `-`): add-profile creates it, test-connection dials it, get-sdk pulls from it |
 | `host` | string | optional | Host or IP where the target PAServer listens (add-profile, or test-connection without name for the raw TCP probe) |
 | `port` | string | optional | Port of the target PAServer (add-profile / test-connection). Default: 64211 |
@@ -404,7 +404,7 @@ The bridge for building and running on OTHER platforms (Linux, macOS) through th
 | `args` | string | optional | remote-run: command-line arguments for the program (no shell metacharacters) |
 | `timeoutms` | integer | optional | remote-run: max milliseconds to wait for the program (default 30000, max 300000) |
 
-`remote-run` also needs the operator's opt-in on this server: `[Security] AllowRemoteRun=1` in `settings.ini` (or `DELPHI_MCP_ALLOW_REMOTE_RUN=1`), OFF by default and independent of `AllowRun`. `install-runner` does not need it.
+`remote-run` also needs TWO declarations in the calling workspace: `AllowRemoteRun=1` and a `RemoteRunProjects=` list naming the project (an empty list allows nothing - fail closed). OFF by default and independent of `AllowRun`.
 
 ### `delphi_adb`
 
@@ -433,7 +433,9 @@ The Linux desktop of a target, the way `delphi_adb` gives you an Android one: SE
 
 THE FLOW, and it is the whole trick: `command=screenshot` brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel you want, `command=tap` presses exactly there and `command=type` writes text (with `x`,`y` it presses there first — the real gesture is "write this here", and it pays the startup once) — x and y measured *on that screenshot*, because the node converts the screen scale itself. An agent never deals with logical versus physical coordinates: it acts on what it sees. `command=windows` shows EVERY window as a thumbnail (the Super key), which is how you reach a window another one covers — show them all, then tap the one you want. `command=key` presses one key by its Linux code (evdev, NOT X11 keycodes: Escape 1, Tab 15, Enter 28) and `command=status` says whether the desktop is reachable and, when it is not, what to ask the operator for.
 
-The target needs a graphical session open — a headless box has nothing to show. Deploy the node first with `delphi_build target=Deploy` against the same profile.
+The target needs a graphical session open — a headless box has nothing to show — and a PAServer **running inside that session** (started from a terminal in the session, not from SSH: the node needs the session's D-Bus, and it inherits it from PAServer). Deploy the node first with `delphi_build target=Deploy` against the same profile.
+
+**The screen-capture permission must have been granted once on that machine**, as part of setting it up (see the note in the Linux/macOS walkthrough for the exact command). Without it the desktop portal tries to ask, and when it cannot paint its dialog — a remote session, a locked screen — it answers nothing: the symptom is a mute 20-second timeout that names no cause. If you hit one, that is what to ask the operator for.
 
 *Access: read-write (tap and key act on the target's desktop; screenshot and status are read-only in spirit but travel the same path).*
 
@@ -627,6 +629,31 @@ Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .j
 `delphi_upload {path, offset:0, chunkbase64:"..."}` per chunk (increasing `offset`); on the last chunk pass the whole-file `sha256` to have the server verify the reassembly. For binaries you cannot recreate by editing (`.res`, icons).
 
 ### Build, deploy and run on another platform (Linux/macOS via PAServer)
+
+> **Bootstrapping a target needs hands ON the machine — and they do not have to be human.** Everything this server does on a Linux/macOS machine — deploy, execute, the runner, the desktop node — travels through a PAServer already listening there. This server cannot start the first one from outside: with nothing listening there is no way in (the same bootstrap adb has — nothing enters a phone until USB debugging is enabled on the phone itself). The hands can be a person's, or an **AI agent running on the target** (OpenCode, Claude, ...): a local agent prepares the machine autonomously through this same MCP — `delphi_paserver {command:"packages"}` to learn the right installer, `delphi_fetch` to download it, then unpack and start it from inside the user's graphical session it runs in. Once that first channel is live, this server operates the machine from outside from then on.
+>
+> **While you are there, grant the screen-capture permission too** — it belongs to the same one-time setup as starting PAServer, and skipping it is expensive. The first capture on a machine makes the desktop portal ask for consent; if that dialog cannot be painted (a remote session, a locked screen), the portal answers **nothing at all** and `delphi_adb_linux` dies on a mute 20 s timeout with no hint of what is missing. Measured on a fresh Zorin 18 / GNOME on 2026-09-19: `journalctl --user -u xdg-desktop-portal.service` said `Failed to show access dialog: timeout reached`. Trigger the dialog on purpose once, with the screen in front of you, and accept it — everything after that is silent:
+>
+> ```
+> gdbus call --session --dest org.freedesktop.portal.Desktop \
+>   --object-path /org/freedesktop/portal/desktop \
+>   --method org.freedesktop.portal.Screenshot.Screenshot "" "{'interactive': <true>}"
+> ```
+>
+> The grant is stored per requesting app id (`~/.local/share/flatpak/db/screenshot`), so it survives reboots and only has to be given once per machine.
+
+#### Setting up a new Linux target: what happens ON the machine, and what this server does
+
+Two things need hands on the target — a person's or a local AI agent's — and everything else is the server's. Knowing which is which is the difference between ten minutes and a lost morning (measured, 2026-09-19, on a Zorin 18):
+
+| On the machine, once | Why it cannot come from here |
+|---|---|
+| **1. Install and start PAServer, inside the graphical session** (a terminal in the session, never SSH) | It is the only channel in; with nothing listening there is no way to reach the machine. And the desktop node inherits the session's D-Bus from it, so a PAServer started outside the session can deploy but cannot drive the screen |
+| **2. Grant the screen-capture permission**, with the screen in front of you (see the note above) | The portal asks the human at the machine. If it cannot paint its dialog it answers *nothing*, and every capture dies on a mute timeout |
+| **3. That is all.** Running a deployed program, holding a GUI open to drive it, collecting output - it all travels through PAServer now (v0.98 removed the on-target runner and its Python dependency) | - |
+
+From then on this server does the rest with no hands anywhere: `get-sdk` (once per target), `delphi_build` (compile), `target=Deploy` (ship), `remote-run` (run the deployed binary and collect its output), and the whole of `delphi_adb_linux` — see the desktop, press, type, show windows.
+
 1. `delphi_config {project}` — see the framework and platforms. **VCL is Windows-only**; only FMX or console apps cross.
 2. `delphi_config {project, command:"add-platform", platform:"Linux64"}` — enable the platform (refused on a VCL project, with the reason).
 3. `delphi_paserver {command:"packages"}` — get the PAServer installer; download it with `delphi_fetch` and run it on the target (it listens on port 64211).

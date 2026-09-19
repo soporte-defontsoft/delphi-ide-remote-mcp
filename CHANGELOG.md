@@ -8,6 +8,85 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.98.0-beta] - 2026-09-19
+
+### The Python runner is gone: PAServer itself executes
+
+`remote-run` no longer needs ANYTHING installed on the target. The transport
+always had the missing half and we had even measured it (2026-08-25) without
+drawing the conclusion: a file sent with paclient's **flag 5 is EXECUTED by
+PAServer** (`/bin/sh`), and flag 3 launches a binary directly. So the server
+now writes a small launch script per call, sends it (the copy does not stay),
+and collects the program's output from a file that ends in an `___RC=<code>`
+sentinel. The `runner/mcp-runner.py` daemon, its job queue and its
+`install-runner`/`start-runner` commands are gone. What that buys, all
+measured:
+
+- **No dependency on the target**: `/usr/bin/python3` is no longer required.
+  A target needs PAServer, full stop.
+- **A program that outlives the call.** The launch is detached: when the
+  timeout expires the process is NOT killed any more - you get
+  `stillRunning: true` plus its PARTIAL output. A GUI app is meant to stay
+  up; that is how you put one on screen and then drive it with
+  `delphi_adb_linux`.
+- **No serial queue.** Jobs no longer block each other - a running program
+  no longer blocks even the desktop screenshots (it did: measured).
+- **Partial output while it runs**, which the runner never gave.
+- **Faster**: a complete desktop gesture takes 1.96s against 3.3s through
+  the runner (~40%).
+- **A whole failure class disappears**: queued job files used to survive
+  their caller and re-run when the daemon restarted (it executed orders from
+  five days before - measured). There is no queue to replay now.
+- The runner's native-binary guarantee SURVIVES, moved into the generated
+  script: it verifies the file signature (ELF/Mach-O/PE - PE because a
+  PAServer target can be Windows) before executing, and "does not exist"
+  (127) is now a different answer from "not a native binary" (126).
+- The test battery executes the REAL generated script (bash) instead of
+  simulating what we think it does.
+
+### Nothing is global any more: every setting is per workspace
+
+The `[Security]` section of `settings.ini` NO LONGER EXISTS - and the server
+does not read it, warn about it or know it existed (beta: clean cuts). Every
+capability and every reach list now belongs to the workspace that declares
+it, completing the v0.91 "workspace or nothing" decision:
+
+- A workspace has EXACTLY what its section declares: an absent switch is
+  OFF, an absent list is EMPTY. Nothing is inherited from anywhere.
+- `GitRemotes`, `RemoteHosts` and `RemoteRunProjects` - which used to be
+  machine-wide - are now per workspace: where each workspace may talk to is
+  as much its own declaration as what it may execute.
+- **`RemoteRunProjects` empty now allows NOTHING** (it used to mean "any
+  project of the jail" - the one fail-open default left in the server).
+  `remote-run` therefore takes two declarations: `AllowRemoteRun=1` and the
+  project list. New env twin `DELPHI_MCP_REMOTE_RUN_PROJECTS`.
+- `[Workspace]` (the unnamed section) is the DEFAULT workspace - the
+  tokenless local mode - and carries its own full definition like everyone
+  else. The `DELPHI_MCP_*` env vars configure it, never a named workspace.
+- Migrating: move your old `[Security]` keys into `[Workspace]` and/or each
+  `[Workspace.<name>]` - same names, same values, one decision per
+  workspace. A stale config authenticates nothing and keeps the
+  `127.0.0.1`-only bind (fail safe, silently).
+- `settings.example.ini` rewritten around the principle; README updated.
+
+### Fixed
+
+- **Tool results were invisible to standard MCP clients.** Every tool call
+  answered with `structuredContent: {"ok": true}` - a status placeholder
+  from the 2026-08-26 audit - and, per the MCP spec, a client that honors
+  `structuredContent` shows THAT and hides the real payload in `content`.
+  Claude Code showed `{"ok":true}` for every single call. Now, when a tool
+  returns JSON, that JSON IS the structuredContent (with `ok`/`code` merged
+  in); plain-text refusals keep the `{ok, code}` shape. The regression
+  suite never caught it because it reads `content` - noted as a coverage
+  gap.
+- `delphi_adb_linux` mute-timeout message now tells the agent WHAT TO ASK
+  FOR (the desktop portal could not paint its permission dialog - remote or
+  locked session) instead of a bare "no answer in 20000 ms". Measured on a
+  fresh Zorin 18: `journalctl` said `Failed to show access dialog` while
+  everything else answered normally.
+
+
 ## [0.97.0-beta] - 2026-09-18
 
 `delphi_adb_linux command=type`: write text on the target's desktop - and,

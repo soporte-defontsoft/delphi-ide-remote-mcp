@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """E2E battery for v0.47.0-beta - delphi_paserver command=remote-run: running
 a program ON THE TARGET through PAServer's file transport (paclient has no
-exec operation) with the mcp-runner script as the target half.
+exec operation) sin NADA instalado alli: PAServer ejecuta el guion (flag 5).
 
 PAServer is NOT needed: paclient.exe is replaced by tests/paclient_stub.py
 (DELPHI_MCP_PACLIENT), which copies to a local folder playing the scratch dir.
@@ -17,12 +17,6 @@ EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
 BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'remoterun')
 shutil.rmtree(BASE, ignore_errors=True); os.makedirs(BASE)
 SCRATCH = os.path.join(BASE, 'scratch'); os.makedirs(SCRATCH)
-
-# the server ships runner/mcp-runner.py next to its exe (that is how it is
-# deployed); install-runner picks it up from there
-_rd = os.path.join(os.path.dirname(os.path.abspath(EXE)), 'runner')
-os.makedirs(_rd, exist_ok=True)
-shutil.copy(os.path.join(REPO, 'runner', 'mcp-runner.py'), _rd)
 
 # the deploy folder the server derives: <windows user>-<profile>/<Project>/
 PROFILE = 'perfil'
@@ -49,20 +43,13 @@ open(DPROJ, 'w', encoding='utf-8').write('<Project/>')
 STUB = os.path.join(BASE, 'paclient.cmd')
 open(STUB, 'w').write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
 
-# the runner, watching the scratch (its folder is <scratch>/_mcp-runner)
-RUNNER_DIR = os.path.join(SCRATCH, '_mcp-runner'); os.makedirs(RUNNER_DIR)
-shutil.copy(os.path.join(REPO, 'runner', 'mcp-runner.py'), RUNNER_DIR)
-
-renv = dict(os.environ)
-runner = subprocess.Popen([sys.executable, os.path.join(RUNNER_DIR, 'mcp-runner.py')],
-                          env=renv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(1)
 
 env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = BASE
 env['DELPHI_MCP_PACLIENT'] = STUB
 env['MCP_STUB_SCRATCH'] = SCRATCH
 env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'   # v0.48.1: remote execution is opt-in
+env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'Saluda'  # v0.98: lista vacia = NADA (fail closed)
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
 q = queue.Queue()
@@ -136,13 +123,6 @@ check('sin name/exe rechazado', 'RECHAZADO' in r, r[:150])
 # 2) shell metachar refused
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'args': 'a; rm -rf /'})
 check('metacaracter rechazado', 'RECHAZADO' in r and ';' in r, r[:150])
-# 2b) install-runner copies the script to the target
-os.remove(os.path.join(RUNNER_DIR, 'mcp-runner.py'))
-r = call('delphi_paserver', {'command': 'install-runner', 'name': 'perfil'})
-check('install-runner copia el script', 'RUNNER COPIADO' in r and os.path.isfile(os.path.join(RUNNER_DIR, 'mcp-runner.py')), r[:200])
-check('install-runner remite a start-runner', 'start-runner' in r, r[:250])
-r = call('delphi_paserver', {'command': 'install-runner'})
-check('install-runner sin name rechazado', 'RECHAZADO' in r, r[:150])
 
 # 3) happy path
 # exe=<nombre simple> de la MISMA carpeta de despliegue (en Linux el binario
@@ -185,35 +165,43 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE,
                              'project': 'C:\\Windows\\x.dproj'})
 check('proyecto fuera de la jaula rechazado', 'RECHAZADO' in r, r[:200])
 
-# 6) runner copiado pero NO arrancado: mensaje distinto de "no instalado"
-runner.kill(); time.sleep(1)
-for f in os.listdir(os.path.join(RUNNER_DIR, 'jobs')):
-    os.remove(os.path.join(RUNNER_DIR, 'jobs', f))
-r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'timeoutms': 1000}, t=180)
+# 6) un programa que NO termina: sigue vivo y devuelve su salida PARCIAL.
+# Es el cambio de fondo al retirar el runner (19-sep-2026): antes se mataba
+# al expirar el plazo y te quedabas sin proceso Y sin resultado; una
+# aplicacion con ventana esta justo para quedarse.
+LENTO = os.path.join(DEPLOY, 'lento.py')
+PROGRAMA_LENTO = [
+    'import sys, time',
+    'print("arrancando", flush=True)',
+    'time.sleep(30)',
+]
+open(LENTO, 'w', encoding='utf-8').write(chr(10).join(PROGRAMA_LENTO))
+os.environ['MCP_STUB_ESPERA'] = '3'   # el stub no espera a que remate
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE,
+                             'project': DPROJ, 'exe': PROJNAME + '.exe',
+                             'args': 'lento.py', 'timeoutms': 4000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
-check('runner parado: dice que falta ARRANCARLO', j.get('runnerInstalled') is True and 'ARRANCARLO' in (j.get('error') or ''), r[:300])
-os.remove(os.path.join(RUNNER_DIR, 'mcp-runner.py'))
-r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'timeoutms': 1000}, t=180)
-j = json.loads(r) if r.startswith('{') else {}
-check('runner ausente: dice que NO esta instalado', j.get('runnerInstalled') is False and 'NO tiene el runner' in (j.get('error') or ''), r[:300])
+check('no termina: stillRunning en vez de matarlo', j.get('stillRunning') is True, r[:300])
+check('no termina: devuelve la salida PARCIAL', 'arrancando' in (j.get('output') or ''), r[:300])
+check('no termina: lo dice sin hablar de errores', 'SIGUE CORRIENDO' in (j.get('stillRunningNote') or ''), r[:300])
+os.environ.pop('MCP_STUB_ESPERA', None)
 
 # 7) sin AllowRemoteRun: remote-run RECHAZADO, install-runner permitido
 r = call_off('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ})
 check('sin AllowRemoteRun: remote-run rechazado', 'RECHAZADO' in r and 'AllowRemoteRun' in r, r[:250])
-r = call_off('delphi_paserver', {'command': 'install-runner', 'name': PROFILE})
-check('sin AllowRemoteRun: install-runner sigue permitido', 'RUNNER COPIADO' in r, r[:200])
 r = call_off('delphi_paserver', {'command': 'platforms'})
 check('sin AllowRemoteRun: el resto del tool intacto', 'platforms' in r, r[:150])
 proc_off.kill()
 
 # 8) RemoteRunProjects: lista blanca de proyectos ejecutables
 env_wl = dict(env); env_wl['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'
+env_wl.pop('DELPHI_MCP_REMOTE_RUN_PROJECTS', None)  # que mande el ini de esta fase
 ini = os.path.join(os.path.dirname(os.path.abspath(EXE)), 'settings.ini')
 had_ini = os.path.exists(ini)
 if had_ini:
     shutil.copy(ini, ini + '.bak')
 open(ini, 'w', encoding='utf-8').write(
-    '[Security]\nAllowRemoteRun=1\nRemoteRunProjects=OtroProyecto\n[Workspace]\nRoots=%s\n' % BASE)
+    '[Workspace]\nRoots=%s\nAllowRemoteRun=1\nRemoteRunProjects=OtroProyecto\n' % BASE)
 proc_wl = subprocess.Popen([EXE], env=env_wl, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
 q_wl = queue.Queue()
@@ -286,10 +274,10 @@ r = call_lz('delphi_read', {'path': RTL, 'fromline': 1, 'toline': 2})
 check('LibraryZone=0: la RTL deja de ser legible', 'RECHAZADO' in r, r[:200])
 r = call_lz('delphi_workspace', {})
 check('LibraryZone=0: se anuncia apagada y sin carpetas', 'APAGADA' in r and '"readableExtra":[]' in r.replace(' ', ''), r[:300])
-r = call_lz('delphi_read', {'path': os.path.join(SCRATCH, '_mcp-runner', 'mcp-runner.py'), 'fromline': 1, 'toline': 1})
+r = call_lz('delphi_read', {'path': SCRIPT, 'fromline': 1, 'toline': 1})
 check('LibraryZone=0: el root sigue legible', 'RECHAZADO' not in r, r[:200])
 proc_lz.kill()
 
-proc.kill(); runner.kill()
+proc.kill()
 print('\n== remote-run: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

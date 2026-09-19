@@ -14,7 +14,7 @@ unit Lsp.TestRunner;
 // Anything else is not a test project and is not run.
 //
 // Running it is EXECUTION, and execution is opt-in on this server. It has its
-// own switch, [Security] AllowTests, deliberately NOT AllowRun: allowing a
+// own switch, AllowTests en el workspace, deliberately NOT AllowRun: allowing a
 // test suite to run is not the same decision as allowing arbitrary binaries
 // (AllowRun implies AllowTests - full execution is a superset). The binary is
 // built here, from a project of the jail, run in the same low-integrity

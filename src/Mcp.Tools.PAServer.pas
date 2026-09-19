@@ -471,7 +471,7 @@ end;
   out" - a port scanner run from inside this machine's network, behind its
   firewall, with no execution permission needed. Same primitive, same rule:
   the hosts of the IDE's own profiles, plus whatever the operator wrote in
-  [Security] RemoteHosts. Nothing else. }
+  RemoteHosts del workspace activo. Nothing else. }
 function ProbeHostDenied(const AHost: string): string;
 var
   H, Allowed: string;
@@ -682,42 +682,6 @@ end;
   - CodeGear.Profiles.Targets imports the .sdk via $(PlatformSDK), which the
     build runner now passes when <Platform>.sdk exists (EnvOptions.proj has
     no command-line default for platforms the SDK Manager never touched). }
-function InstallRunnerCmd(const Params: TDelphiPAServerParams): string;
-var
-  Prof, Err, HowTo: string;
-begin
-  Prof := Params.Name.Trim;
-  if Prof = '' then
-    Exit(SR_PASERVER_RUN_NEEDS);
-  Err := ShellArgDenied(Prof);
-  if Err <> '' then
-    Exit(Err);
-  Err := InstallRunner(Prof, HowTo);
-  if Err <> '' then
-    Exit(Err);
-  Result := HowTo;
-end;
-
-function StartRunnerCmd(const Params: TDelphiPAServerParams): string;
-var
-  Prof, Err, Status: string;
-begin
-  // starting the runner IS enabling execution on that machine: same gate as
-  // remote-run, deliberately (install-runner only copies and stays open).
-  if not AllowRemoteRun then
-    Exit(SR_PASERVER_RUN_DISABLED);
-  Prof := Params.Name.Trim;
-  if Prof = '' then
-    Exit(SR_PASERVER_RUN_NEEDS);
-  Err := ShellArgDenied(Prof);
-  if Err <> '' then
-    Exit(Err);
-  Err := StartRunner(Prof, Status);
-  if Err <> '' then
-    Exit(Err);
-  Result := Status;
-end;
-
 function RemoteRunCmd(const Params: TDelphiPAServerParams): string;
 var
   Prof, Proj, ExeName, Denied: string;
@@ -939,10 +903,6 @@ begin
     Result := TestConnection(Params)
   else if Cmd = 'get-sdk' then
     Result := GetSdk(Params)
-  else if Cmd = 'install-runner' then
-    Result := InstallRunnerCmd(Params)
-  else if Cmd = 'start-runner' then
-    Result := StartRunnerCmd(Params)
   else if Cmd = 'remote-run' then
     Result := RemoteRunCmd(Params)
   else

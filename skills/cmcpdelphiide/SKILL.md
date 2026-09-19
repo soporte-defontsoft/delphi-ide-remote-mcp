@@ -129,12 +129,12 @@ on your side.
   You never give a remote path: the server runs what THAT project deployed
   and nothing else on that machine (a script in the same folder is refused
   too - only native binaries).
-- It needs the runner installed ONCE on the target: `delphi_paserver
-  command=install-runner name=<profile>` copies it there and answers with
-  the single line somebody with a shell on that machine must run (`nohup
-  python3 _mcp-runner/mcp-runner.py &`). Without that launch the call times
-  out and tells you so - that is the opt-in, not a bug.
-- The runner refuses anything outside the scratch dir. Remember
+- Nothing has to be installed on the target (v0.98): PAServer itself runs
+  what this server sends. If the program has not finished when the timeout
+  expires it is NOT killed - you get `stillRunning: true` and its partial
+  output; a GUI app stays up, ready to be driven with delphi_adb_linux.
+- Only the NATIVE binary that project deployed can run (the launch script
+  verifies the file signature). Remember
   `target=Deploy` REWRITES that folder: copy state you need before
   redeploying.
 

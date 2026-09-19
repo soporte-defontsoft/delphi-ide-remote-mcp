@@ -105,7 +105,8 @@ CONTENT = [
     (os.path.join(rel, 'DelphiLspMcpTray.exe'), 'DelphiLspMcpTray.exe'),
     (os.path.join(rel, 'DelphiStyleConvert.exe'), 'DelphiStyleConvert.exe'),
     (os.path.join(REPO, 'settings.example.ini'), 'settings.example.ini'),
-    (os.path.join(REPO, 'runner', 'mcp-runner.py'), 'runner/mcp-runner.py'),
+    # runner/mcp-runner.py salio del zip en v0.98: el destino ya no necesita
+    # NADA instalado (PAServer ejecuta por flag 5)
     (os.path.join(REPO, 'README.md'), 'README.md'),
     (os.path.join(REPO, 'CHANGELOG.md'), 'CHANGELOG.md'),
     (os.path.join(REPO, 'LICENSE'), 'LICENSE'),
