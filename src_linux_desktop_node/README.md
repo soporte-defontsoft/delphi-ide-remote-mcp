@@ -5,6 +5,14 @@ the Linux target: the server's eyes and hands there. One short-lived process
 per gesture — capture the desktop, convert the screen scale, press a pixel,
 type text — launched through PAServer, nothing resident.
 
+**It was developed entirely through the MCP server it now serves**: an AI
+agent wrote these units, compiled them for Linux64, deployed them over
+PAServer and debugged them against live Zorin and Fedora desktops — without
+ever sitting at the Windows machine. Every trap documented in the unit
+headers (the portal's mute timeout, libei's handshake, the PNG written by
+hand) was measured through that same remote loop. Dogfooding, start to
+finish.
+
 **GNOME only for today** (measured live on Zorin 18 and Fedora): capture goes
 through the XDG desktop portal, input through libei, the scale comes from
 Mutter. Nothing gets installed on the target: every system library is opened
