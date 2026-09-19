@@ -201,7 +201,10 @@ with the IDE - `delphi_fetch` its path and `curl` the `download` link, it
 is ~70 MB) -> install and start it on the target, from a terminal INSIDE
 its graphical session (a GUI launched later through an out-of-session
 PAServer aborts with no DISPLAY - measured) -> `add-profile` (it registers
-in the operator's IDE too; an existing name is refused, never overwritten)
+in the operator's IDE too; an existing name is refused, never overwritten.
+Best with the RAD Studio IDE CLOSED: the IDE dumps its own lists back
+when it exits and can wipe a seat created while it was open - the profile
+itself keeps working for these tools regardless)
 -> `test-connection` -> `get-sdk` once (pulls the sysroot; minutes) ->
 `delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
 (`download` link, sha256) to run the ELF on YOUR machine - or run it ON
