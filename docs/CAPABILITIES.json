@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/gen-capabilities.py (from the live tools/list)",
   "version": "0.98.0-beta",
-  "tools": 42,
-  "coreTools": 37,
+  "tools": 43,
+  "coreTools": 38,
   "optionalTools": 5,
   "toolNames": [
     "delphi_adb",
@@ -16,6 +16,7 @@
     "delphi_definition",
     "delphi_delete",
     "delphi_designer",
+    "delphi_desktop",
     "delphi_diagnostics",
     "delphi_edit",
     "delphi_fetch",

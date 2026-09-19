@@ -868,6 +868,78 @@ const
   SP_ADBLINUX_OUT =
     'screenshot: folder where the PNG lands (default: the server''s temp ' +
     'folder). Retrieve it with delphi_fetch.';
+  { ------------------------------------------------ delphi_desktop (Windows) }
+  SD_DESKTOP =
+    'Eyes and hands on the desktop of THIS server - the Windows machine that ' +
+    'runs RAD Studio. It is the same idea delphi_adb_linux gives you on a ' +
+    'Linux target and delphi_adb on Android, pointed at the machine you are ' +
+    'already talking to: use it to drive the IDE itself, an installer, a ' +
+    'dialog no tool can reach, or a Windows build of your app running here. ' +
+    'THE FLOW: command=screenshot brings the WHOLE desktop back as a PNG; ' +
+    'you LOOK at it, measure the pixel you want and command=tap presses ' +
+    'exactly there. command=type writes text (accents included, whatever the ' +
+    'keyboard layout is) and, with x and y, clicks first and types in one ' +
+    'trip. command=key presses one key BY NAME (escape, enter, tab, super, ' +
+    'f4...). command=windows lists the visible windows with title and ' +
+    'rectangle - and THOSE coordinates are the ones to click with, because ' +
+    'the node reports real pixels, the same ones the screenshot has. ' +
+    'Every answer carries a fresh screenshot, so you always act on what you ' +
+    'just saw. IT IS OFF UNLESS THE OPERATOR SAYS OTHERWISE: it needs ' +
+    'AllowDesktopControl=1 in YOUR workspace, and it is refused on a ' +
+    'read-only credential. Remember whose screen this is: it is the ' +
+    'operator''s own machine, not a test box.';
+  SD_DESKTOP_LOCKED =
+    'El escritorio esta BLOQUEADO (o la sesion no tiene pantalla): Windows ' +
+    'no deja ni mirar ni tocar desde aqui. Es el gemelo del "sin DISPLAY" de ' +
+    'Linux. Pidele al operador que desbloquee la sesion.';
+  SR_DESKTOP_DISABLED =
+    'RECHAZADO: delphi_desktop esta apagado en este workspace. Da ojos y ' +
+    'manos sobre el escritorio del OPERADOR (su raton, su teclado, su ' +
+    'pantalla entera), asi que solo se enciende declarando ' +
+    'AllowDesktopControl=1 en la seccion [Workspace.<nombre>] de quien lo ' +
+    'usa. No lo hereda de nadie.';
+  SR_DESKTOP_CMD =
+    'RECHAZADO: command debe ser screenshot, tap, type, key, windows o ' +
+    'status.';
+  SR_DESKTOP_NEEDXY =
+    'RECHAZADO: tap necesita x e y, medidos sobre la captura que devuelve ' +
+    'command=screenshot (o el rectangulo que da command=windows).';
+  SR_DESKTOP_NEEDTEXT =
+    'RECHAZADO: type necesita "text". Con x e y ademas pulsa ahi antes de ' +
+    'escribir: un solo viaje.';
+  SR_DESKTOP_NEEDCODE =
+    'RECHAZADO: key necesita "code" con el NOMBRE de la tecla: escape, ' +
+    'enter, tab, space, backspace, delete, home, end, up, down, left, ' +
+    'right, super, alt, ctrl, shift o f1..f12.';
+  SR_DESKTOP_NONODE_FMT =
+    'delphi_desktop: falta el nodo de escritorio (%s). La distribucion lo ' +
+    'trae en node\McpDesktopNode.exe junto al servidor; si no esta, ' +
+    'recompilalo con BuildGroup.bat Release.';
+  SR_DESKTOP_NOSHOT =
+    'El nodo no devolvio captura. Suele ser la sesion bloqueada o sin ' +
+    'pantalla; mira "nodeOutput" para el motivo exacto.';
+  SP_DESKTOP_COMMAND =
+    'screenshot (el escritorio entero como PNG; es lo que devuelve TODO ' +
+    'comando) | tap (pulsa en x,y de la captura) | type (escribe "text"; ' +
+    'con x,y pulsa ahi primero) | key (una tecla por nombre en "code") | ' +
+    'windows (las ventanas visibles con titulo y rectangulo) | status (que ' +
+    've el nodo: sistema, tamano del escritorio y escala). Por defecto: ' +
+    'screenshot';
+  SP_DESKTOP_X =
+    'Columna (pixel) medida SOBRE la captura, para tap o para type.';
+  SP_DESKTOP_Y =
+    'Fila (pixel) medida SOBRE la captura, para tap o para type.';
+  SP_DESKTOP_CODE =
+    'Nombre de la tecla para command=key: escape, enter, tab, space, ' +
+    'backspace, delete, home, end, up, down, left, right, super, alt, ' +
+    'ctrl, shift, f1..f12.';
+  SP_DESKTOP_TEXT =
+    'El texto a escribir (command=type). Va por Unicode, asi que los ' +
+    'acentos entran igual sea cual sea la distribucion de teclado.';
+  SP_DESKTOP_OUT =
+    'Carpeta donde dejar la captura. Por defecto, una temporal del ' +
+    'servidor; bajatela con delphi_fetch.';
+
   SR_ADBLINUX_CMD =
     'RECHAZADO: command debe ser screenshot, tap, key, windows o status.';
   SR_ADBLINUX_NEEDXY =

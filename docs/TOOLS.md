@@ -449,6 +449,28 @@ The target needs a graphical session open — a headless box has nothing to show
 | `code` | string | optional | key: the Linux (evdev) key code — Escape 1, Tab 15, Enter 28, left Alt 56, Super 125 |
 | `out` | string | optional | screenshot: folder where the PNG lands (default: the server's temp folder). Retrieve it with `delphi_fetch` |
 
+### `delphi_desktop`
+
+Eyes and hands on the desktop of **this server** — the Windows machine that runs RAD Studio. The third leg of the same idea: `delphi_adb` gives you an Android screen, `delphi_adb_linux` a Linux target's, and this one the machine you are already talking to. It is for what no other tool reaches: the IDE itself (a dialog, a wizard, a settings page), an installer, a modal that blocks a build, a Windows build of your app running right there.
+
+The engine is the SAME Delphi node that travels to the Linux targets (`node\McpDesktopNode.exe`, part of the distribution, sources in `src_desktop_node/`): one short-lived process per gesture, nothing resident. Here there is nothing to deploy — the node already sits next to the server — so a gesture is just a process and its output.
+
+THE FLOW is the one you already know: `command=screenshot` brings the WHOLE desktop back as a PNG; you LOOK at it, measure the pixel and `command=tap` presses exactly there. `command=type` writes text — Unicode, so accents arrive whatever the keyboard layout is — and with `x`,`y` it clicks first and types in one trip. `command=key` presses one key BY NAME (escape, enter, tab, super, f4…), never a raw number: the numeric codes are not the same ones the Linux node uses, and a silent mismatch would press the wrong key. `command=windows` lists the visible windows with title and rectangle, which beats a thumbnail view — you get the coordinates to click straight away. Every answer but `status` carries a fresh screenshot, so you always act on what you just saw.
+
+**Coordinates are real pixels, and that is a trap worth naming** (measured 2026-09-19): the node is DPI-aware, so what it reports matches the screenshot exactly. A tool that is NOT DPI-aware sees the same window somewhere else — on a 125% display, the same Notepad was at 600,254 for a non-aware caller and at 750,318 for the node. Measure on the screenshot or on `command=windows`, and never mix in coordinates from another source.
+
+**It needs an unlocked session.** A locked Windows answers "Access denied" to any capture — the exact twin of a Linux with no DISPLAY — and the tool says so in `hint` instead of leaving you guessing.
+
+*Access: read-write, and OFF unless the operator says otherwise. It needs `AllowDesktopControl=1` in YOUR workspace (absent = off, never inherited) and is refused outright to a read-only credential. Treat it differently from its two siblings: they look at a test machine, this one looks at the operator's own screen and moves the operator's own mouse — whatever they have open is in frame.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | screenshot (default) \| tap \| type \| key \| windows \| status |
+| `x` / `y` | string | optional | tap, and optionally type: the pixel MEASURED ON THE SCREENSHOT this tool returned (or the rectangle `windows` gave) |
+| `text` | string | optional | type: the text to write. With `x`,`y` it clicks there first to focus the field |
+| `code` | string | optional | key: the key NAME — escape, enter, tab, space, backspace, delete, home, end, up, down, left, right, super, alt, ctrl, shift, f1..f12 |
+| `out` | string | optional | Folder where the PNG lands (default: the server's temp folder). Retrieve it with `delphi_fetch` |
+
 ### `delphi_components`
 
 What this server's RAD Studio has INSTALLED to program with: every component/design package REGISTERED in the IDE (Known Packages — the same list the IDE loads into its palette), whatever the install channel: GetIt, a vendor installer or manual. Each line is the package's description plus its `.bpl` file; disabled packages are marked, IDE-plumbing packages are excluded. Read-only by design — there is no install command; if a library you need is missing, say so with delphi_report. The base RTL units are always available and never appear here.

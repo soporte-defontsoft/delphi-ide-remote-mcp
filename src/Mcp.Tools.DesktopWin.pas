@@ -1,0 +1,212 @@
+unit Mcp.Tools.DesktopWin;
+
+{ delphi_desktop: el escritorio de ESTE servidor - la maquina Windows con
+  RAD Studio - visto y manejado por el agente.
+
+  Es la tercera pata de la misma idea: delphi_adb en Android, delphi_adb_linux
+  en un Linux con PAServer, y aqui la maquina a la que el agente ya esta
+  hablando. Sirve para lo que ninguna otra tool alcanza: el propio IDE, un
+  instalador, un dialogo modal, una app Windows recien compilada.
+
+  El motor es el MISMO nodo Delphi que viaja a los Linux (node\McpDesktopNode,
+  con su .exe para Windows): un programa por gesto, sin nada residente. Aqui
+  no hay que desplegar nada - el nodo ya esta al lado del servidor - asi que
+  el gesto es un CreateProcess y leer su salida.
+
+  LA DIFERENCIA QUE IMPORTA respecto a sus hermanas: alli el escritorio es una
+  maquina de pruebas; aqui es la del operador. Por eso este es el unico camino
+  del servidor que exige su propio interruptor por workspace
+  (AllowDesktopControl=1) y que se niega en una credencial de solo lectura. }
+
+interface
+
+uses
+  System.SysUtils,
+  MCPServer.Tool.Base,
+  MCPServer.Types,
+  Lsp.Texts;
+
+type
+  TDesktopWinParams = class
+  private
+    FCommand: string;
+    FX: string;
+    FY: string;
+    FCode: string;
+    FText: string;
+    FOut: string;
+  public
+    [SchemaDescription(SP_DESKTOP_COMMAND)]
+    property Command: string read FCommand write FCommand;
+    [SchemaDescription(SP_DESKTOP_X)]
+    property X: string read FX write FX;
+    [SchemaDescription(SP_DESKTOP_Y)]
+    property Y: string read FY write FY;
+    [SchemaDescription(SP_DESKTOP_CODE)]
+    property Code: string read FCode write FCode;
+    [SchemaDescription(SP_DESKTOP_TEXT)]
+    property Text: string read FText write FText;
+    [SchemaDescription(SP_DESKTOP_OUT)]
+    property Out_: string read FOut write FOut;
+  end;
+
+  TDesktopWinTool = class(TMCPToolBase<TDesktopWinParams>)
+  protected
+    function ExecuteWithParams(const Params: TDesktopWinParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
+{ El nodo de escritorio de ESTA maquina: node\McpDesktopNode.exe junto al
+  servidor. Se expone porque el registro de la tool pregunta si existe. }
+function NodoWindowsPath: string;
+
+implementation
+
+uses
+  System.JSON,
+  System.IOUtils,
+  System.StrUtils,
+  MCPServer.Registration,
+  Lsp.Guard,
+  Lsp.BuildRunner;
+
+const
+  NODO_TIMEOUT = 30000;   { un gesto no deberia pasar de unos segundos }
+
+function NodoWindowsPath: string;
+begin
+  Result := TPath.Combine(TPath.Combine(
+    TPath.GetDirectoryName(ParamStr(0)), 'node'), 'McpDesktopNode.exe');
+end;
+
+constructor TDesktopWinTool.Create;
+begin
+  inherited;
+  FName := 'delphi_desktop';
+  FDescription := SD_DESKTOP;
+end;
+
+{ La linea CAPTURA=<ruta> que el nodo escribe al guardar la imagen. }
+function RutaDeCaptura(const ASalida: string): string;
+var
+  L: string;
+begin
+  Result := '';
+  for L in ASalida.Split([#10]) do
+    if L.TrimLeft.StartsWith('CAPTURA=') then
+      Result := L.Trim.Substring(8);
+end;
+
+{ Las teclas se pasan POR NOMBRE. El nodo las traduce a codigos de Windows;
+  aqui solo se comprueba que no venga un numero suelto, que en Linux era el
+  codigo evdev y aqui significaria otra tecla distinta: mejor un rechazo
+  claro que un gesto equivocado. }
+function NombreDeTeclaValido(const ACode: string): Boolean;
+begin
+  Result := (ACode <> '') and
+    ((ACode[Low(ACode)] < '0') or (ACode[Low(ACode)] > '9'));
+end;
+
+function TDesktopWinTool.ExecuteWithParams(const Params: TDesktopWinParams): string;
+var
+  Cmd, Args, Salida, Nodo, Origen, Destino, Local: string;
+  Codigo: Cardinal;
+  Return: TJSONObject;
+begin
+  Cmd := Params.Command.Trim.ToLower;
+  if Cmd = '' then
+    Cmd := 'screenshot';
+  if not MatchStr(Cmd, ['screenshot', 'tap', 'type', 'key', 'windows', 'status']) then
+    Exit(SR_DESKTOP_CMD);
+
+  { El interruptor va ANTES que nada: mirar la pantalla del operador ya es
+    el gesto, no hace falta pulsar para que importe. }
+  if not AllowDesktopControl then
+    Exit(SR_DESKTOP_DISABLED);
+
+  Nodo := NodoWindowsPath;
+  if not TFile.Exists(Nodo) then
+    Exit(Format(SR_DESKTOP_NONODE_FMT, [Nodo]));
+
+  Args := '';
+  if Cmd = 'tap' then
+  begin
+    if (Params.X.Trim = '') or (Params.Y.Trim = '') then
+      Exit(SR_DESKTOP_NEEDXY);
+    Args := Format('%d %d', [StrToIntDef(Params.X.Trim, -1),
+      StrToIntDef(Params.Y.Trim, -1)]);
+  end
+  else if Cmd = 'type' then
+  begin
+    if Params.Text.Trim = '' then
+      Exit(SR_DESKTOP_NEEDTEXT);
+    if (Params.X.Trim <> '') and (Params.Y.Trim <> '') then
+      Args := Format('escribe %d %d %s', [StrToIntDef(Params.X.Trim, -1),
+        StrToIntDef(Params.Y.Trim, -1), Params.Text.Trim])
+    else
+      Args := 'texto ' + Params.Text.Trim;
+  end
+  else if Cmd = 'key' then
+  begin
+    if not NombreDeTeclaValido(Params.Code.Trim) then
+      Exit(SR_DESKTOP_NEEDCODE);
+    Args := 'tecla ' + Params.Code.Trim;
+  end
+  else if Cmd = 'windows' then
+    Args := 'ventanas';
+  { screenshot y status corren el nodo sin argumentos: siempre captura al
+    terminar y cuenta lo que ve del escritorio. }
+
+  Salida := RunCaptured(Format('"%s" %s', [Nodo, Args]), NODO_TIMEOUT, Codigo);
+
+  Return := TJSONObject.Create;
+  try
+    Return.AddPair('command', Cmd);
+    Return.AddPair('ran', TJSONBool.Create(Codigo = 0));
+    Return.AddPair('nodeOutput', Salida.Trim);
+
+    Origen := RutaDeCaptura(Salida);
+    if (Cmd <> 'status') and (Origen <> '') and TFile.Exists(Origen) then
+    begin
+      { La captura se mueve a su sitio: el nodo siempre escribe el mismo
+        captura.png al lado suyo, asi que dejarla ahi seria pisarsela al
+        siguiente gesto. }
+      Destino := Params.Out_.Trim;
+      if Destino = '' then
+        Destino := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-desktop');
+      try
+        TDirectory.CreateDirectory(Destino);
+        Local := TPath.Combine(Destino, Format('desktop-%s.png',
+          [FormatDateTime('yyyymmdd-hhnnss', Now)]));
+        TFile.Copy(Origen, Local, True);
+        TFile.Delete(Origen);
+        Return.AddPair('screenshot', Local);
+        Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Local)));
+        Return.AddPair('note', 'mide el pixel SOBRE esta imagen y pasalo a ' +
+          'command=tap; bajala con delphi_fetch');
+      except
+        on E: Exception do
+          Return.AddPair('screenshotError', E.Message);
+      end;
+    end
+    else if Cmd <> 'status' then
+    begin
+      Return.AddPair('screenshotError', SR_DESKTOP_NOSHOT);
+      { El sintoma de la sesion bloqueada es siempre el mismo y despista
+        bastante, asi que se nombra por su nombre. }
+      if Salida.Contains('Acceso denegado') or Salida.Contains('Access is denied') then
+        Return.AddPair('hint', SD_DESKTOP_LOCKED);
+    end;
+
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
+initialization
+  TMCPRegistry.RegisterTool('delphi_desktop',
+    function: IMCPTool begin Result := TDesktopWinTool.Create; end);
+
+end.

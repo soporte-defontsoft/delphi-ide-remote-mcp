@@ -114,11 +114,11 @@ try:
                 'delphi_search', 'delphi_signature', 'delphi_symbols',
                 'delphi_textedit', 'delphi_upload', 'delphi_workspace',
                 'delphi_paserver', 'delphi_delete', 'delphi_move',
-                'delphi_adb', 'delphi_adb_linux',
+                'delphi_adb', 'delphi_adb_linux', 'delphi_desktop',
                 'delphi_components', 'delphi_styles', 'delphi_messages',
                 'delphi_changeset', 'delphi_designer', 'delphi_rename_symbol',
                 'delphi_test', 'delphi_help']
-    check('http: tools/list = 37 tools', sorted(names) == sorted(expected), names)
+    check('http: tools/list = 38 tools', sorted(names) == sorted(expected), names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",

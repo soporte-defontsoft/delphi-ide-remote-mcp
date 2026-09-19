@@ -41,7 +41,11 @@ const
 
 { El nodo de escritorio EMPAQUETADO con el servidor: node\McpDesktopNode
   junto al exe. '' si la distribucion no lo trae. }
-function BundledNodePath: string;
+function BundledNodePath: string; overload;
+
+{ El mismo, eligiendo binario por la plataforma del target ('Win64',
+  'Linux64'...): a cada sistema el suyo. }
+function BundledNodePath(const APlataforma: string): string; overload;
 
 { Deja el nodo del target AL DIA sin compilar nada (peticion David
   2026-09-19): compara el sello node.ver del target (SHA-256 del binario)
@@ -77,6 +81,7 @@ uses
   System.Diagnostics,
   System.SyncObjs,
   System.Hash,
+  System.RegularExpressions,
   Lsp.BuildRunner,
   Lsp.Discovery,
   Lsp.Texts;
@@ -361,12 +366,48 @@ begin
   Result.AddPair('note', SN_REMOTERUN_NOTE);
 end;
 
-function BundledNodePath: string;
+function PlataformaDelPerfil(const AProfile: string): string;
+var
+  Installs: TArray<TRadStudioInfo>;
+  Info: TRadStudioInfo;
+  P: string;
 begin
+  { El .profile dice para que plataforma se creo (Profile_platform). Es la
+    unica fuente fiable: el nombre del perfil no significa nada. }
+  Result := '';
+  Installs := DiscoverAllRadStudios;
+  for Info in Installs do
+  begin
+    P := TPath.Combine(IdeProfilesDir(Info.Version), AProfile + '.profile');
+    if TFile.Exists(P) then
+      with TRegEx.Match(TFile.ReadAllText(P),
+        '<Profile_platform>([^<]*)</Profile_platform>', [roIgnoreCase]) do
+        if Success then
+          Exit(Groups[1].Value.Trim);
+  end;
+end;
+
+function BundledNodePath(const APlataforma: string): string;
+var
+  Nombre: string;
+begin
+  { UN nodo por sistema, y al target va el QUE LE CORRESPONDE (David,
+    19-sep-2026). La distribucion trae los dos al lado del servidor:
+    McpDesktopNode (ELF, para los Linux) y McpDesktopNode.exe (para un
+    Windows con PAServer). Sin plataforma conocida se asume Linux, que es
+    de donde viene este camino. }
+  Nombre := NODE_PROJECT;
+  if APlataforma.StartsWith('Win', True) then
+    Nombre := NODE_PROJECT + '.exe';
   Result := TPath.Combine(TPath.Combine(
-    TPath.GetDirectoryName(ParamStr(0)), 'node'), NODE_PROJECT);
+    TPath.GetDirectoryName(ParamStr(0)), 'node'), Nombre);
   if not TFile.Exists(Result) then
     Result := '';
+end;
+
+function BundledNodePath: string;
+begin
+  Result := BundledNodePath('');
 end;
 
 function Sha256DeFichero(const APath: string): string;
@@ -393,7 +434,10 @@ begin
   finally
     GNodoLock.Leave;
   end;
-  Bin := BundledNodePath;
+  { Al target va el binario de SU sistema: el ELF a un Linux y el .exe a un
+    Windows con PAServer. El nombre en el destino es el mismo para los dos
+    (el proyecto), asi que el sello y el lanzador no cambian. }
+  Bin := BundledNodePath(PlataformaDelPerfil(AProfile.Trim));
   if Bin = '' then
     Exit(SR_ADBLINUX_NONODE);
   Pc := PaClientPath;
