@@ -41,6 +41,7 @@ EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SRC, 'Compiled', 'Win64
 # made the SERVER open the connection). The clone check below is about cloning,
 # not about the allowlist, so allow the host it uses.
 _env = dict(os.environ)
+_env.setdefault('DELPHI_MCP_ROOTS', REPO + ';' + os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests'))  # v0.98: sin jaula = solo lectura; esta bateria toca repo Y temp
 _env['DELPHI_MCP_GIT_REMOTES'] = 'github.com'
 proc = subprocess.Popen([EXE], env=_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
@@ -193,7 +194,10 @@ out = call('delphi_projects', {"root": REPO, "name": "core"})
 d = json.loads(out)
 check('projects: filtro por nombre', d['total'] == 1 and d['projects'][0]['name'] == 'LspCoreTest', out[:150])
 out = call('delphi_projects', {})
-check('projects: sin root ni ini configurado avisa', out.startswith('error:') and 'Roots' in out, out[:150])
+# v0.98: la bateria declara su jaula, asi que sin root explicito descubre
+# DENTRO de ella (el estado "sin configurar" ya no existe: o jaula o RO)
+check('projects: sin root explicito descubre dentro de la jaula',
+      '"total"' in out and 'RECHAZADO' not in out, out[:200])
 
 # --- fetch (chunked download with sha256) ---
 LIC = os.path.join(REPO, 'LICENSE')

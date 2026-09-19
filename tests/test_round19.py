@@ -48,6 +48,11 @@ PORT = sk.getsockname()[1]
 sk.close()
 env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = BASE
+env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
+# v0.98: o workspace o nada - la bateria presenta su token
+TOKEN = 'bateria-workspace'
+with open(os.path.join(BASE, 'settings.ini'), 'w') as _f:
+    _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, BASE))
 proc = subprocess.Popen([EXE, '--http', str(PORT)], env=env,
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(2.3)
@@ -56,7 +61,8 @@ URL = 'http://127.0.0.1:%d/mcp' % PORT
 
 def rpc(body, sid=None):
     h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream'}
+         'Accept': 'application/json, text/event-stream',
+         'Authorization': 'Bearer ' + TOKEN}
     if sid:
         h['Mcp-Session-Id'] = sid
     r = urllib.request.urlopen(urllib.request.Request(

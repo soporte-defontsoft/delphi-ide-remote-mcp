@@ -37,6 +37,9 @@ def check(name, ok, detail=''):
         print('FAIL', name, '--', str(detail).replace('\n', ' ')[:220])
 
 
+TOKEN = 'bateria-workspace'
+
+
 def start(confine):
     base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests',
                         'confine-%s-%d' % ('on' if confine else 'off', int(time.time() * 1000) % 100000))
@@ -53,9 +56,12 @@ def start(confine):
     sk.close()
     env = dict(os.environ)
     env['DELPHI_MCP_ROOTS'] = base
-    if confine:
-        env['DELPHI_MCP_AGENT_CONFINEMENT'] = '1'
-        env['DELPHI_MCP_SHARED_FOLDERS'] = 'shared'
+    env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
+    # v0.98: o workspace o nada - el confinamiento se declara EN el workspace
+    with open(os.path.join(base, 'settings.ini'), 'w') as _f:
+        _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, base))
+        if confine:
+            _f.write('AgentConfinement=1\nSharedFolders=shared\n')
     proc = subprocess.Popen([exe, '--http', str(port)], env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2.3)
@@ -64,7 +70,8 @@ def start(confine):
 
 def rpc(url, body, sid=None):
     h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream'}
+         'Accept': 'application/json, text/event-stream',
+         'Authorization': 'Bearer ' + TOKEN}
     if sid:
         h['Mcp-Session-Id'] = sid
     r = urllib.request.urlopen(urllib.request.Request(
@@ -149,6 +156,7 @@ shutil.copy(SRC, exe)
 os.makedirs(os.path.join(base, 'bob'))
 env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = base
+env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
 env['DELPHI_MCP_AGENT_CONFINEMENT'] = '1'
 proc = subprocess.Popen([exe], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')

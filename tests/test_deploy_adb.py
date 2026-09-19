@@ -33,6 +33,7 @@ os.makedirs(BASE, exist_ok=True)
 class Server:
     def __init__(self, extra_args=None, env=None):
         e = dict(os.environ)
+        e.setdefault('DELPHI_MCP_ROOTS', BASE)  # v0.98: sin jaula declarada = solo lectura
         e.update(env or {})
         self.proc = subprocess.Popen([EXE] + (extra_args or []), env=e,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -107,7 +108,7 @@ def check(name, cond, detail=''):
         print('FAIL -', name, '|', str(detail)[:200])
 
 
-srv = Server()
+srv = Server(env={'DELPHI_MCP_ADB_DEVICES': 'ZZZ-NO-EXISTE;127.0.0.1'})
 
 # ====================== delphi_adb: read commands ======================
 out = srv.call('delphi_adb', {"command": "devices"}, t=60)
@@ -132,7 +133,8 @@ except Exception:
 
 # logcat answers (with no device attached adb's own error text comes back;
 # either way it must NOT be a refusal nor a protocol error)
-out = srv.call('delphi_adb', {"command": "logcat", "lines": "50"}, t=90)
+out = srv.call('delphi_adb', {"command": "logcat", "lines": "50",
+                              "device": "ZZZ-NO-EXISTE"}, t=90)
 check('adb logcat: responde sin rechazo',
       'RECHAZADO' not in out and not out.startswith('MCPERROR'), out[:200])
 
@@ -142,21 +144,22 @@ check('adb command invalido: lista los diez comandos',
       'command debe ser' in out and 'discover' in out and 'run' in out
       and 'screenshot' in out and 'tap' in out and 'key' in out, out[:250])
 
-out = srv.call('delphi_adb', {"command": "run"})
+out = srv.call('delphi_adb', {"command": "run", "device": "ZZZ-NO-EXISTE"})
 check('adb run sin app: rechazo con el nombre de paquete como camino',
       'RECHAZADO' in out and '"app"' in out, out[:250])
 
-out = srv.call('delphi_adb', {"command": "screenshot"})
+out = srv.call('delphi_adb', {"command": "screenshot", "device": "ZZZ-NO-EXISTE"})
 check('adb screenshot sin out: rechazo que guia a delphi_fetch',
       'RECHAZADO' in out and '"out"' in out and 'delphi_fetch' in out, out[:250])
-out = srv.call('delphi_adb', {"command": "screenshot",
+out = srv.call('delphi_adb', {"command": "screenshot", "device": "ZZZ-NO-EXISTE",
                               "out": os.path.join(BASE, 'captura.txt')})
 check('adb screenshot out sin .png: rechazado', 'RECHAZADO' in out and '.png' in out,
       out[:200])
-out = srv.call('delphi_adb', {"command": "tap"})
+out = srv.call('delphi_adb', {"command": "tap", "device": "ZZZ-NO-EXISTE"})
 check('adb tap sin x/y: rechazo que guia al screenshot',
       'RECHAZADO' in out and 'screenshot' in out, out[:250])
-out = srv.call('delphi_adb', {"command": "key", "key": "poweroff"})
+out = srv.call('delphi_adb', {"command": "key", "key": "poweroff",
+                              "device": "ZZZ-NO-EXISTE"})
 check('adb key fuera de whitelist: rechazada con el vocabulario',
       'RECHAZADO' in out and 'back' in out and 'appswitch' in out, out[:250])
 
@@ -164,11 +167,11 @@ out = srv.call('delphi_adb', {"command": "connect"})
 check('adb connect sin address: rechazo con formato ip:puerto',
       'RECHAZADO' in out and 'address' in out, out[:250])
 
-out = srv.call('delphi_adb', {"command": "install"})
+out = srv.call('delphi_adb', {"command": "install", "device": "ZZZ-NO-EXISTE"})
 check('adb install sin apk: rechazo con camino (delphi_build)',
       'RECHAZADO' in out and 'apk' in out and 'delphi_build' in out, out[:250])
 
-out = srv.call('delphi_adb', {"command": "install",
+out = srv.call('delphi_adb', {"command": "install", "device": "ZZZ-NO-EXISTE",
                               "apk": os.path.join(BASE, 'no-such.apk')})
 check('adb install apk inexistente: error honesto',
       'no existe el .apk' in out, out[:250])
@@ -187,12 +190,13 @@ out = srv.call('delphi_adb', {"command": "logcat", "lines": "0",
                               "device": "ZZZ-NO-EXISTE"}, t=60)
 check('adb logcat lines=0: tratado como default (no rechazo de rango)',
       '5000' not in out and 'SIN CONEXION' in out, out[:250])
-out = srv.call('delphi_adb', {"command": "logcat", "lines": "99999"})
+out = srv.call('delphi_adb', {"command": "logcat", "lines": "99999",
+                              "device": "ZZZ-NO-EXISTE"})
 check('adb logcat lines=99999: rechazado', 'RECHAZADO' in out, out[:200])
 
 # logcat out= dumps to a file the agent reads in ranges (field lesson: an
 # inline dump of thousands of lines drowned a 200k-context client)
-out = srv.call('delphi_adb', {"command": "logcat",
+out = srv.call('delphi_adb', {"command": "logcat", "device": "ZZZ-NO-EXISTE",
                               "out": os.path.join(BASE, 'volcado.md')})
 check('adb logcat out sin .txt/.log: rechazado', 'RECHAZADO' in out
       and '.txt' in out, out[:200])
@@ -320,11 +324,12 @@ except Exception:
 srv.close()
 
 # ====================== read-only split ===================================
-ro = Server(['--readonly'])
+ro = Server(['--readonly'], env={'DELPHI_MCP_ADB_DEVICES': '127.0.0.1'})
 out = ro.call('delphi_adb', {"command": "devices"}, t=60)
 check('readonly: devices sigue abierto',
       'SOLO LECTURA' not in out and 'devices' in out, out[:200])
-out = ro.call('delphi_adb', {"command": "logcat", "lines": "20"}, t=90)
+out = ro.call('delphi_adb', {"command": "logcat", "lines": "20",
+                             "device": "127.0.0.1"}, t=90)
 check('readonly: logcat sigue abierto (debug del dispositivo es lectura)',
       'SOLO LECTURA' not in out, out[:200])
 out = ro.call('delphi_adb', {"command": "connect", "address": "127.0.0.1:5555"})
@@ -333,25 +338,29 @@ check('readonly: connect rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in ou
 out = ro.call('delphi_adb', {"command": "disconnect", "address": "127.0.0.1:5555"})
 check('readonly: disconnect rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out,
       out[:250])
-out = ro.call('delphi_adb', {"command": "install", "apk": "x.apk"})
+out = ro.call('delphi_adb', {"command": "install", "apk": "x.apk",
+                             "device": "127.0.0.1"})
 check('readonly: install rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out,
       out[:250])
-out = ro.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X"})
+out = ro.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X",
+                             "device": "127.0.0.1"})
 check('readonly: run rechazado (ejecutar en el dispositivo es write)',
       'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
-out = ro.call('delphi_adb', {"command": "screenshot"})
+out = ro.call('delphi_adb', {"command": "screenshot", "device": "127.0.0.1"})
 check('readonly: screenshot sigue abierto (mirar es lectura)',
       'SOLO LECTURA' not in out and 'RECHAZADO' in out and '"out"' in out,
       out[:250])
-out = ro.call('delphi_adb', {"command": "tap", "x": "1", "y": "1"})
+out = ro.call('delphi_adb', {"command": "tap", "x": "1", "y": "1",
+                             "device": "127.0.0.1"})
 check('readonly: tap rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out,
       out[:250])
-out = ro.call('delphi_adb', {"command": "key", "key": "back"})
+out = ro.call('delphi_adb', {"command": "key", "key": "back",
+                             "device": "127.0.0.1"})
 check('readonly: key rechazada', 'RECHAZADO' in out and 'SOLO LECTURA' in out,
       out[:250])
 ro.close()
 
-# ====================== device allowlist ([Adb] AllowedDevices) ===========
+# ============== device allowlist (AdbAllowedDevices por workspace) ========
 # configured -> ONLY those targets, and every device-addressing command must
 # name its device explicitly (an implicit target could be an unlisted one)
 al = Server(env={'DELPHI_MCP_ADB_DEVICES': '10.9.9.9;SERIALX'})
@@ -378,12 +387,18 @@ check('allowlist: device fuera de lista rechazado TAMBIEN en comando read',
       'RECHAZADO' in out and 'lista permitida' in out, out[:250])
 al.close()
 
-# without the setting nothing changes (regression: the whole battery above
-# ran unrestricted); one explicit probe that an arbitrary target passes
+# v0.98: SIN lista ya no hay barra libre - ausente = NINGUN dispositivo,
+# como toda lista por workspace. El unico fail-open del adb, cerrado.
 noal = Server()
 out = noal.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X"})
-check('sin allowlist: device implicito sigue permitido (compatibilidad)',
-      'AllowedDevices' not in out, out[:200])
+check('sin lista: comando con device implicito RECHAZADO (fail closed)',
+      'RECHAZADO' in out and 'AdbAllowedDevices' in out, out[:250])
+out = noal.call('delphi_adb', {"command": "connect", "address": "192.168.1.163:5555"})
+check('sin lista: hasta un connect explicito se rechaza (lista vacia = nada)',
+      'RECHAZADO' in out, out[:250])
+out = noal.call('delphi_adb', {"command": "devices"}, t=60)
+check('sin lista: listar devices sigue abierto (es solo mirar)',
+      'RECHAZADO' not in out, out[:200])
 noal.close()
 
 print()

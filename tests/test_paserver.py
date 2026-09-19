@@ -46,6 +46,7 @@ class Server:
         # against loopback, so it opts into loopback the way the guard battery
         # opts into execution.
         _env = dict(os.environ)
+        _env.setdefault('DELPHI_MCP_ROOTS', os.path.dirname(os.path.abspath(__file__)))  # v0.98: sin jaula = solo lectura
         _env['DELPHI_MCP_REMOTE_HOSTS'] = '127.0.0.1,localhost'
         self.proc = subprocess.Popen([EXE] + (extra_args or []), env=_env,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,

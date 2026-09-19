@@ -767,16 +767,18 @@ initialization
   // The write lock exists for the whole process life, whether or not writing is
   // enabled in this deployment (cheap, and it keeps the write path unconditional).
   GVaultWrite := TCriticalSection.Create;
-  // Conditional registration: no vault configured, no vault tools in
-  // tools/list at all. Writing needs [Vault] ReadOnly=0 as well - and, on top
-  // of that, a read-write credential (enforced at the gate).
-  if VaultConfigured then
+  // Conditional registration: ningun workspace con vault, ninguna tool
+  // vault_* en tools/list. Desde v0.98 el vault es del workspace ACTIVO,
+  // que al arrancar aun no existe: se registra si CUALQUIER workspace
+  // declara vault y cada peticion decide con el suyo (VaultConfigured /
+  // VaultWritable resuelven el workspace activo y las de escritura se
+  // rechazan por peticion cuando su vault es de solo lectura).
+  if VaultConfiguredAnywhere then
   begin
     TMCPRegistry.RegisterTool('vault_search',
       function: IMCPTool begin Result := TVaultSearchTool.Create; end);
     TMCPRegistry.RegisterTool('vault_read',
       function: IMCPTool begin Result := TVaultReadTool.Create; end);
-    if VaultWritable then
     begin
       TMCPRegistry.RegisterTool('vault_append',
         function: IMCPTool begin Result := TVaultAppendTool.Create; end);

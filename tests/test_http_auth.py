@@ -374,21 +374,15 @@ try:
               code == 200 and 'SOLO LECTURA' not in body,
               '%s %s' % (code, body[:150]))
 
-        # v0.98: el anonimo vive en el workspace por defecto y SU jaula son
-        # los Roots de [Workspace] (tmpdir3 en este ini) - ya no campa por
-        # el repo entero
+        # v0.98 final (David): el anonimo NO EXISTE - o un workspace con su
+        # token o 401, sin modo abierto ni de solo lectura sin credencial
         code, body = call('delphi_list', {'root': tmpdir3,
                                           'pattern': '*.pas'}, None)
-        check('ro: anonimo (AnonymousReadOnly=1) puede leer SU jaula',
-              code == 200 and 'Sample.pas' in body, '%s %s' % (code, body[:120]))
-        code, body = call('delphi_list', {'root': os.path.join(REPO, 'src'),
-                                          'pattern': '*.pas'}, None)
-        check('ro: y fuera de sus Roots, RECHAZADO (nada global)',
-              'RECHAZADO' in body, '%s %s' % (code, body[:120]))
-
+        check('ro: anonimo = 401 SIEMPRE (el anonimo murio en v0.98)',
+              code == 401, '%s %s' % (code, body[:120]))
         code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',
                                           'new': 'interface // y'}, None)
-        check('ro: anonimo NO puede editar', 'SOLO LECTURA' in body,
+        check('ro: anonimo tampoco edita: 401', code == 401,
               '%s %s' % (code, body[:150]))
 
         code, body = call('delphi_list', {'root': REPO}, 'wrong-token')

@@ -73,6 +73,7 @@ uses
   System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,
+  Mcp.Tools.PAServer,
   Lsp.RemoteRun;
 
 constructor TDesktopLinuxTool.Create;
@@ -95,7 +96,7 @@ end;
 
 function TDesktopLinuxTool.ExecuteWithParams(const Params: TDesktopLinuxParams): string;
 var
-  Cmd, Args, Salida, Destino, Local, Fallo, Remota: string;
+  Cmd, Args, Salida, Destino, Local, Fallo, Remota, Proj, Nota: string;
   Res: TJSONObject;
   Return: TJSONObject;
 begin
@@ -105,9 +106,24 @@ begin
   if not MatchStr(Cmd, ['screenshot', 'tap', 'type', 'key', 'windows', 'status']) then
     Exit(SR_ADBLINUX_CMD);
 
-  { El jail decide si este token puede tocar ese proyecto, igual que en
-    cualquier otra tool que nombre un fichero. }
-  Result := PathDenied(Params.Project);
+  { Ejecutar en el destino es remote-run con otro volante: mismos
+    interruptores del workspace que delphi_paserver (v0.98; antes este
+    camino no pasaba ni por AllowRemoteRun ni por las listas). }
+  if not AllowRemoteRun then
+    Exit(SR_PASERVER_RUN_DISABLED);
+  Result := ProfileHostDenied(Params.Profile.Trim);
+  if Result <> '' then
+    Exit;
+  Proj := Params.Project.Trim;
+  if Proj <> '' then
+  begin
+    { El jail decide si este token puede tocar ese proyecto, igual que en
+      cualquier otra tool que nombre un fichero. }
+    Result := PathDenied(Proj);
+    if Result <> '' then
+      Exit;
+  end;
+  Result := RemoteRunProjectDenied(IfThen(Proj <> '', Proj, NODE_PROJECT));
   if Result <> '' then
     Exit;
 
@@ -141,7 +157,18 @@ begin
   { screenshot y status corren el nodo sin argumentos: el nodo siempre
     captura al arrancar y cuenta el estado del escritorio. }
 
-  Res := RemoteRun(Params.Profile.Trim, Params.Project.Trim, '', Args, 60000);
+  { Sin project (lo normal): el nodo EMPAQUETADO junto al servidor. El
+    primer gesto de la sesion por perfil comprueba el sello node.ver y, si
+    falta o difiere, despliega/actualiza el nodo sin compilar nada. }
+  Nota := '';
+  if Proj = '' then
+  begin
+    Result := EnsureNodeCurrent(Params.Profile.Trim, Nota);
+    if Result <> '' then
+      Exit;
+    Proj := NODE_PROJECT;
+  end;
+  Res := RemoteRun(Params.Profile.Trim, Proj, '', Args, 60000);
   try
     Salida := '';
     if Res.GetValue('output') <> nil then
@@ -150,6 +177,8 @@ begin
     Return := TJSONObject.Create;
     Return.AddPair('command', Cmd);
     Return.AddPair('profile', Params.Profile.Trim);
+    if Nota <> '' then
+      Return.AddPair('nodeDeploy', Nota);
     if Res.GetValue('success') <> nil then
       Return.AddPair('ran', TJSONBool.Create(Res.GetValue<Boolean>('success')));
     if Res.GetValue('error') <> nil then
@@ -164,7 +193,7 @@ begin
       Destino := Params.Out_.Trim;
       if Destino = '' then
         Destino := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-desktop');
-      Fallo := FetchFromTarget(Params.Profile.Trim, Params.Project.Trim,
+      Fallo := FetchFromTarget(Params.Profile.Trim, Proj,
         TPath.GetFileName(Remota), Destino, Local);
       if Fallo = '' then
       begin

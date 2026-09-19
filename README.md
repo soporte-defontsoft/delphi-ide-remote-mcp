@@ -23,7 +23,7 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 
 ## Use cases
 
-Two credential levels — a full read-write token, and a read-only one (or anonymous read-only for tokenless clients) — let very different agents share the same live codebase safely. The read-only level can read, search, navigate symbols, get diagnostics, follow definitions into RTL/VCL and installed components, download files and run query-only git; it can touch **nothing** on the server. That opens up a range of setups:
+Two credential levels — a full read-write token, and a read-only one — let very different agents share the same live codebase safely. The read-only level can read, search, navigate symbols, get diagnostics, follow definitions into RTL/VCL and installed components, download files and run query-only git; it can touch **nothing** on the server. That opens up a range of setups:
 
 - **Move your daily work to another OS.** The Windows box with RAD Studio becomes a remote build server; you drive it from a Linux laptop, a Mac, or a cloud agent. Full read-write token, VPN/LAN only. Edit, scaffold, build, run, fetch the binaries, commit — Delphi never leaves the server.
 - **A documentation / wiki / RAG agent that cross-checks the real source.** Give it the read-only token. It maintains the wiki or answers questions from a RAG index, and whenever it needs to be sure, it confirms the claim against the actual code — "does `TOrderService.Post` really validate the tax id?" — instead of trusting a possibly-stale document. Grounded answers, zero write risk.
@@ -70,9 +70,9 @@ not know *why* that unit is built the way it is, which conventions your team
 follows, what was already tried and rejected, or where a project stands today.
 So you explain it again. And the next session, again.
 
-Point `[Vault] Path` at a folder of Markdown notes — an Obsidian vault, or just
+Give a workspace a `VaultPath=` pointing at a folder of Markdown notes — an Obsidian vault, or just
 a folder — and that stops. The agent gets **`vault_read` and `vault_search`**:
-a memory it consults before touching the code. Optionally (`ReadOnly=0`) it also
+a memory it consults before touching the code. Optionally (`VaultReadOnly=0`) it also
 gets **`vault_append`, `vault_create` and `vault_patch`**, so it records what it
 learned for the next session — and for the next agent.
 
@@ -198,7 +198,7 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_config` | See and manage a project's build **configurations, target platforms, output folder and search paths**: `view` reports framework/configs/platforms with status and the search paths per platform; `add-platform`/`remove-platform` enable/disable a platform in the `.dproj` (curated edit), refusing platforms the framework can't target (VCL is Windows-only); `set-output` puts every binary under one folder (e.g. `Compiled`); `add-searchpath`/`remove-searchpath` manage a platform's unit search path - the IDE's Project Options > Search path - creating the platform's property groups as the IDE would (the usual fix for "unit not found" on a newly added platform: its third-party components' folders are registered for the other platforms only); `add-deployfile`/`remove-deployfile` ship an extra file with the build on one platform - the IDE's Deployment Manager - for the native library a component loads at runtime; `add-unit`/`remove-unit` are the IDE's Add to project / Remove from project for an existing `.pas` (uses, CreateForm, DCCReference; the file stays on disk) |
 | `delphi_paserver` (incl. `remote-run`: execute on the target through PAServer itself - nothing installed there) | The bridge for building on **Linux/macOS** via the Platform Assistant. **PAServer is the channel, and lighting the first one needs hands ON the target — a person's or a local AI agent's** (an agent running on the machine, e.g. OpenCode, bootstraps it autonomously through this same MCP: `packages` → `delphi_fetch` the installer → start it inside the graphical session); with nothing listening there is no way in, the same bootstrap adb has until USB debugging is enabled on the phone itself. **Exactly two things happen on the machine, once** — start PAServer inside the graphical session and grant the screen-capture permission — and everything else is this server's job, execution included (v0.98: the on-target Python runner is gone; PAServer itself launches what this server sends); the table in [TOOLS.md](docs/TOOLS.md#setting-up-a-new-linux-target-what-happens-on-the-machine-and-what-this-server-does) says why each one cannot come from here. Commands: `platforms` (what the server can target + profile status), `packages` (the PAServer installers to download and run on the target), `profiles` (registered connection profiles/SDKs), `add-profile` (register a connection profile against a live PAServer - the password is stored encrypted by `paclient` itself), `test-connection` (full handshake against a profile, or a raw TCP reachability probe with `host`+`port` and no name), `get-sdk` (pull the platform SDK/sysroot from the live PAServer and register it - after this, `delphi_build` links for the platform; distro-aware since v0.92: it tries every known GCC triplet - Debian/Ubuntu `x86_64-linux-gnu`, Fedora/RHEL `x86_64-redhat-linux` + `/usr/lib64` - and requires that ONE of each group lands, instead of failing hard on the Debian path) |
 | `delphi_adb` | **Android devices for remote development** — the phones/tablets hang off the *server*, you program from anywhere: `discover` (devices announcing wireless debugging on the server's network, via mDNS, each with its `ip:port`), `devices` (what adb has attached — the IDE's deploy-target list), `connect`/`disconnect` (attach one over the network), `install` (put a built `.apk` on a device), `run` (launch the installed app — the IDE's "Deploy and Run"), `logcat` (bounded dump of the device log, optional filter), `screenshot` (the device screen to a PNG you then fetch — your remote **eyes**) and `tap`/`key` (touch and navigation keys — your remote **hands**): enough to deploy, drive and debug the app end to end. Uses the IDE's own Android SDK `adb`, discovered per install |
-| `delphi_adb_linux` | **The Linux desktop of a target**, the way `delphi_adb` gives you an Android one. The machine hangs off a PAServer profile and runs a small Delphi node this server deployed there — nothing else is installed on it. The flow is the whole trick: `screenshot` brings the **whole desktop** here as a PNG, you look at it, measure the pixel you want, `tap` presses exactly there and `type` writes text (with x, y it presses there first — the real gesture, "write this here", and it pays the startup once) — all measured *on that screenshot* — the node converts the screen scale itself, so you never deal with logical versus physical coordinates). `key` presses one key by its Linux code, `windows` shows every window as a thumbnail (how you reach a window another one covers: show them all, then tap the one you want), and `status` says whether the desktop is reachable and what to ask the operator for when it is not. The target needs a graphical session open, with its PAServer running **inside** that session (the node needs the session's D-Bus and inherits it from PAServer) and the **screen-capture permission granted once** — part of setting the machine up, next to starting PAServer: without it the portal tries to ask, cannot paint its dialog in a remote or locked session, and answers nothing at all, so the call dies on a mute timeout that names no cause |
+| `delphi_adb_linux` | **The Linux desktop of a target**, the way `delphi_adb` gives you an Android one. The machine hangs off a PAServer profile and runs a small Delphi node **this server deploys and updates there by itself** — leave `project` empty and the node bundled with the server (`node\McpLinuxDesktop`) is pushed on first use, then refreshed whenever its version stamp (`node.ver`, the binary's SHA-256) stops matching; nothing is compiled and nothing else is installed on the target. The flow is the whole trick: `screenshot` brings the **whole desktop** here as a PNG, you look at it, measure the pixel you want, `tap` presses exactly there and `type` writes text (with x, y it presses there first — the real gesture, "write this here", and it pays the startup once) — all measured *on that screenshot* — the node converts the screen scale itself, so you never deal with logical versus physical coordinates). `key` presses one key by its Linux code, `windows` shows every window as a thumbnail (how you reach a window another one covers: show them all, then tap the one you want), and `status` says whether the desktop is reachable and what to ask the operator for when it is not. The target needs a graphical session open, with its PAServer running **inside** that session (the node needs the session's D-Bus and inherits it from PAServer) and the **screen-capture permission granted once** — part of setting the machine up, next to starting PAServer: without it the portal tries to ask, cannot paint its dialog in a remote or locked session, and answers nothing at all, so the call dies on a mute timeout that names no cause |
 | `delphi_components` | **What the server has installed to program with**: every design package registered in the IDE (the list the palette loads), whatever the install channel — GetIt, vendor installers, manual. Description + `.bpl` per entry, disabled ones marked, optional `filter`. Read-only by design — no install (that stays a human decision); a missing library is reported with `delphi_report`. `platform=Linux64` shows instead the IDE's Library Search Path of that platform and the components registered only elsewhere — the porting matrix |
 | `delphi_test` | **Does it WORK, not just compile**: `discover` finds the test projects (DUnitX, or console runners named *Test*), `run` builds and runs one in the same low-integrity sandbox and answers structured — total/passed/failed, the failing lines, `exitCode`, duration. A runner whose output cannot be counted is still reported FAILED when its exit code says so. `nobuild`, `timeoutms`, and `countsFormat` for a hand-rolled runner. Own opt-in (`AllowTests`); runs Win64 by default |
 | `delphi_delete` | Delete a file or folder — into a **recoverable trash** next to it (`__delphi-patch\<date>\deleted\`), not a hard delete; it also drops the unit from the projects that list it. `purge=true` is the one hard delete, allowed only INSIDE that trash, and only for what you put there: every trashed item records who trashed it, and a folder holding somebody else's copies is refused, naming them |
@@ -258,14 +258,20 @@ The configuration is **four layers**, safest-by-default at every one:
 **One principle above the layers (v0.98): NOTHING IS GLOBAL.** Every
 permission, whitelist and capability belongs to ONE workspace, and a
 workspace has exactly what its section declares — an absent switch is OFF,
-an absent list is EMPTY. There is no `[Security]` section any more; if an
-old ini still carries one, it is completely inert.
+an absent list is EMPTY. There is no `[Security]` section any more — and no generic `[Workspace]`
+section either: only `[Workspace.<name>]` sections exist, because **an agent
+either has a workspace token or has nothing**. A stale ini with either old
+section is completely inert.
 
-1. **The door** — credentials: **workspace or nothing** (v0.91). A token
-   authenticates *only* through a `[Workspace.<name>]` section — its own
-   `Token`, optional `ReadOnlyToken`, its `Roots` and its configs.
-2. **The jail** — where each credential may touch disk: `[Workspace] Roots`
-   for the tokenless local mode, a world of its own per workspace token.
+1. **The door** — credentials: **workspace or nothing** (v0.91, completed
+   in v0.98). A caller authenticates *only* through a `[Workspace.<name>]`
+   section — its own `Token`, optional `ReadOnlyToken`, its `Roots` and its
+   configs. Tokenless HTTP is always **401**; a tokenless *local* stdio
+   process may look, never touch (read-only).
+2. **The jail** — where each credential may touch disk: a world of its own
+   per workspace token. (A locally launched process may declare a private
+   jail with `DELPHI_MCP_ROOTS` and the other `DELPHI_MCP_*` variables —
+   the harness/dev launch mode; they never touch a named workspace.)
 3. **Capabilities** — what each workspace may *do* beyond compiling (run,
    test, remote-run, build scripts, reach git hosts or PAServer machines).
    All off until that workspace declares them.
@@ -275,12 +281,7 @@ old ini still carries one, it is completely inert.
 ```ini
 [Server]
 Port=3000                               ; HTTP port for --http and the tray (-gui)
-
-[Workspace]                             ; the DEFAULT workspace: tokenless local mode
-Roots=D:\Projects;E:\MoreProjects       ; its jail (or DELPHI_MCP_ROOTS)
-AnonymousReadOnly=0                     ; 1 = tokenless HTTP -> read-only, not 401
-LibraryZone=1                           ; may read RTL/VCL sources (its declaration)
-AllowRun=0                              ; like every workspace: only what it declares
+MessagesRetentionDays=30                ; mailbox housekeeping (plumbing, not permission)
 
 ; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
 ; workspaces' roots are not even readable. Overlap is allowed and never
@@ -292,6 +293,8 @@ ReadOnlyToken=galatea-reviewer-secret   ; optional read-only twin, same roots
 Roots=D:\Projects\Galatea;D:\Projects\Shared
 LibraryZone=1                           ; ITS declaration - nothing is inherited
 AllowTests=1                            ; may build+run ITS test suites
+VaultPath=D:\Vaults\TeamMemory          ; ITS persistent memory (vault_* tools)
+AdbAllowedDevices=192.168.1.163         ; ITS Android devices (absent = NONE)
 Profile=coder                           ; optional: trims tools/list for this token
 
 [Workspace.Audit]
@@ -325,18 +328,21 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   search, navigate symbols, get diagnostics, download, run query git commands and file
   reports — but `delphi_edit`, `delphi_create`, `delphi_build`, `delphi_run`,
   `delphi_package`, `delphi_upload` and git write commands are refused).
-  `AnonymousReadOnly=1` grants that same read-only level to tokenless requests over the
-  global roots. The whole classification is enforced at a **single gate** in front of every
+  Tokenless HTTP is **always 401** — the anonymous mode is gone in v0.98.
+  The whole classification is enforced at a **single gate** in front of every
   `tools/call` — including the git argument filter, so no option can turn a "read" command
   into a write. **With NO workspace token configured at all, the server binds to
   `127.0.0.1` only** — an unconfigured server is never silently open to the network.
 - **BREAKING — migrating from ≤ v0.97**: the `[Security]` section is GONE and completely
   inert — the server neither reads it, nor warns about it, nor knows it existed. Move every
-  key you had there into `[Workspace]` (the default workspace) and/or into each
-  `[Workspace.<name>]` that deserves it — same names, same values, one decision per
-  workspace. Old `AuthToken`/`ReadOnlyToken` values become a workspace's `Token=`/
-  `ReadOnlyToken=` (that part has been true since v0.91). Fail safe is preserved the
-  blunt way: a stale config authenticates nothing and earns a `127.0.0.1`-only bind.
+  key you had there into each `[Workspace.<name>]` that deserves it — same names, same
+  values, one decision per workspace. The generic `[Workspace]` section, the anonymous
+  mode (`AnonymousReadOnly`) and the global `[Vault]`/`[Adb]` sections fell the same day:
+  the vault is now each workspace's `VaultPath=`/`VaultReadOnly=`, the adb allowlist its
+  `AdbAllowedDevices=` (absent = NO devices — the last fail-open default is gone). Old
+  `AuthToken`/`ReadOnlyToken` values become a workspace's `Token=`/`ReadOnlyToken=` (true
+  since v0.91). Fail safe is preserved the blunt way: a stale config authenticates
+  nothing and earns a `127.0.0.1`-only bind.
 - `--readonly` on the command line makes the entire process read-only, whatever the
   transport (useful for a stdio-registered reviewer).
 - **`[Workspace.<name>]` token-scoped sandboxes**: each section defines its own credential(s)
@@ -372,16 +378,20 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98).
 - **Reach lists (per workspace)**: `GitRemotes` limits which hosts an *explicit* git URL may
   reach (clone/fetch/pull/push; configured remotes keep working by name) — measured to close
-  an SSRF/exfiltration primitive. `RemoteHosts` does the same for hand-named PAServer dials
-  (profile hosts are always allowed) — measured to close a port-scanning primitive. Where
-  each workspace may talk to is its own declaration, like everything else.
+  an SSRF/exfiltration primitive. `RemoteHosts` does the same for every PAServer dial —
+  hand-named hosts AND connection profiles: since v0.98 having a profile in the IDE is not
+  permission (the profile says HOW to connect; the workspace says WHETHER) — measured to
+  close a port-scanning primitive. `*` (or `0.0.0.0`) declares "any host" on purpose, and
+  `RemoteRunProjects=all` (or `*`) is the same explicit wildcard for projects. Where each
+  workspace may talk to is its own declaration, like everything else.
 - **`[Tools]` profiles**: `full` / `coder` / `reader` (or an explicit `Only=` allowlist) trim
   what `tools/list` advertises — ~15k tokens of schemas drown a small model. Listing only:
   hidden tools stay callable, permissions live in the layers above. A workspace can carry its
   own `Profile=`.
-- **`[Vault]`**: optional persistent memory for agents (a folder of Markdown notes). Read-only
-  by default; writes, when enabled, are append/create/anchored-replace only, always backed up
-  first. See `docs/VAULT.md`.
+- **`VaultPath=` / `VaultReadOnly=` (per workspace)**: optional persistent memory for
+  agents (a folder of Markdown notes) — each workspace declares its own, and two workspaces
+  may remember in *different* vaults. Read-only by default; writes, when enabled, are
+  append/create/anchored-replace only, always backed up first. See `docs/VAULT.md`.
 - **AllowBuildScripts**: `delphi_build` refuses a project whose `.dproj` (or an imported
   `.targets`) carries a task that *executes a program or plants/deletes files* at build
   time — the compile-only guarantee, so an uploaded `.dproj` cannot run code through a
@@ -389,12 +399,17 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   builds. For a **trusted** project that legitimately signs (Authenticode via `<Exec>`) or
   copies at build time, set `AllowBuildScripts=1` — this permits its build scripts **without**
   enabling `delphi_run`. `AllowRun=1` implies it. Both off by default.
-- **`[Adb] AllowedDevices`**: an allowlist for `delphi_adb` — `AllowedDevices=192.168.1.163;SERIAL123`
-  (semicolon list; an IP entry covers whatever port wifi debugging negotiates, a USB serial is
-  listed as-is). When configured, devices outside the list are refused at **both** access levels,
-  and every device-addressing command must name its `device` explicitly (an implicit target could
-  be an unlisted device that happens to be the only one attached). Absent = unrestricted, for a
-  dev machine.
+- **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist —
+  `AdbAllowedDevices=192.168.1.163;SERIAL123` (semicolon list; an IP entry covers whatever
+  port wifi debugging negotiates, a USB serial is listed as-is). Devices outside the
+  workspace's list are refused at **both** access levels, every device-addressing command
+  must name its `device` explicitly (an implicit target could be an unlisted device that
+  happens to be the only one attached) — and, like every list since v0.98, **absent means
+  NO devices**, never unrestricted.
+- **`[Server] MessagesRetentionDays`**: mailbox housekeeping — delivered agent mail older
+  than N days (default 30; 0 = keep forever) is purged, and stale empty mailboxes removed,
+  on each mailbox use. Server plumbing, not a permission: that is why it lives under
+  `[Server]` and not in a workspace.
 - **`[Log]`** (tray mode): the live log window keeps at most `LinesPerFile` lines in memory —
   on reaching the cap the block is saved to `logs\yyyymmdd-hhnnss.log` next to the exe and the
   window restarts at zero; rotation keeps the newest `MaxFiles` files. A controlled exit

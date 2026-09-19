@@ -16,6 +16,7 @@ shutil.rmtree(BASE, ignore_errors=True)
 os.makedirs(BASE, exist_ok=True)
 
 env = dict(os.environ)
+env.setdefault('DELPHI_MCP_ROOTS', BASE)  # v0.98: sin jaula declarada = solo lectura
 env['DELPHI_MCP_ALLOW_RUN'] = '1'  # let the run test reach the "needs roots" path
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
@@ -114,10 +115,11 @@ except Exception as e:
 out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "HolaConsola"})
 check('create: jamas sobreescribe', 'RECHAZADO' in out, out)
 
-# run the freshly built console exe (needs roots configured -> restart not
-# needed: this battery runs unrestricted, so delphi_run must REFUSE)
+# v0.98: la bateria declara su jaula (sin jaula ya no hay barra libre sino
+# solo lectura), asi que delphi_run del exe recien compilado EJECUTA dentro
+# de ella - sandbox de integridad baja y salida capturada, como siempre
 out = call('delphi_run', {"path": os.path.join(CDIR, 'Win64', 'Debug', 'HolaConsola.exe')})
-check('run: sin jaula configurada rechaza', out.startswith('error:') and 'roots' in out.lower(), out[:150])
+check('run: con jaula declarada ejecuta en el sandbox', 'exit=0' in out, out[:150])
 
 # --- VCL project + extra form ---
 VDIR = os.path.join(BASE, 'HolaVcl')

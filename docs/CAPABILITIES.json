@@ -73,7 +73,7 @@
   },
   "security": {
     "workspaceJail": "[Workspace] Roots / DELPHI_MCP_ROOTS",
-    "credentials": "AuthToken (read-write) / ReadOnlyToken / AnonymousReadOnly",
+    "credentials": "Token (read-write) / ReadOnlyToken, por workspace; sin token no hay acceso",
     "execution": "AllowRun / AllowBuildScripts / AllowRemoteRun (all off by default)",
     "remoteRunScope": "RemoteRunProjects (empty = any project of the jail)",
     "libraryZone": "LibraryZone=0 confines reads to the roots"

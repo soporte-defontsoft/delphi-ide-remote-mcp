@@ -35,6 +35,22 @@ interface
 uses
   System.JSON;
 
+const
+  { La carpeta y el binario del nodo de escritorio en el target. }
+  NODE_PROJECT = 'McpLinuxDesktop';
+
+{ El nodo de escritorio EMPAQUETADO con el servidor: node\McpLinuxDesktop
+  junto al exe. '' si la distribucion no lo trae. }
+function BundledNodePath: string;
+
+{ Deja el nodo del target AL DIA sin compilar nada (peticion David
+  2026-09-19): compara el sello node.ver del target (SHA-256 del binario)
+  con el del nodo empaquetado y, si falta o difiere, sube binario nuevo
+  (flag 1 = ejecutable) y sello. Se comprueba UNA vez por perfil y proceso:
+  los gestos siguientes no pagan el viaje. AAccion queda en '' (al dia),
+  'desplegado' o 'actualizado'. Devuelve '' si bien, o el motivo. }
+function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
+
 { Runs the program DEPLOYED for ADprojPath on the machine of PAServer profile
   AProfile. The remote path is DERIVED here, never taken from the caller:
   <windows user>-<profile>/<Project>/<Project> - the folder delphi_build
@@ -59,9 +75,15 @@ uses
   System.IOUtils,
   System.StrUtils,
   System.Diagnostics,
+  System.SyncObjs,
+  System.Hash,
   Lsp.BuildRunner,
   Lsp.Discovery,
   Lsp.Texts;
+
+var
+  GNodoLock: TCriticalSection;
+  GNodoAlDia: TStringList; // perfiles con nodo comprobado en este proceso
 
 const
   POLL_MS = 1500;
@@ -338,5 +360,96 @@ begin
 
   Result.AddPair('note', SN_REMOTERUN_NOTE);
 end;
+
+function BundledNodePath: string;
+begin
+  Result := TPath.Combine(TPath.Combine(
+    TPath.GetDirectoryName(ParamStr(0)), 'node'), NODE_PROJECT);
+  if not TFile.Exists(Result) then
+    Result := '';
+end;
+
+function Sha256DeFichero(const APath: string): string;
+var
+  H: THashSHA2;
+begin
+  H := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);
+  H.Update(TFile.ReadAllBytes(APath));
+  Result := H.HashAsString.ToLower;
+end;
+
+function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
+var
+  Bin, LocalSha, RemotoSha, Pc, Output, VerLocal, VerFile, TmpDir: string;
+  Rc: Integer;
+  Enc: TEncoding;
+begin
+  Result := '';
+  AAccion := '';
+  GNodoLock.Enter;
+  try
+    if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) >= 0 then
+      Exit;
+  finally
+    GNodoLock.Leave;
+  end;
+  Bin := BundledNodePath;
+  if Bin = '' then
+    Exit(SR_ADBLINUX_NONODE);
+  Pc := PaClientPath;
+  if Pc = '' then
+    Exit(SR_REMOTERUN_NO_PACLIENT);
+  LocalSha := Sha256DeFichero(Bin);
+  TmpDir := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-remoterun');
+  TDirectory.CreateDirectory(TmpDir);
+  // el sello del target: ausente = nodo de antes de los sellos (o ninguno)
+  RemotoSha := '';
+  if FetchFromTarget(AProfile, NODE_PROJECT, 'node.ver', TmpDir, VerFile) = '' then
+  try
+    RemotoSha := TFile.ReadAllText(VerFile).Trim;
+    TFile.Delete(VerFile);
+  except
+    RemotoSha := '';
+  end;
+  if not SameText(RemotoSha, LocalSha) then
+  begin
+    // flag 1 = runnable: PAServer deja el fichero ejecutable en su carpeta
+    Rc := Paclient(Pc, Format('"--put=%s,%s,1,%s"',
+      [Bin, NODE_PROJECT, NODE_PROJECT]), AProfile, Output);
+    if Rc <> 0 then
+      Exit(Format(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
+    VerLocal := TPath.Combine(TmpDir, 'node-' + LocalSha.Substring(0, 12) + '.ver');
+    Enc := TUTF8Encoding.Create(False);
+    try
+      TFile.WriteAllText(VerLocal, LocalSha, Enc);
+    finally
+      Enc.Free;
+    end;
+    Rc := Paclient(Pc, Format('"--put=%s,%s,0,node.ver"',
+      [VerLocal, NODE_PROJECT]), AProfile, Output);
+    TFile.Delete(VerLocal);
+    if Rc <> 0 then
+      Exit(Format(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
+    if RemotoSha = '' then
+      AAccion := 'desplegado'
+    else
+      AAccion := 'actualizado';
+  end;
+  GNodoLock.Enter;
+  try
+    if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) < 0 then
+      GNodoAlDia.Add(AProfile.Trim.ToLower);
+  finally
+    GNodoLock.Leave;
+  end;
+end;
+
+initialization
+  GNodoLock := TCriticalSection.Create;
+  GNodoAlDia := TStringList.Create;
+
+finalization
+  GNodoAlDia.Free;
+  GNodoLock.Free;
 
 end.

@@ -106,7 +106,10 @@ CONTENT = [
     (os.path.join(rel, 'DelphiStyleConvert.exe'), 'DelphiStyleConvert.exe'),
     (os.path.join(REPO, 'settings.example.ini'), 'settings.example.ini'),
     # runner/mcp-runner.py salio del zip en v0.98: el destino ya no necesita
-    # NADA instalado (PAServer ejecuta por flag 5)
+    # NADA instalado (PAServer ejecuta por flag 5). En su lugar viaja el
+    # NODO de escritorio Linux ya compilado: delphi_adb_linux lo despliega
+    # y actualiza solo (sello node.ver) sin compilar nada.
+    (os.path.join(REPO, 'node', 'McpLinuxDesktop'), 'node/McpLinuxDesktop'),
     (os.path.join(REPO, 'README.md'), 'README.md'),
     (os.path.join(REPO, 'CHANGELOG.md'), 'CHANGELOG.md'),
     (os.path.join(REPO, 'LICENSE'), 'LICENSE'),

@@ -40,14 +40,22 @@ w('AGENTS-VAULT.md', '# Reglas\n\n1. Carga perezosa.\n')
 w('MEMORY.md', '# MEMORY\n\n- nota de concurrencia\n')
 w('conc/base.md', '# Concurrencia\n\nlinea base.\n')
 
+# v0.98: o workspace o nada - la bateria define su workspace en un ini
+# junto a una COPIA del exe (nunca junto al de la build) y entra con su
+# token, que es el mismo TOKEN que ya viajaba en las cabeceras.
+EXE2 = os.path.join(WORK, 'DelphiLspMcp.exe')
+shutil.copy(EXE, EXE2)
+EXE = EXE2
+with open(os.path.join(WORK, 'settings.ini'), 'w') as _f:
+    _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\nVaultPath=%s\nVaultReadOnly=0\n'
+             % (TOKEN, WORK, VAULT))
+
 env = dict(os.environ)
 # Loopback ONLY. Listening on every interface makes Windows Firewall pop its
 # "allow this app?" prompt, and it asks once per program PATH - so a battery
 # that runs the exe from a fresh temp folder asks again on every single run.
 # The tests only ever talk to 127.0.0.1, so there is nothing to expose.
 env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'
-# v0.91: workspace o nada - this battery tests vault concurrency, not auth:
-# run in open local mode (no credentials configured)
 env['DELPHI_MCP_ROOTS'] = WORK
 env['DELPHI_MCP_VAULT_PATH'] = VAULT
 env['DELPHI_MCP_VAULT_READONLY'] = '0'

@@ -152,7 +152,7 @@ begin
     begin
       Result := VaultInstructions;
     end;
-  if VaultConfigured then
+  if VaultConfiguredAnywhere then
   begin
     TMCPCoreManager.DeclarePrompts := True;
     FRegistry.RegisterManager(TMCPPromptsManager.Create);
@@ -214,10 +214,10 @@ begin
   // production fully migrated and the log still cried "no token").
   if WorkspaceTokensConfigured then
     Add('Bearer auth enabled (tokens por workspace).')
-  else if not AnonymousReadOnly then
+  else
     Add(NOTE_WARNING_PREFIX + 'Sin credenciales: no hay ningun ' +
-      '[Workspace.<nombre>] con Token=. Bien en localhost; NO expongas el ' +
-      'servidor a la red asi.');
+      '[Workspace.<nombre>] con Token=. Todo HTTP respondera 401; solo ' +
+      'sirve el modo local stdio.');
   // One auth mechanism: workspaces. A legacy env pair shows up
   // here as the "default" workspace; misconfigured sections stop vanishing
   // silently (operator decision 2026-09-11).
@@ -226,8 +226,6 @@ begin
       Add(NOTE_WARNING_PREFIX + WsNote)
     else
       Add(WsNote);
-  if AnonymousReadOnly then
-    Add('AnonymousReadOnly: tokenless requests get read-only access.');
   Result := Notes;
 end;
 
@@ -242,24 +240,22 @@ begin
   Result.CoreManager := FCore;
   Result.AuthToken := Lsp.Guard.AuthToken;
   Result.ReadOnlyToken := Lsp.Guard.ReadOnlyToken;
-  Result.AnonymousReadOnly := Lsp.Guard.AnonymousReadOnly;
+  Result.AnonymousReadOnly := False; // v0.98: sin acceso anonimo
   Result.BindIP := Lsp.Guard.BindIP;
   // Fail SAFE: with NO credential of any kind configured, never listen on
   // every interface - bind to localhost so an unconfigured server is not
-  // silently open to the whole network. Remote access requires a token (or an
-  // explicit AnonymousReadOnly opt-in).
-  // v0.91: only workspace tokens are credentials; a legacy-only env
-  // pair neither authenticates nor earns a wide bind.
-  if (not WorkspaceTokensConfigured) and
-     (not Result.AnonymousReadOnly) and (Result.BindIP = '') then
+  // silently open to the whole network. Remote access requires a workspace
+  // token; a legacy-only env pair neither authenticates nor earns a wide
+  // bind, and el anonimo ya no existe (v0.98).
+  if (not WorkspaceTokensConfigured) and (Result.BindIP = '') then
     Result.BindIP := '127.0.0.1';
   Result.OnAccessLevel :=
     procedure(AReadOnly: Boolean)
     begin
       SetRequestReadOnly(AReadOnly);
     end;
-  // Full bearer authorization lives in ONE place (Lsp.Guard): the global
-  // pair, AnonymousReadOnly, and the [Workspace.*] tokens - the secret
+  // Full bearer authorization lives in ONE place (Lsp.Guard): the
+  // [Workspace.*] tokens - the secret
   // decides the jail (operator decision 2026-08-28, v0.88). Worker threads
   // are reused, so BOTH per-thread flags are set on every request.
   Result.OnAuthorize :=

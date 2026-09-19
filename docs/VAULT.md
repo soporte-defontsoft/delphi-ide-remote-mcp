@@ -1,6 +1,6 @@
 # The knowledge vault — persistent memory for your agents
 
-**Optional.** Everything in this document is off unless you set `[Vault] Path`.
+**Optional.** Everything in this document is off unless a workspace declares `VaultPath=`.
 Without it the `vault_*` tools are not registered at all and the server is
 purely a Delphi build server.
 
@@ -95,13 +95,17 @@ On top of that:
 ## Setting it up
 
 ```ini
-[Vault]
-Path=D:\Vaults\MyKnowledge
-ReadOnly=1          ; 0 to also allow append/create/patch
+[Workspace.MiEquipo]
+Token=su-secreto
+Roots=D:\Proyectos\MiEspacio
+VaultPath=D:\Vaults\MyKnowledge
+VaultReadOnly=1     ; 0 to also allow append/create/patch
 ```
 
-Or the environment variables `DELPHI_MCP_VAULT_PATH` and
-`DELPHI_MCP_VAULT_READONLY`, which take precedence.
+The vault is PER WORKSPACE (v0.98): each workspace declares its own, and two
+workspaces may remember in different vaults. For a locally launched process
+(batteries, dev) the environment variables `DELPHI_MCP_VAULT_PATH` and
+`DELPHI_MCP_VAULT_READONLY` play the same role.
 
 Start with `ReadOnly=1`. Give an agent read access for a while, see what it
 looks up and what it wishes it could record, and only then decide whether to
@@ -127,7 +131,7 @@ You do not have to teach an agent any of this — the server does it:
 ## Starting a vault from scratch
 
 **There is a ready-made starter vault in [`examples/vault/`](../examples/vault/)** —
-copy the folder, point `[Vault] Path` at it and you have a working vault with
+copy the folder, point your workspace's `VaultPath=` at it and you have a working vault with
 the rules, the index, the write guide and example `context`/`progress`/`log`
 notes. It is deliberately generic: it shows the shape, not anyone's content.
 

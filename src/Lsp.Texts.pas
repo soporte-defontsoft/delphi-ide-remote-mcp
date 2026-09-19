@@ -799,8 +799,11 @@ const
     'The Linux desktop of a target, the way adb gives you an Android one: ' +
     'SEE the screen and ACT on it. The machine hangs off a PAServer profile ' +
     '(the same profiles delphi_paserver builds and deploys with) and runs a ' +
-    'small Delphi node that this server deployed there - nothing else is ' +
-    'installed on it. THE FLOW, and it is the whole trick: command=screenshot ' +
+    'small Delphi node that this server deploys AND UPDATES there BY ITSELF ' +
+    '- leave "project" empty and the node bundled with the server is pushed ' +
+    'on first use, then refreshed whenever the server ships a newer one; ' +
+    'nothing else is installed on the target and nothing is compiled. THE ' +
+    'FLOW, and it is the whole trick: command=screenshot ' +
     'brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel ' +
     'you want, and command=tap presses exactly there (x, y measured on that ' +
     'screenshot - the node converts the screen scale itself, you never deal ' +
@@ -825,9 +828,11 @@ const
     'PAServer profile of the target machine (delphi_paserver command=profiles ' +
     'lists them). The desktop is THAT machine''s, never the agent''s.';
   SP_ADBLINUX_PROJECT =
-    'Absolute path of the node''s .dproj (the Delphi program this server ' +
-    'deployed to the target). Build and deploy it first with delphi_build ' +
-    'target=Deploy.';
+    'OPTIONAL since v0.98: empty = the node BUNDLED with this server ' +
+    '(node\McpLinuxDesktop next to the exe) is deployed to the target on ' +
+    'first use and updated when its version changes - nothing to compile. ' +
+    'Give the absolute path of the node''s .dproj only when you develop the ' +
+    'node itself and deployed it with delphi_build target=Deploy.';
   SP_ADBLINUX_X =
     'tap: horizontal pixel MEASURED ON THE SCREENSHOT this tool returned';
   SP_ADBLINUX_Y =
@@ -842,6 +847,12 @@ const
   SR_ADBLINUX_NEEDTEXT =
     'RECHAZADO: type necesita "text". Si ademas pasas x e y, pulsa ahi antes ' +
     'de escribir: es el gesto real, "escribe esto aqui", y arranca una sola vez.';
+  SR_ADBLINUX_NONODE =
+    'delphi_adb_linux: ni "project" ni nodo empaquetado. O el operador deja ' +
+    'el binario Linux del nodo en node\McpLinuxDesktop junto al servidor ' +
+    '(la distribucion lo trae: entonces se despliega y actualiza solo), o ' +
+    'pasa project= con el .dproj del nodo desplegado via delphi_build ' +
+    'target=Deploy.';
   SP_ADBLINUX_OUT =
     'screenshot: folder where the PNG lands (default: the server''s temp ' +
     'folder). Retrieve it with delphi_fetch.';
@@ -945,12 +956,12 @@ const
 
   SR_ADB_ALLOWLIST_FMT =
     'RECHAZADO: el dispositivo "%s" no esta en la lista permitida de este ' +
-    'servidor ([Adb] AllowedDevices en settings.ini). Fuera de esa lista, ' +
-    'nada. El operador la amplia si procede.';
+    'workspace (AdbAllowedDevices= en su seccion del settings.ini; ausente ' +
+    '= ninguno). Fuera de esa lista, nada. El operador la amplia si procede.';
 
   SR_ADB_ALLOWLIST_DEVICE =
-    'RECHAZADO: este servidor tiene lista de dispositivos permitidos ' +
-    '([Adb] AllowedDevices): indica "device" explicitamente con uno de la ' +
+    'RECHAZADO: los dispositivos van por lista del workspace ' +
+    '(AdbAllowedDevices=): indica "device" explicitamente con uno de la ' +
     'lista (command=devices los enumera).';
 
   SN_ADB_GONE =
@@ -2509,12 +2520,11 @@ const
     'hay vuelta atras salvo volver a crearlo con add-profile.';
 
   SR_PASERVER_HOST_DENIED_FMT =
-    'RECHAZADO: no marco a "%s". Un test-connection es una conexion que abre ' +
-    'ESTE servidor, asi que decidir a donde no te toca a ti: valen los hosts ' +
-    'de los perfiles de conexion que ya tiene el IDE (command=profiles te ' +
-    'los lista) y los que el operador haya escrito en [Workspace] RemoteHosts ' +
-    '(ahora mismo: %s). Si lo que quieres es comprobar un target de verdad, ' +
-    'usa su PERFIL por nombre: test-connection name=<perfil>.';
+    'RECHAZADO: no marco a "%s". Marcar es una conexion que abre ESTE ' +
+    'servidor, asi que decidir a donde no te toca a ti: valen SOLO los ' +
+    'hosts que el operador haya escrito en RemoteHosts del workspace ' +
+    'activo (ahora mismo: %s). Tener un perfil del IDE apuntando alli NO ' +
+    'es permiso: el perfil dice COMO conectar, el workspace dice SI se puede.';
 
   SR_GIT_REMOTE_OFF_FMT =
     'RECHAZADO: este servidor no habla con "%s". Una URL explicita en un ' +

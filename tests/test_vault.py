@@ -140,7 +140,7 @@ class Server:
 # ===========================================================================
 s = Server()
 names = s.tools()
-check('registro: las 5 tools de vault existen con [Vault] Path + ReadOnly=0',
+check('registro: las 5 tools de vault existen con VaultPath + VaultReadOnly=0',
       all(t in names for t in ('vault_search', 'vault_read', 'vault_append',
                                'vault_create', 'vault_patch')), names)
 
@@ -406,15 +406,21 @@ check('R9: la nota conserva su contenido',
       open(VACIA, encoding='utf-8').read().strip() != '', 'quedo vacia')
 
 # ===========================================================================
-# 10. Read-only vault ([Vault] ReadOnly=1): only the 2 read tools exist
+# 10. Read-only vault (VaultReadOnly=1). Desde v0.98 el vault es del
+# workspace ACTIVO, asi que las tools de escritura se registran igualmente
+# (otro workspace del mismo servidor podria escribir) y es CADA peticion la
+# que se rechaza cuando su vault es de solo lectura.
 # ===========================================================================
 s.close()
 s2 = Server(writable=False)
 names = s2.tools()
 check('ReadOnly=1: vault_read/search SI se registran',
       'vault_read' in names and 'vault_search' in names, names)
-check('ReadOnly=1: las 3 tools de escritura NO se registran',
-      not any(t in names for t in ('vault_append', 'vault_create', 'vault_patch')), names)
+check('ReadOnly=1: las de escritura se registran pero RECHAZAN por peticion',
+      'vault_append' in names, names)
+out = s2.call('vault_append', {"path": "projects/delphi/log.md", "content": "- x\n"})
+check('ReadOnly=1: vault_append rechazado (vault de solo lectura)',
+      'RECHAZADO' in out or 'solo lectura' in out.lower(), out[:200])
 out = s2.call('vault_read', {"path": "conventions/estilo.md"})
 check('ReadOnly=1: la lectura sigue funcionando', 'Estilo' in out, out[:120])
 s2.close()

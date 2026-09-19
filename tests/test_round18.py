@@ -47,6 +47,11 @@ PORT = sk.getsockname()[1]
 sk.close()
 env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = BASE
+env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
+# v0.98: o workspace o nada - la bateria presenta su token
+TOKEN = 'bateria-workspace'
+with open(os.path.join(BASE, 'settings.ini'), 'w') as _f:
+    _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, BASE))
 proc = subprocess.Popen([EXE, '--http', str(PORT)], env=env,
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 time.sleep(2.3)
@@ -56,7 +61,8 @@ HOST = 'http://127.0.0.1:%d' % PORT
 
 def rpc(body, sid=None):
     h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream'}
+         'Accept': 'application/json, text/event-stream',
+         'Authorization': 'Bearer ' + TOKEN}
     if sid:
         h['Mcp-Session-Id'] = sid
     r = urllib.request.urlopen(urllib.request.Request(
@@ -100,7 +106,8 @@ try:
     dl = j1.get('download', '')
     check('H1b fichero grande responde enlace, no base64',
           j1.get('bytes') == 0 and dl != '', j1)
-    r = urllib.request.urlopen(HOST + dl, timeout=60)
+    r = urllib.request.urlopen(urllib.request.Request(
+        HOST + dl, headers={'Authorization': 'Bearer ' + TOKEN}), timeout=60)
     body = r.read()
     check('H2 /files X-File-SHA256 == fetch sha y el contenido casa',
           r.headers.get('X-File-SHA256') == local1 and

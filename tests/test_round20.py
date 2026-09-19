@@ -36,6 +36,9 @@ def check(name, ok, detail=''):
         print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
 
 
+TOKEN = 'bateria-workspace'
+
+
 def start(extra_env):
     base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests',
                         'round20-%d' % (int(time.time() * 1000) % 100000))
@@ -49,7 +52,12 @@ def start(extra_env):
     sk.close()
     env = dict(os.environ)
     env['DELPHI_MCP_ROOTS'] = base
+    env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
     env.update(extra_env)
+    # v0.98: o workspace o nada (los perfiles de [Tools] siguen siendo
+    # fontaneria global y entran por el entorno igual que antes)
+    with open(os.path.join(base, 'settings.ini'), 'w') as _f:
+        _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, base))
     proc = subprocess.Popen([exe, '--http', str(port)], env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2.3)
@@ -58,7 +66,8 @@ def start(extra_env):
 
 def rpc(url, body, sid=None):
     h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream'}
+         'Accept': 'application/json, text/event-stream',
+         'Authorization': 'Bearer ' + TOKEN}
     if sid:
         h['Mcp-Session-Id'] = sid
     r = urllib.request.urlopen(urllib.request.Request(

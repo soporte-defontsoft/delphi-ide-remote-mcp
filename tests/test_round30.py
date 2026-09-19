@@ -53,6 +53,9 @@ BASE = CRLF.join([
 
 env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = DIR
+# v0.98: delphi_adb_linux pasa por los MISMOS interruptores que remote-run
+env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'
+env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'all'
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
 q = queue.Queue()

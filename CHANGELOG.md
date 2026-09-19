@@ -49,7 +49,58 @@ measured:
 The `[Security]` section of `settings.ini` NO LONGER EXISTS - and the server
 does not read it, warn about it or know it existed (beta: clean cuts). Every
 capability and every reach list now belongs to the workspace that declares
-it, completing the v0.91 "workspace or nothing" decision:
+it, completing the v0.91 "workspace or nothing" decision. Later the same
+day the cut went all the way (operator decision, three times over):
+
+- **The generic `[Workspace]` section is gone too.** Only `[Workspace.<name>]`
+  sections exist: an agent either presents a workspace token or has nothing.
+  Tokenless HTTP answers 401 ALWAYS - the anonymous read-only mode
+  (`AnonymousReadOnly`) and the "nothing configured = open" mode are both
+  dead. A tokenless LOCAL stdio process may only LOOK: read-only, as a
+  courtesy of the machine's owner. The `DELPHI_MCP_*` environment variables
+  remain as the LAUNCH workspace (test batteries, dev sessions): whoever
+  starts the process declares its jail; they never touch a named workspace.
+- **A local stdio process can present a token too**: if `DELPHI_MCP_TOKEN`
+  (or `DELPHI_MCP_READONLY_TOKEN`) matches a workspace, the process is bound
+  to THAT jail - same rule as a Bearer header, one door for everyone.
+- **The vault and the adb allowlist are per workspace now**: `VaultPath=` /
+  `VaultReadOnly=` and `AdbAllowedDevices=` in each section replace the
+  global `[Vault]` and `[Adb]` sections (gone, unread, inert). Two
+  workspaces may remember in DIFFERENT vaults. And the adb list joins the
+  fail-closed family: absent = NO devices (it used to mean unrestricted -
+  the last fail-open default).
+- **A connection profile is not permission.** Every PAServer dial - by hand
+  OR through a profile (test-connection, get-sdk, remote-run,
+  delphi_adb_linux) - must pass the workspace's `RemoteHosts`. Measured the
+  hole this closes: a profile pointing at another machine dialled from a
+  workspace whose list did not include it. The profile says HOW to connect;
+  the workspace says WHETHER.
+- **Explicit wildcards**: `RemoteRunProjects=all` (or `*`) and
+  `RemoteHosts=*` (or `0.0.0.0`) declare "anything" on purpose - a
+  declaration like any other, never a default.
+- `delphi_adb_linux` now runs under the SAME switches as remote-run
+  (AllowRemoteRun + RemoteRunProjects + RemoteHosts); it used to bypass
+  all three.
+
+### The Linux desktop node ships with the server and keeps itself current
+
+The distribution now carries the compiled node (`node/McpLinuxDesktop`).
+With `project` empty, `delphi_adb_linux` pushes it to the target on first
+use and stamps `node.ver` (the binary's SHA-256) next to it; the stamp is
+checked once per profile and session, so a server upgrade heals every
+already-provisioned Linux on the next gesture. Nothing to compile, nothing
+to install by hand - and `delphi_build target=Deploy` remains the path for
+whoever develops the node itself.
+
+### Mailboxes finally clean themselves
+
+Delivered agent mail (`messages/_entregados`) accumulated forever (since
+August - measured). Now every mailbox use purges deliveries older than
+`[Server] MessagesRetentionDays` (default 30; 0 = keep forever) and removes
+stale empty agent folders. Plumbing, not permission: that is why the knob
+lives under `[Server]`.
+
+Continuation of the same principle, from the morning:
 
 - A workspace has EXACTLY what its section declares: an absent switch is
   OFF, an absent list is EMPTY. Nothing is inherited from anywhere.

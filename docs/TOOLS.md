@@ -4,7 +4,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 
 - **Paths** use virtual drive units (`srvd:\...`, `srvc:\...`) — call `delphi_workspace` first to learn the roots.
 - **Positions** for the semantic tools are 0-based (line and character), like the LSP. Point *inside* the identifier.
-- **Access**: with a read-only credential (or `AnonymousReadOnly`) only the read-only tools run; mutating ones are refused at the gate.
+- **Access**: with a read-only credential only the read-only tools run; mutating ones are refused at the gate. Without a workspace token there is no access at all (HTTP 401; a tokenless local stdio process is read-only).
 - **Required column**: the MCP schema marks every field required (a limitation of the vendor's schema generator); the table below reflects what each tool *actually* needs — the rest are optional and have sensible defaults, as their descriptions note.
 
 
@@ -412,7 +412,7 @@ Android devices for remote development: the phones/tablets hang off THIS server 
 
 *Access: mixed (discover / devices / logcat / screenshot read-only; connect / disconnect / install / run / tap / key read-write).*
 
-The operator can pin an allowlist in `settings.ini` — `[Adb] AllowedDevices=192.168.1.163;SERIAL123` (semicolon list; an IP entry covers any port wifi debugging negotiates). When configured, targets outside the list are refused at BOTH access levels, and every device-addressing command must name its `device` explicitly.
+Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.168.1.163;SERIAL123` in its section (semicolon list; an IP entry covers any port wifi debugging negotiates). Targets outside the workspace list are refused at BOTH access levels, every device-addressing command must name its `device` explicitly, and an absent list means NO devices (v0.98).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -429,21 +429,21 @@ The operator can pin an allowlist in `settings.ini` — `[Adb] AllowedDevices=19
 
 ### `delphi_adb_linux`
 
-The Linux desktop of a target, the way `delphi_adb` gives you an Android one: SEE the screen and ACT on it. The machine hangs off a PAServer profile (the same profiles `delphi_paserver` builds and deploys with) and runs a small Delphi node this server deployed there — nothing else is installed on it: the node leans only on libraries the GNOME desktop already ships.
+The Linux desktop of a target, the way `delphi_adb` gives you an Android one: SEE the screen and ACT on it. The machine hangs off a PAServer profile (the same profiles `delphi_paserver` builds and deploys with) and runs a small Delphi node **this server deploys and updates by itself** — nothing else is installed on it: the node leans only on libraries the GNOME desktop already ships. With `project` empty (the normal case) the node BUNDLED with the server (`node\McpLinuxDesktop`, part of the distribution) is pushed to the target on first use and refreshed whenever its version stamp stops matching: the server compares the target's `node.ver` (the binary's SHA-256) against its bundled copy once per profile and session, so an updated server heals every already-provisioned Linux on the next gesture, and nothing is ever compiled for it.
 
 THE FLOW, and it is the whole trick: `command=screenshot` brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel you want, `command=tap` presses exactly there and `command=type` writes text (with `x`,`y` it presses there first — the real gesture is "write this here", and it pays the startup once) — x and y measured *on that screenshot*, because the node converts the screen scale itself. An agent never deals with logical versus physical coordinates: it acts on what it sees. `command=windows` shows EVERY window as a thumbnail (the Super key), which is how you reach a window another one covers — show them all, then tap the one you want. `command=key` presses one key by its Linux code (evdev, NOT X11 keycodes: Escape 1, Tab 15, Enter 28) and `command=status` says whether the desktop is reachable and, when it is not, what to ask the operator for.
 
-The target needs a graphical session open — a headless box has nothing to show — and a PAServer **running inside that session** (started from a terminal in the session, not from SSH: the node needs the session's D-Bus, and it inherits it from PAServer). Deploy the node first with `delphi_build target=Deploy` against the same profile.
+The target needs a graphical session open — a headless box has nothing to show — and a PAServer **running inside that session** (started from a terminal in the session, not from SSH: the node needs the session's D-Bus — and a GUI launched by remote-run needs its DISPLAY — and both inherit them from PAServer; measured on Fedora 2026-09-19: with PAServer started outside the session, GalateaFMX aborted with "Can't create a GtkStyleContext without a display connection" while the node's captures still worked, because the portal only needs D-Bus). No deploy step is needed for the node itself; `delphi_build target=Deploy` is only for when you develop the NODE and want your own build on the target (then pass `project`).
 
 **The screen-capture permission must have been granted once on that machine**, as part of setting it up (see the note in the Linux/macOS walkthrough for the exact command). Without it the desktop portal tries to ask, and when it cannot paint its dialog — a remote session, a locked screen — it answers nothing: the symptom is a mute 20-second timeout that names no cause. If you hit one, that is what to ask the operator for.
 
-*Access: read-write (tap and key act on the target's desktop; screenshot and status are read-only in spirit but travel the same path).*
+*Access: read-write (tap and key act on the target's desktop; screenshot and status are read-only in spirit but travel the same path). Since v0.98 it runs under the SAME workspace switches as remote-run: `AllowRemoteRun=1`, `McpLinuxDesktop` (or the wildcard `all`) in `RemoteRunProjects`, and the profile's host inside `RemoteHosts`.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `command` | string | optional | screenshot (default) \| tap \| type \| key \| windows \| status |
 | `profile` | string | required | PAServer profile of the target machine (`delphi_paserver command=profiles` lists them). The desktop is THAT machine's, never the agent's |
-| `project` | string | required | Absolute path of the node's .dproj — the Delphi program this server deployed to the target |
+| `project` | string | optional | Empty (normal): the BUNDLED node is deployed/updated automatically. A .dproj path only when developing the node itself (deployed via `delphi_build target=Deploy`) |
 | `x` / `y` | string | optional | tap: the pixel MEASURED ON THE SCREENSHOT this tool returned |
 | `text` | string | optional | type: the text to write, key by key. Letters, digits, space and `- . , /` only — a character it cannot type is refused BY NAME instead of writing something else. With `x`,`y` it presses there first to focus the field: one trip, one startup |
 | `code` | string | optional | key: the Linux (evdev) key code — Escape 1, Tab 15, Enter 28, left Alt 56, Super 125 |
@@ -731,7 +731,7 @@ Busca en el vault de conocimiento (notas Markdown enlazadas con [[wikilinks]]). 
 
 Anade contenido a una nota existente del vault (entradas de log, avances de progress). Escribe SIEMPRE en espanol. Formato log: entrada fechada bajo la seccion del dia. En progress.md respeta su estructura snapshot: lineas de estado vivas, el historico va en log - no acumules; si cierras un asunto, elimina su linea con vault_patch en lugar de anadir "hecho". El servidor guarda copia del original antes de escribir.
 
-*Access: read-write only, and [Vault] ReadOnly=0.*
+*Access: read-write only, and VaultReadOnly=0 en el workspace.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -743,7 +743,7 @@ Anade contenido a una nota existente del vault (entradas de log, avances de prog
 
 Crea una nota nueva en el vault. ANTES de crear: lee AGENTS-VAULT-WRITE.md (arbol de decision de donde va cada cosa y plantillas) y enlaza la nota desde el indice que corresponda con [[wikilinks]]. Escribe en espanol. No reorganices carpetas ni muevas notas existentes - eso requiere OK humano. Nunca sobreescribe: si la nota existe, se rechaza.
 
-*Access: read-write only, and [Vault] ReadOnly=0.*
+*Access: read-write only, and VaultReadOnly=0 en el workspace.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -754,7 +754,7 @@ Crea una nota nueva en el vault. ANTES de crear: lee AGENTS-VAULT-WRITE.md (arbo
 
 Edicion puntual de una nota: sustituye old_text (UNICO en el fichero) por new_text. Para tachar lineas cerradas de un progress o corregir un dato. Para anadir contenido usa vault_append; para reescrituras grandes, para y consulta al usuario. El servidor guarda copia del original antes de escribir.
 
-*Access: read-write only, and [Vault] ReadOnly=0.*
+*Access: read-write only, and VaultReadOnly=0 en el workspace.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

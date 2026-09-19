@@ -46,7 +46,9 @@ with open(DFM_FF, 'wb') as f:
     f.write(b'\xff\x0a\x00TFORMX\x00\x30\x10\x86\x03\x00\x00TPF0binarydata')
 ORIG = open(PAS, 'rb').read()
 
-proc = subprocess.Popen([EXE], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+_env = dict(os.environ)
+_env.setdefault('DELPHI_MCP_ROOTS', DIR)  # v0.98: sin jaula declarada = solo lectura
+proc = subprocess.Popen([EXE], env=_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
 q = queue.Queue()
 

@@ -51,6 +51,7 @@ uses
   System.Classes,
   System.IOUtils,
   System.StrUtils,
+  System.IniFiles,
   System.Generics.Collections,
   MCPServer.Registration,
   Lsp.Guard,
@@ -157,6 +158,63 @@ begin
   end;
 end;
 
+{ Los buzones no se limpiaban NUNCA (David, 2026-09-19): _entregados
+  acumulaba desde agosto y las carpetas de agentes ya idos quedaban vacias
+  para siempre. Barrido barato en cada uso del buzon: lo entregado hace mas
+  de [Server] MessagesRetentionDays dias (30 por defecto; 0 = no purgar) se
+  borra, y una carpeta vacia desaparece (se recrea sola al proximo uso).
+  Config de OPERATIVA del servidor, no de permisos: por eso vive en
+  [Server] y no en un workspace. }
+procedure PurgarEntregados;
+var
+  Root, Entregados, Dir, F, IniPath: string;
+  Limite: TDateTime;
+  Dias: Integer;
+  Ini: TIniFile;
+begin
+  Root := MessagesRoot;
+  if not TDirectory.Exists(Root) then
+    Exit;
+  Dias := 30;
+  IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+  if TFile.Exists(IniPath) then
+  begin
+    Ini := TIniFile.Create(IniPath);
+    try
+      Dias := Ini.ReadInteger('Server', 'MessagesRetentionDays', 30);
+    finally
+      Ini.Free;
+    end;
+  end;
+  if Dias <= 0 then
+    Exit;
+  Limite := Now - Dias;
+  try
+    Entregados := TPath.Combine(Root, DELIVERED_DIR);
+    if TDirectory.Exists(Entregados) then
+    begin
+      for F in TDirectory.GetFiles(Entregados, '*', TSearchOption.soAllDirectories) do
+        if TFile.GetLastWriteTime(F) < Limite then
+          TFile.Delete(F);
+      for Dir in TDirectory.GetDirectories(Entregados) do
+        if (Length(TDirectory.GetFiles(Dir)) = 0) and
+           (Length(TDirectory.GetDirectories(Dir)) = 0) then
+          TDirectory.Delete(Dir);
+    end;
+    // una carpeta vacia solo cae cuando ademas es VIEJA: recien vaciada
+    // por una entrega, el operador (o una bateria) puede estar a punto de
+    // volver a escribir en ella (medido: test_messages, 2026-09-19)
+    for Dir in TDirectory.GetDirectories(Root) do
+      if not SameText(TPath.GetFileName(Dir), DELIVERED_DIR) and
+         (Length(TDirectory.GetFiles(Dir)) = 0) and
+         (Length(TDirectory.GetDirectories(Dir)) = 0) and
+         (TDirectory.GetLastWriteTime(Dir) < Limite) then
+        TDirectory.Delete(Dir);
+  except
+    // una purga que tropieza no rompe la entrega de correo
+  end;
+end;
+
 { TDelphiMessagesTool }
 
 constructor TDelphiMessagesTool.Create;
@@ -173,6 +231,7 @@ var
   Sb: TStringBuilder;
   N: Integer;
 begin
+  PurgarEntregados;
   Cmd := Params.Command.Trim.ToLower;
   if Cmd = '' then
     Cmd := 'read';

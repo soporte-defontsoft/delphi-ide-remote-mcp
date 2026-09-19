@@ -8,9 +8,9 @@ unit Lsp.Guard;
      paths are canonicalized so ..\ tricks and prefix cousins do not escape.
      No roots = unrestricted (local trusted mode).
 
-  2. Credentials - [Workspace] AuthToken (full read-write) and ReadOnlyToken
-     (read-only), plus AnonymousReadOnly=1 (no token = read-only). Enforced
-     by the HTTP transport; this unit only reads and caches them.
+  2. Credentials - SOLO tokens por workspace ([Workspace.<nombre>] Token= /
+     ReadOnlyToken=). Sin coincidencia, 401: no hay anonimo ni modo abierto
+     (v0.98). Enforced by the HTTP transport; this unit reads and caches.
 
   3. Read-only gate - ToolCallDenied is THE single entry gate, consulted by
      the tools dispatcher before ANY tool executes. The read/write
@@ -44,7 +44,7 @@ function ReadPathDenied(const APath: string): string;
 function WorkspaceRoots: TArray<string>;
 
 { Bearer authorization - the ONE place that knows every credential: the
-  global pair, AnonymousReadOnly, and the per-workspace tokens from
+  per-workspace tokens from
   [Workspace.<name>] sections (Token= read-write inside its Roots,
   ReadOnlyToken= read-only inside its Roots). True = allowed; AReadOnly and
   AWorkspaceIx (-1 = every root, the operator) describe the scope the request
@@ -101,15 +101,15 @@ function IdePlatformLibraryPaths(const AVersion, APlatform: string): TArray<stri
 { Credentials (env var first, then settings.ini [Workspace] next to the exe). }
 function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
 function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
-function AnonymousReadOnly: Boolean;// DELPHI_MCP_ANON_READONLY  / AnonymousReadOnly=1
 function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] BindIP ('' = all)
 
 { The knowledge-vault root (Obsidian notes). Empty when unset.
-  Env DELPHI_MCP_VAULT_PATH, else [Vault] Path. Canonicalized, no trailing
-  delimiter. The vault_read/vault_search tools register only when
+  Env DELPHI_MCP_VAULT_PATH (solo el workspace por defecto), si no el
+  VaultPath= del workspace activo. Canonicalized, no trailing delimiter. The vault_read/vault_search tools register only when
   VaultConfigured is true. }
-function VaultPath: string;         // DELPHI_MCP_VAULT_PATH     / [Vault] Path
+function VaultPath: string;         // DELPHI_MCP_VAULT_PATH / VaultPath= del workspace
 function VaultConfigured: Boolean;  // VaultPath set AND the directory exists
+function VaultConfiguredAnywhere: Boolean; // algun workspace declara vault (registro)
 
 { Whether APath is inside the knowledge vault. The vault belongs to the
   vault_* tools alone, so the code tools skip it in their walks even when it
@@ -127,10 +127,11 @@ function InVault(const APath: string): Boolean;
 function PathAnomaly(const APath: string): string;
 
 { Whether the vault WRITE tools (vault_append/create/patch) are enabled:
-  the vault is configured AND [Vault] ReadOnly is 0 (default 1 = read-only).
+  el vault del workspace activo esta configurado Y su VaultReadOnly= es 0
+  (defecto 1 = solo lectura).
   Even when writable, the write tools are refused for a read-only credential
   at the gate (they are in the mutating list). }
-function VaultWritable: Boolean;    // VaultConfigured AND [Vault] ReadOnly=0
+function VaultWritable: Boolean;    // VaultConfigured AND VaultReadOnly=0 del workspace
 
 { Whether delphi_run may execute a compiled program ON THIS SERVER. OFF by
   design: this is a pure development/compile server - clients download the
@@ -223,8 +224,9 @@ function LongCanonical(const APath: string): string;
 function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
 
 { Host names delphi_paserver may DIAL when the caller names one by hand
-  (test-connection host=...), comma separated. The hosts of the IDE's own
-  connection profiles are always allowed and do not need listing. }
+  (test-connection host=...) O cuando un comando marca por perfil, comma
+  separated. Tener un perfil en el IDE NO da permiso: cuenta SOLO la lista
+  del workspace activo (v0.98; medido que el perfil ajeno marcaba igual). }
 function RemoteProbeHosts: string; // DELPHI_MCP_REMOTE_HOSTS / RemoteHosts=
 
 { Whether the READ-ONLY library zone exists at all. Default True (reading the
@@ -341,8 +343,10 @@ type
     // hereda NADA de ningun sitio (decision David, rematando la del
     // 2026-09-11: "cada workspace lleva su par, sus roots Y sus configs").
     // Un workspace con nombre tiene EXACTAMENTE lo que declara: tri-estado
-    // ausente (-1) = APAGADO, lista ausente = VACIA = nada permitido. Solo
-    // el workspace por defecto ([Workspace]) usa las G* de este modulo.
+    // ausente (-1) = APAGADO, lista ausente = VACIA = nada permitido. Las
+    // G* de este modulo alimentan SOLO el modo local de lanzamiento (el
+    // entorno de quien arranca el proceso: baterias, desarrollo); el ini
+    // NO tiene seccion generica desde v0.98.
     OvAllowRun, OvAllowTests, OvAllowRemoteRun, OvAllowBuildScripts,
       OvLibraryZone, OvAgentConfinement: Integer;
     OvSharedSet: Boolean;             // SharedFolders= present in the section
@@ -351,6 +355,9 @@ type
     GitRemotes: string;               // hosts que un git clone/push puede nombrar
     RemoteHosts: string;              // hosts que un dial PAServer puede marcar
     RemoteProjects: TArray<string>;   // proyectos ejecutables en un target
+    VaultPath: string;                // vault de conocimiento de ESTE workspace
+    OvVaultReadOnly: Integer;         // tri-estado: ausente = solo lectura
+    AdbDevices: TArray<string>;       // dispositivos delphi_adb; ausente = ninguno
   end;
 
 var
@@ -363,7 +370,6 @@ var
   GIdentLock: TCriticalSection;
   GSessionNames: TStringList; // sessionId=name, bound at initialize
   GReadOnlyToken: string;
-  GAnonymousReadOnly: Boolean = False;
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
   GLibraryZone: Boolean = True;     // the read-only library zone, on by default
@@ -381,13 +387,28 @@ var
   GSharedFolders: TArray<string>;     // subfolders any agent may write (opt-in)
   GWorkspaces: TArray<TWorkspaceDef>; // [Workspace.*]: token -> its own jail
   GWorkspaceNotes: TArray<string>;    // startup findings about that config
-  GAdbDevices: TArray<string>;      // [Adb] AllowedDevices - the allowlist
-  GAdbDevicesSet: Boolean = False;  // configured at all? absent = unrestricted
+  GAdbDevices: TArray<string>;      // DELPHI_MCP_ADB_DEVICES (lanzamiento local)
+  GVaultPath: string = '';          // DELPHI_MCP_VAULT_PATH (lanzamiento local)
 
 threadvar
   TCurrentAgent: string; // WHO is calling on THIS thread (the HTTP request)
   GRequestReadOnly: Boolean;
-  TWorkspaceIx1: Integer; // active workspace index + 1; 0 = none (threadvars zero-init)
+  TRequestWorkspaceIx1: Integer; // workspace de la peticion HTTP (lo pone el transporte)
+
+var
+  GStdioIx1: Integer = 0; // workspace abierto por DELPHI_MCP_TOKEN (proceso stdio)
+
+{ El workspace activo de ESTA llamada, indice+1; 0 = ninguno. El transporte
+  HTTP lo fija por peticion; en un proceso local (stdio) vale el que abrio
+  el token del entorno al cargar la seguridad - asi el cliente local tambien
+  entra "con su token" cuando lo tiene, y sin token se queda en el modo
+  local de lanzamiento que definan las variables de entorno. }
+function TWorkspaceIx1: Integer;
+begin
+  Result := TRequestWorkspaceIx1;
+  if Result = 0 then
+    Result := GStdioIx1;
+end;
 
 { 'a;b;c' -> resolved roots with trailing delimiter; quotes tolerated,
   unparseable entries ignored. Shared by the global Roots= and every
@@ -441,7 +462,7 @@ end;
 
 procedure SetRequestWorkspace(AIx: Integer);
 begin
-  TWorkspaceIx1 := AIx + 1;
+  TRequestWorkspaceIx1 := AIx + 1;
 end;
 
 function CurrentWorkspaceName: string;
@@ -487,18 +508,10 @@ var
 begin
   AReadOnly := False;
   AWorkspaceIx := -1;
-  // O WORKSPACE O NADA (operator decision 2026-09-11, v0.91): a token
-  // authenticates ONLY through a [Workspace.<name>] section. A legacy env
-  // pair (DELPHI_MCP_TOKEN) no longer opens anything - and, fail SAFE, its
-  // mere presence does NOT count as "nothing configured" either.
-  if not WorkspaceTokensConfigured then
-  begin
-    if (GAuthToken <> '') or (GReadOnlyToken <> '') then
-      Exit(False); // legacy-only config: everything 401s until migrated
-    // truly nothing configured: open local trusted mode, as always
-    AReadOnly := GAnonymousReadOnly;
-    Exit(True);
-  end;
+  // O WORKSPACE O NADA (v0.91; rematado 2026-09-19): un Bearer autentica
+  // SOLO contra un [Workspace.<nombre>]. Sin coincidencia, 401 - ya no hay
+  // modo abierto "sin configurar" ni anonimo de solo lectura. El modo de
+  // confianza queda para el proceso LOCAL (stdio) que lanza el operador.
   // workspace tokens: the secret decides the jail, not the declared name
   for I := 0 to High(GWorkspaces) do
   begin
@@ -519,11 +532,6 @@ begin
       Exit(True);
     end;
   end;
-  if GAnonymousReadOnly and (AAuth = '') then
-  begin
-    AReadOnly := True;
-    Exit(True);
-  end;
   Result := False;
 end;
 
@@ -540,6 +548,12 @@ end;
 function IsReadOnlyNow: Boolean;
 begin
   Result := GProcessReadOnly or GRequestReadOnly;
+  if not Result then
+    // Excepcion local sin token, SOLO LECTURA (David 2026-09-19, "menos
+    // sustos"): sin workspace activo y sin jaula declarada en el entorno
+    // se puede MIRAR todo el codigo pero no tocar nada. Solo alcanzable en
+    // stdio: todo HTTP entra con token de workspace o recibe 401 antes.
+    Result := (TWorkspaceIx1 = 0) and (Length(WorkspaceRoots) = 0);
 end;
 
 procedure ParseAdbDevices(const ARaw: string);
@@ -548,7 +562,6 @@ var
 begin
   if ARaw.Trim = '' then
     Exit;
-  GAdbDevicesSet := True;
   for E in ARaw.Split([';']) do
     if E.Trim <> '' then
       GAdbDevices := GAdbDevices + [E.Trim];
@@ -564,7 +577,6 @@ begin
   ParseAdbDevices(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'));
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
-  GAnonymousReadOnly := GetEnvironmentVariable('DELPHI_MCP_ANON_READONLY') = '1';
   GAllowRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_RUN') = '1';
   GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
   GLibraryZone := GetEnvironmentVariable('DELPHI_MCP_LIBRARY_ZONE') <> '0';
@@ -573,6 +585,7 @@ begin
   GRemoteHosts := GetEnvironmentVariable('DELPHI_MCP_REMOTE_HOSTS');
   GRemoteProjects := GetEnvironmentVariable('DELPHI_MCP_REMOTE_RUN_PROJECTS')
     .Split([';'], TStringSplitOptions.ExcludeEmpty);
+  GVaultPath := GetEnvironmentVariable('DELPHI_MCP_VAULT_PATH');
   GAllowBuildScripts := GetEnvironmentVariable('DELPHI_MCP_ALLOW_BUILD_SCRIPTS') = '1';
   GAgentConfinement := GetEnvironmentVariable('DELPHI_MCP_AGENT_CONFINEMENT') = '1';
   GToolsProfile := LowerCase(GetEnvironmentVariable('DELPHI_MCP_TOOLS_PROFILE').Trim);
@@ -587,34 +600,14 @@ begin
   begin
     Ini := TIniFile.Create(IniPath);
     try
-      if not GAnonymousReadOnly then
-        GAnonymousReadOnly := Ini.ReadBool('Workspace', 'AnonymousReadOnly', False);
-      if not GAllowRun then
-        GAllowRun := Ini.ReadBool('Workspace', 'AllowRun', False);
-      if not GAllowRemoteRun then
-        GAllowRemoteRun := Ini.ReadBool('Workspace', 'AllowRemoteRun', False);
-      if GLibraryZone then
-        GLibraryZone := Ini.ReadBool('Workspace', 'LibraryZone', True);
-      if not GAllowTests then
-        GAllowTests := Ini.ReadBool('Workspace', 'AllowTests', False);
-      if GGitRemotes = '' then
-        GGitRemotes := Ini.ReadString('Workspace', 'GitRemotes', '');
-      if GRemoteHosts = '' then
-        GRemoteHosts := Ini.ReadString('Workspace', 'RemoteHosts', '');
-      if Length(GRemoteProjects) = 0 then
-        GRemoteProjects := Ini.ReadString('Workspace', 'RemoteRunProjects', '')
-          .Split([';'], TStringSplitOptions.ExcludeEmpty);
-      if not GAllowBuildScripts then
-        GAllowBuildScripts := Ini.ReadBool('Workspace', 'AllowBuildScripts', False);
-      if not AgentConfinementNow then
-        GAgentConfinement := Ini.ReadBool('Workspace', 'AgentConfinement', False);
+      // v0.98 (David): el ini NO tiene seccion generica - todo permiso
+      // vive en un [Workspace.<nombre>]; el modo local de lanzamiento se
+      // define SOLO por el entorno de quien arranca el proceso. Del ini,
+      // fuera de los workspaces, solo queda fontaneria ([Server]/[Tools]).
       if GToolsProfile = 'full' then
         GToolsProfile := LowerCase(Ini.ReadString('Tools', 'Profile', 'full').Trim);
       if Length(GToolsOnly) = 0 then
         GToolsOnly := LowerCase(Ini.ReadString('Tools', 'Only', ''))
-          .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
-      if Length(GSharedFolders) = 0 then
-        GSharedFolders := LowerCase(Ini.ReadString('Workspace', 'SharedFolders', ''))
           .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
       // [Workspace.<name>] sections: token-scoped sandboxes. Parsed once,
       // here, so AuthorizeBearer never touches the disk per request.
@@ -649,6 +642,10 @@ begin
             W.RemoteHosts := Ini.ReadString(S, 'RemoteHosts', '').Trim;
             W.RemoteProjects := Ini.ReadString(S, 'RemoteRunProjects', '')
               .Split([';'], TStringSplitOptions.ExcludeEmpty);
+            W.VaultPath := Ini.ReadString(S, 'VaultPath', '').Trim;
+            W.OvVaultReadOnly := ReadTriState(Ini, S, 'VaultReadOnly');
+            W.AdbDevices := Ini.ReadString(S, 'AdbAllowedDevices', '')
+              .Split([';'], TStringSplitOptions.ExcludeEmpty);
             W.OvSharedSet := Ini.ValueExists(S, 'SharedFolders');
             if W.OvSharedSet then
               W.OvSharedFolders := LowerCase(Ini.ReadString(S, 'SharedFolders', ''))
@@ -677,10 +674,31 @@ begin
       finally
         Secs.Free;
       end;
-      if not GAdbDevicesSet then
-        ParseAdbDevices(Ini.ReadString('Adb', 'AllowedDevices', ''));
     finally
       Ini.Free;
+    end;
+  end;
+  // O TOKEN O NADA tambien para el cliente local con credencial: si el
+  // entorno trae DELPHI_MCP_TOKEN (o DELPHI_MCP_READONLY_TOKEN, en solo
+  // lectura) y coincide con un workspace, el proceso stdio queda ligado a
+  // ESA jaula, exactamente como un Bearer en HTTP (David, 2026-09-19).
+  // Sin coincidencia no abre nada: el par de entorno sigue inerte.
+  for var K := 0 to High(GWorkspaces) do
+  begin
+    if GWorkspaces[K].Invalid or (Length(GWorkspaces[K].Roots) = 0) then
+      Continue;
+    if (GAuthToken <> '') and (GWorkspaces[K].Token <> '') and
+       (GAuthToken = GWorkspaces[K].Token) then
+    begin
+      GStdioIx1 := K + 1;
+      Break;
+    end;
+    if (GReadOnlyToken <> '') and (GWorkspaces[K].ReadOnlyToken <> '') and
+       (GReadOnlyToken = GWorkspaces[K].ReadOnlyToken) then
+    begin
+      GStdioIx1 := K + 1;
+      GProcessReadOnly := True;
+      Break;
     end;
   end;
   GSecLoaded := True;
@@ -696,12 +714,6 @@ function ReadOnlyToken: string;
 begin
   LoadSecurity;
   Result := GReadOnlyToken;
-end;
-
-function AnonymousReadOnly: Boolean;
-begin
-  LoadSecurity;
-  Result := GAnonymousReadOnly;
 end;
 
 function AllowRun: Boolean;
@@ -899,6 +911,11 @@ begin
   if Length(Lista) = 0 then
     Exit(SR_REMOTERUN_NOPROJLIST);
   Result := '';
+  // Comodin EXPLICITO del operador: RemoteRunProjects=all (o *) significa
+  // cualquier proyecto de la jaula. Declararlo sigue siendo su decision.
+  for E in Lista do
+    if SameText(E.Trim, 'all') or (E.Trim = '*') then
+      Exit;
   try
     Full := TPath.GetFullPath(APath);
   except
@@ -944,24 +961,15 @@ begin
 end;
 
 function VaultPath: string;
-var
-  IniPath: string;
-  Ini: TIniFile;
 begin
-  Result := GetEnvironmentVariable('DELPHI_MCP_VAULT_PATH');
-  if Result = '' then
-  begin
-    IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
-    if TFile.Exists(IniPath) then
-    begin
-      Ini := TIniFile.Create(IniPath);
-      try
-        Result := Ini.ReadString('Vault', 'Path', '');
-      finally
-        Ini.Free;
-      end;
-    end;
-  end;
+  LoadSecurity;
+  // El vault es del workspace ACTIVO, como todo lo demas (v0.98): un
+  // workspace sin VaultPath= NO tiene vault. Solo el por defecto usa el
+  // entorno / [Workspace].
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Result := GWorkspaces[TWorkspaceIx1 - 1].VaultPath
+  else
+    Result := GVaultPath;
   Result := Result.Trim.Trim(['"']).Trim;
   if Result <> '' then
     try
@@ -995,38 +1003,45 @@ end;
 
 function VaultWritable: Boolean;
 var
-  IniPath: string;
-  Ini: TIniFile;
-  RO: Boolean;
+  EnvRO: string;
 begin
   Result := False;
   if not VaultConfigured then
     Exit;
-  // Read-only by DEFAULT: writing to the knowledge vault must be opted into.
-  // The env var wins in BOTH directions - it only overrode the ini when set to
-  // "0", so a settings.ini with ReadOnly=0 could not be forced back to
-  // read-only from the environment (which is how the test batteries ask for a
-  // read-only vault).
-  RO := True;
-  var EnvRO := GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY');
+  LoadSecurity;
+  // Solo lectura POR DEFECTO: escribir en el vault se pide a proposito.
+  // Un workspace con nombre tiene exactamente lo que declara: VaultReadOnly=0
+  // o nada de escritura.
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvVaultReadOnly = 0);
+  // Workspace por defecto: el entorno gana en AMBOS sentidos (las baterias
+  // fuerzan un vault de solo lectura por encima de cualquier ini).
+  EnvRO := GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY');
   if EnvRO = '0' then
-    RO := False
-  else if EnvRO <> '' then
-    RO := True
-  else
+    Exit(True);
+  Result := False;
+end;
+
+{ Si HAY vault en alguna parte (workspace por defecto o cualquier seccion):
+  decide el REGISTRO de las tools vault_* al arrancar, cuando aun no hay
+  workspace activo en el hilo. El acceso real de cada peticion lo decide
+  VaultConfigured, que resuelve el del workspace ACTIVO. }
+function VaultConfiguredAnywhere: Boolean;
+var
+  W: TWorkspaceDef;
+  P: string;
+begin
+  LoadSecurity;
+  P := GVaultPath.Trim.Trim(['"']).Trim;
+  if (P <> '') and TDirectory.Exists(P) then
+    Exit(True);
+  for W in GWorkspaces do
   begin
-    IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
-    if TFile.Exists(IniPath) then
-    begin
-      Ini := TIniFile.Create(IniPath);
-      try
-        RO := Ini.ReadBool('Vault', 'ReadOnly', True);
-      finally
-        Ini.Free;
-      end;
-    end;
+    P := W.VaultPath.Trim.Trim(['"']).Trim;
+    if (P <> '') and TDirectory.Exists(P) then
+      Exit(True);
   end;
-  Result := not RO;
+  Result := False;
 end;
 
 procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
@@ -1225,23 +1240,28 @@ end;
   address - outside it, nothing, at BOTH access levels (David's rule). An
   entry matches the target exactly, or matches its host part (the text
   before ':'), so '192.168.1.163' covers whatever port wifi debugging
-  negotiates and a USB serial is listed as-is. Absent = unrestricted (a dev
-  machine). }
+  negotiates and a USB serial is listed as-is. Ausente o vacia = NINGUN
+  dispositivo: cada workspace declara la suya con AdbAllowedDevices= y lo
+  que no se declara no existe (v0.98; antes fallaba abierto). }
 function AdbTargetAllowed(const ATarget: string): Boolean;
 var
+  Lista: TArray<string>;
   E, Host: string;
   P: Integer;
 begin
-  if not GAdbDevicesSet then
-    Exit(True);
+  Result := False;
+  LoadSecurity;
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Lista := GWorkspaces[TWorkspaceIx1 - 1].AdbDevices
+  else
+    Lista := GAdbDevices;
   Host := ATarget;
   P := Pos(':', ATarget);
   if P > 0 then
     Host := Copy(ATarget, 1, P - 1);
-  for E in GAdbDevices do
-    if SameText(E, ATarget) or SameText(E, Host) then
+  for E in Lista do
+    if SameText(E.Trim, ATarget) or SameText(E.Trim, Host) then
       Exit(True);
-  Result := False;
 end;
 
 { delphi_adb's address/device land on the adb command line. Same lesson as
@@ -1268,12 +1288,7 @@ begin
       Exit(Format(SR_ADB_TARGET_FMT, [V]));
     if not AdbTargetAllowed(V) then
       Exit(Format(SR_ADB_ALLOWLIST_FMT, [V]));
-  end
-  else if GAdbDevicesSet and MatchText(Trim(ArgStr(AArguments, 'command')),
-    ['install', 'run', 'tap', 'key', 'logcat', 'screenshot']) then
-    // With the allowlist active, an implicit target could be an UNLISTED
-    // device that happens to be the only one attached: name it or nothing.
-    Exit(SR_ADB_ALLOWLIST_DEVICE);
+  end;
   // "app" is a package name reaching adb shell am start - same charset rule
   // (a package is letters/digits/dots/underscores), own message.
   V := ArgStr(AArguments, 'app').Trim;
@@ -1294,6 +1309,14 @@ begin
     for var C in V do
       if not CharInSet(C, ['A'..'Z', 'a'..'z']) then
         Exit(Format(SR_ADB_KEY_FMT, [V]));
+  // Y al final, el target implicito: podria ser un dispositivo NO listado
+  // que casualmente es el unico conectado - se nombra o nada. Va tras las
+  // reglas de formato para que el error mas util conteste primero. Desde
+  // v0.98 la lista es del workspace y vacia = ninguno: sin excepcion.
+  if (ArgStr(AArguments, 'device').Trim = '') and
+     MatchText(Trim(ArgStr(AArguments, 'command')),
+       ['install', 'run', 'tap', 'key', 'logcat', 'screenshot']) then
+    Exit(SR_ADB_ALLOWLIST_DEVICE);
 end;
 
 function BuildArgDenied(const AArguments: TJSONObject): string;
@@ -1471,7 +1494,7 @@ begin
   // filters below are universal on purpose, but letting one of them answer
   // first meant a read-only server explained a git remote policy instead of
   // saying the obvious thing: nothing writes here (v0.62).
-  if (GProcessReadOnly or GRequestReadOnly) and
+  if IsReadOnlyNow and
      MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
        'delphi_changeset', 'delphi_build', 'delphi_run', 'delphi_package',
        'delphi_upload', 'delphi_delete', 'delphi_move',
@@ -1479,7 +1502,7 @@ begin
     Exit(WriteDenied(AToolName));
   // ...and the same for the WRITING half of delphi_git: on a read-only server
   // a clone has no business being explained in terms of remote policy.
-  if (GProcessReadOnly or GRequestReadOnly) and SameText(AToolName, 'delphi_git') then
+  if IsReadOnlyNow and SameText(AToolName, 'delphi_git') then
   begin
     Cmd := ArgStr(AArguments, 'command');
     if not (MatchText(Cmd, ['status', 'diff', 'log', 'show']) or
@@ -1548,7 +1571,7 @@ begin
     if Result <> '' then
       Exit;
   end;
-  if not (GProcessReadOnly or GRequestReadOnly) then
+  if not IsReadOnlyNow then
     Exit;
   // Fully mutating tools: refused outright in read-only mode.
   if MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
@@ -1624,8 +1647,7 @@ end;
 
 function WorkspaceRoots: TArray<string>;
 var
-  Raw, IniPath: string;
-  Ini: TIniFile;
+  Raw: string;
 begin
   // A token-scoped session sees ITS workspace's roots as the whole world:
   // every jail check, listing and scan downstream of this ONE function
@@ -1636,20 +1658,9 @@ begin
     Exit(GWorkspaces[TWorkspaceIx1 - 1].Roots);
   if not GLoaded then
   begin
+    // Modo local de lanzamiento: SOLO el entorno. El ini ya no tiene
+    // seccion generica (v0.98) - una jaula del ini es la de un workspace.
     Raw := GetEnvironmentVariable('DELPHI_MCP_ROOTS');
-    if Raw = '' then
-    begin
-      IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
-      if TFile.Exists(IniPath) then
-      begin
-        Ini := TIniFile.Create(IniPath);
-        try
-          Raw := Ini.ReadString('Workspace', 'Roots', '');
-        finally
-          Ini.Free;
-        end;
-      end;
-    end;
     // Quotes around a root (Roots="D:\My Projects") are tolerated; see
     // ParseRootsList (shared with the [Workspace.*] sections).
     GRoots := ParseRootsList(Raw);
@@ -1672,13 +1683,14 @@ begin
   begin
     AWarning := True;
     Result := 'Workspace jail: INVALID roots (fail-closed) - every ' +
-      'disk-touching tool is refused. Fix [Workspace] Roots in settings.ini.';
+      'disk-touching tool is refused. Revisa DELPHI_MCP_ROOTS (lanzamiento local).';
   end
   else if Length(Roots) = 0 then
   begin
     AWarning := True;
-    Result := 'Workspace jail: NONE - UNRESTRICTED local mode (agents may ' +
-      'touch any path the service account can). Set [Workspace] Roots to confine.';
+    Result := 'Workspace jail: NONE - modo LOCAL de confianza (solo existe ' +
+      'en un proceso stdio lanzado por el operador; todo cliente HTTP entra ' +
+      'por token de workspace o recibe 401).';
   end
   else
   begin

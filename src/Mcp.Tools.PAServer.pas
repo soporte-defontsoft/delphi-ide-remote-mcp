@@ -73,6 +73,12 @@ type
     constructor Create; override;
   end;
 
+{ '' si el workspace activo permite marcar al host del perfil AProfName; el
+  motivo si no. Existe porque tener un perfil en el IDE NO es permiso del
+  workspace (v0.98): el host del perfil pasa por la MISMA lista RemoteHosts
+  que un host escrito a mano. Lo usa tambien delphi_adb_linux. }
+function ProfileHostDenied(const AProfName: string): string;
+
 implementation
 
 uses
@@ -420,46 +426,36 @@ end;
   chasing credentials (field request from the first live PAServer session:
   the agent had no way to ask whether we reached it). Route only, no
   credentials involved, so a failure here is ALWAYS network/NAT/firewall. }
-{ Every host the IDE already has a connection profile for. Those are targets
-  the operator set up, so dialling them is the job; anything else has to be
-  allowed on purpose. }
-function ProfileHosts: TArray<string>;
+{ El host de un perfil, pasado por la MISMA lista que un host escrito a
+  mano. Todo comando que marca por perfil (test-connection name=, get-sdk,
+  remote-run, delphi_adb_linux) pasa por aqui ANTES de tocar la red: medido
+  2026-09-19 que el perfil de otra maquina marcaba desde un workspace cuya
+  lista no lo incluia. El perfil dice COMO conectar; el workspace dice SI. }
+function ProfileHostDenied(const AProfName: string): string;
 var
   Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
-  Dir, F, Xml, H: string;
-  L: TStringList;
+  ProfileFile, Xml: string;
   M: TMatch;
 begin
-  L := TStringList.Create;
-  try
-    L.Duplicates := dupIgnore;
-    L.Sorted := True;
-    Installs := DiscoverAllRadStudios;
-    for Info in Installs do
-    begin
-      if not Info.Found then
-        Continue;
-      Dir := ProfilesDir(Info.Version);
-      if not TDirectory.Exists(Dir) then
-        Continue;
-      for F in TDirectory.GetFiles(Dir, '*.profile') do
-        try
-          Xml := TFile.ReadAllText(F);
-          M := TRegEx.Match(Xml, '(?i)<Profile_host>\s*([^<]+?)\s*</Profile_host>');
-          if M.Success then
-          begin
-            H := M.Groups[1].Value.Trim.ToLower;
-            if H <> '' then
-              L.Add(H);
-          end;
-        except
-          // an unreadable profile is not a reason to fail the whole check
-        end;
+  Result := '';
+  Installs := DiscoverAllRadStudios;
+  for Info in Installs do
+  begin
+    if not Info.Found then
+      Continue;
+    ProfileFile := TPath.Combine(ProfilesDir(Info.Version),
+      AProfName.Trim + '.profile');
+    if not TFile.Exists(ProfileFile) then
+      Continue; // el no-existe lo reporta cada comando con su propio texto
+    try
+      Xml := TFile.ReadAllText(ProfileFile);
+    except
+      Continue;
     end;
-    Result := L.ToStringArray;
-  finally
-    L.Free;
+    M := TRegEx.Match(Xml, '(?i)<Profile_host>\s*([^<]+?)\s*</Profile_host>');
+    if M.Success then
+      Exit(ProbeHostDenied(M.Groups[1].Value));
   end;
 end;
 
@@ -470,8 +466,9 @@ end;
   its own MCP port, and any host:port answered "reachable / refused / timed
   out" - a port scanner run from inside this machine's network, behind its
   firewall, with no execution permission needed. Same primitive, same rule:
-  the hosts of the IDE's own profiles, plus whatever the operator wrote in
-  RemoteHosts del workspace activo. Nothing else. }
+  SOLO lo que el operador escribio en RemoteHosts del workspace activo.
+  Nada mas - desde v0.98 ni siquiera los hosts de los perfiles del IDE:
+  el perfil dice COMO conectar, el workspace dice SI se puede. }
 function ProbeHostDenied(const AHost: string): string;
 var
   H, Allowed: string;
@@ -480,13 +477,10 @@ begin
   H := AHost.Trim.ToLower;
   if H = '' then
     Exit;
-  for var P in ProfileHosts do
-    if SameText(P, H) then
-      Exit;
   Allowed := RemoteProbeHosts;
   for var A in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
-    if SameText(A.Trim, H) then
-      Exit;
+    if SameText(A.Trim, H) or (A.Trim = '*') or (A.Trim = '0.0.0.0') then
+      Exit; // '*' / 0.0.0.0: el operador declaro CUALQUIER host
   Result := Format(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim,
     IfThen(Allowed <> '', Allowed, '(ninguno)')]);
 end;
@@ -595,6 +589,9 @@ begin
   ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
   if not TFile.Exists(ProfileFile) then
     Exit(Format(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+  Result := ProfileHostDenied(ProfName);
+  if Result <> '' then
+    Exit;
   Cmd := '"' + PaClient + '" --timeout=20 "' + ProfName + '"';
   Output := RunCaptured(Cmd, 45000, ExitCode);
   Return := TJSONObject.Create;
@@ -694,6 +691,9 @@ begin
   ExeName := Params.Exe.Trim;
   if (Prof = '') or (Proj = '') then
     Exit(SR_PASERVER_RUN_NEEDS);
+  Denied := ProfileHostDenied(Prof);
+  if Denied <> '' then
+    Exit(Denied);
   // the project must be one this server may touch, and must exist
   Denied := PathDenied(Proj);
   if Denied <> '' then
@@ -741,6 +741,9 @@ begin
   ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
   if not TFile.Exists(ProfileFile) then
     Exit(Format(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+  Result := ProfileHostDenied(ProfName);
+  if Result <> '' then
+    Exit;
   ProfXml := TFile.ReadAllText(ProfileFile);
   Plat := TagValue(ProfXml, 'Profile_platform');
   if not SameText(Plat, 'Linux64') then
