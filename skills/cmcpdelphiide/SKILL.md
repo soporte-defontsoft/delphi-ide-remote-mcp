@@ -231,10 +231,10 @@ is ~70 MB) -> install and start it on the target, from a terminal INSIDE
 its graphical session (a GUI launched later through an out-of-session
 PAServer aborts with no DISPLAY - measured) -> `add-profile` (an existing
 name is refused, never overwritten. It also writes the seat the IDE
-keeps in the registry, but whether the IDE LISTS it is erratic and
-unexplained - do not promise the operator it will appear. What does
-work is everything that builds: the .profile file is what paclient,
-MSBuild and these tools read)
+reads for its own list - the IDE picks it up at its NEXT start, so do
+not expect it to appear in a running IDE. If a profile is on disk but
+missing from the IDE, `command=reseat` writes the missing seats
+from the files themselves, no PAServer and no passwords needed)
 -> `test-connection` -> `get-sdk` once (pulls the sysroot; minutes) ->
 `delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
 (`download` link, sha256) to run the ELF on YOUR machine - or run it ON

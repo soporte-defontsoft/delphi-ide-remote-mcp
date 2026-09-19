@@ -8,6 +8,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+- **`delphi_paserver command=reseat`**: repairs the IDE's profile list. It
+  walks the `.profile` files and writes the registry seats that are missing,
+  reading each encrypted password from its own file — no PAServer, no
+  passwords to know. Born from a real case: two profiles that built and
+  deployed perfectly for weeks were invisible in the IDE because their seat
+  had never landed.
+- `command=profiles` now also reports `ideRegistrySeats`, the IDE's own
+  registry list. Seeing the files and the seats side by side is the whole
+  diagnosis of "why doesn't my IDE show this profile".
+
 ## [0.99.0-beta] - 2026-09-19
 
 ### Added
@@ -32,14 +43,10 @@ the MCP `initialize` response (`serverInfo.version`).
   binaries renamed in one sweep. Targets provisioned by an older server keep a
   stale `McpLinuxDesktop` folder; the self-updater simply deploys the new one
   beside it.
-- **`add-profile` / `get-sdk`: what the IDE shows is no longer promised.** The
-  tools still write both halves — the `.profile` file and the registry seat —
-  but a day of measuring says the IDE lists ours erratically (its own profiles
-  always; the 32-bit IDE showed three of five with four in the registry, the
-  64-bit IDE showed none) and it rewrites that list from memory when it exits.
-  The docs now say what is certain instead: the FILES are what `paclient`,
-  MSBuild and every tool here read, and those work — connect, pull an SDK,
-  build, deploy and run all happen from them.
+- **`add-profile` / `get-sdk`: the IDE seat, and when it shows.** The tools
+  write both halves — the `.profile` file and the registry seat the IDE reads
+  for its Connection Profile Manager — and the IDE loads that list **at
+  startup**, so a profile created while it runs appears at its next start.
 
 ### Security
 - **The node obeys the server and nobody else.** Both builds now require a key

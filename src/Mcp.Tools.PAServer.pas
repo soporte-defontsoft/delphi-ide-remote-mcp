@@ -240,6 +240,9 @@ end;
 
 function ListProfiles: string;
 var
+  Asientos: TJSONArray;
+  Reg: TRegistry;
+  Claves: TStringList;
   Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   Dir, F: string;
@@ -263,8 +266,42 @@ begin
       for F in TDirectory.GetFiles(Dir, '*.sdk') do
         Sdks.Add(TPath.GetFileNameWithoutExtension(F));
     end;
+    { Lo que el IDE guarda POR SU CUENTA: la clave RemoteProfiles. Se
+      informa aparte de los ficheros porque son dos cosas distintas y solo
+      una manda para compilar: el FICHERO es lo que leen paclient, MSBuild y
+      este servidor; la clave es de donde el IDE saca su lista. Verlas
+      juntas es el diagnostico de "por que el IDE no me lo ensena". }
+    Asientos := TJSONArray.Create;
+    Return.AddPair('ideRegistrySeats', Asientos);
+    for Info in Installs do
+    begin
+      if not Info.Found then Continue;
+      Reg := TRegistry.Create(KEY_READ);
+      try
+        Reg.RootKey := HKEY_CURRENT_USER;
+        if Reg.OpenKeyReadOnly(Format('Software\\Embarcadero\\BDS\\%s\\RemoteProfiles',
+             [Info.Version])) then
+        begin
+          Claves := TStringList.Create;
+          try
+            Reg.GetKeyNames(Claves);
+            for F in Claves do
+              Asientos.Add(F);
+          finally
+            Claves.Free;
+          end;
+        end;
+      finally
+        Reg.Free;
+      end;
+    end;
+    Return.AddPair('note', 'profiles = los .profile en disco (lo que usan ' +
+      'paclient, MSBuild y las tools de este servidor). ideRegistrySeats = ' +
+      'las claves RemoteProfiles del registro, de donde el IDE saca SU ' +
+      'lista. Si un nombre esta en una y no en la otra, ahi esta la ' +
+      'explicacion de lo que el IDE ensena o deja de ensenar.');
     if (Profs.Count = 0) and (Sdks.Count = 0) then
-      Return.AddPair('note', 'No connection profiles or SDKs yet. They are ' +
+      Return.AddPair('note2', 'No connection profiles or SDKs yet. They are ' +
         'created against a running PAServer on the target machine.');
     Result := Return.ToJSON;
   finally
@@ -1031,6 +1068,91 @@ begin
   end;
 end;
 
+{ Repara la lista del IDE: por cada .profile en disco que no tenga su
+  asiento en RemoteProfiles, lo crea leyendo el propio fichero. Nacio el
+  19-sep-2026, cuando se vio que un perfil creado por las tools podia estar
+  perfectamente en disco -y compilar y desplegar con el- y no aparecer en el
+  Connection Profile Manager porque le faltaba el asiento. No toca los que ya
+  lo tienen: no es una migracion, es un remiendo idempotente. }
+function ReseatProfiles: string;
+var
+  Installs: TArray<TRadStudioInfo>;
+  Info: TRadStudioInfo;
+  Dir, F, Nombre, Plat, Host, Pwd: string;
+  Puerto: Integer;
+  Texto: string;
+  Reg: TRegistry;
+  YaEstaba: Boolean;
+  Return: TJSONObject;
+  Sembrados, Intactos: TJSONArray;
+  M: TMatch;
+begin
+  Return := TJSONObject.Create;
+  Sembrados := TJSONArray.Create;
+  Intactos := TJSONArray.Create;
+  Return.AddPair('seated', Sembrados);
+  Return.AddPair('alreadyThere', Intactos);
+  try
+    Installs := DiscoverAllRadStudios;
+    for Info in Installs do
+    begin
+      if not Info.Found then
+        Continue;
+      Dir := ProfilesDir(Info.Version);
+      if not TDirectory.Exists(Dir) then
+        Continue;
+      for F in TDirectory.GetFiles(Dir, '*.profile') do
+      begin
+        Nombre := TPath.GetFileNameWithoutExtension(F);
+        Reg := TRegistry.Create(KEY_READ);
+        try
+          Reg.RootKey := HKEY_CURRENT_USER;
+          YaEstaba := Reg.KeyExists('\Software\Embarcadero\BDS\' +
+            Info.Version + '\RemoteProfiles\' + Nombre);
+        finally
+          Reg.Free;
+        end;
+        if YaEstaba then
+        begin
+          Intactos.Add(Nombre);
+          Continue;
+        end;
+        try
+          Texto := TFile.ReadAllText(F);
+        except
+          Continue;
+        end;
+        Plat := 'Linux64';
+        M := TRegEx.Match(Texto, '<Profile_platform>([^<]*)</Profile_platform>');
+        if M.Success then
+          Plat := M.Groups[1].Value.Trim;
+        Host := '';
+        M := TRegEx.Match(Texto, '<Profile_host>([^<]*)</Profile_host>');
+        if M.Success then
+          Host := M.Groups[1].Value.Trim;
+        Puerto := 64211;
+        M := TRegEx.Match(Texto, '<Profile_port>([^<]*)</Profile_port>');
+        if M.Success then
+          Puerto := StrToIntDef(M.Groups[1].Value.Trim, 64211);
+        Pwd := '';
+        M := TRegEx.Match(Texto, '<Profile_password>([^<]*)</Profile_password>');
+        if M.Success then
+          Pwd := M.Groups[1].Value.Trim;   { ya viene cifrada: se copia tal cual }
+        if Host = '' then
+          Continue;
+        RegistrarPerfilEnIde(Info.Version, Nombre, Plat, Host, Puerto, Pwd);
+        Sembrados.Add(Nombre);
+      end;
+    end;
+    Return.AddPair('note', 'El asiento es lo que el IDE lee para SU lista; el ' +
+      '.profile es lo que usan paclient, MSBuild y este servidor. El IDE ' +
+      'carga esa lista AL ARRANCAR, asi que cierralo y abrelo para verlos.');
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
 function TDelphiPAServerTool.ExecuteWithParams(const Params: TDelphiPAServerParams): string;
 var
   Cmd: string;
@@ -1042,6 +1164,8 @@ begin
     Result := ListPackages
   else if Cmd = 'profiles' then
     Result := ListProfiles
+  else if Cmd = 'reseat' then
+    Result := ReseatProfiles
   else if Cmd = 'add-profile' then
     Result := AddProfile(Params)
   else if Cmd = 'remove-profile' then
