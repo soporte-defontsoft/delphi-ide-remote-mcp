@@ -1,6 +1,6 @@
 ---
 name: cmcpdelphiide
-description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb) and how to move files and logs the right way.
+description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb, the Linux desktop via delphi_adb_linux) and how to move files and logs the right way.
 ---
 
 # Delphi IDE Remote MCP - field guide for agents
@@ -67,7 +67,7 @@ on your side.
   `command=run project=<the test .dproj>` builds and runs one and answers
   `total`/`passed`/`failed` with the failing lines. That is your red-green
   loop: edit -> diagnostics -> build -> **test** -> commit.
-- It needs the operator's `[Security] AllowTests=1` on the server. Without
+- It needs `AllowTests=1` declared in YOUR workspace on the server. Without
   it `discover` works and `run` says so - that is a switch, not a bug.
 
 ## Renaming a symbol
@@ -138,6 +138,27 @@ on your side.
   `target=Deploy` REWRITES that folder: copy state you need before
   redeploying.
 
+## The Linux desktop (`delphi_adb_linux`) - eyes and hands
+
+The same idea as adb, for a Linux machine hanging off a PAServer profile.
+**GNOME only today** (Zorin and Fedora measured). No `project` needed: the
+node bundled with the server deploys and UPDATES itself on the target on
+first use (a `node.ver` stamp) - nothing is compiled or installed by hand.
+
+Flow: `screenshot` brings the WHOLE desktop here as a PNG -> LOOK at it and
+measure the pixel -> `tap x= y=` presses exactly there (the node converts
+the screen scale itself; always measure ON the screenshot it returned) ->
+`type text=` writes (with `x`,`y` it presses there first: one trip) ->
+`key code=` presses one key (evdev: Escape 1, Tab 15, Enter 28) ->
+`windows` shows every window as thumbnails (Super) to reach a covered one
+-> `status` says whether the desktop is reachable and what to ask for.
+
+It runs under the SAME workspace switches as remote-run: `AllowRemoteRun`,
+`McpLinuxDesktop` (or the wildcard `all`) in `RemoteRunProjects`, and the
+profile's host inside `RemoteHosts`. The target needs a graphical session
+with PAServer started INSIDE it and the screen-capture permission granted
+once - a mute screenshot timeout means exactly that permission.
+
 ## Create and build
 
 - `delphi_create` scaffolds console/VCL/FMX projects, and inside a
@@ -177,10 +198,15 @@ on your side.
 
 `delphi_paserver` end to end: `packages` (the PAServer installer ships
 with the IDE - `delphi_fetch` its path and `curl` the `download` link, it
-is ~70 MB) -> install and start it on the target -> `add-profile` ->
-`test-connection` -> `get-sdk` once (pulls the sysroot; can take minutes)
--> `delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
-(`download` link, sha256) -> run the ELF on YOUR machine.
+is ~70 MB) -> install and start it on the target, from a terminal INSIDE
+its graphical session (a GUI launched later through an out-of-session
+PAServer aborts with no DISPLAY - measured) -> `add-profile` (it registers
+in the operator's IDE too; an existing name is refused, never overwritten)
+-> `test-connection` -> `get-sdk` once (pulls the sysroot; minutes) ->
+`delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
+(`download` link, sha256) to run the ELF on YOUR machine - or run it ON
+the target with `command=remote-run` and drive its window with
+`delphi_adb_linux`.
 
 ## Android (`delphi_adb`) - eyes and hands
 
@@ -188,7 +214,8 @@ Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
 `delphi_build target=Deploy` -> `install` -> `run` -> `logcat` ->
 `screenshot` -> `tap`/`key`.
 
-- An allowlist may be active: name your `device=` explicitly.
+- Devices are allowlisted PER WORKSPACE (`AdbAllowedDevices`; absent =
+  NONE since v0.98): always name your `device=` explicitly.
 - `logcat`: default 300 lines, inline answers carry the newest 400.
   For the full dump pass `out=srvd:\...\dump.txt`, then read it in
   ranges or download it. Validate app behaviour by logging from your app
@@ -229,3 +256,9 @@ components, fetch files, take screenshots and file reports - but every
 mutating tool (edit/create/build/run/install/tap...) is refused at the
 gate. If you are read-only and need a change, report it; do not fish
 for bypasses (there are none).
+
+Since v0.98 you always work inside ONE workspace: what its declaration
+grants is ALL there is (an absent switch is off, an absent list is empty -
+hosts, projects, devices, vault). A refusal naming `RemoteHosts`,
+`RemoteRunProjects` or `AdbAllowedDevices` is your workspace's declared
+reach, not a server bug: `delphi_report` it if you need more.
