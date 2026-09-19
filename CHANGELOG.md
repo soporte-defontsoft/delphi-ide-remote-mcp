@@ -32,11 +32,14 @@ the MCP `initialize` response (`serverInfo.version`).
   binaries renamed in one sweep. Targets provisioned by an older server keep a
   stale `McpLinuxDesktop` folder; the self-updater simply deploys the new one
   beside it.
-- **`add-profile` / `get-sdk`: seat profiles with the IDE closed.** Measured
-  with the operator: the IDE reads `RemoteProfiles` at STARTUP and writes its
-  in-memory list back at exit, so a seat created while it runs shows up only on
-  its next start — and a key deleted meanwhile can reappear. The tools and the
-  docs now say so.
+- **`add-profile` / `get-sdk`: what the IDE shows is no longer promised.** The
+  tools still write both halves — the `.profile` file and the registry seat —
+  but a day of measuring says the IDE lists ours erratically (its own profiles
+  always; the 32-bit IDE showed three of five with four in the registry, the
+  64-bit IDE showed none) and it rewrites that list from memory when it exits.
+  The docs now say what is certain instead: the FILES are what `paclient`,
+  MSBuild and every tool here read, and those work — connect, pull an SDK,
+  build, deploy and run all happen from them.
 
 ### Security
 - **The node obeys the server and nobody else.** Both builds now require a key
