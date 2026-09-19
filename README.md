@@ -250,7 +250,11 @@ whole family:
 | `LspCoreTest` | [`src/`](src) | Console **diagnostic harness for the LSP core**: probes a real `DelphiLSP.exe` with no MCP layer on top, for when the LSP conversation itself misbehaves. |
 | `McpLinuxDesktop` | [`src_linux_desktop_node/`](src_linux_desktop_node) | The **Linux desktop node** — the server's eyes and hands on a GNOME target. Its compiled binary travels as [`node/McpLinuxDesktop`](node) and self-deploys; building it needs the Linux64 SDK (once, in the SDK Manager — or `delphi_build`, which links against the `get-sdk` sysroot by itself). |
 
-Each folder carries its own README with the detail.
+Each folder carries its own README with the detail. Build everything with one
+command: **`BuildGroup.bat`** (`BuildGroup.bat quiet build Release` compiles
+the four legs — the node against the Linux64 sysroot — and refreshes
+`node/McpLinuxDesktop` so the release payload and the self-updating targets
+stay in step).
 
 ## Quickstart
 
