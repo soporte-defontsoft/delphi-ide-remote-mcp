@@ -238,12 +238,19 @@ desktops are not supported yet - the portal half would travel, the rest would
 not. On a GNOME target it leans only on libraries the desktop already ships
 (libdbus, libei): nothing to install, ever.
 
-**Working on this repo in the IDE?** Open [`MCP-delphi.groupproj`](MCP-delphi.groupproj):
-one project group with the four legs - the server (`DelphiLspMcp`), the style
-converter, the LSP-core test harness (`LspCoreTest`) and the Linux desktop
-node. Building the node from the IDE needs the Linux64 SDK registered once in
-its SDK Manager (see below); from `delphi_build`/msbuild it links against the
-sysroot that `get-sdk` provisioned.
+## One repo, one project group, four projects
+
+Open [`MCP-delphi.groupproj`](MCP-delphi.groupproj) and the IDE loads the
+whole family:
+
+| Project | Folder | What it is |
+|---|---|---|
+| **`DelphiLspMcp`** | [`src/`](src) | **The server itself** — the 42-tool MCP server this repo exists for. What ships in every release. |
+| `DelphiStyleConvert` | [`src/`](src) | Companion CLI that converts VCL⇄FMX style files; `delphi_styles` drives it. Ships next to the server. |
+| `LspCoreTest` | [`src/`](src) | Console **diagnostic harness for the LSP core**: probes a real `DelphiLSP.exe` with no MCP layer on top, for when the LSP conversation itself misbehaves. |
+| `McpLinuxDesktop` | [`src_linux_desktop_node/`](src_linux_desktop_node) | The **Linux desktop node** — the server's eyes and hands on a GNOME target. Its compiled binary travels as [`node/McpLinuxDesktop`](node) and self-deploys; building it needs the Linux64 SDK (once, in the SDK Manager — or `delphi_build`, which links against the `get-sdk` sysroot by itself). |
+
+Each folder carries its own README with the detail.
 
 ## Quickstart
 
