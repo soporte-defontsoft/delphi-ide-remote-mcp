@@ -1,0 +1,72 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{8CE8EDB2-1C71-4284-B6E5-466F36010B43}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="src_linux_desktop_node\McpLinuxDesktop.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="src\DelphiLspMcp.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="src\LspCoreTest.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="src\DelphiStyleConvert.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="McpLinuxDesktop">
+        <MSBuild Projects="src_linux_desktop_node\McpLinuxDesktop.dproj"/>
+    </Target>
+    <Target Name="McpLinuxDesktop:Clean">
+        <MSBuild Projects="src_linux_desktop_node\McpLinuxDesktop.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="McpLinuxDesktop:Make">
+        <MSBuild Projects="src_linux_desktop_node\McpLinuxDesktop.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DelphiLspMcp">
+        <MSBuild Projects="src\DelphiLspMcp.dproj"/>
+    </Target>
+    <Target Name="DelphiLspMcp:Clean">
+        <MSBuild Projects="src\DelphiLspMcp.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DelphiLspMcp:Make">
+        <MSBuild Projects="src\DelphiLspMcp.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="LspCoreTest">
+        <MSBuild Projects="src\LspCoreTest.dproj"/>
+    </Target>
+    <Target Name="LspCoreTest:Clean">
+        <MSBuild Projects="src\LspCoreTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="LspCoreTest:Make">
+        <MSBuild Projects="src\LspCoreTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DelphiStyleConvert">
+        <MSBuild Projects="src\DelphiStyleConvert.dproj"/>
+    </Target>
+    <Target Name="DelphiStyleConvert:Clean">
+        <MSBuild Projects="src\DelphiStyleConvert.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DelphiStyleConvert:Make">
+        <MSBuild Projects="src\DelphiStyleConvert.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="McpLinuxDesktop;DelphiLspMcp;LspCoreTest;DelphiStyleConvert"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="McpLinuxDesktop:Clean;DelphiLspMcp:Clean;LspCoreTest:Clean;DelphiStyleConvert:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="McpLinuxDesktop:Make;DelphiLspMcp:Make;LspCoreTest:Make;DelphiStyleConvert:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

@@ -238,6 +238,13 @@ desktops are not supported yet - the portal half would travel, the rest would
 not. On a GNOME target it leans only on libraries the desktop already ships
 (libdbus, libei): nothing to install, ever.
 
+**Working on this repo in the IDE?** Open [`MCP-delphi.groupproj`](MCP-delphi.groupproj):
+one project group with the four legs - the server (`DelphiLspMcp`), the style
+converter, the LSP-core test harness (`LspCoreTest`) and the Linux desktop
+node. Building the node from the IDE needs the Linux64 SDK registered once in
+its SDK Manager (see below); from `delphi_build`/msbuild it links against the
+sysroot that `get-sdk` provisioned.
+
 ## Quickstart
 
 **No Delphi installed, or don't want to compile?** Download the ready-made
