@@ -86,6 +86,8 @@ uses
   System.JSON,
   System.IOUtils,
   System.StrUtils,
+  System.Win.Registry,
+  Winapi.Windows,
   System.RegularExpressions,
   Lsp.RemoteRun,
   Lsp.Guard,
@@ -359,10 +361,122 @@ end;
   process argument. }
 function ProbeHostDenied(const AHost: string): string; forward;
 
+{ Los asientos del IDE. Medido 2026-09-19, arqueologia con David delante:
+  el Connection Profile Manager del IDE NO enumera los .profile del disco -
+  lee HKCU\Software\Embarcadero\BDS\<ver>\RemoteProfiles\<nombre> al
+  arrancar y lo reescribe al salir; el SDK Manager hace lo mismo con
+  PlatformSDKs\<sdk>. paclient y msbuild solo miran ficheros, asi que los
+  perfiles del MCP funcionaron un mes por linea de comandos siendo
+  invisibles en el IDE. Estos helpers escriben el asiento gemelo: la
+  contrasena va CIFRADA y es la misma cadena en fichero y registro
+  (verificado byte a byte), o sea que se copia tal cual. }
+procedure RegistrarPerfilEnIde(const AVersion, AName, APlat, AHost: string;
+  APort: Integer; const APasswordCifrada: string);
+var
+  R: TRegistry;
+begin
+  R := TRegistry.Create(KEY_WRITE);
+  try
+    R.RootKey := HKEY_CURRENT_USER;
+    if R.OpenKey('\Software\Embarcadero\BDS\' + AVersion +
+       '\RemoteProfiles\' + AName, True) then
+    begin
+      R.WriteString('Platform', APlat);
+      R.WriteString('HostName', AHost);
+      R.WriteInteger('PortNumber', APort);
+      R.WriteString('Password', APasswordCifrada);
+      R.WriteString('LocalRoot', '');
+      R.WriteInteger('PathCount', 0);
+      R.CloseKey;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure BorrarPerfilDelIde(const AVersion, AName: string);
+var
+  R: TRegistry;
+begin
+  R := TRegistry.Create(KEY_WRITE);
+  try
+    R.RootKey := HKEY_CURRENT_USER;
+    R.DeleteKey('\Software\Embarcadero\BDS\' + AVersion +
+      '\RemoteProfiles\' + AName);
+  finally
+    R.Free;
+  end;
+end;
+
+{ El gemelo del SDK en el SDK Manager del IDE: PlatformSDKs\Linux64.sdk
+  apuntando al sysroot que get-sdk acaba de aprovisionar. La tabla de rutas
+  y los objetos crt NO van clavados aqui: se leen del
+  bin\Linux64.defaultsdkpaths que trae CADA instalacion de Delphi (David,
+  2026-09-19: cada Delphi tiene su lista), igual que hace el asistente.
+  Devuelve True si escribio el asiento; el Default_Linux64 solo se pone si
+  faltaba (la eleccion del operador no se roba). }
+function RegistrarSdkEnIde(const AVersion, ARootDir, ASysRoot: string): Boolean;
+var
+  R: TRegistry;
+  Fichero, Xml, Clave: string;
+  M: TMatch;
+  I: Integer;
+begin
+  Result := False;
+  Fichero := TPath.Combine(TPath.Combine(
+    ExcludeTrailingPathDelimiter(ARootDir), 'bin'), 'Linux64.defaultsdkpaths');
+  if not TFile.Exists(Fichero) then
+    Exit;
+  Xml := TFile.ReadAllText(Fichero);
+  R := TRegistry.Create(KEY_WRITE);
+  try
+    R.RootKey := HKEY_CURRENT_USER;
+    Clave := '\Software\Embarcadero\BDS' + AVersion + '\PlatformSDKs';
+    if not R.OpenKey(Clave + '\Linux64.sdk', True) then
+      Exit;
+    R.WriteString('SDKName', 'Linux64.sdk');
+    R.WriteString('SDKDisplayName', 'Linux64 sysroot (MCP get-sdk)');
+    R.WriteString('PlatformName', 'Linux64');
+    R.WriteString('Version', '');
+    R.WriteString('SystemRoot', ExcludeTrailingPathDelimiter(ASysRoot));
+    R.WriteString('SDKStartupObj', TagValue(Xml, 'Profile_startupobj'));
+    R.WriteString('SDKEndCodeObj', TagValue(Xml, 'Profile_endcodeobj'));
+    R.WriteString('SDKStartupObjS', TagValue(Xml, 'Profile_startupobjS'));
+    R.WriteString('SDKEndCodeObjS', TagValue(Xml, 'Profile_endcodeobjS'));
+    I := 0;
+    for M in TRegEx.Matches(Xml,
+      '(?is)<Profile(Include|Library)\s+Include="([^"]+)">.*?' +
+      '<FileMask>([^<]*)</FileMask>.*?<SubDirs>([^<]*)</SubDirs>') do
+    begin
+      R.WriteString('Path' + IntToStr(I), M.Groups[2].Value);
+      R.WriteString('Mask' + IntToStr(I), M.Groups[3].Value.Trim);
+      if SameText(M.Groups[4].Value.Trim, 'True') then
+        R.WriteString('IncludeSubDir' + IntToStr(I), '1')
+      else
+        R.WriteString('IncludeSubDir' + IntToStr(I), '0');
+      R.WriteInteger('Type' + IntToStr(I),
+        Ord(SameText(M.Groups[1].Value, 'Library')));
+      Inc(I);
+    end;
+    R.WriteInteger('PathCount', I);
+    R.CloseKey;
+    if R.OpenKey(Clave, False) then
+    begin
+      if not R.ValueExists('Default_Linux64') then
+        R.WriteString('Default_Linux64', 'Linux64.sdk');
+      R.CloseKey;
+    end;
+    Result := I > 0;
+  finally
+    R.Free;
+  end;
+end;
+
 function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
   PaClient, ProfName, Host, Port, Plat, P, Cmd, Output, ProfileFile: string;
+  AvisoDup, F: string;
   ExitCode: Cardinal;
   Return: TJSONObject;
 begin
@@ -388,13 +502,35 @@ begin
     if SameText(P, Params.Platform.Trim) then Plat := P;
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(SR_PASERVER_NO_PACLIENT);
+  // Un nombre existente NUNCA se pisa (lo pudo crear el IDE u otro agente
+  // con una contrasena que este no conoce); y si otro perfil ya apunta al
+  // mismo host:puerto, se crea pero avisando - contra los perfiles a lo
+  // loco (David, 2026-09-19).
+  ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
+  if TFile.Exists(ProfileFile) then
+    Exit(Format(SR_PASERVER_PROFILE_EXISTS_FMT,
+      [ProfName, TagValue(TFile.ReadAllText(ProfileFile), 'Profile_host')]));
+  AvisoDup := '';
+  if TDirectory.Exists(ProfilesDir(Info.Version)) then
+    for F in TDirectory.GetFiles(ProfilesDir(Info.Version), '*.profile') do
+    try
+      if SameText(TagValue(TFile.ReadAllText(F), 'Profile_host'), Host) and
+         (TagValue(TFile.ReadAllText(F), 'Profile_port') = Port) then
+        AvisoDup := Format(SN_PASERVER_DUP_HOST_FMT,
+          [TPath.GetFileNameWithoutExtension(F)]);
+    except
+      // un perfil ilegible no impide crear el nuevo
+    end;
   Cmd := '"' + PaClient + '" --local "--host=' + Host + '" --port=' + Port +
     ' "--password=' + Params.Password + '" "--platform=' + Plat + '" "' +
     ProfName + '"';
   Output := RunCaptured(Cmd, 30000, ExitCode);
-  ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
   if (ExitCode = 0) and TFile.Exists(ProfileFile) then
   begin
+    // el asiento gemelo del IDE, con la contrasena YA cifrada por paclient
+    RegistrarPerfilEnIde(Info.Version, ProfName, Plat, Host,
+      StrToIntDef(Port, 64211),
+      TagValue(TFile.ReadAllText(ProfileFile), 'Profile_password'));
     Return := TJSONObject.Create;
     try
       Return.AddPair('profile', ProfName);
@@ -403,6 +539,9 @@ begin
       Return.AddPair('port', Port);
       Return.AddPair('platform', Plat);
       Return.AddPair('delphiVersion', Info.Version);
+      Return.AddPair('ideRegistered', TJSONBool.Create(True));
+      if AvisoDup <> '' then
+        Return.AddPair('aviso', AvisoDup);
       Return.AddPair('note', SN_PASERVER_PROFILE_OK);
       Result := Return.ToJSON;
     finally
@@ -560,6 +699,7 @@ begin
     on E: Exception do
       Exit('error: no pude borrar el perfil: ' + E.Message);
   end;
+  BorrarPerfilDelIde(Info.Version, ProfName);
   Result := Format(SN_PASERVER_PROFILE_REMOVED_FMT, [ProfName]);
 end;
 
@@ -869,6 +1009,10 @@ begin
 
       SdkFile := TPath.Combine(ProfilesDir(Info.Version), 'Linux64.sdk');
       TFile.WriteAllText(SdkFile, Sb.ToString, TEncoding.UTF8);
+      // y el asiento del SDK Manager del IDE, leyendo la tabla del
+      // defaultsdkpaths de ESTA instalacion (nada clavado)
+      if RegistrarSdkEnIde(Info.Version, Info.RootDir, SysRoot) then
+        Return.AddPair('ideSdkRegistered', TJSONBool.Create(True));
     finally
       Sb.Free;
       LibDirs.Free;

@@ -92,6 +92,29 @@ already-provisioned Linux on the next gesture. Nothing to compile, nothing
 to install by hand - and `delphi_build target=Deploy` remains the path for
 whoever develops the node itself.
 
+### The IDE finally sees what the agents build
+
+Archaeology measured live with the operator (2026-09-19): the IDE's
+Connection Profile Manager does NOT enumerate the `.profile` files on disk -
+it reads `HKCU\...\BDS\<ver>\RemoteProfiles\<name>` at startup and
+rewrites it at exit, and the SDK Manager does the same with
+`PlatformSDKs\<sdk>`. `paclient` and msbuild only look at the files, so for
+a month the MCP-created profiles worked on the command line while being
+invisible in the IDE. Now:
+
+- `add-profile` writes the IDE registry seat too (the encrypted password is
+  the SAME string in file and registry - verified byte by byte - so it is
+  copied verbatim; nobody ever needs to know it). `remove-profile` removes
+  the seat as well.
+- `add-profile` REFUSES an existing name (a credential is never silently
+  overwritten - it might be the IDE's or another agent's) and warns when
+  another profile already points at the same host:port, against profile
+  sprawl.
+- `get-sdk` also registers the sysroot in the IDE's SDK Manager, reading
+  the path table and crt objects from THAT install's own
+  `bin/Linux64.defaultsdkpaths` (nothing hardcoded: each Delphi carries its
+  list), and never steals an existing `Default_Linux64`.
+
 ### Mailboxes finally clean themselves
 
 Delivered agent mail (`messages/_entregados`) accumulated forever (since

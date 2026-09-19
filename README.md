@@ -410,7 +410,10 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98).
 - **Reach lists (per workspace)**: `GitRemotes` limits which hosts an *explicit* git URL may
   reach (clone/fetch/pull/push; configured remotes keep working by name) — measured to close
-  an SSRF/exfiltration primitive. `RemoteHosts` does the same for every PAServer dial —
+  an SSRF/exfiltration primitive. Profiles and SDKs created through the MCP appear in the
+  IDE too (`add-profile`/`get-sdk` write the registry seats the IDE actually reads — measured:
+  its managers ignore the `.profile` folder), an existing profile name is never overwritten,
+  and duplicates by host get a warning. `RemoteHosts` does the same for every PAServer dial —
   hand-named hosts AND connection profiles: since v0.98 having a profile in the IDE is not
   permission (the profile says HOW to connect; the workspace says WHETHER) — measured to
   close a port-scanning primitive. `*` (or `0.0.0.0`) declares "any host" on purpose, and

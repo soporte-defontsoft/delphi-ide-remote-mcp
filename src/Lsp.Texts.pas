@@ -597,14 +597,17 @@ const
     'packages (PAServer installers to download and run on the target) | ' +
     'profiles (registered connection profiles and SDKs) | add-profile ' +
     '(register a connection profile: name, host, password; optional port, ' +
-    'platform - the host must be one the operator allows in [Workspace] ' +
-    'RemoteHosts, because registering a profile IS declaring where this ' +
-    'machine may connect) | remove-profile (delete a profile by name; they ' +
-    'live outside the workspace, so there is no trash for them) | ' +
+    'platform - the host must be one the workspace allows in RemoteHosts, ' +
+    'because registering a profile IS declaring where this machine may ' +
+    'connect; an existing name is refused, never overwritten, and the new ' +
+    'profile shows up in the IDE too) | remove-profile (delete a profile ' +
+    'by name, from the IDE list too; they live outside the workspace, so ' +
+    'there is no trash for them) | ' +
     'test-connection (with name: full handshake against that profile; with ' +
     'host+port and no name: raw TCP reachability probe, same host rule) | ' +
     'get-sdk (pull the SDK/sysroot from the PAServer of profile "name" and ' +
-    'register it for delphi_build; can take minutes) | remote-run (execute ' +
+    'register it for delphi_build AND in the IDE SDK Manager; can take ' +
+    'minutes) | remote-run (execute ' +
     '"exe" on the target of profile "name" and return its exit code and ' +
     'output - NOTHING has to be installed there: PAServer itself runs it. It ' +
     'runs the program THAT PROJECT deployed and nothing else on that ' +
@@ -764,9 +767,18 @@ const
     '(sondeo TCP, sin credenciales).';
 
   SN_PASERVER_PROFILE_OK =
-    'Profile stored with the password encrypted inside. Verify the link ' +
-    'with command=test-connection, then delphi_build with this platform ' +
-    'builds against the target PAServer.';
+    'Profile stored with the password encrypted inside, and REGISTERED in ' +
+    'the IDE too (its Connection Profile Manager reads the registry, not ' +
+    'the .profile folder - measured 2026-09-19). Verify the link with ' +
+    'command=test-connection, then delphi_build with this platform builds ' +
+    'against the target PAServer.';
+  SR_PASERVER_PROFILE_EXISTS_FMT =
+    'RECHAZADO: ya existe un perfil "%s" (apunta a %s). Una credencial no ' +
+    'se machaca en silencio: usalo tal cual (test-connection name=%0:s) o ' +
+    'retiralo antes con command=remove-profile.';
+  SN_PASERVER_DUP_HOST_FMT =
+    'ojo: el perfil "%s" ya apunta a ese mismo host y puerto - valora ' +
+    'reutilizarlo en vez de duplicar perfiles.';
 
   SN_PASERVER_CONNECTED =
     'PAServer alive and credentials accepted. delphi_build can now target ' +
