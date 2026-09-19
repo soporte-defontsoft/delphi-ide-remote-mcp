@@ -1,4 +1,4 @@
-﻿program McpDesktopNode;
+program McpDesktopNode;
 
 {$APPTYPE CONSOLE}
 
@@ -21,6 +21,31 @@ uses
   Mld.DBus in 'Mld.DBus.pas',
   Mld.Eis in 'Mld.Eis.pas';
 {$ENDIF}
+
+const
+{$I NodeKey.inc}
+
+{ Los argumentos van DESPLAZADOS uno: el primero es la clave que prueba que
+  llama el servidor MCP, y las ordenes empiezan detras. Todo el reparto de
+  abajo habla por estas dos funciones y no se entera. }
+function Arg(AIndice: Integer): string;
+begin
+  Result := ParamStr(AIndice + 1);
+end;
+
+function Args: Integer;
+begin
+  Result := ParamCount - 1;
+  if Result < 0 then
+    Result := 0;
+end;
+
+{ El pestillo: sin la clave del servidor, el nodo no mira ni toca nada.
+  Ver NodeKey.inc para lo que esto protege de verdad (y lo que no). }
+function LlamaElServidor: Boolean;
+begin
+  Result := ParamStr(1) = NODE_KEY;
+end;
 
 {$IFDEF MSWINDOWS}
 { ------------------------------------------------------------- WINDOWS --- }
@@ -53,7 +78,7 @@ begin
     Writeln;
 
     { Mismas ordenes que en Linux y mismas coordenadas: las de LA CAPTURA. }
-    Orden := LowerCase(ParamStr(1));
+    Orden := LowerCase(Arg(1));
     Hizo := False;
     if Orden = 'ventanas' then
     begin
@@ -67,13 +92,13 @@ begin
           [V.X, V.Y, V.Ancho, V.Alto, V.Titulo]));
       Hizo := Length(Lista) > 0;
     end
-    else if (Orden = 'escribe') and (ParamCount >= 4) then
+    else if (Orden = 'escribe') and (Args >= 4) then
     begin
-      ObjX := StrToIntDef(ParamStr(2), -1);
-      ObjY := StrToIntDef(ParamStr(3), -1);
+      ObjX := StrToIntDef(Arg(2), -1);
+      ObjY := StrToIntDef(Arg(3), -1);
       Frase := '';
-      for I := 4 to ParamCount do
-        Frase := Frase + IfThen(Frase = '', '', ' ') + ParamStr(I);
+      for I := 4 to Args do
+        Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
       Hizo := Escritorio.Pulsar(ObjX, ObjY);
       if not Hizo then
         Writeln('  no pude pulsar en el campo: ', Escritorio.Error)
@@ -87,31 +112,31 @@ begin
           Writeln('  pulse bien pero no pude escribir: ', Escritorio.Error);
       end;
     end
-    else if (Orden = 'texto') and (ParamCount >= 2) then
+    else if (Orden = 'texto') and (Args >= 2) then
     begin
       Frase := '';
-      for I := 2 to ParamCount do
-        Frase := Frase + IfThen(Frase = '', '', ' ') + ParamStr(I);
+      for I := 2 to Args do
+        Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
       Hizo := Escritorio.Escribir(Frase);
       if Hizo then
         Writeln('  ESCRITO: ', Frase)
       else
         Writeln('  no pude escribir: ', Escritorio.Error);
     end
-    else if (Orden = 'tecla') and (ParamCount >= 2) then
+    else if (Orden = 'tecla') and (Args >= 2) then
     begin
       { Por NOMBRE ('escape', 'enter'), que es lo mismo en los dos sistemas;
         un numero se toma como codigo virtual de Windows. }
-      Tecla := TeclaPorNombre(ParamStr(2));
+      Tecla := TeclaPorNombre(Arg(2));
       if Tecla = 0 then
-        Tecla := Word(StrToIntDef(ParamStr(2), 0));
+        Tecla := Word(StrToIntDef(Arg(2), 0));
       if Tecla = 0 then
-        Writeln('  no conozco la tecla ', ParamStr(2))
+        Writeln('  no conozco la tecla ', Arg(2))
       else
       begin
         Hizo := Escritorio.Combinacion([Tecla]);
         if Hizo then
-          Writeln('  TECLA ', ParamStr(2), ' enviada')
+          Writeln('  TECLA ', Arg(2), ' enviada')
         else
           Writeln('  no pude enviar la tecla: ', Escritorio.Error);
       end;
@@ -124,10 +149,10 @@ begin
       else
         Writeln('  no pude enviar Alt+Tab: ', Escritorio.Error);
     end
-    else if ParamCount >= 2 then
+    else if Args >= 2 then
     begin
-      ObjX := StrToIntDef(ParamStr(1), -1);
-      ObjY := StrToIntDef(ParamStr(2), -1);
+      ObjX := StrToIntDef(Arg(1), -1);
+      ObjY := StrToIntDef(Arg(2), -1);
       if (ObjX >= 0) and (ObjY >= 0) then
       begin
         Hizo := Escritorio.Pulsar(ObjX, ObjY);
@@ -288,7 +313,7 @@ begin
             [Manos.Region.Ancho, Manos.Region.Alto, Manos.Escala]));
           { Las coordenadas son las de la CAPTURA: quien llama mide sobre la
             imagen y ya esta. La escala la aplica el nodo. }
-          Orden := LowerCase(ParamStr(1));
+          Orden := LowerCase(Arg(1));
           Hizo := False;
           if Orden = 'ventanas' then
           begin
@@ -302,15 +327,15 @@ begin
             else
               Writeln('  no pude abrir la vista: ', Manos.Error);
           end
-          else if (Orden = 'escribe') and (ParamCount >= 4) then
+          else if (Orden = 'escribe') and (Args >= 4) then
           begin
             { Un solo viaje: pulsa para dar el foco y teclea. Es el gesto
               real -"escribe esto ahi"- y paga el arranque UNA vez. }
-            ObjX := StrToIntDef(ParamStr(2), -1);
-            ObjY := StrToIntDef(ParamStr(3), -1);
+            ObjX := StrToIntDef(Arg(2), -1);
+            ObjY := StrToIntDef(Arg(3), -1);
             Frase := '';
-            for I := 4 to ParamCount do
-              Frase := Frase + IfThen(Frase = '', '', ' ') + ParamStr(I);
+            for I := 4 to Args do
+              Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
             Hizo := Manos.Pulsar(ObjX, ObjY);
             if not Hizo then
               Writeln('  no pude pulsar en el campo: ', Manos.Error)
@@ -324,24 +349,24 @@ begin
                 Writeln('  pulse bien pero no pude escribir: ', Manos.Error);
             end;
           end
-          else if (Orden = 'texto') and (ParamCount >= 2) then
+          else if (Orden = 'texto') and (Args >= 2) then
           begin
             { Todo lo que venga detras es el texto, espacios incluidos. }
             Frase := '';
-            for ObjX := 2 to ParamCount do
-              Frase := Frase + IfThen(Frase = '', '', ' ') + ParamStr(ObjX);
+            for ObjX := 2 to Args do
+              Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(ObjX);
             Hizo := Manos.Escribir(Frase);
             if Hizo then
               Writeln('  ESCRITO: ', Frase)
             else
               Writeln('  no pude escribir: ', Manos.Error);
           end
-          else if (Orden = 'tecla') and (ParamCount >= 2) then
+          else if (Orden = 'tecla') and (Args >= 2) then
           begin
             { Una tecla suelta, en codigo evdev: Escape 1, Tab 15, Enter 28. }
-            Hizo := Manos.Combinacion([StrToIntDef(ParamStr(2), 0)]);
+            Hizo := Manos.Combinacion([StrToIntDef(Arg(2), 0)]);
             if Hizo then
-              Writeln('  TECLA ', ParamStr(2), ' enviada')
+              Writeln('  TECLA ', Arg(2), ' enviada')
             else
               Writeln('  no pude enviar la tecla: ', Manos.Error);
           end
@@ -354,10 +379,10 @@ begin
             else
               Writeln('  no pude enviar Alt+Tab: ', Manos.Error);
           end
-          else if ParamCount >= 2 then
+          else if Args >= 2 then
           begin
-            ObjX := StrToIntDef(ParamStr(1), -1);
-            ObjY := StrToIntDef(ParamStr(2), -1);
+            ObjX := StrToIntDef(Arg(1), -1);
+            ObjY := StrToIntDef(Arg(2), -1);
             if (ObjX >= 0) and (ObjY >= 0) then
             begin
               Hizo := Manos.Pulsar(ObjX, ObjY);
@@ -407,6 +432,14 @@ end;
   de este mismo reparto: el protocolo de ordenes no cambia. }
 begin
   try
+    if not LlamaElServidor then
+    begin
+      Writeln('McpDesktopNode - nodo de escritorio del Delphi IDE Remote MCP.');
+      Writeln('  Este programa no se usa a mano: lo lanza el servidor MCP, que');
+      Writeln('  es quien decide (por workspace) si un agente puede ver y tocar');
+      Writeln('  este escritorio. Sin esa llamada no hace nada.');
+      Exit;
+    end;
 {$IF DEFINED(MSWINDOWS)}
     EjecutarWindows;
 {$ELSEIF DEFINED(LINUX)}

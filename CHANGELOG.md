@@ -39,6 +39,13 @@ the MCP `initialize` response (`serverInfo.version`).
   docs now say so.
 
 ### Security
+- **The node obeys the server and nobody else.** Both builds now require a key
+  that only this server passes (`NodeKey.inc`, shared by the two projects so
+  they cannot drift): run the binary by hand and it prints what it is and
+  exits without looking at or touching anything. It is a latch, not a lock —
+  the node runs as the same user who could execute it and the key travels
+  inside the binary — so it stops accidental or careless use, not a determined
+  local user. Said plainly wherever it is documented.
 - `AllowDesktopControl` (per workspace, absent = OFF, never inherited) gates
   `delphi_desktop`, which is also refused outright to a read-only credential.
   Its two siblings watch a test machine; this one watches the operator's own

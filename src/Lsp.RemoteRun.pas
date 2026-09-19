@@ -39,6 +39,10 @@ const
   { La carpeta y el binario del nodo de escritorio en el target. }
   NODE_PROJECT = 'McpDesktopNode';
 
+{ La clave con la que el nodo reconoce que le llama ESTE servidor. Vive en
+  un solo sitio para que los dos proyectos no se desincronicen. }
+{$I ..\src_desktop_node\NodeKey.inc}
+
 { El nodo de escritorio EMPAQUETADO con el servidor: node\McpDesktopNode
   junto al exe. '' si la distribucion no lo trae. }
 function BundledNodePath: string; overload;

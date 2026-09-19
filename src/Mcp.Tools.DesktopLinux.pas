@@ -168,7 +168,12 @@ begin
       Exit;
     Proj := NODE_PROJECT;
   end;
-  Res := RemoteRun(Params.Profile.Trim, Proj, '', Args, 60000);
+  { El nodo del target solo obedece al servidor: la clave (NodeKey.inc) va
+    delante de la orden, igual que en el escritorio local. Un nodo ya
+    desplegado por un servidor viejo no la pide, pero EnsureNodeCurrent lo
+    habra sustituido antes de llegar aqui. }
+  Res := RemoteRun(Params.Profile.Trim, Proj, '',
+    Trim(NODE_KEY + ' ' + Args), 60000);
   try
     Salida := '';
     if Res.GetValue('output') <> nil then

@@ -39,6 +39,14 @@ is identical: coordinates are pixels OF THE CAPTURE and the node answers with
 | `Mld.X11.pas` | The eyes, part one: enumerate windows via libX11 at runtime (replaces xdotool — one dependency fewer) |
 | `Mld.Win.pas` | Windows: eyes (GDI capture of the virtual desktop), hands (`SendInput`: click, Unicode typing, key combos) and the window list, with DPI awareness asked for at runtime |
 
+**It only answers the server.** Both builds require a key that the MCP server
+passes as the first argument (`NodeKey.inc`, included by the node and by the
+server so the two cannot drift). Launched by hand it prints what it is and
+exits, touching nothing. Be honest about what that buys: the node runs as the
+same user who could run it, and the key lives inside the binary, so this is a
+latch against accidents and careless scripts — not a lock against someone with
+access to the machine and an interest in opening it.
+
 **You normally never build this.** The compiled Release ships as
 [`node/McpDesktopNode`](../node) inside every release zip, and the server
 deploys/updates it on targets by itself (the `node.ver` SHA-256 stamp). Build

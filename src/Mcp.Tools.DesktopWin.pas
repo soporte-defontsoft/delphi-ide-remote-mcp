@@ -69,7 +69,8 @@ uses
   System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,
-  Lsp.BuildRunner;
+  Lsp.BuildRunner,
+  Lsp.RemoteRun;   { NODE_KEY: la clave la sirve el mismo sitio para los dos nodos }
 
 const
   NODO_TIMEOUT = 30000;   { un gesto no deberia pasar de unos segundos }
@@ -158,7 +159,10 @@ begin
   { screenshot y status corren el nodo sin argumentos: siempre captura al
     terminar y cuenta lo que ve del escritorio. }
 
-  Salida := RunCaptured(Format('"%s" %s', [Nodo, Args]), NODO_TIMEOUT, Codigo);
+  { El nodo solo obedece al servidor: la clave va SIEMPRE delante (NodeKey.inc),
+    y aqui solo se llega si el workspace declaro AllowDesktopControl=1. }
+  Salida := RunCaptured(Format('"%s" %s %s', [Nodo, NODE_KEY, Args]),
+    NODO_TIMEOUT, Codigo);
 
   Return := TJSONObject.Create;
   try

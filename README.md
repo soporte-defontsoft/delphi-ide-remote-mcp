@@ -30,7 +30,7 @@ points that idea at the machine you are already talking to, which is where RAD S
 lives: screenshot the whole desktop, click the pixel you measured, type into it, press a
 key by name, list the windows. It reaches what no other tool can — **the IDE itself**, an
 installer, a modal dialog that blocks a build, a Windows build of your app running right
-there. It needs no PAServer and deploys nothing: the same node, run locally. Its debut
+there. It needs no PAServer and deploys nothing: the same node, run locally. The node **only answers this server**: it wants a key the server passes, so running the binary by hand does nothing at all (a latch against accidents, not a lock against a determined local user — see [`node/`](node)). Its debut
 was a real case, driven entirely over MCP: opening the IDE's Options, walking to the
 Connection Profile Manager and reading the list, to settle where the IDE really keeps
 its connection profiles. Because this one watches the **operator's own screen** and moves
