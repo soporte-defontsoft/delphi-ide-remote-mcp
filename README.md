@@ -3,6 +3,8 @@
 [![Latest release](https://img.shields.io/github/v/release/soporte-defontsoft/delphi-ide-remote-mcp?label=download&color=blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+![Delphi IDE Remote MCP — RAD Studio as a remote backend for AI programming agents: any MCP client on one side, Windows/Linux/Android test targets on the other, one workspace-jailed server in the middle](docs/media/hero.webp)
+
 **An MCP server that remote-controls a full RAD Studio (Delphi IDE) installation — language server, build system, deploy chain — so you can develop in Delphi from any platform. And when your app lands on an Android device or a Linux GNOME desktop, the agent gets eyes and hands there too: it sees the real screen and drives the running app, remotely.**
 
 📦 **[Download the ready-made Windows binary →](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)** (no Delphi needed to *run* the server binary; the machine it runs on needs its own licensed RAD Studio — see [Quickstart](#quickstart)).
