@@ -84,7 +84,7 @@ day the cut went all the way (operator decision, three times over):
 
 ### The Linux desktop node ships with the server and keeps itself current
 
-The distribution now carries the compiled node (`node/McpLinuxDesktop`).
+The distribution now carries the compiled node (`node/McpDesktopNode`).
 With `project` empty, `delphi_adb_linux` pushes it to the target on first
 use and stamps `node.ver` (the binary's SHA-256) next to it; the stamp is
 checked once per profile and session, so a server upgrade heals every

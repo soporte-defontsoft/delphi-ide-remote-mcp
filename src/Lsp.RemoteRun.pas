@@ -37,9 +37,9 @@ uses
 
 const
   { La carpeta y el binario del nodo de escritorio en el target. }
-  NODE_PROJECT = 'McpLinuxDesktop';
+  NODE_PROJECT = 'McpDesktopNode';
 
-{ El nodo de escritorio EMPAQUETADO con el servidor: node\McpLinuxDesktop
+{ El nodo de escritorio EMPAQUETADO con el servidor: node\McpDesktopNode
   junto al exe. '' si la distribucion no lo trae. }
 function BundledNodePath: string;
 

@@ -1,4 +1,4 @@
-# `src_linux_desktop_node/` — sources of the desktop node
+# `src_desktop_node/` — sources of the desktop node
 
 The **node** is the tiny Delphi console program that `delphi_adb_linux` runs on
 the Linux target: the server's eyes and hands there. One short-lived process
@@ -40,11 +40,11 @@ is identical: coordinates are pixels OF THE CAPTURE and the node answers with
 | `Mld.Win.pas` | Windows: eyes (GDI capture of the virtual desktop), hands (`SendInput`: click, Unicode typing, key combos) and the window list, with DPI awareness asked for at runtime |
 
 **You normally never build this.** The compiled Release ships as
-[`node/McpLinuxDesktop`](../node) inside every release zip, and the server
+[`node/McpDesktopNode`](../node) inside every release zip, and the server
 deploys/updates it on targets by itself (the `node.ver` SHA-256 stamp). Build
 it only to work ON the node: from the IDE (needs the Linux64 SDK in the SDK
 Manager) or `delphi_build platform=Linux64`, or raw msbuild adding
 `/p:PlatformSDK=Linux64.sdk` — without that property the linker dies with
 `cannot find -lgcc_s` (measured). After a rebuild, copy the Release binary
-over `node/McpLinuxDesktop`: every provisioned target updates itself on its
+over `node/McpDesktopNode`: every provisioned target updates itself on its
 next gesture.

@@ -841,7 +841,7 @@ const
     'lists them). The desktop is THAT machine''s, never the agent''s.';
   SP_ADBLINUX_PROJECT =
     'OPTIONAL since v0.98: empty = the node BUNDLED with this server ' +
-    '(node\McpLinuxDesktop next to the exe) is deployed to the target on ' +
+    '(node\McpDesktopNode next to the exe) is deployed to the target on ' +
     'first use and updated when its version changes - nothing to compile. ' +
     'Give the absolute path of the node''s .dproj only when you develop the ' +
     'node itself and deployed it with delphi_build target=Deploy.';
@@ -861,7 +861,7 @@ const
     'de escribir: es el gesto real, "escribe esto aqui", y arranca una sola vez.';
   SR_ADBLINUX_NONODE =
     'delphi_adb_linux: ni "project" ni nodo empaquetado. O el operador deja ' +
-    'el binario Linux del nodo en node\McpLinuxDesktop junto al servidor ' +
+    'el binario Linux del nodo en node\McpDesktopNode junto al servidor ' +
     '(la distribucion lo trae: entonces se despliega y actualiza solo), o ' +
     'pasa project= con el .dproj del nodo desplegado via delphi_build ' +
     'target=Deploy.';

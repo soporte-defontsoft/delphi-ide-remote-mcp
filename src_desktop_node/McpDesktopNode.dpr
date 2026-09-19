@@ -1,4 +1,4 @@
-﻿program McpLinuxDesktop;
+﻿program McpDesktopNode;
 
 {$APPTYPE CONSOLE}
 

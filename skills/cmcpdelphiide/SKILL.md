@@ -154,7 +154,7 @@ the screen scale itself; always measure ON the screenshot it returned) ->
 -> `status` says whether the desktop is reachable and what to ask for.
 
 It runs under the SAME workspace switches as remote-run: `AllowRemoteRun`,
-`McpLinuxDesktop` (or the wildcard `all`) in `RemoteRunProjects`, and the
+`McpDesktopNode` (or the wildcard `all`) in `RemoteRunProjects`, and the
 profile's host inside `RemoteHosts`. The target needs a graphical session
 with PAServer started INSIDE it and the screen-capture permission granted
 once - a mute screenshot timeout means exactly that permission.

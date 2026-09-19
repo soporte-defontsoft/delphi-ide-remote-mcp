@@ -4,9 +4,9 @@
         <ProjectFileVersion>12</ProjectFileVersion>
     </ProjectExtensions>
     <ItemGroup Condition="'$(Platform)'=='Linux64' And '$(Config)'=='Debug'">
-        <DeployFile Include="Linux64\Debug\McpLinuxDesktop">
-            <RemoteDir>McpLinuxDesktop\</RemoteDir>
-            <RemoteName>McpLinuxDesktop</RemoteName>
+        <DeployFile Include="Linux64\Debug\McpDesktopNode">
+            <RemoteDir>McpDesktopNode\</RemoteDir>
+            <RemoteName>McpDesktopNode</RemoteName>
             <DeployClass>ProjectOutput</DeployClass>
             <Operation>1</Operation>
             <LocalCommand/>
@@ -16,9 +16,9 @@
         </DeployFile>
     </ItemGroup>
     <ItemGroup Condition="'$(Platform)'=='Linux64' And '$(Config)'=='Release'">
-        <DeployFile Include="Linux64\Release\McpLinuxDesktop">
-            <RemoteDir>McpLinuxDesktop\</RemoteDir>
-            <RemoteName>McpLinuxDesktop</RemoteName>
+        <DeployFile Include="Linux64\Release\McpDesktopNode">
+            <RemoteDir>McpDesktopNode\</RemoteDir>
+            <RemoteName>McpDesktopNode</RemoteName>
             <DeployClass>ProjectOutput</DeployClass>
             <Operation>1</Operation>
             <LocalCommand/>
