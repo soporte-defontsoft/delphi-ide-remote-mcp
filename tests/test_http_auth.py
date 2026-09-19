@@ -180,7 +180,7 @@ try:
 finally:
     shutil.rmtree(tmpdir, ignore_errors=True)
 
-# --- read-only access: ReadOnlyToken + AnonymousReadOnly ---------------------
+# --- read-only access: ReadOnlyToken (el anonimo murio en v0.98: 401) --------
 RO_PORT = 4241
 RO_TOKEN = 'ro-token-456'
 REPO = os.path.abspath(os.path.join(HERE, '..'))
@@ -194,10 +194,11 @@ try:
     with open(paspath, 'w') as f:
         f.write('unit Sample;\r\ninterface\r\nimplementation\r\nend.\r\n')
     with open(os.path.join(tmpdir3, 'settings.ini'), 'w') as f:
+        # v0.98: no generic [Workspace] section and no anonymous mode - only
+        # named workspaces exist, and tokenless requests answer 401
         f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
-                '[Workspace]\nAnonymousReadOnly=1\nRoots=%s\n\n'
                 '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\nAllowRun=1\n'
-                % (RO_PORT, tmpdir3, TOKEN, RO_TOKEN, tmpdir3))
+                % (RO_PORT, TOKEN, RO_TOKEN, tmpdir3))
     env3 = dict(os.environ)
     env3.pop('DELPHI_MCP_TOKEN', None)
     proc3 = subprocess.Popen([exe3, '--http'], env=env3,

@@ -685,11 +685,11 @@ Your MAILBOX: messages the operator leaves for you (the way back of delphi_repor
 
 Operator side: drop a `.md` in `messages\<agent>\` or `messages\` next to the server exe (`scripts\Enviar-Mensaje.ps1 -Agente dsh -Titulo ... -Texto ...`). Delivered files move to `messages\_entregados\<agent>\`.
 
-## Knowledge vault (optional — only when `[Vault] Path` is configured)
+## Knowledge vault (optional — only for workspaces that declare `VaultPath=`)
 
 Persistent memory: a folder of Markdown notes linked with `[[wikilinks]]`.
 These tools are **not registered at all** unless a vault is configured, and the
-three write ones need `[Vault] ReadOnly=0` on top of a read-write credential.
+three write ones need the workspace's `VaultReadOnly=0` on top of a read-write credential.
 
 - **Start with `vault_read` and NO path**: it returns the vault's rules plus its
   index, which is how you decide what to load. Lazy loading — never read a vault

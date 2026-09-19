@@ -10,10 +10,13 @@ cp -r examples/vault ~/MyVault        # or copy the folder in Explorer
 ```
 
 ```ini
-; settings.ini next to the executable
-[Vault]
-Path=C:\Users\you\MyVault
-ReadOnly=1        ; 0 when you want the agent to write too
+; settings.ini next to the executable - the vault belongs to a WORKSPACE
+; (v0.98: nothing is global; two workspaces may remember in different vaults)
+[Workspace.MyTeam]
+Token=its-secret
+Roots=D:\Projects\MySpace
+VaultPath=C:\Users\you\MyVault
+VaultReadOnly=1   ; 0 when you want the agent to write too
 ```
 
 Restart the server. Connect an agent and it will be told, at connect time, that
