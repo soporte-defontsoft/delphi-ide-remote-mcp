@@ -8,6 +8,8 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.99.1-beta] - 2026-09-20
+
 ### Added
 - **`delphi_paserver command=reseat`**: repairs the IDE's profile list. It
   walks the `.profile` files and writes the registry seats that are missing,
