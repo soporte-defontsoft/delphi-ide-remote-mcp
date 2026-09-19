@@ -1,6 +1,6 @@
 ---
 name: cmcpdelphiide
-description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb, the Linux desktop via delphi_adb_linux) and how to move files and logs the right way.
+description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb, the Linux desktop via delphi_adb_linux, this server's own Windows desktop via delphi_desktop) and how to move files and logs the right way.
 ---
 
 # Delphi IDE Remote MCP - field guide for agents
@@ -158,6 +158,35 @@ It runs under the SAME workspace switches as remote-run: `AllowRemoteRun`,
 profile's host inside `RemoteHosts`. The target needs a graphical session
 with PAServer started INSIDE it and the screen-capture permission granted
 once - a mute screenshot timeout means exactly that permission.
+
+## This server's own desktop (`delphi_desktop`) - eyes and hands
+
+The same idea pointed at the Windows machine you are already talking to,
+the one with RAD Studio. No PAServer, nothing deployed: the same node,
+run locally. Use it for what no other tool reaches - the IDE's own
+dialogs, an installer, a modal that blocks a build, a Windows build of
+the app running there.
+
+Flow: `screenshot` brings the whole desktop back as a PNG -> LOOK at it,
+measure the pixel -> `tap x= y=` -> `type text=` (Unicode, so accents
+arrive whatever the keyboard layout is; with `x`,`y` it clicks first) ->
+`key code=` presses one key **by NAME** (escape, enter, tab, super,
+f1..f12 - a number is refused, because those codes are not the Linux
+ones) -> `windows` lists the visible windows with title and rectangle,
+which is usually the fastest way to find where to click. Every answer
+but `status` carries a fresh screenshot.
+
+Coordinates are REAL pixels and the node is DPI-aware, so what it reports
+matches the screenshot exactly: measure there or on `windows`, and never
+mix in coordinates from a tool that is not DPI-aware (on a 125% display
+the same window sits 250 px away).
+
+Two conditions: `AllowDesktopControl=1` in YOUR workspace (absent = off,
+never inherited; read-only credentials are refused outright), and an
+UNLOCKED session - a locked Windows answers "Access denied" to any
+capture, the twin of a Linux with no DISPLAY, and the tool says so.
+**This is the operator's own screen and mouse**: whatever they have open
+is in frame. Do the gesture you came for and nothing else.
 
 ## Create and build
 

@@ -8,6 +8,42 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [0.99.0-beta] - 2026-09-19
+
+### Added
+- **`delphi_desktop`: eyes and hands on the server's own Windows desktop.** The
+  third leg of the family — `delphi_adb` on Android, `delphi_adb_linux` on a
+  Linux target, and now the machine the agent is already talking to. Screenshot
+  the whole desktop, click a measured pixel, type (Unicode, so accents arrive
+  whatever the keyboard layout is), press a key BY NAME, list the visible
+  windows with title and rectangle. It drives what no other tool reaches: the
+  IDE itself, an installer, a modal dialog, a Windows build of your app.
+  It runs the SAME bundled node, locally: no PAServer, nothing deployed.
+- **The desktop node speaks Windows too.** One program, two desktops: the same
+  `.dpr` and the same commands build for Linux (XDG portal + libei + X11,
+  GNOME) and for Windows (`Mld.Win.pas`: GDI capture and `SendInput`), chosen
+  by `{$IFDEF}`, with the slot for macOS left open. The hand-written PNG writer
+  is now shared by both. `node/` carries BOTH builds and each target gets the
+  one that fits it (read from the PAServer profile's own platform).
+
+### Changed
+- **The node project is now `McpDesktopNode`** (was `McpLinuxDesktop`, a name
+  that stopped being true): project, folder (`src_desktop_node/`) and bundled
+  binaries renamed in one sweep. Targets provisioned by an older server keep a
+  stale `McpLinuxDesktop` folder; the self-updater simply deploys the new one
+  beside it.
+- **`add-profile` / `get-sdk`: seat profiles with the IDE closed.** Measured
+  with the operator: the IDE reads `RemoteProfiles` at STARTUP and writes its
+  in-memory list back at exit, so a seat created while it runs shows up only on
+  its next start — and a key deleted meanwhile can reappear. The tools and the
+  docs now say so.
+
+### Security
+- `AllowDesktopControl` (per workspace, absent = OFF, never inherited) gates
+  `delphi_desktop`, which is also refused outright to a read-only credential.
+  Its two siblings watch a test machine; this one watches the operator's own
+  screen and moves the operator's own mouse.
+
 ## [0.98.0-beta] - 2026-09-19
 
 ### The Python runner is gone: PAServer itself executes

@@ -107,9 +107,12 @@ CONTENT = [
     (os.path.join(REPO, 'settings.example.ini'), 'settings.example.ini'),
     # runner/mcp-runner.py salio del zip en v0.98: el destino ya no necesita
     # NADA instalado (PAServer ejecuta por flag 5). En su lugar viaja el
-    # NODO de escritorio Linux ya compilado: delphi_adb_linux lo despliega
-    # y actualiza solo (sello node.ver) sin compilar nada.
+    # NODO de escritorio ya compilado, EN SUS DOS SABORES (v0.99): el ELF va
+    # a un Linux por delphi_adb_linux (que lo despliega y actualiza solo por
+    # sello node.ver) y el .exe se queda aqui, que es lo que ejecuta
+    # delphi_desktop en la maquina del propio servidor.
     (os.path.join(REPO, 'node', 'McpDesktopNode'), 'node/McpDesktopNode'),
+    (os.path.join(REPO, 'node', 'McpDesktopNode.exe'), 'node/McpDesktopNode.exe'),
     (os.path.join(REPO, 'README.md'), 'README.md'),
     (os.path.join(REPO, 'CHANGELOG.md'), 'CHANGELOG.md'),
     (os.path.join(REPO, 'LICENSE'), 'LICENSE'),
