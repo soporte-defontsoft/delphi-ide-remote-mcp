@@ -284,6 +284,47 @@ begin
     Resp.Free;
   end;
 
+  // A Pascal routine has TWO definition lines: the interface (or forward)
+  // declaration and the implementation. The engine answers one or the other
+  // depending on WHERE you ask, and the two never compare equal - so asking
+  // "who uses this" from the BODY confirmed the body and threw every real
+  // call site away as a homonym. Measured 2026-09-20 on OneTool: 4 real
+  // uses, 1 reported from the body, 3 from a call site. An agent that goes
+  // delphi_symbols (which hands you DECLARATION lines) -> delphi_references
+  // lands exactly on the bad side and reads "nobody uses this" about a
+  // routine with two callers - a wrong answer, not a missing one.
+  // So resolve the counterpart ONCE, here, and accept both as one symbol.
+  var TargetTwin: Integer := -1;
+  var TargetPath := TLspClient.UriToPath(TargetUri);
+  if TFile.Exists(TargetPath) then
+  begin
+    var TwinLines := TStringList.Create;
+    try
+      TwinLines.Text := TLspClient.LoadSourceText(TargetPath);
+      if (TargetLine >= 0) and (TargetLine < TwinLines.Count) then
+      begin
+        // Same 1-based-Pos-as-character convention the candidate loop uses
+        // below: a position one char into the identifier, never its edge.
+        var TwinCol := Pos(Ident.ToLower, TwinLines[TargetLine].ToLower);
+        if TwinCol > 0 then
+        begin
+          Resp := Client.Definition(TargetUri, TargetLine, TwinCol);
+          try
+            var TwinUri: string;
+            var TwinLine: Integer;
+            if DefinitionLocation(Resp, TwinUri, TwinLine) and
+               SameText(TwinUri, TargetUri) and (TwinLine <> TargetLine) then
+              TargetTwin := TwinLine;
+          finally
+            Resp.Free;
+          end;
+        end;
+      end;
+    finally
+      TwinLines.Free;
+    end;
+  end;
+
   // Text scan for candidates.
   Candidates := TList<TCandidate>.Create;
   AllFiles := TList<string>.Create;
@@ -416,7 +457,8 @@ begin
           Cand.Line, Cand.Col + 1);
         try
           if DefinitionLocation(Resp, CandUri, CandLine) and
-             SameText(CandUri, TargetUri) and (CandLine = TargetLine) then
+             SameText(CandUri, TargetUri) and
+             ((CandLine = TargetLine) or (CandLine = TargetTwin)) then
             Confirmed.Add(CandidateJson(Cand))
           else if CandUri = '' then
             Unverified.Add(CandidateJson(Cand))
@@ -434,13 +476,17 @@ begin
             // the interface and implemented below resolves to two different
             // lines of its own file, and treating that as a lookalike made
             // every single rename inapplicable (caught by the battery).
-            if not SameText(CandUri, TargetUri) then
-            begin
-              var RObj := CandidateJson(Cand);
-              RObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
-              RObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine));
-              RejectedArr.AddElement(RObj);
-            end;
+            // Every rejection is LISTED, never just counted. The tool's own
+            // description promises leftovers are never silently dropped, and
+            // a bare count is precisely what hid the bug above from view
+            // (rejectedHomonyms: 3, rejected: []). Same-file leftovers are
+            // listed too now: with the decl/impl pair accepted above, one
+            // that still lands here really is another symbol, and the caller
+            // is the one who should decide whether that matters.
+            var RObj := CandidateJson(Cand);
+            RObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
+            RObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine));
+            RejectedArr.AddElement(RObj);
           end;
         finally
           Resp.Free;

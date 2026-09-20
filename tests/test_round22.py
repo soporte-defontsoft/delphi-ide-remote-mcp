@@ -113,18 +113,34 @@ lines = [
 probe = os.path.join(BASE, 'echo.txt')
 open(probe, 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
 
-# delphi_read is EXEMPT from masking (file text travels verbatim), so the
-# machine-independent probe goes through delphi_search, whose hit lines ARE
-# masked like any other tool output.
-r = call('delphi_search', {'root': probe, 'query': 'sysroot'})
-check('M1 rutas re-dobladas del linker legibles (cero cascada srvhost)',
+# El enmascarador corre sobre todo texto de salida MENOS el de las tools de
+# fidelidad byte a byte: delphi_read, los aciertos de delphi_search, los
+# lectores del vault y el eco de verificacion de delphi_edit/delphi_textedit.
+# En todas ellas el texto es CONTENIDO DE FICHERO y un ancla copiada de ahi
+# tiene que casar con el disco (v1.0.4-beta: el search enmascaraba dentro de
+# la linea encontrada, asi que ningun ancla copiada de un resultado casaba).
+# Antes esta sonda usaba delphi_search como canal enmascarado; ya no lo es,
+# asi que va por una NEGATIVA, que se enmascara siempre y ademas prueba al
+# enmascarador mas directamente: la ruta entra tal cual y vuelve tapada.
+r = call('delphi_read', {'path': 'C:' + D2 + 'Users' + D2 + 'yo' + D2 +
+                         'Linux64' + D2 + 'Embarcadero' + D2 + 'NoExiste.pas'})
+check('M1 rutas re-dobladas legibles (cero cascada srvhost)',
       r.count('srvhost') == 0 and 'Linux64' in r and 'Users' in r and
       'Embarcadero' in r, 'srvhost x%d | %s' % (r.count('srvhost'), r[:220]))
-r2 = call('delphi_search', {'root': probe, 'query': 'copia real'})
+r2 = call('delphi_read', {'path': BS + BS + 'nas01' + BS + 'backups' + BS +
+                          'x.pas'})
 check('M2 el UNC de verdad SI se enmascara (nas01 desaparece)',
       'nas01' not in r2 and 'srvhost' in r2, r2[:220])
 check('M3 las unidades siguen enmascaradas (srvc:)',
       'srvc:' in r and 'C:' + D2 not in r, r[:220])
+# ...y el contrato NUEVO, el que rompio a los de arriba: el texto de un
+# acierto de delphi_search llega VERBATIM, con su letra de unidad real, para
+# que sirva de ancla. La ruta del acierto si sale virtual.
+rs = call('delphi_search', {'root': probe, 'query': 'copia real'})
+check('M3b el TEXTO de un acierto de search llega verbatim (ancla valida)',
+      'nas01' in rs, rs[:220])
+check('M3c ...pero su campo path si viaja como unidad virtual',
+      '"path":"srv' in rs.replace(' ', ''), rs[:220])
 
 # M4 live: a real Linux64 link on machines that hold the SDK
 r = call('delphi_create', {'kind': 'project-console', 'name': 'TailM', 'dir': BASE})

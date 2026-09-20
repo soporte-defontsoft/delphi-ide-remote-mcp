@@ -198,8 +198,14 @@ else:
 GHOST = os.path.join(PRJ, 'NoExiste.pas')
 for tool in ('delphi_symbols',):
     r = call(A, tool, {'path': GHOST})
-    check('B5 %s con un fichero que no esta: RECHAZADO, no fallo interno' % tool,
-          r.startswith('RECHAZADO'), r[:200])
+    # v1.0.4-beta: el prefijo pasa a "error:". La regla 11 de las propias
+    # convenciones lo dice: "RECHAZADO:" es "te lo he denegado a proposito,
+    # no insistas" y "error:" es "no he podido (no existe...): corrige y
+    # repite" - con un fichero que falta como ejemplo literal. Lo que esta
+    # linea vigila de verdad (que no salga como fallo interno) no cambia.
+    check('B5 %s con un fichero que no esta: "error:", no fallo interno' % tool,
+          r.startswith('error:') and not r.startswith('Error executing'),
+          r[:200])
 r = call(A, 'delphi_hover', {'path': GHOST, 'line': 0, 'character': 0})
 check('B5 hover igual', not r.startswith('Error executing tool'), r[:200])
 r = call(A, 'delphi_config', {'project': DPROJ, 'command': 'remove-unit', 'name': 'X'})

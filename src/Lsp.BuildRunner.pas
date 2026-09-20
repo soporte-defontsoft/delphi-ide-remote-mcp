@@ -320,13 +320,29 @@ begin
       CloseHandle(Job);
   end;
   // git and modern tools emit UTF-8 (measured mojibake in remote field
-  // test: "AÃ±ade" for "Añade"); compilers emit ANSI/OEM. Strictly valid
-  // UTF-8 with high bytes IS UTF-8; anything else stays ANSI, which is
-  // close enough for compiler messages and never throws.
+  // test: "AÃ±ade" for "Añade"); compilers emit OEM. Strictly valid UTF-8
+  // with high bytes IS UTF-8; anything else is the console codepage.
+  //
+  // NOT TEncoding.ANSI: a child writing to a pipe is still a console program
+  // and encodes in the console OUTPUT codepage (850 here), not in the ANSI
+  // one (1252). They differ exactly on the accented letters, so decoding as
+  // ANSI turned MSBuild's "raiz"/"linea"/"posicion" into "ra¡z"/"l¡nea"/
+  // "posici¢n" - measured 2026-09-20. Asked to Windows, never hardcoded:
+  // another machine has another codepage.
   if LooksUtf8(Bytes) then
     Result := TEncoding.UTF8.GetString(Bytes)
   else
-    Result := TEncoding.ANSI.GetString(Bytes);
+  begin
+    var Cp: Cardinal := GetConsoleOutputCP;
+    if Cp = 0 then
+      Cp := GetOEMCP; // tray and service have no console: ask the machine
+    var Enc := TEncoding.GetEncoding(Cp);
+    try
+      Result := Enc.GetString(Bytes);
+    finally
+      Enc.Free; // GetEncoding returns a new object, not a singleton
+    end;
+  end;
 end;
 
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
@@ -977,6 +993,19 @@ begin
     raise Exception.Create(Denied);
   if not FileExists(ADprojPath) then
     raise Exception.CreateFmt('.dproj not found: %s', [ADprojPath]);
+  // A TYPE check, before anything reads the file or spawns anything. Without
+  // it the hazard scan below was a substring search standing in for one, and
+  // it failed in both directions at once (measured 2026-09-20): CHANGELOG.md
+  // was refused for an <Exec> task it does not have - the word appears in
+  // prose describing that very guard - while LICENSE, with no "exec"
+  // anywhere, went straight through and MSBuild was spawned on the text of
+  // an MIT licence. The refusal even named a real config key
+  // (AllowBuildScripts) for a condition that was not happening, which is how
+  // an agent ends up asking the operator to enable build scripts in order to
+  // compile a markdown file.
+  if not SameText(TPath.GetExtension(ADprojPath), '.dproj') then
+    raise Exception.Create(Format(SR_BUILD_NOT_A_PROJECT_FMT,
+      [TPath.GetFileName(ADprojPath)]));
   // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
   // shell-running / file-planting MSBuild tasks (a planted <Target><Exec>, a
   // build-event, a foreign <Import>) and refuse unless build scripts were

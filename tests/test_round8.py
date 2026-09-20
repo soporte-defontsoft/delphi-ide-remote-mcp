@@ -419,8 +419,17 @@ open(os.path.join(MBOX, 'otro', '20260825-privado.md'), 'w', encoding='utf-8').w
 MSG = spawn()
 t = call(MSG, 'delphi_workspace', {})
 check('#9 el aviso NO nombra el buzon ajeno', 'otro' not in t, t[-250:])
-check('#9 ...pero SI dice que hay correo dirigido a alguien',
-      'para agentes concretos' in t, t[-250:])
+# v1.0.4-beta: y ya NO lo dice en cada respuesta. Contar el correo ajeno era
+# la otra mitad del mismo arreglo y envejecio igual de mal: seis mensajes
+# para otros ids, que quien lee no puede ni leer ni limpiar, dejaban la linea
+# clavada en TODAS sus respuestas para siempre (medido sobre 40 llamadas
+# seguidas). Un aviso que grita en cada respuesta ensena a los agentes a
+# saltarse la unica linea que importara cuando el correo si sea suyo. Ese
+# recuento vive ahora en delphi_workspace, que es la llamada de orientacion.
+check('#9 ...y NO anuncia el correo ajeno en cada respuesta',
+      'para agentes concretos' not in t, t[-250:])
+check('#9b ...pero se puede saber que lo hay, en la ficha del servidor',
+      json.loads(t).get('server', {}).get('mailboxes') == 1, t[-250:])
 open(os.path.join(MBOX, '20260825-general.md'), 'w', encoding='utf-8').write(
     '# general\n\npara todos\n')
 t = call(MSG, 'delphi_workspace', {})

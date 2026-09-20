@@ -6,6 +6,102 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.4-beta] - 2026-09-20
+
+Three agents were pointed at this server and told to use it as a client, not
+to test it. Between them they found eleven things, and the thread running
+through almost all of them is the same: **the server answered "it isn't
+there" when the truth was "it isn't that kind of thing"**, and it counted
+things instead of saying them.
+
+### Fixed
+- **`delphi_references` answered that nothing uses a routine that has
+  callers.** A Pascal routine has TWO definition lines - the forward or
+  interface declaration and the implementation - and only one was accepted as
+  the target. Asking "who uses this" from the body resolved to one, the call
+  sites resolved to the other, and every real use was thrown away as a
+  homonym. `OneTool` in `Mcp.Tools.Help.pas` has four uses: asked from its
+  body it reported one. The natural flow is exactly the broken one, because
+  `delphi_symbols` hands you declaration lines. A wrong answer, not a missing
+  one - and the kind an agent acts on by deleting live code. The counterpart
+  is now resolved once, up front, and both halves count as one symbol.
+- **Discarded candidates are listed, not just counted.** The tool's own
+  description promises leftovers are "never silently dropped"; same-file ones
+  were dropped with only `rejectedHomonyms: 3` to show for it, which is
+  precisely what hid the bug above.
+- **`delphi_search` was falsifying the contents of files.** The outbound
+  filter that turns server drive letters into virtual units (`D:\` ->
+  `srvd:\`) was rewriting them INSIDE the matched line - the field the tool
+  publishes verbatim so an agent can copy it as an edit anchor. A line that
+  reads `Roots=D:\Projects\Galatea` on disk came back as
+  `Roots=srvd:\Projects\Galatea`: no anchor copied from a search hit could
+  ever match, and a documentation file was quoted wrong. The tool now masks
+  its own `path` fields and its text reaches the client as written.
+- **...and the same mask was falsifying `delphi_edit`'s own evidence.** Found
+  while writing this entry: the verification echo those tools return is the
+  lines RE-READ FROM DISK, which is what an agent checks a write against.
+  `D:\Projects\Galatea` went in, the disk held it correctly, and the echo
+  came back `srvd:\Projects\Galatea`. A proof that is rewritten before you
+  see it proves nothing.
+- **MSBuild output was decoded as ANSI instead of the console codepage.**
+  They differ exactly on the accented letters, so `raiz`, `linea` and
+  `posicion` arrived as `ra¡z`, `l¡nea` and `posici¢n` - mojibake in the
+  error text of a server whose headline promise is reading Delphi files
+  decoded correctly. Asked to Windows now, with an OEM fallback for the tray
+  and the service, which have no console of their own.
+- **`delphi_build` ran MSBuild on anything.** There was no type check at all:
+  the `<Exec>` hazard scan was a substring search standing in for one, and it
+  failed in both directions at once. `CHANGELOG.md` was refused for a build
+  task it does not have - the word appears in prose describing that very
+  guard - and the refusal named a real config key (`AllowBuildScripts`) for a
+  condition that was not happening, so an agent would go ask the operator to
+  enable build scripts in order to compile a markdown file. Meanwhile
+  `LICENSE`, which contains no "exec" anywhere, sailed past and MSBuild was
+  spawned on the text of an MIT licence.
+- **21 user-facing texts sent the operator to edit `[Workspace]`, a section
+  that has not been read since v0.98.** Two of them shipped inside
+  `tools/list`. Worse, a literal `[Workspace]` was explicitly EXEMPTED from
+  the "you spelled that wrong" warning, so somebody following our own
+  instructions got no jail, no token, and not one word anywhere saying why.
+  It now gets the loudest note of the three.
+- **`vault_read` named a settings key that exists nowhere**, `VaultRoot`. It
+  is `VaultPath=`, per workspace. v1.0.3 fixed this same lie in the refusals
+  and missed it in the tool description.
+- **A refusal inside a JSON answer travelled with `"ok": true`.** The outcome
+  code is derived from the text prefix, and a tool answering a JSON object
+  starts with `{`, so no code was derived and the object's own `ok` was left
+  alone. A client that branches on `ok` read a refusal as a success - the
+  same family as the v1.0.0-beta `structuredContent` regression.
+- **"It isn't there" vs "it isn't that kind of thing", both directions.**
+  `delphi_read` on the repo root answered "does not exist" about a folder
+  with 20 entries; `delphi_list` and `delphi_package` answered "directory not
+  found" about a README that is right there. Each now says what the path
+  actually is and which tool handles it.
+- **A missing file is `error:`, not `RECHAZADO:`.** By this server's own rule
+  11, `RECHAZADO:` means "denied on purpose, change course" and `error:`
+  means "correct it and repeat" - with a missing file as its literal example.
+  An agent that mistyped a filename was being told to give up.
+- **The mailbox notice stopped announcing other agents' post.** Six messages
+  for named ids, which the reader can neither read nor clear, kept ~90 bytes
+  of untrue notice stuck to the end of every single answer - measured over 40
+  consecutive calls. A notice that cries wolf on every answer teaches agents
+  to skip the one line that matters when the mail really is theirs. Mail
+  addressed to everyone still announces itself; the rest is counted in
+  `delphi_workspace`, which is the orientation call.
+- **`delphi_help command=tasks`, "the map of this server", listed 36 of its
+  43 tools.** `delphi_hover`, `delphi_signature`, `delphi_completion`,
+  `delphi_installs`, `delphi_adb_linux`, `delphi_desktop` and `delphi_help`
+  itself were missing from the first call the manual tells an agent to make.
+
+### Added
+- `test_round31.py` - one check per fix above, all of them written from the
+  measurement that found it.
+- `test_tray.py` - the FIRST battery that ever starts the tray host. All 51
+  existing batteries run the terminal host (36 stdio, 13 `--http`); the mode
+  that actually runs in production had zero coverage, which is why nothing
+  guarded the three things only it does: `FreeConsole`, a VCL message loop,
+  and taking its port from `settings.ini` alone.
+
 ## [1.0.3-beta] - 2026-09-20
 
 Four things that the day's own use of this server turned up, three of them

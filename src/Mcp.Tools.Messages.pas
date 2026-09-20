@@ -41,9 +41,21 @@ type
   end;
 
 { One line for the end of any tool result while mail waits ('' when none).
-  Counts the broadcast folder plus every agent folder - the answering tool
-  does not know who is asking, the line names the folders with mail. }
+  ONLY mail addressed to everyone, which really is for whoever is reading and
+  which disappears from their answers once they have read it. Mail addressed
+  to a named agent is NOT announced here: this tool does not know who is
+  asking, so a count of other people's post was 90 bytes of untrue,
+  unclearable noise on every single answer - measured 2026-09-20, an agent
+  read "6 mensaje(s) para agentes concretos" on ~40 consecutive calls, found
+  none of them were its own, and could do nothing about it. That count now
+  lives in delphi_workspace, which is the orientation call and is asked once.
+  A notice that cries wolf on every answer teaches agents to skip the one
+  line that will matter when the mail really is theirs. }
 function PendingMessagesNote: string;
+
+{ How many messages wait in NAMED agent boxes. For delphi_workspace only:
+  it is server state, not a message for the caller. }
+function DirectedMessagesPending: Integer;
 
 implementation
 
@@ -138,8 +150,8 @@ end;
 
 function PendingMessagesNote: string;
 var
-  Root, D: string;
-  Broadcast, Directed: Integer;
+  Root: string;
+  Broadcast: Integer;
 begin
   Result := '';
   Root := MessagesRoot;
@@ -152,23 +164,35 @@ begin
   // (three agents reported it; measured field round 8). So now:
   // - mail addressed to "todos" IS for whoever is reading: announced, and it
   //   is the only thing that names itself.
-  // - mail addressed to a named agent is only COUNTED, never named. Whoever
-  //   is waiting for post checks their own box; nobody else learns anything.
+  // - mail addressed to a named agent is NOT mentioned here at all. Counting
+  //   it was the leftover half of that same fix and it aged into the same
+  //   problem: 6 messages for other ids, unreadable and unclearable by
+  //   whoever was reading, kept the line stuck on every answer forever
+  //   (measured 2026-09-20 over ~40 consecutive calls). The count moved to
+  //   delphi_workspace, which is the orientation call. Whoever is waiting
+  //   for post checks their own box; nobody else is told anything.
   // Un aviso que ESTE agente ya leyo no se le vuelve a anunciar: desde que el
   // aviso se queda en la raiz para los demas, contarlo a secas dejaba la linea
   // "MENSAJES PENDIENTES" clavada en todas sus respuestas para siempre.
   Broadcast := Length(AvisosPendientes(Root, Slug(CurrentAgent)));
-  Directed := 0;
+  if Broadcast > 0 then
+    Result := Format(SN_MESSAGES_PENDING_ALL_FMT, [Broadcast]);
+end;
+
+function DirectedMessagesPending: Integer;
+var
+  Root, D: string;
+begin
+  Result := 0;
+  Root := MessagesRoot;
+  if not TDirectory.Exists(Root) then
+    Exit;
   for D in TDirectory.GetDirectories(Root) do
   begin
     if SameText(TPath.GetFileName(D), DELIVERED_DIR) then
       Continue;
-    Inc(Directed, Length(PendingIn(D)));
+    Inc(Result, Length(PendingIn(D)));
   end;
-  if Broadcast > 0 then
-    Result := Format(SN_MESSAGES_PENDING_ALL_FMT, [Broadcast]);
-  if Directed > 0 then
-    Result := Result + Format(SN_MESSAGES_PENDING_SOME_FMT, [Directed]);
 end;
 
 function FirstLine(const APath: string): string;

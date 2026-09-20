@@ -672,8 +672,21 @@ begin
                  'ReadOnlyToken=: seccion IGNORADA. La clave es Token= ' +
                  '(AuthToken= tambien vale como alias).'];
           end
-          else if S.ToLower.StartsWith('work') and
-                  not SameText(S, 'Workspace') then
+          else if SameText(S, 'Workspace') then
+            // [Workspace] without the dot is the v0.97 section, and it was
+            // EXEMPTED from the warning below - so it was the one spelling
+            // that vanished in total silence. Worse: until 2026-09-20 our
+            // own refusals sent the operator to edit exactly that section,
+            // in 21 user-facing strings ("settings.ini [Workspace] Roots"),
+            // two of them shipped inside tools/list. Somebody following our
+            // own instructions got no jail, no token, and not one word
+            // anywhere saying why. It gets the loudest note of the three.
+            GWorkspaceNotes := GWorkspaceNotes +
+              ['AVISO: la seccion [Workspace] (sin punto) ya NO existe y se ' +
+               'IGNORA entera: sus Roots, sus tokens y sus permisos no ' +
+               'valen nada. Desde v0.98 nada es global - renombrala a ' +
+               '[Workspace.<nombre>] y dale un Token=.']
+          else if S.ToLower.StartsWith('work') then
             // [Workopenclaw], [WorkspaceX]... a workspace section spelled
             // wrong used to vanish silently and its token answered 401 with
             // no clue anywhere (measured 2026-09-10). Name the fix.
@@ -2203,7 +2216,24 @@ begin
   // and a note may start with "Error", so a loose case-insensitive 'error'
   // test would silently mask real content and break every anchored write built
   // on it.
-  if MatchText(AToolName, ['delphi_read', 'vault_read', 'vault_search']) and
+  // delphi_search joined them 2026-09-20, and it was the loudest of all:
+  // its "text" field is a VERBATIM line of the file, published precisely so
+  // an agent can copy it as an edit anchor - and the blanket mask rewrote
+  // the drive letter INSIDE it. README.md:358 reads "Roots=D:\Projects\..."
+  // and the search answered "Roots=srvd:\Projects\...": an anchor copied
+  // from a hit could never match the disk, and a documentation file was
+  // quoted wrong. It masks its own "path" fields instead (see there).
+  // delphi_edit y delphi_textedit, por lo mismo y con una vuelta de tuerca:
+  // su eco de verificacion son las lineas RELEIDAS DEL DISCO, que es la
+  // prueba con la que el agente comprueba que escribio lo que queria. Si esa
+  // prueba va enmascarada, no prueba nada. Encontrado escribiendo este mismo
+  // CHANGELOG el 2026-09-20: se escribio "D:\Projects\Galatea", el disco lo
+  // tenia bien, y el eco devolvia "srvd:\Projects\Galatea". Sus negativas
+  // empiezan por RECHAZADO/error y siguen enmascarandose por el test de
+  // abajo; sus ecos de exito no llevan rutas absolutas.
+  if MatchText(AToolName, ['delphi_read', 'vault_read', 'vault_search',
+                           'delphi_search', 'delphi_edit',
+                           'delphi_textedit']) and
      not (AText.StartsWith('RECHAZADO') or AText.StartsWith('error') or
           AText.StartsWith('Error executing tool: ')) then
     Exit(AText);

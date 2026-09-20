@@ -61,7 +61,11 @@ for b in batteries:
                        text=True, encoding='utf-8', errors='replace', cwd=REPO)
     out = (r.stdout or '') + (r.stderr or '')
     ok = sum(1 for line in out.splitlines() if line.startswith('PASS'))
-    bad = sum(1 for line in out.splitlines() if line.startswith('FAIL'))
+    # .lstrip(): test_messages indenta sus FAIL con dos espacios, asi que el
+    # recolector no los veia: la bateria salia ROJA y sin una sola linea que
+    # dijera por que (medido 2026-09-20, y es justo el pecado que este
+    # release se dedica a arreglar en el servidor).
+    bad = sum(1 for line in out.splitlines() if line.lstrip().startswith('FAIL'))
     # batteries print their own tally; trust rc for the verdict
     verdict = 'OK  ' if r.returncode == 0 else 'FALLA'
     if r.returncode != 0:
@@ -77,6 +81,6 @@ print('\n== %d baterias | %d checks OK | %d fallos | %d baterias rojas ==' % (
 for name, out in failed:
     print('\n--- %s ---' % name)
     for line in out.splitlines():
-        if line.startswith('FAIL') or 'Error' in line or 'Traceback' in line:
+        if line.lstrip().startswith('FAIL') or 'Error' in line or 'Traceback' in line:
             print('   ', line[:220])
 sys.exit(1 if failed else 0)

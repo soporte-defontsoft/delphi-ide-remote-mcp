@@ -1,6 +1,8 @@
 # Tool reference
 
-Every tool this MCP server exposes, with its parameters, types and access level. Generated from the server's own `tools/list` (the exact schema the client receives), so it never drifts from the code.
+Every tool this MCP server exposes, with its parameters, types and access level.
+
+> **This page is written by hand and it does drift.** It used to claim it was generated from `tools/list` "so it never drifts from the code", and an audit on 2026-09-20 found it missing `delphi_edit`'s `edits`, `delphi_search`'s `offset`, `delphi_list`'s `includetrash`, `delphi_test`'s `platform` and `delphi_changeset`'s `unstage` — the headline features of three releases. The authority is the server itself: **`delphi_help command=tool name=<tool>`** returns the live schema of one tool, and `docs/CAPABILITIES.json` IS generated from `tools/list`. When this page and the server disagree, the server is right.
 
 - **Paths** use virtual drive units (`srvd:\...`, `srvc:\...`) — call `delphi_workspace` first to learn the roots.
 - **Positions** for the semantic tools are 0-based (line and character), like the LSP. Point *inside* the identifier.
@@ -20,6 +22,12 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Cross-platform: build configs, remote platforms & devices** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver), [`delphi_adb`](#delphi_adb), [`delphi_adb_linux`](#delphi_adb_linux), [`delphi_components`](#delphi_components)
 - **FMX styles** — [`delphi_styles`](#delphi_styles)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
+- **Several files in one transaction** — [`delphi_changeset`](#delphi_changeset)
+- **Rename a symbol (preview only)** — [`delphi_rename_symbol`](#delphi_rename_symbol)
+- **Forms & designers** — [`delphi_designer`](#delphi_designer)
+- **Run the tests of a project** — [`delphi_test`](#delphi_test)
+- **The operator's own screen** — [`delphi_desktop`](#delphi_desktop)
+- **The map, and the house rules** — [`delphi_help`](#delphi_help)
 - **Version control** — [`delphi_git`](#delphi_git)
 - **Feedback** — [`delphi_report`](#delphi_report), [`delphi_messages`](#delphi_messages)
 - **Knowledge vault (optional)** — [`vault_read`](#vault_read), [`vault_search`](#vault_search), [`vault_append`](#vault_append), [`vault_create`](#vault_create), [`vault_patch`](#vault_patch)
@@ -328,7 +336,7 @@ Deploy declares the built `.apk` as `output`.
 
 ### `delphi_help`
 
-THE MAP of this server, so an agent does not have to spend context working it out. `command=tasks` (the default) gives the task → tool table, one line each: what do I use to read, to edit, to compile, to change several files at once, to rename, to test, to deploy. `command=tool name=<tool>` gives ONE tool in full (description + parameters) without asking for `tools/list`, which returns all 41 at once. `command=conventions` gives the rules that hold for every tool: paths and virtual drives, the jail, anchored editing, the backups, encodings. Start here after connecting.
+THE MAP of this server, so an agent does not have to spend context working it out. `command=tasks` (the default) gives the task → tool table, one line each: what do I use to read, to edit, to compile, to change several files at once, to rename, to test, to deploy. `command=tool name=<tool>` gives ONE tool in full (description + parameters) without asking for `tools/list`, which returns all 43 at once. `command=conventions` gives the rules that hold for every tool: paths and virtual drives, the jail, anchored editing, the backups, encodings. Start here after connecting.
 
 *Access: read-only.*
 

@@ -593,7 +593,18 @@ begin
   if Denied <> '' then
     Exit(Denied);
   if not TFile.Exists(APath) then
-    Exit('RECHAZADO: no existe ' + APath);
+  begin
+    // "No esta" y "no es un fichero" son cosas distintas, y contestar la
+    // primera cuando pasa la segunda manda al agente a buscar una ruta que
+    // tiene delante: delphi_read sobre la raiz del repo contestaba "no
+    // existe" de una carpeta con 20 entradas (medido 2026-09-20). Y el
+    // prefijo era "RECHAZADO:", que por la regla 11 de las convenciones
+    // significa "no insistas, cambia de camino"; un nombre mal escrito es
+    // "corrige y repite", o sea "error:".
+    if TDirectory.Exists(APath) then
+      Exit(Format(SR_LSP_IS_FOLDER_FMT, [APath]));
+    Exit(Format(SR_LSP_NO_FILE_FMT, [APath]));
+  end;
   B := TFile.ReadAllBytes(APath);
   // A binary (an exe, a .res, a .bin.style) is not a text to number: 9 MB
   // of mojibake burned a context for nothing (measured 2026-08-24). NUL

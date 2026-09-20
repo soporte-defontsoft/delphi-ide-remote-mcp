@@ -268,6 +268,34 @@ begin
       Structured := TJSONObject.Create;
       Structured.AddPair('text', TextValue);
     end;
+    // [local change 2026-09-20] Una tool que contesta un OBJETO JSON con un
+    // campo "error" dentro viajaba con "ok": true. El codigo de arriba se
+    // deduce del PREFIJO del texto, y ese texto empieza por '{', asi que no
+    // se le sacaba ninguno; y el "ok": true que el propio objeto trae dentro
+    // no se pisaba por el guard de mas abajo. Resultado: un cliente que
+    // ramifica por "ok" leia una NEGATIVA como un exito - exactamente la
+    // familia del structuredContent de v1.0.0. Medido 2026-09-20 en
+    // delphi_test (proyecto que no existe) y delphi_build (build fallido).
+    // El campo "error" del objeto manda sobre lo que el objeto diga de si
+    // mismo: si hay error, no hay ok.
+    if Assigned(Structured) and (OutcomeCode = '') then
+    begin
+      var ErrVal := Structured.GetValue('error');
+      var ErrTxt := '';
+      if Assigned(ErrVal) then
+        ErrTxt := ErrVal.Value.Trim;
+      if ErrTxt <> '' then
+      begin
+        if ErrTxt.StartsWith('RECHAZADO') then
+          OutcomeCode := 'DENIED'
+        else if ErrTxt.ToLower.Contains('no existe') or
+                ErrTxt.ToLower.Contains('not found') then
+          OutcomeCode := 'NOT_FOUND'
+        else
+          OutcomeCode := 'INVALID_PARAM';
+        Structured.RemovePair('ok').Free; // el suyo mentia; abajo se pone el bueno
+      end;
+    end;
     if Assigned(Structured) then
     begin
       Result.AddPair('structuredContent', Structured);

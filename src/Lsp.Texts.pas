@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.0.3-beta';
+  SERVER_VERSION = '1.0.4-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -38,7 +38,8 @@ const
     'disks.';
 
   SN_WORKSPACE_LIBZONE_OFF =
-    'La zona de biblioteca esta APAGADA en este servidor ([Workspace] ' +
+    'La zona de biblioteca esta APAGADA en este servidor ' +
+    '([Workspace.<nombre>] ' +
     'LibraryZone=0): la lectura se limita a los roots, igual que la ' +
     'escritura. Las fuentes de la RTL y de los componentes NO son legibles ' +
     'desde aqui.';
@@ -212,10 +213,46 @@ const
     'Esto es el resumen. El detalle, por secciones: section=platforms | ' +
     'searchpaths | deploy | units. section=all lo trae todo junto (grande).';
 
+  { Regla 11 de las convenciones: "error:" es "no he podido (no existe, no
+    cuadra, falta un parametro): corrige y repite"; "RECHAZADO:" es "te lo he
+    denegado a proposito, no insistas". Un fichero que no esta es el ejemplo
+    literal de la primera, y este texto llevaba la segunda: al agente que se
+    equivocaba de nombre se le decia que se rindiera (medido 2026-09-20).
+    delphi_list y delphi_search ya lo hacen bien sobre la misma entrada. }
   SR_LSP_NO_FILE_FMT =
-    'RECHAZADO: no existe %s. (Antes esto salia como "Error executing ' +
-    'tool", que en este servidor significa "me he roto por dentro" y no era ' +
-    'el caso: el fichero simplemente no esta.)';
+    'error: no existe %s. (Antes esto salia como "Error executing tool", que ' +
+    'en este servidor significa "me he roto por dentro" y no era el caso: el ' +
+    'fichero simplemente no esta.)';
+
+  { La ruta existe, pero es de otro tipo - que no es lo mismo que no existir.
+    Medido 2026-09-20: delphi_read sobre la raiz del repo contestaba "no
+    existe" de una carpeta con 20 entradas, y el agente se iba a buscar una
+    ruta que tenia delante. }
+  { El espejo del anterior: delphi_list y delphi_package sobre un README.md
+    que existe contestaban "directory not found", conflando "no esta" con "no
+    es de ese tipo" igual que delphi_read al reves (medido 2026-09-20). }
+  { Una mascara que no casa con NADA y una carpeta vacia contestaban lo
+    mismo: total 0 y files vacio (sin llaves aqui: cierran el comentario).
+    delphi_symbols presume en su propia
+    negativa de haber arreglado justo esto ("antes te devolvia una lista
+    vacia, que parecia decir que la unit no tiene nada") y el arreglo no
+    habia viajado hasta aqui - medido 2026-09-20 sobre src\, que tiene 55
+    fuentes. }
+  SN_LIST_MASK_NO_MATCH_FMT =
+    'La mascara "%s" no ha casado con nada, pero la carpeta NO esta vacia: ' +
+    'solo en su primer nivel ya tiene %d entradas. Se admite UNA mascara ' +
+    '(*.pas) o varias separadas por ";" (*.pas;*.dfm). Sin pattern se listan ' +
+    'los fuentes y proyectos Delphi.';
+
+  SR_LIST_IS_FILE_FMT =
+    'error: %s es un FICHERO, no una carpeta. delphi_list recorre carpetas; ' +
+    'para leerlo usa delphi_read, y para buscar DENTRO de el, delphi_search ' +
+    'root=<ese fichero> (acepta un fichero suelto como raiz).';
+
+  SR_LSP_IS_FOLDER_FMT =
+    'error: %s es una CARPETA, no un fichero. Para ver lo que tiene usa ' +
+    'delphi_list root=<esa ruta>; para leer uno de sus ficheros, pasa su ' +
+    'ruta completa.';
 
   SR_LSP_NOT_SOURCE_FMT =
     'RECHAZADO: %s no es un fuente Delphi (%s), asi que no hay simbolos que ' +
@@ -407,7 +444,7 @@ const
     'trabajo: borrarlo o moverlo se llevaria el proyecto entero y dejaria la ' +
     'copia de seguridad FUERA de la jaula. Borra o mueve lo que hay DENTRO ' +
     '(delphi_list te lo ensena). Cambiar los roots es cosa del operador, en ' +
-    'settings.ini [Workspace] Roots.';
+    'settings.ini [Workspace.<nombre>] Roots.';
 
   SR_AGENT_CONFINED_FMT =
     'RECHAZADO: el servidor esta en modo confinado y tu (agente "%s") solo ' +
@@ -419,10 +456,11 @@ const
   SR_JAIL_FMT =
     'RECHAZADO: "%s" esta FUERA de los workspaces permitidos. Este servidor ' +
     'solo opera dentro de: %s (configurado en DELPHI_MCP_ROOTS o ' +
-    'settings.ini [Workspace] Roots).';
+    'settings.ini [Workspace.<nombre>] Roots).';
 
   SR_ROOTS_INVALID =
-    'RECHAZADO: [Workspace] Roots esta configurado pero ninguna de sus ' +
+    'RECHAZADO: [Workspace.<nombre>] Roots esta configurado pero ninguna ' +
+    'de sus ' +
     'rutas es valida (comillas de mas, unidad inexistente...). Por seguridad ' +
     'se rechaza todo hasta corregir settings.ini / DELPHI_MCP_ROOTS.';
 
@@ -447,13 +485,26 @@ const
   // (unless build scripts were opted into) - field round 7: upload could plant
   // a .dproj whose <Target><Exec> ran arbitrary commands at build time. An inert
   // custom <Target> (Message/PropertyGroup only) is NOT refused (field round 9).
+  { Wrong KIND of file, which is not the same as a missing one. Until
+    2026-09-20 there was no type check at all and the hazard scan below stood
+    in for it: CHANGELOG.md was "refused" for an <Exec> task it does not have
+    (the word appears in prose describing that very guard) while LICENSE,
+    which contains no "exec" anywhere, sailed past and MSBuild was spawned on
+    the text of an MIT licence. "error:" and not "RECHAZADO:" on purpose
+    (rule 11): nothing was denied, the argument does not fit - correct it and
+    repeat. }
+  SR_BUILD_NOT_A_PROJECT_FMT =
+    'error: "%s" no es un proyecto Delphi. delphi_build compila un .dproj. ' +
+    'Localiza el del proyecto con delphi_projects, o mira los de una carpeta ' +
+    'con delphi_list.';
+
   SR_BUILD_HAZARD_FMT =
     'RECHAZADO: el proyecto contiene %s. Este servidor solo COMPILA, nunca ' +
     'ejecuta, y esa tarea correria un programa o escribiria ficheros durante ' +
     'el build. Compila un .dproj sin tareas de ejecucion (un <Target> que solo ' +
     'imprime un mensaje o fija una propiedad SI se admite). Si es un proyecto ' +
     'de confianza que firma o copia en post-build, el operador lo habilita con ' +
-    '[Workspace] AllowBuildScripts=1 (sin encender delphi_run).';
+    '[Workspace.<nombre>] AllowBuildScripts=1 (sin encender delphi_run).';
 
   SR_RUN_DISABLED =
     'RECHAZADO: la ejecucion en el servidor esta deshabilitada por diseno. ' +
@@ -461,7 +512,8 @@ const
     'ejecuta. Para PROBAR un binario, descargalo con delphi_package + ' +
     'delphi_fetch y ejecutalo en TU maquina, o despliegalo a un target real ' +
     '(PAServer en Linux/macOS, o Android) - ahi corre en el cliente, no en ' +
-    'el servidor. (El operador puede habilitarlo con [Workspace] AllowRun=1, ' +
+    'el servidor. (El operador puede habilitarlo con ' +
+    '[Workspace.<nombre>] AllowRun=1, ' +
     'pero no es el uso previsto.)';
 
   // ---------------------------------------------------------------------
@@ -482,7 +534,8 @@ const
     'devuelve las reglas (AGENTS-VAULT.md) + el indice (MEMORY.md): hazlo al ' +
     'empezar. Los [[wikilinks]] del contenido refieren a otras notas - ' +
     'localizalas con vault_search target=files. OJO: el vault que sirve este ' +
-    'servidor es el que su operador ha expuesto (VaultRoot del settings.ini), ' +
+    'servidor es el que su operador ha expuesto (el VaultPath= de TU ' +
+    '[Workspace.<nombre>] en el settings.ini), ' +
     'que puede ser una COPIA y no la carpeta viva del usuario: si algo suena ' +
     'desactualizado, preguntalo antes de darlo por bueno.';
 
@@ -720,16 +773,18 @@ const
 
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     'RECHAZADO: el proyecto "%s" no esta en la lista de proyectos que este ' +
-    'servidor permite ejecutar en un target ([Workspace] RemoteRunProjects). ' +
+    'servidor permite ejecutar en un target ' +
+    '([Workspace.<nombre>] RemoteRunProjects). ' +
     'Permitidos: %s.';
 
   SR_PASERVER_RUN_DISABLED =
     'RECHAZADO: la ejecucion remota esta APAGADA en este servidor. El ' +
-    'operador la enciende con [Workspace] AllowRemoteRun=1 en el settings.ini ' +
+    'operador la enciende con [Workspace.<nombre>] AllowRemoteRun=1 en el ' +
+    'settings.ini ' +
     'que hay junto al ejecutable (o la variable DELPHI_MCP_ALLOW_REMOTE_RUN=1) ' +
     'y reinicia el servidor. Ademas, solo se ejecuta el binario que ese ' +
     'proyecto desplego, y solo si el proyecto esta en ' +
-    '[Workspace] RemoteRunProjects.';
+    '[Workspace.<nombre>] RemoteRunProjects.';
 
   SR_PASERVER_RUN_NEEDS =
     'RECHAZADO: remote-run necesita "name" (el perfil PAServer) y "project" ' +
@@ -1929,6 +1984,8 @@ const
     'ORIENTARSE'#10 +
     '  donde estoy, que puedo tocar ....... delphi_workspace'#10 +
     '  que proyectos hay (y su repo/rama) . delphi_projects'#10 +
+    '  que Delphi hay en esta maquina ..... delphi_installs'#10 +
+    '  esta tabla, o una tool entera ...... delphi_help'#10 +
     '  buscar texto en el codigo .......... delphi_search'#10 +
     '  listar ficheros de una carpeta ..... delphi_list'#10 +
     #10 +
@@ -1938,6 +1995,9 @@ const
     '  donde se define / donde se usa ..... delphi_definition, delphi_references'#10 +
     '  errores sin compilar ............... delphi_diagnostics'#10 +
     '  que componentes hay instalados ..... delphi_components'#10 +
+    '  que ES esto (tipo y doc) ........... delphi_hover'#10 +
+    '  que parametros lleva esta llamada .. delphi_signature'#10 +
+    '  que puedo escribir aqui ............ delphi_completion'#10 +
     #10 +
     'ESCRIBIR'#10 +
     '  cambiar Pascal por ANCLA ........... delphi_edit'#10 +
@@ -1965,6 +2025,8 @@ const
     '  empaquetar una carpeta ............. delphi_package'#10 +
     '  desplegar y ejecutar en un target .. delphi_paserver, delphi_adb'#10 +
     '  Android ............................ delphi_adb'#10 +
+    '  Android desde un Linux remoto ...... delphi_adb_linux'#10 +
+    '  ver y tocar la pantalla del operador delphi_desktop'#10 +
     #10 +
     'GIT Y MEMORIA'#10 +
     '  ramas, commit, diff, stash ......... delphi_git'#10 +
@@ -2063,7 +2125,8 @@ const
     'dialectos: el resumen de DUnitX y la convencion PASS/FAIL + ExitCode de ' +
     'un runner de consola escrito a mano. El veredicto dice de donde sale ' +
     '(verdictFrom: counts o exitCode) y nunca se lo inventa. Ejecutar tests ' +
-    'es EJECUTAR: tiene su propio interruptor [Workspace] AllowTests (o ' +
+    'es EJECUTAR: tiene su propio interruptor ' +
+    '[Workspace.<nombre>] AllowTests (o ' +
     'AllowRun, que lo implica); el binario se compila aqui, sale de un ' +
     'proyecto de la jaula y corre en el mismo sandbox de baja integridad que ' +
     'delphi_run, con timeout. Sin ese interruptor, discover funciona y run ' +
@@ -2213,7 +2276,8 @@ const
 
   SR_TEST_DISABLED =
     'RECHAZADO: ejecutar tests esta APAGADO en este servidor. El operador lo ' +
-    'enciende con [Workspace] AllowTests=1 en el settings.ini junto al ' +
+    'enciende con [Workspace.<nombre>] AllowTests=1 en el settings.ini ' +
+    'junto al ' +
     'ejecutable (o DELPHI_MCP_ALLOW_TESTS=1) y reinicia. Es un interruptor ' +
     'propio, separado de AllowRun a proposito: permitir una bateria de tests ' +
     'no es lo mismo que permitir ejecutar binarios cualesquiera (AllowRun, ' +
@@ -2844,7 +2908,8 @@ const
     'RECHAZADO: este servidor no habla con "%s". Una URL explicita en un ' +
     'comando de git hace que sea EL SERVIDOR quien abre la conexion, asi que ' +
     'decidir con quien la abre no te toca a ti: el operador escribe los hosts ' +
-    'permitidos en [Workspace] GitRemotes del settings.ini. Los remotos que el ' +
+    'permitidos en [Workspace.<nombre>] GitRemotes del settings.ini. Los ' +
+    'remotos que el ' +
     'ya haya configurado en el repositorio SI funcionan: usa el nombre del ' +
     'remoto (push origin main), no la URL.';
 

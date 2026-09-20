@@ -75,7 +75,7 @@ type
     FMaxResults: Integer;
     FOffset: Integer;
   public
-    [SchemaDescription('Directory to search under. Empty = the roots configured in settings.ini [Workspace] Roots (semicolon-separated)')]
+    [SchemaDescription('Directory to search under. Empty = the roots configured in settings.ini [Workspace.<name>] Roots (semicolon-separated)')]
     property Root: string read FRoot write FRoot;
     [SchemaDescription('Optional name filter (substring, case-insensitive), e.g. "comunicador"')]
     property Name: string read FName write FName;
@@ -262,7 +262,8 @@ uses
   Lsp.Guard,
   Lsp.Patch,
   Lsp.ShaCache,
-  Lsp.Files;
+  Lsp.Files,
+  Mcp.Tools.Messages; // DirectedMessagesPending, para la ficha del servidor
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =
@@ -398,7 +399,12 @@ begin
               begin
                 Entry := TJSONObject.Create;
                 Hits.Add(Entry);
-                Entry.AddPair('path', F);
+                // This tool masks its OWN paths, because its answer is
+                // exempt from the blanket outbound filter - see the
+                // delphi_search note in MaskDriveText. Any path field added
+                // to a hit from now on MUST go through MaskDriveText too,
+                // or a real drive letter walks out.
+                Entry.AddPair('path', MaskDriveText('', F));
                 Entry.AddPair('line', TJSONNumber.Create(I + 1));
                 // The LSP tools want a 0-based line:character, and the hit
                 // used to arrive Trim'ed - so the column could not be derived
@@ -490,7 +496,14 @@ begin
     Root := Params.Root;
   end;
   if not TDirectory.Exists(Root) then
+  begin
+    // "No esta" y "no es una carpeta" no son lo mismo, y contestar la primera
+    // cuando pasa la segunda manda al agente a buscar un fichero que tiene
+    // delante (medido 2026-09-20 sobre README.md).
+    if TFile.Exists(Root) then
+      Exit(Format(SR_LIST_IS_FILE_FMT, [Root]));
     Exit('error: directory not found: ' + Root);
+  end;
   // Shell-style brace expansion is NOT a mask: *.{pas,dfm} matched nothing
   // silently (field 2026-08-22). Say so instead of returning an empty list.
   if Params.Pattern.Contains('{') or Params.Pattern.Contains('}') then
@@ -639,7 +652,22 @@ begin
     // Without "pattern" only Delphi files are listed. That is a filter, and a
     // filter nobody mentioned reads as "there is nothing else here".
     if Params.Pattern.Trim = '' then
-      Return.AddPair('maskNote', SN_LIST_DEFAULT_MASK);
+      Return.AddPair('maskNote', SN_LIST_DEFAULT_MASK)
+    else if Total = 0 then
+    begin
+      // Solo el primer nivel, que es barato y basta para probar que la
+      // carpeta no esta vacia: recorrerla entera otra vez para dar una cifra
+      // mas bonita seria pagar dos veces el paseo justo en el caso malo.
+      var Cuantas := 0;
+      try
+        Cuantas := Length(TDirectory.GetFileSystemEntries(Root));
+      except
+        Cuantas := 0;
+      end;
+      if Cuantas > 0 then
+        Return.AddPair('maskNote', Format(SN_LIST_MASK_NO_MATCH_FMT,
+          [Params.Pattern.Trim, Cuantas]));
+    end;
     Return.AddPair('files', Arr);
     Result := Return.ToJSON;
   finally
@@ -999,6 +1027,14 @@ begin
   Srv.AddPair('exe', ParamStr(0));
   Srv.AddPair('startedAt', FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque));
   Srv.AddPair('uptime', TiempoEnMarcha(GArranque));
+  // Mail waiting in NAMED agent boxes. It lives here, in the orientation
+  // call, and nowhere else: it is server state, not a message for whoever is
+  // asking. Announced at the end of EVERY tool answer it was 90 bytes of
+  // noise about other people's post - unreadable and unclearable by the
+  // reader, so it never went away (measured 2026-09-20).
+  var Correo := DirectedMessagesPending;
+  if Correo > 0 then
+    Srv.AddPair('mailboxes', TJSONNumber.Create(Correo));
 end;
 
 { TDelphiWorkspaceTool }
@@ -1031,9 +1067,22 @@ begin
     RootsArr := TJSONArray.Create;
     Return.AddPair('roots', RootsArr);
     for R in Roots do
-      RootsArr.Add(ExcludeTrailingPathDelimiter(R));
+    begin
+      // Una raiz que es la unidad ENTERA se queda en "D:" al quitarle la
+      // barra, y el enmascarador de salida solo reconoce la forma
+      // <letra>:<separador> - asi que la unica letra de unidad real que
+      // llegaba al cliente era precisamente la del campo que le dice lo que
+      // puede tocar, contra la regla 1 de las convenciones (medido
+      // 2026-09-20). Con la barra puesta viaja como srvd:\, como todo lo
+      // demas, y el agente puede usarla verbatim igual que antes.
+      var Raiz := ExcludeTrailingPathDelimiter(R);
+      if (Length(Raiz) = 2) and (Raiz[2] = ':') then
+        Raiz := Raiz + '\';
+      RootsArr.Add(Raiz);
+    end;
     if Length(Roots) = 0 then
-      Return.AddPair('jail', 'none (unrestricted local mode - no [Workspace] ' +
+      Return.AddPair('jail', 'none (unrestricted local mode - no ' +
+        '[Workspace.<name>] ' +
         'Roots configured)')
     else
       Return.AddPair('jail', 'active');
@@ -1117,7 +1166,8 @@ begin
   FName := 'delphi_projects';
   FDescription := 'Locate Delphi projects (.dproj/.groupproj) under a ' +
     'directory - or under the workspace roots configured in settings.ini ' +
-    '[Workspace] Roots when root is empty. Optional name filter. Use this ' +
+    '[Workspace.<name>] Roots when root is empty. Optional name filter. ' +
+    'Use this ' +
     'to answer "open project X" without knowing the disk layout. Answers in ' +
     'PAGES (maxresults, default 50; offset + nextOffset to walk them): a ' +
     'work machine holds thousands of .dproj and the whole list does not fit ' +
@@ -1232,7 +1282,8 @@ begin
     Roots := WorkspaceRoots;
     if Length(Roots) = 0 then
       Exit('error: no root given and no workspace roots configured. Pass ' +
-        '"root", or configure [Workspace] Roots in settings.ini next to the ' +
+        '"root", or configure [Workspace.<name>] Roots in settings.ini next ' +
+        'to the ' +
         'server exe (or the DELPHI_MCP_ROOTS environment variable).');
   end;
 
@@ -1410,7 +1461,8 @@ begin
     Exit;
   if Length(WorkspaceRoots) = 0 then
     Exit('error: delphi_run requiere workspace roots configurados ' +
-      '(DELPHI_MCP_ROOTS o settings.ini [Workspace] Roots) - ejecutar ' +
+      '(DELPHI_MCP_ROOTS o settings.ini [Workspace.<nombre>] Roots) - ' +
+      'ejecutar ' +
       'binarios sin jaula no esta permitido.');
   if not TFile.Exists(ExePath) then
     Exit('error: no existe ' + ExePath);
@@ -1790,7 +1842,10 @@ begin
   if Result <> '' then
     Exit;
   if not TDirectory.Exists(Dir) then
-    Exit('error: directory not found: ' + Dir);
+    if TFile.Exists(Dir) then
+      Exit(Format(SR_LIST_IS_FILE_FMT, [Dir]))
+    else
+      Exit('error: directory not found: ' + Dir);
 
   if Params.OutFile <> '' then
     OutZip := TPath.GetFullPath(Params.OutFile)

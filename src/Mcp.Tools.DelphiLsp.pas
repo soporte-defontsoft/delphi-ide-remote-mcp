@@ -298,6 +298,14 @@ begin
     Result := nil;
 end;
 
+{ La linea del simbolo EN BASE 1, que es como cuenta delphi_read y como
+  cuenta el campo "line" de delphi_search. El motor LSP las da en base 0 y
+  este digest las publicaba tal cual en modo FICHERO ("@30" para la linea 31)
+  mientras el modo CARPETA publicaba base 1 - misma tool, mismo nombre de
+  campo, dos convenios, y nada que lo dijera. Un agente que llevara una linea
+  del digest a delphi_read o a un ancla caia una linea desplazada (medido
+  2026-09-20). Se unifican en base 1 y el 0 viaja aparte en "line0", que es
+  el convenio que ya usa delphi_search para las tools de LSP. }
 function SymLine(const ANode: TJSONObject): Integer;
 var
   R, S: TJSONValue;
@@ -312,6 +320,13 @@ begin
     if S is TJSONObject then
       Result := TJSONObject(S).GetValue<Integer>('line', -1);
   end;
+end;
+
+function SymLine1(const ANode: TJSONObject): Integer;
+begin
+  Result := SymLine(ANode);
+  if Result >= 0 then
+    Inc(Result);
 end;
 
 function SymCountDeep(const AArr: TJSONArray): Integer;
@@ -336,8 +351,8 @@ begin
   Nm := ANode.GetValue<string>('name', '?');
   Ch := SymChildren(ANode);
   if SameText(Nm, 'uses') and (Ch <> nil) then
-    Exit(Format('uses (%d units) @%d', [Ch.Count, SymLine(ANode)]));
-  Result := Format('%s %s @%d', [SymKindName(ANode), Nm, SymLine(ANode)]);
+    Exit(Format('uses (%d units) @%d', [Ch.Count, SymLine1(ANode)]));
+  Result := Format('%s %s @%d', [SymKindName(ANode), Nm, SymLine1(ANode)]);
   if (Ch <> nil) and (Ch.Count > 0) then
     Result := Result + Format(' (+%d dentro)', [Ch.Count]);
 end;
@@ -365,7 +380,8 @@ begin
       SecObj := TJSONObject.Create;
       Sections.AddElement(SecObj);
       SecObj.AddPair('section', N.GetValue<string>('name', '?'));
-      SecObj.AddPair('line', TJSONNumber.Create(SymLine(N)));
+      SecObj.AddPair('line', TJSONNumber.Create(SymLine1(N)));
+      SecObj.AddPair('line0', TJSONNumber.Create(SymLine(N)));
       Syms := TJSONArray.Create;
       SecObj.AddPair('symbols', Syms);
       if SymChildren(N) <> nil then
@@ -416,7 +432,8 @@ var
           Hits.AddElement(H);
           H.AddPair('name', Nm);
           H.AddPair('kind', SymKindName(N));
-          H.AddPair('line', TJSONNumber.Create(SymLine(N)));
+          H.AddPair('line', TJSONNumber.Create(SymLine1(N)));
+          H.AddPair('line0', TJSONNumber.Create(SymLine(N)));
           if APath <> '' then
             H.AddPair('in', APath);
           if (Ch <> nil) and (Ch.Count > 0) then
@@ -643,6 +660,7 @@ begin
         if (Owner <> '') and not L.StartsWith(Owner) then
           Obj.AddPair('of', Owner);
         Obj.AddPair('line', TJSONNumber.Create(I + 1));
+        Obj.AddPair('line0', TJSONNumber.Create(I));
       end
       else
         J := I;

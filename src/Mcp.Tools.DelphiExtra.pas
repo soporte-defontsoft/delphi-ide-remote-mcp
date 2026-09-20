@@ -250,7 +250,11 @@ begin
       IfThen(Params.Verbosity.Trim = '', 'quiet', Params.Verbosity.Trim.ToLower));
   except
     on E: Exception do
-      if E.Message.StartsWith('RECHAZADO') then
+      // "error:" tambien, no solo "RECHAZADO": desde v1.0.4-beta el motor
+      // rechaza con ese prefijo lo que no es un proyecto (regla 11: corrige
+      // y repite), y ese mensaje se estaba re-lanzando y saliendo disfrazado
+      // de averia interna - justo lo que este try/except existe para evitar.
+      if E.Message.StartsWith('RECHAZADO') or E.Message.StartsWith('error:') then
         Exit(E.Message)
       else
         raise;
