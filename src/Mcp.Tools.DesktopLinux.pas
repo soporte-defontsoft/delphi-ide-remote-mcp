@@ -255,7 +255,7 @@ begin
             [NombreSeguro(Params.Profile.Trim),
              FormatDateTime('yyyymmdd-hhnnsszzz', Now),
              TPath.GetExtension(Remota)]));
-          TDirectory.CreateDirectory(Destino);
+          CrearCarpeta(Destino);
           TFile.Move(Local, Propia);
           Local := Propia;
           TDirectory.Delete(Bajada, True);

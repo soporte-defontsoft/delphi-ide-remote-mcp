@@ -195,7 +195,7 @@ begin
       if Destino = '' then
         Destino := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-desktop');
       try
-        TDirectory.CreateDirectory(Destino);
+        CrearCarpeta(Destino);
         { Milisegundos y un fragmento GUID: con resolucion de SEGUNDOS dos
           capturas del mismo segundo compartian nombre y la segunda pisaba a
           la primera - las dos llamadas se llevaban la misma imagen. }

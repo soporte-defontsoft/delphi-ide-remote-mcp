@@ -86,6 +86,7 @@ uses
   System.SyncObjs,
   System.Hash,
   System.RegularExpressions,
+  Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
   Lsp.BuildRunner,
   Lsp.Discovery,
   Lsp.Texts;
@@ -155,7 +156,7 @@ begin
      ARelPath.StartsWith('/') or ARelPath.Contains('\') then
     Exit(SR_FETCHTARGET_BADPATH);
   ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
-  TDirectory.CreateDirectory(ADestDir);
+  CrearCarpeta(ADestDir);
   Ops := Format('"--get=%s/%s,%s"', [ProjName, ARelPath, ADestDir]);
   Rc := Paclient(Pc, Ops, AProfile, Output);
   if Rc <> 0 then
@@ -284,7 +285,7 @@ begin
   JobId := FormatDateTime('yyyymmdd"-"hhnnsszzz', Now) + '-' +
     LowerCase(TGUID.NewGuid.ToString.Substring(1, 8));
   TmpDir := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-remoterun');
-  TDirectory.CreateDirectory(TmpDir);
+  CrearCarpeta(TmpDir);
   GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.sh');
   // POSIX script: LF endings and NO BOM - /bin/sh chokes on both.
   Enc := TUTF8Encoding.Create(False);
@@ -452,7 +453,7 @@ begin
   TmpDir := TPath.Combine(TPath.Combine(TPath.GetTempPath,
     'delphi-mcp-remoterun'), 'ver-' +
     LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
-  TDirectory.CreateDirectory(TmpDir);
+  CrearCarpeta(TmpDir);
   // el sello del target: ausente = nodo de antes de los sellos (o ninguno)
   RemotoSha := '';
   if FetchFromTarget(AProfile, NODE_PROJECT, 'node.ver', TmpDir, VerFile) = '' then

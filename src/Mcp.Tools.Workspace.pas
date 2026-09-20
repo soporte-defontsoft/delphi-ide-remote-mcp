@@ -715,7 +715,7 @@ begin
   if SameText(Params.Command.Trim, 'clone') then
   begin
     if not TDirectory.Exists(Repo) then
-      TDirectory.CreateDirectory(Repo);
+      CrearCarpeta(Repo);
   end
   else if not TDirectory.Exists(Repo) then
     Exit('error: directory not found: ' + Repo);
@@ -1716,7 +1716,7 @@ begin
 
   Dir := TPath.GetDirectoryName(FullPath);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
-    TDirectory.CreateDirectory(Dir);
+    CrearCarpeta(Dir);
 
   // Non-destructive: a fresh upload (offset 0) TRUNCATES the target. If a file
   // is already there, copy it to the recoverable trash first - upload was the

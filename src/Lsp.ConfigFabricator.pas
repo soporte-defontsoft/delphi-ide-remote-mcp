@@ -160,7 +160,7 @@ begin
   // newer than the .dproj (and same tool generation baked into the name).
   CacheDir := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'),
     'DelphiLspMcp\configs');
-  TDirectory.CreateDirectory(CacheDir);
+  CrearCarpeta(CacheDir);
   CacheFile := TPath.Combine(CacheDir, Format('%s-%x-%s-g%d.delphilsp.json',
     [TPath.GetFileNameWithoutExtension(ADprojPath),
      THashFNV1a32.GetHashValue(TPath.GetFullPath(ADprojPath).ToLower),

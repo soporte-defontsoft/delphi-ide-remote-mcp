@@ -60,7 +60,8 @@ uses
   System.StrUtils,
   Winapi.Windows,
   MCPServer.Registration,
-  MCPServer.Logger;
+  MCPServer.Logger,
+  Lsp.Guard;      // CrearCarpeta: crear la carpeta tolerando la carrera
 
 const
   REPORTS_DIR = 'reports';
@@ -162,7 +163,7 @@ begin
   Dir := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), REPORTS_DIR);
   if Agent <> '' then
     Dir := TPath.Combine(Dir, Agent);
-  TDirectory.CreateDirectory(Dir);
+  CrearCarpeta(Dir);
 
   Stamp := Now;
   FileName := FormatDateTime('yyyymmdd-hhnnss', Stamp) + '-' + Kind;

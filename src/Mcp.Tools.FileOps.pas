@@ -128,7 +128,7 @@ procedure WriteOwnerMarker(const ATrash: string); forward;
 procedure MoveToTrash(const APath: string; out ATrash: string);
 begin
   ATrash := TrashPathFor(APath);
-  TDirectory.CreateDirectory(TPath.GetDirectoryName(ATrash));
+  CrearCarpeta(TPath.GetDirectoryName(ATrash));
   if TDirectory.Exists(APath) then
   begin
     // The RAW Windows rename, on purpose: TDirectory.Move falls back to a
@@ -498,12 +498,12 @@ begin
   try
     // Safety copy of the source into the trash before relocating.
     BackupNote := TrashPathFor(Params.Path);
-    TDirectory.CreateDirectory(TPath.GetDirectoryName(BackupNote));
+    CrearCarpeta(TPath.GetDirectoryName(BackupNote));
     if TDirectory.Exists(Params.Path) then
       TDirectory.Copy(Params.Path, BackupNote)
     else
       TFile.Copy(Params.Path, BackupNote);
-    TDirectory.CreateDirectory(TPath.GetDirectoryName(TPath.GetFullPath(Params.Dest)));
+    CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(Params.Dest)));
     if TDirectory.Exists(Params.Path) then
       TDirectory.Move(Params.Path, Params.Dest)
     else

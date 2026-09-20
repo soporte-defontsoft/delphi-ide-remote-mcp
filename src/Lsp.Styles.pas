@@ -92,7 +92,7 @@ implementation
 
 uses
   System.IOUtils, System.StrUtils, System.RegularExpressions,
-  Lsp.Patch, Lsp.BuildRunner;
+  Lsp.Patch, Lsp.BuildRunner, Lsp.Guard;
 
 { TStyleObj }
 
@@ -471,7 +471,7 @@ begin
     Exe := StyleConverterExe;
     if Exe = '' then
       Exit;
-    TDirectory.CreateDirectory(TPath.GetDirectoryName(Cache));
+    CrearCarpeta(TPath.GetDirectoryName(Cache));
     RunCaptured('"' + Exe + '" defaults "' + Cache + '"', 60000, Code);
     if (Code <> 0) or not TFile.Exists(Cache) then
       Exit;

@@ -291,7 +291,7 @@ begin
   Tmp := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-sdk-' +
     LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
   try
-    TDirectory.CreateDirectory(Tmp);
+    CrearCarpeta(Tmp);
     RunCaptured(Format('"%s" --timeout=30 "--get=/etc/os-release,%s" "%s"',
       [APaClient, Tmp, AProfName]), 120000, Rc);
     F := TPath.Combine(Tmp, 'os-release');
@@ -1270,7 +1270,7 @@ begin
     finally
       Ficha.Free;
     end;
-  TDirectory.CreateDirectory(SysRoot);
+  CrearCarpeta(SysRoot);
 
   Return := TJSONObject.Create;
   Pulls := TJSONArray.Create;
@@ -1288,7 +1288,7 @@ begin
         Pattern := Pull.RemoteBase + '/*';
       DestDir := TPath.Combine(SysRoot,
         Pull.RemoteBase.TrimLeft(['/']).Replace('/', '\'));
-      TDirectory.CreateDirectory(DestDir);
+      CrearCarpeta(DestDir);
       Cmd := '"' + PaClient + '" --timeout=30 "--get=' + Pattern + ',' +
         DestDir + '" "' + ProfName + '"';
       Output := RunCaptured(Cmd, 1200000, ExitCode);

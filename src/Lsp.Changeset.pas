@@ -306,7 +306,7 @@ begin
           AError := 'ya existe ' + Op.Path;
           Exit;
         end;
-        TDirectory.CreateDirectory(TPath.GetDirectoryName(Op.Path));
+        CrearCarpeta(TPath.GetDirectoryName(Op.Path));
         if MatchText(TPath.GetExtension(Op.Path), ['.pas', '.dpr', '.dpk', '.inc', '.dfm', '.fmx']) then
           Enc := NewFileEncName
         else
@@ -362,7 +362,7 @@ begin
           AError := 'el destino ya existe: ' + Op.Dest;
           Exit;
         end;
-        TDirectory.CreateDirectory(TPath.GetDirectoryName(Op.Dest));
+        CrearCarpeta(TPath.GetDirectoryName(Op.Dest));
         TFile.Move(Op.Path, Op.Dest);
         Result := True;
       end;

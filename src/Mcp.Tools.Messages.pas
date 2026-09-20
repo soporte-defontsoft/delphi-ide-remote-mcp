@@ -338,7 +338,7 @@ begin
         DestDir := TPath.Combine(DestDir, TPath.GetFileName(TPath.GetDirectoryName(F)))
       else if Agent <> '' then
         DestDir := TPath.Combine(DestDir, Agent); // who collected the broadcast
-      TDirectory.CreateDirectory(DestDir);
+      CrearCarpeta(DestDir);
       Dest := TPath.Combine(DestDir, TPath.GetFileName(F));
       try
         if EsAviso and (Agent <> '') then

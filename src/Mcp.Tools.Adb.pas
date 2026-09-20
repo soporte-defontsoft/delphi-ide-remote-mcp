@@ -270,7 +270,7 @@ begin
       // 200k-context client in the field (312k tokens, 4 compressions).
       var OutDir := TPath.GetDirectoryName(Params.Out.Trim);
       if OutDir <> '' then
-        TDirectory.CreateDirectory(OutDir);
+        CrearCarpeta(OutDir);
       TFile.WriteAllText(Params.Out.Trim, Txt, TEncoding.UTF8);
       Return := TJSONObject.Create;
       try

@@ -49,7 +49,7 @@ var
 begin
   if TFile.Exists(APath) then
     raise Exception.CreateFmt('%s YA EXISTE - el scaffolder jamas sobreescribe.', [APath]);
-  TDirectory.CreateDirectory(TPath.GetDirectoryName(TPath.GetFullPath(APath)));
+  CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(APath)));
   Ext := LowerCase(TPath.GetExtension(APath));
   if Ext = '.dproj' then
     Enc := 'utf8-bom' // MSBuild XML declares utf-8: not subject to IDE taste
@@ -421,7 +421,7 @@ begin
     if Clash <> '' then
       Exit(Format(SR_CREATE_CLASH_FMT, [Clash, Dir, AName]));
   end;
-  TDirectory.CreateDirectory(Dir);
+  CrearCarpeta(Dir);
 
   Files := TStringList.Create;
   try

@@ -166,166 +166,30 @@ end;
 // viven en Lsp.Patch desde 2026-09-20 para que delphi_textedit tenga lo
 // mismo: son genericas, no tienen nada de Pascal.
 function ApplyEdits(const APath, AEditsJson: string): string;
-var
-  Arr: TJSONArray;
-  V: TJSONValue;
-  Obj: TJSONObject;
-  A: TPatchArgs;
-  Snapshot: TBytes;
-  Existed: Boolean;
-  Sb: TStringBuilder;
-  One: string;
-  N, Failed: Integer;
 begin
-  V := TJSONObject.ParseJSONValue(AEditsJson);
-  if not (V is TJSONArray) then
-  begin
-    V.Free;
-    Exit(SR_PATCH_EDITS_JSON);
-  end;
-  Arr := TJSONArray(V);
-  try
-    if Arr.Count = 0 then
-      Exit(SR_PATCH_EDITS_EMPTY);
-    if Arr.Count > 50 then
-      Exit(SR_PATCH_EDITS_TOOMANY);
-    Existed := TFile.Exists(APath);
-    if not Existed then
-      Exit(Format(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
-    Snapshot := TFile.ReadAllBytes(APath);
-    Sb := TStringBuilder.Create;
-    try
-      // "occurrence" se resuelve AQUI, UNA VEZ, contra el fichero ORIGINAL, y
-      // despues se ARRASTRA segun cada entrada aplicada anade o quita lineas.
-      //
-      // Antes se recontaba dentro del bucle, sobre el fichero YA MUTADO - que
-      // es justo lo contrario de lo que promete la descripcion del parametro
-      // ("los numeros de linea SE MUEVEN y occurrence no"). Medido el
-      // 2026-09-20 por un agente auditor: pedir las ocurrencias 1, 2 y 3 de
-      // la misma linea dejaba la 2 y la 3 INTERCAMBIADAS, y borrar la 1 y la
-      // 2 borraba la 1 y la 3 - contestando "OK" a las dos. Se escribe en el
-      // sitio equivocado y se dice que todo fue bien, que es la peor forma de
-      // fallar que tiene una tool de escritura.
-      var Ocurr: TArray<Integer>;
-      SetLength(Ocurr, Arr.Count);
-      for N := 0 to Arr.Count - 1 do
-      begin
-        Ocurr[N] := 0;
-        if Arr.Items[N] is TJSONObject then
-        begin
-          var O2 := TJSONObject(Arr.Items[N]);
-          var Nth := O2.GetValue<Integer>('occurrence', 0);
-          if (O2.GetValue<Integer>('atline', 0) = 0) and (Nth > 0) and
-             not O2.GetValue<string>('old', '').Contains(#10) then
-            Ocurr[N] := NthOccurrenceLine(APath,
-              O2.GetValue<string>('old', ''), Nth);
-        end;
-      end;
-      N := 0;
-      Failed := 0;
-      for V in Arr do
-      begin
-        Inc(N);
-        if not (V is TJSONObject) then
-        begin
-          Failed := N;
-          Sb.AppendLine(Format('  %d: no es un objeto {old,new}', [N]));
-          Break;
-        end;
-        Obj := TJSONObject(V);
-        // A MULTI-LINE anchor. The one-line rule protects a lone edit, where
-        // a long anchor is a long chance to mistype; inside a batch, where
-        // the caller is replacing a whole method body it just copied, it was
-        // pure work: six lines meant six entries to line up by hand (field
-        // round 12). Here the block is matched WHOLE and exactly, which is
-        // its own protection, and it must appear once (or "occurrence" says
-        // which one).
-        if Obj.GetValue<string>('old', '').Contains(#10) then
-        begin
-          One := ApplyBlockEdit(APath, Obj.GetValue<string>('old', ''),
-            Obj.GetValue<string>('new', ''), Obj.GetValue<Integer>('occurrence', 0));
-          if One.StartsWith('RECHAZADO') or One.StartsWith('error') then
-          begin
-            Failed := N;
-            Sb.AppendLine(Format('  %d: %s', [N, One.Replace(#10, ' ')]));
-            Break;
-          end;
-          Sb.AppendLine(Format('  %d OK (bloque de %d lineas)',
-            [N, Length(Obj.GetValue<string>('old', '').Split([#10]))]));
-          Continue;
-        end;
-        A := Default(TPatchArgs);
-        A.Path := APath;
-        A.OldLine := Obj.GetValue<string>('old', '');
-        A.NewText := Obj.GetValue<string>('new', '');
-        A.HasOld := A.OldLine <> '';
-        A.HasNew := (A.NewText <> '') or A.HasOld;
-        A.AtLine := Obj.GetValue<Integer>('atline', 0);
-        // "occurrence" instead of counting lines: inside a batch the line
-        // numbers MOVE as earlier entries add or remove lines, so an atline
-        // taken from the original file drifts. Which of the N identical
-        // lines you meant does not drift (field round 12).
-        if A.AtLine = 0 then
-          A.AtLine := Ocurr[N - 1]; // resuelto arriba y ya desplazado
-        A.DeleteLine := Obj.GetValue<Boolean>('delete', False);
-        // El antes, para saber DONDE cambio y CUANTO y poder arrastrar las
-        // ocurrencias que quedan pendientes.
-        var EncTmp: string;
-        var AntesL: TArray<string>;
-        try
-          AntesL := PatchLoadText(APath, EncTmp)
-            .Replace(#13#10, #10).Split([#10]);
-        except
-          AntesL := nil;
-        end;
-        One := ExecutePatch(A);
-        if (AntesL <> nil) and not (One.StartsWith('RECHAZADO') or
-                                    One.StartsWith('error')) then
-        try
-          var DespuesL := PatchLoadText(APath, EncTmp)
-            .Replace(#13#10, #10).Split([#10]);
-          var Delta := Length(DespuesL) - Length(AntesL);
-          if Delta <> 0 then
-          begin
-            // La primera linea que difiere: a partir de ahi todo se mueve.
-            var Cambio := 0;
-            while (Cambio < Length(AntesL)) and (Cambio < Length(DespuesL)) and
-                  (AntesL[Cambio] = DespuesL[Cambio]) do
-              Inc(Cambio);
-            for var K := N to High(Ocurr) do
-              if Ocurr[K] > Cambio + 1 then // Ocurr es 1-based, Cambio 0-based
-                Inc(Ocurr[K], Delta);
-          end;
-        except
-          // si no se puede releer, mejor no tocar lo pendiente
-        end;
-        // The engine says RECHAZADO / error when it refused; anything else is
-        // an applied edit with its audit.
-        if One.StartsWith('RECHAZADO') or One.StartsWith('error') then
-        begin
-          Failed := N;
-          Sb.AppendLine(Format('  %d: %s', [N, One.Replace(#10, ' ')]));
-          Break;
-        end;
-        Sb.AppendLine(Format('  %d OK: %s', [N,
-          A.OldLine.Trim.Substring(0, Min(70, Length(A.OldLine.Trim)))]));
-      end;
-      if Failed > 0 then
-      begin
-        // all or nothing: the file goes back byte for byte
-        TFile.WriteAllBytes(APath, Snapshot);
-        Exit(Format(SR_PATCH_EDITS_ROLLED_FMT,
-          [Failed, Arr.Count, Sb.ToString.TrimRight]));
-      end;
-      Result := Format(SN_PATCH_EDITS_OK_FMT,
-        [Arr.Count, TPath.GetFileName(APath), Sb.ToString.TrimRight]);
-    finally
-      Sb.Free;
-    end;
-  finally
-    Arr.Free;
-  end;
+  // El motor de tandas vive en Lsp.Patch (AplicaTanda) y lo comparten las DOS
+  // tools de escritura. Aqui solo queda lo que es de delphi_edit: como se
+  // aplica UNA edicion suelta sobre un fuente Pascal. Eran 132 lineas con un
+  // 78% identico a las de delphi_textedit, y esa duplicacion se cobro el bug
+  // de "occurrence" DOS veces el mismo dia.
+  Result := AplicaTanda(APath, AEditsJson,
+    function(const AOld, ANew: string; AAtLine: Integer;
+      ADelete: Boolean): string
+    var
+      A: TPatchArgs;
+    begin
+      A := Default(TPatchArgs);
+      A.Path := APath;
+      A.OldLine := AOld;
+      A.NewText := ANew;
+      A.HasOld := AOld <> '';
+      A.HasNew := (ANew <> '') or A.HasOld;
+      A.AtLine := AAtLine;
+      A.DeleteLine := ADelete;
+      Result := ExecutePatch(A);
+    end);
 end;
+
 
 function TDelphiPatchTool.ExecuteWithParams(const Params: TDelphiPatchParams): string;
 var

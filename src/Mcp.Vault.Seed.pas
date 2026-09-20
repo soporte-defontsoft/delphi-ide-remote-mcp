@@ -37,7 +37,8 @@ implementation
 uses
   System.SysUtils,
   System.IOUtils,
-  System.Types;
+  System.Types,
+  Lsp.Guard;      // CrearCarpeta: crear la carpeta tolerando la carrera
 
 var
   GNote: string = '';
@@ -262,7 +263,7 @@ var
 begin
   Dir := TPath.GetDirectoryName(APath);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
-    TDirectory.CreateDirectory(Dir);
+    CrearCarpeta(Dir);
   // UTF-8 without BOM, same as every other vault write.
   TFile.WriteAllBytes(APath, TEncoding.UTF8.GetBytes(AText));
 end;
@@ -283,7 +284,7 @@ begin
         Exit; // an existing vault is never touched
     end
     else
-      TDirectory.CreateDirectory(Root);
+      CrearCarpeta(Root);
 
     WriteNote(TPath.Combine(Root, 'VAULT-INSTRUCTIONS.md'), T_INSTRUCTIONS);
     WriteNote(TPath.Combine(Root, 'AGENTS-VAULT.md'), T_RULES);

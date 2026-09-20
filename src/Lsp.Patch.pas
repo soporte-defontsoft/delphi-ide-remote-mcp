@@ -80,6 +80,34 @@ function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
   el fallo; se mueve al sitio donde ya miran todas. }
 function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
 
+{ EL motor de tandas, escrito UNA vez.
+
+  Aplica un array JSON de ediciones sobre UN fichero, EN ORDEN y TODO O NADA:
+  parsea, pre-resuelve los "occurrence" contra el fichero ORIGINAL y los
+  arrastra segun las entradas anteriores anaden o quitan lineas, maneja las
+  anclas de bloque, acumula el eco y, si una falla, devuelve el fichero byte a
+  byte. Lo unico que NO sabe es como se aplica UNA edicion suelta: eso lo pone
+  quien llama, y es la unica linea en la que las dos tools se diferencian.
+
+  Por que existe: esto vivia DUPLICADO en Mcp.Tools.DelphiPatch.ApplyEdits
+  (delphi_edit) y en Lsp.TextEdit.TextEditsNucleo (delphi_textedit) - 132 y
+  140 lineas con 103 identicas, un 78%. Y lo que cambiaba era cosmetico: el
+  tipo del registro de argumentos, la llamada al motor de una edicion, y las
+  variables renombradas al castellano (One/Una, Failed/Fallo,
+  Snapshot/Copia), que es lo que impedia verlas como gemelas al leerlas.
+
+  El precio de esa duplicacion se pago el 2026-09-20: el bug de "occurrence"
+  -recontar sobre el fichero ya mutado, escribir en la linea equivocada y
+  contestar OK- habia que arreglarlo DOS veces, y la segunda solo aparecio
+  porque la sonda de verificacion uso por casualidad la tool que no se habia
+  tocado. Con un solo motor, esta familia entera tiene una sola puerta. }
+type
+  TAplicaUnaEdicion = reference to function(const AOld, ANew: string;
+    AAtLine: Integer; ADelete: Boolean): string;
+
+function AplicaTanda(const APath, AEditsJson: string;
+  const AAplicaUna: TAplicaUnaEdicion): string;
+
 { Encoding-preserving load/save for other engines (scaffolder): text is
   decoded with the real encoding; save re-encodes with the SAME one, makes
   the pre-edit backup and writes atomically. AEncName as in delphi_read. }
@@ -119,6 +147,7 @@ uses
   System.Classes,
   System.StrUtils,
   System.IOUtils,
+  System.JSON,    // AplicaTanda: el motor de tandas vive aqui desde 2026-09-20
   System.SyncObjs,
   System.Generics.Collections,
   System.RegularExpressions,
@@ -425,7 +454,7 @@ begin
   Dest := TPath.Combine(DayDir, TPath.GetFileName(APath));
   if TFile.Exists(Dest) then
     Exit('ya existia (' + Dest + ')');
-  TDirectory.CreateDirectory(DayDir);
+  CrearCarpeta(DayDir);
   // "Existe?" y "copia" no son un solo gesto: dos escrituras del mismo fichero
   // a la vez pasaban las dos por el if y la segunda moria con "Cannot create
   // file ... already exists", RECHAZANDO una edicion perfectamente valida
@@ -588,6 +617,152 @@ begin
     Sb.Free;
   end;
   Result := Format(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
+end;
+
+function AplicaTanda(const APath, AEditsJson: string;
+  const AAplicaUna: TAplicaUnaEdicion): string;
+var
+  Arr: TJSONArray;
+  V: TJSONValue;
+  Obj: TJSONObject;
+  Copia: TBytes;
+  Sb: TStringBuilder;
+  Una, Anc, Nue: string;
+  N, Fallo, EnLinea: Integer;
+  Borra: Boolean;
+begin
+  V := TJSONObject.ParseJSONValue(AEditsJson);
+  if not (V is TJSONArray) then
+  begin
+    V.Free;
+    Exit(SR_PATCH_EDITS_JSON);
+  end;
+  Arr := TJSONArray(V);
+  try
+    if Arr.Count = 0 then
+      Exit(SR_PATCH_EDITS_EMPTY);
+    if Arr.Count > 50 then
+      Exit(SR_PATCH_EDITS_TOOMANY);
+    if not TFile.Exists(APath) then
+      Exit(Format(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
+    Copia := TFile.ReadAllBytes(APath); // la red: el fichero antes de nada
+    Sb := TStringBuilder.Create;
+    try
+      // "occurrence" se resuelve AQUI, UNA VEZ, contra el fichero ORIGINAL, y
+      // despues se ARRASTRA segun cada entrada aplicada anade o quita lineas.
+      // Recontarlo dentro del bucle, sobre el fichero YA MUTADO, es justo lo
+      // contrario de lo que promete la descripcion del parametro ("los
+      // numeros de linea SE MUEVEN y occurrence no"): pedir las ocurrencias
+      // 1, 2 y 3 dejaba la 2 y la 3 INTERCAMBIADAS, y borrar la 1 y la 2
+      // borraba la 1 y la 3 - contestando "OK" a todo. Escribir en el sitio
+      // equivocado y decir que fue bien es la peor forma de fallar que tiene
+      // una tool de escritura.
+      var Ocurr: TArray<Integer>;
+      SetLength(Ocurr, Arr.Count);
+      for N := 0 to Arr.Count - 1 do
+      begin
+        Ocurr[N] := 0;
+        if Arr.Items[N] is TJSONObject then
+        begin
+          var O2 := TJSONObject(Arr.Items[N]);
+          var Nth := O2.GetValue<Integer>('occurrence', 0);
+          if (O2.GetValue<Integer>('atline', 0) = 0) and (Nth > 0) and
+             not O2.GetValue<string>('old', '').Contains(#10) then
+            Ocurr[N] := NthOccurrenceLine(APath,
+              O2.GetValue<string>('old', ''), Nth);
+        end;
+      end;
+      N := 0;
+      Fallo := 0;
+      for V in Arr do
+      begin
+        Inc(N);
+        if not (V is TJSONObject) then
+        begin
+          Fallo := N;
+          Sb.AppendLine(Format('  %d: no es un objeto {old,new}', [N]));
+          Break;
+        end;
+        Obj := TJSONObject(V);
+        Anc := Obj.GetValue<string>('old', '');
+        Nue := Obj.GetValue<string>('new', '');
+        // Ancla de VARIAS lineas: se sustituye el bloque entero. La regla de
+        // "una linea" protege a una edicion suelta, donde un ancla larga es
+        // una ocasion larga de equivocarse; dentro de una tanda, donde quien
+        // llama sustituye un cuerpo que acaba de copiar, era trabajo puro.
+        if Anc.Contains(#10) then
+        begin
+          Una := ApplyBlockEdit(APath, Anc, Nue,
+            Obj.GetValue<Integer>('occurrence', 0));
+          if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
+          begin
+            Fallo := N;
+            Sb.AppendLine(Format('  %d: %s', [N, Una.Replace(#10, ' ')]));
+            Break;
+          end;
+          Sb.AppendLine(Format('  %d OK (bloque de %d lineas)',
+            [N, Length(Anc.Split([#10]))]));
+          Continue;
+        end;
+        EnLinea := Obj.GetValue<Integer>('atline', 0);
+        if EnLinea = 0 then
+          EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
+        Borra := Obj.GetValue<Boolean>('delete', False);
+        // El antes, para saber DONDE cambio y CUANTO y arrastrar lo pendiente.
+        var EncTmp: string;
+        var AntesL: TArray<string>;
+        try
+          AntesL := PatchLoadText(APath, EncTmp)
+            .Replace(#13#10, #10).Split([#10]);
+        except
+          AntesL := nil;
+        end;
+        Una := AAplicaUna(Anc, Nue, EnLinea, Borra);
+        if (AntesL <> nil) and not (Una.StartsWith('RECHAZADO') or
+                                    Una.StartsWith('error')) then
+        try
+          var DespuesL := PatchLoadText(APath, EncTmp)
+            .Replace(#13#10, #10).Split([#10]);
+          var Delta := Length(DespuesL) - Length(AntesL);
+          if Delta <> 0 then
+          begin
+            // La primera linea que difiere: de ahi para abajo todo se mueve.
+            var Cambio := 0;
+            while (Cambio < Length(AntesL)) and (Cambio < Length(DespuesL)) and
+                  (AntesL[Cambio] = DespuesL[Cambio]) do
+              Inc(Cambio);
+            for var K := N to High(Ocurr) do
+              if Ocurr[K] > Cambio + 1 then // Ocurr 1-based, Cambio 0-based
+                Inc(Ocurr[K], Delta);
+          end;
+        except
+          // si no se puede releer, mejor no tocar lo pendiente
+        end;
+        // El motor dice RECHAZADO / error cuando se nego; cualquier otra cosa
+        // es una edicion aplicada con su auditoria.
+        if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
+        begin
+          Fallo := N;
+          Sb.AppendLine(Format('  %d: %s', [N, Una.Replace(#10, ' ')]));
+          Break;
+        end;
+        Sb.AppendLine(Format('  %d OK: %s',
+          [N, Anc.Trim.Substring(0, Min(70, Length(Anc.Trim)))]));
+      end;
+      if Fallo > 0 then
+      begin
+        TFile.WriteAllBytes(APath, Copia); // todo o nada, byte a byte
+        Exit(Format(SR_PATCH_EDITS_ROLLED_FMT,
+          [Fallo, Arr.Count, Sb.ToString.TrimRight]));
+      end;
+      Result := Format(SN_PATCH_EDITS_OK_FMT,
+        [Arr.Count, TPath.GetFileName(APath), Sb.ToString.TrimRight]);
+    finally
+      Sb.Free;
+    end;
+  finally
+    Arr.Free;
+  end;
 end;
 
 function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
@@ -782,7 +957,7 @@ begin
             'implementation'#13#10#13#10'end.'#13#10, [UnitName]);
           Note := 'esqueleto estandar del IDE';
         end;
-        TDirectory.CreateDirectory(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
+        CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
         // New files honour the encoding the IDE is configured to use.
         var NewK := ekCp1252;
         if IdeWantsUtf8 then
@@ -886,7 +1061,7 @@ begin
 
           var PreCopy := TPath.Combine(TPath.Combine(DirBk, FormatDateTime('yyyymmdd', Now)),
             TPath.GetFileName(A.Path) + '.antes-restaurar-' + FormatDateTime('hhnnss', Now));
-          TDirectory.CreateDirectory(TPath.GetDirectoryName(PreCopy));
+          CrearCarpeta(TPath.GetDirectoryName(PreCopy));
           TFile.Copy(A.Path, PreCopy);
           AtomicWrite(A.Path, BkBytes);
           Exit(Format('RESTAURADO %s desde %s'#10'  ahora: %s'#10 +

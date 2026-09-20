@@ -232,6 +232,21 @@ function DeadCopyWriteDenied(const APath: string): string;
   server's own scratch and home paths legitimately contain one (DFONTA~1). }
 function LongCanonical(const APath: string): string;
 
+{ Crea una carpeta (y sus padres) TOLERANDO que otro hilo la este creando a la
+  vez. TDirectory.CreateDirectory mira si existe y LUEGO crea: dos hilos
+  entran juntos, los dos contestan "no existe", los dos crean, y el que pierde
+  se lleva un EInOutError "no se puede crear un archivo que ya existe".
+
+  Es la misma carrera que delphi_report ya resolvia para el NOMBRE del fichero
+  con CREATE_NEW... doce lineas mas abajo de donde la dejaba abierta para la
+  CARPETA. Medido el 2026-09-20 por la bateria de concurrencia, que falla de
+  higos a brevas justo por esto: de 8 informes simultaneos llegaban 7.
+
+  Y estaba en las 32 llamadas del servidor, no en una: con dos agentes
+  trabajando a la vez, cualquiera podia perder. Por eso se arregla aqui y no
+  alli - si el resultado es que la carpeta esta, da igual quien la creo. }
+procedure CrearCarpeta(const ADir: string);
+
 { Host names git may talk to when an agent writes an explicit URL, comma
   separated; '' (the default) means none - see GitRemoteDenied. }
 function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
@@ -1038,6 +1053,20 @@ begin
     Exit(SR_GUARD_DEAD_TRASH);
   if P.Contains('\__history\') or P.Contains('\__recovery\') then
     Exit(SR_GUARD_DEAD_IDE);
+end;
+
+procedure CrearCarpeta(const ADir: string);
+begin
+  if ADir = '' then
+    Exit;
+  try
+    TDirectory.CreateDirectory(ADir);
+  except
+    // Si despues del intento la carpeta esta, alguien gano la carrera y es
+    // exactamente lo que queriamos. Si no esta, el fallo es de verdad.
+    if not TDirectory.Exists(ADir) then
+      raise;
+  end;
 end;
 
 function LongCanonical(const APath: string): string;

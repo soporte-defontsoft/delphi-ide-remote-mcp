@@ -133,7 +133,7 @@ begin
       'edita con old/new.');
   Dir := TPath.GetDirectoryName(A.Path);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
-    TDirectory.CreateDirectory(Dir);
+    CrearCarpeta(Dir);
   // Line endings are explicit: the JSON channel often delivers LF-only text,
   // so CRLF (the Windows default here) is applied unless 'lf' is asked for.
   Text := A.Content.Replace(#13#10, #10).Replace(#13, #10);
@@ -316,16 +316,11 @@ end;
 
 { El trabajo de la tanda; ExecuteTextEdits lo envuelve en el cerrojo. }
 function TextEditsNucleo(const APath, AEditsJson: string): string;
-var
-  V: TJSONValue;
-  Arr: TJSONArray;
-  Obj: TJSONObject;
-  A: TTextEditArgs;
-  Copia: TBytes;
-  Sb: TStringBuilder;
-  Una: string;
-  N, Fallo: Integer;
 begin
+  // Los gates SI son propios: esta tool vigila extensiones que la otra no, y
+  // al reves. Lo que era comun -parseo, occurrence, bucle, todo o nada, eco-
+  // vive ahora en Lsp.Patch.AplicaTanda y lo comparten las dos. Aqui queda
+  // solo como se aplica UNA edicion suelta sobre texto que no es Pascal.
   Result := PathDenied(APath);
   if Result <> '' then
     Exit;
@@ -337,140 +332,24 @@ begin
     Exit;
   if not TFile.Exists(APath) then
     Exit('RECHAZADO: no existe ' + APath + '. Para crearlo usa create=true.');
-  V := TJSONObject.ParseJSONValue(AEditsJson);
-  if not (V is TJSONArray) then
-  begin
-    V.Free;
-    Exit(SR_PATCH_EDITS_JSON);
-  end;
-  Arr := TJSONArray(V);
-  try
-    if Arr.Count = 0 then
-      Exit(SR_PATCH_EDITS_EMPTY);
-    if Arr.Count > 50 then
-      Exit(SR_PATCH_EDITS_TOOMANY);
-    // La red: el fichero entero antes de tocar nada.
-    Copia := TFile.ReadAllBytes(APath);
-    Sb := TStringBuilder.Create;
-    try
-      // "occurrence" se resuelve AQUI, UNA VEZ, contra el fichero ORIGINAL, y
-      // luego se ARRASTRA segun cada entrada aplicada anade o quita lineas.
-      // Antes se recontaba dentro del bucle, sobre el fichero YA MUTADO, que
-      // es lo contrario de lo que promete el parametro. Medido el 2026-09-20:
-      // pedir las ocurrencias 1, 2 y 3 dejaba la 2 y la 3 INTERCAMBIADAS, y
-      // borrar la 1 y la 2 borraba la 1 y la 3, contestando "OK" a todo.
-      // Gemelo exacto del de Mcp.Tools.DelphiPatch.ApplyEdits: son dos
-      // bucles con la misma forma, y el fallo estaba en los dos.
-      var Ocurr: TArray<Integer>;
-      SetLength(Ocurr, Arr.Count);
-      for N := 0 to Arr.Count - 1 do
-      begin
-        Ocurr[N] := 0;
-        if Arr.Items[N] is TJSONObject then
-        begin
-          var O2 := TJSONObject(Arr.Items[N]);
-          var Nth := O2.GetValue<Integer>('occurrence', 0);
-          if (O2.GetValue<Integer>('atline', 0) = 0) and (Nth > 0) and
-             not O2.GetValue<string>('old', '').Contains(#10) then
-            Ocurr[N] := NthOccurrenceLine(APath,
-              O2.GetValue<string>('old', ''), Nth);
-        end;
-      end;
-      N := 0;
-      Fallo := 0;
-      for V in Arr do
-      begin
-        Inc(N);
-        if not (V is TJSONObject) then
-        begin
-          Fallo := N;
-          Sb.AppendLine(Format('  %d: no es un objeto {old,new}', [N]));
-          Break;
-        end;
-        Obj := TJSONObject(V);
-        // Ancla de VARIAS lineas: se sustituye el bloque entero. Sin esto, un
-        // parrafo largo de documentacion no se podia tocar - TOOLS.md tiene
-        // parrafos de 3 KB en UNA linea y el ancla es "una linea completa",
-        // asi que habia que pegar los 3 KB (medido el 2026-09-20).
-        if Obj.GetValue<string>('old', '').Contains(#10) then
-        begin
-          Una := ApplyBlockEdit(APath, Obj.GetValue<string>('old', ''),
-            Obj.GetValue<string>('new', ''),
-            Obj.GetValue<Integer>('occurrence', 0));
-          if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
-          begin
-            Fallo := N;
-            Sb.AppendLine(Format('  %d: %s', [N, Una.Replace(#10, ' ')]));
-            Break;
-          end;
-          Sb.AppendLine(Format('  %d OK (bloque de %d lineas)',
-            [N, Length(Obj.GetValue<string>('old', '').Split([#10]))]));
-          Continue;
-        end;
-        A := Default(TTextEditArgs);
-        A.Path := APath;
-        A.OldLine := Obj.GetValue<string>('old', '');
-        A.NewText := Obj.GetValue<string>('new', '');
-        A.HasOld := A.OldLine <> '';
-        A.HasNew := (A.NewText <> '') or A.HasOld;
-        A.AtLine := Obj.GetValue<Integer>('atline', 0);
-        // "occurrence" en vez de contar lineas: dentro de una tanda los
-        // numeros SE MUEVEN segun las entradas anteriores anaden o quitan.
-        if A.AtLine = 0 then
-          A.AtLine := Ocurr[N - 1]; // resuelto arriba y ya desplazado
-        A.DeleteLine := Obj.GetValue<Boolean>('delete', False);
-        var EncTmp: string;
-        var AntesL: TArray<string>;
-        try
-          AntesL := PatchLoadText(APath, EncTmp)
-            .Replace(#13#10, #10).Split([#10]);
-        except
-          AntesL := nil;
-        end;
-        Una := TextEditNucleo(A);
-        if (AntesL <> nil) and not (Una.StartsWith('RECHAZADO') or
-                                    Una.StartsWith('error')) then
-        try
-          var DespuesL := PatchLoadText(APath, EncTmp)
-            .Replace(#13#10, #10).Split([#10]);
-          var Delta := Length(DespuesL) - Length(AntesL);
-          if Delta <> 0 then
-          begin
-            var Cambio := 0;
-            while (Cambio < Length(AntesL)) and (Cambio < Length(DespuesL)) and
-                  (AntesL[Cambio] = DespuesL[Cambio]) do
-              Inc(Cambio);
-            for var K := N to High(Ocurr) do
-              if Ocurr[K] > Cambio + 1 then // Ocurr 1-based, Cambio 0-based
-                Inc(Ocurr[K], Delta);
-          end;
-        except
-          // si no se puede releer, mejor no tocar lo pendiente
-        end;
-        if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
-        begin
-          Fallo := N;
-          Sb.AppendLine(Format('  %d: %s', [N, Una.Replace(#10, ' ')]));
-          Break;
-        end;
-        Sb.AppendLine(Format('  %d OK: %s', [N,
-          A.OldLine.Trim.Substring(0, Min(70, Length(A.OldLine.Trim)))]));
-      end;
-      if Fallo > 0 then
-      begin
-        TFile.WriteAllBytes(APath, Copia); // todo o nada
-        Exit(Format(SR_PATCH_EDITS_ROLLED_FMT,
-          [Fallo, Arr.Count, Sb.ToString.TrimRight]));
-      end;
-      Result := Format(SN_PATCH_EDITS_OK_FMT,
-        [Arr.Count, TPath.GetFileName(APath), Sb.ToString.TrimRight]);
-    finally
-      Sb.Free;
-    end;
-  finally
-    Arr.Free;
-  end;
+  Result := AplicaTanda(APath, AEditsJson,
+    function(const AOld, ANew: string; AAtLine: Integer;
+      ADelete: Boolean): string
+    var
+      A: TTextEditArgs;
+    begin
+      A := Default(TTextEditArgs);
+      A.Path := APath;
+      A.OldLine := AOld;
+      A.NewText := ANew;
+      A.HasOld := AOld <> '';
+      A.HasNew := (ANew <> '') or A.HasOld;
+      A.AtLine := AAtLine;
+      A.DeleteLine := ADelete;
+      Result := TextEditNucleo(A);
+    end);
 end;
+
 
 function ExecuteTextEdits(const APath, AEditsJson: string): string;
 begin

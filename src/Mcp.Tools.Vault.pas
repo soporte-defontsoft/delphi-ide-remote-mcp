@@ -302,7 +302,7 @@ begin
     Exit(Dest); // already preserved earlier in this run: keep the original
   DestDir := TPath.GetDirectoryName(Dest);
   if not TDirectory.Exists(DestDir) then
-    TDirectory.CreateDirectory(DestDir);
+    CrearCarpeta(DestDir);
   TFile.Copy(AFull, Dest);
   Result := Dest;
 end;
@@ -709,7 +709,7 @@ begin
         'corregir un fragmento.', [Params.Path.Trim]));
     Dir := TPath.GetDirectoryName(Full);
     if (Dir <> '') and not TDirectory.Exists(Dir) then
-      TDirectory.CreateDirectory(Dir);
+      CrearCarpeta(Dir);
     VaultSave(Full, Params.Content.TrimRight + #10);
   finally
     GVaultWrite.Leave;

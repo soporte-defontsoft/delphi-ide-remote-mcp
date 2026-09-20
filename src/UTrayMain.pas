@@ -117,7 +117,7 @@ begin
     // nothing after 11:54 for a 14:00 diagnosis). Appended per drain,
     // removed when the block is persisted - never a second copy.
     try
-      TDirectory.CreateDirectory(FLogDir);
+      CrearCarpeta(FLogDir);
       TFile.AppendAllText(TPath.Combine(FLogDir, LIVE_LOG_NAME),
         Chunk.Text, TEncoding.UTF8);
     except
@@ -139,7 +139,7 @@ begin
   if MemoLog.Lines.Count = 0 then
     Exit;
   try
-    TDirectory.CreateDirectory(FLogDir);
+    CrearCarpeta(FLogDir);
     Stamp := FormatDateTime('yyyymmdd"-"hhnnss', Now);
     FileName := TPath.Combine(FLogDir, Stamp + '.log');
     N := 2;
