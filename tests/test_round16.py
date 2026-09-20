@@ -166,9 +166,18 @@ check('S1 arbol grande por defecto = summary compacto con secciones',
       j.get('mode') == 'summary' and isinstance(j.get('sections'), list) and
       j.get('totalSymbols', 0) > 50 and 'autoNote' in j, rbig[:260])
 # the fixture is Lsp.Guard.pas itself, which grows with the server: assert
-# compact relative to a hard ceiling, not to last month's size
-check('S1 y de verdad es compacto (<12k chars, el arbol completo pasa de 38k)',
-      len(rbig) < 12000, len(rbig))
+# compact relative to a hard ceiling, not to last month's size.
+#
+# El techo subio de 12k a 14k el 2026-09-20, A PROPOSITO y medido: desde la
+# v1.0.7 el resumen da la declaracion REAL del fuente en vez de la firma que
+# renderiza DelphiLSP, que se come los valores por defecto y los rangos de los
+# arrays. La verdad es mas larga. Medido sobre Lsp.Guard.pas: 11.9k antes,
+# 17.3k sin acotar, 12.9k con el tope de 110 por etiqueta y sin el ';' final.
+# O sea que decir la verdad cuesta un 7%, y el arbol completo sigue pasando de
+# 38k. No se sube el techo para callar el fallo: se sube porque el trato
+# cambio y este es su precio.
+check('S1 y de verdad es compacto (<14k chars, el arbol completo pasa de 38k)',
+      len(rbig) < 14000, len(rbig))
 
 rfull = call('delphi_symbols', {'path': big, 'mode': 'full'})
 check('S2 mode=full conserva el arbol completo con rangos',

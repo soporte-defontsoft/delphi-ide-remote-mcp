@@ -287,6 +287,98 @@ begin
     Result := 'symbol';
 end;
 
+{ La declaracion REAL, leida del FUENTE, que empieza en la linea 0-based
+  ADesde; AHasta devuelve la ultima linea usada. Une las lineas siguientes
+  mientras la sentencia no ha terminado -un ';' con todos los parentesis
+  cerrados-, porque una firma partida en varias lineas no dice nada leida a
+  medias.
+
+  Por que vive suelta y no dentro del digest de carpeta, que es donde nacio:
+  la necesitan DOS caminos. El digest lee el fuente y acierta; el camino de UN
+  fichero se fiaba del "name" que da DelphiLSP, que NO es un nombre sino una
+  FIRMA RENDERIZADA, y pierde cosas. Medido el 2026-09-20 con una unidad
+  sonda:
+
+    fuente:   function Alta(const A: string; B: Integer = 0): Boolean;
+    DelphiLSP: Alta(const A: string; B: Integer): Boolean
+    fuente:   FBuffer: array [0 .. 7] of Byte;
+    DelphiLSP: FBuffer: Byte
+
+  Un parametro opcional pasa por obligatorio y un array desaparece. Un agente
+  que respeta esa firma escribe una llamada que no compila, y lo peor que
+  puede hacer una tool de lectura es contestar algo FALSO con seguridad. El
+  arbol, los kinds y las lineas siguen siendo del LSP: lo unico que se deja de
+  creer es su forma de escribir una declaracion. }
+function StatementAt(const ALines: TArray<string>; ADesde: Integer;
+  out AHasta: Integer): string;
+
+  // Cuantos '(' quedan abiertos en AText.
+  function Unbalanced(const AText: string): Integer;
+  var
+    C: Char;
+  begin
+    Result := 0;
+    for C in AText do
+      if C = '(' then
+        Inc(Result)
+      else if C = ')' then
+        Dec(Result);
+    if Result < 0 then
+      Result := 0;
+  end;
+
+var
+  K: Integer;
+begin
+  AHasta := ADesde;
+  if (ADesde < 0) or (ADesde > High(ALines)) then
+    Exit('');
+  Result := ALines[ADesde].Trim;
+  K := ADesde;
+  // Una cabecera de class/record/interface ABRE un bloque; no es una
+  // sentencia a medias, y unirle lo que viene detras pegaba el primer campo
+  // a la linea de la clase.
+  if TRegEx.IsMatch(Result,
+    '(?i)^[A-Za-z_]\w*[ ]*=[ ]*(packed[ ]+)?(class|record|interface)\b') and
+     not Result.EndsWith(';') then
+    Exit;
+  // Un ';' DENTRO de la lista de parametros es un separador, no el final de
+  // nada: "function Alta(const A, B: string; C: Integer;" parece terminada y
+  // no lo esta, asi que se perdian el tipo de retorno y el valor por defecto.
+  while (K < High(ALines)) and (K - ADesde < 8) and
+        (not Result.EndsWith(';') or (Unbalanced(Result) > 0)) and
+        not Result.EndsWith('=') do
+  begin
+    Inc(K);
+    if ALines[K].Trim = '' then
+      Break;
+    // Una linea que es SOLO comentario o directiva se salta al unir: una
+    // property partida en tres con una nota en medio volvia como
+    // "property Cosa: string read FCosa { la nota } write FCosa;". No es
+    // falso, pero es ruido dentro de lo unico que el lector va a copiar.
+    // Solo la linea ENTERA: quitar comentarios por dentro tocaria literales.
+    if ALines[K].TrimLeft.StartsWith('//') or
+       ALines[K].TrimLeft.StartsWith('{') then
+      Continue;
+    Result := Result + ' ' + ALines[K].Trim;
+  end;
+  AHasta := K;
+end;
+
+{ El identificador, sacado del "name" del LSP: lo que hay antes del primer
+  '(' o ':'. Filtrar sobre el nombre entero era filtrar sobre una firma
+  renderizada - filter="string" casaba con todo lo que DEVUELVE un string, en
+  una tool cuyo parametro se llama "busca por nombre". }
+function IdentOf(const AName: string): string;
+var
+  I: Integer;
+begin
+  Result := AName.Trim;
+  I := Result.IndexOfAny(['(', ':']);
+  if I >= 0 then
+    Result := Result.Substring(0, I).Trim;
+end;
+
 function SymChildren(const ANode: TJSONObject): TJSONArray;
 var
   C: TJSONValue;
@@ -352,9 +444,72 @@ begin
   Ch := SymChildren(ANode);
   if SameText(Nm, 'uses') and (Ch <> nil) then
     Exit(Format('uses (%d units) @%d', [Ch.Count, SymLine1(ANode)]));
-  Result := Format('%s %s @%d', [SymKindName(ANode), Nm, SymLine1(ANode)]);
+  // La declaracion del FUENTE manda sobre la firma renderizada del LSP, y
+  // ademas ya dice ella sola si es function, procedure o property: poner
+  // delante la palabra del kind sobraba, y encima mentia - DelphiLSP marca
+  // como "method" una rutina GLOBAL, porque para el kind 6 es cualquier
+  // rutina. Cuando no hay declaracion legible se vuelve a lo de antes.
+  var Decl := ANode.GetValue<string>('decl', '');
+  if Decl <> '' then
+  begin
+    // El resumen existe para ser BARATO: decir la verdad cuesta (una firma
+    // real es mas larga que la que renderiza el LSP, que se come la mitad),
+    // y eso esta bien pagado, pero sin tope una firma monstruosa se lleva el
+    // ahorro por delante. El ';' final tampoco aporta nada aqui. Quien
+    // necesite la firma COMPLETA tiene filter="nombre" y mode="full", que es
+    // exactamente para lo que estan.
+    if Decl.EndsWith(';') then
+      Decl := Decl.Substring(0, Decl.Length - 1);
+    if Decl.Length > 110 then
+      Decl := Decl.Substring(0, 110) + '...';
+    Result := Format('%s @%d', [Decl, SymLine1(ANode)]);
+  end
+  else
+    Result := Format('%s %s @%d', [SymKindName(ANode), Nm, SymLine1(ANode)]);
   if (Ch <> nil) and (Ch.Count > 0) then
     Result := Result + Format(' (+%d dentro)', [Ch.Count]);
+end;
+
+{ Le pone a cada simbolo del arbol su declaracion REAL y su identificador
+  limpio, en UNA pasada de la que comen los tres modos (full, summary y
+  filter). Si cada modo lo sacase por su cuenta acabarian diciendo cosas
+  distintas del mismo simbolo, que es como nacieron los gemelos de este mes.
+
+  Solo los kinds que SON una declaracion: en la clausula uses cada unit es un
+  simbolo de kind "file" y unir desde su linea se tragaria la clausula entera. }
+procedure DecorateSymbolDecls(V: TJSONValue; const ALines: TArray<string>);
+const
+  DECLARAN = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 22, 23];
+var
+  Obj: TJSONObject;
+  Item: TJSONValue;
+  Ln, Fin: Integer;
+  Nm, Decl: string;
+begin
+  if V is TJSONArray then
+  begin
+    for Item in TJSONArray(V) do
+      DecorateSymbolDecls(Item, ALines);
+    Exit;
+  end;
+  if not (V is TJSONObject) then
+    Exit;
+  Obj := TJSONObject(V);
+  Nm := Obj.GetValue<string>('name', '');
+  if (Nm <> '') and (Obj.GetValue('range') <> nil) then
+  begin
+    if Obj.GetValue('ident') = nil then
+      Obj.AddPair('ident', IdentOf(Nm));
+    Ln := SymLine(Obj);
+    if (Obj.GetValue<Integer>('kind', 0) in DECLARAN) and (Ln >= 0) and
+       (Obj.GetValue('decl') = nil) then
+    begin
+      Decl := StatementAt(ALines, Ln, Fin);
+      if Decl <> '' then
+        Obj.AddPair('decl', Decl);
+    end;
+  end;
+  DecorateSymbolDecls(SymChildren(Obj), ALines);
 end;
 
 { The compact skeleton: each top-level section with its direct members as
@@ -372,11 +527,24 @@ begin
     Ret.AddPair('mode', 'summary');
     Sections := TJSONArray.Create;
     Ret.AddPair('sections', Sections);
+    // Un .dpr no tiene secciones: DelphiLSP devuelve el arbol PLANO, cada
+    // rutina en la raiz y sin hijos. Tratar la raiz como "secciones" sacaba
+    // trece secciones con "symbols": [] - que se lee como "esta rutina no
+    // tiene nada dentro", justo lo contrario de la verdad (medido el
+    // 2026-09-20 sobre DelphiLspMcp.dpr). Lo que no tiene hijos no es una
+    // seccion: es un simbolo de primer nivel.
+    var Sueltos := TJSONArray.Create;
+    Ret.AddPair('symbols', Sueltos);
     for V in AArr do
     begin
       if not (V is TJSONObject) then
         Continue;
       N := TJSONObject(V);
+      if (SymChildren(N) = nil) or (SymChildren(N).Count = 0) then
+      begin
+        Sueltos.Add(SymLabel(N));
+        Continue;
+      end;
       SecObj := TJSONObject.Create;
       Sections.AddElement(SecObj);
       SecObj.AddPair('section', N.GetValue<string>('name', '?'));
@@ -389,6 +557,10 @@ begin
           if CV is TJSONObject then
             Syms.Add(SymLabel(TJSONObject(CV)));
     end;
+    if Sections.Count = 0 then
+      Ret.RemovePair('sections').Free;
+    if Sueltos.Count = 0 then
+      Ret.RemovePair('symbols').Free;
     Ret.AddPair('totalSymbols', TJSONNumber.Create(SymCountDeep(AArr)));
     if AAuto then
       Ret.AddPair('autoNote', Format(SN_SYMBOLS_AUTO_FMT, [AFullLen]));
@@ -423,14 +595,25 @@ var
       N := TJSONObject(V);
       Nm := N.GetValue<string>('name', '');
       Ch := SymChildren(N);
-      if Nm.ToLower.Contains(AFilter) then
+      // Se busca por NOMBRE, que es lo que promete el parametro. Antes se
+      // buscaba dentro del "name" del LSP, que es una FIRMA renderizada: con
+      // filter="string" casaba todo lo que devuelve un string o recibe uno.
+      var Id := N.GetValue<string>('ident', '');
+      if Id = '' then
+        Id := IdentOf(Nm);
+      if Id.ToLower.Contains(AFilter) then
       begin
         Inc(Total);
         if Hits.Count < 100 then
         begin
           H := TJSONObject.Create;
           Hits.AddElement(H);
-          H.AddPair('name', Nm);
+          H.AddPair('name', Id);
+          // Y la declaracion, tal y como esta escrita en el fuente.
+          var D := N.GetValue<string>('decl', '');
+          if D = '' then
+            D := Nm;
+          H.AddPair('decl', D);
           H.AddPair('kind', SymKindName(N));
           H.AddPair('line', TJSONNumber.Create(SymLine1(N)));
           H.AddPair('line0', TJSONNumber.Create(SymLine(N)));
@@ -441,9 +624,9 @@ var
         end;
       end;
       if APath = '' then
-        Sub := Nm
+        Sub := Id
       else
-        Sub := APath + ' > ' + Nm;
+        Sub := APath + ' > ' + Id;
       Walk(Ch, Sub);
     end;
   end;
@@ -460,8 +643,7 @@ begin
     if Total > Hits.Count then
       Ret.AddPair('truncated', TJSONBool.Create(True));
     if Total = 0 then
-      Ret.AddPair('note',
-        'sin coincidencias; mode="summary" te da el esqueleto para orientarte');
+      Ret.AddPair('note', SN_SYMBOLS_FILTER_NONE);
     Result := Ret.ToJSON;
   finally
     Ret.Free;
@@ -511,52 +693,17 @@ var
   Obj: TJSONObject;
   I, J, Kept, Depth: Integer;
 
-  // How many '(' are still open in AText.
-  function Unbalanced(const AText: string): Integer;
-  var
-    C: Char;
-  begin
-    Result := 0;
-    for C in AText do
-      if C = '(' then
-        Inc(Result)
-      else if C = ')' then
-        Dec(Result);
-    if Result < 0 then
-      Result := 0;
-  end;
-
-  // A declaration can span several lines; the reader needs the WHOLE thing.
-  // "function Alta(const A, B: string; C: Integer;" told nobody what it
-  // returns or that the last parameter has a default (field round 12).
+  // Una declaracion puede ocupar varias lineas y quien lee la necesita
+  // ENTERA. El como vive ahora en StatementAt, ahi arriba, porque el camino
+  // de UN fichero tambien lo necesita: el digest de carpeta acertaba con las
+  // firmas y el otro camino las daba mal, leyendo lo MISMO de sitios
+  // distintos (medido 2026-09-20).
   function WholeStatement(var AIdx: Integer): string;
   var
-    K: Integer;
+    Fin: Integer;
   begin
-    Result := Lines[AIdx].Trim;
-    K := AIdx;
-    // A class/record/interface header OPENS a block; it is not an unfinished
-    // statement, and joining what comes after it glued the first field onto
-    // the class line (caught the same day it was written).
-    if TRegEx.IsMatch(Result,
-      '(?i)^[A-Za-z_]\w*[ ]*=[ ]*(packed[ ]+)?(class|record|interface)\b') and
-       not Result.EndsWith(';') then
-      Exit;
-    // A ';' INSIDE a parameter list is a separator, not the end of anything:
-    // "function Alta(const A, B: string; C: Integer;" looks finished and is
-    // not, so the return type and the default value were being dropped -
-    // exactly the signature somebody had to respect (field round 12). Count
-    // the brackets: the statement ends at a ';' with none open.
-    while (K < High(Lines)) and (K - AIdx < 8) and
-          (not Result.EndsWith(';') or (Unbalanced(Result) > 0)) and
-          not Result.EndsWith('=') do
-    begin
-      Inc(K);
-      if Lines[K].Trim = '' then
-        Break;
-      Result := Result + ' ' + Lines[K].Trim;
-    end;
-    AIdx := K;
+    Result := StatementAt(Lines, AIdx, Fin);
+    AIdx := Fin;
   end;
 
 begin
@@ -719,6 +866,20 @@ begin
     if (V = nil) or (V is TJSONNull) then
       Exit('null' + Note);
     DecorateLocations(V);
+    // La VERDAD de cada declaracion, leida del fuente, UNA vez y para los
+    // tres modos. DelphiLSP renderiza las firmas perdiendo los valores por
+    // defecto y los rangos de los arrays; el arbol, los kinds y las lineas
+    // siguen siendo suyos, pero como se escribe una declaracion lo dice el
+    // fichero. Si no se puede leer, no se decora nada y todo sigue como
+    // antes: esto anade verdad, no la sustituye.
+    try
+      var EncSim: string;
+      DecorateSymbolDecls(V, PatchLoadText(Params.Path, EncSim)
+        .Replace(#13#10, #10).Split([#10]));
+    except
+      // un fichero que el LSP si pudo abrir y nosotros no: mejor el arbol
+      // pelado que ningun arbol
+    end;
     if not (V is TJSONArray) then
       Exit(V.ToJSON + Note);
     var Filt := Params.Filter.Trim.ToLower;

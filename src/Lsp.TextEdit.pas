@@ -170,9 +170,11 @@ begin
   if LooksBinary(A.Path) then
     Exit('RECHAZADO: ' + TPath.GetFileName(A.Path) +
       ' parece BINARIO (bytes nulos). Esta tool es solo para texto.');
+  // El gemelo de la negativa de delphi_edit, y por eso comparten el texto:
+  // decian cosas distintas de la misma regla, y la de aqui ni siquiera
+  // mencionaba que en "edits" el ancla SI puede ser un bloque.
   if A.OldLine.Contains(#10) or A.OldLine.Contains(#13) then
-    Exit('RECHAZADO: old debe ser UNA sola linea completa (copiala de ' +
-      'delphi_read, todo lo que hay tras la barra |).');
+    Exit(SR_PATCH_ANCHOR_MULTILINE);
 
   Text := PatchLoadText(A.Path, EncNm);
   Eol := DominantEol(Text);

@@ -1751,9 +1751,7 @@ begin
   if M.CRLF > M.Loose then Eol := 'CRLF' else Eol := 'LF';
 
   if (Pos(#13, AOld) > 0) or (Pos(#10, AOld) > 0) then
-    Exit('RECHAZADO: el ancla tiene mas de una linea. Regla: ancla de UNA sola linea.'#10 +
-      '- Para CAMBIAR varias lineas: una llamada por linea.'#10 +
-      '- Para INSERTAR: ancla en UNA linea existente y en "new" devuelves esa misma linea junto con lo nuevo.');
+    Exit(SR_PATCH_ANCHOR_MULTILINE);
   if AOld.Trim = '' then
     Exit('RECHAZADO: el ancla esta vacia o es solo espacios.');
   if Pos(#$FFFD, AOld) > 0 then

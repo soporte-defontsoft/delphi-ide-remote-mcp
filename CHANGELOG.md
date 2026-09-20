@@ -6,6 +6,76 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.7-beta] - 2026-09-20
+
+`delphi_symbols` was answering **false signatures with confidence**, which is
+the worst thing a reading tool can do: an agent respects the signature it is
+given and writes a call that does not compile.
+
+### Fixed — the signatures are read from the source now
+DelphiLSP's `documentSymbol` does not return a *name*: it returns a **rendered
+signature**, and the rendering is lossy. Measured with a probe unit:
+
+```
+source:    function Alta(const A: string; B: Integer = 0): Boolean;
+DelphiLSP: Alta(const A: string; B: Integer): Boolean
+source:    FBuffer: array [0 .. 7] of Byte;
+DelphiLSP: FBuffer: Byte
+```
+
+An optional parameter passes for a mandatory one and an array disappears
+entirely. The tree, the kinds and the line numbers are still the language
+server's — the only thing no longer believed is **how it writes a
+declaration**.
+
+- The correct reader **already existed in the same unit**: the folder digest
+  reads the source as text and gets every default and every array bound right.
+  The single-file path ignored it and trusted the LSP. It is now one function,
+  `StatementAt`, with two callers — not a second parser.
+- One pass decorates the tree with the real declaration, and the three modes
+  (`full`, `summary`, `filter`) read from it. Three renderers would have
+  drifted apart, which is how every twin bug of this month started.
+- **A global routine no longer announces itself as `method`.** DelphiLSP uses
+  SymbolKind 6 for any routine; the real declaration says `function` or
+  `procedure` on its own, so the kind word in front was both redundant and
+  wrong.
+- **`filter` searches by NAME again.** It was matching inside the rendered
+  signature, so `filter="string"` returned nine symbols because of their
+  *type*, in a parameter documented as "search by name". Hits now carry a
+  clean `name` and the real `decl` beside it, and an empty result explains
+  that this is a name search and `delphi_search` is the text one.
+- **A `.dpr` no longer comes back as empty sections.** Its tree is flat — every
+  routine at the root with no children — and rendering the root as "sections"
+  produced thirteen of them with `"symbols": []`, which reads as "this routine
+  contains nothing". What has no children is not a section; it is a top-level
+  symbol.
+- **A comment line is no longer glued inside a declaration** when joining the
+  lines of a multi-line one: `property Larga: string { a note } read FNombre;`
+  was a real answer from the folder digest.
+
+### Fixed — a refusal that had been giving stale advice for a month
+- The multi-line anchor refusal sent the caller to **"one call per line"**.
+  That was true in August and stopped being true twice: when `edits` accepted
+  BLOCK anchors, and again when `toline` arrived. It now names both. The two
+  tools had **different wordings of the same rule** and only one of them was
+  wrong in an interesting way, so they share the text now.
+
+### Correction to this file
+The *Known and not fixed* list of 1.0.5 said `delphi_symbols` reports `const`
+as `variable`. **That is false** — measured: an interface `const` comes back as
+SymbolKind 14 (constant) and a `var` as 13 (variable), both correct. It was
+recorded from memory instead of from a measurement, and it would have sent
+somebody to fix something that was not broken.
+
+### Measured
+- `tests/test_round36.py`: 16 checks, 14 of which fail against the previous
+  build. Suite: 58 batteries, 1446 checks, 0 failures.
+- **The summary costs 7% more now, deliberately.** Telling the truth is longer
+  than the LSP's rendering: 11.9k chars before, 17.3k unbounded, 12.9k with a
+  110-character cap per label and no trailing `;`. `test_round16`'s ceiling
+  went from 12k to 14k with the measurement written next to it — the full tree
+  is still over 38k.
+
 ## [1.0.6-beta] - 2026-09-20
 
 The first release written entirely through the server itself, and the first

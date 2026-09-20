@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.0.6-beta';
+  SERVER_VERSION = '1.0.7-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -199,12 +199,26 @@ const
     creyera la nota apuntaba una linea mas abajo. Ahora se dicen las dos
     cosas, que es lo unico que no se malinterpreta. }
   SN_SYMBOLS_SUMMARY_NOTE =
-    'Esto es el RESUMEN del arbol. Los @N son lineas 1-BASED, las mismas que ' +
+    'Esto es el RESUMEN del arbol. Cada linea es la declaracion TAL Y COMO ' +
+    'esta escrita en el fuente (desde v1.0.7: antes se daba la firma que ' +
+    'renderiza DelphiLSP, que pierde los valores por defecto y los rangos de ' +
+    'los arrays). Los @N son lineas 1-BASED, las mismas que ' +
     'te ensena delphi_read - OJO: las tools de LSP (definition, hover, ' +
     'references, completion, signature) piden la linea 0-based, o sea @N-1. ' +
     'Los contenedores dicen cuantos miembros llevan (+N dentro): pide ' +
     'filter="nombre" para dar con uno concreto, y ahi tienes line y line0 ya ' +
-    'separadas, o mode="full" para el arbol completo con rangos.';
+    'separadas, o mode="full" para el arbol completo con rangos. "symbols" ' +
+    'de primer nivel son los que no viven en ninguna seccion, que es como ' +
+    'DelphiLSP devuelve un .dpr entero.';
+
+  { El filtro busca por NOMBRE y antes buscaba dentro de la firma renderizada,
+    asi que filter="string" sacaba nueve cosas por su TIPO. Al arreglarlo, esa
+    llamada pasa a dar cero - y cero sin explicacion se lee como "aqui no hay
+    nada". }
+  SN_SYMBOLS_FILTER_NONE =
+    'Sin coincidencias. Esto busca por NOMBRE de simbolo, no por tipo ni por ' +
+    'el texto de la firma: para buscar texto dentro del fuente usa ' +
+    'delphi_search, y para ver el esqueleto entero, mode="summary".';
 
   SN_SYMBOLS_AUTO_FMT =
     'El arbol completo pesaba %d caracteres, asi que te doy el resumen. ' +
@@ -323,6 +337,24 @@ const
 
   { La descripcion del parametro, compartida por delphi_edit y
     delphi_textedit: lo que hace no depende de si el fichero es Pascal. }
+  { El rechazo del ancla de VARIAS lineas en la forma suelta. Mandaba a "una
+    llamada por linea", que era verdad en agosto y dejo de serlo dos veces:
+    primero cuando "edits" acepto anclas de BLOQUE y despues cuando llego
+    "toline". Un agente que se cree la negativa hace cuarenta llamadas para
+    algo que es una. Lo mide quien lo sufre: yo tropece con esta misma
+    negativa dos dias seguidos usando el servidor como cliente, y las dos
+    veces el camino bueno estaba a un parametro de distancia. Una negativa
+    que no dice por donde SI se puede es media negativa. }
+  SR_PATCH_ANCHOR_MULTILINE =
+    'RECHAZADO: el ancla de una edicion SUELTA es de UNA sola linea, y esta ' +
+    'tiene varias. No he escrito nada. Por donde SI:'#10 +
+    '- Varias lineas SEGUIDAS a la vez: mandalas en "edits" como UNA entrada, ' +
+    'que ahi el ancla puede ser un BLOQUE y se sustituye entero.'#10 +
+    '- Quitar o sustituir un TRAMO del que solo quieres escribir la primera ' +
+    'linea: "old" = esa linea y "toline" = la ultima del tramo.'#10 +
+    '- INSERTAR: ancla en UNA linea existente y en "new" devuelves esa misma ' +
+    'linea junto con lo nuevo.';
+
   SP_PATCH_TOLINE =
     'RANGO (1-based, incluida): la ULTIMA linea del tramo. Con esto "old" ' +
     'deja de ser la linea a tocar y pasa a ser la PRIMERA de un tramo que ' +

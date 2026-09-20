@@ -191,7 +191,7 @@ switch and its own allowlist; it will not arrive by accident.
 | Tool | What it does |
 |---|---|
 | `delphi_help` | **The map — call this first.** `command=tasks` gives a task -> tool table ("I need to change a form", "the build failed"), `command=tool name=<x>` explains one tool and every parameter it really takes, and `command=conventions` is the house rules: what `RECHAZADO:` means versus `error:`, how the recoverable trash and `purge` work, how agents identify themselves and share the mailbox |
-| `delphi_symbols` | Document symbol tree of a unit (classes, methods, sections) |
+| `delphi_symbols` | Document symbol tree of a unit (classes, methods, sections). Since v1.0.7 every symbol carries the declaration **as written in the source**: DelphiLSP's own `name` is a rendered signature that drops default values (`B: Integer = 0` → `B: Integer`) and array bounds (`array [0..7] of Byte` → `Byte`). A folder answers with the interface digest of every unit inside |
 | `delphi_definition` | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` jumps to the interface declaration of the target symbol (on call sites the tool chains definition→declaration, so you get the callee) |
 | `delphi_signature` | Signature help for the call under the cursor (parameter names/types) — the IDE's Ctrl+Shift+Space |
 | `delphi_hover` | Type/signature of an identifier usage |

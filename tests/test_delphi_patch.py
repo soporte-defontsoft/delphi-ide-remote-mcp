@@ -126,7 +126,12 @@ check('edit: sin BOM, CRLF', not nb.startswith(b'\xef') and b'\r\n' in nb[:20])
 
 # --- rejection gates ---
 out = call('delphi_edit', {"path": PAS, "old": "begin\n  X := 1;", "new": "x"})
-check('gate: ancla multilinea', 'RECHAZADO' in out and 'mas de una linea' in out, out)
+# Se afirma el CONTRATO, no la redaccion: que rechace y que diga por donde SI
+# se puede. La negativa antigua mandaba a "una llamada por linea", consejo que
+# caduco dos veces -cuando "edits" acepto bloques y cuando llego "toline"- y
+# una bateria pegada a sus palabras habria defendido el consejo caducado.
+check('gate: ancla multilinea', 'RECHAZADO' in out and 'edits' in out and
+      'toline' in out, out)
 out = call('delphi_edit', {"path": PAS, "old": "  Writeln('inventada');", "new": "x"})
 check('gate: ancla inexistente', 'RECHAZADO' in out and 'no aparece' in out, out)
 out = call('delphi_edit', {"path": PAS, "old": "  X := 1;", "new": "  X := 2;"})

@@ -39,13 +39,15 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 
 Document symbol tree of a Delphi unit (classes, methods, properties, sections) with 0-based ranges, straight from the official DelphiLSP engine. Works even without project settings. Big trees come back as a compact summary by default (`mode`/`filter` control it); a FOLDER answers with the interface digest of every unit inside.
 
+**Since v1.0.7 each symbol also carries `decl`: the declaration as it is WRITTEN IN THE SOURCE.** DelphiLSP's `name` is not a name, it is a rendered signature, and it is lossy — `function Alta(const A: string; B: Integer = 0): Boolean` comes back as `Alta(const A: string; B: Integer)` and `FBuffer: array [0..7] of Byte` as `FBuffer: Byte`. The tree, the kinds and the lines are still the language server's; only the way a declaration is written is read from the file.
+
 *Access: read-only OK.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the Delphi source file (.pas/.dpr) — or a folder for the per-unit interface digest |
 | `mode` | string | optional | File only: `summary` = the skeleton (each section with its members and line; containers say how many they hold), `full` = the complete LSP tree with ranges. Empty = automatic: full when the tree is small, summary when it is big (the answer says which and how much the full one weighed) |
-| `filter` | string | optional | Name search inside a file's tree (substring, case-insensitive): returns ONLY the matching symbols with kind, 0-based line and container. Ignores `mode`. The cheap way to find one method without the whole tree |
+| `filter` | string | optional | Name search inside a file's tree (substring, case-insensitive): returns ONLY the matching symbols, each with its clean `name`, the real `decl`, kind, line, line0 and container. Ignores `mode`. The cheap way to find one method without the whole tree. It matches the NAME, not the signature: to search text inside sources use `delphi_search` |
 
 ### `delphi_definition`
 
