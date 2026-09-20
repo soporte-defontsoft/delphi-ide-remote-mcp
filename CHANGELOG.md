@@ -6,6 +6,99 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.5-beta] - 2026-09-20
+
+Three more agents were pointed at the server as clients. Between them and the
+work that followed: a real jail escape, a write path that corrupted code
+silently, and four duplications that were each holding a family of bugs.
+
+### Fixed — the jail was measured on a name, not on a destination
+- **A junction or symlink inside the root escaped it, for reading AND for
+  writing.** The boundary check validated the path as TEXT while the file
+  system dereferenced the reparse point to its target. A junction planted in
+  the root let `delphi_list` list `C:\Windows\System32\drivers\etc`,
+  `delphi_read` return the machine's hosts file, and `delphi_textedit` create
+  a file OUTSIDE the root. It did not need a console to plant: a `git clone`
+  with `core.symlinks` brings the link in without leaving the MCP. The jail is
+  now measured on the real destination, and `test_round33` reproduces the
+  escape — it fails against the previous build, which is the only thing that
+  makes a battery worth having.
+- **`ReadOnlyPaths` per workspace**: folders inside the jail that are read and
+  never written. Third-party code often has to live inside the project — that
+  is where whoever clones it will look — and when that folder is *another git
+  repository*, a careless write does not even show up in the main repo's
+  `git status`. Now the server enforces it instead of the agent remembering.
+
+### Fixed — writes that reported success while writing the wrong line
+- **`occurrence` inside a batch was recounted against the ALREADY MUTATED
+  file**, which is the exact opposite of what its own parameter description
+  promises. Asking for occurrences 1, 2 and 3 left 2 and 3 swapped; deleting 1
+  and 2 deleted 1 and 3; both answered OK. Occurrences are now resolved once
+  against the original and dragged as earlier entries add or remove lines.
+  The bug had **three doors** — `delphi_edit`, `delphi_textedit` and block
+  anchors — because the batch loop was written twice and blocks went through a
+  third function. All three are closed, and there is now one loop.
+- **A batch returns a verification echo.** A single edit has always re-read
+  from disk and shown the result; a batch only said `OK: <anchor>` — what you
+  asked for, not what happened. The tool recommends batches for refactors,
+  which is exactly when it matters: with `occurrence` writing in the wrong
+  place, an agent had no way to notice.
+- **A block edit that adds or removes lines now shifts the pending
+  occurrences.** That branch left the loop just above the shift, so it moved
+  nothing — a hole that was invisible while the two branches were apart.
+
+### Fixed — tools that answered confidently about a position nobody could point at
+- **`delphi_completion` answered `ok: true` with 16835 candidates to a
+  NEGATIVE column**, and two items to line 9999 of a 519-line file.
+  `delphi_signature` blamed the parentheses for a line that does not exist.
+  Four of the six position-taking tools validated and two did not, because the
+  validation lived in the implementation of one tool's unit, invisible to the
+  others. It moved; all six share it.
+- **`delphi_rename_symbol` duplicated the definition row in every rename**,
+  and — worse — omitted it when a confirmed occurrence sat on the line just
+  above the definition, which is exactly the `E2065 Unsatisfied forward` the
+  comment above it claimed to have fixed. It compared a 1-based number against
+  a 0-based one. It now compares `line0`, and reports `changesCount` so the
+  extra definition row is never mistaken for a duplicate.
+- **`delphi_references` capped its rejected list.** For a short identifier it
+  returned 212 homonyms with full text: 78 KB that the client refused
+  entirely, so the agent did not even see the 8 real references.
+
+### Fixed — the drive mask, in the one place it lives
+- **`<letter>:` with no separator leaked the real drive letter** — `root="D:"`,
+  `repo="C:"`, `project="D:foo\bar"` — in every tool that echoes a path in its
+  refusal. Combined with `C:\Windows` correctly masking to `srvc:`, a reader
+  could invert the whole mapping. Fixed in the single outbound masker; an
+  earlier attempt had patched one emitter instead, which is precisely how it
+  survived in eight other tools.
+
+### Fixed — a race that had 32 doors
+- **Creating a directory checked whether it existed and THEN created it.** Two
+  threads both answer "no", both create, and the loser gets "cannot create a
+  file when that file already exists". The concurrency battery catches it now
+  and then — 7 of 8 reports arriving — and it was the same race
+  `delphi_report` already solved for the FILE name with `CREATE_NEW`, twelve
+  lines below where it left it open for the DIRECTORY. All 32 call sites now
+  go through one helper. Only one of the 32 had ever shown its face.
+
+### Changed — four duplications removed
+Not tidiness: each one was holding a family of bugs, and three of the four
+were found by asking where else the rule lives rather than by a failure.
+`AplicaTanda` (one batch engine instead of two, 78% identical),
+`CrearCarpeta` (one helper instead of 32 sites), `CanonicalSubiendo` (one
+walk-up instead of two) and `PositionOutOfRange` (one validation instead of
+four-and-a-half). The binary is smaller than before.
+
+### Known and not fixed
+Said plainly rather than left to be discovered: `delphi_symbols` fuses
+optional parameters into mandatory ones, reports `const` as `variable` and
+`array [0..7]` as `array of` — false information about signatures, which is
+what hurts an agent most; `delphi_list includetrash=true` does not show the
+trash, because the recovery suffix breaks the extension mask; restoring a form
+unit from the trash leaves its `.dfm` behind; `delphi_references` on an
+override answers that nobody calls it; and a rarer race in unit creation, seen
+ONCE and not reproduced in 16 further runs.
+
 ## [1.0.4-beta] - 2026-09-20
 
 Three agents were pointed at this server and told to use it as a client, not

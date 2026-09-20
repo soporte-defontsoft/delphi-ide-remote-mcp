@@ -55,9 +55,18 @@ function DecodeSourceBytes(const B: TArray<Byte>): string; // = TBytes
   como ancla de una linea (medido el 2026-09-20 con TOOLS.md, que tiene
   parrafos de 3 KB en UNA linea). Es generico: solo usa PatchLoadText y
   PatchSaveText.
-  AOccurrence: 0 = tiene que ser unico; 1, 2... = esa aparicion. }
+  AOccurrence: 0 = tiene que ser unico; 1, 2... = esa aparicion.
+  AAtLine (1-based, 0 = sin usar): la linea donde empieza el bloque, YA
+  resuelta por quien llama. Dentro de una tanda es obligatorio usarla: las
+  ocurrencias se resuelven contra el fichero ORIGINAL y se arrastran, porque
+  contarlas aqui seria contarlas sobre el fichero ya mutado. }
 function ApplyBlockEdit(const APath, AOld, ANew: string;
-  AOccurrence: Integer): string;
+  AOccurrence: Integer; AAtLine: Integer = 0): string;
+
+{ La linea (1-based) donde empieza la N-esima aparicion de un ancla de BLOQUE,
+  0 si no hay tantas. El gemelo de NthOccurrenceLine para bloques, y por el
+  mismo motivo: pre-resolver una tanda contra el fichero original. }
+function NthBlockLine(const APath, AOld: string; AN: Integer): Integer;
 
 { La linea (1-based) de la N-esima aparicion de un ancla de UNA linea, 0 si no
   hay tantas. Desempata dentro de una tanda mejor que atline, porque los
@@ -544,13 +553,78 @@ begin
     end;
 end;
 
+{ EL escaneo del bloque, escrito una vez. Devuelve el indice 0-based donde
+  empieza la ocurrencia pedida (-1 si no esta) y cuantas hay en total. Lo usan
+  ApplyBlockEdit y NthBlockLine: escribirlo dos veces era precisamente como
+  nacio el bug de "occurrence" que este release arregla. }
+function BuscaBloque(const ALines, AOldLines: TArray<string>;
+  AOccurrence: Integer; out ACuantas: Integer): Integer;
+var
+  I, J, Vistas: Integer;
+  Ok: Boolean;
+begin
+  Result := -1;
+  ACuantas := 0;
+  Vistas := 0;
+  for I := 0 to Length(ALines) - Length(AOldLines) do
+  begin
+    Ok := True;
+    for J := 0 to High(AOldLines) do
+      if ALines[I + J].Trim <> AOldLines[J].Trim then
+      begin
+        Ok := False;
+        Break;
+      end;
+    if Ok then
+    begin
+      Inc(ACuantas);
+      Inc(Vistas);
+      if (AOccurrence > 0) and (Vistas = AOccurrence) then
+      begin
+        Result := I;
+        ACuantas := 1;
+        Exit;
+      end;
+      if AOccurrence = 0 then
+        Result := I;
+    end;
+  end;
+end;
+
+{ Normaliza un ancla de bloque: sin CRLF y sin la linea vacia final que pone
+  el editor de quien llama. }
+function LineasDelAncla(const AOld: string): TArray<string>;
+begin
+  Result := AOld.Replace(#13#10, #10).Split([#10]);
+  while (Length(Result) > 1) and (Result[High(Result)].Trim = '') do
+    SetLength(Result, Length(Result) - 1);
+end;
+
+function NthBlockLine(const APath, AOld: string; AN: Integer): Integer;
+var
+  Enc: string;
+  Cuantas: Integer;
+begin
+  Result := 0;
+  if AN <= 0 then
+    Exit;
+  try
+    var Idx := BuscaBloque(
+      PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]),
+      LineasDelAncla(AOld), AN, Cuantas);
+    if Idx >= 0 then
+      Result := Idx + 1; // 1-based, como atline
+  except
+    Result := 0;
+  end;
+end;
+
 function ApplyBlockEdit(const APath, AOld, ANew: string;
-  AOccurrence: Integer): string;
+  AOccurrence: Integer; AAtLine: Integer): string;
 var
   Enc, Text, Eol: string;
   Lines, OldLines, NewLines: TArray<string>;
-  I, J, Hit, Count, Seen: Integer;
-  Ok: Boolean;
+  I, J, Hit, Count: Integer;
   Sb: TStringBuilder;
 begin
   Text := PatchLoadText(APath, Enc);
@@ -559,38 +633,31 @@ begin
   else
     Eol := #10;
   Lines := Text.Replace(#13#10, #10).Split([#10]);
-  OldLines := AOld.Replace(#13#10, #10).Split([#10]);
-  // a trailing newline in the anchor is the caller's editor, not a line
-  while (Length(OldLines) > 1) and (OldLines[High(OldLines)].Trim = '') do
-    SetLength(OldLines, Length(OldLines) - 1);
+  OldLines := LineasDelAncla(AOld);
   if Length(OldLines) < 2 then
     Exit(SR_PATCH_BLOCK_SHORT);
-  Hit := -1;
-  Count := 0;
-  Seen := 0;
-  for I := 0 to Length(Lines) - Length(OldLines) do
+  if AAtLine > 0 then
   begin
-    Ok := True;
-    for J := 0 to High(OldLines) do
-      if Lines[I + J].Trim <> OldLines[J].Trim then
-      begin
-        Ok := False;
-        Break;
-      end;
-    if Ok then
-    begin
-      Inc(Count);
-      Inc(Seen);
-      if (AOccurrence > 0) and (Seen = AOccurrence) then
-      begin
-        Hit := I;
-        Count := 1;
-        Break;
-      end;
-      if AOccurrence = 0 then
-        Hit := I;
-    end;
-  end;
+    // Linea YA resuelta por quien llama. Una tanda la resuelve contra el
+    // fichero ORIGINAL y la arrastra segun las entradas anteriores anaden o
+    // quitan lineas; volver a contar ocurrencias aqui, sobre el fichero ya
+    // mutado, es el bug de "occurrence" por su tercera puerta - la de las
+    // anclas de BLOQUE, que se quedo abierta cuando se cerraron las otras
+    // dos (2026-09-20). Aqui solo se comprueba que el bloque SIGUE ahi.
+    Hit := AAtLine - 1;
+    Count := 1;
+    if (Hit < 0) or (Hit + Length(OldLines) > Length(Lines)) then
+      Hit := -1
+    else
+      for J := 0 to High(OldLines) do
+        if Lines[Hit + J].Trim <> OldLines[J].Trim then
+        begin
+          Hit := -1;
+          Break;
+        end;
+  end
+  else
+    Hit := BuscaBloque(Lines, OldLines, AOccurrence, Count);
   if Hit < 0 then
     Exit(Format(SR_PATCH_BLOCK_MISSING_FMT,
       [Length(OldLines), OldLines[0].Trim]));
@@ -666,10 +733,16 @@ begin
         begin
           var O2 := TJSONObject(Arr.Items[N]);
           var Nth := O2.GetValue<Integer>('occurrence', 0);
-          if (O2.GetValue<Integer>('atline', 0) = 0) and (Nth > 0) and
-             not O2.GetValue<string>('old', '').Contains(#10) then
-            Ocurr[N] := NthOccurrenceLine(APath,
-              O2.GetValue<string>('old', ''), Nth);
+          var Anc2 := O2.GetValue<string>('old', '');
+          if (O2.GetValue<Integer>('atline', 0) = 0) and (Nth > 0) then
+          begin
+            // Las de BLOQUE tambien: era la tercera puerta del mismo bug y
+            // se quedo abierta cuando se cerraron las de una linea.
+            if Anc2.Contains(#10) then
+              Ocurr[N] := NthBlockLine(APath, Anc2, Nth)
+            else
+              Ocurr[N] := NthOccurrenceLine(APath, Anc2, Nth);
+          end;
         end;
       end;
       N := 0;
@@ -686,29 +759,12 @@ begin
         Obj := TJSONObject(V);
         Anc := Obj.GetValue<string>('old', '');
         Nue := Obj.GetValue<string>('new', '');
-        // Ancla de VARIAS lineas: se sustituye el bloque entero. La regla de
-        // "una linea" protege a una edicion suelta, donde un ancla larga es
-        // una ocasion larga de equivocarse; dentro de una tanda, donde quien
-        // llama sustituye un cuerpo que acaba de copiar, era trabajo puro.
-        if Anc.Contains(#10) then
-        begin
-          Una := ApplyBlockEdit(APath, Anc, Nue,
-            Obj.GetValue<Integer>('occurrence', 0));
-          if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
-          begin
-            Fallo := N;
-            Sb.AppendLine(Format('  %d: %s', [N, Una.Replace(#10, ' ')]));
-            Break;
-          end;
-          Sb.AppendLine(Format('  %d OK (bloque de %d lineas)',
-            [N, Length(Anc.Split([#10]))]));
-          Continue;
-        end;
-        EnLinea := Obj.GetValue<Integer>('atline', 0);
-        if EnLinea = 0 then
-          EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
-        Borra := Obj.GetValue<Boolean>('delete', False);
         // El antes, para saber DONDE cambio y CUANTO y arrastrar lo pendiente.
+        // Se toma para las DOS ramas: antes solo lo hacia la de una linea,
+        // porque la de bloque salia por Continue justo encima del arrastre -
+        // asi que un bloque que anadia o quitaba lineas NO desplazaba las
+        // ocurrencias pendientes. Con las dos ramas juntas el agujero se ve;
+        // separadas no se veia.
         var EncTmp: string;
         var AntesL: TArray<string>;
         try
@@ -717,24 +773,49 @@ begin
         except
           AntesL := nil;
         end;
+        // Ancla de VARIAS lineas: se sustituye el bloque entero. La regla de
+        // "una linea" protege a una edicion suelta, donde un ancla larga es
+        // una ocasion larga de equivocarse; dentro de una tanda, donde quien
+        // llama sustituye un cuerpo que acaba de copiar, era trabajo puro.
+        var EsBloque := Anc.Contains(#10);
+        if EsBloque then
+          Una := ApplyBlockEdit(APath, Anc, Nue,
+            Obj.GetValue<Integer>('occurrence', 0), Ocurr[N - 1])
+        else
+        begin
+          EnLinea := Obj.GetValue<Integer>('atline', 0);
+          if EnLinea = 0 then
+            EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
+          Borra := Obj.GetValue<Boolean>('delete', False);
         Una := AAplicaUna(Anc, Nue, EnLinea, Borra);
+        end;
+        var Eco := '';
         if (AntesL <> nil) and not (Una.StartsWith('RECHAZADO') or
                                     Una.StartsWith('error')) then
         try
           var DespuesL := PatchLoadText(APath, EncTmp)
             .Replace(#13#10, #10).Split([#10]);
           var Delta := Length(DespuesL) - Length(AntesL);
+          // La primera linea que difiere: de ahi para abajo todo se mueve, y
+          // ademas es DONDE cayo esta edicion.
+          var Cambio := 0;
+          while (Cambio < Length(AntesL)) and (Cambio < Length(DespuesL)) and
+                (AntesL[Cambio] = DespuesL[Cambio]) do
+            Inc(Cambio);
           if Delta <> 0 then
-          begin
-            // La primera linea que difiere: de ahi para abajo todo se mueve.
-            var Cambio := 0;
-            while (Cambio < Length(AntesL)) and (Cambio < Length(DespuesL)) and
-                  (AntesL[Cambio] = DespuesL[Cambio]) do
-              Inc(Cambio);
             for var K := N to High(Ocurr) do
               if Ocurr[K] > Cambio + 1 then // Ocurr 1-based, Cambio 0-based
                 Inc(Ocurr[K], Delta);
-          end;
+          // EL ECO DE VERIFICACION, releido del disco. Una edicion suelta lo
+          // devuelve desde siempre; una TANDA solo decia "OK: <ancla>", que
+          // es lo que PEDISTE, no lo que PASO. Y la propia tool recomienda
+          // tandas para refactorizar, que es justo cuando hace mas falta: con
+          // el bug de "occurrence" escribiendo en la linea equivocada, un
+          // agente no tenia forma de enterarse (medido 2026-09-20).
+          if Cambio < Length(DespuesL) then
+            Eco := Format('%d| %s', [Cambio + 1, DespuesL[Cambio].Trim])
+          else if Delta < 0 then
+            Eco := Format('%d| (linea quitada)', [Cambio + 1]);
         except
           // si no se puede releer, mejor no tocar lo pendiente
         end;
@@ -746,8 +827,15 @@ begin
           Sb.AppendLine(Format('  %d: %s', [N, Una.Replace(#10, ' ')]));
           Break;
         end;
-        Sb.AppendLine(Format('  %d OK: %s',
-          [N, Anc.Trim.Substring(0, Min(70, Length(Anc.Trim)))]));
+        if EsBloque then
+          Una := Format('  %d OK (bloque de %d lineas)',
+            [N, Length(LineasDelAncla(Anc))])
+        else
+          Una := Format('  %d OK: %s',
+            [N, Anc.Trim.Substring(0, Min(70, Length(Anc.Trim)))]);
+        if Eco <> '' then
+          Una := Una + '  ->  ' + Eco.Substring(0, Min(90, Length(Eco)));
+        Sb.AppendLine(Una);
       end;
       if Fallo > 0 then
       begin

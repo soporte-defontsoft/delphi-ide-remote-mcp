@@ -14,6 +14,50 @@ batteries, 1293 checks, 0 failures — they speak the raw protocol and read
 `content`, so not one of them could see it. Using the server as an agent found
 it in the first call.
 
+## Survey the landscape first (David, 2026-09-20)
+
+One act, two questions. You look at the landscape once, and while you are
+there you ask both:
+
+**1. Landscape before TOUCHING** — where else does this live? You do not fix
+where you happen to be looking; you fix where the rule lives. If there is a
+single central point, patching an edge *hides* the bug: the symptom goes and
+the cause stays, now with nobody looking for it.
+
+**2. Landscape to see if it ALREADY EXISTS** — is there something similar,
+usable or adaptable? Often the answer is a *parameter* on what exists, not a
+sibling. That reduces code and centralises the problems.
+
+The practical part: **the same search answers both.** Search for what the
+function DOES, not for what you would call it, and that one pass turns up the
+other places the rule lives AND the function you were about to duplicate.
+Measured: searching for where paths were canonicalised turned up
+`LongCanonical` — exactly what was being rewritten from scratch 800 lines
+below it, in the same unit.
+
+They are not style. Measured here on 2026-09-20, all three the same shape:
+
+- A drive-letter leak was patched at ONE emitter instead of at the single
+  outbound masker. It stayed alive in eight other tools and an auditor found
+  it hours later.
+- A jail fix changed how roots are canonicalised without checking the other
+  sites that canonicalise. Two forms then coexisted, the "is this the root?"
+  comparison stopped matching, and the workspace root became **deletable**.
+- The `occurrence` bug lived in two twins (`delphi_edit` / `delphi_textedit`)
+  and a third door (block anchors). Fixing one left two.
+
+And the counterpart, which is what the rules buy: of the 32 sites of one
+directory-creation race, only ONE had ever shown up in a battery. The other 31
+were waiting for two agents to coincide. Asking "where else does this live?"
+is how you fix the bugs that have not happened yet.
+
+The corollary: **a shared helper is also where the NEXT feature of the same
+family lands.** `AplicaTanda` is the example — the two things still pending
+for batches now have one place to be written instead of two.
+
+Full version, with the criteria for when a boolean is *not* the right answer:
+`conventions/paisaje-antes-de-tocar.md` in the vault.
+
 ## What it means in practice
 
 | Job | Tool |
