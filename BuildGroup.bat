@@ -10,9 +10,9 @@ REM  USO:  BuildGroup.bat [quiet^|normal^|verbose] [make^|build] [Debug^|Release
 REM        (sin parametros = quiet make Debug)
 REM
 REM  NOTAS (medidas, no teoricas):
-REM    - El nodo Linux necesita /p:PlatformSDK=Linux64.sdk o el linker muere
-REM      con "cannot find -lgcc_s". Pasarlo no molesta a los proyectos
-REM      Windows, asi que va siempre.
+REM    - El SDK de Linux NO se pasa a ciegas: si el proyecto declara su
+REM      PlatformSDK manda EL PROYECTO; si no, el activo del SDK Manager
+REM      (Default_Linux64); y en ultimo caso, el primer .sdk de Linux64.
 REM    - Con Release, el binario recien compilado del nodo se copia a
 REM      node\McpDesktopNode (lo que viaja en la release y lo que el server
 REM      autodespliega por sello node.ver): un solo comando deja TODO listo.
@@ -75,7 +75,20 @@ REM  (un binario enlazado con glibc vieja corre en las distros nuevas; al
 REM  reves muere con "GLIBC_2.xx not found"). Comprobacion de un vistazo:
 REM     grep -aoE "GLIBC_[0-9]+\.[0-9]+" node\McpDesktopNode | sort -uV | tail -1
 set SDKLINUX=%MCP_LINUX_SDK%
-if "%SDKLINUX%"=="" (
+REM  1) Si el PROYECTO ya declara su SDK (PlatformSDK: lo que pone el IDE en
+REM     Project Options y lo que escribe delphi_config set-sdk), NO se le pisa.
+REM     Una propiedad en la linea de msbuild GANA a la del .dproj, asi que
+REM     pasarla aqui anulaba la eleccion del proyecto (medido 2026-09-20: el
+REM     proyecto decia zorin18 y este script compilaba con fedora44).
+set SDKPROYECTO=
+if "%SDKLINUX%"=="" findstr /I /C:"<PlatformSDK>" "%~dp0src_desktop_node\McpDesktopNode.dproj" >nul 2>&1 && set SDKPROYECTO=1
+REM  2) Si el proyecto no dice nada, manda el ACTIVO del SDK Manager
+REM     (Default_Linux64), que es lo que hace el IDE y lo que hace delphi_build.
+if "%SDKLINUX%"=="" if not defined SDKPROYECTO (
+  for /f "tokens=2,*" %%A in ('reg query "HKCU\Software\Embarcadero\BDS\%DELPHIVER%\PlatformSDKs" /v Default_Linux64 2^>nul ^| findstr /I "Default_Linux64"') do set SDKLINUX=%%B
+)
+REM  3) Y como ultimo recurso, el primer .sdk registrado que sea de Linux64.
+if "%SDKLINUX%"=="" if not defined SDKPROYECTO (
   for %%F in ("%APPDATA%\Embarcadero\BDS\%DELPHIVER%\*.sdk") do (
     if "!SDKLINUX!"=="" (
       findstr /I /C:"<Profile_platform>Linux64<" "%%F" >nul 2>&1 && set SDKLINUX=%%~nxF
@@ -84,9 +97,10 @@ if "%SDKLINUX%"=="" (
 )
 set ARGSDK=
 if not "%SDKLINUX%"=="" set ARGSDK=/p:PlatformSDK=%SDKLINUX%
-if "%SDKLINUX%"=="" echo [BuildGroup] AVISO: no hay ningun SDK de Linux64 registrado; el nodo Linux no enlazara. Traelo con delphi_paserver command=get-sdk.
+if "%SDKLINUX%"=="" if not defined SDKPROYECTO echo [BuildGroup] AVISO: no hay ningun SDK de Linux64 registrado; el nodo Linux no enlazara. Traelo con delphi_paserver command=get-sdk.
 
-echo [BuildGroup] Compilando el grupo (%BCONFIG%, %MSBTARGET%) con SDK Linux "%SDKLINUX%"...
+if defined SDKPROYECTO echo [BuildGroup] Compilando el grupo (%BCONFIG%, %MSBTARGET%); el SDK de Linux lo manda el proyecto (PlatformSDK).
+if not defined SDKPROYECTO echo [BuildGroup] Compilando el grupo (%BCONFIG%, %MSBTARGET%) con SDK Linux "%SDKLINUX%"...
 msbuild "%GRUPO%" /t:%MSBTARGET% /p:Config=%BCONFIG% %ARGSDK% %VERBOSITY%
 if errorlevel 1 exit /b 1
 
