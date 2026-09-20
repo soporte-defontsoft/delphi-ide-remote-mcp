@@ -39,15 +39,28 @@ not a reason to go around it: write it down or send it with `delphi_report`.
 - **What is not Delphi work**: the knowledge vault and the server's own
   `settings.ini` (which lives outside the workspace roots). Neither belongs to
   these tools and neither counts as a gap.
-- **Deploying the exe** to `C:\Delphi-mcp-Server\`. Production is closed and
-  started **by David**. This is not a prohibition, it is a measured
-  constraint: Claude Desktop ships as an MSIX package, and everything it
-  launches inherits the package's private registry hive, so a server started
-  by the agent stops seeing the operator's IDE - its SDKs and its profiles.
+- **Deploying the exe** to `C:\Delphi-mcp-Server\`. Since 2026-09-20 the
+  agent does the whole thing: production is a **Windows Service**, and
+  `sc.exe stop` / `sc.exe start DelphiLspMcp` work unelevated because that one
+  account was granted start/stop rights on that one service (see the README).
+  The MSIX constraint that used to make this David's job no longer applies -
+  the SCM launches the service, so it never inherits the package's private
+  registry hive.
+
+  **But the service has to log on as the user who owns RAD Studio.** Not
+  LocalSystem, not a fresh admin account: the IDE keeps its Library Search
+  Path, its registered packages, its SDKs and its profiles in `HKCU`, and a
+  server without them starts, answers, says `activeDelphi: 37.0` and then
+  fails with `F2613 unit not found` the first time a project touches an
+  installed component. Measured: 11 library roots as the IDE's user, 1 as
+  LocalSystem, 2 as a new admin.
 - **A wall.** If a tool genuinely cannot do the job, fix it the conventional
   way as a last resort and go straight back to the MCP — but **the wall IS the
   finding**: write down what you were doing, which tool you expected to do it,
   and what you did instead. That list is the roadmap.
-- **The tray being down.** The agent talks to production over HTTP
-  (127.0.0.1:3131), so with no tray there are no tools — getting it back is
-  then the only job.
+- **Production being down.** The agent talks to production over HTTP
+  (127.0.0.1:3131), so with nothing listening there are no tools — getting it
+  back is then the only job. Normally that is `sc.exe start DelphiLspMcp` and
+  the agent does it alone. The tray (`-gui`) is the fallback and reads the
+  same port from `settings.ini`, so the two can never run at once: it is the
+  service or the tray, never both.

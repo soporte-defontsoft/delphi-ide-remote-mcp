@@ -307,10 +307,43 @@ claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp --header "Au
 |---|---|---|
 | A local client to spawn it | `DelphiLspMcp.exe` | No switch: MCP over stdio. |
 | The remote server, in a terminal | `DelphiLspMcp.exe --http 3000` | Ctrl+C stops it. Good for trying things out. |
-| The remote server, permanently | `DelphiLspMcp.exe -install` | **How you should actually deploy it**: a Windows Service, started by the machine, with nobody logged in. Needs an elevated prompt; `-uninstall` removes it. |
+| The remote server, permanently | `DelphiLspMcp.exe -install` | **How you should actually deploy it**: a Windows Service. Needs an elevated prompt; `-uninstall` removes it. It must then be told to **log on as the user who installed and uses RAD Studio** — see right below, this one is not optional. |
 | An eye on it while you work | `DelphiLspMcp.exe -gui` | Tray app: starts iconized, double-click for the live log. |
 
-Each switch is accepted as `/x`, `-x` or `--x`. The service reads the same `settings.ini` next to the executable as every other mode.
+Each switch is accepted as `/x`, `-x` or `--x`. The service reads the same `settings.ini` next to the executable as every other mode — including its port, so the service and the tray cannot both run: it is one or the other.
+
+#### The service must log on as the user who owns the IDE
+
+Not `LocalSystem`, and not a freshly created administrator either. RAD Studio keeps its configuration under **`HKEY_CURRENT_USER`**: the Library Search Path, the registered design packages, the platform SDKs, the PAServer profiles, the `$(BDS)` macro table. That is per user, by Embarcadero's design, and there is no way around it — even if this server read someone else's hive, the `msbuild` and `DelphiLSP.exe` processes it spawns are its children and would read their own.
+
+Measured 2026-09-20 on one machine, same binary, only the service account changing:
+
+| The service logs on as | Library roots it sees | Registered design packages |
+|---|---|---|
+| `LocalSystem` | 1 | 0 |
+| a brand-new admin account | 2 | 0 |
+| **the IDE's own user** | **11** | **all of them** |
+
+What makes this worth a table is that the failure is *quiet*. The server starts, answers, reports `activeDelphi: 37.0` — the installation itself lives in `HKEY_LOCAL_MACHINE`, so it is found — and compiles anything that needs only the RTL. It breaks the first time a project uses an installed component, with `F2613 unit not found` and nothing anywhere pointing at the real cause.
+
+So after `-install`: `services.msc` → the service → **Log On** → *This account*, and give it the IDE's user. Do it there rather than with `sc config`: that dialog also grants the account the "Log on as a service" right, and the password never travels on a command line. The SCM stores it, so changing that Windows password later stops the service from starting until you re-enter it.
+
+#### Letting an agent restart it by itself
+
+Starting and stopping a service normally needs elevation, which an agent does not have. Grant one account start/stop rights on this one service, once, from an elevated prompt:
+
+```
+sc.exe sdshow DelphiLspMcp
+sc.exe sdset  DelphiLspMcp "<what sdshow printed>(A;;CCLCSWRPWPDTLOCRRC;;;<your SID>)"
+```
+
+`whoami /user` gives the SID. After that `sc.exe stop` and `sc.exe start` work unelevated, so an agent can deploy a new build and bring the server back without anyone at the keyboard. It is a permission on one service, not a general privilege.
+
+And set the start type, or a reboot leaves you with no server:
+
+```
+sc.exe config DelphiLspMcp start= auto
+```
 
 Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom agents): see [docs/CLIENTS.md](docs/CLIENTS.md).
 
