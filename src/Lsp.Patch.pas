@@ -42,6 +42,12 @@ type
 
 function ExecutePatch(const A: TPatchArgs): string;
 
+{ El decodificador de delphi_read, suelto: bytes -> texto con SU encoding real
+  (BOM, UTF-8 estricto, y CP1252 solo cuando algun byte alto NO forma
+  secuencia valida). Para quien ya tiene los bytes en la mano y no quiere
+  leer el fichero dos veces. }
+function DecodeSourceBytes(const B: TArray<Byte>): string; // = TBytes
+
 { Encoding-correct numbered read (also serves the remote file toolset). }
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
 
@@ -423,6 +429,11 @@ begin
     if (C <> ' ') and (C <> #9) then
       Exit(False);
   Result := True;
+end;
+
+function DecodeSourceBytes(const B: TArray<Byte>): string;
+begin
+  Result := DecodeBytes(B, DetectEnc(B));
 end;
 
 function PatchLoadText(const APath: string; out AEncName: string): string;

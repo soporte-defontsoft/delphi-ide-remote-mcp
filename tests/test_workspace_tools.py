@@ -114,6 +114,28 @@ except Exception as e:
     check('search: parsea', False, out[:200])
 
 out = call('delphi_search', {"root": SRC, "query": "retry", "wholeword": True})
+# --- search: el texto que devuelve es el REAL, no mojibake ---------------
+# Sin BOM no significa CP1252. Darlo por hecho convertia en basura todo
+# fichero UTF-8 sin BOM, y ese texto corrupto es justo el que un agente copia
+# para construir un ancla de delphi_edit (medido el 2026-09-20 buscando en los
+# .md de este repo: cada raya volvia como tres caracteres raros).
+_enc = _fixed('encodings')
+_u8 = os.path.join(_enc, 'utf8_sin_bom.md')
+_cp = os.path.join(_enc, 'legacy_cp1252.pas')
+_TEXTO = 'La gestoria envio la accion - con acentos: aeiou ' + 'áéíóúñ — fin'
+with open(_u8, 'w', encoding='utf-8', newline='') as _f:   # UTF-8 SIN BOM
+    _f.write('# titulo\n' + _TEXTO + '\n')
+_CP = 'unit legacy; // la accion se ejecuto: ' + 'áéíóúñ'
+with open(_cp, 'w', encoding='cp1252', newline='') as _f:  # CP1252 de siempre
+    _f.write(_CP + '\ninterface\nimplementation\nend.\n')
+for _nom, _ruta, _esperado, _aguja in (
+        ('utf-8 sin BOM', _u8, _TEXTO, 'acentos'),
+        ('cp1252 legacy', _cp, _CP, 'accion')):
+    _d = json.loads(call('delphi_search', {"root": _ruta, "query": _aguja}))
+    _hit = (_d.get('hits') or [{}])[0].get('text', '')
+    check('search: devuelve el texto real de un fichero %s' % _nom,
+          _hit == _esperado, '%r != %r' % (_hit[:70], _esperado[:70]))
+
 d = json.loads(out)
 out2 = call('delphi_search', {"root": SRC, "query": "retry", "wholeword": False})
 d2 = json.loads(out2)
@@ -291,6 +313,23 @@ try:
           out[:200])
     check('workspace: nivel de acceso', d.get('access') in ('read-write', 'read-only'),
           out[:200])
+    # QUIEN contesta: sin esto, comprobar un despliegue obligaba a mirar el
+    # proceso desde FUERA del MCP (medido el 2026-09-20 usando el servidor
+    # como agente: la version solo vivia en el titulo de la bandeja y dentro
+    # de un delphi_report).
+    srv = d.get('server', {})
+    check('workspace: ficha del servidor (version, modo, transporte, pid)',
+          srv.get('version', '') != '' and
+          srv.get('mode') in ('consola', 'bandeja', 'servicio') and
+          srv.get('transport') in ('stdio', 'http') and
+          isinstance(srv.get('pid'), int) and srv['pid'] > 0, str(srv)[:200])
+    check('workspace: lanzado por la bateria = consola por stdio',
+          srv.get('mode') == 'consola' and srv.get('transport') == 'stdio',
+          str(srv)[:200])
+    check('workspace: dice desde cuando vive y con que exe',
+          srv.get('startedAt', '').startswith('20') and
+          srv.get('exe', '').lower().endswith('delphilspmcp.exe') and
+          srv.get('uptime', '') != '', str(srv)[:200])
 except Exception:
     check('workspace: parsea', False, out[:200])
 

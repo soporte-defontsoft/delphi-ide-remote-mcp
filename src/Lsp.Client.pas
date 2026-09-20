@@ -98,6 +98,9 @@ type
 
 implementation
 
+uses
+  Lsp.Patch; // DecodeSourceBytes: el detector de encoding de delphi_read
+
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);
   LSP_REQUEST_REMOVED = -32800;
@@ -501,10 +504,15 @@ begin
   else if (Length(Bytes) >= 2) and (Bytes[0] = $FE) and (Bytes[1] = $FF) then
     Result := TEncoding.BigEndianUnicode.GetString(Bytes, 2, Length(Bytes) - 2)
   else
-    // No BOM: legacy Delphi sources are typically the system ANSI codepage
-    // (Windows-1252 on western systems). Reading them as UTF-8 corrupts
-    // every accented character.
-    Result := TEncoding.ANSI.GetString(Bytes);
+    // Sin BOM NO significa CP1252. Darlo por hecho convertia en mojibake
+    // TODO fichero UTF-8 sin BOM: delphi_search sobre los .md de este mismo
+    // repo devolvia basura por cada raya (medido el 20-sep-2026 usando el
+    // servidor como agente), y ese texto corrupto es el que un agente copia
+    // para construir un ancla. Por aqui pasa ademas lo que se le manda al
+    // linter y lo que lee delphi_references. Ahora decide el MISMO detector
+    // que usa delphi_read: utf8 solo si CADA byte alto forma secuencia
+    // valida, asi que los fuentes CP1252 de siempre siguen leyendose bien.
+    Result := DecodeSourceBytes(Bytes);
 end;
 
 end.

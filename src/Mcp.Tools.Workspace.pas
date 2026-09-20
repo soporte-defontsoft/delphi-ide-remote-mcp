@@ -243,6 +243,7 @@ implementation
 
 uses
   System.RegularExpressions,
+  System.DateUtils,
   Winapi.Windows,
   MCPServer.Registration,
   MCPServer.Logger,
@@ -935,6 +936,63 @@ begin
   end;
 end;
 
+var
+  GArranque: TDateTime; // cuando empezo a vivir ESTE proceso
+
+{ Cuanto lleva en marcha, en algo que se lee de un vistazo. }
+function TiempoEnMarcha(const ADesde: TDateTime): string;
+var
+  Segs: Int64;
+begin
+  Segs := SecondsBetween(Now, ADesde);
+  if Segs < 60 then
+    Exit(Format('%ds', [Segs]));
+  if Segs < 3600 then
+    Exit(Format('%dm %ds', [Segs div 60, Segs mod 60]));
+  if Segs < 86400 then
+    Exit(Format('%dh %dm', [Segs div 3600, (Segs mod 3600) div 60]));
+  Result := Format('%dd %dh', [Segs div 86400, (Segs mod 86400) div 3600]);
+end;
+
+{ QUIEN esta contestando: version, como se arranco este proceso y cuanto lleva
+  vivo. Ninguna tool lo decia: la version vivia en el titulo de la bandeja y
+  dentro de un delphi_report, asi que comprobar un despliegue obligaba a mirar
+  el proceso DESDE FUERA del MCP (medido el 2026-09-20 usando el servidor como
+  agente). Esto es autoconocimiento, no listar procesos: nada de aqui sale de
+  este proceso. }
+procedure AnadirFichaDelServidor(ADestino: TJSONObject);
+var
+  Srv: TJSONObject;
+  Modo, Transporte, P: string;
+  I: Integer;
+begin
+  Modo := 'consola';
+  Transporte := 'stdio';
+  for I := 1 to ParamCount do
+  begin
+    P := ParamStr(I).ToLower.TrimLeft(['-', '/']);
+    if MatchText(P, ['service', 'install', 'uninstall']) then
+      Modo := 'servicio'
+    else if MatchText(P, ['gui', 'tray']) then
+      Modo := 'bandeja'
+    else if P.StartsWith('http') then
+      Transporte := 'http';
+  end;
+  // La bandeja y el servicio SIEMPRE sirven por HTTP (ambos llaman a
+  // CreateHttpServer); solo la consola puede estar en stdio.
+  if Modo <> 'consola' then
+    Transporte := 'http';
+  Srv := TJSONObject.Create;
+  ADestino.AddPair('server', Srv);
+  Srv.AddPair('version', SERVER_VERSION);
+  Srv.AddPair('mode', Modo);
+  Srv.AddPair('transport', Transporte);
+  Srv.AddPair('pid', TJSONNumber.Create(GetCurrentProcessId));
+  Srv.AddPair('exe', ParamStr(0));
+  Srv.AddPair('startedAt', FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque));
+  Srv.AddPair('uptime', TiempoEnMarcha(GArranque));
+end;
+
 { TDelphiWorkspaceTool }
 
 constructor TDelphiWorkspaceTool.Create;
@@ -944,6 +1002,9 @@ begin
   FDescription := 'The lay of the land on the SERVER: the workspace roots ' +
     'this server operates within (your entire allowed universe here), the ' +
     'access level (read-write / read-only), and the active RAD Studio. ' +
+    'It also says WHO is answering ("server"): version, how this process was ' +
+    'started (tray / service / console), transport, pid and uptime - the way ' +
+    'to check a deployment without looking at the machine from outside. ' +
     SN_VIRTUAL_DRIVES + ' Call this FIRST. Read-only, no parameters.';
 end;
 
@@ -1033,6 +1094,7 @@ begin
       Return.AddPair('activeDelphi', Info.Version)
     else
       Return.AddPair('activeDelphi', '');
+    AnadirFichaDelServidor(Return);
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -1757,6 +1819,7 @@ initialization
     function: IMCPTool begin Result := TDelphiRunTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_list',
     function: IMCPTool begin Result := TDelphiListTool.Create; end);
+  GArranque := Now; // la unidad se inicializa al arrancar el proceso
   TMCPRegistry.RegisterTool('delphi_git',
     function: IMCPTool begin Result := TDelphiGitTool.Create; end);
 

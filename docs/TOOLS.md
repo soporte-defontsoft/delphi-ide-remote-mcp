@@ -173,7 +173,7 @@ No parameters.
 
 ### `delphi_workspace`
 
-The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), and the active RAD Studio. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only, no parameters.
+The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), and the active RAD Studio. It also says WHO is answering (`server`): version, how this process was started (tray / service / console), transport, pid and uptime - the way to check a deployment without looking at the machine from outside. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only, no parameters.
 
 *Access: read-only OK.*
 

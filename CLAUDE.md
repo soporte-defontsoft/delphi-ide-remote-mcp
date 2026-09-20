@@ -36,9 +36,14 @@ not a reason to go around it: write it down or send it with `delphi_report`.
   not its own group, and the batteries are the harness, not a client.
 - **The release ritual** — it reads a credential file, and a credential never
   travels through a tool.
+- **What is not Delphi work**: the knowledge vault and the server's own
+  `settings.ini` (which lives outside the workspace roots). Neither belongs to
+  these tools and neither counts as a gap.
 - **Deploying the exe** to `C:\Delphi-mcp-Server\`. Production is closed and
-  started **by David**, never by the agent: a server launched from the agent's
-  shell inherits its registry bubble and stops seeing the operator's IDE.
+  started **by David**. This is not a prohibition, it is a measured
+  constraint: Claude Desktop ships as an MSIX package, and everything it
+  launches inherits the package's private registry hive, so a server started
+  by the agent stops seeing the operator's IDE - its SDKs and its profiles.
 - **A wall.** If a tool genuinely cannot do the job, fix it the conventional
   way as a last resort and go straight back to the MCP — but **the wall IS the
   finding**: write down what you were doing, which tool you expected to do it,
