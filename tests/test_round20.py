@@ -40,8 +40,11 @@ TOKEN = 'bateria-workspace'
 
 
 def start(extra_env):
-    base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests',
-                        'round20-%d' % (int(time.time() * 1000) % 100000))
+    # Carpeta FIJA, no con marca de tiempo: la raiz temporal la comparten
+    # todas las baterias y el rastro se acumulaba por centenares (medido
+    # 2026-09-20: 521 entradas). Se limpia al empezar, como las demas.
+    base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round20',
+                        str(abs(hash(frozenset(extra_env.items()))) % 1000))
     shutil.rmtree(base, ignore_errors=True)
     os.makedirs(base)
     exe = os.path.join(base, 'DelphiLspMcp.exe')

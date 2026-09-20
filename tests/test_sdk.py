@@ -228,6 +228,56 @@ try:
     check('sysroot limpio con /lib64 (Ubuntu): NO se marca',
           'warning' not in fichas.get('limpio', {}), out[:400])
 
+    # --- 5-bis) el proyecto se lo fija EL SOLO con set-sdk -----------------
+    # Es el modelo del IDE: muchos SDK registrados y el proyecto elige. Hasta
+    # ahora el servidor respetaba el PlatformSDK del proyecto pero no sabia
+    # ponerlo, asi que todo dependia del default del SDK Manager.
+    out = srv.call('delphi_config', {"project": dproj, "command": "set-sdk",
+                                     "platform": "Linux64", "sdk": "nomeinventes"})
+    check('set-sdk de un SDK que no existe: RECHAZADO',
+          out.startswith('RECHAZADO') and 'uno.sdk' in out, out[:200])
+    out = srv.call('delphi_config', {"project": dproj, "command": "set-sdk",
+                                     "platform": "Linux64", "sdk": "uno"})
+    with open(dproj, encoding='utf-8', errors='replace') as f:
+        xml = f.read()
+    check('set-sdk escribe PlatformSDK en el .dproj',
+          xml.count('<PlatformSDK>uno.sdk</PlatformSDK>') == 1, out[:200])
+    out = srv.call('delphi_build', {"project": dproj, "platform": "Linux64"},
+                   timeout=600)
+    check('y el build lo obedece sin que nadie se lo diga',
+          'uno.sdk' in out and 'sdkNote' in out, out[:300])
+    out = srv.call('delphi_config', {"project": dproj, "command": "set-sdk",
+                                     "platform": "Linux64", "sdk": "none"})
+    with open(dproj, encoding='utf-8', errors='replace') as f:
+        xml = f.read()
+    check('set-sdk none lo quita del .dproj', '<PlatformSDK>' not in xml, out[:200])
+
+    # anadir un destino al proyecto es UN gesto: plataforma + SDK + perfil
+    out = srv.call('delphi_config', {"project": dproj, "command": "add-platform",
+                                     "platform": "OSX64", "sdk": "uno"})
+    check('add-platform con sdk lo deja puesto en el proyecto',
+          'uno.sdk' in out or 'RECHAZADO' in out, out[:250])
+
+    # cada .sdk declara SU plataforma: uno de Android no vale para Linux64
+    sdk_file(os.path.join(PROFILES_DIR, 'androidfalso.sdk'), platform='Android64')
+    out = srv.call('delphi_config', {"project": dproj, "command": "set-sdk",
+                                     "platform": "Linux64", "sdk": "androidfalso"})
+    check('set-sdk no cuela un SDK de OTRA plataforma',
+          out.startswith('RECHAZADO'), out[:200])
+
+    # --- 5-ter) la otra mitad: el PAServer del proyecto --------------------
+    # "Anadir a un proyecto" en el IDE es dar de alta las DOS cosas: la
+    # conexion (el perfil) y el SDK. msbuild lee $(Profile) del proyecto
+    # igual que $(PlatformSDK), asi que va en el mismo sitio.
+    out = srv.call('delphi_config', {"project": dproj, "command": "set-profile",
+                                     "platform": "Win64", "profile": "loquesea"})
+    check('set-profile en una plataforma LOCAL: RECHAZADO',
+          out.startswith('RECHAZADO') and 'PAServer' in out, out[:200])
+    out = srv.call('delphi_config', {"project": dproj, "command": "set-profile",
+                                     "platform": "Linux64", "profile": "no-existe-este"})
+    check('set-profile de un perfil que no existe: RECHAZADO',
+          out.startswith('RECHAZADO'), out[:200])
+
     # --- 6) quitar un SDK: se desregistra, pero los gigas NO se tocan ------
     raiz_limpia = os.path.join(BASE, 'sysroot-limpio')
     out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "limpio"})

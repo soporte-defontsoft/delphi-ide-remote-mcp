@@ -73,9 +73,36 @@ the MCP `initialize` response (`serverInfo.version`).
     same reason: that seat lives in the registry, so it only lands when the
     operator's own server writes it.
 
+  - `command=profiles` also reports the IDE's own registry side of the SDKs:
+    `ideSdkSeats` (what the SDK Manager lists) and `ideSdkDefaults` (which SDK
+    each platform builds with when nobody says). Files on one side, registry on
+    the other: the pair is the whole diagnosis, the same way `ideRegistrySeats`
+    already worked for connection profiles.
   - **new `command=remove-sdk`**: takes an SDK out of the way — its `.sdk`
     file and its IDE seat — and deliberately leaves the sysroot on disk,
     reporting where it is. Deleting gigabytes is the operator's decision.
+  - `get-sdk` gained `active`, the equivalent of the IDE dialog's "Make the
+    selected SDK active": it sets the platform's ACTIVE SDK (the bold entry of
+    the SDK Manager, the one a project builds with when it declares none) — by
+    default only when the platform has none yet, so a fresh pull never
+    silently replaces the one the operator chose.
+  - `command=add-platform` now takes `sdk` and `profile` too, so adding a
+    target to a project is ONE call - the same three things the IDE's dialog
+    asks for: platform, connection, SDK.
+  - **new `delphi_config command=set-profile`**: the other half. Adding a
+    target to a project, in the IDE, is giving it BOTH the PAServer connection
+    and the SDK; msbuild reads `$(Profile)` from the project exactly like
+    `$(PlatformSDK)`, so it is written in the same place. With it, a
+    `target=Deploy` no longer needs the profile spelled out on every call. It
+    refuses local platforms: a Windows project builds here and takes no
+    profile and no SDK.
+  - **new `delphi_config command=set-sdk`**: the missing half of the model.
+    The server already RESPECTED a project's own `PlatformSDK`; now it can
+    write it. Measured on the operator's machine: not one `.dproj` in the whole
+    tree declared an SDK, so what the IDE showed per platform was the active
+    SDK of the SDK Manager — everything rode on a fallback. `set-sdk` pins it
+    in the project (`sdk=none` removes it), which is what the IDE does when you
+    choose one in Project Options.
 
 ### Fixed (same area)
 - **The IDE SDK seat went to a key nobody reads.** `get-sdk` wrote

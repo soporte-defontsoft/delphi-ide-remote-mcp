@@ -22,6 +22,11 @@ function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
 procedure EnsureDeployManifest(const ADprojPath, APlat, ABdsRoot: string;
   out AGenerated: Boolean);
 
+{ Los <nombre>.sdk que el IDE tiene registrados para una plataforma. Expuesto
+  porque delphi_config lo necesita para validar el SDK que se fija en un
+  proyecto: una sola definicion de "que SDK hay", no dos que se desincronizan. }
+function SdksDePlataforma(const AVersion, APlat: string): TArray<string>;
+
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 
@@ -1110,7 +1115,10 @@ begin
       if SdkUsado <> '' then
       begin
         SdkArg := ' /p:PlatformSDK=' + SdkUsado;
-        if Length(Cand) > 1 then
+        // Solo si nadie ha explicado ya POR QUE es ese: la rama del default
+        // del IDE deja su propia nota, y pisarla convertia "lo eligio tu SDK
+        // Manager" en un "hay varios, mira a ver" que no decia nada.
+        if (SdkNota = '') and (Length(Cand) > 1) then
           SdkNota := Format(SN_BUILD_SDK_ELEGIDO_FMT,
             [SdkUsado, string.Join(', ', Cand)]);
       end;

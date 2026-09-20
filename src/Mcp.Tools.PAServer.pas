@@ -43,6 +43,7 @@ type
     FProject: string;
     FArgs: string;
     FSdk: string;
+    FActive: string;
     FTimeoutMs: Integer;
   public
     [SchemaDescription(SP_PASERVER_COMMAND)]
@@ -65,6 +66,8 @@ type
     property Args: string read FArgs write FArgs;
     [SchemaDescription(SP_PASERVER_SDK)]
     property Sdk: string read FSdk write FSdk;
+    [SchemaDescription(SP_PASERVER_ACTIVE)]
+    property Active: string read FActive write FActive;
     [SchemaDescription(SP_PASERVER_TIMEOUT)]
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
   end;
@@ -426,6 +429,36 @@ begin
   end;
 end;
 
+{ Los Default_<Plataforma> de esa version: que SDK usa el IDE cuando el
+  proyecto no dice nada. Es una eleccion del operador y se informa tal cual. }
+function DefaultsDeSdk(const AVersion: string): TArray<string>;
+var
+  R: TRegistry;
+  L, Nombres: TStringList;
+  V: string;
+begin
+  Result := nil;
+  R := TRegistry.Create(KEY_READ);
+  L := TStringList.Create;
+  Nombres := TStringList.Create;
+  try
+    R.RootKey := HKEY_CURRENT_USER;
+    if R.OpenKeyReadOnly(Format('Software\Embarcadero\BDS\%s\PlatformSDKs',
+      [AVersion])) then
+    begin
+      R.GetValueNames(Nombres);
+      for V in Nombres do
+        if V.StartsWith('Default_', True) then
+          L.Add(V.Substring(8) + ' = ' + R.ReadString(V));
+      Result := L.ToStringArray;
+    end;
+  finally
+    Nombres.Free;
+    L.Free;
+    R.Free;
+  end;
+end;
+
 function AsientoDeSdkExiste(const AVersion, ANombre: string): Boolean;
 var
   S: string;
@@ -537,10 +570,16 @@ begin
     Return.AddPair('ideRegistrySeats', Asientos);
     var SdkSeats := TJSONArray.Create;
     Return.AddPair('ideSdkSeats', SdkSeats);
+    var SdkDefs := TJSONArray.Create;
+    Return.AddPair('ideSdkDefaults', SdkDefs);
     for Info in Installs do
       if Info.Found then
+      begin
         for F in AsientosDeSdk(Info.Version) do
           SdkSeats.Add(F);
+        for F in DefaultsDeSdk(Info.Version) do
+          SdkDefs.Add(F);
+      end;
     for Info in Installs do
     begin
       if not Info.Found then Continue;
@@ -773,11 +812,11 @@ begin
     R.CloseKey;
     if R.OpenKey(Clave, False) then
     begin
-      // El default por plataforma, solo al APROVISIONAR y solo si no habia
-      // ninguno: la eleccion del operador no se roba. Una REPARACION
-      // (reseat-sdk) no pinta nada aqui - repara asientos, no cambia
-      // politicas -, y por eso llega con AFijarDefault=False.
-      if AFijarDefault and not R.ValueExists('Default_Linux64') then
+      // El SDK "activo" de la plataforma: la negrita de la lista del SDK
+      // Manager, y lo que usa un proyecto que no diga nada. SOLO se toca si
+      // lo piden (David, 20-sep): traerse un sysroot no es decidir con que
+      // compila esta maquina, y un proyecto Windows no necesita ningun SDK.
+      if AFijarDefault then
         R.WriteString('Default_Linux64', ASdkName + '.sdk');
       R.CloseKey;
     end;
@@ -1351,7 +1390,7 @@ begin
       // y el asiento del SDK Manager del IDE, leyendo la tabla del
       // defaultsdkpaths de ESTA instalacion (nada clavado)
       if RegistrarSdkEnIde(Info.Version, Info.RootDir, SysRoot, SdkName,
-        True) then
+        MatchText(Params.Active.Trim, ['si', 'yes', 'true', '1'])) then
         Return.AddPair('ideSdkRegistered', TJSONBool.Create(True));
     finally
       Sb.Free;

@@ -28,6 +28,8 @@ type
     FProject: string;
     FCommand: string;
     FPlatform: string;
+    FSdk: string;
+    FProfile: string;
     FOutput: string;
     FPath: string;
     FRemoteDir: string;
@@ -41,6 +43,10 @@ type
     property Command: string read FCommand write FCommand;
     [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required)')]
     property Platform: string read FPlatform write FPlatform;
+    [SchemaDescription(SP_CONFIG_SDK)]
+    property Sdk: string read FSdk write FSdk;
+    [SchemaDescription(SP_CONFIG_PROFILE)]
+    property Profile: string read FProfile write FProfile;
     [SchemaDescription(SP_CONFIG_PATH)]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_CONFIG_SECTION)]
@@ -1159,6 +1165,164 @@ begin
   AReturn.AddPair('deployFiles', Obj);
 end;
 
+{ ---- el SDK del proyecto -------------------------------------------------
+  En Delphi se registran tantos SDK como haga falta (uno por maquina destino,
+  desde 2026-09-20) y **es el PROYECTO el que elige** cual usa - la propiedad
+  PlatformSDK, que es la que lee CodeGear.Profiles.Targets. El "por defecto"
+  de cada plataforma existe (la entrada en negrita del SDK Manager) pero es un
+  ultimo recurso. El servidor ya RESPETABA lo que dijera el proyecto; esto es
+  lo que faltaba para poder decirlo. }
+function SetSdk(const ADproj, ARawPlatform, ARawSdk: string): string;
+var
+  APlatform, Sdk, Enc, Xml, Antes, Disponibles: string;
+  Info: TRadStudioInfo;
+  O, I, C, TagIni, TagFin: Integer;
+  Quitar: Boolean;
+begin
+  APlatform := CanonicalPlatform(ARawPlatform);
+  if APlatform = '' then
+    Exit(Format(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit(SR_COMPONENTS_MISSING);
+  Disponibles := string.Join(', ', SdksDePlataforma(Info.Version, APlatform));
+
+  Sdk := ARawSdk.Trim;
+  Quitar := SameText(Sdk, 'none') or SameText(Sdk, 'default') or (Sdk = '');
+  if not Quitar then
+  begin
+    if not Sdk.ToLower.EndsWith('.sdk') then
+      Sdk := Sdk + '.sdk';
+    // No basta con que exista: CADA .sdk declara SU plataforma (por eso el
+    // dialogo del IDE empieza preguntandola y la lista sale agrupada), asi
+    // que un SDK de Android no puede acabar puesto en Linux64.
+    if not MatchText(Sdk, SdksDePlataforma(Info.Version, APlatform)) then
+      Exit(Format(SR_CONFIG_SDK_NOEXISTE_FMT, [Sdk, APlatform, Disponibles]));
+  end;
+
+  Xml := PatchLoadText(ADproj, Enc);
+  EnsurePlatformGroups(Xml, APlatform);
+  if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
+    Exit('error: no encuentro el PropertyGroup de ' + APlatform + ' en el .dproj');
+
+  // lo que hubiera DENTRO de ese grupo, no en cualquier sitio del fichero
+  Antes := '';
+  TagIni := Pos(LowerCase('<PlatformSDK>'), LowerCase(Xml), I);
+  if (TagIni > 0) and (TagIni < C) then
+  begin
+    TagFin := Pos(LowerCase('</PlatformSDK>'), LowerCase(Xml), TagIni);
+    Antes := Copy(Xml, TagIni + Length('<PlatformSDK>'),
+      TagFin - TagIni - Length('<PlatformSDK>'));
+    TagFin := TagFin + Length('</PlatformSDK>');
+    // se lleva por delante la linea entera, sangria incluida
+    while (TagIni > 1) and CharInSet(Xml[TagIni - 1], [' ', #9]) do
+      Dec(TagIni);
+    if (TagIni > 2) and (Xml[TagIni - 1] = #10) then
+    begin
+      Dec(TagIni);
+      if (TagIni > 1) and (Xml[TagIni - 1] = #13) then
+        Dec(TagIni);
+    end;
+    Xml := Copy(Xml, 1, TagIni - 1) + Copy(Xml, TagFin, MaxInt);
+    if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
+      Exit('error: el .dproj quedo inconsistente al quitar el PlatformSDK previo');
+  end;
+
+  if not Quitar then
+    Xml := Copy(Xml, 1, I - 1) + sLineBreak +
+      '        <PlatformSDK>' + Sdk + '</PlatformSDK>' + Copy(Xml, I, MaxInt);
+
+  PatchSaveText(ADproj, Xml, Enc);
+  if Quitar then
+    Result := Format(SN_CONFIG_SDK_QUITADO_FMT,
+      [APlatform, IfThen(Antes = '', '(ninguno)', Antes), Disponibles])
+  else
+    Result := Format(SN_CONFIG_SDK_PUESTO_FMT,
+      [APlatform, Sdk, IfThen(Antes = '', '(ninguno)', Antes)]);
+end;
+
+{ El PAServer del proyecto. La mitad gemela de set-sdk: en el IDE, "anadir a
+  un proyecto" es dar de alta a la vez la conexion (el perfil) y el SDK que ya
+  existen. msbuild lo lee igual - $(Profile) sale del proyecto si lo declara y
+  del activo de la plataforma si no -, asi que se escribe en el mismo sitio:
+  el PropertyGroup de esa plataforma. }
+function SetProfile(const ADproj, ARawPlatform, ARawProfile: string): string;
+var
+  APlatform, Perfil, Enc, Xml, Antes, Disponibles: string;
+  Info: TRadStudioInfo;
+  Dir, F: string;
+  L: TStringList;
+  O, I, C, TagIni, TagFin: Integer;
+  Quitar: Boolean;
+begin
+  APlatform := CanonicalPlatform(ARawPlatform);
+  if APlatform = '' then
+    Exit(Format(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
+  if IsLocalPlatform(APlatform) then
+    Exit(Format(SR_CONFIG_PROFILE_LOCAL_FMT, [APlatform]));
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit(SR_COMPONENTS_MISSING);
+  Dir := IdeProfilesDir(Info.Version);
+  L := TStringList.Create;
+  try
+    if TDirectory.Exists(Dir) then
+      for F in TDirectory.GetFiles(Dir, '*.profile') do
+        L.Add(TPath.GetFileNameWithoutExtension(F));
+    Disponibles := string.Join(', ', L.ToStringArray);
+  finally
+    L.Free;
+  end;
+
+  Perfil := ARawProfile.Trim;
+  Quitar := SameText(Perfil, 'none') or SameText(Perfil, 'default') or (Perfil = '');
+  if not Quitar then
+  begin
+    if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then
+      Exit(SR_PASERVER_PROFILE_NAME);
+    if not TFile.Exists(TPath.Combine(Dir, Perfil + '.profile')) then
+      Exit(Format(SR_CONFIG_PROFILE_NOEXISTE_FMT, [Perfil, Disponibles]));
+  end;
+
+  Xml := PatchLoadText(ADproj, Enc);
+  EnsurePlatformGroups(Xml, APlatform);
+  if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
+    Exit('error: no encuentro el PropertyGroup de ' + APlatform + ' en el .dproj');
+
+  Antes := '';
+  TagIni := Pos(LowerCase('<Profile>'), LowerCase(Xml), I);
+  if (TagIni > 0) and (TagIni < C) then
+  begin
+    TagFin := Pos(LowerCase('</Profile>'), LowerCase(Xml), TagIni);
+    Antes := Copy(Xml, TagIni + Length('<Profile>'),
+      TagFin - TagIni - Length('<Profile>'));
+    TagFin := TagFin + Length('</Profile>');
+    while (TagIni > 1) and CharInSet(Xml[TagIni - 1], [' ', #9]) do
+      Dec(TagIni);
+    if (TagIni > 2) and (Xml[TagIni - 1] = #10) then
+    begin
+      Dec(TagIni);
+      if (TagIni > 1) and (Xml[TagIni - 1] = #13) then
+        Dec(TagIni);
+    end;
+    Xml := Copy(Xml, 1, TagIni - 1) + Copy(Xml, TagFin, MaxInt);
+    if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
+      Exit('error: el .dproj quedo inconsistente al quitar el Profile previo');
+  end;
+
+  if not Quitar then
+    Xml := Copy(Xml, 1, I - 1) + sLineBreak +
+      '        <Profile>' + Perfil + '</Profile>' + Copy(Xml, I, MaxInt);
+
+  PatchSaveText(ADproj, Xml, Enc);
+  if Quitar then
+    Result := Format(SN_CONFIG_PROFILE_QUITADO_FMT,
+      [APlatform, IfThen(Antes = '', '(ninguno)', Antes), Disponibles])
+  else
+    Result := Format(SN_CONFIG_PROFILE_PUESTO_FMT,
+      [APlatform, Perfil, IfThen(Antes = '', '(ninguno)', Antes)]);
+end;
+
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
 var
   Cmd, Proj, Sibling: string;
@@ -1197,7 +1361,20 @@ begin
   EnterFileEdit;
   try
     if Cmd = 'add-platform' then
-      Result := AddPlatform(Proj, Params.Platform)
+    begin
+      Result := AddPlatform(Proj, Params.Platform);
+      // Anadir un destino a un proyecto es UN gesto: el dialogo del IDE pide
+      // plataforma, perfil y SDK a la vez. Si el agente los trae, se dejan
+      // puestos aqui mismo en vez de exigir dos llamadas mas.
+      if not Result.StartsWith('RECHAZADO') and not Result.StartsWith('error') then
+      begin
+        if Params.Sdk.Trim <> '' then
+          Result := Result + sLineBreak + SetSdk(Proj, Params.Platform, Params.Sdk);
+        if Params.Profile.Trim <> '' then
+          Result := Result + sLineBreak +
+            SetProfile(Proj, Params.Platform, Params.Profile);
+      end;
+    end
     else if Cmd = 'remove-platform' then
       Result := RemovePlatform(Proj, Params.Platform)
     else if Cmd = 'set-output' then
@@ -1210,6 +1387,10 @@ begin
       Result := AddDeployFile(Proj, Params.Platform, Params.Path, Params.RemoteDir)
     else if Cmd = 'remove-deployfile' then
       Result := RemoveDeployFile(Proj, Params.Platform, Params.Path)
+    else if Cmd = 'set-sdk' then
+      Result := SetSdk(Proj, Params.Platform, Params.Sdk)
+    else if Cmd = 'set-profile' then
+      Result := SetProfile(Proj, Params.Platform, Params.Profile)
     else if (Cmd = 'add-unit') or (Cmd = 'remove-unit') then
     begin
       if Params.Path.Trim = '' then
@@ -1226,8 +1407,9 @@ begin
     end
     else
       Result := 'error: command debe ser view | add-platform | remove-platform | ' +
-        'set-output | add-searchpath | remove-searchpath | add-deployfile | remove-deployfile | ' +
-        'add-unit | remove-unit';
+        'set-output | set-sdk | set-profile | add-searchpath | ' +
+        'remove-searchpath | ' +
+        'add-deployfile | remove-deployfile | add-unit | remove-unit';
   finally
     LeaveFileEdit;
   end;

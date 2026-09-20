@@ -41,8 +41,13 @@ TOKEN = 'bateria-workspace'
 
 
 def start(confine):
+    # Carpeta FIJA por modo (no con marca de tiempo): la raiz temporal la
+    # comparten todas las baterias, y una que deja rastro en cada arranque
+    # acaba con cientos de carpetas ahi - hasta que el listado de otra bateria
+    # se trunca y falla algo que no tiene nada que ver (medido 2026-09-20:
+    # 521 entradas, ~500 de esta).
     base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests',
-                        'confine-%s-%d' % ('on' if confine else 'off', int(time.time() * 1000) % 100000))
+                        'confine', 'on' if confine else 'off')
     shutil.rmtree(base, ignore_errors=True)
     os.makedirs(base)
     exe = os.path.join(base, 'DelphiLspMcp.exe')
@@ -148,7 +153,8 @@ finally:
     proc.kill()
 
 # ---- ON, but stdio has no identity: unconfined ----
-base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'confine-stdio-%d' % (int(time.time() * 1000) % 100000))
+# carpeta fija, ver el comentario de start(): la raiz temporal es compartida
+base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'confine', 'stdio')
 shutil.rmtree(base, ignore_errors=True)
 os.makedirs(base)
 exe = os.path.join(base, 'DelphiLspMcp.exe')

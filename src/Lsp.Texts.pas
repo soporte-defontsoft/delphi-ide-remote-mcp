@@ -725,6 +725,26 @@ const
     'ruta existente en el target?) y vuelve a lanzar get-sdk: los pulls son ' +
     'reanudables.';
 
+  SR_CONFIG_SDK_PLATFORM_FMT =
+    'RECHAZADO: "%s" no es una plataforma Delphi valida. Validas: Win32, ' +
+    'Win64, Win64x, WinARM64EC, OSX64, OSXARM64, Linux64, Android, Android64, ' +
+    'iOSDevice64, iOSSimARM64.';
+
+  SR_CONFIG_SDK_NOEXISTE_FMT =
+    'RECHAZADO: no hay ningun SDK llamado "%s". Registrados para %s: %s. Se ' +
+    'traen con delphi_paserver command=get-sdk (uno por maquina destino, cada ' +
+    'uno en su carpeta).';
+
+  SN_CONFIG_SDK_PUESTO_FMT =
+    'El proyecto compilara %s con el SDK %s (antes: %s). Es la propiedad ' +
+    'PlatformSDK, la misma que pone el IDE en Project Options, asi que vale ' +
+    'para delphi_build y para compilar desde el IDE. Copia previa del .dproj ' +
+    'en __delphi-patch.';
+
+  SN_CONFIG_SDK_QUITADO_FMT =
+    'El proyecto ya no fija SDK para %s (antes: %s): volvera a usar el que el ' +
+    'SDK Manager tenga por defecto para esa plataforma. Registrados: %s.';
+
   SR_BUILD_SDK_NOEXISTE_FMT =
     'RECHAZADO: no tengo ningun SDK llamado "%s". Registrados para esta ' +
     'plataforma: %s. Se traen con delphi_paserver command=get-sdk (uno por ' +
@@ -761,6 +781,14 @@ const
     'like the IDE does with the Android ones). Default: the target distro ' +
     'read from its /etc/os-release (zorin18, fedora44, ubuntu2404). Pass it ' +
     'to keep one SDK as "the one this shop builds with"';
+
+  SP_PASERVER_ACTIVE =
+    'get-sdk optional, "si" to make this the ACTIVE SDK of the platform - ' +
+    'the bold entry of the IDE SDK Manager, the one a project builds with ' +
+    'when it declares none ("Make the selected SDK active" in the IDE ' +
+    'dialog). Default: NOTHING is touched. Pulling a sysroot is not deciding ' +
+    'what this machine builds with: that belongs to the project ' +
+    '(delphi_config command=set-sdk) or to you.';
 
   SR_PASERVER_SDK_NOFILE_FMT =
     'RECHAZADO: no tengo ningun SDK llamado "%s" (delphi_paserver ' +
@@ -1247,6 +1275,40 @@ const
     'delphi_workspace las enumera.';
 
   // ---- delphi_config: search paths ----
+
+  SP_CONFIG_SDK =
+    'set-sdk: the SDK this PROJECT builds that platform with, by name ' +
+    '(delphi_paserver command=profiles lists them with their glibc). One SDK ' +
+    '= one folder, and the project choosing is the IDE''s own model - without ' +
+    'it everything rides on the SDK Manager default. "none" removes the ' +
+    'setting and goes back to that default.';
+
+  SP_CONFIG_PROFILE =
+    'set-profile: the PAServer connection profile this PROJECT deploys and ' +
+    'runs that platform with (delphi_paserver command=profiles lists them). ' +
+    'The twin of set-sdk: in the IDE, adding a target to a project is giving ' +
+    'it BOTH - the connection and the SDK. "none" removes it and falls back ' +
+    'to the platform''s active profile.';
+
+  SR_CONFIG_PROFILE_LOCAL_FMT =
+    'RECHAZADO: %s se compila y se ejecuta EN esta maquina, asi que no lleva ' +
+    'perfil de PAServer. Los perfiles son para los destinos remotos ' +
+    '(Linux64, OSX64, Android...).';
+
+  SR_CONFIG_PROFILE_NOEXISTE_FMT =
+    'RECHAZADO: no hay ningun perfil llamado "%s". Registrados: %s. Se crean ' +
+    'con delphi_paserver command=add-profile contra el PAServer vivo de esa ' +
+    'maquina.';
+
+  SN_CONFIG_PROFILE_PUESTO_FMT =
+    'El proyecto desplegara y ejecutara %s por el perfil %s (antes: %s). Es ' +
+    'la propiedad Profile, la que lee msbuild, asi que target=Deploy ya no ' +
+    'necesita que se le diga el perfil en cada llamada. Copia previa del ' +
+    '.dproj en __delphi-patch.';
+
+  SN_CONFIG_PROFILE_QUITADO_FMT =
+    'El proyecto ya no fija perfil para %s (antes: %s): volvera a usar el ' +
+    'activo de la plataforma. Registrados: %s.';
 
   SP_CONFIG_PATH =
     'add/remove-searchpath: the unit search path to add or remove - a ' +
