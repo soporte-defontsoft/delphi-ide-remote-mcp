@@ -42,6 +42,7 @@ type
     FExe: string;
     FProject: string;
     FArgs: string;
+    FSdk: string;
     FTimeoutMs: Integer;
   public
     [SchemaDescription(SP_PASERVER_COMMAND)]
@@ -62,6 +63,8 @@ type
     property Exe: string read FExe write FExe;
     [SchemaDescription(SP_PASERVER_ARGS)]
     property Args: string read FArgs write FArgs;
+    [SchemaDescription(SP_PASERVER_SDK)]
+    property Sdk: string read FSdk write FSdk;
     [SchemaDescription(SP_PASERVER_TIMEOUT)]
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
   end;
@@ -238,6 +241,262 @@ begin
   Result := IdeProfilesDir(AVersion);
 end;
 
+const
+  { La ficha que cada sysroot lleva dentro: de que maquina salio y con que
+    glibc/gcc. Nombre feo a proposito - no debe parecerse a nada del target. }
+  SDK_FICHA = 'mcp-sdk.json';
+
+{ ------------------------------------------------------------------ SDKs --
+
+  UN SDK = UNA CARPETA, y el proyecto elige cual usar. Es el modelo del propio
+  RAD Studio (el mismo de Android: AndroidAPI36.1_64bit.sdk y compania): el
+  sysroot vive en <carpeta de SDKs de ESA instalacion>\<nombre>.sdk - que se
+  pregunta con IdeSdksDir(version), NUNCA se escribe a mano: en una maquina
+  puede haber dos o tres Delphi y cada uno contesta por si mismo -, su fichero
+  <nombre>.sdk en el APPDATA del IDE lo describe, y msbuild lo elige con la
+  propiedad PlatformSDK (medido en CodeGear.Profiles.Targets: PlatformSDK vacio
+  toma DefaultPlatformSDK de EnvOptions.proj).
+
+  Hasta 2026-09-20 get-sdk volcaba SIEMPRE en "Linux64.sdk", asi que traerse el
+  sysroot de una segunda maquina lo superponia al de la primera. Medido en la
+  maquina de David: esa carpeta tenia a la vez el arbol de Ubuntu/Zorin y el de
+  Fedora, DOS libc.so.6 (2.39 y 2.43) y dos arboles de gcc (13 y 16), con las
+  rutas de ambos en el Profile_LibraryPath que ve el linker. Funcionaba por el
+  ORDEN de esa lista, no por diseno. }
+
+{ Solo letras y digitos, en minusculas: de aqui sale un nombre de carpeta. }
+function SoloAlfanumerico(const S: string): string;
+var
+  C: Char;
+begin
+  Result := '';
+  for C in S do
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
+      Result := Result + C;
+  Result := Result.ToLower;
+end;
+
+{ Que distro es el target, por su /etc/os-release y por el mismo transporte que
+  el resto del SDK: 'zorin18', 'fedora44', 'ubuntu2404'. '' si no se puede leer
+  (no es motivo para no traerse el sysroot: se cae al nombre del perfil). }
+function EtiquetaDelTarget(const APaClient, AProfName: string): string;
+var
+  Tmp, F, L, Id, Ver: string;
+  Rc: Cardinal;
+begin
+  Result := '';
+  Tmp := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-sdk-' +
+    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
+  try
+    TDirectory.CreateDirectory(Tmp);
+    RunCaptured(Format('"%s" --timeout=30 "--get=/etc/os-release,%s" "%s"',
+      [APaClient, Tmp, AProfName]), 120000, Rc);
+    F := TPath.Combine(Tmp, 'os-release');
+    if not TFile.Exists(F) then
+      Exit;
+    Id := '';
+    Ver := '';
+    for L in TFile.ReadAllText(F).Replace(#13#10, #10).Split([#10]) do
+    begin
+      if L.StartsWith('ID=') then
+        Id := L.Substring(3).Trim(['"', ' ']);
+      if L.StartsWith('VERSION_ID=') then
+        Ver := L.Substring(11).Trim(['"', ' ']);
+    end;
+    Result := SoloAlfanumerico(Id) + SoloAlfanumerico(Ver);
+  finally
+    try
+      TDirectory.Delete(Tmp, True);
+    except
+      // un temporal huerfano no estropea un despliegue
+    end;
+  end;
+end;
+
+{ La version de glibc de un sysroot, leida de su propio libc.so.6 ("release
+  version 2.39"). ES el dato que decide si un binario servira o no: enlazado
+  con una glibc vieja corre en las nuevas, al reves no. }
+function VersionDeGlibc(const ASysRoot: string): string;
+var
+  D, F: string;
+  M: TMatch;
+begin
+  Result := '';
+  for D in TArray<string>.Create('lib\x86_64-linux-gnu', 'lib64',
+    'usr\lib\x86_64-linux-gnu', 'usr\lib64') do
+  begin
+    F := TPath.Combine(TPath.Combine(ASysRoot, D), 'libc.so.6');
+    if not TFile.Exists(F) then
+      Continue;
+    try
+      M := TRegEx.Match(TEncoding.ASCII.GetString(TFile.ReadAllBytes(F)),
+        'release version (\d+\.\d+)');
+      if M.Success then
+        Exit(M.Groups[1].Value);
+    except
+      // un libc ilegible no es motivo para abortar: se queda sin dato
+    end;
+  end;
+end;
+
+{ Dos distros dentro del mismo sysroot: el arbol de Debian y el de Red Hat a la
+  vez. Se detecta por las carpetas, que es lo que el linker acaba viendo. }
+function SysrootMezclado(const ASysRoot: string): Boolean;
+
+  function HayLibc(const ARel: string): Boolean;
+  begin
+    Result := TFile.Exists(TPath.Combine(TPath.Combine(ASysRoot, ARel),
+      'libc.so.6'));
+  end;
+
+begin
+  // DOS libc.so.6, uno en cada arbol. Mirar si EXISTEN las dos carpetas no
+  // vale: un Ubuntu trae /lib64 y /usr/lib64 con el cargador dentro y nada
+  // mas, asi que el primer sysroot limpio que bajo el get-sdk nuevo se acuso
+  // a si mismo de estar mezclado (medido 2026-09-20 con el del Zorin).
+  Result := (HayLibc('lib\x86_64-linux-gnu') or
+             HayLibc('usr\lib\x86_64-linux-gnu')) and
+            (HayLibc('lib64') or HayLibc('usr\lib64'));
+end;
+
+{ La ficha que queda DENTRO del sysroot: de donde salio y con que. Es lo que
+  permite decir "esta carpeta es de Fedora" sin volver a preguntarle al target,
+  y lo que impide superponerle otra distro encima. }
+function FichaDeSysroot(const ASysRoot: string): TJSONObject;
+var
+  F: string;
+begin
+  Result := nil;
+  F := TPath.Combine(ASysRoot, SDK_FICHA);
+  if not TFile.Exists(F) then
+    Exit;
+  try
+    Result := TJSONObject.ParseJSONValue(TFile.ReadAllText(F)) as TJSONObject;
+  except
+    Result := nil;
+  end;
+end;
+
+procedure EscribirFicha(const ASysRoot, ASdk, ADistro, AGlibc, AGcc,
+  AProfile: string);
+var
+  O: TJSONObject;
+begin
+  O := TJSONObject.Create;
+  try
+    O.AddPair('sdk', ASdk);
+    O.AddPair('distro', ADistro);
+    O.AddPair('glibc', AGlibc);
+    O.AddPair('gcc', AGcc);
+    O.AddPair('profile', AProfile);
+    O.AddPair('pulled', FormatDateTime('yyyy-mm-dd hh:nn', Now));
+    try
+      TFile.WriteAllText(TPath.Combine(ASysRoot, SDK_FICHA), O.ToJSON,
+        TEncoding.UTF8);
+    except
+      // sin ficha se sigue: solo se pierde el aviso de mezcla
+    end;
+  finally
+    O.Free;
+  end;
+end;
+
+{ Los SDK que el IDE tiene ASENTADOS en su registro (PlatformSDKs). El gemelo
+  de ideRegistrySeats para perfiles: ver los ficheros .sdk y los asientos uno al
+  lado del otro ES el diagnostico de "por que el SDK Manager ensena esto". }
+function AsientosDeSdk(const AVersion: string): TArray<string>;
+var
+  R: TRegistry;
+  L: TStringList;
+begin
+  Result := nil;
+  R := TRegistry.Create(KEY_READ);
+  L := TStringList.Create;
+  try
+    R.RootKey := HKEY_CURRENT_USER;
+    if R.OpenKeyReadOnly(Format('Software\Embarcadero\BDS\%s\PlatformSDKs',
+      [AVersion])) then
+    begin
+      R.GetKeyNames(L);
+      Result := L.ToStringArray;
+    end;
+  finally
+    L.Free;
+    R.Free;
+  end;
+end;
+
+function AsientoDeSdkExiste(const AVersion, ANombre: string): Boolean;
+var
+  S: string;
+begin
+  for S in AsientosDeSdk(AVersion) do
+    if SameText(S, ANombre + '.sdk') then
+      Exit(True);
+  Result := False;
+end;
+
+{ Un SDK registrado, con lo que se sabe de el: nombre, sysroot, y -si lo
+  trajo get-sdk- la distro y la glibc con la que se enlaza. Un SDK sin ficha es
+  uno de antes o uno del IDE: se informa igual, sin inventarse nada. }
+function FichaDeSdk(const AVersion, ASdkFile: string): TJSONObject;
+var
+  Xml, Raiz, Ficha: string;
+  M: TMatch;
+  O: TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  Result.AddPair('name', TPath.GetFileNameWithoutExtension(ASdkFile));
+  Xml := '';
+  try
+    Xml := TFile.ReadAllText(ASdkFile);
+  except
+    Exit;
+  end;
+  M := TRegEx.Match(Xml, '(?i)<Profile_sysroot>([^<]+)</Profile_sysroot>');
+  if not M.Success then
+    Exit;
+  Raiz := M.Groups[1].Value.Trim;
+  Result.AddPair('sysroot', Raiz);
+  // Los .sdk que escribe el IDE usan su macro; aqui se sabe a que apunta, y
+  // sin expandirla no se podria decir nada de los SDK del SDK Manager.
+  if Raiz.Contains('$(BDSPLATFORMSDKSDIR)') then
+    Raiz := Raiz.Replace('$(BDSPLATFORMSDKSDIR)', IdeSdksDir(AVersion),
+      [rfIgnoreCase]);
+  if Raiz.Contains('$(') or not TDirectory.Exists(Raiz) then
+    Exit; // con macros sin expandir (o sin carpeta) no hay nada que mirar
+  // La glibc SIEMPRE se lee del propio sysroot: es el dato que decide si un
+  // binario correra en el destino, y lo tienen tambien los SDK del IDE.
+  Ficha := VersionDeGlibc(Raiz);
+  if Ficha <> '' then
+    Result.AddPair('glibc', Ficha);
+  Ficha := TPath.Combine(Raiz, SDK_FICHA);
+  if not TFile.Exists(Ficha) then
+  begin
+    if SysrootMezclado(Raiz) then
+      Result.AddPair('warning', 'dos distros dentro del mismo sysroot');
+    Exit;
+  end;
+  O := nil;
+  try
+    O := TJSONObject.ParseJSONValue(TFile.ReadAllText(Ficha)) as TJSONObject;
+  except
+    O := nil;
+  end;
+  if not Assigned(O) then
+    Exit;
+  try
+    for var Clave in TArray<string>.Create('distro', 'gcc', 'profile',
+      'pulled') do
+      if O.GetValue(Clave) <> nil then
+        Result.AddPair(Clave, O.GetValue<string>(Clave));
+  finally
+    O.Free;
+  end;
+  if SysrootMezclado(Raiz) then
+    Result.AddPair('warning', 'dos distros dentro del mismo sysroot');
+end;
+
 function ListProfiles: string;
 var
   Asientos: TJSONArray;
@@ -263,8 +522,11 @@ begin
       if not TDirectory.Exists(Dir) then Continue;
       for F in TDirectory.GetFiles(Dir, '*.profile') do
         Profs.Add(TPath.GetFileNameWithoutExtension(F));
+      { Cada SDK con SU ficha: de que distro salio y con que glibc. Es lo
+        que permite elegir el generico con criterio - se compila con la
+        glibc MAS VIEJA del parque - en vez de por el nombre. }
       for F in TDirectory.GetFiles(Dir, '*.sdk') do
-        Sdks.Add(TPath.GetFileNameWithoutExtension(F));
+        Sdks.AddElement(FichaDeSdk(Info.Version, F));
     end;
     { Lo que el IDE guarda POR SU CUENTA: la clave RemoteProfiles. Se
       informa aparte de los ficheros porque son dos cosas distintas y solo
@@ -273,6 +535,12 @@ begin
       juntas es el diagnostico de "por que el IDE no me lo ensena". }
     Asientos := TJSONArray.Create;
     Return.AddPair('ideRegistrySeats', Asientos);
+    var SdkSeats := TJSONArray.Create;
+    Return.AddPair('ideSdkSeats', SdkSeats);
+    for Info in Installs do
+      if Info.Found then
+        for F in AsientosDeSdk(Info.Version) do
+          SdkSeats.Add(F);
     for Info in Installs do
     begin
       if not Info.Found then Continue;
@@ -452,7 +720,8 @@ end;
   2026-09-19: cada Delphi tiene su lista), igual que hace el asistente.
   Devuelve True si escribio el asiento; el Default_Linux64 solo se pone si
   faltaba (la eleccion del operador no se roba). }
-function RegistrarSdkEnIde(const AVersion, ARootDir, ASysRoot: string): Boolean;
+function RegistrarSdkEnIde(const AVersion, ARootDir, ASysRoot,
+  ASdkName: string; AFijarDefault: Boolean): Boolean;
 var
   R: TRegistry;
   Fichero, Xml, Clave: string;
@@ -468,11 +737,16 @@ begin
   R := TRegistry.Create(KEY_WRITE);
   try
     R.RootKey := HKEY_CURRENT_USER;
-    Clave := '\Software\Embarcadero\BDS' + AVersion + '\PlatformSDKs';
-    if not R.OpenKey(Clave + '\Linux64.sdk', True) then
+    // OJO con la barra: sin ella la clave sale "BDS37.0\PlatformSDKs", que no
+    // la lee nadie. Estuvo asi desde que se escribio get-sdk (visto
+    // 2026-09-20 al comparar con las otras cuatro claves de esta unidad, que
+    // si la llevan): el SDK quedaba perfecto para msbuild - que solo mira el
+    // fichero .sdk - y jamas aparecia en el SDK Manager del IDE.
+    Clave := '\Software\Embarcadero\BDS\' + AVersion + '\PlatformSDKs';
+    if not R.OpenKey(Clave + '\' + ASdkName + '.sdk', True) then
       Exit;
-    R.WriteString('SDKName', 'Linux64.sdk');
-    R.WriteString('SDKDisplayName', 'Linux64 sysroot (MCP get-sdk)');
+    R.WriteString('SDKName', ASdkName + '.sdk');
+    R.WriteString('SDKDisplayName', 'Linux64 ' + ASdkName + ' (MCP get-sdk)');
     R.WriteString('PlatformName', 'Linux64');
     R.WriteString('Version', '');
     R.WriteString('SystemRoot', ExcludeTrailingPathDelimiter(ASysRoot));
@@ -499,8 +773,12 @@ begin
     R.CloseKey;
     if R.OpenKey(Clave, False) then
     begin
-      if not R.ValueExists('Default_Linux64') then
-        R.WriteString('Default_Linux64', 'Linux64.sdk');
+      // El default por plataforma, solo al APROVISIONAR y solo si no habia
+      // ninguno: la eleccion del operador no se roba. Una REPARACION
+      // (reseat-sdk) no pinta nada aqui - repara asientos, no cambia
+      // politicas -, y por eso llega con AFijarDefault=False.
+      if AFijarDefault and not R.ValueExists('Default_Linux64') then
+        R.WriteString('Default_Linux64', ASdkName + '.sdk');
       R.CloseKey;
     end;
     Result := I > 0;
@@ -900,6 +1178,8 @@ var
   Info: TRadStudioInfo;
   PaClient, ProfName, ProfileFile, ProfXml, Plat, SysRoot: string;
   Cmd, Output, Pattern, DestDir, GccVer, SdkFile, D: string;
+  SdkName, Etiqueta, Otra, Glibc: string;
+  Ficha: TJSONObject;
   ExitCode: Cardinal;
   Pull: TSdkPull;
   Return, PullObj: TJSONObject;
@@ -926,10 +1206,31 @@ begin
   if not SameText(Plat, 'Linux64') then
     Exit(Format(SR_PASERVER_SDK_PLATFORM_FMT, [ProfName, Plat]));
 
-  // The IDE's default SDK root: Documents\Embarcadero\Studio\SDKs, with the
-  // sysroot folder named <Platform>.sdk (the Linux64.defaultsdkpaths default).
-  SysRoot := TPath.Combine(TPath.Combine(TPath.GetDocumentsPath,
-    'Embarcadero\Studio\SDKs'), 'Linux64.sdk');
+  // UNA CARPETA POR SDK, igual que el IDE hace con los de Android: el nombre
+  // sale de la DISTRO del target (zorin18, fedora44...), del parametro "sdk"
+  // cuando el operador quiere imponerlo, o del perfil como ultimo recurso.
+  Etiqueta := EtiquetaDelTarget(PaClient, ProfName);
+  SdkName := SoloAlfanumerico(Params.Sdk);
+  if SdkName = '' then
+    SdkName := Etiqueta;
+  if SdkName = '' then
+    SdkName := SoloAlfanumerico(ProfName);
+  SysRoot := TPath.Combine(IdeSdksDir(Info.Version), SdkName + '.sdk');
+  // Una distro NO se superpone a otra. Eso es exactamente lo que dejaba dos
+  // libc.so.6 y dos arboles de gcc en la misma carpeta, con las rutas de
+  // ambos en el Profile_LibraryPath que ve el linker.
+  Ficha := FichaDeSysroot(SysRoot);
+  if Assigned(Ficha) then
+    try
+      Otra := '';
+      if Ficha.GetValue('distro') <> nil then
+        Otra := Ficha.GetValue<string>('distro');
+      if (Otra <> '') and (Etiqueta <> '') and not SameText(Otra, Etiqueta) then
+        Exit(Format(SR_PASERVER_SDK_OTRA_FMT,
+          [SdkName + '.sdk', Otra, Etiqueta, Etiqueta]));
+    finally
+      Ficha.Free;
+    end;
   TDirectory.CreateDirectory(SysRoot);
 
   Return := TJSONObject.Create;
@@ -1016,8 +1317,9 @@ begin
       Sb.AppendLine('    <Profile_platform>Linux64</Profile_platform>');
       Sb.AppendLine('    <Profile_host>' + TagValue(ProfXml, 'Profile_host') + '</Profile_host>');
       Sb.AppendLine('    <Profile_port>' + TagValue(ProfXml, 'Profile_port') + '</Profile_port>');
-      Sb.AppendLine('    <Profile_sdkname>Linux64.sdk</Profile_sdkname>');
-      Sb.AppendLine('    <Profile_displayname>Linux64 (delphi_paserver get-sdk, profile ' + ProfName + ')</Profile_displayname>');
+      Sb.AppendLine('    <Profile_sdkname>' + SdkName + '.sdk</Profile_sdkname>');
+      Sb.AppendLine('    <Profile_displayname>Linux64 ' + SdkName +
+        ' (delphi_paserver get-sdk, profile ' + ProfName + ')</Profile_displayname>');
       Sb.AppendLine('    <Profile_sysroot>' + SysRoot + '</Profile_sysroot>');
       Sb.AppendLine('    <Profile_startupobj>crt1.o;crti.o;crtbegin.o</Profile_startupobj>');
       Sb.AppendLine('    <Profile_endcodeobj>crtend.o;crtn.o</Profile_endcodeobj>');
@@ -1044,24 +1346,40 @@ begin
       Sb.AppendLine('  </ItemGroup>');
       Sb.AppendLine('</Project>');
 
-      SdkFile := TPath.Combine(ProfilesDir(Info.Version), 'Linux64.sdk');
+      SdkFile := TPath.Combine(ProfilesDir(Info.Version), SdkName + '.sdk');
       TFile.WriteAllText(SdkFile, Sb.ToString, TEncoding.UTF8);
       // y el asiento del SDK Manager del IDE, leyendo la tabla del
       // defaultsdkpaths de ESTA instalacion (nada clavado)
-      if RegistrarSdkEnIde(Info.Version, Info.RootDir, SysRoot) then
+      if RegistrarSdkEnIde(Info.Version, Info.RootDir, SysRoot, SdkName,
+        True) then
         Return.AddPair('ideSdkRegistered', TJSONBool.Create(True));
     finally
       Sb.Free;
       LibDirs.Free;
     end;
 
+    // La glibc del sysroot recien traido: ES el dato con el que se elige.
+    Glibc := VersionDeGlibc(SysRoot);
+    EscribirFicha(SysRoot, SdkName, Etiqueta, Glibc, GccVer, ProfName);
+
+    Return.AddPair('sdk', SdkName + '.sdk');
     Return.AddPair('sdkFile', SdkFile);
     Return.AddPair('sysroot', SysRoot);
+    if Etiqueta <> '' then
+      Return.AddPair('distro', Etiqueta);
+    if Glibc <> '' then
+      Return.AddPair('glibc', Glibc);
     if GccVer <> '' then
       Return.AddPair('gccVersion', GccVer);
     Return.AddPair('totalFiles', TJSONNumber.Create(TotalFiles));
     Return.AddPair('totalBytes', TJSONNumber.Create(TotalBytes));
     Return.AddPair('note', SN_PASERVER_SDK_OK);
+    if Glibc <> '' then
+      Return.AddPair('genericNote', Format(SN_PASERVER_SDK_GENERIC_FMT, [Glibc]));
+    // Una carpeta con dos distros dentro solo puede venir de antes de este
+    // cambio: se dice, porque el linker las mezcla sin avisar.
+    if SysrootMezclado(SysRoot) then
+      Return.AddPair('warning', Format(SN_PASERVER_SDK_MEZCLA_FMT, [SysRoot]));
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -1153,6 +1471,145 @@ begin
   end;
 end;
 
+{ Vuelve a escribir el ASIENTO del IDE de un SDK que ya esta en disco, sin
+  tocar la red ni el target. Es el gemelo de command=reseat para perfiles, y
+  nace del mismo sitio: el asiento vive en el registro, asi que lo escribe con
+  buen resultado el servidor que arranca el OPERADOR - si lo escribio otro
+  proceso, el IDE no lo ve. Asi repararlo no cuesta volver a bajarse el
+  sysroot entero. }
+function ReseatSdk(const Params: TDelphiPAServerParams): string;
+var
+  Info: TRadStudioInfo;
+  Nombre, Fichero, Xml, Raiz: string;
+  M: TMatch;
+  Return: TJSONObject;
+  Hechos: TJSONArray;
+  Ficheros: TArray<string>;
+begin
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit(SR_PASERVER_NO_PACLIENT);
+  Nombre := SoloAlfanumerico(Params.Sdk);
+  if Nombre = '' then
+    Nombre := SoloAlfanumerico(Params.Name);
+  if Nombre <> '' then
+    Ficheros := [TPath.Combine(ProfilesDir(Info.Version), Nombre + '.sdk')]
+  else
+    // sin nombre: todos los que haya, que es lo que hace falta despues de un
+    // despliegue ("registra lo que tengas")
+    Ficheros := TDirectory.GetFiles(ProfilesDir(Info.Version), '*.sdk');
+
+  Return := TJSONObject.Create;
+  Hechos := TJSONArray.Create;
+  Return.AddPair('seated', Hechos);
+  try
+    for Fichero in Ficheros do
+    begin
+      if not TFile.Exists(Fichero) then
+      begin
+        Return.AddPair('error', Format(SR_PASERVER_SDK_NOFILE_FMT,
+          [TPath.GetFileName(Fichero)]));
+        Continue;
+      end;
+      Xml := '';
+      try
+        Xml := TFile.ReadAllText(Fichero);
+      except
+        Continue;
+      end;
+      // solo los de PAServer: los de Android los pone GetIt y no son cosa
+      // nuestra
+      if not TRegEx.IsMatch(Xml, '(?i)<Profile_platform>\s*Linux64\s*<') then
+        Continue;
+      M := TRegEx.Match(Xml, '(?i)<Profile_sysroot>([^<]+)</Profile_sysroot>');
+      if not M.Success then
+        Continue;
+      Raiz := M.Groups[1].Value.Trim;
+      // los .sdk que escribe el IDE usan su macro; aqui se sabe a que apunta
+      if Raiz.Contains('$(BDSPLATFORMSDKSDIR)') then
+        Raiz := Raiz.Replace('$(BDSPLATFORMSDKSDIR)',
+          IdeSdksDir(Info.Version), [rfIgnoreCase]);
+      if Raiz.Contains('$(') or not TDirectory.Exists(Raiz) then
+        Continue;
+      if RegistrarSdkEnIde(Info.Version, Info.RootDir, Raiz,
+           TPath.GetFileNameWithoutExtension(Fichero), False) then
+        Hechos.Add(TPath.GetFileNameWithoutExtension(Fichero));
+    end;
+    Return.AddPair('note', SN_PASERVER_SDK_RESEAT);
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
+{ Quita un SDK de en medio: su fichero <nombre>.sdk y su asiento en el SDK
+  Manager del IDE, igual que remove-profile hace con un perfil. El SYSROOT (que
+  son gigas) NO se borra aqui: se dice donde esta y lo borra quien quiera, que
+  una tool que se lleva 11 GB por delante sin preguntar no deberia existir. }
+function RemoveSdk(const Params: TDelphiPAServerParams): string;
+var
+  Info: TRadStudioInfo;
+  Nombre, Fichero, Xml, Raiz: string;
+  M: TMatch;
+  R: TRegistry;
+  Return: TJSONObject;
+begin
+  Nombre := SoloAlfanumerico(Params.Sdk);
+  if Nombre = '' then
+    Nombre := SoloAlfanumerico(Params.Name);
+  if Nombre = '' then
+    Exit(Format(SR_PASERVER_NEED_FMT, ['sdk']));
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit(SR_COMPONENTS_MISSING);
+  Fichero := TPath.Combine(ProfilesDir(Info.Version), Nombre + '.sdk');
+  // El fichero puede no estar y el ASIENTO seguir ahi - pasa en cuanto alguien
+  // borra el .sdk a mano, y entonces el IDE sigue ofreciendo un SDK que ya no
+  // existe. Esta tool es la escoba: si no hay nada que limpiar, NI fichero ni
+  // asiento, entonces si se protesta.
+  Raiz := '';
+  if TFile.Exists(Fichero) then
+  begin
+    try
+      Xml := TFile.ReadAllText(Fichero);
+      M := TRegEx.Match(Xml, '(?i)<Profile_sysroot>([^<]+)</Profile_sysroot>');
+      if M.Success then
+        Raiz := M.Groups[1].Value.Trim;
+    except
+      Raiz := '';
+    end;
+    try
+      TFile.Delete(Fichero);
+    except
+      on E: Exception do
+        Exit('error: no pude borrar ' + TPath.GetFileName(Fichero) + ': ' +
+          E.Message);
+    end;
+  end
+  else if not AsientoDeSdkExiste(Info.Version, Nombre) then
+    Exit(Format(SR_PASERVER_SDK_NOFILE_FMT, [Nombre]));
+  R := TRegistry.Create(KEY_WRITE);
+  try
+    R.RootKey := HKEY_CURRENT_USER;
+    R.DeleteKey('\Software\Embarcadero\BDS\' + Info.Version +
+      '\PlatformSDKs\' + Nombre + '.sdk');
+  finally
+    R.Free;
+  end;
+  Return := TJSONObject.Create;
+  try
+    Return.AddPair('removed', Nombre + '.sdk');
+    if Raiz <> '' then
+    begin
+      Return.AddPair('sysrootLeftBehind', Raiz);
+      Return.AddPair('note', SN_PASERVER_SDK_REMOVED);
+    end;
+    Result := Return.ToJSON;
+  finally
+    Return.Free;
+  end;
+end;
+
 function TDelphiPAServerTool.ExecuteWithParams(const Params: TDelphiPAServerParams): string;
 var
   Cmd: string;
@@ -1172,6 +1629,10 @@ begin
     Result := RemoveProfile(Params)
   else if Cmd = 'test-connection' then
     Result := TestConnection(Params)
+  else if Cmd = 'remove-sdk' then
+    Result := RemoveSdk(Params)
+  else if Cmd = 'reseat-sdk' then
+    Result := ReseatSdk(Params)
   else if Cmd = 'get-sdk' then
     Result := GetSdk(Params)
   else if Cmd = 'remote-run' then

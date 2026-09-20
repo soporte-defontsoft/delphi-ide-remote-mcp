@@ -45,6 +45,52 @@ the MCP `initialize` response (`serverInfo.version`).
     checking and deploying are now one gesture, per profile.
 
 ### Changed
+- **One SDK = one folder, and the project says which one it builds with** — the
+  model RAD Studio already uses for its Android SDKs. `get-sdk` used to write
+  every target into a single `Linux64.sdk`, so pulling a second machine landed
+  on top of the first: measured on a real setup, that folder held the
+  Debian/Ubuntu tree AND the Red Hat one, two `libc.so.6` (2.39 and 2.43), two
+  gcc trees, and both lib directories on the linker's path — it linked
+  correctly only because of the ORDER of that list. Now:
+  - the sysroot goes into a folder named after the target's distribution
+    (`fedora44.sdk`, `zorin18.sdk`, read from its `/etc/os-release`; `sdk=`
+    overrides the name), registered for msbuild and in the IDE's SDK Manager;
+  - pulling one distribution ON TOP of another is refused;
+  - each sysroot carries a small card (distribution, glibc, gcc, profile), and
+    `command=profiles` reports the `glibc` of every SDK — the IDE's own
+    included — plus a warning on any folder holding two distributions;
+  - `delphi_build` gained `sdk=`, and chooses in this order: the call, the
+    project's own `PlatformSDK`, the default of the IDE's SDK Manager for that
+    platform (an explicit operator choice), the only one registered — and
+    **refuses, naming them, only when there are several, no default and no
+    hint**. The wrong sysroot yields a binary that dies on the target with
+    `GLIBC_2.xx not found`, which is a much worse way to find out. Every answer
+    says which SDK it used and why.
+
+  - **new `delphi_paserver command=reseat-sdk`**: re-writes the IDE's SDK
+    Manager seats from the SDKs already on disk — no network, nothing
+    downloaded again. The twin of `command=reseat` for profiles, and for the
+    same reason: that seat lives in the registry, so it only lands when the
+    operator's own server writes it.
+
+  - **new `command=remove-sdk`**: takes an SDK out of the way — its `.sdk`
+    file and its IDE seat — and deliberately leaves the sysroot on disk,
+    reporting where it is. Deleting gigabytes is the operator's decision.
+
+### Fixed (same area)
+- **The IDE SDK seat went to a key nobody reads.** `get-sdk` wrote
+  `Software\Embarcadero\BDS<version>\PlatformSDKs<name>.sdk` — two missing
+  backslashes — instead of `...\BDS\<version>\PlatformSDKs\<name>.sdk`,
+  which is the key the other four registry paths in that unit use and the one
+  the IDE reads. The SDK worked for msbuild (which only reads the `.sdk` file)
+  and never appeared in the IDE's SDK Manager. Present since get-sdk was
+  written; found 2026-09-20 while adding `remove-sdk`. The per-platform
+  default it writes also pointed at a hardcoded `Linux64.sdk`; it now names
+  the SDK actually registered.
+
+  You still do NOT need one SDK per machine: a binary linked against an OLD
+  glibc runs on newer distributions, so build everything with the oldest one
+  in your fleet. What you need is for them not to be mixed in one folder.
 - **A message "para todos" now reaches everyone.** It used to be consumed by
   the first agent that read its mail, and the second was told there was
   nothing. The broadcast stays in the mailbox root and each agent gets a

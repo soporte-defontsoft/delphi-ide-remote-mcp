@@ -605,9 +605,12 @@ const
     'there is no trash for them) | ' +
     'test-connection (with name: full handshake against that profile; with ' +
     'host+port and no name: raw TCP reachability probe, same host rule) | ' +
-    'get-sdk (pull the SDK/sysroot from the PAServer of profile "name" and ' +
-    'register it for delphi_build AND in the IDE SDK Manager; can take ' +
-    'minutes) | remote-run (execute ' +
+    'get-sdk (pull the SDK/sysroot from the PAServer of profile "name" into ' +
+    'a folder OF ITS OWN, named after the target distribution, and register ' +
+    'it for delphi_build AND in the IDE SDK Manager; can take minutes) | ' +
+    'reseat-sdk (re-write the IDE SDK Manager seat of an SDK already on ' +
+    'disk - no network, nothing downloaded again; "sdk" names one, no name ' +
+    'does them all) | remote-run (execute ' +
     '"exe" on the target of profile "name" and return its exit code and ' +
     'output - NOTHING has to be installed there: PAServer itself runs it. It ' +
     'runs the program THAT PROJECT deployed and nothing else on that ' +
@@ -646,8 +649,9 @@ const
     'Linux64. Default: Linux64';
 
   SR_PASERVER_CMD =
-    'error: command debe ser platforms | packages | profiles | add-profile ' +
-    '| remove-profile | test-connection | get-sdk | remote-run';
+    'error: command debe ser platforms | packages | profiles | reseat | ' +
+    'add-profile | remove-profile | test-connection | get-sdk | ' +
+    'reseat-sdk | remote-run';
 
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     'RECHAZADO: el proyecto "%s" no esta en la lista de proyectos que este ' +
@@ -721,11 +725,88 @@ const
     'ruta existente en el target?) y vuelve a lanzar get-sdk: los pulls son ' +
     'reanudables.';
 
+  SR_BUILD_SDK_NOEXISTE_FMT =
+    'RECHAZADO: no tengo ningun SDK llamado "%s". Registrados para esta ' +
+    'plataforma: %s. Se traen con delphi_paserver command=get-sdk (uno por ' +
+    'maquina destino, cada uno en su carpeta).';
+
+  SR_BUILD_SDK_VARIOS_FMT =
+    'RECHAZADO: hay VARIOS SDK de %s y nadie dice cual usar: %s. No elijo yo ' +
+    '- enlazar con el sysroot equivocado da un binario que muere en el ' +
+    'destino con "GLIBC_2.xx not found". Pasa sdk=<nombre> en esta llamada, o ' +
+    'fijalo en el proyecto (PlatformSDK) para no repetirlo nunca mas.';
+
+  SN_BUILD_SDK_PROYECTO_FMT =
+    'El SDK lo manda el proyecto (PlatformSDK=%s); no lo he tocado.';
+
+  SN_BUILD_SDK_DEFAULT_FMT =
+    'He compilado con %s, que es el SDK por defecto de esta plataforma en el ' +
+    'SDK Manager del IDE. Hay mas de uno (%s): para otro, pasa sdk=<nombre> ' +
+    'o fijalo en el proyecto (PlatformSDK) y no habra que repetirlo.';
+
+  SN_BUILD_SDK_ELEGIDO_FMT =
+    'He compilado con %s. Hay mas de uno registrado (%s): si este no es el ' +
+    'que querias, pasa sdk=<nombre> o fijalo en el proyecto.';
+
+  SN_BUILD_SDK_MEZCLA_FMT =
+    'AVISO: el SDK %s apunta a un sysroot con DOS distros dentro (%s): tiene ' +
+    'el arbol de Debian/Ubuntu y el de Red Hat/Fedora a la vez, con dos ' +
+    'libc.so.6 y dos arboles de gcc, y las rutas de ambos van al linker. Lo ' +
+    'que salga de aqui compila, pero contra una mezcla que nadie eligio. ' +
+    'Vuelve a traerte el SDK con delphi_paserver command=get-sdk (ahora cada ' +
+    'maquina va a su propia carpeta).';
+
+  SP_PASERVER_SDK =
+    'get-sdk optional: the NAME of the SDK to write (a folder of its own, ' +
+    'like the IDE does with the Android ones). Default: the target distro ' +
+    'read from its /etc/os-release (zorin18, fedora44, ubuntu2404). Pass it ' +
+    'to keep one SDK as "the one this shop builds with"';
+
+  SR_PASERVER_SDK_NOFILE_FMT =
+    'RECHAZADO: no tengo ningun SDK llamado "%s" (delphi_paserver ' +
+    'command=profiles los lista). Se traen con command=get-sdk.';
+
+  SN_PASERVER_SDK_REMOVED =
+    'Quitado de en medio: su fichero .sdk y su asiento del SDK Manager (el ' +
+    'IDE deja de listarlo en su proximo arranque). El SYSROOT sigue EN DISCO ' +
+    'y son gigas: la ruta va en "sysrootLeftBehind" y la borras tu cuando ' +
+    'quieras. Borrar carpetas asi no es cosa de una tool.';
+
+  SN_PASERVER_SDK_RESEAT =
+    'Asientos del SDK Manager reescritos desde los SDK que ya estaban en ' +
+    'disco - sin red y sin volver a bajarse nada. El IDE lee esa lista al ' +
+    'ARRANCAR, asi que los vera en su proximo inicio. Si sigues sin verlos, ' +
+    'el servidor que escribio el asiento no era el que arrancaste tu: ' +
+    'relanzalo desde tu sesion y repite.';
+
+  SR_PASERVER_SDK_OTRA_FMT =
+    'RECHAZADO: el SDK "%s" ya existe y es de %s; este perfil es de %s. NO lo ' +
+    'superpongo: dos distros en la misma carpeta dejan dos libc y dos arboles ' +
+    'de gcc, y el linker acaba mezclandolos sin avisar. Lanza get-sdk sin ' +
+    '"sdk" (se llamara %s) o dame otro nombre.';
+
+  SN_PASERVER_SDK_GENERIC_FMT =
+    'Este sysroot trae glibc %s. La regla para tener UN SOLO SDK que sirva ' +
+    'para todos tus Linux: compila SIEMPRE con la glibc mas VIEJA de tu ' +
+    'parque - un binario enlazado con una glibc vieja corre en las nuevas, y ' +
+    'al reves muere con "GLIBC_2.xx not found". delphi_paserver ' +
+    'command=profiles lista la glibc de cada SDK que tengas.';
+
+  SN_PASERVER_SDK_MEZCLA_FMT =
+    'AVISO: %s tiene DENTRO dos distros (el arbol de Debian/Ubuntu y el de ' +
+    'Red Hat/Fedora a la vez), asi que lleva dos libc.so.6 y dos arboles de ' +
+    'gcc, y las rutas de ambos van al linker. Viene de cuando get-sdk volcaba ' +
+    'todos los targets en una sola carpeta. Bajalos otra vez (ahora cada uno ' +
+    'va a la suya) y borra esta a mano cuando no te haga falta.';
+
   SN_PASERVER_SDK_OK =
-    'SDK provisioned: the target libraries now live on this server and the ' +
-    'platform SDK is registered. delphi_build picks it up automatically for ' +
-    'this platform. Note: C++ headers are NOT pulled (this server links ' +
-    'Delphi); re-run get-sdk after OS/toolchain upgrades on the target.';
+    'SDK provisioned: the target libraries now live on this server, in a ' +
+    'folder OF THEIR OWN, and the SDK is registered for msbuild and in the ' +
+    'IDE SDK Manager - the same model RAD Studio uses for the Android SDKs: ' +
+    'one folder per SDK, and the project says which one it builds with ' +
+    '(delphi_build sdk=<name>, or the project''s own PlatformSDK). Note: C++ ' +
+    'headers are NOT pulled (this server links Delphi); re-run get-sdk after ' +
+    'OS/toolchain upgrades on the target.';
 
   SR_PASERVER_NAME_FMT =
     'RECHAZADO: "%s" no vale como nombre de perfil. Usa letras, digitos, ' +

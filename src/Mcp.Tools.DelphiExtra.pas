@@ -49,6 +49,7 @@ type
     FTarget: string;
     FProfile: string;
     FDeviceId: string;
+    FSdk: string;
   public
     [SchemaDescription('Absolute path of the .dproj to build')]
     [Required]
@@ -64,6 +65,8 @@ type
     property Target: string read FTarget write FTarget;
     [SchemaDescription('Connection profile name for target=Deploy on a PAServer platform (see delphi_paserver command=profiles). The deployed files land on the target under its PAServer scratch dir, in <profile>/<project name>/')]
     property Profile: string read FProfile write FProfile;
+    [SchemaDescription('Which platform SDK to link against, by name (delphi_paserver command=profiles lists them with their glibc). One SDK = one folder, the same model as the Android SDKs. Omit it and the project decides (its own PlatformSDK), or the only one there is; with several and no hint the build is refused instead of guessing')]
+    property Sdk: string read FSdk write FSdk;
     [SchemaDescription('Android device serial for target=Deploy on Android platforms (see delphi_adb command=devices; attach one over wifi with command=connect)')]
     property DeviceId: string read FDeviceId write FDeviceId;
   end;
@@ -231,7 +234,7 @@ begin
   // reporting as a bug. A refusal is not a crash: it goes out as itself.
   try
     R := RunMsBuild(Params.Project, Params.Platform, Params.Config, Params.Target,
-      Params.Profile, Params.DeviceId);
+      Params.Profile, Params.DeviceId, 600000, Params.Sdk);
   except
     on E: Exception do
       if E.Message.StartsWith('RECHAZADO') then

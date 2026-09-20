@@ -20,8 +20,12 @@ REM    - Requiere el SDK Linux64 aprovisionado una vez (delphi_paserver
 REM      command=get-sdk, o el SDK Manager del IDE).
 REM ============================================================================
 
-setlocal
-set RSVARS=C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat
+setlocal enabledelayedexpansion
+REM  La version con la que compila ESTE grupo. Una maquina puede tener dos o
+REM  tres Delphi instalados: si hace falta otra, se cambia aqui (o con
+REM  set DELPHIVER=38.0 antes de llamar) y todo lo de abajo la sigue.
+if "%DELPHIVER%"=="" set DELPHIVER=37.0
+set RSVARS=C:\Program Files (x86)\Embarcadero\Studio\%DELPHIVER%\bin\rsvars.bat
 set GRUPO=%~dp0MCP-delphi.groupproj
 
 set MODE=%~1
@@ -62,8 +66,28 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [BuildGroup] Compilando el grupo (%BCONFIG%, %MSBTARGET%)...
-msbuild "%GRUPO%" /t:%MSBTARGET% /p:Config=%BCONFIG% /p:PlatformSDK=Linux64.sdk %VERBOSITY%
+REM  El SDK de Linux NO se clava por nombre: desde 2026-09-20 cada maquina
+REM  destino tiene el suyo (zorin18.sdk, fedora44.sdk...) y "Linux64.sdk" puede
+REM  no existir. Se coge el primer .sdk del IDE cuya plataforma sea Linux64.
+REM  Se puede imponer uno con  set MCP_LINUX_SDK=zorin18.sdk  antes de llamar,
+REM  y con varios conviene: el bueno es el de la glibc MAS VIEJA del parque
+REM  (un binario enlazado con glibc vieja corre en las distros nuevas; al
+REM  reves muere con "GLIBC_2.xx not found"). Comprobacion de un vistazo:
+REM     grep -aoE "GLIBC_[0-9]+\.[0-9]+" node\McpDesktopNode | sort -uV | tail -1
+set SDKLINUX=%MCP_LINUX_SDK%
+if "%SDKLINUX%"=="" (
+  for %%F in ("%APPDATA%\Embarcadero\BDS\%DELPHIVER%\*.sdk") do (
+    if "!SDKLINUX!"=="" (
+      findstr /I /C:"<Profile_platform>Linux64<" "%%F" >nul 2>&1 && set SDKLINUX=%%~nxF
+    )
+  )
+)
+set ARGSDK=
+if not "%SDKLINUX%"=="" set ARGSDK=/p:PlatformSDK=%SDKLINUX%
+if "%SDKLINUX%"=="" echo [BuildGroup] AVISO: no hay ningun SDK de Linux64 registrado; el nodo Linux no enlazara. Traelo con delphi_paserver command=get-sdk.
+
+echo [BuildGroup] Compilando el grupo (%BCONFIG%, %MSBTARGET%) con SDK Linux "%SDKLINUX%"...
+msbuild "%GRUPO%" /t:%MSBTARGET% /p:Config=%BCONFIG% %ARGSDK% %VERBOSITY%
 if errorlevel 1 exit /b 1
 
 if /I "%BCONFIG%"=="Release" (

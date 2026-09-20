@@ -317,7 +317,8 @@ try:
     files_d = glob.glob(os.path.join(WORK, 'reports', '*.md'))
     check('D informes: los %d se escriben sin pisarse' % NR,
           ok_d == NR and len(files_d) == NR,
-          'exitos=%d ficheros=%d' % (ok_d, len(files_d)))
+          'exitos=%d ficheros=%d; los que no: %s' % (
+              ok_d, len(files_d), [str(r)[:160] for r in rd if bad(r)]))
 
     # ---------------------------------------------------------------- E ----
     # A message dropped in the mailbox ROOT is addressed to everybody. Two

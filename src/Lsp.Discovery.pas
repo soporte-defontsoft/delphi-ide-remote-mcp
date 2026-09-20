@@ -49,6 +49,18 @@ function IdeDefaultUtf8(const AVersion: string): Boolean;
   ONE definition, shared by delphi_paserver and the build runner. }
 function IdeProfilesDir(const AVersion: string): string;
 
+{ Where THIS installation keeps the platform sysroots - the folder the IDE
+  calls $(BDSPLATFORMSDKSDIR), with one <name>.sdk subfolder per SDK.
+
+  It is asked to the install, never composed by hand, because a machine can
+  host two or three Delphi versions side by side and each one answers for
+  itself: (1) the IDE's own Environment Variables of that version, where an
+  operator's override lives; (2) failing that, the SDK Manager entries of that
+  version - the parent of any sysroot already registered IS the folder; (3)
+  and only if neither exists, the documented default, whose literal lives HERE
+  and nowhere else. }
+function IdeSdksDir(const AVersion: string): string;
+
 { ALL RAD Studio installations on the machine (a machine may host several
   Delphi versions side by side), newest first. Installs WITHOUT DelphiLSP
   are included too: they still build via msbuild. }
@@ -412,6 +424,57 @@ function IdeProfilesDir(const AVersion: string): string;
 begin
   Result := TPath.Combine(TPath.Combine(TPath.Combine(
     GetEnvironmentVariable('APPDATA'), 'Embarcadero'), 'BDS'), AVersion);
+end;
+
+function IdeSdksDir(const AVersion: string): string;
+var
+  Vars: TStringList;
+  Reg: TRegistry;
+  Claves: TStringList;
+  K, Raiz: string;
+begin
+  Result := '';
+  // 1. lo que diga ESA version, si el operador lo redefinio
+  Vars := TStringList.Create;
+  try
+    IdeEnvironmentVars(AVersion, Vars);
+    Result := Vars.Values['BDSPLATFORMSDKSDIR'];
+  finally
+    Vars.Free;
+  end;
+  if (Result <> '') and not Result.Contains('$(') then
+    Exit(ExcludeTrailingPathDelimiter(Result));
+  // 2. donde estan los SDK que ESA version ya tiene registrados
+  Reg := TRegistry.Create(KEY_READ);
+  Claves := TStringList.Create;
+  try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs',
+      [AVersion])) then
+    begin
+      Reg.GetKeyNames(Claves);
+      for K in Claves do
+        if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs\%s',
+          [AVersion, K])) then
+        try
+          Raiz := Reg.ReadString('SystemRoot');
+          // solo sirve el que apunte a una carpeta <algo>.sdk: los SDK de
+          // Android viven en el CatalogRepository, que es otra cosa
+          if (Raiz <> '') and not Raiz.Contains('$(') and
+             TPath.GetFileName(ExcludeTrailingPathDelimiter(Raiz)).ToLower.EndsWith('.sdk') then
+            Exit(ExcludeTrailingPathDelimiter(TPath.GetDirectoryName(
+              ExcludeTrailingPathDelimiter(Raiz))));
+        except
+          // una entrada sin SystemRoot no dice nada
+        end;
+    end;
+  finally
+    Claves.Free;
+    Reg.Free;
+  end;
+  // 3. el default documentado. UNICO literal, y aqui.
+  Result := TPath.Combine(TPath.Combine(TPath.Combine(
+    TPath.GetDocumentsPath, 'Embarcadero'), 'Studio'), 'SDKs');
 end;
 
 end.

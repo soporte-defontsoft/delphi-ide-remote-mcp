@@ -1694,8 +1694,20 @@ begin
     Zip.Free;
   end;
   // Un solo gesto del sistema: nadie ve nunca un zip a medias con el nombre
-  // bueno (packages are disposable artifacts, always fresh).
-  if not MoveFileEx(PChar(EnProceso), PChar(OutZip), MOVEFILE_REPLACE_EXISTING) then
+  // bueno (packages are disposable artifacts, always fresh). Reintentado unos
+  // instantes: si DOS empaquetados del mismo sitio se cruzan, el destino esta
+  // siendo reemplazado por el otro justo en ese momento y el rename rebota
+  // (medido 2026-09-20 en la bateria de concurrencia).
+  var Renombrado := False;
+  for var Intento := 1 to 5 do
+  begin
+    Renombrado := MoveFileEx(PChar(EnProceso), PChar(OutZip),
+      MOVEFILE_REPLACE_EXISTING);
+    if Renombrado then
+      Break;
+    Sleep(200);
+  end;
+  if not Renombrado then
   begin
     try
       TFile.Delete(EnProceso);

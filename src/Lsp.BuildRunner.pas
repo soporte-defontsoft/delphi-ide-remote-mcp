@@ -12,7 +12,7 @@ uses
 
 function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
   const AProfile: string = ''; const ADeviceId: string = '';
-  ATimeoutMs: Integer = 600000): TJSONObject;
+  ATimeoutMs: Integer = 600000; const ASdk: string = ''): TJSONObject;
 
 { Runs a command line with stdout+stderr captured (no shell). }
 { Generates the deployment manifest (.deployproj + its import line in the
@@ -49,6 +49,7 @@ uses
   System.SysUtils,
   System.Classes,
   System.IOUtils,
+  System.Win.Registry,
   Winapi.Windows,
   MCPServer.Logger,
   Lsp.Discovery,
@@ -838,8 +839,123 @@ begin
   end;
 end;
 
+{ Los SDK que el IDE tiene registrados para una plataforma: los <nombre>.sdk
+  de su APPDATA cuyo Profile_platform coincide. UN SDK = UNA CARPETA y aqui se
+  decide con cual se compila - la misma idea que los SDK de Android. }
+function SdksDePlataforma(const AVersion, APlat: string): TArray<string>;
+var
+  F, Xml, Dir: string;
+  L: TStringList;
+begin
+  Result := nil;
+  Dir := IdeProfilesDir(AVersion);
+  if not TDirectory.Exists(Dir) then
+    Exit;
+  L := TStringList.Create;
+  try
+    L.Sorted := True;
+    for F in TDirectory.GetFiles(Dir, '*.sdk') do
+    begin
+      Xml := '';
+      try
+        Xml := TFile.ReadAllText(F);
+      except
+        Continue;
+      end;
+      if TRegEx.IsMatch(Xml, '(?i)<Profile_platform>\s*' + APlat + '\s*<') then
+        L.Add(TPath.GetFileName(F));
+    end;
+    Result := L.ToStringArray;
+  finally
+    L.Free;
+  end;
+end;
+
+{ El SDK que el SDK MANAGER de esa version tiene por defecto para la
+  plataforma (Default_<Plataforma> de PlatformSDKs). Es la eleccion explicita
+  del operador en el IDE, asi que manda sobre cualquier adivinanza nuestra. }
+function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
+var
+  Reg: TRegistry;
+begin
+  Result := '';
+  Reg := TRegistry.Create(KEY_READ);
+  try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    if Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\PlatformSDKs',
+      [AVersion])) then
+      try
+        if Reg.ValueExists('Default_' + APlat) then
+          Result := Reg.ReadString('Default_' + APlat).Trim;
+      except
+        Result := '';
+      end;
+  finally
+    Reg.Free;
+  end;
+end;
+
+{ El SDK que declara EL PROYECTO (propiedad PlatformSDK, que es la que lee
+  CodeGear.Profiles.Targets). El modelo del IDE es que cada proyecto diga con
+  cual se compila; si lo dice, no se le pisa. }
+function ProyectoDeclaraSdk(const ADproj: string; out ASdk: string): Boolean;
+var
+  Xml: string;
+  M: TMatch;
+begin
+  ASdk := '';
+  Result := False;
+  try
+    Xml := TFile.ReadAllText(ADproj);
+  except
+    Exit;
+  end;
+  M := TRegEx.Match(Xml, '(?i)<PlatformSDK>([^<]+)</PlatformSDK>');
+  if M.Success then
+  begin
+    ASdk := M.Groups[1].Value.Trim;
+    Result := ASdk <> '';
+  end;
+end;
+
+{ Un sysroot con DOS distros dentro - el arbol de Debian y el de Red Hat a la
+  vez -, que es lo que dejaba el get-sdk de antes de 2026-09-20 al volcar todos
+  los targets en una carpeta unica. Devuelve la carpeta, o '' si esta limpio. }
+function SysrootMezcladoDeSdk(const AVersion, ASdkFile: string): string;
+var
+  Xml, Raiz: string;
+  M: TMatch;
+begin
+  Result := '';
+  try
+    Xml := TFile.ReadAllText(TPath.Combine(IdeProfilesDir(AVersion), ASdkFile));
+  except
+    Exit;
+  end;
+  M := TRegEx.Match(Xml, '(?i)<Profile_sysroot>([^<]+)</Profile_sysroot>');
+  if not M.Success then
+    Exit;
+  Raiz := M.Groups[1].Value.Trim;
+  if Raiz.Contains('$(BDSPLATFORMSDKSDIR)') then
+    Raiz := Raiz.Replace('$(BDSPLATFORMSDKSDIR)', IdeSdksDir(AVersion),
+      [rfIgnoreCase]);
+  if Raiz.Contains('$(') then
+    Exit; // con macros sin expandir no se puede mirar el disco
+  // DOS libc.so.6, uno en cada arbol: la unica senal fiable de que dos
+  // maquinas escribieron en la misma carpeta. Que existan a la vez /lib64 y
+  // /usr/lib/x86_64-linux-gnu NO lo es - un Ubuntu trae /lib64 con el
+  // cargador dentro y nada mas, y mirando carpetas se acusaba de mezcla a un
+  // sysroot recien traido y perfectamente limpio (medido 2026-09-20).
+  if (TFile.Exists(TPath.Combine(Raiz, 'lib\x86_64-linux-gnu\libc.so.6')) or
+      TFile.Exists(TPath.Combine(Raiz, 'usr\lib\x86_64-linux-gnu\libc.so.6'))) and
+     (TFile.Exists(TPath.Combine(Raiz, 'lib64\libc.so.6')) or
+      TFile.Exists(TPath.Combine(Raiz, 'usr\lib64\libc.so.6'))) then
+    Result := Raiz;
+end;
+
 function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
-  const AProfile, ADeviceId: string; ATimeoutMs: Integer): TJSONObject;
+  const AProfile, ADeviceId: string; ATimeoutMs: Integer;
+  const ASdk: string): TJSONObject;
 var
   Info: TRadStudioInfo;
   Output, Line, Plat, Cfg, Target: string;
@@ -919,6 +1035,9 @@ begin
   // .deployproj, and silently corrupt each other (hermes, release audit
   // 2026-08-26). A global queue is the safe shape; the wait is reported so
   // a queued caller can tell compiler time from queue time.
+  var SdkUsado := '';         // el SDK con el que se compilo (si hubo)
+  var SdkNota := '';          // por que ese y no otro
+  var SdkAviso := '';         // sysroot con dos distros dentro
   var ReintentosBloqueo := 0; // builds repetidos por un .exe en uso (F2039)
   var QueueSW := TStopwatch.StartNew;
   GBuildLock.Enter;
@@ -939,18 +1058,71 @@ begin
     DeviceArg := ' /p:DeviceId=' + ADeviceId.Trim;
 
   // Remote platforms (Linux64...) link against a locally provisioned
-  // SDK/sysroot. The IDE keeps its default in EnvOptions.proj, but for a
-  // platform the SDK Manager never configured that default is EMPTY - so
-  // when delphi_paserver get-sdk has written <Platform>.sdk, pass it. A
-  // command-line /p: overrides any imported default; when no such file
-  // exists nothing changes (Android's SDK arrives via its own default).
+  // SDK/sysroot, y desde 2026-09-20 puede haber VARIOS: un SDK = una carpeta,
+  // como los de Android. Quien manda, por este orden: lo que pida la llamada
+  // (sdk=), lo que declare el PROYECTO (PlatformSDK, que es lo que lee
+  // CodeGear.Profiles.Targets), y si no, el unico que haya - o el
+  // <Plataforma>.sdk historico, para no romper lo que ya compilaba. Con
+  // varios y sin pistas NO se elige a ciegas: se dice y se para.
   var SdkArg := '';
   if not IsLocalPlatform(Plat) then
   begin
-    var SdkName := CanonicalPlatform(Plat) + '.sdk';
-    if (CanonicalPlatform(Plat) <> '') and
-       TFile.Exists(TPath.Combine(IdeProfilesDir(Info.Version), SdkName)) then
-      SdkArg := ' /p:PlatformSDK=' + SdkName;
+    var Dir := IdeProfilesDir(Info.Version);
+    var Pedido := ASdk.Trim;
+    if Pedido <> '' then
+    begin
+      if not Pedido.ToLower.EndsWith('.sdk') then
+        Pedido := Pedido + '.sdk';
+      if not TFile.Exists(TPath.Combine(Dir, Pedido)) then
+        raise Exception.Create(Format(SR_BUILD_SDK_NOEXISTE_FMT,
+          [Pedido, string.Join(', ', SdksDePlataforma(Info.Version, Plat))]));
+      SdkArg := ' /p:PlatformSDK=' + Pedido;
+      SdkUsado := Pedido;
+    end
+    else if ProyectoDeclaraSdk(TPath.GetFullPath(ADprojPath), SdkUsado) then
+      // el proyecto lo dice: no se le pisa, y se cuenta cual es
+      SdkNota := Format(SN_BUILD_SDK_PROYECTO_FMT, [SdkUsado])
+    else
+    begin
+      var Cand := SdksDePlataforma(Info.Version, Plat);
+      var Historico := CanonicalPlatform(Plat) + '.sdk';
+      // El default del SDK Manager es la eleccion del operador EN EL IDE:
+      // manda sobre el nombre historico y sobre cualquier adivinanza, y es lo
+      // que evita negarse a compilar en una maquina que ya tenia respuesta a
+      // esta pregunta (medido: al retirar el Linux64.sdk viejo, media bateria
+      // se quedo sin poder compilar).
+      var PorDefecto := SdkPorDefectoDelIde(Info.Version, Plat);
+      if (PorDefecto <> '') and TFile.Exists(TPath.Combine(Dir, PorDefecto)) then
+      begin
+        SdkUsado := PorDefecto;
+        if Length(Cand) > 1 then
+          SdkNota := Format(SN_BUILD_SDK_DEFAULT_FMT,
+            [SdkUsado, string.Join(', ', Cand)]);
+      end
+      else if (CanonicalPlatform(Plat) <> '') and
+         TFile.Exists(TPath.Combine(Dir, Historico)) then
+        SdkUsado := Historico
+      else if Length(Cand) = 1 then
+        SdkUsado := Cand[0]
+      else if Length(Cand) > 1 then
+        raise Exception.Create(Format(SR_BUILD_SDK_VARIOS_FMT,
+          [Plat, string.Join(', ', Cand)]));
+      if SdkUsado <> '' then
+      begin
+        SdkArg := ' /p:PlatformSDK=' + SdkUsado;
+        if Length(Cand) > 1 then
+          SdkNota := Format(SN_BUILD_SDK_ELEGIDO_FMT,
+            [SdkUsado, string.Join(', ', Cand)]);
+      end;
+    end;
+    // Compilar contra un sysroot con dos distros dentro no es un error del
+    // compilador y no se ve en ningun sitio: se dice aqui.
+    if SdkUsado <> '' then
+    begin
+      var Mezcla := SysrootMezcladoDeSdk(Info.Version, SdkUsado);
+      if Mezcla <> '' then
+        SdkAviso := Format(SN_BUILD_SDK_MEZCLA_FMT, [SdkUsado, Mezcla]);
+    end;
   end;
 
   // Security audit trail: a build can run arbitrary pre/post-build steps
@@ -1027,6 +1199,12 @@ begin
       Result.AddPair('platformNote', SN_BUILD_DEFAULT_PLATFORM);
     Result.AddPair('config', Cfg);
     Result.AddPair('target', Target);
+    if SdkUsado <> '' then
+      Result.AddPair('sdk', SdkUsado);
+    if SdkNota <> '' then
+      Result.AddPair('sdkNote', SdkNota);
+    if SdkAviso <> '' then
+      Result.AddPair('sdkWarning', SdkAviso);
     Result.AddPair('errors', Errors);
     Result.AddPair('warnings', Warnings);
     // ONE error can father a dozen. Measured in the field (2026-08-25): a
