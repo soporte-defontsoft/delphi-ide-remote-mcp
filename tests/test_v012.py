@@ -428,6 +428,36 @@ check('set-output: el payload no se escribio en el .dproj',
 # absolute path refused
 out = call('delphi_config', {"project": CON, "command": "set-output", "output": r"C:\Temp\out"})
 check('set-output: ruta absoluta RECHAZADA', out.startswith('RECHAZADO'), out[:120])
+
+# ---- delphi_config set-version: los cuatro sitios que deben coincidir ------
+# Subir de version era lo UNICO del ritual de release que obligaba a salir del
+# MCP: las dos tools de edicion vetan el .dproj, y con razon - es XML con
+# grupos de propiedades repetidos por plataforma y un ancla acierta en el
+# grupo equivocado sin avisar. La respuesta no es abrir la mano, es la
+# operacion CURADA (David, 2026-09-20).
+out = call('delphi_config', {"project": CON, "command": "set-version",
+                             "version": "3.4.5-beta"})
+_d = open(CON, encoding='utf-8-sig').read()
+check('set-version: escribe los cuatro numeros del VERSIONINFO',
+      '<VerInfo_MajorVer>3</VerInfo_MajorVer>' in _d and
+      '<VerInfo_MinorVer>4</VerInfo_MinorVer>' in _d and
+      '<VerInfo_Release>5</VerInfo_Release>' in _d and
+      '<VerInfo_Build>0</VerInfo_Build>' in _d, out[:200])
+check('set-version: FileVersion y ProductVersion dicen lo MISMO',
+      'FileVersion=3.4.5.0;' in _d and 'ProductVersion=3.4.5.0' in _d, out[:200])
+check('set-version: el sufijo -beta no entra en el .dproj',
+      '-beta' not in _d and 'sufijo' in out, out[:200])
+check('set-version: no toca Android ni iOS',
+      'versionCode=1;' in _d and 'CFBundleVersion=1.0.0' in _d,
+      'la numeracion de las tiendas es otra cosa')
+for _mala in ('', '1', 'uno.dos', '1.2.3.4.5', '1.2.99999'):
+    out = call('delphi_config', {"project": CON, "command": "set-version",
+                                 "version": _mala})
+    check('set-version: version "%s" RECHAZADA' % _mala,
+          out.startswith('RECHAZADO'), out[:120])
+out = call('delphi_config', {"project": CON, "section": "all"})
+check('set-version: el .dproj sigue siendo valido despues',
+      'Debug' in json.loads(out).get('configurations', []), out[:150])
 # restore to the RAD Studio default layout
 out = call('delphi_config', {"project": CON, "command": "set-output", "output": "default"})
 check('set-output: restaurar default',

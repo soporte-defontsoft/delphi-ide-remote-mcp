@@ -34,11 +34,12 @@ type
     FPath: string;
     FRemoteDir: string;
     FSection: string;
+    FVersion: string;
   public
     [SchemaDescription('Absolute path of the project .dproj')]
     [Required]
     property Project: string read FProject write FProject;
-    [SchemaDescription('view (default: project summary; section= brings the detail per area) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk)')]
+    [SchemaDescription('view (default: project summary; section= brings the detail per area) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | set-version (the project VERSION: the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys, which have to agree) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk)')]
     [SchemaDefault('view')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required)')]
@@ -54,6 +55,8 @@ type
     property Section: string read FSection write FSection;
     [SchemaDescription(SP_CONFIG_REMOTEDIR)]
     property RemoteDir: string read FRemoteDir write FRemoteDir;
+    [SchemaDescription(SP_CONFIG_VERSION)]
+    property Version: string read FVersion write FVersion;
     [SchemaDescription('set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to <folder>\$(Platform)\$(Config) and .dcu to <folder>\Dcu\$(Platform)\$(Config). Use "default" to restore the RAD Studio layout. No absolute paths, no "..".')]
     property Output: string read FOutput write FOutput;
   end;
@@ -93,7 +96,12 @@ begin
     'it is enabled, whether THIS project can target it, and whether it needs ' +
     'a remote PAServer profile. command=add-platform enables a platform in ' +
     'the .dproj (a curated edit of the <Platforms> block only); ' +
-    'remove-platform disables it again. command=set-output puts every binary ' +
+    'remove-platform disables it again. command=set-version writes the ' +
+    'project VERSION where it has to agree with itself: the Windows ' +
+    'VERSIONINFO numbers AND the FileVersion/ProductVersion keys, which is ' +
+    'exactly what drifts when a release is cut by hand (a -beta suffix is ' +
+    'accepted and ignored, and Android/iOS numbering is not touched). ' +
+    'command=set-output puts every binary ' +
     'under one folder (output=Compiled by default): a curated edit that sets ' +
     'DCC_ExeOutput/DCC_DcuOutput, keeping the per-platform/config subfolders. ' +
     'command=add-searchpath adds a unit search path (where the compiler looks ' +
@@ -1172,6 +1180,114 @@ end;
   de cada plataforma existe (la entrada en negrita del SDK Manager) pero es un
   ultimo recurso. El servidor ya RESPETABA lo que dijera el proyecto; esto es
   lo que faltaba para poder decirlo. }
+{ La VERSION del proyecto: los cuatro numeros del VERSIONINFO de Windows
+  (VerInfo_MajorVer/MinorVer/Release/Build) y las claves FileVersion y
+  ProductVersion de VerInfo_Keys. Son sitios distintos que tienen que decir lo
+  mismo, y el gate de release los compara uno a uno: descuadrarlos es el fallo
+  clasico de subir una version a mano.
+
+  Por que CURADA y no por ancla: las dos tools de edicion vetan el .dproj a
+  proposito, y con razon - es XML con grupos de propiedades repetidos por
+  plataforma y configuracion, donde un ancla como "la linea que dice
+  <VerInfo_MinorVer>0</...>" acierta en el grupo equivocado sin avisar. Lo que
+  faltaba no era permiso: era la operacion que sabe QUE esta tocando, igual
+  que set-sdk. Medido el 2026-09-20: subir de version era lo UNICO del ritual
+  de release que obligaba a salir del MCP.
+
+  Lo que NO toca: Android (versionCode/versionName) e iOS (CFBundleVersion).
+  Esa numeracion es otra cosa - versionCode es un entero que solo puede subir
+  y una tienda lo rechaza si baja -, asi que cambiarla de rebote seria una
+  sorpresa, no un favor. }
+function SetVersion(const ADproj, ARawVersion: string): string;
+var
+  Enc, Xml, Pedida, Sufijo, Cuatro, AntesNum, AntesKey, Nota, Eol: string;
+  Partes, Tags: TArray<string>;
+  N: array [0 .. 3] of Integer;
+  I: Integer;
+  Previo: string;
+  M: TMatch;
+begin
+  Pedida := ARawVersion.Trim;
+  if Pedida = '' then
+    Exit(SR_CONFIG_VERSION_VACIA);
+  Sufijo := '';
+  I := Pedida.IndexOf('-');
+  if I > 0 then
+  begin
+    Sufijo := Pedida.Substring(I);
+    Pedida := Pedida.Substring(0, I);
+  end;
+  Partes := Pedida.Split(['.']);
+  if (Length(Partes) < 2) or (Length(Partes) > 4) then
+    Exit(Format(SR_CONFIG_VERSION_FORMATO_FMT, [ARawVersion.Trim]));
+  for I := 0 to 3 do
+    N[I] := 0;
+  for I := 0 to High(Partes) do
+    if not TryStrToInt(Partes[I].Trim, N[I]) or (N[I] < 0) or (N[I] > 65535) then
+      Exit(Format(SR_CONFIG_VERSION_FORMATO_FMT, [ARawVersion.Trim]));
+  Cuatro := Format('%d.%d.%d.%d', [N[0], N[1], N[2], N[3]]);
+
+  Xml := PatchLoadText(ADproj, Enc);
+  if not TRegEx.IsMatch(Xml, '(?i)<VerInfo_MajorVer>') then
+    Exit(SR_CONFIG_VERSION_SIN_VERINFO);
+  if Xml.Contains(#13#10) then
+    Eol := #13#10
+  else
+    Eol := #10;
+
+  // Lo que habia, para poder decirlo: los numeros por un lado y la clave por
+  // otro, que es donde se ve si estaban descuadrados.
+  AntesNum := '';
+  Tags := ['VerInfo_MajorVer', 'VerInfo_MinorVer', 'VerInfo_Release',
+    'VerInfo_Build'];
+  for I := 0 to 3 do
+  begin
+    M := TRegEx.Match(Xml, '(?i)<' + Tags[I] + '>([^<]*)</' + Tags[I] + '>');
+    if M.Success then
+      AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + M.Groups[1].Value
+    else
+      AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + '0';
+  end;
+  M := TRegEx.Match(Xml, '(?i)FileVersion=([\d.]+)');
+  if M.Success then
+    AntesKey := M.Groups[1].Value
+  else
+    AntesKey := '(ninguna)';
+
+  // Los numeros: se sustituyen donde ya estan (en TODOS los grupos que los
+  // lleven) y el que falte entra justo detras del anterior de la serie, que
+  // es como los escribe el IDE.
+  Previo := '';
+  for I := 0 to 3 do
+  begin
+    if TRegEx.IsMatch(Xml, '(?i)<' + Tags[I] + '>') then
+      Xml := TRegEx.Replace(Xml, '(?i)<' + Tags[I] + '>[^<]*</' + Tags[I] + '>',
+        '<' + Tags[I] + '>' + N[I].ToString + '</' + Tags[I] + '>')
+    else if Previo <> '' then
+      Xml := TRegEx.Replace(Xml,
+        '(?i)([ \t]*)(<' + Previo + '>[^<]*</' + Previo + '>)',
+        '$1$2' + Eol + '$1<' + Tags[I] + '>' + N[I].ToString +
+        '</' + Tags[I] + '>');
+    Previo := Tags[I];
+  end;
+
+  // Y las claves de texto, solo donde ya existen: las de Android e iOS no
+  // llevan FileVersion ni ProductVersion, asi que no las roza.
+  Xml := TRegEx.Replace(Xml, '(?i)FileVersion=[\d.]*', 'FileVersion=' + Cuatro);
+  Xml := TRegEx.Replace(Xml, '(?i)ProductVersion=[\d.]*',
+    'ProductVersion=' + Cuatro);
+
+  PatchSaveText(ADproj, Xml, Enc);
+  Nota := '';
+  if Sufijo <> '' then
+    Nota := Eol + 'El sufijo "' + Sufijo + '" no va al .dproj (el VERSIONINFO ' +
+      'es numerico): eso vive en SERVER_VERSION y en el CHANGELOG, y de eso ' +
+      'te encargas tu.';
+  Result := Format(SN_CONFIG_VERSION_OK_FMT,
+    [Cuatro, IfThen(AntesNum = AntesKey, AntesNum,
+     AntesNum + ' en los numeros y ' + AntesKey + ' en las claves'), Nota]);
+end;
+
 function SetSdk(const ADproj, ARawPlatform, ARawSdk: string): string;
 var
   APlatform, Sdk, Enc, Xml, Antes, Disponibles: string;
@@ -1387,6 +1503,8 @@ begin
       Result := AddDeployFile(Proj, Params.Platform, Params.Path, Params.RemoteDir)
     else if Cmd = 'remove-deployfile' then
       Result := RemoveDeployFile(Proj, Params.Platform, Params.Path)
+    else if Cmd = 'set-version' then
+      Result := SetVersion(Proj, Params.Version)
     else if Cmd = 'set-sdk' then
       Result := SetSdk(Proj, Params.Platform, Params.Sdk)
     else if Cmd = 'set-profile' then
@@ -1407,7 +1525,7 @@ begin
     end
     else
       Result := 'error: command debe ser view | add-platform | remove-platform | ' +
-        'set-output | set-sdk | set-profile | add-searchpath | ' +
+        'set-output | set-version | set-sdk | set-profile | add-searchpath | ' +
         'remove-searchpath | ' +
         'add-deployfile | remove-deployfile | add-unit | remove-unit';
   finally

@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.0.1-beta';
+  SERVER_VERSION = '1.0.2-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -68,6 +68,33 @@ const
   SN_PROJECTS_PAGE_FMT =
     'Te doy %d de %d proyectos. La siguiente pagina va con offset=%d, pero ' +
     'para acotar de verdad usa "name" o un "root" mas concreto.';
+
+  // La version del proyecto. Cuatro sitios del .dproj tienen que decir lo
+  // mismo (los numeros del VERSIONINFO y las claves FileVersion y
+  // ProductVersion) y el gate de release los compara: por eso es una
+  // operacion curada y no una edicion por ancla.
+  SR_CONFIG_VERSION_VACIA =
+    'RECHAZADO: falta "version". Ejemplos: 1.2.3, 1.2.3.0 o 1.2.3-beta (el ' +
+    'sufijo se admite y se ignora para el VERSIONINFO, que es numerico).';
+
+  SR_CONFIG_VERSION_FORMATO_FMT =
+    'RECHAZADO: "%s" no es una version. Se esperan de 2 a 4 numeros ' +
+    'separados por puntos (1.2, 1.2.3, 1.2.3.4), cada uno entre 0 y 65535. ' +
+    'Un sufijo como -beta se admite y se ignora para el VERSIONINFO.';
+
+  SR_CONFIG_VERSION_SIN_VERINFO =
+    'RECHAZADO: este proyecto no lleva VERSIONINFO (no hay VerInfo_MajorVer ' +
+    'en el .dproj). Ese bloque lo crea el IDE al marcar "Include version ' +
+    'information" en Project Options; en cuanto existe, esta tool mantiene ' +
+    'sus valores.';
+
+  SN_CONFIG_VERSION_OK_FMT =
+    'Version del proyecto: %s (antes %s). El VERSIONINFO de Windows y las ' +
+    'claves FileVersion/ProductVersion dicen ya lo mismo, que es justo donde ' +
+    'se descuadran cuando se tocan a mano. NO he tocado Android ' +
+    '(versionCode/versionName) ni iOS (CFBundleVersion): ahi la numeracion ' +
+    'es otra y versionCode solo puede subir. Copia previa del .dproj en ' +
+    '__delphi-patch.%s';
 
   SR_PROJECTS_NO_ROOT_FMT =
     'error: la carpeta de trabajo "%s" no existe en este servidor. No es que ' +
@@ -1283,6 +1310,14 @@ const
     'delphi_workspace las enumera.';
 
   // ---- delphi_config: search paths ----
+
+  SP_CONFIG_VERSION =
+    'set-version: the version to write, 2 to 4 numbers (1.2, 1.2.3, ' +
+    '1.2.3.4); a suffix like -beta is accepted and ignored, because the ' +
+    'VERSIONINFO is numeric. It goes to the Windows VerInfo numbers AND to ' +
+    'the FileVersion/ProductVersion keys at once - they have to agree and ' +
+    'that is exactly what drifts when they are edited by hand. Android ' +
+    '(versionCode/versionName) and iOS (CFBundleVersion) are NOT touched.';
 
   SP_CONFIG_SDK =
     'set-sdk: the SDK this PROJECT builds that platform with, by name ' +

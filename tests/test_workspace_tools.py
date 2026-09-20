@@ -158,6 +158,9 @@ check('projects: cuando hay mas, dice en que carpetas estan',
       all(' = ' in f for f in _p1['byFolder']) and
       sum(int(f.rsplit(' = ', 1)[1]) for f in _p1['byFolder']) == _p1['total'],
       str(_p1.get('byFolder'))[:200])
+check('projects: un proyecto en la propia raiz sale como "." y no como otra carpeta',
+      any(f.startswith('. = ') for f in _p1.get('byFolder', [])),
+      str(_p1.get('byFolder'))[:200])
 _p2 = json.loads(call('delphi_projects',
                       {"root": REPO, "maxresults": 5, "offset": 5}))
 check('projects: la siguiente pagina es OTRA y dice su offset',

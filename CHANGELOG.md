@@ -6,6 +6,52 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.2-beta] - 2026-09-20
+
+Everything here was found by **using this server as an agent** on its own
+repository, not by testing it: the rule now lives in `CLAUDE.md`.
+
+### Added
+- **`delphi_workspace` says WHO is answering.** A `server` block with version,
+  how the process was started (tray / service / console), transport, pid, exe,
+  start time and uptime. Nothing said it before: the version lived in the tray
+  caption and inside a `delphi_report`, so checking a deployment meant looking
+  at the machine from outside the MCP.
+- **`delphi_textedit` gained what `delphi_edit` already had**: `edits`, several
+  changes to the SAME file in one ALL-OR-NOTHING call (a failing entry puts the
+  file back byte for byte), and `delete` to remove a line entirely. A
+  three-line comment used to cost three calls, with the file half done between
+  them.
+- **`delphi_config command=set-version`**: the project version, written where
+  it has to agree with itself - the Windows VERSIONINFO numbers AND the
+  `FileVersion`/`ProductVersion` keys, which is exactly what drifts when a
+  release is cut by hand. Android (`versionCode`/`versionName`) and iOS
+  (`CFBundleVersion`) are left alone: that numbering is a different thing.
+  Until now, bumping the version was the ONE step of the release ritual that
+  forced an agent out of the MCP, because both editing tools refuse the
+  `.dproj` on purpose - it is XML with property groups repeated per platform,
+  where a line anchor hits the wrong group without saying so. The answer was
+  not to open the door but to add the curated operation, like `set-sdk`.
+- **`delphi_projects` answers in pages** (`maxresults`, default 50, plus
+  `offset`/`nextOffset`) and, when there are more, reports `byFolder` - the ten
+  folders holding the most.
+
+### Fixed
+- **Text arrives as it is written.** `LoadSourceText` assumed CP1252 whenever a
+  file had no BOM, so every UTF-8 file without one came back as mojibake:
+  searching this repo's own README answered three junk characters for each em
+  dash. That reader also feeds `delphi_references` and the text handed to the
+  linter - and the corrupted text is exactly what an agent copies to build a
+  `delphi_edit` anchor. It now uses the same detector `delphi_read` has always
+  used (utf8 only when EVERY high byte forms a valid sequence), so legacy
+  CP1252 sources still decode as CP1252.
+- **A broad jail made `delphi_projects` unusable.** With a whole drive as root
+  the answer was 7025 projects and 82 KB, past the client's limit - and 6420 of
+  those were third-party component sources and their backups while the
+  operator's own were 73. Paging fixes the size; `byFolder` fixes the rest.
+
+Regression: **51 batteries | 1309 checks | 0 failures**.
+
 ## [1.0.1-beta] - 2026-09-20
 
 ### Fixed

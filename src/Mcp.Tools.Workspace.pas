@@ -1277,15 +1277,22 @@ begin
           if (Filt <> '') and not TPath.GetFileName(F).ToLower.Contains(Filt) then
             Continue;
           Inc(Total);
-          var Carpeta := TPath.GetDirectoryName(F);
-          var Rel := Carpeta;
-          if StartsText(IncludeTrailingPathDelimiter(RootDir.Trim), Carpeta) then
-            Rel := Carpeta.Substring(Length(IncludeTrailingPathDelimiter(RootDir.Trim)));
-          var Trozos := Rel.Split([TPath.DirectorySeparatorChar]);
-          if Length(Trozos) > 2 then
-            Rel := Trozos[0] + TPath.DirectorySeparatorChar + Trozos[1];
-          if Rel = '' then
-            Rel := ExcludeTrailingPathDelimiter(RootDir.Trim);
+          var Carpeta := ExcludeTrailingPathDelimiter(TPath.GetDirectoryName(F));
+          var Raiz := ExcludeTrailingPathDelimiter(RootDir.Trim);
+          var Rel: string;
+          if SameText(Carpeta, Raiz) then
+            // el proyecto vive en la propia raiz (un .groupproj, tipicamente).
+            // Decia la raiz recortada a dos segmentos y parecia OTRA carpeta.
+            Rel := '.'
+          else if StartsText(IncludeTrailingPathDelimiter(Raiz), Carpeta) then
+          begin
+            Rel := Carpeta.Substring(Length(IncludeTrailingPathDelimiter(Raiz)));
+            var Trozos := Rel.Split([TPath.DirectorySeparatorChar]);
+            if Length(Trozos) > 2 then
+              Rel := Trozos[0] + TPath.DirectorySeparatorChar + Trozos[1];
+          end
+          else
+            Rel := Carpeta;
           PorCarpeta.Values[Rel] := (StrToIntDef(PorCarpeta.Values[Rel], 0) + 1).ToString;
           if (Total > Ofs) and (Arr.Count < Max) then
           begin
