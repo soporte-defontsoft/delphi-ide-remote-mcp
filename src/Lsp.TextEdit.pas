@@ -19,6 +19,7 @@ type
     HasOld: Boolean;
     HasNew: Boolean;
     AtLine: Integer;   // tie-break when the anchor repeats
+    ToLine: Integer;   // 1-based LAST line of the range; 0 = just the anchor
     DeleteLine: Boolean;  // DELETE: remove the anchored line entirely
     CreateFile_: Boolean; // CREATE: new file (never overwrites)
     Content: string;      // CREATE: initial content (may be empty)
@@ -226,6 +227,17 @@ begin
     end;
   end;
 
+  // EL RANGO: con toline el ancla es la PRIMERA linea de un tramo que acaba
+  // ahi, incluida. Las reglas las pone RangoHasta, en Lsp.Patch, que es de
+  // donde tira tambien el motor de Pascal: un rango no tiene nada de Pascal
+  // ni nada de Markdown, y escribirlo dos veces es como nacieron los bugs
+  // gemelos de este mes.
+  var Fin: Integer;
+  var MalRango := RangoHasta(A.Path, Target, A.ToLine, Length(Lines), Fin);
+  if MalRango <> '' then
+    Exit(MalRango);
+  var Cuantas := Fin - Target + 1;
+
   // Replacement. If the anchor was given without its indentation, the
   // original prefix is preserved on the first replacement line.
   if A.DeleteLine then
@@ -245,6 +257,8 @@ begin
   try
     for I := 0 to High(Lines) do
     begin
+      if (I > Target) and (I <= Fin) then
+        Continue; // resto del rango: se lo lleva la edicion
       if I = Target then
       begin
         for S in NewLines do
@@ -273,6 +287,13 @@ begin
       Exit('RECHAZADO al codificar: ' + E.Message);
   end;
 
+  if Cuantas > 1 then
+    Exit(Format('%s  encoding=%s  (backup en %s\)'#10 +
+      'Verificacion (releido de disco):'#10'%s',
+      [Format(IfThen(A.DeleteLine, SN_RANGE_DELETED_FMT, SN_RANGE_REPLACED_FMT),
+         [Cuantas, Target + 1, Target + Cuantas, TPath.GetFileName(A.Path)]),
+       EncNm, '__delphi-patch',
+       ReadNumbered(A.Path, Target, Target + Length(NewLines) + 1)]));
   if A.DeleteLine then
     Exit(Format('OK borrada la linea %d de %s  encoding=%s  (backup en %s\)'#10 +
       'Verificacion (releido de disco):'#10'%s',
@@ -299,6 +320,11 @@ begin
     Result := DeadCopyWriteDenied(A.Path);
     if Result <> '' then
       Exit;
+    // Antes del reparto de modos: "toline" solo significa algo con un ancla,
+    // y un parametro que se traga en silencio es como se cree haber borrado
+    // algo que sigue ahi.
+    if (A.ToLine > 0) and A.CreateFile_ then
+      Exit(Format(SR_RANGE_WRONG_MODE_FMT, ['create']));
     if A.CreateFile_ then
       Exit(DoCreate(A));
     if A.DeleteLine and not A.HasOld then
@@ -333,7 +359,7 @@ begin
   if not TFile.Exists(APath) then
     Exit('RECHAZADO: no existe ' + APath + '. Para crearlo usa create=true.');
   Result := AplicaTanda(APath, AEditsJson,
-    function(const AOld, ANew: string; AAtLine: Integer;
+    function(const AOld, ANew: string; AAtLine, AToLine: Integer;
       ADelete: Boolean): string
     var
       A: TTextEditArgs;
@@ -345,6 +371,7 @@ begin
       A.HasOld := AOld <> '';
       A.HasNew := (ANew <> '') or A.HasOld;
       A.AtLine := AAtLine;
+      A.ToLine := AToLine;
       A.DeleteLine := ADelete;
       Result := TextEditNucleo(A);
     end);

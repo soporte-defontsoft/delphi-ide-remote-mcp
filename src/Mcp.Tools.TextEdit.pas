@@ -11,6 +11,7 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
+  Lsp.Texts,
   Lsp.TextEdit;
 
 type
@@ -20,6 +21,7 @@ type
     FOld: string;
     FNew: string;
     FAtLine: Integer;
+    FToLine: Integer;
     FEdits: string;
     FDelete: Boolean;
     FCreate: Boolean;
@@ -35,7 +37,14 @@ type
     property New: string read FNew write FNew;
     [SchemaDescription('EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence')]
     property AtLine: Integer read FAtLine write FAtLine;
-    [SchemaDescription('VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O NADA: un array JSON [{"old":"...","new":"...","atline":12},...] que se aplica EN ORDEN. Cada entrada admite dos formas de ancla: UNA LINEA (igual que una edicion suelta) o un BLOQUE de varias lineas seguidas en "old", que se busca entero y en orden - es la forma de tocar un parrafo largo de documentacion sin pegarlo dos veces. Si el ancla aparece mas de una vez, desempata con "occurrence": 1, 2... (mejor que "atline" dentro de una tanda: los numeros de linea SE MUEVEN segun las entradas anteriores anaden o quitan lineas). "delete": true quita la linea. Si una entrada falla, el fichero vuelve byte a byte a como estaba y te digo cual fallo. Si el cambio toca VARIOS ficheros, eso es delphi_changeset. Cuando mandas "edits" se ignoran old/new/atline/delete')]
+    [SchemaDescription(SP_PATCH_TOLINE)]
+    property ToLine: Integer read FToLine write FToLine;
+    // La descripcion de "edits" estaba COPIADA aqui, palabra por palabra pero
+    // no del todo, de la de delphi_edit. Documentar el rango en una sola de
+    // las dos habria dejado la mitad de la funcion invisible para quien usa
+    // la otra, que es exactamente como se pierden las tools: una constante
+    // compartida y se acabo (2026-09-20).
+    [SchemaDescription(SP_PATCH_EDITS)]
     property Edits: string read FEdits write FEdits;
     [SchemaDescription('DELETE mode: true = quita ENTERA la linea anclada en "old" (old + new vacio solo la deja en blanco). Aqui no va "new"')]
     property Delete: Boolean read FDelete write FDelete;
@@ -93,6 +102,7 @@ begin
   A.HasOld := Params.Old <> '';
   A.HasNew := (Params.New <> '') or A.HasOld;
   A.AtLine := Params.AtLine;
+  A.ToLine := Params.ToLine;
   A.DeleteLine := Params.Delete;
   A.CreateFile_ := Params.Create_;
   A.Content := Params.Content;

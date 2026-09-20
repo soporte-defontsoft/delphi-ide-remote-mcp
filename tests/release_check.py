@@ -123,7 +123,15 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
             z.write(src, arc)
         else:
             check('artifact member exists: %s' % arc, False, src)
-    for root, _dirs, files in os.walk(os.path.join(REPO, 'docs')):
+    # Las copias de seguridad de las tools de edicion (__delphi-patch) y los
+    # cementerios del IDE viven DENTRO de docs\ en cuanto un agente toca un
+    # fichero de ahi. Se colaban en el artefacto publicado: tres versiones
+    # viejas de ARCHITECTURE/TOOLS/VAULT viajaron en la v1.0.5 (medido el
+    # 2026-09-20 abriendo el zip). Se podan aqui, en el walk, porque podar
+    # despues seria acordarse.
+    PODA = ('__delphi-patch', '__history', '__recovery')
+    for root, dirs, files in os.walk(os.path.join(REPO, 'docs')):
+        dirs[:] = [d for d in dirs if d not in PODA]
         for f in files:
             full = os.path.join(root, f)
             z.write(full, 'docs/' + os.path.relpath(full, os.path.join(REPO, 'docs')).replace(os.sep, '/'))

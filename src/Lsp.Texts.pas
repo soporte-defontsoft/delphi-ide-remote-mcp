@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.0.5-beta';
+  SERVER_VERSION = '1.0.6-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -321,19 +321,48 @@ const
     'sacar; antes te devolvia una lista vacia, que parecia decir que la unit ' +
     'no tiene nada. Esta tool trabaja sobre .pas, .dpr, .dpk e .inc.';
 
+  { La descripcion del parametro, compartida por delphi_edit y
+    delphi_textedit: lo que hace no depende de si el fichero es Pascal. }
+  SP_PATCH_TOLINE =
+    'RANGO (1-based, incluida): la ULTIMA linea del tramo. Con esto "old" ' +
+    'deja de ser la linea a tocar y pasa a ser la PRIMERA de un tramo que ' +
+    'acaba aqui: con delete:true se van todas, y con "new" se sustituyen ' +
+    'todas por ese texto. Es la forma de tirar o reemplazar un metodo entero ' +
+    'sin pegarlo como ancla. Se rechaza si el rango va al reves, si se sale ' +
+    'del fichero o si se lo lleva entero.';
+
   SP_PATCH_EDITS =
     'VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O ' +
     'NADA: un array JSON [{"old":"...","new":"...","atline":12}, ...] que se ' +
     'aplica EN ORDEN. Cada entrada admite dos formas de ancla: UNA LINEA ' +
     '(igual que una edicion suelta) o un BLOQUE de varias lineas seguidas en ' +
-    '"old", que se busca entero y en orden - util para sustituir el cuerpo de ' +
-    'un metodo de una pieza. Si el ancla aparece mas de una vez, desempata ' +
+    '"old", que se busca entero y en orden - util para sustituir de una pieza ' +
+    'el cuerpo de un metodo o un parrafo largo de documentacion. Si el ancla ' +
+    'aparece mas de una vez, desempata ' +
     'con "occurrence": 1, 2... (mejor que "atline" dentro de una tanda: los ' +
     'numeros de linea SE MUEVEN segun las entradas anteriores anaden o quitan ' +
-    'lineas, y "occurrence" no). "delete": true quita la linea. Si una ' +
+    'lineas, y "occurrence" no). "delete": true quita la linea; y con ' +
+    '"toline": <numero> el ancla deja de ser UNA linea y pasa a ser un RANGO ' +
+    '- desde la linea del ancla hasta esa, las dos incluidas - que se quita ' +
+    'entero (delete) o se sustituye por "new". Es la forma de tirar un metodo ' +
+    'sin pegarlo entero como ancla. Dentro de una tanda el rango tambien se ' +
+    'arrastra: si una entrada anterior anadio o quito lineas, "toline" se ' +
+    'corrige solo. Si una ' +
     'entrada falla, el fichero vuelve byte a byte a como estaba y te digo ' +
     'cual fallo. Si el cambio toca VARIOS ficheros, eso es delphi_changeset. ' +
-    'Cuando mandas "edits" se ignoran old/new/atline.';
+    'Cuando mandas "edits" se ignoran old/new/atline/delete/toline.';
+
+  { Los campos de una entrada de tanda se leen a mano, uno a uno, asi que un
+    nombre que no existe no daba "Unknown parameter" como en los parametros
+    de la tool: se IGNORABA. Una errata ("occurence" con una r, "atlines")
+    dejaba la entrada haciendo otra cosa -la de por defecto- y contestando
+    OK. Descubierto el 2026-09-20 al medir la bateria del rango contra el
+    binario anterior: "toline" entraba sin protestar y no hacia nada. }
+  SR_PATCH_EDIT_KEY_FMT =
+    'RECHAZADO: la entrada %d de "edits" lleva el campo "%s", que no existe. ' +
+    'Los campos de una edicion son: old, new, atline, toline, delete, ' +
+    'occurrence (todos en minusculas). No he escrito nada: un nombre mal ' +
+    'escrito se ignoraba en silencio y la entrada acababa tocando otra cosa.';
 
   SR_PATCH_BLOCK_SHORT =
     'RECHAZADO: ese "old" de varias lineas se queda en una sola despues de ' +
@@ -353,6 +382,41 @@ const
 
   SN_PATCH_BLOCK_OK_FMT =
     'bloque de %d lineas sustituido (empezaba en la linea %d)';
+
+  { EL RANGO: "old" ancla la PRIMERA linea y "toline" dice hasta donde. Un
+    rango mal puesto se lleva codigo por delante sin que se vea en la
+    respuesta, asi que las tres formas de ponerlo mal se rechazan antes de
+    tocar el disco. }
+  SR_RANGE_BACKWARDS_FMT =
+    'error: toline=%d esta ANTES de la linea del ancla (%d), o sea que el ' +
+    'rango va al reves y no hay nada que quitar. "old" marca la PRIMERA linea ' +
+    'del rango y "toline" la ULTIMA, las dos incluidas.';
+
+  SR_RANGE_BEYOND_FMT =
+    'error: toline=%d, pero %s tiene %d lineas. Relee el tramo con ' +
+    'delphi_read y copia el numero de la ultima linea que se va.';
+
+  SR_RANGE_WHOLE_FMT =
+    'RECHAZADO: ese rango (1-%d) se lleva el fichero ENTERO. Esta tool no ' +
+    'vacia ficheros, igual que no los reescribe enteros. Si lo que quieres es ' +
+    'eliminarlo, delphi_delete lo manda a la papelera y se puede recuperar.';
+
+  SR_RANGE_WITH_BLOCK =
+    'error: "toline" no se combina con un ancla de VARIAS lineas: o dice el ' +
+    'bloque lo que se sustituye, o lo dice el rango. Con "toline", "old" es ' +
+    'UNA sola linea, la primera del rango.';
+
+  SR_RANGE_WRONG_MODE_FMT =
+    'error: "toline" es del modo EDIT/DELETE (un ancla "old" y hasta donde ' +
+    'llega el rango) y aqui has pedido %s, que no anda por lineas. Lo he ' +
+    'parado en vez de ignorarlo: un parametro que se traga en silencio es ' +
+    'como se cree haber borrado algo que sigue ahi.';
+
+  SN_RANGE_DELETED_FMT =
+    'BORRADAS %d lineas (de la %d a la %d) de %s';
+
+  SN_RANGE_REPLACED_FMT =
+    'SUSTITUIDAS %d lineas (de la %d a la %d) de %s';
 
   SR_PATCH_EDITS_JSON =
     'RECHAZADO: "edits" tiene que ser un array JSON de objetos, por ejemplo ' +

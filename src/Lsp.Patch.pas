@@ -27,6 +27,7 @@ type
     NewText: string;      // replacement (may be multi-line)
     HasOld, HasNew: Boolean;
     AtLine: Integer;      // 1-based disambiguation; 0 = unset
+    ToLine: Integer;      // 1-based LAST line of the range; 0 = just the anchor
     DeleteLine: Boolean;  // true = remove the anchored line entirely
     Insert: string;       // '', 'rutina-global', 'metodo'
     Code: string;
@@ -62,6 +63,20 @@ function DecodeSourceBytes(const B: TArray<Byte>): string; // = TBytes
   contarlas aqui seria contarlas sobre el fichero ya mutado. }
 function ApplyBlockEdit(const APath, AOld, ANew: string;
   AOccurrence: Integer; AAtLine: Integer = 0): string;
+
+{ EL rango, validado en un solo sitio.
+
+  "old" ancla la PRIMERA linea y "toline" (1-based, incluida) dice hasta
+  donde llega. Devuelve '' y el indice 0-based final en AFin, o el texto de
+  rechazo si el rango no tiene sentido. ATarget0 es la linea del ancla ya
+  resuelta (0-based) y ATotal cuantas lineas tiene el fichero.
+
+  Vive aqui y no dentro de cada motor porque los motores son DOS -el de
+  Pascal (DoEdit) y el de texto plano (DoEditLine)- y las reglas de un rango
+  no tienen nada de Pascal. Escribirlas dos veces es como nacieron los tres
+  bugs gemelos del 2026-09-20. }
+function RangoHasta(const APath: string;
+  ATarget0, AToLine, ATotal: Integer; out AFin: Integer): string;
 
 { La linea (1-based) donde empieza la N-esima aparicion de un ancla de BLOQUE,
   0 si no hay tantas. El gemelo de NthOccurrenceLine para bloques, y por el
@@ -112,7 +127,7 @@ function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
   tocado. Con un solo motor, esta familia entera tiene una sola puerta. }
 type
   TAplicaUnaEdicion = reference to function(const AOld, ANew: string;
-    AAtLine: Integer; ADelete: Boolean): string;
+    AAtLine, AToLine: Integer; ADelete: Boolean): string;
 
 function AplicaTanda(const APath, AEditsJson: string;
   const AAplicaUna: TAplicaUnaEdicion): string;
@@ -686,6 +701,27 @@ begin
   Result := Format(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
 end;
 
+function RangoHasta(const APath: string;
+  ATarget0, AToLine, ATotal: Integer; out AFin: Integer): string;
+begin
+  Result := '';
+  AFin := ATarget0;      // sin rango, el ancla es ella sola
+  if AToLine <= 0 then
+    Exit;
+  if AToLine - 1 < ATarget0 then
+    Exit(Format(SR_RANGE_BACKWARDS_FMT, [AToLine, ATarget0 + 1]));
+  if AToLine > ATotal then
+    Exit(Format(SR_RANGE_BEYOND_FMT,
+      [AToLine, TPath.GetFileName(APath), ATotal]));
+  // Un rango de la primera a la ultima es "vaciame el fichero" por otra
+  // puerta, y estas tools ya rechazan reescribirlo entero. La puerta de al
+  // lado es justo donde se cuelan los agujeros (medido tres veces el
+  // 2026-09-20), asi que se cierra aqui, con el mismo criterio.
+  if (ATarget0 = 0) and (AToLine >= ATotal) then
+    Exit(Format(SR_RANGE_WHOLE_FMT, [ATotal]));
+  AFin := AToLine - 1;
+end;
+
 function AplicaTanda(const APath, AEditsJson: string;
   const AAplicaUna: TAplicaUnaEdicion): string;
 var
@@ -726,12 +762,34 @@ begin
       // una tool de escritura.
       var Ocurr: TArray<Integer>;
       SetLength(Ocurr, Arr.Count);
+      // El final de un RANGO es un numero de linea, o sea que se mueve
+      // exactamente igual que los demas: se arrastra en el mismo bucle de
+      // abajo. Dejarlo fijo seria el bug de "occurrence" otra vez, ahora
+      // llevandose por delante lineas que no eran.
+      var Hasta: TArray<Integer>;
+      SetLength(Hasta, Arr.Count);
       for N := 0 to Arr.Count - 1 do
       begin
         Ocurr[N] := 0;
+        Hasta[N] := 0;
         if Arr.Items[N] is TJSONObject then
         begin
           var O2 := TJSONObject(Arr.Items[N]);
+          // Un campo que no existe se leia y se tiraba. Se compara SIN ignorar
+          // mayusculas a proposito: "Old" tampoco lo lee nadie mas abajo, asi
+          // que tampoco puede pasar por bueno.
+          for var Par in O2 do
+          begin
+            var Conocido := False;
+            for var Cl in ['old', 'new', 'atline', 'toline', 'delete',
+                           'occurrence'] do
+              if Par.JsonString.Value = Cl then
+                Conocido := True;
+            if not Conocido then
+              Exit(Format(SR_PATCH_EDIT_KEY_FMT,
+                [N + 1, Par.JsonString.Value]));
+          end;
+          Hasta[N] := O2.GetValue<Integer>('toline', 0);
           var Nth := O2.GetValue<Integer>('occurrence', 0);
           var Anc2 := O2.GetValue<string>('old', '');
           if (O2.GetValue<Integer>('atline', 0) = 0) and (Nth > 0) then
@@ -778,6 +836,12 @@ begin
         // una ocasion larga de equivocarse; dentro de una tanda, donde quien
         // llama sustituye un cuerpo que acaba de copiar, era trabajo puro.
         var EsBloque := Anc.Contains(#10);
+        if EsBloque and (Hasta[N - 1] > 0) then
+        begin
+          Fallo := N;
+          Sb.AppendLine(Format('  %d: %s', [N, SR_RANGE_WITH_BLOCK]));
+          Break;
+        end;
         if EsBloque then
           Una := ApplyBlockEdit(APath, Anc, Nue,
             Obj.GetValue<Integer>('occurrence', 0), Ocurr[N - 1])
@@ -787,7 +851,7 @@ begin
           if EnLinea = 0 then
             EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
           Borra := Obj.GetValue<Boolean>('delete', False);
-        Una := AAplicaUna(Anc, Nue, EnLinea, Borra);
+          Una := AAplicaUna(Anc, Nue, EnLinea, Hasta[N - 1], Borra);
         end;
         var Eco := '';
         if (AntesL <> nil) and not (Una.StartsWith('RECHAZADO') or
@@ -804,8 +868,12 @@ begin
             Inc(Cambio);
           if Delta <> 0 then
             for var K := N to High(Ocurr) do
+            begin
               if Ocurr[K] > Cambio + 1 then // Ocurr 1-based, Cambio 0-based
                 Inc(Ocurr[K], Delta);
+              if Hasta[K] > Cambio + 1 then
+                Inc(Hasta[K], Delta);
+            end;
           // EL ECO DE VERIFICACION, releido del disco. Una edicion suelta lo
           // devuelve desde siempre; una TANDA solo decia "OK: <ancla>", que
           // es lo que PEDISTE, no lo que PASO. Y la propia tool recomienda
@@ -960,7 +1028,8 @@ end;
 // -------------------------------------------------------------------------
 
 function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
-  AIsDesigner: Boolean; ADelete: Boolean = False): string; forward;
+  AIsDesigner: Boolean; ADelete: Boolean = False;
+  AToLine: Integer = 0): string; forward;
 
 function FindUniqueLine(const Lines: TArray<string>;
   const APred: TFunc<string, Boolean>; out AIdx: Integer): Boolean;
@@ -1011,6 +1080,18 @@ begin
         Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la carpeta de copias de seguridad de esta tool. Copias muertas: no se leen, no se editan. El fichero vivo esta un nivel mas arriba.');
       if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
         Exit('RECHAZADO: __history\ y __recovery\ son copias muertas del IDE. El fichero vivo esta en la carpeta del proyecto.');
+
+      // "toline" solo significa algo con un ancla: en los modos que no van
+      // por lineas se rechaza en vez de tragarselo en silencio.
+      if A.ToLine > 0 then
+      begin
+        if A.CreateUnit_ then
+          Exit(Format(SR_RANGE_WRONG_MODE_FMT, ['createunit']));
+        if A.Restore then
+          Exit(Format(SR_RANGE_WRONG_MODE_FMT, ['restore']));
+        if A.Insert <> '' then
+          Exit(Format(SR_RANGE_WRONG_MODE_FMT, ['insert=' + A.Insert]));
+      end;
 
       // ---------- CREATE UNIT ----------
       if A.CreateUnit_ then
@@ -1551,7 +1632,7 @@ begin
           Exit('RECHAZADO: delete:true necesita "old" con la linea exacta a borrar (copiada de delphi_read).');
         if A.NewText <> '' then
           Exit('RECHAZADO: delete:true no lleva "new": elimina la linea del ancla entera. Para sustituirla usa old+new sin delete.');
-        Exit(DoEdit(A.Path, A.OldLine, '', A.AtLine, IsDesigner, True));
+        Exit(DoEdit(A.Path, A.OldLine, '', A.AtLine, IsDesigner, True, A.ToLine));
       end;
 
       // new without anchor: measured pattern where generic edit tools rewrite
@@ -1565,7 +1646,8 @@ begin
       if not A.HasNew then
         Exit('RECHAZADO: has pasado "old" pero no "new".');
 
-      Result := DoEdit(A.Path, A.OldLine, A.NewText, A.AtLine, IsDesigner);
+      Result := DoEdit(A.Path, A.OldLine, A.NewText, A.AtLine, IsDesigner,
+        False, A.ToLine);
     except
       on E: Exception do
         Result := 'ERROR: ' + E.ClassName + ': ' + E.Message;
@@ -1622,7 +1704,8 @@ begin
 end;
 
 function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
-  AIsDesigner: Boolean; ADelete: Boolean = False): string;
+  AIsDesigner: Boolean; ADelete: Boolean = False;
+  AToLine: Integer = 0): string;
 var
   B, NewBytes, After: TBytes;
   K: TEncKind;
@@ -1753,6 +1836,26 @@ begin
       end;
     end;
 
+    // EL RANGO. Con AToLine el ancla deja de ser una linea y pasa a ser la
+    // PRIMERA de un tramo que acaba en AToLine, incluida. Las reglas de un
+    // rango no tienen nada de Pascal, asi que viven en RangoHasta y de ahi
+    // tira tambien el motor de texto plano: una sola puerta.
+    var Reales := Length(Lines);
+    if (Reales > 0) and (Lines[Reales - 1] = '') then
+      Dec(Reales); // la linea fantasma que deja el salto final del fichero
+    var Fin: Integer;
+    var MalRango := RangoHasta(APath, HitIdx, AToLine, Reales, Fin);
+    if MalRango <> '' then
+      Exit(MalRango);
+    var Cuantas := Fin - HitIdx + 1;
+    // Lo que SALE, para el recuento de bytes altos de mas abajo. Con un rango
+    // no es el ancla: son TODAS las lineas que se van. Contar solo el ancla
+    // dispararia el aviso de "acentos fuera de cuadro" -que manda PARAR- en
+    // cualquier rango que incluyese una linea con acentos.
+    var Salido := AOld;
+    if Cuantas > 1 then
+      Salido := string.Join(#10, Copy(Lines, HitIdx, Cuantas));
+
     // The anchor may omit leading indentation: whatever prefix the real line
     // has beyond the anchor is preserved in front of the new text.
     Prefix := Copy(Lines[HitIdx], 1, Length(Lines[HitIdx]) - Length(AOld));
@@ -1771,12 +1874,10 @@ begin
     var NewFirst := '';
     if Replacement <> '' then
       NewFirst := Replacement.Split([#10])[0];
+    var Quita := 0;      // cuantas lineas desaparecen del array
+    var Desde := HitIdx; // desde donde se cierra el hueco
     if ADelete then
-    begin
-      for I := HitIdx to High(Lines) - 1 do
-        Lines[I] := Lines[I + 1];
-      SetLength(Lines, Length(Lines) - 1);
-    end
+      Quita := Cuantas   // el tramo entero se va (sin rango, Cuantas = 1)
     else
     begin
       // An insert that repeats the line above or below is almost always the
@@ -1793,11 +1894,21 @@ begin
         if (HitIdx > 0) and (Lines[HitIdx - 1].Trim <> '') and
            (Lines[HitIdx - 1].Trim = NewFirst.Trim) then
           Warnings.Add(Format(SN_EDIT_DUP_ABOVE_FMT, [HitIdx, NewFirst.Trim]));
-        if (HitIdx < High(Lines)) and (Lines[HitIdx + 1].Trim <> '') and
+        // Con un rango, la linea de debajo esta DENTRO de lo que se va: no
+        // es una duplicacion, es material a punto de desaparecer.
+        if (Cuantas = 1) and (HitIdx < High(Lines)) and (Lines[HitIdx + 1].Trim <> '') and
            (Lines[HitIdx + 1].Trim = LastNew.Trim) then
           Warnings.Add(Format(SN_EDIT_DUP_BELOW_FMT, [HitIdx + 2, LastNew.Trim]));
       end;
       Lines[HitIdx] := Prefix + Replacement;
+      Quita := Cuantas - 1; // la del ancla se queda, con el texto nuevo
+      Desde := HitIdx + 1;
+    end;
+    if Quita > 0 then
+    begin
+      for I := Desde to High(Lines) - Quita do
+        Lines[I] := Lines[I + Quita];
+      SetLength(Lines, Length(Lines) - Quita);
     end;
 
     var Joined: string;
@@ -1874,7 +1985,7 @@ begin
       Warnings.Add(Format('(el fichero era ASCII puro y he escrito los caracteres ' +
         'nuevos en %s, el encoding que el IDE tiene configurado para ficheros ' +
         'sin BOM. Si este proyecto usa otro, dilo en tu informe.)', [EncName(K)]));
-    var Salen := HighCount(AOld);
+    var Salen := HighCount(Salido);
     var Entran := HighCount(Prefix + Replacement) - HighCount(Prefix);
     if (Salen >= 0) and (Entran >= 0) and (D.High <> M.High - Salen + Entran) then
       Warnings.Add(Format('*** ACENTOS FUERA DE CUADRO: esperaba %d bytes altos y hay %d. Restaura con restore:true y PARA. ***',
@@ -1932,7 +2043,16 @@ begin
     end;
 
     var Accion := 'ESCRITO en ' + TPath.GetFileName(APath);
-    if ADelete then
+    if Cuantas > 1 then
+    begin
+      if ADelete then
+        Accion := Format(SN_RANGE_DELETED_FMT,
+          [Cuantas, HitIdx + 1, HitIdx + Cuantas, TPath.GetFileName(APath)])
+      else
+        Accion := Format(SN_RANGE_REPLACED_FMT,
+          [Cuantas, HitIdx + 1, HitIdx + Cuantas, TPath.GetFileName(APath)]);
+    end
+    else if ADelete then
       Accion := Format('BORRADA la linea %d de %s (la linea ya no existe)',
         [HitIdx + 1, TPath.GetFileName(APath)])
     else if Replacement = '' then

@@ -1627,7 +1627,7 @@ end;
 procedure ApplyArgAliases(const AToolName: string; AArguments: TJSONObject);
 const
   // tool, alias, real
-  Aliases: array [0 .. 20, 0 .. 2] of string = (
+  Aliases: array [0 .. 24, 0 .. 2] of string = (
     // "path" is what almost every other tool calls it; delphi_list calls it
     // "root" and delphi_projects too. Each spelling cost a wasted call
     // (measured 2026-08-25), and the fix is free: accept both.
@@ -1653,7 +1653,14 @@ const
     ('delphi_read', 'endline', 'toline'),
     ('delphi_search', 'text', 'query'),
     ('vault_read', 'linecount', 'limit'),
-    ('delphi_designer', 'class', 'classname'));
+    ('delphi_designer', 'class', 'classname'),
+    // El rango de delphi_edit / delphi_textedit se llama "toline" porque asi
+    // se llama ya en delphi_read: mismo concepto, mismo nombre. Y por lo
+    // mismo se le aceptan los mismos dos apodos.
+    ('delphi_edit', 'to', 'toline'),
+    ('delphi_edit', 'endline', 'toline'),
+    ('delphi_textedit', 'to', 'toline'),
+    ('delphi_textedit', 'endline', 'toline'));
 var
   I: Integer;
   P: TJSONPair;

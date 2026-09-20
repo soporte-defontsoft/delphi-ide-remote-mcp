@@ -6,6 +6,57 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.6-beta] - 2026-09-20
+
+The first release written entirely through the server itself, and the first
+one that closes a **wall** — something the tools genuinely could not do —
+instead of a bug. A wall is worth more than a bug report: it is the roadmap.
+
+### Added — the anchor can be a RANGE
+- **`toline` on `delphi_edit` and `delphi_textedit`**, in the single form and
+  inside `edits`. With it, `old` stops being the line to touch and becomes the
+  FIRST line of a stretch that ends at `toline`, included: `delete:true`
+  removes them all, `new` replaces them all. Dropping a 40-line method used to
+  mean pasting all 40 as a block anchor, or forty calls. Hit three times in
+  one day of using the server as a client.
+- The range is **one helper, `RangoHasta`, for both engines**. A range has
+  nothing of Pascal and nothing of Markdown in it, and the three twin bugs of
+  this month were all born from writing the same rule twice.
+- **Inside a batch the range is dragged**, exactly like `occurrence`: if an
+  earlier entry adds or removes lines, `toline` corrects itself. A fixed
+  number there would be the `occurrence` bug again, this time carrying lines
+  away with it.
+- Three refusals, all before anything is written: a range that runs backwards,
+  one that runs past the end of the file, and one that **swallows the file
+  whole** — that last is rewriting a file from scratch through the side door,
+  and that was already forbidden through the front one.
+
+### Fixed — a field nobody knew was being ignored
+- **An unknown field inside an `edits` entry was swallowed in silence.** The
+  entries are read by hand, field by field, so they never got the
+  `Unknown parameter` answer the tool's own parameters get: a typo
+  (`occurence` with one `r`, `atlines`) left the entry doing the default thing
+  and answering OK. Found by measuring the new battery against the previous
+  binary — `toline` went in without a word and did nothing. Now the whole
+  entry is checked first and a bad field is refused by name.
+- **The high-byte audit of `delphi_edit` counted what the ANCHOR took out**,
+  not what actually left. With a range that is wrong by every line below the
+  anchor, so any accent inside the stretch would fire *ACCENTS OUT OF LINE* —
+  the alarm that tells an agent to stop and restore. It now counts the real
+  removed text.
+- **`delphi_textedit` carried its own hand-copied version of the `edits`
+  description**, almost but not quite the same as `delphi_edit`'s.
+  Documenting the range in one of them would have left half the feature
+  invisible to whoever used the other. Both now read one shared constant.
+- The `delphi_edit` parameter table in `docs/TOOLS.md` got its **`edits` row**,
+  which had never been there — the very drift the page's own warning banner
+  names. `toline` went in at the same time, on both tools.
+
+### Measured
+- `tests/test_round35.py`: 24 checks. Against the previous build 15 of them
+  fail, which is the only thing that makes a battery worth having. Suite: 57
+  batteries, 1430 checks, 0 failures.
+
 ## [1.0.5-beta] - 2026-09-20
 
 Three more agents were pointed at the server as clients. Between them and the

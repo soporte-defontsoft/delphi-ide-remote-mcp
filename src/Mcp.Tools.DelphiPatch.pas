@@ -35,6 +35,7 @@ type
     FOld: string;
     FNew: string;
     FAtLine: Integer;
+    FToLine: Integer;
     FEdits: string;
     FDelete: Boolean;
     FInsert: string;
@@ -57,6 +58,8 @@ type
     property New: string read FNew write FNew;
     [SchemaDescription('EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence (the rejection lists the valid numbers)')]
     property AtLine: Integer read FAtLine write FAtLine;
+    [SchemaDescription(SP_PATCH_TOLINE)]
+    property ToLine: Integer read FToLine write FToLine;
     [SchemaDescription(SP_PATCH_EDITS)]
     property Edits: string read FEdits write FEdits;
     [SchemaDescription('DELETE mode: true = remove the "old" anchored line ENTIRELY (old+new="" only blanks it). No "new" here')]
@@ -173,7 +176,7 @@ begin
   // 78% identico a las de delphi_textedit, y esa duplicacion se cobro el bug
   // de "occurrence" DOS veces el mismo dia.
   Result := AplicaTanda(APath, AEditsJson,
-    function(const AOld, ANew: string; AAtLine: Integer;
+    function(const AOld, ANew: string; AAtLine, AToLine: Integer;
       ADelete: Boolean): string
     var
       A: TPatchArgs;
@@ -185,6 +188,7 @@ begin
       A.HasOld := AOld <> '';
       A.HasNew := (ANew <> '') or A.HasOld;
       A.AtLine := AAtLine;
+      A.ToLine := AToLine;
       A.DeleteLine := ADelete;
       Result := ExecutePatch(A);
     end);
@@ -211,6 +215,7 @@ begin
   // is caught by the whole-file-rewrite gate inside the engine.
   A.HasNew := (Params.New <> '') or A.HasOld;
   A.AtLine := Params.AtLine;
+  A.ToLine := Params.ToLine;
   A.DeleteLine := Params.Delete;
   A.Insert := Params.Insert.Trim.ToLower;
   A.Code := Params.Code;
