@@ -20,6 +20,8 @@ type
     FOld: string;
     FNew: string;
     FAtLine: Integer;
+    FEdits: string;
+    FDelete: Boolean;
     FCreate: Boolean;
     FContent: string;
     FEol: string;
@@ -33,6 +35,10 @@ type
     property New: string read FNew write FNew;
     [SchemaDescription('EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence')]
     property AtLine: Integer read FAtLine write FAtLine;
+    [SchemaDescription('VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O NADA: un array JSON [{"old":"...","new":"...","atline":12},...] que se aplica EN ORDEN. Cada ancla es UNA linea completa, igual que una edicion suelta; "delete": true quita la linea. Si una entrada falla, el fichero vuelve byte a byte a como estaba y te digo cual fallo. Si el cambio toca VARIOS ficheros, eso es delphi_changeset. Cuando mandas "edits" se ignoran old/new/atline/delete')]
+    property Edits: string read FEdits write FEdits;
+    [SchemaDescription('DELETE mode: true = quita ENTERA la linea anclada en "old" (old + new vacio solo la deja en blanco). Aqui no va "new"')]
+    property Delete: Boolean read FDelete write FDelete;
     [SchemaDescription('CREATE mode: true = create a NEW file (never overwrites). UTF-8, parent directories created')]
     property Create_: Boolean read FCreate write FCreate;
     [SchemaDescription('CREATE mode: the initial content of the new file (may be empty)')]
@@ -63,7 +69,9 @@ begin
     '.html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): ' +
     'docs, web assets, tests, scripts, config. Same ' +
     'discipline as delphi_edit - one-full-line unique anchor (old/new, ' +
-    'atline tie-break), real encoding preserved (UTF-8 +/- BOM / CP1252), ' +
+    'atline tie-break), DELETE mode (delete=true + old), several edits on ' +
+    'the SAME file in one all-or-nothing call ("edits"), ' +
+    'real encoding preserved (UTF-8 +/- BOM / CP1252), ' +
     'line endings preserved, automatic backup, atomic write - without the ' +
     'Pascal gates. CREATE mode (create=true + content) for new files, never ' +
     'overwrites. Whole-file rewrites are refused. Delphi sources/designers ' +
@@ -75,6 +83,8 @@ function TDelphiTextEditTool.ExecuteWithParams(const Params: TDelphiTextEditPara
 var
   A: TTextEditArgs;
 begin
+  if Params.Edits.Trim <> '' then
+    Exit(ExecuteTextEdits(Params.Path, Params.Edits));
   A := Default(TTextEditArgs);
   A.Path := Params.Path;
   A.OldLine := Params.Old;
@@ -82,6 +92,7 @@ begin
   A.HasOld := Params.Old <> '';
   A.HasNew := (Params.New <> '') or A.HasOld;
   A.AtLine := Params.AtLine;
+  A.DeleteLine := Params.Delete;
   A.CreateFile_ := Params.Create_;
   A.Content := Params.Content;
   A.Eol := Params.Eol;

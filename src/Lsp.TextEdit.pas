@@ -19,12 +19,24 @@ type
     HasOld: Boolean;
     HasNew: Boolean;
     AtLine: Integer;   // tie-break when the anchor repeats
+    DeleteLine: Boolean;  // DELETE: remove the anchored line entirely
     CreateFile_: Boolean; // CREATE: new file (never overwrites)
     Content: string;      // CREATE: initial content (may be empty)
     Eol: string;          // CREATE: 'lf' = LF; anything else = CRLF (default)
   end;
 
 function ExecuteTextEdit(const A: TTextEditArgs): string;
+
+{ VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O
+  NADA, igual que delphi_edit: un array JSON de objetos con old, new, atline
+  y delete, aplicado EN ORDEN. Si una falla, el fichero vuelve byte a byte
+  a como estaba y se dice cual fallo.
+
+  Por que: sin esto, cambiar un comentario de tres lineas costaba TRES
+  llamadas, y entre una y otra el fichero quedaba a medias (medido el
+  2026-09-20 usando este servidor como agente). Aqui las anclas son de UNA
+  linea, como siempre: el bloque de varias lineas es cosa de delphi_edit. }
+function ExecuteTextEdits(const APath, AEditsJson: string): string;
 
 implementation
 
@@ -33,7 +45,10 @@ uses
   System.Classes,
   System.StrUtils,
   System.IOUtils,
+  System.Math,
+  System.JSON,
   Lsp.Guard,
+  Lsp.Texts,
   Lsp.Patch;
 
 const
@@ -212,8 +227,11 @@ begin
 
   // Replacement. If the anchor was given without its indentation, the
   // original prefix is preserved on the first replacement line.
-  NewLines := A.NewText.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
-  if (Length(NewLines) > 0) and (LeadingWhite(A.OldLine) = '') and
+  if A.DeleteLine then
+    SetLength(NewLines, 0)  // la linea se va entera: ni una vacia queda
+  else
+    NewLines := A.NewText.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
+  if (not A.DeleteLine) and (Length(NewLines) > 0) and (LeadingWhite(A.OldLine) = '') and
      (LeadingWhite(NewLines[0]) = '') then
   begin
     Prefix := LeadingWhite(Lines[Target]);
@@ -254,6 +272,11 @@ begin
       Exit('RECHAZADO al codificar: ' + E.Message);
   end;
 
+  if A.DeleteLine then
+    Exit(Format('OK borrada la linea %d de %s  encoding=%s  (backup en %s\)'#10 +
+      'Verificacion (releido de disco):'#10'%s',
+      [Target + 1, TPath.GetFileName(A.Path), EncNm, '__delphi-patch',
+       ReadNumbered(A.Path, Target, Target + 2)]));
   Result := Format('OK linea %d de %s  encoding=%s  (backup en %s\)'#10 +
     'Verificacion (releido de disco):'#10'%s',
     [Target + 1, TPath.GetFileName(A.Path), EncNm, '__delphi-patch',
@@ -277,6 +300,8 @@ begin
       Exit;
     if A.CreateFile_ then
       Exit(DoCreate(A));
+    if A.DeleteLine and not A.HasOld then
+      Exit('RECHAZADO: delete=true necesita "old": la linea que se va.');
     if not A.HasOld then
       Exit('RECHAZADO: falta el ancla (old). Esta tool no reescribe ficheros ' +
         'enteros: una linea existente + su sustituto, o create=true para ' +
@@ -285,6 +310,101 @@ begin
   except
     on E: Exception do
       Result := 'RECHAZADO: ' + E.Message;
+  end;
+end;
+
+{ El trabajo de la tanda; ExecuteTextEdits lo envuelve en el cerrojo. }
+function TextEditsNucleo(const APath, AEditsJson: string): string;
+var
+  V: TJSONValue;
+  Arr: TJSONArray;
+  Obj: TJSONObject;
+  A: TTextEditArgs;
+  Copia: TBytes;
+  Sb: TStringBuilder;
+  Una: string;
+  N, Fallo: Integer;
+begin
+  Result := PathDenied(APath);
+  if Result <> '' then
+    Exit;
+  Result := ExtGate(APath);
+  if Result <> '' then
+    Exit;
+  Result := DeadCopyWriteDenied(APath);
+  if Result <> '' then
+    Exit;
+  if not TFile.Exists(APath) then
+    Exit('RECHAZADO: no existe ' + APath + '. Para crearlo usa create=true.');
+  V := TJSONObject.ParseJSONValue(AEditsJson);
+  if not (V is TJSONArray) then
+  begin
+    V.Free;
+    Exit(SR_PATCH_EDITS_JSON);
+  end;
+  Arr := TJSONArray(V);
+  try
+    if Arr.Count = 0 then
+      Exit(SR_PATCH_EDITS_EMPTY);
+    if Arr.Count > 50 then
+      Exit(SR_PATCH_EDITS_TOOMANY);
+    // La red: el fichero entero antes de tocar nada.
+    Copia := TFile.ReadAllBytes(APath);
+    Sb := TStringBuilder.Create;
+    try
+      N := 0;
+      Fallo := 0;
+      for V in Arr do
+      begin
+        Inc(N);
+        if not (V is TJSONObject) then
+        begin
+          Fallo := N;
+          Sb.AppendLine(Format('  %d: no es un objeto {old,new}', [N]));
+          Break;
+        end;
+        Obj := TJSONObject(V);
+        A := Default(TTextEditArgs);
+        A.Path := APath;
+        A.OldLine := Obj.GetValue<string>('old', '');
+        A.NewText := Obj.GetValue<string>('new', '');
+        A.HasOld := A.OldLine <> '';
+        A.HasNew := (A.NewText <> '') or A.HasOld;
+        A.AtLine := Obj.GetValue<Integer>('atline', 0);
+        A.DeleteLine := Obj.GetValue<Boolean>('delete', False);
+        Una := TextEditNucleo(A);
+        if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
+        begin
+          Fallo := N;
+          Sb.AppendLine(Format('  %d: %s', [N, Una.Replace(#10, ' ')]));
+          Break;
+        end;
+        Sb.AppendLine(Format('  %d OK: %s', [N,
+          A.OldLine.Trim.Substring(0, Min(70, Length(A.OldLine.Trim)))]));
+      end;
+      if Fallo > 0 then
+      begin
+        TFile.WriteAllBytes(APath, Copia); // todo o nada
+        Exit(Format(SR_PATCH_EDITS_ROLLED_FMT,
+          [Fallo, Arr.Count, Sb.ToString.TrimRight]));
+      end;
+      Result := Format(SN_PATCH_EDITS_OK_FMT,
+        [Arr.Count, TPath.GetFileName(APath), Sb.ToString.TrimRight]);
+    finally
+      Sb.Free;
+    end;
+  finally
+    Arr.Free;
+  end;
+end;
+
+function ExecuteTextEdits(const APath, AEditsJson: string): string;
+begin
+  EnterFileEdit;
+  try
+    Result := TextEditsNucleo(APath, AEditsJson);
+  finally
+    LeaveFileEdit;
   end;
 end;
 

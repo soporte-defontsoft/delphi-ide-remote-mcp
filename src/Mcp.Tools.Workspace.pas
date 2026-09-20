@@ -72,11 +72,19 @@ type
   private
     FRoot: string;
     FName: string;
+    FMaxResults: Integer;
+    FOffset: Integer;
   public
     [SchemaDescription('Directory to search under. Empty = the roots configured in settings.ini [Workspace] Roots (semicolon-separated)')]
     property Root: string read FRoot write FRoot;
     [SchemaDescription('Optional name filter (substring, case-insensitive), e.g. "comunicador"')]
     property Name: string read FName write FName;
+    [SchemaDescription('Maximum projects to return PER PAGE (default 50, cap 300). A work machine holds thousands of .dproj: the full list does not fit in an answer')]
+    [SchemaDefault('50')]
+    property MaxResults: Integer read FMaxResults write FMaxResults;
+    [SchemaDescription('Skip the first N projects of the FULL list - pagination: pass the nextOffset of the previous answer to get the next page')]
+    [SchemaDefault('0')]
+    property Offset: Integer read FOffset write FOffset;
   end;
 
   TDelphiGitParams = class
@@ -1110,7 +1118,10 @@ begin
   FDescription := 'Locate Delphi projects (.dproj/.groupproj) under a ' +
     'directory - or under the workspace roots configured in settings.ini ' +
     '[Workspace] Roots when root is empty. Optional name filter. Use this ' +
-    'to answer "open project X" without knowing the disk layout.';
+    'to answer "open project X" without knowing the disk layout. Answers in ' +
+    'PAGES (maxresults, default 50; offset + nextOffset to walk them): a ' +
+    'work machine holds thousands of .dproj and the whole list does not fit ' +
+    'in one answer.';
 end;
 
 { The git repository a path belongs to (the folder holding .git), '' when
@@ -1202,7 +1213,8 @@ var
   Entry: TJSONObject;
   Total: Integer;
   Mask, Repo, Branch: string;
-  AllCount: Integer;
+  AllCount, Ofs, Max: Integer;
+  PorCarpeta: TStringList;
 begin
   if Params.Root <> '' then
   begin
@@ -1231,9 +1243,27 @@ begin
     if (RootDir.Trim <> '') and not TDirectory.Exists(RootDir.Trim) then
       Exit(Format(SR_PROJECTS_NO_ROOT_FMT, [RootDir.Trim]));
   Filt := Params.Name.Trim.ToLower;
+  // Paginado como delphi_search: una maquina de trabajo tiene miles de .dproj
+  // y la lista entera no cabe en una respuesta (medido: 7025 proyectos = 82 KB
+  // = limite del cliente reventado, o sea la tool inservible sin "root").
+  Ofs := Params.Offset;
+  if Ofs < 0 then
+    Ofs := 0;
+  Max := Params.MaxResults;
+  if Max <= 0 then
+    Max := 50;
+  if Max > 300 then
+    Max := 300;
   Return := TJSONObject.Create;
   Arr := TJSONArray.Create;
   Total := 0;
+  // Donde estan, no solo cuantos: en una maquina de trabajo la lista la
+  // COPAN los componentes de terceros y sus copias de seguridad (medido el
+  // 2026-09-20 en este servidor: de 7025 proyectos, 6420 eran backups de
+  // componentes y fuentes de SecureBlackbox, y los del operador eran 73).
+  // Una pagina de 50 de esos no vale para nada; el reparto por carpeta si,
+  // porque dice a que "root" volver a llamar.
+  PorCarpeta := TStringList.Create;
   try
     for RootDir in Roots do
     begin
@@ -1247,7 +1277,17 @@ begin
           if (Filt <> '') and not TPath.GetFileName(F).ToLower.Contains(Filt) then
             Continue;
           Inc(Total);
-          if Arr.Count < 300 then
+          var Carpeta := TPath.GetDirectoryName(F);
+          var Rel := Carpeta;
+          if StartsText(IncludeTrailingPathDelimiter(RootDir.Trim), Carpeta) then
+            Rel := Carpeta.Substring(Length(IncludeTrailingPathDelimiter(RootDir.Trim)));
+          var Trozos := Rel.Split([TPath.DirectorySeparatorChar]);
+          if Length(Trozos) > 2 then
+            Rel := Trozos[0] + TPath.DirectorySeparatorChar + Trozos[1];
+          if Rel = '' then
+            Rel := ExcludeTrailingPathDelimiter(RootDir.Trim);
+          PorCarpeta.Values[Rel] := (StrToIntDef(PorCarpeta.Values[Rel], 0) + 1).ToString;
+          if (Total > Ofs) and (Arr.Count < Max) then
           begin
             Entry := TJSONObject.Create;
             Arr.Add(Entry);
@@ -1282,6 +1322,34 @@ begin
     end;
     Return.AddPair('total', TJSONNumber.Create(Total));
     Return.AddPair('shown', TJSONNumber.Create(Arr.Count));
+    if Ofs > 0 then
+      Return.AddPair('offset', TJSONNumber.Create(Ofs));
+    Return.AddPair('hasMore', TJSONBool.Create(Total > Ofs + Arr.Count));
+    if Total > Ofs + Arr.Count then
+    begin
+      Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Arr.Count));
+      Return.AddPair('note', Format(SN_PROJECTS_PAGE_FMT,
+        [Arr.Count, Total, Ofs + Arr.Count]));
+      // Las 10 carpetas que mas acumulan, ordenadas: con esto el agente elige
+      // "root" y deja de pasear paginas de cosas que no son suyas.
+      var Carpetas := TJSONArray.Create;
+      Return.AddPair('byFolder', Carpetas);
+      for var I := 0 to 9 do
+      begin
+        var Mejor := -1;
+        var MejorN := 0;
+        for var J := 0 to PorCarpeta.Count - 1 do
+          if StrToIntDef(PorCarpeta.ValueFromIndex[J], 0) > MejorN then
+          begin
+            MejorN := StrToIntDef(PorCarpeta.ValueFromIndex[J], 0);
+            Mejor := J;
+          end;
+        if Mejor < 0 then
+          Break;
+        Carpetas.Add(Format('%s = %d', [PorCarpeta.Names[Mejor], MejorN]));
+        PorCarpeta.ValueFromIndex[Mejor] := '0';
+      end;
+    end;
     if (Total = 0) and (Filt <> '') then
     begin
       // {"total":0} for a name that matches nothing reads as "this server has
@@ -1300,6 +1368,7 @@ begin
     Return.AddPair('projects', Arr);
     Result := Return.ToJSON;
   finally
+    PorCarpeta.Free;
     Return.Free;
   end;
 end;

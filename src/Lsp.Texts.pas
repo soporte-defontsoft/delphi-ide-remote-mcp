@@ -59,7 +59,15 @@ const
   // traversal residue (R4-C), so even a cosmetic ellipsis is banned here.
   SN_PROJECTS_NO_MATCH_FMT =
     'Ningun proyecto se llama asi ("%s"). Hay %d en el workspace; llama sin ' +
-    '"name" para verlos todos.';
+    '"name" para verlos (vienen por paginas).';
+
+  // Una maquina de trabajo tiene MILES de .dproj: sin paginar, la respuesta
+  // eran 82 KB y reventaba el limite del cliente, o sea que la tool era
+  // inservible sin "root" (medido el 2026-09-20 usando el servidor como
+  // agente: 7025 proyectos). Ahora se pagina como delphi_search.
+  SN_PROJECTS_PAGE_FMT =
+    'Te doy %d de %d proyectos. La siguiente pagina va con offset=%d, pero ' +
+    'para acotar de verdad usa "name" o un "root" mas concreto.';
 
   SR_PROJECTS_NO_ROOT_FMT =
     'error: la carpeta de trabajo "%s" no existe en este servidor. No es que ' +

@@ -154,7 +154,7 @@ List Delphi files under a directory recursively (sources and project files by de
 
 ### `delphi_projects`
 
-Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots configured in settings.ini [Workspace] Roots when root is empty. Optional name filter. Use this to answer "open project X" without knowing the disk layout.
+Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots configured in settings.ini [Workspace] Roots when root is empty. Optional name filter. Use this to answer "open project X" without knowing the disk layout. Answers in PAGES (`maxresults`, default 50; `offset` + `nextOffset` to walk them), and when there are more it also reports `byFolder` - the ten folders holding the most - so the next call can narrow `root` instead of walking pages. That matters on a broad jail: measured on a server whose root was a whole drive, 6420 of 7025 projects were third-party component sources and their backups, and the operator's own were 73.
 
 *Access: read-only OK.*
 
@@ -162,6 +162,8 @@ Locate Delphi projects (.dproj/.groupproj) under a directory - or under the work
 |---|---|---|---|
 | `root` | string | optional | Directory to search under. Empty = the roots configured in settings.ini [Workspace] Roots (semicolon-separated) |
 | `name` | string | optional | Optional name filter (substring, case-insensitive), e.g. "comunicador" |
+| `maxresults` | number | optional (default 50) | Maximum projects to return PER PAGE (cap 300) |
+| `offset` | number | optional (default 0) | Skip the first N projects of the FULL list - pass the `nextOffset` of the previous answer |
 
 ### `delphi_installs`
 
@@ -226,7 +228,7 @@ MULTI-FILE TRANSACTIONS: when one change touches several files, either the whole
 
 ### `delphi_textedit`
 
-SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, web assets, tests, scripts, config. Same discipline as delphi_edit - one-full-line unique anchor (old/new, atline tie-break), real encoding preserved (UTF-8 +/- BOM / CP1252), line endings preserved, automatic backup, atomic write - without the Pascal gates. CREATE mode (create=true + content) for new files, never overwrites. Whole-file rewrites are refused. Delphi sources/designers are refused (use delphi_edit) and so are .dproj and binaries. Read first with delphi_read and copy the anchor exactly.
+SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, web assets, tests, scripts, config. Same discipline as delphi_edit - one-full-line unique anchor (old/new, atline tie-break), DELETE mode (delete=true + old), several edits on the SAME file in one all-or-nothing call (`edits`), real encoding preserved (UTF-8 +/- BOM / CP1252), line endings preserved, automatic backup, atomic write - without the Pascal gates. CREATE mode (create=true + content) for new files, never overwrites. Whole-file rewrites are refused. Delphi sources/designers are refused (use delphi_edit) and so are .dproj and binaries. Read first with delphi_read and copy the anchor exactly.
 
 *Access: read-write.*
 
@@ -236,6 +238,8 @@ SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .b
 | `old` | string | optional | EDIT mode: the exact line to replace - ONE full line copied literally from delphi_read (everything after the \| bar). Leading indentation may be omitted |
 | `new` | string | optional | EDIT mode: the new text; may be several lines. Empty = blank the line |
 | `atline` | integer | optional | EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence |
+| `edits` | string | optional | Several edits on THIS SAME file, in one call and ALL OR NOTHING: a JSON array `[{"old":"...","new":"...","atline":12},...]` applied IN ORDER. Each anchor is ONE full line, as in a single edit; `"delete": true` removes the line. If one entry fails the file goes back byte for byte and the answer names it. Changes across SEVERAL files are delphi_changeset. When `edits` is given, old/new/atline/delete are ignored |
+| `delete` | boolean | optional | DELETE mode: true = remove the line anchored by `old` ENTIRELY (old + empty new only blanks it). No `new` here |
 | `create` | boolean | optional | CREATE mode: true = create a NEW file (never overwrites). UTF-8, parent directories created |
 | `content` | string | optional | CREATE mode: the initial content of the new file (may be empty) |
 | `eol` | string | optional | CREATE mode: line endings, "crlf" (default) or "lf" |

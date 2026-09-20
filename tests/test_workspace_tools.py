@@ -141,6 +141,45 @@ out2 = call('delphi_search', {"root": SRC, "query": "retry", "wholeword": False}
 d2 = json.loads(out2)
 check('search: wholeword filtra', d2['total'] > d['total'], '%s vs %s' % (d['total'], d2['total']))
 
+# --- projects: por paginas -----------------------------------------------
+# Sin paginar, una maquina de trabajo (7025 .dproj) contestaba 82 KB y
+# reventaba el limite del cliente: la tool era inservible sin "root" (medido
+# el 2026-09-20 usando el servidor como agente).
+_p1 = json.loads(call('delphi_projects', {"root": REPO, "maxresults": 5}))
+check('projects: la pagina respeta maxresults',
+      _p1.get('shown') == 5 and len(_p1.get('projects', [])) == 5,
+      str(_p1.get('shown')))
+check('projects: dice que hay mas y por donde seguir',
+      _p1.get('hasMore') is True and _p1.get('nextOffset') == 5 and
+      'offset=5' in _p1.get('note', ''),
+      (_p1.get('hasMore'), _p1.get('nextOffset'), _p1.get('note', '')[:80]))
+check('projects: cuando hay mas, dice en que carpetas estan',
+      isinstance(_p1.get('byFolder'), list) and len(_p1['byFolder']) >= 1 and
+      all(' = ' in f for f in _p1['byFolder']) and
+      sum(int(f.rsplit(' = ', 1)[1]) for f in _p1['byFolder']) == _p1['total'],
+      str(_p1.get('byFolder'))[:200])
+_p2 = json.loads(call('delphi_projects',
+                      {"root": REPO, "maxresults": 5, "offset": 5}))
+check('projects: la siguiente pagina es OTRA y dice su offset',
+      _p2.get('offset') == 5 and
+      _p2['projects'][0]['project'] != _p1['projects'][0]['project'],
+      (_p2.get('offset'), _p2['projects'][0]['name'], _p1['projects'][0]['name']))
+_vistos, _off, _vueltas = [], 0, 0
+while _vueltas < 20:
+    _pg = json.loads(call('delphi_projects',
+                          {"root": REPO, "maxresults": 5, "offset": _off}))
+    _vistos += [p['project'] for p in _pg.get('projects', [])]
+    _vueltas += 1
+    if not _pg.get('hasMore'):
+        break
+    _off = _pg['nextOffset']
+check('projects: recorrer nextOffset llega a TODOS y sin repetir',
+      len(_vistos) == _p1['total'] and len(set(_vistos)) == len(_vistos),
+      '%d vistos / total %d' % (len(_vistos), _p1['total']))
+_pd = json.loads(call('delphi_projects', {"root": REPO}))
+check('projects: por defecto no vuelca la lista entera',
+      _pd.get('shown', 0) <= 50, str(_pd.get('shown')))
+
 # --- list ---
 out = call('delphi_list', {"root": SRC, "pattern": "*.pas"})
 try:
@@ -462,6 +501,33 @@ try:
     check('textedit: contenido correcto en disco',
           'linea EDITADA por MCP' in body and '# Titulo' in body and 'fin' in body, body[:120])
     check('textedit: CRLF preservado', '\r\n' in body, repr(body[:40]))
+    # --- varias ediciones en UNA llamada, y todo o nada ---
+    # Sin esto, cambiar tres lineas eran tres llamadas y tres oportunidades de
+    # dejar el fichero a medias (medido el 2026-09-20 usando el servidor como
+    # agente para trabajar en su propio repo).
+    lote = os.path.join(tmptxt, 'lote.md')
+    call('delphi_textedit', {"path": lote, "create": True,
+                             "content": "uno\ndos\ntres\ncuatro\n", "eol": "lf"})
+    out = call('delphi_textedit', {"path": lote, "edits": json.dumps([
+        {"old": "uno", "new": "UNO"},
+        {"old": "dos", "delete": True},
+        {"old": "cuatro", "new": "CUATRO"}])})
+    cuerpo = open(lote, 'rb').read().decode('utf-8')
+    check('textedit: varias ediciones en una sola llamada',
+          out.startswith('APLICADAS') and cuerpo == 'UNO\ntres\nCUATRO\n',
+          (out[:90], repr(cuerpo)))
+    out = call('delphi_textedit', {"path": lote, "edits": json.dumps([
+        {"old": "UNO", "new": "roto"},
+        {"old": "esta linea no existe", "new": "x"}])})
+    cuerpo = open(lote, 'rb').read().decode('utf-8')
+    check('textedit: si una falla, el fichero vuelve byte a byte',
+          'ROLLBACK' in out and cuerpo == 'UNO\ntres\nCUATRO\n',
+          (out[:90], repr(cuerpo)))
+    out = call('delphi_textedit', {"path": lote, "old": "tres", "delete": True})
+    cuerpo = open(lote, 'rb').read().decode('utf-8')
+    check('textedit: delete quita la linea ENTERA (no la deja en blanco)',
+          out.startswith('OK') and cuerpo == 'UNO\nCUATRO\n',
+          (out[:90], repr(cuerpo)))
     out = call('delphi_textedit', {"path": md, "old": "no existe esta linea",
                                    "new": "x"})
     check('textedit: ancla inexistente rechaza', 'RECHAZADO' in out, out[:150])
