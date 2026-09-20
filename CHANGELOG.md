@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.0.0-beta] - 2026-09-20
 
 ### Fixed
 - **Several agents at once no longer lose each other's work.** The HTTP host
