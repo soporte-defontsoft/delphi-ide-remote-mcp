@@ -532,6 +532,103 @@ check('dentro-del-root: el codigo del workspace sigue accesible',
       'unit Codigo' in out, out[:120])
 s7.close()
 
+# ===========================================================================
+# EL VAULT ES EL QUE CADA WORKSPACE DECLARA. No se hereda nada: no hay vault
+# "por defecto" (el codigo solo registra un [Workspace.X] si trae token, y el
+# env DELPHI_MCP_VAULT_PATH es solo para un arranque local por stdio). Varios
+# workspaces PUEDEN compartir el mismo vault - pero solo el que declaran.
+#
+# Por HTTP con tokens, que es como funciona produccion. Y las tools vault_*
+# las VE tambien el workspace sin vault (se registran si CUALQUIERA lo tiene),
+# asi que su rechazo es lo unico que ese agente tiene: decia "este servidor no
+# tiene vault ([Vault] Path en settings.ini)" y las dos mitades eran falsas
+# desde v0.98 (medido el 2026-09-20).
+# ===========================================================================
+HPORT = 3997
+HDIR = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'vault-http-ws')
+shutil.rmtree(HDIR, ignore_errors=True)
+os.makedirs(os.path.join(HDIR, 'codigo'))
+os.makedirs(os.path.join(HDIR, 'vault-compartido'))
+open(os.path.join(HDIR, 'vault-compartido', 'MEMORY.md'), 'w',
+     encoding='utf-8').write('# indice compartido\n')
+_hexe = os.path.join(HDIR, 'DelphiLspMcp.exe')
+shutil.copyfile(EXE, _hexe)
+open(os.path.join(HDIR, 'settings.ini'), 'w', encoding='utf-8').write(
+    '[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
+    '[Workspace.ConVault]\nToken=tok-con-vault\nRoots=%s\nVaultPath=%s\n'
+    'VaultReadOnly=1\n\n'
+    '[Workspace.MismoVault]\nToken=tok-mismo-vault\nRoots=%s\nVaultPath=%s\n'
+    'VaultReadOnly=1\n\n'
+    '[Workspace.SinVault]\nToken=tok-sin-vault\nRoots=%s\n'
+    % (HPORT, os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
+       os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
+       os.path.join(HDIR, 'codigo')))
+_henv = dict(os.environ)
+_henv.pop('DELPHI_MCP_TOKEN', None)
+_henv.pop('DELPHI_MCP_VAULT_PATH', None)
+_hp = subprocess.Popen([_hexe, '--http'], env=_henv, cwd=HDIR,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+time.sleep(3)
+
+
+def _http(token, method, params, rid=1):
+    import urllib.request
+    import urllib.error
+    req = urllib.request.Request(
+        'http://127.0.0.1:%d/mcp' % HPORT,
+        json.dumps({"jsonrpc": "2.0", "id": rid, "method": method,
+                    "params": params}).encode('utf-8'),
+        {'Content-Type': 'application/json', 'Accept': 'application/json',
+         'Authorization': 'Bearer ' + token})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read().decode('utf-8', 'replace'))
+    except urllib.error.HTTPError as e:
+        return {'http': e.code, 'body': e.read().decode('utf-8', 'replace')[:200]}
+
+
+def _texto(resp):
+    try:
+        return resp['result']['content'][0]['text']
+    except Exception:
+        return json.dumps(resp)[:300]
+
+
+_INIT = {"protocolVersion": "2025-06-18", "capabilities": {},
+         "clientInfo": {"name": "vault-battery", "version": "1"}}
+try:
+    for _tok in ('tok-con-vault', 'tok-mismo-vault', 'tok-sin-vault'):
+        _http(_tok, 'initialize', _INIT)
+
+    _leen = []
+    for _tok in ('tok-con-vault', 'tok-mismo-vault'):
+        _leen.append(_texto(_http(_tok, 'tools/call',
+                                  {"name": "vault_read", "arguments": {}}, 5)))
+    check('por-workspace: dos workspaces distintos comparten el MISMO vault',
+          all('indice compartido' in t for t in _leen), [t[:80] for t in _leen])
+
+    _sin = _texto(_http('tok-sin-vault', 'tools/call',
+                        {"name": "vault_read", "arguments": {}}, 6))
+    check('por-workspace: el que NO lo declara no lo ve (no se hereda nada)',
+          'indice compartido' not in _sin, _sin[:150])
+    check('por-workspace: el rechazo habla de TU workspace, no del servidor',
+          'TU workspace' in _sin and 'este servidor no tiene vault' not in _sin,
+          _sin[:200])
+    check('por-workspace: manda a la clave que existe de verdad',
+          'VaultPath' in _sin and '[Workspace.' in _sin and '[Vault]' not in _sin,
+          _sin[:200])
+    check('por-workspace: y ofrece camino (pedirselo al operador)',
+          'delphi_report' in _sin, _sin[:200])
+
+    _lst = _http('tok-sin-vault', 'tools/list', {}, 7)
+    _nombres = [t['name'] for t in _lst.get('result', {}).get('tools', [])]
+    check('por-workspace: las tools vault_* SI se le ofrecen igual '
+          '(las registra quien si tiene)',
+          'vault_read' in _nombres and 'vault_search' in _nombres, _nombres[:8])
+finally:
+    _hp.kill()
+    shutil.rmtree(HDIR, ignore_errors=True)
+
 print('\n== vault battery: %d PASS / %d FAIL ==' % (PASS, FAIL))
 shutil.rmtree(VAULT, ignore_errors=True)
 shutil.rmtree(WORK, ignore_errors=True)

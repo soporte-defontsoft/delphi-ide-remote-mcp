@@ -29,6 +29,16 @@ if not os.path.exists(SRC):
 
 CLEAN = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', '_cleanexe')
 shutil.rmtree(CLEAN, ignore_errors=True)
+# Si la carpeta sigue ahi despues del rmtree es que OTRA regresion la tiene
+# cogida (su exe esta en uso). Dos suites a la vez comparten la raiz temporal
+# y se pisan, asi que se dice y se para - no se revienta con un traceback de
+# makedirs (medido el 2026-09-20: lance dos sin darme cuenta y la segunda
+# murio con FileExistsError en esta misma linea, sin explicar nada).
+if os.path.isdir(CLEAN):
+    sys.exit('Parece que hay OTRA regresion en marcha: no puedo limpiar\n  '
+             + CLEAN + '\nporque su exe esta en uso. Dos suites a la vez '
+             'comparten la carpeta temporal y se pisan.\nEspera a que termine '
+             '(o matala) y vuelve a lanzar.')
 os.makedirs(CLEAN)
 EXE = os.path.join(CLEAN, 'DelphiLspMcp.exe')
 shutil.copy(SRC, EXE)

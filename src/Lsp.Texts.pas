@@ -527,9 +527,19 @@ const
     'servidor. Trabaja con carga perezosa: carga solo las notas que el indice ' +
     'indique que aplican a tu tarea, con vault_read.';
 
+  // Decia "este servidor no tiene vault configurado ([Vault] Path)" y las dos
+  // mitades eran falsas desde v0.98: el servidor PUEDE tener vault (el de otro
+  // workspace) y la clave [Vault] Path ya no existe. Un agente que leyera eso
+  // le contaba a su operador algo que no es y lo mandaba a una seccion que no
+  // esta (medido el 2026-09-20 con un servidor de dos workspaces, uno con
+  // vault y otro sin el).
   SR_VAULT_UNSET =
-    'error: este servidor no tiene vault de conocimiento configurado ' +
-    '([Vault] Path en settings.ini).';
+    'error: TU workspace no declara vault de conocimiento. El vault es del ' +
+    'workspace ACTIVO: se declara con VaultPath= en su seccion ' +
+    '[Workspace.<nombre>] del settings.ini del servidor (y VaultReadOnly=0 ' +
+    'si ademas ha de poder escribirse). Que estas tools aparezcan aqui solo ' +
+    'significa que ALGUN workspace de este servidor tiene vault, no que sea ' +
+    'el tuyo. Si lo necesitas para tu trabajo, pidelo con delphi_report.';
 
   // No echo of the offending path on purpose: the outbound filter rewrites
   // server drive letters, so echoing "C:/Windows/win.ini" came back as
