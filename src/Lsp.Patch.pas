@@ -67,6 +67,19 @@ function NthOccurrenceLine(const APath, AAnchor: string; AN: Integer): Integer;
 { Encoding-correct numbered read (also serves the remote file toolset). }
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
 
+{ Una posicion a la que nadie podria apuntar: linea o columna negativa, linea
+  mas alla del final, columna mas alla de la linea, o fichero que no esta.
+  '' cuando la posicion es real.
+
+  Vive AQUI, y no en la unidad de una tool, porque la usan SEIS: definition,
+  hover, signature, completion, references y rename_symbol. Estaba en la
+  implementation de Mcp.Tools.DelphiLsp, o sea invisible para las otras dos
+  unidades, y por eso cuatro validaban y dos no: delphi_completion contestaba
+  ok:true con 16.835 candidatos a una columna NEGATIVA, y references lanzaba
+  una excepcion cruda en ingles. Duplicarla en cada unidad habria sido repetir
+  el fallo; se mueve al sitio donde ya miran todas. }
+function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
+
 { Encoding-preserving load/save for other engines (scaffolder): text is
   decoded with the real encoding; save re-encodes with the SAME one, makes
   the pre-edit backup and writes atomically. AEncName as in delphi_read. }
@@ -575,6 +588,32 @@ begin
     Sb.Free;
   end;
   Result := Format(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
+end;
+
+function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
+var
+  Lines: TArray<string>;
+  Enc: string;
+begin
+  Result := '';
+  if (ALine < 0) or (AChar < 0) then
+    Exit(Format(SR_LSP_NEGATIVE_FMT, [ALine, AChar]));
+  // Una ruta que no esta llegaba al motor y volvia como "Error executing
+  // tool: File not found", que en las reglas de este servidor significa "me
+  // he roto por dentro" y no era el caso (2026-08-25).
+  if not TFile.Exists(APath) then
+    Exit(Format(SR_LSP_NO_FILE_FMT, [APath]));
+  try
+    Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
+  except
+    Exit;
+  end;
+  if ALine >= Length(Lines) then
+    Exit(Format(SR_LSP_LINE_RANGE_FMT,
+      [ALine, TPath.GetFileName(APath), Length(Lines), Length(Lines) - 1]))
+  else if AChar > Length(Lines[ALine]) then
+    Exit(Format(SR_LSP_CHAR_RANGE_FMT,
+      [AChar, ALine, Length(Lines[ALine]), Lines[ALine].Trim]));
 end;
 
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;

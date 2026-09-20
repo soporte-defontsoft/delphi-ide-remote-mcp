@@ -211,7 +211,7 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_upload` | The mirror of fetch: send files TO the server in chunks, SHA-256 verified — for binaries you cannot recreate by editing |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
 | `delphi_list` | Recursive file listing with size/mtime; `dirs=true` browses subdirectories explorer-style; IDE artifacts are filtered relative to the root and the result says how many entries it hid |
-| `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace] Roots=D:\Projects;E:\More`). Paged (`maxresults`/`offset`): a work machine holds thousands of them |
+| `delphi_projects` | Locate projects (.dproj/.groupproj) by name under a root or under the configured workspace roots (`settings.ini [Workspace.<name>] Roots=D:\Projects;E:\More`). Paged (`maxresults`/`offset`): a work machine holds thousands of them. Backup copies (`__delphi-patch`, `__history`) are never declared as projects, but the answer says how many it hid — and naming one of those folders as `root` lists them |
 | `delphi_installs` | List every RAD Studio/Delphi installation discovered on the machine (side-by-side versions), flagging which one is active for the LSP engine |
 | `delphi_workspace` | The lay of the land on the server: the configured workspace roots (your allowed universe), the access level, and the active Delphi. It also says **who is answering** — version, how the process was started (tray / service / console), transport, pid and uptime — so checking a deployment does not mean looking at the machine from outside. Server paths travel with **virtual drive units** (`srvd:`, `srvc:` — they only exist inside this MCP, never on your local disk). Call it first |
 | `delphi_git` | Whitelisted git operations — including **`clone`/`pull`** (bring a whole repo onto the server in one call, jailed) plus status/diff/log/show/branch/add/commit/init/push/tag/config. Options that write files or read outside the repo (`--output`, `--no-index`, `-c`…) are refused at the gate |
@@ -389,6 +389,7 @@ MessagesRetentionDays=30                ; mailbox housekeeping (plumbing, not pe
 Token=galatea-secret                    ; read-write, but only inside THESE roots
 ReadOnlyToken=galatea-reviewer-secret   ; optional read-only twin, same roots
 Roots=D:\Projects\Galatea;D:\Projects\Shared
+ReadOnlyPaths=vendor;third-party\libx   ; INSIDE the jail: read, never write
 LibraryZone=1                           ; ITS declaration - nothing is inherited
 AllowTests=1                            ; may build+run ITS test suites
 AllowDesktopControl=1                   ; may SEE and DRIVE this server's own
@@ -458,10 +459,11 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   mistake never fails silently. And a workspace carries **everything else** too:
   `AllowRun`, `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`, `AllowDesktopControl`,
   `LibraryZone`,
-  `AgentConfinement`, `SharedFolders`, `Profile` — and the reach lists `GitRemotes`,
+  `AgentConfinement`, `SharedFolders`, `ReadOnlyPaths`, `Profile` — and the reach lists `GitRemotes`,
   `RemoteHosts`, `RemoteRunProjects`. Nothing is inherited from anywhere: an absent switch
   is off, an absent list is empty — one workspace can be a CI space that executes and dials
   its build machine while every other space stays compile-only and offline.
+- **ReadOnlyPaths**: folders INSIDE the jail that may be read but never written — a `vendor/`, a submodule, a reference clone. Semicolon-separated; a relative entry resolves against each root, an absolute one is taken as is; absent means none. It is not the jail and the server says so differently: the jail is "you don't go in there", this is "you look, you don't touch". Third-party code often has to live inside the project — that is where whoever clones it will look for it — and when that folder is *another git repository*, a careless write does not even show up in the main repo's `git status`, so it can go a whole session unnoticed. This turns that into a rule the server enforces instead of one the agent has to remember.
 - **AgentConfinement**: *cooperative* subdivision inside one credential's
   jail — each agent (by its self-declared `clientInfo.name`) writes only under
   `<root>\<name>\`, plus any `SharedFolders`. Useful for teams sharing one token; for a

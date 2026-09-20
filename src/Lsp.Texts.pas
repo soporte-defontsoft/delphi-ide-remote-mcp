@@ -192,10 +192,19 @@ const
     'linea 0-based y en que contenedor viven. Ignora mode. Es la forma ' +
     'barata de encontrar un metodo sin traerte el arbol entero.';
 
+  { Decia "lineas 0-based" y desde v1.0.4-beta los @N son 1-BASED, como los
+    de delphi_read: la nota se quedo describiendo el comportamiento viejo.
+    Importa porque las tools de LSP (definition, hover, references,
+    completion, signature, rename) SI toman 0-based, asi que un agente que se
+    creyera la nota apuntaba una linea mas abajo. Ahora se dicen las dos
+    cosas, que es lo unico que no se malinterpreta. }
   SN_SYMBOLS_SUMMARY_NOTE =
-    'Esto es el RESUMEN del arbol (lineas 0-based). Los contenedores dicen ' +
-    'cuantos miembros llevan (+N dentro): pide filter="nombre" para dar ' +
-    'con uno concreto, o mode="full" para el arbol completo con rangos.';
+    'Esto es el RESUMEN del arbol. Los @N son lineas 1-BASED, las mismas que ' +
+    'te ensena delphi_read - OJO: las tools de LSP (definition, hover, ' +
+    'references, completion, signature) piden la linea 0-based, o sea @N-1. ' +
+    'Los contenedores dicen cuantos miembros llevan (+N dentro): pide ' +
+    'filter="nombre" para dar con uno concreto, y ahi tienes line y line0 ya ' +
+    'separadas, o mode="full" para el arbol completo con rangos.';
 
   SN_SYMBOLS_AUTO_FMT =
     'El arbol completo pesaba %d caracteres, asi que te doy el resumen. ' +
@@ -238,6 +247,59 @@ const
     vacia, que parecia decir que la unit no tiene nada") y el arreglo no
     habia viajado hasta aqui - medido 2026-09-20 sobre src\, que tiene 55
     fuentes. }
+  { delphi_projects escondia las copias de seguridad y los artefactos del IDE
+    sin decirlo: apuntarlo a __delphi-patch contestaba total 0 teniendo dos
+    .dproj dentro. delphi_list ya contaba lo oculto y te lo ensenaba si
+    NOMBRABAS esa carpeta como raiz; el arreglo no habia viajado hasta aqui.
+    Lo vio David el 2026-09-20 preguntando si esto deberia leer __delphi-patch
+    para declarar proyectos - no debe declararlos, pero si decir que estan. }
+  { Dentro de la jaula pero en una carpeta declarada de SOLO LECTURA. No es
+    la jaula: la jaula dice "ahi no entras" y esta dice "ahi miras y no
+    tocas", asi que el texto tiene que distinguirlo o el agente se pone a
+    buscar un problema de roots que no tiene. Nace el 20-sep-2026 para los
+    clones de referencia que viven dentro del repo con su propio git. }
+  { Un identificador corto (una variable local de una letra) saca cientos de
+    homonimos, y volcarlos enteros hizo una respuesta de 78 KB que el cliente
+    MCP rechazo ENTERA - el agente no vio ni las referencias buenas. Se listan
+    los primeros y se dice cuantos hay. Medido 2026-09-20. }
+  { La ruta cae dentro de la jaula por el TEXTO, pero un enlace del camino
+    lleva fuera. Merece mensaje propio y no el de la jaula: quien lo lea tiene
+    que entender que su ruta no esta mal escrita, que lo que pasa es que esa
+    carpeta no es lo que parece. Encontrado el 2026-09-20 por un agente
+    auditor: un junction dentro del root apuntando a
+    C:\Windows\System32\drivers\etc hacia que delphi_list listara ese sitio y
+    delphi_read devolviera el hosts de la maquina - y se podia plantar un
+    fichero fuera. }
+  SR_JAIL_LINK_FMT =
+    'RECHAZADO: "%s" parece estar dentro de los workspaces permitidos, pero ' +
+    'algun tramo del camino es un ENLACE (junction o symlink) que sale fuera ' +
+    'de ellos, y la jaula se mide sobre el destino de verdad, no sobre el ' +
+    'nombre. No es que hayas escrito mal la ruta: esa carpeta no es lo que ' +
+    'parece. Si el enlace deberia valer, es el operador quien anade su ' +
+    'DESTINO a Roots= de tu [Workspace.<nombre>].';
+
+  SN_REFS_REJECTED_CAP_FMT =
+    'Se listan %d de los %d descartados: con un identificador corto salen ' +
+    'cientos y la respuesta entera no le cabe al cliente. El recuento ' +
+    'completo esta en rejectedHomonyms; si necesitas verlos todos, pregunta ' +
+    'por un ambito mas pequeno (un fichero concreto como path) o usa ' +
+    'delphi_search wholeword=true, que pagina.';
+
+  SR_READONLY_PATH_FMT =
+    'RECHAZADO: "%s" esta dentro de una carpeta declarada de SOLO LECTURA ' +
+    'en este workspace (%s). No es la jaula: leer ahi SI puedes (delphi_read, ' +
+    'delphi_search, delphi_symbols...), lo que no puedes es escribir. Suele ' +
+    'ser codigo de terceros - un vendor, un submodulo, un clon de ' +
+    'referencia - que se consulta pero no se toca. Si de verdad hay que ' +
+    'cambiarlo, es el operador quien lo saca de ReadOnlyPaths= en su ' +
+    '[Workspace.<nombre>]: pidelo con delphi_report y di para que.';
+
+  SN_PROJECTS_HIDDEN_FMT =
+    '%d .dproj/.groupproj ocultos por ser COPIAS: copias de seguridad de ' +
+    'este servidor (__delphi-patch), del IDE (__history) o artefactos de ' +
+    'compilacion. No son proyectos que puedas abrir. Si los quieres ver, ' +
+    'pasa esa carpeta como "root" y te los enseno.';
+
   SN_LIST_MASK_NO_MATCH_FMT =
     'La mascara "%s" no ha casado con nada, pero la carpeta NO esta vacia: ' +
     'solo en su primer nivel ya tiene %d entradas. Se admite UNA mascara ' +

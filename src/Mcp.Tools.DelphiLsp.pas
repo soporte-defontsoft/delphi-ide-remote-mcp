@@ -481,36 +481,9 @@ begin
     'FOLDER answers with the interface digest of every unit inside.';
 end;
 
-{ A position nobody could point at. delphi_references said "Line 9999 out of
-  range"; hover answered `null [hint: hover only answers on usages]` and
-  definition answered a bare `null` - two canned answers that hid a typo and
-  sent the reader looking for the wrong thing (measured 2026-08-25). '' when
-  the position is real. }
-function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
-var
-  Lines: TArray<string>;
-  Enc: string;
-begin
-  Result := '';
-  if (ALine < 0) or (AChar < 0) then
-    Exit(Format(SR_LSP_NEGATIVE_FMT, [ALine, AChar]));
-  // A path that is not there reached the language server and came back as
-  // "Error executing tool: File not found", which this server's own rules
-  // define as an internal failure worth reporting as a bug (2026-08-25).
-  if not TFile.Exists(APath) then
-    Exit(Format(SR_LSP_NO_FILE_FMT, [APath]));
-  try
-    Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
-  except
-    Exit;
-  end;
-  if ALine >= Length(Lines) then
-    Exit(Format(SR_LSP_LINE_RANGE_FMT,
-      [ALine, TPath.GetFileName(APath), Length(Lines), Length(Lines) - 1]))
-  else if AChar > Length(Lines[ALine]) then
-    Exit(Format(SR_LSP_CHAR_RANGE_FMT,
-      [AChar, ALine, Length(Lines[ALine]), Lines[ALine].Trim]));
-end;
+// PositionOutOfRange vivia AQUI, en la implementation, o sea invisible para
+// las otras unidades - y por eso cuatro tools validaban la posicion y dos no.
+// Se mudo a Lsp.Patch, que es donde ya miran todas. Ver alli el porque.
 
 { Whether this is a file DelphiLSP can say anything about at all. Answering
   `[]` for a .txt reads as "this unit has no symbols" (measured 2026-08-25). }
@@ -859,6 +832,16 @@ var
   Resp: TJSONObject;
   V: TJSONValue;
 begin
+  // Validar la posicion ANTES de preguntarle al motor, igual que hacen
+  // delphi_definition y delphi_hover. Sin esto, line=9999 sobre un fichero de
+  // 519 lineas contestaba el hint de "pon el cursor dentro de los parentesis"
+  // - un diagnostico FALSO: el problema no era el parentesis, era que la
+  // linea no existe. Medido 2026-09-20 por un agente auditor.
+  Result := NotDelphiSource(Params.Path);
+  if Result = '' then
+    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  if Result <> '' then
+    Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
   Resp := Client.SignatureHelp(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
   V := Resp.GetValue('result');
@@ -926,6 +909,19 @@ var
   Items, OutItems: TJSONArray;
   I, EffChar: Integer;
 begin
+  // Lo mismo aqui, y era lo mas enganoso de todo: delphi_completion no
+  // validaba nada y contestaba ok:true a posiciones imposibles. line=9999
+  // sobre un fichero de 519 lineas devolvia dos items (nil, not), y
+  // character=-5 devolvia DIECISEIS MIL candidatos - respuestas verosimiles
+  // para posiciones que no existen. Un agente que calcula mal una linea (por
+  // ejemplo dandole el numero 1-based de delphi_read a una tool 0-based)
+  // recibia una lista con pinta de buena en vez del error que le habria
+  // dicho donde se equivoco. Medido 2026-09-20 por un agente auditor.
+  Result := NotDelphiSource(Params.Path);
+  if Result = '' then
+    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  if Result <> '' then
+    Exit;
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
 
   // Member completion happens AFTER the dot, and "after ServicioEventos." is

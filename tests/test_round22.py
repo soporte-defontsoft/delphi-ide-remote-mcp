@@ -142,6 +142,25 @@ check('M3b el TEXTO de un acierto de search llega verbatim (ancla valida)',
 check('M3c ...pero su campo path si viaja como unidad virtual',
       '"path":"srv' in rs.replace(' ', ''), rs[:220])
 
+# La unidad SIN separador detras. El enmascarador pedia <letra>:<separador>,
+# asi que "D:" a secas y "D:relativo\x" salian con la LETRA REAL en cada
+# negativa que echoa el parametro de quien llama - en TODAS las tools, no solo
+# en una (medido 2026-09-20). Y como C:\Windows si salia como srvc:, el lector
+# deducia el mapeo entero. El arreglo va en MaskDriveText, que es el UNICO
+# punto de salida: parchear los emisores uno a uno es como sobrevivio esto.
+for sonda in ('D:', 'C:', 'D:relativo' + BS + 'x'):
+    r = call('delphi_list', {'root': sonda})
+    check('M5 la unidad sin separador no filtra la letra real (%r)' % sonda,
+          ('"' + sonda[:2] + '"') not in r and (sonda[:2] + BS) not in r
+          and 'srv' in r, r[:200])
+
+# ...y el reves, que es el riesgo del arreglo: NO enmascarar de mas. Un dos
+# puntos seguido de espacio no es una unidad.
+r = call('delphi_workspace', {})
+check('M5b no se enmascara de mas: la respuesta normal sigue siendo JSON '
+      'valido y sin srvsrv',
+      'srvsrv' not in r and r.lstrip().startswith('{'), r[:200])
+
 # M4 live: a real Linux64 link on machines that hold the SDK
 r = call('delphi_create', {'kind': 'project-console', 'name': 'TailM', 'dir': BASE})
 dpr = glob.glob(os.path.join(BASE, '**', 'TailM.dpr'), recursive=True)

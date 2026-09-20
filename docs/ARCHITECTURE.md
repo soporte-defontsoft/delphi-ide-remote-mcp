@@ -36,7 +36,7 @@
 | **Workspace Manager** | Lifecycle of one DelphiLSP per workspace: spawn on first request, keep warm, request queue (the LSP agent is single-request), LRU eviction, idle shutdown, kill+respawn on hang |
 | **Config Fabricator** | Locate RAD Studio via registry (highest installed version); use project's `.delphilsp.json` if fresh; otherwise generate settings from the `.dproj` (search paths, defines, platform, namespaces) |
 | **LSP Client** | `Content-Length` framing over child stdio, request/response correlation, retry with escalating delays (indexing returns `-32800 Request removed`), document sync (`didOpen` with correct encoding) |
-| **Host** | ONE executable, three modes of the same core: Windows Service (headless, `-install`), terminal (stdio, or `--http`) and VCL tray (live log). All three share `Lsp.Host`, which builds the managers, the single access gate and its outbound filter — never copied per mode. |
+| **Host** | ONE executable, three modes of the same core: Windows Service (headless, `-install`), terminal (stdio, or `--http`) and VCL tray (live log). All three share `Lsp.Host`, which builds the managers, the single access gate and its outbound filter — never copied per mode. **The service must log on as the user who owns the IDE** — RAD Studio's configuration lives in `HKEY_CURRENT_USER`, so under `LocalSystem` the server starts and answers with no Library Search Path and no registered packages. See the README and `settings.example.ini`. |
 
 ## Why a resident service (and not per-session stdio)
 

@@ -1066,20 +1066,17 @@ begin
     Roots := WorkspaceRoots;
     RootsArr := TJSONArray.Create;
     Return.AddPair('roots', RootsArr);
+    // Aqui NO se enmascara nada. El enmascarado es UN solo punto de salida
+    // (MaskDriveText, montado como ResultFilter en Lsp.Host) y esa es la
+    // arquitectura: un sitio, una regla. La primera version de este arreglo
+    // (20-sep-2026) apano el sintoma AQUI - le ponia una barra final a una
+    // raiz de unidad entera para que "D:" tuviera la forma que el
+    // enmascarador sabia reconocer - y eso dejo la fuga viva en todas las
+    // demas tools, que echoan rutas en sus negativas. La regla central ya
+    // cubre "D:" a secas; parchear los emisores uno a uno es exactamente
+    // como sobrevive esta clase de fallo.
     for R in Roots do
-    begin
-      // Una raiz que es la unidad ENTERA se queda en "D:" al quitarle la
-      // barra, y el enmascarador de salida solo reconoce la forma
-      // <letra>:<separador> - asi que la unica letra de unidad real que
-      // llegaba al cliente era precisamente la del campo que le dice lo que
-      // puede tocar, contra la regla 1 de las convenciones (medido
-      // 2026-09-20). Con la barra puesta viaja como srvd:\, como todo lo
-      // demas, y el agente puede usarla verbatim igual que antes.
-      var Raiz := ExcludeTrailingPathDelimiter(R);
-      if (Length(Raiz) = 2) and (Raiz[2] = ':') then
-        Raiz := Raiz + '\';
-      RootsArr.Add(Raiz);
-    end;
+      RootsArr.Add(ExcludeTrailingPathDelimiter(R));
     if Length(Roots) = 0 then
       Return.AddPair('jail', 'none (unrestricted local mode - no ' +
         '[Workspace.<name>] ' +
@@ -1314,17 +1311,29 @@ begin
   // componentes y fuentes de SecureBlackbox, y los del operador eran 73).
   // Una pagina de 50 de esos no vale para nada; el reparto por carpeta si,
   // porque dice a que "root" volver a llamar.
+  var Ocultos := 0;
   PorCarpeta := TStringList.Create;
   try
     for RootDir in Roots do
     begin
       if (RootDir.Trim = '') or not TDirectory.Exists(RootDir.Trim) then
         Continue;
+      // Si quien llama NOMBRA la papelera (o una carpeta de artefactos) como
+      // raiz, es que la quiere: misma regla que delphi_list. Apuntar aqui a
+      // __delphi-patch contestaba total 0 teniendo dos .dproj dentro - "no
+      // hay nada" cuando la verdad era "hay, y no te los enseno".
+      var RaizEnArtefactos := SkipIdeArtifacts(
+        IncludeTrailingPathDelimiter(RootDir.Trim));
       for Mask in TArray<string>.Create('*.dproj', '*.groupproj') do
         for F in WalkFiles(RootDir.Trim, Mask) do
         begin
-          if SkipIdeArtifacts(F) or InVault(F) then
+          if not RaizEnArtefactos and (SkipIdeArtifacts(F) or InVault(F)) then
+          begin
+            // Contados, no tragados: un cero sin explicacion es la mentira
+            // que llevamos todo el dia quitando de este servidor.
+            Inc(Ocultos);
             Continue;
+          end;
           if (Filt <> '') and not TPath.GetFileName(F).ToLower.Contains(Filt) then
             Continue;
           Inc(Total);
@@ -1422,6 +1431,11 @@ begin
                 Inc(AllCount);
       Return.AddPair('note', Format(SN_PROJECTS_NO_MATCH_FMT,
         [Params.Name.Trim, AllCount]));
+    end;
+    if Ocultos > 0 then
+    begin
+      Return.AddPair('hidden', TJSONNumber.Create(Ocultos));
+      Return.AddPair('hiddenNote', Format(SN_PROJECTS_HIDDEN_FMT, [Ocultos]));
     end;
     Return.AddPair('projects', Arr);
     Result := Return.ToJSON;

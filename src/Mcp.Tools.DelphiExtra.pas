@@ -104,6 +104,7 @@ uses
   System.IOUtils,
   MCPServer.Registration,
   Lsp.References,
+  Lsp.Patch,      // PositionOutOfRange: la misma validacion que las otras cinco
   Lsp.BuildRunner;
 
 const
@@ -204,6 +205,15 @@ function TDelphiReferencesTool.ExecuteWithParams(
 var
   R: TJSONObject;
 begin
+  // La misma validacion que definition, hover, signature y completion. Sin
+  // ella, una linea que no existe salia como "Error executing tool: Line 9999
+  // out of range" - una excepcion cruda, en ingles, y que en las reglas de
+  // este servidor significa "me he roto por dentro". Era el caller el que se
+  // equivoco, y el mensaje rico ya existia: solo estaba en una unidad que
+  // esta no podia ver.
+  Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  if Result <> '' then
+    Exit;
   R := FindDelphiReferences(Params.Path, Params.Line, Params.Character);
   try
     Result := R.ToJSON;

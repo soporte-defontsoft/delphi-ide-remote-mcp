@@ -483,10 +483,22 @@ begin
             // listed too now: with the decl/impl pair accepted above, one
             // that still lands here really is another symbol, and the caller
             // is the one who should decide whether that matters.
-            var RObj := CandidateJson(Cand);
-            RObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
-            RObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine));
-            RejectedArr.AddElement(RObj);
+            // ...pero LISTADOS, no VOLCADOS. Con un identificador corto (una
+            // variable local "F") salen cientos: 212 homonimos con su ruta y
+            // su texto entero hicieron una respuesta de 78 KB que el cliente
+            // MCP rechazo ENTERA por pasarse de tokens - o sea que el agente
+            // no vio ni las 8 referencias buenas. La tool promete "Bounded
+            // work"; el trabajo si estaba acotado, la respuesta no. Medido el
+            // 2026-09-20 por un agente auditor. Se listan los primeros y se
+            // dice cuantos hay: el recuento completo sigue en
+            // rejectedHomonyms.
+            if RejectedArr.Count < 25 then
+            begin
+              var RObj := CandidateJson(Cand);
+              RObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
+              RObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine));
+              RejectedArr.AddElement(RObj);
+            end;
           end;
         finally
           Resp.Free;
@@ -503,6 +515,9 @@ begin
       Result.AddPair('unverified', Unverified);
       Result.AddPair('rejectedHomonyms', TJSONNumber.Create(Rejected));
       Result.AddPair('rejected', RejectedArr);
+      if Rejected > RejectedArr.Count then
+        Result.AddPair('rejectedNote', Format(SN_REFS_REJECTED_CAP_FMT,
+          [RejectedArr.Count, Rejected]));
       Result.AddPair('filesScanned', TJSONNumber.Create(Scanned));
       Result.AddPair('candidates', TJSONNumber.Create(Candidates.Count));
       // WHERE we looked. "filesScanned: 4" says how many, never which, and a

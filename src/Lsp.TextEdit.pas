@@ -353,6 +353,29 @@ begin
     Copia := TFile.ReadAllBytes(APath);
     Sb := TStringBuilder.Create;
     try
+      // "occurrence" se resuelve AQUI, UNA VEZ, contra el fichero ORIGINAL, y
+      // luego se ARRASTRA segun cada entrada aplicada anade o quita lineas.
+      // Antes se recontaba dentro del bucle, sobre el fichero YA MUTADO, que
+      // es lo contrario de lo que promete el parametro. Medido el 2026-09-20:
+      // pedir las ocurrencias 1, 2 y 3 dejaba la 2 y la 3 INTERCAMBIADAS, y
+      // borrar la 1 y la 2 borraba la 1 y la 3, contestando "OK" a todo.
+      // Gemelo exacto del de Mcp.Tools.DelphiPatch.ApplyEdits: son dos
+      // bucles con la misma forma, y el fallo estaba en los dos.
+      var Ocurr: TArray<Integer>;
+      SetLength(Ocurr, Arr.Count);
+      for N := 0 to Arr.Count - 1 do
+      begin
+        Ocurr[N] := 0;
+        if Arr.Items[N] is TJSONObject then
+        begin
+          var O2 := TJSONObject(Arr.Items[N]);
+          var Nth := O2.GetValue<Integer>('occurrence', 0);
+          if (O2.GetValue<Integer>('atline', 0) = 0) and (Nth > 0) and
+             not O2.GetValue<string>('old', '').Contains(#10) then
+            Ocurr[N] := NthOccurrenceLine(APath,
+              O2.GetValue<string>('old', ''), Nth);
+        end;
+      end;
       N := 0;
       Fallo := 0;
       for V in Arr do
@@ -393,11 +416,37 @@ begin
         A.AtLine := Obj.GetValue<Integer>('atline', 0);
         // "occurrence" en vez de contar lineas: dentro de una tanda los
         // numeros SE MUEVEN segun las entradas anteriores anaden o quitan.
-        if (A.AtLine = 0) and (Obj.GetValue<Integer>('occurrence', 0) > 0) then
-          A.AtLine := NthOccurrenceLine(APath, A.OldLine,
-            Obj.GetValue<Integer>('occurrence', 0));
+        if A.AtLine = 0 then
+          A.AtLine := Ocurr[N - 1]; // resuelto arriba y ya desplazado
         A.DeleteLine := Obj.GetValue<Boolean>('delete', False);
+        var EncTmp: string;
+        var AntesL: TArray<string>;
+        try
+          AntesL := PatchLoadText(APath, EncTmp)
+            .Replace(#13#10, #10).Split([#10]);
+        except
+          AntesL := nil;
+        end;
         Una := TextEditNucleo(A);
+        if (AntesL <> nil) and not (Una.StartsWith('RECHAZADO') or
+                                    Una.StartsWith('error')) then
+        try
+          var DespuesL := PatchLoadText(APath, EncTmp)
+            .Replace(#13#10, #10).Split([#10]);
+          var Delta := Length(DespuesL) - Length(AntesL);
+          if Delta <> 0 then
+          begin
+            var Cambio := 0;
+            while (Cambio < Length(AntesL)) and (Cambio < Length(DespuesL)) and
+                  (AntesL[Cambio] = DespuesL[Cambio]) do
+              Inc(Cambio);
+            for var K := N to High(Ocurr) do
+              if Ocurr[K] > Cambio + 1 then // Ocurr 1-based, Cambio 0-based
+                Inc(Ocurr[K], Delta);
+          end;
+        except
+          // si no se puede releer, mejor no tocar lo pendiente
+        end;
         if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
         begin
           Fallo := N;

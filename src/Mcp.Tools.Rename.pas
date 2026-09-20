@@ -50,6 +50,7 @@ uses
   System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,
+  Lsp.Patch,      // PositionOutOfRange
   Lsp.Rename;
 
 constructor TDelphiRenameTool.Create;
@@ -76,6 +77,13 @@ begin
   if Params.NewName.Trim = '' then
     Exit(SR_RENAME_NEED_NEWNAME);
   Result := ReadPathDenied(Params.Path); // preview only reads
+  if Result = '' then
+    // La sexta y ultima de la familia. Sin esto, una linea que no existe
+    // salia como excepcion cruda en ingles en vez del mensaje que dice
+    // cuantas lineas tiene el fichero - y en un rename, que es la tool mas
+    // destructiva del lote, saber que te has equivocado de posicion importa
+    // mas que en ninguna.
+    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
   if Result <> '' then
     Exit;
   try

@@ -71,6 +71,18 @@ CEBO = 'Roots=D:\\Projects\\Galatea;D:\\Projects\\Shared'
 open(os.path.join(JAIL, 'cebo.md'), 'w').write(
     'linea uno\n%s\nlinea tres\n' % CEBO)
 
+# Un proyecto con una COPIA de si mismo en la papelera del servidor. La copia
+# no es un proyecto que se pueda abrir, asi que no debe declararse - pero
+# tampoco debe desaparecer sin decir nada.
+PROY = os.path.join(JAIL, 'proy')
+BASURA = os.path.join(PROY, '__delphi-patch', '20260101')
+os.makedirs(BASURA)
+DPROJ_MIN = ('<?xml version="1.0" encoding="utf-8"?>\n'
+             '<Project><PropertyGroup><MainSource>App.dpr</MainSource>'
+             '</PropertyGroup></Project>\n')
+open(os.path.join(PROY, 'App.dproj'), 'w').write(DPROJ_MIN)
+open(os.path.join(BASURA, 'App.dproj'), 'w').write(DPROJ_MIN)
+
 # Correo dirigido a OTRO agente: no es nuestro, no podemos leerlo ni
 # limpiarlo, y no tiene por que salir en nuestras respuestas.
 BUZON = os.path.join(EXEDIR, 'messages', 'otro-agente')
@@ -234,6 +246,23 @@ try:
     check('R7b ese correo se cuenta en delphi_workspace, que es la llamada '
           'de orientacion', w.get('server', {}).get('mailboxes') == 1,
           json.dumps(w.get('server', {}))[:200])
+
+    # ----------------------------------------------------------------- R8
+    # Las copias de la papelera no son proyectos que puedas abrir, asi que no
+    # se declaran - pero desaparecer en silencio es la misma mentira que todo
+    # lo de arriba: apuntar a __delphi-patch contestaba total 0 teniendo un
+    # .dproj dentro. delphi_list ya lo hacia bien; el arreglo no habia viajado.
+    r = json.loads(texto(call('delphi_projects', {'root': PROY})))
+    nombres = [p['project'] for p in r.get('projects', [])]
+    check('R8 un barrido normal NO declara la copia de la papelera',
+          r.get('total') == 1 and not any('delphi-patch' in n for n in nombres),
+          json.dumps(r)[:240])
+    check('R8b ...pero dice cuantas ha escondido, en vez de tragarselas',
+          r.get('hidden') == 1 and 'hiddenNote' in r, json.dumps(r)[:240])
+    r = json.loads(texto(call('delphi_projects', {
+        'root': os.path.join(PROY, '__delphi-patch')})))
+    check('R8c y si NOMBRAS la papelera como raiz, te la ensena (misma regla '
+          'que delphi_list)', r.get('total') == 1, json.dumps(r)[:240])
 finally:
     try:
         proc.kill()

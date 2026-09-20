@@ -215,6 +215,10 @@ begin
           Chg.AddPair('character', TJSONNumber.Create(
             Item.GetValue('character').GetValue<Integer>));
       end;
+      // "occurrences" cuenta REFERENCIAS; "changes" puede llevar una fila mas,
+      // la de la propia definicion, que no es una referencia pero si hay que
+      // editarla. Decir las dos cifras evita que el que las compare crea que
+      // ha encontrado un duplicado.
       Result.AddPair('occurrences', TJSONNumber.Create(Arr.Count));
       if Arr.Count > 100 then
         Result.AddPair('changesTruncated', TJSONBool.Create(True));
@@ -230,8 +234,18 @@ begin
         for I := 0 to Changes.Count - 1 do
         begin
           Item := Changes.Items[I] as TJSONObject;
+          // POR line0, que es la 0-based - igual que DefLine. Esta linea
+          // comparaba "line", que se escribe arriba en base 1, contra DefLine
+          // en base 0: nunca casaba, asi que la fila de la definicion se
+          // anadia SIEMPRE y todo rename de rutina salia con una fila
+          // duplicada y "applicable": true (medido 2026-09-20 por un agente
+          // auditor: 13 apariciones reales, 14 filas en "changes"). Y al
+          // reves: una aparicion confirmada en la linea justo ANTERIOR a la
+          // definicion casaba por accidente y entonces la fila NO se anadia -
+          // que es exactamente el E2065 que el comentario de arriba dice
+          // haber arreglado. Un off-by-one que fallaba en los dos sentidos.
           if SameText(Item.GetValue('path').Value, DefPath) and
-             (Item.GetValue('line').GetValue<Integer> = DefLine) then
+             (Item.GetValue('line0').GetValue<Integer> = DefLine) then
           begin
             HasDef := True;
             Break;
@@ -261,6 +275,12 @@ begin
           end;
         end;
       end;
+
+      // Cuantas filas lleva "changes" DE VERDAD: es lo que el agente va a
+      // estadiar, y puede ser una mas que "occurrences" porque la definicion
+      // no es una referencia pero si hay que editarla. Sin esta cifra, quien
+      // compare las dos cree que sobra una fila.
+      Result.AddPair('changesCount', TJSONNumber.Create(Changes.Count));
 
       // one unverified candidate = not applicable, the adopted rule
       Arr := Refs.GetValue('unverified') as TJSONArray;

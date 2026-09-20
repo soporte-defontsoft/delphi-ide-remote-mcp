@@ -43,6 +43,12 @@ function ReadPathDenied(const APath: string): string;
 { The configured roots (empty array = unrestricted). }
 function WorkspaceRoots: TArray<string>;
 
+{ Carpetas de DENTRO de la jaula que se leen pero no se escriben: el
+  ReadOnlyPaths= del workspace activo. Vacio = ninguna, que es el
+  comportamiento de siempre. Mismo trato que la zona de biblioteca del IDE:
+  las tools de lectura entran, las de escritura no. }
+function WorkspaceReadOnlyPaths: TArray<string>;
+
 { Bearer authorization - the ONE place that knows every credential: the
   per-workspace tokens from
   [Workspace.<name>] sections (Token= read-write inside its Roots,
@@ -345,6 +351,17 @@ type
   TWorkspaceDef = record
     Name, Token, ReadOnlyToken, Profile: string;
     Roots: TArray<string>;
+    // Carpetas de DENTRO del root que se leen pero no se escriben. Mismo
+    // trato que la zona de biblioteca del IDE, que ya existia con esa
+    // semantica pero cableada. Nace el 20-sep-2026: el root de este repo
+    // contiene dos clones de referencia con su PROPIO git (gdk-mcp,
+    // skybuck-mcp), y estrechar la jaula al repo los metio dentro con
+    // permiso de escritura. Como son repos aparte, un descuido ahi ni
+    // siquiera aparece en el "git status" del principal. David no quiere
+    // sacarlos fuera, y tiene razon: lo relacionado con el proyecto vive en
+    // la carpeta del proyecto, que es lo que encuentra quien lo clona. Asi
+    // que la proteccion la pone la configuracion, no la memoria del agente.
+    ReadOnlyPaths: TArray<string>;
     Invalid: Boolean; // Roots= had text but nothing parsed: fail closed
     // Capacidades del workspace. Desde el 19-sep-2026 (v0.98) NO se
     // hereda NADA de ningun sitio (decision David, rematando la del
@@ -371,6 +388,8 @@ var
   GLoaded: Boolean = False;
   GRoots: TArray<string>;
   GRootsInvalid: Boolean = False; // Roots= had text but NO valid root: fail closed
+  GRoLoaded: Boolean = False;
+  GRoPaths: TArray<string>;       // ReadOnlyPaths del modo local de lanzamiento
   GProcessReadOnly: Boolean = False;
   GSecLoaded: Boolean = False;
   GAuthToken: string;
@@ -421,6 +440,154 @@ end;
 { 'a;b;c' -> resolved roots with trailing delimiter; quotes tolerated,
   unparseable entries ignored. Shared by the global Roots= and every
   [Workspace.*] Roots=. }
+{ El nombre FINAL de una ruta que existe: sigue junctions y symlinks hasta su
+  destino de verdad. False si no se puede abrir (no existe, o no hay permiso
+  ni para preguntar). Acceso 0 = solo consultar, y FILE_FLAG_BACKUP_SEMANTICS
+  hace falta para poder abrir CARPETAS. }
+{ EL paseo hacia arriba, escrito UNA vez. Dada una ruta, busca el antecesor
+  existente mas cercano que AResuelve sepa traducir y le vuelve a pegar el
+  resto: el ultimo tramo de un create o un upload todavia no existe, y aun asi
+  hay que canonicalizar el camino ANTES de que ningun guarda lo mire.
+
+  Estaba escrito DOS veces. LongCanonical lo tenia desde siempre (8.3 ->
+  nombre largo), y el 20-sep-2026, para cerrar el escape por junctions, escribi
+  RealPath con el MISMO bucle y otra llamada de Windows - sin mirar si habia
+  algo aprovechable, teniendolo en esta misma unidad. Entre las dos cambia UNA
+  linea, el resolutor; el paseo era identico. Ahora es uno. }
+type
+  TResuelveTramo = reference to function(const ADir: string;
+    out ASalida: string): Boolean;
+
+function CanonicalSubiendo(const AFull: string;
+  const AResuelve: TResuelveTramo): string;
+var
+  Dir, Tail, Parent, Resuelto: string;
+begin
+  Dir := AFull;
+  Tail := '';
+  while Dir <> '' do
+  begin
+    if AResuelve(Dir, Resuelto) then
+    begin
+      Result := Resuelto;
+      if Tail <> '' then
+        Result := IncludeTrailingPathDelimiter(Result) + Tail;
+      Exit;
+    end;
+    Parent := TPath.GetDirectoryName(Dir);
+    if (Parent = '') or SameText(Parent, Dir) then
+      Break;
+    if Tail = '' then
+      Tail := TPath.GetFileName(Dir)
+    else
+      Tail := TPath.GetFileName(Dir) + '\' + Tail;
+    Dir := Parent;
+  end;
+  Result := AFull; // nada del camino existe: se queda la forma textual
+end;
+
+function NombreFinal(const APath: string; out AReal: string): Boolean;
+var
+  H: THandle;
+  Len: DWORD;
+  Buf: array [0 .. 32767] of Char;
+begin
+  Result := False;
+  AReal := '';
+  H := CreateFile(PChar(APath), 0,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil,
+    OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+  if H = INVALID_HANDLE_VALUE then
+    Exit;
+  try
+    // flags 0 = FILE_NAME_NORMALIZED + VOLUME_NAME_DOS, que es lo que
+    // queremos: la ruta con letra de unidad, normalizada.
+    Len := GetFinalPathNameByHandle(H, Buf, Length(Buf) - 1, 0);
+    if (Len = 0) or (Len >= DWORD(Length(Buf))) then
+      Exit;
+    SetString(AReal, PChar(@Buf[0]), Len);
+    // GetFinalPathNameByHandle devuelve la forma extendida.
+    if AReal.StartsWith('\\?\UNC\') then
+      AReal := '\\' + AReal.Substring(8)
+    else if AReal.StartsWith('\\?\') then
+      AReal := AReal.Substring(4);
+    Result := AReal <> '';
+  finally
+    CloseHandle(H);
+  end;
+end;
+
+{ LA RUTA REAL, que es contra la que hay que medir la jaula.
+
+  TPath.GetFullPath normaliza el TEXTO y no sigue reparse points, asi que un
+  junction o un symlink creado DENTRO del root apuntando fuera pasaba el
+  control y el sistema de ficheros servia el destino de verdad. Medido el
+  2026-09-20 por un agente auditor: un junction a
+  C:\Windows\System32\drivers\etc dentro del root hizo que delphi_list y
+  delphi_read devolvieran el hosts de la maquina. Y no hace falta consola para
+  plantarlo: un git clone con core.symlinks=true mete el enlace sin salir del
+  MCP, o sea que era alcanzable por el propio agente.
+
+  Si la ruta NO existe todavia (crear un fichero nuevo, por ejemplo), se
+  resuelve el ANTECESOR existente mas cercano y se le vuelve a pegar el resto:
+  lo que importa es que ningun tramo del camino salte fuera. Si no existe
+  nada del camino, se queda la normalizacion textual, que es lo que habia. }
+function RealPath(const APath: string): string;
+var
+  Base: string;
+begin
+  Result := APath;
+  try
+    Base := ExcludeTrailingPathDelimiter(TPath.GetFullPath(APath));
+  except
+    Exit;
+  end;
+  Result := CanonicalSubiendo(Base,
+    function(const ADir: string; out ASalida: string): Boolean
+    begin
+      Result := NombreFinal(ADir, ASalida);
+      if Result then
+        ASalida := ExcludeTrailingPathDelimiter(ASalida);
+    end);
+end;
+
+{ Las rutas de SOLO LECTURA de un workspace. Una entrada ABSOLUTA vale tal
+  cual; una RELATIVA se resuelve contra CADA root, que es como la lee quien la
+  escribe ("gdk-mcp" = la carpeta gdk-mcp de mi proyecto). No se puede reusar
+  ParseRootsList para esto: aquella resuelve lo relativo contra el directorio
+  ACTUAL del proceso, que bajo el SCM es system32. Misma forma canonica que
+  los roots - con barra final - para que la comparacion de despues sea la
+  misma y no una parecida. }
+function ParseReadOnlyList(const ARaw: string;
+  const ARoots: TArray<string>): TArray<string>;
+var
+  List: TStringList;
+  E, R, V: string;
+begin
+  List := TStringList.Create;
+  try
+    for E in ARaw.Split([';']) do
+    begin
+      V := E.Trim.Trim(['"']).Trim;
+      if V = '' then
+        Continue;
+      try
+        if TPath.IsPathRooted(V) then
+          List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(V)))
+        else
+          for R in ARoots do
+            List.Add(IncludeTrailingPathDelimiter(
+              TPath.GetFullPath(TPath.Combine(R, V))));
+      except
+        // una entrada que no parsea se ignora, nunca tumba el servidor
+      end;
+    end;
+    Result := List.ToStringArray;
+  finally
+    List.Free;
+  end;
+end;
+
 function ParseRootsList(const ARaw: string): TArray<string>;
 var
   List: TStringList;
@@ -639,6 +806,8 @@ begin
             W.Profile := LowerCase(Ini.ReadString(S, 'Profile', '').Trim);
             var RawRoots := Ini.ReadString(S, 'Roots', '');
             W.Roots := ParseRootsList(RawRoots);
+            W.ReadOnlyPaths := ParseReadOnlyList(
+              Ini.ReadString(S, 'ReadOnlyPaths', ''), W.Roots);
             W.Invalid := (RawRoots.Trim <> '') and (Length(W.Roots) = 0);
             // capability overrides; absent key = inherit the default
             W.OvAllowRun := ReadTriState(Ini, S, 'AllowRun');
@@ -873,37 +1042,22 @@ end;
 
 function LongCanonical(const APath: string): string;
 var
-  Full, Dir, Tail, Parent: string;
-  Buf: array [0 .. 2047] of Char;
-  N: DWORD;
+  Full: string;
 begin
-  Full := TPath.GetFullPath(APath).Replace('/', '\\');
+  Full := TPath.GetFullPath(APath).Replace('/', '\');
   if Full.IndexOf('~') < 0 then
-    Exit(Full);
-  // Walk up until GetLongPathName resolves an ANCESTOR that exists (the leaf of
-  // a create/upload does not yet), then re-attach the part below it.
-  Dir := Full;
-  Tail := '';
-  while Dir <> '' do
-  begin
-    N := GetLongPathName(PChar(Dir), @Buf[0], Length(Buf));
-    if (N > 0) and (N < DWORD(Length(Buf))) then
+    Exit(Full); // sin 8.3 que deshacer, no se paga el paseo
+  Result := CanonicalSubiendo(Full,
+    function(const ADir: string; out ASalida: string): Boolean
+    var
+      Buf: array [0 .. 2047] of Char;
+      N: DWORD;
     begin
-      SetString(Result, PChar(@Buf[0]), N);
-      if Tail <> '' then
-        Result := IncludeTrailingPathDelimiter(Result) + Tail;
-      Exit;
-    end;
-    Parent := TPath.GetDirectoryName(Dir);
-    if (Parent = '') or SameText(Parent, Dir) then
-      Break;
-    if Tail = '' then
-      Tail := TPath.GetFileName(Dir)
-    else
-      Tail := TPath.GetFileName(Dir) + '\\' + Tail;
-    Dir := Parent;
-  end;
-  Result := Full; // a ~ that maps to nothing existing: leave it, it is not real
+      N := GetLongPathName(PChar(ADir), @Buf[0], Length(Buf));
+      Result := (N > 0) and (N < DWORD(Length(Buf)));
+      if Result then
+        SetString(ASalida, PChar(@Buf[0]), N);
+    end);
 end;
 
 function GitRemoteHosts: string;
@@ -1702,6 +1856,22 @@ begin
   Result := GRoots;
 end;
 
+function WorkspaceReadOnlyPaths: TArray<string>;
+begin
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].ReadOnlyPaths);
+  if not GRoLoaded then
+  begin
+    // Modo local de lanzamiento (baterias, desarrollo): solo el entorno,
+    // igual que los roots. Se resuelve CONTRA los roots, no contra el
+    // directorio actual del proceso.
+    GRoPaths := ParseReadOnlyList(
+      GetEnvironmentVariable('DELPHI_MCP_READONLY_PATHS'), WorkspaceRoots);
+    GRoLoaded := True;
+  end;
+  Result := GRoPaths;
+end;
+
 function WorkspaceJailSummary(out AWarning: Boolean): string;
 var
   Roots: TArray<string>;
@@ -1849,7 +2019,40 @@ begin
   end;
   for R in Roots do
     if StartsText(R, IncludeTrailingPathDelimiter(Full)) then
+    begin
+      // Dentro POR EL TEXTO. Falta que lo este DE VERDAD: un junction o un
+      // symlink plantado en la jaula apuntaba fuera y el sistema de ficheros
+      // servia el destino tan tranquilo (ver RealPath, y la bateria
+      // test_round33 que lo reproduce).
+      //
+      // OJO a como se compara: el mundo REAL consigo mismo, la ruta real
+      // contra las raices reales. Mezclar las dos formas - raices resueltas
+      // contra rutas textuales - fue el primer intento de esto y rompio algo
+      // peor de lo que arreglaba: las carpetas temporales llegan en 8.3
+      // (DFONTA~1), RealPath las alarga, la comparacion dejaba de casar y se
+      // pudo BORRAR la propia raiz del workspace. Lo cazo test_guard en la
+      // misma tanda.
+      var Verdad := IncludeTrailingPathDelimiter(RealPath(APath));
+      var DentroDeVerdad := False;
+      for var RR in Roots do
+        if StartsText(IncludeTrailingPathDelimiter(
+             RealPath(ExcludeTrailingPathDelimiter(RR))), Verdad) then
+        begin
+          DentroDeVerdad := True;
+          Break;
+        end;
+      if not DentroDeVerdad then
+        Exit(Format(SR_JAIL_LINK_FMT, [APath]));
+      // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO
+      // LECTURA: un vendor/, un submodulo, un clon de referencia con su
+      // propio git. Se comprueba AQUI y no en el lector, y esa es justo la
+      // distincion que se quiere: se lee, no se escribe.
+      for var Ro in WorkspaceReadOnlyPaths do
+        if StartsText(Ro, IncludeTrailingPathDelimiter(Full)) then
+          Exit(Format(SR_READONLY_PATH_FMT,
+            [APath, ExcludeTrailingPathDelimiter(Ro)]));
       Exit(AgentConfineDenied(Full, R));
+    end;
   Result := Format(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;
 
@@ -2055,6 +2258,32 @@ begin
   // allowed even under confinement (you see everything, you write only yours).
   if (Result <> '') and Result.Contains('modo confinado') then
     Exit('');
+  // ReadOnlyPaths es de escritura tambien, y ES SU RAZON DE SER: esa carpeta
+  // se lee, lo que no se hace es escribirla. Se comprueba POR RUTA y no por
+  // el texto de la negativa (como hace la linea de arriba), que se rompe en
+  // cuanto alguien reescribe un mensaje. Y solo se perdona DENTRO de la
+  // jaula: una entrada de ReadOnlyPaths que apunte fuera del root no abre
+  // nada - ahi manda la jaula, que no es negociable.
+  if Result <> '' then
+  begin
+    var Canon := '';
+    try
+      Canon := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
+    except
+      Canon := '';
+    end;
+    if Canon <> '' then
+    begin
+      var EnJaula := False;
+      for R in WorkspaceRoots do
+        if StartsText(R, Canon) then
+          EnJaula := True;
+      if EnJaula then
+        for R in WorkspaceReadOnlyPaths do
+          if StartsText(R, Canon) then
+            Exit('');
+    end;
+  end;
   if Result = '' then
     Exit;
   // Outside the jail - but READING library territory is legitimate.
@@ -2295,6 +2524,34 @@ begin
               Sb.Append('srvx');
             Sb.Append(AText[I + 1]).Append(AText[I + 2]).Append(AText[I + 3]);
             Inc(I, 4);
+            Continue;
+          end;
+          // forma B2 - la unidad SIN separador detras: "D:" a secas, o una
+          // ruta relativa a la unidad como "D:foo\bar". La forma A pide
+          // <letra>:<separador>, asi que estas salian con la LETRA REAL en
+          // cada negativa que echoa el parametro del que llama:
+          //   delphi_list root="D:"       -> RECHAZADO: "D:" esta FUERA...
+          //   delphi_git  repo="C:"       -> idem, en todas las tools
+          // Y eso no es solo incumplir el contrato: como C:\Windows si sale
+          // como srvc:, el lector deduce el mapeo entero. Medido 2026-09-20
+          // por un agente auditor; es la misma forma del roots:["D:"] de esa
+          // misma manana.
+          //
+          // Donde NO se toca, para no estropear texto que no es una ruta:
+          // si tras los dos puntos viene un ESPACIO ("opcion C: haz esto") o
+          // un DIGITO (una clave JSON de una letra, "a":1), se deja como
+          // esta. Una ruta nunca empieza por espacio, y "D:1" no es un caso
+          // que se de aqui.
+          if (I + 1 <= L) and (AText[I + 1] = ':') and
+             ((I + 2 > L) or
+              not CharInSet(AText[I + 2],
+                            [' ', #9, #10, #13, '0' .. '9'])) then
+          begin
+            if Pos(UpCase(C), Letters) > 0 then
+              Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32)).Append(':')
+            else
+              Sb.Append('srvx:');
+            Inc(I, 2);
             Continue;
           end;
         end;
