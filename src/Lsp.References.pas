@@ -188,6 +188,96 @@ begin
   Result := SkipIdeArtifacts(APath);
 end;
 
+{ LA SEGUNDA CLASE DE GEMELO.
+
+  Un metodo virtual y el que lo sobrescribe no son homonimos: son el MISMO
+  metodo visto desde dos alturas de la jerarquia, y una llamada a traves de
+  una variable de la hija resuelve SIEMPRE a la hija. Preguntando por
+  TBase.Pinta, la tool contestaba "no lo llama nadie" y mandaba a la lista de
+  homonimos el override y LAS DOS LLAMADAS REALES (medido 2026-09-20). Un
+  agente lee eso, concluye que el virtual es codigo muerto y borra la base de
+  la jerarquia: el mismo desenlace que el bug de la v1.0.4, un nivel mas
+  arriba.
+
+  Se resuelve con lo que ya esta en la mano -los fuentes que el escaneo lee de
+  todas formas- y con una condicion estricta: mismo identificador Y clases
+  emparentadas por herencia. Sin parentesco no se junta nada. }
+
+{ La clase a la que pertenece un metodo en ALine. '' cuando es una rutina
+  global. Dos formas: "procedure TBase.Pinta;" lo dice en su propia linea, y
+  "procedure Pinta; virtual;" obliga a subir hasta el "X = class" que la
+  contiene - parando en el "end;" de la clase anterior, que significa que esa
+  linea no vive dentro de ninguna. }
+function ClaseDeMetodo(const ALines: TStringList; ALine: Integer;
+  const AIdent: string): string;
+var
+  M: TMatch;
+  I: Integer;
+begin
+  Result := '';
+  if (ALine < 0) or (ALine >= ALines.Count) or (AIdent = '') then
+    Exit;
+  M := TRegEx.Match(ALines[ALine],
+    '(?i)\b(procedure|function|constructor|destructor)\s+([A-Za-z_]\w*)\s*\.\s*' +
+    TRegEx.Escape(AIdent) + '\b');
+  if M.Success then
+    Exit(M.Groups[2].Value);
+  for I := ALine downto 0 do
+  begin
+    if TRegEx.IsMatch(ALines[I], '(?i)^\s*(implementation|initialization)\s*$') then
+      Exit('');
+    M := TRegEx.Match(ALines[I],
+      '(?i)^\s*([A-Za-z_]\w*)\s*=\s*(packed\s+)?(class|interface)\b');
+    if M.Success then
+      Exit(M.Groups[1].Value);
+    if (I < ALine) and TRegEx.IsMatch(ALines[I], '^\s{0,4}end;\s*$') then
+      Exit('');
+  end;
+end;
+
+{ Apunta "clase -> padre" de un fuente ya leido. Se alimenta del mismo bucle
+  que busca candidatos: ni un fichero de mas. }
+procedure AnotaHerencia(const AText: string;
+  const AMapa: TDictionary<string, string>);
+var
+  M: TMatch;
+begin
+  for M in TRegEx.Matches(AText,
+    '(?im)^\s*([A-Za-z_]\w*)\s*=\s*(?:packed\s+)?class\s*\(\s*([A-Za-z_][\w.]*)') do
+    AMapa.AddOrSetValue(M.Groups[1].Value.ToLower, M.Groups[2].Value);
+end;
+
+{ true si una de las dos clases desciende de la otra. El tope de 20 saltos es
+  contra una jerarquia circular en fuentes a medio escribir. }
+function MismaFamilia(const AMapa: TDictionary<string, string>;
+  const A, B: string): Boolean;
+
+  function Desciende(const AHijo, AAbuelo: string): Boolean;
+  var
+    Cur, Par: string;
+    N: Integer;
+  begin
+    Result := False;
+    Cur := AHijo;
+    N := 0;
+    while (Cur <> '') and (N < 20) do
+    begin
+      if SameText(Cur, AAbuelo) then
+        Exit(True);
+      if not AMapa.TryGetValue(Cur.ToLower, Par) then
+        Exit(False);
+      if Par.Contains('.') then // el padre puede venir cualificado
+        Par := Par.Substring(Par.LastIndexOf('.') + 1);
+      Cur := Par;
+      Inc(N);
+    end;
+  end;
+
+begin
+  Result := (A <> '') and (B <> '') and
+    (Desciende(A, B) or Desciende(B, A));
+end;
+
 function DefinitionLocation(AResp: TJSONObject; out AUri: string;
   out ALine: Integer): Boolean;
 var
@@ -295,12 +385,17 @@ begin
   // routine with two callers - a wrong answer, not a missing one.
   // So resolve the counterpart ONCE, here, and accept both as one symbol.
   var TargetTwin: Integer := -1;
+  var ClaseObjetivo := '';
+  var Familia := False;
+  var Herencia := TDictionary<string, string>.Create;
+  var Textos := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
   var TargetPath := TLspClient.UriToPath(TargetUri);
   if TFile.Exists(TargetPath) then
   begin
     var TwinLines := TStringList.Create;
     try
       TwinLines.Text := TLspClient.LoadSourceText(TargetPath);
+      ClaseObjetivo := ClaseDeMetodo(TwinLines, TargetLine, Ident);
       if (TargetLine >= 0) and (TargetLine < TwinLines.Count) then
       begin
         // Same 1-based-Pos-as-character convention the candidate loop uses
@@ -314,7 +409,13 @@ begin
             var TwinLine: Integer;
             if DefinitionLocation(Resp, TwinUri, TwinLine) and
                SameText(TwinUri, TargetUri) and (TwinLine <> TargetLine) then
+            begin
               TargetTwin := TwinLine;
+              // La mitad declarada dentro de la clase no siempre dice de
+              // quien es; la implementacion SIEMPRE lo dice, cualificada.
+              if ClaseObjetivo = '' then
+                ClaseObjetivo := ClaseDeMetodo(TwinLines, TwinLine, Ident);
+            end;
           finally
             Resp.Free;
           end;
@@ -398,6 +499,9 @@ begin
       if Candidates.Count >= AMaxCandidates then
         Break;
       Text := TLspClient.LoadSourceText(F);
+      // La jerarquia se apunta AQUI, del fuente que ya se ha leido para
+      // buscar candidatos: el parentesco entre clases sale gratis.
+      AnotaHerencia(Text, Herencia);
       Lines := TStringList.Create;
       try
         Lines.Text := Text;
@@ -456,10 +560,40 @@ begin
         Resp := Client.Definition(TLspClient.PathToUri(Cand.Path),
           Cand.Line, Cand.Col + 1);
         try
-          if DefinitionLocation(Resp, CandUri, CandLine) and
-             SameText(CandUri, TargetUri) and
-             ((CandLine = TargetLine) or (CandLine = TargetTwin)) then
+          var Resuelto := DefinitionLocation(Resp, CandUri, CandLine);
+          var EsElMismo := Resuelto and SameText(CandUri, TargetUri) and
+            ((CandLine = TargetLine) or (CandLine = TargetTwin));
+          // El parentesco: el candidato resolvio a OTRA linea, pero a un
+          // metodo del mismo nombre en una clase de la misma familia. Eso no
+          // es un homonimo: es el mismo metodo a otra altura de la jerarquia.
+          var Pariente := False;
+          if Resuelto and not EsElMismo and (ClaseObjetivo <> '') then
+          begin
+            var CandPath := TLspClient.UriToPath(CandUri);
+            var CandLines: TStringList;
+            if not Textos.TryGetValue(CandPath.ToLower, CandLines) then
+            begin
+              CandLines := TStringList.Create;
+              try
+                CandLines.Text := TLspClient.LoadSourceText(CandPath);
+              except
+              end;
+              Textos.Add(CandPath.ToLower, CandLines);
+            end;
+            Pariente := MismaFamilia(Herencia, ClaseObjetivo,
+              ClaseDeMetodo(CandLines, CandLine, Ident));
+          end;
+          if EsElMismo then
             Confirmed.Add(CandidateJson(Cand))
+          else if Pariente then
+          begin
+            var PObj := CandidateJson(Cand);
+            PObj.AddPair('via', 'override');
+            PObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
+            PObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine));
+            Confirmed.Add(PObj);
+            Familia := True;
+          end
           else if CandUri = '' then
             Unverified.Add(CandidateJson(Cand))
           else
@@ -513,6 +647,8 @@ begin
       Entry.AddPair('line', TJSONNumber.Create(TargetLine));
       Result.AddPair('confirmed', Confirmed);
       Result.AddPair('unverified', Unverified);
+      if Familia then
+        Result.AddPair('familyNote', SN_REFS_FAMILY_NOTE);
       Result.AddPair('rejectedHomonyms', TJSONNumber.Create(Rejected));
       Result.AddPair('rejected', RejectedArr);
       if Rejected > RejectedArr.Count then
@@ -533,6 +669,8 @@ begin
   finally
     Candidates.Free;
     AllFiles.Free;
+    Herencia.Free;
+    Textos.Free;
   end;
 end;
 

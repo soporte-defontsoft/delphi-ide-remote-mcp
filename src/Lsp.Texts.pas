@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.0.7-beta';
+  SERVER_VERSION = '1.0.8-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -292,6 +292,21 @@ const
     'parece. Si el enlace deberia valer, es el operador quien anade su ' +
     'DESTINO a Roots= de tu [Workspace.<nombre>].';
 
+  { Un virtual y su override no son dos simbolos: son el mismo metodo a dos
+    alturas de la jerarquia. Preguntando por el de la base, las llamadas
+    reales -que resuelven SIEMPRE a la hija- se iban a la lista de homonimos
+    y la respuesta era "no lo llama nadie" sobre un metodo con dos llamadas.
+    Un agente actua sobre eso borrando la base de la jerarquia. }
+  SN_REFS_FAMILY_NOTE =
+    'Entre las confirmadas hay algunas marcadas con via:"override": no ' +
+    'resuelven a ESTE metodo sino a uno de su misma familia de herencia ' +
+    '(el virtual y quien lo sobrescribe, o al reves). Se cuentan como usos ' +
+    'suyos a proposito: una llamada por una variable de la clase hija ' +
+    'resuelve siempre a la hija, asi que preguntando por el virtual de la ' +
+    'base la respuesta habria sido "no lo llama nadie" sobre un metodo con ' +
+    'llamadas. Si vas a RENOMBRAR, ojo: hay que renombrar toda la familia a ' +
+    'la vez o el override deja de sobrescribir.';
+
   SN_REFS_REJECTED_CAP_FMT =
     'Se listan %d de los %d descartados: con un identificador corto salen ' +
     'cientos y la respuesta entera no le cabe al cliente. El recuento ' +
@@ -390,6 +405,16 @@ const
     dejaba la entrada haciendo otra cosa -la de por defecto- y contestando
     OK. Descubierto el 2026-09-20 al medir la bateria del rango contra el
     binario anterior: "toline" entraba sin protestar y no hacia nada. }
+  { Pedir la ocurrencia 5 de algo que aparece 3 veces no fallaba: la
+    resolucion devolvia 0, el motor lo leia como "sin desempate" y la edicion
+    caia en la PRIMERA aparicion. O sea que el parametro que existe para no
+    equivocarse de sitio te mandaba justo al sitio equivocado, con un OK. }
+  SR_PATCH_OCCURRENCE_FMT =
+    'RECHAZADO: la entrada %d pide occurrence %d de "%s", y ahi solo hay %d. ' +
+    'No he escrito nada. Antes esto se ignoraba y la edicion caia en la ' +
+    'PRIMERA aparicion - exactamente lo que occurrence sirve para evitar. ' +
+    'Relee con delphi_read y cuenta, o alarga el ancla hasta que sea unica.';
+
   SR_PATCH_EDIT_KEY_FMT =
     'RECHAZADO: la entrada %d de "edits" lleva el campo "%s", que no existe. ' +
     'Los campos de una edicion son: old, new, atline, toline, delete, ' +

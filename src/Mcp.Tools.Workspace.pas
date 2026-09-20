@@ -274,7 +274,8 @@ const
   first failure - measured on the Android NDK, whose deep paths exceed the
   classic limit and killed an entire delphi_list. One bad folder must never
   hide the rest of the tree. }
-function WalkFiles(const ADir, AMask: string): TArray<string>;
+function WalkFiles(const ADir, AMask: string;
+  AConPapelera: Boolean = False): TArray<string>;
 var
   Acc: TStringList;
 
@@ -287,6 +288,22 @@ var
         Acc.Add(F);
     except
       // unreadable folder: skip its files, still try its children
+    end;
+    // Dentro de la papelera cada copia lleva el sello de hora DETRAS de la
+    // extension ("UFicha.pas-215825250"), asi que la mascara "*.pas" no casa
+    // con ella. Resultado medido el 2026-09-20: includetrash=true ensenaba
+    // las copias de seguridad -que SI conservan su nombre- y escondia justo
+    // lo BORRADO, que es lo unico que ese flag promete. La mascara se abre
+    // solo aqui y solo cuando lo piden: los demas que llaman no se enteran.
+    if AConPapelera and
+       D.ToLower.Replace('/', '\').Contains('\__delphi-patch\') then
+    try
+      for F in TDirectory.GetFiles(D, AMask + '-*',
+        TSearchOption.soTopDirectoryOnly) do
+        if not F.ToLower.EndsWith('.by') then // el marcador de quien lo tiro
+          Acc.Add(F);
+    except
+      // idem
     end;
     try
       for Sub in TDirectory.GetDirectories(D) do
@@ -585,7 +602,7 @@ begin
   RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
   try
     for Mask in Masks do
-      for F in WalkFiles(Root, Mask.Trim) do
+      for F in WalkFiles(Root, Mask.Trim, Params.IncludeTrash) do
       begin
         // The vault is the vault_* tools' business, even when it sits inside a
         // root: listing its notes would invite edits behind its back.

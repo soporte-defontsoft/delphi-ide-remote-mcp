@@ -6,6 +6,61 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.8-beta] - 2026-09-20
+
+Four items off the *known and not fixed* list, and the thread running through
+all of them is the same one as the whole month: **the server answered
+something false, confidently, and an agent would act on it.**
+
+### Fixed — a virtual method and its override are the SAME method
+- **`delphi_references` on a virtual said "nobody calls it"** and filed the
+  override AND every real call site as homonyms. A call through a variable of
+  the child class always resolves to the child, so asking from the base got
+  back only its own two declaration lines. An agent reads that, concludes the
+  virtual is dead code and deletes the base of the hierarchy.
+- This is the **second kind of twin**. v1.0.4 fixed the first one (a Pascal
+  routine has two definition lines and asking from one threw away the other's
+  references); this is the same shape one level up, in the inheritance chain.
+- The union is **strict**: same identifier AND the two owning classes related
+  by inheritance. Two unrelated classes with a method of the same name stay
+  homonyms — measured, in both directions. The hierarchy is built from the
+  sources the scan already reads, so it costs no extra I/O.
+- Family members come back marked `via: "override"` rather than disguised as
+  direct uses, with a note warning that a rename has to take the whole family
+  at once or the override stops overriding.
+
+### Fixed — the recoverable trash could be neither found nor fully restored
+Three items recorded as separate bugs, **one cause**: `delphi_delete` parks a
+file as `UFicha.pas-215825250` — the timestamp goes AFTER the extension, which
+is what stops two deletions of the same file colliding, and what breaks
+everyone who looks at the extension.
+
+- **`delphi_list includetrash=true` showed the backups and hid the deleted
+  files** — the `*.pas` mask does not match `UFicha.pas-215825250`. So the
+  flag showed what you were not looking for and hid the one thing it promises.
+- **Restoring a form unit left its `.dfm` behind.** The "this is a unit" path
+  reads the extension, saw `.pas-215825250` and never entered, so the restore
+  produced a unit with no designer — which the IDE will not open. The twin is
+  now *searched for* rather than computed, because the `.dfm` copy carries its
+  own timestamp (measured: `.pas-215825250` next to `.dfm-215825248`).
+- **Restoring made a trash inside the trash**, with the timestamp doubled, and
+  every restore added another layer. What is being restored does not need a
+  safety net: it IS the safety net.
+
+### Fixed — `occurrence` out of range was ignored
+- Asking for occurrence 3 of an anchor that appears ONCE resolved to 0, the
+  engine read that as "no tie-break given" and edited the only one there is,
+  answering OK. The parameter that exists so you do not write in the wrong
+  place was sending you to the wrong place. It now refuses and says how many
+  there actually are. (With a REPEATED anchor the ambiguity check already
+  caught it, by another door and with a message that never mentioned
+  `occurrence` — which is why this had gone unnoticed.)
+
+### Measured
+- `tests/test_round37.py` (12 checks, 7 fail against the previous build) and
+  `tests/test_round38.py` (9 checks, 5 fail). `test_round35` grew to 27.
+  Suite: 60 batteries, 1471 checks, 0 failures.
+
 ## [1.0.7-beta] - 2026-09-20
 
 `delphi_symbols` was answering **false signatures with confidence**, which is

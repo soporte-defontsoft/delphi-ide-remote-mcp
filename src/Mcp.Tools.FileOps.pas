@@ -125,6 +125,40 @@ end;
 
 procedure WriteOwnerMarker(const ATrash: string); forward;
 
+{ El gemelo designer de una unit: al lado, si es un fichero vivo; y buscando
+  por el nombre ORIGINAL si venimos de la papelera, donde cada copia lleva SU
+  propio sello de hora - el del .dfm no es el del .pas, se guardaron con
+  milisegundos distintos (medido: .pas-215825250 junto a .dfm-215825248). Por
+  eso aqui no vale calcular el nombre: hay que buscarlo. '' si no hay gemelo. }
+function DesignerJunto(const ASrc, AStem, AExt: string;
+  ADesdePapelera: Boolean): string;
+var
+  Dir, Mejor: string;
+begin
+  Result := '';
+  if not ADesdePapelera then
+  begin
+    if TFile.Exists(ChangeFileExt(ASrc, AExt)) then
+      Result := ChangeFileExt(ASrc, AExt);
+    Exit;
+  end;
+  Dir := TPath.GetDirectoryName(ASrc);
+  Mejor := '';
+  try
+    for var F in TDirectory.GetFiles(Dir, AStem + AExt + '-*') do
+    begin
+      // ".by" es el marcador de quien lo tiro, no el fichero
+      if F.ToLower.EndsWith('.by') then
+        Continue;
+      if (Mejor = '') or (TFile.GetLastWriteTime(F) > TFile.GetLastWriteTime(Mejor)) then
+        Mejor := F;
+    end;
+  except
+    Exit('');
+  end;
+  Result := Mejor;
+end;
+
 procedure MoveToTrash(const APath: string; out ATrash: string);
 begin
   ATrash := TrashPathFor(APath);
@@ -478,9 +512,21 @@ begin
     Exit('RECHAZADO: no existe el origen ' + Params.Path);
   if TFile.Exists(Params.Dest) or TDirectory.Exists(Params.Dest) then
     Exit('RECHAZADO: el destino ya existe: ' + Params.Dest + ' (no sobreescribo).');
-  IsUnit := TFile.Exists(Params.Path) and (TPath.GetExtension(Params.Path).ToLower = '.pas');
+  // Una copia de la papelera se llama "UFicha.pas-215825250": su extension
+  // REAL esta detras del sello de hora. Sin esto, restaurar un formulario
+  // dejaba el .dfm dentro de la papelera y la unit fuera, sin designer.
+  var DesdePapelera := IsBackupPath(Params.Path);
+  var NombreReal := TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path));
+  if DesdePapelera then
+  begin
+    var Orig := TrashOriginalName(NombreReal);
+    if Orig <> '' then
+      NombreReal := Orig;
+  end;
+  IsUnit := TFile.Exists(Params.Path) and
+    (TPath.GetExtension(NombreReal).ToLower = '.pas');
   Projects := [];
-  OldStem := TPath.GetFileNameWithoutExtension(Params.Path);
+  OldStem := TPath.GetFileNameWithoutExtension(NombreReal);
   NewStem := TPath.GetFileNameWithoutExtension(Params.Dest);
   if IsUnit then
   begin
@@ -496,13 +542,22 @@ begin
     Projects := ProjectsUsingUnit(Params.Path);
   end;
   try
-    // Safety copy of the source into the trash before relocating.
-    BackupNote := TrashPathFor(Params.Path);
-    CrearCarpeta(TPath.GetDirectoryName(BackupNote));
-    if TDirectory.Exists(Params.Path) then
-      TDirectory.Copy(Params.Path, BackupNote)
+    // Safety copy of the source into the trash before relocating... salvo que
+    // el origen YA sea una copia de la papelera. Hacer una copia de una copia
+    // dejaba una papelera DENTRO de la papelera, con el sello doblado, y cada
+    // restauracion anadia otra capa (medido 2026-09-20). Lo que se restaura no
+    // necesita red: la red es el.
+    if DesdePapelera then
+      BackupNote := '(el origen ya estaba en la papelera: no hago copia de una copia)'
     else
-      TFile.Copy(Params.Path, BackupNote);
+    begin
+      BackupNote := TrashPathFor(Params.Path);
+      CrearCarpeta(TPath.GetDirectoryName(BackupNote));
+      if TDirectory.Exists(Params.Path) then
+        TDirectory.Copy(Params.Path, BackupNote)
+      else
+        TFile.Copy(Params.Path, BackupNote);
+    end;
     CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(Params.Dest)));
     if TDirectory.Exists(Params.Path) then
       TDirectory.Move(Params.Path, Params.Dest)
@@ -528,16 +583,25 @@ begin
   // the designer pair travels with the unit
   PairNote := '';
   for Ext in ['.dfm', '.fmx'] do
-    if TFile.Exists(ChangeFileExt(Params.Path, Ext)) then
+  begin
+    var Gemelo := DesignerJunto(Params.Path, OldStem, Ext, DesdePapelera);
+    if Gemelo = '' then
+      Continue;
     try
-      TFile.Move(ChangeFileExt(Params.Path, Ext), ChangeFileExt(Params.Dest, Ext));
+      TFile.Move(Gemelo, ChangeFileExt(Params.Dest, Ext));
       PairNote := Format(SN_FILE_DESIGNER_TOO_FMT,
         [TPath.GetFileName(ChangeFileExt(Params.Dest, Ext)), 'movido con la unit']);
+      if DesdePapelera and TFile.Exists(Gemelo + '.by') then
+        try
+          TFile.Delete(Gemelo + '.by');
+        except
+        end;
     except
       on E: Exception do
         PairNote := Format(SN_FILE_DESIGNER_TOO_FMT,
-          [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), 'ERROR ' + E.Message]);
+          [TPath.GetFileName(Gemelo), 'ERROR ' + E.Message]);
     end;
+  end;
   if PairNote <> '' then
     Result := Result + #10 + PairNote;
 

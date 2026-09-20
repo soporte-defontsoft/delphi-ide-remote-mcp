@@ -289,6 +289,36 @@ try:
     check('R13b ...y el fichero intacto', open(f, 'rb').read() == antes,
           'el fichero cambio')
 
+    # ------------------------------------------------------------------ R14
+    # occurrence fuera de rango se IGNORABA: la resolucion devolvia 0, el
+    # motor lo leia como "sin desempate" y la edicion caia en la PRIMERA
+    # aparicion. El parametro que existe para no equivocarse de sitio te
+    # llevaba al sitio equivocado, contestando OK.
+    # El ancla es UNICA: sin ambiguedad que lo cace, pedir la ocurrencia 3 se
+    # resolvia a 0, el motor lo leia como "sin desempate" y editaba la unica
+    # que hay, contestando OK. Con un ancla repetida el viejo ya protestaba
+    # -por ambigua, no por el occurrence-, asi que el agujero solo se ve aqui.
+    f = os.path.join(JAIL, 'occ.md')
+    open(f, 'w', newline='\n').write('a\nsolo\nb\nc\n')
+    antes = open(f, 'rb').read()
+    r = call('delphi_textedit', {'path': f, 'edits': json.dumps([
+        {'old': 'solo', 'new': 'CAMBIADA', 'occurrence': 3},
+    ])})
+    check('R14 occurrence fuera de rango se rechaza, no se ignora',
+          r.startswith('RECHAZADO') and 'occurrence 3' in r and
+          'solo hay 1' in r, r[:220])
+    check('R14b ...y no ha tocado la unica aparicion que hay',
+          open(f, 'rb').read() == antes, open(f).read()[:80])
+    # Y el caso repetido sigue protestando (por otra puerta, pero protesta)
+    f2 = os.path.join(JAIL, 'occ2.md')
+    open(f2, 'w', newline='\n').write('a\nrep\nb\nrep\nc\n')
+    antes2 = open(f2, 'rb').read()
+    r = call('delphi_textedit', {'path': f2, 'edits': json.dumps([
+        {'old': 'rep', 'new': 'CAMBIADA', 'occurrence': 5},
+    ])})
+    check('R14c con el ancla repetida tampoco pasa de largo',
+          'RECHAZADO' in r and open(f2, 'rb').read() == antes2, r[:220])
+
     # ------------------------------------------------------------------ R11
     for apodo in ('to', 'endline'):
         f = os.path.join(JAIL, 'apodo-%s.md' % apodo)

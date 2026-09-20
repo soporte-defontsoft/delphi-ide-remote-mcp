@@ -163,6 +163,27 @@ function NewFileEncName: string;
   Exposed so binary writers (delphi_upload) can be non-destructive too. }
 function BackupFile(const APath: string): string;
 
+{ El nombre ORIGINAL de una copia de la papelera, o '' si ese nombre no lleva
+  sello. Solo tiene sentido DENTRO de __delphi-patch.
+
+  delphi_delete aparca los ficheros como "UFicha.pas-215825250": el sello de
+  hora va DETRAS de la extension, que es lo que impide que dos borrados del
+  mismo fichero se pisen... y lo que rompe a todo el que mire la extension.
+  Quita tambien los sellos ENCADENADOS ("-215825250-215841305"), que es lo que
+  deja restaurar algo ya restaurado.
+
+  Medido el 2026-09-20 usando el servidor como cliente: TRES sintomas, UNA
+  causa, y cada uno se habria "arreglado" por su lado en el sitio equivocado.
+  - delphi_list includetrash=true ensenaba las copias de seguridad y NO lo
+    BORRADO, que es justo lo que promete: la mascara *.pas no casa contra
+    "UFicha.pas-215825250".
+  - restaurar la unit de un formulario dejaba el .dfm dentro de la papelera:
+    el camino de "esto es una unit" mira la extension, leia ".pas-215825250" y
+    no entraba. Quedaba una unit sin su designer, que el IDE ya no abre.
+  - restaurar hacia una copia de la copia DENTRO de la papelera, con el sello
+    doblado. }
+function TrashOriginalName(const AName: string): string;
+
 implementation
 
 uses
@@ -518,6 +539,24 @@ begin
   Result := DecodeBytes(B, DetectEnc(B));
 end;
 
+function TrashOriginalName(const AName: string): string;
+var
+  M: TMatch;
+begin
+  Result := AName;
+  // hhnnsszzz = 9 digitos. En bucle, porque restaurar una copia restaurada
+  // encadena sellos.
+  while True do
+  begin
+    M := TRegEx.Match(Result, '^(.+)-\d{9}$');
+    if not M.Success then
+      Break;
+    Result := M.Groups[1].Value;
+  end;
+  if Result = AName then
+    Result := '';
+end;
+
 function PatchLoadText(const APath: string; out AEncName: string): string;
 var
   B: TBytes;
@@ -800,6 +839,28 @@ begin
               Ocurr[N] := NthBlockLine(APath, Anc2, Nth)
             else
               Ocurr[N] := NthOccurrenceLine(APath, Anc2, Nth);
+            // Pedir la ocurrencia 5 de algo que aparece 3 veces devolvia 0,
+            // el motor lo leia como "sin desempate" y la edicion caia en la
+            // PRIMERA. El parametro que existe para no equivocarse de sitio
+            // te llevaba al sitio equivocado, contestando OK.
+            if Ocurr[N] = 0 then
+            begin
+              var Hay := 0;
+              while Hay < 500 do
+              begin
+                var Sig: Integer;
+                if Anc2.Contains(#10) then
+                  Sig := NthBlockLine(APath, Anc2, Hay + 1)
+                else
+                  Sig := NthOccurrenceLine(APath, Anc2, Hay + 1);
+                if Sig = 0 then
+                  Break;
+                Inc(Hay);
+              end;
+              Exit(Format(SR_PATCH_OCCURRENCE_FMT, [N + 1, Nth,
+                Anc2.Split([#10])[0].Trim.Substring(0,
+                  Min(60, Length(Anc2.Split([#10])[0].Trim))), Hay]));
+            end;
           end;
         end;
       end;
