@@ -249,20 +249,35 @@ begin
     // objeto JSON, ese objeto va a structuredContent y el ok/code se le añade
     // dentro (sin pisar claves que ya traiga). Si no lo es, se queda el
     // {ok, code} de siempre y el texto viaja entero en 'content'.
+    // [local change 2026-09-20] Y si el texto NO es JSON, no se publica
+    // structuredContent EN ABSOLUTO. El arreglo anterior salvo a las tools
+    // que responden JSON, pero dejo mudas a las que responden PROSA: un
+    // cliente que ensena structuredContent (Claude Code, Claude Desktop)
+    // recibia {"ok":true} y ningun contenido en delphi_read, delphi_help o
+    // delphi_git status (medido 2026-09-20 contra el exe de produccion por
+    // HTTP). structuredContent solo tiene sentido cuando la tool declara
+    // outputSchema, y ninguna de estas lo hace: sin el campo, el cliente
+    // ensena 'content', que es la respuesta de verdad.
+    // El fallo en prosa SI lo publica - es corto y el agente necesita el
+    // code - y se lleva el texto dentro para que tampoco desaparezca.
     var Structured: TJSONObject := nil;
     if TextValue.TrimLeft.StartsWith('{') then
       Structured := TJSONObject.ParseJSONValue(TextValue) as TJSONObject;
-    if Structured = nil then
-      Structured := TJSONObject.Create;
-    Result.AddPair('structuredContent', Structured);
-    if Structured.GetValue('ok') = nil then
-      Structured.AddPair('ok', TJSONBool.Create(OutcomeCode = ''));
-    if OutcomeCode <> '' then
+    if (Structured = nil) and (OutcomeCode <> '') then
     begin
-      if Structured.GetValue('code') = nil then
-        Structured.AddPair('code', OutcomeCode);
-      HasError := True;
+      Structured := TJSONObject.Create;
+      Structured.AddPair('text', TextValue);
     end;
+    if Assigned(Structured) then
+    begin
+      Result.AddPair('structuredContent', Structured);
+      if Structured.GetValue('ok') = nil then
+        Structured.AddPair('ok', TJSONBool.Create(OutcomeCode = ''));
+      if (OutcomeCode <> '') and (Structured.GetValue('code') = nil) then
+        Structured.AddPair('code', OutcomeCode);
+    end;
+    if OutcomeCode <> '' then
+      HasError := True;
 
     if HasError then
 {$IF COMPILERVERSION <= 29}

@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.1-beta] - 2026-09-20
+
+### Fixed
+- **The server was answering nothing to the clients that matter.** Any tool
+  whose answer is prose — `delphi_read`, the most used tool here;
+  `delphi_help`, the very first call the manual tells an agent to make;
+  `delphi_git status` — reached the agent as `{"ok": true}` and not one line
+  of content. Measured against the production build over HTTP.
+  The cause is a field, not the tools: the result always published
+  `structuredContent`, and a client that understands that field **shows it
+  and hides `content`**, which is where the text travels. The 1.0.0-beta
+  repair only covered answers that are JSON (their JSON becomes the
+  structured output); prose answers kept the `{ok, code}` placeholder and
+  the agent saw the placeholder instead of the answer.
+  From here: a prose success publishes **no `structuredContent` at all** —
+  the field is the tool's output for the protocol and only means something
+  when the tool declares an `outputSchema`, which none of these do. A prose
+  failure still publishes it, because the agent needs the `code`, and now
+  carries its text inside so the reason cannot disappear either. A JSON
+  answer is unchanged: it IS the structured output.
+  `tests/test_round17.py` now requires the three shapes (prose success,
+  JSON success, prose failure with its text).
+
 ## [1.0.0-beta] - 2026-09-20
 
 ### Fixed

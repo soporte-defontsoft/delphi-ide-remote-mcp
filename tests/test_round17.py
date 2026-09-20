@@ -1,18 +1,25 @@
 """E2E battery for v0.78.0-beta - hermes' supplement #1 and #2.
 
-#1 Structured outcomes: the MCP result of every string-answering tool now
-   carries structuredContent {ok, code} and isError, so a client never has to
-   parse Spanish prefixes. The human text stays byte-identical - the contract
-   is additive. Codes: DENIED (policy refusal: jail, guard, ownership),
-   NOT_FOUND (the named thing is not there), INVALID_PARAM (the call was
-   wrong), INTERNAL (server broke - report it). The jail's anti-probing
-   property survives: outside-the-jail refusals use one fixed text whether
-   the target exists or not, so both map to DENIED.
+#1 Structured outcomes: a failing call carries structuredContent {ok, code}
+   and isError, so a client never has to parse Spanish prefixes. Codes:
+   DENIED (policy refusal: jail, guard, ownership), NOT_FOUND (the named
+   thing is not there), INVALID_PARAM (the call was wrong), INTERNAL (server
+   broke - report it). The jail's anti-probing property survives:
+   outside-the-jail refusals use one fixed text whether the target exists or
+   not, so both map to DENIED.
+
+   A PROSE SUCCESS PUBLISHES NO structuredContent (fixed 2026-09-20). The
+   field is the tool's output for the protocol, so a client that understands
+   it SHOWS IT AND HIDES 'content': publishing {"ok": true} there left
+   delphi_read, delphi_help and delphi_git status answering literally
+   nothing in Claude Code. A JSON answer is its own structuredContent; a
+   prose answer has none, and prose failures carry their text inside it.
 
 #2 Real JSON Schema defaults: optional parameters that have a measured
    default now emit it as a schema "default" (typed), instead of prose only.
 
-  R1  success answers ok:true and no isError
+  R1  prose success: no structuredContent at all, and the text arrives
+  R1b JSON success: the JSON IS the structuredContent, with ok:true
   R2  in-jail missing file answers NOT_FOUND + isError
   R3  outside-the-jail answers DENIED whether the target exists or not
   R4  a wrong parameter value answers INVALID_PARAM
@@ -102,12 +109,21 @@ recv(1)
 send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 time.sleep(0.3)
 
-# R1: success
+# R1: prose success - NOTHING may hide the answer
 r = call('delphi_read', {'path': os.path.join(BASE, 'ok.pas')})
+txt = r.get('content', [{}])[0].get('text', '')
+check('R1 exito en prosa: sin structuredContent, sin isError, y el texto llega',
+      'structuredContent' not in r and 'isError' not in r
+      and 'unit ok;' in txt,
+      (r.get('structuredContent'), r.get('isError'), txt[:80]))
+
+# R1b: JSON success - the JSON itself is the structuredContent
+r = call('delphi_list', {'root': BASE})
 sc = r.get('structuredContent', {})
-check('R1 exito: structuredContent.ok true, sin code, sin isError',
-      sc.get('ok') is True and 'code' not in sc and 'isError' not in r,
-      (sc, r.get('isError')))
+check('R1b exito en JSON: el JSON ES structuredContent, ok true, sin isError',
+      sc.get('ok') is True and 'code' not in sc and 'isError' not in r
+      and 'files' in sc,
+      (list(sc)[:6], r.get('isError')))
 
 # R2: in-jail missing file
 r = call('delphi_read', {'path': os.path.join(BASE, 'no-esta.pas')})
@@ -116,6 +132,9 @@ check('R2 no existe (dentro del jail): NOT_FOUND + isError',
       sc.get('ok') is False and sc.get('code') == 'NOT_FOUND' and
       r.get('isError') is True,
       (sc, r.get('content', [{}])[0].get('text', '')[:120]))
+check('R2b el fallo en prosa se lleva su texto dentro de structuredContent',
+      sc.get('text', '') == r.get('content', [{}])[0].get('text', ''),
+      (sc.get('text', '')[:80],))
 
 # R3: outside the jail - existing and non-existing must answer the SAME
 r_exist = call('delphi_read', {'path': 'C:\\Windows\\win.ini'})
