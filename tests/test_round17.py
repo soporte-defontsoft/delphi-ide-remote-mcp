@@ -174,6 +174,34 @@ check('R5 delphi_build: platform default Win32, config default Debug (tipados)',
       prop('delphi_build', 'config').get('default') == 'Debug' and
       prop('delphi_build', 'target').get('default') == 'Build',
       {k: prop('delphi_build', k).get('default') for k in ('platform', 'config', 'target')})
+check('R5 delphi_build: verbosity default quiet (el contrato del bat de la casa)',
+      prop('delphi_build', 'verbosity').get('default') == 'quiet',
+      prop('delphi_build', 'verbosity'))
+# Y que quiet de VERDAD cuesta menos: mismo proyecto, dos verbosidades.
+_pr = call('delphi_create', {'kind': 'project-console', 'name': 'Verb', 'dir': BASE})
+_dprojs = [p for p in
+           __import__('glob').glob(os.path.join(BASE, '**', 'Verb.dproj'),
+                                   recursive=True)]
+if _dprojs:
+    _q = call('delphi_build', {'project': _dprojs[0], 'platform': 'Win64',
+                               'config': 'Debug'})
+    _n = call('delphi_build', {'project': _dprojs[0], 'platform': 'Win64',
+                               'config': 'Debug', 'verbosity': 'normal'})
+    _tq = _q.get('content', [{}])[0].get('text', '')
+    _tn = _n.get('content', [{}])[0].get('text', '')
+    _jq, _jn = json.loads(_tq), json.loads(_tn)
+    check('R5b quiet no manda un warnings vacio (no es "no hay", es "no se pidieron")',
+          'warnings' not in _jq and 'warningsNote' in _jq and 'warnings' in _jn,
+          (list(_jq)[:8], list(_jn)[:8]))
+    # Ojo con lo que se mide: en un proyecto LIMPIO quiet NO es mas corto (la
+    # nota pesa mas que la cola vacia). El ahorro esta donde hay ruido; lo que
+    # se puede pinar siempre es la FORMA: quiet no trae cola, normal si.
+    check('R5b quiet no trae cola de salida y normal si',
+          _jq.get('success') is True and _jn.get('success') is True and
+          not _jq.get('outputTail') and bool(_jn.get('outputTail')),
+          (len(_jq.get('outputTail', '')), len(_jn.get('outputTail', ''))))
+else:
+    check('R5b verbosity: proyecto de prueba creado', False, _pr)
 check('R5 delphi_search: maxresults default 100 como NUMERO',
       prop('delphi_search', 'maxresults').get('default') == 100 and
       not isinstance(prop('delphi_search', 'maxresults').get('default'), str),

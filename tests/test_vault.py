@@ -620,6 +620,23 @@ try:
     check('por-workspace: y ofrece camino (pedirselo al operador)',
           'delphi_report' in _sin, _sin[:200])
 
+    # Escribir sin vault NO es "vault de solo lectura": son dos cosas y decir
+    # la segunda mandaba al agente a quitar un ReadOnly que no existe. Este
+    # token es de ESCRITURA, asi que la razon no puede venir de la credencial.
+    _esc = _texto(_http('tok-sin-vault', 'tools/call',
+                        {"name": "vault_append",
+                         "arguments": {"path": "MEMORY.md", "content": "x"}}, 8))
+    check('por-workspace: escribir sin vault dice SIN VAULT, no "solo lectura"',
+          'TU workspace no declara vault' in _esc and
+          'SOLO LECTURA' not in _esc, _esc[:200])
+    # Y el de verdad-solo-lectura (VaultReadOnly=1) nombra SU clave, no [Vault]
+    _ro = _texto(_http('tok-con-vault', 'tools/call',
+                       {"name": "vault_append",
+                        "arguments": {"path": "MEMORY.md", "content": "x"}}, 9))
+    check('por-workspace: el vault de solo lectura nombra VaultReadOnly, no [Vault]',
+          'SOLO LECTURA' in _ro and 'VaultReadOnly' in _ro and '[Vault]' not in _ro,
+          _ro[:200])
+
     _lst = _http('tok-sin-vault', 'tools/list', {}, 7)
     _nombres = [t['name'] for t in _lst.get('result', {}).get('tools', [])]
     check('por-workspace: las tools vault_* SI se le ofrecen igual '

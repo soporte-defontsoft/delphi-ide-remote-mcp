@@ -35,7 +35,7 @@ type
     property New: string read FNew write FNew;
     [SchemaDescription('EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence')]
     property AtLine: Integer read FAtLine write FAtLine;
-    [SchemaDescription('VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O NADA: un array JSON [{"old":"...","new":"...","atline":12},...] que se aplica EN ORDEN. Cada ancla es UNA linea completa, igual que una edicion suelta; "delete": true quita la linea. Si una entrada falla, el fichero vuelve byte a byte a como estaba y te digo cual fallo. Si el cambio toca VARIOS ficheros, eso es delphi_changeset. Cuando mandas "edits" se ignoran old/new/atline/delete')]
+    [SchemaDescription('VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O NADA: un array JSON [{"old":"...","new":"...","atline":12},...] que se aplica EN ORDEN. Cada entrada admite dos formas de ancla: UNA LINEA (igual que una edicion suelta) o un BLOQUE de varias lineas seguidas en "old", que se busca entero y en orden - es la forma de tocar un parrafo largo de documentacion sin pegarlo dos veces. Si el ancla aparece mas de una vez, desempata con "occurrence": 1, 2... (mejor que "atline" dentro de una tanda: los numeros de linea SE MUEVEN segun las entradas anteriores anaden o quitan lineas). "delete": true quita la linea. Si una entrada falla, el fichero vuelve byte a byte a como estaba y te digo cual fallo. Si el cambio toca VARIOS ficheros, eso es delphi_changeset. Cuando mandas "edits" se ignoran old/new/atline/delete')]
     property Edits: string read FEdits write FEdits;
     [SchemaDescription('DELETE mode: true = quita ENTERA la linea anclada en "old" (old + new vacio solo la deja en blanco). Aqui no va "new"')]
     property Delete: Boolean read FDelete write FDelete;
@@ -70,7 +70,8 @@ begin
     'docs, web assets, tests, scripts, config. Same ' +
     'discipline as delphi_edit - one-full-line unique anchor (old/new, ' +
     'atline tie-break), DELETE mode (delete=true + old), several edits on ' +
-    'the SAME file in one all-or-nothing call ("edits"), ' +
+    'the SAME file in one all-or-nothing call ("edits", where an anchor may ' +
+    'be ONE line or a contiguous BLOCK), ' +
     'real encoding preserved (UTF-8 +/- BOM / CP1252), ' +
     'line endings preserved, automatic backup, atomic write - without the ' +
     'Pascal gates. CREATE mode (create=true + content) for new files, never ' +

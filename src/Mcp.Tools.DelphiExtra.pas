@@ -12,7 +12,8 @@ uses
   MCPServer.Tool.Base,
   MCPServer.Types,
   Lsp.Client,
-  Lsp.Session;
+  Lsp.Session,
+  Lsp.Texts; // los textos de los parametros viven ahi, y son de interface
 
 type
   TDelphiDiagnosticsParams = class
@@ -50,6 +51,7 @@ type
     FProfile: string;
     FDeviceId: string;
     FSdk: string;
+    FVerbosity: string;
   public
     [SchemaDescription('Absolute path of the .dproj to build')]
     [Required]
@@ -67,6 +69,9 @@ type
     property Profile: string read FProfile write FProfile;
     [SchemaDescription('Which platform SDK to link against, by name (delphi_paserver command=profiles lists them with their glibc). One SDK = one folder, the same model as the Android SDKs. Omit it and the project decides (its own PlatformSDK), or the only one there is; with several and no hint the build is refused instead of guessing')]
     property Sdk: string read FSdk write FSdk;
+    [SchemaDescription(SP_BUILD_VERBOSITY)]
+    [SchemaDefault('quiet')]
+    property Verbosity: string read FVerbosity write FVerbosity;
     [SchemaDescription('Android device serial for target=Deploy on Android platforms (see delphi_adb command=devices; attach one over wifi with command=connect)')]
     property DeviceId: string read FDeviceId write FDeviceId;
   end;
@@ -97,7 +102,6 @@ implementation
 uses
   System.StrUtils,
   System.IOUtils,
-  Lsp.Texts,
   MCPServer.Registration,
   Lsp.References,
   Lsp.BuildRunner;
@@ -215,6 +219,11 @@ begin
   inherited;
   FName := 'delphi_build';
   FDescription := 'Build a Delphi project for real with MSBuild on this ' +
+    'machine. How much comes back is yours to choose with "verbosity": ' +
+    'quiet (DEFAULT) = errors and the summary, a few lines, which is what a ' +
+    '"does it still compile" build needs; normal = warnings too; verbose = ' +
+    'everything. It sets the msbuild verbosity as well, so quiet really asks ' +
+    'for less. ' +
     'machine (rsvars located via registry). Returns success flag, compiler ' +
     'errors/warnings and the output tail. Use this as the closing ' +
     'verification after editing - the linter does not link nor produce ' +
@@ -233,8 +242,12 @@ begin
   // tool", which this server's own rules define as an internal failure worth
   // reporting as a bug. A refusal is not a crash: it goes out as itself.
   try
+    // quiet por defecto, como el bat de la casa: la mayoria de los builds de
+    // un agente son "?sigue compilando?" y pagar los warnings enteros en cada
+    // uno se lo come el contexto.
     R := RunMsBuild(Params.Project, Params.Platform, Params.Config, Params.Target,
-      Params.Profile, Params.DeviceId, 600000, Params.Sdk);
+      Params.Profile, Params.DeviceId, 600000, Params.Sdk,
+      IfThen(Params.Verbosity.Trim = '', 'quiet', Params.Verbosity.Trim.ToLower));
   except
     on E: Exception do
       if E.Message.StartsWith('RECHAZADO') then

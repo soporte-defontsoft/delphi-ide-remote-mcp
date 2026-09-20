@@ -29,13 +29,14 @@ function ExecuteTextEdit(const A: TTextEditArgs): string;
 
 { VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O
   NADA, igual que delphi_edit: un array JSON de objetos con old, new, atline
-  y delete, aplicado EN ORDEN. Si una falla, el fichero vuelve byte a byte
+  delete y occurrence, aplicado EN ORDEN. El ancla puede ser UNA linea o un
+  BLOQUE de varias seguidas, que se sustituye entero. Si una falla, el
+  fichero vuelve byte a byte
   a como estaba y se dice cual fallo.
 
   Por que: sin esto, cambiar un comentario de tres lineas costaba TRES
   llamadas, y entre una y otra el fichero quedaba a medias (medido el
-  2026-09-20 usando este servidor como agente). Aqui las anclas son de UNA
-  linea, como siempre: el bloque de varias lineas es cosa de delphi_edit. }
+  2026-09-20 usando este servidor como agente). }
 function ExecuteTextEdits(const APath, AEditsJson: string): string;
 
 implementation
@@ -364,6 +365,25 @@ begin
           Break;
         end;
         Obj := TJSONObject(V);
+        // Ancla de VARIAS lineas: se sustituye el bloque entero. Sin esto, un
+        // parrafo largo de documentacion no se podia tocar - TOOLS.md tiene
+        // parrafos de 3 KB en UNA linea y el ancla es "una linea completa",
+        // asi que habia que pegar los 3 KB (medido el 2026-09-20).
+        if Obj.GetValue<string>('old', '').Contains(#10) then
+        begin
+          Una := ApplyBlockEdit(APath, Obj.GetValue<string>('old', ''),
+            Obj.GetValue<string>('new', ''),
+            Obj.GetValue<Integer>('occurrence', 0));
+          if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
+          begin
+            Fallo := N;
+            Sb.AppendLine(Format('  %d: %s', [N, Una.Replace(#10, ' ')]));
+            Break;
+          end;
+          Sb.AppendLine(Format('  %d OK (bloque de %d lineas)',
+            [N, Length(Obj.GetValue<string>('old', '').Split([#10]))]));
+          Continue;
+        end;
         A := Default(TTextEditArgs);
         A.Path := APath;
         A.OldLine := Obj.GetValue<string>('old', '');
@@ -371,6 +391,11 @@ begin
         A.HasOld := A.OldLine <> '';
         A.HasNew := (A.NewText <> '') or A.HasOld;
         A.AtLine := Obj.GetValue<Integer>('atline', 0);
+        // "occurrence" en vez de contar lineas: dentro de una tanda los
+        // numeros SE MUEVEN segun las entradas anteriores anaden o quitan.
+        if (A.AtLine = 0) and (Obj.GetValue<Integer>('occurrence', 0) > 0) then
+          A.AtLine := NthOccurrenceLine(APath, A.OldLine,
+            Obj.GetValue<Integer>('occurrence', 0));
         A.DeleteLine := Obj.GetValue<Boolean>('delete', False);
         Una := TextEditNucleo(A);
         if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then

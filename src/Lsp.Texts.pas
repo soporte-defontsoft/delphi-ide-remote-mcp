@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.0.2-beta';
+  SERVER_VERSION = '1.0.3-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -73,6 +73,21 @@ const
   // mismo (los numeros del VERSIONINFO y las claves FileVersion y
   // ProductVersion) y el gate de release los compara: por eso es una
   // operacion curada y no una edicion por ancla.
+  // El contrato de BuildWithParams.bat, el de la casa: quiet no le pide los
+  // warnings a msbuild, asi que no hay recuento que dar - se dice, en vez de
+  // poner un 0 que seria mentira.
+  SN_BUILD_QUIET_WARNINGS =
+    'quiet: a msbuild solo se le han pedido los ERRORES, asi que de los ' +
+    'warnings no se sabe nada. Repite con verbosity=normal si los quieres.';
+
+  SP_BUILD_VERBOSITY =
+    'How much of the build comes back, the same contract as the house build ' +
+    'script: quiet (DEFAULT) = errors + the summary, a few lines, cheapest ' +
+    'for "does it still compile"; normal = warnings and msbuild milestones; ' +
+    'verbose = everything, including the linker command line whole - use it ' +
+    'when a quiet error is not clear enough. It picks the msbuild verbosity ' +
+    'too, so quiet really does ask for less, it does not just hide it.';
+
   SR_CONFIG_VERSION_VACIA =
     'RECHAZADO: falta "version". Ejemplos: 1.2.3, 1.2.3.0 o 1.2.3-beta (el ' +
     'sufijo se admite y se ignora para el VERSIONINFO, que es numerico).';
@@ -595,10 +610,15 @@ const
     #10'--- Falta %s (no cabe junto con lo anterior en una sola respuesta). ' +
     'Pidelo entero con vault_read {path: "%s"}.';
 
+  // Decia "en este servidor ([Vault] ReadOnly=1)" y otra vez las dos mitades
+  // estaban caducadas: el ajuste es del WORKSPACE y la clave se llama
+  // VaultReadOnly. Ademas se daba esta respuesta cuando el workspace NO tenia
+  // vault (ver SR_VAULT_UNSET), que es otra cosa.
   SR_VAULT_READONLY =
-    'RECHAZADO: el vault de conocimiento esta en SOLO LECTURA en este ' +
-    'servidor ([Vault] ReadOnly=1). Puedes consultarlo con vault_read y ' +
-    'vault_search.';
+    'RECHAZADO: el vault de TU workspace esta en SOLO LECTURA ' +
+    '(VaultReadOnly=1 en su seccion [Workspace.<nombre>] del settings.ini ' +
+    'del servidor). Puedes consultarlo con vault_read y vault_search; si ' +
+    'necesitas escribir en el, pidelo con delphi_report.';
 
   SR_VAULT_GOVERNANCE =
     'RECHAZADO: AGENTS-VAULT.md, AGENTS-VAULT-WRITE.md y MEMORY.md son los ' +

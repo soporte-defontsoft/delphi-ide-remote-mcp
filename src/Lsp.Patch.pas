@@ -48,6 +48,22 @@ function ExecutePatch(const A: TPatchArgs): string;
   leer el fichero dos veces. }
 function DecodeSourceBytes(const B: TArray<Byte>): string; // = TBytes
 
+{ Sustituye un BLOQUE CONTIGUO de lineas, comparado entero y por contenido
+  (sin sangria). Encoding y finales de linea, los del fichero. Vivia dentro de
+  delphi_edit y por eso delphi_textedit no podia tener anclas de bloque -
+  editar un parrafo largo de documentacion obligaba a pegar el parrafo entero
+  como ancla de una linea (medido el 2026-09-20 con TOOLS.md, que tiene
+  parrafos de 3 KB en UNA linea). Es generico: solo usa PatchLoadText y
+  PatchSaveText.
+  AOccurrence: 0 = tiene que ser unico; 1, 2... = esa aparicion. }
+function ApplyBlockEdit(const APath, AOld, ANew: string;
+  AOccurrence: Integer): string;
+
+{ La linea (1-based) de la N-esima aparicion de un ancla de UNA linea, 0 si no
+  hay tantas. Desempata dentro de una tanda mejor que atline, porque los
+  numeros de linea SE MUEVEN segun las entradas anteriores. }
+function NthOccurrenceLine(const APath, AAnchor: string; AN: Integer): Integer;
+
 { Encoding-correct numbered read (also serves the remote file toolset). }
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
 
@@ -460,6 +476,105 @@ begin
   if TFile.Exists(APath) then
     BackupFile(APath); // new files have nothing to back up
   AtomicWrite(APath, EncodeText(AText, K));
+end;
+
+function NthOccurrenceLine(const APath, AAnchor: string; AN: Integer): Integer;
+var
+  Lines: TArray<string>;
+  Enc: string;
+  I, Seen: Integer;
+begin
+  Result := 0;
+  if (AN <= 0) or (AAnchor.Trim = '') then
+    Exit;
+  try
+    Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
+  except
+    Exit;
+  end;
+  Seen := 0;
+  for I := 0 to High(Lines) do
+    if Lines[I].Trim = AAnchor.Trim then
+    begin
+      Inc(Seen);
+      if Seen = AN then
+        Exit(I + 1);
+    end;
+end;
+
+function ApplyBlockEdit(const APath, AOld, ANew: string;
+  AOccurrence: Integer): string;
+var
+  Enc, Text, Eol: string;
+  Lines, OldLines, NewLines: TArray<string>;
+  I, J, Hit, Count, Seen: Integer;
+  Ok: Boolean;
+  Sb: TStringBuilder;
+begin
+  Text := PatchLoadText(APath, Enc);
+  if Text.Contains(#13#10) then
+    Eol := #13#10
+  else
+    Eol := #10;
+  Lines := Text.Replace(#13#10, #10).Split([#10]);
+  OldLines := AOld.Replace(#13#10, #10).Split([#10]);
+  // a trailing newline in the anchor is the caller's editor, not a line
+  while (Length(OldLines) > 1) and (OldLines[High(OldLines)].Trim = '') do
+    SetLength(OldLines, Length(OldLines) - 1);
+  if Length(OldLines) < 2 then
+    Exit(SR_PATCH_BLOCK_SHORT);
+  Hit := -1;
+  Count := 0;
+  Seen := 0;
+  for I := 0 to Length(Lines) - Length(OldLines) do
+  begin
+    Ok := True;
+    for J := 0 to High(OldLines) do
+      if Lines[I + J].Trim <> OldLines[J].Trim then
+      begin
+        Ok := False;
+        Break;
+      end;
+    if Ok then
+    begin
+      Inc(Count);
+      Inc(Seen);
+      if (AOccurrence > 0) and (Seen = AOccurrence) then
+      begin
+        Hit := I;
+        Count := 1;
+        Break;
+      end;
+      if AOccurrence = 0 then
+        Hit := I;
+    end;
+  end;
+  if Hit < 0 then
+    Exit(Format(SR_PATCH_BLOCK_MISSING_FMT,
+      [Length(OldLines), OldLines[0].Trim]));
+  if Count > 1 then
+    Exit(Format(SR_PATCH_BLOCK_AMBIGUOUS_FMT, [Count, OldLines[0].Trim]));
+  NewLines := ANew.Replace(#13#10, #10).Split([#10]);
+  while (Length(NewLines) > 1) and (NewLines[High(NewLines)].Trim = '') do
+    SetLength(NewLines, Length(NewLines) - 1);
+  Sb := TStringBuilder.Create;
+  try
+    for I := 0 to Hit - 1 do
+      Sb.Append(Lines[I]).Append(Eol);
+    if not ((Length(NewLines) = 1) and (NewLines[0] = '')) then
+      for I := 0 to High(NewLines) do
+        Sb.Append(NewLines[I]).Append(Eol);
+    for I := Hit + Length(OldLines) to High(Lines) do
+    begin
+      Sb.Append(Lines[I]);
+      if I < High(Lines) then
+        Sb.Append(Eol);
+    end;
+    PatchSaveText(APath, Sb.ToString, Enc);
+  finally
+    Sb.Free;
+  end;
+  Result := Format(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
 end;
 
 function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
@@ -1401,29 +1516,34 @@ begin
     var AfterLines := SplitToLines(AfterText);
 
     var Ctx := '(no he sabido localizar la linea nueva)';
-    var Idx := -1;
-    if NewFirst <> '' then
-    begin
-      for I := 0 to High(AfterLines) do
+    // El sitio se SABE: la sustitucion empieza justo donde estaba el ancla.
+    // Buscar la primera linea del texto nuevo DESDE ARRIBA sacaba otra
+    // region entera cuando esa linea es de las que se repiten - un "begin",
+    // un "var", un "end;" - y entonces el agente comprobaba su edicion
+    // mirando un trozo de fichero que no era el suyo (medido el 2026-09-20:
+    // edicion en la linea 19, eco de la 7).
+    var Idx := HitIdx;
+    if Idx > High(AfterLines) then
+      Idx := High(AfterLines);
+    // Salvavidas por si algun dia el sitio no cuadra: se busca DESDE ahi
+    // hacia abajo, nunca desde el principio.
+    if (NewFirst <> '') and (Idx >= 0) and (Idx <= High(AfterLines)) and
+       not AfterLines[Idx].Contains(NewFirst) then
+      for I := Idx to High(AfterLines) do
         if AfterLines[I].Contains(NewFirst) then
         begin
           Idx := I;
           Break;
         end;
-    end
-    else
-    begin
-      // Blanked or deleted line: the spot is exactly known - show it instead
-      // of the confusing "no he sabido localizar" (measured, round 2 C2).
-      Idx := HitIdx;
-      if Idx > High(AfterLines) then
-        Idx := High(AfterLines);
-    end;
     if Idx >= 0 then
     begin
       var IniC := Idx - 1;
       if IniC < 0 then IniC := 0;
+      // La ventana cubre TODO lo escrito, no las dos primeras lineas: una
+      // insercion de diez lineas se verificaba viendo tres.
       var FinC := Idx + 2;
+      if Replacement <> '' then
+        FinC := Idx + Length(Replacement.Split([#10])) + 1;
       if FinC > High(AfterLines) then FinC := High(AfterLines);
       var SbC := TStringBuilder.Create;
       try

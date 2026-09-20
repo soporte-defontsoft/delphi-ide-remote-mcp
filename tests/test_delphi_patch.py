@@ -273,6 +273,33 @@ check('lint dfm: FMX-ismos avisados en el sentido inverso',
       'AVISO DESIGNER' in out and 'no existe en TButton' in out
       and 'alClient' in out, out[-600:])
 
+# --- la verificacion ensena LA region editada, no otra igual ---------------
+# El eco buscaba la primera linea del texto nuevo DESDE ARRIBA, asi que si esa
+# linea era de las que se repiten (un "begin", un "var") el agente comprobaba
+# su edicion mirando un trozo de fichero que no era el suyo. Medido el
+# 2026-09-20: edicion en la linea 19, eco de la 7.
+ECO = os.path.join(DIR, 'UEco.pas')
+open(ECO, 'wb').write(
+    ('unit UEco;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\n'
+     'procedure Uno;\r\nbegin\r\nend;\r\n\r\n'
+     'procedure Dos;\r\nbegin\r\nend;\r\n\r\n'
+     'procedure Tres;\r\nbegin\r\nend;\r\n\r\nend.\r\n').encode('ascii'))
+out = call('delphi_edit', {"path": ECO, "old": "procedure Tres;",
+                           "new": "begin\r\nend;\r\n\r\nprocedure Marcador;\r\nprocedure Tres;"})
+_eco = out.split('lineas resultantes leidas del disco:')[-1]
+check('eco: la verificacion ensena la region EDITADA, no el primer "begin"',
+      'Marcador' in _eco and 'procedure Uno' not in _eco, _eco[:200])
+_nums = [int(l.split('|')[0].strip()) for l in _eco.strip().splitlines() if '|' in l]
+check('eco: y esas lineas son las de verdad (>= 14, no las de arriba)',
+      bool(_nums) and min(_nums) >= 14, _nums)
+out = call('delphi_edit', {"path": ECO, "old": "procedure Dos;",
+                           "new": "procedure A;\r\nbegin\r\nend;\r\n\r\n"
+                                  "procedure B;\r\nbegin\r\nend;\r\n\r\nprocedure Dos;"})
+_eco = out.split('lineas resultantes leidas del disco:')[-1]
+check('eco: la ventana cubre TODO lo escrito, no solo las dos primeras lineas',
+      'procedure A;' in _eco and 'procedure B;' in _eco and 'procedure Dos;' in _eco,
+      _eco[:300])
+
 # --- restore: two steps, byte-identical ---
 out = call('delphi_edit', {"path": PAS, "restore": True})
 check('restore: paso 1 solo avisa', 'NO he hecho nada' in out and 'SE PERDERAN' in out, out)

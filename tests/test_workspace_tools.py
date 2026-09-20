@@ -526,6 +526,28 @@ try:
     check('textedit: si una falla, el fichero vuelve byte a byte',
           'ROLLBACK' in out and cuerpo == 'UNO\ntres\nCUATRO\n',
           (out[:90], repr(cuerpo)))
+    # Ancla de BLOQUE dentro del lote: sin esto, un parrafo largo no se podia
+    # tocar - TOOLS.md tiene parrafos de 3 KB en UNA linea y el ancla es "una
+    # linea completa", asi que habia que pegar los 3 KB (medido el 2026-09-20
+    # trabajando en el propio repo por el MCP).
+    bloque = os.path.join(tmptxt, 'bloque.md')
+    call('delphi_textedit', {"path": bloque, "create": True, "eol": "lf",
+                             "content": "cabecera\nuno\ndos\ntres\npie\n"})
+    out = call('delphi_textedit', {"path": bloque, "edits": json.dumps([
+        {"old": "uno\ndos\ntres", "new": "UNO Y DOS Y TRES"}])})
+    cuerpo = open(bloque, 'rb').read().decode('utf-8')
+    check('textedit: un ancla de VARIAS lineas sustituye el bloque entero',
+          'bloque de 3 lineas' in out and cuerpo == 'cabecera\nUNO Y DOS Y TRES\npie\n',
+          (out[:90], repr(cuerpo)))
+    # "occurrence" desempata donde atline no sirve: los numeros se mueven
+    rep = os.path.join(tmptxt, 'repes.md')
+    call('delphi_textedit', {"path": rep, "create": True, "eol": "lf",
+                             "content": "x\nigual\ny\nigual\nz\n"})
+    out = call('delphi_textedit', {"path": rep, "edits": json.dumps([
+        {"old": "igual", "new": "SEGUNDA", "occurrence": 2}])})
+    cuerpo = open(rep, 'rb').read().decode('utf-8')
+    check('textedit: "occurrence" elige cual de las lineas repetidas',
+          cuerpo == 'x\nigual\ny\nSEGUNDA\nz\n', (out[:90], repr(cuerpo)))
     out = call('delphi_textedit', {"path": lote, "old": "tres", "delete": True})
     cuerpo = open(lote, 'rb').read().decode('utf-8')
     check('textedit: delete quita la linea ENTERA (no la deja en blanco)',

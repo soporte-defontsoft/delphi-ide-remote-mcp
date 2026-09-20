@@ -6,6 +6,55 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.3-beta] - 2026-09-20
+
+Four things that the day's own use of this server turned up, three of them
+refusals or answers that were lying to the agent reading them.
+
+### Fixed
+- **A refusal that tells the truth about whose vault is missing.** A workspace
+  declaring no `VaultPath` was told "this server has no knowledge vault
+  configured (`[Vault] Path` in settings.ini)". Both halves were false since
+  v0.98: the server may well have a vault — another workspace's — and that
+  section does not exist any more. Worse, a workspace with a WRITE token but no
+  vault got "the vault is READ-ONLY (`[Vault] ReadOnly=1`)", sending its
+  operator to remove a flag that was not there. Missing and read-only are two
+  different things and are now told apart, both naming the key that exists
+  (`VaultPath=` / `VaultReadOnly=` in `[Workspace.<name>]`) and offering
+  `delphi_report` as the way to ask. The vault tools stay visible to every
+  workspace on purpose — they register when ANY workspace declares one — so
+  that refusal is the only thing such an agent gets.
+- **`delphi_edit` showed the wrong lines back.** The verification echo looked
+  for the first line of the new text from the TOP of the file, so when that
+  line was a common one — a `begin`, a `var` — the agent checked its edit
+  against a different part of the file. It uses the known edit position now,
+  and the window covers the whole block written instead of its first two lines.
+- **A Linux build no longer dumps the linker command line.** Some 2 KB of
+  repeated `-L` paths in EVERY build. What is kept is the part anyone reads:
+  the `--sysroot` (which SDK it linked against) plus the count of the rest.
+  Measured on a real build: the tail went from ~2.5 KB to 476 bytes.
+
+### Added
+- **`delphi_textedit` anchors can be blocks too**, like `delphi_edit`'s: a
+  contiguous run of lines in `old`, matched whole, plus `occurrence` to pick
+  which one when it repeats. The two routines that did this moved into
+  `Lsp.Patch` so both tools share them instead of one owning them.
+- **`delphi_build` takes `verbosity`, the same contract as the house build
+  script** (`quiet` by default, `normal`, `verbose`) — and it sets the msbuild
+  verbosity too, so `quiet` really does ask for less instead of hiding it. In
+  `quiet` there is no `warnings` array at all: an empty one would read as "no
+  warnings" when the truth is "not asked for". The build answer also stopped
+  repeating in `outputTail` what already travels in `errors`/`warnings`.
+  Measured on this repo: a routine build went from 3.4 KB to 743 bytes. On a
+  project that compiles clean the saving is nil — the win is exactly where the
+  noise is. **A project no longer needs its own .bat to build cheaply**; the
+  one it keeps is for ITS ritual (build number, EurekaLog, signing, data).
+- `tests/run_all.py` says when another regression is still running instead of
+  dying with a bare `FileExistsError` — two suites share the temp folder and
+  step on each other.
+
+Regression: **51 batteries | 1330+ checks | 0 failures**.
+
 ## [1.0.2-beta] - 2026-09-20
 
 Everything here was found by **using this server as an agent** on its own

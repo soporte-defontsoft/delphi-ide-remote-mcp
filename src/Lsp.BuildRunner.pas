@@ -12,7 +12,8 @@ uses
 
 function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
   const AProfile: string = ''; const ADeviceId: string = '';
-  ATimeoutMs: Integer = 600000; const ASdk: string = ''): TJSONObject;
+  ATimeoutMs: Integer = 600000; const ASdk: string = '';
+  const AVerbosity: string = ''): TJSONObject;
 
 { Runs a command line with stdout+stderr captured (no shell). }
 { Generates the deployment manifest (.deployproj + its import line in the
@@ -960,12 +961,13 @@ end;
 
 function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
   const AProfile, ADeviceId: string; ATimeoutMs: Integer;
-  const ASdk: string): TJSONObject;
+  const ASdk, AVerbosity: string): TJSONObject;
 var
   Info: TRadStudioInfo;
   Output, Line, Plat, Cfg, Target: string;
   ExitCode: DWORD;
   Errors, Warnings: TJSONArray;
+  YaDicho: TStringList; // lo que ya va en errors[]/warnings[]: la cola no lo repite
   Tail: TStringBuilder;
   Lines: TArray<string>;
   I, TailFrom: Integer;
@@ -1138,10 +1140,22 @@ begin
   TLogger.Warning(Format('delphi_build: BUILD "%s" %s/%s target=%s%s',
     [TPath.GetFullPath(ADprojPath), Plat, Cfg, Target, SdkArg]));
 
+  // Los MISMOS flags que BuildWithParams.bat, que es el contrato de la casa
+  // para builds con agentes: quiet = solo errores y el resumen (unas pocas
+  // lineas), normal = warnings e hitos, verbose = todo. Un bat por proyecto
+  // existia sobre todo por esto; teniendolo aqui, un proyecto solo necesita
+  // el suyo para SU ritual (numero de build, EurekaLog, firma, datos).
+  // Vacio = normal, que es como se comportaba antes de tener el parametro:
+  // los otros motores que llaman aqui no cambian de comportamiento.
+  var Verb := '/v:minimal /nologo';
+  if SameText(AVerbosity, 'quiet') then
+    Verb := '/v:quiet /clp:ErrorsOnly;Summary;NoItemAndPropertyList /nologo'
+  else if SameText(AVerbosity, 'verbose') then
+    Verb := '/v:detailed';
   var Orden := Format(
-    'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s%s%s%s /v:minimal /nologo"',
+    'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s%s%s%s %s"',
     [Info.RsVarsBat, TPath.GetFullPath(ADprojPath), Target, Cfg, Plat, SdkArg,
-     ProfileArg, DeviceArg]);
+     ProfileArg, DeviceArg, Verb]);
   Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
   // F2039 = el .exe que este build va a escribir esta ABIERTO, casi siempre
   // porque delphi_run o delphi_test lo estan ejecutando ahora mismo: el
@@ -1168,26 +1182,64 @@ begin
 
   Errors := TJSONArray.Create;
   Warnings := TJSONArray.Create;
+  // Lo mismo que entra en errors[]/warnings[], apuntado aparte para que la
+  // cola no lo repita.
+  YaDicho := TStringList.Create;
+  YaDicho.Sorted := True;
+  YaDicho.Duplicates := dupIgnore;
   Lines := Output.Split([#13#10, #10]);
   for Line in Lines do
   begin
     if Line.Contains(': error ') or Line.Contains(' error E') or
        Line.Contains(' error MSB') or Line.Contains('fatal error') or
        Line.Contains(': fatal ') then
-      Errors.Add(Line.Trim)
-    else if Line.Contains(': warning ') or Line.Contains(' warning W') then
-      Warnings.Add(Line.Trim);
+  begin
+    Errors.Add(Line.Trim);
+    YaDicho.Add(Line.Trim);
+  end
+  else if Line.Contains(': warning ') or Line.Contains(' warning W') then
+  begin
+    Warnings.Add(Line.Trim);
+    YaDicho.Add(Line.Trim);
+  end;
   end;
 
+  // La linea del linker de Linux trae unos 2 KB de rutas -L en CADA build.
+  // La primera vez es informativa; a partir de la segunda es ruido que se
+  // come el contexto del agente (medido el 2026-09-20 usando este servidor
+  // como agente). Se queda lo unico que se mira de ella -el --sysroot, que
+  // dice con QUE SDK enlazo- y el recuento de las rutas.
   // Keep the last ~25 lines as raw context (summary, timings).
   Tail := TStringBuilder.Create;
   try
     TailFrom := Length(Lines) - 25;
+    if SameText(AVerbosity, 'verbose') then
+      TailFrom := Length(Lines) - 120;
     if TailFrom < 0 then
       TailFrom := 0;
     for I := TailFrom to High(Lines) do
       if Lines[I].Trim <> '' then
-        Tail.AppendLine(Lines[I].TrimRight);
+      begin
+        // Lo que ya va en errors[] o warnings[] NO se repite aqui: la cola
+        // los traia OTRA VEZ enteros, y en un proyecto con quince avisos eso
+        // son 2-3 KB duplicados en CADA build, pagados por el contexto del
+        // agente (visto el 2026-09-20 compilando este mismo repo por el MCP
+        // una y otra vez). La cola es el resumen y los tiempos.
+        if YaDicho.IndexOf(Lines[I].Trim) >= 0 then
+          Continue;
+        var Linea := Lines[I].TrimRight;
+        if Linea.Contains('Linker command line:') and
+           not SameText(AVerbosity, 'verbose') and
+           (TRegEx.Matches(Linea, '(?:^|\s)-L\s*\S+').Count >= 4) then
+        begin
+          var MSys := TRegEx.Match(Linea, '--sysroot\s+(\S+)');
+          Linea := Format('  Linker command line: --sysroot %s  (+%d rutas -L omitidas: ' +
+            'son 2 KB identicos en cada build)',
+            [IfThen(MSys.Success, MSys.Groups[1].Value, '(ninguno)'),
+             TRegEx.Matches(Linea, '(?:^|\s)-L\s*\S+').Count]);
+        end;
+        Tail.AppendLine(Linea);
+      end;
 
     Result := TJSONObject.Create;
     Result.AddPair('success', TJSONBool.Create(ExitCode = 0));
@@ -1214,7 +1266,12 @@ begin
     if SdkAviso <> '' then
       Result.AddPair('sdkWarning', SdkAviso);
     Result.AddPair('errors', Errors);
-    Result.AddPair('warnings', Warnings);
+    // En quiet NO va un warnings:[] vacio: se leeria como "no hay warnings" y
+    // seria mentira - es que no se han pedido. Va la nota y punto.
+    if SameText(AVerbosity, 'quiet') then
+      Warnings.Free
+    else
+      Result.AddPair('warnings', Warnings);
     // ONE error can father a dozen. Measured in the field (2026-08-25): a
     // single E2009 - assigning a plain procedure to a TNotifyEvent - produced
     // seven E2250 "no overloaded version of Synchronize/Queue" in the same
@@ -1268,6 +1325,10 @@ begin
         Result.AddPair('missingUnitsNote', SN_BUILD_MISSING_UNITS_NOTE);
       end;
     end;
+    // En quiet msbuild NI SIQUIERA imprime los warnings, asi que no se puede
+    // dar un recuento: se dice que no se pidieron, en vez de inventar un 0.
+    if SameText(AVerbosity, 'quiet') then
+      Result.AddPair('warningsNote', SN_BUILD_QUIET_WARNINGS);
     Result.AddPair('outputTail', Tail.ToString);
     // A stateless protocol means the agent only knows what each result tells
     // it: say WHERE the artifact landed, or it has to hunt the disk for it
@@ -1326,6 +1387,7 @@ begin
       else
         Result.AddPair('deployManifest', SN_BUILD_MANIFEST_NEW);
   finally
+    YaDicho.Free;
     Tail.Free;
   end;
 end;

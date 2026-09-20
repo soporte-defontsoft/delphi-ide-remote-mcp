@@ -13,7 +13,8 @@ form.
   M1  linker-style re-doubled paths survive legibly (no srvhost cascade)
   M2  a genuine UNC host is still masked (after quote, raw and JSON forms)
   M3  drive letters still masked in the same text
-  M4  (live, only if this machine holds the Linux64 SDK) a real Linux64 link:
+  M4  (live, only if this machine holds the Linux64 SDK) a real Linux64 link
+      asked with verbosity=verbose, the only mode that carries the whole line:
       outputTail carries ZERO srvhost and a legible "Linker command line"
 
 Usage:  python tests/test_round22.py [path-to-DelphiLspMcp.exe]
@@ -132,7 +133,12 @@ if dpr:
     dproj = dpr[0][:-4] + '.dproj'
     call('delphi_config', {'project': dproj, 'command': 'add-platform',
                            'platform': 'Linux64'})
+    # verbosity=verbose a proposito: lo que se comprueba aqui es que el
+    # enmascarador NO mete srvhost en la linea del linker, y esa linea solo
+    # viaja entera en verbose - en quiet (el defecto desde la v1.0.3) la cola
+    # del build ni la trae, y en normal viene resumida a su --sysroot.
     out = call('delphi_build', {'project': dproj, 'platform': 'Linux64',
+                                'verbosity': 'verbose',
                                 'config': 'Debug'}, 600)
     try:
         j = json.loads(out)

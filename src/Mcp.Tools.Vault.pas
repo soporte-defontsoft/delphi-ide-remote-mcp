@@ -613,6 +613,12 @@ function TVaultAppendTool.ExecuteWithParams(const Params: TVaultAppendParams): s
 var
   Full, Add, Anchor, Backup: string;
 begin
+  // "Sin vault" y "vault de solo lectura" son dos cosas distintas, y decir
+  // la segunda cuando pasaba la primera mandaba al agente a quitar un
+  // ReadOnly que no existia (medido el 2026-09-20 desde un workspace con
+  // token de ESCRITURA y sin VaultPath).
+  if not VaultConfigured then
+    Exit(SR_VAULT_UNSET);
   if not VaultWritable then
     Exit(SR_VAULT_READONLY);
   Result := VaultResolve(Params.Path, Full);
@@ -681,6 +687,8 @@ function TVaultCreateTool.ExecuteWithParams(const Params: TVaultCreateParams): s
 var
   Full, Dir: string;
 begin
+  if not VaultConfigured then
+    Exit(SR_VAULT_UNSET);
   if not VaultWritable then
     Exit(SR_VAULT_READONLY);
   Result := VaultResolve(Params.Path, Full);
@@ -725,6 +733,8 @@ function TVaultPatchTool.ExecuteWithParams(const Params: TVaultPatchParams): str
 var
   Full, Backup: string;
 begin
+  if not VaultConfigured then
+    Exit(SR_VAULT_UNSET);
   if not VaultWritable then
     Exit(SR_VAULT_READONLY);
   Result := VaultResolve(Params.Path, Full);
