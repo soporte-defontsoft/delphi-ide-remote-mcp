@@ -6,6 +6,50 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.10-beta] - 2026-09-20
+
+Four answers that were correct and unreadable. None of them broke anything;
+each of them cost a call, which is how an agent's context gets spent without
+anybody writing it down.
+
+### Fixed
+- **Six tools said they accept a FOLDER.** `delphi_definition`,
+  `delphi_hover`, `delphi_completion`, `delphi_signature` and friends
+  inherited their `path` description from a base class shared with
+  `delphi_symbols` — the one tool that really does take a folder. Sharing the
+  base class made them share a description that was true in exactly one of
+  them. The shared-helper smell, running backwards: `delphi_symbols` no
+  longer descends from it, because its `path` is a different parameter.
+- **`git diff` on a clean tree answered `exit=0` and nothing else.** That is
+  indistinguishable from a response that broke on the way, and the first
+  thing anyone does with a broken response is send it again. Silence means
+  something different per command, so now it says which: "no differences" for
+  `diff`, "this command prints nothing when it succeeds" for the rest.
+- **`delphi_diagnostics` documented three severities and emitted four.** The
+  LSP scale is 1=error, 2=warning, 3=information, 4=hint; the description
+  stopped at "3=hint", so a diagnostic arriving as 4 had nothing to read it
+  by. The `hints` counter groups 3 and 4 and now says so.
+- **A bare `null`.** Four characters as a whole answer: correct — the engine
+  resolved nothing — and unreadable. It does not distinguish pointing at the
+  wrong place from missing project settings from there being no symbol there,
+  and those are fixed three different ways. The three causes are listed now,
+  in frequency order, starting with the 0-based/1-based one.
+
+### Known and not fixed
+Current as of this release, and measured rather than remembered:
+- **`delphi_references` lists as `unverified` candidates that are inside
+  strings and comments**, which makes renaming a short identifier awkward.
+- **A rarer race when creating a unit**, seen ONCE and not reproduced in 16
+  further runs. Recorded as seen-once, not as fixed.
+- **A commit line count off by one**, noted during the day and NOT
+  re-measured since — treat the claim itself as unverified. Today an
+  identical entry on this list (`const` reported as `variable`) turned out to
+  be false when measured.
+
+### Measured
+- `tests/test_round39.py`: 8 checks, 7 of which fail against 1.0.9. Suite: 61
+  batteries, 1482 checks, 0 failures.
+
 ## [1.0.9-beta] - 2026-09-20
 
 **One namer.** David asked a single question about 1.0.8 — *"did you

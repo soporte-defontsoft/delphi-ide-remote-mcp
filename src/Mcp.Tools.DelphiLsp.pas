@@ -17,20 +17,31 @@ uses
   Lsp.Session;
 
 type
+  { El "path" de las tools de POSICION. Llevaba la descripcion de
+    delphi_symbols porque symbols heredaba de esta misma clase, asi que las
+    SEIS anunciaban que aceptan una CARPETA y ninguna la acepta. Compartir la
+    clase base hizo compartir una descripcion que solo era verdad en una de
+    ellas; por eso symbols ya no hereda de aqui: su "path" es OTRO parametro,
+    acepta fichero o carpeta, y decirlo una vez para las siete era decirlo mal
+    en seis. }
   TDelphiFileParams = class
   private
     FPath: string;
   public
-    [SchemaDescription(SP_SYMBOLS_PATH)]
+    [SchemaDescription(SP_LSP_FILE_PATH)]
     [Required]
     property Path: string read FPath write FPath;
   end;
 
-  TDelphiSymbolsParams = class(TDelphiFileParams)
+  TDelphiSymbolsParams = class
   private
+    FPath: string;
     FMode: string;
     FFilter: string;
   public
+    [SchemaDescription(SP_SYMBOLS_PATH)]
+    [Required]
+    property Path: string read FPath write FPath;
     [SchemaDescription(SP_SYMBOLS_MODE)]
     property Mode: string read FMode write FMode;
     [SchemaDescription(SP_SYMBOLS_FILTER)]
@@ -260,7 +271,7 @@ begin
       Exit('LSP error: ' + Err.ToJSON + ANote);
     V := AResp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
-      Exit('null' + ANote);
+      Exit(SN_LSP_NULL_NOTE + ANote);
     DecorateLocations(V);
     Result := V.ToJSON + ANote;
   finally
@@ -864,7 +875,7 @@ begin
       Exit('LSP error: ' + Err.ToJSON + Note);
     var V := Resp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
-      Exit('null' + Note);
+      Exit(SN_LSP_NULL_NOTE + Note);
     DecorateLocations(V);
     // La VERDAD de cada declaracion, leida del fuente, UNA vez y para los
     // tres modos. DelphiLSP renderiza las firmas perdiendo los valores por

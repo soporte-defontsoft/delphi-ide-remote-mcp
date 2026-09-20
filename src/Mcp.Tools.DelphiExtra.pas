@@ -119,7 +119,11 @@ begin
   FDescription := 'Compiler-grade errors/warnings/hints for one Delphi source ' +
     'file (Error Insight via the official DelphiLSP linter), WITHOUT building. ' +
     'Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions. ' +
-    'Severity: 1=error, 2=warning, 3=hint. Lints the CURRENT on-disk content. ' +
+    'Severity is the LSP scale: 1=error, 2=warning, 3=information, 4=hint. ' +
+    'The description used to stop at "3=hint", so a diagnostic arriving as 4 ' +
+    'had no meaning to read it by; the "hints" counter groups 3 and 4 ' +
+    'together, and the per-diagnostic severity tells them apart. ' +
+    'Lints the CURRENT on-disk content. ' +
     'A big unit can take over a minute the first time: the answer then says ' +
     'the lint is in progress - call again with the same file and the result ' +
     'is returned (the lint is not restarted while the file is unchanged).';
@@ -163,6 +167,10 @@ begin
         for V in Diags do
         begin
           Sev := (V as TJSONObject).GetValue<Integer>('severity');
+          // 3 (information) y 4 (hint) de la escala LSP se cuentan juntos en
+          // "hints": son los dos "ni error ni aviso". Lo que NO puede pasar
+          // es que el numero llegue sin estar documentado, que es lo que
+          // ocurria con el 4 (medido 2026-09-20).
           case Sev of
             1: Inc(Errors);
             2: Inc(WarningsC);

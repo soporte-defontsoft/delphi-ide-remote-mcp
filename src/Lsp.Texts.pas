@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.0.9-beta';
+  SERVER_VERSION = '1.0.10-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -164,6 +164,50 @@ const
 
   SR_LSP_NEGATIVE_FMT =
     'error: linea %d y columna %d: no hay posiciones negativas.';
+
+  { El "path" de las tools de POSICION (definition, hover, completion,
+    signature, references, rename_symbol). Estaba heredado de una clase base
+    comun con delphi_symbols, asi que las SEIS anunciaban que aceptan una
+    CARPETA - cosa que solo hace symbols. Compartir la clase base hizo
+    compartir una descripcion que era verdad en una sola de ellas: el olor de
+    siempre, pero al reves (medido 2026-09-20 leyendo el esquema de
+    delphi_definition). }
+  { "exit=0" y NADA mas es indistinguible de una respuesta que se ha roto por
+    el camino, y lo primero que hace quien la recibe es repetir la llamada.
+    En "diff" el silencio SIGNIFICA algo -no hay cambios-, que es justo lo que
+    se estaba preguntando; en otras ordenes significa "fue bien y esta no
+    imprime nada". Decirlo cuesta una linea. Medido 2026-09-20 preguntando por
+    el diff de un arbol limpio. }
+  { Cuatro caracteres, "null", como respuesta entera. Es correcto -el motor no
+    ha resuelto nada- y es ilegible: no dice si apuntaste mal, si falta la
+    configuracion del proyecto o si ahi de verdad no hay nada que resolver, y
+    las tres se arreglan de forma distinta. Una respuesta que no se puede
+    leer cuesta una llamada, y a veces tres. }
+  SN_LSP_NULL_NOTE =
+    'null - el motor no ha resuelto nada ahi. No es un error: es que no tiene '
+    + 'respuesta. Las tres causas, por orden de frecuencia: (1) la posicion no '
+    + 'cae DENTRO de un identificador - las lineas son 0-BASED aqui y '
+    + '1-based en delphi_read, asi que la linea N de una lectura es la N-1 '
+    + 'aqui; (2) el fichero no tiene configuracion de proyecto y el motor no '
+    + 'puede cruzar units (lo dice el aviso de al lado, si sale); (3) ahi hay '
+    + 'una palabra reservada, un literal o un comentario, y no hay simbolo '
+    + 'que resolver. Para ver que hay en esa linea, delphi_read; para localizar '
+    + 'un simbolo por nombre, delphi_symbols filter=<nombre>, que te da la '
+    + 'linea ya separada en 1-based y 0-based.';
+
+  SN_GIT_DIFF_CLEAN =
+    '(sin diferencias: no hay NADA cambiado respecto a lo comparado. La orden ' +
+    'ha ido bien; git no imprime nada cuando no hay cambios.)';
+
+  SN_GIT_SILENT_OK_FMT =
+    '(git %s ha terminado bien y no imprime nada cuando lo consigue. No es ' +
+    'una respuesta perdida: es el exito de esta orden.)';
+
+  SP_LSP_FILE_PATH =
+    'Un fichero Delphi (.pas/.dpr/.dpk/.inc). Aqui va UN fichero, no una ' +
+    'carpeta: estas tools resuelven una posicion dentro de un fuente. Para ' +
+    'ver de golpe lo que ofrece cada unit de una carpeta, esa es ' +
+    'delphi_symbols.';
 
   SP_SYMBOLS_PATH =
     'Un fichero Delphi (.pas/.dpr) para sus simbolos completos... o una ' +

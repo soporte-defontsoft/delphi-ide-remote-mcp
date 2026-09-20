@@ -928,6 +928,17 @@ begin
       // it was not ours to remove after all: leave it
     end;
   Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
+  // Una respuesta que es solo "exit=0" no se distingue de una que se ha roto
+  // por el camino, y lo primero que hace quien la recibe es repetirla. El
+  // silencio de git SIGNIFICA cosas distintas segun la orden, asi que se
+  // dice cual (medido 2026-09-20 pidiendo el diff de un arbol limpio).
+  if (ExitCode = 0) and (Output.Trim = '') then
+  begin
+    if SameText(Cmd, 'diff') then
+      Result := 'exit=0'#10 + SN_GIT_DIFF_CLEAN
+    else
+      Result := 'exit=0'#10 + Format(SN_GIT_SILENT_OK_FMT, [Cmd]);
+  end;
   // git's own hints recommend exactly what this tool refuses (--no-ff,
   // rebase, "specify the URL from the command-line"): say so, or the reader
   // follows the advice printed last (field round 10).
