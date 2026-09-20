@@ -51,6 +51,21 @@ function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
 function PatchLoadText(const APath: string; out AEncName: string): string;
 procedure PatchSaveText(const APath, AText, AEncName: string);
 
+{ EL cerrojo de escritura del servidor, prestado a los otros motores.
+
+  delphi_edit entero corre dentro de el desde siempre; el problema es que
+  editar un fichero es leer-modificar-escribir y ESO no es atomico, asi que
+  dos caminos distintos sobre el mismo fichero (delphi_textedit, registrar una
+  unidad en el .dpr, el designer...) se pisaban entre si aunque cada escritura
+  suelta fuese atomica. Medido 2026-09-20 con la bateria de concurrencia: de
+  12 ediciones simultaneas al mismo fichero llegaban 6 al disco.
+
+  Es recursivo (TCriticalSection lo es), asi que un motor puede tomarlo y
+  llamar por dentro a ExecutePatch sin bloquearse. Las escrituras son raras y
+  cortas: un cerrojo unico no cuesta nada, igual que en el vault. }
+procedure EnterFileEdit;
+procedure LeaveFileEdit;
+
 { Encoding for NEW Delphi files, honouring the IDE's configured default
   (Tools > Options > Editor): 'utf8-bom' when the IDE is set to UTF-8,
   'cp1252' when ANSI. }
@@ -320,12 +335,28 @@ begin
   end;
 end;
 
+procedure EnterFileEdit;
+begin
+  GLock.Enter;
+end;
+
+procedure LeaveFileEdit;
+begin
+  GLock.Leave;
+end;
+
 procedure AtomicWrite(const APath: string; const B: TBytes);
 var
   Tmp: string;
 begin
+  // El temporal lleva un fragmento GUID: con nombre fijo, dos escrituras del
+  // MISMO fichero por caminos distintos compartian el intermedio - una se
+  // llevaba los bytes de la otra al renombrar y la segunda moria con "rename
+  // atomico fallido" (medido 2026-09-20). El cerrojo de arriba ya las
+  // serializa; esto protege ademas a quien escriba sin pasar por el.
   Tmp := TPath.Combine(TPath.GetDirectoryName(APath),
-    '.' + TPath.GetFileName(APath) + '.delphi-patch-tmp');
+    '.' + TPath.GetFileName(APath) + '.' +
+    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)) + '.delphi-patch-tmp');
   TFile.WriteAllBytes(Tmp, B);
   if not MoveFileEx(PChar(Tmp), PChar(APath), MOVEFILE_REPLACE_EXISTING) then
   begin
@@ -360,7 +391,21 @@ begin
   if TFile.Exists(Dest) then
     Exit('ya existia (' + Dest + ')');
   TDirectory.CreateDirectory(DayDir);
-  TFile.Copy(APath, Dest);
+  // "Existe?" y "copia" no son un solo gesto: dos escrituras del mismo fichero
+  // a la vez pasaban las dos por el if y la segunda moria con "Cannot create
+  // file ... already exists", RECHAZANDO una edicion perfectamente valida
+  // (medido 2026-09-20: era la causa dominante de las ediciones perdidas). La
+  // copia ya esta hecha por el otro y vale igual: es la version PREVIA al
+  // primer cambio del dia, que es justo lo que promete.
+  try
+    TFile.Copy(APath, Dest);
+  except
+    on E: Exception do
+      if TFile.Exists(Dest) then
+        Exit('ya existia (' + Dest + ')')
+      else
+        raise;
+  end;
   PurgeOldBackups(Dir);
   Result := Dest;
 end;

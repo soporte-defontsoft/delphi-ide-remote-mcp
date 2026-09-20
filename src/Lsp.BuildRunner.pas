@@ -919,6 +919,7 @@ begin
   // .deployproj, and silently corrupt each other (hermes, release audit
   // 2026-08-26). A global queue is the safe shape; the wait is reported so
   // a queued caller can tell compiler time from queue time.
+  var ReintentosBloqueo := 0; // builds repetidos por un .exe en uso (F2039)
   var QueueSW := TStopwatch.StartNew;
   GBuildLock.Enter;
   var QueuedMs := QueueSW.ElapsedMilliseconds;
@@ -957,10 +958,30 @@ begin
   TLogger.Warning(Format('delphi_build: BUILD "%s" %s/%s target=%s%s',
     [TPath.GetFullPath(ADprojPath), Plat, Cfg, Target, SdkArg]));
 
-  Output := RunCaptured(Format(
+  var Orden := Format(
     'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s%s%s%s /v:minimal /nologo"',
     [Info.RsVarsBat, TPath.GetFullPath(ADprojPath), Target, Cfg, Plat, SdkArg,
-     ProfileArg, DeviceArg]), ATimeoutMs, ExitCode);
+     ProfileArg, DeviceArg]);
+  Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
+  // F2039 = el .exe que este build va a escribir esta ABIERTO, casi siempre
+  // porque delphi_run o delphi_test lo estan ejecutando ahora mismo: el
+  // cerrojo serializa msbuild contra msbuild, pero se suelta antes de que el
+  // programa corra (medido 2026-09-20: build + run del mismo proyecto = build
+  // rojo). Casi todas esas ejecuciones son cortas, asi que se reintenta unos
+  // segundos antes de dar el diagnostico - encolar el build detras de una
+  // ejecucion de cinco minutos seria peor.
+  // La espera CRECE (1, 2, 4, 8 s): una ejecucion corta se despeja en el
+  // primer reintento y una de varios segundos entra en el ultimo, sin
+  // machacar a msbuild ni quedarse esperando para siempre. Medido 2026-09-20:
+  // con esperas fijas de 1,5 s un programa de 8 s agotaba los reintentos.
+  var EsperaBloqueo := 1000;
+  while (ExitCode <> 0) and (ReintentosBloqueo < 4) and Output.Contains('F2039') do
+  begin
+    Inc(ReintentosBloqueo);
+    Sleep(EsperaBloqueo);
+    EsperaBloqueo := EsperaBloqueo * 2;
+    Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
+  end;
   finally
     GBuildLock.Leave;
   end;
@@ -1031,6 +1052,13 @@ begin
     if (ExitCode <> 0) and Output.Contains('F2039') then
     begin
       Result.AddPair('lockedOutputNote', SN_BUILD_LOCKED_OUTPUT);
+    end;
+    // Se reintento y salio: el agente merece saber que su build tardo mas
+    // porque el binario estaba ocupado, no porque compilar sea lento.
+    if ReintentosBloqueo > 0 then
+    begin
+      Result.AddPair('lockedRetries', TJSONNumber.Create(ReintentosBloqueo));
+      Result.AddPair('lockedRetriesNote', SN_BUILD_LOCKED_RETRY);
     end;
     // Units the compiler could not find: say where their source lives, so
     // the next call is the add-searchpath and not another failed build.

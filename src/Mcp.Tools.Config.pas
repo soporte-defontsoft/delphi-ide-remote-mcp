@@ -1188,39 +1188,49 @@ begin
         [TPath.GetFileName(Proj), TPath.GetFileName(Sibling)]));
   end;
   if (Cmd = '') or (Cmd = 'view') then
-    Result := ViewConfig(Proj, Params.Section)
-  else if Cmd = 'add-platform' then
-    Result := AddPlatform(Proj, Params.Platform)
-  else if Cmd = 'remove-platform' then
-    Result := RemovePlatform(Proj, Params.Platform)
-  else if Cmd = 'set-output' then
-    Result := SetOutput(Proj, Params.Output)
-  else if Cmd = 'add-searchpath' then
-    Result := AddSearchPath(Proj, Params.Platform, Params.Path)
-  else if Cmd = 'remove-searchpath' then
-    Result := RemoveSearchPath(Proj, Params.Platform, Params.Path)
-  else if Cmd = 'add-deployfile' then
-    Result := AddDeployFile(Proj, Params.Platform, Params.Path, Params.RemoteDir)
-  else if Cmd = 'remove-deployfile' then
-    Result := RemoveDeployFile(Proj, Params.Platform, Params.Path)
-  else if (Cmd = 'add-unit') or (Cmd = 'remove-unit') then
-  begin
-    if Params.Path.Trim = '' then
-      Exit(SR_UNIT_NEED_PATH);
-    Result := PathDenied(Params.Project);
-    if Result = '' then
-      Result := PathDenied(Params.Path);
-    if Result <> '' then
-      Exit;
-    if Cmd = 'add-unit' then
-      Result := AddProjectUnit(Params.Project, Params.Path)
+    Exit(ViewConfig(Proj, Params.Section));
+
+  // Todo lo demas ESCRIBE el .dproj leyendolo, cambiandolo y guardandolo, asi
+  // que va bajo el mismo cerrojo que las demas ediciones: dos agentes tocando
+  // la configuracion del mismo proyecto a la vez perdian el cambio de uno con
+  // exito reportado (medido 2026-09-20, bateria de concurrencia).
+  EnterFileEdit;
+  try
+    if Cmd = 'add-platform' then
+      Result := AddPlatform(Proj, Params.Platform)
+    else if Cmd = 'remove-platform' then
+      Result := RemovePlatform(Proj, Params.Platform)
+    else if Cmd = 'set-output' then
+      Result := SetOutput(Proj, Params.Output)
+    else if Cmd = 'add-searchpath' then
+      Result := AddSearchPath(Proj, Params.Platform, Params.Path)
+    else if Cmd = 'remove-searchpath' then
+      Result := RemoveSearchPath(Proj, Params.Platform, Params.Path)
+    else if Cmd = 'add-deployfile' then
+      Result := AddDeployFile(Proj, Params.Platform, Params.Path, Params.RemoteDir)
+    else if Cmd = 'remove-deployfile' then
+      Result := RemoveDeployFile(Proj, Params.Platform, Params.Path)
+    else if (Cmd = 'add-unit') or (Cmd = 'remove-unit') then
+    begin
+      if Params.Path.Trim = '' then
+        Exit(SR_UNIT_NEED_PATH);
+      Result := PathDenied(Params.Project);
+      if Result = '' then
+        Result := PathDenied(Params.Path);
+      if Result <> '' then
+        Exit;
+      if Cmd = 'add-unit' then
+        Result := AddProjectUnit(Params.Project, Params.Path)
+      else
+        Result := RemoveProjectUnit(Params.Project, Params.Path);
+    end
     else
-      Result := RemoveProjectUnit(Params.Project, Params.Path);
-  end
-  else
-    Result := 'error: command debe ser view | add-platform | remove-platform | ' +
-      'set-output | add-searchpath | remove-searchpath | add-deployfile | remove-deployfile | ' +
-      'add-unit | remove-unit';
+      Result := 'error: command debe ser view | add-platform | remove-platform | ' +
+        'set-output | add-searchpath | remove-searchpath | add-deployfile | remove-deployfile | ' +
+        'add-unit | remove-unit';
+  finally
+    LeaveFileEdit;
+  end;
 end;
 
 initialization

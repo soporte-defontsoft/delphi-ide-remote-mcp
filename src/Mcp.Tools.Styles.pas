@@ -638,7 +638,8 @@ end;
 
 { ---- dispatcher ---- }
 
-function TDelphiStylesTool.ExecuteWithParams(const Params: TDelphiStylesParams): string;
+{ El gesto; ExecuteWithParams envuelve los que ESCRIBEN en el cerrojo. }
+function GestoDeEstilos(const Params: TDelphiStylesParams): string;
 var
   Cmd, Denied: string;
 begin
@@ -687,6 +688,22 @@ begin
       Result := 'ERROR ' + E.ClassName + ': ' + E.Message;
   end;
   Result := MaskDriveText('delphi_styles', Result);
+end;
+
+function TDelphiStylesTool.ExecuteWithParams(const Params: TDelphiStylesParams): string;
+begin
+  // set/clone/delete reescriben el .dfm leyendolo entero: cerrojo, como
+  // cualquier otra edicion. build NO entra - lanza el conversor externo y
+  // puede tardar segundos; tener ahi dentro el cerrojo de TODAS las escrituras
+  // del servidor seria peor que la carrera que evita.
+  if not MatchText(Params.Command.Trim.ToLower, ['set', 'clone', 'delete']) then
+    Exit(GestoDeEstilos(Params));
+  EnterFileEdit;
+  try
+    Result := GestoDeEstilos(Params);
+  finally
+    LeaveFileEdit;
+  end;
 end;
 
 initialization

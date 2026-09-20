@@ -301,6 +301,8 @@ Build a Delphi project for real with MSBuild on this machine (rsvars located via
 | `profile` | string | optional | Connection profile name for target=Deploy on a PAServer platform (see `delphi_paserver command=profiles`). The deployed files land on the target under its PAServer scratch dir, in `<profile>/<project name>/` |
 | `deviceid` | string | optional | Android device serial for target=Deploy on Android platforms (see `delphi_adb command=devices`) — measured: msbuild only auto-installs on iOS; on Android install the built .apk with `delphi_adb command=install` |
 
+One msbuild at a time, server-wide: two builds share output folders and would corrupt each other, so a second one queues (the answer says how long it waited in `queuedMs`). If the `.exe` the build has to write is OPEN — typically a `delphi_run` or `delphi_test` of that same project still alive — the compiler answers F2039; the build retries for a few seconds and, if it gets through, says so in `lockedRetries`. If it does not, `lockedOutputNote` explains what to do: this server never kills a process of the machine, because somebody may be working at the other end.
+
 When the build fails with F2613 (`Unit 'X' not found`) or F1026, the result carries `missingUnits`: each unit with the `sourceFolders` of the library zone where its `.pas` lives (shortest first, at most 6) and a note with the `delphi_config command=add-searchpath platform=<platform> path=<folder>` to run. An empty list means the component is not installed or brings no source for that platform (`delphi_components platform=<platform>`, then `delphi_report`).
 
 Everything above reaches an MSBuild command line, so it is validated at the
@@ -437,6 +439,8 @@ The target needs a graphical session open — a headless box has nothing to show
 
 **The screen-capture permission must have been granted once on that machine**, as part of setting it up (see the note in the Linux/macOS walkthrough for the exact command). Without it the desktop portal tries to ask, and when it cannot paint its dialog — a remote session, a locked screen — it answers nothing: the symptom is a mute 20-second timeout that names no cause. If you hit one, that is what to ask the operator for.
 
+**The target machine is the unit of exclusion, not the call.** `profile` says which machine every gesture goes to — the server never remembers a "current profile" — so one agent can drive two Linux boxes at the same time and nothing mixes. Gestures to the SAME profile are serialized (the node writes its capture in its own deploy folder on that machine, and two gestures at once would fight over it), and each capture lands here named after its profile, so two machines answering at once never overwrite one another.
+
 *Access: read-write (tap and key act on the target's desktop; screenshot and status are read-only in spirit but travel the same path). Since v0.98 it runs under the SAME workspace switches as remote-run: `AllowRemoteRun=1`, `McpDesktopNode` (or the wildcard `all`) in `RemoteRunProjects`, and the profile's host inside `RemoteHosts`.*
 
 | Parameter | Type | Required | Description |
@@ -460,6 +464,8 @@ THE FLOW is the one you already know: `command=screenshot` brings the WHOLE desk
 **Coordinates are real pixels, and that is a trap worth naming** (measured 2026-09-19): the node is DPI-aware, so what it reports matches the screenshot exactly. A tool that is NOT DPI-aware sees the same window somewhere else — on a 125% display, the same Notepad was at 600,254 for a non-aware caller and at 750,318 for the node. Measure on the screenshot or on `command=windows`, and never mix in coordinates from another source.
 
 **It needs an unlocked session.** A locked Windows answers "Access denied" to any capture — the exact twin of a Linux with no DISPLAY — and the tool says so in `hint` instead of leaving you guessing.
+
+**One gesture at a time.** The desktop is a single machine, not a per-call resource: gestures from different agents are serialized, and each capture comes back with its own file name (milliseconds plus a unique tail). Two agents asking for a screenshot in the same second used to receive the SAME image (measured 2026-09-20). Serialized does not mean coordinated: if two agents drive the same screen, each still acts on what it saw, and what it saw may have moved.
 
 *Access: read-write, and OFF unless the operator says otherwise. It needs `AllowDesktopControl=1` in YOUR workspace (absent = off, never inherited) and is refused outright to a read-only credential. Treat it differently from its two siblings: they look at a test machine, this one looks at the operator's own screen and moves the operator's own mouse — whatever they have open is in frame.*
 
@@ -705,7 +711,7 @@ Your MAILBOX: messages the operator leaves for you (the way back of delphi_repor
 | `command` | string | optional | read (default: deliver every pending message for this agent, then mark it delivered) \| check (titles and dates of what is pending, nothing consumed) |
 | `agent` | string | optional | Your agent id - the same value you give delphi_report as "agent" (e.g. dsh, hermes). Messages addressed to everyone are delivered too |
 
-Operator side: drop a `.md` in `messages\<agent>\` or `messages\` next to the server exe (`scripts\Enviar-Mensaje.ps1 -Agente dsh -Titulo ... -Texto ...`). Delivered files move to `messages\_entregados\<agent>\`.
+Operator side: drop a `.md` in `messages\<agent>\` or `messages\` next to the server exe (`scripts\Enviar-Mensaje.ps1 -Agente dsh -Titulo ... -Texto ...`). A message addressed to ONE agent moves to `messages\_entregados\<agent>\` when it is delivered. A message left in the ROOT is for **everyone**: it stays there and each agent gets a copy in `messages\_entregados\<agent>\` as the mark that it already read it — so it reaches all of them and none of them twice. Retire it when it has been seen (after `MessagesRetentionDays`, 30 by default, the marks are purged and it would be delivered again). A caller with no identity — stdio, the operator's own console — still takes it off the board, the same rule the recoverable trash uses.
 
 ## Knowledge vault (optional — only for workspaces that declare `VaultPath=`)
 

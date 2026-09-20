@@ -69,6 +69,8 @@ implementation
 
 uses
   System.JSON,
+  System.SyncObjs,
+  System.Generics.Collections,
   System.IOUtils,
   System.StrUtils,
   MCPServer.Registration,
@@ -83,6 +85,29 @@ begin
   FDescription := SD_ADBLINUX;
 end;
 
+var
+  { UN gesto por MAQUINA a la vez - no uno por servidor: dos Linux distintos
+    pueden ir en paralelo (es justo para lo que existe el parametro profile),
+    pero dos agentes sobre EL MISMO target se interleavan las pulsaciones y se
+    pisan el captura.png que el nodo escribe en su carpeta de despliegue. Un
+    cerrojo por perfil, creado la primera vez que ese perfil se usa. }
+  GPerfilesLock: TCriticalSection;
+  GPerfiles: TObjectDictionary<string, TCriticalSection>;
+
+function CerrojoDePerfil(const APerfil: string): TCriticalSection;
+begin
+  GPerfilesLock.Enter;
+  try
+    if not GPerfiles.TryGetValue(APerfil.Trim.ToLower, Result) then
+    begin
+      Result := TCriticalSection.Create;
+      GPerfiles.Add(APerfil.Trim.ToLower, Result);
+    end;
+  finally
+    GPerfilesLock.Leave;
+  end;
+end;
+
 { La linea CAPTURA=<ruta> que el nodo escribe al guardar una captura. }
 function RutaDeCaptura(const ASalida: string): string;
 var
@@ -94,9 +119,26 @@ begin
       Result := L.Trim.Substring(8);
 end;
 
-function TDesktopLinuxTool.ExecuteWithParams(const Params: TDesktopLinuxParams): string;
+{ El nombre del perfil, apto para un nombre de fichero (lo eligio el operador
+  en el IDE: puede traer espacios y acentos). }
+function NombreSeguro(const S: string): string;
+var
+  C: Char;
+begin
+  Result := '';
+  for C in S do
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '-', '_']) then
+      Result := Result + C;
+  if Result = '' then
+    Result := 'perfil';
+  Result := Result.ToLower;
+end;
+
+{ El gesto; ExecuteWithParams lo envuelve en el cerrojo de SU maquina. }
+function GestoEnElTarget(const Params: TDesktopLinuxParams): string;
 var
   Cmd, Args, Salida, Destino, Local, Fallo, Remota, Proj, Nota: string;
+  Bajada, Propia: string;
   Res: TJSONObject;
   Return: TJSONObject;
 begin
@@ -198,10 +240,28 @@ begin
       Destino := Params.Out_.Trim;
       if Destino = '' then
         Destino := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-desktop');
+      { La captura baja con SU nombre remoto (captura.png), igual para todos
+        los perfiles: con un destino comun, dos maquinas a la vez se pisaban la
+        imagen y una llamada acababa con la pantalla de la otra. Baja a una
+        carpeta propia y se queda con un nombre que dice de quien es. }
+      Bajada := TPath.Combine(Destino, '.tmp-' +
+        LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
       Fallo := FetchFromTarget(Params.Profile.Trim, Proj,
-        TPath.GetFileName(Remota), Destino, Local);
+        TPath.GetFileName(Remota), Bajada, Local);
       if Fallo = '' then
       begin
+        try
+          Propia := TPath.Combine(Destino, Format('desktop-%s-%s%s',
+            [NombreSeguro(Params.Profile.Trim),
+             FormatDateTime('yyyymmdd-hhnnsszzz', Now),
+             TPath.GetExtension(Remota)]));
+          TDirectory.CreateDirectory(Destino);
+          TFile.Move(Local, Propia);
+          Local := Propia;
+          TDirectory.Delete(Bajada, True);
+        except
+          // si no se puede renombrar, la imagen vale igual donde cayo
+        end;
         Return.AddPair('screenshot', Local);
         Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Local)));
         Return.AddPair('note', 'mide el pixel SOBRE esta imagen y pasalo a ' +
@@ -220,8 +280,27 @@ begin
   end;
 end;
 
+function TDesktopLinuxTool.ExecuteWithParams(const Params: TDesktopLinuxParams): string;
+var
+  Cerrojo: TCriticalSection;
+begin
+  Cerrojo := CerrojoDePerfil(Params.Profile);
+  Cerrojo.Enter;
+  try
+    Result := GestoEnElTarget(Params);
+  finally
+    Cerrojo.Leave;
+  end;
+end;
+
 initialization
+  GPerfilesLock := TCriticalSection.Create;
+  GPerfiles := TObjectDictionary<string, TCriticalSection>.Create([doOwnsValues]);
   TMCPRegistry.RegisterTool('delphi_adb_linux',
     function: IMCPTool begin Result := TDesktopLinuxTool.Create; end);
+
+finalization
+  GPerfiles.Free;
+  GPerfilesLock.Free;
 
 end.

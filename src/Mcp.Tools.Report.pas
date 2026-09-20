@@ -58,6 +58,7 @@ uses
   System.IOUtils,
   System.Classes,
   System.StrUtils,
+  Winapi.Windows,
   MCPServer.Registration,
   MCPServer.Logger;
 
@@ -95,6 +96,21 @@ begin
       Break;
   end;
   Result := Result.Trim(['-']).ToLower;
+end;
+
+{ Reserva el nombre creando el fichero VACIO en exclusiva: si ya existe (o lo
+  acaba de crear otro hilo en este mismo instante) devuelve False y el llamante
+  prueba el siguiente. CREATE_NEW es atomico en el sistema de ficheros, que es
+  justo lo que "if not FileExists then escribir" no es. }
+function ReservarNombre(const APath: string): Boolean;
+var
+  H: THandle;
+begin
+  H := CreateFile(PChar(APath), GENERIC_WRITE, 0, nil, CREATE_NEW,
+    FILE_ATTRIBUTE_NORMAL, 0);
+  Result := H <> INVALID_HANDLE_VALUE;
+  if Result then
+    CloseHandle(H);
 end;
 
 { TDelphiReportTool }
@@ -152,12 +168,18 @@ begin
   FileName := FormatDateTime('yyyymmdd-hhnnss', Stamp) + '-' + Kind;
   if Slug(Title) <> '' then
     FileName := FileName + '-' + Slug(Title);
-  // never overwrite a previous report, even within the same second
+  // Never overwrite a previous report, even within the same second - and
+  // "existe? pues el siguiente" NO basta: dos informes simultaneos contestan
+  // que no a la vez, eligen el mismo nombre y uno pisa al otro (medido
+  // 2026-09-20: de 8 informes a la vez llegaban 6). El nombre se RESERVA
+  // creando el fichero en exclusiva, que es una sola operacion del sistema.
   Path := TPath.Combine(Dir, FileName + '.md');
   I := 1;
-  while TFile.Exists(Path) do
+  while not ReservarNombre(Path) do
   begin
     Inc(I);
+    if I > 500 then // absurdo, pero nunca un bucle infinito
+      Exit(SR_REPORT_NO_NAME);
     Path := TPath.Combine(Dir, Format('%s-%d.md', [FileName, I]));
   end;
 

@@ -67,6 +67,7 @@ uses
   System.JSON,
   System.IOUtils,
   System.StrUtils,
+  System.SyncObjs,
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.BuildRunner,
@@ -74,6 +75,15 @@ uses
 
 const
   NODO_TIMEOUT = 30000;   { un gesto no deberia pasar de unos segundos }
+
+var
+  { El escritorio es UNO. Dos agentes pulsando o mirando a la vez no solo se
+    interleavan los gestos: el nodo escribe SIEMPRE el mismo captura.png a su
+    lado, asi que entre capturar y mover la imagen el otro ya la habia pisado y
+    las dos llamadas recibian la MISMA foto (medido 2026-09-20, bateria de
+    concurrencia). Un gesto cada vez, que es lo unico que significa "este
+    escritorio". }
+  GEscritorio: TCriticalSection;
 
 function NodoWindowsPath: string;
 begin
@@ -161,6 +171,11 @@ begin
 
   { El nodo solo obedece al servidor: la clave va SIEMPRE delante (NodeKey.inc),
     y aqui solo se llega si el workspace declaro AllowDesktopControl=1. }
+  { Un gesto cada vez: el nodo y su captura.png son recursos de LA maquina,
+    no de la llamada (ver GEscritorio). El cerrojo abarca desde el gesto hasta
+    que la imagen esta a salvo con su nombre propio. }
+  GEscritorio.Enter;
+  try
   Salida := RunCaptured(Format('"%s" %s %s', [Nodo, NODE_KEY, Args]),
     NODO_TIMEOUT, Codigo);
 
@@ -181,8 +196,12 @@ begin
         Destino := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-desktop');
       try
         TDirectory.CreateDirectory(Destino);
-        Local := TPath.Combine(Destino, Format('desktop-%s.png',
-          [FormatDateTime('yyyymmdd-hhnnss', Now)]));
+        { Milisegundos y un fragmento GUID: con resolucion de SEGUNDOS dos
+          capturas del mismo segundo compartian nombre y la segunda pisaba a
+          la primera - las dos llamadas se llevaban la misma imagen. }
+        Local := TPath.Combine(Destino, Format('desktop-%s-%s.png',
+          [FormatDateTime('yyyymmdd-hhnnsszzz', Now),
+           LowerCase(TGUID.NewGuid.ToString.Substring(1, 6))]));
         TFile.Copy(Origen, Local, True);
         TFile.Delete(Origen);
         Return.AddPair('screenshot', Local);
@@ -207,10 +226,17 @@ begin
   finally
     Return.Free;
   end;
+  finally
+    GEscritorio.Leave;
+  end;
 end;
 
 initialization
+  GEscritorio := TCriticalSection.Create;
   TMCPRegistry.RegisterTool('delphi_desktop',
     function: IMCPTool begin Result := TDesktopWinTool.Create; end);
+
+finalization
+  GEscritorio.Free;
 
 end.

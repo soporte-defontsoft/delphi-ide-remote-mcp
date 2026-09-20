@@ -260,7 +260,8 @@ begin
      ReadNumbered(A.Path, Target, Target + Length(NewLines) + 1)]);
 end;
 
-function ExecuteTextEdit(const A: TTextEditArgs): string;
+{ El trabajo; ExecuteTextEdit lo envuelve en el cerrojo de escritura. }
+function TextEditNucleo(const A: TTextEditArgs): string;
 begin
   try
     Result := PathDenied(A.Path);
@@ -284,6 +285,19 @@ begin
   except
     on E: Exception do
       Result := 'RECHAZADO: ' + E.Message;
+  end;
+end;
+
+function ExecuteTextEdit(const A: TTextEditArgs): string;
+begin
+  // Dentro del cerrojo de escritura, igual que delphi_edit: leer-modificar-
+  // escribir no es atomico, y dos agentes sobre el mismo fichero perdian
+  // ediciones dando exito (medido 2026-09-20, bateria de concurrencia).
+  EnterFileEdit;
+  try
+    Result := TextEditNucleo(A);
+  finally
+    LeaveFileEdit;
   end;
 end;
 

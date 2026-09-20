@@ -761,7 +761,7 @@ end;
 
 { ---- public operations ---- }
 
-function AddProjectUnit(const AProject, APasPath: string): string;
+function AddProjectUnitNucleo(const AProject, APasPath: string): string;
 var
   Dpr, Dproj, Enc, Text, Include, Entry, Note: string;
   Info: TUnitInfo;
@@ -839,6 +839,20 @@ begin
     Result := Result + #10 + Note;
 end;
 
+function AddProjectUnit(const AProject, APasPath: string): string;
+begin
+  // Registrar una unidad es leer el .dpr, modificarlo y escribirlo: dos
+  // agentes creando unidades en el MISMO proyecto a la vez perdian entradas
+  // dando exito (medido 2026-09-20, bateria de concurrencia). Con el cerrojo
+  // de escritura por delante, el .dpr deja de ser una carrera.
+  EnterFileEdit;
+  try
+    Result := AddProjectUnitNucleo(AProject, APasPath);
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
 { The entry and the .dproj include for a unit, by unit name or by file stem
   (the .pas may already be gone when delete calls us). }
 function LocateEntry(const U: TUsesClause; const AUnitName: string; out AEntry: string): Boolean;
@@ -854,7 +868,7 @@ begin
   Result := False;
 end;
 
-function RemoveProjectUnit(const AProject, APasPath: string;
+function RemoveProjectUnitNucleo(const AProject, APasPath: string;
   AFileGoesToo: Boolean): string;
 var
   Dpr, Dproj, Enc, Text, UnitName, Entry, Include, FormName, ClassName: string;
@@ -943,7 +957,18 @@ begin
     IfThen(InDproj, ', DCCReference del .dproj', ''), TPath.GetFileName(APasPath)]);
 end;
 
-function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
+function RemoveProjectUnit(const AProject, APasPath: string;
+  AFileGoesToo: Boolean): string;
+begin
+  EnterFileEdit;
+  try
+    Result := RemoveProjectUnitNucleo(AProject, APasPath, AFileGoesToo);
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
+function RenameProjectUnitNucleo(const AProject, AOldPasPath, ANewPasPath: string): string;
 var
   Dpr, Dproj, Enc, Text, OldName, OldInclude, Entry, NewInclude, Prefix, Core: string;
   U: TUsesClause;
@@ -998,6 +1023,16 @@ begin
   end;
   Result := Format(SN_UNIT_RENAMED_FMT, [OldName, OldInclude, Info.UnitName, NewInclude,
     TPath.GetFileName(Dpr)]);
+end;
+
+function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
+begin
+  EnterFileEdit;
+  try
+    Result := RenameProjectUnitNucleo(AProject, AOldPasPath, ANewPasPath);
+  finally
+    LeaveFileEdit;
+  end;
 end;
 
 function ProjectUnits(const AProject: string; ANeedDproj: Boolean): TArray<TProjectUnit>;

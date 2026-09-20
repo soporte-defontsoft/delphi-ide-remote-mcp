@@ -2150,7 +2150,21 @@ const
     'un depurador enganchado. Espera a que termine lo que este corriendo y ' +
     'repite; si es delphi_test quien lo dejo colgado, tiene timeout y se mata ' +
     'solo. Yo NO mato procesos de esta maquina: puede haber alguien ' +
-    'trabajando con el IDE al otro lado.';
+    'trabajando con el IDE al otro lado. (Ya lo he reintentado varias veces ' +
+    'durante unos segundos antes de contestarte: lo que lo tiene abierto no ' +
+    'es cosa de un momento.)';
+
+  SR_PACKAGE_RENAME_FMT =
+    'ERROR: el zip se creo pero no he podido dejarlo en %s (alguien lo tiene ' +
+    'abierto: una descarga en curso, el explorador, un antivirus). Reintenta ' +
+    'en unos segundos.';
+
+  // El otro lado de lo mismo: reintento y SALIO. Un build que de pronto tarda
+  // cinco segundos de mas sin explicacion invita a pensar que algo va mal.
+  SN_BUILD_LOCKED_RETRY =
+    'El binario estaba en uso (F2039) cuando empece - tipicamente una ' +
+    'ejecucion de delphi_run o delphi_test todavia viva - asi que repeti el ' +
+    'build hasta que quedo libre. El resultado es bueno; solo tardo mas.';
 
   SN_BUILD_DEFAULT_PLATFORM =
     'No me diste "platform", asi que he compilado Win32, que es el defecto de ' +
@@ -2927,6 +2941,12 @@ const
     'RECHAZADO: el reporte ocupa %d KB y el limite son %d KB. Cuenta lo ' +
     'esencial (que intentaste, que paso, que esperabas) y parte lo demas en ' +
     'varios reportes: se acumulan, no se sobreescriben.';
+
+  // 500 informes del mismo tipo, titulo y segundo: no pasa en la vida real,
+  // pero un bucle de nombres sin techo tampoco se deja abierto.
+  SR_REPORT_NO_NAME =
+    'RECHAZADO: no encuentro un nombre libre para el reporte en la carpeta ' +
+    'reports. Cambia el "title" y reintenta.';
 
   SN_REPORT_OK_FMT =
     'GRACIAS - reporte guardado como %s (v%s).'#10 +

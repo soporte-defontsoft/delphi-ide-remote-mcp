@@ -109,6 +109,33 @@ begin
   end;
 end;
 
+{ Un aviso de la RAIZ ("para todos") ya lo recogio ESTE agente? La huella es su
+  copia en _entregados\<agente>\ con el mismo nombre; el aviso original se queda
+  en la raiz, que para eso es para todos. Sin identidad no hay huella posible:
+  ahi manda la regla de siempre (stdio/operador = se lo lleva). }
+function AvisoYaLeido(const ARoot, AFichero, AAgente: string): Boolean;
+begin
+  Result := (AAgente <> '') and TFile.Exists(TPath.Combine(TPath.Combine(
+    TPath.Combine(ARoot, DELIVERED_DIR), AAgente), TPath.GetFileName(AFichero)));
+end;
+
+{ Los avisos de la raiz que le faltan por leer a AAgente. }
+function AvisosPendientes(const ARoot, AAgente: string): TArray<string>;
+var
+  L: TList<string>;
+  F: string;
+begin
+  L := TList<string>.Create;
+  try
+    for F in PendingIn(ARoot) do
+      if not AvisoYaLeido(ARoot, F, AAgente) then
+        L.Add(F);
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
 function PendingMessagesNote: string;
 var
   Root, D: string;
@@ -127,7 +154,10 @@ begin
   //   is the only thing that names itself.
   // - mail addressed to a named agent is only COUNTED, never named. Whoever
   //   is waiting for post checks their own box; nobody else learns anything.
-  Broadcast := Length(PendingIn(Root));
+  // Un aviso que ESTE agente ya leyo no se le vuelve a anunciar: desde que el
+  // aviso se queda en la raiz para los demas, contarlo a secas dejaba la linea
+  // "MENSAJES PENDIENTES" clavada en todas sus respuestas para siempre.
+  Broadcast := Length(AvisosPendientes(Root, Slug(CurrentAgent)));
   Directed := 0;
   for D in TDirectory.GetDirectories(Root) do
   begin
@@ -230,6 +260,7 @@ var
   Files: TArray<string>;
   Sb: TStringBuilder;
   N: Integer;
+  EsAviso: Boolean;
 begin
   PurgarEntregados;
   Cmd := Params.Command.Trim.ToLower;
@@ -245,7 +276,7 @@ begin
   if Agent = '' then
     Agent := Slug(CurrentAgent);
   Root := MessagesRoot;
-  Files := PendingIn(Root);
+  Files := AvisosPendientes(Root, Agent); // los avisos que le faltan a EL
   if Agent <> '' then
   begin
     AgentDir := TPath.Combine(Root, Agent);
@@ -277,17 +308,28 @@ begin
       Sb.AppendLine(TFile.ReadAllText(F, TEncoding.UTF8).TrimRight);
       Sb.AppendLine;
       // delivered once: park it where the operator can still read it
+      EsAviso := SameText(TPath.GetDirectoryName(F), Root);
       DestDir := TPath.Combine(Root, DELIVERED_DIR);
-      if not SameText(TPath.GetDirectoryName(F), Root) then
+      if not EsAviso then
         DestDir := TPath.Combine(DestDir, TPath.GetFileName(TPath.GetDirectoryName(F)))
       else if Agent <> '' then
         DestDir := TPath.Combine(DestDir, Agent); // who collected the broadcast
       TDirectory.CreateDirectory(DestDir);
       Dest := TPath.Combine(DestDir, TPath.GetFileName(F));
-      if TFile.Exists(Dest) then
-        Dest := TPath.Combine(DestDir, FormatDateTime('hhnnss', Now) + '-' + TPath.GetFileName(F));
       try
-        TFile.Move(F, Dest);
+        if EsAviso and (Agent <> '') then
+          // "Para todos" es para TODOS: el aviso se QUEDA en la raiz y aqui
+          // solo se guarda la marca de que este agente ya lo leyo, con su
+          // nombre exacto. Antes se lo llevaba el primero que leia y el
+          // segundo recibia "sin mensajes" (medido 2026-09-20).
+          TFile.Copy(F, Dest, True)
+        else
+        begin
+          if TFile.Exists(Dest) then
+            Dest := TPath.Combine(DestDir,
+              FormatDateTime('hhnnss', Now) + '-' + TPath.GetFileName(F));
+          TFile.Move(F, Dest);
+        end;
       except
         // a message that cannot be parked stays pending (delivered again later)
       end;

@@ -243,6 +243,7 @@ implementation
 
 uses
   System.RegularExpressions,
+  Winapi.Windows,
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Client,
@@ -1635,7 +1636,7 @@ end;
 
 function TDelphiPackageTool.ExecuteWithParams(const Params: TDelphiPackageParams): string;
 var
-  Dir, OutZip, F, Rel: string;
+  Dir, OutZip, EnProceso, F, Rel: string;
   Zip: TZipFile;
   Return: TJSONObject;
   Count: Integer;
@@ -1661,21 +1662,27 @@ begin
   Result := PathDenied(OutZip);
   if Result <> '' then
     Exit;
-  if TFile.Exists(OutZip) then
-    TFile.Delete(OutZip); // packages are disposable artifacts, always fresh
+  // El zip se arma con nombre propio y se pone en su sitio de un golpe al
+  // final. Empaquetar sobre el nombre definitivo hacia que dos llamadas a la
+  // vez sobre la misma carpeta se estorbasen - una borraba el zip que la otra
+  // estaba escribiendo y saltaba "el proceso no tiene acceso al archivo"
+  // (medido 2026-09-20). Ahora cada una arma el suyo y la ultima gana, entero.
+  EnProceso := OutZip + '.' +
+    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)) + '.tmp';
 
   Count := 0;
   TotalBytes := 0;
   Zip := TZipFile.Create;
   try
-    Zip.Open(OutZip, zmWrite);
+    Zip.Open(EnProceso, zmWrite);
     for F in WalkFiles(Dir, '*') do
     begin
       if SameText(TPath.GetExtension(F), '.dcu') then
         Continue;
       if F.ToLower.Contains('\dcu\') then
         Continue;
-      if SameText(TPath.GetFullPath(F), OutZip) then
+      if SameText(TPath.GetFullPath(F), OutZip) or
+         SameText(TPath.GetFullPath(F), EnProceso) then
         Continue;
       Rel := F.Substring(Length(IncludeTrailingPathDelimiter(Dir))).Replace('\', '/');
       Zip.Add(F, Rel);
@@ -1685,6 +1692,16 @@ begin
     Zip.Close;
   finally
     Zip.Free;
+  end;
+  // Un solo gesto del sistema: nadie ve nunca un zip a medias con el nombre
+  // bueno (packages are disposable artifacts, always fresh).
+  if not MoveFileEx(PChar(EnProceso), PChar(OutZip), MOVEFILE_REPLACE_EXISTING) then
+  begin
+    try
+      TFile.Delete(EnProceso);
+    except
+    end;
+    Exit(Format(SR_PACKAGE_RENAME_FMT, [OutZip]));
   end;
 
   Return := TJSONObject.Create;

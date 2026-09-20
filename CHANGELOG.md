@@ -8,6 +8,50 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+- **Several agents at once no longer lose each other's work.** The HTTP host
+  has always served every request on its own thread, so two agents — or one
+  agent firing parallel calls — run tools concurrently; a new battery
+  (`tests/test_concurrencia.py`, 8 probes) measured what that actually broke,
+  and this is the repair list:
+  - **Edits were lost with success reported.** Twelve simultaneous edits of one
+    text file landed six. Two causes: the pre-edit backup did `if not exists
+    then copy`, and the second writer died on "Cannot create file"; and
+    read-modify-write was only serialized inside `delphi_edit`, so
+    `delphi_textedit` and the project-file writers raced. The backup is now
+    tolerant, the atomic write's temp file carries a unique name (it was
+    shared, so one writer could publish another's bytes), and every editing
+    path goes through the same write lock.
+  - **Units vanished from the `.dpr`.** Eight `delphi_create` into one project
+    registered four. Registering a unit is now serialized like an edit.
+  - **Reports overwrote each other.** Eight `delphi_report` at once wrote five
+    files: "is this name free?" was answered by several threads at the same
+    time. The name is now reserved by creating the file exclusively.
+  - **A screenshot could be another agent's screen.** The node always writes
+    the same `captura.png` and the copy was named by the second, so two
+    captures of the same second collided — both calls got one image. Captures
+    now carry milliseconds and a unique tail, the local desktop takes one
+    gesture at a time, and a remote capture lands in its own folder and keeps
+    the profile's name. A remote gesture is serialized PER PROFILE: two
+    different Linux boxes still work in parallel, which is what `profile` is
+    for.
+  - **`delphi_package` twice on one folder** deleted the zip the other was
+    writing. Each call now builds its own and publishes it in one move.
+  - **A build whose `.exe` was running** failed with F2039. It now retries for
+    a few seconds before answering, and says so (`lockedRetries`) — queueing
+    the build behind a five-minute run would be worse.
+  - **The node deploy check** compared the target's stamp through a shared
+    temp name, so two profiles checked at once could read each other's;
+    checking and deploying are now one gesture, per profile.
+
+### Changed
+- **A message "para todos" now reaches everyone.** It used to be consumed by
+  the first agent that read its mail, and the second was told there was
+  nothing. The broadcast stays in the mailbox root and each agent gets a
+  delivery mark in `_entregados\<agent>\`, so nobody reads it twice and nobody
+  misses it. A caller with no identity (stdio, the operator's own console)
+  still takes it off the board, the same rule the recoverable trash uses.
+
 ## [0.99.1-beta] - 2026-09-20
 
 ### Added

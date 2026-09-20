@@ -1152,7 +1152,8 @@ begin
   FDescription := SD_DESIGNER;
 end;
 
-function TDelphiDesignerTool.ExecuteWithParams(const Params: TDelphiDesignerParams): string;
+{ El gesto; ExecuteWithParams lo envuelve en el cerrojo de escritura. }
+function GestoDeDisenador(const Params: TDelphiDesignerParams): string;
 var
   Cmd, Fw: string;
 begin
@@ -1196,6 +1197,20 @@ begin
   else
     Result := SR_DESIGNER_CMD;
   Result := MaskDriveText('delphi_designer', Result);
+end;
+
+function TDelphiDesignerTool.ExecuteWithParams(const Params: TDelphiDesignerParams): string;
+begin
+  // Media docena de comandos de aqui reescriben el .dfm/.fmx leyendolo entero,
+  // cambiando una propiedad y guardandolo: es una edicion como cualquier otra
+  // y va bajo el mismo cerrojo. Los de solo lectura (info, prop) pasan por el
+  // igual - miran tablas en memoria y no lo tienen ni un milisegundo.
+  EnterFileEdit;
+  try
+    Result := GestoDeDisenador(Params);
+  finally
+    LeaveFileEdit;
+  end;
 end;
 
 initialization

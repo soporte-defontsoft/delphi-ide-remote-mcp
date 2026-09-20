@@ -83,12 +83,31 @@ check('broadcast archivado bajo quien lo recogio', os.path.exists(os.path.join(M
 t = call('delphi_messages', {"agent": "dsh"})
 check('segunda lectura: nada', t.startswith('Sin mensajes para "dsh"'), t)
 t = call('delphi_workspace', {})
-check('sin aviso cuando no hay nada', 'MENSAJES PENDIENTES' not in t, t[-80:])
+# "Para todos" es para TODOS (2026-09-20): que dsh lo haya recogido no lo
+# retira del buzon, asi que a ESTE cliente - que no lo ha leido - se le sigue
+# anunciando. Antes se lo llevaba el primero y el segundo no se enteraba.
+check('el aviso para TODOS sigue anunciandose a quien no lo ha leido',
+      'MENSAJES PENDIENTES: 1 para TODOS' in t, t[-120:])
+check('el correo de dsh ya no se cuenta (lo leyo)',
+      'para agentes concretos' not in t, t[-120:])
 # Desde v0.68 el buzon toma tu identidad del handshake (clientInfo.name), asi
 # que "read" sin agent lee TU correo sin teclearlo. Este cliente se llama
-# "messages-battery", que no tiene correo -> lo dice, nombrandote.
+# "messages-battery": no tiene correo propio, pero el aviso general TAMBIEN es
+# suyo y lo recibe entero.
 t = call('delphi_messages', {})
-check('sin agent: usa la identidad del handshake', 'messages-battery' in t, t)
+check('sin agent: la identidad del handshake recibe el aviso de todos',
+      'Aviso general' in t, t)
+t = call('delphi_workspace', {})
+check('leido por este agente: deja de anunciarse', 'MENSAJES PENDIENTES' not in t,
+      t[-120:])
+t = call('delphi_messages', {})
+check('y no se le entrega dos veces',
+      t.startswith('Sin mensajes para "messages-battery"'), t)
+check('el aviso SIGUE en el buzon para los demas',
+      os.path.exists(os.path.join(MSG, '20260823-0059-aviso.md')))
+check('con su marca de lectura por agente',
+      os.path.exists(os.path.join(MSG, '_entregados', 'messages-battery',
+                                  '20260823-0059-aviso.md')))
 t = call('delphi_messages', {"command": "x"})
 check('command invalido', t.startswith('error:'), t)
 # the agent id is slugged like delphi_report: no path tricks

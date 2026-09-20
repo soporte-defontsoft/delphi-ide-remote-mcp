@@ -423,7 +423,9 @@ begin
   Result := H.HashAsString.ToLower;
 end;
 
-function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
+{ El trabajo; EnsureNodeCurrent lo envuelve en el cerrojo del nodo. }
+function EnsureNodeCurrentNucleo(const AProfile: string;
+  out AAccion: string): string;
 var
   Bin, LocalSha, RemotoSha, Pc, Output, VerLocal, VerFile, TmpDir: string;
   Rc: Integer;
@@ -431,13 +433,8 @@ var
 begin
   Result := '';
   AAccion := '';
-  GNodoLock.Enter;
-  try
-    if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) >= 0 then
-      Exit;
-  finally
-    GNodoLock.Leave;
-  end;
+  if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) >= 0 then
+    Exit;
   { Al target va el binario de SU sistema: el ELF a un Linux y el .exe a un
     Windows con PAServer. El nombre en el destino es el mismo para los dos
     (el proyecto), asi que el sello y el lanzador no cambian. }
@@ -448,7 +445,13 @@ begin
   if Pc = '' then
     Exit(SR_REMOTERUN_NO_PACLIENT);
   LocalSha := Sha256DeFichero(Bin);
-  TmpDir := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-remoterun');
+  // Carpeta PROPIA de esta comprobacion: el sello baja con su nombre remoto
+  // (node.ver), asi que con un destino comun la comprobacion de un perfil se
+  // llevaba por delante la de otro - dos Linux a la vez y cada uno leyendo el
+  // sello del contrario (analisis de concurrencia 2026-09-20).
+  TmpDir := TPath.Combine(TPath.Combine(TPath.GetTempPath,
+    'delphi-mcp-remoterun'), 'ver-' +
+    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
   TDirectory.CreateDirectory(TmpDir);
   // el sello del target: ausente = nodo de antes de los sellos (o ninguno)
   RemotoSha := '';
@@ -483,10 +486,24 @@ begin
     else
       AAccion := 'actualizado';
   end;
+  if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) < 0 then
+    GNodoAlDia.Add(AProfile.Trim.ToLower);
+  try
+    TDirectory.Delete(TmpDir, True); // la carpeta de ESTA comprobacion
+  except
+    // dejar un temporal huerfano nunca es motivo para fallar un despliegue
+  end;
+end;
+
+function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
+begin
+  // Comprobar el sello y desplegar son UN gesto: separados, dos llamadas
+  // simultaneas veian las dos "falta el nodo" y subian el binario a la vez
+  // sobre el mismo fichero del target (analisis 2026-09-20). Pasa una vez por
+  // perfil y proceso, asi que un cerrojo unico no le cuesta nada a nadie.
   GNodoLock.Enter;
   try
-    if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) < 0 then
-      GNodoAlDia.Add(AProfile.Trim.ToLower);
+    Result := EnsureNodeCurrentNucleo(AProfile, AAccion);
   finally
     GNodoLock.Leave;
   end;
