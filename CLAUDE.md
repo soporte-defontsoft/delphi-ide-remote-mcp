@@ -55,6 +55,31 @@ The corollary: **a shared helper is also where the NEXT feature of the same
 family lands.** `AplicaTanda` is the example — the two things still pending
 for batches now have one place to be written instead of two.
 
+## One namer (David, 2026-09-20)
+
+The strong form of the rule, and his own words: *"si siempre pasan por el
+mismo nombrador se te acaban los problemas"*. When something has a FORMAT —
+a file name, a path, a key, an id, a wire format — there is **one function
+that composes it and one that reads it, and the reader is the inverse of the
+writer**. Nobody builds one by hand, anywhere.
+
+Why it is not the same as the two questions above: you can pass both of them
+and still fail here. v1.0.8 unified the READER of the trash file names and
+left the three WRITERS alone — so the copy taken before a `restore`, named by
+hand in a third shape, was invisible to the listing and could not be
+restored. The edge was fixed and the point was left. **It took David one
+question to find it**, the day it shipped.
+
+The test is mechanical: grep for the format, not for the function name. If
+two places build the same kind of string, one of them will drift, and the
+reader will only understand one of them. A repeated *constant* is the same
+smell one size down.
+
+And the design cue that falls out of it: when two copies need to be told
+apart, put the difference in the **folder, the prefix, the field** — never in
+a variant of the name itself. The name stays one shape, so the reader keeps
+working for all of them.
+
 Full version, with the criteria for when a boolean is *not* the right answer:
 `conventions/paisaje-antes-de-tocar.md` in the vault.
 

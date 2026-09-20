@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.9-beta] - 2026-09-20
+
+**One namer.** David asked a single question about 1.0.8 — *"did you
+centralise the file naming in the trash, or is it written in several
+places?"* — and the answer was the second one. 1.0.8 unified the READER and
+left three WRITERS, which is fixing the edge and leaving the point: the very
+habit this repo's `CLAUDE.md` exists to break.
+
+### Fixed — three conventions for the same trash
+Three places composed paths inside `__delphi-patch`, each with its own shape:
+
+```
+delphi_delete   __delphi-patch\<day>\deleted\UFicha.pas-215825250   9-digit stamp
+a pre-edit copy __delphi-patch\<day>\UMain.pas                      no stamp
+a pre-restore   __delphi-patch\<day>\UMain.pas.antes-restaurar-221530   6-digit, other shape
+```
+
+The reader added in 1.0.8 only understood the first, so the copy taken before
+a `restore` — the one that holds what you are about to lose — **could not be
+found by `delphi_list includetrash` and could not be properly restored**: the
+`*.pas-*` mask does not match `.pas.antes-restaurar-`, and the unit path reads
+that as an unknown extension, which is the `.dfm`-left-behind bug again.
+
+- There is now ONE namer (`TrashDayDir` + `TrashStampedName`) and the reader
+  is its inverse. The stamp is always `-hhnnsszzz`; what distinguishes one
+  kind of copy from another is its **drawer**, not its name, so a pre-restore
+  copy lives in `<day>\antes-restaurar\` next to `<day>\deleted\`.
+- Nobody composes those paths by hand any more, which is the point: a new kind
+  of copy cannot invent a fourth convention.
+- `BACKUP_SUB` was declared twice, in two units. A repeated constant is a
+  convention waiting to drift; its owner declares it now.
+
+### Measured
+- `test_round37` grew to 16 checks; the two new ones fail against 1.0.8,
+  which was released an hour earlier. Suite: 60 batteries, 1474 checks, 0
+  failures.
+
 ## [1.0.8-beta] - 2026-09-20
 
 Four items off the *known and not fixed* list, and the thread running through

@@ -21,6 +21,12 @@ extension -"UFicha.pas-215825250"-, y nadie sabia quitarselo.
   T6  restaurar barre el marcador .by de los dos ficheros
   T7  sin includetrash la papelera sigue escondida (no se ha abierto de par
       en par por el camino)
+  T8  EL NOMBRADOR: la copia previa a un restore -que se componia a mano, con
+      OTRA forma de sello (".pas.antes-restaurar-221530")- tambien se
+      encuentra y tambien se restaura. Tres sitios componian rutas dentro de
+      __delphi-patch con tres convenciones y el lector solo entendia una:
+      arreglado el borde, el punto seguia abierto. Ahora el sello lo pone UN
+      nombrador y lo que distingue una copia de otra es su CAJON.
 
 Usage:  python tests/test_round37.py [path-to-DelphiLspMcp.exe]
 """
@@ -191,6 +197,32 @@ try:
         quedan += [x for x in f_ if x.lower().endswith('.by')]
     check('T6 los marcadores .by de lo restaurado se barren',
           not any('UFicha' in x for x in quedan), str(quedan)[:240])
+
+    # ------------------------------------------------------------------ T8
+    # Se edita UMain.pas y se restaura: eso deja una copia "previa al
+    # restore" que ANTES se llamaba UMain.pas.antes-restaurar-221530 y que
+    # ningun lector de la papelera reconocia.
+    umain = os.path.join(PROY, 'UMain.pas')
+    orig = open(umain, 'rb').read()
+    call('delphi_edit', {'path': umain, 'old': 'implementation',
+                         'new': 'implementation' + chr(10) + chr(10) +
+                                '// linea que se perdera al restaurar'})
+    r = call('delphi_edit', {'path': umain, 'restore': True, 'confirm': True})
+    check('T8 setup: restaurado', 'RESTAURADO' in r, r[:200])
+    previas = []
+    for r_, d_, f_ in os.walk(os.path.join(PROY, '__delphi-patch')):
+        for x in f_:
+            if x.startswith('UMain.pas') and x != 'UMain.pas':
+                previas.append(os.path.join(r_, x))
+    check('T8b la copia previa al restore lleva el sello del NOMBRADOR',
+          previas and all(p.split('-')[-1].isdigit() and
+                          len(p.split('-')[-1]) == 9 for p in previas),
+          str([os.path.basename(p) for p in previas])[:240])
+    lst2 = json.loads(call('delphi_list', {'root': PROY,
+                                           'includetrash': True}))
+    check('T8c ...y includetrash la encuentra, como a las de borrado',
+          any('UMain.pas-' in f['path'] for f in lst2['files']),
+          str([f['path'] for f in lst2['files']])[:300])
 finally:
     try:
         proc.kill()

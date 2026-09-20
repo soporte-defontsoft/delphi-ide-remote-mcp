@@ -184,6 +184,32 @@ function BackupFile(const APath: string): string;
     doblado. }
 function TrashOriginalName(const AName: string): string;
 
+{ EL NOMBRADOR de la papelera. Un solo sitio compone, un solo sitio lee, y el
+  lector (TrashOriginalName) es la INVERSA de este.
+
+  Por que existe, medido el 2026-09-20 contestando a David: habia TRES sitios
+  componiendo rutas dentro de __delphi-patch con TRES convenciones distintas -
+  "UFicha.pas-215825250" al borrar, "UMain.pas" a secas al editar, y
+  "UMain.pas.antes-restaurar-221530" al restaurar-. El lector solo entendia la
+  primera, asi que la copia previa a un restore ni la encontraba
+  includetrash (la mascara *.pas-* no casa con ".pas.antes-restaurar-") ni se
+  podia restaurar bien. Se habia arreglado el borde y dejado el punto.
+
+  La regla: el sello SIEMPRE es '-hhnnsszzz' detras del nombre completo, y lo
+  que distingue una copia de otra es la CARPETA, no el nombre. Asi el lector
+  sirve para todas y una copia nueva no puede inventarse una convencion. }
+
+{ La carpeta del dia dentro de la papelera, al lado del fichero.
+  ASub: '' = la raiz del dia, 'deleted' / 'antes-restaurar' = su cajon. }
+function TrashDayDir(const APath, ASub: string): string;
+
+{ El nombre de una copia: el nombre real + el sello. La unica forma. }
+function TrashStampedName(const AName: string): string;
+
+{ El nombre de la carpeta de copias ('__delphi-patch'), para quien tenga que
+  reconocerla. Estaba declarada DOS veces, aqui y en Mcp.Tools.FileOps. }
+function TrashFolderName: string;
+
 implementation
 
 uses
@@ -495,7 +521,10 @@ var
   Dir, DayDir, Dest: string;
 begin
   Dir := TPath.Combine(TPath.GetDirectoryName(APath), BACKUP_SUB);
-  DayDir := TPath.Combine(Dir, FormatDateTime('yyyymmdd', Now));
+  // Esta copia NO lleva sello a proposito: es una por fichero y dia, la
+  // version previa al primer cambio del dia. Pero la CARPETA la pone el
+  // nombrador, como todas.
+  DayDir := TrashDayDir(APath, '');
   Dest := TPath.Combine(DayDir, TPath.GetFileName(APath));
   if TFile.Exists(Dest) then
     Exit('ya existia (' + Dest + ')');
@@ -537,6 +566,26 @@ end;
 function DecodeSourceBytes(const B: TArray<Byte>): string;
 begin
   Result := DecodeBytes(B, DetectEnc(B));
+end;
+
+function TrashFolderName: string;
+begin
+  Result := BACKUP_SUB;
+end;
+
+function TrashDayDir(const APath, ASub: string): string;
+begin
+  Result := TPath.Combine(
+    TPath.Combine(TPath.GetDirectoryName(ExcludeTrailingPathDelimiter(APath)),
+      BACKUP_SUB),
+    FormatDateTime('yyyymmdd', Now));
+  if ASub <> '' then
+    Result := TPath.Combine(Result, ASub);
+end;
+
+function TrashStampedName(const AName: string): string;
+begin
+  Result := AName + '-' + FormatDateTime('hhnnsszzz', Now);
 end;
 
 function TrashOriginalName(const AName: string): string;
@@ -1289,8 +1338,13 @@ begin
               [TPath.GetFileName(A.Path), Src, Losses.Count, Lista]));
           end;
 
-          var PreCopy := TPath.Combine(TPath.Combine(DirBk, FormatDateTime('yyyymmdd', Now)),
-            TPath.GetFileName(A.Path) + '.antes-restaurar-' + FormatDateTime('hhnnss', Now));
+          // Antes se componia aqui a mano, con OTRA forma de sello
+          // (".antes-restaurar-hhnnss"), y por eso el lector de la papelera no
+          // la reconocia: ni salia en delphi_list includetrash ni se podia
+          // restaurar como es debido. Ahora el sello lo pone el nombrador y
+          // lo que distingue a esta copia es su CAJON, no su nombre.
+          var PreCopy := TPath.Combine(TrashDayDir(A.Path, 'antes-restaurar'),
+            TrashStampedName(TPath.GetFileName(A.Path)));
           CrearCarpeta(TPath.GetDirectoryName(PreCopy));
           TFile.Copy(A.Path, PreCopy);
           AtomicWrite(A.Path, BkBytes);

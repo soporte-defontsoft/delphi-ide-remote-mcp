@@ -67,20 +67,20 @@ uses
   Lsp.Patch,
   Lsp.ProjectUnits;
 
-const
-  BACKUP_SUB = '__delphi-patch';
-
-{ Where a deleted/overwritten item is parked, next to it: recoverable. }
-function TrashPathFor(const APath: string): string;
 var
-  Dir, Day, Name: string;
+  // El nombre de la carpeta de copias estaba escrito DOS veces, aqui y en
+  // Lsp.Patch. Una constante repetida es una convencion esperando a
+  // separarse: ahora la dice su duenno.
+  BACKUP_SUB: string;
+
+{ Where a deleted/overwritten item is parked, next to it: recoverable.
+  La ruta entera la compone EL NOMBRADOR (Lsp.Patch): aqui solo se elige el
+  cajon. Componerla a mano es como nacieron tres convenciones distintas para
+  la misma papelera. }
+function TrashPathFor(const APath: string): string;
 begin
-  Dir := TPath.GetDirectoryName(ExcludeTrailingPathDelimiter(APath));
-  Day := FormatDateTime('yyyymmdd', Now);
-  Name := TPath.GetFileName(ExcludeTrailingPathDelimiter(APath)) + '-' +
-    FormatDateTime('hhnnsszzz', Now);
-  Result := TPath.Combine(TPath.Combine(TPath.Combine(Dir, BACKUP_SUB), Day),
-    TPath.Combine('deleted', Name));
+  Result := TPath.Combine(TrashDayDir(APath, 'deleted'),
+    TrashStampedName(TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
 end;
 
 function IsBackupPath(const APath: string): Boolean;
@@ -644,6 +644,7 @@ begin
 end;
 
 initialization
+  BACKUP_SUB := TrashFolderName;
   TMCPRegistry.RegisterTool('delphi_delete',
     function: IMCPTool begin Result := TDelphiDeleteTool.Create; end);
   TMCPRegistry.RegisterTool('delphi_move',
