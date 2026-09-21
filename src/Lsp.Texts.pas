@@ -293,9 +293,9 @@ const
     equivocaba de nombre se le decia que se rindiera (medido 2026-09-20).
     delphi_list y delphi_search ya lo hacen bien sobre la misma entrada. }
   SR_LSP_NO_FILE_FMT =
-    'error: no existe %s. (Antes esto salia como "Error executing tool", que ' +
-    'en este servidor significa "me he roto por dentro" y no era el caso: el ' +
-    'fichero simplemente no esta.)';
+    'error: no existe %s. Comprueba el nombre y la carpeta: delphi_list ' +
+    'root=<carpeta> ensena lo que hay de verdad, y delphi_search lo busca ' +
+    'por contenido.';
 
   { La ruta existe, pero es de otro tipo - que no es lo mismo que no existir.
     Medido 2026-09-20: delphi_read sobre la raiz del repo contestaba "no

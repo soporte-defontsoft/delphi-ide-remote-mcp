@@ -47,6 +47,31 @@ wall ended in a replace done outside the tool.
 - `delphi_adb_linux`: a refused `out` answered "File name is empty" instead
   of the refusal (found on the first live call against a Linux node).
 
+### Fixed - nobody decodes by hand
+- `delphi_styles lint` read every .pas as strict UTF-8 "because lookups are
+  ASCII" - but the FILE is not: one CP1252 source with an accent, the normal
+  thing in a Delphi project with years on it, killed the whole lint with "No
+  mapping for the Unicode character". The twin of the CESU-8 child-output bug.
+- The same strict reader sat in the vault's single loader: `vault_read` died on
+  a note saved as CP1252 by an old editor, and `vault_search` skipped it IN
+  SILENCE - "no results" for something that was there. Also the session
+  bootstrap, the mailbox and the output file of a remote run. All go through
+  the house reader now (`Lsp.Patch.DecodeSourceBytes`); the vault still WRITES
+  UTF-8 only.
+
+### Added - the server says which account it runs as
+`delphi_workspace` "server" carries `account`, plus an `accountWarning` when it
+is LocalSystem: the IDE keeps its Library Path, packages, SDKs and profiles in
+HKCU, so a service on the default account starts, answers and then fails with
+F2613. It was in the README and nowhere the server could say it.
+`test_service_smoke` gives service mode its first battery (it measures the
+service that is ALREADY installed; a battery has no elevation to install one).
+
+### Changed - what a tool says
+- `delphi_symbols` now states that code inside an INACTIVE `{$IFDEF}` is not in
+  the tree (measured: a `{$IFDEF LINUX}` routine was simply absent).
+- "File not found" of the LSP tools told its own history instead of what to do.
+
 ### Measured - the third debt of 1.0.13
 The settings cache between OVERLAPPING workspaces. One server, a wide token
 rooted at a project and a narrow one rooted at a subfolder below the .dproj.

@@ -674,7 +674,10 @@ begin
     'properties, sections) with 0-based ranges, straight from the official ' +
     'DelphiLSP engine. Works even without project settings. Big trees come ' +
     'back as a compact summary by default (mode/filter control it); a ' +
-    'FOLDER answers with the interface digest of every unit inside.';
+    'FOLDER answers with the interface digest of every unit inside. The ' +
+    'engine parses as the COMPILER would for Windows: code inside an ' +
+    'inactive {$IFDEF} (LINUX, ANDROID, MACOS...) is not in the tree, and ' +
+    'nothing says so - for those blocks use delphi_search or delphi_read.';
 end;
 
 // PositionOutOfRange vivia AQUI, en la implementation, o sea invisible para

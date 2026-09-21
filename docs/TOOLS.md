@@ -37,7 +37,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 
 ### `delphi_symbols`
 
-Document symbol tree of a Delphi unit (classes, methods, properties, sections) with 0-based ranges, straight from the official DelphiLSP engine. Works even without project settings. Big trees come back as a compact summary by default (`mode`/`filter` control it); a FOLDER answers with the interface digest of every unit inside.
+Document symbol tree of a Delphi unit (classes, methods, properties, sections) with 0-based ranges, straight from the official DelphiLSP engine. Works even without project settings. Big trees come back as a compact summary by default (`mode`/`filter` control it); a FOLDER answers with the interface digest of every unit inside. The engine parses as the COMPILER would for Windows: code inside an inactive `{$IFDEF}` (LINUX, ANDROID, MACOS...) is not in the tree, and nothing says so - for those blocks use `delphi_search` or `delphi_read`.
 
 **Since v1.0.7 each symbol also carries `decl`: the declaration as it is WRITTEN IN THE SOURCE.** DelphiLSP's `name` is not a name, it is a rendered signature, and it is lossy — `function Alta(const A: string; B: Integer = 0): Boolean` comes back as `Alta(const A: string; B: Integer)` and `FBuffer: array [0..7] of Byte` as `FBuffer: Byte`. The tree, the kinds and the lines are still the language server's; only the way a declaration is written is read from the file.
 
