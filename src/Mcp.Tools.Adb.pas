@@ -20,7 +20,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiAdbParams = class
@@ -44,10 +45,15 @@ type
     [SchemaDescription(SP_ADB_DEVICE)]
     property Device: string read FDevice write FDevice;
     [SchemaDescription(SP_ADB_APK)]
+    [RutaDelServidor]
     property Apk: string read FApk write FApk;
     [SchemaDescription(SP_ADB_APP)]
     property App: string read FApp write FApp;
+    // Fichero LOCAL donde se escribe (la captura del movil, el logcat). Ojo:
+    // aqui "out" es un FICHERO y en delphi_desktop es una CARPETA - misma
+    // familia, contrato distinto. Ruta nuestra las dos.
     [SchemaDescription(SP_ADB_OUT)]
+    [RutaDelServidor]
     property Out: string read FOut write FOut;
     [SchemaDescription(SP_ADB_X)]
     property X: string read FX write FX;

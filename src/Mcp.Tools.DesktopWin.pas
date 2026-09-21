@@ -24,7 +24,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDesktopWinParams = class
@@ -46,7 +47,10 @@ type
     property Code: string read FCode write FCode;
     [SchemaDescription(SP_DESKTOP_TEXT)]
     property Text: string read FText write FText;
+    // La carpeta donde cae la captura: ruta NUESTRA, y la que el 2026-09-21
+    // se escribia fuera de la jaula por no tener donde declararlo.
     [SchemaDescription(SP_DESKTOP_OUT)]
+    [RutaDelServidor]
     property Out_: string read FOut write FOut;
   end;
 

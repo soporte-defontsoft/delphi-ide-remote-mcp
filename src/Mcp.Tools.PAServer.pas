@@ -28,7 +28,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiPAServerParams = class
@@ -58,8 +59,13 @@ type
     property Password: string read FPassword write FPassword;
     [SchemaDescription(SP_PASERVER_PLATFORM)]
     property Platform: string read FPlatform write FPlatform;
+    // El .dproj es NUESTRO: vive aqui, aunque lo que se ejecuta este alla.
     [SchemaDescription(SP_PASERVER_PROJECT)]
+    [RutaDelServidor]
     property Project: string read FProject write FProject;
+    // SIN marca, y es la otra excepcion del contrato (con
+    // delphi_config.remotedir): este fichero esta EN LA CARPETA DESPLEGADA
+    // DEL TARGET. Nuestra jaula no tiene nada que decir sobre el.
     [SchemaDescription(SP_PASERVER_EXE)]
     property Exe: string read FExe write FExe;
     [SchemaDescription(SP_PASERVER_ARGS)]

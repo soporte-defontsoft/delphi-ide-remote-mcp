@@ -28,7 +28,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiDesignerParams = class
@@ -45,6 +46,7 @@ type
     [SchemaDescription(SP_DESIGNER_COMMAND)]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_DESIGNER_PATH)]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_DESIGNER_CLASS)]
     property ClassName_: string read FClass_ write FClass_;

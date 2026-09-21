@@ -26,7 +26,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDesktopLinuxParams = class
@@ -44,6 +45,9 @@ type
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_ADBLINUX_PROFILE)]
     property Profile: string read FProfile write FProfile;
+    // SIN marca a proposito: aqui "project" es un NOMBRE (el nodo incluido),
+    // no una ruta de este servidor. Es una de las dos excepciones de todo el
+    // contrato, con delphi_paserver.exe y delphi_config.remotedir.
     [SchemaDescription(SP_ADBLINUX_PROJECT)]
     property Project: string read FProject write FProject;
     [SchemaDescription(SP_ADBLINUX_X)]
@@ -54,7 +58,10 @@ type
     property Code: string read FCode write FCode;
     [SchemaDescription(SP_ADBLINUX_TEXT)]
     property Text: string read FText write FText;
+    // La carpeta LOCAL donde baja la captura del destino: ruta NUESTRA,
+    // aunque la imagen venga de otra maquina.
     [SchemaDescription(SP_ADBLINUX_OUT)]
+    [RutaDelServidor]
     property Out_: string read FOut write FOut;
   end;
 

@@ -11,7 +11,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiStylesParams = class
@@ -31,8 +32,10 @@ type
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_STYLES_PATH)]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('lint: the project .dproj (or a folder) whose .fmx/.pas files are scanned for StyleLookup. Default: the parent folder of the styles folder')]
+    [RutaDelServidor]
     property Project: string read FProject write FProject;
     [SchemaDescription('get/set/clone: the StyleName of the style (top-level object of the container), e.g. buttonstyle or cardstyle')]
     property Style: string read FStyle write FStyle;

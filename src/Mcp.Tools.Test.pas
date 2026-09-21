@@ -10,7 +10,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiTestParams = class
@@ -27,8 +28,10 @@ type
     [SchemaDescription(SP_TEST_COMMAND)]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_TEST_PATH)]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_TEST_PROJECT)]
+    [RutaDelServidor]
     property Project: string read FProject write FProject;
     [SchemaDescription(SP_TEST_CONFIG)]
     [SchemaDefault('Debug')]

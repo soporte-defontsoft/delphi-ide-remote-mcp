@@ -12,6 +12,7 @@ uses
   MCPServer.Tool.Base,
   MCPServer.Types,
   Lsp.Texts,
+  Lsp.Attributes,  // [RutaDelServidor]: que parametro es una ruta NUESTRA
   Lsp.TextEdit;
 
 type
@@ -30,6 +31,7 @@ type
   public
     [SchemaDescription('Absolute path of the text file (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml ... any plain text - Delphi files are refused, use delphi_edit)')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('EDIT mode: the exact line to replace - ONE full line copied literally from delphi_read (everything after the | bar). Leading indentation may be omitted')]
     property Old: string read FOld write FOld;

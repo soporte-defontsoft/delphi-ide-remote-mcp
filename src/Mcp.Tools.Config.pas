@@ -20,7 +20,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiConfigParams = class
@@ -38,6 +39,7 @@ type
   public
     [SchemaDescription('Absolute path of the project .dproj')]
     [Required]
+    [RutaDelServidor]
     property Project: string read FProject write FProject;
     [SchemaDescription('view (default: project summary; section= brings the detail per area) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | set-version (the project VERSION: the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys, which have to agree) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk)')]
     [SchemaDefault('view')]
@@ -53,6 +55,9 @@ type
     [SchemaDescription(SP_CONFIG_SECTION)]
     [SchemaDefault('summary')]
     property Section: string read FSection write FSection;
+    // SIN marca, y es una de las dos unicas excepciones de todo el contrato:
+    // esta carpeta esta EN LA MAQUINA DESTINO. Comprobarla contra nuestra
+    // jaula seria rechazar una llamada correcta.
     [SchemaDescription(SP_CONFIG_REMOTEDIR)]
     property RemoteDir: string read FRemoteDir write FRemoteDir;
     [SchemaDescription(SP_CONFIG_VERSION)]

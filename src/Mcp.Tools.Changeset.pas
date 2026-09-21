@@ -9,7 +9,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiChangesetParams = class
@@ -32,8 +33,10 @@ type
     [SchemaDescription(SP_CHANGESET_KIND)]
     property Kind: string read FKind write FKind;
     [SchemaDescription(SP_CHANGESET_PATH)]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_CHANGESET_DEST)]
+    [RutaDelServidor]
     property Dest: string read FDest write FDest;
     [SchemaDescription(SP_CHANGESET_OLD)]
     property Old: string read FOld write FOld;

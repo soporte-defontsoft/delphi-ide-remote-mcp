@@ -9,7 +9,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiRenameParams = class
@@ -22,6 +23,7 @@ type
   public
     [SchemaDescription(SP_RENAME_PATH)]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_RENAME_LINE)]
     [Required]
