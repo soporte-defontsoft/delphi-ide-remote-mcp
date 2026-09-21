@@ -272,6 +272,13 @@ begin
       Fallo := CaptureTarget(Params.Out_, 'desktop',
         'desktop-' + NombreSeguro(Params.Profile.Trim),
         TPath.GetExtension(Remota), Propia);
+      { Con un "out" rechazado Propia viene VACIA, y calcular su carpeta
+        reventaba con "File name is empty" en vez de dar la negativa - lo
+        cazo la primera prueba en vivo contra el Fedora (2026-09-21); en
+        Windows no pasaba porque alli el rechazo sale por excepcion. Todo lo
+        que depende del destino va DENTRO del if. }
+      if Fallo = '' then
+      begin
       Destino := TPath.GetDirectoryName(Propia);
       { La captura baja con SU nombre remoto (captura.png), igual para todos
         los perfiles: con un destino comun, dos maquinas a la vez se pisaban la
@@ -279,9 +286,9 @@ begin
         carpeta propia y se queda con un nombre que dice de quien es. }
       Bajada := TPath.Combine(Destino, '.tmp-' +
         LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
-      if Fallo = '' then
-        Fallo := FetchFromTarget(Params.Profile.Trim, Proj,
-          TPath.GetFileName(Remota), Bajada, Local);
+      Fallo := FetchFromTarget(Params.Profile.Trim, Proj,
+        TPath.GetFileName(Remota), Bajada, Local);
+      end;
       if Fallo = '' then
       begin
         try
