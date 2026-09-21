@@ -24,6 +24,7 @@ type
     FAtLine: Integer;
     FToLine: Integer;
     FEdits: string;
+    FFragment: string;
     FDelete: Boolean;
     FCreate: Boolean;
     FContent: string;
@@ -48,6 +49,8 @@ type
     // compartida y se acabo (2026-09-20).
     [SchemaDescription(SP_PATCH_EDITS)]
     property Edits: string read FEdits write FEdits;
+    [SchemaDescription(SP_PATCH_FRAGMENT)]
+    property Fragment: string read FFragment write FFragment;
     [SchemaDescription('DELETE mode: true = quita ENTERA la linea anclada en "old" (old + new vacio solo la deja en blanco). Aqui no va "new"')]
     property Delete: Boolean read FDelete write FDelete;
     [SchemaDescription('CREATE mode: true = create a NEW file (never overwrites). UTF-8, parent directories created')]
@@ -80,7 +83,9 @@ begin
     '.html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): ' +
     'docs, web assets, tests, scripts, config. Same ' +
     'discipline as delphi_edit - one-full-line unique anchor (old/new, ' +
-    'atline tie-break), DELETE mode (delete=true + old), several edits on ' +
+    'atline tie-break; for a LONG line such as a README paragraph, ' +
+    'fragment + atline + new changes just a piece of it), DELETE mode ' +
+    '(delete=true + old), several edits on ' +
     'the SAME file in one all-or-nothing call ("edits", where an anchor may ' +
     'be ONE line or a contiguous BLOCK), ' +
     'real encoding preserved (UTF-8 +/- BOM / CP1252), ' +
@@ -106,6 +111,7 @@ begin
   A.AtLine := Params.AtLine;
   A.ToLine := Params.ToLine;
   A.DeleteLine := Params.Delete;
+  A.Fragment := Params.Fragment;
   A.CreateFile_ := Params.Create_;
   A.Content := Params.Content;
   A.Eol := Params.Eol;

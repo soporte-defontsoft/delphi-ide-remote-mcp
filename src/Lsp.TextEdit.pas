@@ -21,6 +21,7 @@ type
     AtLine: Integer;   // tie-break when the anchor repeats
     ToLine: Integer;   // 1-based LAST line of the range; 0 = just the anchor
     DeleteLine: Boolean;  // DELETE: remove the anchored line entirely
+    Fragment: string;     // modo fragmento: un trozo de la linea AtLine
     CreateFile_: Boolean; // CREATE: new file (never overwrites)
     Content: string;      // CREATE: initial content (may be empty)
     Eol: string;          // CREATE: 'lf' = LF; anything else = CRLF (default)
@@ -337,6 +338,27 @@ begin
     // algo que sigue ahi.
     if (A.ToLine > 0) and A.CreateFile_ then
       Exit(Format(SR_RANGE_WRONG_MODE_FMT, ['create']));
+    // MODO FRAGMENTO: el mismo resolvedor que delphi_edit, y despues el
+    // motor de siempre con la linea COMPLETA (ver Lsp.Patch.FragmentoALinea).
+    if A.Fragment <> '' then
+    begin
+      var Otros := '';
+      if A.HasOld and (A.OldLine <> '') then Otros := 'old'
+      else if A.DeleteLine then Otros := 'delete'
+      else if A.ToLine > 0 then Otros := 'toline'
+      else if A.CreateFile_ then Otros := 'create';
+      var AF := A;
+      var LineaVieja, LineaNueva: string;
+      Result := FragmentoALinea(A.Path, A.Fragment, A.NewText, A.AtLine,
+        Otros, LineaVieja, LineaNueva);
+      if Result <> '' then
+        Exit;
+      AF.OldLine := LineaVieja;
+      AF.NewText := LineaNueva;
+      AF.HasOld := True;
+      AF.HasNew := True;
+      Exit(DoEditLine(AF));
+    end;
     if A.CreateFile_ then
       Exit(DoCreate(A));
     if A.DeleteLine and not A.HasOld then

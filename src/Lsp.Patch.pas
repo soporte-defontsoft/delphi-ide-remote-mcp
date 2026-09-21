@@ -29,6 +29,7 @@ type
     AtLine: Integer;      // 1-based disambiguation; 0 = unset
     ToLine: Integer;      // 1-based LAST line of the range; 0 = just the anchor
     DeleteLine: Boolean;  // true = remove the anchored line entirely
+    Fragment: string;     // modo fragmento: un trozo de la linea AtLine
     Insert: string;       // '', 'rutina-global', 'metodo'
     Code: string;
     ClassName_: string;
@@ -77,6 +78,23 @@ function ApplyBlockEdit(const APath, AOld, ANew: string;
   bugs gemelos del 2026-09-20. }
 function RangoHasta(const APath: string;
   ATarget0, AToLine, ATotal: Integer; out AFin: Integer): string;
+
+{ EL modo fragmento, resuelto en un solo sitio.
+
+  Convierte (fragmento + atline + new) en lo unico que entienden los motores:
+  la linea COMPLETA que hay (AOld) y la linea COMPLETA que queda (ANewLine).
+  Devuelve '' o el texto de rechazo. No escribe nada y no sabe nada de Pascal:
+  despues, el motor de siempre vuelve a casar la linea entera en AtLine antes
+  de tocar el disco, asi que la regla del ancla completa no se relaja - solo
+  deja de teclearla quien llama. Si el fichero cambia entre medias, el ancla
+  ya no casa y la edicion se rechaza.
+
+  Lo llaman las cuatro puertas por las que entra una edicion: delphi_edit,
+  delphi_textedit, las tandas (AplicaTanda) y el stage de delphi_changeset.
+  AOtros: el nombre del parametro incompatible que venga puesto ('' si
+  ninguno), para que la negativa sea la misma en las cuatro. }
+function FragmentoALinea(const APath, AFrag, ANew: string; AAtLine: Integer;
+  const AOtros: string; out AOld, ANewLine: string): string;
 
 { La linea (1-based) donde empieza la N-esima aparicion de un ancla de BLOQUE,
   0 si no hay tantas. El gemelo de NthOccurrenceLine para bloques, y por el
@@ -838,6 +856,59 @@ begin
   Result := Format(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
 end;
 
+function FragmentoALinea(const APath, AFrag, ANew: string; AAtLine: Integer;
+  const AOtros: string; out AOld, ANewLine: string): string;
+var
+  Enc, Linea: string;
+  Lines: TArray<string>;
+  Veces, P: Integer;
+begin
+  Result := '';
+  AOld := '';
+  ANewLine := '';
+  if AOtros <> '' then
+    Exit(Format(SR_FRAG_MIXED_FMT, [AOtros]));
+  if AAtLine <= 0 then
+    Exit(SR_FRAG_NEEDS_ATLINE);
+  if (AFrag = '') or (Pos(#$FFFD, AFrag) > 0) then
+    Exit(SR_FRAG_EMPTY);
+  if AFrag.Contains(#10) or AFrag.Contains(#13) or
+     ANew.Contains(#10) or ANew.Contains(#13) then
+    Exit(SR_FRAG_MULTILINE);
+  if AFrag = ANew then
+    Exit(SR_FRAG_SAME);
+  // Los rechazos de aqui ENSENAN la linea: que no sea la de un fichero que
+  // este token no puede leer. La puerta ya lo mira; esto es el cinturon.
+  Result := ReadPathDenied(APath);
+  if Result <> '' then
+    Exit;
+  if not TFile.Exists(APath) then
+    Exit(Format(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
+  Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Replace(#13, #10)
+    .Split([#10]);
+  if (Length(Lines) > 0) and (Lines[High(Lines)] = '') then
+    SetLength(Lines, Length(Lines) - 1); // la fantasma del salto final
+  if AAtLine > Length(Lines) then
+    Exit(Format(SR_FRAG_BEYOND_FMT,
+      [AAtLine, TPath.GetFileName(APath), Length(Lines)]));
+  Linea := Lines[AAtLine - 1];
+  Veces := 0;
+  P := Pos(AFrag, Linea);
+  while P > 0 do
+  begin
+    Inc(Veces);
+    P := Pos(AFrag, Linea, P + 1); // solapadas tambien cuentan: "aa" en "aaa"
+  end;
+  if Veces = 0 then
+    Exit(Format(SR_FRAG_NOTFOUND_FMT, [AFrag, AAtLine, AAtLine, Linea]));
+  if Veces > 1 then
+    Exit(Format(SR_FRAG_SEVERAL_FMT, [AFrag, Veces, AAtLine, AAtLine, Linea]));
+  P := Pos(AFrag, Linea);
+  AOld := Linea;
+  ANewLine := Copy(Linea, 1, P - 1) + ANew +
+    Copy(Linea, P + Length(AFrag), MaxInt);
+end;
+
 function RangoHasta(const APath: string;
   ATarget0, AToLine, ATotal: Integer; out AFin: Integer): string;
 begin
@@ -919,7 +990,7 @@ begin
           begin
             var Conocido := False;
             for var Cl in ['old', 'new', 'atline', 'toline', 'delete',
-                           'occurrence'] do
+                           'occurrence', 'fragment'] do
               if Par.JsonString.Value = Cl then
                 Conocido := True;
             if not Conocido then
@@ -994,6 +1065,29 @@ begin
         // "una linea" protege a una edicion suelta, donde un ancla larga es
         // una ocasion larga de equivocarse; dentro de una tanda, donde quien
         // llama sustituye un cuerpo que acaba de copiar, era trabajo puro.
+        // MODO FRAGMENTO: la entrada se convierte AQUI, contra el fichero
+        // tal como esta en este momento de la tanda, en un ancla de linea
+        // completa - y de ahi para abajo es una entrada como las demas.
+        var Frag := Obj.GetValue<string>('fragment', '');
+        if Frag <> '' then
+        begin
+          var Otros := '';
+          if Anc <> '' then Otros := 'old'
+          else if Obj.GetValue<Boolean>('delete', False) then Otros := 'delete'
+          else if Hasta[N - 1] > 0 then Otros := 'toline'
+          else if Obj.GetValue<Integer>('occurrence', 0) > 0 then
+            Otros := 'occurrence';
+          var NueLinea: string;
+          var Mal := FragmentoALinea(APath, Frag, Nue,
+            Obj.GetValue<Integer>('atline', 0), Otros, Anc, NueLinea);
+          if Mal <> '' then
+          begin
+            Fallo := N;
+            Sb.AppendLine(Format('  %d: %s', [N, Mal.Replace(#10, ' ')]));
+            Break;
+          end;
+          Nue := NueLinea;
+        end;
         var EsBloque := Anc.Contains(#10);
         if EsBloque and (Hasta[N - 1] > 0) then
         begin
@@ -1249,6 +1343,26 @@ begin
         Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la carpeta de copias de seguridad de esta tool. Copias muertas: no se leen, no se editan. El fichero vivo esta un nivel mas arriba.');
       if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
         Exit('RECHAZADO: __history\ y __recovery\ son copias muertas del IDE. El fichero vivo esta en la carpeta del proyecto.');
+
+      // MODO FRAGMENTO: se resuelve a un ancla de linea completa y sigue
+      // por el motor de siempre (ver FragmentoALinea).
+      if A.Fragment <> '' then
+      begin
+        var Otros := '';
+        if A.HasOld and (A.OldLine <> '') then Otros := 'old'
+        else if A.DeleteLine then Otros := 'delete'
+        else if A.ToLine > 0 then Otros := 'toline'
+        else if A.CreateUnit_ then Otros := 'createunit'
+        else if A.Restore then Otros := 'restore'
+        else if A.Insert <> '' then Otros := 'insert';
+        var LineaVieja, LineaNueva: string;
+        Result := FragmentoALinea(A.Path, A.Fragment, A.NewText, A.AtLine,
+          Otros, LineaVieja, LineaNueva);
+        if Result <> '' then
+          Exit;
+        Exit(DoEdit(A.Path, LineaVieja, LineaNueva, A.AtLine, IsDesigner,
+          False, 0));
+      end;
 
       // "toline" solo significa algo con un ancla: en los modos que no van
       // por lineas se rechaza en vez de tragarselo en silencio.

@@ -24,6 +24,7 @@ type
     FNew: string;
     FContent: string;
     FAtLine: Integer;
+    FFragment: string;
     FN: Integer;
   public
     [SchemaDescription(SP_CHANGESET_COMMAND)]
@@ -46,6 +47,8 @@ type
     property Content: string read FContent write FContent;
     [SchemaDescription(SP_CHANGESET_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;
+    [SchemaDescription(SP_PATCH_FRAGMENT)]
+    property Fragment: string read FFragment write FFragment;
     [SchemaDescription(SP_CHANGESET_N)]
     property N: Integer read FN write FN;
   end;
@@ -75,7 +78,7 @@ function TDelphiChangesetTool.ExecuteWithParams(const Params: TDelphiChangesetPa
 begin
   Result := ChangesetExecute(Params.Command, Params.Id, Params.Kind.Trim.ToLower,
     Params.Path, Params.Dest, Params.Old, Params.New, Params.Content,
-    Params.AtLine, Params.N);
+    Params.AtLine, Params.N, Params.Fragment);
   Result := MaskDriveText('delphi_changeset', Result);
 end;
 

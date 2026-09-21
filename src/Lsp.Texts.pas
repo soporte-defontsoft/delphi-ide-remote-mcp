@@ -463,6 +463,52 @@ const
     'sin pegarlo como ancla. Se rechaza si el rango va al reves, si se sale ' +
     'del fichero o si se lo lleva entero.';
 
+  { EL MODO FRAGMENTO (2026-09-21). El ancla de linea completa es la regla
+    de la casa y sigue siendolo: existe para que nadie edite de memoria. Pero
+    un parrafo de README es UNA linea de 600 caracteres, y cambiar "68" por
+    "69" obligaba a pegarla entera byte a byte - el muro que acabo con un
+    reemplazo hecho por fuera de la tool. El fragmento no relaja la regla:
+    "atline" es OBLIGATORIO y el fragmento tiene que aparecer UNA sola vez
+    en esa linea. Un solo texto para las tres tools que lo aceptan. }
+  SP_PATCH_FRAGMENT =
+    'FRAGMENT mode, for LONG lines (a README paragraph, a long string): ' +
+    'instead of "old", pass "fragment" = the exact piece of text to change ' +
+    'INSIDE one line, "atline" = that line''s 1-based number (MANDATORY, ' +
+    'from delphi_read) and "new" = what replaces just that piece. The rest ' +
+    'of the line is kept byte for byte. It is case-sensitive, and the ' +
+    'fragment must appear EXACTLY ONCE in that line: zero or several is a ' +
+    'refusal that shows you the real line - lengthen the fragment until it ' +
+    'is unique. One line only (no line breaks in "fragment" nor, in this ' +
+    'mode, in "new"); it does not combine with old, delete or toline. ' +
+    'Inside "edits" it is the same: {"fragment":"68","new":"69","atline":12}.';
+
+  SR_FRAG_NEEDS_ATLINE =
+    'RECHAZADO: "fragment" necesita "atline": el numero (1-based, el que ' +
+    'ensena delphi_read) de la linea donde esta. Un fragmento se busca DENTRO ' +
+    'de una linea concreta, nunca por todo el fichero. No he escrito nada.';
+  SR_FRAG_MIXED_FMT =
+    'RECHAZADO: "fragment" no se combina con "%s". Son dos formas distintas ' +
+    'de decir donde: o la linea completa en "old" (con delete/toline si ' +
+    'hacen falta), o un trozo de UNA linea con fragment + atline + new.';
+  SR_FRAG_MULTILINE =
+    'RECHAZADO: en modo fragmento ni "fragment" ni "new" llevan saltos de ' +
+    'linea: cambia un trozo DENTRO de una linea. Para meter o quitar lineas ' +
+    'usa el ancla de linea completa ("old").';
+  SR_FRAG_EMPTY =
+    'RECHAZADO: "fragment" esta vacio o lleva U+FFFD (leiste el fichero con ' +
+    'una tool generica). Copia el trozo de delphi_read.';
+  SR_FRAG_BEYOND_FMT =
+    'RECHAZADO: atline=%d no existe en %s, que tiene %d lineas.';
+  SR_FRAG_NOTFOUND_FMT =
+    'RECHAZADO: el fragmento |%s| no aparece en la linea %d (se compara con ' +
+    'mayusculas y minusculas). No he escrito nada. La linea real es:'#10'  %d|%s';
+  SR_FRAG_SEVERAL_FMT =
+    'RECHAZADO: el fragmento |%s| aparece %d veces en la linea %d, y no voy ' +
+    'a adivinar cual. No he escrito nada. Alargalo con lo que tiene al lado ' +
+    'hasta que sea unico. La linea real es:'#10'  %d|%s';
+  SR_FRAG_SAME =
+    'RECHAZADO: "new" es igual que "fragment": no hay nada que cambiar.';
+
   SP_PATCH_EDITS =
     'VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O ' +
     'NADA: un array JSON [{"old":"...","new":"...","atline":12}, ...] que se ' +
@@ -481,8 +527,11 @@ const
     'arrastra: si una entrada anterior anadio o quito lineas, "toline" se ' +
     'corrige solo. Si una ' +
     'entrada falla, el fichero vuelve byte a byte a como estaba y te digo ' +
-    'cual fallo. Si el cambio toca VARIOS ficheros, eso es delphi_changeset. ' +
-    'Cuando mandas "edits" se ignoran old/new/atline/delete/toline.';
+    'cual fallo. Para una linea LARGA, una entrada puede llevar "fragment" ' +
+    'en vez de "old": {"fragment":"68","new":"69","atline":12} cambia solo ' +
+    'ese trozo de la linea 12 (atline obligatorio, y el trozo una sola vez ' +
+    'en ella). Si el cambio toca VARIOS ficheros, eso es delphi_changeset. ' +
+    'Cuando mandas "edits" se ignoran old/new/atline/delete/toline/fragment.';
 
   { Los campos de una entrada de tanda se leen a mano, uno a uno, asi que un
     nombre que no existe no daba "Unknown parameter" como en los parametros
@@ -503,7 +552,7 @@ const
   SR_PATCH_EDIT_KEY_FMT =
     'RECHAZADO: la entrada %d de "edits" lleva el campo "%s", que no existe. ' +
     'Los campos de una edicion son: old, new, atline, toline, delete, ' +
-    'occurrence (todos en minusculas). No he escrito nada: un nombre mal ' +
+    'occurrence, fragment (todos en minusculas). No he escrito nada: un nombre mal ' +
     'escrito se ignoraba en silencio y la entrada acababa tocando otra cosa.';
 
   SR_PATCH_BLOCK_SHORT =
@@ -3268,7 +3317,9 @@ const
     'every file byte-exact and reports which operation failed). rollback ' +
     'discards a staged batch; status lists open changesets. Edits use the ' +
     'delphi_edit contract: old = ONE full line, unique in the file (atline ' +
-    'pins a duplicate). A changeset expires after 30 minutes unused. Use it ' +
+    'pins a duplicate) - or, for a LONG line, fragment + atline + new, ' +
+    'resolved against the file when you stage it. A changeset expires ' +
+    'after 30 minutes unused. Use it ' +
     'for renames, refactors and any change where a half-applied batch would ' +
     'leave the project broken; for one file, plain delphi_edit is simpler.';
 
@@ -3300,7 +3351,7 @@ const
 
   SP_CHANGESET_OLD =
     'stage kind=edit: the anchor - ONE full line copied verbatim from ' +
-    'delphi_read, unique in the file';
+    'delphi_read, unique in the file (or use fragment + atline instead)';
 
   SP_CHANGESET_NEW =
     'stage kind=edit: the replacement text (may span several lines)';

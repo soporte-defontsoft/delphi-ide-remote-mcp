@@ -39,6 +39,7 @@ type
     FAtLine: Integer;
     FToLine: Integer;
     FEdits: string;
+    FFragment: string;
     FDelete: Boolean;
     FInsert: string;
     FCode: string;
@@ -65,6 +66,8 @@ type
     property ToLine: Integer read FToLine write FToLine;
     [SchemaDescription(SP_PATCH_EDITS)]
     property Edits: string read FEdits write FEdits;
+    [SchemaDescription(SP_PATCH_FRAGMENT)]
+    property Fragment: string read FFragment write FFragment;
     [SchemaDescription('DELETE mode: true = remove the "old" anchored line ENTIRELY (old+new="" only blanks it). No "new" here')]
     property Delete: Boolean read FDelete write FDelete;
     [SchemaDescription('INSERT mode (preferred for NEW routines/methods): "rutina-global" or "metodo". The tool places the block at the legal boundary (in a .dpr: between uses and the main begin; in a unit: before the final end./initialization); with "metodo" it also writes the class declaration. Pass code, not old/new')]
@@ -139,7 +142,8 @@ begin
   FName := 'delphi_edit';
   FDescription := 'SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus ' +
     'text .dfm/.fmx) preserving the real encoding and line endings. Modes: ' +
-    'EDIT (old = ONE full line copied from delphi_read + new), DELETE ' +
+    'EDIT (old = ONE full line copied from delphi_read + new; for a LONG ' +
+    'line, fragment + atline + new changes just a piece of it), DELETE ' +
     '(delete=true + old: removes the line entirely), INSERT ' +
     '(insert="rutina-global"|"metodo" + code: the tool picks the legal spot ' +
     '- also inside a .dpr - and, for methods, writes BOTH halves: ' +
@@ -220,6 +224,7 @@ begin
   A.AtLine := Params.AtLine;
   A.ToLine := Params.ToLine;
   A.DeleteLine := Params.Delete;
+  A.Fragment := Params.Fragment;
   A.Insert := Params.Insert.Trim.ToLower;
   A.Code := Params.Code;
   A.ClassName_ := Params.InClass;

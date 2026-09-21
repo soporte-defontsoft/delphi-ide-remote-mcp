@@ -35,7 +35,8 @@ uses
   System.JSON;
 
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
-  AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer = 0): string;
+  AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer = 0;
+  const AFragment: string = ''): string;
 
 implementation
 
@@ -408,7 +409,8 @@ begin
 end;
 
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
-  AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer): string;
+  AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer;
+  const AFragment: string): string;
 var
   Cmd, Id, Denied, EncName, Text, Err: string;
   C: TChangeset;
@@ -511,13 +513,31 @@ begin
       case Op.Kind of
         opEdit:
           begin
-            if (AOldLine = '') then
+            if (AOldLine = '') and (AFragment = '') then
               Exit(SR_CHANGESET_EDIT_NEEDS);
             Op.OldLine := AOldLine;
             Op.NewText := ANewText;
             Op.AtLine := AAtLine;
             if not WillExist(C, Op.Path) then
               Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+            // MODO FRAGMENTO: se resuelve AHORA, al apuntar, en un ancla de
+            // linea completa, y la operacion queda como cualquier otra - el
+            // preview y el commit no se enteran. Si una operacion anterior
+            // del mismo lote cambia esa linea, el ancla no casara y el lote
+            // entero se rechaza: todo o nada, como siempre.
+            if AFragment <> '' then
+            begin
+              var Otros := '';
+              if AOldLine <> '' then
+                Otros := 'old';
+              var LineaVieja, LineaNueva: string;
+              Denied := FragmentoALinea(Op.Path, AFragment, ANewText, AAtLine,
+                Otros, LineaVieja, LineaNueva);
+              if Denied <> '' then
+                Exit(Denied);
+              Op.OldLine := LineaVieja;
+              Op.NewText := LineaNueva;
+            end;
           end;
         opCreate:
           begin
