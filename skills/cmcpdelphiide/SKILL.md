@@ -45,6 +45,14 @@ on your side.
 - Anchor edits: `old` must be copied EXACTLY from a fresh `delphi_read`,
   as small and unique as possible. An edit error is a diagnosis - re-read
   and fix the anchor; do not retry blindly.
+- **Fragment mode, for a long line**: `fragment` + `atline` (mandatory) +
+  `new` changes just that piece of ONE line - no need to paste a
+  600-character README paragraph to turn "68" into "69". The fragment must
+  appear EXACTLY ONCE in that line, case-sensitive; zero or several is a
+  refusal that shows you the real line. No line breaks, and it does not
+  combine with `old`, `delete`, `toline`, `insert` or `occurrence`. Same
+  rule in `delphi_edit`, `delphi_textedit`, batches (`edits`, key
+  `fragment`) and `delphi_changeset` stage (resolved when you stage).
 - Pascal traps: a method signature exists TWICE (interface +
   implementation); there are TWO uses clauses; one single `end.` at the
   file end. Half an edit is not an edit.
@@ -148,7 +156,12 @@ first use (a `node.ver` stamp) - nothing is compiled or installed by hand.
 Flow: `screenshot` brings the WHOLE desktop here as a PNG -> LOOK at it and
 measure the pixel -> `tap x= y=` presses exactly there (the node converts
 the screen scale itself; always measure ON the screenshot it returned) ->
-`type text=` writes (with `x`,`y` it presses there first: one trip) ->
+`type text=` writes (with `x`,`y` it presses there first: one trip). It
+types with the DESKTOP'S OWN keymap, so accents, `@`, capitals and
+punctuation arrive whatever the layout is, and the echo names the keyboard
+it used; a character that layout has no key for is a refusal, not a silent
+drop. The text is typed, never run: shell metacharacters are just
+characters ->
 `key code=` presses one key (evdev: Escape 1, Tab 15, Enter 28) ->
 `windows` shows every window as thumbnails (Super) to reach a covered one
 -> `status` says whether the desktop is reachable and what to ask for.
@@ -195,6 +208,11 @@ is in frame. Do the gesture you came for and nothing else.
   and `unit` (a plain .pas). Everything compiles at birth and is already
   registered in the `.dpr` and the `.dproj`. Then `delphi_config
   command=add-platform` for extra targets.
+- **The folder layout is yours**: inside a project, `dir=` is a SUBFOLDER
+  of the project (relative, as deep as you like - no drive, no `..`); the
+  unit is born there and registered with its relative path. Moving or
+  deleting a whole FOLDER with `delphi_move` / `delphi_delete` re-points
+  or removes the units inside it in the `.dpr`/`.dproj`.
 - **Project membership is the server's job, never a hand edit of the
   `.dpr`/`.dproj`**: an existing `.pas` joins with `delphi_config
   command=add-unit path=<.pas>` (forms get their `CreateForm`, frames do
@@ -235,7 +253,8 @@ reads for its own list - the IDE picks it up at its NEXT start, so do
 not expect it to appear in a running IDE. If a profile is on disk but
 missing from the IDE, `command=reseat` writes the missing seats
 from the files themselves, no PAServer and no passwords needed)
--> `test-connection` -> `get-sdk` once (pulls the sysroot; minutes) ->
+-> `test-connection` -> `get-sdk` once (pulls the sysroot; minutes -
+re-running it is safe and incremental: `already up to date` is success) ->
 `delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
 (`download` link, sha256) to run the ELF on YOUR machine - or run it ON
 the target with `command=remote-run` and drive its window with
@@ -272,7 +291,9 @@ Your client caches the tool schemas when it connects. If a refusal asks
 for a parameter your schema does not have (e.g. "Falta path"), the
 server was updated after you connected: reconnect the MCP session (or
 restart your client) and fetch the tools again. `initialize` tells you
-the server version.
+the server version. A NEW optional parameter your cached schema does not
+list (e.g. `fragment`) still travels if you send it; the contract you can
+trust is `delphi_help command=tool name=<tool>`.
 
 ## When you hit a wall
 
