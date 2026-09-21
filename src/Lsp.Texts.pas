@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.0.12-beta';
+  SERVER_VERSION = '1.0.13-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1357,8 +1357,9 @@ const
     'pasa project= con el .dproj del nodo desplegado via delphi_build ' +
     'target=Deploy.';
   SP_ADBLINUX_OUT =
-    'screenshot: folder where the PNG lands (default: the server''s temp ' +
-    'folder). Retrieve it with delphi_fetch.';
+    'screenshot: folder ON THIS SERVER where the PNG lands, jailed like ' +
+    'any of our paths (default: __delphi-temp\<agent> inside the ' +
+    'workspace, wiped on server restart). Retrieve it with delphi_fetch.';
   { ------------------------------------------------ delphi_desktop (Windows) }
   SD_DESKTOP =
     'Eyes and hands on the desktop of THIS server - the Windows machine that ' +
@@ -1428,8 +1429,10 @@ const
     'El texto a escribir (command=type). Va por Unicode, asi que los ' +
     'acentos entran igual sea cual sea la distribucion de teclado.';
   SP_DESKTOP_OUT =
-    'Carpeta donde dejar la captura. Por defecto, una temporal del ' +
-    'servidor; bajatela con delphi_fetch.';
+    'Carpeta EN ESTE SERVIDOR donde dejar la captura, sujeta a la jaula ' +
+    'como cualquier ruta nuestra. Por defecto, __delphi-temp\<agente> ' +
+    'dentro del workspace (se vacia al rearrancar el servidor); bajatela ' +
+    'con delphi_fetch.';
 
   SR_ADBLINUX_CMD =
     'RECHAZADO: command debe ser screenshot, tap, key, windows o status.';

@@ -185,6 +185,9 @@ try:
           rechazada_por_jaula(a), a[:280])
     # EL DANO, no la ausencia del guardia: contra un binario sin el arreglo
     # esto falla porque la pantalla del operador acaba escrita ahi fuera.
+    # Solo, y con la sesion bloqueada, esta asercion seria vacua (ni un
+    # servidor roto podria escribir): la medida DE VERDAD la remata W4c,
+    # cuando consta que capturar funciona (auditoria 2026-09-21).
     check('W1b ...y NO acaba una captura escrita fuera de la jaula',
           not hay_png(FUERA),
           'hay una captura bajo %s' % FUERA)
@@ -199,8 +202,9 @@ try:
 
     # ------------------------------------------------------------------ W3
     # Las tres que SI se acordaban: se fijan para que no se desvien.
+    ROBADA = os.path.join(FUERA, 'robada.png')
     c = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
-                            'out': os.path.join(FUERA, 'robada.png')})
+                            'out': ROBADA})
     check('W3 delphi_adb screenshot sigue rechazandolo',
           rechazada_por_jaula(c), c[:280])
     d = call('delphi_adb', {'command': 'logcat', 'device': DEV,
@@ -210,7 +214,10 @@ try:
     e = call('delphi_package', {'dir': JAIL, 'outfile': ZIP_FUERA})
     check('W3c delphi_package sigue rechazando su "outfile"',
           rechazada_por_jaula(e), e[:280])
+    # Decia "las tres" y media DOS: faltaba la captura de delphi_adb
+    # (auditoria 2026-09-21).
     check('W3d ...y ninguna de las tres ha escrito nada fuera',
+          not os.path.exists(ROBADA) and
           not os.path.exists(LOG_FUERA) and not os.path.exists(ZIP_FUERA),
           os.listdir(FUERA))
 
@@ -230,6 +237,8 @@ try:
     elif HAY_NODO:
         check('W4b ...y con el nodo de verdad la captura llega a su sitio',
               hay_png(DIR_DENTRO), f[:280])
+        check('W4c y ahora que consta que capturar FUNCIONA, fuera sigue vacio',
+              not hay_png(FUERA), 'hay una captura bajo %s' % FUERA)
     else:
         print('NOTA: no hay node/McpDesktopNode.exe; W1 y W4b miden menos.')
 finally:

@@ -76,6 +76,7 @@ uses
   Lsp.BuildRunner,
   Lsp.Patch,
   Lsp.ProjectUnits,
+  Lsp.References,   // SkipIdeArtifacts: el filtro compartido de artefactos
   Lsp.Styles;
 
 constructor TDelphiStylesTool.Create;
@@ -372,7 +373,10 @@ begin
       begin
         if not (F.EndsWith('.fmx', True) or F.EndsWith('.pas', True)) then
           Continue;
-        if F.ToLower.Contains('\__delphi-patch\') or F.ToLower.Contains('\__history\') then
+        // El filtro COMPARTIDO, no una lista propia: esta era el tercer
+        // emisor de "que carpetas se saltan" y no conocia __delphi-temp ni
+        // las carpetas de compilacion (auditoria 2026-09-21).
+        if SkipIdeArtifacts(F) then
           Continue;
         if ReadPathDenied(F) <> '' then
           Continue;

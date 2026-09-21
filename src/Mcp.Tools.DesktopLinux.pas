@@ -45,10 +45,14 @@ type
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_ADBLINUX_PROFILE)]
     property Profile: string read FProfile write FProfile;
-    // SIN marca a proposito: aqui "project" es un NOMBRE (el nodo incluido),
-    // no una ruta de este servidor. Es una de las dos excepciones de todo el
-    // contrato, con delphi_paserver.exe y delphi_config.remotedir.
+    // Ruta de un .dproj de ESTE servidor cuando se da (PathDenied la
+    // comprueba 139 lineas mas abajo, como en cualquier tool); vacio = el
+    // nodo incluido junto al exe. Aqui ponia "es un NOMBRE, no una ruta",
+    // que era FALSO - y ademas contaba "dos excepciones" enumerando tres.
+    // La clasificacion falsa que la puerta central habria heredado
+    // (auditoria 2026-09-21).
     [SchemaDescription(SP_ADBLINUX_PROJECT)]
+    [RutaDelServidor]
     property Project: string read FProject write FProject;
     [SchemaDescription(SP_ADBLINUX_X)]
     property X: string read FX write FX;
@@ -245,6 +249,7 @@ begin
       Salida := Res.GetValue<string>('output');
 
     Return := TJSONObject.Create;
+    try // su gemela de Windows ya lo protegia; esta no (auditoria 2026-09-21)
     Return.AddPair('command', Cmd);
     Return.AddPair('profile', Params.Profile.Trim);
     if Nota <> '' then
@@ -284,7 +289,7 @@ begin
           CrearCarpeta(Destino);
           TFile.Move(Local, Propia);
           Local := Propia;
-          TDirectory.Delete(Bajada, True);
+          BorraArbol(Bajada); // sin cruzar enlaces: ver Lsp.Guard
         except
           // si no se puede renombrar, la imagen vale igual donde cayo
         end;
@@ -299,8 +304,10 @@ begin
     else if (Cmd = 'screenshot') and (Remota = '') then
       Return.AddPair('screenshotError', SR_ADBLINUX_NOSHOT);
 
-    Result := Return.ToJSON;
-    Return.Free;
+      Result := Return.ToJSON;
+    finally
+      Return.Free;
+    end;
   finally
     Res.Free;
   end;

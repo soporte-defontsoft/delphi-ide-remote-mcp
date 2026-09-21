@@ -102,7 +102,11 @@ if os.path.exists(zip_path):
 rel = os.path.join(REPO, 'src', 'Compiled', 'Win64', 'Release')
 CONTENT = [
     (os.path.join(rel, 'DelphiLspMcp.exe'), 'DelphiLspMcp.exe'),
-    (os.path.join(rel, 'DelphiLspMcpTray.exe'), 'DelphiLspMcpTray.exe'),
+    # DelphiLspMcpTray.exe SALIO del zip el 2026-09-21: era un fosil. La
+    # bandeja es un MODO del exe (-gui) desde hace semanas, el proyecto ya no
+    # existe (test_workspace_tools lo afirma), y aqui se seguia publicando el
+    # binario del 20 de agosto - un servidor de hace un mes, con los agujeros
+    # de jaula de entonces dentro. Nadie lo recompilaba y nadie lo miraba.
     (os.path.join(rel, 'DelphiStyleConvert.exe'), 'DelphiStyleConvert.exe'),
     (os.path.join(REPO, 'settings.example.ini'), 'settings.example.ini'),
     # runner/mcp-runner.py salio del zip en v0.98: el destino ya no necesita

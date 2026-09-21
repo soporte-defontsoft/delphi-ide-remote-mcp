@@ -318,7 +318,7 @@ begin
     Result := SoloAlfanumerico(Id) + SoloAlfanumerico(Ver);
   finally
     try
-      TDirectory.Delete(Tmp, True);
+      BorraArbol(Tmp); // sin cruzar enlaces: ver Lsp.Guard
     except
       // un temporal huerfano no estropea un despliegue
     end;

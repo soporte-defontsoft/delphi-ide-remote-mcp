@@ -330,8 +330,18 @@ begin
   // "posici¢n" - measured 2026-09-20. Asked to Windows, never hardcoded:
   // another machine has another codepage.
   if LooksUtf8(Bytes) then
-    Result := TEncoding.UTF8.GetString(Bytes)
-  else
+    try
+      Exit(TEncoding.UTF8.GetString(Bytes));
+    except
+      // LooksUtf8 mira la FORMA de los bytes, y hay secuencias bien
+      // formadas que el decodificador estricto (MB_ERR_INVALID_CHARS)
+      // rechaza igual: los surrogates CESU-8 y las sobrelargas del
+      // "modified UTF-8" que emiten las herramientas Java/Android (adb,
+      // gradle). La red de abajo se puso el 21-sep JUSTO por esta
+      // excepcion... y esta rama quedo fuera de ella (auditoria del mismo
+      // dia). Se cae a la rama del codepage, que decodifica distinto y
+      // ademas tiene la red byte a byte que no puede fallar.
+    end;
   begin
     var Cp: Cardinal := GetConsoleOutputCP;
     if Cp = 0 then

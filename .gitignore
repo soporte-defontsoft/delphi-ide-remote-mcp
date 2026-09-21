@@ -27,6 +27,7 @@ __recovery/
 *.tvsconfig
 *.stat
 *.~*
+*-deploy.zip
 
 # --- LSP / machine-local configs (contain absolute local paths) ---
 *.delphilsp.json

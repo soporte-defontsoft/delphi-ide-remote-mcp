@@ -6,6 +6,140 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.13-beta] - 2026-09-21
+
+**The audit release.** A multi-agent review of v1.0.12 (12 independent
+angles, 3 adversarial verifiers per finding, 173 agents) confirmed fifteen
+defects; every one was then re-verified BY HAND against the live source
+before touching anything - down to the RTL sources where the claim depended
+on them - and every fix landed with its net. Two of the fifteen were jail
+escapes that had survived every battery: both involved NTFS junctions, and
+both are now measured with real `mklink /J` links in `test_round46`.
+
+### Fixed - reading through a junction under ReadOnlyPaths escaped the jail
+`PathDenied` caught the link with `RealPath` - and then `ReadPathDenied`'s
+ReadOnlyPaths forgiveness re-checked the path BY TEXT and pardoned the very
+refusal the link check had just produced: `delphi_fetch`, `delphi_read` and
+`delphi_search` served files from OUTSIDE the jail whenever a junction sat
+under a ReadOnlyPaths entry. The refusal now carries its REASON
+(`TMotivoVeto`, a second `PathDenied` overload) and forgiveness goes by
+motive - never by re-deriving the verdict, never by matching message text.
+The same change retired the 'modo confinado' text-match the old code
+apologised for, and stopped the library-zone pardon from giving vault and
+anomaly refusals a second chance.
+
+### Fixed - every recursive delete followed junctions to the other side
+The RTL's `TDirectory.Delete(..., True)` recurses into anything carrying
+the directory bit - a junction carries it - and deletes the files of the
+TARGET (verified in the System.IOUtils sources: `WalkThroughDirectory`
+never looks at the reparse bit). SIX call sites had it, including the
+startup purge, which runs with nobody asking, and `delphi_delete`, which
+the caller aims. There is now ONE tree deleter, `BorraArbol` in
+`Lsp.Guard`: a reparse point is removed as an ENTRY - the link falls, its
+target is never looked at - and all six sites go through it.
+
+### Fixed - the restore echo leaked unmasked server paths
+`delphi_edit` is exempt from the outbound drive mask (its echoes must stay
+verbatim), so everything it COMPOSES itself must be masked by hand - the
+obligation is written right where the exemption is. `RESTAURAR` /
+`RESTAURADO` composed three absolute server paths and masked none: the
+second emitter, one unit away from the comment that records the rule, for
+the third time in three days. All three go through `MaskDriveText('', ...)`.
+
+### Fixed - a stdio launch purged the temp of the live service
+"Server and tray cannot run at once - they share the port" is false for
+stdio, which opens no port and shares the folder next to the exe: a second
+instance purged `__delphi-temp` while the first had files in flight (a git
+commit's `-F` message, a remote-run capture). The startup purge now belongs
+to the FIRST live instance of that exe only - a global mutex per exe
+folder, held for life and inherited by the next start.
+
+### Fixed - eight more, each verified before touching
+- `delphi_edit` could write inside `__delphi-temp`: the ban lived in three
+  of the four write doors, and the startup purge would silently eat the
+  work. Now refused, like its twin always did.
+- The UTF-8 branch of the child-output decoder was still unprotected:
+  CESU-8 surrogates (what adb and gradle emit) pass the shape check and the
+  strict decoder throws - the very crash 1.0.12 fixed in the OTHER branch.
+  Both branches now fall through to the byte-safe net.
+- The per-directory settings cache ignored WHICH workspace resolved it:
+  with overlapping jails, the wide token's RootDir was handed to the
+  narrow one, which then walked a root its own jail forbids. The cache key
+  now carries the jail.
+- `AgentTempDir` composed deliverables on `Roots[0]` even when that root
+  is declared read-only - writing exactly where the server's own jail
+  refuses the same path by hand. It now picks the first WRITABLE root.
+- `delphi_package` zipped `__delphi-temp` - the one walker that COPIES
+  files out of the workspace, and the folder now holds desktop captures of
+  the operator. Skipped.
+- The unserved-drive sentinel `srvx` was exactly what a genuinely served
+  X: drive masks to: the namer stopped being injective and its inverse
+  expanded the sentinel to `X:\`. The sentinel is now `srv0` - a digit can
+  collide with nothing - refused by name like any unserved unit.
+- Two parameters were misclassified: `delphi_config.path` (a server path
+  in all three uses) carried neither the `[RutaDelServidor]` mark nor an
+  exception comment, and `delphi_adb_linux.project`'s comment claimed "a
+  NAME, not a path" while the code jails it 139 lines below. Both marked;
+  the census in `Lsp.Attributes` and the README is 39 ours + 2 remote.
+- Contract texts told yesterday's truth: the `out` descriptions of both
+  desktop twins now say the folder is ON THIS SERVER, jailed, and where
+  the default lands; the README no longer describes the discarded
+  "first use" purge; the Linux twin's JSON reply is built under
+  try/finally like its Windows sister.
+
+### Fixed - every release zip shipped a month-old server binary
+`DelphiLspMcpTray.exe` - the project's PREVIOUS name - was still listed in
+the release payload. The tray has been a mode of the one executable (`-gui`)
+for weeks and that project no longer exists (a battery even asserts so), but
+its last build, dated 2026-08-20, kept sitting in the output folder and the
+packager kept picking it up: every zip published since carried a server from
+before v0.98, with that era's jail holes inside. Found while reviewing the
+README for this release. **If you unpacked any earlier zip, delete
+`DelphiLspMcpTray.exe`** and use `DelphiLspMcp.exe -gui`. The README also
+caught up: battery counts (68 / 1,550+), the 43 tools, what the zip really
+carries, the `srv0:` sentinel.
+
+### Tests - four batteries measured nothing, and said otherwise
+- round44 T6/T6b ran against a folder the previous check had just emptied:
+  they stayed green with the filter deleted. They now plant a decoy, and
+  T6c finally performs the writer/reader literal check that
+  `Lsp.References` promised in writing.
+- round45's discoverer only sees the LIVE tools/list, and without a vault
+  the five conditional `vault_*` tools were invisible - their `path`
+  parameters sat unclassified; the ">= 30 tools" floor would not notice an
+  eight-tool cut. It now runs with a vault and a floor of 43 - and
+  immediately caught three more unclassified parameters.
+- Two EXCLUIDOS excuses claimed coverage that did not exist:
+  `delphi_changeset.path/dest` are now probed for real, outside the jail
+  (G2b, at stage time), and `delphi_adb_linux.project`'s excuse tells the
+  truth.
+- round43's W3d said "none of the three wrote outside" while checking two;
+  W1b alone was vacuous with the session locked - W4c re-asserts it once
+  capturing demonstrably works.
+- New `test_round46` (14 checks): both junction escapes with real links,
+  the restore mask, the `srv0` sentinel, the single-instance purge, the
+  edit ban, the clean zip - plus, said out loud, what it cannot measure
+  here: the CESU-8 fall-through needs a child emitting those bytes, the
+  read-only-root case needs the desktop node, and the cache key needs two
+  overlapping tokens with a live LSP. The code is fixed; those three
+  measurements are still owed.
+
+### Known issues
+- The central gate reading `[RutaDelServidor]` is still pending. The audit
+  also judged the reasoning behind the withdrawn floor in `Lsp.Guard.pas`:
+  right for a REDUNDANT layer, wrong as the general slogan the note makes
+  of it ("refusing must fail open") - and it left four warnings for
+  whoever writes the gate. They are recorded in the project log and still
+  have to be verified against the code before anyone builds on them.
+- The `__delphi-patch` retention gap: a folder you stop editing keeps its
+  copies forever (the purge is driven from `BackupFile`).
+- `out` is a FOLDER in `delphi_desktop` and a FILE in `delphi_adb` - same
+  family, different contract.
+- `delphi_search` filters artifact folders on the absolute path while
+  `delphi_list` uses the root-relative form plus the RootInArtifacts
+  consent rule; the twins should agree.
+- The unit-creation race, seen once, never reproduced in 16 runs.
+
 ## [1.0.12-beta] - 2026-09-21
 
 **The parameter now says whose path it is.** One hole was closed, a folder

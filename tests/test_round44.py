@@ -233,11 +233,13 @@ try:
 
     # ------------------------------------------------------------------ T7
     # "__delphi-temp puede limpiarse entero en cada arranque del server"
-    # (David). La del SERVIDOR se vacia en el arranque de verdad; la del
-    # WORKSPACE no puede -al arrancar no hay workspace activo, los roots los
-    # elige el token- asi que se vacia en el PRIMER uso de cada proceso. Lo
-    # que se mide es el efecto, que es el mismo: lo de la vez anterior no
-    # sobrevive.
+    # (David). Las DOS casas se vacian en el arranque: la del servidor y la
+    # de cada workspace del settings.ini - los declara LoadSecurity, no
+    # hace falta ninguno "activo"; la version de "en el primer uso" se
+    # probo y se descarto, y este comentario la describia como vigente
+    # (auditoria 21-sep). Solo purga la PRIMERA instancia viva del exe: un
+    # stdio del mismo binario no borra lo que el servicio tiene en vuelo.
+    # Lo que se mide es el efecto: lo de la vez anterior no sobrevive.
     # Sin depender del nodo: lo que se mide es el ARRANQUE, y ya no hace
     # falta que nadie pida una captura para que la carpeta se vacie. Esa
     # dependencia era justo el fallo del primer intento.
@@ -280,14 +282,32 @@ try:
 
     # ------------------------------------------------------------------ T6
     # Y no ensucia los listados: no es papelera, es temporal, asi que se
-    # salta SIEMPRE, tambien con includetrash.
+    # salta SIEMPRE, tambien con includetrash. OJO: T7 acaba de vaciar la
+    # carpeta, asi que sin plantar nada estas aserciones pasaban hasta sin
+    # filtro - cinco angulos de la auditoria del 21-sep las cazaron verdes
+    # y vacias. Se planta un png A MANO, por fuera del servidor, para que
+    # haya algo que esconder de verdad.
+    plantado = os.path.join(TEMP_JAULA, 'plantada-para-t6.png')
+    os.makedirs(TEMP_JAULA, exist_ok=True)
+    open(plantado, 'wb').write(b'no es un png de verdad: es el cebo de T6')
     l1 = call('delphi_list', {'root': JAIL, 'pattern': '*.png'})
     l2 = call('delphi_list', {'root': JAIL, 'pattern': '*.png',
                               'includetrash': True})
     check('T6 __delphi-temp no aparece en un listado del workspace',
-          '__delphi-temp' not in l1, l1[:240])
+          '__delphi-temp' not in l1 and 'plantada-para-t6' not in l1, l1[:240])
     check('T6b ...ni siquiera pidiendo la papelera: no es papelera',
-          '__delphi-temp' not in l2, l2[:240])
+          '__delphi-temp' not in l2 and 'plantada-para-t6' not in l2, l2[:240])
+    os.remove(plantado)
+    # La promesa de Lsp.References.pas ("que los dos digan lo mismo no se
+    # deja a la buena fe: lo comprueba la bateria") no la comprobaba nadie
+    # hasta la auditoria. Esta es esa comprobacion: el nombrador
+    # (TempFolderName, Lsp.Guard) y el lector literal (CARPETAS_ARTEFACTO)
+    # tienen que decir la misma carpeta.
+    g_src = open(os.path.join(REPO, 'src', 'Lsp.Guard.pas'), 'rb').read().decode('utf-8', 'replace')
+    r_src = open(os.path.join(REPO, 'src', 'Lsp.References.pas'), 'rb').read().decode('utf-8', 'replace')
+    check('T6c el literal del lector coincide con el nombrador',
+          "Result := '__delphi-temp';" in g_src and "'\\__delphi-temp\\'" in r_src,
+          'el nombrador o el lector han cambiado de carpeta sin avisarse')
 finally:
     try:
         proc.kill()

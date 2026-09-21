@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: BETA.** Functional and covered by 51 end-to-end batteries — over 1,280 checks — against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
+> **Status: BETA.** Functional and covered by 68 end-to-end batteries — over 1,550 checks — against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
 
 ## Why
 
@@ -69,7 +69,7 @@ The table below says which engine each one uses and why it matters:
 | **DelphiLSP** (official, compiler-grade) | `delphi_symbols`, `delphi_definition`, `delphi_hover`, `delphi_completion`, `delphi_signature`, `delphi_diagnostics` | Real semantic answers, not grep: resolves inheritance, `with`, overloads, and follows into RTL/VCL. Needs a `.delphilsp.json` (used when fresh, fabricated from the `.dproj` when not). |
 | **DelphiLSP + disk scan** (hybrid) | `delphi_references` | The LSP has no `references`, so candidates are scanned from disk and then each one is *validated* by asking the LSP where it resolves to. Verified against the live compiler, never an index. A name written in a comment or inside a string literal is **not** a reference: it goes to `mentions`, listed but harmless, instead of counting as `unverified` and blocking a rename. |
 | **Own safe-editing engine** | `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create` | Anchored edits with encoding preserved (CP1252 vs UTF-8), atomic writes, automatic backups, designer-file awareness. No LSP involved. |
-| **MSBuild** (`rsvars.bat`, located via the registry) | `delphi_build` | The real compiler and linker. The LSP cannot build — it has no such operation.. A failed build with F2613 names each missing unit and where its `.pas` lives in the library zone (`missingUnits`), with the `add-searchpath` to run |
+| **MSBuild** (`rsvars.bat`, located via the registry) | `delphi_build` | The real compiler and linker. The LSP cannot build — it has no such operation. A failed build with F2613 names each missing unit and where its `.pas` lives in the library zone (`missingUnits`), with the `add-searchpath` to run |
 | `delphi_test` | **Does it WORK, not just compile**: `discover` finds the test projects (DUnitX, or console runners named *Test*), `run` builds and runs one in the same low-integrity sandbox and answers structured — total/passed/failed, the failing lines, exitCode, duration. Own opt-in (`AllowTests`) |
 | **The filesystem, jailed** | `delphi_list`, `delphi_search`, `delphi_projects`, `delphi_workspace`, `delphi_move`, `delphi_delete`, `delphi_fetch`, `delphi_upload`, `delphi_package` | Navigation, transfer and housekeeping inside the workspace roots. |
 | **`git.exe`**, arguments composed by the server | `delphi_git` | Query commands at every level; writes only read-write. Never a shell. |
@@ -225,7 +225,7 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_test` | **Does it WORK, not just compile**: `discover` finds the test projects (DUnitX, or console runners named *Test*), `run` builds and runs one in the same low-integrity sandbox and answers structured — total/passed/failed, the failing lines, `exitCode`, duration. A runner whose output cannot be counted is still reported FAILED when its exit code says so. `nobuild`, `timeoutms`, and `countsFormat` for a hand-rolled runner. Own opt-in (`AllowTests`); runs Win64 by default |
 | `delphi_delete` | Delete a file or folder — into a **recoverable trash** next to it (`__delphi-patch\<date>\deleted\`), not a hard delete; it also drops the unit from the projects that list it. `purge=true` is the one hard delete, allowed only INSIDE that trash, and only for what you put there: every trashed item records who trashed it, and a folder holding somebody else's copies is refused, naming them |
 | `delphi_move` | Move or rename a file or folder inside the workspace — and, for a unit, rename it everywhere it is referenced (`.dpr`, `.dproj`, uses clauses, its `.dfm`). Moving an item OUT of the trash is how you restore it |
-| `delphi_package` | Zip a build output folder for download (recursive, `.dcu` and intermediates excluded) — the last step of "build on the server, run it here" |
+| `delphi_package` | Zip a build output folder for download (recursive; `.dcu`, intermediates and the server's `__delphi-temp` excluded) — the last step of "build on the server, run it here" |
 | `delphi_styles` | **FMX styles by `StyleName`**: view/get/set/clone a style member, `lint` it, and `build` a `.style` into the binary the app loads. The `.rc` include chain is walked so a style cannot pull in a file from outside the jail |
 | `delphi_messages` | The agents' mailbox: `check` lists what is pending for you, `read` delivers it. Notes from the operator to one agent or to everyone (a restart, a new tool, a convention); your identity comes from the handshake, so you do not type it |
 | `vault_read` · `vault_search` | **Optional persistent memory** (off unless configured): read and search a vault of Markdown notes — your decisions, conventions and project context — so a remote agent starts with more than the source tree. Lazy loading: it bootstraps with the vault's own rules + index and pulls only the notes it needs |
@@ -267,7 +267,7 @@ whole family:
 
 | Project | Folder | What it is |
 |---|---|---|
-| **`DelphiLspMcp`** | [`src/`](src) | **The server itself** — the 42-tool MCP server this repo exists for. What ships in every release. |
+| **`DelphiLspMcp`** | [`src/`](src) | **The server itself** — the 43-tool MCP server this repo exists for. What ships in every release. |
 | `DelphiStyleConvert` | [`src/`](src) | Companion CLI that converts VCL⇄FMX style files; `delphi_styles` drives it. Ships next to the server. |
 | `LspCoreTest` | [`src/`](src) | Console **diagnostic harness for the LSP core**: probes a real `DelphiLSP.exe` with no MCP layer on top, for when the LSP conversation itself misbehaves. |
 | `McpDesktopNode` | [`src_desktop_node/`](src_desktop_node) | The **Linux desktop node** — the server's eyes and hands on a GNOME target. Its compiled binary travels as [`node/McpDesktopNode`](node) and self-deploys; building it needs the Linux64 SDK (once, in the SDK Manager — or `delphi_build`, which links against the `get-sdk` sysroot by itself). |
@@ -282,8 +282,8 @@ stay in step).
 
 **No Delphi installed, or don't want to compile?** Download the ready-made
 Windows binary from **[Releases](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)** —
-the zip carries `DelphiLspMcp.exe`, `settings.example.ini`, the remote runner
-and the docs, plus a SHA-256 to verify the download (`certutil -hashfile
+the zip carries `DelphiLspMcp.exe`, the style converter, `settings.example.ini`,
+the desktop node in both flavours (`node/`) and the docs, plus a SHA-256 to verify the download (`certutil -hashfile
 DelphiLspMcp-*.zip SHA256` on Windows, `sha256sum` elsewhere). Note the
 *server* machine still needs its own licensed RAD Studio at runtime — the
 binary talks to *your* DelphiLSP and MSBuild; nothing of Embarcadero's is
@@ -537,15 +537,18 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   a target) goes next to the executable, like `reports\`. What the agent must FETCH - a desktop
   capture - goes to `<root>\__delphi-temp\<agent>\`, inside the workspace, because `delphi_fetch`
   checks the jail and a deliverable outside it cannot be delivered. **The folder is emptied whole
-  every time the server starts** (the one inside a workspace on its first use of the run, since
-  at startup no workspace is active yet): nothing there survives the call that created it, so
+  every time the server starts** - the server's own and the one in every workspace declared in
+  `settings.ini` - and only by the FIRST live instance of that exe (a stdio launch of the
+  service's own binary shares the folder, and purging it would delete files in flight):
+  nothing there survives a restart, so
   never leave anything of your own in it - writing inside is refused. Skipped by every listing
   and search, `includetrash` included: it is not trash, nothing is restored from it. Before
   1.0.12 these files went to the MACHINE's `%TEMP%`, outside every jail - 56.4 MB measured,
   forgotten there for two days.
-- **A destination you choose is checked too.** Every parameter that names a path ON THIS SERVER
-  is declared as such in the tool's own schema (`[RutaDelServidor]`, since 1.0.12), so the jail
-  applies to `out`, `dest`, `outfile` and friends exactly as it does to `path`. The two
+- **A destination you choose is checked too.** The jail applies to `out`, `dest`, `outfile`
+  and friends exactly as it does to `path`, and every parameter that names a path ON THIS
+  SERVER declares it in the tool's own source (`[RutaDelServidor]`, since 1.0.12 - the
+  declaration the pending central gate will read; today each tool still checks by hand). The two
   exceptions are paths on the TARGET machine - `delphi_paserver`'s `exe` and `delphi_config`'s
   `remotedir` - where this server's jail has nothing to say.
 - **A root is also where project discovery STOPS.** Looking for a unit's `.delphilsp.json` or
@@ -559,8 +562,12 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   leave as `srvd:\...`, `srvc:\...` and are accepted back in the same form (real paths still
   work), so an agent can never mistake server paths for its own local disks. One generic rule
   at the dispatch gate covers every tool's output, compiler/git messages and 8.3 short forms
-  included. Exception: successful `delphi_read`/`delphi_fetch` content is byte-exact by
-  design and travels verbatim.
+  included. Exception: file CONTENT is byte-exact by design and travels verbatim
+  (`delphi_read`, `delphi_fetch`, search hits, the vault readers, the verification echo of
+  the editors - see "Byte fidelity beats the drive mask" below). A path on a drive this
+  server does not serve leaves as `srv0:` - it says there is a path and not where - and
+  is refused by name if it comes back (it was `srvx:` until 1.0.13, which is exactly what
+  a genuinely served `X:` drive masks to).
 - **Library read zone** (`LibraryZone=1` by default; `0` confines reads to the roots exactly
   like writes): READING tools (read/search/list/fetch/LSP navigation) additionally
   accept, for **every installed Delphi**, its installation directory, the Library Search Path
@@ -574,7 +581,7 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
 
 ## Tests
 
-`tests/` contains 51 end-to-end batteries that talk real MCP (stdio and HTTP) to the built server — over 1,280 checks, with byte-level verification for the editing tools. `python tests/run_all.py` runs them all against a clean copy of the built exe and prints the totals. Highlights: safe editing (`test_delphi_patch.py`), workspace jail and escape attempts (`test_guard.py`), auth and access levels (`test_http_auth.py`), real project scaffolding + builds (`test_scaffold.py`), the recoverable trash and its ownership rules, the designer tools (layout semantics measured against the VCL), concurrency (`test_concurrencia.py`: bursts of simultaneous agents editing one file, registering units in one project, filing reports, packaging, screenshotting and building while that binary runs — every one checked against the disk afterwards),  remote execution end-to-end against a real `paclient` stub that runs the generated launch scripts (`test_remoterun.py`), and docs/runtime consistency (`test_docs_consistency.py`).
+`tests/` contains 68 end-to-end batteries that talk real MCP (stdio and HTTP) to the built server — over 1,550 checks, with byte-level verification for the editing tools. `python tests/run_all.py` runs them all against a clean copy of the built exe and prints the totals. Highlights: safe editing (`test_delphi_patch.py`), workspace jail and escape attempts (`test_guard.py`, and `test_round46.py` with real NTFS junctions), auth and access levels (`test_http_auth.py`), real project scaffolding + builds (`test_scaffold.py`), the recoverable trash and its ownership rules, the designer tools (layout semantics measured against the VCL), concurrency (`test_concurrencia.py`: bursts of simultaneous agents editing one file, registering units in one project, filing reports, packaging, screenshotting and building while that binary runs — every one checked against the disk afterwards),  remote execution end-to-end against a real `paclient` stub that runs the generated launch scripts (`test_remoterun.py`), and docs/runtime consistency (`test_docs_consistency.py`).
 
 Each security fix is paired with the vector it closes **and** with a counter-test proving it did not over-tighten — a fix that refuses too much is a bug too.
 
@@ -588,7 +595,7 @@ Each security fix is paired with the vector it closes **and** with a counter-tes
 - **What a tool answers is what the agent sees** — tools reply in prose or in JSON, and both travel in the MCP `content`. `structuredContent` is published only when the answer IS a JSON object, or when a prose call FAILED (there it carries `ok`, a machine-readable `code` — `DENIED`, `NOT_FOUND`, `INVALID_PARAM`, `INTERNAL` — and the refusal text). A prose success publishes none: a client that understands the field shows it *instead of* `content`, so a status placeholder there made the real answer invisible (measured against production and fixed in v1.0.1-beta). A refusal carried INSIDE a JSON object gets the same treatment since v1.0.4-beta: the object's `error` field decides, so `ok` is never `true` on a refusal, whatever the tool put there.
 - **"It isn't there" and "it isn't that kind of thing" are different answers** (v1.0.4-beta). A folder handed to `delphi_read`, a file handed to `delphi_list`, a markdown file handed to `delphi_build`: each says what the path actually is and which tool handles it, instead of reporting it missing. And the prefix follows rule 11 — a path that is simply not there is `error:` ("correct it and repeat"), never `RECHAZADO:` ("denied on purpose, change course").
 - **Byte fidelity beats the drive mask** (v1.0.4-beta). Server drive letters leave as virtual units (`D:\` → `srvd:\`) in every textual result, EXCEPT where the text is file content an agent will copy as an edit anchor: `delphi_read`, `delphi_search` hits, the vault readers, and the verification echo of `delphi_edit` / `delphi_textedit`. Those tools mask their own `path` fields instead. A mask that rewrites the line you are about to anchor on guarantees the anchor cannot match.
-- **The jail is measured on where a path really goes** (v1.0.5-beta). Not on what it is called: a junction or a symlink inside a root used to escape it for reading *and* for writing, because the check validated the path as text while the file system followed the link. A `git clone` with `core.symlinks` was enough to plant one without leaving the MCP. Boundaries are now decided on the resolved destination.
+- **The jail is measured on where a path really goes** (v1.0.5-beta). Not on what it is called: a junction or a symlink inside a root used to escape it for reading *and* for writing, because the check validated the path as text while the file system followed the link. A `git clone` with `core.symlinks` was enough to plant one without leaving the MCP. Boundaries are now decided on the resolved destination. Two corners of the same rule fell in v1.0.13-beta, both found by audit and both measured with real junctions: the ReadOnlyPaths pardon re-checked the path as TEXT and forgave the very refusal the link check had just produced (pardons now go by the refusal's *reason*, never by re-deriving it), and every recursive delete - the startup purge included - followed a junction and deleted on the other side, because the RTL's recursive delete never looks at the reparse bit. There is one tree deleter now, and a link falls as an entry: its target is never looked at.
 - **A batch of edits answers with what happened, not with what you asked for** (v1.0.5-beta). Every entry comes back with the resulting line re-read from disk, the same evidence a single edit has always returned — and `occurrence` inside a batch is resolved once against the ORIGINAL file and then dragged as earlier entries add or remove lines, which is what its description always promised and did not do.
 
 ## Requirements
@@ -606,7 +613,7 @@ Which Claude model actually did the work was *not* the author's choice. Anthropi
 swap the active model mid-session on their own — in this project's experience, every time
 their content classifier trips over some word in an ordinary technical conversation — so the
 model kept changing under our feet, often in the middle of a task. **Claude Fable 5, Claude
-Opus 5 and Claude Opus 4.8** all took part for that reason, and all three are credited; every
+Fable 5.1, Claude Opus 5 and Claude Opus 4.8** all took part, and all four are credited; every
 commit carries its co-author tag.
 
 The safe-editing tool ports an internally battle-tested design measured over 30+ test

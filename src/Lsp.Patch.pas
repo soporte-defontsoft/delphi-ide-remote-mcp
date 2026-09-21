@@ -509,7 +509,7 @@ begin
     for D in TDirectory.GetDirectories(ADir) do
       if TRegEx.IsMatch(TPath.GetFileName(D), '^\d{8}$') and
          (TPath.GetFileName(D) < Limit) then
-        TDirectory.Delete(D, True);
+        BorraArbol(D); // sin cruzar enlaces: ver Lsp.Guard
   except
     // purging must never break an edit
   end;
@@ -1188,6 +1188,16 @@ begin
       Result := PathDenied(A.Path);
       if Result <> '' then
         Exit;
+      // Las carpetas muertas (la papelera __delphi-patch, los temporales
+      // __delphi-temp, el __history del IDE) no se editan. Su gemela
+      // delphi_textedit lo comprobaba desde el principio y esta puerta no:
+      // editar dentro de __delphi-temp dejaba el trabajo -y su copia- justo
+      // donde la purga del arranque lo borra sin avisar (auditoria
+      // 2026-09-21: la regla entro en 1 de los 3 guardianes y delphi_edit
+      // era el que faltaba).
+      Result := DeadCopyWriteDenied(A.Path);
+      if Result <> '' then
+        Exit;
       Ext := LowerCase(TPath.GetExtension(A.Path));
       IsSource := False;
       for var E in SOURCE_EXTS do
@@ -1347,10 +1357,13 @@ begin
                 SbL.Free;
               end;
             end;
+            // "desde %s" sale al agente y delphi_edit esta EXENTA del filtro de
+            // salida: la mascara va A MANO aqui y en el RESTAURADO de abajo,
+            // como en BackupFile (la obligacion de la lista, ver Lsp.Guard).
             Exit(Format('RESTAURAR %s desde %s: aun NO he hecho nada.'#10 +
               'Estas %d lineas del fichero ACTUAL no estan en la copia y SE PERDERAN:'#10'%s'#10 +
               'Si de verdad quieres restaurar, repite con confirm: true.',
-              [TPath.GetFileName(A.Path), Src, Losses.Count, Lista]));
+              [TPath.GetFileName(A.Path), MaskDriveText('', Src), Losses.Count, Lista]));
           end;
 
           // Antes se componia aqui a mano, con OTRA forma de sello
@@ -1366,8 +1379,8 @@ begin
           Exit(Format('RESTAURADO %s desde %s'#10'  ahora: %s'#10 +
             '  OJO: se han perdido %d lineas que tenias escritas. Rehaz y RE-VERIFICA cada tarea de este fichero.'#10 +
             '  (estado previo guardado en %s)',
-            [TPath.GetFileName(A.Path), Src, Summary(Measure(TFile.ReadAllBytes(A.Path))),
-             Losses.Count, PreCopy]));
+            [TPath.GetFileName(A.Path), MaskDriveText('', Src), Summary(Measure(TFile.ReadAllBytes(A.Path))),
+             Losses.Count, MaskDriveText('', PreCopy)]));
         finally
           BkSet.Free;
           Losses.Free;

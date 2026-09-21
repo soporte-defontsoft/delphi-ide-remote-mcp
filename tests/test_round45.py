@@ -78,6 +78,11 @@ def borra(d):
 if os.path.isdir(BASE):
     borra(BASE)
 EXEDIR = os.path.join(BASE, 'srv')
+# El vault de mentira: sin VaultPath las cinco vault_* (el unico registro
+# CONDICIONAL del repo) no salen en tools/list y G1 no las ve - asi
+# quedaron sus 'path' sin clasificar hasta la auditoria del 21-sep.
+VAULT = os.path.join(BASE, 'vault')
+os.makedirs(VAULT, exist_ok=True)
 JAIL = os.path.join(BASE, 'jail')
 # FUERA de la jaula y FUERA de la zona de biblioteca (leer la RTL SI es
 # legitimo, asi que un path de Embarcadero no valdria de prueba). Y dentro
@@ -188,7 +193,11 @@ PROBAR = [
 EXCLUIDOS = {
     ('delphi_paserver', 'exe'): 'fichero de la carpeta desplegada EN EL TARGET',
     ('delphi_config', 'remotedir'): 'carpeta EN EL TARGET, no de esta maquina',
-    ('delphi_adb_linux', 'project'): 'NOMBRE del proyecto/nodo, no una ruta',
+    # v1.0.13: la excusa vieja ("es un NOMBRE") era FALSA - la tool lo pasa
+    # por PathDenied y ya lleva [RutaDelServidor]. No se sonda en la tabla
+    # porque ProfileHostDenied corta antes cuando no hay un PAServer vivo.
+    ('delphi_adb_linux', 'project'):
+        'ruta NUESTRA jaulada tras el profile; sin PAServer no se alcanza',
     ('delphi_git', 'args'): 'argumentos libres de git; filtro propio (GitArgDenied)',
     ('delphi_search', 'pattern'): 'mascara de fichero, no una ruta',
     ('delphi_list', 'pattern'): 'mascara de fichero, no una ruta',
@@ -196,8 +205,21 @@ EXCLUIDOS = {
     ('delphi_config', 'path'): 'search path: puede apuntar a la zona de biblioteca, que es legitima',
     ('delphi_styles', 'project'): 'acepta carpeta o .dproj; cubierto por test_styles',
     ('delphi_styles', 'child'): 'ruta DENTRO de un estilo, no del disco',
-    ('delphi_changeset', 'path'): 'necesita un changeset vivo; cubierto por test_changeset',
-    ('delphi_changeset', 'dest'): 'idem',
+    ('delphi_changeset', 'path'): 'necesita el id de un begin: lo mide G2b',
+    ('delphi_changeset', 'dest'):
+        'idem G2b, y FUERA de la jaula (la excusa vieja apuntaba a '
+        'test_changeset, que solo usa rutas de dentro - auditoria 21-sep)',
+    # Las vault_* existen porque el settings declara VaultPath: sus rutas
+    # son RELATIVAS al vault y las vigila la guarda del vault, no la jaula.
+    ('vault_read', 'path'): 'ruta RELATIVA al vault; guarda propia',
+    ('vault_append', 'path'): 'idem vault',
+    ('vault_create', 'path'): 'idem vault',
+    ('vault_patch', 'path'): 'idem vault',
+    ('vault_search', 'target'): 'nota/carpeta RELATIVA al vault; guarda propia',
+    ('vault_search', 'subfolder'): 'idem vault',
+    ('vault_search', 'pattern'): 'mascara de nombre de nota, no una ruta',
+    ('vault_append', 'anchor'): 'texto ancla DENTRO de la nota, no una ruta',
+    ('vault_patch', 'old_text'): 'texto a sustituir en la nota, no una ruta',
 }
 
 TOK = 'r45'
@@ -212,7 +234,8 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Workspace.R45]', 'Token=%s' % TOK, 'Roots=%s' % JAIL,
     'AllowDesktopControl=1', 'AllowRemoteRun=1', 'AllowRun=1', 'AllowTests=1',
     'RemoteRunProjects=Ajeno;McpDesktopNode',
-    'AdbAllowedDevices=%s' % DEV, '',
+    'AdbAllowedDevices=%s' % DEV,
+    'VaultPath=%s' % VAULT, '',
 ]))
 
 proc = subprocess.Popen([os.path.join(EXEDIR, 'DelphiLspMcp.exe'),
@@ -306,8 +329,11 @@ try:
           not sin_clasificar,
           'sin clasificar: %s  (anadelo a PROBAR o a EXCLUIDOS con su motivo)'
           % sorted(sin_clasificar))
+    # 43 = el contrato entero con los interruptores y el vault encendidos.
+    # Con >=30, un recorte de ocho tools pasaba callado y el descubridor
+    # perdia justo a las de registro condicional (auditoria 21-sep).
     check('G1b ...y la lista mira el contrato VIVO, no una copia',
-          len(tools) >= 30, '%d tools' % len(tools))
+          len(tools) >= 43, '%d tools' % len(tools))
 
     # ------------------------------------------------------------------ G2
     # Y ahora, una por una. Cada fallo aqui es un parametro por el que se
@@ -327,6 +353,28 @@ try:
         for f in fugas:
             print('    FUGA:', f)
         print()
+
+    # ----------------------------------------------------------------- G2b
+    # Los dos parametros de delphi_changeset que la tabla no puede sondar
+    # (stage necesita el id de un begin). Su exclusion decia "cubierto por
+    # test_changeset" y era FALSO: aquella bateria solo usa rutas de
+    # DENTRO - se podia borrar el PathDenied del stage con la suite en
+    # verde (auditoria 21-sep). El stage valida en el momento: dos llamadas.
+    rb = call('delphi_changeset', {'command': 'begin'})
+    cid = rb.split('CHANGESET ')[1].split(' ')[0] if 'CHANGESET ' in rb else ''
+    check('G2b begin da un changeset para sondar', bool(cid), rb[:150])
+    if cid:
+        t = call('delphi_changeset', {'command': 'stage', 'id': cid,
+                                      'kind': 'edit', 'path': AJENO_PAS,
+                                      'old': 'unit Ajena;', 'new': 'unit A2;'})
+        check('G2b delphi_changeset.path rechaza la ruta de fuera',
+              JAULA in t, t[:150])
+        t = call('delphi_changeset', {'command': 'stage', 'id': cid,
+                                      'kind': 'move',
+                                      'path': os.path.join(JAIL, 'Propia.pas'),
+                                      'dest': os.path.join(FUERA, 'robada.pas')})
+        check('G2b delphi_changeset.dest rechaza el destino de fuera',
+              JAULA in t, t[:150])
 
     # ------------------------------------------------------------------ G3
     # El otro lado, sin el cual esto no vale: la misma llamada DENTRO de la

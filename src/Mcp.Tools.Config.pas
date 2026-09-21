@@ -50,7 +50,12 @@ type
     property Sdk: string read FSdk write FSdk;
     [SchemaDescription(SP_CONFIG_PROFILE)]
     property Profile: string read FProfile write FProfile;
+    // Ruta NUESTRA en sus tres usos: add-unit la pasa por PathDenied, y
+    // search/deploy por ReadPathDenied (que ya perdona la zona de
+    // biblioteca, su destino legitimo). Se quedo sin marca en la primera
+    // pasada y el censo salio 37+2 cuando es 39+2 (auditoria 2026-09-21).
     [SchemaDescription(SP_CONFIG_PATH)]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_CONFIG_SECTION)]
     [SchemaDefault('summary')]

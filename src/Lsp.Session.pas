@@ -299,7 +299,14 @@ begin
   // the answer (.delphilsp.json or .dproj): editing search paths touches the
   // .dproj, which changes the stamp, which re-fabricates. The no-source case
   // is never cached - a project file could appear at any moment.
-  Dir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath)).ToLower;
+  // La clave lleva la JAULA ademas del directorio: el veredicto de la
+  // escalada (PuedoSubirA, via ReadPathDenied) depende de los roots del
+  // token que llama, y con workspaces solapados el primero que resolvia
+  // una carpeta fijaba SU RootDir para todos los demas - el token ancho
+  // le regalaba al estrecho una raiz que su jaula le prohibe
+  // (auditoria 2026-09-21).
+  Dir := string.Join(';', WorkspaceRoots).ToLower + '|' +
+    TPath.GetDirectoryName(TPath.GetFullPath(AFilePath)).ToLower;
   FLock.Enter;
   try
     if FSettingsCache.TryGetValue(Dir, E) and (E.SourceFile <> '') and

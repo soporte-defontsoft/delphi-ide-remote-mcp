@@ -566,6 +566,15 @@ begin
           Inc(HiddenGit);
           Continue;
         end;
+        // __delphi-temp es ARTEFACTO, no papelera: de un temporal no se
+        // restaura nada e includetrash NUNCA lo ensena - contarlo como
+        // papelera prometia lo contrario (auditoria 2026-09-21).
+        if SameText(TPath.GetFileName(F), TempFolderName) then
+        begin
+          Inc(Hidden);
+          Inc(HiddenArt);
+          Continue;
+        end;
         if TPath.GetFileName(F).StartsWith('__') and
            not (Params.IncludeTrash and IsTrash) then
         begin
@@ -1929,6 +1938,13 @@ begin
     Zip.Open(EnProceso, zmWrite);
     for F in WalkFiles(Dir, '*') do
     begin
+      // Los temporales del servidor no son parte de ningun entregable:
+      // ahi caen las capturas del escritorio del OPERADOR desde 1.0.12, y
+      // este era el unico recorredor que las COPIABA fuera del workspace.
+      // El formato se excluyo en cinco sitios y se olvido aqui
+      // (auditoria 2026-09-21).
+      if F.ToLower.Contains('\' + TempFolderName + '\') then
+        Continue;
       if SameText(TPath.GetExtension(F), '.dcu') then
         Continue;
       if F.ToLower.Contains('\dcu\') then

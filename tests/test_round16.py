@@ -176,8 +176,13 @@ check('S1 arbol grande por defecto = summary compacto con secciones',
 # O sea que decir la verdad cuesta un 7%, y el arbol completo sigue pasando de
 # 38k. No se sube el techo para callar el fallo: se sube porque el trato
 # cambio y este es su precio.
-check('S1 y de verdad es compacto (<14k chars, el arbol completo pasa de 38k)',
-      len(rbig) < 14000, len(rbig))
+# Y de 14k a 16k el 2026-09-21, por un motivo distinto: esta vez no cambio
+# el trato sino el FIXTURE. Lsp.Guard crecio de verdad con la auditoria
+# (TMotivoVeto y PathDenied con motivo, BorraArbol, la purga con instancia
+# unica). Medido: 14.198 justo despues. El margen es para que la unidad
+# respire sin que cada release toque este numero.
+check('S1 y de verdad es compacto (<16k chars, el arbol completo pasa de 38k)',
+      len(rbig) < 16000, len(rbig))
 
 rfull = call('delphi_symbols', {'path': big, 'mode': 'full'})
 check('S2 mode=full conserva el arbol completo con rangos',

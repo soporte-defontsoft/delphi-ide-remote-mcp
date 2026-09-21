@@ -336,8 +336,10 @@ begin
     try
       if TDirectory.Exists(Params.Path) then
       begin
-        ClearReadOnlyTree(Params.Path);
-        TDirectory.Delete(Params.Path, True);
+        // BorraArbol limpia atributos por entrada y NO cruza enlaces: el
+        // junction cae como entrada y su destino ni se mira. El borrado
+        // recursivo de la RTL entraba y borraba AL OTRO LADO (2026-09-21).
+        BorraArbol(Params.Path);
       end
       else
       begin

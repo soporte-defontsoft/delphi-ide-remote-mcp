@@ -17,8 +17,13 @@
   le escapo a nadie: es que no habia donde declararlo.
 
   POR QUE UN SOLO MARCADOR Y NO UN ENUM. Lo midio David sobre el contrato
-  vivo: de los 39 parametros que son rutas, 37 son NUESTRAS y solo DOS son de
-  la maquina destino (delphi_paserver.exe y delphi_config.remotedir). Con esa
+  vivo: de los 41 parametros que son rutas, 39 son NUESTRAS y solo DOS son de
+  la maquina destino (delphi_paserver.exe y delphi_config.remotedir). El
+  primer censo salio 37+2: delphi_config.path se quedo sin marca y sin
+  comentario, y delphi_adb_linux.project llevaba una excepcion FALSA ("es
+  un nombre") que su propia llamada a PathDenied desmiente. Los encontro
+  la auditoria del 21-sep - exactamente la mina que la puerta central
+  habria heredado. Con esa
   proporcion no hacen falta categorias: se marca lo nuestro, y lo que no lleva
   marca -las dos remotas, los nombres, el contenido- la puerta ni lo mira.
 
@@ -32,7 +37,11 @@
 
   Que no se olvide de ponerla en un parametro nuevo lo vigila la bateria
   test_round45: si aparece un parametro cuya descripcion habla de una ruta y
-  nadie lo ha clasificado, se pone en rojo. }
+  nadie lo ha clasificado, se pone en rojo. Vigila el contrato VIVO, asi
+  que solo ve las tools que su settings.ini registra: por eso su workspace
+  declara tambien un vault - sin el, las cinco vault_* (el unico registro
+  condicional del repo) eran invisibles y sus 'path' quedaron sin
+  clasificar hasta la auditoria del 21-sep. }
 
 interface
 

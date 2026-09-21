@@ -30,7 +30,19 @@ uses
   ToolCallDenied's job. delphi_help/messages/report always stay listed. }
 function ToolHiddenFromList(const AToolName: string): Boolean;
 
-function PathDenied(const APath: string): string;
+{ Por que PathDenied dijo que no. Los perdones de ReadPathDenied van por
+  este MOTIVO y nunca por el texto de la negativa ni por recomprobar la
+  ruta: comparar texto se rompe en cuanto alguien reescribe un mensaje, y
+  recomprobar por texto perdonaba el junction que RealPath acababa de
+  cazar (auditoria 2026-09-21). }
+type
+  TMotivoVeto = (mvNinguno, mvAnomalia, mvVault, mvRootsInvalidos,
+    mvRutaInvalida, mvEnlaceFuera, mvSoloLectura, mvConfinado,
+    mvFueraDeJaula);
+
+function PathDenied(const APath: string): string; overload;
+function PathDenied(const APath: string;
+  out AMotivo: TMotivoVeto): string; overload;
 
 { Like PathDenied but for READING tools (read/search/list/fetch/LSP
   navigation): the jail is extended with the LIBRARY ZONE - the RAD Studio
@@ -142,14 +154,30 @@ function TempFolderName: string;
 function ServerTempDir(const ASub: string = ''): string;
 function AgentTempDir(const ASub: string = ''): string;
 
+{ Borra un arbol entero SIN CRUZAR ENLACES: un junction/symlink que haya
+  dentro se elimina como ENTRADA (cae el enlace, jamas su destino). El
+  TDirectory.Delete recursivo de la RTL entra en cualquier cosa con el bit
+  de directorio sin mirar el de reparse (System.IOUtils,
+  WalkThroughDirectory) y borra los ficheros DEL DESTINO: un junction
+  plantado en la jaula apuntando fuera convertia cualquier borrado
+  recursivo en un borrado FUERA de la jaula (auditoria 2026-09-21). Habia
+  SEIS borrados recursivos sueltos por el codigo; este es ahora el unico,
+  y quien necesite tirar un arbol pasa por aqui. Limpia atributos
+  (solo-lectura) como hacia la RTL - los objetos de un .git vienen asi.
+  Lanza si no puede: que cada llamador decida si tragarselo. }
+procedure BorraArbol(const ADir: string);
+
 { Vacia la casa del servidor al arrancar. Lo que hay ahi pertenece a la
   llamada que lo creo y ninguna llamada sobrevive a un reinicio, asi que al
   arrancar TODO lo que quede es basura de una ejecucion anterior - la que
   dejo 56,4 MB olvidados en el %TEMP% de la maquina durante dos dias, medido
-  el 2026-09-21. Se vacia entera y no por antiguedad porque el servidor y la
-  bandeja no pueden correr a la vez (comparten puerto: es uno o el otro), y
-  cada copia del exe tiene su propia carpeta al lado. Nunca lanza: un
-  temporal que no se deja borrar no es motivo para no arrancar. }
+  el 2026-09-21. Solo purga la PRIMERA instancia viva de este exe: la
+  premisa "el servidor y la bandeja no pueden correr a la vez, comparten
+  puerto" no vale para stdio, que no abre puerto ninguno y comparte la
+  carpeta con el servicio - su purga borraria ficheros EN USO de una
+  llamada en vuelo del otro (el -F de un commit, una salida de remoterun).
+  Nunca lanza: un temporal que no se deja borrar no es motivo para no
+  arrancar. }
 procedure PurgeServerTemp;
 
 { Credentials (env var first, then settings.ini [Workspace] next to the exe). }
@@ -2170,22 +2198,38 @@ begin
     Result := TPath.Combine(Result, ASub);
 end;
 
-{ El workspace de quien llama. Con varias raices manda la PRIMERA, que es la
-  que el operador escribio primero en Roots=; sin ninguna raiz configurada no
-  hay workspace donde dejar nada y se cae a la casa del servidor, que siempre
-  existe. La subcarpeta del agente sale de la misma identidad que usa el modo
-  confinado, asi que dos agentes en la misma jaula no se pisan - y cuando no
-  hay identidad (stdio, la consola del operador) no se inventa una. }
+{ El workspace de quien llama. Con varias raices manda la PRIMERA
+  ESCRIBIBLE - una raiz declarada entera en ReadOnlyPaths (el clon de
+  referencia) no recibe entregables: seria escribir justo donde nuestra
+  propia jaula lo prohibe, y la misma ruta pasada a mano en "out" se
+  rechaza (auditoria 2026-09-21). Sin ninguna raiz configurada, o ninguna
+  escribible, no hay workspace donde dejar nada y se cae a la casa del
+  servidor, que siempre existe. La subcarpeta del agente sale de la misma
+  identidad que usa el modo confinado, asi que dos agentes en la misma
+  jaula no se pisan - y cuando no hay identidad (stdio, la consola del
+  operador) no se inventa una. }
 function AgentTempDir(const ASub: string): string;
 var
   Roots: TArray<string>;
-  Me, Casa: string;
+  Me, Casa, R, Ro: string;
+  SoloLectura: Boolean;
 begin
   Roots := WorkspaceRoots;
-  if Length(Roots) = 0 then
+  Casa := '';
+  for R in Roots do
+  begin
+    SoloLectura := False;
+    for Ro in WorkspaceReadOnlyPaths do
+      if StartsText(Ro, IncludeTrailingPathDelimiter(R)) then
+        SoloLectura := True;
+    if not SoloLectura then
+    begin
+      Casa := TPath.Combine(ExcludeTrailingPathDelimiter(R), TempFolderName);
+      Break;
+    end;
+  end;
+  if Casa = '' then
     Exit(ServerTempDir(ASub));
-  Casa := TPath.Combine(ExcludeTrailingPathDelimiter(Roots[0]),
-    TempFolderName);
   // El vaciado NO se hace aqui: se hace entero en el arranque, para todos
   // los workspaces del settings.ini (PurgeServerTemp). Hacerlo en el primer
   // uso se probo y no cumplia lo prometido - si nadie pedia un entregable,
@@ -2198,6 +2242,42 @@ begin
     Result := TPath.Combine(Result, Me);
   if ASub <> '' then
     Result := TPath.Combine(Result, ASub);
+end;
+
+{ El unico borrador de arboles del servidor (la nota larga, en el
+  interface). El bit de reparse se mira ANTES de entrar: el enlace cae,
+  el destino ni se mira. }
+procedure BorraArbol(const ADir: string);
+var
+  E: string;
+  A: Cardinal;
+begin
+  A := GetFileAttributes(PChar(ADir));
+  if A = INVALID_FILE_ATTRIBUTES then
+    Exit; // no esta: nada que borrar
+  if (A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0 then
+  begin
+    // RemoveDir sobre un junction/symlink de directorio elimina el punto
+    // de reanalisis y jamas toca lo que hay al otro lado.
+    SetFileAttributes(PChar(ADir), FILE_ATTRIBUTE_NORMAL);
+    if not RemoveDir(ADir) then
+      RaiseLastOSError;
+    Exit;
+  end;
+  // La RTL limpiaba atributos antes de borrar (los objetos de un .git
+  // vienen de solo lectura); se conserva ese contrato. Por la API y no por
+  // TFile.SetAttributes: esa valida que la ruta sea un FICHERO y sobre un
+  // directorio lanza "file not found" - lo cazaron round13 y round44 en la
+  // primera pasada de la suite (2026-09-21).
+  for E in TDirectory.GetFiles(ADir) do
+  begin
+    SetFileAttributes(PChar(E), FILE_ATTRIBUTE_NORMAL);
+    TFile.Delete(E);
+  end;
+  for E in TDirectory.GetDirectories(ADir) do
+    BorraArbol(E);
+  SetFileAttributes(PChar(ADir), FILE_ATTRIBUTE_NORMAL);
+  TDirectory.Delete(ADir, False);
 end;
 
 { Vacia una carpeta de temporales sin borrarla. Nunca lanza: no poder tirar
@@ -2216,19 +2296,49 @@ begin
       end;
     for E in TDirectory.GetDirectories(ADir) do
       try
-        TDirectory.Delete(E, True);
+        BorraArbol(E);
       except
       end;
   except
   end;
 end;
 
+var
+  GPrimera: THandle = 0;
+
+{ True si este proceso es la PRIMERA instancia viva de ESTE exe (esta
+  carpeta). El mutex se queda abierto de por vida: ser el primero dura
+  hasta morir, y entonces lo hereda el siguiente arranque. Sin esto, un
+  arranque stdio del exe del servicio purgaba __delphi-temp con el
+  servicio en marcha y una llamada en vuelo perdia su fichero (el -F de
+  un commit, una salida de remoterun) - auditoria 2026-09-21. }
+function SoyLaPrimeraInstancia: Boolean;
+var
+  H: THandle;
+begin
+  if GPrimera <> 0 then
+    Exit(True);
+  H := CreateMutex(nil, False, PChar('Global\DelphiLspMcp-' +
+    LowerCase(TPath.GetDirectoryName(ParamStr(0)))
+      .Replace('\', '/').Replace(':', '')));
+  if (H <> 0) and (GetLastError = ERROR_ALREADY_EXISTS) then
+  begin
+    CloseHandle(H);
+    Exit(False);
+  end;
+  // Sin handle (otra cuenta, otro fallo): mejor suponer que hay otro vivo
+  // y no purgar - purgar es lo unico peligroso de las dos opciones.
+  GPrimera := H;
+  Result := H <> 0;
+end;
 
 procedure PurgeServerTemp;
 var
   W: TWorkspaceDef;
   R: string;
 begin
+  if not SoyLaPrimeraInstancia then
+    Exit;
   // La casa del servidor, la de siempre.
   VaciaTemp(ServerTempDir);
   // ...Y LA DE CADA WORKSPACE. Primer intento: se vaciaba en el primer uso
@@ -2283,27 +2393,45 @@ end;
 
 function PathDenied(const APath: string): string;
 var
+  M: TMotivoVeto;
+begin
+  Result := PathDenied(APath, M);
+end;
+
+function PathDenied(const APath: string; out AMotivo: TMotivoVeto): string;
+var
   Roots: TArray<string>;
   Full, R: string;
 begin
+  AMotivo := mvNinguno;
   // Name normalization first: it applies with or without a jail configured.
   Result := PathAnomaly(APath);
   if Result <> '' then
+  begin
+    AMotivo := mvAnomalia;
     Exit;
+  end;
   // The knowledge vault belongs to the vault_* tools ALONE, wherever it sits.
   // If it happens to live inside a workspace root, the code tools must still
   // keep out - otherwise delphi_edit could rewrite a note behind the vault's
   // back, skipping its automatic backup and its protected governance files.
   if InVault(APath) then
+  begin
+    AMotivo := mvVault;
     Exit(SR_VAULT_NOT_CODE);
+  end;
   Roots := WorkspaceRoots;
   if GRootsInvalid then
+  begin
+    AMotivo := mvRootsInvalidos;
     Exit(SR_ROOTS_INVALID);
+  end;
   if Length(Roots) = 0 then
     Exit; // no jail configured
   try
     Full := TPath.GetFullPath(APath);
   except
+    AMotivo := mvRutaInvalida;
     Exit('RECHAZADO: ruta invalida: ' + APath);
   end;
   for R in Roots do
@@ -2331,17 +2459,27 @@ begin
           Break;
         end;
       if not DentroDeVerdad then
+      begin
+        AMotivo := mvEnlaceFuera;
         Exit(Format(SR_JAIL_LINK_FMT, [APath]));
+      end;
       // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO
       // LECTURA: un vendor/, un submodulo, un clon de referencia con su
       // propio git. Se comprueba AQUI y no en el lector, y esa es justo la
       // distincion que se quiere: se lee, no se escribe.
       for var Ro in WorkspaceReadOnlyPaths do
         if StartsText(Ro, IncludeTrailingPathDelimiter(Full)) then
+        begin
+          AMotivo := mvSoloLectura;
           Exit(Format(SR_READONLY_PATH_FMT,
             [APath, ExcludeTrailingPathDelimiter(Ro)]));
-      Exit(AgentConfineDenied(Full, R));
+        end;
+      Result := AgentConfineDenied(Full, R);
+      if Result <> '' then
+        AMotivo := mvConfinado;
+      Exit;
     end;
+  AMotivo := mvFueraDeJaula;
   Result := Format(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;
 
@@ -2539,52 +2677,48 @@ end;
 
 function ReadPathDenied(const APath: string): string;
 var
+  Motivo: TMotivoVeto;
   Full, R: string;
 begin
-  Result := PathDenied(APath);
-  // Confinement is a WRITE rule. A read that trips ONLY it is inside the jail
-  // and merely belongs to another agent - and reading the whole tree is
-  // allowed even under confinement (you see everything, you write only yours).
-  if (Result <> '') and Result.Contains('modo confinado') then
-    Exit('');
-  // ReadOnlyPaths es de escritura tambien, y ES SU RAZON DE SER: esa carpeta
-  // se lee, lo que no se hace es escribirla. Se comprueba POR RUTA y no por
-  // el texto de la negativa (como hace la linea de arriba), que se rompe en
-  // cuanto alguien reescribe un mensaje. Y solo se perdona DENTRO de la
-  // jaula: una entrada de ReadOnlyPaths que apunte fuera del root no abre
-  // nada - ahi manda la jaula, que no es negociable.
-  if Result <> '' then
-  begin
-    var Canon := '';
-    try
-      Canon := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
-    except
-      Canon := '';
-    end;
-    if Canon <> '' then
-    begin
-      var EnJaula := False;
-      for R in WorkspaceRoots do
-        if StartsText(R, Canon) then
-          EnJaula := True;
-      if EnJaula then
-        for R in WorkspaceReadOnlyPaths do
-          if StartsText(R, Canon) then
-            Exit('');
-    end;
-  end;
+  Result := PathDenied(APath, Motivo);
   if Result = '' then
     Exit;
-  // Outside the jail - but READING library territory is legitimate.
-  try
-    Full := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
-  except
-    Exit; // keep the invalid-path rejection
+  case Motivo of
+    // Confinement is a WRITE rule. A read that trips ONLY it is inside the
+    // jail and merely belongs to another agent - and reading the whole tree
+    // is allowed even under confinement (you see everything, you write only
+    // yours).
+    mvConfinado:
+      Exit('');
+    // ReadOnlyPaths es de escritura tambien, y ES SU RAZON DE SER: esa
+    // carpeta se lee, lo que no se hace es escribirla. El perdon va por el
+    // MOTIVO, no por el texto de la negativa ni por recomprobar la ruta
+    // aqui: la version anterior recomprobaba POR TEXTO (GetFullPath) y
+    // perdonaba tambien la negativa del junction que RealPath acababa de
+    // dar - delphi_fetch servia ficheros de FUERA de la jaula si el enlace
+    // caia bajo un ReadOnlyPath (auditoria 2026-09-21). PathDenied solo
+    // dice mvSoloLectura DESPUES de su comprobacion real de enlaces, asi
+    // que este perdon ya no necesita mirar nada mas.
+    mvSoloLectura:
+      Exit('');
+    // Outside the jail - but READING library territory is legitimate. Solo
+    // para quien esta fuera DE VERDAD: la negativa del enlace
+    // (mvEnlaceFuera) no se perdona, y la del vault y las anomalias
+    // tampoco - antes este repaso les daba una segunda oportunidad a
+    // todas, porque miraba el texto que quedara y no el motivo.
+    mvFueraDeJaula:
+      begin
+        try
+          Full := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
+        except
+          Exit; // keep the invalid-path rejection
+        end;
+        if LibraryZoneEnabled then
+          for R in LibraryRoots do
+            if StartsText(R, Full) then
+              Exit('');
+      end;
   end;
-  if LibraryZoneEnabled then
-    for R in LibraryRoots do
-      if StartsText(R, Full) then
-        Exit('');
   // Refused for reading: say that a library zone exists and how to see it.
   // Field 2026-08-22: an agent listed the PARENT of a registered component
   // folder, got the plain jail refusal, and concluded list and read disagreed.
@@ -2649,25 +2783,32 @@ end;
   encontrar exactamente esta misma forma en los nombres de la papelera:
   alli el lector estaba unificado y habia TRES escritores.
 
-  Una letra que este servidor no sirve sale como 'srvx': dice que hay una
-  ruta y no dice donde. }
+  Una letra que este servidor no sirve sale como 'srv0': dice que hay una
+  ruta y no dice donde. Era 'srvx', que es EXACTAMENTE lo que produce una
+  unidad X: servida de verdad (una red mapeada como X: es lo normal): el
+  nombrador dejaba de ser inyectivo y su inversa expandia el centinela a
+  X:\ (auditoria 2026-09-21). El '0' no es letra: no puede chocar con
+  nada servido, y VirtualUnitLetter lo reconoce para que PathAnomaly lo
+  rechace POR NOMBRE con la lista de unidades validas, como a cualquier
+  otra unidad no servida. }
 function VirtualUnitOf(ALetter: Char; const AServed: string): string;
 begin
   if (ALetter <> #0) and (Pos(UpCase(ALetter), AServed) > 0) then
     Result := 'srv' + Char(Ord(UpCase(ALetter)) + 32)
   else
-    Result := 'srvx';
+    Result := 'srv0';
 end;
 
 { The ONE place that recognizes the virtual-unit shape: 'srvd:', 'srvd:\x',
-  'srvd:/x'. Returns the upper-case letter, or #0 when the value is not a
+  'srvd:/x' - y el centinela 'srv0:', para que su rechazo sea el de una
+  unidad no servida. Returns the upper-case letter, or #0 when the value is not a
   virtual unit at all. Both the inbound expansion and the rejection of an
   unserved unit ask this - the shape is never re-tested by hand. }
 function VirtualUnitLetter(const AValue: string): Char;
 begin
   Result := #0;
   if (Length(AValue) >= 5) and StartsText('srv', AValue) and
-     CharInSet(AValue[4], ['A'..'Z', 'a'..'z']) and (AValue[5] = ':') then
+     CharInSet(AValue[4], ['A'..'Z', 'a'..'z', '0']) and (AValue[5] = ':') then
     if (Length(AValue) = 5) or CharInSet(AValue[6], ['\', '/']) then
       Result := UpCase(AValue[4]);
 end;
@@ -2806,7 +2947,7 @@ begin
       // (found 2026-08-25 by an auditor). Nothing real leaks on THIS machine
       // today - only C: and D: exist and both are mapped - but a root on
       // another drive, or a file referenced from one, would have. An
-      // unmapped letter travels as srvx: : the reader learns there is a path
+      // unmapped letter travels as srv0: : the reader learns there is a path
       // and learns nothing about where.
       if CharInSet(UpCase(C), ['A' .. 'Z']) then
       begin

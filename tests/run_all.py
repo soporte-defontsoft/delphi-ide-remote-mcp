@@ -44,7 +44,7 @@ EXE = os.path.join(CLEAN, 'DelphiLspMcp.exe')
 shutil.copy(SRC, EXE)
 # The helper executables travel WITH the server (delphi_styles needs the
 # text<->binary converter beside it); settings.ini deliberately does not.
-for helper in ('DelphiStyleConvert.exe', 'DelphiLspMcpTray.exe'):
+for helper in ('DelphiStyleConvert.exe',):  # el Tray.exe era un fosil de agosto
     _h = os.path.join(os.path.dirname(os.path.abspath(SRC)), helper)
     if os.path.exists(_h):
         shutil.copy(_h, os.path.join(CLEAN, helper))

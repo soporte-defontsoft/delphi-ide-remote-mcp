@@ -491,7 +491,7 @@ begin
   if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) < 0 then
     GNodoAlDia.Add(AProfile.Trim.ToLower);
   try
-    TDirectory.Delete(TmpDir, True); // la carpeta de ESTA comprobacion
+    BorraArbol(TmpDir); // la carpeta de ESTA comprobacion, sin cruzar enlaces
   except
     // dejar un temporal huerfano nunca es motivo para fallar un despliegue
   end;
