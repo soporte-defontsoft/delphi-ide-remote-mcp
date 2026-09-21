@@ -12,6 +12,29 @@ the MCP `initialize` response (`serverInfo.version`).
 retyped.** Everything here was found by USING the tools live in a sandbox
 workspace, not by a battery; the batteries were written afterwards.
 
+### SECURITY - `delphi_adb_linux command=type` ran shell on the target
+The text to type travelled UNQUOTED into the `/bin/sh` script that PAServer runs
+on the target machine. The metacharacter filter was applied by the CALLER -
+`remote-run` did, `delphi_adb_linux` did not - so `text="hello; rm -rf ~"` ran
+its second half there. Found live: a text with parentheses broke the script's
+syntax and the error showed how it travelled. Fixed at the single point every
+argument goes through (`Lsp.RemoteRun.GuionDeEjecucion`): each argument is
+single-quoted for sh, double quotes still group an argument with spaces, and
+the text to type is a LITERAL argument of its own, never split. Measured
+against a Fedora: `; touch X $(id) (p) 'q'` was typed verbatim, not run.
+**Upgrade if you expose `delphi_adb_linux` to an agent you do not fully trust.**
+
+### Fixed - the Linux node typed with a US keyboard
+An evdev code is a POSITION, not a character: on a Spanish desktop `1015-14`
+came out as `1015'14` while the node answered it had typed it right. Keypad
+codes are not an answer - libei's virtual keyboard drops them silently
+(measured). The node now asks the desktop for its keymap (libei hands it over
+as XKB text) and resolves each character with `libxkbcommon`, loaded at runtime
+like everything else, nothing to install: key + level (Shift, AltGr). `ñ`, `@`,
+`¿`, capitals and punctuation now work, and the echo says which keyboard was
+used (`Spanish, 159 characters`). Without a keymap it falls back to the old
+table. Measured on a Fedora and a Zorin. The Windows node was never affected: it types Unicode.
+
 ### Added - fragment mode, in the whole editing family
 The full-line anchor stays the rule: it exists so that nobody edits from
 memory. But a README paragraph is ONE line of 600 characters, and turning

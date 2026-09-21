@@ -1408,9 +1408,14 @@ const
     'key: the Linux key code (evdev), NOT an X11 keycode: Escape 1, Tab 15, ' +
     'Enter 28, left Alt 56, Super 125';
   SP_ADBLINUX_TEXT =
-    'type: the text to write, key by key. Letters, digits, space and - . , / ' +
-    'only: a character it cannot type is refused by name instead of writing ' +
-    'something else. With x,y it presses there first to focus the field.';
+    'type: the text to write, key by key, with the keyboard layout the ' +
+    'TARGET desktop really has (it hands its keymap over): any character ' +
+    'that layout gives with a key, Shift or AltGr - accents of its own keys, ' +
+    'punctuation, @ # and so on. A character that layout has no key for ' +
+    '(one that needs a dead key, an emoji) is refused BY NAME instead of ' +
+    'writing something else, and the answer says which keyboard was used. ' +
+    'It is typed as TEXT, never run: quotes, ; and $ arrive as characters. ' +
+    'With x,y it presses there first to focus the field.';
   SR_ADBLINUX_NEEDTEXT =
     'RECHAZADO: type necesita "text". Si ademas pasas x e y, pulsa ahi antes ' +
     'de escribir: es el gesto real, "escribe esto aqui", y arranca una sola vez.';

@@ -486,7 +486,7 @@ The target needs a graphical session open — a headless box has nothing to show
 | `profile` | string | required | PAServer profile of the target machine (`delphi_paserver command=profiles` lists them). The desktop is THAT machine's, never the agent's |
 | `project` | string | optional | Empty (normal): the BUNDLED node is deployed/updated automatically. A .dproj path only when developing the node itself (deployed via `delphi_build target=Deploy`) |
 | `x` / `y` | string | optional | tap: the pixel MEASURED ON THE SCREENSHOT this tool returned |
-| `text` | string | optional | type: the text to write, key by key. Letters, digits, space and `- . , /` only — a character it cannot type is refused BY NAME instead of writing something else. With `x`,`y` it presses there first to focus the field: one trip, one startup |
+| `text` | string | optional | type: the text to write, key by key. It uses the keyboard layout the TARGET desktop really has (the desktop hands its keymap over): any character that layout gives with a key, Shift or AltGr. A character it has no key for (one that needs a dead key, an emoji) is refused BY NAME instead of writing something else, and the answer says which keyboard was used. It is typed as TEXT, never run: quotes, `;` and `$` arrive as characters. With `x`,`y` it presses there first to focus the field: one trip, one startup |
 | `code` | string | optional | key: the Linux (evdev) key code — Escape 1, Tab 15, Enter 28, left Alt 56, Super 125 |
 | `out` | string | optional | screenshot: folder where the PNG lands (default: the server's temp folder). Retrieve it with `delphi_fetch` |
 
