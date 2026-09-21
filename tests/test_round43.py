@@ -221,6 +221,31 @@ try:
           not os.path.exists(LOG_FUERA) and not os.path.exists(ZIP_FUERA),
           os.listdir(FUERA))
 
+    # ------------------------------------------------------------------ W5
+    # UNA regla para el "out" de toda la familia (CaptureTarget, v1.0.14).
+    # Antes era CARPETA en los escritorios y FICHERO obligatorio acabado en
+    # ".png" en delphi_adb. Ahora: carpeta o fichero, y el fichero tiene que
+    # llevar la extension REAL de la captura - que sale de la captura, no de
+    # una constante ("y si un dia no es png?", David). En delphi_adb la
+    # regla muerde ANTES de tocar el dispositivo, asi que se mide sin el.
+    g = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
+                            'out': os.path.join(JAIL, 'foto.jpg')})
+    check('W5 un fichero con la extension de OTRO formato se rechaza',
+          'RECHAZADO' in g and '.png' in g and '.jpg' in g, g[:280])
+    h = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
+                            'out': os.path.join(JAIL, 'foto.png')})
+    check('W5b ...con la suya pasa la regla (lo que falle sera el dispositivo)',
+          'No escribo una imagen' not in h and not rechazada_por_jaula(h),
+          h[:280])
+    i = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
+                            'out': os.path.join(JAIL, 'capturas')})
+    check('W5c ...y una CARPETA tambien vale ya en delphi_adb',
+          'No escribo una imagen' not in i and 'terminar en .png' not in i
+          and not rechazada_por_jaula(i), i[:280])
+    j = call('delphi_adb', {'command': 'screenshot', 'device': DEV})
+    check('W5d ...y sin "out" ya no se rechaza: tiene un defecto, como sus hermanas',
+          'necesita "out"' not in j, j[:280])
+
     # ------------------------------------------------------------------ W4
     # Y el otro lado, que es la mitad que se olvida: cerrar la puerta no sirve
     # de nada si se cierra tambien para quien SI puede pasar.
@@ -233,12 +258,23 @@ try:
     # medido es mentir en verde.
     if HAY_NODO and 'NO pude capturar' in f:
         print('NOTA: esta maquina no puede capturar la pantalla ahora mismo; '
-              'W4b no se mide (W1 y W1b si: el rechazo es ANTES de capturar).')
+              'W4b, W4c, W5e y W5f no se miden (W1, W1b y W5-W5d si: esos '
+              'rechazos son ANTES de capturar).')
     elif HAY_NODO:
         check('W4b ...y con el nodo de verdad la captura llega a su sitio',
               hay_png(DIR_DENTRO), f[:280])
         check('W4c y ahora que consta que capturar FUNCIONA, fuera sigue vacio',
               not hay_png(FUERA), 'hay una captura bajo %s' % FUERA)
+        # La misma regla de W5, en el escritorio y con una captura de verdad.
+        mia = os.path.join(DIR_DENTRO, 'la-mia.png')
+        k = call('delphi_desktop', {'command': 'screenshot', 'out': mia})
+        check('W5e delphi_desktop: un FICHERO con nombre propio es ese fichero',
+              os.path.isfile(mia), k[:280])
+        m = call('delphi_desktop', {'command': 'screenshot',
+                                    'out': os.path.join(DIR_DENTRO, 'otra.jpg')})
+        check('W5f ...y con la extension de otro formato no se escribe nada',
+              'No escribo una imagen' in m and
+              not os.path.exists(os.path.join(DIR_DENTRO, 'otra.jpg')), m[:280])
     else:
         print('NOTA: no hay node/McpDesktopNode.exe; W1 y W4b miden menos.')
 finally:

@@ -1081,6 +1081,9 @@ begin
   Srv.AddPair('exe', ParamStr(0));
   Srv.AddPair('startedAt', FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque));
   Srv.AddPair('uptime', TiempoEnMarcha(GArranque));
+  // Cuantos parametros vigila el suelo de la jaula en la puerta. Un cero
+  // aqui es un suelo muerto, y siendo redundante nadie mas lo notaria.
+  Srv.AddPair('jailedParams', TJSONNumber.Create(ServerPathParamCount));
   // Mail waiting in NAMED agent boxes. It lives here, in the orientation
   // call, and nowhere else: it is server state, not a message for whoever is
   // asking. Announced at the end of EVERY tool answer it was 90 bytes of

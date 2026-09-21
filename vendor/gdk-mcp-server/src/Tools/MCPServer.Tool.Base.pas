@@ -24,6 +24,17 @@ type
     property OutputSchema: TJSONObject read GetOutputSchema;
   end;
 
+  { LOCAL PATCH (Defontsoft, 2026-09-21): the class that carries a tool's
+    parameters, reachable from an IMCPTool. GetParamsClass is protected in
+    the generic base, so nothing outside could ask a tool which properties
+    its arguments bind to - and the host's security gate needs exactly
+    that, to read the attributes declared on them. A separate interface
+    instead of a new IMCPTool method: non-generic tools owe nothing. }
+  IMCPToolParams = interface
+    ['{6B0D5C1E-2F3A-4E7B-9C41-8A5D7E90B312}']
+    function ParamsClass: TClass;
+  end;
+
   TMCPToolBase = class(TInterfacedObject, IMCPTool)
   protected
     FName: string;
@@ -41,7 +52,8 @@ type
     function Execute(const Arguments: TJSONObject): TValue; virtual; abstract;
   end;
 
-  TMCPToolBase<T : class, constructor> = class(TInterfacedObject, IMCPTool)
+  TMCPToolBase<T : class, constructor> = class(TInterfacedObject, IMCPTool,
+    IMCPToolParams)
   protected
     FName: string;
     FTitle: string;
@@ -50,6 +62,7 @@ type
     function GetParamsClass: TClass; virtual;
   public
     constructor Create; virtual;
+    function ParamsClass: TClass; // IMCPToolParams: goes through the virtual
 
     function GetName: string;
     function GetTitle: string;
@@ -165,6 +178,11 @@ begin
   finally
     ParamsInstance.Free;
   end;
+end;
+
+function TMCPToolBase<T>.ParamsClass: TClass;
+begin
+  Result := GetParamsClass;
 end;
 
 function TMCPToolBase<T>.GetParamsClass: TClass;

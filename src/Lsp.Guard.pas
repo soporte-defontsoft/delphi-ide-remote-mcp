@@ -154,6 +154,30 @@ function TempFolderName: string;
 function ServerTempDir(const ASub: string = ''): string;
 function AgentTempDir(const ASub: string = ''): string;
 
+{ DONDE CAE UNA CAPTURA: el "out" de toda la familia (delphi_desktop,
+  delphi_adb_linux, delphi_adb), resuelto en UN sitio. Hasta la v1.0.13 era
+  una CARPETA en los dos escritorios y un FICHERO obligatorio acabado en
+  ".png" en delphi_adb - misma idea, mismo nombre de parametro, contrato
+  distinto - y el nombre del fichero se componia a mano en tres sitios. Un
+  agente que pasaba out=...\captura.png a delphi_desktop conseguia una
+  CARPETA llamada captura.png.
+
+    vacio                          -> AgentTempDir(ASub), nombre nuestro
+    carpeta que existe, o acaba \  -> esa carpeta, nombre nuestro
+    sin extension                  -> carpeta nueva, nombre nuestro
+    extension = la de la captura   -> ESE fichero
+    otra extension                 -> RECHAZADO, nombrando el formato real
+
+  AExt es la extension REAL de la captura (con su punto), la que trae lo
+  que devolvio el nodo o el dispositivo: aqui no hay ningun "png" escrito.
+  Si un dia un nodo devuelve otro formato, la regla sigue valiendo y nadie
+  recibe una imagen con la extension de otra (David, 2026-09-21: "y si un
+  dia no es png?"). Devuelve '' y el fichero final en AFile, o la negativa.
+  Un destino que elige quien llama pasa por PathDenied; el nuestro no, que
+  ya sale de AgentTempDir. No crea nada: crear la carpeta es de quien la use. }
+function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
+  out AFile: string): string;
+
 { Borra un arbol entero SIN CRUZAR ENLACES: un junction/symlink que haya
   dentro se elimina como ENTRADA (cae el enlace, jamas su destino). El
   TDirectory.Delete recursivo de la RTL entra en cualquier cosa con el bit
@@ -366,6 +390,12 @@ function IsReadOnlyNow: Boolean;
   mixed and resolved by its "command" argument (query commands pass).
   It also NORMALIZES the arguments in place: virtual drive units
   (srvd:\x -> D:\x) are expanded here, before any check or tool. }
+{ Cuantos parametros de todo el contrato vigila el suelo de la jaula: los
+  marcados [RutaDelServidor], leidos por RTTI del registro real de tools. Se
+  publica (delphi_workspace) para que un suelo VACIO se pueda ver: es una
+  capa redundante, y si dejase de funcionar no romperia nada. }
+function ServerPathParamCount: Integer;
+
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
 
@@ -433,7 +463,11 @@ uses
   System.IOUtils,
   System.SyncObjs,
   System.Generics.Collections,
+  System.Rtti,
   MCPServer.Serializer, // NormalizeKey: ONE rule for argument names
+  MCPServer.Tool.Base,     // IMCPToolParams: la clase de parametros de una tool
+  MCPServer.Registration,  // el registro REAL de tools, no una lista nuestra
+  Lsp.Attributes,          // [RutaDelServidor]
   Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
   Lsp.Texts;
 
@@ -1805,50 +1839,107 @@ begin
               ((AValue[1] = '/') and (AValue[2] = '/'))));
 end;
 
-{ ESCRITA, MEDIDA Y RETIRADA el 2026-09-21. No se llama desde ningun sitio, y
-  se deja aqui porque la idea vuelve sola y conviene que vuelva con lo que ya
-  se aprendio.
-
-  POR QUE SE RETIRO: la puerta reconoce que un argumento es una ruta por una
-  lista de EXCLUSION -los que llevan contenido: new, old, content, data,
-  message, code, args-. Esa lista sirve para REESCRIBIR (equivocarse ahi es
-  inocuo) pero NO para RECHAZAR. Al primer intento tumbo un delphi_search con
-  query="D:\Proyectos": una consulta de busqueda no es una ruta, y "query" no
-  esta en la lista. Ni estaria "text", ni el siguiente parametro que alguien
-  anada. Tres baterias en rojo (test_guard, test_http_auth y la propia
-  test_round40) en la primera pasada.
-
-  COMO SE HACE BIEN: lista de INCLUSION de los nombres que SI son rutas
-  (path, dest, root, dir, out, outfile, project, repo, apk...). Fallar
-  cerrado con lo desconocido esta bien cuando decides si algo PASA; aqui
-  decides si algo MUERE, y entonces lo que no conoces tiene que pasar.
-
-  Y el problema que venia a resolver SIGUE AHI, asi que no se tire la idea:
-
-  EL SUELO DE LA JAULA, en la puerta y para TODAS las tools.
+{ EL SUELO DE LA JAULA, en la puerta y para TODAS las tools.
 
   La regla ya estaba en una sola funcion (PathDenied / ReadPathDenied). Lo que
   no estaba centralizado era ACORDARSE de llamarla: ~60 llamadas a mano en
-  una veintena de units, y nada obliga a una tool nueva -ni a un parametro
-  nuevo de una vieja- a pasar por ahi. Medido el 2026-09-21 con la familia de
-  los destinos que elige quien llama: delphi_adb lo comprobaba en sus dos
-  sitios y delphi_package en el suyo, y delphi_desktop -en Windows y en
-  Linux- no; con el nodo real, una llamada consiguio que el servidor
-  escribiera una captura del escritorio del operador FUERA de la jaula. La
-  frontera de verdad era "te acordaste?". Lo pregunto David:
-  "tambien controlamos la jaula en 7 sitios o lo tenemos centralizado?".
+  una veintena de units, y nada obligaba a una tool nueva -ni a un parametro
+  nuevo de una vieja- a pasar por ahi. Medido el 2026-09-21 con los destinos
+  que elige quien llama: delphi_adb y delphi_package comprobaban, y
+  delphi_desktop -en Windows y en Linux- no; con el nodo real, una llamada
+  consiguio que el servidor escribiera una captura del escritorio del
+  operador FUERA de la jaula. La frontera de verdad era "te acordaste?". Lo
+  pregunto David: "tambien controlamos la jaula en 7 sitios o lo tenemos
+  centralizado?".
 
-  Esto no sustituye a esas ~60 llamadas: es un SUELO. La puerta no sabe si
-  una tool va a LEER o a ESCRIBIR ese argumento, asi que aplica la regla
-  ancha (ReadPathDenied, que perdona la zona de biblioteca - RTL, VCL,
-  componentes - y las carpetas de solo lectura). O sea que nunca rechaza algo
-  que una tool habria aceptado: solo caza lo que NINGUNA deberia aceptar. La
-  distincion leer/escribir y los mensajes buenos siguen en cada tool. }
-function ArgPathOutsideDenied(const AArguments: TJSONObject): string;
+  HISTORIA, porque la idea tuvo un primer intento y conviene no repetirlo:
+  el 21-sep se escribio reconociendo las rutas por EXCLUSION (todo argumento
+  que no fuera de contenido) y tumbo un delphi_search con
+  query="D:\Proyectos" - un texto a buscar que PARECE una ruta. Tres baterias
+  en rojo y retirado el mismo dia. Una lista de exclusion vale para
+  REESCRIBIR, donde equivocarse es inocuo; esto RECHAZA, y entonces lo que no
+  conoces tiene que pasar. Ahora solo muerde lo que lleva la marca
+  [RutaDelServidor] (Lsp.Attributes): inclusion, declarada por quien diseno
+  el parametro, leida por RTTI del registro REAL de tools.
+
+  QUE ES Y QUE NO ES. Es un SUELO, una capa REDUNDANTE: no sustituye a las
+  llamadas de cada tool. La puerta no sabe si la tool va a LEER o a ESCRIBIR
+  ese argumento, asi que aplica la regla ANCHA (ReadPathDenied, que perdona
+  la zona de biblioteca y las carpetas de solo lectura): nunca rechaza algo
+  que una tool habria aceptado, solo caza lo que NINGUNA deberia aceptar. NO
+  ve a un agente escribiendo en el subarbol confinado de otro, ni en la RTL:
+  eso sigue siendo de PathDenied, en cada tool. El dia que alguien quite esas
+  llamadas "porque ya esta centralizado", esta lista pasa de red a punto
+  unico de fallo y un parametro sin marca es una ruta sin jaula (dictamen de
+  la auditoria del 21-sep). No se quitan.
+
+  SOLO RUTAS ABSOLUTAS, a proposito. Una relativa se resuelve contra una base
+  que solo conoce la tool (delphi_config.path va contra la carpeta del
+  proyecto); la puerta la resolveria contra el directorio del proceso y
+  rechazaria llamadas correctas. La auditoria propuso comprobarlas tambien:
+  verificado contra el codigo, aqui seria un falso positivo seguro. }
+var
+  GRutasNuestras: TDictionary<string, Boolean> = nil; // 'tool|parametro'
+
+{ El mapa de parametros marcados, montado UNA vez desde el registro real.
+  Sin cerrojo: cada hilo que llegue a la vez monta el suyo y solo uno se
+  publica; los demas tiran el suyo. Instanciar las tools aqui es barato (un
+  constructor que pone nombre y descripcion) y pasa una sola vez. }
+function RutasNuestras: TDictionary<string, Boolean>;
+var
+  Mapa: TDictionary<string, Boolean>;
+  Ctx: TRttiContext;
+  Nombre: string;
+  Tool: IMCPTool;
+  Con: IMCPToolParams;
+  Prop: TRttiProperty;
+  Attr: TCustomAttribute;
+begin
+  Result := GRutasNuestras;
+  if Result <> nil then
+    Exit;
+  Mapa := TDictionary<string, Boolean>.Create;
+  Ctx := TRttiContext.Create;
+  try
+    for Nombre in TMCPRegistry.GetToolNames do
+    begin
+      Tool := TMCPRegistry.CreateTool(Nombre);
+      if not Supports(Tool, IMCPToolParams, Con) then
+        Continue;
+      for Prop in Ctx.GetType(Con.ParamsClass).GetProperties do
+        for Attr in Prop.GetAttributes do
+          if Attr is RutaDelServidorAttribute then
+            // La MISMA normalizacion con la que el binder casa argumento y
+            // propiedad: un solo nombrador, o la puerta miraria un nombre y
+            // la tool recibiria otro.
+            Mapa.AddOrSetValue(LowerCase(Nombre) + '|' +
+              TMCPSerializer.NormalizeKey(Prop.Name), True);
+    end;
+  finally
+    Ctx.Free;
+  end;
+  if InterlockedCompareExchangePointer(Pointer(GRutasNuestras),
+       Pointer(Mapa), nil) <> nil then
+    Mapa.Free;
+  Result := GRutasNuestras;
+end;
+
+{ Cuantos parametros vigila el suelo. Lo publica delphi_workspace y lo mide
+  test_round45 contra las marcas del fuente: un suelo redundante que se
+  quedase VACIO (RTTI que no emite, un registro que cambia) no romperia nada
+  y nadie lo notaria - que es justo el fallo que hay que poder ver. }
+function ServerPathParamCount: Integer;
+begin
+  Result := RutasNuestras.Count;
+end;
+
+function ArgPathOutsideDenied(const AToolName: string;
+  const AArguments: TJSONObject): string;
 var
   I: Integer;
   P: TJSONPair;
   V: string;
+  Mapa: TDictionary<string, Boolean>;
 begin
   Result := '';
   if not Assigned(AArguments) then
@@ -1857,12 +1948,14 @@ begin
   // confianza): el suelo no se inventa una.
   if Length(WorkspaceRoots) = 0 then
     Exit;
+  Mapa := RutasNuestras;
   for I := 0 to AArguments.Count - 1 do
   begin
     P := AArguments.Pairs[I];
     if not (P.JsonValue is TJSONString) then
       Continue;
-    if MatchText(P.JsonString.Value, PARAMS_CON_CONTENIDO) then
+    if not Mapa.ContainsKey(LowerCase(AToolName) + '|' +
+         TMCPSerializer.NormalizeKey(P.JsonString.Value)) then
       Continue;
     V := TJSONString(P.JsonValue).Value;
     if not EsRutaAbsoluta(V) then
@@ -1911,9 +2004,13 @@ begin
              (Trim(ArgStr(AArguments, 'message')) = ''))) then
       Exit(WriteDenied(Trim('delphi_git ' + Cmd)));
   end;
-  // (Aqui iba EL SUELO de la jaula para todas las tools. Se escribio, se
-  //  midio contra la suite y se retiro el mismo dia: la nota larga sobre
-  //  ArgPathOutsideDenied, mas abajo, cuenta por que y como se hace bien.)
+  // EL SUELO de la jaula, para todas las tools: todo argumento marcado
+  // [RutaDelServidor] que sea una ruta absoluta tiene que caer dentro de lo
+  // que este workspace puede LEER. Redundante a proposito - la nota larga
+  // esta sobre ArgPathOutsideDenied.
+  Result := ArgPathOutsideDenied(AToolName, AArguments);
+  if Result <> '' then
+    Exit;
   // Universal git-argument filter (BOTH access levels): a dangerous option
   // would let even a read-write client escape the jail. The single place git
   // freeform args are vetted.
@@ -2242,6 +2339,40 @@ begin
     Result := TPath.Combine(Result, Me);
   if ASub <> '' then
     Result := TPath.Combine(Result, ASub);
+end;
+
+function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
+  out AFile: string): string;
+var
+  O, Carpeta, Ext: string;
+begin
+  Result := '';
+  AFile := '';
+  O := AOut.Trim;
+  Carpeta := '';
+  if O = '' then
+    Carpeta := AgentTempDir(ASub)
+  else if O.EndsWith('\') or O.EndsWith('/') or TDirectory.Exists(O) then
+    Carpeta := ExcludeTrailingPathDelimiter(O)
+  else
+  begin
+    Ext := TPath.GetExtension(O);
+    if Ext = '' then
+      Carpeta := O
+    else if SameText(Ext, AExt) then
+      AFile := O
+    else
+      Exit(Format(SR_CAPTURE_EXT_FMT, [AExt, Ext]));
+  end;
+  if AFile = '' then
+    // Milisegundos y un fragmento GUID: con resolucion de SEGUNDOS dos
+    // capturas del mismo segundo compartian nombre y la segunda pisaba a la
+    // primera - las dos llamadas se llevaban la misma imagen.
+    AFile := TPath.Combine(Carpeta, Format('%s-%s-%s%s', [APrefix,
+      FormatDateTime('yyyymmdd-hhnnsszzz', Now),
+      LowerCase(TGUID.NewGuid.ToString.Substring(1, 6)), AExt]));
+  if O <> '' then
+    Result := PathDenied(AFile);
 end;
 
 { El unico borrador de arboles del servidor (la nota larga, en el

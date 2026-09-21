@@ -125,7 +125,7 @@ end;
 
 function TDesktopWinTool.ExecuteWithParams(const Params: TDesktopWinParams): string;
 var
-  Cmd, Args, Salida, Nodo, Origen, Destino, Local: string;
+  Cmd, Args, Salida, Nodo, Origen, Local: string;
   Codigo: Cardinal;
   Return: TJSONObject;
 begin
@@ -209,24 +209,19 @@ begin
       { La captura se mueve a su sitio: el nodo siempre escribe el mismo
         captura.png al lado suyo, asi que dejarla ahi seria pisarsela al
         siguiente gesto. }
-      Destino := Params.Out_.Trim;
-      if Destino = '' then
-        // ENTREGABLE, no temporal del servidor: la descripcion de esta tool
-        // dice "bajatela con delphi_fetch", y delphi_fetch comprueba la
-        // jaula. El defecto estaba en el %TEMP% de la maquina, que no es la
-        // jaula de nadie, asi que el flujo documentado no funcionaba de
-        // punta a punta (medido 2026-09-21). Ahora cae dentro del workspace,
-        // y en la carpeta del agente: una jaula puede estar compartida, y la
-        // captura de uno no se le pone delante a otro.
-        Destino := AgentTempDir('desktop');
+      // ENTREGABLE, no temporal del servidor: la descripcion de esta tool
+      // dice "bajatela con delphi_fetch", y delphi_fetch comprueba la jaula.
+      // Sin "out" cae dentro del workspace y en la carpeta del agente: una
+      // jaula puede estar compartida, y la captura de uno no se le pone
+      // delante a otro. Donde cae y como se llama lo decide CaptureTarget
+      // (Lsp.Guard), el mismo para toda la familia - y el formato lo dice la
+      // captura que ha hecho el nodo, no una constante de aqui.
       try
-        CrearCarpeta(Destino);
-        { Milisegundos y un fragmento GUID: con resolucion de SEGUNDOS dos
-          capturas del mismo segundo compartian nombre y la segunda pisaba a
-          la primera - las dos llamadas se llevaban la misma imagen. }
-        Local := TPath.Combine(Destino, Format('desktop-%s-%s.png',
-          [FormatDateTime('yyyymmdd-hhnnsszzz', Now),
-           LowerCase(TGUID.NewGuid.ToString.Substring(1, 6))]));
+        var Veto := CaptureTarget(Params.Out_, 'desktop', 'desktop',
+          TPath.GetExtension(Origen), Local);
+        if Veto <> '' then
+          raise Exception.Create(Veto);
+        CrearCarpeta(TPath.GetDirectoryName(Local));
         TFile.Copy(Origen, Local, True);
         TFile.Delete(Origen);
         Return.AddPair('screenshot', Local);

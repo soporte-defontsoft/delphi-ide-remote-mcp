@@ -349,27 +349,32 @@ begin
     // The agent's remote eyes (read-level, like logcat): capture on the
     // device, pull to a server path, clean up. A direct exec-out redirect
     // mangles the PNG through the console (measured) - hence the tmp file.
-    if Params.Out.Trim = '' then
-      Exit(SR_ADB_NEED_OUT);
-    if not Params.Out.Trim.ToLower.EndsWith('.png') then
-      Exit(SR_ADB_OUT_PNG);
-    Denied := PathDenied(Params.Out);
+    // "out" ya no es obligatorio ni tiene que acabar en ".png" a mano: lo
+    // resuelve CaptureTarget (Lsp.Guard), el mismo para toda la familia de
+    // capturas. El formato sale del fichero que screencap escribe en el
+    // dispositivo, no de una segunda constante. Se resuelve ANTES de tocar
+    // el dispositivo: un argumento malo de quien llama se contesta sin
+    // preguntarle a nadie.
+    const DevPng = '/sdcard/delphi_mcp_screen.png';
+    var Destino: string;
+    Denied := CaptureTarget(Params.Out, 'android', 'android',
+      TPath.GetExtension(DevPng), Destino);
     if Denied <> '' then
       Exit(Denied);
-    const DevPng = '/sdcard/delphi_mcp_screen.png';
+    CrearCarpeta(TPath.GetDirectoryName(Destino));
     Output := RunAdb(Adb, DevArg + 'shell screencap -p ' + DevPng, 30000,
       ExitCode);
     if (ExitCode <> 0) or DeviceGone(Output) then
       Exit(GoneHint(Output));
     Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
-      Params.Out.Trim + '"', 60000, ExitCode);
+      Destino + '"', 60000, ExitCode);
     RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitCode);
-    if not TFile.Exists(Params.Out.Trim) then
+    if not TFile.Exists(Destino) then
       Exit(GoneHint(Output));
     Return := TJSONObject.Create;
     try
-      Return.AddPair('screenshot', Params.Out.Trim);
-      Return.AddPair('size', TJSONNumber.Create(TFile.GetSize(Params.Out.Trim)));
+      Return.AddPair('screenshot', Destino);
+      Return.AddPair('size', TJSONNumber.Create(TFile.GetSize(Destino)));
       Return.AddPair('note', SN_ADB_SCREENSHOT);
       Result := Return.ToJSON;
     finally

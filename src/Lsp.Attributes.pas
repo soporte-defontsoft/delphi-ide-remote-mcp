@@ -26,6 +26,15 @@
   habria heredado. Con esa
   proporcion no hacen falta categorias: se marca lo nuestro, y lo que no lleva
   marca -las dos remotas, los nombres, el contenido- la puerta ni lo mira.
+  Y la puerta ya la LEE (v1.0.14): ArgPathOutsideDenied, en Lsp.Guard, monta
+  el mapa de marcas por RTTI desde el registro real de tools y aplica el
+  suelo de la jaula a todo argumento marcado que sea una ruta absoluta.
+  Ese mapa dio la cifra buena: 42 PARAMETROS vigilados, no 39. Hay 39
+  marcas en el fuente, pero la de TDelphiFileParams.path la heredan cuatro
+  tools - una marca, cuatro parametros del contrato. El censo de arriba
+  contaba marcas. delphi_workspace publica el numero (jailedParams) y
+  test_round45 lo fija: un suelo redundante que se vacia no rompe nada, asi
+  que tiene que poder VERSE.
 
   Y POR QUE SE MARCA LO QUE SI ES (inclusion) Y NO LO QUE NO (exclusion): el
   21-sep se intento al reves, reconociendo las rutas por una lista de los

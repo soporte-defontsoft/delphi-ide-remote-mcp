@@ -265,27 +265,26 @@ begin
     Remota := RutaDeCaptura(Salida);
     if (Cmd <> 'status') and (Remota <> '') then
     begin
-      Destino := Params.Out_.Trim;
-      if Destino = '' then
-        // Lo mismo que su gemela de Windows: es un ENTREGABLE, y el defecto
-        // estaba fuera de toda jaula, donde delphi_fetch no puede ir a
-        // buscarlo (2026-09-21).
-        Destino := AgentTempDir('desktop');
+      // Lo mismo que su gemela de Windows, y por la MISMA funcion: donde cae
+      // la captura y como se llama lo decide CaptureTarget (Lsp.Guard), con
+      // el formato que trae la captura remota. Se resuelve ANTES de bajar
+      // nada: un "out" con la extension equivocada no merece el viaje.
+      Fallo := CaptureTarget(Params.Out_, 'desktop',
+        'desktop-' + NombreSeguro(Params.Profile.Trim),
+        TPath.GetExtension(Remota), Propia);
+      Destino := TPath.GetDirectoryName(Propia);
       { La captura baja con SU nombre remoto (captura.png), igual para todos
         los perfiles: con un destino comun, dos maquinas a la vez se pisaban la
         imagen y una llamada acababa con la pantalla de la otra. Baja a una
         carpeta propia y se queda con un nombre que dice de quien es. }
       Bajada := TPath.Combine(Destino, '.tmp-' +
         LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
-      Fallo := FetchFromTarget(Params.Profile.Trim, Proj,
-        TPath.GetFileName(Remota), Bajada, Local);
+      if Fallo = '' then
+        Fallo := FetchFromTarget(Params.Profile.Trim, Proj,
+          TPath.GetFileName(Remota), Bajada, Local);
       if Fallo = '' then
       begin
         try
-          Propia := TPath.Combine(Destino, Format('desktop-%s-%s%s',
-            [NombreSeguro(Params.Profile.Trim),
-             FormatDateTime('yyyymmdd-hhnnsszzz', Now),
-             TPath.GetExtension(Remota)]));
           CrearCarpeta(Destino);
           TFile.Move(Local, Propia);
           Local := Propia;

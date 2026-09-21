@@ -585,8 +585,13 @@ check('build: una configuracion propia con espacio NO se rechaza',
 # delete/move park their target in a trash folder created NEXT TO it: for a
 # root that lands in the root's PARENT, outside the jail, taking the whole
 # workspace with it.
+# El destino del move va DENTRO de la jaula a proposito (v1.0.14): con uno de
+# fuera (INSIDE + '2') contesta antes el suelo de la puerta -"FUERA de los
+# workspaces"-, que es un rechazo correcto pero no es la regla que se mide
+# aqui. Para ver la regla de la RAIZ, lo unico ilegal tiene que ser la raiz.
 for tool, args in (('delphi_delete', {"path": INSIDE}),
-                   ('delphi_move', {"path": INSIDE, "dest": INSIDE + '2'})):
+                   ('delphi_move', {"path": INSIDE,
+                                    "dest": os.path.join(INSIDE, 'movida')})):
     out = call(tool, args)
     check('%s: el root mismo rechazado' % tool,
           'RECHAZADO' in out and 'WORKSPACE ROOT' in out, out[:150])

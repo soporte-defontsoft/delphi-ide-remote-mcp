@@ -1356,10 +1356,17 @@ const
     '(la distribucion lo trae: entonces se despliega y actualiza solo), o ' +
     'pasa project= con el .dproj del nodo desplegado via delphi_build ' +
     'target=Deploy.';
+  { UNA descripcion para el "out" de toda la familia de capturas, porque es
+    UNA regla (CaptureTarget, Lsp.Guard). Va aqui arriba porque una constante
+    se declara antes de su primer uso. }
+  SP_CAPTURE_OUT_RULE =
+    ' "out" may be a FOLDER (existing, or ending in \ - the server names ' +
+    'the file) or a FILE whose extension matches the capture''s real format ' +
+    '(a mismatch is refused, naming the format). Empty = __delphi-temp\' +
+    '<agent> inside the workspace, wiped on server restart. On THIS server, ' +
+    'jailed like any of our paths; retrieve it with delphi_fetch.';
   SP_ADBLINUX_OUT =
-    'screenshot: folder ON THIS SERVER where the PNG lands, jailed like ' +
-    'any of our paths (default: __delphi-temp\<agent> inside the ' +
-    'workspace, wiped on server restart). Retrieve it with delphi_fetch.';
+    'screenshot: where the capture lands.' + SP_CAPTURE_OUT_RULE;
   { ------------------------------------------------ delphi_desktop (Windows) }
   SD_DESKTOP =
     'Eyes and hands on the desktop of THIS server - the Windows machine that ' +
@@ -1429,10 +1436,7 @@ const
     'El texto a escribir (command=type). Va por Unicode, asi que los ' +
     'acentos entran igual sea cual sea la distribucion de teclado.';
   SP_DESKTOP_OUT =
-    'Carpeta EN ESTE SERVIDOR donde dejar la captura, sujeta a la jaula ' +
-    'como cualquier ruta nuestra. Por defecto, __delphi-temp\<agente> ' +
-    'dentro del workspace (se vacia al rearrancar el servidor); bajatela ' +
-    'con delphi_fetch.';
+    'screenshot: where the capture lands.' + SP_CAPTURE_OUT_RULE;
 
   SR_ADBLINUX_CMD =
     'RECHAZADO: command debe ser screenshot, tap, key, windows o status.';
@@ -1492,9 +1496,10 @@ const
     'run: package name of the installed app to launch (e.g. ' +
     'com.embarcadero.MiApp - the build/install results state it)';
   SP_ADB_OUT =
-    'screenshot: server path of the .png to write (then delphi_fetch it). ' +
-    'logcat: optional .txt/.log path to dump into INSTEAD of answering ' +
-    'inline - then read it in ranges with delphi_read. Inside the workspace';
+    'screenshot: where the capture lands - optional since v1.0.14.' +
+    SP_CAPTURE_OUT_RULE +
+    ' logcat: optional .txt/.log FILE to dump into INSTEAD of answering ' +
+    'inline - then read it in ranges with delphi_read.';
   SP_ADB_X =
     'tap: X coordinate in pixels (measure on a screenshot)';
   SP_ADB_Y =
@@ -1514,12 +1519,14 @@ const
     'error: command debe ser discover | devices | connect | disconnect | ' +
     'install | run | logcat | screenshot | tap | key';
 
-  SR_ADB_NEED_OUT =
-    'RECHAZADO: screenshot necesita "out" (ruta .png dentro del workspace ' +
-    'donde dejar la captura; despues se descarga con delphi_fetch).';
-
-  SR_ADB_OUT_PNG =
-    'RECHAZADO: "out" debe terminar en .png.';
+  { El "out" de TODA la familia de capturas (delphi_desktop, delphi_adb_linux,
+    delphi_adb): una regla y un texto, en CaptureTarget (Lsp.Guard). El
+    formato lo dice la CAPTURA, no una constante: el dia que un nodo devuelva
+    otra cosa que PNG, esto sigue siendo verdad sin tocarlo. }
+  SR_CAPTURE_EXT_FMT =
+    'RECHAZADO: la captura es %0:s y "out" nombra un fichero %1:s. Llama al ' +
+    'fichero %0:s, o pasa una CARPETA (que ya exista, o acabada en \) y el ' +
+    'nombre lo pongo yo. No escribo una imagen con la extension de otra.';
 
   SR_ADB_NEED_XY =
     'RECHAZADO: tap necesita "x" e "y" (pixeles de pantalla; midelos sobre ' +

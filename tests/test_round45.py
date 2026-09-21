@@ -181,6 +181,13 @@ PROBAR = [
                            'apk': AJENO_APK}),
     ('delphi_adb_linux', 'out', {'command': 'screenshot', 'profile': 'x',
                                  'out': FUERA}),
+    # LA PRUEBA DE QUE EL SUELO DE LA PUERTA VIVE (v1.0.14). Dentro de la
+    # tool el rechazo del profile llega ANTES que el PathDenied de project,
+    # asi que sin un PAServer vivo esta sonda era imposible. El suelo
+    # (ArgPathOutsideDenied, que lee [RutaDelServidor]) muerde en la puerta,
+    # antes que la tool: si esto contesta JAULA, es el suelo quien contesta.
+    ('delphi_adb_linux', 'project', {'command': 'screenshot', 'profile': 'x',
+                                     'project': AJENO_DPROJ}),
     # OJO: en delphi_paserver el perfil se llama "name", no "profile". Un
     # parametro inventado contesta "Unknown parameter" y la comprobacion
     # mediria eso en vez de la jaula.
@@ -193,11 +200,6 @@ PROBAR = [
 EXCLUIDOS = {
     ('delphi_paserver', 'exe'): 'fichero de la carpeta desplegada EN EL TARGET',
     ('delphi_config', 'remotedir'): 'carpeta EN EL TARGET, no de esta maquina',
-    # v1.0.13: la excusa vieja ("es un NOMBRE") era FALSA - la tool lo pasa
-    # por PathDenied y ya lleva [RutaDelServidor]. No se sonda en la tabla
-    # porque ProfileHostDenied corta antes cuando no hay un PAServer vivo.
-    ('delphi_adb_linux', 'project'):
-        'ruta NUESTRA jaulada tras el profile; sin PAServer no se alcanza',
     ('delphi_git', 'args'): 'argumentos libres de git; filtro propio (GitArgDenied)',
     ('delphi_search', 'pattern'): 'mascara de fichero, no una ruta',
     ('delphi_list', 'pattern'): 'mascara de fichero, no una ruta',
@@ -353,6 +355,22 @@ try:
         for f in fugas:
             print('    FUGA:', f)
         print()
+
+    # ------------------------------------------------------------------ G4
+    # El suelo es una capa REDUNDANTE: si se quedase vacio (RTTI que no
+    # emite, un registro que cambia) no romperia nada y nadie lo notaria.
+    # Por eso publica cuantos parametros vigila. Son 42 y no las 39 MARCAS
+    # que hay en el fuente: la de TDelphiFileParams.path la heredan cuatro
+    # tools (definition, signature, hover, completion) - una marca, cuatro
+    # parametros del contrato. El primer censo contaba marcas y decia 39;
+    # lo corrigio el propio servidor la primera vez que se le pregunto.
+    w = call('delphi_workspace', {})
+    try:
+        vigilados = json.loads(w).get('server', {}).get('jailedParams', -1)
+    except Exception:
+        vigilados = -1
+    check('G4 el suelo de la puerta vigila los 42 parametros marcados',
+          vigilados == 42, 'jailedParams=%s' % vigilados)
 
     # ----------------------------------------------------------------- G2b
     # Los dos parametros de delphi_changeset que la tabla no puede sondar
