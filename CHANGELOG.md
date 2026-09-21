@@ -6,6 +6,115 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.12-beta] - 2026-09-21
+
+**The parameter now says whose path it is.** One hole was closed, a folder
+was given a home, and the thing underneath both was finally named: of the 200
+parameters across 38 tools - all of them designed by us - not one recorded
+the most basic fact about a path, which is whether it belongs to this machine.
+
+### Fixed - the caller could choose where a screenshot of the operator's desktop landed
+`delphi_desktop` and its Linux twin never checked `out`, the LOCAL destination
+the caller picks. Measured with the real node against 1.0.11: a call got the
+server to create a folder and write a capture of the operator's screen
+**outside the jail**. Of the five caller-chosen output paths in the whole
+contract, three were checked and two were not - and `delphi_adb` checks the
+same parameter, by the same name, in the same kind of tool.
+
+Both now vet it before touching anything remote, so a bogus profile or device
+is not needed to see the refusal - an error of the caller's is answered
+without first asking a machine that may take a minute not to reply.
+
+### Fixed - the message explaining the failure was what crashed the tool
+Found while cutting this release, and not by looking for it: `delphi_desktop`
+had stopped working ENTIRELY - `command=status` included - and answered
+`Error executing tool: No mapping for the Unicode character exists in the
+target multi-byte code page`, which in this server's own rules means "I broke
+inside". Nothing had broken. The published 1.0.11 failed identically at the
+same moment, so it was never about this release.
+
+The chain, measured: the machine could not copy the screen just then
+("Acceso denegado" - a locked or disconnected session); the node said so in a
+message carrying an accent (*"Controlador no **vá**lido"*); and the single
+place that decodes a child process's output raised on that byte, because a
+codepage that cannot represent a sequence makes `TEncoding.GetString` throw.
+**The sentence that explained the real problem was the one that killed the
+tool, and it hid the explanation behind an internal error.**
+
+Decoding can no longer kill a call: the fallback is byte-by-byte and cannot
+fail. Losing an accent is a defect; losing the output of a build is another
+thing entirely - and this is the path `delphi_build`, `delphi_git`,
+`delphi_test`, `delphi_adb` and `delphi_paserver` all capture through.
+
+### New - `__delphi-temp`, sister of `__delphi-patch`
+The server wrote its temporaries into the MACHINE's `%TEMP%`, by hand, in
+seven places, outside every jail and without cleaning up. Measured on
+2026-09-21: **56.4 MB** forgotten there - 33 captures of the operator's
+desktop from two days earlier and a 10.7 MB remote-run output - plus a 10-byte
+`.dproj` a battery had left loose, which had become the "project" of the units
+of three other batteries.
+
+One namer, two homes, and one criterion: `ServerTempDir` next to the
+executable for what the agent never touches, `AgentTempDir` inside the
+workspace for what it must FETCH. That second half is not tidiness:
+`delphi_fetch` checks the jail, so the default screenshot destination in
+`%TEMP%` made "download it with delphi_fetch" - which the tool promises in
+writing - impossible. **The documented flow was broken end to end.** It works
+now. The folder is emptied at startup: declaring it disposable is worthless if
+nobody disposes of it.
+
+### New - `[RutaDelServidor]`, the field that was missing
+In the schema all 200 parameters are an identical `string`. The only way to
+tell a path of ours from a path of the TARGET - or from something that merely
+looks like one - was to read the prose description, one by one. The server
+cannot do that; neither can the agent, which sees `path` and `exe` with
+nothing saying that one is subject to the jail and the other is not.
+
+That is why the jail check was decided by hand in ~60 places, from memory, by
+whoever wrote the tool - and why `delphi_desktop.out` had none. Nobody forgot:
+there was nowhere to declare it.
+
+One marker, no enum, because the proportion says so: of the 39 path
+parameters **37 are ours and exactly two belong to the target machine**
+(`delphi_paserver.exe`, `delphi_config.remotedir`, plus
+`delphi_adb_linux.project`, which is a name). Mark ours; what carries no mark
+the gate will not look at. And the three exceptions now carry a comment saying
+WHY they have none, because an exception without its reason written down is
+where the next one slips through.
+
+Marking what IS a path rather than what is not is not arbitrary: the opposite
+was tried the same day and died. Recognising paths by an exclusion list killed
+a `delphi_search` whose query was `D:\Proyectos`. An exclusion list is fine
+for REWRITING, where being wrong is harmless; to REFUSE you must fail open on
+what you do not know. That attempt is kept, unused, with the note.
+
+### Measured
+- `tests/test_round43.py` (9 checks, 3 failing against 1.0.11 - one of them
+  the capture actually written outside the jail, with the real node).
+- `tests/test_round44.py` (10 checks, 7 failing against 1.0.11).
+- `tests/test_round45.py` (4 checks): the guardian. It reads the LIVE
+  contract, refuses to let a path-looking parameter go unclassified, hands an
+  outside path to each of the 37 local ones, and checks that the same call
+  INSIDE the jail still passes. **Against 1.0.11 it finds, by name and with
+  nobody looking for them, the two leaks this release fixes.**
+- Three batteries were passing green while leaning on that stray file in
+  `%TEMP%`; `test_round30` no longer leaves it there and
+  `test_round38`/`test_round41` now ship a real `.dproj`.
+- `test_round43` and `test_round44` now tell apart "the tool is broken" from
+  "this machine cannot capture the screen right now", and SAY which checks
+  they did not measure. A battery that stays silent about what it did not
+  measure is a battery lying in green.
+- Suite: 67 batteries, 1534 checks, 0 failures.
+
+### Known and not fixed
+- **`out` is a FOLDER in `delphi_desktop` and a FILE in `delphi_adb`** - same
+  family, same parameter name, different contract. Noted where it is.
+- **The gate does not read `[RutaDelServidor]` yet.** The attribute is
+  declared and complete; wiring it is next, and then the ~60 hand-written
+  decisions become a belt over braces instead of the only line of defence.
+- **A rarer race when creating a unit**, seen ONCE and not reproduced in 16
+  further runs. Recorded as seen-once, not as fixed.
+
 ## [1.0.11-beta] - 2026-09-21
 
 **What the server let out of the jail.** Four fixes with one thread running

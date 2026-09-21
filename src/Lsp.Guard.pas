@@ -458,6 +458,7 @@ var
   GAuthToken: string;
   GIdentLock: TCriticalSection;
   GSessionNames: TStringList; // sessionId=name, bound at initialize
+
   GReadOnlyToken: string;
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
@@ -1315,6 +1316,7 @@ end;
 procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
 function ServedDriveLetters: string; forward;
 function VirtualUnitOf(ALetter: Char; const AServed: string): string; forward;
+
 // VirtualUnitLetter is declared in the interface now (used by /files too).
 
 function WriteDenied(const AWhat: string): string;
@@ -2177,13 +2179,20 @@ end;
 function AgentTempDir(const ASub: string): string;
 var
   Roots: TArray<string>;
-  Me: string;
+  Me, Casa: string;
 begin
   Roots := WorkspaceRoots;
   if Length(Roots) = 0 then
     Exit(ServerTempDir(ASub));
-  Result := TPath.Combine(ExcludeTrailingPathDelimiter(Roots[0]),
+  Casa := TPath.Combine(ExcludeTrailingPathDelimiter(Roots[0]),
     TempFolderName);
+  // El vaciado NO se hace aqui: se hace entero en el arranque, para todos
+  // los workspaces del settings.ini (PurgeServerTemp). Hacerlo en el primer
+  // uso se probo y no cumplia lo prometido - si nadie pedia un entregable,
+  // nadie limpiaba. Y ademas seria peligroso a mitad de sesion: se llevaria
+  // por delante la captura que otro agente acaba de pedir y aun no se ha
+  // bajado.
+  Result := Casa;
   Me := CurrentAgent;
   if Me <> '' then
     Result := TPath.Combine(Result, Me);
@@ -2191,24 +2200,57 @@ begin
     Result := TPath.Combine(Result, ASub);
 end;
 
-procedure PurgeServerTemp;
+{ Vacia una carpeta de temporales sin borrarla. Nunca lanza: no poder tirar
+  un temporal no es motivo para que falle lo que lo pedia. }
+procedure VaciaTemp(const ADir: string);
 var
-  Dir, E: string;
+  E: string;
 begin
   try
-    Dir := ServerTempDir;
-    if not TDirectory.Exists(Dir) then
+    if not TDirectory.Exists(ADir) then
       Exit;
-    for E in TDirectory.GetFiles(Dir) do
+    for E in TDirectory.GetFiles(ADir) do
       try
         TFile.Delete(E);
       except
       end;
-    for E in TDirectory.GetDirectories(Dir) do
+    for E in TDirectory.GetDirectories(ADir) do
       try
         TDirectory.Delete(E, True);
       except
       end;
+  except
+  end;
+end;
+
+
+procedure PurgeServerTemp;
+var
+  W: TWorkspaceDef;
+  R: string;
+begin
+  // La casa del servidor, la de siempre.
+  VaciaTemp(ServerTempDir);
+  // ...Y LA DE CADA WORKSPACE. Primer intento: se vaciaba en el primer uso
+  // de AgentTempDir, porque "al arrancar no hay workspace activo" - los
+  // roots los elige el token de quien llama. Falso: los workspaces ESTAN
+  // declarados en el settings.ini y LoadSecurity los tiene desde el
+  // arranque; lo que no hay es uno ACTIVO, que no es lo mismo. Lo canto la
+  // suite: con el nodo del escritorio ocupado por otra bateria nadie llamaba
+  // a AgentTempDir, nadie purgaba, y la migaja de la ejecucion anterior
+  // sobrevivia. "Se limpia en el primer uso" no es "se limpia al arrancar",
+  // que es lo que se prometio (David, 2026-09-21).
+  try
+    LoadSecurity;
+    for W in GWorkspaces do
+      for R in W.Roots do
+        if R.Trim <> '' then
+          VaciaTemp(TPath.Combine(ExcludeTrailingPathDelimiter(R.Trim),
+            TempFolderName));
+    for R in WorkspaceRoots do
+      if R.Trim <> '' then
+        VaciaTemp(TPath.Combine(ExcludeTrailingPathDelimiter(R.Trim),
+          TempFolderName));
   except
     // limpiar no puede impedir arrancar
   end;
@@ -2921,6 +2963,7 @@ initialization
   GSessionNames := TStringList.Create;
 
 finalization
+
   GSessionNames.Free;
   GIdentLock.Free;
 

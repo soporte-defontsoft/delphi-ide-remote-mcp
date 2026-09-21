@@ -338,7 +338,34 @@ begin
       Cp := GetOEMCP; // tray and service have no console: ask the machine
     var Enc := TEncoding.GetEncoding(Cp);
     try
-      Result := Enc.GetString(Bytes);
+      try
+        Result := Enc.GetString(Bytes);
+      except
+        // DECODIFICAR NO PUEDE MATAR LA LLAMADA. Windows rechaza una
+        // secuencia que esa pagina de codigos no sabe representar y Delphi la
+        // convierte en "No mapping for the Unicode character exists in the
+        // target multi-byte code page", que sale al agente como "Error
+        // executing tool" - o sea, en las reglas de este servidor, "me he
+        // roto por dentro". Y no se ha roto nada: solo que un programa hijo
+        // escribio algo que no era ni UTF-8 valido ni de la consola (un
+        // titulo de ventana con un emoji, por ejemplo).
+        //
+        // Medido el 2026-09-21: delphi_desktop dejo de funcionar ENTERO -
+        // hasta command=status- segun lo que hubiera en la pantalla del
+        // operador, y lo mismo le podia pasar a delphi_build, delphi_git,
+        // delphi_test, delphi_adb y delphi_paserver, que capturan por aqui.
+        // Perder un acento es un defecto; perder la salida de una
+        // compilacion es otra cosa.
+        //
+        // La vuelta atras es byte a byte y no puede fallar: cada byte se lee
+        // como su punto de codigo latin-1. Lo que no sea ASCII saldra raro,
+        // pero saldra - y los errores del compilador, que es lo que importa,
+        // son ASCII.
+        Result := '';
+        SetLength(Result, Length(Bytes));
+        for var K := 0 to High(Bytes) do
+          Result[K + 1] := Char(Bytes[K]);
+      end;
     finally
       Enc.Free; // GetEncoding returns a new object, not a singleton
     end;

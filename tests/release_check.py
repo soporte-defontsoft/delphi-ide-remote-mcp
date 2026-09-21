@@ -129,7 +129,11 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
     # viejas de ARCHITECTURE/TOOLS/VAULT viajaron en la v1.0.5 (medido el
     # 2026-09-20 abriendo el zip). Se podan aqui, en el walk, porque podar
     # despues seria acordarse.
-    PODA = ('__delphi-patch', '__history', '__recovery')
+    # __delphi-temp entra aqui el 2026-09-21, el dia que nace: es la carpeta
+    # de temporales del servidor y cuando cae dentro de un workspace puede
+    # aparecer bajo docs\ igual que la papelera. Anadirla ahora cuesta una
+    # linea; descubrirlo abriendo un zip publicado costo un release.
+    PODA = ('__delphi-patch', '__delphi-temp', '__history', '__recovery')
     for root, dirs, files in os.walk(os.path.join(REPO, 'docs')):
         dirs[:] = [d for d in dirs if d not in PODA]
         for f in files:

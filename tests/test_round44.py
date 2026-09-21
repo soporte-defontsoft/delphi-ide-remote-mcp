@@ -194,14 +194,26 @@ try:
     # ------------------------------------------------------------------ T3
     # La captura SIN "out": el defecto. Antes caia en el %TEMP% del PC, donde
     # delphi_fetch no puede ir a buscarla.
-    if HAY_NODO:
-        s = call('delphi_desktop', {'command': 'screenshot'})
+    # "NO pude capturar" es del NODO, no de la tool: la maquina no puede
+    # copiar la pantalla en este momento (sesion bloqueada o desconectada:
+    # "Acceso denegado"). Eso no es un fallo del contrato y no se pinta de
+    # rojo - pero se DICE, porque una bateria que calla lo que no ha medido
+    # es una bateria que miente en verde.
+    s = call('delphi_desktop', {'command': 'screenshot'}) if HAY_NODO else ''
+    PUEDE = HAY_NODO and 'NO pude capturar' not in s
+    if HAY_NODO and not PUEDE:
+        print('NOTA: esta maquina no puede capturar la pantalla ahora mismo '
+              '(el nodo dice "NO pude capturar"). T3 y T4 no se miden.')
+    if PUEDE:
         check('T3 la captura por defecto cae DENTRO del workspace',
               bool(pngs(TEMP_JAULA)),
               'no hay png bajo %s | %s' % (TEMP_JAULA, s[:200]))
-        check('T3b ...y NO en el %TEMP% de la maquina',
-              all(not os.path.isdir(v) for v in VIEJAS),
-              'han vuelto: %s' % [v for v in VIEJAS if os.path.isdir(v)])
+    # Esta SI se mide siempre: aunque la captura falle, lo que no puede pasar
+    # es que el servidor vuelva a tocar el %TEMP% de la maquina.
+    check('T3b el servidor no vuelve a tocar el %TEMP% de la maquina',
+          all(not os.path.isdir(v) for v in VIEJAS),
+          'han vuelto: %s' % [v for v in VIEJAS if os.path.isdir(v)])
+    if PUEDE:
 
         # -------------------------------------------------------------- T4
         # Y ahora lo que la tool promete por escrito: "bajatela con
@@ -216,8 +228,48 @@ try:
         else:
             check('T4 y delphi_fetch SI puede bajarsela', False,
                   'no hubo captura que bajar')
-    else:
+    elif not HAY_NODO:
         print('NOTA: no hay node/McpDesktopNode.exe; T3 y T4 no se miden.')
+
+    # ------------------------------------------------------------------ T7
+    # "__delphi-temp puede limpiarse entero en cada arranque del server"
+    # (David). La del SERVIDOR se vacia en el arranque de verdad; la del
+    # WORKSPACE no puede -al arrancar no hay workspace activo, los roots los
+    # elige el token- asi que se vacia en el PRIMER uso de cada proceso. Lo
+    # que se mide es el efecto, que es el mismo: lo de la vez anterior no
+    # sobrevive.
+    # Sin depender del nodo: lo que se mide es el ARRANQUE, y ya no hace
+    # falta que nadie pida una captura para que la carpeta se vacie. Esa
+    # dependencia era justo el fallo del primer intento.
+    if True:
+        antes = pngs(TEMP_JAULA)
+        proc.kill()
+        time.sleep(1.5)
+        # Una migaja de la "ejecucion anterior" que tiene que desaparecer.
+        # Se crea la carpeta si no esta: si T3 no llego a dejar la captura
+        # -dos baterias peleandose por el nodo del escritorio, que es UNO por
+        # maquina- esto reventaba con FileNotFoundError en vez de medir. Una
+        # bateria informa, no se cae.
+        os.makedirs(TEMP_JAULA, exist_ok=True)
+        vieja = os.path.join(TEMP_JAULA, 'de-la-vez-anterior.txt')
+        open(vieja, 'w').write('x')
+        p2 = subprocess.Popen(
+            [os.path.join(EXEDIR, 'DelphiLspMcp.exe'), '--http', str(PORT)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(3)
+        proc = p2
+        SID = None
+        _, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                      'params': {'protocolVersion': '2025-06-18',
+                                 'capabilities': {},
+                                 'clientInfo': {'name': 'r44', 'version': '1'}}})
+        rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+        check('T7 al rearrancar, la carpeta del workspace se vacia entera',
+              not os.path.exists(vieja),
+              'sobrevivio %s' % vieja)
+        check('T7b ...y las capturas de la vez anterior tampoco sobreviven',
+              not any(os.path.exists(f) for f in antes),
+              'sobrevivio alguna de %s' % antes[:2])
 
     # ------------------------------------------------------------------ T5
     # La carpeta es del servidor: se lee, no se escribe dentro.

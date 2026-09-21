@@ -220,7 +220,14 @@ try:
     f = call('delphi_desktop', {'command': 'screenshot', 'out': DIR_DENTRO})
     check('W4 un "out" DENTRO de la jaula no muere por la ruta',
           not rechazada_por_jaula(f), f[:280])
-    if HAY_NODO:
+    # "NO pude capturar" lo dice el NODO: esta maquina no puede copiar la
+    # pantalla ahora (sesion bloqueada o desconectada). No es un fallo del
+    # contrato, asi que no se pinta de rojo - pero se dice, que callar lo no
+    # medido es mentir en verde.
+    if HAY_NODO and 'NO pude capturar' in f:
+        print('NOTA: esta maquina no puede capturar la pantalla ahora mismo; '
+              'W4b no se mide (W1 y W1b si: el rechazo es ANTES de capturar).')
+    elif HAY_NODO:
         check('W4b ...y con el nodo de verdad la captura llega a su sitio',
               hay_png(DIR_DENTRO), f[:280])
     else:

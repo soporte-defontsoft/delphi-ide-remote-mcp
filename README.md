@@ -532,6 +532,22 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   but no root parses valid, the server **fails closed** (everything refused) rather than
   silently running unrestricted. No roots = unrestricted (local trusted mode). For remote
   exposure configure BOTH, and expose over VPN/LAN only.
+- **`__delphi-temp`: the server's temporaries, and they are disposable.** Two homes, one
+  criterion. What the agent never touches (a git message file, an SDK probe, the script sent to
+  a target) goes next to the executable, like `reports\`. What the agent must FETCH - a desktop
+  capture - goes to `<root>\__delphi-temp\<agent>\`, inside the workspace, because `delphi_fetch`
+  checks the jail and a deliverable outside it cannot be delivered. **The folder is emptied whole
+  every time the server starts** (the one inside a workspace on its first use of the run, since
+  at startup no workspace is active yet): nothing there survives the call that created it, so
+  never leave anything of your own in it - writing inside is refused. Skipped by every listing
+  and search, `includetrash` included: it is not trash, nothing is restored from it. Before
+  1.0.12 these files went to the MACHINE's `%TEMP%`, outside every jail - 56.4 MB measured,
+  forgotten there for two days.
+- **A destination you choose is checked too.** Every parameter that names a path ON THIS SERVER
+  is declared as such in the tool's own schema (`[RutaDelServidor]`, since 1.0.12), so the jail
+  applies to `out`, `dest`, `outfile` and friends exactly as it does to `path`. The two
+  exceptions are paths on the TARGET machine - `delphi_paserver`'s `exe` and `delphi_config`'s
+  `remotedir` - where this server's jail has nothing to say.
 - **A root is also where project discovery STOPS.** Looking for a unit's `.delphilsp.json` or
   `.dproj`, the server walks up from the file — but never past the edge of what this workspace
   may read. A project file sitting ABOVE the root is not adopted (since 1.0.11): if your layout
