@@ -1983,6 +1983,7 @@ begin
 
   Count := 0;
   TotalBytes := 0;
+  var Elfs := 0; // ejecutables de Linux (cabecera #$7F'ELF') que van dentro
   Zip := TZipFile.Create;
   try
     Zip.Open(EnProceso, zmWrite);
@@ -2004,6 +2005,25 @@ begin
         Continue;
       Rel := F.Substring(Length(IncludeTrailingPathDelimiter(Dir))).Replace('\', '/');
       Zip.Add(F, Rel);
+      // Un zip hecho en Windows NO guarda permisos Unix: el binario de
+      // Linux64 (un ELF, sin extension) sale del unzip sin el bit de
+      // ejecucion y "no arranca" sin decir por que. Se cuentan para
+      // avisarlo en la respuesta.
+      if (TPath.GetExtension(F) = '') or SameText(TPath.GetExtension(F), '.so') then
+        try
+          var Fs := TFileStream.Create(F, fmOpenRead or fmShareDenyNone);
+          try
+            var Cab: array[0..3] of Byte;
+            if (Fs.Read(Cab, 4) = 4) and (Cab[0] = $7F) and (Cab[1] = Ord('E')) and
+               (Cab[2] = Ord('L')) and (Cab[3] = Ord('F')) and
+               (TPath.GetExtension(F) = '') then
+              Inc(Elfs);
+          finally
+            Fs.Free;
+          end;
+        except
+          // no se pudo mirar: el aviso es una ayuda, no una condicion
+        end;
       Inc(Count);
       Inc(TotalBytes, TFile.GetSize(F));
     end;
@@ -2040,6 +2060,12 @@ begin
     Return.AddPair('files', TJSONNumber.Create(Count));
     Return.AddPair('uncompressedBytes', TJSONNumber.Create(TotalBytes));
     Return.AddPair('zipBytes', TJSONNumber.Create(TFile.GetSize(OutZip)));
+    if Elfs > 0 then
+      Return.AddPair('linuxNote', Format(
+        '%d Linux executable(s) inside. A zip made on Windows keeps no Unix ' +
+        'permissions, so after unzipping on the target they are NOT ' +
+        'executable: run chmod +x <file> once (a Deploy through PAServer ' +
+        'does not have this problem).', [Elfs]));
     // The next step used to be prose and a model had to GUESS the zip
     // name (one invented Win64-Release-deploy.zip - hermes' blind eval).
     // Hand it the exact call instead.

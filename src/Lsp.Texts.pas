@@ -1438,6 +1438,9 @@ const
     'Linux target and delphi_adb on Android, pointed at the machine you are ' +
     'already talking to: use it to drive the IDE itself, an installer, a ' +
     'dialog no tool can reach, or a Windows build of your app running here. ' +
+    'It needs an OPEN desktop session on the server (the console, or a ' +
+    'connected RDP) and does not work without one, on purpose: the user can ' +
+    'watch what you do and step in. ' +
     'THE FLOW: command=screenshot brings the WHOLE desktop back as a PNG; ' +
     'you LOOK at it, measure the pixel you want and command=tap presses ' +
     'exactly there. command=type writes text (accents included, whatever the ' +
@@ -1479,8 +1482,12 @@ const
     'trae en node\McpDesktopNode.exe junto al servidor; si no esta, ' +
     'recompilalo con BuildGroup.bat Release.';
   SR_DESKTOP_NOSHOT =
-    'El nodo no devolvio captura. Suele ser la sesion bloqueada o sin ' +
-    'pantalla; mira "nodeOutput" para el motivo exacto.';
+    'El nodo no devolvio captura. delphi_desktop maneja una sesion de ' +
+    'escritorio ABIERTA (la consola o un RDP conectado) y sin ella no ' +
+    'funciona: es asi a proposito, para que el usuario pueda VER lo que ' +
+    'hace el agente e intervenir. Con la sesion bloqueada o el RDP ' +
+    'desconectado no hay pantalla que capturar: pidele al usuario que la ' +
+    'abra. El motivo exacto esta en "nodeOutput".';
   SP_DESKTOP_COMMAND =
     'screenshot (el escritorio entero como PNG; es lo que devuelve TODO ' +
     'comando) | tap (pulsa en x,y de la captura) | type (escribe "text"; ' +

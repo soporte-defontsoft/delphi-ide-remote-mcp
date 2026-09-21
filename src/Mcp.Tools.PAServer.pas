@@ -1307,9 +1307,24 @@ begin
       PullObj.AddPair('dir', Pull.RemoteBase);
       PullObj.AddPair('files', TJSONNumber.Create(NFiles));
       PullObj.AddPair('bytes', TJSONNumber.Create(NBytes));
-      if (ExitCode = 0) and (NFiles > 0) then
+      // paclient --get es INCREMENTAL: sobre un sysroot ya traido copia solo
+      // lo que cambio, y muchas veces eso es CERO ficheros. Leer "0 copiados"
+      // como "esta distro no tiene este arbol" hacia que REPETIR get-sdk -que
+      // es lo que la descripcion manda hacer tras actualizar el sistema del
+      // destino- acabase RECHAZADO con "no encaja con ninguna distribucion"
+      // (medido contra el Fedora el 2026-09-21: gcc 0 ficheros, /usr/lib64 6).
+      // Lo que decide es si el arbol ESTA aqui, no cuantos bajaron hoy. Dos
+      // distros no se mezclan en una carpeta (la ficha de arriba lo impide),
+      // asi que un arbol presente es de ESTA distro.
+      var YaEstaba := (ExitCode = 0) and (NFiles = 0) and
+        (Length(TDirectory.GetFiles(DestDir, '*',
+          TSearchOption.soAllDirectories)) > 0);
+      if ((ExitCode = 0) and (NFiles > 0)) or YaEstaba then
       begin
-        PullObj.AddPair('status', 'ok');
+        if YaEstaba then
+          PullObj.AddPair('status', 'already up to date')
+        else
+          PullObj.AddPair('status', 'ok');
         if Pull.Group = 'gcc' then
           GotGcc := True
         else if Pull.Group = 'libc' then
@@ -1421,6 +1436,13 @@ begin
       Return.AddPair('gccVersion', GccVer);
     Return.AddPair('totalFiles', TJSONNumber.Create(TotalFiles));
     Return.AddPair('totalBytes', TJSONNumber.Create(TotalBytes));
+    // Pocos ficheros (o ninguno) en una segunda pasada NO es un SDK vacio:
+    // a un agente de campo se lo parecio (2026-08-21).
+    Return.AddPair('incremental',
+      'totalFiles/totalBytes count what was copied in THIS run. The pull is ' +
+      'incremental: over a sysroot already on disk it brings only what ' +
+      'changed on the target, so a small number - or zero, "already up to ' +
+      'date" - is the normal answer of a re-run, not an empty SDK.');
     Return.AddPair('note', SN_PASERVER_SDK_OK);
     if Glibc <> '' then
       Return.AddPair('genericNote', Format(SN_PASERVER_SDK_GENERIC_FMT, [Glibc]));

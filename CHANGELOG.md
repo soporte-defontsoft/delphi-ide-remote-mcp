@@ -59,6 +59,16 @@ wall ended in a replace done outside the tool.
   the house reader now (`Lsp.Patch.DecodeSourceBytes`); the vault still WRITES
   UTF-8 only.
 
+### Fixed - re-running get-sdk was REFUSED
+`paclient --get` is incremental: over a sysroot already on disk it copies only
+what changed, often ZERO files. The tool read "0 copied" as "this distro does
+not have that tree", so re-running `get-sdk` - what its own description tells
+you to do after an OS upgrade on the target - ended in "the sysroot does not
+match any distribution I know". Measured against a live Fedora. What decides
+now is whether the tree IS on disk, not how many files came down today; such a
+pull answers `already up to date`, and the result explains that the totals
+count THIS run only. (Live-only: there is no PAServer in the batteries.)
+
 ### Added - the server says which account it runs as
 `delphi_workspace` "server" carries `account`, plus an `accountWarning` when it
 is LocalSystem: the IDE keeps its Library Path, packages, SDKs and profiles in
@@ -71,6 +81,13 @@ service that is ALREADY installed; a battery has no elevation to install one).
 - `delphi_symbols` now states that code inside an INACTIVE `{$IFDEF}` is not in
   the tree (measured: a `{$IFDEF LINUX}` routine was simply absent).
 - "File not found" of the LSP tools told its own history instead of what to do.
+- `delphi_desktop` states its design: it drives an OPEN desktop session (the
+  console or a connected RDP) and does not work without one, on purpose - the
+  user can watch what the agent does and step in. The no-capture answer says so
+  and asks for the session, instead of "usually a locked session".
+- `delphi_package` answers a `linuxNote` when the zip carries Linux executables:
+  a zip made on Windows keeps no Unix permissions, so they come out of `unzip`
+  not executable (`chmod +x` once).
 
 ### Measured - the third debt of 1.0.13
 The settings cache between OVERLAPPING workspaces. One server, a wide token
