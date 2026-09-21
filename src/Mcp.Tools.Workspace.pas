@@ -1068,6 +1068,31 @@ end;
   el proceso DESDE FUERA del MCP (medido el 2026-09-20 usando el servidor como
   agente). Esto es autoconocimiento, no listar procesos: nada de aqui sale de
   este proceso. }
+{ Con que cuenta de Windows corre ESTE proceso. No es curiosidad: el IDE guarda
+  su Library Path, sus paquetes, sus SDK y sus perfiles en HKCU, asi que un
+  servicio instalado con la cuenta por defecto (LocalSystem) arranca, contesta,
+  dice activeDelphi y falla con F2613 en cuanto un proyecto toca un componente
+  instalado (medido el 2026-09-20: 11 raices de biblioteca como el usuario del
+  IDE, 1 como LocalSystem). Estaba escrito en el README y en ningun sitio que
+  el servidor pudiera DECIR. }
+function CuentaDelProceso(out AEsSistema: Boolean): string;
+var
+  Buf: array[0..256] of Char;
+  Len: DWORD;
+begin
+  Len := Length(Buf);
+  if GetUserName(Buf, Len) then
+    Result := Buf
+  else
+    Result := GetEnvironmentVariable('USERNAME');
+  if GetEnvironmentVariable('USERDOMAIN') <> '' then
+    Result := GetEnvironmentVariable('USERDOMAIN') + '\' + Result;
+  // Dos senales, porque ninguna depende del idioma de Windows a la vez: el
+  // nombre de la cuenta y donde cae su perfil.
+  AEsSistema := Result.EndsWith('\SYSTEM', True) or SameText(Result, 'SYSTEM') or
+    GetEnvironmentVariable('USERPROFILE').ToLower.EndsWith('\config\systemprofile');
+end;
+
 procedure AnadirFichaDelServidor(ADestino: TJSONObject);
 var
   Srv: TJSONObject;
@@ -1099,6 +1124,10 @@ begin
   Srv.AddPair('exe', ParamStr(0));
   Srv.AddPair('startedAt', FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque));
   Srv.AddPair('uptime', TiempoEnMarcha(GArranque));
+  var EsSistema: Boolean;
+  Srv.AddPair('account', CuentaDelProceso(EsSistema));
+  if EsSistema then
+    Srv.AddPair('accountWarning', SN_SERVER_LOCALSYSTEM);
   // Cuantos parametros vigila el suelo de la jaula en la puerta. Un cero
   // aqui es un suelo muerto, y siendo redundante nadie mas lo notaria.
   Srv.AddPair('jailedParams', TJSONNumber.Create(ServerPathParamCount));

@@ -470,6 +470,15 @@ const
     reemplazo hecho por fuera de la tool. El fragmento no relaja la regla:
     "atline" es OBLIGATORIO y el fragmento tiene que aparecer UNA sola vez
     en esa linea. Un solo texto para las tres tools que lo aceptan. }
+  SN_SERVER_LOCALSYSTEM =
+    'This server runs as LocalSystem. RAD Studio keeps its Library Path, ' +
+    'registered packages, SDKs and PAServer profiles in the HKCU of the user ' +
+    'who owns the IDE, and LocalSystem sees none of them: builds that use an ' +
+    'installed component fail with F2613, "profiles" comes back empty and ' +
+    'get-sdk lands in the SYSTEM profile. Ask the operator to make the ' +
+    'service log on as that user (services.msc, or sc config ... obj=) - see ' +
+    '"The service must log on as the user who owns the IDE" in the README.';
+
   SP_PATCH_FRAGMENT =
     'FRAGMENT mode, for LONG lines (a README paragraph, a long string): ' +
     'instead of "old", pass "fragment" = the exact piece of text to change ' +
