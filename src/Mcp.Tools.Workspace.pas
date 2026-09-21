@@ -778,8 +778,13 @@ begin
       Exit('error: commit needs the "message" parameter');
     // -F <file>: the message reaches git byte-exact. Embedding it in the
     // command line mangled double quotes (measured in the field: " -> '').
-    MsgFile := TPath.Combine(TPath.GetTempPath,
-      'delphi-mcp-msg-' + TGUID.NewGuid.ToString + '.txt');
+    // Temporal DEL SERVIDOR, y de los que importan: lleva el mensaje que
+    // escribe quien llama. Vivia en el %TEMP% de la MAQUINA, fuera de toda
+    // jaula; se borra siempre (mas abajo), pero mientras existe no tiene por
+    // que estar donde lo vea cualquiera. Por el nombrador (Lsp.Guard).
+    CrearCarpeta(ServerTempDir('git'));
+    MsgFile := TPath.Combine(ServerTempDir('git'),
+      'msg-' + TGUID.NewGuid.ToString + '.txt');
     TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
     GitArgs := Format('commit -F "%s" %s', [MsgFile, Params.Args]);
   end
@@ -890,8 +895,9 @@ begin
     begin
       // -F makes it annotated (like -m) and keeps quotes byte-exact;
       // args = tag name (and options)
-      MsgFile := TPath.Combine(TPath.GetTempPath,
-        'delphi-mcp-msg-' + TGUID.NewGuid.ToString + '.txt');
+      CrearCarpeta(ServerTempDir('git'));
+      MsgFile := TPath.Combine(ServerTempDir('git'),
+        'msg-' + TGUID.NewGuid.ToString + '.txt');
       TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
       GitArgs := Format('tag -F "%s" %s', [MsgFile, Params.Args]);
     end

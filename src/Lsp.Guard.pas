@@ -104,6 +104,54 @@ procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
   of delphi_build compares against. }
 function IdePlatformLibraryPaths(const AVersion, APlatform: string): TArray<string>;
 
+{ EL NOMBRADOR DE LOS TEMPORALES, hermana de __delphi-patch y con la misma
+  disciplina: el nombre de la carpeta se escribe en UN SITIO y nadie compone
+  una ruta de temporales a mano.
+
+  Por que existe: hasta el 2026-09-21 el servidor escribia sus temporales en
+  el %TEMP% de la MAQUINA, en siete sitios distintos y a mano. Medido ese
+  dia: 56,4 MB olvidados ahi fuera de toda jaula -33 capturas del escritorio
+  del operador de dos dias antes y una salida de remoterun de 10,7 MB-, y un
+  fichero de 10 bytes que una bateria se dejo suelto acabo siendo el
+  "proyecto" de las units de otras tres. Un temporal repartido no se purga
+  nunca.
+
+  DOS CASAS, y el criterio es el mismo que separa a __delphi-temp de
+  __delphi-patch:
+
+    ServerTempDir  lo que es del SERVIDOR y el agente no toca nunca (el
+                   fichero del mensaje de git, la descarga de un SDK, el
+                   guion que se manda a un target). Va JUNTO AL EJECUTABLE,
+                   como reports\ y settings.ini, y se puede borrar en
+                   cualquier momento: nada de lo que hay ahi sobrevive a la
+                   llamada que lo creo. No pasa por la jaula porque no es
+                   una ruta que elija nadie de fuera.
+
+    AgentTempDir   lo que el agente tiene que ALCANZAR: una captura que se
+                   baja con delphi_fetch, una salida que se lee. Va DENTRO
+                   del workspace, porque delphi_fetch comprueba la jaula y
+                   un entregable fuera de ella es un entregable que no se
+                   puede entregar (medido: el flujo documentado de
+                   delphi_desktop estaba roto de punta a punta). Y con la
+                   carpeta del agente, porque una jaula puede estar
+                   compartida por varios: la captura de uno no se le pone
+                   delante a otro.
+
+  Componen la ruta y ya: crear la carpeta es de quien la use. }
+function TempFolderName: string;
+function ServerTempDir(const ASub: string = ''): string;
+function AgentTempDir(const ASub: string = ''): string;
+
+{ Vacia la casa del servidor al arrancar. Lo que hay ahi pertenece a la
+  llamada que lo creo y ninguna llamada sobrevive a un reinicio, asi que al
+  arrancar TODO lo que quede es basura de una ejecucion anterior - la que
+  dejo 56,4 MB olvidados en el %TEMP% de la maquina durante dos dias, medido
+  el 2026-09-21. Se vacia entera y no por antiguedad porque el servidor y la
+  bandeja no pueden correr a la vez (comparten puerto: es uno o el otro), y
+  cada copia del exe tiene su propia carpeta al lado. Nunca lanza: un
+  temporal que no se deja borrar no es motivo para no arrancar. }
+procedure PurgeServerTemp;
+
 { Credentials (env var first, then settings.ini [Workspace] next to the exe). }
 function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
 function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
@@ -1051,6 +1099,13 @@ begin
     Exit(SR_GUARD_OWNER_MARKER);
   if P.Contains('\__delphi-patch\') or P.EndsWith('\__delphi-patch') then
     Exit(SR_GUARD_DEAD_TRASH);
+  // La carpeta de temporales del servidor, por el mismo motivo y uno propio:
+  // se puede borrar entera en cualquier momento, asi que escribir ahi es
+  // escribir en algo que no tiene por que seguir estando. Leerla si se puede
+  // (de ahi se baja una captura con delphi_fetch): esta es la puerta de
+  // ESCRIBIR.
+  if P.Contains('\__delphi-temp\') or P.EndsWith('\__delphi-temp') then
+    Exit(SR_GUARD_DEAD_TEMP);
   if P.Contains('\__history\') or P.Contains('\__recovery\') then
     Exit(SR_GUARD_DEAD_IDE);
 end;
@@ -1694,6 +1749,100 @@ begin
   end;
 end;
 
+{ Los parametros que llevan CONTENIDO, no rutas: su texto es de un fichero o
+  de un mensaje y no pertenece al espacio de nombres de rutas. Lo usan las DOS
+  pasadas que recorren los argumentos de una llamada -la que expande unidades
+  virtuales y la que comprueba la jaula-, y por eso vive aqui y no copiada en
+  cada una: si una aprendiese un parametro nuevo y la otra no, o se
+  comprobaria una ruta sin expandir, o se tomaria un contenido por ruta. }
+const
+  PARAMS_CON_CONTENIDO: array [0 .. 6] of string = (
+    'new', 'old', 'content', 'data', 'message', 'code', 'args');
+
+{ Una ruta ABSOLUTA de verdad: <letra>:<separador> o un UNC. A proposito NO
+  cuenta "D:" a secas ni nada relativo - el suelo de abajo solo puede morder
+  donde esta seguro, porque muerde ANTES de que la tool mire sus argumentos y
+  un falso positivo ahi rechaza una llamada legitima sin que nadie sepa por
+  que. Las formas raras (la unidad sin separador, los nombres con punto o
+  espacio al final) las sigue cazando PathAnomaly dentro de PathDenied. }
+function EsRutaAbsoluta(const AValue: string): Boolean;
+begin
+  Result := ((Length(AValue) >= 3) and (AValue[2] = ':') and
+             CharInSet(AValue[1], ['A' .. 'Z', 'a' .. 'z']) and
+             CharInSet(AValue[3], ['\', '/'])) or
+            ((Length(AValue) >= 2) and
+             (((AValue[1] = '\') and (AValue[2] = '\')) or
+              ((AValue[1] = '/') and (AValue[2] = '/'))));
+end;
+
+{ ESCRITA, MEDIDA Y RETIRADA el 2026-09-21. No se llama desde ningun sitio, y
+  se deja aqui porque la idea vuelve sola y conviene que vuelva con lo que ya
+  se aprendio.
+
+  POR QUE SE RETIRO: la puerta reconoce que un argumento es una ruta por una
+  lista de EXCLUSION -los que llevan contenido: new, old, content, data,
+  message, code, args-. Esa lista sirve para REESCRIBIR (equivocarse ahi es
+  inocuo) pero NO para RECHAZAR. Al primer intento tumbo un delphi_search con
+  query="D:\Proyectos": una consulta de busqueda no es una ruta, y "query" no
+  esta en la lista. Ni estaria "text", ni el siguiente parametro que alguien
+  anada. Tres baterias en rojo (test_guard, test_http_auth y la propia
+  test_round40) en la primera pasada.
+
+  COMO SE HACE BIEN: lista de INCLUSION de los nombres que SI son rutas
+  (path, dest, root, dir, out, outfile, project, repo, apk...). Fallar
+  cerrado con lo desconocido esta bien cuando decides si algo PASA; aqui
+  decides si algo MUERE, y entonces lo que no conoces tiene que pasar.
+
+  Y el problema que venia a resolver SIGUE AHI, asi que no se tire la idea:
+
+  EL SUELO DE LA JAULA, en la puerta y para TODAS las tools.
+
+  La regla ya estaba en una sola funcion (PathDenied / ReadPathDenied). Lo que
+  no estaba centralizado era ACORDARSE de llamarla: ~60 llamadas a mano en
+  una veintena de units, y nada obliga a una tool nueva -ni a un parametro
+  nuevo de una vieja- a pasar por ahi. Medido el 2026-09-21 con la familia de
+  los destinos que elige quien llama: delphi_adb lo comprobaba en sus dos
+  sitios y delphi_package en el suyo, y delphi_desktop -en Windows y en
+  Linux- no; con el nodo real, una llamada consiguio que el servidor
+  escribiera una captura del escritorio del operador FUERA de la jaula. La
+  frontera de verdad era "te acordaste?". Lo pregunto David:
+  "tambien controlamos la jaula en 7 sitios o lo tenemos centralizado?".
+
+  Esto no sustituye a esas ~60 llamadas: es un SUELO. La puerta no sabe si
+  una tool va a LEER o a ESCRIBIR ese argumento, asi que aplica la regla
+  ancha (ReadPathDenied, que perdona la zona de biblioteca - RTL, VCL,
+  componentes - y las carpetas de solo lectura). O sea que nunca rechaza algo
+  que una tool habria aceptado: solo caza lo que NINGUNA deberia aceptar. La
+  distincion leer/escribir y los mensajes buenos siguen en cada tool. }
+function ArgPathOutsideDenied(const AArguments: TJSONObject): string;
+var
+  I: Integer;
+  P: TJSONPair;
+  V: string;
+begin
+  Result := '';
+  if not Assigned(AArguments) then
+    Exit;
+  // Sin jaula configurada no hay nada que hacer cumplir (modo local de
+  // confianza): el suelo no se inventa una.
+  if Length(WorkspaceRoots) = 0 then
+    Exit;
+  for I := 0 to AArguments.Count - 1 do
+  begin
+    P := AArguments.Pairs[I];
+    if not (P.JsonValue is TJSONString) then
+      Continue;
+    if MatchText(P.JsonString.Value, PARAMS_CON_CONTENIDO) then
+      Continue;
+    V := TJSONString(P.JsonValue).Value;
+    if not EsRutaAbsoluta(V) then
+      Continue;
+    Result := ReadPathDenied(V);
+    if Result <> '' then
+      Exit;
+  end;
+end;
+
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
@@ -1732,6 +1881,9 @@ begin
              (Trim(ArgStr(AArguments, 'message')) = ''))) then
       Exit(WriteDenied(Trim('delphi_git ' + Cmd)));
   end;
+  // (Aqui iba EL SUELO de la jaula para todas las tools. Se escribio, se
+  //  midio contra la suite y se retiro el mismo dia: la nota larga sobre
+  //  ArgPathOutsideDenied, mas abajo, cuenta por que y como se hace bien.)
   // Universal git-argument filter (BOTH access levels): a dangerous option
   // would let even a read-write client escape the jail. The single place git
   // freeform args are vetted.
@@ -2004,6 +2156,64 @@ end;
   each other. A caller with no identity (stdio, the operator's own console) is
   trusted with everything, the same rule the recoverable trash already uses.
   Reading is never confined: an agent still sees the whole tree. }
+function TempFolderName: string;
+begin
+  Result := '__delphi-temp';
+end;
+
+function ServerTempDir(const ASub: string): string;
+begin
+  Result := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), TempFolderName);
+  if ASub <> '' then
+    Result := TPath.Combine(Result, ASub);
+end;
+
+{ El workspace de quien llama. Con varias raices manda la PRIMERA, que es la
+  que el operador escribio primero en Roots=; sin ninguna raiz configurada no
+  hay workspace donde dejar nada y se cae a la casa del servidor, que siempre
+  existe. La subcarpeta del agente sale de la misma identidad que usa el modo
+  confinado, asi que dos agentes en la misma jaula no se pisan - y cuando no
+  hay identidad (stdio, la consola del operador) no se inventa una. }
+function AgentTempDir(const ASub: string): string;
+var
+  Roots: TArray<string>;
+  Me: string;
+begin
+  Roots := WorkspaceRoots;
+  if Length(Roots) = 0 then
+    Exit(ServerTempDir(ASub));
+  Result := TPath.Combine(ExcludeTrailingPathDelimiter(Roots[0]),
+    TempFolderName);
+  Me := CurrentAgent;
+  if Me <> '' then
+    Result := TPath.Combine(Result, Me);
+  if ASub <> '' then
+    Result := TPath.Combine(Result, ASub);
+end;
+
+procedure PurgeServerTemp;
+var
+  Dir, E: string;
+begin
+  try
+    Dir := ServerTempDir;
+    if not TDirectory.Exists(Dir) then
+      Exit;
+    for E in TDirectory.GetFiles(Dir) do
+      try
+        TFile.Delete(E);
+      except
+      end;
+    for E in TDirectory.GetDirectories(Dir) do
+      try
+        TDirectory.Delete(E, True);
+      except
+      end;
+  except
+    // limpiar no puede impedir arrancar
+  end;
+end;
+
 function AgentConfineDenied(const AFull, ARoot: string): string;
 var
   Me, Rel, Seg, Sh: string;
@@ -2457,8 +2667,7 @@ begin
       P := AArguments.Pairs[I];
       if not (P.JsonValue is TJSONString) then
         Continue;
-      if MatchText(P.JsonString.Value,
-        ['new', 'old', 'content', 'data', 'message', 'code', 'args']) then
+      if MatchText(P.JsonString.Value, PARAMS_CON_CONTENIDO) then
         Continue;
       V := TJSONString(P.JsonValue).Value;
       N := ExpandDriveValue(V);

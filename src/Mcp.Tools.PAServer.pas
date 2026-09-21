@@ -288,7 +288,10 @@ var
   Rc: Cardinal;
 begin
   Result := '';
-  Tmp := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-sdk-' +
+  // Temporal DEL SERVIDOR: se baja el /etc/os-release del target, se lee y se
+  // tira. El agente no lo ve nunca, asi que va junto al ejecutable y no en la
+  // jaula de nadie (ver el nombrador en Lsp.Guard).
+  Tmp := ServerTempDir('sdk-' +
     LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
   try
     CrearCarpeta(Tmp);

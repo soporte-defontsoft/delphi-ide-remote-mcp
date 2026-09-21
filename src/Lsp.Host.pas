@@ -137,6 +137,12 @@ end;
 
 procedure TMcpHost.Wire;
 begin
+  // Lo primero: vaciar los temporales del servidor. Lo que quede ahi es de
+  // una ejecucion anterior, y un temporal que nadie recoge son 56 MB dentro
+  // de dos dias (medido 2026-09-21, cuando vivian en el %TEMP% de la
+  // maquina). Declarar la carpeta borrable no vale de nada si no la borra
+  // nadie.
+  PurgeServerTemp;
   FRegistry := TMCPManagerRegistry.Create;
   FRegistryIntf := FRegistry; // pin: from here, reference counting owns it
   FCore := TMCPCoreManager.Create(FSettings);

@@ -153,6 +153,22 @@ begin
     camino no pasaba ni por AllowRemoteRun ni por las listas). }
   if not AllowRemoteRun then
     Exit(SR_PASERVER_RUN_DISABLED);
+
+  { "out" es una ruta LOCAL que elige QUIEN LLAMA -donde baja la captura del
+    destino- y no pasaba por la jaula: el servidor creaba la carpeta y
+    escribia el PNG donde le dijeran. Se comprueba lo PROPIO antes que lo
+    remoto: es un argumento del que llama y no depende de ningun perfil, asi
+    que falla rapido y no hace falta un destino vivo para verlo fallar.
+    Justo debajo se comprueba "project" con esta misma llamada desde siempre:
+    era uno de dos. Su gemela de Windows tenia el mismo hueco (2026-09-21), y
+    delphi_adb -misma idea, mismo nombre de parametro- si lo comprobaba. }
+  if Params.Out_.Trim <> '' then
+  begin
+    Result := PathDenied(Params.Out_.Trim);
+    if Result <> '' then
+      Exit;
+  end;
+
   Result := ProfileHostDenied(Params.Profile.Trim);
   if Result <> '' then
     Exit;
@@ -239,7 +255,10 @@ begin
     begin
       Destino := Params.Out_.Trim;
       if Destino = '' then
-        Destino := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-desktop');
+        // Lo mismo que su gemela de Windows: es un ENTREGABLE, y el defecto
+        // estaba fuera de toda jaula, donde delphi_fetch no puede ir a
+        // buscarlo (2026-09-21).
+        Destino := AgentTempDir('desktop');
       { La captura baja con SU nombre remoto (captura.png), igual para todos
         los perfiles: con un destino comun, dos maquinas a la vez se pisaban la
         imagen y una llamada acababa con la pantalla de la otra. Baja a una

@@ -497,10 +497,24 @@ begin
     // and tool backups; the agent may edit it later with delphi_textedit.
     if not TFile.Exists(TPath.Combine(Dir, '.gitignore')) then
     begin
+      { Esta lista y la del propio repo del servidor son la misma cosa escrita
+        dos veces, y se habian separado: aqui faltaban los .map -decenas de MB
+        en un proyecto de verdad, y ademas publican la disposicion de simbolos-
+        junto con los .drc, los .rsm, los binarios y las carpetas de salida que
+        no son Win32/Win64. Lo vio David el 2026-09-21 mirando esta misma linea
+        ("donde has dejado los maps?"). Si se anade algo aqui, va tambien al
+        .gitignore del repo, y al reves. }
       WriteNewFile(TPath.Combine(Dir, '.gitignore'),
-        'Win32/' + CRLF + 'Win64/' + CRLF + '*.dcu' + CRLF +
-        '*.local' + CRLF + '*.identcache' + CRLF + '*.stat' + CRLF +
-        '__delphi-patch/' + CRLF + '__history/' + CRLF + '__recovery/' + CRLF +
+        'Compiled/' + CRLF + 'Win32/' + CRLF + 'Win64/' + CRLF +
+        'Linux64/' + CRLF + 'Android/' + CRLF + 'Android64/' + CRLF +
+        'OSX64/' + CRLF + 'Debug/' + CRLF + 'Release/' + CRLF +
+        '*.dcu' + CRLF + '*.dcp' + CRLF + '*.bpl' + CRLF +
+        '*.exe' + CRLF + '*.dll' + CRLF +
+        '*.map' + CRLF + '*.drc' + CRLF + '*.rsm' + CRLF +
+        '*.local' + CRLF + '*.identcache' + CRLF + '*.projdata' + CRLF +
+        '*.tvsconfig' + CRLF + '*.stat' + CRLF + '*.~*' + CRLF +
+        '__delphi-patch/' + CRLF + '__delphi-temp/' + CRLF +
+        '__history/' + CRLF + '__recovery/' + CRLF +
         '*-deploy.zip' + CRLF + '*.delphilsp.json' + CRLF);
       Files.Add('.gitignore');
     end;

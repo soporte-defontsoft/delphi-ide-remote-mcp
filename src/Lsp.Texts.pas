@@ -3088,6 +3088,17 @@ const
     'RECHAZADO: __history\\ y __recovery\\ son las copias muertas del IDE. No ' +
     'se escribe en ellas; el fichero vivo esta en la carpeta del proyecto.';
 
+  { Ni papelera ni copia muerta: la carpeta donde el servidor deja LO SUYO.
+    Se lee -de ahi te bajas una captura con delphi_fetch- y se puede borrar
+    entera en cualquier momento, que es justo por lo que no se escribe codigo
+    dentro: lo que pongas ahi no tiene por que seguir estando. }
+  SR_GUARD_DEAD_TEMP =
+    'RECHAZADO: __delphi-temp\\ es la carpeta de temporales del servidor, no ' +
+    'sitio para trabajar. Lo que hay ahi lo pone el servidor y se puede ' +
+    'borrar entero en cualquier momento, asi que un fichero tuyo ahi dentro ' +
+    'es un fichero que vas a perder. Leerla si puedes (bajate una captura ' +
+    'con delphi_fetch); escribe tu trabajo en el workspace.';
+
   SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT =
     'RECHAZADO: dentro de esa carpeta hay %d copia(s) que mandaron a la ' +
     'papelera otros agentes (%s). Una carpeta se purga entera o no se purga: ' +

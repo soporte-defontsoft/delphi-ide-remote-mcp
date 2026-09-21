@@ -138,20 +138,46 @@ begin
   end;
 end;
 
-function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean;
+{ LAS CARPETAS QUE NO SON CODIGO, en UN solo sitio.
+
+  Estaban escritas dos veces, identicas, en las dos funciones de aqui abajo:
+  el mismo olor que todo lo demas de este repo una talla mas pequena. Anadir
+  una carpeta nueva obligaba a acordarse de las dos, y la que se olvidase
+  haria que delphi_list la ocultase y delphi_search la ensenase (o al reves).
+
+  Y son DOS listas, no una, porque no se tratan igual:
+
+    ARTEFACTO  se salta SIEMPRE. Compilacion, historicos del IDE... y los
+               temporales del servidor cuando caen dentro de un workspace
+               (una captura que el agente tiene que poder bajarse con
+               delphi_fetch). De un temporal no se restaura nada, asi que ni
+               siquiera con includeTrash tiene sentido ensenarlo: seria ruido
+               en cada listado.
+    PAPELERA   se salta salvo que te lo pidan (includeTrash=true), porque de
+               ahi SI se restaura.
+
+  El nombre de la carpeta de temporales lo pone TempFolderName (Lsp.Guard) y
+  aqui va literal porque un array const no puede llamar a una funcion. Que
+  los dos digan lo mismo no se deja a la buena fe: lo comprueba la bateria. }
 const
-  Bad: array [0 .. 7] of string = ('\__history\', '\__recovery\', '\win32\',
-    '\win64\', '\debug\', '\release\', '\dcu\', '\.git\');
-  Trash: array [0 .. 1] of string = ('\__pascal-patch\', '\__delphi-patch\');
+  CARPETAS_ARTEFACTO: array [0 .. 7] of string = (
+    '\__history\', '\__recovery\', '\win32\', '\win64\', '\debug\',
+    '\release\', '\dcu\', '\__delphi-temp\');
+  CARPETAS_PAPELERA: array [0 .. 1] of string = (
+    '\__pascal-patch\', '\__delphi-patch\');
+
+function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean;
 var
   B, Low: string;
 begin
   Low := APath.ToLower;
-  for B in Bad do
+  if Low.Contains('\.git\') then
+    Exit(True);
+  for B in CARPETAS_ARTEFACTO do
     if Low.Contains(B) then
       Exit(True);
   if not AAllowTrash then
-    for B in Trash do
+    for B in CARPETAS_PAPELERA do
       if Low.Contains(B) then
         Exit(True);
   Result := False;
@@ -163,10 +189,6 @@ begin
 end;
 
 function SkipReason(const APath: string; AAllowTrash: Boolean): string;
-const
-  Art: array [0 .. 6] of string = ('\__history\', '\__recovery\', '\win32\',
-    '\win64\', '\debug\', '\release\', '\dcu\');
-  Trash: array [0 .. 1] of string = ('\__pascal-patch\', '\__delphi-patch\');
 var
   B, Low: string;
 begin
@@ -174,11 +196,11 @@ begin
   Low := APath.ToLower;
   if Low.Contains('\.git\') then
     Exit('git');
-  for B in Art do
+  for B in CARPETAS_ARTEFACTO do
     if Low.Contains(B) then
       Exit('artifacts');
   if not AAllowTrash then
-    for B in Trash do
+    for B in CARPETAS_PAPELERA do
       if Low.Contains(B) then
         Exit('trash');
 end;

@@ -136,6 +136,20 @@ begin
   if not AllowDesktopControl then
     Exit(SR_DESKTOP_DISABLED);
 
+  { "out" es una ruta que elige QUIEN LLAMA, y hasta el 2026-09-21 no pasaba
+    por la jaula: el servidor creaba la carpeta y soltaba el PNG donde le
+    dijeran. Su gemela delphi_adb SI lo comprobaba -misma idea, mismo nombre
+    de parametro, la comprobacion en una y no en la otra-, asi que aqui va la
+    suya con la misma forma y en el mismo sitio: ANTES de tocar el nodo.
+    Escribir es escribir: PathDenied, no ReadPathDenied - la zona de
+    biblioteca se lee, no se llena de capturas. }
+  if Params.Out_.Trim <> '' then
+  begin
+    var Denied := PathDenied(Params.Out_.Trim);
+    if Denied <> '' then
+      Exit(Denied);
+  end;
+
   Nodo := NodoWindowsPath;
   if not TFile.Exists(Nodo) then
     Exit(Format(SR_DESKTOP_NONODE_FMT, [Nodo]));
@@ -193,7 +207,14 @@ begin
         siguiente gesto. }
       Destino := Params.Out_.Trim;
       if Destino = '' then
-        Destino := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-desktop');
+        // ENTREGABLE, no temporal del servidor: la descripcion de esta tool
+        // dice "bajatela con delphi_fetch", y delphi_fetch comprueba la
+        // jaula. El defecto estaba en el %TEMP% de la maquina, que no es la
+        // jaula de nadie, asi que el flujo documentado no funcionaba de
+        // punta a punta (medido 2026-09-21). Ahora cae dentro del workspace,
+        // y en la carpeta del agente: una jaula puede estar compartida, y la
+        // captura de uno no se le pone delante a otro.
+        Destino := AgentTempDir('desktop');
       try
         CrearCarpeta(Destino);
         { Milisegundos y un fragmento GUID: con resolucion de SEGUNDOS dos

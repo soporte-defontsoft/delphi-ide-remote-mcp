@@ -284,7 +284,9 @@ begin
   // makes each operation's files unique while the prefix stays sortable.
   JobId := FormatDateTime('yyyymmdd"-"hhnnsszzz', Now) + '-' +
     LowerCase(TGUID.NewGuid.ToString.Substring(1, 8));
-  TmpDir := TPath.Combine(TPath.GetTempPath, 'delphi-mcp-remoterun');
+  // Temporal DEL SERVIDOR: este guion se manda al target y aqui no vuelve a
+  // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Guard).
+  TmpDir := ServerTempDir('remoterun');
   CrearCarpeta(TmpDir);
   GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.sh');
   // POSIX script: LF endings and NO BOM - /bin/sh chokes on both.
@@ -450,8 +452,7 @@ begin
   // (node.ver), asi que con un destino comun la comprobacion de un perfil se
   // llevaba por delante la de otro - dos Linux a la vez y cada uno leyendo el
   // sello del contrario (analisis de concurrencia 2026-09-20).
-  TmpDir := TPath.Combine(TPath.Combine(TPath.GetTempPath,
-    'delphi-mcp-remoterun'), 'ver-' +
+  TmpDir := TPath.Combine(ServerTempDir('remoterun'), 'ver-' +
     LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
   CrearCarpeta(TmpDir);
   // el sello del target: ausente = nodo de antes de los sellos (o ninguno)
