@@ -188,6 +188,95 @@ begin
   Result := SkipIdeArtifacts(APath);
 end;
 
+{ ------------------------------------------------- codigo, o solo prosa - }
+
+{ Un candidato dentro de un COMENTARIO o de un LITERAL de cadena no es una
+  referencia. El motor contesta ahi lo mismo que cuando la validacion se
+  queda sin presupuesto -nada- y los dos acababan en el mismo saco,
+  "unverified". Pero "no lo se" y "se que no" no son lo mismo, y confundirlos
+  se pagaba caro: delphi_rename_symbol bloquea el rename con UN solo
+  unverified, asi que cualquier identificador nombrado en un comentario -en
+  codigo documentado, casi todos- dejaba esa tool inservible. Medido el
+  2026-09-21 sobre MaskDriveText de este mismo repo: 18 confirmadas y 6
+  unverified, las SEIS comentarios.
+
+  Se decide por lexico y no preguntando al motor, porque el motor ya ha dicho
+  lo unico que sabe decir. Y se calcula DENTRO del barrido secuencial que ya
+  existe, no en una segunda pasada, porque un comentario de bloque cruza
+  lineas y el estado tiene que viajar con ellas. }
+type
+  TEstadoLex = (elCodigo, elLlave, elParen);
+
+{ Marca que posiciones (1-based, como las que devuelve Pos) de ALine son
+  codigo de verdad. AEstado entra con el comentario de bloque que venga
+  abierto de la linea anterior y sale con el que quede abierto para la
+  siguiente. }
+procedure MarcaCodigo(const ALine: string; var AEstado: TEstadoLex;
+  var ACodigo: TArray<Boolean>);
+var
+  I, N: Integer;
+  EnCadena: Boolean;
+begin
+  N := Length(ALine);
+  SetLength(ACodigo, N + 1);    // 1-based: la posicion 0 no se usa
+  EnCadena := False;            // una cadena Pascal no cruza lineas
+  I := 1;
+  while I <= N do
+  begin
+    ACodigo[I] := (AEstado = elCodigo) and not EnCadena;
+    case AEstado of
+      elLlave:
+        if ALine[I] = '}' then
+          AEstado := elCodigo;
+      elParen:
+        if (ALine[I] = '*') and (I < N) and (ALine[I + 1] = ')') then
+        begin
+          Inc(I);
+          ACodigo[I] := False;
+          AEstado := elCodigo;
+        end;
+      elCodigo:
+        // El orden importa: dentro de una cadena, // y { son texto y nada
+        // mas. Asi 'http://x' no abre un comentario hasta fin de linea.
+        if EnCadena then
+        begin
+          // La comilla cierra... o es el escape '' y la siguiente vuelve a
+          // abrir, que da igual: la cadena sigue.
+          if ALine[I] = '''' then
+            EnCadena := False;
+        end
+        else if ALine[I] = '''' then
+          EnCadena := True
+        else if ALine[I] = '{' then
+        begin
+          // Una directiva {$...} tampoco es una referencia: mismo saco.
+          ACodigo[I] := False;
+          AEstado := elLlave;
+        end
+        else if (ALine[I] = '(') and (I < N) and (ALine[I + 1] = '*') then
+        begin
+          ACodigo[I] := False;
+          Inc(I);
+          ACodigo[I] := False;
+          AEstado := elParen;
+        end
+        else if (ALine[I] = '/') and (I < N) and (ALine[I + 1] = '/') then
+        begin
+          // Hasta el final de la linea, y se sale sin mirar mas: un apostrofe
+          // dentro del comentario ("don't") no puede abrir una cadena que
+          // envenene el resto de la linea.
+          while I <= N do
+          begin
+            ACodigo[I] := False;
+            Inc(I);
+          end;
+          Break;
+        end;
+    end;
+    Inc(I);
+  end;
+end;
+
 { LA SEGUNDA CLASE DE GEMELO.
 
   Un metodo virtual y el que lo sobrescribe no son homonimos: son el MISMO
@@ -322,6 +411,9 @@ var
   AllFiles: TList<string>;
   I, P, ScanCol, FilesOpened: Integer;
   Confirmed, Unverified: TJSONArray;
+  Menciones: TList<TCandidate>;   // el nombre aparece, pero en prosa
+  Estado: TEstadoLex;
+  Codigo: TArray<Boolean>;
   Rejected, Scanned: Integer;
   RejectedArr: TJSONArray;
   ScopeDirs: TArray<string>;
@@ -373,6 +465,18 @@ begin
   finally
     Resp.Free;
   end;
+
+  // El motor contesta con un FICHERO, y ese fichero puede no ser de aqui: el
+  // indice le sobrevive al servidor y una unit sin configurar se resuelve
+  // contra otra del mismo nombre vista en otra sesion (y en otra jaula).
+  // Hasta ahora esa ruta ajena viajaba hasta el primer sitio que tocaba la
+  // jaula y reventaba la llamada entera con un RECHAZADO... que escupia la
+  // ruta. Se corta AQUI, que es donde la respuesta del motor entra en
+  // nuestro mundo, y el mensaje nombra el identificador y no el sitio.
+  // La zona de biblioteca (RTL/VCL, componentes instalados) NO cae aqui:
+  // ReadPathDenied la da por buena, que es justo lo que se quiere.
+  if ReadPathDenied(TLspClient.UriToPath(TargetUri)) <> '' then
+    raise Exception.CreateFmt(SR_REFS_TARGET_OUTSIDE_FMT, [Ident]);
 
   // A Pascal routine has TWO definition lines: the interface (or forward)
   // declaration and the implementation. The engine answers one or the other
@@ -428,6 +532,7 @@ begin
 
   // Text scan for candidates.
   Candidates := TList<TCandidate>.Create;
+  Menciones := TList<TCandidate>.Create;
   AllFiles := TList<string>.Create;
   try
     // The project folder is not the whole project: units living in sibling
@@ -437,7 +542,19 @@ begin
     // the file itself and the folder of every unit the .dpr lists.
     var Dirs := TList<string>.Create;
     try
-      Dirs.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(RootDir)));
+      // Con el MISMO filtro que los otros dos sitios que anaden carpetas
+      // aqui abajo. Era uno de tres y era el unico sin comprobar, que es
+      // como se cuelan estas cosas: RootDir no lo elige quien llama, lo
+      // decide la busqueda de configuracion, y esa podia traerlo de FUERA
+      // del workspace (un .dproj suelto por encima de la raiz). El barrido
+      // se llevaba entonces todo lo que colgase de ahi - medido el
+      // 2026-09-21: 168 fuentes de otros workspaces - y la llamada moria
+      // publicando sus rutas. La causa se corto ademas en Lsp.Session
+      // (PuedoSubirA); esto es el cinturon, porque el ambito del barrido es
+      // cosa de aqui.
+      var Raiz := IncludeTrailingPathDelimiter(TPath.GetFullPath(RootDir));
+      if ReadPathDenied(Raiz) = '' then
+        Dirs.Add(Raiz);
       var Extra: TArray<string> := [TPath.GetDirectoryName(FullPath)];
       var Dproj := Session.FindDproj(FullPath);
       if Dproj <> '' then
@@ -505,9 +622,11 @@ begin
       Lines := TStringList.Create;
       try
         Lines.Text := Text;
+        Estado := elCodigo;   // el estado lexico empieza limpio en cada fichero
         for I := 0 to Lines.Count - 1 do
         begin
           LineText := Lines[I];
+          MarcaCodigo(LineText, Estado, Codigo);
           ScanCol := 1;
           repeat
             P := Pos(Ident.ToLower, LineText.ToLower, ScanCol);
@@ -522,9 +641,18 @@ begin
               Cand.Line := I;
               Cand.Col := P - 1;
               Cand.Text := LineText;
-              Candidates.Add(Cand);
-              if Candidates.Count >= AMaxCandidates then
-                Break;
+              // Codigo, o solo una mencion. Y una mencion ya no gasta
+              // presupuesto de candidatos ni hace abrir un fichero para
+              // validarla: ese era el otro coste, callado, de meterlas en
+              // el mismo saco que lo que no se pudo comprobar.
+              if (P <= High(Codigo)) and Codigo[P] then
+              begin
+                Candidates.Add(Cand);
+                if Candidates.Count >= AMaxCandidates then
+                  Break;
+              end
+              else
+                Menciones.Add(Cand);
             end;
             ScanCol := P + Length(Ident);
           until False;
@@ -647,6 +775,25 @@ begin
       Entry.AddPair('line', TJSONNumber.Create(TargetLine));
       Result.AddPair('confirmed', Confirmed);
       Result.AddPair('unverified', Unverified);
+      // Menciones: el nombre esta escrito ahi, pero en prosa. No son
+      // referencias y NO bloquean un rename - que es exactamente lo que
+      // hacian mientras caian en "unverified". Se listan igual, acotadas:
+      // quien renombra suele querer repasar los comentarios a mano, y el
+      // "nunca se tiran en silencio" que promete la tool vale tambien aqui.
+      Result.AddPair('mentionsCount', TJSONNumber.Create(Menciones.Count));
+      if Menciones.Count > 0 then
+      begin
+        var MenArr := TJSONArray.Create;
+        Result.AddPair('mentions', MenArr);
+        for var Men in Menciones do
+        begin
+          if MenArr.Count >= 25 then
+            Break;
+          MenArr.AddElement(CandidateJson(Men));
+        end;
+        Result.AddPair('mentionsNote', Format(SN_REFS_MENTIONS_FMT,
+          [Menciones.Count, MenArr.Count]));
+      end;
       if Familia then
         Result.AddPair('familyNote', SN_REFS_FAMILY_NOTE);
       Result.AddPair('rejectedHomonyms', TJSONNumber.Create(Rejected));
@@ -668,6 +815,7 @@ begin
     end;
   finally
     Candidates.Free;
+    Menciones.Free;
     AllFiles.Free;
     Herencia.Free;
     Textos.Free;

@@ -150,8 +150,18 @@ begin
   // Report the encoding as a later delphi_read will DETECT it: pure ASCII
   // content is indistinguishable from CP1252 (no high bytes to tell them
   // apart), and claiming "utf8" there confused agents in the field test.
+  // La ruta va por el ENMASCARADOR a mano. Esta tool esta EXENTA del filtro
+  // de salida (MaskDriveText la salta entera, porque su eco es contenido
+  // LITERAL del disco y un ancla enmascarada no casaria con el fichero), asi
+  // que lo poco que compone ella misma tiene que taparse aqui: esta linea no
+  // es eco, es la unica de la respuesta que lleva una ruta NUESTRA, y salia
+  // con la letra REAL del servidor - inservible ademas para el cliente, que
+  // solo puede pasar unidades virtuales. Su gemela delphi_edit nunca fallo
+  // porque imprime el NOMBRE del fichero: asi es como derivan dos gemelas
+  // (medido 2026-09-21, bateria test_round40).
   Result := Format('CREADO %s  encoding=%s  finales=%s  bytes=%d',
-    [A.Path, IfThen(IsAscii(Text), 'ascii (utf8/cp1252 compatibles)', 'utf8'),
+    [MaskDriveText('', A.Path),
+     IfThen(IsAscii(Text), 'ascii (utf8/cp1252 compatibles)', 'utf8'),
      EolName, Length(TFile.ReadAllBytes(A.Path))]);
 end;
 

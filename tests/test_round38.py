@@ -133,9 +133,37 @@ end;
 end.
 '''
 
+# La unit va con su PROYECTO al lado. Sin el va SIN CONFIGURAR y el motor
+# resuelve la declaracion y poco mas, que no es lo que mide esta bateria.
+# Hasta el 2026-09-21 colaba igual, pero por accidente: la busqueda de
+# configuracion subia ocho niveles sin mirar la jaula y adoptaba un
+# "fuera-de-la-jaula.dproj" de 10 bytes que otra bateria habia dejado en
+# %TEMP%. Al cerrar esa subida (PuedoSubirA) esta bateria se quedo sin el
+# apoyo prestado y se vio lo que de verdad necesitaba.
+DPR = """program P38;
+
+uses
+  Ov in 'Ov.pas';
+
+begin
+end.
+"""
+
+DPROJ = """<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MainSource>P38.dpr</MainSource>
+    <Platform>Win32</Platform>
+    <DCC_UnitSearchPath>.</DCC_UnitSearchPath>
+  </PropertyGroup>
+</Project>
+"""
+
 os.makedirs(os.path.join(JAIL, 'u'))
 PAS = os.path.join(JAIL, 'u', 'Ov.pas')
 open(PAS, 'w', newline='\r\n').write(UNIT)
+open(os.path.join(JAIL, 'u', 'P38.dpr'), 'w', newline='\r\n').write(DPR)
+open(os.path.join(JAIL, 'u', 'P38.dproj'), 'w', newline='\r\n').write(DPROJ)
 L = UNIT.split('\n')
 
 

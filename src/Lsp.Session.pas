@@ -166,6 +166,29 @@ begin
   FreeAndNil(FInstance);
 end;
 
+{ HASTA DONDE SE SUBE buscando la configuracion de un fuente.
+
+  Las dos busquedas de abajo trepan ocho niveles desde el fichero, y hasta
+  el 2026-09-21 lo hacian sin mirar la jaula: un .dproj cualquiera colocado
+  POR ENCIMA de la raiz del workspace se adoptaba como el proyecto de esa
+  unit. Medido: un fichero de 10 bytes llamado "fuera-de-la-jaula.dproj" que
+  se habia quedado en %TEMP% hacia que el RootDir de una unit en
+  %TEMP%\x\jail\u fuese %TEMP% ENTERO. delphi_references se lleva ese
+  RootDir al ambito del barrido y acabo abriendo 168 fuentes de otros
+  workspaces: la llamada moria con una negativa de jaula que ADEMAS
+  publicaba las rutas ajenas.
+
+  Se sube mientras la carpeta siga siendo territorio legible de este
+  workspace. Se usa ReadPathDenied y no PathDenied a proposito: la zona de
+  biblioteca (RTL/VCL, componentes instalados) es de solo lectura y es un
+  sitio legitimo donde encontrar configuracion. Y sin jaula configurada
+  ReadPathDenied dice que si a todo, asi que el comportamiento de siempre
+  se queda igual. }
+function PuedoSubirA(const ADir: string): Boolean;
+begin
+  Result := (ADir <> '') and (ReadPathDenied(ADir) = '');
+end;
+
 function TLspSession.FindSettingsFile(const AFilePath: string): string;
 var
   Dir, Candidate: string;
@@ -176,7 +199,7 @@ begin
   Dir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
   for Depth := 1 to 8 do
   begin
-    if Dir = '' then
+    if not PuedoSubirA(Dir) then
       Exit;
     Matches := TDirectory.GetFiles(Dir, '*.delphilsp.json');
     if Length(Matches) > 0 then
@@ -208,7 +231,7 @@ begin
   Dir := TPath.GetDirectoryName(TPath.GetFullPath(AFilePath));
   for Depth := 1 to 8 do
   begin
-    if Dir = '' then
+    if not PuedoSubirA(Dir) then
       Exit;
     Matches := TDirectory.GetFiles(Dir, '*.dproj');
     if Length(Matches) > 0 then

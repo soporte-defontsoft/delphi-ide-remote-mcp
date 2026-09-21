@@ -1259,6 +1259,7 @@ end;
 
 procedure ExpandVirtualDrives(const AArguments: TJSONObject); forward;
 function ServedDriveLetters: string; forward;
+function VirtualUnitOf(ALetter: Char; const AServed: string): string; forward;
 // VirtualUnitLetter is declared in the interface now (used by /files too).
 
 function WriteDenied(const AWhat: string): string;
@@ -1965,7 +1966,7 @@ begin
     begin
       if List <> '' then
         List := List + ', ';
-      List := List + 'srv' + Char(Ord(C) + 32) + ':';
+      List := List + VirtualUnitOf(C, Units) + ':';
     end;
     Exit(Format(SR_UNIT_UNKNOWN_FMT, [APath, List]));
   end;
@@ -2381,6 +2382,31 @@ begin
   Result := GDrvLetters;
 end;
 
+{ EL NOMBRADOR de la unidad virtual, y la inversa exacta de la funcion que
+  viene justo debajo: esa LEE la forma, esta la ESCRIBE. Nadie la compone a
+  mano en ningun sitio.
+
+  Estaba escrita a mano en CUATRO: las tres formas de MaskDriveText (la ruta
+  normal, el %3A de las URIs del motor, y la unidad a secas) y la lista de
+  unidades validas de PathAnomaly. Las cuatro decian
+  'srv' + Char(Ord(...) + 32), pero no igual: tres hacian UpCase antes y la
+  cuarta no, apoyandose en que ServedDriveLetters promete mayusculas
+  cuatrocientas lineas mas arriba. Ninguna estaba mal; era la forma de que
+  una se desviase. Lo pregunto David el 2026-09-21 -"lo de enmascarar y
+  desenmascarar las unidades esta centralizado, no?"- el dia despues de
+  encontrar exactamente esta misma forma en los nombres de la papelera:
+  alli el lector estaba unificado y habia TRES escritores.
+
+  Una letra que este servidor no sirve sale como 'srvx': dice que hay una
+  ruta y no dice donde. }
+function VirtualUnitOf(ALetter: Char; const AServed: string): string;
+begin
+  if (ALetter <> #0) and (Pos(UpCase(ALetter), AServed) > 0) then
+    Result := 'srv' + Char(Ord(UpCase(ALetter)) + 32)
+  else
+    Result := 'srvx';
+end;
+
 { The ONE place that recognizes the virtual-unit shape: 'srvd:', 'srvd:\x',
   'srvd:/x'. Returns the upper-case letter, or #0 when the value is not a
   virtual unit at all. Both the inbound expansion and the rejection of an
@@ -2495,7 +2521,19 @@ begin
   // CHANGELOG el 2026-09-20: se escribio "D:\Projects\Galatea", el disco lo
   // tenia bien, y el eco devolvia "srvd:\Projects\Galatea". Sus negativas
   // empiezan por RECHAZADO/error y siguen enmascarandose por el test de
-  // abajo; sus ecos de exito no llevan rutas absolutas.
+  // abajo.
+  //
+  // LA OBLIGACION QUE VIENE CON ESTAR EN ESTA LISTA, y es facil de olvidar:
+  // la exencion es por TOOL, pero solo el ECO merece exencion. Todo lo que
+  // una de estas tools COMPONGA ella misma -una ruta en un mensaje, un campo
+  // "path" de un JSON- tiene que pasar a mano por MaskDriveText('', ruta),
+  // que es esta misma funcion con el nombre de tool vacio. delphi_search lo
+  // hace asi con sus campos "path" (ver Mcp.Tools.Workspace). delphi_textedit
+  // NO lo hacia con la ruta de su "CREADO %s" y sacaba la letra real del
+  // servidor; aqui ponia escrito que "sus ecos de exito no llevan rutas
+  // absolutas", que era FALSO y es justo lo que hizo que nadie mirara. Lo
+  // caza ya la bateria test_round40, en las dos direcciones: que no salga la
+  // letra real, y que el contenido del disco NO venga enmascarado.
   if MatchText(AToolName, ['delphi_read', 'vault_read', 'vault_search',
                            'delphi_search', 'delphi_edit',
                            'delphi_textedit']) and
@@ -2542,10 +2580,7 @@ begin
           if (I + 2 <= L) and (AText[I + 1] = ':') and
              CharInSet(AText[I + 2], ['\', '/']) then
           begin
-            if Pos(UpCase(C), Letters) > 0 then
-              Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32)).Append(':')
-            else
-              Sb.Append('srvx:'); // a drive this server does not serve
+            Sb.Append(VirtualUnitOf(C, Letters)).Append(':');
             Inc(I, 2);
             Continue;
           end;
@@ -2554,10 +2589,9 @@ begin
           if (I + 4 <= L) and (AText[I + 1] = '%') and (AText[I + 2] = '3') and
              ((AText[I + 3] = 'A') or (AText[I + 3] = 'a')) and (AText[I + 4] = '/') then
           begin
-            if Pos(UpCase(C), Letters) > 0 then
-              Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32))
-            else
-              Sb.Append('srvx');
+            // Aqui los dos puntos van codificados (%3A), asi que el nombrador
+            // pone la unidad y el separador se copia tal cual viene.
+            Sb.Append(VirtualUnitOf(C, Letters));
             Sb.Append(AText[I + 1]).Append(AText[I + 2]).Append(AText[I + 3]);
             Inc(I, 4);
             Continue;
@@ -2583,10 +2617,7 @@ begin
               not CharInSet(AText[I + 2],
                             [' ', #9, #10, #13, '0' .. '9'])) then
           begin
-            if Pos(UpCase(C), Letters) > 0 then
-              Sb.Append('srv').Append(Char(Ord(UpCase(C)) + 32)).Append(':')
-            else
-              Sb.Append('srvx:');
+            Sb.Append(VirtualUnitOf(C, Letters)).Append(':');
             Inc(I, 2);
             Continue;
           end;

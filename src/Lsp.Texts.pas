@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.0.10-beta';
+  SERVER_VERSION = '1.0.11-beta';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -357,6 +357,41 @@ const
     'completo esta en rejectedHomonyms; si necesitas verlos todos, pregunta ' +
     'por un ambito mas pequeno (un fichero concreto como path) o usa ' +
     'delphi_search wholeword=true, que pagina.';
+
+  { "No lo se" y "se que no" no son lo mismo, y acababan en el mismo saco.
+    Un nombre escrito en un comentario o dentro de una cadena no lo resuelve
+    el motor -ahi no hay simbolo- igual que no resuelve lo que se quedo sin
+    presupuesto de validacion, y las dos cosas caian en "unverified". Como
+    delphi_rename_symbol bloquea el rename con UNO solo, documentar un
+    identificador dejaba esa tool inservible sobre el. Medido 2026-09-21
+    sobre MaskDriveText de este repo: 18 confirmadas, 6 unverified, las SEIS
+    comentarios. }
+  { El motor puede contestar con un fichero de OTRO sitio. Sin .delphilsp.json
+    ni .dproj cerca la unit va SIN CONFIGURAR, y el indice del motor -que
+    sobrevive al reinicio del servidor- conserva units del mismo nombre vistas
+    en otras sesiones. Medido 2026-09-21: preguntando por un simbolo de la
+    jaula A, la definicion resolvia a un fichero de la jaula B de una bateria
+    anterior; al borrar ese fichero, caia en el de una tercera. La llamada
+    entera moria con un RECHAZADO de jaula que ADEMAS escupia la ruta ajena:
+    una respuesta imposible y una fuga en el mismo sitio. El %s es el
+    IDENTIFICADOR, nunca la ruta de fuera. }
+  SR_REFS_TARGET_OUTSIDE_FMT =
+    'error: "%s" resuelve a una definicion que esta FUERA de este workspace, ' +
+    'asi que no busco sus usos: lo que encontrase aqui no serian usos de ese ' +
+    'simbolo, y decirte que no lo usa nadie seria peor que no contestar. ' +
+    'Pasa casi siempre con una unit SIN CONFIGURAR (sin .delphilsp.json ni ' +
+    '.dproj cerca): el motor la resuelve contra otra unit del mismo nombre ' +
+    'que indexo antes. Mira con delphi_definition a donde va de verdad; si la ' +
+    'unit pertenece a un proyecto, trabaja sobre el proyecto (con su .dproj ' +
+    'al lado) para que se configure.';
+
+  SN_REFS_MENTIONS_FMT =
+    'El nombre aparece ademas %d vez/veces en COMENTARIOS o dentro de ' +
+    'cadenas (se listan %d en "mentions"). No son referencias -ahi no hay ' +
+    'nada que el compilador resuelva- y por eso no cuentan como ' +
+    '"unverified" ni bloquean un delphi_rename_symbol, que renombra codigo ' +
+    'y no prosa. Si quieres que los comentarios digan tambien el nombre ' +
+    'nuevo, eso se cambia a mano con delphi_edit.';
 
   SR_READONLY_PATH_FMT =
     'RECHAZADO: "%s" esta dentro de una carpeta declarada de SOLO LECTURA ' +
@@ -2151,6 +2186,15 @@ const
   SN_RENAME_QUALIFIED_FMT =
     'La definicion es una cabecera CUALIFICADA ("%s"): al renombrarla cambia ' +
     'SOLO la parte del metodo, nunca el nombre de la clase.';
+
+  { AVISO, no bloqueo: la tool renombra codigo. Hasta 2026-09-21 estas
+    apariciones llegaban como "unverified" y tumbaban el rename entero; ahora
+    no estorban, pero callarlas seria lo contrario del mismo error - el que
+    renombra suele querer repasarlas. }
+  SN_RENAME_MENTIONS_FMT =
+    'El nombre viejo se queda escrito en %d comentario(s) o cadena(s): esta ' +
+    'tool renombra CODIGO, no prosa. delphi_references te los lista en ' +
+    '"mentions" con su linea si quieres repasarlos a mano.';
 
   SN_RENAME_PREVIEW_NOTE =
     'Preview: NOTHING was written. applicable=true means every occurrence ' +

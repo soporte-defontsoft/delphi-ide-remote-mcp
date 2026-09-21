@@ -282,6 +282,19 @@ begin
       // compare las dos cree que sobra una fila.
       Result.AddPair('changesCount', TJSONNumber.Create(Changes.Count));
 
+      // Las MENCIONES (el nombre escrito en un comentario o en una cadena)
+      // llegaban aqui dentro de "unverified" y tumbaban el rename: una linea
+      // de documentacion bastaba para que la tool dijera que no se puede.
+      // Ya vienen separadas de origen; aqui son un aviso, porque el nombre
+      // viejo SI se queda escrito ahi y eso hay que repasarlo a mano.
+      if Refs.GetValue('mentionsCount') <> nil then
+      begin
+        var Menciones := Refs.GetValue('mentionsCount').GetValue<Integer>;
+        Result.AddPair('mentions', TJSONNumber.Create(Menciones));
+        if Menciones > 0 then
+          Warnings.Add(Format(SN_RENAME_MENTIONS_FMT, [Menciones]));
+      end;
+
       // one unverified candidate = not applicable, the adopted rule
       Arr := Refs.GetValue('unverified') as TJSONArray;
       if Arr.Count > 0 then

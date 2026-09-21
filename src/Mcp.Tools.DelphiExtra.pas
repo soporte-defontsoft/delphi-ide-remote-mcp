@@ -205,6 +205,10 @@ begin
     'references): project-wide text scan, then every candidate is validated ' +
     'by asking the compiler engine for its definition - only candidates ' +
     'resolving to the SAME symbol are confirmed, homonyms are rejected. ' +
+    'A name written in a COMMENT or inside a string literal is not a ' +
+    'reference and does not count as unverified: those go to "mentions", ' +
+    'listed but harmless - they used to block delphi_rename_symbol, which ' +
+    'refuses on a single unverified candidate. ' +
     'Bounded work: leftovers are listed as unverified, never silently dropped.';
 end;
 

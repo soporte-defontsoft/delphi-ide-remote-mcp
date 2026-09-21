@@ -161,11 +161,23 @@ r = call('delphi_adb_linux', {"command": "key", "profile": "x", "project": PROJ}
 check('key sin codigo se rechaza con ejemplos',
       r.startswith('RECHAZADO') and ('Escape' in r or 'Tab' in r), r[:160])
 
-fuera = os.path.join(tempfile.gettempdir(), 'fuera-de-la-jaula.dproj')
+# El cebo va en una carpeta PROPIA y se recoge. Estaba suelto en la raiz de
+# %TEMP% y ahi se quedaba: un .dproj de 10 bytes llamado literalmente
+# "fuera-de-la-jaula" que el 2026-09-21 resulto ser el proyecto que adoptaban
+# las units de OTRAS baterias, porque la busqueda de configuracion subia ocho
+# niveles sin mirar la jaula. Tres baterias pasaban en verde apoyadas en la
+# basura de esta. Una bateria no deja nada en la maquina, y menos fuera de
+# una jaula.
+cebo = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round30-fuera')
+os.makedirs(cebo, exist_ok=True)
+fuera = os.path.join(cebo, 'fuera-de-la-jaula.dproj')
 open(fuera, 'w', encoding='utf-8').write('<Project/>')
-r = call('delphi_adb_linux', {"command": "screenshot", "profile": "x", "project": fuera})
-check('un proyecto fuera de la jaula se rechaza',
-      r.startswith('RECHAZADO') or 'FUERA' in r.upper(), r[:160])
+try:
+    r = call('delphi_adb_linux', {"command": "screenshot", "profile": "x", "project": fuera})
+    check('un proyecto fuera de la jaula se rechaza',
+          r.startswith('RECHAZADO') or 'FUERA' in r.upper(), r[:160])
+finally:
+    shutil.rmtree(cebo, ignore_errors=True)
 
 print()
 print('round30: %d PASS / %d FAIL' % (P, F))

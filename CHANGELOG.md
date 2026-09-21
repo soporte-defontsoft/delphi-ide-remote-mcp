@@ -6,6 +6,121 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.11-beta] - 2026-09-21
+
+**What the server let out of the jail.** Four fixes with one thread running
+through them: something composed here - a path, a scope, a drive prefix -
+left this machine, or reached into it, without passing the one place that
+decides. Three of the four were found BY USING the server, not by looking
+for them, and one of those was found while cutting this very release.
+
+### Fixed - a scan that walked out of the workspace
+`delphi_references` could open and read sources belonging to ANOTHER
+workspace, and then die publishing their paths. The chain, measured:
+
+1. the search for a unit's project settings climbed **eight levels without
+   checking the jail**, so a stray `fuera-de-la-jaula.dproj` of 10 bytes left
+   in `%TEMP%` by a battery became the "project" of any unit below it;
+2. that made the unit's `RootDir` the whole of `%TEMP%`;
+3. and the scan added `RootDir` to its scope **without the jail check that
+   the two sibling additions right below it both perform** - one of three,
+   and the only one unguarded;
+4. so the scan enumerated **168 sources across other jails**, opened them,
+   and the guard killed the call with a refusal that printed the foreign
+   path.
+
+This server serves several `[Workspace.X]` with different tokens, and jails
+can be shared by several agents, so that last step is not cosmetic: a client
+of workspace A learned paths inside workspace B. Cut in both places - the
+climb stops at the edge of what this workspace may read (`PuedoSubirA`), and
+the scope takes the same filter as its siblings.
+
+**Behaviour change worth knowing:** a `.dproj` sitting ABOVE the workspace
+root is no longer adopted. If a project is laid out with the root at `src\`
+and the `.dproj` one level up, point the root at the project folder.
+
+### Fixed - a name in a comment is not a reference
+A candidate inside a comment or a string literal resolved to nothing, exactly
+like a candidate the validation ran out of budget for, and both landed in
+`unverified`. "I don't know" and "I know it isn't" are not the same thing,
+and the confusion was expensive: `delphi_rename_symbol` refuses on a SINGLE
+unverified candidate, so documenting an identifier made that tool useless on
+it. Measured on this repo's own `MaskDriveText`: 18 confirmed, 6 unverified,
+**all six comments**.
+
+They now go to `mentions`: listed, never a blocker, and reported by the
+rename as a warning - because the old name really does stay written there.
+The classifier is lexical and runs inside the sequential scan that already
+existed, because a block comment crosses lines. It handles `//`, `{ }`,
+`(* *)`, `{$...}` and string literals, including the two cases that separate
+a correct implementation from a naive one: `'http://x'` does not open a
+comment, and `'don''t'` does not leave a string open.
+
+A mention also no longer spends candidate budget or opens a file to validate
+it - the quiet second cost of the same bag.
+
+### Fixed - the real drive letter escaped through two echoes
+`MaskDriveText` exempts six tools wholesale, and rightly: their answer is
+LITERAL disk content, and a masked anchor would not match the file. But the
+exemption is per TOOL and only the ECHO deserves it. Two lines that these
+tools compose THEMSELVES were going out with the server's real drive letter:
+
+- `delphi_textedit`'s `CREADO <path>` - while its twin `delphi_edit` printed
+  only the file name, which is how two twins drift;
+- `delphi_edit`'s `copia=<path>`, which says where the backup landed. **This
+  one escaped the first sweep and was caught by the tool itself while cutting
+  this release**: the sweep searched for the identifier instead of for the
+  FORMAT, which is precisely what this repo's own rule says not to do.
+
+Both now go through the single masker. The obligation that comes with being
+on the exemption list is written at the exemption itself, where a comment
+previously claimed - falsely - that these echoes carried no absolute paths.
+
+### Fixed - one namer for the virtual units
+David asked whether masking and unmasking the drive units went through one
+function. Measured: the READER was one (`VirtualUnitLetter`, whose own
+comment says the shape is never re-tested by hand) and the WRITER was **four
+hand-built copies** - the three forms of `MaskDriveText` and the valid-units
+list of `PathAnomaly`. Three of them did `UpCase` first; the fourth relied on
+`ServedDriveLetters` promising upper case four hundred lines away. None was
+wrong; that is how one of them drifts.
+
+`VirtualUnitOf` now composes it, written next to the function that reads it,
+as its inverse. **This is the same shape as the trash-naming bug of 1.0.9,
+one day later, in the server's own wire contract** - unifying the reader
+feels like finishing, and is not.
+
+### Known and not fixed
+Current as of this release, and measured rather than remembered:
+- **The server writes its temporary files to the MACHINE's `%TEMP%`**, in
+  seven places, outside every jail, and does not clean them up: 56.4 MB
+  measured on 2026-09-21 (33 desktop screenshots from two days earlier, and
+  a 10.7 MB remoterun output). On a shared jail those are one agent's
+  artifacts sitting where anything on the machine can read them.
+- **A screenshot cannot be downloaded.** `delphi_desktop` leaves the capture
+  in `%TEMP%` and answers "bajala con delphi_fetch", but `delphi_fetch`
+  checks the jail, and `%TEMP%` is inside nobody's. The flow is broken end to
+  end. Both of these land next.
+- **A rarer race when creating a unit**, seen ONCE and not reproduced in 16
+  further runs. Recorded as seen-once, not as fixed.
+
+The *commit line count off by one* of 1.0.10 is **removed from this list**:
+it was never re-measured and could not be reproduced. The edit tools were
+measured instead and preserve a missing final newline exactly, which was the
+only mechanism that would have produced it. A claim nobody can reproduce is
+not a known bug, it is a rumour that sends you to fix healthy code.
+
+### Measured
+- `tests/test_round40.py` (13 checks, 2 failing against 1.0.10 and 2 more
+  against the first fix of the day), `test_round41.py` (11, all 11 failing
+  against 1.0.10), `test_round42.py` (8, 6 failing against 1.0.10, in both
+  directions).
+- `test_round30` no longer leaves its out-of-jail bait loose in `%TEMP%`, and
+  `test_round38`/`test_round41` now ship a real `.dproj`: **three batteries
+  were passing green while leaning on that stray 10-byte file**, which the
+  jail fix exposed.
+- Suite: 64 batteries, 1513 checks, 0 failures.
+
 ## [1.0.10-beta] - 2026-09-20
 
 Four answers that were correct and unreadable. None of them broke anything;

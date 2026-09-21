@@ -526,8 +526,23 @@ begin
   // nombrador, como todas.
   DayDir := TrashDayDir(APath, '');
   Dest := TPath.Combine(DayDir, TPath.GetFileName(APath));
+  // Lo que DEVUELVE esta funcion es para ENSENARLO (el "copia=" del eco de
+  // delphi_edit, la respuesta de delphi_upload), nunca para volver a abrir
+  // el fichero: por eso la ruta sale enmascarada, desde el unico sitio que
+  // la compone. delphi_edit esta EXENTO del filtro de salida -su eco es
+  // contenido literal del disco-, y esto no es eco: es una ruta NUESTRA, y
+  // salia con la letra REAL del servidor. Mismo fallo que el "CREADO" de
+  // delphi_textedit, en otro emisor de la misma tool; se me escapo el
+  // 2026-09-21 por buscar el identificador en vez del FORMATO, y lo canto
+  // la propia tool al cortar un release.
+  //
+  // OJO A DONDE VA LA MASCARA: solo en lo que SALE. Enmascarar la variable
+  // Dest antes de usarla deja el TFile.Exists y el TFile.Copy apuntando a
+  // una unidad virtual que no existe en el disco - es decir, se carga la
+  // copia de seguridad entera. Escrito aqui porque lo hice al primer
+  // intento, el mismo dia.
   if TFile.Exists(Dest) then
-    Exit('ya existia (' + Dest + ')');
+    Exit('ya existia (' + MaskDriveText('', Dest) + ')');
   CrearCarpeta(DayDir);
   // "Existe?" y "copia" no son un solo gesto: dos escrituras del mismo fichero
   // a la vez pasaban las dos por el if y la segunda moria con "Cannot create
@@ -540,12 +555,12 @@ begin
   except
     on E: Exception do
       if TFile.Exists(Dest) then
-        Exit('ya existia (' + Dest + ')')
+        Exit('ya existia (' + MaskDriveText('', Dest) + ')')
       else
         raise;
   end;
   PurgeOldBackups(Dir);
-  Result := Dest;
+  Result := MaskDriveText('', Dest);
 end;
 
 function SplitToLines(const T: string): TArray<string>;

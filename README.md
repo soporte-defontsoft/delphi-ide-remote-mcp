@@ -67,7 +67,7 @@ The table below says which engine each one uses and why it matters:
 | Engine | Tools | What that means for you |
 |---|---|---|
 | **DelphiLSP** (official, compiler-grade) | `delphi_symbols`, `delphi_definition`, `delphi_hover`, `delphi_completion`, `delphi_signature`, `delphi_diagnostics` | Real semantic answers, not grep: resolves inheritance, `with`, overloads, and follows into RTL/VCL. Needs a `.delphilsp.json` (used when fresh, fabricated from the `.dproj` when not). |
-| **DelphiLSP + disk scan** (hybrid) | `delphi_references` | The LSP has no `references`, so candidates are scanned from disk and then each one is *validated* by asking the LSP where it resolves to. Verified against the live compiler, never an index. |
+| **DelphiLSP + disk scan** (hybrid) | `delphi_references` | The LSP has no `references`, so candidates are scanned from disk and then each one is *validated* by asking the LSP where it resolves to. Verified against the live compiler, never an index. A name written in a comment or inside a string literal is **not** a reference: it goes to `mentions`, listed but harmless, instead of counting as `unverified` and blocking a rename. |
 | **Own safe-editing engine** | `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create` | Anchored edits with encoding preserved (CP1252 vs UTF-8), atomic writes, automatic backups, designer-file awareness. No LSP involved. |
 | **MSBuild** (`rsvars.bat`, located via the registry) | `delphi_build` | The real compiler and linker. The LSP cannot build — it has no such operation.. A failed build with F2613 names each missing unit and where its `.pas` lives in the library zone (`missingUnits`), with the `add-searchpath` to run |
 | `delphi_test` | **Does it WORK, not just compile**: `discover` finds the test projects (DUnitX, or console runners named *Test*), `run` builds and runs one in the same low-integrity sandbox and answers structured — total/passed/failed, the failing lines, exitCode, duration. Own opt-in (`AllowTests`) |
@@ -196,7 +196,7 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_signature` | Signature help for the call under the cursor (parameter names/types) — the IDE's Ctrl+Shift+Space |
 | `delphi_hover` | Type/signature of an identifier usage |
 | `delphi_completion` | Code completion candidates |
-| `delphi_references` | Find references (hybrid: text scan + per-candidate `definition` validation — homonyms rejected by the compiler engine) |
+| `delphi_references` | Find references (hybrid: text scan + per-candidate `definition` validation — homonyms rejected by the compiler engine; names in comments/strings listed apart as `mentions`) |
 | `delphi_diagnostics` | Error Insight on demand: real compiler codes (E/W/H) with exact positions, no build |
 | `delphi_read` | Encoding-correct numbered reads (CP1252 / UTF-8±BOM detected for real) |
 | `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, semantic INSERT (global routine / method with both halves — also inside a `.dpr`, and into the implicit published section of forms; since v0.94 it checks each half first: a declaration the class already has is not duplicated, and a method that fully exists is refused with both line numbers; since v0.95 the signature is read whole however many lines it spans, and a doc comment above it travels with the implementation), line DELETE mode, **range** delete/replace since v1.0.6 (`toline`: the anchor is the first line, `toline` the last — a whole method goes without pasting it as the anchor), TPF0 hard-reject, post-write audit; new units use the encoding configured in the IDE |
@@ -532,6 +532,13 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   but no root parses valid, the server **fails closed** (everything refused) rather than
   silently running unrestricted. No roots = unrestricted (local trusted mode). For remote
   exposure configure BOTH, and expose over VPN/LAN only.
+- **A root is also where project discovery STOPS.** Looking for a unit's `.delphilsp.json` or
+  `.dproj`, the server walks up from the file — but never past the edge of what this workspace
+  may read. A project file sitting ABOVE the root is not adopted (since 1.0.11): if your layout
+  puts the root at `src\` and the `.dproj` one level up, point the root at the project folder.
+  Measured on 2026-09-21: without that stop, a stray 10-byte `.dproj` left in `%TEMP%` became
+  the "project" of every unit below it, which made `delphi_references` scan **168 sources
+  across other workspaces** and publish their paths in the refusal.
 - **Virtual drive units**: the server's real drive letters never travel to the client — paths
   leave as `srvd:\...`, `srvc:\...` and are accepted back in the same form (real paths still
   work), so an agent can never mistake server paths for its own local disks. One generic rule
