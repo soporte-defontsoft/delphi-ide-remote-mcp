@@ -24,7 +24,7 @@ type
     [SchemaDescription('What to create: project-console | project-vcl | project-fmx | form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit (a plain .pas). Everything but projects is registered in the project given')]
     [Required]
     property Kind: string read FKind write FKind;
-    [SchemaDescription('Projects: target directory (created if missing)')]
+    [SchemaDescription('Projects: ABSOLUTE target directory (created if missing). Everything else (unit, form, frame, data module): optional SUBFOLDER of the project, RELATIVE to it and as deep as you like (Dominio\Modelos\Dto) - created if missing, and the unit is registered with that relative path. The folder layout is yours to decide. No absolute paths, no drive, no "..": what you create in a project hangs from that project. Empty = next to the .dpr')]
     [RutaDelServidor]
     property Dir: string read FDir write FDir;
     [SchemaDescription('Projects: project name. Forms, frames, data modules and units: unit name (e.g. UClientes)')]
@@ -75,11 +75,14 @@ begin
   if K.StartsWith('project-') then
     Result := CreateDelphiProject(Params.Dir, Params.Name, K.Substring(8))
   else if K.StartsWith('form-') then
-    Result := CreateDelphiForm(Params.Project, Params.Name, Params.FormName, K.Substring(5))
+    Result := CreateDelphiForm(Params.Project, Params.Name, Params.FormName,
+      K.Substring(5), Params.Dir)
   else if K.StartsWith('frame-') or (K = 'datamodule') then
-    Result := CreateDelphiForm(Params.Project, Params.Name, Params.FormName, K)
+    Result := CreateDelphiForm(Params.Project, Params.Name, Params.FormName, K,
+      Params.Dir)
   else if K = 'unit' then
-    Result := CreateDelphiUnit(Params.Project, Params.Name, Params.Content)
+    Result := CreateDelphiUnit(Params.Project, Params.Name, Params.Content,
+      Params.Dir)
   else
     Result := 'RECHAZADO: kind debe ser project-console | project-vcl | project-fmx | ' +
       'form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit.';

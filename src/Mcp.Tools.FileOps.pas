@@ -285,8 +285,9 @@ begin
     '(__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. ' +
     'Jailed to the workspace roots, refused in read-only mode. Use it to ' +
     'clean up stray files and leftovers. Deleting a unit (.pas) also trashes ' +
-    'its .dfm/.fmx and takes it out of every project in its folder or the ' +
-    'parent folder that lists it (uses, CreateForm, DCCReference). To keep ' +
+    'its .dfm/.fmx and takes it out of every project that lists it - looked ' +
+    'for from its folder UP to the edge of the workspace, however deep the ' +
+    'unit sits (uses, CreateForm, DCCReference). To keep ' +
     'the file but drop it from a project use delphi_config command=remove-unit.';
 end;
 
@@ -426,6 +427,45 @@ begin
           DesignerNote := Format(SN_FILE_DESIGNER_TOO_FMT,
             [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), 'ERROR ' + E.Message]);
       end;
+  end
+  else if TDirectory.Exists(Params.Path) then
+  try
+    // UNA CARPETA ENTERA: cada unit de dentro sale de los proyectos que la
+    // listan, igual que una unit suelta. Se borraba la carpeta, se contestaba
+    // "BORRADO" y el .dpr seguia listando units que ya no estaban: build roto
+    // con F1026 y una respuesta de exito (medido en vivo el 2026-09-21, el
+    // gemelo de lo que le pasaba a delphi_move). Un proyecto que vive DENTRO
+    // de la carpeta se va con ella: no se toca.
+    var Raiz := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path));
+    var Cuantas := 0;
+    for var U in TDirectory.GetFiles(Params.Path, '*.pas',
+      TSearchOption.soAllDirectories) do
+    begin
+      if IsBackupPath(U) then
+        Continue;
+      for P in ProjectsUsingUnit(U) do
+      begin
+        if StartsText(Raiz, IncludeTrailingPathDelimiter(
+             TPath.GetDirectoryName(TPath.GetFullPath(P)))) then
+          Continue;
+        if PathDenied(P) <> '' then
+          R := Format(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)])
+        else
+          try
+            R := RemoveProjectUnit(P, U, True);
+          except
+            on E: Exception do
+              R := 'ERROR ' + E.Message;
+          end;
+        Inc(Cuantas);
+        ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
+      end;
+    end;
+    if Cuantas > 0 then
+      ProjNote := Format('  units de la carpeta quitadas de sus proyectos (%d):',
+        [Cuantas]) + ProjNote;
+  except
+    // una subcarpeta ilegible no impide borrar: se quita lo que se vio
   end;
   try
     MoveToTrash(Params.Path, Trash);
@@ -488,8 +528,10 @@ begin
     'folders of the destination are created. The source is copied to the ' +
     'recoverable trash first. Jailed, refused in read-only mode. Moving or ' +
     'renaming a unit (.pas) moves its .dfm/.fmx with it, rewrites its "unit X;" ' +
-    'header on a rename, and re-points every project in its folder or the ' +
-    'parent folder that lists it (uses + DCCReference).';
+    'header on a rename, and re-points every project that lists it (uses + ' +
+    'DCCReference) - looked for from its folder UP to the edge of the ' +
+    'workspace, however deep the unit sits. Moving a whole FOLDER re-points ' +
+    'every unit inside it the same way: reorganise freely, the projects follow.';
 end;
 
 function TDelphiMoveTool.ExecuteWithParams(const Params: TDelphiMoveParams): string;
@@ -547,6 +589,32 @@ begin
         Exit('RECHAZADO: ya existe ' + ChangeFileExt(Params.Dest, Ext) + ' (no sobreescribo).');
     Projects := ProjectsUsingUnit(Params.Path);
   end;
+  // UNA CARPETA ENTERA: se apunta ANTES de moverla que unit de dentro lista
+  // que proyecto, porque despues las rutas viejas ya no existen. Una carpeta
+  // se movia y la funcion se iba sin mirar ningun proyecto: contestaba
+  // "MOVIDO", el .dpr seguia diciendo in 'Dominio\Modelos\UCliente.pas' y el
+  // build moria con F1026 - reorganizar carpetas, que es justo decidir la
+  // estructura, dejaba el proyecto sin compilar con una respuesta de exito
+  // (medido en vivo el 2026-09-21). Un proyecto que vive DENTRO de la carpeta
+  // viaja con ella y sus rutas relativas siguen valiendo: no se toca.
+  var Mudanza := TStringList.Create; // proyecto|unit vieja
+  try
+  if TDirectory.Exists(Params.Path) and not DesdePapelera then
+  try
+    var Raiz := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path));
+    for var U in TDirectory.GetFiles(Params.Path, '*.pas',
+      TSearchOption.soAllDirectories) do
+    begin
+      if IsBackupPath(U) then
+        Continue;
+      for var Pr in ProjectsUsingUnit(U) do
+        if not StartsText(Raiz, IncludeTrailingPathDelimiter(
+             TPath.GetDirectoryName(TPath.GetFullPath(Pr)))) then
+          Mudanza.Add(Pr + '|' + TPath.GetFullPath(U));
+    end;
+  except
+    // una subcarpeta ilegible no impide mover: se re-apunta lo que se vio
+  end;
   try
     // Safety copy of the source into the trash before relocating... salvo que
     // el origen YA sea una copia de la papelera. Hacer una copia de una copia
@@ -583,6 +651,33 @@ begin
   end;
   Result := Format('MOVIDO'#10'  de: %s'#10'  a:  %s'#10'  (copia de seguridad en %s)',
     [Params.Path, Params.Dest, BackupNote]);
+  if Mudanza.Count > 0 then
+  begin
+    var RaizVieja := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path));
+    var RaizNueva := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Dest));
+    var Notas := '';
+    for var Linea in Mudanza do
+    begin
+      var Pr := Linea.Substring(0, Linea.IndexOf('|'));
+      var Vieja := Linea.Substring(Linea.IndexOf('|') + 1);
+      var Nueva := RaizNueva + Vieja.Substring(Length(RaizVieja));
+      if PathDenied(Pr) <> '' then
+        R := Format(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(Pr)])
+      else
+        try
+          R := RenameProjectUnit(Pr, Vieja, Nueva);
+        except
+          on E: Exception do
+            R := 'ERROR ' + E.Message;
+        end;
+      Notas := Notas + #10 + '    ' + TPath.GetFileName(Pr) + ': ' + R.Replace(#10, ' ');
+    end;
+    Result := Result + #10 + Format('  units de la carpeta re-apuntadas en sus proyectos (%d):',
+      [Mudanza.Count]) + Notas;
+  end;
+  finally
+    Mudanza.Free;
+  end;
   if not IsUnit then
     Exit;
 

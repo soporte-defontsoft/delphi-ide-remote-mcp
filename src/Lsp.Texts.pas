@@ -122,6 +122,12 @@ const
     '(un patron mas concreto, o "path" a una subcarpeta) antes de sacar ' +
     'conclusiones de este listado.';
 
+  SR_CREATE_SUBDIR_REL_FMT =
+    'RECHAZADO: "dir"="%s" no vale para crear DENTRO de un proyecto. Aqui ' +
+    '"dir" es una SUBCARPETA del proyecto, relativa a el y con los niveles ' +
+    'que quieras (Dominio\Modelos): sin unidad, sin ruta absoluta, sin ".." ' +
+    'y solo con letras, digitos, espacio, punto, guion y guion bajo. La ' +
+    'ruta absoluta es solo para crear un PROYECTO nuevo.';
   SR_CREATE_UNIT_NEED_PROJECT =
     'RECHAZADO: kind=unit necesita "project" (la ruta del .dpr o .dproj al ' +
     'que anadir la unit); la carpeta sale de ahi, NO de "dir". Ojo: "dir" si ' +
@@ -1894,8 +1900,9 @@ const
     '  proyectos actualizados (%d): %s';
 
   SN_FILE_PROJECTS_NONE =
-    '  (ningun .dpr en la carpeta ni en la superior lo listaba; si otro ' +
-    'proyecto lo usa, quitalo con delphi_config command=remove-unit)';
+    '  (ningun .dpr lo listaba, mirando desde su carpeta hacia arriba hasta ' +
+    'el borde del workspace; si otro proyecto lo usa, quitalo con ' +
+    'delphi_config command=remove-unit)';
 
   SN_FILE_PROJECT_DENIED_FMT =
     '    %s: fuera de los workspaces permitidos, NO tocado (quita la unit ' +

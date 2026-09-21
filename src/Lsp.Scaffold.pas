@@ -12,9 +12,11 @@ interface
 
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
 { AKind: vcl | fmx (forms) | frame-vcl | frame-fmx | datamodule. }
-function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string): string;
+function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
+  const ASubDir: string = ''): string;
 { A plain unit (interface/implementation skeleton) registered in the project. }
-function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string): string;
+function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string;
+  const ASubDir: string = ''): string;
 
 implementation
 
@@ -552,7 +554,46 @@ begin
     Result := 'vcl';
 end;
 
-function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string): string;
+{ DONDE CAE LO QUE SE CREA DENTRO DE UN PROYECTO: la estructura de carpetas la
+  decide el programador (o el agente), no el scaffolder. Hasta la v1.0.14 una
+  unit, un form, un frame o un data module caian SIEMPRE junto al .dpr, y el
+  "dir" que un agente pasaba de forma natural se IGNORABA EN SILENCIO - la
+  respuesta decia "CREADA" con la unit en otro sitio (medido en vivo el
+  2026-09-21; el 25-ago ya se habia visto a los agentes pasarlo, y entonces
+  solo se mejoro el mensaje). David: "tenemos que poder hacer una estructura
+  de subcarpetas a gusto del programador", y "tienen que ser carpetas dentro
+  de la jaula".
+
+  ASubDir es RELATIVO a la carpeta del proyecto, con los niveles que se
+  quiera (Dominio\Modelos\Dto). QUE es una carpeta relativa valida no se
+  decide aqui: lo decide ValidOutputFolder (Lsp.Dproj), la misma regla de
+  set-output - sin unidad, sin absolutas, sin ".." y con su lista blanca de
+  caracteres, porque esta ruta acaba escrita en el DCCReference del .dproj y
+  en el in '..' del .dpr. La primera version de esta funcion la reescribia a
+  mano y SIN la lista blanca: habria reabierto la inyeccion R5-B. Aqui solo
+  queda lo propio: colgarla del proyecto y pasar la jaula - PathDenied mide
+  con RealPath, asi que un junction dentro del proyecto tampoco sirve para
+  salirse. La usan las DOS gemelas (unit y form/frame/datamodule); registrar
+  lo hace AddProjectUnit, que ya componia bien el in 'sub\X.pas'. }
+function CarpetaEnElProyecto(const ADprPath, ASubDir: string;
+  out ADir: string): string;
+var
+  S: string;
+begin
+  Result := '';
+  ADir := TPath.GetDirectoryName(TPath.GetFullPath(ADprPath));
+  if ASubDir.Trim = '' then
+    Exit;
+  if not ValidOutputFolder(ASubDir, S) then
+    Exit(Format(SR_CREATE_SUBDIR_REL_FMT, [ASubDir]));
+  ADir := TPath.Combine(ADir, S);
+  Result := PathDenied(ADir);
+  if Result = '' then
+    Result := DeadCopyWriteDenied(ADir);
+end;
+
+function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
+  const ASubDir: string): string;
 var
   Kind, Dir, FormName, PasPath, DesignerExt, Have, Want, FrameworkNote: string;
   Fmx: Boolean;
@@ -602,7 +643,9 @@ begin
   if not TRegEx.IsMatch(FormName, '^[A-Za-z_]\w*$') then
     Exit('RECHAZADO: ''' + FormName + ''' no es un identificador valido de form.');
 
-  Dir := TPath.GetDirectoryName(TPath.GetFullPath(ADprPath));
+  Result := CarpetaEnElProyecto(ADprPath, ASubDir, Dir);
+  if Result <> '' then
+    Exit;
   PasPath := TPath.Combine(Dir, AUnitName + '.pas');
   if TFile.Exists(PasPath) then
     Exit('RECHAZADO: ' + PasPath + ' ya existe. El scaffolder jamas sobreescribe.');
@@ -650,14 +693,16 @@ begin
        IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]);
 end;
 
-function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string): string;
+function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string;
+  const ASubDir: string): string;
 var
   Dir, PasPath, Body: string;
   M: TMatch;
 begin
-  // kind=unit takes "project", not "dir" - the folder comes from the project.
-  // Passing dir= answered "RECHAZADO: ruta invalida: " with an empty path and
-  // cost four calls to decode (measured 2026-08-25).
+  // kind=unit takes "project"; "dir" is the SUBFOLDER of that project (see
+  // CarpetaEnElProyecto). Passing dir= without project answered "RECHAZADO:
+  // ruta invalida: " with an empty path and cost four calls to decode
+  // (measured 2026-08-25).
   if ADprPath.Trim = '' then
     Exit(SR_CREATE_UNIT_NEED_PROJECT);
   Result := PathDenied(ADprPath);
@@ -668,7 +713,9 @@ begin
   Result := BadUnitName(AUnitName);
   if Result <> '' then
     Exit;
-  Dir := TPath.GetDirectoryName(TPath.GetFullPath(ADprPath));
+  Result := CarpetaEnElProyecto(ADprPath, ASubDir, Dir);
+  if Result <> '' then
+    Exit;
   PasPath := TPath.Combine(Dir, AUnitName + '.pas');
   if TFile.Exists(PasPath) then
     Exit('RECHAZADO: ' + PasPath + ' ya existe. El scaffolder jamas sobreescribe. ' +

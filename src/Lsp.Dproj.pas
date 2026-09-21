@@ -62,6 +62,19 @@ function IsLocalPlatform(const APlatform: string): Boolean;
   Returns the correctly-cased canonical name, or '' if unknown. }
 function CanonicalPlatform(const AName: string): string;
 
+{ Una carpeta RELATIVA al proyecto, apta para acabar escrita DENTRO de un
+  .dproj o de un .dpr: nombre simple o con niveles (Compiled, bin\out,
+  Dominio\Modelos), sin unidad ni ruta absoluta, sin "..", y solo con
+  caracteres de una lista blanca - para que nada pueda inyectarse en el XML
+  del .dproj como hizo R5-B. Devuelve el token limpio en AClean.
+
+  Vivia en Mcp.Tools.Config, privada, para set-output. Se sube aqui el
+  2026-09-21 porque delphi_create necesita EXACTAMENTE la misma regla para la
+  subcarpeta donde crea una unit (su ruta acaba en DCCReference Include=".."
+  y en el in '..' del .dpr): iba a escribirse una hermana a mano, SIN la
+  lista blanca. Lo paro David: "cuidado que no exista ya algo parecido". }
+function ValidOutputFolder(const AFolder: string; out AClean: string): Boolean;
+
 const
   { The platforms paclient.exe accepts for --platform= (its own help lists
     exactly these). Narrower than CanonicalPlatform - Android deploys without
@@ -332,6 +345,26 @@ const
     'writelinestofile', 'writecodefragment', 'downloadfile',
     'unzip', 'zipdirectory',
     'csc', 'vbc', 'fsc', 'xslttransformation', 'generateresource');
+
+function ValidOutputFolder(const AFolder: string; out AClean: string): Boolean;
+var
+  C: Char;
+  Seg: string;
+begin
+  Result := False;
+  AClean := AFolder.Trim.Trim(['"']).Trim;
+  AClean := AClean.Replace('/', '\');
+  while AClean.StartsWith('\') do AClean := AClean.Substring(1);
+  while AClean.EndsWith('\') do AClean := AClean.Substring(0, AClean.Length - 1);
+  if AClean = '' then Exit;
+  if AClean.Contains('..') or AClean.Contains(':') then Exit; // no escape, no drive
+  for C in AClean do
+    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.', ' ', '\']) then
+      Exit;
+  for Seg in AClean.Split(['\']) do
+    if Seg.Trim = '' then Exit; // no empty segments (\\ , trailing, etc.)
+  Result := True;
+end;
 
 function CanonicalPlatform(const AName: string): string;
 var

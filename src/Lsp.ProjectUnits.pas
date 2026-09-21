@@ -88,7 +88,8 @@ implementation
 uses
   System.IOUtils, System.StrUtils, System.RegularExpressions,
   System.Generics.Collections, System.Character,
-  Lsp.Patch, Lsp.Texts;
+  Lsp.Patch, Lsp.Texts,
+  Lsp.Guard; // ReadPathDenied: hasta donde se puede subir buscando un .dpr
 
 { TUnitInfo }
 
@@ -1106,14 +1107,33 @@ var
   Dir, Parent, D, F, Stem: string;
   Dirs: TArray<string>;
   P: TProjectUnit;
+  Niveles: Integer;
 begin
   Result := [];
   Stem := TPath.GetFileNameWithoutExtension(APasPath);
   Dir := TPath.GetDirectoryName(TPath.GetFullPath(APasPath));
-  Parent := TPath.GetDirectoryName(Dir);
-  Dirs := [Dir];
-  if (Parent <> '') and (Parent <> Dir) then
-    Dirs := Dirs + [Parent];
+  // Se sube desde la carpeta de la unit HASTA EL BORDE DE LA JAULA. Solo
+  // miraba la carpeta y su madre, asi que en cuanto un proyecto tenia
+  // profundidad de verdad (Dominio\Modelos\UCliente.pas) mover esa unit
+  // contestaba "ningun .dpr lo listaba" y dejaba el proyecto sin compilar
+  // (medido en vivo el 2026-09-21). La estructura la decide el programador:
+  // el buscador no puede suponer que es plana. El freno es el mismo que el
+  // de Lsp.Session al buscar un .dproj - nunca mas alla de lo que este
+  // workspace puede leer - y un tope de niveles para el modo sin jaula, que
+  // si no subiria hasta la raiz del disco. Cada nivel es UN listado de *.dpr
+  // sin recursion: barato.
+  Dirs := [];
+  D := Dir;
+  Niveles := 0;
+  while (D <> '') and (Niveles < 12) and (ReadPathDenied(D) = '') do
+  begin
+    Dirs := Dirs + [D];
+    Parent := TPath.GetDirectoryName(D);
+    if (Parent = '') or SameText(Parent, D) then
+      Break;
+    D := Parent;
+    Inc(Niveles);
+  end;
   for D in Dirs do
   begin
     if not TDirectory.Exists(D) then

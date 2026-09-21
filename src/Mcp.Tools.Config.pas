@@ -403,30 +403,9 @@ begin
     'desactivada; add-platform la reactiva). Copia previa en __delphi-patch.', [APlatform]);
 end;
 
-{ A binary output folder must be a SIMPLE relative name (Compiled, or
-  bin\out): no XML metacharacters (so nothing can be injected into the .dproj
-  the way R5-B did), no drive/absolute path, no ".." escape. Returns the
-  cleaned token in AClean. }
-function ValidOutputFolder(const AFolder: string; out AClean: string): Boolean;
-var
-  C: Char;
-  Seg: string;
-begin
-  Result := False;
-  AClean := AFolder.Trim.Trim(['"']).Trim;
-  AClean := AClean.Replace('/', '\');
-  while AClean.StartsWith('\') do AClean := AClean.Substring(1);
-  while AClean.EndsWith('\') do AClean := AClean.Substring(0, AClean.Length - 1);
-  if AClean = '' then Exit;
-  if AClean.Contains('..') or AClean.Contains(':') then Exit; // no escape, no drive
-  for C in AClean do
-    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.', ' ', '\']) then
-      Exit;
-  for Seg in AClean.Split(['\']) do
-    if Seg.Trim = '' then Exit; // no empty segments (\\ , trailing, etc.)
-  Result := True;
-end;
-
+{ ValidOutputFolder (la regla de "carpeta relativa al proyecto, apta para
+  escribirse en un .dproj") vive ahora en Lsp.Dproj: delphi_create necesita
+  la misma para sus subcarpetas, y una regla asi no se escribe dos veces. }
 { Inner text currently between <ATag>..</ATag> ('' if the tag is absent). }
 function TagInner(const AXml, ATag: string): string;
 var
