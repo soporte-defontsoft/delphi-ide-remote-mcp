@@ -16,10 +16,8 @@ voz alta. Aqui se pagan dos:
      entregable tiene que caer en la primera raiz ESCRIBIBLE. Necesita el
      nodo del escritorio y una sesion que pueda capturar; si no, se DICE.
 
-La tercera (la clave de cache entre workspaces solapados) sigue debiendose:
-la raiz que resuelve una sesion LSP no sale en ninguna respuesta, y medirla
-por sus efectos pide un DelphiLSP vivo y dos tokens. test_round42 cubre el
-sintoma cruzado que la motivo.
+La tercera (la clave de cache entre workspaces solapados) se paga en
+test_round48: un servidor, dos tokens, y el exe de la 1.0.12 de control.
 """
 import json
 import os
@@ -225,8 +223,6 @@ try:
         check('R2 ...y en la raiz de solo lectura no se ha creado nada',
               not os.path.exists(os.path.join(RO, '__delphi-temp')),
               os.listdir(RO))
-    print('NOTA: sigue debiendose la medida de la clave de cache entre '
-          'workspaces solapados (pide un DelphiLSP vivo y dos tokens).')
 finally:
     try:
         proc.kill()
