@@ -6,6 +6,64 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+**The folder layout is the programmer's, and a long line no longer has to be
+retyped.** Everything here was found by USING the tools live in a sandbox
+workspace, not by a battery; the batteries were written afterwards.
+
+### Added - fragment mode, in the whole editing family
+The full-line anchor stays the rule: it exists so that nobody edits from
+memory. But a README paragraph is ONE line of 600 characters, and turning
+"68" into "69" meant pasting the whole line byte for byte - in 1.0.13 that
+wall ended in a replace done outside the tool.
+
+- `fragment` + `atline` (MANDATORY) + `new` changes just that piece of one
+  line. The fragment must appear EXACTLY ONCE in that line, case-sensitive;
+  zero or several is a refusal that shows the real line. No line breaks, and
+  it does not combine with `old`, `delete`, `toline`, `insert` or
+  `occurrence`.
+- Nothing is relaxed: one resolver (`Lsp.Patch.FragmentoALinea`) turns the
+  fragment into a full-line anchor, and the usual engine matches the WHOLE
+  line again, with its whole audit, before writing.
+- It serves the four doors an edit comes in by - `delphi_edit`,
+  `delphi_textedit`, batches (`edits`) and `delphi_changeset` stage, where it
+  is resolved when you stage it, so an ambiguous fragment is refused there and
+  not at commit. One shared description for the three tools.
+
+### Fixed - project subfolders (all four answered success)
+- `delphi_create` ignored `dir` for everything but projects: the unit landed
+  next to the .dpr. `dir` is now a SUBFOLDER of the project, relative and as
+  deep as you like, registered with its relative path in the .dpr and the
+  .dproj. It goes through the same whitelist as `set-output`
+  (`ValidOutputFolder`): no absolute path, no drive, no `..`, no characters
+  that could inject into the .dproj.
+- The project finder of a unit climbed ONE level: a unit three folders below
+  its .dpr had no project. It now climbs to the edge of the workspace, and
+  never past what the token may read.
+- Moving a whole FOLDER left the .dpr/.dproj pointing at nothing. The units
+  inside are re-pointed.
+- Deleting a whole FOLDER, the same: the units inside leave the project.
+- `delphi_adb_linux`: a refused `out` answered "File name is empty" instead
+  of the refusal (found on the first live call against a Linux node).
+
+### Measured - the third debt of 1.0.13
+The settings cache between OVERLAPPING workspaces. One server, a wide token
+rooted at a project and a narrow one rooted at a subfolder below the .dproj.
+With the 1.0.12 exe as control, one call from the wide token was enough for
+`delphi_definition` to hand the narrow one a path OUTSIDE its jail; since
+1.0.13 the answer does not depend on who called first. `test_round48` keeps
+the control: a battery that cannot see the bug in the binary that has it
+measures nothing.
+
+### Tests
+- `test_round48` (cache key), `test_round49` (fragment mode, 22 checks, CP1252
+  included), `test_round50` (subfolders, the project is built after each step).
+- `run_all.py` starts and ends a full run with an EMPTY
+  `%TEMP%\delphi-mcp-tests`: a battery that died halfway left its folder and a
+  later run could lean on it and pass for the wrong reason. Measured: 3.5 GB
+  of leftovers. A red run keeps its evidence.
+
 ## [1.0.14-beta] - 2026-09-21
 
 **The jail has a floor, in the gate.** The pending list of 1.0.13, worked
