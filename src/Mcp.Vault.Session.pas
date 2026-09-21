@@ -57,6 +57,7 @@ uses
   System.IOUtils,
   System.Classes,
   Lsp.Guard,
+  Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
   Lsp.Texts,
   Mcp.Vault.Seed;
 
@@ -80,7 +81,7 @@ begin
       Body := '';
       if TFile.Exists(Full) then
         try
-          Body := TFile.ReadAllText(Full, TEncoding.UTF8).TrimRight;
+          Body := DecodeSourceBytes(TFile.ReadAllBytes(Full)).TrimRight;
         except
           on E: Exception do
             Body := '(no se pudo leer: ' + E.Message + ')';
@@ -122,7 +123,7 @@ begin
   if TFile.Exists(Custom) then
   begin
     try
-      Result := TFile.ReadAllText(Custom, TEncoding.UTF8).Trim;
+      Result := DecodeSourceBytes(TFile.ReadAllBytes(Custom)).Trim;
     except
       Result := '';
     end;

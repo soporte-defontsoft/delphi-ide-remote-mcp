@@ -380,7 +380,12 @@ begin
           Continue;
         if ReadPathDenied(F) <> '' then
           Continue;
-        Text := TEncoding.UTF8.GetString(TFile.ReadAllBytes(F)); // lookups are ASCII
+        // El lector de la CASA, con el encoding REAL. Leia como UTF-8
+        // estricto "porque los lookups son ASCII" - pero el FICHERO no lo es:
+        // un solo .pas en CP1252 con un acento tumbaba el lint entero con
+        // "No mapping for the Unicode character" (medido en vivo 2026-09-21).
+        var EncF: string;
+        Text := PatchLoadText(F, EncF);
         if F.EndsWith('.pas', True) then
           Text := BlankComments(Text); // a lookup in a comment is not a lookup
         Lines := Text.Replace(#13#10, #10).Split([#10]);

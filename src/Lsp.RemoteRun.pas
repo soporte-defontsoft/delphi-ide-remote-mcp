@@ -89,6 +89,7 @@ uses
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
   Lsp.BuildRunner,
   Lsp.Discovery,
+  Lsp.Patch,     // DecodeSourceBytes: el lector de la casa
   Lsp.Texts;
 
 var
@@ -334,7 +335,9 @@ begin
     Ops := Format('"--get=%s/%s.out,%s"', [DeployRel, JobId, TmpDir]);
     if (Paclient(Pc, Ops, AProfile, Output) = 0) and TFile.Exists(OutFile) then
     begin
-      Texto := TFile.ReadAllText(OutFile, TEncoding.UTF8);
+      // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
+      // leida en estricto un solo byte suelto mataba el run entero.
+      Texto := DecodeSourceBytes(TFile.ReadAllBytes(OutFile));
       Terminado := PartirSalida(Texto, Salida, Codigo);
     end;
   until Terminado or (Sw.ElapsedMilliseconds > ATimeoutMs);

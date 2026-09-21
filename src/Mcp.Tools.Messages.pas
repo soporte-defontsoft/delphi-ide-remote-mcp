@@ -67,6 +67,7 @@ uses
   System.Generics.Collections,
   MCPServer.Registration,
   Lsp.Guard,
+  Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
   Lsp.Texts;
 
 const
@@ -203,7 +204,7 @@ begin
   Result := '';
   L := TStringList.Create;
   try
-    L.LoadFromFile(APath, TEncoding.UTF8);
+    L.Text := DecodeSourceBytes(TFile.ReadAllBytes(APath));
     for I := 0 to L.Count - 1 do
       if L[I].Trim <> '' then
         Exit(L[I].Trim.TrimLeft(['#', ' ']));
@@ -329,7 +330,7 @@ begin
       Inc(N);
       Sb.AppendLine(Format('===== MENSAJE %d/%d  (%s%s) =====', [N, Length(Files),
         TPath.GetFileName(F), IfThen(SameText(TPath.GetDirectoryName(F), Root), ', para todos', '')]));
-      Sb.AppendLine(TFile.ReadAllText(F, TEncoding.UTF8).TrimRight);
+      Sb.AppendLine(DecodeSourceBytes(TFile.ReadAllBytes(F)).TrimRight);
       Sb.AppendLine;
       // delivered once: park it where the operator can still read it
       EsAviso := SameText(TPath.GetDirectoryName(F), Root);

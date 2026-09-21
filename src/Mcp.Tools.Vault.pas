@@ -159,6 +159,7 @@ uses
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Guard,
+  Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
   Lsp.Texts,
   Mcp.Vault.Session;
 
@@ -309,8 +310,13 @@ end;
 
 function VaultLoad(const AFull: string): string;
 begin
-  // UTF-8 (with or without BOM); never the Delphi CP1252 pipeline.
-  Result := TFile.ReadAllText(AFull, TEncoding.UTF8);
+  // El vault ESCRIBE siempre UTF-8, pero LEER no lo puede exigir: una nota
+  // guardada en CP1252 por un editor viejo mataba vault_read con "No mapping
+  // for the Unicode character" y, peor, vault_search se la saltaba EN
+  // SILENCIO - "sin resultados" de algo que estaba ahi (medido 2026-09-21,
+  // test_round51). El lector de la casa: BOM, UTF-8 estricto, y CP1252 solo
+  // cuando algun byte alto no forma secuencia valida.
+  Result := DecodeSourceBytes(TFile.ReadAllBytes(AFull));
 end;
 
 procedure VaultSave(const AFull, AText: string);
