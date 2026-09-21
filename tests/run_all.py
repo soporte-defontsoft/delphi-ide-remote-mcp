@@ -27,7 +27,15 @@ SRC = args[0] if args else os.path.join(
 if not os.path.exists(SRC):
     sys.exit('no encuentro el exe: ' + SRC)
 
-CLEAN = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', '_cleanexe')
+RAIZ = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests')
+CLEAN = os.path.join(RAIZ, '_cleanexe')
+# Se barre la raiz ENTERA, no solo el exe: cada bateria limpia lo suyo cuando
+# acaba bien, pero una que muere a medias deja su carpeta, y la siguiente
+# pasada puede apoyarse en ella y salir verde por el motivo equivocado (paso
+# dos veces en dos dias). Medido el 2026-09-21: 3,5 GB de restos de ~90
+# baterias. Una suite completa empieza y acaba con la raiz vacia.
+if not only:
+    shutil.rmtree(RAIZ, ignore_errors=True)
 shutil.rmtree(CLEAN, ignore_errors=True)
 # Si la carpeta sigue ahi despues del rmtree es que OTRA regresion la tiene
 # cogida (su exe esta en uso). Dos suites a la vez comparten la raiz temporal
@@ -83,4 +91,8 @@ for name, out in failed:
     for line in out.splitlines():
         if line.lstrip().startswith('FAIL') or 'Error' in line or 'Traceback' in line:
             print('   ', line[:220])
+# ...y no se deja nada en el %TEMP% de la maquina. Con rojas se conserva: lo
+# que dejo la bateria que fallo es la evidencia.
+if not failed:
+    shutil.rmtree(RAIZ if not only else CLEAN, ignore_errors=True)
 sys.exit(1 if failed else 0)
