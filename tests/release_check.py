@@ -87,7 +87,20 @@ if '--skip-regression' in sys.argv:
 else:
     r = subprocess.run([sys.executable, os.path.join(HERE, 'run_all.py')],
                        capture_output=True, text=True, encoding='utf-8', errors='replace')
-    reg_line = (r.stdout or '').strip().splitlines()[-1] if r.stdout else ''
+    # La linea de RESUMEN, no la ultima: con rojas la suite imprime detras el
+    # detalle de cada fallo, y "la ultima linea" era entonces UNO de los FAIL -
+    # el gate contestaba con un fallo suelto y escondia cuantas baterias y
+    # cuantos checks habian caido (medido el 2026-09-21: imposible
+    # diagnosticar una roja intermitente). Y la salida ENTERA se guarda.
+    _lineas = (r.stdout or '').strip().splitlines()
+    reg_line = next((l for l in _lineas if l.startswith('== ') and 'baterias' in l),
+                    _lineas[-1] if _lineas else '')
+    os.makedirs(OUT, exist_ok=True)
+    with open(os.path.join(OUT, 'regression.log'), 'w', encoding='utf-8') as _f:
+        _f.write((r.stdout or '') + ('\n--- stderr ---\n' + r.stderr if r.stderr else ''))
+    for _l in _lineas:
+        if _l.lstrip().startswith('FAIL') or _l.startswith('FALLA') or _l.startswith('--- '):
+            print('   ', _l[:240])
     check('regression green (%s)' % reg_line, r.returncode == 0 and '0 fallos' in reg_line,
           reg_line or r.stderr[-200:] if r.stderr else '')
 

@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.0.15-beta] - 2026-09-21
 
 **The folder layout is the programmer's, and a long line no longer has to be
 retyped.** Everything here was found by USING the tools live in a sandbox
