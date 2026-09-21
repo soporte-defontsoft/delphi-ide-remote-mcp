@@ -353,6 +353,8 @@ begin
     '(same numbering as delphi_read).';
 end;
 
+function RelToRoot(const AFull, ARoot: string): string; forward;
+
 function TDelphiSearchTool.ExecuteWithParams(const Params: TDelphiSearchParams): string;
 var
   Return: TJSONObject;
@@ -400,9 +402,19 @@ begin
     else
       for Mask in Masks do
         Targets := Targets + WalkFiles(Params.Root, Mask);
+    // La MISMA regla que delphi_list, su gemela: los artefactos se filtran
+    // sobre la ruta RELATIVA a la raiz, y si quien llama nombro una carpeta
+    // de compilacion, es que la quiere ver. Aqui se filtraba la ABSOLUTA y
+    // sin consentimiento: buscar en ...\Win64\Release (o en una jaula que
+    // cuelga de una carpeta llamada Debug) devolvia cero, en silencio
+    // (auditoria 2026-09-21).
+    var RaizEnArtefactos := (not SingleFile) and
+      SkipIdeArtifacts(IncludeTrailingPathDelimiter(Params.Root));
     for F in Targets do
       begin
-        if not SingleFile and (SkipIdeArtifacts(F) or InVault(F)) then
+        if not SingleFile and (InVault(F) or
+           (not RaizEnArtefactos and
+            SkipIdeArtifacts(RelToRoot(F, Params.Root)))) then
           Continue;
         Inc(FilesScanned);
         Text := TLspClient.LoadSourceText(F);

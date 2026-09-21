@@ -166,6 +166,23 @@ try:
     check('C2 ...y el ASCII de los dos lados llega entero',
           'MARCA-ANTES' in s and 'MARCA-DESPUES' in s, s[:240])
 
+    # ------------------------------------------------------------------- S
+    # delphi_search filtra los artefactos como su gemela delphi_list: sobre
+    # la ruta RELATIVA a la raiz, y si nombras la carpeta de compilacion es
+    # que la quieres ver. Filtraba la absoluta: buscar DENTRO de
+    # Win64\Release devolvia cero, en silencio.
+    salida = os.path.join(RW, 'proy', 'Win64', 'Release')
+    os.makedirs(salida)
+    open(os.path.join(salida, 'Generado.pas'), 'w').write(
+        'unit Generado;\n// agujaenelartefacto\ninterface\nimplementation\nend.\n')
+    a = call('delphi_search', {'root': os.path.join(RW, 'proy'),
+                               'query': 'agujaenelartefacto'})
+    check('S1 desde arriba, la carpeta de compilacion sigue oculta',
+          'Generado.pas' not in a, a[:200])
+    b = call('delphi_search', {'root': salida, 'query': 'agujaenelartefacto'})
+    check('S2 nombrada como raiz, se busca dentro (como hace delphi_list)',
+          'Generado.pas' in b, b[:200])
+
     # ------------------------------------------------------------------- R
     # Roots=referencia;trabajo con ReadOnlyPaths=referencia. El entregable
     # por defecto caia en Roots[0] a pelo: justo donde la jaula prohibe
