@@ -141,6 +141,23 @@ import re as _re
 check('jobId lleva fragmento GUID (timestamp-only colisionaba)',
       bool(_re.match(r'^\d{8}-\d{9}-[0-9a-f]{8}$', j.get('jobId') or '')),
       j.get('jobId'))
+# 3b) CADA argumento llega blindado al /bin/sh del destino. Iban a pelo en el
+# guion y el filtro de metacaracteres lo ponia quien llama: remote-run si,
+# delphi_adb_linux NO, y un type text="hola; rm -rf ~" ejecutaba la segunda
+# mitad en la maquina destino (medido contra un Fedora el 2026-09-21: un texto
+# con parentesis rompio la sintaxis del guion). Aqui se mide el punto unico:
+# parentesis, asterisco, almohadilla, virgulilla y comilla simple tienen que
+# llegar LITERALES, y las comillas dobles siguen agrupando.
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                             'exe': PROJNAME + '.exe',
+                             'args': '"%s" (a) * #b ~ it\'s "dos palabras"' % SCRIPT.replace(chr(92), '/'),
+                             'timeoutms': 30000}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+out = j.get('output') or ''
+check('argumentos blindados: ( ) * # ~ y la comilla simple llegan literales',
+      all(x in out for x in ("'(a)'", "'*'", "'#b'", "'~'", '"it\'s"')), r[:400])
+check('...y las comillas dobles siguen agrupando un argumento con espacios',
+      "'dos palabras'" in out, r[:400])
 # 4) exe fuera de la scratch -> runnerError
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': '..\\..\\fuera.exe', 'timeoutms': 20000})
 j = json.loads(r) if r.startswith('{') else {}

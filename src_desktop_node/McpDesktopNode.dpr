@@ -19,6 +19,7 @@ uses
 {$ELSE}
   Mld.Dyn in 'Mld.Dyn.pas',
   Mld.DBus in 'Mld.DBus.pas',
+  Mld.Teclado in 'Mld.Teclado.pas',
   Mld.Eis in 'Mld.Eis.pas';
 {$ENDIF}
 
@@ -344,7 +345,8 @@ begin
               Sleep(250);
               Hizo := Manos.Escribir(Frase);
               if Hizo then
-                Writeln(Format('  ESCRITO "%s" en el pixel (%d,%d)', [Frase, ObjX, ObjY]))
+                Writeln(Format('  ESCRITO "%s" en el pixel (%d,%d)  [%s]',
+                  [Frase, ObjX, ObjY, Manos.MapaNota]))
               else
                 Writeln('  pulse bien pero no pude escribir: ', Manos.Error);
             end;
@@ -357,7 +359,7 @@ begin
               Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(ObjX);
             Hizo := Manos.Escribir(Frase);
             if Hizo then
-              Writeln('  ESCRITO: ', Frase)
+              Writeln('  ESCRITO: ', Frase, '  [', Manos.MapaNota, ']')
             else
               Writeln('  no pude escribir: ', Manos.Error);
           end

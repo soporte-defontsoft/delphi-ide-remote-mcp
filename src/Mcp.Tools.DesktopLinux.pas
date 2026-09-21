@@ -148,7 +148,7 @@ end;
 { El gesto; ExecuteWithParams lo envuelve en el cerrojo de SU maquina. }
 function GestoEnElTarget(const Params: TDesktopLinuxParams): string;
 var
-  Cmd, Args, Salida, Destino, Local, Fallo, Remota, Proj, Nota: string;
+  Cmd, Args, Salida, Destino, Local, Fallo, Remota, Proj, Nota, Literal: string;
   Bajada, Propia: string;
   Res: TJSONObject;
   Return: TJSONObject;
@@ -197,6 +197,7 @@ begin
     Exit;
 
   Args := '';
+  Literal := '';
   if Cmd = 'tap' then
   begin
     if (Params.X.Trim = '') or (Params.Y.Trim = '') then
@@ -209,11 +210,16 @@ begin
     if Params.Text.Trim = '' then
       Exit(SR_ADBLINUX_NEEDTEXT);
     { Con coordenadas es UN solo viaje: pulsa para dar el foco y escribe. }
+    { El TEXTO no va en Args: viaja como argumento LITERAL (ver
+      Lsp.RemoteRun.GuionDeEjecucion). Pegado aqui llegaba a pelo al /bin/sh
+      del destino, y un "hola; lo-que-sea" ejecutaba la segunda mitad alli
+      (medido 2026-09-21). }
+    Literal := Params.Text.Trim;
     if (Params.X.Trim <> '') and (Params.Y.Trim <> '') then
-      Args := Format('escribe %d %d %s', [StrToIntDef(Params.X.Trim, -1),
-        StrToIntDef(Params.Y.Trim, -1), Params.Text.Trim])
+      Args := Format('escribe %d %d', [StrToIntDef(Params.X.Trim, -1),
+        StrToIntDef(Params.Y.Trim, -1)])
     else
-      Args := 'texto ' + Params.Text.Trim;
+      Args := 'texto';
   end
   else if Cmd = 'key' then
   begin
@@ -242,7 +248,7 @@ begin
     desplegado por un servidor viejo no la pide, pero EnsureNodeCurrent lo
     habra sustituido antes de llegar aqui. }
   Res := RemoteRun(Params.Profile.Trim, Proj, '',
-    Trim(NODE_KEY + ' ' + Args), 60000);
+    Trim(NODE_KEY + ' ' + Args), 60000, Literal);
   try
     Salida := '';
     if Res.GetValue('output') <> nil then

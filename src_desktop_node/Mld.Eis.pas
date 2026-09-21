@@ -13,7 +13,8 @@
 interface
 
 uses
-  Mld.Dyn;
+  Mld.Dyn,
+  Mld.Teclado;
 
 type
   TRegion = record
@@ -34,6 +35,10 @@ type
     FNombreAsiento: string;
     FSecuencia: Cardinal;
     FError: string;
+    FMapa: TMapaTeclado;
+    FMapaMirado: Boolean;
+    FMapaNota: string;
+    procedure MirarMapa;
     function Resolver: Boolean;
     procedure Atender(AEvento: Pointer; ATipo: Integer);
     procedure Emitir(ADisp: Pointer);
@@ -69,13 +74,16 @@ type
     property Region: TRegion read FRegion;
     property NombreAsiento: string read FNombreAsiento;
     property Error: string read FError;
+    { Con que teclea: la distribucion que entrego el escritorio, o por que
+      se ha quedado con la tabla fija. Para que el eco lo DIGA. }
+    property MapaNota: string read FMapaNota;
     function Microsegundos: UInt64;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Diagnostics;
+  System.SysUtils, System.Diagnostics, Posix.SysMman;
 
 const
   { enum ei_device_capability }
@@ -116,6 +124,9 @@ type
   TEiBoton = procedure(AD: Pointer; ABoton: Cardinal; APulsado: Boolean); cdecl;
   TEiTecla = procedure(AD: Pointer; ATecla: Cardinal; APulsada: Boolean); cdecl;
   TEiCuadro = procedure(AD: Pointer; AUs: UInt64); cdecl;
+  TEiMapaDe = function(AD: Pointer): Pointer; cdecl;
+  TEiMapaFd = function(AM: Pointer): Integer; cdecl;
+  TEiMapaTam = function(AM: Pointer): NativeUInt; cdecl;
 
 var
   EiNuevo: TEiNuevo;
@@ -141,6 +152,10 @@ var
   EiBoton: TEiBoton;
   EiTecla: TEiTecla;
   EiCuadro: TEiCuadro;
+  { Opcionales: si esta libei no las trae, se teclea con la tabla fija. }
+  EiMapaDe: TEiMapaDe;
+  EiMapaFd: TEiMapaFd;
+  EiMapaTam: TEiMapaTam;
 
 function Texto(A: MarshaledAString): string;
 begin
@@ -162,6 +177,7 @@ destructor TManos.Destroy;
 begin
   if (FEi <> nil) and Assigned(EiUnref) then
     EiUnref(FEi);
+  FMapa.Free;
   FLib.Free;
   inherited;
 end;
@@ -392,6 +408,61 @@ begin
   Result := True;
 end;
 
+{ Pide al escritorio su mapa de teclado, UNA vez. libei lo entrega como un
+  descriptor a un texto XKB; se copia (acabado en #0) y lo lee Mld.Teclado. }
+procedure TManos.MirarMapa;
+var
+  Dir, Mapa, Vista: Pointer;
+  Fd: Integer;
+  Tam: NativeUInt;
+  Copia: TBytes;
+begin
+  if FMapaMirado then
+    Exit;
+  FMapaMirado := True;
+  FMapaNota := 'teclado: tabla fija (americano)';
+  if FTeclado = nil then
+    Exit;
+  if not (FLib.Simbolo('ei_device_keyboard_get_keymap', Dir)) then
+  begin
+    FMapaNota := FMapaNota + ' - esta libei no entrega el mapa';
+    Exit;
+  end;
+  EiMapaDe := TEiMapaDe(Dir);
+  if not FLib.Simbolo('ei_keymap_get_fd', Dir) then Exit;
+  EiMapaFd := TEiMapaFd(Dir);
+  if not FLib.Simbolo('ei_keymap_get_size', Dir) then Exit;
+  EiMapaTam := TEiMapaTam(Dir);
+  Mapa := EiMapaDe(FTeclado);
+  if Mapa = nil then
+  begin
+    FMapaNota := FMapaNota + ' - el escritorio no entrego su mapa';
+    Exit;
+  end;
+  Fd := EiMapaFd(Mapa);
+  Tam := EiMapaTam(Mapa);
+  if (Fd < 0) or (Tam = 0) or (Tam > 8 * 1024 * 1024) then
+    Exit;
+  Vista := mmap(nil, Tam, PROT_READ, MAP_PRIVATE, Fd, 0);
+  if NativeInt(Vista) = -1 then
+  begin
+    FMapaNota := FMapaNota + ' - no pude leer el mapa del escritorio';
+    Exit;
+  end;
+  try
+    SetLength(Copia, Tam + 1); // a ceros: el texto queda acabado en #0
+    Move(Vista^, Copia[0], Tam);
+  finally
+    munmap(Vista, Tam);
+  end;
+  FMapa := TMapaTeclado.Create;
+  if FMapa.Cargar(@Copia[0]) then
+    FMapaNota := Format('teclado: el del escritorio (%s, %d caracteres)',
+      [FMapa.Distribucion, FMapa.Cuantas])
+  else
+    FMapaNota := FMapaNota + ' - ' + FMapa.Error;
+end;
+
 function TManos.Tecla(ACodigo: Cardinal; APulsada: Boolean): Boolean;
 begin
   Result := False;
@@ -437,6 +508,7 @@ end;
 function TManos.Escribir(const ATexto: string): Boolean;
 const
   MAYUSCULA = 42;   { KEY_LEFTSHIFT }
+  ALTGR = 100;      { KEY_RIGHTALT: el tercer nivel del teclado (@, #, ~...) }
 var
   I, Codigo: Integer;
   C: Char;
@@ -448,9 +520,33 @@ begin
     FError := 'el canal no esta listo';
     Exit;
   end;
+  MirarMapa;
   for I := 1 to Length(ATexto) do
   begin
     C := ATexto[I];
+    // Con el mapa del escritorio en la mano, manda EL: la tecla y el nivel
+    // (Mayusculas 42, AltGr 100) que el escritorio dice que dan ese caracter.
+    if (FMapa <> nil) and (FMapa.Cuantas > 0) then
+    begin
+      var P: TPulsacion;
+      if not FMapa.Buscar(Ord(C), P) then
+      begin
+        FError := Format('el teclado del escritorio (%s) no tiene una tecla ' +
+          'que de el caracter "%s" (posicion %d)', [FMapa.Distribucion, C, I]);
+        Exit;
+      end;
+      if Odd(P.Nivel) and not Tecla(MAYUSCULA, True) then Exit;
+      if (P.Nivel >= 2) and not Tecla(ALTGR, True) then Exit;
+      if not Tecla(P.Codigo, True) then Exit;
+      Sleep(35);
+      if not Tecla(P.Codigo, False) then Exit;
+      if (P.Nivel >= 2) and not Tecla(ALTGR, False) then Exit;
+      if Odd(P.Nivel) and not Tecla(MAYUSCULA, False) then Exit;
+      Sleep(35);
+      Continue;
+    end;
+    // Sin mapa: la tabla fija de siempre, que es un teclado AMERICANO. En
+    // otra distribucion '-' y '/' NO salen bien, y MapaNota lo dice.
     Mayus := CharInSet(C, ['A'..'Z']);
     if Mayus then
       C := Chr(Ord(C) + 32);

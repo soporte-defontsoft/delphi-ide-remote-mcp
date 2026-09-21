@@ -66,7 +66,7 @@ function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
   picks another file of THAT SAME folder (a helper binary of the deploy) and
   may not contain path separators. Returns the JSON the tool hands back. }
 function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
-  ATimeoutMs: Integer): TJSONObject;
+  ATimeoutMs: Integer; const ALiteral: string = ''): TJSONObject;
 
 { Trae AQUI un fichero que el programa desplegado dejo en SU carpeta del
   target. ARelPath es relativo a esa carpeta ('captura.png'), nunca una ruta
@@ -183,13 +183,70 @@ end;
   del fichero cuando aparezca el centinela ___RC=<codigo>. Mientras no esta,
   lo que hay en el fichero es la salida PARCIAL: se puede leer el avance de un
   proceso largo, cosa que el runner nunca dio. }
-function GuionDeEjecucion(const AExeLeaf, AArgs, ASalida: string): string;
+{ Un argumento, blindado para /bin/sh: entre comillas SIMPLES el shell no
+  interpreta nada, y la unica que hay que tratar es la propia comilla simple. }
+function ComillasSh(const AArg: string): string;
+begin
+  Result := '''' + AArg.Replace(#13, ' ').Replace(#10, ' ')
+    .Replace('''', '''\''''') + '''';
+end;
+
+{ Trocea AArgs como lo haria quien los escribio: por espacios, y con comillas
+  DOBLES para agrupar un argumento que lleva espacios ("ruta con espacios"
+  uno dos). Las comillas dobles agrupan y se van; nada mas se interpreta. }
+function TrocearArgs(const AArgs: string): TArray<string>;
+var
+  I: Integer;
+  Actual: string;
+  Dentro, Hay: Boolean;
+begin
+  Result := nil;
+  Actual := '';
+  Dentro := False;
+  Hay := False;
+  for I := 1 to Length(AArgs) do
+    if AArgs[I] = '"' then
+    begin
+      Dentro := not Dentro;
+      Hay := True; // "" es un argumento vacio, pero es un argumento
+    end
+    else if CharInSet(AArgs[I], [' ', #9, #13, #10]) and not Dentro then
+    begin
+      if Hay then
+        Result := Result + [Actual];
+      Actual := '';
+      Hay := False;
+    end
+    else
+    begin
+      Actual := Actual + AArgs[I];
+      Hay := True;
+    end;
+  if Hay then
+    Result := Result + [Actual];
+end;
+
+function GuionDeEjecucion(const AExeLeaf, AArgs, ASalida: string;
+  const ALiteral: string = ''): string;
 var
   Linea: string;
 begin
   Linea := '"$D/' + AExeLeaf + '"';
-  if AArgs <> '' then
-    Linea := Linea + ' ' + AArgs;
+  // CADA argumento entre comillas SIMPLES de shell. Iban A PELO dentro del
+  // guion, y este es el unico sitio por donde pasan todos: el filtro de
+  // metacaracteres lo aplicaba quien llama, remote-run SI y delphi_adb_linux
+  // NO, asi que `type text="hola; rm -rf ~"` ejecutaba la segunda mitad en
+  // la maquina destino (medido el 2026-09-21: un texto con parentesis rompio
+  // la sintaxis del guion y enseno como viajaba). Dentro de comillas simples
+  // el shell no interpreta NADA; la unica que hay que tratar es la propia
+  // comilla simple. Y de paso un texto legitimo con ( ) * ? # ~ ' " deja de
+  // romperse o de expandirse. El filtro de quien llama se queda: cinturon.
+  for var Trozo in TrocearArgs(AArgs) do
+    Linea := Linea + ' ' + ComillasSh(Trozo);
+  // ALiteral: UN argumento que viaja TAL CUAL, sin trocear - el texto que
+  // delphi_adb_linux manda teclear, con sus espacios y sus comillas.
+  if ALiteral <> '' then
+    Linea := Linea + ' ' + ComillasSh(ALiteral);
   Result :=
     '#!/bin/sh'#10 +
     'D="$(cd "$(dirname "$0")" && pwd)"'#10 +
@@ -244,7 +301,7 @@ begin
 end;
 
 function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
-  ATimeoutMs: Integer): TJSONObject;
+  ATimeoutMs: Integer; const ALiteral: string): TJSONObject;
 var
   ProjName, DeployRel, ARemoteExe, ExeLeaf: string;
   Pc, JobId, TmpDir, GuionFile, OutFile, Ops, Output, Texto, Salida: string;
@@ -294,7 +351,7 @@ begin
   Enc := TUTF8Encoding.Create(False);
   try
     TFile.WriteAllText(GuionFile,
-      GuionDeEjecucion(ExeLeaf, AArgs, JobId + '.out'), Enc);
+      GuionDeEjecucion(ExeLeaf, AArgs, JobId + '.out', ALiteral), Enc);
   finally
     Enc.Free;
   end;

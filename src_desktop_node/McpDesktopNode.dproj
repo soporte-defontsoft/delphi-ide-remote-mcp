@@ -176,6 +176,7 @@
         </DelphiCompile>
         <DCCReference Include="Mld.Dyn.pas"/>
         <DCCReference Include="Mld.DBus.pas"/>
+        <DCCReference Include="Mld.Teclado.pas"/>
         <DCCReference Include="Mld.Eis.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
