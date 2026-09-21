@@ -6,6 +6,91 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.0.14-beta] - 2026-09-21
+
+**The jail has a floor, in the gate.** The pending list of 1.0.13, worked
+through: the central gate now reads `[RutaDelServidor]`, the capture family
+got one rule for `out`, and two of the three measurements that release owed
+were paid.
+
+### Added - the jail floor, for every tool, at the gate
+The rule already lived in one function (`PathDenied` / `ReadPathDenied`);
+what was never centralised was REMEMBERING to call it - about sixty calls by
+hand across twenty units. The floor was first written on 2026-09-21
+recognising paths by EXCLUSION, refused a `delphi_search` whose query merely
+looked like a path, and was withdrawn the same day. It is back with the right
+criterion: only arguments whose parameter carries `[RutaDelServidor]` - read
+by RTTI from the real tool registry, keyed with the binder's own
+`NormalizeKey` - and only ABSOLUTE paths (a relative one resolves against a
+base that only the tool knows). It applies the WIDE rule (`ReadPathDenied`),
+so it never refuses what a tool would have accepted: a redundant layer. The
+per-tool checks stay, on purpose - the day someone removes them "because it
+is centralised", an unmarked parameter becomes an unjailed path.
+
+- `delphi_workspace` publishes `jailedParams`, because a redundant layer that
+  went EMPTY would break nothing and nobody would notice. It said **42**, not
+  the 39 of the census: there are 39 marks in the source and one is inherited
+  by four tools. The census counted marks; the server counts parameters.
+- `delphi_adb_linux.project` could never be probed outside the jail (the
+  profile refusal came first). With the floor the jail answers at the gate,
+  and that probe is now the proof the floor is alive.
+- The audit had left four warnings for whoever wrote this gate. Verified
+  against the code before building on them: two were right, **two were
+  wrong** (there is no second vendor copy being compiled; and checking
+  relative paths at the gate would refuse legitimate `delphi_config.path`
+  calls).
+
+### Changed - one rule for the `out` of every capture
+It was a FOLDER in `delphi_desktop` and `delphi_adb_linux` and a mandatory
+FILE ending in ".png" in `delphi_adb` - same idea, same parameter name,
+different contract - with the file name composed by hand in three places. An
+agent passing `out=...\shot.png` to `delphi_desktop` got a folder CALLED
+`shot.png`. One function now, `CaptureTarget`: a folder (existing, or ending
+in `\`, or without extension) or a file - and a file must carry the capture's
+REAL extension, which comes from the capture itself, not from a constant. The
+day a node returns something other than PNG the rule still holds, and nobody
+receives an image wearing another format's extension: a mismatch is refused,
+naming the real one. `delphi_adb`'s `out` becomes optional, like its sisters'.
+
+### Fixed
+- **`delphi_search` hid a build folder you asked for by name.** It filtered
+  IDE artifacts on the ABSOLUTE path; its twin `delphi_list` does it on the
+  path relative to the root, with the rule "if you name the build folder, you
+  mean it". Searching inside `...\Win64\Release` - or in a jail hanging from
+  a folder called `Debug` - answered zero hits, silently. Same rule now.
+- **The trash of a folder you stop editing was kept forever.** The 15-day
+  purge only ran from `BackupFile`. Walking every root at startup was
+  measured and discarded (5.9 s on a tree of 8,869 folders - and a jail can
+  be a whole disk), and so was an hourly background sweep: the walker behind
+  `delphi_list` / `search` / `projects` ALREADY passes every trash folder, so
+  it purges in passing - 0.012 ms when there is nothing to drop. Two brakes:
+  a read-only credential purges nothing, and `PathDenied` decides whether
+  that trash is ours to write, which leaves out ReadOnlyPaths, another
+  agent's confined subtree and a "trash" that is a junction out of the jail.
+
+### Tests
+- New `test_round47`: the CESU-8 fall-through measured with a REAL child
+  (`git show` of a file holding a CESU-8 surrogate pair), deliverables
+  avoiding a read-only first root, the search/list rule, the purge in
+  passing with both brakes.
+- `test_round43` W5: the `out` rule, on `delphi_adb` always (it bites before
+  the device is touched) and on a real desktop capture when the session can
+  take one - and it says so when it cannot.
+- Three fixtures followed deliberate contract changes: `test_guard`'s root
+  check uses a legal `dest` so it still measures the ROOT rule rather than
+  the floor; `test_round31` dates its trash today; `test_deploy_adb` no
+  longer expects "screenshot needs out".
+
+### Known issues
+- Still owed: measuring the settings-cache key across overlapping workspaces.
+  It does not need the IDE - only DelphiLSP, which the server spawns itself -
+  but the resolved root shows in no answer, so it has to be measured by its
+  effects.
+- **Next**: `delphi_create` cannot place a unit in a SUBFOLDER of the project
+  (it always lands next to the `.dpr`; today that takes a second step with
+  `delphi_move` or `delphi_edit createunit` + `delphi_config add-unit`).
+- The unit-creation race, seen once, never reproduced in 16 runs.
+
 ## [1.0.13-beta] - 2026-09-21
 
 **The audit release.** A multi-agent review of v1.0.12 (12 independent

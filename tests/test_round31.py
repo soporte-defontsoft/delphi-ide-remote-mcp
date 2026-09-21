@@ -75,7 +75,11 @@ open(os.path.join(JAIL, 'cebo.md'), 'w').write(
 # no es un proyecto que se pueda abrir, asi que no debe declararse - pero
 # tampoco debe desaparecer sin decir nada.
 PROY = os.path.join(JAIL, 'proy')
-BASURA = os.path.join(PROY, '__delphi-patch', '20260101')
+# Con la fecha de HOY (v1.0.14): el recorredor purga al pasar las carpetas de
+# dia caducadas (>15 dias), y una fija como '20260101' desaparecia -con razon-
+# antes de que R8b/R8c pudieran contarla. Lo que se mide aqui es que la
+# papelera se ESCONDE y se CUENTA, no cuanto dura.
+BASURA = os.path.join(PROY, '__delphi-patch', __import__('time').strftime('%Y%m%d'))
 os.makedirs(BASURA)
 DPROJ_MIN = ('<?xml version="1.0" encoding="utf-8"?>\n'
              '<Project><PropertyGroup><MainSource>App.dpr</MainSource>'

@@ -183,6 +183,32 @@ try:
     check('S2 nombrada como raiz, se busca dentro (como hace delphi_list)',
           'Generado.pas' in b, b[:200])
 
+    # ------------------------------------------------------------------- P
+    # La papelera de una carpeta que NADIE edita ya se purga: el recorredor
+    # de delphi_list pasa por delante y tira lo caducado (>15 dias). Antes la
+    # purga solo salia de BackupFile, asi que esas copias eran para siempre.
+    # Recorrer las raices al arrancar se midio y se descarto (5,9 s).
+    quieta = os.path.join(RW, 'quieta', '__delphi-patch')
+    os.makedirs(os.path.join(quieta, '20200101'))
+    open(os.path.join(quieta, '20200101', 'Vieja.pas'), 'w').write('x')
+    hoy = time.strftime('%Y%m%d')
+    os.makedirs(os.path.join(quieta, hoy))
+    open(os.path.join(quieta, hoy, 'Reciente.pas'), 'w').write('x')
+    # ...y la misma trampa bajo la raiz de SOLO LECTURA: ahi no se toca nada.
+    intocable = os.path.join(RO, 'vendor', '__delphi-patch', '20200101')
+    os.makedirs(intocable)
+    open(os.path.join(intocable, 'Ajena.pas'), 'w').write('x')
+    call('delphi_list', {'root': RW})
+    call('delphi_list', {'root': RO})
+    check('P1 un listado que pasa por delante tira la carpeta de dia caducada',
+          not os.path.exists(os.path.join(quieta, '20200101')),
+          os.listdir(quieta))
+    check('P2 ...y deja en paz la reciente',
+          os.path.exists(os.path.join(quieta, hoy, 'Reciente.pas')),
+          os.listdir(quieta))
+    check('P3 bajo ReadOnlyPaths no se purga nada: se lee, no se toca',
+          os.path.exists(os.path.join(intocable, 'Ajena.pas')), intocable)
+
     # ------------------------------------------------------------------- R
     # Roots=referencia;trabajo con ReadOnlyPaths=referencia. El entregable
     # por defecto caia en Roots[0] a pelo: justo donde la jaula prohibe

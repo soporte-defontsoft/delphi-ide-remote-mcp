@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: BETA.** Functional and covered by 68 end-to-end batteries — over 1,550 checks — against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
+> **Status: BETA.** Functional and covered by 69 end-to-end batteries — over 1,570 checks — against DelphiLSP 37.0 (RAD Studio 13), but young: expect rough edges and breaking changes between minor versions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, and [CHANGELOG.md](CHANGELOG.md) for versions.
 
 ## Why
 
@@ -545,10 +545,14 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   and search, `includetrash` included: it is not trash, nothing is restored from it. Before
   1.0.12 these files went to the MACHINE's `%TEMP%`, outside every jail - 56.4 MB measured,
   forgotten there for two days.
-- **A destination you choose is checked too.** The jail applies to `out`, `dest`, `outfile`
-  and friends exactly as it does to `path`, and every parameter that names a path ON THIS
-  SERVER declares it in the tool's own source (`[RutaDelServidor]`, since 1.0.12 - the
-  declaration the pending central gate will read; today each tool still checks by hand). The two
+- **A destination you choose is checked too - twice.** The jail applies to `out`, `dest`,
+  `outfile` and friends exactly as it does to `path`. Every parameter that names a path ON
+  THIS SERVER declares it in the tool's own source (`[RutaDelServidor]`), and since 1.0.14 the
+  gate in front of every `tools/call` READS that declaration: an absolute path in a marked
+  argument must fall inside what the workspace may read, before the tool even starts. It is a
+  floor, not a replacement - each tool still makes its own, stricter check (reading versus
+  writing is something only the tool knows) - and `delphi_workspace` reports how many
+  parameters the floor watches (`jailedParams`), so an empty floor can be seen. The two
   exceptions are paths on the TARGET machine - `delphi_paserver`'s `exe` and `delphi_config`'s
   `remotedir` - where this server's jail has nothing to say.
 - **A root is also where project discovery STOPS.** Looking for a unit's `.delphilsp.json` or
@@ -581,7 +585,7 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
 
 ## Tests
 
-`tests/` contains 68 end-to-end batteries that talk real MCP (stdio and HTTP) to the built server — over 1,550 checks, with byte-level verification for the editing tools. `python tests/run_all.py` runs them all against a clean copy of the built exe and prints the totals. Highlights: safe editing (`test_delphi_patch.py`), workspace jail and escape attempts (`test_guard.py`, and `test_round46.py` with real NTFS junctions), auth and access levels (`test_http_auth.py`), real project scaffolding + builds (`test_scaffold.py`), the recoverable trash and its ownership rules, the designer tools (layout semantics measured against the VCL), concurrency (`test_concurrencia.py`: bursts of simultaneous agents editing one file, registering units in one project, filing reports, packaging, screenshotting and building while that binary runs — every one checked against the disk afterwards),  remote execution end-to-end against a real `paclient` stub that runs the generated launch scripts (`test_remoterun.py`), and docs/runtime consistency (`test_docs_consistency.py`).
+`tests/` contains 69 end-to-end batteries that talk real MCP (stdio and HTTP) to the built server — over 1,570 checks, with byte-level verification for the editing tools. `python tests/run_all.py` runs them all against a clean copy of the built exe and prints the totals. Highlights: safe editing (`test_delphi_patch.py`), workspace jail and escape attempts (`test_guard.py`, and `test_round46.py` with real NTFS junctions), auth and access levels (`test_http_auth.py`), real project scaffolding + builds (`test_scaffold.py`), the recoverable trash and its ownership rules, the designer tools (layout semantics measured against the VCL), concurrency (`test_concurrencia.py`: bursts of simultaneous agents editing one file, registering units in one project, filing reports, packaging, screenshotting and building while that binary runs — every one checked against the disk afterwards),  remote execution end-to-end against a real `paclient` stub that runs the generated launch scripts (`test_remoterun.py`), and docs/runtime consistency (`test_docs_consistency.py`).
 
 Each security fix is paired with the vector it closes **and** with a counter-test proving it did not over-tighten — a fix that refuses too much is a bug too.
 

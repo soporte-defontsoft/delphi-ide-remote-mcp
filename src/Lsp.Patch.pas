@@ -210,6 +210,27 @@ function TrashStampedName(const AName: string): string;
   reconocerla. Estaba declarada DOS veces, aqui y en Mcp.Tools.FileOps. }
 function TrashFolderName: string;
 
+{ Tira las carpetas de dia caducadas (RETENTION_DAYS) de UNA papelera. Coste
+  medido cuando no hay nada que tirar, que es casi siempre: 0,012 ms - leer
+  una carpeta de tres entradas y comparar nombres. Nunca lanza.
+
+  Se exporta porque la purga solo salia de BackupFile: una carpeta que se
+  deja de EDITAR conservaba sus copias para siempre (lo vio David). Recorrer
+  las raices al arrancar se midio y se descarto - 5,9 s en un arbol de 8.869
+  carpetas, y una jaula puede ser un disco entero -; un hilo que lo haga
+  cada hora tampoco hace falta: el recorredor de delphi_list / search /
+  projects YA pasa por delante de cada papelera, asi que purga al pasar
+  (PurgaAlPasar). Trabajo proporcional a la actividad, cero recorridos
+  nuevos. }
+procedure PurgeOldBackups(const ADir: string);
+
+{ La purga oportunista, con sus dos frenos: una credencial de solo lectura
+  no borra nada (un listado no tiene efectos), y PathDenied decide si esa
+  papelera es NUESTRA para escribir - lo que deja fuera las ReadOnlyPaths,
+  el subarbol confinado de otro agente y, sobre todo, una "papelera" que
+  sea un junction hacia fuera de la jaula. }
+procedure PurgaAlPasar(const ATrashDir: string);
+
 implementation
 
 uses
@@ -497,6 +518,19 @@ begin
   begin
     TFile.Delete(Tmp);
     raise Exception.CreateFmt('rename atomico fallido (%d)', [GetLastError]);
+  end;
+end;
+
+procedure PurgaAlPasar(const ATrashDir: string);
+begin
+  try
+    if IsReadOnlyNow then
+      Exit;
+    if PathDenied(ATrashDir) <> '' then
+      Exit;
+    PurgeOldBackups(ATrashDir);
+  except
+    // purgar al pasar nunca rompe el listado que pasaba
   end;
 end;
 

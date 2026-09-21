@@ -318,7 +318,13 @@ var
     end;
     try
       for Sub in TDirectory.GetDirectories(D) do
+      begin
+        // Una papelera por delante: se purga AL PASAR lo caducado, antes de
+        // entrar (la nota, con las medidas, en Lsp.Patch.PurgaAlPasar).
+        if SameText(TPath.GetFileName(Sub), TrashFolderName) then
+          PurgaAlPasar(Sub);
         Recurse(Sub);
+      end;
     except
       // cannot enumerate children: nothing else to do here
     end;

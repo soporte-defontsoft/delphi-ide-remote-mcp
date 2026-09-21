@@ -149,8 +149,11 @@ check('adb run sin app: rechazo con el nombre de paquete como camino',
       'RECHAZADO' in out and '"app"' in out, out[:250])
 
 out = srv.call('delphi_adb', {"command": "screenshot", "device": "ZZZ-NO-EXISTE"})
-check('adb screenshot sin out: rechazo que guia a delphi_fetch',
-      'RECHAZADO' in out and '"out"' in out and 'delphi_fetch' in out, out[:250])
+# v1.0.14: "out" es opcional en toda la familia de capturas (CaptureTarget);
+# sin el, la captura cae en __delphi-temp del workspace. Lo que falle aqui
+# sera el dispositivo, que no existe - nunca la falta de "out".
+check('adb screenshot sin out: ya no se rechaza por faltar "out"',
+      not ('RECHAZADO' in out and '"out"' in out), out[:250])
 out = srv.call('delphi_adb', {"command": "screenshot", "device": "ZZZ-NO-EXISTE",
                               "out": os.path.join(BASE, 'captura.txt')})
 check('adb screenshot out sin .png: rechazado', 'RECHAZADO' in out and '.png' in out,
@@ -348,8 +351,7 @@ check('readonly: run rechazado (ejecutar en el dispositivo es write)',
       'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
 out = ro.call('delphi_adb', {"command": "screenshot", "device": "127.0.0.1"})
 check('readonly: screenshot sigue abierto (mirar es lectura)',
-      'SOLO LECTURA' not in out and 'RECHAZADO' in out and '"out"' in out,
-      out[:250])
+      'SOLO LECTURA' not in out, out[:250])
 out = ro.call('delphi_adb', {"command": "tap", "x": "1", "y": "1",
                              "device": "127.0.0.1"})
 check('readonly: tap rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out,
