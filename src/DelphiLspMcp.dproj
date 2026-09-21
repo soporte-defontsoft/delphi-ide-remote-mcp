@@ -216,6 +216,7 @@
             <Form>FormTray</Form>
             <FormType>dfm</FormType>
         </DCCReference>
+        <DCCReference Include="Lsp.Attributes.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

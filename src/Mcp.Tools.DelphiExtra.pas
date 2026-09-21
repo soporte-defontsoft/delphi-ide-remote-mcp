@@ -13,7 +13,8 @@ uses
   MCPServer.Types,
   Lsp.Client,
   Lsp.Session,
-  Lsp.Texts; // los textos de los parametros viven ahi, y son de interface
+  Lsp.Texts, // los textos de los parametros viven ahi, y son de interface
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiDiagnosticsParams = class
@@ -22,6 +23,7 @@ type
   public
     [SchemaDescription('Absolute path of the Delphi source file to lint (.pas/.dpr)')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
   end;
 
@@ -33,6 +35,7 @@ type
   public
     [SchemaDescription('Absolute path of the Delphi source file')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('Zero-based line of the identifier to find references for')]
     [Required]
@@ -55,6 +58,7 @@ type
   public
     [SchemaDescription('Absolute path of the .dproj to build')]
     [Required]
+    [RutaDelServidor]
     property Project: string read FProject write FProject;
     [SchemaDescription('Target platform (default Win32): Win32/Win64 build natively here. Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and their SDK pulled once (delphi_paserver get-sdk). Building is LOCAL against that SDK and does NOT use profile - a PAServer profile is only needed for target=Deploy')]
     [SchemaDefault('Win32')]

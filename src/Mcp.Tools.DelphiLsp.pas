@@ -13,6 +13,7 @@ uses
   MCPServer.Tool.Base,
   MCPServer.Types,
   Lsp.Texts,   // SchemaDescription texts: attributes live in the interface
+  Lsp.Attributes,  // [RutaDelServidor]: que parametro es una ruta NUESTRA
   Lsp.Client,
   Lsp.Session;
 
@@ -30,6 +31,7 @@ type
   public
     [SchemaDescription(SP_LSP_FILE_PATH)]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
   end;
 
@@ -41,6 +43,7 @@ type
   public
     [SchemaDescription(SP_SYMBOLS_PATH)]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_SYMBOLS_MODE)]
     property Mode: string read FMode write FMode;

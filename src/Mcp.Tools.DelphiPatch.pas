@@ -11,6 +11,7 @@ uses
   MCPServer.Tool.Base,
   MCPServer.Types,
   Lsp.Texts,
+  Lsp.Attributes,  // [RutaDelServidor]: que parametro es una ruta NUESTRA
   Lsp.Patch;
 
 type
@@ -22,6 +23,7 @@ type
   public
     [SchemaDescription('Absolute path of the Delphi file (.pas/.dpr/.dpk/.inc/.dfm/.fmx)')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('First line to show, 1-based (0 = from the start)')]
     property FromLine: Integer read FFromLine write FFromLine;
@@ -51,6 +53,7 @@ type
   public
     [SchemaDescription('Absolute path of the Delphi file')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('EDIT mode: the exact line to replace - ONE full line copied literally from delphi_read (everything after the | bar). Leading indentation may be omitted')]
     property Old: string read FOld write FOld;

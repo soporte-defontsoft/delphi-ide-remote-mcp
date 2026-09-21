@@ -12,7 +12,8 @@ uses
   System.SysUtils,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;   // SchemaDescription texts: attributes are interface-level
+  Lsp.Texts,   // SchemaDescription texts: attributes are interface-level
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiDeleteParams = class
@@ -22,6 +23,7 @@ type
   public
     [SchemaDescription('Absolute path of the file or folder to delete (inside the workspace roots). Moved to a recoverable trash, not hard-deleted')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_DELETE_PURGE)]
     property Purge: Boolean read FPurge write FPurge;
@@ -34,9 +36,11 @@ type
   public
     [SchemaDescription('Absolute path of the file or folder to move (inside the workspace roots)')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('Destination absolute path (inside the workspace roots). Parent folders are created. Renames when the parent is the same')]
     [Required]
+    [RutaDelServidor]
     property Dest: string read FDest write FDest;
   end;
 

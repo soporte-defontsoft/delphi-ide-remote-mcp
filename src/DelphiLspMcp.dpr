@@ -63,8 +63,8 @@ uses
   MCPServer.ToolsManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ToolsManager.pas',
   MCPServer.ResourcesManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ResourcesManager.pas',
   // ONE list now: every mode links the same units, so no host can expose
-  // fewer tools than another (that drift is why the two projects merged).
-  Lsp.Texts in 'Lsp.Texts.pas',
+    // fewer tools than another (that drift is why the two projects merged).
+    Lsp.Texts in 'Lsp.Texts.pas',
   Lsp.Transport.Process in 'Lsp.Transport.Process.pas',
   Lsp.Client in 'Lsp.Client.pas',
   Lsp.Discovery in 'Lsp.Discovery.pas',
@@ -111,7 +111,8 @@ uses
   Lsp.Rename in 'Lsp.Rename.pas',
   Lsp.Changeset in 'Lsp.Changeset.pas',
   Lsp.Service in 'Lsp.Service.pas',
-  UTrayMain in 'UTrayMain.pas' {FormTray};
+  UTrayMain in 'UTrayMain.pas' {FormTray},
+  Lsp.Attributes in 'Lsp.Attributes.pas';
 
 {$R *.res}
 

@@ -20,7 +20,8 @@ uses
   System.Generics.Collections,
   MCPServer.Tool.Base,
   MCPServer.Types,
-  Lsp.Texts;   // SchemaDescription texts live there, and attributes are interface-level
+  Lsp.Texts,   // SchemaDescription texts live there, and attributes are interface-level
+  Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
 type
   TDelphiSearchParams = class
@@ -34,6 +35,7 @@ type
   public
     [SchemaDescription('Directory to search recursively (project root) - or ONE file (a .dproj, .dpr, .inc, .xml...) to search inside it in a single call')]
     [Required]
+    [RutaDelServidor]
     property Root: string read FRoot write FRoot;
     [SchemaDescription('Literal text to find (case-insensitive - it is Pascal)')]
     [Required]
@@ -59,6 +61,7 @@ type
   public
     [SchemaDescription('Directory to list recursively')]
     [Required]
+    [RutaDelServidor]
     property Root: string read FRoot write FRoot;
     [SchemaDescription('Filename mask, e.g. *.pas (default: Delphi source and project files)')]
     property Pattern: string read FPattern write FPattern;
@@ -76,6 +79,7 @@ type
     FOffset: Integer;
   public
     [SchemaDescription('Directory to search under. Empty = the roots configured in settings.ini [Workspace.<name>] Roots (semicolon-separated)')]
+    [RutaDelServidor]
     property Root: string read FRoot write FRoot;
     [SchemaDescription('Optional name filter (substring, case-insensitive), e.g. "comunicador"')]
     property Name: string read FName write FName;
@@ -97,6 +101,7 @@ type
   public
     [SchemaDescription('Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots)')]
     [Required]
+    [RutaDelServidor]
     property Repo: string read FRepo write FRepo;
     [SchemaDescription('One of: status | diff | log | show | branch | switch | merge | stash | add | commit | init | push | tag | config | clone | pull | fetch. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push|pop|list (never drop). config: args=user.name|user.email + value in message. clone: URL in message, destination in repo')]
     [Required]
@@ -166,10 +171,12 @@ type
   public
     [SchemaDescription('Absolute path of the .exe to run (must be inside the workspace roots)')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('Optional command-line arguments (shell metacharacters rejected)')]
     property Args: string read FArgs write FArgs;
     [SchemaDescription('Optional working directory (default: the exe directory; must be inside the roots)')]
+    [RutaDelServidor]
     property WorkDir: string read FWorkDir write FWorkDir;
     [SchemaDescription('Timeout in milliseconds (default 30000, max 300000); the process is killed on expiry')]
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
@@ -190,6 +197,7 @@ type
   public
     [SchemaDescription('Absolute path of the file to download from the server')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('Byte offset to start from (0 = beginning). Loop increasing it until eof=true and reassemble')]
     property Offset: Integer read FOffset write FOffset;
@@ -213,6 +221,7 @@ type
   public
     [SchemaDescription('Absolute path of the file to write ON the server (inside the workspace roots)')]
     [Required]
+    [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('One chunk of the file, base64-encoded. offset=0 truncates/creates; later offsets append')]
     property ChunkBase64: string read FChunkBase64 write FChunkBase64;
@@ -235,8 +244,10 @@ type
     FOutFile: string;
   public
     [SchemaDescription('Directory to package (e.g. the build output Win64\Debug). Recursive; *.dcu and dcu\ intermediates excluded')]
+    [RutaDelServidor]
     property Dir: string read FDir write FDir;
     [SchemaDescription('Optional zip path (default: sibling of dir, named <dirname>-deploy.zip). Must be inside the workspace roots')]
+    [RutaDelServidor]
     property OutFile: string read FOutFile write FOutFile;
   end;
 
