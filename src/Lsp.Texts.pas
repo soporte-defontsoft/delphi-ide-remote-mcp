@@ -154,6 +154,26 @@ const
     'en marcha, vuelve a llamar" para siempre, y eso era mentira: no iba a ' +
     'terminar nunca.';
 
+  { Calentamiento del motor: definition vacia con hover lleno (medido por
+    Hermes, 2026-09-22). Es "todavia no", asi que va como error: (corrige y
+    repite) y no como RECHAZADO (cambia de rumbo). }
+  SN_LSP_WARMING =
+    'error: el motor reconoce el simbolo en esa posicion (hover contesta) ' +
+    'pero todavia no ha indexado su definicion: esta calentando esa unit. ' +
+    'Repite la misma llamada en unos segundos; la posicion es correcta y no ' +
+    'hay nada que cambiar.';
+  SR_REFS_WARMING_FMT =
+    'error: el motor reconoce "%s" (hover contesta) pero todavia no tiene ' +
+    'su definicion indexada: esta calentando esa unit. Repite la misma ' +
+    'llamada en unos segundos, con los mismos argumentos.';
+  { Medido por Hermes (2026-09-22): con definition vacia, declaration directa
+    en un punto de llamada devuelve el metodo ENVOLVENTE, y la tool lo daba
+    por bueno sin decirlo. }
+  SN_DEF_DECL_FALLBACK =
+    ' [note: definition did not resolve at that position, so this is ' +
+    'DelphiLSP''s DIRECT declaration answer - on a call site that is the ' +
+    'ENCLOSING routine, not the callee. Check the line before trusting it.]';
+
   SR_REFS_NO_DEFINITION_FMT =
     'RECHAZADO: el compilador no resuelve "%s" en esa posicion, asi que no ' +
     'hay nada contra lo que anclar las referencias. Casi siempre es porque ' +
@@ -684,6 +704,10 @@ const
     '(__delphi-patch). Existen en el disco: para ver las de compilacion pasa ' +
     'esa carpeta como root, o baja el resultado con delphi_package + ' +
     'delphi_fetch; para ver la papelera, includetrash=true.';
+
+  SN_LIST_SHOWN_TRASH_FMT =
+    'De las %d entradas, %d son copias de la papelera (__delphi-patch), ' +
+    'listadas porque includetrash=true; las demas son ficheros vivos.';
 
   SN_LIST_DEFAULT_MASK =
     'Sin "pattern" solo se listan ficheros de Delphi (*.pas, *.dpr, *.dpk, ' +

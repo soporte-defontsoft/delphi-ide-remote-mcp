@@ -528,7 +528,7 @@ var
   F, Mask, Root, Reason: string;
   Masks: TArray<string>;
   Entry: TJSONObject;
-  Total, Hidden, HiddenArt, HiddenGit, HiddenTrash: Integer;
+  Total, Hidden, HiddenArt, HiddenGit, HiddenTrash, ShownTrash: Integer;
   RootInArtifacts: Boolean;
 begin
   Result := ReadPathDenied(Params.Root); // listing may enter the library zone
@@ -636,7 +636,7 @@ begin
   Return := TJSONObject.Create;
   Arr := TJSONArray.Create;
   Total := 0;
-  Hidden := 0; HiddenArt := 0; HiddenGit := 0; HiddenTrash := 0;
+  Hidden := 0; HiddenArt := 0; HiddenGit := 0; HiddenTrash := 0; ShownTrash := 0;
   RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
   try
     for Mask in Masks do
@@ -666,6 +666,11 @@ begin
           Continue;
         end;
         Inc(Total);
+        // Con includetrash la papelera entra en el listado y deja de contarse
+        // como oculta; el lector sigue queriendo saber cuantas de las entradas
+        // son copias y cuantas ficheros vivos (Hermes, 2026-09-22).
+        if Params.IncludeTrash and (SkipReason(RelToRoot(F, Root), False) = 'trash') then
+          Inc(ShownTrash);
         if Arr.Count < 500 then
         begin
           Entry := TJSONObject.Create;
@@ -685,6 +690,11 @@ begin
       end;
     Return.AddPair('total', TJSONNumber.Create(Total));
     Return.AddPair('shown', TJSONNumber.Create(Arr.Count));
+    if ShownTrash > 0 then
+    begin
+      Return.AddPair('shownTrash', TJSONNumber.Create(ShownTrash));
+      Return.AddPair('trashNote', Format(SN_LIST_SHOWN_TRASH_FMT, [Total, ShownTrash]));
+    end;
     if Total > Arr.Count then
       Return.AddPair('shownNote', Format(SN_SEARCH_CAPPED_FMT,
         [Arr.Count, Total]));

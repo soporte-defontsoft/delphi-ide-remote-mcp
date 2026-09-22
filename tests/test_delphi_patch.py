@@ -210,6 +210,42 @@ check('insert metodo: declaracion en clase',
 check('insert metodo: implementacion cualificada',
       'procedure TCosa.Ping;' in ctx and ctx.rstrip().endswith('end.'), ctx[-120:])
 
+# --- insert metodo con un TIPO ANIDADO en la clase (medido 2026-09-22 en
+# Lsp.Client: el primer 'end;' era el del tipo anidado y la declaracion caia
+# DENTRO de el, y la seccion 'public' pedida "no existia") ---
+ANI = os.path.join(DIR, 'ConAnidado.pas')
+with open(ANI, 'wb') as f:
+    f.write(CRLF.join([
+        'unit ConAnidado;', '',
+        'interface', '',
+        'type',
+        '  TFuera = class',
+        '  private type',
+        '    TDentro = class',
+        '      Valor: Integer;',
+        '      constructor Create;',
+        '    end;',
+        '  private',
+        '    FLista: TDentro;',
+        '  public',
+        '    procedure Existente;',
+        '  end;', '',
+        'implementation', '',
+        'constructor TFuera.TDentro.Create;',
+        'begin',
+        'end;', '',
+        'procedure TFuera.Existente;',
+        'begin',
+        'end;', '',
+        'end.', '']).encode('cp1252'))
+out = call('delphi_edit', {"path": ANI, "insert": "metodo", "code": mcode,
+                            "inclass": "TFuera", "visibility": "public"})
+check('insert metodo con tipo anidado: DOS mitades', 'DOS mitades' in out and 'Mitad 2' in out, out)
+ctx = open(ANI, 'rb').read().decode('cp1252')
+check('insert metodo con tipo anidado: la declaracion cae en public, DESPUES del tipo anidado',
+      '    procedure Ping;' in ctx and ctx.index('procedure Ping;') > ctx.index('FLista: TDentro;')
+      and ctx.index('procedure Ping;') < ctx.index('implementation'), ctx)
+
 # --- createunit ---
 NU = os.path.join(DIR, 'Naciente.pas')
 if os.path.exists(NU):

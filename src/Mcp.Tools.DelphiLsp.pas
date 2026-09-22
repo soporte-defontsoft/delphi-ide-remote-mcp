@@ -952,7 +952,8 @@ begin
     // definition answers a bare Location object with column 0. Chain: run
     // definition (correct at a call site) to reach the body, then declaration
     // AT the body's identifier column to reach the interface declaration.
-    var DefResp := Client.Definition(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
+    var Pending: Boolean;
+    var DefResp := Client.DefinitionResolved(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character, Pending);
     var DefLoc: TLoc;
     if ParseLoc(DefResp.GetValue('result'), DefLoc) then
     begin
@@ -976,17 +977,34 @@ begin
         Resp := DefResp;
       end;
     end
+    else if Pending then
+    begin
+      // hover knows the symbol, definition is not indexed yet: say "not yet",
+      // never the enclosing routine (measured by Hermes, 2026-09-22)
+      DefResp.Free;
+      Exit(SN_LSP_WARMING + NoSettingsNote(Settings));
+    end
     else
     begin
-      // no definition to chain from: fall back to a direct declaration
+      // no definition to chain from: fall back to a direct declaration, and
+      // SAY that on a call site this is the enclosing routine's
       DefResp.Free;
       Resp := Client.Declaration(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
+      Exit(RenderResult(Resp, SN_DEF_DECL_FALLBACK + NoSettingsNote(Settings)));
     end;
   end
   else if Kind = 'implementation' then
     Resp := Client.Implementation_(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character)
   else
-    Resp := Client.Definition(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
+  begin
+    var Pending: Boolean;
+    Resp := Client.DefinitionResolved(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character, Pending);
+    if Pending then
+    begin
+      Resp.Free;
+      Exit(SN_LSP_WARMING + NoSettingsNote(Settings));
+    end;
+  end;
   Result := RenderResult(Resp, NoSettingsNote(Settings));
 end;
 

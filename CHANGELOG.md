@@ -29,6 +29,45 @@ pressed - in that order, released in reverse, one gesture - on Linux as
 evdev codes, on Windows by name, through the same combination both nodes
 already had inside.
 
+### Fixed - definition and references no longer call the engine's warm-up "does not resolve"
+Field finding (Hermes, 2026-09-22, block 5 of the stable battery): five
+`delphi_references` / `delphi_definition` calls in a row on the same, correct
+position answered `RECHAZADO: el compilador no resuelve ...` while
+`delphi_hover` on that very position resolved the symbol, and the next call
+passed. DelphiLSP answers null to `definition` while it is still indexing a
+unit, and the tools took that null for "not a symbol". There is now ONE
+resolver in the LSP client, `DefinitionResolved`, used by `delphi_definition`
+and by the anchor of `delphi_references`: when `definition` comes back empty it
+asks `hover`; if hover knows the symbol it is warm-up, so it retries with a
+pause (four times, 750 ms), and if the engine still has nothing it answers
+`error:` "the engine recognises the symbol but has not indexed its definition
+yet, call again in a few seconds" - correct-and-repeat, not change-course.
+Without hover there is no wait: that position is not a symbol, as before.
+
+### Fixed - `delphi_definition kind=declaration` no longer passes off the enclosing routine as the callee
+Same battery, test 20: with `definition` unresolved, the tool fell back to a
+direct `declaration` at the call site, and DelphiLSP answers THAT with the
+declaration of the routine that CONTAINS the call - which the tool returned as
+if it were the callee's. The fallback stays (it is right when the cursor is on
+a declaration itself) but the answer now carries a note saying what it is and
+that on a call site it is the enclosing routine; and when the cause is the
+warm-up above, it answers "not yet" instead of falling back at all.
+
+### Fixed - `delphi_edit insert=metodo` on a class with a nested type
+Measured on this server's own `Lsp.Client` while fixing the above: the class
+declares a private nested class (`private type TPendingCall = class ... end;`),
+the tool took the nested type's `end;` for the class's, wrote the declaration
+INSIDE the nested type and refused the requested `visibility=public` as a
+section the class "does not have". The class end is now found by depth: a
+nested class/record/interface opens on the line that declares it without
+closing it and closes on its own `end;`. Battery case added.
+
+### Added - `delphi_list includetrash=true` says how many of the entries are trash copies
+Hermes' block 2: with the trash included the `hidden`/`note` pair disappears
+(nothing is hidden any more, which is correct) but the reader still wants to
+know how many of the listed entries are live files and how many are copies
+from `__delphi-patch`. The answer now carries `shownTrash` and a `trashNote`.
+
 ### Removed - `delphi_adb_linux`, the deprecated alias of `delphi_desktop`
 It was kept "one release" in 1.0.16 so cached schemas kept working, stayed
 through 1.0.17, and goes now: one desktop tool, one name, 42 tools. A client

@@ -1757,13 +1757,31 @@ begin
           end;
         if IClase = -1 then
           Exit(Format('RECHAZADO: no encuentro ''%s = class'' en %s.', [A.ClassName_, TPath.GetFileName(A.Path)]));
+        // Un tipo ANIDADO (private type TPendingCall = class ... end;) cierra
+        // con su propio 'end;' antes que la clase, asi que el primer 'end;'
+        // no es el de la clase: la declaracion caia DENTRO del tipo anidado y
+        // la seccion pedida "no existia" (medido 2026-09-22 en Lsp.Client).
+        // Se lleva la profundidad: un tipo anidado abre en la linea que lo
+        // declara sin cerrarlo (sin ';' al final) y cierra con su 'end;'.
         var IFin := -1;
+        var TipoAnidadoRe := TRegEx.Create('[=:]\s*(packed\s+)?(class|record|interface|dispinterface|object)\b', [roIgnoreCase]);
+        var Prof := 0;
         for I := IClase + 1 to High(Lines) do
-          if Lines[I].Trim.ToLower = 'end;' then
+        begin
+          var L := Lines[I].Trim;
+          if L.ToLower = 'end;' then
           begin
-            IFin := I;
-            Break;
-          end;
+            if Prof = 0 then
+            begin
+              IFin := I;
+              Break;
+            end;
+            Dec(Prof);
+          end
+          else if TipoAnidadoRe.IsMatch(L) and not L.EndsWith(';') and
+                  not L.ToLower.Contains(' end;') then
+            Inc(Prof);
+        end;
         if IFin = -1 then
           Exit(Format('RECHAZADO: no encuentro el ''end;'' de cierre de la clase %s.', [A.ClassName_]));
 
@@ -1843,7 +1861,7 @@ begin
                 var TrimL := Lines[I].Trim.ToLower;
                 var IsSec := False;
                 for var S2 in Secs do
-                  if S2 = TrimL then IsSec := True;
+                  if (S2 = TrimL) or TrimL.StartsWith(S2 + ' ') then IsSec := True; // 'private type', 'public const'...
                 if IsSec then // first explicit visibility specifier = end of
                 begin         // the implicit published section
                   IDecl := I;
@@ -1863,7 +1881,7 @@ begin
               var TrimL := Lines[I].Trim.ToLower;
               var IsSec := False;
               for var S2 in Secs do
-                if S2 = TrimL then IsSec := True;
+                if (S2 = TrimL) or TrimL.StartsWith(S2 + ' ') then IsSec := True;
               if IsSec then
               begin
                 IDecl := I;
@@ -1878,7 +1896,7 @@ begin
           var TrimL := Lines[I].Trim;
           var IsSec := False;
           for var S2 in Secs do
-            if S2 = TrimL.ToLower then IsSec := True;
+            if (S2 = TrimL.ToLower) or TrimL.ToLower.StartsWith(S2 + ' ') then IsSec := True;
           if (TrimL <> '') and not IsSec then
           begin
             Sangria := Copy(Lines[I], 1, Length(Lines[I]) - Length(Lines[I].TrimLeft));

@@ -76,6 +76,11 @@ type
     { Language features (positions are 0-based, LSP style) }
     function Hover(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
     function Definition(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
+    { Definition con hover de oraculo (calentamiento del motor): ver la
+      implementacion. APending = True cuando hover conoce el simbolo y
+      definition sigue vacia tras los reintentos. }
+    function DefinitionResolved(const AUri: string; ALine, ACharacter: Integer;
+      out APending: Boolean): TJSONObject;
     function Declaration(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
     function Implementation_(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
     function SignatureHelp(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
@@ -513,6 +518,62 @@ begin
     // que usa delphi_read: utf8 solo si CADA byte alto forma secuencia
     // valida, asi que los fuentes CP1252 de siempre siguen leyendose bien.
     Result := DecodeSourceBytes(Bytes);
+end;
+
+{ Definition con hover de oraculo. DelphiLSP contesta null a definition
+  mientras todavia indexa una unit, y en ese MISMO instante hover si resuelve
+  el simbolo (medido por Hermes el 2026-09-22: cinco definition/references
+  seguidas rechazadas con "no resuelve", hover correcto, y la siguiente pasa).
+  Si definition viene vacia pero hover no, es calentamiento y no un simbolo
+  inexistente: se reintenta con pausa; si sigue vacia, APending = True para
+  que la tool diga "todavia no" en vez de "no resuelve". Sin hover, ni
+  reintento ni espera: ahi no hay simbolo. UN sitio para las tools que anclan
+  en una definicion (delphi_definition, delphi_references, rename). }
+function TLspClient.DefinitionResolved(const AUri: string; ALine, ACharacter: Integer;
+  out APending: Boolean): TJSONObject;
+const
+  INTENTOS = 4;
+  PAUSA_MS = 750;
+
+  function TieneLocalizacion(AResp: TJSONObject): Boolean;
+  var
+    V: TJSONValue;
+  begin
+    V := AResp.GetValue('result');
+    if (V = nil) or (V is TJSONNull) then
+      Exit(False);
+    if V is TJSONArray then
+      Exit(TJSONArray(V).Count > 0);
+    Result := (V is TJSONObject) and
+      ((TJSONObject(V).GetValue('uri') <> nil) or (TJSONObject(V).GetValue('targetUri') <> nil));
+  end;
+
+var
+  H: TJSONObject;
+  V: TJSONValue;
+  I: Integer;
+begin
+  APending := False;
+  Result := Definition(AUri, ALine, ACharacter);
+  if TieneLocalizacion(Result) then
+    Exit;
+  H := Hover(AUri, ALine, ACharacter);
+  try
+    V := H.GetValue('result');
+    if (V = nil) or (V is TJSONNull) then
+      Exit; // ni hover lo conoce: no es un simbolo, no hay nada que esperar
+  finally
+    H.Free;
+  end;
+  for I := 1 to INTENTOS do
+  begin
+    Sleep(PAUSA_MS);
+    Result.Free;
+    Result := Definition(AUri, ALine, ACharacter);
+    if TieneLocalizacion(Result) then
+      Exit;
+  end;
+  APending := True;
 end;
 
 end.

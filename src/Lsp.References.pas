@@ -475,15 +475,22 @@ begin
     raise Exception.Create('No identifier at the given position');
 
   // Resolve the target location the compiler engine assigns to that symbol.
-  Resp := Client.Definition(TLspClient.PathToUri(FullPath), ALine, ACharacter);
+  var Pending: Boolean;
+  Resp := Client.DefinitionResolved(TLspClient.PathToUri(FullPath), ALine, ACharacter, Pending);
   try
     if not DefinitionLocation(Resp, TargetUri, TargetLine) then
+    begin
+      // Hover knows the symbol but definition is not indexed yet: that is
+      // "not yet", not "not a symbol" (measured by Hermes, 2026-09-22).
+      if Pending then
+        raise Exception.CreateFmt(SR_REFS_WARMING_FMT, [Ident]);
       // This fires whenever the position is not on something the compiler
       // can resolve - inside a string literal, in a comment, on a keyword -
       // and it used to blame "project settings" and quote the name of an
       // internal function, which sent the reader looking in the wrong place
       // (measured 2026-08-25).
       raise Exception.CreateFmt(SR_REFS_NO_DEFINITION_FMT, [Ident]);
+    end;
   finally
     Resp.Free;
   end;

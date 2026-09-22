@@ -161,7 +161,7 @@ List Delphi files under a directory recursively (sources and project files by de
 | `root` | string | **yes** | Directory to list recursively |
 | `pattern` | string | optional | Filename mask, e.g. *.pas (default: Delphi source and project files) |
 | `dirs` | boolean | optional | true = list SUBDIRECTORIES of root (one level, explorer-style) instead of files |
-| `includetrash` | boolean | optional | true = also show the recoverable trash `__delphi-patch` (default false: skipped like the other IDE artifacts) |
+| `includetrash` | boolean | optional | true = also show the recoverable trash `__delphi-patch` (default false: skipped like the other IDE artifacts). With it on, the answer says how many of the entries are trash copies (`shownTrash`, `trashNote`) |
 
 ### `delphi_projects`
 
