@@ -29,6 +29,20 @@ pressed - in that order, released in reverse, one gesture - on Linux as
 evdev codes, on Windows by name, through the same combination both nodes
 already had inside.
 
+### Fixed - renaming a unit with `delphi_move` follows it into the other units and the qualified references
+Hermes' block 4, test 19: `UBatHelper.pas` renamed to `UBatHelperMoved.pas`
+rewrote the header, the `.dpr` uses and the `DCCReference`, and the build
+died with `E2003 Undeclared identifier: 'UBatHelper'` because the `.dpr`
+still said `UBatHelper.Bat11Sum(2, 3)`. The rename stopped at the project
+files: neither the `uses` of the other units of the project nor a single
+qualified `UnitOld.Identifier` were touched, while the description promised
+"uses clauses". Now every unit the project lists, and the `.dpr`, get the
+unit name rewritten as a whole identifier (uses entries and qualifiers alike,
+outside string literals; comments too, a comment naming the old unit lies),
+and the answer counts what it rewrote and where. Battery case added: a unit
+that uses the renamed one and names it qualified, plus the same text inside
+a string that must stay.
+
 ### Fixed - definition and references no longer call the engine's warm-up "does not resolve"
 Field finding (Hermes, 2026-09-22, block 5 of the stable battery): five
 `delphi_references` / `delphi_definition` calls in a row on the same, correct

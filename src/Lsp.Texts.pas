@@ -2056,7 +2056,8 @@ const
 
   SN_UNIT_RENAMED_FMT =
     'REAPUNTADA la unit %s (%s) -> %s (%s) en el proyecto %s (uses del .dpr + ' +
-    'DCCReference del .dproj).';
+    'DCCReference del .dproj). Referencias reescritas: %d en %d fichero(s) ' +
+    '(uses de las demas units y calificadores UnitVieja.X).';
 
   SN_FILE_PROJECTS_UPDATED_FMT =
     '  proyectos actualizados (%d): %s';

@@ -83,6 +83,8 @@ function ProjectsUsingUnit(const APasPath: string): TArray<string>;
 // StyleLookup mentioned in a comment became a lint "finding").
 function BlankComments(const S: string): string;
 
+function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Integer;
+
 implementation
 
 uses
@@ -1022,8 +1024,29 @@ begin
     end;
     PatchSaveText(Dproj, Text, Enc);
   end;
+  // Las OTRAS units del proyecto y el propio .dpr: sus uses y toda referencia
+  // CUALIFICADA (UnitVieja.Identificador) seguian nombrando la unit vieja y
+  // el build caia con E2003 (Hermes, 2026-09-22, test 19). Se reescribe el
+  // nombre como identificador entero, fuera de cadenas, en cada fichero que
+  // el proyecto lista, y la respuesta cuenta cuantas y donde.
+  var NRefs := 0;
+  var NFich := 0;
+  var Ficheros: TArray<string> := [Dpr];
+  for var PU in ProjectUnits(AProject, False) do
+    if PU.Include <> '' then
+      Ficheros := Ficheros + [TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(Dpr), PU.Include))];
+  for var Fich in Ficheros do
+    if TFile.Exists(Fich) then
+    begin
+      var N := RenombrarIdentificadorUnit(Fich, OldName, Info.UnitName);
+      if N > 0 then
+      begin
+        Inc(NRefs, N);
+        Inc(NFich);
+      end;
+    end;
   Result := Format(SN_UNIT_RENAMED_FMT, [OldName, OldInclude, Info.UnitName, NewInclude,
-    TPath.GetFileName(Dpr)]);
+    TPath.GetFileName(Dpr), NRefs, NFich]);
 end;
 
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
@@ -1147,6 +1170,61 @@ begin
           Break;
         end;
   end;
+end;
+
+{ Reescribe el NOMBRE de una unit como identificador entero en un fuente: las
+  entradas de sus uses (interface e implementation) y las referencias
+  cualificadas UnitVieja.Identificador. Fuera de cadenas (comillas impares
+  antes del match en su linea = dentro de una cadena, no se toca); los
+  comentarios si se reescriben, que un comentario que nombra la unit vieja
+  tambien miente. La cabecera "unit X;" no se toca: la reescribe el que mueve
+  el fichero. Devuelve cuantas ocurrencias cambio (0 = fichero intacto, no se
+  reescribe). Medido por Hermes el 2026-09-22 (test 19): tras el rename el
+  .dpr conservaba UBatHelper.Bat11Sum y el build caia con E2003. }
+function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Integer;
+var
+  Enc, Texto, Linea: string;
+  Lineas: TArray<string>;
+  Re: TRegEx;
+  M: TMatch;
+  I, J, Comillas, Ultimo: Integer;
+  Partes: TStringBuilder;
+begin
+  Result := 0;
+  Texto := PatchLoadText(APath, Enc);
+  Re := TRegEx.Create('(?<![\w.])' + TRegEx.Escape(AViejo) + '(?![\w])', [roIgnoreCase]);
+  Lineas := Texto.Split([#10]); // el #13 de un CRLF se queda en cada linea y vuelve intacto
+  for I := 0 to High(Lineas) do
+  begin
+    Linea := Lineas[I];
+    if Linea.TrimLeft.StartsWith('unit ', True) then
+      Continue;
+    Partes := TStringBuilder.Create;
+    try
+      Ultimo := 0; // 0-based: hasta donde se ha copiado ya la linea
+      for M in Re.Matches(Linea) do
+      begin
+        Comillas := 0;
+        for J := 1 to M.Index - 1 do
+          if Linea[J] = '''' then
+            Inc(Comillas);
+        if Odd(Comillas) then
+          Continue; // dentro de una cadena
+        Partes.Append(Linea.Substring(Ultimo, M.Index - 1 - Ultimo));
+        Partes.Append(ANuevo);
+        Ultimo := M.Index - 1 + M.Length;
+        Inc(Result);
+      end;
+      if Ultimo = 0 then
+        Continue;
+      Partes.Append(Linea.Substring(Ultimo));
+      Lineas[I] := Partes.ToString;
+    finally
+      Partes.Free;
+    end;
+  end;
+  if Result > 0 then
+    PatchSaveText(APath, string.Join(#10, Lineas), Enc);
 end;
 
 end.

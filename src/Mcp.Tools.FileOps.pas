@@ -528,8 +528,9 @@ begin
     'folders of the destination are created. The source is copied to the ' +
     'recoverable trash first. Jailed, refused in read-only mode. Moving or ' +
     'renaming a unit (.pas) moves its .dfm/.fmx with it, rewrites its "unit X;" ' +
-    'header on a rename, and re-points every project that lists it (uses + ' +
-    'DCCReference) - looked for from its folder UP to the edge of the ' +
+    'header on a rename, and re-points every project that lists it: the .dpr ' +
+    'uses and DCCReference, the uses of every other unit of the project and ' +
+    'every qualified UnitOld.X reference in them - looked for from its folder UP to the edge of the ' +
     'workspace, however deep the unit sits. Moving a whole FOLDER re-points ' +
     'every unit inside it the same way: reorganise freely, the projects follow.';
 end;

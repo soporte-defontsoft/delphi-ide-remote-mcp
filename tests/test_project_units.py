@@ -249,6 +249,13 @@ check('delete unit suelta: nota "ningun .dpr"', out.startswith('BORRADO') and 'n
 # ---- delphi_move rename of a unit ----
 out = call('delphi_create', {"kind": "form-vcl", "name": "UVenta", "project": DPR})
 check('create form UVenta', out.startswith('CREADO'), out[:200])
+# a unit that USES UVenta and names it qualified: both must follow the rename
+# (Hermes, 2026-09-22, test 19: the .dpr kept UBatHelper.Bat11Sum and the
+# build died with E2003). A 'UVenta.' inside a string literal must NOT move.
+usa = os.path.join(VDIR, 'UUsaVenta.pas')
+open(usa, 'wb').write(b"unit UUsaVenta;\r\n\r\ninterface\r\n\r\nuses\r\n  UVenta;\r\n\r\nfunction HayVenta: string;\r\n\r\nimplementation\r\n\r\nfunction HayVenta: string;\r\nbegin\r\n  if UVenta.FormUVenta <> nil then\r\n    Result := 'UVenta.FormUVenta'\r\n  else\r\n    Result := '';\r\nend;\r\n\r\nend.\r\n")
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": usa})
+check('unit que usa UVenta anadida al proyecto', out.startswith('ANADIDA'), out[:200])
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UVenta.pas'), "dest": os.path.join(VDIR, 'UVentas.pas')})
 check('move rename: MOVIDO', out.startswith('MOVIDO'), out[:400])
 check('move rename: designer movido', os.path.exists(os.path.join(VDIR, 'UVentas.dfm')) and not os.path.exists(os.path.join(VDIR, 'UVenta.dfm')), out)
@@ -260,6 +267,11 @@ check('move rename: uses nuevo con form', "UVentas in 'UVentas.pas' {FormUVenta}
 check('move rename: CreateForm intacto (la clase no cambia)', 'CreateForm(TFormUVenta, FormUVenta)' in dpr, dpr)
 xml = rd(DPROJ)
 check('move rename: DCCReference nuevo, viejo fuera', 'Include="UVentas.pas"' in xml and 'Include="UVenta.pas"' not in xml, '')
+usa_src = rd(usa)
+check('move rename: el uses de OTRA unit sigue el rename', '  UVentas;' in usa_src and '  UVenta;' not in usa_src, usa_src)
+check('move rename: el calificador UVenta.X sigue el rename', 'if UVentas.FormUVenta' in usa_src, usa_src)
+check('move rename: dentro de una cadena NO se toca', "'UVenta.FormUVenta'" in usa_src, usa_src)
+check('move rename: la respuesta cuenta las referencias reescritas', 'Referencias reescritas' in out, out)
 ok, err = build_ok(DPROJ)
 check('build: tras rename COMPILA', ok, err)
 # move into a subfolder keeps the name
