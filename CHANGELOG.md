@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.0.16-beta] - 2026-09-22
 
 **A second day of field use, all measured on the machines.** An external agent
 ran the 1.0.15 field test on two Linux desktops; every item below is what it

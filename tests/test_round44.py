@@ -101,8 +101,7 @@ PORT = sk.getsockname()[1]
 sk.close()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
-    '[Workspace.R44]', 'Token=%s' % TOK, 'Roots=%s' % JAIL,
-    'AllowDesktopControl=1', '',
+    '[Workspace.R44]', 'Token=%s' % TOK, 'Roots=%s' % JAIL, '',
 ]))
 
 proc = subprocess.Popen([os.path.join(EXEDIR, 'DelphiLspMcp.exe'),
@@ -193,17 +192,20 @@ try:
 
     # ------------------------------------------------------------------ T3
     # La captura SIN "out": el defecto. Antes caia en el %TEMP% del PC, donde
-    # delphi_fetch no puede ir a buscarla.
-    # "NO pude capturar" es del NODO, no de la tool: la maquina no puede
-    # copiar la pantalla en este momento (sesion bloqueada o desconectada:
-    # "Acceso denegado"). Eso no es un fallo del contrato y no se pinta de
-    # rojo - pero se DICE, porque una bateria que calla lo que no ha medido
-    # es una bateria que miente en verde.
-    s = call('delphi_desktop', {'command': 'screenshot'}) if HAY_NODO else ''
-    PUEDE = HAY_NODO and 'NO pude capturar' not in s
-    if HAY_NODO and not PUEDE:
-        print('NOTA: esta maquina no puede capturar la pantalla ahora mismo '
-              '(el nodo dice "NO pude capturar"). T3 y T4 no se miden.')
+    # delphi_fetch no puede ir a buscarla. Hasta 1.0.15 se media aqui con el
+    # nodo corriendo EN LOCAL (delphi_desktop sin perfil); desde 1.0.16 el
+    # escritorio se alcanza SOLO por un PAServer y un perfil (decision de
+    # David, 21-sep), asi que sin PAServer no hay captura que medir en esta
+    # bateria. La regla vive en CaptureTarget (Lsp.Guard), la misma que ya
+    # mide T2 con delphi_adb; y el defecto de delphi_desktop se midio EN
+    # VIVO el 2026-09-22 contra windows-local y windows-remoto: las
+    # capturas cayeron en __delphi-temp\<agente>\desktop del workspace.
+    # Se dice, porque una bateria que calla lo que no ha medido es una
+    # bateria que miente en verde.
+    PUEDE = False
+    s = ''
+    print('NOTA: T3 y T4 no se miden aqui desde 1.0.16 (el escritorio va por '
+          'PAServer y perfil); medidos en vivo el 2026-09-22.')
     if PUEDE:
         check('T3 la captura por defecto cae DENTRO del workspace',
               bool(pngs(TEMP_JAULA)),
@@ -228,8 +230,7 @@ try:
         else:
             check('T4 y delphi_fetch SI puede bajarsela', False,
                   'no hubo captura que bajar')
-    elif not HAY_NODO:
-        print('NOTA: no hay node/McpDesktopNode.exe; T3 y T4 no se miden.')
+
 
     # ------------------------------------------------------------------ T7
     # "__delphi-temp puede limpiarse entero en cada arranque del server"

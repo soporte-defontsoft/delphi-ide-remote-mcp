@@ -188,6 +188,10 @@ PROBAR = [
     # antes que la tool: si esto contesta JAULA, es el suelo quien contesta.
     ('delphi_adb_linux', 'project', {'command': 'screenshot', 'profile': 'x',
                                      'project': AJENO_DPROJ}),
+    # 1.0.16: delphi_desktop ES la tool (delphi_adb_linux queda de alias con
+    # los mismos parametros), asi que su project es la misma sonda.
+    ('delphi_desktop', 'project', {'command': 'screenshot', 'profile': 'x',
+                                   'project': AJENO_DPROJ}),
     # OJO: en delphi_paserver el perfil se llama "name", no "profile". Un
     # parametro inventado contesta "Unknown parameter" y la comprobacion
     # mediria eso en vez de la jaula.
@@ -359,18 +363,20 @@ try:
     # ------------------------------------------------------------------ G4
     # El suelo es una capa REDUNDANTE: si se quedase vacio (RTTI que no
     # emite, un registro que cambia) no romperia nada y nadie lo notaria.
-    # Por eso publica cuantos parametros vigila. Son 42 y no las 39 MARCAS
+    # Por eso publica cuantos parametros vigila. Son 43 y no las MARCAS
     # que hay en el fuente: la de TDelphiFileParams.path la heredan cuatro
     # tools (definition, signature, hover, completion) - una marca, cuatro
     # parametros del contrato. El primer censo contaba marcas y decia 39;
     # lo corrigio el propio servidor la primera vez que se le pregunto.
+    # 1.0.16: 42 -> 43, porque delphi_desktop paso a ser la tool del
+    # escritorio por perfil y gano el "project" marcado que tenia su alias.
     w = call('delphi_workspace', {})
     try:
         vigilados = json.loads(w).get('server', {}).get('jailedParams', -1)
     except Exception:
         vigilados = -1
-    check('G4 el suelo de la puerta vigila los 42 parametros marcados',
-          vigilados == 42, 'jailedParams=%s' % vigilados)
+    check('G4 el suelo de la puerta vigila los 43 parametros marcados',
+          vigilados == 43, 'jailedParams=%s' % vigilados)
 
     # ----------------------------------------------------------------- G2b
     # Los dos parametros de delphi_changeset que la tabla no puede sondar
