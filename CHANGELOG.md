@@ -29,6 +29,13 @@ pressed - in that order, released in reverse, one gesture - on Linux as
 evdev codes, on Windows by name, through the same combination both nodes
 already had inside.
 
+### Fixed - `delphi_paserver remove-profile` also removes the empty folder paclient left in the IDE's SDKs directory
+`paclient` creates an empty `SDKs\<profile>` folder when a profile is
+registered and nobody collected it on removal: measured on the operator's
+machine on 2026-09-22, ten orphan folders of long-gone test profiles. The
+folder now goes with the profile - only when it is empty; a folder with
+anything inside stays, as always.
+
 ### Fixed - renaming a unit with `delphi_move` follows it into the other units and the qualified references
 Hermes' block 4, test 19: `UBatHelper.pas` renamed to `UBatHelperMoved.pas`
 rewrote the header, the `.dpr` uses and the `DCCReference`, and the build

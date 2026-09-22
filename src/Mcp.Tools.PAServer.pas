@@ -1067,6 +1067,13 @@ begin
   end;
   BorrarPerfilDelIde(Info.Version, ProfName);
   Result := Format(SN_PASERVER_PROFILE_REMOVED_FMT, [ProfName]);
+  // paclient deja una carpeta VACIA con el nombre del perfil en el directorio
+  // de SDKs del IDE al crearlo, y nadie la recogia: medido el 2026-09-22, diez
+  // carpetas huerfanas de perfiles de prueba en la maquina del operador.
+  // RemoveDir solo se lleva una carpeta vacia; si tiene algo, se queda.
+  var Huerfana := TPath.Combine(IdeSdksDir(Info.Version), ProfName);
+  if TDirectory.Exists(Huerfana) and RemoveDir(Huerfana) then
+    Result := Result + ' Tambien su carpeta vacia en SDKs.';
 end;
 
 function TestConnection(const Params: TDelphiPAServerParams): string;
