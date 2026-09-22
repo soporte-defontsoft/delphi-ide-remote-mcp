@@ -38,6 +38,17 @@ function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer = 0;
   const AFragment: string = ''): string;
 
+{ Abre un changeset y devuelve su id ('' = ya hay demasiados abiertos). Es lo
+  que hace command=begin, expuesto para que otro motor del servidor (el
+  rename, desde 1.0.17) apile y confirme por AQUI, con las mismas huellas,
+  copias y todo-o-nada, en vez de escribir ficheros por su cuenta. }
+function ChangesetBegin: string;
+
+{ Verdadero si la respuesta de ChangesetExecute es la de exito de ese texto
+  (el trozo fijo que precede al primer %). Un solo sitio que sepa como suena
+  el exito, para quien encadena stage/preview/commit desde codigo. }
+function ChangesetRespondio(const ARespuesta, ATextoFmt: string): Boolean;
+
 implementation
 
 uses
@@ -408,6 +419,41 @@ begin
   end;
 end;
 
+function ChangesetBegin: string;
+begin
+  GLock.Enter;
+  try
+    Prune;
+    if GSets.Count >= MAX_SETS then
+      Exit('');
+    Inc(GSeq); // Now has ~16 ms granularity: two begins can share it
+    // The id is also the CAPABILITY. Nothing bound a changeset to whoever
+    // opened it, and `status` printed every open id: anybody holding the
+    // token could commit or roll back somebody else's half-built batch
+    // (found 2026-08-25 while auditing through MCP). So the id gets a
+    // random tail, and status shows only the part before it - enough to
+    // see that a batch exists and how big it is, not enough to touch it.
+    Result := FormatDateTime('hhnnss', Now) + '-' + IntToStr(GSeq) + '-' +
+      IntToHex(Random($10000), 4) + IntToHex(Random($10000), 4);
+    GSets.Add(Result, TChangeset.Create(Result));
+  finally
+    GLock.Leave;
+  end;
+end;
+
+function ChangesetRespondio(const ARespuesta, ATextoFmt: string): Boolean;
+var
+  P: Integer;
+  Fijo: string;
+begin
+  P := ATextoFmt.IndexOf('%');
+  if P > 0 then
+    Fijo := ATextoFmt.Substring(0, P)
+  else
+    Fijo := ATextoFmt;
+  Result := (Fijo <> '') and ARespuesta.StartsWith(Fijo);
+end;
+
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer;
   const AFragment: string): string;
@@ -437,18 +483,9 @@ begin
 
     if Cmd = 'begin' then
     begin
-      if GSets.Count >= MAX_SETS then
+      Id := ChangesetBegin;
+      if Id = '' then
         Exit(SR_CHANGESET_TOO_MANY);
-      Inc(GSeq); // Now has ~16 ms granularity: two begins can share it
-      // The id is also the CAPABILITY. Nothing bound a changeset to whoever
-      // opened it, and `status` printed every open id: anybody holding the
-      // token could commit or roll back somebody else's half-built batch
-      // (found 2026-08-25 while auditing through MCP). So the id gets a
-      // random tail, and status shows only the part before it - enough to
-      // see that a batch exists and how big it is, not enough to touch it.
-      Id := FormatDateTime('hhnnss', Now) + '-' + IntToStr(GSeq) + '-' +
-        IntToHex(Random($10000), 4) + IntToHex(Random($10000), 4);
-      GSets.Add(Id, TChangeset.Create(Id));
       Exit(Format(SN_CHANGESET_BEGUN_FMT, [Id]));
     end;
 

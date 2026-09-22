@@ -86,9 +86,11 @@ on your side.
   search-and-replace: the preview exists precisely because designers,
   string literals (FindComponent/RTTI/StyleLookup) and homonyms break
   silently.
-- If `applicable=true`, stage the `changes` list with `delphi_changeset`
-  (one edit per line, preview, commit). If false, the blockers say exactly
-  why - fix them or leave the name alone.
+- If `applicable=true`, repeat the same call with `mode=apply`: the tool
+  writes it through the changeset engine (all files or none, a backup of
+  each) and answers with the commit. Then `delphi_build`. If false, the
+  blockers say exactly why - fix them or leave the name alone; apply
+  writes nothing in that case.
 
 ## Forms (.dfm/.fmx)
 

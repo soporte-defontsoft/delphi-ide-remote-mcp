@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added - `delphi_rename_symbol mode=apply`: the rename is written, through the changeset engine
+Preview was the whole tool since v0.53: an applicable rename came back as a
+change list the agent staged by hand with `delphi_changeset`. `mode=apply`
+does exactly that, by the same engine: the same analysis, and when
+applicable one edit per touched line (the identifier replaced as a WORD, so a
+qualified header keeps its class and two occurrences on a line change at
+once), preview, commit - all files or none, fingerprints, a byte snapshot
+first and a copy of each file in `__delphi-patch`. Not applicable = nothing
+written, blockers given. The engine grew one public door for it
+(`ChangesetBegin`, which `command=begin` now uses too) instead of a second
+writer. A symbol with more than 100 uses is applied whole; only the
+answer's `changes` list is capped. Measured on the battery's fixture: two
+files, the project builds after the rename.
+
 ### Added - `delphi_adb screenshot` says what the display really is
 `input tap` takes pixels of the display in force, not of the picture. The
 screenshot answer now carries `image` (the PNG's size, read from its IHDR

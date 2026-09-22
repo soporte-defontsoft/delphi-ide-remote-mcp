@@ -1,7 +1,7 @@
 unit Mcp.Tools.Rename;
 
-{ delphi_rename_symbol: semantic rename, preview only in this version.
-  See Lsp.Rename for the applicability rule. }
+{ delphi_rename_symbol: semantic rename - preview, and since 1.0.17 apply
+  over the changeset engine. See Lsp.Rename for the applicability rule. }
 
 interface
 
@@ -70,15 +70,19 @@ begin
   Mode := Params.Mode.Trim.ToLower;
   if Mode = '' then
     Mode := 'preview';
-  if Mode = 'apply' then
-    Exit(SR_RENAME_APPLY_NOT_YET);
-  if Mode <> 'preview' then
+  if (Mode <> 'preview') and (Mode <> 'apply') then
     Exit(SR_RENAME_MODE);
   if Params.Path.Trim = '' then
     Exit(SR_RENAME_NEED_PATH);
   if Params.NewName.Trim = '' then
     Exit(SR_RENAME_NEED_NEWNAME);
-  Result := ReadPathDenied(Params.Path); // preview only reads
+  // preview solo lee; apply escribe, asi que pasa por la puerta de escritura
+  // (jaula + credencial de solo lectura) ANTES de calcular nada. Cada
+  // fichero que apply toque vuelve a pasar por ella al apilarse.
+  if Mode = 'apply' then
+    Result := PathDenied(Params.Path)
+  else
+    Result := ReadPathDenied(Params.Path);
   if Result = '' then
     // La sexta y ultima de la familia. Sin esto, una linea que no existe
     // salia como excepcion cruda en ingles en vez del mensaje que dice
@@ -89,8 +93,12 @@ begin
   if Result <> '' then
     Exit;
   try
-    Ret := RenamePreview(Params.Path, Params.Line, Params.Character,
-      Params.NewName.Trim);
+    if Mode = 'apply' then
+      Ret := RenameApply(Params.Path, Params.Line, Params.Character,
+        Params.NewName.Trim)
+    else
+      Ret := RenamePreview(Params.Path, Params.Line, Params.Character,
+        Params.NewName.Trim);
     try
       Result := Ret.ToJSON;
     finally

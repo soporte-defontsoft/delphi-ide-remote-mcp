@@ -23,7 +23,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **FMX styles** — [`delphi_styles`](#delphi_styles)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
 - **Several files in one transaction** — [`delphi_changeset`](#delphi_changeset)
-- **Rename a symbol (preview only)** — [`delphi_rename_symbol`](#delphi_rename_symbol)
+- **Rename a symbol (preview, then apply)** — [`delphi_rename_symbol`](#delphi_rename_symbol)
 - **Forms & designers** — [`delphi_designer`](#delphi_designer)
 - **Run the tests of a project** — [`delphi_test`](#delphi_test)
 - **The operator's own screen** — [`delphi_desktop`](#delphi_desktop)
@@ -530,9 +530,11 @@ What this server's RAD Studio has INSTALLED to program with: every component/des
 
 ### `delphi_rename_symbol`
 
-SEMANTIC RENAME, preview only in this version — by design. Point at the identifier (path + 0-based line/character, same convention as delphi_definition) and give `newname`: the answer lists every CONFIRMED occurrence (each one re-resolved against the same definition), the files touched, and whether the rename is APPLICABLE. The rule is strict on purpose: one single unverified reference, a hit in a `.dfm`/`.fmx` (form bindings break), a hit inside a string literal (FindComponent/RTTI/StyleLookup by name), a symbol whose definition lives outside the workspace (RTL/components), or a collision with the new name = `applicable=false` with the reasons. `mode=apply` is refused for now: it will arrive over `delphi_changeset` once preview has been validated in the field; meanwhile an applicable preview gives you the exact change list to stage yourself.
+SEMANTIC RENAME. Point at the identifier (path + 0-based line/character, same convention as delphi_definition) and give `newname`. `mode=preview` (default, never writes) lists every CONFIRMED occurrence (each one re-resolved against the same definition), the files touched, and whether the rename is APPLICABLE. The rule is strict on purpose: one single unverified reference, a hit in a `.dfm`/`.fmx` (form bindings break), a hit inside a string literal (FindComponent/RTTI/StyleLookup by name), a symbol whose definition lives outside the workspace (RTL/components), or a collision with the new name = `applicable=false` with the reasons.
 
-*Access: read-only (preview never writes).*
+**`mode=apply` (1.0.17) writes it - through the changeset engine, not on its own.** The same analysis runs first; when applicable, every touched line is staged as one edit (the identifier replaced as a WORD, so a qualified header `TClass.Method` keeps its class and two occurrences on one line change at once), the batch is previewed and committed: all files or none, fingerprints re-checked, a byte snapshot of each file taken first and a copy in `__delphi-patch` as with any edit. The answer is the preview's plus `applied`, `editsApplied` and the `commit` audit; not applicable = `applied:false`, nothing written, blockers given. Mentions in comments are renamed only on lines that also carry a real occurrence; the rest come back as `warnings`. Rebuild afterwards - the tool does not.
+
+*Access: preview read-only; apply read-write (jailed and refused to a read-only credential, like every write).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -540,7 +542,7 @@ SEMANTIC RENAME, preview only in this version — by design. Point at the identi
 | `line` | integer | **yes** | Zero-based line of the identifier |
 | `character` | integer | **yes** | Zero-based column inside the identifier |
 | `newname` | string | **yes** | The new identifier (legal Delphi name, no reserved words) |
-| `mode` | string | optional | preview (default; never writes) \| apply (refused for now) |
+| `mode` | string | optional | preview (default; never writes) \| apply (writes the rename when applicable, through the changeset engine: all files or none, backups in `__delphi-patch`) |
 
 ### `delphi_designer`
 

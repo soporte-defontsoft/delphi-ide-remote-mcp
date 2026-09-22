@@ -29,7 +29,20 @@ interface
 uses
   System.JSON;
 
+{ ATodas: sin el tope de 100 filas en "changes" - lo que apply necesita, que
+  edita cada aparicion y no puede quedarse con las cien primeras. El tope
+  protege el transporte de un agente pequeno; apply lo vuelve a poner en la
+  RESPUESTA, no en el trabajo. }
 function RenamePreview(const AFilePath: string; ALine, ACharacter: Integer;
+  const ANewName: string; ATodas: Boolean = False): TJSONObject;
+
+{ El rename APLICADO (1.0.17): el mismo preview, y si es aplicable, sus
+  cambios apilados y confirmados por el motor de changeset - una edicion por
+  linea tocada, preview, commit: huellas, copias en __delphi-patch y todo o
+  nada, exactamente lo que un agente hacia a mano con la lista. La respuesta
+  es la del preview mas "applied" y el resultado del commit; si no es
+  aplicable no se escribe nada y los blockers dicen por que. }
+function RenameApply(const AFilePath: string; ALine, ACharacter: Integer;
   const ANewName: string): TJSONObject;
 
 implementation
@@ -44,6 +57,7 @@ uses
   Lsp.References,
   Lsp.ProjectUnits,
   Lsp.Patch,
+  Lsp.Changeset,
   Lsp.Guard,
   Lsp.Session,
   Lsp.Texts;
@@ -112,7 +126,7 @@ begin
 end;
 
 function RenamePreview(const AFilePath: string; ALine, ACharacter: Integer;
-  const ANewName: string): TJSONObject;
+  const ANewName: string; ATodas: Boolean): TJSONObject;
 var
   Refs, DefObj: TJSONObject;
   Blockers, Warnings, Changes, UnvArr, RejArr: TJSONArray;
@@ -189,7 +203,7 @@ begin
         // the change list is capped: a symbol with hundreds of uses must
         // not flood a small client's context (measured 2026-08-24). The
         // caps protect the transport; occurrences/files carry the truth.
-        if I >= 100 then
+        if (I >= 100) and not ATodas then
           Continue;
         Chg := TJSONObject.Create;
         Changes.AddElement(Chg);
@@ -220,7 +234,7 @@ begin
       // editarla. Decir las dos cifras evita que el que las compare crea que
       // ha encontrado un duplicado.
       Result.AddPair('occurrences', TJSONNumber.Create(Arr.Count));
-      if Arr.Count > 100 then
+      if (Arr.Count > 100) and not ATodas then
         Result.AddPair('changesTruncated', TJSONBool.Create(True));
 
       // The DEFINITION line itself is not a "reference", so it never came in
@@ -417,6 +431,135 @@ begin
     Changes.Free;
     Warnings.Free;
     Blockers.Free;
+  end;
+end;
+
+function RenameApply(const AFilePath: string; ALine, ACharacter: Integer;
+  const ANewName: string): TJSONObject;
+var
+  Changes: TJSONArray;
+  Chg: TJSONObject;
+  Ident, Id, R, P, EncName, Vieja, Nueva: string;
+  Hechas: TStringList;          // path|line0 ya apiladas: dos apariciones en una linea = UNA edicion
+  Textos: TDictionary<string, TArray<string>>; // lineas de cada fichero, leidas una vez
+  I, L0, Apiladas: Integer;
+  Lineas: TArray<string>;
+
+  procedure PonResultado(const AClave: string; AValor: TJSONValue);
+  begin
+    if Result.GetValue(AClave) <> nil then
+      Result.RemovePair(AClave).Free;
+    Result.AddPair(AClave, AValor);
+  end;
+
+  procedure Fallo(const AMotivo: string);
+  begin
+    if Id <> '' then
+      ChangesetExecute('rollback', Id, '', '', '', '', '', '', 0);
+    Id := '';
+    PonResultado('applied', TJSONBool.Create(False));
+    PonResultado('note', TJSONString.Create(Format(SR_RENAME_APPLY_FAILED_FMT, [AMotivo])));
+  end;
+
+begin
+  Id := '';
+  Result := RenamePreview(AFilePath, ALine, ACharacter, ANewName, True);
+  if not ((Result.GetValue('applicable') is TJSONBool) and
+          TJSONBool(Result.GetValue('applicable')).AsBoolean) then
+  begin
+    PonResultado('applied', TJSONBool.Create(False));
+    PonResultado('note', TJSONString.Create(SR_RENAME_NOT_APPLICABLE));
+    Exit;
+  end;
+  Changes := Result.GetValue('changes') as TJSONArray;
+  Ident := Result.GetValue('symbol').Value;
+  Hechas := TStringList.Create;
+  Textos := TDictionary<string, TArray<string>>.Create;
+  try
+    Hechas.CaseSensitive := False;
+    Id := ChangesetBegin;
+    if Id = '' then
+    begin
+      Fallo(SR_CHANGESET_TOO_MANY);
+      Exit;
+    end;
+    Apiladas := 0;
+    for I := 0 to Changes.Count - 1 do
+    begin
+      Chg := Changes.Items[I] as TJSONObject;
+      P := TPath.GetFullPath(Chg.GetValue('path').Value);
+      L0 := Chg.GetValue('line0').GetValue<Integer>;
+      if Hechas.IndexOf(P + '|' + IntToStr(L0)) >= 0 then
+        Continue;
+      Hechas.Add(P + '|' + IntToStr(L0));
+      if not Textos.TryGetValue(P.ToLower, Lineas) then
+      begin
+        Lineas := PatchLoadText(P, EncName).Replace(#13#10, #10).Split([#10]);
+        Textos.Add(P.ToLower, Lineas);
+      end;
+      if (L0 < 0) or (L0 >= Length(Lineas)) then
+      begin
+        Fallo(Format(SR_RENAME_LINE_GONE_FMT, [L0 + 1, P]));
+        Exit;
+      end;
+      { La linea entera, con el identificador cambiado como PALABRA: la
+        cabecera cualificada (TClase.Metodo) conserva la clase, y una
+        aparicion doble en la misma linea se cambia de una vez. Todo lo
+        que hay en esa linea con ese nombre es el simbolo, porque una sola
+        referencia sin confirmar ya ha hecho el rename no aplicable. }
+      Vieja := Lineas[L0];
+      Nueva := TRegEx.Replace(Vieja, '(?i)\b' + TRegEx.Escape(Ident) + '\b', ANewName);
+      if Nueva = Vieja then
+        Continue; // una fila que no lleva el nombre (no deberia pasar): nada que apilar
+      R := ChangesetExecute('stage', Id, 'edit', P, '', Vieja, Nueva, '', L0 + 1);
+      if not ChangesetRespondio(R, SN_CHANGESET_STAGED_FMT) then
+      begin
+        Fallo(R);
+        Exit;
+      end;
+      Inc(Apiladas);
+    end;
+    if Apiladas = 0 then
+    begin
+      Fallo(SR_RENAME_NOTHING_TO_STAGE);
+      Exit;
+    end;
+    R := ChangesetExecute('preview', Id, '', '', '', '', '', '', 0);
+    var Prev := TJSONObject.ParseJSONValue(R);
+    try
+      if not (Prev is TJSONObject) or
+         (TJSONObject(Prev).GetValue('unresolved') = nil) or
+         (TJSONObject(Prev).GetValue('unresolved').GetValue<Integer> <> 0) then
+      begin
+        Fallo(R);
+        Exit;
+      end;
+    finally
+      Prev.Free;
+    end;
+    R := ChangesetExecute('commit', Id, '', '', '', '', '', '', 0);
+    Id := ''; // commit consume el changeset, haya ido bien o mal
+    if not ChangesetRespondio(R, SN_CHANGESET_COMMITTED_FMT) then
+    begin
+      Fallo(R);
+      Exit;
+    end;
+    PonResultado('applied', TJSONBool.Create(True));
+    PonResultado('editsApplied', TJSONNumber.Create(Apiladas));
+    PonResultado('commit', TJSONString.Create(R));
+    PonResultado('note', TJSONString.Create(SN_RENAME_APPLIED_NOTE));
+    { El tope de 100 filas vuelve a la RESPUESTA: lo aplicado esta en el
+      disco, y un simbolo con cientos de usos no tiene que inundar el
+      contexto de un cliente pequeno. }
+    if Changes.Count > 100 then
+    begin
+      while Changes.Count > 100 do
+        Changes.Remove(Changes.Count - 1).Free;
+      PonResultado('changesTruncated', TJSONBool.Create(True));
+    end;
+  finally
+    Textos.Free;
+    Hechas.Free;
   end;
 end;
 

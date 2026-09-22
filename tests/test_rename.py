@@ -161,13 +161,37 @@ j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': li, 'character': co, 
 check('simbolo de la RTL bloqueado (definicion fuera del workspace)',
       j.get('applicable') is False and any('FUERA' in b or 'RTL' in b for b in j.get('blockers', [])), str(j)[:400])
 
-# 7. mode=apply refused; nothing ever written
-r = call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'Duplica', 'mode': 'apply'})
-check('mode=apply rechazado con el camino (changeset)', 'RECHAZADO' in r and 'changeset' in r, r[:250])
-# note: fixture edits in step 6 changed UCalc deliberately; verify the TOOL wrote nothing
+# 7. mode=apply on a NON applicable rename: nothing written (ConCadena has a
+# string-literal hit). Until 1.0.17 apply was refused outright.
+MID = sha_all()
+j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 5, 'character': 9, 'newname': 'OtraCosa', 'mode': 'apply'}))
+check('apply sobre un rename NO aplicable: applied=false y los blockers',
+      j.get('applied') is False and j.get('applicable') is False and j.get('blockers'), str(j)[:300])
+check('...y no escribio NADA', sha_all() == MID, 'algo cambio en el disco')
+# note: fixture edits in step 6 changed UCalc deliberately; verify the TOOL wrote nothing so far
 AFTER = sha_all()
 tool_touched = [p for p in BEFORE if p in AFTER and BEFORE[p] != AFTER[p] and 'UCalc.pas' not in p]
-check('la tool no escribio NADA (solo el fixture cambio a proposito)', not tool_touched, tool_touched)
+check('la tool no escribio NADA hasta aqui (solo el fixture cambio a proposito)', not tool_touched, tool_touched)
+
+# 8. mode=apply on an applicable rename: Doble -> Duplica lands in BOTH files
+# (UCalc.pas: declaration, implementation header, a call; Ren.dpr: a call),
+# through the changeset engine, and the project still builds.
+j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'Duplica', 'mode': 'apply'}))
+check('apply aplicable: applied=true con el commit del changeset',
+      j.get('applied') is True and 'COMMIT COMPLETO' in j.get('commit', ''), str(j)[:400])
+check('apply: una edicion por linea tocada (4: decl, impl, uso, dpr)', j.get('editsApplied') == 4, j.get('editsApplied'))
+import re as _re
+uc = open(UCALC, encoding='utf-8-sig').read(); dp = open(DPR, encoding='utf-8-sig').read()
+check('apply: Doble ya no existe como palabra en UCalc.pas ni en Ren.dpr',
+      not _re.search(r'Doble', uc) and not _re.search(r'Doble', dp), (uc[:200], dp[:200]))
+check('apply: Duplica esta en la declaracion, la implementacion y los dos usos',
+      uc.count('Duplica') == 3 and dp.count('Duplica') == 1, (uc.count('Duplica'), dp.count('Duplica')))
+check('apply: la copia previa esta en __delphi-patch',
+      os.path.isdir(os.path.join(PRJ, '__delphi-patch')), os.listdir(PRJ))
+r = call('delphi_build', {'project': os.path.join(PRJ, 'Ren.dproj')}, t=600)
+check('apply: el proyecto COMPILA despues del rename', '"success":true' in r.replace(' ', ''), r[:300])
+# the note says to rebuild, and the answer never floods: changes is capped in the answer
+check('apply: la nota manda recompilar', 'delphi_build' in j.get('note', ''), j.get('note'))
 
 proc.kill()
 print('\n== rename battery: %d PASS / %d FAIL ==' % (P, F))

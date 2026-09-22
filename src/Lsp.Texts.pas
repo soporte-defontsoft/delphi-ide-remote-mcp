@@ -2232,19 +2232,22 @@ const
   // ---- delphi_rename_symbol ----
 
   SD_RENAME =
-    'SEMANTIC RENAME of a Delphi symbol - PREVIEW ONLY in this version, by ' +
-    'design. Point at the identifier (path + 0-based line/character, same ' +
-    'convention as delphi_definition) and give newname: the answer lists ' +
-    'every CONFIRMED occurrence (each one re-resolved against the same ' +
-    'definition), the files touched, and whether the rename is APPLICABLE. ' +
-    'The rule is strict on purpose: one single unverified reference, a hit ' +
-    'in a .dfm/.fmx (form bindings break), a hit inside a string literal ' +
-    '(FindComponent/RTTI/StyleLookup by name), a symbol whose definition ' +
-    'lives outside the workspace (RTL/components), or a collision with the ' +
-    'new name = applicable=false with the reasons. mode=apply is refused ' +
-    'for now: it will arrive over delphi_changeset once preview has been ' +
-    'validated in the field. Meanwhile, an applicable=true preview gives ' +
-    'you the exact change list to stage yourself with delphi_changeset.';
+    'SEMANTIC RENAME of a Delphi symbol. Point at the identifier (path + ' +
+    '0-based line/character, same convention as delphi_definition) and give ' +
+    'newname: mode=preview (default, never writes) lists every CONFIRMED ' +
+    'occurrence (each one re-resolved against the same definition), the ' +
+    'files touched, and whether the rename is APPLICABLE; mode=apply does ' +
+    'the same and, when applicable, WRITES it through the changeset engine ' +
+    '- one edit per touched line, preview, commit: all files or none, ' +
+    'fingerprints, a backup of each in __delphi-patch - and answers with the ' +
+    'commit. The rule is strict on purpose, for both modes: one single ' +
+    'unverified reference, a hit in a .dfm/.fmx (form bindings break), a hit ' +
+    'inside a string literal (FindComponent/RTTI/StyleLookup by name), a ' +
+    'symbol whose definition lives outside the workspace (RTL/components), ' +
+    'or a collision with the new name = applicable=false with the reasons, ' +
+    'and apply writes nothing. Mentions in comments are renamed only on the ' +
+    'lines that also carry a real occurrence; the rest are reported as ' +
+    'warnings for you to look at. Rebuild afterwards.';
 
   SP_RENAME_PATH =
     'The .pas/.dpr with the symbol (any occurrence works)';
@@ -2259,11 +2262,12 @@ const
     'The new identifier (legal Delphi name, no reserved words)';
 
   SP_RENAME_MODE =
-    'preview (default; never writes) | apply (refused for now - arrives ' +
-    'over delphi_changeset after field validation)';
+    'preview (default; never writes) | apply (writes the rename when ' +
+    'applicable, through the changeset engine: all files or none, backups ' +
+    'in __delphi-patch; refused with the blockers otherwise)';
 
   SR_RENAME_MODE =
-    'error: mode debe ser preview (apply llegara sobre delphi_changeset).';
+    'error: mode debe ser preview o apply.';
 
   SR_RENAME_NEED_PATH =
     'RECHAZADO: falta "path" (el fichero con el simbolo).';
@@ -2271,11 +2275,28 @@ const
   SR_RENAME_NEED_NEWNAME =
     'RECHAZADO: falta "newname" (el identificador nuevo).';
 
-  SR_RENAME_APPLY_NOT_YET =
-    'RECHAZADO: mode=apply aun no existe, a proposito: el preview tiene que ' +
-    'validarse en campo antes de escribir nada. Si el preview te da ' +
-    'applicable=true, su lista changes es exactamente lo que puedes montar ' +
-    'tu mismo con delphi_changeset (stage edit por linea + preview + commit).';
+  SR_RENAME_NOT_APPLICABLE =
+    'NO APLICADO: el rename no es aplicable y no se ha escrito nada. Los ' +
+    '"blockers" dicen por que; arreglalos (o renombra a mano con la ' +
+    'evidencia de "changes") y repite.';
+
+  SR_RENAME_APPLY_FAILED_FMT =
+    'NO APLICADO: el motor de changeset no lo dejo pasar y todo esta como ' +
+    'estaba (todo o nada). Motivo: %s';
+
+  SR_RENAME_LINE_GONE_FMT =
+    'la linea %d de %s ya no existe: el fichero cambio entre el analisis y ' +
+    'la escritura';
+
+  SR_RENAME_NOTHING_TO_STAGE =
+    'ninguna de las lineas de "changes" contiene el identificador';
+
+  SN_RENAME_APPLIED_NOTE =
+    'APLICADO: cada linea de "changes" se ha escrito por el motor de ' +
+    'changeset (una edicion por linea, todo o nada, copia previa de cada ' +
+    'fichero en __delphi-patch - "commit" trae el detalle). Recompila ' +
+    '(delphi_build) para cerrar el ciclo, y repasa los "warnings": una ' +
+    'mencion en un comentario de OTRA linea conserva el nombre viejo.';
 
   SR_RENAME_BAD_IDENT_FMT =
     '"%s" no es un identificador Delphi valido (letra o _ inicial, luego ' +
@@ -2414,7 +2435,7 @@ const
     '  crear proyecto/unit/form/frame ..... delphi_create'#10 +
     '  borrar / mover un fichero .......... delphi_delete, delphi_move'#10 +
     '  subir un binario o un trozo ........ delphi_upload'#10 +
-    '  ver el impacto de un rename ........ delphi_rename_symbol (solo preview)'#10 +
+    '  renombrar un simbolo ............... delphi_rename_symbol (preview, luego mode=apply)'#10 +
     #10 +
     'PROYECTO'#10 +
     '  framework, plataformas, search path  delphi_config'#10 +
