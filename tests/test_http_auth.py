@@ -26,7 +26,8 @@ with open(os.path.join(_maindir, 'settings.ini'), 'w') as f:
     f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)*2
             + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
             + 'Roots=%s' % REPOROOT + chr(10)
-            + 'AllowRun=1' + chr(10) + 'LibraryZone=1' + chr(10))
+            + 'AllowRun=1' + chr(10) + 'LibraryZone=1' + chr(10)
+            + 'DelphiVersion=37.0' + chr(10))   # 1.0.17: pinned to the one install here
 env = dict(os.environ)
 env.pop('DELPHI_MCP_TOKEN', None)
 proc = subprocess.Popen([_mainexe, '--http'], env=env,
@@ -99,6 +100,17 @@ try:
     check('http: la sesion emitida por este proceso sigue valiendo', code == 200 and 'delphi_build' in body,
           '%s %s' % (code, body[:120]))
 
+    # 1.0.17: [Workspace] DelphiVersion= pins the RAD Studio; pinned to the
+    # installed one it is simply the active one, with no note
+    code, body = post({"jsonrpc": "2.0", "id": 21, "method": "tools/call",
+                       "params": {"name": "delphi_workspace", "arguments": {}}}, TOKEN)
+    try:
+        ws = json.loads(json.loads(body)['result']['content'][0]['text'])
+    except Exception:
+        ws = {}
+    check('DelphiVersion=37.0 instalada: activeDelphi 37.0, pedida 37.0, sin nota',
+          ws.get('activeDelphi') == '37.0' and ws.get('delphiVersionRequested') == '37.0'
+          and 'delphiVersionNote' not in ws, json.dumps(ws)[:200])
     code, body = post({"jsonrpc": "2.0", "id": 2, "method": "tools/list",
                        "params": {}}, TOKEN)
     try:
@@ -525,7 +537,8 @@ try:
         f.write('[Server]' + chr(10) + 'Port=%d' % TTL_PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)
                 + 'SessionTimeoutMinutes=0.05' + chr(10) * 2
                 + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
-                + 'Roots=%s' % tmpdir5 + chr(10))
+                + 'Roots=%s' % tmpdir5 + chr(10)
+                + 'DelphiVersion=12.0' + chr(10))   # NOT installed here: falls back, says so
     env5 = dict(os.environ); env5.pop('DELPHI_MCP_TOKEN', None); env5.pop('DELPHI_MCP_SESSION_TIMEOUT_MINUTES', None)
     proc5 = subprocess.Popen([exe5, '--http'], env=env5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(3)
@@ -554,6 +567,22 @@ try:
         check('ttl: delphi_workspace publica sessions y sessionTimeoutMinutes',
               srv.get('sessions', 0) >= 1 and abs(float(srv.get('sessionTimeoutMinutes', -1)) - 0.05) < 1e-6,
               json.dumps(srv)[:200])
+        try:
+            ws5 = json.loads(json.loads(body)['result']['content'][0]['text'])
+        except Exception:
+            ws5 = {}
+        check('DelphiVersion=12.0 NO instalada: cae a la de siempre y lo dice',
+              ws5.get('activeDelphi') == '37.0' and ws5.get('delphiVersionRequested') == '12.0'
+              and '12.0' in ws5.get('delphiVersionNote', '') and '37.0' in ws5.get('delphiVersionNote', ''),
+              json.dumps(ws5)[:300])
+        code, _, body = post5({"jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                               "params": {"name": "delphi_installs", "arguments": {}}}, sid5)
+        try:
+            ins = json.loads(json.loads(body)['result']['content'][0]['text'])
+        except Exception:
+            ins = {}
+        check('delphi_installs dice la pedida y la nota',
+              ins.get('requested') == '12.0' and '37.0' in ins.get('requestedNote', ''), json.dumps(ins)[:300])
         time.sleep(1.5)
         code, _, body = post5({"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}, sid5)
         check('ttl: cada peticion la toca (1,5 s despues sigue viva)', code == 200 and 'delphi_build' in body,

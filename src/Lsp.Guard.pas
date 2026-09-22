@@ -209,6 +209,14 @@ function AuthToken: string;         // DELPHI_MCP_TOKEN         / AuthToken
 function ReadOnlyToken: string;     // DELPHI_MCP_READONLY_TOKEN / ReadOnlyToken
 function BindIP: string;            // DELPHI_MCP_BIND_IP        / [Server] BindIP ('' = all)
 
+{ Que RAD Studio usa el workspace ACTIVO cuando la maquina tiene varios lado
+  a lado: [Workspace.<x>] DelphiVersion=36.0 (o DELPHI_MCP_DELPHI_VERSION en
+  el modo local de lanzamiento). '' = la regla de siempre, la mas nueva con
+  DelphiLSP. La decide el workspace y no el agente porque la version la manda
+  el PROYECTO, y un workspace es un proyecto. Quien la aplica es
+  DiscoverRadStudio (Lsp.Discovery), el unico sitio que elige instalacion. }
+function PreferredDelphiVersion: string;
+
 { The knowledge-vault root (Obsidian notes). Empty when unset.
   Env DELPHI_MCP_VAULT_PATH (solo el workspace por defecto), si no el
   VaultPath= del workspace activo. Canonicalized, no trailing delimiter. The vault_read/vault_search tools register only when
@@ -516,6 +524,7 @@ type
     // A donde puede llegar ESTE workspace: sin declarar = a ninguna parte.
     GitRemotes: string;               // hosts que un git clone/push puede nombrar
     RemoteHosts: string;              // hosts que un dial PAServer puede marcar
+    DelphiVersion: string;            // DelphiVersion=36.0: que RAD Studio usa ('' = la mas nueva con DelphiLSP)
     RemoteProjects: TArray<string>;   // proyectos ejecutables en un target
     VaultPath: string;                // vault de conocimiento de ESTE workspace
     OvVaultReadOnly: Integer;         // tri-estado: ausente = solo lectura
@@ -539,6 +548,7 @@ var
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
   GLibraryZone: Boolean = True;     // the read-only library zone, on by default
+  GDelphiVersion: string = '';      // DELPHI_MCP_DELPHI_VERSION (modo local de lanzamiento)
   GAllowTests: Boolean = False;     // running test suites is opt-in too
   GGitRemotes: string = '';         // hosts an explicit git URL may name
   GRemoteHosts: string = '';        // hosts a raw TCP probe may dial
@@ -889,6 +899,7 @@ begin
   if GSecLoaded then
     Exit;
   ParseAdbDevices(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'));
+  GDelphiVersion := GetEnvironmentVariable('DELPHI_MCP_DELPHI_VERSION').Trim;
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
   GAllowRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_RUN') = '1';
@@ -956,6 +967,7 @@ begin
             W.OvAgentConfinement := ReadTriState(Ini, S, 'AgentConfinement');
             W.GitRemotes := Ini.ReadString(S, 'GitRemotes', '').Trim;
             W.RemoteHosts := Ini.ReadString(S, 'RemoteHosts', '').Trim;
+            W.DelphiVersion := Ini.ReadString(S, 'DelphiVersion', '').Trim;
             W.RemoteProjects := Ini.ReadString(S, 'RemoteRunProjects', '')
               .Split([';'], TStringSplitOptions.ExcludeEmpty);
             W.VaultPath := Ini.ReadString(S, 'VaultPath', '').Trim;
@@ -1417,6 +1429,19 @@ begin
       Ini.Free;
     end;
   end;
+end;
+
+function PreferredDelphiVersion: string;
+begin
+  LoadSecurity;
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Result := GWorkspaces[TWorkspaceIx1 - 1].DelphiVersion
+  else
+    Result := GDelphiVersion;
+  Result := Result.Trim;
+  // '36' y '36.0' son la misma: el registro la escribe con decimal
+  if (Result <> '') and (Result.IndexOf('.') < 0) then
+    Result := Result + '.0';
 end;
 
 function VaultPath: string;

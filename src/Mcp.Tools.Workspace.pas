@@ -1025,6 +1025,11 @@ begin
   try
     Return.AddPair('total', TJSONNumber.Create(Length(All)));
     Return.AddPair('activeForLsp', Active.Version); // '' = none has DelphiLSP
+    // La que pide el workspace (DelphiVersion=) y, si no esta, la nota
+    if PreferredDelphiVersion <> '' then
+      Return.AddPair('requested', PreferredDelphiVersion);
+    if DiscoverRadStudioNote <> '' then
+      Return.AddPair('requestedNote', DiscoverRadStudioNote);
     Arr := TJSONArray.Create;
     Return.AddPair('installs', Arr);
     for Info in All do
@@ -1256,6 +1261,13 @@ begin
       Return.AddPair('activeDelphi', Info.Version)
     else
       Return.AddPair('activeDelphi', '');
+    // Un workspace fijado a una version (DelphiVersion=) lo dice aqui, y si
+    // esa version no esta instalada lo dice mas alto: es el primer sitio que
+    // mira quien no entiende por que compila con otra.
+    if PreferredDelphiVersion <> '' then
+      Return.AddPair('delphiVersionRequested', PreferredDelphiVersion);
+    if DiscoverRadStudioNote <> '' then
+      Return.AddPair('delphiVersionNote', DiscoverRadStudioNote);
     AnadirFichaDelServidor(Return);
     Result := Return.ToJSON;
   finally

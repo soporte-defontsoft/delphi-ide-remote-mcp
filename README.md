@@ -398,6 +398,7 @@ LibraryZone=1                           ; ITS declaration - nothing is inherited
 AllowTests=1                            ; may build+run ITS test suites
 VaultPath=D:\Vaults\TeamMemory          ; ITS persistent memory (vault_* tools)
 AdbAllowedDevices=192.168.1.163         ; ITS Android devices (absent = NONE)
+DelphiVersion=36.0                      ; which RAD Studio it uses (absent = newest with DelphiLSP)
 Profile=coder                           ; optional: trims tools/list for this token
 
 [Workspace.Audit]
@@ -521,6 +522,13 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   than N days (default 30; 0 = keep forever) is purged, and stale empty mailboxes removed,
   on each mailbox use. Server plumbing, not a permission: that is why it lives under
   `[Server]` and not in a workspace.
+- **`[Workspace.<name>] DelphiVersion`** (or `DELPHI_MCP_DELPHI_VERSION` in launch mode): which RAD
+  Studio a workspace uses when the machine hosts several side by side - the BDS version number
+  (`37.0` = Delphi 13, `36.0` = Delphi 12; `delphi_installs` lists them). One key governs the
+  build, the DelphiLSP engine, profiles and SDKs, because every tool asks the same one place
+  for its installation. Absent = the newest with DelphiLSP; a version that is not installed
+  falls back to that and `delphi_workspace` says so in `delphiVersionNote`. The workspace
+  decides, not the agent: the version is the project's, and a workspace is a project.
 - **`[Server] SessionTimeoutMinutes`** (or `DELPHI_MCP_SESSION_TIMEOUT_MINUTES`): an HTTP
   session that sits idle longer than this (default 720 minutes; 0 = never) expires, and the
   next request on it answers 404 with the reason so the client re-initializes - the

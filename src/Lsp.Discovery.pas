@@ -66,9 +66,18 @@ function IdeSdksDir(const AVersion: string): string;
   are included too: they still build via msbuild. }
 function DiscoverAllRadStudios: TArray<TRadStudioInfo>;
 
-{ The ACTIVE install for the LSP engine: the highest version that ships a
-  DelphiLSP.exe. }
+{ The ACTIVE install - the ONE place that chooses one. The version the
+  active workspace asks for (PreferredDelphiVersion: [Workspace.<x>]
+  DelphiVersion=36.0) when it is installed; otherwise, and by default, the
+  highest version that ships a DelphiLSP.exe. Every tool that needs an
+  install (build, LSP engine, profiles, SDKs, components) asks here, so a
+  workspace pinned to one version gets it everywhere at once. }
 function DiscoverRadStudio: TRadStudioInfo;
+
+{ '' when the active install is the one asked for (or none was asked for);
+  otherwise the note that says which version was requested and which one
+  answers instead - delphi_workspace and delphi_installs show it. }
+function DiscoverRadStudioNote: string;
 
 { The IDE's global Library Search Path for a platform ('Win32'/'Win64'),
   raw, with its $() variables unexpanded. This is where INSTALLED COMPONENT
@@ -115,6 +124,8 @@ uses
   System.Generics.Collections,
   System.Generics.Defaults,
   System.Win.Registry,
+  Lsp.Guard, // PreferredDelphiVersion: la version que pide el workspace activo
+  Lsp.Texts,
   Winapi.Windows;
 
 function TRadStudioInfo.Found: Boolean;
@@ -197,11 +208,32 @@ end;
 function DiscoverRadStudio: TRadStudioInfo;
 var
   Info: TRadStudioInfo;
+  Pedida: string;
 begin
+  Pedida := PreferredDelphiVersion;
+  if Pedida <> '' then
+    for Info in DiscoverAllRadStudios do
+      if SameText(Info.Version, Pedida) and (Info.DelphiLspExe <> '') then
+        Exit(Info);
+  // sin peticion, o pedida y no instalada (la nota lo cuenta): la de siempre
   for Info in DiscoverAllRadStudios do // newest first
     if Info.DelphiLspExe <> '' then
       Exit(Info);
   Result := Default(TRadStudioInfo);
+end;
+
+function DiscoverRadStudioNote: string;
+var
+  Pedida: string;
+  Activa: TRadStudioInfo;
+begin
+  Result := '';
+  Pedida := PreferredDelphiVersion;
+  if Pedida = '' then
+    Exit;
+  Activa := DiscoverRadStudio;
+  if not SameText(Activa.Version, Pedida) then
+    Result := Format(SN_DELPHIVERSION_MISSING_FMT, [Pedida, Activa.Version]);
 end;
 
 function BdsCommonDir(const AInfo: TRadStudioInfo): string;

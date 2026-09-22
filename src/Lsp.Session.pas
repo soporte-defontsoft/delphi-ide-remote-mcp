@@ -52,7 +52,6 @@ type
     // when it changes, the buffer is refreshed with didChange (the LSP must
     // always see the CURRENT disk truth, e.g. after a delphi_edit).
     FDocStamps: TDictionary<string, string>;
-    FLspExe: string;
     FSettingsCache: TDictionary<string, TSettingsEntry>;
     function EnsureExe: string;
     function ResolveSettingsWalk(const AFilePath: string;
@@ -100,15 +99,14 @@ function TLspSession.EnsureExe: string;
 var
   Info: TRadStudioInfo;
 begin
-  if FLspExe = '' then
-  begin
-    Info := DiscoverRadStudio;
-    if not Info.Found then
-      raise ELspSession.Create(
-        'No RAD Studio installation with DelphiLSP.exe found in the registry.');
-    FLspExe := Info.DelphiLspExe;
-  end;
-  Result := FLspExe;
+  // Sin cache: la instalacion la elige DiscoverRadStudio por WORKSPACE
+  // (DelphiVersion=), asi que dos workspaces pueden pedir motores
+  // distintos en el mismo proceso. Se llama solo al arrancar un motor.
+  Info := DiscoverRadStudio;
+  if not Info.Found or (Info.DelphiLspExe = '') then
+    raise ELspSession.Create(
+      'No RAD Studio installation with DelphiLSP.exe found in the registry.');
+  Result := Info.DelphiLspExe;
 end;
 
 constructor TLspSession.Create;
@@ -305,7 +303,10 @@ begin
   // una carpeta fijaba SU RootDir para todos los demas - el token ancho
   // le regalaba al estrecho una raiz que su jaula le prohibe
   // (auditoria 2026-09-21).
-  Dir := string.Join(';', WorkspaceRoots).ToLower + '|' +
+  // ...y la VERSION de RAD Studio, porque los settings fabricados salen de
+  // los paths de ESA instalacion (DelphiVersion= por workspace).
+  Dir := DiscoverRadStudio.Version + '|' +
+    string.Join(';', WorkspaceRoots).ToLower + '|' +
     TPath.GetDirectoryName(TPath.GetFullPath(AFilePath)).ToLower;
   FLock.Enter;
   try
@@ -366,10 +367,13 @@ const
   Prefix: array [Boolean] of string = ('agent|', 'linter|');
 begin
   ASettingsUsed := ResolveSettings(AFullPath, ARootDir);
+  // La VERSION entra en la clave: un workspace fijado a otra RAD Studio
+  // (DelphiVersion=) necesita SU DelphiLSP, no el que ya corre para otro.
+  var Ver := DiscoverRadStudio.Version;
   if ASettingsUsed <> '' then
-    AClientKey := Prefix[ALinter] + ASettingsUsed.ToLower
+    AClientKey := Prefix[ALinter] + Ver + '|' + ASettingsUsed.ToLower
   else
-    AClientKey := Prefix[ALinter] + '(nosettings)' + ARootDir.ToLower;
+    AClientKey := Prefix[ALinter] + Ver + '|(nosettings)' + ARootDir.ToLower;
 
   // Fast path under the lock; the SLOW path (spawn DelphiLSP + initialize +
   // settings load, seconds) runs UNLOCKED, so warming one project no longer

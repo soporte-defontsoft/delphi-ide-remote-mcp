@@ -177,7 +177,7 @@ Locate Delphi projects (.dproj/.groupproj) under a directory - or under the work
 
 ### `delphi_installs`
 
-List EVERY RAD Studio / Delphi installation discovered on this machine (a machine may host several versions side by side): version, root directory, whether it ships DelphiLSP.exe (semantic engine) and rsvars.bat (msbuild). Also reports which one is ACTIVE for the LSP tools (the newest with DelphiLSP). Read-only, no parameters.
+List EVERY RAD Studio / Delphi installation discovered on this machine (a machine may host several versions side by side): version, root directory, whether it ships DelphiLSP.exe (semantic engine) and rsvars.bat (msbuild). Also reports which one is ACTIVE for the calling workspace: the version its `DelphiVersion=` asks for when installed, otherwise the newest with DelphiLSP - and, when the requested one is missing, `requested` plus a `requestedNote` saying which one answers instead (the same note `delphi_workspace` gives as `delphiVersionNote`). Read-only, no parameters.
 
 *Access: read-only OK.*
 

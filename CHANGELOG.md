@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added - `[Workspace.<name>] DelphiVersion`: which RAD Studio a workspace uses
+A machine often hosts several Delphi versions side by side, and the server
+always took the newest with DelphiLSP. `DelphiVersion=36.0` (the BDS number;
+`DELPHI_MCP_DELPHI_VERSION` in launch mode) pins a workspace to one, and one
+place applies it: `DiscoverRadStudio`, which every tool already asks for its
+installation - build (rsvars/msbuild), the DelphiLSP engine (whose client
+key and fabricated settings now carry the version, so two workspaces on two
+versions run two engines in one process), profiles, SDKs, components. A
+version that is not installed falls back to the default and
+`delphi_workspace` / `delphi_installs` say so (`delphiVersionNote`,
+`requestedNote`). The workspace decides, not the agent: the version is the
+project's. Measured here with one install only (37.0 pinned, 12.0 missing);
+the two-versions case is to be measured on a machine that has them.
+
 ### Added - `delphi_rename_symbol mode=apply`: the rename is written, through the changeset engine
 Preview was the whole tool since v0.53: an applicable rename came back as a
 change list the agent staged by hand with `delphi_changeset`. `mode=apply`

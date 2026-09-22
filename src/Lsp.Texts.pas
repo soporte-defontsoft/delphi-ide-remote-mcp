@@ -37,6 +37,12 @@ const
     'you will receive them back in results. They are NEVER your own local ' +
     'disks.';
 
+  { Varias RAD Studio lado a lado y el workspace pide una que no esta (o
+    que no trae DelphiLSP): se sigue con la de siempre, pero se dice. }
+  SN_DELPHIVERSION_MISSING_FMT =
+    'DelphiVersion=%s asked by this workspace is not installed (or ships no ' +
+    'DelphiLSP): version %s answers instead - the newest with DelphiLSP. ' +
+    'delphi_installs lists what this machine has.';
   SN_WORKSPACE_LIBZONE_OFF =
     'La zona de biblioteca esta APAGADA en este servidor ' +
     '([Workspace.<nombre>] ' +
