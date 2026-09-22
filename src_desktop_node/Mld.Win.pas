@@ -65,6 +65,7 @@ type
   conozco. }
 function TeclaPorNombre(const ANombre: string): Word;
 
+
 {$ENDIF}
 
 implementation
@@ -95,6 +96,7 @@ type
 var
   GLista: TListaVentanas;   { EnumWindows no lleva contexto tipado comodo }
   GIzq, GSup: Integer;
+
 
 function TeclaPorNombre(const ANombre: string): Word;
 var
@@ -441,16 +443,26 @@ begin
 end;
 
 { Una ventana "visible" que en realidad no esta en el escritorio: minimizada
-  (su rectangulo vive en -32000) o ENCAPOTADA por el DWM (las apps de la
+  (su rectangulo vive en -32000), ENCAPOTADA por el DWM (las apps de la
   tienda y las de otro escritorio virtual quedan IsWindowVisible pero no se
-  ven). Al listarlas despistan, y al componer la captura de respaldo pintarian
-  encima de lo que si se ve. Un solo sitio decide que es "estar en el
+  ven) o una SUPERPOSICION: transparente a los clics (WS_EX_TRANSPARENT, el
+  cursor de un agente) o que nunca toma el foco ni sale en la barra
+  (WS_EX_NOACTIVATE + WS_EX_TOOLWINDOW: la de NVIDIA GeForce, medida
+  2026-09-22 en un Windows remoto con ex=8080080). No se pueden pulsar, al
+  listarlas despistan, y en la composicion de respaldo, al ir por encima de
+  todo en Z, la taparian entera. Un solo sitio decide que es "estar en el
   escritorio", para la lista y para la captura. }
 function NoEstaEnElEscritorio(AHandle: HWND): Boolean;
 var
   Tapada: DWORD;
+  Ex: NativeInt;
 begin
   if IsIconic(AHandle) then
+    Exit(True);
+  Ex := GetWindowLongPtr(AHandle, GWL_EXSTYLE);
+  if (Ex and WS_EX_TRANSPARENT) <> 0 then
+    Exit(True);
+  if ((Ex and WS_EX_NOACTIVATE) <> 0) and ((Ex and WS_EX_TOOLWINDOW) <> 0) then
     Exit(True);
   Tapada := 0;
   { Winapi.Dwmapi la carga en diferido: en un Windows sin DWM la llamada

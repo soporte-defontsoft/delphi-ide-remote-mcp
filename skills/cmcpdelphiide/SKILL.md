@@ -153,7 +153,9 @@ on your side.
 
 The same idea as adb, for the machine behind a PAServer profile: a Linux
 (**GNOME only today**, Zorin and Fedora measured), a Windows with PAServer,
-or this very server when a PAServer runs in its user session. The machine is
+or this very server when a PAServer runs in its user session. ALWAYS through
+a PAServer listening on that machine, Windows included: without one there
+is no desktop to reach, whatever the network says. The machine is
 the `profile` parameter, never a different tool. No `project` needed: the
 node bundled with the server deploys and UPDATES itself on the target on
 first use (a `node.ver` stamp), the right binary for that system - nothing
@@ -261,6 +263,20 @@ re-running it is safe and incremental: `already up to date` is success) ->
 (`download` link, sha256) to run the ELF on YOUR machine - or run it ON
 the target with `command=remote-run` and drive its window with
 `delphi_desktop`.
+
+## Windows (PAServer too)
+
+A Windows target - another PC, or this server's own desktop - is set up
+the same way, and without PAServer there is nothing to talk to. On that
+machine, once: start `paserver.exe` (it ships with RAD Studio under
+`C:\Program Files (x86)\Embarcadero\PAServer\37.0\`; `packages` names the
+installer for a machine without the IDE) from a terminal INSIDE the user's
+session - never as a service, session 0 has no desktop - and open its port
+in that machine's firewall, Windows' or the antivirus suite's (measured:
+ESET's was the one blocking). From here: `test-connection host= port=`
+(no name) is the probe - unreachable with the machine answering a ping is
+a firewall - then `add-profile ... platform=Win64`, `test-connection
+name=`, and `delphi_desktop profile=` deploys the node on its first gesture.
 
 ## Android (`delphi_adb`) - eyes and hands
 

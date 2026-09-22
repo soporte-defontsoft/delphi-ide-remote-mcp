@@ -707,6 +707,19 @@ Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .j
 >
 > The grant is stored per requesting app id (`~/.local/share/flatpak/db/screenshot`), so it survives reboots and only has to be given once per machine.
 
+#### Setting up a Windows target: PAServer first, like everywhere else
+
+**An agent reaches a Windows desktop only through a PAServer listening on that machine** - a remote Windows or this server's own: the node and every gesture travel through PAServer and are started by it, so without one there is nothing to talk to, whatever the network says. Three things, once, on that machine (measured 2026-09-22 against a second Windows on the LAN):
+
+1. **Start PAServer inside the user's session** - from a terminal of that session, never as a service: a Windows service lives in session 0, which has no desktop, and `graphicalEnv` says so. It ships with RAD Studio (`C:\Program Files (x86)\Embarcadero\PAServer\37.0\paserver.exe`; `delphi_paserver command=packages` names the installer for a machine without the IDE):
+   ```
+   & "C:\Program Files (x86)\Embarcadero\PAServer\37.0\paserver.exe" -port=64211 -password=<yours>
+   ```
+2. **Open the port in THAT machine's firewall** - Windows' own or the antivirus suite's. Measured: the port answered nothing until a rule was added in ESET's firewall; Windows' was not the one blocking. `test-connection host=<ip> port=64211` with no name is the probe: `tcpReachable=false` with the machine answering a ping is a firewall.
+3. **Register the profile from here**: `add-profile name=<name> host=<ip> port=64211 password=<yours> platform=Win64`, then `test-connection name=<name>` for the full handshake. The host must be inside the workspace's `RemoteHosts`.
+
+From then on `delphi_desktop profile=<name>` does the rest by itself: the first gesture deploys the node (`nodeDeploy: desplegado`), and capture, `windows`, `window=` crops and `tap` work as on Linux. Nothing else is installed on that machine.
+
 #### Setting up a new Linux target: what happens ON the machine, and what this server does
 
 Two things need hands on the target — a person's or a local AI agent's — and everything else is the server's. Knowing which is which is the difference between ten minutes and a lost morning (measured, 2026-09-19, on a Zorin 18):

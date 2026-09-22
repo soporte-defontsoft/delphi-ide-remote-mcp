@@ -223,12 +223,27 @@ switch and its own allowlist; it will not arrive by accident.
 
 **→ Handing this server to an AI agent?** Give it [skills/cmcpdelphiide/SKILL.md](skills/cmcpdelphiide/SKILL.md) — a field-tested agent skill (drop it into the agent's skills folder or paste it as instructions) covering the path model, the safe-editing contract, the deploy chains and how to move files and logs the right way.
 
-## The Linux desktop node (`src_desktop_node/`)
+## The desktop node (`src_desktop_node/`)
+
+**Every desktop an agent drives - Linux or Windows, a remote machine or this
+server's own - is reached through a PAServer listening on that machine.** There
+is no other channel: the node travels through PAServer and is started by it,
+so a Windows without PAServer is as unreachable as a Linux without one, whatever
+the network says. On Windows that means the PAServer that ships with RAD Studio
+(`C:\Program Files (x86)\Embarcadero\PAServer\37.0\paserver.exe`, or its
+installer from `delphi_paserver command=packages`), started **inside the user's
+session** (a Windows service lives in session 0, which has no desktop), with its
+port open in that machine's firewall - Windows' own or the antivirus suite's
+(measured 2026-09-22: the port was closed by ESET's firewall, not by Windows) -
+and then `add-profile platform=Win64`. Measured the same day against a second
+Windows on the LAN: first gesture deploys the node, capture, window list, crop
+and tap, nothing else installed there.
 
 `delphi_desktop` works through a tiny Delphi console program - the **node** -
-that lives on the Linux target and is the server's eyes and hands there: it
-captures the desktop through the XDG portal, converts the screen scale, and
-injects clicks and keys. This repository carries BOTH halves:
+that lives on the target and is the server's eyes and hands there: on Linux it
+captures the desktop through the XDG portal and injects through libei, on
+Windows through GDI and SendInput; on both it converts the screen scale. This
+repository carries BOTH halves:
 
 - **`node/McpDesktopNode`** - the compiled Linux binary, shipped inside every
   release zip. Nothing to build and nothing to install: the server pushes it to

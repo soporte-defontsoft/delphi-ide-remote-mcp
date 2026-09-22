@@ -80,6 +80,15 @@ with the exact call; `kill` takes the same switches as `remote-run` and can
 only reach a job this server started for that project on that machine. A job
 that already ended answers `killed=false`. Measured on Zorin and Windows.
 
+### Docs - a Windows target is set up like a Linux one: PAServer first
+Measured 2026-09-22 against a second Windows on the LAN: PAServer started
+inside the user's session, the port opened in that machine's firewall (it was
+ESET's, not Windows'), `add-profile platform=Win64`, and the first
+`delphi_desktop` gesture deployed the node by itself - capture, window list,
+crop and tap, nothing else installed there. README, TOOLS.md and the skill
+now say it plainly: an agent reaches ANY desktop, Windows included, only
+through a PAServer listening on that machine; there is no other channel.
+
 ### Fixed - Windows capture: a fallback when the screen says "Access denied"
 The Windows node reads the desktop with one `BitBlt` from the screen DC, and
 on 2026-09-22 that call answered `Access denied` at random with the session
@@ -98,7 +107,11 @@ provoked on demand: `MCPDESKTOP_SIN_BITBLT=1` in the node's environment skips
 `BitBlt`): the same 3440x1440 desktop, 258 KB. While there, the `windows`
 list - and the composition, which is built from it - leaves out the windows
 that are "visible" but not on the desktop: minimized ones (their rectangle
-lives at -32000) and DWM-cloaked ones (store apps, other virtual desktops).
+lives at -32000), DWM-cloaked ones (store apps, other virtual desktops) and
+click-through overlays (`WS_EX_TRANSPARENT`: the NVIDIA GeForce overlay and
+an agent's cursor overlay showed up as two full-screen "windows" on the first
+remote Windows measured, 2026-09-22 - they cannot be pressed, and on top of
+the Z order they would have covered the whole composed capture).
 
 ### Fixed - `delphi_build target=Deploy` to a Windows PAServer shipped nothing
 The minimal deployment manifest was only generated for non-Windows
