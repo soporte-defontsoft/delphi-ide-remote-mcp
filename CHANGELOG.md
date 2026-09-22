@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed - `delphi_desktop type` on Linux writes accented letters through dead keys
+On a Spanish layout the node knew the keys that give a character directly
+and refused everything else - so `í`, `á`, `ñ`'s neighbours and every
+accented vowel were refused, and a field agent had to type "Articulos"
+without its accent (report of 2026-09-22). The keymap the desktop hands
+over does carry the dead keys (dead_acute, dead_grave, dead_diaeresis...);
+the node now records them by keysym and, for a character it has no direct
+key for, types the dead key and then the base letter - exactly what a person
+does. Which letter decomposes into which base and diacritic comes from
+Unicode's canonical decomposition (161 rows of Latin-1 and Latin Extended-A,
+generated, not typed), and a character the layout cannot produce at all is
+still refused by name, now saying how many dead keys the map had.
+
+### Added - `delphi_desktop key` takes `modifiers` on both targets
+`key` pressed one key and nothing else, so Ctrl+K, Ctrl+C, Alt+Tab were
+impossible on a Linux target (the field agent met a field that only opens
+with Ctrl+K). `modifiers=ctrl,shift,alt,super` are held while `code` is
+pressed - in that order, released in reverse, one gesture - on Linux as
+evdev codes, on Windows by name, through the same combination both nodes
+already had inside.
+
 ## [1.0.17-beta] - 2026-09-22
 
 **The roadmap, walked one item at a time with the operator.** Four yes, the

@@ -187,6 +187,11 @@ finally:
     shutil.rmtree(cebo, ignore_errors=True)
 
 print()
+# 1.0.18: key takes modifiers by name on both targets; an unknown one is
+# refused naming the valid four, before anything travels to any target
+r = call('delphi_desktop', {'command': 'key', 'profile': 'x', 'code': '37', 'modifiers': 'hyper'})
+check('key modifiers=hyper rechazado nombrando los validos',
+      'RECHAZADO' in r and 'hyper' in r and 'ctrl' in r and 'super' in r, r[:200])
 print('round30: %d PASS / %d FAIL' % (P, F))
 proc.stdin.close()
 try:

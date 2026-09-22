@@ -44,6 +44,7 @@ type
     FX: string;
     FY: string;
     FCode: string;
+    FModifiers: string;
     FText: string;
     FOut: string;
     FRegion: string;
@@ -68,6 +69,8 @@ type
     property Y: string read FY write FY;
     [SchemaDescription(SP_ADBLINUX_CODE)]
     property Code: string read FCode write FCode;
+    [SchemaDescription(SP_ADBLINUX_MODIFIERS)]
+    property Modifiers: string read FModifiers write FModifiers;
     [SchemaDescription(SP_ADBLINUX_TEXT)]
     property Text: string read FText write FText;
     // La carpeta LOCAL donde baja la captura del destino: ruta NUESTRA,
@@ -342,17 +345,37 @@ begin
       POSICION del teclado), en Windows el NOMBRE de la tecla. Un numero en
       Windows no es la misma tecla que en Linux, asi que no se traduce: se
       rechaza diciendo lo que ese destino espera. }
+    { Modificadores (Ctrl+K, Alt+Tab, Ctrl+Shift+S): por nombre en la tool,
+      y el nodo los recibe DELANTE de la tecla, que es el orden en que se
+      pulsan (y se sueltan al reves). En Linux viajan como codigos evdev; en
+      Windows por su nombre, que el nodo ya conoce. Hasta 1.0.17 no habia
+      forma (informe de Hermes 2026-09-22: un campo que solo abre Ctrl+K). }
+    var Mods: TArray<string> := nil;
+    for var M in Params.Modifiers.ToLower.Split([',', '+', ' '], TStringSplitOptions.ExcludeEmpty) do
+    begin
+      var Mo := M.Trim;
+      if Mo = 'control' then Mo := 'ctrl';
+      if Mo = 'win' then Mo := 'super';
+      if not MatchText(Mo, ['ctrl', 'shift', 'alt', 'super']) then
+        Exit(Format(SR_ADBLINUX_MODIFIERS_BAD_FMT, [M.Trim]));
+      if EsWin then
+        Mods := Mods + [Mo]
+      else if Mo = 'ctrl' then Mods := Mods + ['29']
+      else if Mo = 'shift' then Mods := Mods + ['42']
+      else if Mo = 'alt' then Mods := Mods + ['56']
+      else Mods := Mods + ['125'];
+    end;
     if EsWin then
     begin
       if not NombreDeTeclaValido(Params.Code.Trim) then
         Exit(SR_DESKTOP_NEEDCODE);
-      Args := Args + ['tecla', Params.Code.Trim];
+      Args := Args + ['tecla'] + Mods + [Params.Code.Trim];
     end
     else
     begin
       if (Params.Code.Trim = '') or (StrToIntDef(Params.Code.Trim, 0) <= 0) then
         Exit(SR_ADBLINUX_NEEDCODE);
-      Args := Args + ['tecla', IntToStr(StrToIntDef(Params.Code.Trim, 0))];
+      Args := Args + ['tecla'] + Mods + [IntToStr(StrToIntDef(Params.Code.Trim, 0))];
     end;
   end
   else if Cmd = 'windows' then

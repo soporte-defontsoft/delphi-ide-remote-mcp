@@ -179,7 +179,11 @@ metacharacters are just characters ->
 `key code=` presses one key: on a Linux target by evdev code (Escape 1,
 Tab 15, Enter 28), on a Windows target by NAME (escape, enter, tab, super,
 f1..f12) - the tool reads the profile's platform and refuses the other
-kind, because a number on Windows is a different key ->
+kind, because a number on Windows is a different key; `modifiers=ctrl`
+(or shift, alt, super, comma separated) holds them while the key goes down:
+Ctrl+K on Linux is `code=37 modifiers=ctrl`, Alt+Tab `code=15
+modifiers=alt`. `type` on Linux composes accented letters through the
+layout's dead keys ("í" = dead acute + i), so Spanish text arrives whole ->
 `windows` shows every window (Linux: thumbnails via Super; Windows: a list
 with title and rectangle) to reach a covered one -> `screenshot
 region="x,y,w,h"` (or `window="<title>"` on Windows) brings back just that

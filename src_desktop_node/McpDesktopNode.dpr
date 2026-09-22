@@ -137,17 +137,28 @@ begin
     else if (Orden = 'tecla') and (Args >= 2) then
     begin
       { Por NOMBRE ('escape', 'enter'), que es lo mismo en los dos sistemas;
-        un numero se toma como codigo virtual de Windows. }
-      Tecla := TeclaPorNombre(Arg(2));
+        un numero se toma como codigo virtual de Windows. VARIAS = una
+        combinacion: se pulsan en orden y se sueltan al reves, asi que los
+        modificadores van delante (tecla ctrl k = Ctrl+K). }
+      var Teclas: TArray<Word> := nil;
+      Tecla := 1;
+      for I := 2 to Args do
+      begin
+        Tecla := TeclaPorNombre(Arg(I));
+        if Tecla = 0 then
+          Tecla := Word(StrToIntDef(Arg(I), 0));
+        if Tecla = 0 then
+          Break;
+        Teclas := Teclas + [Tecla];
+      end;
       if Tecla = 0 then
-        Tecla := Word(StrToIntDef(Arg(2), 0));
-      if Tecla = 0 then
-        Writeln('  no conozco la tecla ', Arg(2))
+        Writeln('  no conozco la tecla ', Arg(I))
       else
       begin
-        Hizo := Escritorio.Combinacion([Tecla]);
+        Hizo := Escritorio.Combinacion(Teclas);
         if Hizo then
-          Writeln('  TECLA ', Arg(2), ' enviada')
+          Writeln('  TECLA ', Arg(Args),
+            IfThen(Args > 2, ' con ' + IntToStr(Args - 2) + ' modificador(es)', ''), ' enviada')
         else
           Writeln('  no pude enviar la tecla: ', Escritorio.Error);
       end;
@@ -375,10 +386,20 @@ begin
           end
           else if (Orden = 'tecla') and (Args >= 2) then
           begin
-            { Una tecla suelta, en codigo evdev: Escape 1, Tab 15, Enter 28. }
-            Hizo := Manos.Combinacion([StrToIntDef(Arg(2), 0)]);
+            { Teclas en codigo evdev: Escape 1, Tab 15, Enter 28. VARIAS =
+              una combinacion, pulsadas en orden y soltadas al reves: los
+              modificadores delante (tecla 29 37 = Ctrl+K). }
+            var Codigos: TArray<Cardinal> := nil;
+            for ObjX := 2 to Args do
+              if StrToIntDef(Arg(ObjX), 0) > 0 then
+                Codigos := Codigos + [Cardinal(StrToIntDef(Arg(ObjX), 0))];
+            if Length(Codigos) < Args - 1 then
+              Hizo := False
+            else
+              Hizo := Manos.Combinacion(Codigos);
             if Hizo then
-              Writeln('  TECLA ', Arg(2), ' enviada')
+              Writeln('  TECLA ', Arg(Args),
+                IfThen(Args > 2, ' con ' + IntToStr(Args - 2) + ' modificador(es)', ''), ' enviada')
             else
               Writeln('  no pude enviar la tecla: ', Manos.Error);
           end

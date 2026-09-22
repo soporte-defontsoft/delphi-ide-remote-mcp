@@ -1482,6 +1482,14 @@ const
     'tap: horizontal pixel MEASURED ON THE SCREENSHOT this tool returned';
   SP_ADBLINUX_Y =
     'tap: vertical pixel MEASURED ON THE SCREENSHOT this tool returned';
+  SP_ADBLINUX_MODIFIERS =
+    'key OPTIONAL: modifier keys held while the key is pressed, comma ' +
+    'separated - ctrl, shift, alt, super (Ctrl+K: code=37 modifiers=ctrl on ' +
+    'Linux, code=k... on Windows: code=<name> modifiers=ctrl). Pressed in ' +
+    'that order and released in reverse, one gesture. Works on both targets.';
+  SR_ADBLINUX_MODIFIERS_BAD_FMT =
+    'RECHAZADO: modifiers no conoce "%s": vale ctrl, shift, alt y super ' +
+    '(separados por comas).';
   SP_ADBLINUX_CODE =
     'key. Linux target: the Linux key code (evdev), NOT an X11 keycode: ' +
     'Escape 1, Tab 15, Enter 28, left Alt 56, Super 125. Windows target: the ' +

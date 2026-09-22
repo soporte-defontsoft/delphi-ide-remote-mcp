@@ -528,21 +528,29 @@ begin
     // (Mayusculas 42, AltGr 100) que el escritorio dice que dan ese caracter.
     if (FMapa <> nil) and (FMapa.Cuantas > 0) then
     begin
-      var P: TPulsacion;
-      if not FMapa.Buscar(Ord(C), P) then
+      // Una pulsacion si la tecla existe, DOS si el caracter sale por tecla
+      // muerta ("´" y luego "i" = "í"): el mapa lo decide, aqui solo se
+      // pulsa cada una con su nivel.
+      var Secuencia: TArray<TPulsacion>;
+      if not FMapa.Secuencia(Ord(C), Secuencia) then
       begin
         FError := Format('el teclado del escritorio (%s) no tiene una tecla ' +
-          'que de el caracter "%s" (posicion %d)', [FMapa.Distribucion, C, I]);
+          'que de el caracter "%s" (posicion %d), ni directa ni por tecla ' +
+          'muerta (%d teclas muertas en el mapa)',
+          [FMapa.Distribucion, C, I, FMapa.CuantasMuertas]);
         Exit;
       end;
-      if Odd(P.Nivel) and not Tecla(MAYUSCULA, True) then Exit;
-      if (P.Nivel >= 2) and not Tecla(ALTGR, True) then Exit;
-      if not Tecla(P.Codigo, True) then Exit;
-      Sleep(35);
-      if not Tecla(P.Codigo, False) then Exit;
-      if (P.Nivel >= 2) and not Tecla(ALTGR, False) then Exit;
-      if Odd(P.Nivel) and not Tecla(MAYUSCULA, False) then Exit;
-      Sleep(35);
+      for var P in Secuencia do
+      begin
+        if Odd(P.Nivel) and not Tecla(MAYUSCULA, True) then Exit;
+        if (P.Nivel >= 2) and not Tecla(ALTGR, True) then Exit;
+        if not Tecla(P.Codigo, True) then Exit;
+        Sleep(35);
+        if not Tecla(P.Codigo, False) then Exit;
+        if (P.Nivel >= 2) and not Tecla(ALTGR, False) then Exit;
+        if Odd(P.Nivel) and not Tecla(MAYUSCULA, False) then Exit;
+        Sleep(35);
+      end;
       Continue;
     end;
     // Sin mapa: la tabla fija de siempre, que es un teclado AMERICANO. En
