@@ -46,6 +46,8 @@ type
     FCode: string;
     FText: string;
     FOut: string;
+    FRegion: string;
+    FWindow: string;
   public
     [SchemaDescription(SP_ADBLINUX_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -73,6 +75,10 @@ type
     [SchemaDescription(SP_ADBLINUX_OUT)]
     [RutaDelServidor]
     property Out_: string read FOut write FOut;
+    [SchemaDescription(SP_ADBLINUX_REGION)]
+    property Region: string read FRegion write FRegion;
+    [SchemaDescription(SP_ADBLINUX_WINDOW)]
+    property Window: string read FWindow write FWindow;
   end;
 
   TDesktopLinuxTool = class(TMCPToolBase<TDesktopLinuxParams>)
@@ -99,8 +105,58 @@ uses
   System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,
+  Lsp.Imagen,
   Mcp.Tools.PAServer,
   Lsp.RemoteRun;
+
+{ "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
+function ParseRegion(const ATexto: string; out X, Y, W, H: Integer): Boolean;
+var
+  P: TArray<string>;
+begin
+  P := ATexto.Replace(' ', '').Split([',']);
+  Result := (Length(P) = 4) and TryStrToInt(P[0], X) and TryStrToInt(P[1], Y) and
+    TryStrToInt(P[2], W) and TryStrToInt(P[3], H) and (W > 0) and (H > 0);
+end;
+
+{ Las lineas "VENTANA x y w h titulo" que el nodo Windows escribe con
+  command=windows, como JSON, y de paso la primera que casa con AWindow. }
+function VentanasDeLaSalida(const ASalida, AWindow: string;
+  out X, Y, W, H: Integer; out AHay: Boolean): TJSONArray;
+var
+  L: string;
+  T: TArray<string>;
+  O: TJSONObject;
+  Titulo: string;
+begin
+  Result := TJSONArray.Create;
+  AHay := False;
+  for L in ASalida.Split([#10]) do
+  begin
+    if not L.TrimLeft.StartsWith('VENTANA ') then
+      Continue;
+    T := L.Trim.Split([' '], 6);
+    if Length(T) < 6 then
+      Continue;
+    Titulo := T[5].Trim([#13, ' ']);
+    O := TJSONObject.Create;
+    Result.AddElement(O);
+    O.AddPair('title', Titulo);
+    O.AddPair('x', TJSONNumber.Create(StrToIntDef(T[1], 0)));
+    O.AddPair('y', TJSONNumber.Create(StrToIntDef(T[2], 0)));
+    O.AddPair('w', TJSONNumber.Create(StrToIntDef(T[3], 0)));
+    O.AddPair('h', TJSONNumber.Create(StrToIntDef(T[4], 0)));
+    if (not AHay) and (AWindow <> '') and
+       Titulo.ToLower.Contains(AWindow.ToLower) then
+    begin
+      AHay := True;
+      X := StrToIntDef(T[1], 0);
+      Y := StrToIntDef(T[2], 0);
+      W := StrToIntDef(T[3], 0);
+      H := StrToIntDef(T[4], 0);
+    end;
+  end;
+end;
 
 constructor TDesktopLinuxTool.Create;
 begin
@@ -181,7 +237,9 @@ var
   Bajada, Propia: string;
   Res: TJSONObject;
   Return: TJSONObject;
-  EsWin: Boolean;
+  EsWin, HayVentana, ConRecorte: Boolean;
+  RX, RY, RW, RH, AnchoOrig, AltoOrig: Integer;
+  Ventanas: TJSONArray;
 begin
   Cmd := Params.Command.Trim.ToLower;
   if Cmd = '' then
@@ -216,6 +274,27 @@ begin
   { El destino dice que nodo y que teclas espera: lo lee el .profile, nunca
     el nombre del perfil (que no significa nada). }
   EsWin := PlataformaDelPerfil(Params.Profile.Trim).StartsWith('Win', True);
+  { Recorte: una VISTA del mismo fotograma, hecha aqui (Lsp.Imagen). region
+    vale en todos; window solo donde el nodo da rectangulos (Windows). }
+  ConRecorte := False;
+  RX := 0; RY := 0; RW := 0; RH := 0;
+  if (Params.Region.Trim <> '') and (Params.Window.Trim <> '') then
+    Exit(SR_ADBLINUX_REGION_OR_WINDOW);
+  if Params.Region.Trim <> '' then
+  begin
+    if Cmd <> 'screenshot' then
+      Exit(SR_ADBLINUX_CROP_ONLY_SHOT);
+    if not ParseRegion(Params.Region.Trim, RX, RY, RW, RH) then
+      Exit(SR_ADBLINUX_REGION_BAD);
+    ConRecorte := True;
+  end;
+  if Params.Window.Trim <> '' then
+  begin
+    if Cmd <> 'screenshot' then
+      Exit(SR_ADBLINUX_CROP_ONLY_SHOT);
+    if not EsWin then
+      Exit(SR_ADBLINUX_WINDOW_LINUX);
+  end;
   Proj := Params.Project.Trim;
   if Proj <> '' then
   begin
@@ -271,7 +350,9 @@ begin
     end;
   end
   else if Cmd = 'windows' then
-    Args := Args + ['ventanas'];
+    Args := Args + ['ventanas']
+  else if (Cmd = 'screenshot') and (Params.Window.Trim <> '') then
+    Args := Args + ['ventanas']; // lista + captura: un viaje, y se recorta aqui
   { screenshot y status corren el nodo sin argumentos: el nodo siempre
     captura al arrancar y cuenta el estado del escritorio. }
 
@@ -355,10 +436,43 @@ begin
         except
           // si no se puede renombrar, la imagen vale igual donde cayo
         end;
-        Return.AddPair('screenshot', Local);
-        Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Local)));
-        Return.AddPair('note', 'mide el pixel SOBRE esta imagen y pasalo a ' +
-          'command=tap; bajala con delphi_fetch');
+        { window= : el rectangulo sale de la lista que el nodo acaba de dar }
+        if (Cmd = 'screenshot') and (Params.Window.Trim <> '') then
+        begin
+          Ventanas := VentanasDeLaSalida(Salida, Params.Window.Trim, RX, RY, RW, RH, HayVentana);
+          Return.AddPair('windows', Ventanas);
+          if not HayVentana then
+            Fallo := Format(SR_ADBLINUX_WINDOW_NOMATCH_FMT, [Params.Window.Trim])
+          else
+            ConRecorte := True;
+        end
+        else if ConRecorte and EsWin then
+          Return.AddPair('windows', VentanasDeLaSalida(Salida, '', RX, RY, RW, RH, HayVentana));
+        if (Fallo = '') and ConRecorte then
+        begin
+          Fallo := RecortaPng(Local, RX, RY, RW, RH, AnchoOrig, AltoOrig);
+          if Fallo = '' then
+          begin
+            var Origen := TJSONObject.Create;
+            Origen.AddPair('x', TJSONNumber.Create(RX));
+            Origen.AddPair('y', TJSONNumber.Create(RY));
+            Return.AddPair('origin', Origen);
+            Return.AddPair('region', Format('%d,%d,%d,%d', [RX, RY, RW, RH]));
+            Return.AddPair('croppedFrom', Format('%dx%d', [AnchoOrig, AltoOrig]));
+          end;
+        end;
+        if Fallo <> '' then
+          Return.AddPair('screenshotError', Fallo)
+        else
+        begin
+          Return.AddPair('screenshot', Local);
+          Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Local)));
+          if ConRecorte then
+            Return.AddPair('note', Format(SN_ADBLINUX_CROP_NOTE_FMT, [RX, RY]))
+          else
+            Return.AddPair('note', 'mide el pixel SOBRE esta imagen y pasalo a ' +
+              'command=tap; bajala con delphi_fetch');
+        end;
       end
       else
         Return.AddPair('screenshotError', Fallo);

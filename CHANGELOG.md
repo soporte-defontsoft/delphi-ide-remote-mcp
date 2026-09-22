@@ -53,6 +53,21 @@ tres" cuatro` arrives as three arguments on Zorin, Fedora and Windows, the
 desktop node captures on the three, and the deploy folder is left clean.
 Nothing is installed on the target.
 
+### Added - a crop of the desktop when you need detail
+The whole desktop stays the truth, but a small dialog on a big screen is
+unreadable in it: the API shrinks every image to one fixed size, so a crop
+buys detail, not tokens. `screenshot region="x,y,w,h"` returns just that
+piece of the SAME capture, cropped on the server (`Lsp.Imagen`) so it works
+on every target; `screenshot window="<part of a title>"` does the measuring
+on a Windows target from the node's window list (refused on Linux, whose
+desktop hands no rectangles out). Cropped answers carry `origin`, `region`
+and `croppedFrom`, and the note spells the rule: press at origin + what you
+measured - one frame, one coordinate space. Against the modal that used to
+get agents lost when they looked at one window only, a cropped answer on
+Windows also carries the whole `windows` list. Found while listing them:
+the launcher, a console program, opened a console window on the user's
+desktop with every gesture; it has no console now.
+
 ### Added - `delphi_paserver command=kill`: stop a job you started
 A `remote-run` that outlives its timeout is left running on purpose, and
 until now there was no way back short of the operator's keyboard. The

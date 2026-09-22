@@ -1503,6 +1503,39 @@ const
     'jailed like any of our paths; retrieve it with delphi_fetch.';
   SP_ADBLINUX_OUT =
     'screenshot: where the capture lands.' + SP_CAPTURE_OUT_RULE;
+  SP_ADBLINUX_REGION =
+    'screenshot OPTIONAL: "x,y,w,h" in DESKTOP pixels - the answer is only ' +
+    'that piece of the same capture, at full resolution (a small dialog on a ' +
+    'big screen is unreadable in the whole-desktop image: the API shrinks ' +
+    'every image to one fixed size, so a crop buys detail, not tokens). The ' +
+    'answer carries origin {x,y}: what you measure on the crop is pressed at ' +
+    '(origin.x + x, origin.y + y). One frame, one coordinate space. When in ' +
+    'doubt - a dialog may have opened elsewhere - capture the whole desktop.';
+  SP_ADBLINUX_WINDOW =
+    'screenshot OPTIONAL, Windows targets only: part of a window title; the ' +
+    'node lists the visible windows and the answer is the capture cropped to ' +
+    'the first one whose title contains it (case-insensitive), with origin ' +
+    '{x,y} like region, plus the whole "windows" list - so a dialog that ' +
+    'popped up OUTSIDE the crop still shows in the list. On Linux use region.';
+  SR_ADBLINUX_REGION_OR_WINDOW =
+    'RECHAZADO: region y window no se combinan: o un rectangulo o una ventana.';
+  SR_ADBLINUX_CROP_ONLY_SHOT =
+    'RECHAZADO: region y window solo valen con command=screenshot (los gestos ' +
+    'siguen siendo sobre el escritorio entero).';
+  SR_ADBLINUX_REGION_BAD =
+    'RECHAZADO: region tiene que ser "x,y,w,h" con cuatro enteros y w,h > 0, ' +
+    'en pixeles de la captura del escritorio.';
+  SR_ADBLINUX_WINDOW_LINUX =
+    'RECHAZADO: window solo vale en un destino Windows (alli el nodo da el ' +
+    'rectangulo de cada ventana). En Linux el escritorio no los entrega: ' +
+    'captura entera, mide, y recorta con region="x,y,w,h".';
+  SR_ADBLINUX_WINDOW_NOMATCH_FMT =
+    'ninguna ventana visible lleva "%s" en el titulo: mira "windows" en esta ' +
+    'misma respuesta y repite con un trozo de uno de esos titulos.';
+  SN_ADBLINUX_CROP_NOTE_FMT =
+    'RECORTE del escritorio: lo que midas en esta imagen se pulsa SUMANDO el ' +
+    'origen, tap x=(%d + tu x) y=(%d + tu y). Ante la duda (un dialogo que ' +
+    'haya salido fuera), captura el escritorio entero. Bajala con delphi_fetch';
   { Dos textos que sobrevivieron a delphi_desktop LOCAL (retirada en 1.0.16):
     los usa la tool por perfil cuando el destino es un Windows. }
   SD_DESKTOP_LOCKED =

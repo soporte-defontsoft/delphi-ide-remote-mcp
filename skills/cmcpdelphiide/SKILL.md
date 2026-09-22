@@ -174,7 +174,11 @@ Tab 15, Enter 28), on a Windows target by NAME (escape, enter, tab, super,
 f1..f12) - the tool reads the profile's platform and refuses the other
 kind, because a number on Windows is a different key ->
 `windows` shows every window (Linux: thumbnails via Super; Windows: a list
-with title and rectangle) to reach a covered one -> `status` says whether
+with title and rectangle) to reach a covered one -> `screenshot
+region="x,y,w,h"` (or `window="<title>"` on Windows) brings back just that
+piece of the same capture at full resolution, with an `origin` to ADD to
+what you measure on it - use it to read a small dialog, and go back to the
+whole desktop whenever something may have opened elsewhere -> `status` says whether
 the desktop is reachable and what to ask for. Every answer carries
 `graphicalEnv`: the session the node ran in.
 

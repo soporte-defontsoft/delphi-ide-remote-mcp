@@ -40,7 +40,11 @@
 
   Nada se instala en el destino. }
 
-{$APPTYPE CONSOLE}
+{ SIN consola (sin la directiva APPTYPE CONSOLE): PAServer lo arranca tal
+  cual, y como programa de consola cada gesto abria una ventana de consola en
+  el escritorio del usuario (medido 2026-09-22: aparecia en la lista de
+  ventanas). Nada de lo que escribe va por stdout: todo va al fichero de
+  salida del trabajo. }
 {$R *.res}
 
 uses
@@ -559,16 +563,13 @@ begin
     Nombre := ChangeFileExt(ExtractFileName(Propio), '');
     if not Nombre.StartsWith('run-', True) then
     begin
-      Writeln('McpRunJob: este programa no se usa a mano; lo sube el servidor ' +
-        'MCP con el nombre run-<trabajo> junto a su run-<trabajo>.job.');
-      Exit;
+      Exit; // no se usa a mano: lo sube el servidor como run-<trabajo>
     end;
     JobId := Nombre.Substring(4);
     JobFile := TPath.Combine(Carpeta, Nombre + '.job');
     if not FileExists(JobFile) then
     begin
-      Writeln('McpRunJob: falta ', JobFile);
-      Exit;
+      Exit; // sin .job no hay trabajo
     end;
     Lineas := TStringList.Create;
     try
@@ -659,6 +660,7 @@ begin
 {$ENDIF}
   except
     on E: Exception do
-      Writeln('McpRunJob: ', E.ClassName, ': ', E.Message);
+      if Salida <> '' then
+        Anade(Salida, 'error: ' + E.ClassName + ': ' + E.Message + #10'___RC=-1'#10);
   end;
 end.
