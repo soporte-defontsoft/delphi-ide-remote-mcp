@@ -6,7 +6,22 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.1.0] - 2026-09-22
+
+**The first stable release.** Nothing in it is new for the sake of a number:
+it is the 1.0.17 line plus the fixes below, a consolidation pass in which the
+live tool contract, the README, the tool reference, the skill, the ini
+template, the manifest and the release itself were measured against each
+other until they told one story, and a day of field rodage by an independent
+agent (Hermes) that ran a 51-test battery as a client: 45 tests executed
+across every family, four real bugs found and fixed the same day (the engine's
+warm-up mistaken for "does not resolve", the declaration fallback, the unit
+rename that stopped at the project files, the empty DUnitX failures), the
+rest measured as correct. The `-beta` suffix and the BETA notices are gone;
+from here on a MINOR adds tools or capabilities, a PATCH fixes, and a
+documented contract that changes says so here first. It is 1.1.0 rather than
+1.0.0 because seventeen `1.0.x-beta` tags already exist and a `1.0.0` would
+sort below all of them.
 
 ### Fixed - `delphi_desktop type` on Linux writes accented letters through dead keys
 On a Spanish layout the node knew the keys that give a character directly
