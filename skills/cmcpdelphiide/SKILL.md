@@ -215,6 +215,7 @@ window sits 250 px away). **When the profile is someone's own machine, its
 screen and mouse are theirs**: whatever they have open is in frame. Do the
 gesture you came for and nothing else.
 
+## Projects and builds
 
 - `delphi_create` scaffolds console/VCL/FMX projects, and inside a
   project: `form-vcl`/`form-fmx`, `frame-vcl`/`frame-fmx`, `datamodule`
@@ -320,7 +321,9 @@ server was updated after you connected: reconnect the MCP session (or
 restart your client) and fetch the tools again. `initialize` tells you
 the server version. A NEW optional parameter your cached schema does not
 list (e.g. `fragment`) still travels if you send it; the contract you can
-trust is `delphi_help command=tool name=<tool>`.
+trust is `delphi_help command=tool name=<tool>`. A 404 on your session id
+also happens when the session expired by inactivity (`[Server]
+SessionTimeoutMinutes`, default 720): re-initialize, it is not a failure.
 
 ## When you hit a wall
 

@@ -74,11 +74,11 @@ manifest = {
         "editing": "anchor-based safe editing engine (encoding/EOL preserved)"
     },
     "security": {
-        "workspaceJail": "[Workspace] Roots / DELPHI_MCP_ROOTS",
-        "credentials": "Token (read-write) / ReadOnlyToken, por workspace; sin token no hay acceso",
+        "workspaceJail": "[Workspace.<name>] Roots / DELPHI_MCP_ROOTS",
+        "credentials": "Token (read-write) / ReadOnlyToken, per workspace; no token, no access",
         "execution": "AllowRun / AllowBuildScripts / AllowRemoteRun (all off by default)",
-        "remoteRunScope": "RemoteRunProjects (empty = any project of the jail)",
-        "libraryZone": "LibraryZone=0 confines reads to the roots"
+        "remoteRunScope": "RemoteRunProjects (empty = nothing; all/* = every project of the jail)",
+        "libraryZone": "LibraryZone=1 opens the read zone; absent = off"
     }
 }
 out = os.path.join(REPO, 'docs', 'CAPABILITIES.json')

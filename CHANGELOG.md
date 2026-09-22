@@ -29,12 +29,42 @@ pressed - in that order, released in reverse, one gesture - on Linux as
 evdev codes, on Windows by name, through the same combination both nodes
 already had inside.
 
+### Fixed - the live tool descriptions and the documentation tell one story
+A consolidation pass measured every tool's live contract (`delphi_help
+command=tool`) against TOOLS.md, the README, the skill, the ini template and
+the manifest, and fixed both sides where they disagreed. In the server:
+`delphi_paserver` now lists `reseat` and `remove-sdk` in its command
+description (both existed and were dispatched; an agent reading the contract
+could not find them), `delphi_config` lists `set-sdk` and `set-profile`,
+`delphi_adb` says that `device` is REQUIRED for every command that touches a
+device (the gate has refused an implied device since v0.98; the description
+still said "optional when several are attached"), `delphi_build` names the
+switch it really checks (`AllowBuildScripts=1`, or `AllowRun=1` which implies
+it) and no longer carries a half sentence left by an old edit, and
+`delphi_installs` / `delphi_workspace` describe the named Delphi
+(`activeDelphiName`, personality, edition, build, `DelphiVersion=`) they have
+answered with since 1.0.17. In the docs: TOOLS.md gains the parameters its own
+header confessed were missing (`offset`, `includetrash`, `unstage`/`n`,
+`platform`, `content`, `purge`, `section`, `unit`, `check-binding`/`layout`,
+`kill`), the severity scale (3 = information, 4 = hint), the launcher model
+of `remote-run`, and stops saying the opposite of what `get-sdk active`,
+`lint` (unknown classes) and `vault_create` (never from MEMORY.md) do. The
+README no longer calls TOOLS.md "generated", no longer says
+`delphi_rename_symbol` is preview-only or that `LibraryZone` is on by default,
+counts five projects and 1650 checks, and its Quickstart says what a local
+stdio process without `DELPHI_MCP_TOKEN` gets: read-only. ROADMAP.md is a
+status page again (delivered / open / parked / declined) instead of the v0.5
+phase list; AGENT.md points at the skill; CAPABILITIES.json no longer states
+that an empty `RemoteRunProjects` allows every project.
+
 ## [1.0.17-beta] - 2026-09-22
 
 **The roadmap, walked one item at a time with the operator.** Four yes, the
 rest closed or parked; every yes measured before it shipped, and one more
 thing that was not on the list but turned out to be vital: the agent knows
 which Delphi it is working with.
+
+Suite: 74 batteries, 1650 checks, 0 failures.
 
 ### Added - `[Workspace.<name>] DelphiVersion`: which RAD Studio a workspace uses
 A machine often hosts several Delphi versions side by side, and the server
@@ -262,11 +292,6 @@ now carries `sdk` / `sdkSource` (`project`, IDE default, none) and `profile` /
 ones under `remoteTargets`, each source naming the command that fixes it.
 
 ### Measured, kept for the roadmap
-- A Windows PAServer (installed on the server machine, profile `windows-local`)
-  receives the Windows node correctly, but PAServer on Windows runs a "script"
-  with a bare `CreateProcess` - a `.sh` is "not a valid Win32 application" -
-  and `paclient` passes no arguments. Driving a Windows desktop through
-  PAServer needs a tiny native launcher in place of the shell script.
 - The intermittent red of the concurrency battery (12 writers, 11 on disk,
   seen once on 2026-09-21) did not reproduce in 30 runs under CPU load; the
   release gate now keeps the whole log if it ever comes back.

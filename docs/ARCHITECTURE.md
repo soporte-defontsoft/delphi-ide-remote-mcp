@@ -6,12 +6,12 @@
                      ┌───────────────────────────────────┐
   Claude Code ───────┤  HTTP (MCP Streamable)            │
   Claude Desktop ────┤                                   │
-  other MCP client ──┤     Delphi Remote MCP Server      │
+  other MCP client ──┤   Delphi IDE Remote MCP Server    │
                      │  ┌─────────────────────────────┐  │
-   (--stdio mode     │  │ MCP layer (tools, routing)  │  │
-    for classic      │  ├─────────────────────────────┤  │
+   (no switch =      │  │ MCP layer (tools, routing)  │  │
+    stdio, for       │  ├─────────────────────────────┤  │
     per-session      │  │ Workspace Manager           │  │  one supervised DelphiLSP
-    clients)         │  │  spawn / warm / LRU / queue │  │  per workspace, kept alive
+    clients)         │  │  spawn / warm / queue       │  │  per workspace, kept alive
                      │  ├─────────────────────────────┤  │  between agent sessions
                      │  │ Config Fabricator           │  │  .dproj → LSP settings when
                      │  │                             │  │  no fresh .delphilsp.json
@@ -33,8 +33,8 @@
 | Layer | Responsibility |
 |---|---|
 | **MCP layer** | Tool registration/dispatch, MCP handshake, Streamable HTTP + stdio transports |
-| **Workspace Manager** | Lifecycle of one DelphiLSP per workspace: spawn on first request, keep warm, request queue (the LSP agent is single-request), LRU eviction, idle shutdown, kill+respawn on hang |
-| **Config Fabricator** | Locate RAD Studio via registry (highest installed version); use project's `.delphilsp.json` if fresh; otherwise generate settings from the `.dproj` (search paths, defines, platform, namespaces) |
+| **Workspace Manager** | Lifecycle of one DelphiLSP per workspace: spawn on first request, keep warm, request queue (the LSP agent is single-request). LRU eviction, idle shutdown and kill+respawn on hang: planned, not implemented |
+| **Config Fabricator** | Locate RAD Studio via registry (newest with DelphiLSP unless the workspace pins `DelphiVersion=`); use project's `.delphilsp.json` if fresh; otherwise generate settings from the `.dproj` (search paths, defines, platform, namespaces) |
 | **LSP Client** | `Content-Length` framing over child stdio, request/response correlation, retry with escalating delays (indexing returns `-32800 Request removed`), document sync (`didOpen` with correct encoding) |
 | **Host** | ONE executable, three modes of the same core: Windows Service (headless, `-install`), terminal (stdio, or `--http`) and VCL tray (live log). All three share `Lsp.Host`, which builds the managers, the single access gate and its outbound filter — never copied per mode. **The service must log on as the user who owns the IDE** — RAD Studio's configuration lives in `HKEY_CURRENT_USER`, so under `LocalSystem` the server starts and answers with no Library Search Path and no registered packages. See the README and `settings.example.ini`. |
 
@@ -44,9 +44,9 @@ Measured on a real ~12k-line unit: DelphiLSP takes seconds to index after `didOp
 
 - keeps indexes **warm across sessions** and across multiple concurrent AI clients;
 - lets `enableFileWatcher` (default `true`) handle cache invalidation — DelphiLSP refreshes itself on disk changes;
-- centralizes resource policy (max workspaces, idle shutdown).
+- centralizes resource policy (max workspaces, idle shutdown — planned, not implemented).
 
-`--stdio` remains available for clients that cannot speak HTTP; it simply hosts the same core with session lifetime.
+Running with no switch (stdio) remains available for clients that cannot speak HTTP; it simply hosts the same core with session lifetime.
 
 ## DelphiLSP operating modes (per Embarcadero docs, verified)
 
@@ -66,8 +66,12 @@ Result quality is compiler-grade; cost is one `definition` round-trip per candid
 
 ## Encoding rules
 
-Legacy Delphi sources are frequently Windows-1252 while LSP mandates UTF-8 JSON. `didOpen` reads: BOM → honor it; no BOM → configurable fallback codepage (default: system ANSI). File content is never written back by this server — it is a read-only consumer of sources.
+Legacy Delphi sources are frequently Windows-1252 while LSP mandates UTF-8 JSON. `didOpen` reads: BOM → honor it; no BOM → configurable fallback codepage (default: system ANSI). The LSP client never writes sources back; the editing tools do, through their own engine.
 
 ## Build tool
 
 `delphi_build` shells out to MSBuild (`rsvars.bat` located via the same registry discovery) and returns structured compiler output. Compilation is intentionally **not** attempted through the LSP: the protocol has no build operation.
+
+## What this document does not cover
+
+This document describes the LSP core only. The guard gate, the editing engine, MSBuild, the PAServer/adb chain, the desktop node, the run-job launcher and the vault are described in the README and in [TOOLS.md](TOOLS.md).

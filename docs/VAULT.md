@@ -64,7 +64,7 @@ agent should have to know in advance — hence the no-path call.
 | `vault_patch` | Replace `old_text` (which must appear **exactly once**) with `new_text`. For closing a line in a progress file or fixing a fact. |
 
 Reading is available to read-only credentials. The three write tools need
-`ReadOnly=0` **and** a read-write credential.
+`VaultReadOnly=0` **and** a read-write credential.
 
 ## What writing deliberately cannot do
 
@@ -107,8 +107,7 @@ workspaces may remember in different vaults. For a locally launched process
 (batteries, dev) the environment variables `DELPHI_MCP_VAULT_PATH` and
 `DELPHI_MCP_VAULT_READONLY` play the same role.
 
-Start with `VaultReadOnly=1` — the key is spelled out eight lines above, and
-this line used to say `ReadOnly=1`, which is nothing. Give an agent read access for a while, see what it
+Start with `VaultReadOnly=1`. Give an agent read access for a while, see what it
 looks up and what it wishes it could record, and only then decide whether to
 let it write.
 

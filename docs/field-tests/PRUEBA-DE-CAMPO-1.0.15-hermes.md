@@ -1,5 +1,7 @@
 # Prueba de campo de la v1.0.15-beta — encargo para el agente Hermes
 
+> **Nota (2026-09-22)**: escrito para la 1.0.15; desde la 1.0.16 la tool de escritorio es `delphi_desktop profile=<perfil PAServer>` para Linux y Windows, y `delphi_adb_linux` es solo un alias. Se conserva como historia.
+
 Eres un probador EXTERNO de este servidor MCP. Trabajas con tu propio token
 (`[Workspace.Hermes]`), dentro de tu propia jaula, sobre un proyecto real:
 **GalateaFMX**, que está en tu sandbox. No conoces el código del servidor ni te

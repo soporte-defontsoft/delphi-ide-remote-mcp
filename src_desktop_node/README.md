@@ -37,6 +37,7 @@ is identical: coordinates are pixels OF THE CAPTURE and the node answers with
 | `Mld.DBus.pas` | The D-Bus session bus conversation: portals (screenshot, input) over `libdbus-1.so.3` |
 | `Mld.Captura.pas` | The eyes, part two: write the PNG **by hand** (no ImageMagick, no external tools). The writer is SHARED: X11 and a Windows DIB both hand over BGR pixels |
 | `Mld.Eis.pas` | The hands: input injection through libei, fed by the descriptor D-Bus negotiated |
+| `Mld.Teclado.pas` | The keymap the desktop really has: which key gives each character directly, and which dead key plus base letter composes the rest (`í` = dead_acute + `i`), from Unicode's canonical decomposition |
 | `Mld.X11.pas` | The eyes, part one: enumerate windows via libX11 at runtime (replaces xdotool — one dependency fewer) |
 | `Mld.Win.pas` | Windows: eyes (GDI capture of the virtual desktop), hands (`SendInput`: click, Unicode typing, key combos) and the window list, with DPI awareness asked for at runtime |
 
@@ -49,7 +50,7 @@ latch against accidents and careless scripts — not a lock against someone with
 access to the machine and an interest in opening it.
 
 **You normally never build this.** The compiled Release ships as
-[`node/McpDesktopNode`](../node) inside every release zip, and the server
+[`node/McpDesktopNode`](../node) (Linux) and `node/McpDesktopNode.exe` (Windows) inside every release zip, and the server
 deploys/updates it on targets by itself (the `node.ver` SHA-256 stamp). Build
 it only to work ON the node: from the IDE (needs the Linux64 SDK in the SDK
 Manager) or `delphi_build platform=Linux64`, or raw msbuild adding

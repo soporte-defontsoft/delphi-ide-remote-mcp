@@ -249,13 +249,13 @@ begin
     'quiet (DEFAULT) = errors and the summary, a few lines, which is what a ' +
     '"does it still compile" build needs; normal = warnings too; verbose = ' +
     'everything. It sets the msbuild verbosity as well, so quiet really asks ' +
-    'for less. ' +
-    'machine (rsvars located via registry). Returns success flag, compiler ' +
-    'errors/warnings and the output tail. Use this as the closing ' +
-    'verification after editing - the linter does not link nor produce ' +
-    'binaries. Compile-only: a project that would EXECUTE a shell during build ' +
-    '(a custom <Target>/<Exec>, a build-event, a foreign <Import>) is refused ' +
-    'unless the operator set AllowRun=1 in the workspace.';
+    'for less. Rsvars is located via the registry; the answer carries the ' +
+    'success flag, the compiler errors/warnings, the output tail and which ' +
+    'Delphi built. Use this as the closing verification after editing - the ' +
+    'linter does not link nor produce binaries. Compile-only: a project that ' +
+    'would EXECUTE a shell during build (a custom <Target>/<Exec>, a ' +
+    'build-event, a foreign <Import>) is refused unless the workspace ' +
+    'declares AllowBuildScripts=1 (or AllowRun=1, which implies it).';
 end;
 
 function TDelphiBuildTool.ExecuteWithParams(const Params: TDelphiBuildParams): string;

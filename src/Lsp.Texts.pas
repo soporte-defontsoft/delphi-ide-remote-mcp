@@ -245,8 +245,9 @@ const
   SP_SYMBOLS_FILTER =
     'Busca por nombre dentro del arbol de un fichero (subcadena, da igual ' +
     'mayusculas): devuelve SOLO los simbolos que casan, con su kind, su ' +
-    'linea 0-based y en que contenedor viven. Ignora mode. Es la forma ' +
-    'barata de encontrar un metodo sin traerte el arbol entero.';
+    'declaracion tal como esta escrita en el fuente (decl), su linea y en ' +
+    'que contenedor viven. Ignora mode. Es la forma barata de encontrar un ' +
+    'metodo sin traerte el arbol entero.';
 
   { Decia "lineas 0-based" y desde v1.0.4-beta los @N son 1-BASED, como los
     de delphi_read: la nota se quedo describiendo el comportamiento viejo.
@@ -1054,7 +1055,9 @@ const
   SP_PASERVER_COMMAND =
     'platforms (what this server can target + profile/SDK status) | ' +
     'packages (PAServer installers to download and run on the target) | ' +
-    'profiles (registered connection profiles and SDKs) | add-profile ' +
+    'profiles (registered connection profiles and SDKs) | reseat (write ' +
+    'the missing IDE seats for profiles already on disk: no PAServer, no ' +
+    'password needed) | add-profile ' +
     '(register a connection profile: name, host, password; optional port, ' +
     'platform - the host must be one the workspace allows in RemoteHosts, ' +
     'because registering a profile IS declaring where this machine may ' +
@@ -1069,7 +1072,9 @@ const
     'it for delphi_build AND in the IDE SDK Manager; can take minutes) | ' +
     'reseat-sdk (re-write the IDE SDK Manager seat of an SDK already on ' +
     'disk - no network, nothing downloaded again; "sdk" names one, no name ' +
-    'does them all) | remote-run (execute ' +
+    'does them all) | remove-sdk (take an SDK out of the way: its .sdk ' +
+    'file and its IDE seat; the sysroot stays on disk and the answer says ' +
+    'where) | remote-run (execute ' +
     '"exe" on the target of profile "name" and return its exit code and ' +
     'output - NOTHING has to be installed there: PAServer itself runs it. It ' +
     'runs the program THAT PROJECT deployed and nothing else on that ' +
@@ -1113,7 +1118,7 @@ const
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | reseat | ' +
     'add-profile | remove-profile | test-connection | get-sdk | ' +
-    'reseat-sdk | remote-run | kill';
+    'reseat-sdk | remove-sdk | remote-run | kill';
   SP_PASERVER_JOB =
     'kill: the "jobId" a remote-run answer gave you (it is the program that ' +
     'run left running on the target). Together with name and project: only ' +
@@ -1591,8 +1596,9 @@ const
     'command=connect attaches one over the network (address ip:port from ' +
     'discover; the device shows an authorize prompt the first time); ' +
     'command=disconnect detaches it; command=install installs a built .apk ' +
-    'on a device (apk path inside the workspace; optional device serial ' +
-    'when several are attached). The adb used is the one from the IDE''s ' +
+    'on a device (apk path inside the workspace; "device" names it - ' +
+    'every command that touches a device needs it, from the workspace ' +
+    'allowlist). The adb used is the one from the IDE''s ' +
     'own Android SDK, discovered per install. Building the .apk is ' +
     'delphi_build target=Deploy (the deployment manifest is generated ' +
     'when the project has none). command=logcat hands ' +
@@ -1620,8 +1626,10 @@ const
     'ip:port of the device for connect/disconnect (from command=discover, ' +
     'or the device''s wireless-debugging screen)';
   SP_ADB_DEVICE =
-    'Device serial (from command=devices) when several are attached ' +
-    '(connect/disconnect/install/logcat)';
+    'Device serial or ip:port (from command=devices). REQUIRED for every ' +
+    'command that touches a device (install/run/tap/key/logcat/screenshot) ' +
+    'and it must be in the workspace''s AdbAllowedDevices= list: the device ' +
+    'is named, never implied, even when only one is attached';
   SP_ADB_APK =
     'Path of the .apk to install (inside the workspace)';
   SP_ADB_APP =

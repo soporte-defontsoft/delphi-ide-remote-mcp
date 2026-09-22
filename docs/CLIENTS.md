@@ -75,22 +75,22 @@ injects it).
 
 ### Downloading build output through OpenCode (`delphi_fetch`)
 
-`delphi_fetch` returns each chunk as base64 inside the tool result — an 8 MB
-chunk is ~11 MB of JSON text. OpenCode truncates tool output that large in
-the conversation, but **saves the full result to a local file** and prints
-its path (`Full output saved to: ...\tool-output\tool_...`). That spool file
-IS the transport — parse it instead of re-fetching with smaller chunks:
+Every `delphi_fetch` answer carries a `download` link (`GET /files?path=...`
+on the same host, with the same Bearer token) and the response comes with an
+`X-File-SHA256` header to verify the bytes. A big file is one `curl`, however
+large — use the `download` value verbatim:
 
-```powershell
-$json = Get-Content -Raw "C:\Users\YOU\.local\share\opencode\tool-output\tool_XXXX" | ConvertFrom-Json
-[IO.File]::WriteAllBytes("C:\dest\file.zip", [Convert]::FromBase64String($json.chunkBase64))
-(Get-FileHash -Algorithm SHA256 "C:\dest\file.zip").Hash  # compare with $json.sha256
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" -o C:/dest/file.zip "<download link>"
 ```
+
+The base64 chunks inline in the tool result remain for small files, or for
+clients that have no shell to run `curl` from. Files over 4 MB answer with the
+link only, unless `maxbytes<=1048576` is passed to force chunks.
 
 Recommended flow for binaries: `delphi_build` (the result names the artifact
 in `output`) → `delphi_package` (zip, compressed, dcu excluded) →
-`delphi_fetch` the zip — it is usually a single chunk. Loop `offset` until
-`eof:true` for anything bigger, appending each decoded chunk.
+`delphi_fetch` the zip → `curl` its `download` link.
 
 ## Any other MCP client (Hermes, custom agents, SDKs)
 

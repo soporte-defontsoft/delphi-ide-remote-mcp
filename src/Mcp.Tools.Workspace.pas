@@ -1007,8 +1007,12 @@ begin
   FDescription := 'List EVERY RAD Studio / Delphi installation discovered on ' +
     'this machine (a machine may host several versions side by side): ' +
     'version, root directory, whether it ships DelphiLSP.exe (semantic ' +
-    'engine) and rsvars.bat (msbuild). Also reports which one is ACTIVE for ' +
-    'the LSP tools (the newest with DelphiLSP). Read-only, no parameters.';
+    'engine) and rsvars.bat (msbuild), plus the name, personality, edition ' +
+    'and build each one states about itself ("RAD Studio 13", "Delphi 13", ' +
+    '"Enterprise", "37.0.59082.6021"). Also reports which one is ACTIVE for ' +
+    'the LSP tools: the one the workspace asks for with DelphiVersion= when ' +
+    'it is installed ("requested" / "requestedNote" say so), otherwise the ' +
+    'newest with DelphiLSP. Read-only, no parameters.';
 end;
 
 function TDelphiInstallsTool.ExecuteWithParams(const Params: TDelphiInstallsParams): string;
@@ -1168,9 +1172,12 @@ begin
   FName := 'delphi_workspace';
   FDescription := 'The lay of the land on the SERVER: the workspace roots ' +
     'this server operates within (your entire allowed universe here), the ' +
-    'access level (read-write / read-only), and the active RAD Studio. ' +
-    'It also says WHO is answering ("server"): version, how this process was ' +
-    'started (tray / service / console), transport, pid and uptime - the way ' +
+    'access level (read-write / read-only), and the active RAD Studio by ' +
+    'version AND by name (activeDelphiName / Personality / Edition / Build, ' +
+    'read from the installation - use them when you look anything up for ' +
+    'this Delphi). It also says WHO is answering ("server"): version, how ' +
+    'this process was started (tray / service / console), transport, pid, ' +
+    'uptime, the open sessions and the Windows account it runs as - the way ' +
     'to check a deployment without looking at the machine from outside. ' +
     SN_VIRTUAL_DRIVES + ' Call this FIRST. Read-only, no parameters.';
 end;

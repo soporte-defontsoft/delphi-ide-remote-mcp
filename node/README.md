@@ -22,4 +22,4 @@ touch it by hand:
 
 GNOME targets only for now on Linux; on Windows the PAServer must run inside the
 user's session. Rebuilding belongs to whoever edits the sources — `BuildGroup.bat
-Release` compiles the three and copies them here.
+Release` compiles the four (two projects, each for Linux and for Windows) and copies them here.
