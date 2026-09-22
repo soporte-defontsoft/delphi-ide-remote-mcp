@@ -135,10 +135,16 @@ begin
   begin
     if not L.TrimLeft.StartsWith('VENTANA ') then
       Continue;
-    T := L.Trim.Split([' '], 6);
+    // "VENTANA x y w h <titulo con espacios>": Split con tope TIRA el resto
+    // (medido: "Experiencia de entrada" quedaba en "Experiencia"), asi que
+    // el titulo se corta a mano tras el quinto espacio
+    T := L.Trim.Split([' ']);
     if Length(T) < 6 then
       Continue;
-    Titulo := T[5].Trim([#13, ' ']);
+    Titulo := L.Trim;
+    for var K := 1 to 5 do
+      Titulo := Titulo.Substring(Titulo.IndexOf(' ') + 1);
+    Titulo := Titulo.Trim([#13, ' ']);
     O := TJSONObject.Create;
     Result.AddElement(O);
     O.AddPair('title', Titulo);
