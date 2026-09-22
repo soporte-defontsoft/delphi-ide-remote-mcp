@@ -144,12 +144,62 @@ function ViewConfig(const ADproj, ASection: string): string;
 var
   Info: TDprojInfo;
   Return: TJSONObject;
-  Cfgs, Plats: TJSONArray;
+  Cfgs, Plats, Remotos: TJSONArray;
   C, Reason: string;
   P: TDprojPlatform;
   Obj: TJSONObject;
-  Sec: string;
+  Sec, Xml: string;
+  Rad: TRadStudioInfo;
+  RadVisto: Boolean;
+
+  { Con que SDK y que PAServer compila y despliega ESA plataforma, y de donde
+    sale cada cosa. Faltaba: view ensenaba el default del IDE y los perfiles
+    globales, y el agente tenia que deducir lo que el proyecto fija (prueba
+    de campo de hermes, 2026-09-21). Inversa de set-sdk / set-profile. }
+  procedure PonDestino(AObj: TJSONObject; const APlat: string);
+  var
+    V: string;
+  begin
+    if Xml = '' then
+      Xml := TFile.ReadAllText(ADproj);
+    if not RadVisto then
+    begin
+      Rad := DiscoverRadStudio;
+      RadVisto := True;
+    end;
+    V := PlatformProperty(Xml, APlat, 'PlatformSDK');
+    // valores CORTOS (project | ide-default | none): cinco destinos con la
+    // explicacion repetida en cada uno hacian del resumen un tocho; la
+    // explicacion va UNA vez, en remoteTargetsNote
+    if V <> '' then
+    begin
+      AObj.AddPair('sdk', V);
+      AObj.AddPair('sdkSource', 'project');
+    end
+    else
+    begin
+      V := SdkPorDefectoDelIde(Rad.Version, APlat);
+      AObj.AddPair('sdk', V);
+      if V <> '' then
+        AObj.AddPair('sdkSource', 'ide-default')
+      else
+        AObj.AddPair('sdkSource', 'none');
+    end;
+    // el PAServer solo existe en las plataformas que despliegan por el:
+    // Android va por adb y no tiene perfil que fijar
+    if APlat.StartsWith('Android', True) then
+      Exit;
+    V := PlatformProperty(Xml, APlat, 'Profile');
+    AObj.AddPair('profile', V);
+    if V <> '' then
+      AObj.AddPair('profileSource', 'project')
+    else
+      AObj.AddPair('profileSource', 'none');
+  end;
+
 begin
+  Xml := '';
+  RadVisto := False;
   Sec := ASection.Trim.ToLower;
   if Sec = '' then
     Sec := 'summary';
@@ -215,7 +265,10 @@ begin
         // shipping. Two names, two questions.
         Obj.AddPair('needsSDKForBuild', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
         Obj.AddPair('needsProfileForDeploy', TJSONBool.Create(PlatformNeedsProfile(P.Name)));
+        if PlatformNeedsProfile(P.Name) then
+          PonDestino(Obj, P.Name);
       end;
+      Return.AddPair('remoteTargetsNote', SN_CONFIG_REMOTE_NOTE);
     end
     else if Sec = 'summary' then
     begin
@@ -230,6 +283,19 @@ begin
           Inc(Disabled);
       if Disabled > 0 then
         Return.AddPair('platformsDisabled', TJSONNumber.Create(Disabled));
+      // las remotas ACTIVAS, con su SDK y su PAServer: es lo que decide con
+      // que se compila y a donde se despliega, y no estaba en ningun sitio
+      Remotos := TJSONArray.Create;
+      Return.AddPair('remoteTargets', Remotos);
+      for P in Info.Platforms do
+        if P.Enabled and PlatformNeedsProfile(P.Name) then
+        begin
+          Obj := TJSONObject.Create;
+          Remotos.AddElement(Obj);
+          Obj.AddPair('platform', P.Name);
+          PonDestino(Obj, P.Name);
+        end;
+      Return.AddPair('remoteTargetsNote', SN_CONFIG_REMOTE_NOTE);
     end;
     if (Sec = 'all') or (Sec = 'searchpaths') then
       AddSearchPathsView(TFile.ReadAllText(ADproj), Return);

@@ -6,6 +6,69 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+**A second day of field use, all measured on the machines.** An external agent
+ran the 1.0.15 field test on two Linux desktops; every item below is what it
+(or the operator) tripped over, fixed at the point where the rule lives.
+
+### Fixed - `remote-run` with PAServer running as a service
+A PAServer started as a service is born outside the desktop session, so a
+program with a window died at once on the target (GTK, exit 134, "Can't create
+a GtkStyleContext without a display connection") while the desktop node kept
+working, because it only needs D-Bus. Seen on a Fedora since 2026-09-19; the
+project itself was carrying a launcher script that hard-coded ONE session's
+`XAUTHORITY`. The run script (`Lsp.RemoteRun.GuionDeEjecucion`, the single
+point every remote execution goes through) now completes only what is
+MISSING - `XDG_RUNTIME_DIR`, the session D-Bus, `WAYLAND_DISPLAY`, `DISPLAY`,
+the newest `XAUTHORITY` - from the session of the user PAServer runs as, and
+the answer says which case it met in `graphicalEnv` (inherited / completed
+with the list / no graphical session). Measured: Zorin (PAServer in session)
+"inherited, nothing to add"; Fedora (systemd service) "completed
+WAYLAND_DISPLAY, DISPLAY, XAUTHORITY" and GalateaFMX started there through
+`remote-run` for the first time. Nothing is installed on the target.
+
+### Fixed - `cannot find -lz`: the pulled sysroot lacked the `-dev` names
+`get-sdk` pulls the libraries the target has; a target without the `-dev`
+package has `libz.so.1` but not `libz.so`, the development name the linker
+looks up, so a project using zlib stopped linking against both `zorin18` and
+`fedora44` (it used to link against the mixed `Linux64.sdk` retired in
+1.0.14, which happened to carry it). `delphi_build` now completes that name in
+the SDK from the shortest versioned file it finds (a copy: Windows has no
+symlinks without privilege; never over an existing `libX.so`), retries ONCE
+and reports it in `sdkLinksCompleted` / `sdkLinkNote`; when the sysroot has
+NO version at all the note says the target lacks the package itself.
+Completing every name at pull time was measured and rejected: 2,117 names and
+2.2 GB on one Zorin.
+
+### Fixed - the project's SDK was read without looking at the platform
+`set-sdk` writes `PlatformSDK` in the platform's own PropertyGroup, the way the
+IDE does; the build read the FIRST `<PlatformSDK>` of the file, so a project
+with Linux64 and macOS targets would have linked macOS against the Linux SDK.
+One reader now (`Lsp.Dproj.PlatformProperty`, the inverse of the writers):
+the platform's group first, a platform-less group as fallback, another
+platform's group never. Battery: a `PlatformSDK` planted in the OSX64 group no
+longer steers a Linux64 build.
+
+### Added - `delphi_config view` says the SDK and the PAServer of each remote platform
+The view showed the IDE default and the global profiles, and the agent had to
+deduce what the PROJECT fixes (found by the field test). `section=platforms`
+now carries `sdk` / `sdkSource` (`project`, IDE default, none) and `profile` /
+`profileSource` on every remote platform, and the summary lists the enabled
+ones under `remoteTargets`, each source naming the command that fixes it.
+
+### Measured, kept for the roadmap
+- A Windows PAServer (installed on the server machine, profile `windows-local`)
+  receives the Windows node correctly, but PAServer on Windows runs a "script"
+  with a bare `CreateProcess` - a `.sh` is "not a valid Win32 application" -
+  and `paclient` passes no arguments. Driving a Windows desktop through
+  PAServer needs a tiny native launcher in place of the shell script.
+- The intermittent red of the concurrency battery (12 writers, 11 on disk,
+  seen once on 2026-09-21) did not reproduce in 30 runs under CPU load; the
+  release gate now keeps the whole log if it ever comes back.
+- `sc.exe query` reports the service STOPPED up to ~30 s before its process
+  exits: a deploy script must wait for the process, not the SCM state.
+
 ## [1.0.15-beta] - 2026-09-21
 
 **The folder layout is the programmer's, and a long line no longer has to be

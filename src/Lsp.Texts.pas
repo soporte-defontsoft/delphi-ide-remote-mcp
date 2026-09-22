@@ -1140,6 +1140,19 @@ const
   SR_REMOTERUN_PUT_FMT =
     'error: no se pudo enviar el trabajo al target (paclient exit %d): %s. ' +
     'PAServer esta vivo? El perfil apunta al host correcto?';
+  SN_REMOTERUN_ENV_INHERITED =
+    'heredado del PAServer: DISPLAY/WAYLAND_DISPLAY ya venian puestos, nada ' +
+    'que anadir';
+  SN_REMOTERUN_ENV_ADDED_FMT =
+    'el PAServer del destino corre FUERA de la sesion grafica (un servicio): ' +
+    'el guion ha completado %s con los de la sesion abierta, para que un ' +
+    'programa con ventana arranque igual';
+  SN_REMOTERUN_ENV_NONE =
+    'sin sesion grafica en el destino: ni DISPLAY ni WAYLAND_DISPLAY, y no ' +
+    'hay socket de X ni de Wayland del usuario del PAServer. Un programa de ' +
+    'consola corre igual; uno con ventana morira al arrancar (GTK, exit 134). ' +
+    'Hace falta una sesion abierta en el destino con el MISMO usuario que ' +
+    'corre PAServer';
   SR_REMOTERUN_TIMEOUT_FMT =
     'el programa SIGUE CORRIENDO en el target: no habia terminado a los %d s ' +
     'y NO se le mata, porque una aplicacion con ventana esta para quedarse. ' +
@@ -2803,6 +2816,27 @@ const
     'El binario estaba en uso (F2039) cuando empece - tipicamente una ' +
     'ejecucion de delphi_run o delphi_test todavia viva - asi que repeti el ' +
     'build hasta que quedo libre. El resultado es bueno; solo tardo mas.';
+
+  // ---- delphi_config view: SDK y perfil por plataforma remota ----
+  SN_CONFIG_REMOTE_NOTE =
+    'sdk/profile por plataforma remota y de donde salen. sdkSource: project ' +
+    '(lo fija el .dproj) | ide-default (el SDK activo del SDK Manager; fijalo ' +
+    'con delphi_config command=set-sdk) | none (no hay SDK: delphi_paserver ' +
+    'command=get-sdk y luego set-sdk). profileSource: project | none (el ' +
+    'proyecto no fija PAServer: delphi_build target=Deploy lo toma de ' +
+    'profile=, o fijalo con command=set-profile). Android no lleva perfil: ' +
+    'despliega por delphi_adb.';
+
+  SN_BUILD_DEVLINK_DONE_FMT =
+    'El enlazador pedia un nombre de DESARROLLO (libX.so) que el sysroot no ' +
+    'traia, porque la maquina de la que se bajo no tiene el paquete -dev; la ' +
+    'libreria si esta (libX.so.N). Lo he completado en el SDK con una copia ' +
+    '-%s- y he repetido el build. Nada que instalar en el destino.';
+  SN_BUILD_DEVLINK_MISSING_FMT =
+    'El enlazador no encuentra %s y el sysroot no trae NINGUNA version de esa ' +
+    'libreria: a la maquina destino le falta el paquete entero. Instala alli ' +
+    'la libreria (con su -dev) y repite delphi_paserver get-sdk; o quita esa ' +
+    'dependencia del proyecto.';
 
   SN_BUILD_DEFAULT_PLATFORM =
     'No me diste "platform", asi que he compilado Win32, que es el defecto de ' +

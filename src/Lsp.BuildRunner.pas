@@ -28,6 +28,12 @@ procedure EnsureDeployManifest(const ADprojPath, APlat, ABdsRoot: string;
   proyecto: una sola definicion de "que SDK hay", no dos que se desincronizan. }
 function SdksDePlataforma(const AVersion, APlat: string): TArray<string>;
 
+{ El SDK que fija EL PROYECTO para esa plataforma (PlatformSDK de su
+  PropertyGroup), y el que el SDK Manager del IDE tiene por defecto para ella.
+  Los usa delphi_config view para decir con que se compila y por que. }
+function ProyectoDeclaraSdk(const ADproj, APlat: string; out ASdk: string): Boolean;
+function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
+
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 
@@ -957,10 +963,9 @@ end;
 { El SDK que declara EL PROYECTO (propiedad PlatformSDK, que es la que lee
   CodeGear.Profiles.Targets). El modelo del IDE es que cada proyecto diga con
   cual se compila; si lo dice, no se le pisa. }
-function ProyectoDeclaraSdk(const ADproj: string; out ASdk: string): Boolean;
+function ProyectoDeclaraSdk(const ADproj, APlat: string; out ASdk: string): Boolean;
 var
   Xml: string;
-  M: TMatch;
 begin
   ASdk := '';
   Result := False;
@@ -969,11 +974,101 @@ begin
   except
     Exit;
   end;
-  M := TRegEx.Match(Xml, '(?i)<PlatformSDK>([^<]+)</PlatformSDK>');
-  if M.Success then
+  // POR PLATAFORMA, que es como lo escriben el IDE y set-sdk: el primer
+  // <PlatformSDK> del fichero le daba a un build OSX64 el SDK de Linux64.
+  ASdk := PlatformProperty(Xml, APlat, 'PlatformSDK');
+  Result := ASdk <> '';
+end;
+
+{ "cannot find -lz": el enlazador busca el nombre de DESARROLLO (libz.so), y
+  un sysroot traido de una maquina sin el paquete -dev solo trae libz.so.1.
+  Completar el sysroot entero al bajarlo no vale: en un Zorin son 2.117
+  nombres y 2,2 GB de copias (medido 2026-09-22). Aqui se completa SOLO lo
+  que un build pide, con una copia (Windows no tiene enlaces simbolicos sin
+  privilegio) de la version con nombre mas corto que haya en las carpetas del
+  Profile_librarypath del .sdk, y el build se repite una vez. Un libX.so que
+  ya exista no se toca nunca (libc.so es un guion del enlazador, no una
+  libreria). Devuelve cuantos completo; ANota explica lo hecho y, si de alguna
+  no hay NINGUNA version, que a esa maquina le falta la libreria misma. }
+function CompletaEnlacesDev(const AVersion, ASdkFile, AOutput: string;
+  out ANota: string): Integer;
+var
+  Xml, Rutas, Nombre, Dir, Dev, Mejor, Hechos, Faltan: string;
+  M: TMatch;
+  Vistos: TStringList;
+  Hecho: Boolean;
+begin
+  Result := 0;
+  ANota := '';
+  try
+    Xml := TFile.ReadAllText(TPath.Combine(IdeProfilesDir(AVersion), ASdkFile));
+  except
+    Exit;
+  end;
+  M := TRegEx.Match(Xml, '(?i)<Profile_librarypath>([^<]+)</Profile_librarypath>');
+  if not M.Success then
+    Exit;
+  Rutas := M.Groups[1].Value.Replace('$(BDSPLATFORMSDKSDIR)',
+    IdeSdksDir(AVersion), [rfIgnoreCase]);
+  Hechos := '';
+  Faltan := '';
+  Vistos := TStringList.Create;
+  try
+    for M in TRegEx.Matches(AOutput, 'cannot find -l([A-Za-z0-9_+.\-]+)') do
+    begin
+      Nombre := M.Groups[1].Value;
+      if Vistos.IndexOf(Nombre) >= 0 then
+        Continue;
+      Vistos.Add(Nombre);
+      Dev := 'lib' + Nombre + '.so';
+      Hecho := False;
+      for Dir in Rutas.Split([';'], TStringSplitOptions.ExcludeEmpty) do
+      begin
+        if Dir.Contains('$(') or not TDirectory.Exists(Dir) then
+          Continue;
+        if TFile.Exists(TPath.Combine(Dir, Dev)) then
+          Continue; // existe y aun asi no lo encontro: no es este el problema
+        // libX.so.1 gana a libX.so.1.3: el nombre mas corto es el soname
+        Mejor := '';
+        for var F in TDirectory.GetFiles(Dir, Dev + '.*') do
+        begin
+          var Cola := TPath.GetFileName(F).Substring(Length(Dev) + 1);
+          if (Cola = '') or not CharInSet(Cola[1], ['0'..'9']) then
+            Continue;
+          if (Mejor = '') or (Length(TPath.GetFileName(F)) < Length(TPath.GetFileName(Mejor))) then
+            Mejor := F;
+        end;
+        if Mejor = '' then
+          Continue;
+        try
+          TFile.Copy(Mejor, TPath.Combine(Dir, Dev), False);
+        except
+          Continue;
+        end;
+        Inc(Result);
+        Hecho := True;
+        if Hechos <> '' then
+          Hechos := Hechos + '; ';
+        Hechos := Hechos + Format('%s <- %s (%s)', [Dev, TPath.GetFileName(Mejor), Dir]);
+        Break;
+      end;
+      if not Hecho then
+      begin
+        if Faltan <> '' then
+          Faltan := Faltan + ', ';
+        Faltan := Faltan + Dev;
+      end;
+    end;
+  finally
+    Vistos.Free;
+  end;
+  if Hechos <> '' then
+    ANota := Format(SN_BUILD_DEVLINK_DONE_FMT, [Hechos]);
+  if Faltan <> '' then
   begin
-    ASdk := M.Groups[1].Value.Trim;
-    Result := ASdk <> '';
+    if ANota <> '' then
+      ANota := ANota + ' ';
+    ANota := ANota + Format(SN_BUILD_DEVLINK_MISSING_FMT, [Faltan]);
   end;
 end;
 
@@ -1112,6 +1207,8 @@ begin
   var SdkNota := '';          // por que ese y no otro
   var SdkAviso := '';         // sysroot con dos distros dentro
   var ReintentosBloqueo := 0; // builds repetidos por un .exe en uso (F2039)
+  var EnlacesDev := 0;        // nombres -dev completados en el sysroot
+  var EnlacesNota := '';      // lo hecho, y lo que no se pudo
   var QueueSW := TStopwatch.StartNew;
   GBuildLock.Enter;
   var QueuedMs := QueueSW.ElapsedMilliseconds;
@@ -1152,7 +1249,7 @@ begin
       SdkArg := ' /p:PlatformSDK=' + Pedido;
       SdkUsado := Pedido;
     end
-    else if ProyectoDeclaraSdk(TPath.GetFullPath(ADprojPath), SdkUsado) then
+    else if ProyectoDeclaraSdk(TPath.GetFullPath(ADprojPath), Plat, SdkUsado) then
       // el proyecto lo dice: no se le pisa, y se cuenta cual es
       SdkNota := Format(SN_BUILD_SDK_PROYECTO_FMT, [SdkUsado])
     else
@@ -1241,6 +1338,16 @@ begin
     Sleep(EsperaBloqueo);
     EsperaBloqueo := EsperaBloqueo * 2;
     Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
+  end;
+  // "cannot find -lX" con un sysroot nuestro: el nombre -dev que falta se
+  // completa en el SDK (ver CompletaEnlacesDev) y el build se repite UNA vez.
+  // Medido 2026-09-21: GalateaFMX dejo de enlazar en zorin18 y fedora44 por
+  // un libz.so que ninguno de los dos traia; con la copia enlaza en ambos.
+  if (ExitCode <> 0) and (SdkUsado <> '') and Output.Contains('cannot find -l') then
+  begin
+    EnlacesDev := CompletaEnlacesDev(Info.Version, SdkUsado, Output, EnlacesNota);
+    if EnlacesDev > 0 then
+      Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
   end;
   finally
     GBuildLock.Leave;
@@ -1369,6 +1476,10 @@ begin
       Result.AddPair('lockedRetries', TJSONNumber.Create(ReintentosBloqueo));
       Result.AddPair('lockedRetriesNote', SN_BUILD_LOCKED_RETRY);
     end;
+    if EnlacesDev > 0 then
+      Result.AddPair('sdkLinksCompleted', TJSONNumber.Create(EnlacesDev));
+    if EnlacesNota <> '' then
+      Result.AddPair('sdkLinkNote', EnlacesNota);
     // Units the compiler could not find: say where their source lives, so
     // the next call is the add-searchpath and not another failed build.
     if ExitCode <> 0 then

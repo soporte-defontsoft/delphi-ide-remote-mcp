@@ -246,6 +246,38 @@ try:
                    timeout=600)
     check('y el build lo obedece sin que nadie se lo diga',
           'uno.sdk' in out and 'sdkNote' in out, out[:300])
+    # el PlatformSDK es POR PLATAFORMA: uno puesto en el grupo de OTRA
+    # (OSX64) no puede colarse en un build Linux64 - el lector viejo cogia el
+    # primer <PlatformSDK> del fichero (paisaje 2026-09-22)
+    with open(dproj, encoding='utf-8', errors='replace') as f:
+        xml = f.read()
+    ajeno = ('    <PropertyGroup Condition="\'$(Base_OSX64)\'!=\'\'">\n'
+             '        <PlatformSDK>ajeno.sdk</PlatformSDK>\n    </PropertyGroup>\n')
+    xml2 = xml.replace('    <PropertyGroup Condition="\'$(Base_Linux64)\'!=\'\'">',
+                       ajeno + '    <PropertyGroup Condition="\'$(Base_Linux64)\'!=\'\'">', 1)
+    assert xml2 != xml, 'la bateria no encuentra el grupo Linux64 del .dproj'
+    with open(dproj, 'w', encoding='utf-8', newline='') as f:
+        f.write(xml2)
+    out = srv.call('delphi_build', {"project": dproj, "platform": "Linux64"},
+                   timeout=600)
+    check('un PlatformSDK del grupo de OTRA plataforma no manda en Linux64',
+          'uno.sdk' in out and 'ajeno' not in out, out[:300])
+    # y view lo DICE: SDK y perfil por plataforma remota, con su procedencia
+    # (la sonda nace Win32/Win64: Linux64 entra en el proyecto como en el IDE)
+    srv.call('delphi_config', {"project": dproj, "command": "add-platform",
+                               "platform": "Linux64"})
+    out = srv.call('delphi_config', {"project": dproj, "command": "view",
+                                     "section": "platforms"})
+    flat = out.replace(' ', '')
+    check('view platforms: Linux64 ensena el SDK del proyecto y su procedencia',
+          '"sdk":"uno.sdk"' in flat and '"sdkSource":"project"' in flat, out[out.find('Linux64')-20:][:600])
+    check('view platforms: sin perfil fijado lo dice y apunta a set-profile',
+          '"profile":""' in flat and 'set-profile' in out, out[:400])
+    out = srv.call('delphi_config', {"project": dproj, "command": "view"})
+    check('view summary: remoteTargets resume las remotas activas',
+          '"remoteTargets"' in out and 'uno.sdk' in out, out[:400])
+    with open(dproj, 'w', encoding='utf-8', newline='') as f:
+        f.write(xml)
     out = srv.call('delphi_config', {"project": dproj, "command": "set-sdk",
                                      "platform": "Linux64", "sdk": "none"})
     with open(dproj, encoding='utf-8', errors='replace') as f:

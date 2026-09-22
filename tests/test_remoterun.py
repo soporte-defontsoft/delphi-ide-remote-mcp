@@ -135,6 +135,12 @@ j = json.loads(r) if r.startswith('{') else {}
 check('exitCode del programa (7)', j.get('exitCode') == 7, r[:300])
 check('output capturado', 'hola desde el target' in (j.get('output') or ''), r[:300])
 check('note explica el mecanismo', 'PAServer' in (j.get('note') or ''), r[:200])
+# v1.0.16: el guion completa el entorno grafico que falte y lo DICE. Bajo el
+# bash de git no hay sesion grafica ninguna, asi que la nota es la de 'sin
+# sesion'; y la linea ___ENV= que la trae nunca llega al output del programa.
+check('graphicalEnv: el resultado dice que en el target no hay sesion grafica',
+      'sin sesion grafica' in (j.get('graphicalEnv') or ''), r[:300])
+check('graphicalEnv: la linea ___ENV= no se cuela en el output', '___ENV' not in (j.get('output') or ''), r[:300])
 # v0.85: two agents firing in the same millisecond used to collide on a
 # timestamp-only jobId; now it carries a GUID fragment
 import re as _re

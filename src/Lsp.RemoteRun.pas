@@ -274,10 +274,76 @@ begin
     '  *) { echo "RECHAZADO: ' + AExeLeaf + ' no es un ejecutable nativo ' +
       '(ELF/Mach-O): solo se ejecuta el binario que produjo delphi_build."; ' +
       'echo "___RC=126"; } > "$O"; exit 0 ;;'#10 +
-    'esac'#10 +
-    '{ trap '''''''' HUP; ' + Linea + ' > "$O" 2>&1; ' +
+    '    esac'#10 +
+    // ENTORNO GRAFICO, solo lo que FALTE. Un PAServer que corre como servicio
+    // (lo normal, David 21-sep-2026) nace fuera de la sesion grafica: sin
+    // DISPLAY una app FMX/GTK muere con exit 134 "Can't create a
+    // GtkStyleContext without a display connection" (medido en Fedora desde el
+    // 19-sep; el nodo de escritorio no lo sufria porque habla por D-Bus).
+    // GalateaFMX lo parcheaba desde el PROYECTO con un lanzador que clavaba
+    // el XAUTHORITY de UNA sesion (.mutter-Xwaylandauth.0OMHV3): ese sufijo
+    // cambia en cada inicio, asi que aqui se busca el mas reciente. Lo que
+    // venga puesto no se toca; lo anadido se cuenta en la primera linea de
+    // la salida (___ENV=) para que el resultado lo DIGA. Nada se instala.
+    'G=""'#10 +
+    'U=$(id -u 2>/dev/null)'#10 +
+    'if [ -z "$XDG_RUNTIME_DIR" ] && [ -n "$U" ] && [ -d "/run/user/$U" ]; ' +
+      'then export XDG_RUNTIME_DIR="/run/user/$U"; G="$G XDG_RUNTIME_DIR"; fi'#10 +
+    'if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && [ -n "$XDG_RUNTIME_DIR" ] && ' +
+      '[ -S "$XDG_RUNTIME_DIR/bus" ]; then ' +
+      'export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"; ' +
+      'G="$G DBUS_SESSION_BUS_ADDRESS"; fi'#10 +
+    'if [ -z "$WAYLAND_DISPLAY" ] && [ -n "$XDG_RUNTIME_DIR" ]; then ' +
+      'for W in "$XDG_RUNTIME_DIR"/wayland-*; do case "$W" in *.lock) ;; ' +
+      '*) if [ -S "$W" ]; then export WAYLAND_DISPLAY="${W##*/}"; ' +
+      'G="$G WAYLAND_DISPLAY"; break; fi ;; esac; done; fi'#10 +
+    'if [ -z "$DISPLAY" ] && [ -S /tmp/.X11-unix/X0 ]; then ' +
+      'export DISPLAY=:0; G="$G DISPLAY"; fi'#10 +
+    'if [ -n "$DISPLAY" ] && [ -z "$XAUTHORITY" ]; then ' +
+      'A=$(ls -t "$XDG_RUNTIME_DIR"/.mutter-Xwaylandauth.* 2>/dev/null | head -n 1); ' +
+      'if [ -z "$A" ] && [ -f "$HOME/.Xauthority" ]; then A="$HOME/.Xauthority"; fi; ' +
+      'if [ -n "$A" ]; then export XAUTHORITY="$A"; G="$G XAUTHORITY"; fi; fi'#10 +
+    'if [ -n "$DISPLAY$WAYLAND_DISPLAY" ]; then S=1; else S=0; fi'#10 +
+    'echo "___ENV=$S|$G" > "$O"'#10 +
+    '{ trap '''''''' HUP; ' + Linea + ' >> "$O" 2>&1; ' +
       'echo "___RC=$?" >> "$O"; } &'#10 +
     'exit 0'#10;
+end;
+
+{ La primera linea de la salida es la del ENTORNO grafico (___ENV=<1|0>|<lo
+  anadido>), escrita por el guion antes de lanzar el programa. Se separa del
+  texto del programa y se traduce a una nota; sin ella (un guion viejo, un
+  target raro) no hay nota y el texto queda como estaba. }
+function PartirEntorno(var ATexto: string): string;
+var
+  Linea, Resto: string;
+  P: Integer;
+begin
+  Result := '';
+  if not ATexto.StartsWith('___ENV=') then
+    Exit;
+  P := ATexto.IndexOf(#10);
+  if P < 0 then
+  begin
+    Linea := ATexto;
+    ATexto := '';
+  end
+  else
+  begin
+    Linea := ATexto.Substring(0, P);
+    ATexto := ATexto.Substring(P + 1);
+  end;
+  Linea := Linea.Substring(Length('___ENV=')).Trim([#13, ' ']);
+  P := Linea.IndexOf('|');
+  if P < 0 then
+    Exit;
+  Resto := Linea.Substring(P + 1).Trim;
+  if Linea.StartsWith('0') then
+    Result := SN_REMOTERUN_ENV_NONE
+  else if Resto = '' then
+    Result := SN_REMOTERUN_ENV_INHERITED
+  else
+    Result := Format(SN_REMOTERUN_ENV_ADDED_FMT, [Resto.Replace(' ', ', ')]);
 end;
 
 { Parte la salida en lo que escribio el programa y su codigo de salida. El
@@ -305,6 +371,7 @@ function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
 var
   ProjName, DeployRel, ARemoteExe, ExeLeaf: string;
   Pc, JobId, TmpDir, GuionFile, OutFile, Ops, Output, Texto, Salida: string;
+  EntornoNota: string;
   Rc, Codigo, Espera: Integer;
   Sw: TStopwatch;
   Enc: TEncoding;
@@ -374,6 +441,7 @@ begin
   Terminado := False;
   Codigo := -1;
   Salida := '';
+  EntornoNota := '';
   Sw := TStopwatch.StartNew;
   // Espera PROGRESIVA, y no es un detalle: un gesto del nodo dura ~2 s, asi
   // que un primer sondeo a los 1,5 s (lo que heredaba del runner) se comia
@@ -395,6 +463,7 @@ begin
       // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
       // leida en estricto un solo byte suelto mataba el run entero.
       Texto := DecodeSourceBytes(TFile.ReadAllBytes(OutFile));
+      EntornoNota := PartirEntorno(Texto);
       Terminado := PartirSalida(Texto, Salida, Codigo);
     end;
   until Terminado or (Sw.ElapsedMilliseconds > ATimeoutMs);
@@ -404,6 +473,8 @@ begin
   Result.AddPair('remoteExe', ARemoteExe);
   Result.AddPair('project', ProjName);
   Result.AddPair('durationMs', TJSONNumber.Create(Sw.ElapsedMilliseconds));
+  if EntornoNota <> '' then
+    Result.AddPair('graphicalEnv', EntornoNota);
   if Terminado then
   begin
     Result.AddPair('success', TJSONBool.Create(Codigo = 0));

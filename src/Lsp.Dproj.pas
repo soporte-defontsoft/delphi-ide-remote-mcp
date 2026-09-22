@@ -87,6 +87,15 @@ const
   purpose. One definition, shared by delphi_paserver and delphi_adb. }
 function TagValue(const AXml, ATag: string): string;
 
+{ El valor de una propiedad DE PLATAFORMA (PlatformSDK, Profile...): la del
+  PropertyGroup de esa plataforma ('$(Base_<Plat>)'!=''), que es donde la
+  escriben el IDE y delphi_config set-sdk / set-profile. Si ahi no hay, vale
+  una puesta en un grupo SIN plataforma (base o incondicional); la del grupo
+  de OTRA plataforma, nunca. Es la inversa de los escritores: leer "el primer
+  <PlatformSDK> del fichero" le daba a un build OSX64 el SDK de Linux64
+  (paisaje del 2026-09-22). '' si no hay. }
+function PlatformProperty(const AXml, APlatform, ATag: string): string;
+
 { Whether a project would EXECUTE a shell during a build: a custom MSBuild
   <Target> or <Exec> task (with or without an XML namespace prefix), a
   non-empty RAD Studio build-event command, or an <Import> of anything that is
@@ -374,6 +383,52 @@ begin
   for P in KNOWN_PLATFORMS do
     if SameText(P, AName.Trim) then
       Exit(P); // canonical casing, and proven metachar-free
+end;
+
+function PlatformProperty(const AXml, APlatform, ATag: string): string;
+var
+  Low, Open1, Cond, Valor, Reserva: string;
+  P, TagEnd, CloseP, G, GEnd, Q: Integer;
+begin
+  Result := '';
+  Reserva := '';
+  Low := LowerCase(AXml);
+  Open1 := LowerCase('<' + ATag + '>');
+  P := Pos(Open1, Low);
+  while P > 0 do
+  begin
+    TagEnd := P + Length(Open1);
+    CloseP := Pos(LowerCase('</' + ATag + '>'), Low, TagEnd);
+    if CloseP = 0 then
+      Break;
+    // el PropertyGroup que lo contiene: el ultimo abierto antes del tag
+    G := 0;
+    Q := Pos('<propertygroup', Low);
+    while (Q > 0) and (Q < P) do
+    begin
+      G := Q;
+      Q := Pos('<propertygroup', Low, Q + 1);
+    end;
+    Cond := '';
+    if G > 0 then
+    begin
+      GEnd := Pos('>', Low, G);
+      if GEnd > 0 then
+        Cond := Copy(Low, G, GEnd - G + 1);
+      if not Cond.Contains('base_') then
+        Cond := ''; // grupo base o incondicional: no es de ninguna plataforma
+    end;
+    Valor := Trim(Copy(AXml, TagEnd, CloseP - TagEnd));
+    if Cond = '' then
+    begin
+      if Reserva = '' then
+        Reserva := Valor;
+    end
+    else if Cond.Contains(LowerCase('base_' + APlatform + ')')) then
+      Exit(Valor);
+    P := Pos(Open1, Low, CloseP);
+  end;
+  Result := Reserva;
 end;
 
 function TagValue(const AXml, ATag: string): string;
