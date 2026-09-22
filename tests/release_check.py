@@ -130,6 +130,16 @@ CONTENT = [
     # delphi_desktop en la maquina del propio servidor.
     (os.path.join(REPO, 'node', 'McpDesktopNode'), 'node/McpDesktopNode'),
     (os.path.join(REPO, 'node', 'McpDesktopNode.exe'), 'node/McpDesktopNode.exe'),
+    # 1.0.16: el LANZADOR nativo (src_run_job), en sus dos sabores. Es lo que
+    # PAServer arranca en el destino por cada remote-run y cada gesto de
+    # escritorio; el servidor lo busca en node\ junto a su exe y sin el no hay
+    # ejecucion remota ninguna. Se quedo fuera del primer zip de la 1.0.16
+    # (David lo pregunto antes de publicar, 2026-09-22): un ejecutable nuevo
+    # entra en ESTA lista el dia que nace, no el dia que alguien lo echa en
+    # falta en una instalacion limpia.
+    (os.path.join(REPO, 'node', 'McpRunJob'), 'node/McpRunJob'),
+    (os.path.join(REPO, 'node', 'McpRunJob.exe'), 'node/McpRunJob.exe'),
+    (os.path.join(REPO, 'node', 'README.md'), 'node/README.md'),
     (os.path.join(REPO, 'README.md'), 'README.md'),
     (os.path.join(REPO, 'CHANGELOG.md'), 'CHANGELOG.md'),
     (os.path.join(REPO, 'LICENSE'), 'LICENSE'),
