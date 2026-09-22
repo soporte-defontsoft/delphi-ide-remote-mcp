@@ -121,7 +121,7 @@ DEV = '127.0.0.1:5555'
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R43]', 'Token=%s' % TOK, 'Roots=%s' % JAIL,
-    'AllowDesktopControl=1', 'AllowRemoteRun=1',
+    'AllowRemoteRun=1',
     'RemoteRunProjects=NodoLinux', 'AdbAllowedDevices=%s' % DEV, '',
 ]))
 
@@ -179,8 +179,11 @@ def rechazada_por_jaula(txt):
 
 try:
     # ------------------------------------------------------------------ W1
-    # El agujero: delphi_desktop escribia donde le dijeran.
-    a = call('delphi_desktop', {'command': 'screenshot', 'out': DIR_FUERA})
+    # El agujero: delphi_desktop escribia donde le dijeran. Desde 1.0.16 la
+    # tool va por perfil PAServer (Linux o Windows); la ruta LOCAL se sigue
+    # comprobando ANTES del perfil, asi que no hace falta un destino vivo.
+    a = call('delphi_desktop', {'command': 'screenshot', 'profile': 'x',
+                                'out': DIR_FUERA})
     check('W1 delphi_desktop rechaza un "out" fuera de la jaula',
           rechazada_por_jaula(a), a[:280])
     # EL DANO, no la ausencia del guardia: contra un binario sin el arreglo
@@ -197,7 +200,7 @@ try:
     # proposito: es una ruta local y no hace falta un destino vivo.
     b = call('delphi_adb_linux', {'command': 'screenshot', 'profile': 'x',
                                   'out': DIR_FUERA})
-    check('W2 delphi_adb_linux tambien, sin necesitar un destino vivo',
+    check('W2 el alias delphi_adb_linux tambien, sin necesitar un destino vivo',
           rechazada_por_jaula(b), b[:280])
 
     # ------------------------------------------------------------------ W3
@@ -248,35 +251,18 @@ try:
 
     # ------------------------------------------------------------------ W4
     # Y el otro lado, que es la mitad que se olvida: cerrar la puerta no sirve
-    # de nada si se cierra tambien para quien SI puede pasar.
-    f = call('delphi_desktop', {'command': 'screenshot', 'out': DIR_DENTRO})
+    # de nada si se cierra tambien para quien SI puede pasar. Con un perfil
+    # ficticio la llamada muere en el perfil, no en la ruta: eso es lo que se
+    # mide. (Hasta 1.0.15 aqui capturaba de verdad con el nodo local; ahora la
+    # captura real necesita un PAServer y se mide en vivo, no en la bateria.)
+    f = call('delphi_desktop', {'command': 'screenshot', 'profile': 'x',
+                                'out': DIR_DENTRO})
     check('W4 un "out" DENTRO de la jaula no muere por la ruta',
           not rechazada_por_jaula(f), f[:280])
-    # "NO pude capturar" lo dice el NODO: esta maquina no puede copiar la
-    # pantalla ahora (sesion bloqueada o desconectada). No es un fallo del
-    # contrato, asi que no se pinta de rojo - pero se dice, que callar lo no
-    # medido es mentir en verde.
-    if HAY_NODO and 'NO pude capturar' in f:
-        print('NOTA: esta maquina no puede capturar la pantalla ahora mismo; '
-              'W4b, W4c, W5e y W5f no se miden (W1, W1b y W5-W5d si: esos '
-              'rechazos son ANTES de capturar).')
-    elif HAY_NODO:
-        check('W4b ...y con el nodo de verdad la captura llega a su sitio',
-              hay_png(DIR_DENTRO), f[:280])
-        check('W4c y ahora que consta que capturar FUNCIONA, fuera sigue vacio',
-              not hay_png(FUERA), 'hay una captura bajo %s' % FUERA)
-        # La misma regla de W5, en el escritorio y con una captura de verdad.
-        mia = os.path.join(DIR_DENTRO, 'la-mia.png')
-        k = call('delphi_desktop', {'command': 'screenshot', 'out': mia})
-        check('W5e delphi_desktop: un FICHERO con nombre propio es ese fichero',
-              os.path.isfile(mia), k[:280])
-        m = call('delphi_desktop', {'command': 'screenshot',
-                                    'out': os.path.join(DIR_DENTRO, 'otra.jpg')})
-        check('W5f ...y con la extension de otro formato no se escribe nada',
-              'No escribo una imagen' in m and
-              not os.path.exists(os.path.join(DIR_DENTRO, 'otra.jpg')), m[:280])
-    else:
-        print('NOTA: no hay node/McpDesktopNode.exe; W1 y W4b miden menos.')
+    check('W4c ...y fuera sigue vacio', not hay_png(FUERA),
+          'hay una captura bajo %s' % FUERA)
+    print('NOTA: W4b, W5e y W5f (captura real por perfil) se miden en vivo '
+          'contra un PAServer, no aqui.')
 finally:
     try:
         proc.kill()

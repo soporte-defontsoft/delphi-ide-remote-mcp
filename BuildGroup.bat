@@ -128,6 +128,21 @@ if /I "%BCONFIG%"=="Release" (
     exit /b 1
   )
   echo [BuildGroup] node\McpDesktopNode.exe actualizado desde el build Release.
+
+  REM El lanzador para destinos WINDOWS (PAServer alli no ejecuta guiones):
+  REM viaja en node\ junto a los dos nodos y el servidor lo sube por trabajo.
+  echo [BuildGroup] Compilando el lanzador McpRunJob (Win64)...
+  msbuild "%~dp0src_run_job\McpRunJob.dproj" /t:%MSBTARGET% /p:Config=Release /p:Platform=Win64 %VERBOSITY%
+  if errorlevel 1 (
+    echo [BuildGroup] AVISO: el lanzador McpRunJob no compilo
+    exit /b 1
+  )
+  copy /Y "%~dp0src_run_job\Win64\Release\McpRunJob.exe" "%~dp0node\McpRunJob.exe" >nul
+  if errorlevel 1 (
+    echo [BuildGroup] AVISO: no pude copiar el lanzador a node\McpRunJob.exe
+    exit /b 1
+  )
+  echo [BuildGroup] node\McpRunJob.exe actualizado desde el build Release.
 )
 
 echo [BuildGroup] Grupo completo OK.

@@ -116,8 +116,15 @@ def tool_info(nombre):
             return t
     return None
 
-T = tool_info('delphi_adb_linux')
+# 1.0.16: la tool es delphi_desktop (el destino es el perfil, Linux o Windows);
+# delphi_adb_linux sigue registrada como alias en desuso con el mismo esquema.
+T = tool_info('delphi_desktop')
 check('la tool existe', T is not None, 'no aparece en tools/list')
+A = tool_info('delphi_adb_linux')
+check('el alias delphi_adb_linux existe y se declara en desuso',
+      A is not None and 'DEPRECATED' in A.get('description', ''), (A or {}).get('description', '')[:120])
+check('el alias tiene el MISMO esquema que delphi_desktop',
+      A is not None and T is not None and A.get('inputSchema') == T.get('inputSchema'), 'esquemas distintos')
 
 desc = (T or {}).get('description', '')
 check('su descripcion ensena el flujo (captura -> mide -> pulsa)',
@@ -145,19 +152,19 @@ check('el parametro code avisa de que son codigos Linux, no X11',
 PROJ = os.path.join(DIR, 'Nodo.dproj')
 open(PROJ, 'w', encoding='utf-8').write('<Project/>')
 
-r = call('delphi_adb_linux', {"command": "bailar", "profile": "x", "project": PROJ})
+r = call('delphi_desktop', {"command": "bailar", "profile": "x", "project": PROJ})
 check('un command inventado se rechaza con la lista buena',
       r.startswith('RECHAZADO') and 'screenshot' in r, r[:160])
 
-r = call('delphi_adb_linux', {"command": "tap", "profile": "x", "project": PROJ})
+r = call('delphi_desktop', {"command": "tap", "profile": "x", "project": PROJ})
 check('tap sin coordenadas se rechaza diciendo de donde salen',
       r.startswith('RECHAZADO') and 'screenshot' in r, r[:160])
 
-r = call('delphi_adb_linux', {"command": "type", "profile": "x", "project": PROJ})
+r = call('delphi_desktop', {"command": "type", "profile": "x", "project": PROJ})
 check('type sin texto se rechaza y explica el gesto de un solo viaje',
       r.startswith('RECHAZADO') and 'x e y' in r, r[:200])
 
-r = call('delphi_adb_linux', {"command": "key", "profile": "x", "project": PROJ})
+r = call('delphi_desktop', {"command": "key", "profile": "x", "project": PROJ})
 check('key sin codigo se rechaza con ejemplos',
       r.startswith('RECHAZADO') and ('Escape' in r or 'Tab' in r), r[:160])
 
@@ -173,7 +180,7 @@ os.makedirs(cebo, exist_ok=True)
 fuera = os.path.join(cebo, 'fuera-de-la-jaula.dproj')
 open(fuera, 'w', encoding='utf-8').write('<Project/>')
 try:
-    r = call('delphi_adb_linux', {"command": "screenshot", "profile": "x", "project": fuera})
+    r = call('delphi_desktop', {"command": "screenshot", "profile": "x", "project": fuera})
     check('un proyecto fuera de la jaula se rechaza',
           r.startswith('RECHAZADO') or 'FUERA' in r.upper(), r[:160])
 finally:

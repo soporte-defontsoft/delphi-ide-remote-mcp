@@ -1140,6 +1140,17 @@ const
   SR_REMOTERUN_PUT_FMT =
     'error: no se pudo enviar el trabajo al target (paclient exit %d): %s. ' +
     'PAServer esta vivo? El perfil apunta al host correcto?';
+  SR_REMOTERUN_NO_RUNJOB =
+    'RECHAZADO: el destino es Windows y falta el lanzador node\McpRunJob.exe ' +
+    'junto al servidor. Alli PAServer no ejecuta guiones: hace falta ese ' +
+    'binario (viaja en la release, carpeta node).';
+  SN_REMOTERUN_ENV_WIN_FMT =
+    'Windows: el programa corre en la sesion interactiva %s del usuario de ' +
+    'PAServer, con escritorio';
+  SN_REMOTERUN_ENV_WIN0 =
+    'Windows: PAServer corre como SERVICIO, en la sesion 0, que no tiene ' +
+    'escritorio: un programa con ventana no se vera ni se podra manejar. ' +
+    'Arranca PAServer dentro de la sesion del usuario (desde su escritorio)';
   SN_REMOTERUN_ENV_INHERITED =
     'heredado del PAServer: DISPLAY/WAYLAND_DISPLAY ya venian puestos, nada ' +
     'que anadir';
@@ -1376,37 +1387,52 @@ const
     'el target no dejo "%s" donde se esperaba: ¿corrio el programa que lo escribe?';
 
   SD_ADBLINUX =
-    'The Linux desktop of a target, the way adb gives you an Android one: ' +
-    'SEE the screen and ACT on it. The machine hangs off a PAServer profile ' +
-    '(the same profiles delphi_paserver builds and deploys with) and runs a ' +
-    'small Delphi node that this server deploys AND UPDATES there BY ITSELF ' +
-    '- leave "project" empty and the node bundled with the server is pushed ' +
-    'on first use, then refreshed whenever the server ships a newer one; ' +
-    'nothing else is installed on the target and nothing is compiled. THE ' +
-    'FLOW, and it is the whole trick: command=screenshot ' +
+    'The desktop of the machine behind a PAServer profile - a Linux target, ' +
+    'a Windows target, or THIS server itself when a PAServer runs in its own ' +
+    'user session - the way adb gives you an Android one: SEE the screen and ' +
+    'ACT on it. The machine hangs off a PAServer profile (the same profiles ' +
+    'delphi_paserver builds and deploys with) and runs a small Delphi node ' +
+    'that this server deploys AND UPDATES there BY ITSELF, the right binary ' +
+    'for that system - leave "project" empty and the node bundled with the ' +
+    'server is pushed on first use, then refreshed whenever the server ships ' +
+    'a newer one; nothing else is installed on the target and nothing is ' +
+    'compiled. THE FLOW, and it is the whole trick: command=screenshot ' +
     'brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel ' +
     'you want, and command=tap presses exactly there (x, y measured on that ' +
     'screenshot - the node converts the screen scale itself, you never deal ' +
     'with logical vs physical coordinates). command=type writes text, and ' +
     'given x and y it presses there FIRST - the real gesture is "write this ' +
     'here", and one trip pays the startup once instead of twice. ' +
-    'command=key types one key by its ' +
-    'Linux code (Escape 1, Tab 15, Enter 28) and command=windows shows EVERY ' +
-    'window as a thumbnail (the Super key) - which is how you reach a window ' +
-    'that another one covers: show them all, then tap the one you want. ' +
-    'command=status says whether the desktop is reachable at all and, when it ' +
-    'is not, what to ask the operator for. The target needs a graphical ' +
-    'session open; a headless box has nothing to show.';
+    'command=key presses one key: on a Linux target by its Linux code ' +
+    '(Escape 1, Tab 15, Enter 28), on a Windows target by NAME (escape, ' +
+    'enter, tab, f4) - the tool reads the profile''s platform and refuses the ' +
+    'other kind. command=windows shows EVERY window (Linux: thumbnails, the ' +
+    'Super key; Windows: a list with title and rectangle) - which is how you ' +
+    'reach a window that another one covers: show them all, then tap the one ' +
+    'you want. command=status says whether the desktop is reachable at all ' +
+    'and, when it is not, what to ask the operator for; every answer carries ' +
+    'graphicalEnv, the session the node ran in. The target needs a graphical ' +
+    'session open for the user PAServer runs as; a headless box, a locked ' +
+    'Windows or a Windows service (session 0) has nothing to show. It was ' +
+    'delphi_adb_linux until 1.0.15; that name stays as an alias one release.';
+  SD_ADBLINUX_ALIAS =
+    'DEPRECATED alias of delphi_desktop: the SAME tool with the same ' +
+    'parameters, kept one release so cached schemas keep working. Use ' +
+    'delphi_desktop.';
   SP_ADBLINUX_COMMAND =
     'screenshot (the whole desktop, brought here as a PNG; default) | tap ' +
     '(press at x,y MEASURED ON THAT SCREENSHOT) | type (write "text" - with ' +
     'x,y it presses there FIRST, which is the real gesture: "write this ' +
-    'here", and pays the startup once) | key (one key by Linux code: code) | ' +
-    'windows (show every window as a thumbnail, to reach a covered one) | ' +
-    'status (is the desktop reachable, and what to ask for if not)';
+    'here", and pays the startup once) | key (one key: Linux code on a Linux ' +
+    'target, key NAME on a Windows one) | windows (show every window - ' +
+    'thumbnails on Linux, a list with rectangles on Windows - to reach a ' +
+    'covered one) | status (is the desktop reachable, and what to ask for if ' +
+    'not)';
   SP_ADBLINUX_PROFILE =
-    'PAServer profile of the target machine (delphi_paserver command=profiles ' +
-    'lists them). The desktop is THAT machine''s, never the agent''s.';
+    'PAServer profile of the target machine - a Linux, a Windows, or this ' +
+    'server itself when a PAServer runs in its user session (delphi_paserver ' +
+    'command=profiles lists them). The desktop is THAT machine''s, never the ' +
+    'agent''s.';
   SP_ADBLINUX_PROJECT =
     'OPTIONAL since v0.98: empty = the node BUNDLED with this server ' +
     '(node\McpDesktopNode next to the exe) is deployed to the target on ' +
@@ -1418,8 +1444,12 @@ const
   SP_ADBLINUX_Y =
     'tap: vertical pixel MEASURED ON THE SCREENSHOT this tool returned';
   SP_ADBLINUX_CODE =
-    'key: the Linux key code (evdev), NOT an X11 keycode: Escape 1, Tab 15, ' +
-    'Enter 28, left Alt 56, Super 125';
+    'key. Linux target: the Linux key code (evdev), NOT an X11 keycode: ' +
+    'Escape 1, Tab 15, Enter 28, left Alt 56, Super 125. Windows target: the ' +
+    'key NAME - escape, enter, tab, space, backspace, delete, home, end, up, ' +
+    'down, left, right, super, alt, ctrl, shift, f1..f12. The tool reads the ' +
+    'profile''s platform and refuses the other kind: a number on Windows ' +
+    'would press a different key.';
   SP_ADBLINUX_TEXT =
     'type: the text to write, key by key, with the keyboard layout the ' +
     'TARGET desktop really has (it hands its keymap over): any character ' +
@@ -1433,11 +1463,11 @@ const
     'RECHAZADO: type necesita "text". Si ademas pasas x e y, pulsa ahi antes ' +
     'de escribir: es el gesto real, "escribe esto aqui", y arranca una sola vez.';
   SR_ADBLINUX_NONODE =
-    'delphi_adb_linux: ni "project" ni nodo empaquetado. O el operador deja ' +
-    'el binario Linux del nodo en node\McpDesktopNode junto al servidor ' +
-    '(la distribucion lo trae: entonces se despliega y actualiza solo), o ' +
-    'pasa project= con el .dproj del nodo desplegado via delphi_build ' +
-    'target=Deploy.';
+    'delphi_desktop: ni "project" ni nodo empaquetado para ese sistema. O el ' +
+    'operador deja el nodo junto al servidor (node\McpDesktopNode para un ' +
+    'Linux, node\McpDesktopNode.exe para un Windows: la distribucion trae ' +
+    'los dos, y entonces se despliega y actualiza solo), o pasa project= con ' +
+    'el .dproj del nodo desplegado via delphi_build target=Deploy.';
   { UNA descripcion para el "out" de toda la familia de capturas, porque es
     UNA regla (CaptureTarget, Lsp.Guard). Va aqui arriba porque una constante
     se declara antes de su primer uso. }
@@ -1449,83 +1479,16 @@ const
     'jailed like any of our paths; retrieve it with delphi_fetch.';
   SP_ADBLINUX_OUT =
     'screenshot: where the capture lands.' + SP_CAPTURE_OUT_RULE;
-  { ------------------------------------------------ delphi_desktop (Windows) }
-  SD_DESKTOP =
-    'Eyes and hands on the desktop of THIS server - the Windows machine that ' +
-    'runs RAD Studio. It is the same idea delphi_adb_linux gives you on a ' +
-    'Linux target and delphi_adb on Android, pointed at the machine you are ' +
-    'already talking to: use it to drive the IDE itself, an installer, a ' +
-    'dialog no tool can reach, or a Windows build of your app running here. ' +
-    'It needs an OPEN desktop session on the server (the console, or a ' +
-    'connected RDP) and does not work without one, on purpose: the user can ' +
-    'watch what you do and step in. ' +
-    'THE FLOW: command=screenshot brings the WHOLE desktop back as a PNG; ' +
-    'you LOOK at it, measure the pixel you want and command=tap presses ' +
-    'exactly there. command=type writes text (accents included, whatever the ' +
-    'keyboard layout is) and, with x and y, clicks first and types in one ' +
-    'trip. command=key presses one key BY NAME (escape, enter, tab, super, ' +
-    'f4...). command=windows lists the visible windows with title and ' +
-    'rectangle - and THOSE coordinates are the ones to click with, because ' +
-    'the node reports real pixels, the same ones the screenshot has. ' +
-    'Every answer carries a fresh screenshot, so you always act on what you ' +
-    'just saw. IT IS OFF UNLESS THE OPERATOR SAYS OTHERWISE: it needs ' +
-    'AllowDesktopControl=1 in YOUR workspace, and it is refused on a ' +
-    'read-only credential. Remember whose screen this is: it is the ' +
-    'operator''s own machine, not a test box.';
+  { Dos textos que sobrevivieron a delphi_desktop LOCAL (retirada en 1.0.16):
+    los usa la tool por perfil cuando el destino es un Windows. }
   SD_DESKTOP_LOCKED =
     'El escritorio esta BLOQUEADO (o la sesion no tiene pantalla): Windows ' +
     'no deja ni mirar ni tocar desde aqui. Es el gemelo del "sin DISPLAY" de ' +
     'Linux. Pidele al operador que desbloquee la sesion.';
-  SR_DESKTOP_DISABLED =
-    'RECHAZADO: delphi_desktop esta apagado en este workspace. Da ojos y ' +
-    'manos sobre el escritorio del OPERADOR (su raton, su teclado, su ' +
-    'pantalla entera), asi que solo se enciende declarando ' +
-    'AllowDesktopControl=1 en la seccion [Workspace.<nombre>] de quien lo ' +
-    'usa. No lo hereda de nadie.';
-  SR_DESKTOP_CMD =
-    'RECHAZADO: command debe ser screenshot, tap, type, key, windows o ' +
-    'status.';
-  SR_DESKTOP_NEEDXY =
-    'RECHAZADO: tap necesita x e y, medidos sobre la captura que devuelve ' +
-    'command=screenshot (o el rectangulo que da command=windows).';
-  SR_DESKTOP_NEEDTEXT =
-    'RECHAZADO: type necesita "text". Con x e y ademas pulsa ahi antes de ' +
-    'escribir: un solo viaje.';
   SR_DESKTOP_NEEDCODE =
-    'RECHAZADO: key necesita "code" con el NOMBRE de la tecla: escape, ' +
-    'enter, tab, space, backspace, delete, home, end, up, down, left, ' +
-    'right, super, alt, ctrl, shift o f1..f12.';
-  SR_DESKTOP_NONODE_FMT =
-    'delphi_desktop: falta el nodo de escritorio (%s). La distribucion lo ' +
-    'trae en node\McpDesktopNode.exe junto al servidor; si no esta, ' +
-    'recompilalo con BuildGroup.bat Release.';
-  SR_DESKTOP_NOSHOT =
-    'El nodo no devolvio captura. delphi_desktop maneja una sesion de ' +
-    'escritorio ABIERTA (la consola o un RDP conectado) y sin ella no ' +
-    'funciona: es asi a proposito, para que el usuario pueda VER lo que ' +
-    'hace el agente e intervenir. Con la sesion bloqueada o el RDP ' +
-    'desconectado no hay pantalla que capturar: pidele al usuario que la ' +
-    'abra. El motivo exacto esta en "nodeOutput".';
-  SP_DESKTOP_COMMAND =
-    'screenshot (el escritorio entero como PNG; es lo que devuelve TODO ' +
-    'comando) | tap (pulsa en x,y de la captura) | type (escribe "text"; ' +
-    'con x,y pulsa ahi primero) | key (una tecla por nombre en "code") | ' +
-    'windows (las ventanas visibles con titulo y rectangulo) | status (que ' +
-    've el nodo: sistema, tamano del escritorio y escala). Por defecto: ' +
-    'screenshot';
-  SP_DESKTOP_X =
-    'Columna (pixel) medida SOBRE la captura, para tap o para type.';
-  SP_DESKTOP_Y =
-    'Fila (pixel) medida SOBRE la captura, para tap o para type.';
-  SP_DESKTOP_CODE =
-    'Nombre de la tecla para command=key: escape, enter, tab, space, ' +
-    'backspace, delete, home, end, up, down, left, right, super, alt, ' +
-    'ctrl, shift, f1..f12.';
-  SP_DESKTOP_TEXT =
-    'El texto a escribir (command=type). Va por Unicode, asi que los ' +
-    'acentos entran igual sea cual sea la distribucion de teclado.';
-  SP_DESKTOP_OUT =
-    'screenshot: where the capture lands.' + SP_CAPTURE_OUT_RULE;
+    'RECHAZADO: el destino es Windows y key necesita "code" con el NOMBRE de ' +
+    'la tecla: escape, enter, tab, space, backspace, delete, home, end, up, ' +
+    'down, left, right, super, alt, ctrl, shift o f1..f12.';
 
   SR_ADBLINUX_CMD =
     'RECHAZADO: command debe ser screenshot, tap, key, windows o status.';

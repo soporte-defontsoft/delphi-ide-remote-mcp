@@ -63,8 +63,8 @@ uses
   MCPServer.ToolsManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ToolsManager.pas',
   MCPServer.ResourcesManager in '..\vendor\gdk-mcp-server\src\Managers\MCPServer.ResourcesManager.pas',
   // ONE list now: every mode links the same units, so no host can expose
-    // fewer tools than another (that drift is why the two projects merged).
-    Lsp.Texts in 'Lsp.Texts.pas',
+        // fewer tools than another (that drift is why the two projects merged).
+        Lsp.Texts in 'Lsp.Texts.pas',
   Lsp.Transport.Process in 'Lsp.Transport.Process.pas',
   Lsp.Client in 'Lsp.Client.pas',
   Lsp.Discovery in 'Lsp.Discovery.pas',
@@ -82,8 +82,7 @@ uses
   Mcp.Tools.Config in 'Mcp.Tools.Config.pas',
   Mcp.Tools.PAServer in 'Mcp.Tools.PAServer.pas',
   Mcp.Tools.Adb in 'Mcp.Tools.Adb.pas',
-  Mcp.Tools.DesktopLinux in 'Mcp.Tools.DesktopLinux.pas',
-  Mcp.Tools.DesktopWin in 'Mcp.Tools.DesktopWin.pas',
+  Mcp.Tools.Desktop in 'Mcp.Tools.Desktop.pas',
   Mcp.Tools.Components in 'Mcp.Tools.Components.pas',
   Mcp.Tools.FileOps in 'Mcp.Tools.FileOps.pas',
   Mcp.Tools.DelphiPatch in 'Mcp.Tools.DelphiPatch.pas',

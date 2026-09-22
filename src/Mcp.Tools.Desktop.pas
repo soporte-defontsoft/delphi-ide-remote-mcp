@@ -1,7 +1,13 @@
-unit Mcp.Tools.DesktopLinux;
+unit Mcp.Tools.Desktop;
 
-{ delphi_adb_linux: el escritorio Linux de un target, como delphi_adb da el de
-  un Android. Ver la pantalla y actuar sobre ella.
+{ delphi_desktop: el escritorio de la maquina de un perfil PAServer -Linux o
+  Windows, incluida ESTA misma si su PAServer corre en la sesion del usuario-,
+  como delphi_adb da el de un Android. Ver la pantalla y actuar sobre ella.
+  Hasta 1.0.15 se llamaba delphi_adb_linux y habia otra tool, delphi_desktop,
+  que corria el nodo en LOCAL con un interruptor propio (AllowDesktopControl):
+  dos caminos y dos modelos de permiso para lo mismo. Decision de David
+  (21-sep-2026): un solo camino, por PAServer y perfil; el nombre viejo sigue
+  registrado como ALIAS en desuso con los mismos parametros.
 
   La forma es la de adb, de arriba abajo: el agente habla con ESTE servidor,
   este habla con el nodo que vive en la maquina de destino, y el nodo habla
@@ -76,6 +82,13 @@ type
     constructor Create; override;
   end;
 
+  { El nombre viejo, en desuso: la MISMA tool, para que un cliente con el
+    esquema cacheado siga funcionando una version mas. }
+  TDesktopAliasTool = class(TDesktopLinuxTool)
+  public
+    constructor Create; override;
+  end;
+
 implementation
 
 uses
@@ -92,8 +105,15 @@ uses
 constructor TDesktopLinuxTool.Create;
 begin
   inherited;
-  FName := 'delphi_adb_linux';
+  FName := 'delphi_desktop';
   FDescription := SD_ADBLINUX;
+end;
+
+constructor TDesktopAliasTool.Create;
+begin
+  inherited;
+  FName := 'delphi_adb_linux';
+  FDescription := SD_ADBLINUX_ALIAS;
 end;
 
 var
@@ -145,6 +165,14 @@ begin
   Result := Result.ToLower;
 end;
 
+{ Una tecla de Windows se nombra (escape, enter, f4); un numero seria un
+  codigo de OTRO sistema y pulsaria otra tecla. }
+function NombreDeTeclaValido(const ACode: string): Boolean;
+begin
+  Result := (ACode <> '') and
+    ((ACode[Low(ACode)] < '0') or (ACode[Low(ACode)] > '9'));
+end;
+
 { El gesto; ExecuteWithParams lo envuelve en el cerrojo de SU maquina. }
 function GestoEnElTarget(const Params: TDesktopLinuxParams): string;
 var
@@ -152,6 +180,7 @@ var
   Bajada, Propia: string;
   Res: TJSONObject;
   Return: TJSONObject;
+  EsWin: Boolean;
 begin
   Cmd := Params.Command.Trim.ToLower;
   if Cmd = '' then
@@ -183,6 +212,9 @@ begin
   Result := ProfileHostDenied(Params.Profile.Trim);
   if Result <> '' then
     Exit;
+  { El destino dice que nodo y que teclas espera: lo lee el .profile, nunca
+    el nombre del perfil (que no significa nada). }
+  EsWin := PlataformaDelPerfil(Params.Profile.Trim).StartsWith('Win', True);
   Proj := Params.Project.Trim;
   if Proj <> '' then
   begin
@@ -223,9 +255,22 @@ begin
   end
   else if Cmd = 'key' then
   begin
-    if Params.Code.Trim = '' then
-      Exit(SR_ADBLINUX_NEEDCODE);
-    Args := Format('tecla %d', [StrToIntDef(Params.Code.Trim, 0)]);
+    { Cada nodo habla el idioma de su sistema: en Linux un codigo evdev (una
+      POSICION del teclado), en Windows el NOMBRE de la tecla. Un numero en
+      Windows no es la misma tecla que en Linux, asi que no se traduce: se
+      rechaza diciendo lo que ese destino espera. }
+    if EsWin then
+    begin
+      if not NombreDeTeclaValido(Params.Code.Trim) then
+        Exit(SR_DESKTOP_NEEDCODE);
+      Args := 'tecla ' + Params.Code.Trim;
+    end
+    else
+    begin
+      if (Params.Code.Trim = '') or (StrToIntDef(Params.Code.Trim, 0) <= 0) then
+        Exit(SR_ADBLINUX_NEEDCODE);
+      Args := Format('tecla %d', [StrToIntDef(Params.Code.Trim, 0)]);
+    end;
   end
   else if Cmd = 'windows' then
     Args := 'ventanas';
@@ -264,7 +309,15 @@ begin
       Return.AddPair('ran', TJSONBool.Create(Res.GetValue<Boolean>('success')));
     if Res.GetValue('error') <> nil then
       Return.AddPair('error', Res.GetValue<string>('error'));
+    // en que sesion/entorno grafico corrio el nodo: lo cuenta remote-run y
+    // aqui es lo primero que explica una captura negra o denegada
+    if Res.GetValue('graphicalEnv') <> nil then
+      Return.AddPair('graphicalEnv', Res.GetValue<string>('graphicalEnv'));
     Return.AddPair('nodeOutput', Salida.Trim);
+    { Un Windows con la sesion bloqueada, desconectada o sin escritorio
+      contesta "Acceso denegado" a cualquier captura: se nombra, que despista. }
+    if Salida.Contains('Acceso denegado') or Salida.Contains('Access is denied') then
+      Return.AddPair('hint', SD_DESKTOP_LOCKED);
 
     { La captura vive en la carpeta que el nodo desplego; se trae aqui por el
       mismo transporte que lo llevo alli. }
@@ -341,8 +394,10 @@ end;
 initialization
   GPerfilesLock := TCriticalSection.Create;
   GPerfiles := TObjectDictionary<string, TCriticalSection>.Create([doOwnsValues]);
-  TMCPRegistry.RegisterTool('delphi_adb_linux',
+  TMCPRegistry.RegisterTool('delphi_desktop',
     function: IMCPTool begin Result := TDesktopLinuxTool.Create; end);
+  TMCPRegistry.RegisterTool('delphi_adb_linux',
+    function: IMCPTool begin Result := TDesktopAliasTool.Create; end);
 
 finalization
   GPerfiles.Free;

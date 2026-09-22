@@ -272,13 +272,6 @@ function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemote
   DELPHI_MCP_ALLOW_TESTS=1 or AllowTests=1 en el workspace. }
 function AllowTests: Boolean;      // DELPHI_MCP_ALLOW_TESTS / AllowTests=1
 
-{ Ojos y manos sobre el escritorio de ESTE servidor (delphi_desktop). Es el
-  interruptor mas serio del ini: no habla de ficheros dentro de una jaula,
-  habla del raton y el teclado del operador, y de ver su pantalla entera
-  (correo incluido, si lo tiene abierto). Por eso nace APAGADO y no lo
-  enciende ninguna herencia: solo AllowDesktopControl=1 en TU workspace. }
-function AllowDesktopControl: Boolean;
-
 { WHO is calling - as far as this server can honestly know.
 
   Two-phase, the way the operator asked: the SHARED token (Bearer) is the door,
@@ -497,7 +490,7 @@ type
     // entorno de quien arranca el proceso: baterias, desarrollo); el ini
     // NO tiene seccion generica desde v0.98.
     OvAllowRun, OvAllowTests, OvAllowRemoteRun, OvAllowBuildScripts,
-      OvLibraryZone, OvAgentConfinement, OvAllowDesktop: Integer;
+      OvLibraryZone, OvAgentConfinement: Integer;
     OvSharedSet: Boolean;             // SharedFolders= present in the section
     OvSharedFolders: TArray<string>;
     // A donde puede llegar ESTE workspace: sin declarar = a ninguna parte.
@@ -526,7 +519,6 @@ var
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
   GLibraryZone: Boolean = True;     // the read-only library zone, on by default
   GAllowTests: Boolean = False;     // running test suites is opt-in too
-  GAllowDesktop: Boolean = False;   // el escritorio del operador: opt-in
   GGitRemotes: string = '';         // hosts an explicit git URL may name
   GRemoteHosts: string = '';        // hosts a raw TCP probe may dial
   GRemoteProjects: TArray<string>;  // RemoteRunProjects del [Workspace] por defecto
@@ -882,7 +874,6 @@ begin
   GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
   GLibraryZone := GetEnvironmentVariable('DELPHI_MCP_LIBRARY_ZONE') <> '0';
   GAllowTests := GetEnvironmentVariable('DELPHI_MCP_ALLOW_TESTS') = '1';
-  GAllowDesktop := GetEnvironmentVariable('DELPHI_MCP_ALLOW_DESKTOP') = '1';
   GGitRemotes := GetEnvironmentVariable('DELPHI_MCP_GIT_REMOTES');
   GRemoteHosts := GetEnvironmentVariable('DELPHI_MCP_REMOTE_HOSTS');
   GRemoteProjects := GetEnvironmentVariable('DELPHI_MCP_REMOTE_RUN_PROJECTS')
@@ -938,7 +929,6 @@ begin
             // capability overrides; absent key = inherit the default
             W.OvAllowRun := ReadTriState(Ini, S, 'AllowRun');
             W.OvAllowTests := ReadTriState(Ini, S, 'AllowTests');
-            W.OvAllowDesktop := ReadTriState(Ini, S, 'AllowDesktopControl');
             W.OvAllowRemoteRun := ReadTriState(Ini, S, 'AllowRemoteRun');
             W.OvAllowBuildScripts := ReadTriState(Ini, S, 'AllowBuildScripts');
             W.OvLibraryZone := ReadTriState(Ini, S, 'LibraryZone');
@@ -1064,13 +1054,6 @@ begin
   if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
     Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowTests = 1); // ausente = apagado
   Result := GAllowTests;
-end;
-
-function AllowDesktopControl: Boolean;
-begin
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowDesktop = 1); // ausente = apagado
-  Result := GAllowDesktop;
 end;
 
 { A name safe to use as a folder tag: letters, digits, dash, underscore, dot.
@@ -1991,7 +1974,7 @@ begin
      MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
        'delphi_changeset', 'delphi_build', 'delphi_run', 'delphi_package',
        'delphi_upload', 'delphi_delete', 'delphi_move', 'delphi_desktop',
-       'vault_append', 'vault_create', 'vault_patch']) then
+       'delphi_adb_linux', 'vault_append', 'vault_create', 'vault_patch']) then
     Exit(WriteDenied(AToolName));
   // ...and the same for the WRITING half of delphi_git: on a read-only server
   // a clone has no business being explained in terms of remote policy.

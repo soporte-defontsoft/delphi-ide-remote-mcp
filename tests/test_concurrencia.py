@@ -15,7 +15,8 @@ them: every probe below names the finding it is aiming at.
   D  N delphi_report at once            -> the "look for a free name" TOCTOU
   E  a broadcast message, two readers   -> is "para todos" really for everyone
   F  two delphi_package of one folder   -> deterministic zip name, no lock
-  G  two delphi_desktop screenshots     -> capture files named by the SECOND
+  G  (retired in 1.0.16: the LOCAL desktop tool is gone, the desktop goes
+     through a PAServer profile and needs a live target - not measured here)
   H  a build while its exe is running   -> the build lock ends with msbuild
 
 A probe whose environment is missing (no RAD Studio for H, no desktop node for
@@ -75,8 +76,7 @@ with open(os.path.join(WORK, 'settings.ini'), 'w') as f:
     f.write('[Workspace.Bateria]\n'
             'Token=%s\n'
             'Roots=%s\n'
-            'AllowRun=1\n'
-            'AllowDesktopControl=1\n' % (TOKEN, JAIL))
+            'AllowRun=1\n' % (TOKEN, JAIL))
 
 sk = socket.socket()
 sk.bind(('127.0.0.1', 0))
@@ -360,37 +360,12 @@ try:
     check('F package x2: el zip resultante es valido y completo', zip_ok, zip_why)
 
     # ---------------------------------------------------------------- G ----
-    # Two screenshots at the same instant. The node always writes the same
-    # captura.png and the mover names the copy by the SECOND, so two captures
-    # of the same second land on the same file.
-    if not os.path.exists(NODE_DST):
-        skip('G escritorio x2', 'no hay node\\McpDesktopNode.exe en el repo')
-    else:
-        SHOTS = os.path.join(JAIL, 'shots')
-        rg = burst(lambda i: call('delphi_desktop',
-                                  {"command": "screenshot", "out": SHOTS}), 2)
-        shots, errs = [], []
-        for r in rg:
-            try:
-                o = json.loads(r)
-            except Exception:
-                errs.append(str(r)[:120])
-                continue
-            if o.get('screenshot'):
-                shots.append(o['screenshot'])
-            else:
-                errs.append(str(o.get('screenshotError') or o.get('hint') or r)[:120])
-        if len(shots) < 2:
-            skip('G escritorio x2',
-                 'el escritorio no dio dos capturas (sesion bloqueada?): %s' % errs)
-        else:
-            check('G escritorio x2: cada llamada recibe SU propia captura',
-                  shots[0] != shots[1], shots)
-            reales = [unmask(s) for s in set(shots)]
-            check('G escritorio x2: los dos ficheros existen y tienen bytes',
-                  len(reales) == 2 and all(os.path.exists(s) and
-                                           os.path.getsize(s) > 1000
-                                           for s in reales), reales)
+    # Retired in 1.0.16: delphi_desktop no longer runs the node locally (the
+    # desktop is the one behind a PAServer profile, Linux or Windows), so two
+    # captures at once need a live target. The per-profile lock that names
+    # each capture by its profile is the same code round 30 exercises.
+    skip('G escritorio x2', 'delphi_desktop local retirado en 1.0.16: el '
+         'escritorio va por perfil PAServer y no hay destino en la bateria')
 
     # ---------------------------------------------------------------- H ----
     # A build while the exe of that same project is running. GBuildLock

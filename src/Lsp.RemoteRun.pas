@@ -59,6 +59,11 @@ function BundledNodePath(const APlataforma: string): string; overload;
   'desplegado' o 'actualizado'. Devuelve '' si bien, o el motivo. }
 function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
 
+{ La plataforma del perfil (Profile_platform de su .profile): Linux64, Win64...
+  '' si el perfil no existe. Con ella la tool de escritorio sabe que nodo y
+  que teclas espera el destino. }
+function PlataformaDelPerfil(const AProfile: string): string;
+
 { Runs the program DEPLOYED for ADprojPath on the machine of PAServer profile
   AProfile. The remote path is DERIVED here, never taken from the caller:
   <windows user>-<profile>/<Project>/<Project> - the folder delphi_build
@@ -310,6 +315,61 @@ begin
     'exit 0'#10;
 end;
 
+{ Un argumento para la linea de comandos de Windows, con las reglas de
+  CommandLineToArgvW: entre comillas dobles, comilla interior como \", y las
+  barras que preceden a una comilla (o al final) dobladas. }
+function ComillasWin(const AArg: string): string;
+var
+  I, Barras: Integer;
+begin
+  Result := '"';
+  Barras := 0;
+  for I := 1 to Length(AArg) do
+  begin
+    if AArg[I] = '\' then
+      Inc(Barras)
+    else if AArg[I] = '"' then
+    begin
+      Result := Result + StringOfChar('\', Barras * 2 + 1) + '"';
+      Barras := 0;
+    end
+    else
+    begin
+      Result := Result + StringOfChar('\', Barras) + AArg[I];
+      Barras := 0;
+    end;
+  end;
+  Result := Result + StringOfChar('\', Barras * 2) + '"';
+end;
+
+{ El FICHERO DE TRABAJO para un destino Windows: PAServer alli no tiene
+  interprete -flag 5 es un CreateProcess a pelo, un .sh "no es una aplicacion
+  Win32 valida"- y paclient no pasa argumentos (medido 2026-09-22: la orden
+  que PAServer ejecuta lleva el hueco de los argumentos VACIO). Asi que lo
+  que sube con flag 5 es un lanzador nativo (node\McpRunJob.exe, con el
+  nombre run-<job>.exe) y este fichero le dice que hacer. Tres lineas, el
+  lanzador es su lector: binario, fichero de salida, linea de argumentos. }
+function TrabajoDeEjecucion(const AExeLeaf, AArgs, ASalida: string;
+  const ALiteral: string = ''): string;
+var
+  Linea: string;
+begin
+  Linea := '';
+  for var Trozo in TrocearArgs(AArgs) do
+    Linea := Linea + ' ' + ComillasWin(Trozo);
+  if ALiteral <> '' then
+    Linea := Linea + ' ' + ComillasWin(ALiteral);
+  Result := AExeLeaf + #10 + ASalida + #10 + Linea.Trim + #10;
+end;
+
+function BundledRunJobPath: string;
+begin
+  Result := TPath.Combine(TPath.Combine(
+    TPath.GetDirectoryName(ParamStr(0)), 'node'), 'McpRunJob.exe');
+  if not TFile.Exists(Result) then
+    Result := '';
+end;
+
 { La primera linea de la salida es la del ENTORNO grafico (___ENV=<1|0>|<lo
   anadido>), escrita por el guion antes de lanzar el programa. Se separa del
   texto del programa y se traduce a una nota; sin ella (un guion viejo, un
@@ -338,6 +398,16 @@ begin
   if P < 0 then
     Exit;
   Resto := Linea.Substring(P + 1).Trim;
+  // el lanzador Windows dice en que SESION corre: la 0 es la de los servicios
+  // y no tiene escritorio (gemela del "sin DISPLAY")
+  if Resto.StartsWith('win:') then
+  begin
+    if Linea.StartsWith('0') then
+      Result := SN_REMOTERUN_ENV_WIN0
+    else
+      Result := Format(SN_REMOTERUN_ENV_WIN_FMT, [Resto.Substring(4)]);
+    Exit;
+  end;
   if Linea.StartsWith('0') then
     Result := SN_REMOTERUN_ENV_NONE
   else if Resto = '' then
@@ -371,7 +441,8 @@ function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
 var
   ProjName, DeployRel, ARemoteExe, ExeLeaf: string;
   Pc, JobId, TmpDir, GuionFile, OutFile, Ops, Output, Texto, Salida: string;
-  EntornoNota: string;
+  EntornoNota, Lanzador: string;
+  EsWindows: Boolean;
   Rc, Codigo, Espera: Integer;
   Sw: TStopwatch;
   Enc: TEncoding;
@@ -413,18 +484,43 @@ begin
   // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Guard).
   TmpDir := ServerTempDir('remoterun');
   CrearCarpeta(TmpDir);
-  GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.sh');
+  // Un destino Windows no ejecuta guiones: sube el fichero de trabajo y el
+  // lanzador nativo con el nombre del trabajo (ver TrabajoDeEjecucion).
+  EsWindows := PlataformaDelPerfil(AProfile).StartsWith('Win', True);
+  if EsWindows then
+  begin
+    Lanzador := BundledRunJobPath;
+    if Lanzador = '' then
+    begin
+      Result.AddPair('success', TJSONBool.Create(False));
+      Result.AddPair('error', SR_REMOTERUN_NO_RUNJOB);
+      Exit;
+    end;
+    GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.job');
+  end
+  else
+    GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.sh');
   // POSIX script: LF endings and NO BOM - /bin/sh chokes on both.
   Enc := TUTF8Encoding.Create(False);
   try
-    TFile.WriteAllText(GuionFile,
-      GuionDeEjecucion(ExeLeaf, AArgs, JobId + '.out', ALiteral), Enc);
+    if EsWindows then
+      TFile.WriteAllText(GuionFile,
+        TrabajoDeEjecucion(ExeLeaf, AArgs, JobId + '.out', ALiteral), Enc)
+    else
+      TFile.WriteAllText(GuionFile,
+        GuionDeEjecucion(ExeLeaf, AArgs, JobId + '.out', ALiteral), Enc);
   finally
     Enc.Free;
   end;
 
   // flag 5 = PAServer EJECUTA el fichero (con /bin/sh) y no deja la copia.
-  Ops := Format('"--put=%s,%s,5,run-%s.sh"', [GuionFile, DeployRel, JobId]);
+  // En Windows ejecuta el lanzador (un PE), que lee su .job y se va: PAServer
+  // espera a que termine lo que lanza, y paclient con el (medido).
+  if EsWindows then
+    Ops := Format('"--put=%s,%s,0,run-%s.job;%s,%s,5,run-%s.exe"',
+      [GuionFile, DeployRel, JobId, Lanzador, DeployRel, JobId])
+  else
+    Ops := Format('"--put=%s,%s,5,run-%s.sh"', [GuionFile, DeployRel, JobId]);
   Rc := Paclient(Pc, Ops, AProfile, Output);
   TFile.Delete(GuionFile);
   if Rc <> 0 then
@@ -500,6 +596,13 @@ begin
     TFile.Delete(OutFile);
   Ops := Format('"--Remove=%s/%s.out"', [DeployRel, JobId]);
   Paclient(Pc, Ops, AProfile, Output);
+  // el vigia del lanzador Windows (<job>.wait.exe) vive lo que el programa:
+  // se barren los de trabajos ya terminados; el de una ventana viva se queda
+  if EsWindows then
+  begin
+    Ops := Format('"--Remove=%s/*.wait.exe"', [DeployRel]);
+    Paclient(Pc, Ops, AProfile, Output);
+  end;
 
   Result.AddPair('note', SN_REMOTERUN_NOTE);
 end;

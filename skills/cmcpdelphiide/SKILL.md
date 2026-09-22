@@ -1,6 +1,6 @@
 ---
 name: cmcpdelphiide
-description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb, the Linux desktop via delphi_adb_linux, this server's own Windows desktop via delphi_desktop) and how to move files and logs the right way.
+description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb, the Linux desktop via delphi_desktop, this server's own Windows desktop via delphi_desktop) and how to move files and logs the right way.
 ---
 
 # Delphi IDE Remote MCP - field guide for agents
@@ -140,68 +140,60 @@ on your side.
 - Nothing has to be installed on the target (v0.98): PAServer itself runs
   what this server sends. If the program has not finished when the timeout
   expires it is NOT killed - you get `stillRunning: true` and its partial
-  output; a GUI app stays up, ready to be driven with delphi_adb_linux.
+  output; a GUI app stays up, ready to be driven with delphi_desktop.
 - Only the NATIVE binary that project deployed can run (the launch script
   verifies the file signature). Remember
   `target=Deploy` REWRITES that folder: copy state you need before
   redeploying.
 
-## The Linux desktop (`delphi_adb_linux`) - eyes and hands
+## The desktop of a target (`delphi_desktop`) - eyes and hands
 
-The same idea as adb, for a Linux machine hanging off a PAServer profile.
-**GNOME only today** (Zorin and Fedora measured). No `project` needed: the
+The same idea as adb, for the machine behind a PAServer profile: a Linux
+(**GNOME only today**, Zorin and Fedora measured), a Windows with PAServer,
+or this very server when a PAServer runs in its user session. The machine is
+the `profile` parameter, never a different tool. No `project` needed: the
 node bundled with the server deploys and UPDATES itself on the target on
-first use (a `node.ver` stamp) - nothing is compiled or installed by hand.
+first use (a `node.ver` stamp), the right binary for that system - nothing
+is compiled or installed by hand. (`delphi_adb_linux` is the old name and
+still works as an alias.)
 
 Flow: `screenshot` brings the WHOLE desktop here as a PNG -> LOOK at it and
 measure the pixel -> `tap x= y=` presses exactly there (the node converts
 the screen scale itself; always measure ON the screenshot it returned) ->
-`type text=` writes (with `x`,`y` it presses there first: one trip). It
-types with the DESKTOP'S OWN keymap, so accents, `@`, capitals and
+`type text=` writes (with `x`,`y` it presses there first: one trip). On
+Linux it types with the DESKTOP'S OWN keymap, so accents, `@`, capitals and
 punctuation arrive whatever the layout is, and the echo names the keyboard
 it used; a character that layout has no key for is a refusal, not a silent
-drop. The text is typed, never run: shell metacharacters are just
-characters ->
-`key code=` presses one key (evdev: Escape 1, Tab 15, Enter 28) ->
-`windows` shows every window as thumbnails (Super) to reach a covered one
--> `status` says whether the desktop is reachable and what to ask for.
+drop. On Windows it types Unicode. The text is typed, never run: shell
+metacharacters are just characters ->
+`key code=` presses one key: on a Linux target by evdev code (Escape 1,
+Tab 15, Enter 28), on a Windows target by NAME (escape, enter, tab, super,
+f1..f12) - the tool reads the profile's platform and refuses the other
+kind, because a number on Windows is a different key ->
+`windows` shows every window (Linux: thumbnails via Super; Windows: a list
+with title and rectangle) to reach a covered one -> `status` says whether
+the desktop is reachable and what to ask for. Every answer carries
+`graphicalEnv`: the session the node ran in.
 
 It runs under the SAME workspace switches as remote-run: `AllowRemoteRun`,
 `McpDesktopNode` (or the wildcard `all`) in `RemoteRunProjects`, and the
-profile's host inside `RemoteHosts`. The target needs a graphical session
-with PAServer started INSIDE it and the screen-capture permission granted
-once - a mute screenshot timeout means exactly that permission.
+profile's host inside `RemoteHosts` (the server's own desktop is the
+profile whose host is 127.0.0.1). The target needs a graphical session open
+for the user PAServer runs as. On Linux, PAServer may run as a service: the
+server completes DISPLAY and friends from the session. On Windows, PAServer
+must run INSIDE the user's session (a Windows service lives in session 0,
+which has no desktop) and the session must be unlocked - a locked Windows
+answers "Access denied" to any capture, and the tool says so in `hint`. On
+GNOME the screen-capture permission must have been granted once - a mute
+screenshot timeout means exactly that permission.
 
-## This server's own desktop (`delphi_desktop`) - eyes and hands
+Coordinates are REAL pixels on both systems and the Windows node is
+DPI-aware: measure on the screenshot or on `windows`, and never mix in
+coordinates from a tool that is not DPI-aware (on a 125% display the same
+window sits 250 px away). **When the profile is someone's own machine, its
+screen and mouse are theirs**: whatever they have open is in frame. Do the
+gesture you came for and nothing else.
 
-The same idea pointed at the Windows machine you are already talking to,
-the one with RAD Studio. No PAServer, nothing deployed: the same node,
-run locally. Use it for what no other tool reaches - the IDE's own
-dialogs, an installer, a modal that blocks a build, a Windows build of
-the app running there.
-
-Flow: `screenshot` brings the whole desktop back as a PNG -> LOOK at it,
-measure the pixel -> `tap x= y=` -> `type text=` (Unicode, so accents
-arrive whatever the keyboard layout is; with `x`,`y` it clicks first) ->
-`key code=` presses one key **by NAME** (escape, enter, tab, super,
-f1..f12 - a number is refused, because those codes are not the Linux
-ones) -> `windows` lists the visible windows with title and rectangle,
-which is usually the fastest way to find where to click. Every answer
-but `status` carries a fresh screenshot.
-
-Coordinates are REAL pixels and the node is DPI-aware, so what it reports
-matches the screenshot exactly: measure there or on `windows`, and never
-mix in coordinates from a tool that is not DPI-aware (on a 125% display
-the same window sits 250 px away).
-
-Two conditions: `AllowDesktopControl=1` in YOUR workspace (absent = off,
-never inherited; read-only credentials are refused outright), and an
-UNLOCKED session - a locked Windows answers "Access denied" to any
-capture, the twin of a Linux with no DISPLAY, and the tool says so.
-**This is the operator's own screen and mouse**: whatever they have open
-is in frame. Do the gesture you came for and nothing else.
-
-## Create and build
 
 - `delphi_create` scaffolds console/VCL/FMX projects, and inside a
   project: `form-vcl`/`form-fmx`, `frame-vcl`/`frame-fmx`, `datamodule`
@@ -258,7 +250,7 @@ re-running it is safe and incremental: `already up to date` is success) ->
 `delphi_build platform=Linux64` -> `delphi_package` -> `delphi_fetch`
 (`download` link, sha256) to run the ELF on YOUR machine - or run it ON
 the target with `command=remote-run` and drive its window with
-`delphi_adb_linux`.
+`delphi_desktop`.
 
 ## Android (`delphi_adb`) - eyes and hands
 

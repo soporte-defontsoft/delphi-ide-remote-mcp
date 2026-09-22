@@ -12,6 +12,40 @@ the MCP `initialize` response (`serverInfo.version`).
 ran the 1.0.15 field test on two Linux desktops; every item below is what it
 (or the operator) tripped over, fixed at the point where the rule lives.
 
+### Changed - ONE desktop tool, and the machine is a parameter
+`delphi_desktop` now drives the desktop of the machine behind a PAServer
+profile - a Linux, a Windows, or this server itself when a PAServer runs in
+its user session (`windows-local`, 127.0.0.1). Until 1.0.15 there were two
+tools and two permission models for one thing: `delphi_adb_linux` (by
+profile) and a local `delphi_desktop` (the node run in place, under its own
+`AllowDesktopControl` switch). Decision of 2026-09-21: one path, PAServer and
+a profile, the same switches as remote-run (`AllowRemoteRun`, `RemoteHosts`,
+`RemoteRunProjects`). `delphi_adb_linux` stays one release as a deprecated
+alias with the same parameters; `AllowDesktopControl` is gone. Per platform,
+read from the profile: `key` takes an evdev code on Linux and a key NAME on
+Windows (the other kind is refused, not translated), `windows` is thumbnails
+on Linux and a list with rectangles on Windows, and a locked Windows answers
+with a `hint`.
+
+### Added - remote execution on a Windows PAServer (the native launcher)
+PAServer on Windows executes no scripts: `--put` flag 5 is a bare
+`CreateProcess` (a `.sh` is "not a valid Win32 application"), `paclient`
+passes no arguments (the command PAServer runs carries an EMPTY argument
+slot), and PAServer waits for what it launches with `paclient` blocked
+meanwhile - all measured 2026-09-22. So for a Windows profile the server
+sends a three-line job file (`run-<job>.job`: binary, output file,
+arguments) and a tiny native launcher (`node\McpRunJob.exe`, sources in
+`src_run_job/`) named `run-<job>.exe`, which PAServer executes: it writes
+`___ENV=` with the SESSION it runs in (session 0 = a service, no desktop),
+checks the binary is a PE (the ELF check of the script), starts it
+unattended with its output in `<job>.out`, leaves a watcher (a copy of
+itself, `<job>.wait.exe`) that appends `___RC=` when the program ends, and
+returns at once. `remote-run` and every desktop gesture go through it
+unchanged; `graphicalEnv` names the session. Measured against a PAServer in
+the user's session of this server: the Windows node ran, captured the
+desktop and came back with "session 2, with a desktop". Nothing is
+installed on the target: PAServer removes the launcher when it returns.
+
 ### Fixed - `remote-run` with PAServer running as a service
 A PAServer started as a service is born outside the desktop session, so a
 program with a window died at once on the target (GTK, exit 134, "Can't create
