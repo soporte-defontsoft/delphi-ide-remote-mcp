@@ -80,6 +80,26 @@ with the exact call; `kill` takes the same switches as `remote-run` and can
 only reach a job this server started for that project on that machine. A job
 that already ended answers `killed=false`. Measured on Zorin and Windows.
 
+### Fixed - Windows capture: a fallback when the screen says "Access denied"
+The Windows node reads the desktop with one `BitBlt` from the screen DC, and
+on 2026-09-22 that call answered `Access denied` at random with the session
+active and unlocked - one capture refused, the next one fine, nothing on the
+operator's screen to explain it. Every top-level window has its own surface
+in the DWM, so when both `BitBlt` attempts fail the node now composes the
+desktop window by window with `PrintWindow(PW_RENDERFULLCONTENT)` - from
+another process, which is what makes it read the DWM buffer instead of
+degenerating into `WM_PRINT` (a lesson already measured in Galatea in July) -
+bottom to top in Z order over a grey background. What that capture lacks is
+the cursor and the untitled shell windows (the taskbar); what it has is every
+window with its real pixels, covered ones included. The node says so in a
+`RESPALDO:` line and the `hint` about a locked Windows is only given when
+there is NO capture. Measured with the fallback forced (the failure cannot be
+provoked on demand: `MCPDESKTOP_SIN_BITBLT=1` in the node's environment skips
+`BitBlt`): the same 3440x1440 desktop, 258 KB. While there, the `windows`
+list - and the composition, which is built from it - leaves out the windows
+that are "visible" but not on the desktop: minimized ones (their rectangle
+lives at -32000) and DWM-cloaked ones (store apps, other virtual desktops).
+
 ### Fixed - `delphi_build target=Deploy` to a Windows PAServer shipped nothing
 The minimal deployment manifest was only generated for non-Windows
 platforms, so a Win64 deploy through a PAServer profile "succeeded" with an

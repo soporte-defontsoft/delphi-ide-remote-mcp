@@ -34,7 +34,9 @@ type
     FError: string;
     FIzq, FSup, FAncho, FAlto: Integer;   { escritorio virtual, en pixeles }
     FEscala: Double;
+    FRespaldo: string;                    { como se hizo la ultima captura si BitBlt fallo }
     procedure MedirPantalla;
+    function ComponerPorVentanas(ADestino: HDC): Integer;
     function EnviarEntradas(var AEntradas: array of TInput): Boolean;
   public
     constructor Create;
@@ -51,6 +53,9 @@ type
     function Ventanas: TArray<TVentanaWin>;
     property Error: string read FError;
     property Escala: Double read FEscala;
+    { '' = la captura salio por BitBlt del escritorio; si no, el camino de
+      respaldo que se uso y por que. }
+    property Respaldo: string read FRespaldo;
     property Ancho: Integer read FAncho;
     property Alto: Integer read FAlto;
   end;
@@ -67,12 +72,22 @@ implementation
 {$IFDEF MSWINDOWS}
 
 uses
-  System.SysUtils, System.Math, System.Generics.Collections, Mld.Captura;
+  System.SysUtils, System.Math, System.Generics.Collections, Winapi.Dwmapi,
+  Mld.Captura;
 
 const
   { No estan en Winapi.Windows de esta version; valores de la API de Win32. }
   CAPTUREBLT = $40000000;               { incluir ventanas por capas }
   MOUSEEVENTF_VIRTUALDESK = $4000;      { coordenadas del escritorio virtual }
+  PW_RENDERFULLCONTENT = $00000002;     { PrintWindow: el bufer del DWM, no WM_PRINT }
+
+{ No esta en Winapi.Windows de esta version. Pinta UNA ventana desde su
+  superficie del DWM; llamado desde OTRO proceso (este nodo lo es) con
+  PW_RENDERFULLCONTENT trae los pixeles reales aunque la tape otra. Desde el
+  hilo de la propia ventana degenera en WM_PRINT (leccion de Galatea,
+  2026-07-04), pero ese caso aqui no se da. }
+function PrintWindow(hwnd: HWND; hdcBlt: HDC; nFlags: UINT): BOOL; stdcall;
+  external user32 name 'PrintWindow';
 
 type
   TListaVentanas = TList<TVentanaWin>;
@@ -179,6 +194,7 @@ var
 begin
   Result := False;
   FError := '';
+  FRespaldo := '';
   DCPantalla := GetDC(0);
   if DCPantalla = 0 then
   begin
@@ -218,16 +234,32 @@ begin
             rechazado por el controlador de pantalla (medido: "Acceso
             denegado" en una VM por RDP), asi que si falla se reintenta sin
             el: mejor una captura sin menus flotantes que ninguna. }
-          if not BitBlt(DCMemoria, 0, 0, FAncho, FAlto, DCPantalla,
+          { El fallo del DC de pantalla es intermitente y no se provoca a
+            voluntad: con MCPDESKTOP_SIN_BITBLT=1 en el entorno se salta
+            BitBlt y se va derecho al respaldo, para poder medirlo. }
+          if (GetEnvironmentVariable('MCPDESKTOP_SIN_BITBLT') = '1') or
+             not BitBlt(DCMemoria, 0, 0, FAncho, FAlto, DCPantalla,
                FIzq, FSup, SRCCOPY or CAPTUREBLT) then
           begin
             FError := 'con CAPTUREBLT: ' + SysErrorMessage(GetLastError);
-            if not BitBlt(DCMemoria, 0, 0, FAncho, FAlto, DCPantalla,
+            if (GetEnvironmentVariable('MCPDESKTOP_SIN_BITBLT') = '1') or
+               not BitBlt(DCMemoria, 0, 0, FAncho, FAlto, DCPantalla,
                  FIzq, FSup, SRCCOPY) then
             begin
               FError := 'la copia de pantalla fallo (' + FError + '; sin el: ' +
                 SysErrorMessage(GetLastError) + ')';
-              Exit;
+              { RESPALDO: el DC de pantalla niega la copia a ratos (medido
+                2026-09-22 con la sesion activa: "Acceso denegado" en un
+                BitBlt y no en el siguiente). Cada ventana de arriba tiene su
+                propia superficie en el DWM y PrintWindow la lee sin pasar
+                por el DC de pantalla: se compone el escritorio ventana a
+                ventana, de abajo arriba, sobre un fondo gris. Sin cursor ni
+                fondo de pantalla, pero con lo que importa: las ventanas. }
+              GdiFlush;
+              FillChar(Pixeles^, FAncho * FAlto * 4, $40);
+              if ComponerPorVentanas(DCMemoria) = 0 then
+                Exit;
+              FRespaldo := 'PrintWindow ventana a ventana, porque ' + FError;
             end;
             FError := '';
           end;
@@ -247,6 +279,62 @@ begin
     end;
   finally
     ReleaseDC(0, DCPantalla);
+  end;
+end;
+
+{ Pinta en ADestino, en coordenadas de la captura, cada ventana visible del
+  escritorio desde su superficie del DWM (PrintWindow), de abajo arriba en
+  orden Z, como las compone el propio escritorio. Devuelve cuantas entraron.
+  PrintWindow pinta en el origen del DC que le das, asi que cada ventana pasa
+  por un bitmap propio y de ahi a su sitio con un BitBlt memoria a memoria,
+  que no tiene nada que negar. }
+function TEscritorioWin.ComponerPorVentanas(ADestino: HDC): Integer;
+var
+  Lista: TArray<TVentanaWin>;
+  Motivo: string;
+  I: Integer;
+  DCV: HDC;
+  Info: TBitmapInfo;
+  Bmp, Previo: HBITMAP;
+  Pix: Pointer;
+begin
+  Result := 0;
+  Motivo := FError;          { Ventanas lo limpia y aqui aun hace falta }
+  Lista := Ventanas;
+  FError := Motivo;
+  DCV := CreateCompatibleDC(ADestino);
+  if DCV = 0 then
+    Exit;
+  try
+    for I := High(Lista) downto 0 do
+    begin
+      FillChar(Info, SizeOf(Info), 0);
+      Info.bmiHeader.biSize := SizeOf(TBitmapInfoHeader);
+      Info.bmiHeader.biWidth := Lista[I].Ancho;
+      Info.bmiHeader.biHeight := -Lista[I].Alto;
+      Info.bmiHeader.biPlanes := 1;
+      Info.bmiHeader.biBitCount := 32;
+      Info.bmiHeader.biCompression := BI_RGB;
+      Pix := nil;
+      Bmp := CreateDIBSection(DCV, Info, DIB_RGB_COLORS, Pix, 0, 0);
+      if Bmp = 0 then
+        Continue;
+      try
+        Previo := SelectObject(DCV, Bmp);
+        try
+          if PrintWindow(Lista[I].Handle, DCV, PW_RENDERFULLCONTENT) and
+             BitBlt(ADestino, Lista[I].X, Lista[I].Y, Lista[I].Ancho,
+               Lista[I].Alto, DCV, 0, 0, SRCCOPY) then
+            Inc(Result);
+        finally
+          SelectObject(DCV, Previo);
+        end;
+      finally
+        DeleteObject(Bmp);
+      end;
+    end;
+  finally
+    DeleteDC(DCV);
   end;
 end;
 
@@ -352,6 +440,29 @@ begin
   Result := EnviarEntradas(E);
 end;
 
+{ Una ventana "visible" que en realidad no esta en el escritorio: minimizada
+  (su rectangulo vive en -32000) o ENCAPOTADA por el DWM (las apps de la
+  tienda y las de otro escritorio virtual quedan IsWindowVisible pero no se
+  ven). Al listarlas despistan, y al componer la captura de respaldo pintarian
+  encima de lo que si se ve. Un solo sitio decide que es "estar en el
+  escritorio", para la lista y para la captura. }
+function NoEstaEnElEscritorio(AHandle: HWND): Boolean;
+var
+  Tapada: DWORD;
+begin
+  if IsIconic(AHandle) then
+    Exit(True);
+  Tapada := 0;
+  { Winapi.Dwmapi la carga en diferido: en un Windows sin DWM la llamada
+    fallaria y se sigue como si no estuviera encapotada. }
+  try
+    Result := Succeeded(DwmGetWindowAttribute(AHandle, DWMWA_CLOAKED, @Tapada,
+      SizeOf(Tapada))) and (Tapada <> 0);
+  except
+    Result := False;
+  end;
+end;
+
 function RecogerVentana(AHandle: HWND; ADato: LPARAM): BOOL; stdcall;
 var
   Buf: array[0..511] of Char;
@@ -359,7 +470,7 @@ var
   V: TVentanaWin;
 begin
   Result := True;
-  if not IsWindowVisible(AHandle) then
+  if not IsWindowVisible(AHandle) or NoEstaEnElEscritorio(AHandle) then
     Exit;
   if GetWindowText(AHandle, Buf, Length(Buf)) <= 0 then
     Exit;

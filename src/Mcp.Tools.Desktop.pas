@@ -399,8 +399,11 @@ begin
       Return.AddPair('graphicalEnv', Res.GetValue<string>('graphicalEnv'));
     Return.AddPair('nodeOutput', Salida.Trim);
     { Un Windows con la sesion bloqueada, desconectada o sin escritorio
-      contesta "Acceso denegado" a cualquier captura: se nombra, que despista. }
-    if Salida.Contains('Acceso denegado') or Salida.Contains('Access is denied') then
+      contesta "Acceso denegado" a cualquier captura: se nombra, que despista.
+      Solo cuando NO hubo captura: desde 1.0.16 el nodo tiene un respaldo
+      (PrintWindow) y su linea RESPALDO cita el mismo error con captura hecha. }
+    if (RutaDeCaptura(Salida) = '') and
+       (Salida.Contains('Acceso denegado') or Salida.Contains('Access is denied')) then
       Return.AddPair('hint', SD_DESKTOP_LOCKED);
 
     { La captura vive en la carpeta que el nodo desplego; se trae aqui por el

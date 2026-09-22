@@ -190,7 +190,10 @@ for the user PAServer runs as. On Linux, PAServer may run as a service: the
 server completes DISPLAY and friends from the session. On Windows, PAServer
 must run INSIDE the user's session (a Windows service lives in session 0,
 which has no desktop) and the session must be unlocked - a locked Windows
-answers "Access denied" to any capture, and the tool says so in `hint`. On
+answers "Access denied" to any capture, and the tool says so in `hint`. (An
+unlocked one may refuse the screen copy now and then; the node then composes
+the desktop from the windows themselves and `nodeOutput` carries a
+`RESPALDO:` line: same coordinates, no cursor, no taskbar.) On
 GNOME the screen-capture permission must have been granted once - a mute
 screenshot timeout means exactly that permission.
 

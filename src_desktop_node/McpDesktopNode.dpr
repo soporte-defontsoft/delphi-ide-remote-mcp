@@ -63,7 +63,13 @@ var
   procedure Instantanea;
   begin
     if Escritorio.Capturar(Ruta) then
-      Writeln('CAPTURA=', Ruta)
+    begin
+      Writeln('CAPTURA=', Ruta);
+      { El camino normal (BitBlt del escritorio) fallo y la captura salio por
+        el de respaldo: se dice, porque le faltan el cursor y el fondo. }
+      if Escritorio.Respaldo <> '' then
+        Writeln('  RESPALDO: ', Escritorio.Respaldo);
+    end
     else
       Writeln('  NO pude capturar: ', Escritorio.Error);
   end;
