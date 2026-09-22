@@ -510,6 +510,75 @@ try:
 finally:
     shutil.rmtree(tmpdir4, ignore_errors=True)
 
+# --- session expiry: [Server] SessionTimeoutMinutes ---------------------------
+# 1.0.17: a session idle longer than the timeout is DEAD - 404 with the reason,
+# the same door an id this process never issued already got - and initialize
+# opens a new one. Three seconds here (decimals are accepted for exactly this).
+TTL_PORT = 4319
+tmpdir5 = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'http-ttl')
+shutil.rmtree(tmpdir5, ignore_errors=True)
+os.makedirs(tmpdir5, exist_ok=True)
+try:
+    exe5 = os.path.join(tmpdir5, 'DelphiLspMcp.exe')
+    shutil.copyfile(EXE, exe5)
+    with open(os.path.join(tmpdir5, 'settings.ini'), 'w') as f:
+        f.write('[Server]' + chr(10) + 'Port=%d' % TTL_PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)
+                + 'SessionTimeoutMinutes=0.05' + chr(10) * 2
+                + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
+                + 'Roots=%s' % tmpdir5 + chr(10))
+    env5 = dict(os.environ); env5.pop('DELPHI_MCP_TOKEN', None); env5.pop('DELPHI_MCP_SESSION_TIMEOUT_MINUTES', None)
+    proc5 = subprocess.Popen([exe5, '--http'], env=env5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(3)
+    URL5 = 'http://127.0.0.1:%d/mcp' % TTL_PORT
+    def post5(payload, session=None):
+        hdr = {'Content-Type': 'application/json', 'Accept': 'application/json',
+               'Authorization': 'Bearer ' + TOKEN}
+        if session:
+            hdr['Mcp-Session-Id'] = session
+        req = urllib.request.Request(URL5, json.dumps(payload).encode('utf-8'), hdr)
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.status, r.headers.get('Mcp-Session-Id'), r.read().decode('utf-8', 'replace')
+        except urllib.error.HTTPError as e:
+            return e.code, None, e.read().decode('utf-8', 'replace')
+    try:
+        code, sid5, body = post5(INIT)
+        check('ttl: initialize da sesion', code == 200 and bool(sid5), '%s %s' % (code, body[:120]))
+        WS = {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+              "params": {"name": "delphi_workspace", "arguments": {}}}
+        code, _, body = post5(WS, sid5)
+        try:
+            srv = json.loads(json.loads(body)['result']['content'][0]['text'])['server']
+        except Exception:
+            srv = {}
+        check('ttl: delphi_workspace publica sessions y sessionTimeoutMinutes',
+              srv.get('sessions', 0) >= 1 and abs(float(srv.get('sessionTimeoutMinutes', -1)) - 0.05) < 1e-6,
+              json.dumps(srv)[:200])
+        time.sleep(1.5)
+        code, _, body = post5({"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}, sid5)
+        check('ttl: cada peticion la toca (1,5 s despues sigue viva)', code == 200 and 'delphi_build' in body,
+              '%s %s' % (code, body[:120]))
+        time.sleep(4)
+        code, _, body = post5({"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {}}, sid5)
+        check('ttl: 4 s sin usarla -> 404 "Session expired" con el plazo',
+              code == 404 and 'Session expired' in body and '0.05' in body, '%s %s' % (code, body[:200]))
+        code, sid5b, body = post5(INIT, sid5)
+        check('ttl: initialize con la sesion caducada abre otra nueva',
+              code == 200 and bool(sid5b) and sid5b != sid5, '%s %s' % (code, body[:120]))
+        code, _, body = post5({"jsonrpc": "2.0", "id": 6, "method": "tools/list", "params": {}}, sid5b)
+        check('ttl: la nueva sirve', code == 200 and 'delphi_build' in body, '%s %s' % (code, body[:120]))
+        # una sesion sin clientInfo tambien se registra (antes: sin nombre, sin sesion, 404)
+        code, sid5c, body = post5({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                                   "params": {"protocolVersion": "2025-06-18", "capabilities": {}}})
+        code2, _, body2 = post5({"jsonrpc": "2.0", "id": 7, "method": "tools/list", "params": {}}, sid5c)
+        check('ttl: initialize SIN clientInfo tambien registra la sesion', code == 200 and code2 == 200,
+              '%s %s %s' % (code, code2, body2[:120]))
+    finally:
+        proc5.kill()
+        proc5.wait()
+finally:
+    shutil.rmtree(tmpdir5, ignore_errors=True)
+
 print()
 print('== http battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

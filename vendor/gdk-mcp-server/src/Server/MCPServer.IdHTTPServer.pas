@@ -11,7 +11,6 @@ uses
   System.StrUtils,
   System.RegularExpressions, // [local change] Mcp-Session-Id on SSE initialize
   System.Classes,
-  System.SyncObjs, // [local change] session registry lock
   System.JSON,
   System.Rtti,
   System.IOUtils,
@@ -124,7 +123,8 @@ implementation
 uses
   MCPServer.Resource.Server,
   MCPServer.CoreManager,
-  Lsp.Guard, // [local change] per-session agent identity
+  Lsp.Guard, // [local change] per-session agent identity and the session registry
+  Lsp.Texts, // [local change] the 404 texts of a dead session
   MCPServer.Logger;
 
 // [local change] Issued session ids. The upstream server echoes whatever
@@ -133,13 +133,10 @@ uses
 // never told (field report 2026-08-25: a garbage id was accepted). Auth is
 // the Bearer token, so this was never a security hole - but the streamable
 // HTTP contract says an unknown session must answer 404 so the client
-// re-initializes. Bounded ring: the last SESSION_KEEP ids of this process.
-const
-  SESSION_KEEP = 64;
-
-var
-  GSessLock: TCriticalSection;
-  GSessions: TStringList;
+// re-initializes. Since 1.0.17 the registry lives in Lsp.Guard, the SAME one
+// that holds the session's identity (this unit kept a second ring of ids
+// until then: two writers for one thing), and a session also EXPIRES there
+// after SessionTimeoutMinutes idle.
 
 // [local change] Bind the handshake's clientInfo.name to the session id the
 // server just issued, so later calls on that session carry an identity the
@@ -147,54 +144,39 @@ var
 procedure BindInitializeIdentity(const ARequestBody, ANewId: string);
 var
   V, Root, Params, CInfo, NameV: TJSONValue;
+  Nombre: string;
 begin
   if (ANewId = '') then Exit;
+  Nombre := '';
   V := nil;
   try
     try
       V := TJSONObject.ParseJSONValue(ARequestBody);
-      if not (V is TJSONObject) then Exit;
-      Root := V;
-      Params := (Root as TJSONObject).GetValue('params');
-      if not (Params is TJSONObject) then Exit;
-      CInfo := (Params as TJSONObject).GetValue('clientInfo');
-      if not (CInfo is TJSONObject) then Exit;
-      NameV := (CInfo as TJSONObject).GetValue('name');
-      if Assigned(NameV) then
-        BindSessionIdentity(ANewId, NameV.Value);
+      if V is TJSONObject then
+      begin
+        Root := V;
+        Params := (Root as TJSONObject).GetValue('params');
+        if Params is TJSONObject then
+        begin
+          CInfo := (Params as TJSONObject).GetValue('clientInfo');
+          if CInfo is TJSONObject then
+          begin
+            NameV := (CInfo as TJSONObject).GetValue('name');
+            if Assigned(NameV) then
+              Nombre := NameV.Value;
+          end;
+        end;
+      end;
     except
       // a malformed handshake just means no identity; never fatal
     end;
   finally
     V.Free;
   end;
-end;
-
-procedure RememberSession(const AId: string);
-begin
-  if AId = '' then
-    Exit;
-  GSessLock.Enter;
-  try
-    if GSessions.IndexOf(AId) < 0 then
-    begin
-      GSessions.Add(AId);
-      while GSessions.Count > SESSION_KEEP do
-        GSessions.Delete(0);
-    end;
-  finally
-    GSessLock.Leave;
-  end;
-end;
-
-function KnownSession(const AId: string): Boolean;
-begin
-  GSessLock.Enter;
-  try
-    Result := GSessions.IndexOf(AId) >= 0;
-  finally
-    GSessLock.Leave;
-  end;
+  // the session is registered with or without a name: a client that sends
+  // no clientInfo still owns a live session, and only a registered one
+  // survives the 404 gate below
+  BindSessionIdentity(ANewId, Nombre);
 end;
 
 const
@@ -539,6 +521,8 @@ var
   JSONRequest: TJSONValue;
   RequestBody: string;
   SessionID: string;
+  Estado: TSessionState; // [local change]
+  Motivo: string;        // [local change]
 begin
   RequestBody := '';
   if Assigned(RequestInfo.PostStream) and (RequestInfo.PostStream.Size > 0) then
@@ -554,21 +538,29 @@ begin
   if SessionID <> '' then
     TLogger.Info('Session ID from header: ' + SessionID);
   // [local change] an id this process never issued is a DEAD session (most
-  // often: the client persisted it and the server was restarted). Say so
-  // with 404, the answer the streamable-HTTP contract defines, so the
-  // client re-initializes instead of working against a ghost. An
-  // initialize request carrying a stale id is welcome: it is the fix.
-  if (SessionID <> '') and not KnownSession(SessionID) and
-     (Pos('"initialize"', RequestBody) = 0) then
+  // often: the client persisted it and the server was restarted), and so is
+  // one that sat idle longer than SessionTimeoutMinutes. Say so with 404,
+  // the answer the streamable-HTTP contract defines, so the client
+  // re-initializes instead of working against a ghost. An initialize
+  // request carrying a stale id is welcome: it is the fix.
+  if (SessionID <> '') and (Pos('"initialize"', RequestBody) = 0) then
   begin
-    ResponseInfo.ResponseNo := 404;
-    ResponseInfo.ContentType := 'application/json';
-    ResponseInfo.ContentText :=
-      '{"jsonrpc":"2.0","error":{"code":-32001,"message":"Session not found: ' +
-      'this server never issued that Mcp-Session-Id (it was probably ' +
-      'restarted). Send initialize again and use the new session id."}}';
-    TLogger.Info('Refused unknown session id: ' + SessionID);
-    Exit;
+    Estado := SessionState(SessionID);
+    if Estado <> ssAlive then
+    begin
+      if Estado = ssExpired then
+        Motivo := Format(SR_SESSION_EXPIRED_FMT,
+          [FormatFloat('0.##', SessionTimeoutMinutes, TFormatSettings.Invariant)])
+      else
+        Motivo := SR_SESSION_UNKNOWN;
+      ResponseInfo.ResponseNo := 404;
+      ResponseInfo.ContentType := 'application/json';
+      ResponseInfo.ContentText :=
+        '{"jsonrpc":"2.0","error":{"code":-32001,"message":"' +
+        Motivo.Replace('\', '\\').Replace('"', '\"') + '"}}';
+      TLogger.Info('Refused dead session id: ' + SessionID);
+      Exit;
+    end;
   end;
 
   AcceptHeader := RequestInfo.RawHeaders.Values['Accept'];
@@ -735,14 +727,16 @@ begin
   // [local change] initialize over SSE must ALSO announce the session in the
   // Mcp-Session-Id header (the JSON path already did): a client strict with
   // the streamable-HTTP spec never reads result.sessionId (field 2026-08-23).
-  if (SessionID = '') and (Pos('"sessionId"', JSONResponse) > 0) then
+  // [local change] ...and it announces the NEW id even when a stale one came
+  // in the header: a client re-initializing after a 404 used to get the old
+  // id echoed back and the new one never registered (found by the battery).
+  if Pos('"sessionId"', JSONResponse) > 0 then
   begin
     var M := TRegEx.Match(JSONResponse, '"sessionId"\s*:\s*"([^"]+)"');
     if M.Success then
     begin
       ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := M.Groups[1].Value;
-      RememberSession(M.Groups[1].Value); // [local change]
-      BindInitializeIdentity(RequestBody, M.Groups[1].Value); // [local change]
+      BindInitializeIdentity(RequestBody, M.Groups[1].Value); // [local change] registers the session too
     end;
   end;
 
@@ -789,7 +783,9 @@ begin
   ResponseInfo.ContentType := 'application/json';
   ResponseInfo.CustomHeaders.Values['Connection'] := 'keep-alive';
 
-  if (SessionID = '') and (Pos('"sessionId"', ResponseBody) > 0) then
+  // [local change] an initialize announces the NEW id even when a stale one
+  // came in the header (see the SSE twin above)
+  if Pos('"sessionId"', ResponseBody) > 0 then
   begin
     ResponseJSON := TJSONObject.ParseJSONValue(ResponseBody) as TJSONObject;
     try
@@ -800,8 +796,7 @@ begin
         if Assigned(SessionValue) then
         begin
           ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionValue.Value;
-          RememberSession(SessionValue.Value); // [local change]
-          BindInitializeIdentity(RequestBody, SessionValue.Value); // [local change]
+          BindInitializeIdentity(RequestBody, SessionValue.Value); // [local change] registers the session too
         end;
       end;
     finally
@@ -819,12 +814,5 @@ begin
 end;
 
 
-initialization
-  GSessLock := TCriticalSection.Create;  // [local change]
-  GSessions := TStringList.Create;
-
-finalization
-  GSessions.Free;
-  GSessLock.Free;
 
 end.

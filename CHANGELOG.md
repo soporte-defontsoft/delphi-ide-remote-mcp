@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Added - HTTP sessions expire: `[Server] SessionTimeoutMinutes`
+A session was forever: bound at `initialize`, it stayed known (and its
+identity with it) until the process died. Now every request that carries an
+`Mcp-Session-Id` touches it, and a session idle longer than
+`SessionTimeoutMinutes` (default 720; 0 = never; decimals accepted) is dead:
+the next request on it answers 404 with the reason - the same answer an id
+this process never issued already got - and the client re-initializes, as the
+streamable-HTTP contract says. Generous by default on purpose: every
+re-initialize costs an agent a whole `tools/list`. While there, the two
+registries of the same thing became one: the HTTP layer kept its own ring of
+known ids next to the identity map in `Lsp.Guard` (two writers, one fact);
+the registry now lives in `Lsp.Guard` alone, and a session is registered
+with or without a `clientInfo.name`. Found by the new battery on the way: an
+`initialize` that still carried the dead session's header answered 200 with
+the OLD id echoed and the new one unregistered, so every call after it was a
+404 - an `initialize` now announces and registers the new id whatever came
+in the header. `delphi_workspace` reports the live
+`sessions` and `sessionTimeoutMinutes` in force.
+
 ## [1.0.16-beta] - 2026-09-22
 
 **A second day of field use, all measured on the machines.** An external agent

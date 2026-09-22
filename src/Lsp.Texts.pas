@@ -470,6 +470,15 @@ const
     reemplazo hecho por fuera de la tool. El fragmento no relaja la regla:
     "atline" es OBLIGATORIO y el fragmento tiene que aparecer UNA sola vez
     en esa linea. Un solo texto para las tres tools que lo aceptan. }
+  { La puerta HTTP: una sesion que este proceso no emitio, o que caduco por
+    inactividad. 404 con motivo, para que el cliente vuelva a hacer
+    initialize en vez de trabajar contra un fantasma. }
+  SR_SESSION_UNKNOWN =
+    'Session not found: this server never issued that Mcp-Session-Id (it was ' +
+    'probably restarted). Send initialize again and use the new session id.';
+  SR_SESSION_EXPIRED_FMT =
+    'Session expired: no request on it for more than %s minutes ([Server] ' +
+    'SessionTimeoutMinutes). Send initialize again and use the new session id.';
   SN_SERVER_LOCALSYSTEM =
     'This server runs as LocalSystem. RAD Studio keeps its Library Path, ' +
     'registered packages, SDKs and PAServer profiles in the HKCU of the user ' +

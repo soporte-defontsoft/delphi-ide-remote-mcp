@@ -1131,6 +1131,10 @@ begin
   // Cuantos parametros vigila el suelo de la jaula en la puerta. Un cero
   // aqui es un suelo muerto, y siendo redundante nadie mas lo notaria.
   Srv.AddPair('jailedParams', TJSONNumber.Create(ServerPathParamCount));
+  // Sesiones HTTP vivas y cuando caducan: lo primero que mira un operador
+  // cuando un agente dice que "le han cerrado la sesion". En stdio, 0.
+  Srv.AddPair('sessions', TJSONNumber.Create(LiveSessionCount));
+  Srv.AddPair('sessionTimeoutMinutes', TJSONNumber.Create(SessionTimeoutMinutes));
   // Mail waiting in NAMED agent boxes. It lives here, in the orientation
   // call, and nowhere else: it is server state, not a message for whoever is
   // asking. Announced at the end of EVERY tool answer it was 90 bytes of

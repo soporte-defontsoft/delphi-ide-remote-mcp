@@ -383,6 +383,7 @@ section is completely inert.
 [Server]
 Port=3000                               ; HTTP port for --http and the tray (-gui)
 MessagesRetentionDays=30                ; mailbox housekeeping (plumbing, not permission)
+SessionTimeoutMinutes=720               ; idle HTTP sessions expire after this (0 = never)
 
 ; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
 ; workspaces' roots are not even readable. Overlap is allowed and never
@@ -520,6 +521,12 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   than N days (default 30; 0 = keep forever) is purged, and stale empty mailboxes removed,
   on each mailbox use. Server plumbing, not a permission: that is why it lives under
   `[Server]` and not in a workspace.
+- **`[Server] SessionTimeoutMinutes`** (or `DELPHI_MCP_SESSION_TIMEOUT_MINUTES`): an HTTP
+  session that sits idle longer than this (default 720 minutes; 0 = never) expires, and the
+  next request on it answers 404 with the reason so the client re-initializes - the
+  streamable-HTTP contract, and the same answer an id this process never issued gets
+  (a server restart). Generous on purpose: every re-initialize costs an agent a whole
+  `tools/list`. `delphi_workspace` reports the live `sessions` and the timeout in force.
 - **`[Log]`** (tray mode): the live log window keeps at most `LinesPerFile` lines in memory —
   on reaching the cap the block is saved to `logs\yyyymmdd-hhnnss.log` next to the exe and the
   window restarts at zero; rotation keeps the newest `MaxFiles` files. A controlled exit

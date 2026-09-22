@@ -297,6 +297,26 @@ procedure ClearThreadIdentity;
 function CurrentAgent: string;               // '' = unknown
 function CurrentAgentOr(const ADefault: string): string;
 
+{ El REGISTRO de sesiones HTTP - uno solo, el mismo que guarda la identidad
+  (hasta 1.0.16 el servidor HTTP llevaba un anillo aparte de ids conocidos:
+  dos escritores para la misma cosa). Una sesion nace en initialize
+  (BindSessionIdentity, con nombre o sin el), se toca en cada peticion que
+  la usa y CADUCA tras SessionTimeoutMinutes de inactividad: [Server]
+  SessionTimeoutMinutes en settings.ini o DELPHI_MCP_SESSION_TIMEOUT_MINUTES
+  (720 por defecto, 0 = nunca). La puerta HTTP contesta 404 a una sesion
+  desconocida o caducada - lo que manda el contrato streamable-HTTP - y el
+  cliente vuelve a hacer initialize. Un initialize con un id viejo siempre
+  pasa: es el arreglo, no el problema. }
+type
+  TSessionState = (ssUnknown, ssExpired, ssAlive);
+  TSesion = record
+    Id, Nombre: string;
+    UltimoUso: TDateTime;
+  end;
+function SessionState(const ASessionId: string): TSessionState; // viva = la toca
+function SessionTimeoutMinutes: Double;                         // 0 = nunca caduca
+function LiveSessionCount: Integer;                             // purga las caducadas
+
 { Dead copies are not a scratchpad. The recoverable trash, and the IDE's own
   __history/__recovery, hold the LAST GOOD version of somebody's work - the
   whole reason every write here is safe. Writing into them destroys exactly
@@ -512,7 +532,8 @@ var
   GSecLoaded: Boolean = False;
   GAuthToken: string;
   GIdentLock: TCriticalSection;
-  GSessionNames: TStringList; // sessionId=name, bound at initialize
+  GSesiones: TList<TSesion>;  // sesiones HTTP: id, nombre atado en initialize, ultimo uso
+  GSessionTimeoutMin: Double = -1; // -1 = sin leer todavia
 
   GReadOnlyToken: string;
   GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
@@ -1073,35 +1094,159 @@ begin
     Result := Copy(Result, 1, 40);
 end;
 
+const
+  SESSION_TIMEOUT_DEFAULT_MIN = 720; // 12 h de inactividad
+  MINUTOS_POR_DIA = 1440;
+  SESIONES_MAX = 256;
+
+{ Bajo GIdentLock. -1 = no esta. }
+function IndiceDeSesion(const AId: string): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to GSesiones.Count - 1 do
+    if GSesiones[I].Id = AId then
+      Exit(I);
+  Result := -1;
+end;
+
+function SesionCaducada(const S: TSesion; ATopeMin: Double): Boolean;
+begin
+  Result := (ATopeMin > 0) and ((Now - S.UltimoUso) * MINUTOS_POR_DIA > ATopeMin);
+end;
+
+{ Bajo GIdentLock. }
+procedure PurgaSesionesCaducadas(ATopeMin: Double);
+var
+  I: Integer;
+begin
+  for I := GSesiones.Count - 1 downto 0 do
+    if SesionCaducada(GSesiones[I], ATopeMin) then
+      GSesiones.Delete(I);
+end;
+
+function SessionTimeoutMinutes: Double;
+var
+  S, IniPath: string;
+  Ini: TIniFile;
+begin
+  if GSessionTimeoutMin >= 0 then
+    Exit(GSessionTimeoutMin);
+  S := GetEnvironmentVariable('DELPHI_MCP_SESSION_TIMEOUT_MINUTES').Trim;
+  if S = '' then
+  begin
+    IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+    if TFile.Exists(IniPath) then
+    begin
+      Ini := TIniFile.Create(IniPath);
+      try
+        S := Ini.ReadString('Server', 'SessionTimeoutMinutes', '').Trim;
+      finally
+        Ini.Free;
+      end;
+    end;
+  end;
+  { Decimales admitidos (0.05 = tres segundos): asi una bateria mide la
+    caducidad sin esperar minutos. Negativo o ilegible = el defecto. }
+  Result := StrToFloatDef(S.Replace(',', '.'), SESSION_TIMEOUT_DEFAULT_MIN,
+    TFormatSettings.Invariant);
+  if Result < 0 then
+    Result := SESSION_TIMEOUT_DEFAULT_MIN;
+  GSessionTimeoutMin := Result;
+end;
+
 procedure BindSessionIdentity(const ASessionId, AName: string);
 var
-  Clean: string;
+  Clean, Id: string;
+  I: Integer;
+  S: TSesion;
 begin
-  if ASessionId.Trim = '' then
+  Id := ASessionId.Trim;
+  if Id = '' then
     Exit;
   Clean := SanitizeAgent(AName);
-  if Clean = '' then
-    Exit;
   GIdentLock.Enter;
   try
-    GSessionNames.Values[ASessionId.Trim] := Clean;
-    while GSessionNames.Count > 256 do
-      GSessionNames.Delete(0);
+    I := IndiceDeSesion(Id);
+    if I >= 0 then
+    begin
+      S := GSesiones[I];
+      if Clean <> '' then
+        S.Nombre := Clean;
+      S.UltimoUso := Now;
+      GSesiones[I] := S;
+    end
+    else
+    begin
+      S.Id := Id;
+      S.Nombre := Clean;
+      S.UltimoUso := Now;
+      GSesiones.Add(S);
+      while GSesiones.Count > SESIONES_MAX do
+        GSesiones.Delete(0);
+    end;
+  finally
+    GIdentLock.Leave;
+  end;
+end;
+
+function SessionState(const ASessionId: string): TSessionState;
+var
+  Id: string;
+  I: Integer;
+  S: TSesion;
+  Tope: Double;
+begin
+  Id := ASessionId.Trim;
+  if Id = '' then
+    Exit(ssUnknown);
+  Tope := SessionTimeoutMinutes;
+  GIdentLock.Enter;
+  try
+    I := IndiceDeSesion(Id);
+    if I < 0 then
+      Result := ssUnknown
+    else if SesionCaducada(GSesiones[I], Tope) then
+    begin
+      GSesiones.Delete(I);
+      Result := ssExpired;
+    end
+    else
+    begin
+      S := GSesiones[I];
+      S.UltimoUso := Now;
+      GSesiones[I] := S;
+      Result := ssAlive;
+    end;
+    PurgaSesionesCaducadas(Tope);
+  finally
+    GIdentLock.Leave;
+  end;
+end;
+
+function LiveSessionCount: Integer;
+begin
+  GIdentLock.Enter;
+  try
+    PurgaSesionesCaducadas(SessionTimeoutMinutes);
+    Result := GSesiones.Count;
   finally
     GIdentLock.Leave;
   end;
 end;
 
 procedure SetThreadIdentityBySession(const ASessionId: string);
+var
+  I: Integer;
 begin
+  TCurrentAgent := '';
   if ASessionId.Trim = '' then
-  begin
-    TCurrentAgent := '';
     Exit;
-  end;
   GIdentLock.Enter;
   try
-    TCurrentAgent := GSessionNames.Values[ASessionId.Trim];
+    I := IndiceDeSesion(ASessionId.Trim);
+    if I >= 0 then
+      TCurrentAgent := GSesiones[I].Nombre;
   finally
     GIdentLock.Leave;
   end;
@@ -3215,11 +3360,11 @@ end;
 
 initialization
   GIdentLock := TCriticalSection.Create;
-  GSessionNames := TStringList.Create;
+  GSesiones := TList<TSesion>.Create;
 
 finalization
 
-  GSessionNames.Free;
+  GSesiones.Free;
   GIdentLock.Free;
 
 end.
