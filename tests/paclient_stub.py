@@ -4,14 +4,21 @@
 Traduce --put / --get / --Remove a copias sobre una carpeta 'scratch' local
 apuntada por MCP_STUB_SCRATCH. Ignora el ProfileName.
 
-Los FLAGS del --put SI cuentan, porque son el mecanismo de ejecucion desde que
-se retiro el runner (19-sep-2026): PAServer ejecuta el fichero cuando va con
-flag 5 (con /bin/sh) o con flag 3 (el binario directamente). El stub lo imita
-corriendo el guion con `bash`, que en Windows llega con git -- asi la bateria
-prueba EL GUION DE VERDAD (su comprobacion de binario nativo, su redireccion,
-su centinela ___RC=), no una reimplementacion nuestra de lo que creemos que
-hace. Sin bash no se puede fingir con honestidad, asi que se dice y se falla:
-un test que se salta en silencio es un agujero.
+Los FLAGS del --put SI cuentan, porque son el mecanismo de ejecucion: PAServer
+ARRANCA el fichero subido, sin argumentos, y espera a que termine (medido
+2026-09-22 en Zorin, Fedora y Windows: flag 3 arranca un ELF en Linux, flag 5
+un PE en Windows). Desde 1.0.16 lo que sube el servidor es siempre el
+LANZADOR nativo (src_run_job, McpRunJob) como run-<trabajo>, junto a un
+fichero run-<trabajo>.job con el binario, la salida y un argumento por
+linea. No hay shell en ningun sitio.
+
+El stub lo imita ARRANCANDO EL LANZADOR DE VERDAD: con flag 5 corre el PE tal
+cual; con flag 3 le llega el ELF de Linux, que aqui no puede correr, asi que
+ejecuta en su lugar el gemelo Win64 (MCP_STUB_RUNJOB_EXE: la misma fuente
+compilada para Windows) con el mismo nombre run-<trabajo>.exe, para que el
+lanzador encuentre su .job. Asi la bateria prueba el lanzador real (su
+comprobacion de binario nativo, su ___ENV=, su argv, su centinela ___RC=) y
+no una reimplementacion nuestra de lo que creemos que hace.
 """
 import os, shutil, subprocess, sys, time
 
@@ -22,43 +29,25 @@ def rel(p):
     return os.path.join(SCRATCH, p.replace('/', os.sep))
 
 
-def bash():
-    """El bash de Git para Windows, o el del PATH."""
-    cand = [shutil.which('bash')]
-    cand += [os.path.join(os.environ.get(v, ''), 'Git', 'bin', 'bash.exe')
-             for v in ('ProgramFiles', 'ProgramW6432', 'LOCALAPPDATA')]
-    for c in cand:
-        if c and os.path.isfile(c):
-            return c
-    return None
-
-
-def ejecutar(guion):
-    """Lo que hace PAServer con un flag 5: correr el fichero.
+def ejecutar(lanzador):
+    """Lo que hace PAServer con un flag 3/5: arrancar el fichero y esperar.
 
     OJO con una trampa del banco de pruebas, que costo un rato: el servidor
     lanza paclient dentro de un Job Object con KILL_ON_JOB_CLOSE, asi que TODO
     lo que cuelgue de esta llamada muere cuando la llamada termina -- incluido
-    el trabajo que el guion deja en segundo plano. En la realidad eso no pasa,
-    porque el trabajo corre en la OTRA maquina, fuera de cualquier job; aqui
-    si. Por eso el stub espera a que el trabajo remate su centinela antes de
-    devolver el control: es la unica forma de que el proceso siga vivo el
-    tiempo suficiente. El runner viejo no sufria esto porque era un proceso
-    aparte que arrancaba la propia bateria.
+    el programa y el vigia que el lanzador deja en segundo plano. En la
+    realidad eso no pasa, porque el trabajo corre en la OTRA maquina, fuera de
+    cualquier job; aqui si. Por eso el stub espera a que el trabajo remate su
+    centinela antes de devolver el control: es la unica forma de que el
+    proceso siga vivo el tiempo suficiente.
 
     La espera tiene tope (MCP_STUB_ESPERA, 20 s por defecto): agotarla deja el
     fichero a medias, que es justo lo que necesita el caso "sigue corriendo".
     """
-    sh = bash()
-    if not sh:
-        sys.stderr.write(
-            'stub: no encuentro bash para ejecutar el guion (flag 5). La '
-            'bateria de remote-run necesita el bash que viene con git.\n')
-        sys.exit(2)
-    d = os.path.dirname(guion)
+    d = os.path.dirname(lanzador)
     antes = {f: os.path.getmtime(os.path.join(d, f))
              for f in os.listdir(d) if f.endswith('.out')}
-    subprocess.run([sh, guion.replace(os.sep, '/')], cwd=d,
+    subprocess.run([lanzador], cwd=d,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                    timeout=120)
     tope = float(os.environ.get('MCP_STUB_ESPERA', '20'))
@@ -90,17 +79,28 @@ for arg in sys.argv[1:]:
             os.makedirs(d, exist_ok=True)
             destino = os.path.join(d, destname)
             shutil.copy(src, destino)
-            if flag == '5':
-                ejecutar(destino)
-                # "the copy does not stay": PAServer no deja el guion
-                try:
-                    os.remove(destino)
-                except OSError:
-                    pass
-            elif flag == '3':
-                subprocess.Popen([destino], cwd=d,
-                                 stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL)
+            if flag in ('3', '5'):
+                # PAServer arranca el fichero. El ELF de Linux (flag 3) no
+                # corre aqui: en su lugar, el gemelo Win64 del lanzador con
+                # el MISMO nombre + .exe, para que encuentre su .job
+                corrido = destino
+                with open(destino, 'rb') as fh:
+                    es_elf = fh.read(4) == b'\x7fELF'
+                if es_elf:
+                    gemelo = os.environ.get('MCP_STUB_RUNJOB_EXE', '')
+                    if not os.path.isfile(gemelo):
+                        sys.stderr.write('stub: MCP_STUB_RUNJOB_EXE no apunta al '
+                                         'lanzador Win64 (McpRunJob.exe)\n')
+                        sys.exit(2)
+                    corrido = destino + '.exe'
+                    shutil.copy(gemelo, corrido)
+                ejecutar(corrido)
+                # PAServer no deja el fichero arrancado
+                for f in {destino, corrido}:
+                    try:
+                        os.remove(f)
+                    except OSError:
+                        pass
     elif arg.startswith('--get='):
         spec = arg[len('--get='):]
         for one in spec.split(';'):

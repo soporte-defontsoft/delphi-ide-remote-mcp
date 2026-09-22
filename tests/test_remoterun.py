@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
 """E2E battery for v0.47.0-beta - delphi_paserver command=remote-run: running
 a program ON THE TARGET through PAServer's file transport (paclient has no
-exec operation) sin NADA instalado alli: PAServer ejecuta el guion (flag 5).
+exec operation) sin NADA instalado alli: PAServer ARRANCA lo que se le sube.
+Desde 1.0.16 eso es el lanzador nativo (src_run_job) y un fichero .job: un
+solo camino para Linux y Windows, sin shell.
 
 PAServer is NOT needed: paclient.exe is replaced by tests/paclient_stub.py
-(DELPHI_MCP_PACLIENT), which copies to a local folder playing the scratch dir.
+(DELPHI_MCP_PACLIENT), which copies to a local folder playing the scratch dir
+and RUNS the real launcher (its Win64 build, the same source as the ELF a
+Linux gets). The server looks the launcher up in node\\ next to its own exe,
+so the battery runs a COPY of the server from its temp folder with node\\
+beside it - the build output stays untouched.
 
 Usage:  python tests/test_remoterun.py [path-to-DelphiLspMcp.exe]
 """
@@ -12,10 +18,17 @@ import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+EXE_ORIG = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'remoterun')
 shutil.rmtree(BASE, ignore_errors=True); os.makedirs(BASE)
+# the server under test: a copy with node\\ (the launchers) beside it
+SERVERDIR = os.path.join(BASE, 'server'); os.makedirs(os.path.join(SERVERDIR, 'node'))
+EXE = os.path.join(SERVERDIR, 'DelphiLspMcp.exe')
+shutil.copy(EXE_ORIG, EXE)
+for f in ('McpRunJob', 'McpRunJob.exe'):
+    shutil.copy(os.path.join(REPO, 'node', f), os.path.join(SERVERDIR, 'node', f))
+RUNJOB_EXE = os.path.join(SERVERDIR, 'node', 'McpRunJob.exe')
 SCRATCH = os.path.join(BASE, 'scratch'); os.makedirs(SCRATCH)
 
 # the deploy folder the server derives: <windows user>-<profile>/<Project>/
@@ -48,6 +61,7 @@ env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = BASE
 env['DELPHI_MCP_PACLIENT'] = STUB
 env['MCP_STUB_SCRATCH'] = SCRATCH
+env['MCP_STUB_RUNJOB_EXE'] = RUNJOB_EXE   # el gemelo Win64 del lanzador que corre el stub
 env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'   # v0.48.1: remote execution is opt-in
 env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'Saluda'  # v0.98: lista vacia = NADA (fail closed)
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -135,11 +149,12 @@ j = json.loads(r) if r.startswith('{') else {}
 check('exitCode del programa (7)', j.get('exitCode') == 7, r[:300])
 check('output capturado', 'hola desde el target' in (j.get('output') or ''), r[:300])
 check('note explica el mecanismo', 'PAServer' in (j.get('note') or ''), r[:200])
-# v1.0.16: el guion completa el entorno grafico que falte y lo DICE. Bajo el
-# bash de git no hay sesion grafica ninguna, asi que la nota es la de 'sin
-# sesion'; y la linea ___ENV= que la trae nunca llega al output del programa.
-check('graphicalEnv: el resultado dice que en el target no hay sesion grafica',
-      'sin sesion grafica' in (j.get('graphicalEnv') or ''), r[:300])
+# v1.0.16: el lanzador cuenta el entorno grafico y el servidor lo traduce. El
+# que corre aqui es el de Windows, que dice en que SESION corre (la 0, de los
+# servicios, no tiene escritorio); y la linea ___ENV= que lo trae nunca llega
+# al output del programa.
+check('graphicalEnv: el resultado dice en que sesion de Windows corrio el programa',
+      'sesion' in (j.get('graphicalEnv') or '').lower(), r[:300])
 check('graphicalEnv: la linea ___ENV= no se cuela en el output', '___ENV' not in (j.get('output') or ''), r[:300])
 # v0.85: two agents firing in the same millisecond used to collide on a
 # timestamp-only jobId; now it carries a GUID fragment
@@ -147,13 +162,13 @@ import re as _re
 check('jobId lleva fragmento GUID (timestamp-only colisionaba)',
       bool(_re.match(r'^\d{8}-\d{9}-[0-9a-f]{8}$', j.get('jobId') or '')),
       j.get('jobId'))
-# 3b) CADA argumento llega blindado al /bin/sh del destino. Iban a pelo en el
-# guion y el filtro de metacaracteres lo ponia quien llama: remote-run si,
-# delphi_adb_linux NO, y un type text="hola; rm -rf ~" ejecutaba la segunda
-# mitad en la maquina destino (medido contra un Fedora el 2026-09-21: un texto
-# con parentesis rompio la sintaxis del guion). Aqui se mide el punto unico:
-# parentesis, asterisco, almohadilla, virgulilla y comilla simple tienen que
-# llegar LITERALES, y las comillas dobles siguen agrupando.
+# 3b) CADA argumento llega al programa TAL CUAL, como argv. Hasta 1.0.15 iban
+# por un /bin/sh y el filtro de metacaracteres lo ponia quien llama (medido
+# contra un Fedora el 2026-09-21: un texto con parentesis rompio la sintaxis
+# del guion). Desde 1.0.16 no hay shell: van del .job al argv del lanzador.
+# Aqui se mide el punto unico: parentesis, asterisco, almohadilla, virgulilla
+# y comilla simple tienen que llegar LITERALES, y las comillas dobles siguen
+# agrupando.
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
                              'exe': PROJNAME + '.exe',
                              'args': '"%s" (a) * #b ~ it\'s "dos palabras"' % SCRIPT.replace(chr(92), '/'),
