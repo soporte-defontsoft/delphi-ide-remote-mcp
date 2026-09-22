@@ -2,28 +2,33 @@ unit Lsp.RemoteRun;
 
 { Remote execution THROUGH PAServer - sin nada instalado en el destino.
   paclient.exe no tiene operacion "ejecuta" (medido 2026-08-24: su superficie
-  es copiar ficheros, firmar y empaquetar Android), pero los FLAGS del --put
-  si ejecutan: flag 5 hace que PAServer corra el fichero con /bin/sh y flag 3
-  lanza un binario directamente. De ahi el mecanismo:
+  es copiar ficheros, firmar y empaquetar Android), pero un flag del --put
+  hace que PAServer ARRANQUE el fichero subido -sin argumentos- y ESPERE a que
+  termine: flag 3 un ELF en Linux, flag 5 un PE en Windows (en Linux el 5 es
+  "/bin/sh fichero"). Medido el 2026-09-22 en Zorin, Fedora y Windows. De ahi
+  el mecanismo, UNO para los dos sistemas:
 
-    servidor: --put  <Proyecto>/run-<id>.sh  con flag 5   (la orden)
-    destino:  PAServer lo ejecuta; el guion lanza el binario DESATENDIDO y
-              deja su salida en <Proyecto>/<id>.out, rematada con ___RC=<n>
+    servidor: --put  <Proyecto>/run-<id>.job  (flag 0: el trabajo, 3 lineas
+              y un ARGUMENTO POR LINEA) y el LANZADOR node\McpRunJob con el
+              nombre run-<id> (flag 3) o run-<id>.exe (flag 5)
+    destino:  PAServer arranca el lanzador; este lee su .job, completa el
+              entorno grafico que falte, comprueba que el binario es nativo,
+              lo lanza DESATENDIDO con la salida en <Proyecto>/<id>.out y
+              deja un vigia que la remata con ___RC=<n>
     servidor: --get  sondea ese fichero hasta ver el centinela o agotar plazo
 
-  Hasta el 19-sep-2026 esto iba por un demonio Python en el destino
-  (runner/mcp-runner.py) con cola de trabajos en ficheros. Se retiro al medir
-  que PAServer solo hace lo mismo y mejor: sin dependencias en el destino
-  (exigia /usr/bin/python3), sin cola de uno en uno -que bloqueaba hasta las
-  capturas mientras corria algo-, sin matar por plazo lo que no termina (una
-  aplicacion con ventana), con la salida PARCIAL legible mientras el proceso
-  vive, y mas rapido: 1,96 s por gesto contra 3,3 s. Y desaparece de raiz una
-  clase de fallo: un fichero de trabajo en un disco sobrevive a quien lo pidio
-  y se ejecuta solo cuando alguien arranca el demonio semanas despues (paso:
-  al reactivarlo corrio trabajos de agosto).
+  Hasta el 2026-09-22 en Linux se subia un guion /bin/sh compuesto AQUI (y el
+  texto de un agente viajaba por un shell: la inyeccion del 21-sep), y en
+  Windows el lanzador: dos escritores, dos lectores, dos ramas. Decision de
+  David: una. Sin shell no hay nada que blindar: los argumentos van del .job
+  al argv del programa tal cual. Hasta el 19-sep-2026 esto iba por un demonio
+  Python en el destino (runner/mcp-runner.py); se retiro al medir que
+  PAServer solo hace lo mismo y mejor: sin dependencias en el destino, sin
+  matar por plazo lo que no termina (una aplicacion con ventana), con la
+  salida PARCIAL legible mientras el proceso vive, y mas rapido.
 
   Lo que puede ejecutarse no cambia: SOLO el binario que ese proyecto
-  desplego, en su carpeta del scratch-dir de PAServer. El guion lo escribe
+  desplego, en su carpeta del scratch-dir de PAServer. El .job lo escribe
   este servidor -del agente solo entran argumentos ya filtrados- y no se
   queda en el destino.
 
@@ -70,8 +75,13 @@ function PlataformaDelPerfil(const AProfile: string): string;
   target=Deploy writes and announces in its deployNote. AExeName, when given,
   picks another file of THAT SAME folder (a helper binary of the deploy) and
   may not contain path separators. Returns the JSON the tool hands back. }
-function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
-  ATimeoutMs: Integer; const ALiteral: string = ''): TJSONObject;
+function RemoteRun(const AProfile, ADprojPath, AExeName: string;
+  const AArgv: TArray<string>; ATimeoutMs: Integer): TJSONObject;
+
+{ Trocea una linea de argumentos como lo haria quien la escribio: por
+  espacios, y con comillas DOBLES para agrupar uno que lleva espacios. Es el
+  UNICO troceador: lo que sale de aqui va al argv del programa tal cual. }
+function TrocearArgs(const AArgs: string): TArray<string>;
 
 { Trae AQUI un fichero que el programa desplegado dejo en SU carpeta del
   target. ARelPath es relativo a esa carpeta ('captura.png'), nunca una ruta
@@ -176,26 +186,6 @@ begin
   Result := '';
 end;
 
-{ El guion que PAServer ejecuta. Lo escribimos NOSOTROS: del agente solo entran
-  los argumentos, y llegan aqui ya filtrados (ShellArgDenied rechaza cualquier
-  metacaracter), dentro de la jaula y de la lista de proyectos con permiso.
-
-  Va DESATENDIDO a proposito (el trabajo en segundo plano, con el HUP
-  ignorado) por una razon medida: si esperase, una aplicacion CON VENTANA
-  -que no termina nunca-
-  dejaria colgado a quien la lanzo, y de paso bloquearia todo lo demas. Asi la
-  llamada vuelve enseguida, el programa queda vivo, y el resultado se recoge
-  del fichero cuando aparezca el centinela ___RC=<codigo>. Mientras no esta,
-  lo que hay en el fichero es la salida PARCIAL: se puede leer el avance de un
-  proceso largo, cosa que el runner nunca dio. }
-{ Un argumento, blindado para /bin/sh: entre comillas SIMPLES el shell no
-  interpreta nada, y la unica que hay que tratar es la propia comilla simple. }
-function ComillasSh(const AArg: string): string;
-begin
-  Result := '''' + AArg.Replace(#13, ' ').Replace(#10, ' ')
-    .Replace('''', '''\''''') + '''';
-end;
-
 { Trocea AArgs como lo haria quien los escribio: por espacios, y con comillas
   DOBLES para agrupar un argumento que lleva espacios ("ruta con espacios"
   uno dos). Las comillas dobles agrupan y se van; nada mas se interpreta. }
@@ -231,141 +221,32 @@ begin
     Result := Result + [Actual];
 end;
 
-function GuionDeEjecucion(const AExeLeaf, AArgs, ASalida: string;
-  const ALiteral: string = ''): string;
+{ EL FICHERO DE TRABAJO, el mismo para Linux y Windows: el binario, el fichero
+  de salida y despues UN ARGUMENTO POR LINEA, tal cual - sin shell no hay
+  nada que escapar. Su unico lector es el lanzador (src_run_job). Un salto de
+  linea dentro de un argumento seria una linea mas, asi que se cambia por un
+  espacio: es el unico caracter que el formato no puede llevar. }
+function TrabajoDeEjecucion(const AExeLeaf, ASalida: string;
+  const AArgv: TArray<string>): string;
 var
-  Linea: string;
+  A: string;
 begin
-  Linea := '"$D/' + AExeLeaf + '"';
-  // CADA argumento entre comillas SIMPLES de shell. Iban A PELO dentro del
-  // guion, y este es el unico sitio por donde pasan todos: el filtro de
-  // metacaracteres lo aplicaba quien llama, remote-run SI y delphi_adb_linux
-  // NO, asi que `type text="hola; rm -rf ~"` ejecutaba la segunda mitad en
-  // la maquina destino (medido el 2026-09-21: un texto con parentesis rompio
-  // la sintaxis del guion y enseno como viajaba). Dentro de comillas simples
-  // el shell no interpreta NADA; la unica que hay que tratar es la propia
-  // comilla simple. Y de paso un texto legitimo con ( ) * ? # ~ ' " deja de
-  // romperse o de expandirse. El filtro de quien llama se queda: cinturon.
-  for var Trozo in TrocearArgs(AArgs) do
-    Linea := Linea + ' ' + ComillasSh(Trozo);
-  // ALiteral: UN argumento que viaja TAL CUAL, sin trocear - el texto que
-  // delphi_adb_linux manda teclear, con sus espacios y sus comillas.
-  if ALiteral <> '' then
-    Linea := Linea + ' ' + ComillasSh(ALiteral);
-  Result :=
-    '#!/bin/sh'#10 +
-    'D="$(cd "$(dirname "$0")" && pwd)"'#10 +
-    'O="$D/' + ASalida + '"'#10 +
-    'rm -f "$O"'#10 +
-    'cd "$D" || exit 1'#10 +
-    // SOLO binarios nativos. Lo comprobaba el runner de Python y al retirarlo
-    // el hueco quedo abierto: "exe" deja elegir OTRO fichero de la carpeta
-    // desplegada, y ahi puede haber un .sh o un .py del propio despliegue
-    // (GalateaFMX lleva un GalateaLanzador.sh al lado). Se mira la firma del
-    // fichero, no su extension: 7f454c46 es ELF, los cuatro feedface... son
-    // Mach-O y 4d5a ("MZ") es un PE - que tambien hace falta, porque un
-    // target PAServer puede ser Windows. Un rechazo escribe su ___RC para que
-    // quien sondea no espere en vano.
-    // "no esta" y "no es ejecutable" son fallos DISTINTOS: si dan el mismo
-    // mensaje, quien lo lee no sabe si se equivoco de nombre o de fichero.
-    'if [ ! -f "$D/' + AExeLeaf + '" ]; then'#10 +
-    '  { echo "error: no existe ' + AExeLeaf + ' en la carpeta desplegada ' +
-      'de este proyecto en el target."; echo "___RC=127"; } > "$O"; exit 0'#10 +
-    'fi'#10 +
-    'M=$(head -c 4 "$D/' + AExeLeaf + '" 2>/dev/null | od -An -t x1 | ' +
-      'tr -d " \n")'#10 +
-    'case "$M" in'#10 +
-    '  7f454c46|cffaedfe|cefaedfe|feedface|feedfacf|4d5a*) ;;'#10 +
-    '  *) { echo "RECHAZADO: ' + AExeLeaf + ' no es un ejecutable nativo ' +
-      '(ELF/Mach-O): solo se ejecuta el binario que produjo delphi_build."; ' +
-      'echo "___RC=126"; } > "$O"; exit 0 ;;'#10 +
-    '    esac'#10 +
-    // ENTORNO GRAFICO, solo lo que FALTE. Un PAServer que corre como servicio
-    // (lo normal, David 21-sep-2026) nace fuera de la sesion grafica: sin
-    // DISPLAY una app FMX/GTK muere con exit 134 "Can't create a
-    // GtkStyleContext without a display connection" (medido en Fedora desde el
-    // 19-sep; el nodo de escritorio no lo sufria porque habla por D-Bus).
-    // GalateaFMX lo parcheaba desde el PROYECTO con un lanzador que clavaba
-    // el XAUTHORITY de UNA sesion (.mutter-Xwaylandauth.0OMHV3): ese sufijo
-    // cambia en cada inicio, asi que aqui se busca el mas reciente. Lo que
-    // venga puesto no se toca; lo anadido se cuenta en la primera linea de
-    // la salida (___ENV=) para que el resultado lo DIGA. Nada se instala.
-    'G=""'#10 +
-    'U=$(id -u 2>/dev/null)'#10 +
-    'if [ -z "$XDG_RUNTIME_DIR" ] && [ -n "$U" ] && [ -d "/run/user/$U" ]; ' +
-      'then export XDG_RUNTIME_DIR="/run/user/$U"; G="$G XDG_RUNTIME_DIR"; fi'#10 +
-    'if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && [ -n "$XDG_RUNTIME_DIR" ] && ' +
-      '[ -S "$XDG_RUNTIME_DIR/bus" ]; then ' +
-      'export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"; ' +
-      'G="$G DBUS_SESSION_BUS_ADDRESS"; fi'#10 +
-    'if [ -z "$WAYLAND_DISPLAY" ] && [ -n "$XDG_RUNTIME_DIR" ]; then ' +
-      'for W in "$XDG_RUNTIME_DIR"/wayland-*; do case "$W" in *.lock) ;; ' +
-      '*) if [ -S "$W" ]; then export WAYLAND_DISPLAY="${W##*/}"; ' +
-      'G="$G WAYLAND_DISPLAY"; break; fi ;; esac; done; fi'#10 +
-    'if [ -z "$DISPLAY" ] && [ -S /tmp/.X11-unix/X0 ]; then ' +
-      'export DISPLAY=:0; G="$G DISPLAY"; fi'#10 +
-    'if [ -n "$DISPLAY" ] && [ -z "$XAUTHORITY" ]; then ' +
-      'A=$(ls -t "$XDG_RUNTIME_DIR"/.mutter-Xwaylandauth.* 2>/dev/null | head -n 1); ' +
-      'if [ -z "$A" ] && [ -f "$HOME/.Xauthority" ]; then A="$HOME/.Xauthority"; fi; ' +
-      'if [ -n "$A" ]; then export XAUTHORITY="$A"; G="$G XAUTHORITY"; fi; fi'#10 +
-    'if [ -n "$DISPLAY$WAYLAND_DISPLAY" ]; then S=1; else S=0; fi'#10 +
-    'echo "___ENV=$S|$G" > "$O"'#10 +
-    '{ trap '''''''' HUP; ' + Linea + ' >> "$O" 2>&1; ' +
-      'echo "___RC=$?" >> "$O"; } &'#10 +
-    'exit 0'#10;
+  Result := AExeLeaf + #10 + ASalida + #10;
+  for A in AArgv do
+    Result := Result + A.Replace(#13, ' ').Replace(#10, ' ') + #10;
 end;
 
-{ Un argumento para la linea de comandos de Windows, con las reglas de
-  CommandLineToArgvW: entre comillas dobles, comilla interior como \", y las
-  barras que preceden a una comilla (o al final) dobladas. }
-function ComillasWin(const AArg: string): string;
+{ El lanzador que le toca al destino: el ELF a un Linux, el .exe a un Windows.
+  Viaja en node\ junto a los dos nodos de escritorio. }
+function BundledRunJobPath(const APlataforma: string): string;
 var
-  I, Barras: Integer;
+  Nombre: string;
 begin
-  Result := '"';
-  Barras := 0;
-  for I := 1 to Length(AArg) do
-  begin
-    if AArg[I] = '\' then
-      Inc(Barras)
-    else if AArg[I] = '"' then
-    begin
-      Result := Result + StringOfChar('\', Barras * 2 + 1) + '"';
-      Barras := 0;
-    end
-    else
-    begin
-      Result := Result + StringOfChar('\', Barras) + AArg[I];
-      Barras := 0;
-    end;
-  end;
-  Result := Result + StringOfChar('\', Barras * 2) + '"';
-end;
-
-{ El FICHERO DE TRABAJO para un destino Windows: PAServer alli no tiene
-  interprete -flag 5 es un CreateProcess a pelo, un .sh "no es una aplicacion
-  Win32 valida"- y paclient no pasa argumentos (medido 2026-09-22: la orden
-  que PAServer ejecuta lleva el hueco de los argumentos VACIO). Asi que lo
-  que sube con flag 5 es un lanzador nativo (node\McpRunJob.exe, con el
-  nombre run-<job>.exe) y este fichero le dice que hacer. Tres lineas, el
-  lanzador es su lector: binario, fichero de salida, linea de argumentos. }
-function TrabajoDeEjecucion(const AExeLeaf, AArgs, ASalida: string;
-  const ALiteral: string = ''): string;
-var
-  Linea: string;
-begin
-  Linea := '';
-  for var Trozo in TrocearArgs(AArgs) do
-    Linea := Linea + ' ' + ComillasWin(Trozo);
-  if ALiteral <> '' then
-    Linea := Linea + ' ' + ComillasWin(ALiteral);
-  Result := AExeLeaf + #10 + ASalida + #10 + Linea.Trim + #10;
-end;
-
-function BundledRunJobPath: string;
-begin
+  Nombre := 'McpRunJob';
+  if APlataforma.StartsWith('Win', True) then
+    Nombre := Nombre + '.exe';
   Result := TPath.Combine(TPath.Combine(
-    TPath.GetDirectoryName(ParamStr(0)), 'node'), 'McpRunJob.exe');
+    TPath.GetDirectoryName(ParamStr(0)), 'node'), Nombre);
   if not TFile.Exists(Result) then
     Result := '';
 end;
@@ -436,13 +317,13 @@ begin
   ACodigo := StrToIntDef(Cola.Split([#10, #13])[0].Trim, -1);
 end;
 
-function RemoteRun(const AProfile, ADprojPath, AExeName, AArgs: string;
-  ATimeoutMs: Integer; const ALiteral: string): TJSONObject;
+function RemoteRun(const AProfile, ADprojPath, AExeName: string;
+  const AArgv: TArray<string>; ATimeoutMs: Integer): TJSONObject;
 var
   ProjName, DeployRel, ARemoteExe, ExeLeaf: string;
   Pc, JobId, TmpDir, GuionFile, OutFile, Ops, Output, Texto, Salida: string;
-  EntornoNota, Lanzador: string;
-  EsWindows: Boolean;
+  EntornoNota, Lanzador, Plataforma, RemotoLanzador: string;
+  Flag: Integer;
   Rc, Codigo, Espera: Integer;
   Sw: TStopwatch;
   Enc: TEncoding;
@@ -484,43 +365,39 @@ begin
   // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Guard).
   TmpDir := ServerTempDir('remoterun');
   CrearCarpeta(TmpDir);
-  // Un destino Windows no ejecuta guiones: sube el fichero de trabajo y el
-  // lanzador nativo con el nombre del trabajo (ver TrabajoDeEjecucion).
-  EsWindows := PlataformaDelPerfil(AProfile).StartsWith('Win', True);
-  if EsWindows then
+  // El lanzador del sistema del destino, con el nombre del trabajo: PAServer
+  // arranca un ELF con flag 3 y un PE con flag 5 (y en Windows lo borra al
+  // terminar). Todo lo demas es igual en los dos.
+  Plataforma := PlataformaDelPerfil(AProfile);
+  Lanzador := BundledRunJobPath(Plataforma);
+  if Lanzador = '' then
   begin
-    Lanzador := BundledRunJobPath;
-    if Lanzador = '' then
-    begin
-      Result.AddPair('success', TJSONBool.Create(False));
-      Result.AddPair('error', SR_REMOTERUN_NO_RUNJOB);
-      Exit;
-    end;
-    GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.job');
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('error', Format(SR_REMOTERUN_NO_RUNJOB_FMT,
+      [IfThen(Plataforma.StartsWith('Win', True), 'McpRunJob.exe', 'McpRunJob')]));
+    Exit;
+  end;
+  if Plataforma.StartsWith('Win', True) then
+  begin
+    Flag := 5;
+    RemotoLanzador := 'run-' + JobId + '.exe';
   end
   else
-    GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.sh');
-  // POSIX script: LF endings and NO BOM - /bin/sh chokes on both.
+  begin
+    Flag := 3;
+    RemotoLanzador := 'run-' + JobId;
+  end;
+  GuionFile := TPath.Combine(TmpDir, 'run-' + JobId + '.job');
+  // el .job: LF y sin BOM, que lo lee un programa nuestro en los dos sistemas
   Enc := TUTF8Encoding.Create(False);
   try
-    if EsWindows then
-      TFile.WriteAllText(GuionFile,
-        TrabajoDeEjecucion(ExeLeaf, AArgs, JobId + '.out', ALiteral), Enc)
-    else
-      TFile.WriteAllText(GuionFile,
-        GuionDeEjecucion(ExeLeaf, AArgs, JobId + '.out', ALiteral), Enc);
+    TFile.WriteAllText(GuionFile,
+      TrabajoDeEjecucion(ExeLeaf, JobId + '.out', AArgv), Enc);
   finally
     Enc.Free;
   end;
-
-  // flag 5 = PAServer EJECUTA el fichero (con /bin/sh) y no deja la copia.
-  // En Windows ejecuta el lanzador (un PE), que lee su .job y se va: PAServer
-  // espera a que termine lo que lanza, y paclient con el (medido).
-  if EsWindows then
-    Ops := Format('"--put=%s,%s,0,run-%s.job;%s,%s,5,run-%s.exe"',
-      [GuionFile, DeployRel, JobId, Lanzador, DeployRel, JobId])
-  else
-    Ops := Format('"--put=%s,%s,5,run-%s.sh"', [GuionFile, DeployRel, JobId]);
+  Ops := Format('"--put=%s,%s,0,run-%s.job;%s,%s,%d,%s"',
+    [GuionFile, DeployRel, JobId, Lanzador, DeployRel, Flag, RemotoLanzador]);
   Rc := Paclient(Pc, Ops, AProfile, Output);
   TFile.Delete(GuionFile);
   if Rc <> 0 then
@@ -594,15 +471,13 @@ begin
   // limpieza remota: la salida ya viajo aqui
   if TFile.Exists(OutFile) then
     TFile.Delete(OutFile);
-  Ops := Format('"--Remove=%s/%s.out"', [DeployRel, JobId]);
+  // ...y el lanzador de este trabajo (en Linux flag 3 lo deja; en Windows
+  // PAServer ya lo borro) y los vigias de Windows de trabajos acabados
+  // (<job>.wait.exe vive lo que el programa: el de una ventana viva se queda).
+  // Un nombre que no exista no es un error que importe.
+  Ops := Format('"--Remove=%s/%s.out;%s/%s;%s/*.wait.exe"',
+    [DeployRel, JobId, DeployRel, RemotoLanzador, DeployRel]);
   Paclient(Pc, Ops, AProfile, Output);
-  // el vigia del lanzador Windows (<job>.wait.exe) vive lo que el programa:
-  // se barren los de trabajos ya terminados; el de una ventana viva se queda
-  if EsWindows then
-  begin
-    Ops := Format('"--Remove=%s/*.wait.exe"', [DeployRel]);
-    Paclient(Pc, Ops, AProfile, Output);
-  end;
 
   Result.AddPair('note', SN_REMOTERUN_NOTE);
 end;

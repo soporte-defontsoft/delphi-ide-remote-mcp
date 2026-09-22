@@ -15,6 +15,9 @@
         <Projects Include="src\DelphiStyleConvert.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="src_run_job\McpRunJob.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -59,14 +62,23 @@
     <Target Name="DelphiStyleConvert:Make">
         <MSBuild Projects="src\DelphiStyleConvert.dproj" Targets="Make"/>
     </Target>
+    <Target Name="McpRunJob">
+        <MSBuild Projects="src_run_job\McpRunJob.dproj"/>
+    </Target>
+    <Target Name="McpRunJob:Clean">
+        <MSBuild Projects="src_run_job\McpRunJob.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="McpRunJob:Make">
+        <MSBuild Projects="src_run_job\McpRunJob.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="McpDesktopNode;DelphiLspMcp;LspCoreTest;DelphiStyleConvert"/>
+        <CallTarget Targets="McpDesktopNode;DelphiLspMcp;LspCoreTest;DelphiStyleConvert;McpRunJob"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="McpDesktopNode:Clean;DelphiLspMcp:Clean;LspCoreTest:Clean;DelphiStyleConvert:Clean"/>
+        <CallTarget Targets="McpDesktopNode:Clean;DelphiLspMcp:Clean;LspCoreTest:Clean;DelphiStyleConvert:Clean;McpRunJob:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="McpDesktopNode:Make;DelphiLspMcp:Make;LspCoreTest:Make;DelphiStyleConvert:Make"/>
+        <CallTarget Targets="McpDesktopNode:Make;DelphiLspMcp:Make;LspCoreTest:Make;DelphiStyleConvert:Make;McpRunJob:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

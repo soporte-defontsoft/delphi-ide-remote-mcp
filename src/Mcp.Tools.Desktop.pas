@@ -176,7 +176,8 @@ end;
 { El gesto; ExecuteWithParams lo envuelve en el cerrojo de SU maquina. }
 function GestoEnElTarget(const Params: TDesktopLinuxParams): string;
 var
-  Cmd, Args, Salida, Destino, Local, Fallo, Remota, Proj, Nota, Literal: string;
+  Cmd, Salida, Destino, Local, Fallo, Remota, Proj, Nota: string;
+  Args: TArray<string>;
   Bajada, Propia: string;
   Res: TJSONObject;
   Return: TJSONObject;
@@ -228,30 +229,27 @@ begin
   if Result <> '' then
     Exit;
 
-  Args := '';
-  Literal := '';
+  { Los argumentos del nodo van como argv, uno a uno: no hay shell en medio
+    (hasta el 2026-09-22 el texto viajaba por un /bin/sh y un "hola; lo que
+    sea" ejecutaba la segunda mitad; el lanzador lo entrega tal cual). }
+  Args := [NODE_KEY];
   if Cmd = 'tap' then
   begin
     if (Params.X.Trim = '') or (Params.Y.Trim = '') then
       Exit(SR_ADBLINUX_NEEDXY);
-    Args := Format('%d %d', [StrToIntDef(Params.X.Trim, -1),
-      StrToIntDef(Params.Y.Trim, -1)]);
+    Args := Args + [IntToStr(StrToIntDef(Params.X.Trim, -1)),
+      IntToStr(StrToIntDef(Params.Y.Trim, -1))];
   end
   else if Cmd = 'type' then
   begin
     if Params.Text.Trim = '' then
       Exit(SR_ADBLINUX_NEEDTEXT);
     { Con coordenadas es UN solo viaje: pulsa para dar el foco y escribe. }
-    { El TEXTO no va en Args: viaja como argumento LITERAL (ver
-      Lsp.RemoteRun.GuionDeEjecucion). Pegado aqui llegaba a pelo al /bin/sh
-      del destino, y un "hola; lo-que-sea" ejecutaba la segunda mitad alli
-      (medido 2026-09-21). }
-    Literal := Params.Text.Trim;
     if (Params.X.Trim <> '') and (Params.Y.Trim <> '') then
-      Args := Format('escribe %d %d', [StrToIntDef(Params.X.Trim, -1),
-        StrToIntDef(Params.Y.Trim, -1)])
+      Args := Args + ['escribe', IntToStr(StrToIntDef(Params.X.Trim, -1)),
+        IntToStr(StrToIntDef(Params.Y.Trim, -1)), Params.Text.Trim]
     else
-      Args := 'texto';
+      Args := Args + ['texto', Params.Text.Trim];
   end
   else if Cmd = 'key' then
   begin
@@ -263,17 +261,17 @@ begin
     begin
       if not NombreDeTeclaValido(Params.Code.Trim) then
         Exit(SR_DESKTOP_NEEDCODE);
-      Args := 'tecla ' + Params.Code.Trim;
+      Args := Args + ['tecla', Params.Code.Trim];
     end
     else
     begin
       if (Params.Code.Trim = '') or (StrToIntDef(Params.Code.Trim, 0) <= 0) then
         Exit(SR_ADBLINUX_NEEDCODE);
-      Args := Format('tecla %d', [StrToIntDef(Params.Code.Trim, 0)]);
+      Args := Args + ['tecla', IntToStr(StrToIntDef(Params.Code.Trim, 0))];
     end;
   end
   else if Cmd = 'windows' then
-    Args := 'ventanas';
+    Args := Args + ['ventanas'];
   { screenshot y status corren el nodo sin argumentos: el nodo siempre
     captura al arrancar y cuenta el estado del escritorio. }
 
@@ -292,8 +290,7 @@ begin
     delante de la orden, igual que en el escritorio local. Un nodo ya
     desplegado por un servidor viejo no la pide, pero EnsureNodeCurrent lo
     habra sustituido antes de llegar aqui. }
-  Res := RemoteRun(Params.Profile.Trim, Proj, '',
-    Trim(NODE_KEY + ' ' + Args), 60000, Literal);
+  Res := RemoteRun(Params.Profile.Trim, Proj, '', Args, 60000);
   try
     Salida := '';
     if Res.GetValue('output') <> nil then

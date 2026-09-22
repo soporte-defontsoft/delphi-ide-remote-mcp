@@ -27,24 +27,37 @@ Windows (the other kind is refused, not translated), `windows` is thumbnails
 on Linux and a list with rectangles on Windows, and a locked Windows answers
 with a `hint`.
 
-### Added - remote execution on a Windows PAServer (the native launcher)
+### Changed - ONE way to run anything on a target: a job file and a native launcher, no shell
 PAServer on Windows executes no scripts: `--put` flag 5 is a bare
 `CreateProcess` (a `.sh` is "not a valid Win32 application"), `paclient`
 passes no arguments (the command PAServer runs carries an EMPTY argument
 slot), and PAServer waits for what it launches with `paclient` blocked
-meanwhile - all measured 2026-09-22. So for a Windows profile the server
-sends a three-line job file (`run-<job>.job`: binary, output file,
-arguments) and a tiny native launcher (`node\McpRunJob.exe`, sources in
-`src_run_job/`) named `run-<job>.exe`, which PAServer executes: it writes
+meanwhile - all measured 2026-09-22, and on Linux exactly the same with an ELF
+and flag 3. So EVERY remote execution - `remote-run` and every desktop
+gesture, Linux or Windows - now sends a job file (`run-<job>.job`: binary,
+output file, then ONE ARGUMENT PER LINE) and a native launcher (one source,
+`src_run_job/`, shipped as `node\McpRunJob` for Linux and `node\McpRunJob.exe`
+for Windows) named `run-<job>`, which PAServer executes: it writes
 `___ENV=` with the SESSION it runs in (session 0 = a service, no desktop),
 checks the binary is a PE (the ELF check of the script), starts it
 unattended with its output in `<job>.out`, leaves a watcher (a copy of
-itself, `<job>.wait.exe`) that appends `___RC=` when the program ends, and
-returns at once. `remote-run` and every desktop gesture go through it
-unchanged; `graphicalEnv` names the session. Measured against a PAServer in
-the user's session of this server: the Windows node ran, captured the
-desktop and came back with "session 2, with a desktop". Nothing is
-installed on the target: PAServer removes the launcher when it returns.
+itself on Windows, a forked child on Linux) that appends `___RC=` when the
+program ends, and returns at once. The `/bin/sh` script the server used to
+compose for Linux is gone, and with it every shell-quoting rule: **there is no
+shell anywhere in the path**, arguments go from the job file to the
+program's argv untouched. On Linux the launcher completes the graphical
+environment in code (what the script did since this release's first entry).
+Decision of the operator: one behaviour, not two branches. Measured on the
+three targets with a probe that counts its arguments and sleeps: `uno "dos
+tres" cuatro` arrives as three arguments on Zorin, Fedora and Windows, the
+desktop node captures on the three, and the deploy folder is left clean.
+Nothing is installed on the target.
+
+### Fixed - `delphi_build target=Deploy` to a Windows PAServer shipped nothing
+The minimal deployment manifest was only generated for non-Windows
+platforms, so a Win64 deploy through a PAServer profile "succeeded" with an
+empty folder on the target (found by the first `remote-run` against
+`windows-local`). A platform is local only when no profile is given.
 
 ### Fixed - `remote-run` with PAServer running as a service
 A PAServer started as a service is born outside the desktop session, so a

@@ -129,20 +129,26 @@ if /I "%BCONFIG%"=="Release" (
   )
   echo [BuildGroup] node\McpDesktopNode.exe actualizado desde el build Release.
 
-  REM El lanzador para destinos WINDOWS (PAServer alli no ejecuta guiones):
-  REM viaja en node\ junto a los dos nodos y el servidor lo sube por trabajo.
-  echo [BuildGroup] Compilando el lanzador McpRunJob (Win64)...
-  msbuild "%~dp0src_run_job\McpRunJob.dproj" /t:%MSBTARGET% /p:Config=Release /p:Platform=Win64 %VERBOSITY%
-  if errorlevel 1 (
-    echo [BuildGroup] AVISO: el lanzador McpRunJob no compilo
-    exit /b 1
-  )
+  REM El LANZADOR (src_run_job): lo que PAServer arranca en el destino por cada
+  REM trabajo remoto, en Linux y en Windows. Ya esta en el grupo (Win64 por
+  REM defecto); la version Linux se pide aparte, y los dos van a node\.
   copy /Y "%~dp0src_run_job\Win64\Release\McpRunJob.exe" "%~dp0node\McpRunJob.exe" >nul
   if errorlevel 1 (
     echo [BuildGroup] AVISO: no pude copiar el lanzador a node\McpRunJob.exe
     exit /b 1
   )
-  echo [BuildGroup] node\McpRunJob.exe actualizado desde el build Release.
+  echo [BuildGroup] Compilando el lanzador McpRunJob tambien para Linux64...
+  msbuild "%~dp0src_run_job\McpRunJob.dproj" /t:%MSBTARGET% /p:Config=Release /p:Platform=Linux64 %ARGSDK% %VERBOSITY%
+  if errorlevel 1 (
+    echo [BuildGroup] AVISO: el lanzador McpRunJob no compilo para Linux64
+    exit /b 1
+  )
+  copy /Y "%~dp0src_run_job\Linux64\Release\McpRunJob" "%~dp0node\McpRunJob" >nul
+  if errorlevel 1 (
+    echo [BuildGroup] AVISO: no pude copiar el lanzador Linux a node\McpRunJob
+    exit /b 1
+  )
+  echo [BuildGroup] node\McpRunJob y node\McpRunJob.exe actualizados desde el build Release.
 )
 
 echo [BuildGroup] Grupo completo OK.

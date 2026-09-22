@@ -1213,7 +1213,8 @@ begin
   Denied := ShellArgDenied(Prof + ' ' + ExeName + ' ' + Params.Args);
   if Denied <> '' then
     Exit(Denied);
-  Res := RemoteRun(Prof, Proj, ExeName, Params.Args.Trim, Params.TimeoutMs);
+  Res := RemoteRun(Prof, Proj, ExeName, TrocearArgs(Params.Args.Trim),
+    Params.TimeoutMs);
   try
     Result := Res.ToJSON;
   finally

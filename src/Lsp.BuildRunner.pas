@@ -1213,7 +1213,11 @@ begin
   GBuildLock.Enter;
   var QueuedMs := QueueSW.ElapsedMilliseconds;
   try
-  if Target.Contains('Deploy') and not IsLocalPlatform(Plat) then
+  // Un Windows REMOTO (perfil PAServer de Windows) despliega como un Linux:
+  // sin manifiesto, msbuild "desplegaba" cero ficheros y decia exito. La
+  // plataforma local solo lo es cuando no hay perfil (medido 2026-09-22 con
+  // el primer deploy Win64 a windows-local: carpeta vacia en el destino).
+  if Target.Contains('Deploy') and ((ProfileArg <> '') or not IsLocalPlatform(Plat)) then
   begin
     ManifestFilled := TFile.Exists(TPath.ChangeExtension(TPath.GetFullPath(ADprojPath), '.deployproj'));
     EnsureDeployManifest(TPath.GetFullPath(ADprojPath), Plat, Info.RootDir,

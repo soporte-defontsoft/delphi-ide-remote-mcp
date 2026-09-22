@@ -1140,10 +1140,11 @@ const
   SR_REMOTERUN_PUT_FMT =
     'error: no se pudo enviar el trabajo al target (paclient exit %d): %s. ' +
     'PAServer esta vivo? El perfil apunta al host correcto?';
-  SR_REMOTERUN_NO_RUNJOB =
-    'RECHAZADO: el destino es Windows y falta el lanzador node\McpRunJob.exe ' +
-    'junto al servidor. Alli PAServer no ejecuta guiones: hace falta ese ' +
-    'binario (viaja en la release, carpeta node).';
+  SR_REMOTERUN_NO_RUNJOB_FMT =
+    'RECHAZADO: falta el lanzador node\%s junto al servidor. PAServer solo ' +
+    'arranca un binario sin argumentos: ese lanzador es quien lee el trabajo ' +
+    'y ejecuta el programa (viaja en la release, carpeta node: McpRunJob para ' +
+    'un Linux, McpRunJob.exe para un Windows).';
   SN_REMOTERUN_ENV_WIN_FMT =
     'Windows: el programa corre en la sesion interactiva %s del usuario de ' +
     'PAServer, con escritorio';

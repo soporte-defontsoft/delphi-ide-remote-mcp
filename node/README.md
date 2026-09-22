@@ -8,7 +8,7 @@
 > binary — it stops accidents and stray scripts, not a determined local user.)
 
 `McpDesktopNode` is the **compiled Linux64 binary** of the desktop node and `McpDesktopNode.exe` the Win64 one - the target gets the one that fits its PAServer profile
-(sources: [`src_desktop_node/`](../src_desktop_node)). `McpRunJob.exe` is the **native launcher for Windows targets** (sources: [`src_run_job/`](../src_run_job)): PAServer on Windows executes no scripts, so the server sends this program as `run-<job>.exe` next to a job file for every remote execution - `remote-run` and every desktop gesture - and it starts the program unattended and leaves a watcher that writes the exit code. It ships in
+(sources: [`src_desktop_node/`](../src_desktop_node)). `McpRunJob` and `McpRunJob.exe` are the **native launcher** for Linux and Windows targets (one source: [`src_run_job/`](../src_run_job)): PAServer starts an uploaded file only without arguments and waits for it, so for every remote execution - `remote-run` and every desktop gesture - the server sends this program as `run-<job>` next to a three-line job file (binary, output, one argument per line); it completes the graphical environment when missing, checks the binary is native, starts it unattended with the arguments as argv, leaves a watcher that writes the exit code, and returns. No shell anywhere. It ships in
 every release zip and next to the server exe in a deployment, and you never
 touch it by hand:
 
