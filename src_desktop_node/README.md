@@ -1,7 +1,8 @@
 # `src_desktop_node/` — sources of the desktop node
 
-The **node** is the tiny Delphi console program that `delphi_adb_linux` runs on
-the Linux target: the server's eyes and hands there. One short-lived process
+The **node** is the tiny Delphi console program that `delphi_desktop` runs on
+the target - a Linux or a Windows behind a PAServer profile: the server's eyes
+and hands there. One short-lived process
 per gesture — capture the desktop, convert the screen scale, press a pixel,
 type text — launched through PAServer, nothing resident.
 
