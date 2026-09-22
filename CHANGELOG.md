@@ -6,7 +6,12 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.0.17-beta] - 2026-09-22
+
+**The roadmap, walked one item at a time with the operator.** Four yes, the
+rest closed or parked; every yes measured before it shipped, and one more
+thing that was not on the list but turned out to be vital: the agent knows
+which Delphi it is working with.
 
 ### Added - `[Workspace.<name>] DelphiVersion`: which RAD Studio a workspace uses
 A machine often hosts several Delphi versions side by side, and the server
