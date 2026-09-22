@@ -20,13 +20,50 @@ interface
 function RecortaPng(const AFichero: string; var X, Y, W, H: Integer;
   out AAnchoOrig, AAltoOrig: Integer): string;
 
+{ Ancho y alto de un PNG leyendo solo su cabecera IHDR (los 24 primeros
+  bytes): sin decodificar la imagen, que para saber su tamano sobra. False
+  si el fichero no es un PNG. }
+function TamanoPng(const AFichero: string; out W, H: Integer): Boolean;
+
 implementation
 
 uses
   System.SysUtils,
+  System.Classes,
   System.Types,
   Vcl.Graphics,
   Vcl.Imaging.pngimage;
+
+function TamanoPng(const AFichero: string; out W, H: Integer): Boolean;
+const
+  FIRMA: array[0..7] of Byte = ($89, $50, $4E, $47, $0D, $0A, $1A, $0A);
+var
+  F: TFileStream;
+  Cab: array[0..23] of Byte;
+  I: Integer;
+begin
+  Result := False;
+  W := 0;
+  H := 0;
+  try
+    F := TFileStream.Create(AFichero, fmOpenRead or fmShareDenyWrite);
+    try
+      if F.Read(Cab, SizeOf(Cab)) <> SizeOf(Cab) then
+        Exit;
+    finally
+      F.Free;
+    end;
+  except
+    Exit;
+  end;
+  for I := 0 to 7 do
+    if Cab[I] <> FIRMA[I] then
+      Exit;
+  { bytes 16..23: ancho y alto, big-endian, dentro del trozo IHDR }
+  W := (Cab[16] shl 24) or (Cab[17] shl 16) or (Cab[18] shl 8) or Cab[19];
+  H := (Cab[20] shl 24) or (Cab[21] shl 16) or (Cab[22] shl 8) or Cab[23];
+  Result := (W > 0) and (H > 0);
+end;
 
 function RecortaPng(const AFichero: string; var X, Y, W, H: Integer;
   out AAnchoOrig, AAltoOrig: Integer): string;

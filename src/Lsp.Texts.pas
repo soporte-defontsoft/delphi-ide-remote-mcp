@@ -1619,9 +1619,11 @@ const
     ' logcat: optional .txt/.log FILE to dump into INSTEAD of answering ' +
     'inline - then read it in ranges with delphi_read.';
   SP_ADB_X =
-    'tap: X coordinate in pixels (measure on a screenshot)';
+    'tap: X coordinate in DISPLAY pixels - measure it on a screenshot; when ' +
+    'that answer carried tapScale, multiply by tapScale.x first';
   SP_ADB_Y =
-    'tap: Y coordinate in pixels (measure on a screenshot)';
+    'tap: Y coordinate in DISPLAY pixels - measure it on a screenshot; when ' +
+    'that answer carried tapScale, multiply by tapScale.y first';
   SP_ADB_KEY =
     'key: back | home | enter | appswitch | wakeup | up | down | left | ' +
     'right | tab';
@@ -1692,7 +1694,13 @@ const
   SN_ADB_SCREENSHOT =
     'The device screen is in this PNG on the server - download it with ' +
     'delphi_fetch. Coordinates measured on it are exactly what ' +
-    'command=tap takes.';
+    'command=tap takes: the image is the size of the display in force ' +
+    '("display": physical, override and density from wm size / wm density).';
+  SN_ADB_TAP_SCALE_FMT =
+    'The device screen is in this PNG on the server - download it with ' +
+    'delphi_fetch. CAREFUL: the image is %dx%d but the display in force is ' +
+    '%dx%d, and command=tap takes DISPLAY pixels: multiply what you measure ' +
+    'on the image by tapScale (x by %s, y by %s) before tapping.';
 
   SR_ADB_NEED_APP =
     'RECHAZADO: run necesita "app" (el nombre del paquete instalado, p.ej. ' +

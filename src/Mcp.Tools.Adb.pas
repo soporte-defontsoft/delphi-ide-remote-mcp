@@ -85,7 +85,31 @@ uses
   Lsp.Discovery,
   Lsp.Dproj,
   Lsp.Guard,
+  Lsp.Imagen,
   Lsp.BuildRunner;
+
+{ El valor de una linea "<clave>: <valor>" de la salida de `wm size` / `wm
+  density` ("Physical size: 1080x1920", "Override density: 320"); '' si no
+  esta. Un solo lector para las cuatro claves. }
+function ValorWm(const ASalida, AClave: string): string;
+var
+  L: string;
+begin
+  Result := '';
+  for L in ASalida.Split([#10]) do
+    if L.Trim.StartsWith(AClave + ':', True) then
+      Exit(L.Trim.Substring(Length(AClave) + 1).Trim);
+end;
+
+{ "1080x1920" -> 1080, 1920. }
+function PartirTamano(const S: string; out W, H: Integer): Boolean;
+var
+  P: TArray<string>;
+begin
+  P := S.ToLower.Split(['x']);
+  Result := (Length(P) = 2) and TryStrToInt(P[0].Trim, W) and
+    TryStrToInt(P[1].Trim, H) and (W > 0) and (H > 0);
+end;
 
 constructor TDelphiAdbTool.Create;
 begin
@@ -375,7 +399,62 @@ begin
     try
       Return.AddPair('screenshot', Destino);
       Return.AddPair('size', TJSONNumber.Create(TFile.GetSize(Destino)));
-      Return.AddPair('note', SN_ADB_SCREENSHOT);
+      { La pantalla REAL del dispositivo, de `wm size` y `wm density`: lo
+        que `input tap` entiende son pixeles de la pantalla en vigor (la
+        Override si la hay, la Physical si no). Normalmente el PNG de
+        screencap mide exactamente eso y las coordenadas medidas sobre la
+        imagen valen tal cual; si no coinciden (un dispositivo que captura
+        a otra escala), se da el factor y la nota lo dice, en vez de dejar
+        que el agente pulse donde no es. Girado (WxH frente a HxW) no es
+        escala: screencap e input miran la misma orientacion. }
+      var SalidaWm := RunAdb(Adb, DevArg + 'shell wm size', 15000, ExitCode);
+      var Fisica := ValorWm(SalidaWm, 'Physical size');
+      var Forzada := ValorWm(SalidaWm, 'Override size');
+      var Densidad := '';
+      if Fisica <> '' then
+      begin
+        var SalidaDen := RunAdb(Adb, DevArg + 'shell wm density', 15000, ExitCode);
+        Densidad := ValorWm(SalidaDen, 'Override density');
+        if Densidad = '' then
+          Densidad := ValorWm(SalidaDen, 'Physical density');
+      end;
+      var ImgW, ImgH, DW, DH: Integer;
+      var HayImagen := TamanoPng(Destino, ImgW, ImgH);
+      if HayImagen then
+        Return.AddPair('image', Format('%dx%d', [ImgW, ImgH]));
+      var Nota := SN_ADB_SCREENSHOT;
+      if Fisica <> '' then
+      begin
+        var Pantalla := TJSONObject.Create;
+        Return.AddPair('display', Pantalla);
+        Pantalla.AddPair('physical', Fisica);
+        if Forzada <> '' then
+          Pantalla.AddPair('override', Forzada);
+        if Densidad <> '' then
+          Pantalla.AddPair('density', TJSONNumber.Create(StrToIntDef(Densidad, 0)));
+        var EnVigor := Forzada;
+        if EnVigor = '' then
+          EnVigor := Fisica;
+        if HayImagen and PartirTamano(EnVigor, DW, DH) then
+        begin
+          { misma orientacion que la imagen antes de comparar }
+          if (ImgW > ImgH) <> (DW > DH) then
+          begin
+            var T := DW; DW := DH; DH := T;
+          end;
+          if (ImgW <> DW) or (ImgH <> DH) then
+          begin
+            var Escala := TJSONObject.Create;
+            Return.AddPair('tapScale', Escala);
+            Escala.AddPair('x', TJSONNumber.Create(DW / ImgW));
+            Escala.AddPair('y', TJSONNumber.Create(DH / ImgH));
+            Nota := Format(SN_ADB_TAP_SCALE_FMT, [ImgW, ImgH, DW, DH,
+              FormatFloat('0.###', DW / ImgW, TFormatSettings.Invariant),
+              FormatFloat('0.###', DH / ImgH, TFormatSettings.Invariant)]);
+          end;
+        end;
+      end;
+      Return.AddPair('note', Nota);
       Result := Return.ToJSON;
     finally
       Return.Free;

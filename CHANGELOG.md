@@ -8,6 +8,15 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added - `delphi_adb screenshot` says what the display really is
+`input tap` takes pixels of the display in force, not of the picture. The
+screenshot answer now carries `image` (the PNG's size, read from its IHDR
+header) and `display` - `physical`, `override` when set, `density` - from
+`wm size` / `wm density`; when the image and the display in force differ,
+`tapScale {x, y}` and a note that says to multiply what you measure before
+tapping. A rotated display is not a scale (screencap and input share the
+orientation), and a device whose `wm` says nothing answers as before.
+
 ### Added - HTTP sessions expire: `[Server] SessionTimeoutMinutes`
 A session was forever: bound at `initialize`, it stayed known (and its
 identity with it) until the process died. Now every request that carries an
