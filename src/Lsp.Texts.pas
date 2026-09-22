@@ -1060,7 +1060,10 @@ const
     'runs the program THAT PROJECT deployed and nothing else on that ' +
     'machine, and it does NOT kill what has not finished when the timeout ' +
     'expires - a program with a window is meant to stay up, so you get its ' +
-    'partial output and stillRunning=true). Default: platforms';
+    'partial output and stillRunning=true) | kill (stop a program a ' +
+    'remote-run left running: name, project and the "job" id that answer ' +
+    'gave you; only a job of THAT project on THAT machine can be killed). ' +
+    'Default: platforms';
   SP_PASERVER_PROJECT =
     'remote-run: the .dproj whose DEPLOYED program you want to run. The ' +
     'server derives the path on the target itself ' +
@@ -1095,7 +1098,27 @@ const
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | reseat | ' +
     'add-profile | remove-profile | test-connection | get-sdk | ' +
-    'reseat-sdk | remote-run';
+    'reseat-sdk | remote-run | kill';
+  SP_PASERVER_JOB =
+    'kill: the "jobId" a remote-run answer gave you (it is the program that ' +
+    'run left running on the target). Together with name and project: only ' +
+    'a job of THAT project on THAT machine can be killed';
+  SR_PASERVER_KILL_NEEDS =
+    'RECHAZADO: kill necesita "name" (el perfil), "project" (el .dproj de ' +
+    'ese remote-run) y "job" (el jobId que devolvio). Solo se mata un ' +
+    'trabajo que este servidor arranco para ese proyecto en esa maquina.';
+  SR_REMOTERUN_KILL_BADJOB =
+    'RECHAZADO: "job" no es un id de trabajo de este servidor (fecha-hora-' +
+    'fragmento, como lo devuelve remote-run).';
+  SN_REMOTERUN_KILL_FMT =
+    'Si se ha quedado colgado o ya no lo necesitas: delphi_paserver ' +
+    'command=kill name=%s project=<el mismo .dproj> job=%s. Solo mata ese ' +
+    'trabajo: nada mas de esa maquina.';
+  SN_REMOTERUN_KILL_NOTE =
+    'kill mata SOLO el programa que ese trabajo arranco (el lanzador lee el ' +
+    '<job>.pid que dejo su vigia, en la carpeta de ESE proyecto): con ' +
+    'killed=false y "ya termino" no habia nada que matar. El ___RC del ' +
+    'trabajo matado lo escribe su vigia en su propia salida.';
 
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     'RECHAZADO: el proyecto "%s" no esta en la lista de proyectos que este ' +
@@ -1170,7 +1193,7 @@ const
     'y NO se le mata, porque una aplicacion con ventana esta para quedarse. ' +
     'En "output" tienes lo que llevaba escrito hasta ahora. Si esperabas algo ' +
     'que termina, dale mas plazo con timeoutms; si es una GUI, ya esta en ' +
-    'marcha y puedes manejarla con delphi_adb_linux (carpeta %s del target).';
+    'marcha y puedes manejarla con delphi_desktop (carpeta %s del target).';
 
   SN_REMOTERUN_NOTE =
     'Ejecutado en el target por PAServer, sin nada instalado alli. Solo se ' +

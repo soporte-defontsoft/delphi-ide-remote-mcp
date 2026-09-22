@@ -43,6 +43,7 @@ type
     FExe: string;
     FProject: string;
     FArgs: string;
+    FJob: string;
     FSdk: string;
     FActive: string;
     FTimeoutMs: Integer;
@@ -70,6 +71,8 @@ type
     property Exe: string read FExe write FExe;
     [SchemaDescription(SP_PASERVER_ARGS)]
     property Args: string read FArgs write FArgs;
+    [SchemaDescription(SP_PASERVER_JOB)]
+    property Job: string read FJob write FJob;
     [SchemaDescription(SP_PASERVER_SDK)]
     property Sdk: string read FSdk write FSdk;
     [SchemaDescription(SP_PASERVER_ACTIVE)]
@@ -1222,6 +1225,40 @@ begin
   end;
 end;
 
+{ kill: matar un trabajo que remote-run dejo corriendo. Mismas puertas que
+  remote-run (es ejecutar algo en el target, aunque sea para pararlo), y solo
+  un trabajo de ESE proyecto en ESE perfil: el lanzador no mata otra cosa. }
+function KillCmd(const Params: TDelphiPAServerParams): string;
+var
+  Prof, Proj, Job, Denied: string;
+  Res: TJSONObject;
+begin
+  if not AllowRemoteRun then
+    Exit(SR_PASERVER_RUN_DISABLED);
+  Prof := Params.Name.Trim;
+  Proj := Params.Project.Trim;
+  Job := Params.Job.Trim;
+  if (Prof = '') or (Proj = '') or (Job = '') then
+    Exit(SR_PASERVER_KILL_NEEDS);
+  Denied := ProfileHostDenied(Prof);
+  if Denied <> '' then
+    Exit(Denied);
+  Denied := PathDenied(Proj);
+  if Denied <> '' then
+    Exit(Denied);
+  if not TFile.Exists(Proj) then
+    Exit(Format(SR_PASERVER_RUN_NOPROJ_FMT, [Proj]));
+  Denied := RemoteRunProjectDenied(Proj);
+  if Denied <> '' then
+    Exit(Denied);
+  Res := RemoteKill(Prof, Proj, Job);
+  try
+    Result := Res.ToJSON;
+  finally
+    Res.Free;
+  end;
+end;
+
 function GetSdk(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
@@ -1708,6 +1745,8 @@ begin
     Result := GetSdk(Params)
   else if Cmd = 'remote-run' then
     Result := RemoteRunCmd(Params)
+  else if Cmd = 'kill' then
+    Result := KillCmd(Params)
   else
     Result := SR_PASERVER_CMD;
 end;

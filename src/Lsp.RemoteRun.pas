@@ -78,6 +78,12 @@ function PlataformaDelPerfil(const AProfile: string): string;
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
   const AArgv: TArray<string>; ATimeoutMs: Integer): TJSONObject;
 
+{ Mata el programa que un remote-run anterior dejo corriendo en el target:
+  el trabajo AJobId, de ESE proyecto, en ESE perfil. Viaja como un trabajo
+  mas cuyo binario es el verbo @kill; el lanzador lee el <job>.pid que su
+  vigia escribio y mata ese proceso, y nada mas. }
+function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
+
 { Trocea una linea de argumentos como lo haria quien la escribio: por
   espacios, y con comillas DOBLES para agrupar uno que lleva espacios. Es el
   UNICO troceador: lo que sale de aqui va al argv del programa tal cual. }
@@ -464,6 +470,7 @@ begin
     Result.AddPair('stillRunning', TJSONBool.Create(True));
     Result.AddPair('stillRunningNote', Format(SR_REMOTERUN_TIMEOUT_FMT,
       [ATimeoutMs div 1000, DeployRel]));
+    Result.AddPair('killNote', Format(SN_REMOTERUN_KILL_FMT, [AProfile, JobId]));
     if Texto <> '' then
       Result.AddPair('output', Texto);
   end;
@@ -480,6 +487,33 @@ begin
   Paclient(Pc, Ops, AProfile, Output);
 
   Result.AddPair('note', SN_REMOTERUN_NOTE);
+end;
+
+function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
+var
+  C: Char;
+  Rc: Integer;
+begin
+  // el id lo compuso ESTE servidor (fecha-hora-fragmento): otra cosa no es
+  // un id, y el lanzador lo usa para nombrar un fichero
+  for C in AJobId do
+    if not CharInSet(C, ['0'..'9', 'a'..'f', 'A'..'F', '-']) then
+    begin
+      Result := TJSONObject.Create;
+      Result.AddPair('success', TJSONBool.Create(False));
+      Result.AddPair('error', SR_REMOTERUN_KILL_BADJOB);
+      Exit;
+    end;
+  Result := RemoteRun(AProfile, ADprojPath, '@kill', [AJobId], 20000);
+  Result.RemovePair('remoteExe').Free;
+  Result.AddPair('job', AJobId);
+  Rc := -1;
+  if Result.GetValue('exitCode') <> nil then
+    Rc := Result.GetValue<Integer>('exitCode');
+  Result.AddPair('killed', TJSONBool.Create(Rc = 0));
+  if Result.GetValue('note') <> nil then
+    Result.RemovePair('note').Free;
+  Result.AddPair('note', SN_REMOTERUN_KILL_NOTE);
 end;
 
 function PlataformaDelPerfil(const AProfile: string): string;

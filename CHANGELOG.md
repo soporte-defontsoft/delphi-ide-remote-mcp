@@ -53,6 +53,18 @@ tres" cuatro` arrives as three arguments on Zorin, Fedora and Windows, the
 desktop node captures on the three, and the deploy folder is left clean.
 Nothing is installed on the target.
 
+### Added - `delphi_paserver command=kill`: stop a job you started
+A `remote-run` that outlives its timeout is left running on purpose, and
+until now there was no way back short of the operator's keyboard. The
+launcher now writes `<job>.pid` next to the program while it lives (its
+watcher removes it when the program ends), and a job whose binary is the
+verb `@kill` reads that `.pid` - of THAT deploy folder, never another - and
+kills that process (SIGTERM, three seconds, SIGKILL on Linux;
+`TerminateProcess` on Windows). `stillRunning` answers carry a `killNote`
+with the exact call; `kill` takes the same switches as `remote-run` and can
+only reach a job this server started for that project on that machine. A job
+that already ended answers `killed=false`. Measured on Zorin and Windows.
+
 ### Fixed - `delphi_build target=Deploy` to a Windows PAServer shipped nothing
 The minimal deployment manifest was only generated for non-Windows
 platforms, so a Win64 deploy through a PAServer profile "succeeded" with an

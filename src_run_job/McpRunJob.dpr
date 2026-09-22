@@ -31,7 +31,12 @@
     5. deja un VIGIA que espera al programa y remata la salida con
        ___RC=<codigo>: en Linux un proceso hijo (fork + setsid), en Windows
        una copia de si mismo (<job>.wait.exe), porque PAServer borra
-       run-<job>.exe en cuanto este proceso termina.
+       run-<job>.exe en cuanto este proceso termina;
+    6. apunta el PID del programa en <job>.pid mientras vive (el vigia lo
+       borra al terminar). Es lo que hace posible MATARLO: un .job cuyo
+       binario es el verbo @kill y cuyo argumento es el id de otro trabajo
+       lee ese .pid -de ESTA carpeta, nunca de otra- y mata ese proceso.
+       Solo se puede matar lo que este lanzador arranco para ese proyecto.
 
   Nada se instala en el destino. }
 
@@ -50,6 +55,7 @@ uses
   Posix.SysStat,
   Posix.SysWait,
   Posix.Fcntl,
+  Posix.Signal,
 {$ENDIF}
   System.SysUtils,
   System.IOUtils,
@@ -60,18 +66,64 @@ const
   PROCESS_QUERY_LIMITED_INFORMATION = $1000; // no esta en Winapi.Windows
 {$ENDIF}
 
+{ El fichero donde vive el PID de un trabajo mientras corre: <job>.pid, al
+  lado de su <job>.out. Un unico nombrador para quien lo escribe (el vigia),
+  quien lo borra (el vigia) y quien lo lee (@kill). }
+function FicheroPid(const ASalida: string): string;
+begin
+  Result := ChangeFileExt(ASalida, '.pid');
+end;
+
+procedure EscribePid(const ASalida: string; APid: Int64);
+begin
+  try
+    TFile.WriteAllText(FicheroPid(ASalida), IntToStr(APid));
+  except
+    // sin .pid no se podra matar, pero el trabajo corre igual
+  end;
+end;
+
+procedure BorraPid(const ASalida: string);
+begin
+  try
+    if FileExists(FicheroPid(ASalida)) then
+      DeleteFile(FicheroPid(ASalida));
+  except
+  end;
+end;
+
+{ Un id de trabajo tal como lo compone el servidor: fecha-hora-fragmento,
+  solo [0-9a-f-]. Cualquier otra cosa no es un id y no se mira. }
+function IdDeTrabajoValido(const AId: string): Boolean;
+var
+  C: Char;
+begin
+  Result := (AId <> '') and (Length(AId) <= 64);
+  for C in AId do
+    if not CharInSet(C, ['0'..'9', 'a'..'f', 'A'..'F', '-']) then
+      Exit(False);
+end;
+
 { Anade texto (UTF-8) al final del fichero de salida, compartiendolo: el
-  programa lanzado escribe en el mismo fichero y paclient lo lee mientras. }
-procedure Anade(const AFichero, ATexto: string);
+  programa lanzado escribe en el mismo fichero y paclient lo lee mientras.
+  ACrear=False (el vigia, al rematar): si el servidor ya se llevo y borro la
+  salida -un trabajo que siguio vivo tras el plazo, o uno matado-, no se
+  resucita un fichero que nadie va a leer. }
+procedure Anade(const AFichero, ATexto: string; ACrear: Boolean = True);
 {$IFDEF MSWINDOWS}
 var
   H: THandle;
   B: TBytes;
   Escritos: DWORD;
+  Modo: DWORD;
 begin
+  if ACrear then
+    Modo := OPEN_ALWAYS
+  else
+    Modo := OPEN_EXISTING;
   H := CreateFile(PChar(AFichero), FILE_APPEND_DATA,
     FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil,
-    OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+    Modo, FILE_ATTRIBUTE_NORMAL, 0);
   if H = INVALID_HANDLE_VALUE then
     Exit;
   try
@@ -84,11 +136,14 @@ begin
 end;
 {$ELSE}
 var
-  Fd: Integer;
+  Fd, Flags: Integer;
   B: TBytes;
 begin
-  Fd := Posix.Fcntl.open(PAnsiChar(UTF8String(AFichero)),
-    O_WRONLY or O_APPEND or O_CREAT, S_IRUSR or S_IWUSR or S_IRGRP or S_IROTH);
+  Flags := O_WRONLY or O_APPEND;
+  if ACrear then
+    Flags := Flags or O_CREAT;
+  Fd := Posix.Fcntl.open(PAnsiChar(UTF8String(AFichero)), Flags,
+    S_IRUSR or S_IWUSR or S_IRGRP or S_IROTH);
   if Fd < 0 then
     Exit;
   try
@@ -243,6 +298,8 @@ begin
     Anade(ASalida, 'error: fork del programa fallo'#10'___RC=-1'#10);
     _exit(1);
   end;
+  if Hijo > 0 then
+    EscribePid(ASalida, Hijo);
   if Hijo = 0 then
   begin
     // --- el programa: salida al fichero, entrada de /dev/null, y execv
@@ -287,8 +344,33 @@ begin
     Codigo := (Estado shr 8) and $FF   // WEXITSTATUS
   else
     Codigo := 128 + (Estado and $7F);  // muerto por senal, como el shell
-  Anade(ASalida, #10'___RC=' + IntToStr(Codigo) + #10);
+  BorraPid(ASalida);
+  Anade(ASalida, #10'___RC=' + IntToStr(Codigo) + #10, False);
   _exit(0);
+end;
+
+{ Mata el proceso de un trabajo de ESTA carpeta: SIGTERM, tres segundos de
+  gracia, y SIGKILL si sigue. Nada mas: el PID sale del .pid que escribio el
+  vigia, nunca de quien llama. }
+function MatarProceso(APid: Int64; out AComo: string): Boolean;
+var
+  I: Integer;
+begin
+  AComo := '';
+  Result := kill(APid, SIGTERM) = 0;
+  if not Result then
+    Exit;
+  for I := 1 to 30 do
+  begin
+    Sleep(100);
+    if kill(APid, 0) <> 0 then
+    begin
+      AComo := 'SIGTERM';
+      Exit;
+    end;
+  end;
+  kill(APid, SIGKILL);
+  AComo := 'SIGKILL (no atendio al SIGTERM en 3 s)';
 end;
 {$ENDIF}
 
@@ -318,7 +400,26 @@ begin
   finally
     CloseHandle(H);
   end;
-  Anade(ASalida, #10'___RC=' + IntToStr(Integer(Codigo)) + #10);
+  BorraPid(ASalida);
+  Anade(ASalida, #10'___RC=' + IntToStr(Integer(Codigo)) + #10, False);
+end;
+
+{ Mata el proceso de un trabajo de ESTA carpeta. El PID sale del .pid que
+  escribio el lanzador, nunca de quien llama. }
+function MatarProceso(APid: Int64; out AComo: string): Boolean;
+var
+  H: THandle;
+begin
+  AComo := 'TerminateProcess';
+  H := OpenProcess(PROCESS_TERMINATE, False, DWORD(APid));
+  Result := H <> 0;
+  if not Result then
+    Exit;
+  try
+    Result := TerminateProcess(H, 137);
+  finally
+    CloseHandle(H);
+  end;
 end;
 
 { Un argumento para la linea de comandos de Windows, con las reglas de
@@ -423,6 +524,7 @@ begin
       Err + #10'___RC=-1'#10);
     Exit;
   end;
+  EscribePid(ASalida, Pid);
   // el vigia: una copia de este programa, porque PAServer borra run-<job>.exe
   // en cuanto este proceso termina
   Vigia := ACarpeta + '\' + AJobId + '.wait.exe';
@@ -494,6 +596,38 @@ begin
 {$ELSE}
     Anade(Salida, CompletaEntornoGrafico);
 {$ENDIF}
+
+    // @kill <id>: matar OTRO trabajo de esta carpeta. El PID sale de su .pid
+    // (lo escribio el vigia al arrancarlo y lo borra al terminar): sin .pid
+    // no hay nada que matar, y un id que no sea de los nuestros no se mira.
+    if SameText(Exe, '@kill') then
+    begin
+      if (Length(Args) < 1) or not IdDeTrabajoValido(Args[0].Trim) then
+        Anade(Salida, 'RECHAZADO: @kill necesita el id de un trabajo de este ' +
+          'servidor.'#10'___RC=2'#10)
+      else if not FileExists(TPath.Combine(Carpeta, Args[0].Trim + '.pid')) then
+        Anade(Salida, 'no hay ningun trabajo ' + Args[0].Trim + ' vivo en ' +
+          'esta carpeta: o ya termino, o no era de este proyecto.'#10'___RC=3'#10)
+      else
+      begin
+        var PidTxt := '';
+        try
+          PidTxt := TFile.ReadAllText(TPath.Combine(Carpeta, Args[0].Trim + '.pid')).Trim;
+        except
+          PidTxt := '';
+        end;
+        var Como := '';
+        if (StrToInt64Def(PidTxt, 0) > 0) and
+           MatarProceso(StrToInt64Def(PidTxt, 0), Como) then
+          Anade(Salida, 'terminado el trabajo ' + Args[0].Trim + ' (pid ' +
+            PidTxt + ', ' + Como + ').'#10'___RC=0'#10)
+        else
+          Anade(Salida, 'no pude matar el trabajo ' + Args[0].Trim + ' (pid ' +
+            PidTxt + '): ' + SysErrorMessage(GetLastError) + #10'___RC=1'#10);
+        BorraPid(TPath.Combine(Carpeta, Args[0].Trim + '.out'));
+      end;
+      Exit;
+    end;
 
     // 2. solo el binario que ese proyecto desplego, y solo si es nativo.
     //    En Windows el proyecto desplego <Proyecto>.exe y el servidor pide

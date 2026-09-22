@@ -140,7 +140,10 @@ on your side.
 - Nothing has to be installed on the target (v0.98): PAServer itself runs
   what this server sends. If the program has not finished when the timeout
   expires it is NOT killed - you get `stillRunning: true` and its partial
-  output; a GUI app stays up, ready to be driven with delphi_desktop.
+  output; a GUI app stays up, ready to be driven with delphi_desktop. If a
+  job is stuck or no longer wanted, the same answer's `killNote` gives the
+  call: `delphi_paserver command=kill name= project= job=<jobId>` - it
+  stops only that job, on that machine.
 - Only the NATIVE binary that project deployed can run (the launch script
   verifies the file signature). Remember
   `target=Deploy` REWRITES that folder: copy state you need before
