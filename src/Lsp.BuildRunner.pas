@@ -1427,6 +1427,13 @@ begin
       Result.AddPair('queuedNote', SN_BUILD_QUEUED);
     end;
     Result.AddPair('project', TPath.GetFullPath(ADprojPath));
+    // Con QUE instalacion se compilo: vital para un agente en una maquina
+    // con varias (DelphiVersion= por workspace), y nada obvio sin decirlo.
+    Result.AddPair('delphiVersion', Info.Version);
+    if Info.ProductName <> '' then
+      Result.AddPair('delphiName', Info.ProductName);
+    if Info.Build <> '' then
+      Result.AddPair('delphiBuild', Info.Build);
     Result.AddPair('platform', Plat);
     // Two tools, two defaults: this one builds Win32 when nobody says, and
     // delphi_test runs Win64. An agent that built by hand and then ran the

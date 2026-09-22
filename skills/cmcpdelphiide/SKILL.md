@@ -12,7 +12,10 @@ on your side.
 
 ## First contact (always, in this order)
 
-1. `delphi_workspace` - your allowed roots, your access level, and the
+1. `delphi_workspace` - your allowed roots, your access level, WHICH
+   Delphi you are working with (`activeDelphiName` "RAD Studio 13",
+   `activeDelphiPersonality` "Delphi 13", edition and build - use those
+   words when you search the web for anything version-specific) and the
    path model. **Server paths use virtual drive units**: `srvd:\...`,
    `srvc:\...`. They only exist inside this MCP. Always send paths in
    that form; never invent local-looking paths of your own.

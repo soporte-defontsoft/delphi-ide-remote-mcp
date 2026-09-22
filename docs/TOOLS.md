@@ -177,7 +177,7 @@ Locate Delphi projects (.dproj/.groupproj) under a directory - or under the work
 
 ### `delphi_installs`
 
-List EVERY RAD Studio / Delphi installation discovered on this machine (a machine may host several versions side by side): version, root directory, whether it ships DelphiLSP.exe (semantic engine) and rsvars.bat (msbuild). Also reports which one is ACTIVE for the calling workspace: the version its `DelphiVersion=` asks for when installed, otherwise the newest with DelphiLSP - and, when the requested one is missing, `requested` plus a `requestedNote` saying which one answers instead (the same note `delphi_workspace` gives as `delphiVersionNote`). Read-only, no parameters.
+List EVERY RAD Studio / Delphi installation discovered on this machine (a machine may host several versions side by side): version, root directory, whether it ships DelphiLSP.exe (semantic engine) and rsvars.bat (msbuild). Also reports which one is ACTIVE for the calling workspace: the version its `DelphiVersion=` asks for when installed, otherwise the newest with DelphiLSP - and, when the requested one is missing, `requested` plus a `requestedNote` saying which one answers instead (the same note `delphi_workspace` gives as `delphiVersionNote`). Each install carries its own `name`, `personality`, `edition` and `build`, read from the registry and `bds.exe`. Read-only, no parameters.
 
 *Access: read-only OK.*
 
@@ -185,7 +185,7 @@ No parameters.
 
 ### `delphi_workspace`
 
-The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), and the active RAD Studio. It also says WHO is answering (`server`): version, how this process was started (tray / service / console), transport, pid and uptime - the way to check a deployment without looking at the machine from outside. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only, no parameters.
+The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), and the active RAD Studio - by BDS number (`activeDelphi`), by NAME as the IDE registers itself (`activeDelphiName` "RAD Studio 13", `activeDelphiPersonality` "Delphi 13": the words to search the web with), its edition and exact build from `bds.exe` (`activeDelphiEdition`, `activeDelphiBuild`) and its folder (`activeDelphiRoot`) - all read from the installation, a field the machine lacks is absent; when the workspace pinned a `DelphiVersion=` that is not installed, `delphiVersionRequested` and `delphiVersionNote` say so. It also says WHO is answering (`server`): version, how this process was started (tray / service / console), transport, pid and uptime - the way to check a deployment without looking at the machine from outside. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only, no parameters.
 
 *Access: read-only OK.*
 

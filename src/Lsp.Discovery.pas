@@ -16,6 +16,15 @@ type
     RootDir: string;   // e.g. 'C:\Program Files (x86)\Embarcadero\Studio\37.0\'
     DelphiLspExe: string; // '' when that install ships no DelphiLSP.exe
     RsVarsBat: string;    // '' when rsvars.bat is missing
+    { Como se llama a si misma, leido de la instalacion y NUNCA compuesto
+      aqui (David, 22-sep-2026: "o los tenemos o no los tenemos"): el
+      registro guarda el nombre en Personalities ("RAD Studio 13" /
+      "Delphi 13") y bds.exe lleva la edicion y el build exacto en su
+      informacion de version. '' = esa instalacion no lo dice. }
+    ProductName: string;  // 'RAD Studio 13'   (Personalities, valor por defecto)
+    DelphiName: string;   // 'Delphi 13'       (Personalities\Delphi.Win32)
+    Edition: string;      // 'Enterprise/Architect' (bds.exe ProductName)
+    Build: string;        // '37.0.59082.6021'     (bds.exe FileVersion)
     function Found: Boolean;
   end;
 
@@ -133,6 +142,43 @@ begin
   Result := DelphiLspExe <> '';
 end;
 
+{ Edicion y version de fichero de un exe (bds.exe): lo que el instalador
+  escribio en el recurso de version, sin tabla ninguna. }
+procedure InfoDelExe(const AExe: string; out AEdicion, ABuild: string);
+var
+  Tam, Dummy: DWORD;
+  Buf: TBytes;
+  Len: UINT;
+  P: Pointer;
+  Fijo: PVSFixedFileInfo;
+  Trad: PLongWord;
+begin
+  AEdicion := '';
+  ABuild := '';
+  if not FileExists(AExe) then
+    Exit;
+  Tam := GetFileVersionInfoSize(PChar(AExe), Dummy);
+  if Tam = 0 then
+    Exit;
+  SetLength(Buf, Tam);
+  if not GetFileVersionInfo(PChar(AExe), 0, Tam, @Buf[0]) then
+    Exit;
+  if VerQueryValue(@Buf[0], '\', P, Len) and (Len >= SizeOf(TVSFixedFileInfo)) then
+  begin
+    Fijo := P;
+    ABuild := Format('%d.%d.%d.%d', [HiWord(Fijo.dwFileVersionMS),
+      LoWord(Fijo.dwFileVersionMS), HiWord(Fijo.dwFileVersionLS),
+      LoWord(Fijo.dwFileVersionLS)]);
+  end;
+  if VerQueryValue(@Buf[0], '\VarFileInfo\Translation', P, Len) and (Len >= 4) then
+  begin
+    Trad := P;
+    if VerQueryValue(@Buf[0], PChar(Format('\StringFileInfo\%.4x%.4x\ProductName',
+         [LoWord(Trad^), HiWord(Trad^)])), P, Len) and (Len > 1) then
+      AEdicion := string(PChar(P)).Trim;
+  end;
+end;
+
 procedure CollectRoot(ARootKey: HKEY; AAccess: LongWord;
   AMap: TDictionary<string, TRadStudioInfo>);
 var
@@ -171,6 +217,16 @@ begin
       Bat := Info.RootDir + 'bin\rsvars.bat';
       if FileExists(Bat) then
         Info.RsVarsBat := Bat;
+      // como se llama a si misma: Personalities (valor por defecto "RAD
+      // Studio 13", Delphi.Win32 "Delphi 13"); ausente = no lo dice
+      if Reg.OpenKeyReadOnly('SOFTWARE\Embarcadero\BDS\' + Ver + '\Personalities') then
+      begin
+        Info.ProductName := Reg.ReadString('').Trim;
+        if Reg.ValueExists('Delphi.Win32') then
+          Info.DelphiName := Reg.ReadString('Delphi.Win32').Trim;
+        Reg.CloseKey;
+      end;
+      InfoDelExe(Info.RootDir + 'bin\bds.exe', Info.Edition, Info.Build);
       AMap.Add(Ver, Info);
     end;
   finally

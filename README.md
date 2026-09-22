@@ -398,7 +398,7 @@ LibraryZone=1                           ; ITS declaration - nothing is inherited
 AllowTests=1                            ; may build+run ITS test suites
 VaultPath=D:\Vaults\TeamMemory          ; ITS persistent memory (vault_* tools)
 AdbAllowedDevices=192.168.1.163         ; ITS Android devices (absent = NONE)
-DelphiVersion=36.0                      ; which RAD Studio it uses (absent = newest with DelphiLSP)
+DelphiVersion=23.0                      ; which RAD Studio it uses (absent = newest with DelphiLSP)
 Profile=coder                           ; optional: trims tools/list for this token
 
 [Workspace.Audit]
@@ -524,7 +524,7 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   `[Server]` and not in a workspace.
 - **`[Workspace.<name>] DelphiVersion`** (or `DELPHI_MCP_DELPHI_VERSION` in launch mode): which RAD
   Studio a workspace uses when the machine hosts several side by side - the BDS version number
-  (`37.0` = Delphi 13, `36.0` = Delphi 12; `delphi_installs` lists them). One key governs the
+  (`37.0` = RAD Studio 13, `23.0` = 12 Athens, `22.0` = 11 Alexandria; `delphi_installs` lists them with their names, and `delphi_workspace` names the active one in `activeDelphiName`). One key governs the
   build, the DelphiLSP engine, profiles and SDKs, because every tool asks the same one place
   for its installation. Absent = the newest with DelphiLSP; a version that is not installed
   falls back to that and `delphi_workspace` says so in `delphiVersionNote`. The workspace

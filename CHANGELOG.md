@@ -10,7 +10,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Added - `[Workspace.<name>] DelphiVersion`: which RAD Studio a workspace uses
 A machine often hosts several Delphi versions side by side, and the server
-always took the newest with DelphiLSP. `DelphiVersion=36.0` (the BDS number;
+always took the newest with DelphiLSP. `DelphiVersion=23.0` (the BDS number;
 `DELPHI_MCP_DELPHI_VERSION` in launch mode) pins a workspace to one, and one
 place applies it: `DiscoverRadStudio`, which every tool already asks for its
 installation - build (rsvars/msbuild), the DelphiLSP engine (whose client
@@ -20,7 +20,18 @@ version that is not installed falls back to the default and
 `delphi_workspace` / `delphi_installs` say so (`delphiVersionNote`,
 `requestedNote`). The workspace decides, not the agent: the version is the
 project's. Measured here with one install only (37.0 pinned, 12.0 missing);
-the two-versions case is to be measured on a machine that has them.
+the two-versions case is to be measured on a machine that has them. "If the
+agent does not know which Delphi it works with, it cannot search for it"
+(David) - and a BDS number tells it nothing - so the version is NAMED
+wherever it shows, with what the installation says of itself and nothing
+composed by hand: `delphi_workspace` gives `activeDelphiName` ("RAD Studio
+13", the IDE's own Personalities key), `activeDelphiPersonality` ("Delphi
+13"), `activeDelphiEdition` ("Enterprise/Architect", from bds.exe),
+`activeDelphiBuild` (the exe's full file version, patch level included) and
+`activeDelphiRoot`; `delphi_installs` carries the same per install; every
+`delphi_build` answer says which installation compiled (`delphiVersion`,
+`delphiName`, `delphiBuild`). A field the machine does not have is simply
+absent.
 
 ### Added - `delphi_rename_symbol mode=apply`: the rename is written, through the changeset engine
 Preview was the whole tool since v0.53: an applicable rename came back as a

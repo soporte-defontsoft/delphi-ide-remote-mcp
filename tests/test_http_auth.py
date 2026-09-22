@@ -111,6 +111,15 @@ try:
     check('DelphiVersion=37.0 instalada: activeDelphi 37.0, pedida 37.0, sin nota',
           ws.get('activeDelphi') == '37.0' and ws.get('delphiVersionRequested') == '37.0'
           and 'delphiVersionNote' not in ws, json.dumps(ws)[:200])
+    # the number means nothing to an agent: the NAME travels with it
+    check('activeDelphiName nombra la version (RAD Studio 13) y activeDelphiRoot su carpeta',
+          'RAD Studio 13' in ws.get('activeDelphiName', '') and '37.0' in ws.get('activeDelphiRoot', ''),
+          json.dumps(ws)[:300])
+    # nothing composed by hand: the personality, edition and build come from the
+    # registry and bds.exe of THAT install
+    check('personality, edition y build salen de la instalacion (Delphi 13, edicion, 37.0.x.y)',
+          ws.get('activeDelphiPersonality', '').startswith('Delphi 13') and ws.get('activeDelphiEdition', '') != ''
+          and ws.get('activeDelphiBuild', '').startswith('37.0.'), json.dumps(ws)[:300])
     code, body = post({"jsonrpc": "2.0", "id": 2, "method": "tools/list",
                        "params": {}}, TOKEN)
     try:

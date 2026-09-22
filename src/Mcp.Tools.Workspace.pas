@@ -1037,6 +1037,16 @@ begin
       Entry := TJSONObject.Create;
       Arr.AddElement(Entry);
       Entry.AddPair('version', Info.Version);
+      // lo que la instalacion dice de si misma (registro y bds.exe), nada
+      // compuesto aqui: ausente = no lo tenemos
+      if Info.ProductName <> '' then
+        Entry.AddPair('name', Info.ProductName);
+      if Info.DelphiName <> '' then
+        Entry.AddPair('personality', Info.DelphiName);
+      if Info.Edition <> '' then
+        Entry.AddPair('edition', Info.Edition);
+      if Info.Build <> '' then
+        Entry.AddPair('build', Info.Build);
       Entry.AddPair('rootdir', Info.RootDir);
       Entry.AddPair('delphilsp', TJSONBool.Create(Info.DelphiLspExe <> ''));
       Entry.AddPair('msbuild', TJSONBool.Create(Info.RsVarsBat <> ''));
@@ -1258,7 +1268,22 @@ begin
       Return.AddPair('access', 'read-write');
     Info := DiscoverRadStudio;
     if Info.Found then
-      Return.AddPair('activeDelphi', Info.Version)
+    begin
+      Return.AddPair('activeDelphi', Info.Version);
+      // El numero de BDS no le dice nada a un agente; el nombre si, y sin
+      // el no puede buscar documentacion de SU version (David, 22-sep-2026).
+      // Todo sale de la instalacion misma (registro, bds.exe): lo que no
+      // este ahi no se inventa.
+      if Info.ProductName <> '' then
+        Return.AddPair('activeDelphiName', Info.ProductName);
+      if Info.DelphiName <> '' then
+        Return.AddPair('activeDelphiPersonality', Info.DelphiName);
+      if Info.Edition <> '' then
+        Return.AddPair('activeDelphiEdition', Info.Edition);
+      if Info.Build <> '' then
+        Return.AddPair('activeDelphiBuild', Info.Build);
+      Return.AddPair('activeDelphiRoot', Info.RootDir);
+    end
     else
       Return.AddPair('activeDelphi', '');
     // Un workspace fijado a una version (DelphiVersion=) lo dice aqui, y si
