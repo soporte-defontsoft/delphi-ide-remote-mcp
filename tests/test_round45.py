@@ -179,17 +179,13 @@ PROBAR = [
                            'out': AJENO_PNG}),
     ('delphi_adb', 'apk', {'command': 'install', 'device': DEV,
                            'apk': AJENO_APK}),
-    ('delphi_adb_linux', 'out', {'command': 'screenshot', 'profile': 'x',
-                                 'out': FUERA}),
     # LA PRUEBA DE QUE EL SUELO DE LA PUERTA VIVE (v1.0.14). Dentro de la
     # tool el rechazo del profile llega ANTES que el PathDenied de project,
     # asi que sin un PAServer vivo esta sonda era imposible. El suelo
     # (ArgPathOutsideDenied, que lee [RutaDelServidor]) muerde en la puerta,
     # antes que la tool: si esto contesta JAULA, es el suelo quien contesta.
-    ('delphi_adb_linux', 'project', {'command': 'screenshot', 'profile': 'x',
-                                     'project': AJENO_DPROJ}),
-    # 1.0.16: delphi_desktop ES la tool (delphi_adb_linux queda de alias con
-    # los mismos parametros), asi que su project es la misma sonda.
+    # 1.0.16: delphi_desktop ES la tool (el alias delphi_adb_linux ya no
+    # existe), asi que su project es la sonda.
     ('delphi_desktop', 'project', {'command': 'screenshot', 'profile': 'x',
                                    'project': AJENO_DPROJ}),
     # OJO: en delphi_paserver el perfil se llama "name", no "profile". Un
@@ -335,11 +331,11 @@ try:
           not sin_clasificar,
           'sin clasificar: %s  (anadelo a PROBAR o a EXCLUIDOS con su motivo)'
           % sorted(sin_clasificar))
-    # 43 = el contrato entero con los interruptores y el vault encendidos.
+    # 42 = el contrato entero con los interruptores y el vault encendidos.
     # Con >=30, un recorte de ocho tools pasaba callado y el descubridor
     # perdia justo a las de registro condicional (auditoria 21-sep).
     check('G1b ...y la lista mira el contrato VIVO, no una copia',
-          len(tools) >= 43, '%d tools' % len(tools))
+          len(tools) >= 42, '%d tools' % len(tools))
 
     # ------------------------------------------------------------------ G2
     # Y ahora, una por una. Cada fallo aqui es un parametro por el que se
@@ -363,20 +359,21 @@ try:
     # ------------------------------------------------------------------ G4
     # El suelo es una capa REDUNDANTE: si se quedase vacio (RTTI que no
     # emite, un registro que cambia) no romperia nada y nadie lo notaria.
-    # Por eso publica cuantos parametros vigila. Son 43 y no las MARCAS
+    # Por eso publica cuantos parametros vigila. Son 41 y no las MARCAS
     # que hay en el fuente: la de TDelphiFileParams.path la heredan cuatro
     # tools (definition, signature, hover, completion) - una marca, cuatro
     # parametros del contrato. El primer censo contaba marcas y decia 39;
     # lo corrigio el propio servidor la primera vez que se le pregunto.
     # 1.0.16: 42 -> 43, porque delphi_desktop paso a ser la tool del
     # escritorio por perfil y gano el "project" marcado que tenia su alias.
+    # 22-sep: 43 -> 41, al retirar el alias delphi_adb_linux (out y project).
     w = call('delphi_workspace', {})
     try:
         vigilados = json.loads(w).get('server', {}).get('jailedParams', -1)
     except Exception:
         vigilados = -1
-    check('G4 el suelo de la puerta vigila los 43 parametros marcados',
-          vigilados == 43, 'jailedParams=%s' % vigilados)
+    check('G4 el suelo de la puerta vigila los 41 parametros marcados',
+          vigilados == 41, 'jailedParams=%s' % vigilados)
 
     # ----------------------------------------------------------------- G2b
     # Los dos parametros de delphi_changeset que la tabla no puede sondar

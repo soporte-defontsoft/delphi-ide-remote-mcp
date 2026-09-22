@@ -196,12 +196,7 @@ try:
           'hay una captura bajo %s' % FUERA)
 
     # ------------------------------------------------------------------ W2
-    # Su gemela de Linux, el mismo hueco. Se comprueba ANTES que el perfil a
-    # proposito: es una ruta local y no hace falta un destino vivo.
-    b = call('delphi_adb_linux', {'command': 'screenshot', 'profile': 'x',
-                                  'out': DIR_FUERA})
-    check('W2 el alias delphi_adb_linux tambien, sin necesitar un destino vivo',
-          rechazada_por_jaula(b), b[:280])
+    # (El alias delphi_adb_linux ya no existe; W1 cubre la unica tool.)
 
     # ------------------------------------------------------------------ W3
     # Las tres que SI se acordaban: se fijan para que no se desvien.

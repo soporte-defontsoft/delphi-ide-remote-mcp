@@ -117,14 +117,12 @@ def tool_info(nombre):
     return None
 
 # 1.0.16: la tool es delphi_desktop (el destino es el perfil, Linux o Windows);
-# delphi_adb_linux sigue registrada como alias en desuso con el mismo esquema.
+# delphi_adb_linux quedo un par de releases como alias en desuso y ya no existe.
 T = tool_info('delphi_desktop')
 check('la tool existe', T is not None, 'no aparece en tools/list')
 A = tool_info('delphi_adb_linux')
-check('el alias delphi_adb_linux existe y se declara en desuso',
-      A is not None and 'DEPRECATED' in A.get('description', ''), (A or {}).get('description', '')[:120])
-check('el alias tiene el MISMO esquema que delphi_desktop',
-      A is not None and T is not None and A.get('inputSchema') == T.get('inputSchema'), 'esquemas distintos')
+check('el alias delphi_adb_linux ya no esta registrado',
+      A is None, (A or {}).get('description', '')[:120])
 
 desc = (T or {}).get('description', '')
 check('su descripcion ensena el flujo (captura -> mide -> pulsa)',

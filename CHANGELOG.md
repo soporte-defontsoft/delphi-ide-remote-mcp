@@ -29,6 +29,12 @@ pressed - in that order, released in reverse, one gesture - on Linux as
 evdev codes, on Windows by name, through the same combination both nodes
 already had inside.
 
+### Removed - `delphi_adb_linux`, the deprecated alias of `delphi_desktop`
+It was kept "one release" in 1.0.16 so cached schemas kept working, stayed
+through 1.0.17, and goes now: one desktop tool, one name, 42 tools. A client
+still calling the old name gets the unknown-tool answer; `delphi_desktop`
+takes exactly the same parameters.
+
 ### Fixed - the live tool descriptions and the documentation tell one story
 A consolidation pass measured every tool's live contract (`delphi_help
 command=tool`) against TOOLS.md, the README, the skill, the ini template and

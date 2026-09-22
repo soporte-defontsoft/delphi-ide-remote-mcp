@@ -2144,7 +2144,7 @@ begin
      MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
        'delphi_changeset', 'delphi_build', 'delphi_run', 'delphi_package',
        'delphi_upload', 'delphi_delete', 'delphi_move', 'delphi_desktop',
-       'delphi_adb_linux', 'vault_append', 'vault_create', 'vault_patch']) then
+       'vault_append', 'vault_create', 'vault_patch']) then
     Exit(WriteDenied(AToolName));
   // ...and the same for the WRITING half of delphi_git: on a read-only server
   // a clone has no business being explained in terms of remote policy.

@@ -164,8 +164,7 @@ is no desktop to reach, whatever the network says. The machine is
 the `profile` parameter, never a different tool. No `project` needed: the
 node bundled with the server deploys and UPDATES itself on the target on
 first use (a `node.ver` stamp), the right binary for that system - nothing
-is compiled or installed by hand. (`delphi_adb_linux` is the old name and
-still works as an alias.)
+is compiled or installed by hand.
 
 Flow: `screenshot` brings the WHOLE desktop here as a PNG -> LOOK at it and
 measure the pixel -> `tap x= y=` presses exactly there (the node converts

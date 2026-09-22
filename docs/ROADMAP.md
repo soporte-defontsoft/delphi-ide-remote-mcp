@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-09-22 (current release v1.0.17-beta, 43 tools).
+Status page as of 2026-09-22 (current release v1.0.17-beta; 42 tools in the next one, the `delphi_adb_linux` alias gone).
 
 ## Delivered
 
@@ -21,7 +21,7 @@ Status page as of 2026-09-22 (current release v1.0.17-beta, 43 tools).
 - `rename_symbol mode=apply` (1.0.17)
 - HTTP session TTL (1.0.17)
 - Bounded per-client notification queue (200)
-- Dead keys and key modifiers on the desktop node (unreleased, `[Unreleased]` in the CHANGELOG)
+- Dead keys and key modifiers on the desktop node; the `delphi_adb_linux` alias retired (unreleased, `[Unreleased]` in the CHANGELOG)
 
 ## Open
 
@@ -32,7 +32,6 @@ Status page as of 2026-09-22 (current release v1.0.17-beta, 43 tools).
 - `delphi_run` stdin / env
 - Progress and cancellation for long builds; `POST /files` upload
 - LSIF as a references backend (measured feasible, see [DELPHILSP-NOTES.md](DELPHILSP-NOTES.md))
-- Remove the `delphi_adb_linux` alias
 - Stable 1.0: drop BETA
 
 ## Parked (the operator keeps them on the list, not now)

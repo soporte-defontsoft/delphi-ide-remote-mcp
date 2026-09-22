@@ -6,8 +6,8 @@ unit Mcp.Tools.Desktop;
   Hasta 1.0.15 se llamaba delphi_adb_linux y habia otra tool, delphi_desktop,
   que corria el nodo en LOCAL con un interruptor propio (AllowDesktopControl):
   dos caminos y dos modelos de permiso para lo mismo. Decision de David
-  (21-sep-2026): un solo camino, por PAServer y perfil; el nombre viejo sigue
-  registrado como ALIAS en desuso con los mismos parametros.
+  (21-sep-2026): un solo camino, por PAServer y perfil. El nombre viejo quedo
+  dos releases como ALIAS en desuso y se retiro (22-sep-2026).
 
   La forma es la de adb, de arriba abajo: el agente habla con ESTE servidor,
   este habla con el nodo que vive en la maquina de destino, y el nodo habla
@@ -91,13 +91,6 @@ type
     constructor Create; override;
   end;
 
-  { El nombre viejo, en desuso: la MISMA tool, para que un cliente con el
-    esquema cacheado siga funcionando una version mas. }
-  TDesktopAliasTool = class(TDesktopLinuxTool)
-  public
-    constructor Create; override;
-  end;
-
 implementation
 
 uses
@@ -172,13 +165,6 @@ begin
   inherited;
   FName := 'delphi_desktop';
   FDescription := SD_ADBLINUX;
-end;
-
-constructor TDesktopAliasTool.Create;
-begin
-  inherited;
-  FName := 'delphi_adb_linux';
-  FDescription := SD_ADBLINUX_ALIAS;
 end;
 
 var
@@ -539,8 +525,6 @@ initialization
   GPerfiles := TObjectDictionary<string, TCriticalSection>.Create([doOwnsValues]);
   TMCPRegistry.RegisterTool('delphi_desktop',
     function: IMCPTool begin Result := TDesktopLinuxTool.Create; end);
-  TMCPRegistry.RegisterTool('delphi_adb_linux',
-    function: IMCPTool begin Result := TDesktopAliasTool.Create; end);
 
 finalization
   GPerfiles.Free;

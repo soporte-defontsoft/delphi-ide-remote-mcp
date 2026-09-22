@@ -350,7 +350,7 @@ Deploy declares the built `.apk` as `output`.
 
 ### `delphi_help`
 
-THE MAP of this server, so an agent does not have to spend context working it out. `command=tasks` (the default) gives the task → tool table, one line each: what do I use to read, to edit, to compile, to change several files at once, to rename, to test, to deploy. `command=tool name=<tool>` gives ONE tool in full (description + parameters) without asking for `tools/list`, which returns all 43 at once. `command=conventions` gives the rules that hold for every tool: paths and virtual drives, the jail, anchored editing, the backups, encodings. Start here after connecting.
+THE MAP of this server, so an agent does not have to spend context working it out. `command=tasks` (the default) gives the task → tool table, one line each: what do I use to read, to edit, to compile, to change several files at once, to rename, to test, to deploy. `command=tool name=<tool>` gives ONE tool in full (description + parameters) without asking for `tools/list`, which returns all 42 at once. `command=conventions` gives the rules that hold for every tool: paths and virtual drives, the jail, anchored editing, the backups, encodings. Start here after connecting.
 
 *Access: read-only.*
 
@@ -485,7 +485,7 @@ Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.168.1.163;SERIA
 
 ### `delphi_desktop`
 
-The desktop of the machine behind a PAServer profile - a Linux target, a Windows target, or **this server itself** when a PAServer runs in its own user session - the way `delphi_adb` gives you an Android one: SEE the screen and ACT on it. Until 1.0.15 this tool was `delphi_adb_linux`, and a second tool called `delphi_desktop` ran the node locally under a switch of its own (`AllowDesktopControl`): two paths and two permission models for one thing. Since 1.0.16 there is ONE path, PAServer and a profile, and the machine is a parameter; `delphi_adb_linux` stays registered as a deprecated alias with the same parameters, and `AllowDesktopControl` no longer exists.
+The desktop of the machine behind a PAServer profile - a Linux target, a Windows target, or **this server itself** when a PAServer runs in its own user session - the way `delphi_adb` gives you an Android one: SEE the screen and ACT on it. Until 1.0.15 this tool was `delphi_adb_linux`, and a second tool called `delphi_desktop` ran the node locally under a switch of its own (`AllowDesktopControl`): two paths and two permission models for one thing. Since 1.0.16 there is ONE path, PAServer and a profile, and the machine is a parameter; `delphi_adb_linux` stayed two releases as a deprecated alias and no longer exists, and neither does `AllowDesktopControl`.
 
 The machine hangs off a PAServer profile (the same profiles `delphi_paserver` builds and deploys with) and runs a small Delphi node **this server deploys and updates by itself**, the right binary for that system (the ELF for a Linux, the `.exe` for a Windows, read from the profile's own platform) - nothing else is installed on it. With `project` empty (the normal case) the bundled node is pushed to the target on first use and refreshed whenever its version stamp stops matching: the server compares the target's `node.ver` (the binary's SHA-256) against its bundled copy once per profile and session, so an updated server heals every already-provisioned machine on the next gesture. The node's sources live in `src_desktop_node/`. **Linux: GNOME only for now** (Zorin 18 and Fedora, measured): portal capture, Mutter scale, Super overview. **Windows: measured 2026-09-22** against a PAServer running in the user's session of this very server (`windows-local`, 127.0.0.1).
 
@@ -515,13 +515,6 @@ The target needs a graphical session open - a headless box has nothing to show -
 | `out` | string | optional | screenshot: folder (or file with the capture's real extension) where the PNG lands, jailed like any path of ours. Retrieve it with `delphi_fetch` |
 | `region` | string | optional | screenshot: `x,y,w,h` in DESKTOP pixels - the answer is only that piece of the same capture, at full resolution, with `origin {x,y}`: what you measure on the crop is pressed at (origin.x + x, origin.y + y) |
 | `window` | string | optional | screenshot, Windows targets only: part of a window title - the capture cropped to the first visible window whose title contains it, with `origin` like region, plus the whole `windows` list |
-
-### `delphi_adb_linux`
-
-**Deprecated alias of `delphi_desktop`**: the same tool, the same parameters, kept one release so a client with a cached schema keeps working. Use `delphi_desktop`.
-
-*Access: as `delphi_desktop`.*
-
 
 ### `delphi_components`
 

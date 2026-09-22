@@ -1458,11 +1458,7 @@ const
     'graphicalEnv, the session the node ran in. The target needs a graphical ' +
     'session open for the user PAServer runs as; a headless box, a locked ' +
     'Windows or a Windows service (session 0) has nothing to show. It was ' +
-    'delphi_adb_linux until 1.0.15; that name stays as an alias one release.';
-  SD_ADBLINUX_ALIAS =
-    'DEPRECATED alias of delphi_desktop: the SAME tool with the same ' +
-    'parameters, kept one release so cached schemas keep working. Use ' +
-    'delphi_desktop.';
+    'delphi_adb_linux until 1.0.15; that name no longer exists.';
   SP_ADBLINUX_COMMAND =
     'screenshot (the whole desktop, brought here as a PNG; default) | tap ' +
     '(press at x,y MEASURED ON THAT SCREENSHOT) | type (write "text" - with ' +
@@ -2476,8 +2472,7 @@ const
     '  empaquetar una carpeta ............. delphi_package'#10 +
     '  desplegar y ejecutar en un target .. delphi_paserver, delphi_adb'#10 +
     '  Android ............................ delphi_adb'#10 +
-    '  Android desde un Linux remoto ...... delphi_adb_linux'#10 +
-    '  ver y tocar la pantalla del operador delphi_desktop'#10 +
+    '  ver y tocar el escritorio de un target delphi_desktop'#10 +
     #10 +
     'GIT Y MEMORIA'#10 +
     '  ramas, commit, diff, stash ......... delphi_git'#10 +
