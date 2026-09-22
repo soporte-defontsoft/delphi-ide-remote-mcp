@@ -29,6 +29,15 @@ pressed - in that order, released in reverse, one gesture - on Linux as
 evdev codes, on Windows by name, through the same combination both nodes
 already had inside.
 
+### Fixed - `delphi_test run` on a DUnitX project lists the failing tests
+Measured the day DUnitX was installed on this machine (2026-09-22, the
+installer's "DUnit Unit Testing Frameworks" option, which brings DUnitX too):
+a suite with one failing test answered `failed=1` and an EMPTY `failures`,
+while `outputTail` carried DUnitX's "Failing Tests" block with the test name
+and its message. The block is parsed now (and "Errored Tests" with it): one
+entry per test, `Name - Message`. The hand-written PASS/FAIL runner was
+already listed correctly.
+
 ### Fixed - `delphi_paserver remove-profile` also removes the empty folder paclient left in the IDE's SDKs directory
 `paclient` creates an empty `SDKs\<profile>` folder when a profile is
 registered and nobody collected it on removal: measured on the operator's

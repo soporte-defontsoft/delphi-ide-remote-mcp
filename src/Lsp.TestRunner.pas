@@ -184,6 +184,43 @@ begin
     if M.Success then begin Passed := StrToIntDef(M.Groups[1].Value, -1); HasNumbers := True; end;
     M := TRegEx.Match(AOutput, '(?i)Tests?\s+Failed\s*:\s*(\d+)');
     if M.Success then begin Failed := StrToIntDef(M.Groups[1].Value, -1); HasNumbers := True; end;
+    // El bloque "Failing Tests" (y "Errored Tests") del logger de consola de
+    // DUnitX: el nombre del test en una linea y su "Message:" en la
+    // siguiente. Sin leerlo, failures venia VACIO con failed=1 (medido el
+    // 2026-09-22, el dia que DUnitX se instalo en esta maquina).
+    var Rojos := TStringList.Create;
+    try
+      var EnFallos := False;
+      for L in AOutput.Replace(#13#10, #10).Split([#10]) do
+      begin
+        var T := L.Trim;
+        if not EnFallos then
+        begin
+          EnFallos := TRegEx.IsMatch(T, '(?i)^(Failing|Errored)\s+Tests\s*$');
+          Continue;
+        end;
+        // DUnitX deja una linea EN BLANCO justo despues de "Failing Tests"
+        // (medido en la salida cruda): un blanco no cierra el bloque.
+        if T = '' then
+          Continue;
+        if TRegEx.IsMatch(T, '(?i)^(Tests?\s+[a-z]+\s*:|Done\b)') then
+        begin
+          EnFallos := False;
+          Continue;
+        end;
+        if TRegEx.IsMatch(T, '(?i)^(Failing|Errored)\s+Tests\s*$') then
+          Continue;
+        if T.StartsWith('Message:', True) and (Rojos.Count > 0) then
+          Rojos[Rojos.Count - 1] := Rojos[Rojos.Count - 1] + ' - ' + T.Substring(8).Trim
+        else
+          Rojos.Add(T);
+      end;
+      for var R in Rojos do
+        if Fails.Count < 50 then
+          Fails.Add(R);
+    finally
+      Rojos.Free;
+    end;
   end;
   if not HasNumbers then
   begin
