@@ -65,6 +65,10 @@ type
   conozco. }
 function TeclaPorNombre(const ANombre: string): Word;
 
+{ El estado del escritorio ahora mismo: escritorio de entrada, sesion remota
+  o de consola, ventana con foco. El nodo lo escribe en cada ejecucion para
+  poder comparar los casos en que la captura falla con los que no. }
+function EstadoDelEscritorio: string;
 
 {$ENDIF}
 
@@ -89,6 +93,45 @@ const
   2026-07-04), pero ese caso aqui no se da. }
 function PrintWindow(hwnd: HWND; hdcBlt: HDC; nFlags: UINT): BOOL; stdcall;
   external user32 name 'PrintWindow';
+
+{ El estado del escritorio EN EL INSTANTE en que el DC de pantalla nego la
+  copia: el fallo es intermitente y no se provoca (medido 2026-09-22: ni el
+  cliente RDP minimizado ni el terminal de PAServer minimizado lo causan),
+  asi que la siguiente vez que ocurra tiene que contarse solo. Escritorio de
+  entrada (Default; Winlogon = escritorio seguro de un UAC o del bloqueo),
+  si la sesion es remota, y la ventana con el foco. }
+function EstadoDelEscritorio: string;
+var
+  D: HDESK;
+  Nombre: array[0..255] of Char;
+  Largo: DWORD;
+  Foco: HWND;
+  Titulo: array[0..255] of Char;
+begin
+  D := OpenInputDesktop(0, False, DESKTOP_READOBJECTS);
+  if D = 0 then
+    Result := 'escritorio de entrada: no se pudo abrir (' +
+      SysErrorMessage(GetLastError) + ')'
+  else
+  try
+    Largo := 0;
+    if GetUserObjectInformation(D, UOI_NAME, @Nombre[0], SizeOf(Nombre), Largo) then
+      Result := 'escritorio de entrada: ' + string(PChar(@Nombre[0]))
+    else
+      Result := 'escritorio de entrada: sin nombre';
+  finally
+    CloseDesktop(D);
+  end;
+  if GetSystemMetrics(SM_REMOTESESSION) <> 0 then
+    Result := Result + '; sesion remota'
+  else
+    Result := Result + '; sesion de consola';
+  Foco := GetForegroundWindow;
+  if (Foco <> 0) and (GetWindowText(Foco, Titulo, Length(Titulo)) > 0) then
+    Result := Result + '; foco en "' + string(PChar(@Titulo[0])) + '"'
+  else
+    Result := Result + '; sin ventana con foco';
+end;
 
 type
   TListaVentanas = TList<TVentanaWin>;
@@ -193,6 +236,7 @@ var
   Info: TBitmapInfo;
   Bmp, Previo: HBITMAP;
   Pixeles: Pointer;
+  Cod: DWORD;
 begin
   Result := False;
   FError := '';
@@ -243,13 +287,15 @@ begin
              not BitBlt(DCMemoria, 0, 0, FAncho, FAlto, DCPantalla,
                FIzq, FSup, SRCCOPY or CAPTUREBLT) then
           begin
-            FError := 'con CAPTUREBLT: ' + SysErrorMessage(GetLastError);
+            Cod := GetLastError;   { antes de formatear nada: FormatMessage lo pisa }
+            FError := Format('con CAPTUREBLT: %s [%d]', [SysErrorMessage(Cod), Cod]);
             if (GetEnvironmentVariable('MCPDESKTOP_SIN_BITBLT') = '1') or
                not BitBlt(DCMemoria, 0, 0, FAncho, FAlto, DCPantalla,
                  FIzq, FSup, SRCCOPY) then
             begin
-              FError := 'la copia de pantalla fallo (' + FError + '; sin el: ' +
-                SysErrorMessage(GetLastError) + ')';
+              Cod := GetLastError;
+              FError := Format('la copia de pantalla fallo (%s; sin el: %s [%d]; %s)',
+                [FError, SysErrorMessage(Cod), Cod, EstadoDelEscritorio]);
               { RESPALDO: el DC de pantalla niega la copia a ratos (medido
                 2026-09-22 con la sesion activa: "Acceso denegado" en un
                 BitBlt y no en el siguiente). Cada ventana de arriba tiene su

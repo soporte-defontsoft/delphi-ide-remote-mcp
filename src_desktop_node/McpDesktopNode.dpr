@@ -82,6 +82,10 @@ begin
     Writeln('  ', TOSVersion.ToString);
     Writeln(Format('  escritorio %dx%d pixeles, escala %.2f',
       [Escritorio.Ancho, Escritorio.Alto, Escritorio.Escala]));
+    { Siempre, no solo al fallar: la captura del DC de pantalla se niega a
+      ratos sin causa conocida (2026-09-22) y hay que poder comparar el
+      estado de los casos buenos con el de los malos. }
+    Writeln('  ESTADO: ', EstadoDelEscritorio);
     Writeln;
 
     { Mismas ordenes que en Linux y mismas coordenadas: las de LA CAPTURA. }
