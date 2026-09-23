@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.1.1] - 2026-09-23
 
 Fixes found by Hermes' 1.2 field battery (2026-09-23), verified against the
 code before being accepted.
