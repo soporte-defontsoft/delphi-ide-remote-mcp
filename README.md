@@ -464,7 +464,7 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   alias; the startup log lists every workspace it loaded and **warns** about misspelled
   sections (`[Workopenclaw]`…), tokenless workspaces and unparseable roots, so a config
   mistake never fails silently. And a workspace carries **everything else** too:
-  `AllowRun`, `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`,
+  `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`,
   `LibraryZone`,
   `AgentConfinement`, `SharedFolders`, `ReadOnlyPaths`, `Profile` — and the reach lists `GitRemotes`,
   `RemoteHosts`, `RemoteRunProjects`. Nothing is inherited from anywhere: an absent switch

@@ -8,7 +8,10 @@ parameter reference: [TOOLS.md](TOOLS.md).
 The short version:
 
 1. **First call `delphi_workspace`** — roots, access level, virtual drives, which
-   Delphi. **Then `delphi_help`** for the map of the tools.
+   Delphi. **Then `delphi_help`** for the map of the tools. And **identify
+   yourself**: `clientInfo.name` = your agent id, or `agent=<id>` on every
+   `delphi_report` / `delphi_messages` call (a generic client name leaves
+   your mail unread).
 2. **Nothing executes on the server** except a test project through `delphi_test` (`AllowTests`); a program runs on a target through `delphi_paserver remote-run`.
 3. **Nothing is hard-deleted**: `delphi_delete` moves to the trash and `delphi_move`
    restores from it. The one exception is `delphi_delete purge=true`, which is

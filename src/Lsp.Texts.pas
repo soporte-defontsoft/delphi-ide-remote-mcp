@@ -2682,7 +2682,7 @@ const
     '"firstError": lo de detras suele ser su sombra.'#10 +
     #10 +
     '9. EJECUTAR ES OPCIONAL Y ESTA APAGADO salvo que el operador lo ' +
-    'encienda (AllowRun, AllowTests, AllowRemoteRun). Si te lo rechaza, no ' +
+    'encienda (AllowTests, AllowRemoteRun, AllowBuildScripts). Si te lo rechaza, no ' +
     'insistas: dilo con delphi_report y sigue con otra cosa.'#10 +
     #10 +
     '10. EL BUZON ES UN TABLON, NO CORREO PRIVADO. Se indexa por el id que ' +
@@ -2704,7 +2704,11 @@ const
     'lo purgas tu (otro agente que lo intente se lleva un RECHAZADO). No es ' +
     'una contrasena -el token es comun a todos-, pero para hacerse pasar por ' +
     'ti hay que robarte la sesion, no basta con escribir tu nombre. Trabaja ' +
-    'en TU carpeta de proyecto y no pisaras a nadie.'#10 +
+    'en TU carpeta de proyecto y no pisaras a nadie. Si tu cliente no te ' +
+    'deja fijar clientInfo.name (se presenta como "mcp" o con un nombre ' +
+    'generico), pasa agent=<tu id> en delphi_report y delphi_messages en ' +
+    'CADA llamada: agent= gana sobre el handshake. Medido: un agente que ' +
+    'de dia era "hermes" y de noche "mcp" dejo seis notas sin leer.'#10 +
     #10 +
     '13. SI ALGO NO SE PUEDE HACER POR AQUI, ESO ES UN HALLAZGO. Cuentalo con ' +
     'delphi_report (kind=limitation) con la llamada exacta y lo que ' +

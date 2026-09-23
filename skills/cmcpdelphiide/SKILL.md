@@ -12,6 +12,13 @@ on your side.
 
 ## First contact (always, in this order)
 
+**Before the first call: identify yourself.** Your `clientInfo.name` in the
+MCP handshake is your identity here: the mailbox, the trash purge and the
+sessions list use it. Set it to your agent id (e.g. `hermes`). If your client
+cannot set it (it says `mcp` or a generic name), pass `agent=<your id>` in
+`delphi_report` and `delphi_messages` on EVERY call: `agent=` wins over the
+handshake.
+
 1. `delphi_workspace` - your allowed roots, your access level, WHICH
    Delphi you are working with (`activeDelphiName` "RAD Studio 13",
    `activeDelphiPersonality` "Delphi 13", edition and build - use those
@@ -132,7 +139,10 @@ on your side.
   `delphi_messages command=read agent=<your id>` before going on: the
   operator answered a report of yours or changed the plan. Messages are
   delivered once; act on them and, when an answer is due, reply with
-  `delphi_report`. Use the same `agent` id in both tools.
+  `delphi_report`. Use the same `agent` id in both tools. If your client
+  cannot set `clientInfo.name` to your id (it introduces itself as `mcp` or
+  some generic name), `agent=` is not optional: without it the mailbox looks
+  empty while mail waits under your name.
 
 ## Running on the target (not on this server)
 

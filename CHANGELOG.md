@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- The house rules (`delphi_help command=conventions`, rule 12), the agent
+  skill and AGENT.md now say how to identify: `clientInfo.name` set to the
+  agent id, or `agent=<id>` on every `delphi_report` / `delphi_messages`
+  call when the client cannot set it (a client introducing itself as `mcp`
+  left six notes unread on 2026-09-22). Rule 9 no longer names `AllowRun`.
+
 ## [1.1.1] - 2026-09-23
 
 Fixes found by Hermes' 1.2 field battery (2026-09-23), verified against the
