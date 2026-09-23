@@ -53,6 +53,7 @@ type
     FConfirm: Boolean;
     FAddUses: string;
     FSection: string;
+    FRemoveUses: string;
   public
     [SchemaDescription('Absolute path of the Delphi file')]
     [Required]
@@ -96,6 +97,8 @@ type
     property AddUses: string read FAddUses write FAddUses;
     [SchemaDescription('ADDUSES mode: "interface" or "implementation" (default implementation: a new unit goes there unless one of its types is used in the interface)')]
     property Section: string read FSection write FSection;
+    [SchemaDescription('REMOVEUSES mode: unit names to take out of the uses clause of "section", separated by ; - the inverse of adduses. A directive around the entry stays glued to its neighbour, and the clause goes whole when it empties. Names not there are reported, not an error. For a .dpr/.dpk use delphi_config remove-unit')]
+    property RemoveUses: string read FRemoveUses write FRemoveUses;
   end;
 
   TDelphiReadTool = class(TMCPToolBase<TDelphiReadParams>)
@@ -156,11 +159,13 @@ begin
     '- also inside a .dpr - and, for methods, writes BOTH halves: ' +
     'declaration and qualified implementation), CREATE (createunit=true; ' +
     'new files honour the encoding configured in the IDE) and RESTORE ' +
-    '(restore=true, two-step) and ADDUSES (adduses="UnitA;UnitB" + ' +
+    '(restore=true, two-step), ADDUSES (adduses="UnitA;UnitB" + ' +
     'section=interface|implementation: the units land in that section''s ' +
     'uses clause, commas and terminator written by the engine, the clause ' +
     'created under the section keyword when there is none, names already ' +
-    'there skipped; a .dpr/.dpk goes through delphi_config add-unit). It ' +
+    'there skipped) and REMOVEUSES (removeuses="UnitA", the inverse: the ' +
+    'clause goes whole when it empties; a .dpr/.dpk goes through ' +
+    'delphi_config add-unit / remove-unit). It ' +
     'refuses to rewrite whole files, refuses ' +
     'binary designer files (TPF0), makes automatic backups, writes ' +
     'atomically, and audits the result (encoding, EOLs, mojibake, end. ' +
@@ -234,6 +239,14 @@ begin
       Exit;
     Exit(AddUsesToUnit(TPath.GetFullPath(Params.Path),
       Params.AddUses.Split([';', ','], TStringSplitOptions.ExcludeEmpty), Params.Section));
+  end;
+  if Params.RemoveUses.Trim <> '' then
+  begin
+    Result := PathDenied(Params.Path);
+    if Result <> '' then
+      Exit;
+    Exit(RemoveUsesFromUnit(TPath.GetFullPath(Params.Path),
+      Params.RemoveUses.Split([';', ','], TStringSplitOptions.ExcludeEmpty), Params.Section));
   end;
   A := Default(TPatchArgs);
   A.Path := Params.Path;

@@ -2133,6 +2133,25 @@ const
     'ANADIDAS al uses de %s de %s: %s.%s%s Copia previa en __delphi-patch.'#10 +
     'La clausula queda (releida del disco):'#10'%s';
 
+  { removeuses: la inversa de adduses. }
+  SR_REMOVEUSES_NOT_PAS_FMT =
+    'RECHAZADO: removeuses es para units (.pas); %s es un proyecto. Para ' +
+    'sacar una unit de un .dpr/.dpk usa delphi_config command=remove-unit.';
+  SR_REMOVEUSES_NEED_NAMES =
+    'RECHAZADO: falta "removeuses": los nombres de unit a quitar, separados ' +
+    'por ; (UCliente;UOtra).';
+  SN_REMOVEUSES_NO_CLAUSE_FMT =
+    'La seccion %s de %s no tiene uses: nada que quitar.';
+  SN_REMOVEUSES_ABSENT_FMT =
+    'No estaba: %s en el uses de %s de %s. Nada que escribir.';
+  SN_REMOVEUSES_SOME_ABSENT_FMT =
+    ' No estaban: %s.';
+  SN_REMOVEUSES_GONE_FMT =
+    '(la seccion %s se queda sin clausula uses: se ha quitado entera)';
+  SN_REMOVEUSES_REMOVED_FMT =
+    'QUITADAS del uses de %s de %s: %s.%s Copia previa en __delphi-patch.'#10 +
+    'La clausula queda (releida del disco):'#10'%s';
+
   SN_UNIT_REMOVED_FMT =
     'QUITADA la unit %s del proyecto %s (%s%s%s). El fichero %s sigue en ' +
     'disco; borralo con delphi_delete si ya no lo quieres. Copias previas en ' +

@@ -93,6 +93,9 @@ function BlankComments(const S: string): string;
   implementation) de un .pas; la clausula la escribe el motor. }
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
   const ASection: string): string;
+{ removeuses de delphi_edit: la inversa; la clausula se va entera si queda vacia. }
+function RemoveUsesFromUnit(const APasPath: string; const ANames: TArray<string>;
+  const ASection: string): string;
 
 function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Integer;
 
@@ -669,8 +672,14 @@ begin
   SetLength(Parts, Length(AEntries));
   for I := 0 to High(AEntries) do
   begin
-    // a multi-line entry (directives around it) keeps its lines indented too
-    E := AEntries[I].Replace(#13#10, #10).Replace(#10, NL + Indent);
+    // a multi-line entry (directives around it) keeps its lines indented too:
+    // cada linea se reindenta desde cero, que la que venia con su sangria
+    // propia (la vecina de una entrada quitada) salia con las dos (medido
+    // en vivo con removeuses, 2026-09-23)
+    var Lineas := AEntries[I].Replace(#13#10, #10).Split([#10]);
+    for var J := 0 to High(Lineas) do
+      Lineas[J] := Lineas[J].Trim;
+    E := string.Join(NL + Indent, Lineas);
     Parts[I] := Indent + E;
   end;
   Body := IfThen(U.Keyword <> '', U.Keyword, 'uses') + NL + string.Join(',' + NL, Parts) + ';';
@@ -980,11 +989,39 @@ begin
   Result := False;
 end;
 
+{ Las entradas de una clausula SIN la unit dicha. El comentario o directiva
+  que precede a la entrada quitada se queda, pegado a la siguiente (o a la
+  anterior si era la ultima), para no desbalancear un IFDEF. Lo hacia
+  remove-unit (.dpr/.dpk) en su sitio; ahora tambien removeuses (.pas): un
+  solo sitio (2026-09-23). }
+function EntriesWithout(const AEntries: TArray<string>; const AUnitName: string): TArray<string>;
+var
+  E, Carry, Prefix, Core: string;
+begin
+  Result := [];
+  Carry := '';
+  for E in AEntries do
+    if not SameText(EntryUnitName(E), AUnitName) then
+    begin
+      if Carry <> '' then
+        Result := Result + [Carry + #10 + E]
+      else
+        Result := Result + [E];
+      Carry := '';
+    end
+    else
+    begin
+      SplitEntryPrefix(E, Prefix, Core);
+      Carry := Prefix; // its directive/comment stays, glued to the next entry
+    end;
+  if (Carry <> '') and (Length(Result) > 0) then
+    Result[High(Result)] := Result[High(Result)] + #10 + Carry;
+end;
+
 function RemoveProjectUnitNucleo(const AProject, APasPath: string;
   AFileGoesToo: Boolean): string;
 var
   Dpr, Dproj, Enc, Text, UnitName, Entry, Include, FormName, ClassName: string;
-  Carry, Prefix, Core: string;
   U: TUsesClause;
   Entries: TArray<string>;
   E: string;
@@ -1019,24 +1056,7 @@ begin
       Include := EntryInclude(Entry);
     if FormName = '' then
       FormName := EntryFormName(Entry);
-    Entries := [];
-    Carry := '';
-    for E in U.Entries do
-      if not SameText(EntryUnitName(E), UnitName) then
-      begin
-        if Carry <> '' then
-          Entries := Entries + [Carry + #10 + E]
-        else
-          Entries := Entries + [E];
-        Carry := '';
-      end
-      else
-      begin
-        SplitEntryPrefix(E, Prefix, Core);
-        Carry := Prefix; // its directive/comment stays, glued to the next entry
-      end;
-    if (Carry <> '') and (Length(Entries) > 0) then
-      Entries[High(Entries)] := Entries[High(Entries)] + #10 + Carry;
+    Entries := EntriesWithout(U.Entries, UnitName);
     Text := ReplaceUses(Text, U, Entries);
     // the .pas gone: only the {Form} variable is known, match on it
     N := RemoveCreateForm(Text, ClassName, FormName);
@@ -1398,6 +1418,90 @@ begin
       string.Join(', ', Faltan),
       IfThen(Length(YaEstan) > 0, Format(SN_ADDUSES_SOME_PRESENT_FMT, [string.Join(', ', YaEstan)]), ''),
       IfThen(Creada, Format(SN_ADDUSES_CREATED_FMT, [Sec]), ''),
+      Clausula]);
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
+{ removeuses: la inversa de adduses. Si la clausula se queda vacia se va
+  entera, con el salto de linea que la seguia: un `uses ;` no compila. }
+function RemoveUsesFromUnit(const APasPath: string; const ANames: TArray<string>;
+  const ASection: string): string;
+var
+  Text, Enc, Sec, Nombre, E, Clausula, Blank: string;
+  M: TMatch;
+  U: TUsesClause;
+  Names, Entries, Quitadas, NoEstaban: TArray<string>;
+  PosSec, Fin: Integer;
+begin
+  if not SameText(TPath.GetExtension(APasPath), '.pas') then
+    Exit(Format(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
+  Names := [];
+  for Nombre in ANames do
+    if Nombre.Trim <> '' then
+      Names := Names + [Nombre.Trim];
+  if Length(Names) = 0 then
+    Exit(SR_REMOVEUSES_NEED_NAMES);
+  for Nombre in Names do
+    if not TRegEx.IsMatch(Nombre, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+      Exit(Format(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
+  Sec := LowerCase(ASection.Trim);
+  if Sec = '' then
+    Sec := 'implementation';
+  if not MatchText(Sec, ['interface', 'implementation']) then
+    Exit(Format(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
+  EnterFileEdit;
+  try
+    if not TFile.Exists(APasPath) then
+      Exit(Format(SR_ADDUSES_NO_FILE_FMT, [APasPath]));
+    Text := PatchLoadText(APasPath, Enc);
+    Blank := BlankComments(Text);
+    M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
+    if not M.Success then
+      Exit(Format(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
+    PosSec := M.Index + M.Length;
+    U := FindUses(Text, PosSec);
+    if not U.Found then
+      Exit(Format(SN_REMOVEUSES_NO_CLAUSE_FMT, [Sec, TPath.GetFileName(APasPath)]));
+    Entries := U.Entries;
+    Quitadas := [];
+    NoEstaban := [];
+    for Nombre in Names do
+      if LocateEntry(U, Nombre, E) then
+      begin
+        Quitadas := Quitadas + [Nombre];
+        Entries := EntriesWithout(Entries, Nombre);
+      end
+      else
+        NoEstaban := NoEstaban + [Nombre];
+    if Length(Quitadas) = 0 then
+      Exit(Format(SN_REMOVEUSES_ABSENT_FMT, [string.Join(', ', Names), Sec,
+        TPath.GetFileName(APasPath)]));
+    if Length(Entries) = 0 then
+    begin
+      Fin := U.EndPos + 1;
+      while (Fin <= Length(Text)) and CharInSet(Text[Fin], [#10, #13]) do
+        Inc(Fin);
+      Text := Copy(Text, 1, U.StartPos - 1) + Copy(Text, Fin, MaxInt);
+    end
+    else
+      Text := ReplaceUses(Text, U, Entries);
+    PatchSaveText(APasPath, Text, Enc);
+    // el eco, releido del disco
+    Text := PatchLoadText(APasPath, Enc);
+    Blank := BlankComments(Text);
+    M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
+    Clausula := Format(SN_REMOVEUSES_GONE_FMT, [Sec]);
+    if M.Success then
+    begin
+      U := FindUses(Text, M.Index + M.Length);
+      if U.Found then
+        Clausula := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
+    end;
+    Result := Format(SN_REMOVEUSES_REMOVED_FMT, [Sec, TPath.GetFileName(APasPath),
+      string.Join(', ', Quitadas),
+      IfThen(Length(NoEstaban) > 0, Format(SN_REMOVEUSES_SOME_ABSENT_FMT, [string.Join(', ', NoEstaban)]), ''),
       Clausula]);
   finally
     LeaveFileEdit;

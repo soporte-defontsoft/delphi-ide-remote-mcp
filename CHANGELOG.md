@@ -76,6 +76,11 @@ code before being accepted.
 - A `delphi_move` that keeps the unit name (a folder change) reported
   "Referencias reescritas: 1" for replacing the name with itself; it now
   says 0 and touches nothing (measured live, 2026-09-23).
+- Rewriting a `uses`/`contains` clause gave a multi-line entry (a unit
+  wrapped in a directive, or the neighbour of one just removed) its own
+  indentation on top of the clause's: the line came out with two. Each
+  line is now re-indented from scratch (measured live with `removeuses`;
+  the same code serves add-unit and remove-unit).
 
 ### Removed
 
@@ -112,7 +117,10 @@ code before being accepted.
   keyword when there is none, names already there skipped, dotted names
   welcome. The mirror of `delphi_config add-unit` for a unit instead of
   a project (David, 2026-09-23: editing a unit's `uses` by hand is the
-  natural move, so the tool that edits sources gets the verb).
+  natural move, so the tool that edits sources gets the verb). `removeuses`
+  is the inverse: the entry goes, a directive around it stays glued to its
+  neighbour (the same code remove-unit uses), and the clause goes whole
+  when it empties.
 
 - `delphi_create kind=project-package`: a runtime package from zero, `.dpk`
   (`requires rtl`, no `contains` yet) plus a package `.dproj` measured against

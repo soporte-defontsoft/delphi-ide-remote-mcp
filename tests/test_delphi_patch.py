@@ -372,6 +372,32 @@ open(DPRX, 'wb').write(b'program Prog;\r\nbegin\r\nend.\r\n')
 out = call('delphi_edit', {"path": DPRX, "adduses": "X"})
 check('adduses: en un .dpr remite a add-unit', out.startswith('RECHAZADO') and 'add-unit' in out, out[:200])
 check('adduses: cp1252 intacto (sin BOM, CRLF)', not open(ADDU, 'rb').read().startswith(b'\xef\xbb\xbf') and b'\n' not in open(ADDU, 'rb').read().replace(b'\r\n', b''))
+# --- removeuses: la inversa ---
+out = call('delphi_edit', {"path": ADDU, "removeuses": "UOtra"})
+_src = open(ADDU, 'rb').read().decode('cp1252')
+check('removeuses: quita de implementation y la clausula sigue bien cerrada',
+      out.startswith('QUITADAS') and 'UOtra' not in _src and 'System.SysUtils,\r\n  Modules.API;\r\n' in _src, out[:300])
+out = call('delphi_edit', {"path": ADDU, "removeuses": "UOtra"})
+check('removeuses: la que no esta -> nada que escribir', out.startswith('No estaba'), out[:200])
+out = call('delphi_edit', {"path": ADDU, "removeuses": "System.Classes;UInterfaz;UNoEsta", "section": "interface"})
+_src = open(ADDU, 'rb').read().decode('cp1252')
+check('removeuses: la clausula vacia se va entera y lo dice',
+      out.startswith('QUITADAS') and 'No estaban: UNoEsta' in out and 'se ha quitado entera' in out
+      and 'interface\r\n\r\ntype\r\n' in _src and _src.count('\r\nuses\r\n') == 1, _src)
+out = call('delphi_edit', {"path": ADDU, "removeuses": "X", "section": "interface"})
+check('removeuses: seccion sin uses lo dice', 'no tiene uses' in out, out[:200])
+out = call('delphi_edit', {"path": DPRX, "removeuses": "X"})
+check('removeuses: en un .dpr remite a remove-unit', out.startswith('RECHAZADO') and 'remove-unit' in out, out[:200])
+# la vecina de una entrada envuelta en directiva: la directiva se queda y la
+# vecina conserva UNA sangria (medido en vivo: salia con dos)
+IFD = os.path.join(DIR, 'ConIfdef.pas')
+open(IFD, 'wb').write(CRLF.join([
+    'unit ConIfdef;', '', 'interface', '', 'uses', '  System.Classes,', '  {$IFDEF MSWINDOWS}',
+    '  Winapi.Windows,', '  {$ENDIF}', '  System.SysUtils;', '', 'implementation', '', 'end.', '']).encode('cp1252'))
+out = call('delphi_edit', {"path": IFD, "removeuses": "Winapi.Windows", "section": "interface"})
+_src = open(IFD, 'rb').read().decode('cp1252')
+check('removeuses: la directiva se queda y la vecina con una sola sangria',
+      out.startswith('QUITADAS') and '  {$IFDEF MSWINDOWS}\r\n  {$ENDIF}\r\n  System.SysUtils;' in _src, _src)
 
 # --- restore: two steps, byte-identical ---
 out = call('delphi_edit', {"path": PAS, "restore": True})
