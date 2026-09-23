@@ -588,7 +588,7 @@ begin
     for Ext in ['.dfm', '.fmx'] do
       if TFile.Exists(ChangeFileExt(Params.Dest, Ext)) then
         Exit('RECHAZADO: ya existe ' + ChangeFileExt(Params.Dest, Ext) + ' (no sobreescribo).');
-    Projects := ProjectsUsingUnit(Params.Path);
+    Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
   end;
   // UNA CARPETA ENTERA: se apunta ANTES de moverla que unit de dentro lista
   // que proyecto, porque despues las rutas viejas ya no existen. Una carpeta
@@ -608,7 +608,7 @@ begin
     begin
       if IsBackupPath(U) then
         Continue;
-      for var Pr in ProjectsUsingUnit(U) do
+      for var Pr in ProjectsUsingUnit(U, Params.Dest) do
         if not StartsText(Raiz, IncludeTrailingPathDelimiter(
              TPath.GetDirectoryName(TPath.GetFullPath(Pr)))) then
           Mudanza.Add(Pr + '|' + TPath.GetFullPath(U));

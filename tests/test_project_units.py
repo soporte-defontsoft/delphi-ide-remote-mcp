@@ -307,6 +307,22 @@ out = call('delphi_move', {"path": os.path.join(VDIR, 'UUtil.pas'), "dest": os.p
 check('move unit a .txt rechazado', 'RECHAZADO' in out, out)
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UUtil.pas'), "dest": os.path.join(VDIR, '2Mal.pas')})
 check('move unit a identificador invalido rechazado', 'RECHAZADO' in out, out)
+# move HACIA la carpeta de un proyecto que vive DEBAJO de la unit: el .dpr/.dpk
+# que la lista esta en el destino, no encima del origen (Hermes, 2026-09-23:
+# la unit volvia a la carpeta de su paquete y la contains se quedaba vieja)
+abajo = os.path.join(VDIR, 'abajo')
+out = call('delphi_create', {"kind": "project-console", "dir": abajo, "name": "Abajo"})
+check('move hacia abajo: proyecto creado', out.startswith('CREADO'), out[:200])
+arriba = os.path.join(VDIR, 'UArriba.pas')
+open(arriba, 'wb').write(b"unit UArriba;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n")
+out = call('delphi_config', {"project": os.path.join(abajo, 'Abajo.dproj'), "command": "add-unit", "path": arriba})
+check('move hacia abajo: unit de ARRIBA registrada en el proyecto de abajo',
+      out.startswith('ANADIDA') and "..\\UArriba.pas" in rd(os.path.join(abajo, 'Abajo.dpr')), out[:200])
+out = call('delphi_move', {"path": arriba, "dest": os.path.join(abajo, 'UArriba.pas')})
+check('move hacia abajo: REAPUNTADA (el proyecto vive en el destino, no encima del origen)',
+      out.startswith('MOVIDO') and 'REAPUNTADA' in out, out[:300])
+check('move hacia abajo: include nuevo sin ..\\', "UArriba in 'UArriba.pas'" in rd(os.path.join(abajo, 'Abajo.dpr')),
+      rd(os.path.join(abajo, 'Abajo.dpr')))
 ok, err = build_ok(DPROJ)
 check('build: final COMPILA', ok, err)
 

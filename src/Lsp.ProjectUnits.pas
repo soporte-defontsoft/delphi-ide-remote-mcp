@@ -79,7 +79,8 @@ procedure AddUnitsView(const ADproj: string; AReturn: TJSONObject);
 
 { Projects (.dproj paths) in ADir and its parent that list APasPath. For the
   file tools: delete/move a unit keeps the projects that use it consistent. }
-function ProjectsUsingUnit(const APasPath: string): TArray<string>;
+{ AAlsoDir: una segunda carpeta desde la que subir (la de DESTINO de un move). }
+function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string = ''): TArray<string>;
 
 // The Pascal text with every comment (brace, paren-star, slash-slash) and
 // compiler directive replaced by spaces - same length, same line breaks, so
@@ -1292,12 +1293,30 @@ begin
   AReturn.AddPair('units', Arr);
 end;
 
-function ProjectsUsingUnit(const APasPath: string): TArray<string>;
+function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string): TArray<string>;
 var
-  Dir, Parent, D, F, Stem: string;
+  Dir, D, F, Stem: string;
   Dirs: TArray<string>;
   P: TProjectUnit;
-  Niveles: Integer;
+
+  procedure Sube(ADesde: string);
+  var
+    Padre: string;
+    Niveles: Integer;
+  begin
+    Niveles := 0;
+    while (ADesde <> '') and (Niveles < 12) and (ReadPathDenied(ADesde) = '') do
+    begin
+      if not MatchText(ADesde, Dirs) then
+        Dirs := Dirs + [ADesde];
+      Padre := TPath.GetDirectoryName(ADesde);
+      if (Padre = '') or SameText(Padre, ADesde) then
+        Break;
+      ADesde := Padre;
+      Inc(Niveles);
+    end;
+  end;
+
 begin
   Result := [];
   Stem := TPath.GetFileNameWithoutExtension(APasPath);
@@ -1312,18 +1331,14 @@ begin
   // workspace puede leer - y un tope de niveles para el modo sin jaula, que
   // si no subiria hasta la raiz del disco. Cada nivel es UN listado de *.dpr
   // sin recursion: barato.
+  // Y la misma subida desde la carpeta de DESTINO de un move: la unit
+  // volvia a la carpeta de su paquete desde la de arriba, y el .dpk que la
+  // lista vive ABAJO, donde el origen no mira (Hermes, 2026-09-23). Un solo
+  // buscador con dos puntos de partida, no dos buscadores.
   Dirs := [];
-  D := Dir;
-  Niveles := 0;
-  while (D <> '') and (Niveles < 12) and (ReadPathDenied(D) = '') do
-  begin
-    Dirs := Dirs + [D];
-    Parent := TPath.GetDirectoryName(D);
-    if (Parent = '') or SameText(Parent, D) then
-      Break;
-    D := Parent;
-    Inc(Niveles);
-  end;
+  Sube(Dir);
+  if AAlsoDir <> '' then
+    Sube(TPath.GetFullPath(AAlsoDir));
   for D in Dirs do
   begin
     if not TDirectory.Exists(D) then

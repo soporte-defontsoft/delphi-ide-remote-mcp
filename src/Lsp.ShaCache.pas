@@ -2,7 +2,7 @@ unit Lsp.ShaCache;
 
 { Whole-file SHA-256 with a small shared cache keyed by (path, mtime, size):
   delphi_fetch offset=0 hashes the file, the /files download hashes it AGAIN
-  before streaming, and delphi_run hashes the exe for the audit log - a big
+  before streaming (and delphi_run, until 2026-09-23, hashed the exe) - a big
   zip was read end-to-end three times for one download (hermes, release audit
   2026-08-26, P1.7). The stamp invalidates an entry the moment the file
   changes, so the contract is untouched - only the repeated I/O goes away.

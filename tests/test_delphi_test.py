@@ -20,7 +20,6 @@ EXE = os.path.join(BASE, 'DelphiLspMcp.exe'); shutil.copy(SRC, EXE)
 
 def spawn(extra_env=None):
     env = dict(os.environ); env['DELPHI_MCP_ROOTS'] = BASE
-    env.pop('DELPHI_MCP_ALLOW_RUN', None)
     env.pop('DELPHI_MCP_ALLOW_TESTS', None)
     if extra_env: env.update(extra_env)
     p = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,

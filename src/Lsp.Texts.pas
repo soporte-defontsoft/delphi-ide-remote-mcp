@@ -753,7 +753,7 @@ const
 
   // delphi_build composes a cmd.exe line (rsvars.bat && msbuild ...) and
   // platform/config/target travel through it UNQUOTED: a metacharacter there
-  // IS a shell, and it would sail past AllowRun, the jail, the low-integrity
+  // IS a shell, and it would sail past the jail, the low-integrity
   // sandbox and the .dproj hazard scanner in a single call. delphi_config
   // already armoured the same token for the XML sink; this is its twin mouth.
   SR_BUILD_PLATFORM_FMT =
@@ -874,11 +874,9 @@ const
     'validas son: %s. Pide las rutas con delphi_workspace y usalas tal ' +
     'como te las devuelve el servidor.';
 
-  // delphi_run is OFF by design: this is a pure DEVELOPMENT/COMPILE server,
-  // it never executes programs. Running a compiled artifact belongs on the
-  // CLIENT machine (or a real target device), not here - it would be both
-  // pointless (nobody sees the process on the server) and the main way an
-  // agent could do damage. Refused for EVERY credential, read-write included.
+  // This is a pure DEVELOPMENT/COMPILE server: nothing runs on it except a
+  // test project (AllowTests). Running a compiled artifact belongs on a real
+  // target through remote-run (delphi_run, execution here, retired 2026-09-23).
   // A build must never EXECUTE code on a compile-only server. If the project
   // carries shell-running / file-planting MSBuild tasks, refuse the build
   // (unless build scripts were opted into) - field round 7: upload could plant
@@ -903,17 +901,7 @@ const
     'el build. Compila un .dproj sin tareas de ejecucion (un <Target> que solo ' +
     'imprime un mensaje o fija una propiedad SI se admite). Si es un proyecto ' +
     'de confianza que firma o copia en post-build, el operador lo habilita con ' +
-    '[Workspace.<nombre>] AllowBuildScripts=1 (sin encender delphi_run).';
-
-  SR_RUN_DISABLED =
-    'RECHAZADO: la ejecucion en el servidor esta deshabilitada por diseno. ' +
-    'Este es un servidor de compilacion (development): compila, nunca ' +
-    'ejecuta. Para PROBAR un binario, descargalo con delphi_package + ' +
-    'delphi_fetch y ejecutalo en TU maquina, o despliegalo a un target real ' +
-    '(PAServer en Linux/macOS, o Android) - ahi corre en el cliente, no en ' +
-    'el servidor. (El operador puede habilitarlo con ' +
-    '[Workspace.<nombre>] AllowRun=1, ' +
-    'pero no es el uso previsto.)';
+    '[Workspace.<nombre>] AllowBuildScripts=1.';
 
   // ---------------------------------------------------------------------
   // vault_* (knowledge vault: Markdown notes linked with [[wikilinks]])
@@ -2135,7 +2123,8 @@ const
     '  proyectos actualizados (%d): %s';
 
   SN_FILE_PROJECTS_NONE =
-    '  (ningun .dpr lo listaba, mirando desde su carpeta hacia arriba hasta ' +
+    '  (ningun .dpr ni .dpk lo listaba, mirando desde su carpeta - y en un ' +
+    'move, tambien desde la de destino - hacia arriba hasta ' +
     'el borde del workspace; si otro proyecto lo usa, quitalo con ' +
     'delphi_config command=remove-unit)';
 
@@ -2565,7 +2554,7 @@ const
     '  meter/quitar una unit del proyecto . delphi_config add-unit / remove-unit'#10 +
     '  compilar ........................... delphi_build'#10 +
     '  saber si FUNCIONA .................. delphi_test'#10 +
-    '  ejecutar aqui ...................... delphi_run (apagado por defecto)'#10 +
+    '  ejecutar el programa ............... delphi_paserver remote-run (en el target; en el servidor no corre nada)'#10 +
     #10 +
     'FORMS Y ESTILOS'#10 +
     '  que publica una clase .............. delphi_designer info / prop'#10 +
@@ -2676,12 +2665,11 @@ const
     'dialectos: el resumen de DUnitX y la convencion PASS/FAIL + ExitCode de ' +
     'un runner de consola escrito a mano. El veredicto dice de donde sale ' +
     '(verdictFrom: counts o exitCode) y nunca se lo inventa. Ejecutar tests ' +
-    'es EJECUTAR: tiene su propio interruptor ' +
-    '[Workspace.<nombre>] AllowTests (o ' +
-    'AllowRun, que lo implica); el binario se compila aqui, sale de un ' +
-    'proyecto de la jaula y corre en el mismo sandbox de baja integridad que ' +
-    'delphi_run, con timeout. Sin ese interruptor, discover funciona y run ' +
-    'se rechaza.';
+    'es EJECUTAR, y es lo unico que se ejecuta en este servidor: tiene su ' +
+    'propio interruptor [Workspace.<nombre>] AllowTests; el binario se ' +
+    'compila aqui, sale de un proyecto de la jaula y corre en un sandbox de ' +
+    'baja integridad, con timeout. Sin ese interruptor, discover funciona y ' +
+    'run se rechaza.';
 
   SP_TEST_COMMAND =
     'discover (listar proyectos de test bajo "path") | run (compilar y ' +
@@ -2829,10 +2817,9 @@ const
     'RECHAZADO: ejecutar tests esta APAGADO en este servidor. El operador lo ' +
     'enciende con [Workspace.<nombre>] AllowTests=1 en el settings.ini ' +
     'junto al ' +
-    'ejecutable (o DELPHI_MCP_ALLOW_TESTS=1) y reinicia. Es un interruptor ' +
-    'propio, separado de AllowRun a proposito: permitir una bateria de tests ' +
-    'no es lo mismo que permitir ejecutar binarios cualesquiera (AllowRun, ' +
-    'si esta encendido, ya lo implica). command=discover si funciona sin el.';
+    'ejecutable (o DELPHI_MCP_ALLOW_TESTS=1) y reinicia. Es lo unico que se ' +
+    'ejecuta en esta maquina: un binario de un proyecto de la jaula, en ' +
+    'sandbox y con timeout. command=discover si funciona sin el.';
 
   SN_TEST_NONE =
     'No hay proyectos de test ahi debajo. Cuenta como tal un .dpr con DUnitX ' +
@@ -2994,7 +2981,7 @@ const
   // cinco segundos de mas sin explicacion invita a pensar que algo va mal.
   SN_BUILD_LOCKED_RETRY =
     'El binario estaba en uso (F2039) cuando empece - tipicamente una ' +
-    'ejecucion de delphi_run o delphi_test todavia viva - asi que repeti el ' +
+    'ejecucion de delphi_test todavia viva - asi que repeti el ' +
     'build hasta que quedo libre. El resultado es bueno; solo tardo mas.';
 
   // ---- delphi_config view: SDK y perfil por plataforma remota ----

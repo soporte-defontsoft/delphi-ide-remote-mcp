@@ -17,7 +17,6 @@ os.makedirs(BASE, exist_ok=True)
 
 env = dict(os.environ)
 env.setdefault('DELPHI_MCP_ROOTS', BASE)  # v0.98: sin jaula declarada = solo lectura
-env['DELPHI_MCP_ALLOW_RUN'] = '1'  # let the run test reach the "needs roots" path
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
 q = queue.Queue()
@@ -114,12 +113,6 @@ except Exception as e:
     check('build: output parsea', False, '%s | %s' % (e, out[:200]))
 out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "HolaConsola"})
 check('create: jamas sobreescribe', 'RECHAZADO' in out, out)
-
-# v0.98: la bateria declara su jaula (sin jaula ya no hay barra libre sino
-# solo lectura), asi que delphi_run del exe recien compilado EJECUTA dentro
-# de ella - sandbox de integridad baja y salida capturada, como siempre
-out = call('delphi_run', {"path": os.path.join(CDIR, 'Win64', 'Debug', 'HolaConsola.exe')})
-check('run: con jaula declarada ejecuta en el sandbox', 'exit=0' in out, out[:150])
 
 # --- runtime package (1.2 candidate, pulled forward on 2026-09-23: Hermes'
 # battery 1.2 case 1 could not even start a package by tools) ---

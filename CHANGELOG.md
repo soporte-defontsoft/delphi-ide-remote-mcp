@@ -66,6 +66,27 @@ code before being accepted.
   `missingUnitsNote` names the other cure: the package in `requires` plus
   the folder of its `.dcp` on the search path (Hermes, battery 1.2 A.2:
   the search path alone leaves the F2613).
+- `delphi_move` of a unit INTO the folder of the project that lists it
+  (a package unit going back to its package folder) answered "no .dpr
+  listed it" and left the `contains` pointing at the old path: the
+  project finder climbed from the SOURCE folder only, and the `.dpk`
+  lived below, in the destination. It now climbs from both (Hermes,
+  battery 1.2, 2026-09-23); the build was green only because dcc finds
+  the unit by name through the search path.
+
+### Removed
+
+- `delphi_run` and its `AllowRun` switch (David, 2026-09-23: "fuera"). It
+  was born on the product's first day (v0.10), was closed by default the
+  same day (v0.21) and never had a job of its own once `remote-run` existed
+  (v0.47): tests run through `delphi_test` (`AllowTests`), build steps
+  through `AllowBuildScripts`, programs on a target through
+  `delphi_paserver remote-run`. Two execution paths were two doors to
+  guard; now there is one. A left-over `AllowRun=1` in the ini is
+  ignored, and `AllowRun` no longer implies `AllowTests` or
+  `AllowBuildScripts` (each is its own declaration). The low-integrity
+  sandbox stays: `delphi_test` runs in it, and the batteries that
+  measured it through `delphi_run` now measure it there. 41 tools.
 
 ### Added
 

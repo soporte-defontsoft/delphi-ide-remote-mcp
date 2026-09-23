@@ -29,7 +29,6 @@ Status page as of 2026-09-22 (current release v1.1.0, the first stable one; 42 t
 - KDE and other non-GNOME Linux desktops on the desktop node
 - The two-Delphi-versions case, measured on a machine that has them
 - Completion prefix filter
-- `delphi_run` stdin / env
 - Progress and cancellation for long builds; `POST /files` upload
 - LSIF as a references backend (measured feasible, see [DELPHILSP-NOTES.md](DELPHILSP-NOTES.md))
 
@@ -41,7 +40,7 @@ Status page as of 2026-09-22 (current release v1.1.0, the first stable one; 42 t
 
 ## Declined by the operator (do not re-propose)
 
-- Interpreters: running arbitrary interpreters through `delphi_run`
+- Interpreters: running arbitrary interpreters on the server (`delphi_run` itself was retired on 2026-09-23)
 - `[URGENTE]`-style priority messages in the mailbox
 - GetIt / package installation from the MCP
 - GUI control of Linux from the MCP outside the PAServer node

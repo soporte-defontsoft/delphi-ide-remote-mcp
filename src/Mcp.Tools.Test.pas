@@ -94,9 +94,9 @@ begin
     end
     else
     begin
-      // running tests IS execution: its own opt-in, and AllowRun (full
-      // execution) implies it.
-      if not (AllowTests or AllowRun) then
+      // running tests IS execution: its own opt-in, the only one this machine
+      // has (delphi_run retired 2026-09-23).
+      if not AllowTests then
         Exit(SR_TEST_DISABLED);
       if Params.Project.Trim = '' then
         Exit(SR_TEST_NEED_PROJECT);

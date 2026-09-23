@@ -1,6 +1,6 @@
 unit Lsp.Sandbox;
 
-{ Filesystem confinement for delphi_run via Windows Mandatory Integrity
+{ Filesystem confinement for delphi_test via Windows Mandatory Integrity
   Control. A process launched at LOW integrity cannot WRITE to any object at
   the normal (Medium) integrity level - i.e. the whole ordinary filesystem,
   the user profile, other projects, Windows. It can still READ (read-down is
@@ -11,7 +11,7 @@ unit Lsp.Sandbox;
   This is the real answer to "a compiled program run through the MCP could
   scribble anywhere the service account can" (B0b). It bounds WRITES; the Job
   Object (Lsp.BuildRunner) bounds lifetime and resources. Together they
-  sandbox delphi_run.
+  sandbox delphi_test (and, until 2026-09-23, delphi_run).
 
   Honest limits: it needs the launch to succeed with a lowered token (verified
   at runtime; if the OS refuses, the caller is told the process ran WITHOUT

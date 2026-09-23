@@ -42,7 +42,7 @@ function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 
 { Like RunCapturedIn but launches the process at LOW integrity (filesystem
-  write confinement for delphi_run). AWorkDir is labelled Low so the program
+  write confinement for delphi_test). AWorkDir is labelled Low so the program
   can write its own output there and nowhere else on the system. ASandboxed
   reports whether the low-integrity launch actually took effect. }
 function RunCapturedSandboxed(const ACmdLine, AWorkDir: string;
@@ -1145,7 +1145,7 @@ begin
   // build-event, a foreign <Import>) and refuse unless build scripts were
   // explicitly enabled. This is the point-of-execution gate, so it holds however
   // the .dproj got there - upload, edit, or a pre-existing one (field round 7,
-  // CRITICAL). AllowBuildScripts (or the broader AllowRun) is the trusted-project
+  // CRITICAL). AllowBuildScripts is the trusted-project
   // opt-in; an inert custom <Target> now builds without it (field round 9 FP).
   if not AllowBuildScripts then
   begin
@@ -1333,7 +1333,7 @@ begin
      ProfileArg, DeviceArg, Verb]);
   Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
   // F2039 = el .exe que este build va a escribir esta ABIERTO, casi siempre
-  // porque delphi_run o delphi_test lo estan ejecutando ahora mismo: el
+  // porque delphi_test lo esta ejecutando ahora mismo: el
   // cerrojo serializa msbuild contra msbuild, pero se suelta antes de que el
   // programa corra (medido 2026-09-20: build + run del mismo proyecto = build
   // rojo). Casi todas esas ejecuciones son cortas, asi que se reintenta unos

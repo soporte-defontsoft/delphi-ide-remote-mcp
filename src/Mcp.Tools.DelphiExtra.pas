@@ -262,7 +262,7 @@ begin
     'linter does not link nor produce binaries. Compile-only: a project that ' +
     'would EXECUTE a shell during build (a custom <Target>/<Exec>, a ' +
     'build-event, a foreign <Import>) is refused unless the workspace ' +
-    'declares AllowBuildScripts=1 (or AllowRun=1, which implies it). For a ' +
+    'declares AllowBuildScripts=1. For a ' +
     'package (.dpk) the answer adds implicitImports (units of OTHER packages ' +
     'it compiled into itself, W1033) and requiresSuggested (their packages, ' +
     'read from the BPLs of this install), the list delphi_config ' +

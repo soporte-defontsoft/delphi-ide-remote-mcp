@@ -26,7 +26,7 @@ with open(os.path.join(_maindir, 'settings.ini'), 'w') as f:
     f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)*2
             + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
             + 'Roots=%s' % REPOROOT + chr(10)
-            + 'AllowRun=1' + chr(10) + 'LibraryZone=1' + chr(10)
+            + 'AllowTests=1' + chr(10) + 'LibraryZone=1' + chr(10)
             + 'DelphiVersion=37.0' + chr(10))   # 1.0.17: pinned to the one install here
 env = dict(os.environ)
 env.pop('DELPHI_MCP_TOKEN', None)
@@ -131,7 +131,7 @@ try:
                 'delphi_fetch', 'delphi_git', 'delphi_hover',
                 'delphi_installs', 'delphi_list', 'delphi_package',
                 'delphi_config', 'delphi_projects', 'delphi_read',
-                'delphi_references', 'delphi_report', 'delphi_run',
+                'delphi_references', 'delphi_report',
                 'delphi_search', 'delphi_signature', 'delphi_symbols',
                 'delphi_textedit', 'delphi_upload', 'delphi_workspace',
                 'delphi_paserver', 'delphi_delete', 'delphi_move',
@@ -218,7 +218,7 @@ try:
         # v0.98: no generic [Workspace] section and no anonymous mode - only
         # named workspaces exist, and tokenless requests answer 401
         f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
-                '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\nAllowRun=1\n'
+                '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\nAllowTests=1\n'
                 % (RO_PORT, TOKEN, RO_TOKEN, tmpdir3))
     env3 = dict(os.environ)
     env3.pop('DELPHI_MCP_TOKEN', None)
@@ -246,7 +246,6 @@ try:
 
         for tool, args in (('delphi_changeset', {'command': 'begin'}),
                            ('delphi_build', {'project': 'x.dproj'}),
-                           ('delphi_run', {'path': 'x.exe'}),
                            ('delphi_package', {'dir': tmpdir3}),
                            ('delphi_create', {'kind': 'project-console',
                                               'dir': tmpdir3, 'name': 'X'})):

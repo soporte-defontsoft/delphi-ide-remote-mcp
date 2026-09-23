@@ -1,7 +1,7 @@
 """E2E battery for v0.81.0-beta - hermes' P1.7: shared SHA-256 cache.
 
 delphi_fetch offset=0 hashed the whole file, then the /files download hashed
-it AGAIN before streaming, and delphi_run hashed the exe too: one big zip was
+it AGAIN before streaming, and delphi_run (retired 2026-09-23) hashed the exe too: one big zip was
 read end-to-end three times for a single download. Now one shared cache keyed
 by (path, mtime, size). The contract must be untouched:
 

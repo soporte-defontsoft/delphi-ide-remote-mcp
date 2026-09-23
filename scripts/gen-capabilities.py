@@ -76,7 +76,7 @@ manifest = {
     "security": {
         "workspaceJail": "[Workspace.<name>] Roots / DELPHI_MCP_ROOTS",
         "credentials": "Token (read-write) / ReadOnlyToken, per workspace; no token, no access",
-        "execution": "AllowRun / AllowBuildScripts / AllowRemoteRun (all off by default)",
+        "execution": "AllowTests / AllowBuildScripts / AllowRemoteRun (all off by default; nothing else runs on the server)",
         "remoteRunScope": "RemoteRunProjects (empty = nothing; all/* = every project of the jail)",
         "libraryZone": "LibraryZone=1 opens the read zone; absent = off"
     }

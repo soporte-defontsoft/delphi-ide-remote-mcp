@@ -4,7 +4,7 @@ Two internal costs removed, with the ONE risk each removal introduces pinned
 by a check:
 
   - The low-integrity labeling of a run's workdir used to re-walk and relabel
-    the whole tree on EVERY delphi_run. Now once per root per process - the
+    the whole tree on EVERY run (delphi_run then, delphi_test now). Now once per root per process - the
     SDDL label carries OICI inheritance, so children born after the first
     labeling arrive Low already. The risk: a MEDIUM file created BETWEEN runs
     by the server/agent (not by the confined program). If inheritance did not
@@ -43,7 +43,7 @@ open(os.path.join(BASE, 'Main.dfm'), 'w').write(
 
 env = dict(os.environ)
 env['DELPHI_MCP_ROOTS'] = BASE
-env['DELPHI_MCP_ALLOW_RUN'] = '1'
+env['DELPHI_MCP_ALLOW_TESTS'] = '1'
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                         text=True, encoding='utf-8')
@@ -120,12 +120,12 @@ check('Z1b lint del designer tambien (segunda entrada a las tablas)',
 
 # Z2/Z3: the label cache vs a medium file created BETWEEN runs
 _q = chr(39)
-call('delphi_create', {"kind": "project-console", "dir": os.path.join(BASE, 'Sbx'), "name": "Sbx"})
-_body = ['program Sbx;', '{$APPTYPE CONSOLE}', 'uses System.SysUtils, System.IOUtils;', 'begin',
+call('delphi_create', {"kind": "project-console", "dir": os.path.join(BASE, 'SbxTest'), "name": "SbxTest"})
+_body = ['program SbxTest;', '{$APPTYPE CONSOLE}', 'uses System.SysUtils, System.IOUtils;', 'begin',
          '  try TFile.WriteAllText(' + _q + 'entre.txt' + _q + ', ' + _q + 'y' + _q + '); Writeln('
          + _q + 'LOCAL-OK' + _q + '); except Writeln(' + _q + 'local-blocked' + _q + '); end;', 'end.']
-open(os.path.join(BASE, 'Sbx', 'Sbx.dpr'), 'w', encoding='utf-8-sig', newline='').write('\r\n'.join(_body) + '\r\n')
-out = call('delphi_build', {"project": os.path.join(BASE, 'Sbx', 'Sbx.dproj'),
+open(os.path.join(BASE, 'SbxTest', 'SbxTest.dpr'), 'w', encoding='utf-8-sig', newline='').write('\r\n'.join(_body) + '\r\n')
+out = call('delphi_build', {"project": os.path.join(BASE, 'SbxTest', 'SbxTest.dproj'),
                             "platform": "Win64", "config": "Debug", "target": "Build"})
 try:
     sbok = json.loads(out)['success']
@@ -133,19 +133,27 @@ except Exception:
     sbok = False
 check('Z2 proyecto de prueba compila', sbok, out[:150])
 if sbok:
-    rundir = os.path.join(BASE, 'Sbx', 'Win64', 'Debug')
-    exe = os.path.join(rundir, 'Sbx.exe')
-    out = call('delphi_run', {"path": exe, "timeoutms": 10000}, 60)
-    check('Z2 run #1 sandboxed escribe en su carpeta',
-          'LOCAL-OK' in out and 'sandbox=low-integrity' in out, out[:200])
+    rundir = os.path.join(BASE, 'SbxTest', 'Win64', 'Debug')
+    # delphi_run was retired on 2026-09-23: the same sandbox is measured
+    # through delphi_test, the one thing that still executes here.
+    def _run():
+        r = call('delphi_test', {"command": "run", "project": os.path.join(BASE, 'SbxTest', 'SbxTest.dproj'),
+                                 "platform": "Win64", "nobuild": True, "timeoutms": 10000}, 60)
+        try:
+            j = json.loads(r)
+        except Exception:
+            j = {}
+        return j.get('outputTail', ''), j.get('sandboxed') is True, r
+    tail, sbx, raw = _run()
+    check('Z2 run #1 sandboxed escribe en su carpeta', 'LOCAL-OK' in tail and sbx, raw[:200])
     # BETWEEN runs: this test process (MEDIUM integrity) creates the file the
     # program will overwrite. With the label cache, run #2 does NOT relabel -
     # only OICI inheritance can make this writable. Measure it.
     open(os.path.join(rundir, 'entre.txt'), 'w').write('medium-file-created-between-runs')
-    out = call('delphi_run', {"path": exe, "timeoutms": 10000}, 60)
+    tail, sbx, raw = _run()
     check('Z3 fichero MEDIUM creado ENTRE runs: run #2 lo sobrescribe '
           '(la herencia OICI cubre a los hijos nuevos; el cache es seguro)',
-          'LOCAL-OK' in out and 'sandbox=low-integrity' in out, out[:220])
+          'LOCAL-OK' in tail and sbx, raw[:220])
 
 proc.kill()
 print('\n== round-21 battery: %d PASS / %d FAIL ==' % (P, F))

@@ -18,7 +18,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Read files & explore** — [`delphi_read`](#delphi_read), [`delphi_search`](#delphi_search), [`delphi_list`](#delphi_list), [`delphi_projects`](#delphi_projects), [`delphi_installs`](#delphi_installs), [`delphi_workspace`](#delphi_workspace)
 - **Edit code safely  (read-write only)** — [`delphi_edit`](#delphi_edit), [`delphi_textedit`](#delphi_textedit), [`delphi_create`](#delphi_create)
 - **Manage files  (read-write only)** — [`delphi_delete`](#delphi_delete), [`delphi_move`](#delphi_move)
-- **Build, run, package  (read-write only)** — [`delphi_build`](#delphi_build), [`delphi_run`](#delphi_run), [`delphi_package`](#delphi_package)
+- **Build, package  (read-write only)** — [`delphi_build`](#delphi_build), [`delphi_package`](#delphi_package)
 - **Cross-platform: build configs, remote platforms & devices** — [`delphi_config`](#delphi_config), [`delphi_paserver`](#delphi_paserver), [`delphi_adb`](#delphi_adb), [`delphi_desktop`](#delphi_desktop), [`delphi_components`](#delphi_components)
 - **FMX styles** — [`delphi_styles`](#delphi_styles)
 - **Transfer files** — [`delphi_fetch`](#delphi_fetch), [`delphi_upload`](#delphi_upload)
@@ -376,19 +376,6 @@ TESTS — the difference between "it compiles" and "it works". `discover path=<f
 | `timeoutms` | integer | optional | run: max milliseconds (120000 default, 600000 max). A hanging test is cut and said so |
 | `nobuild` | boolean | optional | run: true = do not build first, run the existing binary. By default it builds (running a stale binary is a lie) |
 
-### `delphi_run`
-
-Run a built executable ON THIS MACHINE (the one that compiled it) and capture its output — the closing step after delphi_build for console test runners. DISABLED by default: this is a compile-only server, and running is an opt-in the workspace declares with `AllowRun=1`. Meant for console test runners, never GUI apps (a window would open on the server's desktop with nobody there to close it): to try a GUI app download it with delphi_package + delphi_fetch, or deploy it to a target. Jailed to the workspace roots, no shell, hard timeout (default 30 s, max 5 min), process killed on expiry.
-
-*Access: read-write.*
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `path` | string | **yes** | Absolute path of the .exe to run (must be inside the workspace roots) |
-| `args` | string | optional | Optional command-line arguments (shell metacharacters rejected) |
-| `workdir` | string | optional | Optional working directory (default: the exe directory; must be inside the roots) |
-| `timeoutms` | integer | optional | Timeout in milliseconds (default 30000, max 300000); the process is killed on expiry |
-
 ### `delphi_package`
 
 Zip a build-output directory ON the server into a single deploy artifact (recursive, *.dcu intermediates excluded), ready to download with ONE delphi_fetch. The standard way to bring a GUI app to the client machine: delphi_build -> delphi_package -> delphi_fetch.
@@ -689,7 +676,7 @@ Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .j
 ### Build and get the binary onto your machine
 1. `delphi_build {project, platform:"Win64", config:"Debug", target:"Build"}` — structured errors/warnings.
 2. `delphi_package {dir:"...\Win64\Debug"}` to zip the deploy, then `delphi_fetch {path:"...deploy.zip"}` in a loop (increase `offset` until `eof:true`), verifying the whole-file `sha256` — and run it on YOUR machine, **or**
-3. deploy it to a target: `delphi_build {target:"Deploy", profile}` + `delphi_paserver {command:"remote-run"}` on a PAServer machine, or `delphi_adb {command:"install"}` on an Android device. `delphi_run` is disabled by default (compile-only server): only with `AllowRun=1` in the workspace, and only for console test runners, never GUI apps.
+3. deploy it to a target: `delphi_build {target:"Deploy", profile}` + `delphi_paserver {command:"remote-run"}` on a PAServer machine, or `delphi_adb {command:"install"}` on an Android device. Nothing executes on the server itself except a test project through `delphi_test` (`AllowTests`).
 
 ### Bring a repository onto the server, work, commit
 1. `delphi_git {command:"clone", message:"https://...", repo:"srvd:\...\dest"}` — the whole repo in one call, jailed.

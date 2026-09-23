@@ -362,8 +362,8 @@ begin
       Exit(SR_ADB_NEED_APP);
     // The IDE's "Deploy and Run": am start on the FMX native activity -
     // every Delphi app's activity (the AndroidManifest template names it).
-    // This executes on the DEVICE, sandboxed by Android - AllowRun governs
-    // execution on the server machine, not here. Vetted at the gate.
+    // This executes on the DEVICE, sandboxed by Android - nothing runs on
+    // the server machine. Vetted at the gate.
     Output := RunAdb(Adb, DevArg + 'shell am start -n ' + Params.App.Trim +
       '/com.embarcadero.firemonkey.FMXNativeActivity', 30000, ExitCode);
     Result := GoneHint(Output);

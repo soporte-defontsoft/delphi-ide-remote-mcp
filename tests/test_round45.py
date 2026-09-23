@@ -169,11 +169,6 @@ PROBAR = [
     ('delphi_git', 'repo', {'repo': FUERA, 'command': 'status'}),
     ('delphi_test', 'path', {'command': 'discover', 'path': FUERA}),
     ('delphi_test', 'project', {'command': 'run', 'project': AJENO_DPROJ}),
-    ('delphi_run', 'path', {'path': AJENO_EXE}),
-    # El "path" tiene que EXISTIR y estar dentro: si no, la tool contesta
-    # que no existe y no se llega a mirar el workdir.
-    ('delphi_run', 'workdir', {'path': os.path.join(JAIL, 'propio.exe'),
-                               'workdir': FUERA}),
     ('delphi_desktop', 'out', {'command': 'screenshot', 'out': FUERA}),
     ('delphi_adb', 'out', {'command': 'screenshot', 'device': DEV,
                            'out': AJENO_PNG}),
@@ -234,7 +229,7 @@ sk.close()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R45]', 'Token=%s' % TOK, 'Roots=%s' % JAIL,
-    'AllowDesktopControl=1', 'AllowRemoteRun=1', 'AllowRun=1', 'AllowTests=1',
+    'AllowDesktopControl=1', 'AllowRemoteRun=1', 'AllowTests=1',
     'RemoteRunProjects=Ajeno;McpDesktopNode',
     'AdbAllowedDevices=%s' % DEV,
     'VaultPath=%s' % VAULT, '',
@@ -331,11 +326,11 @@ try:
           not sin_clasificar,
           'sin clasificar: %s  (anadelo a PROBAR o a EXCLUIDOS con su motivo)'
           % sorted(sin_clasificar))
-    # 42 = el contrato entero con los interruptores y el vault encendidos.
+    # 41 = el contrato entero (delphi_run retirada el 23-sep) con los interruptores y el vault encendidos.
     # Con >=30, un recorte de ocho tools pasaba callado y el descubridor
     # perdia justo a las de registro condicional (auditoria 21-sep).
     check('G1b ...y la lista mira el contrato VIVO, no una copia',
-          len(tools) >= 42, '%d tools' % len(tools))
+          len(tools) >= 41, '%d tools' % len(tools))
 
     # ------------------------------------------------------------------ G2
     # Y ahora, una por una. Cada fallo aqui es un parametro por el que se
@@ -359,7 +354,7 @@ try:
     # ------------------------------------------------------------------ G4
     # El suelo es una capa REDUNDANTE: si se quedase vacio (RTTI que no
     # emite, un registro que cambia) no romperia nada y nadie lo notaria.
-    # Por eso publica cuantos parametros vigila. Son 41 y no las MARCAS
+    # Por eso publica cuantos parametros vigila. Son 39 y no las MARCAS
     # que hay en el fuente: la de TDelphiFileParams.path la heredan cuatro
     # tools (definition, signature, hover, completion) - una marca, cuatro
     # parametros del contrato. El primer censo contaba marcas y decia 39;
@@ -367,13 +362,14 @@ try:
     # 1.0.16: 42 -> 43, porque delphi_desktop paso a ser la tool del
     # escritorio por perfil y gano el "project" marcado que tenia su alias.
     # 22-sep: 43 -> 41, al retirar el alias delphi_adb_linux (out y project).
+    # 23-sep: 41 -> 39, al retirar delphi_run (path y workdir).
     w = call('delphi_workspace', {})
     try:
         vigilados = json.loads(w).get('server', {}).get('jailedParams', -1)
     except Exception:
         vigilados = -1
-    check('G4 el suelo de la puerta vigila los 41 parametros marcados',
-          vigilados == 41, 'jailedParams=%s' % vigilados)
+    check('G4 el suelo de la puerta vigila los 39 parametros marcados',
+          vigilados == 39, 'jailedParams=%s' % vigilados)
 
     # ----------------------------------------------------------------- G2b
     # Los dos parametros de delphi_changeset que la tabla no puede sondar

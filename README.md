@@ -11,7 +11,7 @@
 
 The Windows machine holds RAD Studio and the projects. You work from wherever you actually want to be: a Linux laptop, a Mac, a cloud agent, a CI runner. Understand the code, edit it safely, scaffold, build, run, package, fetch the binaries, commit — and then deploy to a real target and **watch your app run there, pressing its buttons yourself** — the whole cycle over MCP, with Delphi installed on **neither** the client nor the agent.
 
-It is not a language-server bridge. Semantic understanding is one capability of many, and it is the one that is genuinely hard, so it runs on Embarcadero's official `DelphiLSP.exe` — the same engine behind Code Insight in the RAD Studio IDE. But the language server backs **8 of the 42 tools**; the other 34 are the working day: the safe editing engine, MSBuild, git, the file tools, the project scaffolder, the deploy chain (PAServer, adb), the knowledge vault. See [What each tool actually runs on](#what-each-tool-actually-runs-on) for the exact split.
+It is not a language-server bridge. Semantic understanding is one capability of many, and it is the one that is genuinely hard, so it runs on Embarcadero's official `DelphiLSP.exe` — the same engine behind Code Insight in the RAD Studio IDE. But the language server backs **8 of the 41 tools**; the other 33 are the working day: the safe editing engine, MSBuild, git, the file tools, the project scaffolder, the deploy chain (PAServer, adb), the knowledge vault. See [What each tool actually runs on](#what-each-tool-actually-runs-on) for the exact split.
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
@@ -45,11 +45,11 @@ An agent can also be pointed at the **library read zone** (RTL/VCL sources and i
 
 ## What each tool actually runs on
 
-The language server is the hardest part to get right, but it is not most of the server. Of the 37 core tools, **exactly 8 are backed by DelphiLSP**; the other 29 never touch it (plus 5 optional `vault_*` tools, registered only when you configure a vault). This matters in practice: the LSP-backed tools are the only ones that need a resolvable project configuration — the rest work on any folder inside the roots.
+The language server is the hardest part to get right, but it is not most of the server. Of the 36 core tools, **exactly 8 are backed by DelphiLSP**; the other 28 never touch it (plus 5 optional `vault_*` tools, registered only when you configure a vault). This matters in practice: the LSP-backed tools are the only ones that need a resolvable project configuration — the rest work on any folder inside the roots.
 
 **Backed by DelphiLSP (8):** `delphi_symbols`, `delphi_definition`, `delphi_hover`, `delphi_completion`, `delphi_signature`, `delphi_diagnostics`, `delphi_references` (hybrid — LSP-validated, see the table) and `delphi_rename_symbol` (semantic rename built on definition + references; `mode=apply` writes it through the changeset engine).
 
-**NOT DelphiLSP (the other 29):** `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create`, `delphi_build`, `delphi_run`, `delphi_list`, `delphi_search`, `delphi_projects`, `delphi_workspace`, `delphi_move`, `delphi_delete`, `delphi_fetch`, `delphi_upload`, `delphi_package`, `delphi_git`, `delphi_installs`, `delphi_config`, `delphi_paserver`, `delphi_adb`, `delphi_desktop`, `delphi_components`, `delphi_styles`, `delphi_messages`, `delphi_changeset`, `delphi_designer`, `delphi_test`, `delphi_report`, `delphi_help` — plus the 5 `vault_*` tools. These run on MSBuild, git, the filesystem, the registry, adb, the safe-editing engine and your vault.
+**NOT DelphiLSP (the other 28):** `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create`, `delphi_build`, `delphi_list`, `delphi_search`, `delphi_projects`, `delphi_workspace`, `delphi_move`, `delphi_delete`, `delphi_fetch`, `delphi_upload`, `delphi_package`, `delphi_git`, `delphi_installs`, `delphi_config`, `delphi_paserver`, `delphi_adb`, `delphi_desktop`, `delphi_components`, `delphi_styles`, `delphi_messages`, `delphi_changeset`, `delphi_designer`, `delphi_test`, `delphi_report`, `delphi_help` — plus the 5 `vault_*` tools. These run on MSBuild, git, the filesystem, the registry, adb, the safe-editing engine and your vault.
 
 The table below says which engine each one uses and why it matters:
 
@@ -59,7 +59,7 @@ The table below says which engine each one uses and why it matters:
 | **DelphiLSP + disk scan** (hybrid) | `delphi_references` | The LSP has no `references`, so candidates are scanned from disk and then each one is *validated* by asking the LSP where it resolves to. Verified against the live compiler, never an index. A name written in a comment or inside a string literal is **not** a reference: it goes to `mentions`, listed but harmless, instead of counting as `unverified` and blocking a rename. |
 | **Own safe-editing engine** | `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create` | Anchored edits with encoding preserved (CP1252 vs UTF-8), atomic writes, automatic backups, designer-file awareness. No LSP involved. |
 | **MSBuild** (`rsvars.bat`, located via the registry) | `delphi_build` | The real compiler and linker. The LSP cannot build — it has no such operation. A failed build with F2613 names each missing unit and where its `.pas` lives in the library zone (`missingUnits`), with the `add-searchpath` to run |
-| **MSBuild, then the runner in the same sandbox as `delphi_run`** | `delphi_test` | **Does it WORK, not just compile**: `discover` finds the test projects (DUnitX, or console runners named *Test*), `run` builds and runs one in the same low-integrity sandbox and answers structured — total/passed/failed, the failing lines, exitCode, duration. Own opt-in (`AllowTests`) |
+| **MSBuild, then a sandboxed runner** | `delphi_test` | **Does it WORK, not just compile**: `discover` finds the test projects (DUnitX, or console runners named *Test*), `run` builds and runs one in the same low-integrity sandbox and answers structured — total/passed/failed, the failing lines, exitCode, duration. Own opt-in (`AllowTests`) |
 | **The filesystem, jailed** | `delphi_list`, `delphi_search`, `delphi_projects`, `delphi_workspace`, `delphi_move`, `delphi_delete`, `delphi_fetch`, `delphi_upload`, `delphi_package` | Navigation, transfer and housekeeping inside the workspace roots. |
 | **`git.exe`**, arguments composed by the server | `delphi_git` | Query commands at every level; writes only read-write. Never a shell. |
 | **Registry / IDE configuration** | `delphi_installs`, `delphi_config`, `delphi_paserver` | Which RAD Studio versions exist, project platforms and output paths, remote-target profiles and SDKs. |
@@ -67,7 +67,6 @@ The table below says which engine each one uses and why it matters:
 | **The desktop of a PAServer target** - Linux, Windows, or this server itself (a small Delphi node this server deploys there) | `delphi_desktop` | Bring the whole desktop here as a PNG, measure the pixel, press it, type into it. Nothing installed on the target beyond the node itself; the machine is the `profile` parameter. |
 | **Its own `.style` parser and `DelphiStyleConvert.exe`** | `delphi_styles` | **FMX styles by StyleName**: `view`/`get` a text `.style`, `set` one property of a style or of a part, `clone` a variant, `delete` one, `lint` (duplicated StyleNames, `StyleLookup` values of the project's `.fmx`/`.pas` that no style defines, design tokens missing in a theme, `.rc` entries without file) and `build` (text `.style` → `.bin.style` the app embeds, `.rc` → `.res`). Ships `DelphiStyleConvert.exe` next to the server |
 | **The IDE's registry** (Known Packages — what the palette loads) | `delphi_components` | The design packages installed in the server's RAD Studio, whatever the install channel — what the agent has available to program with. List only; installing stays a human decision. |
-| **A separate process, sandboxed** | `delphi_run` | Off by design (`AllowRun`): this is a compile server. |
 | **Your Markdown vault** | `vault_read`, `vault_search`, `vault_append`, `vault_create`, `vault_patch` | Persistent memory, isolated from the code tools (see below). |
 | **A folder the server owns** | `delphi_messages` | The operator's **mailbox** (the way back of `delphi_report`): `.md` files left in `messages\<agent>\` are delivered once by `read`; while one waits every tool answer ends with a `MENSAJES PENDIENTES` line |
 | **The same folder** (`reports\`) | `delphi_report` | The feedback channel back to us; the one write a read-only client may perform. |
@@ -164,7 +163,7 @@ read zone lets an agent read RTL/VCL and component sources without any write rig
 build reports `missingUnits` with the folders that do hold each unit — *though it looks through
 the installed component sources, not through your own workspace.* A Linux link that fails with `cannot find -lX` because the pulled sysroot lacks the `-dev` name (`libX.so`) is completed in the SDK from the versioned library it does have, retried once and reported in `sdkLinkNote` - nothing to install on the target.
 *Deliberately absent:* running `boss install` / package managers. That is arbitrary code
-downloaded from the internet and executed on the build host — exactly what `AllowRun`, the git
+downloaded from the internet and executed on the build host — exactly what the git
 remote allowlist and the host allowlist exist to gate. If you want it, it needs its own opt-in
 switch and its own allowlist; it will not arrive by accident.
 
@@ -194,7 +193,6 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too. `edits` applies several changes to one file all-or-nothing, `delete` removes a line, `toline` turns the anchor into a **range**, and `fragment` + `atline` changes just a piece of one LONG line (it must appear exactly once in it) without retyping the line |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX, and runtime packages: `.dpk` + `.dproj`, built to BPL+DCP in their own folder, never installed in the IDE) and NEW forms, frames, data modules and plain units (VCL/FMX) with IDE-equivalent skeletons, registered in the `.dpr` uses or the `.dpk` contains **and** the `.dproj` on creation — buildable immediately |
 | `delphi_build` | Real MSBuild builds with structured errors/warnings; on success it declares the artifact it produced (`output`). `target=Deploy` compiles **and ships**: to the PAServer of the `profile` param on Linux/macOS, or assembling the **Android `.apk`** — the deployment manifest, manifest template and version fallbacks are generated when the project has none (the IDE's own files always win). For a `.dpk` it also gives `implicitImports` and `requiresSuggested` (units of other packages it compiled into itself, W1033), the list `delphi_config add-requires` takes |
-| `delphi_run` | **OFF by default** — this is a compile-only server, it does not execute programs. Download the artifact (`delphi_package` + `delphi_fetch`) and run it on your machine, or deploy to a real target (PAServer / Android). An operator can opt in with `AllowRun=1` in a workspace for CI console runners; even then it is jailed, no shell, hard timeout, and Low-integrity sandboxed |
 | `delphi_fetch` | Download files from the server — "get the deploy" to run GUI apps on the client machine. Every answer carries a **`download` link** (`GET /files?path=...` on the same host, same Bearer, `X-File-SHA256` header): bytes travel as HTTP — a 70 MB installer is one `curl`. Base64 chunks inline remain for small files and clients without a shell; files over 4 MB answer with the link only unless `maxbytes<=1048576` is passed explicitly |
 | `delphi_upload` | The mirror of fetch: send files TO the server in chunks, SHA-256 verified — for binaries you cannot recreate by editing |
 | `delphi_search` | Recursive literal search, IDE artifacts skipped |
@@ -436,7 +434,7 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   `Authorization: Bearer <token>` where the token is some workspace's `Token=` (read-write
   inside its roots) or `ReadOnlyToken=` (read-only inside the same roots: it can read,
   search, navigate symbols, get diagnostics, download, run query git commands and file
-  reports — but `delphi_edit`, `delphi_create`, `delphi_build`, `delphi_run`,
+  reports — but `delphi_edit`, `delphi_create`, `delphi_build`,
   `delphi_package`, `delphi_upload` and git write commands are refused).
   Tokenless HTTP is **always 401** — the anonymous mode is gone in v0.98.
   The whole classification is enforced at a **single gate** in front of every
@@ -479,13 +477,14 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   boundary an agent cannot cross, use a workspace token instead (the name is self-declared,
   the secret is not).
 - **AllowTests**: lets `delphi_test` build and run a workspace test project here (sandboxed,
-  timeout) — deliberately separate from `AllowRun`: allowing a test suite is a narrower
-  decision than allowing arbitrary binaries, and without it an agent can write code but never
-  learn whether it works. `AllowRun=1` implies it.
+  timeout) — the only thing that ever executes on the server, and without it an agent can
+  write code but never learn whether it works. (`AllowRun` and `delphi_run`, arbitrary
+  binaries on the server, were retired on 2026-09-23: one execution path, `remote-run`;
+  a left-over `AllowRun=1` in the ini is ignored.)
 - **AllowRemoteRun**: lets `delphi_paserver remote-run` execute, on a PAServer target, the
   binary *that project deployed there* — never anything else on that machine: the server
   derives the remote path itself and its launch script verifies the file's signature
-  (ELF/Mach-O/PE), so only a native binary ever runs. Independent of `AllowRun` (running on
+  (ELF/Mach-O/PE), so only a native binary ever runs. The one execution path of the product (running on
   the target is not running here). It takes TWO declarations: this switch and
   `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98).
 - **Reach lists (per workspace)**: `GitRemotes` limits which hosts an *explicit* git URL may
@@ -515,8 +514,8 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   time — the compile-only guarantee, so an uploaded `.dproj` cannot run code through a
   planted `<Exec>`. An **inert** custom `<Target>` (a `<Message>`, a property) always
   builds. For a **trusted** project that legitimately signs (Authenticode via `<Exec>`) or
-  copies at build time, set `AllowBuildScripts=1` — this permits its build scripts **without**
-  enabling `delphi_run`. `AllowRun=1` implies it. Both off by default.
+  copies at build time, set `AllowBuildScripts=1` — this permits its build scripts and
+  nothing else. Off by default.
 - **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist —
   `AdbAllowedDevices=192.168.1.163;SERIAL123` (semicolon list; an IP entry covers whatever
   port wifi debugging negotiates, a USB serial is listed as-is). Devices outside the
@@ -617,7 +616,7 @@ Each security fix is paired with the vector it closes **and** with a counter-tes
 - **Project config made automatic** — uses the IDE-generated `.delphilsp.json` when fresh, and can **fabricate one from the `.dproj`** when absent or stale (validated experimentally).
 - **Warm processes** — one `DelphiLSP` (controller + agents; DelphiLSP replaces its own dead/hung children) per workspace, kept alive between agent sessions and refreshed against disk on each use. (LRU eviction and idle-shutdown of idle workspaces are roadmap, not yet implemented — processes stay warm until the host exits.)
 - **Correct source encoding** — BOM detection with configurable ANSI fallback; legacy CP1252 sources are not corrupted.
-- **One executable, three modes** — Windows Service, terminal (`--http`/stdio) and VCL tray app (live log) are the same binary and the same 42 tools. They cannot drift: one project, one unit list, and the server itself is built once in `Lsp.Host` for all three.
+- **One executable, three modes** — Windows Service, terminal (`--http`/stdio) and VCL tray app (live log) are the same binary and the same 41 tools. They cannot drift: one project, one unit list, and the server itself is built once in `Lsp.Host` for all three.
 - **What a tool answers is what the agent sees** — tools reply in prose or in JSON, and both travel in the MCP `content`. `structuredContent` is published only when the answer IS a JSON object, or when a prose call FAILED (there it carries `ok`, a machine-readable `code` — `DENIED`, `NOT_FOUND`, `INVALID_PARAM`, `INTERNAL` — and the refusal text). A prose success publishes none: a client that understands the field shows it *instead of* `content`, so a status placeholder there made the real answer invisible (measured against production and fixed in v1.0.1-beta). A refusal carried INSIDE a JSON object gets the same treatment since v1.0.4-beta: the object's `error` field decides, so `ok` is never `true` on a refusal, whatever the tool put there.
 - **"It isn't there" and "it isn't that kind of thing" are different answers** (v1.0.4-beta). A folder handed to `delphi_read`, a file handed to `delphi_list`, a markdown file handed to `delphi_build`: each says what the path actually is and which tool handles it, instead of reporting it missing. And the prefix follows rule 11 — a path that is simply not there is `error:` ("correct it and repeat"), never `RECHAZADO:` ("denied on purpose, change course").
 - **Byte fidelity beats the drive mask** (v1.0.4-beta). Server drive letters leave as virtual units (`D:\` → `srvd:\`) in every textual result, EXCEPT where the text is file content an agent will copy as an edit anchor: `delphi_read`, `delphi_search` hits, the vault readers, and the verification echo of `delphi_edit` / `delphi_textedit`. Those tools mask their own `path` fields instead. A mask that rewrites the line you are about to anchor on guarantees the anchor cannot match.

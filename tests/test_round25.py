@@ -6,11 +6,10 @@ es global. Cada [Workspace.<name>] tiene EXACTAMENTE lo que declara: un
 interruptor ausente esta APAGADO, una lista ausente esta VACIA. No existe
 la seccion [Security] ni ninguna herencia.
 
-  C1  el workspace declara AllowRun=1: delphi_run deja de estar
-      "deshabilitada" para SU token (falla despues por otras razones)
-  C2  otro workspace NO lo declara: apagado (nada que heredar)
+  C1  delphi_run ya no existe (retirada 2026-09-23): tool desconocida para
+      cualquier token; la unica via de ejecucion es remote-run
   C3  AllowTests=0 declarado: rechazado alli. Y quien no declara nada de
-      tests tampoco los tiene (C3b), salvo que su AllowRun=1 los implique
+      tests tampoco los tiene (C3b); quien declara AllowTests=1 si (C3c)
   C4  AgentConfinement=1 solo en su workspace: su agente queda confinado a
       <root>\\<name>\\, y quien no lo declara campa libre
 
@@ -50,10 +49,10 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Workspace.Operador]',             # no declara capacidades: no las tiene
     'Token=op-25',
     'Roots=%s' % JAIL, '',
-    '[Workspace.Runner]',               # may run, may NOT test, confined
+    '[Workspace.Runner]',               # may test, confined
     'Token=runner-25',
     'Roots=%s' % JAIL,
-    'AllowRun=1',
+    'AllowTests=1',
     'AgentConfinement=1', '',
     '[Workspace.Notest]',               # only override: tests OFF here
     'Token=notest-25',
@@ -119,18 +118,15 @@ try:
     # (also under test in C4) never preempts the run/tests checks
     ghost = os.path.join(JAIL, 'agente', 'no-existe.exe')
 
-    # C1: the workspace override ENABLES run for its token
+    # C1: delphi_run ya no existe para NINGUN token (retirada 2026-09-23: la
+    # unica via de ejecucion es remote-run): tool desconocida
     r = call('runner-25', s_run, 'delphi_run', {'path': ghost})
-    check('C1 AllowRun=1 del workspace: delphi_run deja de estar deshabilitada',
-          'deshabilitada' not in r and 'no existe' in r, r[:200])
+    check('C1 delphi_run retirada: tool desconocida para todo token',
+          'Tool not found' in r, r[:200])
 
-    # C2: un workspace que no declara AllowRun no lo tiene (nada se hereda)
-    r = call('op-25', s_op, 'delphi_run', {'path': ghost})
-    check('C2 Operador no declara AllowRun: deshabilitada (nada se hereda)',
-          'deshabilitada' in r, r[:200])
 
     # C3: declarar AllowTests=0 y no declararlo dan lo mismo (apagado), y
-    # la implicacion AllowRun=>AllowTests sigue viva DENTRO del workspace
+    # quien lo declara a 1 lo tiene, sin heredar nada de nadie
     s_nt = session('notest-25', 'probador')
     r = call('notest-25', s_nt, 'delphi_test',
              {'command': 'run', 'project': os.path.join(JAIL, 'X.dproj')})
@@ -142,7 +138,7 @@ try:
           'AllowTests' in r or 'deshabilitad' in r, r[:200])
     r = call('runner-25', s_run, 'delphi_test',
              {'command': 'run', 'project': os.path.join(JAIL, 'X.dproj')})
-    check('C3c Runner declara AllowRun=1: los tests pasan el gate (implicacion)',
+    check('C3c Runner declara AllowTests=1: los tests pasan el gate',
           'AllowTests' not in r and 'deshabilitad' not in r, r[:200])
 
     # C4: confinement only inside the workspace

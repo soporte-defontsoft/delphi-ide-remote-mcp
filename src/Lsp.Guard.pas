@@ -247,25 +247,18 @@ function PathAnomaly(const APath: string): string;
   at the gate (they are in the mutating list). }
 function VaultWritable: Boolean;    // VaultConfigured AND VaultReadOnly=0 del workspace
 
-{ Whether delphi_run may execute a compiled program ON THIS SERVER. OFF by
-  design: this is a pure development/compile server - clients download the
-  artifact and run it in their own environment (or a real target via PAServer
-  / Android). Opt in with DELPHI_MCP_ALLOW_RUN=1 or AllowRun=1 en el workspace. }
-function AllowRun: Boolean;         // DELPHI_MCP_ALLOW_RUN      / AllowRun=1
-
 { Whether delphi_build may run a project's OWN build scripts: a custom <Target>,
-  a post-build step, Authenticode signing via <Exec>. SEPARATE from AllowRun on
-  purpose - a TRUSTED project that signs or copies at build time can be enabled
-  WITHOUT also turning on delphi_run (which would allow running arbitrary
-  compiled programs). AllowRun implies this (full execution is a superset).
+  a post-build step, Authenticode signing via <Exec>. Its own opt-in, for a
+  TRUSTED project that signs or copies at build time; nothing else runs here.
   Untrusted uploads with no opt-in still hit the hazard scanner. Opt in with
   DELPHI_MCP_ALLOW_BUILD_SCRIPTS=1 or AllowBuildScripts=1 en el workspace. }
 function AllowBuildScripts: Boolean; // DELPHI_MCP_ALLOW_BUILD_SCRIPTS / AllowBuildScripts=1
 
 { Whether delphi_paserver may EXECUTE the deployed program on a PAServer
-  target (command=remote-run). OFF by design and INDEPENDENT of AllowRun:
-  running on the target is not running here, and the operator of this server
-  is not necessarily the owner of that machine. Two locks in series, on
+  target (command=remote-run). OFF by design. Since 2026-09-23 it is the ONLY
+  way this product executes a program (delphi_run, execution on the server
+  itself, was retired: one door instead of two), and the operator of this
+  server is not necessarily the owner of that machine. Two locks in series, on
   purpose: this switch (server side) and the runner someone has to launch on
   the target. Opt in with DELPHI_MCP_ALLOW_REMOTE_RUN=1 or
   AllowRemoteRun=1. install-runner does NOT need it: copying the script
@@ -273,10 +266,10 @@ function AllowBuildScripts: Boolean; // DELPHI_MCP_ALLOW_BUILD_SCRIPTS / AllowBu
 function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemoteRun=1
 
 { Whether delphi_test may RUN a test project's binary on this server. OFF by
-  default and separate from AllowRun on purpose: letting a test suite run is
-  a narrower decision than letting any compiled program run (the binary comes
-  from a project of the jail, is built here, and goes through the same
-  low-integrity sandbox). AllowRun implies this one. Opt in with
+  default, and the ONE thing that ever runs on this machine (delphi_run,
+  arbitrary binaries, was retired 2026-09-23: one door): the binary comes
+  from a project of the jail, is built here, and goes through the
+  low-integrity sandbox with a timeout. Opt in with
   DELPHI_MCP_ALLOW_TESTS=1 or AllowTests=1 en el workspace. }
 function AllowTests: Boolean;      // DELPHI_MCP_ALLOW_TESTS / AllowTests=1
 
@@ -517,7 +510,7 @@ type
     // G* de este modulo alimentan SOLO el modo local de lanzamiento (el
     // entorno de quien arranca el proceso: baterias, desarrollo); el ini
     // NO tiene seccion generica desde v0.98.
-    OvAllowRun, OvAllowTests, OvAllowRemoteRun, OvAllowBuildScripts,
+    OvAllowTests, OvAllowRemoteRun, OvAllowBuildScripts,
       OvLibraryZone, OvAgentConfinement: Integer;
     OvSharedSet: Boolean;             // SharedFolders= present in the section
     OvSharedFolders: TArray<string>;
@@ -545,7 +538,6 @@ var
   GSessionTimeoutMin: Double = -1; // -1 = sin leer todavia
 
   GReadOnlyToken: string;
-  GAllowRun: Boolean = False; // delphi_run is OFF unless explicitly opted in
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
   GLibraryZone: Boolean = True;     // the read-only library zone, on by default
   GDelphiVersion: string = '';      // DELPHI_MCP_DELPHI_VERSION (modo local de lanzamiento)
@@ -902,7 +894,6 @@ begin
   GDelphiVersion := GetEnvironmentVariable('DELPHI_MCP_DELPHI_VERSION').Trim;
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
-  GAllowRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_RUN') = '1';
   GAllowRemoteRun := GetEnvironmentVariable('DELPHI_MCP_ALLOW_REMOTE_RUN') = '1';
   GLibraryZone := GetEnvironmentVariable('DELPHI_MCP_LIBRARY_ZONE') <> '0';
   GAllowTests := GetEnvironmentVariable('DELPHI_MCP_ALLOW_TESTS') = '1';
@@ -959,7 +950,6 @@ begin
               Ini.ReadString(S, 'ReadOnlyPaths', ''), W.Roots);
             W.Invalid := (RawRoots.Trim <> '') and (Length(W.Roots) = 0);
             // capability overrides; absent key = inherit the default
-            W.OvAllowRun := ReadTriState(Ini, S, 'AllowRun');
             W.OvAllowTests := ReadTriState(Ini, S, 'AllowTests');
             W.OvAllowRemoteRun := ReadTriState(Ini, S, 'AllowRemoteRun');
             W.OvAllowBuildScripts := ReadTriState(Ini, S, 'AllowBuildScripts');
@@ -1055,14 +1045,6 @@ function ReadOnlyToken: string;
 begin
   LoadSecurity;
   Result := GReadOnlyToken;
-end;
-
-function AllowRun: Boolean;
-begin
-  // workspace con nombre: SU declaracion, sin herencia (ausente = off)
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowRun = 1); // ausente = apagado
-  Result := GAllowRun;
 end;
 
 function AllowRemoteRun: Boolean;
@@ -1404,11 +1386,8 @@ function AllowBuildScripts: Boolean;
 begin
   // workspace con nombre: SU declaracion, sin herencia (ausente = off)
   if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    // ausente = apagado; y AllowRun implica build scripts, como siempre,
-    // pero dentro de las declaraciones de ESTE workspace
-    Exit((GWorkspaces[TWorkspaceIx1 - 1].OvAllowBuildScripts = 1) or
-         (GWorkspaces[TWorkspaceIx1 - 1].OvAllowRun = 1));
-  Result := GAllowBuildScripts or GAllowRun;
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowBuildScripts = 1); // ausente = apagado
+  Result := GAllowBuildScripts;
 end;
 
 function BindIP: string;
@@ -1685,7 +1664,7 @@ end;
 
 { delphi_build's platform/config/target reach a cmd.exe line UNQUOTED
   (rsvars.bat && msbuild ...), so a metacharacter there is arbitrary execution
-  that sails past AllowRun, the jail, the low-integrity sandbox and the .dproj
+  that sails past the jail, the low-integrity sandbox and the .dproj
   hazard scanner at once. platform reuses the whitelist that ALREADY exists for
   the .dproj XML sink (Lsp.Dproj.CanonicalPlatform) instead of a second, weaker
   charset test; target is a fixed trio; config is NOT a fixed list - a project
@@ -2142,7 +2121,7 @@ begin
   // saying the obvious thing: nothing writes here (v0.62).
   if IsReadOnlyNow and
      MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
-       'delphi_changeset', 'delphi_build', 'delphi_run', 'delphi_package',
+       'delphi_changeset', 'delphi_build', 'delphi_package',
        'delphi_upload', 'delphi_delete', 'delphi_move', 'delphi_desktop',
        'vault_append', 'vault_create', 'vault_patch']) then
     Exit(WriteDenied(AToolName));
@@ -2184,7 +2163,7 @@ begin
   end;
   // Universal build-argument filter (BOTH access levels): platform, config and
   // target land in a cmd.exe line, so a metacharacter there is arbitrary
-  // execution - and it would sail past AllowRun, the jail, the sandbox and the
+  // execution - and it would sail past the jail, the sandbox and the
   // .dproj hazard scanner in a single call.
   if SameText(AToolName, 'delphi_build') then
   begin
@@ -2202,11 +2181,6 @@ begin
     if Result <> '' then
       Exit;
   end;
-  // Universal execution block (BOTH access levels): this is a compile-only
-  // development server; running a program here is off by design. Refused for
-  // every credential unless the operator explicitly opted in (AllowRun).
-  if SameText(AToolName, 'delphi_run') and not AllowRun then
-    Exit(SR_RUN_DISABLED);
   // Universal PAServer-argument filter (BOTH access levels): profile name,
   // host, port, platform and password land on the paclient command line, and
   // the name becomes a file in %APPDATA%.
@@ -2229,7 +2203,7 @@ begin
   // Fully mutating tools: refused outright in read-only mode.
   if MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
     'delphi_changeset',
-    'delphi_build', 'delphi_run', 'delphi_package', 'delphi_upload',
+    'delphi_build', 'delphi_package', 'delphi_upload',
     'delphi_delete', 'delphi_move',
     // The knowledge vault: reading is fine read-only, writing never is.
     'vault_append', 'vault_create', 'vault_patch']) then

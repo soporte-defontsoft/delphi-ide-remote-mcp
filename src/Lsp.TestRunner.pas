@@ -14,12 +14,11 @@ unit Lsp.TestRunner;
 // Anything else is not a test project and is not run.
 //
 // Running it is EXECUTION, and execution is opt-in on this server. It has its
-// own switch, AllowTests en el workspace, deliberately NOT AllowRun: allowing a
-// test suite to run is not the same decision as allowing arbitrary binaries
-// (AllowRun implies AllowTests - full execution is a superset). The binary is
-// built here, from a project of the jail, run in the same low-integrity
-// sandbox delphi_run uses, with a timeout, and only ever the artifact
-// delphi_build declared.
+// own switch, AllowTests en el workspace, and it is the ONLY execution this
+// machine offers (delphi_run, arbitrary binaries, was retired 2026-09-23:
+// one door). The binary is built here, from a project of the jail, run in a
+// low-integrity sandbox (Lsp.Sandbox), with a timeout, and only ever the
+// artifact delphi_build declared.
 //
 // The result is STRUCTURED, which is the whole point: an agent must be able
 // to act on "which test failed and why" without parsing prose. Two dialects

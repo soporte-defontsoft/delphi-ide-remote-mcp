@@ -76,7 +76,7 @@ with open(os.path.join(WORK, 'settings.ini'), 'w') as f:
     f.write('[Workspace.Bateria]\n'
             'Token=%s\n'
             'Roots=%s\n'
-            'AllowRun=1\n' % (TOKEN, JAIL))
+            'AllowTests=1\n' % (TOKEN, JAIL))
 
 sk = socket.socket()
 sk.bind(('127.0.0.1', 0))
@@ -402,8 +402,11 @@ try:
             res = {}
 
             def runner():
-                res['run'] = call('delphi_run', {"path": exe[0],
-                                                 "timeoutMs": 20000}, timeout=300)
+                # The battery itself keeps the exe alive (delphi_run was
+                # retired 2026-09-23): what matters is the file being OPEN
+                # while msbuild wants to write it.
+                pr = subprocess.run([exe[0]], capture_output=True, text=True, timeout=300)
+                res['run'] = pr.stdout
 
             def builder():
                 time.sleep(2.0)   # the program is already running by now
