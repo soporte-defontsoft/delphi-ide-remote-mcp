@@ -60,6 +60,22 @@ code before being accepted.
 
 ### Added
 
+- `delphi_create kind=project-package`: a runtime package from zero, `.dpk`
+  (`requires rtl`, no `contains` yet) plus a package `.dproj` measured against
+  an IDE-made one (MainSource `.dpk`, AppType/ProjectType Package,
+  GenDll/GenPackage, `bpl` extension) with the BPL and the DCP kept in the
+  project folder instead of Embarcadero's public Bpl/Dcp folders. Pulled
+  forward from 1.2 because Hermes' field battery could not start a package by
+  tools at all. A package is worked on, never installed: nothing is
+  registered in the IDE.
+- The project-units engine understands packages: `delphi_config add-unit`,
+  `remove-unit`, `view section=units`, `delphi_create kind=unit` and
+  `delphi_move` accept a `.dpk` (or a `.dproj` whose main source is one) and
+  edit its `contains` clause the way they edit a `.dpr` uses clause, skipping
+  the `requires` clause that precedes it. The first unit opens the `contains`
+  clause of a fresh package (an empty one is not legal Pascal). `delphi_delete`
+  also looks for the unit in every `.dpk` of the tree.
+
 - `delphi_build target=Deploy` explains an `E0017 Unable to delete
   <job>.wait.exe`: that is the watcher of a remote-run job whose program is
   still running on the target, so the folder cannot be rewritten. The new

@@ -121,6 +121,61 @@ check('create: jamas sobreescribe', 'RECHAZADO' in out, out)
 out = call('delphi_run', {"path": os.path.join(CDIR, 'Win64', 'Debug', 'HolaConsola.exe')})
 check('run: con jaula declarada ejecuta en el sandbox', 'exit=0' in out, out[:150])
 
+# --- runtime package (1.2 candidate, pulled forward on 2026-09-23: Hermes'
+# battery 1.2 case 1 could not even start a package by tools) ---
+PDIR = os.path.join(BASE, 'PaqueteUno')
+PDPK = os.path.join(PDIR, 'PaqueteUno.dpk')
+PDPROJ = os.path.join(PDIR, 'PaqueteUno.dproj')
+out = call('delphi_create', {"kind": "project-package", "dir": PDIR, "name": "PaqueteUno"})
+check('package: CREADO', out.startswith('CREADO') and 'contains' in out, out[:300])
+check('package: .dpk + .dproj', os.path.isfile(PDPK) and os.path.isfile(PDPROJ), os.listdir(PDIR) if os.path.isdir(PDIR) else 'sin carpeta')
+_k = open(PDPK, 'rb').read().decode('utf-8-sig')
+check('package: requires rtl, sin contains', 'requires' in _k and 'rtl;' in _k and 'contains' not in _k, _k)
+_x = open(PDPROJ, 'rb').read().decode('utf-8-sig')
+check('package: .dproj de paquete (MainSource .dpk, AppType Package, bpl en la carpeta)',
+      '<MainSource>PaqueteUno.dpk</MainSource>' in _x and '<AppType>Package</AppType>' in _x and
+      '<DCC_BplOutput>' in _x and '<DCC_DcpOutput>' in _x and '<Borland.ProjectType>Package</Borland.ProjectType>' in _x, _x[:400])
+out = call('delphi_build', {"project": PDPROJ, "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
+try:
+    d = json.loads(out)
+    check('package: vacio COMPILA a .bpl', d['success'] and d.get('output', '').lower().endswith('paqueteuno.bpl'), out[:250])
+    check('package: .dcp en la carpeta del proyecto (no en la publica de Embarcadero)',
+          os.path.isfile(os.path.join(PDIR, 'Win64', 'Debug', 'PaqueteUno.dcp')), os.listdir(os.path.join(PDIR, 'Win64', 'Debug')) if os.path.isdir(os.path.join(PDIR, 'Win64', 'Debug')) else 'sin salida')
+except Exception as e:
+    check('package: build parsea', False, '%s | %s' % (e, out[:200]))
+# the first unit OPENS the contains clause
+out = call('delphi_create', {"kind": "unit", "name": "UPkgUno", "project": PDPK})
+check('package: kind=unit registra en contains', out.startswith('CREADA') and 'ANADIDA' in out, out[:300])
+_k = open(PDPK, 'rb').read().decode('utf-8-sig')
+check('package: contains estrenada antes de end.', "contains\r\n  UPkgUno in 'UPkgUno.pas';" in _k and _k.index('contains') < _k.index('end.'), _k)
+check('package: requires intacta', "requires\r\n  rtl;" in _k, _k)
+# a second unit by hand + add-unit, into a subfolder
+_sub = os.path.join(PDIR, 'src')
+os.makedirs(_sub, exist_ok=True)
+_dos = os.path.join(_sub, 'UPkgDos.pas')
+open(_dos, 'wb').write('unit UPkgDos;\r\n\r\ninterface\r\n\r\nfunction Dos: Integer;\r\n\r\nimplementation\r\n\r\nfunction Dos: Integer;\r\nbegin\r\n  Result := 2;\r\nend;\r\n\r\nend.\r\n'.encode('utf-8-sig'))
+out = call('delphi_config', {"project": PDPROJ, "command": "add-unit", "path": _dos})
+check('package: add-unit por el .dproj (resuelve al .dpk)', out.startswith('ANADIDA'), out[:300])
+_k = open(PDPK, 'rb').read().decode('utf-8-sig')
+check('package: contains con dos entradas y coma', "UPkgUno in 'UPkgUno.pas',\r\n  UPkgDos in 'src\\UPkgDos.pas';" in _k, _k)
+check('package: DCCReference de las dos', 'Include="UPkgUno.pas"' in open(PDPROJ, 'rb').read().decode('utf-8-sig') and 'Include="src\\UPkgDos.pas"' in open(PDPROJ, 'rb').read().decode('utf-8-sig'), '')
+out = call('delphi_config', {"project": PDPROJ, "section": "units"})
+try:
+    _u = {u['unit'] for u in json.loads(out).get('units', [])}
+    check('package: view units lista las dos', _u == {'UPkgUno', 'UPkgDos'}, _u)
+except Exception as e:
+    check('package: view units parsea', False, '%s | %s' % (e, out[:200]))
+ok, err = build_ok(PDPROJ)
+check('package: con dos units COMPILA', ok, err)
+out = call('delphi_config', {"project": PDPROJ, "command": "remove-unit", "path": os.path.join(PDIR, 'UPkgUno.pas')})
+check('package: remove-unit', out.startswith('QUITADA') or 'quitada' in out.lower(), out[:200])
+_k = open(PDPK, 'rb').read().decode('utf-8-sig')
+check('package: contains se queda con la otra', "contains\r\n  UPkgDos in 'src\\UPkgDos.pas';" in _k and 'UPkgUno' not in _k, _k)
+ok, err = build_ok(PDPROJ)
+check('package: tras remove-unit COMPILA', ok, err)
+out = call('delphi_create', {"kind": "project-package", "dir": PDIR, "name": "PaqueteUno"})
+check('package: jamas sobreescribe', 'RECHAZADO' in out, out)
+
 # --- VCL project + extra form ---
 VDIR = os.path.join(BASE, 'HolaVcl')
 out = call('delphi_create', {"kind": "project-vcl", "dir": VDIR, "name": "HolaVcl"})

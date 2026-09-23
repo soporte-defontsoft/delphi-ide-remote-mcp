@@ -2006,14 +2006,15 @@ const
   // ---- project units (Lsp.ProjectUnits: add-unit / remove-unit / create / delete / move) ----
 
   SR_UNIT_NEED_PROJECT =
-    'Falta "project": el .dproj (o .dpr) del proyecto.';
+    'Falta "project": el .dproj (o .dpr / .dpk) del proyecto.';
 
   SR_UNIT_PROJECT_EXT_FMT =
-    'RECHAZADO: "%s" no es un proyecto (.dproj o .dpr).';
+    'RECHAZADO: "%s" no es un proyecto (.dproj, .dpr o .dpk).';
 
   SR_UNIT_NO_DPR_FMT =
-    'RECHAZADO: no existe el .dpr del proyecto (%s); las units se registran ' +
-    'en el .dpr y sin el no hay programa.';
+    'RECHAZADO: no existe el fuente principal del proyecto (%s); las units ' +
+    'se registran en el .dpr (uses) o en el .dpk (contains) y sin el no hay ' +
+    'proyecto.';
 
   SR_UNIT_NEED_PATH =
     'Falta "path": la unit .pas a registrar o quitar. Si tu cliente no ' +
@@ -2045,15 +2046,15 @@ const
     'Delphi deben coincidir; arregla uno de los dos con delphi_edit / delphi_move.';
 
   SR_UNIT_NO_USES_FMT =
-    'RECHAZADO: no encuentro la clausula uses de %s.';
+    'RECHAZADO: no encuentro la clausula de units (uses / contains) de %s.';
 
   SN_UNIT_ADDED_FMT =
-    'ANADIDA la unit %s (%s) al proyecto %s: uses del .dpr + DCCReference ' +
+    'ANADIDA la unit %s (%s) al proyecto %s: clausula %s de %s + DCCReference ' +
     'del .dproj. Copias previas en __delphi-patch.';
 
   SN_UNIT_ADDED_FORM_FMT =
-    'ANADIDA la unit %s (%s) con su form %s: %s al proyecto %s: uses del ' +
-    '.dpr%s + DCCReference del .dproj. Copias previas en __delphi-patch.';
+    'ANADIDA la unit %s (%s) con su form %s: %s al proyecto %s: clausula %s ' +
+    'de %s%s + DCCReference del .dproj. Copias previas en __delphi-patch.';
 
   SN_UNIT_CREATEFORM = ' + Application.CreateForm';
 
@@ -3209,10 +3210,22 @@ const
     'pero MiEmpresa.MiApp.LoQueSea si).';
 
   SR_CREATE_PROJECT_KIND =
-    'RECHAZADO: de proyectos solo se yo hacer tres: kind=project-console, ' +
-    'kind=project-vcl y kind=project-fmx. (Y luego form-vcl, form-fmx, ' +
-    'frame-vcl, frame-fmx, datamodule y unit, que van DENTRO de un proyecto ' +
-    'que ya existe.)';
+    'RECHAZADO: de proyectos solo se yo hacer cuatro: kind=project-console, ' +
+    'kind=project-vcl, kind=project-fmx y kind=project-package (un paquete ' +
+    'runtime, .dpk + .dproj). (Y luego form-vcl, form-fmx, frame-vcl, ' +
+    'frame-fmx, datamodule y unit, que van DENTRO de un proyecto que ya ' +
+    'existe.)';
+
+  { Un paquete propio se TRABAJA, no se instala (David, 2026-09-23): se
+    compila a BPL+DCP en su carpeta, sus units entran por la clausula
+    contains, y el IDE ni lo registra ni lo carga. }
+  SN_CREATE_PACKAGE_NOTE =
+    'Es un paquete RUNTIME sin units todavia: la primera la escribe kind=unit ' +
+    '(o delphi_config add-unit), en la clausula contains. delphi_build lo ' +
+    'compila a <nombre>.bpl + <nombre>.dcp en Win64\Debug de esta carpeta; ' +
+    'no se instala ni se registra en el IDE (eso no lo hace este servidor). ' +
+    'Para que otro proyecto lo use, anade su carpeta de salida al search ' +
+    'path (delphi_config add-searchpath) o enlaza sus units directamente.';
 
   SR_CREATE_NEED_DIR =
     'RECHAZADO: falta "dir", la carpeta donde crear el proyecto. Debe estar ' +

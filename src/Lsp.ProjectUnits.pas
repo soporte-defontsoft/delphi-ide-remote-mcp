@@ -124,9 +124,19 @@ begin
   Ext := TPath.GetExtension(AProject).ToLower;
   Stem := TPath.Combine(TPath.GetDirectoryName(TPath.GetFullPath(AProject)),
     TPath.GetFileNameWithoutExtension(AProject));
-  if (Ext <> '.dpr') and (Ext <> '.dproj') then
+  if (Ext <> '.dpr') and (Ext <> '.dpk') and (Ext <> '.dproj') then
     Exit(Format(SR_UNIT_PROJECT_EXT_FMT, [TPath.GetFileName(AProject)]));
-  ADpr := Stem + '.dpr';
+  // Un paquete es un proyecto: su fuente principal es el .dpk (con clausula
+  // contains en vez de uses) y el .dproj es el mismo. Desde un .dproj se
+  // decide por lo que hay en disco: el .dpr si existe, si no el .dpk.
+  // (Hermes, bateria 1.2 caso 1: sin esto un paquete propio no se podia
+  // trabajar por tools.)
+  if Ext = '.dpk' then
+    ADpr := Stem + '.dpk'
+  else if (Ext = '.dproj') and (not TFile.Exists(Stem + '.dpr')) and TFile.Exists(Stem + '.dpk') then
+    ADpr := Stem + '.dpk'
+  else
+    ADpr := Stem + '.dpr';
   ADproj := Stem + '.dproj';
   if not TFile.Exists(ADpr) then
     Exit(Format(SR_UNIT_NO_DPR_FMT, [ADpr]));
@@ -299,6 +309,7 @@ type
     StartPos: Integer;  // index (1-based) of the 'u' of 'uses'
     EndPos: Integer;    // index of the closing ';'
     Entries: TArray<string>; // raw entry texts, trimmed
+    Keyword: string;    // 'uses' (program/library) o 'contains' (package)
   end;
 
 // Length of the comment or directive starting at S[I] (0 when none): the
@@ -442,19 +453,28 @@ begin
   Result := C.IsLetterOrDigit or (C = '_');
 end;
 
-{ The program's uses clause: the `uses` keyword after `program X;` (never
-  one inside a comment), closed by the first `;` outside quotes/comments. }
+{ La clausula de units del proyecto: `uses` tras `program X;` (o `library`),
+  y `contains` tras `package X;` - en un paquete la `requires` que va antes
+  se salta entera. Nunca una dentro de un comentario; cerrada por el primer
+  `;` fuera de comillas y comentarios. }
 function FindUses(const Dpr: string): TUsesClause;
 var
-  I, N, Start: Integer;
+  I, N, Start, K: Integer;
   M: TMatch;
   SeenProgram: Boolean;
+  Token: string;
 begin
   Result := Default(TUsesClause);
-  M := TRegEx.Match(Dpr, '^\s*program\b', [roIgnoreCase, roMultiline]);
+  Result.Keyword := 'uses';
+  M := TRegEx.Match(Dpr, '^\s*(program|library|package)\b', [roIgnoreCase, roMultiline]);
   I := 1;
   if M.Success then
+  begin
     I := M.Index + M.Length;
+    if SameText(M.Groups[1].Value, 'package') then
+      Result.Keyword := 'contains';
+  end;
+  K := Length(Result.Keyword);
   SeenProgram := not M.Success;
   Start := 0;
   while I <= Length(Dpr) do
@@ -476,22 +496,43 @@ begin
     end;
     if Start = 0 then
     begin
-      if ((I = 1) or not IsIdentChar(Dpr[I - 1])) and (I + 3 <= Length(Dpr)) and
-         SameText(Copy(Dpr, I, 4), 'uses') and
-         ((I + 4 > Length(Dpr)) or not IsIdentChar(Dpr[I + 4])) then
+      if ((I = 1) or not IsIdentChar(Dpr[I - 1])) and (I + K - 1 <= Length(Dpr)) and
+         SameText(Copy(Dpr, I, K), Result.Keyword) and
+         ((I + K > Length(Dpr)) or not IsIdentChar(Dpr[I + K])) then
       begin
         Start := I;
-        Inc(I, 4);
+        Inc(I, K);
         Continue;
       end;
       if IsIdentChar(Dpr[I]) then
       begin
-        // another token before `uses` (const, type, begin...): no clause
+        // another token before the clause (const, type, begin...): no clause.
+        // Except `requires ...;` in a package, which comes BEFORE contains
+        // and is skipped whole.
+        Token := '';
         while (I <= Length(Dpr)) and IsIdentChar(Dpr[I]) do
+        begin
+          Token := Token + Dpr[I];
           Inc(I);
-        if not SameText(Copy(Dpr, I - 4, 4), 'uses') then
+        end;
+        if SameText(Token, 'requires') then
+        begin
+          while (I <= Length(Dpr)) and (Dpr[I] <> ';') do
+          begin
+            N := CommentLen(Dpr, I);
+            if N = 0 then
+              N := QuoteLen(Dpr, I);
+            if N > 0 then
+              Inc(I, N)
+            else
+              Inc(I);
+          end;
+          Inc(I); // the ';' of requires
+          Continue;
+        end;
+        if not SameText(Token, Result.Keyword) then
           Exit;
-        Start := I - 4;
+        Start := I - K;
       end
       else
         Inc(I);
@@ -502,7 +543,7 @@ begin
       Result.StartPos := Start;
       Result.EndPos := I;
       Result.Found := True;
-      Result.Entries := SplitEntries(Copy(Dpr, Start + 4, I - (Start + 4)));
+      Result.Entries := SplitEntries(Copy(Dpr, Start + K, I - (Start + K)));
       Exit;
     end;
     Inc(I);
@@ -612,7 +653,7 @@ begin
     E := AEntries[I].Replace(#13#10, #10).Replace(#10, NL + Indent);
     Parts[I] := Indent + E;
   end;
-  Body := 'uses' + NL + string.Join(',' + NL, Parts) + ';';
+  Body := IfThen(U.Keyword <> '', U.Keyword, 'uses') + NL + string.Join(',' + NL, Parts) + ';';
   Body := TRegEx.Replace(Body, '[ \t]+(\r?\n)', '$1'); // no trailing blanks
   Result := Copy(Dpr, 1, U.StartPos - 1) + Body + Copy(Dpr, U.EndPos + 1, MaxInt);
 end;
@@ -779,7 +820,7 @@ var
   Info: TUnitInfo;
   U: TUsesClause;
   E: string;
-  Present, Completada: Boolean;
+  Present, Completada, Estrenada: Boolean;
   Entries: TArray<string>;
   S, L: Integer;
 begin
@@ -794,8 +835,27 @@ begin
   // .dpr
   Text := PatchLoadText(Dpr, Enc);
   U := FindUses(Text);
+  Estrenada := False;
   if not U.Found then
-    Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
+  begin
+    // Un paquete recien creado no tiene clausula contains (una vacia no es
+    // legal): la primera unit la estrena, justo antes del end. final.
+    if SameText(U.Keyword, 'contains') then
+    begin
+      Estrenada := True;
+      var MEnd := TRegEx.Match(Text, '(?im)^\s*end\s*\.');
+      if not MEnd.Success then
+        Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
+      var NL := IfThen(Text.Contains(#13#10), #13#10, #10);
+      Text := Copy(Text, 1, MEnd.Index - 1) + 'contains' + NL + '  ' +
+        BuildEntry(Info, Include) + ';' + NL + NL + Copy(Text, MEnd.Index, MaxInt);
+      PatchSaveText(Dpr, Text, Enc);
+      Text := PatchLoadText(Dpr, Enc);
+      U := FindUses(Text);
+    end;
+    if not U.Found then
+      Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
+  end;
   Present := False;
   Completada := False;
   Entries := U.Entries;
@@ -858,13 +918,15 @@ begin
   if Completada then
     Result := Format(SN_UNIT_COMPLETED_FMT, [Info.UnitName, TPath.GetFileName(Dpr),
       Info.UnitName, Include])
-  else if Present then
+  else if Present and not Estrenada then
     Result := Format(SN_UNIT_PRESENT_FMT, [Info.UnitName, TPath.GetFileName(Dpr)])
   else if Info.IsDesigner then
     Result := Format(SN_UNIT_ADDED_FORM_FMT, [Info.UnitName, Include, Info.FormName,
-      Info.ClassName, TPath.GetFileName(Dpr), IfThen(Info.NeedsCreateForm, SN_UNIT_CREATEFORM, '')])
+      Info.ClassName, TPath.GetFileName(Dpr), U.Keyword, TPath.GetFileName(Dpr),
+      IfThen(Info.NeedsCreateForm, SN_UNIT_CREATEFORM, '')])
   else
-    Result := Format(SN_UNIT_ADDED_FMT, [Info.UnitName, Include, TPath.GetFileName(Dpr)]);
+    Result := Format(SN_UNIT_ADDED_FMT, [Info.UnitName, Include, TPath.GetFileName(Dpr),
+      U.Keyword, TPath.GetFileName(Dpr)]);
   if Note <> '' then
     Result := Result + #10 + Note;
 end;
@@ -1188,7 +1250,8 @@ begin
   begin
     if not TDirectory.Exists(D) then
       Continue;
-    for F in TDirectory.GetFiles(D, '*.dpr') do
+    for F in TDirectory.GetFiles(D, '*.dp?') do // .dpr y .dpk, no .dproj
+      if MatchText(TPath.GetExtension(F), ['.dpr', '.dpk']) then
       for P in ProjectUnits(F, False) do // the .dpr decides; no .dproj read
         if SameText(P.UnitName, Stem) and
           (NormPath(TPath.Combine(TPath.GetDirectoryName(F), P.Include)) = NormPath(APasPath)) then

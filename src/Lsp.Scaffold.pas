@@ -11,6 +11,8 @@ unit Lsp.Scaffold;
 interface
 
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
+{ AKind: console | vcl | fmx | package (a runtime package: .dpk + .dproj,
+  requires rtl, no contains yet - the first kind=unit opens it). }
 { AKind: vcl | fmx (forms) | frame-vcl | frame-fmx | datamodule. }
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
   const ASubDir: string = ''): string;
@@ -65,8 +67,33 @@ end;
 function DprojTemplate(const AName, AGuid, AAppType, AFramework,
   AFormUnit, AFormName, AFormType: string): string;
 var
-  FormRef: string;
+  FormRef, MainExt, ProjectType, PkgProps: string;
 begin
+  // Un paquete se diferencia en cuatro cosas, medidas contra un .dproj de
+  // paquete del IDE (FMXDefontsoft, 2026-09-23): el fuente principal es el
+  // .dpk, AppType/ProjectType = Package, GenDll+GenPackage+AppFileExt=bpl,
+  // y el BPL y el DCP se quedan en la carpeta del proyecto (el IDE los
+  // manda por defecto a la carpeta publica Bpl/Dcp de Embarcadero: fuera de
+  // la jaula, y ademas eso es "instalar", que no hacemos).
+  MainExt := '.dpr';
+  ProjectType := 'Application';
+  PkgProps := '';
+  if SameText(AAppType, 'Package') then
+  begin
+    MainExt := '.dpk';
+    ProjectType := 'Package';
+    PkgProps :=
+      '        <DCC_BplOutput>.\$(Platform)\$(Config)</DCC_BplOutput>' + CRLF +
+      '        <DCC_DcpOutput>.\$(Platform)\$(Config)</DCC_DcpOutput>' + CRLF +
+      '        <GenDll>true</GenDll>' + CRLF +
+      '        <GenPackage>true</GenPackage>' + CRLF +
+      '        <AppFileExt>bpl</AppFileExt>' + CRLF +
+      '        <DCC_E>false</DCC_E>' + CRLF +
+      '        <DCC_N>false</DCC_N>' + CRLF +
+      '        <DCC_S>false</DCC_S>' + CRLF +
+      '        <DCC_F>false</DCC_F>' + CRLF +
+      '        <DCC_K>false</DCC_K>' + CRLF;
+  end;
   FormRef := '';
   if AFormUnit <> '' then
     FormRef :=
@@ -78,7 +105,7 @@ begin
     '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">' + CRLF +
     '    <PropertyGroup>' + CRLF +
     '        <ProjectGuid>' + AGuid + '</ProjectGuid>' + CRLF +
-    '        <MainSource>' + AName + '.dpr</MainSource>' + CRLF +
+    '        <MainSource>' + AName + MainExt + '</MainSource>' + CRLF +
     '        <Base>True</Base>' + CRLF +
     '        <Config Condition="''$(Config)''==''''">Debug</Config>' + CRLF +
     '        <ProjectName Condition="''$(ProjectName)''==''''">' + AName + '</ProjectName>' + CRLF +
@@ -115,6 +142,7 @@ begin
     '        <SanitizedProjectName>' + AName + '</SanitizedProjectName>' + CRLF +
     '        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>' + CRLF +
     '        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>' + CRLF +
+    PkgProps +
     '        <VerInfo_Locale>1033</VerInfo_Locale>' + CRLF +
     '        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>' + CRLF +
     '    </PropertyGroup>' + CRLF +
@@ -137,11 +165,11 @@ begin
     '    </ItemGroup>' + CRLF +
     '    <ProjectExtensions>' + CRLF +
     '        <Borland.Personality>Delphi.Personality.12</Borland.Personality>' + CRLF +
-    '        <Borland.ProjectType>Application</Borland.ProjectType>' + CRLF +
+    '        <Borland.ProjectType>' + ProjectType + '</Borland.ProjectType>' + CRLF +
     '        <BorlandProject>' + CRLF +
     '            <Delphi.Personality>' + CRLF +
     '                <Source>' + CRLF +
-    '                    <Source Name="MainSource">' + AName + '.dpr</Source>' + CRLF +
+    '                    <Source Name="MainSource">' + AName + MainExt + '</Source>' + CRLF +
     '                </Source>' + CRLF +
     '            </Delphi.Personality>' + CRLF +
     '            <Platforms>' + CRLF +
@@ -382,7 +410,7 @@ var
   Files: TStringList;
 begin
   Kind := AKind.Trim.ToLower;
-  if (Kind <> 'console') and (Kind <> 'vcl') and (Kind <> 'fmx') then
+  if (Kind <> 'console') and (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'package') then
     // The caller wrote "project-web": answering "console | vcl | fmx" sends
     // them to write kind=console, which is refused too. Name the values that
     // work (field round 10).
@@ -400,8 +428,9 @@ begin
   Result := PathDenied(Dir);
   if Result <> '' then
     Exit;
-  Dpr := TPath.Combine(Dir, AName + '.dpr');
-  if TFile.Exists(Dpr) or TFile.Exists(TPath.Combine(Dir, AName + '.dproj')) then
+  Dpr := TPath.Combine(Dir, AName + IfThen(Kind = 'package', '.dpk', '.dpr'));
+  if TFile.Exists(Dpr) or TFile.Exists(TPath.Combine(Dir, AName + '.dproj')) or
+     TFile.Exists(TPath.Combine(Dir, AName + '.dpr')) or TFile.Exists(TPath.Combine(Dir, AName + '.dpk')) then
     Exit('RECHAZADO: ya existe un proyecto ' + AName + ' en ' + Dir + '. El scaffolder jamas sobreescribe.');
   // All or nothing. The files used to be written one by one, so a collision
   // on the THIRD of them (the UMain.pas of a project already living in that
@@ -411,7 +440,7 @@ begin
   // written, and the folder is not even created when the answer is no.
   MainUnit := 'UMain';
   MainForm := 'FormMain';
-  if Kind <> 'console' then
+  if (Kind <> 'console') and (Kind <> 'package') then
   begin
     Clash := '';
     if TFile.Exists(TPath.Combine(Dir, MainUnit + '.pas')) then
@@ -427,7 +456,26 @@ begin
 
   Files := TStringList.Create;
   try
-    if Kind = 'console' then
+    if Kind = 'package' then
+    begin
+      // Un paquete RUNTIME propio: requires rtl y sin contains (una clausula
+      // contains vacia no es legal; la primera kind=unit la escribe). Ni se
+      // instala ni se registra en el IDE: se compila a BPL+DCP en su carpeta.
+      // Hermes, bateria 1.2 caso 1 (2026-09-23): sin esto un agente no podia
+      // empezar un paquete propio.
+      WriteNewFile(Dpr,
+        'package ' + AName + ';' + CRLF + CRLF +
+        '{$R *.res}' + CRLF +
+        '{$IMPLICITBUILD ON}' + CRLF + CRLF +
+        'requires' + CRLF +
+        '  rtl;' + CRLF + CRLF +
+        'end.' + CRLF);
+      WriteNewFile(TPath.Combine(Dir, AName + '.dproj'),
+        DprojTemplate(AName, NewGuidStr, 'Package', 'None', '', '', ''));
+      Files.Add(AName + '.dpk');
+      Files.Add(AName + '.dproj');
+    end
+    else if Kind = 'console' then
     begin
       WriteNewFile(Dpr,
         'program ' + AName + ';' + CRLF + CRLF +
@@ -523,8 +571,9 @@ begin
 
     Result := Format('CREADO proyecto %s (%s) en %s'#10'  ficheros: %s'#10 +
       'Fuentes en %s (el encoding configurado en el IDE) + CRLF. Compilable ' +
-      'ya con delphi_build (el IDE enriquecera el .dproj al abrirlo).',
-      [AName, Kind, Dir, string.Join(', ', Files.ToStringArray), NewFileEncName]);
+      'ya con delphi_build (el IDE enriquecera el .dproj al abrirlo).%s',
+      [AName, Kind, Dir, string.Join(', ', Files.ToStringArray), NewFileEncName,
+       IfThen(Kind = 'package', #10 + SN_CREATE_PACKAGE_NOTE, '')]);
   finally
     Files.Free;
   end;

@@ -270,7 +270,7 @@ Create a NEW Delphi project (console/VCL/FMX: .dpr + buildable .dproj + main for
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | **yes** | What to create: project-console \| project-vcl \| project-fmx \| form-vcl \| form-fmx \| frame-vcl \| frame-fmx \| datamodule \| unit (a plain .pas). Everything but projects is registered in the project given |
+| `kind` | string | **yes** | What to create: project-console \| project-vcl \| project-fmx \| project-package (a runtime package: .dpk + .dproj, requires rtl; units go into its contains clause with kind=unit or add-unit; built to BPL+DCP in its own folder, never installed in the IDE) \| form-vcl \| form-fmx \| frame-vcl \| frame-fmx \| datamodule \| unit (a plain .pas). Everything but projects is registered in the project given |
 | `dir` | string | optional | Projects: ABSOLUTE target directory (created if missing). Everything else (unit, form, frame, data module): optional SUBFOLDER of the project, RELATIVE to it and as deep as you like (`Dominio\Modelos\Dto`) - created if missing, and the unit is registered with that relative path. The folder layout is yours to decide. No absolute paths, no drive, no `..`. Empty = next to the .dpr |
 | `name` | string | **yes** | Projects: project name. Forms, frames, data modules and units: unit name (e.g. UClientes) |
 | `project` | string | optional | Everything but projects: absolute path of the project .dpr (or .dproj) to register the new unit in |
@@ -683,7 +683,7 @@ Concrete sequences that string the tools together. Paths shown as `srvd:\...` ar
 Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .js .css .py .ini ...`. `delphi_edit` refuses them on purpose.
 
 ### Scaffold a new project or form
-`delphi_create {kind:"project-vcl"|"project-fmx"|"project-console", dir, name}`, or `{kind:"form-vcl"|"form-fmx"|"frame-vcl"|"frame-fmx"|"datamodule"|"unit", project, name}` (registered in the `.dpr` and the `.dproj` on creation). An existing `.pas` joins with `delphi_config {project, command:"add-unit", path}`; `remove-unit` takes it out and keeps the file. `delphi_delete`/`delphi_move` on a unit keep the projects that list it consistent (designer pair included).
+`delphi_create {kind:"project-vcl"|"project-fmx"|"project-console"|"project-package", dir, name}`, or `{kind:"form-vcl"|"form-fmx"|"frame-vcl"|"frame-fmx"|"datamodule"|"unit", project, name}` (registered in the `.dpr` and the `.dproj` on creation). An existing `.pas` joins with `delphi_config {project, command:"add-unit", path}`; `remove-unit` takes it out and keeps the file. `delphi_delete`/`delphi_move` on a unit keep the projects that list it consistent (designer pair included).
 
 ### Build and get the binary onto your machine
 1. `delphi_build {project, platform:"Win64", config:"Debug", target:"Build"}` — structured errors/warnings.

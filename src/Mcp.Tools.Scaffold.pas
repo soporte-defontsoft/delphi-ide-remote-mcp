@@ -21,7 +21,7 @@ type
     FFormName: string;
     FContent: string;
   public
-    [SchemaDescription('What to create: project-console | project-vcl | project-fmx | form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit (a plain .pas). Everything but projects is registered in the project given')]
+    [SchemaDescription('What to create: project-console | project-vcl | project-fmx | project-package (a runtime package: .dpk + .dproj, requires rtl; its units go in with kind=unit or add-unit, into the contains clause; it is built to BPL+DCP in its own folder and never installed in the IDE) | form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit (a plain .pas). Everything but projects is registered in the project given')]
     [Required]
     property Kind: string read FKind write FKind;
     [SchemaDescription('Projects: ABSOLUTE target directory (created if missing). Everything else (unit, form, frame, data module): optional SUBFOLDER of the project, RELATIVE to it and as deep as you like (Dominio\Modelos\Dto) - created if missing, and the unit is registered with that relative path. The folder layout is yours to decide. No absolute paths, no drive, no "..": what you create in a project hangs from that project. Empty = next to the .dpr')]
@@ -30,7 +30,7 @@ type
     [SchemaDescription('Projects: project name. Forms, frames, data modules and units: unit name (e.g. UClientes)')]
     [Required]
     property Name: string read FName write FName;
-    [SchemaDescription('Everything but projects: absolute path of the project .dpr (or .dproj) to register the new unit in')]
+    [SchemaDescription('Everything but projects: absolute path of the project .dpr, .dpk or .dproj to register the new unit in (uses of a program, contains of a package)')]
     [RutaDelServidor]
     property Project: string read FProject write FProject;
     [SchemaDescription('Forms/frames/data modules optional: instance name without the T (default: Form+unit, Frame+unit, DM+unit)')]
@@ -57,7 +57,8 @@ begin
   inherited;
   FName := 'delphi_create';
   FDescription := 'Create a NEW Delphi project (console/VCL/FMX: .dpr + ' +
-    'buildable .dproj + main form) or a NEW form, frame or data module ' +
+    'buildable .dproj + main form; or a runtime PACKAGE: .dpk + .dproj, ' +
+    'built to BPL+DCP in its folder, never installed) or a NEW form, frame or data module ' +
     '(VCL/FMX: .pas + .dfm/.fmx pair, registered in the .dpr uses - with ' +
     'Application.CreateForm for forms and data modules - and in the .dproj). ' +
     'IDE-equivalent skeletons, CRLF, source encoding follows the IDE''s ' +
@@ -84,7 +85,7 @@ begin
     Result := CreateDelphiUnit(Params.Project, Params.Name, Params.Content,
       Params.Dir)
   else
-    Result := 'RECHAZADO: kind debe ser project-console | project-vcl | project-fmx | ' +
+    Result := 'RECHAZADO: kind debe ser project-console | project-vcl | project-fmx | project-package | ' +
       'form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit.';
 end;
 
