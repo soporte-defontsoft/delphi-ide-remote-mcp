@@ -458,6 +458,22 @@ end;
 function QueryFullProcessImageNameW(hProcess: THandle; dwFlags: DWORD;
   lpExeName: PWideChar; var lpdwSize: DWORD): BOOL; stdcall; external kernel32;
 
+{ La forma LARGA de una ruta: la carpeta puede llegar como C:\Users\DFONTA~1\...
+  (8.3) y el sistema da el binario del proceso como C:\Users\dfontanet\...;
+  comparadas tal cual no casaban y kill decia "otro programa" del suyo
+  (medido 2026-09-23 en la bateria, que vive en %TEMP%). }
+function RutaLarga(const APath: string): string;
+var
+  Buf: array [0 .. MAX_PATH] of WideChar;
+  N: DWORD;
+begin
+  N := GetLongPathNameW(PChar(APath), @Buf[0], Length(Buf));
+  if (N > 0) and (N < DWORD(Length(Buf))) then
+    Result := PWideChar(@Buf[0])
+  else
+    Result := APath;
+end;
+
 { Mata el proceso de un trabajo de ESTA carpeta. El PID sale del .pid que
   escribio el lanzador o del nombre del vigia, nunca de quien llama - y como
   un PID se reutiliza, antes de matar se comprueba que el proceso ejecuta un
@@ -468,15 +484,24 @@ var
   Ruta: array [0 .. MAX_PATH] of WideChar;
   N: DWORD;
 begin
-  AComo := 'TerminateProcess';
+  AComo := 'OpenProcess';
   H := OpenProcess(PROCESS_TERMINATE or PROCESS_QUERY_LIMITED_INFORMATION, False, DWORD(APid));
   Result := H <> 0;
   if not Result then
+  begin
+    // ERROR_INVALID_PARAMETER: no hay ningun proceso con ese pid. El vigia
+    // dejo su fichero (con el pid en el nombre) pero el programa ya no esta:
+    // un trabajo terminado, no un fallo al matar.
+    if GetLastError = ERROR_INVALID_PARAMETER then
+      AComo := 'ya termino';
     Exit;
+  end;
+  AComo := 'TerminateProcess';
   try
     N := Length(Ruta);
     if QueryFullProcessImageNameW(H, 0, @Ruta[0], N) and
-       not string(PWideChar(@Ruta[0])).StartsWith(IncludeTrailingPathDelimiter(ACarpeta), True) then
+       not RutaLarga(string(PWideChar(@Ruta[0]))).StartsWith(
+         IncludeTrailingPathDelimiter(RutaLarga(ACarpeta)), True) then
     begin
       AComo := 'ese pid ya es de otro programa, fuera de esta carpeta: no se toca';
       Exit(False);
@@ -703,6 +728,9 @@ begin
           if MatarProceso(Pid, Carpeta, Como) then
             Anade(Salida, 'terminado el trabajo ' + Args[0].Trim + ' (pid ' +
               IntToStr(Pid) + ' por ' + Origen + ', ' + Como + ').'#10'___RC=0'#10)
+          else if Como = 'ya termino' then
+            Anade(Salida, 'no hay ningun trabajo ' + Args[0].Trim + ' vivo en ' +
+              'esta carpeta: o ya termino, o no era de este proyecto.'#10'___RC=3'#10)
           else
             Anade(Salida, 'no pude matar el trabajo ' + Args[0].Trim + ' (pid ' +
               IntToStr(Pid) + '): ' + Como + ' - ' + SysErrorMessage(GetLastError) + #10'___RC=1'#10);

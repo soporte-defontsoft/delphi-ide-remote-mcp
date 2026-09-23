@@ -85,6 +85,27 @@ code before being accepted.
   offers to add them to `requires`. `delphi_config command=add-requires
   requires="vcl;dbrtl"` writes them into the `.dpk` (idempotent, creates the
   clause if missing). `warnings[]` stays out of a quiet answer.
+- `line1` next to the 0-based `line` in `delphi_references` (candidates, the
+  definition, rejected homonyms as `resolvedLine1`) and in every entry of
+  `delphi_diagnostics`: the 1-based line `delphi_read` shows, the way
+  definition, hover and signature already answer. Additive; `line` keeps
+  its meaning. Until now the five engine tools said "line" three different
+  ways (measured by the field battery).
+- `delphi_completion` no longer lists the token being typed as a candidate:
+  the engine returns it with type `<error>` (`{label:'C', detail:': <error>;'}`)
+  and it is noise, not a symbol.
+- The remote-run battery now exercises `kill`: by `.pid`, repeated (no job),
+  and with the `.pid` removed by hand the way a failed redeploy does, where
+  the pid comes from the watcher's name. It runs the real Windows launcher,
+  spawned outside the server's job object through WMI so the program
+  survives the paclient call the way it does on a real target (until now
+  every launched process died with the call, which is why `kill` could not
+  be measured there). Measured on the way: `kill` compared the program's
+  image path with the folder in 8.3 form and refused its own job as "another
+  program" - both are canonicalised now; and a stale watcher file whose pid
+  no longer exists answers "no job alive" instead of "could not kill".
+- docs/DELPHILSP-NOTES: the engine does not check the section legality of
+  `{$I}` includes (E2050/E2004 only dcc sees).
 
 - `delphi_build target=Deploy` explains an `E0017 Unable to delete
   <job>.wait.exe`: that is the watcher of a remote-run job whose program is

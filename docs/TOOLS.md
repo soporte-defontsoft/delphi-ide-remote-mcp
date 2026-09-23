@@ -5,7 +5,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 > **This page is written by hand and it does drift.** It used to claim it was generated from `tools/list` "so it never drifts from the code", and an audit on 2026-09-20 found it missing the headline features of three releases (`delphi_edit`'s `edits`, `delphi_search`'s `offset`, `delphi_list`'s `includetrash`, `delphi_test`'s `platform`, `delphi_changeset`'s `unstage` — all documented below since 2026-09-22). The authority is the server itself: **`delphi_help command=tool name=<tool>`** returns the live schema of one tool, and `docs/CAPABILITIES.json` IS generated from `tools/list`. When this page and the server disagree, the server is right.
 
 - **Paths** use virtual drive units (`srvd:\...`, `srvc:\...`) — call `delphi_workspace` first to learn the roots.
-- **Positions** for the semantic tools are 0-based (line and character), like the LSP. Point *inside* the identifier.
+- **Positions** for the semantic tools are 0-based (line and character), like the LSP. Point *inside* the identifier. Every answer that names a location also carries the 1-based line next to it (`line1` in definition, hover, signature, references and diagnostics; `line` + `line0` in symbols, search and rename): the 1-based one is what `delphi_read` shows and `delphi_edit` takes.
 - **Access**: with a read-only credential only the read-only tools run; mutating ones are refused at the gate. Without a workspace token there is no access at all (HTTP 401; a tokenless local stdio process is read-only).
 - **Required column**: every schema carries its real `required` list (the same one `delphi_help command=tool` returns); the table below says the same — the rest are optional and have sensible defaults, as their descriptions note.
 
@@ -112,7 +112,7 @@ Find references to the identifier at a 0-based line:character position. Hybrid m
 
 ### `delphi_diagnostics`
 
-Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight via the official DelphiLSP linter), WITHOUT building. Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions. Severity: 1=error, 2=warning, 3=information, 4=hint. Lints the CURRENT on-disk content.
+Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight via the official DelphiLSP linter), WITHOUT building. Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions (range) and line1, the 1-based line delphi_read shows. Severity: 1=error, 2=warning, 3=information, 4=hint. Lints the CURRENT on-disk content.
 
 *Access: read-only OK.*
 

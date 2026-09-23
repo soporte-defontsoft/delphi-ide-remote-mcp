@@ -1192,6 +1192,13 @@ begin
         if I >= MAX_COMPLETION_ITEMS then
           Break;
         var Src := Items.Items[Order[I]] as TJSONObject;
+        // El motor devuelve el TOKEN que se esta escribiendo como candidato,
+        // con tipo "<error>" porque aun no resuelve ({label:'C', kind:6,
+        // detail:': <error>;'}): ruido, no un simbolo. Fuera (Hermes,
+        // bateria 1.2 caso C.14, 2026-09-23).
+        var DetErr := Src.GetValue('detail');
+        if (DetErr <> nil) and DetErr.Value.Contains('<error>') then
+          Continue;
         ItemObj := TJSONObject.Create;
         OutItems.Add(ItemObj);
         ItemObj.AddPair('label', Src.GetValue('label').Value);

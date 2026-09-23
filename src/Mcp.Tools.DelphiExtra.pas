@@ -122,7 +122,7 @@ begin
   FName := 'delphi_diagnostics';
   FDescription := 'Compiler-grade errors/warnings/hints for one Delphi source ' +
     'file (Error Insight via the official DelphiLSP linter), WITHOUT building. ' +
-    'Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions. ' +
+    'Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions (range) and line1, the 1-based line delphi_read shows. ' +
     'Severity is the LSP scale: 1=error, 2=warning, 3=information, 4=hint. ' +
     'The description used to stop at "3=hint", so a diagnostic arriving as 4 ' +
     'had no meaning to read it by; the "hints" counter groups 3 and 4 ' +
@@ -181,7 +181,14 @@ begin
           else
             Inc(Hints);
           end;
-          OutArr.Add(V.Clone as TJSONObject);
+          // La 1-based al lado del range 0-based del motor, como en
+          // definition/hover/references: diagnostics era la ultima tool del
+          // motor sin gemela (Hermes, 2026-09-23).
+          var D := V.Clone as TJSONObject;
+          var L0 := D.FindValue('range.start.line');
+          if L0 <> nil then
+            D.AddPair('line1', TJSONNumber.Create(L0.GetValue<Integer> + 1));
+          OutArr.Add(D);
         end;
       Return.AddPair('errors', TJSONNumber.Create(Errors));
       Return.AddPair('warnings', TJSONNumber.Create(WarningsC));

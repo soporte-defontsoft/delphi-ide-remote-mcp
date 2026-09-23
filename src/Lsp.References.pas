@@ -447,6 +447,9 @@ var
     Result := TJSONObject.Create;
     Result.AddPair('path', C.Path);
     Result.AddPair('line', TJSONNumber.Create(C.Line));
+    // La 1-based al lado de la 0-based, como definition/hover: references y
+    // diagnostics eran las dos tools del motor sin gemela (Hermes, 2026-09-23)
+    Result.AddPair('line1', TJSONNumber.Create(C.Line + 1));
     Result.AddPair('character', TJSONNumber.Create(C.Col));
     Result.AddPair('text', C.Text.Trim);
     // The trimmed text reads well but is NOT an anchor: delphi_edit wants the
@@ -788,6 +791,7 @@ begin
               var RObj := CandidateJson(Cand);
               RObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
               RObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine));
+              RObj.AddPair('resolvedLine1', TJSONNumber.Create(CandLine + 1));
               RejectedArr.AddElement(RObj);
             end;
           end;
@@ -802,6 +806,7 @@ begin
       Result.AddPair('definition', Entry);
       Entry.AddPair('path', TLspClient.UriToPath(TargetUri));
       Entry.AddPair('line', TJSONNumber.Create(TargetLine));
+      Entry.AddPair('line1', TJSONNumber.Create(TargetLine + 1));
       Result.AddPair('confirmed', Confirmed);
       Result.AddPair('unverified', Unverified);
       // Menciones: el nombre esta escrito ahi, pero en prosa. No son

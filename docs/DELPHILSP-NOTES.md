@@ -69,6 +69,12 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
 - Positions are 0-based, UTF-16 code units. Content in `didOpen` is UTF-8 JSON — decode legacy CP1252 sources correctly before sending.
 - An external DelphiLSP instance coexists fine with the IDE's own instances; each agent holds hundreds of MB on a mid-size project.
 - The LSP reads **disk state**; unsaved IDE editor buffers are invisible to it.
+- **No section legality for `{$I}` includes** (measured 2026-09-23, field battery): a procedure
+  BODY, or an identifier declared twice, inside an include pulled into the interface part passes
+  `diagnostics` with zero errors, while dcc rejects the same unit (E2050 "Statements not allowed in
+  interface part", E2004 "Identifier redeclared"). The engine resolves symbols across the include
+  (definition, references and completion see them) but does not re-check the included text against
+  the section it lands in. A green `diagnostics` on a unit with includes is not a green build.
 
 ## Complete capability inventory (measured on 37.0, 2026-08)
 

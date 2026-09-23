@@ -47,9 +47,26 @@ def ejecutar(lanzador):
     d = os.path.dirname(lanzador)
     antes = {f: os.path.getmtime(os.path.join(d, f))
              for f in os.listdir(d) if f.endswith('.out')}
-    subprocess.run([lanzador], cwd=d,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                   timeout=120)
+    # 2026-09-23: el lanzador se arranca FUERA del Job Object del servidor, a
+    # traves de WMI (Win32_Process.Create lo crea el proveedor de WMI, no este
+    # proceso), para que el programa y su vigia SOBREVIVAN a la vuelta de
+    # paclient como en la realidad. Sin esto no habia forma de medir kill
+    # contra un proceso vivo: al llegar el kill el pid ya estaba muerto
+    # (OpenProcess -> "El parametro no es correcto"). Si WMI no esta, se
+    # vuelve a la ejecucion directa (el caso "sigue corriendo" sigue valiendo).
+    cmd = ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+           "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create "
+           "-Arguments @{CommandLine='\"%s\"'; CurrentDirectory='%s'}; exit $r.ReturnValue"
+           % (lanzador.replace("'", "''"), d.replace("'", "''"))]
+    try:
+        rc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            timeout=60).returncode
+    except Exception:
+        rc = -1
+    if rc != 0:
+        subprocess.run([lanzador], cwd=d,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       timeout=120)
     tope = float(os.environ.get('MCP_STUB_ESPERA', '20'))
     fin = time.time() + tope
     while time.time() < fin:
@@ -114,7 +131,13 @@ for arg in sys.argv[1:]:
     elif arg.startswith('--Remove='):
         spec = arg[len('--Remove='):]
         for one in spec.split(';'):
-            p = rel(one)
-            if os.path.isfile(p):
-                os.remove(p)
+            # paclient admite comodines (el servidor barre *.wait*.exe); un
+            # fichero en uso (el vigia de un programa vivo) se queda, como alli
+            import glob as _glob
+            for p in (_glob.glob(rel(one)) if '*' in one else [rel(one)]):
+                try:
+                    if os.path.isfile(p):
+                        os.remove(p)
+                except OSError:
+                    pass
 sys.exit(0)

@@ -224,6 +224,34 @@ check('no termina: devuelve la salida PARCIAL', 'arrancando' in (j.get('output')
 check('no termina: lo dice sin hablar de errores', 'SIGUE CORRIENDO' in (j.get('stillRunningNote') or ''), r[:300])
 os.environ.pop('MCP_STUB_ESPERA', None)
 
+# 6b) kill: el trabajo vivo se mata por su .pid; y SIN .pid (un deploy fallido
+# borra la carpeta antes de rendirse en el vigia, medido 2026-09-23 en
+# 192.168.1.10 con dos GUI huerfanas) el vigia lleva el pid en su NOMBRE
+# (<job>.wait.<pid>.exe) y kill lo saca de ahi. El stub corre el lanzador
+# REAL de Windows, asi que esto mide el binario que viaja en node\.
+job6 = j.get('jobId')
+r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+check("kill: mata el trabajo vivo por su .pid", j.get('killed') is True and 'por .pid' in (j.get('output') or ''), r[:900])
+r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+check('kill: repetido, ya no hay trabajo (killed=false, sin error)', j.get('killed') is False and 'ya termino' in (j.get('output') or ''), r[:300])
+os.environ['MCP_STUB_ESPERA'] = '3'
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                             'exe': PROJNAME + '.exe', 'args': 'lento.py', 'timeoutms': 4000}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+os.environ.pop('MCP_STUB_ESPERA', None)
+job6b = j.get('jobId') or ''
+pidf = os.path.join(DEPLOY, job6b + '.pid')
+_vigias = [f for f in os.listdir(DEPLOY) if f.startswith(job6b + '.wait.') and f.endswith('.exe')]
+check('vigia con el pid en el nombre (<job>.wait.<pid>.exe) junto al .pid', j.get('stillRunning') is True and os.path.isfile(pidf) and len(_vigias) == 1 and _vigias[0][len(job6b) + 6:-4].isdigit(), (r[:150], os.listdir(DEPLOY)))
+if os.path.isfile(pidf):
+    os.remove(pidf)   # lo que hace un deploy fallido antes de rendirse
+r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6b}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+check('kill sin .pid: lo mata por el nombre del vigia', j.get('killed') is True and 'nombre del vigia' in (j.get('output') or ''), r[:300])
+check('kill sin .pid: el proceso ha muerto de verdad', not any(f.endswith('.pid') for f in os.listdir(DEPLOY)), os.listdir(DEPLOY))
+
 # 7) sin AllowRemoteRun: remote-run RECHAZADO, install-runner permitido
 r = call_off('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ})
 check('sin AllowRemoteRun: remote-run rechazado', 'RECHAZADO' in r and 'AllowRemoteRun' in r, r[:250])
