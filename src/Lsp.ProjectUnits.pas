@@ -1050,7 +1050,7 @@ begin
   // the reader doubt what had happened (measured 2026-08-25).
   Result := Format(IfThen(AFileGoesToo, SN_UNIT_REMOVED_GONE_FMT,
     SN_UNIT_REMOVED_FMT), [UnitName, TPath.GetFileName(Dpr),
-    IfThen(InDpr, 'uses', '-'), IfThen(N > 0, ' + CreateForm', ''),
+    IfThen(InDpr, U.Keyword, '-'), IfThen(N > 0, ' + CreateForm', ''),
     IfThen(InDproj, ', DCCReference del .dproj', ''), TPath.GetFileName(APasPath)]);
 end;
 
@@ -1140,7 +1140,7 @@ begin
       end;
     end;
   Result := Format(SN_UNIT_RENAMED_FMT, [OldName, OldInclude, Info.UnitName, NewInclude,
-    TPath.GetFileName(Dpr), NRefs, NFich]);
+    TPath.GetFileName(Dpr), U.Keyword, NRefs, NFich]);
 end;
 
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;

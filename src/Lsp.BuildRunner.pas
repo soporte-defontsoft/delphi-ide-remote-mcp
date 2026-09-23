@@ -1566,7 +1566,8 @@ begin
           for var D in UnitSourceFolders(U) do
             CArr.Add(D);
         end;
-        Result.AddPair('missingUnitsNote', SN_BUILD_MISSING_UNITS_NOTE);
+        Result.AddPair('missingUnitsNote', SN_BUILD_MISSING_UNITS_NOTE +
+          IfThen(EsPaquete, SN_BUILD_MISSING_UNITS_PACKAGE, ''));
       end;
     end;
     // En quiet msbuild NI SIQUIERA imprime los warnings, asi que no se puede

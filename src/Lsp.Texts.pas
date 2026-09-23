@@ -2127,7 +2127,7 @@ const
     'La unit %s no esta en el proyecto %s. Mira las units con command=view.';
 
   SN_UNIT_RENAMED_FMT =
-    'REAPUNTADA la unit %s (%s) -> %s (%s) en el proyecto %s (uses del .dpr + ' +
+    'REAPUNTADA la unit %s (%s) -> %s (%s) en el proyecto %s (clausula %s + ' +
     'DCCReference del .dproj). Referencias reescritas: %d en %d fichero(s) ' +
     '(uses de las demas units y calificadores UnitVieja.X).';
 
@@ -2343,6 +2343,14 @@ const
     'y repite la build. Sin candidatos: el componente no esta instalado o no ' +
     'trae fuente para esta plataforma (delphi_components platform=<plataforma>, ' +
     'y si falta, delphi_report).';
+  { En un paquete el F2613 tiene otra salida mas: la unit vive en OTRO
+    paquete propio (Hermes, bateria 1.2 A.2, 2026-09-23): hace falta el
+    requires Y el .dcp a mano; el search path solo no lo resuelve. }
+  SN_BUILD_MISSING_UNITS_PACKAGE =
+    ' En un paquete, una unit que vive en OTRO paquete tuyo necesita las dos ' +
+    'cosas: ese paquete en el requires (delphi_config command=add-requires) ' +
+    'y la carpeta donde queda su .dcp (la salida de su build) en el search ' +
+    'path; el search path solo no basta, sin el requires dcc no abre el .dcp.';
 
   // ---- delphi_rename_symbol ----
 

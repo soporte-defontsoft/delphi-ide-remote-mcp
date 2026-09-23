@@ -57,6 +57,15 @@ code before being accepted.
   also checks that the pid still runs a binary of that project folder - a
   reused pid is never touched. Needs the launcher shipped in `node\`
   (rebuilt for Win64 and Linux64).
+- `delphi_config remove-unit` and `delphi_move` on a unit of a package said
+  "uses" for the clause they had touched; they now name it (`contains`),
+  as add-unit already did (Hermes, battery 1.2 A.5).
+- The `delphi_build` contract now says what a package build adds
+  (`implicitImports`, `requiresSuggested`, from W1033) and that a unit dcc
+  cannot find at all is F2613 in `missingUnits`, not there; and a package's
+  `missingUnitsNote` names the other cure: the package in `requires` plus
+  the folder of its `.dcp` on the search path (Hermes, battery 1.2 A.2:
+  the search path alone leaves the F2613).
 
 ### Added
 

@@ -312,7 +312,7 @@ a root. Changing the roots is the operator's job, in `settings.ini`.
 
 ### `delphi_build`
 
-Build a Delphi project for real with MSBuild on this machine (rsvars located via registry). Returns success flag, compiler errors/warnings and the output tail. Use this as the closing verification after editing - the linter does not link nor produce binaries. Compile-only: a project that would EXECUTE a shell during build (a custom `<Target>`/`<Exec>`, a build-event, a foreign `<Import>`) is refused unless the workspace declares `AllowBuildScripts=1` (or `AllowRun=1`, which implies it).
+Build a Delphi project for real with MSBuild on this machine (rsvars located via registry). Returns success flag, compiler errors/warnings and the output tail. Use this as the closing verification after editing - the linter does not link nor produce binaries. Compile-only: a project that would EXECUTE a shell during build (a custom `<Target>`/`<Exec>`, a build-event, a foreign `<Import>`) is refused unless the workspace declares `AllowBuildScripts=1` (or `AllowRun=1`, which implies it). For a package (.dpk) the answer adds `implicitImports` (units of OTHER packages it compiled into itself, W1033) and `requiresSuggested` (their packages, read from the BPLs of this install), the list `delphi_config add-requires` takes; a unit dcc cannot find at all is F2613 and comes back in `missingUnits` instead.
 
 *Access: read-write.*
 

@@ -199,7 +199,7 @@ try:
 except Exception as e:
     check('package: build con requires parsea', False, '%s | %s' % (e, out[:200]))
 out = call('delphi_config', {"project": PDPROJ, "command": "remove-unit", "path": os.path.join(PDIR, 'UUsaVcl.pas')})
-check('package: remove-unit de la unit VCL', out.startswith('QUITADA'), out[:200])
+check('package: remove-unit de la unit VCL dice contains', out.startswith('QUITADA') and '(contains' in out, out[:200])
 out = call('delphi_config', {"project": PDPROJ, "command": "remove-unit", "path": os.path.join(PDIR, 'UPkgUno.pas')})
 check('package: remove-unit', out.startswith('QUITADA') or 'quitada' in out.lower(), out[:200])
 _k = open(PDPK, 'rb').read().decode('utf-8-sig')
