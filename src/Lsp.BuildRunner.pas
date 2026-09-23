@@ -1556,14 +1556,36 @@ begin
       begin
         var Shipped := TRegEx.Matches(Output, 'Deploying\s+"([^"]+)"', [roIgnoreCase]).Count +
           TRegEx.Matches(Output, 'Copying\s+"?([^"\r\n]+?)"?\s+to\s+remote', [roIgnoreCase]).Count;
+        // Lo que msbuild imprime de verdad en un Deploy por PAServer (medido
+        // 2026-09-23, Windows, verbose): la orden paclient --put="a,b,1,c;..."
+        // del target _DeployFiles, un fichero por cada tramo entre ';'.
+        for var MP in TRegEx.Matches(Output, '--put="?([^"\r\n]+)', [roIgnoreCase]) do
+          Shipped := Shipped + Length(MP.Groups[1].Value.Split([';']));
         Result.AddPair('deployNote', Format(SN_BUILD_DEPLOYED_FMT,
           [AProfile.Trim, GetEnvironmentVariable('USERNAME'), AProfile.Trim,
            TPath.GetFileNameWithoutExtension(ADprojPath)]));
         if Output.Contains('Local file "" not found') then
           Result.AddPair('deployWarning', SN_BUILD_DEPLOY_EMPTY_ENTRY);
         if Shipped > 0 then
-          Result.AddPair('deployedFiles', TJSONNumber.Create(Shipped));
+          Result.AddPair('deployedFiles', TJSONNumber.Create(Shipped))
+        else if SameText(AVerbosity, 'quiet') then
+          // En quiet msbuild no imprime las copias: no se puede contar, y
+          // decir "no se envio nada" era falso (medido 2026-09-23: deploy a
+          // Windows correcto y sin deployedFiles).
+          Result.AddPair('deployedFilesNote', SN_BUILD_QUIET_DEPLOYED);
       end;
+    end;
+    // Un Deploy que no pudo reescribir la carpeta del target porque el vigia
+    // de un remote-run anterior (<job>.wait.exe) sigue vivo: ese programa
+    // sigue corriendo alli. El E0017 crudo de msbuild no lo dice; el nombre
+    // del fichero lleva el id del trabajo, asi que se le da la orden de kill.
+    // Medido 2026-09-23 contra 192.168.1.10 con una GUI viva.
+    if (ExitCode <> 0) and Target.Contains('Deploy') and Output.Contains('E0017') then
+    begin
+      var MLock := TRegEx.Match(Output, '([0-9]{8}-[0-9]{9}-[0-9a-f]{8})\.wait(?:\.[0-9]+)?\.exe', [roIgnoreCase]);
+      if MLock.Success then
+        Result.AddPair('deployLockedNote', Format(SN_BUILD_DEPLOY_LOCKED_FMT,
+          [MLock.Groups[1].Value, AProfile.Trim, ADprojPath, MLock.Groups[1].Value]));
     end;
     // The agent should know its project just gained a manifest whether or
     // not this particular msbuild run succeeded.

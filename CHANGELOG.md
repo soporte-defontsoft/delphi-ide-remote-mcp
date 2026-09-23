@@ -25,6 +25,47 @@ code before being accepted.
   is there. Measured: RAD Studio 13 compiles and links such a unit. The
   refusal now states the real cause (this server's parsers do not handle
   accented unit names yet) and points to `delphi_move` or `delphi_report`.
+- `delphi_paserver remote-run` against a **Windows** PAServer: the job file
+  and the launcher travelled in ONE paclient `--put`, and PAServer started
+  the launcher (flag 5) before the job file (flag 0) was written - the
+  launcher found no job and exited, the `.job` stayed on the target and the
+  agent got `stillRunning` for a program that never started (measured
+  2026-09-23 against 192.168.1.10 by hand: 6/6 failures in one put, 6/6 fine
+  in two). The job file now goes in its own `--put` before the launcher, on
+  every platform.
+- `delphi_build target=Deploy` with `verbosity=quiet` (the default) never
+  carried `deployedFiles`, and the deploy note said "if it is missing,
+  nothing was sent": msbuild does not print the copies in quiet. The note now
+  says the count needs `verbosity=normal`, and quiet adds a
+  `deployedFilesNote` saying so. And the count itself never matched a
+  PAServer deploy: msbuild prints the `paclient --put=...` order, not the
+  "Deploying"/"Copying to remote" lines the counter looked for; it now counts
+  the files of every `--put` (verbosity=normal or verbose).
+- `remote-run` on a Windows target lost the exit code of a short program:
+  the watcher opened the process by PID after it had already ended, so the
+  answer said `exitCode -1` / `success false` for a program that printed
+  its output and returned 0. The launcher now hands the watcher the process
+  HANDLE (inherited), which outlives the process, and the real exit code
+  comes back.
+- `kill` after a failed redeploy: the deploy wipes the target folder before
+  failing on the live watcher, taking the job's `.pid` with it, and `kill`
+  then answered "no job alive" while the program stayed open (measured:
+  two orphaned GUIs). The Windows watcher is now named
+  `<job>.wait.<pid>.exe` (one namer, `NombreVigia`, and its inverse
+  `PidDelVigia`): a running exe cannot be deleted, so the pid survives where
+  the `.pid` does not, and `kill` finds it. Before terminating, `kill` now
+  also checks that the pid still runs a binary of that project folder - a
+  reused pid is never touched. Needs the launcher shipped in `node\`
+  (rebuilt for Win64 and Linux64).
+
+### Added
+
+- `delphi_build target=Deploy` explains an `E0017 Unable to delete
+  <job>.wait.exe`: that is the watcher of a remote-run job whose program is
+  still running on the target, so the folder cannot be rewritten. The new
+  `deployLockedNote` names the job and the exact `kill` call, and warns that
+  the failed deploy may already have removed the job's `.pid` (then the
+  program has to be closed on the target by hand).
 
 ## [1.1.0] - 2026-09-22
 

@@ -402,9 +402,20 @@ begin
   finally
     Enc.Free;
   end;
-  Ops := Format('"--put=%s,%s,0,run-%s.job;%s,%s,%d,%s"',
-    [GuionFile, DeployRel, JobId, Lanzador, DeployRel, Flag, RemotoLanzador]);
+  // El .job va en un put PROPIO, antes del lanzador. En el MISMO --put, el
+  // PAServer de Windows arrancaba el lanzador (flag 5) sin tener escrito aun
+  // el .job (flag 0): el lanzador salia sin trabajo, el .job se quedaba en la
+  // carpeta y el agente veia "sigue corriendo" de un programa que nunca
+  // arranco. Medido 2026-09-23 contra 192.168.1.10 con paclient a pelo: 6/6
+  // fallos en un solo put, 6/6 bien en dos. Un viaje mas (~0,1 s) y ningun
+  // orden que adivinar.
+  Ops := Format('"--put=%s,%s,0,run-%s.job"', [GuionFile, DeployRel, JobId]);
   Rc := Paclient(Pc, Ops, AProfile, Output);
+  if Rc = 0 then
+  begin
+    Ops := Format('"--put=%s,%s,%d,%s"', [Lanzador, DeployRel, Flag, RemotoLanzador]);
+    Rc := Paclient(Pc, Ops, AProfile, Output);
+  end;
   TFile.Delete(GuionFile);
   if Rc <> 0 then
   begin
@@ -480,9 +491,9 @@ begin
     TFile.Delete(OutFile);
   // ...y el lanzador de este trabajo (en Linux flag 3 lo deja; en Windows
   // PAServer ya lo borro) y los vigias de Windows de trabajos acabados
-  // (<job>.wait.exe vive lo que el programa: el de una ventana viva se queda).
-  // Un nombre que no exista no es un error que importe.
-  Ops := Format('"--Remove=%s/%s.out;%s/%s;%s/*.wait.exe"',
+  // (<job>.wait.<pid>.exe vive lo que el programa: el de una ventana viva se
+  // queda). Un nombre que no exista no es un error que importe.
+  Ops := Format('"--Remove=%s/%s.out;%s/%s;%s/*.wait*.exe"',
     [DeployRel, JobId, DeployRel, RemotoLanzador, DeployRel]);
   Paclient(Pc, Ops, AProfile, Output);
 

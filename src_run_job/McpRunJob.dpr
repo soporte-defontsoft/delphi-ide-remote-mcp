@@ -30,7 +30,7 @@
        PAServer y paclient queden libres;
     5. deja un VIGIA que espera al programa y remata la salida con
        ___RC=<codigo>: en Linux un proceso hijo (fork + setsid), en Windows
-       una copia de si mismo (<job>.wait.exe), porque PAServer borra
+       una copia de si mismo (<job>.wait.<pid>.exe), porque PAServer borra
        run-<job>.exe en cuanto este proceso termina;
     6. apunta el PID del programa en <job>.pid mientras vive (el vigia lo
        borra al terminar). Es lo que hace posible MATARLO: un .job cuyo
@@ -95,6 +95,44 @@ begin
   except
   end;
 end;
+
+{$IFDEF MSWINDOWS}
+{ El vigia de un trabajo lleva el PID del programa en su NOMBRE:
+  <job>.wait.<pid>.exe. Un deploy fallido (E0017) borra el .pid de la carpeta
+  antes de rendirse, pero no puede borrar el vigia mientras vive (el exe esta
+  en uso), asi que el pid sobrevive ahi donde el .pid no, y @kill lo
+  encuentra. Medido 2026-09-23 en 192.168.1.10: GUI huerfana dos veces. Un
+  solo nombrador (NombreVigia) y su inversa (PidDelVigia). }
+function NombreVigia(const ACarpeta, AJobId: string; APid: DWORD): string;
+begin
+  Result := ACarpeta + '\' + AJobId + '.wait.' + IntToStr(APid) + '.exe';
+end;
+
+function PidDelVigia(const ACarpeta, AJobId: string): Int64;
+var
+  SR: TSearchRec;
+  Prefijo: string;
+begin
+  Result := 0;
+  Prefijo := AJobId + '.wait.';
+  if FindFirst(ACarpeta + '\' + Prefijo + '*.exe', faAnyFile, SR) = 0 then
+  try
+    repeat
+      if SameText(Copy(SR.Name, 1, Length(Prefijo)), Prefijo) then
+        Result := StrToInt64Def(ChangeFileExt(Copy(SR.Name, Length(Prefijo) + 1, MaxInt), ''), 0);
+    until (Result > 0) or (FindNext(SR) <> 0);
+  finally
+    FindClose(SR);
+  end;
+end;
+{$ELSE}
+{ En Linux el vigia es un proceso hijo sin fichero: sin .pid no hay de donde
+  sacar el pid, y esta funcion existe para que @kill sea un solo codigo. }
+function PidDelVigia(const ACarpeta, AJobId: string): Int64;
+begin
+  Result := 0;
+end;
+{$ENDIF}
 
 { Un id de trabajo tal como lo compone el servidor: fecha-hora-fragmento,
   solo [0-9a-f-]. Cualquier otra cosa no es un id y no se mira. }
@@ -355,8 +393,10 @@ end;
 
 { Mata el proceso de un trabajo de ESTA carpeta: SIGTERM, tres segundos de
   gracia, y SIGKILL si sigue. Nada mas: el PID sale del .pid que escribio el
-  vigia, nunca de quien llama. }
-function MatarProceso(APid: Int64; out AComo: string): Boolean;
+  vigia, nunca de quien llama. ACarpeta la usa la version Windows para
+  comprobar el binario del pid; aqui el .pid lo borra el vigia al terminar,
+  asi que un pid reutilizado no llega. }
+function MatarProceso(APid: Int64; const ACarpeta: string; out AComo: string): Boolean;
 var
   I: Integer;
 begin
@@ -385,13 +425,20 @@ begin
     Result := 0;
 end;
 
-{ El vigia: espera al proceso y remata la salida con el centinela. }
-procedure Vigilar(APid: DWORD; const ASalida: string);
+{ El vigia: espera al proceso y remata la salida con el centinela. Con
+  AProceso (el handle del programa, HEREDADO del lanzador) no hace falta
+  abrirlo por PID: un programa corto ya habia terminado cuando el vigia
+  llegaba a OpenProcess, este fallaba y el codigo de salida se perdia
+  (___RC=-1 con el programa en verde; medido 2026-09-23 en Windows). }
+procedure Vigilar(APid: DWORD; const ASalida: string; AProceso: THandle = 0);
 var
   H: THandle;
   Codigo: DWORD;
 begin
-  H := OpenProcess(SYNCHRONIZE or PROCESS_QUERY_LIMITED_INFORMATION, False, APid);
+  if AProceso <> 0 then
+    H := AProceso
+  else
+    H := OpenProcess(SYNCHRONIZE or PROCESS_QUERY_LIMITED_INFORMATION, False, APid);
   if H = 0 then
   begin
     Anade(ASalida, #10'___RC=-1'#10);
@@ -408,18 +455,32 @@ begin
   Anade(ASalida, #10'___RC=' + IntToStr(Integer(Codigo)) + #10, False);
 end;
 
+function QueryFullProcessImageNameW(hProcess: THandle; dwFlags: DWORD;
+  lpExeName: PWideChar; var lpdwSize: DWORD): BOOL; stdcall; external kernel32;
+
 { Mata el proceso de un trabajo de ESTA carpeta. El PID sale del .pid que
-  escribio el lanzador, nunca de quien llama. }
-function MatarProceso(APid: Int64; out AComo: string): Boolean;
+  escribio el lanzador o del nombre del vigia, nunca de quien llama - y como
+  un PID se reutiliza, antes de matar se comprueba que el proceso ejecuta un
+  binario de ESTA carpeta: otra cosa no se toca. }
+function MatarProceso(APid: Int64; const ACarpeta: string; out AComo: string): Boolean;
 var
   H: THandle;
+  Ruta: array [0 .. MAX_PATH] of WideChar;
+  N: DWORD;
 begin
   AComo := 'TerminateProcess';
-  H := OpenProcess(PROCESS_TERMINATE, False, DWORD(APid));
+  H := OpenProcess(PROCESS_TERMINATE or PROCESS_QUERY_LIMITED_INFORMATION, False, DWORD(APid));
   Result := H <> 0;
   if not Result then
     Exit;
   try
+    N := Length(Ruta);
+    if QueryFullProcessImageNameW(H, 0, @Ruta[0], N) and
+       not string(PWideChar(@Ruta[0])).StartsWith(IncludeTrailingPathDelimiter(ACarpeta), True) then
+    begin
+      AComo := 'ese pid ya es de otro programa, fuera de esta carpeta: no se toca';
+      Exit(False);
+    end;
     Result := TerminateProcess(H, 137);
   finally
     CloseHandle(H);
@@ -457,7 +518,7 @@ end;
 { Arranca un programa con la salida en el fichero y sin ventana de consola.
   Devuelve el PID (0 si no pudo; AError dice por que). }
 function Arrancar(const ALinea, ACarpeta, ASalida: string; AHeredar: Boolean;
-  out AError: string): DWORD;
+  out AError: string; AProceso: PHandle = nil): DWORD;
 var
   SA: TSecurityAttributes;
   SI: TStartupInfo;
@@ -502,7 +563,10 @@ begin
     end;
     Result := PI.dwProcessId;
     CloseHandle(PI.hThread);
-    CloseHandle(PI.hProcess);
+    if AProceso <> nil then
+      AProceso^ := PI.hProcess // el llamador lo cierra (o se lo pasa al vigia)
+    else
+      CloseHandle(PI.hProcess);
   finally
     if HOut <> INVALID_HANDLE_VALUE then
       CloseHandle(HOut);
@@ -517,11 +581,13 @@ var
   Linea, Vigia, Err: string;
   A: string;
   Pid: DWORD;
+  HProc: THandle;
 begin
   Linea := ComillasWin(AExe);
   for A in AArgs do
     Linea := Linea + ' ' + ComillasWin(A);
-  Pid := Arrancar(Linea, ACarpeta, ASalida, True, Err);
+  HProc := 0;
+  Pid := Arrancar(Linea, ACarpeta, ASalida, True, Err, @HProc);
   if Pid = 0 then
   begin
     Anade(ASalida, 'error: no pude arrancar ' + ExtractFileName(AExe) + ': ' +
@@ -530,16 +596,21 @@ begin
   end;
   EscribePid(ASalida, Pid);
   // el vigia: una copia de este programa, porque PAServer borra run-<job>.exe
-  // en cuanto este proceso termina
-  Vigia := ACarpeta + '\' + AJobId + '.wait.exe';
+  // en cuanto este proceso termina; con el pid en el nombre (ver NombreVigia)
+  Vigia := NombreVigia(ACarpeta, AJobId, Pid);
   if not CopyFile(PChar(APropio), PChar(Vigia), False) then
   begin
-    Vigilar(Pid, ASalida); // sin copia posible: se espera aqui, bloqueando
+    Vigilar(Pid, ASalida, HProc); // sin copia posible: se espera aqui, bloqueando
     Exit;
   end;
-  if Arrancar('"' + Vigia + '" --wait ' + IntToStr(Pid) + ' "' + ASalida + '"',
-    ACarpeta, ASalida, False, Err) = 0 then
-    Vigilar(Pid, ASalida);
+  // el handle del programa viaja HEREDADO al vigia (ver Vigilar): por eso el
+  // vigia se arranca con herencia, y el numero del handle vale alli igual
+  SetHandleInformation(HProc, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+  if Arrancar('"' + Vigia + '" --wait ' + IntToStr(Pid) + ' "' + ASalida + '" ' +
+    IntToStr(HProc), ACarpeta, ASalida, True, Err) = 0 then
+    Vigilar(Pid, ASalida, HProc)
+  else
+    CloseHandle(HProc);
 end;
 {$ENDIF}
 
@@ -551,10 +622,10 @@ var
 begin
   try
 {$IFDEF MSWINDOWS}
-    // ---- modo vigia: run --wait <pid> <fichero de salida>
+    // ---- modo vigia: run --wait <pid> <fichero de salida> [<handle heredado>]
     if (ParamCount >= 3) and SameText(ParamStr(1), '--wait') then
     begin
-      Vigilar(StrToIntDef(ParamStr(2), 0), ParamStr(3));
+      Vigilar(StrToIntDef(ParamStr(2), 0), ParamStr(3), THandle(StrToInt64Def(ParamStr(4), 0)));
       Exit;
     end;
 {$ENDIF}
@@ -606,26 +677,37 @@ begin
       if (Length(Args) < 1) or not IdDeTrabajoValido(Args[0].Trim) then
         Anade(Salida, 'RECHAZADO: @kill necesita el id de un trabajo de este ' +
           'servidor.'#10'___RC=2'#10)
-      else if not FileExists(TPath.Combine(Carpeta, Args[0].Trim + '.pid')) then
-        Anade(Salida, 'no hay ningun trabajo ' + Args[0].Trim + ' vivo en ' +
-          'esta carpeta: o ya termino, o no era de este proyecto.'#10'___RC=3'#10)
       else
       begin
-        var PidTxt := '';
+        var Pid: Int64 := 0;
+        var Origen := '.pid';
+        if FileExists(TPath.Combine(Carpeta, Args[0].Trim + '.pid')) then
         try
-          PidTxt := TFile.ReadAllText(TPath.Combine(Carpeta, Args[0].Trim + '.pid')).Trim;
+          Pid := StrToInt64Def(TFile.ReadAllText(TPath.Combine(Carpeta, Args[0].Trim + '.pid')).Trim, 0);
         except
-          PidTxt := '';
+          Pid := 0;
         end;
-        var Como := '';
-        if (StrToInt64Def(PidTxt, 0) > 0) and
-           MatarProceso(StrToInt64Def(PidTxt, 0), Como) then
-          Anade(Salida, 'terminado el trabajo ' + Args[0].Trim + ' (pid ' +
-            PidTxt + ', ' + Como + ').'#10'___RC=0'#10)
+        if Pid = 0 then
+        begin
+          // sin .pid (un deploy fallido se lo llevo): el vigia, que sigue
+          // vivo con el programa, lleva el pid en el nombre
+          Pid := PidDelVigia(Carpeta, Args[0].Trim);
+          Origen := 'nombre del vigia';
+        end;
+        if Pid = 0 then
+          Anade(Salida, 'no hay ningun trabajo ' + Args[0].Trim + ' vivo en ' +
+            'esta carpeta: o ya termino, o no era de este proyecto.'#10'___RC=3'#10)
         else
-          Anade(Salida, 'no pude matar el trabajo ' + Args[0].Trim + ' (pid ' +
-            PidTxt + '): ' + SysErrorMessage(GetLastError) + #10'___RC=1'#10);
-        BorraPid(TPath.Combine(Carpeta, Args[0].Trim + '.out'));
+        begin
+          var Como := '';
+          if MatarProceso(Pid, Carpeta, Como) then
+            Anade(Salida, 'terminado el trabajo ' + Args[0].Trim + ' (pid ' +
+              IntToStr(Pid) + ' por ' + Origen + ', ' + Como + ').'#10'___RC=0'#10)
+          else
+            Anade(Salida, 'no pude matar el trabajo ' + Args[0].Trim + ' (pid ' +
+              IntToStr(Pid) + '): ' + Como + ' - ' + SysErrorMessage(GetLastError) + #10'___RC=1'#10);
+          BorraPid(TPath.Combine(Carpeta, Args[0].Trim + '.out'));
+        end;
       end;
       Exit;
     end;

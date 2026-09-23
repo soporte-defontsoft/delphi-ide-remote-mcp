@@ -39,7 +39,7 @@ job file to the program's argv untouched.
 4. Starts it unattended, stdout+stderr into `<job>.out`, stdin from nothing.
 5. Leaves a watcher that appends `___RC=<exit code>` when the program ends:
    on Linux a forked child (`fork` + `setsid`), on Windows a copy of itself
-   (`<job>.wait.exe`, because PAServer deletes `run-<job>.exe` the moment the
+   (`<job>.wait.<pid>.exe` - the pid in the name survives a failed redeploy that wipes the `.pid` - because PAServer deletes `run-<job>.exe` the moment the
    launcher returns). The server sweeps finished watchers.
 
 Nothing is installed on the target. Rebuilding belongs to whoever edits this

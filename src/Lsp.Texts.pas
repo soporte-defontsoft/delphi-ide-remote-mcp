@@ -780,9 +780,27 @@ const
     'That folder is REWRITTEN on every deploy: whatever the app stored next ' +
     'to its binary (a data\ folder, a local database, a key file) is gone ' +
     'with it - copy it elsewhere before redeploying if a test needs it. ' +
-    'deployedFiles counts what this run shipped; if it is missing, nothing ' +
-    'was sent: check the manifest with delphi_config command=view ' +
+    'deployedFiles counts what this run shipped (only with verbosity=normal ' +
+    'or verbose: quiet does not print the copies); if it is missing there, ' +
+    'nothing was sent: check the manifest with delphi_config command=view ' +
     '(deployFiles) and add the missing entries with add-deployfile.';
+
+  SN_BUILD_QUIET_DEPLOYED =
+    'quiet: msbuild does not print the deploy copies, so deployedFiles ' +
+    'cannot be counted. Repeat with verbosity=normal if you need the count.';
+
+  { E0017 sobre <job>.wait.exe = el vigia de un remote-run anterior sigue
+    vivo porque su programa sigue corriendo en el target. El deploy borra
+    la carpeta antes de copiar, asi que ademas puede haberse llevado el .pid
+    de ese trabajo. Medido 2026-09-23 (192.168.1.10, GUI viva). }
+  SN_BUILD_DEPLOY_LOCKED_FMT =
+    'The deploy could not rewrite the project folder on the target: msbuild ' +
+    'hit E0017 on the watcher of remote-run job %s, which is alive because ' +
+    'THAT PROGRAM IS STILL RUNNING there. Stop it first (delphi_paserver ' +
+    'command=kill name=%s project=%s job=%s) and deploy again. Careful: ' +
+    'this failed deploy may already have deleted the job''s .pid on the ' +
+    'target; if kill then answers "no job alive", close the program on the ' +
+    'target by hand (delphi_desktop) before deploying.';
 
   SN_BUILD_DEPLOY_EMPTY_ENTRY =
     'The deployment manifest has an entry with an EMPTY local file for this ' +
