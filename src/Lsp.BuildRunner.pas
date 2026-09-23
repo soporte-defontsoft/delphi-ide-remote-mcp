@@ -34,6 +34,15 @@ function SdksDePlataforma(const AVersion, APlat: string): TArray<string>;
 function ProyectoDeclaraSdk(const ADproj, APlat: string; out ASdk: string): Boolean;
 function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
 
+{ Lanza ACmdLine FUERA del job object de la llamada y espera a que el proceso
+  lanzado termine (hasta ATimeoutMs), sin capturar nada. Solo para demonios
+  que deben sobrevivir a la llamada: el servidor de adb (`adb start-server`
+  deja un demonio en el puerto 5037 y sale). Dentro del job, KILL_ON_JOB_CLOSE
+  lo mataba al acabar la llamada y cada conexion wifi se perdia entre una
+  llamada y la siguiente (medido 2026-09-23, G.23 de Hermes). True si el
+  lanzador termino a tiempo. }
+function RunDetached(const ACmdLine: string; ATimeoutMs: Integer): Boolean;
+
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 
@@ -81,6 +90,34 @@ uses
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
   GBuildLock: TCriticalSection;
+
+function RunDetached(const ACmdLine: string; ATimeoutMs: Integer): Boolean;
+var
+  SI: TStartupInfo;
+  PI: TProcessInformation;
+  Cmd: string;
+begin
+  Result := False;
+  FillChar(SI, SizeOf(SI), 0);
+  SI.cb := SizeOf(SI);
+  SI.dwFlags := STARTF_USESHOWWINDOW;
+  SI.wShowWindow := SW_HIDE;
+  Cmd := ACmdLine;
+  UniqueString(Cmd); // CreateProcessW puede modificar el buffer
+  // Sin job: ese es el punto. BREAKAWAY por si el propio servidor corriera
+  // dentro de uno (el SCM no lo hace); si el job padre no lo permite, sin el.
+  if not CreateProcess(nil, PChar(Cmd), nil, nil, False,
+    CREATE_NO_WINDOW or CREATE_BREAKAWAY_FROM_JOB, nil, nil, SI, PI) then
+    if not CreateProcess(nil, PChar(Cmd), nil, nil, False,
+      CREATE_NO_WINDOW, nil, nil, SI, PI) then
+      Exit;
+  try
+    Result := WaitForSingleObject(PI.hProcess, ATimeoutMs) = WAIT_OBJECT_0;
+  finally
+    CloseHandle(PI.hThread);
+    CloseHandle(PI.hProcess);
+  end;
+end;
 
 function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   out AExitCode: DWORD): string;

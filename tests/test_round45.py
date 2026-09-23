@@ -404,6 +404,17 @@ try:
     d2 = call('delphi_list', {'root': JAIL})
     check('G3 lo de DENTRO de la jaula sigue pasando',
           JAULA not in d1 and JAULA not in d2, (d1 + ' | ' + d2)[:240])
+
+    # ------------------------------------------------------------------ G5
+    # El demonio de adb tiene que sobrevivir a la llamada: nacia dentro del
+    # job de la llamada y moria con ella, y una conexion wifi se perdia entre
+    # un connect y el devices siguiente (medido 2026-09-23 con un movil).
+    # Sin dispositivo aqui, lo que se mide es el demonio: vivo tras la llamada.
+    a = call('delphi_adb', {'command': 'devices'})
+    t = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq adb.exe'],
+                       capture_output=True, text=True).stdout
+    check('G5 el demonio adb.exe sobrevive a la llamada (fuera del job)',
+          '"devices"' in a and 'adb.exe' in t, (a[:120] + ' | ' + t[-120:]))
 finally:
     try:
         proc.kill()

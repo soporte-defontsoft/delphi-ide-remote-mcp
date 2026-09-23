@@ -143,6 +143,12 @@ end;
 function RunAdb(const AAdb, AArgs: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 begin
+  // El demonio de adb (puerto 5037) tiene que sobrevivir a ESTA llamada:
+  // lanzado desde dentro del job moria con ella y cada conexion wifi se
+  // perdia entre una llamada y la siguiente - connect decia "connected" y
+  // el devices siguiente no veia nada (medido 2026-09-23, con el movil de
+  // David). start-server es idempotente y barato; fuera del job se queda.
+  RunDetached('"' + AAdb + '" start-server', 15000);
   Result := RunCaptured('"' + AAdb + '" ' + AArgs, ATimeoutMs, AExitCode);
 end;
 

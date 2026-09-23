@@ -81,6 +81,13 @@ code before being accepted.
   indentation on top of the clause's: the line came out with two. Each
   line is now re-indented from scratch (measured live with `removeuses`;
   the same code serves add-unit and remove-unit).
+- `delphi_adb` over wifi never kept a device: the adb server daemon was
+  started from inside the call's job object and died with the call, so
+  `connect` said "connected" and the next `devices` saw nothing (measured
+  2026-09-23 with a real phone, Hermes' G.23). The daemon is now started
+  outside the job (`RunDetached`, the one launcher for processes that
+  must outlive a call) before every adb command; `start-server` is
+  idempotent.
 
 ### Removed
 
