@@ -88,6 +88,12 @@ code before being accepted.
   outside the job (`RunDetached`, the one launcher for processes that
   must outlive a call) before every adb command; `start-server` is
   idempotent.
+- `delphi_build` with `verbosity=normal` crashed ("Index out of bounds (1)")
+  on an Android build: the linker-line summary asked a regex match for its
+  group inside an `IfThen`, which evaluates both branches, and Android's
+  linker has no `--sysroot`. Same shape in `delphi_config view` for a
+  DeployFile without `<RemoteDir>`. Both now test the match first
+  (measured 2026-09-23, Hermes' G.23).
 
 ### Removed
 

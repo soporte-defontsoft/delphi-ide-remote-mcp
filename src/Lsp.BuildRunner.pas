@@ -1455,9 +1455,15 @@ begin
            (TRegEx.Matches(Linea, '(?:^|\s)-L\s*\S+').Count >= 4) then
         begin
           var MSys := TRegEx.Match(Linea, '--sysroot\s+(\S+)');
+          // IfThen evalua los DOS brazos: con un linker sin --sysroot (Android)
+          // Groups[1] lanzaba "Index out of bounds (1)" y tumbaba la respuesta
+          // entera del build con verbosity=normal (medido 2026-09-23, G.23).
+          var Sysroot := '(ninguno)';
+          if MSys.Success then
+            Sysroot := MSys.Groups[1].Value;
           Linea := Format('  Linker command line: --sysroot %s  (+%d rutas -L omitidas: ' +
             'son 2 KB identicos en cada build)',
-            [IfThen(MSys.Success, MSys.Groups[1].Value, '(ninguno)'),
+            [Sysroot,
              TRegEx.Matches(Linea, '(?:^|\s)-L\s*\S+').Count]);
         end;
         Tail.AppendLine(Linea);

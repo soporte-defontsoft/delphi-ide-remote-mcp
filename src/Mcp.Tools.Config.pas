@@ -1217,7 +1217,12 @@ begin
       Obj.AddPair(Plat, TJSONArray.Create);
     Arr := Obj.GetValue(Plat) as TJSONArray;
     // one line per file (the IDE writes one entry per configuration)
-    var Line := M.Groups[1].Value + ' -> ' + IfThen(RM.Success, RM.Groups[1].Value, '');
+    // IfThen evalua los DOS brazos: un DeployFile sin <RemoteDir> lanzaba
+    // "Index out of bounds (1)" (el gemelo del de Lsp.BuildRunner, 2026-09-23)
+    var Remoto := '';
+    if RM.Success then
+      Remoto := RM.Groups[1].Value;
+    var Line := M.Groups[1].Value + ' -> ' + Remoto;
     var Dup := False;
     for var V in Arr do
       if SameText(V.Value, Line) then
