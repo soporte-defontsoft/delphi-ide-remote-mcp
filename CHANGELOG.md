@@ -69,6 +69,11 @@ code before being accepted.
 
 ### Added
 
+- `delphi_workspace` answers `workspace`: the name of the
+  `[Workspace.<name>]` section the session authenticated with. Nothing
+  said it, so the operator could not tell which section of the ini was
+  which agent's (Hermes, 2026-09-23).
+
 - `delphi_create kind=project-package`: a runtime package from zero, `.dpk`
   (`requires rtl`, no `contains` yet) plus a package `.dproj` measured against
   an IDE-made one (MainSource `.dpk`, AppType/ProjectType Package,

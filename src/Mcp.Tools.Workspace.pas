@@ -1182,7 +1182,8 @@ begin
   FName := 'delphi_workspace';
   FDescription := 'The lay of the land on the SERVER: the workspace roots ' +
     'this server operates within (your entire allowed universe here), the ' +
-    'access level (read-write / read-only), and the active RAD Studio by ' +
+    'access level (read-write / read-only), the [Workspace.<name>] section ' +
+    'of the server this token is scoped to ("workspace"), and the active RAD Studio by ' +
     'version AND by name (activeDelphiName / Personality / Edition / Build, ' +
     'read from the installation - use them when you look anything up for ' +
     'this Delphi). It also says WHO is answering ("server"): version, how ' +
@@ -1223,6 +1224,12 @@ begin
         'Roots configured)')
     else
       Return.AddPair('jail', 'active');
+    // El NOMBRE de la seccion [Workspace.<nombre>] que autentico esta
+    // sesion. Ninguna tool lo decia y el operador no podia saber que seccion
+    // del ini es la de cada agente (Hermes, 2026-09-23): CurrentWorkspaceName
+    // existia desde v0.98 "para delphi_workspace" y nadie la llamaba.
+    if CurrentWorkspaceName <> '' then
+      Return.AddPair('workspace', CurrentWorkspaceName);
     // What may be READ beyond the roots: the RAD Studio installations, the
     // IDE library search paths and the GetIt catalog repositories. Announced
     // because "anything outside is refused" was not the whole truth for
