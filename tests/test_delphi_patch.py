@@ -363,6 +363,10 @@ out = call('delphi_edit', {"path": ADDU, "adduses": "UInterfaz;System.Classes", 
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('adduses: interface con uses -> anade la que falta y dice cual estaba',
       out.startswith('ANADIDAS') and 'Ya estaban: System.Classes' in out and 'System.Classes,\r\n  UInterfaz;' in _src, out[:300])
+_antes = open(ADDU, 'rb').read()
+out = call('delphi_edit', {"path": ADDU, "adduses": "System.Classes"})
+check('adduses: ya esta en la OTRA seccion -> no la repite (E2004) y lo dice',
+      out.startswith('Nada que escribir') and 'interface' in out and open(ADDU, 'rb').read() == _antes, out[:200])
 out = call('delphi_edit', {"path": ADDU, "adduses": "2Mal"})
 check('adduses: nombre invalido rechazado', out.startswith('RECHAZADO'), out[:200])
 out = call('delphi_edit', {"path": ADDU, "adduses": "X", "section": "initialization"})

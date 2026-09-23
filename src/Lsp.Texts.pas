@@ -2123,6 +2123,13 @@ const
   SR_ADDUSES_NO_SECTION_FMT =
     'RECHAZADO: no encuentro la seccion %s en %s (una unit tiene interface e ' +
     'implementation; si el fichero no es una unit, edita su uses con old/new).';
+  SN_ADDUSES_IN_OTHER_FMT =
+    ' Ya estaban en %s, y una unit no puede ir en las dos secciones ' +
+    '(E2004): %s.';
+  SN_ADDUSES_PRESENT_OTHER_FMT =
+    'Nada que escribir: %s ya esta en el uses de %s de %s, y una unit no ' +
+    'puede ir en las dos secciones (E2004 Identifier redeclared). Si la ' +
+    'quieres en la otra, quitala primero con removeuses.';
   SN_ADDUSES_PRESENT_FMT =
     'Ya estaba: %s en el uses de %s de %s. Nada que escribir.';
   SN_ADDUSES_SOME_PRESENT_FMT =

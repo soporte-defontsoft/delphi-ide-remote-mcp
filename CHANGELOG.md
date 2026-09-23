@@ -133,7 +133,8 @@ code before being accepted.
   natural move, so the tool that edits sources gets the verb). `removeuses`
   is the inverse: the entry goes, a directive around it stays glued to its
   neighbour (the same code remove-unit uses), and the clause goes whole
-  when it empties.
+  when it empties. A unit already in the other section is reported, not
+  written twice (E2004; Hermes measured it on UPkgB).
 
 - `delphi_create kind=project-package`: a runtime package from zero, `.dpk`
   (`requires rtl`, no `contains` yet) plus a package `.dproj` measured against

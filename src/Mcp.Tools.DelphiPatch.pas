@@ -93,7 +93,7 @@ type
     property Restore: Boolean read FRestore write FRestore;
     [SchemaDescription('Only with restore: execute after having seen the losses')]
     property Confirm: Boolean read FConfirm write FConfirm;
-    [SchemaDescription('ADDUSES mode: unit names to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCliente). The engine writes the commas and the terminator, creates the clause under the section keyword when there is none, and skips the names already there (idempotent). For a .dpr/.dpk use delphi_config add-unit instead')]
+    [SchemaDescription('ADDUSES mode: unit names to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCliente). The engine writes the commas and the terminator, creates the clause under the section keyword when there is none, and skips the names already there, in this section or in the other one (idempotent; a unit cannot be in both, E2004). For a .dpr/.dpk use delphi_config add-unit instead')]
     property AddUses: string read FAddUses write FAddUses;
     [SchemaDescription('ADDUSES mode: "interface" or "implementation" (default implementation: a new unit goes there unless one of its types is used in the interface)')]
     property Section: string read FSection write FSection;

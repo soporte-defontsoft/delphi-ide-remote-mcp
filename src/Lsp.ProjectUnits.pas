@@ -1340,10 +1340,10 @@ end;
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
   const ASection: string): string;
 var
-  Text, Enc, Sec, NL, Nombre, E, Clausula, Blank: string;
-  M: TMatch;
-  U: TUsesClause;
-  Names, Entries, Faltan, YaEstan: TArray<string>;
+  Text, Enc, Sec, OtraSec, NL, Nombre, E, Clausula, Blank: string;
+  M, MO: TMatch;
+  U, UOtra: TUsesClause;
+  Names, Entries, Faltan, YaEstan, EnOtra: TArray<string>;
   PosSec, FinLinea: Integer;
   Creada: Boolean;
 begin
@@ -1379,14 +1379,28 @@ begin
     Faltan := [];
     YaEstan := [];
     Entries := U.Entries;
+    // La OTRA seccion tambien cuenta: una unit no puede ir en interface e
+    // implementation a la vez (E2004 Identifier redeclared; Hermes lo midio
+    // el 2026-09-23 con UPkgA en las dos).
+    OtraSec := IfThen(Sec = 'interface', 'implementation', 'interface');
+    UOtra := Default(TUsesClause);
+    MO := TRegEx.Match(Blank, '^[ \t]*' + OtraSec + '\b', [roIgnoreCase, roMultiline]);
+    if MO.Success then
+      UOtra := FindUses(Text, MO.Index + MO.Length);
+    EnOtra := [];
     for Nombre in Names do
       if U.Found and LocateEntry(U, Nombre, E) then
         YaEstan := YaEstan + [Nombre]
+      else if UOtra.Found and LocateEntry(UOtra, Nombre, E) then
+        EnOtra := EnOtra + [Nombre]
       else
       begin
         Faltan := Faltan + [Nombre];
         Entries := Entries + [Nombre];
       end;
+    if (Length(Faltan) = 0) and (Length(EnOtra) > 0) then
+      Exit(Format(SN_ADDUSES_PRESENT_OTHER_FMT, [string.Join(', ', EnOtra), OtraSec,
+        TPath.GetFileName(APasPath)]));
     if Length(Faltan) = 0 then
       Exit(Format(SN_ADDUSES_PRESENT_FMT, [string.Join(', ', Names), Sec,
         TPath.GetFileName(APasPath)]));
@@ -1416,7 +1430,8 @@ begin
     end;
     Result := Format(SN_ADDUSES_ADDED_FMT, [Sec, TPath.GetFileName(APasPath),
       string.Join(', ', Faltan),
-      IfThen(Length(YaEstan) > 0, Format(SN_ADDUSES_SOME_PRESENT_FMT, [string.Join(', ', YaEstan)]), ''),
+      IfThen(Length(YaEstan) > 0, Format(SN_ADDUSES_SOME_PRESENT_FMT, [string.Join(', ', YaEstan)]), '') +
+      IfThen(Length(EnOtra) > 0, Format(SN_ADDUSES_IN_OTHER_FMT, [OtraSec, string.Join(', ', EnOtra)]), ''),
       IfThen(Creada, Format(SN_ADDUSES_CREATED_FMT, [Sec]), ''),
       Clausula]);
   finally
