@@ -75,6 +75,16 @@ code before being accepted.
   the `requires` clause that precedes it. The first unit opens the `contains`
   clause of a fresh package (an empty one is not legal Pascal). `delphi_delete`
   also looks for the unit in every `.dpk` of the tree.
+- Building a package that compiles units of OTHER packages into itself
+  (W1033 "implicitly imported": the whole VCL inside a 4.6 MB BPL, measured)
+  used to pass in green, and in `quiet` without a word. `delphi_build` now
+  asks msbuild for warnings on a package even in quiet, and answers with
+  `implicitImports` (the units), `requiresSuggested` (their packages, read
+  from the PACKAGEINFO of the BPLs the install ships, never from a table) and
+  a `requiresNote` with the exact call - the list the IDE shows when it
+  offers to add them to `requires`. `delphi_config command=add-requires
+  requires="vcl;dbrtl"` writes them into the `.dpk` (idempotent, creates the
+  clause if missing). `warnings[]` stays out of a quiet answer.
 
 - `delphi_build target=Deploy` explains an `E0017 Unable to delete
   <job>.wait.exe`: that is the watcher of a remote-run job whose program is

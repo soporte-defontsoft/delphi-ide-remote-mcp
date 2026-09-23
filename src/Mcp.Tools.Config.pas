@@ -36,12 +36,13 @@ type
     FRemoteDir: string;
     FSection: string;
     FVersion: string;
+    FRequires: string;
   public
     [SchemaDescription('Absolute path of the project .dproj')]
     [Required]
     [RutaDelServidor]
     property Project: string read FProject write FProject;
-    [SchemaDescription('view (default: project summary; section= brings the detail per area) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | set-version (the project VERSION: the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys, which have to agree) | set-sdk (the SDK this project builds a remote platform with, by name; "none" goes back to the SDK Manager default) | set-profile (the PAServer profile it deploys and runs that platform with; "none" falls back to the platform''s active profile) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk)')]
+    [SchemaDescription('view (default: project summary; section= brings the detail per area) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | set-version (the project VERSION: the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys, which have to agree) | set-sdk (the SDK this project builds a remote platform with, by name; "none" goes back to the SDK Manager default) | set-profile (the PAServer profile it deploys and runs that platform with; "none" falls back to the platform''s active profile) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk) | add-requires (packages only: add package names to the requires clause of the .dpk - what the IDE offers after a build reports W1033, and what delphi_build lists in requiresSuggested)')]
     [SchemaDefault('view')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required)')]
@@ -69,6 +70,8 @@ type
     property Version: string read FVersion write FVersion;
     [SchemaDescription('set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to <folder>\$(Platform)\$(Config) and .dcu to <folder>\Dcu\$(Platform)\$(Config). Use "default" to restore the RAD Studio layout. No absolute paths, no "..".')]
     property Output: string read FOutput write FOutput;
+    [SchemaDescription('add-requires: the package names to add to the requires clause of the .dpk, separated by ; (vcl;dbrtl) - take them from requiresSuggested of the delphi_build answer. Names already there are kept, not repeated')]
+    property Requires: string read FRequires write FRequires;
   end;
 
   TDelphiConfigTool = class(TMCPToolBase<TDelphiConfigParams>)
@@ -1513,12 +1516,12 @@ begin
   // was not (field round 8). Configuration lives in the .dproj, so resolve
   // the sibling - and when there is none, say that instead of inventing.
   Proj := Params.Project;
-  if SameText(TPath.GetExtension(Proj), '.dpr') then
+  if MatchText(TPath.GetExtension(Proj), ['.dpr', '.dpk']) then
   begin
     Sibling := TPath.ChangeExtension(Proj, '.dproj');
     if TFile.Exists(Sibling) then
       Proj := Sibling
-    else if not MatchText(Cmd, ['', 'view', 'add-unit', 'remove-unit']) then
+    else if not MatchText(Cmd, ['', 'view', 'add-unit', 'remove-unit', 'add-requires']) then
       Exit(Format(SR_CONFIG_NO_DPROJ_FMT,
         [TPath.GetFileName(Proj), TPath.GetFileName(Sibling)]));
   end;
@@ -1564,6 +1567,12 @@ begin
       Result := SetSdk(Proj, Params.Platform, Params.Sdk)
     else if Cmd = 'set-profile' then
       Result := SetProfile(Proj, Params.Platform, Params.Profile)
+    else if Cmd = 'add-requires' then
+    begin
+      Result := PathDenied(Params.Project);
+      if Result = '' then
+        Result := AddPackageRequires(Params.Project, Params.Requires);
+    end
     else if (Cmd = 'add-unit') or (Cmd = 'remove-unit') then
     begin
       if Params.Path.Trim = '' then
@@ -1582,7 +1591,7 @@ begin
       Result := 'error: command debe ser view | add-platform | remove-platform | ' +
         'set-output | set-version | set-sdk | set-profile | add-searchpath | ' +
         'remove-searchpath | ' +
-        'add-deployfile | remove-deployfile | add-unit | remove-unit';
+        'add-deployfile | remove-deployfile | add-unit | remove-unit | add-requires';
   finally
     LeaveFileEdit;
   end;

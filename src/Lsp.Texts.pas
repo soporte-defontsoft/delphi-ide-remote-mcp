@@ -785,6 +785,21 @@ const
     'nothing was sent: check the manifest with delphi_config command=view ' +
     '(deployFiles) and add the missing entries with add-deployfile.';
 
+  { W1033 en un paquete: units de OTROS paquetes compiladas dentro del
+    nuestro. El IDE ensena la lista y pregunta si anadirlos al requires
+    (David, 2026-09-23); aqui la lista va en la respuesta y el agente decide. }
+  SN_BUILD_REQUIRES_FMT =
+    'This package compiled %d units of OTHER packages into itself (W1033 ' +
+    'implicitly imported): a duplicate of their code, which the IDE would ' +
+    'have offered to fix by adding those packages to the requires clause. ' +
+    'Their packages, read from the BPLs this install ships: %s. Add them ' +
+    'with delphi_config command=add-requires requires="%s" and build ' +
+    'again; implicitImports lists the units.%s';
+  SN_BUILD_REQUIRES_UNKNOWN_FMT =
+    ' No BPL of this install declares these units, so their package is not ' +
+    'known here (a third-party package outside bin\, or units of your own ' +
+    'that belong in contains): %s.';
+
   SN_BUILD_QUIET_DEPLOYED =
     'msbuild only prints the deploy copies at verbosity=verbose, so deployedFiles ' +
     'cannot be counted here. Repeat with verbosity=verbose if you need the count.';
@@ -2080,6 +2095,24 @@ const
 
   SN_UNIT_NO_DPROJ =
     'El proyecto no tiene .dproj: solo se actualizo el .dpr.';
+
+  { add-requires: la clausula requires de un .dpk, lo que el IDE ofrece tras
+    un build con W1033. }
+  SR_REQUIRES_NOT_PACKAGE_FMT =
+    'RECHAZADO: %s no es un paquete (.dpk): la clausula requires solo existe ' +
+    'en paquetes.';
+  SR_REQUIRES_BAD_NAME_FMT =
+    'RECHAZADO: "%s" no es un nombre de paquete (letras, digitos, _ y ' +
+    'puntos, como en el IDE: vcl, dbrtl, fmx, IndyCore).';
+  SR_REQUIRES_NEED_NAMES =
+    'RECHAZADO: falta "requires": los nombres de paquete a anadir, ' +
+    'separados por ; (los que dijo requiresSuggested del build).';
+  SN_REQUIRES_PRESENT_FMT =
+    'Todos esos paquetes ya estaban en el requires de %s. Nada que cambiar.';
+  SN_REQUIRES_ADDED_FMT =
+    'ANADIDOS al requires de %s: %s. La clausula queda: %s. Vuelve a ' +
+    'compilar: las units de esos paquetes dejan de duplicarse dentro del ' +
+    'tuyo. Copia previa en __delphi-patch.';
 
   SN_UNIT_REMOVED_FMT =
     'QUITADA la unit %s del proyecto %s (%s%s%s). El fichero %s sigue en ' +

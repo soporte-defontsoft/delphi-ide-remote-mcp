@@ -167,6 +167,39 @@ except Exception as e:
     check('package: view units parsea', False, '%s | %s' % (e, out[:200]))
 ok, err = build_ok(PDPROJ)
 check('package: con dos units COMPILA', ok, err)
+# a unit that uses another package's units: the IDE lists them and offers
+# to add their packages to requires; here the build lists them and
+# add-requires writes them (measured 2026-09-23: 25 W1033 and a 4.6 MB BPL
+# with the VCL inside, invisible in quiet)
+out = call('delphi_create', {"kind": "unit", "name": "UUsaVcl", "project": PDPK, "content":
+    "unit UUsaVcl;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Dialogs, Data.DB;\r\n\r\nprocedure Saluda;\r\n\r\nimplementation\r\n\r\nprocedure Saluda;\r\nbegin\r\n  ShowMessage('hola');\r\nend;\r\n\r\nend.\r\n"})
+check('package: unit que usa Vcl y Data', out.startswith('CREADA'), out[:200])
+out = call('delphi_build', {"project": PDPROJ, "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
+try:
+    d = json.loads(out)
+    check('package: build quiet en verde pero con implicitImports', d['success'] and 'Vcl.Dialogs' in d.get('implicitImports', []), out[:300])
+    check('package: requiresSuggested trae vcl y dbrtl (leido de los BPL)', {'vcl', 'dbrtl'} <= set(d.get('requiresSuggested', [])), d.get('requiresSuggested'))
+    check('package: requiresNote con la orden add-requires', 'add-requires' in d.get('requiresNote', ''), d.get('requiresNote', '')[:200])
+    check('package: en quiet sigue sin warnings[]', 'warnings' not in d, list(d.keys()))
+    _sug = ';'.join(d.get('requiresSuggested', []))
+    _bpl_gordo = d.get('outputSize', 0)
+except Exception as e:
+    check('package: build con W1033 parsea', False, '%s | %s' % (e, out[:200])); _sug = 'vcl;dbrtl'; _bpl_gordo = 0
+out = call('delphi_config', {"project": PDPROJ, "command": "add-requires", "requires": _sug})
+check('package: add-requires ANADIDOS', out.startswith('ANADIDOS'), out[:200])
+_k = open(PDPK, 'rb').read().decode('utf-8-sig')
+check('package: requires con rtl, vcl y dbrtl, una por linea', "requires\r\n  rtl,\r\n" in _k and 'vcl' in _k.split('contains')[0] and 'dbrtl' in _k.split('contains')[0], _k)
+out = call('delphi_config', {"project": PDPROJ, "command": "add-requires", "requires": "vcl"})
+check('package: add-requires idempotente', 'ya estaban' in out, out[:200])
+out = call('delphi_build', {"project": PDPROJ, "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
+try:
+    d = json.loads(out)
+    check('package: con requires COMPILA sin implicitImports', d['success'] and 'implicitImports' not in d, out[:300])
+    check('package: el BPL adelgaza (ya no lleva la VCL dentro)', 0 < d.get('outputSize', 0) < _bpl_gordo, '%s -> %s' % (_bpl_gordo, d.get('outputSize')))
+except Exception as e:
+    check('package: build con requires parsea', False, '%s | %s' % (e, out[:200]))
+out = call('delphi_config', {"project": PDPROJ, "command": "remove-unit", "path": os.path.join(PDIR, 'UUsaVcl.pas')})
+check('package: remove-unit de la unit VCL', out.startswith('QUITADA'), out[:200])
 out = call('delphi_config', {"project": PDPROJ, "command": "remove-unit", "path": os.path.join(PDIR, 'UPkgUno.pas')})
 check('package: remove-unit', out.startswith('QUITADA') or 'quitada' in out.lower(), out[:200])
 _k = open(PDPK, 'rb').read().decode('utf-8-sig')

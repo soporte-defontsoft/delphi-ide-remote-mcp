@@ -75,7 +75,8 @@ uses
   System.Diagnostics,
   Lsp.Patch,
   Lsp.Texts,
-  Lsp.Sandbox;
+  Lsp.Sandbox,
+  Lsp.PackageMap;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -1115,6 +1116,7 @@ var
   Output, Line, Plat, Cfg, Target: string;
   ExitCode: DWORD;
   Errors, Warnings: TJSONArray;
+  EsPaquete: Boolean;
   YaDicho: TStringList; // lo que ya va en errors[]/warnings[]: la cola no lo repite
   Tail: TStringBuilder;
   Lines: TArray<string>;
@@ -1315,7 +1317,13 @@ begin
   // Vacio = normal, que es como se comportaba antes de tener el parametro:
   // los otros motores que llaman aqui no cambian de comportamiento.
   var Verb := '/v:minimal /nologo';
-  if SameText(AVerbosity, 'quiet') then
+  // Un PAQUETE en quiet pide minimal: el W1033 ("unit de otro paquete
+  // compilada dentro de este") es un warning, y en quiet msbuild no lo
+  // imprime - el paquete salia en verde con la VCL entera dentro y el agente
+  // no veia nada (medido 2026-09-23: 25 W1033, BPL de 4,6 MB en vez de 13 KB).
+  // La respuesta sigue sin warnings[] en quiet; los W1033 van aparte.
+  EsPaquete := SameText(ReadDproj(TPath.GetFullPath(ADprojPath)).AppType, 'Package');
+  if SameText(AVerbosity, 'quiet') and not EsPaquete then
     Verb := '/v:quiet /clp:ErrorsOnly;Summary;NoItemAndPropertyList /nologo'
   else if SameText(AVerbosity, 'verbose') then
     Verb := '/v:detailed';
@@ -1456,6 +1464,54 @@ begin
       Warnings.Free
     else
       Result.AddPair('warnings', Warnings);
+    // W1033 en un paquete: units de OTROS paquetes compiladas dentro del
+    // nuestro. El IDE ensena la lista y pregunta si anadir esos paquetes al
+    // requires (David, 2026-09-23); aqui va la lista, con el paquete de cada
+    // unit leido de los BPL de la instalacion, y el agente decide con
+    // delphi_config add-requires.
+    if EsPaquete then
+    begin
+      var Implicitas := TStringList.Create;
+      var Sugeridos := TStringList.Create;
+      var SinPaquete := TStringList.Create;
+      try
+        Implicitas.Sorted := True; Implicitas.Duplicates := dupIgnore;
+        Sugeridos.Sorted := True; Sugeridos.Duplicates := dupIgnore;
+        SinPaquete.Sorted := True; SinPaquete.Duplicates := dupIgnore;
+        for var MI in TRegEx.Matches(Output, 'W1033: Unit ''([^'']+)'' implicitly imported', [roIgnoreCase]) do
+        begin
+          Implicitas.Add(MI.Groups[1].Value);
+          var Pk := PaqueteDeUnit(Info.RootDir, MI.Groups[1].Value);
+          if Pk <> '' then
+            Sugeridos.Add(Pk)
+          else
+            SinPaquete.Add(MI.Groups[1].Value);
+        end;
+        if Implicitas.Count > 0 then
+        begin
+          var ArrI := TJSONArray.Create;
+          for var S in Implicitas do
+            ArrI.Add(S);
+          Result.AddPair('implicitImports', ArrI);
+          if Sugeridos.Count > 0 then
+          begin
+            var ArrS := TJSONArray.Create;
+            for var S in Sugeridos do
+              ArrS.Add(S);
+            Result.AddPair('requiresSuggested', ArrS);
+          end;
+          Result.AddPair('requiresNote', Format(SN_BUILD_REQUIRES_FMT,
+            [Implicitas.Count, string.Join(', ', Sugeridos.ToStringArray),
+             string.Join(';', Sugeridos.ToStringArray),
+             IfThen(SinPaquete.Count > 0,
+               Format(SN_BUILD_REQUIRES_UNKNOWN_FMT, [string.Join(', ', SinPaquete.ToStringArray)]), '')]));
+        end;
+      finally
+        Implicitas.Free;
+        Sugeridos.Free;
+        SinPaquete.Free;
+      end;
+    end;
     // ONE error can father a dozen. Measured in the field (2026-08-25): a
     // single E2009 - assigning a plain procedure to a TNotifyEvent - produced
     // seven E2250 "no overloaded version of Synchronize/Queue" in the same

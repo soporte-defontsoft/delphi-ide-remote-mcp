@@ -62,6 +62,11 @@ function RemoveProjectUnit(const AProject, APasPath: string;
   or renamed by the caller; the new file's header decides the unit name). }
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
 
+{ Anade nombres de paquete a la clausula requires de un .dpk (la crea antes
+  de contains / end. si no existe). Idempotente: los que ya estan no se
+  repiten. Es lo que el IDE ofrece tras un build con W1033. }
+function AddPackageRequires(const AProject, ANames: string): string;
+
 { The units a project lists (from the .dpr uses, cross-checked with the
   .dproj). Never raises; empty on unreadable input. }
 function ProjectUnits(const AProject: string): TArray<TProjectUnit>; overload;
@@ -1145,6 +1150,79 @@ begin
     Result := RenameProjectUnitNucleo(AProject, AOldPasPath, ANewPasPath);
   finally
     LeaveFileEdit;
+  end;
+end;
+
+function AddPackageRequires(const AProject, ANames: string): string;
+var
+  Dpr, Dproj, Enc, Text, NL, Clausula, N, E: string;
+  M, MPos: TMatch;
+  Nombres, Nuevos: TStringList;
+  Existentes: TArray<string>;
+  Ya: Boolean;
+begin
+  Result := ResolveProjectPair(AProject, Dpr, Dproj);
+  if Result <> '' then
+    Exit;
+  if not SameText(TPath.GetExtension(Dpr), '.dpk') then
+    Exit(Format(SR_REQUIRES_NOT_PACKAGE_FMT, [TPath.GetFileName(Dpr)]));
+  Nombres := TStringList.Create;
+  Nuevos := TStringList.Create;
+  try
+    for N in ANames.Split([';', ',', ' ']) do
+      if N.Trim <> '' then
+      begin
+        if not TRegEx.IsMatch(N.Trim, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+          Exit(Format(SR_REQUIRES_BAD_NAME_FMT, [N.Trim]));
+        Nombres.Add(N.Trim);
+      end;
+    if Nombres.Count = 0 then
+      Exit(SR_REQUIRES_NEED_NAMES);
+    EnterFileEdit;
+    try
+      Text := PatchLoadText(Dpr, Enc);
+      NL := IfThen(Text.Contains(#13#10), #13#10, #10);
+      // la clausula se localiza sobre el texto con los comentarios en blanco
+      // (mismas posiciones) y se reescribe entera, un nombre por linea
+      M := TRegEx.Match(BlankComments(Text), '^[ \t]*requires\b\s*(.*?);', [roIgnoreCase, roMultiline, roSingleline]);
+      Existentes := [];
+      if M.Success then
+        for E in M.Groups[1].Value.Split([',']) do
+          if E.Trim <> '' then
+            Existentes := Existentes + [E.Trim];
+      for N in Nombres do
+      begin
+        Ya := False;
+        for E in Existentes do
+          if SameText(E, N) then
+            Ya := True;
+        if not Ya then
+        begin
+          Existentes := Existentes + [N];
+          Nuevos.Add(N);
+        end;
+      end;
+      if Nuevos.Count = 0 then
+        Exit(Format(SN_REQUIRES_PRESENT_FMT, [TPath.GetFileName(Dpr)]));
+      Clausula := 'requires' + NL + '  ' + string.Join(',' + NL + '  ', Existentes) + ';';
+      if M.Success then
+        Text := Copy(Text, 1, M.Index - 1) + Clausula + Copy(Text, M.Index + M.Length, MaxInt)
+      else
+      begin
+        MPos := TRegEx.Match(Text, '^[ \t]*(contains\b|end\s*\.)', [roIgnoreCase, roMultiline]);
+        if not MPos.Success then
+          Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
+        Text := Copy(Text, 1, MPos.Index - 1) + Clausula + NL + NL + Copy(Text, MPos.Index, MaxInt);
+      end;
+      PatchSaveText(Dpr, Text, Enc);
+    finally
+      LeaveFileEdit;
+    end;
+    Result := Format(SN_REQUIRES_ADDED_FMT, [TPath.GetFileName(Dpr),
+      string.Join(', ', Nuevos.ToStringArray), string.Join(', ', Existentes)]);
+  finally
+    Nombres.Free;
+    Nuevos.Free;
   end;
 end;
 
