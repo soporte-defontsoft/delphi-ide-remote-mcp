@@ -237,7 +237,16 @@ begin
   Src := PatchLoadText(AInfo.PasPath, Enc);
   M := TRegEx.Match(Src, '^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;', [roIgnoreCase, roMultiline]);
   if not M.Success then
+  begin
+    // Hay cabecera, pero con letras fuera de A-Z/0-9/_ (acentos): dcc la
+    // compila (medido 2026-09-23 con RAD Studio 13) y este servidor aun no
+    // la maneja. Decir "no tiene cabecera" era falso y mandaba al agente a
+    // buscar un fallo que no existia (Hermes, bateria 1.2).
+    M := TRegEx.Match(Src, '^\s*unit\s+([^\s;]+)\s*;', [roIgnoreCase, roMultiline]);
+    if M.Success then
+      Exit(Format(SR_UNIT_HEADER_NONASCII_FMT, [TPath.GetFileName(APasPath), M.Groups[1].Value]));
     Exit(Format(SR_UNIT_NO_HEADER_FMT, [TPath.GetFileName(APasPath)]));
+  end;
   AInfo.UnitName := M.Groups[1].Value;
   Stem := TPath.GetFileNameWithoutExtension(AInfo.PasPath);
   if not SameText(Stem, AInfo.UnitName) then
@@ -766,11 +775,11 @@ end;
 
 function AddProjectUnitNucleo(const AProject, APasPath: string): string;
 var
-  Dpr, Dproj, Enc, Text, Include, Entry, Note: string;
+  Dpr, Dproj, Enc, Text, Include, Entry, Note, Prefix, Core: string;
   Info: TUnitInfo;
   U: TUsesClause;
   E: string;
-  Present: Boolean;
+  Present, Completada: Boolean;
   Entries: TArray<string>;
   S, L: Integer;
 begin
@@ -788,20 +797,35 @@ begin
   if not U.Found then
     Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
   Present := False;
-  for E in U.Entries do
-    if SameText(EntryUnitName(E), Info.UnitName) then
+  Completada := False;
+  Entries := U.Entries;
+  for var I := 0 to High(Entries) do
+    if SameText(EntryUnitName(Entries[I]), Info.UnitName) then
     begin
       Present := True;
-      if EntryInclude(E) <> '' then
-        Include := EntryInclude(E); // the .dproj element follows the .dpr entry
+      if EntryInclude(Entries[I]) <> '' then
+        Include := EntryInclude(Entries[I]) // the .dproj element follows the .dpr entry
+      else
+      begin
+        // Presente por el NOMBRE pero sin clausula in: se daba por hecha
+        // ("ya estaba, nada que cambiar"), se refrescaba el .dproj y el .dpr
+        // se quedaba sin la ruta, asi que dcc no encontraba una unit de otra
+        // carpeta (F2613). Medido 2026-09-23 (Hermes, bateria 1.2). Se
+        // completa la entrada como la escribiria el IDE, conservando la
+        // directiva o comentario que la preceda.
+        SplitEntryPrefix(Entries[I], Prefix, Core);
+        Entries[I] := IfThen(Prefix <> '', Prefix + #10, '') + BuildEntry(Info, Include);
+        Completada := True;
+      end;
     end;
   Note := '';
   if not Present then
   begin
-    Entries := U.Entries;
     Entries := Entries + [BuildEntry(Info, Include)];
     Text := ReplaceUses(Text, U, Entries);
-  end;
+  end
+  else if Completada then
+    Text := ReplaceUses(Text, U, Entries);
   if Info.NeedsCreateForm then
   begin
     if not InsertCreateForm(Text, Info) then
@@ -831,7 +855,10 @@ begin
   else
     Note := Note + IfThen(Note <> '', ' ', '') + SN_UNIT_NO_DPROJ;
 
-  if Present then
+  if Completada then
+    Result := Format(SN_UNIT_COMPLETED_FMT, [Info.UnitName, TPath.GetFileName(Dpr),
+      Info.UnitName, Include])
+  else if Present then
     Result := Format(SN_UNIT_PRESENT_FMT, [Info.UnitName, TPath.GetFileName(Dpr)])
   else if Info.IsDesigner then
     Result := Format(SN_UNIT_ADDED_FORM_FMT, [Info.UnitName, Include, Info.FormName,

@@ -194,6 +194,24 @@ check('add-unit: DCCReference relativo', 'Include="src\\USub.pas"' in rd(DPROJ),
 ok, err = build_ok(DPROJ)
 check('build: con add-unit x2 COMPILA', ok, err)
 
+# ---- present by NAME but without the in clause (1.1.1, Hermes battery 1.2) ----
+# The agent wrote "USinIn," by hand in the uses; dcc cannot find a unit of
+# another folder without its path, and add-unit used to answer "ya estaba".
+sinin = os.path.join(sub, 'USinIn.pas')
+open(sinin, 'wb').write('unit USinIn;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n'.encode('utf-8-sig'))
+_d = rd(DPR)
+_d = _d.replace("USub in 'src\\USub.pas'", "USub in 'src\\USub.pas',\r\n  USinIn", 1)
+open(DPR, 'wb').write(_d.encode('utf-8-sig'))
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": sinin})
+check('add-unit: presente sin in -> COMPLETADA', out.startswith('COMPLETADA') and 'F2613' in out, out[:300])
+check('add-unit: la entrada gana su clausula in', "USinIn in 'src\\USinIn.pas'" in rd(DPR), rd(DPR))
+check('add-unit: sin duplicar la entrada completada', rd(DPR).count('USinIn in') == 1, rd(DPR))
+check('add-unit: DCCReference de la completada', 'Include="src\\USinIn.pas"' in rd(DPROJ), '')
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": sinin})
+check('add-unit: completada es idempotente', 'ya estaba' in out, out[:200])
+ok, err = build_ok(DPROJ)
+check('build: con la entrada completada COMPILA', ok, err)
+
 # ---- refusals ----
 bad = os.path.join(VDIR, 'UMal.pas')
 open(bad, 'wb').write(b'unit UOtroNombre;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n')
@@ -201,6 +219,13 @@ out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": ba
 check('add-unit: cabecera != fichero rechazado', 'RECHAZADO' in out and 'UOtroNombre' in out, out)
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": os.path.join(VDIR, 'App.dpr')})
 check('add-unit: no .pas rechazado', 'RECHAZADO' in out, out)
+# accented unit name: dcc compiles it (measured 2026-09-23) but this server's
+# parsers do not - the refusal says THAT, not "no header" (Hermes, 1.2 G.19)
+acc = os.path.join(VDIR, 'UÁrbol.pas')
+open(acc, 'wb').write('unit UÁrbol;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n'.encode('utf-8-sig'))
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": acc})
+check('add-unit: unit acentuada -> RECHAZADO con la causa real', 'RECHAZADO' in out and 'acentos' in out and 'UÁrbol' in out, out)
+check('add-unit: unit acentuada no dice "no tiene cabecera"', 'no tiene cabecera' not in out, out)
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit"})
 check('add-unit: sin path -> pide path y reconectar', 'Falta "path"' in out and 'reconecta' in out, out)
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": os.path.join(VDIR, 'NoExiste.pas')})

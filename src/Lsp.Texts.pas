@@ -2011,6 +2011,17 @@ const
   SR_UNIT_NO_HEADER_FMT =
     'RECHAZADO: %s no tiene cabecera "unit X;" - no es una unit Delphi.';
 
+  { La cabecera existe pero el nombre lleva letras fuera de A-Z/0-9/_. El
+    compilador la acepta (medido 2026-09-23, RAD Studio 13: "unit UArtículos;"
+    compila y enlaza); los analizadores de este servidor, no, en ~40 sitios.
+    Se dice la causa real en vez de "no tiene cabecera". }
+  SR_UNIT_HEADER_NONASCII_FMT =
+    'RECHAZADO: la cabecera de %s dice "unit %s;", con letras fuera de ' +
+    'A-Z/0-9/_ (acentos, enie...). El compilador las acepta, pero este ' +
+    'servidor todavia no maneja nombres de unit asi: renombra la unit y el ' +
+    'fichero a un nombre sin acentos (delphi_move), o pide el soporte con ' +
+    'delphi_report.';
+
   SR_UNIT_HEADER_MISMATCH_FMT =
     'RECHAZADO: la cabecera dice "unit %s;" pero el fichero se llama %s. En ' +
     'Delphi deben coincidir; arregla uno de los dos con delphi_edit / delphi_move.';
@@ -2030,6 +2041,15 @@ const
 
   SN_UNIT_PRESENT_FMT =
     'La unit %s ya estaba en %s. Nada que cambiar (entrada del .dproj refrescada).';
+
+  { Estaba en la uses por el NOMBRE, sin clausula in: antes "ya estaba, nada
+    que cambiar" y el build en F2613 porque dcc no encuentra una unit de otra
+    carpeta sin la ruta. Medido 2026-09-23 (Hermes, bateria 1.2). }
+  SN_UNIT_COMPLETED_FMT =
+    'COMPLETADA la entrada de la unit %s en la uses de %s: estaba por el ' +
+    'nombre pero SIN clausula in, y sin ella dcc no encuentra una unit de ' +
+    'otra carpeta (F2613). Ahora es "%s in ''%s''" + DCCReference del ' +
+    '.dproj. Copia previa en __delphi-patch.';
 
   SN_UNIT_NO_RUN_ANCHOR =
     'No hay Application.Run ni otro CreateForm en el .dpr: crea la instancia ' +

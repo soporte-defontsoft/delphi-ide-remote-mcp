@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+Fixes found by Hermes' 1.2 field battery (2026-09-23), verified against the
+code before being accepted.
+
+### Fixed
+
+- `delphi_config add-unit` took a unit for registered when its NAME was in
+  the `.dpr` uses clause even without an `in '<path>'` clause: it refreshed
+  the `.dproj` DCCReference, left the `.dpr` as it was and answered "nothing
+  to change", and the build then failed with F2613 because dcc never got the
+  unit's folder. The entry is now completed the way the IDE writes it
+  (`USub in 'src\USub.pas'`, directives kept) and the answer says so
+  (`COMPLETADA`); a unit already carrying its clause is still "ya estaba".
+- `add-unit` on a unit whose header name carries letters outside A-Z/0-9/_
+  (`unit UArtículos;`) answered "no tiene cabecera unit X" - false: the header
+  is there. Measured: RAD Studio 13 compiles and links such a unit. The
+  refusal now states the real cause (this server's parsers do not handle
+  accented unit names yet) and points to `delphi_move` or `delphi_report`.
+
 ## [1.1.0] - 2026-09-22
 
 **The first stable release.** Nothing in it is new for the sake of a number:
