@@ -2102,6 +2102,37 @@ const
     'compilar: las units de esos paquetes dejan de duplicarse dentro del ' +
     'tuyo. Copia previa en __delphi-patch.';
 
+  { adduses de delphi_edit (David, 2026-09-23): la unit entra en el uses de
+    OTRA unit y la clausula la escribe el motor. }
+  SR_ADDUSES_NOT_PAS_FMT =
+    'RECHAZADO: adduses es para units (.pas); %s es un proyecto. Para meter ' +
+    'una unit en un .dpr/.dpk usa delphi_config command=add-unit, que ademas ' +
+    'registra la DCCReference del .dproj.';
+  SR_ADDUSES_NEED_NAMES =
+    'RECHAZADO: falta "adduses": los nombres de unit a anadir, separados ' +
+    'por ; (System.SysUtils;UCliente).';
+  SR_ADDUSES_BAD_NAME_FMT =
+    'RECHAZADO: "%s" no es un nombre de unit (letras, digitos, _ y puntos: ' +
+    'System.SysUtils, Modules.API).';
+  SR_ADDUSES_BAD_SECTION_FMT =
+    'RECHAZADO: "section"="%s" no vale: interface o implementation (por ' +
+    'defecto implementation, que es donde va una unit nueva salvo que un ' +
+    'tipo suyo se use en la interfaz).';
+  SR_ADDUSES_NO_FILE_FMT =
+    'RECHAZADO: no existe %s.';
+  SR_ADDUSES_NO_SECTION_FMT =
+    'RECHAZADO: no encuentro la seccion %s en %s (una unit tiene interface e ' +
+    'implementation; si el fichero no es una unit, edita su uses con old/new).';
+  SN_ADDUSES_PRESENT_FMT =
+    'Ya estaba: %s en el uses de %s de %s. Nada que escribir.';
+  SN_ADDUSES_SOME_PRESENT_FMT =
+    ' Ya estaban: %s.';
+  SN_ADDUSES_CREATED_FMT =
+    ' La seccion %s no tenia uses: creada debajo de la palabra de seccion.';
+  SN_ADDUSES_ADDED_FMT =
+    'ANADIDAS al uses de %s de %s: %s.%s%s Copia previa en __delphi-patch.'#10 +
+    'La clausula queda (releida del disco):'#10'%s';
+
   SN_UNIT_REMOVED_FMT =
     'QUITADA la unit %s del proyecto %s (%s%s%s). El fichero %s sigue en ' +
     'disco; borralo con delphi_delete si ya no lo quieres. Copias previas en ' +

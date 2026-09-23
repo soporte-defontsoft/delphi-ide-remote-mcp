@@ -341,6 +341,38 @@ check('eco: la ventana cubre TODO lo escrito, no solo las dos primeras lineas',
       'procedure A;' in _eco and 'procedure B;' in _eco and 'procedure Dos;' in _eco,
       _eco[:300])
 
+# --- adduses: la unit entra en el uses de la seccion, la clausula la escribe el motor ---
+ADDU = os.path.join(DIR, 'ConUses.pas')
+open(ADDU, 'wb').write(CRLF.join([
+    'unit ConUses;', '', 'interface', '', 'uses', '  System.Classes;', '',
+    'type', '  TX = class end;', '', 'implementation', '', '{$R *.res} // uses (en comentario, no cuenta)', '',
+    'end.', '']).encode('cp1252'))
+out = call('delphi_edit', {"path": ADDU, "adduses": "System.SysUtils; Modules.API"})
+check('adduses: implementation sin uses -> se crea', out.startswith('ANADIDAS') and 'creada' in out, out[:300])
+_src = open(ADDU, 'rb').read().decode('cp1252')
+check('adduses: clausula nueva bajo implementation, con puntos en los nombres',
+      'implementation\r\n\r\nuses\r\n  System.SysUtils, Modules.API;\r\n\r\n{$R' in _src, _src)
+check('adduses: la de interface no se toca', 'interface\r\n\r\nuses\r\n  System.Classes;\r\n' in _src, _src)
+out = call('delphi_edit', {"path": ADDU, "adduses": "UOtra", "section": "implementation"})
+_src = open(ADDU, 'rb').read().decode('cp1252')
+check('adduses: anade al final de la clausula existente', out.startswith('ANADIDAS') and 'Modules.API,\r\n  UOtra;' in _src, out[:300])
+check('adduses: el eco trae la clausula releida', 'UOtra;' in out.split('releida del disco')[-1], out[:300])
+out = call('delphi_edit', {"path": ADDU, "adduses": "System.Classes", "section": "interface"})
+check('adduses: idempotente (ya estaba)', out.startswith('Ya estaba'), out[:200])
+out = call('delphi_edit', {"path": ADDU, "adduses": "UInterfaz;System.Classes", "section": "interface"})
+_src = open(ADDU, 'rb').read().decode('cp1252')
+check('adduses: interface con uses -> anade la que falta y dice cual estaba',
+      out.startswith('ANADIDAS') and 'Ya estaban: System.Classes' in out and 'System.Classes,\r\n  UInterfaz;' in _src, out[:300])
+out = call('delphi_edit', {"path": ADDU, "adduses": "2Mal"})
+check('adduses: nombre invalido rechazado', out.startswith('RECHAZADO'), out[:200])
+out = call('delphi_edit', {"path": ADDU, "adduses": "X", "section": "initialization"})
+check('adduses: seccion invalida rechazada', out.startswith('RECHAZADO'), out[:200])
+DPRX = os.path.join(DIR, 'Prog.dpr')
+open(DPRX, 'wb').write(b'program Prog;\r\nbegin\r\nend.\r\n')
+out = call('delphi_edit', {"path": DPRX, "adduses": "X"})
+check('adduses: en un .dpr remite a add-unit', out.startswith('RECHAZADO') and 'add-unit' in out, out[:200])
+check('adduses: cp1252 intacto (sin BOM, CRLF)', not open(ADDU, 'rb').read().startswith(b'\xef\xbb\xbf') and b'\n' not in open(ADDU, 'rb').read().replace(b'\r\n', b''))
+
 # --- restore: two steps, byte-identical ---
 out = call('delphi_edit', {"path": PAS, "restore": True})
 check('restore: paso 1 solo avisa', 'NO he hecho nada' in out and 'SE PERDERAN' in out, out)

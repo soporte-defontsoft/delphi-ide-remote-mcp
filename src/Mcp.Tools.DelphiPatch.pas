@@ -51,6 +51,8 @@ type
     FEol: string;
     FRestore: Boolean;
     FConfirm: Boolean;
+    FAddUses: string;
+    FSection: string;
   public
     [SchemaDescription('Absolute path of the Delphi file')]
     [Required]
@@ -90,6 +92,10 @@ type
     property Restore: Boolean read FRestore write FRestore;
     [SchemaDescription('Only with restore: execute after having seen the losses')]
     property Confirm: Boolean read FConfirm write FConfirm;
+    [SchemaDescription('ADDUSES mode: unit names to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCliente). The engine writes the commas and the terminator, creates the clause under the section keyword when there is none, and skips the names already there (idempotent). For a .dpr/.dpk use delphi_config add-unit instead')]
+    property AddUses: string read FAddUses write FAddUses;
+    [SchemaDescription('ADDUSES mode: "interface" or "implementation" (default implementation: a new unit goes there unless one of its types is used in the interface)')]
+    property Section: string read FSection write FSection;
   end;
 
   TDelphiReadTool = class(TMCPToolBase<TDelphiReadParams>)
@@ -113,6 +119,7 @@ uses
   System.IOUtils,
   System.JSON,
   Lsp.Guard,
+  Lsp.ProjectUnits,
   MCPServer.Registration;
 
 { TDelphiReadTool }
@@ -149,7 +156,12 @@ begin
     '- also inside a .dpr - and, for methods, writes BOTH halves: ' +
     'declaration and qualified implementation), CREATE (createunit=true; ' +
     'new files honour the encoding configured in the IDE) and RESTORE ' +
-    '(restore=true, two-step). It refuses to rewrite whole files, refuses ' +
+    '(restore=true, two-step) and ADDUSES (adduses="UnitA;UnitB" + ' +
+    'section=interface|implementation: the units land in that section''s ' +
+    'uses clause, commas and terminator written by the engine, the clause ' +
+    'created under the section keyword when there is none, names already ' +
+    'there skipped; a .dpr/.dpk goes through delphi_config add-unit). It ' +
+    'refuses to rewrite whole files, refuses ' +
     'binary designer files (TPF0), makes automatic backups, writes ' +
     'atomically, and audits the result (encoding, EOLs, mojibake, end. ' +
     'structure) reporting the REAL lines read back from disk - use that as ' +
@@ -212,6 +224,16 @@ begin
     if Result <> '' then
       Exit;
     Exit(ApplyEdits(TPath.GetFullPath(Params.Path), Params.Edits));
+  end;
+  // ADDUSES: la clausula la escribe el motor de clausulas (Lsp.ProjectUnits),
+  // el mismo del .dpr y el .dpk; aqui solo la jaula y el reparto de nombres.
+  if Params.AddUses.Trim <> '' then
+  begin
+    Result := PathDenied(Params.Path);
+    if Result <> '' then
+      Exit;
+    Exit(AddUsesToUnit(TPath.GetFullPath(Params.Path),
+      Params.AddUses.Split([';', ','], TStringSplitOptions.ExcludeEmpty), Params.Section));
   end;
   A := Default(TPatchArgs);
   A.Path := Params.Path;

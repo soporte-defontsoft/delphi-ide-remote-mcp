@@ -89,6 +89,11 @@ function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string = ''):
 // StyleLookup mentioned in a comment became a lint "finding").
 function BlankComments(const S: string): string;
 
+{ adduses de delphi_edit: nombres de unit al uses de una seccion (interface o
+  implementation) de un .pas; la clausula la escribe el motor. }
+function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
+  const ASection: string): string;
+
 function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Integer;
 
 implementation
@@ -463,7 +468,7 @@ end;
   y `contains` tras `package X;` - en un paquete la `requires` que va antes
   se salta entera. Nunca una dentro de un comentario; cerrada por el primer
   `;` fuera de comillas y comentarios. }
-function FindUses(const Dpr: string): TUsesClause;
+function FindUses(const Dpr: string; AFrom: Integer = 0): TUsesClause;
 var
   I, N, Start, K: Integer;
   M: TMatch;
@@ -472,16 +477,25 @@ var
 begin
   Result := Default(TUsesClause);
   Result.Keyword := 'uses';
-  M := TRegEx.Match(Dpr, '^\s*(program|library|package)\b', [roIgnoreCase, roMultiline]);
   I := 1;
-  if M.Success then
+  SeenProgram := True;
+  if AFrom > 0 then
+    // Una SECCION de un .pas (adduses, 2026-09-23): se busca desde justo
+    // despues de interface/implementation, y otro token antes de la clausula
+    // (type, const, procedure, la seccion siguiente...) = no hay uses ahi.
+    I := AFrom
+  else
   begin
-    I := M.Index + M.Length;
-    if SameText(M.Groups[1].Value, 'package') then
-      Result.Keyword := 'contains';
+    M := TRegEx.Match(Dpr, '^\s*(program|library|package)\b', [roIgnoreCase, roMultiline]);
+    if M.Success then
+    begin
+      I := M.Index + M.Length;
+      if SameText(M.Groups[1].Value, 'package') then
+        Result.Keyword := 'contains';
+    end;
+    SeenProgram := not M.Success;
   end;
   K := Length(Result.Keyword);
-  SeenProgram := not M.Success;
   Start := 0;
   while I <= Length(Dpr) do
   begin
@@ -1295,6 +1309,99 @@ begin
     Arr.AddElement(O);
   end;
   AReturn.AddPair('units', Arr);
+end;
+
+{ adduses de delphi_edit (David, 2026-09-23): una unit entra en el uses de
+  OTRA unit, en la seccion que se diga, y la clausula la escribe el motor:
+  comas, terminador y, si no existia, la clausula entera bajo la palabra de
+  seccion. Es el espejo de add-unit para el .dpr: alli membresia de
+  proyecto, aqui una dependencia entre units. Idempotente. Un solo escritor
+  del formato: FindUses/ReplaceUses, los mismos del .dpr y el .dpk. }
+function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
+  const ASection: string): string;
+var
+  Text, Enc, Sec, NL, Nombre, E, Clausula, Blank: string;
+  M: TMatch;
+  U: TUsesClause;
+  Names, Entries, Faltan, YaEstan: TArray<string>;
+  PosSec, FinLinea: Integer;
+  Creada: Boolean;
+begin
+  if not SameText(TPath.GetExtension(APasPath), '.pas') then
+    Exit(Format(SR_ADDUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
+  Names := [];
+  for Nombre in ANames do
+    if Nombre.Trim <> '' then
+      Names := Names + [Nombre.Trim];
+  if Length(Names) = 0 then
+    Exit(SR_ADDUSES_NEED_NAMES);
+  for Nombre in Names do
+    if not TRegEx.IsMatch(Nombre, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+      Exit(Format(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
+  Sec := LowerCase(ASection.Trim);
+  if Sec = '' then
+    Sec := 'implementation';
+  if not MatchText(Sec, ['interface', 'implementation']) then
+    Exit(Format(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
+  EnterFileEdit;
+  try
+    if not TFile.Exists(APasPath) then
+      Exit(Format(SR_ADDUSES_NO_FILE_FMT, [APasPath]));
+    Text := PatchLoadText(APasPath, Enc);
+    Blank := BlankComments(Text);
+    M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
+    if not M.Success then
+      Exit(Format(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
+    PosSec := M.Index + M.Length;
+    NL := IfThen(Text.Contains(#13#10), #13#10, #10);
+    U := FindUses(Text, PosSec);
+    Creada := not U.Found;
+    Faltan := [];
+    YaEstan := [];
+    Entries := U.Entries;
+    for Nombre in Names do
+      if U.Found and LocateEntry(U, Nombre, E) then
+        YaEstan := YaEstan + [Nombre]
+      else
+      begin
+        Faltan := Faltan + [Nombre];
+        Entries := Entries + [Nombre];
+      end;
+    if Length(Faltan) = 0 then
+      Exit(Format(SN_ADDUSES_PRESENT_FMT, [string.Join(', ', Names), Sec,
+        TPath.GetFileName(APasPath)]));
+    if U.Found then
+      Text := ReplaceUses(Text, U, Entries)
+    else
+    begin
+      // sin clausula: nace justo debajo de la palabra de seccion, con su
+      // linea en blanco, como la escribe el IDE
+      FinLinea := PosSec;
+      while (FinLinea <= Length(Text)) and not CharInSet(Text[FinLinea], [#10, #13]) do
+        Inc(FinLinea);
+      Text := Copy(Text, 1, FinLinea - 1) + NL + NL + 'uses' + NL + '  ' +
+        string.Join(', ', Faltan) + ';' + Copy(Text, FinLinea, MaxInt);
+    end;
+    PatchSaveText(APasPath, Text, Enc);
+    // el eco, releido del disco: la clausula tal y como ha quedado
+    Text := PatchLoadText(APasPath, Enc);
+    Blank := BlankComments(Text);
+    M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
+    Clausula := '(?)';
+    if M.Success then
+    begin
+      U := FindUses(Text, M.Index + M.Length);
+      if U.Found then
+        Clausula := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
+    end;
+    Result := Format(SN_ADDUSES_ADDED_FMT, [Sec, TPath.GetFileName(APasPath),
+      string.Join(', ', Faltan),
+      IfThen(Length(YaEstan) > 0, Format(SN_ADDUSES_SOME_PRESENT_FMT, [string.Join(', ', YaEstan)]), ''),
+      IfThen(Creada, Format(SN_ADDUSES_CREATED_FMT, [Sec]), ''),
+      Clausula]);
+  finally
+    LeaveFileEdit;
+  end;
 end;
 
 function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string): TArray<string>;

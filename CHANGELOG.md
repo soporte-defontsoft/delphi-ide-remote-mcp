@@ -105,6 +105,14 @@ code before being accepted.
   wrong jail without a trace (David, 2026-09-23). Now those workspaces
   answer 401 and the startup log names the pair, the key or the
   section.
+- `delphi_edit adduses="UnitA;UnitB" section=interface|implementation`: a
+  unit enters the `uses` of another unit and the clause is written by the
+  engine (the same `FindUses`/`ReplaceUses` that serve the `.dpr` and the
+  `.dpk`): commas, terminator, the clause created under the section
+  keyword when there is none, names already there skipped, dotted names
+  welcome. The mirror of `delphi_config add-unit` for a unit instead of
+  a project (David, 2026-09-23: editing a unit's `uses` by hand is the
+  natural move, so the tool that edits sources gets the verb).
 
 - `delphi_create kind=project-package`: a runtime package from zero, `.dpk`
   (`requires rtl`, no `contains` yet) plus a package `.dproj` measured against

@@ -197,7 +197,7 @@ No parameters.
 
 ### `delphi_edit`
 
-SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx) preserving the real encoding and line endings. Modes: EDIT (old = ONE full line copied from delphi_read + new), DELETE (delete=true + old: removes the line entirely), INSERT (insert="rutina-global"|"metodo" + code: the tool picks the legal spot - also inside a .dpr - and, for methods, writes BOTH halves: declaration and qualified implementation), CREATE (createunit=true; new files honour the encoding configured in the IDE) and RESTORE (restore=true, two-step). It refuses to rewrite whole files, refuses binary designer files (TPF0), makes automatic backups, writes atomically, and audits the result (encoding, EOLs, mojibake, end. structure) reporting the REAL lines read back from disk - use that as evidence. Never edit Delphi files with generic tools: CP1252 sources get destroyed.
+SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx) preserving the real encoding and line endings. Modes: EDIT (old = ONE full line copied from delphi_read + new), DELETE (delete=true + old: removes the line entirely), INSERT (insert="rutina-global"|"metodo" + code: the tool picks the legal spot - also inside a .dpr - and, for methods, writes BOTH halves: declaration and qualified implementation), CREATE (createunit=true; new files honour the encoding configured in the IDE) and RESTORE (restore=true, two-step) and ADDUSES (adduses="UnitA;UnitB" + section=interface|implementation: the units land in that section's uses clause, commas and terminator written by the engine, the clause created under the section keyword when there is none, names already there skipped; a .dpr/.dpk goes through delphi_config add-unit). It refuses to rewrite whole files, refuses binary designer files (TPF0), makes automatic backups, writes atomically, and audits the result (encoding, EOLs, mojibake, end. structure) reporting the REAL lines read back from disk - use that as evidence. Never edit Delphi files with generic tools: CP1252 sources get destroyed.
 
 *Access: read-write.*
 
@@ -221,6 +221,8 @@ SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx) preser
 | `eol` | string | optional | CREATE mode: line endings, "crlf" (default, Delphi standard) or "lf" |
 | `restore` | boolean | optional | RESTORE mode: true = restore the file from this tool's backup. First call shows what would be LOST; repeat with confirm=true to execute |
 | `confirm` | boolean | optional | Only with restore: execute after having seen the losses |
+| `adduses` | string | optional | ADDUSES mode: unit names to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCliente). The engine writes the commas and the terminator, creates the clause under the section keyword when there is none, and skips the names already there (idempotent). For a .dpr/.dpk use delphi_config add-unit instead |
+| `section` | string | optional | ADDUSES mode: "interface" or "implementation" (default implementation: a new unit goes there unless one of its types is used in the interface) |
 
 ### `delphi_changeset`
 
