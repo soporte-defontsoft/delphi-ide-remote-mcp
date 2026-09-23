@@ -1130,6 +1130,10 @@ begin
   for var PU in ProjectUnits(AProject, False) do
     if PU.Include <> '' then
       Ficheros := Ficheros + [TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(Dpr), PU.Include))];
+  // Mismo nombre (move de carpeta sin renombrar): no hay nada que reescribir
+  // y la cuenta decia "1 en 1 fichero" por sustituir X por X (medido en
+  // vivo, 2026-09-23).
+  if not SameText(OldName, Info.UnitName) then
   for var Fich in Ficheros do
     if TFile.Exists(Fich) then
     begin

@@ -73,6 +73,9 @@ code before being accepted.
   lived below, in the destination. It now climbs from both (Hermes,
   battery 1.2, 2026-09-23); the build was green only because dcc finds
   the unit by name through the search path.
+- A `delphi_move` that keeps the unit name (a folder change) reported
+  "Referencias reescritas: 1" for replacing the name with itself; it now
+  says 0 and touches nothing (measured live, 2026-09-23).
 
 ### Removed
 

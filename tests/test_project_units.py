@@ -302,6 +302,7 @@ check('build: tras rename COMPILA', ok, err)
 # move into a subfolder keeps the name
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UOtra.pas'), "dest": os.path.join(sub, 'UOtra.pas')})
 check('move a subcarpeta: MOVIDO + reapuntado', out.startswith('MOVIDO') and 'REAPUNTADA' in out, out[:300])
+check('move a subcarpeta: sin renombrar no reescribe referencias (cuenta 0)', 'Referencias reescritas: 0 en 0' in out, out[:300])
 check('move a subcarpeta: include relativo', "UOtra in 'src\\UOtra.pas'" in rd(DPR), rd(DPR))
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UUtil.pas'), "dest": os.path.join(VDIR, 'UUtil.txt')})
 check('move unit a .txt rechazado', 'RECHAZADO' in out, out)
