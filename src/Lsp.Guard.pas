@@ -883,6 +883,125 @@ begin
       GAdbDevices := GAdbDevices + [E.Trim];
 end;
 
+{ Un copia-pega futuro puede dejar el MISMO token en dos [Workspace.*], la
+  misma clave dos veces en una seccion, o la misma seccion dos veces. TIniFile
+  no avisa de nada de eso: coge lo primero y calla, y un agente entra en una
+  jaula que no es la suya sin que nadie lo vea. Los workspaces afectados se
+  CIERRAN (fail closed, el mismo Invalid que unas Roots que no parsean) y el
+  arranque lo dice (David, 2026-09-23). }
+procedure ComprobarDuplicadosIni(const AIniPath: string);
+var
+  I, J, P: Integer;
+  Lineas: TArray<string>;
+  Seccion, T, Clave: string;
+  Claves, Secciones: TStringList;
+
+  procedure Cierra(const ANombre: string);
+  var
+    K: Integer;
+  begin
+    for K := 0 to High(GWorkspaces) do
+      if SameText(GWorkspaces[K].Name, ANombre) then
+        GWorkspaces[K].Invalid := True;
+  end;
+
+  function Comparten(const A, B: TWorkspaceDef): Boolean;
+  begin
+    Result := ((A.Token <> '') and ((A.Token = B.Token) or (A.Token = B.ReadOnlyToken))) or
+      ((A.ReadOnlyToken <> '') and ((A.ReadOnlyToken = B.Token) or (A.ReadOnlyToken = B.ReadOnlyToken)));
+  end;
+
+begin
+  // 1. el mismo secreto en dos workspaces, o Token = ReadOnlyToken en uno
+  for I := 0 to High(GWorkspaces) do
+  begin
+    if (GWorkspaces[I].Token <> '') and (GWorkspaces[I].Token = GWorkspaces[I].ReadOnlyToken) then
+    begin
+      GWorkspaces[I].Invalid := True;
+      GWorkspaceNotes := GWorkspaceNotes +
+        ['AVISO: [Workspace.' + GWorkspaces[I].Name + '] tiene el MISMO valor en ' +
+         'Token= y ReadOnlyToken=: no se sabe si quien entra puede escribir. ' +
+         'CERRADO (fail closed) hasta que sean distintos.'];
+    end;
+    for J := I + 1 to High(GWorkspaces) do
+      if Comparten(GWorkspaces[I], GWorkspaces[J]) then
+      begin
+        GWorkspaces[I].Invalid := True;
+        GWorkspaces[J].Invalid := True;
+        GWorkspaceNotes := GWorkspaceNotes +
+          ['AVISO: [Workspace.' + GWorkspaces[I].Name + '] y [Workspace.' +
+           GWorkspaces[J].Name + '] comparten un token (copia-pega): con el ' +
+           'mismo secreto no se sabe que jaula toca. Los DOS quedan CERRADOS ' +
+           '(fail closed) hasta que cada uno tenga el suyo.'];
+      end;
+  end;
+  // 2. la misma clave dos veces en una seccion, o la misma seccion dos veces
+  try
+    Lineas := TFile.ReadAllLines(AIniPath);
+  except
+    Exit;
+  end;
+  Claves := TStringList.Create;
+  Secciones := TStringList.Create;
+  try
+    Claves.CaseSensitive := False;
+    Secciones.CaseSensitive := False;
+    Seccion := '';
+    for var L in Lineas do
+    begin
+      T := L.Trim;
+      if (T = '') or T.StartsWith(';') or T.StartsWith('#') then
+        Continue;
+      if T.StartsWith('[') and T.EndsWith(']') then
+      begin
+        Seccion := T.Substring(1, T.Length - 2).Trim;
+        if Secciones.IndexOf(Seccion) >= 0 then
+        begin
+          if Seccion.StartsWith('Workspace.', True) then
+          begin
+            Cierra(Seccion.Substring(Length('Workspace.')));
+            GWorkspaceNotes := GWorkspaceNotes +
+              ['AVISO: la seccion [' + Seccion + '] aparece DOS veces en ' +
+               'settings.ini y el ini solo lee la primera. Ese workspace ' +
+               'queda CERRADO (fail closed) hasta que sea una sola.'];
+          end
+          else
+            GWorkspaceNotes := GWorkspaceNotes +
+              ['AVISO: la seccion [' + Seccion + '] aparece DOS veces en ' +
+               'settings.ini y el ini solo lee la primera: fusionalas.'];
+        end
+        else
+          Secciones.Add(Seccion);
+        Continue;
+      end;
+      P := T.IndexOf('=');
+      if P <= 0 then
+        Continue;
+      Clave := Seccion + '|' + T.Substring(0, P).Trim;
+      if Claves.IndexOf(Clave) >= 0 then
+      begin
+        if Seccion.StartsWith('Workspace.', True) then
+        begin
+          Cierra(Seccion.Substring(Length('Workspace.')));
+          GWorkspaceNotes := GWorkspaceNotes +
+            ['AVISO: [' + Seccion + '] repite la clave ' + T.Substring(0, P).Trim +
+             ' y el ini solo lee la primera. Ese workspace queda CERRADO ' +
+             '(fail closed) hasta que la clave sea una sola.'];
+        end
+        else
+          GWorkspaceNotes := GWorkspaceNotes +
+            ['AVISO: [' + Seccion + '] repite la clave ' + T.Substring(0, P).Trim +
+             ': el ini solo lee la primera y la segunda se ignora en silencio.'];
+      end
+      else
+        Claves.Add(Clave);
+    end;
+  finally
+    Claves.Free;
+    Secciones.Free;
+  end;
+end;
+
 procedure LoadSecurity;
 var
   IniPath: string;
@@ -1008,6 +1127,7 @@ begin
     finally
       Ini.Free;
     end;
+    ComprobarDuplicadosIni(IniPath);
   end;
   // O TOKEN O NADA tambien para el cliente local con credencial: si el
   // entorno trae DELPHI_MCP_TOKEN (o DELPHI_MCP_READONLY_TOKEN, en solo

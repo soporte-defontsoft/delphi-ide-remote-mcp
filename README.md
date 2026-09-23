@@ -436,7 +436,7 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   search, navigate symbols, get diagnostics, download, run query git commands and file
   reports — but `delphi_edit`, `delphi_create`, `delphi_build`,
   `delphi_package`, `delphi_upload` and git write commands are refused).
-  Tokenless HTTP is **always 401** — the anonymous mode is gone in v0.98.
+  Tokenless HTTP is **always 401** — the anonymous mode is gone in v0.98. A secret that appears in two sections (or a `Token=` equal to its `ReadOnlyToken=`), a key repeated inside a section, or a section written twice is a copy-paste the ini parser would swallow silently, so the server **closes the workspaces involved** (fail closed) and says which in the startup log.
   The whole classification is enforced at a **single gate** in front of every
   `tools/call` — including the git argument filter, so no option can turn a "read" command
   into a write. **With NO workspace token configured at all, the server binds to

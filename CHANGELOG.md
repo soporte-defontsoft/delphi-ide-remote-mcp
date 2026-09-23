@@ -97,6 +97,14 @@ code before being accepted.
   `[Workspace.<name>]` section the session authenticated with. Nothing
   said it, so the operator could not tell which section of the ini was
   which agent's (Hermes, 2026-09-23).
+- Duplicates in `settings.ini` close the workspaces involved instead of
+  being swallowed: the same token in two `[Workspace.*]` sections (or a
+  `Token=` equal to its `ReadOnlyToken=`), a key repeated inside a
+  section, or a section written twice. `TIniFile` reads the first and
+  says nothing, so a future copy-paste would have put an agent in the
+  wrong jail without a trace (David, 2026-09-23). Now those workspaces
+  answer 401 and the startup log names the pair, the key or the
+  section.
 
 - `delphi_create kind=project-package`: a runtime package from zero, `.dpk`
   (`requires rtl`, no `contains` yet) plus a package `.dproj` measured against
