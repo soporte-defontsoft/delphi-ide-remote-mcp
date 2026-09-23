@@ -35,12 +35,12 @@ code before being accepted.
   every platform.
 - `delphi_build target=Deploy` with `verbosity=quiet` (the default) never
   carried `deployedFiles`, and the deploy note said "if it is missing,
-  nothing was sent": msbuild does not print the copies in quiet. The note now
-  says the count needs `verbosity=normal`, and quiet adds a
+  nothing was sent": msbuild only prints the copies at verbose. The note now
+  says the count needs `verbosity=verbose`, and quiet or normal add a
   `deployedFilesNote` saying so. And the count itself never matched a
   PAServer deploy: msbuild prints the `paclient --put=...` order, not the
   "Deploying"/"Copying to remote" lines the counter looked for; it now counts
-  the files of every `--put` (verbosity=normal or verbose).
+  the files of every `--put` (verbosity=verbose).
 - `remote-run` on a Windows target lost the exit code of a short program:
   the watcher opened the process by PID after it had already ended, so the
   answer said `exitCode -1` / `success false` for a program that printed

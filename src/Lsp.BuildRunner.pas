@@ -1568,8 +1568,9 @@ begin
           Result.AddPair('deployWarning', SN_BUILD_DEPLOY_EMPTY_ENTRY);
         if Shipped > 0 then
           Result.AddPair('deployedFiles', TJSONNumber.Create(Shipped))
-        else if SameText(AVerbosity, 'quiet') then
-          // En quiet msbuild no imprime las copias: no se puede contar, y
+        else if not SameText(AVerbosity, 'verbose') then
+          // Solo en verbose imprime msbuild las copias (medido 2026-09-23:
+          // en normal tampoco): no se puede contar, y
           // decir "no se envio nada" era falso (medido 2026-09-23: deploy a
           // Windows correcto y sin deployedFiles).
           Result.AddPair('deployedFilesNote', SN_BUILD_QUIET_DEPLOYED);

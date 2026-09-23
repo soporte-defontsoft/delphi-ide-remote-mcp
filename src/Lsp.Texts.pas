@@ -780,14 +780,14 @@ const
     'That folder is REWRITTEN on every deploy: whatever the app stored next ' +
     'to its binary (a data\ folder, a local database, a key file) is gone ' +
     'with it - copy it elsewhere before redeploying if a test needs it. ' +
-    'deployedFiles counts what this run shipped (only with verbosity=normal ' +
-    'or verbose: quiet does not print the copies); if it is missing there, ' +
+    'deployedFiles counts what this run shipped (only with verbosity=verbose: ' +
+    'quiet and normal do not print the copies); if it is missing there, ' +
     'nothing was sent: check the manifest with delphi_config command=view ' +
     '(deployFiles) and add the missing entries with add-deployfile.';
 
   SN_BUILD_QUIET_DEPLOYED =
-    'quiet: msbuild does not print the deploy copies, so deployedFiles ' +
-    'cannot be counted. Repeat with verbosity=normal if you need the count.';
+    'msbuild only prints the deploy copies at verbosity=verbose, so deployedFiles ' +
+    'cannot be counted here. Repeat with verbosity=verbose if you need the count.';
 
   { E0017 sobre <job>.wait.exe = el vigia de un remote-run anterior sigue
     vivo porque su programa sigue corriendo en el target. El deploy borra
