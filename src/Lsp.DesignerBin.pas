@@ -137,7 +137,18 @@ begin
   Entrada := TMemoryStream.Create;
   Salida := TMemoryStream.Create;
   try
-    Bytes := TEncoding.UTF8.GetBytes(AText);
+    // El parser de la RTL (el mismo que usa el IDE al cargar un .dfm de
+    // texto) lee los bytes como ANSI: darle UTF-8 convertia una 'o' con
+    // acento en #195#179 (medido 24-sep-2026). Lo normal en un .dfm de
+    // texto es que lo no-ASCII vaya como #NNN, que es como lo escribe el IDE
+    // y como lo escribe to-text; una 'o' en crudo se le da en ANSI, y lo que
+    // ANSI no puede representar se rechaza en vez de escribir '?'.
+    Bytes := TEncoding.ANSI.GetBytes(AText);
+    if TEncoding.ANSI.GetString(Bytes) <> AText then
+      Exit('el texto lleva caracteres que no caben en la pagina de codigos ' +
+        'ANSI de esta maquina: en un .dfm de texto se escriben como #NNNN ' +
+        '(codigo decimal del caracter, fuera de las comillas), como hace el ' +
+        'IDE. Corrigelos y repite.');
     if Length(Bytes) > 0 then
       Entrada.WriteBuffer(Bytes[0], Length(Bytes));
     Entrada.Position := 0;

@@ -34,7 +34,11 @@ the MCP `initialize` response (`serverInfo.version`).
   digit of floats). Editing a binary directly stays refused, pointing at
   `to-text`; `.fmx` is always text. One shape detector (`Lsp.DesignerBin`)
   replaces four hand-made byte checks. A legacy form had left a field agent
-  blind (Hermes, 2026-09-24). New battery `tests/test_designer_binary.py`.
+  blind (Hermes, 2026-09-24). Accents: `to-text` writes them as `#NNN` like
+  the IDE; `to-binary` reads a raw one through ANSI, what the RTL parser and
+  the IDE expect (fed UTF-8 it produced `#195#179`, measured), and refuses a
+  character ANSI cannot hold, asking for `#NNNN`. New battery
+  `tests/test_designer_binary.py` (36 checks).
 - `delphi_build` of a package: when a W1033 unit is not in any BPL of the
   install but lives in a `.dpk` of the workspace (found by climbing the folders
   from the one being built, the same search `delphi_move` uses), that package

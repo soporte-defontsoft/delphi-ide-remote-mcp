@@ -156,6 +156,26 @@ r = call('delphi_designer', {'command': 'to-binary', 'path': DFM})
 b2 = open(DFM, 'rb').read()
 check('viaje redondo: el binario se reproduce byte a byte', b2 == b1, '%d vs %d bytes' % (len(b2), len(b1)))
 
+# ---- accents: to-text writes #NNN like the IDE; to-binary reads a raw one
+# through ANSI (what the RTL parser and the IDE expect) and refuses what ANSI
+# cannot hold. Measured 2026-09-24: feeding the parser UTF-8 turned an 'o'
+# with an accent into #195#179.
+for nombre, enc in (('utf8', 'utf-8'), ('utf8bom', 'utf-8-sig'), ('cp1252', 'cp1252')):
+    RAW = os.path.join(BASE, 'Raw_%s.dfm' % nombre)
+    open(RAW, 'wb').write(("object FormR: TFormR\r\n  Caption = 'Configuración'\r\n"
+                           "  ClientHeight = 10\r\n  ClientWidth = 10\r\nend\r\n").encode(enc))
+    r = call('delphi_designer', {'command': 'to-binary', 'path': RAW})
+    check('acento en crudo (%s): to-binary acepta' % nombre, 'CONVERTIDO' in r, r[:160])
+    r = call('delphi_designer', {'command': 'to-text', 'path': RAW})
+    t = open(RAW, 'rb').read()
+    check('acento en crudo (%s): vuelve como #243, ASCII puro' % nombre,
+          b"'Configuraci'#243'n'" in t and all(x < 128 for x in t), t[:120])
+FUERA = os.path.join(BASE, 'FueraAnsi.dfm')
+open(FUERA, 'wb').write("object FormF: TFormF\r\n  Caption = 'ok ✔'\r\n  ClientHeight = 10\r\n  ClientWidth = 10\r\nend\r\n".encode('utf-8'))
+r = call('delphi_designer', {'command': 'to-binary', 'path': FUERA})
+check('caracter fuera de ANSI en crudo: to-binary RECHAZADO con #NNNN', 'RECHAZADO' in r and '#NNNN' in r, r[:200])
+check('...y el fichero no se toco', open(FUERA, 'rb').read().startswith(b'object FormF'), '')
+
 # ---- .fmx is always text; a damaged binary is refused with the reason
 FMX = os.path.join(BASE, 'Vista.fmx')
 open(FMX, 'w', encoding='utf-8', newline='\r\n').write("object Form1: TForm1\n  Caption = 'x'\nend\n")

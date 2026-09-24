@@ -82,6 +82,9 @@ handshake.
   conversion, backup first), edit as text, then `lint` and `check-binding`
   (what the IDE reports when it reopens the form); `to-binary` is the way
   back. Editing the binary directly is refused. `.fmx` is always text.
+  Accents in a text `.dfm` go as `#NNN` outside the quotes
+  (`'Configuraci'#243'n'`), the way the IDE and `to-text` write them; a raw
+  one is read through ANSI, and a character ANSI cannot hold is refused.
 - Prefer `Align`/anchors over absolute Position/Size in forms: absolute
   coordinates designed on a desktop form overflow phone screens.
 
