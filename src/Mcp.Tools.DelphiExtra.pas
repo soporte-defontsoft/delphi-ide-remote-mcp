@@ -265,7 +265,9 @@ begin
     'declares AllowBuildScripts=1. For a ' +
     'package (.dpk) the answer adds implicitImports (units of OTHER packages ' +
     'it compiled into itself, W1033) and requiresSuggested (their packages, ' +
-    'read from the BPLs of this install), the list delphi_config ' +
+    'read from the BPLs of this install - or, for a unit of a .dpk of your ' +
+    'own workspace, that package, with requiresWorkspaceNote telling you to ' +
+    'build it first), the list delphi_config ' +
     'add-requires takes; a unit dcc cannot find at all is F2613 and comes ' +
     'back in missingUnits instead.';
 end;

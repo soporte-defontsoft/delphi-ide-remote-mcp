@@ -85,7 +85,8 @@ uses
   Lsp.Patch,
   Lsp.Texts,
   Lsp.Sandbox,
-  Lsp.PackageMap;
+  Lsp.PackageMap,
+  Lsp.ProjectUnits;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -1517,6 +1518,8 @@ begin
       var Implicitas := TStringList.Create;
       var Sugeridos := TStringList.Create;
       var SinPaquete := TStringList.Create;
+      var DelWorkspace := TStringList.Create;
+      var DeBpl := TStringList.Create; // solo los leidos de los BPL: la frase los nombra aparte
       try
         Implicitas.Sorted := True; Implicitas.Duplicates := dupIgnore;
         Sugeridos.Sorted := True; Sugeridos.Duplicates := dupIgnore;
@@ -1526,9 +1529,27 @@ begin
           Implicitas.Add(MI.Groups[1].Value);
           var Pk := PaqueteDeUnit(Info.RootDir, MI.Groups[1].Value);
           if Pk <> '' then
-            Sugeridos.Add(Pk)
+          begin
+            Sugeridos.Add(Pk);
+            DeBpl.Add(Pk);
+          end
           else
-            SinPaquete.Add(MI.Groups[1].Value);
+          begin
+            // Punto 8 (Hermes 2026-09-23; David 24-sep): la unit puede ser de
+            // un .dpk del PROPIO workspace, que no esta en ningun BPL de la
+            // instalacion. Se sugiere ese paquete y se dice que hay que
+            // compilarlo antes; nada mas. Si dos .dpk la contienen, van los dos.
+            var Dpks := WorkspacePackagesWithUnit(
+              ChangeFileExt(TPath.GetFullPath(ADprojPath), '.dpk'), MI.Groups[1].Value);
+            if Length(Dpks) = 0 then
+              SinPaquete.Add(MI.Groups[1].Value)
+            else
+              for var Dk in Dpks do
+              begin
+                Sugeridos.Add(TPath.GetFileNameWithoutExtension(Dk));
+                DelWorkspace.Add(MI.Groups[1].Value + ' -> ' + Dk);
+              end;
+          end;
         end;
         if Implicitas.Count > 0 then
         begin
@@ -1543,16 +1564,25 @@ begin
               ArrS.Add(S);
             Result.AddPair('requiresSuggested', ArrS);
           end;
+          // La frase de los BPL solo si hay alguno: con la lista vacia decia
+          // 'requires=""' (visto el 24-sep con un paquete del workspace).
           Result.AddPair('requiresNote', Format(SN_BUILD_REQUIRES_FMT,
-            [Implicitas.Count, string.Join(', ', Sugeridos.ToStringArray),
-             string.Join(';', Sugeridos.ToStringArray),
+            [Implicitas.Count,
+             IfThen(DeBpl.Count > 0,
+               Format(SN_BUILD_REQUIRES_KNOWN_FMT, [string.Join(', ', DeBpl.ToStringArray),
+                 string.Join(';', DeBpl.ToStringArray)]), ''),
              IfThen(SinPaquete.Count > 0,
                Format(SN_BUILD_REQUIRES_UNKNOWN_FMT, [string.Join(', ', SinPaquete.ToStringArray)]), '')]));
+          if DelWorkspace.Count > 0 then
+            Result.AddPair('requiresWorkspaceNote', Format(SN_BUILD_REQUIRES_WORKSPACE_FMT,
+              [string.Join('; ', DelWorkspace.ToStringArray)]));
         end;
       finally
         Implicitas.Free;
         Sugeridos.Free;
         SinPaquete.Free;
+        DelWorkspace.Free;
+        DeBpl.Free;
       end;
     end;
     // ONE error can father a dozen. Measured in the field (2026-08-25): a

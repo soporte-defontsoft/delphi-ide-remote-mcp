@@ -792,14 +792,22 @@ const
   SN_BUILD_REQUIRES_FMT =
     'This package compiled %d units of OTHER packages into itself (W1033 ' +
     'implicitly imported): a duplicate of their code, which the IDE would ' +
-    'have offered to fix by adding those packages to the requires clause. ' +
-    'Their packages, read from the BPLs this install ships: %s. Add them ' +
-    'with delphi_config command=add-requires requires="%s" and build ' +
-    'again; implicitImports lists the units.%s';
+    'have offered to fix by adding those packages to the requires clause; ' +
+    'implicitImports lists the units.%s%s';
+  SN_BUILD_REQUIRES_KNOWN_FMT =
+    ' Their packages, read from the BPLs this install ships: %s. Add them ' +
+    'with delphi_config command=add-requires requires="%s" and build again.';
   SN_BUILD_REQUIRES_UNKNOWN_FMT =
     ' No BPL of this install declares these units, so their package is not ' +
     'known here (a third-party package outside bin\, or units of your own ' +
     'that belong in contains): %s.';
+  { Punto 8 (Hermes 2026-09-23, David 24-sep): units de un .dpk del PROPIO
+    workspace. Solo pista: compilar e instalar paquetes no es cosa del server. }
+  SN_BUILD_REQUIRES_WORKSPACE_FMT =
+    'These units belong to packages of YOUR workspace, not to this install: ' +
+    '%s. Build that package FIRST (until it compiles there is no .dcp to ' +
+    'require), then add-requires it here and build again. Installing a ' +
+    'package in the IDE is the operator''s job, never yours.';
 
   SN_BUILD_QUIET_DEPLOYED =
     'msbuild only prints the deploy copies at verbosity=verbose, so deployedFiles ' +

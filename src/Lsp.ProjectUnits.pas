@@ -82,6 +82,14 @@ procedure AddUnitsView(const ADproj: string; AReturn: TJSONObject);
 { AAlsoDir: una segunda carpeta desde la que subir (la de DESTINO de un move). }
 function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string = ''): TArray<string>;
 
+{ Paquetes (.dpk) del workspace cuya clausula contains lista la unit
+  AUnitName, subiendo desde la carpeta de ADpkPath hasta el borde de la jaula
+  (el MISMO buscador que ProjectsUsingUnit); el propio ADpkPath no cuenta.
+  Es la pista de requires de delphi_build cuando la unit no esta en ningun
+  BPL de la instalacion (punto 8 de Hermes; David, 24-sep-2026): solo pista,
+  sin comprobar dcp ni instalacion - compilar el paquete es cosa del agente. }
+function WorkspacePackagesWithUnit(const ADpkPath, AUnitName: string): TArray<string>;
+
 // The Pascal text with every comment (brace, paren-star, slash-slash) and
 // compiler directive replaced by spaces - same length, same line breaks, so
 // positions and line numbers survive. String literals are left intact. For
@@ -1523,30 +1531,75 @@ begin
   end;
 end;
 
+{ La subida por carpetas, compartida: desde ADesde hasta el borde de la jaula
+  (ReadPathDenied) y con tope de niveles para el modo sin jaula, acumulando
+  en ADirs sin repetir. Un solo buscador para ProjectsUsingUnit y
+  WorkspacePackagesWithUnit (24-sep-2026), no dos. }
+procedure SubeCarpetas(ADesde: string; var ADirs: TArray<string>);
+var
+  Padre: string;
+  Niveles: Integer;
+begin
+  Niveles := 0;
+  while (ADesde <> '') and (Niveles < 12) and (ReadPathDenied(ADesde) = '') do
+  begin
+    if not MatchText(ADesde, ADirs) then
+      ADirs := ADirs + [ADesde];
+    Padre := TPath.GetDirectoryName(ADesde);
+    if (Padre = '') or SameText(Padre, ADesde) then
+      Break;
+    ADesde := Padre;
+    Inc(Niveles);
+  end;
+end;
+
+function WorkspacePackagesWithUnit(const ADpkPath, AUnitName: string): TArray<string>;
+var
+  Dirs: TArray<string>;
+  D, F: string;
+  P: TProjectUnit;
+begin
+  Result := [];
+  Dirs := [];
+  SubeCarpetas(TPath.GetDirectoryName(TPath.GetFullPath(ADpkPath)), Dirs);
+  // Dos paquetes de un mismo trabajo viven en carpetas HERMANAS (pkgA\ y
+  // pkgB\), no una encima de otra: a cada nivel de la subida se miran
+  // tambien sus subcarpetas inmediatas. Un listado por carpeta, sin recursion.
+  var Sitios: TArray<string> := [];
+  for D in Dirs do
+  begin
+    if not TDirectory.Exists(D) then
+      Continue;
+    Sitios := Sitios + [D];
+    try
+      for var Sub in TDirectory.GetDirectories(D) do
+        if not MatchText(Sub, Dirs) then
+          Sitios := Sitios + [Sub];
+    except
+      // una carpeta que no se deja listar no es motivo para no mirar el resto
+    end;
+  end;
+  for D in Sitios do
+  begin
+    for F in TDirectory.GetFiles(D, '*.dpk') do
+    begin
+      if SameText(TPath.GetFullPath(F), TPath.GetFullPath(ADpkPath)) then
+        Continue;
+      for P in ProjectUnits(F, False) do // el .dpk decide; sin leer .dproj
+        if SameText(P.UnitName, AUnitName) then
+        begin
+          Result := Result + [TPath.GetFullPath(F)];
+          Break;
+        end;
+    end;
+  end;
+end;
+
 function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string): TArray<string>;
 var
   Dir, D, F, Stem: string;
   Dirs: TArray<string>;
   P: TProjectUnit;
-
-  procedure Sube(ADesde: string);
-  var
-    Padre: string;
-    Niveles: Integer;
-  begin
-    Niveles := 0;
-    while (ADesde <> '') and (Niveles < 12) and (ReadPathDenied(ADesde) = '') do
-    begin
-      if not MatchText(ADesde, Dirs) then
-        Dirs := Dirs + [ADesde];
-      Padre := TPath.GetDirectoryName(ADesde);
-      if (Padre = '') or SameText(Padre, ADesde) then
-        Break;
-      ADesde := Padre;
-      Inc(Niveles);
-    end;
-  end;
-
 begin
   Result := [];
   Stem := TPath.GetFileNameWithoutExtension(APasPath);
@@ -1566,9 +1619,9 @@ begin
   // lista vive ABAJO, donde el origen no mira (Hermes, 2026-09-23). Un solo
   // buscador con dos puntos de partida, no dos buscadores.
   Dirs := [];
-  Sube(Dir);
+  SubeCarpetas(Dir, Dirs);
   if AAlsoDir <> '' then
-    Sube(TPath.GetFullPath(AAlsoDir));
+    SubeCarpetas(TPath.GetFullPath(AAlsoDir), Dirs);
   for D in Dirs do
   begin
     if not TDirectory.Exists(D) then

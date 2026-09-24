@@ -21,6 +21,12 @@ the MCP `initialize` response (`serverInfo.version`).
   node output says why. The Windows node now writes its output as UTF-8 like
   the Linux one (a title with an accent used to rely on the server's CP1252
   fallback).
+- `delphi_build` of a package: when a W1033 unit is not in any BPL of the
+  install but lives in a `.dpk` of the workspace (found by climbing the folders
+  from the one being built, the same search `delphi_move` uses), that package
+  joins `requiresSuggested` and `requiresWorkspaceNote` says to build it first.
+  A hint only: compiling and installing packages stays the agent's and the
+  operator's job (Hermes' point 8, 2026-09-23).
 
 ### Fixed
 
