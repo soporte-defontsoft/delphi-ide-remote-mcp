@@ -125,7 +125,7 @@ Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight v
 
 ### `delphi_read`
 
-Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or without BOM detected for real). Returns numbered lines in the format number|content - to build a delphi_edit anchor, copy everything after the bar, exactly. ALWAYS use this instead of a generic read for Delphi files: generic reads turn CP1252 accents into U+FFFD and poison every anchor built from them.
+Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or without BOM / UTF-16 detected for real). Returns numbered lines in the format number|content - to build a delphi_edit anchor, copy everything after the bar, exactly. ALWAYS use this instead of a generic read for Delphi files: generic reads turn CP1252 accents into U+FFFD and poison every anchor built from them.
 
 *Access: read-only OK.*
 
@@ -247,7 +247,7 @@ MULTI-FILE TRANSACTIONS: when one change touches several files, either the whole
 
 ### `delphi_textedit`
 
-SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, web assets, tests, scripts, config. Same discipline as delphi_edit - one-full-line unique anchor (old/new, atline tie-break), DELETE mode (delete=true + old), several edits on the SAME file in one all-or-nothing call (`edits`), real encoding preserved (UTF-8 +/- BOM / CP1252), line endings preserved, automatic backup, atomic write - without the Pascal gates. CREATE mode (create=true + content) for new files, never overwrites. Whole-file rewrites are refused. Delphi sources/designers are refused (use delphi_edit) and so are .dproj and binaries. Read first with delphi_read and copy the anchor exactly.
+SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, web assets, tests, scripts, config. Same discipline as delphi_edit - one-full-line unique anchor (old/new, atline tie-break), DELETE mode (delete=true + old), several edits on the SAME file in one all-or-nothing call (`edits`), real encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), line endings preserved, automatic backup, atomic write - without the Pascal gates. CREATE mode (create=true + content) for new files, never overwrites. Whole-file rewrites are refused. Delphi sources/designers are refused (use delphi_edit) and so are .dproj and binaries. Read first with delphi_read and copy the anchor exactly.
 
 *Access: read-write.*
 

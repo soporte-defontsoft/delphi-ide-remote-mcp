@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- One encoding detector, not two. `delphi_search`, `delphi_references` and
+  the linter decoded a file through their own BOM branches while `delphi_read`,
+  `delphi_edit`, `delphi_textedit` and the write audit used `Lsp.Patch.DetectEnc`,
+  which knew nothing of UTF-16 - so a text `.dfm` the IDE saved in UTF-16 (its
+  editor encoding menu) was found by search and refused by read as "binary"
+  (NUL bytes). UTF-16 LE/BE by BOM now lives in the one detector, is read,
+  edited and written back with its BOM, the header says `encoding=utf16-le`,
+  and the "is this text at all" rule (a NUL in the first 64 KB) is one function
+  shared by `delphi_read` and `delphi_textedit` instead of two copies with
+  different windows.
+
 ## [1.1.2] - 2026-09-24
 
 ### Added

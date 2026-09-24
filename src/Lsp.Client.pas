@@ -513,22 +513,17 @@ begin
       Result := '';
     Exit;
   end;
-  if (Length(Bytes) >= 3) and (Bytes[0] = $EF) and (Bytes[1] = $BB) and (Bytes[2] = $BF) then
-    Result := TEncoding.UTF8.GetString(Bytes, 3, Length(Bytes) - 3)
-  else if (Length(Bytes) >= 2) and (Bytes[0] = $FF) and (Bytes[1] = $FE) then
-    Result := TEncoding.Unicode.GetString(Bytes, 2, Length(Bytes) - 2)
-  else if (Length(Bytes) >= 2) and (Bytes[0] = $FE) and (Bytes[1] = $FF) then
-    Result := TEncoding.BigEndianUnicode.GetString(Bytes, 2, Length(Bytes) - 2)
-  else
-    // Sin BOM NO significa CP1252. Darlo por hecho convertia en mojibake
-    // TODO fichero UTF-8 sin BOM: delphi_search sobre los .md de este mismo
-    // repo devolvia basura por cada raya (medido el 20-sep-2026 usando el
-    // servidor como agente), y ese texto corrupto es el que un agente copia
-    // para construir un ancla. Por aqui pasa ademas lo que se le manda al
-    // linter y lo que lee delphi_references. Ahora decide el MISMO detector
-    // que usa delphi_read: utf8 solo si CADA byte alto forma secuencia
-    // valida, asi que los fuentes CP1252 de siempre siguen leyendose bien.
-    Result := DecodeSourceBytes(Bytes);
+  // Sin BOM NO significa CP1252. Darlo por hecho convertia en mojibake
+  // TODO fichero UTF-8 sin BOM: delphi_search sobre los .md de este mismo
+  // repo devolvia basura por cada raya (medido el 20-sep-2026 usando el
+  // servidor como agente), y ese texto corrupto es el que un agente copia
+  // para construir un ancla. Por aqui pasa ademas lo que se le manda al
+  // linter y lo que lee delphi_references. Decide el MISMO detector que usa
+  // delphi_read, y SOLO el: el 20-sep se le delego el caso sin BOM y aqui
+  // se quedaron tres ramas propias para los BOM (UTF-8 y UTF-16), asi que
+  // search leia un .dfm en UTF-16 y delphi_read no (24-sep-2026). Ahora los
+  // BOM los conoce Lsp.Patch.DetectEnc y aqui no se decide nada.
+  Result := DecodeSourceBytes(Bytes);
 end;
 
 { Definition con hover de oraculo. DelphiLSP contesta null a definition

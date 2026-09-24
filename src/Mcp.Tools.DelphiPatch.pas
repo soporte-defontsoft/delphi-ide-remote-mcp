@@ -132,7 +132,7 @@ begin
   inherited;
   FName := 'delphi_read';
   FDescription := 'Read a Delphi source file DECODED CORRECTLY (CP1252 / ' +
-    'UTF-8 with or without BOM detected for real). Returns numbered lines in ' +
+    'UTF-8 with or without BOM / UTF-16 detected for real). Returns numbered lines in ' +
     'the format number|content - to build a delphi_edit anchor, copy ' +
     'everything after the bar, exactly. ALWAYS use this instead of a generic ' +
     'read for Delphi files: generic reads turn CP1252 accents into U+FFFD ' +

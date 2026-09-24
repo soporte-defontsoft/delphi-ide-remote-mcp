@@ -186,6 +186,35 @@ r = call('delphi_designer', {'command': 'to-text', 'path': U16})
 check('texto UTF-16 NO se toma por binario (to-text: ya es texto)', 'ya es texto' in r, r[:160])
 check('...y el fichero no se toco', open(U16, 'rb').read()[:2] == b'\xff\xfe', '')
 
+# ---- and a UTF-16 text form is READ, EDITED and WRITTEN BACK as UTF-16 by ONE
+# detector (Lsp.Patch.DetectEnc). Until 24-sep two detectors lived side by
+# side: search read UTF-16 through its own BOM branch, delphi_read did not
+# (and its NUL-byte gate took UTF-16 for a binary). LE with an accent, BE too.
+open(U16, 'wb').write("object FormU: TFormU\r\n  Caption = 'acento: c\u00f3digo'\r\n  ClientHeight = 10\r\n  ClientWidth = 10\r\nend\r\n".encode('utf-16'))
+r = call('delphi_read', {'path': U16})
+check('delphi_read lee el UTF-16 LE y lo dice', 'encoding=utf16-le' in r and "Caption = 'acento: c\u00f3digo'" in r, r[:200])
+check('...con sus CRLF y sus 2 bytes altos (medido sobre el cuerpo UTF-8)', 'CRLF=5' in r and 'LFsueltos=0' in r and 'acentos=2' in r, r[:200])
+r = call('delphi_search', {'root': U16, 'query': 'c\u00f3digo'})
+check('delphi_search lo encuentra con el acento', '"total":1' in r and '"line":2' in r, r[:200])
+r = call('delphi_edit', {'path': U16, 'old': '  ClientHeight = 10', 'new': '  ClientHeight = 11'})
+check('delphi_edit edita el UTF-16 LE', r.startswith('ESCRITO') and 'encoding=utf16-le' in r, r[:200])
+b = open(U16, 'rb').read()
+check('...y en disco sigue UTF-16 LE con BOM, CRLF, acento y el cambio', b[:2] == b'\xff\xfe' and b[2:].decode('utf-16-le') == "object FormU: TFormU\r\n  Caption = 'acento: c\u00f3digo'\r\n  ClientHeight = 11\r\n  ClientWidth = 10\r\nend\r\n", b[:60].hex())
+r = call('delphi_designer', {'command': 'lint', 'path': U16})
+check('delphi_designer lint sobre el UTF-16: limpio', 'LIMPIO' in r, r[:200])
+U16BE = os.path.join(BASE, 'notas_be.txt')
+open(U16BE, 'wb').write(b'\xfe\xff' + 'uno\r\ndos: canci\u00f3n\r\ntres\r\n'.encode('utf-16-be'))
+r = call('delphi_textedit', {'path': U16BE, 'old': 'tres', 'new': 'tres (editada)'})
+check('delphi_textedit edita un UTF-16 BE (antes: "parece BINARIO")', 'encoding=utf16-be' in r and 'RECHAZADO' not in r, r[:200])
+b = open(U16BE, 'rb').read()
+check('...y en disco sigue UTF-16 BE con BOM y el acento', b[:2] == b'\xfe\xff' and b[2:].decode('utf-16-be') == 'uno\r\ndos: canci\u00f3n\r\ntres (editada)\r\n', b[:40].hex())
+EXE_BIN = os.path.join(BASE, 'no_texto.bin')
+open(EXE_BIN, 'wb').write(b'MZ\x90\x00\x03\x00\x00\x00' * 64)
+r = call('delphi_read', {'path': EXE_BIN})
+check('un binario de verdad sigue RECHAZADO por NUL (regla unica, 64 KB)', 'RECHAZADO' in r and 'BINARIO' in r, r[:200])
+r = call('delphi_textedit', {'path': EXE_BIN, 'old': 'MZ', 'new': 'ZZ'})
+check('...tambien en delphi_textedit, la misma regla', 'RECHAZADO' in r and 'BINARIO' in r, r[:200])
+
 # ---- .fmx is always text; a damaged binary is refused with the reason
 FMX = os.path.join(BASE, 'Vista.fmx')
 open(FMX, 'w', encoding='utf-8', newline='\r\n').write("object Form1: TForm1\n  Caption = 'x'\nend\n")

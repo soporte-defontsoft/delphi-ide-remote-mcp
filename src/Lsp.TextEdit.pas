@@ -4,7 +4,7 @@ unit Lsp.TextEdit;
   web assets, scripts, config: .md .txt .html .js .css .sql .py .bat .ini
   .json .yml .xml - ANY plain text, it is a DENYLIST not a whitelist) with the same
   discipline as Lsp.Patch - one-full-line unique anchor with hints and atline
-  tie-break, real encoding preserved (UTF-8 +/- BOM / CP1252), dominant EOL
+  tie-break, real encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), dominant EOL
   preserved, automatic backup, atomic write - but without the Pascal semantic
   gates. Delphi sources and designer files are refused (delphi_edit is their
   path) and so are project files and binaries. }
@@ -68,21 +68,6 @@ begin
     if Ord(C) > 127 then
       Exit(False);
   Result := True;
-end;
-
-function LooksBinary(const APath: string): Boolean;
-var
-  B: TBytes;
-  I, Limit: Integer;
-begin
-  B := TFile.ReadAllBytes(APath);
-  Limit := Length(B);
-  if Limit > 65536 then
-    Limit := 65536;
-  for I := 0 to Limit - 1 do
-    if B[I] = 0 then
-      Exit(True);
-  Result := False;
 end;
 
 function DominantEol(const T: string): string;
@@ -178,7 +163,9 @@ var
 begin
   if not TFile.Exists(A.Path) then
     Exit('RECHAZADO: no existe ' + A.Path + '. Para crearlo usa create=true.');
-  if LooksBinary(A.Path) then
+  // La regla "esto no es texto" es LooksBinaryBytes (Lsp.Patch), la misma de
+  // delphi_read: aqui habia una copia con otra ventana y sin UTF-16.
+  if LooksBinaryBytes(TFile.ReadAllBytes(A.Path)) then
     Exit('RECHAZADO: ' + TPath.GetFileName(A.Path) +
       ' parece BINARIO (bytes nulos). Esta tool es solo para texto.');
   // El gemelo de la negativa de delphi_edit, y por eso comparten el texto:

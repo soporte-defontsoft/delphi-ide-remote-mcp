@@ -88,7 +88,7 @@ begin
     '(delete=true + old), several edits on ' +
     'the SAME file in one all-or-nothing call ("edits", where an anchor may ' +
     'be ONE line or a contiguous BLOCK), ' +
-    'real encoding preserved (UTF-8 +/- BOM / CP1252), ' +
+    'real encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), ' +
     'line endings preserved, automatic backup, atomic write - without the ' +
     'Pascal gates. CREATE mode (create=true + content) for new files, never ' +
     'overwrites. Whole-file rewrites are refused. Delphi sources/designers ' +

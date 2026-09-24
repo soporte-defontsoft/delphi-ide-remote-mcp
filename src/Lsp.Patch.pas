@@ -7,7 +7,7 @@ unit Lsp.Patch;
 
   - Anchor = ONE full existing line (leading indentation may be omitted);
     never substrings, never multi-line anchors, never whole-file rewrites.
-  - Encoding is detected (UTF-8 BOM / strict UTF-8 / CP1252) and preserved;
+  - Encoding is detected (UTF-8 BOM / strict UTF-8 / CP1252 / UTF-16 by BOM) and preserved;
     a character that does not fit the file's codepage REJECTS the edit with
     the legitimate native-literal alternative spelled out.
   - Atomic writes (tmp + rename), automatic pre-edit backups under
@@ -45,10 +45,17 @@ type
 function ExecutePatch(const A: TPatchArgs): string;
 
 { El decodificador de delphi_read, suelto: bytes -> texto con SU encoding real
-  (BOM, UTF-8 estricto, y CP1252 solo cuando algun byte alto NO forma
-  secuencia valida). Para quien ya tiene los bytes en la mano y no quiere
-  leer el fichero dos veces. }
+  (BOM de UTF-8 o UTF-16, UTF-8 estricto, y CP1252 solo cuando algun byte alto
+  NO forma secuencia valida). Es EL detector: nadie mas decide codificaciones.
+  Para quien ya tiene los bytes en la mano y no quiere leer el fichero dos
+  veces. }
 function DecodeSourceBytes(const B: TArray<Byte>): string; // = TBytes
+
+{ La regla UNICA de "esto no es texto": un byte NUL en los primeros 64 KB,
+  salvo que el detector diga UTF-16, donde los NUL son la mitad de cada
+  caracter ASCII. Vivia dos veces (delphi_read con 4 KB y delphi_textedit
+  con 64 KB) y ninguna sabia de UTF-16 (24-sep-2026). }
+function LooksBinaryBytes(const B: TArray<Byte>): Boolean;
 
 { Sustituye un BLOQUE CONTIGUO de lineas, comparado entero y por contenido
   (sin sangria). Encoding y finales de linea, los del fichero. Vivia dentro de
@@ -285,7 +292,11 @@ var
   GHighMap: TDictionary<Char, Byte>; // CP1252 0x80-0x9F, derived from the codec
 
 type
-  TEncKind = (ekUtf8Bom, ekUtf8, ekCp1252);
+  // UTF-16 (LE y BE, siempre con BOM: es como lo escribe el IDE cuando se
+  // elige ese formato al ver un .dfm como texto) entro aqui el 24-sep-2026.
+  // Antes lo reconocia SOLO Lsp.Client.LoadSourceText por su cuenta: search
+  // leia un .dfm UTF-16 y delphi_read no. Un detector, no dos.
+  TEncKind = (ekUtf8Bom, ekUtf8, ekCp1252, ekUtf16LE, ekUtf16BE);
 
   TMetrics = record
     Bytes, CR, LF, CRLF, Loose, High, Corruption: Integer;
@@ -296,8 +307,37 @@ begin
   case K of
     ekUtf8Bom: Result := 'utf8-bom';
     ekUtf8: Result := 'utf8';
+    ekUtf16LE: Result := 'utf16-le';
+    ekUtf16BE: Result := 'utf16-be';
   else
     Result := 'cp1252';
+  end;
+end;
+
+{ La inversa de EncName: el nombre que sale de una lectura vuelve a entrar
+  como clase al guardar. Un nombre desconocido es cp1252, como siempre. }
+function EncKindOf(const AName: string): TEncKind;
+begin
+  if AName = 'utf8-bom' then
+    Result := ekUtf8Bom
+  else if AName = 'utf8' then
+    Result := ekUtf8
+  else if AName = 'utf16-le' then
+    Result := ekUtf16LE
+  else if AName = 'utf16-be' then
+    Result := ekUtf16BE
+  else
+    Result := ekCp1252;
+end;
+
+{ Bytes de BOM que preceden al texto en esa clase. }
+function PreambleLen(K: TEncKind): Integer;
+begin
+  case K of
+    ekUtf8Bom: Result := 3;
+    ekUtf16LE, ekUtf16BE: Result := 2;
+  else
+    Result := 0;
   end;
 end;
 
@@ -365,6 +405,12 @@ var
 begin
   if (Length(B) >= 3) and (B[0] = $EF) and (B[1] = $BB) and (B[2] = $BF) then
     Exit(ekUtf8Bom);
+  // UTF-16 solo por BOM: sin el, ningun fuente Delphi es UTF-16 (el IDE lo
+  // escribe siempre con marca) y adivinarlo por ceros seria otro detector.
+  if (Length(B) >= 2) and (B[0] = $FF) and (B[1] = $FE) then
+    Exit(ekUtf16LE);
+  if (Length(B) >= 2) and (B[0] = $FE) and (B[1] = $FF) then
+    Exit(ekUtf16BE);
   HasHigh := False;
   for I := 0 to High(B) do
     if B[I] > 127 then
@@ -394,6 +440,8 @@ begin
   case K of
     ekUtf8Bom: Result := TEncoding.UTF8.GetString(B, 3, Length(B) - 3);
     ekUtf8: Result := TEncoding.UTF8.GetString(B);
+    ekUtf16LE: Result := TEncoding.Unicode.GetString(B, 2, Length(B) - 2);
+    ekUtf16BE: Result := TEncoding.BigEndianUnicode.GetString(B, 2, Length(B) - 2);
   else
     Result := GCp1252.GetString(B);
   end;
@@ -406,6 +454,10 @@ var
   BB: Byte;
   Body: TBytes;
 begin
+  case K of
+    ekUtf16LE: Exit(TEncoding.Unicode.GetPreamble + TEncoding.Unicode.GetBytes(S));
+    ekUtf16BE: Exit(TEncoding.BigEndianUnicode.GetPreamble + TEncoding.BigEndianUnicode.GetBytes(S));
+  end;
   if K <> ekCp1252 then
   begin
     Body := TEncoding.UTF8.GetBytes(S);
@@ -437,27 +489,38 @@ end;
 function Measure(const B: TBytes): TMetrics;
 var
   I, Start: Integer;
+  K: TEncKind;
+  Cuerpo: TBytes;
 begin
   Result := Default(TMetrics);
   Result.Bytes := Length(B);
-  // The UTF-8 BOM is filesystem plumbing, not text: counting its 3 bytes as
-  // "acentos" confused the accounting shown to the agent (measured).
-  Start := 0;
-  if (Length(B) >= 3) and (B[0] = $EF) and (B[1] = $BB) and (B[2] = $BF) then
-    Start := 3;
-  for I := Start to High(B) do
+  // El BOM es fontaneria del fichero, no texto: contar sus bytes como
+  // "acentos" confundia la cuenta que ve el agente (medido). Cuantos bytes
+  // son lo dice el MISMO detector que decide la codificacion, no otro if.
+  K := DetectEnc(B);
+  Cuerpo := B;
+  Start := PreambleLen(K);
+  if K in [ekUtf16LE, ekUtf16BE] then
   begin
-    if B[I] = 13 then
+    // En UTF-16 cada caracter son dos bytes: un 0D 00 0A 00 no es un CRLF
+    // byte a byte. Se mide el cuerpo en UTF-8, las mismas cuentas que un
+    // fichero utf8 (un acento = 2 bytes altos); HighCount hace lo mismo.
+    Cuerpo := EncodeText(DecodeBytes(B, K), ekUtf8);
+    Start := 0;
+  end;
+  for I := Start to High(Cuerpo) do
+  begin
+    if Cuerpo[I] = 13 then
       Inc(Result.CR)
-    else if B[I] = 10 then
+    else if Cuerpo[I] = 10 then
     begin
       Inc(Result.LF);
-      if (I > 0) and (B[I - 1] = 13) then
+      if (I > 0) and (Cuerpo[I - 1] = 13) then
         Inc(Result.CRLF);
     end
-    else if B[I] > 127 then
+    else if Cuerpo[I] > 127 then
       Inc(Result.High);
-    if (I + 2 <= High(B)) and (B[I] = $EF) and (B[I + 1] = $BF) and (B[I + 2] = $BD) then
+    if (I + 2 <= High(Cuerpo)) and (Cuerpo[I] = $EF) and (Cuerpo[I + 1] = $BF) and (Cuerpo[I + 2] = $BD) then
       Inc(Result.Corruption);
   end;
   Result.Loose := Result.LF - Result.CRLF;
@@ -640,6 +703,18 @@ begin
   Result := DecodeBytes(B, DetectEnc(B));
 end;
 
+function LooksBinaryBytes(const B: TArray<Byte>): Boolean;
+var
+  I: Integer;
+begin
+  if DetectEnc(B) in [ekUtf16LE, ekUtf16BE] then
+    Exit(False);
+  for I := 0 to Min(Length(B), 65536) - 1 do
+    if B[I] = 0 then
+      Exit(True);
+  Result := False;
+end;
+
 { Una antiguedad en palabras para un agente: "12 min", "3 h 05 min",
   "2 dias". Para la vista previa de restore. }
 function EdadLegible(ADias: Double): string;
@@ -710,12 +785,7 @@ procedure PatchSaveText(const APath, AText, AEncName: string);
 var
   K: TEncKind;
 begin
-  if AEncName = 'utf8-bom' then
-    K := ekUtf8Bom
-  else if AEncName = 'utf8' then
-    K := ekUtf8
-  else
-    K := ekCp1252;
+  K := EncKindOf(AEncName);
   if TFile.Exists(APath) then
     BackupFile(APath); // new files have nothing to back up
   AtomicWrite(APath, EncodeText(AText, K));
@@ -1273,14 +1343,13 @@ begin
     B := TEncoding.UTF8.GetBytes(Text);
     NotaBin := SN_READ_BINARY_DESIGNER + #10;
   end;
-  // A binary (an exe, a .res, a .bin.style) is not a text to number: 9 MB
-  // of mojibake burned a context for nothing (measured 2026-08-24). NUL
-  // bytes in the first 4 KB = binary.
-  for I := 0 to Min(Length(B), 4096) - 1 do
-    if B[I] = 0 then
-      Exit('RECHAZADO: ' + APath + ' es un fichero BINARIO (byte NUL en los ' +
-        'primeros 4 KB): no se puede leer como texto numerado. Para bajarlo ' +
-        'usa delphi_fetch (o el campo download de /files).');
+  // Un binario (un exe, un .res, un .bin.style) no es un texto que numerar:
+  // 9 MB de mojibake quemaron un contexto para nada (medido 2026-08-24).
+  // La regla es LooksBinaryBytes, la misma que delphi_textedit.
+  if LooksBinaryBytes(B) then
+    Exit('RECHAZADO: ' + APath + ' es un fichero BINARIO (byte NUL en los ' +
+      'primeros 64 KB): no se puede leer como texto numerado. Para bajarlo ' +
+      'usa delphi_fetch (o el campo download de /files).');
   K := DetectEnc(B);
   Text := DecodeBytes(B, K);
   M := Measure(B);
@@ -2093,8 +2162,8 @@ var
     // fragment as utf8-bom would smuggle 3 phantom high bytes into the
     // accounting (measured false positive: "expected 0, got 3").
     KH := K;
-    if KH = ekUtf8Bom then
-      KH := ekUtf8;
+    if KH in [ekUtf8Bom, ekUtf16LE, ekUtf16BE] then
+      KH := ekUtf8; // sin BOM, y UTF-16 en el mismo cuerpo UTF-8 que mide Measure
     try
       for X in EncodeText(S, KH) do
         if X > 127 then
