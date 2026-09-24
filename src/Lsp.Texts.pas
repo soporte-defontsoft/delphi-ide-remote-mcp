@@ -524,7 +524,8 @@ const
     'fragment must appear EXACTLY ONCE in that line: zero or several is a ' +
     'refusal that shows you the real line - lengthen the fragment until it ' +
     'is unique. One line only (no line breaks in "fragment" nor, in this ' +
-    'mode, in "new"); it does not combine with old, delete or toline. ' +
+    'mode, in "new"); it does not combine with old, delete or toline, nor ' +
+    'with another mode (insert, createunit, restore, create). ' +
     'Inside "edits" it is the same: {"fragment":"68","new":"69","atline":12}.';
 
   SR_FRAG_NEEDS_ATLINE =
@@ -1643,6 +1644,9 @@ const
 
   SR_ADBLINUX_CMD =
     'RECHAZADO: command debe ser screenshot, tap, key, windows o status.';
+  SR_ADBLINUX_NEEDPROFILE =
+    'RECHAZADO: falta "profile", el perfil PAServer de la maquina cuyo ' +
+    'escritorio quieres (delphi_paserver command=profiles los lista).';
   SR_ADBLINUX_NEEDXY =
     'RECHAZADO: tap necesita x e y, medidos sobre la captura que devuelve ' +
     'command=screenshot.';
@@ -3602,6 +3606,12 @@ const
 
   SN_GIT_MERGE_ABORTED =
     'MERGE ABORTADO: el repositorio vuelve a como estaba antes de intentarlo.';
+  SN_GIT_MERGE_DIVERGED =
+    'MERGE RECHAZADO POR GIT: las dos ramas han divergido y esta tool solo ' +
+    'integra por fast-forward (sin commit de merge, sin conflictos a medias). ' +
+    'No se ha tocado nada. Integrar ramas divergidas es cosa de una persona ' +
+    '(merge o rebase a mano); si lo que quieres es ponerte al dia, switch a ' +
+    'la otra rama y sigue desde ahi.';
 
   SR_GIT_MESSAGE_LINES =
     'error: "message" no admite saltos de linea en este comando (va en la ' +

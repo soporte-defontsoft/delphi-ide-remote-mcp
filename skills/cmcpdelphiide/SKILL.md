@@ -60,7 +60,8 @@ handshake.
   600-character README paragraph to turn "68" into "69". The fragment must
   appear EXACTLY ONCE in that line, case-sensitive; zero or several is a
   refusal that shows you the real line. No line breaks, and it does not
-  combine with `old`, `delete`, `toline`, `insert` or `occurrence`. Same
+  combine with `old`, `delete`, `toline` or another mode (`insert`,
+  `createunit`, `restore`, `create`). Same
   rule in `delphi_edit`, `delphi_textedit`, batches (`edits`, key
   `fragment`) and `delphi_changeset` stage (resolved when you stage).
 - Pascal traps: a method signature exists TWICE (interface +

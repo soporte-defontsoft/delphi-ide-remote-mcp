@@ -53,6 +53,7 @@ type
     [SchemaDescription(SP_ADBLINUX_COMMAND)]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_ADBLINUX_PROFILE)]
+    [Required]
     property Profile: string read FProfile write FProfile;
     // Ruta de un .dproj de ESTE servidor cuando se da (PathDenied la
     // comprueba 139 lineas mas abajo, como en cualquier tool); vacio = el
@@ -273,6 +274,10 @@ begin
       Exit;
   end;
 
+  { Sin perfil no hay destino: ProfileHostDenied con '' no encuentra nada y
+    dejaba pasar, y el fallo salia de paclient con otro nombre. }
+  if Params.Profile.Trim = '' then
+    Exit(SR_ADBLINUX_NEEDPROFILE);
   Result := ProfileHostDenied(Params.Profile.Trim);
   if Result <> '' then
     Exit;

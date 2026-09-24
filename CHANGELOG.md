@@ -22,6 +22,18 @@ the MCP `initialize` response (`serverInfo.version`).
   the Linux one (a title with an accent used to rely on the server's CP1252
   fallback).
 
+### Fixed
+
+- `delphi_git merge` on diverged branches answered with git's bare `exit=128`;
+  it now says the merge was refused because only fast-forward is allowed and
+  nothing was touched. `delphi_workspace` in a tokenless local (stdio) process
+  no longer calls the missing jail "unrestricted" next to `access: read-only`.
+  `delphi_desktop` refuses an empty `profile` by name (and marks it required in
+  the schema, like `delphi_upload.chunkbase64`); `vault_search.target` is
+  documented as optional (default `files`), which is what the code does. The
+  three descriptions of `fragment` (contract, TOOLS.md, agent skill) now list
+  the same exclusions, the engine's.
+
 ### Changed
 
 - The house rules (`delphi_help command=conventions`, rule 12), the agent

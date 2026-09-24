@@ -197,6 +197,7 @@ type
     [RutaDelServidor]
     property Path: string read FPath write FPath;
     [SchemaDescription('One chunk of the file, base64-encoded. offset=0 truncates/creates; later offsets append')]
+    [Required]
     property ChunkBase64: string read FChunkBase64 write FChunkBase64;
     [SchemaDescription('Byte offset this chunk starts at (0 = beginning). Send chunks in order, increasing offset by the bytes written')]
     property Offset: Integer read FOffset write FOffset;
@@ -969,6 +970,11 @@ begin
   // git's own hints recommend exactly what this tool refuses (--no-ff,
   // rebase, "specify the URL from the command-line"): say so, or the reader
   // follows the advice printed last (field round 10).
+  // Un merge que no puede ir en fast-forward muere con exit 128 y "Not
+  // possible to fast-forward": git no sugiere nada y la respuesta era el
+  // codigo a pelo (abierto menor del 22-sep). Se dice que significa.
+  if (ExitCode <> 0) and SameText(Cmd, 'merge') and Output.Contains('fast-forward') then
+    Result := Result + #10 + SN_GIT_MERGE_DIVERGED;
   if (ExitCode <> 0) and (Output.Contains('--no-ff') or Output.Contains('rebase') or
      Output.Contains('specify the URL')) then
     Result := Result + #10 + SN_GIT_HINT_OVERRIDE;
@@ -1192,9 +1198,10 @@ begin
     for R in Roots do
       RootsArr.Add(ExcludeTrailingPathDelimiter(R));
     if Length(Roots) = 0 then
-      Return.AddPair('jail', 'none (unrestricted local mode - no ' +
-        '[Workspace.<name>] ' +
-        'Roots configured)')
+      // Sin Roots solo queda el proceso local sin token: mira, no toca. Decir
+      // "unrestricted" al lado de access=read-only era contradecirse (22-sep).
+      Return.AddPair('jail', 'none (no [Workspace.<name>] Roots: a tokenless ' +
+        'local process may look at any path, never touch - see "access")')
     else
       Return.AddPair('jail', 'active');
     // El NOMBRE de la seccion [Workspace.<nombre>] que autentico esta
