@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: stable (1.1.2).** Covered by 76 end-to-end batteries — 1,756 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: stable (1.2.0).** Covered by 77 end-to-end batteries — 1,989 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -274,10 +274,11 @@ whole family:
 | `LspUnitTests` | [`src/UnitTests/`](src/UnitTests) | The engine's **DUnitX suite**: unit tests of the encoding detector, the designer binary shape and the build-hazard scan - the step below the black-box Python batteries. Born with `delphi_create kind=project-test`, run through `delphi_test` by `tests/test_engine_dunitx.py`, so it is part of the regression. |
 | `McpDesktopNode` | [`src/DesktopNode/`](src/DesktopNode) | The **desktop node** — the server's eyes and hands on a Linux (GNOME) or Windows target. Its compiled binaries travel as [`node/McpDesktopNode`](node) and `node/McpDesktopNode.exe` and self-deploy; the Linux build needs the Linux64 SDK (once, in the SDK Manager — or `delphi_build`, which links against the `get-sdk` sysroot by itself). |
 | `McpRunJob` | [`src/RunJob/`](src/RunJob) | The **run-job launcher** — what PAServer starts for every remote execution and every desktop gesture: it reads a job file and starts the native binary unattended, no shell anywhere. Travels as `node/McpRunJob` (Linux) and `node/McpRunJob.exe` (Windows). |
+| `DumpMetaVcl` / `DumpMetaFmx` | [`src/DesignerMetaDump/`](src/DesignerMetaDump) | The two **generators of the designer tables** (`Lsp.DesignerMeta.Vcl.pas` / `.Fmx.pas`): they walk the framework's RTTI once per RAD Studio version and write what `delphi_designer info`, `prop` and the lint answer from. In the group so they keep compiling; run again only when the framework changes. |
 
-Each folder carries its own README with the detail. Build everything with one
+[`src/README.md`](src/README.md) maps the seven projects (what each is for, whether it ships, when it runs) and each folder carries its own README with the detail. Build everything with one
 command: **`BuildGroup.bat`** (`BuildGroup.bat quiet build Release` compiles
-the five legs — the node and the launcher against the Linux64 sysroot and for
+the seven legs — the node and the launcher against the Linux64 sysroot and for
 Win64 — and refreshes the four binaries in `node/` so the release payload and
 the self-updating targets stay in step).
 

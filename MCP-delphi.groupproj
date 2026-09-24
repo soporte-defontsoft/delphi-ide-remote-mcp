@@ -18,6 +18,12 @@
         <Projects Include="src\UnitTests\LspUnitTests.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="src\DesignerMetaDump\DumpMetaFmx.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="src\DesignerMetaDump\DumpMetaVcl.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -71,14 +77,32 @@
     <Target Name="LspUnitTests:Make">
         <MSBuild Projects="src\UnitTests\LspUnitTests.dproj" Targets="Make"/>
     </Target>
+    <Target Name="DumpMetaFmx">
+        <MSBuild Projects="src\DesignerMetaDump\DumpMetaFmx.dproj"/>
+    </Target>
+    <Target Name="DumpMetaFmx:Clean">
+        <MSBuild Projects="src\DesignerMetaDump\DumpMetaFmx.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DumpMetaFmx:Make">
+        <MSBuild Projects="src\DesignerMetaDump\DumpMetaFmx.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DumpMetaVcl">
+        <MSBuild Projects="src\DesignerMetaDump\DumpMetaVcl.dproj"/>
+    </Target>
+    <Target Name="DumpMetaVcl:Clean">
+        <MSBuild Projects="src\DesignerMetaDump\DumpMetaVcl.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DumpMetaVcl:Make">
+        <MSBuild Projects="src\DesignerMetaDump\DumpMetaVcl.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="McpDesktopNode;DelphiLspMcp;DelphiStyleConvert;McpRunJob;LspUnitTests"/>
+        <CallTarget Targets="McpDesktopNode;DelphiLspMcp;DelphiStyleConvert;McpRunJob;LspUnitTests;DumpMetaFmx;DumpMetaVcl"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="McpDesktopNode:Clean;DelphiLspMcp:Clean:Clean;DelphiStyleConvert:Clean;McpRunJob:Clean;LspUnitTests:Clean"/>
+        <CallTarget Targets="McpDesktopNode:Clean;DelphiLspMcp:Clean;DelphiStyleConvert:Clean;McpRunJob:Clean;LspUnitTests:Clean;DumpMetaFmx:Clean;DumpMetaVcl:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="McpDesktopNode:Make;DelphiLspMcp:Make:Make;DelphiStyleConvert:Make;McpRunJob:Make;LspUnitTests:Make"/>
+        <CallTarget Targets="McpDesktopNode:Make;DelphiLspMcp:Make;DelphiStyleConvert:Make;McpRunJob:Make;LspUnitTests:Make;DumpMetaFmx:Make;DumpMetaVcl:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
