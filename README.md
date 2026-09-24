@@ -360,6 +360,12 @@ Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom
 
 ### Configuration (`settings.ini` next to the exe, or environment variables)
 
+The file is read **once, when the process starts**, and never reloaded live -
+on purpose: the jail of a running agent must not change under it. After editing
+it, restart the service (`sc.exe stop DelphiLspMcp` / `sc.exe start DelphiLspMcp`).
+`delphi_workspace` says so (`settingsChangedNote`) whenever the file on disk is
+newer than the running process.
+
 The configuration is **four layers**, safest-by-default at every one:
 
 **One principle above the layers (v0.98): NOTHING IS GLOBAL.** Every

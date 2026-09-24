@@ -506,6 +506,12 @@ const
   SR_SESSION_EXPIRED_FMT =
     'Session expired: no request on it for more than %s minutes ([Server] ' +
     'SessionTimeoutMinutes). Send initialize again and use the new session id.';
+  SN_SERVER_INI_CHANGED_FMT =
+    'settings.ini on disk was modified at %s, AFTER this process started at %s: ' +
+    'what was edited is NOT loaded. The file is read once at start-up and never ' +
+    'reloaded live (a running agent''s jail must not change under it): ask the ' +
+    'operator to restart the service (sc.exe stop DelphiLspMcp; sc.exe start ' +
+    'DelphiLspMcp).';
   SN_SERVER_LOCALSYSTEM =
     'This server runs as LocalSystem. RAD Studio keeps its Library Path, ' +
     'registered packages, SDKs and PAServer profiles in the HKCU of the user ' +

@@ -1132,6 +1132,14 @@ begin
   Srv.AddPair('exe', ParamStr(0));
   Srv.AddPair('startedAt', FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque));
   Srv.AddPair('uptime', TiempoEnMarcha(GArranque));
+  // El ini se lee UNA vez al arrancar y no se recarga en caliente (decision
+  // de David, 24-sep-2026: cambiar la jaula bajo sesiones vivas es una
+  // superficie nueva). Lo que si se dice es que el fichero en disco es mas
+  // nuevo que este proceso: lo tocado no esta cargado, hay que reiniciar.
+  if TFile.Exists(SettingsIniPath) and (TFile.GetLastWriteTime(SettingsIniPath) > GArranque) then
+    Srv.AddPair('settingsChangedNote', Format(SN_SERVER_INI_CHANGED_FMT,
+      [FormatDateTime('yyyy-mm-dd hh:nn:ss', TFile.GetLastWriteTime(SettingsIniPath)),
+       FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque)]));
   var EsSistema: Boolean;
   Srv.AddPair('account', CuentaDelProceso(EsSistema));
   if EsSistema then

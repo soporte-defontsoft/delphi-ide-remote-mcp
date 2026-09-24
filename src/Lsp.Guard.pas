@@ -79,6 +79,10 @@ procedure SetRequestWorkspace(AIx: Integer);
 
 { The active workspace's name ('' = none) - for delphi_workspace and logs. }
 function CurrentWorkspaceName: string;
+{ La ruta del settings.ini: UN nombrador (estaba compuesta a mano en tres
+  sitios de esta unidad, 24-sep-2026). Lo lee LoadSecurity al arrancar y lo
+  mira delphi_workspace para avisar de que el fichero cambio despues. }
+function SettingsIniPath: string;
 
 { True when any [Workspace.*] token is configured (counts as a credential
   for the fail-safe bind decision). }
@@ -781,6 +785,11 @@ begin
   TRequestWorkspaceIx1 := AIx + 1;
 end;
 
+function SettingsIniPath: string;
+begin
+  Result := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+end;
+
 function CurrentWorkspaceName: string;
 begin
   if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
@@ -1030,7 +1039,7 @@ begin
     .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
   GSharedFolders := LowerCase(GetEnvironmentVariable('DELPHI_MCP_SHARED_FOLDERS'))
     .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
-  IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+  IniPath := SettingsIniPath;
   if TFile.Exists(IniPath) then
   begin
     Ini := TIniFile.Create(IniPath);
@@ -1249,7 +1258,7 @@ begin
   S := GetEnvironmentVariable('DELPHI_MCP_SESSION_TIMEOUT_MINUTES').Trim;
   if S = '' then
   begin
-    IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+    IniPath := SettingsIniPath;
     if TFile.Exists(IniPath) then
     begin
       Ini := TIniFile.Create(IniPath);
@@ -1518,7 +1527,7 @@ begin
   Result := GetEnvironmentVariable('DELPHI_MCP_BIND_IP');
   if Result <> '' then
     Exit;
-  IniPath := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+  IniPath := SettingsIniPath;
   if TFile.Exists(IniPath) then
   begin
     Ini := TIniFile.Create(IniPath);

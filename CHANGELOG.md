@@ -42,6 +42,11 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- `delphi_workspace` warns with `settingsChangedNote` when `settings.ini` on disk
+  is newer than the running process: the file is read once at start-up and is
+  not reloaded live (decided by David on 2026-09-24 against a hot reload: a
+  running agent's jail must not change under it), so the note says to restart
+  the service. README says the same.
 - `delphi_edit restore`: the preview now says when the day copy was made and
   how old it is, and warns that the copy is the first of that day for the file
   and does not know who edited it since - restoring takes another agent's work
