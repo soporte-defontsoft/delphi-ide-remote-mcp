@@ -13,6 +13,7 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.StrUtils,
+  System.Classes,
 {$IFDEF MSWINDOWS}
   Winapi.Windows,
   Mld.Captura in 'Mld.Captura.pas',
@@ -373,6 +374,22 @@ begin
       'dbus_message_iter_init', 'dbus_bus_get_unique_name']);
     Sondear('libei.so.1', ['ei_new_sender', 'ei_setup_backend_fd',
       'ei_configure_name', 'ei_dispatch', 'ei_get_fd', 'ei_get_event']);
+    { Con que IDENTIDAD corre el nodo: el portal deduce la app-id de una
+      aplicacion sin sandbox del nombre de su cgroup (app-...-<id>-....scope)
+      y a ese nombre apunta el permiso de captura. Se dice para poder medirlo
+      (decision 5, 24-sep-2026). }
+    try
+      // /proc declara tamano 0: ReadAllText devuelve vacio; se lee por flujo.
+      if TFile.Exists('/proc/self/cgroup') then
+        with TStreamReader.Create('/proc/self/cgroup') do
+        try
+          Writeln('  cgroup: ', ReadToEnd.Trim.Replace(#10, ' | '));
+        finally
+          Free;
+        end;
+    except
+      // sin /proc no hay dato, y no es motivo para parar
+    end;
     Writeln;
 
     Bus := TConexionBus.Create;
