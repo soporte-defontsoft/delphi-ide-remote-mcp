@@ -521,9 +521,12 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   `.targets`) carries a task that *executes a program or plants/deletes files* at build
   time — the compile-only guarantee, so an uploaded `.dproj` cannot run code through a
   planted `<Exec>`. An **inert** custom `<Target>` (a `<Message>`, a property) always
-  builds. For a **trusted** project that legitimately signs (Authenticode via `<Exec>`) or
-  copies at build time, set `AllowBuildScripts=1` — this permits its build scripts and
-  nothing else. Off by default.
+  builds. The project's **pre/post build events** (signing, copies, EurekaLog) are not
+  refused either: the build runs with them emptied and says so (`buildEventsSkipped`) -
+  the binary is for working and testing in the agent's workspace; the final, signed one is
+  the operator's build, outside this server, where those events run. For a
+  **trusted** project that must really execute its tasks, set `AllowBuildScripts=1` — this
+  permits its build scripts and nothing else. Off by default.
 - **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist —
   `AdbAllowedDevices=192.168.1.163;SERIAL123` (semicolon list; an IP entry covers whatever
   port wifi debugging negotiates, a USB serial is listed as-is). Devices outside the

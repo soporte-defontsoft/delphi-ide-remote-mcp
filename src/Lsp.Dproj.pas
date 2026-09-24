@@ -113,7 +113,12 @@ function PlatformProperty(const AXml, APlatform, ATag: string): string;
 
   AProjectPath is the .dproj being built (used to resolve the imports).
   Returns the offending construct, or '' when the project is safe to build. }
-function DprojBuildHazard(const AXml, AProjectPath: string): string;
+{ AIgnoreBuildEvents: no contar los eventos pre/post build (firma, copia):
+  delphi_build los SALTA en vez de rechazar el proyecto, vaciandolos en la
+  linea de msbuild, y lo dice (David, 24-sep-2026: "una cosa es compilar la
+  version final, otra poder trabajar y ejecutar mientras tanto"). }
+function DprojBuildHazard(const AXml, AProjectPath: string;
+  AIgnoreBuildEvents: Boolean = False): string;
 
 { The artifact a build just produced, found ON DISK (truth of the moment,
   never an index): candidate output dirs are every DCC_ExeOutput /
@@ -599,14 +604,17 @@ begin
   Result := Best;
 end;
 
-function HazardScan(const AXml, AProjectFile: string; ADepth: Integer): string; forward;
+function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
+  AIgnoreBuildEvents: Boolean): string; forward;
 
-function DprojBuildHazard(const AXml, AProjectPath: string): string;
+function DprojBuildHazard(const AXml, AProjectPath: string;
+  AIgnoreBuildEvents: Boolean): string;
 begin
-  Result := HazardScan(AXml, AProjectPath, 0);
+  Result := HazardScan(AXml, AProjectPath, 0, AIgnoreBuildEvents);
 end;
 
-function HazardScan(const AXml, AProjectFile: string; ADepth: Integer): string;
+function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
+  AIgnoreBuildEvents: Boolean): string;
 var
   Low, V, Resolved, Imported: string;
   Scan, TagEnd, CloseP, AttrP, ValStart, ValEnd: Integer;
@@ -634,6 +642,8 @@ begin
         [Danger]));
 
   // RAD Studio build-event commands: only a NON-EMPTY one runs a shell.
+  // Con AIgnoreBuildEvents no cuentan: el runner los vacia al compilar.
+  if not AIgnoreBuildEvents then
   for var Tag in ['prebuildevent', 'postbuildevent', 'prelinkevent',
                   'postlinkevent', 'buildevent'] do
   begin
@@ -697,7 +707,7 @@ begin
           Exit('an <Import> that cannot be read to be checked (' + V + ')');
         end;
         // Recurse: the imported file is held to exactly the same standard.
-        Result := HazardScan(Imported, Resolved, ADepth + 1);
+        Result := HazardScan(Imported, Resolved, ADepth + 1, AIgnoreBuildEvents);
         if Result <> '' then
           Exit(Format('%s, brought in by <Import> "%s"', [Result, V]));
       end;

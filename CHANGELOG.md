@@ -39,6 +39,16 @@ the MCP `initialize` response (`serverInfo.version`).
   the IDE expect (fed UTF-8 it produced `#195#179`, measured), and refuses a
   character ANSI cannot hold, asking for `#NNNN`. New battery
   `tests/test_designer_binary.py` (36 checks).
+- `delphi_build` no longer refuses a project because of its pre/post build
+  EVENTS (signing, copies, EurekaLog): the build runs with them emptied on the
+  msbuild line and says so (`buildEventsSkipped`, `buildEventsNote`), so an
+  agent can build, test and run a project like Galatea in its workspace; the
+  final, signed build stays the operator's, outside this server, where those
+  events run. A custom `<Target>`/`<Exec>` or a foreign
+  `<Import>` is still refused without `AllowBuildScripts=1`: the same scanner,
+  asked once without counting events. Decided by David on 2026-09-24 ("one
+  thing is building the final version, another is being able to work and run
+  meanwhile").
 - `delphi_build` of a package: when a W1033 unit is not in any BPL of the
   install but lives in a `.dpk` of the workspace (found by climbing the folders
   from the one being built, the same search `delphi_move` uses), that package

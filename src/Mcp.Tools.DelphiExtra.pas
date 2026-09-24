@@ -260,9 +260,11 @@ begin
     'success flag, the compiler errors/warnings, the output tail and which ' +
     'Delphi built. Use this as the closing verification after editing - the ' +
     'linter does not link nor produce binaries. Compile-only: a project that ' +
-    'would EXECUTE a shell during build (a custom <Target>/<Exec>, a ' +
-    'build-event, a foreign <Import>) is refused unless the workspace ' +
-    'declares AllowBuildScripts=1. For a ' +
+    'would EXECUTE a shell during build (a custom <Target>/<Exec>, a foreign ' +
+    '<Import>) is refused unless the workspace declares AllowBuildScripts=1; ' +
+    'its pre/post build EVENTS (signing, copies) are skipped instead, and ' +
+    'buildEventsSkipped says so - the binary is for working and testing, the ' +
+    'final one is built where the events run. For a ' +
     'package (.dpk) the answer adds implicitImports (units of OTHER packages ' +
     'it compiled into itself, W1033) and requiresSuggested (their packages, ' +
     'read from the BPLs of this install - or, for a unit of a .dpk of your ' +

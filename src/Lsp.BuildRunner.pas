@@ -1155,6 +1155,7 @@ var
   ExitCode: DWORD;
   Errors, Warnings: TJSONArray;
   EsPaquete: Boolean;
+  EventosSaltados: Boolean; // eventos pre/post build vaciados en este build
   YaDicho: TStringList; // lo que ya va en errors[]/warnings[]: la cola no lo repite
   Tail: TStringBuilder;
   Lines: TArray<string>;
@@ -1185,17 +1186,26 @@ begin
   // the .dproj got there - upload, edit, or a pre-existing one (field round 7,
   // CRITICAL). AllowBuildScripts is the trusted-project
   // opt-in; an inert custom <Target> now builds without it (field round 9 FP).
+  // Los EVENTOS pre/post build (la firma, una copia) ya no cierran la puerta:
+  // se compila con ellos vaciados (/p:PreBuildEvent= ...) y se dice. Sin eso
+  // Galatea no compilaba en el workspace de un agente, y "una cosa es compilar
+  // la version final, otra poder trabajar y ejecutar mientras tanto" (David,
+  // 24-sep-2026). Lo que ejecuta de verdad -un <Exec>/<Target> propio, un
+  // <Import> ajeno- sigue rechazado: el MISMO escaner, primero sin contar los
+  // eventos.
+  EventosSaltados := False;
   if not AllowBuildScripts then
   begin
     var ProjXml := '';
     try ProjXml := TFile.ReadAllText(ADprojPath); except end;
-    var Hazard := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath));
+    var Hazard := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), True);
     if Hazard <> '' then
     begin
       TLogger.Warning(Format('delphi_build: REFUSED "%s" - %s',
         [TPath.GetFullPath(ADprojPath), Hazard]));
       raise Exception.Create(Format(SR_BUILD_HAZARD_FMT, [Hazard]));
     end;
+    EventosSaltados := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), False) <> '';
   end;
   // Before a single line is compiled: what does this project pull in from
   // outside, and is it allowed to? Same shape as the hazard check above.
@@ -1365,10 +1375,15 @@ begin
     Verb := '/v:quiet /clp:ErrorsOnly;Summary;NoItemAndPropertyList /nologo'
   else if SameText(AVerbosity, 'verbose') then
     Verb := '/v:detailed';
+  // Propiedades globales de msbuild ganan a las del .dproj: vaciar los
+  // eventos aqui es no ejecutarlos, sin tocar el proyecto.
+  var EventArg := '';
+  if EventosSaltados then
+    EventArg := ' /p:PreBuildEvent= /p:PostBuildEvent= /p:PreLinkEvent= /p:PostLinkEvent=';
   var Orden := Format(
-    'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s%s%s%s %s"',
+    'cmd.exe /c ""%s" && msbuild "%s" /t:%s /p:Config=%s /p:Platform=%s%s%s%s%s %s"',
     [Info.RsVarsBat, TPath.GetFullPath(ADprojPath), Target, Cfg, Plat, SdkArg,
-     ProfileArg, DeviceArg, Verb]);
+     ProfileArg, DeviceArg, EventArg, Verb]);
   Output := RunCaptured(Orden, ATimeoutMs, ExitCode);
   // F2039 = el .exe que este build va a escribir esta ABIERTO, casi siempre
   // porque delphi_test lo esta ejecutando ahora mismo: el
@@ -1495,6 +1510,11 @@ begin
       Result.AddPair('platformNote', SN_BUILD_DEFAULT_PLATFORM);
     Result.AddPair('config', Cfg);
     Result.AddPair('target', Target);
+    if EventosSaltados then
+    begin
+      Result.AddPair('buildEventsSkipped', TJSONBool.Create(True));
+      Result.AddPair('buildEventsNote', SN_BUILD_EVENTS_SKIPPED);
+    end;
     if SdkUsado <> '' then
       Result.AddPair('sdk', SdkUsado);
     if SdkNota <> '' then

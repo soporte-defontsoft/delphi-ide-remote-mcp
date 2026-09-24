@@ -311,10 +311,6 @@ if os.path.exists(_holad):
     for payload, label in (
         ('<target name="x" beforetargets="Build"><exec command="cmd /c echo x" /></target>',
          'minusculas'),
-        ('<PropertyGroup><PostBuildEvent>cmd /c echo x &gt; M.txt</PostBuildEvent></PropertyGroup>',
-         'PostBuildEvent'),
-        ('<PropertyGroup><prebuildevent>cmd /c echo x</prebuildevent></PropertyGroup>',
-         'prebuildevent en minusculas'),
         ('<Import Project="evil.targets" />', 'Import relativo (targets al lado)'),
         ('<import project="evil.targets" />', 'import relativo en minusculas'),
         ('<Import Project="$(BDS)\\..\\..\\evil.targets" />', 'Import con .. tras macro'),
@@ -323,6 +319,27 @@ if os.path.exists(_holad):
         upload_dproj(_clean.replace('</Project>', payload + '</Project>'))
         out = build_default(_holad)
         check('R7 evasion (%s): build RECHAZADO' % label, 'RECHAZADO' in out, out[:160])
+    # Build EVENTS are not a refusal any more (2026-09-24): the project builds
+    # with them EMPTIED on the msbuild line and says so - the event never runs.
+    _mev = os.path.join(INSIDE, 'Hola', 'M.txt')
+    for payload, label in (
+        ('<PropertyGroup><PostBuildEvent>cmd /c echo x &gt; M.txt</PostBuildEvent></PropertyGroup>',
+         'PostBuildEvent'),
+        ('<PropertyGroup><prebuildevent>cmd /c echo x &gt; M.txt</prebuildevent></PropertyGroup>',
+         'prebuildevent en minusculas'),
+    ):
+        if os.path.exists(_mev):
+            os.remove(_mev)
+        upload_dproj(_clean.replace('</Project>', payload + '</Project>'))
+        out = build_default(_holad)
+        check('evento de build (%s): compila en vez de rechazar' % label,
+              '"success":true' in out.replace(' ', ''), out[:200])
+        check('evento de build (%s): buildEventsSkipped en la respuesta' % label,
+              'buildEventsSkipped' in out, out[:200])
+        check('evento de build (%s): el evento NO se ejecuto (sin M.txt)' % label,
+              not os.path.exists(_mev), _mev)
+    if os.path.exists(_mev):
+        os.remove(_mev)
     # R8 CRITICAL (Fable): the payload one file away. A macro-based <Import>
     # that resolves NEXT TO the project - macro-based, so a naive macro check
     # passed it - pulling in a .targets uploaded there. Imports are now

@@ -914,9 +914,16 @@ const
     'RECHAZADO: el proyecto contiene %s. Este servidor solo COMPILA, nunca ' +
     'ejecuta, y esa tarea correria un programa o escribiria ficheros durante ' +
     'el build. Compila un .dproj sin tareas de ejecucion (un <Target> que solo ' +
-    'imprime un mensaje o fija una propiedad SI se admite). Si es un proyecto ' +
-    'de confianza que firma o copia en post-build, el operador lo habilita con ' +
-    '[Workspace.<nombre>] AllowBuildScripts=1.';
+    'imprime un mensaje o fija una propiedad SI se admite; un evento pre/post ' +
+    'build de firma o copia tampoco rechaza: se compila sin ejecutarlo y se ' +
+    'dice). Para que un proyecto de confianza ejecute de verdad sus tareas, el ' +
+    'operador lo habilita con [Workspace.<nombre>] AllowBuildScripts=1.';
+  SN_BUILD_EVENTS_SKIPPED =
+    'Compilado SIN ejecutar los eventos pre/post build del proyecto (firma, ' +
+    'copias, EurekaLog...): este servidor solo compila. El binario vale para ' +
+    'probar y ejecutar mientras trabajas; la version final, con firma, la ' +
+    'compila el operador fuera de este servidor, donde esos eventos corren. ' +
+    'Con AllowBuildScripts=1 en el workspace se ejecutarian.';
 
   // ---------------------------------------------------------------------
   // vault_* (knowledge vault: Markdown notes linked with [[wikilinks]])
