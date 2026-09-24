@@ -8,6 +8,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- `delphi_create kind=project-test`: a DUnitX console runner plus its first
+  fixture, green at birth, registered in the `.dproj`, with the answer saying
+  how to add fixtures and how to run it. `delphi_test` discovers it (uses
+  DUnitX) and runs it. A field agent had to receive that skeleton by note
+  (test 27, 2026-09-22); now the tool writes it. Scaffold battery covers it.
+- `src/LspUnitTests`: a DUnitX suite of the engine's own units, the step
+  below the black-box Python batteries: the encoding detector and its
+  inverses (UTF-8 with and without BOM, CP1252, UTF-16 LE/BE, the NUL rule),
+  the designer binary shape and the RTL round trip, and the build-hazard scan
+  with events ignored. Born through `delphi_create kind=project-test`, run
+  through `delphi_test` by `tests/test_engine_dunitx.py`, so it is part of the
+  regression.
+
 ### Fixed
 
 - One encoding detector, not two. `delphi_search`, `delphi_references` and

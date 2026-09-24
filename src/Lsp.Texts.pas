@@ -3387,11 +3387,25 @@ const
     'pero MiEmpresa.MiApp.LoQueSea si).';
 
   SR_CREATE_PROJECT_KIND =
-    'RECHAZADO: de proyectos solo se yo hacer cuatro: kind=project-console, ' +
-    'kind=project-vcl, kind=project-fmx y kind=project-package (un paquete ' +
-    'runtime, .dpk + .dproj). (Y luego form-vcl, form-fmx, frame-vcl, ' +
-    'frame-fmx, datamodule y unit, que van DENTRO de un proyecto que ya ' +
-    'existe.)';
+    'RECHAZADO: de proyectos solo se yo hacer cinco: kind=project-console, ' +
+    'kind=project-vcl, kind=project-fmx, kind=project-package (un paquete ' +
+    'runtime, .dpk + .dproj) y kind=project-test (un runner DUnitX con su ' +
+    'primer fixture, para delphi_test). (Y luego form-vcl, form-fmx, ' +
+    'frame-vcl, frame-fmx, datamodule y unit, que van DENTRO de un proyecto ' +
+    'que ya existe.)';
+
+  { Un proyecto de test nace verde y con el camino escrito: como se anaden
+    fixtures y como se corre. Hermes tuvo que recibir el esqueleto por nota
+    (22-sep-2026); desde el 24-sep lo escribe la tool. }
+  SN_CREATE_TEST_NOTE_FMT =
+    'Es un runner DUnitX (viene con RAD Studio, no se instala nada) con el ' +
+    'fixture T%0:s en %1:s.pas y un test que pasa. Corre con delphi_test ' +
+    'command=run project=<este .dproj> (pide AllowTests=1 en el workspace; ' +
+    'discover lo reconoce sin el). Cada fixture nuevo: kind=unit con una ' +
+    'clase [TestFixture] y TDUnitX.RegisterTestFixture en su initialization; ' +
+    'las units que pruebas entran por el uses del .dpr (delphi_config ' +
+    'add-unit) o por add-searchpath a su carpeta. Sale con ExitCode 1 si ' +
+    'algun test falla.';
 
   { Un paquete propio se TRABAJA, no se instala (David, 2026-09-23): se
     compila a BPL+DCP en su carpeta, sus units entran por la clausula

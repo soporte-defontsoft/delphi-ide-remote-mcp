@@ -237,7 +237,9 @@ gesture you came for and nothing else.
 
 ## Projects and builds
 
-- `delphi_create` scaffolds console/VCL/FMX projects, and inside a
+- `delphi_create` scaffolds console/VCL/FMX projects, runtime packages
+  and DUnitX test projects (`project-test`: runner + first fixture, green
+  at birth; `delphi_test` runs it), and inside a
   project: `form-vcl`/`form-fmx`, `frame-vcl`/`frame-fmx`, `datamodule`
   and `unit` (a plain .pas). Everything compiles at birth and is already
   registered in the `.dpr` and the `.dproj`. Then `delphi_config

@@ -12,7 +12,8 @@ interface
 
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
 { AKind: console | vcl | fmx | package (a runtime package: .dpk + .dproj,
-  requires rtl, no contains yet - the first kind=unit opens it). }
+  requires rtl, no contains yet - the first kind=unit opens it) | test (un
+  runner DUnitX de consola + su primer fixture, lo que delphi_test corre). }
 { AKind: vcl | fmx (forms) | frame-vcl | frame-fmx | datamodule. }
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
   const ASubDir: string = ''): string;
@@ -95,7 +96,11 @@ begin
       '        <DCC_K>false</DCC_K>' + CRLF;
   end;
   FormRef := '';
-  if AFormUnit <> '' then
+  if (AFormUnit <> '') and (AFormName = '') then
+    // Una unit sin form (el fixture de un proyecto de test): la referencia
+    // a secas, como la escribe el IDE para un .pas cualquiera.
+    FormRef := '        <DCCReference Include="' + AFormUnit + '.pas"/>' + CRLF
+  else if AFormUnit <> '' then
     FormRef :=
       '        <DCCReference Include="' + AFormUnit + '.pas">' + CRLF +
       '            <Form>' + AFormName + '</Form>' + CRLF +
@@ -410,7 +415,8 @@ var
   Files: TStringList;
 begin
   Kind := AKind.Trim.ToLower;
-  if (Kind <> 'console') and (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'package') then
+  if (Kind <> 'console') and (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'package') and
+     (Kind <> 'test') then
     // The caller wrote "project-web": answering "console | vcl | fmx" sends
     // them to write kind=console, which is refused too. Name the values that
     // work (field round 10).
@@ -440,6 +446,8 @@ begin
   // written, and the folder is not even created when the answer is no.
   MainUnit := 'UMain';
   MainForm := 'FormMain';
+  if Kind = 'test' then
+    MainUnit := 'U' + AName; // el primer fixture, con el nombre del proyecto
   if (Kind <> 'console') and (Kind <> 'package') then
   begin
     Clash := '';
@@ -494,6 +502,69 @@ begin
         DprojTemplate(AName, NewGuidStr, 'Console', 'None', '', '', ''));
       Files.Add(AName + '.dpr');
       Files.Add(AName + '.dproj');
+    end
+    else if Kind = 'test' then
+    begin
+      // Un proyecto de TEST: el runner DUnitX de consola que el IDE genera
+      // con su asistente, y el primer fixture ya registrado, verde al nacer.
+      // DUnitX viene con RAD Studio (Library Path): no se instala nada.
+      // Hermes se quedo sin saber montarlo (test 27, 22-sep-2026) y el
+      // esqueleto viajo por nota; ahora lo escribe la tool y delphi_test
+      // lo reconoce (usa DUnitX) y lo corre. Sale con ExitCode 1 si algo
+      // falla: el veredicto de delphi_test no depende de leer la consola.
+      WriteNewFile(Dpr,
+        'program ' + AName + ';' + CRLF + CRLF +
+        '{$APPTYPE CONSOLE}' + CRLF + CRLF +
+        'uses' + CRLF +
+        '  System.SysUtils,' + CRLF +
+        '  DUnitX.TestFramework,' + CRLF +
+        '  DUnitX.Loggers.Console,' + CRLF +
+        '  ' + MainUnit + ' in ''' + MainUnit + '.pas'';' + CRLF + CRLF +
+        'var' + CRLF +
+        '  Runner: ITestRunner;' + CRLF +
+        '  Logger: ITestLogger;' + CRLF +
+        '  Results: IRunResults;' + CRLF + CRLF +
+        'begin' + CRLF +
+        '  try' + CRLF +
+        '    Runner := TDUnitX.CreateRunner;' + CRLF +
+        '    Logger := TDUnitXConsoleLogger.Create(True);' + CRLF +
+        '    Runner.AddLogger(Logger);' + CRLF +
+        '    Results := Runner.Execute;' + CRLF +
+        '    if not Results.AllPassed then' + CRLF +
+        '      ExitCode := 1;' + CRLF +
+        '  except' + CRLF +
+        '    on E: Exception do' + CRLF +
+        '    begin' + CRLF +
+        '      Writeln(E.ClassName, '': '', E.Message);' + CRLF +
+        '      ExitCode := 2;' + CRLF +
+        '    end;' + CRLF +
+        '  end;' + CRLF +
+        'end.' + CRLF);
+      WriteNewFile(TPath.Combine(Dir, MainUnit + '.pas'),
+        'unit ' + MainUnit + ';' + CRLF + CRLF +
+        'interface' + CRLF + CRLF +
+        'uses' + CRLF +
+        '  DUnitX.TestFramework;' + CRLF + CRLF +
+        'type' + CRLF +
+        '  [TestFixture]' + CRLF +
+        '  T' + AName + ' = class' + CRLF +
+        '  public' + CRLF +
+        '    [Test]' + CRLF +
+        '    procedure Esqueleto;' + CRLF +
+        '  end;' + CRLF + CRLF +
+        'implementation' + CRLF + CRLF +
+        'procedure T' + AName + '.Esqueleto;' + CRLF +
+        'begin' + CRLF +
+        '  Assert.AreEqual(4, 2 + 2, ''el esqueleto del proyecto de test corre'');' + CRLF +
+        'end;' + CRLF + CRLF +
+        'initialization' + CRLF +
+        '  TDUnitX.RegisterTestFixture(T' + AName + ');' + CRLF + CRLF +
+        'end.' + CRLF);
+      WriteNewFile(TPath.Combine(Dir, AName + '.dproj'),
+        DprojTemplate(AName, NewGuidStr, 'Console', 'None', MainUnit, '', ''));
+      Files.Add(AName + '.dpr');
+      Files.Add(AName + '.dproj');
+      Files.Add(MainUnit + '.pas');
     end
     else
     begin
@@ -573,7 +644,8 @@ begin
       'Fuentes en %s (el encoding configurado en el IDE) + CRLF. Compilable ' +
       'ya con delphi_build (el IDE enriquecera el .dproj al abrirlo).%s',
       [AName, Kind, Dir, string.Join(', ', Files.ToStringArray), NewFileEncName,
-       IfThen(Kind = 'package', #10 + SN_CREATE_PACKAGE_NOTE, '')]);
+       IfThen(Kind = 'package', #10 + SN_CREATE_PACKAGE_NOTE,
+         IfThen(Kind = 'test', #10 + Format(SN_CREATE_TEST_NOTE_FMT, [AName, MainUnit]), ''))]);
   finally
     Files.Free;
   end;

@@ -44,6 +44,26 @@ type
 
 function ExecutePatch(const A: TPatchArgs): string;
 
+{ EL detector de codificacion y sus dos inversas, publicos para que la suite
+  DUnitX del motor (LspUnitTests) los pruebe sin pasar por un fichero.
+  UTF-16 (LE y BE, siempre con BOM: es como lo escribe el IDE cuando se elige
+  ese formato al ver un .dfm como texto) entro el 24-sep-2026; antes lo
+  reconocia SOLO Lsp.Client.LoadSourceText por su cuenta. Un detector, no dos. }
+type
+  TEncKind = (ekUtf8Bom, ekUtf8, ekCp1252, ekUtf16LE, ekUtf16BE);
+
+  TMetrics = record
+    Bytes, CR, LF, CRLF, Loose, High, Corruption: Integer;
+  end;
+
+function DetectEnc(const B: TArray<Byte>): TEncKind;
+function DecodeBytes(const B: TArray<Byte>; K: TEncKind): string;
+function EncodeText(const S: string; K: TEncKind): TArray<Byte>;
+function EncName(K: TEncKind): string;
+function EncKindOf(const AName: string): TEncKind;
+function PreambleLen(K: TEncKind): Integer;
+function Measure(const B: TArray<Byte>): TMetrics;
+
 { El decodificador de delphi_read, suelto: bytes -> texto con SU encoding real
   (BOM de UTF-8 o UTF-16, UTF-8 estricto, y CP1252 solo cuando algun byte alto
   NO forma secuencia valida). Es EL detector: nadie mas decide codificaciones.
@@ -291,16 +311,6 @@ var
   GCp1252: TEncoding;
   GHighMap: TDictionary<Char, Byte>; // CP1252 0x80-0x9F, derived from the codec
 
-type
-  // UTF-16 (LE y BE, siempre con BOM: es como lo escribe el IDE cuando se
-  // elige ese formato al ver un .dfm como texto) entro aqui el 24-sep-2026.
-  // Antes lo reconocia SOLO Lsp.Client.LoadSourceText por su cuenta: search
-  // leia un .dfm UTF-16 y delphi_read no. Un detector, no dos.
-  TEncKind = (ekUtf8Bom, ekUtf8, ekCp1252, ekUtf16LE, ekUtf16BE);
-
-  TMetrics = record
-    Bytes, CR, LF, CRLF, Loose, High, Corruption: Integer;
-  end;
 
 function EncName(K: TEncKind): string;
 begin

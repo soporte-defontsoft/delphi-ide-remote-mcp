@@ -114,6 +114,25 @@ except Exception as e:
 out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "HolaConsola"})
 check('create: jamas sobreescribe', 'RECHAZADO' in out, out)
 
+# --- test project (24-sep-2026): a DUnitX runner + first fixture, green at
+# birth. Hermes had to get this skeleton by note (test 27); now the tool
+# writes it and delphi_test recognises it. DUnitX ships with RAD Studio.
+TDIR = os.path.join(BASE, 'HolaTest')
+out = call('delphi_create', {"kind": "project-test", "dir": TDIR, "name": "HolaTest"})
+check('create: proyecto test (DUnitX)', out.startswith('CREADO') and 'delphi_test' in out and 'AllowTests' in out, out[:300])
+check('create test: .dpr + .dproj + UHolaTest.pas', all(os.path.isfile(os.path.join(TDIR, f)) for f in ('HolaTest.dpr', 'HolaTest.dproj', 'UHolaTest.pas')), str(os.listdir(TDIR)))
+_dpr = open(os.path.join(TDIR, 'HolaTest.dpr'), encoding='utf-8-sig').read()
+check('create test: el runner usa DUnitX y sale con ExitCode 1 si falla', 'DUnitX.TestFramework' in _dpr and 'ExitCode := 1' in _dpr, _dpr[:200])
+check('create test: el .dproj registra el fixture', 'DCCReference Include="UHolaTest.pas"' in open(os.path.join(TDIR, 'HolaTest.dproj'), encoding='utf-8-sig').read(), '')
+ok, err = build_ok(os.path.join(TDIR, 'HolaTest.dproj'))
+check('build: proyecto test COMPILA (DUnitX en el Library Path)', ok, err)
+out = call('delphi_test', {"command": "discover", "path": TDIR})
+check('delphi_test discover lo reconoce como DUnitX', 'DUnitX' in out and 'HolaTest' in out, out[:300])
+out = call('delphi_create', {"kind": "project-test", "dir": TDIR, "name": "HolaTest"})
+check('create test: jamas sobreescribe', 'RECHAZADO' in out, out[:200])
+out = call('delphi_create', {"kind": "project-web", "dir": TDIR, "name": "Web"})
+check('create: el rechazo de kind nombra project-test', 'RECHAZADO' in out and 'project-test' in out, out[:300])
+
 # --- runtime package (1.2 candidate, pulled forward on 2026-09-23: Hermes'
 # battery 1.2 case 1 could not even start a package by tools) ---
 PDIR = os.path.join(BASE, 'PaqueteUno')
