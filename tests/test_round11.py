@@ -26,7 +26,7 @@ import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, base
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round11')
 shutil.rmtree(BASE, ignore_errors=True)
 os.makedirs(BASE)
@@ -34,7 +34,8 @@ EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
 shutil.copy(SRC, EXE)
 # el conversor de estilos vive junto al servidor: sin el, command=build para
 # antes de llegar al .rc y no se puede comprobar su jaula
-_conv = os.path.join(os.path.dirname(SRC), 'DelphiStyleConvert.exe')
+# desde la reorganizacion del 24-sep el conversor tiene su propio proyecto y carpeta
+_conv = os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', 'DelphiStyleConvert.exe')
 if os.path.exists(_conv):
     shutil.copy(_conv, os.path.join(BASE, 'DelphiStyleConvert.exe'))
 

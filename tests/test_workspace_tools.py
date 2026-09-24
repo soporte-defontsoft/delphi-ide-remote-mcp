@@ -34,7 +34,7 @@ def _fixed(name):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = os.path.join(REPO, 'src')
+SRC = os.path.join(REPO, 'src', 'Server')  # la carpeta del servidor: units, .dproj y Compiled (reorganizacion 24-sep)
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SRC, 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
 # Explicit git URLs need the operator's allowlist since v0.62 (an arbitrary URL
@@ -249,14 +249,14 @@ try:
     # ONE server project now: the terminal, the service and the tray are three
     # modes of the same executable, not three projects.
     check('projects: encuentra los del repo',
-          'DelphiLspMcp' in names and 'LspCoreTest' in names, names)
+          'DelphiLspMcp' in names and 'LspUnitTests' in names, names)
     check('projects: el proyecto del tray ya no existe por separado',
           'DelphiLspMcpTray' not in names, names)
 except Exception:
     check('projects: parsea', False, out[:200])
-out = call('delphi_projects', {"root": REPO, "name": "core"})
+out = call('delphi_projects', {"root": REPO, "name": "unittests"})
 d = json.loads(out)
-check('projects: filtro por nombre', d['total'] == 1 and d['projects'][0]['name'] == 'LspCoreTest', out[:150])
+check('projects: filtro por nombre', d['total'] == 1 and d['projects'][0]['name'] == 'LspUnitTests', out[:150])
 out = call('delphi_projects', {})
 # v0.98: la bateria declara su jaula, asi que sin root explicito descubre
 # DENTRO de ella (el estado "sin configurar" ya no existe: o jaula o RO)

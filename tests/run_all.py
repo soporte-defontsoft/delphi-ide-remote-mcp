@@ -23,7 +23,7 @@ if '-k' in args:
     only = args[i + 1]
     del args[i:i + 2]
 SRC = args[0] if args else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 if not os.path.exists(SRC):
     sys.exit('no encuentro el exe: ' + SRC)
 
@@ -53,7 +53,8 @@ shutil.copy(SRC, EXE)
 # The helper executables travel WITH the server (delphi_styles needs the
 # text<->binary converter beside it); settings.ini deliberately does not.
 for helper in ('DelphiStyleConvert.exe',):  # el Tray.exe era un fosil de agosto
-    _h = os.path.join(os.path.dirname(os.path.abspath(SRC)), helper)
+    # el conversor tiene su propio proyecto y carpeta desde la reorganizacion del 24-sep
+    _h = os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', helper)
     if os.path.exists(_h):
         shutil.copy(_h, os.path.join(CLEAN, helper))
 
@@ -68,7 +69,7 @@ for b in batteries:
     r = subprocess.run([sys.executable, b, EXE], capture_output=True,
                        text=True, encoding='utf-8', errors='replace', cwd=REPO)
     out = (r.stdout or '') + (r.stderr or '')
-    ok = sum(1 for line in out.splitlines() if line.startswith('PASS'))
+    ok = sum(1 for line in out.splitlines() if line.lstrip().startswith('PASS'))  # misma regla que FAIL: test_styles indenta sus PASS y contaban 0
     # .lstrip(): test_messages indenta sus FAIL con dos espacios, asi que el
     # recolector no los veia: la bateria salia ROJA y sin una sola linea que
     # dijera por que (medido 2026-09-20, y es justo el pecado que este

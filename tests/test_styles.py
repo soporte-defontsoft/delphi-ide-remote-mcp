@@ -4,7 +4,7 @@ view / get / set / clone / lint / build over a copy of a REAL style pipeline
 and the new `pattern` of delphi_search.
 
 Needs DelphiStyleConvert.exe next to the server exe (built from
-src/DelphiStyleConvert.dproj) for build and for the platform default names.
+src/StyleConvert/DelphiStyleConvert.dproj) for build and for the platform default names.
 
 Usage:  python tests/test_styles.py [path-to-DelphiLspMcp.exe]
 """
@@ -13,7 +13,7 @@ import json, subprocess, threading, queue, time, os, re, sys, tempfile, shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
 BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'styles-battery')
 shutil.rmtree(BASE, ignore_errors=True)

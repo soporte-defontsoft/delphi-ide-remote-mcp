@@ -79,7 +79,7 @@ check('TOOLS.md documenta TODAS las tools del manifest', not missing, missing)
 check('TOOLS.md no documenta tools inexistentes', not extra, extra)
 
 # ---- CHANGELOG vs SERVER_VERSION ---------------------------------------
-texts = open(os.path.join(REPO, 'src', 'Lsp.Texts.pas'), encoding='utf-8').read()
+texts = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas'), encoding='utf-8').read()
 mv = re.search(r"SERVER_VERSION = '([^']+)'", texts)
 ch = open(os.path.join(REPO, 'CHANGELOG.md'), encoding='utf-8').read()
 mc = re.search(r'^## \[([^\]]+)\] - ', ch, re.M)

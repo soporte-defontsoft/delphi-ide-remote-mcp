@@ -1,4 +1,4 @@
-# `src_desktop_node/` — sources of the desktop node
+# `src/DesktopNode/` — sources of the desktop node
 
 The **node** is the tiny Delphi console program that `delphi_desktop` runs on
 the target - a Linux or a Windows behind a PAServer profile: the server's eyes
@@ -50,7 +50,7 @@ latch against accidents and careless scripts — not a lock against someone with
 access to the machine and an interest in opening it.
 
 **You normally never build this.** The compiled Release ships as
-[`node/McpDesktopNode`](../node) (Linux) and `node/McpDesktopNode.exe` (Windows) inside every release zip, and the server
+[`node/McpDesktopNode`](../../node) (Linux) and `node/McpDesktopNode.exe` (Windows) inside every release zip, and the server
 deploys/updates it on targets by itself (the `node.ver` SHA-256 stamp). Build
 it only to work ON the node: from the IDE (needs the Linux64 SDK in the SDK
 Manager) or `delphi_build platform=Linux64`, or raw msbuild adding

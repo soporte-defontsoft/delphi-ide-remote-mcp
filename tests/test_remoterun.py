@@ -2,7 +2,7 @@
 """E2E battery for v0.47.0-beta - delphi_paserver command=remote-run: running
 a program ON THE TARGET through PAServer's file transport (paclient has no
 exec operation) sin NADA instalado alli: PAServer ARRANCA lo que se le sube.
-Desde 1.0.16 eso es el lanzador nativo (src_run_job) y un fichero .job: un
+Desde 1.0.16 eso es el lanzador nativo (src/RunJob) y un fichero .job: un
 solo camino para Linux y Windows, sin shell.
 
 PAServer is NOT needed: paclient.exe is replaced by tests/paclient_stub.py
@@ -19,7 +19,7 @@ import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 EXE_ORIG = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'remoterun')
 shutil.rmtree(BASE, ignore_errors=True); os.makedirs(BASE)
 # the server under test: a copy with node\\ (the launchers) beside it

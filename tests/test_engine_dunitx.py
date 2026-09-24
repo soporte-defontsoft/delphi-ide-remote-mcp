@@ -15,16 +15,16 @@ import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 SRCDIR = os.path.join(REPO, 'src')
-SUITE = os.path.join(SRCDIR, 'LspUnitTests.dproj')
+SUITE = os.path.join(SRCDIR, 'UnitTests', 'LspUnitTests.dproj')
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    SRCDIR, 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    SRCDIR, 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'engine-dunitx')
 shutil.rmtree(BASE, ignore_errors=True); os.makedirs(BASE)
 EXE = os.path.join(BASE, 'DelphiLspMcp.exe'); shutil.copy(SRC, EXE)
 
 # The jail is the whole repo, like the real workspace: the suite lives in src/
 # and the engine units it links include files from sibling folders (the
-# node key .inc under src_desktop_node), which a src-only jail refuses -
+# node key .inc under src/DesktopNode), which a src-only jail refuses -
 # measured the day this battery was born. AllowTests comes from the
 # environment, the way a workspace would declare it in settings.ini.
 env = dict(os.environ); env['DELPHI_MCP_ROOTS'] = REPO; env['DELPHI_MCP_ALLOW_TESTS'] = '1'

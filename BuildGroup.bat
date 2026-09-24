@@ -1,7 +1,7 @@
 @echo off
 REM ============================================================================
 REM  BuildGroup.bat - compila el GRUPO entero (MCP-delphi.groupproj):
-REM  el servidor (DelphiLspMcp), DelphiStyleConvert, LspCoreTest y el nodo
+REM  el servidor (DelphiLspMcp), DelphiStyleConvert, LspUnitTests y el nodo
 REM  de escritorio. Cada proyecto compila en SU plataforma por defecto
 REM  (Win64 los tres primeros, Linux64 el nodo) y ADEMAS, en Release, el
 REM  nodo se compila TAMBIEN para Win64: un mismo codigo, dos escritorios.
@@ -81,7 +81,7 @@ REM     Una propiedad en la linea de msbuild GANA a la del .dproj, asi que
 REM     pasarla aqui anulaba la eleccion del proyecto (medido 2026-09-20: el
 REM     proyecto decia zorin18 y este script compilaba con fedora44).
 set SDKPROYECTO=
-if "%SDKLINUX%"=="" findstr /I /C:"<PlatformSDK>" "%~dp0src_desktop_node\McpDesktopNode.dproj" >nul 2>&1 && set SDKPROYECTO=1
+if "%SDKLINUX%"=="" findstr /I /C:"<PlatformSDK>" "%~dp0src\DesktopNode\McpDesktopNode.dproj" >nul 2>&1 && set SDKPROYECTO=1
 REM  2) Si el proyecto no dice nada, manda el ACTIVO del SDK Manager
 REM     (Default_Linux64), que es lo que hace el IDE y lo que hace delphi_build.
 if "%SDKLINUX%"=="" if not defined SDKPROYECTO (
@@ -105,7 +105,7 @@ msbuild "%GRUPO%" /t:%MSBTARGET% /p:Config=%BCONFIG% %ARGSDK% %VERBOSITY%
 if errorlevel 1 exit /b 1
 
 if /I "%BCONFIG%"=="Release" (
-  copy /Y "%~dp0src_desktop_node\Linux64\Release\McpDesktopNode" "%~dp0node\McpDesktopNode" >nul
+  copy /Y "%~dp0src\DesktopNode\Linux64\Release\McpDesktopNode" "%~dp0node\McpDesktopNode" >nul
   if errorlevel 1 (
     echo [BuildGroup] AVISO: no pude copiar el nodo Release a node\McpDesktopNode
     exit /b 1
@@ -117,33 +117,33 @@ if /I "%BCONFIG%"=="Release" (
   REM lo que cambia es con quien habla por debajo (GDI+SendInput en vez de
   REM portal+libei), elegido con IFDEF en tiempo de compilacion.
   echo [BuildGroup] Compilando el nodo tambien para Win64...
-  msbuild "%~dp0src_desktop_node\McpDesktopNode.dproj" /t:%MSBTARGET% /p:Config=Release /p:Platform=Win64 %VERBOSITY%
+  msbuild "%~dp0src\DesktopNode\McpDesktopNode.dproj" /t:%MSBTARGET% /p:Config=Release /p:Platform=Win64 %VERBOSITY%
   if errorlevel 1 (
     echo [BuildGroup] AVISO: el nodo no compilo para Win64
     exit /b 1
   )
-  copy /Y "%~dp0src_desktop_node\Win64\Release\McpDesktopNode.exe" "%~dp0node\McpDesktopNode.exe" >nul
+  copy /Y "%~dp0src\DesktopNode\Win64\Release\McpDesktopNode.exe" "%~dp0node\McpDesktopNode.exe" >nul
   if errorlevel 1 (
     echo [BuildGroup] AVISO: no pude copiar el nodo Windows a node\McpDesktopNode.exe
     exit /b 1
   )
   echo [BuildGroup] node\McpDesktopNode.exe actualizado desde el build Release.
 
-  REM El LANZADOR (src_run_job): lo que PAServer arranca en el destino por cada
+  REM El LANZADOR (src\RunJob): lo que PAServer arranca en el destino por cada
   REM trabajo remoto, en Linux y en Windows. Ya esta en el grupo (Win64 por
   REM defecto); la version Linux se pide aparte, y los dos van a node\.
-  copy /Y "%~dp0src_run_job\Win64\Release\McpRunJob.exe" "%~dp0node\McpRunJob.exe" >nul
+  copy /Y "%~dp0src\RunJob\Win64\Release\McpRunJob.exe" "%~dp0node\McpRunJob.exe" >nul
   if errorlevel 1 (
     echo [BuildGroup] AVISO: no pude copiar el lanzador a node\McpRunJob.exe
     exit /b 1
   )
   echo [BuildGroup] Compilando el lanzador McpRunJob tambien para Linux64...
-  msbuild "%~dp0src_run_job\McpRunJob.dproj" /t:%MSBTARGET% /p:Config=Release /p:Platform=Linux64 %ARGSDK% %VERBOSITY%
+  msbuild "%~dp0src\RunJob\McpRunJob.dproj" /t:%MSBTARGET% /p:Config=Release /p:Platform=Linux64 %ARGSDK% %VERBOSITY%
   if errorlevel 1 (
     echo [BuildGroup] AVISO: el lanzador McpRunJob no compilo para Linux64
     exit /b 1
   )
-  copy /Y "%~dp0src_run_job\Linux64\Release\McpRunJob" "%~dp0node\McpRunJob" >nul
+  copy /Y "%~dp0src\RunJob\Linux64\Release\McpRunJob" "%~dp0node\McpRunJob" >nul
   if errorlevel 1 (
     echo [BuildGroup] AVISO: no pude copiar el lanzador Linux a node\McpRunJob
     exit /b 1

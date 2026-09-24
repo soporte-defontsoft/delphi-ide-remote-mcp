@@ -33,7 +33,7 @@ def check(name, ok, detail=''):
         print('FAIL', name, '--', str(detail)[:300])
 
 
-texts = open(os.path.join(REPO, 'src', 'Lsp.Texts.pas'),
+texts = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas'),
              encoding='utf-8').read()
 
 

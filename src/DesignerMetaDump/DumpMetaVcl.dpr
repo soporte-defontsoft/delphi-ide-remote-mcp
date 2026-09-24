@@ -3,7 +3,7 @@ program DumpMetaVcl;
 { Designer-metadata dumper, VCL side - see DumpMetaFmx.dpr for the story.
 
   Usage:  DumpMetaVcl.exe <output .pas path>
-  e.g.    DumpMetaVcl.exe ..\..\src\Lsp.DesignerMeta.Vcl.pas }
+  e.g.    DumpMetaVcl.exe ..\Server\Lsp.DesignerMeta.Vcl.pas }
 
 {$APPTYPE CONSOLE}
 {$STRONGLINKTYPES ON}

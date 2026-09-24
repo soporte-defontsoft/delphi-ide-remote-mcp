@@ -32,9 +32,9 @@ def check(name, ok, detail=''):
         print('FAIL', name, '--', str(detail)[:300])
 
 
-pas = open(os.path.join(REPO, 'src', 'Mcp.Tools.PAServer.pas'),
+pas = open(os.path.join(REPO, 'src', 'Server', 'Mcp.Tools.PAServer.pas'),
            encoding='utf-8').read()
-texts = open(os.path.join(REPO, 'src', 'Lsp.Texts.pas'),
+texts = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas'),
              encoding='utf-8').read()
 
 # ---- 1. the table itself: group semantics, no per-entry requiredness ----

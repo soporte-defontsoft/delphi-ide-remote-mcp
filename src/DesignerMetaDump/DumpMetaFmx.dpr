@@ -6,7 +6,7 @@ program DumpMetaFmx;
   the server never runs this.
 
   Usage:  DumpMetaFmx.exe <output .pas path>
-  e.g.    DumpMetaFmx.exe ..\..\src\Lsp.DesignerMeta.Fmx.pas
+  e.g.    DumpMetaFmx.exe ..\Server\Lsp.DesignerMeta.Fmx.pas
 
   STRONGLINKTYPES keeps the smart linker from stripping classes no code
   references - the whole point is covering ALL of them. The uses list below

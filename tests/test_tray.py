@@ -40,7 +40,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
 P = F = 0
 
@@ -224,12 +224,12 @@ try:
     tanda = [
         ('delphi_help', {'command': 'tasks'}),
         ('delphi_list', {'root': os.path.join(REPO, 'src')}),
-        ('delphi_read', {'path': os.path.join(REPO, 'src', 'Lsp.Texts.pas'),
+        ('delphi_read', {'path': os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas'),
                          'fromline': 1, 'toline': 20}),
         ('delphi_search', {'root': os.path.join(REPO, 'src'),
                            'query': 'SERVER_VERSION'}),
         ('delphi_git', {'repo': REPO, 'command': 'status'}),
-        ('delphi_symbols', {'path': os.path.join(REPO, 'src',
+        ('delphi_symbols', {'path': os.path.join(REPO, 'src', 'Server',
                                                  'Lsp.Service.pas')}),
     ]
     rid = 100
@@ -246,7 +246,7 @@ try:
     rid += 1
     try:
         r = llama(PORT_GUI, sid, 'delphi_diagnostics',
-                  {'path': os.path.join(REPO, 'src', 'Lsp.Texts.pas')},
+                  {'path': os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas')},
                   rid, 180)
         t = r['result']['content'][0]['text']
         check('T4b delphi_diagnostics (motor LSP) contesta en bandeja',

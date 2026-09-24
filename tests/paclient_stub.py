@@ -8,7 +8,7 @@ Los FLAGS del --put SI cuentan, porque son el mecanismo de ejecucion: PAServer
 ARRANCA el fichero subido, sin argumentos, y espera a que termine (medido
 2026-09-22 en Zorin, Fedora y Windows: flag 3 arranca un ELF en Linux, flag 5
 un PE en Windows). Desde 1.0.16 lo que sube el servidor es siempre el
-LANZADOR nativo (src_run_job, McpRunJob) como run-<trabajo>, junto a un
+LANZADOR nativo (src/RunJob, McpRunJob) como run-<trabajo>, junto a un
 fichero run-<trabajo>.job con el binario, la salida y un argumento por
 linea. No hay shell en ningun sitio.
 

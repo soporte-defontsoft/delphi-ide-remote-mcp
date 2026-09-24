@@ -21,14 +21,14 @@ import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, glob
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round16')
 shutil.rmtree(BASE, ignore_errors=True)
 os.makedirs(BASE)
 EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
 shutil.copy(SRC, EXE)
 # a real big unit for the symbols wall (typ. >30k chars of full tree)
-shutil.copy(os.path.join(REPO, 'src', 'Lsp.Guard.pas'),
+shutil.copy(os.path.join(REPO, 'src', 'Server', 'Lsp.Guard.pas'),
             os.path.join(BASE, 'Big.pas'))
 open(os.path.join(BASE, 'Small.pas'), 'w').write(
     'unit Small;\ninterface\nprocedure Uno;\nimplementation\n'

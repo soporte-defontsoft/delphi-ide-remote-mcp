@@ -1,7 +1,7 @@
 unit Lsp.DesignerMeta;
 
 { Resolves designer property paths against the GENERATED framework tables
-  (tools\designer-meta-dump): classes, published properties (classic
+  (src\DesignerMetaDump): classes, published properties (classic
   typinfo - the same metadata TReader streams against), enum and set
   members, and instance aliases (the class a class-typed property REALLY
   holds at runtime - TLabel.TextSettings declares TTextSettings but holds

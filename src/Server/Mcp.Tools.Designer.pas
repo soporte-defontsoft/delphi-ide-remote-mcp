@@ -7,7 +7,7 @@ unit Mcp.Tools.Designer;
                              (properties with kind and type, events apart) -
                              straight from the GENERATED RTTI tables the
                              designer lint already uses (tools/
-                             designer-meta-dump: the framework describing
+                             DesignerMetaDump: the framework describing
                              itself, nothing hand-written).
     prop  <class> <prop>     one property in detail: type, kind, and the
                              legal members when it is an enum or a set.

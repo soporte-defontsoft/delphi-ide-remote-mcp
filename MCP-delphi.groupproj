@@ -3,19 +3,19 @@
         <ProjectGuid>{8CE8EDB2-1C71-4284-B6E5-466F36010B43}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
-        <Projects Include="src_desktop_node\McpDesktopNode.dproj">
+        <Projects Include="src\DesktopNode\McpDesktopNode.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="src\DelphiLspMcp.dproj">
+        <Projects Include="src\Server\DelphiLspMcp.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="src\LspCoreTest.dproj">
+        <Projects Include="src\StyleConvert\DelphiStyleConvert.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="src\DelphiStyleConvert.dproj">
+        <Projects Include="src\RunJob\McpRunJob.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="src_run_job\McpRunJob.dproj">
+        <Projects Include="src\UnitTests\LspUnitTests.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -27,58 +27,58 @@
         </BorlandProject>
     </ProjectExtensions>
     <Target Name="McpDesktopNode">
-        <MSBuild Projects="src_desktop_node\McpDesktopNode.dproj"/>
+        <MSBuild Projects="src\DesktopNode\McpDesktopNode.dproj"/>
     </Target>
     <Target Name="McpDesktopNode:Clean">
-        <MSBuild Projects="src_desktop_node\McpDesktopNode.dproj" Targets="Clean"/>
+        <MSBuild Projects="src\DesktopNode\McpDesktopNode.dproj" Targets="Clean"/>
     </Target>
     <Target Name="McpDesktopNode:Make">
-        <MSBuild Projects="src_desktop_node\McpDesktopNode.dproj" Targets="Make"/>
+        <MSBuild Projects="src\DesktopNode\McpDesktopNode.dproj" Targets="Make"/>
     </Target>
     <Target Name="DelphiLspMcp">
-        <MSBuild Projects="src\DelphiLspMcp.dproj"/>
+        <MSBuild Projects="src\Server\DelphiLspMcp.dproj"/>
     </Target>
     <Target Name="DelphiLspMcp:Clean">
-        <MSBuild Projects="src\DelphiLspMcp.dproj" Targets="Clean"/>
+        <MSBuild Projects="src\Server\DelphiLspMcp.dproj" Targets="Clean"/>
     </Target>
     <Target Name="DelphiLspMcp:Make">
-        <MSBuild Projects="src\DelphiLspMcp.dproj" Targets="Make"/>
-    </Target>
-    <Target Name="LspCoreTest">
-        <MSBuild Projects="src\LspCoreTest.dproj"/>
-    </Target>
-    <Target Name="LspCoreTest:Clean">
-        <MSBuild Projects="src\LspCoreTest.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="LspCoreTest:Make">
-        <MSBuild Projects="src\LspCoreTest.dproj" Targets="Make"/>
+        <MSBuild Projects="src\Server\DelphiLspMcp.dproj" Targets="Make"/>
     </Target>
     <Target Name="DelphiStyleConvert">
-        <MSBuild Projects="src\DelphiStyleConvert.dproj"/>
+        <MSBuild Projects="src\StyleConvert\DelphiStyleConvert.dproj"/>
     </Target>
     <Target Name="DelphiStyleConvert:Clean">
-        <MSBuild Projects="src\DelphiStyleConvert.dproj" Targets="Clean"/>
+        <MSBuild Projects="src\StyleConvert\DelphiStyleConvert.dproj" Targets="Clean"/>
     </Target>
     <Target Name="DelphiStyleConvert:Make">
-        <MSBuild Projects="src\DelphiStyleConvert.dproj" Targets="Make"/>
+        <MSBuild Projects="src\StyleConvert\DelphiStyleConvert.dproj" Targets="Make"/>
     </Target>
     <Target Name="McpRunJob">
-        <MSBuild Projects="src_run_job\McpRunJob.dproj"/>
+        <MSBuild Projects="src\RunJob\McpRunJob.dproj"/>
     </Target>
     <Target Name="McpRunJob:Clean">
-        <MSBuild Projects="src_run_job\McpRunJob.dproj" Targets="Clean"/>
+        <MSBuild Projects="src\RunJob\McpRunJob.dproj" Targets="Clean"/>
     </Target>
     <Target Name="McpRunJob:Make">
-        <MSBuild Projects="src_run_job\McpRunJob.dproj" Targets="Make"/>
+        <MSBuild Projects="src\RunJob\McpRunJob.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="LspUnitTests">
+        <MSBuild Projects="src\UnitTests\LspUnitTests.dproj"/>
+    </Target>
+    <Target Name="LspUnitTests:Clean">
+        <MSBuild Projects="src\UnitTests\LspUnitTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="LspUnitTests:Make">
+        <MSBuild Projects="src\UnitTests\LspUnitTests.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="McpDesktopNode;DelphiLspMcp;LspCoreTest;DelphiStyleConvert;McpRunJob"/>
+        <CallTarget Targets="McpDesktopNode;DelphiLspMcp;DelphiStyleConvert;McpRunJob;LspUnitTests"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="McpDesktopNode:Clean;DelphiLspMcp:Clean;LspCoreTest:Clean;DelphiStyleConvert:Clean;McpRunJob:Clean"/>
+        <CallTarget Targets="McpDesktopNode:Clean;DelphiLspMcp:Clean:Clean;DelphiStyleConvert:Clean;McpRunJob:Clean;LspUnitTests:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="McpDesktopNode:Make;DelphiLspMcp:Make;LspCoreTest:Make;DelphiStyleConvert:Make;McpRunJob:Make"/>
+        <CallTarget Targets="McpDesktopNode:Make;DelphiLspMcp:Make:Make;DelphiStyleConvert:Make;McpRunJob:Make;LspUnitTests:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

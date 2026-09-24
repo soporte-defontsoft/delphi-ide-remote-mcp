@@ -40,7 +40,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
 P = F = 0
 
@@ -166,7 +166,7 @@ try:
     # ------------------------------------------------------------ R1 / R1b
     # Se localizan las apariciones reales con delphi_search en vez de fijar
     # numeros de linea: el fichero se edita y la bateria no debe envejecer.
-    ayuda = os.path.join(REPO, 'src', 'Mcp.Tools.Help.pas')
+    ayuda = os.path.join(REPO, 'src', 'Server', 'Mcp.Tools.Help.pas')
     hits = json.loads(texto(call('delphi_search', {
         'root': ayuda, 'query': 'OneTool', 'wholeword': True})))
     lineas = sorted(h['line0'] for h in hits['hits'])
@@ -218,7 +218,7 @@ try:
     check('R4 delphi_read sobre una CARPETA lo dice',
           'CARPETA' in t and 'delphi_list' in t, t[:200])
     t = texto(call('delphi_read', {
-        'path': os.path.join(REPO, 'src', 'NoExisteJamas.pas')}))
+        'path': os.path.join(REPO, 'src', 'Server', 'NoExisteJamas.pas')}))
     check('R4b un fichero que falta es "error:", no "RECHAZADO:" (regla 11)',
           t.strip().startswith('error:') and 'RECHAZADO' not in t, t[:200])
 

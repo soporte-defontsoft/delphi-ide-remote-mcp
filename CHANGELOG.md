@@ -23,6 +23,18 @@ the MCP `initialize` response (`serverInfo.version`).
   through `delphi_test` by `tests/test_engine_dunitx.py`, so it is part of the
   regression.
 
+### Changed
+
+- Repository layout: one project per folder under `src/` - `Server/` (the server
+  and the engine units), `StyleConvert/`, `UnitTests/`, `DesktopNode/` (was
+  `src_desktop_node/`), `RunJob/` (was `src_run_job/`) and `DesignerMetaDump/`
+  (was `tools/designer-meta-dump/`). `LspCoreTest`, the August console harness of
+  the LSP core, is gone: nothing used it and `LspUnitTests` is the engine's test
+  project now. The move was done through the server's own tools as a field test
+  of `delphi_move` on whole folders; what it did not re-point (the relative
+  `in '..\vendor\...'` paths and `{$I}` of a moved project, and the `.groupproj`
+  no tool edits) is recorded in the log as findings.
+
 ### Fixed
 
 - One encoding detector, not two. `delphi_search`, `delphi_references` and

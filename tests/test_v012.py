@@ -15,7 +15,7 @@ import json, subprocess, threading, queue, time, os, re, sys, tempfile, shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
 BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'v012')
 shutil.rmtree(BASE, ignore_errors=True)
@@ -363,7 +363,7 @@ import shutil as _sh
 # since the hosts merged): the VCL copy verbatim, and a FrameworkType=None copy
 # for the non-VCL case. Deriving them keeps the test honest about the real
 # .dproj shape without needing a second project to exist just to be test data.
-_real = open(os.path.join(REPO, 'src', 'DelphiLspMcp.dproj'), encoding='utf-8').read()
+_real = open(os.path.join(REPO, 'src', 'Server', 'DelphiLspMcp.dproj'), encoding='utf-8').read()
 VCLP = os.path.join(INSIDE, 'VclProj.dproj')
 open(VCLP, 'w', encoding='utf-8').write(_real)                       # VCL
 CON = os.path.join(INSIDE, 'ConfProj.dproj')

@@ -34,7 +34,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 
 P = F = 0
 
@@ -304,8 +304,8 @@ try:
     # hasta la auditoria. Esta es esa comprobacion: el nombrador
     # (TempFolderName, Lsp.Guard) y el lector literal (CARPETAS_ARTEFACTO)
     # tienen que decir la misma carpeta.
-    g_src = open(os.path.join(REPO, 'src', 'Lsp.Guard.pas'), 'rb').read().decode('utf-8', 'replace')
-    r_src = open(os.path.join(REPO, 'src', 'Lsp.References.pas'), 'rb').read().decode('utf-8', 'replace')
+    g_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Guard.pas'), 'rb').read().decode('utf-8', 'replace')
+    r_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.References.pas'), 'rb').read().decode('utf-8', 'replace')
     check('T6c el literal del lector coincide con el nombrador',
           "Result := '__delphi-temp';" in g_src and "'\\__delphi-temp\\'" in r_src,
           'el nombrador o el lector han cambiado de carpeta sin avisarse')

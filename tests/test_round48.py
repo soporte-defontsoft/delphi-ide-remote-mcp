@@ -22,7 +22,7 @@ import json, os, shutil, socket, subprocess, sys, tempfile, time, urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
 NUEVO = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 ZIP12 = os.path.join(REPO, 'release-out', 'DelphiLspMcp-v1.0.12-beta-win64.zip')
 BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round48')
 PROY = os.path.join(BASE, 'jaula', 'proy')

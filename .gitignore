@@ -1,5 +1,3 @@
-# --- Local reference material (not part of this project) ---
-skybuck-mcp/
 
 # --- Delphi / RAD Studio build artifacts ---
 Compiled/
@@ -38,8 +36,6 @@ __recovery/
 *.trace
 tmp/
 
-# Reference clones (not part of this project)
-gdk-mcp/
 
 # --- Runtime data next to the executable (never versioned) ---
 reports/

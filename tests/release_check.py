@@ -33,7 +33,7 @@ def check(name, ok, detail=''):
 
 
 # 1) SERVER_VERSION vs CHANGELOG
-texts = open(os.path.join(REPO, 'src', 'Lsp.Texts.pas'), encoding='utf-8').read()
+texts = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas'), encoding='utf-8').read()
 ver = re.search(r"SERVER_VERSION = '([^']+)'", texts).group(1)
 ch = open(os.path.join(REPO, 'CHANGELOG.md'), encoding='utf-8').read()
 head = re.search(r'^## \[([^\]]+)\] - ', ch, re.M).group(1)
@@ -43,7 +43,7 @@ m = re.match(r'^(\d+)\.(\d+)\.(\d+)', ver)
 winver = '%s.%s.%s.0' % m.groups()
 
 # 2) .dproj VerInfo
-dproj = open(os.path.join(REPO, 'src', 'DelphiLspMcp.dproj'), encoding='utf-8').read()
+dproj = open(os.path.join(REPO, 'src', 'Server', 'DelphiLspMcp.dproj'), encoding='utf-8').read()
 check('.dproj FileVersion == %s' % winver,
       ('FileVersion=%s;' % winver) in dproj and ('ProductVersion=%s' % winver) in dproj,
       re.search(r'FileVersion=([\d.]+)', dproj).group(1))
@@ -51,7 +51,7 @@ check('.dproj embeds VERSIONINFO for Windows',
       dproj.count('<VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>') >= 3)
 
 # 3) built exe embeds it
-exe = os.path.join(REPO, 'src', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+exe = os.path.join(REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 check('built exe exists', os.path.exists(exe), exe)
 
 
@@ -112,7 +112,7 @@ zip_name = 'DelphiLspMcp-v%s-win64.zip' % ver
 zip_path = os.path.join(OUT, zip_name)
 if os.path.exists(zip_path):
     os.remove(zip_path)
-rel = os.path.join(REPO, 'src', 'Compiled', 'Win64', 'Release')
+rel = os.path.join(REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release')
 CONTENT = [
     (os.path.join(rel, 'DelphiLspMcp.exe'), 'DelphiLspMcp.exe'),
     # DelphiLspMcpTray.exe SALIO del zip el 2026-09-21: era un fosil. La
@@ -120,7 +120,7 @@ CONTENT = [
     # existe (test_workspace_tools lo afirma), y aqui se seguia publicando el
     # binario del 20 de agosto - un servidor de hace un mes, con los agujeros
     # de jaula de entonces dentro. Nadie lo recompilaba y nadie lo miraba.
-    (os.path.join(rel, 'DelphiStyleConvert.exe'), 'DelphiStyleConvert.exe'),
+    (os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', 'DelphiStyleConvert.exe'), 'DelphiStyleConvert.exe'),
     (os.path.join(REPO, 'settings.example.ini'), 'settings.example.ini'),
     # runner/mcp-runner.py salio del zip en v0.98: el destino ya no necesita
     # NADA instalado (PAServer ejecuta por flag 5). En su lugar viaja el
@@ -130,7 +130,7 @@ CONTENT = [
     # delphi_desktop en la maquina del propio servidor.
     (os.path.join(REPO, 'node', 'McpDesktopNode'), 'node/McpDesktopNode'),
     (os.path.join(REPO, 'node', 'McpDesktopNode.exe'), 'node/McpDesktopNode.exe'),
-    # 1.0.16: el LANZADOR nativo (src_run_job), en sus dos sabores. Es lo que
+    # 1.0.16: el LANZADOR nativo (src/RunJob), en sus dos sabores. Es lo que
     # PAServer arranca en el destino por cada remote-run y cada gesto de
     # escritorio; el servidor lo busca en node\ junto a su exe y sin el no hay
     # ejecucion remota ninguna. Se quedo fuera del primer zip de la 1.0.16

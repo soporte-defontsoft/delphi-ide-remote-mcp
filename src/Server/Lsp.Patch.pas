@@ -2105,7 +2105,7 @@ end;
 { Designer lint: every property line of the RESULTING file resolved against
   the GENERATED framework tables (Lsp.DesignerMeta - classes, published
   properties, enum/set members and instance aliases dumped from the
-  framework's own metadata by tools\designer-meta-dump). The framework
+  framework's own metadata by src\DesignerMetaDump). The framework
   describes itself; no hand-written error rules. Field origin (Fase 3): a
   hand-edited .fmx crashed at form-load on the device with no trace - the
   build only checks a form resource's text grammar. Warnings, not

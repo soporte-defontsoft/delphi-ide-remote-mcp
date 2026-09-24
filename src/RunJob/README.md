@@ -1,10 +1,10 @@
-# `src_run_job/` — the launcher PAServer starts on a target
+# `src/RunJob/` — the launcher PAServer starts on a target
 
 `McpRunJob` is the small console program the server uploads with every remote
 execution — `delphi_paserver remote-run` and every `delphi_desktop` gesture —
 and that PAServer starts on the target machine. One source, two builds:
 `McpRunJob` (Linux64, ELF) and `McpRunJob.exe` (Win64), both shipped in
-[`node/`](../node) next to the desktop nodes. `BuildGroup.bat Release`
+[`node/`](../../node) next to the desktop nodes. `BuildGroup.bat Release`
 compiles and copies both.
 
 ## Why it exists

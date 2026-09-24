@@ -220,7 +220,7 @@ switch and its own allowlist; it will not arrive by accident.
 
 **→ Handing this server to an AI agent?** Give it [skills/cmcpdelphiide/SKILL.md](skills/cmcpdelphiide/SKILL.md) — a field-tested agent skill (drop it into the agent's skills folder or paste it as instructions) covering the path model, the safe-editing contract, the deploy chains and how to move files and logs the right way.
 
-## The desktop node (`src_desktop_node/`)
+## The desktop node (`src/DesktopNode/`)
 
 **Every desktop an agent drives - Linux or Windows, a remote machine or this
 server's own - is reached through a PAServer listening on that machine.** There
@@ -248,7 +248,7 @@ repository carries BOTH halves:
   with the binary's SHA-256, checked once per profile and session - upgrade the
   server and every provisioned target heals on its next gesture; measured:
   3.0 s for a gesture that also updated the node, 1.4 s warm).
-- **`src_desktop_node/`** - its Delphi sources (seven units and the
+- **`src/DesktopNode/`** - its Delphi sources (seven units and the
   project), for whoever wants to read exactly what runs on their machine, or
   extend it. Build with `delphi_build platform=Linux64` (the tool passes the
   SDK by itself) or by hand with msbuild plus `/p:PlatformSDK=Linux64.sdk`.
@@ -269,12 +269,11 @@ whole family:
 
 | Project | Folder | What it is |
 |---|---|---|
-| **`DelphiLspMcp`** | [`src/`](src) | **The server itself** — the 41-tool MCP server this repo exists for. What ships in every release. |
-| `DelphiStyleConvert` | [`src/`](src) | Companion CLI that converts VCL⇄FMX style files; `delphi_styles` drives it. Ships next to the server. |
-| `LspUnitTests` | [`src/`](src) | The engine's **DUnitX suite**: unit tests of the encoding detector, the designer binary shape and the build-hazard scan - the step below the black-box Python batteries. Born with `delphi_create kind=project-test`, run through `delphi_test` by `tests/test_engine_dunitx.py`, so it is part of the regression. Not in the project group yet. |
-| `LspCoreTest` | [`src/`](src) | Console **diagnostic harness for the LSP core**: probes a real `DelphiLSP.exe` with no MCP layer on top, for when the LSP conversation itself misbehaves. |
-| `McpDesktopNode` | [`src_desktop_node/`](src_desktop_node) | The **desktop node** — the server's eyes and hands on a Linux (GNOME) or Windows target. Its compiled binaries travel as [`node/McpDesktopNode`](node) and `node/McpDesktopNode.exe` and self-deploy; the Linux build needs the Linux64 SDK (once, in the SDK Manager — or `delphi_build`, which links against the `get-sdk` sysroot by itself). |
-| `McpRunJob` | [`src_run_job/`](src_run_job) | The **run-job launcher** — what PAServer starts for every remote execution and every desktop gesture: it reads a job file and starts the native binary unattended, no shell anywhere. Travels as `node/McpRunJob` (Linux) and `node/McpRunJob.exe` (Windows). |
+| **`DelphiLspMcp`** | [`src/Server/`](src/Server) | **The server itself** — the 41-tool MCP server this repo exists for. What ships in every release. |
+| `DelphiStyleConvert` | [`src/StyleConvert/`](src/StyleConvert) | Companion CLI that converts VCL⇄FMX style files; `delphi_styles` drives it. Ships next to the server. |
+| `LspUnitTests` | [`src/UnitTests/`](src/UnitTests) | The engine's **DUnitX suite**: unit tests of the encoding detector, the designer binary shape and the build-hazard scan - the step below the black-box Python batteries. Born with `delphi_create kind=project-test`, run through `delphi_test` by `tests/test_engine_dunitx.py`, so it is part of the regression. |
+| `McpDesktopNode` | [`src/DesktopNode/`](src/DesktopNode) | The **desktop node** — the server's eyes and hands on a Linux (GNOME) or Windows target. Its compiled binaries travel as [`node/McpDesktopNode`](node) and `node/McpDesktopNode.exe` and self-deploy; the Linux build needs the Linux64 SDK (once, in the SDK Manager — or `delphi_build`, which links against the `get-sdk` sysroot by itself). |
+| `McpRunJob` | [`src/RunJob/`](src/RunJob) | The **run-job launcher** — what PAServer starts for every remote execution and every desktop gesture: it reads a job file and starts the native binary unattended, no shell anywhere. Travels as `node/McpRunJob` (Linux) and `node/McpRunJob.exe` (Windows). |
 
 Each folder carries its own README with the detail. Build everything with one
 command: **`BuildGroup.bat`** (`BuildGroup.bat quiet build Release` compiles

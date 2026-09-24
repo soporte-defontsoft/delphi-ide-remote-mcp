@@ -46,7 +46,7 @@ const
 
 { La clave con la que el nodo reconoce que le llama ESTE servidor. Vive en
   un solo sitio para que los dos proyectos no se desincronicen. }
-{$I ..\src_desktop_node\NodeKey.inc}
+{$I ..\DesktopNode\NodeKey.inc}
 
 { El nodo de escritorio EMPAQUETADO con el servidor: node\McpDesktopNode
   junto al exe. '' si la distribucion no lo trae. }
@@ -229,7 +229,7 @@ end;
 
 { EL FICHERO DE TRABAJO, el mismo para Linux y Windows: el binario, el fichero
   de salida y despues UN ARGUMENTO POR LINEA, tal cual - sin shell no hay
-  nada que escapar. Su unico lector es el lanzador (src_run_job). Un salto de
+  nada que escapar. Su unico lector es el lanzador (src\RunJob). Un salto de
   linea dentro de un argumento seria una linea mas, asi que se cambia por un
   espacio: es el unico caracter que el formato no puede llevar. }
 function TrabajoDeEjecucion(const AExeLeaf, ASalida: string;
