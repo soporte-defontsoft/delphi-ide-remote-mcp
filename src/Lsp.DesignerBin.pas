@@ -7,7 +7,9 @@
 
   Dos formas binarias, medidas con convert.exe (2026-09-24):
     - el fichero REAL en disco envuelve el flujo en una cabecera de recurso de
-      16 bits: FF 0A 00 + NOMBRE EN MAYUSCULAS + 00 + flags/tamano + TPF0...
+      16 bits: FF 0A 00 (tipo RT_RCDATA) + NOMBRE EN MAYUSCULAS + 00 +
+      flags/tamano + TPF0... Un texto guardado en UTF-16 empieza por FF FE:
+      por eso se miran tres bytes, no uno.
     - un flujo a pelo empieza por TPF0 (lo que escribe un WriteComponent).
   Un designer de texto empieza siempre por object/inherited/inline: nunca por
   $FF ni por TPF0.
@@ -51,7 +53,12 @@ begin
   Result := dsText;
   if Length(ABytes) < 4 then
     Exit;
-  if ABytes[0] = $FF then
+  // La cabecera de recurso de 16 bits: $FF y el TIPO 10 (RT_RCDATA) en dos
+  // bytes, FF 0A 00. Solo $FF no vale: un .dfm de TEXTO guardado en UTF-16 LE
+  // desde el IDE (el selector de codificacion del editor) empieza por FF FE,
+  // y las cuatro comprobaciones antiguas lo tomaban por binario (David,
+  // 24-sep-2026).
+  if (ABytes[0] = $FF) and (ABytes[1] = $0A) and (ABytes[2] = $00) then
     Exit(dsResource);
   if (ABytes[0] = $54) and (ABytes[1] = $50) and (ABytes[2] = $46) and (ABytes[3] = $30) then
     Exit(dsTpf0);

@@ -176,6 +176,16 @@ r = call('delphi_designer', {'command': 'to-binary', 'path': FUERA})
 check('caracter fuera de ANSI en crudo: to-binary RECHAZADO con #NNNN', 'RECHAZADO' in r and '#NNNN' in r, r[:200])
 check('...y el fichero no se toco', open(FUERA, 'rb').read().startswith(b'object FormF'), '')
 
+# ---- the IDE can save a TEXT form in UTF-16 (editor encoding menu): it
+# starts with FF FE, and "starts with $FF" used to mean binary. The real
+# binary starts with the resource header FF 0A 00.
+U16 = os.path.join(BASE, 'Utf16.dfm')
+open(U16, 'wb').write("object FormU: TFormU\r\n  Caption = 'u'\r\n  ClientHeight = 10\r\n  ClientWidth = 10\r\nend\r\n".encode('utf-16'))
+check('fixture UTF-16 LE empieza por FF FE', open(U16, 'rb').read()[:2] == b'\xff\xfe', '')
+r = call('delphi_designer', {'command': 'to-text', 'path': U16})
+check('texto UTF-16 NO se toma por binario (to-text: ya es texto)', 'ya es texto' in r, r[:160])
+check('...y el fichero no se toco', open(U16, 'rb').read()[:2] == b'\xff\xfe', '')
+
 # ---- .fmx is always text; a damaged binary is refused with the reason
 FMX = os.path.join(BASE, 'Vista.fmx')
 open(FMX, 'w', encoding='utf-8', newline='\r\n').write("object Form1: TForm1\n  Caption = 'x'\nend\n")
