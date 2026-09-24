@@ -411,6 +411,35 @@ check('restore: paso 2 ejecuta', out.startswith('RESTAURADO'), out)
 check('restore: bytes identicos al original', open(PAS, 'rb').read() == ORIG)
 
 print()
+# ---- occurrence inside a batch counts on the file BEFORE the batch: two
+# entries resolving to the same line are refused at the gate (2026-09-24,
+# found using the server as an agent: "occurrence 1" twice, expecting the
+# second to be the next one, died mid-batch with a message that explained
+# nothing). Bottom-up numbering (2 then 1) and top-down (1 then 2) both work.
+_occ = os.path.join(DIR, 'UOcc.pas')
+open(_occ, 'w', encoding='utf-8', newline='').write(  # newline='': el texto ya lleva CRLF, sin traducir
+    "unit UOcc;\r\n\r\ninterface\r\n\r\nprocedure Hazlo;\r\n\r\nimplementation\r\n\r\n"
+    "procedure Hazlo;\r\nbegin\r\n  Writeln('x');\r\n  Writeln('x');\r\n  Writeln('x');\r\nend;\r\n\r\nend.\r\n")
+out = call('delphi_edit', {'path': _occ, 'edits': json.dumps([
+    {'old': "  Writeln('x');", 'new': "  Writeln('A');", 'occurrence': 1},
+    {'old': "  Writeln('x');", 'new': "  Writeln('B');", 'occurrence': 1}])})
+check('tanda: dos entradas a la MISMA linea (occurrence 1 y 1) -> RECHAZADO en la puerta',
+      'RECHAZADO' in out and 'MISMA linea' in out and 'ANTES de la tanda' in out, out[:220])
+check('tanda rechazada: el fichero no se toco',
+      open(_occ, encoding='utf-8').read().count("Writeln('x')") == 3, '')
+out = call('delphi_edit', {'path': _occ, 'edits': json.dumps([
+    {'old': "  Writeln('x');", 'new': "  Writeln('B');", 'occurrence': 2},
+    {'old': "  Writeln('x');", 'new': "  Writeln('A');", 'occurrence': 1}])})
+_t = open(_occ, encoding='utf-8', newline='').read()
+check('tanda de abajo arriba (occurrence 2, luego 1): aplicada en su sitio',
+      out.startswith('APLICADAS') and "Writeln('A');\r\n  Writeln('B');\r\n  Writeln('x');" in _t, out[:900] + ' | ' + _t[-120:])
+out = call('delphi_edit', {'path': _occ, 'edits': json.dumps([
+    {'old': "  Writeln('A');", 'new': "  Writeln('A');\r\n  Writeln('A2');"},
+    {'old': "  Writeln('x');", 'new': "  Writeln('C');", 'occurrence': 1}])})
+_t = open(_occ, encoding='utf-8', newline='').read()
+check('tanda: una entrada anade lineas y la siguiente occurrence se arrastra bien',
+      out.startswith('APLICADAS') and "Writeln('A2');\r\n  Writeln('B');\r\n  Writeln('C');" in _t, out[:900] + ' | ' + _t[-140:])
+
 print('== delphi_edit battery: %d PASS / %d FAIL ==' % (P, F))
 proc.stdin.close()
 time.sleep(1)

@@ -58,6 +58,13 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- `delphi_edit` / `delphi_textedit` batches: two entries that resolve to the
+  SAME line (`occurrence` 1 twice, expecting the second to mean "the next one")
+  are refused at the gate with the rule spelled out - `occurrence` counts on
+  the file as it is BEFORE the batch, so after changing occurrence 1 the next
+  entry asks for 2 - instead of dying mid-batch with a bare "anchor not at
+  line N". Found twice on 2026-09-24 using the server as an agent; the
+  contract of `edits` states the rule now.
 - `delphi_git merge` on diverged branches answered with git's bare `exit=128`;
   it now says the merge was refused because only fast-forward is allowed and
   nothing was touched. `delphi_workspace` in a tokenless local (stdio) process

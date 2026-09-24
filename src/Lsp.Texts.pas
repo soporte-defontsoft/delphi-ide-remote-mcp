@@ -571,7 +571,10 @@ const
     'aparece mas de una vez, desempata ' +
     'con "occurrence": 1, 2... (mejor que "atline" dentro de una tanda: los ' +
     'numeros de linea SE MUEVEN segun las entradas anteriores anaden o quitan ' +
-    'lineas, y "occurrence" no). "delete": true quita la linea; y con ' +
+    'lineas, y "occurrence" no: cuenta sobre el fichero de ANTES de la tanda, ' +
+    'asi que si una entrada cambia la aparicion 1, la siguiente entrada pide ' +
+    'la 2, no otra vez la 1; dos entradas sobre la misma linea se rechazan). ' +
+    '"delete": true quita la linea; y con ' +
     '"toline": <numero> el ancla deja de ser UNA linea y pasa a ser un RANGO ' +
     '- desde la linea del ancla hasta esa, las dos incluidas - que se quita ' +
     'entero (delete) o se sustituye por "new". Es la forma de tirar un metodo ' +
@@ -595,6 +598,11 @@ const
     resolucion devolvia 0, el motor lo leia como "sin desempate" y la edicion
     caia en la PRIMERA aparicion. O sea que el parametro que existe para no
     equivocarse de sitio te mandaba justo al sitio equivocado, con un OK. }
+  SR_PATCH_OCCURRENCE_DUP_FMT =
+    'RECHAZADO: las entradas %d y %d apuntan a la MISMA linea (%d). ' +
+    '"occurrence" cuenta sobre el fichero de ANTES de la tanda, no sobre lo ' +
+    'que va quedando: si la entrada anterior cambia la aparicion 1, esta tiene ' +
+    'que pedir la 2 (o anclar por atline). No he escrito nada.';
   SR_PATCH_OCCURRENCE_FMT =
     'RECHAZADO: la entrada %d pide occurrence %d de "%s", y ahi solo hay %d. ' +
     'No he escrito nada. Antes esto se ignoraba y la edicion caia en la ' +

@@ -1055,6 +1055,16 @@ begin
           end;
         end;
       end;
+      // Dos entradas que apuntan a la MISMA linea. occurrence cuenta sobre el
+      // fichero de ANTES de la tanda (por eso no se mueve con las entradas
+      // anteriores): pedir "occurrence 1" dos veces, esperando que la segunda
+      // sea la siguiente aparicion, deja a la segunda sin ancla a mitad de
+      // tanda con un mensaje que no explicaba nada (me paso dos veces el
+      // 24-sep-2026 usando el servidor como agente). Se rechaza en la puerta.
+      for N := 0 to Arr.Count - 1 do
+        for var M := 0 to N - 1 do
+          if (Ocurr[N] > 0) and (Ocurr[N] = Ocurr[M]) then
+            Exit(Format(SR_PATCH_OCCURRENCE_DUP_FMT, [M + 1, N + 1, Ocurr[N]]));
       N := 0;
       Fallo := 0;
       for V in Arr do
