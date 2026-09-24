@@ -144,6 +144,29 @@ CONTENT = [
     (os.path.join(REPO, 'CHANGELOG.md'), 'CHANGELOG.md'),
     (os.path.join(REPO, 'LICENSE'), 'LICENSE'),
 ]
+# 6b) the four node/ binaries are build output (never versioned since
+# 2026-09-24): BuildGroup.bat Release produces them. A release must carry
+# binaries of the code it publishes, so a missing one, or one older than
+# the newest source of its project, is a FAIL here - not a stale binary
+# quietly zipped from whatever was on disk.
+def newest_source(folder):
+    t = 0.0
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d not in ('Win64', 'Win32', 'Linux64', 'Compiled', '__delphi-patch', '__history')]
+        for f in files:
+            if f.lower().endswith(('.pas', '.dpr', '.inc', '.dproj')):
+                t = max(t, os.path.getmtime(os.path.join(root, f)))
+    return t
+for binario, fuente in (('McpDesktopNode', 'DesktopNode'), ('McpDesktopNode.exe', 'DesktopNode'),
+                        ('McpRunJob', 'RunJob'), ('McpRunJob.exe', 'RunJob')):
+    b = os.path.join(REPO, 'node', binario)
+    if not os.path.exists(b):
+        check('node binary present: %s' % binario, False, 'run BuildGroup.bat quiet build Release')
+    else:
+        check('node binary not older than its sources: %s' % binario,
+              os.path.getmtime(b) >= newest_source(os.path.join(REPO, 'src', fuente)),
+              'src/%s changed after the binary: run BuildGroup.bat quiet build Release' % fuente)
+
 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
     for src, arc in CONTENT:
         if os.path.exists(src):

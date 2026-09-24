@@ -34,6 +34,10 @@ the MCP `initialize` response (`serverInfo.version`).
   of `delphi_move` on whole folders; what it did not re-point (the relative
   `in '..\vendor\...'` paths and `{$I}` of a moved project, and the `.groupproj`
   no tool edits) is recorded in the log as findings.
+- The four `node/` binaries are no longer versioned: two of them never were
+  (`*.exe` is ignored) and the other two grew the history by 3 MB per rebuild.
+  `BuildGroup.bat Release` produces them and `release_check` now refuses to
+  package one that is missing or older than its sources.
 
 ### Fixed
 

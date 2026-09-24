@@ -23,3 +23,6 @@ touch it by hand:
 GNOME targets only for now on Linux; on Windows the PAServer must run inside the
 user's session. Rebuilding belongs to whoever edits the sources — `BuildGroup.bat
 Release` compiles the four (two projects, each for Linux and for Windows) and copies them here.
+None of the four is versioned (since 2026-09-24): they are build output, and
+`tests/release_check.py` refuses to package one that is missing or older than
+its sources, so a release always carries binaries of the code it publishes.
