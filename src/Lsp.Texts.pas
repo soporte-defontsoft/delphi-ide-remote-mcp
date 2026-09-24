@@ -1495,10 +1495,15 @@ const
     'command=key presses one key: on a Linux target by its Linux code ' +
     '(Escape 1, Tab 15, Enter 28), on a Windows target by NAME (escape, ' +
     'enter, tab, f4) - the tool reads the profile''s platform and refuses the ' +
-    'other kind. command=windows shows EVERY window (Linux: thumbnails, the ' +
-    'Super key; Windows: a list with title and rectangle) - which is how you ' +
-    'reach a window that another one covers: show them all, then tap the one ' +
-    'you want. command=status says whether the desktop is reachable at all ' +
+    'other kind. Every answer with a capture carries "windows": title and ' +
+    'rectangle of each window in pixels of that capture (Windows: every ' +
+    'visible top-level window; Linux: the X11/Xwayland ones, which is every ' +
+    'FMX application - native Wayland windows are not listed, the capture ' +
+    'still shows them) - tap inside one, or crop to it with window=. ' +
+    'command=windows brings them ALL into view when one covers another ' +
+    '(Linux: the Super overview, every window reduced with its icon below - ' +
+    'tap one or Escape; Windows: a fresh capture with the list). ' +
+    'command=status says whether the desktop is reachable at all ' +
     'and, when it is not, what to ask the operator for; every answer carries ' +
     'graphicalEnv, the session the node ran in. The target needs a graphical ' +
     'session open for the user PAServer runs as; a headless box, a locked ' +
@@ -1509,9 +1514,10 @@ const
     '(press at x,y MEASURED ON THAT SCREENSHOT) | type (write "text" - with ' +
     'x,y it presses there FIRST, which is the real gesture: "write this ' +
     'here", and pays the startup once) | key (one key: Linux code on a Linux ' +
-    'target, key NAME on a Windows one) | windows (show every window - ' +
-    'thumbnails on Linux, a list with rectangles on Windows - to reach a ' +
-    'covered one) | status (is the desktop reachable, and what to ask for if ' +
+    'target, key NAME on a Windows one) | windows (bring EVERY window into ' +
+    'view when one covers another: on Linux the Super overview, on Windows ' +
+    'a fresh capture; the "windows" list itself comes with every capture) ' +
+    '| status (is the desktop reachable, and what to ask for if ' +
     'not)';
   SP_ADBLINUX_PROFILE =
     'PAServer profile of the target machine - a Linux, a Windows, or this ' +
@@ -1581,11 +1587,12 @@ const
     '(origin.x + x, origin.y + y). One frame, one coordinate space. When in ' +
     'doubt - a dialog may have opened elsewhere - capture the whole desktop.';
   SP_ADBLINUX_WINDOW =
-    'screenshot OPTIONAL, Windows targets only: part of a window title; the ' +
-    'node lists the visible windows and the answer is the capture cropped to ' +
-    'the first one whose title contains it (case-insensitive), with origin ' +
-    '{x,y} like region, plus the whole "windows" list - so a dialog that ' +
-    'popped up OUTSIDE the crop still shows in the list. On Linux use region.';
+    'screenshot OPTIONAL: part of a window title; the answer is the capture ' +
+    'cropped to the first window of the "windows" list whose title contains ' +
+    'it (case-insensitive), with origin {x,y} like region, plus the whole ' +
+    'list - so a dialog that popped up OUTSIDE the crop still shows in it. ' +
+    'On Linux the list holds the X11/Xwayland windows (every FMX ' +
+    'application); a native Wayland window has no rectangle: use region.';
   SR_ADBLINUX_REGION_OR_WINDOW =
     'RECHAZADO: region y window no se combinan: o un rectangulo o una ventana.';
   SR_ADBLINUX_CROP_ONLY_SHOT =
@@ -1594,10 +1601,28 @@ const
   SR_ADBLINUX_REGION_BAD =
     'RECHAZADO: region tiene que ser "x,y,w,h" con cuatro enteros y w,h > 0, ' +
     'en pixeles de la captura del escritorio.';
-  SR_ADBLINUX_WINDOW_LINUX =
-    'RECHAZADO: window solo vale en un destino Windows (alli el nodo da el ' +
-    'rectangulo de cada ventana). En Linux el escritorio no los entrega: ' +
-    'captura entera, mide, y recorta con region="x,y,w,h".';
+  { La lista de ventanas viaja con cada captura (24-sep-2026): estas notas
+    dicen que contiene en cada sistema, y en Linux como leer la vista que
+    abre command=windows. }
+  SN_DESKTOP_WINDOWS_WIN =
+    'windows: todas las ventanas visibles de primer nivel, titulo y ' +
+    'rectangulo en pixeles de ESTA captura (tap dentro de una). Para ' +
+    'recortar a una: screenshot window=<trozo de su titulo>.';
+  SN_DESKTOP_WINDOWS_LINUX =
+    'windows: las ventanas X11/Xwayland -toda aplicacion FMX es una-, titulo ' +
+    'y rectangulo en pixeles de ESTA captura. Las ventanas nativas Wayland ' +
+    '(la terminal, Archivos, un navegador) NO salen en la lista aunque la ' +
+    'captura las muestre: para esas, mira la imagen y usa region. Para ' +
+    'recortar a una de la lista: screenshot window=<trozo de su titulo>.';
+  SN_DESKTOP_OVERVIEW_LINUX =
+    'Esta captura se tomo 0,8 s despues de pulsar Super: es la VISTA DE ' +
+    'ACTIVIDADES, con cada ventana dibujada REDUCIDA y el icono de su ' +
+    'aplicacion debajo (con dos ventanas se ven casi a tamano real, una al ' +
+    'lado de la otra). Pulsa sobre una para traerla al frente y salir de la ' +
+    'vista, o key code=1 (Escape) para cerrarla sin elegir. La lista ' +
+    '"windows" de esta respuesta trae las posiciones REALES de las ventanas ' +
+    '(las de X11), no donde las dibuja la vista: para pulsar una aqui, mide ' +
+    'sobre la imagen.';
   SR_ADBLINUX_WINDOW_NOMATCH_FMT =
     'ninguna ventana visible lleva "%s" en el titulo: mira "windows" en esta ' +
     'misma respuesta y repite con un trozo de uno de esos titulos.';

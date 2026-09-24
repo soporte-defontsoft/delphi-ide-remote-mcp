@@ -14,13 +14,15 @@ uses
   System.IOUtils,
   System.StrUtils,
 {$IFDEF MSWINDOWS}
+  Winapi.Windows,
   Mld.Captura in 'Mld.Captura.pas',
   Mld.Win in 'Mld.Win.pas';
 {$ELSE}
   Mld.Dyn in 'Mld.Dyn.pas',
   Mld.DBus in 'Mld.DBus.pas',
   Mld.Teclado in 'Mld.Teclado.pas',
-  Mld.Eis in 'Mld.Eis.pas';
+  Mld.Eis in 'Mld.Eis.pas',
+  Mld.X11 in 'Mld.X11.pas';
 {$ENDIF}
 
 const
@@ -57,10 +59,11 @@ var
   ObjX, ObjY, I: Integer;
   Tecla: Word;
   Hizo: Boolean;
-  Lista: TArray<TVentanaWin>;
-  V: TVentanaWin;
 
   procedure Instantanea;
+  var
+    Lista: TArray<TVentanaWin>;
+    V: TVentanaWin;
   begin
     if Escritorio.Capturar(Ruta) then
     begin
@@ -69,12 +72,29 @@ var
         el de respaldo: se dice, porque le faltan el cursor y el fondo. }
       if Escritorio.Respaldo <> '' then
         Writeln('  RESPALDO: ', Escritorio.Respaldo);
+      { La lista de ventanas viaja CON cada captura (David, 24-sep), en
+        pixeles de la imagen. PROTEGIDA: si falla, falla la lista y se
+        dice; la captura ya esta escrita y no se pierde por esto. }
+      try
+        Lista := Escritorio.Ventanas;
+        Writeln(Format('  %d ventanas visibles:', [Length(Lista)]));
+        for V in Lista do
+          Writeln(Format('  VENTANA %d %d %d %d %s',
+            [V.X, V.Y, V.Ancho, V.Alto, V.Titulo]));
+      except
+        on E: Exception do
+          Writeln('  ventanas: fallo la lista (', E.Message, ')');
+      end;
     end
     else
       Writeln('  NO pude capturar: ', Escritorio.Error);
   end;
 
 begin
+  { La salida va a un fichero que el servidor lee como UTF-8 estricto o, si
+    no lo es, como CP1252: en ANSI un titulo con acento salia bien solo por
+    ese respaldo. En UTF-8, como el nodo Linux, no depende de adivinar. }
+  SetTextCodePage(Output, CP_UTF8);
   Ruta := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'captura.png');
   Escritorio := TEscritorioWin.Create;
   try
@@ -93,15 +113,11 @@ begin
     Hizo := False;
     if Orden = 'ventanas' then
     begin
-      { En Windows no hace falta pedirle al escritorio que las ensene: se
-        pueden enumerar con titulo y sitio, que es mas util que una vista
-        de miniaturas. Quien llama ya sabe donde pulsar. }
-      Lista := Escritorio.Ventanas;
-      Writeln(Format('  %d ventanas visibles:', [Length(Lista)]));
-      for V in Lista do
-        Writeln(Format('  VENTANA %d %d %d %d %s',
-          [V.X, V.Y, V.Ancho, V.Alto, V.Titulo]));
-      Hizo := Length(Lista) > 0;
+      { En Windows no hace falta pedirle al escritorio que las ensene: la
+        lista con titulo y sitio va CON CADA captura (24-sep), asi que esta
+        orden solo vuelve a capturar, y con ella la lista al dia. }
+      Writeln('  ventanas: la lista va con la captura de abajo');
+      Hizo := True;
     end
     else if (Orden = 'escribe') and (Args >= 4) then
     begin
@@ -225,6 +241,27 @@ begin
   end;
 end;
 
+{ Ancho y alto de un PNG, de su IHDR (bytes 16..23, big-endian): lo que
+  mide la captura, para convertir a sus pixeles lo que X11 cuenta. }
+function TamanoPng(const ARuta: string; out AAncho, AAlto: Integer): Boolean;
+var
+  B: TBytes;
+begin
+  AAncho := 0;
+  AAlto := 0;
+  Result := False;
+  try
+    B := TFile.ReadAllBytes(ARuta);
+  except
+    Exit;
+  end;
+  if (Length(B) < 24) or (B[1] <> Ord('P')) or (B[2] <> Ord('N')) or (B[3] <> Ord('G')) then
+    Exit;
+  AAncho := (B[16] shl 24) or (B[17] shl 16) or (B[18] shl 8) or B[19];
+  AAlto := (B[20] shl 24) or (B[21] shl 16) or (B[22] shl 8) or B[23];
+  Result := (AAncho > 0) and (AAlto > 0);
+end;
+
 { Sonda: abre una libreria del sistema y resuelve una muestra de simbolos.
   Es la prueba de que el nodo puede hablar con el escritorio sin enlazar
   nada en compilacion ni instalar nada en la maquina destino. }
@@ -270,7 +307,63 @@ var
   Orden, Frase: string;
   I: Integer;
   Hizo: Boolean;
+  Ojos: TOjos;
+  SinOjos: Boolean;
+
+  { La lista de ventanas que viaja CON la captura (David, 24-sep): detras de
+    cada CAPTURA=, en el mismo formato que el nodo Windows y en pixeles de
+    la imagen. Son los ojos X11: bajo Wayland ven lo que corre por Xwayland
+    (toda aplicacion FMX), no las ventanas nativas Wayland. PROTEGIDA: si
+    los ojos fallan, falla la lista y se dice; la captura ya esta escrita y
+    no se pierde por esto. }
+  procedure ListarVentanas(const ACaptura: string);
+  var
+    Lista: TArray<TVentana>;
+    V: TVentana;
+    RaizW, RaizH, CapW, CapH: Integer;
+    FX, FY: Double;
+  begin
+    if SinOjos then
+      Exit;
+    try
+      if Ojos = nil then
+      begin
+        Ojos := TOjos.Create;
+        if not Ojos.Abrir then
+        begin
+          Writeln('  ventanas: sin ojos X11 (', Ojos.Error, ')');
+          SinOjos := True;
+          Exit;
+        end;
+      end;
+      if not Ojos.Principales(Lista) or not Ojos.TamanoRaiz(RaizW, RaizH) then
+      begin
+        Writeln('  ventanas: no pude enumerarlas (', Ojos.Error, ')');
+        Exit;
+      end;
+      FX := 1;
+      FY := 1;
+      if TamanoPng(ACaptura, CapW, CapH) then
+      begin
+        FX := CapW / RaizW;
+        FY := CapH / RaizH;
+      end
+      else
+        Writeln('  ventanas: no pude leer el tamano de la captura; coordenadas de X11 sin convertir');
+      Writeln(Format('  %d ventanas visibles:', [Length(Lista)]));
+      Writeln('  (ventanas X11/Xwayland: las nativas Wayland no salen en la lista)');
+      for V in Lista do
+        Writeln(Format('  VENTANA %d %d %d %d %s',
+          [Round(V.X * FX), Round(V.Y * FY), Round(V.Ancho * FX), Round(V.Alto * FY), V.Titulo]));
+    except
+      on E: Exception do
+        Writeln('  ventanas: fallo la lista (', E.ClassName, ': ', E.Message, ')');
+    end;
+  end;
+
 begin
+    Ojos := nil;
+    SinOjos := False;
     Writeln('McpDesktop - nodo de control del escritorio Linux');
     Writeln;
 
@@ -303,6 +396,7 @@ begin
       begin
         Captura := RecogerCaptura(Captura);
         Writeln('CAPTURA=', Captura);
+        ListarVentanas(Captura);
       end
       else
       begin
@@ -443,6 +537,7 @@ begin
             begin
               Captura := RecogerCaptura(Captura);
               Writeln('CAPTURA=', Captura);
+              ListarVentanas(Captura);
             end;
           end;
         finally
@@ -453,6 +548,7 @@ begin
       end;
     finally
       Bus.Free;
+      Ojos.Free;
     end;
 
     Writeln;

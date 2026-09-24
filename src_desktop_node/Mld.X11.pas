@@ -54,6 +54,16 @@ type
     function Abrir: Boolean;
     { Todas las ventanas del escritorio, de la raiz hacia abajo. }
     function Enumerar(out AVentanas: TArray<TVentana>): Boolean;
+    { Las ventanas PRINCIPALES: las hijas de la raiz que se ven y tienen
+      nombre, con titulo y PID propios o -si no los llevan: bajo Mutter el
+      marco y el cliente son ventanas distintas- los del primer descendiente
+      que los tenga. Es la lista que viaja con cada captura (24-sep-2026).
+      Coordenadas de X11, relativas a la raiz. }
+    function Principales(out AVentanas: TArray<TVentana>): Boolean;
+    { El tamano de la raiz de X11: con el de la captura da el factor para
+      pasar un rectangulo de X11 a pixeles de la imagen (bajo Xwayland la
+      raiz no mide lo que el monitor: 5504x2304 frente a 3440x1440, medido). }
+    function TamanoRaiz(out AAncho, AAlto: Integer): Boolean;
     { Pixeles de una ventana; nil deja el motivo en Error. }
     function Imagen(AVentana: NativeUInt): PXImage;
     procedure LiberarImagen(AImagen: PXImage);
@@ -323,6 +333,116 @@ begin
   end;
   Recorrer(XDefaultRootWindow(FDisp));
   AVentanas := Acc;
+  Result := True;
+end;
+
+function TOjos.TamanoRaiz(out AAncho, AAlto: Integer): Boolean;
+var
+  At: TXWindowAttributes;
+begin
+  AAncho := 0;
+  AAlto := 0;
+  Result := False;
+  if FDisp = nil then
+    Exit;
+  FillChar(At, SizeOf(At), 0);
+  if XGetWindowAttributes(FDisp, XDefaultRootWindow(FDisp), At) = 0 then
+    Exit;
+  AAncho := At.Ancho;
+  AAlto := At.Alto;
+  Result := (AAncho > 0) and (AAlto > 0);
+end;
+
+function TOjos.Principales(out AVentanas: TArray<TVentana>): Boolean;
+var
+  Raiz, Padre: NativeUInt;
+  Hijos, P: PNativeUInt;
+  Num, I: Cardinal;
+  At: TXWindowAttributes;
+  V: TVentana;
+  RaizW, RaizH: Integer;
+
+  { Titulo y PID del primer descendiente que los tenga (pocos niveles: un
+    marco lleva dentro al cliente, no un arbol). }
+  procedure Completar(AVentana: NativeUInt; var AV: TVentana; ANivel: Integer);
+  var
+    R, Pa: NativeUInt;
+    H, Q: PNativeUInt;
+    N, K: Cardinal;
+  begin
+    if (ANivel > 4) or ((AV.Titulo <> '') and (AV.Pid <> 0)) then
+      Exit;
+    H := nil;
+    N := 0;
+    if XQueryTree(FDisp, AVentana, R, Pa, H, N) = 0 then
+      Exit;
+    if H = nil then
+      Exit;
+    try
+      Q := H;
+      for K := 1 to N do
+      begin
+        if AV.Titulo = '' then
+          AV.Titulo := LeerTitulo(Q^);
+        if AV.Pid = 0 then
+          AV.Pid := LeerPid(Q^);
+        Completar(Q^, AV, ANivel + 1);
+        if (AV.Titulo <> '') and (AV.Pid <> 0) then
+          Break;
+        Inc(Q);
+      end;
+    finally
+      XFree(H);
+    end;
+  end;
+
+begin
+  AVentanas := nil;
+  FError := '';
+  if FDisp = nil then
+  begin
+    FError := 'no hay conexion con X11';
+    Exit(False);
+  end;
+  TamanoRaiz(RaizW, RaizH);
+  Hijos := nil;
+  Num := 0;
+  if XQueryTree(FDisp, XDefaultRootWindow(FDisp), Raiz, Padre, Hijos, Num) = 0 then
+  begin
+    FError := 'no pude leer el arbol de ventanas de X11';
+    Exit(False);
+  end;
+  if Hijos <> nil then
+  try
+    P := Hijos;
+    for I := 1 to Num do
+    begin
+      FillChar(At, SizeOf(At), 0);
+      if (XGetWindowAttributes(FDisp, P^, At) <> 0) and
+         (At.MapState = IsViewable) and (At.Ancho > 1) and (At.Alto > 1) then
+      begin
+        V := Default(TVentana);
+        V.Id := P^;
+        V.X := At.X;
+        V.Y := At.Y;
+        V.Ancho := At.Ancho;
+        V.Alto := At.Alto;
+        V.Visible := True;
+        V.Titulo := LeerTitulo(P^);
+        V.Pid := LeerPid(P^);
+        Completar(P^, V, 0);
+        { Sin nombre no es una ventana para quien mira (un menu, un tooltip).
+          Y la ventana GUARDIA de Mutter lleva nombre ("mutter guard window",
+          medido 24-sep) pero no es de nadie: sin PID y tapando la raiz entera. }
+        if (V.Titulo <> '') and not ((V.Pid = 0) and (V.X = 0) and (V.Y = 0) and
+           (V.Ancho = RaizW) and (V.Alto = RaizH)) then
+          AVentanas := AVentanas + [V];
+      end;
+      Inc(P);
+    end;
+  finally
+    XFree(Hijos);
+  end;
   Result := True;
 end;
 

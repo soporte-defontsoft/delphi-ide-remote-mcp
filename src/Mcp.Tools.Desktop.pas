@@ -124,11 +124,21 @@ var
   T: TArray<string>;
   O: TJSONObject;
   Titulo: string;
+  Lineas: TArray<string>;
+  Desde, I: Integer;
 begin
   Result := TJSONArray.Create;
   AHay := False;
-  for L in ASalida.Split([#10]) do
+  // La lista de la ULTIMA captura: el nodo imprime una detras de cada
+  // CAPTURA= (24-sep), y la que describe la imagen devuelta es la ultima
+  Lineas := ASalida.Split([#10]);
+  Desde := 0;
+  for I := 0 to High(Lineas) do
+    if Lineas[I].Contains('ventanas visibles') then
+      Desde := I;
+  for I := Desde to High(Lineas) do
   begin
+    L := Lineas[I];
     if not L.TrimLeft.StartsWith('VENTANA ') then
       Continue;
     // "VENTANA x y w h <titulo con espacios>": Split con tope TIRA el resto
@@ -270,7 +280,8 @@ begin
     el nombre del perfil (que no significa nada). }
   EsWin := PlataformaDelPerfil(Params.Profile.Trim).StartsWith('Win', True);
   { Recorte: una VISTA del mismo fotograma, hecha aqui (Lsp.Imagen). region
-    vale en todos; window solo donde el nodo da rectangulos (Windows). }
+    vale en todos; window por la lista que trae cada captura (en Linux, las
+    ventanas X11/Xwayland: toda aplicacion FMX). }
   ConRecorte := False;
   RX := 0; RY := 0; RW := 0; RH := 0;
   if (Params.Region.Trim <> '') and (Params.Window.Trim <> '') then
@@ -287,8 +298,6 @@ begin
   begin
     if Cmd <> 'screenshot' then
       Exit(SR_ADBLINUX_CROP_ONLY_SHOT);
-    if not EsWin then
-      Exit(SR_ADBLINUX_WINDOW_LINUX);
   end;
   Proj := Params.Project.Trim;
   if Proj <> '' then
@@ -365,9 +374,9 @@ begin
     end;
   end
   else if Cmd = 'windows' then
-    Args := Args + ['ventanas']
-  else if (Cmd = 'screenshot') and (Params.Window.Trim <> '') then
-    Args := Args + ['ventanas']; // lista + captura: un viaje, y se recorta aqui
+    Args := Args + ['ventanas'];
+  { La lista de ventanas viaja con CADA captura (24-sep): window= no manda
+    nada al nodo; se recorta aqui con la lista que trae la captura. }
   { screenshot y status corren el nodo sin argumentos: el nodo siempre
     captura al arrancar y cuenta el estado del escritorio. }
 
@@ -454,18 +463,25 @@ begin
         except
           // si no se puede renombrar, la imagen vale igual donde cayo
         end;
-        { window= : el rectangulo sale de la lista que el nodo acaba de dar }
+        { La lista de ventanas viaja CON cada captura (David, 24-sep), en los
+          dos sistemas y en pixeles de la imagen: titulo y rectangulo. En
+          Linux son las X11/Xwayland (toda aplicacion FMX; las nativas
+          Wayland no salen) y la nota lo dice. window= recorta por ella. }
+        Ventanas := VentanasDeLaSalida(Salida, Params.Window.Trim, RX, RY, RW, RH, HayVentana);
+        Return.AddPair('windows', Ventanas);
+        Return.AddPair('windowsNote', IfThen(EsWin, SN_DESKTOP_WINDOWS_WIN, SN_DESKTOP_WINDOWS_LINUX));
+        { En Linux "windows" abre la vista de actividades y la captura es ESA
+          vista: se dice como leerla (un agente la tomo por el escritorio a
+          secas, 24-sep). }
+        if (Cmd = 'windows') and not EsWin then
+          Return.AddPair('overviewNote', SN_DESKTOP_OVERVIEW_LINUX);
         if (Cmd = 'screenshot') and (Params.Window.Trim <> '') then
         begin
-          Ventanas := VentanasDeLaSalida(Salida, Params.Window.Trim, RX, RY, RW, RH, HayVentana);
-          Return.AddPair('windows', Ventanas);
           if not HayVentana then
             Fallo := Format(SR_ADBLINUX_WINDOW_NOMATCH_FMT, [Params.Window.Trim])
           else
             ConRecorte := True;
-        end
-        else if ConRecorte and EsWin then
-          Return.AddPair('windows', VentanasDeLaSalida(Salida, '', RX, RY, RW, RH, HayVentana));
+        end;
         if (Fallo = '') and ConRecorte then
         begin
           Fallo := RecortaPng(Local, RX, RY, RW, RH, AnchoOrig, AltoOrig);

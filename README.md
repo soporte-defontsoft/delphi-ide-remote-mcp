@@ -254,8 +254,10 @@ repository carries BOTH halves:
   SDK by itself) or by hand with msbuild plus `/p:PlatformSDK=Linux64.sdk`.
 
 **Today the node speaks GNOME only** (measured live on Zorin 18 and Fedora):
-the capture goes through the XDG desktop portal, the window overview uses
-GNOME's Super gesture and the screen scale comes from Mutter. KDE and other
+the capture goes through the XDG desktop portal, the window list that comes
+with every capture is read from X11 (Xwayland: every FMX application; native
+Wayland windows are not listed, and the answer says so), the window overview
+uses GNOME's Super gesture and the screen scale comes from Mutter. KDE and other
 desktops are not supported yet - the portal half would travel, the rest would
 not. On a GNOME target it leans only on libraries the desktop already ships
 (libdbus, libei): nothing to install, ever.

@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- `delphi_desktop`: every answer with a capture now carries `windows` - title
+  and rectangle of each window in pixels of that capture - on both targets.
+  On Linux the list is read from X11/Xwayland (every FMX application, Galatea
+  included; native Wayland windows are not listed and `windowsNote` says so),
+  so `window=<title>` crops on Linux too. `command=windows` on Linux answers
+  with an `overviewNote` explaining the activities overview it opened (a field
+  agent took it for the plain desktop, 2026-09-24). The list is optional by
+  construction: if the enumeration fails, the capture still comes back and the
+  node output says why. The Windows node now writes its output as UTF-8 like
+  the Linux one (a title with an accent used to rely on the server's CP1252
+  fallback).
+
 ### Changed
 
 - The house rules (`delphi_help command=conventions`, rule 12), the agent
