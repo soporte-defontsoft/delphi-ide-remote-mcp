@@ -635,6 +635,23 @@ begin
   Result := DecodeBytes(B, DetectEnc(B));
 end;
 
+{ Una antiguedad en palabras para un agente: "12 min", "3 h 05 min",
+  "2 dias". Para la vista previa de restore. }
+function EdadLegible(ADias: Double): string;
+var
+  Mins: Int64;
+begin
+  Mins := Round(ADias * 24 * 60);
+  if Mins < 0 then
+    Mins := 0;
+  if Mins < 60 then
+    Result := Format('%d min', [Mins])
+  else if Mins < 24 * 60 then
+    Result := Format('%d h %.2d min', [Mins div 60, Mins mod 60])
+  else
+    Result := Format('%d dias', [Mins div (24 * 60)]);
+end;
+
 function TrashFolderName: string;
 begin
   Result := BACKUP_SUB;
@@ -1508,10 +1525,24 @@ begin
             // "desde %s" sale al agente y delphi_edit esta EXENTA del filtro de
             // salida: la mascara va A MANO aqui y en el RESTAURADO de abajo,
             // como en BackupFile (la obligacion de la lista, ver Lsp.Guard).
+            // La copia es la PRIMERA del dia de ese fichero y no sabe de quien
+            // es: si otro agente lo edito despues, restaurar se lleva TAMBIEN
+            // su trabajo. Decision de David (24-sep-2026): no se hace una copia
+            // por agente; se dice la hora de la copia y se avisa de los demas.
+            // Deshacer con precision es cosa de git (delphi_git).
+            // Hora de CREACION de la copia: la de modificacion la hereda del
+            // original (TFile.Copy) y puede ser de dias antes.
+            var Sello := TFile.GetCreationTime(Src);
             Exit(Format('RESTAURAR %s desde %s: aun NO he hecho nada.'#10 +
+              'La copia se hizo el %s (hace %s): es la PRIMERA de ese dia de este ' +
+              'fichero, y no sabe quien lo ha editado desde entonces. Si otro agente lo ' +
+              'toco despues de esa hora, restaurar se lleva TAMBIEN su trabajo; para ' +
+              'deshacer con precision usa delphi_git (diff, stash).'#10 +
               'Estas %d lineas del fichero ACTUAL no estan en la copia y SE PERDERAN:'#10'%s'#10 +
               'Si de verdad quieres restaurar, repite con confirm: true.',
-              [TPath.GetFileName(A.Path), MaskDriveText('', Src), Losses.Count, Lista]));
+              [TPath.GetFileName(A.Path), MaskDriveText('', Src),
+               FormatDateTime('yyyy-mm-dd hh:nn', Sello), EdadLegible(Now - Sello),
+               Losses.Count, Lista]));
           end;
 
           // Antes se componia aqui a mano, con OTRA forma de sello

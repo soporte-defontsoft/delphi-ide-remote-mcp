@@ -42,6 +42,11 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- `delphi_edit restore`: the preview now says when the day copy was made and
+  how old it is, and warns that the copy is the first of that day for the file
+  and does not know who edited it since - restoring takes another agent's work
+  with it; precise undo is `delphi_git`. Decided by David on 2026-09-24 over a
+  copy per agent: the copy is the day's safety net, not a per-agent undo.
 - The house rules (`delphi_help command=conventions`, rule 12), the agent
   skill and AGENT.md now say how to identify: `clientInfo.name` set to the
   agent id, or `agent=<id>` on every `delphi_report` / `delphi_messages`
