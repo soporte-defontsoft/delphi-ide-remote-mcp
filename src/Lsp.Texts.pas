@@ -1515,7 +1515,7 @@ const
     'visible top-level window; Linux: the X11/Xwayland ones, which is every ' +
     'FMX application - native Wayland windows are not listed, the capture ' +
     'still shows them) - tap inside one, or crop to it with window=. ' +
-    'command=windows brings them ALL into view when one covers another ' +
+    'command=overview brings them ALL into view when one covers another ' +
     '(Linux: the Super overview, every window reduced with its icon below - ' +
     'tap one or Escape; Windows: a fresh capture with the list). ' +
     'command=status says whether the desktop is reachable at all ' +
@@ -1529,7 +1529,7 @@ const
     '(press at x,y MEASURED ON THAT SCREENSHOT) | type (write "text" - with ' +
     'x,y it presses there FIRST, which is the real gesture: "write this ' +
     'here", and pays the startup once) | key (one key: Linux code on a Linux ' +
-    'target, key NAME on a Windows one) | windows (bring EVERY window into ' +
+    'target, key NAME on a Windows one) | overview (bring EVERY window into ' +
     'view when one covers another: on Linux the Super overview, on Windows ' +
     'a fresh capture; the "windows" list itself comes with every capture) ' +
     '| status (is the desktop reachable, and what to ask for if ' +
@@ -1618,7 +1618,7 @@ const
     'en pixeles de la captura del escritorio.';
   { La lista de ventanas viaja con cada captura (24-sep-2026): estas notas
     dicen que contiene en cada sistema, y en Linux como leer la vista que
-    abre command=windows. }
+    abre command=overview. }
   SN_DESKTOP_WINDOWS_WIN =
     'windows: todas las ventanas visibles de primer nivel, titulo y ' +
     'rectangulo en pixeles de ESTA captura (tap dentro de una). Para ' +
@@ -1657,7 +1657,7 @@ const
     'down, left, right, super, alt, ctrl, shift o f1..f12.';
 
   SR_ADBLINUX_CMD =
-    'RECHAZADO: command debe ser screenshot, tap, key, windows o status.';
+    'RECHAZADO: command debe ser screenshot, tap, type, key, overview o status.';
   SR_ADBLINUX_NEEDPROFILE =
     'RECHAZADO: falta "profile", el perfil PAServer de la maquina cuyo ' +
     'escritorio quieres (delphi_paserver command=profiles los lista).';

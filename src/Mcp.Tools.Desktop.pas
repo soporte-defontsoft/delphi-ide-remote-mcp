@@ -250,7 +250,13 @@ begin
   Cmd := Params.Command.Trim.ToLower;
   if Cmd = '' then
     Cmd := 'screenshot';
-  if not MatchStr(Cmd, ['screenshot', 'tap', 'type', 'key', 'windows', 'status']) then
+  { "windows" se leia como el sistema operativo, y desde el 24-sep ademas
+    es el nombre de la LISTA que trae cada captura: el gesto pasa a llamarse
+    overview (David, 24-sep-2026) y "windows" sigue aceptado sin anunciarse,
+    que un agente puede tenerlo apuntado. }
+  if Cmd = 'windows' then
+    Cmd := 'overview';
+  if not MatchStr(Cmd, ['screenshot', 'tap', 'type', 'key', 'overview', 'status']) then
     Exit(SR_ADBLINUX_CMD);
 
   { Ejecutar en el destino es remote-run con otro volante: mismos
@@ -378,7 +384,7 @@ begin
       Args := Args + ['tecla'] + Mods + [IntToStr(StrToIntDef(Params.Code.Trim, 0))];
     end;
   end
-  else if Cmd = 'windows' then
+  else if Cmd = 'overview' then
     Args := Args + ['ventanas'];
   { La lista de ventanas viaja con CADA captura (24-sep): window= no manda
     nada al nodo; se recorta aqui con la lista que trae la captura. }
@@ -478,7 +484,7 @@ begin
         { En Linux "windows" abre la vista de actividades y la captura es ESA
           vista: se dice como leerla (un agente la tomo por el escritorio a
           secas, 24-sep). }
-        if (Cmd = 'windows') and not EsWin then
+        if (Cmd = 'overview') and not EsWin then
           Return.AddPair('overviewNote', SN_DESKTOP_OVERVIEW_LINUX);
         if (Cmd = 'screenshot') and (Params.Window.Trim <> '') then
         begin

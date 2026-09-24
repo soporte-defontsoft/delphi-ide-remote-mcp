@@ -42,6 +42,10 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- `delphi_desktop command=windows` is now `command=overview`: the word read as
+  the operating system (David, reading a field report: "how did it control
+  Windows?") and since today it also names the list that comes with every
+  capture. `windows` is still accepted as a silent alias.
 - `delphi_workspace` warns with `settingsChangedNote` when `settings.ini` on disk
   is newer than the running process: the file is read once at start-up and is
   not reloaded live (decided by David on 2026-09-24 against a hot reload: a

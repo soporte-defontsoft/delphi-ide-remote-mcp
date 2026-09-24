@@ -196,7 +196,7 @@ modifiers=alt`. `type` on Linux composes accented letters through the
 layout's dead keys ("í" = dead acute + i), so Spanish text arrives whole ->
 every capture comes with a `windows` list (title + rectangle in capture
 pixels; on Linux the X11/Xwayland windows, i.e. every FMX app - native
-Wayland windows are not listed); `windows` brings them all into view to
+Wayland windows are not listed); `overview` brings them all into view to
 reach a covered one (Linux: the Super overview - tap one or Escape) ->
 `screenshot region="x,y,w,h"` (or `window="<title>"`) brings back just that
 piece of the same capture at full resolution, with an `origin` to ADD to
