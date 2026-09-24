@@ -219,6 +219,7 @@
         <DCCReference Include="Lsp.Attributes.pas"/>
         <DCCReference Include="Lsp.Imagen.pas"/>
         <DCCReference Include="Lsp.PackageMap.pas"/>
+        <DCCReference Include="Lsp.DesignerBin.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

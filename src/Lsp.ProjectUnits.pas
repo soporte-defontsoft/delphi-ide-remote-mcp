@@ -110,10 +110,15 @@ function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Intege
 implementation
 
 uses
-  System.IOUtils, System.StrUtils, System.RegularExpressions,
-  System.Generics.Collections, System.Character,
-  Lsp.Patch, Lsp.Texts,
-  Lsp.Guard; // ReadPathDenied: hasta donde se puede subir buscando un .dpr
+  System.IOUtils,
+  System.StrUtils,
+  System.RegularExpressions,
+  System.Generics.Collections,
+  System.Character,
+  Lsp.Patch,
+  Lsp.Texts,
+  Lsp.Guard,
+  Lsp.DesignerBin; // ReadPathDenied: hasta donde se puede subir buscando un .dpr
 
 { TUnitInfo }
 
@@ -198,10 +203,16 @@ begin
   B := TFile.ReadAllBytes(ADesigner);
   if Length(B) < 4 then
     Exit;
-  // binary designer (TPF0 stream or $FF resource wrapper): no text header
-  if (B[0] = $FF) or ((B[0] = $54) and (B[1] = $50) and (B[2] = $46) and (B[3] = $30)) then
-    Exit;
-  Lines := PatchLoadText(ADesigner, Enc).Replace(#13#10, #10).Split([#10]);
+  // Un designer BINARIO tambien tiene nombre y clase: se lee al vuelo como
+  // texto (Lsp.DesignerBin); si esta danado, no hay cabecera que leer.
+  if IsBinaryDesignerBytes(B) then
+  begin
+    if DesignerBinaryToText(B, Enc) <> '' then
+      Exit;
+    Lines := Enc.Replace(#13#10, #10).Split([#10]);
+  end
+  else
+    Lines := PatchLoadText(ADesigner, Enc).Replace(#13#10, #10).Split([#10]);
   for Line in Lines do
   begin
     M := TRegEx.Match(Line, '^\s*(object|inherited)\s+(\w+)\s*:\s*(\w+)', [roIgnoreCase]);

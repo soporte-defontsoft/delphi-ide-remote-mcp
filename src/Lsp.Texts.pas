@@ -2958,8 +2958,9 @@ const
     'enum/set. tree path=<.dfm|.fmx>: the component tree (name, class, ' +
     'line). get path=... component=<Name>: that component''s block verbatim. ' +
     'lint path=...: unknown classes, properties the class does not publish, ' +
-    'enum values that do not exist. Text designers only (binary TPF0 is ' +
-    'refused, as everywhere). Read-only: editing a form is phase 2 and will ' +
+    'enum values that do not exist. A BINARY .dfm is read on the fly (the ' +
+    'IDE''s own conversion, the answer says so) and to-text / to-binary ' +
+    'convert it on disk with a backup. Read-only otherwise: editing a form is phase 2 and will ' +
     'go through delphi_changeset; today use delphi_edit on the .dfm/.fmx ' +
     'with the property line as anchor, then this lint to verify.';
 
@@ -2974,10 +2975,14 @@ const
     'resolves Align and returns the resolved rectangle of every control plus ' +
     'controls of size zero, outside their container, overlapping, or clipped ' +
     'by the bands around them - a form can bind perfectly and still be ' +
-    'unusable). Default: info';
+    'unusable) | to-text (a BINARY .dfm becomes text on disk, the IDE''s own ' +
+    'conversion, backup first - reading never needs it: tree/get/lint/layout ' +
+    'and delphi_read already read a binary .dfm on the fly) | to-binary ' +
+    '(the way back, the resource-wrapped form the IDE writes). Default: info';
 
   SP_DESIGNER_PATH =
-    'tree/get/lint: the .dfm or .fmx file (text form; binary TPF0 refused)';
+    'tree/get/lint/check-binding/layout/to-text/to-binary: the .dfm or .fmx ' +
+    'file (a binary .dfm is read on the fly; the answer says so)';
 
   SP_DESIGNER_CLASS =
     'info/prop: the component class, e.g. TButton, TEdit, TLayout';
@@ -3016,10 +3021,35 @@ const
   SR_DESIGNER_NOT_FORM =
     'RECHAZADO: eso no es un designer (.dfm/.fmx).';
 
-  SR_DESIGNER_BINARY =
-    'RECHAZADO: designer BINARIO (TPF0). Este servidor no lo toca ni lo ' +
-    'interpreta: abrelo en el IDE y guardalo como texto si quieres operarlo ' +
-    'desde aqui.';
+  { Un .dfm BINARIO ya se lee al vuelo (Lsp.DesignerBin, la conversion del
+    propio IDE); solo uno danado sigue rechazado. Textos del 24-sep-2026,
+    tras el reporte de Hermes (un form legacy dejaba ciego al agente). }
+  SR_DESIGNER_BINARY_FMT =
+    'RECHAZADO: %s';
+  SN_DESIGNER_BINARY_VIEW =
+    'DFM BINARIO en disco, leido al vuelo como texto (lo que el IDE ensena ' +
+    'en "Ver como texto"): lo que ves es fiel. Para EDITARLO pasalo a texto ' +
+    'con command=to-text (copia previa) y desde ahi se edita como cualquier ' +
+    '.dfm; command=to-binary es el camino de vuelta.';
+  SN_DESIGNER_TOTEXT_FMT =
+    'CONVERTIDO %s a TEXTO: %d bytes binarios -> %d lineas, la misma ' +
+    'conversion que hace el IDE. Copia previa: %s. El IDE lo abre igual y ' +
+    'al guardar respeta el formato que encuentra; desde ahora se lee, se ' +
+    'busca y se edita como cualquier .dfm.';
+  SN_DESIGNER_TOBINARY_FMT =
+    'CONVERTIDO %s a BINARIO: %d bytes, con el envoltorio de recurso que ' +
+    'escribe el IDE. Copia previa: %s. Desde aqui se lee al vuelo, pero no ' +
+    'se edita hasta volver a pasarlo a texto.';
+  SN_DESIGNER_ALREADY_FMT =
+    '%s ya es %s: nada que hacer.';
+  SR_DESIGNER_FMX_ALWAYS_TEXT =
+    'RECHAZADO: un .fmx es siempre texto (FireMonkey no tiene formato ' +
+    'binario): to-text y to-binary son solo para .dfm.';
+  SN_READ_BINARY_DESIGNER =
+    'DFM BINARIO en disco, mostrado como texto (la conversion del propio IDE, ' +
+    '"Ver como texto"). Lo que lees es fiel, pero NO se edita asi: ' +
+    'delphi_designer command=to-text lo pasa a texto en disco (copia previa) ' +
+    'y desde ahi se edita como cualquier .dfm.';
 
   SR_DESIGNER_EMPTY =
     'RECHAZADO: el fichero no contiene ningun object.';

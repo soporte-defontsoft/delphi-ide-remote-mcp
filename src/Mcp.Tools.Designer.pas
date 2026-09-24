@@ -18,8 +18,10 @@ unit Mcp.Tools.Designer;
                              properties the class does not publish, enum
                              values that do not exist.
 
-  Binary designer files (TPF0) are refused, as everywhere else in this
-  server. Editing commands (set-property, add-component, bind-event) are
+  A binary .dfm is READ on the fly as text (Lsp.DesignerBin, the IDE's own
+  conversion) and every answer says so; to-text / to-binary convert it on
+  disk, backup first (David, 2026-09-24, after a legacy form left an agent
+  blind). Editing commands (set-property, add-component, bind-event) are
   phase 2, and will go through delphi_changeset. }
 
 interface
@@ -83,7 +85,8 @@ uses
   Lsp.Guard,
   Lsp.Patch,
   Lsp.Styles,
-  Lsp.DesignerMeta;
+  Lsp.DesignerMeta,
+  Lsp.DesignerBin;
 
 const
   MAX_PROPS = 400;
@@ -215,28 +218,10 @@ begin
 end;
 
 function IsBinaryDesigner(const APath: string): Boolean;
-var
-  B: TBytes;
-  S: TFileStream;
 begin
-  Result := False;
-  S := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    if S.Size < 4 then
-      Exit;
-    SetLength(B, 4);
-    S.ReadBuffer(B[0], 4);
-    // Two binary shapes, same as the write layer in Lsp.Patch: a raw stream
-    // starts 'TPF0', but the REAL on-disk binary .dfm/.fmx wraps it in a
-    // resource header whose first byte is $FF. Checking only TPF0 let the
-    // commonest binary form through as if it were text - and lint answering
-    // about garbage is worse than lint refusing. A text form always begins
-    // with object/inherited/inline, never $FF.
-    Result := ((B[0] = $54) and (B[1] = $50) and (B[2] = $46) and (B[3] = $30))
-      or (B[0] = $FF);
-  finally
-    S.Free;
-  end;
+  // El nombrador de la forma vive en Lsp.DesignerBin (antes, cuatro copias de
+  // la regla de los bytes: aqui, Lsp.Patch, Lsp.ProjectUnits y upload).
+  Result := IsBinaryDesignerFile(APath);
 end;
 
 function LoadDoc(const APath: string; out ADoc: TStyleDoc): string;
@@ -248,9 +233,14 @@ begin
     Exit('RECHAZADO: no existe ' + APath);
   if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
     Exit(SR_DESIGNER_NOT_FORM);
-  if IsBinaryDesigner(APath) then
-    Exit(SR_DESIGNER_BINARY);
-  ADoc := TStyleDoc.Create(APath);
+  // Un binario se lee al vuelo (TStyleDoc lo convierte); solo uno danado
+  // sigue siendo un rechazo, con el motivo de la RTL.
+  try
+    ADoc := TStyleDoc.Create(APath);
+  except
+    on E: Exception do
+      Exit(Format(SR_DESIGNER_BINARY_FMT, [E.Message]));
+  end;
 end;
 
 function TreeOf(const APath: string): string;
@@ -487,10 +477,11 @@ begin
     Exit(SR_DESIGNER_BINDING_NOT_FORM);
   if not TFile.Exists(ADfm) then
     Exit(Format(SR_DESIGNER_NO_FORM_FMT, [ADfm]));
-  // Binary BEFORE the unit check: on a binary form "I cannot find the unit"
-  // sends the caller hunting for a file that was never the problem.
-  if IsBinaryDesigner(ADfm) then
-    Exit(SR_DESIGNER_BINARY);
+  // Un binario DANADO antes de buscar la unit: "no encuentro la unit" sobre
+  // un form ilegible manda a buscar un fichero que nunca fue el problema. Un
+  // binario sano se lee al vuelo mas abajo.
+  if IsBinaryDesigner(ADfm) and (DesignerFileToText(ADfm, Enc) <> '') then
+    Exit(Format(SR_DESIGNER_BINARY_FMT, [Enc]));
   if Pas = '' then
     Pas := TPath.ChangeExtension(ADfm, '.pas')
   else
@@ -506,7 +497,10 @@ begin
   end;
   if not TFile.Exists(Pas) then
     Exit(Format(SR_DESIGNER_NO_UNIT_FMT, [Pas]));
-  DfmTxt := PatchLoadText(ADfm, Enc);
+  if IsBinaryDesigner(ADfm) then
+    DesignerFileToText(ADfm, DfmTxt) // sano: comprobado arriba
+  else
+    DfmTxt := PatchLoadText(ADfm, Enc);
   PasTxt := PatchLoadText(Pas, Enc);
   DfmLines := DfmTxt.Replace(#13#10, #10).Split([#10]);
   PasLines := PasTxt.Replace(#13#10, #10).Split([#10]);
@@ -1132,10 +1126,16 @@ begin
     Exit('RECHAZADO: no existe ' + APath);
   if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
     Exit(SR_DESIGNER_NOT_FORM);
-  if IsBinaryDesigner(APath) then
-    Exit(SR_DESIGNER_BINARY);
   IsFmx := APath.EndsWith('.fmx', True);
-  Text := PatchLoadText(APath, EncName);
+  // Un .dfm binario se lee al vuelo (Lsp.DesignerBin); uno danado se rechaza.
+  if IsBinaryDesigner(APath) then
+  begin
+    EncName := DesignerFileToText(APath, Text);
+    if EncName <> '' then
+      Exit(Format(SR_DESIGNER_BINARY_FMT, [EncName]));
+  end
+  else
+    Text := PatchLoadText(APath, EncName);
   Warns := DesignerMetaLint(IsFmx, Text.Replace(#13#10, #10).Split([#10]));
   if Length(Warns) = 0 then
     Result := Format(SN_DESIGNER_LINT_OK_FMT, [TPath.GetFileName(APath)])
@@ -1152,6 +1152,76 @@ begin
   inherited;
   FName := 'delphi_designer';
   FDescription := SD_DESIGNER;
+end;
+
+{ to-text / to-binary: el mismo fichero en el otro formato, tal como lo
+  escribiria el IDE (Lsp.DesignerBin). Copia previa por el nombrador de
+  siempre (BackupFile). Solo .dfm: los .fmx son texto siempre. }
+function ConvertDesigner(const APath: string; AToText: Boolean): string;
+var
+  Ruta, Texto, Err, Copia: string;
+  B, Bin: TBytes;
+  Forma: TDesignerShape;
+begin
+  Result := PathDenied(APath);
+  if Result <> '' then
+    Exit;
+  Ruta := TPath.GetFullPath(APath);
+  if not TFile.Exists(Ruta) then
+    Exit('RECHAZADO: no existe ' + Ruta);
+  if not MatchText(TPath.GetExtension(Ruta), ['.dfm', '.fmx']) then
+    Exit(SR_DESIGNER_NOT_FORM);
+  if SameText(TPath.GetExtension(Ruta), '.fmx') then
+    Exit(SR_DESIGNER_FMX_ALWAYS_TEXT);
+  B := TFile.ReadAllBytes(Ruta);
+  Forma := DesignerShapeOf(B);
+  if AToText then
+  begin
+    if Forma = dsText then
+      Exit(Format(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), 'texto']));
+    Err := DesignerBinaryToText(B, Texto);
+    if Err <> '' then
+      Exit('RECHAZADO: ' + Err);
+    Copia := BackupFile(Ruta);
+    PatchSaveText(Ruta, Texto, 'utf8');
+    Result := Format(SN_DESIGNER_TOTEXT_FMT, [TPath.GetFileName(Ruta), Length(B),
+      Length(Texto.Replace(#13#10, #10).TrimRight([#10]).Split([#10])), Copia]);
+  end
+  else
+  begin
+    if Forma <> dsText then
+      Exit(Format(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), 'binario']));
+    Texto := PatchLoadText(Ruta, Err); // Err recibe el nombre del encoding
+    Err := DesignerTextToBinary(Texto, Bin);
+    if Err <> '' then
+      Exit('RECHAZADO: ' + Err);
+    Copia := BackupFile(Ruta);
+    AtomicWrite(Ruta, Bin);
+    Result := Format(SN_DESIGNER_TOBINARY_FMT, [TPath.GetFileName(Ruta), Length(Bin), Copia]);
+  end;
+end;
+
+{ La respuesta de un comando de lectura sobre un .dfm binario lleva la nota:
+  lo que ves es fiel, pero en disco es binario. }
+function ConNotaBinario(const AResult: string): string;
+var
+  V: TJSONValue;
+begin
+  Result := AResult;
+  V := TJSONObject.ParseJSONValue(AResult);
+  if V = nil then
+    Exit(AResult + #10 + SN_DESIGNER_BINARY_VIEW);
+  try
+    if V is TJSONObject then
+    begin
+      TJSONObject(V).AddPair('binaryOnDiskNote', SN_DESIGNER_BINARY_VIEW);
+      Result := V.ToJSON;
+    end
+    else
+      Result := AResult + #10 + SN_DESIGNER_BINARY_VIEW;
+  finally
+    V.Free;
+  end;
 end;
 
 { El gesto; ExecuteWithParams lo envuelve en el cerrojo de escritura. }
@@ -1195,6 +1265,14 @@ begin
       Result := SR_DESIGNER_NEED_COMPONENT
     else
       Result := GetComponent(Params.Path, Params.Component);
+    if IsBinaryDesigner(TPath.GetFullPath(Params.Path)) then
+      Result := ConNotaBinario(Result);
+  end
+  else if MatchText(Cmd, ['to-text', 'to-binary']) then
+  begin
+    if Params.Path.Trim = '' then
+      Exit(SR_DESIGNER_NEED_PATH);
+    Result := ConvertDesigner(Params.Path, Cmd = 'to-text');
   end
   else
     Result := SR_DESIGNER_CMD;

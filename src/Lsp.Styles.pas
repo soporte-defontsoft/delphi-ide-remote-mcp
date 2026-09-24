@@ -47,6 +47,7 @@ type
     FEnc: string;
     FPath: string;
     FEol: string;
+    FBinaryOnDisk: Boolean;
     procedure Parse;
   public
     constructor Create(const APath: string);
@@ -54,6 +55,9 @@ type
     property Root: TStyleObj read FRoot;
     property Lines: TArray<string> read FLines;
     property Path: string read FPath;
+    { True si el fichero en disco es un .dfm BINARIO leido al vuelo como texto
+      (Lsp.DesignerBin): se lee entero, no se guarda (ver Save). }
+    property BinaryOnDisk: Boolean read FBinaryOnDisk;
     { Top-level styles (children of the container) - the ones StyleLookup
       resolves. }
     function Styles: TArray<TStyleObj>;
@@ -91,8 +95,13 @@ function PlatformDefaultStyleNames: TArray<string>;
 implementation
 
 uses
-  System.IOUtils, System.StrUtils, System.RegularExpressions,
-  Lsp.Patch, Lsp.BuildRunner, Lsp.Guard;
+  System.IOUtils,
+  System.StrUtils,
+  System.RegularExpressions,
+  Lsp.Patch,
+  Lsp.BuildRunner,
+  Lsp.Guard,
+  Lsp.DesignerBin;
 
 { TStyleObj }
 
@@ -135,10 +144,22 @@ end;
 
 procedure TStyleDoc.Reload;
 var
-  Text: string;
+  Text, Err: string;
 begin
   FreeAndNil(FRoot);
-  Text := PatchLoadText(FPath, FEnc);
+  // Un .dfm BINARIO se lee al vuelo como texto (la conversion del IDE) y se
+  // recuerda: Save lo rechaza, que guardar texto sobre un binario sin decirlo
+  // es cambiarle el formato a escondidas; to-text lo hace a la vista.
+  FBinaryOnDisk := IsBinaryDesignerFile(FPath);
+  if FBinaryOnDisk then
+  begin
+    Err := DesignerFileToText(FPath, Text);
+    if Err <> '' then
+      raise Exception.Create(Err);
+    FEnc := 'binario';
+  end
+  else
+    Text := PatchLoadText(FPath, FEnc);
   FEol := IfThen(Text.Contains(#13#10), #13#10, #10);
   FLines := Text.Replace(#13#10, #10).Split([#10]);
   Parse;
@@ -406,6 +427,10 @@ end;
 
 procedure TStyleDoc.Save;
 begin
+  if FBinaryOnDisk then
+    raise Exception.Create('RECHAZADO: ' + TPath.GetFileName(FPath) +
+      ' es un .dfm BINARIO en disco: se lee al vuelo pero no se guarda asi. ' +
+      'Pasalo a texto con delphi_designer command=to-text y repite.');
   PatchSaveText(FPath, string.Join(FEol, FLines), FEnc);
   Reload;
 end;

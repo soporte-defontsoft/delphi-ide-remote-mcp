@@ -104,7 +104,9 @@ type
 implementation
 
 uses
-  Lsp.Patch; // DecodeSourceBytes: el detector de encoding de delphi_read
+  Lsp.Patch,
+  Lsp.DesignerBin,
+  System.StrUtils; // DecodeSourceBytes: el detector de encoding de delphi_read
 
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);
@@ -502,6 +504,15 @@ var
   Bytes: TBytes;
 begin
   Bytes := TFile.ReadAllBytes(AFilePath);
+  // Un .dfm BINARIO se sirve como texto (Lsp.DesignerBin): delphi_search no
+  // encontraba ni el nombre del form en uno legacy (Hermes, 2026-09-24). Si
+  // esta danado, se devuelve vacio: nada que buscar ahi.
+  if MatchText(TPath.GetExtension(AFilePath), ['.dfm', '.fmx']) and IsBinaryDesignerBytes(Bytes) then
+  begin
+    if DesignerBinaryToText(Bytes, Result) <> '' then
+      Result := '';
+    Exit;
+  end;
   if (Length(Bytes) >= 3) and (Bytes[0] = $EF) and (Bytes[1] = $BB) and (Bytes[2] = $BF) then
     Result := TEncoding.UTF8.GetString(Bytes, 3, Length(Bytes) - 3)
   else if (Length(Bytes) >= 2) and (Bytes[0] = $FF) and (Bytes[1] = $FE) then

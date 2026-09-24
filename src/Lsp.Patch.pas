@@ -180,6 +180,9 @@ function NewFileEncName: string;
   overwritten (once per file per day). Returns a note / the backup path.
   Exposed so binary writers (delphi_upload) can be non-destructive too. }
 function BackupFile(const APath: string): string;
+{ Escritura atomica de bytes (temporal + MoveFileEx): la usa to-binary del
+  disenador para dejar un .dfm binario como lo escribiria el IDE. }
+procedure AtomicWrite(const APath: string; const B: TArray<Byte>); // = TBytes
 
 { El nombre ORIGINAL de una copia de la papelera, o '' si ese nombre no lleva
   sello. Solo tiene sentido DENTRO de __delphi-patch.
@@ -257,7 +260,8 @@ uses
   System.Classes,
   System.StrUtils,
   System.IOUtils,
-  System.JSON,    // AplicaTanda: el motor de tandas vive aqui desde 2026-09-20
+  System.JSON,
+  // AplicaTanda: el motor de tandas vive aqui desde 2026-09-20
   System.SyncObjs,
   System.Generics.Collections,
   System.RegularExpressions,
@@ -265,7 +269,8 @@ uses
   Lsp.Guard,
   Lsp.Discovery,
   Lsp.Texts,
-  Lsp.DesignerMeta;
+  Lsp.DesignerMeta,
+  Lsp.DesignerBin;
 
 const
   BACKUP_SUB = '__delphi-patch';
@@ -1227,7 +1232,7 @@ var
   Lines: TArray<string>;
   IniL, FinL, I: Integer;
   Sb: TStringBuilder;
-  Cut: string;
+  Cut, NotaBin: string;
 begin
   Denied := ReadPathDenied(APath); // reading may enter the library zone
   if Denied <> '' then
@@ -1246,6 +1251,18 @@ begin
     Exit(Format(SR_LSP_NO_FILE_FMT, [APath]));
   end;
   B := TFile.ReadAllBytes(APath);
+  // Un .dfm BINARIO se lee al vuelo como texto ("Ver como texto" del IDE,
+  // Lsp.DesignerBin) y se dice: un form legacy dejaba ciego al agente
+  // (Hermes, 2026-09-24). Editarlo pide to-text; leerlo, no.
+  NotaBin := '';
+  if MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) and IsBinaryDesignerBytes(B) then
+  begin
+    NotaBin := DesignerBinaryToText(B, Text);
+    if NotaBin <> '' then
+      Exit('RECHAZADO: ' + NotaBin);
+    B := TEncoding.UTF8.GetBytes(Text);
+    NotaBin := SN_READ_BINARY_DESIGNER + #10;
+  end;
   // A binary (an exe, a .res, a .bin.style) is not a text to number: 9 MB
   // of mojibake burned a context for nothing (measured 2026-08-24). NUL
   // bytes in the first 4 KB = binary.
@@ -1287,7 +1304,7 @@ begin
   finally
     Sb.Free;
   end;
-  Result := Format('%s  encoding=%s  finales=%s  %s'#10 +
+  Result := NotaBin + Format('%s  encoding=%s  finales=%s  %s'#10 +
     'Lineas %d-%d de %d (formato numero|contenido: el ancla se copia desde justo despues de la barra):'#10'%s%s',
     [TPath.GetFileName(APath), EncName(K), Eol, Summary(M), IniL, FinL,
      Length(Lines), Body, Cut]);
@@ -1456,12 +1473,11 @@ begin
       // that stream in a 16-bit resource header whose first byte is $FF
       // (FF 0A 00 + UPPERCASED name + the TPF0 stream at ~offset 19). A text
       // form always begins with object/inherited/inline - never $FF.
-      if IsDesigner and (Length(B) >= 4) and
-         (((B[0] = $54) and (B[1] = $50) and (B[2] = $46) and (B[3] = $30)) or
-          (B[0] = $FF)) then
+      if IsDesigner and IsBinaryDesignerBytes(B) then
         Exit(Format('RECHAZADO: %s es un %s BINARIO (firma TPF0 o envoltorio de recurso $FF). ' +
-          'No es texto y no se puede editar asi. ' +
-          'Abrelo en el IDE ("View as Text") o entrega el cambio a una persona.',
+          'No es texto y no se edita asi. Pasalo a texto con delphi_designer ' +
+          'command=to-text (copia previa, la misma conversion que el IDE) y edita; ' +
+          'delphi_read y delphi_designer ya lo LEEN al vuelo sin convertirlo.',
           [TPath.GetFileName(A.Path), Ext]));
 
       K := DetectEnc(B);

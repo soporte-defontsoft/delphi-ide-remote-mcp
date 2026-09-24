@@ -75,8 +75,13 @@ handshake.
   truth - fix it before building. FMX property spelling is not VCL:
   `Size.Width` (not `Size.X`), `TextSettings.Font.Size` (not
   `Font.Size`), `TextSettings.HorzAlign = Center` (not `taCenter`).
-- Binary designer files (TPF0 stream or `$FF` resource wrapper) are
-  refused - they belong to the IDE. Do not try to work around it.
+- A binary `.dfm` (TPF0 stream or `$FF` resource wrapper, the legacy shape)
+  is READ on the fly everywhere - `delphi_read`, `delphi_search`,
+  `delphi_designer tree/get/lint/check-binding/layout` - and the answer says
+  so. To EDIT it: `delphi_designer command=to-text` (the IDE's own
+  conversion, backup first), edit as text, then `lint` and `check-binding`
+  (what the IDE reports when it reopens the form); `to-binary` is the way
+  back. Editing the binary directly is refused. `.fmx` is always text.
 - Prefer `Align`/anchors over absolute Position/Size in forms: absolute
   coordinates designed on a desktop form overflow phone screens.
 
@@ -112,8 +117,8 @@ handshake.
   block. After editing a form with `delphi_edit`, run `delphi_designer lint
   path=<form>`: a property the class does not publish or an enum value that
   does not exist will not stream, and nobody tells you at build time.
-- Binary designers (TPF0) are refused everywhere: have a person save the
-  form as text from the IDE first.
+- A binary `.dfm` reads on the fly; editing it needs `to-text` first (see
+  above). `.fmx` is always text.
 
 ## FMX styles
 

@@ -21,6 +21,20 @@ the MCP `initialize` response (`serverInfo.version`).
   node output says why. The Windows node now writes its output as UTF-8 like
   the Linux one (a title with an accent used to rely on the server's CP1252
   fallback).
+- Binary `.dfm` (VCL forms saved in binary, the legacy shape): every reader
+  now reads them on the fly as text through the RTL's own conversion (what the
+  IDE runs on "View as Text") - `delphi_read`, `delphi_search`, `delphi_designer`
+  tree/get/lint/check-binding/layout and the form-name reader of
+  `delphi_config` - and says so (`binaryOnDiskNote`). `delphi_designer to-text`
+  converts the file on disk with a backup, so it can then be edited like any
+  `.dfm`, checked with `lint` and `check-binding` (what the IDE reports when it
+  reopens the form) and taken back with `to-binary`, which reproduces the
+  IDE's bytes exactly (measured on a 94 KB legacy form: binary -> text ->
+  binary identical; the text differs from `convert.exe` only in one padding
+  digit of floats). Editing a binary directly stays refused, pointing at
+  `to-text`; `.fmx` is always text. One shape detector (`Lsp.DesignerBin`)
+  replaces four hand-made byte checks. A legacy form had left a field agent
+  blind (Hermes, 2026-09-24). New battery `tests/test_designer_binary.py`.
 - `delphi_build` of a package: when a W1033 unit is not in any BPL of the
   install but lives in a `.dpk` of the workspace (found by climbing the folders
   from the one being built, the same search `delphi_move` uses), that package

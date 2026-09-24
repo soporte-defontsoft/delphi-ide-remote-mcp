@@ -248,7 +248,8 @@ uses
   Lsp.Patch,
   Lsp.ShaCache,
   Lsp.Files,
-  Mcp.Tools.Messages; // DirectedMessagesPending, para la ficha del servidor
+  Mcp.Tools.Messages,
+  Lsp.DesignerBin; // DirectedMessagesPending, para la ficha del servidor
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =
@@ -1784,9 +1785,7 @@ begin
   // died in RLINK32. Every other writer refuses both binary shapes; this one
   // shipped them.
   if MatchText(TPath.GetExtension(FullPath), ['.dfm', '.fmx']) and
-     (Length(Bytes) >= 4) and
-     (((Bytes[0] = $54) and (Bytes[1] = $50) and (Bytes[2] = $46) and
-       (Bytes[3] = $30)) or (Bytes[0] = $FF)) then
+     IsBinaryDesignerBytes(Bytes) then // el nombrador de la forma: Lsp.DesignerBin
     Exit(SR_UPLOAD_BINARY_DESIGNER);
 
   Dir := TPath.GetDirectoryName(FullPath);
