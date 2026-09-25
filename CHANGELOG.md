@@ -8,6 +8,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- `[Workspace.<name>] ReadOnlyRoots=`: **reference projects**, folders outside
+  `Roots` that the workspace reads as its own (read, search, symbols,
+  definition, git query, fetch) and never writes: edit, create, move, delete,
+  build and test are refused with a message that says why. Separate from
+  `Roots` on purpose, so the write jail never sees them, and it wins over
+  `Roots`: a folder in both, or a root inside a reference, is read-only. The
+  same junction check as the roots; temp files never land there.
+  `delphi_workspace` lists them as `readOnlyRoots`, `delphi_projects`
+  includes their projects flagged `readOnly:true` (overlaps walked once) and
+  checks an explicit `root` with the read gate; `delphi_git` runs its query
+  half (status, diff, log, show, bare branch/tag) on a reference repository
+  and `delphi_config view` reads a reference project - one git
+  classification, shared with the read-only credential. Env
+  `DELPHI_MCP_READONLY_ROOTS` for the local launch mode; the contract is
+  written at the top of `Lsp.Guard` and measured by a two-server battery.
+  (David, 2026-09-25: "que un agente trabaje con sus roots pero pueda ver
+  otros proyectos, solo para aprender como se hacen las cosas".)
+
 ### Changed
 
 - `QUICKSTART.md` lives at the repository root (was `docs/`), so it is the

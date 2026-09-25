@@ -748,7 +748,15 @@ begin
   Repo := Params.Repo;
   if Repo = '' then
     Exit('error: missing repo');
-  Result := PathDenied(Repo);
+  // En un proyecto de REFERENCIA (ReadOnlyRoots) vale la mitad de CONSULTA
+  // de git - la misma clasificacion que la credencial de solo lectura, en
+  // UNA funcion (Lsp.Guard.GitCommandIsQuery). Lo demas pasa por la puerta
+  // de escritura y sale con el motivo de referencia.
+  if (ReadOnlyRootOf(Repo) <> '') and
+     GitCommandIsQuery(Params.Command, Params.Args, Params.Message) then
+    Result := ReadPathDenied(Repo)
+  else
+    Result := PathDenied(Repo);
   if Result <> '' then
     Exit;
   if TFile.Exists(Repo) then

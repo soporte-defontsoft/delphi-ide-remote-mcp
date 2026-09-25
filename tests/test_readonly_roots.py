@@ -112,6 +112,11 @@ check('fixture: proyecto en la carpeta doble creado', out.startswith('CREADO'), 
 maker.kill()
 REF_PAS = os.path.join(REF, 'Ref', 'URefUtil.pas')
 REF_DPROJ = os.path.join(REF, 'Ref', 'Ref.dproj')
+# the reference is a git repository with one commit: query must work, writes not
+REF_GIT = os.path.join(REF, 'Ref')
+subprocess.run(['git', 'init', '-q'], cwd=REF_GIT, check=True)
+subprocess.run(['git', '-c', 'user.name=bateria', '-c', 'user.email=b@t', 'add', '-A'], cwd=REF_GIT, check=True)
+subprocess.run(['git', '-c', 'user.name=bateria', '-c', 'user.email=b@t', 'commit', '-q', '-m', 'ref'], cwd=REF_GIT, check=True)
 
 # ---- 2) the server under test
 srv = Server({'DELPHI_MCP_ROOTS': MINE + ';' + BOTH, 'DELPHI_MCP_READONLY_ROOTS': REF + ';' + BOTH})
@@ -184,6 +189,26 @@ out = call('delphi_edit', {'path': os.path.join(BOTH, 'Ambos', 'Ambos.dpr'), 'ol
 check('carpeta en Roots Y ReadOnlyRoots: escribir RECHAZADO (manda la referencia)', refused_as_reference(out), out[:200])
 out = call('delphi_read', {'path': os.path.join(BOTH, 'Ambos', 'Ambos.dpr')})
 check('carpeta en Roots Y ReadOnlyRoots: leer OK', 'program Ambos' in out, out[:200])
+
+# git: the QUERY half works on a reference repository, the writing half does not
+out = call('delphi_git', {'repo': REF_GIT, 'command': 'status'})
+check('git status en la referencia: consulta OK', out.startswith('exit=0') and not out.startswith('RECHAZADO'), out[:200])
+out = call('delphi_git', {'repo': REF_GIT, 'command': 'log'})
+check('git log en la referencia: consulta OK', 'ref' in out and not out.startswith('RECHAZADO'), out[:200])
+out = call('delphi_git', {'repo': REF_GIT, 'command': 'add', 'args': '-A'})
+check('git add en la referencia: RECHAZADO como referencia', refused_as_reference(out), out[:200])
+out = call('delphi_git', {'repo': REF_GIT, 'command': 'branch', 'args': 'rama-nueva'})
+check('git branch con args en la referencia: RECHAZADO (crea)', refused_as_reference(out), out[:200])
+
+# config: view reads, everything else writes
+out = call('delphi_config', {'project': REF_DPROJ, 'command': 'view'})
+check('config view en la referencia: OK', not out.startswith('RECHAZADO') and 'platform' in out.lower(), out[:200])
+out = call('delphi_config', {'project': REF_DPROJ, 'command': 'set-version', 'version': '9.9.9'})
+check('config set-version en la referencia: RECHAZADO', refused_as_reference(out), out[:200])
+
+# rename: preview reads, apply writes
+out = call('delphi_rename_symbol', {'path': REF_PAS, 'line': 1, 'character': 6, 'newname': 'UOtra', 'mode': 'apply'})
+check('rename apply en la referencia: RECHAZADO', refused_as_reference(out), out[:200])
 
 # my own roots still work, and outside is still outside
 out = call('delphi_edit', {'path': os.path.join(MINE, 'Mio.pas'), 'old': 'unit Mio;', 'new': 'unit Mio; // mio'})

@@ -14,7 +14,44 @@ unit Lsp.Guard;
 
   3. Read-only gate - ToolCallDenied is THE single entry gate, consulted by
      the tools dispatcher before ANY tool executes. The read/write
-     classification of every tool lives HERE and nowhere else. }
+     classification of every tool lives HERE and nowhere else.
+
+  4. Reference projects - [Workspace.<name>] ReadOnlyRoots (David,
+     2026-09-25): folders OUTSIDE Roots that this workspace may READ as if
+     they were its own and NEVER write. This is the door through which
+     remote agents will see the house's REAL projects as code references,
+     so the contract is spelled out:
+       - One list, its own (WorkspaceReadOnlyRoots), parsed by the same
+         reader as Roots. One locator (ReadOnlyRootOf) answers "is this
+         path in a reference?" for the gate, the temp folders and
+         delphi_projects. Nobody re-derives it.
+       - PathDenied (the WRITE gate) checks the reference list BEFORE the
+         roots, so a reference WINS: a folder declared in both lists, or a
+         root that lies inside a reference, is read-only. Its verdict
+         carries its own reason (mvReferencia) and its own text.
+       - ReadPathDenied (the READ gate) forgives mvReferencia and nothing
+         else new: the vault, path anomalies and a junction that leaves
+         the reference are still refused. The same RealPath check the
+         roots get: a link planted inside a reference opens nothing.
+       - Every tool that WRITES goes through PathDenied and therefore
+         refuses a reference: edit, textedit, create, changeset, move (also
+         copy=true, both ends), delete, upload, build, test run, package,
+         deploy, remote-run, designer to-text/to-binary, styles build,
+         config (everything but view), rename apply, desktop out=.
+       - Every tool that READS goes through ReadPathDenied and therefore
+         enters: read, list, search, fetch and the /files route, symbols,
+         definition, references, hover, signature, completion, diagnostics
+         (the LSP config is cached under LOCALAPPDATA, never next to the
+         project), designer tree/get/lint/check-binding/layout, config
+         view, test discover, rename preview, and the QUERY half of git
+         (GitCommandIsQuery - the one classification, shared with the
+         read-only credential).
+       - Temp files (AgentTempDir) never land in a reference, its drive
+         letters are served (srvX:) like the roots', and the [RutaDelServidor]
+         floor (ArgPathOutsideDenied) uses the read gate, so it lets them in.
+       - What it does NOT do: subtract. Everything under a reference root is
+         readable, secrets included - point it at clean project folders.
+     Measured by tests/test_readonly_roots.py (two servers). }
 
 interface
 
@@ -430,6 +467,11 @@ function IsReadOnlyNow: Boolean;
   publica (delphi_workspace) para que un suelo VACIO se pueda ver: es una
   capa redundante, y si dejase de funcionar no romperia nada. }
 function ServerPathParamCount: Integer;
+
+{ La mitad de CONSULTA de delphi_git: lo que una credencial de solo lectura
+  y un proyecto de REFERENCIA (ReadOnlyRoots) pueden ejecutar. UNA lista:
+  la consulta ToolCallDenied y la consulta la propia tool. }
+function GitCommandIsQuery(const ACmd, AArgs, AMessage: string): Boolean;
 
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
@@ -2249,6 +2291,12 @@ begin
   end;
 end;
 
+function GitCommandIsQuery(const ACmd, AArgs, AMessage: string): Boolean;
+begin
+  Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show']) or
+    (MatchText(Trim(ACmd), ['branch', 'tag']) and (Trim(AArgs) = '') and (Trim(AMessage) = ''));
+end;
+
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
@@ -2281,10 +2329,7 @@ begin
   if IsReadOnlyNow and SameText(AToolName, 'delphi_git') then
   begin
     Cmd := ArgStr(AArguments, 'command');
-    if not (MatchText(Cmd, ['status', 'diff', 'log', 'show']) or
-            (MatchText(Cmd, ['branch', 'tag']) and
-             (Trim(ArgStr(AArguments, 'args')) = '') and
-             (Trim(ArgStr(AArguments, 'message')) = ''))) then
+    if not GitCommandIsQuery(Cmd, ArgStr(AArguments, 'args'), ArgStr(AArguments, 'message')) then
       Exit(WriteDenied(Trim('delphi_git ' + Cmd)));
   end;
   // EL SUELO de la jaula, para todas las tools: todo argumento marcado

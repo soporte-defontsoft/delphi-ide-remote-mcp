@@ -1508,12 +1508,17 @@ var
 begin
   if Params.Project.Trim = '' then
     Exit('error: delphi_config necesita "project" (ruta del .dproj)');
-  Result := PathDenied(Params.Project);
+  Cmd := Params.Command.Trim.ToLower;
+  // view solo LEE el .dproj (y vale en un proyecto de REFERENCIA); todo lo
+  // demas lo escribe y pasa por la puerta de escritura.
+  if (Cmd = '') or (Cmd = 'view') then
+    Result := ReadPathDenied(Params.Project)
+  else
+    Result := PathDenied(Params.Project);
   if Result <> '' then
     Exit;
   if not TFile.Exists(Params.Project) then
     Exit('error: no existe el proyecto ' + Params.Project);
-  Cmd := Params.Command.Trim.ToLower;
   // Arriving with the .dpr in hand is the common case - delphi_create's own
   // schema says its "project" takes ".dpr (or .dproj)". `view` used to answer
   // for it anyway, with an empty framework, no platforms, no configurations
