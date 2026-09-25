@@ -8,6 +8,40 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Security
+
+- **1.3.0 promised that a reference project is never written ("move, delete
+  ... are refused"), and two paths broke that promise. Both are closed.**
+  1. `delphi_move` of a folder used the RTL's `TDirectory.Move`, which, when
+     it cannot rename, copies and deletes file by file and walks INTO
+     junctions. With a junction inside the jail pointing to a reference (or
+     anywhere outside the roots), the files behind it were brought into the
+     jail and DELETED from their place. Present since v0.16; reproduced live
+     on 2026-09-25, when the victim folder came out empty. A folder now
+     moves through `MueveArbol` (`Lsp.Guard`), the one mover, shared with
+     the trash of `delphi_delete`: a rename on the same drive, whole or not
+     at all. A link inside travels as a link and what is behind it is never
+     touched. Across drives it is refused with the legitimate path
+     (`copy=true`, then `delphi_delete`).
+  2. The write gate looked only at the path it was given, and moving or
+     trashing a folder takes everything inside it. A reference declared
+     INSIDE a write root went to the trash with its parent folder (measured
+     live against 1.3.0: "BORRADO", reference gone). `delphi_delete` and
+     `delphi_move` now refuse a folder that IS or CONTAINS a protected place
+     through `ProtegidoDenegado`. Protected places are any workspace root,
+     reference project or `ReadOnlyPaths` folder, the vault, the server's
+     folder and the system folders. It is the same list the tree deleter
+     already honoured (`LugaresProtegidos`, which now also carries the
+     `ReadOnlyPaths`). A protected place the session cannot read is not
+     named in the refusal.
+
+  The rule, written down the same day (David): nothing outside the
+  workspace is created, edited, moved or deleted - not directly, not
+  through a link, not as a side effect of the RTL. `test_readonly_roots.py`
+  plants a junction to a victim outside the roots and a reference inside a
+  root; both must come out untouched. The 1.3.0 binary fails six of those
+  checks.
+
 ### Added
 
 - **Screenshots in one step.** `delphi_desktop` and `delphi_adb` return the
@@ -31,6 +65,14 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- `delphi_move copy=true` takes its SOURCE through the READ gate: a unit
+  or a folder can be brought in from a reference project
+  (`ReadOnlyRoots`), from a `ReadOnlyPaths` folder or from the library
+  zone. The original is never touched, and a folder holding a project is
+  still refused (a project never lives in two places). A move still needs
+  a writable source. Until now a reference was reachable through a
+  junction inside a copied folder but not directly; now one rule covers
+  both. (David, 2026-09-25.)
 - A desktop capture that lands in the server's temp folder (the default of
   `delphi_desktop`) is **consumed on retrieval**: `delphi_fetch` deletes it when
   it serves the last chunk (`consumedOnServer`), and one GET on its `download`
@@ -76,6 +118,14 @@ the MCP `initialize` response (`serverInfo.version`).
   routine that empties a disposable folder, and `delphi_move copy=true` uses
   it to drop the source's trash from the copy (it used the RTL's recursive
   delete, which follows junctions and skipped the guard).
+- Folder copies never leak what the session cannot read. `CopiaArbol`, the
+  one tree copier, follows a link (junction or symlink, folder or file) only
+  when its real target passes the READ gate - the roots, `ReadOnlyRoots`, the
+  library zone; otherwise it is not copied and the answer says which links
+  were not followed. `delphi_move` uses it for its safety copy and for
+  `copy=true` (which no longer copies the source's trash at all). The RTL's
+  `TDirectory.Copy` followed any junction: one planted in a folder copied
+  into the jail what the jail does not let you read.
 - One resolver of the active workspace inside the guard: `HasActiveWS` /
   `ActiveWS` replace 18 hand-written copies of "if a workspace is active, its
   field; else the global", and `LoadSecurity` reads every local-mode key

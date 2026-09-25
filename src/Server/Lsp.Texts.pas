@@ -1663,6 +1663,29 @@ const
     'temporal suya, y nunca una raiz de workspace, el vault, la carpeta del ' +
     'servidor ni del sistema, ni nada que los contenga.';
 
+  SR_MUDANZA_PROTEGIDA_FMT =
+    'RECHAZADO: "%s" no se mueve ni se borra entera: es o contiene %s, que ' +
+    'este workspace no puede escribir. Mover una carpeta o tirarla a la ' +
+    'papelera se lleva TODO lo de dentro. Mueve o borra por separado lo de ' +
+    'dentro que SI es tuyo.';
+
+  SN_LUGAR_PROTEGIDO =
+    'un sitio protegido (una raiz de workspace, un proyecto de referencia, ' +
+    'una carpeta de solo lectura o una carpeta del sistema)';
+
+  SR_MUDANZA_OTRA_UNIDAD_FMT =
+    'RECHAZADO: "%s" y "%s" estan en unidades distintas, y una carpeta solo ' +
+    'se mueve RENOMBRANDOLA en la misma unidad: entera o nada. Entre ' +
+    'unidades habria que copiar y borrar fichero a fichero, que se queda a ' +
+    'medias si algo falla y atraviesa los enlaces. Para llevarla alli: ' +
+    'delphi_move copy=true y despues delphi_delete del origen.';
+
+  SN_COPY_LINKS_NOT_FOLLOWED_FMT =
+    '  %d enlace(s) NO seguidos al copiar, porque apuntan a algo que este ' +
+    'workspace no puede leer (fuera de sus raices, de sus ReadOnlyRoots y de ' +
+    'la zona de biblioteca): %s. Lo demas se ha copiado. Si ese contenido ' +
+    'hace falta, que el operador lo declare en ReadOnlyRoots.';
+
   SN_CAPTURE_OUT_TEMP_HINT =
     'Para una captura no hace falta out: omitelo y la imagen llega en la ' +
     'misma respuesta, sin fichero que recoger ni que acumular. out= es solo ' +
@@ -2336,13 +2359,17 @@ const
   SR_MOVE_COPY_PROJECT_FMT =
     'RECHAZADO: esa carpeta contiene un proyecto (%s) y un proyecto nunca ' +
     'vive en dos sitios. Para arrancar un proyecto a partir de otro, ' +
-    'delphi_create; para llevarlo a otro sitio, delphi_move sin copy.';
+    'delphi_create; para llevarlo a otro sitio de tu workspace, ' +
+    'delphi_move sin copy. Un proyecto de REFERENCIA se lee donde esta: ' +
+    'de el se copian units o carpetas sin proyecto.';
 
   SP_MOVE_COPY =
     'true = COPY instead of move: the source stays untouched, no trash copy ' +
     'is taken, and NO project is re-pointed (the copy is a new unit nobody ' +
     'lists yet - delphi_config add-unit). A copied unit named differently ' +
     'gets its "unit X;" header rewritten and its .dfm/.fmx copied along. ' +
+    'The source only has to be READABLE (your roots, ReadOnlyRoots, the ' +
+    'library zone): the way to bring a file in from a reference project. ' +
     'Refused for a folder that holds a .dproj/.dpk (a project never lives in ' +
     'two places) and for anything inside the trash.';
 

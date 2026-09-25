@@ -171,18 +171,12 @@ begin
   ATrash := TrashPathFor(APath);
   CrearCarpeta(TPath.GetDirectoryName(ATrash));
   if TDirectory.Exists(APath) then
-  begin
-    // The RAW Windows rename, on purpose: TDirectory.Move falls back to a
-    // recursive copy+delete of its OWN accord when the atomic rename fails, and
-    // that fallback GUTTED a locked folder INTO the trash while the caller said
-    // "half done" - a human who then purged those "leftover" copies lost real
-    // code, and every retry made another full copy (measured 2026-08-25 by a
-    // probe agent deleting a folder with a locked build output). MoveFile does
-    // NOT copy: same-volume it renames atomically, and if a handle inside is
-    // held it returns False and the whole tree stays intact. Move or nothing.
-    if not MoveFile(PChar(APath), PChar(ATrash)) then
-      RaiseLastOSError;
-  end
+    // EL mudador (Lsp.Guard): renombrar o nada, con su guard. Nacio AQUI el
+    // 2026-08-25 (TDirectory.Move, al no poder renombrar, copiaba y borraba
+    // por su cuenta y vacio en la papelera una carpeta bloqueada) y se quedo
+    // aqui solo: delphi_move siguio un mes con TDirectory.Move y se trajo a
+    // la jaula y BORRO lo de detras de un junction (2026-09-25).
+    MueveArbol(APath, ATrash)
   else
     TFile.Move(APath, ATrash);
   // Who trashed it, so a later purge can be told "yours only". A file with no
@@ -286,7 +280,9 @@ begin
   FDescription := 'Delete a file or folder inside the workspace. NOT a hard ' +
     'delete: the target is moved to a recoverable trash ' +
     '(__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. ' +
-    'Jailed to the workspace roots, refused in read-only mode. Use it to ' +
+    'Jailed to the workspace roots, refused in read-only mode. A folder ' +
+    'that is or holds a workspace root, a reference project or a read-only ' +
+    'folder is refused (it would go along). Use it to ' +
     'clean up stray files and leftovers. Deleting a unit (.pas) also trashes ' +
     'its .dfm/.fmx and takes it out of every project that lists it - looked ' +
     'for from its folder UP to the edge of the workspace, however deep the ' +
@@ -374,6 +370,16 @@ begin
       'No se borra desde aqui (purgala manualmente si de verdad quieres).');
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
     Exit('RECHAZADO: no existe ' + Params.Path);
+  // Una carpeta a la papelera se lleva TODO lo de dentro: ni ser ni contener
+  // una raiz, una referencia o una carpeta de solo lectura. La puerta de
+  // arriba solo mira la ruta que le pasan (2026-09-25). Tambien la vacia:
+  // una raiz de otro workspace sin nada dentro sigue siendo suya.
+  if TDirectory.Exists(Params.Path) then
+  begin
+    Denied := ProtegidoDenegado(Params.Path);
+    if Denied <> '' then
+      Exit(Denied);
+  end;
   // An empty folder needs no copy: retrying a half-finished delete used to
   // dump the (empty) tree into the trash again on every attempt.
   if TDirectory.Exists(Params.Path) and
@@ -527,10 +533,17 @@ begin
   inherited;
   FName := 'delphi_move';
   FDescription := 'Move or rename a file or folder inside the workspace, or COPY ' +
-    'it with copy=true. Both ' +
-    'source and destination must be inside the workspace roots; parent ' +
+    'it with copy=true. The destination must be inside the workspace ' +
+    'roots, and so must the source of a move; the source of a COPY only ' +
+    'has to be readable (your roots, your ReadOnlyRoots, the library ' +
+    'zone): a copy is how something is brought in from a reference ' +
+    'project, its original untouched. Parent ' +
     'folders of the destination are created. The source is copied to the ' +
-    'recoverable trash first. Jailed, refused in read-only mode. Moving or ' +
+    'recoverable trash first. Jailed, refused in read-only mode. A FOLDER ' +
+    'moves only as a rename on the same drive, whole or not at all (links ' +
+    'inside travel as links); to another drive, copy=true and then ' +
+    'delphi_delete. A folder that is or holds a root, a reference or a ' +
+    'read-only folder is refused. Moving or ' +
     'renaming a unit (.pas) moves its .dfm/.fmx with it, rewrites its "unit X;" ' +
     'header on a rename, and re-points every project that lists it: the .dpr ' +
     'uses and DCCReference, the uses of every other unit of the project and ' +
@@ -548,12 +561,20 @@ end;
 function TDelphiMoveTool.ExecuteWithParams(const Params: TDelphiMoveParams): string;
 var
   Denied, BackupNote, Ext, Enc, Src, OldStem, NewStem, ProjNote, P, R, PairNote: string;
-  Projects: TArray<string>;
+  Projects, NoSeguidos: TArray<string>;
   IsUnit: Boolean;
 begin
   if Params.Dest.Trim = '' then
     Exit('RECHAZADO: delphi_move necesita "dest" (ruta destino).');
-  Denied := PathDenied(Params.Path);
+  // El ORIGEN: mover lo quita de su sitio, asi que pasa la puerta de
+  // ESCRITURA; copiar solo lo LEE, asi que pasa la de LECTURA: tus raices,
+  // tus ReadOnlyRoots, la zona de biblioteca. Traer algo de un proyecto de
+  // referencia es justo para lo que existen (David, 25-sep-2026); el
+  // original no se toca y un proyecto entero sigue sin poder duplicarse.
+  if Params.Copy then
+    Denied := ReadPathDenied(Params.Path)
+  else
+    Denied := PathDenied(Params.Path);
   if Denied <> '' then
     Exit(Denied);
   // El destino no cae en temporales, __history ni papelera (aprobado por
@@ -574,6 +595,15 @@ begin
     Exit('RECHAZADO: no existe el origen ' + Params.Path);
   if TFile.Exists(Params.Dest) or TDirectory.Exists(Params.Dest) then
     Exit('RECHAZADO: el destino ya existe: ' + Params.Dest + ' (no sobreescribo).');
+  // UNA CARPETA se mueve renombrandola o nada (MueveArbol, Lsp.Guard). Se
+  // pregunta ANTES de la copia de seguridad: un rechazo no deja copias de
+  // algo que no se va a mover.
+  if TDirectory.Exists(Params.Path) and not Params.Copy then
+  begin
+    Denied := MovidoDenegado(Params.Path, Params.Dest);
+    if Denied <> '' then
+      Exit(Denied);
+  end;
   // copy=true: misma puerta, dos rechazos mas. Desde la papelera se RESTAURA
   // (move), no se copia; y una carpeta con proyecto dentro no se duplica: un
   // proyecto nunca vive en dos sitios (David, 24-sep-2026).
@@ -657,7 +687,8 @@ begin
       BackupNote := TrashPathFor(Params.Path);
       CrearCarpeta(TPath.GetDirectoryName(BackupNote));
       if TDirectory.Exists(Params.Path) then
-        TDirectory.Copy(Params.Path, BackupNote)
+        // EL copiador: no sigue un enlace a lo que no se puede leer (25-sep-2026)
+        CopiaArbol(Params.Path, BackupNote, True, NoSeguidos)
       else
         TFile.Copy(Params.Path, BackupNote);
     end;
@@ -666,23 +697,16 @@ begin
     begin
       if TDirectory.Exists(Params.Path) then
       begin
-        TDirectory.Copy(Params.Path, Params.Dest);
-        // la papelera del origen no es contenido: la copia nace limpia
-        // ...vaciandola con EL vaciador (borrador con guard, sin cruzar
-        // enlaces) y quitando la carpeta ya vacia sin recursion. Antes:
-        // TDirectory.Delete recursivo de la RTL, que cruza junctions y se
-        // saltaba el guard (25-sep-2026).
-        for var Basura in TDirectory.GetDirectories(Params.Dest, BACKUP_SUB, TSearchOption.soAllDirectories) do
-        begin
-          VaciaDesechable(Basura);
-          RemoveDir(Basura);
-        end;
+        // EL copiador (Lsp.Guard): sin la papelera del origen (no es
+        // contenido: ni se copia ni hay que borrarla despues) y sin seguir un
+        // enlace a lo que este workspace no puede leer (25-sep-2026).
+        CopiaArbol(Params.Path, Params.Dest, False, NoSeguidos);
       end
       else
         TFile.Copy(Params.Path, Params.Dest);
     end
     else if TDirectory.Exists(Params.Path) then
-      TDirectory.Move(Params.Path, Params.Dest)
+      MueveArbol(Params.Path, Params.Dest) // renombrar o nada
     else
       TFile.Move(Params.Path, Params.Dest);
     // Restoring a copy OUT of the trash leaves its owner marker behind with
@@ -699,6 +723,9 @@ begin
   end;
   Result := Format('%s'#10'  de: %s'#10'  a:  %s',
     [IfThen(Params.Copy, 'COPIADO', 'MOVIDO'), Params.Path, Params.Dest]);
+  if Length(NoSeguidos) > 0 then
+    Result := Result + #10 + Format(SN_COPY_LINKS_NOT_FOLLOWED_FMT,
+      [Length(NoSeguidos), string.Join(', ', NoSeguidos)]);
   if not Params.Copy then // una copia no necesita red: el origen sigue ahi
     Result := Result + #10 + '  (copia de seguridad en ' + BackupNote + ')';
   if Mudanza.Count > 0 then

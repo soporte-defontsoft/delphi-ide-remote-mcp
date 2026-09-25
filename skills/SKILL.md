@@ -366,7 +366,7 @@ twenty blind retries.
 
 ## Access levels
 
-A workspace may also declare `ReadOnlyRoots`: reference projects outside your roots that you can read, search and navigate to learn how things are done in this house, never write - `delphi_workspace` lists them and `delphi_projects` flags them `readOnly`. A read-only credential can read, search, navigate, diagnose, list
+A workspace may also declare `ReadOnlyRoots`: reference projects outside your roots that you can read, search and navigate to learn how things are done in this house, never write (bring a unit or a folder in with `delphi_move copy=true`; a whole project stays where it is) - `delphi_workspace` lists them and `delphi_projects` flags them `readOnly`. A read-only credential can read, search, navigate, diagnose, list
 components, fetch files, take screenshots and file reports - but every
 mutating tool (edit/create/build/run/install/tap...) is refused at the
 gate. If you are read-only and need a change, report it; do not fish

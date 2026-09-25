@@ -186,10 +186,16 @@ check('S1 arbol grande por defecto = summary compacto con secciones',
 # ReadOnlyRootOf) y la clasificacion de git en una funcion
 # (GitCommandIsQuery), sacada de ToolCallDenied para que la compartan la
 # credencial de solo lectura y los proyectos de referencia. Medido: 16.163.
-check('S1 y de verdad es compacto (<18k chars, el arbol completo pasa de 38k)',
-      len(rbig) < 18000, len(rbig))
-
+# Y el 2026-09-25 (noche), a PROPORCION: el techo fijo se quedo corto por
+# tercera vez por el mismo motivo - el fixture es Lsp.Guard y crece con la
+# puerta (MueveArbol y compania: 18.370). Un numero que hay que subir cada
+# vez que la unidad crece no mide nada. Lo que importa es que el resumen
+# sea COMPACTO frente al arbol completo, y eso no depende del tamano de la
+# unidad. Medido ese dia: 18.210 frente a 111.608 (16%). Techo: 25%.
+# (David: 'la proporcion, adelante'.)
 rfull = call('delphi_symbols', {'path': big, 'mode': 'full'})
+check('S1 y de verdad es compacto (el resumen pesa < 25% del arbol completo)',
+      len(rfull) > 0 and len(rbig) < 0.25 * len(rfull), (len(rbig), len(rfull)))
 check('S2 mode=full conserva el arbol completo con rangos',
       rfull.lstrip().startswith('[') and 'selectionRange' in rfull and
       len(rfull) > 20000, len(rfull))

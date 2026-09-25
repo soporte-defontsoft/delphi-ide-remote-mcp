@@ -284,11 +284,11 @@ function CarpetasDesechables: TArray<string>;
 function NuevaCarpetaDescarga(const ADentroDe: string): string;
 function EsCarpetaDescarga(const ANombre: string): Boolean;
 
-{ LOS sitios que un borrado nunca puede SER ni CONTENER: toda raiz de
-  workspace (de escritura y de referencia, de cualquier workspace, y las del
-  modo local), el vault, la carpeta del servidor, Windows, Archivos de
-  programa y la carpeta del usuario. Una lista: un sitio sagrado nuevo se
-  anade AQUI. }
+{ LOS sitios que un borrado o una mudanza nunca pueden SER ni CONTENER: toda
+  raiz de workspace (de escritura y de referencia, de cualquier workspace, y
+  las del modo local) y sus carpetas de solo lectura (ReadOnlyPaths), el
+  vault, la carpeta del servidor, Windows, Archivos de programa y la carpeta
+  del usuario. Una lista: un sitio sagrado nuevo se anade AQUI. }
 function LugaresProtegidos: TArray<string>;
 
 { La decision de BorraArbol, sola: '' = ADir se puede borrar entero; si no,
@@ -307,6 +307,51 @@ function BorradoDenegado(const ADir: string): string;
   purga del arranque y la copia de carpetas (que no se lleva la papelera del
   origen) pasan por aqui (25-sep-2026). }
 procedure VaciaDesechable(const ADir: string);
+
+{ EL copiador de arboles: copia AOrigen en ADestino SIN FUGAS DE LECTURA. Un
+  enlace (junction o symlink, de carpeta o de fichero) se sigue SOLO si su
+  destino real pasa la puerta de lectura de la sesion (ReadPathDenied): sus
+  raices, sus ReadOnlyRoots, la zona de biblioteca. Si no, no se copia y va
+  a ANoSeguidos. TDirectory.Copy de la RTL seguia cualquier junction: uno
+  plantado en una carpeta (un git clone con enlaces lo mete sin consola)
+  copiaba DENTRO de la jaula lo que la jaula no deja leer (25-sep-2026;
+  David: 'solo se puede escribir en tu workspace, incluye copiar', y leer
+  fuera es lo que el operador declara, 'ReadOnlyRoots es para eso').
+  AConPapelera: si copia tambien las papeleras (__delphi-patch) que haya
+  dentro. Un bucle de enlaces se corta por la ruta real ya visitada. Lanza si
+  no puede copiar. }
+procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
+  out ANoSeguidos: TArray<string>);
+
+{ EL mudador de carpetas: AOrigen pasa a ser ADestino RENOMBRANDOLA (MoveFile
+  en la misma unidad) o NADA. No abre la carpeta ni toca sus ficheros: un
+  junction de dentro viaja como enlace y lo de detras ni se mira; si algo
+  de dentro esta abierto, falla entera y la carpeta sigue intacta. Lo que
+  hacia TDirectory.Move de la RTL cuando no podia renombrar - copiar y
+  borrar fichero a fichero ENTRANDO en los junctions - se trajo a la jaula
+  y BORRO de su sitio el contenido de una carpeta de fuera (reproducido en
+  vivo el 25-sep-2026, presente desde v0.16). Antes de tocar nada pasa por
+  MovidoDenegado. No hay otra forma de mover un arbol: delphi_move y la
+  papelera de delphi_delete pasan por aqui. Lanza si no debe o no puede. }
+procedure MueveArbol(const AOrigen, ADestino: string);
+
+{ La decision de MueveArbol, sola: '' = se puede. Las dos rutas pasan la
+  puerta de escritura (PathDenied), el origen ni ES ni CONTIENE un lugar
+  protegido (ProtegidoDenegado) y las dos estan en la misma unidad: entre
+  unidades no hay renombrado, y copiar y borrar es justo lo prohibido.
+  Quien quiera rechazar ANTES de preparar nada (la copia de seguridad de
+  delphi_move) la llama primero; MueveArbol la repite igualmente. }
+function MovidoDenegado(const AOrigen, ADestino: string): string;
+
+{ '' salvo que la carpeta ADir SEA o CONTENGA un lugar protegido
+  (LugaresProtegidos). PathDenied mira la ruta que le pasan, y mover o
+  tirar a la papelera una carpeta se lleva TODO lo de dentro: un proyecto
+  de referencia declarado DENTRO de una raiz de escritura, o la raiz de
+  otro workspace, se iban con su padre (David, 25-sep-2026: 'ese agujero
+  es grave'). El lugar se NOMBRA solo si la sesion ya lo puede leer: la
+  raiz de otro workspace, el vault o la carpeta del servidor no se
+  revelan, se dice un sitio protegido. }
+function ProtegidoDenegado(const ADir: string): string;
 
 { Vacia la casa del servidor al arrancar. Lo que hay ahi pertenece a la
   llamada que lo creo y ninguna llamada sobrevive a un reinicio, asi que al
@@ -2609,12 +2654,15 @@ var
 begin
   Result := '';
   try
-    Full := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
+    // Formas LARGAS canonicas en los dos lados: una raiz declarada con
+    // nombres cortos (DFONTA~1) y una ruta que llega resuelta (RealPath la
+    // alarga) son el mismo sitio. Comparar texto contra texto no casaba.
+    Full := IncludeTrailingPathDelimiter(LongCanonical(TPath.GetFullPath(APath)));
   except
     Exit;
   end;
   for R in WorkspaceReadOnlyRoots do
-    if StartsText(IncludeTrailingPathDelimiter(R), Full) then
+    if StartsText(IncludeTrailingPathDelimiter(LongCanonical(ExcludeTrailingPathDelimiter(R))), Full) then
       Exit(ExcludeTrailingPathDelimiter(R));
 end;
 
@@ -2906,17 +2954,43 @@ var
   W: TWorkspaceDef;
 begin
   LoadSecurity;
-  Result := GRoots + GRoRoots + [VaultPath, ExtractFileDir(ParamStr(0)),
+  Result := GRoots + GRoRoots + GRoPaths + [VaultPath, ExtractFileDir(ParamStr(0)),
     GetEnvironmentVariable('WINDIR'), GetEnvironmentVariable('ProgramFiles'),
     GetEnvironmentVariable('ProgramFiles(x86)'),
     GetEnvironmentVariable('USERPROFILE')];
   for W in GWorkspaces do
-    Result := Result + W.Roots + W.ReadOnlyRoots;
+    Result := Result + W.Roots + W.ReadOnlyRoots + W.ReadOnlyPaths;
+end;
+
+{ La ruta de un enlace se juzga por DONDE ESTA, no por adonde apunta: la ruta
+  REAL del padre + el nombre. Quitar o mover un junction nunca toca lo de
+  detras, y un junction en el camino no hace pasar una ruta por otra. }
+function RutaDelEnlace(const AFull: string): string;
+begin
+  Result := IncludeTrailingPathDelimiter(RealPath(ExtractFileDir(AFull))) +
+    ExtractFileName(AFull);
+end;
+
+{ El lugar protegido (tal como esta declarado) que AReal ES o CONTIENE; ''
+  si ninguno. EL comparador: BorradoDenegado y ProtegidoDenegado. }
+function LugarProtegidoEn(const AReal: string): string;
+var
+  P, PReal: string;
+begin
+  Result := '';
+  for P in LugaresProtegidos do
+  begin
+    if P.Trim = '' then
+      Continue;
+    PReal := ExcludeTrailingPathDelimiter(RealPath(P.Trim));
+    if StartsText(IncludeTrailingPathDelimiter(AReal), IncludeTrailingPathDelimiter(PReal)) then
+      Exit(ExcludeTrailingPathDelimiter(P.Trim));
+  end;
 end;
 
 function BorradoDenegado(const ADir: string): string;
 var
-  Full, Real, Seg, P, PReal: string;
+  Full, Real, Seg, P: string;
   Segs: TArray<string>;
   I: Integer;
   Desechable: Boolean;
@@ -2933,8 +3007,7 @@ begin
      (Length(Full.Substring(2).Split(['\'], TStringSplitOptions.ExcludeEmpty)) <= 2)) then
     Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'es una unidad o un recurso compartido entero']));
   // la ruta REAL del padre + el nombre (ver la nota de la interface)
-  Real := IncludeTrailingPathDelimiter(RealPath(ExtractFileDir(Full))) +
-    ExtractFileName(Full);
+  Real := RutaDelEnlace(Full);
   // (1) lista blanca
   Segs := Real.Split(['\', '/'], TStringSplitOptions.ExcludeEmpty);
   Desechable := False;
@@ -2956,14 +3029,68 @@ begin
       'no esta dentro de una carpeta desechable (' +
       string.Join(', ', CarpetasDesechables) + ') ni es una descarga temporal']));
   // (2) lista negra: ni ser ni contener un lugar protegido
-  for P in LugaresProtegidos do
+  P := LugarProtegidoEn(Real);
+  if P <> '' then
+    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'es o contiene un lugar protegido (' + P + ')']));
+end;
+
+procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
+  out ANoSeguidos: TArray<string>);
+var
+  Vistos: TStringList;
+  NoSeg: TStringList;
+
+  function EsEnlace(const P: string): Boolean;
+  var
+    A: Cardinal;
   begin
-    if P.Trim = '' then
-      Continue;
-    PReal := ExcludeTrailingPathDelimiter(RealPath(P.Trim));
-    if StartsText(IncludeTrailingPathDelimiter(Real), IncludeTrailingPathDelimiter(PReal)) then
-      Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'es o contiene un lugar protegido (' +
-        ExcludeTrailingPathDelimiter(P.Trim) + ')']));
+    A := GetFileAttributes(PChar(P));
+    Result := (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0);
+  end;
+
+  // Un enlace se sigue solo si lo de detras se puede LEER en esta sesion.
+  function SeSigue(const P: string): Boolean;
+  begin
+    // Dos veredictos de la MISMA puerta de lectura: el destino real (una
+    // referencia, la zona de biblioteca) o el camino por el enlace (un
+    // enlace a tus propias raices). Ninguno abre nada que no se lea ya.
+    Result := (ReadPathDenied(RealPath(P)) = '') or (ReadPathDenied(P) = '');
+    if not Result then
+      NoSeg.Add(P);
+  end;
+
+  procedure Copia(const O, D: string);
+  var
+    E, Nombre: string;
+  begin
+    // la ruta REAL ya copiada no se vuelve a copiar: corta un bucle de enlaces
+    if Vistos.IndexOf(LowerCase(RealPath(O))) >= 0 then
+      Exit;
+    Vistos.Add(LowerCase(RealPath(O)));
+    CrearCarpeta(D);
+    for E in TDirectory.GetFiles(O) do
+      if not EsEnlace(E) or SeSigue(E) then
+        TFile.Copy(E, TPath.Combine(D, TPath.GetFileName(E)), False);
+    for E in TDirectory.GetDirectories(O) do
+    begin
+      Nombre := TPath.GetFileName(E);
+      if not AConPapelera and SameText(Nombre, TrashFolderName) then
+        Continue; // la papelera del origen no es contenido
+      if not EsEnlace(E) or SeSigue(E) then
+        Copia(E, TPath.Combine(D, Nombre));
+    end;
+  end;
+
+begin
+  Vistos := TStringList.Create;
+  NoSeg := TStringList.Create;
+  try
+    Vistos.Sorted := True;
+    Copia(ExcludeTrailingPathDelimiter(AOrigen), ExcludeTrailingPathDelimiter(ADestino));
+    ANoSeguidos := NoSeg.ToStringArray;
+  finally
+    NoSeg.Free;
+    Vistos.Free;
   end;
 end;
 
@@ -2978,6 +3105,73 @@ begin
   if Motivo <> '' then
     raise Exception.Create(Motivo);
   BorraArbolDentro(ADir);
+end;
+
+function ProtegidoDenegado(const ADir: string): string;
+var
+  Full, P: string;
+begin
+  Result := '';
+  try
+    Full := ExcludeTrailingPathDelimiter(TPath.GetFullPath(ADir.Trim));
+  except
+    Exit; // una ruta que no parsea es cosa de PathDenied
+  end;
+  P := LugarProtegidoEn(RutaDelEnlace(Full));
+  if P = '' then
+    Exit;
+  // se nombra solo lo que esta sesion ya puede leer (la nota, en la interface)
+  if ReadPathDenied(P) = '' then
+    P := '"' + P + '"'
+  else
+    P := SN_LUGAR_PROTEGIDO;
+  Result := Format(SR_MUDANZA_PROTEGIDA_FMT, [ADir, P]);
+end;
+
+function MovidoDenegado(const AOrigen, ADestino: string): string;
+var
+  UO, UD: string;
+begin
+  Result := PathDenied(AOrigen);
+  if Result <> '' then
+    Exit;
+  Result := PathDenied(ADestino);
+  if Result <> '' then
+    Exit;
+  Result := ProtegidoDenegado(AOrigen);
+  if Result <> '' then
+    Exit;
+  // la unidad REAL de cada lado: un junction en el camino no la disfraza
+  try
+    UO := ExtractFileDrive(RutaDelEnlace(ExcludeTrailingPathDelimiter(
+      TPath.GetFullPath(AOrigen))));
+    UD := ExtractFileDrive(RealPath(ADestino));
+  except
+    Exit('RECHAZADO: ruta invalida: ' + AOrigen);
+  end;
+  if not SameText(UO, UD) then
+    Result := Format(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]);
+end;
+
+procedure MueveArbol(const AOrigen, ADestino: string);
+var
+  Motivo: string;
+begin
+  // El guard ANTES de tocar nada, como en BorraArbol.
+  Motivo := MovidoDenegado(AOrigen, ADestino);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
+  // MoveFile a secas: ni MOVEFILE_COPY_ALLOWED ni TDirectory.Move. En la
+  // misma unidad renombra de un golpe; si no puede, devuelve False sin
+  // haber tocado nada. Entre unidades falla con ERROR_NOT_SAME_DEVICE: el
+  // mismo rechazo, por si la unidad llego disfrazada (un punto de montaje).
+  if not MoveFile(PChar(ExcludeTrailingPathDelimiter(AOrigen)),
+       PChar(ExcludeTrailingPathDelimiter(ADestino))) then
+  begin
+    if GetLastError = ERROR_NOT_SAME_DEVICE then
+      raise Exception.Create(Format(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]));
+    RaiseLastOSError;
+  end;
 end;
 
 { (la nota, en la interface) Nunca lanza: no poder tirar un temporal no es
