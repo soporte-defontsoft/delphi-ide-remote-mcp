@@ -2366,8 +2366,13 @@ const
     'RECHAZADO: copy=true desde la papelera no: para recuperar una copia ' +
     'MUEVELA fuera (delphi_move sin copy), que es lo que hace un restore.';
 
+  SR_COPIA_DENTRO_DE_SI_FMT =
+    'RECHAZADO: "%s" esta dentro de "%s": una carpeta no se copia ni se ' +
+    'mueve dentro de si misma (se copiaria sin fin). Elige un destino fuera ' +
+    'de ella.';
+
   SR_MOVE_COPY_PROJECT_FMT =
-    'RECHAZADO: esa carpeta contiene un proyecto (%s) y un proyecto nunca ' +
+    'RECHAZADO: eso es o contiene un proyecto (%s) y un proyecto nunca ' +
     'vive en dos sitios. Para arrancar un proyecto a partir de otro, ' +
     'delphi_create; para llevarlo a otro sitio de tu workspace, ' +
     'delphi_move sin copy. Un proyecto de REFERENCIA se lee donde esta: ' +

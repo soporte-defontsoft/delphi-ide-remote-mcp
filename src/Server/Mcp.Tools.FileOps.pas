@@ -611,10 +611,12 @@ begin
   begin
     if IsBackupPath(Params.Path) then
       Exit(SR_MOVE_COPY_FROM_TRASH);
-    if TDirectory.Exists(Params.Path) then
-      for var Pr in TDirectory.GetFiles(Params.Path, '*.d*', TSearchOption.soAllDirectories) do
-        if MatchText(TPath.GetExtension(Pr), ['.dproj', '.dpk']) and not IsBackupPath(Pr) then
-          Exit(Format(SR_MOVE_COPY_PROJECT_FMT, [Pr]));
+    // La decision de la copia, en Lsp.Guard: mira lo que CopiaArbol VA a
+    // copiar (fichero suelto incluido, .dpr incluido, enlaces con su regla),
+    // y un destino dentro del origen (se copiaria sin fin).
+    Denied := CopiaDenegada(Params.Path, Params.Dest);
+    if Denied <> '' then
+      Exit(Denied);
   end;
   // Una copia de la papelera se llama "UFicha.pas-215825250": su extension
   // REAL esta detras del sello de hora. Sin esto, restaurar un formulario

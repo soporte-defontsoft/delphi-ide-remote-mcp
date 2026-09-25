@@ -323,6 +323,15 @@ procedure VaciaDesechable(const ADir: string);
 procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
   out ANoSeguidos: TArray<string>);
 
+{ La decision de copy=true, sola: '' = se puede copiar AOrigen en ADestino.
+  No, si ADestino cae DENTRO de AOrigen (se copiaria sin fin), ni si lo que
+  se va a copiar ES o CONTIENE un proyecto (.dproj, .dpk, .dpr): un proyecto
+  nunca vive en dos sitios (David, 24-sep-2026). Se mira lo que la copia VA
+  a copiar: los enlaces con la misma regla que CopiaArbol (EnlaceLegible),
+  sin la papelera, y un fichero suelto tambien (un .dproj copiado solo se
+  colaba; el .dpr ni se contaba - auditoria 25-sep-2026). }
+function CopiaDenegada(const AOrigen, ADestino: string): string;
+
 { EL mudador de carpetas: AOrigen pasa a ser ADestino RENOMBRANDOLA (MoveFile
   en la misma unidad) o NADA. No abre la carpeta ni toca sus ficheros: un
   junction de dentro viaja como enlace y lo de detras ni se mira; si algo
@@ -3083,27 +3092,41 @@ begin
     Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'es o contiene un lugar protegido (' + P + ')']));
 end;
 
+{ P es un enlace (junction o symlink, de carpeta o de fichero). }
+function EsEnlace(const P: string): Boolean;
+var
+  A: Cardinal;
+begin
+  A := GetFileAttributes(PChar(P));
+  Result := (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0);
+end;
+
+{ LA regla de enlaces de la copia: se sigue solo si lo de detras se puede
+  LEER en esta sesion. Dos veredictos de la MISMA puerta de lectura: el
+  destino real (una referencia, la zona de biblioteca) o el camino por el
+  enlace (un enlace a tus propias raices). Ninguno abre nada que no se lea
+  ya. La usan CopiaArbol y CopiaDenegada: lo que se mira es lo que se copia. }
+function EnlaceLegible(const P: string): Boolean;
+begin
+  Result := (ReadPathDenied(RealPath(P)) = '') or (ReadPathDenied(P) = '');
+end;
+
+{ ADestino cae DENTRO de AOrigen (o es el), por las rutas REALES. }
+function DentroDeSiMismo(const AOrigen, ADestino: string): Boolean;
+begin
+  Result := StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(AOrigen))),
+    IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(ADestino))));
+end;
+
 procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
   out ANoSeguidos: TArray<string>);
 var
   Vistos: TStringList;
   NoSeg: TStringList;
 
-  function EsEnlace(const P: string): Boolean;
-  var
-    A: Cardinal;
-  begin
-    A := GetFileAttributes(PChar(P));
-    Result := (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0);
-  end;
-
-  // Un enlace se sigue solo si lo de detras se puede LEER en esta sesion.
   function SeSigue(const P: string): Boolean;
   begin
-    // Dos veredictos de la MISMA puerta de lectura: el destino real (una
-    // referencia, la zona de biblioteca) o el camino por el enlace (un
-    // enlace a tus propias raices). Ninguno abre nada que no se lea ya.
-    Result := (ReadPathDenied(RealPath(P)) = '') or (ReadPathDenied(P) = '');
+    Result := EnlaceLegible(P);
     if not Result then
       NoSeg.Add(P);
   end;
@@ -3131,6 +3154,10 @@ var
   end;
 
 begin
+  // Dentro de si misma se copiaria sin fin: el destino recien creado sale
+  // en el listado del origen, con una ruta real nueva en cada vuelta.
+  if DentroDeSiMismo(AOrigen, ADestino) then
+    raise Exception.Create(Format(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
   Vistos := TStringList.Create;
   NoSeg := TStringList.Create;
   try
@@ -3141,6 +3168,60 @@ begin
     NoSeg.Free;
     Vistos.Free;
   end;
+end;
+
+function CopiaDenegada(const AOrigen, ADestino: string): string;
+var
+  Vistos: TStringList;
+  Hallado: string;
+
+  function EsProyecto(const F: string): Boolean;
+  begin
+    Result := MatchText(TPath.GetExtension(F), ['.dproj', '.dpk', '.dpr']);
+  end;
+
+  procedure Busca(const O: string);
+  var
+    E: string;
+  begin
+    if (Hallado <> '') or (Vistos.IndexOf(LowerCase(RealPath(O))) >= 0) then
+      Exit;
+    Vistos.Add(LowerCase(RealPath(O)));
+    for E in TDirectory.GetFiles(O) do
+      if EsProyecto(E) and (not EsEnlace(E) or EnlaceLegible(E)) then
+      begin
+        Hallado := E;
+        Exit;
+      end;
+    for E in TDirectory.GetDirectories(O) do
+      if not SameText(TPath.GetFileName(E), TrashFolderName) and
+         (not EsEnlace(E) or EnlaceLegible(E)) then
+        Busca(E);
+  end;
+
+begin
+  if DentroDeSiMismo(AOrigen, ADestino) then
+    Exit(Format(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
+  Hallado := '';
+  if TFile.Exists(AOrigen) then
+  begin
+    if EsProyecto(AOrigen) then
+      Hallado := AOrigen;
+  end
+  else if TDirectory.Exists(AOrigen) then
+  begin
+    Vistos := TStringList.Create;
+    try
+      Vistos.Sorted := True;
+      Busca(ExcludeTrailingPathDelimiter(AOrigen));
+    finally
+      Vistos.Free;
+    end;
+  end;
+  if Hallado <> '' then
+    Result := Format(SR_MOVE_COPY_PROJECT_FMT, [Hallado])
+  else
+    Result := '';
 end;
 
 procedure BorraArbol(const ADir: string);
@@ -3190,6 +3271,8 @@ begin
   Result := ProtegidoDenegado(AOrigen);
   if Result <> '' then
     Exit;
+  if DentroDeSiMismo(AOrigen, ADestino) then
+    Exit(Format(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
   // la unidad REAL de cada lado: un junction en el camino no la disfraza
   try
     UO := ExtractFileDrive(RutaDelEnlace(ExcludeTrailingPathDelimiter(

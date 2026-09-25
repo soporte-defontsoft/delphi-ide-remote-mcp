@@ -276,6 +276,15 @@ var
 begin
   AError := '';
   Result := False;
+  // La puerta OTRA VEZ al aplicar, para cada operacion: entre stage y
+  // commit pasan hasta 30 minutos, y un camino puede haber cambiado (un
+  // junction nuevo, las raices). Solo las ediciones lo volvian a mirar
+  // (auditoria 25-sep-2026). La misma pregunta que los escritores.
+  AError := EscrituraDenegada(Op.Path);
+  if (AError = '') and (Op.Kind = opMove) then
+    AError := EscrituraDenegada(Op.Dest);
+  if AError <> '' then
+    Exit;
   case Op.Kind of
     opEdit:
       begin
@@ -827,8 +836,12 @@ begin
         end;
         if not Applied then
         begin
+          // deshacer tambien escribe: por la misma puerta (un camino que dejo
+          // de ser escribible no se restaura por el)
           for Snap in Snaps do
-            if Snap.Existed then
+            if EscrituraDenegada(Snap.Path) <> '' then
+              Continue
+            else if Snap.Existed then
               TFile.WriteAllBytes(Snap.Path, Snap.Bytes)
             else if TFile.Exists(Snap.Path) then
               TFile.Delete(Snap.Path);

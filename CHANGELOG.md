@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Security
+
+- **A changeset asks the gate again when it applies**, and when it rolls
+  back. Between `preview` and `commit` up to 30 minutes can pass; only edits
+  were re-checked. A folder swapped for a junction to outside in that window
+  had a staged `delete` remove the file BEHIND it (reproduced against 1.3.2).
+- **A folder is never copied or moved into itself.** `copy=true` into its own
+  subfolder copied itself until the path was too long and left the partial
+  tree behind. `move` failed with an opaque error. Both now say why
+  (`CopiaArbol` guards itself; `MovidoDenegado` asks too).
+- **"A project never lives in two places" looks at what the copy will
+  copy**: `CopiaDenegada` (`Lsp.Guard`). A loose `.dproj`/`.dpk` and a
+  folder with only a `.dpr` were copied; links are judged with the copier's
+  own rule (`EnlaceLegible`, shared), not by walking every junction.
+
 ## [1.3.2] - 2026-09-25
 
 ### Security
