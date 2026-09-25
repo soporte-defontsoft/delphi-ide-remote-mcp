@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.2.4';
+  SERVER_VERSION = '1.3.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)

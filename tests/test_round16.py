@@ -181,8 +181,13 @@ check('S1 arbol grande por defecto = summary compacto con secciones',
 # (TMotivoVeto y PathDenied con motivo, BorraArbol, la purga con instancia
 # unica). Medido: 14.198 justo despues. El margen es para que la unidad
 # respire sin que cada release toque este numero.
-check('S1 y de verdad es compacto (<16k chars, el arbol completo pasa de 38k)',
-      len(rbig) < 16000, len(rbig))
+# Y de 16k a 18k el 2026-09-25, por el mismo motivo que la anterior: el
+# FIXTURE crecio de verdad. ReadOnlyRoots (WorkspaceReadOnlyRoots,
+# ReadOnlyRootOf) y la clasificacion de git en una funcion
+# (GitCommandIsQuery), sacada de ToolCallDenied para que la compartan la
+# credencial de solo lectura y los proyectos de referencia. Medido: 16.163.
+check('S1 y de verdad es compacto (<18k chars, el arbol completo pasa de 38k)',
+      len(rbig) < 18000, len(rbig))
 
 rfull = call('delphi_symbols', {'path': big, 'mode': 'full'})
 check('S2 mode=full conserva el arbol completo con rangos',
