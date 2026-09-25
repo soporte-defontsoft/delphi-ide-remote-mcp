@@ -9,7 +9,7 @@ Delphi. Nothing gets installed on the machines you work from.
 
 Take the zip from **[Releases](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)**,
 check its SHA-256 against the one printed on the release page, and unzip it
-into a folder of its own, for example `C:\Delphi-mcp-Server\`:
+**on the Delphi PC**, into a folder of its own, for example `C:\Delphi-mcp-Server\`:
 
 ```
 certutil -hashfile DelphiLspMcp-*.zip SHA256
