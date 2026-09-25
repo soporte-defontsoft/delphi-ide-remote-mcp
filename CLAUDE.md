@@ -79,6 +79,41 @@ The corollary: **a shared helper is also where the NEXT feature of the same
 family lands.** `AplicaTanda` is the example — the two things still pending
 for batches now have one place to be written instead of two.
 
+## Nothing outside the workspace is ever written (David, 2026-09-25)
+
+**Hard rule.** No tool creates, modifies, moves, renames, overwrites or
+deletes anything outside the session's write roots - not directly, not
+through a junction or a symlink, not as a side effect of an RTL call.
+`ReadOnlyRoots` and everything outside `Roots` are read-only, full stop.
+To bring something in from outside there is ONE way: `copy`, which copies
+only what the session can read. `move` only moves inside the workspace.
+
+**The proof that it needs a hard rule.** From v0.16 to 2026-09-25,
+`delphi_move` of a folder called `TDirectory.Move`. The gate checked the two
+paths it was given; the RTL then walked every junction inside the folder,
+copied the files behind it into the jail and deleted the originals.
+Reproduced live: a victim folder outside every root came out EMPTY. A gate
+on the argument plus an operation on the tree is a hole: the gate has to
+hold for every path the operation TOUCHES, not the one it was GIVEN.
+
+**How it is kept.**
+- One question, one helper: "may this session write HERE?" is answered by
+  the jail's write gate in `Lsp.Guard`, on the REAL path. No tool decides
+  read-only-ness on its own and no tool rebuilds the answer; a new writer
+  asks the gate.
+- Trees are walked only by the guard's walkers, which never cross a link
+  (`BorraArbol` deletes, `CopiaArbol` copies). A folder moves only by a
+  rename of the folder itself, where a link travels as a link and what is
+  behind it is never touched.
+- The RTL tree functions (`TDirectory.Move`, `TDirectory.Copy`, recursive
+  `TDirectory.Delete`) do not belong in the server. A raw primitive
+  (`TFile.Move/Copy/Delete`, `MoveFile`, `DeleteFile`, `RemoveDir`) runs
+  only on a path the gate has just approved. Measured 2026-09-25: about 35
+  raw write calls spread across the units - every one is a door until it is
+  audited behind the gate.
+- Every tool that writes a folder gets a battery that plants a junction to
+  a victim outside the roots; the victim must come out untouched.
+
 ## One namer (David, 2026-09-20)
 
 The strong form of the rule, and his own words: *"si siempre pasan por el
