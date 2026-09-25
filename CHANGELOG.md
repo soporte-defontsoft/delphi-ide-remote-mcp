@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- `QUICKSTART.md` lives at the repository root (was `docs/`), so it is the
+  second thing a reader sees, and it ships at the root of the zip too.
+
 ## [1.2.4] - 2026-09-25
 
 ### Changed

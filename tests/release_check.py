@@ -122,6 +122,7 @@ CONTENT = [
     # de jaula de entonces dentro. Nadie lo recompilaba y nadie lo miraba.
     (os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', 'DelphiStyleConvert.exe'), 'DelphiStyleConvert.exe'),
     (os.path.join(REPO, 'settings.example.ini'), 'settings.example.ini'),
+    (os.path.join(REPO, 'QUICKSTART.md'), 'QUICKSTART.md'),  # en la raiz del repo y del zip (David, 25-sep)
     # runner/mcp-runner.py salio del zip en v0.98: el destino ya no necesita
     # NADA instalado (PAServer ejecuta por flag 5). En su lugar viaja el
     # NODO de escritorio ya compilado, EN SUS DOS SABORES (v0.99): el ELF va

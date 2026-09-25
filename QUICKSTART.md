@@ -66,7 +66,7 @@ claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp --header "Au
 On the Windows machine itself use `localhost`. From another machine, open the
 port in the Windows firewall for your LAN or VPN (or pin the listen address
 with `BindIP=` under `[Server]`). Other clients (Claude Desktop, OpenCode,
-your own agent): [CLIENTS.md](CLIENTS.md). MCP is a standard: it is
+your own agent): [docs/CLIENTS.md](docs/CLIENTS.md). MCP is a standard: it is
 configuration, never client-side code.
 
 ## 5. The first call
@@ -75,8 +75,8 @@ Ask the agent for **`delphi_workspace`**. It answers with the roots it sees,
 the active Delphi version and the server version: if that comes back, you are
 connected and inside the jail. Then `delphi_projects` lists the projects under
 `Roots`, and `delphi_build` compiles one. From there the agent's manual is
-[../skills/SKILL.md](../skills/SKILL.md) and the
-tool reference is [TOOLS.md](TOOLS.md).
+[skills/SKILL.md](skills/SKILL.md) and the
+tool reference is [docs/TOOLS.md](docs/TOOLS.md).
 
 ## If it does not work
 
