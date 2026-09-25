@@ -44,13 +44,18 @@ function LabelDirLowIntegrity(const ADir: string): Boolean;
   so a file created earlier at Medium integrity (a log/csv/ini next to the exe)
   would otherwise be un-writable by the confined process - "Acceso denegado"
   with no hint (field round 6, R6-C). This makes the whole working tree
-  writable by the low-IL run, and only that tree. Best-effort, bounded depth. }
+  writable by the low-IL run, and only that tree: only where the session may
+  write (EscrituraDenegada), never across a link (RecorreSinEnlaces) and never
+  a file with a second name (a hard link shares its label) - a junction in the
+  working folder lowered the label of a file OUTSIDE the jail (measured live,
+  2026-09-25). Best-effort. }
 procedure LabelDirTreeLowIntegrity(const ADir: string);
 
 implementation
 
 uses
-  System.Classes;
+  System.Classes,
+  Lsp.Guard; // EscrituraDenegada, RecorreSinEnlaces
 
 var
   GLabeled: TStringList; // canonical roots already tree-labeled this process
@@ -167,12 +172,37 @@ begin
   end;
 end;
 
+{ Cuantos nombres tiene un fichero (hard links). Uno que no se deja abrir
+  cuenta como muchos: lo que no se sabe no se toca. }
+function NombresDelFichero(const APath: string): Cardinal;
+var
+  H: THandle;
+  Info: TByHandleFileInformation;
+begin
+  Result := High(Cardinal);
+  H := CreateFile(PChar(APath), 0, FILE_SHARE_READ or FILE_SHARE_WRITE or
+    FILE_SHARE_DELETE, nil, OPEN_EXISTING, 0, 0);
+  if H = INVALID_HANDLE_VALUE then
+    Exit;
+  try
+    if GetFileInformationByHandle(H, Info) then
+      Result := Info.nNumberOfLinks;
+  finally
+    CloseHandle(H);
+  end;
+end;
+
 procedure LabelDirTreeLowIntegrity(const ADir: string);
 var
-  Entry, Key: string;
+  Key: string;
   RootOk: Boolean;
 begin
   if (ADir = '') or not TDirectory.Exists(ADir) then
+    Exit;
+  // Bajar la etiqueta es ESCRIBIR (el descriptor de seguridad): solo donde
+  // esta sesion puede escribir, por la ruta REAL. Una carpeta de trabajo que
+  // es un enlace a fuera no se etiqueta (25-sep-2026).
+  if EscrituraDenegada(ADir) <> '' then
     Exit;
   // Once per root per process: the SDDL label carries OICI inheritance, so
   // children created AFTER the first labeling are born Low already - only the
@@ -188,18 +218,17 @@ begin
     System.TMonitor.Exit(GLabeledLock);
   end;
   RootOk := LabelDirLowIntegrity(ADir);
-  // Relabel existing children. Best-effort and bounded: an unreadable subtree
-  // is skipped, never fatal (same tolerance as the rest of the server).
-  try
-    for Entry in TDirectory.GetFiles(ADir, '*', TSearchOption.soAllDirectories) do
-      LabelDirLowIntegrity(Entry);
-  except
-  end;
-  try
-    for Entry in TDirectory.GetDirectories(ADir, '*', TSearchOption.soAllDirectories) do
-      LabelDirLowIntegrity(Entry);
-  except
-  end;
+  // Relabel existing children. Best-effort: an unreadable subtree is skipped,
+  // never fatal. Sin cruzar NUNCA un enlace (RecorreSinEnlaces): con
+  // soAllDirectories un junction en la carpeta de trabajo bajaba la etiqueta
+  // de ficheros de FUERA de la jaula (medido en vivo, 25-sep-2026). Un fichero
+  // con otro nombre (hard link) comparte la etiqueta con el: tampoco se toca.
+  RecorreSinEnlaces(ADir,
+    procedure(const APath: string)
+    begin
+      if TDirectory.Exists(APath) or (NombresDelFichero(APath) = 1) then
+        LabelDirLowIntegrity(APath);
+    end);
   if RootOk then
   begin
     System.TMonitor.Enter(GLabeledLock);

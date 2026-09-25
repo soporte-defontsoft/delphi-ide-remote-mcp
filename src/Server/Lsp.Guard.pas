@@ -343,6 +343,19 @@ function CopiaDenegada(const AOrigen, ADestino: string): string;
   comprobacion: estaba escrita cuatro veces en esta unidad. }
 function EsEnlace(const P: string): Boolean;
 
+type
+  TVisitaRuta = reference to procedure(const APath: string);
+
+{ Visita cada fichero y carpeta DEBAJO de ADir (no ADir) sin cruzar NUNCA un
+  enlace: un enlace ni se visita ni se entra - tocarlo seria tocar lo de
+  detras (SetFileSecurity sobre un junction etiqueta su destino). EL
+  recorrido de quien tiene que tocar cada entrada de un arbol y no es borrar
+  ni copiar (esos son BorraArbol y CopiaArbol): el etiquetado de integridad
+  de delphi_test cruzaba un junction con soAllDirectories y bajaba la
+  etiqueta de un fichero de FUERA de la jaula (medido en vivo, 25-sep-2026).
+  Nunca lanza: una rama ilegible se salta. }
+procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta);
+
 { LA regla de enlaces de quien RECORRE un arbol: se sigue solo si lo de
   detras se puede LEER en esta sesion. La usan el copiador, la decision de
   la copia y el recorredor de ficheros (delphi_search, delphi_list,
@@ -930,7 +943,26 @@ begin
   end;
   Result := CanonicalSubiendo(Base,
     function(const ADir: string; out ASalida: string): Boolean
+    var
+      A: Cardinal;
     begin
+      // Un fichero NORMAL no se abre: solo un enlace redirige, y su ruta real
+      // es la real de su carpeta mas su nombre largo (LongCanonical no abre
+      // el fichero). Abrirlo para pedirle el nombre final le quitaba el
+      // rename a otro escritor en ese instante: con un handle abierto, aunque
+      // comparta el borrado, MoveFileEx no puede reemplazarlo - "rename
+      // atomico fallido" y una edicion perdida en test_concurrencia (A y C,
+      // 25-sep-2026, al crecer las comparaciones por ruta real).
+      A := GetFileAttributes(PChar(ADir));
+      if (A <> INVALID_FILE_ATTRIBUTES) and
+         ((A and (FILE_ATTRIBUTE_DIRECTORY or FILE_ATTRIBUTE_REPARSE_POINT)) = 0) then
+      begin
+        Result := NombreFinal(TPath.GetDirectoryName(ADir), ASalida);
+        if Result then
+          ASalida := IncludeTrailingPathDelimiter(ExcludeTrailingPathDelimiter(ASalida)) +
+            TPath.GetFileName(LongCanonical(ADir));
+        Exit;
+      end;
       Result := NombreFinal(ADir, ASalida);
       if Result then
         ASalida := ExcludeTrailingPathDelimiter(ASalida);
@@ -3147,6 +3179,30 @@ var
 begin
   A := GetFileAttributes(PChar(P));
   Result := (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0);
+end;
+
+procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta);
+var
+  Entradas: TArray<string>;
+  E: string;
+begin
+  try
+    Entradas := TDirectory.GetFileSystemEntries(ADir);
+  except
+    Exit; // una rama ilegible se salta
+  end;
+  for E in Entradas do
+  begin
+    if EsEnlace(E) then
+      Continue; // ni se visita ni se entra: lo de detras no es de este arbol
+    try
+      AVisita(E);
+    except
+      // una entrada que no se deja tocar no para las demas
+    end;
+    if TDirectory.Exists(E) then
+      RecorreSinEnlaces(E, AVisita);
+  end;
 end;
 
 { LA regla de enlaces de la copia: se sigue solo si lo de detras se puede

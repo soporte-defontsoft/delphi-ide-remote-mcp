@@ -66,6 +66,14 @@ the MCP `initialize` response (`serverInfo.version`).
   letter case or on the whitespace inside a tag, as MSBuild does not:
   `<DCC_EXEOUTPUT>` was invisible to it.
 
+- **`delphi_test` lowered the integrity label of a file outside the jail.**
+  To let the confined run write its own output, the working folder and
+  everything already in it get a Low label; that walk crossed junctions, so
+  a file outside the roots came out labelled Low (reproduced against 1.3.2).
+  It now walks with `RecorreSinEnlaces` (`Lsp.Guard`), which never visits
+  or enters a link, labels only where `EscrituraDenegada` allows, and never
+  a file with a second name (a hard link shares its label).
+
 ### Changed
 
 - **A message is deleted when it is read**, like a delivered capture:
@@ -79,6 +87,14 @@ the MCP `initialize` response (`serverInfo.version`).
 - The `MENSAJES PENDIENTES` line at the end of every answer announces the
   caller's OWN mail (the identity bound at the handshake), which it can read
   and so turn off. Other boxes are still never named there.
+
+### Fixed
+
+- **`RealPath` no longer opens a regular file**: only a link redirects, so
+  a file's real path is its folder's plus its long name. Opening it made a
+  concurrent atomic rename of that same file fail - "rename atomico
+  fallido", and an edit lost in `test_concurrencia` (2 of 4 runs, after
+  today's added real-path comparisons; 0 of 5 now).
 
 ## [1.3.2] - 2026-09-25
 

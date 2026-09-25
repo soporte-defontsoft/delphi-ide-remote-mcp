@@ -20,6 +20,9 @@ session may write and asserts it comes out untouched:
       platform/config being built (the global or its own) is where the IDE
       puts it - next to every source, or its global Bpl/Dcp - and is
       refused too.
+  T   delphi_test lowered the integrity label of everything under its
+      working folder, across junctions: a file OUTSIDE the roots came out
+      labelled Low (measured live 2026-09-25).
 
 Usage:  python tests/test_escritor_guardado.py [path-to-DelphiLspMcp.exe]
 """
@@ -404,6 +407,34 @@ except Exception:
 check('O un proyecto normal SI compila, con la salida dentro', ok and os.path.exists(
     os.path.join(os.path.dirname(dpn), 'Win64', 'Debug', 'App.exe')), out[:300])
 bs.kill()
+
+# ---- T: delphi_test lowers the integrity label of its working folder so the
+# confined run can write its own output there; the walk never crosses a link
+# (measured live 2026-09-25: a junction there lowered the label of a file
+# OUTSIDE the roots)
+ts = Server({'DELPHI_MCP_ROOTS': MINE, 'DELPHI_MCP_ALLOW_TESTS': '1'})
+TV = os.path.join(OUT, 'etiqueta')
+os.makedirs(TV, exist_ok=True)
+open(os.path.join(TV, 'v.txt'), 'w').write('fuera')
+
+
+def etiqueta_baja(p):
+    o = subprocess.run(['icacls', p], capture_output=True).stdout.decode('cp850', 'replace').lower()
+    return 'low mandatory' in o or 'obligatorio bajo' in o
+
+
+TA = os.path.join(MINE, 'build', 'contests')
+ts.call('delphi_create', {'kind': 'project-console', 'dir': TA, 'name': 'AppTests'})
+out = ts.call('delphi_build', {'project': os.path.join(TA, 'AppTests.dproj'), 'platform': 'Win64', 'config': 'Debug'}, t=600)
+TS = os.path.join(TA, 'Win64', 'Debug')
+subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(TS, 'aFuera'), TV], capture_output=True)
+check('T fixture: exe de test y junction en su carpeta', os.path.exists(os.path.join(TS, 'AppTests.exe'))
+      and os.path.isjunction(os.path.join(TS, 'aFuera')), out[:200])
+check('T fixture: la victima empieza con su etiqueta normal', not etiqueta_baja(os.path.join(TV, 'v.txt')), '')
+out = ts.call('delphi_test', {'project': os.path.join(TA, 'AppTests.dproj'), 'platform': 'Win64', 'nobuild': True}, t=300)
+check('T delphi_test: el fichero de FUERA conserva su etiqueta', not etiqueta_baja(os.path.join(TV, 'v.txt')), out[:200])
+check('T ...y lo suyo SI se etiqueta (el exe, para el sandbox)', etiqueta_baja(os.path.join(TS, 'AppTests.exe')), out[:200])
+ts.kill()
 
 borra(BASE)
 print()
