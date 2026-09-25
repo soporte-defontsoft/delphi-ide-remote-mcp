@@ -68,7 +68,7 @@ The table below says which engine each one uses and why it matters:
 | **Its own `.style` parser and `DelphiStyleConvert.exe`** | `delphi_styles` | **FMX styles by StyleName**: `view`/`get` a text `.style`, `set` one property of a style or of a part, `clone` a variant, `delete` one, `lint` (duplicated StyleNames, `StyleLookup` values of the project's `.fmx`/`.pas` that no style defines, design tokens missing in a theme, `.rc` entries without file) and `build` (text `.style` → `.bin.style` the app embeds, `.rc` → `.res`). Ships `DelphiStyleConvert.exe` next to the server |
 | **The IDE's registry** (Known Packages — what the palette loads) | `delphi_components` | The design packages installed in the server's RAD Studio, whatever the install channel — what the agent has available to program with. List only; installing stays a human decision. |
 | **Your Markdown vault** | `vault_read`, `vault_search`, `vault_append`, `vault_create`, `vault_patch` | Persistent memory, isolated from the code tools (see below). |
-| **A folder the server owns** | `delphi_messages` | The operator's **mailbox** (the way back of `delphi_report`): `.md` files left in `messages\<agent>\` are delivered once by `read`; while one waits every tool answer ends with a `MENSAJES PENDIENTES` line |
+| **A folder the server owns** | `delphi_messages` | The operator's **mailbox** (the way back of `delphi_report`): `.md` files left in `messages\<agent>\` are delivered once by `read`, which deletes them; while one waits every tool answer ends with a `MENSAJES PENDIENTES` line |
 | **The same folder** (`reports\`) | `delphi_report` | The feedback channel back to us; the one write a read-only client may perform. |
 
 ## Persistent memory for your agents (optional)
@@ -212,7 +212,7 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_move` | Move or rename a file or folder inside the workspace — and, for a unit, rename it everywhere it is referenced (`.dpr`, `.dproj`, the uses clauses of every unit of the project, qualified `UnitOld.X` references, its `.dfm`). Moving an item OUT of the trash is how you restore it. `copy=true` is the same door with a different last step: the source stays, the copied unit gets its header and designer, and no project is re-pointed |
 | `delphi_package` | Zip a build output folder for download (recursive; `.dcu`, intermediates and the server's `__delphi-temp` excluded) — the last step of "build on the server, run it here" |
 | `delphi_styles` | **FMX styles by `StyleName`**: view/get/set/clone a style member, `lint` it, and `build` a `.style` into the binary the app loads. The `.rc` include chain is walked so a style cannot pull in a file from outside the jail |
-| `delphi_messages` | The agents' mailbox: `check` lists what is pending for you, `read` delivers it. Notes from the operator to one agent or to everyone (a restart, a new tool, a convention); your identity comes from the handshake, so you do not type it |
+| `delphi_messages` | The agents' mailbox: `check` lists what is pending for you, `read` delivers it. Notes from the operator to one agent (a restart, a new tool, a convention); reading one deletes it, and a notice for everyone goes into each agent's box; your identity comes from the handshake, so you do not type it |
 | `vault_read` · `vault_search` | **Optional persistent memory** (off unless configured): read and search a vault of Markdown notes — your decisions, conventions and project context — so a remote agent starts with more than the source tree. Lazy loading: it bootstraps with the vault's own rules + index and pulls only the notes it needs |
 | `vault_append` · `vault_create` · `vault_patch` | Let the agent **record what it learned** (opt-in, read-write credential only): append a log entry, create a note, replace an anchored fragment. New notes are linked from the project's own notes, never from the root index: `MEMORY.md` and the vault rules are **governance files**, refused on every write - the agent asks for their update in its reply (or a `delphi_report`) and a person applies it. No rewrites, no deletes, and the server always backs the original up first. See **[docs/VAULT.md](docs/VAULT.md)** |
 
@@ -400,7 +400,6 @@ section is completely inert.
 ```ini
 [Server]
 Port=3000                               ; HTTP port for --http and the tray (-gui)
-MessagesRetentionDays=30                ; mailbox housekeeping (plumbing, not permission)
 SessionTimeoutMinutes=720               ; idle HTTP sessions expire after this (0 = never)
 
 ; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
@@ -542,10 +541,6 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   must name its `device` explicitly (an implicit target could be an unlisted device that
   happens to be the only one attached) — and, like every list since v0.98, **absent means
   NO devices**, never unrestricted.
-- **`[Server] MessagesRetentionDays`**: mailbox housekeeping — delivered agent mail older
-  than N days (default 30; 0 = keep forever) is purged, and stale empty mailboxes removed,
-  on each mailbox use. Server plumbing, not a permission: that is why it lives under
-  `[Server]` and not in a workspace.
 - **`[Workspace.<name>] DelphiVersion`** (or `DELPHI_MCP_DELPHI_VERSION` in launch mode): which RAD
   Studio a workspace uses when the machine hosts several side by side - the BDS version number
   (`37.0` = RAD Studio 13, `23.0` = 12 Athens, `22.0` = 11 Alexandria; `delphi_installs` lists them with their names, and `delphi_workspace` names the active one in `activeDelphiName`). One key governs the

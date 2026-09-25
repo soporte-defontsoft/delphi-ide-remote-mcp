@@ -13,7 +13,7 @@ them: every probe below names the finding it is aiming at.
   B  N writers on N different files     -> control: this one must be green
   C  N delphi_create into the SAME .dpr -> lost update on the project file
   D  N delphi_report at once            -> the "look for a free name" TOCTOU
-  E  a broadcast message, two readers   -> is "para todos" really for everyone
+  E  a notice for everyone, two readers -> one copy per agent box, each read and deleted
   F  two delphi_package of one folder   -> deterministic zip name, no lock
   G  (retired in 1.0.16: the LOCAL desktop tool is gone, the desktop goes
      through a PAServer profile and needs a live target - not measured here)
@@ -321,20 +321,25 @@ try:
               ok_d, len(files_d), [str(r)[:160] for r in rd if bad(r)]))
 
     # ---------------------------------------------------------------- E ----
-    # A message dropped in the mailbox ROOT is addressed to everybody. Two
-    # agents ask for their mail; both should see it.
+    # A notice for everyone is the SAME message dropped in each agent's box:
+    # there is no box "for everyone" since 2026-09-25 (David). Two agents ask
+    # for their mail; each gets its own copy, and reading it deletes it.
     MSGS = os.path.join(WORK, 'messages')
-    os.makedirs(MSGS, exist_ok=True)
-    with open(os.path.join(MSGS, '20260920-0900-aviso.md'), 'w',
-              encoding='utf-8') as f:
-        f.write('AVISO-BROADCAST: parad todos y leed esto\n')
+    for quien in ('alice', 'bob'):
+        os.makedirs(os.path.join(MSGS, quien), exist_ok=True)
+        with open(os.path.join(MSGS, quien, '20260920-0900-aviso.md'), 'w',
+                  encoding='utf-8') as f:
+            f.write('AVISO-BROADCAST: parad todos y leed esto\n')
     alice, bob = session('alice'), session('bob')
     ea = call('delphi_messages', {"command": "read"}, alice)
     eb = call('delphi_messages', {"command": "read"}, bob)
-    check('E buzon: el primer agente recibe el aviso para todos',
+    check('E buzon: el primer agente recibe su copia del aviso',
           'AVISO-BROADCAST' in ea, ea[:150])
-    check('E buzon: el SEGUNDO agente tambien lo recibe',
+    check('E buzon: el SEGUNDO agente tambien recibe la suya',
           'AVISO-BROADCAST' in eb, eb[:150])
+    check('E buzon: leidas, las dos copias se han borrado',
+          not any(os.path.exists(os.path.join(MSGS, q, '20260920-0900-aviso.md'))
+                  for q in ('alice', 'bob')), os.listdir(MSGS))
 
     # ---------------------------------------------------------------- F ----
     # Two packages of the same folder at once: the zip name is derived from the

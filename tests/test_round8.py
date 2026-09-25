@@ -430,11 +430,14 @@ check('#9 ...y NO anuncia el correo ajeno en cada respuesta',
       'para agentes concretos' not in t, t[-250:])
 check('#9b ...pero se puede saber que lo hay, en la ficha del servidor',
       json.loads(t).get('server', {}).get('mailboxes') == 1, t[-250:])
-open(os.path.join(MBOX, '20260825-general.md'), 'w', encoding='utf-8').write(
-    '# general\n\npara todos\n')
+# Desde 2026-09-25 no hay buzon "para todos": el aviso que va en cada
+# respuesta es el del correo PROPIO (la identidad del handshake, aqui "r8").
+os.makedirs(os.path.join(MBOX, 'r8'), exist_ok=True)
+open(os.path.join(MBOX, 'r8', '20260825-general.md'), 'w', encoding='utf-8').write(
+    '# general\n\npara ti\n')
 t = call(MSG, 'delphi_workspace', {})
-check('#9 el correo para TODOS si se anuncia como tuyo',
-      'para TODOS' in t, t[-250:])
+check('#9 el correo PROPIO si se anuncia como tuyo',
+      'en tu buzon (r8)' in t, t[-250:])
 # El aviso se pegaba DETRAS del resultado: con correo esperando, cualquier
 # respuesta JSON dejaba de poder parsearse (json.loads reventaba de la nada,
 # y solo mientras hubiera correo). Ahora entra DENTRO del objeto.
@@ -442,7 +445,7 @@ jw = J(t)
 check('#9 con correo esperando, una respuesta JSON SIGUE siendo JSON',
       jw != {} and 'roots' in jw, t[:120])
 check('#9 ...y el aviso viaja dentro, en "mailbox"',
-      'para TODOS' in jw.get('mailbox', ''), str(jw.get('mailbox'))[:150])
+      'en tu buzon (r8)' in jw.get('mailbox', ''), str(jw.get('mailbox'))[:150])
 MSG['p'].kill()
 
 # ------------------------------------------------------------------- #19 --

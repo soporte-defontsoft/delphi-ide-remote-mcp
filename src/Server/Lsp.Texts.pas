@@ -2544,43 +2544,35 @@ const
 
   SD_MESSAGES =
     'Your MAILBOX: messages the operator leaves for you (the way back of ' +
-    'delphi_report). command=read delivers every pending message addressed ' +
-    'to your agent id or to everyone, once; check only lists what waits. ' +
-    'While mail waits, every tool answer ends with a MENSAJES PENDIENTES ' +
-    'line - read it then: it may change what you are doing.'#10 +
+    'delphi_report). command=read delivers every pending message in YOUR ' +
+    'box and DELETES it: a message is read once and nothing is kept. check ' +
+    'only lists what waits. While mail for you waits, every tool answer ends ' +
+    'with a MENSAJES PENDIENTES line - read it then: it may change what you ' +
+    'are doing.'#10 +
     'HONESTLY, ABOUT PRIVACY: the box is indexed by the agent id YOU declare, ' +
     'and nothing ties that id to whoever is calling - everyone here shares ' +
     'one token. So anyone using this server can list, and consume, the mail ' +
-    'of any id they can guess, and a consumed message does not reach the one ' +
-    'it was for (it is still in messages\_entregados, so the operator can ' +
-    'put it back). Treat this as a shared noticeboard, not as private post: ' +
-    'read YOUR id, and do not go through other people''s. Nothing secret ' +
-    'should be sent through here.';
-
-  SN_MESSAGES_PENDING_ALL_FMT =
-    #10#10'MENSAJES PENDIENTES: %d para TODOS los agentes (te incluye). ' +
-    'Leelos con delphi_messages command=read agent=<tu id>.';
-
-  SN_MESSAGES_PENDING_SOME_FMT =
-    #10'(Hay ademas %d mensaje(s) para agentes concretos; si esperas correo: ' +
-    'delphi_messages command=check agent=<tu id>.)';
+    'of any id they can guess, and a consumed message is gone: it does not ' +
+    'reach the one it was for. Treat this as a shared noticeboard, not as ' +
+    'private post: read YOUR id, and do not go through other people''s. ' +
+    'Nothing secret should be sent through here.';
 
   SN_MESSAGES_PENDING_FMT =
-    #10'MENSAJES PENDIENTES: %d (buzon: %s). Leelos con delphi_messages ' +
-    'command=read agent=<tu id>.';
+    #10#10'MENSAJES PENDIENTES: %d en tu buzon (%s). Leelos con ' +
+    'delphi_messages command=read.';
 
   SN_MESSAGES_NONE_FMT =
-    'Sin mensajes para "%s" ni para todos.';
+    'Sin mensajes para "%s".';
 
   SN_MESSAGES_NONE_NO_AGENT =
-    'Sin mensajes para todos. Si tienes un id de agente (el "agent" de ' +
-    'delphi_report), pasalo en agent= para ver tu buzon propio.';
+    'Sin id de agente no hay buzon: pasa agent=<tu id> (el mismo "agent" ' +
+    'que das a delphi_report).';
 
   SN_MESSAGES_CHECK_FMT =
-    'Mensajes pendientes: %d (command=read los entrega):';
+    'Mensajes pendientes: %d (command=read los entrega y los borra):';
 
   SN_MESSAGES_DELIVERED =
-    '(entregados; no volveran a aparecer. Si piden algo, hazlo y, si ' +
+    '(leidos y borrados: no volveran a aparecer. Si piden algo, hazlo y, si ' +
     'procede, responde con delphi_report.)';
 
   // ---- delphi_build: F2613 helper ----

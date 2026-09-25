@@ -66,6 +66,20 @@ the MCP `initialize` response (`serverInfo.version`).
   letter case or on the whitespace inside a tag, as MSBuild does not:
   `<DCC_EXEOUTPUT>` was invisible to it.
 
+### Changed
+
+- **A message is deleted when it is read**, like a delivered capture:
+  nothing is kept aside in `messages\_entregados` and nothing is purged
+  later, so the box only ever holds what has not been read.
+  `[Server] MessagesRetentionDays` is gone.
+- **One box per agent, none "for everyone".** A notice for all agents goes
+  into each agent's folder: with two places to look at, agents looked at
+  the wrong one. A `.md` left loose in `messages\` is no longer anyone's
+  mail.
+- The `MENSAJES PENDIENTES` line at the end of every answer announces the
+  caller's OWN mail (the identity bound at the handshake), which it can read
+  and so turn off. Other boxes are still never named there.
+
 ## [1.3.2] - 2026-09-25
 
 ### Security
