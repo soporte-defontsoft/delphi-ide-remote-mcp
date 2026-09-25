@@ -270,6 +270,12 @@ begin
   // Belt and braces: whatever the input did, the result must live in the vault.
   if not StartsText(IncludeTrailingPathDelimiter(Root), Full) then
     Exit(SR_VAULT_JAIL);
+  // ...y por la ruta REAL: un enlace dentro del vault no saca la nota fuera.
+  // Nada fuera de su sitio se escribe, por ningun camino (norma de David,
+  // 25-sep-2026; el vault no tiene enlaces propios: 'Obsidian no toca el vault').
+  if not StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(Root))),
+       IncludeTrailingPathDelimiter(RealPath(Full))) then
+    Exit(SR_VAULT_JAIL);
   AFull := Full;
   Result := '';
 end;

@@ -74,29 +74,7 @@ const
   MESSAGES_DIR = 'messages';
   DELIVERED_DIR = '_entregados';
 
-function Slug(const S: string): string;
-var
-  C, Prev: Char;
-begin
-  Result := '';
-  Prev := '-';
-  for C in S do
-  begin
-    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
-    begin
-      Result := Result + C;
-      Prev := C;
-    end
-    else if Prev <> '-' then
-    begin
-      Result := Result + '-';
-      Prev := '-';
-    end;
-    if Length(Result) >= 40 then
-      Break;
-  end;
-  Result := Result.Trim(['-']).ToLower;
-end;
+// Slug: EL normalizador de nombres de cliente vive en Lsp.Guard (uno solo).
 
 function MessagesRoot: string;
 begin

@@ -73,31 +73,7 @@ const
   // check: it is this tool's own input contract, not an access decision.
   MAX_REPORT_BYTES = 256 * 1024;
 
-{ File-name-safe slug of the title (ASCII letters/digits/dashes, capped). }
-function Slug(const S: string): string;
-var
-  C: Char;
-  Prev: Char;
-begin
-  Result := '';
-  Prev := '-';
-  for C in S do
-  begin
-    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
-    begin
-      Result := Result + C;
-      Prev := C;
-    end
-    else if Prev <> '-' then
-    begin
-      Result := Result + '-';
-      Prev := '-';
-    end;
-    if Length(Result) >= 40 then
-      Break;
-  end;
-  Result := Result.Trim(['-']).ToLower;
-end;
+// Slug: EL normalizador de nombres de cliente vive en Lsp.Guard (uno solo).
 
 { Reserva el nombre creando el fichero VACIO en exclusiva: si ya existe (o lo
   acaba de crear otro hilo en este mismo instante) devuelve False y el llamante

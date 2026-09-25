@@ -284,6 +284,13 @@ function CarpetasDesechables: TArray<string>;
 function NuevaCarpetaDescarga(const ADentroDe: string): string;
 function EsCarpetaDescarga(const ANombre: string): Boolean;
 
+{ EL normalizador de lo que un CLIENTE nombra y acaba en el disco (el
+  agente de un buzon o de un informe, el titulo de un informe): letras y
+  cifras ASCII, el resto se junta en un guion, 40 como mucho, minusculas.
+  Nada del valor crudo llega al sistema de ficheros. Uno solo: estaba
+  copiado identico en Mcp.Tools.Messages y Mcp.Tools.Report (25-sep-2026). }
+function Slug(const S: string): string;
+
 { LOS sitios que un borrado o una mudanza nunca pueden SER ni CONTENER: toda
   raiz de workspace (de escritura y de referencia, de cualquier workspace, y
   las del modo local) y sus carpetas de solo lectura (ReadOnlyPaths), el
@@ -3022,6 +3029,30 @@ begin
   // la inversa exacta del nombrador: el prefijo y 8 hexadecimales
   Result := TRegEx.IsMatch(ANombre, '^' + TRegEx.Escape(DESCARGA_PREFIJO) +
     '[0-9a-f]{8}$', [roIgnoreCase]);
+end;
+
+function Slug(const S: string): string;
+var
+  C, Prev: Char;
+begin
+  Result := '';
+  Prev := '-';
+  for C in S do
+  begin
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
+    begin
+      Result := Result + C;
+      Prev := C;
+    end
+    else if Prev <> '-' then
+    begin
+      Result := Result + '-';
+      Prev := '-';
+    end;
+    if Length(Result) >= 40 then
+      Break;
+  end;
+  Result := Result.Trim(['-']).ToLower;
 end;
 
 function LugaresProtegidos: TArray<string>;

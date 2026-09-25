@@ -37,6 +37,11 @@ the MCP `initialize` response (`serverInfo.version`).
 - One `EsEnlace` for the four hand-written reparse-point checks of
   `Lsp.Guard`; `RealPath` is public, for comparing (never for deciding).
 
+- **The vault is confined by the real path too**: a link inside the vault
+  cannot take a note outside it (`VaultResolve`).
+- One `Slug` (`Lsp.Guard`): the normalizer of client-chosen names that reach
+  the disk was copied identically in `delphi_messages` and `delphi_report`.
+
 ## [1.3.2] - 2026-09-25
 
 ### Security
