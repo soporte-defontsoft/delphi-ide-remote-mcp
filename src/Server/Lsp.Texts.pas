@@ -1657,6 +1657,11 @@ const
     'inline=false gives file + download instead; a capture with out= is ' +
     'yours and stays.';
 
+  SN_CAPTURE_OUT_TEMP_HINT =
+    'Para una captura no hace falta out: omitelo y la imagen llega en la ' +
+    'misma respuesta, sin fichero que recoger ni que acumular. out= es solo ' +
+    'para guardarla en una carpeta TUYA del proyecto.';
+
   SP_CAPTURE_FRAME =
     'tap/type: the "frame" of the screenshot you MEASURED ON, copied ' +
     'verbatim. With it, x,y are pixels of THAT image and the server converts ' +

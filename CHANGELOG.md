@@ -40,7 +40,11 @@ the MCP `initialize` response (`serverInfo.version`).
   the same day: 10 gestures had left 41 MB in a workspace root, purged only
   at restart. (David, 2026-09-25.) The recognizer now knows both capture
   sub-folders (`desktop` and `android`) from constants shared with the
-  namer: Android captures were accumulating too.
+  namer: Android captures were accumulating too. A capture requested with
+  `out=` inside a `__delphi-temp` is refused (the refusal says: omit `out`,
+  the image comes in the answer) - 90 captures, 66 MB, had piled up in a
+  nested temp folder the startup purge never reaches - and the temporary
+  download folder of a desktop capture is always removed.
 - One resolver of the active workspace inside the guard: `HasActiveWS` /
   `ActiveWS` replace 18 hand-written copies of "if a workspace is active, its
   field; else the global", and `LoadSecurity` reads every local-mode key

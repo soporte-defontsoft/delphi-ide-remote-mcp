@@ -488,9 +488,17 @@ begin
           CrearCarpeta(Destino);
           TFile.Move(Local, Propia);
           Local := Propia;
-          BorraArbol(Bajada); // sin cruzar enlaces: ver Lsp.Guard
         except
-          // si no se puede renombrar, la imagen vale igual donde cayo
+          // Antes la imagen se quedaba 'donde cayo', dentro de la .tmp-, y la
+          // .tmp- se quedaba para siempre (una de Hermes, 25-sep-2026). Ahora
+          // se dice y no queda nada.
+          on E: Exception do
+            Fallo := 'no pude colocar la captura bajada: ' + E.Message;
+        end;
+        try
+          BorraArbol(Bajada); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
+        except
+          // limpiar no puede tumbar la respuesta
         end;
         { La lista de ventanas viaja CON cada captura (David, 24-sep), en los
           dos sistemas y en pixeles de la imagen: titulo y rectangulo. En

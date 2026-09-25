@@ -79,7 +79,7 @@ if not j:
     print('RESPUESTA CRUDA:', raw[:1200])
 check('run: compila y corre', j.get('result') in ('pass', 'fail'), str(j)[:500])
 check('run: result=pass (0 fallos)', j.get('result') == 'pass' and j.get('failed') == 0, str(j)[:600])
-MIN_TESTS = 37  # 14 encodings + 8 designer + 5 dproj on 24-sep-2026; +10 images/frame on 25-sep; only grows
+MIN_TESTS = 38  # 14 encodings + 8 designer + 5 dproj on 24-sep-2026; +11 images/frame/capture-out on 25-sep; only grows
 check('run: al menos %d tests, todos pasados' % MIN_TESTS,
       j.get('total', 0) >= MIN_TESTS and j.get('passed') == j.get('total'), str(j)[:300])
 check('run: veredicto por numeros, no por exit code', j.get('verdictFrom') == 'counts', str(j)[:200])

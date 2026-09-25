@@ -2772,7 +2772,20 @@ begin
       FormatDateTime('yyyymmdd-hhnnsszzz', Now),
       LowerCase(TGUID.NewGuid.ToString.Substring(1, 6)), AExt]));
   if O <> '' then
+  begin
     Result := PathDenied(AFile);
+    // Una captura no se guarda en los temporales del servidor: 90 capturas y
+    // 66 MB de Hermes en una __delphi-temp anidada que la purga del arranque
+    // no alcanza (25-sep-2026). Se omite out y llega en la respuesta (David:
+    // 'no queremos acumular capturas, se entregan en una sola llamada y se
+    // borran').
+    if Result = '' then
+    begin
+      Result := DeadCopyWriteDenied(AFile);
+      if Result <> '' then
+        Result := Result + ' ' + SN_CAPTURE_OUT_TEMP_HINT;
+    end;
+  end;
 end;
 
 { El unico borrador de arboles del servidor (la nota larga, en el

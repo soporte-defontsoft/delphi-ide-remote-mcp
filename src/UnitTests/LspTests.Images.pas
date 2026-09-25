@@ -23,6 +23,7 @@ type
     [Test] procedure FrameConvierteEscalaYOrigen;
     [Test] procedure FrameEsLaInversaDeSuNombrador;
     [Test] procedure FrameRechazaFormaYPuntoFuera;
+    [Test] procedure CapturaConOutEnTemporalesSeRechaza;
   end;
 
 implementation
@@ -186,6 +187,22 @@ begin
   Assert.StartsWith('RECHAZADO', FramePoint('0x536@3440x1440+0+0', '1', '1', X, Y));
   Assert.StartsWith('RECHAZADO', FramePoint('1280x536@3440x1440+0+0', '1280', '10', X, Y));
   Assert.StartsWith('RECHAZADO', FramePoint('1280x536@3440x1440+0+0', '-1', '10', X, Y));
+end;
+
+procedure TImageTests.CapturaConOutEnTemporalesSeRechaza;
+var
+  F, R: string;
+begin
+  // Junto al ejecutor: dentro del repo, o sea dentro de la jaula con la que
+  // lo lance el servidor de pruebas (una ruta de fuera la rechaza la jaula y
+  // nunca llega a la regla de temporales).
+  R := CaptureTarget(ExtractFilePath(ParamStr(0)) + '__delphi-temp\cap.png',
+    CAPTURE_SUB_DESKTOP, 'desktop', '.png', F);
+  Assert.StartsWith('RECHAZADO', R, 'una captura con out= en __delphi-temp se acumula');
+  Assert.Contains(R, 'omitelo', 'el rechazo dice que se omita out');
+  // (la jaula la pone el servidor que lanza el ejecutor: aqui solo la regla)
+  Assert.AreEqual('', DeadCopyWriteDenied('C:\w\proyecto\capturas\cap.png'),
+    'una carpeta del proyecto no es una carpeta muerta');
 end;
 
 initialization
