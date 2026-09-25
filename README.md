@@ -412,6 +412,7 @@ Token=galatea-secret                    ; read-write, but only inside THESE root
 ReadOnlyToken=galatea-reviewer-secret   ; optional read-only twin, same roots
 Roots=D:\Projects\Galatea;D:\Projects\Shared
 ReadOnlyPaths=vendor;third-party\libx   ; INSIDE the jail: read, never write
+ReadOnlyRoots=D:\Projects\ReferenceERP    ; OUTSIDE the jail: reference projects, read only, win over Roots
 LibraryZone=1                           ; ITS declaration - nothing is inherited
 AllowTests=1                            ; may build+run ITS test suites
 VaultPath=D:\Vaults\TeamMemory          ; ITS persistent memory (vault_* tools)
@@ -480,11 +481,13 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   mistake never fails silently. And a workspace carries **everything else** too:
   `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`,
   `LibraryZone`,
-  `AgentConfinement`, `SharedFolders`, `ReadOnlyPaths`, `Profile` — and the reach lists `GitRemotes`,
+  `AgentConfinement`, `SharedFolders`, `ReadOnlyPaths`, `ReadOnlyRoots`, `Profile` — and the reach lists `GitRemotes`,
   `RemoteHosts`, `RemoteRunProjects`. Nothing is inherited from anywhere: an absent switch
   is off, an absent list is empty — one workspace can be a CI space that executes and dials
   its build machine while every other space stays compile-only and offline.
 - **ReadOnlyPaths**: folders INSIDE the jail that may be read but never written — a `vendor/`, a submodule, a reference clone. Semicolon-separated; a relative entry resolves against each root, an absolute one is taken as is; absent means none. It is not the jail and the server says so differently: the jail is "you don't go in there", this is "you look, you don't touch". Third-party code often has to live inside the project — that is where whoever clones it will look for it — and when that folder is *another git repository*, a careless write does not even show up in the main repo's `git status`, so it can go a whole session unnoticed. This turns that into a rule the server enforces instead of one the agent has to remember.
+- **ReadOnlyRoots**: **reference projects** — folders OUTSIDE the jail that the workspace may read as if they were its own (read, search, symbols, definition, git query, fetch) and never write: no edit, no build (a build writes dcu and exe), no move, no temp files. Same syntax as `Roots`, absolute. The idea: an agent works in its roots and can also *see other projects of the house to learn how things are done here*. Deliberately separate from `Roots`, so the write jail never sees them, and it **wins over `Roots`**: a folder in both lists, or a root inside a reference, is read-only. `delphi_workspace` lists them as `readOnlyRoots` and `delphi_projects` flags their projects with `readOnly:true`.
+- **ReadOnlyRoots**: **reference projects** - folders OUTSIDE the jail that the workspace may read as if they were its own (read, search, symbols, definition, git query, fetch) and never write: no edit, no build (a build writes dcu and exe), no move, no temp files. Same syntax as `Roots`, absolute. The idea: an agent works in its roots and can also *see other projects of the house to learn how things are done here*. Deliberately separate from `Roots`, so the write jail never sees them, and it **wins over `Roots`**: a folder in both lists, or a root inside a reference, is read-only. `delphi_workspace` lists them as `readOnlyRoots` and `delphi_projects` flags their projects with `readOnly:true`.
 - **AgentConfinement**: *cooperative* subdivision inside one credential's
   jail — each agent (by its self-declared `clientInfo.name`) writes only under
   `<root>\<name>\`, plus any `SharedFolders`. Useful for teams sharing one token; for a

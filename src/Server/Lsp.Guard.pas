@@ -38,7 +38,7 @@ function ToolHiddenFromList(const AToolName: string): Boolean;
 type
   TMotivoVeto = (mvNinguno, mvAnomalia, mvVault, mvRootsInvalidos,
     mvRutaInvalida, mvEnlaceFuera, mvSoloLectura, mvConfinado,
-    mvFueraDeJaula);
+    mvFueraDeJaula, mvReferencia);
 
 function PathDenied(const APath: string): string; overload;
 function PathDenied(const APath: string;
@@ -60,6 +60,23 @@ function WorkspaceRoots: TArray<string>;
   comportamiento de siempre. Mismo trato que la zona de biblioteca del IDE:
   las tools de lectura entran, las de escritura no. }
 function WorkspaceReadOnlyPaths: TArray<string>;
+
+{ Proyectos de REFERENCIA: el ReadOnlyRoots= del workspace activo (o
+  DELPHI_MCP_READONLY_ROOTS en el modo local). Carpetas FUERA de Roots que
+  las tools de lectura recorren como si fueran suyas - leer, buscar,
+  simbolos, definicion, git de consulta, fetch - y las de escritura no tocan
+  jamas: ni edit, ni build (escribe dcu/exe), ni temporales. La idea (David,
+  25-sep-2026): un agente trabaja en sus roots y ademas VE otros proyectos
+  de la casa para aprender como se hacen las cosas. Separado de Roots a
+  proposito, y MANDA sobre Roots: una carpeta en los dos sitios, o una raiz
+  dentro de una referencia, es de solo lectura ('lo que tienes mas claro es
+  lo que quieres readonly'). }
+function WorkspaceReadOnlyRoots: TArray<string>;
+
+{ La raiz de referencia que contiene APath ('' = ninguna). EL sitio que sabe
+  si una ruta es de referencia: lo usan la guarda, los temporales y
+  delphi_projects. }
+function ReadOnlyRootOf(const APath: string): string;
 
 { Bearer authorization - the ONE place that knows every credential: the
   per-workspace tokens from
@@ -505,6 +522,7 @@ type
     // la carpeta del proyecto, que es lo que encuentra quien lo clona. Asi
     // que la proteccion la pone la configuracion, no la memoria del agente.
     ReadOnlyPaths: TArray<string>;
+    ReadOnlyRoots: TArray<string>;    // proyectos de referencia: se leen, no se escriben
     Invalid: Boolean; // Roots= had text but nothing parsed: fail closed
     // Capacidades del workspace. Desde el 19-sep-2026 (v0.98) NO se
     // hereda NADA de ningun sitio (decision David, rematando la del
@@ -534,6 +552,8 @@ var
   GRootsInvalid: Boolean = False; // Roots= had text but NO valid root: fail closed
   GRoLoaded: Boolean = False;
   GRoPaths: TArray<string>;       // ReadOnlyPaths del modo local de lanzamiento
+  GRoRootsLoaded: Boolean = False;
+  GRoRoots: TArray<string>;       // ReadOnlyRoots del modo local de lanzamiento
   GProcessReadOnly: Boolean = False;
   GSecLoaded: Boolean = False;
   GAuthToken: string;
@@ -1076,6 +1096,8 @@ begin
             W.Roots := ParseRootsList(RawRoots);
             W.ReadOnlyPaths := ParseReadOnlyList(
               Ini.ReadString(S, 'ReadOnlyPaths', ''), W.Roots);
+            // Mismo lector que Roots: son raices, solo que de lectura.
+            W.ReadOnlyRoots := ParseRootsList(Ini.ReadString(S, 'ReadOnlyRoots', ''));
             W.Invalid := (RawRoots.Trim <> '') and (Length(W.Roots) = 0);
             // capability overrides; absent key = inherit the default
             W.OvAllowTests := ReadTriState(Ini, S, 'AllowTests');
@@ -2444,6 +2466,33 @@ begin
   Result := GRoPaths;
 end;
 
+function WorkspaceReadOnlyRoots: TArray<string>;
+begin
+  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
+    Exit(GWorkspaces[TWorkspaceIx1 - 1].ReadOnlyRoots);
+  if not GRoRootsLoaded then
+  begin
+    GRoRoots := ParseRootsList(GetEnvironmentVariable('DELPHI_MCP_READONLY_ROOTS'));
+    GRoRootsLoaded := True;
+  end;
+  Result := GRoRoots;
+end;
+
+function ReadOnlyRootOf(const APath: string): string;
+var
+  Full, R: string;
+begin
+  Result := '';
+  try
+    Full := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
+  except
+    Exit;
+  end;
+  for R in WorkspaceReadOnlyRoots do
+    if StartsText(IncludeTrailingPathDelimiter(R), Full) then
+      Exit(ExcludeTrailingPathDelimiter(R));
+end;
+
 function WorkspaceJailSummary(out AWarning: Boolean): string;
 var
   Roots: TArray<string>;
@@ -2575,6 +2624,8 @@ begin
     for Ro in WorkspaceReadOnlyPaths do
       if StartsText(Ro, IncludeTrailingPathDelimiter(R)) then
         SoloLectura := True;
+    if ReadOnlyRootOf(R) <> '' then // raiz dentro de una referencia: manda la referencia
+      SoloLectura := True;
     if not SoloLectura then
     begin
       Casa := TPath.Combine(ExcludeTrailingPathDelimiter(R), TempFolderName);
@@ -2820,6 +2871,25 @@ begin
   except
     AMotivo := mvRutaInvalida;
     Exit('RECHAZADO: ruta invalida: ' + APath);
+  end;
+  // Un proyecto de REFERENCIA (ReadOnlyRoots) manda sobre Roots: una
+  // carpeta declarada en los dos sitios, o una raiz que caiga dentro de una
+  // referencia, es de SOLO LECTURA (David, 25-sep-2026). Por eso se mira
+  // ANTES de las raices. El motivo lo distingue, ReadPathDenied lo perdona y
+  // el texto dice que se lee y no se toca. El mismo repaso de enlaces que
+  // las raices: un junction plantado en la referencia que apunte fuera no
+  // abre nada.
+  var Ref := ReadOnlyRootOf(APath);
+  if Ref <> '' then
+  begin
+    if StartsText(IncludeTrailingPathDelimiter(RealPath(Ref)),
+         IncludeTrailingPathDelimiter(RealPath(APath))) then
+    begin
+      AMotivo := mvReferencia;
+      Exit(Format(SR_REFERENCE_ROOT_FMT, [APath, Ref]));
+    end;
+    AMotivo := mvEnlaceFuera;
+    Exit(Format(SR_JAIL_LINK_FMT, [APath]));
   end;
   for R in Roots do
     if StartsText(R, IncludeTrailingPathDelimiter(Full)) then
@@ -3088,6 +3158,9 @@ begin
     // que este perdon ya no necesita mirar nada mas.
     mvSoloLectura:
       Exit('');
+    // Un proyecto de REFERENCIA (ReadOnlyRoots) es justo eso: se lee.
+    mvReferencia:
+      Exit('');
     // Outside the jail - but READING library territory is legitimate. Solo
     // para quien esta fuera DE VERDAD: la negativa del enlace
     // (mvEnlaceFuera) no se perdona, y la del vault y las anomalias
@@ -3143,6 +3216,8 @@ begin
     for R in WorkspaceRoots do
       AddDriveOf(R);
     for R in LibraryRoots do
+      AddDriveOf(R);
+    for R in WorkspaceReadOnlyRoots do
       AddDriveOf(R);
     // The vault is a served root of its OWN: it sits deliberately outside the
     // code jail and outside the library zone, so neither list carries it. A

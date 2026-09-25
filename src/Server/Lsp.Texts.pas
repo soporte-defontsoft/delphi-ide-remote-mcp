@@ -876,6 +876,20 @@ const
     'escribir, solo lo tuyo. Crea/edita bajo tu carpeta, o pide al operador que ' +
     'marque esa carpeta como compartida.';
 
+  SR_REFERENCE_ROOT_FMT =
+    'RECHAZADO: "%s" esta en un proyecto de REFERENCIA de este workspace ' +
+    '(ReadOnlyRoots: %s). Se lee, se busca, se navega y se consulta su git, ' +
+    'pero no se escribe, no se compila (compilar escribe dcu y exe) y no se ' +
+    'mueve: esta ahi para aprender como se hacen las cosas en la casa, no ' +
+    'para cambiarlo. Lo tuyo son los roots de delphi_workspace.';
+
+  SN_WORKSPACE_REFERENCE_NOTE =
+    'readOnlyRoots are REFERENCE projects: read, search, navigate, git ' +
+    'query and fetch work there exactly like in your roots; every write, ' +
+    'build, test, move and delete is refused. They are there to learn how ' +
+    'things are done in this house, and they win over roots: a folder in ' +
+    'both is read-only. delphi_projects lists them with readOnly:true.';
+
   SR_JAIL_FMT =
     'RECHAZADO: "%s" esta FUERA de los workspaces permitidos. Este servidor ' +
     'solo opera dentro de: %s (configurado en DELPHI_MCP_ROOTS o ' +

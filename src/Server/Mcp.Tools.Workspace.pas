@@ -1209,6 +1209,16 @@ begin
     // como sobrevive esta clase de fallo.
     for R in Roots do
       RootsArr.Add(ExcludeTrailingPathDelimiter(R));
+    // Proyectos de REFERENCIA (ReadOnlyRoots): se leen, nunca se escriben,
+    // no son raices (la jaula de escritura no los ve) y mandan sobre Roots.
+    if Length(WorkspaceReadOnlyRoots) > 0 then
+    begin
+      var RefArr := TJSONArray.Create;
+      Return.AddPair('readOnlyRoots', RefArr);
+      for R in WorkspaceReadOnlyRoots do
+        RefArr.Add(ExcludeTrailingPathDelimiter(R));
+      Return.AddPair('readOnlyRootsNote', SN_WORKSPACE_REFERENCE_NOTE);
+    end;
     if Length(Roots) = 0 then
       // Sin Roots solo queda el proceso local sin token: mira, no toca. Decir
       // "unrestricted" al lado de access=read-only era contradecirse (22-sep).
@@ -1426,7 +1436,7 @@ var
 begin
   if Params.Root <> '' then
   begin
-    Result := PathDenied(Params.Root);
+    Result := ReadPathDenied(Params.Root); // listar es leer: una referencia vale
     if Result <> '' then
       Exit;
     Roots := TArray<string>.Create(Params.Root);
@@ -1443,6 +1453,23 @@ begin
         '"root", or configure [Workspace.<name>] Roots in settings.ini next ' +
         'to the ' +
         'server exe (or the DELPHI_MCP_ROOTS environment variable).');
+    // ...y los proyectos de REFERENCIA, marcados abajo como readOnly. Si se
+    // solapan (una raiz dentro de una referencia o al reves) se recorre UNA
+    // vez: la referencia manda y la marca sale por fichero.
+    var Unicas: TArray<string> := nil;
+    for var Rz in Roots do
+      if ReadOnlyRootOf(Rz) = '' then
+        Unicas := Unicas + [Rz];
+    for var Rf in WorkspaceReadOnlyRoots do
+    begin
+      var Dentro := False;
+      for var Rz in Unicas do // solo las raices que siguen vivas: una en los dos sitios entra como referencia
+        if StartsText(IncludeTrailingPathDelimiter(Rz), IncludeTrailingPathDelimiter(Rf)) then
+          Dentro := True;
+      if not Dentro then
+        Unicas := Unicas + [Rf];
+    end;
+    Roots := Unicas;
   end;
 
   // A root that is not there answered {"total":0}, which reads as "there are
@@ -1523,6 +1550,8 @@ begin
             Entry.AddPair('project', F);
             Entry.AddPair('dir', TPath.GetDirectoryName(F));
             Entry.AddPair('kind', LowerCase(TPath.GetExtension(F)).Substring(1));
+            if ReadOnlyRootOf(F) <> '' then
+              Entry.AddPair('readOnly', TJSONBool.Create(True)); // referencia: se lee, no se toca
             // Which OTHER folders this project compiles against. Without it
             // nobody can explain how a test project with two units in its
             // uses builds against three from next door - it cost an agent a
