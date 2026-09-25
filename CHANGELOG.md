@@ -6,6 +6,44 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Security
+
+- **The writer guards itself.** An audit of every write the server makes
+  found writes that passed the gate on the ARGUMENT and then wrote something
+  ELSE. All of them were reproduced live against 1.3.1:
+  - **Renaming a unit** (`delphi_move`) rewrote every file its `.dpr` lists,
+    including one outside the roots or in a reference project, and left a
+    `__delphi-patch` folder next to it.
+  - **A junction inside a root** pointing to a reference declared inside the
+    root, or to a `ReadOnlyPaths` folder, made it writable: the gate compared
+    the text path, not the real one.
+  - **Fetching** a capture-shaped `.png` deleted it with only the READ gate
+    behind it, so a reference project lost its captures on being read.
+  - **`delphi_designer to-text` / `to-binary`** was in no read-only list, so
+    a read-only credential rewrote forms (and, in the local read-only mode,
+    any form on the machine).
+
+  The fix is one question for every writer, `EscrituraDenegada` (`Lsp.Guard`):
+  the write gate on the real path plus the read-only mode. The writers
+  themselves ask it (`AtomicWrite`, `BackupFile`), so a caller that forgets,
+  or writes a file it found inside a `.dpr`, can no longer open anything.
+  - A unit rename rewrites only what the session may write, and the answer
+    lists what it did not rewrite.
+  - `ReadOnlyRootOf` and the `ReadOnlyPaths` check compare the real path too.
+  - Consuming a capture requires the write gate, or the server's own temp
+    home.
+  - `delphi_designer` is classified by what it READS, so an unknown command
+    fails closed.
+- `delphi_build`'s `sdk` reached the cmd.exe line unquoted, checked only for
+  the existence of a file (a rooted name replaced the profiles folder). It
+  is now a plain file name at the gate, and it must be one of the platform's
+  SDKs: the same list `delphi_config set-sdk` uses.
+
+  `tests/test_escritor_guardado.py` plants each of these; the 1.3.1 binary
+  fails ten of its checks.
+
 ## [1.3.1] - 2026-09-25
 
 ### Security

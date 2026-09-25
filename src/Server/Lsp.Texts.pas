@@ -2334,6 +2334,16 @@ const
   SN_UNIT_ABSENT_FMT =
     'La unit %s no esta en el proyecto %s. Mira las units con command=view.';
 
+  SN_UNIT_RENAME_NOT_WRITTEN_FMT =
+    '  %d fichero(s) del proyecto NO reescritos porque este workspace no ' +
+    'puede escribirlos (fuera de sus raices, en una referencia o de solo ' +
+    'lectura): %s. Siguen nombrando la unit vieja; si son tuyos en otro ' +
+    'workspace, cambialos alli.';
+
+  SR_BUILD_SDK_NAME_FMT =
+    'RECHAZADO: sdk "%s" no es un nombre de SDK: solo letras, cifras, ' +
+    '".", "-" y "_" (por ejemplo zorin18.sdk), sin carpeta.';
+
   SN_UNIT_RENAMED_FMT =
     'REAPUNTADA la unit %s (%s) -> %s (%s) en el proyecto %s (clausula %s + ' +
     'DCCReference del .dproj). Referencias reescritas: %d en %d fichero(s) ' +

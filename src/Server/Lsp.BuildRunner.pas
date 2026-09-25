@@ -1297,7 +1297,9 @@ begin
     begin
       if not Pedido.ToLower.EndsWith('.sdk') then
         Pedido := Pedido + '.sdk';
-      if not TFile.Exists(TPath.Combine(Dir, Pedido)) then
+      // No basta con que exista un fichero con ese nombre: la lista de SDKs
+      // de la plataforma, la MISMA que usa set-sdk (auditoria 25-sep-2026).
+      if not MatchText(Pedido, SdksDePlataforma(Info.Version, Plat)) then
         raise Exception.Create(Format(SR_BUILD_SDK_NOEXISTE_FMT,
           [Pedido, string.Join(', ', SdksDePlataforma(Info.Version, Plat))]));
       SdkArg := ' /p:PlatformSDK=' + Pedido;

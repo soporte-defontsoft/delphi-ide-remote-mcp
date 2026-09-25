@@ -600,8 +600,14 @@ end;
 
 procedure AtomicWrite(const APath: string; const B: TBytes);
 var
-  Tmp: string;
+  Tmp, Motivo: string;
 begin
+  // EL escritor pregunta el mismo (Lsp.Guard.EscrituraDenegada): quien lo
+  // llama puede haberse olvidado, o escribir un fichero que no le pasaron
+  // sino que saco de un .dpr (auditoria 25-sep-2026).
+  Motivo := EscrituraDenegada(APath);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
   // El temporal lleva un fragmento GUID: con nombre fijo, dos escrituras del
   // MISMO fichero por caminos distintos compartian el intermedio - una se
   // llevaba los bytes de la otra al renombrar y la segunda moria con "rename
@@ -649,7 +655,7 @@ end;
 { Makes the pre-edit copy (once per file per day). Returns a note. }
 function BackupFile(const APath: string): string;
 var
-  Dir, DayDir, Dest: string;
+  Dir, DayDir, Dest, Motivo: string;
 begin
   Dir := TPath.Combine(TPath.GetDirectoryName(APath), BACKUP_SUB);
   // Esta copia NO lleva sello a proposito: es una por fichero y dia, la
@@ -672,6 +678,14 @@ begin
   // una unidad virtual que no existe en el disco - es decir, se carga la
   // copia de seguridad entera. Escrito aqui porque lo hice al primer
   // intento, el mismo dia.
+  // La copia se escribe JUNTO al fichero: el fichero y su carpeta de copias
+  // pasan la puerta, esta por la ruta REAL (un __delphi-patch que fuera un
+  // junction llevaria la copia a donde apunte).
+  Motivo := EscrituraDenegada(APath);
+  if Motivo = '' then
+    Motivo := EscrituraDenegada(DayDir);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
   if TFile.Exists(Dest) then
     Exit('ya existia (' + MaskDriveText('', Dest) + ')');
   CrearCarpeta(DayDir);

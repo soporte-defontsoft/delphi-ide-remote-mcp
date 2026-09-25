@@ -98,9 +98,12 @@ hold for every path the operation TOUCHES, not the one it was GIVEN.
 
 **How it is kept.**
 - One question, one helper: "may this session write HERE?" is answered by
-  the jail's write gate in `Lsp.Guard`, on the REAL path. No tool decides
-  read-only-ness on its own and no tool rebuilds the answer; a new writer
-  asks the gate.
+  `EscrituraDenegada` in `Lsp.Guard` (the write gate on the REAL path plus
+  the read-only mode). No tool decides read-only-ness on its own and no
+  tool rebuilds the answer. The WRITERS ask it themselves (`AtomicWrite`,
+  `BackupFile`): a caller that forgets - or writes a file it found inside
+  a .dpr instead of one it was given - cannot open anything (audit,
+  2026-09-25: a unit rename rewrote a file outside the roots).
 - Trees are walked only by the guard's walkers, which never cross a link
   (`BorraArbol` deletes, `CopiaArbol` copies). A folder moves only by a
   rename of the folder itself, where a link travels as a link and what is

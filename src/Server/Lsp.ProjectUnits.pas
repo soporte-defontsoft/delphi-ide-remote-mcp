@@ -1186,10 +1186,20 @@ begin
   // Mismo nombre (move de carpeta sin renombrar): no hay nada que reescribir
   // y la cuenta decia "1 en 1 fichero" por sustituir X por X (medido en
   // vivo, 2026-09-23).
+  // El .dpr puede listar ficheros de FUERA (..\Common, una referencia): se
+  // reescribe solo lo que esta sesion puede escribir, y lo demas se dice.
+  // El escritor tambien lo comprueba (EscrituraDenegada): esto es para
+  // contestarlo en vez de lanzar a mitad (auditoria 25-sep-2026).
+  var NoEscritos: TArray<string> := [];
   if not SameText(OldName, Info.UnitName) then
   for var Fich in Ficheros do
     if TFile.Exists(Fich) then
     begin
+      if EscrituraDenegada(Fich) <> '' then
+      begin
+        NoEscritos := NoEscritos + [TPath.GetFileName(Fich)];
+        Continue;
+      end;
       var N := RenombrarIdentificadorUnit(Fich, OldName, Info.UnitName);
       if N > 0 then
       begin
@@ -1199,6 +1209,9 @@ begin
     end;
   Result := Format(SN_UNIT_RENAMED_FMT, [OldName, OldInclude, Info.UnitName, NewInclude,
     TPath.GetFileName(Dpr), U.Keyword, NRefs, NFich]);
+  if Length(NoEscritos) > 0 then
+    Result := Result + #10 + Format(SN_UNIT_RENAME_NOT_WRITTEN_FMT,
+      [Length(NoEscritos), string.Join(', ', NoEscritos)]);
 end;
 
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;

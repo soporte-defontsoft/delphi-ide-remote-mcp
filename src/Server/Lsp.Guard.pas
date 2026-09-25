@@ -353,6 +353,16 @@ function MovidoDenegado(const AOrigen, ADestino: string): string;
   revelan, se dice un sitio protegido. }
 function ProtegidoDenegado(const ADir: string): string;
 
+{ LA pregunta de todo escritor: '' = esta sesion puede escribir APath;
+  si no, el motivo. Es la puerta de escritura (PathDenied, sobre la ruta
+  REAL) mas el modo de solo lectura. La hacen los ESCRITORES mismos
+  (AtomicWrite, BackupFile), no solo quien los llama: renombrar una unit
+  reescribia cada fichero que listaba el .dpr, y el .dpr puede listar
+  uno de fuera o de una referencia (medido en vivo contra 1.3.1,
+  25-sep-2026). Un llamador que se olvide de preguntar ya no abre
+  nada: el escritor lanza. }
+function EscrituraDenegada(const APath: string): string;
+
 { Vacia la casa del servidor al arrancar. Lo que hay ahi pertenece a la
   llamada que lo creo y ninguna llamada sobrevive a un reinicio, asi que al
   arrancar TODO lo que quede es basura de una ejecucion anterior - la que
@@ -1862,6 +1872,13 @@ begin
   Result := Format(SR_READ_ONLY_FMT, [AWhat]);
 end;
 
+function EscrituraDenegada(const APath: string): string;
+begin
+  if IsReadOnlyNow then
+    Exit(WriteDenied('escribir ' + TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
+  Result := PathDenied(APath);
+end;
+
 { git "read" commands (diff/show/log...) still take FREEFORM args, and git has
   options that write files, read paths OUTSIDE the repository, or run a
   command - a jail/write escape usable even by a read-only client (measured:
@@ -2151,6 +2168,14 @@ begin
   V := ArgStr(AArguments, 'deviceid').Trim;
   if (V <> '') and BadDeviceToken(V) then
     Exit(Format(SR_ADB_TARGET_FMT, [V]));
+  // "sdk" reaches the cmd.exe line (/p:PlatformSDK=): a file NAME, never a
+  // path and never a metacharacter (audit 2026-09-25). The build also
+  // checks it against the SDKs of the platform, like set-sdk does.
+  V := ArgStr(AArguments, 'sdk').Trim;
+  if V <> '' then
+    for C in V do
+      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
+        Exit(Format(SR_BUILD_SDK_NAME_FMT, [V]));
   V := ArgStr(AArguments, 'config');
   if V <> '' then
     for C in V do
@@ -2589,6 +2614,18 @@ begin
       Exit;
     Exit(WriteDenied('delphi_paserver ' + Cmd));
   end;
+  // delphi_designer is mixed: to-text / to-binary rewrite the .dfm/.fmx; the
+  // rest looks. Listed by what READS, so an unknown command fails closed
+  // (it was in no list at all: a read-only credential rewrote forms -
+  // audit 2026-09-25).
+  if SameText(AToolName, 'delphi_designer') then
+  begin
+    Cmd := Trim(ArgStr(AArguments, 'command'));
+    if (Cmd = '') or MatchText(Cmd, ['info', 'prop', 'tree', 'get', 'lint',
+      'check-binding', 'binding', 'layout']) then
+      Exit;
+    Exit(WriteDenied('delphi_designer ' + Cmd));
+  end;
   // delphi_adb is mixed: discovering, listing and reading the device log are
   // reads; attaching/detaching a device or installing an app are writes.
   if SameText(AToolName, 'delphi_adb') then
@@ -2650,7 +2687,7 @@ end;
 
 function ReadOnlyRootOf(const APath: string): string;
 var
-  Full, R: string;
+  Full, Real, R: string;
 begin
   Result := '';
   try
@@ -2658,11 +2695,16 @@ begin
     // nombres cortos (DFONTA~1) y una ruta que llega resuelta (RealPath la
     // alarga) son el mismo sitio. Comparar texto contra texto no casaba.
     Full := IncludeTrailingPathDelimiter(LongCanonical(TPath.GetFullPath(APath)));
+    // ...y por la ruta REAL: un junction dentro de una raiz que apunte a una
+    // referencia (o a una declarada DENTRO de la raiz) llevaba a ella con
+    // un texto que no la nombra, y se escribia (auditoria 25-sep-2026).
+    Real := IncludeTrailingPathDelimiter(RealPath(APath));
   except
     Exit;
   end;
   for R in WorkspaceReadOnlyRoots do
-    if StartsText(IncludeTrailingPathDelimiter(LongCanonical(ExcludeTrailingPathDelimiter(R))), Full) then
+    if StartsText(IncludeTrailingPathDelimiter(LongCanonical(ExcludeTrailingPathDelimiter(R))), Full) or
+       StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(R))), Real) then
       Exit(ExcludeTrailingPathDelimiter(R));
 end;
 
@@ -2802,6 +2844,13 @@ end;
 procedure ConsumeAgentCapture(const APath: string);
 begin
   if not IsAgentCapture(APath) then
+    Exit;
+  // Consumir es BORRAR: el nombre no basta. Solo lo que esta sesion puede
+  // escribir, o lo que esta en la casa del servidor. Lo llaman lectores
+  // (delphi_fetch, la descarga), y una referencia con una carpeta de
+  // capturas perdia sus ficheros al leerlos (auditoria 25-sep-2026).
+  if (PathDenied(APath) <> '') and not StartsText(
+       IncludeTrailingPathDelimiter(RealPath(ServerTempDir(''))), RealPath(APath)) then
     Exit;
   try
     if TFile.Exists(APath) then
@@ -3461,8 +3510,11 @@ begin
       // LECTURA: un vendor/, un submodulo, un clon de referencia con su
       // propio git. Se comprueba AQUI y no en el lector, y esa es justo la
       // distincion que se quiere: se lee, no se escribe.
+      // Por el texto Y por la ruta REAL (Verdad): un junction de la raiz que
+      // apunte a una carpeta de solo lectura no la vuelve escribible.
       for var Ro in WorkspaceReadOnlyPaths do
-        if StartsText(Ro, IncludeTrailingPathDelimiter(Full)) then
+        if StartsText(Ro, IncludeTrailingPathDelimiter(Full)) or
+           StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(Ro))), Verdad) then
         begin
           AMotivo := mvSoloLectura;
           Exit(Format(SR_READONLY_PATH_FMT,
