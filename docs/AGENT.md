@@ -1,6 +1,6 @@
 # Agent guide — how to use this server well
 
-The agent's manual is [skills/cmcpdelphiide/SKILL.md](../skills/cmcpdelphiide/SKILL.md).
+The agent's manual is [skills/SKILL.md](../skills/SKILL.md).
 Give it to the agent as a skill, or paste it into its instructions (`CLAUDE.md`,
 `AGENTS.md`, system prompt). It is written FOR the model, not for humans. Full
 parameter reference: [TOOLS.md](TOOLS.md).

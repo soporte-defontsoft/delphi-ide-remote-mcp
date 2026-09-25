@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- Two folders flattened: the vendored MCP plumbing is `vendor/` (was
+  `vendor/gdk-mcp-server/`; `VENDOR.md` there still names the upstream and
+  its commit) and the agent manual is `skills/SKILL.md` (was
+  `skills/cmcpdelphiide/SKILL.md`; its frontmatter name is now `delphi-mcp`,
+  and whoever installs it names the folder they copy it into). The `.dpr`
+  moved by `delphi_edit`; the two `.dproj` by hand, the known wall.
+
 ## [1.2.1] - 2026-09-25
 
 ### Added

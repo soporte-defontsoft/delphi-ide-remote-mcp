@@ -75,7 +75,7 @@ Ask the agent for **`delphi_workspace`**. It answers with the roots it sees,
 the active Delphi version and the server version: if that comes back, you are
 connected and inside the jail. Then `delphi_projects` lists the projects under
 `Roots`, and `delphi_build` compiles one. From there the agent's manual is
-[../skills/cmcpdelphiide/SKILL.md](../skills/cmcpdelphiide/SKILL.md) and the
+[../skills/SKILL.md](../skills/SKILL.md) and the
 tool reference is [TOOLS.md](TOOLS.md).
 
 ## If it does not work

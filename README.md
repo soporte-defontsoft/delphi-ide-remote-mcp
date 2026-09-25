@@ -218,7 +218,7 @@ switch and its own allowlist; it will not arrive by accident.
 
 **→ Full parameter-by-parameter reference with types, defaults and worked workflows: [docs/TOOLS.md](docs/TOOLS.md)** (written by hand and checked against the live server; the authority is always `delphi_help command=tool name=<tool>`).
 
-**→ Handing this server to an AI agent?** Give it [skills/cmcpdelphiide/SKILL.md](skills/cmcpdelphiide/SKILL.md) — a field-tested agent skill (drop it into the agent's skills folder or paste it as instructions) covering the path model, the safe-editing contract, the deploy chains and how to move files and logs the right way.
+**→ Handing this server to an AI agent?** Give it [skills/SKILL.md](skills/SKILL.md) — a field-tested agent skill (drop it into the agent's skills folder or paste it as instructions) covering the path model, the safe-editing contract, the deploy chains and how to move files and logs the right way.
 
 ## The desktop node (`src/DesktopNode/`)
 
@@ -362,7 +362,7 @@ sc.exe config DelphiLspMcp start= auto
 
 Per-client configuration snippets (Claude Code, Claude Desktop, OpenCode, custom agents): see [docs/CLIENTS.md](docs/CLIENTS.md).
 
-**Getting the best out of the server from an AI agent** — the manual is [skills/cmcpdelphiide/SKILL.md](skills/cmcpdelphiide/SKILL.md); [docs/AGENT.md](docs/AGENT.md) is a short pointer to it.
+**Getting the best out of the server from an AI agent** — the manual is [skills/SKILL.md](skills/SKILL.md); [docs/AGENT.md](docs/AGENT.md) is a short pointer to it.
 
 ### Configuration (`settings.ini` next to the exe, or environment variables)
 

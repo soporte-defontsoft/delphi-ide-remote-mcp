@@ -1,5 +1,5 @@
 ---
-name: cmcpdelphiide
+name: delphi-mcp
 description: Work a remote RAD Studio (Delphi IDE) machine through the Delphi IDE Remote MCP Server (delphi_* / vault_* tools). Load when connected to an MCP server exposing delphi_workspace, delphi_build, delphi_edit and friends - it teaches the path model, the safe-editing contract, the build/deploy chains (Windows, Linux via PAServer, Android via adb, the desktop of any PAServer target - Linux or Windows, this server included - via delphi_desktop) and how to move files and logs the right way.
 ---
 

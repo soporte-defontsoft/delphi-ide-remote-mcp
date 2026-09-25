@@ -103,7 +103,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_UnitSearchPath>../Server;../../vendor/gdk-mcp-server/src/Tools;../../vendor/gdk-mcp-server/src/Server;../../vendor/gdk-mcp-server/src/Resources;../../vendor/gdk-mcp-server/src/Protocol;../../vendor/gdk-mcp-server/src/Managers;../../vendor/gdk-mcp-server/src/Core;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>../Server;../../vendor/src/Tools;../../vendor/src/Server;../../vendor/src/Resources;../../vendor/src/Protocol;../../vendor/src/Managers;../../vendor/src/Core;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <SanitizedProjectName>LspUnitTests</SanitizedProjectName>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
