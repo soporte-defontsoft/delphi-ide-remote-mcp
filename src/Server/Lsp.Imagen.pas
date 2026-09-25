@@ -25,12 +25,22 @@ function RecortaPng(const AFichero: string; var X, Y, W, H: Integer;
   si el fichero no es un PNG. }
 function TamanoPng(const AFichero: string; out W, H: Integer): Boolean;
 
+{ Escala un PNG EN MEMORIA a un ancho maximo (proporcion intacta, HALFTONE)
+  sin tocar ningun fichero: una captura pedida con out= es del agente y no
+  se modifica. La de un escritorio de 3440 puntos pesa 5 MB y en base64
+  casi 7: no cabe en la respuesta de una tool para un modelo pequeno.
+  AEscala sale con el factor aplicado (1.0 = ya cabia, ASalida = AEntrada)
+  y AW/AH con el tamano final. '' si todo fue bien; el motivo si no. }
+function EscalaPngBytes(const AEntrada: TArray<Byte>; AMaxAncho: Integer;
+  out ASalida: TArray<Byte>; out AEscala: Double; out AW, AH: Integer): string;
+
 implementation
 
 uses
   System.SysUtils,
   System.Classes,
   System.Types,
+  Winapi.Windows, // SetStretchBltMode(HALFTONE): escalar sin dientes de sierra
   Vcl.Graphics,
   Vcl.Imaging.pngimage;
 
@@ -121,6 +131,65 @@ begin
   except
     on E: Exception do
       Result := 'no pude recortar la captura: ' + E.Message;
+  end;
+end;
+
+function EscalaPngBytes(const AEntrada: TArray<Byte>; AMaxAncho: Integer;
+  out ASalida: TArray<Byte>; out AEscala: Double; out AW, AH: Integer): string;
+var
+  Png, Nuevo: TPngImage;
+  Entera, Chica: TBitmap;
+  Ent, Sal: TBytesStream;
+begin
+  Result := '';
+  ASalida := AEntrada;
+  AEscala := 1.0;
+  AW := 0;
+  AH := 0;
+  try
+    Ent := TBytesStream.Create(AEntrada);
+    Png := TPngImage.Create;
+    try
+      Png.LoadFromStream(Ent);
+      AW := Png.Width;
+      AH := Png.Height;
+      if (AMaxAncho <= 0) or (Png.Width <= AMaxAncho) then
+        Exit; // ya cabe: sale tal cual
+      AEscala := AMaxAncho / Png.Width;
+      AW := AMaxAncho;
+      AH := Round(Png.Height * AEscala);
+      if AH < 1 then
+        AH := 1;
+      Entera := TBitmap.Create;
+      Chica := TBitmap.Create;
+      Nuevo := TPngImage.Create;
+      Sal := TBytesStream.Create;
+      try
+        Entera.Assign(Png);
+        Chica.PixelFormat := pf24bit;
+        Chica.SetSize(AW, AH);
+        SetStretchBltMode(Chica.Canvas.Handle, HALFTONE);
+        Chica.Canvas.StretchDraw(Rect(0, 0, AW, AH), Entera);
+        Nuevo.Assign(Chica);
+        Nuevo.CompressionLevel := 6;
+        Nuevo.SaveToStream(Sal);
+        ASalida := Copy(Sal.Bytes, 0, Sal.Size);
+      finally
+        Sal.Free;
+        Nuevo.Free;
+        Chica.Free;
+        Entera.Free;
+      end;
+    finally
+      Png.Free;
+      Ent.Free;
+    end;
+  except
+    on E: Exception do
+    begin
+      ASalida := nil;
+      Result := 'no pude escalar la captura: ' + E.Message;
+    end;
   end;
 end;
 

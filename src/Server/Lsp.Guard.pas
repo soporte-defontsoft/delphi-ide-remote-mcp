@@ -212,14 +212,22 @@ function TempFolderName: string;
 function ServerTempDir(const ASub: string = ''): string;
 function AgentTempDir(const ASub: string = ''): string;
 
-{ Una CAPTURA del escritorio en una carpeta temporal del servidor (un .png
-  bajo <...>\__delphi-temp\...\desktop\) se CONSUME al recogerla: quien la
+{ Una CAPTURA (escritorio o Android) en una carpeta temporal del servidor (un
+  .png bajo <...>\__delphi-temp\...\desktop|android\) se CONSUME al recogerla: quien la
   baja - delphi_fetch al servir el ultimo trozo, GET /files - la borra.
   David, 25-sep-2026: 'lo mas sensato es borrar la captura una vez la ha
   recogido el agente, asi de simple; nada de caches ni rotaciones ni guardar
   nada; quiere otra, que la pida'. Medido el mismo dia: 10 gestos = 41 MB en
   la raiz del workspace, purgados solo al reiniciar. Una captura pedida con
   out= explicito NO esta en esa carpeta y no se toca. }
+const
+  // Las subcarpetas de captura: las pasa quien llama a CaptureTarget y las
+  // reconoce IsAgentCapture. UNA lista - hasta el 25-sep-2026 el reconocedor
+  // solo sabia de 'desktop' y las capturas de delphi_adb ('android') se
+  // acumulaban sin consumirse.
+  CAPTURE_SUB_DESKTOP = 'desktop';
+  CAPTURE_SUB_ANDROID = 'android';
+
 function IsAgentCapture(const APath: string): Boolean;
 procedure ConsumeAgentCapture(const APath: string); // nunca lanza
 
@@ -2679,7 +2687,8 @@ begin
   end;
   Result := SameText(TPath.GetExtension(Full), '.png') and
     Full.ToLower.Contains('\' + TempFolderName + '\') and
-    SameText(TPath.GetFileName(TPath.GetDirectoryName(Full)), 'desktop');
+    MatchText(TPath.GetFileName(TPath.GetDirectoryName(Full)),
+      [CAPTURE_SUB_DESKTOP, CAPTURE_SUB_ANDROID]);
 end;
 
 procedure ConsumeAgentCapture(const APath: string);

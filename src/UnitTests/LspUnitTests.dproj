@@ -171,6 +171,7 @@
         <DCCReference Include="LspTests.Encodings.pas"/>
         <DCCReference Include="LspTests.DesignerBin.pas"/>
         <DCCReference Include="LspTests.Dproj.pas"/>
+        <DCCReference Include="LspTests.Images.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

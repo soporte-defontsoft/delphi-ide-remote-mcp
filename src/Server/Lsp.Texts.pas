@@ -1579,9 +1579,11 @@ const
     'Give the absolute path of the node''s .dproj only when you develop the ' +
     'node itself and deployed it with delphi_build target=Deploy.';
   SP_ADBLINUX_X =
-    'tap: horizontal pixel MEASURED ON THE SCREENSHOT this tool returned';
+    'tap: horizontal pixel MEASURED ON THE SCREENSHOT this tool returned ' +
+    '(pass its frame too and the server converts)';
   SP_ADBLINUX_Y =
-    'tap: vertical pixel MEASURED ON THE SCREENSHOT this tool returned';
+    'tap: vertical pixel MEASURED ON THE SCREENSHOT this tool returned ' +
+    '(pass its frame too and the server converts)';
   SP_ADBLINUX_MODIFIERS =
     'key OPTIONAL: modifier keys held while the key is pressed, comma ' +
     'separated - ctrl, shift, alt, super (Ctrl+K: code=37 modifiers=ctrl on ' +
@@ -1634,6 +1636,47 @@ const
     'answer carries origin {x,y}: what you measure on the crop is pressed at ' +
     '(origin.x + x, origin.y + y). One frame, one coordinate space. When in ' +
     'doubt - a dialog may have opened elsewhere - capture the whole desktop.';
+  // Lsp.InlineImages: la entrega de una captura, la misma en toda tool que capture.
+  SP_CAPTURE_INLINE =
+    'Default true: the screenshot comes back IN this answer as an image ' +
+    'content item (scaled to maxwidth) and its temp file is consumed on the ' +
+    'spot - one call, nothing to download. false = file + download link ' +
+    'instead (a client without vision, or one that wants the bytes).';
+
+  SP_CAPTURE_MAXWIDTH =
+    'Inline only: the image is scaled down to this width before it travels ' +
+    '(0 = 1280, enough to read a desktop and light for any model). The ' +
+    'answer says inlineScale: divide what you measure on the inline image ' +
+    'by it to get capture pixels for tap.';
+
+  SN_CAPTURE_INLINE_NOTE_FMT =
+    'The image is IN this answer (scaled %s of the capture). To press what ' +
+    'you see, measure x,y ON THIS IMAGE and pass them to tap/type with ' +
+    'frame (below): the server converts - never divide or add yourself. Its ' +
+    'temp file was consumed: need it again, take another screenshot; ' +
+    'inline=false gives file + download instead; a capture with out= is ' +
+    'yours and stays.';
+
+  SP_CAPTURE_FRAME =
+    'tap/type: the "frame" of the screenshot you MEASURED ON, copied ' +
+    'verbatim. With it, x,y are pixels of THAT image and the server converts ' +
+    'them (inline scale, crop origin, device display) - no arithmetic on your ' +
+    'side. Without it, x,y are capture pixels, as always.';
+
+  SN_CAPTURE_FRAME_NOTE =
+    'To press something you see in this image: tap (or type) with x,y ' +
+    'measured ON THIS IMAGE and frame=<the frame above>, copied as it is. The ' +
+    'server converts scale, crop origin and display for you.';
+
+  SR_CAPTURE_FRAME_BAD_FMT =
+    'RECHAZADO: frame "%s" no tiene la forma de las capturas ' +
+    '(<ancho>x<alto>@<ancho>x<alto>+<x>+<y>). Copialo TAL CUAL de la respuesta ' +
+    'de la captura sobre la que mediste; no pulse nada.';
+
+  SR_CAPTURE_FRAME_OUT_FMT =
+    'RECHAZADO: (%s,%s) cae fuera de la imagen de ese frame (%dx%d). Mide ' +
+    'sobre la imagen que trajo ese frame, o pide otra captura; no pulse nada.';
+
   SP_ADBLINUX_WINDOW =
     'screenshot OPTIONAL: part of a window title; the answer is the capture ' +
     'cropped to the first window of the "windows" list whose title contains ' +
@@ -1675,8 +1718,9 @@ const
     'ninguna ventana visible lleva "%s" en el titulo: mira "windows" en esta ' +
     'misma respuesta y repite con un trozo de uno de esos titulos.';
   SN_ADBLINUX_CROP_NOTE_FMT =
-    'RECORTE del escritorio: lo que midas en esta imagen se pulsa SUMANDO el ' +
-    'origen, tap x=(%d + tu x) y=(%d + tu y). Ante la duda (un dialogo que ' +
+    'RECORTE del escritorio: pasa a tap los x,y medidos en ESTA imagen con su ' +
+    'frame y el servidor suma el origen; sin frame, tap x=(%d + tu x) y=(%d + ' +
+    'tu y). Ante la duda (un dialogo que ' +
     'haya salido fuera), captura el escritorio entero. Bajala con delphi_fetch';
   { Dos textos que sobrevivieron a delphi_desktop LOCAL (retirada en 1.0.16):
     los usa la tool por perfil cuando el destino es un Windows. }
@@ -1758,11 +1802,13 @@ const
     ' logcat: optional .txt/.log FILE to dump into INSTEAD of answering ' +
     'inline - then read it in ranges with delphi_read.';
   SP_ADB_X =
-    'tap: X coordinate in DISPLAY pixels - measure it on a screenshot; when ' +
-    'that answer carried tapScale, multiply by tapScale.x first';
+    'tap: X measured on a screenshot. Pass that screenshot''s frame and the ' +
+    'server converts to DISPLAY pixels; without frame, X is DISPLAY pixels ' +
+    '(multiply by tapScale.x when the answer carried it)';
   SP_ADB_Y =
-    'tap: Y coordinate in DISPLAY pixels - measure it on a screenshot; when ' +
-    'that answer carried tapScale, multiply by tapScale.y first';
+    'tap: Y measured on a screenshot. Pass that screenshot''s frame and the ' +
+    'server converts to DISPLAY pixels; without frame, Y is DISPLAY pixels ' +
+    '(multiply by tapScale.y when the answer carried it)';
   SP_ADB_KEY =
     'key: back | home | enter | appswitch | wakeup | up | down | left | ' +
     'right | tab';
@@ -1839,7 +1885,8 @@ const
     'The device screen is in this PNG on the server - download it with ' +
     'delphi_fetch. CAREFUL: the image is %dx%d but the display in force is ' +
     '%dx%d, and command=tap takes DISPLAY pixels: multiply what you measure ' +
-    'on the image by tapScale (x by %s, y by %s) before tapping.';
+    'on the image by tapScale (x by %s, y by %s) before tapping - or simply ' +
+    'pass frame with x,y measured on the image and the server converts.';
 
   SR_ADB_NEED_APP =
     'RECHAZADO: run necesita "app" (el nombre del paquete instalado, p.ej. ' +

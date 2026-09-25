@@ -37,6 +37,9 @@ type
     FKey: string;
     FFilter: string;
     FLines: string;
+    FInline: string;
+    FMaxWidth: Integer;
+    FFrame: string;
   public
     [SchemaDescription(SP_ADB_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -65,6 +68,12 @@ type
     property Filter: string read FFilter write FFilter;
     [SchemaDescription(SP_ADB_LINES)]
     property Lines: string read FLines write FLines;
+    [SchemaDescription(SP_CAPTURE_INLINE)]
+    property Inline_: string read FInline write FInline;
+    [SchemaDescription(SP_CAPTURE_MAXWIDTH)]
+    property MaxWidth: Integer read FMaxWidth write FMaxWidth;
+    [SchemaDescription(SP_CAPTURE_FRAME)]
+    property Frame: string read FFrame write FFrame;
   end;
 
   TDelphiAdbTool = class(TMCPToolBase<TDelphiAdbParams>)
@@ -86,6 +95,7 @@ uses
   Lsp.Dproj,
   Lsp.Guard,
   Lsp.Imagen,
+  Lsp.InlineImages, // DeliverCapture: la entrega de una captura, la de toda la casa
   Lsp.BuildRunner;
 
 { El valor de una linea "<clave>: <valor>" de la salida de `wm size` / `wm
@@ -387,7 +397,7 @@ begin
     // preguntarle a nadie.
     const DevPng = '/sdcard/delphi_mcp_screen.png';
     var Destino: string;
-    Denied := CaptureTarget(Params.Out, 'android', 'android',
+    Denied := CaptureTarget(Params.Out, CAPTURE_SUB_ANDROID, 'android',
       TPath.GetExtension(DevPng), Destino);
     if Denied <> '' then
       Exit(Denied);
@@ -429,6 +439,9 @@ begin
       if HayImagen then
         Return.AddPair('image', Format('%dx%d', [ImgW, ImgH]));
       var Nota := SN_ADB_SCREENSHOT;
+      // del PNG a la pantalla en vigor: lo lleva el frame, el agente no multiplica
+      var TSX: Double := 1.0;
+      var TSY: Double := 1.0;
       if Fisica <> '' then
       begin
         var Pantalla := TJSONObject.Create;
@@ -454,6 +467,8 @@ begin
             Return.AddPair('tapScale', Escala);
             Escala.AddPair('x', TJSONNumber.Create(DW / ImgW));
             Escala.AddPair('y', TJSONNumber.Create(DH / ImgH));
+            TSX := DW / ImgW;
+            TSY := DH / ImgH;
             Nota := Format(SN_ADB_TAP_SCALE_FMT, [ImgW, ImgH, DW, DH,
               FormatFloat('0.###', DW / ImgW, TFormatSettings.Invariant),
               FormatFloat('0.###', DH / ImgH, TFormatSettings.Invariant)]);
@@ -461,6 +476,11 @@ begin
         end;
       end;
       Return.AddPair('note', Nota);
+      // UN SOLO PASO: la misma entrega que delphi_desktop (Lsp.InlineImages).
+      // Antes una captura de Android se quedaba en la carpeta temporal para
+      // siempre y no traia enlace de descarga.
+      DeliverCapture('delphi_adb', Destino, Params.Inline_, Params.MaxWidth, 0, 0,
+        TSX, TSY, Return);
       Result := Return.ToJSON;
     finally
       Return.Free;
@@ -470,10 +490,15 @@ begin
   begin
     if (Params.X.Trim = '') or (Params.Y.Trim = '') then
       Exit(SR_ADB_NEED_XY);
-    // coordinates vetted digits-only at the gate
-    Output := RunAdb(Adb, DevArg + 'shell input tap ' + Params.X.Trim + ' ' +
-      Params.Y.Trim, 15000, ExitCode);
-    Result := GoneHint(('TAP en (' + Params.X.Trim + ',' + Params.Y.Trim +
+    // coordinates vetted digits-only at the gate; with frame, measured on
+    // that image and converted here to DISPLAY pixels (Lsp.InlineImages)
+    var PX, PY: Integer;
+    var FP := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
+    if FP <> '' then
+      Exit(FP);
+    Output := RunAdb(Adb, DevArg + 'shell input tap ' + IntToStr(PX) + ' ' +
+      IntToStr(PY), 15000, ExitCode);
+    Result := GoneHint(('TAP en (' + IntToStr(PX) + ',' + IntToStr(PY) +
       ') ' + Output.Trim).Trim);
   end
   else if Cmd = 'key' then

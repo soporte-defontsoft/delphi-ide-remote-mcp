@@ -195,6 +195,8 @@ PROBAR = [
 EXCLUIDOS = {
     ('delphi_paserver', 'exe'): 'fichero de la carpeta desplegada EN EL TARGET',
     ('delphi_move', 'copy'): 'booleano (copiar en vez de mover); la ruta es path/dest, probados arriba',
+    ('delphi_desktop', 'inline'): 'booleano (imagen en la respuesta o fichero); la ruta es out, probada aparte',
+    ('delphi_adb', 'inline'): 'idem delphi_desktop: la entrega de la captura (Lsp.InlineImages)',
     ('delphi_config', 'remotedir'): 'carpeta EN EL TARGET, no de esta maquina',
     ('delphi_git', 'args'): 'argumentos libres de git; filtro propio (GitArgDenied)',
     ('delphi_search', 'pattern'): 'mascara de fichero, no una ruta',

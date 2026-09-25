@@ -28,6 +28,13 @@ type
   // [local change] see ListFilter
   TToolListFilter = reference to function(const ToolName: string): Boolean;
 
+  // [local change 2026-09-25] optional, applied AFTER ResultFilter: lets the
+  // host turn a textual result into a content array (the text plus image
+  // items a tool attached) - one place for every tool, so a screenshot
+  // travels in the same answer. nil = leave the text as it is.
+  TToolResultWrapper = reference to function(const ToolName: string;
+    const AText: string): TJSONArray;
+
   TMCPToolsManager = class(TInterfacedObject, IMCPCapabilityManager)
   strict private
     function ExtractToolNameAndArguments(const Params: System.JSON.TJSONObject; out ToolName: string; out Arguments: TJSONObject): Boolean;
@@ -54,6 +61,8 @@ type
     class var ToolGate: TToolGateFunc;
     // [local change] outbound filter for every textual result (see TToolResultFilter)
     class var ResultFilter: TToolResultFilter;
+    // [local change 2026-09-25] see TToolResultWrapper
+    class var ResultWrapper: TToolResultWrapper;
     // [local change] optional tools/list filter: True = omit the tool from
     // the listing (it stays CALLABLE - this trims token surface for small
     // models, it is not a permission; permissions live in ToolGate).
@@ -414,6 +423,14 @@ begin
   // [local change] outbound filter: one place to rewrite textual results.
   if Assigned(ResultFilter) and ResultValue.IsType<string> then
     ResultValue := TValue.From<string>(ResultFilter(ToolName, ResultValue.AsString));
+  // [local change 2026-09-25] ...and then, the attachments: the text is
+  // already filtered, so nothing leaves unmasked by taking the array shape.
+  if Assigned(ResultWrapper) and ResultValue.IsType<string> then
+  begin
+    var Wrapped := ResultWrapper(ToolName, ResultValue.AsString);
+    if Wrapped <> nil then
+      ResultValue := TValue.From<TJSONArray>(Wrapped);
+  end;
 
   Result := TValue.From<TJSONObject>(BuildToolCallResponse(ResultValue));
 end;

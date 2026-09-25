@@ -185,6 +185,15 @@ node bundled with the server deploys and UPDATES itself on the target on
 first use (a `node.ver` stamp), the right binary for that system - nothing
 is compiled or installed by hand.
 
+**One step, no arithmetic (1.3.1):** a `screenshot` comes back IN the
+same answer as an image (scaled to `maxwidth`, 1280 by default) together
+with a `frame` token; nothing to download, and its temp file is gone.
+To press what you see, measure x,y ON THAT IMAGE and call `tap` (or
+`type`) with those x,y and `frame=<the token, copied as it is>`: the
+server converts scale, crop origin and (Android) display for you. Never
+divide by a scale or add an origin yourself. `inline=false` gives the
+old file + `download` link (still with a `frame`).
+
 Flow: `screenshot` brings the WHOLE desktop here as a PNG -> LOOK at it and
 measure the pixel -> `tap x= y=` presses exactly there (the node converts
 the screen scale itself; always measure ON the screenshot it returned) ->
@@ -207,8 +216,8 @@ pixels; on Linux the X11/Xwayland windows, i.e. every FMX app - native
 Wayland windows are not listed); `overview` brings them all into view to
 reach a covered one (Linux: the Super overview - tap one or Escape) ->
 `screenshot region="x,y,w,h"` (or `window="<title>"`) brings back just that
-piece of the same capture at full resolution, with an `origin` to ADD to
-what you measure on it - use it to read a small dialog, and go back to the
+piece of the same capture at full resolution, with an `origin` (pass its `frame` to tap and the server adds it; without frame, ADD it to
+what you measure on it) - use it to read a small dialog, and go back to the
 whole desktop whenever something may have opened elsewhere -> `status` says whether
 the desktop is reachable and what to ask for. Every answer carries
 `graphicalEnv`: the session the node ran in.

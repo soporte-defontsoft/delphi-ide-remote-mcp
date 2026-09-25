@@ -77,6 +77,7 @@ uses
   Lsp.Guard,
   Lsp.Texts,
   Lsp.Files,
+  Lsp.InlineImages, // ClearAttachedImages / WrapWithAttachedImages
   Mcp.Tools.Messages,
   Mcp.Vault.Session,
   Mcp.Vault.Seed;
@@ -169,6 +170,7 @@ begin
   TMCPToolsManager.ToolGate :=
     function(const ToolName: string; const Arguments: TJSONObject): string
     begin
+      ClearAttachedImages; // nada de una llamada anterior en este hilo
       Result := ToolCallDenied(ToolName, Arguments);
     end;
   // Outbound twin of the gate: server drive letters leave as virtual units
@@ -189,6 +191,13 @@ begin
       // tool answer carries the notice while a message waits.
       if ToolName <> 'delphi_messages' then
         Result := WithMailboxNote(Result, PendingMessagesNote);
+    end;
+  // ...y lo que una tool adjunto (una captura, Lsp.InlineImages): viaja EN
+  // la misma respuesta. Un punto para todas las tools, junto al filtro.
+  TMCPToolsManager.ResultWrapper :=
+    function(const ToolName, AText: string): TJSONArray
+    begin
+      Result := WrapWithAttachedImages(AText);
     end;
 end;
 

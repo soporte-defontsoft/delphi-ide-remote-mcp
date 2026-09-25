@@ -8,7 +8,8 @@ uses
   DUnitX.Loggers.Console,
   LspTests.Encodings in 'LspTests.Encodings.pas',
   LspTests.DesignerBin in 'LspTests.DesignerBin.pas',
-  LspTests.Dproj in 'LspTests.Dproj.pas';
+  LspTests.Dproj in 'LspTests.Dproj.pas',
+  LspTests.Images in 'LspTests.Images.pas';
 
 var
   Runner: ITestRunner;

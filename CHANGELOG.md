@@ -8,6 +8,27 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- **Screenshots in one step.** `delphi_desktop` and `delphi_adb` return the
+  capture IN the same answer, as an MCP `image` content item next to the usual
+  text, scaled in memory to `maxwidth` (1280 by default: a 3440-wide desktop
+  travels as ~70 KB instead of 365 KB), and consume its temp file on the spot:
+  nothing to download, nothing left on disk. `inline=false` gives file +
+  `download` as before. One helper (`Lsp.InlineImages.DeliverCapture`) for
+  every tool that captures, and one point that wraps text + image
+  (`ResultWrapper`, next to the output filter in the tools manager): the next
+  tool that returns an image calls `AttachImage` and is done. (David,
+  2026-09-25: "1 solo paso es lo logico".)
+- **`frame`: the agent never does coordinate arithmetic.** Every capture
+  carries a stateless token with its geometry
+  (`<imgW>x<imgH>@<srcW>x<srcH>+<x>+<y>`); `tap` / `type` with `frame=` take
+  x,y measured on that image and the server converts. It absorbs the three
+  sums agents did by hand: dividing by the inline scale, adding a crop's
+  origin, and multiplying by Android's `tapScale`. A malformed frame or a
+  point outside its image is refused before anything is pressed. Without
+  `frame`, x,y mean what they always meant.
+
 ### Changed
 
 - A desktop capture that lands in the server's temp folder (the default of
@@ -17,7 +38,9 @@ the MCP `initialize` response (`serverInfo.version`).
   honest 404. Nothing cached, nothing rotated, nothing kept: need it again,
   take another. A capture requested with `out=` is yours and stays. Measured
   the same day: 10 gestures had left 41 MB in a workspace root, purged only
-  at restart. (David, 2026-09-25.)
+  at restart. (David, 2026-09-25.) The recognizer now knows both capture
+  sub-folders (`desktop` and `android`) from constants shared with the
+  namer: Android captures were accumulating too.
 - One resolver of the active workspace inside the guard: `HasActiveWS` /
   `ActiveWS` replace 18 hand-written copies of "if a workspace is active, its
   field; else the global", and `LoadSecurity` reads every local-mode key

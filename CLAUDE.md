@@ -16,8 +16,9 @@ it in the first call.
 
 ## Survey the landscape first (David, 2026-09-20)
 
-One act, two questions. You look at the landscape once, and while you are
-there you ask both:
+One act, four questions. You look at the landscape once - the one there is
+today AND the one this code will have tomorrow - and while you are
+there you ask all four:
 
 **1. Landscape before TOUCHING** — where else does this live? You do not fix
 where you happen to be looking; you fix where the rule lives. If there is a
@@ -28,7 +29,30 @@ the cause stays, now with nobody looking for it.
 usable or adaptable? Often the answer is a *parameter* on what exists, not a
 sibling. That reduces code and centralises the problems.
 
-The practical part: **the same search answers both.** Search for what the
+**3. Landscape to COUNT** - how many times is this already written? Twice
+is a helper with parameters: reusable, extendable, central, and a bug fixed
+there is fixed in every caller at once. For configuration and jail
+decisions, ONE reader from the very first copy: several readers of the same
+setting are several doors. Measured 2026-09-25: 18 hand-written copies of
+"the active workspace's field, else the global" - a new key with its
+workspace half forgotten would have fallen back to the global SILENTLY.
+
+**4. The FUTURE landscape** - who will need this next? Design it so the
+next caller is one line, not a copy: the next tool that captures, the next
+key of a workspace, the next format. Measured 2026-09-25, three times in one
+afternoon: the inline screenshot first went into `delphi_desktop`'s own
+`Execute` while `delphi_adb` also captures; base64 was validated inside
+`delphi_upload` while `delphi_fetch` encoded on its own; the capture
+recognizer knew `desktop` and Android captures kept piling up. Each became
+one helper (`DeliverCapture` / `AttachImage`, `Lsp.Base64`,
+`CAPTURE_SUB_*` shared by namer and reader), and the next tool that
+captures now calls it.
+
+In David's words: *"una cosa es saber escribir codigo y otra distinta es
+saber programar"* - writing code solves today's line; programming leaves
+tomorrow's line somewhere to land.
+
+The practical part: **the same search answers all four.** Search for what the
 function DOES, not for what you would call it, and that one pass turns up the
 other places the rule lives AND the function you were about to duplicate.
 Measured: searching for where paths were canonicalised turned up

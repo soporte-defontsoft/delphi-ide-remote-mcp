@@ -460,6 +460,11 @@ The launcher also takes care of the **graphical environment** of the target. On 
 
 ### `delphi_adb`
 
+Since 1.3.1 `screenshot` is delivered like `delphi_desktop`'s (same helper): the
+image inline in the answer, or file + `download` with `inline=false`, always with
+a `frame`; `tap` with `frame=` converts to DISPLAY pixels, so `tapScale` no longer
+has to be applied by hand.
+
 Android devices for remote development: the phones/tablets hang off THIS server (USB or wifi adb), while you program from anywhere. command=discover finds devices ANNOUNCING wireless debugging on the server's network (mDNS) and hands you each one's ip:port; command=devices lists what adb has ATTACHED (the same list the IDE shows as deploy targets); command=connect attaches one over the network (the device shows an authorize prompt the first time); command=disconnect detaches it; command=install installs a built .apk; command=run launches the installed app (the IDE's "Deploy and Run"); command=logcat hands you the device log (a bounded dump, optionally filtered) - remote debugging of the deployed app; command=screenshot grabs the device screen to a PNG you then `delphi_fetch` (your remote EYES) and command=tap / command=key touch the screen and press navigation keys (your remote HANDS) - enough to drive the deployed app end to end. The adb used is the IDE's own Android SDK's, discovered per install. Typical flow: discover → connect → devices → `delphi_build target=Deploy` → install → run → screenshot → tap → logcat.
 
 **The screenshot says what the display really is.** Every `screenshot` answer carries `image` (the PNG's size) and `display` - the device's `physical` size, its `override` size when one is set and its `density`, from `wm size` / `wm density` - because `input tap` takes pixels of the display in force, not of the picture. Normally they are the same and what you measure on the image is what you tap; when they differ (a device that captures at another scale) the answer carries `tapScale {x, y}` and its note says to multiply first. A rotated display (WxH against HxW) is not a scale: screencap and input share the orientation.
@@ -482,6 +487,14 @@ Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.168.1.163;SERIA
 | `lines` | string | optional | logcat: how many recent lines to capture (default 300, max 5000; 0 = default). Inline answers carry at most the newest 400 — bigger dumps via `out=` |
 
 ### `delphi_desktop`
+
+Since 1.3.1 a screenshot is **one step**: the image travels in the same answer
+(an MCP `image` content item, scaled to `maxwidth`, 1280 by default) and its temp
+file is consumed on the spot; `inline=false` returns the file and its `download`
+link instead. Every capture carries a `frame` token
+(`<imgW>x<imgH>@<srcW>x<srcH>+<x>+<y>`): `tap`/`type` with x,y measured on that
+image and `frame=` copied verbatim, and the server converts scale and crop origin -
+the agent never does arithmetic. Without `frame`, x,y are capture pixels, as before.
 
 The desktop of the machine behind a PAServer profile - a Linux target, a Windows target, or **this server itself** when a PAServer runs in its own user session - the way `delphi_adb` gives you an Android one: SEE the screen and ACT on it. Until 1.0.15 this tool was `delphi_adb_linux`, and a second tool called `delphi_desktop` ran the node locally under a switch of its own (`AllowDesktopControl`): two paths and two permission models for one thing. Since 1.0.16 there is ONE path, PAServer and a profile, and the machine is a parameter; `delphi_adb_linux` stayed two releases as a deprecated alias and no longer exists, and neither does `AllowDesktopControl`.
 

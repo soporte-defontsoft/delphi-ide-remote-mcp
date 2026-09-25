@@ -49,6 +49,9 @@ type
     FOut: string;
     FRegion: string;
     FWindow: string;
+    FInline: string;
+    FMaxWidth: Integer;
+    FFrame: string;
   public
     [SchemaDescription(SP_ADBLINUX_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -83,6 +86,12 @@ type
     property Region: string read FRegion write FRegion;
     [SchemaDescription(SP_ADBLINUX_WINDOW)]
     property Window: string read FWindow write FWindow;
+    [SchemaDescription(SP_CAPTURE_INLINE)]
+    property Inline_: string read FInline write FInline;
+    [SchemaDescription(SP_CAPTURE_MAXWIDTH)]
+    property MaxWidth: Integer read FMaxWidth write FMaxWidth;
+    [SchemaDescription(SP_CAPTURE_FRAME)]
+    property Frame: string read FFrame write FFrame;
   end;
 
   TDesktopLinuxTool = class(TMCPToolBase<TDesktopLinuxParams>)
@@ -104,7 +113,7 @@ uses
   Lsp.Guard,
   Lsp.Imagen,
   Mcp.Tools.PAServer,
-  Lsp.Files,     // DownloadLinkFor: el enlace, el mismo que da delphi_fetch
+  Lsp.InlineImages, // DeliverCapture: como se entrega una captura, la misma en toda tool
   Lsp.RemoteRun;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
@@ -245,7 +254,7 @@ var
   Res: TJSONObject;
   Return: TJSONObject;
   EsWin, HayVentana, ConRecorte: Boolean;
-  RX, RY, RW, RH, AnchoOrig, AltoOrig: Integer;
+  RX, RY, RW, RH, AnchoOrig, AltoOrig, PX, PY: Integer;
   Ventanas: TJSONArray;
 begin
   Cmd := Params.Command.Trim.ToLower;
@@ -332,8 +341,12 @@ begin
   begin
     if (Params.X.Trim = '') or (Params.Y.Trim = '') then
       Exit(SR_ADBLINUX_NEEDXY);
-    Args := Args + [IntToStr(StrToIntDef(Params.X.Trim, -1)),
-      IntToStr(StrToIntDef(Params.Y.Trim, -1))];
+    // Con frame, x,y son de la imagen que el agente miro y el servidor los
+    // pasa a pixeles de captura (Lsp.InlineImages.FramePoint).
+    var FP := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
+    if FP <> '' then
+      Exit(FP);
+    Args := Args + [IntToStr(PX), IntToStr(PY)];
   end
   else if Cmd = 'type' then
   begin
@@ -341,8 +354,12 @@ begin
       Exit(SR_ADBLINUX_NEEDTEXT);
     { Con coordenadas es UN solo viaje: pulsa para dar el foco y escribe. }
     if (Params.X.Trim <> '') and (Params.Y.Trim <> '') then
-      Args := Args + ['escribe', IntToStr(StrToIntDef(Params.X.Trim, -1)),
-        IntToStr(StrToIntDef(Params.Y.Trim, -1)), Params.Text.Trim]
+    begin
+      var FT := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
+      if FT <> '' then
+        Exit(FT);
+      Args := Args + ['escribe', IntToStr(PX), IntToStr(PY), Params.Text.Trim];
+    end
     else
       Args := Args + ['texto', Params.Text.Trim];
   end
@@ -445,7 +462,7 @@ begin
       // la captura y como se llama lo decide CaptureTarget (Lsp.Guard), con
       // el formato que trae la captura remota. Se resuelve ANTES de bajar
       // nada: un "out" con la extension equivocada no merece el viaje.
-      Fallo := CaptureTarget(Params.Out_, 'desktop',
+      Fallo := CaptureTarget(Params.Out_, CAPTURE_SUB_DESKTOP,
         'desktop-' + NombreSeguro(Params.Profile.Trim),
         TPath.GetExtension(Remota), Propia);
       { Con un "out" rechazado Propia viene VACIA, y calcular su carpeta
@@ -513,18 +530,22 @@ begin
         begin
           Return.AddPair('screenshot', Local);
           Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Local)));
-          // El enlace listo para copiar, como en delphi_fetch: un agente que
-          // recompone esta ruta a mano se inventa carpetas (hermes, 25-sep-2026).
-          if DownloadLinkFor('delphi_desktop', Local) <> '' then
+          // UN SOLO PASO (David, 25-sep-2026): la imagen viaja en esta misma
+          // respuesta, o fichero + enlace con inline=false. Lo decide
+          // DeliverCapture, el mismo para toda tool que capture.
+          // El frame lleva el origen del recorte: el agente no suma nada.
+          var OX := 0;
+          var OY := 0;
+          if ConRecorte then
           begin
-            Return.AddPair('download', DownloadLinkFor('delphi_desktop', Local));
-            Return.AddPair('downloadNote', SN_FETCH_DOWNLOAD);
-            if IsAgentCapture(Local) then
-              Return.AddPair('consumedOnDownload', TJSONBool.Create(True)); // se borra al recogerla
+            OX := RX;
+            OY := RY;
           end;
+          var EnLinea := DeliverCapture('delphi_desktop', Local, Params.Inline_,
+            Params.MaxWidth, OX, OY, 1.0, 1.0, Return);
           if ConRecorte then
             Return.AddPair('note', Format(SN_ADBLINUX_CROP_NOTE_FMT, [RX, RY]))
-          else
+          else if not EnLinea then
             Return.AddPair('note', 'mide el pixel SOBRE esta imagen y pasalo a ' +
               'command=tap; bajala con download o delphi_fetch. Al recogerla ENTERA ' +
               'se borra del servidor: si la necesitas otra vez, pide otra captura ' +
