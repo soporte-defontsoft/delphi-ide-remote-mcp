@@ -6,7 +6,16 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.2.2] - 2026-09-25
+
+### Added
+
+- `delphi_move copy=true`: copy instead of move, through the same gate (jail,
+  designer pair, `unit X;` header on a different name, no overwrite). The
+  source stays, no trash copy is taken, no project is re-pointed (the copy
+  is a new unit nobody lists yet: `delphi_config add-unit`). Refused for a
+  folder that holds a `.dproj`/`.dpk` (a project never lives in two places)
+  and from the trash. A copied folder is born without the source's trash.
 
 ### Changed
 

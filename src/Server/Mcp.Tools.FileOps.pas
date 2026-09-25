@@ -33,6 +33,7 @@ type
   private
     FPath: string;
     FDest: string;
+    FCopy: Boolean;
   public
     [SchemaDescription('Absolute path of the file or folder to move (inside the workspace roots)')]
     [Required]
@@ -42,6 +43,8 @@ type
     [Required]
     [RutaDelServidor]
     property Dest: string read FDest write FDest;
+    [SchemaDescription(SP_MOVE_COPY)]
+    property Copy: Boolean read FCopy write FCopy;
   end;
 
   TDelphiDeleteTool = class(TMCPToolBase<TDelphiDeleteParams>)
@@ -523,7 +526,8 @@ constructor TDelphiMoveTool.Create;
 begin
   inherited;
   FName := 'delphi_move';
-  FDescription := 'Move or rename a file or folder inside the workspace. Both ' +
+  FDescription := 'Move or rename a file or folder inside the workspace, or COPY ' +
+    'it with copy=true. Both ' +
     'source and destination must be inside the workspace roots; parent ' +
     'folders of the destination are created. The source is copied to the ' +
     'recoverable trash first. Jailed, refused in read-only mode. Moving or ' +
@@ -532,7 +536,13 @@ begin
     'uses and DCCReference, the uses of every other unit of the project and ' +
     'every qualified UnitOld.X reference in them - looked for from its folder UP to the edge of the ' +
     'workspace, however deep the unit sits. Moving a whole FOLDER re-points ' +
-    'every unit inside it the same way: reorganise freely, the projects follow.';
+    'every unit inside it the same way: reorganise freely, the projects follow. ' +
+    'copy=true is the same door with a different last step: the source stays, ' +
+    'no trash copy is taken, a copied unit named differently gets its "unit X;" ' +
+    'header rewritten and its .dfm/.fmx copied along, and NO project is ' +
+    're-pointed (the copy is a new unit nobody lists yet: delphi_config ' +
+    'add-unit). Refused for a folder holding a .dproj/.dpk - a project never ' +
+    'lives in two places; start one from another with delphi_create.';
 end;
 
 function TDelphiMoveTool.ExecuteWithParams(const Params: TDelphiMoveParams): string;
@@ -561,6 +571,18 @@ begin
     Exit('RECHAZADO: no existe el origen ' + Params.Path);
   if TFile.Exists(Params.Dest) or TDirectory.Exists(Params.Dest) then
     Exit('RECHAZADO: el destino ya existe: ' + Params.Dest + ' (no sobreescribo).');
+  // copy=true: misma puerta, dos rechazos mas. Desde la papelera se RESTAURA
+  // (move), no se copia; y una carpeta con proyecto dentro no se duplica: un
+  // proyecto nunca vive en dos sitios (David, 24-sep-2026).
+  if Params.Copy then
+  begin
+    if IsBackupPath(Params.Path) then
+      Exit(SR_MOVE_COPY_FROM_TRASH);
+    if TDirectory.Exists(Params.Path) then
+      for var Pr in TDirectory.GetFiles(Params.Path, '*.d*', TSearchOption.soAllDirectories) do
+        if MatchText(TPath.GetExtension(Pr), ['.dproj', '.dpk']) and not IsBackupPath(Pr) then
+          Exit(Format(SR_MOVE_COPY_PROJECT_FMT, [Pr]));
+  end;
   // Una copia de la papelera se llama "UFicha.pas-215825250": su extension
   // REAL esta detras del sello de hora. Sin esto, restaurar un formulario
   // dejaba el .dfm dentro de la papelera y la unit fuera, sin designer.
@@ -588,7 +610,8 @@ begin
     for Ext in ['.dfm', '.fmx'] do
       if TFile.Exists(ChangeFileExt(Params.Dest, Ext)) then
         Exit('RECHAZADO: ya existe ' + ChangeFileExt(Params.Dest, Ext) + ' (no sobreescribo).');
-    Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
+    if not Params.Copy then
+      Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
   end;
   // UNA CARPETA ENTERA: se apunta ANTES de moverla que unit de dentro lista
   // que proyecto, porque despues las rutas viejas ya no existen. Una carpeta
@@ -600,7 +623,7 @@ begin
   // viaja con ella y sus rutas relativas siguen valiendo: no se toca.
   var Mudanza := TStringList.Create; // proyecto|unit vieja
   try
-  if TDirectory.Exists(Params.Path) and not DesdePapelera then
+  if TDirectory.Exists(Params.Path) and not DesdePapelera and not Params.Copy then
   try
     var Raiz := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path));
     for var U in TDirectory.GetFiles(Params.Path, '*.pas',
@@ -622,7 +645,9 @@ begin
     // dejaba una papelera DENTRO de la papelera, con el sello doblado, y cada
     // restauracion anadia otra capa (medido 2026-09-20). Lo que se restaura no
     // necesita red: la red es el.
-    if DesdePapelera then
+    if Params.Copy then
+      BackupNote := ''
+    else if DesdePapelera then
       BackupNote := '(el origen ya estaba en la papelera: no hago copia de una copia)'
     else
     begin
@@ -634,7 +659,19 @@ begin
         TFile.Copy(Params.Path, BackupNote);
     end;
     CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(Params.Dest)));
-    if TDirectory.Exists(Params.Path) then
+    if Params.Copy then
+    begin
+      if TDirectory.Exists(Params.Path) then
+      begin
+        TDirectory.Copy(Params.Path, Params.Dest);
+        // la papelera del origen no es contenido: la copia nace limpia
+        for var Basura in TDirectory.GetDirectories(Params.Dest, BACKUP_SUB, TSearchOption.soAllDirectories) do
+          TDirectory.Delete(Basura, True);
+      end
+      else
+        TFile.Copy(Params.Path, Params.Dest);
+    end
+    else if TDirectory.Exists(Params.Path) then
       TDirectory.Move(Params.Path, Params.Dest)
     else
       TFile.Move(Params.Path, Params.Dest);
@@ -648,10 +685,12 @@ begin
       end;
   except
     on E: Exception do
-      Exit('ERROR al mover: ' + E.Message);
+      Exit('ERROR al ' + IfThen(Params.Copy, 'copiar', 'mover') + ': ' + E.Message);
   end;
-  Result := Format('MOVIDO'#10'  de: %s'#10'  a:  %s'#10'  (copia de seguridad en %s)',
-    [Params.Path, Params.Dest, BackupNote]);
+  Result := Format('%s'#10'  de: %s'#10'  a:  %s',
+    [IfThen(Params.Copy, 'COPIADO', 'MOVIDO'), Params.Path, Params.Dest]);
+  if not Params.Copy then // una copia no necesita red: el origen sigue ahi
+    Result := Result + #10 + '  (copia de seguridad en ' + BackupNote + ')';
   if Mudanza.Count > 0 then
   begin
     var RaizVieja := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path));
@@ -690,9 +729,13 @@ begin
     if Gemelo = '' then
       Continue;
     try
-      TFile.Move(Gemelo, ChangeFileExt(Params.Dest, Ext));
+      if Params.Copy then
+        TFile.Copy(Gemelo, ChangeFileExt(Params.Dest, Ext))
+      else
+        TFile.Move(Gemelo, ChangeFileExt(Params.Dest, Ext));
       PairNote := Format(SN_FILE_DESIGNER_TOO_FMT,
-        [TPath.GetFileName(ChangeFileExt(Params.Dest, Ext)), 'movido con la unit']);
+        [TPath.GetFileName(ChangeFileExt(Params.Dest, Ext)),
+         IfThen(Params.Copy, 'copiado con la unit', 'movido con la unit')]);
       if DesdePapelera and TFile.Exists(Gemelo + '.by') then
         try
           TFile.Delete(Gemelo + '.by');
@@ -740,6 +783,8 @@ begin
   if Length(Projects) > 0 then
     ProjNote := Format(SN_FILE_PROJECTS_UPDATED_FMT, [Length(Projects),
       string.Join(', ', Projects)]) + ProjNote
+  else if Params.Copy then
+    ProjNote := SN_FILE_COPY_NO_PROJECT
   else
     ProjNote := SN_FILE_PROJECTS_NONE;
   Result := Result + #10 + ProjNote;

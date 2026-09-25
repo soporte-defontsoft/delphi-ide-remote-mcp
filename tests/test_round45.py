@@ -194,6 +194,7 @@ PROBAR = [
 # motivo escrito es por donde se cuela la siguiente.
 EXCLUIDOS = {
     ('delphi_paserver', 'exe'): 'fichero de la carpeta desplegada EN EL TARGET',
+    ('delphi_move', 'copy'): 'booleano (copiar en vez de mover); la ruta es path/dest, probados arriba',
     ('delphi_config', 'remotedir'): 'carpeta EN EL TARGET, no de esta maquina',
     ('delphi_git', 'args'): 'argumentos libres de git; filtro propio (GitArgDenied)',
     ('delphi_search', 'pattern'): 'mascara de fichero, no una ruta',

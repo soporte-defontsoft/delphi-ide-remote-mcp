@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.2.1';
+  SERVER_VERSION = '1.2.2';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -2243,6 +2243,27 @@ const
     'move, tambien desde la de destino - hacia arriba hasta ' +
     'el borde del workspace; si otro proyecto lo usa, quitalo con ' +
     'delphi_config command=remove-unit)';
+
+  SN_FILE_COPY_NO_PROJECT =
+    '  (una COPIA es una unit nueva que ningun proyecto lista todavia: ' +
+    'delphi_config command=add-unit cuando la quieras en uno)';
+
+  SR_MOVE_COPY_FROM_TRASH =
+    'RECHAZADO: copy=true desde la papelera no: para recuperar una copia ' +
+    'MUEVELA fuera (delphi_move sin copy), que es lo que hace un restore.';
+
+  SR_MOVE_COPY_PROJECT_FMT =
+    'RECHAZADO: esa carpeta contiene un proyecto (%s) y un proyecto nunca ' +
+    'vive en dos sitios. Para arrancar un proyecto a partir de otro, ' +
+    'delphi_create; para llevarlo a otro sitio, delphi_move sin copy.';
+
+  SP_MOVE_COPY =
+    'true = COPY instead of move: the source stays untouched, no trash copy ' +
+    'is taken, and NO project is re-pointed (the copy is a new unit nobody ' +
+    'lists yet - delphi_config add-unit). A copied unit named differently ' +
+    'gets its "unit X;" header rewritten and its .dfm/.fmx copied along. ' +
+    'Refused for a folder that holds a .dproj/.dpk (a project never lives in ' +
+    'two places) and for anything inside the trash.';
 
   SN_FILE_PROJECT_DENIED_FMT =
     '    %s: fuera de los workspaces permitidos, NO tocado (quita la unit ' +

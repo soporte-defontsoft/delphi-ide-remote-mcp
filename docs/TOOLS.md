@@ -296,6 +296,13 @@ Delete a file or folder inside the workspace. NOT a hard delete: the target is m
 
 ### `delphi_move`
 
+`copy=true` (1.2.2) copies instead of moving, through the same gate: the source
+stays, no trash copy is taken, a copied unit named differently gets its `unit X;`
+header rewritten and its designer file copied along, and **no project is
+re-pointed** (the copy is a new unit nobody lists yet; `delphi_config add-unit`
+puts it in one). Refused for a folder that holds a `.dproj`/`.dpk` (a project never
+lives in two places; `delphi_create` starts one from another) and from the trash.
+
 Move or rename a file or folder inside the workspace. Both source and destination must be inside the workspace roots; parent folders of the destination are created. The source is copied to the recoverable trash first. Jailed, refused in read-only mode. Moving or renaming a unit (.pas) moves its .dfm/.fmx with it, rewrites its "unit X;" header on a rename, and re-points every project that lists it: the .dpr uses and DCCReference, the uses of every other unit of the project and every qualified `UnitOld.X` reference in them (outside string literals) - looked for from its folder UP to the edge of the workspace, however deep the unit sits. Moving a whole FOLDER re-points the units inside it too.
 
 *Access: read-write.*

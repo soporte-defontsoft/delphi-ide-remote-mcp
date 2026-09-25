@@ -255,7 +255,7 @@ gesture you came for and nothing else.
   not), `remove-unit` drops it from the project and keeps the file,
   `delphi_delete` on a unit trashes its designer pair and updates the
   projects that list it, `delphi_move` renames/moves a unit with its pair,
-  header and project entries. `view` lists the project's `units`.
+  header and project entries; with `copy=true` it copies instead (header and pair too, no project re-pointed: `add-unit` when you want it in one). `view` lists the project's `units`.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess. `target=Deploy` on Android builds the
   full `.apk` (the server generates the deployment manifest if missing).
