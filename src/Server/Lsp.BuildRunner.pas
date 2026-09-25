@@ -943,6 +943,30 @@ begin
   end;
 end;
 
+{ Donde deja este build lo que produce, y si esta sesion puede escribir
+  alli: la pregunta de todo escritor (EscrituraDenegada), para CADA carpeta
+  de salida que declaran el .dproj y sus .optset (BuildOutputDirs), ANTES de
+  que msbuild arranque - un Clean borra en esas mismas carpetas. El gate de
+  la ruta del proyecto no bastaba: un .dproj con DCC_ExeOutput absoluto
+  fuera de las raices dejaba App.exe y App.rsm fuera de la jaula (medido en
+  vivo, 25-sep-2026). Una salida que no se sabe resolver no se aprueba. }
+function SalidaDenegada(const ADprojPath, APlat, ACfg: string): string;
+begin
+  Result := '';
+  // La que NO declara la pone el IDE fuera del proyecto (David, 25-sep-2026).
+  var Falta := BuildOutputUndeclared(ADprojPath, APlat, ACfg);
+  if Falta <> '' then
+    Exit(Format(SR_BUILD_OUTPUT_UNDECLARED_FMT, [Falta]));
+  for var S in BuildOutputDirs(ADprojPath, APlat, ACfg) do
+  begin
+    if S.Dir = '' then
+      Exit(Format(SR_BUILD_OUTPUT_UNRESOLVED_FMT, [S.Tag, S.Value]));
+    var Motivo := EscrituraDenegada(S.Dir);
+    if Motivo <> '' then
+      Exit(Format(SR_BUILD_OUTPUT_DENIED_FMT, [S.Tag, S.Value, Motivo]));
+  end;
+end;
+
 { Los SDK que el IDE tiene registrados para una plataforma: los <nombre>.sdk
   de su APPDATA cuyo Profile_platform coincide. UN SDK = UNA CARPETA y aqui se
   decide con cual se compila - la misma idea que los SDK de Android. }
@@ -1231,6 +1255,14 @@ begin
   Target := ATarget;
   if Target = '' then
     Target := 'Build';
+  // Donde deja la salida, con la plataforma y la config de ESTE build.
+  var SalidaMala := SalidaDenegada(ADprojPath, Plat, Cfg);
+  if SalidaMala <> '' then
+  begin
+    TLogger.Warning(Format('delphi_build: REFUSED "%s" - %s',
+      [TPath.GetFullPath(ADprojPath), SalidaMala]));
+    raise Exception.Create(SalidaMala);
+  end;
   // Deploy ALWAYS builds first: a bare /t:Deploy repackages and ships the
   // PREVIOUS binary with today's date and zero warnings - the measured
   // half-a-session trap (vault: delphi-android-deploy-sin-build). The IDE

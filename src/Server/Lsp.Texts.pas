@@ -3268,6 +3268,28 @@ const
     'no es Pascal. Las rutas de {$I} y {$R} tienen que quedarse dentro del ' +
     'workspace.';
 
+  SR_BUILD_OUTPUT_DENIED_FMT =
+    'RECHAZADO: no compilo esto. El proyecto deja su salida en %s = %s, ' +
+    'y ahi esta sesion no puede escribir: %s. Un build escribe el binario, ' +
+    'los .dcu y el resto en las carpetas de salida del proyecto (y un ' +
+    'Clean borra alli): tienen que quedar dentro del workspace. ' +
+    'delphi_config set-output coloca dentro las del binario y los .dcu.';
+
+  SR_BUILD_OUTPUT_UNDECLARED_FMT =
+    'RECHAZADO: no compilo esto. El proyecto no declara %s para esta ' +
+    'plataforma y config (ni en la global ni en la particular), y sin ella el ' +
+    'IDE deja esa salida fuera del proyecto: los .dcu junto a cada fuente ' +
+    '(tambien las de una referencia), los .bpl, .dcp y .hpp en sus ' +
+    'carpetas globales. Declarala dentro del proyecto, por ejemplo ' +
+    '.\$(Platform)\$(Config) como hace delphi_create (delphi_config ' +
+    'set-output pone la del binario y la de los .dcu).';
+
+  SR_BUILD_OUTPUT_UNRESOLVED_FMT =
+    'RECHAZADO: no compilo esto. No se a donde va la salida de %s = %s ' +
+    '(una macro o un escape que este servidor no resuelve), y una carpeta ' +
+    'de salida que no se puede comprobar no se aprueba. Escribela como ' +
+    'ruta relativa al proyecto, con $(Platform) y $(Config) si hace falta.';
+
   SN_BUILD_LOCKED_OUTPUT =
     'F2039 "Could not create output file" casi nunca es un fallo de tu ' +
     'codigo: el binario que este build quiere escribir esta ABIERTO. Suele ' +

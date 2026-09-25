@@ -42,6 +42,30 @@ the MCP `initialize` response (`serverInfo.version`).
 - One `Slug` (`Lsp.Guard`): the normalizer of client-chosen names that reach
   the disk was copied identically in `delphi_messages` and `delphi_report`.
 
+- **A build leaves its output only where the session may write.**
+  `delphi_build` and `delphi_test` checked the project's path, not where the
+  build writes: a `.dproj` whose `DCC_ExeOutput` pointed outside the roots
+  got `App.exe` and `App.rsm` written there, and into a read-only reference
+  as well (reproduced against 1.3.2). Every output folder that the `.dproj`
+  and the `.optset` files it imports declare (`DCC_ExeOutput`, `DcuOutput`,
+  `BplOutput`, `DcpOutput`, `HppOutput`, `ObjOutput`, `BpiOutput`) now goes
+  through the write gate (`EscrituraDenegada`, on the real path) before
+  msbuild starts; a `Clean` deletes in those same folders. One that cannot
+  be resolved (an unknown macro, an escape) is refused, not assumed.
+- **An output folder the project does not declare is refused too**, because
+  the IDE then puts it outside the project: `.dcu` files next to every
+  source (a read-only reference's too), a package's `.bpl`/`.dcp` and C++
+  `.hpp` files in its global folders. What counts is the value for the
+  platform and config being built, as MSBuild sees it: the global group,
+  or the platform's or config's own (`Base_<platform>`, `Cfg_N`,
+  `Cfg_N_<platform>`), the last one winning - so a folder declared only for
+  Win32 does not cover a Win64 build, and an empty one for Debug cancels
+  the global. Measured on 22 real projects, every declared platform
+  (GalateaFMX: 8): one is refused, for having no `DCC_DcuOutput` at all.
+- The `.dproj` tag reader (`AllTagValues`, `AllTagAttr`) no longer depends on
+  letter case or on the whitespace inside a tag, as MSBuild does not:
+  `<DCC_EXEOUTPUT>` was invisible to it.
+
 ## [1.3.2] - 2026-09-25
 
 ### Security

@@ -31,9 +31,18 @@ type
     function CanTarget(const APlatform: string; out AReason: string): Boolean;
   end;
 
+  { Una carpeta donde un build deja ficheros, tal como la declara el proyecto. }
+  TBuildOutputDir = record
+    Tag: string;   // DCC_ExeOutput, DCC_DcuOutput...
+    Value: string; // el valor tal como esta escrito
+    Dir: string;   // absoluto y resuelto; '' si no se sabe resolver
+  end;
+
 { ---- tolerant XML primitives (shared) ---- }
 
-{ Inner texts of <ATag ...>...</ATag>, in document order. }
+{ Inner texts of <ATag ...>...</ATag>, in document order. SIN distinguir
+  mayusculas y con cualquier blanco tras el nombre: MSBuild no distingue
+  mayusculas en el nombre de una propiedad, y una puerta lee con esta. }
 function AllTagValues(const AXml, ATag: string): TArray<string>;
 
 { Value of one attribute across every <ATag attr="...">, in document order. }
@@ -128,6 +137,28 @@ function DprojBuildHazard(const AXml, AProjectPath: string;
   is there (build failed, macro we cannot resolve, unusual layout). }
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
 
+{ TODAS las carpetas donde un build de ADprojPath (APlatform/AConfig) deja
+  ficheros, tal como las declaran el .dproj y lo que importa del proyecto
+  (un .optset): cada valor de cada DCC_*Output, en CUALQUIER grupo - las
+  condiciones no se evaluan: una de mas es prudencia, una de menos es una
+  puerta -, con las macros comunes expandidas y resuelto contra la carpeta
+  del proyecto. Dir = '' cuando el valor no se sabe resolver (una macro, un
+  escape): quien pregunta decide, y la puerta de build lo rechaza. Una
+  etiqueta ausente o vacia no sale: es la del IDE por defecto. }
+function BuildOutputDirs(const ADprojPath, APlatform, AConfig: string): TArray<TBuildOutputDir>;
+
+{ La carpeta de salida que este proyecto NO declara y que el IDE pondria
+  fuera de el, o '' si declara todas las que usa: sin DCC_DcuOutput los .dcu
+  caen junto a cada fuente (tambien las de una referencia de solo lectura);
+  un paquete sin DCC_BplOutput/DCC_DcpOutput los deja en las carpetas
+  globales del IDE, y la salida C++ (DCC_CBuilderOutput) sin DCC_HppOutput
+  deja alli los .hpp (los .obj y .bpi van a la del .dcp). Decidido con David
+  (25-sep-2026): se rechaza y se pide declararla. Medido: 1 de 22 proyectos
+  de nuestras raices. Se mira PARA ESTE BUILD (APlatform/AConfig): cada
+  plataforma y config puede tener su carpeta, o heredar la global
+  (EffectiveProperty). }
+function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): string;
+
 implementation
 
 uses
@@ -137,43 +168,84 @@ uses
   System.IOUtils,
   System.Generics.Collections;
 
+{ El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
+  entre comillas: un Condition="'$(A)'>'1'" no la cierra. 0 si no hay. }
+function FinDeEtiqueta(const AXml: string; AFrom: Integer): Integer;
+var
+  Q: Char;
+begin
+  Q := #0;
+  Result := AFrom;
+  while Result <= Length(AXml) do
+  begin
+    if Q <> #0 then
+    begin
+      if AXml[Result] = Q then
+        Q := #0;
+    end
+    else if CharInSet(AXml[Result], ['"', '''']) then
+      Q := AXml[Result]
+    else if AXml[Result] = '>' then
+      Exit;
+    Inc(Result);
+  end;
+  Result := 0;
+end;
+
 function AllTagValues(const AXml, ATag: string): TArray<string>;
 var
   List: TList<string>;
-  P, TagEnd, CloseP: Integer;
-  Open1, Open2, CloseTag: string;
+  Low, Open, CloseOpen: string;
+  P, After, TagEnd, CloseP, Q: Integer;
 begin
+  // SIN distinguir mayusculas y con cualquier blanco tras el nombre: con esta
+  // funcion lee la puerta de las carpetas de salida (BuildOutputDirs), y ni
+  // <DCC_EXEOUTPUT>, ni un salto de linea antes de Condition=, ni un '>'
+  // dentro de una condicion pueden saltarsela (25-sep-2026). LowerCase solo
+  // toca A..Z: las posiciones de Low valen en AXml.
   List := TList<string>.Create;
   try
-    Open1 := '<' + ATag + '>';
-    Open2 := '<' + ATag + ' ';
-    CloseTag := '</' + ATag + '>';
+    Low := LowerCase(AXml);
+    Open := '<' + LowerCase(ATag);
+    CloseOpen := '</' + LowerCase(ATag);
     P := 1;
-    while P <= Length(AXml) do
+    while True do
     begin
-      var P1 := Pos(Open1, AXml, P);
-      var P2 := Pos(Open2, AXml, P);
-      if (P1 = 0) and (P2 = 0) then
+      P := Pos(Open, Low, P);
+      if P = 0 then
         Break;
-      if (P1 = 0) or ((P2 > 0) and (P2 < P1)) then
+      After := P + Length(Open);
+      if (After > Length(Low)) or
+         not CharInSet(Low[After], ['>', '/', ' ', #9, #13, #10]) then
       begin
-        TagEnd := Pos('>', AXml, P2);
-        if TagEnd = 0 then
+        P := After; // <Platforms> no es <Platform>
+        Continue;
+      end;
+      TagEnd := FinDeEtiqueta(Low, After);
+      if TagEnd = 0 then
+        Break;
+      P := TagEnd + 1;
+      if Low[TagEnd - 1] = '/' then
+        Continue; // <Tag/> o <Tag Condition="..."/>: vacia
+      // el cierre, admitiendo blancos antes del '>' (</Tag >)
+      CloseP := P;
+      Q := 0;
+      while True do
+      begin
+        CloseP := Pos(CloseOpen, Low, CloseP);
+        if CloseP = 0 then
           Break;
-        if AXml[TagEnd - 1] = '/' then
-        begin
-          P := TagEnd + 1;
-          Continue;
-        end;
-        P := TagEnd + 1;
-      end
-      else
-        P := P1 + Length(Open1);
-      CloseP := Pos(CloseTag, AXml, P);
+        Q := CloseP + Length(CloseOpen);
+        while (Q <= Length(Low)) and CharInSet(Low[Q], [' ', #9, #13, #10]) do
+          Inc(Q);
+        if (Q <= Length(Low)) and (Low[Q] = '>') then
+          Break;
+        CloseP := Q;
+      end;
       if CloseP = 0 then
         Break;
       List.Add(Copy(AXml, P, CloseP - P));
-      P := CloseP + Length(CloseTag);
+      P := Q + 1;
     end;
     Result := List.ToArray;
   finally
@@ -184,29 +256,56 @@ end;
 function AllTagAttr(const AXml, ATag, AAttr: string): TArray<string>;
 var
   List: TList<string>;
-  P, TagEnd, AttrP, ValStart, ValEnd: Integer;
-  Open, Needle: string;
+  Low, Open, Attr, Nombre: string;
+  P, After, TagEnd, A, K, ValEnd: Integer;
 begin
+  // Mismo criterio que AllTagValues: sin distinguir mayusculas, con cualquier
+  // blanco, y el valor entre comillas dobles O simples (las dos son XML).
+  // Los atributos se leen uno a uno: 'Include' no casa dentro de 'XInclude'.
   List := TList<string>.Create;
   try
-    Open := '<' + ATag + ' ';
-    Needle := AAttr + '="';
+    Low := LowerCase(AXml);
+    Open := '<' + LowerCase(ATag);
+    Attr := LowerCase(AAttr);
     P := 1;
-    while P <= Length(AXml) do
+    while True do
     begin
-      P := Pos(Open, AXml, P);
+      P := Pos(Open, Low, P);
       if P = 0 then
         Break;
-      TagEnd := Pos('>', AXml, P);
+      After := P + Length(Open);
+      if (After > Length(Low)) or not CharInSet(Low[After], [' ', #9, #13, #10]) then
+      begin
+        P := After;
+        Continue;
+      end;
+      TagEnd := FinDeEtiqueta(Low, After);
       if TagEnd = 0 then
         Break;
-      AttrP := Pos(Needle, AXml, P);
-      if (AttrP > 0) and (AttrP < TagEnd) then
+      A := After;
+      while A < TagEnd do
       begin
-        ValStart := AttrP + Length(Needle);
-        ValEnd := Pos('"', AXml, ValStart);
-        if (ValEnd > 0) and (ValEnd <= TagEnd) then
-          List.Add(Copy(AXml, ValStart, ValEnd - ValStart));
+        while (A < TagEnd) and CharInSet(Low[A], [' ', #9, #13, #10, '/']) do
+          Inc(A);
+        K := A;
+        while (K < TagEnd) and not CharInSet(Low[K], ['=', ' ', #9, #13, #10, '/']) do
+          Inc(K);
+        Nombre := Copy(Low, A, K - A);
+        while (K < TagEnd) and CharInSet(Low[K], [' ', #9, #13, #10]) do
+          Inc(K);
+        if (K >= TagEnd) or (Low[K] <> '=') then
+          Break; // no es un atributo bien formado
+        Inc(K);
+        while (K < TagEnd) and CharInSet(Low[K], [' ', #9, #13, #10]) do
+          Inc(K);
+        if (K >= TagEnd) or not CharInSet(Low[K], ['"', '''']) then
+          Break;
+        ValEnd := Pos(Low[K], Low, K + 1);
+        if (ValEnd = 0) or (ValEnd > TagEnd) then
+          Break;
+        if Nombre = Attr then
+          List.Add(Copy(AXml, K + 1, ValEnd - K - 1));
+        A := ValEnd + 1;
       end;
       P := TagEnd + 1;
     end;
@@ -515,6 +614,249 @@ begin
             APathLow.EndsWith('.deployproj');
 end;
 
+const
+  // Las propiedades con las que dcc decide DONDE deja lo que produce:
+  // -E exe/dll, -NU dcu, -LE bpl, -LN dcp, -NH hpp, -NO obj, -NB bpi.
+  BUILD_OUTPUT_TAGS: array [0 .. 6] of string = (
+    'DCC_ExeOutput', 'DCC_DcuOutput', 'DCC_BplOutput', 'DCC_DcpOutput',
+    'DCC_HppOutput', 'DCC_ObjOutput', 'DCC_BpiOutput');
+
+{ Las macros comunes de una carpeta de salida, para una plataforma/config.
+  Lo que conserva '$(' no se sabe resolver aqui. UNA copia: la usan
+  ResolveBuildOutput (buscar el binario) y BuildOutputDirs (la puerta). }
+function ExpandOutputMacros(const AValue, ADir, ABase, APlatform,
+  AConfig: string): string;
+begin
+  Result := AValue;
+  Result := Result.Replace('$(Platform)', APlatform, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(Config)', AConfig, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(MSBuildProjectDirectory)', ADir, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(ProjectDir)', ADir, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(MSBuildProjectName)', ABase, [rfReplaceAll, rfIgnoreCase]);
+  Result := Result.Replace('$(SanitizedProjectName)', ABase, [rfReplaceAll, rfIgnoreCase]);
+end;
+
+{ El texto del .dproj y el de cada fichero DEL PROYECTO que importa (un
+  .optset), recursivo hasta 4 niveles: lo que un build lee de este proyecto.
+  Los del IDE no se leen (IsStockImport); lo que no se resuelve se salta
+  aqui y lo rechaza DprojBuildHazard. UN lector para las dos preguntas sobre
+  la salida (BuildOutputDirs, BuildOutputUndeclared). }
+function ProjectXmlChain(const ADprojPath: string): TArray<string>;
+var
+  List: TList<string>;
+
+  procedure Lee(const AFile: string; ADepth: Integer);
+  var
+    Xml, V, Resolved: string;
+  begin
+    try
+      Xml := TFile.ReadAllText(AFile);
+    except
+      Exit;
+    end;
+    List.Add(Xml);
+    if ADepth >= 4 then
+      Exit;
+    for V in AllTagAttr(Xml, 'Import', 'Project') do
+    begin
+      if IsStockImport(LowerCase(V.Trim)) then
+        Continue;
+      Resolved := ResolveImportPath(V.Trim, AFile);
+      if (Resolved <> '') and TFile.Exists(Resolved) then
+        Lee(Resolved, ADepth + 1);
+    end;
+  end;
+
+begin
+  Result := nil;
+  if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
+    Exit;
+  List := TList<string>.Create;
+  try
+    Lee(TPath.GetFullPath(ADprojPath), 0);
+    Result := List.ToArray;
+  finally
+    List.Free;
+  end;
+end;
+
+function BuildOutputDirs(const ADprojPath, APlatform, AConfig: string): TArray<TBuildOutputDir>;
+var
+  List: TList<TBuildOutputDir>;
+  Dir, Base, Xml, V, Cand: string;
+  Item: TBuildOutputDir;
+begin
+  Result := nil;
+  if (ADprojPath = '') or not TFile.Exists(ADprojPath) then
+    Exit;
+  Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
+  Base := TPath.GetFileNameWithoutExtension(ADprojPath);
+  List := TList<TBuildOutputDir>.Create;
+  try
+    // Un valor relativo se resuelve contra la carpeta del PROYECTO aunque
+    // venga de un .optset: dcc trabaja alli.
+    for Xml in ProjectXmlChain(ADprojPath) do
+      for var Tag in BUILD_OUTPUT_TAGS do
+        for V in AllTagValues(Xml, Tag) do
+        begin
+          Item.Tag := Tag;
+          Item.Value := V.Trim;
+          Item.Dir := '';
+          Cand := ExpandOutputMacros(XmlUnescape(Item.Value), Dir, Base,
+            APlatform, AConfig).Trim;
+          if Cand = '' then
+            Continue; // vacia: la del IDE por defecto (BuildOutputUndeclared)
+          // Una macro sin resolver, un escape de MSBuild (%3A), una entidad
+          // numerica (&#58;) o un CDATA: msbuild lo leeria distinto que
+          // nosotros, y lo que no se puede comprobar no se aprueba.
+          if not (Cand.Contains('$(') or Cand.Contains('@(') or
+                  Cand.Contains('%') or Item.Value.Contains('&#') or
+                  Cand.Contains('<')) then
+          begin
+            if not TPath.IsPathRooted(Cand) then
+              Cand := TPath.Combine(Dir, Cand);
+            try
+              Item.Dir := TPath.GetFullPath(Cand);
+            except
+              Item.Dir := '';
+            end;
+          end;
+          List.Add(Item);
+        end;
+    Result := List.ToArray;
+  finally
+    List.Free;
+  end;
+end;
+
+{ La clave (Cfg_N) con la que el .dproj nombra una configuracion:
+  <BuildConfiguration Include="Debug"><Key>Cfg_2</Key>. No se supone: en
+  lo que escribe delphi_create, Cfg_1 es Release. '' si no esta. }
+function ConfigKey(const AXml, AConfig: string): string;
+var
+  Low: string;
+  P, TagEnd, CloseP: Integer;
+begin
+  Result := '';
+  Low := LowerCase(AXml);
+  P := 1;
+  while True do
+  begin
+    P := Pos('<buildconfiguration', Low, P);
+    if P = 0 then
+      Exit;
+    TagEnd := FinDeEtiqueta(Low, P + 1);
+    if TagEnd = 0 then
+      Exit;
+    CloseP := Pos('</buildconfiguration', Low, TagEnd);
+    for var Incl in AllTagAttr(Copy(AXml, P, TagEnd - P + 1), 'BuildConfiguration', 'Include') do
+      if SameText(Incl.Trim, AConfig) and (CloseP > 0) then
+        for var K in AllTagValues(Copy(AXml, TagEnd + 1, CloseP - TagEnd - 1), 'Key') do
+          Exit(K.Trim);
+    P := TagEnd + 1;
+  end;
+end;
+
+{ El valor EFECTIVO de ATag para un build APlatform/AConfig: los grupos del
+  .dproj con las condiciones que escribe el IDE - ninguna, '$(Base)' (la
+  global: todas las configs y plataformas), '$(Base_<plataforma>)',
+  '$(Cfg_N)' y '$(Cfg_N_<plataforma>)' -, en orden de documento, y el
+  ultimo que lo fija gana, como en MSBuild: sin definicion particular se
+  hereda la global, y una particular vacia la anula. Cada plataforma y
+  config puede tener su carpeta (David, 25-sep-2026). Un grupo con otra
+  condicion NO cuenta: lo que no se sabe si se aplica no se da por
+  declarado. }
+function EffectiveProperty(const AXml, ATag, APlatform, AConfig: string): string;
+var
+  Low, Plat, Key, Cond, V: string;
+  Validas: TArray<string>;
+  P, Ini, After, TagEnd, CloseP: Integer;
+begin
+  Result := '';
+  Low := LowerCase(AXml);
+  Plat := LowerCase(APlatform);
+  Key := LowerCase(ConfigKey(AXml, AConfig));
+  Validas := ['', '''$(base)''!=''''', '''$(base_' + Plat + ')''!=''''' ];
+  if Key <> '' then
+    Validas := Validas + ['''$(' + Key + ')''!=''''',
+      '''$(' + Key + '_' + Plat + ')''!=''''' ];
+  P := 1;
+  while True do
+  begin
+    Ini := Pos('<propertygroup', Low, P);
+    if Ini = 0 then
+      Break;
+    After := Ini + Length('<propertygroup');
+    if (After > Length(Low)) or
+       not CharInSet(Low[After], ['>', '/', ' ', #9, #13, #10]) then
+    begin
+      P := After;
+      Continue;
+    end;
+    TagEnd := FinDeEtiqueta(Low, After);
+    if TagEnd = 0 then
+      Break;
+    P := TagEnd + 1;
+    if Low[TagEnd - 1] = '/' then
+      Continue; // <PropertyGroup/>: vacio
+    CloseP := Pos('</propertygroup', Low, P);
+    if CloseP = 0 then
+      Break;
+    Cond := '';
+    for V in AllTagAttr(Copy(AXml, Ini, TagEnd - Ini + 1), 'PropertyGroup', 'Condition') do
+      Cond := LowerCase(XmlUnescape(V)).Replace(' ', '', [rfReplaceAll])
+        .Replace(#9, '', [rfReplaceAll]).Replace(#13, '', [rfReplaceAll])
+        .Replace(#10, '', [rfReplaceAll]);
+    if MatchStr(Cond, Validas) then
+      for V in AllTagValues(Copy(AXml, P, CloseP - P), ATag) do
+        Result := XmlUnescape(V).Trim; // el ultimo gana
+    P := CloseP + 1;
+  end;
+end;
+
+function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): string;
+var
+  Chain: TArray<string>;
+
+  // Declarada PARA ESTE BUILD en el .dproj: la global o la particular que
+  // se aplica. Un .optset no cuenta aqui: se importa con su condicion y no
+  // se sabe si se aplica.
+  function Declara(const ATag: string): Boolean;
+  begin
+    Result := EffectiveProperty(Chain[0], ATag, APlatform, AConfig) <> '';
+  end;
+
+var
+  Xml, V: string;
+  Paquete, Cpp: Boolean;
+begin
+  Result := '';
+  Chain := ProjectXmlChain(ADprojPath);
+  if Chain = nil then
+    Exit;
+  // Paquete o salida C++ con que UN sitio lo diga: se exige su carpeta
+  // (una de mas es prudencia).
+  Paquete := False;
+  Cpp := False;
+  for Xml in Chain do
+  begin
+    for V in AllTagValues(Xml, 'AppType') do
+      if SameText(XmlUnescape(V).Trim, 'Package') then
+        Paquete := True;
+    for V in AllTagValues(Xml, 'DCC_CBuilderOutput') do
+      if (XmlUnescape(V).Trim <> '') and not SameText(XmlUnescape(V).Trim, 'None') then
+        Cpp := True;
+  end;
+  if not Declara('DCC_DcuOutput') then
+    Exit('DCC_DcuOutput');
+  if Paquete and not Declara('DCC_BplOutput') then
+    Exit('DCC_BplOutput');
+  if (Paquete or Cpp) and not Declara('DCC_DcpOutput') then
+    Exit('DCC_DcpOutput');
+  if Cpp and not Declara('DCC_HppOutput') then
+    Exit('DCC_HppOutput');
+end;
+
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
 var
   Xml, Dir, Base, D, Cand, Ext, Artifact: string;
@@ -525,13 +867,7 @@ var
 
   function Expand(const AValue: string): string;
   begin
-    Result := AValue;
-    Result := Result.Replace('$(Platform)', APlatform, [rfReplaceAll, rfIgnoreCase]);
-    Result := Result.Replace('$(Config)', AConfig, [rfReplaceAll, rfIgnoreCase]);
-    Result := Result.Replace('$(MSBuildProjectDirectory)', Dir, [rfReplaceAll, rfIgnoreCase]);
-    Result := Result.Replace('$(ProjectDir)', Dir, [rfReplaceAll, rfIgnoreCase]);
-    Result := Result.Replace('$(MSBuildProjectName)', Base, [rfReplaceAll, rfIgnoreCase]);
-    Result := Result.Replace('$(SanitizedProjectName)', Base, [rfReplaceAll, rfIgnoreCase]);
+    Result := ExpandOutputMacros(AValue, Dir, Base, APlatform, AConfig);
   end;
 
 begin

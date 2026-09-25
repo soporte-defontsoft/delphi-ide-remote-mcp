@@ -14,6 +14,12 @@ session may write and asserts it comes out untouched:
       (a reference that holds one lost it on reading).
   S   the "sdk" argument of delphi_build reached the cmd.exe line unquoted.
   D   delphi_designer to-text/to-binary was in no read-only list.
+  O   a build left its output wherever the .dproj said: a DCC_ExeOutput
+      outside the roots got App.exe and App.rsm written there (measured
+      live 2026-09-25). A folder the project does NOT declare for the
+      platform/config being built (the global or its own) is where the IDE
+      puts it - next to every source, or its global Bpl/Dcp - and is
+      refused too.
 
 Usage:  python tests/test_escritor_guardado.py [path-to-DelphiLspMcp.exe]
 """
@@ -291,6 +297,113 @@ check('V vault_create por un junction a fuera: RECHAZADO', out.startswith('RECHA
 out = vs.call('vault_create', {'path': 'propia.md', 'content': '# propia\n'})
 check('V una nota normal SI se crea', os.path.exists(os.path.join(VAULT, 'propia.md')), out[:200])
 vs.kill()
+
+# ---- O: a build leaves its output only where the session may write
+import re
+bs = Server({'DELPHI_MCP_ROOTS': MINE, 'DELPHI_MCP_READONLY_ROOTS': REF})
+SAL = os.path.join(OUT, 'salida')
+os.makedirs(SAL, exist_ok=True)
+antes_ref = sorted(os.listdir(REF))
+
+
+def proyecto_con(nombre, cambia):
+    d = os.path.join(MINE, 'build', nombre)
+    bs.call('delphi_create', {'kind': 'project-console', 'dir': d, 'name': 'App'})
+    dp = os.path.join(d, 'App.dproj')
+    x = open(dp, encoding='utf-8-sig').read()
+    open(dp, 'w', encoding='utf-8').write(cambia(x, d))
+    return dp
+
+
+def salida(valor, tag='DCC_ExeOutput', etiqueta=None):
+    # TODAS las entradas del tag: el grupo de la config pisa al Base
+    def f(x, d):
+        e = etiqueta or tag
+        return re.sub(r'<' + tag + r'>[^<]*</' + tag + r'>',
+                      lambda m: '<' + e + '>' + valor + '</' + e + '>', x)
+    return f
+
+
+def build(dp):
+    return bs.call('delphi_build', {'project': dp, 'platform': 'Win64', 'config': 'Debug'}, t=600)
+
+
+def rechazado(out):
+    return 'RECHAZADO' in out[:120] and 'no compilo esto' in out
+
+
+out = build(proyecto_con('fuera', salida(SAL)))
+check('O DCC_ExeOutput absoluto fuera de las raices: RECHAZADO', rechazado(out) and 'DCC_ExeOutput' in out, out[:300])
+out = build(proyecto_con('mayus', salida(SAL, etiqueta='DCC_EXEOUTPUT')))
+check('O la misma etiqueta en MAYUSCULAS: RECHAZADO', rechazado(out), out[:300])
+
+
+def con_optset(x, d):
+    open(os.path.join(d, 'opciones.optset'), 'w', encoding='utf-8').write(
+        '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
+        '  <PropertyGroup>\n    <DCC_DcuOutput>' + SAL + '</DCC_DcuOutput>\n  </PropertyGroup>\n</Project>\n')
+    return x.replace('</Project>', '    <Import Project="opciones.optset"/>\n</Project>')
+
+
+out = build(proyecto_con('optset', con_optset))
+check('O la salida declarada en un .optset importado: RECHAZADO', rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
+out = build(proyecto_con('macro', salida(r'$(NoExiste)\dcu', tag='DCC_DcuOutput')))
+check('O una salida con una macro que no se resuelve: RECHAZADO', rechazado(out) and 'NoExiste' in out, out[:300])
+
+
+def por_junction(x, d):
+    subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(d, 'aFuera'), SAL], capture_output=True)
+    return salida(r'.\aFuera')(x, d)
+
+
+dpj = proyecto_con('junction', por_junction)
+check('O fixture: junction del proyecto a fuera', os.path.isjunction(os.path.join(os.path.dirname(dpj), 'aFuera')), '')
+out = build(dpj)
+check('O una salida relativa que es un junction a fuera: RECHAZADO (ruta real)', rechazado(out), out[:300])
+out = build(proyecto_con('referencia', salida(REF)))
+check('O la salida dentro de una referencia de solo lectura: RECHAZADO', rechazado(out), out[:300])
+out = build(proyecto_con('sindcu', lambda x, d: re.sub(r'\s*<DCC_DcuOutput>[^<]*</DCC_DcuOutput>', '', x)))
+check('O sin DCC_DcuOutput (los .dcu junto a cada fuente): RECHAZADO', rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
+out = build(proyecto_con('paquete', lambda x, d: re.sub(r'<AppType>[^<]*</AppType>', '<AppType>Package</AppType>', x)))
+check('O un paquete sin DCC_BplOutput (la carpeta global del IDE): RECHAZADO', rechazado(out) and 'DCC_BplOutput' in out, out[:300])
+
+
+def grupo(cond, cuerpo):
+    # un PropertyGroup con la condicion que escribe el IDE, antes del ItemGroup
+    def f(x):
+        return x.replace('    <ItemGroup>', '    <PropertyGroup Condition="' + "'$(" + cond + ")'!=''" + '">\n'
+                         '        ' + cuerpo + '\n    </PropertyGroup>\n    <ItemGroup>', 1)
+    return f
+
+
+def solo_para(cond):
+    # la carpeta de .dcu fuera de la global, solo en el grupo de COND
+    return lambda x, d: grupo(cond, r'<DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>')(
+        re.sub(r'\s*<DCC_DcuOutput>[^<]*</DCC_DcuOutput>', '', x))
+
+
+out = build(proyecto_con('solowin32', solo_para('Base_Win32')))
+check('O DCC_DcuOutput solo para Win32 y el build es Win64: RECHAZADO', rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
+out = build(proyecto_con('anulada', lambda x, d: grupo('Cfg_2', '<DCC_DcuOutput></DCC_DcuOutput>')(x)))
+check('O la global anulada por una particular VACIA de Debug (Cfg_2): RECHAZADO', rechazado(out) and 'DCC_DcuOutput' in out, out[:300])
+dpw = proyecto_con('solowin64', solo_para('Base_Win64'))
+out = build(dpw)
+try:
+    ok = json.loads(out).get('success') is True
+except Exception:
+    ok = False
+check('O DCC_DcuOutput solo para Win64 y el build es Win64: SI compila', ok and os.path.isdir(
+    os.path.join(os.path.dirname(dpw), 'Win64', 'Debug', 'dcu')), out[:300])
+check('O nada ha caido en la carpeta de fuera', os.listdir(SAL) == [] and sorted(os.listdir(REF)) == antes_ref, (os.listdir(SAL), os.listdir(REF)))
+dpn = proyecto_con('normal', lambda x, d: x)
+out = build(dpn)
+try:
+    ok = json.loads(out).get('success') is True
+except Exception:
+    ok = False
+check('O un proyecto normal SI compila, con la salida dentro', ok and os.path.exists(
+    os.path.join(os.path.dirname(dpn), 'Win64', 'Debug', 'App.exe')), out[:300])
+bs.kill()
 
 borra(BASE)
 print()
