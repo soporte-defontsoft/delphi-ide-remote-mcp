@@ -268,14 +268,20 @@ function WalkFiles(const ADir, AMask: string;
   AConPapelera: Boolean = False): TArray<string>;
 var
   Acc: TStringList;
+  Vistos: TStringList; // rutas REALES de los enlaces ya seguidos: corta ciclos
 
   procedure Recurse(const D: string);
   var
     F, Sub: string;
   begin
     try
+      // Un enlace (de fichero o de carpeta) se sigue solo si lo de detras se
+      // puede LEER: EnlaceLegible, la regla del copiador. Un junction a
+      // cualquier sitio ensenaba, buscaba y empaquetaba lo que la puerta de
+      // lectura no deja leer (auditoria 25-sep-2026).
       for F in TDirectory.GetFiles(D, AMask, TSearchOption.soTopDirectoryOnly) do
-        Acc.Add(F);
+        if not EsEnlace(F) or EnlaceLegible(F) then
+          Acc.Add(F);
     except
       // unreadable folder: skip its files, still try its children
     end;
@@ -302,6 +308,15 @@ var
         // entrar (la nota, con las medidas, en Lsp.Patch.PurgaAlPasar).
         if SameText(TPath.GetFileName(Sub), TrashFolderName) then
           PurgaAlPasar(Sub);
+        if EsEnlace(Sub) then
+        begin
+          if not EnlaceLegible(Sub) then
+            Continue;
+          var RealSub := LowerCase(RealPath(Sub));
+          if Vistos.IndexOf(RealSub) >= 0 then
+            Continue; // un ciclo de enlaces
+          Vistos.Add(RealSub);
+        end;
         Recurse(Sub);
       end;
     except
@@ -311,10 +326,14 @@ var
 
 begin
   Acc := TStringList.Create;
+  Vistos := TStringList.Create;
   try
+    Vistos.Sorted := True;
+    Vistos.Add(LowerCase(RealPath(ADir)));
     Recurse(ADir);
     Result := Acc.ToStringArray;
   finally
+    Vistos.Free;
     Acc.Free;
   end;
 end;
@@ -1992,7 +2011,8 @@ begin
   else
     OutZip := TPath.Combine(TPath.GetDirectoryName(ExcludeTrailingPathDelimiter(Dir)),
       TPath.GetFileName(ExcludeTrailingPathDelimiter(Dir)) + '-deploy.zip');
-  Result := PathDenied(OutZip);
+  // el zip es un destino: la puerta de destino (jaula + carpetas muertas)
+  Result := WriteTargetDenied(OutZip);
   if Result <> '' then
     Exit;
   // El zip se arma con nombre propio y se pone en su sitio de un golpe al

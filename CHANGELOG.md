@@ -23,6 +23,20 @@ the MCP `initialize` response (`serverInfo.version`).
   folder with only a `.dpr` were copied; links are judged with the copier's
   own rule (`EnlaceLegible`, shared), not by walking every junction.
 
+- **The file walker follows a link only when what is behind it can be
+  read**, and a cycle of links ends. `WalkFiles` (behind `delphi_search`,
+  `delphi_list`, `delphi_projects` and the `delphi_package` zip) entered every
+  junction: what the read gate refuses could be searched and zipped, and a
+  junction to its own parent broke `delphi_search` and sent the zip into an
+  endless path. It now uses the copier's own rule (`EnlaceLegible`).
+- **Writers ask the destination gate** (jail + dead folders): `adduses`,
+  `removeuses` and batched edits, `delphi_config` writes, `delphi_styles`
+  writes, the `delphi_designer` conversion, `delphi_create`, the project a
+  build compiles, the `delphi_package` zip and the `changeset` stage (except
+  the source of a move, which may leave a dead folder, as in `delphi_move`).
+- One `EsEnlace` for the four hand-written reparse-point checks of
+  `Lsp.Guard`; `RealPath` is public, for comparing (never for deciding).
+
 ## [1.3.2] - 2026-09-25
 
 ### Security

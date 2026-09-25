@@ -225,7 +225,7 @@ var
 begin
   if Params.Edits.Trim <> '' then
   begin
-    Result := PathDenied(Params.Path);
+    Result := WriteTargetDenied(Params.Path);
     if Result <> '' then
       Exit;
     Exit(ApplyEdits(TPath.GetFullPath(Params.Path), Params.Edits));
@@ -234,7 +234,7 @@ begin
   // el mismo del .dpr y el .dpk; aqui solo la jaula y el reparto de nombres.
   if Params.AddUses.Trim <> '' then
   begin
-    Result := PathDenied(Params.Path);
+    Result := WriteTargetDenied(Params.Path);
     if Result <> '' then
       Exit;
     Exit(AddUsesToUnit(TPath.GetFullPath(Params.Path),
@@ -242,7 +242,7 @@ begin
   end;
   if Params.RemoveUses.Trim <> '' then
   begin
-    Result := PathDenied(Params.Path);
+    Result := WriteTargetDenied(Params.Path);
     if Result <> '' then
       Exit;
     Exit(RemoveUsesFromUnit(TPath.GetFullPath(Params.Path),

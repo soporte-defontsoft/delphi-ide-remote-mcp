@@ -332,6 +332,17 @@ procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
   colaba; el .dpr ni se contaba - auditoria 25-sep-2026). }
 function CopiaDenegada(const AOrigen, ADestino: string): string;
 
+{ P es un enlace (junction o symlink, de carpeta o de fichero). LA
+  comprobacion: estaba escrita cuatro veces en esta unidad. }
+function EsEnlace(const P: string): Boolean;
+
+{ LA regla de enlaces de quien RECORRE un arbol: se sigue solo si lo de
+  detras se puede LEER en esta sesion. La usan el copiador, la decision de
+  la copia y el recorredor de ficheros (delphi_search, delphi_list,
+  delphi_projects, el zip de delphi_package): lo que se ensena, se busca o
+  se empaqueta es lo que se podia leer. }
+function EnlaceLegible(const P: string): Boolean;
+
 { EL mudador de carpetas: AOrigen pasa a ser ADestino RENOMBRANDOLA (MoveFile
   en la misma unidad) o NADA. No abre la carpeta ni toca sus ficheros: un
   junction de dentro viaja como enlace y lo de detras ni se mira; si algo
@@ -537,6 +548,12 @@ function WriteTargetDenied(const APath: string): string;
   before any segment guard looks at it. It cannot blanket-reject "~": the
   server's own scratch and home paths legitimately contain one (DFONTA~1). }
 function LongCanonical(const APath: string): string;
+
+{ LA ruta REAL: junctions y symlinks resueltos, nombres largos (la nota
+  larga, en la implementacion). Publica para COMPARAR y reconocer - una
+  clave de visitados que corta un ciclo de enlaces, un "esta dentro de" -,
+  nunca para decidir un permiso por tu cuenta: eso es de las puertas. }
+function RealPath(const APath: string): string;
 
 { Crea una carpeta (y sus padres) TOLERANDO que otro hilo la este creando a la
   vez. TDirectory.CreateDirectory mira si existe y LUEGO crea: dos hilos
@@ -2961,7 +2978,7 @@ begin
   A := GetFileAttributes(PChar(ADir));
   if A = INVALID_FILE_ATTRIBUTES then
     Exit; // no esta: nada que borrar
-  if (A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0 then
+  if EsEnlace(ADir) then
   begin
     // RemoveDir sobre un junction/symlink de directorio elimina el punto
     // de reanalisis y jamas toca lo que hay al otro lado.
@@ -3320,8 +3337,7 @@ begin
     Exit;
   // ...y si la propia temporal es un ENLACE, lo de detras no es nuestro:
   // enumerarla seria vaciar el destino (25-sep-2026).
-  var AT := GetFileAttributes(PChar(ExcludeTrailingPathDelimiter(ADir)));
-  if (AT <> INVALID_FILE_ATTRIBUTES) and ((AT and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
+  if EsEnlace(ExcludeTrailingPathDelimiter(ADir)) then
     Exit;
   try
     if not TDirectory.Exists(ADir) then
@@ -3404,8 +3420,7 @@ var
       for Sub in TDirectory.GetDirectories(D) do
       begin
         A := GetFileAttributes(PChar(Sub));
-        if (A = INVALID_FILE_ATTRIBUTES) or
-           ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
+        if (A = INVALID_FILE_ATTRIBUTES) or EsEnlace(Sub) then
           Continue; // un enlace: no se sigue
         Nombre := TPath.GetFileName(Sub);
         if SameText(Nombre, '.git') or Protegida(Sub) then

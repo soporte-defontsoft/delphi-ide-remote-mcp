@@ -661,7 +661,7 @@ begin
   if Params.Path.Trim = '' then
     Exit(SR_STYLES_NEED_PATH);
   if MatchText(Cmd, ['set', 'clone', 'delete', 'build']) then
-    Denied := PathDenied(Params.Path)
+    Denied := WriteTargetDenied(Params.Path)
   else
     Denied := ReadPathDenied(Params.Path);
   if Denied <> '' then

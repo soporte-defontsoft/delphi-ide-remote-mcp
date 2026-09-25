@@ -431,7 +431,7 @@ begin
     Exit(SR_CREATE_NEED_DIR);
 
   Dir := TPath.GetFullPath(ADir);
-  Result := PathDenied(Dir);
+  Result := WriteTargetDenied(Dir);
   if Result <> '' then
     Exit;
   Dpr := TPath.Combine(Dir, AName + IfThen(Kind = 'package', '.dpk', '.dpr'));
@@ -721,7 +721,7 @@ begin
   if (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'frame-vcl') and
      (Kind <> 'frame-fmx') and (Kind <> 'datamodule') then
     Exit('RECHAZADO: kind debe ser form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule.');
-  Result := PathDenied(ADprPath);
+  Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
     Exit;
   if not TFile.Exists(ADprPath) then
@@ -824,7 +824,7 @@ begin
   // (measured 2026-08-25).
   if ADprPath.Trim = '' then
     Exit(SR_CREATE_UNIT_NEED_PROJECT);
-  Result := PathDenied(ADprPath);
+  Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
     Exit;
   if not TFile.Exists(ADprPath) then

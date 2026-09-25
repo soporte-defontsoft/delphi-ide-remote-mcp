@@ -887,7 +887,7 @@ var
   B, Bin: TBytes;
   Forma: TDesignerShape;
 begin
-  Result := PathDenied(APath);
+  Result := WriteTargetDenied(APath);
   if Result <> '' then
     Exit;
   Ruta := TPath.GetFullPath(APath);

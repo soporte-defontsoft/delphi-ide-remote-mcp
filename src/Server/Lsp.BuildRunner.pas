@@ -1161,7 +1161,7 @@ var
   Lines: TArray<string>;
   I, TailFrom: Integer;
 begin
-  var Denied := PathDenied(ADprojPath);
+  var Denied := WriteTargetDenied(ADprojPath); // compilar escribe junto al proyecto
   if Denied <> '' then
     raise Exception.Create(Denied);
   if not FileExists(ADprojPath) then

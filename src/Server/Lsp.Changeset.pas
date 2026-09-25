@@ -544,7 +544,13 @@ begin
         Exit(SR_CHANGESET_KIND);
       if APath.Trim = '' then
         Exit(SR_CHANGESET_NEED_PATH);
-      Denied := PathDenied(APath);
+      // Lo que se escribe o se borra, por la puerta de DESTINO (jaula +
+      // carpetas muertas), como delphi_edit y delphi_move; el ORIGEN de un
+      // move puede salir de una de ellas (restaurar), como en delphi_move.
+      if Op.Kind = opMove then
+        Denied := PathDenied(APath)
+      else
+        Denied := WriteTargetDenied(APath);
       if Denied <> '' then
         Exit(Denied);
       Op.Path := TPath.GetFullPath(APath);
@@ -616,7 +622,7 @@ begin
           begin
             if ADest.Trim = '' then
               Exit(SR_CHANGESET_NEED_DEST);
-            Denied := PathDenied(ADest);
+            Denied := WriteTargetDenied(ADest);
             if Denied <> '' then
               Exit(Denied);
             Op.Dest := TPath.GetFullPath(ADest);

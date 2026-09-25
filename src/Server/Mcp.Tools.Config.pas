@@ -1514,7 +1514,7 @@ begin
   if (Cmd = '') or (Cmd = 'view') then
     Result := ReadPathDenied(Params.Project)
   else
-    Result := PathDenied(Params.Project);
+    Result := WriteTargetDenied(Params.Project);
   if Result <> '' then
     Exit;
   if not TFile.Exists(Params.Project) then
@@ -1579,7 +1579,7 @@ begin
       Result := SetProfile(Proj, Params.Platform, Params.Profile)
     else if Cmd = 'add-requires' then
     begin
-      Result := PathDenied(Params.Project);
+      Result := WriteTargetDenied(Params.Project);
       if Result = '' then
         Result := AddPackageRequires(Params.Project, Params.Requires);
     end
@@ -1587,9 +1587,9 @@ begin
     begin
       if Params.Path.Trim = '' then
         Exit(SR_UNIT_NEED_PATH);
-      Result := PathDenied(Params.Project);
+      Result := WriteTargetDenied(Params.Project);
       if Result = '' then
-        Result := PathDenied(Params.Path);
+        Result := PathDenied(Params.Path); // la unit solo se NOMBRA
       if Result <> '' then
         Exit;
       if Cmd = 'add-unit' then

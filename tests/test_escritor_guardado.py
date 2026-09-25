@@ -222,6 +222,47 @@ check('CS commit a traves de un camino que dejo de ser escribible: no borra', os
 check('CS ...y lo dice (deshecho)', 'f.txt' in out or 'RECHAZADO' in out or 'deshech' in out.lower(), out[:300])
 os.rmdir(CS)
 os.rename(CS + '-aparte', CS)
+
+# ---- W: the file walker (search, list, projects, the package zip) follows a
+# link only when what is behind it can be READ, and a cycle of links ends
+os.makedirs(os.path.join(OUT, 'secretos'), exist_ok=True)
+open(os.path.join(OUT, 'secretos', 'Secreto.pas'), 'w').write('unit Secreto;\n// MARCA_FUERA_DE_TODO\nend.\n')
+os.makedirs(os.path.join(REF, 'libro'), exist_ok=True)
+open(os.path.join(REF, 'libro', 'Libro.pas'), 'w').write('unit Libro;\n// MARCA_DE_LA_REFERENCIA\nend.\n')
+BUS = os.path.join(MINE, 'busca')
+os.makedirs(os.path.join(BUS, 'bucle'), exist_ok=True)
+open(os.path.join(BUS, 'Propio.pas'), 'w').write('unit Propio;\n// MARCA_PROPIA\nend.\n')
+subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(BUS, 'aFuera'), os.path.join(OUT, 'secretos')], capture_output=True)
+subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(BUS, 'aRef'), os.path.join(REF, 'libro')], capture_output=True)
+subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(BUS, 'bucle', 'aPadre'), BUS], capture_output=True)
+check('fixture: tres junctions (fuera, referencia, ciclo)', all(os.path.isjunction(p) for p in (
+    os.path.join(BUS, 'aFuera'), os.path.join(BUS, 'aRef'), os.path.join(BUS, 'bucle', 'aPadre'))), '')
+t0 = time.time()
+out = call('delphi_search', {'root': BUS, 'query': 'MARCA_'})
+check('W search termina pese al ciclo', time.time() - t0 < 60 and not out.startswith('MCPERROR'), out[:200])
+check('W search encuentra lo propio', 'MARCA_PROPIA' in out, out[:300])
+check('W search encuentra lo de la referencia (se puede leer)', 'MARCA_DE_LA_REFERENCIA' in out, out[:300])
+check('W search NO ve lo de fuera por el junction', 'MARCA_FUERA_DE_TODO' not in out, out[:300])
+out = call('delphi_package', {'dir': BUS, 'outfile': os.path.join(MINE, 'paquete.zip')})
+import zipfile
+nombres = zipfile.ZipFile(os.path.join(MINE, 'paquete.zip')).namelist() if os.path.exists(os.path.join(MINE, 'paquete.zip')) else []
+check('W package: el zip existe', bool(nombres), out[:200])
+check('W package: NO empaqueta lo de fuera', not any('Secreto' in n for n in nombres), nombres)
+
+# ---- M: writers ask the DESTINATION gate (jail + dead folders)
+out = call('delphi_package', {'dir': BUS, 'outfile': os.path.join(MINE, '__delphi-temp', 'p.zip')})
+check('M package con outfile en una carpeta muerta: RECHAZADO', out.startswith('RECHAZADO') and not os.path.exists(os.path.join(MINE, '__delphi-temp', 'p.zip')), out[:200])
+HIST = os.path.join(MINE, '__history')
+os.makedirs(HIST, exist_ok=True)
+open(os.path.join(HIST, 'UVieja.pas'), 'w').write('unit UVieja;\n\ninterface\n\nimplementation\n\nend.\n')
+antes_h = open(os.path.join(HIST, 'UVieja.pas'), 'rb').read()
+out = call('delphi_edit', {'path': os.path.join(HIST, 'UVieja.pas'), 'adduses': 'SysUtils'})
+check('M adduses en __history: RECHAZADO', out.startswith('RECHAZADO') and open(os.path.join(HIST, 'UVieja.pas'), 'rb').read() == antes_h, out[:200])
+out = call('delphi_changeset', {'command': 'begin'})
+cid = out.split()[1] if out.startswith('CHANGESET') else ''
+out = call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create', 'path': os.path.join(MINE, '__delphi-patch', 'colado.txt'), 'content': 'x'})
+check('M changeset create dentro de la papelera: RECHAZADO al preparar', out.startswith('RECHAZADO'), out[:200])
+call('delphi_changeset', {'command': 'rollback', 'id': cid})
 srv.kill()
 
 # ---- D: read-only mode (local stdio with no roots) never rewrites a form
