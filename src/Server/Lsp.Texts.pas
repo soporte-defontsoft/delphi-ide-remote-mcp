@@ -1901,6 +1901,12 @@ const
     'to get inline chunks instead. Jailed to the workspace roots and the ' +
     'read-only library zone.';
 
+  SN_FETCH_CAPTURE_CONSUMED =
+    'Desktop capture: it is deleted from the server the moment it has been ' +
+    'fetched whole (last chunk served, or one GET on the download link). ' +
+    'Nothing is cached or kept: if you need it again, take a new screenshot; ' +
+    'a capture requested with out= is yours and stays.';
+
   SN_FETCH_DOWNLOAD =
     'Direct download: GET this path on the SAME host:port you use for /mcp, ' +
     'with the SAME Authorization: Bearer header, e.g. ' +
@@ -3565,11 +3571,18 @@ const
     'de texto vacio o con contenido, delphi_create / delphi_edit son mejor ' +
     'herramienta; delphi_upload es para binarios y para trozos.';
 
-  SR_UPLOAD_B64_LEN_FMT =
-    'RECHAZADO: chunkBase64 tiene %d caracteres utiles y base64 va en grupos ' +
+  // Lsp.Base64: los rechazos del decodificador, con el nombre del parametro.
+  SR_B64_ALPHABET_FMT =
+    'error: %s contiene caracteres que no son base64. No he escrito nada.';
+
+  SR_B64_LEN_FMT =
+    'RECHAZADO: %s tiene %d caracteres utiles y base64 va en grupos ' +
     'de 4: faltan o sobran caracteres, casi siempre al transcribir un trozo ' +
     'largo. No he escrito nada. Manda trozos mas cortos, o pasa chunkSha256 ' +
     'con cada uno para que el fallo se vea en el trozo y no al final.';
+
+  SR_B64_INVALID_FMT =
+    'error: %s no es base64 valido (%s)';
 
   SR_UPLOAD_CHUNK_SHA_MISMATCH_FMT =
     'RECHAZADO: el sha256 de ESTE trozo no coincide (recibido %s, esperado ' +

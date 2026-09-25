@@ -250,6 +250,7 @@ uses
   Lsp.Guard,
   Lsp.Patch,
   Lsp.ShaCache,
+  Lsp.Base64,     // BytesToBase64 / Base64ToBytes: el codificador de la casa
   Lsp.Files,
   Mcp.Tools.Messages,
   Lsp.DesignerBin; // DirectedMessagesPending, para la ficha del servidor
@@ -1669,7 +1670,6 @@ var
   MaxB: Integer;
   Buf: TBytes;
   Return: TJSONObject;
-  B64: TBase64Encoding;
   LinkOnly: Boolean;
 begin
   FullPath := TPath.GetFullPath(Params.Path);
@@ -1710,7 +1710,6 @@ begin
       Stream.ReadBuffer(Buf[0], ChunkLen);
 
     Return := TJSONObject.Create;
-    B64 := TBase64Encoding.Create(0); // no line breaks
     try
       Return.AddPair('path', FullPath);
       Return.AddPair('size', TJSONNumber.Create(Size));
@@ -1730,19 +1729,29 @@ begin
       end;
       if LinkOnly then
         Return.AddPair('inline', TJSONBool.Create(False));
+      // Una captura del escritorio se consume al recogerla ENTERA (David,
+      // 25-sep-2026): recogida = ultimo trozo servido. Se dice en la
+      // respuesta; una segunda peticion encontrara 'no existe'.
+      if IsAgentCapture(FullPath) then
+      begin
+        Return.AddPair('consumedOnServer',
+          TJSONBool.Create((not LinkOnly) and (Params.Offset + ChunkLen >= Size)));
+        Return.AddPair('consumedNote', SN_FETCH_CAPTURE_CONSUMED);
+      end;
       if LinkOnly then
         Return.AddPair('note', Format(SN_FETCH_BIG_FMT,
           [FormatFloat('0.0', Size / (1024 * 1024), TFormatSettings.Invariant) + ' MB']))
       else
-        Return.AddPair('chunkBase64', B64.EncodeBytesToString(Buf));
+        Return.AddPair('chunkBase64', BytesToBase64(Buf)); // EL codificador de la casa
       Result := Return.ToJSON;
     finally
-      B64.Free;
       Return.Free;
     end;
   finally
     Stream.Free;
   end;
+  if (not LinkOnly) and (Params.Offset + ChunkLen >= Size) then
+    ConsumeAgentCapture(FullPath); // ya servida entera: fuera del servidor
 end;
 
 { TDelphiUploadTool }
@@ -1770,9 +1779,7 @@ var
   Bytes: TBytes;
   Stream: TFileStream;
   Return: TJSONObject;
-  B64: TBase64Encoding;
   Size, OldSize: Int64;
-  Utiles: Integer;
   Replaced: Boolean;
 begin
   FullPath := TPath.GetFullPath(Params.Path);
@@ -1804,34 +1811,13 @@ begin
     Exit(SR_UPLOAD_NO_CHUNK_NEW);
   end;
 
-  // Delphi's decoder SKIPS invalid characters instead of failing, which would
-  // silently write a corrupt file: validate the alphabet ourselves first.
-  Utiles := 0;
-  for var Ch in Params.ChunkBase64 do
-    if CharInSet(Ch, [#13, #10, ' ']) then
-      Continue
-    else if CharInSet(Ch, ['A' .. 'Z', 'a' .. 'z', '0' .. '9', '+', '/', '=']) then
-      Inc(Utiles)
-    else
-      Exit('error: chunkBase64 contiene caracteres que no son base64');
-  // ...and it did not check the LENGTH either: base64 travels in groups of
-  // 4, and a chunk with a character lost or gained on the way (a small
-  // model transcribing 9 KB of base64, hermes 2026-09-25) decoded to two
-  // bytes too many and was only caught by the whole-file sha at the END,
-  // with the file already corrupt. Refuse it here, before touching disk.
-  if Utiles mod 4 <> 0 then
-    Exit(Format(SR_UPLOAD_B64_LEN_FMT, [Utiles]));
-  B64 := TBase64Encoding.Create(0);
-  try
-    try
-      Bytes := B64.DecodeStringToBytes(Params.ChunkBase64);
-    except
-      on E: Exception do
-        Exit('error: chunkBase64 no es base64 valido (' + E.Message + ')');
-    end;
-  finally
-    B64.Free;
-  end;
+  // EL decodificador de la casa (Lsp.Base64): alfabeto, longitud en grupos
+  // de 4 y decodificacion, con el motivo si no. Delphi's decoder SKIPS
+  // invalid characters instead of failing and takes any length: both wrote
+  // a corrupt file that only the final sha caught (hermes, 2026-09-25).
+  Result := Base64ToBytes(Params.ChunkBase64, 'chunkBase64', Bytes);
+  if Result <> '' then
+    Exit;
 
   // Per-chunk verification: a slip is caught at the chunk that carried it,
   // with nothing written, instead of at the end with the file in

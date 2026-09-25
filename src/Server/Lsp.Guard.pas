@@ -212,6 +212,17 @@ function TempFolderName: string;
 function ServerTempDir(const ASub: string = ''): string;
 function AgentTempDir(const ASub: string = ''): string;
 
+{ Una CAPTURA del escritorio en una carpeta temporal del servidor (un .png
+  bajo <...>\__delphi-temp\...\desktop\) se CONSUME al recogerla: quien la
+  baja - delphi_fetch al servir el ultimo trozo, GET /files - la borra.
+  David, 25-sep-2026: 'lo mas sensato es borrar la captura una vez la ha
+  recogido el agente, asi de simple; nada de caches ni rotaciones ni guardar
+  nada; quiere otra, que la pida'. Medido el mismo dia: 10 gestos = 41 MB en
+  la raiz del workspace, purgados solo al reiniciar. Una captura pedida con
+  out= explicito NO esta en esa carpeta y no se toca. }
+function IsAgentCapture(const APath: string): Boolean;
+procedure ConsumeAgentCapture(const APath: string); // nunca lanza
+
 { DONDE CAE UNA CAPTURA: el "out" de toda la familia (delphi_desktop,
   delphi_adb_linux, delphi_adb), resuelto en UN sitio. Hasta la v1.0.13 era
   una CARPETA en los dos escritorios y un FICHERO obligatorio acabado en
@@ -2656,6 +2667,33 @@ end;
   identidad que usa el modo confinado, asi que dos agentes en la misma
   jaula no se pisan - y cuando no hay identidad (stdio, la consola del
   operador) no se inventa una. }
+function IsAgentCapture(const APath: string): Boolean;
+var
+  Full: string;
+begin
+  Result := False;
+  try
+    Full := TPath.GetFullPath(APath);
+  except
+    Exit;
+  end;
+  Result := SameText(TPath.GetExtension(Full), '.png') and
+    Full.ToLower.Contains('\' + TempFolderName + '\') and
+    SameText(TPath.GetFileName(TPath.GetDirectoryName(Full)), 'desktop');
+end;
+
+procedure ConsumeAgentCapture(const APath: string);
+begin
+  if not IsAgentCapture(APath) then
+    Exit;
+  try
+    if TFile.Exists(APath) then
+      TFile.Delete(APath);
+  except
+    // recoger no puede fallar por no poder borrar
+  end;
+end;
+
 function AgentTempDir(const ASub: string): string;
 var
   Roots: TArray<string>;

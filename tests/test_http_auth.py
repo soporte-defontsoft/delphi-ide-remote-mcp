@@ -524,6 +524,21 @@ try:
         js = json.loads(json.loads(body)['result']['content'][0]['text'])
         check('fetch: maxbytes<=1MB explicito SI trae chunk del fichero grande (opt-in)',
               'chunkBase64' in js and js.get('bytes') == 1048576, body[:200])
+        # a desktop capture in the server's temp folder is CONSUMED by the
+        # download route too (David, 2026-09-25): one GET serves it whole from
+        # memory and deletes it; the next GET is an honest 404.
+        capdir = os.path.join(jail4, '__delphi-temp', 'desktop')
+        os.makedirs(capdir, exist_ok=True)
+        cap = os.path.join(capdir, 'desktop-bateria-20260925-000000000-cafe02.png')
+        cappayload = b'\x89PNG' + os.urandom(5000)
+        with open(cap, 'wb') as f:
+            f.write(cappayload)
+        code, hdr, data = get(vjail + '\\__delphi-temp\\desktop\\desktop-bateria-20260925-000000000-cafe02.png', TOKEN)
+        check('files: una captura del agente se sirve entera desde memoria',
+              code == 200 and data == cappayload, '%s %d bytes' % (code, len(data)))
+        check('files: ...y se borra al servirla', not os.path.exists(cap), cap)
+        code, hdr, data = get(vjail + '\\__delphi-temp\\desktop\\desktop-bateria-20260925-000000000-cafe02.png', TOKEN)
+        check('files: la segunda peticion de la captura es 404', code == 404, code)
     finally:
         proc4.kill()
         proc4.wait()

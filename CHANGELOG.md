@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- A desktop capture that lands in the server's temp folder (the default of
+  `delphi_desktop`) is **consumed on retrieval**: `delphi_fetch` deletes it when
+  it serves the last chunk (`consumedOnServer`), and one GET on its `download`
+  link serves it whole from memory and deletes it; the next request is an
+  honest 404. Nothing cached, nothing rotated, nothing kept: need it again,
+  take another. A capture requested with `out=` is yours and stays. Measured
+  the same day: 10 gestures had left 41 MB in a workspace root, purged only
+  at restart. (David, 2026-09-25.)
+- One resolver of the active workspace inside the guard: `HasActiveWS` /
+  `ActiveWS` replace 18 hand-written copies of "if a workspace is active, its
+  field; else the global", and `LoadSecurity` reads every local-mode key
+  (`Roots`, `ReadOnlyPaths`, `ReadOnlyRoots`, `VaultReadOnly`) with the rest
+  instead of four lazy readers. No behaviour change, full regression green.
+- `Lsp.Base64` is the one base64 encoder/decoder: `delphi_fetch` encoded by
+  itself and `delphi_upload` validated and decoded by itself; the decoder
+  refuses the wrong alphabet or a length not in groups of four, naming the
+  parameter, before touching anything.
+
 ## [1.3.0] - 2026-09-25
 
 ### Added

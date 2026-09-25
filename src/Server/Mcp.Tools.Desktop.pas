@@ -519,12 +519,16 @@ begin
           begin
             Return.AddPair('download', DownloadLinkFor('delphi_desktop', Local));
             Return.AddPair('downloadNote', SN_FETCH_DOWNLOAD);
+            if IsAgentCapture(Local) then
+              Return.AddPair('consumedOnDownload', TJSONBool.Create(True)); // se borra al recogerla
           end;
           if ConRecorte then
             Return.AddPair('note', Format(SN_ADBLINUX_CROP_NOTE_FMT, [RX, RY]))
           else
             Return.AddPair('note', 'mide el pixel SOBRE esta imagen y pasalo a ' +
-              'command=tap; bajala con delphi_fetch');
+              'command=tap; bajala con download o delphi_fetch. Al recogerla ENTERA ' +
+              'se borra del servidor: si la necesitas otra vez, pide otra captura ' +
+              '(una pedida con out= no se borra)');
         end;
       end
       else

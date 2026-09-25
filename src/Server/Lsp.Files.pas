@@ -84,7 +84,7 @@ procedure ServeFile(RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo);
 var
   P, Full, Denied, Sha: string;
-  Stream: TFileStream;
+  Stream: TStream;
 begin
   try
     P := RequestInfo.Params.Values['path'].Trim;
@@ -141,7 +141,18 @@ begin
     // Whole-file hash in a header: the client verifies with sha256sum, the
     // same contract delphi_fetch offers on its offset=0 answer.
     Sha := CachedFileSha256(Full); // shared with delphi_fetch: hashed once per (path, mtime, size)
-    Stream := TFileStream.Create(Full, fmOpenRead or fmShareDenyWrite);
+    if IsAgentCapture(Full) then
+    begin
+      // Una captura del escritorio se consume al recogerla (David,
+      // 25-sep-2026): entera en memoria (unos MB), fuera del disco, y se
+      // sirve desde memoria. Una segunda peticion es un 404 honesto.
+      Stream := TMemoryStream.Create;
+      TMemoryStream(Stream).LoadFromFile(Full);
+      Stream.Position := 0;
+      ConsumeAgentCapture(Full);
+    end
+    else
+      Stream := TFileStream.Create(Full, fmOpenRead or fmShareDenyWrite);
     ResponseInfo.ResponseNo := 200;
     ResponseInfo.ContentType := 'application/octet-stream';
     ResponseInfo.ContentDisposition := 'attachment; filename="' +

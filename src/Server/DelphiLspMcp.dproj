@@ -221,6 +221,7 @@
         <DCCReference Include="Lsp.PackageMap.pas"/>
         <DCCReference Include="Lsp.DesignerBin.pas"/>
         <DCCReference Include="Lsp.DesignerBinding.pas"/>
+        <DCCReference Include="Lsp.Base64.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
