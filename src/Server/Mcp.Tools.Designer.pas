@@ -956,6 +956,12 @@ begin
   Cmd := Params.Command.Trim.ToLower;
   if Cmd = '' then
     Cmd := 'info';
+  // Sin guion tambien (un modelo pequeno lo pierde, y este agente dos veces
+  // en un dia): la misma cortesia que 'windows' y 'binding'.
+  if Cmd = 'totext' then
+    Cmd := 'to-text'
+  else if Cmd = 'tobinary' then
+    Cmd := 'to-binary';
   if MatchText(Cmd, ['info', 'prop']) then
   begin
     Fw := ResolveFramework(Params.Framework, Params.Path);

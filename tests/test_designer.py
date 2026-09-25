@@ -237,6 +237,9 @@ check('tras el insert, el lint ya no avisa de btnNadaClick (y sigue avisando de 
 r = call('delphi_designer', {'command': 'lint', 'path': DFM})
 check('lint de un designer SIN .pas pareja sigue limpio (no hay contra que comparar)', 'LINT LIMPIO' in r, r[:200])
 
+r = call('delphi_designer', {'command': 'totext', 'path': BIN})
+check('to-text sin guion (totext) se acepta como alias: no es "comando invalido"', 'command debe ser' not in r, r[:200])
+
 proc.kill()
 print('\n== designer battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)
