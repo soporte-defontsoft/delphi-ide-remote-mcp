@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Added
+
+- `delphi_upload chunkSha256`: the SHA-256 of ONE chunk, verified before the
+  chunk is written, so a slip in transit is caught at the chunk that carried
+  it with nothing on disk, instead of by the whole-file `sha256` at the end
+  with the file already in quarantine. The answer carries `chunkVerified`.
+
+### Fixed
+
+- A structured parameter declared as a string (`delphi_edit edits`) sent as a
+  REAL JSON array or object arrived empty: the vendor serializer took the
+  RTL's `Value`, which is `''` for both, and the batch was silently ignored
+  (the tool then fell into single-edit mode with an error about something
+  else). It now takes the JSON text. A batch encoded twice (a JSON string
+  inside a string) is unwrapped once, and anything still not an array is
+  refused naming how many characters arrived and how they start. Reported
+  by hermes, 2026-09-25.
+- `delphi_upload` checked the base64 alphabet but not its length: a chunk
+  with a character lost or gained in transit decoded to extra bytes and was
+  only caught by the final sha. A chunk whose useful length is not a
+  multiple of 4 is now refused before anything is written.
+
 ## [1.2.0] - 2026-09-24
 
 ### Added

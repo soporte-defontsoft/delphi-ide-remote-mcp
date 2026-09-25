@@ -191,6 +191,7 @@ type
     FChunkBase64: string;
     FOffset: Integer;
     FSha256: string;
+    FChunkSha256: string;
   public
     [SchemaDescription('Absolute path of the file to write ON the server (inside the workspace roots)')]
     [Required]
@@ -203,6 +204,8 @@ type
     property Offset: Integer read FOffset write FOffset;
     [SchemaDescription('Optional: on the LAST chunk, the whole-file SHA-256; the server verifies the assembled file and reports verified true/false')]
     property Sha256: string read FSha256 write FSha256;
+    [SchemaDescription('Optional: the SHA-256 of THIS chunk (of its decoded bytes). Verified BEFORE the chunk is written, so a slip in transit is caught at the chunk that carried it, with nothing on disk')]
+    property ChunkSha256: string read FChunkSha256 write FChunkSha256;
   end;
 
   TDelphiUploadTool = class(TMCPToolBase<TDelphiUploadParams>)
@@ -1717,7 +1720,8 @@ begin
     '(.res, icons, images), binary designer files, archives, reference ' +
     'material. Send chunks in order: offset=0 creates/truncates, later ' +
     'offsets append and must match the current size. Pass sha256 on the LAST ' +
-    'chunk to have the server verify the assembled file. Jailed to the ' +
+    'chunk to have the server verify the assembled file, and chunkSha256 on ' +
+    'ANY chunk to have that chunk checked BEFORE it is written. Jailed to the ' +
     'workspace roots; parent directories are created. A fresh upload over an ' +
     'existing file backs the old one up to the recoverable trash first. For ' +
     'SOURCE CODE prefer delphi_edit / delphi_textedit (they audit encoding and ' +
@@ -1732,6 +1736,7 @@ var
   Return: TJSONObject;
   B64: TBase64Encoding;
   Size, OldSize: Int64;
+  Utiles: Integer;
   Replaced: Boolean;
 begin
   FullPath := TPath.GetFullPath(Params.Path);
@@ -1753,6 +1758,9 @@ begin
   if (Params.Sha256.Trim <> '') and
      not TRegEx.IsMatch(Params.Sha256.Trim, '^[0-9A-Fa-f]{64}$') then
     Exit(Format(SR_UPLOAD_BAD_SHA_FMT, [Params.Sha256.Trim]));
+  if (Params.ChunkSha256.Trim <> '') and
+     not TRegEx.IsMatch(Params.ChunkSha256.Trim, '^[0-9A-Fa-f]{64}$') then
+    Exit(Format(SR_UPLOAD_BAD_SHA_FMT, [Params.ChunkSha256.Trim]));
   if Params.ChunkBase64.Trim = '' then
   begin
     if TFile.Exists(FullPath) then
@@ -1762,10 +1770,21 @@ begin
 
   // Delphi's decoder SKIPS invalid characters instead of failing, which would
   // silently write a corrupt file: validate the alphabet ourselves first.
+  Utiles := 0;
   for var Ch in Params.ChunkBase64 do
-    if not (CharInSet(Ch, ['A' .. 'Z', 'a' .. 'z', '0' .. '9', '+', '/', '=',
-      #13, #10, ' '])) then
+    if CharInSet(Ch, [#13, #10, ' ']) then
+      Continue
+    else if CharInSet(Ch, ['A' .. 'Z', 'a' .. 'z', '0' .. '9', '+', '/', '=']) then
+      Inc(Utiles)
+    else
       Exit('error: chunkBase64 contiene caracteres que no son base64');
+  // ...and it did not check the LENGTH either: base64 travels in groups of
+  // 4, and a chunk with a character lost or gained on the way (a small
+  // model transcribing 9 KB of base64, hermes 2026-09-25) decoded to two
+  // bytes too many and was only caught by the whole-file sha at the END,
+  // with the file already corrupt. Refuse it here, before touching disk.
+  if Utiles mod 4 <> 0 then
+    Exit(Format(SR_UPLOAD_B64_LEN_FMT, [Utiles]));
   B64 := TBase64Encoding.Create(0);
   try
     try
@@ -1776,6 +1795,17 @@ begin
     end;
   finally
     B64.Free;
+  end;
+
+  // Per-chunk verification: a slip is caught at the chunk that carried it,
+  // with nothing written, instead of at the end with the file in
+  // quarantine (hermes, 2026-09-25).
+  if Params.ChunkSha256.Trim <> '' then
+  begin
+    Sha := Sha256DeBytes(Bytes);
+    if not SameText(Sha, Params.ChunkSha256.Trim) then
+      Exit(Format(SR_UPLOAD_CHUNK_SHA_MISMATCH_FMT,
+        [Sha, Params.ChunkSha256.Trim, Length(Bytes)]));
   end;
 
   // A designer this server cannot read is a designer nobody here can fix.
@@ -1847,6 +1877,8 @@ begin
   try
     Return.AddPair('path', FullPath);
     Return.AddPair('written', TJSONNumber.Create(Length(Bytes)));
+    if Params.ChunkSha256.Trim <> '' then
+      Return.AddPair('chunkVerified', TJSONBool.Create(True));
     Return.AddPair('size', TJSONNumber.Create(Size));
     Return.AddPair('nextOffset', TJSONNumber.Create(Size));
     // A fresh upload over an existing file REPLACES it. Say so, and say where

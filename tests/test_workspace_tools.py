@@ -463,6 +463,30 @@ try:
     check('upload: base64 invalido rechaza (no escribe basura)',
           out.startswith('error:') and not os.path.exists(os.path.join(tmpup, 'Y.bin')),
           out[:120])
+    # 2026-09-25 (hermes): a chunk with a character lost or gained in transit
+    # decoded to 2 extra bytes and only the whole-file sha at the END caught
+    # it, file already in quarantine. Now the length is checked per chunk and
+    # chunkSha256 verifies a chunk BEFORE it is written.
+    zb = os.path.join(tmpup, 'Z.bin')
+    good = base64.b64encode(b'0123456789abcdef').decode()
+    out = call('delphi_upload', {"path": zb, "offset": 0, "chunkbase64": good[:-1]})
+    check('upload: base64 con longitud no multiplo de 4 rechaza sin escribir',
+          out.startswith('RECHAZADO') and 'grupos de 4' in out and not os.path.exists(zb), out[:160])
+    out = call('delphi_upload', {"path": zb, "offset": 0, "chunkbase64": good,
+                                 "chunksha256": '0' * 64})
+    check('upload: chunkSha256 que no coincide rechaza sin escribir',
+          out.startswith('RECHAZADO') and 'ESTE trozo' in out and not os.path.exists(zb), out[:160])
+    out = call('delphi_upload', {"path": zb, "offset": 0, "chunkbase64": good,
+                                 "chunksha256": hashlib.sha256(b'0123456789abcdef').hexdigest()})
+    try:
+        dz = json.loads(out)
+        check('upload: chunkSha256 correcto -> chunkVerified true y escrito',
+              dz.get('chunkVerified') is True and open(zb, 'rb').read() == b'0123456789abcdef', out[:160])
+    except Exception as e:
+        check('upload: chunkSha256 correcto parsea', False, '%s | %s' % (e, out[:160]))
+    out = call('delphi_upload', {"path": zb, "offset": 0, "chunkbase64": good, "chunksha256": 'zz'})
+    check('upload: chunkSha256 con forma mala rechaza el parametro, el fichero sigue',
+          out.startswith('RECHAZADO') and 'sha256' in out and open(zb, 'rb').read() == b'0123456789abcdef', out[:160])
 finally:
     shutil.rmtree(tmpup, ignore_errors=True)
 

@@ -1045,10 +1045,21 @@ var
   Borra: Boolean;
 begin
   V := TJSONObject.ParseJSONValue(AEditsJson);
+  // Un cliente que codifica dos veces manda el array como CADENA JSON
+  // (hermes, 25-sep-2026): se desenvuelve UNA vez. Lo que siga sin ser un
+  // array se rechaza diciendo cuanto llego y como empieza, no solo "no es
+  // array", que llevaba al cliente a reenviar lo mismo en bucle.
+  if V is TJSONString then
+  begin
+    Una := TJSONString(V).Value;
+    V.Free;
+    V := TJSONObject.ParseJSONValue(Una);
+  end;
   if not (V is TJSONArray) then
   begin
     V.Free;
-    Exit(SR_PATCH_EDITS_JSON);
+    Exit(Format(SR_PATCH_EDITS_JSON_FMT,
+      [Length(AEditsJson), Copy(AEditsJson.Trim, 1, 60)]));
   end;
   Arr := TJSONArray(V);
   try

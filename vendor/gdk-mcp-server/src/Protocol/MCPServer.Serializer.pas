@@ -260,7 +260,14 @@ begin
       end;
 
     tkString, tkLString, tkWString, tkUString:
-      Result := JsonValue.Value;
+      // A JSON object or array sent for a STRING parameter travels as its
+      // JSON text: the RTL's Value is '' for both, so a client that sent
+      // delphi_edit "edits" as a real array (the description says array)
+      // got the batch silently ignored (hermes, 2026-09-25).
+      if (JsonValue is TJSONObject) or (JsonValue is TJSONArray) then
+        Result := JsonValue.ToJSON
+      else
+        Result := JsonValue.Value;
       
     tkEnumeration:
       if RttiType.Handle = TypeInfo(Boolean) then

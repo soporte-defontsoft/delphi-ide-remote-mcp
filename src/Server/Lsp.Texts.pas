@@ -669,11 +669,12 @@ const
   SN_RANGE_REPLACED_FMT =
     'SUSTITUIDAS %d lineas (de la %d a la %d) de %s';
 
-  SR_PATCH_EDITS_JSON =
+  SR_PATCH_EDITS_JSON_FMT =
     'RECHAZADO: "edits" tiene que ser un array JSON de objetos, por ejemplo ' +
     '[{"old":"  FLista: TList;","new":"  FLista: TObjectList<TCosa>;"}]. Si ' +
     'lo mandas desde una linea de comandos, metelo en un fichero y usa la ' +
-    'forma @fichero, que la consola no te lo destroce.';
+    'forma @fichero, que la consola no te lo destroce. Han llegado %d ' +
+    'caracteres que empiezan por: %s';
 
   SR_PATCH_EDITS_EMPTY =
     'RECHAZADO: "edits" viene vacio. Sin operaciones no hay nada que aplicar.';
@@ -3512,6 +3513,17 @@ const
     'RECHAZADO: falta "chunkbase64", el contenido en base64. Para un fichero ' +
     'de texto vacio o con contenido, delphi_create / delphi_edit son mejor ' +
     'herramienta; delphi_upload es para binarios y para trozos.';
+
+  SR_UPLOAD_B64_LEN_FMT =
+    'RECHAZADO: chunkBase64 tiene %d caracteres utiles y base64 va en grupos ' +
+    'de 4: faltan o sobran caracteres, casi siempre al transcribir un trozo ' +
+    'largo. No he escrito nada. Manda trozos mas cortos, o pasa chunkSha256 ' +
+    'con cada uno para que el fallo se vea en el trozo y no al final.';
+
+  SR_UPLOAD_CHUNK_SHA_MISMATCH_FMT =
+    'RECHAZADO: el sha256 de ESTE trozo no coincide (recibido %s, esperado ' +
+    '%s; %d bytes decodificados). No he escrito nada: el fichero sigue como ' +
+    'estaba. Reenvia el mismo trozo con el mismo offset.';
 
   SR_UPLOAD_SHA_MISMATCH_FMT =
     'el sha256 NO coincide: lo ensamblado difiere del origen, asi que NO lo ' +

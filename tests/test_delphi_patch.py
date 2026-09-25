@@ -440,6 +440,25 @@ _t = open(_occ, encoding='utf-8', newline='').read()
 check('tanda: una entrada anade lineas y la siguiente occurrence se arrastra bien',
       out.startswith('APLICADAS') and "Writeln('A2');\r\n  Writeln('B');\r\n  Writeln('C');" in _t, out[:900] + ' | ' + _t[-140:])
 
+# 2026-09-25 (hermes): a client that sends "edits" as a REAL JSON array (the
+# description says "array", the schema says string) got '' from the vendor
+# serializer and the batch was silently ignored; one that encodes it twice
+# got "no es array" with nothing about what arrived. Both work now, and
+# garbage is refused naming its length and start.
+out = call('delphi_edit', {'path': _occ, 'edits': [
+    {'old': "  Writeln('C');", 'new': "  Writeln('D');"}]})
+_t = open(_occ, encoding='utf-8').read()
+check('tanda: "edits" como ARRAY JSON real (no cadena) se aplica',
+      out.startswith('APLICADAS') and "Writeln('D');" in _t, out[:200])
+out = call('delphi_edit', {'path': _occ, 'edits': json.dumps(json.dumps([
+    {'old': "  Writeln('D');", 'new': "  Writeln('E');"}]))})
+_t = open(_occ, encoding='utf-8').read()
+check('tanda: "edits" codificado dos veces (cadena JSON dentro de cadena) se desenvuelve',
+      out.startswith('APLICADAS') and "Writeln('E');" in _t, out[:200])
+out = call('delphi_edit', {'path': _occ, 'edits': '{"old": "x", "new": "y"}'})
+check('tanda: "edits" que no es array -> RECHAZADO diciendo cuantos caracteres llegaron y como empieza',
+      out.startswith('RECHAZADO') and 'Han llegado 24 caracteres' in out and '{"old": "x"' in out, out[:300])
+
 print('== delphi_edit battery: %d PASS / %d FAIL ==' % (P, F))
 proc.stdin.close()
 time.sleep(1)

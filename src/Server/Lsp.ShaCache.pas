@@ -14,6 +14,7 @@ unit Lsp.ShaCache;
 interface
 
 function CachedFileSha256(const APath: string): string;
+function Sha256DeBytes(const ABytes: TArray<Byte>): string;
 
 implementation
 
@@ -37,6 +38,18 @@ begin
   except
     Result := '';
   end;
+end;
+
+// El sha de un trozo en memoria (delphi_upload chunkSha256): mismo sitio
+// que el de fichero, para que nadie monte otro THashSHA2 por su cuenta.
+function Sha256DeBytes(const ABytes: TArray<Byte>): string;
+var
+  H: THashSHA2;
+begin
+  H := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);
+  if Length(ABytes) > 0 then
+    H.Update(ABytes[0], Length(ABytes));
+  Result := H.HashAsString;
 end;
 
 function CachedFileSha256(const APath: string): string;
