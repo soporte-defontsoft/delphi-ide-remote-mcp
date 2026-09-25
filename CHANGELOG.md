@@ -55,6 +55,12 @@ the MCP `initialize` response (`serverInfo.version`).
   valid call; only the reason given first can differ when a call fails for
   two things at once. The `out=` of `delphi_adb logcat` stays out on purpose:
   a disposable dump belongs in a temp folder.
+- The startup purge empties EVERY `__delphi-temp` under each write root, nested
+  ones included (it only reached `<root>\__delphi-temp`; a nested one kept 90
+  captures, 66 MB, through every restart of 2026-09-25). It never follows a
+  junction, never enters `.git`, and never touches `ReadOnlyPaths`, reference
+  projects (`ReadOnlyRoots`) or the vault. `VaciaTemp`, the one routine that
+  empties, now refuses any folder not named `__delphi-temp`.
 - One resolver of the active workspace inside the guard: `HasActiveWS` /
   `ActiveWS` replace 18 hand-written copies of "if a workspace is active, its
   field; else the global", and `LoadSecurity` reads every local-mode key

@@ -2844,6 +2844,11 @@ procedure VaciaTemp(const ADir: string);
 var
   E: string;
 begin
+  // El guard del unico que vacia (David, 25-sep-2026): solo una carpeta que
+  // se llame __delphi-temp. Una ruta mal calculada nunca vacia otra cosa.
+  if not SameText(TPath.GetFileName(ExcludeTrailingPathDelimiter(ADir)),
+    TempFolderName) then
+    Exit;
   try
     if not TDirectory.Exists(ADir) then
       Exit;
@@ -2890,6 +2895,71 @@ begin
   Result := H <> 0;
 end;
 
+{ TODAS las __delphi-temp bajo una raiz, la de arriba y las anidadas. Antes
+  la purga solo vaciaba <raiz>\__delphi-temp, y una anidada guardo 90
+  capturas (66 MB) de Hermes a traves de todos los reinicios del 25-sep.
+  Sin cruzar enlaces (un junction dentro de la raiz que apunte fuera no se
+  recorre: lo de fuera no es nuestro), sin entrar en .git, sin bajar dentro
+  de una temporal ya encontrada, y sin tocar lo PROTEGIDO: lo de solo
+  lectura de la raiz (ReadOnlyPaths), todo proyecto de referencia
+  (ReadOnlyRoots, de cualquier workspace) y el vault. }
+function TemporalesBajo(const ARoot: string;
+  const AProtegidas: TArray<string>): TArray<string>;
+var
+  Acc: TStringList;
+
+  function Protegida(const D: string): Boolean;
+  var
+    P: string;
+  begin
+    Result := False;
+    for P in AProtegidas do
+      if (P.Trim <> '') and StartsText(IncludeTrailingPathDelimiter(P.Trim),
+           IncludeTrailingPathDelimiter(D)) then
+        Exit(True);
+  end;
+
+  procedure Baja(const D: string; ANivel: Integer);
+  var
+    Sub, Nombre: string;
+    A: Cardinal;
+  begin
+    if ANivel > 16 then
+      Exit; // tope de profundidad: un arbol patologico no para el arranque
+    try
+      for Sub in TDirectory.GetDirectories(D) do
+      begin
+        A := GetFileAttributes(PChar(Sub));
+        if (A = INVALID_FILE_ATTRIBUTES) or
+           ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
+          Continue; // un enlace: no se sigue
+        Nombre := TPath.GetFileName(Sub);
+        if SameText(Nombre, '.git') or Protegida(Sub) then
+          Continue;
+        if SameText(Nombre, TempFolderName) then
+        begin
+          Acc.Add(Sub);
+          Continue;
+        end;
+        Baja(Sub, ANivel + 1);
+      end;
+    except
+      // una carpeta ilegible: se sigue con las demas
+    end;
+  end;
+
+begin
+  Acc := TStringList.Create;
+  try
+    if (ARoot.Trim <> '') and TDirectory.Exists(ARoot.Trim) and
+       not Protegida(ARoot.Trim) then
+      Baja(ExcludeTrailingPathDelimiter(ARoot.Trim), 0);
+    Result := Acc.ToStringArray;
+  finally
+    Acc.Free;
+  end;
+end;
+
 procedure PurgeServerTemp;
 var
   W: TWorkspaceDef;
@@ -2908,17 +2978,22 @@ begin
   // a AgentTempDir, nadie purgaba, y la migaja de la ejecucion anterior
   // sobrevivia. "Se limpia en el primer uso" no es "se limpia al arrancar",
   // que es lo que se prometio (David, 2026-09-21).
+  // Todas las temporales bajo cada raiz de escritura, las anidadas tambien
+  // (TemporalesBajo, arriba). Protegido: lo de solo lectura de ESE
+  // workspace, cualquier proyecto de referencia y el vault.
   try
     LoadSecurity;
+    var Referencias: TArray<string> := nil;
+    for W in GWorkspaces do
+      Referencias := Referencias + W.ReadOnlyRoots;
+    Referencias := Referencias + GRoRoots + [VaultPath];
     for W in GWorkspaces do
       for R in W.Roots do
-        if R.Trim <> '' then
-          VaciaTemp(TPath.Combine(ExcludeTrailingPathDelimiter(R.Trim),
-            TempFolderName));
-    for R in WorkspaceRoots do
-      if R.Trim <> '' then
-        VaciaTemp(TPath.Combine(ExcludeTrailingPathDelimiter(R.Trim),
-          TempFolderName));
+        for var T in TemporalesBajo(R, W.ReadOnlyPaths + Referencias) do
+          VaciaTemp(T);
+    for R in GRoots do // modo local de lanzamiento (baterias)
+      for var T in TemporalesBajo(R, GRoPaths + Referencias) do
+        VaciaTemp(T);
   except
     // limpiar no puede impedir arrancar
   end;
