@@ -2,7 +2,8 @@
 
 Five steps. What you need: **one Windows machine with a licensed RAD Studio /
 Delphi 11+ installed and working** (open the IDE once, build something). That
-machine is the server. Nothing gets installed on the machines you work from.
+machine is the server: **everything below happens on that PC**, the one with
+Delphi. Nothing gets installed on the machines you work from.
 
 ## 1. Download the release
 
