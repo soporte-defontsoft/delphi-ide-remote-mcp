@@ -1657,6 +1657,12 @@ const
     'inline=false gives file + download instead; a capture with out= is ' +
     'yours and stays.';
 
+  SR_BORRADO_DENEGADO_FMT =
+    'NO BORRO "%s": %s. El borrador de arboles solo borra dentro de una ' +
+    'carpeta desechable del servidor (temporales, papelera) o una descarga ' +
+    'temporal suya, y nunca una raiz de workspace, el vault, la carpeta del ' +
+    'servidor ni del sistema, ni nada que los contenga.';
+
   SN_CAPTURE_OUT_TEMP_HINT =
     'Para una captura no hace falta out: omitelo y la imagen llega en la ' +
     'misma respuesta, sin fichero que recoger ni que acumular. out= es solo ' +

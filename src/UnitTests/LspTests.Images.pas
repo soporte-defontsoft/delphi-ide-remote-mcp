@@ -24,6 +24,9 @@ type
     [Test] procedure FrameEsLaInversaDeSuNombrador;
     [Test] procedure FrameRechazaFormaYPuntoFuera;
     [Test] procedure CapturaConOutEnTemporalesSeRechaza;
+    [Test] procedure BorradoSoloDentroDeLoDesechable;
+    [Test] procedure BorradoNuncaUnidadNiSistema;
+    [Test] procedure DescargaTemporalNombradorYLector;
   end;
 
 implementation
@@ -203,6 +206,39 @@ begin
   // (la jaula la pone el servidor que lanza el ejecutor: aqui solo la regla)
   Assert.AreEqual('', DeadCopyWriteDenied('C:\w\proyecto\capturas\cap.png'),
     'una carpeta del proyecto no es una carpeta muerta');
+end;
+
+procedure TImageTests.BorradoSoloDentroDeLoDesechable;
+begin
+  Assert.AreEqual('', BorradoDenegado('C:\w\proyecto\__delphi-temp\x'), 'dentro de la temporal');
+  Assert.AreEqual('', BorradoDenegado('C:\w\proyecto\__delphi-temp\hermes\desktop'),
+    'el __ se exige a la RAIZ de la zona; lo de dentro se llama como sea');
+  Assert.AreEqual('', BorradoDenegado('C:\w\proyecto\__delphi-patch\20260918'), 'dentro de la papelera');
+  Assert.AreEqual('', BorradoDenegado('C:\w\capturas\__tmp-abcd1234'), 'una descarga temporal');
+  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\proyecto\__delphi-temp'), 'la temporal misma, no');
+  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\proyecto\__delphi-patch'), 'la papelera misma, no');
+  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\proyecto\src'), 'una carpeta de proyecto, no');
+  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\capturas\__tmp-zz'), 'un __tmp- que no es del nombrador, no');
+  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\capturas\.tmp-abcd1234'), 'el prefijo viejo, sin __, no');
+  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\delphi-temp\x'), 'una carpeta que se llama casi igual pero sin __, no');
+end;
+
+procedure TImageTests.BorradoNuncaUnidadNiSistema;
+begin
+  Assert.StartsWith('NO BORRO', BorradoDenegado(''), 'vacia');
+  Assert.StartsWith('NO BORRO', BorradoDenegado('relativo\__delphi-temp\x'), 'relativa');
+  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\'), 'unidad');
+  Assert.StartsWith('NO BORRO', BorradoDenegado('\\servidor\recurso'), 'recurso compartido');
+  Assert.StartsWith('NO BORRO', BorradoDenegado(GetEnvironmentVariable('WINDIR')), 'Windows');
+  Assert.StartsWith('NO BORRO', BorradoDenegado(ExtractFileDir(ParamStr(0))), 'la carpeta del ejecutable');
+end;
+
+procedure TImageTests.DescargaTemporalNombradorYLector;
+begin
+  Assert.IsTrue(EsCarpetaDescarga(ExtractFileName(NuevaCarpetaDescarga('C:\w'))), 'el lector reconoce al nombrador');
+  Assert.IsFalse(EsCarpetaDescarga('__tmp-'), 'sin hex');
+  Assert.IsFalse(EsCarpetaDescarga('tmp-abcd1234'), 'sin __');
+  Assert.IsFalse(EsCarpetaDescarga('.tmp-abcd1234'), 'el prefijo viejo');
 end;
 
 initialization

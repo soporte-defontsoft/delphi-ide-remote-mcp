@@ -668,8 +668,15 @@ begin
       begin
         TDirectory.Copy(Params.Path, Params.Dest);
         // la papelera del origen no es contenido: la copia nace limpia
+        // ...vaciandola con EL vaciador (borrador con guard, sin cruzar
+        // enlaces) y quitando la carpeta ya vacia sin recursion. Antes:
+        // TDirectory.Delete recursivo de la RTL, que cruza junctions y se
+        // saltaba el guard (25-sep-2026).
         for var Basura in TDirectory.GetDirectories(Params.Dest, BACKUP_SUB, TSearchOption.soAllDirectories) do
-          TDirectory.Delete(Basura, True);
+        begin
+          VaciaDesechable(Basura);
+          RemoveDir(Basura);
+        end;
       end
       else
         TFile.Copy(Params.Path, Params.Dest);

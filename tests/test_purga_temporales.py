@@ -45,12 +45,22 @@ vendor = siembra(ROOT, 'vendor', '__delphi-temp', 'no-tocar.txt')
 ref = siembra(REF, 'p', '__delphi-temp', 'no-tocar.txt')
 fuera = siembra(FUERA, '__delphi-temp', 'no-tocar.txt')
 normal = siembra(ROOT, 'proy', 'temp', 'fichero.txt')  # "temp" no es __delphi-temp
+# the deletion guard (25-sep-2026): a SECOND root that lives inside the
+# first root's temp folder must survive the purge of that temp folder,
+# and a junction planted inside a temp folder is removed as a LINK - the
+# folder it points to is never emptied.
+RAIZ2 = os.path.join(ROOT, '__delphi-temp', 'otra-raiz')
+raiz2 = siembra(RAIZ2, 'proyecto.pas')
+VICTIMA = os.path.join(BASE, 'victima')
+victima = siembra(VICTIMA, 'no-tocar.txt')
+enlace_tmp = os.path.join(ROOT, 'proy', 'sub', '__delphi-temp', 'lnk')
+subprocess.run(['cmd', '/c', 'mklink', '/J', enlace_tmp, VICTIMA], capture_output=True)
 enlace = os.path.join(ROOT, 'enlace')
 subprocess.run(['cmd', '/c', 'mklink', '/J', enlace, FUERA], capture_output=True)
 check('fixture: junction creado dentro de la raiz apuntando fuera', os.path.isdir(enlace), enlace)
 
 env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = ROOT
+env['DELPHI_MCP_ROOTS'] = ROOT + ';' + RAIZ2
 env['DELPHI_MCP_READONLY_PATHS'] = 'vendor'
 env['DELPHI_MCP_READONLY_ROOTS'] = REF
 proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -72,6 +82,12 @@ check('protegido: ReadOnlyPaths (vendor) no se toca', os.path.exists(vendor), ve
 check('protegido: un proyecto de referencia no se toca', os.path.exists(ref), ref)
 check('protegido: lo que hay tras un junction no se toca', os.path.exists(fuera), fuera)
 check('una carpeta "temp" cualquiera no se toca', os.path.exists(normal), normal)
+check('guard: una RAIZ metida en una temporal sobrevive a la purga de esa temporal',
+      os.path.exists(raiz2), raiz2)
+check('guard: un junction dentro de una temporal cae como enlace',
+      not os.path.exists(enlace_tmp), enlace_tmp)
+check('guard: la carpeta a la que apuntaba el junction sigue intacta',
+      os.path.exists(victima), victima)
 
 try:
     proc.stdin.close()

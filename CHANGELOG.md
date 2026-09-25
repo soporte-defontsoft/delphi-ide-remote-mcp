@@ -60,7 +60,22 @@ the MCP `initialize` response (`serverInfo.version`).
   captures, 66 MB, through every restart of 2026-09-25). It never follows a
   junction, never enters `.git`, and never touches `ReadOnlyPaths`, reference
   projects (`ReadOnlyRoots`) or the vault. `VaciaTemp`, the one routine that
-  empties, now refuses any folder not named `__delphi-temp`.
+  empties, now refuses any folder not named `__delphi-temp`, or one that is
+  itself a link.
+- The one tree deleter (`BorraArbol`) guards itself instead of trusting its
+  callers: it only deletes INSIDE a disposable folder of the server
+  (`CarpetasDesechables`: temp and trash) or a temporary download folder
+  (`__tmp-<8 hex>`, with its namer and reader; every segment that enables
+  a deletion must start with `__`, whatever the lists say), and never deletes nor
+  contains a protected place (`LugaresProtegidos`: every workspace root,
+  write or reference, the vault, the server folder, Windows, Program Files,
+  the user profile), a drive or a share. Judged on the real path. Both lists
+  are declared once: a new disposable folder or a new protected place is one
+  line. Every caller of 2026-09-25 deletes inside those zones; anything else
+  now raises and deletes nothing. `VaciaDesechable` (was `VaciaTemp`) is the one
+  routine that empties a disposable folder, and `delphi_move copy=true` uses
+  it to drop the source's trash from the copy (it used the RTL's recursive
+  delete, which follows junctions and skipped the guard).
 - One resolver of the active workspace inside the guard: `HasActiveWS` /
   `ActiveWS` replace 18 hand-written copies of "if a workspace is active, its
   field; else the global", and `LoadSecurity` reads every local-mode key

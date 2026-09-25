@@ -477,8 +477,7 @@ begin
         los perfiles: con un destino comun, dos maquinas a la vez se pisaban la
         imagen y una llamada acababa con la pantalla de la otra. Baja a una
         carpeta propia y se queda con un nombre que dice de quien es. }
-      Bajada := TPath.Combine(Destino, '.tmp-' +
-        LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
+      Bajada := NuevaCarpetaDescarga(Destino); // EL nombrador: el guard del borrado la reconoce
       Fallo := FetchFromTarget(Params.Profile.Trim, Proj,
         TPath.GetFileName(Remota), Bajada, Local);
       end;

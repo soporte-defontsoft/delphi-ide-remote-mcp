@@ -265,8 +265,48 @@ function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
   SEIS borrados recursivos sueltos por el codigo; este es ahora el unico,
   y quien necesite tirar un arbol pasa por aqui. Limpia atributos
   (solo-lectura) como hacia la RTL - los objetos de un .git vienen asi.
-  Lanza si no puede: que cada llamador decida si tragarselo. }
+  Lanza si no puede: que cada llamador decida si tragarselo.
+
+  Y desde el 25-sep-2026 LANZA TAMBIEN SI NO DEBE: antes de tocar nada pasa
+  por BorradoDenegado (abajo). No hay otra forma de borrar un arbol. }
 procedure BorraArbol(const ADir: string);
+
+{ LAS carpetas desechables del servidor, por nombre de segmento: lo UNICO
+  dentro de lo que BorraArbol borra (hoy la temporal y la papelera). Una
+  lista: si manana nace otra (una cache, un spool), se anade AQUI y el guard
+  la conoce, sin tocar la logica (David, 25-sep-2026). Todas empiezan por
+  __: es la tercera barrera de BorradoDenegado. }
+function CarpetasDesechables: TArray<string>;
+
+{ EL nombrador de la carpeta de descarga temporal ('__tmp-' + 8 hex) que
+  crea quien baja algo de un target, y su lector: la unica carpeta fuera de
+  una desechable que BorraArbol acepta, porque la acaba de crear el servidor. }
+function NuevaCarpetaDescarga(const ADentroDe: string): string;
+function EsCarpetaDescarga(const ANombre: string): Boolean;
+
+{ LOS sitios que un borrado nunca puede SER ni CONTENER: toda raiz de
+  workspace (de escritura y de referencia, de cualquier workspace, y las del
+  modo local), el vault, la carpeta del servidor, Windows, Archivos de
+  programa y la carpeta del usuario. Una lista: un sitio sagrado nuevo se
+  anade AQUI. }
+function LugaresProtegidos: TArray<string>;
+
+{ La decision de BorraArbol, sola: '' = ADir se puede borrar entero; si no,
+  el motivo. (1) LISTA BLANCA: tiene que estar DENTRO de una carpeta
+  desechable (nunca la carpeta misma) o ser/estar en una carpeta de
+  descarga. (2) LISTA NEGRA: no puede ser ni contener un lugar protegido, ni
+  ser una unidad o un recurso compartido entero. Se evalua sobre la ruta
+  REAL del padre + el nombre: un junction en el camino no hace pasar por
+  temporal lo que no lo es, y quitar un enlace (que nunca toca lo de detras)
+  se juzga por donde esta el enlace. }
+function BorradoDenegado(const ADir: string): string;
+
+{ Vacia una carpeta DESECHABLE (temporal o papelera: CarpetasDesechables) sin
+  borrarla, por el borrador con guard. Nunca una que sea un enlace (seria
+  vaciar lo de detras) ni una de otro nombre. Nunca lanza. EL vaciador: la
+  purga del arranque y la copia de carpetas (que no se lleva la papelera del
+  origen) pasan por aqui (25-sep-2026). }
+procedure VaciaDesechable(const ADir: string);
 
 { Vacia la casa del servidor al arrancar. Lo que hay ahi pertenece a la
   llamada que lo creo y ninguna llamada sobrevive a un reinicio, asi que al
@@ -576,6 +616,8 @@ uses
   MCPServer.Registration,  // el registro REAL de tools, no una lista nuestra
   Lsp.Attributes,          // [RutaDelServidor]
   Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
+  System.RegularExpressions,
+  Lsp.Patch,            // TrashFolderName: el nombre de la papelera, de SU nombrador
   Lsp.Texts;
 
 type
@@ -2805,7 +2847,7 @@ end;
 { El unico borrador de arboles del servidor (la nota larga, en el
   interface). El bit de reparse se mira ANTES de entrar: el enlace cae,
   el destino ni se mira. }
-procedure BorraArbol(const ADir: string);
+procedure BorraArbolDentro(const ADir: string);
 var
   E: string;
   A: Cardinal;
@@ -2833,21 +2875,127 @@ begin
     TFile.Delete(E);
   end;
   for E in TDirectory.GetDirectories(ADir) do
-    BorraArbol(E);
+    BorraArbolDentro(E);
   SetFileAttributes(PChar(ADir), FILE_ATTRIBUTE_NORMAL);
   TDirectory.Delete(ADir, False);
 end;
 
-{ Vacia una carpeta de temporales sin borrarla. Nunca lanza: no poder tirar
-  un temporal no es motivo para que falle lo que lo pedia. }
-procedure VaciaTemp(const ADir: string);
+function CarpetasDesechables: TArray<string>;
+begin
+  Result := [TempFolderName, TrashFolderName];
+end;
+
+const
+  DESCARGA_PREFIJO = '__tmp-'; // empieza por __, como toda zona borrable
+
+function NuevaCarpetaDescarga(const ADentroDe: string): string;
+begin
+  Result := TPath.Combine(ADentroDe, DESCARGA_PREFIJO +
+    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
+end;
+
+function EsCarpetaDescarga(const ANombre: string): Boolean;
+begin
+  // la inversa exacta del nombrador: el prefijo y 8 hexadecimales
+  Result := TRegEx.IsMatch(ANombre, '^' + TRegEx.Escape(DESCARGA_PREFIJO) +
+    '[0-9a-f]{8}$', [roIgnoreCase]);
+end;
+
+function LugaresProtegidos: TArray<string>;
+var
+  W: TWorkspaceDef;
+begin
+  LoadSecurity;
+  Result := GRoots + GRoRoots + [VaultPath, ExtractFileDir(ParamStr(0)),
+    GetEnvironmentVariable('WINDIR'), GetEnvironmentVariable('ProgramFiles'),
+    GetEnvironmentVariable('ProgramFiles(x86)'),
+    GetEnvironmentVariable('USERPROFILE')];
+  for W in GWorkspaces do
+    Result := Result + W.Roots + W.ReadOnlyRoots;
+end;
+
+function BorradoDenegado(const ADir: string): string;
+var
+  Full, Real, Seg, P, PReal: string;
+  Segs: TArray<string>;
+  I: Integer;
+  Desechable: Boolean;
+begin
+  Result := '';
+  if (ADir.Trim = '') or not TPath.IsPathRooted(ADir.Trim) then
+    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'ruta vacia o relativa']));
+  try
+    Full := ExcludeTrailingPathDelimiter(TPath.GetFullPath(ADir.Trim));
+  except
+    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'ruta invalida']));
+  end;
+  if (Length(Full) <= 3) or (Full.StartsWith('\\') and
+     (Length(Full.Substring(2).Split(['\'], TStringSplitOptions.ExcludeEmpty)) <= 2)) then
+    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'es una unidad o un recurso compartido entero']));
+  // la ruta REAL del padre + el nombre (ver la nota de la interface)
+  Real := IncludeTrailingPathDelimiter(RealPath(ExtractFileDir(Full))) +
+    ExtractFileName(Full);
+  // (1) lista blanca
+  Segs := Real.Split(['\', '/'], TStringSplitOptions.ExcludeEmpty);
+  Desechable := False;
+  for I := 0 to High(Segs) do
+  begin
+    Seg := Segs[I];
+    // Tercera barrera (David, 25-sep-2026): el segmento que habilita el
+    // borrado EMPIEZA POR __, sea cual sea la lista: una entrada futura con
+    // nombre normal, o una ruta mal calculada, no habilita nada.
+    if not Seg.StartsWith('__') then
+      Continue;
+    if (I < High(Segs)) and MatchText(Seg, CarpetasDesechables) then
+      Desechable := True // DENTRO de una desechable, nunca la carpeta misma
+    else if EsCarpetaDescarga(Seg) then
+      Desechable := True;
+  end;
+  if not Desechable then
+    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir,
+      'no esta dentro de una carpeta desechable (' +
+      string.Join(', ', CarpetasDesechables) + ') ni es una descarga temporal']));
+  // (2) lista negra: ni ser ni contener un lugar protegido
+  for P in LugaresProtegidos do
+  begin
+    if P.Trim = '' then
+      Continue;
+    PReal := ExcludeTrailingPathDelimiter(RealPath(P.Trim));
+    if StartsText(IncludeTrailingPathDelimiter(Real), IncludeTrailingPathDelimiter(PReal)) then
+      Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'es o contiene un lugar protegido (' +
+        ExcludeTrailingPathDelimiter(P.Trim) + ')']));
+  end;
+end;
+
+procedure BorraArbol(const ADir: string);
+var
+  Motivo: string;
+begin
+  // El guard ANTES de tocar nada, y una sola vez: los hijos de algo aprobado
+  // estan dentro de ello (misma lista blanca) y si hubiera un lugar
+  // protegido debajo, el padre ya lo CONTENDRIA y se habria denegado.
+  Motivo := BorradoDenegado(ADir);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
+  BorraArbolDentro(ADir);
+end;
+
+{ (la nota, en la interface) Nunca lanza: no poder tirar un temporal no es
+  motivo para que falle lo que lo pedia. }
+procedure VaciaDesechable(const ADir: string);
 var
   E: string;
 begin
-  // El guard del unico que vacia (David, 25-sep-2026): solo una carpeta que
-  // se llame __delphi-temp. Una ruta mal calculada nunca vacia otra cosa.
-  if not SameText(TPath.GetFileName(ExcludeTrailingPathDelimiter(ADir)),
-    TempFolderName) then
+  // El guard del unico que vacia (David, 25-sep-2026): solo una carpeta de la
+  // lista central de desechables, y con el __ delante. Una ruta mal
+  // calculada nunca vacia otra cosa.
+  var Nombre := TPath.GetFileName(ExcludeTrailingPathDelimiter(ADir));
+  if not (Nombre.StartsWith('__') and MatchText(Nombre, CarpetasDesechables)) then
+    Exit;
+  // ...y si la propia temporal es un ENLACE, lo de detras no es nuestro:
+  // enumerarla seria vaciar el destino (25-sep-2026).
+  var AT := GetFileAttributes(PChar(ExcludeTrailingPathDelimiter(ADir)));
+  if (AT <> INVALID_FILE_ATTRIBUTES) and ((AT and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
     Exit;
   try
     if not TDirectory.Exists(ADir) then
@@ -2968,7 +3116,7 @@ begin
   if not SoyLaPrimeraInstancia then
     Exit;
   // La casa del servidor, la de siempre.
-  VaciaTemp(ServerTempDir);
+  VaciaDesechable(ServerTempDir);
   // ...Y LA DE CADA WORKSPACE. Primer intento: se vaciaba en el primer uso
   // de AgentTempDir, porque "al arrancar no hay workspace activo" - los
   // roots los elige el token de quien llama. Falso: los workspaces ESTAN
@@ -2990,10 +3138,10 @@ begin
     for W in GWorkspaces do
       for R in W.Roots do
         for var T in TemporalesBajo(R, W.ReadOnlyPaths + Referencias) do
-          VaciaTemp(T);
+          VaciaDesechable(T);
     for R in GRoots do // modo local de lanzamiento (baterias)
       for var T in TemporalesBajo(R, GRoPaths + Referencias) do
-        VaciaTemp(T);
+        VaciaDesechable(T);
   except
     // limpiar no puede impedir arrancar
   end;
