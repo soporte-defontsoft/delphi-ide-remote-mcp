@@ -284,6 +284,11 @@ the self-updating targets stay in step).
 
 ## Quickstart
 
+**In a hurry? [docs/QUICKSTART.md](docs/QUICKSTART.md)**: one Windows machine with
+Delphi, download the release, a five-line `settings.ini`, `-gui`, connect a client,
+first call. Five steps and nothing else. The rest of this section is the full picture:
+the three ways to run it, the service account, and letting an agent restart it.
+
 **No Delphi installed, or don't want to compile?** Download the ready-made
 Windows binary from **[Releases](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)** —
 the zip carries `DelphiLspMcp.exe`, the style converter, `settings.example.ini`,

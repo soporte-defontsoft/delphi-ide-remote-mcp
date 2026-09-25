@@ -14,6 +14,10 @@ the MCP `initialize` response (`serverInfo.version`).
   chunk is written, so a slip in transit is caught at the chunk that carried
   it with nothing on disk, instead of by the whole-file `sha256` at the end
   with the file already in quarantine. The answer carries `chunkVerified`.
+- `docs/QUICKSTART.md`: the five-step path from zero to the first call (one
+  Windows machine with Delphi, download, a five-line `settings.ini`, `-gui`,
+  connect, `delphi_workspace`), with the five things that go wrong first. It
+  ships in the zip and the README points to it at the top of its Quickstart.
 
 ### Fixed
 
