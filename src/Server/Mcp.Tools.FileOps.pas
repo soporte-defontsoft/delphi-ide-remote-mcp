@@ -556,7 +556,10 @@ begin
   Denied := PathDenied(Params.Path);
   if Denied <> '' then
     Exit(Denied);
-  Denied := PathDenied(Params.Dest);
+  // El destino no cae en temporales, __history ni papelera (aprobado por
+  // David, 25-sep-2026). Sacar algo de ahi (restaurar, guardar una captura)
+  // es el ORIGEN, y ese sigue siendo libre dentro de la jaula.
+  Denied := WriteTargetDenied(Params.Dest);
   if Denied <> '' then
     Exit(Denied);
   // Moving an item OUT of the trash is a RESTORE - allowed (what delphi_delete

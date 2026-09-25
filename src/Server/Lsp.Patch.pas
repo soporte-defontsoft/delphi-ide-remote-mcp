@@ -1448,7 +1448,7 @@ begin
   GLock.Enter;
   try
     try
-      Result := PathDenied(A.Path);
+      Result := WriteTargetDenied(A.Path); // jaula + carpetas muertas, UNA puerta
       if Result <> '' then
         Exit;
       // Las carpetas muertas (la papelera __delphi-patch, los temporales
@@ -1458,9 +1458,7 @@ begin
       // donde la purga del arranque lo borra sin avisar (auditoria
       // 2026-09-21: la regla entro en 1 de los 3 guardianes y delphi_edit
       // era el que faltaba).
-      Result := DeadCopyWriteDenied(A.Path);
-      if Result <> '' then
-        Exit;
+      // -> ahora dentro de WriteTargetDenied, arriba (25-sep-2026).
       Ext := LowerCase(TPath.GetExtension(A.Path));
       IsSource := False;
       for var E in SOURCE_EXTS do

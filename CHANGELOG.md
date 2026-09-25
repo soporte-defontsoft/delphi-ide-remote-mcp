@@ -45,6 +45,16 @@ the MCP `initialize` response (`serverInfo.version`).
   the image comes in the answer) - 90 captures, 66 MB, had piled up in a
   nested temp folder the startup purge never reaches - and the temporary
   download folder of a desktop capture is always removed.
+- `delphi_move` refuses a DESTINATION inside a dead folder (`__delphi-temp`,
+  `__history`/`__recovery`, the trash, a `.by` marker); moving OUT of them -
+  restoring, keeping a capture - is the source and stays free.
+- One destination gate for writers, `WriteTargetDenied` (jail + dead
+  folders): `delphi_edit`, `delphi_textedit`, `delphi_create`,
+  `delphi_upload`, the capture namer and `delphi_move` call it instead of
+  pairing the two checks by hand (four copies). Same behaviour for every
+  valid call; only the reason given first can differ when a call fails for
+  two things at once. The `out=` of `delphi_adb logcat` stays out on purpose:
+  a disposable dump belongs in a temp folder.
 - One resolver of the active workspace inside the guard: `HasActiveWS` /
   `ActiveWS` replace 18 hand-written copies of "if a workspace is active, its
   field; else the global", and `LoadSecurity` reads every local-mode key

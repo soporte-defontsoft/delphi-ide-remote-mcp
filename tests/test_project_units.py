@@ -508,6 +508,20 @@ check('copy carpeta con .dproj: RECHAZADO (un proyecto nunca en dos sitios)', ou
 out = call('delphi_move', {"path": os.path.join(cdir, 'UOrig.pas'), "dest": os.path.join(cdir, 'UCopia.pas'), "copy": True})
 check('copy sobre destino existente: RECHAZADO, no sobreescribe', out.startswith('RECHAZADO') and 'ya existe' in out, out[:200])
 
+# ---- the destination of a move never lands in a dead folder (25-sep-2026,
+# approved by David): temp, __history and trash are refused; moving OUT of
+# them (restore, keep a capture) is the source and stays free. ----
+mdir = os.path.join(BASE, 'MoveMuerto')
+os.makedirs(os.path.join(mdir, '__delphi-temp'), exist_ok=True)
+open(os.path.join(mdir, 'a.txt'), 'w').write('x')
+open(os.path.join(mdir, '__delphi-temp', 'b.txt'), 'w').write('y')
+out = call('delphi_move', {"path": os.path.join(mdir, 'a.txt'), "dest": os.path.join(mdir, '__delphi-temp', 'a.txt')})
+check('move HACIA __delphi-temp: RECHAZADO, el origen sigue', out.startswith('RECHAZADO') and 'temporales' in out and os.path.exists(os.path.join(mdir, 'a.txt')), out[:200])
+out = call('delphi_move', {"path": os.path.join(mdir, 'a.txt'), "dest": os.path.join(mdir, '__history', 'a.txt')})
+check('move HACIA __history: RECHAZADO', out.startswith('RECHAZADO'), out[:200])
+out = call('delphi_move', {"path": os.path.join(mdir, '__delphi-temp', 'b.txt'), "dest": os.path.join(mdir, 'b.txt')})
+check('move DESDE __delphi-temp a una carpeta normal: permitido', out.startswith('MOVIDO') and os.path.exists(os.path.join(mdir, 'b.txt')), out[:200])
+
 print('== project units battery: %d PASS / %d FAIL ==' % (P, F))
 proc.stdin.close()
 time.sleep(1)

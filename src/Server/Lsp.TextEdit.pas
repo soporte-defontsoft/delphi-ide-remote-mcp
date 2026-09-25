@@ -309,17 +309,15 @@ end;
 function TextEditNucleo(const A: TTextEditArgs): string;
 begin
   try
-    Result := PathDenied(A.Path);
+    Result := WriteTargetDenied(A.Path); // jaula + carpetas muertas, UNA puerta
     if Result <> '' then
       Exit;
     Result := ExtGate(A.Path);
     if Result <> '' then
       Exit;
     // delphi_edit refused the trash and sent non-Delphi text here; this tool
-    // did not know the rule, so the trash was writable after all.
-    Result := DeadCopyWriteDenied(A.Path);
-    if Result <> '' then
-      Exit;
+    // did not know the rule, so the trash was writable after all. Now the
+    // rule is part of WriteTargetDenied, above - no tool can forget it.
     // Antes del reparto de modos: "toline" solo significa algo con un ancla,
     // y un parametro que se traga en silencio es como se cree haber borrado
     // algo que sigue ahi.
@@ -368,13 +366,10 @@ begin
   // al reves. Lo que era comun -parseo, occurrence, bucle, todo o nada, eco-
   // vive ahora en Lsp.Patch.AplicaTanda y lo comparten las dos. Aqui queda
   // solo como se aplica UNA edicion suelta sobre texto que no es Pascal.
-  Result := PathDenied(APath);
+  Result := WriteTargetDenied(APath); // jaula + carpetas muertas, UNA puerta
   if Result <> '' then
     Exit;
   Result := ExtGate(APath);
-  if Result <> '' then
-    Exit;
-  Result := DeadCopyWriteDenied(APath);
   if Result <> '' then
     Exit;
   if not TFile.Exists(APath) then

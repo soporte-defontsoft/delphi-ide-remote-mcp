@@ -1783,7 +1783,7 @@ var
   Replaced: Boolean;
 begin
   FullPath := TPath.GetFullPath(Params.Path);
-  Result := PathDenied(FullPath); // writing: the strict jail, never the library zone
+  Result := WriteTargetDenied(FullPath); // writing: the strict jail + dead folders, never the library zone
   if Result <> '' then
     Exit;
   if Params.Offset < 0 then
@@ -1791,9 +1791,7 @@ begin
   if SkipIdeArtifacts(LongCanonical(FullPath)) then
     Exit('error: ruta de artefactos del IDE (__history, __recovery, Win32, ' +
       'dcu...): no se sube ahi.');
-  Result := DeadCopyWriteDenied(FullPath);
-  if Result <> '' then
-    Exit;
+  // (las carpetas muertas: WriteTargetDenied, arriba)
   // An upload with no bytes is not an upload: the schema only demanded "path",
   // so a half-typed call landed here, opened the file with fmCreate and left
   // it at 0 bytes reporting success (field round 8). Nothing destructive may

@@ -411,6 +411,17 @@ function LiveSessionCount: Integer;                             // purga las cad
   moving one OUT is the restore itself. Only writing IN is refused. }
 function DeadCopyWriteDenied(const APath: string): string;
 
+{ EL gate de DESTINO de escritura: la jaula (PathDenied) y las carpetas
+  muertas (DeadCopyWriteDenied), en ese orden. Todo escritor que cree o
+  reescriba un fichero en una ruta que elige el agente pasa por aqui. Hasta
+  el 25-sep-2026 cada escritor escribia el par a mano (cuatro copias) y dos
+  no lo hacian: el out= de las capturas (90 capturas, 66 MB acumulados en
+  una __delphi-temp anidada que la purga no alcanza) y el destino de
+  delphi_move. El proximo escritor llama a esta y ya esta. Queda fuera a
+  proposito el out= del logcat de adb: su sitio natural ES un temporal, y
+  rechazarlo empujaria los volcados dentro del proyecto (David, 25-sep-2026). }
+function WriteTargetDenied(const APath: string): string;
+
 { The SAME directory can be named more than one way, and a guard that matches a
   path segment literally is blind to every alias. NTFS keeps an 8.3 short name
   for each entry ("__delphi-patch" also answers to "__DELP~1"), and it resolves
@@ -1511,6 +1522,13 @@ begin
     Result := TCurrentAgent
   else
     Result := ADefault;
+end;
+
+function WriteTargetDenied(const APath: string): string;
+begin
+  Result := PathDenied(APath);
+  if Result = '' then
+    Result := DeadCopyWriteDenied(APath);
 end;
 
 function DeadCopyWriteDenied(const APath: string): string;
@@ -2773,18 +2791,14 @@ begin
       LowerCase(TGUID.NewGuid.ToString.Substring(1, 6)), AExt]));
   if O <> '' then
   begin
-    Result := PathDenied(AFile);
+    Result := WriteTargetDenied(AFile);
     // Una captura no se guarda en los temporales del servidor: 90 capturas y
     // 66 MB de Hermes en una __delphi-temp anidada que la purga del arranque
     // no alcanza (25-sep-2026). Se omite out y llega en la respuesta (David:
     // 'no queremos acumular capturas, se entregan en una sola llamada y se
     // borran').
-    if Result = '' then
-    begin
-      Result := DeadCopyWriteDenied(AFile);
-      if Result <> '' then
-        Result := Result + ' ' + SN_CAPTURE_OUT_TEMP_HINT;
-    end;
+    if (Result <> '') and (DeadCopyWriteDenied(AFile) <> '') then
+      Result := Result + ' ' + SN_CAPTURE_OUT_TEMP_HINT;
   end;
 end;
 

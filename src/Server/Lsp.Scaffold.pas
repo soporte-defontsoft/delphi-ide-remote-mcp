@@ -708,9 +708,7 @@ begin
   if not ValidOutputFolder(ASubDir, S) then
     Exit(Format(SR_CREATE_SUBDIR_REL_FMT, [ASubDir]));
   ADir := TPath.Combine(ADir, S);
-  Result := PathDenied(ADir);
-  if Result = '' then
-    Result := DeadCopyWriteDenied(ADir);
+  Result := WriteTargetDenied(ADir); // jaula + carpetas muertas, UNA puerta
 end;
 
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
