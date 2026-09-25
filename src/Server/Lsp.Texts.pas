@@ -1544,7 +1544,10 @@ const
     'screenshot (the whole desktop, brought here as a PNG; default) | tap ' +
     '(press at x,y MEASURED ON THAT SCREENSHOT) | type (write "text" - with ' +
     'x,y it presses there FIRST, which is the real gesture: "write this ' +
-    'here", and pays the startup once) | key (one key: Linux code on a Linux ' +
+    'here", and pays the startup once. ESCRITO means the keys were SENT: ' +
+    'nothing verifies where the focus was, so read the screenshot every ' +
+    'answer brings; a press 14 px below the field lands outside it) | key ' +
+    '(one key: Linux code on a Linux ' +
     'target, key NAME on a Windows one) | overview (bring EVERY window into ' +
     'view when one covers another: on Linux the Super overview, on Windows ' +
     'a fresh capture; the "windows" list itself comes with every capture) ' +

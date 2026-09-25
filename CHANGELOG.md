@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- `delphi_desktop` answers carry the same `download` link as `delphi_fetch`
+  for every screenshot, built by one function (`Lsp.Files.DownloadLinkFor`)
+  the two tools share. A small agent that retyped the announced path put
+  its own folder in the middle and fetched a file that never existed
+  (hermes, 2026-09-25); a link is copied, not composed.
+- The desktop node says what ESCRITO means: the keys were sent, focus is not
+  verified, read the screenshot. The `type` description says the same.
+
 ## [1.2.3] - 2026-09-25
 
 ### Changed

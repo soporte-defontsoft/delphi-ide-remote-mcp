@@ -135,7 +135,7 @@ begin
         Sleep(250);
         Hizo := Escritorio.Escribir(Frase);
         if Hizo then
-          Writeln(Format('  ESCRITO "%s" en el pixel (%d,%d)', [Frase, ObjX, ObjY]))
+          Writeln(Format('  ESCRITO "%s" en el pixel (%d,%d) (tecleado; el foco NO se verifica: comprueba con la captura)', [Frase, ObjX, ObjY]))
         else
           Writeln('  pulse bien pero no pude escribir: ', Escritorio.Error);
       end;
@@ -147,7 +147,7 @@ begin
         Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
       Hizo := Escritorio.Escribir(Frase);
       if Hizo then
-        Writeln('  ESCRITO: ', Frase)
+        Writeln('  ESCRITO: ', Frase, ' (tecleado; el foco NO se verifica: comprueba con la captura)')
       else
         Writeln('  no pude escribir: ', Escritorio.Error);
     end
@@ -477,7 +477,7 @@ begin
               Sleep(250);
               Hizo := Manos.Escribir(Frase);
               if Hizo then
-                Writeln(Format('  ESCRITO "%s" en el pixel (%d,%d)  [%s]',
+                Writeln(Format('  ESCRITO "%s" en el pixel (%d,%d)  [%s] (tecleado; el foco NO se verifica: comprueba con la captura)',
                   [Frase, ObjX, ObjY, Manos.MapaNota]))
               else
                 Writeln('  pulse bien pero no pude escribir: ', Manos.Error);
@@ -491,7 +491,7 @@ begin
               Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(ObjX);
             Hizo := Manos.Escribir(Frase);
             if Hizo then
-              Writeln('  ESCRITO: ', Frase, '  [', Manos.MapaNota, ']')
+              Writeln('  ESCRITO: ', Frase, '  [', Manos.MapaNota, '] (tecleado; el foco NO se verifica: comprueba con la captura)')
             else
               Writeln('  no pude escribir: ', Manos.Error);
           end

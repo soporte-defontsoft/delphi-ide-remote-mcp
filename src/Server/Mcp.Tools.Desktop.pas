@@ -104,6 +104,7 @@ uses
   Lsp.Guard,
   Lsp.Imagen,
   Mcp.Tools.PAServer,
+  Lsp.Files,     // DownloadLinkFor: el enlace, el mismo que da delphi_fetch
   Lsp.RemoteRun;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
@@ -512,6 +513,13 @@ begin
         begin
           Return.AddPair('screenshot', Local);
           Return.AddPair('screenshotBytes', TJSONNumber.Create(TFile.GetSize(Local)));
+          // El enlace listo para copiar, como en delphi_fetch: un agente que
+          // recompone esta ruta a mano se inventa carpetas (hermes, 25-sep-2026).
+          if DownloadLinkFor('delphi_desktop', Local) <> '' then
+          begin
+            Return.AddPair('download', DownloadLinkFor('delphi_desktop', Local));
+            Return.AddPair('downloadNote', SN_FETCH_DOWNLOAD);
+          end;
           if ConRecorte then
             Return.AddPair('note', Format(SN_ADBLINUX_CROP_NOTE_FMT, [RX, RY]))
           else

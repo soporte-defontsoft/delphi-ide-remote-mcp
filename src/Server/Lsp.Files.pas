@@ -32,6 +32,15 @@ var
 procedure ServeFile(RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo);
 
+{ EL enlace de descarga de un fichero del servidor, el mismo para toda tool
+  que entregue uno (delphi_fetch, delphi_desktop): relativo a proposito (el
+  cliente ya sabe a que host:port habla), la ruta en su forma VIRTUAL y
+  URL-encoded - ninguna letra de unidad real sale, codificada o no. Vacio
+  cuando la ruta /files no esta servida (stdio). Un agente pequeno que
+  recompone la ruta a mano se equivoca (hermes, 25-sep-2026: metio su
+  carpeta en medio y pidio un fichero que nunca existio); un enlace se copia. }
+function DownloadLinkFor(const AToolName, AFullPath: string): string;
+
 implementation
 
 uses
@@ -41,9 +50,18 @@ uses
   System.Hash,
   System.JSON,
   MCPServer.Logger,
+  System.NetEncoding,
   Lsp.Guard,
   Lsp.Texts,
   Lsp.ShaCache;
+
+function DownloadLinkFor(const AToolName, AFullPath: string): string;
+begin
+  if not GFilesServed then
+    Exit('');
+  Result := FILES_ROUTE + '?path=' +
+    TNetEncoding.URL.Encode(MaskDriveText(AToolName, AFullPath));
+end;
 
 procedure Answer(ResponseInfo: TIdHTTPResponseInfo; ACode: Integer;
   const AMessage: string);

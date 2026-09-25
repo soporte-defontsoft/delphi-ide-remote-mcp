@@ -1688,8 +1688,7 @@ begin
         // talks to, and the server never guesses its own public address.
         // The path travels in its VIRTUAL form, URL-encoded (no real drive
         // letter ever leaves, encoded or not).
-        Return.AddPair('download', FILES_ROUTE + '?path=' +
-          TNetEncoding.URL.Encode(MaskDriveText(FName, FullPath)));
+        Return.AddPair('download', DownloadLinkFor(FName, FullPath));
         Return.AddPair('downloadNote', SN_FETCH_DOWNLOAD);
       end;
       if LinkOnly then
