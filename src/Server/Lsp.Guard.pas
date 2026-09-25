@@ -589,13 +589,13 @@ type
   end;
 
 var
-  GLoaded: Boolean = False;
+  // Modo local de lanzamiento (baterias, desarrollo): lo carga LoadSecurity
+  // con todo lo demas. Sin banderas perezosas por clave (25-sep-2026).
   GRoots: TArray<string>;
   GRootsInvalid: Boolean = False; // Roots= had text but NO valid root: fail closed
-  GRoLoaded: Boolean = False;
-  GRoPaths: TArray<string>;       // ReadOnlyPaths del modo local de lanzamiento
-  GRoRootsLoaded: Boolean = False;
-  GRoRoots: TArray<string>;       // ReadOnlyRoots del modo local de lanzamiento
+  GRoPaths: TArray<string>;       // ReadOnlyPaths del modo local
+  GRoRoots: TArray<string>;       // ReadOnlyRoots del modo local
+  GVaultEnvWritable: Boolean = False; // DELPHI_MCP_VAULT_READONLY=0
   GProcessReadOnly: Boolean = False;
   GSecLoaded: Boolean = False;
   GAuthToken: string;
@@ -642,6 +642,25 @@ begin
   Result := TRequestWorkspaceIx1;
   if Result = 0 then
     Result := GStdioIx1;
+end;
+
+{ EL resolvedor del workspace activo: la UNICA forma de preguntar "que vale
+  para esta sesion". Antes cada accesor repetia el par "si hay workspace
+  activo, su campo; si no, el global" (18 copias medidas el 25-sep-2026):
+  una clave nueva obligaba a escribir las dos mitades a mano, y olvidar la
+  del workspace hacia caer la clave al global SIN RUIDO - un token con un
+  permiso que otro operador declaro para otro token. La regla de v0.98 ("un
+  workspace tiene exactamente lo que declara") la cumplian 18 copias; ahora
+  la cumple este par. David: "si una aplicacion repite mucho una accion hay
+  que centralizarla con parametros, por salud del codigo". }
+function HasActiveWS: Boolean;
+begin
+  Result := (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces));
+end;
+
+function ActiveWS: TWorkspaceDef;
+begin
+  Result := GWorkspaces[TWorkspaceIx1 - 1];
 end;
 
 { 'a;b;c' -> resolved roots with trailing delimiter; quotes tolerated,
@@ -819,15 +838,15 @@ end;
 { Confinamiento y carpetas compartidas: la declaracion del workspace, sin herencia. }
 function AgentConfinementNow: Boolean;
 begin
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAgentConfinement = 1); // ausente = apagado
+  if HasActiveWS then
+    Exit(ActiveWS.OvAgentConfinement = 1); // ausente = apagado
   Result := GAgentConfinement;
 end;
 
 function SharedFoldersNow: TArray<string>;
 begin
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvSharedFolders); // ausente = ninguna
+  if HasActiveWS then
+    Exit(ActiveWS.OvSharedFolders); // ausente = ninguna
   Result := GSharedFolders;
 end;
 
@@ -854,8 +873,8 @@ end;
 
 function CurrentWorkspaceName: string;
 begin
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Result := GWorkspaces[TWorkspaceIx1 - 1].Name
+  if HasActiveWS then
+    Result := ActiveWS.Name
   else
     Result := '';
 end;
@@ -1101,6 +1120,19 @@ begin
     .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
   GSharedFolders := LowerCase(GetEnvironmentVariable('DELPHI_MCP_SHARED_FOLDERS'))
     .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+  // Las claves de JAULA del modo local, aqui con las demas: hasta el
+  // 25-sep-2026 Roots, ReadOnlyPaths, ReadOnlyRoots y VaultReadOnly se
+  // leian cada una en su primer uso, con su propia cache - cuatro
+  // cargadores mas que este, y cuatro sitios donde olvidar una mitad.
+  var RawRootsEnv := GetEnvironmentVariable('DELPHI_MCP_ROOTS');
+  GRoots := ParseRootsList(RawRootsEnv);
+  // Fail CLOSED: Roots con texto pero nada parseado = nada permitido.
+  GRootsInvalid := (RawRootsEnv.Trim <> '') and (Length(GRoots) = 0);
+  GRoPaths := ParseReadOnlyList(GetEnvironmentVariable('DELPHI_MCP_READONLY_PATHS'), GRoots);
+  GRoRoots := ParseRootsList(GetEnvironmentVariable('DELPHI_MCP_READONLY_ROOTS'));
+  // El entorno gana en AMBOS sentidos para el vault del modo local (las
+  // baterias fuerzan un vault de solo lectura por encima de cualquier ini).
+  GVaultEnvWritable := GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY') = '0';
   IniPath := SettingsIniPath;
   if TFile.Exists(IniPath) then
   begin
@@ -1243,24 +1275,24 @@ end;
 function AllowRemoteRun: Boolean;
 begin
   // workspace con nombre: SU declaracion, sin herencia (ausente = off)
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowRemoteRun = 1); // ausente = apagado
+  if HasActiveWS then
+    Exit(ActiveWS.OvAllowRemoteRun = 1); // ausente = apagado
   Result := GAllowRemoteRun;
 end;
 
 function LibraryZoneEnabled: Boolean;
 begin
   // workspace con nombre: SU declaracion, sin herencia (ausente = off)
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvLibraryZone = 1); // ausente = apagado
+  if HasActiveWS then
+    Exit(ActiveWS.OvLibraryZone = 1); // ausente = apagado
   Result := GLibraryZone;
 end;
 
 function AllowTests: Boolean;
 begin
   // workspace con nombre: SU declaracion, sin herencia (ausente = off)
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowTests = 1); // ausente = apagado
+  if HasActiveWS then
+    Exit(ActiveWS.OvAllowTests = 1); // ausente = apagado
   Result := GAllowTests;
 end;
 
@@ -1526,8 +1558,8 @@ function GitRemoteHosts: string;
 begin
   LoadSecurity;
   // workspace con nombre: SUS remotos declarados, sin herencia
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].GitRemotes);
+  if HasActiveWS then
+    Exit(ActiveWS.GitRemotes);
   Result := GGitRemotes.Trim;
 end;
 
@@ -1535,8 +1567,8 @@ function RemoteProbeHosts: string;
 begin
   LoadSecurity;
   // workspace con nombre: SUS hosts declarados, sin herencia
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].RemoteHosts);
+  if HasActiveWS then
+    Exit(ActiveWS.RemoteHosts);
   Result := GRemoteHosts.Trim;
 end;
 
@@ -1550,8 +1582,8 @@ begin
   // lista vacia ya no significa "cualquiera de la jaula" sino NADA: era el
   // unico permiso que fallaba abierto, al reves que todo el resto del
   // servidor. Lo que no se declara no existe.
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Lista := GWorkspaces[TWorkspaceIx1 - 1].RemoteProjects
+  if HasActiveWS then
+    Lista := ActiveWS.RemoteProjects
   else
     Lista := GRemoteProjects;
   if Length(Lista) = 0 then
@@ -1578,8 +1610,8 @@ end;
 function AllowBuildScripts: Boolean;
 begin
   // workspace con nombre: SU declaracion, sin herencia (ausente = off)
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvAllowBuildScripts = 1); // ausente = apagado
+  if HasActiveWS then
+    Exit(ActiveWS.OvAllowBuildScripts = 1); // ausente = apagado
   Result := GAllowBuildScripts;
 end;
 
@@ -1606,8 +1638,8 @@ end;
 function PreferredDelphiVersion: string;
 begin
   LoadSecurity;
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Result := GWorkspaces[TWorkspaceIx1 - 1].DelphiVersion
+  if HasActiveWS then
+    Result := ActiveWS.DelphiVersion
   else
     Result := GDelphiVersion;
   Result := Result.Trim;
@@ -1622,8 +1654,8 @@ begin
   // El vault es del workspace ACTIVO, como todo lo demas (v0.98): un
   // workspace sin VaultPath= NO tiene vault. Solo el por defecto usa el
   // entorno / [Workspace].
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Result := GWorkspaces[TWorkspaceIx1 - 1].VaultPath
+  if HasActiveWS then
+    Result := ActiveWS.VaultPath
   else
     Result := GVaultPath;
   Result := Result.Trim.Trim(['"']).Trim;
@@ -1658,8 +1690,6 @@ begin
 end;
 
 function VaultWritable: Boolean;
-var
-  EnvRO: string;
 begin
   Result := False;
   if not VaultConfigured then
@@ -1668,14 +1698,11 @@ begin
   // Solo lectura POR DEFECTO: escribir en el vault se pide a proposito.
   // Un workspace con nombre tiene exactamente lo que declara: VaultReadOnly=0
   // o nada de escritura.
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].OvVaultReadOnly = 0);
+  if HasActiveWS then
+    Exit(ActiveWS.OvVaultReadOnly = 0);
   // Workspace por defecto: el entorno gana en AMBOS sentidos (las baterias
   // fuerzan un vault de solo lectura por encima de cualquier ini).
-  EnvRO := GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY');
-  if EnvRO = '0' then
-    Exit(True);
-  Result := False;
+  Result := GVaultEnvWritable; // leido por LoadSecurity con las demas claves
 end;
 
 { Si HAY vault en alguna parte (workspace por defecto o cualquier seccion):
@@ -1909,8 +1936,8 @@ var
 begin
   Result := False;
   LoadSecurity;
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Lista := GWorkspaces[TWorkspaceIx1 - 1].AdbDevices
+  if HasActiveWS then
+    Lista := ActiveWS.AdbDevices
   else
     Lista := GAdbDevices;
   Host := ATarget;
@@ -2469,57 +2496,31 @@ begin
 end;
 
 function WorkspaceRoots: TArray<string>;
-var
-  Raw: string;
 begin
   // A token-scoped session sees ITS workspace's roots as the whole world:
   // every jail check, listing and scan downstream of this ONE function
-  // inherits the boundary. Overlap is deliberate and never subtracts - the
-  // wide workspace still sees a subtree that is also some other workspace's
-  // root (operator decision 2026-08-28, v0.88).
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].Roots);
-  if not GLoaded then
-  begin
-    // Modo local de lanzamiento: SOLO el entorno. El ini ya no tiene
-    // seccion generica (v0.98) - una jaula del ini es la de un workspace.
-    Raw := GetEnvironmentVariable('DELPHI_MCP_ROOTS');
-    // Quotes around a root (Roots="D:\My Projects") are tolerated; see
-    // ParseRootsList (shared with the [Workspace.*] sections).
-    GRoots := ParseRootsList(Raw);
-    // Fail CLOSED: if Roots was configured but nothing parsed, a typo must
-    // never silently leave the server unrestricted.
-    GRootsInvalid := (Raw.Trim <> '') and (Length(GRoots) = 0);
-    GLoaded := True;
-  end;
+  // inherits the boundary. Overlap is deliberate and never subtracts (v0.88).
+  if HasActiveWS then
+    Exit(ActiveWS.Roots);
+  // Modo local de lanzamiento: SOLO el entorno, leido por el cargador con
+  // todo lo demas (antes aqui, en el primer uso, con cache propia).
+  LoadSecurity;
   Result := GRoots;
 end;
 
 function WorkspaceReadOnlyPaths: TArray<string>;
 begin
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].ReadOnlyPaths);
-  if not GRoLoaded then
-  begin
-    // Modo local de lanzamiento (baterias, desarrollo): solo el entorno,
-    // igual que los roots. Se resuelve CONTRA los roots, no contra el
-    // directorio actual del proceso.
-    GRoPaths := ParseReadOnlyList(
-      GetEnvironmentVariable('DELPHI_MCP_READONLY_PATHS'), WorkspaceRoots);
-    GRoLoaded := True;
-  end;
+  if HasActiveWS then
+    Exit(ActiveWS.ReadOnlyPaths);
+  LoadSecurity; // modo local: resuelto contra GRoots en el cargador
   Result := GRoPaths;
 end;
 
 function WorkspaceReadOnlyRoots: TArray<string>;
 begin
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) then
-    Exit(GWorkspaces[TWorkspaceIx1 - 1].ReadOnlyRoots);
-  if not GRoRootsLoaded then
-  begin
-    GRoRoots := ParseRootsList(GetEnvironmentVariable('DELPHI_MCP_READONLY_ROOTS'));
-    GRoRootsLoaded := True;
-  end;
+  if HasActiveWS then
+    Exit(ActiveWS.ReadOnlyRoots);
+  LoadSecurity; // modo local: el entorno, cargado UNA vez con todo lo demas
   Result := GRoRoots;
 end;
 
@@ -3596,9 +3597,9 @@ begin
     Exit(not MatchText(N, GToolsOnly));
   // a workspace may carry its own profile; it wins over the global one
   Prof := GToolsProfile;
-  if (TWorkspaceIx1 > 0) and (TWorkspaceIx1 <= Length(GWorkspaces)) and
-     (GWorkspaces[TWorkspaceIx1 - 1].Profile <> '') then
-    Prof := GWorkspaces[TWorkspaceIx1 - 1].Profile;
+  if HasActiveWS and
+     (ActiveWS.Profile <> '') then
+    Prof := ActiveWS.Profile;
   if Prof = 'reader' then
     Exit(not MatchText(N, READER));
   if Prof = 'coder' then
