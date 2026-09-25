@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Changed
+
+- `check-binding` is now engine (`Lsp.DesignerBinding`) and runs where an agent
+  needs it, not only on request: `delphi_designer lint` includes it when the
+  `.pas` is next to the form, every WRITE to a designer through `delphi_edit`
+  reports it at once, and `delphi_edit insert=metodo` without `visibility`
+  declares the method in `published` when the paired designer already wires
+  it as an event (`OnClick = Name`), saying so. Found by hermes on 2026-09-25:
+  a handler left in `public`, green build, "Invalid property value" when the
+  form loaded on the target - the exact case check-binding had caught since
+  round 12, for whoever asked.
+
 ## [1.2.2] - 2026-09-25
 
 ### Added

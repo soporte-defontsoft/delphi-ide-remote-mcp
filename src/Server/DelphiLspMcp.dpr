@@ -114,7 +114,8 @@ uses
   Lsp.Attributes in 'Lsp.Attributes.pas',
   Lsp.Imagen in 'Lsp.Imagen.pas',
   Lsp.PackageMap in 'Lsp.PackageMap.pas',
-  Lsp.DesignerBin in 'Lsp.DesignerBin.pas';
+  Lsp.DesignerBin in 'Lsp.DesignerBin.pas',
+  Lsp.DesignerBinding in 'Lsp.DesignerBinding.pas';
 
 {$R *.res}
 

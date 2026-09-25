@@ -166,6 +166,77 @@ check('fuera de jaula / no designer rechazado', 'RECHAZADO' in r, r[:150])
 r = call('delphi_designer', {'command': 'volar'})
 check('comando invalido', 'error' in r.lower() or 'RECHAZADO' in r, r[:120])
 
+# ---- eventos por nombre contra el .pas pareja, en lint, al ESCRIBIR y en insert=metodo ----
+# hermes 25-sep-2026: OnClick = btnHelpClick con el handler en public (insert=metodo
+# sin visibility lo deja al final de la clase): build verde, "Invalid property value"
+# al cargar el form en Zorin. check-binding ya lo sabia; nadie lo llamaba.
+EVP = os.path.join(BASE, 'UEv.pas')
+EV = os.path.join(BASE, 'UEv.dfm')
+open(EVP, 'w', encoding='utf-8', newline='\r\n').write(
+"""unit UEv;
+
+interface
+
+uses
+  System.Classes, Vcl.Forms, Vcl.StdCtrls;
+
+type
+  TFormEv = class(TForm)
+    btnOk: TButton;
+    btnHelp: TButton;
+    btnNada: TButton;
+    procedure btnOkClick(Sender: TObject);
+  private
+    procedure btnHelpClick(Sender: TObject);
+  public
+    { Public declarations }
+  end;
+
+implementation
+
+{$R *.dfm}
+
+procedure TFormEv.btnOkClick(Sender: TObject);
+begin
+end;
+
+procedure TFormEv.btnHelpClick(Sender: TObject);
+begin
+end;
+
+end.
+""")
+open(EV, 'w', encoding='utf-8', newline='\r\n').write(
+"""object FormEv: TFormEv
+  Caption = 'Ev'
+  object btnOk: TButton
+    Caption = 'Ok'
+    OnClick = btnOkClick
+  end
+  object btnHelp: TButton
+    Caption = '?'
+    OnClick = btnHelpClick
+  end
+  object btnNada: TButton
+    Caption = 'x'
+    OnClick = btnNadaClick
+  end
+end
+""")
+r = call('delphi_designer', {'command': 'lint', 'path': EV})
+check('lint: el handler en private se avisa (el cargador solo ve published)', 'btnHelpClick' in r and 'NO esta en published' in r, r[:600])
+check('lint: el handler inexistente se avisa', 'btnNadaClick' in r and 'no esta declarado' in r, r[:600])
+check('lint: el handler published NO se avisa', 'btnOkClick' not in r, r[:600])
+r = call('delphi_edit', {'path': EV, 'old': "    Caption = '?'", 'new': "    Caption = 'Ayuda'"})
+check('ESCRIBIR el designer avisa al momento del evento no resoluble', r.startswith('ESCRITO') and 'btnHelpClick' in r and 'NO cuadra con su clase' in r, r[:700])
+r = call('delphi_edit', {'path': EVP, 'insert': 'metodo', 'inclass': 'TFormEv', 'code': 'procedure btnNadaClick(Sender: TObject);\nbegin\nend;'})
+src = open(EVP, encoding='utf-8').read()
+check('insert=metodo sin visibility + evento cableado en el designer -> published, y lo dice', 'published elegida por la tool' in r and src.index('procedure btnNadaClick') < src.index('  private'), r[:500])
+r = call('delphi_designer', {'command': 'lint', 'path': EV})
+check('tras el insert, el lint ya no avisa de btnNadaClick (y sigue avisando de btnHelpClick)', 'btnNadaClick' not in r and 'btnHelpClick' in r, r[:500])
+r = call('delphi_designer', {'command': 'lint', 'path': DFM})
+check('lint de un designer SIN .pas pareja sigue limpio (no hay contra que comparar)', 'LINT LIMPIO' in r, r[:200])
+
 proc.kill()
 print('\n== designer battery: %d PASS / %d FAIL ==' % (P, F))
 sys.exit(1 if F else 0)

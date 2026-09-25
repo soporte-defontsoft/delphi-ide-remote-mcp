@@ -3115,11 +3115,24 @@ const
 
   SN_DESIGNER_LINT_OK_FMT =
     'LINT LIMPIO: %s no tiene clases desconocidas, propiedades no publicadas ' +
-    'ni valores de enum invalidos.';
+    'ni valores de enum invalidos, y si tiene .pas pareja cuadra con su clase ' +
+    '(check-binding: cada evento apunta a un metodo declarado y published).';
 
   SN_DESIGNER_LINT_BAD_FMT =
     '%d avisos del designer en %s (clase desconocida, propiedad no publicada ' +
-    'o valor de enum inexistente):';
+    'o valor de enum inexistente, o el .dfm no cuadra con su clase: evento a ' +
+    'un metodo inexistente o NO published, objeto sin campo, nombre repetido):';
+
+  SN_DESIGNER_BINDING_LINT_HEADER =
+    '*** AVISO DESIGNER: el form NO cuadra con su clase (check-binding). El ' +
+    'build pasa, porque el compilador no mira esto, y la app muere al CARGAR ' +
+    'el form: un evento cableado a un metodo que no esta en published no se ' +
+    'resuelve ("Invalid property value" / EReadError). Arreglalo antes de ' +
+    'desplegar: ***';
+
+  SN_PATCH_INSERT_PUBLISHED_BY_EVENT_FMT =
+    'seccion published elegida por la tool: el designer pareja %s cablea ' +
+    '''%s'' como evento, y el streaming solo resuelve metodos published';
 
   // ---- delphi_git: ramas ----
 

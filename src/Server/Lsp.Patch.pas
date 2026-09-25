@@ -297,7 +297,8 @@ uses
   Lsp.Discovery,
   Lsp.Texts,
   Lsp.DesignerMeta,
-  Lsp.DesignerBin;
+  Lsp.DesignerBin,
+  Lsp.DesignerBinding;
 
 const
   BACKUP_SUB = '__delphi-patch';
@@ -1971,6 +1972,7 @@ begin
         var R1 := '';
         var DeclLinea := '';
         var DeclNota := '';
+        var NotaPublished := '';
         if IDeclExiste >= 0 then
           DeclNota := Format('la clase YA declaraba ''%s'' (linea %d) y NO se anade ' +
             'segunda declaracion (si querias un OVERLOAD, su declaracion va con old/new)',
@@ -1983,6 +1985,19 @@ begin
         var Vis := A.Visibility.Trim.ToLower;
         if Vis = 'default' then
           Vis := 'published';
+        // Sin visibility, un metodo que el designer pareja YA cablea como
+        // evento (OnClick = Nombre) va a published: es lo unico que resuelve
+        // el streaming (hermes, 25-sep-2026: cayo en public, build verde,
+        // "Invalid property value" al cargar el form en Zorin).
+        if Vis = '' then
+          for var ExtD in ['.dfm', '.fmx'] do
+            if DesignerWiresMethodFile(ChangeFileExt(A.Path, ExtD), Nombre) then
+            begin
+              Vis := 'published';
+              NotaPublished := Format(SN_PATCH_INSERT_PUBLISHED_BY_EVENT_FMT,
+                [TPath.GetFileName(ChangeFileExt(A.Path, ExtD)), Nombre]);
+              Break;
+            end;
         if Vis <> '' then
         begin
           var IVis := -1;
@@ -2075,10 +2090,11 @@ begin
           Exit(Format('INSERT metodo en %s: %s. Solo se ha escrito la implementacion.'#10 +
             '--- Implementacion ''%s'' en la frontera legal ---'#10'%s',
             [A.ClassName_, DeclNota, Copy(FirmaCual, 1, 70), R2]));
-        Exit(Format('INSERT metodo en %s: la tool ha hecho las DOS mitades.'#10 +
+        Exit(Format('INSERT metodo en %s: la tool ha hecho las DOS mitades.%s'#10 +
           '--- Mitad 1: declaracion ''%s'' dentro de la clase ---'#10'%s'#10 +
           '--- Mitad 2: implementacion ''%s'' en la frontera legal ---'#10'%s',
-          [A.ClassName_, DeclLinea.Trim, R1, Copy(FirmaCual, 1, 70), R2]));
+          [A.ClassName_, IfThen(NotaPublished <> '', #10'  ' + NotaPublished, ''),
+           DeclLinea.Trim, R1, Copy(FirmaCual, 1, 70), R2]));
       end;
 
       // ---------- DELETE LINE ----------
@@ -2131,10 +2147,15 @@ var
 begin
   Result := [];
   Raw := DesignerMetaLint(APath.ToLower.EndsWith('.fmx'), ALines);
-  if Length(Raw) = 0 then
+  // El form contra su clase (Lsp.DesignerBinding): un OnClick a un metodo
+  // en public compila y revienta al cargar el form. Se avisa AL ESCRIBIR.
+  var Bind := DesignerBindingWarnings(APath, ALines);
+  if (Length(Raw) = 0) and (Length(Bind) = 0) then
     Exit;
   Res := TStringList.Create;
   try
+    if Length(Raw) > 0 then
+    begin
     for I := 0 to High(Raw) do
     begin
       if I >= 8 then
@@ -2153,6 +2174,12 @@ begin
       'propio framework). El build las empaqueta igual (solo valida ' +
       'gramatica) y la app CRASHEA al cargar el form en runtime - en ' +
       'Android muere sin mensaje. Corrigelas antes de desplegar: ***');
+    end;
+    if Length(Bind) > 0 then
+    begin
+      Res.Add(SN_DESIGNER_BINDING_LINT_HEADER);
+      Res.AddStrings(Bind);
+    end;
     Result := Res.ToStringArray;
   finally
     Res.Free;

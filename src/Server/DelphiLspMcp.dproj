@@ -220,6 +220,7 @@
         <DCCReference Include="Lsp.Imagen.pas"/>
         <DCCReference Include="Lsp.PackageMap.pas"/>
         <DCCReference Include="Lsp.DesignerBin.pas"/>
+        <DCCReference Include="Lsp.DesignerBinding.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

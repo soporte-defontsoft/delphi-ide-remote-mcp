@@ -544,6 +544,13 @@ SEMANTIC RENAME. Point at the identifier (path + 0-based line/character, same co
 
 ### `delphi_designer`
 
+Since 1.2.3 `check-binding` is not only on request: `lint` includes it when the
+`.pas` sits next to the form, every write to a designer through `delphi_edit`
+reports it at once, and `delphi_edit insert=metodo` without `visibility` puts a
+method in `published` when the paired designer already wires it as an event. An
+event to a method that is not `published` builds fine and kills the form at load
+time ("Invalid property value"): the loader only sees published methods.
+
 FORMS AND COMPONENTS, structured — never guess what a class publishes or what a form contains. `info class=TButton`: every property the framework really publishes for that class (kind and type, events apart), from RTTI tables generated at release time (`src/DesignerMetaDump`). `prop class=X prop=Y`: one property in detail, with the legal members when it is an enum/set and the runtime class of class-typed properties. `tree path=<.dfm|.fmx>`: the component tree (name, class, line). `get path=... component=<Name>`: that component's block verbatim. `lint path=...`: unknown classes (warned once per class; root, inherited and inline excluded), properties the class does not publish, enum values that do not exist. `check-binding path=<.dfm|.fmx>` (+ `unit` when the .pas is not beside it): does the designer agree with the form class in the .pas — components with no published field, events naming a method that is not published, published fields with no component, duplicate names, all of which compile and then throw when the form is created. `layout path=<.dfm>`: WHERE things end up on a VCL form — resolves Align and returns every control's rectangle plus the ones of size zero, outside their container, overlapping or clipped by the bands around them. Text designers only (binary TPF0 refused). Read-only: editing a form is phase 2 and will go through `delphi_changeset`.
 
 *Access: read-only (always available).*
