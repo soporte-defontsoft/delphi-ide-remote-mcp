@@ -406,6 +406,41 @@ except Exception:
     ok = False
 check('O un proyecto normal SI compila, con la salida dentro', ok and os.path.exists(
     os.path.join(os.path.dirname(dpn), 'Win64', 'Debug', 'App.exe')), out[:300])
+# ---- R: a project may not redefine an ENV property the IDE's own <Import>s
+# resolve through. CodeGear.Common.Targets imports $(EnvironmentSettings),
+# $(EnvOptions), $(Profiles), $(GlobalOptionFile) directly; CodeGear.Profiles.
+# Targets (and the UserTools.proj every .dproj imports) resolve their file
+# under $(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(ProductVersion). The
+# server trusts those IDE imports without reading them, so a project that
+# DEFINES one of these redirects a trusted import to a file it chose - code
+# loaded at build time with no <Import> visible in the .dproj. Refused before
+# msbuild. PlatformSDK is NOT here: the project legitimately sets it (set-sdk).
+def con_propiedad(nombre, valor='algo'):
+    def f(x, d):
+        return x.replace('</Project>',
+                         '  <PropertyGroup>\n    <' + nombre + '>' + valor + '</' + nombre + '>\n'
+                         '  </PropertyGroup>\n</Project>')
+    return f
+
+
+RESERVADAS = ('EnvironmentSettings', 'EnvOptions', 'Profiles', 'GlobalOptionFile',
+              'APPDATA', 'BDSAPPDATABASEDIR', 'ProductVersion')
+for nombre in RESERVADAS:
+    out = build(proyecto_con('res-' + nombre.lower(), con_propiedad(nombre)))
+    check('R redefinir ' + nombre + ' (reservada del IDE): RECHAZADO antes de msbuild',
+          out.startswith('RECHAZADO') and 'reservada del IDE' in out and ('define ' + nombre + ',') in out,
+          out[:300])
+# PlatformSDK la fija el proyecto (delphi_config set-sdk): esta puerta NO la toca
+out = build(proyecto_con('res-platformsdk', con_propiedad('PlatformSDK', 'algo.sdk')))
+check('R PlatformSDK (legitima del proyecto) NO la rechaza esta puerta',
+      'reservada del IDE' not in out, out[:300])
+# y un proyecto sin ninguna de ellas sigue compilando
+out = build(proyecto_con('res-limpio', lambda x, d: x))
+try:
+    ok = json.loads(out).get('success') is True
+except Exception:
+    ok = False
+check('R un proyecto sin propiedades reservadas SI compila', ok, out[:300])
 bs.kill()
 
 # ---- T: delphi_test lowers the integrity label of its working folder so the

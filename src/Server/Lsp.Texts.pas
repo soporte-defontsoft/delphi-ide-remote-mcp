@@ -948,6 +948,19 @@ const
     'compila el operador fuera de este servidor, donde esos eventos corren. ' +
     'Con AllowBuildScripts=1 en el workspace se ejecutarian.';
 
+  SR_BUILD_RESERVED_PROP_FMT =
+    'RECHAZADO: el proyecto (o algo que importa) define %s, una propiedad ' +
+    'reservada del IDE. Los <Import> de CodeGear.Common.Targets y ' +
+    'CodeGear.Profiles.Targets (y el UserTools.proj de todo .dproj) resuelven ' +
+    'a traves de ella el fichero que cargan, y este servidor confia esos ' +
+    '<Import> del IDE sin leerlos: redefinirla desvia uno de ellos a un ' +
+    'fichero que elige el proyecto, y asi se carga y ejecuta codigo durante ' +
+    'el build SIN un <Import> visible en el .dproj. Este servidor solo ' +
+    'compila, nunca ejecuta: quita esa propiedad del proyecto y de lo que ' +
+    'importa (delphi_config no la escribe). Para que un proyecto de ' +
+    'confianza ejecute de verdad sus tareas, el operador lo habilita con ' +
+    '[Workspace.<nombre>] AllowBuildScripts=1.';
+
   // ---------------------------------------------------------------------
   // vault_* (knowledge vault: Markdown notes linked with [[wikilinks]])
   // These descriptions ARE the doctrine the agent sees: lazy loading, write

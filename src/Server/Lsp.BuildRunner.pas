@@ -1229,6 +1229,19 @@ begin
         [TPath.GetFullPath(ADprojPath), Hazard]));
       raise Exception.Create(Format(SR_BUILD_HAZARD_FMT, [Hazard]));
     end;
+    // Parte 2 del mismo gate: una propiedad de entorno que el IDE reserva,
+    // redefinida por el proyecto o por algo que importa, desvia uno de los
+    // <Import> propios del IDE (que confiamos sin leer, IsStockImport) a un
+    // fichero elegido por el proyecto - codigo cargado en el build sin un
+    // <Import> visible. Mismo opt-in (AllowBuildScripts) que el hazard: un
+    // proyecto de confianza ya puede ejecutar de todos modos.
+    var ResProp := RedefinedIdeImportProperty(TPath.GetFullPath(ADprojPath));
+    if ResProp <> '' then
+    begin
+      TLogger.Warning(Format('delphi_build: REFUSED "%s" - redefines reserved IDE property %s',
+        [TPath.GetFullPath(ADprojPath), ResProp]));
+      raise Exception.Create(Format(SR_BUILD_RESERVED_PROP_FMT, [ResProp]));
+    end;
     EventosSaltados := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), False) <> '';
   end;
   // Before a single line is compiled: what does this project pull in from

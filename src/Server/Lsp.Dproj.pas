@@ -159,6 +159,18 @@ function BuildOutputDirs(const ADprojPath, APlatform, AConfig: string): TArray<T
   (EffectiveProperty). }
 function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): string;
 
+{ La propiedad de ENTORNO del IDE que este proyecto -o algo que importa-
+  REDEFINE, o '' si no toca ninguna. Los <Import> de CodeGear.Common.Targets
+  (EnvironmentSettings/EnvOptions/Profiles/GlobalOptionFile) y de
+  CodeGear.Profiles.Targets, mas el UserTools.proj de todo .dproj, resuelven A
+  TRAVES de estas propiedades el fichero que cargan; el servidor confia esos
+  <Import> del IDE sin leerlos (IsStockImport), asi que redefinir una las
+  desvia a un fichero elegido por el proyecto: codigo cargado y ejecutado en el
+  build SIN un <Import> visible. Se mira la misma cadena que
+  BuildOutputUndeclared (el .dproj y lo que importa del proyecto). Es la parte
+  2 del gate del build, hermana de BuildOutputUndeclared (la 1). }
+function RedefinedIdeImportProperty(const ADprojPath: string): string;
+
 implementation
 
 uses
@@ -855,6 +867,36 @@ begin
     Exit('DCC_DcpOutput');
   if Cpp and not Declara('DCC_HppOutput') then
     Exit('DCC_HppOutput');
+end;
+
+const
+  // Las propiedades de ENTORNO con las que los <Import> propios del IDE
+  // localizan lo que cargan: los cuatro punteros a fichero de
+  // CodeGear.Common.Targets (<Import Project="$(EnvironmentSettings)"> y sus
+  // hermanos EnvOptions/Profiles/GlobalOptionFile), y la raiz
+  // $(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(ProductVersion) con la que
+  // CodeGear.Profiles.Targets importa el .sdk y todo .dproj importa
+  // UserTools.proj. Un proyecto NUNCA las define: las pone el entorno del IDE.
+  // PlatformSDK queda fuera aposta - esa SI la fija el proyecto (delphi_config
+  // set-sdk) y vive en proyectos reales; rechazarla romperia builds legitimos.
+  RESERVED_IDE_IMPORT_PROPS: array [0 .. 6] of string = (
+    'EnvironmentSettings', 'EnvOptions', 'Profiles', 'GlobalOptionFile',
+    'APPDATA', 'BDSAPPDATABASEDIR', 'ProductVersion');
+
+function RedefinedIdeImportProperty(const ADprojPath: string): string;
+var
+  Xml, Prop: string;
+begin
+  Result := '';
+  // El .dproj y lo que importa del proyecto (ProjectXmlChain, el mismo lector
+  // que BuildOutputUndeclared). Una definicion <Prop>...</Prop> en cualquier
+  // fichero de la cadena cuenta, sin evaluar su condicion (una de mas es
+  // prudencia); una referencia $(Prop) no es una definicion y AllTagValues no
+  // la ve, asi que el $(APPDATA)\...\UserTools.proj de todo .dproj no cuenta.
+  for Xml in ProjectXmlChain(ADprojPath) do
+    for Prop in RESERVED_IDE_IMPORT_PROPS do
+      if Length(AllTagValues(Xml, Prop)) > 0 then
+        Exit(Prop);
 end;
 
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
