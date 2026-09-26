@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Added
+
+- **`delphi_git worktree`**: another version of the repo next to it, so an
+  agent - a remote one above all - can build and test an old release and
+  compare, without leaving the MCP and without touching anybody's working
+  tree. `args=add` with `path` (a NEW folder inside the roots, like the
+  destination of a clone) and `ref` (a tag, branch or commit, checked out
+  detached); `args=list` shows them (a query: allowed read-only);
+  `args=remove` takes away only what `list` shows, never the main copy, never
+  with changes (no `--force`) and never with a link inside - measured: `git
+  worktree remove` crosses a junction in an ignored folder and empties what
+  is behind it. No temp folders and no cleanups at start: whoever adds one
+  removes it. Paths are compared by their real path (git reports long names,
+  a caller may pass the 8.3 form). New battery `test_git_worktree` (26
+  checks; the 1.3.4 binary fails 21).
+
+### Changed
+
+- The read-only credential's git classification calls `GitCommandIsQuery`
+  instead of a hand-written copy of it; `RecorreSinEnlaces` (`Lsp.Guard`)
+  can report the links it does not enter.
+
 ## [1.3.4] - 2026-09-26
 
 ### Security

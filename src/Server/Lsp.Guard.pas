@@ -353,8 +353,14 @@ type
   ni copiar (esos son BorraArbol y CopiaArbol): el etiquetado de integridad
   de delphi_test cruzaba un junction con soAllDirectories y bajaba la
   etiqueta de un fichero de FUERA de la jaula (medido en vivo, 25-sep-2026).
-  Nunca lanza: una rama ilegible se salta. }
-procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta);
+  Nunca lanza: una rama ilegible se salta.
+
+  AAlEnlace (opcional) recibe cada enlace que se encuentra, sin entrar
+  en el: para quien necesita SABER que hay uno antes de hacer algo que
+  si lo cruzaria (quitar un worktree: git lo atraviesa, medido el
+  26-sep-2026). Un parametro del recorredor, no otro recorredor. }
+procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;
+  const AAlEnlace: TVisitaRuta = nil);
 
 { LA regla de enlaces de quien RECORRE un arbol: se sigue solo si lo de
   detras se puede LEER en esta sesion. La usan el copiador, la decision de
@@ -2535,7 +2541,9 @@ end;
 function GitCommandIsQuery(const ACmd, AArgs, AMessage: string): Boolean;
 begin
   Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show']) or
-    (MatchText(Trim(ACmd), ['branch', 'tag']) and (Trim(AArgs) = '') and (Trim(AMessage) = ''));
+    (MatchText(Trim(ACmd), ['branch', 'tag']) and (Trim(AArgs) = '') and (Trim(AMessage) = '')) or
+    // worktree list solo ENSENA las copias de trabajo (1.4.0)
+    (SameText(Trim(ACmd), 'worktree') and SameText(Trim(AArgs), 'list'));
 end;
 
 function ToolCallDenied(const AToolName: string;
@@ -2711,11 +2719,10 @@ begin
     Cmd := ArgStr(AArguments, 'command');
     GitArgs := ArgStr(AArguments, 'args');
     GitMsg := ArgStr(AArguments, 'message');
-    // Pure query commands pass. branch/tag only LIST when called with NO args
-    // AND no message (a message makes tag annotated = a write).
-    if MatchText(Cmd, ['status', 'diff', 'log', 'show']) or
-       (MatchText(Cmd, ['branch', 'tag']) and (Trim(GitArgs) = '') and
-        (Trim(GitMsg) = '')) then
+    // Pure query commands pass - la MISMA clasificacion que el modo solo
+    // lectura y las referencias, GitCommandIsQuery: aqui habia una copia
+    // a mano, y el worktree list de la 1.4.0 solo lo habria aprendido una.
+    if GitCommandIsQuery(Cmd, GitArgs, GitMsg) then
       Exit;
     Exit(WriteDenied(Trim('delphi_git ' + Cmd)));
   end;
@@ -3181,7 +3188,8 @@ begin
   Result := (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0);
 end;
 
-procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta);
+procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;
+  const AAlEnlace: TVisitaRuta = nil);
 var
   Entradas: TArray<string>;
   E: string;
@@ -3194,14 +3202,23 @@ begin
   for E in Entradas do
   begin
     if EsEnlace(E) then
-      Continue; // ni se visita ni se entra: lo de detras no es de este arbol
+    begin
+      // ni se visita ni se entra: lo de detras no es de este arbol. Quien
+      // necesita saber que esta aqui, lo recibe.
+      if Assigned(AAlEnlace) then
+        try
+          AAlEnlace(E);
+        except
+        end;
+      Continue;
+    end;
     try
       AVisita(E);
     except
       // una entrada que no se deja tocar no para las demas
     end;
     if TDirectory.Exists(E) then
-      RecorreSinEnlaces(E, AVisita);
+      RecorreSinEnlaces(E, AVisita, AAlEnlace);
   end;
 end;
 

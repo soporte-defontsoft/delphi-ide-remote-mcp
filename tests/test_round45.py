@@ -167,6 +167,8 @@ PROBAR = [
     ('delphi_designer', 'path', {'command': 'tree', 'path': AJENO_DFM}),
     ('delphi_styles', 'path', {'command': 'view', 'path': AJENO_STYLE}),
     ('delphi_git', 'repo', {'repo': FUERA, 'command': 'status'}),
+    ('delphi_git', 'path', {'repo': JAIL, 'command': 'worktree', 'args': 'add',
+                            'path': os.path.join(FUERA, 'wt'), 'ref': 'v1'}),
     ('delphi_test', 'path', {'command': 'discover', 'path': FUERA}),
     ('delphi_test', 'project', {'command': 'run', 'project': AJENO_DPROJ}),
     ('delphi_desktop', 'out', {'command': 'screenshot', 'out': FUERA}),
@@ -366,13 +368,14 @@ try:
     # escritorio por perfil y gano el "project" marcado que tenia su alias.
     # 22-sep: 43 -> 41, al retirar el alias delphi_adb_linux (out y project).
     # 23-sep: 41 -> 39, al retirar delphi_run (path y workdir).
+    # 26-sep: 39 -> 40, delphi_git gana path (worktree, 1.4.0).
     w = call('delphi_workspace', {})
     try:
         vigilados = json.loads(w).get('server', {}).get('jailedParams', -1)
     except Exception:
         vigilados = -1
-    check('G4 el suelo de la puerta vigila los 39 parametros marcados',
-          vigilados == 39, 'jailedParams=%s' % vigilados)
+    check('G4 el suelo de la puerta vigila los 40 parametros marcados',
+          vigilados == 40, 'jailedParams=%s' % vigilados)
 
     # ----------------------------------------------------------------- G2b
     # Los dos parametros de delphi_changeset que la tabla no puede sondar

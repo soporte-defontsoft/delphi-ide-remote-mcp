@@ -3910,6 +3910,48 @@ const
     'RECHAZADO: stash admite push (guardar, por defecto), pop (recuperar) o ' +
     'list. "drop" no esta: destruye trabajo sin vuelta atras.';
 
+  // ---- delphi_git worktree (1.4.0) ----
+
+  SR_GIT_WORKTREE_ARGS =
+    'RECHAZADO: worktree admite args=list (las copias de trabajo de este ' +
+    'repo), add (path=<carpeta NUEVA dentro de tus raices> ref=<tag, rama o ' +
+    'commit>) o remove (path=<una que ensene list>).';
+
+  SR_GIT_WORKTREE_PATH =
+    'RECHAZADO: worktree add/remove necesitan "path": la carpeta de la copia ' +
+    'de trabajo (add: una carpeta NUEVA dentro de tus raices, como el destino ' +
+    'de un clone).';
+
+  SR_GIT_WORKTREE_EXISTS_FMT =
+    'RECHAZADO: %s ya existe. Un worktree va en una carpeta NUEVA: elige otro ' +
+    'nombre, o quita antes la que hay.';
+
+  SR_GIT_WORKTREE_REF =
+    'RECHAZADO: "ref" tiene que ser un tag, una rama o un commit (letras, ' +
+    'cifras y . _ / ~ ^ -, sin empezar por guion): por ejemplo v1.3.2, main, ' +
+    'HEAD~3 o un hash.';
+
+  SR_GIT_WORKTREE_INSIDE_FMT =
+    'RECHAZADO: el worktree no puede ir dentro del propio repositorio (%s): ' +
+    'el arbol principal lo veria como una carpeta sin seguimiento y un ' +
+    '"add -A" se lo llevaria. Ponlo fuera, al lado.';
+
+  SR_GIT_WORKTREE_NOT_LISTED_FMT =
+    'RECHAZADO: %s no es un worktree de este repositorio (command=worktree ' +
+    'args=list ensena los que hay). remove solo quita esos, y nunca la copia ' +
+    'principal.';
+
+  SR_GIT_WORKTREE_LINK_FMT =
+    'RECHAZADO: no quito este worktree porque dentro hay un enlace (%s): git ' +
+    'lo atravesaria y borraria lo que hay detras, que puede no ser tuyo. ' +
+    'Quita antes el enlace y repite.';
+
+  SN_GIT_WORKTREE_ADDED_FMT =
+    'Worktree listo en %s, con esa version suelta (detached): compila y ' +
+    'prueba ahi (delphi_build, delphi_test) para comparar. Es tuyo de ' +
+    'limpiar: quitalo con command=worktree args=remove y el mismo path cuando ' +
+    'acabes; args=list lo ensena mientras siga.';
+
   // ---- delphi_changeset ----
 
   SD_CHANGESET =

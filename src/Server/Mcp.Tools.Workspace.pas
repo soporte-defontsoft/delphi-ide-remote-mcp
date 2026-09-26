@@ -98,12 +98,14 @@ type
     FArgs: string;
     FCreate: Boolean;
     FMessage: string;
+    FPath: string;
+    FRef: string;
   public
     [SchemaDescription('Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots)')]
     [Required]
     [RutaDelServidor]
     property Repo: string read FRepo write FRepo;
-    [SchemaDescription('One of: status | diff | log | show | branch | switch | merge | stash | add | commit | init | push | tag | config | clone | pull | fetch. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push|pop|list (never drop). config: args=user.name|user.email + value in message. clone: URL in message, destination in repo')]
+    [SchemaDescription('One of: status | diff | log | show | branch | switch | merge | stash | add | commit | init | push | tag | config | clone | pull | fetch | worktree. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push|pop|list (never drop). config: args=user.name|user.email + value in message. clone: URL in message, destination in repo. worktree: args=list | add (path=<a NEW folder inside your roots>, ref=<tag|branch|commit>: another version of the repo next to it, detached, to build and compare) | remove (path=<one that list shows>; refused with changes or with a link inside)')]
     [Required]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). They are SPLIT ON SPACES into argv, so a path with spaces goes in double quotes: args="mis notas.txt". There is no shell involved, but shell metacharacters (; | & ` $ < >) are rejected anyway - if a legitimate git option needs one (--pretty=format:...), ask for it with delphi_report instead of trying to smuggle it')]
@@ -112,6 +114,11 @@ type
     property Create: Boolean read FCreate write FCreate;
     [SchemaDescription('commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL')]
     property Message: string read FMessage write FMessage;
+    [SchemaDescription('worktree add: a NEW folder inside your roots for the second working copy (like the destination of a clone). worktree remove: a folder that command=worktree args=list shows')]
+    [RutaDelServidor]
+    property Path: string read FPath write FPath;
+    [SchemaDescription('worktree add: the tag, branch or commit to put there, detached - a version to build and compare, not a place to work (v1.3.2, main, HEAD~3, a commit hash)')]
+    property Ref: string read FRef write FRef;
   end;
 
   TDelphiSearchTool = class(TMCPToolBase<TDelphiSearchParams>)
@@ -747,10 +754,15 @@ begin
   FDescription := 'Whitelisted git operations on a repository of this ' +
     'machine, so a remote agent can bring in code and version its work: ' +
     'status, diff, log, show, branch, switch, merge, stash, add, commit, ' +
-    'init, push, tag, config, clone, pull, fetch. **clone** is the fast way ' +
+    'init, push, tag, config, clone, pull, fetch, worktree. **clone** is the fast way ' +
     'to get a whole repo onto ' +
     'the server (URL in "message", destination directory in "repo", jailed ' +
     'to the workspace roots) - far better than recreating files one by one. ' +
+    '**worktree** puts ANOTHER version of the repo next to it (args=add, ' +
+    'path=<a new folder inside your roots>, ref=<tag|branch|commit>) to build ' +
+    'and test it and compare - how you check an old release from a remote ' +
+    'machine without touching anybody''s working tree; args=list shows them ' +
+    'and args=remove takes one away (it is yours to clean up). ' +
     'commit/tag messages and config values also travel in "message"; push/' +
     'pull use the credentials and remotes stored on the server. No arbitrary ' +
     'git commands, no shell.';
@@ -763,6 +775,7 @@ var
   Cmd, GitArgs, Repo, Output, MsgFile: string;
   ExitCode: Cardinal;
   B: string;
+  Destino, Enlace: string; // worktree
 begin
   MsgFile := '';
   Repo := Params.Repo;
@@ -958,11 +971,97 @@ begin
     else
       GitArgs := 'tag ' + Params.Args; // no args = list tags
   end
+  else if Cmd = 'worktree' then
+  begin
+    // OTRA version del repo al lado, sin tocar el arbol de nadie: con lo que
+    // un agente REMOTO compara con una version anterior sin salirse del MCP
+    // (1.4.0; David, 26-sep-2026: 'lo que nos falta para que el agente remoto
+    // pueda revisar'). Como clone: la carpeta la elige el agente dentro de sus
+    // raices. Sin carpetas temporales ni limpiezas al arrancar (David): la
+    // quita quien la pone, y list se la ensena.
+    var Sub := Params.Args.Trim.ToLower;
+    if Sub = 'list' then
+      GitArgs := 'worktree list'
+    else if (Sub = 'add') or (Sub = 'remove') then
+    begin
+      if Params.Path.Trim = '' then
+        Exit(SR_GIT_WORKTREE_PATH);
+      Destino := ExcludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path.Trim));
+      // Crear o quitar una copia de trabajo es ESCRIBIR alli: la pregunta de
+      // todo escritor, por la ruta real, y nunca en una carpeta muerta.
+      Result := EscrituraDenegada(Destino);
+      if Result = '' then
+        Result := WriteTargetDenied(Destino);
+      if Result <> '' then
+        Exit;
+      if Sub = 'add' then
+      begin
+        if TDirectory.Exists(Destino) or TFile.Exists(Destino) then
+          Exit(Format(SR_GIT_WORKTREE_EXISTS_FMT, [Destino]));
+        if not TRegEx.IsMatch(Params.Ref.Trim, '^[A-Za-z0-9][A-Za-z0-9._/~^-]*$') then
+          Exit(SR_GIT_WORKTREE_REF);
+        // Nunca DENTRO del propio repo: el arbol principal la veria como una
+        // carpeta sin seguimiento, y un add -A se la llevaria.
+        var Raiz := RunCaptured(Format('git.exe -C "%s" rev-parse --show-toplevel',
+          [Repo]), 60000, ExitCode).Trim.Replace('/', '\');
+        // Por la ruta REAL de los dos: git da nombres largos y el agente
+        // puede pasar la forma 8.3 (medido: C:\Users\DFONTA~1 frente a
+        // C:/Users/dfontanet - el texto no casaba y lo dejaba dentro).
+        var RaizReal := ExcludeTrailingPathDelimiter(RealPath(Raiz));
+        var DestinoReal := ExcludeTrailingPathDelimiter(RealPath(Destino));
+        if (ExitCode = 0) and (Raiz <> '') and
+           (SameText(DestinoReal, RaizReal) or
+            StartsText(IncludeTrailingPathDelimiter(RaizReal), DestinoReal)) then
+          Exit(Format(SR_GIT_WORKTREE_INSIDE_FMT, [Raiz]));
+        GitArgs := Format('worktree add --detach "%s" %s', [Destino, Params.Ref.Trim]);
+      end
+      else
+      begin
+        // Solo lo que git lista como worktree de ESTE repo, y nunca el
+        // principal (el primero): remove no sirve para borrar otra cosa.
+        var Lista := RunCaptured(Format('git.exe -C "%s" worktree list --porcelain',
+          [Repo]), 60000, ExitCode);
+        var Listado := False;
+        var DestinoReal := ExcludeTrailingPathDelimiter(RealPath(Destino));
+        var Primero := True;
+        for var Linea in Lista.Split([#10]) do
+          if Linea.StartsWith('worktree ') then
+          begin
+            // por la ruta real, como arriba: git lista nombres largos
+            if not Primero and SameText(DestinoReal, ExcludeTrailingPathDelimiter(
+                 RealPath(Linea.Substring(9).Trim.Replace('/', '\')))) then
+              Listado := True;
+            Primero := False;
+          end;
+        if not Listado then
+          Exit(Format(SR_GIT_WORKTREE_NOT_LISTED_FMT, [Destino]));
+        // git worktree remove ATRAVIESA un enlace de dentro y borra lo que hay
+        // detras (medido el 26-sep-2026: un junction en una carpeta ignorada
+        // dejo vacia una victima de fuera). Con un enlace dentro no se quita.
+        Enlace := '';
+        RecorreSinEnlaces(Destino,
+          procedure(const APath: string)
+          begin
+          end,
+          procedure(const APath: string)
+          begin
+            if Enlace = '' then
+              Enlace := APath;
+          end);
+        if Enlace <> '' then
+          Exit(Format(SR_GIT_WORKTREE_LINK_FMT, [Enlace]));
+        // Sin --force: con cambios, git se niega y lo dice.
+        GitArgs := Format('worktree remove "%s"', [Destino]);
+      end;
+    end
+    else
+      Exit(SR_GIT_WORKTREE_ARGS);
+  end
   else
     Exit('error: unknown command "' + Params.Command +
       '". Allowed: status | diff | log | show | branch | switch | merge | ' +
       'stash | add | commit | init | push | tag | config | clone | pull | ' +
-      'fetch');
+      'fetch | worktree');
 
   if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push']) then
     TLogger.Warning(Format('delphi_git: NETWORK %s repo=%s %s',
@@ -999,6 +1098,9 @@ begin
     else
       Result := 'exit=0'#10 + Format(SN_GIT_SILENT_OK_FMT, [Cmd]);
   end;
+  // Un worktree nuevo es de quien lo pidio: se lo dice, con como quitarlo.
+  if (ExitCode = 0) and (Cmd = 'worktree') and SameText(Params.Args.Trim, 'add') then
+    Result := Result + #10 + Format(SN_GIT_WORKTREE_ADDED_FMT, [Destino]);
   // git's own hints recommend exactly what this tool refuses (--no-ff,
   // rebase, "specify the URL from the command-line"): say so, or the reader
   // follows the advice printed last (field round 10).
