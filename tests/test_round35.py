@@ -281,6 +281,34 @@ try:
         hay = open(f3, newline='').read()
         check('R17 salto final de new (%s)' % nombre, hay == esperado, '%r | %s' % (hay, r[:120]))
 
+    # R18: un ancla que es un TROZO de una linea. delphi_edit contestaba "el
+    # ancla no aparece" a un texto que estaba ahi, dentro de una linea (lo
+    # cazo un agente creyendo que el culpable era un '|'); su gemela
+    # delphi_textedit si ensenaba las lineas que lo contienen. UN texto ahora
+    # para las dos (AnclaPerdida), y el bloque dice QUE linea le falta.
+    fp = os.path.join(JAIL, 'Trozo.pas')
+    open(fp, 'w', newline='\n').write(UNIT)
+    ft = os.path.join(JAIL, 'trozo.md')
+    open(ft, 'w', newline='\n').write(UNIT)
+    antes_p, antes_t = open(fp, 'rb').read(), open(ft, 'rb').read()
+    re_ = call('delphi_edit', {'path': fp, 'old': 'WriteLn(3)', 'new': 'WriteLn(4)'})
+    rt = call('delphi_textedit', {'path': ft, 'old': 'WriteLn(3)', 'new': 'WriteLn(4)'})
+    check('R18 delphi_edit con un TROZO de linea: dice que esta DENTRO, en que linea y como',
+          re_.startswith('RECHAZADO') and 'DENTRO' in re_ and 'no aparece' not in re_ and
+          '15|  WriteLn(3);' in re_ and 'fragment=' in re_ and
+          open(fp, 'rb').read() == antes_p, re_[:300])
+    check('R18b ...y delphi_textedit, su gemela, dice LO MISMO',
+          rt.replace('trozo.md', 'X') == re_.replace('Trozo.pas', 'X') and
+          open(ft, 'rb').read() == antes_t, rt[:300])
+    rb = call('delphi_textedit', {'path': ft, 'edits': json.dumps(
+        [{'old': 'begin\nWriteLn(3)', 'new': 'begin\n  WriteLn(4);'}])})
+    check('R18c un bloque dice QUE linea no esta entera, con la misma pista',
+          'RECHAZADO' in rb and 'La linea 2 de tu bloque' in rb and  # en tanda: ROLLBACK + el motivo
+          '15|  WriteLn(3);' in rb and open(ft, 'rb').read() == antes_t, rb[:300])
+    rn = call('delphi_edit', {'path': fp, 'old': 'WriteLn(99);', 'new': 'x'})
+    check('R18d lo que no esta en ningun sitio sigue siendo "no aparece"',
+          rn.startswith('RECHAZADO') and 'no aparece' in rn and 'DENTRO' not in rn, rn[:200])
+
     # ------------------------------------------------------------------ R11
     for apodo in ('to', 'endline'):
         f = os.path.join(JAIL, 'apodo-%s.md' % apodo)

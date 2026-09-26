@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.5.2] - 2026-09-26
+
+### Fixed
+
+- **`delphi_edit` answered "el ancla no aparece" to a text that was there,
+  inside a line.** Its `old` is one FULL line (a piece goes with `fragment`
+  + `atline`), so refusing was right - the reason was not: an agent went
+  hunting for the `|` in its text. The twin, `delphi_textedit`, did show the
+  lines containing it; the two said different things about the same rule,
+  and a block anchor said only "no encuentro ese bloque". One text now,
+  `AnclaPerdida` (`Lsp.Patch`), for both tools: when the anchor is INSIDE a
+  line it says so, shows that line and how to change just that piece; when
+  it is nowhere it is still "no aparece", with the best hint (the same line
+  with another indentation, or the most similar one). A block names WHICH
+  of its lines is not in the file, with the same hint. `test_round35`
+  R18-R18d (the 1.5.1 binary fails three; the fourth guards that "no
+  aparece" still means what it says).
+
 ## [1.5.1] - 2026-09-26
 
 ### Added

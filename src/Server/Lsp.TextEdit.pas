@@ -159,7 +159,6 @@ var
   I, Target: Integer;
   Sb: TStringBuilder;
   EndsWithEol: Boolean;
-  Hints: string;
 begin
   if not TFile.Exists(A.Path) then
     Exit('RECHAZADO: no existe ' + A.Path + '. Para crearlo usa create=true.');
@@ -188,17 +187,10 @@ begin
       Matches := Matches + [I];
 
   if Length(Matches) = 0 then
-  begin
-    Hints := '';
-    if Trim(A.OldLine) <> '' then
-      for I := 0 to High(Lines) do
-        if (Hints.CountChar(#10) < 5) and Lines[I].Contains(Trim(A.OldLine)) then
-          Hints := Hints + Format('  %d|%s'#10, [I + 1, Lines[I]]);
-    if Hints <> '' then
-      Hints := #10'Lineas que CONTIENEN ese texto (el ancla debe ser la linea COMPLETA):'#10 + Hints;
-    Exit('RECHAZADO: el ancla no aparece en ' + TPath.GetFileName(A.Path) +
-      '. Copia la linea exacta de delphi_read.' + Hints);
-  end;
+    // La negativa es la de delphi_edit, su gemela: UN texto
+    // (Lsp.Patch.AnclaPerdida). Aqui ya se ensenaban las lineas que lo
+    // contienen y alli no; ahora las dos dicen lo mismo.
+    Exit(AnclaPerdida(Lines, A.OldLine, TPath.GetFileName(A.Path)));
 
   Target := -1;
   if Length(Matches) = 1 then

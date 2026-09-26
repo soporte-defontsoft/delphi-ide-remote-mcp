@@ -103,6 +103,15 @@ function ApplyBlockEdit(const APath, AOld, ANew: string;
   APLICADAS (lo cazaron las baterias al pasarlas al cliente unico). }
 function LineasDeNew(const ANew: string): TArray<string>;
 
+{ La negativa de un ancla de UNA linea que no casa con ninguna, con el
+  motivo: si el texto esta DENTRO de una linea lo dice (y como cambiar
+  solo ese trozo); si no, "no aparece" con la mejor pista (la misma
+  linea con otra indentacion, o la mas parecida). UN texto para
+  delphi_edit y delphi_textedit; la linea que falta de un ancla de
+  bloque usa la misma pista. AFichero es el nombre a ensenar. }
+function AnclaPerdida(const ALines: TArray<string>;
+  const AOld, AFichero: string): string;
+
 { EL rango, validado en un solo sitio.
 
   "old" ancla la PRIMERA linea y "toline" (1-based, incluida) dice hasta
@@ -851,6 +860,79 @@ begin
     end;
 end;
 
+{ La pista de por que AOld no es una linea del fichero. ADentro = esta
+  contenido en alguna linea (entonces no es que no aparezca: es un trozo). }
+function PistaAncla(const ALines: TArray<string>; const AOld: string;
+  out ADentro: Boolean): string;
+var
+  I, N, Mejor, MejorLen, Tope, K: Integer;
+  Objetivo, Lt: string;
+begin
+  Result := '';
+  ADentro := False;
+  Objetivo := AOld.Trim;
+  if Objetivo = '' then
+    Exit;
+  // 1. la misma linea con otra indentacion
+  for I := 0 to High(ALines) do
+    if ALines[I].Trim = Objetivo then
+      Exit(#10 + Format(SN_ANCLA_INDENTACION_FMT, [I + 1]) +
+        Format(#10'  %d|%s', [I + 1, ALines[I]]));
+  // 2. un TROZO de una o mas lineas
+  N := 0;
+  for I := 0 to High(ALines) do
+    if ALines[I].Contains(Objetivo) then
+    begin
+      Inc(N);
+      if N <= 5 then
+        Result := Result + Format(#10'  %d|%s', [I + 1, ALines[I]]);
+    end;
+  if N > 0 then
+  begin
+    ADentro := True;
+    if N > 5 then
+      Result := Result + Format(#10'  ...y %d mas', [N - 5]);
+    Exit(#10 + SN_ANCLA_CONTIENEN + Result);
+  end;
+  // 3. la linea real que mas se le parece por el principio
+  Mejor := -1;
+  MejorLen := 0;
+  for I := 0 to High(ALines) do
+  begin
+    Lt := ALines[I].Trim;
+    if Lt = '' then
+      Continue;
+    Tope := Length(Lt);
+    if Length(Objetivo) < Tope then
+      Tope := Length(Objetivo);
+    K := 0;
+    while (K < Tope) and (Lt[K + 1] = Objetivo[K + 1]) do
+      Inc(K);
+    if K > MejorLen then
+    begin
+      MejorLen := K;
+      Mejor := I;
+    end;
+  end;
+  if (Mejor >= 0) and (MejorLen >= 12) then
+    Result := #10 + Format(SN_ANCLA_PARECIDA_FMT, [Mejor + 1]) +
+      Format(#10'  %d|%s', [Mejor + 1, ALines[Mejor]]);
+end;
+
+function AnclaPerdida(const ALines: TArray<string>;
+  const AOld, AFichero: string): string;
+var
+  Dentro: Boolean;
+  Pista: string;
+begin
+  Pista := PistaAncla(ALines, AOld, Dentro);
+  if Dentro then
+    Result := Format(SR_ANCLA_DENTRO_FMT, [AFichero]) + Pista
+  else
+    Result := Format(SR_ANCLA_NO_ESTA_FMT, [AFichero, AOld]) + Pista + #10 +
+      SN_ANCLA_COPIALA;
+end;
+
 { EL escaneo del bloque, escrito una vez. Devuelve el indice 0-based donde
   empieza la ocurrencia pedida (-1 si no esta) y cuantas hay en total. Lo usan
   ApplyBlockEdit y NthBlockLine: escribirlo dos veces era precisamente como
@@ -969,8 +1051,31 @@ begin
   else
     Hit := BuscaBloque(Lines, OldLines, AOccurrence, Count);
   if Hit < 0 then
+  begin
+    // Y QUE linea del bloque no esta, con la misma pista que un ancla de
+    // una linea: "no encuentro el bloque" a secas mandaba a comparar
+    // todas a ojo.
+    var Falta := '';
+    for J := 0 to High(OldLines) do
+    begin
+      var Esta := False;
+      for I := 0 to High(Lines) do
+        if Lines[I].Trim = OldLines[J].Trim then
+        begin
+          Esta := True;
+          Break;
+        end;
+      if not Esta then
+      begin
+        var Dentro: Boolean;
+        Falta := #10 + Format(SN_BLOQUE_LINEA_FALTA_FMT, [J + 1, OldLines[J].Trim]) +
+          PistaAncla(Lines, OldLines[J], Dentro);
+        Break;
+      end;
+    end;
     Exit(Format(SR_PATCH_BLOCK_MISSING_FMT,
-      [Length(OldLines), OldLines[0].Trim]));
+      [Length(OldLines), OldLines[0].Trim]) + Falta);
+  end;
   if Count > 1 then
     Exit(Format(SR_PATCH_BLOCK_AMBIGUOUS_FMT, [Count, OldLines[0].Trim]));
   NewLines := LineasDeNew(ANew);
@@ -2287,43 +2392,9 @@ begin
         Hits.Add(I);
 
     if Hits.Count = 0 then
-    begin
-      var Pista := '';
-      var Objetivo := AOld.Trim;
-      for I := 0 to High(Lines) do
-        if Lines[I].Trim = Objetivo then
-        begin
-          Pista := Format(#10'OJO: la linea %d tiene ese MISMO texto con OTRA indentacion. Copiala tal cual:'#10'  %d|%s',
-            [I + 1, I + 1, Lines[I]]);
-          Break;
-        end;
-      if Pista = '' then
-      begin
-        var Mejor := -1;
-        var MejorLen := 0;
-        for I := 0 to High(Lines) do
-        begin
-          var Lt := Lines[I].Trim;
-          if Lt = '' then Continue;
-          var Tope := Length(Lt);
-          if Length(Objetivo) < Tope then Tope := Length(Objetivo);
-          var KK := 0;
-          while (KK < Tope) and (Lt[KK + 1] = Objetivo[KK + 1]) do
-            Inc(KK);
-          if KK > MejorLen then
-          begin
-            MejorLen := KK;
-            Mejor := I;
-          end;
-        end;
-        if (Mejor >= 0) and (MejorLen >= 12) then
-          Pista := Format(#10'La linea REAL mas parecida es la %d - comparala caracter a caracter:'#10'  %d|%s',
-            [Mejor + 1, Mejor + 1, Lines[Mejor]]);
-      end;
-      Exit(Format('RECHAZADO: el ancla no aparece en el fichero. No he escrito nada.'#10 +
-        'Ancla buscada: |%s|%s'#10'Copia la linea literal de delphi_read (no la reconstruyas de memoria).',
-        [AOld, Pista]));
-    end;
+      // Por que no casa: UN texto para delphi_edit, delphi_textedit y la
+      // linea que falta de un bloque (AnclaPerdida).
+      Exit(AnclaPerdida(Lines, AOld, TPath.GetFileName(APath)));
 
     if (Hits.Count > 1) and (AAtLine <= 0) then
     begin

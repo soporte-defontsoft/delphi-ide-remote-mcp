@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.5.1';
+  SERVER_VERSION = '1.5.2';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -619,6 +619,31 @@ const
     'RECHAZADO: ese "old" de varias lineas se queda en una sola despues de ' +
     'quitarle el salto final. Para una linea suelta no hace falta nada ' +
     'especial: mandala tal cual.';
+
+  { Por que no casa un ancla de UNA linea (Lsp.Patch.AnclaPerdida, el
+    texto de delphi_edit y de delphi_textedit). Decian cosas distintas de
+    la misma regla, y delphi_edit contestaba "no aparece" a un texto que
+    estaba DENTRO de una linea (26-sep-2026). }
+  SR_ANCLA_DENTRO_FMT =
+    'RECHAZADO: eso no es una linea entera de %s: esta DENTRO de una ' +
+    '(abajo). El ancla ("old") es la linea COMPLETA, copiada de ' +
+    'delphi_read (la indentacion puede faltar); para cambiar solo ese ' +
+    'trozo: fragment=<ese texto> atline=<su numero> y new. No he escrito ' +
+    'nada.';
+  SR_ANCLA_NO_ESTA_FMT =
+    'RECHAZADO: el ancla no aparece en %s. No he escrito nada.'#10 +
+    'Ancla buscada: |%s|';
+  SN_ANCLA_COPIALA =
+    'Copia la linea literal de delphi_read (no la reconstruyas de memoria).';
+  SN_ANCLA_INDENTACION_FMT =
+    'OJO: la linea %d tiene ese MISMO texto con OTRA indentacion. Copiala ' +
+    'tal cual:';
+  SN_ANCLA_CONTIENEN =
+    'Lineas que lo CONTIENEN:';
+  SN_ANCLA_PARECIDA_FMT =
+    'La linea REAL mas parecida es la %d - comparala caracter a caracter:';
+  SN_BLOQUE_LINEA_FALTA_FMT =
+    'La linea %d de tu bloque no esta ENTERA en el fichero: "%s".';
 
   SR_PATCH_BLOCK_MISSING_FMT =
     'RECHAZADO: no encuentro ese bloque de %d lineas. La primera que busco ' +
