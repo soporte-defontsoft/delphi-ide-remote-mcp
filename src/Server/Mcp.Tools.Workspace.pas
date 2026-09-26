@@ -105,7 +105,7 @@ type
     [Required]
     [RutaDelServidor]
     property Repo: string read FRepo write FRepo;
-    [SchemaDescription('One of: status | diff | log | show | branch | switch | merge | stash | add | commit | init | push | tag | config | clone | pull | fetch | worktree. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push|pop|list (never drop). config: args=user.name|user.email + value in message. clone: URL in message, destination in repo. worktree: args=list | add (path=<a NEW folder inside your roots>, ref=<tag|branch|commit>: another version of the repo next to it, detached, to build and compare) | remove (path=<one that list shows>; refused with changes or with a link inside)')]
+    [SchemaDescription('One of: status | diff | log | show | branch | switch | merge | stash | add | commit | init | push | tag | config | clone | pull | fetch | worktree. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push|pop|list (never drop); push -- <paths> parks ONLY those paths and sets them back to HEAD - how you discard one file''s changes without losing them (pop brings them back); its label goes in message. config: args=user.name|user.email + value in message. clone: URL in message, destination in repo. worktree: args=list | add (path=<a NEW folder inside your roots>, ref=<tag|branch|commit>: another version of the repo next to it, detached, to build and compare) | remove (path=<one that list shows>; refused with changes or with a link inside)')]
     [Required]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). They are SPLIT ON SPACES into argv, so a path with spaces goes in double quotes: args="mis notas.txt". There is no shell involved, but shell metacharacters (; | & ` $ < >) are rejected anyway - if a legitimate git option needs one (--pretty=format:...), ask for it with delphi_report instead of trying to smuggle it')]
@@ -752,6 +752,14 @@ begin
     'git commands, no shell.';
 end;
 
+{ Un valor de quien llama DENTRO de la linea de ordenes de git, entre
+  comillas dobles: una comilla suya no puede cerrar el argumento (se
+  cambia por dos simples). La usan config y stash push -m. }
+function EnComillas(const AValor: string): string;
+begin
+  Result := '"' + AValor.Replace('"', '''''') + '"';
+end;
+
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
 const
   BadChars: array [0 .. 8] of string = (';', '|', '&', '`', '$', '<', '>', #13, #10);
@@ -887,8 +895,8 @@ begin
         '(the value goes in the "message" parameter)');
     if Params.Message.Trim = '' then
       Exit('error: config needs the value in the "message" parameter');
-    GitArgs := Format('config %s "%s"',
-      [Params.Args.Trim.ToLower, Params.Message.Replace('"', '''''')]);
+    GitArgs := 'config ' + Params.Args.Trim.ToLower + ' ' +
+      EnComillas(Params.Message);
   end
   else if Cmd = 'switch' then
   begin
@@ -929,12 +937,59 @@ begin
   begin
     // push (default) / pop / list: park work to change branch and get it
     // back. Never "stash drop" - that destroys.
-    if Params.Args.Trim = '' then
-      GitArgs := 'stash push'
-    else if MatchText(Params.Args.Trim.ToLower, ['push', 'pop', 'list']) then
-      GitArgs := 'stash ' + Params.Args.Trim.ToLower
+    // Y push con RUTAS es como se DESCARTAN los cambios de unos ficheros
+    // sin destruirlos: vuelven a HEAD y lo de antes queda en el stash, de
+    // donde pop lo devuelve. Faltaba: devolver dos .res a HEAD obligo a
+    // salir a la consola (muro, 26-sep-2026).
+    var Trozos := PartirArgs(Params.Args);
+    var Sub := 'push';
+    if Length(Trozos) > 0 then
+      Sub := Trozos[0].ToLower;
+    if MatchText(Sub, ['pop', 'list']) and (Length(Trozos) = 1) then
+      GitArgs := 'stash ' + Sub
+    else if Sub = 'push' then
+    begin
+      GitArgs := 'stash push';
+      if Params.Message.Trim <> '' then
+        GitArgs := GitArgs + ' -m ' + EnComillas(Params.Message.Trim);
+      var Base := IncludeTrailingPathDelimiter(TPath.GetFullPath(Repo));
+      var Rutas := '';
+      for var I := 1 to High(Trozos) do
+      begin
+        if (I = 1) and (Trozos[I] = '--') then
+          Continue;
+        // Rutas, no opciones: -u, -k, -p... cambian lo que se guarda y lo
+        // que se toca, y ninguna hace falta para descartar.
+        if Trozos[I].StartsWith('-') or (Trozos[I].Trim = '') then
+          Exit(Format(SR_GIT_STASH_ARGS_FMT, [Params.Args.Trim]));
+        // Una ruta de ESTE repo, con su nombre tal cual: un comodin no es un
+        // nombre en Windows, y lo que GetFullPath no entiende no es una ruta.
+        var Ruta := '';
+        try
+          if not (Trozos[I].Contains('*') or Trozos[I].Contains('?')) then
+            Ruta := ExcludeTrailingPathDelimiter(TPath.GetFullPath(
+              TPath.Combine(Base, Trozos[I].Replace('/', '\'))));
+        except
+          Ruta := '';
+        end;
+        if (Ruta = '') or not StartsText(Base, IncludeTrailingPathDelimiter(Ruta)) then
+          Exit(Format(SR_GIT_STASH_RUTA_FMT, [Trozos[I], Repo]));
+        // Devolver un fichero a HEAD es ESCRIBIRLO: la pregunta de todo
+        // escritor, por la ruta real de cada uno.
+        Result := EscrituraDenegada(Ruta);
+        if Result <> '' then
+          Exit;
+        var Rel := Ruta.Substring(Length(Base)).Replace('\', '/');
+        if Rel = '' then
+          Rel := '.'; // la carpeta del propio repo
+        // :(literal): el nombre es el nombre, sin comodines ni magia.
+        Rutas := Rutas + ' ' + EnComillas(':(literal)' + Rel);
+      end;
+      if Rutas <> '' then
+        GitArgs := GitArgs + ' --' + Rutas;
+    end
     else
-      Exit(SR_GIT_STASH_ARGS);
+      Exit(Format(SR_GIT_STASH_ARGS_FMT, [Params.Args.Trim]));
   end
   else if Cmd = 'push' then
     // uses the SERVER's stored credentials/remotes - consistent with the

@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.5.0';
+  SERVER_VERSION = '1.5.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -3959,9 +3959,20 @@ const
     'conflictos), se rechaza en vez de dejarlo a medias. Eso es cosa de una ' +
     'persona, no de un agente adivinando.';
 
-  SR_GIT_STASH_ARGS =
-    'RECHAZADO: stash admite push (guardar, por defecto), pop (recuperar) o ' +
-    'list. "drop" no esta: destruye trabajo sin vuelta atras.';
+  { Dice lo que RECIBIO: contestaba "drop no esta" a un push con rutas que
+    nadie habia pedido tirar (26-sep-2026). }
+  SR_GIT_STASH_RUTA_FMT =
+    'RECHAZADO: stash push -- "%s": no es una ruta de este repositorio ' +
+    '(%s). Van ficheros o carpetas DENTRO del repo, relativos a "repo" o ' +
+    'absolutos, con su nombre tal cual: sin comodines. No se ha guardado nada.';
+
+  SR_GIT_STASH_ARGS_FMT =
+    'RECHAZADO: stash no entiende args="%s". Admite: push (guarda TODO, por ' +
+    'defecto); push -- <rutas> (guarda SOLO esas: vuelven a como estan en ' +
+    'HEAD y lo de antes queda en el stash, que es como se descartan los ' +
+    'cambios de un fichero sin perderlos; sin opciones, y la etiqueta va ' +
+    'en "message"); pop (recupera el ultimo) y list. drop no existe: ' +
+    'destruye trabajo sin vuelta atras.';
 
   // ---- delphi_git worktree (1.4.0) ----
 

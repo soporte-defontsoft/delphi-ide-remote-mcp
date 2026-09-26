@@ -667,6 +667,13 @@ function IsReadOnlyNow: Boolean;
   capa redundante, y si dejase de funcionar no romperia nada. }
 function ServerPathParamCount: Integer;
 
+{ Los "args" de delphi_git partidos como promete su descripcion: por
+  espacios, y unas comillas dobles mantienen junta una ruta con espacios
+  ("mis notas.txt" es UN trozo, sin las comillas). El lector unico de esa
+  regla: lo usa quien necesita los trozos uno a uno (stash push con rutas,
+  que pasa cada una por la puerta de escritura). }
+function PartirArgs(const AArgs: string): TArray<string>;
+
 { La mitad de CONSULTA de delphi_git: lo que una credencial de solo lectura
   y un proyecto de REFERENCIA (ReadOnlyRoots) pueden ejecutar. UNA lista:
   la consulta ToolCallDenied y la consulta la propia tool. }
@@ -1977,6 +1984,38 @@ end;
   `diff --output=<abs path>` wrote a file anywhere on disk). Filtered HERE, at
   the single gate, so it applies to EVERY git call in BOTH access levels (the
   -C <repo> confinement does not stop an absolute --output). '' = clean. }
+function PartirArgs(const AArgs: string): TArray<string>;
+var
+  Trozo: string;
+  Dentro, Hay: Boolean;
+  C: Char;
+begin
+  Result := [];
+  Trozo := '';
+  Dentro := False;
+  Hay := False;
+  for C in AArgs do
+    if C = '"' then
+    begin
+      Dentro := not Dentro;
+      Hay := True; // "" es un trozo vacio, pero es un trozo
+    end
+    else if not Dentro and ((C = ' ') or (C = #9)) then
+    begin
+      if Hay then
+        Result := Result + [Trozo];
+      Trozo := '';
+      Hay := False;
+    end
+    else
+    begin
+      Trozo := Trozo + C;
+      Hay := True;
+    end;
+  if Hay then
+    Result := Result + [Trozo];
+end;
+
 function GitArgDenied(const AArgs: string): string;
 var
   Tok, T: string;

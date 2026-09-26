@@ -6,6 +6,36 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.5.1] - 2026-09-26
+
+### Added
+
+- **`delphi_git stash push -- <paths>`**: parks ONLY those paths and sets
+  them back to HEAD - the way to discard one file's changes without losing
+  them (`pop` brings them back); the label goes in `message`. Each path must
+  be inside the repository, is taken literally (`:(literal)`: no wildcards,
+  no pathspec magic) and goes through the write gate, so a path inside a
+  read-only reference is refused while the rest of the repo is not. There
+  was no way to do it through the MCP: putting two `.res` files back to HEAD
+  after 1.5.0 meant leaving for the console (a wall, reported with
+  `delphi_report`). `test_git_branches` +8 checks and one hardened (the 1.5.0
+  binary fails the nine).
+
+### Fixed
+
+- The `stash` refusal answered `"drop" no esta` to anything it did not
+  understand - a push with paths that nobody had asked to drop included. It
+  now says what it received and the whole grammar, and a path that is not
+  one of the repository has its own refusal.
+
+### Changed
+
+- Tests: the adb server a battery started is stopped when it ends - the one
+  that was running before is never touched (`host:kill` on its port; inside
+  `run_all` the suite does it once at the end). `scripts/gen-capabilities.py`
+  no longer leaves its exe copy in the machine's `%TEMP%`, and
+  `docs/CAPABILITIES.json` is regenerated (it still said 1.3.2).
+
 ## [1.5.0] - 2026-09-26
 
 ### Added
