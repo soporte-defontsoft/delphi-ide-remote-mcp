@@ -37,6 +37,9 @@ if not os.path.exists(SRC):
 
 RAIZ = mc.RAIZ
 CLEAN = os.path.join(RAIZ, '_cleanexe')
+# El adb que arranquen las baterias se para al final, una vez: dentro de la
+# suite ninguna lo para por su cuenta (mc.fin mira esta variable).
+os.environ[mc.SUITE] = '1'
 # Se barre la raiz ENTERA, no solo el exe: cada bateria limpia lo suyo cuando
 # acaba bien, pero una que muere a medias deja su carpeta, y la siguiente
 # pasada puede apoyarse en ella y salir verde por el motivo equivocado (paso
@@ -100,6 +103,10 @@ for name, out in failed:
     for line in out.splitlines():
         if line.lstrip().startswith('FAIL') or 'Error' in line or 'Traceback' in line:
             print('   ', line[:220])
+# ...ni un adb vivo que no estuviera antes de empezar (mc.ADB_ANTES)...
+if not mc.ADB_ANTES and mc.adb_vivo():
+    print('NOTA: adb arrancado por las baterias: %s' % (
+        'parado' if mc.adb_para() else 'NO se ha podido parar'))
 # ...y no se deja nada en el %TEMP% de la maquina. Con rojas se conserva: lo
 # que dejo la bateria que fallo es la evidencia.
 if not failed:

@@ -53,6 +53,14 @@ send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
 tools = sorted(t['name'] for t in recv(2)['result']['tools'])
 proc.kill()
+# Y no se deja nada en el %TEMP% de la maquina: la copia del exe y el vault
+# de mentira se quedaban en delphi-mcp-tests\gencap (26-sep-2026).
+proc.wait(timeout=10)
+shutil.rmtree(BASE, ignore_errors=True)
+try:
+    os.rmdir(os.path.dirname(BASE))  # la raiz de las baterias, si queda vacia
+except OSError:
+    pass
 
 vault_tools = [t for t in tools if t.startswith('vault_')]
 lsp_backed = ['delphi_symbols', 'delphi_definition', 'delphi_hover',

@@ -155,8 +155,51 @@ def check(name, ok, detail=''):
     return ok
 
 
+# ------------------------------------------------------------------- adb
+# Una llamada a delphi_adb arranca el servidor de adb (su daemon) y adb lo
+# deja vivo al acabar. A un usuario le conviene; una bateria no deja
+# procesos en la maquina (26-sep-2026: un adb.exe vivo desde el dia
+# anterior, con el padre ya muerto). Se para SOLO el que no estaba al
+# empezar: el de David o el del IDE no se tocan. Se habla con el propio
+# protocolo de adb (host:kill) en su puerto, el de ANDROID_ADB_SERVER_PORT
+# si lo hay: ni se busca el adb.exe ni se matan procesos por nombre.
+ADB_PUERTO = int(os.environ.get('ANDROID_ADB_SERVER_PORT') or 5037)
+SUITE = 'MCP_BATERIAS_SUITE'  # lo pone run_all: la suite limpia al final
+
+
+def adb_vivo():
+    """True si hay un servidor de adb escuchando en su puerto."""
+    try:
+        with socket.create_connection(('127.0.0.1', ADB_PUERTO), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+def adb_para():
+    """Para el servidor de adb (host:kill) y espera a que suelte el puerto."""
+    try:
+        with socket.create_connection(('127.0.0.1', ADB_PUERTO), timeout=2) as s:
+            s.sendall(b'0009host:kill')
+            s.recv(4)
+    except OSError:
+        pass
+    for _ in range(20):
+        if not adb_vivo():
+            return True
+        time.sleep(0.25)
+    return False
+
+
+ADB_ANTES = adb_vivo()  # al importar = al empezar la bateria
+
+
 def fin(titulo):
-    """El recuento de la bateria y su codigo de salida: 1 si fallo algo."""
+    """El recuento de la bateria y su codigo de salida: 1 si fallo algo.
+    Suelta, para el adb que ella arranco; dentro de run_all eso lo hace la
+    suite, una vez al final, para no parar el que otra esta usando."""
+    if not ADB_ANTES and not os.environ.get(SUITE) and adb_vivo():
+        adb_para()
     print()
     print('== %s: %d PASS / %d FAIL ==' % (titulo, P, F))
     sys.exit(1 if F else 0)

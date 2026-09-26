@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/gen-capabilities.py (from the live tools/list)",
-  "version": "1.3.2",
+  "version": "1.5.0",
   "tools": 41,
   "coreTools": 36,
   "optionalTools": 5,
