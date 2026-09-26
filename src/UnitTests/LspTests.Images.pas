@@ -27,6 +27,7 @@ type
     [Test] procedure BorradoSoloDentroDeLoDesechable;
     [Test] procedure BorradoNuncaUnidadNiSistema;
     [Test] procedure DescargaTemporalNombradorYLector;
+    [Test] procedure SinCapturaDiceElMotivo;
   end;
 
 implementation
@@ -41,7 +42,9 @@ uses
   Lsp.Imagen,
   Lsp.InlineImages,
   Lsp.Base64,
-  Lsp.Guard;
+  Lsp.Guard,
+  Lsp.RemoteRun, // MotivoSinCaptura
+  Lsp.Texts;
 
 function PngDe(W, H: Integer): TArray<Byte>;
 var
@@ -239,6 +242,25 @@ begin
   Assert.IsFalse(EsCarpetaDescarga('__tmp-'), 'sin hex');
   Assert.IsFalse(EsCarpetaDescarga('tmp-abcd1234'), 'sin __');
   Assert.IsFalse(EsCarpetaDescarga('.tmp-abcd1234'), 'el prefijo viejo');
+end;
+
+procedure TImageTests.SinCapturaDiceElMotivo;
+var
+  R: string;
+begin
+  // Una respuesta sin captura dice POR QUE, nunca la fontaneria ("el nodo
+  // no dijo donde dejo la captura", hasta la 1.5.2).
+  R := MotivoSinCaptura('', SN_REMOTERUN_ENV_NONE);
+  Assert.IsTrue(R.Contains('sesion grafica'), 'sin sesion: ' + R);
+  R := MotivoSinCaptura('  Error: Acceso denegado.', '');
+  Assert.IsTrue(R.Contains('deniega'), 'Windows bloqueado: ' + R);
+  R := MotivoSinCaptura('-- 2. la pantalla'#10 +
+    '  NO pude capturar: org.freedesktop.DBus.Error.NoReply: sin respuesta'#10,
+    SN_REMOTERUN_ENV_INHERITED);
+  Assert.IsTrue(R.Contains('NoReply'), 'el motivo del propio nodo: ' + R);
+  R := MotivoSinCaptura('nodo listo', '');
+  Assert.IsTrue(R.Contains('nodeOutput'), 'sin motivo: ' + R);
+  Assert.IsFalse(R.Contains('dijo donde'), 'nunca la fontaneria: ' + R);
 end;
 
 initialization

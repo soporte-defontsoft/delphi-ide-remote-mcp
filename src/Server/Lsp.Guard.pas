@@ -667,12 +667,13 @@ function IsReadOnlyNow: Boolean;
   capa redundante, y si dejase de funcionar no romperia nada. }
 function ServerPathParamCount: Integer;
 
-{ Los "args" de delphi_git partidos como promete su descripcion: por
-  espacios, y unas comillas dobles mantienen junta una ruta con espacios
-  ("mis notas.txt" es UN trozo, sin las comillas). El lector unico de esa
-  regla: lo usa quien necesita los trozos uno a uno (stash push con rutas,
-  que pasa cada una por la puerta de escritura). }
-function PartirArgs(const AArgs: string): TArray<string>;
+{ Trocea una linea de argumentos como lo haria quien la escribio: por
+  espacios, y con comillas DOBLES para agrupar uno que lleva espacios
+  ("mis notas.txt" es UNO, sin las comillas). Es el UNICO troceador: el
+  argv que remote-run da al programa y las rutas de stash push de
+  delphi_git. Vivia en Lsp.RemoteRun y la 1.5.1 le escribio un gemelo
+  aqui (PartirArgs) sin verlo: ahora es uno, donde lo alcanzan los dos. }
+function TrocearArgs(const AArgs: string): TArray<string>;
 
 { La mitad de CONSULTA de delphi_git: lo que una credencial de solo lectura
   y un proyecto de REFERENCIA (ReadOnlyRoots) pueden ejecutar. UNA lista:
@@ -1984,36 +1985,36 @@ end;
   `diff --output=<abs path>` wrote a file anywhere on disk). Filtered HERE, at
   the single gate, so it applies to EVERY git call in BOTH access levels (the
   -C <repo> confinement does not stop an absolute --output). '' = clean. }
-function PartirArgs(const AArgs: string): TArray<string>;
+function TrocearArgs(const AArgs: string): TArray<string>;
 var
-  Trozo: string;
+  I: Integer;
+  Actual: string;
   Dentro, Hay: Boolean;
-  C: Char;
 begin
-  Result := [];
-  Trozo := '';
+  Result := nil;
+  Actual := '';
   Dentro := False;
   Hay := False;
-  for C in AArgs do
-    if C = '"' then
+  for I := 1 to Length(AArgs) do
+    if AArgs[I] = '"' then
     begin
       Dentro := not Dentro;
-      Hay := True; // "" es un trozo vacio, pero es un trozo
+      Hay := True; // "" es un argumento vacio, pero es un argumento
     end
-    else if not Dentro and ((C = ' ') or (C = #9)) then
+    else if CharInSet(AArgs[I], [' ', #9, #13, #10]) and not Dentro then
     begin
       if Hay then
-        Result := Result + [Trozo];
-      Trozo := '';
+        Result := Result + [Actual];
+      Actual := '';
       Hay := False;
     end
     else
     begin
-      Trozo := Trozo + C;
+      Actual := Actual + AArgs[I];
       Hay := True;
     end;
   if Hay then
-    Result := Result + [Trozo];
+    Result := Result + [Actual];
 end;
 
 function GitArgDenied(const AArgs: string): string;

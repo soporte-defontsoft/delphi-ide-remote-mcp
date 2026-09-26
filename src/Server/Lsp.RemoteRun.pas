@@ -97,10 +97,17 @@ function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
   login- solo se veia entrando en la maquina (2026-09-26). }
 function RemoteOutput(const AProfile, ADprojPath, AJobId: string): TJSONObject;
 
-{ Trocea una linea de argumentos como lo haria quien la escribio: por
-  espacios, y con comillas DOBLES para agrupar uno que lleva espacios. Es el
-  UNICO troceador: lo que sale de aqui va al argv del programa tal cual. }
-function TrocearArgs(const AArgs: string): TArray<string>;
+{ La negativa de Windows a CUALQUIER captura con la sesion bloqueada,
+  desconectada o sin escritorio, en la salida del nodo. }
+function CapturaDenegada(const ASalida: string): Boolean;
+
+{ Por que una respuesta del nodo de escritorio vino SIN captura, cuando
+  toda (menos status) la trae en la misma llamada: sin sesion grafica (lo
+  que midio el lanzador: AEntorno es su graphicalEnv), Windows que la
+  deniega, o la linea en que el propio nodo lo dice. Nunca la fontaneria:
+  decia "el nodo no dijo donde dejo la captura" (David, 26-sep-2026). El
+  troceador de argumentos que vivia aqui esta en Lsp.Guard (TrocearArgs). }
+function MotivoSinCaptura(const ASalida, AEntorno: string): string;
 
 { Trae AQUI un fichero que el programa desplegado dejo en SU carpeta del
   target. ARelPath es relativo a esa carpeta ('captura.png'), nunca una ruta
@@ -208,36 +215,31 @@ end;
 { Trocea AArgs como lo haria quien los escribio: por espacios, y con comillas
   DOBLES para agrupar un argumento que lleva espacios ("ruta con espacios"
   uno dos). Las comillas dobles agrupan y se van; nada mas se interpreta. }
-function TrocearArgs(const AArgs: string): TArray<string>;
-var
-  I: Integer;
-  Actual: string;
-  Dentro, Hay: Boolean;
+function CapturaDenegada(const ASalida: string): Boolean;
 begin
-  Result := nil;
-  Actual := '';
-  Dentro := False;
-  Hay := False;
-  for I := 1 to Length(AArgs) do
-    if AArgs[I] = '"' then
-    begin
-      Dentro := not Dentro;
-      Hay := True; // "" es un argumento vacio, pero es un argumento
-    end
-    else if CharInSet(AArgs[I], [' ', #9, #13, #10]) and not Dentro then
-    begin
-      if Hay then
-        Result := Result + [Actual];
-      Actual := '';
-      Hay := False;
-    end
-    else
-    begin
-      Actual := Actual + AArgs[I];
-      Hay := True;
-    end;
-  if Hay then
-    Result := Result + [Actual];
+  Result := ASalida.Contains('Acceso denegado') or
+    ASalida.Contains('Access is denied');
+end;
+
+function MotivoSinCaptura(const ASalida, AEntorno: string): string;
+const
+  NO_PUDE = 'NO pude capturar:'; // lo escribe el nodo (src\DesktopNode)
+var
+  L, Motivo: string;
+begin
+  Motivo := '';
+  if AEntorno = SN_REMOTERUN_ENV_NONE then
+    Motivo := SN_DESKTOP_MOTIVO_SIN_SESION
+  else if CapturaDenegada(ASalida) then
+    Motivo := SN_DESKTOP_MOTIVO_DENEGADA
+  else
+    for L in ASalida.Split([#10]) do
+      if (Motivo = '') and L.Trim.StartsWith(NO_PUDE) then
+        Motivo := Format(SN_DESKTOP_MOTIVO_NODO_FMT,
+          [L.Trim.Substring(Length(NO_PUDE)).Trim]);
+  if Motivo = '' then
+    Motivo := SN_DESKTOP_MOTIVO_NINGUNO;
+  Result := Format(SR_DESKTOP_SIN_CAPTURA_FMT, [Motivo]);
 end;
 
 { EL FICHERO DE TRABAJO, el mismo para Linux y Windows: el binario, el fichero

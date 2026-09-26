@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.5.2';
+  SERVER_VERSION = '1.5.3';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1869,8 +1869,20 @@ const
   SR_ADBLINUX_NEEDCODE =
     'RECHAZADO: key necesita "code", el codigo Linux de la tecla (Escape 1, ' +
     'Tab 15, Enter 28).';
-  SR_ADBLINUX_NOSHOT =
-    'el nodo no dijo donde dejo la captura: mira su salida.';
+  { Por que una respuesta de delphi_desktop viene SIN captura, cuando toda
+    (menos status) la trae en esta misma llamada (Lsp.RemoteRun.
+    MotivoSinCaptura). Decia "el nodo no dijo donde dejo la captura": la
+    fontaneria, no el motivo (David, 26-sep-2026). }
+  SR_DESKTOP_SIN_CAPTURA_FMT = 'no hay captura: %s.';
+  SN_DESKTOP_MOTIVO_SIN_SESION =
+    'el destino no tiene sesion grafica abierta (graphicalEnv): abre una ' +
+    'con el MISMO usuario que corre PAServer y repite';
+  SN_DESKTOP_MOTIVO_DENEGADA =
+    'Windows la deniega: la sesion esta bloqueada, desconectada o sin ' +
+    'escritorio (hint)';
+  SN_DESKTOP_MOTIVO_NODO_FMT = 'el destino no pudo hacerla (%s)';
+  SN_DESKTOP_MOTIVO_NINGUNO =
+    'el nodo no dijo por que; su salida entera va en nodeOutput';
 
   SD_ADB =
     'Android devices for remote development: the phones/tablets hang off ' +

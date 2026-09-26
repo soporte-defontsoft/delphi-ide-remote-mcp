@@ -433,8 +433,7 @@ begin
       contesta "Acceso denegado" a cualquier captura: se nombra, que despista.
       Solo cuando NO hubo captura: desde 1.0.16 el nodo tiene un respaldo
       (PrintWindow) y su linea RESPALDO cita el mismo error con captura hecha. }
-    if (RutaDeCaptura(Salida) = '') and
-       (Salida.Contains('Acceso denegado') or Salida.Contains('Access is denied')) then
+    if (RutaDeCaptura(Salida) = '') and CapturaDenegada(Salida) then
       Return.AddPair('hint', SD_DESKTOP_LOCKED);
 
     { La captura vive en la carpeta que el nodo desplego; se trae aqui por el
@@ -546,8 +545,16 @@ begin
       else
         Return.AddPair('screenshotError', Fallo);
     end
-    else if (Cmd = 'screenshot') and (Remota = '') then
-      Return.AddPair('screenshotError', SR_ADBLINUX_NOSHOT);
+    else if (Cmd <> 'status') and (Remota = '') then
+    begin
+      // Toda respuesta menos status TRAE su captura en esta misma llamada:
+      // sin ella se dice POR QUE, y en todo gesto, no solo en screenshot
+      // (un tap sin captura no decia nada).
+      var Entorno := '';
+      if Res.GetValue('graphicalEnv') <> nil then
+        Entorno := Res.GetValue<string>('graphicalEnv');
+      Return.AddPair('screenshotError', MotivoSinCaptura(Salida, Entorno));
+    end;
 
       Result := Return.ToJSON;
     finally

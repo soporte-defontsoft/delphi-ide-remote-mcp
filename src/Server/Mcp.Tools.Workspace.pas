@@ -941,7 +941,7 @@ begin
     // sin destruirlos: vuelven a HEAD y lo de antes queda en el stash, de
     // donde pop lo devuelve. Faltaba: devolver dos .res a HEAD obligo a
     // salir a la consola (muro, 26-sep-2026).
-    var Trozos := PartirArgs(Params.Args);
+    var Trozos := TrocearArgs(Params.Args);
     var Sub := 'push';
     if Length(Trozos) > 0 then
       Sub := Trozos[0].ToLower;

@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.5.3] - 2026-09-26
+
+### Fixed
+
+- **A `delphi_desktop` answer without a capture said "el nodo no dijo donde
+  dejo la captura"** - how the server fetches it, not why there is none:
+  every answer but `status` brings its capture in that same call. It now
+  says the reason: no graphical session on the target (what the launcher
+  measured, `graphicalEnv`), Windows refusing it (a locked or disconnected
+  session), or the node's own line. And it says it for every gesture, not
+  only `screenshot`: a `tap` without its capture said nothing. One function,
+  `MotivoSinCaptura` (`Lsp.RemoteRun`), with a DUnitX test
+  (`SinCapturaDiceElMotivo`); the old text was measured live on Zorin with
+  no session open (2026-09-26).
+
+### Changed
+
+- **One argument splitter.** 1.5.1 wrote `PartirArgs` (`Lsp.Guard`) for the
+  paths of `stash push` without seeing `TrocearArgs` (`Lsp.RemoteRun`), which
+  already split remote-run's argv the same way - quotes, empty argument and
+  all. One now, `TrocearArgs` in `Lsp.Guard`, where both reach it.
+
 ## [1.5.2] - 2026-09-26
 
 ### Fixed
