@@ -424,7 +424,7 @@ def con_propiedad(nombre, valor='algo'):
 
 
 RESERVADAS = ('EnvironmentSettings', 'EnvOptions', 'Profiles', 'GlobalOptionFile',
-              'APPDATA', 'BDSAPPDATABASEDIR', 'ProductVersion')
+              'APPDATA', 'BDSAPPDATABASEDIR', 'ProductVersion', 'BDS')
 for nombre in RESERVADAS:
     out = build(proyecto_con('res-' + nombre.lower(), con_propiedad(nombre)))
     check('R redefinir ' + nombre + ' (reservada del IDE): RECHAZADO antes de msbuild',

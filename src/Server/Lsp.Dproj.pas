@@ -879,9 +879,11 @@ const
   // UserTools.proj. Un proyecto NUNCA las define: las pone el entorno del IDE.
   // PlatformSDK queda fuera aposta - esa SI la fija el proyecto (delphi_config
   // set-sdk) y vive en proyectos reales; rechazarla romperia builds legitimos.
-  RESERVED_IDE_IMPORT_PROPS: array [0 .. 6] of string = (
+  // Y BDS: la raiz de los propios imports del IDE ($(BDS)\Bin\CodeGear.*.Targets),
+  // que IsStockImport reconoce por el texto (medido el 25-sep-2026).
+  RESERVED_IDE_IMPORT_PROPS: array [0 .. 7] of string = (
     'EnvironmentSettings', 'EnvOptions', 'Profiles', 'GlobalOptionFile',
-    'APPDATA', 'BDSAPPDATABASEDIR', 'ProductVersion');
+    'APPDATA', 'BDSAPPDATABASEDIR', 'ProductVersion', 'BDS');
 
 function RedefinedIdeImportProperty(const ADprojPath: string): string;
 var

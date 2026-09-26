@@ -8,6 +8,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Security
+
+- **A build refuses a `.dproj` that redefines an environment property the
+  IDE's own imports rely on** (`EnvironmentSettings`, `EnvOptions`,
+  `Profiles`, `GlobalOptionFile`, `APPDATA`, `BDSAPPDATABASEDIR`,
+  `ProductVersion`, `BDS`), in the project or in anything it imports.
+  `RedefinedIdeImportProperty` (`Lsp.Dproj`) sits next to the existing
+  hazard scan, under the same `AllowBuildScripts` opt-in, so it guards
+  `delphi_build` and `delphi_test`. `PlatformSDK` stays allowed: projects set
+  it (`delphi_config set-sdk`). No real project in the roots is refused.
+
 ### Documentation
 
 - **README: what a `delphi_desktop` profile gives.** It drives the target's
