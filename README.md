@@ -253,6 +253,12 @@ repository carries BOTH halves:
   extend it. Build with `delphi_build platform=Linux64` (the tool passes the
   SDK by itself) or by hand with msbuild plus `/p:PlatformSDK=Linux64.sdk`.
 
+**What a desktop profile gives.** `delphi_desktop` drives the target's desktop
+as the user PAServer runs as: everything a person sitting at that keyboard can
+do, opening a terminal and typing in it included. That is by design - a filter
+on what gets typed into which window would be a guess, not a guarantee. Give an
+agent a desktop profile the way you would give it a seat at that machine.
+
 **Today the node speaks GNOME only** (measured live on Zorin 18 and Fedora):
 the capture goes through the XDG desktop portal, the window list that comes
 with every capture is read from X11 (Xwayland: every FMX application; native

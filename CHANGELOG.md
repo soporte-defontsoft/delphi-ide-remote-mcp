@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Documentation
+
+- **README: what a `delphi_desktop` profile gives.** It drives the target's
+  desktop as the user PAServer runs as - everything a person at that keyboard
+  can do, a terminal included. By design, not filtered: grant a desktop
+  profile the way you would grant a seat at that machine.
+
 ## [1.3.3] - 2026-09-26
 
 ### Security
