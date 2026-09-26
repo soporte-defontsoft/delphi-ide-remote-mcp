@@ -19,49 +19,12 @@ Usage:  python tests/test_round42.py [path-to-DelphiLspMcp.exe]
 """
 import json
 import os
-import shutil
-import socket
-import subprocess
-import sys
-import tempfile
 import time
-import urllib.request
 import uuid
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:300])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round42')
-
-
-def borra(d):
-    def alafuerza(func, path, _exc):
-        try:
-            os.chmod(path, 0o700)
-            func(path)
-        except Exception:
-            pass
-    shutil.rmtree(d, onexc=alafuerza) if sys.version_info >= (3, 12) else \
-        shutil.rmtree(d, onerror=alafuerza)
-
-
-if os.path.isdir(BASE):
-    borra(BASE)
+BASE = mc.carpeta('round42')
 
 # Unico por pasada: lo que se mide es la contaminacion que monta ESTA
 # bateria entre sus dos jaulas, no la que dejaron las anteriores.
@@ -100,8 +63,7 @@ def monta(nombre):
     exedir = os.path.join(BASE, nombre, 'srv')
     jail = os.path.join(BASE, nombre, 'jail')
     os.makedirs(os.path.join(jail, 'u'), exist_ok=True)
-    os.makedirs(exedir, exist_ok=True)
-    shutil.copy(SRC, os.path.join(exedir, 'DelphiLspMcp.exe'))
+    mc.copia_exe(exedir)
     pas = os.path.join(jail, 'u', 'Cru.pas')
     open(pas, 'w', newline='\r\n').write(UNIT)
     return exedir, jail, pas
@@ -110,58 +72,20 @@ def monta(nombre):
 class Servidor:
     def __init__(self, exedir, jail, tok):
         self.tok = tok
-        sk = socket.socket()
-        sk.bind(('127.0.0.1', 0))
-        self.port = sk.getsockname()[1]
-        sk.close()
+        self.port = mc.puerto_libre()
         open(os.path.join(exedir, 'settings.ini'), 'w').write('\n'.join([
             '[Server]', 'BindIP=127.0.0.1', '',
             '[Workspace.%s]' % tok.upper(), 'Token=%s' % tok,
             'Roots=%s' % jail, '']))
-        self.proc = subprocess.Popen(
-            [os.path.join(exedir, 'DelphiLspMcp.exe'), '--http', str(self.port)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(3)
-        self.url = 'http://127.0.0.1:%d/mcp' % self.port
-        self.sid = None
-        _, self.sid = self.rpc(
-            {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-             'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-                        'clientInfo': {'name': tok, 'version': '1'}}})
-        self.rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-        self.rid = 100
-
-    def rpc(self, body, timeout=300):
-        h = {'Content-Type': 'application/json',
-             'Accept': 'application/json, text/event-stream',
-             'Authorization': 'Bearer ' + self.tok}
-        if self.sid:
-            h['Mcp-Session-Id'] = self.sid
-        r = urllib.request.urlopen(urllib.request.Request(
-            self.url, data=json.dumps(body).encode(), headers=h,
-            method='POST'), timeout=timeout)
-        raw = r.read().decode('utf-8', 'replace')
-        for l in raw.splitlines():
-            if l.startswith('data:'):
-                m = json.loads(l[5:].strip())
-                if 'result' in m or 'error' in m:
-                    return m, r.headers.get('Mcp-Session-Id')
-        try:
-            return json.loads(raw), r.headers.get('Mcp-Session-Id')
-        except Exception:
-            return None, r.headers.get('Mcp-Session-Id')
+        self.proc = mc.lanza_http(os.path.join(exedir, 'DelphiLspMcp.exe'), self.port,
+                                  mc.entorno())
+        # sin texto, el mensaje entero en JSON: es lo que ensena el detalle
+        self.cli = mc.Http(self.port, tok, t=300, respaldo_json=True)
+        self.cli.session(tok)
 
     def refs(self, pas, line, col):
-        self.rid += 1
-        r, _ = self.rpc({'jsonrpc': '2.0', 'id': self.rid,
-                         'method': 'tools/call',
-                         'params': {'name': 'delphi_references',
-                                    'arguments': {'path': pas, 'line': line,
-                                                  'character': col}}})
-        try:
-            return r['result']['content'][0]['text']
-        except Exception:
-            return json.dumps(r)[:400]
+        return self.cli.call('delphi_references',
+                             {'path': pas, 'line': line, 'character': col})
 
     def para(self):
         try:
@@ -195,6 +119,22 @@ try:
     for quien in ('A', 'B'):
         r = respuestas[quien]
         otra = ajena[quien]
+        propia = {'A': jailA, 'B': jailB}[quien].lower()
+        try:
+            j = json.loads(r)
+        except Exception:
+            j = {}
+        if not isinstance(j, dict):
+            j = {}
+        # Las DOS salidas legitimas, y solo ellas: contestar sobre SU simbolo
+        # (el JSON de referencias), o el error que se entiende cuando el motor
+        # resuelve la definicion fuera ("no busco sus usos"). Un timeout, un
+        # error cualquiera o la negativa cruda de la jaula no son ninguna.
+        contesta = j.get('identifier') == IDENT
+        se_niega = (r.startswith('error:') and 'FUERA de este workspace' in r
+                    and IDENT in r)
+        print('  (jaula %s: el motor %s)' % (quien, 'contesta con referencias' if contesta else
+              'resuelve fuera y se niega' if se_niega else 'NO da ninguna salida legitima'))
 
         # -------------------------------------------------------------- X1
         # EL INVARIANTE: pase lo que pase por dentro, en la respuesta no
@@ -202,47 +142,40 @@ try:
         # [Workspace.X] con tokens distintos, asi que esto no es estetica.
         check('X1%s la respuesta de la jaula %s no nombra la otra jaula'
               % (quien.lower(), quien),
-              otra.lower() not in r.lower(),
+              (contesta or se_niega) and otra.lower() not in r.lower(),
               'se ha colado %s en: %s' % (otra, r[:240]))
 
         # -------------------------------------------------------------- X2
         # Y no puede morir con la negativa cruda de la jaula: eso es el
         # sintoma de haber dado por buena una ruta que no era de aqui.
         check('X2%s ...ni muere con un RECHAZADO de jaula' % quien.lower(),
-              'FUERA de los workspaces permitidos' not in r, r[:240])
+              (contesta or se_niega) and 'FUERA de los workspaces permitidos' not in r,
+              r[:240])
 
         # -------------------------------------------------------------- X3
-        # Las dos salidas legitimas: contestar bien, o decir con claridad
-        # que la definicion cae fuera. Cualquier otra cosa no vale.
-        if 'FUERA de este workspace' in r:
-            check('X3%s la salida es el error que se entiende' % quien.lower(),
-                  IDENT in r and 'SIN CONFIGURAR' in r and
-                  'delphi_definition' in r, r[:300])
-        else:
-            try:
-                j = json.loads(r)
-            except Exception:
-                j = {}
-            # No se mide CUANTAS confirma: estas units van sin configurar a
-            # proposito y el motor resuelve lo que puede. Lo que se mide es
-            # que la respuesta habla de MI fichero y mira donde le toca.
-            propia = {'A': jailA, 'B': jailB}[quien].lower()
-            defe = (j.get('definition') or {}).get('path', '')
-            check('X3%s la respuesta habla de su propio fichero'
-                  % quien.lower(),
-                  j.get('identifier') == IDENT and
-                  propia in defe.lower().replace('srvc:', 'c:'),
-                  'identifier=%s definition=%s' % (j.get('identifier'), defe))
-            check('X3%s-b ...y solo mira dentro de su jaula'
-                  % quien.lower(),
-                  bool(j.get('scope')) and
-                  all(propia in s.lower().replace('srvc:', 'c:')
-                      for s in j.get('scope', [])),
-                  'scope=%s' % j.get('scope'))
+        # SIEMPRE los mismos dos checks, sea cual sea la salida que elija el
+        # motor (antes eran uno u otros dos segun la pasada). No se mide
+        # CUANTAS confirma: estas units van sin configurar a proposito y el
+        # motor resuelve lo que puede.
+        defe = (j.get('definition') or {}).get('path', '')
+        # X3: habla de lo SUYO - su fichero si contesta; su identificador y
+        # el porque (SIN CONFIGURAR, mira con delphi_definition) si se niega
+        check('X3%s la respuesta habla de su propio fichero'
+              % quien.lower(),
+              (contesta and propia in defe.lower().replace('srvc:', 'c:')) or
+              (se_niega and 'SIN CONFIGURAR' in r and 'delphi_definition' in r),
+              'identifier=%s definition=%s | %s' % (j.get('identifier'), defe, r[:200]))
+        # X3-b: mira SOLO dentro de su jaula - o no mira en ningun sitio
+        check('X3%s-b ...y solo mira dentro de su jaula'
+              % quien.lower(),
+              (contesta and bool(j.get('scope')) and
+               all(propia in s.lower().replace('srvc:', 'c:')
+                   for s in j.get('scope', []))) or
+              (se_niega and 'no busco sus usos' in r),
+              'scope=%s | %s' % (j.get('scope'), r[:200]))
 finally:
     for s in (a, b):
         if s:
             s.para()
 
-print('== test_round42: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round42')

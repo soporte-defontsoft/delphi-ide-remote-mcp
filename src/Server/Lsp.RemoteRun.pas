@@ -74,15 +74,28 @@ function PlataformaDelPerfil(const AProfile: string): string;
   <windows user>-<profile>/<Project>/<Project> - the folder delphi_build
   target=Deploy writes and announces in its deployNote. AExeName, when given,
   picks another file of THAT SAME folder (a helper binary of the deploy) and
-  may not contain path separators. Returns the JSON the tool hands back. }
+  may not contain path separators. Returns the JSON the tool hands back.
+  AGuardaSiSigue: True (remote-run, que devuelve el jobId al agente) deja
+  en el target la salida de un programa que SIGUE vivo al volver, para
+  leer despues lo que escriba con RemoteOutput; False (un gesto del nodo,
+  el @kill: nadie tiene su id) la borra siempre. }
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
-  const AArgv: TArray<string>; ATimeoutMs: Integer): TJSONObject;
+  const AArgv: TArray<string>; ATimeoutMs: Integer;
+  AGuardaSiSigue: Boolean = False): TJSONObject;
 
 { Mata el programa que un remote-run anterior dejo corriendo en el target:
   el trabajo AJobId, de ESE proyecto, en ESE perfil. Viaja como un trabajo
   mas cuyo binario es el verbo @kill; el lanzador lee el <job>.pid que su
   vigia escribio y mata ese proceso, y nada mas. }
 function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
+
+{ Lo que el trabajo AJobId de ESE proyecto lleva escrito en el target,
+  aunque su remote-run volviera hace rato: vivo, lo que lleve; terminado,
+  todo y su codigo de salida, y entonces su salida se BORRA del target
+  (leida entera, como el buzon). Es lo que se perdia: lo que un programa
+  con ventana escribe despues del plazo -el error al cerrar tras un
+  login- solo se veia entrando en la maquina (2026-09-26). }
+function RemoteOutput(const AProfile, ADprojPath, AJobId: string): TJSONObject;
 
 { Trocea una linea de argumentos como lo haria quien la escribio: por
   espacios, y con comillas DOBLES para agrupar uno que lleva espacios. Es el
@@ -251,8 +264,7 @@ begin
   Nombre := 'McpRunJob';
   if APlataforma.StartsWith('Win', True) then
     Nombre := Nombre + '.exe';
-  Result := TPath.Combine(TPath.Combine(
-    TPath.GetDirectoryName(ParamStr(0)), 'node'), Nombre);
+  Result := TPath.Combine(ServerDir('node'), Nombre);
   if not TFile.Exists(Result) then
     Result := '';
 end;
@@ -320,14 +332,62 @@ begin
     Exit;
   ASalida := ATexto.Substring(0, P).TrimRight;
   Cola := ATexto.Substring(P + Length('___RC=')).Trim;
-  ACodigo := StrToIntDef(Cola.Split([#10, #13])[0].Trim, -1);
+  // un ___RC= a medio escribir (output lo trae mientras el vigia escribe)
+  // deja la cola vacia: PrimerTrozo, no Split()[0]
+  ACodigo := StrToIntDef(PrimerTrozo(Cola, [#10, #13]).Trim, -1);
+end;
+
+{ Un id de trabajo lo compone ESTE servidor (fecha-hora-fragmento): otra
+  cosa no es un id, y el lanzador lo usa para nombrar un fichero. Lo
+  comprueban kill y output. }
+function JobIdValido(const AJobId: string): Boolean;
+var
+  C: Char;
+begin
+  Result := AJobId <> '';
+  for C in AJobId do
+    if not CharInSet(C, ['0'..'9', 'a'..'f', 'A'..'F', '-']) then
+      Exit(False);
+end;
+
+{ Trae <ADeployRel>/<job>.out del target y lo parte: el entorno grafico,
+  lo que escribio el programa y, si TERMINO, su codigo. EL lector de ese
+  fichero: remote-run mientras espera y output despues. False si no se
+  pudo traer (no esta, o paclient fallo); los var solo cambian si se
+  trajo. La copia local se borra al leerla. }
+function TraeSalida(const APc, AProfile, ADeployRel, AJobId, ATmpDir: string;
+  var ATexto, AEntorno, ASalida: string; var ACodigo: Integer;
+  var ATerminado: Boolean): Boolean;
+var
+  OutFile, Ops, Output: string;
+  Bytes: TBytes;
+begin
+  Result := False;
+  OutFile := TPath.Combine(ATmpDir, AJobId + '.out');
+  if TFile.Exists(OutFile) then
+    TFile.Delete(OutFile);
+  Ops := Format('"--get=%s/%s.out,%s"', [ADeployRel, AJobId, ATmpDir]);
+  if (Paclient(APc, Ops, AProfile, Output) <> 0) or not TFile.Exists(OutFile) then
+    Exit;
+  try
+    Bytes := TFile.ReadAllBytes(OutFile);
+  finally
+    TFile.Delete(OutFile);
+  end;
+  // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
+  // leida en estricto un solo byte suelto mataba el run entero.
+  ATexto := DecodeSourceBytes(Bytes);
+  AEntorno := PartirEntorno(ATexto);
+  ATerminado := PartirSalida(ATexto, ASalida, ACodigo);
+  Result := True;
 end;
 
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
-  const AArgv: TArray<string>; ATimeoutMs: Integer): TJSONObject;
+  const AArgv: TArray<string>; ATimeoutMs: Integer;
+  AGuardaSiSigue: Boolean): TJSONObject;
 var
   ProjName, DeployRel, ARemoteExe, ExeLeaf: string;
-  Pc, JobId, TmpDir, GuionFile, OutFile, Ops, Output, Texto, Salida: string;
+  Pc, JobId, TmpDir, GuionFile, Ops, Output, Texto, Salida: string;
   EntornoNota, Lanzador, Plataforma, RemotoLanzador: string;
   Flag: Integer;
   Rc, Codigo, Espera: Integer;
@@ -426,7 +486,6 @@ begin
 
   // el resultado se recoge del fichero: existe en cuanto el programa escribe,
   // y trae el centinela cuando termina
-  OutFile := TPath.Combine(TmpDir, JobId + '.out');
   Texto := '';
   Terminado := False;
   Codigo := -1;
@@ -445,17 +504,8 @@ begin
       Espera := Espera * 2;
     if Espera > POLL_MS then
       Espera := POLL_MS;
-    if TFile.Exists(OutFile) then
-      TFile.Delete(OutFile);
-    Ops := Format('"--get=%s/%s.out,%s"', [DeployRel, JobId, TmpDir]);
-    if (Paclient(Pc, Ops, AProfile, Output) = 0) and TFile.Exists(OutFile) then
-    begin
-      // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
-      // leida en estricto un solo byte suelto mataba el run entero.
-      Texto := DecodeSourceBytes(TFile.ReadAllBytes(OutFile));
-      EntornoNota := PartirEntorno(Texto);
-      Terminado := PartirSalida(Texto, Salida, Codigo);
-    end;
+    TraeSalida(Pc, AProfile, DeployRel, JobId, TmpDir, Texto, EntornoNota,
+      Salida, Codigo, Terminado);
   until Terminado or (Sw.ElapsedMilliseconds > ATimeoutMs);
 
   Result.AddPair('jobId', JobId);
@@ -482,19 +532,26 @@ begin
     Result.AddPair('stillRunningNote', Format(SR_REMOTERUN_TIMEOUT_FMT,
       [ATimeoutMs div 1000, DeployRel]));
     Result.AddPair('killNote', Format(SN_REMOTERUN_KILL_FMT, [AProfile, JobId]));
+    if AGuardaSiSigue then
+      Result.AddPair('outputNote', Format(SN_REMOTERUN_OUTPUT_FMT, [AProfile, JobId]));
     if Texto <> '' then
       Result.AddPair('output', Texto);
   end;
 
-  // limpieza remota: la salida ya viajo aqui
-  if TFile.Exists(OutFile) then
-    TFile.Delete(OutFile);
-  // ...y el lanzador de este trabajo (en Linux flag 3 lo deja; en Windows
-  // PAServer ya lo borro) y los vigias de Windows de trabajos acabados
-  // (<job>.wait.<pid>.exe vive lo que el programa: el de una ventana viva se
-  // queda). Un nombre que no exista no es un error que importe.
-  Ops := Format('"--Remove=%s/%s.out;%s/%s;%s/*.wait*.exe"',
-    [DeployRel, JobId, DeployRel, RemotoLanzador, DeployRel]);
+  // Limpieza remota: el lanzador de este trabajo (en Linux flag 3 lo deja;
+  // en Windows PAServer ya lo borro) y los vigias de Windows de trabajos
+  // acabados (<job>.wait.<pid>.exe vive lo que el programa: el de una
+  // ventana viva se queda). Y la salida si ya viajo ENTERA. La de un
+  // programa que sigue vivo se queda para output: lo que escriba despues
+  // -un error al cerrar tras el login, su codigo- es justo lo que se
+  // perdia (2026-09-26: el AV de Galatea solo se veia en el journal de
+  // Zorin). Un nombre que no exista no es un error que importe.
+  if Terminado or not AGuardaSiSigue then
+    Ops := Format('"--Remove=%s/%s.out;%s/%s;%s/*.wait*.exe"',
+      [DeployRel, JobId, DeployRel, RemotoLanzador, DeployRel])
+  else
+    Ops := Format('"--Remove=%s/%s;%s/*.wait*.exe"',
+      [DeployRel, RemotoLanzador, DeployRel]);
   Paclient(Pc, Ops, AProfile, Output);
 
   Result.AddPair('note', SN_REMOTERUN_NOTE);
@@ -502,19 +559,15 @@ end;
 
 function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
 var
-  C: Char;
   Rc: Integer;
 begin
-  // el id lo compuso ESTE servidor (fecha-hora-fragmento): otra cosa no es
-  // un id, y el lanzador lo usa para nombrar un fichero
-  for C in AJobId do
-    if not CharInSet(C, ['0'..'9', 'a'..'f', 'A'..'F', '-']) then
-    begin
-      Result := TJSONObject.Create;
-      Result.AddPair('success', TJSONBool.Create(False));
-      Result.AddPair('error', SR_REMOTERUN_KILL_BADJOB);
-      Exit;
-    end;
+  if not JobIdValido(AJobId) then
+  begin
+    Result := TJSONObject.Create;
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('error', SR_REMOTERUN_BADJOB);
+    Exit;
+  end;
   Result := RemoteRun(AProfile, ADprojPath, '@kill', [AJobId], 20000);
   Result.RemovePair('remoteExe').Free;
   Result.AddPair('job', AJobId);
@@ -525,6 +578,68 @@ begin
   if Result.GetValue('note') <> nil then
     Result.RemovePair('note').Free;
   Result.AddPair('note', SN_REMOTERUN_KILL_NOTE);
+end;
+
+function RemoteOutput(const AProfile, ADprojPath, AJobId: string): TJSONObject;
+var
+  Pc, DeployRel, TmpDir, Texto, Entorno, Salida, Ops, Output: string;
+  Codigo: Integer;
+  Terminado: Boolean;
+begin
+  Result := TJSONObject.Create;
+  if not JobIdValido(AJobId) then
+  begin
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('error', SR_REMOTERUN_BADJOB);
+    Exit;
+  end;
+  Pc := PaClientPath;
+  if Pc = '' then
+  begin
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('error', SR_REMOTERUN_NO_PACLIENT);
+    Exit;
+  end;
+  // la misma carpeta que deriva remote-run: la del proyecto, nunca otra
+  DeployRel := TPath.GetFileNameWithoutExtension(ADprojPath);
+  TmpDir := ServerTempDir('remoterun');
+  CrearCarpeta(TmpDir);
+  Texto := '';
+  Entorno := '';
+  Salida := '';
+  Codigo := -1;
+  Terminado := False;
+  Result.AddPair('jobId', AJobId);
+  Result.AddPair('profile', AProfile);
+  Result.AddPair('project', DeployRel);
+  if not TraeSalida(Pc, AProfile, DeployRel, AJobId, TmpDir, Texto, Entorno,
+    Salida, Codigo, Terminado) then
+  begin
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('error', Format(SR_REMOTERUN_NO_OUTPUT_FMT, [AJobId]));
+    Exit;
+  end;
+  if Entorno <> '' then
+    Result.AddPair('graphicalEnv', Entorno);
+  Result.AddPair('stillRunning', TJSONBool.Create(not Terminado));
+  if Terminado then
+  begin
+    Result.AddPair('success', TJSONBool.Create(Codigo = 0));
+    Result.AddPair('exitCode', TJSONNumber.Create(Codigo));
+    Result.AddPair('output', Salida);
+    // leida ENTERA = borrada, como el buzon y las capturas: en el target
+    // no se acumula nada que alguien ya tiene
+    Ops := Format('"--Remove=%s/%s.out"', [DeployRel, AJobId]);
+    Paclient(Pc, Ops, AProfile, Output);
+    Result.AddPair('note', SN_REMOTERUN_OUTPUT_DONE);
+  end
+  else
+  begin
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('exitCode', TJSONNumber.Create(-1));
+    Result.AddPair('output', Texto);
+    Result.AddPair('note', Format(SN_REMOTERUN_OUTPUT_ALIVE_FMT, [AProfile, AJobId]));
+  end;
 end;
 
 function PlataformaDelPerfil(const AProfile: string): string;
@@ -560,8 +675,7 @@ begin
   Nombre := NODE_PROJECT;
   if APlataforma.StartsWith('Win', True) then
     Nombre := NODE_PROJECT + '.exe';
-  Result := TPath.Combine(TPath.Combine(
-    TPath.GetDirectoryName(ParamStr(0)), 'node'), Nombre);
+  Result := TPath.Combine(ServerDir('node'), Nombre);
   if not TFile.Exists(Result) then
     Result := '';
 end;

@@ -774,7 +774,7 @@ begin
     // private fields entirely - one of them being the subject of a refactor.
     if TRegEx.IsMatch(L, '^[A-Za-z_]\w*[ ]*=[ ]*(class|record|interface)\b') then
     begin
-      Owner := L.Split(['='])[0].Trim;
+      Owner := PrimerTrozo(L, ['=']).Trim;
       Depth := 1;
     end
     else if (Owner <> '') and TRegEx.IsMatch(L, '(?i)^end;') then

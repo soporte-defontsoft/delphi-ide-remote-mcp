@@ -3,105 +3,42 @@
 Usage:  python tests/test_workspace_tools.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Uses this very repository as the git fixture.
 """
-import json, subprocess, threading, queue, time, os, sys, base64, hashlib
-import tempfile, shutil, stat
+import json, os, base64, hashlib, subprocess
+import mcp_cliente as mc
+from mcp_cliente import check
 
-# Every scratch folder this battery needs lives under ONE parent with a FIXED
-# name. mkdtemp gave each run a new random path, which scatters leftovers all
+# Every scratch folder this battery needs lives under ITS folder, with FIXED
+# names. mkdtemp gave each run a new random path, which scatters leftovers all
 # over %TEMP% and - for anything that opens a port - makes Windows Firewall
 # treat each run as a brand-new program and ask again.
+BASE = mc.carpeta('workspace-tools')
+
+
 def _fixed(name):
-    d = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', name)
-    # rmtree(ignore_errors=True) is NOT enough here and failing silently is the
-    # worst outcome: a cloned repo leaves read-only files under .git\objects, so
-    # the folder survives, the next run finds a repo already there, git clone
-    # refuses and three checks quietly stop running. Clear the read-only bit and
-    # try again, then assert the folder is really gone.
-    for _ in range(3):
-        shutil.rmtree(d, ignore_errors=True)
-        if not os.path.isdir(d):
-            break
-        for root, _dirs, files in os.walk(d):
-            for f in files:
-                try:
-                    os.chmod(os.path.join(root, f), stat.S_IWRITE)
-                except OSError:
-                    pass
-    assert not os.path.isdir(d), 'no se pudo limpiar la carpeta de scratch: ' + d
-    os.makedirs(d, exist_ok=True)
-    return d
+    # mc.carpeta empties it even with read-only files (a clone leaves them
+    # under .git\objects) and says so if it cannot: the next run must never
+    # find a repo already there (git clone refused and three checks quietly
+    # stopped running).
+    return mc.carpeta(os.path.join('workspace-tools', name))
 
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
+REPO = mc.REPO
 SRC = os.path.join(REPO, 'src', 'Server')  # la carpeta del servidor: units, .dproj y Compiled (reorganizacion 24-sep)
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SRC, 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+# Its OWN copy, in a folder that IS build output by name (Compiled\Win64\
+# Release): 'list: root explicito DENTRO de build output' lists that folder,
+# not the repo's.
+EXE = mc.copia_exe(os.path.join(BASE, 'Compiled', 'Win64', 'Release'))
 
 # Explicit git URLs need the operator's allowlist since v0.62 (an arbitrary URL
 # made the SERVER open the connection). The clone check below is about cloning,
 # not about the allowlist, so allow the host it uses.
-_env = dict(os.environ)
-_env.setdefault('DELPHI_MCP_ROOTS', REPO + ';' + os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests'))  # v0.98: sin jaula = solo lectura; esta bateria toca repo Y temp
-_env['DELPHI_MCP_GIT_REMOTES'] = 'github.com'
-proc = subprocess.Popen([EXE], env=_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-def recv(r, t=90):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-def call(name, args, t=90):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": name, "arguments": args}})
-    r = recv(rid[0], t)
-    if r is None:
-        return '(timeout)'
-    if 'error' in r:
-        return 'MCPERROR ' + json.dumps(r['error'])[:150]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "ws-battery", "version": "1"}}})
-assert recv(1, 20), 'no initialize response'
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-P = F = 0
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('PASS -', name)
-    else:
-        F += 1
-        print('FAIL -', name, '|', str(detail)[:170])
+# v0.98: sin jaula = solo lectura; esta bateria toca el repo Y su carpeta
+_env = mc.entorno({'DELPHI_MCP_ROOTS': REPO + ';' + BASE,
+                   'DELPHI_MCP_GIT_REMOTES': 'github.com'})
+# 'servidor' y no 'srv': mas abajo 'srv' es la ficha de delphi_workspace
+servidor = mc.Stdio(EXE, _env, inicializa=False, t=90)
+assert servidor.inicializa('ws-battery'), 'no initialize response'
+call = servidor.call
 
 # --- search ---
 out = call('delphi_search', {"root": SRC, "query": "RequestWithRetry", "wholeword": True})
@@ -285,7 +222,9 @@ check('fetch: fue en varios chunks', len(local) > 400, len(local))
 # --- a desktop capture in the server's temp folder is CONSUMED on retrieval
 # (David, 2026-09-25: delete it once the agent has fetched it; no cache, no
 # rotation, nothing kept). Retrieved = last chunk served. A normal file stays.
-capdir = os.path.join(REPO, '__delphi-temp', 'desktop')
+# In the battery's own root, never in the repo: REPO\__delphi-temp is where a
+# server whose first writable root is this repo leaves its deliverables.
+capdir = os.path.join(BASE, '__delphi-temp', 'desktop')
 os.makedirs(capdir, exist_ok=True)
 cap = os.path.join(capdir, 'desktop-bateria-20260925-000000000-cafe01.png')
 payload = b'\x89PNG' + os.urandom(3000)
@@ -304,7 +243,7 @@ try:
     d3 = json.loads(call('delphi_fetch', {"path": LIC, "offset": 0, "maxbytes": 400}))
     check('un fichero normal no se consume', 'consumedOnServer' not in d3 and os.path.exists(LIC), json.dumps(d3)[:120])
 finally:
-    shutil.rmtree(os.path.join(REPO, '__delphi-temp', 'desktop'), ignore_errors=True)
+    mc.borra(capdir)
 
 # --- git (this repo as fixture) ---
 out = call('delphi_git', {"repo": REPO, "command": "status"})
@@ -316,8 +255,17 @@ check('git: log', out.startswith('exit=0')
       and len([l for l in out.splitlines()[1:] if l.strip()]) >= 5, out[:150])
 out = call('delphi_git', {"repo": REPO, "command": "branch"})
 check('git: branch', out.startswith('exit=0') and 'main' in out, out[:150])
-out = call('delphi_git', {"repo": REPO, "command": "diff", "args": "--stat"})
-check('git: diff --stat', out.startswith('exit='), out[:120])
+# The stat of the LAST COMMIT, not of the working tree: the working tree is
+# being edited while the battery runs, the commit is fixed. And it has to be
+# the SAME stat git gives here - until 2026-09-26 any "exit=" passed, a
+# fatal "exit=128" included.
+out = call('delphi_git', {"repo": REPO, "command": "diff", "args": "--stat HEAD~1 HEAD"})
+_git = subprocess.run(['git', '-C', REPO, 'diff', '--stat', 'HEAD~1', 'HEAD'],
+                      capture_output=True, text=True, encoding='utf-8', errors='replace')
+_stat = lambda t: [l.strip() for l in t.splitlines() if l.strip()]
+check('git: diff --stat', out.startswith('exit=0') and bool(_stat(_git.stdout))
+      and _stat(out)[1:] == _stat(_git.stdout) and 'changed' in _stat(out)[-1],
+      (out[:120], _git.stdout[-120:]))
 out = call('delphi_git', {"repo": REPO, "command": "rebase"})
 check('git: comando fuera de whitelist rechaza', out.startswith('error: unknown command'), out[:120])
 out = call('delphi_git', {"repo": REPO, "command": "log", "args": "; del *"})
@@ -342,7 +290,11 @@ if sig_line >= 0:
           'PathDenied' in out or 'APath' in out, out[:200])
     out = call('delphi_definition', {"path": GUARD, "line": ident_line,
                                      "character": ident_char, "kind": "xx"})
-    check('definition: kind invalido rechaza', 'RECHAZADO' in out, out[:120])
+    # the refusal OF THE PARAMETER, naming the valid kinds - not any RECHAZADO
+    # (a jail refusal passed too)
+    check('definition: kind invalido rechaza',
+          out.startswith('RECHAZADO') and 'kind debe ser' in out
+          and 'definition | declaration | implementation' in out, out[:120])
 else:
     check('signature: ancla de test encontrada en Lsp.Guard.pas', False, 'no anchor')
 
@@ -415,7 +367,6 @@ except Exception:
     check('installs: parsea', False, out[:200])
 
 # --- git init / tag / push (in a THROWAWAY dir - never against this repo) ---
-import tempfile, shutil
 tmpgit = _fixed('git')
 try:
     out = call('delphi_git', {"repo": tmpgit, "command": "init"})
@@ -451,7 +402,7 @@ try:
     check('git: acentos del mensaje SIN mojibake (utf-8 bien decodificado)',
           '¡signos!' in out and 'Ã' not in out, out[:200])
 finally:
-    shutil.rmtree(tmpgit, ignore_errors=True)
+    mc.borra(tmpgit)
 
 # --- delphi_upload: mirror of fetch, byte-identical reassembly ---
 import base64, secrets
@@ -512,7 +463,7 @@ try:
     check('upload: chunkSha256 con forma mala rechaza el parametro, el fichero sigue',
           out.startswith('RECHAZADO') and 'sha256' in out and open(zb, 'rb').read() == b'0123456789abcdef', out[:160])
 finally:
-    shutil.rmtree(tmpup, ignore_errors=True)
+    mc.borra(tmpup)
 
 # --- git clone: whole repo in one call (network; skipped if offline) ---
 tmpcl = _fixed('clone')
@@ -535,7 +486,7 @@ try:
                               "message": "file:///C:/Windows"})
     check('git clone: URL no http/ssh rechazada', out.startswith('error:'), out[:120])
 finally:
-    shutil.rmtree(tmpcl, ignore_errors=True)
+    mc.borra(tmpcl)
 
 # --- delphi_textedit (non-Delphi text files) ---
 tmptxt = _fixed('textedit')
@@ -626,13 +577,9 @@ try:
     bdir = os.path.join(tmptxt, '__delphi-patch')
     check('textedit: backup automatico creado', os.path.isdir(bdir), bdir)
 finally:
-    shutil.rmtree(tmptxt, ignore_errors=True)
+    mc.borra(tmptxt)
 out = call('delphi_git', {"repo": REPO, "command": "commit"})
 check('git: commit sin message rechaza', 'needs the "message"' in out, out[:120])
 
-print()
-print('== workspace battery: %d PASS / %d FAIL ==' % (P, F))
-proc.stdin.close()
-time.sleep(1)
-proc.kill()
-sys.exit(1 if F else 0)
+servidor.cierra()
+mc.fin('workspace battery')

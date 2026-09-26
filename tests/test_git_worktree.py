@@ -8,12 +8,11 @@ crosses a junction in an ignored folder and empties what is behind it.
 
 Usage:  python tests/test_git_worktree.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, shutil, stat, subprocess, sys, tempfile, threading, queue, time
+import os, subprocess
+import mcp_cliente as mc
+from mcp_cliente import check
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO_ROOT, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'git-worktree')
+BASE = os.path.join(mc.RAIZ, 'git-worktree')
 
 
 def quita_enlaces(base):
@@ -26,15 +25,16 @@ def quita_enlaces(base):
 
 
 def borra(base):
-    def reintenta(fn, p, exc):
-        os.chmod(p, stat.S_IWRITE)
-        fn(p)
+    # los junctions de DENTRO primero (esta bateria los planta); el resto,
+    # objetos de git de solo lectura incluidos, es de mc.borra
     quita_enlaces(base)
-    if os.path.isdir(base):
-        shutil.rmtree(base, onexc=reintenta)
+    mc.borra(base)
 
 
-borra(BASE)
+quita_enlaces(BASE)
+BASE = mc.carpeta('git-worktree')
+# su propia copia del servidor, fuera de las raices (MINE) y de la victima
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 MINE = os.path.join(BASE, 'mio')          # Roots
 OUT = os.path.join(BASE, 'fuera')         # outside everything
 VIC = os.path.join(OUT, 'victima')
@@ -61,75 +61,11 @@ g('tag', 'v1')
 open(os.path.join(REPO, 'version.txt'), 'w').write('dos')
 g('commit', '-qam', 'dos')
 
-P = F = 0
 
-
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('  PASS', name)
-    else:
-        F += 1
-        print('  FAIL', name, '--', str(detail)[:300])
-
-
-class Server:
-    def __init__(self, env):
-        e = {k: v for k, v in os.environ.items() if not k.startswith('DELPHI_MCP_')}
-        e.update(env)
-        self.proc = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL, text=True, encoding='utf-8',
-                                     errors='replace', bufsize=1)
-        self.q = queue.Queue()
-        threading.Thread(target=self._reader, daemon=True).start()
-        self.n = 0
-        self.send({'jsonrpc': '2.0', 'id': 0, 'method': 'initialize', 'params': {
-            'protocolVersion': '2025-03-26', 'capabilities': {},
-            'clientInfo': {'name': 'bateria-git-worktree', 'version': '1'}}})
-        self.recv(0)
-        self.send({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-
-    def _reader(self):
-        for line in self.proc.stdout:
-            self.q.put(line)
-
-    def send(self, o):
-        self.proc.stdin.write(json.dumps(o) + '\n')
-        self.proc.stdin.flush()
-
-    def recv(self, rid, t=180):
-        end = time.time() + t
-        while time.time() < end:
-            try:
-                line = self.q.get(timeout=1)
-            except queue.Empty:
-                continue
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == rid:
-                return m
-        return {'error': 'timeout'}
-
-    def call(self, name, args, t=180):
-        self.n += 1
-        self.send({'jsonrpc': '2.0', 'id': self.n, 'method': 'tools/call',
-                   'params': {'name': name, 'arguments': args}})
-        r = self.recv(self.n, t)
-        if 'error' in r:
-            return 'MCPERROR: ' + json.dumps(r['error'])
-        c = r['result'].get('content', [])
-        return c[0].get('text', '') if c else '(no content)'
-
-    def kill(self):
-        try:
-            self.proc.stdin.close()
-        except Exception:
-            pass
-        time.sleep(0.5)
-        self.proc.kill()
+def Server(env):
+    # el protocolo con el que esta bateria nacio, y su plazo de 180 s
+    return mc.Stdio(EXE, mc.entorno(env), nombre='bateria-git-worktree',
+                    protocolo='2025-03-26', t=180)
 
 
 def rechazado(out):
@@ -199,7 +135,7 @@ check('remove limpio: quitado', out.startswith('exit=0') and not os.path.exists(
 out = wt(args='list')
 check('list: ya no la ensena', out.startswith('exit=0') and 'repo-v1' not in out, out)
 check('la victima de fuera sigue intacta al final', os.listdir(VIC) == ['v.txt'], os.listdir(VIC))
-srv.kill()
+srv.cierra()
 
 # ---- read-only mode (local stdio with no roots): list yes, add no
 ro = Server({})
@@ -208,9 +144,7 @@ check('solo lectura: list SI', out.startswith('exit=0'), out)
 out = ro.call('delphi_git', {'repo': REPO, 'command': 'worktree', 'args': 'add',
                              'path': os.path.join(MINE, 'ro-wt'), 'ref': 'v1'})
 check('solo lectura: add RECHAZADO', rechazado(out) and not os.path.exists(os.path.join(MINE, 'ro-wt')), out)
-ro.kill()
+ro.cierra()
 
 borra(BASE)
-print()
-print('== git-worktree battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('git-worktree battery')

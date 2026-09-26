@@ -19,85 +19,16 @@ form.
 
 Usage:  python tests/test_round22.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, glob
+import json, os, glob
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round22')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('round22')
+EXE = mc.copia_exe(BASE)
 
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                        text=True, encoding='utf-8')
-q = queue.Queue()
-
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-P = F = 0
-
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-def recv(r, t=300):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-
-def call(tool, args, t=300):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": tool, "arguments": args}})
-    r = recv(rid[0], t)
-    if not r:
-        return '(sin respuesta)'
-    return r.get('result', {}).get('content', [{}])[0].get('text', 'ERR')
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:260])
-
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "round22", "version": "1"}}})
-recv(1)
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-time.sleep(0.3)
+# plazo de 300 s: hay un link Linux64
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='round22', t=300)
+call = srv.call
 
 # The masker runs on every textual result, so delphi_read of a crafted file
 # exercises it machine-independently. The file reproduces the linker-echo
@@ -164,7 +95,10 @@ check('M5b no se enmascara de mas: la respuesta normal sigue siendo JSON '
 # M4 live: a real Linux64 link on machines that hold the SDK
 r = call('delphi_create', {'kind': 'project-console', 'name': 'TailM', 'dir': BASE})
 dpr = glob.glob(os.path.join(BASE, '**', 'TailM.dpr'), recursive=True)
-if dpr:
+M4 = 'M4 link Linux64 real: outputTail sin srvhost y linker legible'
+if not dpr:
+    check(M4, False, 'no se pudo crear el proyecto de la prueba: ' + r[:200])
+else:
     dproj = dpr[0][:-4] + '.dproj'
     call('delphi_config', {'project': dproj, 'command': 'add-platform',
                            'platform': 'Linux64'})
@@ -181,12 +115,19 @@ if dpr:
         j = {}
     if j.get('success') is True:
         tail = j.get('outputTail') or ''
-        check('M4 link Linux64 real: outputTail sin srvhost y linker legible',
+        check(M4,
               'srvhost' not in tail and 'Linker command line' in tail
               and 'sysroot' in tail, 'srvhost x%d' % tail.count('srvhost'))
+    elif 'success' in j and not j.get('sdk'):
+        # SOLO esto es "sin SDK": el build CORRIO y el servidor no encontro
+        # ningun SDK de Linux64 con el que enlazar (la respuesta de un build
+        # con SDK lo nombra en "sdk")
+        print('SKIP M4: esta maquina no tiene SDK de Linux64 (el build corrio sin '
+              'ninguno); M1-M3 cubren el masker')
     else:
-        print('SKIP M4: esta maquina no linka Linux64 (sin SDK); M1-M3 cubren el masker')
+        # un build con SDK que falla, un RECHAZADO, un timeout...: eso no es
+        # "esta maquina no linka", es un fallo
+        check(M4, False, out[:300])
 
-proc.kill()
-print('\n== round-22 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('round-22 battery')

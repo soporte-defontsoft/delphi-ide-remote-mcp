@@ -179,8 +179,17 @@ begin
       // saying the call was wrong, so it goes out as a plain refusal.
       on E: EArgumentException do
         Result := 'error: ' + E.Message;
+      // [local change 2026-09-26] ...and a REFUSAL that travelled as an
+      // exception is a refusal too: a check deep inside (the jail in
+      // Lsp.Session, "the compiler does not resolve X" in Lsp.References)
+      // raises with the very RECHAZADO text a tool would have returned, and
+      // wrapping it here told the agent the server had broken. Measured by
+      // test_round48 while hardening it. One place, every tool.
       on E: Exception do
-        Result := 'Error executing tool: ' + E.Message;
+        if E.Message.StartsWith('RECHAZADO') then
+          Result := E.Message
+        else
+          Result := 'Error executing tool: ' + E.Message;
     end;
   finally
     Owned.Free;

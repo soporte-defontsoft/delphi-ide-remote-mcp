@@ -27,21 +27,8 @@ prueba del despliegue, no del build; la version que contesta sale en una NOTA.
 import json
 import os
 import subprocess
-import sys
-import urllib.error
-import urllib.request
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:300])
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
 SERVICIO = 'DelphiLspMcp'
@@ -52,30 +39,20 @@ q = subprocess.run(['sc.exe', 'query', SERVICIO], capture_output=True, text=True
 if q.returncode != 0:
     print('NOTA: en esta maquina no hay servicio %s instalado; el modo servicio '
           'no se mide aqui.' % SERVICIO)
-    print('== test_service_smoke: 0 OK | 0 fallos ==')
-    sys.exit(0)
+    mc.fin('test_service_smoke')
 
 check('V1 el SCM da el servicio por RUNNING', 'RUNNING' in q.stdout,
       q.stdout.strip()[:200])
 
 
 def post(body, tok='', sid=None):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream'}
-    if tok:
-        h['Authorization'] = 'Bearer ' + tok
-    if sid:
-        h['Mcp-Session-Id'] = sid
+    # (status, texto, session-id); status 0 si ni conecta: V2 mira eso, y
+    # mc.post lanza en ese caso (solo un 4xx/5xx es una respuesta)
     try:
-        r = urllib.request.urlopen(urllib.request.Request(
-            URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-            timeout=60)
-        return r.status, r.read().decode('utf-8', 'replace'), \
-            r.headers.get('Mcp-Session-Id')
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode('utf-8', 'replace'), None
+        st, h, raw = mc.post(URL, body, tok, sid, t=60)
     except Exception as e:
         return 0, str(e), None
+    return st, raw, (h.get('Mcp-Session-Id') if 200 <= st < 300 else None)
 
 
 INIT = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
@@ -144,5 +121,4 @@ else:
     else:
         print('NOTA: token de solo lectura; V7 no se mide.')
 
-print('== test_service_smoke: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_service_smoke')

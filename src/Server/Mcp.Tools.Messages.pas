@@ -73,7 +73,7 @@ const
 
 function MessagesRoot: string;
 begin
-  Result := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), MESSAGES_DIR);
+  Result := ServerDir(MESSAGES_DIR);
 end;
 
 { Pending .md files of one folder, oldest first (by name: the operator's

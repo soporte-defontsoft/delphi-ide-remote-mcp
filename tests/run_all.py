@@ -12,6 +12,14 @@ Usage:
     python tests/run_all.py [path-to-DelphiLspMcp.exe] [-k substring]
 """
 import os, sys, glob, shutil, tempfile, subprocess, time
+import mcp_cliente as mc  # borra(): el barrido que puede con lo de solo lectura
+
+# La consola es cp1252, y el error de una bateria puede traer un mensaje de
+# Windows en castellano leido con errors='replace' (U+FFFD dentro). Al
+# imprimirlo se caia ESTE script, justo cuando explicaba por que una
+# bateria salio roja: medido 2026-09-26, test_round20 roja "sin una linea"
+# y run_all muerto con UnicodeEncodeError. Lo que no quepa sale como '?'.
+sys.stdout.reconfigure(errors='replace')
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
@@ -27,7 +35,7 @@ SRC = args[0] if args else os.path.join(
 if not os.path.exists(SRC):
     sys.exit('no encuentro el exe: ' + SRC)
 
-RAIZ = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests')
+RAIZ = mc.RAIZ
 CLEAN = os.path.join(RAIZ, '_cleanexe')
 # Se barre la raiz ENTERA, no solo el exe: cada bateria limpia lo suyo cuando
 # acaba bien, pero una que muere a medias deja su carpeta, y la siguiente
@@ -35,8 +43,8 @@ CLEAN = os.path.join(RAIZ, '_cleanexe')
 # dos veces en dos dias). Medido el 2026-09-21: 3,5 GB de restos de ~90
 # baterias. Una suite completa empieza y acaba con la raiz vacia.
 if not only:
-    shutil.rmtree(RAIZ, ignore_errors=True)
-shutil.rmtree(CLEAN, ignore_errors=True)
+    mc.borra(RAIZ)
+mc.borra(CLEAN)
 # Si la carpeta sigue ahi despues del rmtree es que OTRA regresion la tiene
 # cogida (su exe esta en uso). Dos suites a la vez comparten la raiz temporal
 # y se pisan, asi que se dice y se para - no se revienta con un traceback de
@@ -95,5 +103,5 @@ for name, out in failed:
 # ...y no se deja nada en el %TEMP% de la maquina. Con rojas se conserva: lo
 # que dejo la bateria que fallo es la evidencia.
 if not failed:
-    shutil.rmtree(RAIZ if not only else CLEAN, ignore_errors=True)
+    mc.borra(RAIZ if not only else CLEAN)
 sys.exit(1 if failed else 0)

@@ -136,7 +136,7 @@ begin
   // reports folder, exactly as before the parameter existed.
   Agent := Slug(Params.Agent);
 
-  Dir := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), REPORTS_DIR);
+  Dir := ServerDir(REPORTS_DIR);
   if Agent <> '' then
     Dir := TPath.Combine(Dir, Agent);
   CrearCarpeta(Dir);

@@ -16,83 +16,21 @@ a 912-line unit - a small model drowned before doing anything. Now:
 
 Usage:  python tests/test_round16.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, glob
+import json, time, os, shutil, glob
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round16')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('round16')
+EXE = mc.copia_exe(BASE)
 # a real big unit for the symbols wall (typ. >30k chars of full tree)
-shutil.copy(os.path.join(REPO, 'src', 'Server', 'Lsp.Guard.pas'),
+shutil.copy(os.path.join(mc.REPO, 'src', 'Server', 'Lsp.Guard.pas'),
             os.path.join(BASE, 'Big.pas'))
 open(os.path.join(BASE, 'Small.pas'), 'w').write(
     'unit Small;\ninterface\nprocedure Uno;\nimplementation\n'
     'procedure Uno;\nbegin\nend;\nend.\n')
 
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                        text=True, encoding='utf-8')
-q = queue.Queue()
-
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-P = F = 0
-
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-def recv(r, t=60):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-
-def call(tool, args):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": tool, "arguments": args}})
-    r = recv(rid[0])
-    if not r:
-        return '(sin respuesta)'
-    return r.get('result', {}).get('content', [{}])[0].get('text', 'ERR')
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:260])
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='round16')
+call = srv.call
 
 
 def jload(s):
@@ -102,11 +40,6 @@ def jload(s):
         return {}
 
 
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "round16", "version": "1"}}})
-recv(1)
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 time.sleep(0.3)
 
 # ---- config sections -------------------------------------------------------
@@ -154,7 +87,7 @@ check('C6 el summary pesa bastante menos que all',
       len(rsum) < len(rall), (len(rsum), len(rall)))
 r = call('delphi_config', {'project': dproj, 'section': 'Marte'})
 check('C7 section invalida se rechaza con la lista',
-      'error' in r and 'summary' in r and 'units' in r, r)
+      r.startswith('error: section debe ser') and 'summary' in r and 'units' in r, r)
 
 # ---- symbols modes ---------------------------------------------------------
 big = os.path.join(BASE, 'Big.pas')
@@ -219,8 +152,7 @@ check('S4 filter encuentra el simbolo con kind, linea y contenedor',
 
 r = call('delphi_symbols', {'path': big, 'mode': 'arbol'})
 check('S5 mode invalido se rechaza explicando los validos',
-      'error' in r and 'summary' in r and 'full' in r, r)
+      r.startswith('error: mode debe ser') and 'summary' in r and 'full' in r, r)
 
-proc.kill()
-print('\n== round-16 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('round-16 battery')

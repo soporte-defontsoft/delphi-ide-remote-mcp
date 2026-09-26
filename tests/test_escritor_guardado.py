@@ -26,12 +26,9 @@ session may write and asserts it comes out untouched:
 
 Usage:  python tests/test_escritor_guardado.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, shutil, stat, subprocess, sys, tempfile, threading, queue, time
-
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'escritor-guardado')
+import json, os, subprocess, time
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
 def quita_enlaces(base):
@@ -44,16 +41,18 @@ def quita_enlaces(base):
 
 
 def borra(base):
-    def reintenta(fn, p, exc):
-        os.chmod(p, stat.S_IWRITE)
-        fn(p)
+    # los junctions de DENTRO del arbol primero (como enlaces); luego el arbol
     quita_enlaces(base)
-    if os.path.isdir(base):
-        shutil.rmtree(base, onexc=reintenta)
+    mc.borra(base)
 
 
-borra(BASE)
-MINE = os.path.join(BASE, 'mio')                       # Roots
+quita_enlaces(os.path.join(mc.RAIZ, 'escritor-guardado'))
+BASE = mc.carpeta('escritor-guardado')
+# Su propia copia del servidor, FUERA de toda raiz de la prueba: el modo
+# solo-lectura de D (stdio sin raices) depende de que junto al exe no haya un
+# settings.ini que le de raices, y en su carpeta no lo hay.
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+MINE =os.path.join(BASE, 'mio')                       # Roots
 OUT = os.path.join(BASE, 'fuera')                      # outside everything
 REF = os.path.join(BASE, 'referencia')                 # ReadOnlyRoots, outside
 NEST = os.path.join(MINE, 'refdentro')                 # ReadOnlyRoots, INSIDE the root
@@ -63,75 +62,9 @@ for d in (MINE, OUT, REF, NEST, ROP):
 open(os.path.join(NEST, 'n.txt'), 'w').write('referencia de dentro')
 open(os.path.join(ROP, 'v.txt'), 'w').write('vendor')
 
-P = F = 0
-
-
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('  PASS', name)
-    else:
-        F += 1
-        print('  FAIL', name, '--', str(detail)[:300])
-
-
-class Server:
-    def __init__(self, env):
-        e = {k: v for k, v in os.environ.items() if not k.startswith('DELPHI_MCP_')}
-        e.update(env)
-        self.proc = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL, text=True, encoding='utf-8',
-                                     errors='replace', bufsize=1)
-        self.q = queue.Queue()
-        threading.Thread(target=self._reader, daemon=True).start()
-        self.n = 0
-        self.send({'jsonrpc': '2.0', 'id': 0, 'method': 'initialize', 'params': {
-            'protocolVersion': '2025-03-26', 'capabilities': {},
-            'clientInfo': {'name': 'bateria-escritor-guardado', 'version': '1'}}})
-        self.recv(0)
-        self.send({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-
-    def _reader(self):
-        for line in self.proc.stdout:
-            self.q.put(line)
-
-    def send(self, o):
-        self.proc.stdin.write(json.dumps(o) + '\n')
-        self.proc.stdin.flush()
-
-    def recv(self, rid, t=180):
-        end = time.time() + t
-        while time.time() < end:
-            try:
-                line = self.q.get(timeout=1)
-            except queue.Empty:
-                continue
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == rid:
-                return m
-        return {'error': 'timeout'}
-
-    def call(self, name, args, t=180):
-        self.n += 1
-        self.send({'jsonrpc': '2.0', 'id': self.n, 'method': 'tools/call',
-                   'params': {'name': name, 'arguments': args}})
-        r = self.recv(self.n, t)
-        if 'error' in r:
-            return 'MCPERROR: ' + json.dumps(r['error'])
-        c = r['result'].get('content', [])
-        return c[0].get('text', '') if c else '(no content)'
-
-    def kill(self):
-        try:
-            self.proc.stdin.close()
-        except Exception:
-            pass
-        time.sleep(0.5)
-        self.proc.kill()
+def Server(env):
+    # sin NINGUNA DELPHI_MCP_* del entorno de quien lanza: solo las de la prueba
+    return mc.Stdio(EXE, mc.entorno(env), nombre='bateria-escritor-guardado', t=180)
 
 
 srv = Server({'DELPHI_MCP_ROOTS': MINE, 'DELPHI_MCP_READONLY_ROOTS': REF + ';' + NEST,
@@ -272,7 +205,7 @@ cid = out.split()[1] if out.startswith('CHANGESET') else ''
 out = call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create', 'path': os.path.join(MINE, '__delphi-patch', 'colado.txt'), 'content': 'x'})
 check('M changeset create dentro de la papelera: RECHAZADO al preparar', out.startswith('RECHAZADO'), out[:200])
 call('delphi_changeset', {'command': 'rollback', 'id': cid})
-srv.kill()
+srv.cierra()
 
 # ---- D: read-only mode (local stdio with no roots) never rewrites a form
 DFM = os.path.join(MINE, 'Form1.dfm')
@@ -286,7 +219,7 @@ check('D solo lectura: el alias tobinary tambien', out.startswith('RECHAZADO'), 
 check('D el .dfm sigue byte a byte', open(DFM, 'rb').read() == antes_dfm, '')
 out = ro.call('delphi_designer', {'command': 'tree', 'path': DFM})
 check('D solo lectura: tree (lee) sigue OK', not out.startswith('RECHAZADO') and 'Form1' in out, out[:200])
-ro.kill()
+ro.cierra()
 
 # ---- V: a link inside the vault does not take a note outside it
 VAULT = os.path.join(BASE, 'vault')
@@ -299,7 +232,7 @@ out = vs.call('vault_create', {'path': 'aFuera/colada.md', 'content': '# x\n'})
 check('V vault_create por un junction a fuera: RECHAZADO', out.startswith('RECHAZADO') and not os.path.exists(os.path.join(OUT, 'vfuera', 'colada.md')), out[:200])
 out = vs.call('vault_create', {'path': 'propia.md', 'content': '# propia\n'})
 check('V una nota normal SI se crea', os.path.exists(os.path.join(VAULT, 'propia.md')), out[:200])
-vs.kill()
+vs.cierra()
 
 # ---- O: a build leaves its output only where the session may write
 import re
@@ -441,7 +374,7 @@ try:
 except Exception:
     ok = False
 check('R un proyecto sin propiedades reservadas SI compila', ok, out[:300])
-bs.kill()
+bs.cierra()
 
 # ---- T: delphi_test lowers the integrity label of its working folder so the
 # confined run can write its own output there; the walk never crosses a link
@@ -469,9 +402,7 @@ check('T fixture: la victima empieza con su etiqueta normal', not etiqueta_baja(
 out = ts.call('delphi_test', {'project': os.path.join(TA, 'AppTests.dproj'), 'platform': 'Win64', 'nobuild': True}, t=300)
 check('T delphi_test: el fichero de FUERA conserva su etiqueta', not etiqueta_baja(os.path.join(TV, 'v.txt')), out[:200])
 check('T ...y lo suyo SI se etiqueta (el exe, para el sandbox)', etiqueta_baja(os.path.join(TS, 'AppTests.exe')), out[:200])
-ts.kill()
+ts.cierra()
 
 borra(BASE)
-print()
-print('== escritor-guardado battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('escritor-guardado battery')

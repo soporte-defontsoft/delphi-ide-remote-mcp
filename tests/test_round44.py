@@ -21,55 +21,19 @@ prometia por escrito ("bajatela con delphi_fetch").
 
 Usage:  python tests/test_round44.py [path-to-DelphiLspMcp.exe]
 """
-import json
 import os
 import shutil
-import socket
-import subprocess
-import sys
 import tempfile
 import time
-import urllib.request
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:280])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round44')
-
-
-def borra(d):
-    def alafuerza(func, path, _exc):
-        try:
-            os.chmod(path, 0o700)
-            func(path)
-        except Exception:
-            pass
-    shutil.rmtree(d, onexc=alafuerza) if sys.version_info >= (3, 12) else \
-        shutil.rmtree(d, onerror=alafuerza)
-
-
-if os.path.isdir(BASE):
-    borra(BASE)
+REPO = mc.REPO
+BASE = mc.carpeta('round44')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
-os.makedirs(EXEDIR, exist_ok=True)
 os.makedirs(JAIL, exist_ok=True)
-shutil.copy(SRC, os.path.join(EXEDIR, 'DelphiLspMcp.exe'))
+EXE = mc.copia_exe(EXEDIR)
 
 NODO_SRC = os.path.join(REPO, 'node', 'McpDesktopNode.exe')
 HAY_NODO = os.path.isfile(NODO_SRC)
@@ -84,7 +48,7 @@ TEMP_JAULA = os.path.join(JAIL, '__delphi-temp')
 VIEJAS = [os.path.join(tempfile.gettempdir(), n) for n in
           ('delphi-mcp-desktop', 'delphi-mcp-remoterun')]
 for v in VIEJAS:
-    shutil.rmtree(v, ignore_errors=True)
+    mc.borra(v)
 
 # Una migaja plantada a mano en la casa del servidor: al arrancar tiene que
 # desaparecer sola. Declarar una carpeta "borrable" no sirve de nada si no la
@@ -95,59 +59,17 @@ open(MIGAJA, 'w').write('basura de una ejecucion anterior\n')
 os.makedirs(os.path.join(TEMP_SERVIDOR, 'carpeta-vieja'), exist_ok=True)
 
 TOK = 'r44'
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
+PORT = mc.puerto_libre()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R44]', 'Token=%s' % TOK, 'Roots=%s' % JAIL, '',
 ]))
 
-proc = subprocess.Popen([os.path.join(EXEDIR, 'DelphiLspMcp.exe'),
-                         '--http', str(PORT)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-SID = None
-
-
-def rpc(body, timeout=180):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if SID:
-        h['Mcp-Session-Id'] = SID
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-        timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            m = json.loads(l[5:].strip())
-            if 'result' in m or 'error' in m:
-                return m, r.headers.get('Mcp-Session-Id')
-    try:
-        return json.loads(raw), r.headers.get('Mcp-Session-Id')
-    except Exception:
-        return None, r.headers.get('Mcp-Session-Id')
-
-
-_, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-              'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-                         'clientInfo': {'name': 'r44', 'version': '1'}}})
-rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-RID = [100]
-
-
-def call(tool, args):
-    RID[0] += 1
-    r, _ = rpc({'jsonrpc': '2.0', 'id': RID[0], 'method': 'tools/call',
-                'params': {'name': tool, 'arguments': args}})
-    try:
-        return r['result']['content'][0]['text']
-    except Exception:
-        return json.dumps(r)[:400]
+proc = mc.lanza_http(EXE, PORT, mc.entorno())
+# sin texto, el mensaje entero en JSON: es lo que ensena el detalle de un FAIL
+cli = mc.Http(PORT, TOK, t=180, respaldo_json=True)
+cli.session('r44')
+call = cli.call
 
 
 def pngs(d):
@@ -256,17 +178,8 @@ try:
         os.makedirs(TEMP_JAULA, exist_ok=True)
         vieja = os.path.join(TEMP_JAULA, 'de-la-vez-anterior.txt')
         open(vieja, 'w').write('x')
-        p2 = subprocess.Popen(
-            [os.path.join(EXEDIR, 'DelphiLspMcp.exe'), '--http', str(PORT)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(3)
-        proc = p2
-        SID = None
-        _, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-                      'params': {'protocolVersion': '2025-06-18',
-                                 'capabilities': {},
-                                 'clientInfo': {'name': 'r44', 'version': '1'}}})
-        rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+        proc = mc.lanza_http(EXE, PORT, mc.entorno())
+        cli.session('r44')
         check('T7 al rearrancar, la carpeta del workspace se vacia entera',
               not os.path.exists(vieja),
               'sobrevivio %s' % vieja)
@@ -291,14 +204,62 @@ try:
     plantado = os.path.join(TEMP_JAULA, 'plantada-para-t6.png')
     os.makedirs(TEMP_JAULA, exist_ok=True)
     open(plantado, 'wb').write(b'no es un png de verdad: es el cebo de T6')
+    # ...y otro FUERA de __delphi-temp, que el listado SI tiene que dar: sin
+    # el, un error o un listado vacio pasaban por "no aparece"
+    visible = os.path.join(JAIL, 'visible-para-t6.png')
+    open(visible, 'wb').write(b'este si se lista')
     l1 = call('delphi_list', {'root': JAIL, 'pattern': '*.png'})
     l2 = call('delphi_list', {'root': JAIL, 'pattern': '*.png',
                               'includetrash': True})
+
+    def lista(t):
+        """las rutas de un listado de VERDAD (el JSON de delphi_list)"""
+        return [f.get('path', '') for f in mc.como_json(t).get('files', [])]
+    # Por las RUTAS del listado, no por su texto: desde 1.5.0 la nota nombra
+    # __delphi-temp para decir QUE escondio, y nombrarla no es listarla.
     check('T6 __delphi-temp no aparece en un listado del workspace',
-          '__delphi-temp' not in l1 and 'plantada-para-t6' not in l1, l1[:240])
+          any(p.endswith('visible-para-t6.png') for p in lista(l1)) and
+          not any('__delphi-temp' in p for p in lista(l1)) and
+          'plantada-para-t6' not in l1, l1[:240])
     check('T6b ...ni siquiera pidiendo la papelera: no es papelera',
-          '__delphi-temp' not in l2 and 'plantada-para-t6' not in l2, l2[:240])
+          any(p.endswith('visible-para-t6.png') for p in lista(l2)) and
+          not any('__delphi-temp' in p for p in lista(l2)) and
+          'plantada-para-t6' not in l2, l2[:240])
+
+    def cajones(d):
+        """la suma de los hidden<Motivo>: tiene que dar el hidden total"""
+        return sum(v for k, v in d.items()
+                   if k.startswith('hidden') and k != 'hidden' and isinstance(v, int))
+    # Lo escondido se cuenta EN SU CAJON: hasta 1.5.0 la temporal salia como
+    # carpeta de compilacion, con el consejo de pasarla como root; el modo
+    # dirs la contaba en otro cajon y a Win64 en ninguno; y delphi_search la
+    # escondia sin decirlo (revision de baterias, 26-sep-2026).
+    j1 = mc.como_json(l1)
+    check('T6d la temporal se cuenta como temporal del servidor, no como compilacion',
+          j1.get('hiddenServerTemp', 0) >= 1 and
+          'temporales del servidor' in j1.get('note', '') and
+          j1.get('hidden') == cajones(j1), l1[:300])
+    s1 = call('delphi_search', {'root': JAIL, 'query': 'cebo de T6', 'pattern': '*.png'})
+    js = mc.como_json(s1)
+    check('T6e delphi_search tampoco la ensena, pero DICE que la salto y por que',
+          js.get('total') == 0 and js.get('hiddenServerTemp', 0) >= 1 and
+          'temporales del servidor' in js.get('note', '') and
+          js.get('hidden') == cajones(js), s1[:300])
+    # En el modo dirs, una carpeta de cada motivo: la temporal, una de
+    # compilacion (Win64, que antes no entraba en ningun cajon) y una de otra
+    # herramienta (.vs, que antes se contaba como git).
+    for d in ('Win64', '.vs'):
+        os.makedirs(os.path.join(JAIL, d), exist_ok=True)
+    ld = call('delphi_list', {'root': JAIL, 'dirs': True})
+    jd = mc.como_json(ld)
+    nombres = [os.path.basename(x) for x in jd.get('dirs', [])]
+    check('T6f dirs: cada carpeta en su cajon (temporal, compilacion, herramienta) y el total cuadra',
+          not {'__delphi-temp', 'Win64', '.vs'} & set(nombres) and
+          jd.get('hiddenServerTemp') == 1 and jd.get('hiddenBuildArtifacts') == 1 and
+          jd.get('hiddenToolFolders') == 1 and 'hiddenGitInternals' not in jd and
+          jd.get('hidden') == cajones(jd), ld[:300])
     os.remove(plantado)
+    os.remove(visible)
     # La promesa de Lsp.References.pas ("que los dos digan lo mismo no se
     # deja a la buena fe: lo comprueba la bateria") no la comprobaba nadie
     # hasta la auditoria. Esta es esa comprobacion: el nombrador
@@ -315,7 +276,6 @@ finally:
     except Exception:
         pass
     time.sleep(0.5)
-    borra(BASE)
+    mc.borra(BASE)
 
-print('== test_round44: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round44')

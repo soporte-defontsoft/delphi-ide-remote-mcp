@@ -269,12 +269,6 @@ begin
   if not MatchStr(Cmd, ['screenshot', 'tap', 'type', 'key', 'overview', 'status']) then
     Exit(SR_ADBLINUX_CMD);
 
-  { Ejecutar en el destino es remote-run con otro volante: mismos
-    interruptores del workspace que delphi_paserver (v0.98; antes este
-    camino no pasaba ni por AllowRemoteRun ni por las listas). }
-  if not AllowRemoteRun then
-    Exit(SR_PASERVER_RUN_DISABLED);
-
   { "out" es una ruta LOCAL que elige QUIEN LLAMA -donde baja la captura del
     destino- y no pasaba por la jaula: el servidor creaba la carpeta y
     escribia el PNG donde le dijeran. Se comprueba lo PROPIO antes que lo
@@ -290,11 +284,13 @@ begin
       Exit;
   end;
 
-  { Sin perfil no hay destino: ProfileHostDenied con '' no encuentra nada y
-    dejaba pasar, y el fallo salia de paclient con otro nombre. }
-  if Params.Profile.Trim = '' then
-    Exit(SR_ADBLINUX_NEEDPROFILE);
-  Result := ProfileHostDenied(Params.Profile.Trim);
+  { Ejecutar en el destino es remote-run con otro volante: la MISMA puerta
+    que delphi_paserver (EjecucionRemotaDenegada): AllowRemoteRun, perfil,
+    host del perfil y el proyecto -el del agente, o el nodo empaquetado-
+    en RemoteRunProjects. Esta tool llevaba su copia. }
+  Proj := Params.Project.Trim;
+  Result := EjecucionRemotaDenegada(Params.Profile.Trim, Proj,
+    SR_ADBLINUX_NEEDPROFILE);
   if Result <> '' then
     Exit;
   { El destino dice que nodo y que teclas espera: lo lee el .profile, nunca
@@ -320,18 +316,6 @@ begin
     if Cmd <> 'screenshot' then
       Exit(SR_ADBLINUX_CROP_ONLY_SHOT);
   end;
-  Proj := Params.Project.Trim;
-  if Proj <> '' then
-  begin
-    { El jail decide si este token puede tocar ese proyecto, igual que en
-      cualquier otra tool que nombre un fichero. }
-    Result := PathDenied(Proj);
-    if Result <> '' then
-      Exit;
-  end;
-  Result := RemoteRunProjectDenied(IfThen(Proj <> '', Proj, NODE_PROJECT));
-  if Result <> '' then
-    Exit;
 
   { Los argumentos del nodo van como argv, uno a uno: no hay shell en medio
     (hasta el 2026-09-22 el texto viajaba por un /bin/sh y un "hola; lo que

@@ -92,6 +92,17 @@ function LooksBinaryBytes(const B: TArray<Byte>): Boolean;
 function ApplyBlockEdit(const APath, AOld, ANew: string;
   AOccurrence: Integer; AAtLine: Integer = 0): string;
 
+{ Las lineas que pone "new": UNA regla para delphi_edit y delphi_textedit,
+  de una linea o de bloque. Un salto final es el FIN de la ultima linea (un
+  bloque leido de un fichero siempre lo trae: se colaba como linea en
+  blanco en medio del codigo, medido 2026-08-25) y se quita; cada salto DE
+  MAS es una linea en blanco pedida. Hasta el 26-sep habia tres reglas:
+  delphi_edit quitaba uno y con dos dejaba DOS en blanco, delphi_textedit
+  no quitaba ninguno, y las anclas de bloque de las dos quitaban TODOS -
+  un bloque no podia acabar en linea en blanco y la tool contestaba
+  APLICADAS (lo cazaron las baterias al pasarlas al cliente unico). }
+function LineasDeNew(const ANew: string): TArray<string>;
+
 { EL rango, validado en un solo sitio.
 
   "old" ancla la PRIMERA linea y "toline" (1-based, incluida) dice hasta
@@ -906,6 +917,18 @@ begin
   end;
 end;
 
+function LineasDeNew(const ANew: string): TArray<string>;
+var
+  S: string;
+begin
+  S := ANew.Replace(#13#10, #10).Replace(#13, #10);
+  if S.EndsWith(#10) then
+    S := S.Substring(0, S.Length - 1);
+  Result := S.Split([#10]);
+  if Length(Result) = 0 then
+    Result := [''];  // '' es una linea vacia, no ninguna
+end;
+
 function ApplyBlockEdit(const APath, AOld, ANew: string;
   AOccurrence: Integer; AAtLine: Integer): string;
 var
@@ -950,9 +973,7 @@ begin
       [Length(OldLines), OldLines[0].Trim]));
   if Count > 1 then
     Exit(Format(SR_PATCH_BLOCK_AMBIGUOUS_FMT, [Count, OldLines[0].Trim]));
-  NewLines := ANew.Replace(#13#10, #10).Split([#10]);
-  while (Length(NewLines) > 1) and (NewLines[High(NewLines)].Trim = '') do
-    SetLength(NewLines, Length(NewLines) - 1);
+  NewLines := LineasDeNew(ANew);
   Sb := TStringBuilder.Create;
   try
     for I := 0 to Hit - 1 do
@@ -1154,9 +1175,9 @@ begin
                   Break;
                 Inc(Hay);
               end;
+              var Cabeza := PrimerTrozo(Anc2, [#10]).Trim;
               Exit(Format(SR_PATCH_OCCURRENCE_FMT, [N + 1, Nth,
-                Anc2.Split([#10])[0].Trim.Substring(0,
-                  Min(60, Length(Anc2.Split([#10])[0].Trim))), Hay]));
+                Cabeza.Substring(0, Min(60, Length(Cabeza))), Hay]));
             end;
           end;
         end;
@@ -1283,7 +1304,9 @@ begin
         if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
         begin
           Fallo := N;
-          Sb.AppendLine(Format('  %d: %s', [N, Una.Replace(#10, ' ')]));
+          // #10, no AppendLine (CRLF en Windows): el mensaje que lo envuelve
+          // separa con #10 y el eco salia con los dos (test_round34, 26-sep)
+          Sb.Append(Format('  %d: %s', [N, Una.Replace(#10, ' ')])).Append(#10);
           Break;
         end;
         if EsBloque then
@@ -1294,7 +1317,7 @@ begin
             [N, Anc.Trim.Substring(0, Min(70, Length(Anc.Trim)))]);
         if Eco <> '' then
           Una := Una + '  ->  ' + Eco.Substring(0, Min(90, Length(Eco)));
-        Sb.AppendLine(Una);
+        Sb.Append(Una).Append(#10);
       end;
       if Fallo > 0 then
       begin
@@ -2352,21 +2375,14 @@ begin
     // The anchor may omit leading indentation: whatever prefix the real line
     // has beyond the anchor is preserved in front of the new text.
     Prefix := Copy(Lines[HitIdx], 1, Length(Lines[HitIdx]) - Length(AOld));
-    Replacement := ANew.Replace(#13#10, #10).Replace(#13, #10);
-    // ONE trailing line break is dropped. "new" replaces a LINE, so the break
-    // that ends it is the file's business, not the caller's: a block read from
-    // a file (the recommended way to send code without the console eating
-    // backslashes) always carries one, and it was landing as a blank line in
-    // the middle of the code (measured 2026-08-25). Two or more are kept:
-    // asking for a blank line after the replacement is a legitimate thing.
-    if Replacement.EndsWith(#10) and not Replacement.EndsWith(#10#10) then
-      Replacement := Replacement.Substring(0, Replacement.Length - 1);
+    // LA regla del salto final, la misma en las dos tools y en los bloques
+    // (LineasDeNew): uno es el fin de linea; cada uno de mas, una en blanco.
+    Replacement := string.Join(#10, LineasDeNew(ANew));
     // Empty replacement (old given + new='') blanks the line - a legitimate
     // edit. Never index Split()[0] on it: '' yields an empty array (measured
-    // Access Violation in the field test). Line DELETION is delete:true.
-    var NewFirst := '';
-    if Replacement <> '' then
-      NewFirst := Replacement.Split([#10])[0];
+    // Access Violation in the field test) - PrimerTrozo, Lsp.Guard. Line
+    // DELETION is delete:true.
+    var NewFirst := PrimerTrozo(Replacement, [#10]);
     var Quita := 0;      // cuantas lineas desaparecen del array
     var Desde := HitIdx; // desde donde se cierra el hueco
     if ADelete then

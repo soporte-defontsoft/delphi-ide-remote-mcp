@@ -22,17 +22,12 @@ by a check:
 
 Usage:  python tests/test_round21.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+import json, os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round21')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('round21')
+EXE = mc.copia_exe(BASE)
 
 # a text .dfm for the lazy-designer check
 open(os.path.join(BASE, 'Main.dfm'), 'w').write(
@@ -41,82 +36,20 @@ open(os.path.join(BASE, 'Main.dfm'), 'w').write(
     "  object Boton1: TButton\r\n    Left = 10\r\n    Top = 10\r\n"
     "    Width = 75\r\n    Height = 25\r\n    Caption = 'Pulsa'\r\n  end\r\nend\r\n")
 
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-env['DELPHI_MCP_ALLOW_TESTS'] = '1'
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                        text=True, encoding='utf-8')
-q = queue.Queue()
-
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-P = F = 0
-
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-def recv(r, t=600):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-
-def call(tool, args, t=600):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": tool, "arguments": args}})
-    r = recv(rid[0], t)
-    if not r:
-        return '(sin respuesta)'
-    return r.get('result', {}).get('content', [{}])[0].get('text', 'ERR')
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
-
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "round21", "version": "1"}}})
-recv(1)
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-time.sleep(0.3)
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_ALLOW_TESTS': '1'}),
+               nombre='round21', t=600)
+call = srv.call
 
 # Z1: the VERY FIRST tool call is a designer one - lazy tables must build now
 r = call('delphi_designer', {'command': 'tree', 'path': os.path.join(BASE, 'Main.dfm')})
 check('Z1 primera llamada del proceso = designer: tablas lazy funcionan',
       'TButton' in r and 'Boton1' in r, r[:200])
+# El veredicto CONCRETO del lint: un form correcto sale LIMPIO, y solo sale
+# limpio si las tablas reconocen TForm1/TButton y sus propiedades. Antes se
+# miraba que no empezara por 'ERR': un RECHAZADO o un "error: ..." pasaban.
 r = call('delphi_designer', {'command': 'lint', 'path': os.path.join(BASE, 'Main.dfm')})
 check('Z1b lint del designer tambien (segunda entrada a las tablas)',
-      'ERR' not in r[:4] and '(sin' not in r, r[:160])
+      r.startswith('LINT LIMPIO') and 'Main.dfm' in r, r[:160])
 
 # Z2/Z3: the label cache vs a medium file created BETWEEN runs
 _q = chr(39)
@@ -155,6 +88,5 @@ if sbok:
           '(la herencia OICI cubre a los hijos nuevos; el cache es seguro)',
           'LOCAL-OK' in tail and sbx, raw[:220])
 
-proc.kill()
-print('\n== round-21 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('round-21 battery')

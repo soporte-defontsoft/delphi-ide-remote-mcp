@@ -14,22 +14,25 @@ beside it - the build output stays untouched.
 
 Usage:  python tests/test_remoterun.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+import json, subprocess, time, os, sys, shutil
+import mcp_cliente as mc
+from mcp_cliente import check
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE_ORIG = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'remoterun')
-shutil.rmtree(BASE, ignore_errors=True); os.makedirs(BASE)
+BASE = mc.carpeta('remoterun')
 # the server under test: a copy with node\\ (the launchers) beside it
 SERVERDIR = os.path.join(BASE, 'server'); os.makedirs(os.path.join(SERVERDIR, 'node'))
-EXE = os.path.join(SERVERDIR, 'DelphiLspMcp.exe')
-shutil.copy(EXE_ORIG, EXE)
+EXE = mc.copia_exe(SERVERDIR)
 for f in ('McpRunJob', 'McpRunJob.exe'):
     shutil.copy(os.path.join(REPO, 'node', f), os.path.join(SERVERDIR, 'node', f))
 RUNJOB_EXE = os.path.join(SERVERDIR, 'node', 'McpRunJob.exe')
 SCRATCH = os.path.join(BASE, 'scratch'); os.makedirs(SCRATCH)
+# Cuanto espera el stub a que el trabajo remate antes de devolver el control
+# (sin el fichero, 20 s). Va por FICHERO: el stub hereda el entorno del
+# servidor, no el de la bateria, y el os.environ que se ponia aqui despues de
+# arrancarlo no le llegaba nunca (medido 2026-09-26).
+ESPERA = os.path.join(SCRATCH, '_espera')
 
 # the deploy folder the server derives: <windows user>-<profile>/<Project>/
 PROFILE = 'perfil'
@@ -57,79 +60,20 @@ STUB = os.path.join(BASE, 'paclient.cmd')
 open(STUB, 'w').write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
 
 
-env = dict(os.environ)
+env = mc.entorno()
 env['DELPHI_MCP_ROOTS'] = BASE
 env['DELPHI_MCP_PACLIENT'] = STUB
 env['MCP_STUB_SCRATCH'] = SCRATCH
 env['MCP_STUB_RUNJOB_EXE'] = RUNJOB_EXE   # el gemelo Win64 del lanzador que corre el stub
 env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'   # v0.48.1: remote execution is opt-in
 env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'Saluda'  # v0.98: lista vacia = NADA (fail closed)
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-def rdr():
-    for line in proc.stdout:
-        line = line.strip()
-        if line: q.put(line)
-threading.Thread(target=rdr, daemon=True).start()
-rid = [10]
-def send(o): proc.stdin.write(json.dumps(o) + '\n'); proc.stdin.flush()
-def recv(r, t=120):
-    dl = time.time() + t
-    while time.time() < dl:
-        try: line = q.get(timeout=1)
-        except queue.Empty: continue
-        try: m = json.loads(line)
-        except Exception: continue
-        if m.get('id') == r: return m
-    return None
-def call(name, args, t=120):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call", "params": {"name": name, "arguments": args}})
-    r = recv(rid[0], t)
-    if r is None: return '(timeout)'
-    if 'error' in r: return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "rr", "version": "1"}}}); recv(1)
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+srv = mc.Stdio(EXE, env, nombre='rr')
+call = srv.call
 
 # ---- the opt-in switch (a server without AllowRemoteRun) ----
 env_off = dict(env); env_off.pop('DELPHI_MCP_ALLOW_REMOTE_RUN', None)
-proc_off = subprocess.Popen([EXE], env=env_off, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q_off = queue.Queue()
-def rdr_off():
-    for line in proc_off.stdout:
-        line = line.strip()
-        if line: q_off.put(line)
-threading.Thread(target=rdr_off, daemon=True).start()
-def call_off(name, args, t=60):
-    proc_off.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 99, "method": "tools/call",
-                                     "params": {"name": name, "arguments": args}}) + '\n')
-    proc_off.stdin.flush()
-    dl = time.time() + t
-    while time.time() < dl:
-        try: line = q_off.get(timeout=1)
-        except queue.Empty: continue
-        try: m = json.loads(line)
-        except Exception: continue
-        if m.get('id') == 99:
-            c = m.get('result', {}).get('content', [])
-            return c[0].get('text', '') if c else json.dumps(m)[:200]
-    return '(timeout)'
-proc_off.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "off", "version": "1"}}}) + '\n')
-proc_off.stdin.flush(); time.sleep(1)
-while not q_off.empty(): q_off.get()
-proc_off.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + '\n')
-proc_off.stdin.flush()
-
-P = F = 0
-def check(n, ok, d=''):
-    global P, F
-    if ok: P += 1; print('PASS', n)
-    else: F += 1; print('FAIL', n, '--', str(d)[:300])
+srv_off = mc.Stdio(EXE, env_off, nombre='off')
+call_off = srv_off.call
 
 # 1) needs name+exe
 r = call('delphi_paserver', {'command': 'remote-run'})
@@ -214,7 +158,7 @@ PROGRAMA_LENTO = [
     'time.sleep(30)',
 ]
 open(LENTO, 'w', encoding='utf-8').write(chr(10).join(PROGRAMA_LENTO))
-os.environ['MCP_STUB_ESPERA'] = '3'   # el stub no espera a que remate
+open(ESPERA, 'w').write('3')   # el stub no espera a que remate
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE,
                              'project': DPROJ, 'exe': PROJNAME + '.exe',
                              'args': 'lento.py', 'timeoutms': 4000}, t=180)
@@ -222,7 +166,19 @@ j = json.loads(r) if r.startswith('{') else {}
 check('no termina: stillRunning en vez de matarlo', j.get('stillRunning') is True, r[:300])
 check('no termina: devuelve la salida PARCIAL', 'arrancando' in (j.get('output') or ''), r[:300])
 check('no termina: lo dice sin hablar de errores', 'SIGUE CORRIENDO' in (j.get('stillRunningNote') or ''), r[:300])
-os.environ.pop('MCP_STUB_ESPERA', None)
+# 1.5.0: la salida de un programa que SIGUE vivo se queda en el target, y lo
+# que escriba despues se lee con command=output (antes se borraba al volver:
+# el AV de Galatea tras el login solo se veia en el journal de Zorin).
+job6 = j.get('jobId') or ''
+OUT6 = os.path.join(DEPLOY, job6 + '.out')
+check('no termina: su salida SE QUEDA en el target para leerla despues', os.path.isfile(OUT6), os.listdir(DEPLOY))
+check('no termina: la respuesta dice como leerla (outputNote)',
+      'command=output' in (j.get('outputNote') or '') and job6 in (j.get('outputNote') or ''), r[:500])
+r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=120)
+jo = json.loads(r) if r.startswith('{') else {}
+check('output con el programa vivo: lo que lleva, stillRunning=true, y la salida sigue alli',
+      jo.get('stillRunning') is True and 'arrancando' in (jo.get('output') or '') and os.path.isfile(OUT6), r[:300])
+os.remove(ESPERA)
 
 # 6b) kill: el trabajo vivo se mata por su .pid; y SIN .pid (un deploy fallido
 # borra la carpeta antes de rendirse en el vigia, medido 2026-09-23 en
@@ -236,11 +192,54 @@ check("kill: mata el trabajo vivo por su .pid", j.get('killed') is True and 'por
 r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('kill: repetido, ya no hay trabajo (killed=false, sin error)', j.get('killed') is False and 'ya termino' in (j.get('output') or ''), r[:300])
-os.environ['MCP_STUB_ESPERA'] = '3'
+# el vigia remata la salida del matado con su ___RC: output la lee entera y la borra
+dl = time.time() + 20
+while True:
+    r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=120)
+    jo = json.loads(r) if r.startswith('{') else {}
+    if jo.get('stillRunning') is not True or time.time() > dl:
+        break
+    time.sleep(1)
+check('output tras kill: terminado, con su codigo y lo que escribio',
+      jo.get('stillRunning') is False and 'exitCode' in jo and 'arrancando' in (jo.get('output') or ''), r[:300])
+check('output leido entero: la salida se BORRA del target (como el buzon)', not os.path.exists(OUT6), os.listdir(DEPLOY))
+r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=120)
+jo = json.loads(r) if r.startswith('{') else {}
+check('output otra vez: ya no hay nada, y lo dice', jo.get('success') is False and 'No hay salida' in (jo.get('error') or ''), r[:300])
+r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': '..\\x'})
+check('output: un job que no es un id de este servidor se rechaza', 'RECHAZADO' in r, r[:200])
+r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ})
+check('output sin job: RECHAZADO, y dice que le falta', 'RECHAZADO' in r and 'output necesita' in r, r[:200])
+
+# 6c) EL caso: un programa que escribe DESPUES de que vuelva su remote-run y
+# termina con un codigo. Antes eso se escribia en un fichero ya borrado.
+TARDE = os.path.join(DEPLOY, 'tarde.py')
+open(TARDE, 'w', encoding='utf-8').write(
+    'import sys, time\nprint("antes del plazo", flush=True)\ntime.sleep(25)\n'
+    'print("DESPUES-DEL-PLAZO", flush=True)\nsys.exit(3)\n')
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                             'exe': PROJNAME + '.exe', 'args': 'tarde.py', 'timeoutms': 2000}, t=180)
+j = json.loads(r) if r.startswith('{') else {}
+job6c = j.get('jobId') or ''
+check('tarde: vuelve vivo, con lo de antes del plazo y nada de despues',
+      j.get('stillRunning') is True and 'antes del plazo' in (j.get('output') or '')
+      and 'DESPUES' not in (j.get('output') or ''), r[:300])
+dl = time.time() + 45
+while True:
+    time.sleep(2)
+    r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': job6c}, t=120)
+    jo = json.loads(r) if r.startswith('{') else {}
+    if jo.get('stillRunning') is not True or time.time() > dl:
+        break
+check('tarde: output trae lo escrito DESPUES del plazo y su codigo de salida (3)',
+      jo.get('stillRunning') is False and 'DESPUES-DEL-PLAZO' in (jo.get('output') or '')
+      and jo.get('exitCode') == 3, r[:300])
+check('tarde: leida entera, borrada', not os.path.exists(os.path.join(DEPLOY, job6c + '.out')), os.listdir(DEPLOY))
+open(ESPERA, 'w').write('3')
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
                              'exe': PROJNAME + '.exe', 'args': 'lento.py', 'timeoutms': 4000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
-os.environ.pop('MCP_STUB_ESPERA', None)
+os.remove(ESPERA)
 job6b = j.get('jobId') or ''
 pidf = os.path.join(DEPLOY, job6b + '.pid')
 _vigias = [f for f in os.listdir(DEPLOY) if f.startswith(job6b + '.wait.') and f.endswith('.exe')]
@@ -257,84 +256,26 @@ r = call_off('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'proj
 check('sin AllowRemoteRun: remote-run rechazado', 'RECHAZADO' in r and 'AllowRemoteRun' in r, r[:250])
 r = call_off('delphi_paserver', {'command': 'platforms'})
 check('sin AllowRemoteRun: el resto del tool intacto', 'platforms' in r, r[:150])
-proc_off.kill()
+srv_off.mata()
 
-# 8) RemoteRunProjects: lista blanca de proyectos ejecutables
-env_wl = dict(env); env_wl['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'
-env_wl.pop('DELPHI_MCP_REMOTE_RUN_PROJECTS', None)  # que mande el ini de esta fase
-ini = os.path.join(os.path.dirname(os.path.abspath(EXE)), 'settings.ini')
-had_ini = os.path.exists(ini)
-if had_ini:
-    shutil.copy(ini, ini + '.bak')
-open(ini, 'w', encoding='utf-8').write(
-    '[Workspace]\nRoots=%s\nAllowRemoteRun=1\nRemoteRunProjects=OtroProyecto\n' % BASE)
-proc_wl = subprocess.Popen([EXE], env=env_wl, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                           stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q_wl = queue.Queue()
-def rdr_wl():
-    for line in proc_wl.stdout:
-        line = line.strip()
-        if line: q_wl.put(line)
-threading.Thread(target=rdr_wl, daemon=True).start()
-proc_wl.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "wl", "version": "1"}}}) + '\n')
-proc_wl.stdin.flush(); time.sleep(1)
-while not q_wl.empty(): q_wl.get()
-proc_wl.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + '\n')
-proc_wl.stdin.flush()
-def call_wl(name, args, t=60):
-    proc_wl.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 98, "method": "tools/call",
-                                    "params": {"name": name, "arguments": args}}) + '\n')
-    proc_wl.stdin.flush()
-    dl = time.time() + t
-    while time.time() < dl:
-        try: line = q_wl.get(timeout=1)
-        except queue.Empty: continue
-        try: m = json.loads(line)
-        except Exception: continue
-        if m.get('id') == 98:
-            c = m.get('result', {}).get('content', [])
-            return c[0].get('text', '') if c else json.dumps(m)[:200]
-    return '(timeout)'
+# 8) RemoteRunProjects: lista blanca de proyectos ejecutables. En el modo
+# local la lista llega por el ENTORNO. Aqui se escribia un settings.ini con
+# [Workspace] (sin punto), seccion IGNORADA entera desde la v0.98: el check
+# pasaba por la lista VACIA (fail closed), no por un proyecto que falta en
+# una lista que nombra otros, que es lo que dice (medido 2026-09-26).
+env_wl = dict(env); env_wl['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'OtroProyecto'
+srv_wl = mc.Stdio(EXE, env_wl, nombre='wl')
+call_wl = srv_wl.call
 r = call_wl('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ})
 check('proyecto fuera de RemoteRunProjects rechazado', 'RECHAZADO' in r and 'RemoteRunProjects' in r, r[:250])
 r = call_wl('delphi_workspace', {})
 check('LibraryZone=1 por defecto: zona anunciada', 'readableExtra' in r and 'RTL' in r, r[:200])
-proc_wl.kill()
-os.remove(ini)
-if had_ini:
-    shutil.move(ini + '.bak', ini)
+srv_wl.mata()
 
 # 9) LibraryZone=0: la lectura se limita a los roots
 env_lz = dict(env); env_lz['DELPHI_MCP_LIBRARY_ZONE'] = '0'
-proc_lz = subprocess.Popen([EXE], env=env_lz, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                           stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q_lz = queue.Queue()
-def rdr_lz():
-    for line in proc_lz.stdout:
-        line = line.strip()
-        if line: q_lz.put(line)
-threading.Thread(target=rdr_lz, daemon=True).start()
-proc_lz.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "lz", "version": "1"}}}) + '\n')
-proc_lz.stdin.flush(); time.sleep(1)
-while not q_lz.empty(): q_lz.get()
-proc_lz.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + '\n')
-proc_lz.stdin.flush()
-def call_lz(name, args, t=60):
-    proc_lz.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 97, "method": "tools/call",
-                                    "params": {"name": name, "arguments": args}}) + '\n')
-    proc_lz.stdin.flush()
-    dl = time.time() + t
-    while time.time() < dl:
-        try: line = q_lz.get(timeout=1)
-        except queue.Empty: continue
-        try: m = json.loads(line)
-        except Exception: continue
-        if m.get('id') == 97:
-            c = m.get('result', {}).get('content', [])
-            return c[0].get('text', '') if c else json.dumps(m)[:200]
-    return '(timeout)'
+srv_lz = mc.Stdio(EXE, env_lz, nombre='lz')
+call_lz = srv_lz.call
 RTL = r'C:\Program Files (x86)\Embarcadero\Studio\37.0\source\rtl\sys\System.SysUtils.pas'
 r = call_lz('delphi_read', {'path': RTL, 'fromline': 1, 'toline': 2})
 check('LibraryZone=0: la RTL deja de ser legible', 'RECHAZADO' in r, r[:200])
@@ -342,8 +283,7 @@ r = call_lz('delphi_workspace', {})
 check('LibraryZone=0: se anuncia apagada y sin carpetas', 'APAGADA' in r and '"readableExtra":[]' in r.replace(' ', ''), r[:300])
 r = call_lz('delphi_read', {'path': SCRIPT, 'fromline': 1, 'toline': 1})
 check('LibraryZone=0: el root sigue legible', 'RECHAZADO' not in r, r[:200])
-proc_lz.kill()
+srv_lz.mata()
 
-proc.kill()
-print('\n== remote-run: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('remote-run')

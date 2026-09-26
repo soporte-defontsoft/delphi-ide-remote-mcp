@@ -33,44 +33,19 @@ puede, la bateria lo DICE y no finge que paso.
 
 Usage:  python tests/test_round33.py [path-to-DelphiLspMcp.exe]
 """
-import json
 import os
-import shutil
-import socket
 import subprocess
-import sys
-import tempfile
-import time
-import urllib.request
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round33')
-shutil.rmtree(BASE, ignore_errors=True)
+BASE = mc.carpeta('round33')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
 FUERA = os.path.join(BASE, 'fuera')        # el botin, fuera de la jaula
 DENTRO = os.path.join(JAIL, 'dentro')      # destino legitimo, dentro
 for d in (EXEDIR, JAIL, FUERA, DENTRO):
     os.makedirs(d)
-EXE = os.path.join(EXEDIR, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+EXE = mc.copia_exe(EXEDIR)
 
 SECRETO = 'unit Secreto;\n\ninterface\n\nimplementation\n\nend.\n'
 open(os.path.join(FUERA, 'Secreto.pas'), 'w').write(SECRETO)
@@ -91,68 +66,30 @@ HAY_SALIDA = junction(SALIDA, FUERA)
 HAY_INTERNO = junction(INTERNO, DENTRO)
 
 TOK = 'r33'
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
+PORT = mc.puerto_libre()
 
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R33]', 'Token=%s' % TOK, 'Roots=%s' % JAIL, '',
 ]))
 
-proc = subprocess.Popen([EXE, '--http', str(PORT)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-SID = None
+proc = mc.lanza_http(EXE, PORT, mc.entorno())
+# sin texto, el mensaje entero en JSON: es lo que ensena el detalle de un FAIL
+cli = mc.Http(PORT, TOK, respaldo_json=True)
+cli.session('r33')
+call = cli.call
 
 
-def rpc(body, timeout=120):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if SID:
-        h['Mcp-Session-Id'] = SID
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-        timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    msgs = []
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            try:
-                msgs.append(json.loads(l[5:].strip()))
-            except Exception:
-                pass
-    if not msgs:
-        try:
-            msgs.append(json.loads(raw))
-        except Exception:
-            pass
-    return (msgs[-1] if msgs else None), r.headers.get('Mcp-Session-Id')
+# La negativa CONCRETA de la jaula, no "cualquier RECHAZADO o error": un
+# "error: no existe" o un ancla que no casa tambien pasaban por negativa.
+def fuera(t):
+    """rechazado por estar FUERA de las raices (la ruta textual ya sale)."""
+    return t.startswith('RECHAZADO') and 'FUERA de los workspaces permitidos' in t
 
 
-_, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-              'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-                         'clientInfo': {'name': 'r33', 'version': '1'}}})
-rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-
-RID = [100]
-
-
-def call(tool, args, timeout=120):
-    RID[0] += 1
-    r, _ = rpc({'jsonrpc': '2.0', 'id': RID[0], 'method': 'tools/call',
-                'params': {'name': tool, 'arguments': args}}, timeout)
-    try:
-        return r['result']['content'][0]['text']
-    except Exception:
-        return json.dumps(r)[:400]
-
-
-def negado(t):
-    return 'RECHAZADO' in t or t.strip().startswith('error')
+def por_enlace(t):
+    """rechazado porque un tramo del camino es un ENLACE que sale de la jaula."""
+    return t.startswith('RECHAZADO') and 'ENLACE (junction o symlink)' in t
 
 
 try:
@@ -161,7 +98,7 @@ try:
     check('E1 control: dentro del root se lee', 'unit Legitima' in t, t[:160])
     t = call('delphi_read', {'path': os.path.join(FUERA, 'Secreto.pas')})
     check('E1b control: la misma ruta por fuera del root se rechaza',
-          negado(t) and 'unit Secreto' not in t, t[:160])
+          fuera(t) and 'unit Secreto' not in t, t[:160])
 
     if not HAY_SALIDA:
         check('E2..E5 NO SE HAN PODIDO PROBAR: mklink /J no pudo crear el '
@@ -170,15 +107,15 @@ try:
         # ---------------------------------------------------------------- E2
         t = call('delphi_list', {'root': SALIDA})
         check('E2 listar a traves de un junction que sale del root: RECHAZADO',
-              negado(t) and 'Secreto.pas' not in t, t[:200])
+              por_enlace(t) and 'Secreto.pas' not in t, t[:200])
         # ---------------------------------------------------------------- E3
         t = call('delphi_read', {'path': os.path.join(SALIDA, 'Secreto.pas')})
         check('E3 leer a traves de el: RECHAZADO (y NO llega el contenido)',
-              negado(t) and 'unit Secreto' not in t, t[:200])
+              por_enlace(t) and 'unit Secreto' not in t, t[:200])
         # ---------------------------------------------------------------- E4
         t = call('delphi_edit', {'path': os.path.join(SALIDA, 'Secreto.pas'),
                                  'old': 'interface', 'new': 'interface // x'})
-        check('E4 escribir a traves de el: RECHAZADO', negado(t), t[:200])
+        check('E4 escribir a traves de el: RECHAZADO', por_enlace(t), t[:200])
         check('E4b ...y el fichero de fuera sigue intacto',
               open(os.path.join(FUERA, 'Secreto.pas')).read() == SECRETO,
               'lo ha tocado')
@@ -187,7 +124,7 @@ try:
         nuevo = os.path.join(SALIDA, 'Plantado.md')
         t = call('delphi_textedit', {'path': nuevo, 'create': True,
                                      'content': 'plantado'})
-        check('E5 crear algo nuevo a traves de el: RECHAZADO', negado(t),
+        check('E5 crear algo nuevo a traves de el: RECHAZADO', por_enlace(t),
               t[:200])
         check('E5b ...y de verdad no ha aparecido nada fuera',
               not os.path.exists(os.path.join(FUERA, 'Plantado.md')),
@@ -215,5 +152,4 @@ finally:
         except Exception:
             pass
 
-print('== test_round33: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round33')

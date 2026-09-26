@@ -477,7 +477,7 @@ end;
 
 function StyleConverterExe: string;
 begin
-  Result := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'DelphiStyleConvert.exe');
+  Result := ServerDir('DelphiStyleConvert.exe');
   if not TFile.Exists(Result) then
     Result := '';
 end;

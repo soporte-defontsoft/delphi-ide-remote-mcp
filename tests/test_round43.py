@@ -19,67 +19,23 @@ otros es como se llego hasta aqui.
 
 Usage:  python tests/test_round43.py [path-to-DelphiLspMcp.exe]
 """
-import json
 import os
-import shutil
-import socket
-import subprocess
-import sys
-import tempfile
 import time
-import urllib.request
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:280])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round43')
-
-
-def borra(d):
-    def alafuerza(func, path, _exc):
-        try:
-            os.chmod(path, 0o700)
-            func(path)
-        except Exception:
-            pass
-    shutil.rmtree(d, onexc=alafuerza) if sys.version_info >= (3, 12) else \
-        shutil.rmtree(d, onerror=alafuerza)
-
-
-if os.path.isdir(BASE):
-    borra(BASE)
+BASE = mc.carpeta('round43')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(EXEDIR, exist_ok=True)
 os.makedirs(JAIL, exist_ok=True)
-EXE = os.path.join(EXEDIR, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+EXE = mc.copia_exe(EXEDIR)
 
-# EL NODO DE ESCRITORIO, de verdad. Sin el, delphi_desktop contesta "falta el
-# nodo" antes de llegar a nada y la bateria mediria el orden de dos negativas
-# en vez de lo que pasa. Con el, contra un binario SIN el arreglo la captura
-# se escribe DE VERDAD fuera de la jaula: eso es el dano, no la ausencia del
-# guardia. Se busca donde lo busca el servidor: <carpeta del exe>/node/.
-NODO_SRC = os.path.join(REPO, 'node', 'McpDesktopNode.exe')
-HAY_NODO = os.path.isfile(NODO_SRC)
-if HAY_NODO:
-    os.makedirs(os.path.join(EXEDIR, 'node'), exist_ok=True)
-    shutil.copy(NODO_SRC, os.path.join(EXEDIR, 'node', 'McpDesktopNode.exe'))
+# (Hasta 1.0.15 aqui se copiaba el nodo de escritorio junto al servidor: la
+# captura era LOCAL. Desde 1.0.16 delphi_desktop va por perfil PAServer y el
+# nodo se despliega en el destino; con un perfil ficticio la llamada muere en
+# la puerta de ejecucion remota, antes de mirar el nodo. Era andamiaje muerto.)
 
 # El destino PROHIBIDO va dentro del arbol de la bateria, no suelto por la
 # maquina: nada de dejar cebos en el %TEMP% del PC (regla de David, y el dia
@@ -96,22 +52,8 @@ LOG_FUERA = os.path.join(FUERA, 'robado.log')
 ZIP_FUERA = os.path.join(FUERA, 'robado.zip')
 DIR_DENTRO = os.path.join(JAIL, 'capturas')
 
-
-def hay_png(d):
-    """Una captura escrita ahi debajo, se llame como se llame."""
-    if not os.path.isdir(d):
-        return False
-    for raiz, _, ficheros in os.walk(d):
-        for f in ficheros:
-            if f.lower().endswith('.png'):
-                return True
-    return False
-
 TOK = 'r43'
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
+PORT = mc.puerto_libre()
 # Los interruptores encendidos A PROPOSITO. Sin ellos las tools contestan
 # "desactivada" o "no declarado" y no se llega a mirar la ruta, que es lo
 # unico que mide esta bateria. El dispositivo y el proyecto remoto son
@@ -125,49 +67,11 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     'RemoteRunProjects=NodoLinux', 'AdbAllowedDevices=%s' % DEV, '',
 ]))
 
-proc = subprocess.Popen([EXE, '--http', str(PORT)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-SID = None
-
-
-def rpc(body, timeout=180):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if SID:
-        h['Mcp-Session-Id'] = SID
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-        timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            m = json.loads(l[5:].strip())
-            if 'result' in m or 'error' in m:
-                return m, r.headers.get('Mcp-Session-Id')
-    try:
-        return json.loads(raw), r.headers.get('Mcp-Session-Id')
-    except Exception:
-        return None, r.headers.get('Mcp-Session-Id')
-
-
-_, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-              'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-                         'clientInfo': {'name': 'r43', 'version': '1'}}})
-rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-RID = [100]
-
-
-def call(tool, args):
-    RID[0] += 1
-    r, _ = rpc({'jsonrpc': '2.0', 'id': RID[0], 'method': 'tools/call',
-                'params': {'name': tool, 'arguments': args}})
-    try:
-        return r['result']['content'][0]['text']
-    except Exception:
-        return json.dumps(r)[:400]
+proc = mc.lanza_http(EXE, PORT, mc.entorno())
+# sin texto, el mensaje entero en el detalle (como siempre en esta bateria)
+cli = mc.Http(PORT, TOK, t=180, respaldo_json=True)
+cli.session('r43')
+call = cli.call
 
 
 def rechazada_por_jaula(txt):
@@ -175,6 +79,19 @@ def rechazada_por_jaula(txt):
     PathDenied para no dar por bueno un 'no hay nodo' o un 'perfil
     desconocido', que tambien empiezan por RECHAZADO."""
     return 'FUERA de los workspaces permitidos' in txt
+
+
+def nada_en(d):
+    """Ni una captura -de ningun formato: la extension sale de la captura,
+    no de una constante- ni la carpeta que el servidor viejo creaba."""
+    return not os.path.exists(d) or not os.listdir(d)
+
+
+def llego_al_dispositivo(txt):
+    """La regla del "out" dejo pasar la llamada y lo que fallo fue el
+    dispositivo (ficticio: nadie contesta en DEV), no otra negativa
+    cualquiera."""
+    return DEV in txt and 'SIN CONEXION CON EL DISPOSITIVO' in txt
 
 
 try:
@@ -191,9 +108,12 @@ try:
     # Solo, y con la sesion bloqueada, esta asercion seria vacua (ni un
     # servidor roto podria escribir): la medida DE VERDAD la remata W4c,
     # cuando consta que capturar funciona (auditoria 2026-09-21).
+    # (Con un perfil ficticio ningun servidor, ni uno roto, llega a capturar:
+    # esta mitad solo muerde en vivo, contra un PAServer. Lo que mira aqui es
+    # que no haya NADA fuera, ni la carpeta que el servidor viejo creaba.)
     check('W1b ...y NO acaba una captura escrita fuera de la jaula',
-          not hay_png(FUERA),
-          'hay una captura bajo %s' % FUERA)
+          nada_en(FUERA),
+          'hay algo bajo %s: %s' % (FUERA, os.listdir(FUERA)))
 
     # ------------------------------------------------------------------ W2
     # (El alias delphi_adb_linux ya no existe; W1 cubre la unica tool.)
@@ -233,29 +153,34 @@ try:
     h = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
                             'out': os.path.join(JAIL, 'foto.png')})
     check('W5b ...con la suya pasa la regla (lo que falle sera el dispositivo)',
-          'No escribo una imagen' not in h and not rechazada_por_jaula(h),
+          'No escribo una imagen' not in h and not rechazada_por_jaula(h)
+          and llego_al_dispositivo(h),
           h[:280])
     i = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
                             'out': os.path.join(JAIL, 'capturas')})
     check('W5c ...y una CARPETA tambien vale ya en delphi_adb',
           'No escribo una imagen' not in i and 'terminar en .png' not in i
-          and not rechazada_por_jaula(i), i[:280])
+          and not rechazada_por_jaula(i) and llego_al_dispositivo(i), i[:280])
     j = call('delphi_adb', {'command': 'screenshot', 'device': DEV})
     check('W5d ...y sin "out" ya no se rechaza: tiene un defecto, como sus hermanas',
-          'necesita "out"' not in j, j[:280])
+          'necesita "out"' not in j and llego_al_dispositivo(j), j[:280])
 
     # ------------------------------------------------------------------ W4
     # Y el otro lado, que es la mitad que se olvida: cerrar la puerta no sirve
     # de nada si se cierra tambien para quien SI puede pasar. Con un perfil
-    # ficticio la llamada muere en el perfil, no en la ruta: eso es lo que se
-    # mide. (Hasta 1.0.15 aqui capturaba de verdad con el nodo local; ahora la
-    # captura real necesita un PAServer y se mide en vivo, no en la bateria.)
+    # ficticio la llamada pasa la ruta y muere en la SIGUIENTE puerta, la de
+    # ejecucion remota (EjecucionRemotaDenegada: el nodo de escritorio no esta
+    # en RemoteRunProjects): eso es lo que se mide, y no "cualquier negativa
+    # que no sea la de la jaula". (Hasta 1.0.15 aqui capturaba de verdad con
+    # el nodo local; ahora la captura real necesita un PAServer y se mide en
+    # vivo, no en la bateria.)
     f = call('delphi_desktop', {'command': 'screenshot', 'profile': 'x',
                                 'out': DIR_DENTRO})
     check('W4 un "out" DENTRO de la jaula no muere por la ruta',
-          not rechazada_por_jaula(f), f[:280])
-    check('W4c ...y fuera sigue vacio', not hay_png(FUERA),
-          'hay una captura bajo %s' % FUERA)
+          not rechazada_por_jaula(f) and 'RemoteRunProjects' in f
+          and 'McpDesktopNode' in f, f[:280])
+    check('W4c ...y fuera sigue vacio', nada_en(FUERA),
+          'hay algo bajo %s: %s' % (FUERA, os.listdir(FUERA)))
     print('NOTA: W4b, W5e y W5f (captura real por perfil) se miden en vivo '
           'contra un PAServer, no aqui.')
 finally:
@@ -266,7 +191,6 @@ finally:
     # Se recoge SIEMPRE, y no es mania: lo que produce esta bateria es una
     # captura de la pantalla del operador. No se queda en la maquina.
     time.sleep(0.5)
-    borra(BASE)
+    mc.borra(BASE)
 
-print('== test_round43: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round43')

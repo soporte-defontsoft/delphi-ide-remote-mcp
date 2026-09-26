@@ -19,93 +19,32 @@ field, like the paserver battery does.
 Usage:  python tests/test_deploy_adb.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Scaffolds into %TEMP%\\delphi-mcp-tests\\deploy-adb.
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+import json, os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    HERE, '..', 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'deploy-adb')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE, exist_ok=True)
-
-
-class Server:
-    def __init__(self, extra_args=None, env=None):
-        e = dict(os.environ)
-        e.setdefault('DELPHI_MCP_ROOTS', BASE)  # v0.98: sin jaula declarada = solo lectura
-        e.update(env or {})
-        self.proc = subprocess.Popen([EXE] + (extra_args or []), env=e,
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL, text=True,
-                                     encoding='utf-8')
-        self.q = queue.Queue()
-        threading.Thread(target=self._reader, daemon=True).start()
-        self.rid = 10
-        self.send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-            "protocolVersion": "2025-06-18", "capabilities": {},
-            "clientInfo": {"name": "deploy-adb-battery", "version": "1"}}})
-        assert self.recv(1, 20), 'no initialize response'
-        self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-    def _reader(self):
-        for line in self.proc.stdout:
-            line = line.strip()
-            if line:
-                self.q.put(line)
-
-    def send(self, o):
-        self.proc.stdin.write(json.dumps(o) + '\n')
-        self.proc.stdin.flush()
-
-    def recv(self, r, t=90):
-        dl = time.time() + t
-        while time.time() < dl:
-            try:
-                line = self.q.get(timeout=1)
-            except queue.Empty:
-                continue
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == r:
-                return m
-        return None
-
-    def call(self, name, args, t=90):
-        self.rid += 1
-        self.send({"jsonrpc": "2.0", "id": self.rid, "method": "tools/call",
-                   "params": {"name": name, "arguments": args}})
-        r = self.recv(self.rid, t)
-        if r is None:
-            return '(timeout)'
-        if 'error' in r:
-            return 'MCPERROR ' + json.dumps(r['error'])[:150]
-        c = r['result'].get('content', [])
-        return c[0].get('text', '') if c else '(no content)'
-
-    def close(self):
-        try:
-            self.proc.stdin.close()
-        except OSError:
-            pass
-        try:
-            self.proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            self.proc.kill()
+BASE = mc.carpeta('deploy-adb')
+# su PROPIA copia del servidor (antes corria el compilado en su sitio, con
+# los logs y temporales de la carpeta de la build)
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 
 
-P = F = 0
+def Server(extra_args=(), env=None):
+    e = {'DELPHI_MCP_ROOTS': BASE}  # v0.98: sin jaula declarada = solo lectura
+    e.update(env or {})
+    return mc.Stdio(EXE, mc.entorno(e), nombre='deploy-adb-battery', args=extra_args)
 
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('PASS -', name)
-    else:
-        F += 1
-        print('FAIL -', name, '|', str(detail)[:200])
+
+def paso_por_adb(out):
+    """La orden LLEGO a adb: su 'device not found' vuelve diagnosticado por
+    el servidor (SIN CONEXION). Un rechazo, un timeout o un error MCP no lo
+    traen - 'que no diga RECHAZADO' lo cumplian tambien esos."""
+    return 'SIN CONEXION' in out and 'RECHAZADO' not in out and not out.startswith('MCPERROR')
+
+
+def lista_devices(out):
+    """La respuesta de devices: un JSON con su lista (vacia aqui)."""
+    return isinstance(mc.como_json(out).get('devices'), list)
 
 
 srv = Server(env={'DELPHI_MCP_ADB_DEVICES': 'ZZZ-NO-EXISTE;127.0.0.1'})
@@ -135,8 +74,7 @@ except Exception:
 # either way it must NOT be a refusal nor a protocol error)
 out = srv.call('delphi_adb', {"command": "logcat", "lines": "50",
                               "device": "ZZZ-NO-EXISTE"}, t=90)
-check('adb logcat: responde sin rechazo',
-      'RECHAZADO' not in out and not out.startswith('MCPERROR'), out[:200])
+check('adb logcat: responde sin rechazo', paso_por_adb(out), out[:200])
 
 # ====================== delphi_adb: dispatcher + functional refusals ======
 out = srv.call('delphi_adb', {"command": "nonsense"})
@@ -153,7 +91,7 @@ out = srv.call('delphi_adb', {"command": "screenshot", "device": "ZZZ-NO-EXISTE"
 # sin el, la captura cae en __delphi-temp del workspace. Lo que falle aqui
 # sera el dispositivo, que no existe - nunca la falta de "out".
 check('adb screenshot sin out: ya no se rechaza por faltar "out"',
-      not ('RECHAZADO' in out and '"out"' in out), out[:250])
+      not ('RECHAZADO' in out and '"out"' in out) and paso_por_adb(out), out[:250])
 out = srv.call('delphi_adb', {"command": "screenshot", "device": "ZZZ-NO-EXISTE",
                               "out": os.path.join(BASE, 'captura.txt')})
 check('adb screenshot out sin .png: rechazado', 'RECHAZADO' in out and '.png' in out,
@@ -324,17 +262,17 @@ try:
 except Exception:
     check('deploy Android: resultado parsea', False, out[:300])
 
-srv.close()
+srv.cierra()
 
 # ====================== read-only split ===================================
-ro = Server(['--readonly'], env={'DELPHI_MCP_ADB_DEVICES': '127.0.0.1'})
+ro = Server(('--readonly',), env={'DELPHI_MCP_ADB_DEVICES': '127.0.0.1'})
 out = ro.call('delphi_adb', {"command": "devices"}, t=60)
 check('readonly: devices sigue abierto',
-      'SOLO LECTURA' not in out and 'devices' in out, out[:200])
+      'SOLO LECTURA' not in out and 'devices' in out and lista_devices(out), out[:200])
 out = ro.call('delphi_adb', {"command": "logcat", "lines": "20",
                              "device": "127.0.0.1"}, t=90)
 check('readonly: logcat sigue abierto (debug del dispositivo es lectura)',
-      'SOLO LECTURA' not in out, out[:200])
+      'SOLO LECTURA' not in out and paso_por_adb(out), out[:200])
 out = ro.call('delphi_adb', {"command": "connect", "address": "127.0.0.1:5555"})
 check('readonly: connect rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out,
       out[:250])
@@ -351,7 +289,7 @@ check('readonly: run rechazado (ejecutar en el dispositivo es write)',
       'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
 out = ro.call('delphi_adb', {"command": "screenshot", "device": "127.0.0.1"})
 check('readonly: screenshot sigue abierto (mirar es lectura)',
-      'SOLO LECTURA' not in out, out[:250])
+      'SOLO LECTURA' not in out and paso_por_adb(out), out[:250])
 out = ro.call('delphi_adb', {"command": "tap", "x": "1", "y": "1",
                              "device": "127.0.0.1"})
 check('readonly: tap rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out,
@@ -360,7 +298,7 @@ out = ro.call('delphi_adb', {"command": "key", "key": "back",
                              "device": "127.0.0.1"})
 check('readonly: key rechazada', 'RECHAZADO' in out and 'SOLO LECTURA' in out,
       out[:250])
-ro.close()
+ro.cierra()
 
 # ============== device allowlist (AdbAllowedDevices por workspace) ========
 # configured -> ONLY those targets, and every device-addressing command must
@@ -368,13 +306,15 @@ ro.close()
 al = Server(env={'DELPHI_MCP_ADB_DEVICES': '10.9.9.9;SERIALX'})
 out = al.call('delphi_adb', {"command": "devices"}, t=60)
 check('allowlist: devices (listar) sigue abierto',
-      'lista permitida' not in out and 'devices' in out, out[:200])
+      'lista permitida' not in out and 'devices' in out and lista_devices(out), out[:200])
 out = al.call('delphi_adb', {"command": "connect", "address": "192.168.1.163:5556"})
 check('allowlist: connect a IP fuera de lista rechazado',
       'RECHAZADO' in out and 'lista permitida' in out, out[:250])
 out = al.call('delphi_adb', {"command": "disconnect", "address": "10.9.9.9:5555"})
+# pasar la puerta = el disconnect llego a adb, que contesta por esa direccion
 check('allowlist: address de la lista pasa la puerta (matchea por host)',
-      'lista permitida' not in out and 'RECHAZADO' not in out, out[:200])
+      'lista permitida' not in out and 'RECHAZADO' not in out
+      and '10.9.9.9:5555' in out and not out.startswith('MCPERROR'), out[:200])
 out = al.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X"})
 check('allowlist: comando sin device explicito rechazado',
       'RECHAZADO' in out and 'AllowedDevices' in out and 'device' in out,
@@ -382,12 +322,12 @@ check('allowlist: comando sin device explicito rechazado',
 out = al.call('delphi_adb', {"command": "logcat", "device": "SERIALX", "lines": "5"},
               t=60)
 check('allowlist: device serial de la lista pasa la puerta',
-      'lista permitida' not in out and 'SOLO LECTURA' not in out, out[:200])
+      'lista permitida' not in out and 'SOLO LECTURA' not in out and paso_por_adb(out), out[:200])
 out = al.call('delphi_adb', {"command": "logcat", "device": "SERIAL-OTRO",
                              "lines": "5"})
 check('allowlist: device fuera de lista rechazado TAMBIEN en comando read',
       'RECHAZADO' in out and 'lista permitida' in out, out[:250])
-al.close()
+al.cierra()
 
 # v0.98: SIN lista ya no hay barra libre - ausente = NINGUN dispositivo,
 # como toda lista por workspace. El unico fail-open del adb, cerrado.
@@ -400,9 +340,7 @@ check('sin lista: hasta un connect explicito se rechaza (lista vacia = nada)',
       'RECHAZADO' in out, out[:250])
 out = noal.call('delphi_adb', {"command": "devices"}, t=60)
 check('sin lista: listar devices sigue abierto (es solo mirar)',
-      'RECHAZADO' not in out, out[:200])
-noal.close()
+      'RECHAZADO' not in out and lista_devices(out), out[:200])
+noal.cierra()
 
-print()
-print('TOTAL: %d PASS, %d FAIL' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('deploy-adb battery')

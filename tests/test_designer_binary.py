@@ -13,52 +13,16 @@ second to-binary must reproduce the first byte for byte.
 
 Usage:  python tests/test_designer_binary.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+import json, os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'designer-binary')
-shutil.rmtree(BASE, ignore_errors=True); os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe'); shutil.copy(SRC, EXE)
+BASE = mc.carpeta('designer-binary')
+EXE = mc.copia_exe(BASE)
 
-env = dict(os.environ); env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line: q.put(line)
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-def send(o): proc.stdin.write(json.dumps(o) + '\n'); proc.stdin.flush()
-def recv(r, t=120):
-    dl = time.time() + t
-    while time.time() < dl:
-        try: line = q.get(timeout=1)
-        except queue.Empty: continue
-        try: m = json.loads(line)
-        except Exception: continue
-        if m.get('id') == r: return m
-    return None
-def call(name, args):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call", "params": {"name": name, "arguments": args}})
-    r = recv(rid[0])
-    if r is None: return '(timeout)'
-    if 'error' in r: return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "dgb", "version": "1"}}})
-recv(1); send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='dgb')
+call = srv.call
 
-P = F = 0
-def check(name, ok, detail=''):
-    global P, F
-    if ok: P += 1; print('PASS', name)
-    else: F += 1; print('FAIL', name, '--', str(detail)[:300])
 def J(t):
     try: return json.loads(t)
     except Exception: return {}
@@ -125,14 +89,14 @@ r = call('delphi_designer', {'command': 'get', 'path': DFM, 'component': 'Button
 check('get del binario: el bloque del boton', "Caption = 'Aceptar'" in r, r[:300])
 check('get lleva la nota (texto)', 'BINARIO' in r and 'to-text' in r, r[-200:])
 r = call('delphi_designer', {'command': 'lint', 'path': DFM})
-check('lint del binario contesta (no rechaza)', 'RECHAZADO' not in r, r[:200])
+check('lint del binario contesta (no rechaza)', r.startswith('LINT LIMPIO') and 'Legacy.dfm' in r, r[:200])
 r = call('delphi_designer', {'command': 'layout', 'path': DFM})
 j = J(r)
 check('layout del binario: clientWidth 300', j.get('clientWidth') == 300, r[:200])
 r = call('delphi_search', {'path': BASE, 'query': 'object Edit1'})
 check('delphi_search encuentra texto dentro del binario', '"total":1' in r.replace(' ', '') and 'Legacy.dfm' in r, r[:300])
 r = call('delphi_projects', {'root': BASE})  # no projects here: just must not choke on the binary
-check('un binario no rompe a quien lista', 'MCPERROR' not in r, r[:120])
+check('un binario no rompe a quien lista', J(r).get('total') == 0 and J(r).get('projects') == [], r[:120])
 
 # ---- editing the binary directly stays refused, pointing at to-text
 r = call('delphi_edit', {'path': DFM, 'old': '  Left = 274', 'new': '  Left = 275'})
@@ -148,7 +112,7 @@ check('en disco: texto, empieza por object, CRLF', t.startswith(b'object FormLeg
 r = call('delphi_designer', {'command': 'to-text', 'path': DFM})
 check('to-text dos veces: nada que hacer', 'ya es texto' in r, r[:120])
 r = call('delphi_read', {'path': DFM, 'fromline': 1, 'toline': 2})
-check('delphi_read del texto: sin nota de binario', 'BINARIO' not in r, r[:200])
+check('delphi_read del texto: sin nota de binario', 'BINARIO' not in r and '1|object FormLegacy: TFormLegacy' in r, r[:200])
 r = call('delphi_edit', {'path': DFM, 'old': '  Left = 274', 'new': '  Left = 275'})
 check('editable como cualquier .dfm tras to-text', r.startswith('ESCRITO') or r.startswith('OK'), r[:120])
 r = call('delphi_edit', {'path': DFM, 'old': '  Left = 275', 'new': '  Left = 274'})
@@ -231,6 +195,5 @@ check('delphi_read de un binario danado: RECHAZADO', 'RECHAZADO' in r, r[:200])
 r = call('delphi_designer', {'command': 'to-text', 'path': BAD})
 check('to-text de un binario danado: RECHAZADO, fichero intacto', 'RECHAZADO' in r and open(BAD, 'rb').read().startswith(b'\xff\x0a\x00TROTO'), r[:200])
 
-proc.kill()
-print('\n== designer-binary battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('designer-binary battery')

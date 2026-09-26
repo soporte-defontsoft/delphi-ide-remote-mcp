@@ -21,96 +21,26 @@ work on the caller's behalf without asking the jail first.
 
 Usage:  python tests/test_round11.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, base64
+import json, os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round11')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+SRC = mc.exe_origen()
+# la carpeta de la bateria; la JAULA es una subcarpeta, para que lo que tiene
+# que estar FUERA de ella (S4) quede tambien dentro de la carpeta de la bateria
+# y no suelto en la raiz comun
+TOP = mc.carpeta('round11')
+BASE = os.path.join(TOP, 'jaula')
 # el conversor de estilos vive junto al servidor: sin el, command=build para
 # antes de llegar al .rc y no se puede comprobar su jaula
-# desde la reorganizacion del 24-sep el conversor tiene su propio proyecto y carpeta
-_conv = os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', 'DelphiStyleConvert.exe')
-if os.path.exists(_conv):
-    shutil.copy(_conv, os.path.join(BASE, 'DelphiStyleConvert.exe'))
+EXE = mc.copia_exe(BASE, con_conversor=True)
 
 
 def spawn(extra_env=None):
-    env = dict(os.environ)
-    env['DELPHI_MCP_ROOTS'] = BASE
-    env['DELPHI_MCP_ALLOW_TESTS'] = '1'
-    env.pop('DELPHI_MCP_REMOTE_HOSTS', None)
-    if extra_env:
-        env.update(extra_env)
-    p = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-    q = queue.Queue()
-
-    def rd():
-        for line in p.stdout:
-            line = line.strip()
-            if line:
-                q.put(line)
-    threading.Thread(target=rd, daemon=True).start()
-    st = {'p': p, 'q': q, 'id': 10}
-    send(st, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": "r11", "version": "1"}}})
-    recv(st, 1)
-    send(st, {"jsonrpc": "2.0", "method": "notifications/initialized"})
-    return st
-
-
-def send(st, o):
-    st['p'].stdin.write(json.dumps(o) + '\n')
-    st['p'].stdin.flush()
-
-
-def recv(st, r, t=900):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = st['q'].get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-
-def call(st, name, args, t=900):
-    st['id'] += 1
-    send(st, {"jsonrpc": "2.0", "id": st['id'], "method": "tools/call",
-              "params": {"name": name, "arguments": args}})
-    r = recv(st, st['id'], t)
-    if r is None:
-        return '(timeout)'
-    if 'error' in r:
-        return 'MCPERROR ' + json.dumps(r['error'])[:300]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail)[:300])
+    env = {'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_ALLOW_TESTS': '1'}
+    env.update(extra_env or {})
+    # plazo de 900 s: aqui se compila
+    return mc.Stdio(EXE, mc.entorno(env), nombre='r11', t=900)
 
 
 def J(t):
@@ -130,50 +60,65 @@ open(os.path.join(ST, 'a.style'), 'w', encoding='utf-8', newline='\r\n').write(
 RC = os.path.join(ST, 'a.rc')
 open(RC, 'w', encoding='utf-8', newline='\r\n').write(
     'AUDSEC RCDATA "C:\\Windows\\win.ini"\r\n')
-r = call(A, 'delphi_styles', {'command': 'build', 'path': ST}, t=300)
+r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
 check('S1 un .rc que apunta FUERA de la jaula: no se compila',
       'RECHAZADO' in r or 'FUERA' in r, r[:300])
 check('S1 ...y no queda ningun .res con eso dentro',
       not os.path.exists(os.path.join(ST, 'a.res')), os.listdir(ST))
 open(RC, 'w', encoding='utf-8', newline='\r\n').write(
     'MIESTILO RCDATA "a.bin.style"\r\n')
-r = call(A, 'delphi_styles', {'command': 'build', 'path': ST}, t=300)
+r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
 # (el conversor de estilos vive junto al servidor desplegado, no junto a esta
 # copia; lo que se comprueba aqui es que el rechazo NO es por la jaula)
 check('S1 un .rc con rutas de dentro no lo veta la jaula',
       'FUERA' not in r, r[:250])
 open(RC, 'w', encoding='utf-8', newline='\r\n').write(
     'ESCAPE RCDATA "..\\..\\..\\..\\Windows\\win.ini"\r\n')
-r = call(A, 'delphi_styles', {'command': 'build', 'path': ST}, t=300)
+r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
 check('S1 ...y un ..\\..\\ tampoco cuela', 'RECHAZADO' in r or 'FUERA' in r, r[:250])
 
 # ------------------------------------------------------- S2/S3: los perfiles --
-r = call(A, 'delphi_paserver', {'command': 'add-profile', 'name': 'r11probe',
+# r11probe es un perfil DE VERDAD, fuera de la jaula: si una pasada anterior
+# murio a medias (matada, sin llegar a su finally) se quedo ahi para siempre.
+# Se quita tambien al EMPEZAR; si no existe, la negativa se ignora.
+A.call('delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
+r = A.call('delphi_paserver', {'command': 'add-profile', 'name': 'r11probe',
                                 'host': '198.51.100.9', 'port': '64211',
                                 'password': 'x', 'platform': 'Linux64'}, t=300)
 check('S2 crear un perfil hacia un host no permitido: RECHAZADO',
       'RECHAZADO' in r and 'RemoteHosts' in r, r[:250])
 B = spawn({'DELPHI_MCP_REMOTE_HOSTS': '198.51.100.9'})
-r = call(B, 'delphi_paserver', {'command': 'add-profile', 'name': 'r11probe',
-                                'host': '198.51.100.9', 'port': '64211',
-                                'password': 'x', 'platform': 'Linux64'}, t=300)
-# with the IDE open on the server, paclient cannot save profiles (W0013,
-# now answered as a clear refusal): tolerate it - a human may be working
-created = ('RECHAZADO' not in r) and ('W0013' not in r) and ('bds.exe' not in r)
-check('S2 con el host permitido, el perfil SI se crea (o el IDE abierto se explica)',
-      created or 'bds.exe' in r, r[:250])
-if created:
-    r = call(B, 'delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
-    check('S3 y se puede volver a borrar desde aqui', 'BORRADO' in r, r[:200])
-else:
-    check('S3 y se puede volver a borrar desde aqui', True, '(no se llego a crear)')
-r = call(B, 'delphi_paserver', {'command': 'remove-profile', 'name': 'no-existe-r11'}, t=120)
-check('S3 borrar un perfil que no existe se explica', 'RECHAZADO' in r, r[:200])
-B['p'].kill()
+# r11probe es un perfil DE VERDAD, fuera de la jaula (un .profile en %APPDATA%
+# y su asiento en HKCU): se quita SIEMPRE, pase lo que pase en medio
+created = borrado = False
+try:
+    r = B.call('delphi_paserver', {'command': 'add-profile', 'name': 'r11probe',
+                                   'host': '198.51.100.9', 'port': '64211',
+                                   'password': 'x', 'platform': 'Linux64'}, t=300)
+    # with the IDE open on the server, paclient cannot save profiles (W0013,
+    # now answered as a clear refusal): tolerate it - a human may be working
+    created = ('RECHAZADO' not in r) and ('W0013' not in r) and ('bds.exe' not in r)
+    check('S2 con el host permitido, el perfil SI se crea (o el IDE abierto se explica)',
+          created or 'bds.exe' in r, r[:250])
+    if created:
+        r = B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
+        borrado = 'BORRADO' in r
+        check('S3 y se puede volver a borrar desde aqui', borrado, r[:200])
+    else:
+        check('S3 y se puede volver a borrar desde aqui', True, '(no se llego a crear)')
+    r = B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'no-existe-r11'}, t=120)
+    check('S3 borrar un perfil que no existe se explica', 'RECHAZADO' in r, r[:200])
+finally:
+    if created and not borrado:
+        try:
+            B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
+        except Exception:
+            pass
+    B.mata()
 
 # ------------------------------------------------- R1/R2: el rename honesto --
 P1 = os.path.join(BASE, 'Lib')
-r = call(A, 'delphi_create', {'kind': 'project-console', 'name': 'Lib', 'dir': P1})
+r = A.call('delphi_create', {'kind': 'project-console', 'name': 'Lib', 'dir': P1})
 assert 'CREADO' in r, r
 UCALC = os.path.join(P1, 'UCalc.pas')
 open(UCALC, 'w', encoding='utf-8', newline='\r\n').write(
@@ -181,11 +126,11 @@ open(UCALC, 'w', encoding='utf-8', newline='\r\n').write(
     '    function Doble(A: Integer): Integer;\n  end;\n\n'
     'implementation\n\nfunction TCalc.Doble(A: Integer): Integer;\nbegin\n'
     '    Result := A * 2;\nend;\n\nend.\n')
-call(A, 'delphi_config', {'project': os.path.join(P1, 'Lib.dproj'),
+A.call('delphi_config', {'project': os.path.join(P1, 'Lib.dproj'),
                           'command': 'add-unit', 'unit': UCALC})
 check('C2 delphi_config acepta unit= como alias de path=',
       os.path.exists(UCALC), '(la unit sigue ahi)')
-j = J(call(A, 'delphi_rename_symbol', {'path': UCALC, 'line': 7, 'character': 14,
+j = J(A.call('delphi_rename_symbol', {'path': UCALC, 'line': 7, 'character': 14,
                                        'newname': 'Triple'}, t=600))
 check('R1 el rename dice DONDE ha buscado', bool(j.get('scope')), str(j)[:300])
 defchg = [c for c in j.get('changes', []) if c.get('kind') == 'definition']
@@ -194,17 +139,17 @@ check('R2 el cambio de la definicion trae anchor, como los demas',
 
 # ------------------------------------------------------------------ C1/C3 ----
 T = os.path.join(BASE, 'MiTest')
-r = call(A, 'delphi_create', {'kind': 'project-console', 'name': 'MiTest', 'dir': T})
+r = A.call('delphi_create', {'kind': 'project-console', 'name': 'MiTest', 'dir': T})
 assert 'CREADO' in r, r
 open(os.path.join(T, 'MiTest.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
     "program MiTest;\n\n{$APPTYPE CONSOLE}\n\nuses\n  System.SysUtils;\n\nbegin\n"
     "  Writeln('PASS uno');\nend.\n")
-r = call(A, 'delphi_test', {'project': os.path.join(T, 'MiTest.dproj')}, t=900)
+r = A.call('delphi_test', {'project': os.path.join(T, 'MiTest.dproj')}, t=900)
 check('C1 delphi_test con solo "project" se entiende como run',
       'discover necesita' not in r and ('"result"' in r or 'result' in r), r[:250])
-call(A, 'delphi_config', {'project': os.path.join(T, 'MiTest.dproj'),
+A.call('delphi_config', {'project': os.path.join(T, 'MiTest.dproj'),
                           'command': 'add-searchpath', 'path': P1})
-j = J(call(A, 'delphi_projects', {}))
+j = J(A.call('delphi_projects', {}))
 mit = [p for p in j.get('projects', []) if p.get('name') == 'MiTest']
 check('C3 delphi_projects dice contra que carpetas compila',
       bool(mit) and bool(mit[0].get('compilesAgainst')), str(mit)[:300])
@@ -219,20 +164,20 @@ open(W, 'w', encoding='utf-8', newline='\r\n').write(
 edits = json.dumps([{"old": "    FA: Integer;", "new": "    FA: Integer;\r\n    FB: string;"},
                     {"old": "    procedure Uno;", "new": "    procedure Uno(A: Integer);"},
                     {"old": "    procedure Dos;", "new": "    procedure Dos(B: string);"}])
-r = call(A, 'delphi_edit', {'path': W, 'edits': edits})
+r = A.call('delphi_edit', {'path': W, 'edits': edits})
 disk = open(W, encoding='utf-8').read()
 check('W1 tres ediciones sobre un fichero en UNA llamada',
       'APLICADAS 3' in r and 'FB: string;' in disk and 'Uno(A: Integer)' in disk, r[:250])
 bad = json.dumps([{"old": "    procedure Uno(A: Integer);", "new": "    procedure Uno(A, C: Integer);"},
                   {"old": "ESTA LINEA NO EXISTE", "new": "x"}])
-r = call(A, 'delphi_edit', {'path': W, 'edits': bad})
+r = A.call('delphi_edit', {'path': W, 'edits': bad})
 check('W1 si una falla, se deshacen TODAS (byte a byte)',
       'ROLLBACK' in r and open(W, encoding='utf-8').read() == disk, r[:250])
-r = call(A, 'delphi_edit', {'path': W, 'edits': 'esto no es json'})
+r = A.call('delphi_edit', {'path': W, 'edits': 'esto no es json'})
 check('W1 un "edits" que no es JSON se explica', 'RECHAZADO' in r and 'JSON' in r, r[:200])
 
 # W2: orientarse en codigo ajeno costaba un delphi_read por fichero
-jd = J(call(A, 'delphi_symbols', {'path': P1}))
+jd = J(A.call('delphi_symbols', {'path': P1}))
 check('W2 delphi_symbols sobre una CARPETA resume todas sus units',
       jd.get('total', 0) >= 1 and bool(jd.get('units')), str(jd)[:250])
 ucalc = [u for u in jd.get('units', []) if u.get('unit') == 'UCalc']
@@ -250,15 +195,15 @@ check('W2 ...diciendo de que clase es cada miembro y en que linea',
 # permisos del servidor, y lo que entra sale por dos sitios: dentro del binario
 # (que se descarga) y citado palabra por palabra en los errores si no es
 # Pascal. Medido: un .txt de fuera volvio como "Undeclared identifier: 'esto'".
-FUERA = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'FUERA-R11.inc')
+FUERA = os.path.join(TOP, 'FUERA-R11.inc')   # fuera de la jaula, dentro de la bateria
 open(FUERA, 'w', encoding='utf-8').write('SECRETO_UNO = 1;\n')
 PF = os.path.join(BASE, 'Incl')
-r = call(A, 'delphi_create', {'kind': 'project-console', 'name': 'Incl', 'dir': PF})
+r = A.call('delphi_create', {'kind': 'project-console', 'name': 'Incl', 'dir': PF})
 assert 'CREADO' in r, r
 open(os.path.join(PF, 'Incl.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
     "program Incl;\n\n{$APPTYPE CONSOLE}\n\nconst\n{$I '" + FUERA + "'}\n\n"
     "begin\n  Writeln(SECRETO_UNO);\nend.\n")
-r = call(A, 'delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
+r = A.call('delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
                              'platform': 'Win64', 'config': 'Debug'}, t=900)
 check('S4 un {$I} que apunta FUERA de la jaula: no se compila',
       r.startswith('RECHAZADO') and '{$I' in r, r[:250])
@@ -272,7 +217,7 @@ open(os.path.join(PF, 'dentro.inc'), 'w', encoding='utf-8', newline='\r\n').writ
 open(os.path.join(PF, 'Incl.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
     "program Incl;\n\n{$APPTYPE CONSOLE}\n{$R *.res}\n\nconst\n"
     "{$I 'dentro.inc'}\n\nbegin\n  Writeln(SECRETO_UNO);\nend.\n")
-r = call(A, 'delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
+r = A.call('delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
                              'platform': 'Win64', 'config': 'Debug'}, t=900)
 check('S4 un include de DENTRO, y el {$R *.res} de siempre, compilan igual',
       not r.startswith('RECHAZADO'), r[:250])
@@ -285,7 +230,7 @@ open(BLK, 'w', encoding='utf-8', newline='\r\n').write(
     '  Writeln(1);\n  Writeln(2);\nend;\n\nend.\n')
 blk = json.dumps([{"old": "  Writeln(1);\n  Writeln(2);", "new": "  Writeln(9);",
                    "occurrence": 2}])
-r = call(A, 'delphi_edit', {'path': BLK, 'edits': blk})
+r = A.call('delphi_edit', {'path': BLK, 'edits': blk})
 disk = open(BLK, encoding='utf-8').read()
 check('M1 un ancla de VARIAS lineas dentro de edits',
       'APLICADAS 1' in r and disk.count('Writeln(9);') == 1, r[:200])
@@ -293,13 +238,13 @@ check('M1 ...y "occurrence" elige cual, sin contar lineas',
       disk.index('Writeln(9);') > disk.index('procedure Dos;'), disk)
 amb = json.dumps([{"old": "procedure Uno;\nbegin", "new": "procedure Uno;\nbegin"},
                   {"old": "  ESTO(1);\n  NO EXISTE(2);", "new": "x"}])
-r = call(A, 'delphi_edit', {'path': BLK, 'edits': amb})
+r = A.call('delphi_edit', {'path': BLK, 'edits': amb})
 check('M1 un bloque que no existe se rechaza y se deshace todo',
       'ROLLBACK' in r or 'RECHAZADO' in r, r[:200])
-r = call(A, 'delphi_help', {})
+r = A.call('delphi_help', {})
 check('M3 el mapa dice COMO averiguar los parametros de una tool',
       'command=tool' in r and 'content' in r, r[-400:])
-r = call(A, 'delphi_test', {'command': 'run', 'project': 'MiTest'})
+r = A.call('delphi_test', {'command': 'run', 'project': 'MiTest'})
 check('C9 un NOMBRE de proyecto se explica como tal, no como jaula',
       'RUTA' in r and 'delphi_projects' in r, r[:250])
 
@@ -316,7 +261,7 @@ open(os.path.join(ST2, 'inner.txt'), 'w', encoding='utf-8', newline='\r\n').writ
     'ROBADO RCDATA "C:\\Windows\\win.ini"\r\n')
 open(os.path.join(ST2, 'b.rc'), 'w', encoding='utf-8', newline='\r\n').write(
     'LEGIT RCDATA "b.bin.style"\r\n#include "inner.txt"\r\n')
-r = call(A, 'delphi_styles', {'command': 'build', 'path': ST2}, t=300)
+r = A.call('delphi_styles', {'command': 'build', 'path': ST2}, t=300)
 check('S5 un #include que trae una ruta de fuera: RECHAZADO',
       'RECHAZADO' in r and 'inner.txt' in r, r[:300])
 check('S5 ...y no queda .res con nada dentro',
@@ -324,8 +269,8 @@ check('S5 ...y no queda .res con nada dentro',
 
 # S6: symbols distinguia "existe fuera" de "no existe" - un mapa del disco,
 # una llamada cada vez. Ahora el rechazo de jaula es el mismo en los dos casos.
-r1 = call(A, 'delphi_symbols', {'path': 'C:\\Windows\\NoExisteJamas.pas'})
-r2 = call(A, 'delphi_symbols', {'path': SRC})
+r1 = A.call('delphi_symbols', {'path': 'C:\\Windows\\NoExisteJamas.pas'})
+r2 = A.call('delphi_symbols', {'path': SRC})
 check('S6 fuera de la jaula: el MISMO rechazo exista o no',
       ('FUERA' in r1) and ('FUERA' in r2), (r1[:90], r2[:90]))
 
@@ -335,23 +280,22 @@ check('S6 fuera de la jaula: el MISMO rechazo exista o no',
 # jaula y descargable. purge=true borra de verdad, y SOLO dentro de la papelera.
 PU = os.path.join(BASE, 'purgar.txt')
 open(PU, 'w', encoding='utf-8').write('x')
-r = call(A, 'delphi_delete', {'path': PU, 'purge': True})
+r = A.call('delphi_delete', {'path': PU, 'purge': True})
 check('P1 purge sobre un fichero VIVO: RECHAZADO (la papelera no se salta)',
       'RECHAZADO' in r and os.path.exists(PU), r[:200])
-r = call(A, 'delphi_delete', {'path': PU})
+r = A.call('delphi_delete', {'path': PU})
 import glob as _glob
 _cop = [x for x in _glob.glob(os.path.join(BASE, '__delphi-patch', '*', 'deleted', 'purgar.txt-*'))
         if not x.endswith('.by')]
 check('P1 el borrado normal sigue dejando copia', len(_cop) == 1, r[:150])
 if _cop:
-    r = call(A, 'delphi_delete', {'path': _cop[0], 'purge': True})
+    r = A.call('delphi_delete', {'path': _cop[0], 'purge': True})
     check('P2 purge de la copia: se va de verdad',
           'PURGADO' in r and not os.path.exists(_cop[0]), r[:200])
-r = call(A, 'delphi_delete', {'path': os.path.join(BASE, '__delphi-patch'),
+r = A.call('delphi_delete', {'path': os.path.join(BASE, '__delphi-patch'),
                               'purge': True})
 check('P3 la papelera ENTERA no se purga de una (ahi hay copias de otros)',
       'RECHAZADO' in r, r[:200])
 
-A['p'].kill()
-print('\n== round-11 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+A.mata()
+mc.fin('round-11 battery')

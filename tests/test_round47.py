@@ -19,117 +19,39 @@ voz alta. Aqui se pagan dos:
 La tercera (la clave de cache entre workspaces solapados) se paga en
 test_round48: un servidor, dos tokens, y el exe de la 1.0.12 de control.
 """
-import json
 import os
 import shutil
-import socket
-import subprocess
-import sys
-import tempfile
 import time
-import urllib.request
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+REPO = mc.REPO
 NODO = os.path.join(REPO, 'node', 'McpDesktopNode.exe')
 
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:260])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round47')
-
-
-def borra(d):
-    def alafuerza(func, path, _exc):
-        try:
-            os.chmod(path, 0o700)
-            func(path)
-        except Exception:
-            pass
-    if not os.path.isdir(d):
-        return
-    shutil.rmtree(d, onexc=alafuerza) if sys.version_info >= (3, 12) else \
-        shutil.rmtree(d, onerror=alafuerza)
-
-
-borra(BASE)
+BASE = mc.carpeta('round47')
 EXEDIR = os.path.join(BASE, 'srv')
 RO = os.path.join(BASE, 'referencia')     # la PRIMERA raiz, de solo lectura
 RW = os.path.join(BASE, 'trabajo')        # la segunda, escribible
 os.makedirs(os.path.join(EXEDIR, 'node'))
 os.makedirs(RO)
 os.makedirs(RW)
-shutil.copy(SRC, os.path.join(EXEDIR, 'DelphiLspMcp.exe'))
+EXE = mc.copia_exe(EXEDIR)
 HAY_NODO = os.path.exists(NODO)
 if HAY_NODO:
     shutil.copy(NODO, os.path.join(EXEDIR, 'node', 'McpDesktopNode.exe'))
 
 TOK = 'r47'
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
+PORT = mc.puerto_libre()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R47]', 'Token=%s' % TOK, 'Roots=%s;%s' % (RO, RW),
     'ReadOnlyPaths=%s' % RO, 'AllowDesktopControl=1', '']))
 
-proc = subprocess.Popen(
-    [os.path.join(EXEDIR, 'DelphiLspMcp.exe'), '--http', str(PORT)],
-    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-SID = None
-
-
-def rpc(body, timeout=120):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if SID:
-        h['Mcp-Session-Id'] = SID
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-        timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            m = json.loads(l[5:].strip())
-            if 'result' in m or 'error' in m:
-                return m, r.headers.get('Mcp-Session-Id')
-    try:
-        return json.loads(raw), r.headers.get('Mcp-Session-Id')
-    except Exception:
-        return None, r.headers.get('Mcp-Session-Id')
-
-
-_, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-              'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-                         'clientInfo': {'name': 'r47', 'version': '1'}}})
-rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-RID = [100]
-
-
-def call(tool, args):
-    RID[0] += 1
-    r, _ = rpc({'jsonrpc': '2.0', 'id': RID[0], 'method': 'tools/call',
-                'params': {'name': tool, 'arguments': args}})
-    try:
-        return r['result']['content'][0]['text']
-    except Exception:
-        return json.dumps(r)[:400]
+proc = mc.lanza_http(EXE, PORT, mc.entorno())
+# sin texto, el mensaje entero en JSON: es lo que ensena el detalle de un FAIL
+cli = mc.Http(PORT, TOK, respaldo_json=True)
+cli.session('r47')
+call = cli.call
 
 
 def pngs(d):
@@ -159,8 +81,11 @@ try:
     check('C0 el fichero venenoso queda versionado', c.startswith('exit=0'), c[:200])
     s = call('delphi_git', {'repo': repo, 'command': 'show',
                             'args': 'HEAD:cesu.txt'})
+    # la llamada VIVA: git contesto (exit=0) y su salida llego; no basta con
+    # que no diga "No mapping" (un timeout tampoco lo dice)
     check('C1 un hijo que emite CESU-8 ya no mata la llamada',
-          'No mapping' not in s and 'Error executing tool' not in s, s[:240])
+          s.startswith('exit=0') and 'No mapping' not in s and
+          'Error executing tool' not in s, s[:240])
     check('C2 ...y el ASCII de los dos lados llega entero',
           'MARCA-ANTES' in s and 'MARCA-DESPUES' in s, s[:240])
 
@@ -175,8 +100,10 @@ try:
         'unit Generado;\n// agujaenelartefacto\ninterface\nimplementation\nend.\n')
     a = call('delphi_search', {'root': os.path.join(RW, 'proy'),
                                'query': 'agujaenelartefacto'})
+    # una busqueda de VERDAD (su JSON con hits) que no trae el artefacto
     check('S1 desde arriba, la carpeta de compilacion sigue oculta',
-          'Generado.pas' not in a, a[:200])
+          isinstance(mc.como_json(a).get('hits'), list) and 'Generado.pas' not in a,
+          a[:200])
     b = call('delphi_search', {'root': salida, 'query': 'agujaenelartefacto'})
     check('S2 nombrada como raiz, se busca dentro (como hace delphi_list)',
           'Generado.pas' in b, b[:200])
@@ -197,15 +124,18 @@ try:
     os.makedirs(intocable)
     open(os.path.join(intocable, 'Ajena.pas'), 'w').write('x')
     call('delphi_list', {'root': RW})
-    call('delphi_list', {'root': RO})
+    lro = call('delphi_list', {'root': RO})
     check('P1 un listado que pasa por delante tira la carpeta de dia caducada',
           not os.path.exists(os.path.join(quieta, '20200101')),
           os.listdir(quieta))
     check('P2 ...y deja en paz la reciente',
           os.path.exists(os.path.join(quieta, hoy, 'Reciente.pas')),
           os.listdir(quieta))
+    # el listado de la referencia se HIZO (su JSON) y aun asi no purgo: si la
+    # llamada fallaba, "sigue ahi" pasaba sin que el recorredor pasara
     check('P3 bajo ReadOnlyPaths no se purga nada: se lee, no se toca',
-          os.path.exists(os.path.join(intocable, 'Ajena.pas')), intocable)
+          isinstance(mc.como_json(lro).get('files'), list) and
+          os.path.exists(os.path.join(intocable, 'Ajena.pas')), (intocable, lro[:160]))
 
     # ------------------------------------------------------------------- R
     # Roots=referencia;trabajo con ReadOnlyPaths=referencia. El entregable
@@ -215,8 +145,11 @@ try:
     if not HAY_NODO:
         print('NOTA: no hay node/McpDesktopNode.exe; R1/R2 no se miden.')
     elif 'NO pude capturar' in shot or '"screenshot"' not in shot:
-        print('NOTA: esta maquina no puede capturar la pantalla ahora mismo '
-              '(sesion bloqueada o desconectada); R1/R2 no se miden.')
+        # Desde 1.0.16 el escritorio solo se alcanza por PAServer y un perfil
+        # (ni hay perfil aqui ni remote-run encendido): se dice el motivo REAL
+        # que da el servidor, no se supone una sesion bloqueada.
+        print('NOTA: R1/R2 no se miden: delphi_desktop no capturo: %s'
+              % ' '.join(shot.split())[:160])
     else:
         check('R1 la captura por defecto cae en la raiz ESCRIBIBLE',
               bool(pngs(os.path.join(RW, '__delphi-temp'))), shot[:240])
@@ -229,7 +162,6 @@ finally:
     except Exception:
         pass
     time.sleep(0.5)
-    borra(BASE)
+    mc.borra(BASE)
 
-print('== test_round47: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round47')

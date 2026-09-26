@@ -36,47 +36,13 @@ import json
 import os
 import re
 import shutil
-import socket
 import subprocess
-import sys
-import tempfile
 import time
-import urllib.request
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:260])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round45')
-
-
-def borra(d):
-    def alafuerza(func, path, _exc):
-        try:
-            os.chmod(path, 0o700)
-            func(path)
-        except Exception:
-            pass
-    shutil.rmtree(d, onexc=alafuerza) if sys.version_info >= (3, 12) else \
-        shutil.rmtree(d, onerror=alafuerza)
-
-
-if os.path.isdir(BASE):
-    borra(BASE)
+BASE = mc.carpeta('round45')
 EXEDIR = os.path.join(BASE, 'srv')
 # El vault de mentira: sin VaultPath las cinco vault_* (el unico registro
 # CONDICIONAL del repo) no salen en tools/list y G1 no las ve - asi
@@ -90,8 +56,8 @@ JAIL = os.path.join(BASE, 'jail')
 FUERA = os.path.join(BASE, 'ajeno')
 for d in (EXEDIR, JAIL, FUERA):
     os.makedirs(d, exist_ok=True)
-shutil.copy(SRC, os.path.join(EXEDIR, 'DelphiLspMcp.exe'))
-NODO_SRC = os.path.join(REPO, 'node', 'McpDesktopNode.exe')
+EXE = mc.copia_exe(EXEDIR)
+NODO_SRC = os.path.join(mc.REPO, 'node', 'McpDesktopNode.exe')
 if os.path.isfile(NODO_SRC):
     os.makedirs(os.path.join(EXEDIR, 'node'), exist_ok=True)
     shutil.copy(NODO_SRC, os.path.join(EXEDIR, 'node', 'McpDesktopNode.exe'))
@@ -225,10 +191,7 @@ EXCLUIDOS = {
 }
 
 TOK = 'r45'
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
+PORT = mc.puerto_libre()
 # TODOS los interruptores encendidos: lo que se mide es la jaula, y un "esta
 # tool esta apagada" contestaria antes y la comprobacion no mediria nada.
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
@@ -240,50 +203,10 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     'VaultPath=%s' % VAULT, '',
 ]))
 
-proc = subprocess.Popen([os.path.join(EXEDIR, 'DelphiLspMcp.exe'),
-                         '--http', str(PORT)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-SID = None
-
-
-def rpc(body, timeout=180):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if SID:
-        h['Mcp-Session-Id'] = SID
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-        timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            m = json.loads(l[5:].strip())
-            if 'result' in m or 'error' in m:
-                return m, r.headers.get('Mcp-Session-Id')
-    try:
-        return json.loads(raw), r.headers.get('Mcp-Session-Id')
-    except Exception:
-        return None, r.headers.get('Mcp-Session-Id')
-
-
-_, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-              'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-                         'clientInfo': {'name': 'r45', 'version': '1'}}})
-rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-RID = [100]
-
-
-def call(tool, args):
-    RID[0] += 1
-    r, _ = rpc({'jsonrpc': '2.0', 'id': RID[0], 'method': 'tools/call',
-                'params': {'name': tool, 'arguments': args}})
-    try:
-        return r['result']['content'][0]['text']
-    except Exception:
-        return json.dumps(r)[:300]
+proc = mc.lanza_http(EXE, PORT, mc.entorno())
+cli = mc.Http(PORT, TOK, t=180)
+cli.session('r45')
+call = cli.call
 
 
 # La negativa de la JAULA, no una cualquiera: casi todas empiezan por
@@ -313,7 +236,7 @@ try:
     # parametro del contrato VIVO con pinta de ruta tiene que estar
     # clasificado - probado o excluido CON MOTIVO. Uno nuevo no se sabe
     # probar, pero si se sabe decir que nadie lo ha mirado.
-    r, _ = rpc({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
+    r = cli.request('tools/list')
     tools = r['result']['tools']
     probados = {(t, p) for t, p, _ in PROBAR}
     sin_clasificar = []
@@ -427,7 +350,6 @@ finally:
     except Exception:
         pass
     time.sleep(0.5)
-    borra(BASE)
+    mc.borra(BASE)
 
-print('== test_round45: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round45')

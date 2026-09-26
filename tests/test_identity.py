@@ -17,91 +17,26 @@ for another agent you would have to steal their session id.
 
 Usage:  python tests/test_identity.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, time, os, sys, tempfile, shutil, socket, glob, urllib.request
+import os, glob
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'identity')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('identity')
+EXE = mc.copia_exe(BASE)
 for name in ('a.txt', 'b.txt', 'c.txt'):
     open(os.path.join(BASE, name), 'w').write(name)
 
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
+PORT = mc.puerto_libre()
+env = mc.entorno({'DELPHI_MCP_ROOTS': BASE,
+                  'DELPHI_MCP_BIND_IP': '127.0.0.1'})  # loopback: sin avisos del firewall
 # v0.98: o workspace o nada - la bateria presenta su token
 TOKEN = 'bateria-workspace'
 with open(os.path.join(BASE, 'settings.ini'), 'w') as _f:
     _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, BASE))
-proc = subprocess.Popen([EXE, '--http', str(PORT)], env=env,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(2.5)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail)[:300])
-
-
-def rpc(body, sid=None):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOKEN}
-    if sid:
-        h['Mcp-Session-Id'] = sid
-    req = urllib.request.Request(URL, data=json.dumps(body).encode(), headers=h, method='POST')
-    r = urllib.request.urlopen(req, timeout=30)
-    raw = r.read().decode('utf-8', 'replace')
-    newsid = r.headers.get('Mcp-Session-Id')
-    msgs = []
-    for line in raw.splitlines():
-        if line.startswith('data:'):
-            try:
-                msgs.append(json.loads(line[5:].strip()))
-            except Exception:
-                pass
-    if not msgs:
-        try:
-            msgs = [json.loads(raw)]
-        except Exception:
-            pass
-    return msgs, newsid
-
-
-def session(name):
-    _, sid = rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": name, "version": "1"}}})
-    rpc({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
-    return sid
-
-
-def call(sid, tool, args):
-    m, _ = rpc({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
-                "params": {"name": tool, "arguments": args}}, sid)
-    for x in m:
-        if x.get('id') == 7:
-            if 'result' in x:
-                return x['result']['content'][0]['text']
-            return 'ERR ' + json.dumps(x.get('error'))[:150]
-    return '(no response)'
+proc = mc.lanza_http(EXE, PORT, env)
+# un cliente, una SESION por agente: la identidad va atada al Mcp-Session-Id,
+# y cada llamada dice con cual habla (sid=)
+cli = mc.Http(PORT, TOKEN)
 
 
 def trashed(name):
@@ -110,38 +45,41 @@ def trashed(name):
 
 
 try:
-    alice = session('alice')
-    bob = session('bob')
+    alice = cli.session('alice')
+    bob = cli.session('bob')
+    # sid=None volveria a la ULTIMA sesion del cliente (la de bob): sin dos
+    # sesiones distintas de verdad, I3 mediria a bob contra si mismo
+    assert alice and bob and alice != bob, (alice, bob)
 
     # I1
-    r = call(alice, 'delphi_messages', {'command': 'check'})
+    r = cli.call('delphi_messages', {'command': 'check'}, sid=alice)
     check('I1 el buzon usa tu identidad sin que la teclees',
           'alice' in r, r[:150])
 
     # I2
-    call(alice, 'delphi_delete', {'path': os.path.join(BASE, 'a.txt')})
+    cli.call('delphi_delete', {'path': os.path.join(BASE, 'a.txt')}, sid=alice)
     ca = trashed('a.txt')
     check('I2 la copia lleva marcador de quien la borro',
           bool(ca) and os.path.exists(ca[0] + '.by') and
           open(ca[0] + '.by').read().strip().endswith('alice'), ca)
 
     # I3
-    r = call(bob, 'delphi_delete', {'path': ca[0], 'purge': True})
+    r = cli.call('delphi_delete', {'path': ca[0], 'purge': True}, sid=bob)
     check('I3 otro agente NO puede purgar tu copia',
           'RECHAZADO' in r and 'alice' in r and os.path.exists(ca[0]), r[:200])
-    r = call(alice, 'delphi_delete', {'path': ca[0], 'purge': True})
+    r = cli.call('delphi_delete', {'path': ca[0], 'purge': True}, sid=alice)
     check('I3 pero tu SI purgas la tuya',
           'PURGADO' in r and not os.path.exists(ca[0]), r[:150])
 
     # I4 - a session with no name is trusted with anyone's trash
-    call(bob, 'delphi_delete', {'path': os.path.join(BASE, 'b.txt')})
+    cli.call('delphi_delete', {'path': os.path.join(BASE, 'b.txt')}, sid=bob)
     cb = trashed('b.txt')
-    anon = session('')  # no clientInfo.name
-    r = call(anon, 'delphi_delete', {'path': cb[0], 'purge': True})
+    anon = cli.session('')  # no clientInfo.name
+    assert anon and anon not in (alice, bob), anon
+    r = cli.call('delphi_delete', {'path': cb[0], 'purge': True}, sid=anon)
     check('I4 una sesion sin nombre (operador) purga cualquier copia',
           'PURGADO' in r and not os.path.exists(cb[0]), r[:150])
 finally:
     proc.kill()
 
-print('\n== identity battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('identity battery')

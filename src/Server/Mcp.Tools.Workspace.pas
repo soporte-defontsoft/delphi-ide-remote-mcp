@@ -358,8 +358,11 @@ begin
   inherited;
   FName := 'delphi_search';
   FDescription := 'Search Delphi sources recursively for a literal text ' +
-    '(case-insensitive), skipping IDE artifacts (__history, Win32/Win64, ' +
-    'dcu, .git...). Files are decoded with their real encoding, so accented ' +
+    '(case-insensitive), skipping IDE artifacts BELOW the root (__history, ' +
+    'Win32/Win64, dcu, .git, the server''s __delphi-temp...): naming such ' +
+    'a folder as root searches inside it, and when files are skipped the ' +
+    'result says how many and why ("hidden" + "note"). Files are decoded ' +
+    'with their real encoding, so accented ' +
     'text matches correctly. Returns path, 1-based line and the line text ' +
     '(same numbering as delphi_read).';
 end;
@@ -421,12 +424,23 @@ begin
     // (auditoria 2026-09-21).
     var RaizEnArtefactos := (not SingleFile) and
       SkipIdeArtifacts(IncludeTrailingPathDelimiter(Params.Root));
+    // Y lo saltado se CUENTA, como en delphi_list: esconder sin decirlo
+    // contestaba "total 0" con medio arbol sin mirar (revision de
+    // baterias, 26-sep-2026).
+    var Ocultos := Default(THiddenCount);
     for F in Targets do
       begin
-        if not SingleFile and (InVault(F) or
-           (not RaizEnArtefactos and
-            SkipIdeArtifacts(RelToRoot(F, Params.Root)))) then
+        if not SingleFile and InVault(F) then
           Continue;
+        if not SingleFile and not RaizEnArtefactos then
+        begin
+          var Motivo := SkipReason(RelToRoot(F, Params.Root), False);
+          if Motivo <> '' then
+          begin
+            Ocultos.Add(Motivo);
+            Continue;
+          end;
+        end;
         Inc(FilesScanned);
         Text := TLspClient.LoadSourceText(F);
         if not Text.ToLower.Contains(Q) then
@@ -483,6 +497,7 @@ begin
     if Total > Ofs + Hits.Count then
       Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Hits.Count));
     Return.AddPair('filesScanned', TJSONNumber.Create(FilesScanned));
+    Ocultos.Report(Return);
     Return.AddPair('hits', Hits);
     Result := Return.ToJSON;
   finally
@@ -533,7 +548,8 @@ var
   F, Mask, Root, Reason: string;
   Masks: TArray<string>;
   Entry: TJSONObject;
-  Total, Hidden, HiddenArt, HiddenGit, HiddenTrash, ShownTrash: Integer;
+  Total, ShownTrash: Integer;
+  Ocultos: THiddenCount;
   RootInArtifacts: Boolean;
 begin
   Result := ReadPathDenied(Params.Root); // listing may enter the library zone
@@ -568,47 +584,36 @@ begin
     Return := TJSONObject.Create;
     Arr := TJSONArray.Create;
     Total := 0;
-    Hidden := 0; HiddenArt := 0; HiddenGit := 0; HiddenTrash := 0;
+    Ocultos := Default(THiddenCount);
     try
       // A root already inside artifact territory was asked for by name:
       // hiding its Debug/Release children would recreate the trap.
       RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
       for F in TDirectory.GetDirectories(Root) do
       begin
-        var IsTrash := SameText(TPath.GetFileName(F), '__delphi-patch') or
-                       SameText(TPath.GetFileName(F), '__pascal-patch');
         if InVault(F) then
           Continue;
         // These were skipped WITHOUT being counted, so a folder holding .git
         // and __delphi-patch answered "total: 1" and said nothing about the
         // other two (measured 2026-08-25). Silence is not the same as saying
         // there is nothing there.
-        if TPath.GetFileName(F).StartsWith('.') then
+        // El motivo lo pone SkipReason, el mismo que en el modo ficheros:
+        // aqui habia tres reglas a mano y cada una contaba en otro cajon
+        // (__delphi-temp como compilacion, __history como papelera, .vs
+        // como git, Win64 en ninguno; revision de baterias, 26-sep-2026).
+        var Nombre := TPath.GetFileName(F);
+        Reason := SkipReason(RelToRoot(F, Root) + '\', Params.IncludeTrash);
+        if RootInArtifacts and (Reason = SKIP_ARTIFACTS) and
+           not Nombre.StartsWith('__') then
+          Reason := '';
+        // Explorador: las carpetas de otras herramientas (.vs, .github,
+        // __pycache__) tampoco salen en este modo; la papelera, si se pidio.
+        if (Reason = '') and (Nombre.StartsWith('.') or Nombre.StartsWith('__')) and
+           (SkipReason(RelToRoot(F, Root) + '\', False) <> SKIP_TRASH) then
+          Reason := SKIP_FOLDERS;
+        if Reason <> '' then
         begin
-          Inc(Hidden);
-          Inc(HiddenGit);
-          Continue;
-        end;
-        // __delphi-temp es ARTEFACTO, no papelera: de un temporal no se
-        // restaura nada e includetrash NUNCA lo ensena - contarlo como
-        // papelera prometia lo contrario (auditoria 2026-09-21).
-        if SameText(TPath.GetFileName(F), TempFolderName) then
-        begin
-          Inc(Hidden);
-          Inc(HiddenArt);
-          Continue;
-        end;
-        if TPath.GetFileName(F).StartsWith('__') and
-           not (Params.IncludeTrash and IsTrash) then
-        begin
-          Inc(Hidden);
-          Inc(HiddenTrash);
-          Continue;
-        end;
-        if (not RootInArtifacts) and
-           SkipIdeArtifacts(RelToRoot(F, Root) + '\', Params.IncludeTrash) then
-        begin
-          Inc(Hidden);
+          Ocultos.Add(Reason);
           Continue;
         end;
         Inc(Total);
@@ -616,12 +621,7 @@ begin
           Arr.Add(F);
       end;
       Return.AddPair('total', TJSONNumber.Create(Total));
-      if Hidden > 0 then
-      begin
-        Return.AddPair('hidden', TJSONNumber.Create(Hidden));
-        Return.AddPair('note', Format(SN_LIST_HIDDEN_FMT,
-          [Hidden, HiddenArt, HiddenGit, HiddenTrash]));
-      end;
+      Ocultos.Report(Return);
       Return.AddPair('dirs', Arr);
       Result := Return.ToJSON;
     finally
@@ -641,7 +641,8 @@ begin
   Return := TJSONObject.Create;
   Arr := TJSONArray.Create;
   Total := 0;
-  Hidden := 0; HiddenArt := 0; HiddenGit := 0; HiddenTrash := 0; ShownTrash := 0;
+  Ocultos := Default(THiddenCount);
+  ShownTrash := 0;
   RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
   try
     for Mask in Masks do
@@ -661,20 +662,14 @@ begin
           Reason := SkipReason(RelToRoot(F, Root), Params.IncludeTrash);
         if Reason <> '' then
         begin
-          Inc(Hidden);
-          if Reason = 'git' then
-            Inc(HiddenGit)
-          else if Reason = 'trash' then
-            Inc(HiddenTrash)
-          else
-            Inc(HiddenArt);
+          Ocultos.Add(Reason);
           Continue;
         end;
         Inc(Total);
         // Con includetrash la papelera entra en el listado y deja de contarse
         // como oculta; el lector sigue queriendo saber cuantas de las entradas
         // son copias y cuantas ficheros vivos (Hermes, 2026-09-22).
-        if Params.IncludeTrash and (SkipReason(RelToRoot(F, Root), False) = 'trash') then
+        if Params.IncludeTrash and (SkipReason(RelToRoot(F, Root), False) = SKIP_TRASH) then
           Inc(ShownTrash);
         if Arr.Count < 500 then
         begin
@@ -703,20 +698,9 @@ begin
     if Total > Arr.Count then
       Return.AddPair('shownNote', Format(SN_SEARCH_CAPPED_FMT,
         [Arr.Count, Total]));
-    if Hidden > 0 then
-    begin
-      Return.AddPair('hidden', TJSONNumber.Create(Hidden));
-      // Say WHICH, because "42 hidden" plus the wrong reason sends the reader
-      // hunting for build output that is not there (measured 2026-08-25).
-      if HiddenArt > 0 then
-        Return.AddPair('hiddenBuildArtifacts', TJSONNumber.Create(HiddenArt));
-      if HiddenGit > 0 then
-        Return.AddPair('hiddenGitInternals', TJSONNumber.Create(HiddenGit));
-      if HiddenTrash > 0 then
-        Return.AddPair('hiddenTrash', TJSONNumber.Create(HiddenTrash));
-      Return.AddPair('note', Format(SN_LIST_HIDDEN_FMT,
-        [Hidden, HiddenArt, HiddenGit, HiddenTrash]));
-    end;
+    // Say WHICH, because "42 hidden" plus the wrong reason sends the reader
+    // hunting for build output that is not there (measured 2026-08-25).
+    Ocultos.Report(Return);
     if Arr.Count >= 500 then
       Return.AddPair('shownNote', SN_LIST_CAPPED);
     // Without "pattern" only Delphi files are listed. That is a filter, and a
@@ -1968,6 +1952,11 @@ begin
   // only writer that could overwrite with no undo (field round 7). Skip the
   // trash's own tree so a backup never triggers another backup.
   Backup := '';
+  // Solo se asignaban si el fichero ya existia: una subida NUEVA (o un
+  // trozo con offset) podia contestar replaced=true con un previousSize
+  // basura (W1036 en cada build, 26-sep).
+  Replaced := False;
+  OldSize := 0;
   if (Params.Offset = 0) and TFile.Exists(FullPath) then
   begin
     Replaced := True;

@@ -11,47 +11,22 @@ Checks:
 
 Usage:  python tests/test_docs_consistency.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, re
+import json, os, re
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'docscheck')
-shutil.rmtree(BASE, ignore_errors=True); os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe'); shutil.copy(SRC, EXE)
+REPO = mc.REPO
+BASE = mc.carpeta('docscheck')
+EXE = mc.copia_exe(BASE)
 VAULT = os.path.join(BASE, 'vault'); os.makedirs(VAULT)
 open(os.path.join(VAULT, 'MEMORY.md'), 'w').write('# MEMORY\n')
 
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-env['DELPHI_MCP_VAULT_PATH'] = VAULT
-env['DELPHI_MCP_VAULT_READONLY'] = '0'  # full surface: the 3 write tools too   # vault tools registered: FULL surface
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line: q.put(line)
-threading.Thread(target=reader, daemon=True).start()
-def send(o): proc.stdin.write(json.dumps(o) + '\n'); proc.stdin.flush()
-def recv(r, t=60):
-    dl = time.time() + t
-    while time.time() < dl:
-        try: line = q.get(timeout=1)
-        except queue.Empty: continue
-        try: m = json.loads(line)
-        except Exception: continue
-        if m.get('id') == r: return m
-    return None
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "docs", "version": "1"}}})
-recv(1); send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-resp = recv(2)
+env = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_VAULT_PATH': VAULT,
+                  'DELPHI_MCP_VAULT_READONLY': '0'})  # full surface: the 3 write tools too   # vault tools registered: FULL surface
+srv = mc.Stdio(EXE, env, nombre='docs', t=60)
+resp = srv.request('tools/list', {})
 TOOLS = sorted(t['name'] for t in resp['result']['tools'])
-proc.kill()
+srv.mata()
 
 TOTAL = len(TOOLS)
 VAULT_TOOLS = sorted(t for t in TOOLS if t.startswith('vault_'))
@@ -60,12 +35,6 @@ LSP_BACKED = ['delphi_symbols', 'delphi_definition', 'delphi_hover',
               'delphi_completion', 'delphi_signature', 'delphi_diagnostics',
               'delphi_references', 'delphi_rename_symbol']
 NON_LSP_CORE = CORE - len(LSP_BACKED)
-
-P = F = 0
-def check(name, ok, detail=''):
-    global P, F
-    if ok: P += 1; print('PASS', name)
-    else: F += 1; print('FAIL', name, '--', str(detail)[:300])
 
 check('tools/list responde', TOTAL > 0, TOTAL)
 check('las LSP-backed existen todas', all(t in TOOLS for t in LSP_BACKED),
@@ -111,5 +80,4 @@ if os.path.exists(cap_path):
           cap.get('optionalTools') == len(VAULT_TOOLS), cap)
     check('manifest: lspBacked', sorted(cap.get('lspBacked', [])) == sorted(LSP_BACKED), cap.get('lspBacked'))
 
-print('\n== docs consistency: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('docs consistency')

@@ -33,7 +33,9 @@
   files, and the RTL only binds those in a console application. The tray mode
   releases the console at startup instead; a service never gets one.
 
-  Logging goes to stderr; stdout carries only protocol messages (stdio mode).
+  Logging goes to logs\ next to the exe in every mode (Lsp.LogSink, started
+  by TMcpHost) and in terminal mode to stderr as well; stdout carries only
+  protocol messages (stdio mode).
   MCP plumbing: vendored gdksoftware/delphi-mcp-server (MIT), see vendor/. }
 
 {$APPTYPE CONSOLE}
@@ -117,7 +119,8 @@ uses
   Lsp.DesignerBin in 'Lsp.DesignerBin.pas',
   Lsp.DesignerBinding in 'Lsp.DesignerBinding.pas',
   Lsp.Base64 in 'Lsp.Base64.pas',
-  Lsp.InlineImages in 'Lsp.InlineImages.pas';
+  Lsp.InlineImages in 'Lsp.InlineImages.pas',
+  Lsp.LogSink in 'Lsp.LogSink.pas';
 
 {$R *.res}
 
@@ -162,19 +165,6 @@ begin
     ShutdownEvent.SetEvent;
 end;
 
-{ Says out loud what the operator most needs to know, in the order they need
-  it. Shared by every mode; only the sink differs. }
-procedure LogNotes(AHost: TMcpHost);
-var
-  S: string;
-begin
-  for S in AHost.StartupNotes do
-    if S.StartsWith(NOTE_WARNING_PREFIX) then
-      TLogger.Warning(S.Substring(Length(NOTE_WARNING_PREFIX)))
-    else
-      TLogger.Info(S);
-end;
-
 procedure RunTerminal;
 begin
   // stdout is the MCP channel in stdio mode: every log line goes to stderr.
@@ -191,7 +181,7 @@ begin
       SetProcessReadOnly(True);
       TLogger.Info('Read-only mode (--readonly): mutating tools disabled.');
     end;
-    LogNotes(Host);
+    Host.LogStartupNotes;
 
     if HasFlag('--http') then
     begin
@@ -203,10 +193,8 @@ begin
         SetConsoleCtrlHandler(@ConsoleCtrl, True);
         HttpServer := Host.CreateHttpServer(FlagValue('--http', 0));
         try
-          if HttpServer.BindIP = '127.0.0.1' then
-            TLogger.Warning('No credential configured: binding to localhost ' +
-              'only. Set [Security] AuthToken (and [Server] BindIP) to expose ' +
-              'to the network.');
+          // el aviso de "solo localhost" es de StartupNotes (Lsp.Host), con
+          // la misma condicion que decide el bind en CreateHttpServer
           HttpServer.Start;
           TLogger.Info('Ready. Ctrl+C to stop.');
           ShutdownEvent.WaitFor(INFINITE);
@@ -253,9 +241,10 @@ end;
 
 procedure RunService;
 begin
-  // No console and no window: the log sink is the event log plus whatever the
-  // logger is configured to write. Never the console - under the SCM there is
-  // none, and writing to it raises an I/O error that would kill the start.
+  // No console and no window: the log goes to disk (Lsp.LogSink, started by
+  // TMcpHost as in every mode) and a start that fails to the event log too.
+  // Never the console - under the SCM there is none, and writing to it raises
+  // an I/O error that would kill the start.
   TLogger.LogToConsole := False;
   IsMultiThread := True;
   if not Vcl.SvcMgr.Application.DelayInitialize or

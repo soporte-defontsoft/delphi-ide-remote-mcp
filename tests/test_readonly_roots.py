@@ -13,12 +13,14 @@ measure the precedence.
 
 Usage:  python tests/test_readonly_roots.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+import atexit, json, subprocess, os, shutil
+import mcp_cliente as mc
+from mcp_cliente import check
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'readonly-roots')
+REPO = mc.REPO
+# carpeta propia en vez de mc.carpeta(): la barre borra(), que quita antes los
+# junctions y los ficheros de solo lectura del repo git de la referencia
+BASE = os.path.join(mc.RAIZ, 'readonly-roots')
 def quita_enlaces(base):
     # junctions first, with rmdir (removes the LINK, never its target):
     # shutil.rmtree refuses to enter them and ignore_errors hid the leftovers
@@ -41,6 +43,9 @@ def borra(base):
 
 
 borra(BASE)
+# su propia copia del servidor, fuera de toda raiz (antes corria el compilado
+# EN SU SITIO: logs y __delphi-temp en la carpeta de build)
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 MINE = os.path.join(BASE, 'mio')          # Roots
 REF = os.path.join(BASE, 'referencia')    # ReadOnlyRoots
 BOTH = os.path.join(BASE, 'ambos')        # in Roots AND ReadOnlyRoots: read-only wins
@@ -59,77 +64,17 @@ open(os.path.join(MINE, 'conref', 'mio.txt'), 'w').write('mio')
 OTRA = os.path.join(REPO, 'tests', '__mudanza-otra-unidad')
 HAY_OTRA = os.path.splitdrive(REPO)[0].lower() != os.path.splitdrive(BASE)[0].lower()
 if HAY_OTRA:
-    os.makedirs(OTRA, exist_ok=True)
-
-P = F = 0
-
-
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('  PASS', name)
-    else:
-        F += 1
-        print('  FAIL', name, '--', str(detail)[:300])
+    # tiene que estar en OTRA unidad, asi que vive en el repo: se barre al
+    # empezar (lo que dejo una pasada rota) y al salir PASE LO QUE PASE
+    borra(OTRA)
+    os.makedirs(OTRA)
+    atexit.register(borra, OTRA)
 
 
-class Server:
-    def __init__(self, env):
-        e = dict(os.environ)
-        e.update(env)
-        self.proc = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL, text=True, encoding='utf-8',
-                                     errors='replace', bufsize=1)
-        self.q = queue.Queue()
-        threading.Thread(target=self._reader, daemon=True).start()
-        self.n = 0
-        self.send({'jsonrpc': '2.0', 'id': 0, 'method': 'initialize', 'params': {
-            'protocolVersion': '2025-03-26', 'capabilities': {},
-            'clientInfo': {'name': 'bateria-readonly-roots', 'version': '1'}}})
-        self.recv(0)
-        self.send({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-
-    def _reader(self):
-        for line in self.proc.stdout:
-            self.q.put(line)
-
-    def send(self, o):
-        self.proc.stdin.write(json.dumps(o) + '\n')
-        self.proc.stdin.flush()
-
-    def recv(self, rid, t=120):
-        end = time.time() + t
-        while time.time() < end:
-            try:
-                line = self.q.get(timeout=1)
-            except queue.Empty:
-                continue
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == rid:
-                return m
-        return {'error': 'timeout'}
-
-    def call(self, name, args, t=120):
-        self.n += 1
-        self.send({'jsonrpc': '2.0', 'id': self.n, 'method': 'tools/call',
-                   'params': {'name': name, 'arguments': args}})
-        r = self.recv(self.n, t)
-        if 'error' in r:
-            return 'MCPERROR: ' + json.dumps(r['error'])
-        c = r['result'].get('content', [])
-        return c[0].get('text', '') if c else '(no content)'
-
-    def kill(self):
-        try:
-            self.proc.stdin.close()
-        except Exception:
-            pass
-        time.sleep(0.5)
-        self.proc.kill()
+def Server(env):
+    # el handshake con el que esta bateria se presento siempre
+    return mc.Stdio(EXE, mc.entorno(env), nombre='bateria-readonly-roots',
+                    protocolo='2025-03-26')
 
 
 # ---- 1) the reference project, made for real by a server that OWNS the folder
@@ -141,7 +86,7 @@ out = maker.call('delphi_create', {'kind': 'unit', 'name': 'URefUtil',
 check('fixture: unit de referencia creada', out.startswith('CREADO') or out.startswith('CREADA'), out[:200])
 out = maker.call('delphi_create', {'kind': 'project-console', 'dir': os.path.join(BOTH, 'Ambos'), 'name': 'Ambos'})
 check('fixture: proyecto en la carpeta doble creado', out.startswith('CREADO'), out[:200])
-maker.kill()
+maker.cierra(0.5)
 REF_PAS = os.path.join(REF, 'Ref', 'URefUtil.pas')
 REF_DPROJ = os.path.join(REF, 'Ref', 'Ref.dproj')
 # the reference is a git repository with one commit: query must work, writes not
@@ -183,7 +128,8 @@ try:
 except Exception as e:
     check('projects: parsea', False, '%s | %s' % (e, out[:300]))
 out = call('delphi_projects', {'root': REF})
-check('projects root=referencia: listar es leer, no se rechaza', not out.startswith('RECHAZADO') and 'Ref' in out, out[:200])
+check('projects root=referencia: listar es leer, no se rechaza',
+      mc.como_json(out).get('total') == 1 and [p.get('name') for p in mc.como_json(out).get('projects', [])] == ['Ref'], out[:200])
 
 # reading works exactly like in the roots
 out = call('delphi_read', {'path': REF_PAS})
@@ -193,7 +139,7 @@ check('search en la referencia', 'URefUtil' in out and not out.startswith('RECHA
 out = call('delphi_list', {'path': os.path.join(REF, 'Ref')})
 check('list en la referencia', 'URefUtil.pas' in out, out[:200])
 out = call('delphi_symbols', {'path': REF_PAS})
-check('symbols (LSP) en la referencia', not out.startswith('RECHAZADO') and 'MCPERROR' not in out, out[:200])
+check('symbols (LSP) en la referencia', out.lstrip().startswith('[') and '"name":"interface"' in out and '"selectionRange"' in out, out[:200])
 out = call('delphi_fetch', {'path': REF_PAS, 'offset': 0})
 check('fetch en la referencia', '"chunkBase64"' in out or '"download"' in out, out[:200])
 
@@ -234,7 +180,7 @@ check('carpeta en Roots Y ReadOnlyRoots: leer OK', 'program Ambos' in out, out[:
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'status'})
 check('git status en la referencia: consulta OK', out.startswith('exit=0') and not out.startswith('RECHAZADO'), out[:200])
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'log'})
-check('git log en la referencia: consulta OK', 'ref' in out and not out.startswith('RECHAZADO'), out[:200])
+check('git log en la referencia: consulta OK', out.startswith('exit=0') and out.rstrip().endswith(' ref'), out[:200])
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'add', 'args': '-A'})
 check('git add en la referencia: RECHAZADO como referencia', refused_as_reference(out), out[:200])
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'branch', 'args': 'rama-nueva'})
@@ -242,7 +188,7 @@ check('git branch con args en la referencia: RECHAZADO (crea)', refused_as_refer
 
 # config: view reads, everything else writes
 out = call('delphi_config', {'project': REF_DPROJ, 'command': 'view'})
-check('config view en la referencia: OK', not out.startswith('RECHAZADO') and 'platform' in out.lower(), out[:200])
+check('config view en la referencia: OK', mc.como_json(out).get('appType') == 'Console' and 'Ref.dproj' in out, out[:200])
 out = call('delphi_config', {'project': REF_DPROJ, 'command': 'set-version', 'version': '9.9.9'})
 check('config set-version en la referencia: RECHAZADO', refused_as_reference(out), out[:200])
 
@@ -312,10 +258,7 @@ check('mis roots: escribir sigue OK', out.startswith('ESCRITO'), out[:200])
 out = call('delphi_read', {'path': os.path.join(OUT, 'Fuera.pas')})
 check('fuera de todo: sigue vetado', out.startswith('RECHAZADO') and 'FUERA' in out, out[:200])
 
-srv.kill()
+srv.cierra(0.5)
+srv.p.wait(10)  # su exe esta en BASE: muerto del todo antes de barrerla
 borra(BASE)
-if HAY_OTRA:
-    borra(OTRA)
-print()
-print('== readonly-roots battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('readonly-roots battery')

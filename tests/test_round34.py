@@ -23,94 +23,27 @@ Usage:  python tests/test_round34.py [path-to-DelphiLspMcp.exe]
 """
 import json
 import os
-import shutil
-import socket
-import subprocess
-import sys
-import tempfile
-import time
-import urllib.request
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round34')
-shutil.rmtree(BASE, ignore_errors=True)
+BASE = mc.carpeta('round34')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
-os.makedirs(EXEDIR)
 os.makedirs(JAIL)
-EXE = os.path.join(EXEDIR, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+EXE = mc.copia_exe(EXEDIR)
 
 TOK = 'r34'
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
+PORT = mc.puerto_libre()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R34]', 'Token=%s' % TOK, 'Roots=%s' % JAIL, '',
 ]))
 
-proc = subprocess.Popen([EXE, '--http', str(PORT)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-SID = None
-
-
-def rpc(body, timeout=120):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if SID:
-        h['Mcp-Session-Id'] = SID
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-        timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            m = json.loads(l[5:].strip())
-            if 'result' in m or 'error' in m:
-                return m, r.headers.get('Mcp-Session-Id')
-    try:
-        return json.loads(raw), r.headers.get('Mcp-Session-Id')
-    except Exception:
-        return None, r.headers.get('Mcp-Session-Id')
-
-
-_, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-              'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-                         'clientInfo': {'name': 'r34', 'version': '1'}}})
-rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-RID = [100]
-
-
-def call(tool, args):
-    RID[0] += 1
-    r, _ = rpc({'jsonrpc': '2.0', 'id': RID[0], 'method': 'tools/call',
-                'params': {'name': tool, 'arguments': args}})
-    try:
-        return r['result']['content'][0]['text']
-    except Exception:
-        return json.dumps(r)[:400]
+proc = mc.lanza_http(EXE, PORT, mc.entorno())
+cli = mc.Http(PORT, TOK)
+cli.session('r34')
+call = cli.call
 
 
 # Tres bloques IDENTICOS de dos lineas, separados. Una entrada previa mete
@@ -162,7 +95,13 @@ try:
               and lineas.count('beta') == 1,
               'quedo: %s' % lineas)
         check('B4 %s: la tanda devuelve ECO de lo que hay en disco, no solo '
-              'el ancla' % tool, '->' in r, r[:200])
+              'el ancla' % tool,
+              '->' in r and '3| PRIMERO-1' in r and '9| TERCERO-1' in r,  # linea y texto del disco
+              r[:200])
+        # el eco sale con UN separador de linea: mezclaba el CRLF de
+        # AppendLine con el LF del mensaje que lo envuelve (26-sep-2026)
+        check('B4b %s: el eco no mezcla CRLF con LF' % tool,
+              '\r' not in r and r.count('\n') >= 3, repr(r[:120]))
 
     # ------------------------------------------------------------------ B5
     f = os.path.join(JAIL, 'atomico.md')
@@ -182,5 +121,4 @@ finally:
     except Exception:
         pass
 
-print('== test_round34: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round34')

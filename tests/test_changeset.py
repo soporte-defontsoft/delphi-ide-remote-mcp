@@ -8,52 +8,16 @@ Acceptance criteria (external review 2026-08-24, adopted):
 
 Usage:  python tests/test_changeset.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, hashlib
+import json, os, sys, hashlib
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'changeset')
-shutil.rmtree(BASE, ignore_errors=True); os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe'); shutil.copy(SRC, EXE)
+BASE = mc.carpeta('changeset')
+EXE = mc.copia_exe(BASE)
 
-env = dict(os.environ); env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line: q.put(line)
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-def send(o): proc.stdin.write(json.dumps(o) + '\n'); proc.stdin.flush()
-def recv(r, t=120):
-    dl = time.time() + t
-    while time.time() < dl:
-        try: line = q.get(timeout=1)
-        except queue.Empty: continue
-        try: m = json.loads(line)
-        except Exception: continue
-        if m.get('id') == r: return m
-    return None
-def call(name, args):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call", "params": {"name": name, "arguments": args}})
-    r = recv(rid[0])
-    if r is None: return '(timeout)'
-    if 'error' in r: return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "cs", "version": "1"}}})
-recv(1); send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='cs')
+call = srv.call
 
-P = F = 0
-def check(name, ok, detail=''):
-    global P, F
-    if ok: P += 1; print('PASS', name)
-    else: F += 1; print('FAIL', name, '--', str(detail)[:300])
 def sha(p): return hashlib.sha256(open(p, 'rb').read()).hexdigest()
 def cs(args):
     r = call('delphi_changeset', args)
@@ -206,6 +170,5 @@ check('rollback descarta', 'descartado' in r, r[:120])
 r = cs({'command': 'status'})
 check('status responde JSON', r.startswith('{'), r[:120])
 
-proc.kill()
-print('\n== changeset battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('changeset battery')

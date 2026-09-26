@@ -17,24 +17,9 @@ operator's console) is unconfined - the same rule the recoverable trash uses.
 
 Usage:  python tests/test_confine.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, time, os, sys, tempfile, shutil, socket, urllib.request
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:220])
+import os
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
 TOKEN = 'bateria-workspace'
@@ -46,155 +31,76 @@ def start(confine):
     # acaba con cientos de carpetas ahi - hasta que el listado de otra bateria
     # se trunca y falla algo que no tiene nada que ver (medido 2026-09-20:
     # 521 entradas, ~500 de esta).
-    base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests',
-                        'confine', 'on' if confine else 'off')
-    shutil.rmtree(base, ignore_errors=True)
-    os.makedirs(base)
-    exe = os.path.join(base, 'DelphiLspMcp.exe')
-    shutil.copy(SRC, exe)
+    base = mc.carpeta(os.path.join('confine', 'on' if confine else 'off'))
+    exe = mc.copia_exe(base)
     for a in ('alice', 'bob', 'shared'):
         os.makedirs(os.path.join(base, a))
     open(os.path.join(base, 'bob', 'b.pas'), 'w').write('unit b;\n')
-    sk = socket.socket()
-    sk.bind(('127.0.0.1', 0))
-    port = sk.getsockname()[1]
-    sk.close()
-    env = dict(os.environ)
-    env['DELPHI_MCP_ROOTS'] = base
-    env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
+    port = mc.puerto_libre()
+    env = mc.entorno({'DELPHI_MCP_ROOTS': base,
+                      'DELPHI_MCP_BIND_IP': '127.0.0.1'})  # loopback: sin avisos del firewall
     # v0.98: o workspace o nada - el confinamiento se declara EN el workspace
     with open(os.path.join(base, 'settings.ini'), 'w') as _f:
         _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, base))
         if confine:
             _f.write('AgentConfinement=1\nSharedFolders=shared\n')
-    proc = subprocess.Popen([exe, '--http', str(port)], env=env,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(2.3)
-    return base, port, proc
+    # espera a que ESCUCHE (antes un sleep fijo de 2,3 s)
+    proc = mc.lanza_http(exe, port, env)
+    return base, mc.Http(port, TOKEN), proc
 
 
-def rpc(url, body, sid=None):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOKEN}
-    if sid:
-        h['Mcp-Session-Id'] = sid
-    r = urllib.request.urlopen(urllib.request.Request(
-        url, data=json.dumps(body).encode(), headers=h, method='POST'), timeout=20)
-    raw = r.read().decode('utf-8', 'replace')
-    msgs = []
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            try:
-                msgs.append(json.loads(l[5:].strip()))
-            except Exception:
-                pass
-    if not msgs:
-        try:
-            msgs = [json.loads(raw)]
-        except Exception:
-            pass
-    return msgs, r.headers.get('Mcp-Session-Id')
-
-
-def session(url, name):
-    _, sid = rpc(url, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": name, "version": "1"}}})
-    rpc(url, {"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
-    return sid
-
-
-def call(url, sid, tool, args):
-    m, _ = rpc(url, {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
-                     "params": {"name": tool, "arguments": args}}, sid)
-    for x in m:
-        if x.get('id') == 7:
-            return x.get('result', {}).get('content', [{}])[0].get('text', 'ERR')
-    return '(no)'
-
-
-def ok(r):
-    return 'RECHAZADO' not in r and r != 'ERR' and '(no)' not in r
+def crea(cli, path):
+    """delphi_textedit create de 'x' en path: True solo si la tool dice
+    CREADO de ESE fichero y el fichero esta en disco con ese contenido (antes
+    valia cualquier respuesta sin RECHAZADO: un timeout o un error pasaban)."""
+    r = cli.call('delphi_textedit', {'path': path, 'create': True, 'content': 'x'})
+    return (r.startswith('CREADO') and os.path.basename(path) in r and os.path.isfile(path)
+            and open(path, encoding='utf-8').read() == 'x')
 
 
 # ---- OFF by default ----
-base, port, proc = start(False)
-url = 'http://127.0.0.1:%d/mcp' % port
+base, a, proc = start(False)
 try:
-    a = session(url, 'alice')
+    a.session('alice')
     check('C0 OFF por defecto: un agente escribe donde sea del jail',
-          ok(call(url, a, 'delphi_textedit',
-                  {'path': os.path.join(base, 'bob', 'off.txt'), 'create': True, 'content': 'x'})))
+          crea(a, os.path.join(base, 'bob', 'off.txt')))
 finally:
     proc.kill()
 
 # ---- ON ----
-base, port, proc = start(True)
-url = 'http://127.0.0.1:%d/mcp' % port
+base, a, proc = start(True)
 try:
-    a = session(url, 'alice')
+    a.session('alice')
     check('C1 ON: escribe en su propia carpeta',
-          ok(call(url, a, 'delphi_textedit',
-                  {'path': os.path.join(base, 'alice', 'n.txt'), 'create': True, 'content': 'x'})))
-    r = call(url, a, 'delphi_textedit',
-             {'path': os.path.join(base, 'bob', 'hack.txt'), 'create': True, 'content': 'x'})
+          crea(a, os.path.join(base, 'alice', 'n.txt')))
+    r = a.call('delphi_textedit',
+               {'path': os.path.join(base, 'bob', 'hack.txt'), 'create': True, 'content': 'x'})
     check('C2 ON: NO escribe en la carpeta de otro agente',
-          'RECHAZADO' in r and 'confinado' in r, r)
+          'RECHAZADO' in r and 'confinado' in r and
+          not os.path.exists(os.path.join(base, 'bob', 'hack.txt')), r)
     check('C3 ON: una carpeta compartida es escribible',
-          ok(call(url, a, 'delphi_textedit',
-                  {'path': os.path.join(base, 'shared', 's.txt'), 'create': True, 'content': 'x'})))
-    r = call(url, a, 'delphi_textedit',
-             {'path': os.path.join(base, 'loose.txt'), 'create': True, 'content': 'x'})
-    check('C4 ON: escribir suelto en la raiz se rechaza', 'RECHAZADO' in r, r)
-    check('C5 ON: leer NO esta confinado (lee el arbol entero)',
-          ok(call(url, a, 'delphi_read', {'path': os.path.join(base, 'bob', 'b.pas')})))
+          crea(a, os.path.join(base, 'shared', 's.txt')))
+    r = a.call('delphi_textedit',
+               {'path': os.path.join(base, 'loose.txt'), 'create': True, 'content': 'x'})
+    check('C4 ON: escribir suelto en la raiz se rechaza',
+          'RECHAZADO' in r and not os.path.exists(os.path.join(base, 'loose.txt')), r)
+    r = a.call('delphi_read', {'path': os.path.join(base, 'bob', 'b.pas')})
+    # el contenido de verdad, en el formato numero|linea del read
+    check('C5 ON: leer NO esta confinado (lee el arbol entero)', '1|unit b;' in r, r)
 finally:
     proc.kill()
 
 # ---- ON, but stdio has no identity: unconfined ----
 # carpeta fija, ver el comentario de start(): la raiz temporal es compartida
-base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'confine', 'stdio')
-shutil.rmtree(base, ignore_errors=True)
-os.makedirs(base)
-exe = os.path.join(base, 'DelphiLspMcp.exe')
-shutil.copy(SRC, exe)
+base = mc.carpeta(os.path.join('confine', 'stdio'))
+exe = mc.copia_exe(base)
 os.makedirs(os.path.join(base, 'bob'))
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = base
-env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
-env['DELPHI_MCP_AGENT_CONFINEMENT'] = '1'
-proc = subprocess.Popen([exe], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
+env = mc.entorno({'DELPHI_MCP_ROOTS': base,
+                  'DELPHI_MCP_AGENT_CONFINEMENT': '1'})
+# clientInfo.name vacio: la sesion NO tiene identidad
+srv = mc.Stdio(exe, env, nombre='')
+ok6 = crea(srv, os.path.join(base, 'bob', 'stdio.txt'))
+srv.mata()
+check('C6 ON: una sesion sin identidad (stdio/operador) no esta confinada', ok6)
 
-
-def sio(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-sio({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "", "version": "1"}}})
-sio({"jsonrpc": "2.0", "method": "notifications/initialized"})
-sio({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {
-    "name": "delphi_textedit",
-    "arguments": {"path": os.path.join(base, 'bob', 'stdio.txt'), "create": True, "content": "x"}}})
-res = ''
-t0 = time.time()
-while time.time() - t0 < 15:
-    line = proc.stdout.readline()
-    if not line:
-        break
-    try:
-        m = json.loads(line)
-    except Exception:
-        continue
-    if m.get('id') == 7:
-        res = m.get('result', {}).get('content', [{}])[0].get('text', 'ERR')
-        break
-proc.kill()
-check('C6 ON: una sesion sin identidad (stdio/operador) no esta confinada',
-      'RECHAZADO' not in res and res not in ('', 'ERR'), res)
-
-print('\n== confine battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('confine battery')

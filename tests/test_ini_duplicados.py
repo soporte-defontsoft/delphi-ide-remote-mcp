@@ -13,33 +13,16 @@ servidor CIERRA los workspaces afectados (401) y lo dice al arrancar.
 
 Usage:  python tests/test_ini_duplicados.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, shutil, socket, subprocess, sys, tempfile, time, urllib.request, urllib.error
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-P = F = 0
+import json, os, subprocess
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'inidup')
-shutil.rmtree(BASE, ignore_errors=True)
+BASE = mc.carpeta('inidup')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
-os.makedirs(EXEDIR)
 os.makedirs(JAIL)
-EXE = os.path.join(EXEDIR, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+EXE = mc.copia_exe(EXEDIR)
 
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
@@ -52,47 +35,30 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Workspace.Limpio]', 'Token=t-limpio', 'Roots=%s' % JAIL, '',
 ]))
 
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
-proc = subprocess.Popen([EXE, '--http', str(PORT)], stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
-time.sleep(2.5)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
+PORT = mc.puerto_libre()
+# lo que dice al arrancar (los AVISO de D6) va a un FICHERO: una tuberia que
+# nadie lee hasta matarlo puede llenarse y bloquear al servidor
+LOG = os.path.join(BASE, 'arranque.log')
+with open(LOG, 'w') as _log:
+    proc = mc.lanza_http(EXE, PORT, mc.entorno(), stdout=_log, stderr=subprocess.STDOUT)
 
 
 def init(tok):
     """HTTP status of an initialize with that Bearer, and the session id."""
-    h = {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + tok}
-    body = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": "inidup", "version": "1"}}}
-    try:
-        r = urllib.request.urlopen(urllib.request.Request(
-            URL, data=json.dumps(body).encode(), headers=h, method='POST'), timeout=60)
-        return r.status, r.headers.get('Mcp-Session-Id')
-    except urllib.error.HTTPError as e:
-        return e.code, None
+    st, h, _ = mc.Http(PORT, tok).post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": mc.PROTOCOLO, "capabilities": {},
+        "clientInfo": {"name": "inidup", "version": "1"}}})
+    return st, (None if st >= 400 else h.get('Mcp-Session-Id'))
 
 
 def workspace_name(tok, sid):
-    h = {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + tok, 'Mcp-Session-Id': sid}
-    urllib.request.urlopen(urllib.request.Request(URL, data=json.dumps(
-        {"jsonrpc": "2.0", "method": "notifications/initialized"}).encode(), headers=h, method='POST'), timeout=60)
-    r = urllib.request.urlopen(urllib.request.Request(URL, data=json.dumps(
-        {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
-         "params": {"name": "delphi_workspace", "arguments": {}}}).encode(), headers=h, method='POST'), timeout=60)
-    raw = r.read().decode('utf-8', 'replace')
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            raw = l[5:].strip()
+    cli = mc.Http(PORT, tok)
+    cli.rpc({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid=sid)
+    t = cli.call('delphi_workspace', {}, sid=sid)
     try:
-        return json.loads(json.loads(raw)['result']['content'][0]['text']).get('workspace')
+        return json.loads(t).get('workspace')
     except Exception:
-        return raw[:200]
+        return t[:200]
 
 
 try:
@@ -107,7 +73,8 @@ try:
         check('D5 y se llama Limpio', workspace_name('t-limpio', sid) == 'Limpio', '')
 finally:
     proc.kill()
-    out = proc.stdout.read() if proc.stdout else ''
+    proc.wait()
+    out = open(LOG, encoding='utf-8', errors='replace').read()
 
 avisos = [l for l in out.splitlines() if 'AVISO' in l]
 check('D6 arranque: nombra el par que comparte token', any('[Workspace.Uno] y [Workspace.Dos]' in l for l in avisos), avisos)
@@ -115,5 +82,4 @@ check('D6 arranque: nombra Token = ReadOnlyToken', any('[Workspace.Tres]' in l a
 check('D6 arranque: nombra la clave repetida', any('[Workspace.Cuatro] repite la clave Roots' in l for l in avisos), avisos)
 check('D6 arranque: nombra la seccion repetida', any('[Workspace.Cinco] aparece DOS veces' in l for l in avisos), avisos)
 
-print('\n== ini duplicados: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('ini duplicados')

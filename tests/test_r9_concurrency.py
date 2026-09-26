@@ -11,23 +11,16 @@ EVERY reported success actually landed on disk.
 Usage:  python tests/test_r9_concurrency.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green.
 """
-import json, subprocess, time, os, sys, tempfile, shutil, threading
-import urllib.request, urllib.error
+import json, os, threading
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-PORT = 4477
-URL = 'http://127.0.0.1:%d/mcp' % PORT
+PORT = mc.puerto_libre()  # antes 4477 fijo
 TOKEN = 'conc-token'
 N = 16  # writers firing at once
 
-VAULT = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'r9-vault')
-WORK = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'r9-work')
-for d in (VAULT, WORK):
-    shutil.rmtree(d, ignore_errors=True)
-    os.makedirs(d, exist_ok=True)
+VAULT = mc.carpeta('r9-vault')
+WORK = mc.carpeta('r9-work')
 
 def w(rel, text):
     p = os.path.join(VAULT, rel.replace('/', os.sep))
@@ -43,14 +36,12 @@ w('conc/base.md', '# Concurrencia\n\nlinea base.\n')
 # v0.98: o workspace o nada - la bateria define su workspace en un ini
 # junto a una COPIA del exe (nunca junto al de la build) y entra con su
 # token, que es el mismo TOKEN que ya viajaba en las cabeceras.
-EXE2 = os.path.join(WORK, 'DelphiLspMcp.exe')
-shutil.copy(EXE, EXE2)
-EXE = EXE2
+EXE = mc.copia_exe(WORK)
 with open(os.path.join(WORK, 'settings.ini'), 'w') as _f:
     _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\nVaultPath=%s\nVaultReadOnly=0\n'
              % (TOKEN, WORK, VAULT))
 
-env = dict(os.environ)
+env = {}
 # Loopback ONLY. Listening on every interface makes Windows Firewall pop its
 # "allow this app?" prompt, and it asks once per program PATH - so a battery
 # that runs the exe from a fresh temp folder asks again on every single run.
@@ -59,17 +50,8 @@ env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'
 env['DELPHI_MCP_ROOTS'] = WORK
 env['DELPHI_MCP_VAULT_PATH'] = VAULT
 env['DELPHI_MCP_VAULT_READONLY'] = '0'
-proc = subprocess.Popen([EXE, '--http', str(PORT)], env=env,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
-
-P = FCOUNT = 0
-def check(name, cond, detail=''):
-    global P, FCOUNT
-    if cond:
-        P += 1; print('PASS -', name)
-    else:
-        FCOUNT += 1; print('FAIL -', name, '|', str(detail)[:200])
+proc = mc.lanza_http(EXE, PORT, mc.entorno(env))
+cli = mc.Http(PORT, TOKEN)
 
 _rid = [100]
 _ridlock = threading.Lock()
@@ -79,14 +61,9 @@ def next_id():
         return _rid[0]
 
 def post(payload):
-    req = urllib.request.Request(URL, json.dumps(payload).encode('utf-8'),
-        {'Content-Type': 'application/json', 'Accept': 'application/json',
-         'Authorization': 'Bearer ' + TOKEN})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.read().decode('utf-8', 'replace')
-    except urllib.error.HTTPError as e:
-        return 'HTTP%d %s' % (e.code, e.read().decode('utf-8', 'replace')[:150])
+    # sin sesion y JSON a secas, como siempre; un 4xx/5xx vuelve como texto
+    st, _h, body = cli.post(payload, accept='application/json', t=60)
+    return body if st < 400 else 'HTTP%d %s' % (st, body[:150])
 
 def tool_text(body):
     try:
@@ -124,8 +101,11 @@ try:
 
     check('conc-append: los %d writers reportan exito' % N, ok_reports == N,
           '%d/%d ANADIDO' % (ok_reports, N))
-    check('conc-append: NINGUNA colision de backup (mismo segundo)', collisions == 0,
-          '%d colisiones' % collisions)
+    # ninguna colision EN UNA RAFAGA QUE OCURRIO: sin respuestas (timeouts,
+    # errores HTTP) tampoco se contaba ninguna
+    check('conc-append: NINGUNA colision de backup (mismo segundo)',
+          collisions == 0 and ok_reports == N,
+          '%d colisiones, %d/%d ANADIDO' % (collisions, ok_reports, N))
     check('conc-append: las %d marcas estan EN DISCO (sin perdida silenciosa)' % N,
           on_disk == N, '%d/%d en disco; faltan %s' % (on_disk, N,
           [i for i in range(N) if ('MARK-%02d' % i) not in disk]))
@@ -155,10 +135,8 @@ try:
         "old_text": open(os.path.join(VAULT, 'conc', 'base.md'), encoding='utf-8').read(),
         "new_text": ""})
     check('lock: patch que vaciaria la nota sigue RECHAZADO',
-          'VACIA' in out or 'vacia' in out or 'RECHAZAD' in out, out[:150])
+          'RECHAZAD' in out and ('VACIA' in out or 'vacia' in out), out[:150])
 finally:
     proc.kill()
 
-total = P + FCOUNT
-print('\n== r9 concurrency battery: %d PASS / %d FAIL ==' % (P, FCOUNT))
-sys.exit(1 if FCOUNT else 0)
+mc.fin('r9 concurrency battery')

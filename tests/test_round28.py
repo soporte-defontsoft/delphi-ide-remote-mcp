@@ -7,26 +7,15 @@ entero se rechaza con las dos lineas y el camino (old/new).
 
 Usage:  python tests/test_round28.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+import os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-DIR = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round28')
-shutil.rmtree(DIR, ignore_errors=True)
+CARPETA = mc.carpeta('round28')
+# su propia copia, fuera de la jaula: el compilado no se ejecuta en su sitio
+EXE = mc.copia_exe(os.path.join(CARPETA, 'srv'))
+DIR = os.path.join(CARPETA, 'jail')
 os.makedirs(DIR)
-
-P = F = 0
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail)[:260])
 
 CRLF = '\r\n'
 BASE = CRLF.join([
@@ -47,56 +36,9 @@ BASE = CRLF.join([
     'end;', '',
     'end.', ''])
 
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = DIR
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-
-def rdr():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-threading.Thread(target=rdr, daemon=True).start()
-rid = [10]
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n'); proc.stdin.flush()
-
-def recv(r, t=60):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-def call(name, args, t=60):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": name, "arguments": args}})
-    r = recv(rid[0], t)
-    if r is None:
-        return '(timeout)'
-    if 'error' in r:
-        return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-      "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                 "clientInfo": {"name": "r28", "version": "1"}}})
-recv(1)
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+env = mc.entorno({'DELPHI_MCP_ROOTS': DIR})
+srv = mc.Stdio(EXE, env, nombre='r28')
+call = srv.call
 
 def fresh(name, content=BASE):
     pas = os.path.join(DIR, name)
@@ -144,7 +86,5 @@ out = edit(pas, 'procedure Huerfana;', '  FValor := 5;')
 check('huerfana: RECHAZADO incoherente',
       out.startswith('RECHAZADO') and 'no la declara' in out, out[:250])
 
-proc.stdin.close()
-proc.wait(timeout=10)
-print('\n== round28 (insert metodo idempotente): %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.cierra()
+mc.fin('round28 (insert metodo idempotente)')

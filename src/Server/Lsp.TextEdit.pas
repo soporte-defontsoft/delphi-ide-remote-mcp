@@ -243,7 +243,7 @@ begin
   if A.DeleteLine then
     SetLength(NewLines, 0)  // la linea se va entera: ni una vacia queda
   else
-    NewLines := A.NewText.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
+    NewLines := LineasDeNew(A.NewText); // la regla del salto final, una
   if (not A.DeleteLine) and (Length(NewLines) > 0) and (LeadingWhite(A.OldLine) = '') and
      (LeadingWhite(NewLines[0]) = '') then
   begin

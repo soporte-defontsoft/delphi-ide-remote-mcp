@@ -61,7 +61,7 @@ type
     property Path: string read FPath write FPath;
     [SchemaDescription('EDIT mode: the exact line to replace - ONE full line copied literally from delphi_read (everything after the | bar). Leading indentation may be omitted')]
     property Old: string read FOld write FOld;
-    [SchemaDescription('EDIT mode: the new text; may be several lines (to insert code, anchor on an existing line and return it inside new together with the added code)')]
+    [SchemaDescription('EDIT mode: the new text; may be several lines (to insert code, anchor on an existing line and return it inside new together with the added code)' + SP_NEW_SALTO_FINAL)]
     property New: string read FNew write FNew;
     [SchemaDescription('EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence (the rejection lists the valid numbers)')]
     property AtLine: Integer read FAtLine write FAtLine;

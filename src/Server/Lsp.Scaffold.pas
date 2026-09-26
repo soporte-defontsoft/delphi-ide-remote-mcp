@@ -402,7 +402,7 @@ begin
   // an empty System.SysUtils.pas next to the .dpr, after which `Exception`
   // stopped existing (measured 2026-08-25). A first segment that IS an RTL
   // namespace is the same hijack with more letters.
-  Head := AName.Split(['.'])[0];
+  Head := PrimerTrozo(AName, ['.']);
   if AName.Contains('.') then
     for W in NAMESPACES do
       if SameText(Head, W) then

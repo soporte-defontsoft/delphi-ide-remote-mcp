@@ -8,20 +8,19 @@ existing at all when no vault is configured.
 
 Usage:  python tests/test_vault.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, glob
+import json, os, glob
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+# su propia copia del servidor (antes el compilado corria EN SU SITIO: logs y
+# __delphi-temp en la carpeta de build), fuera del vault y de la jaula
+SRV = mc.carpeta('vault-srv')
+EXE = mc.copia_exe(SRV)
 
-VAULT = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'vault')
-shutil.rmtree(VAULT, ignore_errors=True)
+VAULT = mc.carpeta('vault')
 # The vault lives in its OWN isolated folder, deliberately NOT inside the
 # workspace roots: the two jails are independent.
-WORK = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'vault-work')
-shutil.rmtree(WORK, ignore_errors=True)
-os.makedirs(WORK, exist_ok=True)
+WORK = mc.carpeta('vault-work')
 with open(os.path.join(WORK, 'Codigo.pas'), 'wb') as f:
     f.write(b'unit Codigo;\r\ninterface\r\nimplementation\r\nend.\r\n')
 
@@ -52,88 +51,28 @@ w('notas.bak.md', '# Copia rancia\n')
 # a big note to exercise the MaxReadChars truncation (>100K chars)
 w('projects/delphi/grande.md', '# Grande\n\n' + ('relleno de linea larga ' * 8 + '\n') * 700)
 
-PASS = FAIL = 0
-def check(name, ok, detail=''):
-    global PASS, FAIL
-    if ok:
-        PASS += 1; print('PASS - ' + name)
-    else:
-        FAIL += 1; print('FAIL - %s | %s' % (name, str(detail)[:220]))
-
-class Server:
-    """One server instance with its own env (vault path / readonly / flags)."""
-    def __init__(self, vault=VAULT, writable=True, extra_args=None):
-        env = dict(os.environ)
-        env['DELPHI_MCP_ROOTS'] = WORK            # the code jail: a DIFFERENT folder
-        if vault is None:
-            env.pop('DELPHI_MCP_VAULT_PATH', None)
-        else:
+class Server(mc.Stdio):
+    """One server instance with its own env (vault path / readonly / flags).
+    Without a vault, DELPHI_MCP_VAULT_PATH is simply absent: mc.entorno()
+    drops every DELPHI_MCP_* of whoever launches the battery."""
+    def __init__(self, vault=VAULT, writable=True, extra_args=()):
+        env = {'DELPHI_MCP_ROOTS': WORK,            # the code jail: a DIFFERENT folder
+               'DELPHI_MCP_VAULT_READONLY': '0' if writable else '1'}
+        if vault is not None:
             env['DELPHI_MCP_VAULT_PATH'] = vault
-        env['DELPHI_MCP_VAULT_READONLY'] = '0' if writable else '1'
-        self.p = subprocess.Popen([EXE] + (extra_args or []), env=env,
-                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                  stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-        self.q = queue.Queue(); self.rid = 10
-        threading.Thread(target=self._reader, daemon=True).start()
-        self._send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-            "protocolVersion": "2025-06-18", "capabilities": {},
-            "clientInfo": {"name": "vault-battery", "version": "1"}}})
-        r = self._recv(1, 20)
-        self.init = (r or {}).get('result', {})
-
-    def _reader(self):
-        for line in self.p.stdout:
-            if line.strip():
-                self.q.put(line.strip())
-
-    def _send(self, o):
-        self.p.stdin.write(json.dumps(o) + '\n'); self.p.stdin.flush()
-
-    def _recv(self, rid, t=60):
-        dl = time.time() + t
-        while time.time() < dl:
-            try:
-                line = self.q.get(timeout=1)
-            except queue.Empty:
-                continue
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == rid:
-                return m
-        return None
-
-    def call(self, name, args, t=60):
-        self.rid += 1
-        self._send({"jsonrpc": "2.0", "id": self.rid, "method": "tools/call",
-                    "params": {"name": name, "arguments": args}})
-        r = self._recv(self.rid, t)
-        if r is None:
-            return '(timeout)'
-        if 'error' in r:
-            return 'MCPERROR ' + json.dumps(r['error'])[:200]
-        c = r['result'].get('content', [])
-        return c[0].get('text', '') if c else '(no content)'
+        super().__init__(EXE, mc.entorno(env), nombre='vault-battery', args=extra_args)
+        # this battery looks at the initialize RESULT (instructions, capabilities)
+        self.init = (self.init or {}).get('result', {})
 
     def rpc(self, method, params=None):
-        self.rid += 1
-        self._send({"jsonrpc": "2.0", "id": self.rid, "method": method,
-                    "params": params or {}})
-        return self._recv(self.rid, 20) or {}
+        return self.request(method, params or {}, 20) or {}
 
     def tools(self):
-        self.rid += 1
-        self._send({"jsonrpc": "2.0", "id": self.rid, "method": "tools/list", "params": {}})
-        r = self._recv(self.rid, 20)
+        r = self.request('tools/list', {}, 20)
         return [t['name'] for t in r['result']['tools']] if r else []
 
     def close(self):
-        try:
-            self.p.stdin.close()
-        except Exception:
-            pass
-        self.p.terminate()
+        self.cierra(0)  # fin de stdin y a matar, sin esperar: como antes
 
 # ===========================================================================
 # 1. Registration: with a vault (read+write), and without one
@@ -454,17 +393,19 @@ check('sin vault: initialize NO trae instructions de vault',
       'vault_read' not in s4.init.get('instructions', ''), s4.init.get('instructions', '')[:150])
 check('sin vault: NO se declara la capability prompts',
       'prompts' not in s4.init.get('capabilities', {}), s4.init.get('capabilities'))
-pl4 = s4.rpc('prompts/list').get('result', {}).get('prompts', None)
+_m4 = s4.rpc('prompts/list')
+pl4 = _m4.get('result', {}).get('prompts', None)
+# sin vault el metodo no existe (-32601) o no ofrece nada; un {} (no contesto) no vale
 check('sin vault: prompts/list no ofrece el prompt vault',
-      not pl4, pl4)
+      _m4.get('error', {}).get('code') == -32601 or pl4 == [], _m4)
 s4.close()
 
 # ===========================================================================
 # 13. First run on a new machine: a configured path that does not exist yet is
 #     SEEDED with the starter templates; an existing vault is never touched.
 # ===========================================================================
-FRESH = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'vault-fresh')
-shutil.rmtree(FRESH, ignore_errors=True)
+FRESH = os.path.join(mc.RAIZ, 'vault-fresh')  # sin mc.carpeta(): NO debe existir
+mc.borra(FRESH)
 check('siembra: la carpeta no existe antes de arrancar', not os.path.exists(FRESH))
 s5 = Server(vault=FRESH)
 check('siembra: el server crea la carpeta del vault', os.path.isdir(FRESH), FRESH)
@@ -492,7 +433,7 @@ s6 = Server(vault=FRESH)
 check('siembra: un vault YA existente no se vuelve a sembrar (no pisa MEMORY.md)',
       open(marker, encoding='utf-8').read() == mine, 'MEMORY.md fue modificado')
 s6.close()
-shutil.rmtree(FRESH, ignore_errors=True)
+mc.borra(FRESH)
 
 # ===========================================================================
 # 14. The vault INSIDE a workspace root: it still belongs to the vault_* tools
@@ -526,7 +467,8 @@ check('dentro-del-root: delphi_textedit NO puede tocar el indice',
       'VAULT DE CONOCIMIENTO' in out, out[:180])
 out = s7.call('delphi_list', {"root": WORK, "pattern": "*.md"})
 check('dentro-del-root: delphi_list no sirve notas del vault',
-      'idea.md' not in out, out[:250])
+      mc.como_json(out).get('total') == 0 and mc.como_json(out).get('files') == []
+      and 'idea.md' not in out, out[:250])
 out = s7.call('delphi_read', {"path": os.path.join(WORK, 'Codigo.pas')})
 check('dentro-del-root: el codigo del workspace sigue accesible',
       'unit Codigo' in out, out[:120])
@@ -544,15 +486,13 @@ s7.close()
 # tiene vault ([Vault] Path en settings.ini)" y las dos mitades eran falsas
 # desde v0.98 (medido el 2026-09-20).
 # ===========================================================================
-HPORT = 3997
-HDIR = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'vault-http-ws')
-shutil.rmtree(HDIR, ignore_errors=True)
+HPORT = mc.puerto_libre()
+HDIR = mc.carpeta('vault-http-ws')
 os.makedirs(os.path.join(HDIR, 'codigo'))
 os.makedirs(os.path.join(HDIR, 'vault-compartido'))
 open(os.path.join(HDIR, 'vault-compartido', 'MEMORY.md'), 'w',
      encoding='utf-8').write('# indice compartido\n')
-_hexe = os.path.join(HDIR, 'DelphiLspMcp.exe')
-shutil.copyfile(EXE, _hexe)
+_hexe = mc.copia_exe(HDIR)
 open(os.path.join(HDIR, 'settings.ini'), 'w', encoding='utf-8').write(
     '[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
     '[Workspace.ConVault]\nToken=tok-con-vault\nRoots=%s\nVaultPath=%s\n'
@@ -563,28 +503,19 @@ open(os.path.join(HDIR, 'settings.ini'), 'w', encoding='utf-8').write(
     % (HPORT, os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
        os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
        os.path.join(HDIR, 'codigo')))
-_henv = dict(os.environ)
-_henv.pop('DELPHI_MCP_TOKEN', None)
-_henv.pop('DELPHI_MCP_VAULT_PATH', None)
-_hp = subprocess.Popen([_hexe, '--http'], env=_henv, cwd=HDIR,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
+_henv = mc.entorno()  # ni DELPHI_MCP_TOKEN ni VAULT_PATH heredados: manda el settings.ini
+# sin puerto en la linea de comandos: el del settings.ini
+_hp = mc.lanza_http(_hexe, None, _henv, espera_en=HPORT, cwd=HDIR)
 
 
 def _http(token, method, params, rid=1):
-    import urllib.request
-    import urllib.error
-    req = urllib.request.Request(
-        'http://127.0.0.1:%d/mcp' % HPORT,
-        json.dumps({"jsonrpc": "2.0", "id": rid, "method": method,
-                    "params": params}).encode('utf-8'),
-        {'Content-Type': 'application/json', 'Accept': 'application/json',
-         'Authorization': 'Bearer ' + token})
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return json.loads(r.read().decode('utf-8', 'replace'))
-    except urllib.error.HTTPError as e:
-        return {'http': e.code, 'body': e.read().decode('utf-8', 'replace')[:200]}
+    # JSON a secas (Accept application/json) y sin sesion: cada llamada suelta
+    st, _, raw = mc.post('http://127.0.0.1:%d/mcp' % HPORT,
+                         {"jsonrpc": "2.0", "id": rid, "method": method, "params": params},
+                         token=token, accept='application/json', t=60)
+    if st >= 400:
+        return {'http': st, 'body': raw[:200]}
+    return json.loads(raw)
 
 
 def _texto(resp):
@@ -610,7 +541,8 @@ try:
     _sin = _texto(_http('tok-sin-vault', 'tools/call',
                         {"name": "vault_read", "arguments": {}}, 6))
     check('por-workspace: el que NO lo declara no lo ve (no se hereda nada)',
-          'indice compartido' not in _sin, _sin[:150])
+          _sin.startswith('error: TU workspace no declara vault')
+          and 'indice compartido' not in _sin, _sin[:150])
     check('por-workspace: el rechazo habla de TU workspace, no del servidor',
           'TU workspace' in _sin and 'este servidor no tiene vault' not in _sin,
           _sin[:200])
@@ -644,9 +576,9 @@ try:
           'vault_read' in _nombres and 'vault_search' in _nombres, _nombres[:8])
 finally:
     _hp.kill()
-    shutil.rmtree(HDIR, ignore_errors=True)
+    _hp.wait(10)  # su exe esta en HDIR: muerto del todo antes de barrerla
+    mc.borra(HDIR)
 
-print('\n== vault battery: %d PASS / %d FAIL ==' % (PASS, FAIL))
-shutil.rmtree(VAULT, ignore_errors=True)
-shutil.rmtree(WORK, ignore_errors=True)
-sys.exit(1 if FAIL else 0)
+for _d in (VAULT, WORK, SRV):
+    mc.borra(_d)
+mc.fin('vault battery')

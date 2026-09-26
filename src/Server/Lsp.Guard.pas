@@ -138,6 +138,11 @@ function CurrentWorkspaceName: string;
   mira delphi_workspace para avisar de que el fichero cambio despues. }
 function SettingsIniPath: string;
 
+{ [Log] LinesPerFile / MaxFiles tal cual los trae el settings.ini (2000 y
+  10 si no estan), leidos por el lector central, LoadSecurity. Los usa
+  Lsp.LogSink; hasta el 26-sep los leia la bandeja con su propio TIniFile. }
+procedure LogIniSettings(out ALinesPerFile, AMaxFiles: Integer);
+
 { True when any [Workspace.*] token is configured (counts as a credential
   for the fail-safe bind decision). }
 function WorkspaceTokensConfigured: Boolean;
@@ -209,6 +214,11 @@ function IdePlatformLibraryPaths(const AVersion, APlatform: string): TArray<stri
 
   Componen la ruta y ya: crear la carpeta es de quien la use. }
 function TempFolderName: string;
+{ <carpeta del exe>\ASub: LA casa del servidor. Todo lo que el servidor
+  guarda o busca junto a si mismo (settings.ini, __delphi-temp, logs,
+  messages, reports, node, el conversor de estilos) se compone aqui; hasta
+  el 26-sep lo componian a mano ocho sitios. Sin ASub, la carpeta. }
+function ServerDir(const ASub: string = ''): string;
 function ServerTempDir(const ASub: string = ''): string;
 function AgentTempDir(const ASub: string = ''): string;
 
@@ -343,6 +353,13 @@ function CopiaDenegada(const AOrigen, ADestino: string): string;
   comprobacion: estaba escrita cuatro veces en esta unidad. }
 function EsEnlace(const P: string): Boolean;
 
+{ El primer trozo de S partido por ASeps; '' si S es ''. S.Split(...)[0] a
+  secas lee fuera del array cuando S es '' (Delphi devuelve un array
+  VACIO): un Access violation medido el 25-ago en delphi_edit y parcheado
+  en ESE sitio, y otra vez el 26-sep en delphi_textedit (una tanda con un
+  ancla vacia y "occurrence"), con otros cinco Split()[0] sueltos. }
+function PrimerTrozo(const S: string; const ASeps: array of Char): string;
+
 type
   TVisitaRuta = reference to procedure(const APath: string);
 
@@ -419,7 +436,12 @@ function EscrituraDenegada(const APath: string): string;
   carpeta con el servicio - su purga borraria ficheros EN USO de una
   llamada en vuelo del otro (el -F de un commit, una salida de remoterun).
   Nunca lanza: un temporal que no se deja borrar no es motivo para no
-  arrancar. }
+  arrancar.
+  Y de las temporales de las RAICES, solo las que no son de OTRO servidor
+  vivo (TemporalEsMia): el cerrojo de arriba va por la carpeta del exe, y
+  un servidor con otro exe y la misma raiz -una bateria sobre el repo, con
+  el servicio sirviendo ese repo- vaciaba las del otro con llamadas en
+  vuelo (visto al revisar las baterias, 26-sep-2026). }
 procedure PurgeServerTemp;
 
 { Credentials (env var first, then settings.ini [Workspace] next to the exe). }
@@ -724,6 +746,7 @@ uses
   Lsp.Attributes,          // [RutaDelServidor]
   Lsp.Dproj,            // CanonicalPlatform: the platform whitelist already exists
   System.RegularExpressions,
+  System.Hash,
   Lsp.Patch,            // TrashFolderName: el nombre de la papelera, de SU nombrador
   Lsp.Texts;
 
@@ -781,6 +804,10 @@ var
   GIdentLock: TCriticalSection;
   GSesiones: TList<TSesion>;  // sesiones HTTP: id, nombre atado en initialize, ultimo uso
   GSessionTimeoutMin: Double = -1; // -1 = sin leer todavia
+  GIniBindIP: string;              // [Server] BindIP
+  GIniSessionTimeout: string;      // [Server] SessionTimeoutMinutes, sin parsear
+  GIniLogLines: Integer = 2000;    // [Log] LinesPerFile
+  GIniLogMaxFiles: Integer = 10;   // [Log] MaxFiles
 
   GReadOnlyToken: string;
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
@@ -1066,7 +1093,7 @@ end;
 
 function SettingsIniPath: string;
 begin
-  Result := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini');
+  Result := ServerDir('settings.ini');
 end;
 
 function CurrentWorkspaceName: string;
@@ -1345,6 +1372,13 @@ begin
       if Length(GToolsOnly) = 0 then
         GToolsOnly := LowerCase(Ini.ReadString('Tools', 'Only', ''))
           .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
+      // La fontaneria de [Server] y [Log], aqui con las demas: hasta el
+      // 26-sep BindIP, SessionTimeoutMinutes y el [Log] de la bandeja
+      // abrian el fichero cada uno por su cuenta (tres lectores mas).
+      GIniBindIP := Ini.ReadString('Server', 'BindIP', '');
+      GIniSessionTimeout := Ini.ReadString('Server', 'SessionTimeoutMinutes', '').Trim;
+      GIniLogLines := Ini.ReadInteger('Log', 'LinesPerFile', 2000);
+      GIniLogMaxFiles := Ini.ReadInteger('Log', 'MaxFiles', 10);
       // [Workspace.<name>] sections: token-scoped sandboxes. Parsed once,
       // here, so AuthorizeBearer never touches the disk per request.
       var Secs := TStringList.Create;
@@ -1458,6 +1492,13 @@ begin
   GSecLoaded := True;
 end;
 
+procedure LogIniSettings(out ALinesPerFile, AMaxFiles: Integer);
+begin
+  LoadSecurity;
+  ALinesPerFile := GIniLogLines;
+  AMaxFiles := GIniLogMaxFiles;
+end;
+
 function AuthToken: string;
 begin
   LoadSecurity;
@@ -1544,24 +1585,15 @@ end;
 
 function SessionTimeoutMinutes: Double;
 var
-  S, IniPath: string;
-  Ini: TIniFile;
+  S: string;
 begin
   if GSessionTimeoutMin >= 0 then
     Exit(GSessionTimeoutMin);
   S := GetEnvironmentVariable('DELPHI_MCP_SESSION_TIMEOUT_MINUTES').Trim;
   if S = '' then
   begin
-    IniPath := SettingsIniPath;
-    if TFile.Exists(IniPath) then
-    begin
-      Ini := TIniFile.Create(IniPath);
-      try
-        S := Ini.ReadString('Server', 'SessionTimeoutMinutes', '').Trim;
-      finally
-        Ini.Free;
-      end;
-    end;
+    LoadSecurity;
+    S := GIniSessionTimeout;
   end;
   { Decimales admitidos (0.05 = tres segundos): asi una bateria mide la
     caducidad sin esperar minutos. Negativo o ilegible = el defecto. }
@@ -1821,23 +1853,12 @@ begin
 end;
 
 function BindIP: string;
-var
-  IniPath: string;
-  Ini: TIniFile;
 begin
   Result := GetEnvironmentVariable('DELPHI_MCP_BIND_IP');
   if Result <> '' then
     Exit;
-  IniPath := SettingsIniPath;
-  if TFile.Exists(IniPath) then
-  begin
-    Ini := TIniFile.Create(IniPath);
-    try
-      Result := Ini.ReadString('Server', 'BindIP', '');
-    finally
-      Ini.Free;
-    end;
-  end;
+  LoadSecurity;
+  Result := GIniBindIP;
 end;
 
 function PreferredDelphiVersion: string;
@@ -2880,9 +2901,16 @@ begin
   Result := '__delphi-temp';
 end;
 
+function ServerDir(const ASub: string): string;
+begin
+  Result := TPath.GetDirectoryName(ParamStr(0));
+  if ASub <> '' then
+    Result := TPath.Combine(Result, ASub);
+end;
+
 function ServerTempDir(const ASub: string): string;
 begin
-  Result := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), TempFolderName);
+  Result := ServerDir(TempFolderName);
   if ASub <> '' then
     Result := TPath.Combine(Result, ASub);
 end;
@@ -3179,6 +3207,17 @@ begin
     Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'es o contiene un lugar protegido (' + P + ')']));
 end;
 
+function PrimerTrozo(const S: string; const ASeps: array of Char): string;
+var
+  Partes: TArray<string>;
+begin
+  Partes := S.Split(ASeps);
+  if Length(Partes) = 0 then
+    Result := ''
+  else
+    Result := Partes[0];
+end;
+
 { P es un enlace (junction o symlink, de carpeta o de fichero). }
 function EsEnlace(const P: string): Boolean;
 var
@@ -3462,6 +3501,43 @@ end;
 
 var
   GPrimera: THandle = 0;
+  GTemporalesMias: TStringList = nil; // claves de las temporales de ESTE proceso
+
+{ Reclama AClave para ESTE proceso mientras viva: un mutex global que se
+  queda abierto de por vida. False si otro proceso vivo ya la tiene, o si
+  no se pudo crear (otra cuenta, otro fallo): en la duda no es nuestra, y
+  no purgar es la opcion sin peligro. LA regla de "de quien es esto
+  mientras vive": la usan la casa del servidor y las temporales de raiz. }
+function ReclamaNombre(const AClave: string; out AHandle: THandle): Boolean;
+begin
+  AHandle := CreateMutex(nil, False, PChar('Global\DelphiLspMcp-' + AClave));
+  if (AHandle <> 0) and (GetLastError = ERROR_ALREADY_EXISTS) then
+  begin
+    CloseHandle(AHandle);
+    AHandle := 0;
+  end;
+  Result := AHandle <> 0;
+end;
+
+{ La temporal ADir es de ESTE proceso: si ningun otro servidor vivo la ha
+  reclamado, la reclama (hasta morir) y True. La clave sale de la ruta
+  canonica, asi que la misma carpeta escrita en 8.3 o con otras mayusculas
+  es la misma temporal; va resumida porque un nombre de mutex es corto. }
+function TemporalEsMia(const ADir: string): Boolean;
+var
+  Clave: string;
+  H: THandle;
+begin
+  Clave := 'tmp-' + THashMD5.GetHashString(
+    LowerCase(ExcludeTrailingPathDelimiter(LongCanonical(ADir))));
+  if not Assigned(GTemporalesMias) then
+    GTemporalesMias := TStringList.Create;
+  if GTemporalesMias.IndexOf(Clave) >= 0 then
+    Exit(True);
+  Result := ReclamaNombre(Clave, H);
+  if Result then
+    GTemporalesMias.Add(Clave);
+end;
 
 { True si este proceso es la PRIMERA instancia viva de ESTE exe (esta
   carpeta). El mutex se queda abierto de por vida: ser el primero dura
@@ -3475,18 +3551,9 @@ var
 begin
   if GPrimera <> 0 then
     Exit(True);
-  H := CreateMutex(nil, False, PChar('Global\DelphiLspMcp-' +
-    LowerCase(TPath.GetDirectoryName(ParamStr(0)))
-      .Replace('\', '/').Replace(':', '')));
-  if (H <> 0) and (GetLastError = ERROR_ALREADY_EXISTS) then
-  begin
-    CloseHandle(H);
-    Exit(False);
-  end;
-  // Sin handle (otra cuenta, otro fallo): mejor suponer que hay otro vivo
-  // y no purgar - purgar es lo unico peligroso de las dos opciones.
-  GPrimera := H;
-  Result := H <> 0;
+  Result := ReclamaNombre(LowerCase(ServerDir).Replace('\', '/').Replace(':', ''), H);
+  if Result then
+    GPrimera := H;
 end;
 
 { TODAS las __delphi-temp bajo una raiz, la de arriba y las anidadas. Antes
@@ -3580,13 +3647,24 @@ begin
     for W in GWorkspaces do
       Referencias := Referencias + W.ReadOnlyRoots;
     Referencias := Referencias + GRoRoots + [VaultPath];
+    // Solo lo que es de ESTE proceso (TemporalEsMia): la temporal de cada
+    // raiz se reclama aunque aun no exista -las llamadas la crearan-, y una
+    // que ya es de otro servidor vivo no se toca.
     for W in GWorkspaces do
       for R in W.Roots do
+      begin
+        TemporalEsMia(TPath.Combine(R, TempFolderName));
         for var T in TemporalesBajo(R, W.ReadOnlyPaths + Referencias) do
-          VaciaDesechable(T);
+          if TemporalEsMia(T) then
+            VaciaDesechable(T);
+      end;
     for R in GRoots do // modo local de lanzamiento (baterias)
+    begin
+      TemporalEsMia(TPath.Combine(R, TempFolderName));
       for var T in TemporalesBajo(R, GRoPaths + Referencias) do
-        VaciaDesechable(T);
+        if TemporalEsMia(T) then
+          VaciaDesechable(T);
+    end;
   except
     // limpiar no puede impedir arrancar
   end;

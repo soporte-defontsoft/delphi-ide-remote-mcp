@@ -25,36 +25,12 @@ la abre al settings.ini.
 
 Usage:  python tests/test_round32.py [path-to-DelphiLspMcp.exe]
 """
-import json
 import os
-import shutil
-import socket
-import subprocess
-import sys
-import tempfile
-import time
-import urllib.request
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round32')
-shutil.rmtree(BASE, ignore_errors=True)
+BASE = mc.carpeta('round32')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
 VENDOR = os.path.join(JAIL, 'vendor')       # relativa al root
@@ -62,8 +38,7 @@ AJENO = os.path.join(BASE, 'otro')          # absoluta, y FUERA del root
 MIO = os.path.join(JAIL, 'mio')
 for d in (EXEDIR, VENDOR, MIO, AJENO):
     os.makedirs(d)
-EXE = os.path.join(EXEDIR, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+EXE = mc.copia_exe(EXEDIR)
 
 UNIT = ('unit Ajena;\n\ninterface\n\n'
         'procedure Saluda;\n\nimplementation\n\n'
@@ -78,10 +53,7 @@ open(MIA, 'w').write(UNIT.replace('Ajena', 'Mia'))
 open(os.path.join(AJENO, 'Fuera.pas'), 'w').write(UNIT.replace('Ajena', 'Fuera'))
 
 TOK = 'r32'
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
+PORT = mc.puerto_libre()
 
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
@@ -92,54 +64,11 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '',
 ]))
 
-proc = subprocess.Popen([EXE, '--http', str(PORT)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-SID = None
-
-
-def rpc(body, timeout=120):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if SID:
-        h['Mcp-Session-Id'] = SID
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-        timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    msgs = []
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            try:
-                msgs.append(json.loads(l[5:].strip()))
-            except Exception:
-                pass
-    if not msgs:
-        try:
-            msgs.append(json.loads(raw))
-        except Exception:
-            pass
-    return (msgs[-1] if msgs else None), r.headers.get('Mcp-Session-Id')
-
-
-_, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-              'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-                         'clientInfo': {'name': 'r32', 'version': '1'}}})
-rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-
-RID = [100]
-
-
-def call(tool, args, timeout=120):
-    RID[0] += 1
-    r, _ = rpc({'jsonrpc': '2.0', 'id': RID[0], 'method': 'tools/call',
-                'params': {'name': tool, 'arguments': args}}, timeout)
-    try:
-        return r['result']['content'][0]['text']
-    except Exception:
-        return json.dumps(r)[:400]
+proc = mc.lanza_http(EXE, PORT, mc.entorno())
+# sin texto, el mensaje entero en el detalle (como siempre en esta bateria)
+cli = mc.Http(PORT, TOK, respaldo_json=True)
+cli.session('r32')
+call = cli.call
 
 
 ANTES = open(AJENA, 'rb').read()
@@ -189,10 +118,14 @@ try:
     # La entrada ABSOLUTA esta fuera del root: manda la jaula, y la negativa
     # tiene que ser la de la jaula, no la de solo lectura. ReadOnlyPaths NO
     # es una puerta de entrada.
+    # La negativa CONCRETA de la jaula (PathDenied), y ni una linea del
+    # fichero: antes valia cualquier texto con "error" - un envoltorio
+    # JSON-RPC de error, o un RECHAZADO por otro motivo, pasaban.
     t = call('delphi_read', {'path': os.path.join(AJENO, 'Fuera.pas')})
     check('L7 una ReadOnlyPaths absoluta FUERA del root no abre nada: '
           'sigue mandando la jaula',
-          'ReadOnlyPaths' not in t and ('RECHAZADO' in t or 'error' in t),
+          t.startswith('RECHAZADO') and 'FUERA de los workspaces permitidos' in t
+          and 'ReadOnlyPaths' not in t and 'procedure Saluda' not in t,
           t[:250])
 finally:
     try:
@@ -200,5 +133,4 @@ finally:
     except Exception:
         pass
 
-print('== test_round32: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round32')

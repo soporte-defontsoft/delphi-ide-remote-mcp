@@ -94,6 +94,16 @@ type
   que un host escrito a mano. Lo usa tambien delphi_adb_linux. }
 function ProfileHostDenied(const AProfName: string): string;
 
+{ LA puerta de todo lo que se ejecuta en un destino por PAServer, sea para
+  lanzarlo, pararlo, leer lo que dejo o hacer un gesto en su escritorio:
+  AllowRemoteRun, un perfil (ASinPerfil si falta) cuyo host permite el
+  workspace, y el proyecto en RemoteRunProjects - un .dproj NUESTRO,
+  dentro de la jaula y existente, o con AProj vacio el nodo de escritorio
+  empaquetado. La usan delphi_paserver (remote-run, kill, output) y
+  delphi_desktop; hasta el 26-sep cada una llevaba su copia, y la de
+  desktop no miraba si el .dproj existia. }
+function EjecucionRemotaDenegada(const AProf, AProj, ASinPerfil: string): string;
+
 implementation
 
 uses
@@ -1180,42 +1190,52 @@ begin
     end;
 end;
 
-{ get-sdk: provision the platform SDK/sysroot locally from the live PAServer
-  of a profile, then register it so delphi_build links. Mirrors what the
-  IDE's SDK Manager does, measured piece by piece (2026-08-21):
-  - paclient --get=<base>/**/*,<dest> recreates the subtree under <dest>
-    (verified against a live PAServer: the gcc version dir arrived intact);
-  - the IDE-written .sdk file is fully RESOLVED MSBuild XML (no $(SDKROOT)/
-    $(GCCVERSION) macros - the Android .sdk on this machine proves it), and
-    CodeGear.Delphi.Targets feeds $(Profile_sysroot) to the compiler as its
-    --syslibroot, so a sysroot mirror with standard layout is what links;
-  - CodeGear.Profiles.Targets imports the .sdk via $(PlatformSDK), which the
-    build runner now passes when <Platform>.sdk exists (EnvOptions.proj has
-    no command-line default for platforms the SDK Manager never touched). }
+function EjecucionRemotaDenegada(const AProf, AProj, ASinPerfil: string): string;
+begin
+  if not AllowRemoteRun then
+    Exit(SR_PASERVER_RUN_DISABLED);
+  // Sin perfil no hay destino: ProfileHostDenied con '' no encuentra nada
+  // y dejaba pasar, y el fallo salia de paclient con otro nombre.
+  if AProf = '' then
+    Exit(ASinPerfil);
+  Result := ProfileHostDenied(AProf);
+  if Result <> '' then
+    Exit;
+  if AProj = '' then
+    Exit(RemoteRunProjectDenied(NODE_PROJECT));
+  // the project must be one this server may touch, and must exist
+  Result := PathDenied(AProj);
+  if Result <> '' then
+    Exit;
+  if not TFile.Exists(AProj) then
+    Exit(Format(SR_PASERVER_RUN_NOPROJ_FMT, [AProj]));
+  Result := RemoteRunProjectDenied(AProj);
+end;
+
+{ Lo que pide cada comando de un trabajo (remote-run, kill, output) antes
+  de la puerta comun: sus parametros. ANecesita es la negativa cuando falta
+  alguno, y AConJob pide ademas "job". Con AllowRemoteRun apagado manda
+  esa respuesta, falte lo que falte. }
+function TrabajoDenegado(const Params: TDelphiPAServerParams;
+  const ANecesita: string; AConJob: Boolean; out AProf, AProj: string): string;
+begin
+  AProf := Params.Name.Trim;
+  AProj := Params.Project.Trim;
+  if AllowRemoteRun and ((AProf = '') or (AProj = '') or
+     (AConJob and (Params.Job.Trim = ''))) then
+    Exit(ANecesita);
+  Result := EjecucionRemotaDenegada(AProf, AProj, ANecesita);
+end;
+
 function RemoteRunCmd(const Params: TDelphiPAServerParams): string;
 var
   Prof, Proj, ExeName, Denied: string;
   Res: TJSONObject;
 begin
-  if not AllowRemoteRun then
-    Exit(SR_PASERVER_RUN_DISABLED);
-  Prof := Params.Name.Trim;
-  Proj := Params.Project.Trim;
+  Denied := TrabajoDenegado(Params, SR_PASERVER_RUN_NEEDS, False, Prof, Proj);
+  if Denied <> '' then
+    Exit(Denied);
   ExeName := Params.Exe.Trim;
-  if (Prof = '') or (Proj = '') then
-    Exit(SR_PASERVER_RUN_NEEDS);
-  Denied := ProfileHostDenied(Prof);
-  if Denied <> '' then
-    Exit(Denied);
-  // the project must be one this server may touch, and must exist
-  Denied := PathDenied(Proj);
-  if Denied <> '' then
-    Exit(Denied);
-  if not TFile.Exists(Proj) then
-    Exit(Format(SR_PASERVER_RUN_NOPROJ_FMT, [Proj]));
-  Denied := RemoteRunProjectDenied(Proj);
-  if Denied <> '' then
-    Exit(Denied);
   // exe, when given, is a FILE NAME of the deploy folder - never a path
   if (ExeName <> '') and (ExeName.Contains('/') or ExeName.Contains(chr(92)) or
      ExeName.Contains('..')) then
@@ -1223,8 +1243,9 @@ begin
   Denied := ShellArgDenied(Prof + ' ' + ExeName + ' ' + Params.Args);
   if Denied <> '' then
     Exit(Denied);
+  // True: si el programa sigue vivo, su salida se queda para command=output
   Res := RemoteRun(Prof, Proj, ExeName, TrocearArgs(Params.Args.Trim),
-    Params.TimeoutMs);
+    Params.TimeoutMs, True);
   try
     Result := Res.ToJSON;
   finally
@@ -1237,28 +1258,14 @@ end;
   un trabajo de ESE proyecto en ESE perfil: el lanzador no mata otra cosa. }
 function KillCmd(const Params: TDelphiPAServerParams): string;
 var
-  Prof, Proj, Job, Denied: string;
+  Prof, Proj, Denied: string;
   Res: TJSONObject;
 begin
-  if not AllowRemoteRun then
-    Exit(SR_PASERVER_RUN_DISABLED);
-  Prof := Params.Name.Trim;
-  Proj := Params.Project.Trim;
-  Job := Params.Job.Trim;
-  if (Prof = '') or (Proj = '') or (Job = '') then
-    Exit(SR_PASERVER_KILL_NEEDS);
-  Denied := ProfileHostDenied(Prof);
+  Denied := TrabajoDenegado(Params, Format(SR_PASERVER_JOB_NEEDS_FMT, ['kill']),
+    True, Prof, Proj);
   if Denied <> '' then
     Exit(Denied);
-  Denied := PathDenied(Proj);
-  if Denied <> '' then
-    Exit(Denied);
-  if not TFile.Exists(Proj) then
-    Exit(Format(SR_PASERVER_RUN_NOPROJ_FMT, [Proj]));
-  Denied := RemoteRunProjectDenied(Proj);
-  if Denied <> '' then
-    Exit(Denied);
-  Res := RemoteKill(Prof, Proj, Job);
+  Res := RemoteKill(Prof, Proj, Params.Job.Trim);
   try
     Result := Res.ToJSON;
   finally
@@ -1266,6 +1273,38 @@ begin
   end;
 end;
 
+{ output: lo que un trabajo de remote-run lleva escrito, aunque su respuesta
+  volviera hace rato. Las mismas puertas que kill: trae un fichero de la
+  carpeta de ESE proyecto y, leido entero, lo borra alli. }
+function OutputCmd(const Params: TDelphiPAServerParams): string;
+var
+  Prof, Proj, Denied: string;
+  Res: TJSONObject;
+begin
+  Denied := TrabajoDenegado(Params, Format(SR_PASERVER_JOB_NEEDS_FMT, ['output']),
+    True, Prof, Proj);
+  if Denied <> '' then
+    Exit(Denied);
+  Res := RemoteOutput(Prof, Proj, Params.Job.Trim);
+  try
+    Result := Res.ToJSON;
+  finally
+    Res.Free;
+  end;
+end;
+
+{ get-sdk: provision the platform SDK/sysroot locally from the live PAServer
+  of a profile, then register it so delphi_build links. Mirrors what the
+  IDE's SDK Manager does, measured piece by piece (2026-08-21):
+  - paclient --get=<base>/**/*,<dest> recreates the subtree under <dest>
+    (verified against a live PAServer: the gcc version dir arrived intact);
+  - the IDE-written .sdk file is fully RESOLVED MSBuild XML (no $(SDKROOT)/
+    $(GCCVERSION) macros - the Android .sdk on this machine proves it), and
+    CodeGear.Delphi.Targets feeds $(Profile_sysroot) to the compiler as its
+    --syslibroot, so a sysroot mirror with standard layout is what links;
+  - CodeGear.Profiles.Targets imports the .sdk via $(PlatformSDK), which the
+    build runner now passes when <Platform>.sdk exists (EnvOptions.proj has
+    no command-line default for platforms the SDK Manager never touched). }
 function GetSdk(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
@@ -1754,6 +1793,8 @@ begin
     Result := RemoteRunCmd(Params)
   else if Cmd = 'kill' then
     Result := KillCmd(Params)
+  else if Cmd = 'output' then
+    Result := OutputCmd(Params)
   else
     Result := SR_PASERVER_CMD;
 end;

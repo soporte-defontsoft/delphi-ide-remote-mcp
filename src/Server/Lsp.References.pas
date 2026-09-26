@@ -26,9 +26,10 @@ function FindDelphiReferences(const AFilePath: string;
 { True for IDE artifacts that must never be scanned/edited/reasoned about. }
 function SkipIdeArtifacts(const APath: string): Boolean; overload;
 
-{ WHY a path is skipped: 'artifacts' (build output, __history), 'git' (the
-  repository's own plumbing), 'trash' (this tool's recoverable copies) or ''
-  when it is not skipped at all. delphi_list used to count every one of them
+{ WHY a path is skipped: 'artifacts' (build output, __history), 'temp' (the
+  server's own __delphi-temp), 'git' (the repository's own plumbing),
+  'trash' (this tool's recoverable copies) or '' when it is not skipped at
+  all - the SKIP_* constants below. delphi_list used to count every one of them
   as "IDE build/artifact folders", so a listing that hid 42 files of .git
   sent the reader looking for build output that did not exist (2026-08-25). }
 function SkipReason(const APath: string; AAllowTrash: Boolean): string;
@@ -38,6 +39,32 @@ function SkipReason(const APath: string; AAllowTrash: Boolean): string;
   explicit request, show what was deleted for a restore (field round 6, R6-B).
   Every other artifact (__history, Win32/Win64, .git...) is still skipped. }
 function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean; overload;
+
+const
+  SKIP_ARTIFACTS = 'artifacts';
+  SKIP_TEMP = 'temp';
+  SKIP_GIT = 'git';
+  SKIP_TRASH = 'trash';
+  { No sale de SkipReason: son las carpetas de otras herramientas (.vs,
+    .github, __pycache__) que solo esconde el modo dirs de delphi_list. }
+  SKIP_FOLDERS = 'folders';
+
+type
+  { Lo que un recorrido NO ensena, contado POR MOTIVO (los SKIP_*), y UNA
+    cosa que lo cuenta y se lo dice al lector. delphi_list llevaba dos
+    cuentas a mano (dirs y ficheros) y ninguna acertaba del todo:
+    __delphi-temp salia como "carpeta de compilacion" con el consejo de
+    pasarla como root, __history como papelera, .vs como git y Win64 en
+    ningun cajon; y delphi_search escondia lo mismo sin decirlo (revision
+    de baterias, 26-sep-2026). Se empieza con Default(THiddenCount). }
+  THiddenCount = record
+    Artifacts, Temp, Git, Trash, Folders: Integer;
+    procedure Add(const AReason: string);
+    function Total: Integer;
+    { hidden, un campo por cada motivo que no sea cero y la nota que dice
+      que es cada cosa y como verla. Si no se escondio nada, nada. }
+    procedure Report(AObj: TJSONObject);
+  end;
 
 implementation
 
@@ -145,14 +172,16 @@ end;
   una carpeta nueva obligaba a acordarse de las dos, y la que se olvidase
   haria que delphi_list la ocultase y delphi_search la ensenase (o al reves).
 
-  Y son DOS listas, no una, porque no se tratan igual:
+  Y no son una lista, porque no se tratan igual:
 
-    ARTEFACTO  se salta SIEMPRE. Compilacion, historicos del IDE... y los
-               temporales del servidor cuando caen dentro de un workspace
-               (una captura que el agente tiene que poder bajarse con
-               delphi_fetch). De un temporal no se restaura nada, asi que ni
-               siquiera con includeTrash tiene sentido ensenarlo: seria ruido
-               en cada listado.
+    ARTEFACTO  se salta SIEMPRE. Compilacion, historicos del IDE...
+    TEMPORAL   tambien SIEMPRE: los temporales del servidor cuando caen
+               dentro de un workspace (una captura que el agente tiene que
+               poder bajarse con delphi_fetch). De un temporal no se
+               restaura nada, asi que ni con includeTrash tiene sentido
+               ensenarlo. Va APARTE de los artefactos porque quien lee el
+               recuento tiene que saber cual de los dos es: la nota lo
+               llamaba carpeta de compilacion (26-sep-2026).
     PAPELERA   se salta salvo que te lo pidan (includeTrash=true), porque de
                ahi SI se restaura.
 
@@ -160,27 +189,17 @@ end;
   aqui va literal porque un array const no puede llamar a una funcion. Que
   los dos digan lo mismo no se deja a la buena fe: lo comprueba la bateria. }
 const
-  CARPETAS_ARTEFACTO: array [0 .. 7] of string = (
+  CARPETAS_ARTEFACTO: array [0 .. 6] of string = (
     '\__history\', '\__recovery\', '\win32\', '\win64\', '\debug\',
-    '\release\', '\dcu\', '\__delphi-temp\');
+    '\release\', '\dcu\');
+  CARPETA_TEMPORAL = '\__delphi-temp\';
   CARPETAS_PAPELERA: array [0 .. 1] of string = (
     '\__pascal-patch\', '\__delphi-patch\');
 
+{ Saltar y el motivo de saltar son UNA decision: la toma SkipReason. }
 function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean;
-var
-  B, Low: string;
 begin
-  Low := APath.ToLower;
-  if Low.Contains('\.git\') then
-    Exit(True);
-  for B in CARPETAS_ARTEFACTO do
-    if Low.Contains(B) then
-      Exit(True);
-  if not AAllowTrash then
-    for B in CARPETAS_PAPELERA do
-      if Low.Contains(B) then
-        Exit(True);
-  Result := False;
+  Result := SkipReason(APath, AAllowTrash) <> '';
 end;
 
 function SkipIdeArtifacts(const APath: string): Boolean;
@@ -195,14 +214,66 @@ begin
   Result := '';
   Low := APath.ToLower;
   if Low.Contains('\.git\') then
-    Exit('git');
+    Exit(SKIP_GIT);
+  if Low.Contains(CARPETA_TEMPORAL) then
+    Exit(SKIP_TEMP);
   for B in CARPETAS_ARTEFACTO do
     if Low.Contains(B) then
-      Exit('artifacts');
+      Exit(SKIP_ARTIFACTS);
   if not AAllowTrash then
     for B in CARPETAS_PAPELERA do
       if Low.Contains(B) then
-        Exit('trash');
+        Exit(SKIP_TRASH);
+end;
+
+{ THiddenCount }
+
+procedure THiddenCount.Add(const AReason: string);
+begin
+  if AReason = SKIP_ARTIFACTS then
+    Inc(Artifacts)
+  else if AReason = SKIP_TEMP then
+    Inc(Temp)
+  else if AReason = SKIP_GIT then
+    Inc(Git)
+  else if AReason = SKIP_TRASH then
+    Inc(Trash)
+  else if AReason = SKIP_FOLDERS then
+    Inc(Folders)
+  else
+    // Un motivo nuevo en SkipReason sin su cajon aqui se perderia de la
+    // cuenta en silencio: mejor que se vea en la primera bateria.
+    raise Exception.CreateFmt('THiddenCount: motivo sin cajon "%s"', [AReason]);
+end;
+
+function THiddenCount.Total: Integer;
+begin
+  Result := Artifacts + Temp + Git + Trash + Folders;
+end;
+
+procedure THiddenCount.Report(AObj: TJSONObject);
+var
+  Partes: TArray<string>;
+
+  procedure Motivo(ACuantos: Integer; const ACampo, AFmt: string);
+  begin
+    if ACuantos = 0 then
+      Exit;
+    AObj.AddPair(ACampo, TJSONNumber.Create(ACuantos));
+    Partes := Partes + [Format(AFmt, [ACuantos])];
+  end;
+
+begin
+  if Total = 0 then
+    Exit;
+  AObj.AddPair('hidden', TJSONNumber.Create(Total));
+  Motivo(Artifacts, 'hiddenBuildArtifacts', SN_HIDDEN_ARTIFACTS_FMT);
+  Motivo(Temp, 'hiddenServerTemp', SN_HIDDEN_TEMP_FMT);
+  Motivo(Git, 'hiddenGitInternals', SN_HIDDEN_GIT_FMT);
+  Motivo(Trash, 'hiddenTrash', SN_HIDDEN_TRASH_FMT);
+  Motivo(Folders, 'hiddenToolFolders', SN_HIDDEN_FOLDERS_FMT);
+  AObj.AddPair('note', Format(SN_HIDDEN_HEAD_FMT, [Total]) + ' ' +
+    string.Join('; ', Partes) + '.');
 end;
 
 function SkipPath(const APath: string): Boolean;

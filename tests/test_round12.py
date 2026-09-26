@@ -44,79 +44,15 @@ battery pins down so it cannot come back:
 
 Usage:  python tests/test_round12.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, glob
+import json, os, glob
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round12')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('round12')
+EXE = mc.copia_exe(BASE)
 
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                        text=True, encoding='utf-8')
-q = queue.Queue()
-
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-P = F = 0
-
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-def recv(r, t=120):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-
-def call(name, args):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": name, "arguments": args}})
-    r = recv(rid[0])
-    if not r:
-        return '(sin respuesta)'
-    if 'result' in r:
-        return r['result']['content'][0]['text']
-    return 'ERROR ' + json.dumps(r.get('error'), ensure_ascii=False)[:200]
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:320])
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='round12')
+call = srv.call
 
 
 def W(rel, text):
@@ -125,13 +61,6 @@ def W(rel, text):
     open(p, 'w', encoding='utf-8', newline='').write(text)
     return p
 
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "round12", "version": "1"}}})
-recv(1)
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-time.sleep(0.5)
 
 # --------------------------------------------------------------- trash safety
 victim = W('victima.txt', 'de otro agente\r\n')
@@ -328,6 +257,5 @@ check('la clase raiz del .dfm tiene que existir en la unit',
 r = call('delphi_designer', {'command': 'volar', 'path': 'x'})
 check('el error de comando nombra check-binding', 'check-binding' in r, r[:200])
 
-proc.kill()
-print('\n== round-12 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('round-12 battery')

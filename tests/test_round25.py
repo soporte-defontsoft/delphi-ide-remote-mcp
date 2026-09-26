@@ -15,34 +15,17 @@ la seccion [Security] ni ninguna herencia.
 
 Usage:  python tests/test_round25.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, time, os, sys, tempfile, shutil, socket, urllib.request
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
+import os
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round25')
-shutil.rmtree(BASE, ignore_errors=True)
+BASE = mc.carpeta('round25')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(EXEDIR)
 os.makedirs(JAIL)
-EXE = os.path.join(EXEDIR, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+EXE = mc.copia_exe(EXEDIR)
 
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Workspace]', 'Roots=%s' % JAIL, '',
@@ -60,55 +43,18 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     'AllowTests=0', '',
 ]))
 
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
-proc = subprocess.Popen([EXE, '--http', str(PORT)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(2.5)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-
-
-def rpc(body, tok, sid=None):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + tok}
-    if sid:
-        h['Mcp-Session-Id'] = sid
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'), timeout=60)
-    raw = r.read().decode('utf-8', 'replace')
-    msgs = []
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            try:
-                msgs.append(json.loads(l[5:].strip()))
-            except Exception:
-                pass
-    if not msgs:
-        try:
-            msgs = [json.loads(raw)]
-        except Exception:
-            pass
-    return msgs, r.headers.get('Mcp-Session-Id')
+PORT = mc.puerto_libre()
+# loopback: su settings.ini no declara [Server] BindIP
+proc = mc.lanza_http(EXE, PORT, mc.entorno({'DELPHI_MCP_BIND_IP': '127.0.0.1'}))
 
 
 def session(tok, name):
-    _, sid = rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": name, "version": "1"}}}, tok)
-    rpc({"jsonrpc": "2.0", "method": "notifications/initialized"}, tok, sid)
-    return sid
+    return mc.Http(PORT, tok).session(name)
 
 
 def call(tok, sid, tool, args):
-    m, _ = rpc({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
-                "params": {"name": tool, "arguments": args}}, tok, sid)
-    for x in m:
-        if x.get('id') == 7:
-            return x.get('result', {}).get('content', [{}])[0].get('text', 'ERR')
-    return '(no)'
+    # el token y la sesion que se le pasan, solo para esta llamada
+    return mc.Http(PORT, tok).call(tool, args, sid=sid)
 
 
 try:
@@ -136,10 +82,15 @@ try:
              {'command': 'run', 'project': os.path.join(JAIL, 'X.dproj')})
     check('C3b Operador no declara tests: rechazados tambien (nada se hereda)',
           'AllowTests' in r or 'deshabilitad' in r, r[:200])
+    # El proyecto va en la carpeta DEL AGENTE: el Runner esta confinado (C4) y
+    # con X.dproj en la raiz lo paraba el CONFINAMIENTO - el check pasaba
+    # porque ese rechazo no nombra AllowTests, no porque el gate de tests
+    # dejara pasar. Pasar el gate = llegar a mirar el proyecto (no existe).
     r = call('runner-25', s_run, 'delphi_test',
-             {'command': 'run', 'project': os.path.join(JAIL, 'X.dproj')})
+             {'command': 'run', 'project': os.path.join(JAIL, 'agente', 'X.dproj')})
     check('C3c Runner declara AllowTests=1: los tests pasan el gate',
-          'AllowTests' not in r and 'deshabilitad' not in r, r[:200])
+          'AllowTests' not in r and 'deshabilitad' not in r and 'confinado' not in r
+          and 'no existe' in r and 'X.dproj' in r, r[:200])
 
     # C4: confinement only inside the workspace
     r = call('runner-25', s_run, 'delphi_textedit',
@@ -158,5 +109,4 @@ try:
 finally:
     proc.kill()
 
-print('\n== round-25 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('round-25 battery')

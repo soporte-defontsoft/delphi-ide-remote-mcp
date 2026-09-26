@@ -17,70 +17,39 @@ Si esta release-out/DelphiLspMcp-v1.0.12-beta-win64.zip se pasa ademas el
 CONTROL: ese exe TIENE que fallar el invariante. Una bateria que no ve el
 fallo en el binario que lo tiene no esta midiendo nada.
 """
-import json, os, shutil, socket, subprocess, sys, tempfile, time, urllib.request, zipfile
+import json, os, time, zipfile
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-NUEVO = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-ZIP12 = os.path.join(REPO, 'release-out', 'DelphiLspMcp-v1.0.12-beta-win64.zip')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round48')
+NUEVO = mc.exe_origen()
+ZIP12 = os.path.join(mc.REPO, 'release-out', 'DelphiLspMcp-v1.0.12-beta-win64.zip')
+# sin mc.carpeta(): la barre prepara(), que es quien monta el escenario
+BASE = os.path.join(mc.RAIZ, 'round48')
 PROY = os.path.join(BASE, 'jaula', 'proy')
 SUB = os.path.join(PROY, 'sub')
 
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:300])
-
-def borra(d):
-    if os.path.isdir(d):
-        shutil.rmtree(d, ignore_errors=True)
 
 class Srv:
     def __init__(self, exe, nombre, workspaces):
         self.dir = os.path.join(BASE, 'srv_' + nombre)
-        borra(self.dir); os.makedirs(self.dir)
-        shutil.copy(exe, os.path.join(self.dir, 'DelphiLspMcp.exe'))
-        sk = socket.socket(); sk.bind(('127.0.0.1', 0)); self.port = sk.getsockname()[1]; sk.close()
+        mc.borra(self.dir)
+        copia = mc.copia_exe(self.dir, exe)
+        self.port = mc.puerto_libre()
         ini = ['[Server]', 'BindIP=127.0.0.1', '']
         for tok, roots in workspaces:
             ini += ['[Workspace.%s]' % tok.upper(), 'Token=%s' % tok, 'Roots=%s' % roots, '']
         open(os.path.join(self.dir, 'settings.ini'), 'w').write('\n'.join(ini))
-        self.proc = subprocess.Popen([os.path.join(self.dir, 'DelphiLspMcp.exe'), '--http', str(self.port)],
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(3)
-        self.sids = {}; self.rid = 100
-    def rpc(self, tok, body):
-        h = {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream',
-             'Authorization': 'Bearer ' + tok}
-        if self.sids.get(tok): h['Mcp-Session-Id'] = self.sids[tok]
-        r = urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:%d/mcp' % self.port,
-            data=json.dumps(body).encode(), headers=h, method='POST'), timeout=300)
-        raw = r.read().decode('utf-8', 'replace')
-        sid = r.headers.get('Mcp-Session-Id')
-        if sid: self.sids[tok] = sid
-        for l in raw.splitlines():
-            if l.startswith('data:'):
-                m = json.loads(l[5:].strip())
-                if 'result' in m or 'error' in m: return m
-        try: return json.loads(raw)
-        except Exception: return None
+        self.proc = mc.lanza_http(copia, self.port, mc.entorno())
+        self.cli = {}; self.rid = 100
     def call(self, tok, tool, args):
-        if tok not in self.sids:
-            self.rpc(tok, {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
-                'protocolVersion': '2025-06-18', 'capabilities': {}, 'clientInfo': {'name': tok, 'version': '1'}}})
-            self.rpc(tok, {'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-        self.rid += 1
-        r = self.rpc(tok, {'jsonrpc': '2.0', 'id': self.rid, 'method': 'tools/call',
-                           'params': {'name': tool, 'arguments': args}})
+        c = self.cli.get(tok)
+        if c is None:
+            c = self.cli[tok] = mc.Http(self.port, tok, t=300)
+            c.session(tok)
+        # un contador de ids POR SERVIDOR, como antes: un fallo devuelve el
+        # mensaje entero (con su id), y en K1 dos fallos no salen iguales
+        c.rid, self.rid = self.rid, self.rid + 1
+        r = c.call_msg(tool, args)
         try: return r['result']['content'][0]['text']
         except Exception: return json.dumps(r)[:600]
     def para(self):
@@ -126,7 +95,7 @@ LIN = [i for i, x in enumerate(LH) if 'Doble(2)' in x][0]
 COL = LH[LIN].index('Doble') + 1
 
 def prepara():
-    borra(BASE); os.makedirs(os.path.join(BASE, 'jaula'))
+    mc.borra(BASE); os.makedirs(os.path.join(BASE, 'jaula'))
     s = Srv(NUEVO, 'setup', [('setup', os.path.join(BASE, 'jaula'))])
     try:
         c1 = (s.call('setup', 'delphi_create', {'kind': 'project-console', 'name': 'P', 'dir': PROY})[:160])
@@ -162,9 +131,16 @@ try:
     check('K1 lo que contesta el estrecho NO depende de que el ancho llamase antes',
           igual, 'solo=%s | tras-ancho=%s' % (out['solo'][0][:120], d[:120]))
     check('K2 ...y su delphi_definition no nombra nada de fuera de su jaula',
-          'base.pas' not in d.lower(), d[:240])
+          # Doble solo vive en Base.pas, FUERA de su jaula: la unica respuesta
+          # buena es "sin resolver" (null), y sin nombrar Base.pas
+          d.startswith('null') and 'base.pas' not in d.lower(), d[:240])
     check('K3 ...ni delphi_references le habla de una definicion de FUERA',
-          'FUERA de este workspace' not in r, r[:240])
+          'no resuelve "Doble"' in r and 'FUERA de este workspace' not in r, r[:240])
+    # K3b: esa negativa es del LLAMANTE y viaja como tal. Hasta el 26-sep salia
+    # como 'Error executing tool: RECHAZADO...' (se lanzaba como excepcion y el
+    # despachador la vestia de fallo interno): lo destapo K3 al endurecerlo.
+    check('K3b ...y esa negativa llega como RECHAZADO, no como fallo interno del servidor',
+          r.startswith('RECHAZADO') and not r.startswith('Error executing tool'), r[:240])
     if os.path.exists(ZIP12):
         z = os.path.join(BASE, 'v12')
         os.makedirs(z)
@@ -178,7 +154,6 @@ try:
     else:
         print('NOTA: sin release-out/...v1.0.12...zip no se pasa el control.')
 finally:
-    borra(BASE)
+    mc.borra(BASE)
 
-print('== test_round48: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round48')

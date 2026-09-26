@@ -6,6 +6,143 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.5.0] - 2026-09-26
+
+### Added
+
+- **`delphi_paserver command=output`**: what a `remote-run` job has written
+  SINCE its answer came back. A program with a window outlives the deadline
+  on purpose (`stillRunning=true`), and until now its output was deleted on
+  the target the moment `remote-run` returned, so everything it wrote later
+  - the error when it closes after a login, its exit code, the `___RC` of a
+  job you killed - was written into a deleted file and lost (2026-09-26: an
+  agent's app died after its login and the crash was only visible in the
+  target's journal, through SSH). Now that output stays on the target, the
+  answer carries an `outputNote`, and `command=output` with the same `name`,
+  `project` and `job` as `kill` reads it: while the program lives, what it
+  wrote so far; once it ended, all of it and its `exitCode`, and then it is
+  deleted on the target (read whole = gone, like the mailbox). One reader
+  of the job's output for `remote-run` and `output`; the desktop node's own
+  gestures still delete theirs. `test_remoterun` +11 checks (the 1.4.0
+  binary fails 8).
+
+### Fixed
+
+- **The Windows Service wrote no log at all.** Since production became the
+  service (2026-09-20) there was not one line on disk: the log was written by
+  the tray's window (`UTrayMain`), so the service and the terminal - which
+  have no window - never had one, and nothing said so. The disk now belongs
+  to one unit, `Lsp.LogSink`, started by `TMcpHost` in every mode: the same
+  `logs\actual.log` (live, every half second) and the same dated blocks and
+  rotation (`[Log] LinesPerFile` / `MaxFiles`) for the service, the terminal
+  and the tray. Blocks are the live file RENAMED, several processes with the
+  same exe append safely, a `.log` the namer does not compose is never
+  pruned, and nothing is written or pruned through a link at `logs\`. The
+  tray's window only hangs on it and shows the latest lines. A clean stop
+  logs `parado`.
+- **Every logged line goes through the secrets masker, the response too.**
+  The transports masked the request they log, but logged the RESPONSE as it
+  was (`Sent:` / `Response:`); with the service now writing to disk that
+  would reach the file. Masking happens in `Lsp.LogSink`, where every line
+  passes, so any future path is covered.
+- **Base64 runs are not kept in the log.** An inline capture travels inside
+  the response and the transport logs the whole response: hundreds of KB on
+  one line, with a rotation that counts lines, not bytes. A mark with its
+  size stays (`[base64: N caracteres]`) and the rest of the line is whole.
+  New battery `test_log_disco` (26 checks; the 1.4.0 binary fails 18).
+- **`delphi_textedit` died with an Access violation** on a batch entry with
+  an empty anchor and `occurrence`: the refusal message took
+  `''.Split(...)[0]`, and Delphi splits '' into an EMPTY array. It had been
+  measured and patched in ONE place (2026-08-25, `delphi_edit`); now
+  `PrimerTrozo` (`Lsp.Guard`) does it for all six `Split()[0]` the server
+  had - one of them in the new job-output reader, where a half-written
+  `___RC=` would have done the same. `test_round35` R16.
+- **What a trailing line break in `new` means had three rules**: `delphi_edit`
+  dropped one (and turned two into TWO blank lines), `delphi_textedit` dropped
+  none, and a BLOCK anchor in either dropped them all - a block could never
+  end in a blank line, and the tool answered `APLICADAS` (the batteries found
+  it while moving to the shared client). One rule now, `LineasDeNew`: one
+  trailing break is the end of the last line and is dropped, each extra one
+  is a blank line; stated once in the three `new` descriptions
+  (`delphi_edit`, `delphi_textedit`, `delphi_changeset`). `test_round35` R17.
+- **`delphi_list` counted the server's `__delphi-temp` as a build folder**,
+  with the advice to pass it as root; its dirs mode counted `__history` as
+  trash, `.vs` as git and Win64 under no reason at all; and `delphi_search`
+  skipped the same folders without saying so. One counter now,
+  `THiddenCount` (`Lsp.References`), over the reasons `SkipReason` gives -
+  the server temp is a reason of its own (`hiddenServerTemp`), the tool
+  folders only the dirs mode hides are `hiddenToolFolders` - and both tools
+  report through it: `hidden`, one field per reason, and a note that says
+  what each one is and how to see it. `test_round44` T6d-T6f (the 1.4.0
+  binary fails the three).
+- **`delphi_config add-platform` did half a gesture**: with a `sdk` or a
+  `profile` that was refused, the platform stayed ADDED and the refusal came
+  after it. It is one gesture now: if any part is refused the `.dproj` goes
+  back byte for byte and the answer says nothing was written. `test_sdk`.
+- **A server purged the temp of ANOTHER live server.** At start every server
+  empties the `__delphi-temp` of the roots it serves; a battery on the repo,
+  with the service serving that repo, emptied production's temp with calls
+  in flight. Each temp is now claimed by the live process that uses it
+  (`TemporalEsMia`: one named mutex per canonical path, the same claimer as
+  the server home's first-instance check) and the purge only empties its
+  own. `test_purga_temporales`.
+- **A refusal raised as an exception reached the agent as an internal
+  error** (`Error executing tool: RECHAZADO...`); it now arrives as the
+  plain refusal it is (`MCPServer.ToolsManager`).
+- `initialize` without `clientInfo` read two uninitialized fields
+  (`MCPServer.CoreManager`), and the upload answer two more (`Replaced`,
+  `OldSize`): compiler warning W1036, and real bugs in both.
+- The echo of a batch edit mixed CRLF and LF. `test_round34` B4b.
+- The startup warning "HTTP listens only on 127.0.0.1" was printed by the
+  terminal from a condition that no longer held; it now comes from
+  `TMcpHost.StartupNotes`, for the three hosts, when it is true (no workspace
+  tokens and no `[Server] BindIP`).
+
+### Changed
+
+- The startup notes are logged by `TMcpHost.LogStartupNotes`, once for the
+  three hosts (the terminal and the service each had a copy, the tray a third
+  way), and they now say where the log is. `[Log]` has one reader.
+- **One gate for executing on a target**, `EjecucionRemotaDenegada`
+  (AllowRemoteRun, a profile whose host the workspace allows, and the
+  project - ours, inside the jail and existing, or the bundled desktop
+  node - in RemoteRunProjects), shared by `delphi_paserver` (`remote-run`,
+  `kill`, `output`) and `delphi_desktop`. Each carried its own copy, and
+  desktop's did not check that a given `.dproj` exists; now it does. One
+  job-id check for `kill` and `output`.
+- **One server home**: `ServerDir` composes everything the server keeps
+  next to itself (settings.ini, `__delphi-temp`, `logs`, `messages`,
+  `reports`, `node`, the style converter); eight places composed it by hand.
+- **One reader of settings.ini**: `[Server] BindIP` and
+  `SessionTimeoutMinutes`, and `[Log]`, are read by the central loader with
+  every other key; they opened the file on their own.
+- **Tests: one client**, `tests/mcp_cliente.py` - the scratch folder, the exe
+  copy, a server start that WAITS until the port answers, the stdio and HTTP
+  clients and the PASS/FAIL counter. Every battery carried its own copy (82
+  `check()`, 71 `call()`, hardly two alike), and 34 of the 37 that start an
+  HTTP server slept a fixed 2.3-3 s instead of waiting: under load the
+  release gate went red for that (`test_round20`). Each battery was
+  converted keeping exactly the same checks, verified before and after;
+  fixed ports became free ones. `run_all.py` no longer dies printing a
+  character the console cannot show - that crash hid why a battery was red.
+  The `paclient` stub gets its wait through a file: the environment variable
+  the battery set after starting the server never reached it.
+  `test_remoterun`'s RemoteRunProjects check went through a `[Workspace]`
+  section that is ignored since v0.98, so it tested an empty list; it now
+  tests a list that names another project. `test_git_branches` kept the server INSIDE its test
+  repo, so `git add .` committed the exe and, since this release, the live
+  log - switching branches then collided with the file being written (1 run
+  in 4 red); the server now lives next to the repo, not in it.
+- **Checks that could pass for the wrong reason were hardened** while the
+  batteries moved to the shared client (three review rounds): a bare
+  `'RECHAZADO' in out` now demands the refusal of the door the check names -
+  the jail, the hazard scanner with the reason of THAT payload, the parameter
+  check -, a count demands the items it counts (`test_round31` R1b now
+  measures real homonyms), a `git diff --stat` demands the real stat. Every
+  hardened check was shown false against the wrong answers it used to
+  accept. The four server bugs above under the batteries' names came out of
+  that review.
+
 ## [1.4.0] - 2026-09-26
 
 ### Added

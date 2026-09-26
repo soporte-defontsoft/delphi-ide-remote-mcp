@@ -6,29 +6,16 @@ sits behind a junction, a folder that is not called __delphi-temp.
 
 Usage:  python tests/test_purga_temporales.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, shutil, subprocess, sys, tempfile, time
+import os, subprocess, time
+import mcp_cliente as mc
+from mcp_cliente import check
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'purga-temporales')
-shutil.rmtree(BASE, ignore_errors=True)
+BASE = mc.carpeta('purga-temporales')
+# su propia copia, fuera de las raices: el compilado no se ejecuta en su sitio
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 ROOT = os.path.join(BASE, 'raiz')
 REF = os.path.join(BASE, 'referencia')
 FUERA = os.path.join(BASE, 'fuera')
-
-P = F = 0
-
-
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('  PASS', name)
-    else:
-        F += 1
-        print('  FAIL', name, '--', str(detail)[:200])
-
 
 def siembra(*partes):
     p = os.path.join(*partes)
@@ -59,17 +46,10 @@ enlace = os.path.join(ROOT, 'enlace')
 subprocess.run(['cmd', '/c', 'mklink', '/J', enlace, FUERA], capture_output=True)
 check('fixture: junction creado dentro de la raiz apuntando fuera', os.path.isdir(enlace), enlace)
 
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = ROOT + ';' + RAIZ2
-env['DELPHI_MCP_READONLY_PATHS'] = 'vendor'
-env['DELPHI_MCP_READONLY_ROOTS'] = REF
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True)
-proc.stdin.write(json.dumps({'jsonrpc': '2.0', 'id': 0, 'method': 'initialize', 'params': {
-    'protocolVersion': '2025-03-26', 'capabilities': {},
-    'clientInfo': {'name': 'bateria-purga', 'version': '1'}}}) + '\n')
-proc.stdin.flush()
-proc.stdout.readline()  # el arranque (y su purga) ya paso
+env = mc.entorno({'DELPHI_MCP_ROOTS': ROOT + ';' + RAIZ2,
+                  'DELPHI_MCP_READONLY_PATHS': 'vendor',
+                  'DELPHI_MCP_READONLY_ROOTS': REF})
+srv = mc.Stdio(EXE, env, nombre='bateria-purga')  # respondio: el arranque (y su purga) ya paso
 time.sleep(0.5)
 
 check('purga: la temporal de la raiz se vacia', not os.path.exists(arriba), arriba)
@@ -89,15 +69,25 @@ check('guard: un junction dentro de una temporal cae como enlace',
 check('guard: la carpeta a la que apuntaba el junction sigue intacta',
       os.path.exists(victima), victima)
 
-try:
-    proc.stdin.close()
-except Exception:
-    pass
+# DUENO (26-sep-2026): la temporal de una raiz es del servidor que la
+# reclamo, mientras viva. Un SEGUNDO servidor -otro exe, la misma raiz- no la
+# vacia: hasta hoy una bateria sobre el repo vaciaba REPO\__delphi-temp con
+# el servicio vivo y sus llamadas en vuelo (el cerrojo iba por la carpeta del
+# exe, y cada bateria corre el suyo).
+en_vuelo = siembra(ROOT, '__delphi-temp', 'agente', 'en-vuelo.txt')
+srv2 = mc.Stdio(mc.copia_exe(os.path.join(BASE, 'srv2')), env, nombre='bateria-purga-2')
 time.sleep(0.5)
-proc.kill()
+check('dueno: un SEGUNDO servidor con la misma raiz NO vacia la temporal de uno vivo',
+      os.path.exists(en_vuelo), en_vuelo)
+srv2.cierra()
+srv.cierra()
+# muerto el primero, lo que quedo no es de nadie: el siguiente arranque lo vacia
+srv3 = mc.Stdio(mc.copia_exe(os.path.join(BASE, 'srv3')), env, nombre='bateria-purga-3')
+time.sleep(0.5)
+check('dueno: muerto el primero, el siguiente arranque SI la vacia (ya es basura)',
+      not os.path.exists(en_vuelo), en_vuelo)
+srv3.cierra()
 if os.path.isdir(enlace):
     os.rmdir(enlace)  # quita el junction, nunca lo que hay detras
-shutil.rmtree(BASE, ignore_errors=True)
-print()
-print('== purga-temporales battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.borra(BASE)
+mc.fin('purga-temporales battery')

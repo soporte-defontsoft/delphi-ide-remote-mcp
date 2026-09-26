@@ -12,123 +12,63 @@ by (path, mtime, size). The contract must be untouched:
 
 Usage:  python tests/test_round18.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, time, os, sys, tempfile, shutil, socket, hashlib, urllib.request
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
+import json, time, os, hashlib, urllib.request
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round18')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('round18')
+EXE = mc.copia_exe(BASE)
 BIG = os.path.join(BASE, 'gordo.bin')
 data1 = os.urandom(1024) * 5120  # ~5 MB, above the 4 MB link threshold
 open(BIG, 'wb').write(data1)
 
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
+PORT = mc.puerto_libre()
+env = mc.entorno({'DELPHI_MCP_ROOTS': BASE,
+                  'DELPHI_MCP_BIND_IP': '127.0.0.1'})  # loopback: sin avisos del firewall
 # v0.98: o workspace o nada - la bateria presenta su token
 TOKEN = 'bateria-workspace'
 with open(os.path.join(BASE, 'settings.ini'), 'w') as _f:
     _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, BASE))
-proc = subprocess.Popen([EXE, '--http', str(PORT)], env=env,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(2.3)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
+proc = mc.lanza_http(EXE, PORT, env)
 HOST = 'http://127.0.0.1:%d' % PORT
-
-
-def rpc(body, sid=None):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOKEN}
-    if sid:
-        h['Mcp-Session-Id'] = sid
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'), timeout=60)
-    raw = r.read().decode('utf-8', 'replace')
-    msgs = []
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            try:
-                msgs.append(json.loads(l[5:].strip()))
-            except Exception:
-                pass
-    if not msgs:
-        try:
-            msgs = [json.loads(raw)]
-        except Exception:
-            pass
-    return msgs, r.headers.get('Mcp-Session-Id')
-
-
-def call(sid, tool, args):
-    m, _ = rpc({"jsonrpc": "2.0", "id": 7, "method": "tools/call",
-                "params": {"name": tool, "arguments": args}}, sid)
-    for x in m:
-        if x.get('id') == 7:
-            return x.get('result', {}).get('content', [{}])[0].get('text', 'ERR')
-    return '(no)'
+cli = mc.Http(PORT, TOKEN)
 
 
 try:
-    _, sid = rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": "round18", "version": "1"}}})
-    rpc({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
+    cli.session('round18')
 
     local1 = hashlib.sha256(data1).hexdigest()
-    j1 = json.loads(call(sid, 'delphi_fetch', {'path': BIG}))
+    j1 = json.loads(cli.call('delphi_fetch', {'path': BIG}))
     check('H1 fetch sha256 == sha256 local', j1.get('sha256') == local1,
           (j1.get('sha256'), local1))
 
     dl = j1.get('download', '')
     check('H1b fichero grande responde enlace, no base64',
           j1.get('bytes') == 0 and dl != '', j1)
-    r = urllib.request.urlopen(urllib.request.Request(
-        HOST + dl, headers={'Authorization': 'Bearer ' + TOKEN}), timeout=60)
-    body = r.read()
+    with urllib.request.urlopen(urllib.request.Request(
+            HOST + dl, headers={'Authorization': 'Bearer ' + TOKEN}), timeout=60) as r:
+        body = r.read()
+        sha_cabecera = r.headers.get('X-File-SHA256')
     check('H2 /files X-File-SHA256 == fetch sha y el contenido casa',
-          r.headers.get('X-File-SHA256') == local1 and
+          sha_cabecera == local1 and
           hashlib.sha256(body).hexdigest() == local1,
-          r.headers.get('X-File-SHA256'))
+          sha_cabecera)
 
     # H3: mutate the file - the stamp must invalidate the cached hash
     time.sleep(1.1)  # ensure a distinct mtime even on coarse filesystems
     data2 = os.urandom(1024) * 5120
     open(BIG, 'wb').write(data2)
     local2 = hashlib.sha256(data2).hexdigest()
-    j2 = json.loads(call(sid, 'delphi_fetch', {'path': BIG}))
+    j2 = json.loads(cli.call('delphi_fetch', {'path': BIG}))
     check('H3 tras cambiar el fichero, sha nuevo y correcto (invalidacion)',
           j2.get('sha256') == local2 and j2.get('sha256') != local1,
           (j2.get('sha256'), local2))
 
-    j3 = json.loads(call(sid, 'delphi_fetch', {'path': BIG}))
+    j3 = json.loads(cli.call('delphi_fetch', {'path': BIG}))
     check('H4 repetir sin cambios: mismo sha', j3.get('sha256') == local2,
           j3.get('sha256'))
 finally:
     proc.kill()
 
-print('\n== round-18 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('round-18 battery')

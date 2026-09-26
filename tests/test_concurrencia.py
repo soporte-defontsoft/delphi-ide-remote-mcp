@@ -35,40 +35,21 @@ import glob
 import json
 import os
 import re
-import shutil
-import socket
 import subprocess
-import sys
-import tempfile
 import threading
 import time
-import urllib.error
-import urllib.request
 import zipfile
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE_SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+import mcp_cliente as mc
+from mcp_cliente import check
 
 TOKEN = 'conc-token'
 N = 12                      # writers firing at once
 
-WORK = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'concurrencia')
-shutil.rmtree(WORK, ignore_errors=True)
-os.makedirs(WORK)
+WORK = mc.carpeta('concurrencia')
 
 # The server reads its settings.ini next to the executable, so the battery runs
 # its OWN copy in its own folder - never the build output in place.
-EXE = os.path.join(WORK, 'DelphiLspMcp.exe')
-shutil.copy(EXE_SRC, EXE)
-# The desktop node travels beside the server (node\McpDesktopNode.exe); probe G
-# needs it and skips itself when it is not there.
-NODE_SRC = os.path.join(REPO, 'node', 'McpDesktopNode.exe')
-NODE_DST = os.path.join(WORK, 'node', 'McpDesktopNode.exe')
-if os.path.exists(NODE_SRC):
-    os.makedirs(os.path.dirname(NODE_DST), exist_ok=True)
-    shutil.copy(NODE_SRC, NODE_DST)
+EXE = mc.copia_exe(WORK)
 
 JAIL = os.path.join(WORK, 'jaula')
 os.makedirs(JAIL)
@@ -78,30 +59,17 @@ with open(os.path.join(WORK, 'settings.ini'), 'w') as f:
             'Roots=%s\n'
             'AllowTests=1\n' % (TOKEN, JAIL))
 
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
-URL = 'http://127.0.0.1:%d/mcp' % PORT
+PORT = mc.puerto_libre()
 
-env = dict(os.environ)
 # Loopback only: binding every interface makes Windows Firewall ask once per
 # executable PATH, and this battery runs from a fresh temp folder every time.
-env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'
-proc = subprocess.Popen([EXE, '--http', str(PORT)], env=env,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+env = mc.entorno({'DELPHI_MCP_BIND_IP': '127.0.0.1'})
+# espera a que ESCUCHE; si no llega, RuntimeError con el motivo
+proc = mc.lanza_http(EXE, PORT, env)
+# seguro entre hilos (cada peticion lleva y busca SU id): burst() lo comparte
+cli = mc.Http(PORT, TOKEN, t=180)
 
-P = FCOUNT = SKIPPED = 0
-
-
-def check(name, cond, detail=''):
-    global P, FCOUNT
-    if cond:
-        P += 1
-        print('PASS -', name)
-    else:
-        FCOUNT += 1
-        print('FAIL -', name, '|', str(detail)[:300])
+SKIPPED = 0
 
 
 def skip(name, why):
@@ -110,68 +78,12 @@ def skip(name, why):
     print('SKIP -', name, '|', str(why)[:200])
 
 
-_rid = [100]
-_ridlock = threading.Lock()
-
-
-def next_id():
-    with _ridlock:
-        _rid[0] += 1
-        return _rid[0]
-
-
-def rpc(body, sid=None, timeout=180):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOKEN}
-    if sid:
-        h['Mcp-Session-Id'] = sid
-    req = urllib.request.Request(URL, data=json.dumps(body).encode('utf-8'),
-                                 headers=h, method='POST')
-    try:
-        r = urllib.request.urlopen(req, timeout=timeout)
-        raw = r.read().decode('utf-8', 'replace')
-        newsid = r.headers.get('Mcp-Session-Id')
-    except urllib.error.HTTPError as e:
-        return [{'error': {'message': 'HTTP%d %s' % (
-            e.code, e.read().decode('utf-8', 'replace')[:200])}}], None
-    except Exception as e:                       # noqa: BLE001 - reported, not raised
-        return [{'error': {'message': repr(e)}}], None
-    msgs = []
-    for line in raw.splitlines():
-        if line.startswith('data:'):
-            try:
-                msgs.append(json.loads(line[5:].strip()))
-            except Exception:
-                pass
-    if not msgs:
-        try:
-            msgs = [json.loads(raw)]
-        except Exception:
-            msgs = [{'error': {'message': raw[:200]}}]
-    return msgs, newsid
-
-
 def session(name):
-    _, sid = rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": name, "version": "1"}}})
-    rpc({"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
-    return sid
+    """El session-id de un agente con ese nombre (clientInfo), para sid=."""
+    return mc.Http(PORT, TOKEN).session(name)
 
 
-def call(tool, args, sid=None, timeout=180):
-    rid = next_id()
-    msgs, _ = rpc({"jsonrpc": "2.0", "id": rid, "method": "tools/call",
-                   "params": {"name": tool, "arguments": args}}, sid, timeout)
-    for m in msgs:
-        if m.get('id') == rid and 'result' in m:
-            c = m['result'].get('content', [])
-            return c[0].get('text', '') if c else '(sin contenido)'
-    for m in msgs:
-        if 'error' in m:
-            return 'MCPERROR ' + json.dumps(m['error'])[:200]
-    return '(sin respuesta)'
+call = cli.call
 
 
 def burst(worker, n=N):
@@ -194,41 +106,15 @@ def burst(worker, n=N):
     return out
 
 
-def unmask(p):
-    """Server paths come out as virtual units (C:\\x -> srvc:\\x) in every tool
-    answer. To CHECK a file on this same machine the battery undoes that."""
-    m = re.match(r'(?i)^srv([a-z]):', p or '')
-    return m.group(1).upper() + ':' + p[5:] if m else p
-
-
 def bad(text):
     """A tool answer that is NOT a success."""
     t = (text or '').upper()
+    # (TIMEOUT) / (NO CONTENT): lo que mc.texto() dice cuando no llega nada
     return ('RECHAZAD' in t or t.startswith('ERROR') or 'MCPERROR' in t or
-            'EXCEPCION' in t or 'FALLID' in t or '(SIN RESPUESTA)' in t)
-
-
-def wait_ready(seconds=20):
-    deadline = time.time() + seconds
-    while time.time() < deadline:
-        msgs, _ = rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                       "params": {"protocolVersion": "2025-06-18",
-                                  "capabilities": {},
-                                  "clientInfo": {"name": "conc", "version": "1"}}},
-                      timeout=5)
-        for m in msgs:
-            if 'result' in m:
-                return True
-        time.sleep(0.5)
-    return False
+            'EXCEPCION' in t or 'FALLID' in t or '(TIMEOUT)' in t or '(NO CONTENT)' in t)
 
 
 try:
-    if not wait_ready():
-        print('FAIL - el servidor no responde en el puerto %d' % PORT)
-        proc.kill()
-        sys.exit(1)
-
     # ---------------------------------------------------------------- A ----
     # N writers on the SAME file. Each one owns its line, so a correct server
     # ends with the N of them done: nobody is overwriting anybody's text, only
@@ -331,8 +217,8 @@ try:
                   encoding='utf-8') as f:
             f.write('AVISO-BROADCAST: parad todos y leed esto\n')
     alice, bob = session('alice'), session('bob')
-    ea = call('delphi_messages', {"command": "read"}, alice)
-    eb = call('delphi_messages', {"command": "read"}, bob)
+    ea = call('delphi_messages', {"command": "read"}, sid=alice)
+    eb = call('delphi_messages', {"command": "read"}, sid=bob)
     check('E buzon: el primer agente recibe su copia del aviso',
           'AVISO-BROADCAST' in ea, ea[:150])
     check('E buzon: el SEGUNDO agente tambien recibe la suya',
@@ -393,7 +279,7 @@ try:
                     'uses\r\n  System.SysUtils;\r\n\r\n'
                     'begin\r\n  Writeln(\'vivo\');\r\n  Sleep(8000);\r\nend.\r\n')
         b1 = call('delphi_build', {"project": RPROJ, "config": "Debug"},
-                  timeout=600)
+                  t=600)
         built = False
         try:
             built = json.loads(b1).get('success') is True
@@ -417,7 +303,7 @@ try:
                 time.sleep(2.0)   # the program is already running by now
                 res['build'] = call('delphi_build',
                                     {"project": RPROJ, "config": "Debug"},
-                                    timeout=600)
+                                    t=600)
 
             ts = [threading.Thread(target=runner), threading.Thread(target=builder)]
             for t in ts:
@@ -440,6 +326,5 @@ try:
 finally:
     proc.kill()
 
-print('\n== bateria de concurrencia: %d PASS / %d FAIL / %d SKIP ==' % (
-    P, FCOUNT, SKIPPED))
-sys.exit(1 if FCOUNT else 0)
+print('\n%d SKIP' % SKIPPED)
+mc.fin('bateria de concurrencia')

@@ -24,87 +24,17 @@ What sec9 found after the round-8 trash fixes, and what is pinned here:
 
 Usage:  python tests/test_round13.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, glob, ctypes
+import os, glob, ctypes
+# 'mc' es aqui una copia de la papelera (R3): el modulo entra por sus nombres
+from mcp_cliente import carpeta, copia_exe, entorno, Stdio, check, fin
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round13')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = carpeta('round13')
+EXE = copia_exe(BASE)
 
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                        text=True, encoding='utf-8')
-q = queue.Queue()
-
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-P = F = 0
-
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-def sess(name):
-    send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": name, "version": "1"}}})
-    recv(1)
-    send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-
-def recv(r, t=60):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-
-def call(tool, args):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": tool, "arguments": args}})
-    r = recv(rid[0])
-    if not r:
-        return '(sin respuesta)'
-    if 'result' in r:
-        return r['result']['content'][0]['text']
-    return 'ERR ' + json.dumps(r.get('error'), ensure_ascii=False)[:150]
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:300])
+env = entorno({'DELPHI_MCP_ROOTS': BASE})
+srv = Stdio(EXE, env, inicializa=False)
+sess = srv.inicializa   # re-handshake con otra identidad (otro / alicia)
+call = srv.call
 
 
 def copies_of(stem):
@@ -119,8 +49,11 @@ def short_dir(path):
     return buf.value
 
 
+# (aqui habia un sleep(0.3) sin motivo: el transporte stdio procesa las
+# lineas de una en una y en orden, asi que el initialized ya esta atendido
+# cuando llega la primera llamada - y el re-handshake de 'alicia', mas
+# abajo, nunca lo tuvo y su identidad se aplica igual)
 sess('otro')
-time.sleep(0.3)
 
 # ---- R1: the 8.3 short-name alias must not dodge the trash guard ----------
 open(os.path.join(BASE, 'victima.txt'), 'w').write('de otro\n')
@@ -128,26 +61,38 @@ call('delphi_delete', {'path': os.path.join(BASE, 'victima.txt')})
 copy = copies_of('victima.txt')[0]
 short = short_dir(os.path.join(BASE, '__delphi-patch'))
 has83 = '~' in os.path.basename(short)
-shortcopy = copy.replace(os.path.join(BASE, '__delphi-patch'), short)
+# SOLO el tramo de la papelera en 8.3, el resto en largo como la raiz. Antes
+# se acortaba la ruta ENTERA (.../Temp/DELPHI~1/round13/__DELP~1): esa ya
+# no casa con la raiz de la jaula, y los tres R1 los paraba la JAULA ("FUERA
+# de los workspaces"), no la guarda de la papelera que dicen medir.
+shortcopy = copy.replace(os.path.join(BASE, '__delphi-patch'),
+                         os.path.join(BASE, os.path.basename(short)))
+
+
+def por_la_papelera(r):
+    """Rechazado por la guarda de la PAPELERA, no por otra puerta."""
+    return 'RECHAZADO' in r and 'es la papelera' in r and 'FUERA de los workspaces' not in r
+
+
 import base64
 if has83:
     r = call('delphi_textedit', {'path': shortcopy, 'old': 'de otro', 'new': 'HIJACK'})
     check('R1 textedit via 8.3 (__DELP~1) rechazado',
-          'RECHAZADO' in r and open(copy).read().strip() == 'de otro', r[:160])
+          por_la_papelera(r) and open(copy).read().strip() == 'de otro', r[:160])
     r = call('delphi_upload', {'path': shortcopy,
                                'chunkbase64': base64.b64encode(b'X').decode(), 'offset': 0})
     check('R1 upload via 8.3 rechazado',
-          'RECHAZADO' in r and open(copy).read().strip() == 'de otro', r[:160])
+          por_la_papelera(r) and open(copy).read().strip() == 'de otro', r[:160])
     r = call('delphi_move', {'path': os.path.join(BASE, 'victima.txt'),
                              'dest': shortcopy.replace('victima.txt-', 'inj-')})
-    check('R1 move DENTRO de la papelera via 8.3 rechazado', 'RECHAZADO' in r, r[:160])
+    check('R1 move DENTRO de la papelera via 8.3 rechazado', por_la_papelera(r), r[:160])
 else:
     print('SKIP R1 - el volumen no genera nombres 8.3')
 
 # the literal path is of course still guarded
 r = call('delphi_textedit', {'path': copy, 'old': 'de otro', 'new': 'X'})
 check('R1b la papelera por su nombre literal sigue protegida',
-      'RECHAZADO' in r and open(copy).read().strip() == 'de otro', r[:160])
+      por_la_papelera(r) and open(copy).read().strip() == 'de otro', r[:160])
 
 # ---- R2: a planted .by must not own anything ----------
 open(os.path.join(BASE, 'trampa'), 'w').write('carpeta con trampa\n')
@@ -202,7 +147,7 @@ check('contra: el dueno SI purga la suya',
       'PURGADO' in r and not os.path.exists(ac), r[:150])
 # the jail still holds
 r = call('delphi_read', {'path': 'C:\\Windows\\win.ini'})
-check('contra: la carcel sigue firme', 'RECHAZADO' in r, r[:120])
+check('contra: la carcel sigue firme', 'RECHAZADO' in r and 'FUERA de los workspaces' in r, r[:120])
 # a normal delete + restore round trip still works
 open(os.path.join(BASE, 'ida.txt'), 'w').write('ida\n')
 r = call('delphi_delete', {'path': os.path.join(BASE, 'ida.txt')})
@@ -212,6 +157,5 @@ r = call('delphi_move', {'path': ic, 'dest': os.path.join(BASE, 'ida.txt')})
 check('contra: restaurar sigue funcionando',
       'MOVIDO' in r and os.path.exists(os.path.join(BASE, 'ida.txt')), r[:120])
 
-proc.kill()
-print('\n== round-13 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+fin('round-13 battery')

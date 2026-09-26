@@ -16,44 +16,22 @@ delphi_help / delphi_messages / delphi_report are always listed.
 
 Usage:  python tests/test_round20.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, time, os, sys, tempfile, shutil, socket, urllib.request
+import os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
 
 
 TOKEN = 'bateria-workspace'
 
 
-def start(extra_env):
-    # Carpeta FIJA, no con marca de tiempo: la raiz temporal la comparten
-    # todas las baterias y el rastro se acumulaba por centenares (medido
-    # 2026-09-20: 521 entradas). Se limpia al empezar, como las demas.
-    base = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round20',
-                        str(abs(hash(frozenset(extra_env.items()))) % 1000))
-    shutil.rmtree(base, ignore_errors=True)
-    os.makedirs(base)
-    exe = os.path.join(base, 'DelphiLspMcp.exe')
-    shutil.copy(SRC, exe)
-    sk = socket.socket()
-    sk.bind(('127.0.0.1', 0))
-    port = sk.getsockname()[1]
-    sk.close()
-    env = dict(os.environ)
+def start(etiqueta, extra_env):
+    # Carpeta FIJA por prueba. Antes era hash(entorno) % 1000, y el hash de
+    # Python cambia en cada ejecucion: la carpeta tambien.
+    base = mc.carpeta(os.path.join('round20', etiqueta))
+    exe = mc.copia_exe(base)
+    port = mc.puerto_libre()
+    env = mc.entorno()
     env['DELPHI_MCP_ROOTS'] = base
     env['DELPHI_MCP_BIND_IP'] = '127.0.0.1'  # loopback: sin avisos del firewall
     env.update(extra_env)
@@ -61,59 +39,10 @@ def start(extra_env):
     # fontaneria global y entran por el entorno igual que antes)
     with open(os.path.join(base, 'settings.ini'), 'w') as _f:
         _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, base))
-    proc = subprocess.Popen([exe, '--http', str(port)], env=env,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(2.3)
-    return base, 'http://127.0.0.1:%d/mcp' % port, proc
-
-
-def rpc(url, body, sid=None):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOKEN}
-    if sid:
-        h['Mcp-Session-Id'] = sid
-    r = urllib.request.urlopen(urllib.request.Request(
-        url, data=json.dumps(body).encode(), headers=h, method='POST'), timeout=30)
-    raw = r.read().decode('utf-8', 'replace')
-    msgs = []
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            try:
-                msgs.append(json.loads(l[5:].strip()))
-            except Exception:
-                pass
-    if not msgs:
-        try:
-            msgs = [json.loads(raw)]
-        except Exception:
-            pass
-    return msgs, r.headers.get('Mcp-Session-Id')
-
-
-def session(url):
-    _, sid = rpc(url, {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                       "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                                  "clientInfo": {"name": "round20", "version": "1"}}})
-    rpc(url, {"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
-    return sid
-
-
-def toolnames(url, sid):
-    m, _ = rpc(url, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}, sid)
-    for x in m:
-        if x.get('id') == 2:
-            return {t['name'] for t in x['result']['tools']}
-    return set()
-
-
-def call(url, sid, tool, args):
-    m, _ = rpc(url, {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
-                     "params": {"name": tool, "arguments": args}}, sid)
-    for x in m:
-        if x.get('id') == 7:
-            return x.get('result', {}).get('content', [{}])[0].get('text', 'ERR')
-    return '(no)'
+    # espera a que ESCUCHE (antes un sleep fijo de 2,3 s: con la maquina
+    # cargada la puerta de release salio roja por eso, 26-sep-2026)
+    proc = mc.lanza_http(exe, port, env)
+    return base, mc.Http(port, TOKEN), proc
 
 
 READER = {'delphi_read', 'delphi_list', 'delphi_search', 'delphi_symbols',
@@ -126,10 +55,10 @@ DEPLOY = {'delphi_adb', 'delphi_paserver', 'delphi_package'}
 
 # T1 default (the test jail has no vault, so vault_* are not registered:
 # every expectation below is relative to THIS server's own census)
-base, url, proc = start({})
+base, cli, proc = start('t1', {})
 try:
-    sid = session(url)
-    ALL = toolnames(url, sid)
+    cli.session('round20')
+    ALL = cli.toolnames()
     check('T1 sin perfil: el censo completo, con las de escribir dentro',
           'delphi_edit' in ALL and 'delphi_adb' in ALL and len(ALL) >= 36,
           len(ALL))
@@ -137,13 +66,13 @@ finally:
     proc.kill()
 
 # T2/T3 reader
-base, url, proc = start({'DELPHI_MCP_TOOLS_PROFILE': 'reader'})
+base, cli, proc = start('t2', {'DELPHI_MCP_TOOLS_PROFILE': 'reader'})
 try:
-    sid = session(url)
-    names = toolnames(url, sid)
+    cli.session('round20')
+    names = cli.toolnames()
     check('T2 reader: exactamente el conjunto de lectura/navegacion',
           names == (READER & ALL), sorted(names ^ (READER & ALL)))
-    r = call(url, sid, 'delphi_textedit',
+    r = cli.call('delphi_textedit',
              {'path': os.path.join(base, 'x.txt'), 'create': True, 'content': 'x'})
     check('T3 reader: una tool oculta sigue siendo llamable (no es un permiso)',
           'CREADO' in r or 'ESCRITO' in r or os.path.exists(os.path.join(base, 'x.txt')), r[:160])
@@ -151,20 +80,20 @@ finally:
     proc.kill()
 
 # T4 coder
-base, url, proc = start({'DELPHI_MCP_TOOLS_PROFILE': 'coder'})
+base, cli, proc = start('t4', {'DELPHI_MCP_TOOLS_PROFILE': 'coder'})
 try:
-    sid = session(url)
-    names = toolnames(url, sid)
+    cli.session('round20')
+    names = cli.toolnames()
     check('T4 coder: todo menos el trio de deploy',
           names == (ALL - DEPLOY), sorted(names ^ (ALL - DEPLOY)))
 finally:
     proc.kill()
 
 # T5 allowlist
-base, url, proc = start({'DELPHI_MCP_TOOLS_ONLY': 'delphi_read,delphi_search'})
+base, cli, proc = start('t5', {'DELPHI_MCP_TOOLS_ONLY': 'delphi_read,delphi_search'})
 try:
-    sid = session(url)
-    names = toolnames(url, sid)
+    cli.session('round20')
+    names = cli.toolnames()
     check('T5 Only= gana al perfil y conserva help/messages/report',
           names == {'delphi_read', 'delphi_search', 'delphi_help',
                     'delphi_messages', 'delphi_report'}, sorted(names))
@@ -172,14 +101,13 @@ finally:
     proc.kill()
 
 # T6 unknown profile
-base, url, proc = start({'DELPHI_MCP_TOOLS_PROFILE': 'marciano'})
+base, cli, proc = start('t6', {'DELPHI_MCP_TOOLS_PROFILE': 'marciano'})
 try:
-    sid = session(url)
-    names = toolnames(url, sid)
+    cli.session('round20')
+    names = cli.toolnames()
     check('T6 perfil desconocido no oculta nada (no es seguridad)',
           names == ALL, sorted(names ^ ALL))
 finally:
     proc.kill()
 
-print('\n== round-20 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('round-20 battery')

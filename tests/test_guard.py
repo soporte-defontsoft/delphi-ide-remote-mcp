@@ -4,15 +4,14 @@ refuse paths outside them - reads, edits, scaffolding, builds, git, search.
 
 Usage:  python tests/test_guard.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+import json, os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'guard')
-shutil.rmtree(BASE, ignore_errors=True)
+BASE = mc.carpeta('guard')
+# su PROPIA copia del servidor, fuera de la jaula (antes corria el compilado
+# en su sitio, con los logs y temporales de la carpeta de la build)
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 INSIDE = os.path.join(BASE, 'permitido')
 OUTSIDE = os.path.join(BASE, 'prohibido')
 os.makedirs(INSIDE, exist_ok=True)
@@ -22,7 +21,7 @@ SRC = 'unit Dentro;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n'
 open(os.path.join(INSIDE, 'Dentro.pas'), 'wb').write(SRC.encode('cp1252'))
 open(os.path.join(OUTSIDE, 'Fuera.pas'), 'wb').write(SRC.replace('Dentro', 'Fuera').encode('cp1252'))
 
-env = dict(os.environ)
+env = {}
 env['DELPHI_MCP_ROOTS'] = INSIDE  # the jail
 # This battery exercises the RUN MECHANISM (jail + low-integrity sandbox)
 # through delphi_test, the one thing that executes on this server since
@@ -33,66 +32,8 @@ env['DELPHI_MCP_ALLOW_TESTS'] = '1'
 # checks below are about the JAIL, not about the allowlist, so this battery
 # allows the host it uses and keeps testing what it means to test.
 env['DELPHI_MCP_GIT_REMOTES'] = 'github.com,example.com'
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                        text=True, encoding='utf-8')
-q = queue.Queue()
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-def recv(r, t=90):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-def call(name, args, t=90):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": name, "arguments": args}})
-    r = recv(rid[0], t)
-    if r is None:
-        return '(timeout)'
-    if 'error' in r:
-        return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "guard-battery", "version": "1"}}})
-assert recv(1, 20), 'no initialize response'
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-P = F = 0
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('PASS -', name)
-    else:
-        F += 1
-        print('FAIL -', name, '|', str(detail)[:170])
+srv = mc.Stdio(EXE, mc.entorno(env), nombre='guard-battery')
+call = srv.call
 
 def denied(out):
     return 'FUERA de los workspaces' in out or ('MCPERROR' in out and 'FUERA' in out)
@@ -217,68 +158,44 @@ _marker = os.path.join(INSIDE, 'Hola', 'R7MARKER.txt')
 if os.path.exists(_marker):
     os.remove(_marker)
 
-def build_default(project):
-    e = dict(os.environ); e['DELPHI_MCP_ROOTS'] = INSIDE
-    p = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-    try:
-        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-            "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-            "clientInfo": {"name": "x", "version": "1"}}}) + '\n')
-        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-            "params": {"name": "delphi_build", "arguments": {"project": project,
-            "platform": "Win64", "config": "Debug", "target": "Build"}}}) + '\n')
-        p.stdin.flush()
-        dl = time.time() + 120
-        while time.time() < dl:
-            line = p.stdout.readline()
-            if not line:
-                break
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == 2:
-                if 'error' in m:
-                    return 'MCPERROR ' + json.dumps(m['error'])[:300]
-                c = m.get('result', {}).get('content', [])
-                return c[0].get('text', '') if c else ''
-        return '(timeout)'
-    finally:
-        p.terminate()
-
 def oneshot(tool, args, env_extra=None, t=120):
     """One fresh server instance (default switches), one tool call, its text back.
     env_extra lets a test flip a single security knob (e.g. AllowBuildScripts)."""
-    e = dict(os.environ); e['DELPHI_MCP_ROOTS'] = INSIDE
+    e = mc.entorno({'DELPHI_MCP_ROOTS': INSIDE})
     if env_extra:
         e.update(env_extra)
-    p = subprocess.Popen([EXE], env=e, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
+    s = mc.Stdio(EXE, e, nombre='x')
     try:
-        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-            "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-            "clientInfo": {"name": "x", "version": "1"}}}) + '\n')
-        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-            "params": {"name": tool, "arguments": args}}) + '\n')
-        p.stdin.flush()
-        dl = time.time() + t
-        while time.time() < dl:
-            line = p.stdout.readline()
-            if not line:
-                break
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == 2:
-                if 'error' in m:
-                    return 'MCPERROR ' + json.dumps(m['error'])[:300]
-                c = m.get('result', {}).get('content', [])
-                return c[0].get('text', '') if c else ''
-        return '(timeout)'
+        return s.call(tool, args, t)
     finally:
-        p.terminate()
+        s.mata()
+
+def compilo(out):
+    """El build llego a msbuild y SALIO BIEN: su JSON con success=true. 'Que
+    no diga RECHAZADO' lo cumplian tambien un timeout y un error MCP."""
+    return mc.como_json(out).get('success') is True
+
+
+def llego_a_msbuild(out):
+    """El build paso la puerta y corrio msbuild (bien o mal): su JSON."""
+    return 'exitCode' in mc.como_json(out)
+
+
+def peligro(out, motivo):
+    """El build lo paro el ESCANER DE PELIGROS (SR_BUILD_HAZARD_FMT) y por el
+    motivo de ESTE payload - no la jaula, ni la puerta de parametros, ni el
+    payload de la vuelta anterior si la subida de este no llego."""
+    return out.startswith('RECHAZADO: el proyecto contiene ') and motivo in out
+
+
+EXEC_TASK = 'a <exec> task (executes a program or writes files during build)'
+
+
+def build_default(project):
+    # 600 s como los demas builds: con los checks endurecidos un timeout ya no
+    # pasa por "no dice RECHAZADO", asi que un build lento no puede cortarse
+    return oneshot('delphi_build', {"project": project, "platform": "Win64",
+                                    "config": "Debug", "target": "Build"}, t=600)
 
 if os.path.exists(_holad):
     _evil = open(_holad, encoding='utf-8-sig').read().replace('</Project>',
@@ -296,7 +213,7 @@ if os.path.exists(_holad):
         os.remove(_marker)
     out = build_default(_holad)
     check('R7 CRITICAL: build (sin AllowBuildScripts) RECHAZA un .dproj con <Target>/<Exec>',
-          'RECHAZADO' in out, out[:200])
+          peligro(out, EXEC_TASK), out[:200])
     check('R7 CRITICAL: el <Exec> inyectado NO se ejecuto (sin marcador)',
           not os.path.exists(_marker), _marker)
 
@@ -308,17 +225,26 @@ if os.path.exists(_holad):
     def upload_dproj(xml):
         return call('delphi_upload', {"path": _holad, "offset": 0,
                                       "chunkbase64": _b64.b64encode(xml.encode()).decode()})
-    for payload, label in (
+    # cada payload con el motivo CONCRETO del escaner; el host del UNC no se
+    # mira (la mascara de salida lo cambia), solo que es UNC
+    for payload, label, motivo in (
         ('<target name="x" beforetargets="Build"><exec command="cmd /c echo x" /></target>',
-         'minusculas'),
-        ('<Import Project="evil.targets" />', 'Import relativo (targets al lado)'),
-        ('<import project="evil.targets" />', 'import relativo en minusculas'),
-        ('<Import Project="$(BDS)\\..\\..\\evil.targets" />', 'Import con .. tras macro'),
-        ('<Import Project="\\\\servidor\\share\\evil.targets" />', 'Import UNC'),
+         'minusculas', EXEC_TASK),
+        ('<Import Project="evil.targets" />', 'Import relativo (targets al lado)',
+         'an <Import> of a file that is not there to be checked (evil.targets)'),
+        ('<import project="evil.targets" />', 'import relativo en minusculas',
+         'an <Import> of a file that is not there to be checked (evil.targets)'),
+        ('<Import Project="$(BDS)\\..\\..\\evil.targets" />', 'Import con .. tras macro',
+         'an <Import> whose path cannot be verified ($(BDS)\\..\\..\\evil.targets)'),
+        ('<Import Project="\\\\servidor\\share\\evil.targets" />', 'Import UNC',
+         'an <Import> from a UNC path ('),
     ):
-        upload_dproj(_clean.replace('</Project>', payload + '</Project>'))
+        # y sobre ESTE payload: si la subida no llega, el build mira el de la
+        # vuelta anterior (las dos de "evil.targets" dan el mismo motivo)
+        subido = upload_dproj(_clean.replace('</Project>', payload + '</Project>'))
         out = build_default(_holad)
-        check('R7 evasion (%s): build RECHAZADO' % label, 'RECHAZADO' in out, out[:160])
+        check('R7 evasion (%s): build RECHAZADO' % label,
+              'written' in subido and peligro(out, motivo), out[:160])
     # Build EVENTS are not a refusal any more (2026-09-24): the project builds
     # with them EMPTIED on the msbuild line and says so - the event never runs.
     _mev = os.path.join(INSIDE, 'Hola', 'M.txt')
@@ -361,10 +287,13 @@ if os.path.exists(_holad):
         ('$(MSBuildThisFileDirectory)r8payload.targets', 'MSBuildThisFileDirectory'),
         ('r8payload.targets', 'relativo simple'),
     ):
-        upload_dproj(_clean.replace('</Project>',
+        subido = upload_dproj(_clean.replace('</Project>',
             '<Import Project="%s" />' % macro + '</Project>'))
         out = build_default(_holad)
-        check('R8 CRITICAL (%s): build RECHAZADO' % label, 'RECHAZADO' in out, out[:180])
+        # el <Exec> del .targets, traido POR ESE <Import>: el escaner lo siguio
+        check('R8 CRITICAL (%s): build RECHAZADO' % label,
+              'written' in subido and
+              peligro(out, '%s, brought in by <Import> "%s"' % (EXEC_TASK, macro)), out[:180])
         check('R8 CRITICAL (%s): el payload importado NO se ejecuto' % label,
               not os.path.exists(_m8), _m8)
     # namespace-prefixed element must not slip past the literal check
@@ -372,14 +301,14 @@ if os.path.exists(_holad):
         '<msb:Target xmlns:msb="http://schemas.microsoft.com/developer/msbuild/2003" '
         'Name="X" BeforeTargets="Build"><msb:Exec Command="cmd /c echo x" /></msb:Target></Project>'))
     out = build_default(_holad)
-    check('R8: <msb:Target> con namespace tambien RECHAZADO', 'RECHAZADO' in out, out[:180])
+    check('R8: <msb:Target> con namespace tambien RECHAZADO', peligro(out, EXEC_TASK), out[:180])
     os.remove(_tgt)
 
     # and the untouched project still builds fine (no false positive)
     upload_dproj(_clean)
     out = build_default(_holad)
     check('R7: un .dproj NORMAL sigue compilando (sin falso positivo)',
-          'RECHAZADO' not in out, out[:200])
+          'RECHAZADO' not in out and compilo(out), out[:200])
 
     # --- R9 (field): the hazard scanner no longer refuses an INERT custom
     #     <Target>. Refusing EVERY target was a false positive as serious as a
@@ -390,7 +319,7 @@ if os.path.exists(_holad):
         '<Message Text="solo un mensaje" Importance="high" /></Target></Project>'))
     out = build_default(_holad)
     check('R9 FP: <Target> INERTE (solo <Message>) NO se rechaza',
-          'el proyecto contiene' not in out, out[:200])
+          'el proyecto contiene' not in out and compilo(out), out[:200])
     # a <Target> that PLANTS/DELETES a file by arbitrary path IS still refused,
     # target wrapper or not - those are the real "runs/writes during build".
     for task, label in (
@@ -399,11 +328,11 @@ if os.path.exists(_holad):
         ('<MakeDir Directories="C:\\pwn" />', 'makedir'),
         ('<Delete Files="C:\\Windows\\notepad.exe" />', 'delete'),
     ):
-        upload_dproj(_clean.replace('</Project>',
+        subido = upload_dproj(_clean.replace('</Project>',
             '<Target Name="Plant" BeforeTargets="Build">' + task + '</Target></Project>'))
         out = build_default(_holad)
         check('R9: <Target> con <%s> (planta/borra) RECHAZADO' % label,
-              'RECHAZADO' in out and 'contiene' in out, out[:180])
+              'written' in subido and peligro(out, 'a <%s> task' % label), out[:180])
     # AllowBuildScripts is its own opt-in: a trusted project with an <Exec>
     # (e.g. signing) may build, and nothing else runs on the server.
     _sign = _clean.replace('</Project>',
@@ -414,15 +343,21 @@ if os.path.exists(_holad):
                                    "config": "Debug", "target": "Build"},
                   {'DELPHI_MCP_ALLOW_BUILD_SCRIPTS': '1'}, 600)
     check('R9: AllowBuildScripts deja compilar un <Target><Exec> de confianza',
-          'el proyecto contiene' not in out, out[:200])
+          'el proyecto contiene' not in out and compilo(out), out[:200])
     upload_dproj(_clean)  # leave a clean project for later sections
 
 # --- B0c: Windows name-normalization bypasses (trailing dot/space, ADS) ---
-for probe, label in ((INSIDE + '\\Evade.pas.', 'punto final'),
-                     (INSIDE + '\\Evade2.pas ', 'espacio final'),
-                     (INSIDE + '\\Evade3.pas::$DATA', 'flujo ADS')):
+# cada uno por la guarda de NORMALIZACION de nombres, con su motivo
+for probe, label, motivo in (
+        (INSIDE + '\\Evade.pas.', 'punto final',
+         'el nombre "Evade.pas." empieza o termina en punto o espacio'),
+        (INSIDE + '\\Evade2.pas ', 'espacio final',
+         'el nombre "Evade2.pas " empieza o termina en punto o espacio'),
+        (INSIDE + '\\Evade3.pas::$DATA', 'flujo ADS',
+         'Evade3.pas::$DATA" contiene ":" fuera de la unidad (flujo alternativo de datos)')):
     out = call('delphi_textedit', {"path": probe, "create": True, "content": "x"})
-    check('bypass %s: textedit lo rechaza' % label, 'RECHAZADO' in out, out[:120])
+    check('bypass %s: textedit lo rechaza' % label,
+          out.startswith('RECHAZADO') and motivo in out, out[:120])
 check('bypass: ningun .pas colado en disco',
       not any(f.startswith('Evade') for f in os.listdir(INSIDE)),
       os.listdir(INSIDE))
@@ -439,12 +374,14 @@ for cand in (r'C:\Program Files (x86)\Embarcadero\Studio\37.0\source\rtl\sys\Sys
         break
 if RTL:
     out = call('delphi_read', {"path": RTL, "fromline": 1, "toline": 5})
-    check('lib: leer fuente RTL permitido pese a la jaula', not denied(out) and '|' in out, out[:150])
+    check('lib: leer fuente RTL permitido pese a la jaula', not denied(out) and '|' in out
+          and 'System.SysUtils.pas' in out and 'Lineas 1-5' in out, out[:150])
     out = call('delphi_edit', {"path": RTL, "old": "interface", "new": "x"})
     check('lib: EDITAR fuente RTL vetado siempre', denied(out), out[:150])
     out = call('delphi_search', {"root": os.path.dirname(RTL), "query": "SysUtils",
                                  "maxresults": 3})
-    check('lib: buscar en fuentes RTL permitido', not denied(out), out[:150])
+    check('lib: buscar en fuentes RTL permitido',
+          not denied(out) and mc.como_json(out).get('hits'), out[:150])
 else:
     print('SKIP - lib: fuentes RTL no encontradas en esta maquina')
 
@@ -459,7 +396,8 @@ for cand in (r'C:\Users\Public\Documents\Embarcadero\Studio\37.0\CatalogReposito
         break
 if CAT:
     out = call('delphi_list', {"root": CAT, "pattern": "*"})
-    check('lib: repositorio de catalogo (paquetes GetIt) legible', not denied(out), out[:150])
+    check('lib: repositorio de catalogo (paquetes GetIt) legible',
+          not denied(out) and mc.como_json(out).get('files'), out[:150])
     pkg = None
     for d in os.listdir(CAT):
         src = os.path.join(CAT, d)
@@ -515,7 +453,9 @@ for opt in ('--separate-git-dir=C:\\evil', '--template=C:\\evil',
     check('git escape: %s rechazado' % opt.split('=')[0], gitclean(out), out[:120])
 # a legitimate read still works (no false positive)
 out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -5"})
-check('git: log --oneline sigue permitido (sin falso positivo)', not gitclean(out), out[:120])
+# permitido = la orden LLEGO a git (su exit=, aqui 128: INSIDE no es un repo)
+check('git: log --oneline sigue permitido (sin falso positivo)',
+      not gitclean(out) and out.startswith('exit='), out[:120])
 
 # --- the gate must read an argument the way the BINDER resolves it ----------
 # The gate used TJSONObject.TryGetValue (case-SENSITIVE) while the RTTI binder
@@ -560,7 +500,7 @@ for param, payload in (('platform', 'Win64 && cmd /c echo x > '),
 out = call('delphi_build', {"project": _holad, "platform": "Win64",
                             "config": "Release Demo", "target": "Make"}, 300)
 check('build: una configuracion propia con espacio NO se rechaza',
-      'RECHAZADO' not in out, out[:130])
+      'RECHAZADO' not in out and llego_a_msbuild(out), out[:130])
 
 # --- the workspace ROOT is the jail, not a file ----------------------------
 # delete/move park their target in a trash folder created NEXT TO it: for a
@@ -586,9 +526,5 @@ out = call('delphi_delete', {"path": _victim})
 check('root: borrar un fichero DENTRO sigue permitido',
       'RECHAZADO' not in out and not os.path.exists(_victim), out[:130])
 
-print()
-print('== guard battery: %d PASS / %d FAIL ==' % (P, F))
-proc.stdin.close()
-time.sleep(1)
-proc.kill()
-sys.exit(1 if F else 0)
+srv.cierra()
+mc.fin('guard battery')

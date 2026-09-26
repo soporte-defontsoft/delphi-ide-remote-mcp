@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.4.0';
+  SERVER_VERSION = '1.5.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -713,13 +713,28 @@ const
     'cuerpo vacio, que parecia decir que ese tramo estaba en blanco. ' +
     'Intercambia los dos numeros.';
 
-  SN_LIST_HIDDEN_FMT =
-    '%d entradas no se listan, y no todas por el mismo motivo: %d estan en ' +
-    'carpetas de compilacion (Win32, Win64, Debug, Release, dcu, __history), ' +
-    '%d son de la fontaneria de git (.git) y %d son copias de la papelera ' +
-    '(__delphi-patch). Existen en el disco: para ver las de compilacion pasa ' +
-    'esa carpeta como root, o baja el resultado con delphi_package + ' +
-    'delphi_fetch; para ver la papelera, includetrash=true.';
+  { Lo que delphi_list y delphi_search NO ensenan: la cabecera y una parte
+    por motivo, solo las que no son cero (THiddenCount.Report, en
+    Lsp.References). Cada parte dice que es y como verlo. }
+  SN_HIDDEN_HEAD_FMT =
+    '%d entradas no salen aqui, y no todas por el mismo motivo:';
+  SN_HIDDEN_ARTIFACTS_FMT =
+    '%d estan en carpetas de compilacion (Win32, Win64, Debug, Release, ' +
+    'dcu, __history): existen en el disco, pasa esa carpeta como root ' +
+    'para verlas o baja el resultado con delphi_package + delphi_fetch';
+  SN_HIDDEN_TEMP_FMT =
+    '%d son temporales del servidor (__delphi-temp): no salen nunca, ni ' +
+    'con includetrash, porque de ahi no se restaura nada; si una tool te ' +
+    'dio una ruta de dentro, delphi_fetch la baja';
+  SN_HIDDEN_GIT_FMT =
+    '%d son la fontaneria de git (.git): el repositorio se mira con ' +
+    'delphi_git';
+  SN_HIDDEN_TRASH_FMT =
+    '%d son copias de la papelera (__delphi-patch): delphi_list con ' +
+    'includetrash=true las ensena';
+  SN_HIDDEN_FOLDERS_FMT =
+    '%d son carpetas de otras herramientas (.vs, .github, __pycache__...), ' +
+    'que el modo dirs no ensena: pasa una como root para ver dentro';
 
   SN_LIST_SHOWN_TRASH_FMT =
     'De las %d entradas, %d son copias de la papelera (__delphi-patch), ' +
@@ -1185,7 +1200,12 @@ const
     'expires - a program with a window is meant to stay up, so you get its ' +
     'partial output and stillRunning=true) | kill (stop a program a ' +
     'remote-run left running: name, project and the "job" id that answer ' +
-    'gave you; only a job of THAT project on THAT machine can be killed). ' +
+    'gave you; only a job of THAT project on THAT machine can be killed) | ' +
+    'output (what a remote-run job has written SINCE its answer came back - ' +
+    'an error on closing, its exit code: same name, project and job as ' +
+    'kill; while it lives you get what it wrote so far, once it ended ' +
+    'the whole of it and its exit code, and then its output is deleted ' +
+    'on the target). ' +
     'Default: platforms';
   SP_PASERVER_PROJECT =
     'remote-run: the .dproj whose DEPLOYED program you want to run. The ' +
@@ -1221,16 +1241,23 @@ const
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | reseat | ' +
     'add-profile | remove-profile | test-connection | get-sdk | ' +
-    'reseat-sdk | remove-sdk | remote-run | kill';
+    'reseat-sdk | remove-sdk | remote-run | kill | output';
+  { Lo que significa un salto de linea al FINAL de "new", dicho igual en
+    delphi_edit y delphi_textedit (LineasDeNew, Lsp.Patch). }
+  SP_NEW_SALTO_FINAL =
+    '. One trailing line break is the end of the last line and is dropped; ' +
+    'each extra one is a blank line (end new with two breaks to leave one ' +
+    'blank line after it). Same rule for one-line and block anchors';
   SP_PASERVER_JOB =
-    'kill: the "jobId" a remote-run answer gave you (it is the program that ' +
-    'run left running on the target). Together with name and project: only ' +
-    'a job of THAT project on THAT machine can be killed';
-  SR_PASERVER_KILL_NEEDS =
-    'RECHAZADO: kill necesita "name" (el perfil), "project" (el .dproj de ' +
-    'ese remote-run) y "job" (el jobId que devolvio). Solo se mata un ' +
+    'kill / output: the "jobId" a remote-run answer gave you (the program ' +
+    'that run left running on the target). Together with name and ' +
+    'project: only a job of THAT project on THAT machine can be killed or ' +
+    'read';
+  SR_PASERVER_JOB_NEEDS_FMT =
+    'RECHAZADO: %s necesita "name" (el perfil), "project" (el .dproj de ' +
+    'ese remote-run) y "job" (el jobId que devolvio). Solo se toca un ' +
     'trabajo que este servidor arranco para ese proyecto en esa maquina.';
-  SR_REMOTERUN_KILL_BADJOB =
+  SR_REMOTERUN_BADJOB =
     'RECHAZADO: "job" no es un id de trabajo de este servidor (fecha-hora-' +
     'fragmento, como lo devuelve remote-run).';
   SN_REMOTERUN_KILL_FMT =
@@ -1241,7 +1268,26 @@ const
     'kill mata SOLO el programa que ese trabajo arranco (el lanzador lee el ' +
     '<job>.pid que dejo su vigia, en la carpeta de ESE proyecto): con ' +
     'killed=false y "ya termino" no habia nada que matar. El ___RC del ' +
-    'trabajo matado lo escribe su vigia en su propia salida.';
+    'trabajo matado lo escribe su vigia en su propia salida: la lees con ' +
+    'command=output y el mismo job.';
+  SN_REMOTERUN_OUTPUT_FMT =
+    'Lo que escriba desde ahora -un error al cerrar, su codigo de salida- ' +
+    'lo lees con delphi_paserver command=output name=%s project=<el mismo ' +
+    '.dproj> job=%s: mientras vive, lo que lleve; al terminar, todo y su ' +
+    'codigo, y entonces se borra del target.';
+  SN_REMOTERUN_OUTPUT_ALIVE_FMT =
+    'Sigue vivo: esto es lo que lleva escrito. Pidelo otra vez cuando ' +
+    'quieras; al terminar trae todo y su codigo de salida, y entonces se ' +
+    'borra del target. Para pararlo: command=kill name=%s project=<el ' +
+    'mismo .dproj> job=%s.';
+  SN_REMOTERUN_OUTPUT_DONE =
+    'Termino: su salida entera y su codigo de salida. Leida entera, se ha ' +
+    'borrado del target (como el buzon): pedirla otra vez ya no trae nada.';
+  SR_REMOTERUN_NO_OUTPUT_FMT =
+    'No hay salida del trabajo %s en el target: o ya se leyo entera (una ' +
+    'salida terminada se borra al leerla), o termino antes de que volviera ' +
+    'su remote-run (y ya la tuviste en su respuesta), o ese trabajo no es ' +
+    'de este proyecto en esa maquina.';
 
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     'RECHAZADO: el proyecto "%s" no esta en la lista de proyectos que este ' +
@@ -1314,7 +1360,8 @@ const
   SR_REMOTERUN_TIMEOUT_FMT =
     'el programa SIGUE CORRIENDO en el target: no habia terminado a los %d s ' +
     'y NO se le mata, porque una aplicacion con ventana esta para quedarse. ' +
-    'En "output" tienes lo que llevaba escrito hasta ahora. Si esperabas algo ' +
+    'En "output" tienes lo que llevaba escrito hasta ahora, y lo que ' +
+    'escriba despues lo lees con command=output (outputNote). Si esperabas algo ' +
     'que termina, dale mas plazo con timeoutms; si es una GUI, ya esta en ' +
     'marcha y puedes manejarla con delphi_desktop (carpeta %s del target).';
 
@@ -1325,7 +1372,8 @@ const
     'haya en esa carpeta (se comprueba la firma del fichero, no su ' +
     'extension). exitCode/output vienen del programa. Si aparece ' +
     'stillRunning=true, no termino a tiempo y sigue vivo: "output" trae su ' +
-    'salida PARCIAL.';
+    'salida PARCIAL, y el resto -hasta su codigo de salida- se lee despues ' +
+    'con command=output.';
 
   SR_SHELL_META_FMT =
     'RECHAZADO: el argumento contiene "%s", un metacaracter de shell que ' +
@@ -1347,6 +1395,11 @@ const
     'Win64, Win64x, WinARM64EC, OSX64, OSXARM64, Linux64, Android, Android64, ' +
     'iOSDevice64, iOSSimARM64.';
 
+  { add-platform con sdk/profile es UN gesto: si una parte se rechaza, el
+    .dproj vuelve como estaba (Mcp.Tools.Config). }
+  SN_CONFIG_ADDPLATFORM_NADA =
+    'Nada escrito: la plataforma TAMPOCO se ha anadido (plataforma, SDK y ' +
+    'perfil van en un solo gesto; corrige y repitelo entero).';
   SR_CONFIG_SDK_NOEXISTE_FMT =
     'RECHAZADO: no hay ningun SDK llamado "%s". Registrados para %s: %s. Se ' +
     'traen con delphi_paserver command=get-sdk (uno por maquina destino, cada ' +
@@ -4002,7 +4055,8 @@ const
     'delphi_read, unique in the file (or use fragment + atline instead)';
 
   SP_CHANGESET_NEW =
-    'stage kind=edit: the replacement text (may span several lines)';
+    'stage kind=edit: the replacement text (may span several lines)' +
+    SP_NEW_SALTO_FINAL;
 
   SP_CHANGESET_CONTENT =
     'stage kind=create: the whole content of the new file';

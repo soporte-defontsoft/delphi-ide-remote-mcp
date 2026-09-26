@@ -27,99 +27,31 @@ Exit code 0 = all green.
 """
 import json
 import os
-import queue
 import re
-import shutil
-import subprocess
-import sys
-import tempfile
-import threading
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'sdk')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('sdk')
+EXE = mc.copia_exe(BASE)
 JAIL = os.path.join(BASE, 'jaula')
 os.makedirs(JAIL)
 FAKE_APPDATA = os.path.join(BASE, 'appdata')
 
-P = F = 0
+
+def Server(env_extra):
+    """El servidor por stdio, con el entorno que le pongamos (plazo 300 s)."""
+    env = {'DELPHI_MCP_ROOTS': JAIL}
+    env.update(env_extra)
+    return mc.Stdio(EXE, mc.entorno(env), nombre='sdk-battery', t=300)
 
 
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('PASS -', name)
-    else:
-        F += 1
-        print('FAIL -', name, '|', str(detail)[:300])
-
-
-class Server:
-    """El servidor por stdio, con el entorno que le pongamos."""
-
-    def __init__(self, env_extra):
-        env = dict(os.environ)
-        env['DELPHI_MCP_ROOTS'] = JAIL
-        env.update(env_extra)
-        self.p = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
-                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                  text=True, encoding='utf-8')
-        self.q = queue.Queue()
-        threading.Thread(target=self._read, daemon=True).start()
-        self.rid = 10
-        self.call_raw({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-            "protocolVersion": "2025-06-18", "capabilities": {},
-            "clientInfo": {"name": "sdk-battery", "version": "1"}}})
-
-    def _read(self):
-        for line in self.p.stdout:
-            line = line.strip()
-            if line:
-                self.q.put(line)
-
-    def call_raw(self, obj, timeout=300):
-        self.p.stdin.write(json.dumps(obj) + '\n')
-        self.p.stdin.flush()
-        import time
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            try:
-                line = self.q.get(timeout=1)
-            except queue.Empty:
-                continue
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == obj.get('id'):
-                return m
-        return None
-
-    def call(self, tool, args, timeout=300):
-        self.rid += 1
-        m = self.call_raw({"jsonrpc": "2.0", "id": self.rid, "method": "tools/call",
-                           "params": {"name": tool, "arguments": args}}, timeout)
-        if m is None:
-            return '(timeout)'
-        if 'error' in m:
-            return 'MCPERROR ' + json.dumps(m['error'])[:200]
-        c = m['result'].get('content', [])
-        return c[0].get('text', '') if c else '(sin contenido)'
-
-    def stop(self):
-        try:
-            self.p.stdin.close()
-        except Exception:
-            pass
-        self.p.kill()
+def sdk_del_grupo(xml, plat):
+    """Los PlatformSDK que el .dproj fija en el grupo de ESA plataforma
+    (PropertyGroup Condition="'$(Base_<plat>)'!=''"), que es donde lo lee
+    msbuild para ella."""
+    grupos = re.findall(r'<PropertyGroup Condition="\'\$\(Base_%s\)\'!=\'\'">(.*?)</PropertyGroup>'
+                        % re.escape(plat), xml, re.S)
+    return [v for g in grupos for v in re.findall(r'<PlatformSDK>([^<]*)</PlatformSDK>', g)]
 
 
 def sdk_file(path, platform='Linux64', sysroot=None):
@@ -155,11 +87,11 @@ def sysroot(nombre, libcs):
 # --- 1) la version de RAD Studio instalada, para saber que carpeta falsear ---
 s0 = Server({})
 installs = s0.call('delphi_installs', {})
-s0.stop()
+s0.mata()
 m = re.search(r'"version"\s*:\s*"(\d+\.\d+)"', installs)
 if not m:
-    print('FAIL - no puedo leer la version de RAD Studio instalada |', installs[:200])
-    sys.exit(1)
+    check('no puedo leer la version de RAD Studio instalada', False, installs[:200])
+    mc.fin('bateria de SDK')
 VER = m.group(1)
 PROFILES_DIR = os.path.join(FAKE_APPDATA, 'Embarcadero', 'BDS', VER)
 os.makedirs(PROFILES_DIR)
@@ -195,7 +127,7 @@ try:
     with open(dproj, 'w', encoding='utf-8', newline='') as f:
         f.write(xml)
     out = srv.call('delphi_build', {"project": dproj, "platform": "Linux64"},
-                   timeout=600)
+                   t=600)
     check('el PlatformSDK del proyecto manda y se dice',
           'dos.sdk' in out and 'sdkNote' in out, out[:400])
 
@@ -205,7 +137,7 @@ try:
         f.write(xml)
     os.remove(os.path.join(PROFILES_DIR, 'dos.sdk'))
     out = srv.call('delphi_build', {"project": dproj, "platform": "Linux64"},
-                   timeout=600)
+                   t=600)
     check('un solo SDK: se usa y la respuesta lo nombra',
           '"sdk":"uno.sdk"' in out.replace(' ', ''), out[:400])
 
@@ -243,7 +175,7 @@ try:
     check('set-sdk escribe PlatformSDK en el .dproj',
           xml.count('<PlatformSDK>uno.sdk</PlatformSDK>') == 1, out[:200])
     out = srv.call('delphi_build', {"project": dproj, "platform": "Linux64"},
-                   timeout=600)
+                   t=600)
     check('y el build lo obedece sin que nadie se lo diga',
           'uno.sdk' in out and 'sdkNote' in out, out[:300])
     # el PlatformSDK es POR PLATAFORMA: uno puesto en el grupo de OTRA
@@ -259,7 +191,7 @@ try:
     with open(dproj, 'w', encoding='utf-8', newline='') as f:
         f.write(xml2)
     out = srv.call('delphi_build', {"project": dproj, "platform": "Linux64"},
-                   timeout=600)
+                   t=600)
     check('un PlatformSDK del grupo de OTRA plataforma no manda en Linux64',
           'uno.sdk' in out and 'ajeno' not in out, out[:300])
     # y view lo DICE: SDK y perfil por plataforma remota, con su procedencia
@@ -284,11 +216,28 @@ try:
         xml = f.read()
     check('set-sdk none lo quita del .dproj', '<PlatformSDK>' not in xml, out[:200])
 
-    # anadir un destino al proyecto es UN gesto: plataforma + SDK + perfil
+    # anadir un destino al proyecto es UN gesto: plataforma + SDK + perfil.
+    # Con un SDK DE ESA plataforma: antes se pedia "uno", que es de Linux64,
+    # asi que el SDK se rechazaba ("no hay ningun SDK llamado uno.sdk") y el
+    # check pasaba igual - por el nombre dentro de la negativa, o por la
+    # negativa misma. Ahora mira el .dproj.
+    sdk_file(os.path.join(PROFILES_DIR, 'mac.sdk'), platform='OSX64')
     out = srv.call('delphi_config', {"project": dproj, "command": "add-platform",
-                                     "platform": "OSX64", "sdk": "uno"})
+                                     "platform": "OSX64", "sdk": "mac"})
+    with open(dproj, encoding='utf-8', errors='replace') as f:
+        xml = f.read()
     check('add-platform con sdk lo deja puesto en el proyecto',
-          'uno.sdk' in out or 'RECHAZADO' in out, out[:250])
+          out.startswith('ANADIDA') and 'RECHAZADO' not in out
+          and sdk_del_grupo(xml, 'OSX64') == ['mac.sdk'], out[:250])
+    # ...y es TODO O NADA: con un SDK que no existe, la plataforma TAMPOCO se
+    # anade (hasta el 26-sep quedaba anadida con el rechazo del SDK detras,
+    # medio gesto; David: "si ya tenemos el rechazo, la quitamos")
+    antes_bytes = open(dproj, 'rb').read()
+    out = srv.call('delphi_config', {"project": dproj, "command": "add-platform",
+                                     "platform": "Android64", "sdk": "noexiste"})
+    check('add-platform con un sdk que no existe no deja NADA escrito (ni la plataforma)',
+          out.startswith('RECHAZADO') and 'TAMPOCO' in out
+          and open(dproj, 'rb').read() == antes_bytes, out[:250])
 
     # cada .sdk declara SU plataforma: uno de Android no vale para Linux64
     sdk_file(os.path.join(PROFILES_DIR, 'androidfalso.sdk'), platform='Android64')
@@ -321,7 +270,6 @@ try:
     check('remove-sdk de uno que no existe: RECHAZADO',
           out.startswith('RECHAZADO'), out[:200])
 finally:
-    srv.stop()
+    srv.mata()
 
-print('\n== bateria de SDK: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('bateria de SDK')

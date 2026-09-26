@@ -14,22 +14,11 @@ distro variant) fails here before it fails in the field.
 
 Usage:  python tests/test_round26.py
 """
-import os, re, sys
+import os, re
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail)[:300])
+REPO = mc.REPO
 
 
 pas = open(os.path.join(REPO, 'src', 'Server', 'Mcp.Tools.PAServer.pas'),
@@ -97,5 +86,4 @@ check('SERVER_VERSION >= 0.92',
       m and (int(m.group(1)), int(m.group(2))) >= (0, 92),
       m.group(0) if m else 'sin SERVER_VERSION')
 
-print('\n== round26 (get-sdk distro-aware): %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('round26 (get-sdk distro-aware)')

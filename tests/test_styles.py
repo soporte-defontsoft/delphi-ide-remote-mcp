@@ -8,15 +8,15 @@ src/StyleConvert/DelphiStyleConvert.dproj) for build and for the platform defaul
 
 Usage:  python tests/test_styles.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, re, sys, tempfile, shutil
+import json, os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+BASE = mc.carpeta('styles-battery')
+# su propia copia del servidor, y A SU LADO el conversor de estilos, que es
+# donde lo busca (sin el, build contesta "falta DelphiStyleConvert.exe")
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_conversor=True)
 
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'styles-battery')
-shutil.rmtree(BASE, ignore_errors=True)
 STY = os.path.join(BASE, 'Styles')
 PRJ = os.path.join(BASE, 'codigofuente')
 os.makedirs(STY); os.makedirs(PRJ)
@@ -100,77 +100,13 @@ open(os.path.join(STY, 'Battery.bin.style'), 'wb').write(b'FMX_STYLE\x00\x01\x02
 
 
 def spawn(extra_env=None):
-    env = dict(os.environ)
-    env['DELPHI_MCP_ROOTS'] = BASE
+    env = {'DELPHI_MCP_ROOTS': BASE}
     env.update(extra_env or {})
-    p = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-    q = queue.Queue()
-
-    def reader():
-        for line in p.stdout:
-            line = line.strip()
-            if line:
-                q.put(line)
-    threading.Thread(target=reader, daemon=True).start()
-    return p, q
+    return mc.Stdio(EXE, mc.entorno(env), nombre='styles-battery')
 
 
-proc, q = spawn()
-rid = [10]
-
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-def recv(r, t=120):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-
-def call(name, args, t=120):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": name, "arguments": args}})
-    r = recv(rid[0], t)
-    if r is None:
-        return '(timeout)'
-    if 'error' in r:
-        return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "styles-battery", "version": "1"}}})
-recv(1)
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-P = F = 0
-
-
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('  PASS', name)
-    else:
-        F += 1
-        print('  FAIL', name, '|', str(detail)[:400])
+srv = spawn()
+call = srv.call
 
 
 def rd(p):
@@ -292,10 +228,8 @@ check('delete: estilo inexistente rechazado', 'RECHAZADO' in out, out)
 out = call('delphi_styles', {"path": S, "command": "delete"})
 check('delete: sin style pide style', 'style' in out.lower() and not out.startswith('BORRADO'), out)
 
-proc.stdin.close(); time.sleep(1); proc.kill()
+srv.cierra()
 
 # (read-only mode is exercised over HTTP in test_http_auth.py)
 
-print()
-print('== styles battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('styles battery')

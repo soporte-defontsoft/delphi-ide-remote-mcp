@@ -20,50 +20,13 @@ AgentTempDir con la primera raiz en ReadOnlyPaths (necesita el nodo del
 escritorio) y la clave de cache de sesion entre workspaces solapados
 (necesita dos tokens y un arbol LSP vivo). Apuntados en el CHANGELOG.
 """
-import json
 import os
 import re
-import shutil
-import socket
 import subprocess
-import sys
-import tempfile
 import time
-import urllib.request
 import zipfile
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:260])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round46')
-
-
-def borra(d):
-    def alafuerza(func, path, _exc):
-        try:
-            os.chmod(path, 0o700)
-            func(path)
-        except Exception:
-            pass
-    if not os.path.isdir(d):
-        return
-    shutil.rmtree(d, onexc=alafuerza) if sys.version_info >= (3, 12) else \
-        shutil.rmtree(d, onerror=alafuerza)
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
 def junction(link, target):
@@ -73,7 +36,9 @@ def junction(link, target):
     return r.returncode == 0 and os.path.isdir(link)
 
 
-borra(BASE)
+# lo que deje una pasada rota (solo lectura, enlaces) lo quita mc.carpeta:
+# borra lo de solo lectura y no cruza enlaces (antes, un borra() propio)
+BASE = mc.carpeta('round46')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
 VICTIMA = os.path.join(BASE, 'victima')       # fuera de la jaula
@@ -85,17 +50,11 @@ os.makedirs(SECRETO)
 open(os.path.join(VICTIMA, 'vive.txt'), 'w').write('sigo aqui')
 open(os.path.join(SECRETO, 'secreto.txt'), 'w').write('ultrasecreto-r46')
 open(os.path.join(JAIL, 'vendor', 'normal.txt'), 'w').write('vendor legitimo')
-shutil.copy(SRC, os.path.join(EXEDIR, 'DelphiLspMcp.exe'))
+EXE = mc.copia_exe(EXEDIR)
 
 TOK = 'r46'
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT2 = sk.getsockname()[1]
-sk.close()
+PORT = mc.puerto_libre()
+PORT2 = mc.puerto_libre()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R46]', 'Token=%s' % TOK, 'Roots=%s' % JAIL,
@@ -111,61 +70,21 @@ HAY_J2 = junction(os.path.join(TEMP_JAULA, 'trampa'), VICTIMA)
 
 
 def arranca(puerto):
-    p = subprocess.Popen(
-        [os.path.join(EXEDIR, 'DelphiLspMcp.exe'), '--http', str(puerto)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(3)
-    return p
+    # espera a que ESCUCHE; la purga del arranque (Wire) va antes del listen,
+    # asi que T7/T7b miran con la purga ya hecha, como con el sleep de antes
+    return mc.lanza_http(EXE, puerto, mc.entorno())
 
 
 proc = arranca(PORT)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-SID = None
-
-
-def rpc(body, timeout=120):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if SID:
-        h['Mcp-Session-Id'] = SID
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-        timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            m = json.loads(l[5:].strip())
-            if 'result' in m or 'error' in m:
-                return m, r.headers.get('Mcp-Session-Id')
-    try:
-        return json.loads(raw), r.headers.get('Mcp-Session-Id')
-    except Exception:
-        return None, r.headers.get('Mcp-Session-Id')
+cli = mc.Http(PORT, TOK, respaldo_json=True)
 
 
 def sesion():
-    global SID
-    SID = None
-    _, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-                  'params': {'protocolVersion': '2025-06-18',
-                             'capabilities': {},
-                             'clientInfo': {'name': 'r46', 'version': '1'}}})
-    rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+    cli.session('r46')
 
 
 sesion()
-RID = [100]
-
-
-def call(tool, args):
-    RID[0] += 1
-    r, _ = rpc({'jsonrpc': '2.0', 'id': RID[0], 'method': 'tools/call',
-                'params': {'name': tool, 'arguments': args}})
-    try:
-        return r['result']['content'][0]['text']
-    except Exception:
-        return json.dumps(r)[:400]
+call = cli.call
 
 
 UNIDAD = os.path.splitdrive(JAIL)[0].lower() + '\\'  # p.ej. 'c:\'
@@ -187,11 +106,14 @@ try:
         r = call('delphi_read',
                  {'path': os.path.join(JAIL, 'vendor', 'out', 'secreto.txt')})
         check('J1 leer a traves del junction bajo ReadOnlyPaths se rechaza',
-              'ultrasecreto-r46' not in r and 'RECHAZADO' in r, r[:240])
+              'ultrasecreto-r46' not in r and 'RECHAZADO' in r and 'ENLACE' in r, r[:240])
         r = call('delphi_fetch',
                  {'path': os.path.join(JAIL, 'vendor', 'out', 'secreto.txt')})
+        # fetch sirve en BASE64: el secreto servido nunca se veria en claro,
+        # asi que "no contiene ultrasecreto" pasaba aunque lo sirviera
         check('J1b ...y delphi_fetch tampoco lo sirve',
-              'ultrasecreto-r46' not in r, r[:240])
+              'ultrasecreto-r46' not in r and 'chunkBase64' not in r
+              and 'RECHAZADO' in r and 'ENLACE' in r, r[:240])
     else:
         print('NOTA: mklink /J fallo en este sistema de ficheros; '
               'J1/J1b no se miden.')
@@ -288,9 +210,12 @@ try:
     check('T7b ...y al morir el primero, el siguiente arranque SI purga',
           not os.path.exists(testigo), 'sobrevivio %s' % testigo)
     if HAY_J2:
+        # sobrevive a una purga que OCURRIO (la basura normal ya no esta): sin
+        # purga, la victima seguia ahi igual
         check('J2 el fichero al OTRO LADO del junction sobrevive a la purga',
-              os.path.exists(os.path.join(VICTIMA, 'vive.txt')),
-              'la purga cruzo el enlace y borro la victima')
+              os.path.exists(os.path.join(VICTIMA, 'vive.txt')) and
+              not os.path.exists(os.path.join(TEMP_JAULA, 'normal')),
+              'la purga cruzo el enlace y borro la victima, o no hubo purga')
         check('J2b el junction mismo si se quita de la carpeta',
               not os.path.exists(os.path.join(TEMP_JAULA, 'trampa')),
               'el enlace sigue plantado')
@@ -318,7 +243,6 @@ finally:
             os.rmdir(j)
         except OSError:
             pass
-    borra(BASE)
+    mc.borra(BASE)
 
-print('== test_round46: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round46')

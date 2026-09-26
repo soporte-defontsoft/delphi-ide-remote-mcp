@@ -13,86 +13,17 @@ Every structural step is proven by a real MSBuild build.
 
 Usage:  python tests/test_project_units.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, re, sys, tempfile, shutil
+import json, os, re
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+BASE = mc.carpeta('punits')
+# su PROPIA copia del servidor (antes corria el compilado en su sitio)
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'punits')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE, exist_ok=True)
-
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-def recv(r, t=300):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-
-def call(name, args, t=300):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": name, "arguments": args}})
-    r = recv(rid[0], t)
-    if r is None:
-        return '(timeout)'
-    if 'error' in r:
-        return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "punits-battery", "version": "1"}}})
-recv(1)
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-P = F = 0
-
-
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('  PASS', name)
-    else:
-        F += 1
-        print('  FAIL', name, '|', str(detail)[:400])
+env = mc.entorno({'DELPHI_MCP_ROOTS': BASE})
+srv = mc.Stdio(EXE, env, nombre='punits-battery', t=300)  # el plazo de esta bateria
+call = srv.call
 
 
 def build_ok(dproj):
@@ -123,7 +54,10 @@ check('create unit: CREADA + registrada', out.startswith('CREADA') and 'ANADIDA'
 check('create unit: fichero esqueleto', os.path.exists(os.path.join(VDIR, 'UUtil.pas')))
 dpr = rd(DPR)
 check('create unit: uses del .dpr', "UUtil in 'UUtil.pas'" in dpr, dpr)
-check('create unit: sin CreateForm (no es form)', 'CreateForm(TUUtil' not in dpr, dpr)
+# los "sin CreateForm" miran un .dpr que SI recibio la unit: si la
+# operacion no llega, el .dpr tampoco tiene CreateForm y pasaban igual
+check('create unit: sin CreateForm (no es form)',
+      "UUtil in 'UUtil.pas'" in dpr and 'CreateForm(TUUtil' not in dpr, dpr)
 # v0.46.2: the clause keeps its indent (it was re-indented to 4 spaces on every edit)
 _u = dpr[dpr.index('uses'):dpr.index(';', dpr.index('uses'))]
 _lines = [l for l in _u.split('\n')[1:] if l.strip()]
@@ -225,7 +159,8 @@ acc = os.path.join(VDIR, 'UÁrbol.pas')
 open(acc, 'wb').write('unit UÁrbol;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n'.encode('utf-8-sig'))
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": acc})
 check('add-unit: unit acentuada -> RECHAZADO con la causa real', 'RECHAZADO' in out and 'acentos' in out and 'UÁrbol' in out, out)
-check('add-unit: unit acentuada no dice "no tiene cabecera"', 'no tiene cabecera' not in out, out)
+check('add-unit: unit acentuada no dice "no tiene cabecera"',
+      'RECHAZADO' in out and 'acentos' in out and 'no tiene cabecera' not in out, out)
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit"})
 check('add-unit: sin path -> pide path y reconectar', 'Falta "path"' in out and 'reconecta' in out, out)
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": os.path.join(VDIR, 'NoExiste.pas')})
@@ -337,7 +272,8 @@ dfm = rd(os.path.join(VDIR, 'UFrameLista.dfm'))
 check('frame-vcl: dfm con TabOrder', dfm.startswith('object FrameUFrameLista: TFrameUFrameLista') and 'TabOrder = 0' in dfm, dfm)
 dpr = rd(DPR)
 check('frame-vcl: uses con {FrameUFrameLista: TFrame}', "UFrameLista in 'UFrameLista.pas' {FrameUFrameLista: TFrame}" in dpr, dpr)
-check('frame-vcl: SIN CreateForm', 'CreateForm(TFrameUFrameLista' not in dpr, dpr)
+check('frame-vcl: SIN CreateForm',
+      "UFrameLista in 'UFrameLista.pas'" in dpr and 'CreateForm(TFrameUFrameLista' not in dpr, dpr)
 xml = rd(DPROJ)
 m = re.search(r'<DCCReference Include="UFrameLista.pas">\s*<Form>FrameUFrameLista</Form>\s*<FormType>dfm</FormType>\s*<DesignClass>TFrame</DesignClass>\s*</DCCReference>', xml)
 check('frame-vcl: DCCReference con DesignClass TFrame', bool(m), xml[-1500:])
@@ -359,7 +295,8 @@ out = call('delphi_move', {"path": os.path.join(VDIR, 'UFrameLista.pas'), "dest"
 check('move frame: reapuntado con DesignClass', out.startswith('MOVIDO') and 'REAPUNTADA' in out, out[:300])
 dpr = rd(DPR)
 check('move frame: uses nuevo {FrameUFrameLista: TFrame}', "UFrameListado in 'UFrameListado.pas' {FrameUFrameLista: TFrame}" in dpr, dpr)
-check('move frame: sigue sin CreateForm', 'CreateForm(TFrameUFrameLista' not in dpr, dpr)
+check('move frame: sigue sin CreateForm',
+      "UFrameListado in 'UFrameListado.pas'" in dpr and 'CreateForm(TFrameUFrameLista' not in dpr, dpr)
 # delete the data module: CreateForm goes too
 out = call('delphi_delete', {"path": os.path.join(VDIR, 'UDatos.pas')})
 check('delete datamodule: BORRADO + proyecto', out.startswith('BORRADO') and 'proyectos actualizados (1)' in out, out[:300])
@@ -522,8 +459,5 @@ check('move HACIA __history: RECHAZADO', out.startswith('RECHAZADO'), out[:200])
 out = call('delphi_move', {"path": os.path.join(mdir, '__delphi-temp', 'b.txt'), "dest": os.path.join(mdir, 'b.txt')})
 check('move DESDE __delphi-temp a una carpeta normal: permitido', out.startswith('MOVIDO') and os.path.exists(os.path.join(mdir, 'b.txt')), out[:200])
 
-print('== project units battery: %d PASS / %d FAIL ==' % (P, F))
-proc.stdin.close()
-time.sleep(1)
-proc.kill()
-sys.exit(1 if F else 0)
+srv.cierra()
+mc.fin('project units battery')

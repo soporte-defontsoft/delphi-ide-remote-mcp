@@ -92,6 +92,12 @@ var
   ToolsCap: TJSONObject;
 begin
   TLogger.Info('MCP Initialize called');
+  // [local change 2026-09-26] Se asignaban solo si llegaba clientInfo, y
+  // ClientName se lee mas abajo: un initialize SIN clientInfo contestaba un
+  // Access violation (medido por test_http_auth al endurecerlo; el
+  // compilador lo avisaba en cada build con W1036).
+  ClientName := nil;
+  ClientVersion := nil;
   
   if Assigned(Params) then
   begin

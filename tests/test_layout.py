@@ -24,79 +24,19 @@ What is pinned here:
 
 Usage:  python tests/test_layout.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil
+import json, os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'layout')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('layout')
+EXE = mc.copia_exe(BASE)
 
-env = dict(os.environ)
-env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                        text=True, encoding='utf-8')
-q = queue.Queue()
-
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-P = F = 0
-
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-def recv(r, t=60):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='layout-battery', t=60)
 
 
 def call(args):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": "delphi_designer", "arguments": args}})
-    r = recv(rid[0])
-    if not r:
-        return '(sin respuesta)'
-    if 'result' in r:
-        return r['result']['content'][0]['text']
-    return 'ERROR ' + json.dumps(r.get('error'), ensure_ascii=False)[:200]
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:300])
+    # toda la bateria habla con delphi_designer
+    return srv.call('delphi_designer', args)
 
 
 def layout(name, body):
@@ -112,13 +52,6 @@ def layout(name, body):
 def all_text(o, *keys):
     return json.dumps([o.get(k, []) for k in keys], ensure_ascii=False)
 
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "layout-battery", "version": "1"}}})
-recv(1)
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-time.sleep(0.3)
 
 # L1/L5/L7 - a real, correct form: a top bar, a status bar, a grid filling the
 # rest, buttons inside the bar, and a TTimer that is not on screen at all.
@@ -429,6 +362,5 @@ check('R10 AlignWithMargins desplaza el rectangulo (boxes exactos)',
       bx['PanelTop']['x'] == 3 and bx['PanelTop']['y'] == 3 and bx['PanelTop']['w'] == 394
       and bx['PanelClient']['y'] == 56 and bx['PanelClient']['h'] == 244, o)
 
-proc.kill()
-print('\n== layout battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('layout battery')

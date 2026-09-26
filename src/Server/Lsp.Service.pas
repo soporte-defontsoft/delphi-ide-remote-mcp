@@ -5,7 +5,8 @@ unit Lsp.Service;
   Same shape as the other two hosts and NOT a third copy of the wiring: it asks
   Lsp.Host for a built server exactly like the terminal and the tray do, and
   only adds what is specific to running under the SCM - answering start/stop,
-  and logging where a service can log (there is no console and no window).
+  and the event log for a start that fails (there is no console and no
+  window; the log on disk is the host's, Lsp.LogSink).
 
   Installed and removed with the switches TServiceApplication already gives us:
       DelphiLspMcp.exe /install      (elevated)
@@ -27,7 +28,6 @@ type
   private
     FHost: TMcpHost;
     FHttp: TMCPIdHTTPServer;
-    procedure LogNotes;
   public
     function GetServiceController: TServiceController; override;
     procedure ServiceStart(Sender: TService; var Started: Boolean);
@@ -118,17 +118,6 @@ begin
   end;
 end;
 
-procedure TDelphiLspMcpService.LogNotes;
-var
-  S: string;
-begin
-  for S in FHost.StartupNotes do
-    if S.StartsWith(NOTE_WARNING_PREFIX) then
-      TLogger.Warning(S.Substring(Length(NOTE_WARNING_PREFIX)))
-    else
-      TLogger.Info(S);
-end;
-
 procedure TDelphiLspMcpService.ServiceStart(Sender: TService; var Started: Boolean);
 begin
   Started := False;
@@ -136,13 +125,13 @@ begin
     // Under the SCM the working directory is NOT the exe's folder (it is
     // usually system32), and settings.ini is resolved next to the exe, so make
     // the two agree before anything reads configuration.
-    SetCurrentDir(TPath.GetDirectoryName(ParamStr(0)));
+    SetCurrentDir(ServerDir);
 
     FHost := TMcpHost.Create;
     FHost.Wire;
     TLogger.Info(Format('%s v%s starting as a Windows Service',
       [SERVER_NAME, SERVER_VERSION]));
-    LogNotes;
+    FHost.LogStartupNotes;
 
     FHttp := FHost.CreateHttpServer(0); // port from settings.ini / default
     FHttp.Start;

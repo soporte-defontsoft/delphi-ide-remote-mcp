@@ -28,40 +28,16 @@ Usage:  python tests/test_round38.py [path-to-DelphiLspMcp.exe]
 """
 import json
 import os
-import shutil
-import socket
-import subprocess
-import sys
-import tempfile
-import time
-import urllib.request
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
+import mcp_cliente as mc
+from mcp_cliente import check
 
 
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:260])
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'round38')
-shutil.rmtree(BASE, ignore_errors=True)
+BASE = mc.carpeta('round38')
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(EXEDIR)
 os.makedirs(JAIL)
-EXE = os.path.join(EXEDIR, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+EXE = mc.copia_exe(EXEDIR)
 
 # TBase.Pinta virtual -> THija override -> TNieta override.
 # TAjena.Pinta NO tiene nada que ver: mismo nombre, otra familia.
@@ -176,61 +152,30 @@ def linea0(texto, desde=0):
 
 
 TOK = 'r38'
-sk = socket.socket()
-sk.bind(('127.0.0.1', 0))
-PORT = sk.getsockname()[1]
-sk.close()
+PORT = mc.puerto_libre()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R38]', 'Token=%s' % TOK, 'Roots=%s' % JAIL, '',
 ]))
 
-proc = subprocess.Popen([EXE, '--http', str(PORT)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
-URL = 'http://127.0.0.1:%d/mcp' % PORT
-SID = None
-
-
-def rpc(body, timeout=300):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if SID:
-        h['Mcp-Session-Id'] = SID
-    r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=json.dumps(body).encode(), headers=h, method='POST'),
-        timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            m = json.loads(l[5:].strip())
-            if 'result' in m or 'error' in m:
-                return m, r.headers.get('Mcp-Session-Id')
-    try:
-        return json.loads(raw), r.headers.get('Mcp-Session-Id')
-    except Exception:
-        return None, r.headers.get('Mcp-Session-Id')
-
-
-_, SID = rpc({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-              'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-                         'clientInfo': {'name': 'r38', 'version': '1'}}})
-rpc({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
-RID = [100]
+proc = mc.lanza_http(EXE, PORT, mc.entorno())
+cli = mc.Http(PORT, TOK, t=300)  # el plazo de esta bateria
+cli.session('r38')
 
 
 def refs(line0):
-    RID[0] += 1
     col = L[line0].lower().index('pinta') + 1
-    r, _ = rpc({'jsonrpc': '2.0', 'id': RID[0], 'method': 'tools/call',
-                'params': {'name': 'delphi_references',
-                           'arguments': {'path': PAS, 'line': line0,
-                                         'character': col}}})
+    r = cli.call_msg('delphi_references',
+                     {'path': PAS, 'line': line0, 'character': col})
     try:
         return json.loads(r['result']['content'][0]['text'])
     except Exception:
         return {'error': json.dumps(r)[:300]}
+
+
+def tiene(j, lista, texto):
+    """Algun ancla de j[lista] ('confirmed' / 'rejected') contiene texto."""
+    return any(texto in c.get('anchor', '') for c in j.get(lista, []))
 
 
 def llamadas(j):
@@ -263,9 +208,12 @@ try:
           'RENOMBRAR' in j.get('familyNote', ''), str(j.get('familyNote'))[:200])
 
     # ------------------------------------------------------------------ V5
+    # Los negativos exigen que la respuesta EXISTA: la llamada ajena tiene que
+    # estar clasificada como homonimo (rejected), no solo ausente de confirmed
+    # - un refs() fallido ({'error': ...}) no tiene ni una cosa ni la otra.
     check('V5 la clase SIN parentesco sigue siendo homonimo',
-          not any('A.Pinta' in c.get('anchor', '') for c in j.get('confirmed', [])),
-          json.dumps(j.get('confirmed'))[:260])
+          tiene(j, 'rejected', 'A.Pinta') and not tiene(j, 'confirmed', 'A.Pinta'),
+          json.dumps({k: j.get(k) for k in ('confirmed', 'rejected', 'error')})[:260])
 
     # ------------------------------------------------------------------ V6
     check('V6 la jerarquia de tres alturas tambien cuenta',
@@ -277,22 +225,22 @@ try:
     check('V4 preguntando por el override se sigue contestando bien',
           len(llamadas(j2)) >= 2, json.dumps(j2.get('confirmed'))[:260])
     check('V4b ...y la clase ajena tampoco entra ahi',
-          not any('A.Pinta' in c.get('anchor', '')
-                  for c in j2.get('confirmed', [])),
-          json.dumps(j2.get('confirmed'))[:260])
+          tiene(j2, 'rejected', 'A.Pinta') and not tiene(j2, 'confirmed', 'A.Pinta'),
+          json.dumps({k: j2.get(k) for k in ('confirmed', 'rejected', 'error')})[:260])
 
     # y desde la clase ajena, solo lo suyo
     j3 = refs(ajena)
+    # ...y la pregunta SI resolvio su propia familia: su llamada confirmada y
+    # las de la otra familia clasificadas como homonimos
     check('V5b desde la clase ajena no entra nada de la otra familia',
-          not any(('H.Pinta' in c.get('anchor', '')) or
-                  ('N.Pinta' in c.get('anchor', ''))
-                  for c in j3.get('confirmed', [])),
-          json.dumps(j3.get('confirmed'))[:260])
+          tiene(j3, 'confirmed', 'A.Pinta') and
+          tiene(j3, 'rejected', 'H.Pinta') and tiene(j3, 'rejected', 'N.Pinta') and
+          not (tiene(j3, 'confirmed', 'H.Pinta') or tiene(j3, 'confirmed', 'N.Pinta')),
+          json.dumps({k: j3.get(k) for k in ('confirmed', 'rejected', 'error')})[:260])
 finally:
     try:
         proc.kill()
     except Exception:
         pass
 
-print('== test_round38: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_round38')

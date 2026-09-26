@@ -14,7 +14,13 @@ unit Lsp.Host;
   the wiring lives here once and every host asks for it.
 
   This unit deliberately knows NOTHING about consoles, windows or the SCM: it
-  builds the server, the host decides how to run and how to report. }
+  builds the server, the host decides how to run and how to report.
+
+  The log ON DISK is not "how to report" but part of the server, so it starts
+  here too (Lsp.LogSink, from Create): until 2026-09-26 only the tray's window
+  wrote it, and the service - production since 2026-09-20 - ran six days
+  without one line. A host adds its own sink on top (stderr, the tray's
+  window); it never has to remember the disk. }
 
 interface
 
@@ -54,10 +60,16 @@ type
     function CreateHttpServer(APort: Integer): TMCPIdHTTPServer;
 
     { The operational facts a host should tell its operator at startup, in
-      order: the write jail, the vault, and the credential situation. Each
+      order: the write jail, the vault, the credential situation, and where
+      the log goes. Each
       entry is prefixed 'AVISO: ' when it is a warning, so a host can colour
       or log it accordingly without re-deciding what is important. }
     function StartupNotes: TArray<string>;
+
+    { Logs StartupNotes, warnings as warnings. The same for every host: it
+      was written out in the terminal and again in the service, and the tray
+      had a third way of its own. }
+    procedure LogStartupNotes;
 
     property Settings: TMCPSettings read FSettings;
     property Registry: TMCPManagerRegistry read FRegistry;
@@ -71,6 +83,7 @@ implementation
 
 uses
   System.StrUtils,
+  MCPServer.Logger,
   MCPServer.ToolsManager,
   MCPServer.ResourcesManager,
   MCPServer.Resource.Server,
@@ -80,11 +93,13 @@ uses
   Lsp.InlineImages, // ClearAttachedImages / WrapWithAttachedImages
   Mcp.Tools.Messages,
   Mcp.Vault.Session,
-  Mcp.Vault.Seed;
+  Mcp.Vault.Seed,
+  Lsp.LogSink;
 
 constructor TMcpHost.Create;
 begin
   inherited;
+  StartLogSink; // first: everything from here on reaches the disk
   FSettings := TMCPSettings.Create('', False); // no settings.ini side effects
   FSettings.ServerName := SERVER_NAME;
   FSettings.ServerVersion := SERVER_VERSION;
@@ -92,6 +107,7 @@ end;
 
 destructor TMcpHost.Destroy;
 begin
+  TLogger.Info(Format('%s v%s: parado', [SERVER_NAME, SERVER_VERSION]));
   // The manual FRegistry.Free that lived here double-freed the registry the
   // moment any interface reference existed: freeing the HTTP server released
   // the last IMCPManagerRegistry ref, the registry destroyed itself, and this
@@ -104,6 +120,7 @@ begin
   FRegistry := nil;
   FRegistryIntf := nil;
   FSettings.Free;
+  FlushLogSink; // the tail of a session is what a post-mortem needs most
   inherited;
 end;
 
@@ -230,9 +247,19 @@ begin
   if WorkspaceTokensConfigured then
     Add('Bearer auth enabled (tokens por workspace).')
   else
+  begin
     Add(NOTE_WARNING_PREFIX + 'Sin credenciales: no hay ningun ' +
       '[Workspace.<nombre>] con Token=. Todo HTTP respondera 401; solo ' +
       'sirve el modo local stdio.');
+    // El fail-safe de CreateHttpServer, dicho aqui con SU condicion: lo
+    // avisaba el .dpr, solo en modo terminal, siempre que la interfaz era
+    // 127.0.0.1 -hubiera o no credenciales- y mandando a [Security],
+    // seccion retirada en la v0.98 (lo destapo test_round24 el 26-sep).
+    if Lsp.Guard.BindIP = '' then
+      Add(NOTE_WARNING_PREFIX + 'Y sin [Server] BindIP: el HTTP escucha ' +
+        'SOLO en 127.0.0.1. Para exponerlo a la red hace falta un ' +
+        '[Workspace.<nombre>] con Token=.');
+  end;
   // One auth mechanism: workspaces. A legacy env pair shows up
   // here as the "default" workspace; misconfigured sections stop vanishing
   // silently (operator decision 2026-09-11).
@@ -241,7 +268,19 @@ begin
       Add(NOTE_WARNING_PREFIX + WsNote)
     else
       Add(WsNote);
+  Add(LogSinkNote);
   Result := Notes;
+end;
+
+procedure TMcpHost.LogStartupNotes;
+var
+  S: string;
+begin
+  for S in StartupNotes do
+    if S.StartsWith(NOTE_WARNING_PREFIX) then
+      TLogger.Warning(S.Substring(Length(NOTE_WARNING_PREFIX)))
+    else
+      TLogger.Info(S);
 end;
 
 function TMcpHost.CreateHttpServer(APort: Integer): TMCPIdHTTPServer;

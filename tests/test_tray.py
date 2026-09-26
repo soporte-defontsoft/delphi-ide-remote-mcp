@@ -28,50 +28,18 @@ Usage:  python tests/test_tray.py [path-to-DelphiLspMcp.exe]
 """
 import json
 import os
-import shutil
-import socket
 import subprocess
-import sys
-import tempfile
 import time
-import urllib.error
-import urllib.request
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail).replace('\n', ' ')[:240])
-
-
-def libre():
-    sk = socket.socket()
-    sk.bind(('127.0.0.1', 0))
-    n = sk.getsockname()[1]
-    sk.close()
-    return n
-
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'tray')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+REPO = mc.REPO
+BASE = mc.carpeta('tray')
+EXE = mc.copia_exe(BASE)
 
 TOK = 'tray-bat'
-PORT_GUI = libre()
-PORT_TERM = libre()
+PORT_GUI = mc.puerto_libre()
+PORT_TERM = mc.puerto_libre()
 
 # La jaula es el repo de verdad: las tools de LSP necesitan un proyecto real
 # para tener algo que decir. Esta bateria SOLO LEE - no edita nada aqui.
@@ -87,68 +55,18 @@ open(os.path.join(BASE, 'settings.ini'), 'w').write('\n'.join([
 ]))
 
 
-def rpc(port, body, sid=None, timeout=90):
-    h = {'Content-Type': 'application/json',
-         'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOK}
-    if sid:
-        h['Mcp-Session-Id'] = sid
-    r = urllib.request.urlopen(urllib.request.Request(
-        'http://127.0.0.1:%d/mcp' % port, data=json.dumps(body).encode(),
-        headers=h, method='POST'), timeout=timeout)
-    raw = r.read().decode('utf-8', 'replace')
-    msgs = []
-    for l in raw.splitlines():
-        if l.startswith('data:'):
-            try:
-                msgs.append(json.loads(l[5:].strip()))
-            except Exception:
-                pass
-    if not msgs:
-        try:
-            msgs.append(json.loads(raw))
-        except Exception:
-            pass
-    return (msgs[-1] if msgs else None), r.headers.get('Mcp-Session-Id')
+class NoArranca(Exception):
+    """La bandeja no levanto: T1 ya lo ha dicho en rojo y el resto no tiene
+    contra quien medir. Antes era un SystemExit a secas: salia con rc=0 y sin
+    resumen."""
 
 
-def espera(port, segundos=30):
-    """El host de bandeja levanta VCL antes que el HTTP: tarda mas que el
-    terminal. Se espera al PUERTO, no a un sleep a ojo."""
-    fin = time.time() + segundos
-    while time.time() < fin:
-        sk = socket.socket()
-        sk.settimeout(0.5)
-        try:
-            sk.connect(('127.0.0.1', port))
-            sk.close()
-            return True
-        except Exception:
-            pass
-        finally:
-            try:
-                sk.close()
-            except Exception:
-                pass
-        time.sleep(0.4)
-    return False
-
-
-def sesion(port):
-    r, sid = rpc(port, {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                        "params": {"protocolVersion": "2025-06-18",
-                                   "capabilities": {},
-                                   "clientInfo": {"name": "tray-bat",
-                                                  "version": "1"}}})
-    rpc(port, {"jsonrpc": "2.0", "method": "notifications/initialized"}, sid)
-    return r, sid
-
-
-def llama(port, sid, tool, args, rid, timeout=90):
-    r, _ = rpc(port, {"jsonrpc": "2.0", "id": rid, "method": "tools/call",
-                      "params": {"name": tool, "arguments": args}}, sid,
-               timeout)
-    return r
+def contesta(r):
+    """Una respuesta de tools/call que es un EXITO: con texto y sin isError
+    (un "error: ..." o un "RECHAZADO" en prosa llegan con isError)."""
+    res = (r or {}).get('result') or {}
+    c = res.get('content') or [{}]
+    return 'error' not in (r or {}) and res.get('isError') is not True and bool(c[0].get('text'))
 
 
 def hijos_lsp(ppid):
@@ -177,23 +95,29 @@ def vivo(pid):
     return 'si' in out
 
 
-gui = subprocess.Popen([EXE, '/gui'])
-term = subprocess.Popen([EXE, '--http', str(PORT_TERM)],
+# sin las DELPHI_MCP_* de quien lanza la bateria: el puerto, la jaula y el
+# token salen de SU settings.ini y de nada mas
+gui = subprocess.Popen([EXE, '/gui'], env=mc.entorno())
+term = subprocess.Popen([EXE, '--http', str(PORT_TERM)], env=mc.entorno(),
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
     # ---------------------------------------------------------------- T1
-    arriba = espera(PORT_GUI, 40)
+    # el host de bandeja levanta VCL antes que el HTTP: tarda mas que el
+    # terminal. Se espera al PUERTO, no a un sleep a ojo
+    arriba = mc.espera_puerto(PORT_GUI, gui, 40)
     check('T1 la bandeja levanta el puerto de settings.ini (%d)' % PORT_GUI,
           arriba, 'no escucha en 40s')
     if not arriba:
-        raise SystemExit
+        raise NoArranca
 
-    ini, sid = sesion(PORT_GUI)
+    cg = mc.Http(PORT_GUI, TOK)
+    cg.session('tray-bat')
+    ini = cg.init
     check('T1b initialize contesta',
           bool(ini and ini.get('result', {}).get('serverInfo')), ini)
 
     # ---------------------------------------------------------------- T2
-    r = llama(PORT_GUI, sid, 'delphi_workspace', {}, 20)
+    r = cg.call_msg('delphi_workspace', {})
     txt = r['result']['content'][0]['text']
     d = json.loads(txt)
     srv = d.get('server') or {}
@@ -205,12 +129,11 @@ try:
           srv.get('pid') == gui.pid, '%s vs %s' % (srv.get('pid'), gui.pid))
 
     # ---------------------------------------------------------------- T3
-    espera(PORT_TERM, 30)
-    _, sidt = sesion(PORT_TERM)
-    a, _ = rpc(PORT_GUI, {"jsonrpc": "2.0", "id": 30,
-                          "method": "tools/list"}, sid)
-    b, _ = rpc(PORT_TERM, {"jsonrpc": "2.0", "id": 30,
-                           "method": "tools/list"}, sidt)
+    mc.espera_puerto(PORT_TERM, term, 30)
+    ct = mc.Http(PORT_TERM, TOK)
+    ct.session('tray-bat')
+    a = cg.request('tools/list')
+    b = ct.request('tools/list')
     na = sorted(t['name'] for t in a['result']['tools'])
     nb = sorted(t['name'] for t in b['result']['tools'])
     check('T3 bandeja y terminal sirven las MISMAS tools (%d)' % len(na),
@@ -232,25 +155,22 @@ try:
         ('delphi_symbols', {'path': os.path.join(REPO, 'src', 'Server',
                                                  'Lsp.Service.pas')}),
     ]
-    rid = 100
     for tool, args in tanda:
-        rid += 1
         try:
-            r = llama(PORT_GUI, sid, tool, args, rid)
+            r = cg.call_msg(tool, args)
             t = r['result']['content'][0]['text']
             check('T4 %s contesta sin consola (%d bytes)' % (tool, len(t)),
-                  len(t) > 0 and 'error' not in str(r.get('error', '')), t[:120])
+                  contesta(r), t[:120])
         except Exception as e:
             check('T4 %s contesta sin consola' % tool, False, e)
 
-    rid += 1
     try:
-        r = llama(PORT_GUI, sid, 'delphi_diagnostics',
-                  {'path': os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas')},
-                  rid, 180)
+        r = cg.call_msg('delphi_diagnostics',
+                        {'path': os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas')},
+                        180)
         t = r['result']['content'][0]['text']
         check('T4b delphi_diagnostics (motor LSP) contesta en bandeja',
-              len(t) > 0, t[:160])
+              contesta(r), t[:160])
     except Exception as e:
         check('T4b delphi_diagnostics (motor LSP) contesta en bandeja',
               False, e)
@@ -266,6 +186,8 @@ try:
     vivos = [p for p in hijos if vivo(p)]
     check('T5b cerrada a lo bruto no deja DelphiLSP huerfanos',
           not vivos, 'siguen vivos: %s' % vivos)
+except NoArranca:
+    pass
 finally:
     for pr in (gui, term):
         try:
@@ -274,5 +196,4 @@ finally:
         except Exception:
             pass
 
-print('== test_tray: %d OK | %d fallos ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('test_tray')

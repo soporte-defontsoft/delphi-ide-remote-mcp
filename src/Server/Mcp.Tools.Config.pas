@@ -1546,17 +1546,35 @@ begin
   try
     if Cmd = 'add-platform' then
     begin
-      Result := AddPlatform(Proj, Params.Platform);
       // Anadir un destino a un proyecto es UN gesto: el dialogo del IDE pide
       // plataforma, perfil y SDK a la vez. Si el agente los trae, se dejan
-      // puestos aqui mismo en vez de exigir dos llamadas mas.
+      // puestos aqui mismo en vez de exigir dos llamadas mas. Y un gesto es
+      // TODO O NADA: un SDK o un perfil que no valen dejaban la plataforma
+      // anadida con el rechazo detras (medio gesto; visto al endurecer
+      // test_sdk el 26-sep, David: "si ya tenemos el rechazo, la quitamos").
+      // El .dproj vuelve byte a byte, como una tanda.
+      var Antes := TFile.ReadAllBytes(Proj);
+      Result := AddPlatform(Proj, Params.Platform);
       if not Result.StartsWith('RECHAZADO') and not Result.StartsWith('error') then
       begin
+        var Pega := '';
         if Params.Sdk.Trim <> '' then
-          Result := Result + sLineBreak + SetSdk(Proj, Params.Platform, Params.Sdk);
-        if Params.Profile.Trim <> '' then
-          Result := Result + sLineBreak +
-            SetProfile(Proj, Params.Platform, Params.Profile);
+          Pega := SetSdk(Proj, Params.Platform, Params.Sdk);
+        if (Params.Profile.Trim <> '') and not Pega.StartsWith('RECHAZADO') and
+           not Pega.StartsWith('error') then
+          Pega := string.Join(sLineBreak, [Pega,
+            SetProfile(Proj, Params.Platform, Params.Profile)]).Trim;
+        var Rechazo := '';
+        for var L in Pega.Replace(sLineBreak, #10).Split([#10]) do
+          if L.StartsWith('RECHAZADO') or L.StartsWith('error') then
+            Rechazo := L;
+        if Rechazo <> '' then
+        begin
+          TFile.WriteAllBytes(Proj, Antes);
+          Result := Rechazo + ' ' + SN_CONFIG_ADDPLATFORM_NADA;
+        end
+        else if Pega <> '' then
+          Result := Result + sLineBreak + Pega;
       end;
     end
     else if Cmd = 'remove-platform' then

@@ -11,17 +11,20 @@ Usage:  python tests/test_paserver.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Creates ONE throwaway profile (mcp-e2e-paserver) in
 %APPDATA%\\Embarcadero\\BDS\\<ver>\\ and deletes it at the end.
 """
-import json, subprocess, threading, queue, time, os, sys, socket, glob
+import atexit, json, time, os, socket, glob
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = os.path.join(REPO, 'src')
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SRC, 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
+# su carpeta: la jaula (antes era la carpeta tests/ del repo) y su PROPIA
+# copia del servidor (antes corria el compilado en su sitio)
+BASE = mc.carpeta('paserver')
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 
 PROF_NAME = 'mcp-e2e-paserver'
 PROF_PASSWORD = 'dummySecretE2E123'
-# nothing must be listening here (refused fast = the failure path we want)
-DEAD_PORT = '64219'
+# nothing must be listening here (refused fast = the failure path we want):
+# un puerto recien soltado, no uno fijo que otro proceso pueda tener abierto
+DEAD_PORT = str(mc.puerto_libre())
 
 
 def profile_files():
@@ -74,96 +77,23 @@ def cleanup_profile():
             pass
 
 
-class Server:
-    """One stdio MCP server process with its stderr captured for log checks."""
-    def __init__(self, extra_args=None):
-        # Since v0.64 naming a host by hand (add-profile / the raw probe) needs
-        # the operator's allowlist: writing a profile to any host and then
-        # "testing" it was a port scanner. This battery exercises the MECHANISM
-        # against loopback, so it opts into loopback the way the guard battery
-        # opts into execution.
-        _env = dict(os.environ)
-        _env.setdefault('DELPHI_MCP_ROOTS', os.path.dirname(os.path.abspath(__file__)))  # v0.98: sin jaula = solo lectura
-        _env['DELPHI_MCP_REMOTE_HOSTS'] = '127.0.0.1,localhost'
-        self.proc = subprocess.Popen([EXE] + (extra_args or []), env=_env,
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE, text=True, encoding='utf-8')
-        self.q = queue.Queue()
-        self.stderr_lines = []
-        threading.Thread(target=self._reader, daemon=True).start()
-        threading.Thread(target=self._err_reader, daemon=True).start()
-        self.rid = 10
-        self.send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-            "protocolVersion": "2025-06-18", "capabilities": {},
-            "clientInfo": {"name": "paserver-battery", "version": "1"}}})
-        assert self.recv(1, 20), 'no initialize response'
-        self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-    def _reader(self):
-        for line in self.proc.stdout:
-            line = line.strip()
-            if line:
-                self.q.put(line)
-
-    def _err_reader(self):
-        for line in self.proc.stderr:
-            self.stderr_lines.append(line.rstrip())
-
-    def send(self, o):
-        self.proc.stdin.write(json.dumps(o) + '\n')
-        self.proc.stdin.flush()
-
-    def recv(self, r, t=90):
-        dl = time.time() + t
-        while time.time() < dl:
-            try:
-                line = self.q.get(timeout=1)
-            except queue.Empty:
-                continue
-            try:
-                m = json.loads(line)
-            except Exception:
-                continue
-            if m.get('id') == r:
-                return m
-        return None
-
-    def call(self, name, args, t=90):
-        self.rid += 1
-        self.send({"jsonrpc": "2.0", "id": self.rid, "method": "tools/call",
-                   "params": {"name": name, "arguments": args}})
-        r = self.recv(self.rid, t)
-        if r is None:
-            return '(timeout)'
-        if 'error' in r:
-            return 'MCPERROR ' + json.dumps(r['error'])[:150]
-        c = r['result'].get('content', [])
-        return c[0].get('text', '') if c else '(no content)'
-
-    def close(self):
-        try:
-            self.proc.stdin.close()
-        except OSError:
-            pass
-        try:
-            self.proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            self.proc.kill()
-
-
-P = F = 0
-
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('PASS -', name)
-    else:
-        F += 1
-        print('FAIL -', name, '|', str(detail)[:170])
+def Server(extra_args=()):
+    """One stdio MCP server process with its stderr captured (srv.errores)
+    for the log checks."""
+    # Since v0.64 naming a host by hand (add-profile / the raw probe) needs
+    # the operator's allowlist: writing a profile to any host and then
+    # "testing" it was a port scanner. This battery exercises the MECHANISM
+    # against loopback, so it opts into loopback the way the guard battery
+    # opts into execution.
+    env = mc.entorno({'DELPHI_MCP_ROOTS': BASE,  # v0.98: sin jaula = solo lectura
+                      'DELPHI_MCP_REMOTE_HOSTS': '127.0.0.1,localhost'})
+    return mc.Stdio(EXE, env, nombre='paserver-battery', args=extra_args, lee_stderr=True)
 
 
 cleanup_profile()
+# el perfil vive FUERA de su carpeta (APPDATA y el registro del IDE): se
+# recoge al salir pase lo que pase, no solo si la bateria llega al final
+atexit.register(cleanup_profile)
 srv = Server()
 
 # --- the three read commands still answer (regression) ---
@@ -304,18 +234,25 @@ except Exception:
 
 # --- log masker: the password must NOT appear in the stderr log ---
 time.sleep(0.5)
-leaked = [l for l in srv.stderr_lines if PROF_PASSWORD in l]
-masked = [l for l in srv.stderr_lines if '"password":"***"' in l.replace(' ', '')]
-check('log: la password NUNCA aparece en el log', not leaked, leaked[:2])
+leaked = [l for l in srv.errores if PROF_PASSWORD in l]
+masked = [l for l in srv.errores if '"password":"***"' in l.replace(' ', '')]
+# "nunca aparece" solo vale si se MIRO la linea que la llevaba: la peticion
+# de add-profile con PROF_PASSWORD (la unica con DEAD_PORT y password) tiene
+# que estar en el log, enmascarada. Con el log sin leer, leaked salia vacio
+# y el check pasaba sin haber visto nada.
+vista = [l for l in masked if DEAD_PORT in l]
+check('log: la password NUNCA aparece en el log', not leaked and vista,
+      leaked[:2] or 'no esta en el log la peticion de add-profile con la password')
 check('log: la peticion se loguea enmascarada', len(masked) >= 1,
-      [l[:120] for l in srv.stderr_lines if 'add-profile' in l][:2])
+      [l[:120] for l in srv.errores if 'add-profile' in l][:2])
 
-srv.close()
+srv.cierra()
 
 # --- read-only process: write commands refused, reads pass ---
-ro = Server(['--readonly'])
+ro = Server(('--readonly',))
 out = ro.call('delphi_paserver', {"command": "platforms"})
-check('readonly: platforms sigue abierto', 'platforms' in out and 'RECHAZADO' not in out, out[:150])
+check('readonly: platforms sigue abierto', 'platforms' in out and 'RECHAZADO' not in out
+      and isinstance(mc.como_json(out).get('platforms'), list), out[:150])
 out = ro.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                   "host": "127.0.0.1", "password": "x"})
 check('readonly: add-profile rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
@@ -324,12 +261,10 @@ out = ro.call('delphi_paserver', {"command": "test-connection", "host": "127.0.0
 check('readonly: test-connection rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
 out = ro.call('delphi_paserver', {"command": "get-sdk", "name": PROF_NAME})
 check('readonly: get-sdk rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
-ro.close()
+ro.cierra()
 
 cleanup_profile()
 check('cleanup: perfil de prueba eliminado', not profile_files(), profile_files())
 check('cleanup: asiento en el IDE eliminado (no ensuciamos la lista del operador)', not profile_seats(), profile_seats())
 
-print()
-print('TOTAL: %d PASS, %d FAIL' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('paserver battery')

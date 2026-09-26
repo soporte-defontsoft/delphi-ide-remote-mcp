@@ -7,13 +7,16 @@ results at BYTE level: encoding preservation is the whole point.
 Usage:  python tests/test_delphi_edit.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green.
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile
+import json, os
+import mcp_cliente as mc
+from mcp_cliente import check
 
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    os.path.dirname(__file__), '..', 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-DIR = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'patch')
-os.makedirs(DIR, exist_ok=True)
+BASE = mc.carpeta('patch')
+# su propia copia del servidor (antes corria el compilado EN SU SITIO: sus
+# logs y su __delphi-temp caian en la carpeta de build), fuera de la jaula
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+DIR = os.path.join(BASE, 'jail')
+os.makedirs(DIR)
 PAS = os.path.join(DIR, 'Dummy.pas')
 DFM = os.path.join(DIR, 'Bin.dfm')
 # The REAL on-disk binary form (IDE / convert.exe, measured 2026-08-21):
@@ -46,67 +49,11 @@ with open(DFM_FF, 'wb') as f:
     f.write(b'\xff\x0a\x00TFORMX\x00\x30\x10\x86\x03\x00\x00TPF0binarydata')
 ORIG = open(PAS, 'rb').read()
 
-_env = dict(os.environ)
-_env.setdefault('DELPHI_MCP_ROOTS', DIR)  # v0.98: sin jaula declarada = solo lectura
-proc = subprocess.Popen([EXE], env=_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line:
-            q.put(line)
-
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-def recv(r, t=60):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-def call(name, args, t=60):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": name, "arguments": args}})
-    r = recv(rid[0], t)
-    if r is None:
-        return '(timeout)'
-    if 'error' in r:
-        return 'MCPERROR ' + json.dumps(r['error'])[:150]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-    "protocolVersion": "2025-06-18", "capabilities": {},
-    "clientInfo": {"name": "patch-battery", "version": "1"}}})
-assert recv(1, 20), 'no initialize response'
-send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-P = F = 0
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('PASS -', name)
-    else:
-        F += 1
-        print('FAIL -', name, '|', str(detail)[:170])
+# v0.98: sin jaula declarada = solo lectura. La jaula es SIEMPRE la de la
+# bateria: antes un DELPHI_MCP_ROOTS de quien la lanzaba ganaba (setdefault)
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': DIR}), nombre='patch-battery')
+assert srv.init, 'no initialize response'
+call = srv.call
 
 GESTORIA = 'gestoría'
 
@@ -459,8 +406,5 @@ out = call('delphi_edit', {'path': _occ, 'edits': '{"old": "x", "new": "y"}'})
 check('tanda: "edits" que no es array -> RECHAZADO diciendo cuantos caracteres llegaron y como empieza',
       out.startswith('RECHAZADO') and 'Han llegado 24 caracteres' in out and '{"old": "x"' in out, out[:300])
 
-print('== delphi_edit battery: %d PASS / %d FAIL ==' % (P, F))
-proc.stdin.close()
-time.sleep(1)
-proc.kill()
-sys.exit(1 if F else 0)
+srv.cierra()
+mc.fin('delphi_edit battery')

@@ -15,29 +15,18 @@ the manifest, and it runs anywhere Python runs:
 
 Usage:  python tests/test_docs_static.py
 """
-import json, os, re, sys, glob, warnings, py_compile
+import json, os, re, glob, warnings, py_compile
+# 'mc' es aqui el match del CHANGELOG: el modulo entra por sus nombres
+from mcp_cliente import check, fin
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
-
-P = F = 0
-
-
-def check(name, ok, detail=''):
-    global P, F
-    if ok:
-        P += 1
-        print('PASS', name)
-    else:
-        F += 1
-        print('FAIL', name, '--', str(detail)[:300])
 
 
 cap_path = os.path.join(REPO, 'docs', 'CAPABILITIES.json')
 check('docs/CAPABILITIES.json existe', os.path.exists(cap_path))
 if not os.path.exists(cap_path):
-    print('\n== docs static: %d PASS / %d FAIL ==' % (P, F))
-    sys.exit(1)
+    fin('docs static')
 
 cap = json.load(open(cap_path, encoding='utf-8'))
 TOOLS = sorted(cap.get('toolNames', []))
@@ -118,5 +107,4 @@ for f in glob.glob(os.path.join(HERE, '*.py')):
         bad.append(os.path.basename(f))
 check('tests/ compila sin SyntaxWarnings', not bad, bad)
 
-print('\n== docs static: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+fin('docs static')

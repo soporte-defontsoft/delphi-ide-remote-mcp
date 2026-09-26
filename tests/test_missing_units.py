@@ -10,55 +10,16 @@ platforms register and this one does not.
 Usage:  python tests/test_missing_units.py [path-to-DelphiLspMcp.exe]
 Needs a RAD Studio with the Linux64 compiler (dcclinux64); no PAServer.
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, glob
+import json, os, glob
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'missingunits')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('missingunits')
+EXE = mc.copia_exe(BASE)
 
-env = dict(os.environ); env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line: q.put(line)
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n'); proc.stdin.flush()
-def recv(r, t=300):
-    dl = time.time() + t
-    while time.time() < dl:
-        try: line = q.get(timeout=1)
-        except queue.Empty: continue
-        try: m = json.loads(line)
-        except Exception: continue
-        if m.get('id') == r: return m
-    return None
-def call(name, args):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call", "params": {"name": name, "arguments": args}})
-    r = recv(rid[0])
-    if r is None: return '(timeout)'
-    if 'error' in r: return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "missing-units-battery", "version": "1"}}})
-recv(1); send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-P = F = 0
-def check(name, ok, detail=''):
-    global P, F
-    if ok: P += 1; print('PASS', name)
-    else: F += 1; print('FAIL', name, '--', (detail or '')[:400])
+# plazo de 300 s: aqui se compila para Linux64
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='missing-units-battery', t=300)
+call = srv.call
 
 # --- delphi_components platform=X -------------------------------------------
 r = call('delphi_components', {'platform': 'Linux64'})
@@ -132,6 +93,5 @@ check('Linux64 build declares output (ELF without extension, v0.46)',
       out.endswith(os.sep + 'MissU') and 'Linux64' in out, r[:300])
 check('no missingUnits on success', 'missingUnits' not in j, r[:300])
 
-proc.kill()
-print('\n== missing units battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('missing units battery')

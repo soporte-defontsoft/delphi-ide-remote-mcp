@@ -41,7 +41,7 @@ def ejecutar(lanzador):
     centinela antes de devolver el control: es la unica forma de que el
     proceso siga vivo el tiempo suficiente.
 
-    La espera tiene tope (MCP_STUB_ESPERA, 20 s por defecto): agotarla deja el
+    La espera tiene tope (<scratch>/_espera, 20 s si no esta): agotarla deja el
     fichero a medias, que es justo lo que necesita el caso "sigue corriendo".
     """
     d = os.path.dirname(lanzador)
@@ -67,7 +67,15 @@ def ejecutar(lanzador):
         subprocess.run([lanzador], cwd=d,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=120)
-    tope = float(os.environ.get('MCP_STUB_ESPERA', '20'))
+    # La espera la pone la bateria en <scratch>/_espera: este proceso hereda
+    # el entorno del SERVIDOR, no el de la bateria, y una variable fijada
+    # despues de arrancar el servidor no le llegaba (26-sep-2026: el caso
+    # "sigue corriendo" pasaba por los 20 s de siempre, no por los 3 pedidos).
+    f_espera = os.path.join(SCRATCH, '_espera')
+    if os.path.exists(f_espera):
+        tope = float(open(f_espera).read().strip())
+    else:
+        tope = float(os.environ.get('MCP_STUB_ESPERA', '20'))
     fin = time.time() + tope
     while time.time() < fin:
         for f in os.listdir(d):

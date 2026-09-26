@@ -10,17 +10,17 @@
 
 Usage:  python tests/test_v012.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, re, sys, tempfile, shutil
+import json, subprocess, os, re
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'v012')
-shutil.rmtree(BASE, ignore_errors=True)
+REPO = mc.REPO
+# mc.carpeta vacia tambien los objetos de SOLO LECTURA del .git que deja una pasada
+BASE = mc.carpeta('v012')
+# su propia copia, fuera de la jaula: el compilado no se ejecuta en su sitio
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 INSIDE = os.path.join(BASE, 'permitido')
-os.makedirs(INSIDE, exist_ok=True)
+os.makedirs(INSIDE)
 
 DRIVE = INSIDE[0].upper()            # the real drive of the jail
 VJAIL = 'srv' + DRIVE.lower() + INSIDE[1:]   # its virtual form
@@ -49,82 +49,15 @@ open(os.path.join(INSIDE, 'UF.pas'), 'wb').write(FORM.encode('cp1252'))
 
 
 def start(envroots, extra_env=None):
-    env = dict(os.environ)
-    env['DELPHI_MCP_ROOTS'] = envroots
+    env = mc.entorno({'DELPHI_MCP_ROOTS': envroots})
     env.update(extra_env or {})
-    p = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                         text=True, encoding='utf-8')
-    qq = queue.Queue()
-
-    def reader():
-        for line in p.stdout:
-            line = line.strip()
-            if line:
-                qq.put(line)
-    threading.Thread(target=reader, daemon=True).start()
-    return p, qq
+    s = mc.Stdio(EXE, env, nombre='v012-battery', t=90)
+    assert s.init, 'no initialize response'
+    return s
 
 
-proc, q = start(INSIDE)
-rid = [10]
-
-
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n')
-    proc.stdin.flush()
-
-
-def recv(r, t=90):
-    dl = time.time() + t
-    while time.time() < dl:
-        try:
-            line = q.get(timeout=1)
-        except queue.Empty:
-            continue
-        try:
-            m = json.loads(line)
-        except Exception:
-            continue
-        if m.get('id') == r:
-            return m
-    return None
-
-
-def call(name, args, t=90):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call",
-          "params": {"name": name, "arguments": args}})
-    r = recv(rid[0], t)
-    if r is None:
-        return '(timeout)'
-    if 'error' in r:
-        return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-
-
-def handshake():
-    send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": "v012-battery", "version": "1"}}})
-    assert recv(1, 20), 'no initialize response'
-    send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-
-handshake()
-
-P = F = 0
-
-
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('PASS -', name)
-    else:
-        F += 1
-        print('FAIL -', name, '|', str(detail)[:200])
+srv = start(INSIDE)
+call = srv.call
 
 
 IN_PAS = os.path.join(INSIDE, 'Dentro.pas')
@@ -358,7 +291,6 @@ out = call('delphi_list', {"root": os.path.join(INSIDE, 'sub', '..'), "pattern":
 check('R4-C: la salida de list no arrastra ".."', '..' not in out, out[:150])
 
 # ---- delphi_config: view + add-platform with the VCL/FMX rule -------------
-import shutil as _sh
 # Both fixtures are derived from the ONE real project (there is a single one
 # since the hosts merged): the VCL copy verbatim, and a FrameworkType=None copy
 # for the non-VCL case. Deriving them keeps the test honest about the real
@@ -716,17 +648,13 @@ if GHOST:
           'unit Dentro' in out, out)
 
 # ---- shutdown main server --------------------------------------------------
-proc.stdin.close()
-proc.wait(timeout=15)
+srv.cierra(15)
 
 # ---- Roots con comillas / roots invalidos (servidores propios) -------------
 def one_shot(envroots, tool, args, extra_env=None):
-    global proc, q
-    proc, q = start(envroots, extra_env)
-    handshake()
-    out = call(tool, args)
-    proc.stdin.close()
-    proc.wait(timeout=15)
+    s = start(envroots, extra_env)
+    out = s.call(tool, args)
+    s.cierra(15)
     return out
 
 
@@ -764,6 +692,4 @@ if VDRV:
     else:
         print('SKIP - subst no disponible, no se prueba el vault en otra unidad')
 
-print()
-print(f'RESULT: {P} passed, {F} failed')
-sys.exit(1 if F else 0)
+mc.fin('v012 battery')

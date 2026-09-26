@@ -3,7 +3,12 @@ unit UTrayMain;
 { Tray host: the resident desktop face of the DelphiLSP MCP Service. Starts
   MINIMIZED TO TRAY - the tray icon itself is the "it's running" indicator.
   Hosts the Streamable HTTP transport (same core as the console --http mode);
-  double-click or the menu opens the live log window. }
+  double-click or the menu opens the live log window.
+
+  The log on DISK is not this window's: it is the server's (Lsp.LogSink,
+  started by TMcpHost in every mode). Until 2026-09-26 it was written here,
+  so the service and the terminal had none; the window now only hangs on it
+  (SetLogTap) and shows the latest lines. }
 
 interface
 
@@ -16,7 +21,8 @@ uses
   MCPServer.Types, MCPServer.Settings, MCPServer.Logger,
   MCPServer.ManagerRegistry, MCPServer.CoreManager, MCPServer.ToolsManager,
   MCPServer.ResourcesManager, MCPServer.IdHTTPServer, MCPServer.Resource.Server,
-  Lsp.Guard, Lsp.Host, Lsp.Session, Lsp.Texts, Mcp.Vault.Session, Mcp.Vault.Seed;
+  Lsp.Guard, Lsp.Host, Lsp.Session, Lsp.Texts, Mcp.Vault.Session, Mcp.Vault.Seed,
+  Lsp.LogSink;
 
 type
   TFormTray = class(TForm)
@@ -41,12 +47,9 @@ type
     FLogLock: TCriticalSection;
     FLogDropped: Integer;        // lines refused because the buffer hit its cap
     FLogTimer: TTimer;
-    FLogDir: string;
     FLinesPerFile: Integer;
-    FMaxLogFiles: Integer;
     procedure AddLog(const S: string);
     procedure DrainLog(Sender: TObject);
-    procedure FlushMemoToDisk;
     procedure WMSysCommand(var Msg: TWMSysCommand); message WM_SYSCOMMAND;
   public
     destructor Destroy; override;
@@ -58,14 +61,6 @@ var
 implementation
 
 {$R *.dfm}
-
-const
-  // Upper bound for the producer buffer. The old path queued one closure per
-  // line via TThread.Queue with NO cap - field 2026-08-21: 16 minutes of
-  // requests piled up unseen and landed in the memo in one burst, all stamped
-  // with the drain time. Lines beyond the cap are counted, not stored.
-  LOG_BUF_CAP = 5000;
-  LIVE_LOG_NAME = 'actual.log'; // live tail of the block not yet persisted
 
 { Producer side - safe from any thread. The timestamp is taken HERE, so the
   log tells when things happened, not when the window got to paint them. }
@@ -82,9 +77,10 @@ begin
   end;
 end;
 
-{ Timer drain on the main thread: buffer -> memo, and every FLinesPerFile
-  lines the memo persists to disk and restarts at zero (David's design
-  2026-08-21: live view stays, memory stays bounded, nothing is lost). }
+{ Timer drain on the main thread: buffer -> memo. The window keeps at most
+  FLinesPerFile lines and then restarts at zero (David's design 2026-08-21:
+  live view stays, memory stays bounded). Nothing is lost doing it: the disk
+  is Lsp.LogSink's, for the three hosts. }
 procedure TFormTray.DrainLog(Sender: TObject);
 var
   Chunk: TStringList;
@@ -111,71 +107,21 @@ begin
     finally
       MemoLog.Lines.EndUpdate;
     end;
-    // The live tail on disk: what the memo holds and has not persisted yet.
-    // The memo only reaches a file every FLinesPerFile lines, so a server
-    // stopped from outside (Stop-Process) lost hours of log (2026-08-23:
-    // nothing after 11:54 for a 14:00 diagnosis). Appended per drain,
-    // removed when the block is persisted - never a second copy.
-    try
-      CrearCarpeta(FLogDir);
-      TFile.AppendAllText(TPath.Combine(FLogDir, LIVE_LOG_NAME),
-        Chunk.Text, TEncoding.UTF8);
-    except
-      // a disk problem must never take the tray down with it
-    end;
   finally
     Chunk.Free;
   end;
   if MemoLog.Lines.Count >= FLinesPerFile then
-    FlushMemoToDisk;
-end;
-
-procedure TFormTray.FlushMemoToDisk;
-var
-  Stamp, FileName: string;
-  N: Integer;
-  Files: TArray<string>;
-begin
-  if MemoLog.Lines.Count = 0 then
-    Exit;
-  try
-    CrearCarpeta(FLogDir);
-    Stamp := FormatDateTime('yyyymmdd"-"hhnnss', Now);
-    FileName := TPath.Combine(FLogDir, Stamp + '.log');
-    N := 2;
-    while TFile.Exists(FileName) do
-    begin
-      FileName := TPath.Combine(FLogDir, Stamp + '-' + IntToStr(N) + '.log');
-      Inc(N);
-    end;
-    MemoLog.Lines.SaveToFile(FileName, TEncoding.UTF8);
     MemoLog.Lines.Clear;
-    if TFile.Exists(TPath.Combine(FLogDir, LIVE_LOG_NAME)) then
-      TFile.Delete(TPath.Combine(FLogDir, LIVE_LOG_NAME)); // now inside the block file
-    // Names are timestamps, so lexicographic order IS chronological order.
-    Files := TDirectory.GetFiles(FLogDir, '*.log');
-    TArray.Sort<string>(Files);
-    for var I := 0 to High(Files) - FMaxLogFiles do
-      TFile.Delete(Files[I]);
-  except
-    // A disk problem must never take the tray down with it.
-    on E: Exception do
-      MemoLog.Lines.Add('AVISO: no se pudo persistir el log: ' + E.Message);
-  end;
 end;
 
 destructor TFormTray.Destroy;
 begin
-  // Exits that skip MiExit (Windows logoff/shutdown) still get their flush.
-  // After MiExit both calls find everything empty and do nothing.
-  TLogger.OnLogMessage := nil;
+  // The window lets go of the log before its buffer goes (SetLogTap waits
+  // for a line in flight). Exits that skip MiExit (Windows logoff/shutdown)
+  // still get the disk flushed: Lsp.LogSink does it when the process ends.
+  SetLogTap(nil);
   if Assigned(FLogTimer) then
     FLogTimer.Enabled := False;
-  if Assigned(FLogBuf) and Assigned(FLogLock) then
-  begin
-    DrainLog(nil);
-    FlushMemoToDisk;
-  end;
   FreeAndNil(FLogBuf);
   FreeAndNil(FLogLock);
   inherited;
@@ -184,24 +130,11 @@ end;
 procedure TFormTray.FormCreate(Sender: TObject);
 var
   Form: TFormTray;
-  Ini: TIniFile;
 begin
   Form := Self;
   FLogLock := TCriticalSection.Create;
   FLogBuf := TStringList.Create;
-  FLogDir := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'logs');
-  Ini := TIniFile.Create(
-    TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'settings.ini'));
-  try
-    FLinesPerFile := Ini.ReadInteger('Log', 'LinesPerFile', 2000);
-    FMaxLogFiles := Ini.ReadInteger('Log', 'MaxFiles', 10);
-  finally
-    Ini.Free;
-  end;
-  if FLinesPerFile < 100 then
-    FLinesPerFile := 100;
-  if FMaxLogFiles < 1 then
-    FMaxLogFiles := 1;
+  FLinesPerFile := LogLinesPerFile; // [Log] has ONE reader: Lsp.LogSink
   FLogTimer := TTimer.Create(Self);
   FLogTimer.Interval := 500;
   FLogTimer.OnTimer := DrainLog;
@@ -210,11 +143,12 @@ begin
   TLogger.MinLogLevel := TLogLevel.Info;
   // Straight into the bounded buffer from whatever thread logs - the old
   // TThread.Queue detour piled up unbounded closures whenever the main
-  // thread failed to drain them (measured: a 16-minute backlog).
-  TLogger.OnLogMessage := procedure(const Message: string)
+  // thread failed to drain them (measured: a 16-minute backlog). The disk
+  // is Lsp.LogSink's; this window only hangs on it.
+  SetLogTap(procedure(const ALine: string)
     begin
-      Form.AddLog(Message);
-    end;
+      Form.AddLog(ALine);
+    end);
 
   // The wiring is NOT written out here: the terminal, the service and this
   // tray must build exactly the same server, and a policy added to one copy
@@ -235,20 +169,17 @@ begin
 
   try
     FServer.Start;
-    AddLog(Format('Servidor MCP escuchando en %s (%s v%s)',
+    TLogger.Info(Format('Servidor MCP escuchando en %s (%s v%s)',
       [FUrl, SERVER_NAME, SERVER_VERSION]));
-    // The operational facts (jail, vault, credentials) come from the SAME
-    // place the terminal and the service read them - one truth, three sinks.
-    for var Note in FHost.StartupNotes do
-      AddLog(Note);
-    AddLog('Icono en la bandeja = servicio encendido. Doble clic para este log.');
-    AddLog(Format('Log persistente: bloques de %d lineas a %s (max %d ficheros; ' +
-      '[Log] LinesPerFile/MaxFiles en settings.ini).',
-      [FLinesPerFile, FLogDir, FMaxLogFiles]));
+    // The operational facts (jail, vault, credentials, the log) come from the
+    // SAME place the terminal and the service read them - one truth, and one
+    // way to log it.
+    FHost.LogStartupNotes;
+    TLogger.Info('Icono en la bandeja = servicio encendido. Doble clic para este log.');
   except
     on E: Exception do
     begin
-      AddLog('ERROR arrancando el servidor: ' + E.Message);
+      TLogger.Error('ERROR arrancando el servidor: ' + E.Message);
       TrayIcon.Hint := 'DelphiLSP MCP Service - ERROR: ' + E.Message;
     end;
   end;
@@ -290,7 +221,7 @@ end;
 procedure TFormTray.MiCopyClick(Sender: TObject);
 begin
   Clipboard.AsText := FUrl;
-  AddLog('URL copiada al portapapeles: ' + FUrl);
+  TLogger.Info('URL copiada al portapapeles: ' + FUrl);
 end;
 
 procedure TFormTray.MiExitClick(Sender: TObject);
@@ -303,14 +234,11 @@ begin
   except
   end;
   TLspSession.Shutdown; // stop every DelphiLSP child
-  TLogger.OnLogMessage := nil;
-  // Whatever the shutdown just logged plus the partial block in the memo
-  // goes to disk - the tail of a session is exactly the part a post-mortem
-  // needs most.
-  DrainLog(nil);
-  FlushMemoToDisk;
+  SetLogTap(nil); // the window is closing; the disk keeps listening
   FreeAndNil(FServer);
-  FreeAndNil(FHost); // frees the settings and the managers it built
+  // Frees the settings and the managers it built, and puts the tail of the
+  // session on disk - the part a post-mortem needs most.
+  FreeAndNil(FHost);
   Application.Terminate;
 end;
 

@@ -3,57 +3,38 @@
 Usage:  python tests/test_http_auth.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green.
 """
-import json, subprocess, time, os, sys, urllib.request, urllib.error
+import hashlib, json, os, shutil, time, urllib.error, urllib.parse, urllib.request
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-EXE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    HERE, '..', 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-PORT = 3999
+HERE = mc.HERE
+# puertos LIBRES (antes 3999, 4123, 4241, 4317 y 4319 fijos): cada servidor
+# lo lee de su settings.ini, y se espera a que escuche en el (antes sleep 3)
+PORT = mc.puerto_libre()
 URL = 'http://127.0.0.1:%d/mcp' % PORT
 TOKEN = 'test-token-123'
 
-import shutil as _sh, tempfile as _tf
 # v0.91: workspace o nada - the token lives in a [Workspace.*] section, so
 # the main server runs from its own folder with its own settings.ini (fixed
 # name: the firewall decides per program PATH; we only talk to 127.0.0.1).
-REPOROOT = os.path.abspath(os.path.join(HERE, '..'))
-_maindir = os.path.join(_tf.gettempdir(), 'delphi-mcp-tests', 'http-main')
-_sh.rmtree(_maindir, ignore_errors=True)
-os.makedirs(_maindir, exist_ok=True)
-_mainexe = os.path.join(_maindir, 'DelphiLspMcp.exe')
-_sh.copyfile(EXE, _mainexe)
+REPOROOT = mc.REPO
+_maindir = mc.carpeta('http-main')
+_mainexe = mc.copia_exe(_maindir)
 with open(os.path.join(_maindir, 'settings.ini'), 'w') as f:
     f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)*2
             + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
             + 'Roots=%s' % REPOROOT + chr(10)
             + 'AllowTests=1' + chr(10) + 'LibraryZone=1' + chr(10)
             + 'DelphiVersion=37.0' + chr(10))   # 1.0.17: pinned to the one install here
-env = dict(os.environ)
-env.pop('DELPHI_MCP_TOKEN', None)
-proc = subprocess.Popen([_mainexe, '--http'], env=env,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-time.sleep(3)
+# sin las DELPHI_MCP_* de quien lanza la bateria: el token lo pone el ini
+proc = mc.lanza_http(_mainexe, None, mc.entorno(), espera_en=PORT)   # sin puerto: el del ini
 
-P = F = 0
-def check(name, cond, detail=''):
-    global P, F
-    if cond:
-        P += 1
-        print('PASS -', name)
-    else:
-        F += 1
-        print('FAIL -', name, '|', str(detail)[:170])
 
 def post(payload, token=None):
-    req = urllib.request.Request(URL, json.dumps(payload).encode('utf-8'),
-        {'Content-Type': 'application/json', 'Accept': 'application/json'})
-    if token:
-        req.add_header('Authorization', 'Bearer ' + token)
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, r.read().decode('utf-8', 'replace')
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode('utf-8', 'replace')
+    # Accept: application/json A SECAS, no el de un cliente streamable (lo
+    # que miran los checks de esta bateria); URL es la del servidor en curso
+    code, _, body = mc.post(URL, payload, token, accept='application/json', t=60)
+    return code, body
 
 INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
     "protocolVersion": "2025-06-18", "capabilities": {},
@@ -69,11 +50,8 @@ try:
     check('http: initialize con token', ok, '%s %s' % (code, body[:150]))
     # streamable-HTTP clients ask with Accept: text/event-stream and read the
     # session from the Mcp-Session-Id header (v0.46: the SSE path emits it too)
-    req = urllib.request.Request(URL, json.dumps(INIT).encode('utf-8'),
-        {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream',
-         'Authorization': 'Bearer ' + TOKEN})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        sid = r.headers.get('Mcp-Session-Id'); sse = r.read().decode('utf-8', 'replace')
+    _, h, sse = mc.post(URL, INIT, TOKEN, accept=mc.ACCEPT_STREAMABLE, t=60)
+    sid = h.get('Mcp-Session-Id')
     check('http: initialize por SSE devuelve la cabecera Mcp-Session-Id', bool(sid) and sid in sse,
           'header=%s body=%s' % (sid, sse[:120]))
 
@@ -81,14 +59,8 @@ try:
     # real: el cliente la persiste y el server se reinicia). 404 claro para
     # que el cliente re-inicialice, en vez de trabajar contra un fantasma.
     def post_sid(payload, session, token=TOKEN):
-        req = urllib.request.Request(URL, json.dumps(payload).encode('utf-8'),
-            {'Content-Type': 'application/json', 'Accept': 'application/json',
-             'Authorization': 'Bearer ' + token, 'Mcp-Session-Id': session})
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                return r.status, r.read().decode('utf-8', 'replace')
-        except urllib.error.HTTPError as e:
-            return e.code, e.read().decode('utf-8', 'replace')
+        code, _, body = mc.post(URL, payload, token, session, accept='application/json', t=60)
+        return code, body
     code, body = post_sid({"jsonrpc": "2.0", "id": 9, "method": "tools/list", "params": {}},
                           '{BASURA-NO-EMITIDA-JAMAS}')
     check('http: sesion desconocida -> 404 con motivo', code == 404 and 'Session not found' in body,
@@ -163,19 +135,15 @@ finally:
     proc.kill()
 
 # --- settings.ini [Server] Port: the port must be configurable, not fixed ---
-import shutil, tempfile
-INI_PORT = 4123
+INI_PORT = mc.puerto_libre()
 # A FIXED folder, like every other battery uses (delphi-guard-tests,
 # delphi-v012-tests...). It used to be mkdtemp, i.e. a new random path on every
 # run - and Windows Firewall decides per program PATH, so each run looked like
 # a brand-new program and asked again. Same name every time = asked at most
 # once, ever.
-tmpdir = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'http-ini-port')
-shutil.rmtree(tmpdir, ignore_errors=True)
-os.makedirs(tmpdir, exist_ok=True)
+tmpdir = mc.carpeta('http-ini-port')
 try:
-    exe2 = os.path.join(tmpdir, 'DelphiLspMcp.exe')
-    shutil.copyfile(EXE, exe2)
+    exe2 = mc.copia_exe(tmpdir)
     with open(os.path.join(tmpdir, 'settings.ini'), 'w') as f:
         # BindIP: loopback only - see the note at the top. This instance runs
         # from a fresh temp folder, so without it the firewall asks again on
@@ -183,12 +151,8 @@ try:
         f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
                 '[Workspace.Op]\nToken=%s\nRoots=%s\n'
                 % (INI_PORT, TOKEN, tmpdir))
-    env2 = dict(os.environ)
-    env2.pop('DELPHI_MCP_TOKEN', None)  # the ini must supply the token too
-    proc2 = subprocess.Popen([exe2, '--http'],  # no port argument: ini decides
-                             env=env2,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(3)
+    env2 = mc.entorno()  # the ini must supply the token too
+    proc2 = mc.lanza_http(exe2, None, env2, espera_en=INI_PORT)  # no port argument: ini decides
     try:
         URL = 'http://127.0.0.1:%d/mcp' % INI_PORT
         code, body = post(INIT, TOKEN)
@@ -202,15 +166,12 @@ finally:
     shutil.rmtree(tmpdir, ignore_errors=True)
 
 # --- read-only access: ReadOnlyToken (el anonimo murio en v0.98: 401) --------
-RO_PORT = 4241
+RO_PORT = mc.puerto_libre()
 RO_TOKEN = 'ro-token-456'
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-tmpdir3 = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'http-ro')  # fixed, see above
-shutil.rmtree(tmpdir3, ignore_errors=True)
-os.makedirs(tmpdir3, exist_ok=True)
+REPO = mc.REPO
+tmpdir3 = mc.carpeta('http-ro')  # fixed, see above
 try:
-    exe3 = os.path.join(tmpdir3, 'DelphiLspMcp.exe')
-    shutil.copyfile(EXE, exe3)
+    exe3 = mc.copia_exe(tmpdir3)
     paspath = os.path.join(tmpdir3, 'Sample.pas')
     with open(paspath, 'w') as f:
         f.write('unit Sample;\r\ninterface\r\nimplementation\r\nend.\r\n')
@@ -220,17 +181,20 @@ try:
         f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
                 '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\nAllowTests=1\n'
                 % (RO_PORT, TOKEN, RO_TOKEN, tmpdir3))
-    env3 = dict(os.environ)
-    env3.pop('DELPHI_MCP_TOKEN', None)
-    proc3 = subprocess.Popen([exe3, '--http'], env=env3,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(3)
+    proc3 = mc.lanza_http(exe3, None, mc.entorno(), espera_en=RO_PORT)
     try:
         URL = 'http://127.0.0.1:%d/mcp' % RO_PORT
 
         def call(tool, args, token):
             return post({"jsonrpc": "2.0", "id": 9, "method": "tools/call",
                          "params": {"name": tool, "arguments": args}}, token)
+
+        # El .dproj de la muestra, de verdad: sin el, "el .dproj no fue
+        # modificado por el escape de mayusculas" no se ejecutaba NUNCA (el
+        # fixture solo tenia el .pas). Lo crea el token COMPLETO, el que si
+        # escribe, y es un proyecto al que add-platform Linux64 SI cambiaria.
+        call('delphi_create', {'kind': 'project-console', 'dir': tmpdir3,
+                               'name': 'Sample'}, TOKEN)
 
         # v0.91: the RO token is a workspace credential too - it reads inside
         # ITS workspace roots (tmpdir3), not the repo
@@ -314,16 +278,21 @@ try:
         # all (delphi_config -> treated as "view", a read) while the handler
         # received add-platform and wrote the .dproj.
         _dproj = paspath.replace('.pas', '.dproj')
-        _before = os.path.getmtime(_dproj) if os.path.exists(_dproj) else None
+        _before = open(_dproj, 'rb').read() if os.path.exists(_dproj) else None
+        _mtime = os.path.getmtime(_dproj) if _before is not None else None
         for spelling in ('Command', 'COMMAND', 'com_mand'):
             code, body = call('delphi_config', {'repo': REPO, 'project': _dproj,
                                                 spelling: 'add-platform',
                                                 'platform': 'Linux64'}, RO_TOKEN)
             check('ro: delphi_config con "%s" sigue siendo SOLO LECTURA' % spelling,
                   'SOLO LECTURA' in body, '%s %s' % (code, body[:130]))
-        if _before is not None:
-            check('ro: el .dproj no fue modificado por el escape de mayusculas',
-                  os.path.getmtime(_dproj) == _before, _dproj)
+        # SIEMPRE: sin el .dproj de la muestra no hay nada que medir, y eso
+        # es un FAIL, no un check que desaparece
+        check('ro: el .dproj no fue modificado por el escape de mayusculas',
+              _before is not None and os.path.exists(_dproj)
+              and open(_dproj, 'rb').read() == _before
+              and os.path.getmtime(_dproj) == _mtime,
+              _dproj if _before is not None else 'no hay .dproj de la muestra: ' + _dproj)
         # same class on git: an annotated tag hidden behind "Message"
         code, body = call('delphi_git', {'repo': REPO, 'command': 'tag',
                                          'args': 'v9', 'Message': 'x'}, RO_TOKEN)
@@ -419,16 +388,13 @@ finally:
 # Born in the field (2026-08-21): a 72 MB PAServer installer pulled as base64
 # chunks through an agent's context. Bytes travel as HTTP now - same exe,
 # same port, same Bearer gate, same read jail.
-import hashlib, urllib.parse
-FILES_PORT = 4317
-tmpdir4 = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'http-files')  # fixed, see above
-shutil.rmtree(tmpdir4, ignore_errors=True)
+FILES_PORT = mc.puerto_libre()
+tmpdir4 = mc.carpeta('http-files')  # fixed, see above
 jail4 = os.path.join(tmpdir4, 'jail')
 os.makedirs(os.path.join(jail4, 'sub'), exist_ok=True)
 os.makedirs(os.path.join(tmpdir4, 'outside'), exist_ok=True)
 try:
-    exe4 = os.path.join(tmpdir4, 'DelphiLspMcp.exe')
-    shutil.copyfile(EXE, exe4)
+    exe4 = mc.copia_exe(tmpdir4)
     small = os.path.join(jail4, 'small.txt')
     with open(small, 'wb') as f:
         f.write(b'hola mundo\r\n')
@@ -444,12 +410,7 @@ try:
                 '[Workspace]\nRoots=%s\n\n'
                 '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\n'
                 % (FILES_PORT, jail4, TOKEN, RO_TOKEN, jail4))
-    env4 = dict(os.environ)
-    env4.pop('DELPHI_MCP_TOKEN', None)
-    env4.pop('DELPHI_MCP_ROOTS', None)
-    proc4 = subprocess.Popen([exe4, '--http'], env=env4,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(3)
+    proc4 = mc.lanza_http(exe4, None, mc.entorno(), espera_en=FILES_PORT)
     try:
         URL = 'http://127.0.0.1:%d/mcp' % FILES_PORT
         BASE = 'http://127.0.0.1:%d' % FILES_PORT
@@ -549,40 +510,27 @@ finally:
 # 1.0.17: a session idle longer than the timeout is DEAD - 404 with the reason,
 # the same door an id this process never issued already got - and initialize
 # opens a new one. Three seconds here (decimals are accepted for exactly this).
-TTL_PORT = 4319
-tmpdir5 = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'http-ttl')
-shutil.rmtree(tmpdir5, ignore_errors=True)
-os.makedirs(tmpdir5, exist_ok=True)
+TTL_PORT = mc.puerto_libre()
+tmpdir5 = mc.carpeta('http-ttl')
 try:
-    exe5 = os.path.join(tmpdir5, 'DelphiLspMcp.exe')
-    shutil.copyfile(EXE, exe5)
+    exe5 = mc.copia_exe(tmpdir5)
     with open(os.path.join(tmpdir5, 'settings.ini'), 'w') as f:
         f.write('[Server]' + chr(10) + 'Port=%d' % TTL_PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)
                 + 'SessionTimeoutMinutes=0.05' + chr(10) * 2
                 + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
                 + 'Roots=%s' % tmpdir5 + chr(10)
                 + 'DelphiVersion=12.0' + chr(10))   # NOT installed here: falls back, says so
-    env5 = dict(os.environ); env5.pop('DELPHI_MCP_TOKEN', None); env5.pop('DELPHI_MCP_SESSION_TIMEOUT_MINUTES', None)
-    proc5 = subprocess.Popen([exe5, '--http'], env=env5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(3)
-    URL5 = 'http://127.0.0.1:%d/mcp' % TTL_PORT
-    def post5(payload, session=None):
-        hdr = {'Content-Type': 'application/json', 'Accept': 'application/json',
-               'Authorization': 'Bearer ' + TOKEN}
-        if session:
-            hdr['Mcp-Session-Id'] = session
-        req = urllib.request.Request(URL5, json.dumps(payload).encode('utf-8'), hdr)
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                return r.status, r.headers.get('Mcp-Session-Id'), r.read().decode('utf-8', 'replace')
-        except urllib.error.HTTPError as e:
-            return e.code, None, e.read().decode('utf-8', 'replace')
+    proc5 = mc.lanza_http(exe5, None, mc.entorno(), espera_en=TTL_PORT)
+    # Accept: application/json a secas, como el post() de arriba
+    cli5 = mc.Http(TTL_PORT, TOKEN, t=60)
+    JSON = 'application/json'
     try:
-        code, sid5, body = post5(INIT)
+        code, h, body = cli5.post(INIT, accept=JSON)
+        sid5 = h.get('Mcp-Session-Id')
         check('ttl: initialize da sesion', code == 200 and bool(sid5), '%s %s' % (code, body[:120]))
         WS = {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
               "params": {"name": "delphi_workspace", "arguments": {}}}
-        code, _, body = post5(WS, sid5)
+        code, _, body = cli5.post(WS, sid5, accept=JSON)
         try:
             srv = json.loads(json.loads(body)['result']['content'][0]['text'])['server']
         except Exception:
@@ -598,8 +546,8 @@ try:
               ws5.get('activeDelphi') == '37.0' and ws5.get('delphiVersionRequested') == '12.0'
               and '12.0' in ws5.get('delphiVersionNote', '') and '37.0' in ws5.get('delphiVersionNote', ''),
               json.dumps(ws5)[:300])
-        code, _, body = post5({"jsonrpc": "2.0", "id": 8, "method": "tools/call",
-                               "params": {"name": "delphi_installs", "arguments": {}}}, sid5)
+        code, _, body = cli5.post({"jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                               "params": {"name": "delphi_installs", "arguments": {}}}, sid5, accept=JSON)
         try:
             ins = json.loads(json.loads(body)['result']['content'][0]['text'])
         except Exception:
@@ -607,30 +555,40 @@ try:
         check('delphi_installs dice la pedida y la nota',
               ins.get('requested') == '12.0' and '37.0' in ins.get('requestedNote', ''), json.dumps(ins)[:300])
         time.sleep(1.5)
-        code, _, body = post5({"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}, sid5)
+        code, _, body = cli5.post({"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}, sid5, accept=JSON)
         check('ttl: cada peticion la toca (1,5 s despues sigue viva)', code == 200 and 'delphi_build' in body,
               '%s %s' % (code, body[:120]))
         time.sleep(4)
-        code, _, body = post5({"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {}}, sid5)
+        code, _, body = cli5.post({"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {}}, sid5, accept=JSON)
         check('ttl: 4 s sin usarla -> 404 "Session expired" con el plazo',
               code == 404 and 'Session expired' in body and '0.05' in body, '%s %s' % (code, body[:200]))
-        code, sid5b, body = post5(INIT, sid5)
+        code, h, body = cli5.post(INIT, sid5, accept=JSON)
+        sid5b = h.get('Mcp-Session-Id')
         check('ttl: initialize con la sesion caducada abre otra nueva',
               code == 200 and bool(sid5b) and sid5b != sid5, '%s %s' % (code, body[:120]))
-        code, _, body = post5({"jsonrpc": "2.0", "id": 6, "method": "tools/list", "params": {}}, sid5b)
+        code, _, body = cli5.post({"jsonrpc": "2.0", "id": 6, "method": "tools/list", "params": {}}, sid5b, accept=JSON)
         check('ttl: la nueva sirve', code == 200 and 'delphi_build' in body, '%s %s' % (code, body[:120]))
         # una sesion sin clientInfo tambien se registra (antes: sin nombre, sin sesion, 404)
-        code, sid5c, body = post5({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                                   "params": {"protocolVersion": "2025-06-18", "capabilities": {}}})
-        code2, _, body2 = post5({"jsonrpc": "2.0", "id": 7, "method": "tools/list", "params": {}}, sid5c)
-        check('ttl: initialize SIN clientInfo tambien registra la sesion', code == 200 and code2 == 200,
-              '%s %s %s' % (code, code2, body2[:120]))
+        code, h, body = cli5.post({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                                   "params": {"protocolVersion": "2025-06-18", "capabilities": {}}},
+                                  accept=JSON)
+        sid5c = h.get('Mcp-Session-Id')
+        # SIN sesion no hay nada que usar: un tools/list sin Mcp-Session-Id
+        # tambien contesta 200, y eso es lo que dejaba pasar este check
+        # (26-sep: ese initialize contestaba 200 con un Access violation
+        # dentro y ninguna sesion). El detalle ensena lo que dijo.
+        if sid5c:
+            code2, _, body2 = cli5.post({"jsonrpc": "2.0", "id": 7, "method": "tools/list", "params": {}},
+                                        sid5c, accept=JSON)
+        else:
+            code2, body2 = None, body
+        check('ttl: initialize SIN clientInfo tambien registra la sesion',
+              code == 200 and bool(sid5c) and code2 == 200,
+              '%s %s %s' % (code, code2, body2[:160]))
     finally:
         proc5.kill()
         proc5.wait()
 finally:
     shutil.rmtree(tmpdir5, ignore_errors=True)
 
-print()
-print('== http battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+mc.fin('http battery')

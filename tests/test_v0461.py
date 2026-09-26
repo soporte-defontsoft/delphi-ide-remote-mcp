@@ -3,55 +3,15 @@ delphi_list brace refusal, log flushed per line.
 
 Usage:  python tests/test_v0461.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, threading, queue, time, os, sys, tempfile, shutil, glob
+import json, os, time, uuid
+import mcp_cliente as mc
+from mcp_cliente import check
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, '..'))
-SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
-BASE = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests', 'v0461')
-shutil.rmtree(BASE, ignore_errors=True)
-os.makedirs(BASE)
-EXE = os.path.join(BASE, 'DelphiLspMcp.exe')
-shutil.copy(SRC, EXE)
+BASE = mc.carpeta('v0461')
+EXE = mc.copia_exe(BASE)
 
-env = dict(os.environ); env['DELPHI_MCP_ROOTS'] = BASE
-proc = subprocess.Popen([EXE], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
-q = queue.Queue()
-def reader():
-    for line in proc.stdout:
-        line = line.strip()
-        if line: q.put(line)
-threading.Thread(target=reader, daemon=True).start()
-rid = [10]
-def send(o):
-    proc.stdin.write(json.dumps(o) + '\n'); proc.stdin.flush()
-def recv(r, t=300):
-    dl = time.time() + t
-    while time.time() < dl:
-        try: line = q.get(timeout=1)
-        except queue.Empty: continue
-        try: m = json.loads(line)
-        except Exception: continue
-        if m.get('id') == r: return m
-    return None
-def call(name, args):
-    rid[0] += 1
-    send({"jsonrpc": "2.0", "id": rid[0], "method": "tools/call", "params": {"name": name, "arguments": args}})
-    r = recv(rid[0])
-    if r is None: return '(timeout)'
-    if 'error' in r: return 'MCPERROR ' + json.dumps(r['error'])[:200]
-    c = r['result'].get('content', [])
-    return c[0].get('text', '') if c else '(no content)'
-send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "v0461-battery", "version": "1"}}})
-recv(1); send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-P = F = 0
-def check(name, ok, detail=''):
-    global P, F
-    if ok: P += 1; print('PASS', name)
-    else: F += 1; print('FAIL', name, '--', (detail or '')[:400])
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='v0461-battery', t=300)
+call = srv.call
 
 # --- fixtures
 open(os.path.join(BASE, 'Big.dproj'), 'w', encoding='utf-8').write(
@@ -99,14 +59,25 @@ check('components alias query->filter', 'Unknown parameter' not in r and 'zzz-no
 
 # --- log flushed per line (the tray never closes the writer)
 r = call('delphi_workspace', {})
-check('workspace ok', 'roots' in r, r[:100])
-logs = glob.glob(os.path.join(BASE, 'logs', '*.log')) + glob.glob(os.path.join(BASE, '*.log'))
-if logs:
-    txt = open(max(logs, key=os.path.getmtime), encoding='utf-8', errors='ignore').read()
-    check('log flushed per line (last call already on disk)', 'delphi_workspace' in txt, logs)
-else:
-    print('SKIP log flush (no log file in scratch: file logging off in stdio mode)')
+# the real card (its roots list): a refusal text also says "roots"
+check('workspace ok', isinstance(mc.como_json(r).get('roots'), list), r[:100])
+# Until 1.5.0 the terminal (stdio) wrote no log at all and this check was a
+# permanent SKIP. Now ONE sink (Lsp.LogSink) serves the three hosts: it
+# appends logs\actual.log next to the exe every half second, while the
+# server lives. The last call carries a marker of its own, so what is found
+# on disk is THAT call and not an earlier line that happens to match.
+MARCA = 'marca-del-log-' + uuid.uuid4().hex[:12]
+call('delphi_search', {'root': BASE, 'query': MARCA})
+VIVO = os.path.join(BASE, 'logs', 'actual.log')
+txt = ''
+for _ in range(50):  # up to 5 s: the sink appends every half second
+    if os.path.isfile(VIVO):
+        txt = open(VIVO, encoding='utf-8', errors='ignore').read()
+        if MARCA in txt:
+            break
+    time.sleep(0.1)
+check('log flushed per line (last call already on disk)', MARCA in txt,
+      '%s | %s' % (VIVO, os.listdir(BASE)))
 
-proc.kill()
-print('\n== v0.46.1 battery: %d PASS / %d FAIL ==' % (P, F))
-sys.exit(1 if F else 0)
+srv.mata()
+mc.fin('v0.46.1 battery')

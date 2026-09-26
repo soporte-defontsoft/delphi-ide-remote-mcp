@@ -923,7 +923,7 @@ begin
         if (Length(Cand) <= 1) or CharInSet(Cand[1], ['+', '-']) then
           Continue;
         // {$R file.res name}: only the first token is a path
-        Cand := Cand.Split([' ', #9])[0].Trim(['''', '"']);
+        Cand := PrimerTrozo(Cand, [' ', #9]).Trim(['''', '"']);
         if Cand = '' then
           Continue;
         if not TPath.IsPathRooted(Cand) then
