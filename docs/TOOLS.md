@@ -287,7 +287,7 @@ Create a NEW Delphi project (console/VCL/FMX: .dpr + buildable .dproj + main for
 
 ### `delphi_delete`
 
-Delete a file or folder inside the workspace. NOT a hard delete: the target is moved to a recoverable trash (__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. Jailed to the workspace roots, refused in read-only mode. Use it to clean up stray files and leftovers. Deleting a unit (.pas) also trashes its .dfm/.fmx and takes it out of every project that lists it (uses, CreateForm, DCCReference) - looked for from its folder UP to the edge of the workspace. Deleting a whole FOLDER takes the units inside it out of the project too. To keep the file but drop it from a project use delphi_config command=remove-unit.
+Delete a file or folder inside the workspace. NOT a hard delete: the target is moved to a recoverable trash (__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. The one exception is the server's `__delphi-temp`: nothing is restored from a temp, so what you delete inside it goes for good - a trash already sitting inside it included - and the temp folder itself is refused, because it is every agent's (1.5.4). Jailed to the workspace roots, refused in read-only mode. Use it to clean up stray files and leftovers. Deleting a unit (.pas) also trashes its .dfm/.fmx and takes it out of every project that lists it (uses, CreateForm, DCCReference) - looked for from its folder UP to the edge of the workspace. Deleting a whole FOLDER takes the units inside it out of the project too. To keep the file but drop it from a project use delphi_config command=remove-unit.
 
 *Access: read-write.*
 

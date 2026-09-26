@@ -260,6 +260,40 @@ try:
           jd.get('hidden') == cajones(jd), ld[:300])
     os.remove(plantado)
     os.remove(visible)
+
+    # ------------------------------------------------------------------ T8
+    # delphi_delete DENTRO de la temporal borra de verdad: de un temporal no
+    # se restaura nada, y la copia a la papelera era un temporal mas, guardado
+    # dentro de la propia temporal y escondido de todo listado (visto el
+    # 26-sep-2026 limpiando dos capturas de 6 MB). "Sin copia" se mide en el
+    # DISCO: nada con ese nombre en toda la jaula, ni en una papelera.
+    def rastro(nombre):
+        return [os.path.join(d, n) for d, ds, fs in os.walk(JAIL)
+                for n in ds + fs if n.startswith(nombre)]
+    os.makedirs(os.path.join(TEMP_JAULA, 'borrame-t8'), exist_ok=True)
+    open(os.path.join(TEMP_JAULA, 'borrame-t8', 'cap.png'), 'wb').write(b'x' * 64)
+    open(os.path.join(TEMP_JAULA, 'suelto-t8.txt'), 'w').write('tmp')
+    d1 = call('delphi_delete', {'path': os.path.join(TEMP_JAULA, 'borrame-t8')})
+    check('T8 borrar una carpeta DENTRO de la temporal: sin copia en ningun sitio',
+          d1.startswith('BORRADO') and 'sin copia' in d1 and not rastro('borrame-t8'),
+          d1[:200] + ' | ' + str(rastro('borrame-t8'))[:200])
+    d2 = call('delphi_delete', {'path': os.path.join(TEMP_JAULA, 'suelto-t8.txt')})
+    check('T8b ...y un fichero suelto, igual',
+          d2.startswith('BORRADO') and 'sin copia' in d2 and not rastro('suelto-t8'),
+          d2[:200] + ' | ' + str(rastro('suelto-t8'))[:200])
+    # una papelera que YA esta dentro de la temporal (la dejaba la version
+    # anterior) es un temporal mas: se borra, no se protege como papelera
+    vieja = os.path.join(TEMP_JAULA, '__delphi-patch', '20200101', 'deleted')
+    os.makedirs(vieja, exist_ok=True)
+    open(os.path.join(vieja, 'vieja-t8.png'), 'wb').write(b'y')
+    d3 = call('delphi_delete', {'path': os.path.join(TEMP_JAULA, '__delphi-patch')})
+    check('T8c una papelera DENTRO de la temporal tambien se borra, sin copia',
+          d3.startswith('BORRADO') and not rastro('vieja-t8'),
+          d3[:200] + ' | ' + str(rastro('vieja-t8'))[:200])
+    d4 = call('delphi_delete', {'path': TEMP_JAULA})
+    check('T8d la temporal ENTERA no: es de todos los agentes del servidor',
+          d4.startswith('RECHAZADO') and 'ENTERA' in d4 and os.path.isdir(TEMP_JAULA),
+          d4[:200])
     # La promesa de Lsp.References.pas ("que los dos digan lo mismo no se
     # deja a la buena fe: lo comprueba la bateria") no la comprobaba nadie
     # hasta la auditoria. Esta es esa comprobacion: el nombrador

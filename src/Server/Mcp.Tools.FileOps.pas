@@ -271,6 +271,38 @@ begin
   Result := TFile.Exists(APath) or TDirectory.Exists(APath);
 end;
 
+{ Borrar DE VERDAD, sin papelera: una carpeta por el borrador con guard
+  (no cruza enlaces: el junction cae como entrada y su destino ni se
+  mira), un fichero quitandole antes el solo-lectura. '' si ya no esta;
+  si no, la negativa. Los dos unicos sitios de donde algo se va para
+  siempre lo comparten: la purga de la papelera y el borrado dentro de una
+  temporal del servidor. }
+function BorraDeVerdad(const APath: string): string;
+begin
+  Result := '';
+  try
+    if TDirectory.Exists(APath) then
+      // La RTL recursiva entraba y borraba AL OTRO LADO de un junction
+      // (2026-09-21): BorraArbol no.
+      BorraArbol(APath)
+    else
+    begin
+      if (TFile.GetAttributes(APath) * [TFileAttribute.faReadOnly]) <> [] then
+        TFile.SetAttributes(APath,
+          TFile.GetAttributes(APath) - [TFileAttribute.faReadOnly]);
+      TFile.Delete(APath);
+    end;
+  except
+    on E: Exception do
+      Exit(Format(SR_FILE_PURGE_FAILED_FMT,
+        [TPath.GetFileName(ExcludeTrailingPathDelimiter(APath)), E.Message]));
+  end;
+  if StillThere(APath) then
+    Result := Format(SR_FILE_PURGE_FAILED_FMT,
+      [TPath.GetFileName(ExcludeTrailingPathDelimiter(APath)),
+       'sigue ahi despues de borrarlo']);
+end;
+
 { TDelphiDeleteTool }
 
 constructor TDelphiDeleteTool.Create;
@@ -280,6 +312,9 @@ begin
   FDescription := 'Delete a file or folder inside the workspace. NOT a hard ' +
     'delete: the target is moved to a recoverable trash ' +
     '(__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. ' +
+    'The one exception is the server''s __delphi-temp: nothing is restored ' +
+    'from a temp, so what you delete inside it goes for good (the temp ' +
+    'folder itself is refused: it is every agent''s). ' +
     'Jailed to the workspace roots, refused in read-only mode. A folder ' +
     'that is or holds a workspace root, a reference project or a read-only ' +
     'folder is refused (it would go along). Use it to ' +
@@ -333,36 +368,36 @@ begin
       if Denied <> '' then
         Exit(Denied);
     end;
-    try
-      if TDirectory.Exists(Params.Path) then
-      begin
-        // BorraArbol limpia atributos por entrada y NO cruza enlaces: el
-        // junction cae como entrada y su destino ni se mira. El borrado
-        // recursivo de la RTL entraba y borraba AL OTRO LADO (2026-09-21).
-        BorraArbol(Params.Path);
-      end
-      else
-      begin
-        if (TFile.GetAttributes(Params.Path) * [TFileAttribute.faReadOnly]) <> [] then
-          TFile.SetAttributes(Params.Path,
-            TFile.GetAttributes(Params.Path) - [TFileAttribute.faReadOnly]);
-        TFile.Delete(Params.Path);
-      end;
-    except
-      on E: Exception do
-        Exit(Format(SR_FILE_PURGE_FAILED_FMT,
-          [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), E.Message]));
-    end;
-    if StillThere(Params.Path) then
-      Exit(Format(SR_FILE_PURGE_FAILED_FMT,
-        [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
-         'sigue ahi despues de borrarlo']));
+    Denied := BorraDeVerdad(Params.Path);
+    if Denied <> '' then
+      Exit(Denied);
     try
       if TFile.Exists(Params.Path + '.by') then
         TFile.Delete(Params.Path + '.by');
     except
     end;
     Exit(Format(SN_FILE_PURGED_FMT,
+      [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
+  end;
+  // De un temporal no se restaura nada (lo dicen la purga del arranque y
+  // los listados): la copia a la papelera era un temporal mas, guardado
+  // DENTRO de la propia temporal y escondido de todo listado hasta la
+  // siguiente purga (visto el 26-sep-2026 al limpiar dos capturas de 6 MB).
+  // Se borra de verdad, y ANTES de la regla de la papelera: una papelera
+  // que ya este dentro de una temporal es un temporal mas. La carpeta de
+  // temporales misma no: es de todos los agentes del servidor y se vacia
+  // sola al arrancar.
+  var EsLaTemporal: Boolean;
+  if EnTemporal(Params.Path, EsLaTemporal) then
+  begin
+    if EsLaTemporal then
+      Exit(Format(SR_FILE_DELETE_TEMP_ROOT_FMT, [Params.Path]));
+    if not StillThere(Params.Path) then
+      Exit('RECHAZADO: no existe ' + Params.Path);
+    Denied := BorraDeVerdad(Params.Path);
+    if Denied <> '' then
+      Exit(Denied);
+    Exit(Format(SN_FILE_DELETE_TEMP_FMT,
       [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
   end;
   if IsBackupPath(Params.Path) then

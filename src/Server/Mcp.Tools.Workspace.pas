@@ -2182,7 +2182,7 @@ begin
       // este era el unico recorredor que las COPIABA fuera del workspace.
       // El formato se excluyo en cinco sitios y se olvido aqui
       // (auditoria 2026-09-21).
-      if F.ToLower.Contains('\' + TempFolderName + '\') then
+      if EnTemporal(F) then
         Continue;
       if SameText(TPath.GetExtension(F), '.dcu') then
         Continue;

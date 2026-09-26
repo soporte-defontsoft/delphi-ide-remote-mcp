@@ -574,6 +574,15 @@ function LiveSessionCount: Integer;                             // purga las cad
   moving one OUT is the restore itself. Only writing IN is refused. }
 function DeadCopyWriteDenied(const APath: string): string;
 
+{ APath ES una carpeta de temporales del servidor (__delphi-temp) o esta
+  DENTRO de una - sobre la ruta canonica larga, asi que un alias 8.3 es la
+  misma carpeta. AEsLaCarpeta: es la carpeta misma, no algo de dentro. EL
+  lector de esa pregunta: la puerta de escritura, el reconocedor de
+  capturas y delphi_package la hacian cada uno a mano, y delphi_delete iba
+  a ser el cuarto (26-sep-2026). }
+function EnTemporal(const APath: string): Boolean; overload;
+function EnTemporal(const APath: string; out AEsLaCarpeta: Boolean): Boolean; overload;
+
 { EL gate de DESTINO de escritura: la jaula (PathDenied) y las carpetas
   muertas (DeadCopyWriteDenied), en ese orden. Todo escritor que cree o
   reescriba un fichero en una ruta que elige el agente pasa por aqui. Hasta
@@ -1739,6 +1748,23 @@ begin
     Result := DeadCopyWriteDenied(APath);
 end;
 
+function EnTemporal(const APath: string; out AEsLaCarpeta: Boolean): Boolean;
+var
+  P, T: string;
+begin
+  P := ExcludeTrailingPathDelimiter(LongCanonical(APath)).ToLower.Replace('/', '\');
+  T := '\' + TempFolderName.ToLower;
+  AEsLaCarpeta := P.EndsWith(T);
+  Result := AEsLaCarpeta or P.Contains(T + '\');
+end;
+
+function EnTemporal(const APath: string): Boolean;
+var
+  EsLaCarpeta: Boolean;
+begin
+  Result := EnTemporal(APath, EsLaCarpeta);
+end;
+
 function DeadCopyWriteDenied(const APath: string): string;
 var
   P: string;
@@ -1759,7 +1785,7 @@ begin
   // escribir en algo que no tiene por que seguir estando. Leerla si se puede
   // (de ahi se baja una captura con delphi_fetch): esta es la puerta de
   // ESCRIBIR.
-  if P.Contains('\__delphi-temp\') or P.EndsWith('\__delphi-temp') then
+  if EnTemporal(APath) then
     Exit(SR_GUARD_DEAD_TEMP);
   if P.Contains('\__history\') or P.Contains('\__recovery\') then
     Exit(SR_GUARD_DEAD_IDE);
@@ -2976,7 +3002,7 @@ begin
     Exit;
   end;
   Result := SameText(TPath.GetExtension(Full), '.png') and
-    Full.ToLower.Contains('\' + TempFolderName + '\') and
+    EnTemporal(Full) and
     MatchText(TPath.GetFileName(TPath.GetDirectoryName(Full)),
       [CAPTURE_SUB_DESKTOP, CAPTURE_SUB_ANDROID]);
 end;

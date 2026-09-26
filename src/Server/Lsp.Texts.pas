@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.5.3';
+  SERVER_VERSION = '1.5.4';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -3872,8 +3872,18 @@ const
     'concreta que quieras quitar de en medio.';
 
   SR_FILE_PURGE_FAILED_FMT =
-    'RECHAZADO: no he podido purgar %s (%s). Si algo lo tiene abierto, ' +
+    'RECHAZADO: no he podido borrar %s (%s). Si algo lo tiene abierto, ' +
     'reintenta en un momento.';
+
+  { delphi_delete DENTRO de una temporal del servidor: de un temporal no se
+    restaura nada, asi que no hay copia (26-sep-2026). }
+  SN_FILE_DELETE_TEMP_FMT =
+    'BORRADO %s, sin copia: es un temporal del servidor (__delphi-temp), ' +
+    'y de un temporal no se restaura nada.';
+  SR_FILE_DELETE_TEMP_ROOT_FMT =
+    'RECHAZADO: %s es la carpeta de temporales del servidor ENTERA: es de ' +
+    'todos sus agentes y se vacia sola al arrancar. Borra lo tuyo de ' +
+    'dentro (tu subcarpeta, una captura).';
 
   SN_FILE_PURGED_FMT =
     'PURGADO %s. Esto no tiene vuelta atras: era una copia de la papelera y ' +

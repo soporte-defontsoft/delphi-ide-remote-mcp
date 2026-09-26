@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.5.4] - 2026-09-26
+
+### Fixed
+
+- **`delphi_delete` inside the server's `__delphi-temp` made a recoverable
+  copy of a temp.** Nothing is restored from a temp - the startup purge and
+  the listings say so - but the delete moved it to a trash created INSIDE
+  the temp itself, hidden from every listing until the next purge (seen
+  cleaning two 6 MB captures). Inside a temp a delete now goes for good,
+  a trash already sitting there included; the temp folder itself is
+  refused, because it is every agent's and empties itself at startup.
+  `test_round44` T8-T8d (the 1.5.3 binary fails the four).
+
+### Changed
+
+- **One reader of "is this inside a server temp?"**: `EnTemporal`
+  (`Lsp.Guard`). The write gate, the capture recognizer and
+  `delphi_package` each asked it by hand - one with the folder name as a
+  literal - and `delphi_delete` was going to be the fourth. And one
+  "delete for good", `BorraDeVerdad`, shared by the trash purge and the
+  temp delete: the only two places anything leaves for good.
+
 ## [1.5.3] - 2026-09-26
 
 ### Fixed
