@@ -925,7 +925,7 @@ begin
           Continue;
         end;
         if ReadPathDenied(Cand) <> '' then
-          Exit(Format(SR_BUILD_INCLUDE_OUTSIDE_FMT,
+          Exit(MsgFmt(SR_BUILD_INCLUDE_OUTSIDE_FMT,
             [D.Texto.Trim, TPath.GetFileName(F)]));
       end;
     end;
@@ -947,14 +947,14 @@ begin
   // La que NO declara la pone el IDE fuera del proyecto (David, 25-sep-2026).
   var Falta := BuildOutputUndeclared(ADprojPath, APlat, ACfg);
   if Falta <> '' then
-    Exit(Format(SR_BUILD_OUTPUT_UNDECLARED_FMT, [Falta]));
+    Exit(MsgFmt(SR_BUILD_OUTPUT_UNDECLARED_FMT, [Falta]));
   for var S in BuildOutputDirs(ADprojPath, APlat, ACfg) do
   begin
     if S.Dir = '' then
-      Exit(Format(SR_BUILD_OUTPUT_UNRESOLVED_FMT, [S.Tag, S.Value]));
+      Exit(MsgFmt(SR_BUILD_OUTPUT_UNRESOLVED_FMT, [S.Tag, S.Value]));
     var Motivo := EscrituraDenegada(S.Dir);
     if Motivo <> '' then
-      Exit(Format(SR_BUILD_OUTPUT_DENIED_FMT, [S.Tag, S.Value, Motivo]));
+      Exit(MsgFmt(SR_BUILD_OUTPUT_DENIED_FMT, [S.Tag, S.Value, Motivo]));
   end;
 end;
 
@@ -1117,12 +1117,12 @@ begin
     Vistos.Free;
   end;
   if Hechos <> '' then
-    ANota := Format(SN_BUILD_DEVLINK_DONE_FMT, [Hechos]);
+    ANota := MsgFmt(SN_BUILD_DEVLINK_DONE_FMT, [Hechos]);
   if Faltan <> '' then
   begin
     if ANota <> '' then
       ANota := ANota + ' ';
-    ANota := ANota + Format(SN_BUILD_DEVLINK_MISSING_FMT, [Faltan]);
+    ANota := ANota + MsgFmt(SN_BUILD_DEVLINK_MISSING_FMT, [Faltan]);
   end;
 end;
 
@@ -1190,7 +1190,7 @@ begin
   // an agent ends up asking the operator to enable build scripts in order to
   // compile a markdown file.
   if not SameText(TPath.GetExtension(ADprojPath), '.dproj') then
-    raise Exception.Create(Format(SR_BUILD_NOT_A_PROJECT_FMT,
+    raise Exception.Create(MsgFmt(SR_BUILD_NOT_A_PROJECT_FMT,
       [TPath.GetFileName(ADprojPath)]));
   // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
   // shell-running / file-planting MSBuild tasks (a planted <Target><Exec>, a
@@ -1216,7 +1216,7 @@ begin
     begin
       TLogger.Warning(Format('delphi_build: REFUSED "%s" - %s',
         [TPath.GetFullPath(ADprojPath), Hazard]));
-      raise Exception.Create(Format(SR_BUILD_HAZARD_FMT, [Hazard]));
+      raise Exception.Create(MsgFmt(SR_BUILD_HAZARD_FMT, [Hazard]));
     end;
     // Parte 2 del mismo gate: una propiedad de entorno que el IDE reserva,
     // redefinida por el proyecto o por algo que importa, desvia uno de los
@@ -1229,7 +1229,7 @@ begin
     begin
       TLogger.Warning(Format('delphi_build: REFUSED "%s" - redefines reserved IDE property %s',
         [TPath.GetFullPath(ADprojPath), ResProp]));
-      raise Exception.Create(Format(SR_BUILD_RESERVED_PROP_FMT, [ResProp]));
+      raise Exception.Create(MsgFmt(SR_BUILD_RESERVED_PROP_FMT, [ResProp]));
     end;
     EventosSaltados := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), False) <> '';
   end;
@@ -1334,14 +1334,14 @@ begin
       // No basta con que exista un fichero con ese nombre: la lista de SDKs
       // de la plataforma, la MISMA que usa set-sdk (auditoria 25-sep-2026).
       if not MatchText(Pedido, SdksDePlataforma(Info.Version, Plat)) then
-        raise Exception.Create(Format(SR_BUILD_SDK_NOEXISTE_FMT,
+        raise Exception.Create(MsgFmt(SR_BUILD_SDK_NOEXISTE_FMT,
           [Pedido, string.Join(', ', SdksDePlataforma(Info.Version, Plat))]));
       SdkArg := ' /p:PlatformSDK=' + Pedido;
       SdkUsado := Pedido;
     end
     else if ProyectoDeclaraSdk(TPath.GetFullPath(ADprojPath), Plat, SdkUsado) then
       // el proyecto lo dice: no se le pisa, y se cuenta cual es
-      SdkNota := Format(SN_BUILD_SDK_PROYECTO_FMT, [SdkUsado])
+      SdkNota := MsgFmt(SN_BUILD_SDK_PROYECTO_FMT, [SdkUsado])
     else
     begin
       var Cand := SdksDePlataforma(Info.Version, Plat);
@@ -1356,7 +1356,7 @@ begin
       begin
         SdkUsado := PorDefecto;
         if Length(Cand) > 1 then
-          SdkNota := Format(SN_BUILD_SDK_DEFAULT_FMT,
+          SdkNota := MsgFmt(SN_BUILD_SDK_DEFAULT_FMT,
             [SdkUsado, string.Join(', ', Cand)]);
       end
       else if (CanonicalPlatform(Plat) <> '') and
@@ -1365,7 +1365,7 @@ begin
       else if Length(Cand) = 1 then
         SdkUsado := Cand[0]
       else if Length(Cand) > 1 then
-        raise Exception.Create(Format(SR_BUILD_SDK_VARIOS_FMT,
+        raise Exception.Create(MsgFmt(SR_BUILD_SDK_VARIOS_FMT,
           [Plat, string.Join(', ', Cand)]));
       if SdkUsado <> '' then
       begin
@@ -1374,7 +1374,7 @@ begin
         // del IDE deja su propia nota, y pisarla convertia "lo eligio tu SDK
         // Manager" en un "hay varios, mira a ver" que no decia nada.
         if (SdkNota = '') and (Length(Cand) > 1) then
-          SdkNota := Format(SN_BUILD_SDK_ELEGIDO_FMT,
+          SdkNota := MsgFmt(SN_BUILD_SDK_ELEGIDO_FMT,
             [SdkUsado, string.Join(', ', Cand)]);
       end;
     end;
@@ -1384,7 +1384,7 @@ begin
     begin
       var Mezcla := SysrootMezcladoDeSdk(Info.Version, SdkUsado);
       if Mezcla <> '' then
-        SdkAviso := Format(SN_BUILD_SDK_MEZCLA_FMT, [SdkUsado, Mezcla]);
+        SdkAviso := MsgFmt(SN_BUILD_SDK_MEZCLA_FMT, [SdkUsado, Mezcla]);
     end;
   end;
 
@@ -1527,7 +1527,7 @@ begin
     if QueuedMs >= 500 then
     begin
       Result.AddPair('queuedMs', TJSONNumber.Create(QueuedMs));
-      Result.AddPair('queuedNote', SN_BUILD_QUEUED);
+      Result.AddPair('queuedNote', MsgText(SN_BUILD_QUEUED));
     end;
     Result.AddPair('project', TPath.GetFullPath(ADprojPath));
     // Con QUE instalacion se compilo: vital para un agente en una maquina
@@ -1543,13 +1543,13 @@ begin
     // tests was looking at two different binaries and could not see why
     // (field round 10). Say which one this was, when nobody chose.
     if APlatform = '' then
-      Result.AddPair('platformNote', SN_BUILD_DEFAULT_PLATFORM);
+      Result.AddPair('platformNote', MsgText(SN_BUILD_DEFAULT_PLATFORM));
     Result.AddPair('config', Cfg);
     Result.AddPair('target', Target);
     if EventosSaltados then
     begin
       Result.AddPair('buildEventsSkipped', TJSONBool.Create(True));
-      Result.AddPair('buildEventsNote', SN_BUILD_EVENTS_SKIPPED);
+      Result.AddPair('buildEventsNote', MsgText(SN_BUILD_EVENTS_SKIPPED));
     end;
     if SdkUsado <> '' then
       Result.AddPair('sdk', SdkUsado);
@@ -1622,15 +1622,15 @@ begin
           end;
           // La frase de los BPL solo si hay alguno: con la lista vacia decia
           // 'requires=""' (visto el 24-sep con un paquete del workspace).
-          Result.AddPair('requiresNote', Format(SN_BUILD_REQUIRES_FMT,
+          Result.AddPair('requiresNote', MsgFmt(SN_BUILD_REQUIRES_FMT,
             [Implicitas.Count,
              IfThen(DeBpl.Count > 0,
-               Format(SN_BUILD_REQUIRES_KNOWN_FMT, [string.Join(', ', DeBpl.ToStringArray),
+               MsgFmt(SN_BUILD_REQUIRES_KNOWN_FMT, [string.Join(', ', DeBpl.ToStringArray),
                  string.Join(';', DeBpl.ToStringArray)]), ''),
              IfThen(SinPaquete.Count > 0,
-               Format(SN_BUILD_REQUIRES_UNKNOWN_FMT, [string.Join(', ', SinPaquete.ToStringArray)]), '')]));
+               MsgFmt(SN_BUILD_REQUIRES_UNKNOWN_FMT, [string.Join(', ', SinPaquete.ToStringArray)]), '')]));
           if DelWorkspace.Count > 0 then
-            Result.AddPair('requiresWorkspaceNote', Format(SN_BUILD_REQUIRES_WORKSPACE_FMT,
+            Result.AddPair('requiresWorkspaceNote', MsgFmt(SN_BUILD_REQUIRES_WORKSPACE_FMT,
               [string.Join('; ', DelWorkspace.ToStringArray)]));
         end;
       finally
@@ -1655,7 +1655,7 @@ begin
     begin
       Result.AddPair('firstError', Errors.Items[0].Value);
       if Errors.Count > 1 then
-        Result.AddPair('firstErrorNote', SN_BUILD_FIRST_ERROR);
+        Result.AddPair('firstErrorNote', MsgText(SN_BUILD_FIRST_ERROR));
     end;
     // F2039 is almost never a code problem: the binary this build is about to
     // write is OPEN - the previous run still alive, the IDE holding it, a
@@ -1663,14 +1663,14 @@ begin
     // gets the one sentence that turns it into an action.
     if (ExitCode <> 0) and Output.Contains('F2039') then
     begin
-      Result.AddPair('lockedOutputNote', SN_BUILD_LOCKED_OUTPUT);
+      Result.AddPair('lockedOutputNote', MsgText(SN_BUILD_LOCKED_OUTPUT));
     end;
     // Se reintento y salio: el agente merece saber que su build tardo mas
     // porque el binario estaba ocupado, no porque compilar sea lento.
     if ReintentosBloqueo > 0 then
     begin
       Result.AddPair('lockedRetries', TJSONNumber.Create(ReintentosBloqueo));
-      Result.AddPair('lockedRetriesNote', SN_BUILD_LOCKED_RETRY);
+      Result.AddPair('lockedRetriesNote', MsgText(SN_BUILD_LOCKED_RETRY));
     end;
     if EnlacesDev > 0 then
       Result.AddPair('sdkLinksCompleted', TJSONNumber.Create(EnlacesDev));
@@ -1695,14 +1695,14 @@ begin
           for var D in UnitSourceFolders(U) do
             CArr.Add(D);
         end;
-        Result.AddPair('missingUnitsNote', SN_BUILD_MISSING_UNITS_NOTE +
-          IfThen(EsPaquete, SN_BUILD_MISSING_UNITS_PACKAGE, ''));
+        Result.AddPair('missingUnitsNote', MsgText(SN_BUILD_MISSING_UNITS_NOTE) +
+          IfThen(EsPaquete, MsgText(SN_BUILD_MISSING_UNITS_PACKAGE), ''));
       end;
     end;
     // En quiet msbuild NI SIQUIERA imprime los warnings, asi que no se puede
     // dar un recuento: se dice que no se pidieron, en vez de inventar un 0.
     if SameText(AVerbosity, 'quiet') then
-      Result.AddPair('warningsNote', SN_BUILD_QUIET_WARNINGS);
+      Result.AddPair('warningsNote', MsgText(SN_BUILD_QUIET_WARNINGS));
     Result.AddPair('outputTail', Tail.ToString);
     // A stateless protocol means the agent only knows what each result tells
     // it: say WHERE the artifact landed, or it has to hunt the disk for it
@@ -1711,7 +1711,7 @@ begin
     if (ExitCode = 0) and not SameText(Target, 'Clean') then
     begin
       var Artifact := ResolveBuildOutput(TPath.GetFullPath(ADprojPath), Plat, Cfg);
-      var Note := SN_BUILD_OUTPUT;
+      var Note := MsgText(SN_BUILD_OUTPUT);
       // An Android Deploy's real product is the .apk the packager left in
       // <Platform>\<Config>\<name>\bin - declare THAT, not the .so.
       if Plat.StartsWith('Android', True) and Target.Contains('Deploy') then
@@ -1723,7 +1723,7 @@ begin
         if TFile.Exists(Apk) then
         begin
           Artifact := Apk;
-          Note := SN_BUILD_APK_NOTE;
+          Note := MsgText(SN_BUILD_APK_NOTE);
         end;
       end;
       if Artifact <> '' then
@@ -1747,11 +1747,11 @@ begin
         // del target _DeployFiles, un fichero por cada tramo entre ';'.
         for var MP in TRegEx.Matches(Output, '--put="?([^"\r\n]+)', [roIgnoreCase]) do
           Shipped := Shipped + Length(MP.Groups[1].Value.Split([';']));
-        Result.AddPair('deployNote', Format(SN_BUILD_DEPLOYED_FMT,
+        Result.AddPair('deployNote', MsgFmt(SN_BUILD_DEPLOYED_FMT,
           [AProfile.Trim, GetEnvironmentVariable('USERNAME'), AProfile.Trim,
            TPath.GetFileNameWithoutExtension(ADprojPath)]));
         if Output.Contains('Local file "" not found') then
-          Result.AddPair('deployWarning', SN_BUILD_DEPLOY_EMPTY_ENTRY);
+          Result.AddPair('deployWarning', MsgText(SN_BUILD_DEPLOY_EMPTY_ENTRY));
         if Shipped > 0 then
           Result.AddPair('deployedFiles', TJSONNumber.Create(Shipped))
         else if not SameText(AVerbosity, 'verbose') then
@@ -1759,7 +1759,7 @@ begin
           // en normal tampoco): no se puede contar, y
           // decir "no se envio nada" era falso (medido 2026-09-23: deploy a
           // Windows correcto y sin deployedFiles).
-          Result.AddPair('deployedFilesNote', SN_BUILD_QUIET_DEPLOYED);
+          Result.AddPair('deployedFilesNote', MsgText(SN_BUILD_QUIET_DEPLOYED));
       end;
     end;
     // Un Deploy que no pudo reescribir la carpeta del target porque el vigia
@@ -1771,18 +1771,18 @@ begin
     begin
       var MLock := TRegEx.Match(Output, '([0-9]{8}-[0-9]{9}-[0-9a-f]{8})\.wait(?:\.[0-9]+)?\.exe', [roIgnoreCase]);
       if MLock.Success then
-        Result.AddPair('deployLockedNote', Format(SN_BUILD_DEPLOY_LOCKED_FMT,
+        Result.AddPair('deployLockedNote', MsgFmt(SN_BUILD_DEPLOY_LOCKED_FMT,
           [MLock.Groups[1].Value, AProfile.Trim, ADprojPath, MLock.Groups[1].Value]));
     end;
     // The agent should know its project just gained a manifest whether or
     // not this particular msbuild run succeeded.
     if ManifestNew then
       if Plat.StartsWith('Android', True) then
-        Result.AddPair('deployManifest', SN_BUILD_ANDROID_NEW)
+        Result.AddPair('deployManifest', MsgText(SN_BUILD_ANDROID_NEW))
       else if ManifestFilled then
-        Result.AddPair('deployManifest', Format(SN_BUILD_MANIFEST_FILLED_FMT, [Plat]))
+        Result.AddPair('deployManifest', MsgFmt(SN_BUILD_MANIFEST_FILLED_FMT, [Plat]))
       else
-        Result.AddPair('deployManifest', SN_BUILD_MANIFEST_NEW);
+        Result.AddPair('deployManifest', MsgText(SN_BUILD_MANIFEST_NEW));
   finally
     YaDicho.Free;
     Tail.Free;

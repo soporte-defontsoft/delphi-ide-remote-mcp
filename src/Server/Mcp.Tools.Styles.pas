@@ -127,7 +127,7 @@ begin
       end;
       Ret.AddPair('count', TJSONNumber.Create(N));
       Ret.AddPair('styles', Arr);
-      Ret.AddPair('note', SN_STYLES_VIEW_NOTE);
+      Ret.AddPair('note', MsgText(SN_STYLES_VIEW_NOTE));
       Result := Ret.ToJSON;
     finally
       Ret.Free;
@@ -187,15 +187,15 @@ var
   WasThere: Boolean;
 begin
   if AProp.Trim = '' then
-    Exit(SR_STYLES_NEED_PROP);
+    Exit(MsgText(SR_STYLES_NEED_PROP));
   if not TRegEx.IsMatch(AProp.Trim, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
-    Exit(Format(SR_STYLES_PROP_CHARS_FMT, [AProp]));
+    Exit(MsgFmt(SR_STYLES_PROP_CHARS_FMT, [AProp]));
   if (not ADelete) and (AValue.Trim = '') then
-    Exit(SR_STYLES_NEED_VALUE);
+    Exit(MsgText(SR_STYLES_NEED_VALUE));
   if AValue.Contains(#10) or AValue.Contains(#13) then
-    Exit(SR_STYLES_VALUE_LINE);
+    Exit(MsgText(SR_STYLES_VALUE_LINE));
   if (not ADelete) and not ValidStyleValue(AValue) then
-    Exit(Format(SR_STYLES_VALUE_GRAMMAR_FMT, [AValue.Trim]));
+    Exit(MsgFmt(SR_STYLES_VALUE_GRAMMAR_FMT, [AValue.Trim]));
   Doc := TStyleDoc.Create(APath);
   try
     O := Doc.Resolve(AStyle, AChild, Err);
@@ -210,25 +210,25 @@ begin
     begin
       NewName := AValue.Trim.Trim(['''']).Trim;
       if NewName = '' then
-        Exit(SR_STYLES_RENAME_EMPTY);
+        Exit(MsgText(SR_STYLES_RENAME_EMPTY));
       if Doc.FindStyle(NewName) <> nil then
-        Exit(Format(SR_STYLES_RENAME_DUP_FMT, [NewName]));
+        Exit(MsgFmt(SR_STYLES_RENAME_DUP_FMT, [NewName]));
       Line := Doc.SetProp(O, AProp.Trim, '''' + NewName + '''', WasThere);
       Doc.Save;
-      Exit(Format(SN_STYLES_RENAMED_FMT,
+      Exit(MsgFmt(SN_STYLES_RENAMED_FMT,
         [AStyle, NewName, TPath.GetFileName(Doc.Path)]));
     end;
     if ADelete then
     begin
       if not Doc.DeleteProp(O, AProp.Trim) then
-        Exit(Format(SN_STYLES_PROP_ABSENT_FMT, [AProp, AStyle, AChild]));
+        Exit(MsgFmt(SN_STYLES_PROP_ABSENT_FMT, [AProp, AStyle, AChild]));
       Doc.Save;
-      Exit(Format(SN_STYLES_PROP_DELETED_FMT, [AProp, AStyle, IfThen(AChild <> '', '/' + AChild, ''),
+      Exit(MsgFmt(SN_STYLES_PROP_DELETED_FMT, [AProp, AStyle, IfThen(AChild <> '', '/' + AChild, ''),
         TPath.GetFileName(Doc.Path)]));
     end;
     Line := Doc.SetProp(O, AProp.Trim, AValue.Trim, WasThere);
     Doc.Save;
-    Result := Format(SN_STYLES_PROP_SET_FMT, [IfThen(WasThere, 'CAMBIADA', 'ANADIDA'), Line.Trim,
+    Result := MsgFmt(SN_STYLES_PROP_SET_FMT, [IfThen(WasThere, 'CAMBIADA', 'ANADIDA'), Line.Trim,
       AStyle, IfThen(AChild <> '', '/' + AChild, ''), TPath.GetFileName(Doc.Path)]);
   finally
     Doc.Free;
@@ -241,9 +241,9 @@ var
   Src: TStyleObj;
 begin
   if ANew.Trim = '' then
-    Exit(SR_STYLES_NEED_NAME);
+    Exit(MsgText(SR_STYLES_NEED_NAME));
   if not TRegEx.IsMatch(ANew.Trim, '^[A-Za-z_][\w.\-]*$') then
-    Exit(Format(SR_STYLES_NAME_CHARS_FMT, [ANew]));
+    Exit(MsgFmt(SR_STYLES_NAME_CHARS_FMT, [ANew]));
   Doc := TStyleDoc.Create(APath);
   try
     Src := Doc.FindStyle(AStyle);
@@ -251,11 +251,11 @@ begin
       Exit(Format('RECHAZADO: no hay ningun estilo ''%s'' en %s (command=view los lista).',
         [AStyle, TPath.GetFileName(Doc.Path)]));
     if Doc.FindStyle(ANew.Trim) <> nil then
-      Exit(Format(SR_STYLES_NAME_TAKEN_FMT, [ANew]));
+      Exit(MsgFmt(SR_STYLES_NAME_TAKEN_FMT, [ANew]));
     Doc.CloneStyle(Src, ANew.Trim);
     Doc.Save;
     Src := Doc.FindStyle(ANew.Trim);
-    Result := Format(SN_STYLES_CLONED_FMT, [ANew.Trim, AStyle, Src.StartLine, Src.EndLine,
+    Result := MsgFmt(SN_STYLES_CLONED_FMT, [ANew.Trim, AStyle, Src.StartLine, Src.EndLine,
       TPath.GetFileName(Doc.Path)]);
   finally
     Doc.Free;
@@ -285,7 +285,7 @@ begin
     N := Length(Doc.Styles);
     Doc.DeleteStyle(Src);
     Doc.Save;
-    Result := Format(SN_STYLES_DELETED_FMT, [AStyle, First, Last,
+    Result := MsgFmt(SN_STYLES_DELETED_FMT, [AStyle, First, Last,
       TPath.GetFileName(Doc.Path), N - 1]);
   finally
     Doc.Free;
@@ -317,7 +317,7 @@ begin
   if TFile.Exists(APath) and not IsBinaryStyle(APath) and (Length(Files) = 0) then
     Files := [TPath.GetFullPath(APath)];
   if Length(Files) = 0 then
-    Exit(Format(SR_STYLES_NO_TEXT_FMT, [Dir]));
+    Exit(MsgFmt(SR_STYLES_NO_TEXT_FMT, [Dir]));
   if AProject.Trim <> '' then
   begin
     if TDirectory.Exists(AProject) then
@@ -473,9 +473,9 @@ begin
     Ret.AddPair('ok', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
       (Tokens.Count = 0) and (Rc.Count = 0)));
     if Length(PlatformDefaultStyleNames) = 0 then
-      Ret.AddPair('note', SN_STYLES_NO_DEFAULTS)
+      Ret.AddPair('note', MsgText(SN_STYLES_NO_DEFAULTS))
     else
-      Ret.AddPair('note', SN_STYLES_LINT_NOTE);
+      Ret.AddPair('note', MsgText(SN_STYLES_LINT_NOTE));
     Result := Ret.ToJSON;
   finally
     Ret.Free; // owns Dups/Missing/Tokens/Rc once added
@@ -502,12 +502,12 @@ begin
   Dir := StylesDirOf(APath);
   Exe := StyleConverterExe;
   if Exe = '' then
-    Exit(SR_STYLES_NO_CONVERTER);
+    Exit(MsgText(SR_STYLES_NO_CONVERTER));
   Files := TextStylesIn(Dir);
   if TFile.Exists(APath) and not IsBinaryStyle(APath) then
     Files := [TPath.GetFullPath(APath)];
   if Length(Files) = 0 then
-    Exit(Format(SR_STYLES_NO_TEXT_FMT, [Dir]));
+    Exit(MsgFmt(SR_STYLES_NO_TEXT_FMT, [Dir]));
   Ret := TJSONObject.Create;
   Arr := TJSONArray.Create;
   try
@@ -568,7 +568,7 @@ begin
       Break; // one manifest per styles folder
     end;
     Ret.AddPair('ok', TJSONBool.Create(AllOk));
-    Ret.AddPair('note', SN_STYLES_BUILD_NOTE);
+    Ret.AddPair('note', MsgText(SN_STYLES_BUILD_NOTE));
     Result := Ret.ToJSON;
   finally
     Ret.Free;
@@ -599,17 +599,17 @@ var
   begin
     Result := '';
     if ADepth > 8 then
-      Exit(SR_STYLES_RC_DEEP);
+      Exit(MsgText(SR_STYLES_RC_DEEP));
     if Seen.IndexOf(AFile.ToLower) >= 0 then
       Exit; // already checked (and it stops an include cycle dead)
     Seen.Add(AFile.ToLower);
     if ReadPathDenied(AFile) <> '' then
-      Exit(Format(SR_STYLES_RC_OUTSIDE_FMT,
+      Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT,
         [TPath.GetFileName(AFile), TPath.GetFileName(ARc)]));
     try
       Txt := PatchLoadText(AFile, Enc);
     except
-      Exit(Format(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(AFile)]));
+      Exit(MsgFmt(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(AFile)]));
     end;
     Base := TPath.GetDirectoryName(TPath.GetFullPath(AFile));
     for M in TRegEx.Matches(Txt, '(?im)^\s*(?:#include\s+|[A-Za-z_]\w*\s+[A-Za-z_]\w*\s+)("[^"]+"|\S+)\s*$') do
@@ -625,10 +625,10 @@ var
       try
         Cand := TPath.GetFullPath(Cand);
       except
-        Exit(Format(SR_STYLES_RC_BADPATH_FMT, [Raw]));
+        Exit(MsgFmt(SR_STYLES_RC_BADPATH_FMT, [Raw]));
       end;
       if ReadPathDenied(Cand) <> '' then
-        Exit(Format(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
+        Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
       // an #include brings a whole new file's worth of references with it
       if M.Value.TrimLeft.ToLower.StartsWith('#include') and TFile.Exists(Cand) then
       begin
@@ -659,7 +659,7 @@ begin
   if Cmd = '' then
     Cmd := 'view';
   if Params.Path.Trim = '' then
-    Exit(SR_STYLES_NEED_PATH);
+    Exit(MsgText(SR_STYLES_NEED_PATH));
   if MatchText(Cmd, ['set', 'clone', 'delete', 'build']) then
     Denied := WriteTargetDenied(Params.Path)
   else
@@ -667,16 +667,16 @@ begin
   if Denied <> '' then
     Exit(Denied);
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
-    Exit(Format(SR_STYLES_MISSING_FMT, [Params.Path]));
+    Exit(MsgFmt(SR_STYLES_MISSING_FMT, [Params.Path]));
   if MatchText(Cmd, ['view', 'get', 'set', 'clone', 'delete']) then
   begin
     if TDirectory.Exists(Params.Path) then
-      Exit(SR_STYLES_NEED_FILE);
+      Exit(MsgText(SR_STYLES_NEED_FILE));
     if IsBinaryStyle(Params.Path) then
-      Exit(Format(SR_STYLES_BINARY_FMT, [TPath.GetFileName(Params.Path)]));
+      Exit(MsgFmt(SR_STYLES_BINARY_FMT, [TPath.GetFileName(Params.Path)]));
   end;
   if MatchText(Cmd, ['get', 'set', 'clone', 'delete']) and (Params.Style.Trim = '') then
-    Exit(SR_STYLES_NEED_STYLE);
+    Exit(MsgText(SR_STYLES_NEED_STYLE));
   try
     if Cmd = 'view' then
       Result := ViewStyles(Params.Path, Params.Filter.Trim)

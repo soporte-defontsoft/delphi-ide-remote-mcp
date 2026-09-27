@@ -274,7 +274,7 @@ begin
       Exit('LSP error: ' + Err.ToJSON + ANote);
     V := AResp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
-      Exit(SN_LSP_NULL_NOTE + ANote);
+      Exit(MsgText(SN_LSP_NULL_NOTE) + ANote);
     DecorateLocations(V);
     Result := V.ToJSON + ANote;
   finally
@@ -577,8 +577,8 @@ begin
       Ret.RemovePair('symbols').Free;
     Ret.AddPair('totalSymbols', TJSONNumber.Create(SymCountDeep(AArr)));
     if AAuto then
-      Ret.AddPair('autoNote', Format(SN_SYMBOLS_AUTO_FMT, [AFullLen]));
-    Ret.AddPair('note', SN_SYMBOLS_SUMMARY_NOTE);
+      Ret.AddPair('autoNote', MsgFmt(SN_SYMBOLS_AUTO_FMT, [AFullLen]));
+    Ret.AddPair('note', MsgText(SN_SYMBOLS_SUMMARY_NOTE));
     Result := Ret.ToJSON;
   finally
     Ret.Free;
@@ -657,7 +657,7 @@ begin
     if Total > Hits.Count then
       Ret.AddPair('truncated', TJSONBool.Create(True));
     if Total = 0 then
-      Ret.AddPair('note', SN_SYMBOLS_FILTER_NONE);
+      Ret.AddPair('note', MsgText(SN_SYMBOLS_FILTER_NONE));
     Result := Ret.ToJSON;
   finally
     Ret.Free;
@@ -690,7 +690,7 @@ function NotDelphiSource(const APath: string): string;
 begin
   Result := '';
   if not MatchText(TPath.GetExtension(APath), ['.pas', '.dpr', '.dpk', '.inc']) then
-    Result := Format(SR_LSP_NOT_SOURCE_FMT,
+    Result := MsgFmt(SR_LSP_NOT_SOURCE_FMT,
       [TPath.GetFileName(APath), TPath.GetExtension(APath)]);
 end;
 
@@ -847,7 +847,7 @@ begin
       Ret.AddPair('total', TJSONNumber.Create(N));
       if N > Units.Count then
         Ret.AddPair('truncated', TJSONBool.Create(True));
-      Ret.AddPair('note', SN_SYMBOLS_DIGEST_NOTE);
+      Ret.AddPair('note', MsgText(SN_SYMBOLS_DIGEST_NOTE));
       Exit(Ret.ToJSON);
     finally
       Ret.Free;
@@ -863,7 +863,7 @@ begin
   if Result = '' then
     Result := NotDelphiSource(Params.Path);
   if (Result = '') and not TFile.Exists(Params.Path) then
-    Result := Format(SR_LSP_NO_FILE_FMT, [Params.Path]);
+    Result := MsgFmt(SR_LSP_NO_FILE_FMT, [Params.Path]);
   if Result <> '' then
     Exit;
   var Mode := Params.Mode.Trim.ToLower;
@@ -881,7 +881,7 @@ begin
       Exit('LSP error: ' + Err.ToJSON + Note);
     var V := Resp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
-      Exit(SN_LSP_NULL_NOTE + Note);
+      Exit(MsgText(SN_LSP_NULL_NOTE) + Note);
     DecorateLocations(V);
     // La VERDAD de cada declaracion, leida del fuente, UNA vez y para los
     // tres modos. DelphiLSP renderiza las firmas perdiendo los valores por
@@ -982,7 +982,7 @@ begin
       // hover knows the symbol, definition is not indexed yet: say "not yet",
       // never the enclosing routine (measured by Hermes, 2026-09-22)
       DefResp.Free;
-      Exit(SN_LSP_WARMING + NoSettingsNote(Settings));
+      Exit(MsgText(SN_LSP_WARMING) + NoSettingsNote(Settings));
     end
     else
     begin
@@ -990,7 +990,7 @@ begin
       // SAY that on a call site this is the enclosing routine's
       DefResp.Free;
       Resp := Client.Declaration(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
-      Exit(RenderResult(Resp, SN_DEF_DECL_FALLBACK + NoSettingsNote(Settings)));
+      Exit(RenderResult(Resp, MsgText(SN_DEF_DECL_FALLBACK) + NoSettingsNote(Settings)));
     end;
   end
   else if Kind = 'implementation' then
@@ -1002,7 +1002,7 @@ begin
     if Pending then
     begin
       Resp.Free;
-      Exit(SN_LSP_WARMING + NoSettingsNote(Settings));
+      Exit(MsgText(SN_LSP_WARMING) + NoSettingsNote(Settings));
     end;
   end;
   Result := RenderResult(Resp, NoSettingsNote(Settings));
@@ -1147,7 +1147,7 @@ begin
             Best := K;
         if (Best >= 1) and (Best <> EffChar) then
         begin
-          AdjNote := Format(SN_COMPLETION_SNAPPED_FMT, [Params.Character, Best]);
+          AdjNote := MsgFmt(SN_COMPLETION_SNAPPED_FMT, [Params.Character, Best]);
           EffChar := Best; // 0-based col past the dot = 1-based index of the dot
         end;
       end;

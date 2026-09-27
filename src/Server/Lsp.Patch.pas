@@ -877,7 +877,7 @@ begin
   // 1. la misma linea con otra indentacion
   for I := 0 to High(ALines) do
     if ALines[I].Trim = Objetivo then
-      Exit(#10 + Format(SN_ANCLA_INDENTACION_FMT, [I + 1]) +
+      Exit(#10 + MsgFmt(SN_ANCLA_INDENTACION_FMT, [I + 1]) +
         Format(#10'  %d|%s', [I + 1, ALines[I]]));
   // 2. un TROZO de una o mas lineas
   N := 0;
@@ -893,7 +893,7 @@ begin
     ADentro := True;
     if N > 5 then
       Result := Result + Format(#10'  ...y %d mas', [N - 5]);
-    Exit(#10 + SN_ANCLA_CONTIENEN + Result);
+    Exit(#10 + MsgText(SN_ANCLA_CONTIENEN) + Result);
   end;
   // 3. la linea real que mas se le parece por el principio
   Mejor := -1;
@@ -916,7 +916,7 @@ begin
     end;
   end;
   if (Mejor >= 0) and (MejorLen >= 12) then
-    Result := #10 + Format(SN_ANCLA_PARECIDA_FMT, [Mejor + 1]) +
+    Result := #10 + MsgFmt(SN_ANCLA_PARECIDA_FMT, [Mejor + 1]) +
       Format(#10'  %d|%s', [Mejor + 1, ALines[Mejor]]);
 end;
 
@@ -928,10 +928,10 @@ var
 begin
   Pista := PistaAncla(ALines, AOld, Dentro);
   if Dentro then
-    Result := Format(SR_ANCLA_DENTRO_FMT, [AFichero]) + Pista
+    Result := MsgFmt(SR_ANCLA_DENTRO_FMT, [AFichero]) + Pista
   else
-    Result := Format(SR_ANCLA_NO_ESTA_FMT, [AFichero, AOld]) + Pista + #10 +
-      SN_ANCLA_COPIALA;
+    Result := MsgFmt(SR_ANCLA_NO_ESTA_FMT, [AFichero, AOld]) + Pista + #10 +
+      MsgText(SN_ANCLA_COPIALA);
 end;
 
 { EL escaneo del bloque, escrito una vez. Devuelve el indice 0-based donde
@@ -1022,7 +1022,7 @@ begin
   if not MatchText(TPath.GetExtension(APath), ['.pas', '.dpr', '.dpk', '.inc', '.lpr']) then
     Exit;
   for var L in LlavesAnidadas(ANuevo) do
-    Result := Result + [Format(SN_AVISO_LLAVE_ANIDADA_FMT, [ALineaBase + L])];
+    Result := Result + [MsgFmt(SN_AVISO_LLAVE_ANIDADA_FMT, [ALineaBase + L])];
 end;
 
 function ApplyBlockEdit(const APath, AOld, ANew: string;
@@ -1041,7 +1041,7 @@ begin
   Lines := Text.Replace(#13#10, #10).Split([#10]);
   OldLines := LineasDelAncla(AOld);
   if Length(OldLines) < 2 then
-    Exit(SR_PATCH_BLOCK_SHORT);
+    Exit(MsgText(SR_PATCH_BLOCK_SHORT));
   if AAtLine > 0 then
   begin
     // Linea YA resuelta por quien llama. Una tanda la resuelve contra el
@@ -1082,16 +1082,16 @@ begin
       if not Esta then
       begin
         var Dentro: Boolean;
-        Falta := #10 + Format(SN_BLOQUE_LINEA_FALTA_FMT, [J + 1, OldLines[J].Trim]) +
+        Falta := #10 + MsgFmt(SN_BLOQUE_LINEA_FALTA_FMT, [J + 1, OldLines[J].Trim]) +
           PistaAncla(Lines, OldLines[J], Dentro);
         Break;
       end;
     end;
-    Exit(Format(SR_PATCH_BLOCK_MISSING_FMT,
+    Exit(MsgFmt(SR_PATCH_BLOCK_MISSING_FMT,
       [Length(OldLines), OldLines[0].Trim]) + Falta);
   end;
   if Count > 1 then
-    Exit(Format(SR_PATCH_BLOCK_AMBIGUOUS_FMT, [Count, OldLines[0].Trim]));
+    Exit(MsgFmt(SR_PATCH_BLOCK_AMBIGUOUS_FMT, [Count, OldLines[0].Trim]));
   NewLines := LineasDeNew(ANew);
   Sb := TStringBuilder.Create;
   try
@@ -1110,7 +1110,7 @@ begin
   finally
     Sb.Free;
   end;
-  Result := Format(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
+  Result := MsgFmt(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
   for var Aviso in AvisosDeLlaves(APath, string.Join(#10, NewLines), Hit) do
     Result := Result + #10 + Aviso;
 end;
@@ -1126,29 +1126,29 @@ begin
   AOld := '';
   ANewLine := '';
   if AOtros <> '' then
-    Exit(Format(SR_FRAG_MIXED_FMT, [AOtros]));
+    Exit(MsgFmt(SR_FRAG_MIXED_FMT, [AOtros]));
   if AAtLine <= 0 then
-    Exit(SR_FRAG_NEEDS_ATLINE);
+    Exit(MsgText(SR_FRAG_NEEDS_ATLINE));
   if (AFrag = '') or (Pos(#$FFFD, AFrag) > 0) then
-    Exit(SR_FRAG_EMPTY);
+    Exit(MsgText(SR_FRAG_EMPTY));
   if AFrag.Contains(#10) or AFrag.Contains(#13) or
      ANew.Contains(#10) or ANew.Contains(#13) then
-    Exit(SR_FRAG_MULTILINE);
+    Exit(MsgText(SR_FRAG_MULTILINE));
   if AFrag = ANew then
-    Exit(SR_FRAG_SAME);
+    Exit(MsgText(SR_FRAG_SAME));
   // Los rechazos de aqui ENSENAN la linea: que no sea la de un fichero que
   // este token no puede leer. La puerta ya lo mira; esto es el cinturon.
   Result := ReadPathDenied(APath);
   if Result <> '' then
     Exit;
   if not TFile.Exists(APath) then
-    Exit(Format(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
+    Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
   Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Replace(#13, #10)
     .Split([#10]);
   if (Length(Lines) > 0) and (Lines[High(Lines)] = '') then
     SetLength(Lines, Length(Lines) - 1); // la fantasma del salto final
   if AAtLine > Length(Lines) then
-    Exit(Format(SR_FRAG_BEYOND_FMT,
+    Exit(MsgFmt(SR_FRAG_BEYOND_FMT,
       [AAtLine, TPath.GetFileName(APath), Length(Lines)]));
   Linea := Lines[AAtLine - 1];
   Veces := 0;
@@ -1159,9 +1159,9 @@ begin
     P := Pos(AFrag, Linea, P + 1); // solapadas tambien cuentan: "aa" en "aaa"
   end;
   if Veces = 0 then
-    Exit(Format(SR_FRAG_NOTFOUND_FMT, [AFrag, AAtLine, AAtLine, Linea]));
+    Exit(MsgFmt(SR_FRAG_NOTFOUND_FMT, [AFrag, AAtLine, AAtLine, Linea]));
   if Veces > 1 then
-    Exit(Format(SR_FRAG_SEVERAL_FMT, [AFrag, Veces, AAtLine, AAtLine, Linea]));
+    Exit(MsgFmt(SR_FRAG_SEVERAL_FMT, [AFrag, Veces, AAtLine, AAtLine, Linea]));
   P := Pos(AFrag, Linea);
   AOld := Linea;
   ANewLine := Copy(Linea, 1, P - 1) + ANew +
@@ -1176,16 +1176,16 @@ begin
   if AToLine <= 0 then
     Exit;
   if AToLine - 1 < ATarget0 then
-    Exit(Format(SR_RANGE_BACKWARDS_FMT, [AToLine, ATarget0 + 1]));
+    Exit(MsgFmt(SR_RANGE_BACKWARDS_FMT, [AToLine, ATarget0 + 1]));
   if AToLine > ATotal then
-    Exit(Format(SR_RANGE_BEYOND_FMT,
+    Exit(MsgFmt(SR_RANGE_BEYOND_FMT,
       [AToLine, TPath.GetFileName(APath), ATotal]));
   // Un rango de la primera a la ultima es "vaciame el fichero" por otra
   // puerta, y estas tools ya rechazan reescribirlo entero. La puerta de al
   // lado es justo donde se cuelan los agujeros (medido tres veces el
   // 2026-09-20), asi que se cierra aqui, con el mismo criterio.
   if (ATarget0 = 0) and (AToLine >= ATotal) then
-    Exit(Format(SR_RANGE_WHOLE_FMT, [ATotal]));
+    Exit(MsgFmt(SR_RANGE_WHOLE_FMT, [ATotal]));
   AFin := AToLine - 1;
 end;
 
@@ -1215,17 +1215,17 @@ begin
   if not (V is TJSONArray) then
   begin
     V.Free;
-    Exit(Format(SR_PATCH_EDITS_JSON_FMT,
+    Exit(MsgFmt(SR_PATCH_EDITS_JSON_FMT,
       [Length(AEditsJson), Copy(AEditsJson.Trim, 1, 60)]));
   end;
   Arr := TJSONArray(V);
   try
     if Arr.Count = 0 then
-      Exit(SR_PATCH_EDITS_EMPTY);
+      Exit(MsgText(SR_PATCH_EDITS_EMPTY));
     if Arr.Count > 50 then
-      Exit(SR_PATCH_EDITS_TOOMANY);
+      Exit(MsgText(SR_PATCH_EDITS_TOOMANY));
     if not TFile.Exists(APath) then
-      Exit(Format(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
+      Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
     Copia := TFile.ReadAllBytes(APath); // la red: el fichero antes de nada
     Sb := TStringBuilder.Create;
     try
@@ -1264,7 +1264,7 @@ begin
               if Par.JsonString.Value = Cl then
                 Conocido := True;
             if not Conocido then
-              Exit(Format(SR_PATCH_EDIT_KEY_FMT,
+              Exit(MsgFmt(SR_PATCH_EDIT_KEY_FMT,
                 [N + 1, Par.JsonString.Value]));
           end;
           Hasta[N] := O2.GetValue<Integer>('toline', 0);
@@ -1297,7 +1297,7 @@ begin
                 Inc(Hay);
               end;
               var Cabeza := PrimerTrozo(Anc2, [#10]).Trim;
-              Exit(Format(SR_PATCH_OCCURRENCE_FMT, [N + 1, Nth,
+              Exit(MsgFmt(SR_PATCH_OCCURRENCE_FMT, [N + 1, Nth,
                 Cabeza.Substring(0, Min(60, Length(Cabeza))), Hay]));
             end;
           end;
@@ -1312,7 +1312,7 @@ begin
       for N := 0 to Arr.Count - 1 do
         for var M := 0 to N - 1 do
           if (Ocurr[N] > 0) and (Ocurr[N] = Ocurr[M]) then
-            Exit(Format(SR_PATCH_OCCURRENCE_DUP_FMT, [M + 1, N + 1, Ocurr[N]]));
+            Exit(MsgFmt(SR_PATCH_OCCURRENCE_DUP_FMT, [M + 1, N + 1, Ocurr[N]]));
       N := 0;
       Fallo := 0;
       var Avisos: TArray<string> := [];
@@ -1373,7 +1373,7 @@ begin
         if EsBloque and (Hasta[N - 1] > 0) then
         begin
           Fallo := N;
-          Sb.AppendLine(Format('  %d: %s', [N, SR_RANGE_WITH_BLOCK]));
+          Sb.AppendLine(Format('  %d: %s', [N, MsgText(SR_RANGE_WITH_BLOCK)]));
           Break;
         end;
         if EsBloque then
@@ -1449,10 +1449,10 @@ begin
       if Fallo > 0 then
       begin
         TFile.WriteAllBytes(APath, Copia); // todo o nada, byte a byte
-        Exit(Format(SR_PATCH_EDITS_ROLLED_FMT,
+        Exit(MsgFmt(SR_PATCH_EDITS_ROLLED_FMT,
           [Fallo, Arr.Count, Sb.ToString.TrimRight]));
       end;
-      Result := Format(SN_PATCH_EDITS_OK_FMT,
+      Result := MsgFmt(SN_PATCH_EDITS_OK_FMT,
         [Arr.Count, TPath.GetFileName(APath), Sb.ToString.TrimRight]);
       if Length(Avisos) > 0 then
         Result := Result + #10 + string.Join(#10, Avisos);
@@ -1471,22 +1471,22 @@ var
 begin
   Result := '';
   if (ALine < 0) or (AChar < 0) then
-    Exit(Format(SR_LSP_NEGATIVE_FMT, [ALine, AChar]));
+    Exit(MsgFmt(SR_LSP_NEGATIVE_FMT, [ALine, AChar]));
   // Una ruta que no esta llegaba al motor y volvia como "Error executing
   // tool: File not found", que en las reglas de este servidor significa "me
   // he roto por dentro" y no era el caso (2026-08-25).
   if not TFile.Exists(APath) then
-    Exit(Format(SR_LSP_NO_FILE_FMT, [APath]));
+    Exit(MsgFmt(SR_LSP_NO_FILE_FMT, [APath]));
   try
     Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
   except
     Exit;
   end;
   if ALine >= Length(Lines) then
-    Exit(Format(SR_LSP_LINE_RANGE_FMT,
+    Exit(MsgFmt(SR_LSP_LINE_RANGE_FMT,
       [ALine, TPath.GetFileName(APath), Length(Lines), Length(Lines) - 1]))
   else if AChar > Length(Lines[ALine]) then
-    Exit(Format(SR_LSP_CHAR_RANGE_FMT,
+    Exit(MsgFmt(SR_LSP_CHAR_RANGE_FMT,
       [AChar, ALine, Length(Lines[ALine]), Lines[ALine].Trim]));
 end;
 
@@ -1515,8 +1515,8 @@ begin
     // significa "no insistas, cambia de camino"; un nombre mal escrito es
     // "corrige y repite", o sea "error:".
     if TDirectory.Exists(APath) then
-      Exit(Format(SR_LSP_IS_FOLDER_FMT, [APath]));
-    Exit(Format(SR_LSP_NO_FILE_FMT, [APath]));
+      Exit(MsgFmt(SR_LSP_IS_FOLDER_FMT, [APath]));
+    Exit(MsgFmt(SR_LSP_NO_FILE_FMT, [APath]));
   end;
   B := TFile.ReadAllBytes(APath);
   // Un .dfm BINARIO se lee al vuelo como texto ("Ver como texto" del IDE,
@@ -1529,7 +1529,7 @@ begin
     if NotaBin <> '' then
       Exit('RECHAZADO: ' + NotaBin);
     B := TEncoding.UTF8.GetBytes(Text);
-    NotaBin := SN_READ_BINARY_DESIGNER + #10;
+    NotaBin := MsgText(SN_READ_BINARY_DESIGNER) + #10;
   end;
   // Un binario (un exe, un .res, un .bin.style) no es un texto que numerar:
   // 9 MB de mojibake quemaron un contexto para nada (medido 2026-08-24).
@@ -1555,7 +1555,7 @@ begin
   // body, which reads as "that stretch of the file is empty" (measured
   // 2026-08-25). It is a typo, and it gets told so.
   if FinL < IniL then
-    Exit(Format(SR_READ_RANGE_FMT, [IniL, ATo, Length(Lines)]));
+    Exit(MsgFmt(SR_READ_RANGE_FMT, [IniL, ATo, Length(Lines)]));
   Cut := '';
   if FinL - IniL + 1 > MAX_READ_LINES then
   begin
@@ -1668,11 +1668,11 @@ begin
       if A.ToLine > 0 then
       begin
         if A.CreateUnit_ then
-          Exit(Format(SR_RANGE_WRONG_MODE_FMT, ['createunit']));
+          Exit(MsgFmt(SR_RANGE_WRONG_MODE_FMT, ['createunit']));
         if A.Restore then
-          Exit(Format(SR_RANGE_WRONG_MODE_FMT, ['restore']));
+          Exit(MsgFmt(SR_RANGE_WRONG_MODE_FMT, ['restore']));
         if A.Insert <> '' then
-          Exit(Format(SR_RANGE_WRONG_MODE_FMT, ['insert=' + A.Insert]));
+          Exit(MsgFmt(SR_RANGE_WRONG_MODE_FMT, ['insert=' + A.Insert]));
       end;
 
       // ---------- CREATE UNIT ----------
@@ -2158,7 +2158,7 @@ begin
             if DesignerWiresMethodFile(ChangeFileExt(A.Path, ExtD), Nombre) then
             begin
               Vis := 'published';
-              NotaPublished := Format(SN_PATCH_INSERT_PUBLISHED_BY_EVENT_FMT,
+              NotaPublished := MsgFmt(SN_PATCH_INSERT_PUBLISHED_BY_EVENT_FMT,
                 [TPath.GetFileName(ChangeFileExt(A.Path, ExtD)), Nombre]);
               Break;
             end;
@@ -2341,7 +2341,7 @@ begin
     end;
     if Length(Bind) > 0 then
     begin
-      Res.Add(SN_DESIGNER_BINDING_LINT_HEADER);
+      Res.Add(MsgText(SN_DESIGNER_BINDING_LINT_HEADER));
       Res.AddStrings(Bind);
     end;
     Result := Res.ToStringArray;
@@ -2398,7 +2398,7 @@ begin
   if M.CRLF > M.Loose then Eol := 'CRLF' else Eol := 'LF';
 
   if (Pos(#13, AOld) > 0) or (Pos(#10, AOld) > 0) then
-    Exit(SR_PATCH_ANCHOR_MULTILINE);
+    Exit(MsgText(SR_PATCH_ANCHOR_MULTILINE));
   if AOld.Trim = '' then
     Exit('RECHAZADO: el ancla esta vacia o es solo espacios.');
   if Pos(#$FFFD, AOld) > 0 then
@@ -2497,12 +2497,12 @@ begin
         end;
         if (HitIdx > 0) and (Lines[HitIdx - 1].Trim <> '') and
            (Lines[HitIdx - 1].Trim = NewFirst.Trim) then
-          Warnings.Add(Format(SN_EDIT_DUP_ABOVE_FMT, [HitIdx, NewFirst.Trim]));
+          Warnings.Add(MsgFmt(SN_EDIT_DUP_ABOVE_FMT, [HitIdx, NewFirst.Trim]));
         // Con un rango, la linea de debajo esta DENTRO de lo que se va: no
         // es una duplicacion, es material a punto de desaparecer.
         if (Cuantas = 1) and (HitIdx < High(Lines)) and (Lines[HitIdx + 1].Trim <> '') and
            (Lines[HitIdx + 1].Trim = LastNew.Trim) then
-          Warnings.Add(Format(SN_EDIT_DUP_BELOW_FMT, [HitIdx + 2, LastNew.Trim]));
+          Warnings.Add(MsgFmt(SN_EDIT_DUP_BELOW_FMT, [HitIdx + 2, LastNew.Trim]));
       end;
       Lines[HitIdx] := Prefix + Replacement;
       Quita := Cuantas - 1; // la del ancla se queda, con el texto nuevo
@@ -2652,10 +2652,10 @@ begin
     if Cuantas > 1 then
     begin
       if ADelete then
-        Accion := Format(SN_RANGE_DELETED_FMT,
+        Accion := MsgFmt(SN_RANGE_DELETED_FMT,
           [Cuantas, HitIdx + 1, HitIdx + Cuantas, TPath.GetFileName(APath)])
       else
-        Accion := Format(SN_RANGE_REPLACED_FMT,
+        Accion := MsgFmt(SN_RANGE_REPLACED_FMT,
           [Cuantas, HitIdx + 1, HitIdx + Cuantas, TPath.GetFileName(APath)]);
     end
     else if ADelete then

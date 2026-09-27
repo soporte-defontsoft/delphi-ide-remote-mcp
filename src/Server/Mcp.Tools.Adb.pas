@@ -181,7 +181,7 @@ function GoneHint(const AOutput: string): string;
 begin
   Result := AOutput.Trim;
   if DeviceGone(Result) then
-    Result := Result + sLineBreak + SN_ADB_GONE;
+    Result := Result + sLineBreak + MsgText(SN_ADB_GONE);
 end;
 
 const
@@ -205,7 +205,7 @@ begin
   Cmd := Params.Command.Trim.ToLower;
   Adb := FindAdb;
   if Adb = '' then
-    Exit(SR_ADB_NO_SDK);
+    Exit(MsgText(SR_ADB_NO_SDK));
   // a serial goes BEFORE the subcommand (adb -s <serial> <cmd>). The gate
   // already vetted the device token.
   DevArg := '';
@@ -223,7 +223,7 @@ begin
       for L in Output.Split([#13#10, #10]) do
         if L.Contains('_adb') and L.Contains(':') then
           Devices.Add(L.Trim);
-      Return.AddPair('note', SN_ADB_DISCOVER);
+      Return.AddPair('note', MsgText(SN_ADB_DISCOVER));
       Result := Return.ToJSON;
     finally
       Return.Free;
@@ -240,7 +240,7 @@ begin
         if (L.Trim <> '') and not L.StartsWith('List of devices') and
            not L.Contains('daemon') then
           Devices.Add(L.Trim);
-      Return.AddPair('note', SN_ADB_DEVICES);
+      Return.AddPair('note', MsgText(SN_ADB_DEVICES));
       Result := Return.ToJSON;
     finally
       Return.Free;
@@ -259,7 +259,7 @@ begin
       N := 300;
     if Params.Lines.Trim <> '' then
       if (N < 1) or (N > 5000) then
-        Exit(Format(SR_ADB_LINES_FMT, [Params.Lines.Trim]));
+        Exit(MsgFmt(SR_ADB_LINES_FMT, [Params.Lines.Trim]));
     // out= vetted BEFORE touching adb (fail fast)
     if Params.Out.Trim <> '' then
     begin
@@ -268,7 +268,7 @@ begin
         Exit(Denied);
       if not (Params.Out.Trim.ToLower.EndsWith('.txt') or
               Params.Out.Trim.ToLower.EndsWith('.log')) then
-        Exit(SR_ADB_OUT_LOG);
+        Exit(MsgText(SR_ADB_OUT_LOG));
     end;
     // logcat on a missing device WAITS instead of erroring (measured:
     // "- waiting for device -" until the timeout); get-state answers the
@@ -324,7 +324,7 @@ begin
         Return.AddPair('lines',
           TJSONNumber.Create(Length(Txt.Split([#13#10, #10]))));
         Return.AddPair('size', TJSONNumber.Create(TFile.GetSize(Params.Out.Trim)));
-        Return.AddPair('note', SN_ADB_LOGFILE);
+        Return.AddPair('note', MsgText(SN_ADB_LOGFILE));
         Result := Return.ToJSON;
       finally
         Return.Free;
@@ -339,7 +339,7 @@ begin
       begin
         var Tail := TStringBuilder.Create;
         try
-          Tail.AppendLine(Format(SN_ADB_TAIL_FMT, [Length(Ls), 400]));
+          Tail.AppendLine(MsgFmt(SN_ADB_TAIL_FMT, [Length(Ls), 400]));
           for var I := Length(Ls) - 400 to High(Ls) do
             Tail.AppendLine(Ls[I].TrimRight);
           Result := Tail.ToString.TrimRight;
@@ -354,7 +354,7 @@ begin
   else if (Cmd = 'connect') or (Cmd = 'disconnect') then
   begin
     if Params.Address.Trim = '' then
-      Exit(SR_ADB_NEED_ADDRESS);
+      Exit(MsgText(SR_ADB_NEED_ADDRESS));
     // adb's own output line already says connected/failed - pass it through
     Output := RunAdb(Adb, Cmd + ' ' + Params.Address.Trim, 30000, ExitCode);
     Result := GoneHint(Output);
@@ -362,7 +362,7 @@ begin
   else if Cmd = 'install' then
   begin
     if Params.Apk.Trim = '' then
-      Exit(SR_ADB_NEED_APK);
+      Exit(MsgText(SR_ADB_NEED_APK));
     Denied := ReadPathDenied(Params.Apk);
     if Denied <> '' then
       Exit(Denied);
@@ -375,7 +375,7 @@ begin
   else if Cmd = 'run' then
   begin
     if Params.App.Trim = '' then
-      Exit(SR_ADB_NEED_APP);
+      Exit(MsgText(SR_ADB_NEED_APP));
     // The IDE's "Deploy and Run": am start on the FMX native activity -
     // every Delphi app's activity (the AndroidManifest template names it).
     // This executes on the DEVICE, sandboxed by Android - nothing runs on
@@ -438,7 +438,7 @@ begin
       var HayImagen := TamanoPng(Destino, ImgW, ImgH);
       if HayImagen then
         Return.AddPair('image', Format('%dx%d', [ImgW, ImgH]));
-      var Nota := SN_ADB_SCREENSHOT;
+      var Nota := MsgText(SN_ADB_SCREENSHOT);
       // del PNG a la pantalla en vigor: lo lleva el frame, el agente no multiplica
       var TSX: Double := 1.0;
       var TSY: Double := 1.0;
@@ -469,7 +469,7 @@ begin
             Escala.AddPair('y', TJSONNumber.Create(DH / ImgH));
             TSX := DW / ImgW;
             TSY := DH / ImgH;
-            Nota := Format(SN_ADB_TAP_SCALE_FMT, [ImgW, ImgH, DW, DH,
+            Nota := MsgFmt(SN_ADB_TAP_SCALE_FMT, [ImgW, ImgH, DW, DH,
               FormatFloat('0.###', DW / ImgW, TFormatSettings.Invariant),
               FormatFloat('0.###', DH / ImgH, TFormatSettings.Invariant)]);
           end;
@@ -489,7 +489,7 @@ begin
   else if Cmd = 'tap' then
   begin
     if (Params.X.Trim = '') or (Params.Y.Trim = '') then
-      Exit(SR_ADB_NEED_XY);
+      Exit(MsgText(SR_ADB_NEED_XY));
     // coordinates vetted digits-only at the gate; with frame, measured on
     // that image and converted here to DISPLAY pixels (Lsp.InlineImages)
     var PX, PY: Integer;
@@ -505,13 +505,13 @@ begin
   begin
     N := IndexText(Params.Key.Trim, KEY_NAMES);
     if N < 0 then
-      Exit(Format(SR_ADB_KEY_FMT, [Params.Key.Trim]));
+      Exit(MsgFmt(SR_ADB_KEY_FMT, [Params.Key.Trim]));
     Output := RunAdb(Adb, DevArg + 'shell input keyevent ' + KEY_CODES[N],
       15000, ExitCode);
     Result := GoneHint(('KEY ' + KEY_NAMES[N] + ' ' + Output.Trim).Trim);
   end
   else
-    Result := SR_ADB_CMD;
+    Result := MsgText(SR_ADB_CMD);
 end;
 
 initialization

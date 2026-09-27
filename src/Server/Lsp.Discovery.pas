@@ -289,7 +289,7 @@ begin
     Exit;
   Activa := DiscoverRadStudio;
   if not SameText(Activa.Version, Pedida) then
-    Result := Format(SN_DELPHIVERSION_MISSING_FMT, [Pedida, Activa.Version]);
+    Result := MsgFmt(SN_DELPHIVERSION_MISSING_FMT, [Pedida, Activa.Version]);
 end;
 
 function BdsCommonDir(const AInfo: TRadStudioInfo): string;

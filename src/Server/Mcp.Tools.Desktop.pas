@@ -267,7 +267,7 @@ begin
   if Cmd = 'windows' then
     Cmd := 'overview';
   if not MatchStr(Cmd, ['screenshot', 'tap', 'type', 'key', 'overview', 'status']) then
-    Exit(SR_ADBLINUX_CMD);
+    Exit(MsgText(SR_ADBLINUX_CMD));
 
   { "out" es una ruta LOCAL que elige QUIEN LLAMA -donde baja la captura del
     destino- y no pasaba por la jaula: el servidor creaba la carpeta y
@@ -290,7 +290,7 @@ begin
     en RemoteRunProjects. Esta tool llevaba su copia. }
   Proj := Params.Project.Trim;
   Result := EjecucionRemotaDenegada(Params.Profile.Trim, Proj,
-    SR_ADBLINUX_NEEDPROFILE);
+    MsgText(SR_ADBLINUX_NEEDPROFILE));
   if Result <> '' then
     Exit;
   { El destino dice que nodo y que teclas espera: lo lee el .profile, nunca
@@ -302,19 +302,19 @@ begin
   ConRecorte := False;
   RX := 0; RY := 0; RW := 0; RH := 0;
   if (Params.Region.Trim <> '') and (Params.Window.Trim <> '') then
-    Exit(SR_ADBLINUX_REGION_OR_WINDOW);
+    Exit(MsgText(SR_ADBLINUX_REGION_OR_WINDOW));
   if Params.Region.Trim <> '' then
   begin
     if Cmd <> 'screenshot' then
-      Exit(SR_ADBLINUX_CROP_ONLY_SHOT);
+      Exit(MsgText(SR_ADBLINUX_CROP_ONLY_SHOT));
     if not ParseRegion(Params.Region.Trim, RX, RY, RW, RH) then
-      Exit(SR_ADBLINUX_REGION_BAD);
+      Exit(MsgText(SR_ADBLINUX_REGION_BAD));
     ConRecorte := True;
   end;
   if Params.Window.Trim <> '' then
   begin
     if Cmd <> 'screenshot' then
-      Exit(SR_ADBLINUX_CROP_ONLY_SHOT);
+      Exit(MsgText(SR_ADBLINUX_CROP_ONLY_SHOT));
   end;
 
   { Los argumentos del nodo van como argv, uno a uno: no hay shell en medio
@@ -324,7 +324,7 @@ begin
   if Cmd = 'tap' then
   begin
     if (Params.X.Trim = '') or (Params.Y.Trim = '') then
-      Exit(SR_ADBLINUX_NEEDXY);
+      Exit(MsgText(SR_ADBLINUX_NEEDXY));
     // Con frame, x,y son de la imagen que el agente miro y el servidor los
     // pasa a pixeles de captura (Lsp.InlineImages.FramePoint).
     var FP := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
@@ -335,7 +335,7 @@ begin
   else if Cmd = 'type' then
   begin
     if Params.Text.Trim = '' then
-      Exit(SR_ADBLINUX_NEEDTEXT);
+      Exit(MsgText(SR_ADBLINUX_NEEDTEXT));
     { Con coordenadas es UN solo viaje: pulsa para dar el foco y escribe. }
     if (Params.X.Trim <> '') and (Params.Y.Trim <> '') then
     begin
@@ -365,7 +365,7 @@ begin
       if Mo = 'control' then Mo := 'ctrl';
       if Mo = 'win' then Mo := 'super';
       if not MatchText(Mo, ['ctrl', 'shift', 'alt', 'super']) then
-        Exit(Format(SR_ADBLINUX_MODIFIERS_BAD_FMT, [M.Trim]));
+        Exit(MsgFmt(SR_ADBLINUX_MODIFIERS_BAD_FMT, [M.Trim]));
       if EsWin then
         Mods := Mods + [Mo]
       else if Mo = 'ctrl' then Mods := Mods + ['29']
@@ -376,13 +376,13 @@ begin
     if EsWin then
     begin
       if not NombreDeTeclaValido(Params.Code.Trim) then
-        Exit(SR_DESKTOP_NEEDCODE);
+        Exit(MsgText(SR_DESKTOP_NEEDCODE));
       Args := Args + ['tecla'] + Mods + [Params.Code.Trim];
     end
     else
     begin
       if (Params.Code.Trim = '') or (StrToIntDef(Params.Code.Trim, 0) <= 0) then
-        Exit(SR_ADBLINUX_NEEDCODE);
+        Exit(MsgText(SR_ADBLINUX_NEEDCODE));
       Args := Args + ['tecla'] + Mods + [IntToStr(StrToIntDef(Params.Code.Trim, 0))];
     end;
   end
@@ -488,16 +488,16 @@ begin
           Wayland no salen) y la nota lo dice. window= recorta por ella. }
         Ventanas := VentanasDeLaSalida(Salida, Params.Window.Trim, RX, RY, RW, RH, HayVentana);
         Return.AddPair('windows', Ventanas);
-        Return.AddPair('windowsNote', IfThen(EsWin, SN_DESKTOP_WINDOWS_WIN, SN_DESKTOP_WINDOWS_LINUX));
+        Return.AddPair('windowsNote', IfThen(EsWin, MsgText(SN_DESKTOP_WINDOWS_WIN), MsgText(SN_DESKTOP_WINDOWS_LINUX)));
         { En Linux "windows" abre la vista de actividades y la captura es ESA
           vista: se dice como leerla (un agente la tomo por el escritorio a
           secas, 24-sep). }
         if (Cmd = 'overview') and not EsWin then
-          Return.AddPair('overviewNote', SN_DESKTOP_OVERVIEW_LINUX);
+          Return.AddPair('overviewNote', MsgText(SN_DESKTOP_OVERVIEW_LINUX));
         if (Cmd = 'screenshot') and (Params.Window.Trim <> '') then
         begin
           if not HayVentana then
-            Fallo := Format(SR_ADBLINUX_WINDOW_NOMATCH_FMT, [Params.Window.Trim])
+            Fallo := MsgFmt(SR_ADBLINUX_WINDOW_NOMATCH_FMT, [Params.Window.Trim])
           else
             ConRecorte := True;
         end;
@@ -534,7 +534,7 @@ begin
           var EnLinea := DeliverCapture('delphi_desktop', Local, Params.Inline_,
             Params.MaxWidth, OX, OY, 1.0, 1.0, Return);
           if ConRecorte then
-            Return.AddPair('note', Format(SN_ADBLINUX_CROP_NOTE_FMT, [RX, RY]))
+            Return.AddPair('note', MsgFmt(SN_ADBLINUX_CROP_NOTE_FMT, [RX, RY]))
           else if not EnLinea then
             Return.AddPair('note', 'mide el pixel SOBRE esta imagen y pasalo a ' +
               'command=tap; bajala con download o delphi_fetch. Al recogerla ENTERA ' +

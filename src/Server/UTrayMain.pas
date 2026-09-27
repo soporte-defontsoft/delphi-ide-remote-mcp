@@ -223,9 +223,9 @@ begin
   Clipboard.AsText := FUrl;
   // The URL alone gets a 401 (issue #4, 2026-09-27): say, the moment it is
   // copied, what a client has to send with it - the same text as the 401.
-  TLogger.Info('Server URL copied to the clipboard: ' + FUrl + '. ' + SR_TOKEN_NEEDED);
+  TLogger.Info('Server URL copied to the clipboard: ' + FUrl + '. ' + MsgText(SR_TOKEN_NEEDED));
   TrayIcon.BalloonTitle := 'Server URL copied';
-  TrayIcon.BalloonHint := SR_TOKEN_NEEDED;
+  TrayIcon.BalloonHint := MsgText(SR_TOKEN_NEEDED);
   TrayIcon.ShowBalloonHint;
 end;
 

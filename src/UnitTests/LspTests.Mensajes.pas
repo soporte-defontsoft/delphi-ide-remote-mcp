@@ -88,7 +88,7 @@ var
   S: string;
 begin
   // hoy el texto tal cual; con traducciones, por el id
-  Assert.AreEqual(EJ_SIN, Msg(EJ_SIN));
+  Assert.AreEqual(EJ_SIN, MsgText(EJ_SIN));
   Assert.AreEqual('ESCRITO en A.pas. [EDIT-001]', MsgFmt(EJ_BUENO, ['A.pas']));
   // unos argumentos que no cuadran: el mensaje sin formatear y el motivo,
   // nunca una excepcion de conversion en mitad de una tool

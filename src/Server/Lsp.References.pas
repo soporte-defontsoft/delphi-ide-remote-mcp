@@ -255,12 +255,12 @@ begin
   if Total = 0 then
     Exit;
   AObj.AddPair('hidden', TJSONNumber.Create(Total));
-  Motivo(Artifacts, 'hiddenBuildArtifacts', SN_HIDDEN_ARTIFACTS_FMT);
-  Motivo(Temp, 'hiddenServerTemp', SN_HIDDEN_TEMP_FMT);
-  Motivo(Git, 'hiddenGitInternals', SN_HIDDEN_GIT_FMT);
-  Motivo(Trash, 'hiddenTrash', SN_HIDDEN_TRASH_FMT);
-  Motivo(Folders, 'hiddenToolFolders', SN_HIDDEN_FOLDERS_FMT);
-  AObj.AddPair('note', Format(SN_HIDDEN_HEAD_FMT, [Total]) + ' ' +
+  Motivo(Artifacts, 'hiddenBuildArtifacts', MsgText(SN_HIDDEN_ARTIFACTS_FMT));
+  Motivo(Temp, 'hiddenServerTemp', MsgText(SN_HIDDEN_TEMP_FMT));
+  Motivo(Git, 'hiddenGitInternals', MsgText(SN_HIDDEN_GIT_FMT));
+  Motivo(Trash, 'hiddenTrash', MsgText(SN_HIDDEN_TRASH_FMT));
+  Motivo(Folders, 'hiddenToolFolders', MsgText(SN_HIDDEN_FOLDERS_FMT));
+  AObj.AddPair('note', MsgFmt(SN_HIDDEN_HEAD_FMT, [Total]) + ' ' +
     string.Join('; ', Partes) + '.');
 end;
 
@@ -545,13 +545,13 @@ begin
       // Hover knows the symbol but definition is not indexed yet: that is
       // "not yet", not "not a symbol" (measured by Hermes, 2026-09-22).
       if Pending then
-        raise Exception.CreateFmt(SR_REFS_WARMING_FMT, [Ident]);
+        raise Exception.CreateFmt(MsgText(SR_REFS_WARMING_FMT), [Ident]);
       // This fires whenever the position is not on something the compiler
       // can resolve - inside a string literal, in a comment, on a keyword -
       // and it used to blame "project settings" and quote the name of an
       // internal function, which sent the reader looking in the wrong place
       // (measured 2026-08-25).
-      raise Exception.CreateFmt(SR_REFS_NO_DEFINITION_FMT, [Ident]);
+      raise Exception.CreateFmt(MsgText(SR_REFS_NO_DEFINITION_FMT), [Ident]);
     end;
   finally
     Resp.Free;
@@ -567,7 +567,7 @@ begin
   // La zona de biblioteca (RTL/VCL, componentes instalados) NO cae aqui:
   // ReadPathDenied la da por buena, que es justo lo que se quiere.
   if ReadPathDenied(TLspClient.UriToPath(TargetUri)) <> '' then
-    raise Exception.CreateFmt(SR_REFS_TARGET_OUTSIDE_FMT, [Ident]);
+    raise Exception.CreateFmt(MsgText(SR_REFS_TARGET_OUTSIDE_FMT), [Ident]);
 
   // A Pascal routine has TWO definition lines: the interface (or forward)
   // declaration and the implementation. The engine answers one or the other
@@ -884,15 +884,15 @@ begin
             Break;
           MenArr.AddElement(CandidateJson(Men));
         end;
-        Result.AddPair('mentionsNote', Format(SN_REFS_MENTIONS_FMT,
+        Result.AddPair('mentionsNote', MsgFmt(SN_REFS_MENTIONS_FMT,
           [Menciones.Count, MenArr.Count]));
       end;
       if Familia then
-        Result.AddPair('familyNote', SN_REFS_FAMILY_NOTE);
+        Result.AddPair('familyNote', MsgText(SN_REFS_FAMILY_NOTE));
       Result.AddPair('rejectedHomonyms', TJSONNumber.Create(Rejected));
       Result.AddPair('rejected', RejectedArr);
       if Rejected > RejectedArr.Count then
-        Result.AddPair('rejectedNote', Format(SN_REFS_REJECTED_CAP_FMT,
+        Result.AddPair('rejectedNote', MsgFmt(SN_REFS_REJECTED_CAP_FMT,
           [RejectedArr.Count, Rejected]));
       Result.AddPair('filesScanned', TJSONNumber.Create(Scanned));
       Result.AddPair('candidates', TJSONNumber.Create(Candidates.Count));

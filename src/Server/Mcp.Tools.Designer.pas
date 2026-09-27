@@ -132,7 +132,7 @@ var
 begin
   M := MetaTable(AFramework = 'fmx');
   if not M.Classes.TryGetValue(AClass.Trim.ToLower, Cls) then
-    Exit(Format(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]));
+    Exit(MsgFmt(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]));
   Ret := TJSONObject.Create;
   Names := TStringList.Create;
   try
@@ -176,7 +176,7 @@ begin
       Ret.AddPair('truncated', TJSONBool.Create(True));
       Ret.AddPair('hint', 'usa filter=<texto> para acotar');
     end;
-    Ret.AddPair('note', SN_DESIGNER_INFO_NOTE);
+    Ret.AddPair('note', MsgText(SN_DESIGNER_INFO_NOTE));
     Result := Ret.ToJSON;
   finally
     Names.Free;
@@ -193,9 +193,9 @@ var
 begin
   M := MetaTable(AFramework = 'fmx');
   if not M.Classes.TryGetValue(AClass.Trim.ToLower, Cls) then
-    Exit(Format(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]));
+    Exit(MsgFmt(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]));
   if not M.Props.TryGetValue(AClass.Trim.ToLower + '.' + AProp.Trim.ToLower, R) then
-    Exit(Format(SR_DESIGNER_PROP_FMT, [AProp, Cls]));
+    Exit(MsgFmt(SR_DESIGNER_PROP_FMT, [AProp, Cls]));
   Ret := TJSONObject.Create;
   try
     Ret.AddPair('class', Cls);
@@ -209,7 +209,7 @@ begin
        M.SetShow.TryGetValue(R.TypeName.ToLower, Members) then
       Ret.AddPair('members', Members);
     if R.Kind = 's' then
-      Ret.AddPair('membersNote', SN_DESIGNER_SET_NOTE);
+      Ret.AddPair('membersNote', MsgText(SN_DESIGNER_SET_NOTE));
     if M.Alias.TryGetValue(AClass.Trim.ToLower + '.' + AProp.Trim.ToLower, Runtime) then
       Ret.AddPair('runtimeClass', Runtime);
     Result := Ret.ToJSON;
@@ -233,14 +233,14 @@ begin
   if not TFile.Exists(APath) then
     Exit('RECHAZADO: no existe ' + APath);
   if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
-    Exit(SR_DESIGNER_NOT_FORM);
+    Exit(MsgText(SR_DESIGNER_NOT_FORM));
   // Un binario se lee al vuelo (TStyleDoc lo convierte); solo uno danado
   // sigue siendo un rechazo, con el motivo de la RTL.
   try
     ADoc := TStyleDoc.Create(APath);
   except
     on E: Exception do
-      Exit(Format(SR_DESIGNER_BINARY_FMT, [E.Message]));
+      Exit(MsgFmt(SR_DESIGNER_BINARY_FMT, [E.Message]));
   end;
 end;
 
@@ -281,7 +281,7 @@ begin
         Ret.AddPair('root', NodeJson(Doc.Root))
       else
         Ret.AddPair('root', TJSONNull.Create);
-      Ret.AddPair('note', SN_DESIGNER_TREE_NOTE);
+      Ret.AddPair('note', MsgText(SN_DESIGNER_TREE_NOTE));
       Result := Ret.ToJSON;
     finally
       Ret.Free;
@@ -317,10 +317,10 @@ begin
     Exit;
   try
     if Doc.Root = nil then
-      Exit(SR_DESIGNER_EMPTY);
+      Exit(MsgText(SR_DESIGNER_EMPTY));
     O := FindByName(Doc.Root, AName.Trim);
     if O = nil then
-      Exit(Format(SR_DESIGNER_COMPONENT_FMT, [AName]));
+      Exit(MsgFmt(SR_DESIGNER_COMPONENT_FMT, [AName]));
     Result := Format('%s (%s) lineas %d-%d de %s:'#13#10'%s',
       [O.ObjName, O.ClassName_, O.StartLine, O.EndLine,
        TPath.GetFileName(APath), Doc.BlockText(O)]);
@@ -360,7 +360,7 @@ begin
     if Result <> '' then
       Exit;
     if not MatchText(TPath.GetExtension(APas), ['.pas']) then
-      Exit(SR_DESIGNER_BINDING_UNIT_EXT);
+      Exit(MsgText(SR_DESIGNER_BINDING_UNIT_EXT));
   end;
   Result := DesignerBindingJson(ADfm, APas);
 end;
@@ -761,13 +761,13 @@ begin
   if not MatchText(TPath.GetExtension(APath), ['.dfm']) then
   begin
     if MatchText(TPath.GetExtension(APath), ['.fmx']) then
-      Exit(SR_DESIGNER_LAYOUT_FMX);
-    Exit(SR_DESIGNER_NOT_FORM);
+      Exit(MsgText(SR_DESIGNER_LAYOUT_FMX));
+    Exit(MsgText(SR_DESIGNER_NOT_FORM));
   end;
   Result := LoadDoc(APath, Doc);
   if Result <> '' then Exit;
   try
-    if Doc.Root = nil then Exit(SR_DESIGNER_BINDING_NO_ROOT);
+    if Doc.Root = nil then Exit(MsgText(SR_DESIGNER_BINDING_NO_ROOT));
     // a truncated .dfm parses into something; only openers left unclosed betray
     // it. Collection items add opener-less "end"s, so we flag ONLY opens>closes,
     // which they can never cause - no false alarm on a form full of collections.
@@ -809,7 +809,7 @@ begin
       Boxes := TJSONArray.Create; Ret.AddPair('boxes', Boxes);
 
       if Opens > Closes then
-        Ret.AddPair('truncatedNote', SR_DESIGNER_LAYOUT_TRUNC);
+        Ret.AddPair('truncatedNote', MsgText(SR_DESIGNER_LAYOUT_TRUNC));
 
       if (RootW <= 0) or (RootH <= 0) then
         NoRoom.Add(Format('%s no dice cuanto mide (%d x %d): sin el tamano del ' +
@@ -820,11 +820,11 @@ begin
       Ret.AddPair('ok', TJSONBool.Create((Zero.Count = 0) and (Outside.Count = 0)
         and (Overlap.Count = 0) and (NoRoom.Count = 0)));
       if Estimated then
-        Ret.AddPair('estimatedNote', SN_DESIGNER_LAYOUT_ESTIMATED);
+        Ret.AddPair('estimatedNote', MsgText(SN_DESIGNER_LAYOUT_ESTIMATED));
       Ret.AddPair('note', IfThen((Zero.Count = 0) and (Outside.Count = 0) and
-        (Overlap.Count = 0) and (NoRoom.Count = 0), SN_DESIGNER_LAYOUT_OK,
-        SN_DESIGNER_LAYOUT_BAD));
-      Ret.AddPair('howMeasured', SN_DESIGNER_LAYOUT_HOW);
+        (Overlap.Count = 0) and (NoRoom.Count = 0), MsgText(SN_DESIGNER_LAYOUT_OK),
+        MsgText(SN_DESIGNER_LAYOUT_BAD)));
+      Ret.AddPair('howMeasured', MsgText(SN_DESIGNER_LAYOUT_HOW));
       Result := Ret.ToJSON;
     finally
       Ret.Free;
@@ -846,14 +846,14 @@ begin
   if not TFile.Exists(APath) then
     Exit('RECHAZADO: no existe ' + APath);
   if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
-    Exit(SR_DESIGNER_NOT_FORM);
+    Exit(MsgText(SR_DESIGNER_NOT_FORM));
   IsFmx := APath.EndsWith('.fmx', True);
   // Un .dfm binario se lee al vuelo (Lsp.DesignerBin); uno danado se rechaza.
   if IsBinaryDesigner(APath) then
   begin
     EncName := DesignerFileToText(APath, Text);
     if EncName <> '' then
-      Exit(Format(SR_DESIGNER_BINARY_FMT, [EncName]));
+      Exit(MsgFmt(SR_DESIGNER_BINARY_FMT, [EncName]));
   end
   else
     Text := PatchLoadText(APath, EncName);
@@ -862,9 +862,9 @@ begin
   Warns := DesignerMetaLint(IsFmx, Text.Replace(#13#10, #10).Split([#10])) +
     DesignerBindingWarnings(APath, Text.Replace(#13#10, #10).Split([#10]));
   if Length(Warns) = 0 then
-    Result := Format(SN_DESIGNER_LINT_OK_FMT, [TPath.GetFileName(APath)])
+    Result := MsgFmt(SN_DESIGNER_LINT_OK_FMT, [TPath.GetFileName(APath)])
   else
-    Result := Format(SN_DESIGNER_LINT_BAD_FMT,
+    Result := MsgFmt(SN_DESIGNER_LINT_BAD_FMT,
       [Length(Warns), TPath.GetFileName(APath)]) + #13#10 +
       string.Join(#13#10, Warns);
 end;
@@ -894,34 +894,34 @@ begin
   if not TFile.Exists(Ruta) then
     Exit('RECHAZADO: no existe ' + Ruta);
   if not MatchText(TPath.GetExtension(Ruta), ['.dfm', '.fmx']) then
-    Exit(SR_DESIGNER_NOT_FORM);
+    Exit(MsgText(SR_DESIGNER_NOT_FORM));
   if SameText(TPath.GetExtension(Ruta), '.fmx') then
-    Exit(SR_DESIGNER_FMX_ALWAYS_TEXT);
+    Exit(MsgText(SR_DESIGNER_FMX_ALWAYS_TEXT));
   B := TFile.ReadAllBytes(Ruta);
   Forma := DesignerShapeOf(B);
   if AToText then
   begin
     if Forma = dsText then
-      Exit(Format(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), 'texto']));
+      Exit(MsgFmt(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), 'texto']));
     Err := DesignerBinaryToText(B, Texto);
     if Err <> '' then
       Exit('RECHAZADO: ' + Err);
     Copia := BackupFile(Ruta);
     PatchSaveText(Ruta, Texto, 'utf8');
-    Result := Format(SN_DESIGNER_TOTEXT_FMT, [TPath.GetFileName(Ruta), Length(B),
+    Result := MsgFmt(SN_DESIGNER_TOTEXT_FMT, [TPath.GetFileName(Ruta), Length(B),
       Length(Texto.Replace(#13#10, #10).TrimRight([#10]).Split([#10])), Copia]);
   end
   else
   begin
     if Forma <> dsText then
-      Exit(Format(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), 'binario']));
+      Exit(MsgFmt(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), 'binario']));
     Texto := PatchLoadText(Ruta, Err); // Err recibe el nombre del encoding
     Err := DesignerTextToBinary(Texto, Bin);
     if Err <> '' then
       Exit('RECHAZADO: ' + Err);
     Copia := BackupFile(Ruta);
     AtomicWrite(Ruta, Bin);
-    Result := Format(SN_DESIGNER_TOBINARY_FMT, [TPath.GetFileName(Ruta), Length(Bin), Copia]);
+    Result := MsgFmt(SN_DESIGNER_TOBINARY_FMT, [TPath.GetFileName(Ruta), Length(Bin), Copia]);
   end;
 end;
 
@@ -934,15 +934,15 @@ begin
   Result := AResult;
   V := TJSONObject.ParseJSONValue(AResult);
   if V = nil then
-    Exit(AResult + #10 + SN_DESIGNER_BINARY_VIEW);
+    Exit(AResult + #10 + MsgText(SN_DESIGNER_BINARY_VIEW));
   try
     if V is TJSONObject then
     begin
-      TJSONObject(V).AddPair('binaryOnDiskNote', SN_DESIGNER_BINARY_VIEW);
+      TJSONObject(V).AddPair('binaryOnDiskNote', MsgText(SN_DESIGNER_BINARY_VIEW));
       Result := V.ToJSON;
     end
     else
-      Result := AResult + #10 + SN_DESIGNER_BINARY_VIEW;
+      Result := AResult + #10 + MsgText(SN_DESIGNER_BINARY_VIEW);
   finally
     V.Free;
   end;
@@ -966,15 +966,15 @@ begin
   begin
     Fw := ResolveFramework(Params.Framework, Params.Path);
     if Fw = '?' then
-      Exit(SR_DESIGNER_FRAMEWORK);
+      Exit(MsgText(SR_DESIGNER_FRAMEWORK));
     if Fw = '' then
       Fw := 'vcl';
     if Params.ClassName_.Trim = '' then
-      Exit(SR_DESIGNER_NEED_CLASS);
+      Exit(MsgText(SR_DESIGNER_NEED_CLASS));
     if Cmd = 'info' then
       Result := MetaClassInfo(Fw, Params.ClassName_, Params.Filter.Trim)
     else if Params.Prop.Trim = '' then
-      Result := SR_DESIGNER_NEED_PROP
+      Result := MsgText(SR_DESIGNER_NEED_PROP)
     else
       Result := PropInfo(Fw, Params.ClassName_, Params.Prop);
   end
@@ -982,7 +982,7 @@ begin
     'layout']) then
   begin
     if Params.Path.Trim = '' then
-      Exit(SR_DESIGNER_NEED_PATH);
+      Exit(MsgText(SR_DESIGNER_NEED_PATH));
     if MatchText(Cmd, ['check-binding', 'binding']) then
       Result := CheckBinding(Params.Path, Params.Unit_)
     else if Cmd = 'layout' then
@@ -992,7 +992,7 @@ begin
     else if Cmd = 'lint' then
       Result := LintForm(Params.Path)
     else if Params.Component.Trim = '' then
-      Result := SR_DESIGNER_NEED_COMPONENT
+      Result := MsgText(SR_DESIGNER_NEED_COMPONENT)
     else
       Result := GetComponent(Params.Path, Params.Component);
     if IsBinaryDesigner(TPath.GetFullPath(Params.Path)) then
@@ -1001,11 +1001,11 @@ begin
   else if MatchText(Cmd, ['to-text', 'to-binary']) then
   begin
     if Params.Path.Trim = '' then
-      Exit(SR_DESIGNER_NEED_PATH);
+      Exit(MsgText(SR_DESIGNER_NEED_PATH));
     Result := ConvertDesigner(Params.Path, Cmd = 'to-text');
   end
   else
-    Result := SR_DESIGNER_CMD;
+    Result := MsgText(SR_DESIGNER_CMD);
   Result := MaskDriveText('delphi_designer', Result);
 end;
 

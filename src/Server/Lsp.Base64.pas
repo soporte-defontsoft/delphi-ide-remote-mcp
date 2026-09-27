@@ -56,16 +56,16 @@ begin
     else if CharInSet(Ch, ['A' .. 'Z', 'a' .. 'z', '0' .. '9', '+', '/', '=']) then
       Inc(Utiles)
     else
-      Exit(Format(SR_B64_ALPHABET_FMT, [AParam]));
+      Exit(MsgFmt(SR_B64_ALPHABET_FMT, [AParam]));
   if Utiles mod 4 <> 0 then
-    Exit(Format(SR_B64_LEN_FMT, [AParam, Utiles]));
+    Exit(MsgFmt(SR_B64_LEN_FMT, [AParam, Utiles]));
   B64 := TBase64Encoding.Create(0);
   try
     try
       ABytes := B64.DecodeStringToBytes(ATexto);
     except
       on E: Exception do
-        Exit(Format(SR_B64_INVALID_FMT, [AParam, E.Message]));
+        Exit(MsgFmt(SR_B64_INVALID_FMT, [AParam, E.Message]));
     end;
   finally
     B64.Free;

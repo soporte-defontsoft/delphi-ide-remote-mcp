@@ -165,7 +165,7 @@ begin
     Lista := ProyectosDeGrupo(AGroup); // EL lector de grupos (Lsp.ProjectUnits)
   except
     on E: Exception do
-      Exit(Format(SR_CONFIG_GROUP_READ_FMT, [AGroup, E.Message]));
+      Exit(MsgFmt(SR_CONFIG_GROUP_READ_FMT, [AGroup, E.Message]));
   end;
   Dir := TPath.GetDirectoryName(AGroup);
   Faltan := 0;
@@ -194,7 +194,7 @@ begin
       else
         E.AddPair('outsideWorkspace', TJSONBool.Create(True));
     end;
-    O.AddPair('note', Format(SN_CONFIG_GROUP_VIEW_FMT, [Arr.Count, Faltan]));
+    O.AddPair('note', MsgFmt(SN_CONFIG_GROUP_VIEW_FMT, [Arr.Count, Faltan]));
     Result := O.ToJSON;
   finally
     O.Free;
@@ -280,7 +280,7 @@ begin
       Return.AddPair('project', ADproj);
       Return.AddPair('hasDproj', TJSONBool.Create(False));
       AddUnitsView(ADproj, Return);
-      Return.AddPair('note', SN_CONFIG_DPR_ONLY);
+      Return.AddPair('note', MsgText(SN_CONFIG_DPR_ONLY));
       Exit(Return.ToJSON);
     finally
       Return.Free;
@@ -329,7 +329,7 @@ begin
         if PlatformNeedsProfile(P.Name) then
           PonDestino(Obj, P.Name);
       end;
-      Return.AddPair('remoteTargetsNote', SN_CONFIG_REMOTE_NOTE);
+      Return.AddPair('remoteTargetsNote', MsgText(SN_CONFIG_REMOTE_NOTE));
     end
     else if Sec = 'summary' then
     begin
@@ -356,7 +356,7 @@ begin
           Obj.AddPair('platform', P.Name);
           PonDestino(Obj, P.Name);
         end;
-      Return.AddPair('remoteTargetsNote', SN_CONFIG_REMOTE_NOTE);
+      Return.AddPair('remoteTargetsNote', MsgText(SN_CONFIG_REMOTE_NOTE));
     end;
     if (Sec = 'all') or (Sec = 'searchpaths') then
       AddSearchPathsView(TFile.ReadAllText(ADproj), Return);
@@ -399,7 +399,7 @@ begin
       finally
         Tmp.Free;
       end;
-      Return.AddPair('sections', SN_CONFIG_SECTIONS);
+      Return.AddPair('sections', MsgText(SN_CONFIG_SECTIONS));
     end;
     if (Sec = 'summary') or (Sec = 'all') or (Sec = 'platforms') then
       Return.AddPair('note', 'To build: delphi_build {project, platform, ' +
@@ -518,12 +518,12 @@ begin
   // answer "DESHABILITADA" again and take a backup of a no-op, filling the
   // trash with identical copies of an unchanged .dproj (field round 8).
   if SameText(Trim(Copy(Xml, ValStart, ValEnd - ValStart)), 'False') then
-    Exit(Format(SN_CONFIG_PLAT_ALREADY_FMT, [APlatform]));
+    Exit(MsgFmt(SN_CONFIG_PLAT_ALREADY_FMT, [APlatform]));
   // ...and never leave a project with nothing to build for. Three calls in a
   // row used to disable every platform, and the next delphi_build compiled
   // anyway without a word, so nothing ever pointed back here.
   if EnabledPlatformCount(Xml) <= 1 then
-    Exit(Format(SR_CONFIG_PLAT_LAST_FMT, [APlatform]));
+    Exit(MsgFmt(SR_CONFIG_PLAT_LAST_FMT, [APlatform]));
   Xml := Copy(Xml, 1, ValStart - 1) + 'False' + Copy(Xml, ValEnd, MaxInt);
   PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := Format('DESHABILITADA la plataforma %s (queda declarada pero ' +
@@ -594,7 +594,7 @@ begin
         // drive mask, so writing C:\Temp\Salida got answered about
         // "srvc:\Temp\Salida" and read like a different error entirely
         // (field round 8). Say the RULE instead of the value.
-      Exit(SR_CONFIG_OUTPUT_INVALID);
+      Exit(MsgText(SR_CONFIG_OUTPUT_INVALID));
     ExeInner := '.\' + Clean + '\$(Platform)\$(Config)';
     DcuInner := '.\' + Clean + '\Dcu\$(Platform)\$(Config)';
   end;
@@ -809,11 +809,11 @@ var
 begin
   AShow := '';
   if ARaw.Trim = '' then
-    Exit(SR_CONFIG_NEED_PATH);
+    Exit(MsgText(SR_CONFIG_NEED_PATH));
   if Length(ARaw) > 400 then
-    Exit(SR_CONFIG_PATH_CHARS);
+    Exit(MsgText(SR_CONFIG_PATH_CHARS));
   if CaracterVetado(ARaw, True) then
-    Exit(SR_CONFIG_PATH_CHARS);
+    Exit(MsgText(SR_CONFIG_PATH_CHARS));
   Expanded := ARaw.Trim;
   if Expanded.Contains('$(') then
   begin
@@ -831,7 +831,7 @@ begin
       Vars.Free;
     end;
     if Expanded.Contains('$(') then
-      Exit(Format(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
+      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
   end;
   if not TPath.IsPathRooted(Expanded) then
     Expanded := TPath.Combine(TPath.GetDirectoryName(ADproj), Expanded);
@@ -839,14 +839,14 @@ begin
     Expanded := TPath.GetFullPath(Expanded);
   except
     on E: Exception do
-      Exit(Format(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
+      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
   end;
   AShow := Expanded;
   Result := ReadPathDenied(Expanded);
   if Result <> '' then
     Exit;
   if not TDirectory.Exists(Expanded) then
-    Exit(Format(SR_CONFIG_PATH_MISSING_FMT, [Expanded]));
+    Exit(MsgFmt(SR_CONFIG_PATH_MISSING_FMT, [Expanded]));
 end;
 
 function AddSearchPath(const ADproj, ARawPlatform, ARawPath: string): string;
@@ -882,7 +882,7 @@ begin
   begin
     for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
       if SameText(XmlUnescape(P), Path) then
-        Exit(Format(SN_CONFIG_PATH_PRESENT_FMT,
+        Exit(MsgFmt(SN_CONFIG_PATH_PRESENT_FMT,
           [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
     NewInner := XmlEscape(Path) + ';' + Copy(Xml, VS, VE - VS);
     Xml := Copy(Xml, 1, VS - 1) + NewInner + Copy(Xml, VE, MaxInt);
@@ -892,7 +892,7 @@ begin
       '        ' + XmlElemento('DCC_UnitSearchPath', Path + ';$(DCC_UnitSearchPath)') +
       Copy(Xml, I, MaxInt);
   PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
-  Result := Format(SN_CONFIG_PATH_ADDED_FMT,
+  Result := MsgFmt(SN_CONFIG_PATH_ADDED_FMT,
     [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat), Show,
      IfThen(Plat = '', 'Win64', Plat)]);
 end;
@@ -913,11 +913,11 @@ begin
   end;
   Path := ARawPath.Trim;
   if Path = '' then
-    Exit(SR_CONFIG_NEED_PATH);
+    Exit(MsgText(SR_CONFIG_NEED_PATH));
   Xml := PatchLoadText(ADproj, Enc);
   if not FindGroup(Xml, GroupCondition(Plat), O, I, C) or
      not FindSearchTag(Xml, I, C, ElS, VS, VE, ElE) then
-    Exit(Format(SN_CONFIG_PATH_ABSENT_FMT,
+    Exit(MsgFmt(SN_CONFIG_PATH_ABSENT_FMT,
       [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
   Found := False;
   Keep := TList<string>.Create;
@@ -928,7 +928,7 @@ begin
       else
         Keep.Add(P);
     if not Found then
-      Exit(Format(SN_CONFIG_PATH_ABSENT_FMT,
+      Exit(MsgFmt(SN_CONFIG_PATH_ABSENT_FMT,
         [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
     Rest := string.Join(';', Keep.ToArray);
   finally
@@ -954,7 +954,7 @@ begin
   else
     Xml := Copy(Xml, 1, VS - 1) + Rest + Copy(Xml, VE, MaxInt);
   PatchSaveText(ADproj, Xml, Enc);
-  Result := Format(SN_CONFIG_PATH_REMOVED_FMT,
+  Result := MsgFmt(SN_CONFIG_PATH_REMOVED_FMT,
     [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]);
 end;
 
@@ -989,7 +989,7 @@ begin
   end;
   AReturn.AddPair('searchPaths', Obj);
   if not Any then
-    AReturn.AddPair('searchPathsNote', SN_CONFIG_NO_PATHS);
+    AReturn.AddPair('searchPathsNote', MsgText(SN_CONFIG_NO_PATHS));
 end;
 
 { ---- deployment files ---------------------------------------------------
@@ -1036,11 +1036,11 @@ var
 begin
   AFull := '';
   if ARaw.Trim = '' then
-    Exit(SR_CONFIG_DEPLOY_NEED_PATH);
+    Exit(MsgText(SR_CONFIG_DEPLOY_NEED_PATH));
   if Length(ARaw) > 400 then
-    Exit(SR_CONFIG_PATH_CHARS);
+    Exit(MsgText(SR_CONFIG_PATH_CHARS));
   if CaracterVetado(ARaw, False) then
-      Exit(SR_CONFIG_PATH_CHARS);
+      Exit(MsgText(SR_CONFIG_PATH_CHARS));
   P := ARaw.Trim;
   if not TPath.IsPathRooted(P) then
     P := TPath.Combine(TPath.GetDirectoryName(ADproj), P);
@@ -1048,27 +1048,27 @@ begin
     P := TPath.GetFullPath(P);
   except
     on E: Exception do
-      Exit(Format(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
+      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
   end;
   AFull := P;
   Result := ReadPathDenied(P);
   if Result <> '' then
     Exit;
   if TDirectory.Exists(P) then
-    Exit(Format(SR_CONFIG_DEPLOY_NOT_FILE_FMT, [P]));
+    Exit(MsgFmt(SR_CONFIG_DEPLOY_NOT_FILE_FMT, [P]));
   if not TFile.Exists(P) then
-    Exit(Format(SR_CONFIG_DEPLOY_MISSING_FMT, [P]));
+    Exit(MsgFmt(SR_CONFIG_DEPLOY_MISSING_FMT, [P]));
 end;
 
 function RemoteDirDenied(const ARaw: string): string;
 begin
   Result := '';
   if Length(ARaw) > 200 then
-    Exit(SR_CONFIG_REMOTEDIR_CHARS);
+    Exit(MsgText(SR_CONFIG_REMOTEDIR_CHARS));
   if CaracterVetado(ARaw, False, [':']) then
-    Exit(SR_CONFIG_REMOTEDIR_CHARS);
+    Exit(MsgText(SR_CONFIG_REMOTEDIR_CHARS));
   if ARaw.Contains('..') or ARaw.StartsWith('\') or ARaw.StartsWith('/') then
-    Exit(SR_CONFIG_REMOTEDIR_CHARS);
+    Exit(MsgText(SR_CONFIG_REMOTEDIR_CHARS));
 end;
 
 { Every DeployFile element of the manifest whose Include matches AFile
@@ -1148,7 +1148,7 @@ var
 begin
   Plat := CanonicalPlatform(ARawPlatform);
   if Plat = '' then
-    Exit(Format(SR_CONFIG_DEPLOY_PLATFORM_FMT, [ARawPlatform.Trim]));
+    Exit(MsgFmt(SR_CONFIG_DEPLOY_PLATFORM_FMT, [ARawPlatform.Trim]));
   Result := DeployFileDenied(ADproj, ARawPath, Full);
   if Result <> '' then
     Exit;
@@ -1171,7 +1171,7 @@ begin
   begin
     Info := DiscoverRadStudio;
     if not Info.Found then
-      Exit(SR_COMPONENTS_MISSING);
+      Exit(MsgText(SR_COMPONENTS_MISSING));
     try
       EnsureDeployManifest(ADproj, Plat, Info.RootDir, Generated);
     except
@@ -1185,7 +1185,7 @@ begin
   Xml := PatchLoadText(DeployProj, Enc);
   if Length(FindDeployEntries(Xml, Plat, Full,
        TPath.GetDirectoryName(TPath.GetFullPath(DeployProj)))) > 0 then
-    Exit(Format(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat]));
+    Exit(MsgFmt(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat]));
   ClosePos := Pos('</project>', LowerCase(Xml));
   if ClosePos = 0 then
     Exit('error: el .deployproj no tiene </Project>; abrelo en el IDE y reintenta.');
@@ -1203,9 +1203,9 @@ begin
     '    </ItemGroup>' + sLineBreak;
   Xml := Copy(Xml, 1, ClosePos - 1) + Block + Copy(Xml, ClosePos, MaxInt);
   PatchSaveText(DeployProj, Xml, Enc); // __delphi-patch copy first
-  Result := Format(SN_CONFIG_DEPLOY_ADDED_FMT,
+  Result := MsgFmt(SN_CONFIG_DEPLOY_ADDED_FMT,
     [Plat, Full, RemoteDir, TPath.GetFileName(Full),
-     IfThen(Generated, SN_CONFIG_DEPLOY_GENERATED + ' ', ''), Plat]);
+     IfThen(Generated, MsgText(SN_CONFIG_DEPLOY_GENERATED) + ' ', ''), Plat]);
 end;
 
 function RemoveDeployFile(const ADproj, ARawPlatform, ARawPath: string): string;
@@ -1216,9 +1216,9 @@ var
 begin
   Plat := CanonicalPlatform(ARawPlatform);
   if Plat = '' then
-    Exit(Format(SR_CONFIG_DEPLOY_PLATFORM_FMT, [ARawPlatform.Trim]));
+    Exit(MsgFmt(SR_CONFIG_DEPLOY_PLATFORM_FMT, [ARawPlatform.Trim]));
   if ARawPath.Trim = '' then
-    Exit(SR_CONFIG_DEPLOY_NEED_PATH);
+    Exit(MsgText(SR_CONFIG_DEPLOY_NEED_PATH));
   Full := ARawPath.Trim;
   if not TPath.IsPathRooted(Full) then
     Full := TPath.Combine(TPath.GetDirectoryName(ADproj), Full);
@@ -1226,16 +1226,16 @@ begin
     Full := TPath.GetFullPath(Full);
   except
     on E: Exception do
-      Exit(Format(SR_CONFIG_PATH_MACRO_FMT, [ARawPath.Trim]));
+      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARawPath.Trim]));
   end;
   DeployProj := DeployProjPath(ADproj);
   if not TFile.Exists(DeployProj) then
-    Exit(Format(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
+    Exit(MsgFmt(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
   Xml := PatchLoadText(DeployProj, Enc);
   Spans := FindDeployEntries(Xml, Plat, Full,
     TPath.GetDirectoryName(TPath.GetFullPath(DeployProj)));
   if Length(Spans) = 0 then
-    Exit(Format(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
+    Exit(MsgFmt(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
   // remove from the end so earlier spans stay valid; eat the element's line
   for I := High(Spans) downto 0 do
   begin
@@ -1253,7 +1253,7 @@ begin
     '[ \t]*<ItemGroup Condition="''\$\(Platform\)''==''' + Plat + '''">\s*</ItemGroup>\r?\n?', '',
     [roIgnoreCase]);
   PatchSaveText(DeployProj, Xml, Enc);
-  Result := Format(SN_CONFIG_DEPLOY_REMOVED_FMT, [Full, Plat, Length(Spans)]);
+  Result := MsgFmt(SN_CONFIG_DEPLOY_REMOVED_FMT, [Full, Plat, Length(Spans)]);
 end;
 
 { view: the deployment entries per platform (Include + RemoteDir), from the
@@ -1270,7 +1270,7 @@ begin
   DeployProj := DeployProjPath(ADproj);
   if not TFile.Exists(DeployProj) then
   begin
-    AReturn.AddPair('deployFilesNote', SN_CONFIG_NO_DEPLOYPROJ);
+    AReturn.AddPair('deployFilesNote', MsgText(SN_CONFIG_NO_DEPLOYPROJ));
     Exit;
   end;
   Xml := TFile.ReadAllText(DeployProj);
@@ -1347,7 +1347,7 @@ var
 begin
   Pedida := ARawVersion.Trim;
   if Pedida = '' then
-    Exit(SR_CONFIG_VERSION_VACIA);
+    Exit(MsgText(SR_CONFIG_VERSION_VACIA));
   Sufijo := '';
   I := Pedida.IndexOf('-');
   if I > 0 then
@@ -1357,17 +1357,17 @@ begin
   end;
   Partes := Pedida.Split(['.']);
   if (Length(Partes) < 2) or (Length(Partes) > 4) then
-    Exit(Format(SR_CONFIG_VERSION_FORMATO_FMT, [ARawVersion.Trim]));
+    Exit(MsgFmt(SR_CONFIG_VERSION_FORMATO_FMT, [ARawVersion.Trim]));
   for I := 0 to 3 do
     N[I] := 0;
   for I := 0 to High(Partes) do
     if not TryStrToInt(Partes[I].Trim, N[I]) or (N[I] < 0) or (N[I] > 65535) then
-      Exit(Format(SR_CONFIG_VERSION_FORMATO_FMT, [ARawVersion.Trim]));
+      Exit(MsgFmt(SR_CONFIG_VERSION_FORMATO_FMT, [ARawVersion.Trim]));
   Cuatro := Format('%d.%d.%d.%d', [N[0], N[1], N[2], N[3]]);
 
   Xml := PatchLoadText(ADproj, Enc);
   if not TRegEx.IsMatch(Xml, '(?i)<VerInfo_MajorVer>') then
-    Exit(SR_CONFIG_VERSION_SIN_VERINFO);
+    Exit(MsgText(SR_CONFIG_VERSION_SIN_VERINFO));
   if Xml.Contains(#13#10) then
     Eol := #13#10
   else
@@ -1420,7 +1420,7 @@ begin
     Nota := Eol + 'El sufijo "' + Sufijo + '" no va al .dproj (el VERSIONINFO ' +
       'es numerico): eso vive en SERVER_VERSION y en el CHANGELOG, y de eso ' +
       'te encargas tu.';
-  Result := Format(SN_CONFIG_VERSION_OK_FMT,
+  Result := MsgFmt(SN_CONFIG_VERSION_OK_FMT,
     [Cuatro, IfThen(AntesNum = AntesKey, AntesNum,
      AntesNum + ' en los numeros y ' + AntesKey + ' en las claves'), Nota]);
 end;
@@ -1434,10 +1434,10 @@ var
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
-    Exit(Format(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
+    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(SR_COMPONENTS_MISSING);
+    Exit(MsgText(SR_COMPONENTS_MISSING));
   Disponibles := string.Join(', ', SdksDePlataforma(Info.Version, APlatform));
 
   Sdk := ARawSdk.Trim;
@@ -1450,7 +1450,7 @@ begin
     // dialogo del IDE empieza preguntandola y la lista sale agrupada), asi
     // que un SDK de Android no puede acabar puesto en Linux64.
     if not MatchText(Sdk, SdksDePlataforma(Info.Version, APlatform)) then
-      Exit(Format(SR_CONFIG_SDK_NOEXISTE_FMT, [Sdk, APlatform, Disponibles]));
+      Exit(MsgFmt(SR_CONFIG_SDK_NOEXISTE_FMT, [Sdk, APlatform, Disponibles]));
   end;
 
   Xml := PatchLoadText(ADproj, Enc);
@@ -1487,10 +1487,10 @@ begin
 
   PatchSaveText(ADproj, Xml, Enc);
   if Quitar then
-    Result := Format(SN_CONFIG_SDK_QUITADO_FMT,
+    Result := MsgFmt(SN_CONFIG_SDK_QUITADO_FMT,
       [APlatform, IfThen(Antes = '', '(ninguno)', Antes), Disponibles])
   else
-    Result := Format(SN_CONFIG_SDK_PUESTO_FMT,
+    Result := MsgFmt(SN_CONFIG_SDK_PUESTO_FMT,
       [APlatform, Sdk, IfThen(Antes = '', '(ninguno)', Antes)]);
 end;
 
@@ -1510,12 +1510,12 @@ var
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
-    Exit(Format(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
+    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
   if IsLocalPlatform(APlatform) then
-    Exit(Format(SR_CONFIG_PROFILE_LOCAL_FMT, [APlatform]));
+    Exit(MsgFmt(SR_CONFIG_PROFILE_LOCAL_FMT, [APlatform]));
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(SR_COMPONENTS_MISSING);
+    Exit(MsgText(SR_COMPONENTS_MISSING));
   Dir := IdeProfilesDir(Info.Version);
   L := TStringList.Create;
   try
@@ -1532,9 +1532,9 @@ begin
   if not Quitar then
   begin
     if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then
-      Exit(SR_PASERVER_PROFILE_NAME);
+      Exit(MsgText(SR_PASERVER_PROFILE_NAME));
     if not TFile.Exists(TPath.Combine(Dir, Perfil + '.profile')) then
-      Exit(Format(SR_CONFIG_PROFILE_NOEXISTE_FMT, [Perfil, Disponibles]));
+      Exit(MsgFmt(SR_CONFIG_PROFILE_NOEXISTE_FMT, [Perfil, Disponibles]));
   end;
 
   Xml := PatchLoadText(ADproj, Enc);
@@ -1569,10 +1569,10 @@ begin
 
   PatchSaveText(ADproj, Xml, Enc);
   if Quitar then
-    Result := Format(SN_CONFIG_PROFILE_QUITADO_FMT,
+    Result := MsgFmt(SN_CONFIG_PROFILE_QUITADO_FMT,
       [APlatform, IfThen(Antes = '', '(ninguno)', Antes), Disponibles])
   else
-    Result := Format(SN_CONFIG_PROFILE_PUESTO_FMT,
+    Result := MsgFmt(SN_CONFIG_PROFILE_PUESTO_FMT,
       [APlatform, Perfil, IfThen(Antes = '', '(ninguno)', Antes)]);
 end;
 
@@ -1615,7 +1615,7 @@ begin
       if Cmd = 'fix-references' then
         Exit(ArreglaReferencias(Proj));
       if Params.Path.Trim = '' then
-        Exit(SR_GRUPO_NECESITA_PATH);
+        Exit(MsgText(SR_GRUPO_NECESITA_PATH));
       Result := ReadPathDenied(Params.Path);
       if Result <> '' then
         Exit;
@@ -1630,7 +1630,7 @@ begin
       end;
       Exit;
     end;
-    Exit(Format(SR_CONFIG_GROUP_FMT, [TPath.GetFileName(Proj), Cmd]));
+    Exit(MsgFmt(SR_CONFIG_GROUP_FMT, [TPath.GetFileName(Proj), Cmd]));
   end;
   if MatchText(TPath.GetExtension(Proj), ['.dpr', '.dpk']) then
   begin
@@ -1638,12 +1638,12 @@ begin
     if TFile.Exists(Sibling) then
       Proj := Sibling
     else if not MatchText(Cmd, ['', 'view', 'add-unit', 'remove-unit', 'add-requires']) then
-      Exit(Format(SR_CONFIG_NO_DPROJ_FMT,
+      Exit(MsgFmt(SR_CONFIG_NO_DPROJ_FMT,
         [TPath.GetFileName(Proj), TPath.GetFileName(Sibling)]));
   end;
   // Y lo que no es un proyecto no se lee ni se escribe como si lo fuera.
   if not MatchText(TPath.GetExtension(Proj), ['.dproj', '.dpr', '.dpk']) then
-    Exit(Format(SR_CONFIG_NOT_PROJECT_FMT, [TPath.GetFileName(Proj)]));
+    Exit(MsgFmt(SR_CONFIG_NOT_PROJECT_FMT, [TPath.GetFileName(Proj)]));
   if (Cmd = '') or (Cmd = 'view') then
     Exit(ViewConfig(Proj, Params.Section));
 
@@ -1680,7 +1680,7 @@ begin
         if Rechazo <> '' then
         begin
           TFile.WriteAllBytes(Proj, Antes);
-          Result := Rechazo + ' ' + SN_CONFIG_ADDPLATFORM_NADA;
+          Result := Rechazo + ' ' + MsgText(SN_CONFIG_ADDPLATFORM_NADA);
         end
         else if Pega <> '' then
           Result := Result + sLineBreak + Pega;
@@ -1713,7 +1713,7 @@ begin
     else if (Cmd = 'add-unit') or (Cmd = 'remove-unit') then
     begin
       if Params.Path.Trim = '' then
-        Exit(SR_UNIT_NEED_PATH);
+        Exit(MsgText(SR_UNIT_NEED_PATH));
       Result := WriteTargetDenied(Params.Project);
       if Result = '' then
         Result := PathDenied(Params.Path); // la unit solo se NOMBRA
@@ -1727,7 +1727,7 @@ begin
     else if Cmd = 'fix-references' then
       Result := ArreglaReferencias(Params.Project)
     else if (Cmd = 'add-project') or (Cmd = 'remove-project') then
-      Result := Format(SR_GRUPO_SOLO_GRUPO_FMT, [Cmd, TPath.GetFileName(Proj)])
+      Result := MsgFmt(SR_GRUPO_SOLO_GRUPO_FMT, [Cmd, TPath.GetFileName(Proj)])
     else
       Result := 'error: command debe ser view | add-platform | remove-platform | ' +
         'set-output | set-version | set-sdk | set-profile | add-searchpath | ' +

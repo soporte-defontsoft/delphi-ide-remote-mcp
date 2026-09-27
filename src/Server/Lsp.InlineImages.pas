@@ -138,7 +138,7 @@ begin
     Exit; // sin frame: pixeles de la captura, el contrato de siempre
   M := TRegEx.Match(AFrame.Trim, '^(\d{1,6})x(\d{1,6})@(\d{1,6})x(\d{1,6})\+(-?\d{1,6})\+(-?\d{1,6})$');
   if not M.Success then
-    Exit(Format(SR_CAPTURE_FRAME_BAD_FMT, [AFrame.Trim]));
+    Exit(MsgFmt(SR_CAPTURE_FRAME_BAD_FMT, [AFrame.Trim]));
   IW := StrToInt(M.Groups[1].Value);
   IH := StrToInt(M.Groups[2].Value);
   SW := StrToInt(M.Groups[3].Value);
@@ -146,11 +146,11 @@ begin
   OX := StrToInt(M.Groups[5].Value);
   OY := StrToInt(M.Groups[6].Value);
   if (IW <= 0) or (IH <= 0) or (SW <= 0) or (SH <= 0) then
-    Exit(Format(SR_CAPTURE_FRAME_BAD_FMT, [AFrame.Trim]));
+    Exit(MsgFmt(SR_CAPTURE_FRAME_BAD_FMT, [AFrame.Trim]));
   X := AOutX;
   Y := AOutY;
   if (X < 0) or (Y < 0) or (X >= IW) or (Y >= IH) then
-    Exit(Format(SR_CAPTURE_FRAME_OUT_FMT, [AX.Trim, AY.Trim, IW, IH]));
+    Exit(MsgFmt(SR_CAPTURE_FRAME_OUT_FMT, [AX.Trim, AY.Trim, IW, IH]));
   AOutX := OX + Round(X * SW / IW);
   AOutY := OY + Round(Y * SH / IH);
 end;
@@ -171,7 +171,7 @@ var
     if (IW <= 0) or (SrcW <= 0) then
       Exit;
     AReturn.AddPair('frame', FrameOf(IW, IH, SrcW, SrcH, AOriginX, AOriginY));
-    AReturn.AddPair('frameNote', SN_CAPTURE_FRAME_NOTE);
+    AReturn.AddPair('frameNote', MsgText(SN_CAPTURE_FRAME_NOTE));
   end;
 
 begin
@@ -207,7 +207,7 @@ begin
         // anuncia como 'screenshot'.
         AReturn.RemovePair('screenshot').Free;
       end;
-      AReturn.AddPair('inlineNote', Format(SN_CAPTURE_INLINE_NOTE_FMT,
+      AReturn.AddPair('inlineNote', MsgFmt(SN_CAPTURE_INLINE_NOTE_FMT,
         [FormatFloat('0.000', Escala, TFormatSettings.Invariant)]));
       Exit(True);
     end;
@@ -221,7 +221,7 @@ begin
   if Enlace <> '' then
   begin
     AReturn.AddPair('download', Enlace);
-    AReturn.AddPair('downloadNote', SN_FETCH_DOWNLOAD);
+    AReturn.AddPair('downloadNote', MsgText(SN_FETCH_DOWNLOAD));
     if IsAgentCapture(AFile) then
       AReturn.AddPair('consumedOnDownload', TJSONBool.Create(True)); // se borra al recogerla
   end;

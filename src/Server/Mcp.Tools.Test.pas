@@ -84,12 +84,12 @@ begin
   if Cmd = '' then
     Cmd := 'discover';
   if not MatchText(Cmd, ['discover', 'run']) then
-    Exit(SR_TEST_CMD);
+    Exit(MsgText(SR_TEST_CMD));
   try
     if Cmd = 'discover' then
     begin
       if Params.Path.Trim = '' then
-        Exit(SR_TEST_NEED_PATH);
+        Exit(MsgText(SR_TEST_NEED_PATH));
       Ret := TestDiscover(Params.Path.Trim);
     end
     else
@@ -97,9 +97,9 @@ begin
       // running tests IS execution: its own opt-in, the only one this machine
       // has (delphi_run retired 2026-09-23).
       if not AllowTests then
-        Exit(SR_TEST_DISABLED);
+        Exit(MsgText(SR_TEST_DISABLED));
       if Params.Project.Trim = '' then
-        Exit(SR_TEST_NEED_PROJECT);
+        Exit(MsgText(SR_TEST_NEED_PROJECT));
       Ret := TestRun(Params.Project.Trim, Params.Config.Trim,
         Params.Filter.Trim, Params.Platform.Trim, Params.TimeoutMs,
         Params.NoBuild);

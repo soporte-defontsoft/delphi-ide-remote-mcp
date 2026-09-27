@@ -149,7 +149,7 @@ begin
     // 1. the new name must be legal before any work
     if not IsValidIdent_(ANewName) then
     begin
-      Blockers.Add(Format(SR_RENAME_BAD_IDENT_FMT, [ANewName]));
+      Blockers.Add(MsgFmt(SR_RENAME_BAD_IDENT_FMT, [ANewName]));
       Result.AddPair('applicable', TJSONBool.Create(False));
       Result.AddPair('blockers', Blockers);
       Blockers := nil;
@@ -157,7 +157,7 @@ begin
     end;
     if MatchText(ANewName, RESERVED) then
     begin
-      Blockers.Add(Format(SR_RENAME_RESERVED_FMT, [ANewName]));
+      Blockers.Add(MsgFmt(SR_RENAME_RESERVED_FMT, [ANewName]));
       Result.AddPair('applicable', TJSONBool.Create(False));
       Result.AddPair('blockers', Blockers);
       Blockers := nil;
@@ -171,7 +171,7 @@ begin
       Result.AddPair('symbol', Ident);
       Result.AddPair('newName', ANewName);
       if SameText(Ident, ANewName) then
-        Blockers.Add(SR_RENAME_SAME_NAME);
+        Blockers.Add(MsgText(SR_RENAME_SAME_NAME));
       DefObj := Refs.GetValue('definition') as TJSONObject;
       DefPath := DefObj.GetValue('path').Value;
       DefLine := DefObj.GetValue('line').GetValue<Integer>;
@@ -188,7 +188,7 @@ begin
       // the definition must be OURS to rename - and a definition outside
       // the jail (an RTL unit can be 1 MB) is NEVER scanned further
       if PathDenied(DefPath) <> '' then
-        Blockers.Add(SR_RENAME_LIBRARY)
+        Blockers.Add(MsgText(SR_RENAME_LIBRARY))
       else if not Touched.Contains(DefPath) then
         Touched.Add(DefPath);
 
@@ -285,7 +285,7 @@ begin
             // class part: say it instead of letting the agent replace the lot
             if TRegEx.IsMatch(Lines[DefLine],
               '(?i)\b\w+\.' + TRegEx.Escape(Ident) + '\b') then
-              Warnings.Add(Format(SN_RENAME_QUALIFIED_FMT, [Lines[DefLine].Trim]));
+              Warnings.Add(MsgFmt(SN_RENAME_QUALIFIED_FMT, [Lines[DefLine].Trim]));
           end;
         end;
       end;
@@ -306,13 +306,13 @@ begin
         var Menciones := Refs.GetValue('mentionsCount').GetValue<Integer>;
         Result.AddPair('mentions', TJSONNumber.Create(Menciones));
         if Menciones > 0 then
-          Warnings.Add(Format(SN_RENAME_MENTIONS_FMT, [Menciones]));
+          Warnings.Add(MsgFmt(SN_RENAME_MENTIONS_FMT, [Menciones]));
       end;
 
       // one unverified candidate = not applicable, the adopted rule
       Arr := Refs.GetValue('unverified') as TJSONArray;
       if Arr.Count > 0 then
-        Blockers.Add(Format(SR_RENAME_UNVERIFIED_FMT, [Arr.Count]));
+        Blockers.Add(MsgFmt(SR_RENAME_UNVERIFIED_FMT, [Arr.Count]));
       Result.AddPair('unverified', TJSONNumber.Create(Arr.Count));
       // A "homonym" the engine resolved somewhere else may be the real thing
       // seen through another project's settings - which is exactly how a
@@ -324,7 +324,7 @@ begin
         RejArr := Refs.GetValue('rejected') as TJSONArray;
         if RejArr.Count > 0 then
         begin
-          Blockers.Add(Format(SR_RENAME_HOMONYMS_FMT, [RejArr.Count]));
+          Blockers.Add(MsgFmt(SR_RENAME_HOMONYMS_FMT, [RejArr.Count]));
           Result.AddPair('lookalikes', TJSONArray(RejArr.Clone));
         end;
       end;
@@ -395,16 +395,16 @@ begin
         if N > 0 then
         begin
           Inc(DesignerHits, N);
-          Warnings.Add(Format(SN_RENAME_DESIGNER_HIT_FMT, [N, P]));
+          Warnings.Add(MsgFmt(SN_RENAME_DESIGNER_HIT_FMT, [N, P]));
         end;
       end;
     finally
       DsgList.Free;
     end;
     if DesignerHits > 0 then
-      Blockers.Add(Format(SR_RENAME_DESIGNER_FMT, [DesignerHits]));
+      Blockers.Add(MsgFmt(SR_RENAME_DESIGNER_FMT, [DesignerHits]));
     if StringHits > 0 then
-      Blockers.Add(Format(SR_RENAME_STRINGS_FMT, [StringHits]));
+      Blockers.Add(MsgFmt(SR_RENAME_STRINGS_FMT, [StringHits]));
 
     // 4. collision: the new name already lives in an affected file
     N := 0;
@@ -414,7 +414,7 @@ begin
       Inc(N, TRegEx.Matches(Text, '(?i)\b' + TRegEx.Escape(ANewName) + '\b').Count);
     end;
     if N > 0 then
-      Blockers.Add(Format(SR_RENAME_COLLISION_FMT, [ANewName, N]));
+      Blockers.Add(MsgFmt(SR_RENAME_COLLISION_FMT, [ANewName, N]));
 
     Files := Touched.Count;
     Result.AddPair('files', TJSONNumber.Create(Files));
@@ -425,7 +425,7 @@ begin
     Blockers := nil;
     Result.AddPair('warnings', Warnings);
     Warnings := nil;
-    Result.AddPair('note', SN_RENAME_PREVIEW_NOTE);
+    Result.AddPair('note', MsgText(SN_RENAME_PREVIEW_NOTE));
   finally
     Touched.Free;
     Changes.Free;
@@ -458,7 +458,7 @@ var
       ChangesetExecute('rollback', Id, '', '', '', '', '', '', 0);
     Id := '';
     PonResultado('applied', TJSONBool.Create(False));
-    PonResultado('note', TJSONString.Create(Format(SR_RENAME_APPLY_FAILED_FMT, [AMotivo])));
+    PonResultado('note', TJSONString.Create(MsgFmt(SR_RENAME_APPLY_FAILED_FMT, [AMotivo])));
   end;
 
 begin
@@ -468,7 +468,7 @@ begin
           TJSONBool(Result.GetValue('applicable')).AsBoolean) then
   begin
     PonResultado('applied', TJSONBool.Create(False));
-    PonResultado('note', TJSONString.Create(SR_RENAME_NOT_APPLICABLE));
+    PonResultado('note', TJSONString.Create(MsgText(SR_RENAME_NOT_APPLICABLE)));
     Exit;
   end;
   Changes := Result.GetValue('changes') as TJSONArray;
@@ -480,7 +480,7 @@ begin
     Id := ChangesetBegin;
     if Id = '' then
     begin
-      Fallo(SR_CHANGESET_TOO_MANY);
+      Fallo(MsgText(SR_CHANGESET_TOO_MANY));
       Exit;
     end;
     Apiladas := 0;
@@ -499,7 +499,7 @@ begin
       end;
       if (L0 < 0) or (L0 >= Length(Lineas)) then
       begin
-        Fallo(Format(SR_RENAME_LINE_GONE_FMT, [L0 + 1, P]));
+        Fallo(MsgFmt(SR_RENAME_LINE_GONE_FMT, [L0 + 1, P]));
         Exit;
       end;
       { La linea entera, con el identificador cambiado como PALABRA: la
@@ -512,7 +512,7 @@ begin
       if Nueva = Vieja then
         Continue; // una fila que no lleva el nombre (no deberia pasar): nada que apilar
       R := ChangesetExecute('stage', Id, 'edit', P, '', Vieja, Nueva, '', L0 + 1);
-      if not ChangesetRespondio(R, SN_CHANGESET_STAGED_FMT) then
+      if not ChangesetRespondio(R, MsgText(SN_CHANGESET_STAGED_FMT)) then
       begin
         Fallo(R);
         Exit;
@@ -521,7 +521,7 @@ begin
     end;
     if Apiladas = 0 then
     begin
-      Fallo(SR_RENAME_NOTHING_TO_STAGE);
+      Fallo(MsgText(SR_RENAME_NOTHING_TO_STAGE));
       Exit;
     end;
     R := ChangesetExecute('preview', Id, '', '', '', '', '', '', 0);
@@ -539,7 +539,7 @@ begin
     end;
     R := ChangesetExecute('commit', Id, '', '', '', '', '', '', 0);
     Id := ''; // commit consume el changeset, haya ido bien o mal
-    if not ChangesetRespondio(R, SN_CHANGESET_COMMITTED_FMT) then
+    if not ChangesetRespondio(R, MsgText(SN_CHANGESET_COMMITTED_FMT)) then
     begin
       Fallo(R);
       Exit;
@@ -547,7 +547,7 @@ begin
     PonResultado('applied', TJSONBool.Create(True));
     PonResultado('editsApplied', TJSONNumber.Create(Apiladas));
     PonResultado('commit', TJSONString.Create(R));
-    PonResultado('note', TJSONString.Create(SN_RENAME_APPLIED_NOTE));
+    PonResultado('note', TJSONString.Create(MsgText(SN_RENAME_APPLIED_NOTE)));
     { El tope de 100 filas vuelve a la RESPUESTA: lo aplicado esta en el
       disco, y un simbolo con cientos de usos no tiene que inundar el
       contexto de un cliente pequeno. }

@@ -107,14 +107,14 @@ var
   I, Size: Integer;
 begin
   if Params.Message.Trim = '' then
-    Exit(SR_REPORT_EMPTY);
+    Exit(MsgText(SR_REPORT_EMPTY));
 
   // Measured on the WHOLE payload the client controls (title, from and agent
   // travel into the body too), in bytes of the encoding written to disk.
   Size := TEncoding.UTF8.GetByteCount(
     Params.Message + Params.Title + Params.From + Params.Agent);
   if Size > MAX_REPORT_BYTES then
-    Exit(Format(SR_REPORT_TOO_BIG_FMT,
+    Exit(MsgFmt(SR_REPORT_TOO_BIG_FMT,
       [Size div 1024, MAX_REPORT_BYTES div 1024]));
 
   Kind := Params.Kind.Trim.ToLower;
@@ -126,7 +126,7 @@ begin
   if not MatchText(Kind, ['bug', 'limitation', 'suggestion', 'question']) then
   begin
     if Kind <> '' then
-      KindNote := Format(SN_REPORT_KIND_FMT, [Params.Kind.Trim]);
+      KindNote := MsgFmt(SN_REPORT_KIND_FMT, [Params.Kind.Trim]);
     Kind := 'bug';
   end;
   Title := Params.Title.Trim;
@@ -156,7 +156,7 @@ begin
   begin
     Inc(I);
     if I > 500 then // absurdo, pero nunca un bucle infinito
-      Exit(SR_REPORT_NO_NAME);
+      Exit(MsgText(SR_REPORT_NO_NAME));
     Path := TPath.Combine(Dir, Format('%s-%d.md', [FileName, I]));
   end;
 
@@ -191,7 +191,7 @@ begin
 
   // The confirmation names the folder too, so the agent knows where its
   // history accumulates.
-  Result := Format(SN_REPORT_OK_FMT,
+  Result := MsgFmt(SN_REPORT_OK_FMT,
     [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path),
      SERVER_VERSION]) + KindNote;
 end;

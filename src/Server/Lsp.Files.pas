@@ -90,7 +90,7 @@ begin
     P := RequestInfo.Params.Values['path'].Trim;
     if P = '' then
     begin
-      Answer(ResponseInfo, 400, SR_FILES_NEED_PATH);
+      Answer(ResponseInfo, 400, MsgText(SR_FILES_NEED_PATH));
       Exit;
     end;
     // Same door as a tools/call argument: srvX: expands only for served
@@ -129,12 +129,12 @@ begin
     end;
     if TDirectory.Exists(Full) then
     begin
-      Answer(ResponseInfo, 403, SR_FILES_DIR);
+      Answer(ResponseInfo, 403, MsgText(SR_FILES_DIR));
       Exit;
     end;
     if not TFile.Exists(Full) then
     begin
-      Answer(ResponseInfo, 404, SR_FILES_MISSING);
+      Answer(ResponseInfo, 404, MsgText(SR_FILES_MISSING));
       Exit;
     end;
 

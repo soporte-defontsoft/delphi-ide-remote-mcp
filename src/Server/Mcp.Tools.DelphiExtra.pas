@@ -152,13 +152,13 @@ begin
     Exit(Format('RECHAZADO: no existe %s.', [Params.Path]));
   if not MatchText(TPath.GetExtension(Params.Path),
        ['.pas', '.dpr', '.dpk', '.inc']) then
-    Exit(Format(SR_DIAG_NOT_SOURCE_FMT,
+    Exit(MsgFmt(SR_DIAG_NOT_SOURCE_FMT,
       [TPath.GetFileName(Params.Path), TPath.GetExtension(Params.Path)]));
   // Answer well inside the usual MCP client timeout (60 s): a slow lint keeps
   // running on the LSP, and the next call on the same text collects it.
   P := TLspSession.Instance.LintFile(Params.Path, DIAG_WAIT_MS, Settings);
   if P = nil then
-    Exit(SN_DIAG_IN_PROGRESS);
+    Exit(MsgText(SN_DIAG_IN_PROGRESS));
   try
     Diags := P.GetValue('diagnostics') as TJSONArray;
     Return := TJSONObject.Create;

@@ -227,7 +227,7 @@ begin
              not Unknown.Contains(',' + Cur + ',') then
           begin
             Unknown := Unknown + Cur + ',';
-            Warn(Format(SN_LINT_UNKNOWN_CLASS_FMT,
+            Warn(MsgFmt(SN_LINT_UNKNOWN_CLASS_FMT,
               [Mt.Groups[2].Value, IfThen(AIsFmx, 'FMX', 'VCL')]));
           end;
           Cur := '';

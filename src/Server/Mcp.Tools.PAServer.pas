@@ -856,9 +856,9 @@ var
 begin
   ProfName := Params.Name.Trim;
   Host := Params.Host.Trim;
-  if ProfName = '' then Exit(Format(SR_PASERVER_NEED_FMT, ['name']));
-  if Host = '' then Exit(Format(SR_PASERVER_NEED_FMT, ['host']));
-  if Params.Password = '' then Exit(Format(SR_PASERVER_NEED_FMT, ['password']));
+  if ProfName = '' then Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['name']));
+  if Host = '' then Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['host']));
+  if Params.Password = '' then Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['password']));
   // Creating a profile IS declaring where this machine may connect, so it
   // goes through the same door as the raw probe. Without this the whitelist
   // was theatre: an agent wrote a profile pointing at any host:port and then
@@ -875,14 +875,14 @@ begin
   for P in PACLIENT_PLATFORMS do
     if SameText(P, Params.Platform.Trim) then Plat := P;
   PaClient := FindPaClient(Info);
-  if PaClient = '' then Exit(SR_PASERVER_NO_PACLIENT);
+  if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
   // Un nombre existente NUNCA se pisa (lo pudo crear el IDE u otro agente
   // con una contrasena que este no conoce); y si otro perfil ya apunta al
   // mismo host:puerto, se crea pero avisando - contra los perfiles a lo
   // loco (David, 2026-09-19).
   ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
   if TFile.Exists(ProfileFile) then
-    Exit(Format(SR_PASERVER_PROFILE_EXISTS_FMT,
+    Exit(MsgFmt(SR_PASERVER_PROFILE_EXISTS_FMT,
       [ProfName, TagValue(TFile.ReadAllText(ProfileFile), 'Profile_host')]));
   AvisoDup := '';
   if TDirectory.Exists(ProfilesDir(Info.Version)) then
@@ -890,7 +890,7 @@ begin
     try
       if SameText(TagValue(TFile.ReadAllText(F), 'Profile_host'), Host) and
          (TagValue(TFile.ReadAllText(F), 'Profile_port') = Port) then
-        AvisoDup := Format(SN_PASERVER_DUP_HOST_FMT,
+        AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT,
           [TPath.GetFileNameWithoutExtension(F)]);
     except
       // un perfil ilegible no impide crear el nuevo
@@ -916,7 +916,7 @@ begin
       Return.AddPair('ideRegistered', TJSONBool.Create(True));
       if AvisoDup <> '' then
         Return.AddPair('aviso', AvisoDup);
-      Return.AddPair('note', SN_PASERVER_PROFILE_OK);
+      Return.AddPair('note', MsgText(SN_PASERVER_PROFILE_OK));
       Result := Return.ToJSON;
     finally
       Return.Free;
@@ -928,7 +928,7 @@ begin
     // 2026-08-28 (the operator had the IDE open): the caller believed the
     // profile existed and every later call chased a ghost. Name the real
     // cause and the real fix.
-    Result := SR_PASERVER_IDE_OPEN
+    Result := MsgText(SR_PASERVER_IDE_OPEN)
   else
     // paclient's output never carries the password (it echoes it encrypted).
     Result := 'error: paclient exit ' + IntToStr(ExitCode) + ': ' + Output.Trim;
@@ -992,7 +992,7 @@ begin
   for var A in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
     if SameText(A.Trim, H) or (A.Trim = '*') or (A.Trim = '0.0.0.0') then
       Exit; // '*' / 0.0.0.0: el operador declaro CUALQUIER host
-  Result := Format(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim,
+  Result := MsgFmt(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim,
     IfThen(Allowed <> '', Allowed, '(ninguno)')]);
 end;
 
@@ -1031,11 +1031,11 @@ begin
     Return.AddPair('tcpReachable', TJSONBool.Create(Ok));
     Return.AddPair('elapsedMs', TJSONNumber.Create(SW.ElapsedMilliseconds));
     if Ok then
-      Return.AddPair('note', SN_PASERVER_TCP_OK)
+      Return.AddPair('note', MsgText(SN_PASERVER_TCP_OK))
     else
     begin
       Return.AddPair('error', Err);
-      Return.AddPair('note', SN_PASERVER_TCP_FAIL);
+      Return.AddPair('note', MsgText(SN_PASERVER_TCP_FAIL));
     end;
     Result := Return.ToJSON;
   finally
@@ -1056,15 +1056,15 @@ var
 begin
   ProfName := Params.Name.Trim;
   if ProfName = '' then
-    Exit(Format(SR_PASERVER_NEED_FMT, ['name']));
+    Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['name']));
   if not TRegEx.IsMatch(ProfName, '^[A-Za-z0-9_.-]+$') then
-    Exit(SR_PASERVER_PROFILE_NAME);
+    Exit(MsgText(SR_PASERVER_PROFILE_NAME));
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(SR_COMPONENTS_MISSING);
+    Exit(MsgText(SR_COMPONENTS_MISSING));
   ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
   if not TFile.Exists(ProfileFile) then
-    Exit(Format(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
   try
     TFile.Delete(ProfileFile);
   except
@@ -1072,7 +1072,7 @@ begin
       Exit('error: no pude borrar el perfil: ' + E.Message);
   end;
   BorrarPerfilDelIde(Info.Version, ProfName);
-  Result := Format(SN_PASERVER_PROFILE_REMOVED_FMT, [ProfName]);
+  Result := MsgFmt(SN_PASERVER_PROFILE_REMOVED_FMT, [ProfName]);
   // paclient deja una carpeta VACIA con el nombre del perfil en el directorio
   // de SDKs del IDE al crearlo, y nadie la recogia: medido el 2026-09-22, diez
   // carpetas huerfanas de perfiles de prueba en la maquina del operador.
@@ -1101,13 +1101,13 @@ begin
       Exit(TcpProbe(Params.Host.Trim,
         IfThen(Params.Port.Trim <> '', Params.Port.Trim, '64211')));
     end;
-    Exit(Format(SR_PASERVER_NO_PROFILE_FMT, ['(sin name)']));
+    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, ['(sin name)']));
   end;
   PaClient := FindPaClient(Info);
-  if PaClient = '' then Exit(SR_PASERVER_NO_PACLIENT);
+  if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
   ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
   if not TFile.Exists(ProfileFile) then
-    Exit(Format(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
   Result := ProfileHostDenied(ProfName);
   if Result <> '' then
     Exit;
@@ -1119,7 +1119,7 @@ begin
     Return.AddPair('connected', TJSONBool.Create(ExitCode = 0));
     Return.AddPair('paclientOutput', Output.Trim);
     if ExitCode = 0 then
-      Return.AddPair('note', SN_PASERVER_CONNECTED);
+      Return.AddPair('note', MsgText(SN_PASERVER_CONNECTED));
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -1189,7 +1189,7 @@ end;
 function EjecucionRemotaDenegada(const AProf, AProj, ASinPerfil: string): string;
 begin
   if not AllowRemoteRun then
-    Exit(SR_PASERVER_RUN_DISABLED);
+    Exit(MsgText(SR_PASERVER_RUN_DISABLED));
   // Sin perfil no hay destino: ProfileHostDenied con '' no encuentra nada
   // y dejaba pasar, y el fallo salia de paclient con otro nombre.
   if AProf = '' then
@@ -1204,7 +1204,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(AProj) then
-    Exit(Format(SR_PASERVER_RUN_NOPROJ_FMT, [AProj]));
+    Exit(MsgFmt(SR_PASERVER_RUN_NOPROJ_FMT, [AProj]));
   Result := RemoteRunProjectDenied(AProj);
 end;
 
@@ -1228,14 +1228,14 @@ var
   Prof, Proj, ExeName, Denied: string;
   Res: TJSONObject;
 begin
-  Denied := TrabajoDenegado(Params, SR_PASERVER_RUN_NEEDS, False, Prof, Proj);
+  Denied := TrabajoDenegado(Params, MsgText(SR_PASERVER_RUN_NEEDS), False, Prof, Proj);
   if Denied <> '' then
     Exit(Denied);
   ExeName := Params.Exe.Trim;
   // exe, when given, is a FILE NAME of the deploy folder - never a path
   if (ExeName <> '') and (ExeName.Contains('/') or ExeName.Contains(chr(92)) or
      ExeName.Contains('..')) then
-    Exit(SR_PASERVER_RUN_EXENAME);
+    Exit(MsgText(SR_PASERVER_RUN_EXENAME));
   Denied := ShellArgDenied(Prof + ' ' + ExeName + ' ' + Params.Args);
   if Denied <> '' then
     Exit(Denied);
@@ -1257,7 +1257,7 @@ var
   Prof, Proj, Denied: string;
   Res: TJSONObject;
 begin
-  Denied := TrabajoDenegado(Params, Format(SR_PASERVER_JOB_NEEDS_FMT, ['kill']),
+  Denied := TrabajoDenegado(Params, MsgFmt(SR_PASERVER_JOB_NEEDS_FMT, ['kill']),
     True, Prof, Proj);
   if Denied <> '' then
     Exit(Denied);
@@ -1277,7 +1277,7 @@ var
   Prof, Proj, Denied: string;
   Res: TJSONObject;
 begin
-  Denied := TrabajoDenegado(Params, Format(SR_PASERVER_JOB_NEEDS_FMT, ['output']),
+  Denied := TrabajoDenegado(Params, MsgFmt(SR_PASERVER_JOB_NEEDS_FMT, ['output']),
     True, Prof, Proj);
   if Denied <> '' then
     Exit(Denied);
@@ -1320,19 +1320,19 @@ var
 begin
   ProfName := Params.Name.Trim;
   if ProfName = '' then
-    Exit(Format(SR_PASERVER_NO_PROFILE_FMT, ['(sin name)']));
+    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, ['(sin name)']));
   PaClient := FindPaClient(Info);
-  if PaClient = '' then Exit(SR_PASERVER_NO_PACLIENT);
+  if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
   ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
   if not TFile.Exists(ProfileFile) then
-    Exit(Format(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
   Result := ProfileHostDenied(ProfName);
   if Result <> '' then
     Exit;
   ProfXml := TFile.ReadAllText(ProfileFile);
   Plat := TagValue(ProfXml, 'Profile_platform');
   if not SameText(Plat, 'Linux64') then
-    Exit(Format(SR_PASERVER_SDK_PLATFORM_FMT, [ProfName, Plat]));
+    Exit(MsgFmt(SR_PASERVER_SDK_PLATFORM_FMT, [ProfName, Plat]));
 
   // UNA CARPETA POR SDK, igual que el IDE hace con los de Android: el nombre
   // sale de la DISTRO del target (zorin18, fedora44...), del parametro "sdk"
@@ -1354,7 +1354,7 @@ begin
       if Ficha.GetValue('distro') <> nil then
         Otra := Ficha.GetValue<string>('distro');
       if (Otra <> '') and (Etiqueta <> '') and not SameText(Otra, Etiqueta) then
-        Exit(Format(SR_PASERVER_SDK_OTRA_FMT,
+        Exit(MsgFmt(SR_PASERVER_SDK_OTRA_FMT,
           [SdkName + '.sdk', Otra, Etiqueta, Etiqueta]));
     finally
       Ficha.Free;
@@ -1420,7 +1420,7 @@ begin
 
     if not (GotGcc and GotLibc) then
     begin
-      Return.AddPair('error', Format(SR_PASERVER_SDK_NOGROUP_FMT,
+      Return.AddPair('error', MsgFmt(SR_PASERVER_SDK_NOGROUP_FMT,
         [ProfName,
          '/usr/lib/gcc/x86_64-linux-gnu | /usr/lib/gcc/x86_64-redhat-linux',
          '/usr/lib/x86_64-linux-gnu | /usr/lib64']));
@@ -1523,13 +1523,13 @@ begin
       'incremental: over a sysroot already on disk it brings only what ' +
       'changed on the target, so a small number - or zero, "already up to ' +
       'date" - is the normal answer of a re-run, not an empty SDK.');
-    Return.AddPair('note', SN_PASERVER_SDK_OK);
+    Return.AddPair('note', MsgText(SN_PASERVER_SDK_OK));
     if Glibc <> '' then
-      Return.AddPair('genericNote', Format(SN_PASERVER_SDK_GENERIC_FMT, [Glibc]));
+      Return.AddPair('genericNote', MsgFmt(SN_PASERVER_SDK_GENERIC_FMT, [Glibc]));
     // Una carpeta con dos distros dentro solo puede venir de antes de este
     // cambio: se dice, porque el linker las mezcla sin avisar.
     if SysrootMezclado(SysRoot) then
-      Return.AddPair('warning', Format(SN_PASERVER_SDK_MEZCLA_FMT, [SysRoot]));
+      Return.AddPair('warning', MsgFmt(SN_PASERVER_SDK_MEZCLA_FMT, [SysRoot]));
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -1629,7 +1629,7 @@ var
 begin
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(SR_PASERVER_NO_PACLIENT);
+    Exit(MsgText(SR_PASERVER_NO_PACLIENT));
   Nombre := SoloAlfanumerico(Params.Sdk);
   if Nombre = '' then
     Nombre := SoloAlfanumerico(Params.Name);
@@ -1648,7 +1648,7 @@ begin
     begin
       if not TFile.Exists(Fichero) then
       begin
-        Return.AddPair('error', Format(SR_PASERVER_SDK_NOFILE_FMT,
+        Return.AddPair('error', MsgFmt(SR_PASERVER_SDK_NOFILE_FMT,
           [TPath.GetFileName(Fichero)]));
         Continue;
       end;
@@ -1675,7 +1675,7 @@ begin
            TPath.GetFileNameWithoutExtension(Fichero), False) then
         Hechos.Add(TPath.GetFileNameWithoutExtension(Fichero));
     end;
-    Return.AddPair('note', SN_PASERVER_SDK_RESEAT);
+    Return.AddPair('note', MsgText(SN_PASERVER_SDK_RESEAT));
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -1697,10 +1697,10 @@ begin
   if Nombre = '' then
     Nombre := SoloAlfanumerico(Params.Name);
   if Nombre = '' then
-    Exit(Format(SR_PASERVER_NEED_FMT, ['sdk']));
+    Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['sdk']));
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(SR_COMPONENTS_MISSING);
+    Exit(MsgText(SR_COMPONENTS_MISSING));
   Fichero := TPath.Combine(ProfilesDir(Info.Version), Nombre + '.sdk');
   // El fichero puede no estar y el ASIENTO seguir ahi - pasa en cuanto alguien
   // borra el .sdk a mano, y entonces el IDE sigue ofreciendo un SDK que ya no
@@ -1724,7 +1724,7 @@ begin
     end;
   end
   else if not AsientoDeSdkExiste(Info.Version, Nombre) then
-    Exit(Format(SR_PASERVER_SDK_NOFILE_FMT, [Nombre]));
+    Exit(MsgFmt(SR_PASERVER_SDK_NOFILE_FMT, [Nombre]));
   R := TRegistry.Create(KEY_WRITE);
   try
     R.RootKey := HKEY_CURRENT_USER;
@@ -1739,7 +1739,7 @@ begin
     if Raiz <> '' then
     begin
       Return.AddPair('sysrootLeftBehind', Raiz);
-      Return.AddPair('note', SN_PASERVER_SDK_REMOVED);
+      Return.AddPair('note', MsgText(SN_PASERVER_SDK_REMOVED));
     end;
     Result := Return.ToJSON;
   finally
@@ -1779,7 +1779,7 @@ begin
   else if Cmd = 'output' then
     Result := OutputCmd(Params)
   else
-    Result := SR_PASERVER_CMD;
+    Result := MsgText(SR_PASERVER_CMD);
 end;
 
 initialization

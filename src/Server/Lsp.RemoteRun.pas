@@ -196,21 +196,21 @@ begin
   ALocalFile := '';
   Pc := PaClientPath;
   if Pc = '' then
-    Exit(SR_REMOTERUN_NO_PACLIENT);
+    Exit(MsgText(SR_REMOTERUN_NO_PACLIENT));
   if (ARelPath = '') or ARelPath.Contains('..') or
      ARelPath.StartsWith('/') or ARelPath.Contains('\') then
-    Exit(SR_FETCHTARGET_BADPATH);
+    Exit(MsgText(SR_FETCHTARGET_BADPATH));
   ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
   CrearCarpeta(ADestDir);
   Ops := Format('"--get=%s/%s,%s"', [ProjName, ARelPath, ADestDir]);
   Rc := Paclient(Pc, Ops, AProfile, Output);
   if Rc <> 0 then
-    Exit(Format(SR_FETCHTARGET_FAIL_FMT, [Rc, Output.Trim]));
+    Exit(MsgFmt(SR_FETCHTARGET_FAIL_FMT, [Rc, Output.Trim]));
   ALocalFile := TPath.Combine(ADestDir, TPath.GetFileName(ARelPath));
   if not TFile.Exists(ALocalFile) then
   begin
     ALocalFile := '';
-    Exit(Format(SR_FETCHTARGET_NOFILE_FMT, [ARelPath]));
+    Exit(MsgFmt(SR_FETCHTARGET_NOFILE_FMT, [ARelPath]));
   end;
   Result := '';
 end;
@@ -231,16 +231,16 @@ begin
   // el motivo real del nodo (revision del 26-sep-2026).
   for L in ASalida.Split([#10]) do
     if (Motivo = '') and L.Trim.StartsWith(NODO_NO_PUDE) then
-      Motivo := Format(SN_DESKTOP_MOTIVO_NODO_FMT,
+      Motivo := MsgFmt(SN_DESKTOP_MOTIVO_NODO_FMT,
         [L.Trim.Substring(Length(NODO_NO_PUDE)).Trim]);
   if Motivo = '' then
-    if AEntorno = SN_REMOTERUN_ENV_NONE then
-      Motivo := SN_DESKTOP_MOTIVO_SIN_SESION
+    if AEntorno = MsgText(SN_REMOTERUN_ENV_NONE) then
+      Motivo := MsgText(SN_DESKTOP_MOTIVO_SIN_SESION)
     else if CapturaDenegada(ASalida) then
-      Motivo := SN_DESKTOP_MOTIVO_DENEGADA;
+      Motivo := MsgText(SN_DESKTOP_MOTIVO_DENEGADA);
   if Motivo = '' then
-    Motivo := SN_DESKTOP_MOTIVO_NINGUNO;
-  Result := Format(SR_DESKTOP_SIN_CAPTURA_FMT, [Motivo]);
+    Motivo := MsgText(SN_DESKTOP_MOTIVO_NINGUNO);
+  Result := MsgFmt(SR_DESKTOP_SIN_CAPTURA_FMT, [Motivo]);
 end;
 
 { EL FICHERO DE TRABAJO, el mismo para Linux y Windows: el binario, el fichero
@@ -305,17 +305,17 @@ begin
   if Resto.StartsWith('win:') then
   begin
     if Linea.StartsWith('0') then
-      Result := SN_REMOTERUN_ENV_WIN0
+      Result := MsgText(SN_REMOTERUN_ENV_WIN0)
     else
-      Result := Format(SN_REMOTERUN_ENV_WIN_FMT, [Resto.Substring(4)]);
+      Result := MsgFmt(SN_REMOTERUN_ENV_WIN_FMT, [Resto.Substring(4)]);
     Exit;
   end;
   if Linea.StartsWith('0') then
-    Result := SN_REMOTERUN_ENV_NONE
+    Result := MsgText(SN_REMOTERUN_ENV_NONE)
   else if Resto = '' then
-    Result := SN_REMOTERUN_ENV_INHERITED
+    Result := MsgText(SN_REMOTERUN_ENV_INHERITED)
   else
-    Result := Format(SN_REMOTERUN_ENV_ADDED_FMT, [Resto.Replace(' ', ', ')]);
+    Result := MsgFmt(SN_REMOTERUN_ENV_ADDED_FMT, [Resto.Replace(' ', ', ')]);
 end;
 
 { Parte la salida en lo que escribio el programa y su codigo de salida. El
@@ -403,7 +403,7 @@ begin
   if Pc = '' then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', SR_REMOTERUN_NO_PACLIENT);
+    Result.AddPair('error', MsgText(SR_REMOTERUN_NO_PACLIENT));
     Exit;
   end;
   if ATimeoutMs <= 0 then
@@ -442,7 +442,7 @@ begin
   if Lanzador = '' then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', Format(SR_REMOTERUN_NO_RUNJOB_FMT,
+    Result.AddPair('error', MsgFmt(SR_REMOTERUN_NO_RUNJOB_FMT,
       [IfThen(Plataforma.StartsWith('Win', True), 'McpRunJob.exe', 'McpRunJob')]));
     Exit;
   end;
@@ -483,7 +483,7 @@ begin
   if Rc <> 0 then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', Format(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
+    Result.AddPair('error', MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
     Exit;
   end;
 
@@ -532,11 +532,11 @@ begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('exitCode', TJSONNumber.Create(-1));
     Result.AddPair('stillRunning', TJSONBool.Create(True));
-    Result.AddPair('stillRunningNote', Format(SR_REMOTERUN_TIMEOUT_FMT,
+    Result.AddPair('stillRunningNote', MsgFmt(SR_REMOTERUN_TIMEOUT_FMT,
       [ATimeoutMs div 1000, DeployRel]));
-    Result.AddPair('killNote', Format(SN_REMOTERUN_KILL_FMT, [AProfile, JobId]));
+    Result.AddPair('killNote', MsgFmt(SN_REMOTERUN_KILL_FMT, [AProfile, JobId]));
     if AGuardaSiSigue then
-      Result.AddPair('outputNote', Format(SN_REMOTERUN_OUTPUT_FMT, [AProfile, JobId]));
+      Result.AddPair('outputNote', MsgFmt(SN_REMOTERUN_OUTPUT_FMT, [AProfile, JobId]));
     if Texto <> '' then
       Result.AddPair('output', Texto);
   end;
@@ -557,7 +557,7 @@ begin
       [DeployRel, RemotoLanzador, DeployRel]);
   Paclient(Pc, Ops, AProfile, Output);
 
-  Result.AddPair('note', SN_REMOTERUN_NOTE);
+  Result.AddPair('note', MsgText(SN_REMOTERUN_NOTE));
 end;
 
 function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
@@ -568,7 +568,7 @@ begin
   begin
     Result := TJSONObject.Create;
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', SR_REMOTERUN_BADJOB);
+    Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
     Exit;
   end;
   Result := RemoteRun(AProfile, ADprojPath, '@kill', [AJobId], 20000);
@@ -580,7 +580,7 @@ begin
   Result.AddPair('killed', TJSONBool.Create(Rc = 0));
   if Result.GetValue('note') <> nil then
     Result.RemovePair('note').Free;
-  Result.AddPair('note', SN_REMOTERUN_KILL_NOTE);
+  Result.AddPair('note', MsgText(SN_REMOTERUN_KILL_NOTE));
 end;
 
 function RemoteOutput(const AProfile, ADprojPath, AJobId: string): TJSONObject;
@@ -593,14 +593,14 @@ begin
   if not JobIdValido(AJobId) then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', SR_REMOTERUN_BADJOB);
+    Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
     Exit;
   end;
   Pc := PaClientPath;
   if Pc = '' then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', SR_REMOTERUN_NO_PACLIENT);
+    Result.AddPair('error', MsgText(SR_REMOTERUN_NO_PACLIENT));
     Exit;
   end;
   // la misma carpeta que deriva remote-run: la del proyecto, nunca otra
@@ -619,7 +619,7 @@ begin
     Salida, Codigo, Terminado) then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', Format(SR_REMOTERUN_NO_OUTPUT_FMT, [AJobId]));
+    Result.AddPair('error', MsgFmt(SR_REMOTERUN_NO_OUTPUT_FMT, [AJobId]));
     Exit;
   end;
   if Entorno <> '' then
@@ -634,14 +634,14 @@ begin
     // no se acumula nada que alguien ya tiene
     Ops := Format('"--Remove=%s/%s.out"', [DeployRel, AJobId]);
     Paclient(Pc, Ops, AProfile, Output);
-    Result.AddPair('note', SN_REMOTERUN_OUTPUT_DONE);
+    Result.AddPair('note', MsgText(SN_REMOTERUN_OUTPUT_DONE));
   end
   else
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('exitCode', TJSONNumber.Create(-1));
     Result.AddPair('output', Texto);
-    Result.AddPair('note', Format(SN_REMOTERUN_OUTPUT_ALIVE_FMT, [AProfile, AJobId]));
+    Result.AddPair('note', MsgFmt(SN_REMOTERUN_OUTPUT_ALIVE_FMT, [AProfile, AJobId]));
   end;
 end;
 
@@ -715,10 +715,10 @@ begin
     (el proyecto), asi que el sello y el lanzador no cambian. }
   Bin := BundledNodePath(PlataformaDelPerfil(AProfile.Trim));
   if Bin = '' then
-    Exit(SR_ADBLINUX_NONODE);
+    Exit(MsgText(SR_ADBLINUX_NONODE));
   Pc := PaClientPath;
   if Pc = '' then
-    Exit(SR_REMOTERUN_NO_PACLIENT);
+    Exit(MsgText(SR_REMOTERUN_NO_PACLIENT));
   LocalSha := Sha256DeFichero(Bin);
   // Carpeta PROPIA de esta comprobacion: el sello baja con su nombre remoto
   // (node.ver), asi que con un destino comun la comprobacion de un perfil se
@@ -742,7 +742,7 @@ begin
     Rc := Paclient(Pc, Format('"--put=%s,%s,1,%s"',
       [Bin, NODE_PROJECT, NODE_PROJECT]), AProfile, Output);
     if Rc <> 0 then
-      Exit(Format(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
+      Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
     VerLocal := TPath.Combine(TmpDir, 'node-' + LocalSha.Substring(0, 12) + '.ver');
     Enc := TUTF8Encoding.Create(False);
     try
@@ -754,7 +754,7 @@ begin
       [VerLocal, NODE_PROJECT]), AProfile, Output);
     TFile.Delete(VerLocal);
     if Rc <> 0 then
-      Exit(Format(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
+      Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
     if RemotoSha = '' then
       AAccion := 'desplegado'
     else

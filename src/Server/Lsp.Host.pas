@@ -250,7 +250,7 @@ begin
   begin
     Add(NOTE_WARNING_PREFIX + 'No credentials: there is no ' +
       '[Workspace.<name>] section with Token=. Every HTTP request gets 401; ' +
-      'only the local stdio mode works. ' + SR_TOKEN_NEEDED);
+      'only the local stdio mode works. ' + MsgText(SR_TOKEN_NEEDED));
     // CreateHttpServer's fail-safe, said here with ITS condition: the .dpr
     // used to say it, only in terminal mode, whenever the interface was
     // 127.0.0.1 - credentials or not - and pointing at [Security], a

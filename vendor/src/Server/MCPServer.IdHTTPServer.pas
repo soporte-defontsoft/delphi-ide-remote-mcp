@@ -553,10 +553,10 @@ begin
     if Estado <> ssAlive then
     begin
       if Estado = ssExpired then
-        Motivo := Format(SR_SESSION_EXPIRED_FMT,
+        Motivo := MsgFmt(SR_SESSION_EXPIRED_FMT,
           [FormatFloat('0.##', SessionTimeoutMinutes, TFormatSettings.Invariant)])
       else
-        Motivo := SR_SESSION_UNKNOWN;
+        Motivo := MsgText(SR_SESSION_UNKNOWN);
       ResponseInfo.ResponseNo := 404;
       ResponseInfo.ContentType := 'application/json';
       ResponseInfo.ContentText :=

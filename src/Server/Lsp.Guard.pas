@@ -1789,18 +1789,18 @@ begin
   // canonical first: an 8.3 alias like __DELP~1 IS the trash
   P := LongCanonical(APath).ToLower.Replace('/', '\');
   if P.EndsWith('.by') then
-    Exit(SR_GUARD_OWNER_MARKER);
+    Exit(MsgText(SR_GUARD_OWNER_MARKER));
   if P.Contains('\__delphi-patch\') or P.EndsWith('\__delphi-patch') then
-    Exit(SR_GUARD_DEAD_TRASH);
+    Exit(MsgText(SR_GUARD_DEAD_TRASH));
   // La carpeta de temporales del servidor, por el mismo motivo y uno propio:
   // se puede borrar entera en cualquier momento, asi que escribir ahi es
   // escribir en algo que no tiene por que seguir estando. Leerla si se puede
   // (de ahi se baja una captura con delphi_fetch): esta es la puerta de
   // ESCRIBIR.
   if EnTemporal(APath) then
-    Exit(SR_GUARD_DEAD_TEMP);
+    Exit(MsgText(SR_GUARD_DEAD_TEMP));
   if P.Contains('\__history\') or P.Contains('\__recovery\') then
-    Exit(SR_GUARD_DEAD_IDE);
+    Exit(MsgText(SR_GUARD_DEAD_IDE));
 end;
 
 procedure CrearCarpeta(const ADir: string);
@@ -1870,7 +1870,7 @@ begin
   else
     Lista := GRemoteProjects;
   if Length(Lista) = 0 then
-    Exit(SR_REMOTERUN_NOPROJLIST);
+    Exit(MsgText(SR_REMOTERUN_NOPROJLIST));
   Result := '';
   // Comodin EXPLICITO del operador: RemoteRunProjects=all (o *) significa
   // cualquier proyecto de la jaula. Declararlo sigue siendo su decision.
@@ -1886,7 +1886,7 @@ begin
   for E in Lista do
     if (E.Trim <> '') and (SameText(E.Trim, Name) or SameText(E.Trim, Full)) then
       Exit;
-  Result := Format(SR_REMOTERUN_PROJECT_DENIED_FMT,
+  Result := MsgFmt(SR_REMOTERUN_PROJECT_DENIED_FMT,
     [Name, string.Join(', ', Lista)]);
 end;
 
@@ -2007,7 +2007,7 @@ function VirtualUnitOf(ALetter: Char; const AServed: string): string; forward;
 
 function WriteDenied(const AWhat: string): string;
 begin
-  Result := Format(SR_READ_ONLY_FMT, [AWhat]);
+  Result := MsgFmt(SR_READ_ONLY_FMT, [AWhat]);
 end;
 
 function EscrituraDenegada(const APath: string): string;
@@ -2176,7 +2176,7 @@ begin
        T.StartsWith('--separate-git-dir') or T.StartsWith('--template') or // write/read outside the dest
        T.StartsWith('--git-dir') or T.StartsWith('--work-tree') or // redirect where git operates -> jail escape
        (T = '-o') or T.StartsWith('-o=') or T.StartsWith('-o/') or T.StartsWith('-o\') then
-      Exit(Format(SR_GIT_OPTION_FMT, [Tok]));
+      Exit(MsgFmt(SR_GIT_OPTION_FMT, [Tok]));
   end;
 end;
 
@@ -2230,7 +2230,7 @@ begin
       Continue;
     Allowed := GitRemoteHosts;
     if Allowed = '' then
-      Exit(Format(SR_GIT_REMOTE_OFF_FMT, [Host]));
+      Exit(MsgFmt(SR_GIT_REMOTE_OFF_FMT, [Host]));
     Ok := False;
     for var H in Allowed.Split([',', ';'], TStringSplitOptions.ExcludeEmpty) do
       if SameText(H.Trim, Host) then
@@ -2239,7 +2239,7 @@ begin
         Break;
       end;
     if not Ok then
-      Exit(Format(SR_GIT_REMOTE_HOST_FMT, [Host, Allowed]));
+      Exit(MsgFmt(SR_GIT_REMOTE_HOST_FMT, [Host, Allowed]));
   end;
 end;
 
@@ -2252,7 +2252,7 @@ begin
   Result := '';
   for B in Bad do
     if AText.Contains(B) then
-      Exit(Format(SR_SHELL_META_FMT, [B]));
+      Exit(MsgFmt(SR_SHELL_META_FMT, [B]));
 end;
 
 { Reads a tools/call argument the SAME WAY the RTTI binder resolves it
@@ -2293,7 +2293,7 @@ begin
     for J := I + 1 to AArguments.Count - 1 do
       if TMCPSerializer.NormalizeKey(AArguments.Pairs[I].JsonString.Value) =
          TMCPSerializer.NormalizeKey(AArguments.Pairs[J].JsonString.Value) then
-        Exit(Format(SR_ARG_DUPLICATE_FMT,
+        Exit(MsgFmt(SR_ARG_DUPLICATE_FMT,
           [AArguments.Pairs[I].JsonString.Value]));
 end;
 
@@ -2377,23 +2377,23 @@ begin
   if V <> '' then
   begin
     if BadDeviceToken(V) then
-      Exit(Format(SR_ADB_TARGET_FMT, [V]));
+      Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
     if not AdbTargetAllowed(V) then
-      Exit(Format(SR_ADB_ALLOWLIST_FMT, [V]));
+      Exit(MsgFmt(SR_ADB_ALLOWLIST_FMT, [V]));
   end;
   V := ArgStr(AArguments, 'device').Trim;
   if V <> '' then
   begin
     if BadDeviceToken(V) then
-      Exit(Format(SR_ADB_TARGET_FMT, [V]));
+      Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
     if not AdbTargetAllowed(V) then
-      Exit(Format(SR_ADB_ALLOWLIST_FMT, [V]));
+      Exit(MsgFmt(SR_ADB_ALLOWLIST_FMT, [V]));
   end;
   // "app" is a package name reaching adb shell am start - same charset rule
   // (a package is letters/digits/dots/underscores), own message.
   V := ArgStr(AArguments, 'app').Trim;
   if (V <> '') and BadDeviceToken(V) then
-    Exit(Format(SR_ADB_APP_FMT, [V]));
+    Exit(MsgFmt(SR_ADB_APP_FMT, [V]));
   // tap coordinates reach adb shell input - digits only. The key name is
   // whitelisted in the tool; here only its charset (letters).
   for var Coord in TArray<string>.Create('x', 'y') do
@@ -2402,13 +2402,13 @@ begin
     if V <> '' then
       for var C in V do
         if not CharInSet(C, ['0'..'9']) then
-          Exit(Format(SR_ADB_XY_FMT, [V]));
+          Exit(MsgFmt(SR_ADB_XY_FMT, [V]));
   end;
   V := ArgStr(AArguments, 'key').Trim;
   if V <> '' then
     for var C in V do
       if not CharInSet(C, ['A'..'Z', 'a'..'z']) then
-        Exit(Format(SR_ADB_KEY_FMT, [V]));
+        Exit(MsgFmt(SR_ADB_KEY_FMT, [V]));
   // Y al final, el target implicito: podria ser un dispositivo NO listado
   // que casualmente es el unico conectado - se nombra o nada. Va tras las
   // reglas de formato para que el error mas util conteste primero. Desde
@@ -2416,7 +2416,7 @@ begin
   if (ArgStr(AArguments, 'device').Trim = '') and
      MatchText(Trim(ArgStr(AArguments, 'command')),
        ['install', 'run', 'tap', 'key', 'logcat', 'screenshot']) then
-    Exit(SR_ADB_ALLOWLIST_DEVICE);
+    Exit(MsgText(SR_ADB_ALLOWLIST_DEVICE));
 end;
 
 function BuildArgDenied(const AArguments: TJSONObject): string;
@@ -2427,21 +2427,21 @@ begin
   Result := '';
   V := ArgStr(AArguments, 'platform').Trim;
   if (V <> '') and (CanonicalPlatform(V) = '') then
-    Exit(Format(SR_BUILD_PLATFORM_FMT, [V]));
+    Exit(MsgFmt(SR_BUILD_PLATFORM_FMT, [V]));
   V := ArgStr(AArguments, 'target').Trim;
   if (V <> '') and not MatchText(V, ['Build', 'Make', 'Clean', 'Deploy']) then
-    Exit(Format(SR_BUILD_TARGET_FMT, [V]));
+    Exit(MsgFmt(SR_BUILD_TARGET_FMT, [V]));
   // "profile" is a PAServer profile name reaching the msbuild command line
   // (/p:Profile=) - the same identifier rule as delphi_paserver's "name",
   // ONE definition for both mouths.
   V := ArgStr(AArguments, 'profile').Trim;
   if (V <> '') and BadProfileName(V) then
-    Exit(Format(SR_PASERVER_NAME_FMT, [V]));
+    Exit(MsgFmt(SR_PASERVER_NAME_FMT, [V]));
   // "deviceid" is an adb serial reaching msbuild (/p:DeviceId=) - the same
   // rule as delphi_adb's address/device.
   V := ArgStr(AArguments, 'deviceid').Trim;
   if (V <> '') and BadDeviceToken(V) then
-    Exit(Format(SR_ADB_TARGET_FMT, [V]));
+    Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
   // "sdk" reaches the cmd.exe line (/p:PlatformSDK=): a file NAME, never a
   // path and never a metacharacter (audit 2026-09-25). The build also
   // checks it against the SDKs of the platform, like set-sdk does.
@@ -2449,12 +2449,12 @@ begin
   if V <> '' then
     for C in V do
       if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
-        Exit(Format(SR_BUILD_SDK_NAME_FMT, [V]));
+        Exit(MsgFmt(SR_BUILD_SDK_NAME_FMT, [V]));
   V := ArgStr(AArguments, 'config');
   if V <> '' then
     for C in V do
       if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.', ' ']) then
-        Exit(Format(SR_BUILD_CONFIG_FMT, [V]));
+        Exit(MsgFmt(SR_BUILD_CONFIG_FMT, [V]));
 end;
 
 { delphi_paserver's add-profile/test-connection compose a paclient.exe command
@@ -2474,23 +2474,23 @@ begin
   Result := '';
   V := ArgStr(AArguments, 'name').Trim;
   if (V <> '') and BadProfileName(V) then
-    Exit(Format(SR_PASERVER_NAME_FMT, [V]));
+    Exit(MsgFmt(SR_PASERVER_NAME_FMT, [V]));
   V := ArgStr(AArguments, 'host').Trim;
   if V <> '' then
     for C in V do
       if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '.', '-', ':']) then
-        Exit(Format(SR_PASERVER_HOST_FMT, [V]));
+        Exit(MsgFmt(SR_PASERVER_HOST_FMT, [V]));
   V := ArgStr(AArguments, 'port').Trim;
   if V <> '' then
     if not TryStrToInt(V, N) or (N < 1) or (N > 65535) then
-      Exit(Format(SR_PASERVER_PORT_FMT, [V]));
+      Exit(MsgFmt(SR_PASERVER_PORT_FMT, [V]));
   V := ArgStr(AArguments, 'platform').Trim;
   if (V <> '') and not MatchText(V, PACLIENT_PLATFORMS) then
-    Exit(Format(SR_PASERVER_PLATFORM_FMT, [V]));
+    Exit(MsgFmt(SR_PASERVER_PLATFORM_FMT, [V]));
   V := ArgStr(AArguments, 'password');
   for C in V do
     if (C < ' ') or (C = '"') then
-      Exit(SR_PASERVER_PASSWORD);
+      Exit(MsgText(SR_PASERVER_PASSWORD));
 end;
 
 { '' unless APath IS one of the configured roots (the jail itself). With no
@@ -2510,7 +2510,7 @@ begin
   end;
   for R in WorkspaceRoots do
     if SameText(R, Full) then
-      Exit(Format(SR_ROOT_ITSELF_FMT, [ExcludeTrailingPathDelimiter(R)]));
+      Exit(MsgFmt(SR_ROOT_ITSELF_FMT, [ExcludeTrailingPathDelimiter(R)]));
 end;
 
 // Parameter ALIASES, per tool, applied only when the real name is absent:
@@ -3042,7 +3042,7 @@ begin
         List := List + ', ';
       List := List + VirtualUnitOf(C, Units) + ':';
     end;
-    Exit(Format(SR_UNIT_UNKNOWN_FMT, [APath, List]));
+    Exit(MsgFmt(SR_UNIT_UNKNOWN_FMT, [APath, List]));
   end;
   // ':' is legal only as the drive separator (C:\...): anywhere else it
   // opens an Alternate Data Stream, which hides content from every check.
@@ -3201,7 +3201,7 @@ begin
     else if SameText(Ext, AExt) then
       AFile := O
     else
-      Exit(Format(SR_CAPTURE_EXT_FMT, [AExt, Ext]));
+      Exit(MsgFmt(SR_CAPTURE_EXT_FMT, [AExt, Ext]));
   end;
   if AFile = '' then
     // Milisegundos y un fragmento GUID: con resolucion de SEGUNDOS dos
@@ -3219,7 +3219,7 @@ begin
     // 'no queremos acumular capturas, se entregan en una sola llamada y se
     // borran').
     if (Result <> '') and (DeadCopyWriteDenied(AFile) <> '') then
-      Result := Result + ' ' + SN_CAPTURE_OUT_TEMP_HINT;
+      Result := Result + ' ' + MsgText(SN_CAPTURE_OUT_TEMP_HINT);
   end;
 end;
 
@@ -3352,15 +3352,15 @@ var
 begin
   Result := '';
   if (ADir.Trim = '') or not TPath.IsPathRooted(ADir.Trim) then
-    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'ruta vacia o relativa']));
+    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, 'ruta vacia o relativa']));
   try
     Full := ExcludeTrailingPathDelimiter(TPath.GetFullPath(ADir.Trim));
   except
-    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'ruta invalida']));
+    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, 'ruta invalida']));
   end;
   if (Length(Full) <= 3) or (Full.StartsWith('\\') and
      (Length(Full.Substring(2).Split(['\'], TStringSplitOptions.ExcludeEmpty)) <= 2)) then
-    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'es una unidad o un recurso compartido entero']));
+    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, 'es una unidad o un recurso compartido entero']));
   // la ruta REAL del padre + el nombre (ver la nota de la interface)
   Real := RutaDelEnlace(Full);
   // (1) lista blanca
@@ -3380,13 +3380,13 @@ begin
       Desechable := True;
   end;
   if not Desechable then
-    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir,
+    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir,
       'no esta dentro de una carpeta desechable (' +
       string.Join(', ', CarpetasDesechables) + ') ni es una descarga temporal']));
   // (2) lista negra: ni ser ni contener un lugar protegido
   P := LugarProtegidoEn(Real);
   if P <> '' then
-    Exit(Format(SR_BORRADO_DENEGADO_FMT, [ADir, 'es o contiene un lugar protegido (' + P + ')']));
+    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, 'es o contiene un lugar protegido (' + P + ')']));
 end;
 
 function PrimerTrozo(const S: string; const ASeps: array of Char): string;
@@ -3499,7 +3499,7 @@ begin
   // Dentro de si misma se copiaria sin fin: el destino recien creado sale
   // en el listado del origen, con una ruta real nueva en cada vuelta.
   if DentroDeSiMismo(AOrigen, ADestino) then
-    raise Exception.Create(Format(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
+    raise Exception.Create(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
   Vistos := TStringList.Create;
   NoSeg := TStringList.Create;
   try
@@ -3543,7 +3543,7 @@ var
 
 begin
   if DentroDeSiMismo(AOrigen, ADestino) then
-    Exit(Format(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
+    Exit(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
   Hallado := '';
   if TFile.Exists(AOrigen) then
   begin
@@ -3561,7 +3561,7 @@ begin
     end;
   end;
   if Hallado <> '' then
-    Result := Format(SR_MOVE_COPY_PROJECT_FMT, [Hallado])
+    Result := MsgFmt(SR_MOVE_COPY_PROJECT_FMT, [Hallado])
   else
     Result := '';
 end;
@@ -3596,8 +3596,8 @@ begin
   if ReadPathDenied(P) = '' then
     P := '"' + P + '"'
   else
-    P := SN_LUGAR_PROTEGIDO;
-  Result := Format(SR_MUDANZA_PROTEGIDA_FMT, [ADir, P]);
+    P := MsgText(SN_LUGAR_PROTEGIDO);
+  Result := MsgFmt(SR_MUDANZA_PROTEGIDA_FMT, [ADir, P]);
 end;
 
 function MovidoDenegado(const AOrigen, ADestino: string): string;
@@ -3614,7 +3614,7 @@ begin
   if Result <> '' then
     Exit;
   if DentroDeSiMismo(AOrigen, ADestino) then
-    Exit(Format(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
+    Exit(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
   // la unidad REAL de cada lado: un junction en el camino no la disfraza
   try
     UO := ExtractFileDrive(RutaDelEnlace(ExcludeTrailingPathDelimiter(
@@ -3624,7 +3624,7 @@ begin
     Exit('RECHAZADO: ruta invalida: ' + AOrigen);
   end;
   if not SameText(UO, UD) then
-    Result := Format(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]);
+    Result := MsgFmt(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]);
 end;
 
 procedure MueveArbol(const AOrigen, ADestino: string);
@@ -3643,7 +3643,7 @@ begin
        PChar(ExcludeTrailingPathDelimiter(ADestino))) then
   begin
     if GetLastError = ERROR_NOT_SAME_DEVICE then
-      raise Exception.Create(Format(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]));
+      raise Exception.Create(MsgFmt(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]));
     RaiseLastOSError;
   end;
 end;
@@ -3874,7 +3874,7 @@ begin
   for Sh in SharedFoldersNow do
     if SameText(Seg, Sh) then
       Exit; // a folder the operator marked shared
-  Result := Format(SR_AGENT_CONFINED_FMT, [Me, Me]);
+  Result := MsgFmt(SR_AGENT_CONFINED_FMT, [Me, Me]);
 end;
 
 function PathDenied(const APath: string): string;
@@ -3904,13 +3904,13 @@ begin
   if InVault(APath) then
   begin
     AMotivo := mvVault;
-    Exit(SR_VAULT_NOT_CODE);
+    Exit(MsgText(SR_VAULT_NOT_CODE));
   end;
   Roots := WorkspaceRoots;
   if GRootsInvalid then
   begin
     AMotivo := mvRootsInvalidos;
-    Exit(SR_ROOTS_INVALID);
+    Exit(MsgText(SR_ROOTS_INVALID));
   end;
   if Length(Roots) = 0 then
     Exit; // no jail configured
@@ -3934,10 +3934,10 @@ begin
          IncludeTrailingPathDelimiter(RealPath(APath))) then
     begin
       AMotivo := mvReferencia;
-      Exit(Format(SR_REFERENCE_ROOT_FMT, [APath, Ref]));
+      Exit(MsgFmt(SR_REFERENCE_ROOT_FMT, [APath, Ref]));
     end;
     AMotivo := mvEnlaceFuera;
-    Exit(Format(SR_JAIL_LINK_FMT, [APath]));
+    Exit(MsgFmt(SR_JAIL_LINK_FMT, [APath]));
   end;
   for R in Roots do
     if StartsText(R, IncludeTrailingPathDelimiter(Full)) then
@@ -3966,7 +3966,7 @@ begin
       if not DentroDeVerdad then
       begin
         AMotivo := mvEnlaceFuera;
-        Exit(Format(SR_JAIL_LINK_FMT, [APath]));
+        Exit(MsgFmt(SR_JAIL_LINK_FMT, [APath]));
       end;
       // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO
       // LECTURA: un vendor/, un submodulo, un clon de referencia con su
@@ -3979,7 +3979,7 @@ begin
            StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(Ro))), Verdad) then
         begin
           AMotivo := mvSoloLectura;
-          Exit(Format(SR_READONLY_PATH_FMT,
+          Exit(MsgFmt(SR_READONLY_PATH_FMT,
             [APath, ExcludeTrailingPathDelimiter(Ro)]));
         end;
       Result := AgentConfineDenied(Full, R);
@@ -3988,7 +3988,7 @@ begin
       Exit;
     end;
   AMotivo := mvFueraDeJaula;
-  Result := Format(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
+  Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;
 
 var
@@ -4234,7 +4234,7 @@ begin
   // Field 2026-08-22: an agent listed the PARENT of a registered component
   // folder, got the plain jail refusal, and concluded list and read disagreed.
   if Result.StartsWith('RECHAZADO') then
-    Result := Result + ' ' + SN_READ_ZONE_HINT;
+    Result := Result + ' ' + MsgText(SN_READ_ZONE_HINT);
 end;
 
 // ---------------------------------------------------------------------------

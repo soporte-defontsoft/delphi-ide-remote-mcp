@@ -135,16 +135,16 @@ begin
         Inc(Ties);
     end;
     if (Best <= 2) and (Ties = 1) then
-      Exit(Format(SN_HELP_ASSUMED_FMT, [AName.Trim, BestName]) + #10 +
+      Exit(MsgFmt(SN_HELP_ASSUMED_FMT, [AName.Trim, BestName]) + #10 +
         OneTool(BestName));
     if Close = '' then
       for var Cand in Names do
         if EditDistance(N, Cand) <= 2 then
           Close := Close + IfThen(Close <> '', ', ', '') + Cand;
     if Close = '' then
-      Exit(Format(SR_HELP_NO_TOOL_ALL_FMT,
+      Exit(MsgFmt(SR_HELP_NO_TOOL_ALL_FMT,
         [AName.Trim, string.Join(', ', Names)]));
-    Exit(Format(SR_HELP_NO_TOOL_FMT, [AName.Trim, Close]));
+    Exit(MsgFmt(SR_HELP_NO_TOOL_FMT, [AName.Trim, Close]));
   end;
   Tool := TMCPRegistry.CreateTool(N);
   Ret := TJSONObject.Create;
@@ -157,7 +157,7 @@ begin
     Schema := Tool.InputSchema;
     if Assigned(Schema) then
       Ret.AddPair('parameters', Schema);
-    Ret.AddPair('note', SN_HELP_TOOL_NOTE);
+    Ret.AddPair('note', MsgText(SN_HELP_TOOL_NOTE));
     Result := Ret.ToJSON;
   finally
     Ret.Free;
@@ -174,18 +174,18 @@ begin
   if Cmd = '' then
     Cmd := 'tasks';
   if MatchText(Cmd, ['tasks', 'task', 'index']) then
-    Result := SN_HELP_TASKS
+    Result := MsgText(SN_HELP_TASKS)
   else if MatchText(Cmd, ['conventions', 'rules', 'reglas']) then
-    Result := SN_HELP_CONVENTIONS
+    Result := MsgText(SN_HELP_CONVENTIONS)
   else if MatchText(Cmd, ['tool', 'tools']) then
   begin
     if Params.Name.Trim = '' then
-      Exit(SR_HELP_NEED_NAME + #10#10 +
+      Exit(MsgText(SR_HELP_NEED_NAME) + #10#10 +
         string.Join(', ', TMCPRegistry.GetToolNames));
     Result := OneTool(Params.Name);
   end
   else
-    Result := SR_HELP_CMD;
+    Result := MsgText(SR_HELP_CMD);
 end;
 
 initialization

@@ -392,15 +392,15 @@ var
 begin
   Result := '';
   if not TRegEx.IsMatch(AName, IDENT_RE) then
-    Exit(Format(SR_CREATE_BADNAME_FMT, [AName]));
+    Exit(MsgFmt(SR_CREATE_BADNAME_FMT, [AName]));
   // every dotted segment must be clean, not just the whole thing
   for Head in AName.Split(['.']) do
     for W in RESERVED do
       if SameText(Head, W) then
-        Exit(Format(SR_CREATE_RESERVED_FMT, [Head, AName]));
+        Exit(MsgFmt(SR_CREATE_RESERVED_FMT, [Head, AName]));
   for W in RTL do
     if SameText(AName, W) then
-      Exit(Format(SR_CREATE_RTLNAME_FMT, [AName, AName, AName]));
+      Exit(MsgFmt(SR_CREATE_RTLNAME_FMT, [AName, AName, AName]));
   // "a namespaced name shadows nothing" was wrong, and the refusal above even
   // RECOMMENDED adding a dot: `name=System.SysUtils` was accepted and planted
   // an empty System.SysUtils.pas next to the .dpr, after which `Exception`
@@ -410,7 +410,7 @@ begin
   if AName.Contains('.') then
     for W in NAMESPACES do
       if SameText(Head, W) then
-        Exit(Format(SR_CREATE_RTLNS_FMT, [AName, Head, Head]));
+        Exit(MsgFmt(SR_CREATE_RTLNS_FMT, [AName, Head, Head]));
 end;
 
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
@@ -424,7 +424,7 @@ begin
     // The caller wrote "project-web": answering "console | vcl | fmx" sends
     // them to write kind=console, which is refused too. Name the values that
     // work (field round 10).
-    Exit(SR_CREATE_PROJECT_KIND);
+    Exit(MsgText(SR_CREATE_PROJECT_KIND));
   if not TRegEx.IsMatch(AName, '^[A-Za-z_]\w*$') then
     Exit('RECHAZADO: ''' + AName + ''' no es un identificador Pascal valido para nombre de proyecto.');
 
@@ -432,7 +432,7 @@ begin
   if Result <> '' then
     Exit;
   if ADir.Trim = '' then
-    Exit(SR_CREATE_NEED_DIR);
+    Exit(MsgText(SR_CREATE_NEED_DIR));
 
   Dir := TPath.GetFullPath(ADir);
   Result := WriteTargetDenied(Dir);
@@ -462,7 +462,7 @@ begin
     else if (Kind = 'fmx') and TFile.Exists(TPath.Combine(Dir, MainUnit + '.fmx')) then
       Clash := MainUnit + '.fmx';
     if Clash <> '' then
-      Exit(Format(SR_CREATE_CLASH_FMT, [Clash, Dir, AName]));
+      Exit(MsgFmt(SR_CREATE_CLASH_FMT, [Clash, Dir, AName]));
   end;
   CrearCarpeta(Dir);
 
@@ -648,8 +648,8 @@ begin
       'Fuentes en %s (el encoding configurado en el IDE) + CRLF. Compilable ' +
       'ya con delphi_build (el IDE enriquecera el .dproj al abrirlo).%s',
       [AName, Kind, Dir, string.Join(', ', Files.ToStringArray), NewFileEncName,
-       IfThen(Kind = 'package', #10 + SN_CREATE_PACKAGE_NOTE,
-         IfThen(Kind = 'test', #10 + Format(SN_CREATE_TEST_NOTE_FMT, [AName, MainUnit]), ''))]);
+       IfThen(Kind = 'package', #10 + MsgText(SN_CREATE_PACKAGE_NOTE),
+         IfThen(Kind = 'test', #10 + MsgFmt(SN_CREATE_TEST_NOTE_FMT, [AName, MainUnit]), ''))]);
   finally
     Files.Free;
   end;
@@ -710,7 +710,7 @@ begin
   if ASubDir.Trim = '' then
     Exit;
   if not ValidOutputFolder(ASubDir, S) then
-    Exit(Format(SR_CREATE_SUBDIR_REL_FMT, [ASubDir]));
+    Exit(MsgFmt(SR_CREATE_SUBDIR_REL_FMT, [ASubDir]));
   ADir := TPath.Combine(ADir, S);
   Result := WriteTargetDenied(ADir); // jaula + carpetas muertas, UNA puerta
 end;
@@ -741,7 +741,7 @@ begin
     Have := ProjectFramework(ADprPath);
     Want := IfThen(Kind.EndsWith('fmx'), 'fmx', 'vcl');
     if (Have <> '') and (Have <> Want) then
-      Exit(Format(SR_CREATE_FRAMEWORK_FMT,
+      Exit(MsgFmt(SR_CREATE_FRAMEWORK_FMT,
         [AKind, TPath.GetFileName(ADprPath), UpperCase(Have)]));
     // A CONSOLE project has no framework at all, so the mismatch check above
     // says nothing - and a form went in without a word (field round 10). It
@@ -749,7 +749,7 @@ begin
     // it. Allowed, because turning a console project into a GUI one is a
     // real thing to do, but never silently.
     if Have = '' then
-      FrameworkNote := SN_CREATE_CONSOLE_FORM;
+      FrameworkNote := MsgText(SN_CREATE_CONSOLE_FORM);
   end;
   FormName := AFormName.Trim;
   if FormName = '' then
@@ -830,11 +830,11 @@ begin
   begin
     M := TRegEx.Match(ABody, '(?im)^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;');
     if not M.Success then
-      Exit(SR_CREATE_CONTENT_NOUNIT);
+      Exit(MsgText(SR_CREATE_CONTENT_NOUNIT));
     if not SameText(M.Groups[1].Value, AUnitName) then
-      Exit(Format(SR_CREATE_CONTENT_NAME_FMT, [M.Groups[1].Value, AUnitName]));
+      Exit(MsgFmt(SR_CREATE_CONTENT_NAME_FMT, [M.Groups[1].Value, AUnitName]));
     if not TRegEx.IsMatch(ABody, '(?im)^\s*end\s*\.') then
-      Exit(SR_CREATE_CONTENT_NOEND);
+      Exit(MsgText(SR_CREATE_CONTENT_NOEND));
     ABody := ABody.Replace(#13#10, #10).Replace(#13, #10).Replace(#10, CRLF);
     if not ABody.EndsWith(CRLF) then
       ABody := ABody + CRLF;
@@ -860,7 +860,7 @@ begin
   if Result <> '' then
     Exit;
   if (ADir.Trim = '') or not TPath.IsPathRooted(ADir.Trim) then
-    Exit(SR_CREATE_SUELTO_DIR);
+    Exit(MsgText(SR_CREATE_SUELTO_DIR));
   ARuta := TPath.Combine(TPath.GetFullPath(ADir.Trim), ANombre + AExt);
   Result := WriteTargetDenied(ARuta);
   if Result <> '' then
@@ -883,14 +883,14 @@ begin
   if ADprPath.Trim = '' then
   begin
     if (ASubDir.Trim = '') or not TPath.IsPathRooted(ASubDir.Trim) then
-      Exit(SR_CREATE_UNIT_NEED_PROJECT);
+      Exit(MsgText(SR_CREATE_UNIT_NEED_PROJECT));
     Result := CuerpoDeUnit(AUnitName, AContent, Body);
     if Result <> '' then
       Exit;
     Result := CreaFuenteSuelto(ASubDir, AUnitName, '.pas', Body, PasPath);
     if Result <> '' then
       Exit;
-    Exit(Format(SN_CREATE_UNIT_SUELTA_FMT, [AUnitName, PasPath, Length(Body.Split([CRLF]))]));
+    Exit(MsgFmt(SN_CREATE_UNIT_SUELTA_FMT, [AUnitName, PasPath, Length(Body.Split([CRLF]))]));
   end;
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
@@ -934,7 +934,7 @@ begin
   if SameText(TPath.GetExtension(Nombre), '.inc') then
     Nombre := TPath.ChangeExtension(Nombre, '').TrimRight(['.']);
   if AContent.Trim = '' then
-    Exit(SR_CREATE_INCLUDE_CONTENT);
+    Exit(MsgText(SR_CREATE_INCLUDE_CONTENT));
   Body := AContent.Replace(#13#10, #10).Replace(#13, #10).Replace(#10, CRLF);
   if not Body.EndsWith(CRLF) then
     Body := Body + CRLF;
@@ -954,7 +954,7 @@ begin
   Result := CreaFuenteSuelto(Dir, Nombre, '.inc', Body, Ruta);
   if Result <> '' then
     Exit;
-  Result := Format(SN_CREATE_INCLUDE_FMT, [Nombre, Ruta, Length(Body.Split([CRLF])), Nombre]);
+  Result := MsgFmt(SN_CREATE_INCLUDE_FMT, [Nombre, Ruta, Length(Body.Split([CRLF])), Nombre]);
 end;
 
 end.

@@ -4505,7 +4505,7 @@ function MsgOutcome(const AText: string): string;
   para poder traducir un dia el mensaje de cada constante). Hoy devuelve el
   texto tal cual; cuando haya traducciones las buscara aqui, por el id de
   su etiqueta, y ninguna llamada tendra que cambiar. }
-function Msg(const AMsg: string): string;
+function MsgText(const AMsg: string): string;
 { Lo mismo con los argumentos de Format. Si no cuadran con los % del
   mensaje, no revienta la tool con una excepcion de conversion: devuelve
   el mensaje sin formatear con el motivo detras, y lo anota en el log. }
@@ -4562,7 +4562,7 @@ begin
     Result := M.Groups[2].Value;
 end;
 
-function Msg(const AMsg: string): string;
+function MsgText(const AMsg: string): string;
 begin
   Result := AMsg;
 end;
@@ -4570,11 +4570,11 @@ end;
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;
 begin
   try
-    Result := Format(Msg(AMsg), AArgs);
+    Result := Format(MsgText(AMsg), AArgs);
   except
     on E: Exception do
     begin
-      Result := Msg(AMsg) + ' (' + E.Message + ')';
+      Result := MsgText(AMsg) + ' (' + E.Message + ')';
       TLogger.Error(Format(SL_MSG_FORMAT_FMT, [MsgTag(AMsg), E.Message, Copy(AMsg, 1, 60)]));
     end;
   end;

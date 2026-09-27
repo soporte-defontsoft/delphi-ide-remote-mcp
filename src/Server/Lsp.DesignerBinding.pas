@@ -197,7 +197,7 @@ begin
       end;
     end;
     if RootClass = '' then
-      Exit(SR_DESIGNER_BINDING_NO_ROOT);
+      Exit(MsgText(SR_DESIGNER_BINDING_NO_ROOT));
 
     ClassFound := True;
     AncestorOutside := False;
@@ -290,16 +290,16 @@ begin
       (MissEv.Count = 0) and (NotPub.Count = 0) and (Extra.Count = 0) and
       (Dups.Count = 0) and (Empty.Count = 0)));
     if not ClassFound then
-      Ret.AddPair('note', Format(SN_DESIGNER_BINDING_NOCLASS_FMT,
+      Ret.AddPair('note', MsgFmt(SN_DESIGNER_BINDING_NOCLASS_FMT,
         [RootClass, TPath.GetFileName(Pas)]))
     else
     begin
       if not Complete then
-        Ret.AddPair('partialNote', Format(SN_DESIGNER_BINDING_PARTIAL_FMT,
+        Ret.AddPair('partialNote', MsgFmt(SN_DESIGNER_BINDING_PARTIAL_FMT,
           [Chain]));
       Ret.AddPair('note', IfThen((Miss.Count = 0) and (MissEv.Count = 0) and
         (NotPub.Count = 0) and (Extra.Count = 0) and (Dups.Count = 0) and
-        (Empty.Count = 0), SN_DESIGNER_BINDING_OK, SN_DESIGNER_BINDING_BAD));
+        (Empty.Count = 0), MsgText(SN_DESIGNER_BINDING_OK), MsgText(SN_DESIGNER_BINDING_BAD)));
     end;
     Result := Ret.ToJSON;
   finally
@@ -317,17 +317,17 @@ var
 begin
   Pas := APas;
   if not MatchText(TPath.GetExtension(ADfm), ['.dfm', '.fmx']) then
-    Exit(SR_DESIGNER_BINDING_NOT_FORM);
+    Exit(MsgText(SR_DESIGNER_BINDING_NOT_FORM));
   if not TFile.Exists(ADfm) then
-    Exit(Format(SR_DESIGNER_NO_FORM_FMT, [ADfm]));
+    Exit(MsgFmt(SR_DESIGNER_NO_FORM_FMT, [ADfm]));
   // Un binario DANADO antes de buscar la unit: "no encuentro la unit" sobre
   // un form ilegible manda a buscar un fichero que nunca fue el problema.
   if IsBinaryDesignerFile(ADfm) and (DesignerFileToText(ADfm, Enc) <> '') then
-    Exit(Format(SR_DESIGNER_BINARY_FMT, [Enc]));
+    Exit(MsgFmt(SR_DESIGNER_BINARY_FMT, [Enc]));
   if Pas = '' then
     Pas := TPath.ChangeExtension(ADfm, '.pas');
   if not TFile.Exists(Pas) then
-    Exit(Format(SR_DESIGNER_NO_UNIT_FMT, [Pas]));
+    Exit(MsgFmt(SR_DESIGNER_NO_UNIT_FMT, [Pas]));
   if IsBinaryDesignerFile(ADfm) then
     DesignerFileToText(ADfm, DfmTxt) // sano: comprobado arriba
   else

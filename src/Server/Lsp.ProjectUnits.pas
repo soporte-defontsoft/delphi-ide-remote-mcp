@@ -230,12 +230,12 @@ begin
   ADpr := '';
   ADproj := '';
   if AProject.Trim = '' then
-    Exit(SR_UNIT_NEED_PROJECT);
+    Exit(MsgText(SR_UNIT_NEED_PROJECT));
   Ext := TPath.GetExtension(AProject).ToLower;
   Stem := TPath.Combine(TPath.GetDirectoryName(TPath.GetFullPath(AProject)),
     TPath.GetFileNameWithoutExtension(AProject));
   if (Ext <> '.dpr') and (Ext <> '.dpk') and (Ext <> '.dproj') then
-    Exit(Format(SR_UNIT_PROJECT_EXT_FMT, [TPath.GetFileName(AProject)]));
+    Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [TPath.GetFileName(AProject)]));
   // Un paquete es un proyecto: su fuente principal es el .dpk (con clausula
   // contains en vez de uses) y el .dproj es el mismo. Desde un .dproj se
   // decide por lo que hay en disco: el .dpr si existe, si no el .dpk.
@@ -249,7 +249,7 @@ begin
     ADpr := Stem + '.dpr';
   ADproj := Stem + '.dproj';
   if not TFile.Exists(ADpr) then
-    Exit(Format(SR_UNIT_NO_DPR_FMT, [ADpr]));
+    Exit(MsgFmt(SR_UNIT_NO_DPR_FMT, [ADpr]));
   // a missing .dproj is tolerated: the .dpr alone still builds with dcc, and
   // the IDE regenerates a .dproj on open. The dproj edits are then skipped.
 end;
@@ -356,9 +356,9 @@ begin
   Result := '';
   AInfo := Default(TUnitInfo);
   if not TFile.Exists(APasPath) then
-    Exit(Format(SR_UNIT_PAS_MISSING_FMT, [APasPath]));
+    Exit(MsgFmt(SR_UNIT_PAS_MISSING_FMT, [APasPath]));
   if TPath.GetExtension(APasPath).ToLower <> '.pas' then
-    Exit(Format(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
+    Exit(MsgFmt(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   AInfo.PasPath := TPath.GetFullPath(APasPath);
   Src := PatchLoadText(AInfo.PasPath, Enc);
   M := TRegEx.Match(Src, '^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;', [roIgnoreCase, roMultiline]);
@@ -370,13 +370,13 @@ begin
     // buscar un fallo que no existia (Hermes, bateria 1.2).
     M := TRegEx.Match(Src, '^\s*unit\s+([^\s;]+)\s*;', [roIgnoreCase, roMultiline]);
     if M.Success then
-      Exit(Format(SR_UNIT_HEADER_NONASCII_FMT, [TPath.GetFileName(APasPath), M.Groups[1].Value]));
-    Exit(Format(SR_UNIT_NO_HEADER_FMT, [TPath.GetFileName(APasPath)]));
+      Exit(MsgFmt(SR_UNIT_HEADER_NONASCII_FMT, [TPath.GetFileName(APasPath), M.Groups[1].Value]));
+    Exit(MsgFmt(SR_UNIT_NO_HEADER_FMT, [TPath.GetFileName(APasPath)]));
   end;
   AInfo.UnitName := M.Groups[1].Value;
   Stem := TPath.GetFileNameWithoutExtension(AInfo.PasPath);
   if not SameText(Stem, AInfo.UnitName) then
-    Exit(Format(SR_UNIT_HEADER_MISMATCH_FMT, [AInfo.UnitName, TPath.GetFileName(APasPath)]));
+    Exit(MsgFmt(SR_UNIT_HEADER_MISMATCH_FMT, [AInfo.UnitName, TPath.GetFileName(APasPath)]));
 
   // designer pair?
   if TFile.Exists(ChangeFileExt(AInfo.PasPath, '.dfm')) then
@@ -905,7 +905,7 @@ begin
   // ramas no se reescribe - la unit caeria en la rama que no toca, o la
   // clausula perderia su forma. Los llamadores lo dicen antes, con el fichero.
   if U.EnRamas then
-    raise Exception.Create(Format(SR_USES_EN_RAMAS_FMT, [U.Keyword, '(el fichero)']));
+    raise Exception.Create(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, '(el fichero)']));
   NL := IfThen(Dpr.Contains(#13#10), #13#10, #10);
   // the indent of the first entry line of the existing clause
   Clause := Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1);
@@ -1119,7 +1119,7 @@ begin
       Estrenada := True;
       var MEnd := TRegEx.Match(Text, '(?im)^\s*end\s*\.');
       if not MEnd.Success then
-        Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
+        Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
       var NL := IfThen(Text.Contains(#13#10), #13#10, #10);
       Text := Copy(Text, 1, MEnd.Index - 1) + 'contains' + NL + '  ' +
         BuildEntry(Info, Include) + ';' + NL + NL + Copy(Text, MEnd.Index, MaxInt);
@@ -1128,10 +1128,10 @@ begin
       U := FindUses(Text);
     end;
     if not U.Found then
-      Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
+      Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
   end;
   if U.EnRamas then
-    Exit(Format(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
+    Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
   Present := False;
   Completada := False;
   Entries := U.Entries;
@@ -1165,7 +1165,7 @@ begin
   if Info.NeedsCreateForm then
   begin
     if not InsertCreateForm(Text, Info) then
-      Note := SN_UNIT_NO_RUN_ANCHOR;
+      Note := MsgText(SN_UNIT_NO_RUN_ANCHOR);
   end;
   PatchSaveText(Dpr, Text, Enc);
 
@@ -1182,26 +1182,26 @@ begin
     begin
       Entry := InsertDccRef(Text, DccRefXml(Info, Include));
       if Entry = Text then
-        Note := Note + IfThen(Note <> '', ' ', '') + SN_UNIT_NO_ITEMGROUP
+        Note := Note + IfThen(Note <> '', ' ', '') + MsgText(SN_UNIT_NO_ITEMGROUP)
       else
         Text := Entry;
     end;
     PatchSaveText(Dproj, Text, Enc);
   end
   else
-    Note := Note + IfThen(Note <> '', ' ', '') + SN_UNIT_NO_DPROJ;
+    Note := Note + IfThen(Note <> '', ' ', '') + MsgText(SN_UNIT_NO_DPROJ);
 
   if Completada then
-    Result := Format(SN_UNIT_COMPLETED_FMT, [Info.UnitName, TPath.GetFileName(Dpr),
+    Result := MsgFmt(SN_UNIT_COMPLETED_FMT, [Info.UnitName, TPath.GetFileName(Dpr),
       Info.UnitName, Include])
   else if Present and not Estrenada then
-    Result := Format(SN_UNIT_PRESENT_FMT, [Info.UnitName, TPath.GetFileName(Dpr)])
+    Result := MsgFmt(SN_UNIT_PRESENT_FMT, [Info.UnitName, TPath.GetFileName(Dpr)])
   else if Info.IsDesigner then
-    Result := Format(SN_UNIT_ADDED_FORM_FMT, [Info.UnitName, Include, Info.FormName,
+    Result := MsgFmt(SN_UNIT_ADDED_FORM_FMT, [Info.UnitName, Include, Info.FormName,
       Info.ClassName, TPath.GetFileName(Dpr), U.Keyword, TPath.GetFileName(Dpr),
-      IfThen(Info.NeedsCreateForm, SN_UNIT_CREATEFORM, '')])
+      IfThen(Info.NeedsCreateForm, MsgText(SN_UNIT_CREATEFORM), '')])
   else
-    Result := Format(SN_UNIT_ADDED_FMT, [Info.UnitName, Include, TPath.GetFileName(Dpr),
+    Result := MsgFmt(SN_UNIT_ADDED_FMT, [Info.UnitName, Include, TPath.GetFileName(Dpr),
       U.Keyword, TPath.GetFileName(Dpr)]);
   if Note <> '' then
     Result := Result + #10 + Note;
@@ -1280,7 +1280,7 @@ begin
   if Result <> '' then
     Exit;
   if TPath.GetExtension(APasPath).ToLower <> '.pas' then
-    Exit(Format(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
+    Exit(MsgFmt(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   UnitName := TPath.GetFileNameWithoutExtension(APasPath);
   ClassName := '';
   FormName := '';
@@ -1294,9 +1294,9 @@ begin
   Text := PatchLoadText(Dpr, Enc);
   U := FindUses(Text);
   if not U.Found then
-    Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
+    Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
   if U.EnRamas then
-    Exit(Format(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
+    Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
   InDpr := LocateEntry(U, UnitName, Entry);
   Include := IncludeFor(Dpr, TPath.GetFullPath(APasPath));
   if InDpr then
@@ -1327,13 +1327,13 @@ begin
   end;
 
   if not (InDpr or InDproj) then
-    Exit(Format(SN_UNIT_ABSENT_FMT, [UnitName, TPath.GetFileName(Dpr)]));
+    Exit(MsgFmt(SN_UNIT_ABSENT_FMT, [UnitName, TPath.GetFileName(Dpr)]));
   // The "the file is still on disk, delete it if you no longer want it" tail
   // belongs to command=remove-unit. It was also landing inside delphi_delete's
   // own answer, three lines under "BORRADO ... moved to the trash", and made
   // the reader doubt what had happened (measured 2026-08-25).
-  Result := Format(IfThen(AFileGoesToo, SN_UNIT_REMOVED_GONE_FMT,
-    SN_UNIT_REMOVED_FMT), [UnitName, TPath.GetFileName(Dpr),
+  Result := Format(IfThen(AFileGoesToo, MsgText(SN_UNIT_REMOVED_GONE_FMT),
+    MsgText(SN_UNIT_REMOVED_FMT)), [UnitName, TPath.GetFileName(Dpr),
     IfThen(InDpr, U.Keyword, '-'), IfThen(N > 0, ' + CreateForm', ''),
     IfThen(InDproj, ', DCCReference del .dproj', ''), TPath.GetFileName(APasPath)]);
 end;
@@ -1371,12 +1371,12 @@ begin
   Text := PatchLoadText(Dpr, Enc);
   U := FindUses(Text);
   if not U.Found then
-    Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
+    Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
   if U.EnRamas then
-    Exit(Format(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
+    Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(Dpr)]));
   Found := LocateEntry(U, OldName, Entry);
   if not Found then
-    Exit(Format(SN_UNIT_ABSENT_FMT, [OldName, TPath.GetFileName(Dpr)]));
+    Exit(MsgFmt(SN_UNIT_ABSENT_FMT, [OldName, TPath.GetFileName(Dpr)]));
   OldInclude := EntryInclude(Entry);
   if OldInclude = '' then
     OldInclude := IncludeFor(Dpr, TPath.GetFullPath(AOldPasPath));
@@ -1439,10 +1439,10 @@ begin
         Inc(NFich);
       end;
     end;
-  Result := Format(SN_UNIT_RENAMED_FMT, [OldName, OldInclude, Info.UnitName, NewInclude,
+  Result := MsgFmt(SN_UNIT_RENAMED_FMT, [OldName, OldInclude, Info.UnitName, NewInclude,
     TPath.GetFileName(Dpr), U.Keyword, NRefs, NFich]);
   if Length(NoEscritos) > 0 then
-    Result := Result + #10 + Format(SN_UNIT_RENAME_NOT_WRITTEN_FMT,
+    Result := Result + #10 + MsgFmt(SN_UNIT_RENAME_NOT_WRITTEN_FMT,
       [Length(NoEscritos), string.Join(', ', NoEscritos)]);
 end;
 
@@ -1468,7 +1468,7 @@ begin
   if Result <> '' then
     Exit;
   if not SameText(TPath.GetExtension(Dpr), '.dpk') then
-    Exit(Format(SR_REQUIRES_NOT_PACKAGE_FMT, [TPath.GetFileName(Dpr)]));
+    Exit(MsgFmt(SR_REQUIRES_NOT_PACKAGE_FMT, [TPath.GetFileName(Dpr)]));
   Nombres := TStringList.Create;
   Nuevos := TStringList.Create;
   try
@@ -1476,11 +1476,11 @@ begin
       if N.Trim <> '' then
       begin
         if not TRegEx.IsMatch(N.Trim, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
-          Exit(Format(SR_REQUIRES_BAD_NAME_FMT, [N.Trim]));
+          Exit(MsgFmt(SR_REQUIRES_BAD_NAME_FMT, [N.Trim]));
         Nombres.Add(N.Trim);
       end;
     if Nombres.Count = 0 then
-      Exit(SR_REQUIRES_NEED_NAMES);
+      Exit(MsgText(SR_REQUIRES_NEED_NAMES));
     EnterFileEdit;
     try
       Text := PatchLoadText(Dpr, Enc);
@@ -1506,7 +1506,7 @@ begin
         end;
       end;
       if Nuevos.Count = 0 then
-        Exit(Format(SN_REQUIRES_PRESENT_FMT, [TPath.GetFileName(Dpr)]));
+        Exit(MsgFmt(SN_REQUIRES_PRESENT_FMT, [TPath.GetFileName(Dpr)]));
       Clausula := 'requires' + NL + '  ' + string.Join(',' + NL + '  ', Existentes) + ';';
       if M.Success then
         Text := Copy(Text, 1, M.Index - 1) + Clausula + Copy(Text, M.Index + M.Length, MaxInt)
@@ -1514,14 +1514,14 @@ begin
       begin
         MPos := TRegEx.Match(Text, '^[ \t]*(contains\b|end\s*\.)', [roIgnoreCase, roMultiline]);
         if not MPos.Success then
-          Exit(Format(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
+          Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
         Text := Copy(Text, 1, MPos.Index - 1) + Clausula + NL + NL + Copy(Text, MPos.Index, MaxInt);
       end;
       PatchSaveText(Dpr, Text, Enc);
     finally
       LeaveFileEdit;
     end;
-    Result := Format(SN_REQUIRES_ADDED_FMT, [TPath.GetFileName(Dpr),
+    Result := MsgFmt(SN_REQUIRES_ADDED_FMT, [TPath.GetFileName(Dpr),
       string.Join(', ', Nuevos.ToStringArray), string.Join(', ', Existentes)]);
   finally
     Nombres.Free;
@@ -1613,35 +1613,35 @@ var
   Creada: Boolean;
 begin
   if not SameText(TPath.GetExtension(APasPath), '.pas') then
-    Exit(Format(SR_ADDUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
+    Exit(MsgFmt(SR_ADDUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   Names := [];
   for Nombre in ANames do
     if Nombre.Trim <> '' then
       Names := Names + [Nombre.Trim];
   if Length(Names) = 0 then
-    Exit(SR_ADDUSES_NEED_NAMES);
+    Exit(MsgText(SR_ADDUSES_NEED_NAMES));
   for Nombre in Names do
     if not TRegEx.IsMatch(Nombre, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
-      Exit(Format(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
+      Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
   Sec := LowerCase(ASection.Trim);
   if Sec = '' then
     Sec := 'implementation';
   if not MatchText(Sec, ['interface', 'implementation']) then
-    Exit(Format(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
+    Exit(MsgFmt(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
   EnterFileEdit;
   try
     if not TFile.Exists(APasPath) then
-      Exit(Format(SR_ADDUSES_NO_FILE_FMT, [APasPath]));
+      Exit(MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath]));
     Text := PatchLoadText(APasPath, Enc);
     Blank := BlankComments(Text);
     M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
     if not M.Success then
-      Exit(Format(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
+      Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
     PosSec := M.Index + M.Length;
     NL := IfThen(Text.Contains(#13#10), #13#10, #10);
     U := FindUses(Text, PosSec);
     if U.Found and U.EnRamas then
-      Exit(Format(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(APasPath)]));
+      Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(APasPath)]));
     Creada := not U.Found;
     Faltan := [];
     YaEstan := [];
@@ -1666,10 +1666,10 @@ begin
         Entries := Entries + [Nombre];
       end;
     if (Length(Faltan) = 0) and (Length(EnOtra) > 0) then
-      Exit(Format(SN_ADDUSES_PRESENT_OTHER_FMT, [string.Join(', ', EnOtra), OtraSec,
+      Exit(MsgFmt(SN_ADDUSES_PRESENT_OTHER_FMT, [string.Join(', ', EnOtra), OtraSec,
         TPath.GetFileName(APasPath)]));
     if Length(Faltan) = 0 then
-      Exit(Format(SN_ADDUSES_PRESENT_FMT, [string.Join(', ', Names), Sec,
+      Exit(MsgFmt(SN_ADDUSES_PRESENT_FMT, [string.Join(', ', Names), Sec,
         TPath.GetFileName(APasPath)]));
     if U.Found then
       Text := ReplaceUses(Text, U, Entries)
@@ -1695,11 +1695,11 @@ begin
       if U.Found then
         Clausula := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
     end;
-    Result := Format(SN_ADDUSES_ADDED_FMT, [Sec, TPath.GetFileName(APasPath),
+    Result := MsgFmt(SN_ADDUSES_ADDED_FMT, [Sec, TPath.GetFileName(APasPath),
       string.Join(', ', Faltan),
-      IfThen(Length(YaEstan) > 0, Format(SN_ADDUSES_SOME_PRESENT_FMT, [string.Join(', ', YaEstan)]), '') +
-      IfThen(Length(EnOtra) > 0, Format(SN_ADDUSES_IN_OTHER_FMT, [OtraSec, string.Join(', ', EnOtra)]), ''),
-      IfThen(Creada, Format(SN_ADDUSES_CREATED_FMT, [Sec]), ''),
+      IfThen(Length(YaEstan) > 0, MsgFmt(SN_ADDUSES_SOME_PRESENT_FMT, [string.Join(', ', YaEstan)]), '') +
+      IfThen(Length(EnOtra) > 0, MsgFmt(SN_ADDUSES_IN_OTHER_FMT, [OtraSec, string.Join(', ', EnOtra)]), ''),
+      IfThen(Creada, MsgFmt(SN_ADDUSES_CREATED_FMT, [Sec]), ''),
       Clausula]);
   finally
     LeaveFileEdit;
@@ -1718,36 +1718,36 @@ var
   PosSec, Fin: Integer;
 begin
   if not SameText(TPath.GetExtension(APasPath), '.pas') then
-    Exit(Format(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
+    Exit(MsgFmt(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   Names := [];
   for Nombre in ANames do
     if Nombre.Trim <> '' then
       Names := Names + [Nombre.Trim];
   if Length(Names) = 0 then
-    Exit(SR_REMOVEUSES_NEED_NAMES);
+    Exit(MsgText(SR_REMOVEUSES_NEED_NAMES));
   for Nombre in Names do
     if not TRegEx.IsMatch(Nombre, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
-      Exit(Format(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
+      Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
   Sec := LowerCase(ASection.Trim);
   if Sec = '' then
     Sec := 'implementation';
   if not MatchText(Sec, ['interface', 'implementation']) then
-    Exit(Format(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
+    Exit(MsgFmt(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
   EnterFileEdit;
   try
     if not TFile.Exists(APasPath) then
-      Exit(Format(SR_ADDUSES_NO_FILE_FMT, [APasPath]));
+      Exit(MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath]));
     Text := PatchLoadText(APasPath, Enc);
     Blank := BlankComments(Text);
     M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
     if not M.Success then
-      Exit(Format(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
+      Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
     PosSec := M.Index + M.Length;
     U := FindUses(Text, PosSec);
     if not U.Found then
-      Exit(Format(SN_REMOVEUSES_NO_CLAUSE_FMT, [Sec, TPath.GetFileName(APasPath)]));
+      Exit(MsgFmt(SN_REMOVEUSES_NO_CLAUSE_FMT, [Sec, TPath.GetFileName(APasPath)]));
     if U.EnRamas then
-      Exit(Format(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(APasPath)]));
+      Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(APasPath)]));
     Entries := U.Entries;
     Quitadas := [];
     NoEstaban := [];
@@ -1760,7 +1760,7 @@ begin
       else
         NoEstaban := NoEstaban + [Nombre];
     if Length(Quitadas) = 0 then
-      Exit(Format(SN_REMOVEUSES_ABSENT_FMT, [string.Join(', ', Names), Sec,
+      Exit(MsgFmt(SN_REMOVEUSES_ABSENT_FMT, [string.Join(', ', Names), Sec,
         TPath.GetFileName(APasPath)]));
     if Length(Entries) = 0 then
     begin
@@ -1776,16 +1776,16 @@ begin
     Text := PatchLoadText(APasPath, Enc);
     Blank := BlankComments(Text);
     M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
-    Clausula := Format(SN_REMOVEUSES_GONE_FMT, [Sec]);
+    Clausula := MsgFmt(SN_REMOVEUSES_GONE_FMT, [Sec]);
     if M.Success then
     begin
       U := FindUses(Text, M.Index + M.Length);
       if U.Found then
         Clausula := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
     end;
-    Result := Format(SN_REMOVEUSES_REMOVED_FMT, [Sec, TPath.GetFileName(APasPath),
+    Result := MsgFmt(SN_REMOVEUSES_REMOVED_FMT, [Sec, TPath.GetFileName(APasPath),
       string.Join(', ', Quitadas),
-      IfThen(Length(NoEstaban) > 0, Format(SN_REMOVEUSES_SOME_ABSENT_FMT, [string.Join(', ', NoEstaban)]), ''),
+      IfThen(Length(NoEstaban) > 0, MsgFmt(SN_REMOVEUSES_SOME_ABSENT_FMT, [string.Join(', ', NoEstaban)]), ''),
       Clausula]);
   finally
     LeaveFileEdit;
@@ -2441,15 +2441,15 @@ begin
     var Nombres: TArray<string> := [];
     for var T in Tocados do
       Nombres := Nombres + [TPath.GetFileName(T)];
-    Result := Format(SN_REUBICA_FMT, [NUnits, NRutas, NDirect, NGrupos, NFuera,
+    Result := MsgFmt(SN_REUBICA_FMT, [NUnits, NRutas, NDirect, NGrupos, NFuera,
       string.Join(', ', Nombres)]);
   end;
   if Length(Fallos) > 0 then
     Result := Result + IfThen(Result <> '', #10, '') +
-      Format(SN_REUBICA_FALLOS_FMT, [string.Join('; ', Fallos)]);
+      MsgFmt(SN_REUBICA_FALLOS_FMT, [string.Join('; ', Fallos)]);
   if Length(Saltadas) > 0 then
     Result := Result + IfThen(Result <> '', #10, '') +
-      Format(SN_REUBICA_SALTADAS_FMT, [string.Join('; ', Saltadas)]);
+      MsgFmt(SN_REUBICA_SALTADAS_FMT, [string.Join('; ', Saltadas)]);
 end;
 
 { ======================================================= grupos de proyectos }
@@ -2504,10 +2504,10 @@ var
 begin
   Proj := DprojDe(AProject);
   if not TFile.Exists(Proj) then
-    Exit(Format(SR_GRUPO_SIN_DPROJ_FMT, [TPath.GetFileName(Proj)]));
+    Exit(MsgFmt(SR_GRUPO_SIN_DPROJ_FMT, [TPath.GetFileName(Proj)]));
   for var I in ProyectosDeGrupo(AGroup) do
     if MismoProyecto(AGroup, I, Proj) then
-      Exit(Format(SN_GRUPO_YA_ESTABA_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup)]));
+      Exit(MsgFmt(SN_GRUPO_YA_ESTABA_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup)]));
   Texto := PatchLoadText(AGroup, Enc);
   if Texto.Contains(#13#10) then
     NL := #13#10
@@ -2517,7 +2517,7 @@ begin
   // El IDE nombra los targets por el proyecto: dos con el mismo nombre en un
   // grupo no caben. Se dice, no se inventa un sufijo.
   if TRegEx.IsMatch(Texto, '<Target\s+Name="' + TRegEx.Escape(XmlEscape(Nombre)) + '"', [roIgnoreCase]) then
-    Exit(Format(SR_GRUPO_TARGET_DUP_FMT, [Nombre, TPath.GetFileName(AGroup)]));
+    Exit(MsgFmt(SR_GRUPO_TARGET_DUP_FMT, [Nombre, TPath.GetFileName(AGroup)]));
   Incl := IncludeFor(AGroup, Proj);
   // 1. el item, detras del ultimo <Projects> (o en un ItemGroup nuevo)
   var Item := '        <Projects ' + XmlAtributo('Include', Incl) + '>' + NL +
@@ -2535,7 +2535,7 @@ begin
   begin
     P := Pos('</PropertyGroup>', Texto);
     if P = 0 then
-      Exit(Format(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup)]));
+      Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup)]));
     P := P + Length('</PropertyGroup>');
     Insert(NL + '    <ItemGroup>' + NL + Item + '    </ItemGroup>', Texto, P);
   end;
@@ -2555,7 +2555,7 @@ begin
   else
     P := AlFinal;
   if P = 0 then
-    Exit(Format(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup)]));
+    Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup)]));
   Insert(Targets, Texto, P);
   // 3. su nombre en los agregados Build, Clean y Make, por UN camino (eran
   //    dos: crearlos todos si no habia ninguno, o anadir a sus listas): en la
@@ -2580,15 +2580,15 @@ begin
     begin
       P := AlFinal;
       if P = 0 then
-        Exit(Format(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup)]));
+        Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup)]));
       Insert('    <Target Name="' + Agregado + '">' + NL + '        <CallTarget ' +
         XmlAtributo('Targets', Nombre + Suf) + '/>' + NL + '    </Target>' + NL, Texto, P);
     end;
   end;
   PatchSaveText(AGroup, Texto, Enc);
-  Result := Format(SN_GRUPO_ANADIDO_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup), Incl, Nombre]);
+  Result := MsgFmt(SN_GRUPO_ANADIDO_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup), Incl, Nombre]);
   if Length(SinAgregado) > 0 then
-    Result := Result + #10 + Format(SN_GRUPO_SIN_AGREGADO_FMT, [string.Join(', ', SinAgregado)]);
+    Result := Result + #10 + MsgFmt(SN_GRUPO_SIN_AGREGADO_FMT, [string.Join(', ', SinAgregado)]);
 end;
 
 function QuitaProyectoDeGrupo(const AGroup, AProject: string): string;
@@ -2629,7 +2629,7 @@ begin
     if MismoProyecto(AGroup, XmlUnescape(M.Groups[1].Value), Proj) then
       Cambia(M.Index, M.Length, '');
   if Length(Cambios) = 0 then
-    Exit(Format(SN_GRUPO_NO_ESTABA_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup)]));
+    Exit(MsgFmt(SN_GRUPO_NO_ESTABA_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup)]));
   // 2. sus targets -los que construyen ESE proyecto, con o sin
   //    DependsOnTargets: el IDE lo escribe en los que dependen de otro, y la
   //    regex lo exigia sin nada-, y se apuntan sus nombres
@@ -2688,7 +2688,7 @@ begin
       Cambia(M.Groups[1].Index, M.Groups[1].Length, string.Join(';', Quedan));
   end;
   PatchSaveText(AGroup, AplicaCambios(Texto, Cambios), Enc);
-  Result := Format(SN_GRUPO_QUITADO_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup),
+  Result := MsgFmt(SN_GRUPO_QUITADO_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup),
     Length(Nombres), NDeps]);
 end;
 
@@ -2805,18 +2805,18 @@ begin
           RutasFaltan := RutasFaltan + [R.Escrita];
     end;
   end;
-  Result := Format(SN_ARREGLA_FMT, [TPath.GetFileName(AProject), Length(Hechos),
+  Result := MsgFmt(SN_ARREGLA_FMT, [TPath.GetFileName(AProject), Length(Hechos),
     Length(Sin), Length(Varios)]);
   if Length(Hechos) > 0 then
     Result := Result + #10 + '  re-apuntadas: ' + string.Join('; ', Hechos);
   if Length(Sin) > 0 then
     Result := Result + #10 + '  no encontradas en el workspace: ' + string.Join('; ', Sin);
   if Length(Varios) > 0 then
-    Result := Result + #10 + Format(SN_ARREGLA_VARIOS_FMT, [string.Join('; ', Varios)]);
+    Result := Result + #10 + MsgFmt(SN_ARREGLA_VARIOS_FMT, [string.Join('; ', Varios)]);
   if Length(RutasFaltan) > 0 then
-    Result := Result + #10 + Format(SN_ARREGLA_RUTAS_FMT, [string.Join('; ', RutasFaltan)]);
+    Result := Result + #10 + MsgFmt(SN_ARREGLA_RUTAS_FMT, [string.Join('; ', RutasFaltan)]);
   if Length(Fallidas) > 0 then
-    Result := Result + #10 + Format(SN_ARREGLA_FALLIDAS_FMT, [string.Join('; ', Fallidas)]);
+    Result := Result + #10 + MsgFmt(SN_ARREGLA_FALLIDAS_FMT, [string.Join('; ', Fallidas)]);
 end;
 
 function ArreglaReferencias(const AProject: string): string;

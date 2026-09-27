@@ -235,7 +235,7 @@ begin
   begin
     Owner := TrashOwner(APath);
     if (Owner <> '') and not SameText(Owner, Me) then
-      Result := Format(SR_FILE_PURGE_NOT_YOURS_FMT, [Owner]);
+      Result := MsgFmt(SR_FILE_PURGE_NOT_YOURS_FMT, [Owner]);
     Exit;
   end;
   if not TDirectory.Exists(APath) then
@@ -258,7 +258,7 @@ begin
         Others.Add(Owner);
     end;
     if Others.Count > 0 then
-      Result := Format(SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT,
+      Result := MsgFmt(SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT,
         [Others.Count, Others.CommaText]);
   finally
     Others.Free;
@@ -294,11 +294,11 @@ begin
     end;
   except
     on E: Exception do
-      Exit(Format(SR_FILE_PURGE_FAILED_FMT,
+      Exit(MsgFmt(SR_FILE_PURGE_FAILED_FMT,
         [TPath.GetFileName(ExcludeTrailingPathDelimiter(APath)), E.Message]));
   end;
   if StillThere(APath) then
-    Result := Format(SR_FILE_PURGE_FAILED_FMT,
+    Result := MsgFmt(SR_FILE_PURGE_FAILED_FMT,
       [TPath.GetFileName(ExcludeTrailingPathDelimiter(APath)),
        'sigue ahi despues de borrarlo']);
 end;
@@ -343,9 +343,9 @@ begin
   if Params.Purge then
   begin
     if not IsBackupPath(Params.Path) then
-      Exit(SR_FILE_PURGE_ONLY_TRASH);
+      Exit(MsgText(SR_FILE_PURGE_ONLY_TRASH));
     if IsBackupRoot(Params.Path) then
-      Exit(SR_FILE_PURGE_NOT_ROOT);
+      Exit(MsgText(SR_FILE_PURGE_NOT_ROOT));
     if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
       Exit('RECHAZADO: no existe ' + Params.Path);
     var CanonPurge := LongCanonical(Params.Path);
@@ -359,7 +359,7 @@ begin
       var Mk := TrashOwner(SibMk); // owner is THIS marker's content
       if (TFile.Exists(SibMk) or TDirectory.Exists(SibMk)) and
          (CurrentAgent <> '') and (Mk <> '') and not SameText(Mk, CurrentAgent) then
-        Exit(Format(SR_FILE_PURGE_NOT_YOURS_FMT, [Mk]));
+        Exit(MsgFmt(SR_FILE_PURGE_NOT_YOURS_FMT, [Mk]));
     end
     else
     begin
@@ -376,7 +376,7 @@ begin
         TFile.Delete(Params.Path + '.by');
     except
     end;
-    Exit(Format(SN_FILE_PURGED_FMT,
+    Exit(MsgFmt(SN_FILE_PURGED_FMT,
       [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
   end;
   // De un temporal no se restaura nada (lo dicen la purga del arranque y
@@ -391,13 +391,13 @@ begin
   if EnTemporal(Params.Path, EsLaTemporal) then
   begin
     if EsLaTemporal then
-      Exit(Format(SR_FILE_DELETE_TEMP_ROOT_FMT, [Params.Path]));
+      Exit(MsgFmt(SR_FILE_DELETE_TEMP_ROOT_FMT, [Params.Path]));
     if not StillThere(Params.Path) then
       Exit('RECHAZADO: no existe ' + Params.Path);
     Denied := BorraDeVerdad(Params.Path);
     if Denied <> '' then
       Exit(Denied);
-    Exit(Format(SN_FILE_DELETE_TEMP_FMT,
+    Exit(MsgFmt(SN_FILE_DELETE_TEMP_FMT,
       [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
   end;
   if IsBackupPath(Params.Path) then
@@ -427,9 +427,9 @@ begin
       // fall through to the honest report below
     end;
     if not TDirectory.Exists(Params.Path) then
-      Exit(Format(SN_FILE_DELETE_EMPTY_OK_FMT,
+      Exit(MsgFmt(SN_FILE_DELETE_EMPTY_OK_FMT,
         [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
-    Exit(Format(SR_FILE_DELETE_STUCK_FMT,
+    Exit(MsgFmt(SR_FILE_DELETE_STUCK_FMT,
       [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
   end;
   ProjNote := '';
@@ -444,7 +444,7 @@ begin
     begin
       if PathDenied(P) <> '' then
       begin
-        ProjNote := ProjNote + #10 + Format(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)]);
+        ProjNote := ProjNote + #10 + MsgFmt(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)]);
         Continue;
       end;
       try
@@ -456,19 +456,19 @@ begin
       ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
     end;
     if Length(Projects) > 0 then
-      ProjNote := Format(SN_FILE_PROJECTS_UPDATED_FMT, [Length(Projects),
+      ProjNote := MsgFmt(SN_FILE_PROJECTS_UPDATED_FMT, [Length(Projects),
         string.Join(', ', Projects)]) + ProjNote
     else
-      ProjNote := SN_FILE_PROJECTS_NONE;
+      ProjNote := MsgText(SN_FILE_PROJECTS_NONE);
     for Ext in ['.dfm', '.fmx'] do
       if TFile.Exists(ChangeFileExt(Params.Path, Ext)) then
       try
         MoveToTrash(ChangeFileExt(Params.Path, Ext), Trash);
-        DesignerNote := Format(SN_FILE_DESIGNER_TOO_FMT,
+        DesignerNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
           [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), 'tambien a la papelera']);
       except
         on E: Exception do
-          DesignerNote := Format(SN_FILE_DESIGNER_TOO_FMT,
+          DesignerNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
             [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), 'ERROR ' + E.Message]);
       end;
   end
@@ -493,7 +493,7 @@ begin
              TPath.GetDirectoryName(TPath.GetFullPath(P)))) then
           Continue;
         if PathDenied(P) <> '' then
-          R := Format(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)])
+          R := MsgFmt(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)])
         else
           try
             R := RemoveProjectUnit(P, U, True);
@@ -519,11 +519,11 @@ begin
       // A locked FOLDER move fails as a whole and leaves the tree intact: say so
       // plainly, because "error" used to read as "and who knows what it did".
       if TDirectory.Exists(Params.Path) then
-        Exit(Format(SR_FILE_DELETE_LOCKED_FMT,
+        Exit(MsgFmt(SR_FILE_DELETE_LOCKED_FMT,
           [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
            E.Message]));
       if (ProjNote <> '') or (DesignerNote <> '') then
-        Exit(Format(SN_FILE_PARTIAL_FMT, ['al mover a la papelera', E.Message,
+        Exit(MsgFmt(SN_FILE_PARTIAL_FMT, ['al mover a la papelera', E.Message,
           #10 + DesignerNote + #10 + ProjNote]));
       Exit('ERROR al mover a la papelera: ' + E.Message);
     end;
@@ -540,10 +540,10 @@ begin
     // empty shell was left (measured 2026-08-25). Say which of the two it is.
     if TDirectory.Exists(Params.Path) and
        (Length(TDirectory.GetFileSystemEntries(Params.Path)) = 0) then
-      Result := Format(SR_FILE_DELETE_EMPTY_SHELL_FMT,
+      Result := MsgFmt(SR_FILE_DELETE_EMPTY_SHELL_FMT,
         [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash])
     else
-      Result := Format(SR_FILE_DELETE_PARTIAL_FMT,
+      Result := MsgFmt(SR_FILE_DELETE_PARTIAL_FMT,
         [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash]);
     if DesignerNote <> '' then
       Result := Result + #10 + DesignerNote;
@@ -674,7 +674,7 @@ begin
   if Params.Copy then
   begin
     if IsBackupPath(Params.Path) then
-      Exit(SR_MOVE_COPY_FROM_TRASH);
+      Exit(MsgText(SR_MOVE_COPY_FROM_TRASH));
     // La decision de la copia, en Lsp.Guard: mira lo que CopiaArbol VA a
     // copiar (fichero suelto incluido, .dpr incluido, enlaces con su regla),
     // y un destino dentro del origen (se copiaria sin fin).
@@ -764,7 +764,7 @@ begin
   Result := Format('%s'#10'  de: %s'#10'  a:  %s',
     [IfThen(Params.Copy, 'COPIADO', 'MOVIDO'), Params.Path, Params.Dest]);
   if Length(NoSeguidos) > 0 then
-    Result := Result + #10 + Format(SN_COPY_LINKS_NOT_FOLLOWED_FMT,
+    Result := Result + #10 + MsgFmt(SN_COPY_LINKS_NOT_FOLLOWED_FMT,
       [Length(NoSeguidos), string.Join(', ', NoSeguidos)]);
   if not Params.Copy then // una copia no necesita red: el origen sigue ahi
     Result := Result + #10 + '  (copia de seguridad en ' + BackupNote + ')';
@@ -783,7 +783,7 @@ begin
         TFile.Copy(Gemelo, ChangeFileExt(Params.Dest, Ext))
       else
         TFile.Move(Gemelo, ChangeFileExt(Params.Dest, Ext));
-      PairNote := Format(SN_FILE_DESIGNER_TOO_FMT,
+      PairNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
         [TPath.GetFileName(ChangeFileExt(Params.Dest, Ext)),
          IfThen(Params.Copy, 'copiado con la unit', 'movido con la unit')]);
       if DesdePapelera and TFile.Exists(Gemelo + '.by') then
@@ -793,7 +793,7 @@ begin
         end;
     except
       on E: Exception do
-        PairNote := Format(SN_FILE_DESIGNER_TOO_FMT,
+        PairNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
           [TPath.GetFileName(Gemelo), 'ERROR ' + E.Message]);
     end;
   end;
@@ -819,7 +819,7 @@ begin
   begin
     if PathDenied(P) <> '' then
     begin
-      ProjNote := ProjNote + #10 + Format(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)]);
+      ProjNote := ProjNote + #10 + MsgFmt(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)]);
       Continue;
     end;
     try
@@ -831,12 +831,12 @@ begin
     ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
   end;
   if Length(Projects) > 0 then
-    ProjNote := Format(SN_FILE_PROJECTS_UPDATED_FMT, [Length(Projects),
+    ProjNote := MsgFmt(SN_FILE_PROJECTS_UPDATED_FMT, [Length(Projects),
       string.Join(', ', Projects)]) + ProjNote
   else if Params.Copy then
-    ProjNote := SN_FILE_COPY_NO_PROJECT
+    ProjNote := MsgText(SN_FILE_COPY_NO_PROJECT)
   else
-    ProjNote := SN_FILE_PROJECTS_NONE;
+    ProjNote := MsgText(SN_FILE_PROJECTS_NONE);
   Result := Result + #10 + ProjNote + Reubicacion(DesdePapelera);
 end;
 

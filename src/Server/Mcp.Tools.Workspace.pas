@@ -569,7 +569,7 @@ begin
     // cuando pasa la segunda manda al agente a buscar un fichero que tiene
     // delante (medido 2026-09-20 sobre README.md).
     if TFile.Exists(Root) then
-      Exit(Format(SR_LIST_IS_FILE_FMT, [Root]));
+      Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [Root]));
     Exit('error: directory not found: ' + Root);
   end;
   // Shell-style brace expansion is NOT a mask: *.{pas,dfm} matched nothing
@@ -579,7 +579,7 @@ begin
       'mascara (*.pas) o varias separadas por ";" (*.pas;*.dfm).');
 
   if TFile.Exists(Root) then
-    Exit(Format(SR_LIST_ROOT_IS_FILE_FMT, [TPath.GetFileName(Root)]));
+    Exit(MsgFmt(SR_LIST_ROOT_IS_FILE_FMT, [TPath.GetFileName(Root)]));
   if Params.Dirs then
   begin
     Return := TJSONObject.Create;
@@ -694,20 +694,20 @@ begin
     if ShownTrash > 0 then
     begin
       Return.AddPair('shownTrash', TJSONNumber.Create(ShownTrash));
-      Return.AddPair('trashNote', Format(SN_LIST_SHOWN_TRASH_FMT, [Total, ShownTrash]));
+      Return.AddPair('trashNote', MsgFmt(SN_LIST_SHOWN_TRASH_FMT, [Total, ShownTrash]));
     end;
     if Total > Arr.Count then
-      Return.AddPair('shownNote', Format(SN_SEARCH_CAPPED_FMT,
+      Return.AddPair('shownNote', MsgFmt(SN_SEARCH_CAPPED_FMT,
         [Arr.Count, Total]));
     // Say WHICH, because "42 hidden" plus the wrong reason sends the reader
     // hunting for build output that is not there (measured 2026-08-25).
     Ocultos.Report(Return);
     if Arr.Count >= 500 then
-      Return.AddPair('shownNote', SN_LIST_CAPPED);
+      Return.AddPair('shownNote', MsgText(SN_LIST_CAPPED));
     // Without "pattern" only Delphi files are listed. That is a filter, and a
     // filter nobody mentioned reads as "there is nothing else here".
     if Params.Pattern.Trim = '' then
-      Return.AddPair('maskNote', SN_LIST_DEFAULT_MASK)
+      Return.AddPair('maskNote', MsgText(SN_LIST_DEFAULT_MASK))
     else if Total = 0 then
     begin
       // Solo el primer nivel, que es barato y basta para probar que la
@@ -720,7 +720,7 @@ begin
         Cuantas := 0;
       end;
       if Cuantas > 0 then
-        Return.AddPair('maskNote', Format(SN_LIST_MASK_NO_MATCH_FMT,
+        Return.AddPair('maskNote', MsgFmt(SN_LIST_MASK_NO_MATCH_FMT,
           [Params.Pattern.Trim, Cuantas]));
     end;
     Return.AddPair('files', Arr);
@@ -821,7 +821,7 @@ begin
   // (field report 2026-08-25).
   if (Params.Message.Contains(#13) or Params.Message.Contains(#10)) and
      not MatchText(Params.Command.Trim, ['commit', 'tag']) then
-    Exit(SR_GIT_MESSAGE_LINES);
+    Exit(MsgText(SR_GIT_MESSAGE_LINES));
   // Dangerous git options (--output, --no-index, -c, ...) are filtered at the
   // single gate (Lsp.Guard.ToolCallDenied), before this handler runs.
 
@@ -920,7 +920,7 @@ begin
     // checkout (checkout -- <path>) are NOT here on purpose - those DISCARD
     // work, and discarding has its own command with its own words.
     if Params.Args.Trim = '' then
-      Exit(SR_GIT_SWITCH_NEEDS);
+      Exit(MsgText(SR_GIT_SWITCH_NEEDS));
     if Params.Create then
       GitArgs := 'switch -c ' + ArgvSeguro(Params.Args)
     else
@@ -929,7 +929,7 @@ begin
   else if Cmd = 'merge' then
   begin
     if Params.Args.Trim = '' then
-      Exit(SR_GIT_MERGE_NEEDS);
+      Exit(MsgText(SR_GIT_MERGE_NEEDS));
     // --ff-only: a merge that would need a commit (and could conflict half
     // way) is refused rather than left half-done. Real conflicts are a
     // human's business, not an agent's guess.
@@ -942,7 +942,7 @@ begin
     else if Params.Args.Trim.StartsWith('-') or
             (Params.Args.Trim.Split([' ', #9],
               TStringSplitOptions.ExcludeEmpty)[0] <> Params.Args.Trim) then
-      Exit(SR_GIT_MERGE_ARGS)
+      Exit(MsgText(SR_GIT_MERGE_ARGS))
     else
       GitArgs := 'merge --ff-only ' + ArgvSeguro(Params.Args.Trim);
   end
@@ -974,7 +974,7 @@ begin
         // Rutas, no opciones: -u, -k, -p... cambian lo que se guarda y lo
         // que se toca, y ninguna hace falta para descartar.
         if Trozos[I].StartsWith('-') or (Trozos[I].Trim = '') then
-          Exit(Format(SR_GIT_STASH_ARGS_FMT, [Params.Args.Trim]));
+          Exit(MsgFmt(SR_GIT_STASH_ARGS_FMT, [Params.Args.Trim]));
         // Una ruta de ESTE repo, con su nombre tal cual: un comodin no es un
         // nombre en Windows, y lo que GetFullPath no entiende no es una ruta.
         var Ruta := '';
@@ -986,7 +986,7 @@ begin
           Ruta := '';
         end;
         if (Ruta = '') or not StartsText(Base, IncludeTrailingPathDelimiter(Ruta)) then
-          Exit(Format(SR_GIT_STASH_RUTA_FMT, [Trozos[I], Repo]));
+          Exit(MsgFmt(SR_GIT_STASH_RUTA_FMT, [Trozos[I], Repo]));
         // Devolver un fichero a HEAD es ESCRIBIRLO: la pregunta de todo
         // escritor, por la ruta real de cada uno.
         Result := EscrituraDenegada(Ruta);
@@ -1002,7 +1002,7 @@ begin
         GitArgs := GitArgs + ' --' + Rutas;
     end
     else
-      Exit(Format(SR_GIT_STASH_ARGS_FMT, [Params.Args.Trim]));
+      Exit(MsgFmt(SR_GIT_STASH_ARGS_FMT, [Params.Args.Trim]));
   end
   else if Cmd = 'push' then
     // uses the SERVER's stored credentials/remotes - consistent with the
@@ -1037,7 +1037,7 @@ begin
     else if (Sub = 'add') or (Sub = 'remove') then
     begin
       if Params.Path.Trim = '' then
-        Exit(SR_GIT_WORKTREE_PATH);
+        Exit(MsgText(SR_GIT_WORKTREE_PATH));
       Destino := ExcludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path.Trim));
       // Crear o quitar una copia de trabajo es ESCRIBIR alli: la pregunta de
       // todo escritor, por la ruta real, y nunca en una carpeta muerta.
@@ -1049,9 +1049,9 @@ begin
       if Sub = 'add' then
       begin
         if TDirectory.Exists(Destino) or TFile.Exists(Destino) then
-          Exit(Format(SR_GIT_WORKTREE_EXISTS_FMT, [Destino]));
+          Exit(MsgFmt(SR_GIT_WORKTREE_EXISTS_FMT, [Destino]));
         if not TRegEx.IsMatch(Params.Ref.Trim, '^[A-Za-z0-9][A-Za-z0-9._/~^-]*$') then
-          Exit(SR_GIT_WORKTREE_REF);
+          Exit(MsgText(SR_GIT_WORKTREE_REF));
         // Nunca DENTRO del propio repo: el arbol principal la veria como una
         // carpeta sin seguimiento, y un add -A se la llevaria.
         var Raiz := RunCaptured(Format('git.exe -C "%s" rev-parse --show-toplevel',
@@ -1064,7 +1064,7 @@ begin
         if (ExitCode = 0) and (Raiz <> '') and
            (SameText(DestinoReal, RaizReal) or
             StartsText(IncludeTrailingPathDelimiter(RaizReal), DestinoReal)) then
-          Exit(Format(SR_GIT_WORKTREE_INSIDE_FMT, [Raiz]));
+          Exit(MsgFmt(SR_GIT_WORKTREE_INSIDE_FMT, [Raiz]));
         GitArgs := Format('worktree add --detach "%s" %s', [Destino, Params.Ref.Trim]);
       end
       else
@@ -1086,7 +1086,7 @@ begin
             Primero := False;
           end;
         if not Listado then
-          Exit(Format(SR_GIT_WORKTREE_NOT_LISTED_FMT, [Destino]));
+          Exit(MsgFmt(SR_GIT_WORKTREE_NOT_LISTED_FMT, [Destino]));
         // git worktree remove ATRAVIESA un enlace de dentro y borra lo que hay
         // detras (medido el 26-sep-2026: un junction en una carpeta ignorada
         // dejo vacia una victima de fuera). Con un enlace dentro no se quita.
@@ -1101,13 +1101,13 @@ begin
               Enlace := APath;
           end);
         if Enlace <> '' then
-          Exit(Format(SR_GIT_WORKTREE_LINK_FMT, [Enlace]));
+          Exit(MsgFmt(SR_GIT_WORKTREE_LINK_FMT, [Enlace]));
         // Sin --force: con cambios, git se niega y lo dice.
         GitArgs := Format('worktree remove "%s"', [Destino]);
       end;
     end
     else
-      Exit(SR_GIT_WORKTREE_ARGS);
+      Exit(MsgText(SR_GIT_WORKTREE_ARGS));
   end
   else
     Exit('error: unknown command "' + Params.Command +
@@ -1146,13 +1146,13 @@ begin
   if (ExitCode = 0) and (Output.Trim = '') then
   begin
     if SameText(Cmd, 'diff') then
-      Result := 'exit=0'#10 + SN_GIT_DIFF_CLEAN
+      Result := 'exit=0'#10 + MsgText(SN_GIT_DIFF_CLEAN)
     else
-      Result := 'exit=0'#10 + Format(SN_GIT_SILENT_OK_FMT, [Cmd]);
+      Result := 'exit=0'#10 + MsgFmt(SN_GIT_SILENT_OK_FMT, [Cmd]);
   end;
   // Un worktree nuevo es de quien lo pidio: se lo dice, con como quitarlo.
   if (ExitCode = 0) and (Cmd = 'worktree') and SameText(Params.Args.Trim, 'add') then
-    Result := Result + #10 + Format(SN_GIT_WORKTREE_ADDED_FMT, [Destino]);
+    Result := Result + #10 + MsgFmt(SN_GIT_WORKTREE_ADDED_FMT, [Destino]);
   // git's own hints recommend exactly what this tool refuses (--no-ff,
   // rebase, "specify the URL from the command-line"): say so, or the reader
   // follows the advice printed last (field round 10).
@@ -1160,10 +1160,10 @@ begin
   // possible to fast-forward": git no sugiere nada y la respuesta era el
   // codigo a pelo (abierto menor del 22-sep). Se dice que significa.
   if (ExitCode <> 0) and SameText(Cmd, 'merge') and Output.Contains('fast-forward') then
-    Result := Result + #10 + SN_GIT_MERGE_DIVERGED;
+    Result := Result + #10 + MsgText(SN_GIT_MERGE_DIVERGED);
   if (ExitCode <> 0) and (Output.Contains('--no-ff') or Output.Contains('rebase') or
      Output.Contains('specify the URL')) then
-    Result := Result + #10 + SN_GIT_HINT_OVERRIDE;
+    Result := Result + #10 + MsgText(SN_GIT_HINT_OVERRIDE);
   // A fresh repo has no author identity and commit dies with exit 128:
   // the fix is already whitelisted, say so (measured 2026-08-24).
   if (ExitCode <> 0) and Output.Contains('Author identity unknown') then
@@ -1323,13 +1323,13 @@ begin
   // superficie nueva). Lo que si se dice es que el fichero en disco es mas
   // nuevo que este proceso: lo tocado no esta cargado, hay que reiniciar.
   if TFile.Exists(SettingsIniPath) and (TFile.GetLastWriteTime(SettingsIniPath) > GArranque) then
-    Srv.AddPair('settingsChangedNote', Format(SN_SERVER_INI_CHANGED_FMT,
+    Srv.AddPair('settingsChangedNote', MsgFmt(SN_SERVER_INI_CHANGED_FMT,
       [FormatDateTime('yyyy-mm-dd hh:nn:ss', TFile.GetLastWriteTime(SettingsIniPath)),
        FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque)]));
   var EsSistema: Boolean;
   Srv.AddPair('account', CuentaDelProceso(EsSistema));
   if EsSistema then
-    Srv.AddPair('accountWarning', SN_SERVER_LOCALSYSTEM);
+    Srv.AddPair('accountWarning', MsgText(SN_SERVER_LOCALSYSTEM));
   // Cuantos parametros vigila el suelo de la jaula en la puerta. Un cero
   // aqui es un suelo muerto, y siendo redundante nadie mas lo notaria.
   Srv.AddPair('jailedParams', TJSONNumber.Create(ServerPathParamCount));
@@ -1363,7 +1363,7 @@ begin
     'this process was started (tray / service / console), transport, pid, ' +
     'uptime, the open sessions and the Windows account it runs as - the way ' +
     'to check a deployment without looking at the machine from outside. ' +
-    SN_VIRTUAL_DRIVES + ' Call this FIRST. Read-only, no parameters.';
+    MsgText(SN_VIRTUAL_DRIVES) + ' Call this FIRST. Read-only, no parameters.';
 end;
 
 function TDelphiWorkspaceTool.ExecuteWithParams(const Params: TDelphiWorkspaceParams): string;
@@ -1376,7 +1376,7 @@ var
 begin
   Return := TJSONObject.Create;
   try
-    Return.AddPair('note', SN_WORKSPACE_NOTE);
+    Return.AddPair('note', MsgText(SN_WORKSPACE_NOTE));
     Roots := WorkspaceRoots;
     RootsArr := TJSONArray.Create;
     Return.AddPair('roots', RootsArr);
@@ -1399,7 +1399,7 @@ begin
       Return.AddPair('readOnlyRoots', RefArr);
       for R in WorkspaceReadOnlyRoots do
         RefArr.Add(ExcludeTrailingPathDelimiter(R));
-      Return.AddPair('readOnlyRootsNote', SN_WORKSPACE_REFERENCE_NOTE);
+      Return.AddPair('readOnlyRootsNote', MsgText(SN_WORKSPACE_REFERENCE_NOTE));
     end;
     if Length(Roots) = 0 then
       // Sin Roots solo queda el proceso local sin token: mira, no toca. Decir
@@ -1469,7 +1469,7 @@ begin
         'sources, installed components and SDKs. Reading tools may enter it; ' +
         'writing tools never can.')
     else
-      Return.AddPair('readableExtraNote', SN_WORKSPACE_LIBZONE_OFF);
+      Return.AddPair('readableExtraNote', MsgText(SN_WORKSPACE_LIBZONE_OFF));
     if IsReadOnlyNow then
       Return.AddPair('access', 'read-only')
     else
@@ -1646,7 +1646,7 @@ begin
   // "directory not found" for the same thing (measured 2026-08-25).
   for RootDir in Roots do
     if (RootDir.Trim <> '') and not TDirectory.Exists(RootDir.Trim) then
-      Exit(Format(SR_PROJECTS_NO_ROOT_FMT, [RootDir.Trim]));
+      Exit(MsgFmt(SR_PROJECTS_NO_ROOT_FMT, [RootDir.Trim]));
   Filt := Params.Name.Trim.ToLower;
   // Paginado como delphi_search: una maquina de trabajo tiene miles de .dproj
   // y la lista entera no cabe en una respuesta (medido: 7025 proyectos = 82 KB
@@ -1754,7 +1754,7 @@ begin
     if Total > Ofs + Arr.Count then
     begin
       Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Arr.Count));
-      Return.AddPair('note', Format(SN_PROJECTS_PAGE_FMT,
+      Return.AddPair('note', MsgFmt(SN_PROJECTS_PAGE_FMT,
         [Arr.Count, Total, Ofs + Arr.Count]));
       // Las 10 carpetas que mas acumulan, ordenadas: con esto el agente elige
       // "root" y deja de pasear paginas de cosas que no son suyas.
@@ -1788,13 +1788,13 @@ begin
             for F in WalkFiles(RootDir.Trim, Mask) do
               if not (SkipIdeArtifacts(F) or InVault(F)) then
                 Inc(AllCount);
-      Return.AddPair('note', Format(SN_PROJECTS_NO_MATCH_FMT,
+      Return.AddPair('note', MsgFmt(SN_PROJECTS_NO_MATCH_FMT,
         [Params.Name.Trim, AllCount]));
     end;
     if Ocultos > 0 then
     begin
       Return.AddPair('hidden', TJSONNumber.Create(Ocultos));
-      Return.AddPair('hiddenNote', Format(SN_PROJECTS_HIDDEN_FMT, [Ocultos]));
+      Return.AddPair('hiddenNote', MsgFmt(SN_PROJECTS_HIDDEN_FMT, [Ocultos]));
     end;
     Return.AddPair('projects', Arr);
     Result := Return.ToJSON;
@@ -1885,7 +1885,7 @@ begin
         // The path travels in its VIRTUAL form, URL-encoded (no real drive
         // letter ever leaves, encoded or not).
         Return.AddPair('download', DownloadLinkFor(FName, FullPath));
-        Return.AddPair('downloadNote', SN_FETCH_DOWNLOAD);
+        Return.AddPair('downloadNote', MsgText(SN_FETCH_DOWNLOAD));
       end;
       if LinkOnly then
         Return.AddPair('inline', TJSONBool.Create(False));
@@ -1896,10 +1896,10 @@ begin
       begin
         Return.AddPair('consumedOnServer',
           TJSONBool.Create((not LinkOnly) and (Params.Offset + ChunkLen >= Size)));
-        Return.AddPair('consumedNote', SN_FETCH_CAPTURE_CONSUMED);
+        Return.AddPair('consumedNote', MsgText(SN_FETCH_CAPTURE_CONSUMED));
       end;
       if LinkOnly then
-        Return.AddPair('note', Format(SN_FETCH_BIG_FMT,
+        Return.AddPair('note', MsgFmt(SN_FETCH_BIG_FMT,
           [FormatFloat('0.0', Size / (1024 * 1024), TFormatSettings.Invariant) + ' MB']))
       else
         Return.AddPair('chunkBase64', BytesToBase64(Buf)); // EL codificador de la casa
@@ -1958,15 +1958,15 @@ begin
   // ride on a call that carries no content.
   if (Params.Sha256.Trim <> '') and
      not TRegEx.IsMatch(Params.Sha256.Trim, '^[0-9A-Fa-f]{64}$') then
-    Exit(Format(SR_UPLOAD_BAD_SHA_FMT, [Params.Sha256.Trim]));
+    Exit(MsgFmt(SR_UPLOAD_BAD_SHA_FMT, [Params.Sha256.Trim]));
   if (Params.ChunkSha256.Trim <> '') and
      not TRegEx.IsMatch(Params.ChunkSha256.Trim, '^[0-9A-Fa-f]{64}$') then
-    Exit(Format(SR_UPLOAD_BAD_SHA_FMT, [Params.ChunkSha256.Trim]));
+    Exit(MsgFmt(SR_UPLOAD_BAD_SHA_FMT, [Params.ChunkSha256.Trim]));
   if Params.ChunkBase64.Trim = '' then
   begin
     if TFile.Exists(FullPath) then
-      Exit(Format(SR_UPLOAD_NO_CHUNK_FMT, [TFile.GetSize(FullPath)]));
-    Exit(SR_UPLOAD_NO_CHUNK_NEW);
+      Exit(MsgFmt(SR_UPLOAD_NO_CHUNK_FMT, [TFile.GetSize(FullPath)]));
+    Exit(MsgText(SR_UPLOAD_NO_CHUNK_NEW));
   end;
 
   // EL decodificador de la casa (Lsp.Base64): alfabeto, longitud en grupos
@@ -1984,7 +1984,7 @@ begin
   begin
     Sha := Sha256DeBytes(Bytes);
     if not SameText(Sha, Params.ChunkSha256.Trim) then
-      Exit(Format(SR_UPLOAD_CHUNK_SHA_MISMATCH_FMT,
+      Exit(MsgFmt(SR_UPLOAD_CHUNK_SHA_MISMATCH_FMT,
         [Sha, Params.ChunkSha256.Trim, Length(Bytes)]));
   end;
 
@@ -1996,7 +1996,7 @@ begin
   // shipped them.
   if MatchText(TPath.GetExtension(FullPath), ['.dfm', '.fmx']) and
      IsBinaryDesignerBytes(Bytes) then // el nombrador de la forma: Lsp.DesignerBin
-    Exit(SR_UPLOAD_BINARY_DESIGNER);
+    Exit(MsgText(SR_UPLOAD_BINARY_DESIGNER));
 
   Dir := TPath.GetDirectoryName(FullPath);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
@@ -2047,7 +2047,7 @@ begin
     // 14-byte file resumed at offset 5 came back 8 bytes long, six of them
     // gone and unrecoverable. Resuming means continuing at the END.
     if (Params.Offset > 0) and (Params.Offset < Stream.Size) then
-      Exit(Format(SR_UPLOAD_OFFSET_INSIDE_FMT,
+      Exit(MsgFmt(SR_UPLOAD_OFFSET_INSIDE_FMT,
         [Params.Offset, Stream.Size, Stream.Size]));
     Stream.Position := Params.Offset;
     if Length(Bytes) > 0 then
@@ -2075,7 +2075,7 @@ begin
       Return.AddPair('previousSize', TJSONNumber.Create(OldSize));
       if Backup <> '' then
         Return.AddPair('backup', Backup);
-      Return.AddPair('note', Format(SN_UPLOAD_REPLACED_FMT, [OldSize]));
+      Return.AddPair('note', MsgFmt(SN_UPLOAD_REPLACED_FMT, [OldSize]));
     end;
     if Params.Sha256.Trim <> '' then
     begin
@@ -2108,7 +2108,7 @@ begin
         end;
         if Quarantine = '' then
           Quarantine := FullPath;
-        Return.AddPair('warning', Format(SR_UPLOAD_SHA_MISMATCH_FMT, [Quarantine]));
+        Return.AddPair('warning', MsgFmt(SR_UPLOAD_SHA_MISMATCH_FMT, [Quarantine]));
       end;
     end;
     Result := Return.ToJSON;
@@ -2141,14 +2141,14 @@ begin
   // wrapped an EArgumentException as "Error executing tool: Invalid characters
   // in path" - a crash where a missing parameter belonged (field round 8).
   if Params.Dir.Trim = '' then
-    Exit(SR_PACKAGE_NEED_DIR);
+    Exit(MsgText(SR_PACKAGE_NEED_DIR));
   Dir := TPath.GetFullPath(Params.Dir);
   Result := PathDenied(Dir);
   if Result <> '' then
     Exit;
   if not TDirectory.Exists(Dir) then
     if TFile.Exists(Dir) then
-      Exit(Format(SR_LIST_IS_FILE_FMT, [Dir]))
+      Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [Dir]))
     else
       Exit('error: directory not found: ' + Dir);
 
@@ -2239,7 +2239,7 @@ begin
       TFile.Delete(EnProceso);
     except
     end;
-    Exit(Format(SR_PACKAGE_RENAME_FMT, [OutZip]));
+    Exit(MsgFmt(SR_PACKAGE_RENAME_FMT, [OutZip]));
   end;
 
   Return := TJSONObject.Create;

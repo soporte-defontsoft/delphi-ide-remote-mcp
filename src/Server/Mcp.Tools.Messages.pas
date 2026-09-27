@@ -109,7 +109,7 @@ begin
     Exit;
   N := Length(PendingIn(TPath.Combine(MessagesRoot, Agent)));
   if N > 0 then
-    Result := Format(SN_MESSAGES_PENDING_FMT, [N, Agent]);
+    Result := MsgFmt(SN_MESSAGES_PENDING_FMT, [N, Agent]);
 end;
 
 function DirectedMessagesPending: Integer;
@@ -172,17 +172,17 @@ begin
   if Agent = '' then
     Agent := Slug(CurrentAgent);
   if Agent = '' then
-    Exit(SN_MESSAGES_NONE_NO_AGENT);
+    Exit(MsgText(SN_MESSAGES_NONE_NO_AGENT));
   // UN buzon por agente y ninguno "para todos" (David, 25-sep-2026): un aviso
   // general se deja en la carpeta de cada uno.
   Files := PendingIn(TPath.Combine(MessagesRoot, Agent));
   if Length(Files) = 0 then
-    Exit(Format(SN_MESSAGES_NONE_FMT, [Agent]));
+    Exit(MsgFmt(SN_MESSAGES_NONE_FMT, [Agent]));
   Sb := TStringBuilder.Create;
   try
     if Cmd = 'check' then
     begin
-      Sb.AppendLine(Format(SN_MESSAGES_CHECK_FMT, [Length(Files)]));
+      Sb.AppendLine(MsgFmt(SN_MESSAGES_CHECK_FMT, [Length(Files)]));
       for F in Files do
         Sb.AppendLine(Format('  - %s  (%s)', [FirstLine(F), TPath.GetFileName(F)]));
       Exit(Sb.ToString.TrimRight);
@@ -204,7 +204,7 @@ begin
         // lo que no se puede borrar sigue pendiente: se entrega otra vez
       end;
     end;
-    Sb.AppendLine(SN_MESSAGES_DELIVERED);
+    Sb.AppendLine(MsgText(SN_MESSAGES_DELIVERED));
     Result := Sb.ToString.TrimRight;
   finally
     Sb.Free;

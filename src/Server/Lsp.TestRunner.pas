@@ -123,7 +123,7 @@ begin
     Dir := APath;
   if not TDirectory.Exists(Dir) then
   begin
-    Result.AddPair('error', Format(SR_TEST_NOPATH_FMT, [APath]));
+    Result.AddPair('error', MsgFmt(SR_TEST_NOPATH_FMT, [APath]));
     Exit;
   end;
   Arr := TJSONArray.Create;
@@ -146,15 +146,15 @@ begin
     Obj.AddPair('hasDproj', TJSONBool.Create(
       TFile.Exists(TPath.ChangeExtension(F, '.dproj'))));
     if K = tkConsole then
-      Obj.AddPair('countsFormat', SN_TEST_CONSOLE_FORMAT);
+      Obj.AddPair('countsFormat', MsgText(SN_TEST_CONSOLE_FORMAT));
   end;
   Result.AddPair('total', TJSONNumber.Create(N));
   if N = 0 then
-    Result.AddPair('note', SN_TEST_NONE)
+    Result.AddPair('note', MsgText(SN_TEST_NONE))
   else
   begin
-    Result.AddPair('note', SN_TEST_DISCOVER_NOTE);
-    Result.AddPair('runsOn', SN_TEST_RUNS_ON);
+    Result.AddPair('note', MsgText(SN_TEST_DISCOVER_NOTE));
+    Result.AddPair('runsOn', MsgText(SN_TEST_RUNS_ON));
   end;
 end;
 
@@ -267,7 +267,7 @@ begin
     if Near.Count > 0 then
     begin
       ARet.AddPair('linesNotCounted', TJSONNumber.Create(Near.Count));
-      ARet.AddPair('linesNotCountedNote', Format(SN_TEST_NEAR_MISS_FMT,
+      ARet.AddPair('linesNotCountedNote', MsgFmt(SN_TEST_NEAR_MISS_FMT,
         [Near.Count, Near[0]]));
     end;
   finally
@@ -307,7 +307,7 @@ begin
   if (AProject.Trim <> '') and not TPath.IsPathRooted(AProject.Trim) and
      not AProject.Contains('') and not AProject.Contains('/') then
   begin
-    Result.AddPair('error', Format(SR_TEST_NAME_NOT_PATH_FMT, [AProject.Trim]));
+    Result.AddPair('error', MsgFmt(SR_TEST_NAME_NOT_PATH_FMT, [AProject.Trim]));
     Exit;
   end;
   Denied := PathDenied(AProject); // running what a project built is a write-side act
@@ -322,13 +322,13 @@ begin
   Dpr := TPath.ChangeExtension(Dproj, '.dpr');
   if not TFile.Exists(Dpr) then
   begin
-    Result.AddPair('error', Format(SR_TEST_NOPATH_FMT, [AProject]));
+    Result.AddPair('error', MsgFmt(SR_TEST_NOPATH_FMT, [AProject]));
     Exit;
   end;
   K := KindOf(Dpr, Why);
   if K = tkNone then
   begin
-    Result.AddPair('error', Format(SR_TEST_NOTATEST_FMT,
+    Result.AddPair('error', MsgFmt(SR_TEST_NOTATEST_FMT,
       [TPath.GetFileName(Dpr)]));
     Exit;
   end;
@@ -343,7 +343,7 @@ begin
   Info := ReadDproj(Dproj);
   if (Length(Info.Configs) > 0) and not Info.HasConfig(Cfg) then
   begin
-    Result.AddPair('error', Format(SR_TEST_CONFIG_FMT,
+    Result.AddPair('error', MsgFmt(SR_TEST_CONFIG_FMT,
       [Cfg, string.Join(', ', Info.Configs)]));
     Exit;
   end;
@@ -356,7 +356,7 @@ begin
   begin
     // platform=Marte used to run Win64 without a word, while config=Turbo and
     // platform=Android64 were both refused properly (measured 2026-08-25).
-    Result.AddPair('error', Format(SR_TEST_PLATFORM_UNKNOWN_FMT,
+    Result.AddPair('error', MsgFmt(SR_TEST_PLATFORM_UNKNOWN_FMT,
       [APlatform.Trim]));
     Exit;
   end;
@@ -364,7 +364,7 @@ begin
     Plat := 'Win64';
   if not IsLocalPlatform(Plat) then
   begin
-    Result.AddPair('error', Format(SR_TEST_PLATFORM_FMT, [Plat]));
+    Result.AddPair('error', MsgFmt(SR_TEST_PLATFORM_FMT, [Plat]));
     Exit;
   end;
   Result.AddPair('platform', Plat);
@@ -383,7 +383,7 @@ begin
       begin
         Result.AddPair('result', 'build-failed');
         Result.AddPair('build', TJSONObject(Build.Clone));
-        Result.AddPair('note', SN_TEST_BUILD_FAILED);
+        Result.AddPair('note', MsgText(SN_TEST_BUILD_FAILED));
         Exit;
       end;
       if Build.GetValue('output') <> nil then
@@ -396,8 +396,8 @@ begin
     Exe := ResolveBuildOutput(Dproj, Plat, Cfg);
   if (Exe = '') or not TFile.Exists(Exe) then
   begin
-    Result.AddPair('error', IfThen(ANoBuild, SR_TEST_NOBINARY_NOBUILD,
-      SR_TEST_NOBINARY));
+    Result.AddPair('error', IfThen(ANoBuild, MsgText(SR_TEST_NOBINARY_NOBUILD),
+      MsgText(SR_TEST_NOBINARY)));
     Exit;
   end;
   Result.AddPair('binary', Exe);
@@ -407,12 +407,12 @@ begin
     // if they were today's: 200000 passing tests out of a binary whose source
     // no longer compiled (measured 2026-08-25). Say how old it is.
     Result.AddPair('builtAt', DateTimeToStr(TFile.GetLastWriteTime(Exe)));
-    Result.AddPair('noBuildNote', SN_TEST_NOBUILD_NOTE);
+    Result.AddPair('noBuildNote', MsgText(SN_TEST_NOBUILD_NOTE));
     // We hold both dates: comparing them is free, and "the source is newer
     // than the binary" is the whole reason nobuild is dangerous.
     try
       if TFile.GetLastWriteTime(Dpr) > TFile.GetLastWriteTime(Exe) then
-        Result.AddPair('staleBinary', Format(SN_TEST_STALE_FMT,
+        Result.AddPair('staleBinary', MsgFmt(SN_TEST_STALE_FMT,
           [TPath.GetFileName(Dpr)]));
     except
     end;
@@ -442,7 +442,7 @@ begin
     Result.AddPair('result', 'timeout');
     Result.AddPair('timedOut', TJSONBool.Create(True));
     Result.AddPair('timeoutMs', TJSONNumber.Create(ATimeoutMs));
-    Result.AddPair('timeoutNote', SN_TEST_TIMEOUT_NOTE);
+    Result.AddPair('timeoutNote', MsgText(SN_TEST_TIMEOUT_NOTE));
   end
   else if (Result.GetValue('total') <> nil) and
           (Result.GetValue('total').GetValue<Integer> = 0) then
@@ -460,13 +460,13 @@ begin
     if ExitCode <> 0 then
     begin
       Result.AddPair('result', 'fail');
-      Result.AddPair('noTestsNote', Format(SN_TEST_NO_COUNTS_FAILED_FMT,
+      Result.AddPair('noTestsNote', MsgFmt(SN_TEST_NO_COUNTS_FAILED_FMT,
         [ExitCode]));
     end
     else
     begin
       Result.AddPair('result', 'no-tests');
-      Result.AddPair('noTestsNote', SN_TEST_NO_COUNTS);
+      Result.AddPair('noTestsNote', MsgText(SN_TEST_NO_COUNTS));
     end;
   end;
   Tail := Output.Replace(#13#10, #10).Split([#10]);
@@ -484,7 +484,7 @@ begin
   end;
   if Length(Tail) > 40 then
     Result.AddPair('outputTruncated', TJSONBool.Create(True));
-  Result.AddPair('note', SN_TEST_RUN_NOTE);
+  Result.AddPair('note', MsgText(SN_TEST_RUN_NOTE));
 end;
 
 end.

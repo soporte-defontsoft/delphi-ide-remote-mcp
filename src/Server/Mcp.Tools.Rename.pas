@@ -71,11 +71,11 @@ begin
   if Mode = '' then
     Mode := 'preview';
   if (Mode <> 'preview') and (Mode <> 'apply') then
-    Exit(SR_RENAME_MODE);
+    Exit(MsgText(SR_RENAME_MODE));
   if Params.Path.Trim = '' then
-    Exit(SR_RENAME_NEED_PATH);
+    Exit(MsgText(SR_RENAME_NEED_PATH));
   if Params.NewName.Trim = '' then
-    Exit(SR_RENAME_NEED_NEWNAME);
+    Exit(MsgText(SR_RENAME_NEED_NEWNAME));
   // preview solo lee; apply escribe, asi que pasa por la puerta de escritura
   // (jaula + credencial de solo lectura) ANTES de calcular nada. Cada
   // fichero que apply toque vuelve a pasar por ella al apilarse.

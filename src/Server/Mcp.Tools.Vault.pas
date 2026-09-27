@@ -245,10 +245,10 @@ begin
   while Rel.StartsWith('\') do
     Rel := Rel.Substring(1);
   if Rel.Contains(':') then
-    Exit(SR_VAULT_JAIL);
+    Exit(MsgText(SR_VAULT_JAIL));
   for var Seg in Rel.Split(['\']) do
     if Seg.Trim = '..' then
-      Exit(SR_VAULT_JAIL);
+      Exit(MsgText(SR_VAULT_JAIL));
   // The Windows name rule lives in Lsp.Guard and is shared with the workspace
   // jail: a segment ending in a dot or a space normalizes to a DIFFERENT file
   // when opened. One rule, one place - not re-derived per toolset.
@@ -265,17 +265,17 @@ begin
   try
     Full := TPath.GetFullPath(TPath.Combine(Root, Rel));
   except
-    Exit(SR_VAULT_JAIL);
+    Exit(MsgText(SR_VAULT_JAIL));
   end;
   // Belt and braces: whatever the input did, the result must live in the vault.
   if not StartsText(IncludeTrailingPathDelimiter(Root), Full) then
-    Exit(SR_VAULT_JAIL);
+    Exit(MsgText(SR_VAULT_JAIL));
   // ...y por la ruta REAL: un enlace dentro del vault no saca la nota fuera.
   // Nada fuera de su sitio se escribe, por ningun camino (norma de David,
   // 25-sep-2026; el vault no tiene enlaces propios: 'Obsidian no toca el vault').
   if not StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(Root))),
        IncludeTrailingPathDelimiter(RealPath(Full))) then
-    Exit(SR_VAULT_JAIL);
+    Exit(MsgText(SR_VAULT_JAIL));
   AFull := Full;
   Result := '';
 end;
@@ -365,7 +365,7 @@ begin
     // deleting knowledge is not on offer here (field round 9). Uniform for both
     // verbs: append only ever grows, so this never fires for it.
     if NewText.Trim = '' then
-      Exit(SR_VAULT_WOULD_EMPTY);
+      Exit(MsgText(SR_VAULT_WOULD_EMPTY));
     ABackup := VaultBackup(AFull); // rule 11, inside the lock: no same-second race
     VaultSave(AFull, NewText);
     Result := '';
@@ -455,7 +455,7 @@ var
   F: string;
 begin
   if not VaultConfigured then
-    Exit(SR_VAULT_UNSET);
+    Exit(MsgText(SR_VAULT_UNSET));
   Pat := Params.Pattern.Trim;
   if Pat = '' then
     Exit('error: falta "pattern"');
@@ -463,7 +463,7 @@ begin
   // `target=contents` (plural) answered with a list of note NAMES and the
   // caller concluded the vault had nothing inside (field round 8).
   if not MatchText(Params.Target.Trim, ['', 'files', 'content']) then
-    Exit(Format(SR_VAULT_TARGET_FMT, [Params.Target.Trim]));
+    Exit(MsgFmt(SR_VAULT_TARGET_FMT, [Params.Target.Trim]));
   ByContent := SameText(Params.Target.Trim, 'content');
   Max := Params.MaxResults;
   if Max <= 0 then
@@ -564,7 +564,7 @@ var
   Total, LastLine, First: Integer;
 begin
   if not VaultConfigured then
-    Exit(SR_VAULT_UNSET);
+    Exit(MsgText(SR_VAULT_UNSET));
 
   // Bootstrap: no path = the vault's own rules + its index, in one call. The
   // names of these two files are a vault convention, not something a remote
@@ -575,7 +575,7 @@ begin
     // be edited by anchor - and reading it whole is what the same vault gives
     // you locally. If the two files do not fit in one result, the split
     // happens between them (the second is fetched by name), never mid-file.
-    Result := SN_VAULT_BOOTSTRAP + VaultBootstrapText(MAX_READ_CHARS);
+    Result := MsgText(SN_VAULT_BOOTSTRAP) + VaultBootstrapText(MAX_READ_CHARS);
     Exit;
   end;
 
@@ -600,16 +600,16 @@ begin
     First := 1;
   Result := Numbered(Text, Params.Offset, Params.Limit, Total, LastLine);
   if (First > 1) and (First > Total) then
-    Exit(Format(SR_VAULT_PAST_END_FMT, [First, Rel, Total]));
+    Exit(MsgFmt(SR_VAULT_PAST_END_FMT, [First, Rel, Total]));
   Result := Format('# %s (%d lineas)'#10#10, [Rel, Total]) + Result;
   // The footer used to say "lineas 1..N" whatever the offset was, so a reader
   // asking for 20..21 was told it had seen 1..21 and stopped asking for the
   // rest. It reports what it actually showed.
   if LastLine < Total then
-    Result := Result + #10 + Format(SR_VAULT_MORE_FMT,
+    Result := Result + #10 + MsgFmt(SR_VAULT_MORE_FMT,
       [First, LastLine, Total, LastLine + 1])
   else if First > 1 then
-    Result := Result + #10 + Format(SR_VAULT_SHOWN_FMT, [First, LastLine, Total]);
+    Result := Result + #10 + MsgFmt(SR_VAULT_SHOWN_FMT, [First, LastLine, Total]);
 end;
 
 { ------------------------------------------------------------ vault_append - }
@@ -630,14 +630,14 @@ begin
   // ReadOnly que no existia (medido el 2026-09-20 desde un workspace con
   // token de ESCRITURA y sin VaultPath).
   if not VaultConfigured then
-    Exit(SR_VAULT_UNSET);
+    Exit(MsgText(SR_VAULT_UNSET));
   if not VaultWritable then
-    Exit(SR_VAULT_READONLY);
+    Exit(MsgText(SR_VAULT_READONLY));
   Result := VaultResolve(Params.Path, Full);
   if Result <> '' then
     Exit;
   if VaultGovernance(Full) then
-    Exit(SR_VAULT_GOVERNANCE);
+    Exit(MsgText(SR_VAULT_GOVERNANCE));
   if not TFile.Exists(Full) then
     Exit(Format('error: la nota "%s" no existe. vault_append solo anade a ' +
       'notas existentes; para una nota nueva usa vault_create.',
@@ -700,14 +700,14 @@ var
   Full, Dir: string;
 begin
   if not VaultConfigured then
-    Exit(SR_VAULT_UNSET);
+    Exit(MsgText(SR_VAULT_UNSET));
   if not VaultWritable then
-    Exit(SR_VAULT_READONLY);
+    Exit(MsgText(SR_VAULT_READONLY));
   Result := VaultResolve(Params.Path, Full);
   if Result <> '' then
     Exit;
   if VaultGovernance(Full) then
-    Exit(SR_VAULT_GOVERNANCE);
+    Exit(MsgText(SR_VAULT_GOVERNANCE));
   if Params.Content.Trim = '' then
     Exit('error: falta "content" (la nota nueva no puede estar vacia)');
 
@@ -746,14 +746,14 @@ var
   Full, Backup: string;
 begin
   if not VaultConfigured then
-    Exit(SR_VAULT_UNSET);
+    Exit(MsgText(SR_VAULT_UNSET));
   if not VaultWritable then
-    Exit(SR_VAULT_READONLY);
+    Exit(MsgText(SR_VAULT_READONLY));
   Result := VaultResolve(Params.Path, Full);
   if Result <> '' then
     Exit;
   if VaultGovernance(Full) then
-    Exit(SR_VAULT_GOVERNANCE);
+    Exit(MsgText(SR_VAULT_GOVERNANCE));
   if not TFile.Exists(Full) then
     Exit(Format('error: la nota "%s" no existe.', [Params.Path.Trim]));
   if Params.Old_Text = '' then

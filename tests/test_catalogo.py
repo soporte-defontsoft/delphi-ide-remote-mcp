@@ -118,12 +118,15 @@ for f in glob.glob(os.path.join(mc.REPO, 'src', 'Server', '*.pas')) + \
         glob.glob(os.path.join(mc.REPO, 'vendor', 'src', '**', '*.pas'), recursive=True):
     if '__' in f or f.endswith('Lsp.Texts.pas'):
         continue
-    for l in open(f, encoding='utf-8-sig', errors='replace').read().splitlines():
+    # sin comentarios de ningun tipo: una constante citada en uno no es un uso
+    fuente = re.sub(r'\{[^}]*\}|\(\*.*?\*\)', '', open(f, encoding='utf-8-sig', errors='replace').read(),
+                    flags=re.S)
+    for l in fuente.splitlines():
         if l.strip().startswith('//'):
             continue
         for m in re.finditer(r'(\w+)?\(?\s*\b(S[RNK]_[A-Z0-9_]+)\b', l):
             if m.group(2) in NOMBRES and not re.search(
-                    r'\b(Msg|MsgFmt|HasMsg|MsgTag)\(\s*(\w+,\s*)?%s\b' % m.group(2), l):
+                    r'\b(MsgText|MsgFmt|HasMsg|MsgTag)\(\s*(\w+,\s*)?%s\b' % m.group(2), l):
                 directas += 1
-print('  info: usos de una constante del catalogo sin el helper Msg/MsgFmt: %d' % directas)
+print('  info: usos de una constante del catalogo sin el helper MsgText/MsgFmt: %d' % directas)
 fin('catalogo')

@@ -171,7 +171,7 @@ begin
   // decian cosas distintas de la misma regla, y la de aqui ni siquiera
   // mencionaba que en "edits" el ancla SI puede ser un bloque.
   if A.OldLine.Contains(#10) or A.OldLine.Contains(#13) then
-    Exit(SR_PATCH_ANCHOR_MULTILINE);
+    Exit(MsgText(SR_PATCH_ANCHOR_MULTILINE));
 
   Text := PatchLoadText(A.Path, EncNm);
   Eol := DominantEol(Text);
@@ -282,7 +282,7 @@ begin
   if Cuantas > 1 then
     Exit(Format('%s  encoding=%s  (backup en %s\)'#10 +
       'Verificacion (releido de disco):'#10'%s',
-      [Format(IfThen(A.DeleteLine, SN_RANGE_DELETED_FMT, SN_RANGE_REPLACED_FMT),
+      [Format(IfThen(A.DeleteLine, MsgText(SN_RANGE_DELETED_FMT), MsgText(SN_RANGE_REPLACED_FMT)),
          [Cuantas, Target + 1, Target + Cuantas, TPath.GetFileName(A.Path)]),
        EncNm, '__delphi-patch',
        ReadNumbered(A.Path, Target, Target + Length(NewLines) + 1)]));
@@ -314,7 +314,7 @@ begin
     // y un parametro que se traga en silencio es como se cree haber borrado
     // algo que sigue ahi.
     if (A.ToLine > 0) and A.CreateFile_ then
-      Exit(Format(SR_RANGE_WRONG_MODE_FMT, ['create']));
+      Exit(MsgFmt(SR_RANGE_WRONG_MODE_FMT, ['create']));
     // MODO FRAGMENTO: el mismo resolvedor que delphi_edit, y despues el
     // motor de siempre con la linea COMPLETA (ver Lsp.Patch.FragmentoALinea).
     if A.Fragment <> '' then

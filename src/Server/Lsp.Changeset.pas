@@ -407,16 +407,16 @@ begin
       case Op.Kind of
         opCreate:
           if WillExist(Sub, Op.Path) then
-            Exit(Format(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
+            Exit(MsgFmt(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
         opEdit, opDeleteLine, opDelete:
           if not WillExist(Sub, Op.Path) then
-            Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+            Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
         opMove:
           begin
             if not WillExist(Sub, Op.Path) then
-              Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+              Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
             if WillExist(Sub, Op.Dest) then
-              Exit(Format(SR_CHANGESET_VIRT_DEST_FMT, [Op.Dest]));
+              Exit(MsgFmt(SR_CHANGESET_VIRT_DEST_FMT, [Op.Dest]));
           end;
       end;
       Sub.Ops.Add(Op);
@@ -494,8 +494,8 @@ begin
     begin
       Id := ChangesetBegin;
       if Id = '' then
-        Exit(SR_CHANGESET_TOO_MANY);
-      Exit(Format(SN_CHANGESET_BEGUN_FMT, [Id]));
+        Exit(MsgText(SR_CHANGESET_TOO_MANY));
+      Exit(MsgFmt(SN_CHANGESET_BEGUN_FMT, [Id]));
     end;
 
     if Cmd = 'status' then
@@ -512,7 +512,7 @@ begin
           Obj.AddPair('ops', TJSONNumber.Create(GSets[Id].Ops.Count));
           Obj.AddPair('previewed', TJSONBool.Create(GSets[Id].Previewed));
         end;
-        Ret.AddPair('note', SN_CHANGESET_STATUS_NOTE);
+        Ret.AddPair('note', MsgText(SN_CHANGESET_STATUS_NOTE));
         Exit(Ret.ToJSON);
       finally
         Ret.Free;
@@ -521,13 +521,13 @@ begin
 
     Id := AId.Trim;
     if (Id = '') or not GSets.TryGetValue(Id, C) then
-      Exit(SR_CHANGESET_UNKNOWN);
+      Exit(MsgText(SR_CHANGESET_UNKNOWN));
     C.LastUsed := Now;
 
     if Cmd = 'rollback' then
     begin
       GSets.Remove(Id);
-      Exit(SN_CHANGESET_DISCARDED);
+      Exit(MsgText(SN_CHANGESET_DISCARDED));
     end;
 
     if Cmd = 'stage' then
@@ -541,9 +541,9 @@ begin
       else if (AKind = 'delete-line') or (AKind = 'deleteline') then Op.Kind := opDeleteLine
       else if AKind = 'move' then Op.Kind := opMove
       else
-        Exit(SR_CHANGESET_KIND);
+        Exit(MsgText(SR_CHANGESET_KIND));
       if APath.Trim = '' then
-        Exit(SR_CHANGESET_NEED_PATH);
+        Exit(MsgText(SR_CHANGESET_NEED_PATH));
       // Lo que se escribe o se borra, por la puerta de DESTINO (jaula +
       // carpetas muertas), como delphi_edit y delphi_move; el ORIGEN de un
       // move puede salir de una de ellas (restaurar), como en delphi_move.
@@ -561,17 +561,17 @@ begin
       // will reject is a preview that lies.
       if MatchText(TPath.GetExtension(Op.Path), ['.dproj', '.groupproj', '.dpk']) and
          (Op.Kind in [opEdit, opDeleteLine]) then
-        Exit(Format(SR_CHANGESET_PROJECT_FILE_FMT, [TPath.GetFileName(Op.Path)]));
+        Exit(MsgFmt(SR_CHANGESET_PROJECT_FILE_FMT, [TPath.GetFileName(Op.Path)]));
       case Op.Kind of
         opEdit:
           begin
             if (AOldLine = '') and (AFragment = '') then
-              Exit(SR_CHANGESET_EDIT_NEEDS);
+              Exit(MsgText(SR_CHANGESET_EDIT_NEEDS));
             Op.OldLine := AOldLine;
             Op.NewText := ANewText;
             Op.AtLine := AAtLine;
             if not WillExist(C, Op.Path) then
-              Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+              Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
             // MODO FRAGMENTO: se resuelve AHORA, al apuntar, en un ancla de
             // linea completa, y la operacion queda como cualquier otra - el
             // preview y el commit no se enteran. Si una operacion anterior
@@ -601,39 +601,39 @@ begin
             if (Op.Content <> '') and not Op.Content.EndsWith(#13#10) then
               Op.Content := Op.Content + #13#10;
             if WillExist(C, Op.Path) then
-              Exit(Format(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
+              Exit(MsgFmt(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
           end;
         opDelete:
           if not WillExist(C, Op.Path) then
-            Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+            Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
         opDeleteLine:
           begin
             // a BLANK line has no usable anchor, so atline decides; old is
             // optional and, when given, must match that line (field
             // 2026-08-24: no way to remove the blank lines a cleanup leaves)
             if not WillExist(C, Op.Path) then
-              Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+              Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
             if AAtLine <= 0 then
-              Exit(SR_CHANGESET_DELLINE_NEEDS);
+              Exit(MsgText(SR_CHANGESET_DELLINE_NEEDS));
             Op.AtLine := AAtLine;
             Op.OldLine := AOldLine;
           end;
         opMove:
           begin
             if ADest.Trim = '' then
-              Exit(SR_CHANGESET_NEED_DEST);
+              Exit(MsgText(SR_CHANGESET_NEED_DEST));
             Denied := WriteTargetDenied(ADest);
             if Denied <> '' then
               Exit(Denied);
             Op.Dest := TPath.GetFullPath(ADest);
             if not WillExist(C, Op.Path) then
-              Exit(Format(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+              Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
             if WillExist(C, Op.Dest) then
-              Exit(Format(SR_CHANGESET_VIRT_DEST_FMT, [Op.Dest]));
+              Exit(MsgFmt(SR_CHANGESET_VIRT_DEST_FMT, [Op.Dest]));
           end;
       end;
       C.Ops.Add(Op);
-      Exit(Format(SN_CHANGESET_STAGED_FMT,
+      Exit(MsgFmt(SN_CHANGESET_STAGED_FMT,
         [KindName(Op.Kind), Op.Path, C.Ops.Count]));
     end;
 
@@ -643,23 +643,23 @@ begin
     if (Cmd = 'unstage') or (Cmd = 'undo') then
     begin
       if C.Ops.Count = 0 then
-        Exit(SR_CHANGESET_EMPTY);
+        Exit(MsgText(SR_CHANGESET_EMPTY));
       N := AN;
       if N = 0 then
         N := C.Ops.Count;
       if (N < 1) or (N > C.Ops.Count) then
-        Exit(Format(SR_CHANGESET_UNSTAGE_N_FMT, [N, C.Ops.Count]));
+        Exit(MsgFmt(SR_CHANGESET_UNSTAGE_N_FMT, [N, C.Ops.Count]));
       Op := C.Ops[N - 1];
       C.Ops.Delete(N - 1);
       C.Previewed := False;
-      Exit(Format(SN_CHANGESET_UNSTAGED_FMT,
+      Exit(MsgFmt(SN_CHANGESET_UNSTAGED_FMT,
         [N, KindName(Op.Kind), Op.Path, C.Ops.Count]));
     end;
 
     if Cmd = 'preview' then
     begin
       if C.Ops.Count = 0 then
-        Exit(SR_CHANGESET_EMPTY);
+        Exit(MsgText(SR_CHANGESET_EMPTY));
       // The plan can stop being valid AFTER an operation was staged - unstage
       // the delete of X and the create of X behind it is suddenly a create
       // over a file that exists. It failed safe (commit refused, byte-exact
@@ -687,7 +687,7 @@ begin
             // staged over a file an earlier op of this same batch creates:
             // there is nothing to anchor against until commit runs
             Obj.AddPair('anchor', 'pendiente');
-            Obj.AddPair('note', SN_CHANGESET_PREVIEW_VIRTUAL);
+            Obj.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_VIRTUAL));
             Continue;
           end;
           if Op.Kind = opEdit then
@@ -719,9 +719,9 @@ begin
         Ret.AddPair('unresolved', TJSONNumber.Create(N));
         C.Previewed := N = 0;
         if C.Previewed then
-          Ret.AddPair('note', SN_CHANGESET_PREVIEW_OK)
+          Ret.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_OK))
         else
-          Ret.AddPair('note', SN_CHANGESET_PREVIEW_BAD);
+          Ret.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_BAD));
         Exit(Ret.ToJSON);
       finally
         Ret.Free;
@@ -731,9 +731,9 @@ begin
     if Cmd = 'commit' then
     begin
       if C.Ops.Count = 0 then
-        Exit(SR_CHANGESET_EMPTY);
+        Exit(MsgText(SR_CHANGESET_EMPTY));
       if not C.Previewed then
-        Exit(SR_CHANGESET_NOT_PREVIEWED);
+        Exit(MsgText(SR_CHANGESET_NOT_PREVIEWED));
       // 1. nothing may have moved since the preview
       // Deltas2 is created further down, but the finally below frees it, and
       // the FILE_CHANGED exit above jumps straight there: an uninitialised
@@ -749,7 +749,7 @@ begin
           if FingerprintBytes(P) <> C.Fingerprints[P] then
             Changed.Add(P);
         if Changed.Count > 0 then
-          Exit(Format(SR_CHANGESET_FILE_CHANGED_FMT,
+          Exit(MsgFmt(SR_CHANGESET_FILE_CHANGED_FMT,
             [string.Join('; ', Changed.ToArray)]));
         // 2. byte snapshots of everything BEFORE the first change
         for P in TouchedPaths(C) do
@@ -852,10 +852,10 @@ begin
             else if TFile.Exists(Snap.Path) then
               TFile.Delete(Snap.Path);
           GSets.Remove(Id);
-          Exit(Format(SR_CHANGESET_ROLLED_BACK_FMT, [N, OpCount, Err]));
+          Exit(MsgFmt(SR_CHANGESET_ROLLED_BACK_FMT, [N, OpCount, Err]));
         end;
         GSets.Remove(Id);
-        Exit(Format(SN_CHANGESET_COMMITTED_FMT,
+        Exit(MsgFmt(SN_CHANGESET_COMMITTED_FMT,
           [OpCount, FileCount, AuditText]));
       finally
         Snaps.Free;
@@ -864,7 +864,7 @@ begin
       end;
     end;
 
-    Result := SR_CHANGESET_CMD;
+    Result := MsgText(SR_CHANGESET_CMD);
   finally
     GLock.Leave;
   end;

@@ -93,7 +93,7 @@ var
 begin
   Plat := CanonicalPlatform(ARawPlatform);
   if Plat = '' then
-    Exit(Format(SR_COMPONENTS_PLATFORM_FMT, [ARawPlatform]));
+    Exit(MsgFmt(SR_COMPONENTS_PLATFORM_FMT, [ARawPlatform]));
   Mine := IdePlatformLibraryPaths(AInfo.Version, Plat);
   UserDocs := ExcludeTrailingPathDelimiter(BdsUserDir(AInfo));
   CommonDocs := ExcludeTrailingPathDelimiter(BdsCommonDir(AInfo));
@@ -101,7 +101,7 @@ begin
   MineRoots := TList<string>.Create;
   Missing := TDictionary<string, string>.Create;
   try
-    Sb.AppendLine(Format(SN_COMPONENTS_PLATFORM_HEAD_FMT, [Plat, AInfo.Version, Length(Mine)]));
+    Sb.AppendLine(MsgFmt(SN_COMPONENTS_PLATFORM_HEAD_FMT, [Plat, AInfo.Version, Length(Mine)]));
     for P in Mine do
     begin
       Sb.Append('  ').Append(P);
@@ -142,14 +142,14 @@ begin
     N := Missing.Count;
     Sb.AppendLine;
     if N = 0 then
-      Sb.AppendLine(Format(SN_COMPONENTS_PLATFORM_COMPLETE_FMT, [Plat]))
+      Sb.AppendLine(MsgFmt(SN_COMPONENTS_PLATFORM_COMPLETE_FMT, [Plat]))
     else
     begin
-      Sb.AppendLine(Format(SN_COMPONENTS_PLATFORM_MISSING_FMT, [N, Plat]));
+      Sb.AppendLine(MsgFmt(SN_COMPONENTS_PLATFORM_MISSING_FMT, [N, Plat]));
       for Pair in Missing do
         Sb.AppendLine(Format('  %s   (registrado en: %s)', [Pair.Key, Pair.Value]));
       Sb.AppendLine;
-      Sb.AppendLine(SN_COMPONENTS_PLATFORM_HINT);
+      Sb.AppendLine(MsgText(SN_COMPONENTS_PLATFORM_HINT));
     end;
     Result := Sb.ToString.TrimRight;
   finally
@@ -179,7 +179,7 @@ var
 begin
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(SR_COMPONENTS_MISSING);
+    Exit(MsgText(SR_COMPONENTS_MISSING));
   if Params.Platform.Trim <> '' then
   begin
     // platform= switches to a completely different view (the library paths of
@@ -188,7 +188,7 @@ begin
     // half the question and never said so (measured 2026-08-25).
     Result := PlatformPathsView(Info, Params.Platform.Trim);
     if Params.Filter.Trim <> '' then
-      Result := Result + #10#10 + Format(SN_COMPONENTS_FILTER_IGNORED_FMT,
+      Result := Result + #10#10 + MsgFmt(SN_COMPONENTS_FILTER_IGNORED_FMT,
         [Params.Filter.Trim]);
     Exit;
   end;
@@ -214,13 +214,13 @@ begin
       Sb.AppendLine;
     end;
     if Shown = 0 then
-      Exit(Format(SN_COMPONENTS_NONE_FMT, [Filter]));
+      Exit(MsgFmt(SN_COMPONENTS_NONE_FMT, [Filter]));
     Result := Format('%d design packages en RAD Studio %s%s%s:',
       [Shown, Info.Version,
        IfThen(Filter <> '', ' con "' + Filter + '"', ''),
        IfThen(Off > 0, Format(' (%d deshabilitados)', [Off]), '')]) +
       sLineBreak + sLineBreak + Sb.ToString.TrimRight +
-      sLineBreak + sLineBreak + SN_COMPONENTS_NOTE;
+      sLineBreak + sLineBreak + MsgText(SN_COMPONENTS_NOTE);
   finally
     Sb.Free;
   end;

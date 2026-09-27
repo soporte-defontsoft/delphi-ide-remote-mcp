@@ -103,7 +103,7 @@ begin
       Sb.AppendLine;
     end;
     if Pending <> '' then
-      Sb.AppendLine(Format(SN_VAULT_BOOTSTRAP_NEXT_FMT, [Pending, Pending]));
+      Sb.AppendLine(MsgFmt(SN_VAULT_BOOTSTRAP_NEXT_FMT, [Pending, Pending]));
     Result := Sb.ToString;
   finally
     Sb.Free;
@@ -136,7 +136,7 @@ begin
     end;
   end;
   // Fallback: the generic protocol, true of any vault.
-  Result := SN_VAULT_INSTRUCTIONS;
+  Result := MsgText(SN_VAULT_INSTRUCTIONS);
 end;
 
 { TMCPPromptsManager }
@@ -192,7 +192,7 @@ begin
       Content := TJSONObject.Create;
       Msg.AddPair('content', Content);
       Content.AddPair('type', 'text');
-      Content.AddPair('text', SN_VAULT_PROMPT_HEADER + sLineBreak + sLineBreak +
+      Content.AddPair('text', MsgText(SN_VAULT_PROMPT_HEADER) + sLineBreak + sLineBreak +
         VaultBootstrapText(BOOTSTRAP_BUDGET));
     end;
     Result := TValue.From<TJSONObject>(Res);
