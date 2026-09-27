@@ -106,9 +106,7 @@ begin
   Ext := LowerCase(TPath.GetExtension(APath));
   for E in DELPHI_EXTS do
     if E = Ext then
-      Exit(Format('RECHAZADO: "%s" es un fichero Delphi. Para fuentes y ' +
-        'designers usa delphi_edit; los ficheros de proyecto (.dproj) los ' +
-        'mantiene el IDE / delphi_create.', [Ext]));
+      Exit(MsgFmt(SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT, [Ext]));
 end;
 
 function DoCreate(const A: TTextEditArgs): string;
@@ -214,7 +212,7 @@ begin
       S := '';
       for I in Matches do
         S := S + IntToStr(I + 1) + ' ';
-      Exit(Format('RECHAZADO: atline=%d no es ninguna de las ocurrencias (%s).',
+      Exit(MsgFmt(SR_TEXT_ATLINE_NINGUNA_OCURRENCIAS_FMT,
         [A.AtLine, S.Trim]));
     end;
   end;
@@ -339,11 +337,9 @@ begin
     if A.CreateFile_ then
       Exit(DoCreate(A));
     if A.DeleteLine and not A.HasOld then
-      Exit('RECHAZADO: delete=true necesita "old": la linea que se va.');
+      Exit(MsgText(SR_TEXT_DELETE_TRUE_NECESITA_OLD));
     if not A.HasOld then
-      Exit('RECHAZADO: falta el ancla (old). Esta tool no reescribe ficheros ' +
-        'enteros: una linea existente + su sustituto, o create=true para ' +
-        'ficheros nuevos.');
+      Exit(MsgText(SR_TEXT_FALTA_ANCLA_OLD_ESTA));
     Result := DoEditLine(A);
   except
     on E: Exception do

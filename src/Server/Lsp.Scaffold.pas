@@ -724,7 +724,7 @@ begin
   Kind := AKind.Trim.ToLower;
   if (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'frame-vcl') and
      (Kind <> 'frame-fmx') and (Kind <> 'datamodule') then
-    Exit('RECHAZADO: kind debe ser form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule.');
+    Exit(MsgText(SR_CREATE_KIND_DEBE_SER_FORM));
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
     Exit;

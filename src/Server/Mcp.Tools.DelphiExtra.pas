@@ -149,7 +149,7 @@ begin
   // it ran out of budget (measured 2026-08-25). It never was a Delphi source:
   // say so once.
   if not TFile.Exists(Params.Path) then
-    Exit(Format('RECHAZADO: no existe %s.', [Params.Path]));
+    Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [Params.Path]));
   if not MatchText(TPath.GetExtension(Params.Path),
        ['.pas', '.dpr', '.dpk', '.inc']) then
     Exit(MsgFmt(SR_DIAG_NOT_SOURCE_FMT,

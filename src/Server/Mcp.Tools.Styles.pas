@@ -248,7 +248,7 @@ begin
   try
     Src := Doc.FindStyle(AStyle);
     if Src = nil then
-      Exit(Format('RECHAZADO: no hay ningun estilo ''%s'' en %s (command=view los lista).',
+      Exit(MsgFmt(SR_STYLE_HAY_NINGUN_ESTILO_COMMAND_FMT,
         [AStyle, TPath.GetFileName(Doc.Path)]));
     if Doc.FindStyle(ANew.Trim) <> nil then
       Exit(MsgFmt(SR_STYLES_NAME_TAKEN_FMT, [ANew]));
@@ -278,7 +278,7 @@ begin
   try
     Src := Doc.FindStyle(AStyle);
     if Src = nil then
-      Exit(Format('RECHAZADO: no hay ningun estilo ''%s'' en %s (command=view los lista).',
+      Exit(MsgFmt(SR_STYLE_HAY_NINGUN_ESTILO_COMMAND_FMT,
         [AStyle, TPath.GetFileName(Doc.Path)]));
     First := Src.StartLine;
     Last := Src.EndLine;

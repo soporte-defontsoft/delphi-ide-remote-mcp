@@ -169,13 +169,13 @@ begin
 
   try
     FServer.Start;
-    TLogger.Info(Format('MCP server listening on %s (%s v%s)',
+    TLogger.Info(MsgFmt(SL_SYS_MCP_SERVER_LISTENING_FMT,
       [FUrl, SERVER_NAME, SERVER_VERSION]));
     // The operational facts (jail, vault, credentials, the log) come from the
     // SAME place the terminal and the service read them - one truth, and one
     // way to log it.
     FHost.LogStartupNotes;
-    TLogger.Info('Tray icon = server running. Double-click it for this log.');
+    TLogger.Info(MsgText(SL_SYS_TRAY_ICON_SERVER_RUNNING));
   except
     on E: Exception do
     begin

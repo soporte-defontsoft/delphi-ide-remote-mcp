@@ -1227,7 +1227,7 @@ begin
     var ResProp := RedefinedIdeImportProperty(TPath.GetFullPath(ADprojPath));
     if ResProp <> '' then
     begin
-      TLogger.Warning(Format('delphi_build: REFUSED "%s" - redefines reserved IDE property %s',
+      TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_REDEFINES_FMT,
         [TPath.GetFullPath(ADprojPath), ResProp]));
       raise Exception.Create(MsgFmt(SR_BUILD_RESERVED_PROP_FMT, [ResProp]));
     end;

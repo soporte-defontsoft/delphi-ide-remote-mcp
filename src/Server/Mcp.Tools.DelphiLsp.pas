@@ -868,7 +868,7 @@ begin
     Exit;
   var Mode := Params.Mode.Trim.ToLower;
   if (Mode <> '') and (Mode <> 'summary') and (Mode <> 'full') then
-    Exit('error: mode debe ser "summary", "full" o vacio (automatico).');
+    Exit(MsgText(SR_LSP_MODE_DEBE_SER_SUMMARY));
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
   var Resp := Client.DocumentSymbols(TLspClient.PathToUri(Params.Path));
   var Note := NoSettingsNote(Settings);
@@ -943,7 +943,7 @@ begin
   Kind := Params.Kind.Trim.ToLower;
   if (Kind <> '') and (Kind <> 'definition') and (Kind <> 'declaration') and
      (Kind <> 'implementation') then
-    Exit('RECHAZADO: kind debe ser definition | declaration | implementation.');
+    Exit(MsgText(SR_LSP_KIND_DEBE_SER_DEFINITION));
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
   if Kind = 'declaration' then
   begin

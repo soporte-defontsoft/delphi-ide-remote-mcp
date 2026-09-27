@@ -241,7 +241,7 @@ begin
   // different name to every later check (field round 9, critical).
   Rel := ARel.Trim(['"']).Replace('/', '\');
   if Rel.Trim = '' then
-    Exit('error: falta "path" (ruta relativa dentro del vault)');
+    Exit(MsgText(SR_VAULT_FALTA_PATH_RUTA_RELATIVA));
   while Rel.StartsWith('\') do
     Rel := Rel.Substring(1);
   if Rel.Contains(':') then
@@ -256,11 +256,9 @@ begin
   if Result <> '' then
     Exit;
   if not SameText(TPath.GetExtension(Rel), '.md') then
-    Exit(Format('RECHAZADO: "%s" no es una nota .md. El vault solo sirve ' +
-      'notas Markdown.', [ARel]));
+    Exit(MsgFmt(SR_VAULT_NOTA_MD_VAULT_SOLO_FMT, [ARel]));
   if VaultExcluded(Rel) then
-    Exit(Format('RECHAZADO: "%s" esta en una carpeta excluida (backups, .git, ' +
-      '.obsidian): no es conocimiento del vault.', [ARel]));
+    Exit(MsgFmt(SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT, [ARel]));
   Root := VaultPath;
   try
     Full := TPath.GetFullPath(TPath.Combine(Root, Rel));
@@ -535,8 +533,7 @@ begin
       end;
     end;
     if Hits = 0 then
-      Result := Format('Sin resultados para "%s" (%s). Recuerda: el indice ' +
-        '(vault_read sin path) dice que notas existen y para que sirven.%s',
+      Result := MsgFmt(SN_VAULT_SIN_RESULTADOS_RECUERDA_INDICE_FMT,
         [Pat, IfThen(ByContent, 'contenido', 'nombres'),
          IfThen(ByContent, '', ' Solo se han mirado los NOMBRES de las notas: ' +
            'para buscar dentro del texto repite con target=content.')])
@@ -583,8 +580,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(Full) then
-    Exit(Format('error: la nota "%s" no existe en el vault. Localizala con ' +
-      'vault_search target=files.', [Params.Path.Trim]));
+    Exit(MsgFmt(SR_VAULT_NOTA_EXISTE_VAULT_LOCALIZALA_FMT, [Params.Path.Trim]));
   try
     Text := VaultLoad(Full);
   except
@@ -639,8 +635,7 @@ begin
   if VaultGovernance(Full) then
     Exit(MsgText(SR_VAULT_GOVERNANCE));
   if not TFile.Exists(Full) then
-    Exit(Format('error: la nota "%s" no existe. vault_append solo anade a ' +
-      'notas existentes; para una nota nueva usa vault_create.',
+    Exit(MsgFmt(SR_VAULT_NOTA_EXISTE_VAULT_APPEND_FMT,
       [Params.Path.Trim]));
   Add := Params.Content;
   if Add.Trim = '' then
@@ -661,11 +656,9 @@ begin
       begin
         P := Pos(Anchor, Text);
         if P = 0 then
-          Exit('error: el anchor no aparece en la nota. Lee la nota con ' +
-            'vault_read y copia un fragmento EXACTO de ella.');
+          Exit(MsgText(SR_VAULT_ANCHOR_APARECE_NOTA_LEE));
         if Pos(Anchor, Text, P + Length(Anchor)) > 0 then
-          Exit('error: el anchor aparece VARIAS veces; usa un fragmento mas ' +
-            'largo que sea unico en la nota.');
+          Exit(MsgText(SR_VAULT_ANCHOR_APARECE_VARIAS_VECES));
         Insert(#10 + Add.TrimRight + #10, Text, P + Length(Anchor));
       end
       else
@@ -680,7 +673,7 @@ begin
   if Result <> '' then
     Exit;
   TLogger.Info('vault_append: ' + VaultRelative(Full));
-  Result := Format('ANADIDO a %s (%s). Copia previa en %s.',
+  Result := MsgFmt(SK_VAULT_ANADIDO_COPIA_PREVIA_FMT,
     [VaultRelative(Full),
      IfThen(Anchor.Trim <> '', 'tras el anchor', 'al final'),
      IfThen(Backup = '', '(sin copia)', VaultRelative(Backup))]);
@@ -709,16 +702,14 @@ begin
   if VaultGovernance(Full) then
     Exit(MsgText(SR_VAULT_GOVERNANCE));
   if Params.Content.Trim = '' then
-    Exit('error: falta "content" (la nota nueva no puede estar vacia)');
+    Exit(MsgText(SR_VAULT_FALTA_CONTENT_NOTA_NUEVA));
 
   // The exists-check and the save are one atomic step: two agents racing to
   // create the same note can no longer both pass the check and both "succeed".
   GVaultWrite.Enter;
   try
     if TFile.Exists(Full) then
-      Exit(Format('RECHAZADO: la nota "%s" YA existe. vault_create nunca ' +
-        'sobreescribe: usa vault_append para anadir, o vault_patch para ' +
-        'corregir un fragmento.', [Params.Path.Trim]));
+      Exit(MsgFmt(SR_VAULT_NOTA_EXISTE_VAULT_CREATE_FMT, [Params.Path.Trim]));
     Dir := TPath.GetDirectoryName(Full);
     if (Dir <> '') and not TDirectory.Exists(Dir) then
       CrearCarpeta(Dir);
@@ -727,8 +718,7 @@ begin
     GVaultWrite.Leave;
   end;
   TLogger.Info('vault_create: ' + VaultRelative(Full));
-  Result := Format('CREADA la nota %s. Recuerda enlazarla desde el indice ' +
-    'que corresponda con [[wikilinks]] (vault_append sobre ese indice).',
+  Result := MsgFmt(SK_VAULT_CREADA_NOTA_RECUERDA_ENLAZARLA_FMT,
     [VaultRelative(Full)]);
 end;
 
@@ -755,7 +745,7 @@ begin
   if VaultGovernance(Full) then
     Exit(MsgText(SR_VAULT_GOVERNANCE));
   if not TFile.Exists(Full) then
-    Exit(Format('error: la nota "%s" no existe.', [Params.Path.Trim]));
+    Exit(MsgFmt(SR_VAULT_NOTA_EXISTE_FMT, [Params.Path.Trim]));
   if Params.Old_Text = '' then
     Exit('error: falta "old_text"');
 
@@ -769,11 +759,9 @@ begin
       Result := '';
       P := Pos(Params.Old_Text, ACurrent);
       if P = 0 then
-        Exit('error: "old_text" no aparece en la nota. Lee la nota con vault_read ' +
-          'y copia el fragmento EXACTO (los numeros de linea NO son parte del texto).');
+        Exit(MsgText(SR_VAULT_OLD_TEXT_APARECE_NOTA));
       if Pos(Params.Old_Text, ACurrent, P + Length(Params.Old_Text)) > 0 then
-        Exit('error: "old_text" aparece VARIAS veces en la nota; amplia el ' +
-          'fragmento hasta que sea unico.');
+        Exit(MsgText(SR_VAULT_OLD_TEXT_APARECE_VARIAS));
       ANewText := Copy(ACurrent, 1, P - 1) + Params.New_Text +
         Copy(ACurrent, P + Length(Params.Old_Text), MaxInt);
     end,
@@ -781,7 +769,7 @@ begin
   if Result <> '' then
     Exit;
   TLogger.Info('vault_patch: ' + VaultRelative(Full));
-  Result := Format('MODIFICADA %s (1 sustitucion). Copia previa en %s.',
+  Result := MsgFmt(SN_VAULT_MODIFICADA_SUSTITUCION_COPIA_PREVIA_FMT,
     [VaultRelative(Full), IfThen(Backup = '', '(sin copia)', VaultRelative(Backup))]);
 end;
 

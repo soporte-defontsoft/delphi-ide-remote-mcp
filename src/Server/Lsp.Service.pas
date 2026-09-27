@@ -129,13 +129,13 @@ begin
 
     FHost := TMcpHost.Create;
     FHost.Wire;
-    TLogger.Info(Format('%s v%s starting as a Windows Service',
+    TLogger.Info(MsgFmt(SL_SYS_STARTING_WINDOWS_SERVICE_FMT,
       [SERVER_NAME, SERVER_VERSION]));
     FHost.LogStartupNotes;
 
     FHttp := FHost.CreateHttpServer(0); // port from settings.ini / default
     FHttp.Start;
-    TLogger.Info(Format('Listening on %s:%d%s',
+    TLogger.Info(MsgFmt(SL_SYS_LISTENING_FMT,
       [IfThen(FHttp.BindIP = '', 'all interfaces', FHttp.BindIP),
        FHost.Settings.Port, FHost.Settings.Endpoint]));
     Started := True;

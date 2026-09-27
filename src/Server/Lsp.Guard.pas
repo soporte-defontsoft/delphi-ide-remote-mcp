@@ -2993,15 +2993,12 @@ begin
   if GRootsInvalid then
   begin
     AWarning := True;
-    Result := 'Workspace jail: INVALID roots (fail-closed) - every ' +
-      'disk-touching tool is refused. Revisa DELPHI_MCP_ROOTS (lanzamiento local).';
+    Result := MsgText(SN_GUARD_WORKSPACE_JAIL_INVALID_ROOTS);
   end
   else if Length(Roots) = 0 then
   begin
     AWarning := True;
-    Result := 'Workspace jail: NONE - modo LOCAL de confianza (solo existe ' +
-      'en un proceso stdio lanzado por el operador; todo cliente HTTP entra ' +
-      'por token de workspace o recibe 401).';
+    Result := MsgText(SN_GUARD_WORKSPACE_JAIL_NONE_MODO);
   end
   else
   begin
@@ -3050,8 +3047,7 @@ begin
   if (Length(Rest) >= 2) and (Rest[2] = ':') then
     Rest := Copy(Rest, 3, MaxInt);
   if Rest.Contains(':') then
-    Exit(Format('RECHAZADO: la ruta "%s" contiene ":" fuera de la unidad ' +
-      '(flujo alternativo de datos). Usa un nombre de fichero normal.', [APath]));
+    Exit(MsgFmt(SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT, [APath]));
   // EVERY segment, not just the last: a folder named "notas " normalizes the
   // same way, and checking only the file name left the rest of the path to
   // slip through (field round 9 hit the same class in the vault resolver).
@@ -3065,9 +3061,7 @@ begin
     if (Name = '.') or (Name = '..') then
       Continue;
     if Name.Trim([' ']).TrimRight([' ', '.']) <> Name then
-      Exit(Format('RECHAZADO: el nombre "%s" empieza o termina en punto o ' +
-        'espacio; Windows los recorta al abrir el fichero, asi que el nombre ' +
-        'real seria otro ("%s"). Pide el nombre exacto, sin adornos.',
+      Exit(MsgFmt(SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT,
         [Name, Name.Trim([' ']).TrimRight([' ', '.'])]));
   end;
 end;

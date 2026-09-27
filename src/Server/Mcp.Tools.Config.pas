@@ -402,10 +402,7 @@ begin
       Return.AddPair('sections', MsgText(SN_CONFIG_SECTIONS));
     end;
     if (Sec = 'summary') or (Sec = 'all') or (Sec = 'platforms') then
-      Return.AddPair('note', 'To build: delphi_build {project, platform, ' +
-        'config}. needsSDKForBuild=true: pull the SDK once with delphi_paserver ' +
-        'get-sdk and build locally - no profile involved. needsProfileForDeploy=' +
-        'true: a PAServer profile is needed only for target=Deploy.');
+      Return.AddPair('note', MsgText(SN_CFG_BUILD_DELPHI_BUILD_PROJECT));
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -420,26 +417,23 @@ var
   ClosePos, OpenPos, LineStart: Integer;
 begin
   if ARawPlatform.Trim = '' then
-    Exit('error: add-platform necesita "platform" (Win64, Linux64, OSX64...)');
+    Exit(MsgText(SR_CFG_ADD_PLATFORM_NECESITA_PLATFORM));
   // WHITELIST: a platform name is a fixed, known token. Rejecting anything
   // else makes it impossible to inject XML into the .dproj through this
   // parameter (measured RCE via a crafted <Import> - field round 5, R5-B).
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
-    Exit(Format('RECHAZADO: "%s" no es una plataforma Delphi valida. ' +
-      'Validas: Win32, Win64, Win64x, WinARM64EC, OSX64, OSXARM64, Linux64, ' +
-      'Android, Android64, iOSDevice64, iOSSimARM64.', [ARawPlatform.Trim]));
+    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
   Info := ReadDproj(ADproj);
   if Info.FrameworkType = '' then
-    Exit('error: no puedo leer el framework del .dproj; revisa la ruta.');
+    Exit(MsgText(SR_CFG_PUEDO_LEER_FRAMEWORK_DPROJ));
   if not Info.CanTarget(APlatform, Reason) then
     Exit(Format('RECHAZADO: %s', [Reason]));
   for P in Info.Platforms do
     if SameText(P.Name, APlatform) then
     begin
       if P.Enabled then
-        Exit(Format('La plataforma %s ya esta habilitada en el proyecto. ' +
-          'Compila con delphi_build {platform:"%s"}.', [APlatform, APlatform]));
+        Exit(MsgFmt(SN_CFG_PLATAFORMA_ESTA_HABILITADA_PROYECTO_FMT, [APlatform, APlatform]));
       Break;
     end;
 
@@ -455,9 +449,7 @@ begin
     begin
       Xml := Copy(Xml, 1, ValStart - 1) + 'True' + Copy(Xml, ValEnd, MaxInt);
       PatchSaveText(ADproj, Xml, Enc);
-      Exit(Format('HABILITADA la plataforma %s (estaba declarada, desactivada). ' +
-        'El IDE la enriquecera al abrir el proyecto; MSBuild ya la compila. ' +
-        'Si necesita PAServer, prepara el perfil con delphi_paserver.', [APlatform]));
+      Exit(MsgFmt(SN_CFG_HABILITADA_PLATAFORMA_ESTABA_DECLARAD_FMT, [APlatform]));
     end;
   end;
 
@@ -504,12 +496,12 @@ var
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
-    Exit(Format('RECHAZADO: "%s" no es una plataforma Delphi valida.', [ARawPlatform.Trim]));
+    Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_FMT, [ARawPlatform.Trim]));
   Xml := PatchLoadText(ADproj, Enc);
   var Tag := Format('<Platform value="%s">', [APlatform]);
   var TagPos := Pos(LowerCase(Tag), LowerCase(Xml));
   if TagPos = 0 then
-    Exit(Format('La plataforma %s no esta declarada en el proyecto.', [APlatform]));
+    Exit(MsgFmt(SN_CFG_PLATAFORMA_ESTA_DECLARADA_PROYECTO_FMT, [APlatform]));
   var ValStart := TagPos + Length(Tag);
   var ValEnd := Pos('<', Xml, ValStart);
   if ValEnd = 0 then
@@ -526,8 +518,7 @@ begin
     Exit(MsgFmt(SR_CONFIG_PLAT_LAST_FMT, [APlatform]));
   Xml := Copy(Xml, 1, ValStart - 1) + 'False' + Copy(Xml, ValEnd, MaxInt);
   PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
-  Result := Format('DESHABILITADA la plataforma %s (queda declarada pero ' +
-    'desactivada; add-platform la reactiva). Copia previa en __delphi-patch.', [APlatform]);
+  Result := MsgFmt(SN_CFG_DESHABILITADA_PLATAFORMA_QUEDA_DECLAR_FMT, [APlatform]);
 end;
 
 { ValidOutputFolder (la regla de "carpeta relativa al proyecto, apta para
@@ -627,11 +618,7 @@ begin
   end;
 
   PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
-  Result := Format('Salida de binarios fijada en "%s". Ahora:%s' +
-    '  DCC_ExeOutput = %s (antes: %s)%s' +
-    '  DCC_DcuOutput = %s (antes: %s)%s' +
-    'Copia previa en __delphi-patch. Verifica con delphi_build; el IDE lo ' +
-    'respeta al abrir el proyecto.',
+  Result := MsgFmt(SN_CFG_SALIDA_BINARIOS_FIJADA_AHORA_FMT,
     [Clean, sLineBreak, ExeInner, IfThen(OldExe = '', '(sin definir)', OldExe),
      sLineBreak, DcuInner, IfThen(OldDcu = '', '(sin definir)', OldDcu), sLineBreak]);
 end;
@@ -859,9 +846,7 @@ begin
   begin
     Plat := CanonicalPlatform(ARawPlatform);
     if Plat = '' then
-      Exit(Format('RECHAZADO: "%s" no es una plataforma Delphi valida. ' +
-        'Validas: Win32, Win64, Win64x, WinARM64EC, OSX64, OSXARM64, Linux64, ' +
-        'Android, Android64, iOSDevice64, iOSSimARM64 (o vacia = todas).', [ARawPlatform.Trim]));
+      Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT, [ARawPlatform.Trim]));
   end;
   Result := SearchPathDenied(ADproj, ARawPath, Show);
   if Result <> '' then
@@ -909,7 +894,7 @@ begin
   begin
     Plat := CanonicalPlatform(ARawPlatform);
     if Plat = '' then
-      Exit(Format('RECHAZADO: "%s" no es una plataforma Delphi valida.', [ARawPlatform.Trim]));
+      Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_FMT, [ARawPlatform.Trim]));
   end;
   Path := ARawPath.Trim;
   if Path = '' then
@@ -1581,7 +1566,7 @@ var
   Cmd, Proj, Sibling: string;
 begin
   if Params.Project.Trim = '' then
-    Exit('error: delphi_config necesita "project" (ruta del .dproj)');
+    Exit(MsgText(SR_CFG_DELPHI_CONFIG_NECESITA_PROJECT));
   Cmd := Params.Command.Trim.ToLower;
   // view solo LEE el .dproj (y vale en un proyecto de REFERENCIA); todo lo
   // demas lo escribe y pasa por la puerta de escritura.
@@ -1729,11 +1714,7 @@ begin
     else if (Cmd = 'add-project') or (Cmd = 'remove-project') then
       Result := MsgFmt(SR_GRUPO_SOLO_GRUPO_FMT, [Cmd, TPath.GetFileName(Proj)])
     else
-      Result := 'error: command debe ser view | add-platform | remove-platform | ' +
-        'set-output | set-version | set-sdk | set-profile | add-searchpath | ' +
-        'remove-searchpath | ' +
-        'add-deployfile | remove-deployfile | add-unit | remove-unit | add-requires | ' +
-        'fix-references | add-project | remove-project (estas dos, en un .groupproj)';
+      Result := MsgText(SR_CFG_COMMAND_DEBE_SER_VIEW);
   finally
     LeaveFileEdit;
   end;

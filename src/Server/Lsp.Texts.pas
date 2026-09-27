@@ -4464,6 +4464,400 @@ const
     'Lo leeremos con calma junto a los demas. Si descubres mas detalles, ' +
     'manda otro reporte: se acumulan, no se sobreescriben.';
 
+  // Mensajes que estaban en linea en DelphiLspMcp.dpr (paso 3c, 27-sep-2026)
+  SL_SYS_READ_ONLY_MODE_READONLY =
+    'Read-only mode (--readonly): mutating tools disabled.';
+
+  SL_SYS_READY_CTRL_STOP =
+    'Ready. Ctrl+C to stop.';
+
+  // Mensajes que estaban en linea en Lsp.BuildRunner.pas (paso 3c, 27-sep-2026)
+  SL_BUILD_DELPHI_BUILD_REFUSED_REDEFINES_FMT =
+    'delphi_build: REFUSED "%s" - redefines reserved IDE property %s';
+
+  // Mensajes que estaban en linea en Lsp.Guard.pas (paso 3c, 27-sep-2026)
+  SN_GUARD_WORKSPACE_JAIL_INVALID_ROOTS =
+    'Workspace jail: INVALID roots (fail-closed) - every disk-touching ' +
+    'tool is refused. Revisa DELPHI_MCP_ROOTS (lanzamiento local). ' +
+    '[GUARD-007]';
+
+  SN_GUARD_WORKSPACE_JAIL_NONE_MODO =
+    'Workspace jail: NONE - modo LOCAL de confianza (solo existe en un ' +
+    'proceso stdio lanzado por el operador; todo cliente HTTP entra por ' +
+    'token de workspace o recibe 401). [GUARD-008]';
+
+  SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT =
+    'RECHAZADO: la ruta "%s" contiene ":" fuera de la unidad (flujo ' +
+    'alternativo de datos). Usa un nombre de fichero normal. [GUARD-009 ' +
+    'DENIED]';
+
+  SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT =
+    'RECHAZADO: el nombre "%s" empieza o termina en punto o espacio; ' +
+    'Windows los recorta al abrir el fichero, asi que el nombre real ' +
+    'seria otro ("%s"). Pide el nombre exacto, sin adornos. [GUARD-010 ' +
+    'DENIED]';
+
+  // Mensajes que estaban en linea en Lsp.Patch.pas (paso 3c, 27-sep-2026)
+  SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT =
+    'RECHAZADO: extension "%s" no soportada. Esta tool es solo para ' +
+    'ficheros Delphi; para texto no-Delphi (.md .py .html .js .ini ...) ' +
+    'usa delphi_textedit. [EDIT-032 DENIED]';
+
+  SR_EDIT_HISTORY_RECOVERY_SON_COPIAS =
+    'RECHAZADO: __history\ y __recovery\ son copias muertas del IDE. El ' +
+    'fichero vivo esta en la carpeta del proyecto. [EDIT-033 DENIED]';
+
+  SR_EDIT_CREATEUNIT_SOLO_CREA_UNITS =
+    'RECHAZADO: createunit solo crea units (.pas). [EDIT-034 DENIED]';
+
+  SR_EDIT_EXISTE_CREATEUNIT_JAMAS_SOBREESCRIBE_FMT =
+    'RECHAZADO: %s YA EXISTE. createunit jamas sobreescribe. [EDIT-035 ' +
+    'DENIED]';
+
+  SR_EDIT_IDENTIFICADOR_PASCAL_VALIDO_NOMBRE_FMT =
+    'RECHAZADO: ''%s'' no es un identificador Pascal valido para nombre de ' +
+    'unit. [EDIT-036 DENIED]';
+
+  SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT =
+    'RECHAZADO: %s es un %s BINARIO (firma TPF0 o envoltorio de recurso ' +
+    '$FF). No es texto y no se edita asi. Pasalo a texto con ' +
+    'delphi_designer command=to-text (copia previa, la misma conversion ' +
+    'que el IDE) y edita; delphi_read y delphi_designer ya lo LEEN al ' +
+    'vuelo sin convertirlo. [EDIT-037 DENIED]';
+
+  SR_EDIT_TIENE_BOM_UTF_PERO_FMT =
+    'RECHAZADO: %s tiene BOM UTF-8 pero su contenido no es UTF-8 valido ' +
+    '(fichero mezclado o danado). No lo toco. [EDIT-038 DENIED]';
+
+  SR_EDIT_HAY_COPIA_SOLO_PUEDO_FMT =
+    'RECHAZADO: no hay copia de %s en %s\. Solo puedo restaurar lo que ' +
+    'yo misma copie. [EDIT-039 DENIED]';
+
+  SR_EDIT_INSERT_SOLO_FUENTES_PASCAL =
+    'RECHAZADO: insert es solo para fuentes Pascal, no para ficheros del ' +
+    'designer. [EDIT-040 DENIED]';
+
+  SR_EDIT_INSERT_DEBE_SER_RUTINA =
+    'RECHAZADO: insert debe ser "rutina-global" o "metodo". Para ' +
+    'statements dentro de un cuerpo usa old/new (ancla en una linea del ' +
+    'metodo). [EDIT-041 DENIED]';
+
+  SR_EDIT_MODO_INSERT_NECESITA_CODE =
+    'RECHAZADO: el modo insert necesita "code" con el bloque COMPLETO ' +
+    '(firma + begin..end;). [EDIT-042 DENIED]';
+
+  SR_EDIT_BLOQUE_TRAE_END_SOLO =
+    'RECHAZADO: el bloque trae un ''end.''. Solo hay un end. y es del ' +
+    'fichero: quitalo del bloque. [EDIT-043 DENIED]';
+
+  SR_EDIT_BLOQUE_TERMINA_END_SIN =
+    'RECHAZADO: el bloque termina en ''end'' SIN punto y coma (E2029). ' +
+    'Anade el '';'' al end final. [EDIT-044 DENIED]';
+
+  SR_EDIT_ULTIMA_LINEA_BLOQUE_RUTINA_FMT =
+    'RECHAZADO: la ultima linea del bloque es |%s| y una rutina COMPLETA ' +
+    'termina en ''end;''. [EDIT-045 DENIED]';
+
+  SR_EDIT_FIRMA_VIENE_CUALIFICADA_CLASE =
+    'RECHAZADO: la firma viene CUALIFICADA con clase. Pasala SIN ' +
+    'cualificar; con insert:"metodo" la tool pone el prefijo. [EDIT-046 ' +
+    'DENIED]';
+
+  SR_EDIT_INSERT_METODO_APLICA_DPR =
+    'RECHAZADO: insert:"metodo" no aplica a un .dpr (las clases van en ' +
+    'units). Crea la unit con createunit e inserta alli. [EDIT-047 ' +
+    'DENIED]';
+
+  SR_EDIT_ENCUENTRO_FINAL_CABECERA_USES =
+    'RECHAZADO: no encuentro el final de la cabecera/uses del .dpr para ' +
+    'colocar la rutina. [EDIT-048 DENIED]';
+
+  SR_EDIT_ENCUENTRO_FRONTERA_FINAL_UNIT =
+    'RECHAZADO: no encuentro la frontera del final de la unit (ni ' +
+    '''initialization'' unica ni ''end.'' unico). [EDIT-049 DENIED]';
+
+  SR_EDIT_INSERT_METODO_NECESITA_INCLASS =
+    'RECHAZADO: insert:"metodo" necesita "inclass" con el nombre exacto ' +
+    'de la clase. [EDIT-050 DENIED]';
+
+  SR_EDIT_ENCUENTRO_CLASS_FMT =
+    'RECHAZADO: no encuentro ''%s = class'' en %s. [EDIT-051 DENIED]';
+
+  SR_EDIT_ENCUENTRO_END_CIERRE_CLASE_FMT =
+    'RECHAZADO: no encuentro el ''end;'' de cierre de la clase %s. ' +
+    '[EDIT-052 DENIED]';
+
+  SR_EDIT_EXISTE_ENTERO_DECLARACION_LINEA_FMT =
+    'RECHAZADO: %s.%s ya existe ENTERO (declaracion en linea %d, ' +
+    'implementacion en linea %d). insert:"metodo" no duplica: para ' +
+    'cambiar su cuerpo usa old/new anclando en una linea del metodo; si ' +
+    'querias un OVERLOAD, anade sus dos mitades con old/new. [EDIT-053 ' +
+    'DENIED]';
+
+  SR_EDIT_EXISTE_IMPLEMENTACION_LINEA_PERO_FMT =
+    'RECHAZADO: existe la implementacion %s.%s (linea %d) pero la clase ' +
+    'no la declara - fichero incoherente. Revisalo y anade la ' +
+    'declaracion con old/new. [EDIT-054 DENIED]';
+
+  SR_EDIT_CLASE_TIENE_SECCION_OMITE_FMT =
+    'RECHAZADO: la clase %s no tiene seccion ''%s''. Omite visibility o ' +
+    'usa una que exista. [EDIT-055 DENIED]';
+
+  SR_EDIT_DELETE_TRUE_NECESITA_OLD =
+    'RECHAZADO: delete:true necesita "old" con la linea exacta a borrar ' +
+    '(copiada de delphi_read). [EDIT-056 DENIED]';
+
+  SR_EDIT_DELETE_TRUE_LLEVA_NEW =
+    'RECHAZADO: delete:true no lleva "new": elimina la linea del ancla ' +
+    'entera. Para sustituirla usa old+new sin delete. [EDIT-057 DENIED]';
+
+  SR_EDIT_FALTAN_PARAMETROS_MODOS_OLD =
+    'RECHAZADO: faltan parametros. Modos: old+new (editar) | insert+code ' +
+    '(insertar) | createunit | restore. Para leer usa delphi_read. ' +
+    '[EDIT-058 DENIED]';
+
+  SR_EDIT_HAS_PASADO_OLD_PERO =
+    'RECHAZADO: has pasado "old" pero no "new". [EDIT-059 DENIED]';
+
+  SR_EDIT_ANCLA_ESTA_VACIA_SOLO =
+    'RECHAZADO: el ancla esta vacia o es solo espacios. [EDIT-060 DENIED]';
+
+  SR_EDIT_TU_ANCLA_LLEVA_CARACTER =
+    'RECHAZADO: tu ancla lleva el caracter de corrupcion U+FFFD. Leiste ' +
+    'el fichero con una tool generica que destruyo los acentos. Vuelve a ' +
+    'leerlo con delphi_read y copia el ancla de ahi. [EDIT-061 DENIED]';
+
+  SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT =
+    'RECHAZADO: en la linea %d no esta ese ancla. Apariciones reales: ' +
+    '%s. Relee con delphi_read. [EDIT-062 DENIED]';
+
+  // Mensajes que estaban en linea en Lsp.Scaffold.pas (paso 3c, 27-sep-2026)
+  SR_CREATE_KIND_DEBE_SER_FORM =
+    'RECHAZADO: kind debe ser form-vcl | form-fmx | frame-vcl | ' +
+    'frame-fmx | datamodule. [CREATE-021 DENIED]';
+
+  // Mensajes que estaban en linea en Lsp.Service.pas (paso 3c, 27-sep-2026)
+  SL_SYS_STARTING_WINDOWS_SERVICE_FMT =
+    '%s v%s starting as a Windows Service';
+
+  SL_SYS_LISTENING_FMT =
+    'Listening on %s:%d%s';
+
+  // Mensajes que estaban en linea en Lsp.TextEdit.pas (paso 3c, 27-sep-2026)
+  SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT =
+    'RECHAZADO: "%s" es un fichero Delphi. Para fuentes y designers usa ' +
+    'delphi_edit; los ficheros de proyecto (.dproj) los mantiene el IDE ' +
+    '/ delphi_create. [TEXT-001 DENIED]';
+
+  SR_TEXT_ATLINE_NINGUNA_OCURRENCIAS_FMT =
+    'RECHAZADO: atline=%d no es ninguna de las ocurrencias (%s). ' +
+    '[TEXT-002 DENIED]';
+
+  SR_TEXT_DELETE_TRUE_NECESITA_OLD =
+    'RECHAZADO: delete=true necesita "old": la linea que se va. ' +
+    '[TEXT-003 DENIED]';
+
+  SR_TEXT_FALTA_ANCLA_OLD_ESTA =
+    'RECHAZADO: falta el ancla (old). Esta tool no reescribe ficheros ' +
+    'enteros: una linea existente + su sustituto, o create=true para ' +
+    'ficheros nuevos. [TEXT-004 DENIED]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Config.pas (paso 3c, 27-sep-2026)
+  SN_CFG_BUILD_DELPHI_BUILD_PROJECT =
+    'To build: delphi_build {project, platform, config}. ' +
+    'needsSDKForBuild=true: pull the SDK once with delphi_paserver ' +
+    'get-sdk and build locally - no profile involved. ' +
+    'needsProfileForDeploy=true: a PAServer profile is needed only for ' +
+    'target=Deploy. [CFG-073]';
+
+  SR_CFG_ADD_PLATFORM_NECESITA_PLATFORM =
+    'error: add-platform necesita "platform" (Win64, Linux64, OSX64...) ' +
+    '[CFG-074 INVALID_PARAM]';
+
+  SR_CFG_PUEDO_LEER_FRAMEWORK_DPROJ =
+    'error: no puedo leer el framework del .dproj; revisa la ruta. ' +
+    '[CFG-075 INVALID_PARAM]';
+
+  SN_CFG_PLATAFORMA_ESTA_HABILITADA_PROYECTO_FMT =
+    'La plataforma %s ya esta habilitada en el proyecto. Compila con ' +
+    'delphi_build {platform:"%s"}. [CFG-076]';
+
+  SN_CFG_HABILITADA_PLATAFORMA_ESTABA_DECLARAD_FMT =
+    'HABILITADA la plataforma %s (estaba declarada, desactivada). El IDE ' +
+    'la enriquecera al abrir el proyecto; MSBuild ya la compila. Si ' +
+    'necesita PAServer, prepara el perfil con delphi_paserver. [CFG-077]';
+
+  SR_CFG_PLATAFORMA_DELPHI_VALIDA_FMT =
+    'RECHAZADO: "%s" no es una plataforma Delphi valida. [CFG-078 DENIED]';
+
+  SN_CFG_PLATAFORMA_ESTA_DECLARADA_PROYECTO_FMT =
+    'La plataforma %s no esta declarada en el proyecto. [CFG-079]';
+
+  SN_CFG_DESHABILITADA_PLATAFORMA_QUEDA_DECLAR_FMT =
+    'DESHABILITADA la plataforma %s (queda declarada pero desactivada; ' +
+    'add-platform la reactiva). Copia previa en __delphi-patch. [CFG-080]';
+
+  SN_CFG_SALIDA_BINARIOS_FIJADA_AHORA_FMT =
+    'Salida de binarios fijada en "%s". Ahora:%s  DCC_ExeOutput = %s ' +
+    '(antes: %s)%s  DCC_DcuOutput = %s (antes: %s)%sCopia previa en ' +
+    '__delphi-patch. Verifica con delphi_build; el IDE lo respeta al ' +
+    'abrir el proyecto. [CFG-081]';
+
+  SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT =
+    'RECHAZADO: "%s" no es una plataforma Delphi valida. Validas: Win32, ' +
+    'Win64, Win64x, WinARM64EC, OSX64, OSXARM64, Linux64, Android, ' +
+    'Android64, iOSDevice64, iOSSimARM64 (o vacia = todas). [CFG-082 ' +
+    'DENIED]';
+
+  SR_CFG_DELPHI_CONFIG_NECESITA_PROJECT =
+    'error: delphi_config necesita "project" (ruta del .dproj) [CFG-083 ' +
+    'INVALID_PARAM]';
+
+  SR_CFG_COMMAND_DEBE_SER_VIEW =
+    'error: command debe ser view | add-platform | remove-platform | ' +
+    'set-output | set-version | set-sdk | set-profile | add-searchpath | ' +
+    'remove-searchpath | add-deployfile | remove-deployfile | add-unit | ' +
+    'remove-unit | add-requires | fix-references | add-project | ' +
+    'remove-project (estas dos, en un .groupproj) [CFG-084 INVALID_PARAM]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3c, 27-sep-2026)
+  SR_LSP_MODE_DEBE_SER_SUMMARY =
+    'error: mode debe ser "summary", "full" o vacio (automatico). ' +
+    '[LSP-019 INVALID_PARAM]';
+
+  SR_LSP_KIND_DEBE_SER_DEFINITION =
+    'RECHAZADO: kind debe ser definition | declaration | implementation. ' +
+    '[LSP-020 DENIED]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.FileOps.pas (paso 3c, 27-sep-2026)
+  SR_FILE_DELPHI_MOVE_NECESITA_DEST =
+    'RECHAZADO: delphi_move necesita "dest" (ruta destino). [FILE-017 ' +
+    'DENIED]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.PAServer.pas (paso 3c, 27-sep-2026)
+  SN_PAS_WINDOWS_FETCH_RUN_SETUP =
+    'Windows: fetch and run the setup, then start PAServer. [PAS-034]';
+
+  SN_PAS_DOWNLOAD_PACKAGE_DELPHI_FETCH =
+    'Download a package with delphi_fetch (it returns a whole-file ' +
+    'sha256 to verify), copy it to the target machine and run it there. ' +
+    'The Platform Assistant then listens on port 64211 for this server ' +
+    'to connect. [PAS-035]';
+
+  SN_PAS_WINDOWS_PLATFORMS_BUILD_NATIVELY =
+    'Windows platforms build natively here. The rest need PAServer on ' +
+    'the target: get the installer with command=packages, run it there, ' +
+    'then a profile/SDK links this server to it. [PAS-036]';
+
+  SN_PAS_ASIENTO_IDE_LEE_LISTA =
+    'El asiento es lo que el IDE lee para SU lista; el .profile es lo ' +
+    'que usan paclient, MSBuild y este servidor. El IDE carga esa lista ' +
+    'AL ARRANCAR, asi que cierralo y abrelo para verlos. [PAS-037]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Styles.pas (paso 3c, 27-sep-2026)
+  SR_STYLE_HAY_NINGUN_ESTILO_COMMAND_FMT =
+    'RECHAZADO: no hay ningun estilo ''%s'' en %s (command=view los ' +
+    'lista). [STYLE-027 DENIED]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Vault.pas (paso 3c, 27-sep-2026)
+  SR_VAULT_FALTA_PATH_RUTA_RELATIVA =
+    'error: falta "path" (ruta relativa dentro del vault) [VAULT-010 ' +
+    'INVALID_PARAM]';
+
+  SR_VAULT_NOTA_MD_VAULT_SOLO_FMT =
+    'RECHAZADO: "%s" no es una nota .md. El vault solo sirve notas ' +
+    'Markdown. [VAULT-011 DENIED]';
+
+  SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT =
+    'RECHAZADO: "%s" esta en una carpeta excluida (backups, .git, ' +
+    '.obsidian): no es conocimiento del vault. [VAULT-012 DENIED]';
+
+  SN_VAULT_SIN_RESULTADOS_RECUERDA_INDICE_FMT =
+    'Sin resultados para "%s" (%s). Recuerda: el indice (vault_read sin ' +
+    'path) dice que notas existen y para que sirven.%s [VAULT-013]';
+
+  SR_VAULT_NOTA_EXISTE_VAULT_LOCALIZALA_FMT =
+    'error: la nota "%s" no existe en el vault. Localizala con ' +
+    'vault_search target=files. [VAULT-014 NOT_FOUND]';
+
+  SR_VAULT_NOTA_EXISTE_VAULT_APPEND_FMT =
+    'error: la nota "%s" no existe. vault_append solo anade a notas ' +
+    'existentes; para una nota nueva usa vault_create. [VAULT-015 ' +
+    'NOT_FOUND]';
+
+  SR_VAULT_ANCHOR_APARECE_NOTA_LEE =
+    'error: el anchor no aparece en la nota. Lee la nota con vault_read ' +
+    'y copia un fragmento EXACTO de ella. [VAULT-016 INVALID_PARAM]';
+
+  SR_VAULT_ANCHOR_APARECE_VARIAS_VECES =
+    'error: el anchor aparece VARIAS veces; usa un fragmento mas largo ' +
+    'que sea unico en la nota. [VAULT-017 INVALID_PARAM]';
+
+  SK_VAULT_ANADIDO_COPIA_PREVIA_FMT =
+    'ANADIDO a %s (%s). Copia previa en %s. [VAULT-018]';
+
+  SR_VAULT_FALTA_CONTENT_NOTA_NUEVA =
+    'error: falta "content" (la nota nueva no puede estar vacia) ' +
+    '[VAULT-019 INVALID_PARAM]';
+
+  SR_VAULT_NOTA_EXISTE_VAULT_CREATE_FMT =
+    'RECHAZADO: la nota "%s" YA existe. vault_create nunca sobreescribe: ' +
+    'usa vault_append para anadir, o vault_patch para corregir un ' +
+    'fragmento. [VAULT-020 DENIED]';
+
+  SK_VAULT_CREADA_NOTA_RECUERDA_ENLAZARLA_FMT =
+    'CREADA la nota %s. Recuerda enlazarla desde el indice que ' +
+    'corresponda con [[wikilinks]] (vault_append sobre ese indice). ' +
+    '[VAULT-021]';
+
+  SR_VAULT_NOTA_EXISTE_FMT =
+    'error: la nota "%s" no existe. [VAULT-022 NOT_FOUND]';
+
+  SR_VAULT_OLD_TEXT_APARECE_NOTA =
+    'error: "old_text" no aparece en la nota. Lee la nota con vault_read ' +
+    'y copia el fragmento EXACTO (los numeros de linea NO son parte del ' +
+    'texto). [VAULT-023 INVALID_PARAM]';
+
+  SR_VAULT_OLD_TEXT_APARECE_VARIAS =
+    'error: "old_text" aparece VARIAS veces en la nota; amplia el ' +
+    'fragmento hasta que sea unico. [VAULT-024 INVALID_PARAM]';
+
+  SN_VAULT_MODIFICADA_SUSTITUCION_COPIA_PREVIA_FMT =
+    'MODIFICADA %s (1 sustitucion). Copia previa en %s. [VAULT-025]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Workspace.pas (paso 3c, 27-sep-2026)
+  SR_WS_PATTERN_DEBE_SER_MASCARA =
+    'RECHAZADO: pattern debe ser UNA mascara simple (*.style, *.ini, ' +
+    'Galatea*.rc). [WS-005 DENIED]';
+
+  SR_WS_PATTERN_ADMITE_LLAVES_EXPANSION =
+    'RECHAZADO: pattern no admite llaves {a,b} (expansion de shell). Usa ' +
+    'UNA mascara (*.pas) o varias separadas por ";" (*.pas;*.dfm). ' +
+    '[WS-006 DENIED]';
+
+  SR_GIT_ADD_NEEDS_ARGS_PATHS =
+    'error: add needs args (paths, or -A for everything) [GIT-022 ' +
+    'INVALID_PARAM]';
+
+  SR_GIT_CLONE_NEEDS_REPOSITORY_URL =
+    'error: clone needs the repository URL in the "message" parameter ' +
+    '(the destination directory is "repo") [GIT-023 INVALID_PARAM]';
+
+  SR_GIT_CONFIG_ONLY_ACCEPTS_USER =
+    'error: config only accepts user.name or user.email in args (the ' +
+    'value goes in the "message" parameter) [GIT-024 INVALID_PARAM]';
+
+  SR_WS_RUTA_ARTEFACTOS_IDE_HISTORY =
+    'error: ruta de artefactos del IDE (__history, __recovery, Win32, ' +
+    'dcu...): no se sube ahi. [WS-007 INVALID_PARAM]';
+
+  // Mensajes que estaban en linea en UTrayMain.pas (paso 3c, 27-sep-2026)
+  SL_SYS_MCP_SERVER_LISTENING_FMT =
+    'MCP server listening on %s (%s v%s)';
+
+  SL_SYS_TRAY_ICON_SERVER_RUNNING =
+    'Tray icon = server running. Double-click it for this log.';
+
   // ---------------------------------------------------------------------
   // Las ETIQUETAS de los mensajes (decision de David, 27-sep-2026)
   // ---------------------------------------------------------------------

@@ -1633,15 +1633,13 @@ begin
       for var E in DESIGNER_EXTS do
         if E = Ext then IsDesigner := True;
       if not IsSource and not IsDesigner then
-        Exit(Format('RECHAZADO: extension "%s" no soportada. Esta tool es solo ' +
-          'para ficheros Delphi; para texto no-Delphi (.md .py .html .js .ini ...) ' +
-          'usa delphi_textedit.', [Ext]));
+        Exit(MsgFmt(SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT, [Ext]));
 
       PLower := LongCanonical(A.Path).ToLower.Replace('/', '\');
       if PLower.Contains('\' + BACKUP_SUB + '\') then
         Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la carpeta de copias de seguridad de esta tool. Copias muertas: no se leen, no se editan. El fichero vivo esta un nivel mas arriba.');
       if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
-        Exit('RECHAZADO: __history\ y __recovery\ son copias muertas del IDE. El fichero vivo esta en la carpeta del proyecto.');
+        Exit(MsgText(SR_EDIT_HISTORY_RECOVERY_SON_COPIAS));
 
       // MODO FRAGMENTO: se resuelve a un ancla de linea completa y sigue
       // por el motor de siempre (ver FragmentoALinea).
@@ -1679,14 +1677,14 @@ begin
       if A.CreateUnit_ then
       begin
         if Ext <> '.pas' then
-          Exit('RECHAZADO: createunit solo crea units (.pas).');
+          Exit(MsgText(SR_EDIT_CREATEUNIT_SOLO_CREA_UNITS));
         if TFile.Exists(A.Path) then
-          Exit(Format('RECHAZADO: %s YA EXISTE. createunit jamas sobreescribe.', [TPath.GetFileName(A.Path)]));
+          Exit(MsgFmt(SR_EDIT_EXISTE_CREATEUNIT_JAMAS_SOBREESCRIBE_FMT, [TPath.GetFileName(A.Path)]));
         var UnitName := TPath.GetFileNameWithoutExtension(A.Path);
         // Dotted namespaces are legal Delphi and REQUIRED by modern projects
         // (Lsp.BuildRunner, System.SysUtils...): allow Ident(.Ident)*.
         if not TRegEx.IsMatch(UnitName, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
-          Exit(Format('RECHAZADO: ''%s'' no es un identificador Pascal valido para nombre de unit.', [UnitName]));
+          Exit(MsgFmt(SR_EDIT_IDENTIFICADOR_PASCAL_VALIDO_NOMBRE_FMT, [UnitName]));
         var Skel: string;
         var Note: string;
         if A.Content <> '' then
@@ -1739,15 +1737,12 @@ begin
       // (FF 0A 00 + UPPERCASED name + the TPF0 stream at ~offset 19). A text
       // form always begins with object/inherited/inline - never $FF.
       if IsDesigner and IsBinaryDesignerBytes(B) then
-        Exit(Format('RECHAZADO: %s es un %s BINARIO (firma TPF0 o envoltorio de recurso $FF). ' +
-          'No es texto y no se edita asi. Pasalo a texto con delphi_designer ' +
-          'command=to-text (copia previa, la misma conversion que el IDE) y edita; ' +
-          'delphi_read y delphi_designer ya lo LEEN al vuelo sin convertirlo.',
+        Exit(MsgFmt(SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT,
           [TPath.GetFileName(A.Path), Ext]));
 
       K := DetectEnc(B);
       if (K = ekUtf8Bom) and not ValidUtf8(B, 3) then
-        Exit(Format('RECHAZADO: %s tiene BOM UTF-8 pero su contenido no es UTF-8 valido (fichero mezclado o danado). No lo toco.',
+        Exit(MsgFmt(SR_EDIT_TIENE_BOM_UTF_PERO_FMT,
           [TPath.GetFileName(A.Path)]));
       Text := DecodeBytes(B, K);
 
@@ -1771,7 +1766,7 @@ begin
           end;
         end;
         if Src = '' then
-          Exit(Format('RECHAZADO: no hay copia de %s en %s\. Solo puedo restaurar lo que yo misma copie.',
+          Exit(MsgFmt(SR_EDIT_HAY_COPIA_SOLO_PUEDO_FMT,
             [TPath.GetFileName(A.Path), BACKUP_SUB]));
 
         var BkBytes := TFile.ReadAllBytes(Src);
@@ -1851,13 +1846,13 @@ begin
       if A.Insert <> '' then
       begin
         if IsDesigner then
-          Exit('RECHAZADO: insert es solo para fuentes Pascal, no para ficheros del designer.');
+          Exit(MsgText(SR_EDIT_INSERT_SOLO_FUENTES_PASCAL));
         if (A.Insert <> 'rutina-global') and (A.Insert <> 'metodo') then
-          Exit('RECHAZADO: insert debe ser "rutina-global" o "metodo". Para statements dentro de un cuerpo usa old/new (ancla en una linea del metodo).');
+          Exit(MsgText(SR_EDIT_INSERT_DEBE_SER_RUTINA));
         if A.Code.Trim = '' then
-          Exit('RECHAZADO: el modo insert necesita "code" con el bloque COMPLETO (firma + begin..end;).');
+          Exit(MsgText(SR_EDIT_MODO_INSERT_NECESITA_CODE));
         if TRegEx.IsMatch(A.Code, '^[ \t]*end\.[ \t]*$', [roMultiLine]) then
-          Exit('RECHAZADO: el bloque trae un ''end.''. Solo hay un end. y es del fichero: quitalo del bloque.');
+          Exit(MsgText(SR_EDIT_BLOQUE_TRAE_END_SOLO));
 
         CodeLines := SplitToLines(A.Code.TrimRight);
         var LastLine := '';
@@ -1872,8 +1867,8 @@ begin
            not TRegEx.IsMatch(NoComment, '(^|[^\w])end\s*;$', [roIgnoreCase]) then
         begin
           if TRegEx.IsMatch(NoComment, '(^|[^\w])end$', [roIgnoreCase]) then
-            Exit('RECHAZADO: el bloque termina en ''end'' SIN punto y coma (E2029). Anade el '';'' al end final.');
-          Exit(Format('RECHAZADO: la ultima linea del bloque es |%s| y una rutina COMPLETA termina en ''end;''.',
+            Exit(MsgText(SR_EDIT_BLOQUE_TERMINA_END_SIN));
+          Exit(MsgFmt(SR_EDIT_ULTIMA_LINEA_BLOQUE_RUTINA_FMT,
             [Copy(LastLine, 1, 80)]));
         end;
 
@@ -1917,7 +1912,7 @@ begin
         if not MF.Success then
           Exit(Format('RECHAZADO: el bloque no empieza por una firma de rutina (puede llevar comentario encima). Primera linea util: |%s|', [Copy(Firma, 1, 80)]));
         if MF.Groups[3].Value = '.' then
-          Exit('RECHAZADO: la firma viene CUALIFICADA con clase. Pasala SIN cualificar; con insert:"metodo" la tool pone el prefijo.');
+          Exit(MsgText(SR_EDIT_FIRMA_VIENE_CUALIFICADA_CLASE));
         var IFirmaFin := IFirmaIni;
         var PosCierre := 0;
         var FirmaCerrada := False;
@@ -1970,8 +1965,7 @@ begin
         if Ext = '.dpr' then
         begin
           if A.Insert = 'metodo' then
-            Exit('RECHAZADO: insert:"metodo" no aplica a un .dpr (las clases ' +
-              'van en units). Crea la unit con createunit e inserta alli.');
+            Exit(MsgText(SR_EDIT_INSERT_METODO_APLICA_DPR));
           var IUses := -1;
           var IAfter := -1;
           for I := 0 to High(Lines) do
@@ -1998,8 +1992,7 @@ begin
                 Break;
               end;
           if IAfter = -1 then
-            Exit('RECHAZADO: no encuentro el final de la cabecera/uses del .dpr ' +
-              'para colocar la rutina.');
+            Exit(MsgText(SR_EDIT_ENCUENTRO_FINAL_CABECERA_USES));
           var AnclaDpr := Lines[IAfter];
           var RDpr := DoEdit(A.Path, AnclaDpr,
             AnclaDpr + #10#10 + string.Join(#10, CodeLines), IAfter + 1, False);
@@ -2024,7 +2017,7 @@ begin
               Result := TRegEx.IsMatch(L, '^[ \t]*end\.[ \t]*$');
             end, FrontIdx);
         if not FoundFront then
-          Exit('RECHAZADO: no encuentro la frontera del final de la unit (ni ''initialization'' unica ni ''end.'' unico).');
+          Exit(MsgText(SR_EDIT_ENCUENTRO_FRONTERA_FINAL_UNIT));
         var FrontLine := Lines[FrontIdx];
 
         if A.Insert = 'rutina-global' then
@@ -2058,7 +2051,7 @@ begin
 
         // insert = 'metodo'
         if A.ClassName_.Trim = '' then
-          Exit('RECHAZADO: insert:"metodo" necesita "inclass" con el nombre exacto de la clase.');
+          Exit(MsgText(SR_EDIT_INSERT_METODO_NECESITA_INCLASS));
         var ClsRe := TRegEx.Create('\b' + TRegEx.Escape(A.ClassName_) + '\s*=\s*class\b', [roIgnoreCase]);
         var IClase := -1;
         for I := 0 to High(Lines) do
@@ -2068,7 +2061,7 @@ begin
             Break;
           end;
         if IClase = -1 then
-          Exit(Format('RECHAZADO: no encuentro ''%s = class'' en %s.', [A.ClassName_, TPath.GetFileName(A.Path)]));
+          Exit(MsgFmt(SR_EDIT_ENCUENTRO_CLASS_FMT, [A.ClassName_, TPath.GetFileName(A.Path)]));
         // Un tipo ANIDADO (private type TPendingCall = class ... end;) cierra
         // con su propio 'end;' antes que la clase, asi que el primer 'end;'
         // no es el de la clase: la declaracion caia DENTRO del tipo anidado y
@@ -2095,7 +2088,7 @@ begin
             Inc(Prof);
         end;
         if IFin = -1 then
-          Exit(Format('RECHAZADO: no encuentro el ''end;'' de cierre de la clase %s.', [A.ClassName_]));
+          Exit(MsgFmt(SR_EDIT_ENCUENTRO_END_CIERRE_CLASE_FMT, [A.ClassName_]));
 
         // COLISION (campo, hermes 17-sep): la firma de un metodo vive DOS
         // veces (interface + implementation) y la tool escribia las dos a
@@ -2122,15 +2115,10 @@ begin
             Break;
           end;
         if (IDeclExiste >= 0) and (IImplExiste >= 0) then
-          Exit(Format('RECHAZADO: %s.%s ya existe ENTERO (declaracion en linea %d, ' +
-            'implementacion en linea %d). insert:"metodo" no duplica: para cambiar ' +
-            'su cuerpo usa old/new anclando en una linea del metodo; si querias un ' +
-            'OVERLOAD, anade sus dos mitades con old/new.',
+          Exit(MsgFmt(SR_EDIT_EXISTE_ENTERO_DECLARACION_LINEA_FMT,
             [A.ClassName_, Nombre, IDeclExiste + 1, IImplExiste + 1]));
         if IImplExiste >= 0 then
-          Exit(Format('RECHAZADO: existe la implementacion %s.%s (linea %d) pero la ' +
-            'clase no la declara - fichero incoherente. Revisalo y anade la ' +
-            'declaracion con old/new.',
+          Exit(MsgFmt(SR_EDIT_EXISTE_IMPLEMENTACION_LINEA_PERO_FMT,
             [A.ClassName_, Nombre, IImplExiste + 1]));
 
         var R1 := '';
@@ -2196,7 +2184,7 @@ begin
               end;
             end
             else
-              Exit(Format('RECHAZADO: la clase %s no tiene seccion ''%s''. Omite visibility o usa una que exista.',
+              Exit(MsgFmt(SR_EDIT_CLASE_TIENE_SECCION_OMITE_FMT,
                 [A.ClassName_, Vis]));
           end
           else
@@ -2265,9 +2253,9 @@ begin
       if A.DeleteLine then
       begin
         if not A.HasOld or (A.OldLine = '') then
-          Exit('RECHAZADO: delete:true necesita "old" con la linea exacta a borrar (copiada de delphi_read).');
+          Exit(MsgText(SR_EDIT_DELETE_TRUE_NECESITA_OLD));
         if A.NewText <> '' then
-          Exit('RECHAZADO: delete:true no lleva "new": elimina la linea del ancla entera. Para sustituirla usa old+new sin delete.');
+          Exit(MsgText(SR_EDIT_DELETE_TRUE_LLEVA_NEW));
         Exit(DoEdit(A.Path, A.OldLine, '', A.AtLine, IsDesigner, True, A.ToLine));
       end;
 
@@ -2278,9 +2266,9 @@ begin
           '- Para editar: old = la linea COMPLETA a sustituir, copiada de delphi_read.'#10 +
           '- Para leer: usa delphi_read.');
       if not A.HasOld then
-        Exit('RECHAZADO: faltan parametros. Modos: old+new (editar) | insert+code (insertar) | createunit | restore. Para leer usa delphi_read.');
+        Exit(MsgText(SR_EDIT_FALTAN_PARAMETROS_MODOS_OLD));
       if not A.HasNew then
-        Exit('RECHAZADO: has pasado "old" pero no "new".');
+        Exit(MsgText(SR_EDIT_HAS_PASADO_OLD_PERO));
 
       Result := DoEdit(A.Path, A.OldLine, A.NewText, A.AtLine, IsDesigner,
         False, A.ToLine);
@@ -2400,10 +2388,9 @@ begin
   if (Pos(#13, AOld) > 0) or (Pos(#10, AOld) > 0) then
     Exit(MsgText(SR_PATCH_ANCHOR_MULTILINE));
   if AOld.Trim = '' then
-    Exit('RECHAZADO: el ancla esta vacia o es solo espacios.');
+    Exit(MsgText(SR_EDIT_ANCLA_ESTA_VACIA_SOLO));
   if Pos(#$FFFD, AOld) > 0 then
-    Exit('RECHAZADO: tu ancla lleva el caracter de corrupcion U+FFFD. Leiste el fichero con una tool generica ' +
-      'que destruyo los acentos. Vuelve a leerlo con delphi_read y copia el ancla de ahi.');
+    Exit(MsgText(SR_EDIT_TU_ANCLA_LLEVA_CARACTER));
 
   Lines := SplitToLines(Text);
   Hits := TList<Integer>.Create;
@@ -2442,7 +2429,7 @@ begin
         var Nums := '';
         for I in Hits do
           Nums := Nums + IntToStr(I + 1) + ', ';
-        Exit(Format('RECHAZADO: en la linea %d no esta ese ancla. Apariciones reales: %s. Relee con delphi_read.',
+        Exit(MsgFmt(SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT,
           [AAtLine, Nums.TrimRight([',', ' '])]));
       end;
     end;

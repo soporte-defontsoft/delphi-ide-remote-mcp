@@ -629,7 +629,7 @@ var
 
 begin
   if Params.Dest.Trim = '' then
-    Exit('RECHAZADO: delphi_move necesita "dest" (ruta destino).');
+    Exit(MsgText(SR_FILE_DELPHI_MOVE_NECESITA_DEST));
   // El ORIGEN: mover lo quita de su sitio, asi que pasa la puerta de
   // ESCRITURA; copiar solo lo LEE, asi que pasa la de LECTURA: tus raices,
   // tus ReadOnlyRoots, la zona de biblioteca. Traer algo de un proyecto de

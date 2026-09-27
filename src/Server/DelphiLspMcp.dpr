@@ -179,7 +179,7 @@ begin
     if HasFlag('--readonly') then
     begin
       SetProcessReadOnly(True);
-      TLogger.Info('Read-only mode (--readonly): mutating tools disabled.');
+      TLogger.Info(MsgText(SL_SYS_READ_ONLY_MODE_READONLY));
     end;
     Host.LogStartupNotes;
 
@@ -196,7 +196,7 @@ begin
           // el aviso de "solo localhost" es de StartupNotes (Lsp.Host), con
           // la misma condicion que decide el bind en CreateHttpServer
           HttpServer.Start;
-          TLogger.Info('Ready. Ctrl+C to stop.');
+          TLogger.Info(MsgText(SL_SYS_READY_CTRL_STOP));
           ShutdownEvent.WaitFor(INFINITE);
           HttpServer.Stop;
         finally

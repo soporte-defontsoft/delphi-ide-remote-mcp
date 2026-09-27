@@ -408,7 +408,7 @@ begin
     if Params.Pattern.Trim <> '' then
     begin
       if not TRegEx.IsMatch(Params.Pattern.Trim, '^[\w*?.\-]+$') then
-        Exit('RECHAZADO: pattern debe ser UNA mascara simple (*.style, *.ini, Galatea*.rc).');
+        Exit(MsgText(SR_WS_PATTERN_DEBE_SER_MASCARA));
       Masks := [Params.Pattern.Trim];
     end;
     var Targets: TArray<string> := [];
@@ -575,8 +575,7 @@ begin
   // Shell-style brace expansion is NOT a mask: *.{pas,dfm} matched nothing
   // silently (field 2026-08-22). Say so instead of returning an empty list.
   if Params.Pattern.Contains('{') or Params.Pattern.Contains('}') then
-    Exit('RECHAZADO: pattern no admite llaves {a,b} (expansion de shell). Usa UNA ' +
-      'mascara (*.pas) o varias separadas por ";" (*.pas;*.dfm).');
+    Exit(MsgText(SR_WS_PATTERN_ADMITE_LLAVES_EXPANSION));
 
   if TFile.Exists(Root) then
     Exit(MsgFmt(SR_LIST_ROOT_IS_FILE_FMT, [TPath.GetFileName(Root)]));
@@ -841,7 +840,7 @@ begin
   else if Cmd = 'add' then
   begin
     if Params.Args.Trim = '' then
-      Exit('error: add needs args (paths, or -A for everything)');
+      Exit(MsgText(SR_GIT_ADD_NEEDS_ARGS_PATHS));
     GitArgs := 'add ' + ArgvSeguro(Params.Args);
   end
   else if Cmd = 'commit' then
@@ -866,8 +865,7 @@ begin
     // legitimately carries ':' '/' '@'). Destination = repo (jailed).
     var Url := Params.Message.Trim;
     if Url = '' then
-      Exit('error: clone needs the repository URL in the "message" parameter ' +
-        '(the destination directory is "repo")');
+      Exit(MsgText(SR_GIT_CLONE_NEEDS_REPOSITORY_URL));
     if not (Url.StartsWith('https://') or Url.StartsWith('http://') or
             Url.StartsWith('git://') or Url.StartsWith('ssh://')) then
       Exit('error: only https/http/git/ssh URLs are accepted for clone');
@@ -904,8 +902,7 @@ begin
     // repo/machine. Anything else in git config stays off-limits.
     if not (SameText(Params.Args.Trim, 'user.name') or
             SameText(Params.Args.Trim, 'user.email')) then
-      Exit('error: config only accepts user.name or user.email in args ' +
-        '(the value goes in the "message" parameter)');
+      Exit(MsgText(SR_GIT_CONFIG_ONLY_ACCEPTS_USER));
     if Params.Message.Trim = '' then
       Exit('error: config needs the value in the "message" parameter');
     GitArgs := 'config ' + Params.Args.Trim.ToLower + ' ' +
@@ -1949,8 +1946,7 @@ begin
   if Params.Offset < 0 then
     Exit('error: offset negativo');
   if SkipIdeArtifacts(LongCanonical(FullPath)) then
-    Exit('error: ruta de artefactos del IDE (__history, __recovery, Win32, ' +
-      'dcu...): no se sube ahi.');
+    Exit(MsgText(SR_WS_RUTA_ARTEFACTOS_IDE_HISTORY));
   // (las carpetas muertas: WriteTargetDenied, arriba)
   // An upload with no bytes is not an upload: the schema only demanded "path",
   // so a half-typed call landed here, opened the file with fmCreate and left

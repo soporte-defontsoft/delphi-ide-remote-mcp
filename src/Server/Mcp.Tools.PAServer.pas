@@ -156,7 +156,7 @@ begin
   else if N.Contains('arm') then
     Result := 'Windows on ARM: fetch and run the setup, then start PAServer.'
   else
-    Result := 'Windows: fetch and run the setup, then start PAServer.';
+    Result := MsgText(SN_PAS_WINDOWS_FETCH_RUN_SETUP);
 end;
 
 function PlatformOfPackage(const AFile: string): string;
@@ -245,10 +245,7 @@ begin
         Dirs.Free;
       end;
     end;
-    Return.AddPair('note', 'Download a package with delphi_fetch (it returns ' +
-      'a whole-file sha256 to verify), copy it to the target machine and run ' +
-      'it there. The Platform Assistant then listens on port 64211 for this ' +
-      'server to connect.');
+    Return.AddPair('note', MsgText(SN_PAS_DOWNLOAD_PACKAGE_DELPHI_FETCH));
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -685,9 +682,7 @@ begin
           Obj.AddPair('status', 'needs a PAServer profile + SDK (see command=packages)');
       end;
     end;
-    Return.AddPair('note', 'Windows platforms build natively here. The rest ' +
-      'need PAServer on the target: get the installer with command=packages, ' +
-      'run it there, then a profile/SDK links this server to it.');
+    Return.AddPair('note', MsgText(SN_PAS_WINDOWS_PLATFORMS_BUILD_NATIVELY));
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -1604,9 +1599,7 @@ begin
         Sembrados.Add(Nombre);
       end;
     end;
-    Return.AddPair('note', 'El asiento es lo que el IDE lee para SU lista; el ' +
-      '.profile es lo que usan paclient, MSBuild y este servidor. El IDE ' +
-      'carga esa lista AL ARRANCAR, asi que cierralo y abrelo para verlos.');
+    Return.AddPair('note', MsgText(SN_PAS_ASIENTO_IDE_LEE_LISTA));
     Result := Return.ToJSON;
   finally
     Return.Free;
