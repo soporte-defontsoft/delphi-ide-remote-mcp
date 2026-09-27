@@ -148,7 +148,7 @@ begin
   // running on the LSP, and the next call on the same text collects it.
   P := TLspSession.Instance.LintFile(Params.Path, DIAG_WAIT_MS, Settings);
   if P = nil then
-    Exit(MsgText(SN_DIAG_IN_PROGRESS));
+    Exit(MsgText(SF_DIAG_IN_PROGRESS));
   try
     Diags := P.GetValue('diagnostics') as TJSONArray;
     Return := TJSONObject.Create;

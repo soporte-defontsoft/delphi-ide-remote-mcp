@@ -76,10 +76,10 @@ finally:
     proc.wait()
     out = open(LOG, encoding='utf-8', errors='replace').read()
 
-avisos = [l for l in out.splitlines() if 'AVISO' in l]
-check('D6 arranque: nombra el par que comparte token', any('[Workspace.Uno] y [Workspace.Dos]' in l for l in avisos), avisos)
-check('D6 arranque: nombra Token = ReadOnlyToken', any('[Workspace.Tres]' in l and 'MISMO valor' in l for l in avisos), avisos)
-check('D6 arranque: nombra la clave repetida', any('[Workspace.Cuatro] repite la clave Roots' in l for l in avisos), avisos)
-check('D6 arranque: nombra la seccion repetida', any('[Workspace.Cinco] aparece DOS veces' in l for l in avisos), avisos)
+avisos = [l for l in out.splitlines() if 'WARNING' in l]
+check('D6 arranque: nombra el par que comparte token', any('[Workspace.Uno] and [Workspace.Dos]' in l for l in avisos), avisos)
+check('D6 arranque: nombra Token = ReadOnlyToken', any('[Workspace.Tres]' in l and 'SAME value' in l for l in avisos), avisos)
+check('D6 arranque: nombra la clave repetida', any('[Workspace.Cuatro] repeats the key Roots' in l for l in avisos), avisos)
+check('D6 arranque: nombra la seccion repetida', any('[Workspace.Cinco] appears TWICE' in l for l in avisos), avisos)
 
 mc.fin('ini duplicados')

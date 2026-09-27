@@ -444,7 +444,7 @@ begin
       else
       begin
         if N >= BASE64_MIN then
-          SB.Append('[base64: ').Append(N).Append(' caracteres]')
+          SB.Append(MsgFmt(SF_LOG_BASE64_FMT, [N]))
         else
           SB.Append(ALinea, I, J - I);
         I := J;

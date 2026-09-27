@@ -100,7 +100,7 @@ try:
 
     # ------------------------------------------------------------------ R12
     check('R12 la respuesta dice cuantas lineas y desde donde',
-          'BORRADAS 3 lineas' in r and 'de la 2 a la 4' in r, r[:200])
+          mc.es(r, 'SN_RANGE_DELETED_FMT') and '3 lines (from 2 to 4)' in r, r[:200])
 
     # ------------------------------------------------------------------ R2
     fp = os.path.join(JAIL, 'Prueba.pas')
@@ -125,7 +125,8 @@ try:
     check('R3 rango + new: el tramo entero se sustituye',
           ls == ['uno', 'EN SU LUGAR', 'seis'], '%s | %s' % (ls, r[:140]))
     check('R3b ...y lo dice como sustitucion, no como borrado',
-          'SUSTITUIDAS 4 lineas' in r, r[:200])
+          mc.es(r, 'SN_RANGE_REPLACED_FMT') and not mc.es(r, 'SN_RANGE_DELETED_FMT')
+          and '4 lines (from 2 to 5)' in r, r[:200])
 
     # ------------------------------------------------------------------ R4
     f = os.path.join(JAIL, 'reves.md')
@@ -142,7 +143,7 @@ try:
     r = call('delphi_textedit',
              {'path': f, 'old': 'dos', 'toline': 99, 'delete': True})
     check('R5 toline mas alla del final: rechazado',
-          mc.es(r, 'SR_RANGE_BEYOND_FMT') and 'toline=99' in r and '6 lineas' in r, r[:200])
+          mc.es(r, 'SR_RANGE_BEYOND_FMT') and 'toline=99' in r and '6 lines' in r, r[:200])
     check('R5b ...y el fichero intacto', open(f, 'rb').read() == antes,
           'el fichero cambio')
 
@@ -182,7 +183,7 @@ try:
     # 'toline' y 'error': un envoltorio JSON-RPC, o un aplicado que lo nombrara)
     check('R8 ancla de bloque + toline: rechazado',
           mc.abre(r, 'SR_PATCH_EDITS_ROLLED_FMT') and
-          '"toline" no se combina con un ancla de VARIAS lineas' in r, r[:300])
+          mc.es(r, 'SR_RANGE_WITH_BLOCK'), r[:300])
     check('R8b ...y el fichero intacto', open(f, 'rb').read() == antes,
           'el fichero cambio')
 
@@ -245,7 +246,7 @@ try:
     ])})
     check('R14 occurrence fuera de rango se rechaza, no se ignora',
           mc.rechazado(r) and mc.es(r, 'SR_PATCH_OCCURRENCE_FMT') and 'occurrence 3' in r and
-          'solo hay 1' in r, r[:220])
+          'there are only 1' in r, r[:220])
     check('R14b ...y no ha tocado la unica aparicion que hay',
           open(f, 'rb').read() == antes, open(f).read()[:80])
     # Y el caso repetido sigue protestando (por otra puerta, pero protesta)
@@ -304,7 +305,8 @@ try:
     rb = call('delphi_textedit', {'path': ft, 'edits': json.dumps(
         [{'old': 'begin\nWriteLn(3)', 'new': 'begin\n  WriteLn(4);'}])})
     check('R18c un bloque dice QUE linea no esta entera, con la misma pista',
-          mc.abre(rb, 'SR_PATCH_EDITS_ROLLED_FMT') and 'La linea 2 de tu bloque' in rb and  # en tanda: ROLLBACK + el motivo
+          mc.abre(rb, 'SR_PATCH_EDITS_ROLLED_FMT') and  # en tanda: ROLLBACK + el motivo
+          mc.es(rb, 'SN_BLOQUE_LINEA_FALTA_FMT') and 'Line 2 of your block' in rb and
           '15|  WriteLn(3);' in rb and open(ft, 'rb').read() == antes_t, rb[:300])
     rn = call('delphi_edit', {'path': fp, 'old': 'WriteLn(99);', 'new': 'x'})
     check('R18d lo que no esta en ningun sitio sigue siendo "no aparece"',

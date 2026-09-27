@@ -56,24 +56,24 @@ def sin_fuga():
 # ---- opciones prohibidas DISFRAZADAS: la puerta las ve como las vera git ----
 r = git({'command': 'diff', 'args': '--o"utput"=' + LEAK + ' HEAD'})
 check('diff --o"utput" (comillas en medio): RECHAZADO y no escribe',
-      'RECHAZADO' in r and sin_fuga(), r[:200])
+      mc.rechazado(r) and sin_fuga(), r[:200])
 r = git({'command': 'diff', 'args': '"--output=' + LEAK + '" HEAD'})
 check('diff "--output=..." (comillas envolviendo): RECHAZADO y no escribe',
-      'RECHAZADO' in r and sin_fuga(), r[:200])
+      mc.rechazado(r) and sin_fuga(), r[:200])
 r = git({'command': 'show', 'args': '--outp"ut"=' + LEAK})
-check('show --outp"ut": RECHAZADO y no escribe', 'RECHAZADO' in r and sin_fuga(), r[:200])
+check('show --outp"ut": RECHAZADO y no escribe', mc.rechazado(r) and sin_fuga(), r[:200])
 r = git({'command': 'diff', 'args': '--no-"index" a.txt a.txt'})
-check('diff --no-"index" (lee rutas arbitrarias): RECHAZADO', 'RECHAZADO' in r, r[:200])
+check('diff --no-"index" (lee rutas arbitrarias): RECHAZADO', mc.rechazado(r), r[:200])
 r = git({'command': 'log', 'args': '-"c" core.pager=x'})
-check('log -"c" (config, disfrazado): RECHAZADO', 'RECHAZADO' in r, r[:200])
+check('log -"c" (config, disfrazado): RECHAZADO', mc.rechazado(r), r[:200])
 # control sin disfraz: la opcion tal cual tambien se rechaza y no escribe
 r = git({'command': 'diff', 'args': '--output=' + LEAK})
 check('diff --output directo (control): RECHAZADO y no escribe',
-      'RECHAZADO' in r and sin_fuga(), r[:200])
+      mc.rechazado(r) and sin_fuga(), r[:200])
 
 # ---- host remoto disfrazado con comillas: la puerta lo ve igual ----
 r = git({'command': 'fetch', 'args': '"https://evil.example/repo"'})
-check('fetch a un host no permitido, con comillas: RECHAZADO', 'RECHAZADO' in r, r[:200])
+check('fetch a un host no permitido, con comillas: RECHAZADO', mc.rechazado(r), r[:200])
 
 # ---- lo LEGITIMO sigue pasando: la recomposicion no rompe args validos ----
 r = git({'command': 'diff', 'args': 'HEAD'})
@@ -94,6 +94,6 @@ srv2 = mc.Stdio(EXE, env2, nombre='gaf2')
 r = srv2.call('delphi_git', {'repo': os.path.join(BASE, 'clon'), 'command': 'clone',
               'message': 'https://allowed.example/a https://evil.example/b'})
 check('clone: segundo host colado en el message, cazado por la puerta al trocear',
-      'RECHAZADO' in r and 'evil.example' in r, r[:200])
+      mc.rechazado(r) and 'evil.example' in r, r[:200])
 srv2.mata()
 mc.fin('git arg filter battery')

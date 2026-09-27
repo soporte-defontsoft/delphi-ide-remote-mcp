@@ -209,9 +209,10 @@ cli.session('r45')
 call = cli.call
 
 
-# La negativa de la JAULA, no una cualquiera: casi todas empiezan por
-# RECHAZADO y dar por buena otra seria justo el fallo que esto vigila.
-JAULA = 'FUERA de los workspaces permitidos'
+# La negativa de la JAULA, no una cualquiera: casi todas son DENIED y dar
+# por buena otra seria justo el fallo que esto vigila. Se reconoce por la
+# constante del catalogo (mc.es), no por su frase: la frase se traduce.
+JAULA = 'SR_JAIL_FMT'
 
 # Pista de que la descripcion de un parametro habla de una ruta. Solo se usa
 # para DESCUBRIR, nunca para decidir: lo que decide es la lista de arriba.
@@ -269,7 +270,7 @@ try:
             t = call(tool, args)
         except Exception as ex:
             t = 'EXCEPCION %s' % ex
-        if JAULA not in t:
+        if not mc.es(t, JAULA):
             fugas.append('%s.%s -> %s' % (tool, par, t[:110].replace('\n', ' ')))
     check('G2 los %d parametros de ruta rechazan una ruta de fuera'
           % len(PROBAR), not fugas, ' | '.join(fugas[:4]))
@@ -307,20 +308,22 @@ try:
     # DENTRO - se podia borrar el PathDenied del stage con la suite en
     # verde (auditoria 21-sep). El stage valida en el momento: dos llamadas.
     rb = call('delphi_changeset', {'command': 'begin'})
-    cid = rb.split('CHANGESET ')[1].split(' ')[0] if 'CHANGESET ' in rb else ''
+    # el id por su FORMA (hhnnss-secuencia-secreto), no por la palabra que lo
+    # precede en la frase
+    cid = mc.id_changeset(rb)
     check('G2b begin da un changeset para sondar', bool(cid), rb[:150])
     if cid:
         t = call('delphi_changeset', {'command': 'stage', 'id': cid,
                                       'kind': 'edit', 'path': AJENO_PAS,
                                       'old': 'unit Ajena;', 'new': 'unit A2;'})
         check('G2b delphi_changeset.path rechaza la ruta de fuera',
-              JAULA in t, t[:150])
+              mc.es(t, JAULA), t[:150])
         t = call('delphi_changeset', {'command': 'stage', 'id': cid,
                                       'kind': 'move',
                                       'path': os.path.join(JAIL, 'Propia.pas'),
                                       'dest': os.path.join(FUERA, 'robada.pas')})
         check('G2b delphi_changeset.dest rechaza el destino de fuera',
-              JAULA in t, t[:150])
+              mc.es(t, JAULA), t[:150])
 
     # ------------------------------------------------------------------ G3
     # El otro lado, sin el cual esto no vale: la misma llamada DENTRO de la
@@ -332,7 +335,7 @@ try:
     d1 = call('delphi_read', {'path': dentro})
     d2 = call('delphi_list', {'root': JAIL})
     check('G3 lo de DENTRO de la jaula sigue pasando',
-          JAULA not in d1 and JAULA not in d2, (d1 + ' | ' + d2)[:240])
+          not mc.es(d1, JAULA) and not mc.es(d2, JAULA), (d1 + ' | ' + d2)[:240])
 
     # ------------------------------------------------------------------ G5
     # El demonio de adb tiene que sobrevivir a la llamada: nacia dentro del

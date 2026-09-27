@@ -50,7 +50,7 @@ check('create: proyecto VCL', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out
 
 # ---- kind=unit ----
 out = call('delphi_create', {"kind": "unit", "name": "UUtil", "project": DPR})
-check('create unit: CREADA + registrada', mc.abre(out, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and 'ANADIDA' in out, out[:300])
+check('create unit: CREADA + registrada', mc.abre(out, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and mc.es(out, 'SN_UNIT_ADDED_FMT'), out[:300])
 check('create unit: fichero esqueleto', os.path.exists(os.path.join(VDIR, 'UUtil.pas')))
 dpr = rd(DPR)
 check('create unit: uses del .dpr', "UUtil in 'UUtil.pas'" in dpr, dpr)
@@ -73,7 +73,7 @@ check('create unit: acepta el .dproj como project', mc.abre(out, 'SK_CREATE_CREA
 
 # ---- form-vcl now writes the DCCReference ----
 out = call('delphi_create', {"kind": "form-vcl", "name": "UClientes", "project": DPR})
-check('create form: CREADO + alta', mc.abre(out, 'SK_CREATE_CREADO_FORM_FMT') and 'ANADIDA' in out, out[:300])
+check('create form: CREADO + alta', mc.abre(out, 'SK_CREATE_CREADO_FORM_FMT') and mc.es(out, 'SN_UNIT_ADDED_FORM_FMT'), out[:300])
 dpr = rd(DPR)
 check('create form: uses con {FormUClientes}', "UClientes in 'UClientes.pas' {FormUClientes}" in dpr, dpr)
 check('create form: CreateForm', 'Application.CreateForm(TFormUClientes, FormUClientes);' in dpr, dpr)
@@ -237,7 +237,7 @@ check('build: tras rename COMPILA', ok, err)
 # move into a subfolder keeps the name
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UOtra.pas'), "dest": os.path.join(sub, 'UOtra.pas')})
 check('move a subcarpeta: MOVIDO + reapuntado', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and mc.es(out, 'SN_UNIT_RENAMED_FMT'), out[:300])
-check('move a subcarpeta: sin renombrar no reescribe referencias (cuenta 0)', mc.es(out, 'SN_UNIT_RENAMED_FMT') and 'Referencias reescritas: 0 en 0' in out, out[:300])
+check('move a subcarpeta: sin renombrar no reescribe referencias (cuenta 0)', mc.es(out, 'SN_UNIT_RENAMED_FMT') and 'References rewritten: 0 in 0 file(s)' in out, out[:300])
 check('move a subcarpeta: include relativo', "UOtra in 'src\\UOtra.pas'" in rd(DPR), rd(DPR))
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UUtil.pas'), "dest": os.path.join(VDIR, 'UUtil.txt')})
 check('move unit a .txt rechazado', mc.rechazado(out) and mc.es(out, 'SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT'), out)
@@ -436,7 +436,7 @@ open(os.path.join(cdir, 'UOrig.dfm'), 'wb').write(b'object FormOrig: TFormOrig\r
 out = call('delphi_move', {"path": os.path.join(cdir, 'UOrig.pas'), "dest": os.path.join(cdir, 'UCopia.pas'), "copy": True})
 check('copy unit: COPIADO y el origen sigue', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(cdir, 'UOrig.pas')), out[:300])
 check('copy unit: cabecera de la copia reescrita', 'unit UCopia;' in rd(os.path.join(cdir, 'UCopia.pas')) and 'unit UOrig;' in rd(os.path.join(cdir, 'UOrig.pas')), out[:300])
-check('copy unit: designer copiado, el original sigue', os.path.exists(os.path.join(cdir, 'UCopia.dfm')) and os.path.exists(os.path.join(cdir, 'UOrig.dfm')) and 'copiado con la unit' in out, out[:300])
+check('copy unit: designer copiado, el original sigue', os.path.exists(os.path.join(cdir, 'UCopia.dfm')) and os.path.exists(os.path.join(cdir, 'UOrig.dfm')) and mc.es(out, 'SN_FILE_DESIGNER_TOO_FMT') and mc.catalogo()['SF_MOVE_COPIADO_CON_UNIT'] in out, out[:300])
 check('copy unit: ningun proyecto reapuntado, y la respuesta lo dice', not mc.es(out, 'SN_UNIT_RENAMED_FMT') and mc.es(out, 'SN_FILE_COPY_NO_PROJECT') and 'add-unit' in out and not mc.es(out, 'SN_FILE_COPIA_SEGURIDAD_EN_FMT'), out[:400])
 out = call('delphi_move', {"path": cdir, "dest": os.path.join(BASE, 'Copia2'), "copy": True})
 check('copy carpeta: COPIADO, las dos existen, sin la papelera del origen', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(BASE, 'Copia2', 'UCopia.pas')) and os.path.isdir(cdir) and not os.path.isdir(os.path.join(BASE, 'Copia2', '__delphi-patch')), out[:300])

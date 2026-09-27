@@ -28,7 +28,7 @@ this server has ever called broken code working.
 
 Usage:  python tests/test_round10.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, base64
+import json, os, re, base64
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -50,6 +50,12 @@ def J(t):
         return json.loads(t)
     except Exception:
         return {}
+
+
+def cid_de(r):
+    """El id de un changeset recien abierto, por SU forma (hhnnss-secuencia-
+    8 hex, ChangesetBegin), no por la frase que lo rodea; '' si no se abrio."""
+    return mc.id_changeset(r) if mc.abre(r, 'SN_CHANGESET_BEGUN_FMT') else ''
 
 
 A = spawn()
@@ -77,7 +83,7 @@ os.makedirs(CS)
 N = os.path.join(CS, 'Nota.txt')
 open(N, 'w', encoding='utf-8', newline='\r\n').write('uno\ndos\ntres\n')
 r = A.call('delphi_changeset', {'command': 'begin'})
-CID = [w for w in r.replace('.', ' ').split() if w.count('-') >= 2][0]
+CID = cid_de(r)
 A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'edit',
                              'path': N, 'old': 'dos', 'new': 'DOS'})
 A.call('delphi_changeset', {'command': 'preview', 'id': CID})
@@ -146,7 +152,7 @@ check('B5 un parametro que no existe es "error:", no "Error executing tool:"',
 DELTA = os.path.join(CS, 'Delta.txt')
 open(DELTA, 'w', encoding='utf-8', newline='\r\n').write('a\nb\nc\nd\n')
 r = A.call('delphi_changeset', {'command': 'begin'})
-CID2 = [w for w in r.replace('.', ' ').split() if w.count('-') >= 2][0]
+CID2 = cid_de(r)
 A.call('delphi_changeset', {'command': 'stage', 'id': CID2, 'kind': 'edit',
                              'path': DELTA, 'old': 'a', 'new': 'A'})
 A.call('delphi_changeset', {'command': 'stage', 'id': CID2, 'kind': 'delete-line',
@@ -163,7 +169,7 @@ r = A.call('delphi_changeset', {'command': 'commit', 'id': CID2})
 check('B6 el commit da el delta UNA vez por fichero',
       r.count('Delta.txt') == 1, r[:400])
 check('B6 ...y no le pone "+" a lo que quita',
-      any('Delta.txt' in l and '(-1 lineas en total)' in l for l in r.splitlines()), r[:400])
+      any('Delta.txt' in l and '(-1 lines in total)' in l for l in r.splitlines()), r[:400])
 raw = open(NUEVO, 'rb').read()
 check('D3 un create dentro de un changeset nace en CRLF, como delphi_create',
       raw.count(b'\r\n') >= 4 and b'\n' not in raw.replace(b'\r\n', b''),  # ni un LF suelto
@@ -209,7 +215,7 @@ check('P4 nobuild sin binario no dice que compilo',
 
 # ------------------------------------------------------------------ P6/P7 --
 _r = A.call('delphi_changeset', {'command': 'begin'})
-CID3 = [w for w in _r.replace('.', ' ').split() if w.count('-') >= 2][0]
+CID3 = cid_de(_r)
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID3, 'kind': 'chapuza',
                                  'path': DELTA})
 check('P6 el rechazo de kind incluye delete-line', 'delete-line' in r, r[:200])

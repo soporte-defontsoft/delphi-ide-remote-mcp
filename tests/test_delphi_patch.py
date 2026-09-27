@@ -7,7 +7,7 @@ results at BYTE level: encoding preservation is the whole point.
 Usage:  python tests/test_delphi_edit.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green.
 """
-import json, os
+import json, os, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -59,7 +59,7 @@ GESTORIA = 'gestoría'
 
 # --- read ---
 out = call('delphi_read', {"path": PAS})
-check('read: detecta cp1252+CRLF', 'encoding=cp1252' in out and 'finales=CRLF' in out, out)
+check('read: detecta cp1252+CRLF', 'encoding=cp1252' in out and 'eol=CRLF' in out, out)
 check('read: acentos correctos', GESTORIA in out, out)
 
 # --- edit happy path + byte-level verification ---
@@ -150,7 +150,7 @@ with open(CLS, 'wb') as f:
         'end.', '']).encode('cp1252'))
 out = call('delphi_edit', {"path": CLS, "insert": "metodo", "code": mcode,
                             "inclass": "TCosa", "visibility": "public"})
-check('insert metodo: DOS mitades', 'DOS mitades' in out and 'Mitad 2' in out, out)
+check('insert metodo: DOS mitades', 'BOTH halves' in out and 'Half 2' in out, out)
 ctx = open(CLS, 'rb').read().decode('cp1252')
 check('insert metodo: declaracion en clase',
       '    procedure Ping;' in ctx and ctx.index('procedure Ping;') < ctx.index('implementation'), ctx)
@@ -187,7 +187,7 @@ with open(ANI, 'wb') as f:
         'end.', '']).encode('cp1252'))
 out = call('delphi_edit', {"path": ANI, "insert": "metodo", "code": mcode,
                             "inclass": "TFuera", "visibility": "public"})
-check('insert metodo con tipo anidado: DOS mitades', 'DOS mitades' in out and 'Mitad 2' in out, out)
+check('insert metodo con tipo anidado: DOS mitades', 'BOTH halves' in out and 'Half 2' in out, out)
 ctx = open(ANI, 'rb').read().decode('cp1252')
 check('insert metodo con tipo anidado: la declaracion cae en public, DESPUES del tipo anidado',
       '    procedure Ping;' in ctx and ctx.index('procedure Ping;') > ctx.index('FLista: TDentro;')
@@ -232,7 +232,7 @@ out = call('delphi_edit', {"path": FMX,
     "old": "    Size.X = 100.000000",
     "new": "    Size.Width = 100.000000000000000000"})
 check('lint fmx: cubre el fichero ENTERO (los defectos restantes siguen avisando)',
-      mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and 'no existe en TLabel' in out, out[-600:])
+      mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and 'does not exist in TLabel' in out, out[-600:])
 FMX2 = os.path.join(DIR, 'Limpio.fmx')
 with open(FMX2, 'wb') as f:
     f.write(('object FormMain: TFormMain\r\n'
@@ -259,7 +259,7 @@ out = call('delphi_edit', {"path": VDFM,
     "old": "    Left = 8",
     "new": "    Left = 8\r\n    Position.X = 20.000000\r\n    Align = Client"})
 check('lint dfm: FMX-ismos avisados en el sentido inverso',
-      mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and 'no existe en TButton' in out
+      mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and 'does not exist in TButton' in out
       and 'alClient' in out, out[-600:])
 
 # --- la verificacion ensena LA region editada, no otra igual ---------------
@@ -267,6 +267,13 @@ check('lint dfm: FMX-ismos avisados en el sentido inverso',
 # linea era de las que se repiten (un "begin", un "var") el agente comprobaba
 # su edicion mirando un trozo de fichero que no era el suyo. Medido el
 # 2026-09-20: edicion en la linea 19, eco de la 7.
+def eco(t):
+    """Las lineas numeradas (N|contenido) que el eco relee del disco: se
+    sacan por su forma, no partiendo por la frase que las presenta (el dia
+    que se tradujo, el split lo devolvia todo y los checks seguian verdes)."""
+    return '\n'.join(re.findall(r'^ *\d+\|.*$', t, re.M))
+
+
 ECO = os.path.join(DIR, 'UEco.pas')
 open(ECO, 'wb').write(
     ('unit UEco;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\n'
@@ -275,19 +282,19 @@ open(ECO, 'wb').write(
      'procedure Tres;\r\nbegin\r\nend;\r\n\r\nend.\r\n').encode('ascii'))
 out = call('delphi_edit', {"path": ECO, "old": "procedure Tres;",
                            "new": "begin\r\nend;\r\n\r\nprocedure Marcador;\r\nprocedure Tres;"})
-_eco = out.split('lineas resultantes leidas del disco:')[-1]
+_eco = eco(out)
 check('eco: la verificacion ensena la region EDITADA, no el primer "begin"',
-      'Marcador' in _eco and 'procedure Uno' not in _eco, _eco[:200])
+      'Marcador' in _eco and 'procedure Uno' not in _eco, _eco[:200] or out[:300])
 _nums = [int(l.split('|')[0].strip()) for l in _eco.strip().splitlines() if '|' in l]
 check('eco: y esas lineas son las de verdad (>= 14, no las de arriba)',
       bool(_nums) and min(_nums) >= 14, _nums)
 out = call('delphi_edit', {"path": ECO, "old": "procedure Dos;",
                            "new": "procedure A;\r\nbegin\r\nend;\r\n\r\n"
                                   "procedure B;\r\nbegin\r\nend;\r\n\r\nprocedure Dos;"})
-_eco = out.split('lineas resultantes leidas del disco:')[-1]
+_eco = eco(out)
 check('eco: la ventana cubre TODO lo escrito, no solo las dos primeras lineas',
       'procedure A;' in _eco and 'procedure B;' in _eco and 'procedure Dos;' in _eco,
-      _eco[:300])
+      _eco[:300] or out[:300])
 
 # --- adduses: la unit entra en el uses de la seccion, la clausula la escribe el motor ---
 ADDU = os.path.join(DIR, 'ConUses.pas')
@@ -296,7 +303,7 @@ open(ADDU, 'wb').write(CRLF.join([
     'type', '  TX = class end;', '', 'implementation', '', '{$R *.res} // uses (en comentario, no cuenta)', '',
     'end.', '']).encode('cp1252'))
 out = call('delphi_edit', {"path": ADDU, "adduses": "System.SysUtils; Modules.API"})
-check('adduses: implementation sin uses -> se crea', mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'creada' in out, out[:300])
+check('adduses: implementation sin uses -> se crea', mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and mc.es(out, 'SN_ADDUSES_CREATED_FMT'), out[:300])
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('adduses: clausula nueva bajo implementation, con puntos en los nombres',
       'implementation\r\n\r\nuses\r\n  System.SysUtils, Modules.API;\r\n\r\n{$R' in _src, _src)
@@ -304,13 +311,15 @@ check('adduses: la de interface no se toca', 'interface\r\n\r\nuses\r\n  System.
 out = call('delphi_edit', {"path": ADDU, "adduses": "UOtra", "section": "implementation"})
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('adduses: anade al final de la clausula existente', mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'Modules.API,\r\n  UOtra;' in _src, out[:300])
-check('adduses: el eco trae la clausula releida', 'UOtra;' in out.split('releida del disco')[-1], out[:300])
+_cl = re.search(r'^uses\s.*?;', out, re.M | re.S)  # la clausula releida: su forma, no la frase que la presenta
+check('adduses: el eco trae la clausula releida', bool(_cl) and 'UOtra;' in _cl.group(0), out[:300])
 out = call('delphi_edit', {"path": ADDU, "adduses": "System.Classes", "section": "interface"})
 check('adduses: idempotente (ya estaba)', mc.abre(out, 'SN_ADDUSES_PRESENT_FMT'), out[:200])
 out = call('delphi_edit', {"path": ADDU, "adduses": "UInterfaz;System.Classes", "section": "interface"})
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('adduses: interface con uses -> anade la que falta y dice cual estaba',
-      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'Ya estaban: System.Classes' in out and 'System.Classes,\r\n  UInterfaz;' in _src, out[:300])
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and mc.es(out, 'SN_ADDUSES_SOME_PRESENT_FMT') and 'Already there: System.Classes.' in out
+      and 'System.Classes,\r\n  UInterfaz;' in _src, out[:300])
 _antes = open(ADDU, 'rb').read()
 out = call('delphi_edit', {"path": ADDU, "adduses": "System.Classes"})
 check('adduses: ya esta en la OTRA seccion -> no la repite (E2004) y lo dice',
@@ -334,7 +343,8 @@ check('removeuses: la que no esta -> nada que escribir', mc.abre(out, 'SN_REMOVE
 out = call('delphi_edit', {"path": ADDU, "removeuses": "System.Classes;UInterfaz;UNoEsta", "section": "interface"})
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('removeuses: la clausula vacia se va entera y lo dice',
-      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'No estaban: UNoEsta' in out and 'se ha quitado entera' in out
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and mc.es(out, 'SN_REMOVEUSES_SOME_ABSENT_FMT') and 'Not there: UNoEsta.' in out
+      and mc.es(out, 'SN_REMOVEUSES_GONE_FMT')
       and 'interface\r\n\r\ntype\r\n' in _src and _src.count('\r\nuses\r\n') == 1, _src)
 out = call('delphi_edit', {"path": ADDU, "removeuses": "X", "section": "interface"})
 check('removeuses: seccion sin uses lo dice', mc.es(out, 'SN_REMOVEUSES_NO_CLAUSE_FMT'), out[:200])
@@ -422,7 +432,7 @@ check('tanda: "edits" codificado dos veces (cadena JSON dentro de cadena) se des
       mc.abre(out, 'SN_PATCH_EDITS_OK_FMT') and "Writeln('E');" in _t, out[:200])
 out = call('delphi_edit', {'path': _occ, 'edits': '{"old": "x", "new": "y"}'})
 check('tanda: "edits" que no es array -> RECHAZADO diciendo cuantos caracteres llegaron y como empieza',
-      mc.rechazado(out) and mc.es(out, 'SR_PATCH_EDITS_JSON_FMT') and 'Han llegado 24 caracteres' in out and '{"old": "x"' in out, out[:300])
+      mc.rechazado(out) and mc.es(out, 'SR_PATCH_EDITS_JSON_FMT') and '24 characters arrived' in out and '{"old": "x"' in out, out[:300])
 
 srv.cierra()
 mc.fin('delphi_edit battery')

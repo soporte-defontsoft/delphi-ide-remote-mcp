@@ -191,7 +191,7 @@ begin
     for F in Files do
     begin
       Inc(N);
-      Sb.AppendLine(Format('===== MENSAJE %d/%d  (%s) =====', [N, Length(Files),
+      Sb.AppendLine(MsgFmt(SF_MSGS_CABECERA_FMT, [N, Length(Files),
         TPath.GetFileName(F)]));
       Sb.AppendLine(DecodeSourceBytes(TFile.ReadAllBytes(F)).TrimRight);
       Sb.AppendLine;

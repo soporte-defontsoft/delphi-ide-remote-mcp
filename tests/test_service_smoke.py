@@ -26,6 +26,7 @@ prueba del despliegue, no del build; la version que contesta sale en una NOTA.
 """
 import json
 import os
+import re
 import subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
@@ -114,7 +115,7 @@ else:
     if roots:
         l = call('delphi_list', {'root': roots[-1], 'dirs': True})
         check('V6 una lectura de verdad (delphi_list de una raiz)',
-              '"ok":true' in l.replace(' ', ''), l[:200])
+              not mc.fallo(l) and 'total' in mc.como_json(l), l[:200])
     if roots and escribible:
         f = roots[-1] + '\\__humo-servicio.txt'
         c = call('delphi_textedit', {'path': f, 'create': True,
@@ -122,8 +123,10 @@ else:
         d = call('delphi_delete', {'path': f})
         # y la copia que delphi_delete deja en la papelera de esa raiz: se
         # quedaba una por pasada en produccion (revision del 26-sep-2026)
-        copia = next((l.split('copia:', 1)[1].strip() for l in d.split('\n')
-                      if l.strip().startswith('copia:')), '')
+        # la copia es la ruta que empieza por la raiz del fichero borrado: el
+        # DATO, no el rotulo que la presenta (texto del catalogo, que se traduce)
+        m = re.search(re.escape(roots[-1]) + r'\\[^\r\n]*__humo-servicio\.txt\S*', d)
+        copia = m.group(0) if m else ''
         pu = call('delphi_delete', {'path': copia, 'purge': True}) if copia else '(sin copia)'
         check('V7 una escritura de verdad, y su limpieza (la copia de la papelera tambien)',
               mc.abre(c, 'SK_TEXT_CREADO_ENCODING_FINALES_FMT') and not mc.rechazado(d) and copia != '' and

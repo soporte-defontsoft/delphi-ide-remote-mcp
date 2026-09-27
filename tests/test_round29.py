@@ -84,7 +84,7 @@ check('multilinea: la firma cualificada conserva sus dos lineas',
       'function TCosa.Llamar(const ADestino, ARuta: string;' in t and
       'out ARespuesta: Pointer): Boolean;' in t, 'falta una mitad')
 check('multilinea: el informe no miente sobre las dos mitades',
-      'DOS mitades' in r and 'ARespuesta' in r, r[:200])
+      'BOTH halves' in r and 'ARespuesta' in r, r[:200])
 
 # ------------------------------------------------------- 2. comentario encima
 pas = fresh('coment.pas')

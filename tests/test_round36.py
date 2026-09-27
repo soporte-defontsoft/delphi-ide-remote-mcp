@@ -116,7 +116,9 @@ call = cli.call
 
 
 def sinaviso(s):
-    return s.split(' [warning')[0]
+    # el aviso va DETRAS del JSON y ahora empieza por su etiqueta: se corta
+    # por ella, nombrada por su constante (antes por la frase '[warning')
+    return s.split(' [%s]' % mc.id_de('SN_LSP_NO_SETTINGS_WARNING'))[0]
 
 
 try:
@@ -204,7 +206,7 @@ try:
                                  'old': 'a\nb', 'new': 'z'})
     check('S10 el rechazo del ancla multilinea manda a edits y a toline',
           mc.es(r, 'SR_PATCH_ANCHOR_MULTILINE') and 'edits' in r and 'toline' in r
-          and 'una llamada por linea' not in r,
+          and 'one call per line' not in r.lower(),
           r[:240])
     r2 = call('delphi_edit', {'path': PAS, 'old': 'begin\nend;', 'new': 'x'})
     check('S10b ...y el gemelo Pascal dice lo MISMO',

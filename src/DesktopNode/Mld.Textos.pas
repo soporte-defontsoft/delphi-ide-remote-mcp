@@ -4,9 +4,9 @@
   los dos programas que corren en la maquina DESTINO. No enlazan Lsp.Texts
   (es del servidor y arrastra su logger), asi que tienen el suyo, con las
   mismas reglas (David, 27-sep-2026): una constante por mensaje, la etiqueta
-  al final de su texto (areas NODE y JOB; con el resultado si es un
-  rechazo), y todo sale por MsgText/MsgFmt, el sitio donde entrara la
-  traduccion. test_catalogo vigila los dos catalogos: un id no se repite.
+  al PRINCIPIO de su texto (areas NODE y JOB; con el resultado si es un
+  rechazo), textos en ingles, y todo sale por MsgText/MsgFmt, el sitio
+  unico de salida. test_catalogo vigila los dos catalogos: un id no se repite.
   Las marcas que el SERVIDOR lee de la salida (NodeProtocolo.inc, las
   lineas de ventanas, ___RC=, ___ENV=) no son mensajes y no estan aqui. }
 
@@ -14,268 +14,290 @@ interface
 
 const
   SN_NODE_VENTANAS_FALLO_LISTA_FMT =
-    '  ventanas: fallo la lista (%s) [NODE-001]';
+    '  [NODE-001] windows: the list failed (%s)';
 
   SN_NODE_CONTROL_ESCRITORIO_WINDOWS =
-    'McpDesktop - nodo de control del escritorio Windows [NODE-002]';
+    '[NODE-002] McpDesktop - Windows desktop control node';
 
   SN_NODE_ESCRITORIO_PIXELES_ESCALA_FMT =
-    '  escritorio %dx%d pixeles, escala %s [NODE-003]';
+    '  [NODE-003] desktop %dx%d pixels, scale %s';
 
   SN_NODE_VENTANAS_LISTA_CAPTURA =
-    '  ventanas: la lista va con la captura de abajo [NODE-004]';
+    '  [NODE-004] windows: the list comes with the screenshot below';
 
   SN_NODE_NO_PUDE_PULSAR_CAMPO_FMT =
-    '  no pude pulsar en el campo: %s [NODE-005]';
+    '  [NODE-005] Could not click on the field: %s';
 
   SK_NODE_ESCRITO_EN_PIXEL_FMT =
-    '  ESCRITO "%s" en el pixel (%d,%d) (tecleado; el foco NO se ' +
-    'verifica: comprueba con la captura) [NODE-006]';
+    '  [NODE-006] WRITTEN "%s" at pixel (%d,%d) (typed; the focus is NOT ' +
+    'verified: check it on the screenshot)';
 
   SN_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT =
-    '  pulse bien pero no pude escribir: %s [NODE-007]';
+    '  [NODE-007] The click worked but I could not type: %s';
 
   SK_NODE_ESCRITO_TECLEADO_FMT =
-    '  ESCRITO: %s (tecleado; el foco NO se verifica: comprueba con la ' +
-    'captura) [NODE-008]';
+    '  [NODE-008] WRITTEN: %s (typed; the focus is NOT verified: check ' +
+    'it on the screenshot)';
 
   SN_NODE_NO_PUDE_ESCRIBIR_FMT =
-    '  no pude escribir: %s [NODE-009]';
+    '  [NODE-009] Could not type: %s';
 
   SN_NODE_NO_CONOZCO_TECLA_FMT =
-    '  no conozco la tecla %s [NODE-010]';
+    '  [NODE-010] Unknown key %s';
 
   SN_NODE_NO_ENVIAR_TECLA_FMT =
-    '  no pude enviar la tecla: %s [NODE-011]';
+    '  [NODE-011] Could not send the key: %s';
 
   SK_NODE_ALT_TAB_ENVIADO =
-    '  ALT+TAB enviado [NODE-012]';
+    '  [NODE-012] ALT+TAB enviado';
 
   SN_NODE_NO_ENVIAR_ALT_TAB_FMT =
-    '  no pude enviar Alt+Tab: %s [NODE-013]';
+    '  [NODE-013] Could not send Alt+Tab: %s';
 
   SK_NODE_CLIC_EN_PIXEL_FMT =
-    '  CLIC en el pixel (%d,%d) de la captura [NODE-014]';
+    '  [NODE-014] CLICK at pixel (%d,%d) of the screenshot';
 
   SN_NODE_NO_PUDE_PULSAR_FMT =
-    '  no pude pulsar: %s [NODE-015]';
+    '  [NODE-015] Could not click: %s';
 
   SN_NODE_USO_ENUMERA_VENTANAS =
-    '  uso: <x> <y>   pulsa en ese pixel de la captura' + sLineBreak +
-    '       altab     cambia de ventana con el teclado' + sLineBreak +
-    '       tecla <t> pulsa una tecla (escape, enter, tab, super...)' + sLineBreak +
-    '       texto <t> escribe ese texto donde este el foco' + sLineBreak +
-    '       escribe <x> <y> <t>  pulsa ahi Y escribe: un solo viaje' + sLineBreak +
-    '       ventanas  enumera las ventanas visibles con su sitio [NODE-016]';
+    '  [NODE-016] usage: <x> <y>   click that pixel of the screenshot' +
+    sLineBreak +
+    '                  altab     switch window with the keyboard' +
+    sLineBreak +
+    '                  tecla <t> press a key (escape, enter, tab, ' +
+    'super...)' +
+    sLineBreak +
+    '                  texto <t> type that text wherever the focus is' +
+    sLineBreak +
+    '                  escribe <x> <y> <t>  click there AND type: a ' +
+    'single trip' +
+    sLineBreak +
+    '                  ventanas  list the visible windows with their ' +
+    'position';
 
   SN_NODE_NODO_LISTO =
-    'nodo listo [NODE-017]';
+    '[NODE-017] node ready';
 
   SN_NODE_NO_RECOGER_CAPTURA_FMT =
-    '  aviso: no pude recoger la captura (%s) [NODE-018]';
+    '  [NODE-018] Warning: could not collect the screenshot (%s)';
 
   SN_NODE_NO_SE_PUDO_ABRIR_FMT =
-    '  %-16s NO SE PUDO ABRIR: %s [NODE-019]';
+    '  [NODE-019] %-16s COULD NOT OPEN: %s';
 
   SN_NODE_ABIERTA_SIMBOLOS_FMT =
-    '  %-16s abierta, simbolos %d/%d [NODE-020]';
+    '  [NODE-020] %-16s abierta, simbolos %d/%d';
 
   SN_NODE_VENTANAS_SIN_OJOS_FMT =
-    '  ventanas: sin ojos X11 (%s) [NODE-021]';
+    '  [NODE-021] windows: no X11 eyes (%s)';
 
   SN_NODE_VENTANAS_NO_ENUMERARLAS_FMT =
-    '  ventanas: no pude enumerarlas (%s) [NODE-022]';
+    '  [NODE-022] windows: could not enumerate them (%s)';
 
   SN_NODE_VENTANAS_SIN_CONVERTIR =
-    '  ventanas: no pude leer el tamano de la captura; coordenadas de ' +
-    'X11 sin convertir [NODE-023]';
+    '  [NODE-023] windows: could not read the screenshot size; X11 ' +
+    'coordinates not converted';
 
   SN_NODE_NATIVAS_WAYLAND_NO_SALEN =
-    '  (ventanas X11/Xwayland: las nativas Wayland no salen en la lista) ' +
-    '[NODE-024]';
+    '  [NODE-024] (X11/Xwayland windows: native Wayland windows do not ' +
+    'appear in the list)';
 
   SN_NODE_VENTANAS_FALLO_LISTA_CLASE_FMT =
-    '  ventanas: fallo la lista (%s: %s) [NODE-025]';
+    '  [NODE-025] windows: the list failed (%s: %s)';
 
   SN_NODE_CONTROL_ESCRITORIO_LINUX =
-    'McpDesktop - nodo de control del escritorio Linux [NODE-026]';
+    '[NODE-026] McpDesktop - Linux desktop control node';
 
   SN_NODE_LIBRERIAS_DEL_SISTEMA =
-    '-- 1. librerias del sistema (nada que instalar) -- [NODE-027]';
+    '[NODE-027] -- 1. system libraries (nothing to install) --';
 
   SN_NODE_NO_HAY_ESCRITORIO_FMT =
-    'NO hay escritorio al que hablar: %s [NODE-028]';
+    '[NODE-028] NO desktop to talk to: %s';
 
   SN_NODE_PANTALLA_ESCALA_CAPTURA =
-    '-- 2. la pantalla: escala y captura -- [NODE-029]';
+    '[NODE-029] -- 2. the screen: scale and screenshot --';
 
   SN_NODE_ESCRITORIO_DICE_ESCALA_FMT =
-    '  el escritorio dice que su escala es %s [NODE-030]';
+    '  [NODE-030] The desktop says its scale is %s';
 
   SN_NODE_NO_LEER_ESCALA_FMT =
-    '  no pude leer la escala, asumo 1,00: %s [NODE-031]';
+    '  [NODE-031] Could not read the scale, assuming 1.00: %s';
 
   SN_NODE_LAS_MANOS =
-    '-- 3. las manos -- [NODE-032]';
+    '[NODE-032] -- 3. the hands --';
 
   SN_NODE_NO_PREPARAR_CANAL_FMT =
-    '  no pude preparar el canal: %s [NODE-033]';
+    '  [NODE-033] Could not prepare the channel: %s';
 
   SN_NODE_NO_ABRIR_CANAL_FMT =
-    '  no pude abrir el canal: %s [NODE-034]';
+    '  [NODE-034] Could not open the channel: %s';
 
   SN_NODE_CANAL_NO_LISTO_FMT =
-    '  el canal no llego a estar listo: %s [NODE-035]';
+    '  [NODE-035] The channel never became ready: %s';
 
   SN_NODE_LISTAS_PANTALLA_LOGICA_FMT =
-    '  listas. pantalla logica %dx%d, escala %s [NODE-036]';
+    '  [NODE-036] ready. logical screen %dx%d, scale %s';
 
   SK_NODE_SUPER_ENVIADO =
-    '  SUPER enviado: vista de todas las ventanas [NODE-037]';
+    '  [NODE-037] SUPER sent: overview of all the windows';
 
   SN_NODE_NO_ABRIR_VISTA_FMT =
-    '  no pude abrir la vista: %s [NODE-038]';
+    '  [NODE-038] Could not open the overview: %s';
 
   SK_NODE_ESCRITO_PIXEL_MAPA_FMT =
-    '  ESCRITO "%s" en el pixel (%d,%d)  [%s] (tecleado; el foco NO se ' +
-    'verifica: comprueba con la captura) [NODE-039]';
+    '  [NODE-039] WRITTEN "%s" at pixel (%d,%d)  [%s] (typed; the focus ' +
+    'is NOT verified: check it on the screenshot)';
 
   SK_NODE_ESCRITO_TECLEADO_MAPA_FMT =
-    '  ESCRITO: %s  [%s] (tecleado; el foco NO se verifica: comprueba ' +
-    'con la captura) [NODE-040]';
+    '  [NODE-040] WRITTEN: %s  [%s] (typed; the focus is NOT verified: ' +
+    'check it on the screenshot)';
 
   SN_NODE_USO_TECLA_EVDEV =
-    '  uso: <x> <y>   pulsa en ese pixel de la captura' + sLineBreak +
-    '       altab     cambia de ventana con el teclado' + sLineBreak +
-    '       tecla <n> pulsa una tecla (evdev: Escape 1, Enter 28)' + sLineBreak +
-    '       texto <t> escribe ese texto donde este el foco' + sLineBreak +
-    '       escribe <x> <y> <t>  pulsa ahi Y escribe: un solo viaje' + sLineBreak +
-    '       ventanas  ensena TODAS las ventanas (tecla Super),' + sLineBreak +
-    '                 para cuando se tapan entre ellas' + sLineBreak +
-    '  (para dar el foco a una ventana, pulsa en su barra de titulo) [NODE-041]';
+    '  [NODE-041] usage: <x> <y>   click that pixel of the screenshot' +
+    sLineBreak +
+    '                  altab     switch window with the keyboard' +
+    sLineBreak +
+    '                  tecla <n> press a key (evdev: Escape 1, Enter 28)' +
+    sLineBreak +
+    '                  texto <t> type that text wherever the focus is' +
+    sLineBreak +
+    '                  escribe <x> <y> <t>  click there AND type: a ' +
+    'single trip' +
+    sLineBreak +
+    '                  ventanas  show ALL the windows (Super key),' +
+    sLineBreak +
+    '                            for when they cover each other' +
+    sLineBreak +
+    '  (to give a window the focus, click its title bar)';
 
   SN_NODE_NO_SE_USA_MANO =
-    'McpDesktopNode - nodo de escritorio del Delphi IDE Remote MCP.' + sLineBreak +
-    '  Este programa no se usa a mano: lo lanza el servidor MCP, que' + sLineBreak +
-    '  es quien decide (por workspace) si un agente puede ver y tocar' + sLineBreak +
-    '  este escritorio. Sin esa llamada no hace nada. [NODE-042]';
+    '[NODE-042] McpDesktopNode - desktop node of the Delphi IDE Remote ' +
+    'MCP.' +
+    sLineBreak +
+    '  This program is not run by hand: the MCP server launches it, and' +
+    sLineBreak +
+    '  the server decides (per workspace) whether an agent may see and ' +
+    'touch' +
+    sLineBreak +
+    '  this desktop. Without that call it does nothing.';
 
   SN_NODE_TODAVIA_NO_TIENE_MANOS =
-    'McpDesktop - este sistema todavia no tiene manos en el nodo' + sLineBreak +
-    '  (hoy: Linux con GNOME y Windows; macOS seria el siguiente) [NODE-043]';
+    '[NODE-043] McpDesktop - this system has no hands in the node yet' +
+    sLineBreak +
+    '  (today: Linux with GNOME, and Windows; macOS would be next)';
 
   SR_JOB_FORK_VIGIA_FALLO =
-    'error: fork del vigia fallo [JOB-001 INVALID_PARAM]';
+    '[JOB-001 INVALID_PARAM] Fork of the watcher failed';
 
   SR_JOB_FORK_PROGRAMA_FALLO =
-    'error: fork del programa fallo [JOB-002 INVALID_PARAM]';
+    '[JOB-002 INVALID_PARAM] Fork of the program failed';
 
   SR_JOB_NO_PUDE_ENTRAR_FMT =
-    'error: no pude entrar en %s: %s [JOB-003 INVALID_PARAM]';
+    '[JOB-003 INVALID_PARAM] Could not enter %s: %s';
 
   SR_JOB_NO_PUDE_ARRANCAR_FMT =
-    'error: no pude arrancar %s: %s [JOB-004 INVALID_PARAM]';
+    '[JOB-004 INVALID_PARAM] Could not start %s: %s';
 
   SR_JOB_KILL_NECESITA_ID =
-    'RECHAZADO: @kill necesita el id de un trabajo de este servidor. ' +
-    '[JOB-005 DENIED]';
+    '[JOB-005 DENIED] @kill needs the id of one of this server''s jobs.';
 
   SN_JOB_NINGUN_TRABAJO_VIVO_FMT =
-    'no hay ningun trabajo %s vivo en esta carpeta: o ya termino, o no ' +
-    'era de este proyecto. [JOB-006]';
+    '[JOB-006] No job %s is alive in this folder: either it already ' +
+    'ended, or it was not from this project.';
 
   SK_JOB_TERMINADO_EL_TRABAJO_FMT =
-    'terminado el trabajo %s (pid %d por %s, %s). [JOB-007]';
+    '[JOB-007] Job %s terminated (pid %d from %s, %s).';
 
   SN_JOB_NO_PUDE_MATAR_FMT =
-    'no pude matar el trabajo %s (pid %d): %s - %s [JOB-008]';
+    '[JOB-008] Could not kill job %s (pid %d): %s - %s';
 
   SR_JOB_NO_EXISTE_FMT =
-    'error: no existe %s en la carpeta desplegada de este proyecto en el ' +
-    'target. [JOB-009 NOT_FOUND]';
+    '[JOB-009 NOT_FOUND] %s does not exist in this project''s deployed ' +
+    'folder on the target.';
 
   SR_JOB_NO_EJECUTABLE_NATIVO_FMT =
-    'RECHAZADO: %s no es un ejecutable nativo (ELF/PE): solo se ejecuta ' +
-    'el binario que produjo delphi_build. [JOB-010 DENIED]';
+    '[JOB-010 DENIED] %s is not a native executable (ELF/PE): only the ' +
+    'binary that delphi_build produced is run.';
 
   // Textos que estaban en linea en Mld.DBus.pas (el resto, 27-sep-2026)
   SF_NODE_FALTA_EN_FMT =
-    'falta %s en %s (%s)';
+    'missing %s in %s (%s)';
 
   
 
   SF_NODE_BUS_NO_DEVOLVIO_CONEXION =
-    'el bus no devolvio conexion (sin DBUS_SESSION_BUS_ADDRESS?)';
+    'the bus returned no connection (no DBUS_SESSION_BUS_ADDRESS?)';
 
   SF_NODE_NO_HAY_CONEXION_BUS =
-    'no hay conexion con el bus';
+    'no connection to the bus';
 
   SF_NODE_BUS_NO_RESPONDIO =
-    'el bus no respondio';
+    'the bus did not answer';
 
   SF_NODE_RESPUESTA_SIN_ARGUMENTOS =
-    'respuesta sin argumentos';
+    'reply without arguments';
 
   SF_NODE_ESPERABA_ARRAY_CADENAS =
-    'se esperaba un array de cadenas';
+    'an array of strings was expected';
 
   SF_NODE_ESCRITORIO_NO_RESPONDIO =
-    'el escritorio no respondio';
+    'the desktop did not answer';
 
   SF_NODE_TERCER_ARGUMENTO_NO_ARRAY =
-    'el tercer argumento no es el array de monitores logicos';
+    'the third argument is not the array of logical monitors';
 
   SF_NODE_NO_ANADIR_ARGUMENTO =
-    'no se pudo anadir un argumento';
+    'could not add an argument';
 
   SF_NODE_CREATESESSION_SIN_RUTA_SESION =
-    'CreateSession no devolvio ruta de sesion';
+    'CreateSession returned no session path';
 
   SF_NODE_NO_ABRIR_DICCIONARIO =
-    'no pude abrir el diccionario';
+    'could not open the dictionary';
 
   SF_NODE_CREATESESSION_NO_DEVOLVIO_RUTA =
-    'CreateSession no devolvio ruta';
+    'CreateSession returned no path';
 
   SF_NODE_NO_LEER_SESSIONID =
-    'no pude leer SessionId';
+    'could not read SessionId';
 
   SF_NODE_SCREENCAST_NO_DEVOLVIO_RUTA =
-    'ScreenCast.CreateSession no devolvio ruta';
+    'ScreenCast.CreateSession returned no path';
 
   SF_NODE_CONNECTTOEIS_NO_DEVOLVIO_NADA =
-    'ConnectToEIS no devolvio nada';
+    'ConnectToEIS returned nothing';
 
   SF_NODE_CONNECTTOEIS_DEVOLVIO_TIPO_FMT =
-    'ConnectToEIS devolvio tipo %d, se esperaba un descriptor';
+    'ConnectToEIS returned type %d, a descriptor was expected';
 
   SF_NODE_DESCRIPTOR_NO_VALIDO =
-    'el descriptor recibido no es valido';
+    'the received descriptor is not valid';
 
   SF_NODE_NO_SUSCRIBIRME_RESPUESTA_FMT =
-    'no pude suscribirme a la respuesta: %s';
+    'could not subscribe to the reply: %s';
 
   SF_NODE_PORTAL_SIN_OBJETO_PETICION =
-    'el portal no devolvio objeto de peticion';
+    'the portal returned no request object';
 
   SF_NODE_PORTAL_RECHAZO_CAPTURA_FMT =
-    'el portal rechazo la captura (codigo %d)';
+    'the portal refused the screenshot (code %d)';
 
   SF_NODE_RESPUESTA_SIN_RESULTADOS =
-    'la respuesta no trae resultados';
+    'the reply carries no results';
 
   SF_NODE_RESPUESTA_SIN_DIRECCION =
-    'la respuesta no trae la direccion del fichero';
+    'the reply does not carry the file URI';
 
   SF_NODE_NO_ENTIENDO_DIRECCION_FMT =
-    'no entiendo la direccion %s';
+    'I do not understand the URI %s';
 
   SF_NODE_PORTAL_QUEDO_CALLADO_FMT =
-    'el portal se quedo callado %d ms: ni respuesta ni error. Lo normal ' +
-    'es que no llegara a mostrar el dialogo del permiso de captura (pasa ' +
-    'en sesion remota o con la pantalla bloqueada). Pide al operador que ' +
-    'conceda UNA vez la captura de pantalla en esa maquina, con la ' +
-    'pantalla delante; despues esto funciona en silencio';
+    'the portal stayed silent for %d ms: neither a reply nor an error. ' +
+    'Most likely it never got to show the screen capture permission ' +
+    'dialog (this happens in a remote session or with the screen ' +
+    'locked). Ask the operator to grant screen capture ONCE on that ' +
+    'machine, sitting in front of the screen; after that this works ' +
+    'silently';
 
   // Textos que estaban en linea en Mld.Eis.pas (el resto, 27-sep-2026)
   SF_NODE_DESCRIPTOR_INVALIDO =
@@ -284,190 +306,192 @@ const
   
 
   SF_NODE_NO_DEVOLVIO_CONTEXTO =
-    'ei_new_sender no devolvio contexto';
+    'ei_new_sender returned no context';
 
   SF_NODE_BACKEND_FD_DEVOLVIO_FMT =
     'ei_setup_backend_fd devolvio %d';
 
   SF_NODE_DISPOSITIVOS_NO_LISTOS_FMT =
-    'los dispositivos no llegaron a estar listos en %d ms (puntero=%s ' +
-    'teclado=%s)';
+    'the devices did not become ready within %d ms (pointer=%s ' +
+    'keyboard=%s)';
 
   SF_NODE_CANAL_NO_ESTA_LISTO =
-    'el canal no esta listo';
+    'the channel is not ready';
 
   SF_NODE_CAE_FUERA_PANTALLA_FMT =
-    '(%s,%s) de la captura cae fuera de la pantalla (escala %s, region ' +
-    '%dx%d)';
+    '(%s,%s) of the screenshot falls outside the screen (scale %s, ' +
+    'region %dx%d)';
 
   SF_NODE_TECLADO_TABLA_FIJA =
-    'teclado: tabla fija (americano)';
+    'keyboard: fixed table (US)';
 
   SF_NODE_LIBEI_NO_ENTREGA_MAPA =
-    ' - esta libei no entrega el mapa';
+    ' - this libei does not provide the keymap';
 
   SF_NODE_ESCRITORIO_NO_ENTREGO_MAPA =
-    ' - el escritorio no entrego su mapa';
+    ' - the desktop did not provide its keymap';
 
   SF_NODE_NO_LEER_MAPA_ESCRITORIO =
-    ' - no pude leer el mapa del escritorio';
+    ' - could not read the desktop keymap';
 
   SF_NODE_TECLADO_DEL_ESCRITORIO_FMT =
-    'teclado: el del escritorio (%s, %d caracteres)';
+    'keyboard: the desktop''s own (%s, %d characters)';
 
   SF_NODE_ESCRITORIO_NO_DIO_TECLADO =
-    'el escritorio no dio teclado';
+    'the desktop provided no keyboard';
 
   SF_NODE_TECLADO_SIN_TECLA_FMT =
-    'el teclado del escritorio (%s) no tiene una tecla que de el ' +
-    'caracter "%s" (posicion %d), ni directa ni por tecla muerta (%d ' +
-    'teclas muertas en el mapa)';
+    'the desktop keyboard (%s) has no key that gives the character "%s" ' +
+    '(position %d), neither directly nor through a dead key (%d dead ' +
+    'keys in the map)';
 
   SF_NODE_NO_SE_TECLEAR_FMT =
-    'no se teclear el caracter "%s" (posicion %d)';
+    'I do not know how to type the character "%s" (position %d)';
 
   // Textos que estaban en linea en Mld.DBus.pas (el resto, 27-sep-2026)
   SF_NODE_NO_CONSTRUIR_MENSAJE =
-    'no se pudo construir el mensaje';
+    'could not build the message';
 
   SF_NODE_SIN_RESPUESTA =
-    'sin respuesta';
+    'no reply';
 
   // Textos que estaban en linea en Mld.X11.pas (el resto, 27-sep-2026)
   SF_NODE_NO_PUDE_MIRAR_FMT =
-    'no pude mirar %s: %s';
+    'could not look into %s: %s';
 
   SF_NODE_SIN_CONEXION_X11 =
-    'no hay conexion con X11';
+    'no connection to X11';
 
   SF_NODE_NO_LEER_ARBOL_X11 =
-    'no pude leer el arbol de ventanas de X11';
+    'could not read the X11 window tree';
 
   SF_NODE_VENTANA_YA_NO_EXISTE =
-    'esa ventana ya no existe';
+    'that window no longer exists';
 
   SF_NODE_VENTANA_NO_VISIBLE =
-    'la ventana no esta visible: no hay nada que capturar';
+    'the window is not visible: there is nothing to capture';
 
   SF_NODE_XGETIMAGE_SIN_IMAGEN =
-    'XGetImage no devolvio imagen (ventana tapada o sin respaldo)';
+    'XGetImage returned no image (window covered or without backing ' +
+    'store)';
 
   SF_NODE_XWAYLAND_SIN_AUTORIZACION =
-    'Hay sesion Wayland pero no encuentro la autorizacion de Xwayland ' +
-    '(.mutter-Xwaylandauth.*). Pidele al operador que abra alguna ' +
-    'aplicacion en esa sesion, o comprueba que Xwayland este activo.';
+    'There is a Wayland session but I cannot find the Xwayland ' +
+    'authorization (.mutter-Xwaylandauth.*). Ask the operator to open ' +
+    'some application in that session, or check that Xwayland is active.';
 
   SF_NODE_SESION_SIN_CONECTAR =
-    'Hay sesion grafica, pero no pude conectar con ella.';
+    'There is a graphical session, but I could not connect to it.';
 
   SF_NODE_PUNTERO_FUERA_PANTALLA =
-    'el puntero no esta en esta pantalla';
+    'the pointer is not on this screen';
 
   // Textos que estaban en linea en Mld.Win.pas (el resto, 27-sep-2026)
   SF_NODE_ESCRITORIO_ENTRADA_NO_ABRIR_FMT =
-    'escritorio de entrada: no se pudo abrir (%s)';
+    'input desktop: could not be opened (%s)';
 
   SF_NODE_ESCRITORIO_ENTRADA_FMT =
-    'escritorio de entrada: %s';
+    'input desktop: %s';
 
   SF_NODE_ESCRITORIO_ENTRADA_SIN_NOMBRE =
-    'escritorio de entrada: sin nombre';
+    'input desktop: no name';
 
   SF_NODE_SESION_REMOTA =
     '; sesion remota';
 
   SF_NODE_SESION_CONSOLA =
-    '; sesion de consola';
+    '; console session';
 
   SF_NODE_FOCO_EN_FMT =
-    '; foco en "%s"';
+    '; focus on "%s"';
 
   SF_NODE_SIN_VENTANA_FOCO =
-    '; sin ventana con foco';
+    '; no window has the focus';
 
   SF_NODE_NO_ABRIR_CONTEXTO_PANTALLA =
-    'no pude abrir el contexto de la pantalla';
+    'could not open the screen context';
 
   SF_NODE_NO_CREAR_CONTEXTO_MEMORIA =
-    'no pude crear el contexto en memoria';
+    'could not create the memory context';
 
   SF_NODE_NO_RESERVAR_IMAGEN =
-    'no pude reservar la imagen';
+    'could not allocate the image';
 
   SF_NODE_CON_CAPTUREBLT_FMT =
-    'con CAPTUREBLT: %s [%d]';
+    'with CAPTUREBLT: %s [%d]';
 
   SF_NODE_COPIA_PANTALLA_FALLO_FMT =
-    'la copia de pantalla fallo (%s; sin el: %s [%d]; %s)';
+    'the screen copy failed (%s; without it: %s [%d]; %s)';
 
   SF_NODE_PRINTWINDOW_PORQUE_FMT =
-    'PrintWindow ventana a ventana, porque %s';
+    'PrintWindow window by window, because %s';
 
   SF_NODE_SISTEMA_ACEPTO_ENTRADAS_FMT =
-    'el sistema acepto %d de %d entradas (%s)';
+    'the system accepted %d of %d inputs (%s)';
 
   SF_NODE_PIXEL_FUERA_CAPTURA_FMT =
-    'el pixel (%d,%d) se sale de la captura (%dx%d)';
+    'pixel (%d,%d) is outside the screenshot (%dx%d)';
 
   // Textos que estaban en linea en Mld.Teclado.pas (el resto, 27-sep-2026)
   SF_NODE_ESCRITORIO_SIN_MAPA_TECLADO =
-    'el escritorio no entrego mapa de teclado';
+    'the desktop provided no keymap';
 
   SF_NODE_NO_ABRIR_LIBXKBCOMMON_FMT =
-    'no pude abrir libxkbcommon.so.0 (%s)';
+    'could not open libxkbcommon.so.0 (%s)';
 
   SF_NODE_XKB_CONTEXT_NEW_NIL =
     'xkb_context_new devolvio nil';
 
   SF_NODE_XKB_NO_ENTENDIO_MAPA =
-    'libxkbcommon no entendio el mapa del escritorio';
+    'libxkbcommon did not understand the desktop keymap';
 
   SF_NODE_MAPA_SIN_CARACTERES =
-    'el mapa del escritorio no trae ningun caracter';
+    'the desktop keymap carries no characters';
 
   // Textos que estaban en linea en Mld.Captura.pas (el resto, 27-sep-2026)
   SF_NODE_NO_LEER_IMAGEN_VENTANA_FMT =
-    'no pude leer la imagen de la ventana: %s';
+    'could not read the window image: %s';
 
   SF_NODE_VENTANA_SIN_PIXELES =
-    'la ventana no devolvio pixeles';
+    'the window returned no pixels';
 
   SF_NODE_FORMATO_PIXEL_NO_CONTEMPLADO_FMT =
-    'formato de pixel no contemplado: %d bits';
+    'unsupported pixel format: %d bits';
 
   SF_NODE_NO_ESCRIBIR_PNG_FMT =
-    'no pude escribir el PNG en %s';
+    'could not write the PNG to %s';
 
   // Textos que estaban en linea en Mld.Sesion.pas (el resto, 27-sep-2026)
   SF_NODE_SIN_SESION_GRAFICA_FMT =
-    'NO hay sesion grafica abierta del usuario %s en esta maquina. ' +
-    'Pidele al operador que inicie sesion en el escritorio (o abra una ' +
-    'sesion remota) con ese usuario y vuelve a intentarlo: sin ' +
-    'escritorio no hay nada que ver ni que pulsar.';
+    'There is NO open graphical session of user %s on this machine. Ask ' +
+    'the operator to log in to the desktop (or open a remote session) as ' +
+    'that user and try again: without a desktop there is nothing to see ' +
+    'or to click.';
 
   // Textos que estaban en linea en Mld.Dyn.pas (el resto, 27-sep-2026)
   SF_NODE_LIBRERIA_NO_ABIERTA =
-    'la libreria no esta abierta';
+    'the library is not open';
 
   // Textos que estaban en linea en McpRunJob.dpr (el resto, 27-sep-2026)
   SF_JOB_SIGKILL_NO_ATENDIO =
-    'SIGKILL (no atendio al SIGTERM en 3 s)';
+    'SIGKILL (it did not honor SIGTERM within 3 s)';
 
   SF_JOB_PID_DE_OTRO_PROGRAMA =
-    'ese pid ya es de otro programa, fuera de esta carpeta: no se toca';
+    'that pid now belongs to another program, outside this folder: left ' +
+    'untouched';
 
   SF_JOB_NO_ABRIR_SALIDA_FMT =
-    'no pude abrir la salida %s';
+    'could not open the output %s';
 
   SF_JOB_NOMBRE_DEL_VIGIA =
-    'nombre del vigia';
+    'the watcher''s name';
 
   SR_JOB_EXCEPCION_FMT =
-    'error: %s: %s [JOB-011 INVALID_PARAM]';
+    '[JOB-011 INVALID_PARAM] %s: %s';
 
   // Textos que estaban en linea en Mld.X11.pas (el resto, 27-sep-2026)
   SF_NODE_NO_HAY_LIB_FMT =
-    'no hay %s en esta maquina: %s';
+    'there is no %s on this machine: %s';
 
 function MsgText(const AMsg: string): string;
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;

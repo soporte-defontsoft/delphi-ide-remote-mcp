@@ -109,6 +109,14 @@ srv = spawn()
 call = srv.call
 
 
+def tras_etiqueta(t):
+    """El mensaje sin la etiqueta que lo abre: set dice CAMBIADA/ANADIDA
+    justo detras de ella (el verbo es SF_STYLE_*, sin etiqueta propia)."""
+    t = (t or '').lstrip()
+    m = mc.ETIQUETA.match(t)
+    return t[m.end():].lstrip() if m else t
+
+
 def rd(p):
     return open(p, 'rb').read().decode('utf-8-sig')
 
@@ -129,7 +137,7 @@ check('view: filter', json.loads(out)['count'] == 1, out[:200])
 
 # ---- get ----
 out = call('delphi_styles', {"path": S, "command": "get", "style": "formheader"})
-check('get: bloque entero', out.startswith('formheader (TLayout) lineas 7-29') and "Text = 'cabecera'" in out, out[:200])
+check('get: bloque entero', out.startswith('formheader (TLayout) lines 7-29') and "Text = 'cabecera'" in out, out[:200])
 out = call('delphi_styles', {"path": S, "command": "get", "style": "formheader", "child": "background"})
 check('get: parte por child', 'background (TRectangle)' in out and 'Fill.Color = xFFF6ECDB' in out and 'cabecera' not in out, out[:300])
 out = call('delphi_styles', {"path": S, "command": "get", "style": "noexiste"})
@@ -137,16 +145,16 @@ check('get: estilo inexistente rechazado con pista', mc.rechazado(out) and 'comm
 
 # ---- set ----
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "background", "prop": "Fill.Color", "value": "xFF112233"})
-check('set: CAMBIADA', mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and out.startswith('CAMBIADA'), out[:200])
+check('set: CAMBIADA', mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and tras_etiqueta(out).startswith(mc.catalogo()['SF_STYLE_CAMBIADA']), out[:200])
 txt = rd(S)
 check('set: valor en disco con la indentacion original', '      Fill.Color = xFF112233' in txt and 'xFFF6ECDB' not in txt, txt)
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "value": "0.500000000000000000"})
-check('set: ANADIDA tras StyleName', mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and out.startswith('ANADIDA'), out[:200])
+check('set: ANADIDA tras StyleName', mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and tras_etiqueta(out).startswith(mc.catalogo()['SF_STYLE_ANADIDA']), out[:200])
 txt = rd(S)
 i = txt.index("StyleName = 'formheader'"); j = txt.index('Opacity = 0.5')
 check('set: la nueva propiedad va justo tras el StyleName', 0 < j - i < 40, txt[i:j + 40])
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "background/text", "prop": "X", "value": "1"})
-check('set: child inexistente rechazado', mc.rechazado(out) and 'no tiene una parte' in out, out)
+check('set: child inexistente rechazado', mc.rechazado(out) and 'has no part' in out, out)
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "delete": True})
 check('set delete: QUITADA', mc.abre(out, 'SN_STYLES_PROP_DELETED_FMT') and 'Opacity' not in rd(S), out[:200])
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Fill Color", "value": "x"})

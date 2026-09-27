@@ -174,7 +174,7 @@ var
 
   procedure Warn(const AMsg: string);
   begin
-    Warns.Add(Format('  linea %d: %s  ->  %s',
+    Warns.Add(MsgFmt(SF_DSGN_LINEA_AVISO_FMT,
       [I + 1, ALines[I].Trim, AMsg]));
   end;
 
@@ -298,7 +298,7 @@ begin
           if (SIdx = 0) and MatchText(Segs[SIdx], ['Viewport', 'ExplicitLeft',
             'ExplicitTop', 'ExplicitWidth', 'ExplicitHeight', 'DesignSize']) then
             Break;
-          Warn(Format('"%s" no existe en %s segun el framework (publica: %s)',
+          Warn(MsgFmt(SF_DSGN_NO_EXISTE_SEGUN_FRAMEWORK_FMT,
             [Segs[SIdx], CurShow, Have]));
           Break;
         end;
@@ -306,7 +306,7 @@ begin
         begin
           if R.Kind <> 'c' then
           begin
-            Warn(Format('"%s" (%s) no tiene subpropiedades',
+            Warn(MsgFmt(SF_DSGN_SIN_SUBPROPIEDADES_FMT,
               [Segs[SIdx], R.TypeName]));
             Break;
           end;
@@ -330,12 +330,11 @@ begin
               V := V.Substring(V.LastIndexOf('.') + 1);
             if M.Enums.TryGetValue(R.TypeName.ToLower, Members) and
                (not Members.Contains(',' + V.ToLower + ',')) then
-              Warn(Format('"%s" no es un valor de %s; validos: %s',
+              Warn(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT,
                 [Rhs, R.TypeName, M.EnumShow[R.TypeName.ToLower]]));
           end
           else if (R.Kind = 's') and TRegEx.IsMatch(Rhs, '^[A-Za-z_]\w*$') then
-            Warn(Format('%s es un SET: los valores van entre corchetes, ' +
-              'p.ej. [%s]', [R.TypeName, Rhs]))
+            Warn(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [R.TypeName, Rhs]))
           else if (R.Kind = 's') and (Rhs <> '') and (Rhs[1] = '[') and
                   Rhs.EndsWith(']') and
                   M.Sets.TryGetValue(R.TypeName.ToLower, Members) then
@@ -344,7 +343,7 @@ begin
               if (V.Trim <> '') and
                  (not Members.Contains(',' + V.Trim.ToLower + ',')) then
               begin
-                Warn(Format('"%s" no es un elemento de %s',
+                Warn(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT,
                   [V.Trim, R.TypeName]));
                 Break;
               end;

@@ -559,7 +559,7 @@ begin
         'implementation' + CRLF + CRLF +
         'procedure T' + AName + '.Esqueleto;' + CRLF +
         'begin' + CRLF +
-        '  Assert.AreEqual(4, 2 + 2, ''el esqueleto del proyecto de test corre'');' + CRLF +
+        '  Assert.AreEqual(4, 2 + 2, ''the test project skeleton runs'');' + CRLF +
         'end;' + CRLF + CRLF +
         'initialization' + CRLF +
         '  TDUnitX.RegisterTestFixture(T' + AName + ');' + CRLF + CRLF +

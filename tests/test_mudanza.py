@@ -49,6 +49,13 @@ def bytes_de(*p):
     return open(ruta(*p), 'rb').read()
 
 
+def reapuntadas(r):
+    """Cuantas re-apunto fix-references: el primer %d de SN_ARREGLA_FMT,
+    leido en SU mensaje (el de su etiqueta); None si no lo trae."""
+    m = re.search(r'\[%s\] fix-references of .*?: (\d+) re-pointed,' % mc.id_de('SN_ARREGLA_FMT'), r or '')
+    return int(m.group(1)) if m else None
+
+
 GRUPO_VACIO = (
     '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\r\n'
     '    <PropertyGroup>\r\n'
@@ -222,7 +229,7 @@ try:
     r = call('delphi_config', {'project': os.path.join(NUEVO, 'App.dproj'),
                                'command': 'fix-references'})
     check('F1 una unit movida por fuera: se encuentra por su nombre y se re-apunta',
-          '1 re-apuntadas' in r and "'..\\..\\lib2\\ULib.pas'" in leer('src', 'app', 'App.dpr') and
+          mc.abre(r, 'SN_ARREGLA_FMT') and reapuntadas(r) == 1 and "'..\\..\\lib2\\ULib.pas'" in leer('src', 'app', 'App.dpr') and
           'Include="..\\..\\lib2\\ULib.pas"' in leer('src', 'app', 'App.dproj'), r[:300])
     for d in ('amb1', 'amb2', 'amb3'):
         os.makedirs(ruta(d))
@@ -243,7 +250,7 @@ try:
                             '    <ProjectExtensions>'))
     r = call('delphi_config', {'project': ruta('Fix.groupproj'), 'command': 'fix-references'})
     check('F3 un grupo con un proyecto que ya no esta: se encuentra y se re-apunta',
-          '1 re-apuntadas' in r and 'Include="otro\\Otro.dproj"' in leer('Fix.groupproj'), r[:300])
+          mc.abre(r, 'SN_ARREGLA_FMT') and reapuntadas(r) == 1 and 'Include="otro\\Otro.dproj"' in leer('Fix.groupproj'), r[:300])
 
     # ------------------------------------------------------------ X: una ruta con &
     # Nueve sitios escribian rutas en atributos XML a mano, sin escapar: una

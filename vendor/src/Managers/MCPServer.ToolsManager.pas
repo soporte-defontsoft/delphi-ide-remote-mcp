@@ -75,31 +75,17 @@ uses
   MCPServer.Registration,
   Lsp.Texts; // [local change 2026-09-27] el lector de las etiquetas de mensaje
 
-{ [local change 2026-09-27] EL resultado de una respuesta, en un solo sitio:
-  eran dos copias que ya no coincidian (el campo error de un JSON con
-  RECHAZADO y no existe salia DENIED, y el mismo texto en prosa NOT_FOUND).
-  Primero la etiqueta del catalogo, que lo DECLARA quien escribe el mensaje
-  (Lsp.Texts.MsgOutcome). Mientras se migra, sin etiqueta, las reglas de
-  siempre leyendo el texto, y se anota en el log para medir lo que falta.
-  AEsError: el texto viene del campo error de un objeto JSON, asi que ya es
-  un fallo aunque no lo diga. }
+{ [local change 2026-09-27] EL resultado de una respuesta: el que DECLARA la
+  etiqueta con la que empieza (Lsp.Texts.MsgOutcome), puesta por quien
+  escribe el mensaje. Antes se adivinaba leyendo el texto (RECHAZADO, no
+  existe, Error:) en dos copias que ya no coincidian. AEsError: el texto
+  viene del campo error de un objeto JSON, asi que es un fallo aunque no lo
+  declare: la llamada estaba mal (lo de siempre para ese campo). }
 function OutcomeDelTexto(const AText: string; AEsError: Boolean): string;
-var
-  PorTexto: string;
 begin
-  // la regla de siempre, leyendo como EMPIEZA el texto (vive en Lsp.Texts)
-  PorTexto := ResultadoPorTexto(AText, AEsError);
-  // la etiqueta manda; si no coincide con la regla, es un cambio que mirar
   Result := MsgOutcome(AText);
-  if Result <> '' then
-  begin
-    if Result <> PorTexto then
-      TLogger.Info(Format(SL_MSG_OUTCOME_DIFFERS_FMT, [Result, PorTexto, Copy(AText, 1, 80)]));
-    Exit;
-  end;
-  Result := PorTexto;
-  if Result <> '' then
-    TLogger.Info(Format(SL_MSG_UNTAGGED_FMT, [Result, Copy(AText, 1, 80)]));
+  if (Result = '') and AEsError then
+    Result := 'INVALID_PARAM';
 end;
 
 { TMCPToolsManager }
@@ -244,7 +230,7 @@ begin
   else if ResultValue.IsType<string> then
   begin
     TextValue := ResultValue.AsString;
-    HasError := TextValue.StartsWith('Error:') or TextValue.StartsWith('Error executing tool:');
+    HasError := False;
 
     ContentArray := TJSONArray.Create;
     Result.AddPair('content', ContentArray);

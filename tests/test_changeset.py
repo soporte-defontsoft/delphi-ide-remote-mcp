@@ -8,7 +8,7 @@ Acceptance criteria (external review 2026-08-24, adopted):
 
 Usage:  python tests/test_changeset.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, sys, hashlib
+import json, os, re, sys, hashlib
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -27,7 +27,9 @@ def begin():
     if not mc.abre(r, 'SN_CHANGESET_BEGUN_FMT'):
         print('BEGIN FALLO:', r[:300])
         sys.exit(2)
-    return r.split('CHANGESET ')[1].split(' ')[0]
+    # el id por su FORMA (hhnnss-secuencia-secreto), no por la palabra que
+    # lo precede en la frase
+    return mc.id_changeset(r)
 
 # ---- fixtures: CP1252 + CRLF file with accents, and friends ----
 A_PATH = os.path.join(BASE, 'UnoAcentos.pas')
@@ -120,7 +122,7 @@ for n, w in ((1, 'uno'), (2, 'dos'), (3, 'tres')):
         'old': w, 'new': w + ' cambiado'})
 cs({'command': 'preview', 'id': cid})
 r = cs({'command': 'commit', 'id': cid})
-check('F1: el commit cuenta las operaciones reales (3, no 0)', mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and '3 operaciones' in r, r[:200])
+check('F1: el commit cuenta las operaciones reales (3, no 0)', mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and '3 operations' in r, r[:200])
 check('F1: y los cambios estan en disco', open(f1, 'rb').read().count(b'cambiado') == 3, open(f1, 'rb').read())
 
 # F2: delete-line borra una linea EN BLANCO (que no tiene ancla usable)
@@ -151,7 +153,7 @@ r = cs({'command': 'preview', 'id': cid})
 j = json.loads(r)
 check('F3: preview limpio', j.get('unresolved') == 0, r[:250])
 r = cs({'command': 'commit', 'id': cid})
-check('F3: commit aplica las dos (atline rebasada, no ROLLBACK)', mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and '2 operaciones' in r, r[:250])
+check('F3: commit aplica las dos (atline rebasada, no ROLLBACK)', mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and '2 operations' in r, r[:250])
 disk = open(f3, 'rb').read()
 check('F3: resultado correcto en disco', b'L1a' in disk and b'L1b' in disk and b'L3 cambiada' in disk, disk)
 

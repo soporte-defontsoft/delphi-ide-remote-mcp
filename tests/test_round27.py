@@ -27,35 +27,37 @@ texts = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas'),
              encoding='utf-8').read()
 
 
-def const_body(name):
-    # up to a line ENDING in '; - a semicolon inside the string must not cut
-    m = re.search(re.escape(name) + r"\s*=\s*(.*?');\s*$", texts, re.S | re.M)
-    if not m:
-        return ''
-    return ' '.join(re.findall(r"'([^']*)'", m.group(1)))
-
-
-create = const_body('SD_VAULT_CREATE')
-gov = const_body('SR_VAULT_GOVERNANCE')
+# The two texts through THE catalog reader of the batteries: the old
+# const_body joined the Pascal literals with a space, so a phrase cut
+# between two of them ('the project ' + 'notes') read with a double space.
+create = mc.catalogo().get('SD_VAULT_CREATE', '')
+gov = mc.catalogo().get('SR_VAULT_GOVERNANCE', '')
 
 check('SD_VAULT_CREATE existe', create != '')
 check('SR_VAULT_GOVERNANCE existe', gov != '')
 
-# the CREATE instruction: point at the editable index, forbid the wall
+# the CREATE instruction: point at the editable index, forbid the wall.
+# The ambiguous phrase was "enlaza la nota desde el indice que corresponda";
+# in English, whatever the wording, an index that is not named.
+AMBIGUA = re.compile(r'\b(corresponding|appropriate|relevant|right|proper|matching|'
+                     r'applicable|suitable)\s+index\b|\bwhichever\s+index\b|'
+                     r'\bindex\s+(that|which)\s+(applies|corresponds|fits)\b', re.I)
+check('la negativa sabe ponerse roja: caza la frase vieja traducida',
+      bool(AMBIGUA.search('link the note from the corresponding index')))
 check('create ya no dice "el indice que corresponda" (la frase ambigua)',
-      'el indice que corresponda' not in create, create)
+      create != '' and not AMBIGUA.search(create), create)
 check('create nombra las notas del proyecto como destino de los wikilinks',
-      'proyecto' in create and 'context.md' in create, create)
+      'project notes' in create and 'context.md' in create, create)
 check('create prohibe MEMORY.md explicitamente',
-      'MEMORY.md' in create and 'NO' in create, create)
+      'NOT from MEMORY.md' in create, create)
 check('create da la via humana (respuesta o delphi_report)',
-      'delphi_report' in create and 'persona' in create, create)
+      'delphi_report' in create and 'a person' in create, create)
 
 # the refusal: same human path, and the note is not lost work
 check('governance refusal ofrece la via humana',
-      'persona' in gov and 'delphi_report' in gov, gov)
+      'a person' in gov and 'delphi_report' in gov, gov)
 check('governance refusal deja claro que la nota creada vale',
-      'vale' in gov, gov)
+      'you created is valid' in gov, gov)
 
 m = re.search(r"SERVER_VERSION = '(\d+)\.(\d+)", texts)
 check('SERVER_VERSION >= 0.93',

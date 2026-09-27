@@ -189,10 +189,10 @@ procedure TImageTests.FrameRechazaFormaYPuntoFuera;
 var
   X, Y: Integer;
 begin
-  Assert.StartsWith('RECHAZADO', FramePoint('1280x536', '1', '1', X, Y));
-  Assert.StartsWith('RECHAZADO', FramePoint('0x536@3440x1440+0+0', '1', '1', X, Y));
-  Assert.StartsWith('RECHAZADO', FramePoint('1280x536@3440x1440+0+0', '1280', '10', X, Y));
-  Assert.StartsWith('RECHAZADO', FramePoint('1280x536@3440x1440+0+0', '-1', '10', X, Y));
+  Assert.IsTrue(EsRechazo(FramePoint('1280x536', '1', '1', X, Y)), 'un frame malo se rechaza');
+  Assert.IsTrue(EsRechazo(FramePoint('0x536@3440x1440+0+0', '1', '1', X, Y)), 'un frame malo se rechaza');
+  Assert.IsTrue(EsRechazo(FramePoint('1280x536@3440x1440+0+0', '1280', '10', X, Y)), 'un frame malo se rechaza');
+  Assert.IsTrue(EsRechazo(FramePoint('1280x536@3440x1440+0+0', '-1', '10', X, Y)), 'un frame malo se rechaza');
 end;
 
 procedure TImageTests.CapturaConOutEnTemporalesSeRechaza;
@@ -204,8 +204,8 @@ begin
   // nunca llega a la regla de temporales).
   R := CaptureTarget(ExtractFilePath(ParamStr(0)) + '__delphi-temp\cap.png',
     CAPTURE_SUB_DESKTOP, 'desktop', '.png', F);
-  Assert.StartsWith('RECHAZADO', R, 'una captura con out= en __delphi-temp se acumula');
-  Assert.Contains(R, 'omitelo', 'el rechazo dice que se omita out');
+  Assert.IsTrue(EsRechazo(R), 'una captura con out= en __delphi-temp se acumula: ' + R);
+  Assert.IsTrue(HasMsg(R, SN_CAPTURE_OUT_TEMP_HINT), 'el rechazo dice que se omita out: ' + R);
   // (la jaula la pone el servidor que lanza el ejecutor: aqui solo la regla)
   Assert.AreEqual('', DeadCopyWriteDenied('C:\w\proyecto\capturas\cap.png'),
     'una carpeta del proyecto no es una carpeta muerta');
@@ -218,22 +218,22 @@ begin
     'el __ se exige a la RAIZ de la zona; lo de dentro se llama como sea');
   Assert.AreEqual('', BorradoDenegado('C:\w\proyecto\__delphi-patch\20260918'), 'dentro de la papelera');
   Assert.AreEqual('', BorradoDenegado('C:\w\capturas\__tmp-abcd1234'), 'una descarga temporal');
-  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\proyecto\__delphi-temp'), 'la temporal misma, no');
-  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\proyecto\__delphi-patch'), 'la papelera misma, no');
-  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\proyecto\src'), 'una carpeta de proyecto, no');
-  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\capturas\__tmp-zz'), 'un __tmp- que no es del nombrador, no');
-  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\capturas\.tmp-abcd1234'), 'el prefijo viejo, sin __, no');
-  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\w\delphi-temp\x'), 'una carpeta que se llama casi igual pero sin __, no');
+  Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\proyecto\__delphi-temp'), SR_BORRADO_DENEGADO_FMT), 'la temporal misma, no');
+  Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\proyecto\__delphi-patch'), SR_BORRADO_DENEGADO_FMT), 'la papelera misma, no');
+  Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\proyecto\src'), SR_BORRADO_DENEGADO_FMT), 'una carpeta de proyecto, no');
+  Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\capturas\__tmp-zz'), SR_BORRADO_DENEGADO_FMT), 'un __tmp- que no es del nombrador, no');
+  Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\capturas\.tmp-abcd1234'), SR_BORRADO_DENEGADO_FMT), 'el prefijo viejo, sin __, no');
+  Assert.IsTrue(EsMsg(BorradoDenegado('C:\w\delphi-temp\x'), SR_BORRADO_DENEGADO_FMT), 'una carpeta que se llama casi igual pero sin __, no');
 end;
 
 procedure TImageTests.BorradoNuncaUnidadNiSistema;
 begin
-  Assert.StartsWith('NO BORRO', BorradoDenegado(''), 'vacia');
-  Assert.StartsWith('NO BORRO', BorradoDenegado('relativo\__delphi-temp\x'), 'relativa');
-  Assert.StartsWith('NO BORRO', BorradoDenegado('C:\'), 'unidad');
-  Assert.StartsWith('NO BORRO', BorradoDenegado('\\servidor\recurso'), 'recurso compartido');
-  Assert.StartsWith('NO BORRO', BorradoDenegado(GetEnvironmentVariable('WINDIR')), 'Windows');
-  Assert.StartsWith('NO BORRO', BorradoDenegado(ExtractFileDir(ParamStr(0))), 'la carpeta del ejecutable');
+  Assert.IsTrue(EsMsg(BorradoDenegado(''), SR_BORRADO_DENEGADO_FMT), 'vacia');
+  Assert.IsTrue(EsMsg(BorradoDenegado('relativo\__delphi-temp\x'), SR_BORRADO_DENEGADO_FMT), 'relativa');
+  Assert.IsTrue(EsMsg(BorradoDenegado('C:\'), SR_BORRADO_DENEGADO_FMT), 'unidad');
+  Assert.IsTrue(EsMsg(BorradoDenegado('\\servidor\recurso'), SR_BORRADO_DENEGADO_FMT), 'recurso compartido');
+  Assert.IsTrue(EsMsg(BorradoDenegado(GetEnvironmentVariable('WINDIR')), SR_BORRADO_DENEGADO_FMT), 'Windows');
+  Assert.IsTrue(EsMsg(BorradoDenegado(ExtractFileDir(ParamStr(0))), SR_BORRADO_DENEGADO_FMT), 'la carpeta del ejecutable');
 end;
 
 procedure TImageTests.DescargaTemporalNombradorYLector;
@@ -251,9 +251,9 @@ begin
   // Una respuesta sin captura dice POR QUE, nunca la fontaneria ("el nodo
   // no dijo donde dejo la captura", hasta la 1.5.2).
   R := MotivoSinCaptura('', SN_REMOTERUN_ENV_NONE);
-  Assert.IsTrue(R.Contains('sesion grafica'), 'sin sesion: ' + R);
+  Assert.IsTrue(HasMsg(R, SN_DESKTOP_MOTIVO_SIN_SESION), 'sin sesion: ' + R);
   R := MotivoSinCaptura('  Error: Acceso denegado.', '');
-  Assert.IsTrue(R.Contains('deniega'), 'Windows bloqueado: ' + R);
+  Assert.IsTrue(HasMsg(R, SN_DESKTOP_MOTIVO_DENEGADA), 'Windows bloqueado: ' + R);
   R := MotivoSinCaptura('-- 2. la pantalla'#10 +
     '  NO pude capturar: org.freedesktop.DBus.Error.NoReply: sin respuesta'#10,
     SN_REMOTERUN_ENV_INHERITED);
@@ -264,8 +264,8 @@ begin
     SN_REMOTERUN_ENV_NONE);
   Assert.IsTrue(R.Contains('operador'), 'el motivo del nodo gana al del entorno: ' + R);
   R := MotivoSinCaptura('nodo listo', '');
-  Assert.IsTrue(R.Contains('nodeOutput'), 'sin motivo: ' + R);
-  Assert.IsFalse(R.Contains('dijo donde'), 'nunca la fontaneria: ' + R);
+  Assert.IsTrue(HasMsg(R, SN_DESKTOP_MOTIVO_NINGUNO), 'sin motivo: ' + R);
+  Assert.IsTrue(EsMsg(R, SR_DESKTOP_SIN_CAPTURA_FMT), 'el motivo va en su mensaje: ' + R);
 end;
 
 initialization

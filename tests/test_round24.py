@@ -82,10 +82,13 @@ finally:
 
 lector.join(10)
 out = ''.join(salida)
+# Line by line: in English all three warnings say IGNORED and two of them
+# name [Workspace.<name>] and Token= (the Spanish IGNORADA was only this one's)
+avisos = [l for l in out.splitlines() if 'WARN' in l]
 check('A2b el arranque AVISA de la seccion mal escrita, por su nombre',
-      'Workopenclaw' in out and 'Workspace.<nombre>' in out, out[-400:])
+      any('[Workopenclaw]' in l and '[Workspace.<name>]' in l for l in avisos), avisos)
 check('A3 el arranque AVISA del workspace sin token (IGNORADA, clave Token=)',
-      'SinToken' in out and 'IGNORADA' in out and 'Token=' in out, out[-400:])
+      any('[Workspace.SinToken]' in l and 'IGNORED' in l and 'Token=' in l for l in avisos), avisos)
 check('A4 el arranque LISTA los workspaces (sin ningun "default")',
       'Workspaces:' in out and 'Alias' in out and 'default' not in out, out[-500:])
 check('A4b el arranque NO menciona la seccion retirada para nada (v0.98)',

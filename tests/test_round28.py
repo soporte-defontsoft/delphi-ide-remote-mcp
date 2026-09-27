@@ -53,7 +53,7 @@ def edit(pas, firma, cuerpo, vis='public'):
 # ---- 1. metodo NUEVO: las dos mitades, como siempre ----
 pas = fresh('Caso1.pas')
 out = edit(pas, 'procedure Nueva;', '  FValor := 2;')
-check('nuevo: las DOS mitades', 'DOS mitades' in out, out[:200])
+check('nuevo: las DOS mitades', 'BOTH halves' in out, out[:200])
 t = open(pas, encoding='utf-8').read()
 check('nuevo: 1 declaracion + 1 implementacion',
       t.count('procedure Nueva;') == 1 and t.count('procedure TCosa.Nueva;') == 1, t[:400])
@@ -62,7 +62,7 @@ check('nuevo: 1 declaracion + 1 implementacion',
 pas = fresh('Caso2.pas')
 out = edit(pas, 'procedure Preparada(Sender: TObject);', '  FValor := 3;')
 check('preparada: lo dice claro',
-      'YA declaraba' in out and 'Solo se ha escrito la implementacion' in out, out[:300])
+      'ALREADY declared' in out and 'Only the implementation was written' in out, out[:300])
 t = open(pas, encoding='utf-8').read()
 check('preparada: UNA sola declaracion (no duplica)',
       t.count('procedure Preparada(Sender: TObject);') == 1, t.count('procedure Preparada(Sender: TObject);'))

@@ -205,7 +205,7 @@ try:
 
     # ------------------------------------------------------------------ V3
     check('V3 la respuesta avisa de lo que implica al renombrar',
-          'RENOMBRAR' in j.get('familyNote', ''), str(j.get('familyNote'))[:200])
+          mc.abre(j.get('familyNote', ''), 'SN_REFS_FAMILY_NOTE'), str(j.get('familyNote'))[:200])
 
     # ------------------------------------------------------------------ V5
     # Los negativos exigen que la respuesta EXISTA: la llamada ajena tiene que

@@ -159,11 +159,11 @@ try:
     i = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
                             'out': os.path.join(JAIL, 'capturas')})
     check('W5c ...y una CARPETA tambien vale ya en delphi_adb',
-          not mc.es(i, 'SR_CAPTURE_EXT_FMT') and 'terminar en .png' not in i
+          not mc.es(i, 'SR_CAPTURE_EXT_FMT')
           and not rechazada_por_jaula(i) and llego_al_dispositivo(i), i[:280])
     j = call('delphi_adb', {'command': 'screenshot', 'device': DEV})
     check('W5d ...y sin "out" ya no se rechaza: tiene un defecto, como sus hermanas',
-          'necesita "out"' not in j and llego_al_dispositivo(j), j[:280])
+          llego_al_dispositivo(j), j[:280])
 
     # ------------------------------------------------------------------ W4
     # Y el otro lado, que es la mitad que se olvida: cerrar la puerta no sirve

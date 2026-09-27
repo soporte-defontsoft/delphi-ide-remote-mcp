@@ -317,7 +317,7 @@ if m_line >= 0:
     # measured semantics: definition = the body, declaration = the
     # interface declaration (two different lines of the same unit)
     ok = ('Lsp.Client.pas' in out_decl and 'Lsp.Client.pas' in out_def
-          and out_decl != out_def and 'null' not in out_decl[:6])
+          and out_decl != out_def and not mc.es(out_decl, 'SN_LSP_NULL_NOTE'))
     check('definition: kind declaration vs default (las dos mitades)',
           ok, ('decl=%s | def=%s' % (out_decl[:90], out_def[:90])))
 else:
@@ -538,7 +538,8 @@ try:
         {"old": "uno\ndos\ntres", "new": "UNO Y DOS Y TRES"}])})
     cuerpo = open(bloque, 'rb').read().decode('utf-8')
     check('textedit: un ancla de VARIAS lineas sustituye el bloque entero',
-          'bloque de 3 lineas' in out and cuerpo == 'cabecera\nUNO Y DOS Y TRES\npie\n',
+          (mc.catalogo()['SF_EDIT_OK_BLOQUE_LINEAS_FMT'] % (1, 3)).strip() in out
+          and cuerpo == 'cabecera\nUNO Y DOS Y TRES\npie\n',
           (out[:90], repr(cuerpo)))
     # "occurrence" desempata donde atline no sirve: los numeros se mueven
     rep = os.path.join(tmptxt, 'repes.md')

@@ -1995,7 +1995,7 @@ end;
 function EscrituraDenegada(const APath: string): string;
 begin
   if IsReadOnlyNow then
-    Exit(WriteDenied('escribir ' + TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
+    Exit(WriteDenied(MsgFmt(SF_GUARD_ESCRIBIR_FMT, [TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))])));
   Result := PathDenied(APath);
 end;
 
@@ -4401,7 +4401,7 @@ begin
   // prueba va enmascarada, no prueba nada. Encontrado escribiendo este mismo
   // CHANGELOG el 2026-09-20: se escribio "D:\Projects\Galatea", el disco lo
   // tenia bien, y el eco devolvia "srvd:\Projects\Galatea". Sus negativas
-  // empiezan por RECHAZADO/error y siguen enmascarandose por el test de
+  // empiezan por su etiqueta con resultado y siguen enmascarandose por el test de
   // abajo.
   //
   // LA OBLIGACION QUE VIENE CON ESTAR EN ESTA LISTA, y es facil de olvidar:
@@ -4422,7 +4422,7 @@ begin
      // la regla de la marca), nunca una etiqueta de DENTRO: un delphi_read de
      // Lsp.Texts trae [X DENIED] en sus lineas, se tomaba por negativa y se
      // enmascaraba el CONTENIDO ('%s:' salia '%srv0:', medido 27-sep)
-     (MsgOutcome(AText) = '') and (ResultadoPorTexto(AText) = '') then
+     (MsgOutcome(AText) = '') then
     Exit(AText);
   Letters := ServedDriveLetters;
   if (Letters = '') or (AText = '') then

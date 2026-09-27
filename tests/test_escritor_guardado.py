@@ -26,7 +26,7 @@ session may write and asserts it comes out untouched:
 
 Usage:  python tests/test_escritor_guardado.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, subprocess, time
+import json, os, re, subprocess, time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -70,6 +70,12 @@ def Server(env):
 srv = Server({'DELPHI_MCP_ROOTS': MINE, 'DELPHI_MCP_READONLY_ROOTS': REF + ';' + NEST,
               'DELPHI_MCP_READONLY_PATHS': ROP})
 call = srv.call
+
+
+def id_changeset(out):
+    # el id que abre 'begin', por SU formato (hhnnss-secuencia-8 hex de
+    # Lsp.Changeset.ChangesetBegin), no por la palabra que ocupe en la frase
+    return mc.id_changeset(out) if mc.abre(out, 'SN_CHANGESET_BEGUN_FMT') else ''
 
 # ---- H1: renaming a unit does not rewrite a listed file it may not write
 APP = os.path.join(MINE, 'App')
@@ -151,7 +157,7 @@ open(os.path.join(CS, 'f.txt'), 'w').write('igual')
 os.makedirs(os.path.join(OUT, 'cs'), exist_ok=True)
 open(os.path.join(OUT, 'cs', 'f.txt'), 'w').write('igual')
 out = call('delphi_changeset', {'command': 'begin'})
-cid = out.split()[1] if mc.abre(out, 'SN_CHANGESET_BEGUN_FMT') else ''
+cid = id_changeset(out)
 check('CS begin', cid != '', out[:200])
 out = call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'delete', 'path': os.path.join(CS, 'f.txt')})
 out = call('delphi_changeset', {'command': 'preview', 'id': cid})
@@ -201,7 +207,7 @@ antes_h = open(os.path.join(HIST, 'UVieja.pas'), 'rb').read()
 out = call('delphi_edit', {'path': os.path.join(HIST, 'UVieja.pas'), 'adduses': 'SysUtils'})
 check('M adduses en __history: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_IDE') and open(os.path.join(HIST, 'UVieja.pas'), 'rb').read() == antes_h, out[:200])
 out = call('delphi_changeset', {'command': 'begin'})
-cid = out.split()[1] if mc.abre(out, 'SN_CHANGESET_BEGUN_FMT') else ''
+cid = id_changeset(out)
 out = call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create', 'path': os.path.join(MINE, '__delphi-patch', 'colado.txt'), 'content': 'x'})
 check('M changeset create dentro de la papelera: RECHAZADO al preparar', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TRASH'), out[:200])
 call('delphi_changeset', {'command': 'rollback', 'id': cid})
@@ -361,7 +367,7 @@ RESERVADAS = ('EnvironmentSettings', 'EnvOptions', 'Profiles', 'GlobalOptionFile
 for nombre in RESERVADAS:
     out = build(proyecto_con('res-' + nombre.lower(), con_propiedad(nombre)))
     check('R redefinir ' + nombre + ' (reservada del IDE): RECHAZADO antes de msbuild',
-          mc.rechazado(out) and mc.es(out, 'SR_BUILD_RESERVED_PROP_FMT') and ('define ' + nombre + ',') in out,
+          mc.rechazado(out) and mc.es(out, 'SR_BUILD_RESERVED_PROP_FMT') and ('defines ' + nombre + ',') in out,
           out[:300])
 # PlatformSDK la fija el proyecto (delphi_config set-sdk): esta puerta NO la toca
 out = build(proyecto_con('res-platformsdk', con_propiedad('PlatformSDK', 'algo.sdk')))

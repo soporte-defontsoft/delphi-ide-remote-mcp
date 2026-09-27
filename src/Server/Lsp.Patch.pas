@@ -1431,9 +1431,10 @@ begin
           Break;
         end;
         // Los avisos del motor (*** ... ***) no se pierden al resumir la
-        // edicion en una linea: en una tanda no llegaban al agente.
+        // edicion en una linea: en una tanda no llegaban al agente. La marca
+        // va detras de la etiqueta del aviso (MsgCuerpo)
         for var LA in Una.Split([#10]) do
-          if LA.Trim.StartsWith('***') then
+          if MsgCuerpo(LA.Trim).StartsWith('***') then
             Avisos := Avisos + [Format('  %d: %s', [N, LA.Trim])];
         if EsBloque then
           Una := MsgFmt(SF_EDIT_OK_BLOQUE_LINEAS_FMT,

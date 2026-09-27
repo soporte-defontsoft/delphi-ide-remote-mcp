@@ -133,7 +133,7 @@ try:
     check('K2 ...y su delphi_definition no nombra nada de fuera de su jaula',
           # Doble solo vive en Base.pas, FUERA de su jaula: la unica respuesta
           # buena es "sin resolver" (null), y sin nombrar Base.pas
-          d.startswith('null') and 'base.pas' not in d.lower(), d[:240])
+          mc.abre(d, 'SN_LSP_NULL_NOTE') and 'base.pas' not in d.lower(), d[:240])
     check('K3 ...ni delphi_references le habla de una definicion de FUERA',
           mc.es(r, 'SR_REFS_NO_DEFINITION_FMT') and 'Doble' in r and not mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT'), r[:240])
     # K3b: esa negativa es del LLAMANTE y viaja como tal. Hasta el 26-sep salia

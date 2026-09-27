@@ -120,7 +120,7 @@ try:
     check('L7 el "copia=" del eco de delphi_edit tampoco saca la letra real',
           sin_letra_real(e), e[:300])
     check('L7b ...y sigue diciendo DONDE quedo la copia',
-          'copia=' in e and (VIRT in e or 'ya existia' in e), e[:300])
+          'backup=' in e and (VIRT in e or 'already existed' in e), e[:300])
 
     # ------------------------------------------------------------------ L8
     # El nombrador, por los dos lados. La lista de unidades validas de una

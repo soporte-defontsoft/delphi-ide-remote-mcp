@@ -107,7 +107,7 @@ end;
 
 destructor TMcpHost.Destroy;
 begin
-  TLogger.Info(Format('%s v%s: parado', [SERVER_NAME, SERVER_VERSION]));
+  TLogger.Info(MsgFmt(SL_SYS_PARADO_FMT, [SERVER_NAME, SERVER_VERSION]));
   // The manual FRegistry.Free that lived here double-freed the registry the
   // moment any interface reference existed: freeing the HTTP server released
   // the last IMCPManagerRegistry ref, the registry destroyed itself, and this

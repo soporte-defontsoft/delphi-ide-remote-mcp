@@ -66,7 +66,7 @@ def problemas(consts):
             p['varias'].append(nombre)
         for tg in tags:
             ids[tg.group(1)] += 1
-            if not txt.rstrip().endswith(tg.group(0)):
+            if not txt.lstrip(' \r\n').startswith(tg.group(0) + ' '):
                 p['al_medio'].append(nombre)
             pref = nombre[:3]
             if pref == 'SR_' and not tg.group(2):
@@ -82,13 +82,13 @@ def problemas(consts):
 
 
 # el comprobador SABE fallar: un catalogo de ejemplo con un fallo de cada clase
-EJEMPLO = {'SR_A': 'RECHAZADO: a. [CFG-07 DENIED]',             # mal formada
-           'SR_B': 'RECHAZADO: b. [CFG-001 DENIED]',
-           'SR_C': 'RECHAZADO: c. [CFG-001 DENIED]',            # id repetido
-           'SN_D': 'nota [EDIT-001] y [EDIT-002]',              # dos, y la primera en medio
-           'SR_E': 'RECHAZADO: e. [CFG-002]',                   # rechazo sin resultado
-           'SN_F': 'nota. [EDIT-003 DENIED]',                   # nota que declara
-           'SD_G': 'descripcion. [EDIT-004]'}                   # descripcion con etiqueta
+EJEMPLO = {'SR_A': '[CFG-07 DENIED] a.',             # mal formada
+           'SR_B': '[CFG-001 DENIED] b.',
+           'SR_C': '[CFG-001 DENIED] c.',            # id repetido
+           'SN_D': '[EDIT-001] nota y [EDIT-002]',   # dos, y la segunda en medio
+           'SR_E': '[CFG-002] e.',                   # rechazo sin resultado
+           'SN_F': '[EDIT-003 DENIED] nota.',        # nota que declara
+           'SD_G': '[EDIT-004] descripcion.'}        # descripcion con etiqueta
 e = problemas(EJEMPLO)
 check('C0 el comprobador encuentra cada fallo plantado',
       e['malas'] == ['SR_A: [CFG-07 DENIED]'] and e['repetidas'] == ['CFG-001'] and
@@ -98,7 +98,7 @@ p = problemas(C)
 check('C2 todo lo que parece una etiqueta lo es', not p['malas'], p['malas'][:10])
 check('C3 ningun id repetido', not p['repetidas'], p['repetidas'][:10])
 check('C3b una etiqueta por mensaje como mucho', not p['varias'], p['varias'][:10])
-check('C4 la etiqueta va al FINAL del mensaje', not p['al_medio'], p['al_medio'][:10])
+check('C4 la etiqueta ABRE el mensaje', not p['al_medio'], p['al_medio'][:10])
 check('C5 rechazos con resultado; notas y buenos sin el; descripciones, log, excepciones y trozos sin '
       'etiqueta', not p['reglas'], p['reglas'][:10])
 

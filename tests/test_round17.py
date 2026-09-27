@@ -154,7 +154,7 @@ check('R6 build.platform dice que Build local NO usa profile',
       'NOT use profile' in prop('delphi_build', 'platform').get('description', ''),
       prop('delphi_build', 'platform').get('description', '')[:150])
 check('R6 fetch.maxbytes ABRE con el aviso de que <=1MB fuerza base64',
-      prop('delphi_fetch', 'maxbytes').get('description', '').startswith('OJO'),
+      prop('delphi_fetch', 'maxbytes').get('description', '').startswith('NOTE:'),
       prop('delphi_fetch', 'maxbytes').get('description', '')[:120])
 
 # v0.80 - blind rerun S10: "cap 500" read as a GLOBAL limit. Per page, and

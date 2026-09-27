@@ -126,14 +126,14 @@ check('lint NO avisa de Left/Top de componentes no visuales',
 # ---- doctrina ----
 r = call('delphi_designer', {'command': 'tree', 'path': BIN})
 check('designer binario (TPF0) rechazado',
-      mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'BINARIO' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'damaged BINARY designer' in r, r[:200])
 for cmd in ('tree', 'get', 'lint', 'check-binding'):
     args = {'command': cmd, 'path': RESBIN}
     if cmd == 'get':
         args['component'] = 'X'
     r = call('delphi_designer', args)
     check('binario envuelto en recurso ($FF) rechazado por ' + cmd,
-          mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'BINARIO' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'damaged BINARY designer' in r, r[:200])
 r = call('delphi_designer', {'command': 'tree', 'path': os.path.join(BASE, 'nx.dfm')})
 check('fichero inexistente',
       mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_NO_EXISTE_FMT') and 'nx.dfm' in r, r[:150])
@@ -202,8 +202,8 @@ open(EV, 'w', encoding='utf-8', newline='\r\n').write(
 end
 """)
 r = call('delphi_designer', {'command': 'lint', 'path': EV})
-check('lint: el handler en private se avisa (el cargador solo ve published)', 'btnHelpClick' in r and 'NO esta en published' in r, r[:600])
-check('lint: el handler inexistente se avisa', 'btnNadaClick' in r and 'no esta declarado' in r, r[:600])
+check('lint: el handler en private se avisa (el cargador solo ve published)', 'btnHelpClick' in r and 'is NOT in published' in r, r[:600])
+check('lint: el handler inexistente se avisa', 'btnNadaClick' in r and 'is not declared' in r, r[:600])
 check('lint: el handler published NO se avisa',
       mc.abre(r, 'SN_DESIGNER_LINT_BAD_FMT') and 'UEv.dfm' in r and 'btnOkClick' not in r, r[:600])
 r = call('delphi_edit', {'path': EV, 'old': "    Caption = '?'", 'new': "    Caption = 'Ayuda'"})
@@ -219,7 +219,7 @@ check('lint de un designer SIN .pas pareja sigue limpio (no hay contra que compa
 r = call('delphi_designer', {'command': 'totext', 'path': BIN})
 # aceptado = llego al conversor (el BIN de prueba esta danado: lo dice el)
 check('to-text sin guion (totext) se acepta como alias: no es "comando invalido"',
-      not mc.es(r, 'SR_DESIGNER_CMD') and 'convertirlo a texto' in r, r[:200])
+      not mc.es(r, 'SR_DESIGNER_CMD') and 'could not convert it to text' in r, r[:200])
 
 srv.mata()
 mc.fin('designer battery')

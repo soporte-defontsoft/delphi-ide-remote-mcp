@@ -30,8 +30,14 @@ check('platform view lists folders',
 check('platform view names candidates or completeness',
       mc.es(r, 'SN_COMPONENTS_PLATFORM_MISSING_FMT')
       or mc.es(r, 'SN_COMPONENTS_PLATFORM_COMPLETE_FMT'), r)
+# El trozo de una linea de candidato sale de SU plantilla del catalogo: con
+# la frase espanola escrita a mano, tras traducir la negativa ya no podia
+# fallar. Y si hay candidatos, el trozo TIENE que verse: una negativa que
+# no ve la forma que vigila no vigila nada.
+CAND = mc.catalogo()['SF_COMP_REGISTRADO_EN_FMT'].split('%s')[1]
 check('platform view never shows the IDE own documents tree as a candidate',
-      '\\Studio\\37.0   (registrado' not in r, r)
+      '\\Studio\\37.0' + CAND not in r
+      and (CAND in r or not mc.es(r, 'SN_COMPONENTS_PLATFORM_MISSING_FMT')), r)
 r = call('delphi_components', {'platform': 'Marte'})
 check('unknown platform refused with the list',
       mc.es(r, 'SR_COMPONENTS_PLATFORM_FMT') and 'Linux64' in r, r)
@@ -67,7 +73,9 @@ tg = next((m for m in mu if m.get('unit') == 'Tee.Grid'), {})
 check('Tee.Grid source folder found in the library zone (Steema Sources)',
       any('Steema' in d for d in tg.get('sourceFolders', [])), json.dumps(tg))
 check('folders come masked (srvc:)', all(d.lower().startswith('srv') for d in tg.get('sourceFolders', [])), json.dumps(tg))
-check('note explains add-searchpath', 'add-searchpath' in (j.get('missingUnitsNote') or ''), r)
+check('note explains add-searchpath',
+      mc.es(j.get('missingUnitsNote') or '', 'SN_BUILD_MISSING_UNITS_NOTE')
+      and 'add-searchpath' in (j.get('missingUnitsNote') or ''), r)
 
 # the suggested fix closes the loop: add-searchpath -> the unit resolves
 folder = tg.get('sourceFolders', [''])[0]

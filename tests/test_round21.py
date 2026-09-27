@@ -49,7 +49,7 @@ check('Z1 primera llamada del proceso = designer: tablas lazy funcionan',
 # miraba que no empezara por 'ERR': un RECHAZADO o un "error: ..." pasaban.
 r = call('delphi_designer', {'command': 'lint', 'path': os.path.join(BASE, 'Main.dfm')})
 check('Z1b lint del designer tambien (segunda entrada a las tablas)',
-      r.startswith('LINT LIMPIO') and 'Main.dfm' in r, r[:160])
+      mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT') and 'Main.dfm' in r, r[:160])
 
 # Z2/Z3: the label cache vs a medium file created BETWEEN runs
 _q = chr(39)

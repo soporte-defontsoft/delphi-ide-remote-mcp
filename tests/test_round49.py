@@ -14,6 +14,7 @@ fallo repetido de este repo es arreglar una gemela y dejar la otra.
 """
 import json
 import os
+import re
 import time
 import mcp_cliente as mc
 from mcp_cliente import check
@@ -168,7 +169,9 @@ try:
     # ------------------------------------------------------------ changeset
     planta()
     cs = call('delphi_changeset', {'command': 'begin'})
-    cid = cs.split()[1]
+    # el id por su FORMA (hhnnss-secuencia-secreto), no por su sitio en la
+    # frase: split()[1] cogia la segunda palabra y la frase cambio
+    cid = mc.id_changeset(cs)
     s1 = call('delphi_changeset', {'command': 'stage', 'id': cid,
                                    'kind': 'edit', 'path': PAS,
                                    'fragment': '68', 'new': '69', 'atline': 6})

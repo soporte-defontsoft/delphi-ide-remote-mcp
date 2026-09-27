@@ -100,7 +100,7 @@ except Exception as e:
     check('package: build parsea', False, '%s | %s' % (e, out[:200]))
 # the first unit OPENS the contains clause
 out = call('delphi_create', {"kind": "unit", "name": "UPkgUno", "project": PDPK})
-check('package: kind=unit registra en contains', mc.abre(out, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and 'ANADIDA' in out, out[:300])
+check('package: kind=unit registra en contains', mc.abre(out, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and mc.es(out, 'SN_UNIT_ADDED_FMT'), out[:300])
 _k = open(PDPK, 'rb').read().decode('utf-8-sig')
 check('package: contains estrenada antes de end.', "contains\r\n  UPkgUno in 'UPkgUno.pas';" in _k and _k.index('contains') < _k.index('end.'), _k)
 check('package: requires intacta', "requires\r\n  rtl;" in _k, _k)

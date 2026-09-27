@@ -29,7 +29,9 @@ with another forty. This battery is the ones that became code.
 
 Usage:  python tests/test_round9.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, base64
+import json, os, re, base64
+
+
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -130,7 +132,7 @@ os.makedirs(CS)
 X = os.path.join(CS, 'X.txt')
 open(X, 'w').write('uno\n')
 r = A.call('delphi_changeset', {'command': 'begin'})
-CID = [w for w in r.replace('.', ' ').split() if w.count('-') >= 2][0]
+CID = mc.id_changeset(r)
 check('F4 el id lleva un secreto (no es solo hora-contador)', len(CID.split('-')) >= 3, CID)
 st = J(A.call('delphi_changeset', {'command': 'status'}))
 ids = [c.get('id') for c in st.get('changesets', [])]
@@ -148,7 +150,7 @@ A.call('delphi_changeset', {'command': 'rollback', 'id': CID})
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'Proy', 'dir': os.path.join(BASE, 'Proy')})
 assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 r = A.call('delphi_changeset', {'command': 'begin'})
-CID2 = [w for w in r.replace('.', ' ').split() if w.count('-') >= 2][0]
+CID2 = mc.id_changeset(r)
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID2, 'kind': 'edit',
                                 'path': os.path.join(BASE, 'Proy', 'Proy.dproj'),
                                 'old': '<Platform>Win32</Platform>', 'new': 'x'})
@@ -169,7 +171,7 @@ check('P8 symbols sobre algo que no es Delphi: lo dice, no devuelve []',
       mc.rechazado(r) and mc.es(r, 'SR_LSP_NOT_SOURCE_FMT') and '.pas' in r, r[:200])
 r = A.call('delphi_diagnostics', {'path': TXT}, t=120)
 check('B3 diagnostics sobre algo que no es Delphi: RECHAZADO, sin bucle',
-      mc.rechazado(r) and mc.es(r, 'SR_DIAG_NOT_SOURCE_FMT') and not mc.es(r, 'SN_DIAG_IN_PROGRESS'), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_DIAG_NOT_SOURCE_FMT') and mc.como_json(r).get('status') != 'in-progress', r[:200])
 
 # ------------------------------------------------------------------- C1/C2 --
 # sin project y con un dir RELATIVO: lo que falta, dicho (con uno ABSOLUTO,

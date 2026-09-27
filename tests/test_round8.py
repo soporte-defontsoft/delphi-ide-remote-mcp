@@ -321,7 +321,7 @@ check('#28 offset pasado del final: se explica, no se calla',
       mc.es(r, 'SR_VAULT_PAST_END_FMT') and '41' in r, r[:200])
 r = A.call('vault_search', {'target': 'contents', 'pattern': 'linea'})
 check('#27 target invalido: RECHAZADO en vez de caer a files en silencio',
-      mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_VAULT_TARGET_FMT') and 'files' in r and 'content' in r, r[:250])
+      mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_VAULT_TARGET_FMT') and 'files' in r and 'content' in r, r[:250])
 r = A.call('vault_search', {'target': 'content', 'pattern': 'linea 3'})
 check('#27 el target bueno sigue funcionando', 'nota.md' in r, r[:200])
 
@@ -337,8 +337,9 @@ os.makedirs(CS)
 UNO = os.path.join(CS, 'Uno.pas')
 open(UNO, 'w', encoding='utf-8').write('unit Uno;\r\ninterface\r\nimplementation\r\nend.\r\n')
 r = A.call('delphi_changeset', {'command': 'begin'})
-CID = r.split()[-1].strip('.') if r else ''
-CID = [w for w in r.replace('.', ' ').split() if '-' in w][0]
+# The id by its own shape (ChangesetBegin: hhnnss-seq-8 hex), not by the
+# words around it: the message now OPENS with its tag, which also has a '-'.
+CID = mc.id_changeset(r)
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'delete', 'path': UNO})
 check('M1 delete se apila', mc.abre(r, 'SN_CHANGESET_STAGED_FMT'), r[:200])
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'create', 'path': UNO,

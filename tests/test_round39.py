@@ -69,12 +69,12 @@ try:
         # Se afirma el CONTRATO, no la letra: lo que mentia era prometer el
         # digest de una carpeta. Buscar la palabra "carpeta" a secas daria
         # falso positivo con el texto nuevo, que la usa para NEGARLO.
-        if 'OFRECE cada unit' in d:
+        if 'each unit in it OFFERS' in d:
             mienten.append(t)
     check('D1 ninguna tool de posicion promete el digest de una carpeta',
           not mienten, 'lo siguen prometiendo: %s' % mienten)
     dicen = [t for t in posicion
-             if 'no una carpeta' in
+             if 'not a folder' in
              esquema(t)['parameters']['properties']['path']['description']]
     check('D1b ...y las de esta unit lo dicen explicitamente',
           len(dicen) >= 4, 'solo lo dicen: %s' % dicen)
@@ -82,7 +82,7 @@ try:
     # ------------------------------------------------------------------ D2
     ds = esquema('delphi_symbols')['parameters']['properties']['path']['description']
     check('D2 ...y delphi_symbols sigue diciendo que SI la acepta',
-          'CARPETA' in ds.upper(), ds[:200])
+          'FOLDER' in ds.upper(), ds[:200])
 
     # ------------------------------------------------------------------ D3
     repo = os.path.join(JAIL, 'r')
@@ -117,7 +117,7 @@ try:
     # hay simbolo que resolver
     n = call('delphi_definition', {'path': pas, 'line': 4, 'character': 2})
     check('D6 un null viene explicado, no a secas',
-          n.startswith('null') and len(n) > 200 and '0-BASED' in n, n[:220])
+          mc.abre(n, 'SN_LSP_NULL_NOTE') and len(n) > 200, n[:220])
     check('D6b ...y dice las tres causas, que se arreglan distinto',
           ('delphi_read' in n) and ('delphi_symbols' in n), n[:260])
 finally:

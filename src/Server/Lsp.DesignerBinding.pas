@@ -322,8 +322,14 @@ begin
     Exit(MsgFmt(SR_DESIGNER_NO_FORM_FMT, [ADfm]));
   // Un binario DANADO antes de buscar la unit: "no encuentro la unit" sobre
   // un form ilegible manda a buscar un fichero que nunca fue el problema.
-  if IsBinaryDesignerFile(ADfm) and (DesignerFileToText(ADfm, Enc) <> '') then
-    Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Enc));
+  // (el motivo es lo que DEVUELVE DesignerFileToText; Enc es el texto, y
+  // cuando falla queda vacio: el rechazo salia sin motivo desde el 25-sep)
+  if IsBinaryDesignerFile(ADfm) then
+  begin
+    var MotivoBin := DesignerFileToText(ADfm, Enc);
+    if MotivoBin <> '' then
+      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, MotivoBin));
+  end;
   if Pas = '' then
     Pas := TPath.ChangeExtension(ADfm, '.pas');
   if not TFile.Exists(Pas) then

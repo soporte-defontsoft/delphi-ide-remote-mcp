@@ -269,7 +269,7 @@ def entorno(extra=None):
 
 
 # Las etiquetas de los mensajes del catalogo (Lsp.Texts.MSG_TAG_REGEX, decision
-# de David 27-sep-2026): [AREA-NNN] o [AREA-NNN RESULTADO] al final de cada
+# de David 27-sep-2026): [AREA-NNN] o [AREA-NNN RESULTADO] al PRINCIPIO de cada
 # mensaje. Las baterias reconocen un mensaje por su id, no por su frase, asi
 # el texto se puede traducir sin romperlas. test_catalogo vigila que este
 # patron sea el mismo que el del servidor.
@@ -287,17 +287,11 @@ def tiene(t, msg_id):
 
 
 def outcome(t):
-    """El resultado que declara el mensaje que ABRE la respuesta: la primera
-    etiqueta, si esta en la primera linea; '' si no hay, si esa no declara
-    ninguno, o si la respuesta es JSON (el mismo criterio que MsgOutcome)."""
-    t = t or ''
-    if t.lstrip().startswith(('{', '[')):
-        return ''
-    m = ETIQUETA.search(t)
-    if not m or ('\n' in t and m.start() > t.index('\n')):
-        return ''
-    return m.group(2) or ''
-
+    """El resultado que declara el mensaje que ABRE el texto: el de la
+    etiqueta con la que EMPIEZA; '' si no empieza por una o si esa no declara
+    ninguno. El mismo criterio que MsgOutcome del servidor."""
+    m = ETIQUETA.match((t or '').lstrip())
+    return (m.group(2) or '') if m else ''
 
 def _fin_literal(t, i):
     """Posicion tras el literal Pascal que empieza en t[i] == "'" ('' dentro)."""
@@ -407,22 +401,26 @@ def abre(t, nombre):
 
 
 def resultado(t):
-    """El resultado de una respuesta como lo decide el servidor: el de la
-    etiqueta (outcome) y, si no declara ninguno, la regla vieja que lee como
-    EMPIEZA el texto - la misma que ResultadoPorTexto, mientras dure la
-    migracion (se va el dia que la etiqueta pase al principio)."""
-    r = outcome(t)
+    """El resultado de una respuesta como lo decide el servidor: el que
+    declara la etiqueta que la abre; y si es un objeto JSON, el de su campo
+    "error" (su etiqueta, o INVALID_PARAM si no la lleva), como
+    OutcomeDelTexto de ToolsManager. Un JSON de exito no declara nada."""
     t = t or ''
-    if r or t.lstrip().startswith(('{', '[')):
-        return r
-    low = t.lower()
-    if t.startswith('RECHAZADO'):
-        return 'NOT_FOUND' if 'no existe' in low else 'DENIED'
-    if t.startswith('error:'):
-        return 'NOT_FOUND' if ('no existe' in low or 'not found' in low) else 'INVALID_PARAM'
-    if t.startswith(('Error:', 'Error executing tool:', 'LSP error:')):
-        return 'INTERNAL'
-    return ''
+    if t.lstrip().startswith('{'):
+        err = como_json(t).get('error')
+        if isinstance(err, str) and err.strip():
+            return outcome(err) or 'INVALID_PARAM'
+        return ''
+    return outcome(t)
+
+def id_changeset(t):
+    """El id de un changeset por su FORMA - hhnnss-secuencia[-secreto], la que
+    compone Lsp.Changeset.ChangesetBegin -, nunca por la palabra que ocupe en
+    la frase (con la etiqueta delante, split()[1] cogia otra cosa: siete
+    baterias lo tenian copiado). El secreto es opcional para que una bateria
+    pueda comprobar que existe. '' si no hay ninguno."""
+    m = re.search(r'\b\d{6}-\d+(?:-[0-9A-F]+)?\b', t or '')
+    return m.group(0) if m else ''
 
 
 def rechazado(t):

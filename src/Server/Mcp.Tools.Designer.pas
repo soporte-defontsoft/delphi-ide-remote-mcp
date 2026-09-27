@@ -921,6 +921,9 @@ var
   V: TJSONValue;
 begin
   Result := AResult;
+  // a un RECHAZO no se le pega "lo que ves es fiel": no se ha ensenado nada
+  if EsFallo(AResult) then
+    Exit;
   V := TJSONObject.ParseJSONValue(AResult);
   if V = nil then
     Exit(AResult + #10 + MsgText(SN_DESIGNER_BINARY_VIEW));

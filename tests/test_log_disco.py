@@ -81,10 +81,10 @@ print('== log en disco ==')
 # ---- A: stdio, salida limpia
 s = mc.Stdio(EXE, ENV, nombre='log-battery')
 check('A actual.log aparece junto al exe con el proceso VIVO',
-      espera(lambda: 'Log en disco:' in lee(VIVO)), os.listdir(BASE))
+      espera(lambda: 'Log on disk:' in lee(VIVO)), os.listdir(BASE))
 t = lee(VIVO)
 check('A el arranque dice donde esta el log (la misma nota en los tres modos)',
-      'Log en disco:' in t and 'actual.log en vivo' in t and '(stdio)' in t, t[-400:])
+      'Log on disk:' in t and 'actual.log live' in t and '(stdio)' in t, t[-400:])
 s.call('delphi_help', {"command": "tool", "name": "MARCA-VIVA-1"})
 check('A una peticion llega a disco en ~medio segundo, sin salir el proceso',
       espera(lambda: 'MARCA-VIVA-1' in lee(VIVO), 3), lee(VIVO)[-300:])
@@ -92,7 +92,7 @@ s.call('delphi_help', {"command": "tool", "name": "delphi_read", "password": "SE
 check('A una contrasena NUNCA llega al log (el enmascarador de siempre)',
       espera(lambda: '"password"' in lee(VIVO), 3) and 'SECRETO-LOG-123' not in lee(VIVO),
       [l for l in lee(VIVO).splitlines() if 'password' in l][:1])
-check('A antes de salir no hay linea de parada', ': parado' not in lee(VIVO))
+check('A antes de salir no hay linea de parada', ': stopped' not in lee(VIVO))
 # F: una tira base64 (600 simbolos, con la barra escapada como la manda JSON)
 # y una palabra corta del mismo alfabeto que NO es una tira
 blob = base64.b64encode(bytes(range(256)) * 2).decode()[:600]
@@ -106,7 +106,7 @@ espera(lambda: 'MARCA-B64' in lee(VIVO), 3)
 linea = next((l for l in lee(VIVO).splitlines() if 'MARCA-B64' in l), '')
 check('F fixture: la tira lleva barras escapadas', '/' in blob and '\\/' in blob.replace('/', '\\/'))
 check('F una tira base64 no llega al log: queda su marca con el tamano',
-      '[base64: 600 caracteres]' in linea and blob[100:160] not in linea
+      '[base64: 600 chars]' in linea and blob[100:160] not in linea
       and blob.replace('/', '\\/')[100:160] not in linea, linea[:300])
 check('F el resto de la linea queda entero (una palabra corta del alfabeto no es una tira)',
       '"corta":"%s"' % corta in linea and '"name":"MARCA-B64"' in linea, linea[:300])
@@ -125,7 +125,7 @@ check('G la respuesta registrada pasa por el enmascarador: "token":"***", nunca 
       '"token":"***"' in linea and '"token":"MARCA-TOK"' not in linea, linea[:400])
 s.cierra()
 check('A salida limpia: queda la linea "parado" (la cola de la sesion llega a disco)',
-      ': parado' in lee(VIVO), lee(VIVO)[-300:])
+      ': stopped' in lee(VIVO), lee(VIVO)[-300:])
 
 # ---- B: --http matado desde fuera
 shutil.rmtree(LOGS, ignore_errors=True)
@@ -136,7 +136,7 @@ check('B --http: el arranque esta en disco con el proceso vivo',
 h.kill(); h.wait(10)
 t = lee(VIVO)
 check('B matado desde fuera: lo registrado sigue ahi (no hace falta salir bien)',
-      ('HTTP :%d' % PORT) in t and ': parado' not in t, t[-300:])
+      ('HTTP :%d' % PORT) in t and ': stopped' not in t, t[-300:])
 
 # ---- C: rotacion, poda y el nombrador
 shutil.rmtree(LOGS, ignore_errors=True)
@@ -158,7 +158,7 @@ for i in range(400):
 check('C un bloque cada LinesPerFile lineas, con el proceso vivo', len(nuevos) >= 1, bloques())
 t_bloques = ''.join(lee(os.path.join(LOGS, n)) for n in nuevos)
 check('C el bloque ES la cola en vivo renombrada: empieza en el arranque de esta ejecucion',
-      'Log en disco:' in t_bloques and 'ROTA-000' in t_bloques, t_bloques[:200])
+      'Log on disk:' in t_bloques and 'ROTA-000' in t_bloques, t_bloques[:200])
 s.call('delphi_help', {"command": "tool", "name": "TRAS-CORTE"})
 check('C tras el corte, lo nuevo va a un actual.log nuevo (nada se pierde en el corte)',
       espera(lambda: 'TRAS-CORTE' in lee(VIVO), 3) and 'ROTA-000' not in lee(VIVO), lee(VIVO)[:200])
@@ -211,7 +211,7 @@ faltan = [m for m in ['MARCA-%s-%02d' % (g, i) for g in ('P1', 'P2') for i in ra
 check('E dos escritores a la vez: no se pierde ninguna linea', not faltan, faltan[:5])
 rotas = [l for l in t.splitlines() if 'MARCA-P' in l and not l.startswith('[')]
 check('E ninguna linea cortada dentro de otra', not rotas, rotas[:2])
-check('E las dos salidas limpias dejan su "parado"', t.count(': parado') >= 2, t.count(': parado'))
+check('E las dos salidas limpias dejan su "stopped"', t.count(': stopped') >= 2, t.count(': stopped'))
 
 if mc.F == 0:
     limpia()

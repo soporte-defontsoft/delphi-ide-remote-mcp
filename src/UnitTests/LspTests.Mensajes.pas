@@ -1,8 +1,8 @@
 ﻿unit LspTests.Mensajes;
 
 // El lector de las etiquetas de los mensajes del catalogo (Lsp.Texts:
-// MsgIds, MsgTag, HasMsg, MsgOutcome). Una etiqueta es [AREA-NNN] o
-// [AREA-NNN RESULTADO] al final del mensaje (decision de David, 27-sep-2026):
+// MsgIds, MsgTag, HasMsg, MsgOutcome, EsMsg, MsgEnvuelve). Una etiqueta es
+// [AREA-NNN] o [AREA-NNN RESULTADO] al PRINCIPIO del mensaje (David, 27-sep):
 // lo que no tiene esa forma exacta no es una etiqueta, y un mensaje sin
 // etiqueta no coincide con nada.
 
@@ -31,17 +31,17 @@ uses
   Lsp.Texts;
 
 const
-  // dos mensajes de ejemplo, como estaran en el catalogo
-  EJ_RECHAZO = 'RECHAZADO: "%s" no es una plataforma Delphi valida. [CFG-007 INVALID_PARAM]';
-  EJ_BUENO = 'ESCRITO en %s. [EDIT-001]';
-  EJ_SIN = 'Un mensaje que aun no lleva etiqueta.';
+  // dos mensajes de ejemplo, como estan en el catalogo: la etiqueta DELANTE
+  EJ_RECHAZO = '[CFG-007 INVALID_PARAM] "%s" is not a valid Delphi platform.';
+  EJ_BUENO = '[EDIT-001] WRITTEN to %s.';
+  EJ_SIN = 'A text with no tag.';
 
 procedure TEtiquetasTests.LosIdsEnOrden;
 var
   Ids: TArray<string>;
 begin
-  Ids := MsgIds('ESCRITO en A.pas. [EDIT-001]'#10'OJO: algo. [EDIT-040]'#10 +
-    'RECHAZADO: fuera. [WS-003 DENIED]');
+  Ids := MsgIds('[EDIT-001] WRITTEN to A.pas.'#10'[EDIT-040] NOTE: something.'#10 +
+    '[WS-003 DENIED] outside.');
   Assert.IsTrue(Length(Ids) = 3, 'tres: ' + IntToStr(Length(Ids)));
   Assert.AreEqual('EDIT-001', Ids[0]);
   Assert.AreEqual('EDIT-040', Ids[1]);
@@ -56,7 +56,7 @@ begin
   Assert.IsTrue(Length(MsgIds('[CFG-07] [C-007] [ABCDEFG-001] [cfg-007] ' +
     '[CFG-007 BOGUS] [CFG-007  DENIED] [ CFG-007]')) = 0, 'ninguna');
   // un corchete normal de un mensaje tampoco
-  Assert.IsTrue(Length(MsgIds('usa [Workspace.<nombre>] y [Server] Port')) = 0, 'secciones');
+  Assert.IsTrue(Length(MsgIds('use [Workspace.<name>] and [Server] Port')) = 0, 'secciones');
 end;
 
 procedure TEtiquetasTests.ElMensajePorSuConstante;
@@ -66,8 +66,7 @@ begin
   Assert.AreEqual('', MsgTag(EJ_SIN));
   Assert.IsTrue(HasMsg(Format(EJ_BUENO, ['A.pas']), EJ_BUENO), 'el suyo');
   Assert.IsFalse(HasMsg(Format(EJ_BUENO, ['A.pas']), EJ_RECHAZO), 'otro');
-  // un mensaje SIN etiqueta no coincide con nada, ni consigo mismo: nadie puede
-  // guiarse por un mensaje que aun no se ha migrado creyendo que si
+  // un mensaje SIN etiqueta no coincide con nada, ni consigo mismo
   Assert.IsFalse(HasMsg(EJ_SIN, EJ_SIN), 'sin etiqueta');
 end;
 
@@ -76,17 +75,20 @@ begin
   Assert.AreEqual('INVALID_PARAM', MsgOutcome(Format(EJ_RECHAZO, ['Win99'])));
   Assert.AreEqual('', MsgOutcome(Format(EJ_BUENO, ['A.pas'])), 'un resultado bueno no declara nada');
   Assert.AreEqual('', MsgOutcome(EJ_SIN));
-  // manda la PRIMERA etiqueta, la del mensaje que abre la respuesta: un
-  // rechazo anadido detras de una nota o de un resultado bueno no la
-  // convierte en error (la regla de siempre miraba como EMPIEZA el texto)
-  Assert.AreEqual('', MsgOutcome('nota [EDIT-040]'#10'RECHAZADO: no existe X. [FILE-004 NOT_FOUND]'),
+  // manda la etiqueta que ABRE el texto: un rechazo anadido detras de una
+  // nota o de un resultado bueno no lo convierte en error
+  Assert.AreEqual('', MsgOutcome('[EDIT-040] note'#10'[FILE-004 NOT_FOUND] X does not exist.'),
     'una nota delante');
-  Assert.AreEqual('NOT_FOUND', MsgOutcome('RECHAZADO: no existe X. [FILE-004 NOT_FOUND]'#10 +
-    'nota [EDIT-040]'#10'y otro [WS-003 DENIED]'), 'el rechazo delante');
-  // lo que viene DETRAS de la primera linea no declara nada: un fichero leido
-  // que cita una etiqueta no convierte la lectura en error (27-sep)
+  Assert.AreEqual('NOT_FOUND', MsgOutcome('[FILE-004 NOT_FOUND] X does not exist.'#10 +
+    '[EDIT-040] note'#10'[WS-003 DENIED] other'), 'el rechazo delante');
+  // el blanco inicial (una nota que se pega detras de otro texto) no cambia nada
+  Assert.AreEqual('DENIED', MsgOutcome(#10'  [WS-003 DENIED] outside.'), 'blanco delante');
+  // lo que NO empieza por una etiqueta no declara nada, aunque la traiga
+  // dentro: un fichero leido que cita etiquetas (27-sep: se tomaba por una
+  // negativa y se enmascaraba su contenido, '%s:' salia '%srv0:')
   Assert.AreEqual('', MsgOutcome('Lsp.Texts.pas  encoding=utf8'#10 +
-    '12|    ''RECHAZADO: x. [CFG-001 DENIED]'';'), 'un fichero leido');
+    '12|    ''[CFG-001 DENIED] x.'';'), 'un fichero leido');
+  Assert.AreEqual('', MsgOutcome('WRITTEN [CFG-001 DENIED]'), 'una etiqueta en medio');
   // y una respuesta JSON tampoco: la decide su campo error
   Assert.AreEqual('', MsgOutcome('{"hits":["[CFG-001 DENIED]"]}'), 'JSON');
 end;
@@ -95,61 +97,66 @@ procedure TEtiquetasTests.ElHelperNoRevienta;
 var
   S: string;
 begin
-  // hoy el texto tal cual; con traducciones, por el id
+
   Assert.AreEqual(EJ_SIN, MsgText(EJ_SIN));
-  Assert.AreEqual('ESCRITO en A.pas. [EDIT-001]', MsgFmt(EJ_BUENO, ['A.pas']));
+  Assert.AreEqual('[EDIT-001] WRITTEN to A.pas.', MsgFmt(EJ_BUENO, ['A.pas']));
   // unos argumentos que no cuadran: el mensaje sin formatear y el motivo,
   // nunca una excepcion de conversion en mitad de una tool
   S := MsgFmt(EJ_BUENO, [42]);
   Assert.IsTrue(S.StartsWith(EJ_BUENO), S);
   Assert.IsTrue(MsgIds(S)[0] = 'EDIT-001', 'conserva su etiqueta: ' + S);
-  // un mensaje metido dentro de otro por un %s pierde su etiqueta: habla el de
-  // fuera (si no, el DENIED de dentro decidiria el resultado de un exito)
-  S := MsgFmt('CREADA la unit, pero NO se pudo registrar: %s [CREATE-099]',
-    ['RECHAZADO: el .dpr no existe. [CFG-001 NOT_FOUND]']);
-  Assert.IsTrue((Length(MsgIds(S)) = 1) and (MsgIds(S)[0] = 'CREATE-099'), S);
+  // un mensaje metido dentro de otro por un %s CONSERVA su etiqueta (se
+  // reconoce por su id) y no decide nada: habla la que abre el texto
+  S := MsgFmt('[CREATE-099] CREATED the unit, but it could NOT be registered: %s',
+    ['[CFG-001 NOT_FOUND] the .dpr does not exist.']);
+  Assert.IsTrue((Length(MsgIds(S)) = 2) and (MsgIds(S)[0] = 'CREATE-099') and
+    (MsgIds(S)[1] = 'CFG-001'), S);
   Assert.AreEqual('', MsgOutcome(S), 'un exito sigue siendolo');
-  Assert.IsTrue(S.Contains('RECHAZADO: el .dpr no existe.'), 'el texto de dentro se queda: ' + S);
+  // y un dato que cita etiquetas llega INTACTO (con la etiqueta al final,
+  // MsgFmt las borraba: el eco de un ancla de Lsp.Texts salia mutilado)
+  S := MsgFmt('[EDIT-093 DENIED] The anchor is not in the file.'#10'Anchor: |%s|',
+    ['x [SYS-006 INTERNAL] y']);
+  Assert.IsTrue(S.Contains('|x [SYS-006 INTERNAL] y|'), S);
+  Assert.AreEqual('DENIED', MsgOutcome(S));
 end;
 
 procedure TEtiquetasTests.LosLectoresDelResultado;
 begin
-  // por la etiqueta: la PRIMERA del mensaje
-  Assert.AreEqual('INVALID_PARAM', ResultadoDe(Format(EJ_RECHAZO, ['Win99'])));
-  Assert.AreEqual('', ResultadoDe(Format(EJ_BUENO, ['A.pas'])), 'un exito no declara nada');
   Assert.IsTrue(EsRechazo(Format(EJ_RECHAZO, ['Win99'])), 'rechazo');
-  Assert.IsFalse(EsRechazo('Error executing tool: x [SYS-999 INTERNAL]'), 'INTERNAL no es un rechazo');
-  Assert.IsTrue(EsFallo('Error executing tool: x [SYS-999 INTERNAL]'), 'pero si un fallo');
-  // sin etiqueta, la regla vieja (mientras quede algun mensaje sin ella)
-  Assert.AreEqual('NOT_FOUND', ResultadoDe('RECHAZADO: no existe X.'));
-  Assert.AreEqual('INVALID_PARAM', ResultadoDe('error: falta "path"'));
-  Assert.IsFalse(EsFallo('ESCRITO en A.pas'), 'sin etiqueta y sin marca: exito');
-  // un rechazo aun SIN etiqueta con una nota etiquetada detras sigue siendo
-  // un rechazo (la puerta del 27-sep: la tanda se aplicaba en vez de deshacerse)
-  Assert.IsTrue(EsFallo('RECHAZADO: el ancla no esta.'#10'la mas parecida es la 3 [EDIT-099]'), 'rechazo + nota');
-  // EsMsg mira la PRIMERA etiqueta: el eco que viene detras no cuenta
-  Assert.IsTrue(EsMsg(Format(EJ_BUENO, ['A.pas']) + #10'12| RECHAZADO [CFG-007 INVALID_PARAM]', EJ_BUENO));
-  Assert.IsFalse(EsMsg('RECHAZADO: x [CFG-007 INVALID_PARAM]'#10'eco: ESCRITO en A.pas. [EDIT-001]', EJ_BUENO),
-    'un ESCRITO citado en el eco no convierte un rechazo en exito');
+  Assert.IsFalse(EsRechazo(Format(EJ_BUENO, ['A.pas'])), 'un exito no');
+  Assert.IsFalse(EsRechazo('[SYS-999 INTERNAL] Error executing tool: x'), 'INTERNAL no es un rechazo');
+  Assert.IsTrue(EsFallo('[SYS-999 INTERNAL] Error executing tool: x'), 'pero si un fallo');
+  // sin etiqueta delante no hay fallo: la regla vieja (leer RECHAZADO,
+  // error:) ya no existe
+  Assert.IsFalse(EsFallo('RECHAZADO: no existe X.'), 'la marca vieja no cuenta');
+  Assert.IsFalse(EsFallo(EJ_SIN), 'sin etiqueta: exito');
+  // un fallo de varias lineas se reconoce: la etiqueta lo abre (con ella al
+  // final, un ROLLBACK de varias lineas salia como EXITO)
+  Assert.IsTrue(EsFallo('[EDIT-099 DENIED] ROLLBACK: edit 2 of 3 failed.'#10'why...'), 'rollback');
+  // EsMsg mira la etiqueta que ABRE el texto: el eco que viene detras no cuenta
+  Assert.IsTrue(EsMsg(Format(EJ_BUENO, ['A.pas']) + #10'12| [CFG-007 INVALID_PARAM] x', EJ_BUENO));
+  Assert.IsFalse(EsMsg('[CFG-007 INVALID_PARAM] x'#10'echo: [EDIT-001] WRITTEN to A.pas.', EJ_BUENO),
+    'un WRITTEN citado en el eco no convierte un rechazo en exito');
+  Assert.IsFalse(EsMsg('before [EDIT-001] WRITTEN', EJ_BUENO), 'una etiqueta en medio no abre nada');
 end;
 
 procedure TEtiquetasTests.ElEnvoltorioRespetaLaCausa;
 const
-  ENVOLTORIO = 'error: %s [SYS-998 INVALID_PARAM]';
-  INTERNO = 'ERROR: %s: %s [SYS-997 INTERNAL]';
+  ENVOLTORIO = '[SYS-998 INVALID_PARAM] %s';
+  INTERNO = '[SYS-997 INTERNAL] %s: %s';
 var
   Causa: string;
 begin
   // una causa que no es un mensaje con resultado: se envuelve
-  Assert.AreEqual('error: falta la clave [SYS-998 INVALID_PARAM]', MsgEnvuelve(ENVOLTORIO, 'falta la clave'));
-  Assert.AreEqual('INVALID_PARAM', ResultadoDe(MsgEnvuelve(ENVOLTORIO, 'falta la clave')));
-  // una que YA lo es sale tal cual: envolverla le quitaba la etiqueta y el
-  // resultado cambiaba (un <Exec> en delphi_test pasaba de DENIED a INVALID_PARAM)
-  Causa := 'RECHAZADO: el .dproj ejecuta ordenes en el build [BUILD-017 DENIED]';
+  Assert.AreEqual('[SYS-998 INVALID_PARAM] the key is missing', MsgEnvuelve(ENVOLTORIO, 'the key is missing'));
+  Assert.AreEqual('INVALID_PARAM', MsgOutcome(MsgEnvuelve(ENVOLTORIO, 'the key is missing')));
+  // una que YA lo es sale tal cual: envolverla cambiaba su resultado (un
+  // <Exec> en delphi_test pasaba de DENIED a INVALID_PARAM)
+  Causa := '[BUILD-017 DENIED] the .dproj runs commands in the build';
   Assert.AreEqual(Causa, MsgEnvuelve(ENVOLTORIO, Causa));
-  Assert.AreEqual('DENIED', ResultadoDe(MsgEnvuelve(ENVOLTORIO, Causa)));
+  Assert.AreEqual('DENIED', MsgOutcome(MsgEnvuelve(ENVOLTORIO, Causa)));
   // con argumentos propios del envoltorio (clase + mensaje)
-  Assert.AreEqual('ERROR: EFoo: roto [SYS-997 INTERNAL]', MsgEnvuelve(INTERNO, 'roto', ['EFoo', 'roto']));
+  Assert.AreEqual('[SYS-997 INTERNAL] EFoo: broken', MsgEnvuelve(INTERNO, 'broken', ['EFoo', 'broken']));
   Assert.AreEqual(Causa, MsgEnvuelve(INTERNO, Causa, ['ELspSession', Causa]));
 end;
 

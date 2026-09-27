@@ -504,7 +504,7 @@ begin
     // dejo su fichero (con el pid en el nombre) pero el programa ya no esta:
     // un trabajo terminado, no un fallo al matar.
     if GetLastError = ERROR_INVALID_PARAMETER then
-      AComo := 'ya termino';
+      AComo := 'already finished';
     Exit;
   end;
   AComo := 'TerminateProcess';
@@ -737,7 +737,7 @@ begin
           if MatarProceso(Pid, Carpeta, Como) then
             Anade(Salida, MsgFmt(SK_JOB_TERMINADO_EL_TRABAJO_FMT, [Args[0].Trim,
               Pid, Origen, Como]) + #10'___RC=0'#10)
-          else if Como = 'ya termino' then
+          else if Como = 'already finished' then
             Anade(Salida, MsgFmt(SN_JOB_NINGUN_TRABAJO_VIVO_FMT, [Args[0].Trim]) + #10'___RC=3'#10)
           else
             Anade(Salida, MsgFmt(SN_JOB_NO_PUDE_MATAR_FMT, [Args[0].Trim,

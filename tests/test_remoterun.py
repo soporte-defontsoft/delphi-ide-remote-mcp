@@ -248,7 +248,7 @@ if os.path.isfile(pidf):
     os.remove(pidf)   # lo que hace un deploy fallido antes de rendirse
 r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6b}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
-check('kill sin .pid: lo mata por el nombre del vigia', j.get('killed') is True and mc.es(j.get('output'), 'SK_JOB_TERMINADO_EL_TRABAJO_FMT') and 'nombre del vigia' in (j.get('output') or ''), r[:300])
+check('kill sin .pid: lo mata por el nombre del vigia', j.get('killed') is True and mc.es(j.get('output'), 'SK_JOB_TERMINADO_EL_TRABAJO_FMT') and mc.catalogo()['SF_JOB_NOMBRE_DEL_VIGIA'] in (j.get('output') or ''), r[:300])
 check('kill sin .pid: el proceso ha muerto de verdad', not any(f.endswith('.pid') for f in os.listdir(DEPLOY)), os.listdir(DEPLOY))
 
 # 7) sin AllowRemoteRun: remote-run RECHAZADO, install-runner permitido

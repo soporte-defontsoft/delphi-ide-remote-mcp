@@ -154,7 +154,7 @@ UF = os.path.join(INSIDE, 'UF.pas')
 out = call('delphi_edit', {"path": UF, "insert": "metodo", "inclass": "TFormPrueba",
                            "visibility": "published",
                            "code": "procedure BotonClick(Sender: TObject);\nbegin\n  FDato := 1;\nend;"})
-check('published implicita: aceptado', 'INSERT metodo' in out and 'DOS mitades' in out, out)
+check('published implicita: aceptado', 'INSERT metodo' in out and 'the tool did BOTH halves' in out, out)
 raw = open(UF, 'rb').read().decode('cp1252')
 icls = raw.find('TFormPrueba = class(TObject)')
 idecl = raw.find('procedure BotonClick(Sender: TObject);')
@@ -177,8 +177,8 @@ out = call('delphi_edit', {"path": NU, "createunit": True})
 check('createunit: informa el encoding del IDE',
       mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out)
 out = call('delphi_read', {"path": NU})
-check('acentos=0 en unit nueva sin acentos (BOM fuera de la cuenta)',
-      'acentos=0' in out, out)
+check('accents=0 en unit nueva sin acentos (BOM fuera de la cuenta)',
+      'accents=0' in out, out)
 
 # ---- B1: git commit con comillas ------------------------------------------
 GITDIR = os.path.join(INSIDE, 'repo')
@@ -257,9 +257,12 @@ except OSError:
     pass
 out = call('delphi_report', {"message": "sin agente sigue en la raiz",
                              "title": "raiz", "kind": "question"})
-saved_name = out.split('como ')[-1].split(' (v')[0] if 'como ' in out else '?'
+# el nombre del .md por SU forma, no por la frase que lo rodea; None si no
+# lo trae (antes '?', y el check de abajo pasaba sin mirar nada)
+_m = re.search(r'\S+\.md\b', out)
+saved_name = _m.group(0) if _m else None
 check('report sin agent: sigue en la raiz de reports',
-      mc.abre(out, 'SN_REPORT_OK_FMT') and '/' not in saved_name, out[:150])
+      mc.abre(out, 'SN_REPORT_OK_FMT') and saved_name is not None and '/' not in saved_name and '\\' not in saved_name, out[:150])
 
 # ---- git dangerous options refused at the GATE (both access levels) --------
 PWN = os.path.join(INSIDE, 'PWNED.txt')
@@ -392,7 +395,7 @@ check('set-version: escribe los cuatro numeros del VERSIONINFO',
 check('set-version: FileVersion y ProductVersion dicen lo MISMO',
       'FileVersion=3.4.5.0;' in _d and 'ProductVersion=3.4.5.0' in _d, out[:200])
 check('set-version: el sufijo -beta no entra en el .dproj',
-      '-beta' not in _d and 'sufijo' in out, out[:200])
+      '-beta' not in _d and 'The suffix "-beta"' in out, out[:200])
 check('set-version: no toca Android ni iOS',
       'versionCode=1;' in _d and 'CFBundleVersion=1.0.0' in _d,
       'la numeracion de las tiendas es otra cosa')
@@ -473,7 +476,7 @@ check('deployfile: CON no tiene manifiesto de despliegue al empezar', not os.pat
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Linux64", "path": _dep})
 check('deployfile: anadido (manifiesto generado primero)',
-      mc.abre(out, 'SN_CONFIG_DEPLOY_ADDED_FMT') and 'genero el estandar' in out, out[:200])
+      mc.abre(out, 'SN_CONFIG_DEPLOY_ADDED_FMT') and mc.catalogo()['SF_CONFIG_DEPLOY_GENERATED'] in out, out[:200])
 _x = open(_deployproj, encoding='utf-8-sig').read()
 # v0.62: la entrada va RELATIVA al proyecto cuando el fichero cuelga de el, y
 # absoluta cuando no; el IDE hace lo mismo. Cuenta las dos formas.
