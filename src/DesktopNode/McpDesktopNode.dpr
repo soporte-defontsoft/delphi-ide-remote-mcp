@@ -14,6 +14,7 @@ uses
   System.IOUtils,
   System.StrUtils,
   System.Classes,
+  Mld.Textos in 'Mld.Textos.pas', // EL catalogo de mensajes del nodo
 {$IFDEF MSWINDOWS}
   Winapi.Windows,
   Mld.Captura in 'Mld.Captura.pas',
@@ -86,7 +87,7 @@ var
             [V.X, V.Y, V.Ancho, V.Alto, V.Titulo]));
       except
         on E: Exception do
-          Writeln('  ventanas: fallo la lista (', E.Message, ')');
+          Writeln(MsgFmt(SN_NODE_VENTANAS_FALLO_LISTA_FMT, [E.Message]));
       end;
     end
     else
@@ -101,10 +102,10 @@ begin
   Ruta := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'captura.png');
   Escritorio := TEscritorioWin.Create;
   try
-    Writeln('McpDesktop - nodo de control del escritorio Windows');
+    Writeln(MsgText(SN_NODE_CONTROL_ESCRITORIO_WINDOWS));
     Writeln('  ', TOSVersion.ToString);
-    Writeln(Format('  escritorio %dx%d pixeles, escala %.2f',
-      [Escritorio.Ancho, Escritorio.Alto, Escritorio.Escala]));
+    Writeln(MsgFmt(SN_NODE_ESCRITORIO_PIXELES_ESCALA_FMT,
+      [Escritorio.Ancho, Escritorio.Alto, FormatFloat('0.00', Escritorio.Escala)]));
     { Siempre, no solo al fallar: la captura del DC de pantalla se niega a
       ratos sin causa conocida (2026-09-22) y hay que poder comparar el
       estado de los casos buenos con el de los malos. }
@@ -119,7 +120,7 @@ begin
       { En Windows no hace falta pedirle al escritorio que las ensene: la
         lista con titulo y sitio va CON CADA captura (24-sep), asi que esta
         orden solo vuelve a capturar, y con ella la lista al dia. }
-      Writeln('  ventanas: la lista va con la captura de abajo');
+      Writeln(MsgText(SN_NODE_VENTANAS_LISTA_CAPTURA));
       Hizo := True;
     end
     else if (Orden = 'escribe') and (Args >= 4) then
@@ -131,15 +132,15 @@ begin
         Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
       Hizo := Escritorio.Pulsar(ObjX, ObjY);
       if not Hizo then
-        Writeln('  no pude pulsar en el campo: ', Escritorio.Error)
+        Writeln(MsgFmt(SN_NODE_NO_PUDE_PULSAR_CAMPO_FMT, [Escritorio.Error]))
       else
       begin
         Sleep(250);
         Hizo := Escritorio.Escribir(Frase);
         if Hizo then
-          Writeln(Format('  ESCRITO "%s" en el pixel (%d,%d) (tecleado; el foco NO se verifica: comprueba con la captura)', [Frase, ObjX, ObjY]))
+          Writeln(MsgFmt(SK_NODE_ESCRITO_EN_PIXEL_FMT, [Frase, ObjX, ObjY]))
         else
-          Writeln('  pulse bien pero no pude escribir: ', Escritorio.Error);
+          Writeln(MsgFmt(SN_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Escritorio.Error]));
       end;
     end
     else if (Orden = 'texto') and (Args >= 2) then
@@ -149,9 +150,9 @@ begin
         Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
       Hizo := Escritorio.Escribir(Frase);
       if Hizo then
-        Writeln('  ESCRITO: ', Frase, ' (tecleado; el foco NO se verifica: comprueba con la captura)')
+        Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_FMT, [Frase]))
       else
-        Writeln('  no pude escribir: ', Escritorio.Error);
+        Writeln(MsgFmt(SN_NODE_NO_PUDE_ESCRIBIR_FMT, [Escritorio.Error]));
     end
     else if (Orden = 'tecla') and (Args >= 2) then
     begin
@@ -171,7 +172,7 @@ begin
         Teclas := Teclas + [Tecla];
       end;
       if Tecla = 0 then
-        Writeln('  no conozco la tecla ', Arg(I))
+        Writeln(MsgFmt(SN_NODE_NO_CONOZCO_TECLA_FMT, [Arg(I)]))
       else
       begin
         Hizo := Escritorio.Combinacion(Teclas);
@@ -179,16 +180,16 @@ begin
           Writeln('  TECLA ', Arg(Args),
             IfThen(Args > 2, ' con ' + IntToStr(Args - 2) + ' modificador(es)', ''), ' enviada')
         else
-          Writeln('  no pude enviar la tecla: ', Escritorio.Error);
+          Writeln(MsgFmt(SN_NODE_NO_ENVIAR_TECLA_FMT, [Escritorio.Error]));
       end;
     end
     else if Orden = 'altab' then
     begin
       Hizo := Escritorio.Combinacion([TeclaPorNombre('alt'), TeclaPorNombre('tab')]);
       if Hizo then
-        Writeln('  ALT+TAB enviado')
+        Writeln(MsgText(SK_NODE_ALT_TAB_ENVIADO))
       else
-        Writeln('  no pude enviar Alt+Tab: ', Escritorio.Error);
+        Writeln(MsgFmt(SN_NODE_NO_ENVIAR_ALT_TAB_FMT, [Escritorio.Error]));
     end
     else if Args >= 2 then
     begin
@@ -198,26 +199,21 @@ begin
       begin
         Hizo := Escritorio.Pulsar(ObjX, ObjY);
         if Hizo then
-          Writeln(Format('  CLIC en el pixel (%d,%d) de la captura', [ObjX, ObjY]))
+          Writeln(MsgFmt(SK_NODE_CLIC_EN_PIXEL_FMT, [ObjX, ObjY]))
         else
-          Writeln('  no pude pulsar: ', Escritorio.Error);
+          Writeln(MsgFmt(SN_NODE_NO_PUDE_PULSAR_FMT, [Escritorio.Error]));
       end;
     end
     else
     begin
-      Writeln('  uso: <x> <y>   pulsa en ese pixel de la captura');
-      Writeln('       altab     cambia de ventana con el teclado');
-      Writeln('       tecla <t> pulsa una tecla (escape, enter, tab, super...)');
-      Writeln('       texto <t> escribe ese texto donde este el foco');
-      Writeln('       escribe <x> <y> <t>  pulsa ahi Y escribe: un solo viaje');
-      Writeln('       ventanas  enumera las ventanas visibles con su sitio');
+      Writeln(MsgText(SN_NODE_USO_ENUMERA_VENTANAS));
     end;
 
     if Hizo then
       Sleep(400);
     Instantanea;
     Writeln;
-    Writeln('nodo listo');
+    Writeln(MsgText(SN_NODE_NODO_LISTO));
   finally
     Escritorio.Free;
   end;
@@ -238,7 +234,7 @@ begin
   except
     on E: Exception do
     begin
-      Writeln('  aviso: no pude recoger la captura (', E.Message, ')');
+      Writeln(MsgFmt(SN_NODE_NO_RECOGER_CAPTURA_FMT, [E.Message]));
       Result := AOrigen;
     end;
   end;
@@ -279,7 +275,7 @@ begin
   try
     if not L.Abrir(ALib) then
     begin
-      Writeln(Format('  %-16s NO SE PUDO ABRIR: %s', [ALib, L.Error]));
+      Writeln(MsgFmt(SN_NODE_NO_SE_PUDO_ABRIR_FMT, [ALib, L.Error]));
       Exit;
     end;
     Buenos := 0;
@@ -292,7 +288,7 @@ begin
       else
         Writeln(Format('     AUSENTE %s (%s)', [S, L.Error]));
     end;
-    Writeln(Format('  %-16s abierta, simbolos %d/%d', [ALib, Buenos, Total]));
+    Writeln(MsgFmt(SN_NODE_ABIERTA_SIMBOLOS_FMT, [ALib, Buenos, Total]));
   finally
     L.Free;
   end;
@@ -335,14 +331,14 @@ var
         Ojos := TOjos.Create;
         if not Ojos.Abrir then
         begin
-          Writeln('  ventanas: sin ojos X11 (', Ojos.Error, ')');
+          Writeln(MsgFmt(SN_NODE_VENTANAS_SIN_OJOS_FMT, [Ojos.Error]));
           SinOjos := True;
           Exit;
         end;
       end;
       if not Ojos.Principales(Lista) or not Ojos.TamanoRaiz(RaizW, RaizH) then
       begin
-        Writeln('  ventanas: no pude enumerarlas (', Ojos.Error, ')');
+        Writeln(MsgFmt(SN_NODE_VENTANAS_NO_ENUMERARLAS_FMT, [Ojos.Error]));
         Exit;
       end;
       FX := 1;
@@ -353,25 +349,25 @@ var
         FY := CapH / RaizH;
       end
       else
-        Writeln('  ventanas: no pude leer el tamano de la captura; coordenadas de X11 sin convertir');
+        Writeln(MsgText(SN_NODE_VENTANAS_SIN_CONVERTIR));
       Writeln(Format('  %d ventanas visibles:', [Length(Lista)]));
-      Writeln('  (ventanas X11/Xwayland: las nativas Wayland no salen en la lista)');
+      Writeln(MsgText(SN_NODE_NATIVAS_WAYLAND_NO_SALEN));
       for V in Lista do
         Writeln(Format('  VENTANA %d %d %d %d %s',
           [Round(V.X * FX), Round(V.Y * FY), Round(V.Ancho * FX), Round(V.Alto * FY), V.Titulo]));
     except
       on E: Exception do
-        Writeln('  ventanas: fallo la lista (', E.ClassName, ': ', E.Message, ')');
+        Writeln(MsgFmt(SN_NODE_VENTANAS_FALLO_LISTA_CLASE_FMT, [E.ClassName, E.Message]));
     end;
   end;
 
 begin
     Ojos := nil;
     SinOjos := False;
-    Writeln('McpDesktop - nodo de control del escritorio Linux');
+    Writeln(MsgText(SN_NODE_CONTROL_ESCRITORIO_LINUX));
     Writeln;
 
-    Writeln('-- 1. librerias del sistema (nada que instalar) --');
+    Writeln(MsgText(SN_NODE_LIBRERIAS_DEL_SISTEMA));
     Sondear('libdbus-1.so.3', ['dbus_bus_get', 'dbus_error_init',
       'dbus_message_new_method_call', 'dbus_connection_send_with_reply_and_block',
       'dbus_message_iter_init', 'dbus_bus_get_unique_name']);
@@ -409,19 +405,19 @@ begin
     try
       if not Bus.Conectar then
       begin
-        Writeln('NO hay escritorio al que hablar: ', Bus.Error);
+        Writeln(MsgFmt(SN_NODE_NO_HAY_ESCRITORIO_FMT, [Bus.Error]));
         Exit;
       end;
 
-      Writeln('-- 2. la pantalla: escala y captura --');
+      Writeln(MsgText(SN_NODE_PANTALLA_ESCALA_CAPTURA));
       Escala := 1.0;
       if Bus.LeerPantallas(Pantallas) and (Length(Pantallas) > 0) then
       begin
         Escala := Pantallas[0].Escala;
-        Writeln(Format('  el escritorio dice que su escala es %.2f', [Escala]));
+        Writeln(MsgFmt(SN_NODE_ESCRITORIO_DICE_ESCALA_FMT, [FormatFloat('0.00', Escala)]));
       end
       else
-        Writeln('  no pude leer la escala, asumo 1,00: ', Bus.Error);
+        Writeln(MsgFmt(SN_NODE_NO_LEER_ESCALA_FMT, [Bus.Error]));
       if Bus.CapturarEscritorio(Captura, 20000) then
       begin
         Captura := RecogerCaptura(Captura);
@@ -435,16 +431,16 @@ begin
       end;
       Writeln;
 
-      Writeln('-- 3. las manos --');
+      Writeln(MsgText(SN_NODE_LAS_MANOS));
       if not Bus.PrepararCanal(RutaSesion, RutaSc, Stream) then
       begin
-        Writeln('  no pude preparar el canal: ', Bus.Error);
+        Writeln(MsgFmt(SN_NODE_NO_PREPARAR_CANAL_FMT, [Bus.Error]));
         Exit;
       end;
       try
         if not Bus.AbrirCanal(RutaSesion, Descriptor) then
         begin
-          Writeln('  no pude abrir el canal: ', Bus.Error);
+          Writeln(MsgFmt(SN_NODE_NO_ABRIR_CANAL_FMT, [Bus.Error]));
           Exit;
         end;
         Manos := TManos.Create;
@@ -452,11 +448,11 @@ begin
           Manos.Escala := Escala;
           if not Manos.Abrir(Descriptor, 'mcp-linux-desktop', 6000) then
           begin
-            Writeln('  el canal no llego a estar listo: ', Manos.Error);
+            Writeln(MsgFmt(SN_NODE_CANAL_NO_LISTO_FMT, [Manos.Error]));
             Exit;
           end;
-          Writeln(Format('  listas. pantalla logica %dx%d, escala %.2f',
-            [Manos.Region.Ancho, Manos.Region.Alto, Manos.Escala]));
+          Writeln(MsgFmt(SN_NODE_LISTAS_PANTALLA_LOGICA_FMT,
+            [Manos.Region.Ancho, Manos.Region.Alto, FormatFloat('0.00', Manos.Escala)]));
           { Las coordenadas son las de la CAPTURA: quien llama mide sobre la
             imagen y ya esta. La escala la aplica el nodo. }
           Orden := LowerCase(Arg(1));
@@ -469,9 +465,9 @@ begin
               entonces vuelve a ser un clic sobre algo visible. }
             Hizo := Manos.Combinacion([125]);
             if Hizo then
-              Writeln('  SUPER enviado: vista de todas las ventanas')
+              Writeln(MsgText(SK_NODE_SUPER_ENVIADO))
             else
-              Writeln('  no pude abrir la vista: ', Manos.Error);
+              Writeln(MsgFmt(SN_NODE_NO_ABRIR_VISTA_FMT, [Manos.Error]));
           end
           else if (Orden = 'escribe') and (Args >= 4) then
           begin
@@ -484,16 +480,16 @@ begin
               Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
             Hizo := Manos.Pulsar(ObjX, ObjY);
             if not Hizo then
-              Writeln('  no pude pulsar en el campo: ', Manos.Error)
+              Writeln(MsgFmt(SN_NODE_NO_PUDE_PULSAR_CAMPO_FMT, [Manos.Error]))
             else
             begin
               Sleep(250);
               Hizo := Manos.Escribir(Frase);
               if Hizo then
-                Writeln(Format('  ESCRITO "%s" en el pixel (%d,%d)  [%s] (tecleado; el foco NO se verifica: comprueba con la captura)',
+                Writeln(MsgFmt(SK_NODE_ESCRITO_PIXEL_MAPA_FMT,
                   [Frase, ObjX, ObjY, Manos.MapaNota]))
               else
-                Writeln('  pulse bien pero no pude escribir: ', Manos.Error);
+                Writeln(MsgFmt(SN_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Manos.Error]));
             end;
           end
           else if (Orden = 'texto') and (Args >= 2) then
@@ -504,9 +500,9 @@ begin
               Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(ObjX);
             Hizo := Manos.Escribir(Frase);
             if Hizo then
-              Writeln('  ESCRITO: ', Frase, '  [', Manos.MapaNota, '] (tecleado; el foco NO se verifica: comprueba con la captura)')
+              Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_MAPA_FMT, [Frase, Manos.MapaNota]))
             else
-              Writeln('  no pude escribir: ', Manos.Error);
+              Writeln(MsgFmt(SN_NODE_NO_PUDE_ESCRIBIR_FMT, [Manos.Error]));
           end
           else if (Orden = 'tecla') and (Args >= 2) then
           begin
@@ -525,16 +521,16 @@ begin
               Writeln('  TECLA ', Arg(Args),
                 IfThen(Args > 2, ' con ' + IntToStr(Args - 2) + ' modificador(es)', ''), ' enviada')
             else
-              Writeln('  no pude enviar la tecla: ', Manos.Error);
+              Writeln(MsgFmt(SN_NODE_NO_ENVIAR_TECLA_FMT, [Manos.Error]));
           end
           else if Orden = 'altab' then
           begin
             { Alt+Tab: la via de teclado para cambiar de ventana. }
             Hizo := Manos.Combinacion([56, 15]);
             if Hizo then
-              Writeln('  ALT+TAB enviado')
+              Writeln(MsgText(SK_NODE_ALT_TAB_ENVIADO))
             else
-              Writeln('  no pude enviar Alt+Tab: ', Manos.Error);
+              Writeln(MsgFmt(SN_NODE_NO_ENVIAR_ALT_TAB_FMT, [Manos.Error]));
           end
           else if Args >= 2 then
           begin
@@ -544,21 +540,14 @@ begin
             begin
               Hizo := Manos.Pulsar(ObjX, ObjY);
               if Hizo then
-                Writeln(Format('  CLIC en el pixel (%d,%d) de la captura', [ObjX, ObjY]))
+                Writeln(MsgFmt(SK_NODE_CLIC_EN_PIXEL_FMT, [ObjX, ObjY]))
               else
-                Writeln('  no pude pulsar: ', Manos.Error);
+                Writeln(MsgFmt(SN_NODE_NO_PUDE_PULSAR_FMT, [Manos.Error]));
             end;
           end
           else
           begin
-            Writeln('  uso: <x> <y>   pulsa en ese pixel de la captura');
-            Writeln('       altab     cambia de ventana con el teclado');
-            Writeln('       tecla <n> pulsa una tecla (evdev: Escape 1, Enter 28)');
-            Writeln('       texto <t> escribe ese texto donde este el foco');
-            Writeln('       escribe <x> <y> <t>  pulsa ahi Y escribe: un solo viaje');
-            Writeln('       ventanas  ensena TODAS las ventanas (tecla Super),');
-            Writeln('                 para cuando se tapan entre ellas');
-            Writeln('  (para dar el foco a una ventana, pulsa en su barra de titulo)');
+            Writeln(MsgText(SN_NODE_USO_TECLA_EVDEV));
           end;
           if Hizo then
           begin
@@ -582,7 +571,7 @@ begin
     end;
 
     Writeln;
-    Writeln('nodo listo');
+    Writeln(MsgText(SN_NODE_NODO_LISTO));
 end;
 {$ENDIF}
 
@@ -593,10 +582,7 @@ begin
   try
     if not LlamaElServidor then
     begin
-      Writeln('McpDesktopNode - nodo de escritorio del Delphi IDE Remote MCP.');
-      Writeln('  Este programa no se usa a mano: lo lanza el servidor MCP, que');
-      Writeln('  es quien decide (por workspace) si un agente puede ver y tocar');
-      Writeln('  este escritorio. Sin esa llamada no hace nada.');
+      Writeln(MsgText(SN_NODE_NO_SE_USA_MANO));
       Exit;
     end;
 {$IF DEFINED(MSWINDOWS)}
@@ -604,8 +590,7 @@ begin
 {$ELSEIF DEFINED(LINUX)}
     EjecutarLinux;
 {$ELSE}
-    Writeln('McpDesktop - este sistema todavia no tiene manos en el nodo');
-    Writeln('  (hoy: Linux con GNOME y Windows; macOS seria el siguiente)');
+    Writeln(MsgText(SN_NODE_TODAVIA_NO_TIENE_MANOS));
 {$ENDIF}
   except
     on E: Exception do

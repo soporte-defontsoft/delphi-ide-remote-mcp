@@ -46,6 +46,13 @@ def constantes(t):
 
 C = constantes(src)
 check('el catalogo se lee: mas de 700 constantes de texto', len(C) > 700, len(C))
+# el del nodo y el lanzador (programas del destino, no enlazan Lsp.Texts):
+# mismas reglas, y un id no se repite entre los dos catalogos. Sus nombres
+# llevan '@nodo' detras para no pisar uno igual del servidor.
+MLD = os.path.join(mc.REPO, 'src', 'DesktopNode', 'Mld.Textos.pas')
+CN = constantes(open(MLD, encoding='utf-8-sig').read())
+check('el catalogo del nodo se lee (Mld.Textos)', len(CN) > 30, len(CN))
+C.update({n + '@nodo': t for n, t in CN.items()})
 
 m = re.search(r"MSG_TAG_REGEX\s*=\s*'((?:[^']|'')*)'", src)
 check('C1 el patron de las baterias es el del servidor (MSG_TAG_REGEX)',
@@ -112,11 +119,14 @@ for pref in ('SR_', 'SK_', 'SN_'):
 # las llamadas que aun no pasan por Msg/MsgFmt (David: todo mensaje por un
 # helper, para poder traducirlo un dia): informa mientras se migra
 import glob
-NOMBRES = set(n for n in C if n[:3] in ('SR_', 'SN_', 'SK_'))
+NOMBRES = set(n.split('@')[0] for n in C if n[:3] in ('SR_', 'SN_', 'SK_'))
 directas = 0
 for f in glob.glob(os.path.join(mc.REPO, 'src', 'Server', '*.pas')) + \
-        glob.glob(os.path.join(mc.REPO, 'vendor', 'src', '**', '*.pas'), recursive=True):
-    if '__' in f or f.endswith('Lsp.Texts.pas'):
+        glob.glob(os.path.join(mc.REPO, 'vendor', 'src', '**', '*.pas'), recursive=True) + \
+        glob.glob(os.path.join(mc.REPO, 'src', 'DesktopNode', '*.pas')) + \
+        glob.glob(os.path.join(mc.REPO, 'src', 'DesktopNode', '*.dpr')) + \
+        glob.glob(os.path.join(mc.REPO, 'src', 'RunJob', '*.dpr')):
+    if '__' in f or f.endswith(('Lsp.Texts.pas', 'Mld.Textos.pas')):
         continue
     # sin comentarios de ningun tipo: una constante citada en uno no es un uso
     fuente = re.sub(r'\{[^}]*\}|\(\*.*?\*\)', '', open(f, encoding='utf-8-sig', errors='replace').read(),

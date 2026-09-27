@@ -64,6 +64,7 @@ uses
 {$ENDIF}
   System.SysUtils,
   System.IOUtils,
+  Mld.Textos in '..\DesktopNode\Mld.Textos.pas', // EL catalogo de mensajes, el del nodo
   System.Classes;
 
 {$IFDEF MSWINDOWS}
@@ -330,7 +331,7 @@ begin
   Vigia := fork;
   if Vigia < 0 then
   begin
-    Anade(ASalida, 'error: fork del vigia fallo'#10'___RC=-1'#10);
+    Anade(ASalida, MsgText(SR_JOB_FORK_VIGIA_FALLO) + #10'___RC=-1'#10);
     Exit;
   end;
   if Vigia > 0 then
@@ -340,7 +341,7 @@ begin
   Hijo := fork;
   if Hijo < 0 then
   begin
-    Anade(ASalida, 'error: fork del programa fallo'#10'___RC=-1'#10);
+    Anade(ASalida, MsgText(SR_JOB_FORK_PROGRAMA_FALLO) + #10'___RC=-1'#10);
     _exit(1);
   end;
   if Hijo > 0 then
@@ -368,8 +369,8 @@ begin
     // string y lanza una excepcion, y aqui estamos en el hijo)
     if __chdir(PAnsiChar(UTF8String(ACarpeta))) <> 0 then
     begin
-      Anade(ASalida, 'error: no pude entrar en ' + ACarpeta + ': ' +
-        SysErrorMessage(GetLastError) + #10);
+      Anade(ASalida, MsgFmt(SR_JOB_NO_PUDE_ENTRAR_FMT, [ACarpeta,
+        SysErrorMessage(GetLastError)]) + #10);
       _exit(127);
     end;
     SetLength(Strs, Length(AArgs) + 1);
@@ -384,8 +385,8 @@ begin
     Ptrs[Length(AArgs) + 1] := nil;
     execv(MarshaledAString(PAnsiChar(Strs[0])), @Ptrs[0]);
     // solo se llega aqui si execv fallo
-    Anade(ASalida, 'error: no pude arrancar ' + AExe + ': ' +
-      SysErrorMessage(GetLastError) + #10);
+    Anade(ASalida, MsgFmt(SR_JOB_NO_PUDE_ARRANCAR_FMT, [AExe,
+      SysErrorMessage(GetLastError)]) + #10);
     _exit(127);
   end;
   // --- el vigia espera y remata
@@ -625,8 +626,8 @@ begin
   Pid := Arrancar(Linea, ACarpeta, ASalida, True, Err, @HProc);
   if Pid = 0 then
   begin
-    Anade(ASalida, 'error: no pude arrancar ' + ExtractFileName(AExe) + ': ' +
-      Err + #10'___RC=-1'#10);
+    Anade(ASalida, MsgFmt(SR_JOB_NO_PUDE_ARRANCAR_FMT, [ExtractFileName(AExe),
+      Err]) + #10'___RC=-1'#10);
     Exit;
   end;
   EscribePid(ASalida, Pid);
@@ -710,8 +711,7 @@ begin
     if SameText(Exe, '@kill') then
     begin
       if (Length(Args) < 1) or not IdDeTrabajoValido(Args[0].Trim) then
-        Anade(Salida, 'RECHAZADO: @kill necesita el id de un trabajo de este ' +
-          'servidor.'#10'___RC=2'#10)
+        Anade(Salida, MsgText(SR_JOB_KILL_NECESITA_ID) + #10'___RC=2'#10)
       else
       begin
         var Pid: Int64 := 0;
@@ -730,20 +730,18 @@ begin
           Origen := 'nombre del vigia';
         end;
         if Pid = 0 then
-          Anade(Salida, 'no hay ningun trabajo ' + Args[0].Trim + ' vivo en ' +
-            'esta carpeta: o ya termino, o no era de este proyecto.'#10'___RC=3'#10)
+          Anade(Salida, MsgFmt(SN_JOB_NINGUN_TRABAJO_VIVO_FMT, [Args[0].Trim]) + #10'___RC=3'#10)
         else
         begin
           var Como := '';
           if MatarProceso(Pid, Carpeta, Como) then
-            Anade(Salida, 'terminado el trabajo ' + Args[0].Trim + ' (pid ' +
-              IntToStr(Pid) + ' por ' + Origen + ', ' + Como + ').'#10'___RC=0'#10)
+            Anade(Salida, MsgFmt(SK_JOB_TERMINADO_EL_TRABAJO_FMT, [Args[0].Trim,
+              Pid, Origen, Como]) + #10'___RC=0'#10)
           else if Como = 'ya termino' then
-            Anade(Salida, 'no hay ningun trabajo ' + Args[0].Trim + ' vivo en ' +
-              'esta carpeta: o ya termino, o no era de este proyecto.'#10'___RC=3'#10)
+            Anade(Salida, MsgFmt(SN_JOB_NINGUN_TRABAJO_VIVO_FMT, [Args[0].Trim]) + #10'___RC=3'#10)
           else
-            Anade(Salida, 'no pude matar el trabajo ' + Args[0].Trim + ' (pid ' +
-              IntToStr(Pid) + '): ' + Como + ' - ' + SysErrorMessage(GetLastError) + #10'___RC=1'#10);
+            Anade(Salida, MsgFmt(SN_JOB_NO_PUDE_MATAR_FMT, [Args[0].Trim,
+              Pid, Como, SysErrorMessage(GetLastError)]) + #10'___RC=1'#10);
           BorraPid(TPath.Combine(Carpeta, Args[0].Trim + '.out'));
         end;
       end;
@@ -760,15 +758,12 @@ begin
 {$ENDIF}
     if not FileExists(Exe) then
     begin
-      Anade(Salida, 'error: no existe ' + ExtractFileName(Exe) + ' en la ' +
-        'carpeta desplegada de este proyecto en el target.'#10'___RC=127'#10);
+      Anade(Salida, MsgFmt(SR_JOB_NO_EXISTE_FMT, [ExtractFileName(Exe)]) + #10'___RC=127'#10);
       Exit;
     end;
     if not EsBinarioNativo(Exe) then
     begin
-      Anade(Salida, 'RECHAZADO: ' + ExtractFileName(Exe) + ' no es un ' +
-        'ejecutable nativo (ELF/PE): solo se ejecuta el binario que produjo ' +
-        'delphi_build.'#10'___RC=126'#10);
+      Anade(Salida, MsgFmt(SR_JOB_NO_EJECUTABLE_NATIVO_FMT, [ExtractFileName(Exe)]) + #10'___RC=126'#10);
       Exit;
     end;
 
