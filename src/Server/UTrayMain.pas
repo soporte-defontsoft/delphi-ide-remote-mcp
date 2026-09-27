@@ -103,7 +103,7 @@ begin
       MemoLog.Lines.AddStrings(Chunk);
       if Dropped > 0 then
         MemoLog.Lines.Add(Format(
-          '... %d lineas de log descartadas (buffer lleno) ...', [Dropped]));
+          '... %d log lines dropped (buffer full) ...', [Dropped]));
     finally
       MemoLog.Lines.EndUpdate;
     end;
@@ -169,17 +169,17 @@ begin
 
   try
     FServer.Start;
-    TLogger.Info(Format('Servidor MCP escuchando en %s (%s v%s)',
+    TLogger.Info(Format('MCP server listening on %s (%s v%s)',
       [FUrl, SERVER_NAME, SERVER_VERSION]));
     // The operational facts (jail, vault, credentials, the log) come from the
     // SAME place the terminal and the service read them - one truth, and one
     // way to log it.
     FHost.LogStartupNotes;
-    TLogger.Info('Icono en la bandeja = servicio encendido. Doble clic para este log.');
+    TLogger.Info('Tray icon = server running. Double-click it for this log.');
   except
     on E: Exception do
     begin
-      TLogger.Error('ERROR arrancando el servidor: ' + E.Message);
+      TLogger.Error('ERROR starting the server: ' + E.Message);
       TrayIcon.Hint := 'DelphiLSP MCP Service - ERROR: ' + E.Message;
     end;
   end;
@@ -221,7 +221,12 @@ end;
 procedure TFormTray.MiCopyClick(Sender: TObject);
 begin
   Clipboard.AsText := FUrl;
-  TLogger.Info('URL copiada al portapapeles: ' + FUrl);
+  // The URL alone gets a 401 (issue #4, 2026-09-27): say, the moment it is
+  // copied, what a client has to send with it - the same text as the 401.
+  TLogger.Info('Server URL copied to the clipboard: ' + FUrl + '. ' + SR_TOKEN_NEEDED);
+  TrayIcon.BalloonTitle := 'Server URL copied';
+  TrayIcon.BalloonHint := SR_TOKEN_NEEDED;
+  TrayIcon.ShowBalloonHint;
 end;
 
 procedure TFormTray.MiExitClick(Sender: TObject);

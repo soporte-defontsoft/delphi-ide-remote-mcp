@@ -48,8 +48,8 @@ one helper (`DeliverCapture` / `AttachImage`, `Lsp.Base64`,
 `CAPTURE_SUB_*` shared by namer and reader), and the next tool that
 captures now calls it.
 
-In David's words: *"una cosa es saber escribir codigo y otra distinta es
-saber programar"* - writing code solves today's line; programming leaves
+In David's words: *"knowing how to write code is one thing, and knowing
+how to program is another"* - writing code solves today's line; programming leaves
 tomorrow's line somewhere to land.
 
 The practical part: **the same search answers all four.** Search for what the
@@ -119,8 +119,8 @@ hold for every path the operation TOUCHES, not the one it was GIVEN.
 
 ## One namer (David, 2026-09-20)
 
-The strong form of the rule, and his own words: *"si siempre pasan por el
-mismo nombrador se te acaban los problemas"*. When something has a FORMAT —
+The strong form of the rule, and his own words: *"if they always go through
+the same namer, your problems are over"*. When something has a FORMAT —
 a file name, a path, a key, an id, a wire format — there is **one function
 that composes it and one that reads it, and the reader is the inverse of the
 writer**. Nobody builds one by hand, anywhere.

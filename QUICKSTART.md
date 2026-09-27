@@ -55,6 +55,10 @@ them. When you want it permanent, make it a Windows Service (`-install`, see
 the README's Quickstart): same `settings.ini`, same port, so it is the service
 *or* the tray, never both.
 
+The tray's **Copy server URL** copies `http://localhost:3000/mcp`. That URL
+alone - pasted in a browser, say - answers `401`: every request has to carry
+the token, which is what step 4 sets up.
+
 ## 4. Connect a client
 
 Claude Code, from any machine (Linux and macOS included):
@@ -82,7 +86,7 @@ tool reference is [docs/TOOLS.md](docs/TOOLS.md).
 
 | You see | It means |
 |---|---|
-| `401` from the server | The Bearer is not the `Token=` of any `[Workspace.<name>]`. Check for a stray space or quote. |
+| `401` from the server | The request carries no `Authorization: Bearer <token>` header (a browser never does), or the Bearer is not the `Token=` of any `[Workspace.<name>]` - check for a stray space or quote. The 401's JSON `hint` says the same. |
 | The tray refuses to start, port taken | The service, or another tray, is already listening on that port. One or the other. |
 | `delphi_projects` finds nothing | `Roots=` does not point where the projects are (typo, wrong drive, forward slashes). |
 | A project with installed components fails with `F2613 unit not found` | The server runs as a user that is not the IDE's. Same exe, other account: no library paths. |

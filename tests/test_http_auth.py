@@ -43,6 +43,14 @@ INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
 try:
     code, body = post(INIT)
     check('http: sin token -> 401', code == 401, '%s %s' % (code, body[:100]))
+    # issue #4 (2026-09-27): the 401 said nothing about how to send the token
+    try:
+        hint = json.loads(body).get('hint', '')
+    except ValueError:
+        hint = ''
+    check('http: the 401 body is JSON and its hint names the header and the ini section',
+          'Authorization: Bearer' in hint and '[Workspace.<name>]' in hint and 'settings.ini' in hint,
+          body[:300])
     code, body = post(INIT, 'wrong-token')
     check('http: token erroneo -> 401', code == 401, '%s %s' % (code, body[:100]))
     code, body = post(INIT, TOKEN)

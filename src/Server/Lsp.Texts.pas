@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.6.1';
+  SERVER_VERSION = '1.6.2';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -533,6 +533,16 @@ const
   SR_SESSION_EXPIRED_FMT =
     'Session expired: no request on it for more than %s minutes ([Server] ' +
     'SessionTimeoutMinutes). Send initialize again and use the new session id.';
+  { The HTTP gate without a valid token: what the client has to send and
+    where the token lives. Said by the 401 body and by the tray when it
+    copies the URL (issue #4, 2026-09-27: the URL alone got a bare 401).
+    At most 255 characters: it is also the tray's balloon, which Windows
+    cuts there. No double quote or backslash: it goes inside JSON as is. }
+  SR_TOKEN_NEEDED =
+    'Send the header Authorization: Bearer <token>, where <token> is the ' +
+    'Token= (or ReadOnlyToken=) of a [Workspace.<name>] section in the ' +
+    'settings.ini next to DelphiLspMcp.exe. A browser cannot send it: register ' +
+    'the URL in your MCP client with that header.';
   SN_SERVER_INI_CHANGED_FMT =
     'settings.ini on disk was modified at %s, AFTER this process started at %s: ' +
     'what was edited is NOT loaded. The file is read once at start-up and never ' +

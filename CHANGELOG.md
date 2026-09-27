@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.6.2] - 2026-09-27
+
+### Fixed
+
+- **A request without a valid token got a bare 401** (issue #4):
+  `{"error":"missing or invalid bearer token"}` and nothing about how to
+  send one. The body now carries a `hint`: the `Authorization: Bearer
+  <token>` header, that the token is the `Token=` (or `ReadOnlyToken=`) of a
+  `[Workspace.<name>]` section in the `settings.ini` next to the exe, and
+  that a browser cannot send it. One text, `SR_TOKEN_NEEDED`, for the two
+  401s of the HTTP handler (they were two copies), the tray and the
+  no-credentials startup warning. `test_http_auth` checks that the body is
+  JSON and says it.
+- **The tray's *Copy server URL* copied a URL that only answers 401.** It now
+  shows, in a balloon and in its log, what a client has to send with it -
+  the same text. The README and the QUICKSTART say it too: the bare URL,
+  in a browser for instance, always answers 401.
+
+### Changed
+
+- **The tray speaks English** (issue #3): its menu (*Status / Log*, *Copy
+  server URL*, *Exit (stop the server)*), its log lines and the startup
+  warning of a server without credentials. The rest of the server's
+  messages and the code comments follow: the repository is going
+  English-only.
+- The quotes and old messages in Spanish in `CHANGELOG.md` and `CLAUDE.md`,
+  in English.
+
 ## [1.6.1] - 2026-09-27
 
 ### Fixed
@@ -218,8 +246,8 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
-- **A `delphi_desktop` answer without a capture said "el nodo no dijo donde
-  dejo la captura"** - how the server fetches it, not why there is none:
+- **A `delphi_desktop` answer without a capture said "the node did not say
+  where it left the capture"** - how the server fetches it, not why there is none:
   every answer but `status` brings its capture in that same call. It now
   says the reason: no graphical session on the target (what the launcher
   measured, `graphicalEnv`), Windows refusing it (a locked or disconnected
@@ -240,7 +268,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
-- **`delphi_edit` answered "el ancla no aparece" to a text that was there,
+- **`delphi_edit` answered "the anchor does not appear" to a text that was there,
   inside a line.** Its `old` is one FULL line (a piece goes with `fragment`
   + `atline`), so refusing was right - the reason was not: an agent went
   hunting for the `|` in its text. The twin, `delphi_textedit`, did show the
@@ -640,7 +668,7 @@ the MCP `initialize` response (`serverInfo.version`).
   every tool that captures, and one point that wraps text + image
   (`ResultWrapper`, next to the output filter in the tools manager): the next
   tool that returns an image calls `AttachImage` and is done. (David,
-  2026-09-25: "1 solo paso es lo logico".)
+  2026-09-25: "one single step is the logical thing".)
 - **`frame`: the agent never does coordinate arithmetic.** Every capture
   carries a stateless token with its geometry
   (`<imgW>x<imgH>@<srcW>x<srcH>+<x>+<y>`); `tap` / `type` with `frame=` take
@@ -742,8 +770,8 @@ the MCP `initialize` response (`serverInfo.version`).
   classification, shared with the read-only credential. Env
   `DELPHI_MCP_READONLY_ROOTS` for the local launch mode; the contract is
   written at the top of `Lsp.Guard` and measured by a two-server battery.
-  (David, 2026-09-25: "que un agente trabaje con sus roots pero pueda ver
-  otros proyectos, solo para aprender como se hacen las cosas".)
+  (David, 2026-09-25: "an agent works inside its roots but can see other
+  projects, just to learn how things are done".)
 
 ### Changed
 
@@ -1052,7 +1080,7 @@ code before being accepted.
 
 ### Removed
 
-- `delphi_run` and its `AllowRun` switch (David, 2026-09-23: "fuera"). It
+- `delphi_run` and its `AllowRun` switch (David, 2026-09-23: "out"). It
   was born on the product's first day (v0.10), was closed by default the
   same day (v0.21) and never had a job of its own once `remote-run` existed
   (v0.47): tests run through `delphi_test` (`AllowTests`), build steps
@@ -1897,8 +1925,9 @@ inside". Nothing had broken. The published 1.0.11 failed identically at the
 same moment, so it was never about this release.
 
 The chain, measured: the machine could not copy the screen just then
-("Acceso denegado" - a locked or disconnected session); the node said so in a
-message carrying an accent (*"Controlador no **vá**lido"*); and the single
+("Access denied" - a locked or disconnected session); the node said so in a
+message carrying an accent (a Spanish Windows' *"Controlador no **vá**lido"*,
+"invalid handle"); and the single
 place that decodes a child process's output raised on that byte, because a
 codepage that cannot represent a sequence makes `TEncoding.GetString` throw.
 **The sentence that explained the real problem was the one that killed the
@@ -3101,7 +3130,7 @@ The vault write protocol stops sending agents into the governance wall
 
 ### Fixed
 - **vault_create no longer instructs a move the server always rejects**:
-  "enlaza la nota desde el indice que corresponda" read as MEMORY.md, and
+  "link the note from the index that fits" read as MEMORY.md, and
   MEMORY.md is a governance file - every vault_patch on it is refused. The
   instruction now names the only index agents can edit (the project's own
   notes: context.md, log.md, progress.md), forbids MEMORY.md explicitly,
@@ -4120,7 +4149,7 @@ found broken.
 ### Added
 - **`delphi_help`** - the map an agent arriving cold does not have. An agent
   said it plainly after doing a real job through nothing but this server:
-  "no hay forma de preguntarle al servidor como se usa". `command=tasks`
+  "there is no way to ask the server how it is used". `command=tasks`
   (the default) is the task -> tool table, one line each; `command=tool
   name=<tool>` is ONE tool in full without asking for `tools/list` (which
   returns all 41 at once, about 14k tokens); `command=conventions` is the
@@ -5627,7 +5656,7 @@ round broke the compile-only guard again and found the bootstrap unusable.
   per-result cap, forcing it to spill to disk and read the result back in
   pieces. Reads are now **paged by line** with a per-result budget, and every
   truncated answer states the exact continuation offset
-  (`Mostradas las lineas 1..271 de 379. Pide el resto con {offset: 272}`).
+  (`Lines 1..271 of 379 shown. Ask for the rest with {offset: 272}`).
   Verified against the real vault: 40 KB first page, continuation works.
 - **A rejected path came back rewritten.** Asking for `C:/Windows/win.ini` was
   refused with `"srvc:/Windows/win.ini"` - the outbound drive filter rewriting
@@ -6055,8 +6084,8 @@ plus every finding from the second field round (the "Agenda" end-to-end run:
   masked like everything else. Measured origin: remote agents mistaking
   server paths for their own local disks.
 - **`delphi_edit delete:true`**: removes the anchored line ENTIRELY
-  (`new:""` only blanks it — and now says so: `BLANQUEADA la linea N ...
-  para eliminarla del todo usa delete:true`).
+  (`new:""` only blanks it — and now says so: `line N BLANKED ... to
+  remove it entirely use delete:true`).
 - **IDE settings read at runtime** (`IdeConfigValue`, generic HKCU reader —
   the building block for future Android/macOS/SDK configuration): new
   units/forms/projects are created with the encoding the IDE is configured
@@ -6162,8 +6191,8 @@ bugs (one an outright blocker), one a new tool, one a security hardening.
 
 ### Fixed
 - **Mojibake in delphi_git output** (second field-test round): git emits
-  UTF-8 but captured console output was decoded as ANSI ("AÃ±ade" for
-  "Añade"). The capture now runs a strict UTF-8 scan over the bytes:
+  UTF-8 but captured console output was decoded as ANSI ("cafÃ©" for
+  "café"). The capture now runs a strict UTF-8 scan over the bytes:
   well-formed UTF-8 with high bytes decodes as UTF-8, everything else keeps
   the ANSI fallback (compilers and console programs emit ANSI/OEM). Applies
   to delphi_git, delphi_run and delphi_build alike. 142 checks.
@@ -6182,7 +6211,7 @@ its report exposed four issues. All four are fixed and test-locked.
   buffer via didChange - the LSP always answers about the CURRENT source.
 - **BOM false positive in the delphi_edit audit**: on UTF-8+BOM files the
   high-byte accounting smuggled 3 phantom bytes (the BOM) into the "leaving"
-  side, producing "ACENTOS FUERA DE CUADRO: esperaba 0 y hay 3" on perfectly
+  side, producing "ACCENTS OUT OF BALANCE: expected 0, found 3" on perfectly
   healthy writes (and scaring agents into restoring). Text fragments are now
   encoded BOM-less for accounting.
 

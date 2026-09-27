@@ -191,6 +191,10 @@ const
   HTTP_METHOD_NOT_ALLOWED = 405;
   HTTP_NOT_ACCEPTABLE = 406;
   HTTP_FORBIDDEN = 403;
+  // [local change] a 401 says what to send and where the token lives (it
+  // was a bare error: issue #4, 2026-09-27). One body for both 401s below.
+  UNAUTHORIZED_BODY = '{"error":"missing or invalid bearer token","hint":"' +
+    SR_TOKEN_NEEDED + '"}';
 
   // CORS Max Age (24 hours in seconds)
   CORS_MAX_AGE = 86400;
@@ -328,7 +332,7 @@ begin
           ResponseInfo.ResponseNo := 401;
           ResponseInfo.ResponseText := 'Unauthorized';
           ResponseInfo.ContentType := 'application/json';
-          ResponseInfo.ContentText := '{"error":"missing or invalid bearer token"}';
+          ResponseInfo.ContentText := UNAUTHORIZED_BODY;
           Exit;
         end;
       end
@@ -358,7 +362,7 @@ begin
         ResponseInfo.ResponseNo := 401;
         ResponseInfo.ResponseText := 'Unauthorized';
         ResponseInfo.ContentType := 'application/json';
-        ResponseInfo.ContentText := '{"error":"missing or invalid bearer token"}';
+        ResponseInfo.ContentText := UNAUTHORIZED_BODY;
         Exit;
       end;
       // Worker threads are reused: flag the access level on EVERY request.

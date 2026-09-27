@@ -245,20 +245,20 @@ begin
   // moment tokens moved into [Workspace.*] sections (measured 2026-09-11:
   // production fully migrated and the log still cried "no token").
   if WorkspaceTokensConfigured then
-    Add('Bearer auth enabled (tokens por workspace).')
+    Add('Bearer auth enabled (per-workspace tokens).')
   else
   begin
-    Add(NOTE_WARNING_PREFIX + 'Sin credenciales: no hay ningun ' +
-      '[Workspace.<nombre>] con Token=. Todo HTTP respondera 401; solo ' +
-      'sirve el modo local stdio.');
-    // El fail-safe de CreateHttpServer, dicho aqui con SU condicion: lo
-    // avisaba el .dpr, solo en modo terminal, siempre que la interfaz era
-    // 127.0.0.1 -hubiera o no credenciales- y mandando a [Security],
-    // seccion retirada en la v0.98 (lo destapo test_round24 el 26-sep).
+    Add(NOTE_WARNING_PREFIX + 'No credentials: there is no ' +
+      '[Workspace.<name>] section with Token=. Every HTTP request gets 401; ' +
+      'only the local stdio mode works. ' + SR_TOKEN_NEEDED);
+    // CreateHttpServer's fail-safe, said here with ITS condition: the .dpr
+    // used to say it, only in terminal mode, whenever the interface was
+    // 127.0.0.1 - credentials or not - and pointing at [Security], a
+    // section retired in v0.98 (found by test_round24 on 2026-09-26).
     if Lsp.Guard.BindIP = '' then
-      Add(NOTE_WARNING_PREFIX + 'Y sin [Server] BindIP: el HTTP escucha ' +
-        'SOLO en 127.0.0.1. Para exponerlo a la red hace falta un ' +
-        '[Workspace.<nombre>] con Token=.');
+      Add(NOTE_WARNING_PREFIX + 'And no [Server] BindIP: HTTP listens on ' +
+        '127.0.0.1 ONLY. To expose it to the network, add a ' +
+        '[Workspace.<name>] section with Token=.');
   end;
   // One auth mechanism: workspaces. A legacy env pair shows up
   // here as the "default" workspace; misconfigured sections stop vanishing

@@ -41,19 +41,19 @@ object FormTray: TFormTray
     Left = 144
     Top = 48
     object MiShow: TMenuItem
-      Caption = 'Estado / Log'
+      Caption = 'Status / Log'
       Default = True
       OnClick = MiShowClick
     end
     object MiCopy: TMenuItem
-      Caption = 'Copiar URL del servidor'
+      Caption = 'Copy server URL'
       OnClick = MiCopyClick
     end
     object MiSep: TMenuItem
       Caption = '-'
     end
     object MiExit: TMenuItem
-      Caption = 'Salir (parar el servicio)'
+      Caption = 'Exit (stop the server)'
       OnClick = MiExitClick
     end
   end
