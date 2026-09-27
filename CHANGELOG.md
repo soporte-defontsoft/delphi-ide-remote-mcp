@@ -28,9 +28,12 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - **The tray speaks English** (issue #3): its menu (*Status / Log*, *Copy
   server URL*, *Exit (stop the server)*), its log lines and the startup
-  warning of a server without credentials. The rest of the server's
-  messages and the code comments follow: the repository is going
-  English-only.
+  warning of a server without credentials.
+- The explanation files that were still in Spanish are in English:
+  `docs/REVIEW-2026-08.md`, the field test (now
+  `docs/field-tests/FIELD-TEST-1.0.15-hermes.md`), the vault tools'
+  section of `docs/TOOLS.md` and two example secrets of
+  `settings.example.ini`. The code and its messages do not change.
 - The quotes and old messages in Spanish in `CHANGELOG.md` and `CLAUDE.md`,
   in English.
 

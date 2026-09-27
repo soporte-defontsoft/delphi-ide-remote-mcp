@@ -812,60 +812,60 @@ Full explanation: [VAULT.md](VAULT.md).
 
 ### `vault_read`
 
-Lee una nota del vault de conocimiento por ruta relativa. SIN path devuelve las reglas (AGENTS-VAULT.md) + el indice (MEMORY.md): hazlo al empezar. Los [[wikilinks]] del contenido refieren a otras notas - localizalas con vault_search target=files.
+Reads a note of the knowledge vault by relative path. WITHOUT path it returns the rules (AGENTS-VAULT.md) + the index (MEMORY.md): do that when you start. The [[wikilinks]] in the content refer to other notes - find them with vault_search target=files.
 
 *Access: read-only OK.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | optional | Ruta RELATIVA de la nota dentro del vault (projects/x/context.md). SIN path devuelve las reglas + el indice: hazlo al empezar |
-| `offset` | number | optional | Opcional: primera linea a devolver (1 = principio) |
-| `limit` | number | optional | Opcional: cuantas lineas devolver desde offset |
+| `path` | string | optional | RELATIVE path of the note inside the vault (projects/x/context.md). WITHOUT path it returns the rules + the index: do that when you start |
+| `offset` | number | optional | Optional: first line to return (1 = the start) |
+| `limit` | number | optional | Optional: how many lines to return from offset |
 
 ### `vault_search`
 
-Busca en el vault de conocimiento (notas Markdown enlazadas con [[wikilinks]]). PROTOCOLO: al empezar una tarea, llama primero a vault_read SIN path para obtener las reglas y el indice; decide por las descripciones del indice que notas cargar con vault_read - carga perezosa, nunca leas el vault en masa.
+Searches the knowledge vault (Markdown notes linked with [[wikilinks]]). PROTOCOL: when you start a task, first call vault_read WITHOUT path to get the rules and the index; decide from the index's descriptions which notes to load with vault_read - lazy loading, never read the vault in bulk.
 
 *Access: read-only OK.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `target` | string | optional (default files) | files (buscar por NOMBRE de nota, patron glob como *reunion*.md) \| content (buscar DENTRO de las notas, pattern es una expresion regular) |
-| `pattern` | string | **yes** | Glob de nombre si target=files (*.md, *delphi*), o expresion regular si target=content |
-| `subfolder` | string | optional | Opcional: carpeta relativa del vault para acotar la busqueda (projects, conventions...) |
-| `maxresults` | number | optional | Maximo de resultados (defecto 50) |
+| `target` | string | optional (default files) | files (search by note NAME, a glob pattern such as *meeting*.md) \| content (search INSIDE the notes, pattern is a regular expression) |
+| `pattern` | string | **yes** | Name glob if target=files (*.md, *delphi*), or regular expression if target=content |
+| `subfolder` | string | optional | Optional: relative folder of the vault to narrow the search (projects, conventions...) |
+| `maxresults` | number | optional | Maximum number of results (default 50) |
 
 ### `vault_append`
 
-Anade contenido a una nota existente del vault (entradas de log, avances de progress). Escribe SIEMPRE en espanol. Formato log: entrada fechada bajo la seccion del dia. En progress.md respeta su estructura snapshot: lineas de estado vivas, el historico va en log - no acumules; si cierras un asunto, elimina su linea con vault_patch en lugar de anadir "hecho". El servidor guarda copia del original antes de escribir.
+Appends content to an existing note of the vault (log entries, progress updates). ALWAYS writes in Spanish. Log format: a dated entry under the day's section. In progress.md keep its snapshot structure: live status lines, the history goes to the log - do not pile up; when you close an item, remove its line with vault_patch instead of appending "done". The server keeps a copy of the original before writing.
 
-*Access: read-write only, and VaultReadOnly=0 en el workspace.*
+*Access: read-write only, and VaultReadOnly=0 in the workspace.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | Ruta RELATIVA de la nota (debe existir) |
-| `content` | string | **yes** | Contenido markdown a anadir. En espanol |
-| `anchor` | string | optional | Opcional: texto UNICO tras el cual insertar. Sin anchor, anade al final del fichero |
+| `path` | string | **yes** | RELATIVE path of the note (it must exist) |
+| `content` | string | **yes** | Markdown content to append. In Spanish |
+| `anchor` | string | optional | Optional: UNIQUE text after which to insert. Without anchor, appends at the end of the file |
 
 ### `vault_create`
 
-Crea una nota nueva en el vault. ANTES de crear: lee AGENTS-VAULT-WRITE.md (arbol de decision de donde va cada cosa y plantillas) y enlaza la nota con [[wikilinks]] desde las notas del proyecto (context.md, log.md, progress.md) - nunca desde MEMORY.md, el indice raiz, que se rechaza. Escribe en espanol. No reorganices carpetas ni muevas notas existentes - eso requiere OK humano. Nunca sobreescribe: si la nota existe, se rechaza.
+Creates a new note in the vault. BEFORE creating: read AGENTS-VAULT-WRITE.md (the decision tree of where each thing goes, and templates) and link the note with [[wikilinks]] from the project's notes (context.md, log.md, progress.md) - never from MEMORY.md, the root index, which is refused. Writes in Spanish. Do not reorganize folders or move existing notes - that needs a human OK. It never overwrites: if the note exists, it is refused.
 
-*Access: read-write only, and VaultReadOnly=0 en el workspace.*
+*Access: read-write only, and VaultReadOnly=0 in the workspace.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | Ruta RELATIVA de la nota nueva (debe NO existir; nunca sobreescribe) |
-| `content` | string | **yes** | Contenido markdown completo, con la estructura/plantilla que pida el vault |
+| `path` | string | **yes** | RELATIVE path of the new note (it must NOT exist; never overwrites) |
+| `content` | string | **yes** | Full markdown content, with the structure/template the vault asks for |
 
 ### `vault_patch`
 
-Edicion puntual de una nota: sustituye old_text (UNICO en el fichero) por new_text. Para tachar lineas cerradas de un progress o corregir un dato. Para anadir contenido usa vault_append; para reescrituras grandes, para y consulta al usuario. El servidor guarda copia del original antes de escribir.
+A precise edit of a note: replaces old_text (UNIQUE in the file) with new_text. To strike closed lines of a progress note or fix a fact. To add content use vault_append; for large rewrites, stop and ask the user. The server keeps a copy of the original before writing.
 
-*Access: read-write only, and VaultReadOnly=0 en el workspace.*
+*Access: read-write only, and VaultReadOnly=0 in the workspace.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | Ruta RELATIVA de la nota |
-| `old_text` | string | **yes** | Texto a sustituir: debe aparecer EXACTAMENTE UNA VEZ en el fichero |
-| `new_text` | string | **yes** | Texto nuevo que lo sustituye |
+| `path` | string | **yes** | RELATIVE path of the note |
+| `old_text` | string | **yes** | Text to replace: it must appear EXACTLY ONCE in the file |
+| `new_text` | string | **yes** | The new text that replaces it |
