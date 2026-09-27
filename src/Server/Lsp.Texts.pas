@@ -4464,6 +4464,88 @@ const
     'Lo leeremos con calma junto a los demas. Si descubres mas detalles, ' +
     'manda otro reporte: se acumulan, no se sobreescriben.';
 
+  // ---------------------------------------------------------------------
+  // Las ETIQUETAS de los mensajes (decision de David, 27-sep-2026)
+  // ---------------------------------------------------------------------
+  { Cada mensaje del catalogo lleva al FINAL de su texto [AREA-NNN] o, si es
+    un rechazo o un fallo, [AREA-NNN RESULTADO] con el code que publica
+    structuredContent (DENIED, NOT_FOUND, INVALID_PARAM, INTERNAL). Las
+    baterias, los agentes y el propio servidor reconocen el mensaje por su
+    id y no por su frase, asi el texto se puede traducir sin romper nada;
+    y el resultado lo DECLARA quien escribe el mensaje, en vez de que
+    ToolsManager lo adivine leyendo RECHAZADO o no existe. Al final y no al
+    principio: lo que hoy mira como EMPIEZA un texto sigue valiendo
+    mientras se migra. Un solo lector del formato, el de abajo; el de las
+    baterias (mcp_cliente.ETIQUETA) lo vigila test_catalogo contra este. }
+  MSG_TAG_REGEX = '\[([A-Z]{2,6}-\d{3})(?: (DENIED|NOT_FOUND|INVALID_PARAM|INTERNAL))?\]';
+
+  { Log del respaldo de ToolsManager mientras se migra: un resultado
+    deducido LEYENDO el texto, porque el mensaje aun no lleva etiqueta.
+    Cuando el log no traiga ninguno, fuera las reglas viejas. }
+  SL_MSG_UNTAGGED_FMT = 'Mensaje sin etiqueta: resultado %s deducido del texto "%s"';
+  { Y cuando la etiqueta y la regla vieja no coinciden: la etiqueta manda,
+    pero cada caso es un cambio de comportamiento que hay que mirar. }
+  SL_MSG_OUTCOME_DIFFERS_FMT = 'Resultado distinto: la etiqueta dice %s y el texto decia "%s" en "%s"';
+
+{ Los ids de las etiquetas que trae AText, en orden. }
+function MsgIds(const AText: string): TArray<string>;
+{ El id de la etiqueta de un mensaje del catalogo; '' si aun no la lleva. }
+function MsgTag(const AMsg: string): string;
+{ True si AText trae la etiqueta del mensaje AMsg del catalogo. Se compara
+  con el id que lleva LA CONSTANTE, asi que el id se escribe en un solo
+  sitio: HasMsg(Respuesta, SK_EDIT_WRITTEN). }
+function HasMsg(const AText, AMsg: string): Boolean;
+{ El resultado que declara la PRIMERA etiqueta de AText, la del mensaje que
+  abre la respuesta; '' si esa no declara ninguno o no hay etiquetas. }
+function MsgOutcome(const AText: string): string;
+
 implementation
+
+uses
+  System.RegularExpressions;
+
+function MsgIds(const AText: string): TArray<string>;
+begin
+  Result := [];
+  for var M in TRegEx.Matches(AText, MSG_TAG_REGEX) do
+    Result := Result + [M.Groups[1].Value];
+end;
+
+function MsgTag(const AMsg: string): string;
+var
+  Ids: TArray<string>;
+begin
+  Ids := MsgIds(AMsg);
+  if Length(Ids) > 0 then
+    Result := Ids[0]
+  else
+    Result := '';
+end;
+
+function HasMsg(const AText, AMsg: string): Boolean;
+var
+  Tag: string;
+begin
+  Result := False;
+  Tag := MsgTag(AMsg);
+  if Tag <> '' then
+    for var Id in MsgIds(AText) do
+      if Id = Tag then
+        Exit(True);
+end;
+
+function MsgOutcome(const AText: string): string;
+var
+  M: TMatch;
+begin
+  Result := '';
+  // manda la PRIMERA etiqueta, como la regla de siempre miraba como EMPIEZA
+  // el texto: un rechazo anadido dentro de una respuesta buena (un aviso,
+  // una linea de una tanda) no la convierte en error
+  M := TRegEx.Match(AText, MSG_TAG_REGEX);
+  // un grupo opcional que no participa puede no contarse en Groups
+  if M.Success and (M.Groups.Count > 2) and M.Groups[2].Success then
+    Result := M.Groups[2].Value;
+end;
 
 end.

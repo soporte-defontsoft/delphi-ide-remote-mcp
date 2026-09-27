@@ -72,7 +72,53 @@ type
 implementation
 
 uses
-  MCPServer.Registration;
+  MCPServer.Registration,
+  Lsp.Texts; // [local change 2026-09-27] el lector de las etiquetas de mensaje
+
+{ [local change 2026-09-27] EL resultado de una respuesta, en un solo sitio:
+  eran dos copias que ya no coincidian (el campo error de un JSON con
+  RECHAZADO y no existe salia DENIED, y el mismo texto en prosa NOT_FOUND).
+  Primero la etiqueta del catalogo, que lo DECLARA quien escribe el mensaje
+  (Lsp.Texts.MsgOutcome). Mientras se migra, sin etiqueta, las reglas de
+  siempre leyendo el texto, y se anota en el log para medir lo que falta.
+  AEsError: el texto viene del campo error de un objeto JSON, asi que ya es
+  un fallo aunque no lo diga. }
+function OutcomeDelTexto(const AText: string; AEsError: Boolean): string;
+var
+  Low, PorTexto: string;
+begin
+  // la regla de siempre, leyendo como EMPIEZA el texto
+  PorTexto := '';
+  Low := AText.ToLower;
+  if AText.StartsWith('RECHAZADO') then
+  begin
+    if Low.Contains('no existe') then
+      PorTexto := 'NOT_FOUND'
+    else
+      PorTexto := 'DENIED';
+  end
+  else if AText.StartsWith('error:') or AEsError then
+  begin
+    if Low.Contains('no existe') or Low.Contains('not found') then
+      PorTexto := 'NOT_FOUND'
+    else
+      PorTexto := 'INVALID_PARAM';
+  end
+  else if AText.StartsWith('Error:') or AText.StartsWith('Error executing tool:') or
+          AText.StartsWith('LSP error:') then
+    PorTexto := 'INTERNAL';
+  // la etiqueta manda; si no coincide con la regla, es un cambio que mirar
+  Result := MsgOutcome(AText);
+  if Result <> '' then
+  begin
+    if Result <> PorTexto then
+      TLogger.Info(Format(SL_MSG_OUTCOME_DIFFERS_FMT, [Result, PorTexto, Copy(AText, 1, 80)]));
+    Exit;
+  end;
+  Result := PorTexto;
+  if Result <> '' then
+    TLogger.Info(Format(SL_MSG_UNTAGGED_FMT, [Result, Copy(AText, 1, 80)]));
+end;
 
 { TMCPToolsManager }
 
@@ -185,8 +231,10 @@ begin
       // raises with the very RECHAZADO text a tool would have returned, and
       // wrapping it here told the agent the server had broken. Measured by
       // test_round48 while hardening it. One place, every tool.
+      // [local change 2026-09-27] y un mensaje del catalogo con etiqueta de
+      // resultado tambien: dice el mismo lo que es
       on E: Exception do
-        if E.Message.StartsWith('RECHAZADO') then
+        if E.Message.StartsWith('RECHAZADO') or (MsgOutcome(E.Message) <> '') then
           Result := E.Message
         else
           Result := 'Error executing tool: ' + E.Message;
@@ -238,24 +286,8 @@ begin
     // The jail's anti-probing property survives: outside-the-jail answers use
     // one fixed text whether the target exists or not, so they all map to
     // DENIED; NOT_FOUND only ever comes from in-jail "no existe" texts.
-    var OutcomeCode := '';
-    var LowText := TextValue.ToLower;
-    if TextValue.StartsWith('RECHAZADO') then
-    begin
-      if LowText.Contains('no existe') then
-        OutcomeCode := 'NOT_FOUND'
-      else
-        OutcomeCode := 'DENIED';
-    end
-    else if TextValue.StartsWith('error:') then
-    begin
-      if LowText.Contains('no existe') or LowText.Contains('not found') then
-        OutcomeCode := 'NOT_FOUND'
-      else
-        OutcomeCode := 'INVALID_PARAM';
-    end
-    else if HasError or TextValue.StartsWith('LSP error:') then
-      OutcomeCode := 'INTERNAL';
+    // [local change 2026-09-27] el resultado, de UNA funcion (OutcomeDelTexto)
+    var OutcomeCode := OutcomeDelTexto(TextValue, False);
     // [local change 2026-09-19] structuredContent ES la salida de la tool para
     // el protocolo, asi que un cliente que lo entienda ENSEÑA ESO Y ESCONDE
     // 'content'. Publicando aqui solo {ok, code} el agente recibia
@@ -304,13 +336,7 @@ begin
         ErrTxt := ErrVal.Value.Trim;
       if ErrTxt <> '' then
       begin
-        if ErrTxt.StartsWith('RECHAZADO') then
-          OutcomeCode := 'DENIED'
-        else if ErrTxt.ToLower.Contains('no existe') or
-                ErrTxt.ToLower.Contains('not found') then
-          OutcomeCode := 'NOT_FOUND'
-        else
-          OutcomeCode := 'INVALID_PARAM';
+        OutcomeCode := OutcomeDelTexto(ErrTxt, True);
         Structured.RemovePair('ok').Free; // el suyo mentia; abajo se pone el bueno
       end;
     end;

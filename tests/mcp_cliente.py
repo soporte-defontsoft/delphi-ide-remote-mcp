@@ -12,7 +12,7 @@ demas; aqui vive una vez.
 No es una bateria (no empieza por test_): run_all no la ejecuta.
 """
 import atexit
-import json, os, queue, shutil, socket, stat, subprocess, sys, tempfile, threading, time
+import json, os, queue, re, shutil, socket, stat, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -266,6 +266,31 @@ def entorno(extra=None):
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith('DELPHI_MCP_')}
     env.update(extra or {})
     return env
+
+
+# Las etiquetas de los mensajes del catalogo (Lsp.Texts.MSG_TAG_REGEX, decision
+# de David 27-sep-2026): [AREA-NNN] o [AREA-NNN RESULTADO] al final de cada
+# mensaje. Las baterias reconocen un mensaje por su id, no por su frase, asi
+# el texto se puede traducir sin romperlas. test_catalogo vigila que este
+# patron sea el mismo que el del servidor.
+ETIQUETA = re.compile(r'\[([A-Z]{2,6}-\d{3})(?: (DENIED|NOT_FOUND|INVALID_PARAM|INTERNAL))?\]')
+
+
+def ids(t):
+    """Los ids de las etiquetas que trae un texto, en orden."""
+    return [m.group(1) for m in ETIQUETA.finditer(t or '')]
+
+
+def tiene(t, msg_id):
+    """True si el texto trae el mensaje con ese id ('CFG-007')."""
+    return msg_id in ids(t)
+
+
+def outcome(t):
+    """El resultado que declara la PRIMERA etiqueta (la del mensaje que abre la
+    respuesta); '' si esa no declara ninguno o no hay etiquetas."""
+    m = ETIQUETA.search(t or '')
+    return (m.group(2) or '') if m else ''
 
 
 def como_json(t):

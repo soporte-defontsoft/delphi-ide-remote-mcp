@@ -11,7 +11,8 @@ uses
   LspTests.Dproj in 'LspTests.Dproj.pas',
   LspTests.Images in 'LspTests.Images.pas',
   LspTests.GitArgs in 'LspTests.GitArgs.pas',
-  LspTests.Pascal in 'LspTests.Pascal.pas';
+  LspTests.Pascal in 'LspTests.Pascal.pas',
+  LspTests.Mensajes in 'LspTests.Mensajes.pas';
 
 var
   Runner: ITestRunner;
