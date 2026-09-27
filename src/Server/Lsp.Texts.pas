@@ -48,14 +48,14 @@ const
     '([Workspace.<nombre>] ' +
     'LibraryZone=0): la lectura se limita a los roots, igual que la ' +
     'escritura. Las fuentes de la RTL y de los componentes NO son legibles ' +
-    'desde aqui.';
+    'desde aqui. [WS-001]';
 
   SN_WORKSPACE_NOTE =
     'These are paths on the REMOTE server that runs Delphi, not your local ' +
     'machine. Server drive letters travel as VIRTUAL units (srvd:, srvc:, ' +
     '...): use them verbatim in every path argument - they only resolve ' +
     'inside this MCP, never on your disk. Work only inside "roots"; ' +
-    'anything outside is refused.';
+    'anything outside is refused. [WS-002]';
 
   // ---------------------------------------------------------------------
   // Listing and build results (a stateless protocol means the agent only
@@ -66,7 +66,7 @@ const
   // traversal residue (R4-C), so even a cosmetic ellipsis is banned here.
   SN_PROJECTS_NO_MATCH_FMT =
     'Ningun proyecto se llama asi ("%s"). Hay %d en el workspace; llama sin ' +
-    '"name" para verlos (vienen por paginas).';
+    '"name" para verlos (vienen por paginas). [PROJ-001]';
 
   // Una maquina de trabajo tiene MILES de .dproj: sin paginar, la respuesta
   // eran 82 KB y reventaba el limite del cliente, o sea que la tool era
@@ -74,7 +74,7 @@ const
   // agente: 7025 proyectos). Ahora se pagina como delphi_search.
   SN_PROJECTS_PAGE_FMT =
     'Te doy %d de %d proyectos. La siguiente pagina va con offset=%d, pero ' +
-    'para acotar de verdad usa "name" o un "root" mas concreto.';
+    'para acotar de verdad usa "name" o un "root" mas concreto. [PROJ-002]';
 
   // La version del proyecto. Cuatro sitios del .dproj tienen que decir lo
   // mismo (los numeros del VERSIONINFO y las claves FileVersion y
@@ -85,7 +85,7 @@ const
   // poner un 0 que seria mentira.
   SN_BUILD_QUIET_WARNINGS =
     'quiet: a msbuild solo se le han pedido los ERRORES, asi que de los ' +
-    'warnings no se sabe nada. Repite con verbosity=normal si los quieres.';
+    'warnings no se sabe nada. Repite con verbosity=normal si los quieres. [BUILD-001]';
 
   SP_BUILD_VERBOSITY =
     'How much of the build comes back, the same contract as the house build ' +
@@ -97,18 +97,18 @@ const
 
   SR_CONFIG_VERSION_VACIA =
     'RECHAZADO: falta "version". Ejemplos: 1.2.3, 1.2.3.0 o 1.2.3-beta (el ' +
-    'sufijo se admite y se ignora para el VERSIONINFO, que es numerico).';
+    'sufijo se admite y se ignora para el VERSIONINFO, que es numerico). [CFG-001 DENIED]';
 
   SR_CONFIG_VERSION_FORMATO_FMT =
     'RECHAZADO: "%s" no es una version. Se esperan de 2 a 4 numeros ' +
     'separados por puntos (1.2, 1.2.3, 1.2.3.4), cada uno entre 0 y 65535. ' +
-    'Un sufijo como -beta se admite y se ignora para el VERSIONINFO.';
+    'Un sufijo como -beta se admite y se ignora para el VERSIONINFO. [CFG-002 DENIED]';
 
   SR_CONFIG_VERSION_SIN_VERINFO =
     'RECHAZADO: este proyecto no lleva VERSIONINFO (no hay VerInfo_MajorVer ' +
     'en el .dproj). Ese bloque lo crea el IDE al marcar "Include version ' +
     'information" en Project Options; en cuanto existe, esta tool mantiene ' +
-    'sus valores.';
+    'sus valores. [CFG-003 DENIED]';
 
   SN_CONFIG_VERSION_OK_FMT =
     'Version del proyecto: %s (antes %s). El VERSIONINFO de Windows y las ' +
@@ -116,36 +116,36 @@ const
     'se descuadran cuando se tocan a mano. NO he tocado Android ' +
     '(versionCode/versionName) ni iOS (CFBundleVersion): ahi la numeracion ' +
     'es otra y versionCode solo puede subir. Copia previa del .dproj en ' +
-    '__delphi-patch.%s';
+    '__delphi-patch.%s [CFG-004]';
 
   SR_PROJECTS_NO_ROOT_FMT =
     'error: la carpeta de trabajo "%s" no existe en este servidor. No es que ' +
     'no haya proyectos: es que ahi no hay nada. Mira delphi_workspace para ' +
-    'ver cuales son las carpetas de verdad.';
+    'ver cuales son las carpetas de verdad. [PROJ-003 NOT_FOUND]';
 
   SN_SEARCH_CAPPED_FMT =
     'Te doy %d de %d coincidencias: el resto NO se listan. Afina la busqueda ' +
     '(un patron mas concreto, o "path" a una subcarpeta) antes de sacar ' +
-    'conclusiones de este listado.';
+    'conclusiones de este listado. [SEARCH-001]';
 
   SR_CREATE_SUBDIR_REL_FMT =
     'RECHAZADO: "dir"="%s" no vale para crear DENTRO de un proyecto. Aqui ' +
     '"dir" es una SUBCARPETA del proyecto, relativa a el y con los niveles ' +
     'que quieras (Dominio\Modelos): sin unidad, sin ruta absoluta, sin ".." ' +
     'y solo con letras, digitos, espacio, punto, guion y guion bajo. La ' +
-    'ruta absoluta es solo para crear un PROYECTO nuevo.';
+    'ruta absoluta es solo para crear un PROYECTO nuevo. [CREATE-001 DENIED]';
   SR_CREATE_UNIT_NEED_PROJECT =
     'RECHAZADO: kind=unit necesita "project" (la ruta del .dpr o .dproj al ' +
     'que anadir la unit); la carpeta sale de ahi, y "dir" es su subcarpeta. ' +
     'Para una unit SUELTA que ningun proyecto lista todavia, sin project y con ' +
-    '"dir" = la carpeta ABSOLUTA donde crearla.';
+    '"dir" = la carpeta ABSOLUTA donde crearla. [CREATE-002 DENIED]';
   SR_CREATE_SUELTO_DIR =
     'RECHAZADO: sin "project", "dir" tiene que ser la carpeta ABSOLUTA ' +
-    'donde crear el fichero (dentro de tus raices).';
+    'donde crear el fichero (dentro de tus raices). [CREATE-003 DENIED]';
   SN_CREATE_UNIT_SUELTA_FMT =
     'CREADA la unit %s (%s), %d lineas, SUELTA: ningun proyecto la lista ' +
     'todavia. Para meterla en uno: delphi_config command=add-unit; si su ' +
-    'uses esta partido en ramas {$IFDEF}, delphi_edit en la rama que toca.';
+    'uses esta partido en ramas {$IFDEF}, delphi_edit en la rama que toca. [CREATE-004]';
   // Aviso de delphi_edit (no bloquea): un comentario de llave con otra llave
   // dentro. Empieza por *** para que una tanda lo conserve.
   SN_AVISO_LLAVE_ANIDADA_FMT =
@@ -154,32 +154,32 @@ const
     'lo que sigue es codigo, o una directiva de verdad si cita una de ' +
     'llave-dolar. Si querias citarla, pon el comentario con // o con (* *). ***';
   SR_CREATE_INCLUDE_CONTENT =
-    'RECHAZADO: kind=include necesita "content": un .inc vacio no sirve de nada.';
+    'RECHAZADO: kind=include necesita "content": un .inc vacio no sirve de nada. [CREATE-005 DENIED]';
   SN_CREATE_INCLUDE_FMT =
     'CREADO el include %s (%s), %d lineas. Se usa con {$I %s.inc} desde la ' +
-    'unit que lo necesite; no se registra en ningun proyecto.';
+    'unit que lo necesite; no se registra en ningun proyecto. [CREATE-006]';
   // Un uses partido en ramas IFDEF (cada rama acaba en su ;): error: y no
   // RECHAZADO, no es politica; es una forma que un escritor no sabe tocar.
   SR_USES_EN_RAMAS_FMT =
     'error: la clausula %s de %s esta partida en ramas {$IFDEF} (cada rama ' +
     'acaba en su propio ";") y no se en cual va la unit: la de una rama solo ' +
     'existe en esa plataforma. Anadela, quitala o renombrala con delphi_edit ' +
-    'en la rama que toca. No he tocado nada.';
+    'en la rama que toca. No he tocado nada. [USES-001 INVALID_PARAM]';
 
   SN_COMPONENTS_FILTER_IGNORED_FMT =
     '(He IGNORADO filter="%s": con platform= esto te da las rutas de ' +
     'biblioteca de esa plataforma, que es otra pregunta. Para buscar entre ' +
-    'los paquetes instalados, llama sin platform.)';
+    'los paquetes instalados, llama sin platform.) [COMP-001]';
 
   SN_REPORT_KIND_FMT =
     #10'(OJO: "%s" no es un kind de los que manejo, asi que lo he archivado ' +
-    'como "bug". Los que hay: bug, limitation, suggestion, question.)';
+    'como "bug". Los que hay: bug, limitation, suggestion, question.) [REPORT-001]';
 
   SR_DIAG_NOT_SOURCE_FMT =
     'RECHAZADO: %s no es un fuente Delphi (%s). El linter solo opina sobre ' +
     '.pas, .dpr, .dpk e .inc; sobre cualquier otra cosa te contestaba "sigue ' +
     'en marcha, vuelve a llamar" para siempre, y eso era mentira: no iba a ' +
-    'terminar nunca.';
+    'terminar nunca. [LSP-001 DENIED]';
 
   { Calentamiento del motor: definition vacia con hover lleno (medido por
     Hermes, 2026-09-22). Es "todavia no", asi que va como error: (corrige y
@@ -192,7 +192,7 @@ const
   SR_REFS_WARMING_FMT =
     'error: el motor reconoce "%s" (hover contesta) pero todavia no tiene ' +
     'su definicion indexada: esta calentando esa unit. Repite la misma ' +
-    'llamada en unos segundos, con los mismos argumentos.';
+    'llamada en unos segundos, con los mismos argumentos. [LSP-002 INVALID_PARAM]';
   { Medido por Hermes (2026-09-22): con definition vacia, declaration directa
     en un punto de llamada devuelve el metodo ENVOLVENTE, y la tool lo daba
     por bueno sin decirlo. }
@@ -209,20 +209,20 @@ const
     'otra unit que este proyecto no compila. Apunta DENTRO del identificador ' +
     'en una linea de codigo de verdad (delphi_read te da linea y columna). Y ' +
     'si el proyecto no tiene configuracion utilizable, tambien puede pasar: ' +
-    'delphi_config command=view te dice si la tiene.';
+    'delphi_config command=view te dice si la tiene. [LSP-003 DENIED]';
 
   SR_LSP_LINE_RANGE_FMT =
     'error: la linea %d no existe en %s, que tiene %d lineas. Recuerda que ' +
     'aqui las lineas van desde 0 (la ultima es la %d), mientras que ' +
-    'delphi_read las numera desde 1.';
+    'delphi_read las numera desde 1. [LSP-004 NOT_FOUND]';
 
   SR_LSP_CHAR_RANGE_FMT =
     'error: la columna %d no existe en la linea %d, que tiene %d caracteres: ' +
     '"%s". Las columnas tambien van desde 0, y hay que apuntar DENTRO del ' +
-    'identificador.';
+    'identificador. [LSP-005 NOT_FOUND]';
 
   SR_LSP_NEGATIVE_FMT =
-    'error: linea %d y columna %d: no hay posiciones negativas.';
+    'error: linea %d y columna %d: no hay posiciones negativas. [LSP-006 INVALID_PARAM]';
 
   { El "path" de las tools de POSICION (definition, hover, completion,
     signature, references, rename_symbol). Estaba heredado de una clase base
@@ -256,11 +256,11 @@ const
 
   SN_GIT_DIFF_CLEAN =
     '(sin diferencias: no hay NADA cambiado respecto a lo comparado. La orden ' +
-    'ha ido bien; git no imprime nada cuando no hay cambios.)';
+    'ha ido bien; git no imprime nada cuando no hay cambios.) [GIT-001]';
 
   SN_GIT_SILENT_OK_FMT =
     '(git %s ha terminado bien y no imprime nada cuando lo consigue. No es ' +
-    'una respuesta perdida: es el exito de esta orden.)';
+    'una respuesta perdida: es el exito de esta orden.) [GIT-002]';
 
   SP_LSP_FILE_PATH =
     'Un fichero Delphi (.pas/.dpr/.dpk/.inc). Aqui va UN fichero, no una ' +
@@ -280,7 +280,7 @@ const
     'como texto y sin el motor semantico. Para el detalle de una unit (con ' +
     'rangos y anidamiento) llama con el fichero; para leerla entera, ' +
     'delphi_read. Si una unit no aparece o algo sale raro, no te fies del ' +
-    'resumen para editar: lee el fichero.';
+    'resumen para editar: lee el fichero. [LSP-007]';
 
   SP_SYMBOLS_MODE =
     'Solo para un FICHERO: "summary" = el esqueleto (cada seccion con sus ' +
@@ -313,7 +313,7 @@ const
     'filter="nombre" para dar con uno concreto, y ahi tienes line y line0 ya ' +
     'separadas, o mode="full" para el arbol completo con rangos. "symbols" ' +
     'de primer nivel son los que no viven en ninguna seccion, que es como ' +
-    'DelphiLSP devuelve un .dpr entero.';
+    'DelphiLSP devuelve un .dpr entero. [LSP-008]';
 
   { El filtro busca por NOMBRE y antes buscaba dentro de la firma renderizada,
     asi que filter="string" sacaba nueve cosas por su TIPO. Al arreglarlo, esa
@@ -322,12 +322,12 @@ const
   SN_SYMBOLS_FILTER_NONE =
     'Sin coincidencias. Esto busca por NOMBRE de simbolo, no por tipo ni por ' +
     'el texto de la firma: para buscar texto dentro del fuente usa ' +
-    'delphi_search, y para ver el esqueleto entero, mode="summary".';
+    'delphi_search, y para ver el esqueleto entero, mode="summary". [LSP-009]';
 
   SN_SYMBOLS_AUTO_FMT =
     'El arbol completo pesaba %d caracteres, asi que te doy el resumen. ' +
     'Con mode="full" lo tienes entero; con filter="nombre" solo lo que ' +
-    'buscas.';
+    'buscas. [LSP-010]';
 
   SP_CONFIG_SECTION =
     'Solo para view: summary (defecto: marco, configuraciones, plataformas ' +
@@ -338,7 +338,7 @@ const
 
   SN_CONFIG_SECTIONS =
     'Esto es el resumen. El detalle, por secciones: section=platforms | ' +
-    'searchpaths | deploy | units. section=all lo trae todo junto (grande).';
+    'searchpaths | deploy | units. section=all lo trae todo junto (grande). [CFG-005]';
 
   { Regla 11 de las convenciones: "error:" es "no he podido (no existe, no
     cuadra, falta un parametro): corrige y repite"; "RECHAZADO:" es "te lo he
@@ -349,7 +349,7 @@ const
   SR_LSP_NO_FILE_FMT =
     'error: no existe %s. Comprueba el nombre y la carpeta: delphi_list ' +
     'root=<carpeta> ensena lo que hay de verdad, y delphi_search lo busca ' +
-    'por contenido.';
+    'por contenido. [LSP-011 NOT_FOUND]';
 
   { La ruta existe, pero es de otro tipo - que no es lo mismo que no existir.
     Medido 2026-09-20: delphi_read sobre la raiz del repo contestaba "no
@@ -394,7 +394,7 @@ const
     'de ellos, y la jaula se mide sobre el destino de verdad, no sobre el ' +
     'nombre. No es que hayas escrito mal la ruta: esa carpeta no es lo que ' +
     'parece. Si el enlace deberia valer, es el operador quien anade su ' +
-    'DESTINO a Roots= de tu [Workspace.<nombre>].';
+    'DESTINO a Roots= de tu [Workspace.<nombre>]. [GUARD-001 DENIED]';
 
   { Un virtual y su override no son dos simbolos: son el mismo metodo a dos
     alturas de la jerarquia. Preguntando por el de la base, las llamadas
@@ -409,14 +409,14 @@ const
     'resuelve siempre a la hija, asi que preguntando por el virtual de la ' +
     'base la respuesta habria sido "no lo llama nadie" sobre un metodo con ' +
     'llamadas. Si vas a RENOMBRAR, ojo: hay que renombrar toda la familia a ' +
-    'la vez o el override deja de sobrescribir.';
+    'la vez o el override deja de sobrescribir. [LSP-012]';
 
   SN_REFS_REJECTED_CAP_FMT =
     'Se listan %d de los %d descartados: con un identificador corto salen ' +
     'cientos y la respuesta entera no le cabe al cliente. El recuento ' +
     'completo esta en rejectedHomonyms; si necesitas verlos todos, pregunta ' +
     'por un ambito mas pequeno (un fichero concreto como path) o usa ' +
-    'delphi_search wholeword=true, que pagina.';
+    'delphi_search wholeword=true, que pagina. [LSP-013]';
 
   { "No lo se" y "se que no" no son lo mismo, y acababan en el mismo saco.
     Un nombre escrito en un comentario o dentro de una cadena no lo resuelve
@@ -443,7 +443,7 @@ const
     '.dproj cerca): el motor la resuelve contra otra unit del mismo nombre ' +
     'que indexo antes. Mira con delphi_definition a donde va de verdad; si la ' +
     'unit pertenece a un proyecto, trabaja sobre el proyecto (con su .dproj ' +
-    'al lado) para que se configure.';
+    'al lado) para que se configure. [LSP-014 INVALID_PARAM]';
 
   SN_REFS_MENTIONS_FMT =
     'El nombre aparece ademas %d vez/veces en COMENTARIOS o dentro de ' +
@@ -451,7 +451,7 @@ const
     'nada que el compilador resuelva- y por eso no cuentan como ' +
     '"unverified" ni bloquean un delphi_rename_symbol, que renombra codigo ' +
     'y no prosa. Si quieres que los comentarios digan tambien el nombre ' +
-    'nuevo, eso se cambia a mano con delphi_edit.';
+    'nuevo, eso se cambia a mano con delphi_edit. [LSP-015]';
 
   SR_READONLY_PATH_FMT =
     'RECHAZADO: "%s" esta dentro de una carpeta declarada de SOLO LECTURA ' +
@@ -466,28 +466,28 @@ const
     '%d .dproj/.groupproj ocultos por ser COPIAS: copias de seguridad de ' +
     'este servidor (__delphi-patch), del IDE (__history) o artefactos de ' +
     'compilacion. No son proyectos que puedas abrir. Si los quieres ver, ' +
-    'pasa esa carpeta como "root" y te los enseno.';
+    'pasa esa carpeta como "root" y te los enseno. [PROJ-004]';
 
   SN_LIST_MASK_NO_MATCH_FMT =
     'La mascara "%s" no ha casado con nada, pero la carpeta NO esta vacia: ' +
     'solo en su primer nivel ya tiene %d entradas. Se admite UNA mascara ' +
     '(*.pas) o varias separadas por ";" (*.pas;*.dfm). Sin pattern se listan ' +
-    'los fuentes y proyectos Delphi.';
+    'los fuentes y proyectos Delphi. [LIST-001]';
 
   SR_LIST_IS_FILE_FMT =
     'error: %s es un FICHERO, no una carpeta. delphi_list recorre carpetas; ' +
     'para leerlo usa delphi_read, y para buscar DENTRO de el, delphi_search ' +
-    'root=<ese fichero> (acepta un fichero suelto como raiz).';
+    'root=<ese fichero> (acepta un fichero suelto como raiz). [LIST-002 INVALID_PARAM]';
 
   SR_LSP_IS_FOLDER_FMT =
     'error: %s es una CARPETA, no un fichero. Para ver lo que tiene usa ' +
     'delphi_list root=<esa ruta>; para leer uno de sus ficheros, pasa su ' +
-    'ruta completa.';
+    'ruta completa. [LSP-016 INVALID_PARAM]';
 
   SR_LSP_NOT_SOURCE_FMT =
     'RECHAZADO: %s no es un fuente Delphi (%s), asi que no hay simbolos que ' +
     'sacar; antes te devolvia una lista vacia, que parecia decir que la unit ' +
-    'no tiene nada. Esta tool trabaja sobre .pas, .dpr, .dpk e .inc.';
+    'no tiene nada. Esta tool trabaja sobre .pas, .dpr, .dpk e .inc. [LSP-017 DENIED]';
 
   { La descripcion del parametro, compartida por delphi_edit y
     delphi_textedit: lo que hace no depende de si el fichero es Pascal. }
@@ -507,7 +507,7 @@ const
     '- Quitar o sustituir un TRAMO del que solo quieres escribir la primera ' +
     'linea: "old" = esa linea y "toline" = la ultima del tramo.'#10 +
     '- INSERTAR: ancla en UNA linea existente y en "new" devuelves esa misma ' +
-    'linea junto con lo nuevo.';
+    'linea junto con lo nuevo. [EDIT-001 DENIED]';
 
   SP_PATCH_TOLINE =
     'RANGO (1-based, incluida): la ULTIMA linea del tramo. Con esto "old" ' +
@@ -548,7 +548,7 @@ const
     'what was edited is NOT loaded. The file is read once at start-up and never ' +
     'reloaded live (a running agent''s jail must not change under it): ask the ' +
     'operator to restart the service (sc.exe stop DelphiLspMcp; sc.exe start ' +
-    'DelphiLspMcp).';
+    'DelphiLspMcp). [SYS-001]';
   SN_SERVER_LOCALSYSTEM =
     'This server runs as LocalSystem. RAD Studio keeps its Library Path, ' +
     'registered packages, SDKs and PAServer profiles in the HKCU of the user ' +
@@ -556,7 +556,7 @@ const
     'installed component fail with F2613, "profiles" comes back empty and ' +
     'get-sdk lands in the SYSTEM profile. Ask the operator to make the ' +
     'service log on as that user (services.msc, or sc config ... obj=) - see ' +
-    '"The service must log on as the user who owns the IDE" in the README.';
+    '"The service must log on as the user who owns the IDE" in the README. [SYS-002]';
 
   SP_PATCH_FRAGMENT =
     'FRAGMENT mode, for LONG lines (a README paragraph, a long string): ' +
@@ -574,29 +574,29 @@ const
   SR_FRAG_NEEDS_ATLINE =
     'RECHAZADO: "fragment" necesita "atline": el numero (1-based, el que ' +
     'ensena delphi_read) de la linea donde esta. Un fragmento se busca DENTRO ' +
-    'de una linea concreta, nunca por todo el fichero. No he escrito nada.';
+    'de una linea concreta, nunca por todo el fichero. No he escrito nada. [EDIT-002 DENIED]';
   SR_FRAG_MIXED_FMT =
     'RECHAZADO: "fragment" no se combina con "%s". Son dos formas distintas ' +
     'de decir donde: o la linea completa en "old" (con delete/toline si ' +
-    'hacen falta), o un trozo de UNA linea con fragment + atline + new.';
+    'hacen falta), o un trozo de UNA linea con fragment + atline + new. [EDIT-003 DENIED]';
   SR_FRAG_MULTILINE =
     'RECHAZADO: en modo fragmento ni "fragment" ni "new" llevan saltos de ' +
     'linea: cambia un trozo DENTRO de una linea. Para meter o quitar lineas ' +
-    'usa el ancla de linea completa ("old").';
+    'usa el ancla de linea completa ("old"). [EDIT-004 DENIED]';
   SR_FRAG_EMPTY =
     'RECHAZADO: "fragment" esta vacio o lleva U+FFFD (leiste el fichero con ' +
-    'una tool generica). Copia el trozo de delphi_read.';
+    'una tool generica). Copia el trozo de delphi_read. [EDIT-005 DENIED]';
   SR_FRAG_BEYOND_FMT =
-    'RECHAZADO: atline=%d no existe en %s, que tiene %d lineas.';
+    'RECHAZADO: atline=%d no existe en %s, que tiene %d lineas. [EDIT-006 NOT_FOUND]';
   SR_FRAG_NOTFOUND_FMT =
     'RECHAZADO: el fragmento |%s| no aparece en la linea %d (se compara con ' +
-    'mayusculas y minusculas). No he escrito nada. La linea real es:'#10'  %d|%s';
+    'mayusculas y minusculas). No he escrito nada. La linea real es:'#10'  %d|%s [EDIT-007 DENIED]';
   SR_FRAG_SEVERAL_FMT =
     'RECHAZADO: el fragmento |%s| aparece %d veces en la linea %d, y no voy ' +
     'a adivinar cual. No he escrito nada. Alargalo con lo que tiene al lado ' +
-    'hasta que sea unico. La linea real es:'#10'  %d|%s';
+    'hasta que sea unico. La linea real es:'#10'  %d|%s [EDIT-008 DENIED]';
   SR_FRAG_SAME =
-    'RECHAZADO: "new" es igual que "fragment": no hay nada que cambiar.';
+    'RECHAZADO: "new" es igual que "fragment": no hay nada que cambiar. [EDIT-009 DENIED]';
 
   SP_PATCH_EDITS =
     'VARIAS ediciones sobre ESTE MISMO fichero, en una sola llamada y TODO O ' +
@@ -639,23 +639,23 @@ const
     'RECHAZADO: las entradas %d y %d apuntan a la MISMA linea (%d). ' +
     '"occurrence" cuenta sobre el fichero de ANTES de la tanda, no sobre lo ' +
     'que va quedando: si la entrada anterior cambia la aparicion 1, esta tiene ' +
-    'que pedir la 2 (o anclar por atline). No he escrito nada.';
+    'que pedir la 2 (o anclar por atline). No he escrito nada. [EDIT-010 DENIED]';
   SR_PATCH_OCCURRENCE_FMT =
     'RECHAZADO: la entrada %d pide occurrence %d de "%s", y ahi solo hay %d. ' +
     'No he escrito nada. Antes esto se ignoraba y la edicion caia en la ' +
     'PRIMERA aparicion - exactamente lo que occurrence sirve para evitar. ' +
-    'Relee con delphi_read y cuenta, o alarga el ancla hasta que sea unica.';
+    'Relee con delphi_read y cuenta, o alarga el ancla hasta que sea unica. [EDIT-011 DENIED]';
 
   SR_PATCH_EDIT_KEY_FMT =
     'RECHAZADO: la entrada %d de "edits" lleva el campo "%s", que no existe. ' +
     'Los campos de una edicion son: old, new, atline, toline, delete, ' +
     'occurrence, fragment (todos en minusculas). No he escrito nada: un nombre mal ' +
-    'escrito se ignoraba en silencio y la entrada acababa tocando otra cosa.';
+    'escrito se ignoraba en silencio y la entrada acababa tocando otra cosa. [EDIT-012 NOT_FOUND]';
 
   SR_PATCH_BLOCK_SHORT =
     'RECHAZADO: ese "old" de varias lineas se queda en una sola despues de ' +
     'quitarle el salto final. Para una linea suelta no hace falta nada ' +
-    'especial: mandala tal cual.';
+    'especial: mandala tal cual. [EDIT-013 DENIED]';
 
   { Por que no casa un ancla de UNA linea (Lsp.Patch.AnclaPerdida, el
     texto de delphi_edit y de delphi_textedit). Decian cosas distintas de
@@ -671,7 +671,7 @@ const
     'RECHAZADO: el ancla no aparece en %s. No he escrito nada.'#10 +
     'Ancla buscada: |%s|';
   SN_ANCLA_COPIALA =
-    'Copia la linea literal de delphi_read (no la reconstruyas de memoria).';
+    'Copia la linea literal de delphi_read (no la reconstruyas de memoria). [EDIT-014]';
   SN_ANCLA_INDENTACION_FMT =
     'OJO: la linea %d tiene ese MISMO texto con OTRA indentacion. Copiala ' +
     'tal cual:';
@@ -691,10 +691,10 @@ const
   SR_PATCH_BLOCK_AMBIGUOUS_FMT =
     'RECHAZADO: ese bloque aparece %d veces (empieza por "%s"), asi que no se ' +
     'a cual te refieres. Anade "occurrence": 1, 2... a esa entrada, o alarga ' +
-    'el bloque hasta que sea unico.';
+    'el bloque hasta que sea unico. [EDIT-015 DENIED]';
 
   SN_PATCH_BLOCK_OK_FMT =
-    'bloque de %d lineas sustituido (empezaba en la linea %d)';
+    'bloque de %d lineas sustituido (empezaba en la linea %d) [EDIT-016]';
 
   { EL RANGO: "old" ancla la PRIMERA linea y "toline" dice hasta donde. Un
     rango mal puesto se lleva codigo por delante sin que se vea en la
@@ -703,51 +703,51 @@ const
   SR_RANGE_BACKWARDS_FMT =
     'error: toline=%d esta ANTES de la linea del ancla (%d), o sea que el ' +
     'rango va al reves y no hay nada que quitar. "old" marca la PRIMERA linea ' +
-    'del rango y "toline" la ULTIMA, las dos incluidas.';
+    'del rango y "toline" la ULTIMA, las dos incluidas. [EDIT-017 INVALID_PARAM]';
 
   SR_RANGE_BEYOND_FMT =
     'error: toline=%d, pero %s tiene %d lineas. Relee el tramo con ' +
-    'delphi_read y copia el numero de la ultima linea que se va.';
+    'delphi_read y copia el numero de la ultima linea que se va. [EDIT-018 INVALID_PARAM]';
 
   SR_RANGE_WHOLE_FMT =
     'RECHAZADO: ese rango (1-%d) se lleva el fichero ENTERO. Esta tool no ' +
     'vacia ficheros, igual que no los reescribe enteros. Si lo que quieres es ' +
-    'eliminarlo, delphi_delete lo manda a la papelera y se puede recuperar.';
+    'eliminarlo, delphi_delete lo manda a la papelera y se puede recuperar. [EDIT-019 DENIED]';
 
   SR_RANGE_WITH_BLOCK =
     'error: "toline" no se combina con un ancla de VARIAS lineas: o dice el ' +
     'bloque lo que se sustituye, o lo dice el rango. Con "toline", "old" es ' +
-    'UNA sola linea, la primera del rango.';
+    'UNA sola linea, la primera del rango. [EDIT-020 INVALID_PARAM]';
 
   SR_RANGE_WRONG_MODE_FMT =
     'error: "toline" es del modo EDIT/DELETE (un ancla "old" y hasta donde ' +
     'llega el rango) y aqui has pedido %s, que no anda por lineas. Lo he ' +
     'parado en vez de ignorarlo: un parametro que se traga en silencio es ' +
-    'como se cree haber borrado algo que sigue ahi.';
+    'como se cree haber borrado algo que sigue ahi. [EDIT-021 INVALID_PARAM]';
 
   SN_RANGE_DELETED_FMT =
-    'BORRADAS %d lineas (de la %d a la %d) de %s';
+    'BORRADAS %d lineas (de la %d a la %d) de %s [EDIT-022]';
 
   SN_RANGE_REPLACED_FMT =
-    'SUSTITUIDAS %d lineas (de la %d a la %d) de %s';
+    'SUSTITUIDAS %d lineas (de la %d a la %d) de %s [EDIT-023]';
 
   SR_PATCH_EDITS_JSON_FMT =
     'RECHAZADO: "edits" tiene que ser un array JSON de objetos, por ejemplo ' +
     '[{"old":"  FLista: TList;","new":"  FLista: TObjectList<TCosa>;"}]. Si ' +
     'lo mandas desde una linea de comandos, metelo en un fichero y usa la ' +
     'forma @fichero, que la consola no te lo destroce. Han llegado %d ' +
-    'caracteres que empiezan por: %s';
+    'caracteres que empiezan por: %s [EDIT-024 DENIED]';
 
   SR_PATCH_EDITS_EMPTY =
-    'RECHAZADO: "edits" viene vacio. Sin operaciones no hay nada que aplicar.';
+    'RECHAZADO: "edits" viene vacio. Sin operaciones no hay nada que aplicar. [EDIT-025 DENIED]';
 
   SR_PATCH_EDITS_TOOMANY =
     'RECHAZADO: son demasiadas ediciones de una vez (el tope es 50). Si de ' +
     'verdad hay que tocar tantas lineas del mismo fichero, casi seguro que lo ' +
-    'que quieres es reescribirlo entero: delphi_changeset con delete + create.';
+    'que quieres es reescribirlo entero: delphi_changeset con delete + create. [EDIT-026 DENIED]';
 
   SR_PATCH_EDITS_NOFILE_FMT =
-    'RECHAZADO: no existe %s.';
+    'RECHAZADO: no existe %s. [EDIT-027 NOT_FOUND]';
 
   SR_PATCH_EDITS_ROLLED_FMT =
     'ROLLBACK: fallo la edicion %d de %d y el fichero ha vuelto byte a byte a ' +
@@ -758,22 +758,22 @@ const
   SN_PATCH_EDITS_OK_FMT =
     'APLICADAS %d ediciones sobre %s, todas o ninguna:'#10'%s'#10'Copia ' +
     'previa del fichero en __delphi-patch (una por dia y fichero: la primera ' +
-    'del dia es el original de antes de todo esto).';
+    'del dia es el original de antes de todo esto). [EDIT-028]';
 
   SN_EDIT_DUP_ABOVE_FMT =
     'OJO: la linea %d (justo ENCIMA) es identica a la primera que acabas de ' +
     'insertar: "%s". Casi siempre significa que has mandado el ancla ' +
-    'repetida dentro de "new". Compila igual y no se ve; mira el fichero.';
+    'repetida dentro de "new". Compila igual y no se ve; mira el fichero. [EDIT-029]';
 
   SN_EDIT_DUP_BELOW_FMT =
     'OJO: la linea %d (justo DEBAJO) es identica a la ultima que acabas de ' +
-    'insertar: "%s". Suele ser el ancla mandada dos veces dentro de "new".';
+    'insertar: "%s". Suele ser el ancla mandada dos veces dentro de "new". [EDIT-030]';
 
   SR_READ_RANGE_FMT =
     'RECHAZADO: el rango va al reves (desde=%d, hasta=%d) y el fichero tiene ' +
     '%d lineas, asi que no hay nada que devolver. Antes te contestaba con el ' +
     'cuerpo vacio, que parecia decir que ese tramo estaba en blanco. ' +
-    'Intercambia los dos numeros.';
+    'Intercambia los dos numeros. [READ-001 DENIED]';
 
   { Lo que delphi_list y delphi_search NO ensenan: la cabecera y una parte
     por motivo, solo las que no son cero (THiddenCount.Report, en
@@ -783,42 +783,42 @@ const
   SN_HIDDEN_ARTIFACTS_FMT =
     '%d estan en carpetas de compilacion (Win32, Win64, Debug, Release, ' +
     'dcu, __history): existen en el disco, pasa esa carpeta como root ' +
-    'para verlas o baja el resultado con delphi_package + delphi_fetch';
+    'para verlas o baja el resultado con delphi_package + delphi_fetch [LIST-003]';
   SN_HIDDEN_TEMP_FMT =
     '%d son temporales del servidor (__delphi-temp): no salen nunca, ni ' +
     'con includetrash, porque de ahi no se restaura nada; si una tool te ' +
-    'dio una ruta de dentro, delphi_fetch la baja';
+    'dio una ruta de dentro, delphi_fetch la baja [LIST-004]';
   SN_HIDDEN_GIT_FMT =
     '%d son la fontaneria de git (.git): el repositorio se mira con ' +
-    'delphi_git';
+    'delphi_git [LIST-005]';
   SN_HIDDEN_TRASH_FMT =
     '%d son copias de la papelera (__delphi-patch): delphi_list con ' +
-    'includetrash=true las ensena';
+    'includetrash=true las ensena [LIST-006]';
   SN_HIDDEN_FOLDERS_FMT =
     '%d son carpetas de otras herramientas (.vs, .github, __pycache__...), ' +
-    'que el modo dirs no ensena: pasa una como root para ver dentro';
+    'que el modo dirs no ensena: pasa una como root para ver dentro [LIST-007]';
 
   SN_LIST_SHOWN_TRASH_FMT =
     'De las %d entradas, %d son copias de la papelera (__delphi-patch), ' +
-    'listadas porque includetrash=true; las demas son ficheros vivos.';
+    'listadas porque includetrash=true; las demas son ficheros vivos. [LIST-008]';
 
   SN_LIST_DEFAULT_MASK =
     'Sin "pattern" solo se listan ficheros de Delphi (*.pas, *.dpr, *.dpk, ' +
     '*.inc, *.dfm, *.fmx, *.dproj, *.groupproj). Si hay .txt, .json, .bat o ' +
-    'lo que sea, estan ahi pero no salen: pide pattern=* para verlo todo.';
+    'lo que sea, estan ahi pero no salen: pide pattern=* para verlo todo. [LIST-009]';
 
   SN_LIST_CAPPED =
     'La lista viene recortada a 500 entradas ("total" dice cuantas hay). ' +
-    'Acota con pattern (*.pas) o baja a una subcarpeta.';
+    'Acota con pattern (*.pas) o baja a una subcarpeta. [LIST-010]';
 
   SR_LIST_ROOT_IS_FILE_FMT =
     'RECHAZADO: "%s" es un FICHERO, no una carpeta, asi que no hay nada que ' +
     'listar. Para verlo por dentro usa delphi_read; para su carpeta, pasa la ' +
-    'carpeta.';
+    'carpeta. [LIST-011 DENIED]';
 
   SN_BUILD_OUTPUT =
     'Retrieve it with delphi_package (zips its folder, dcu excluded) + ' +
-    'delphi_fetch (chunked download with sha256).';
+    'delphi_fetch (chunked download with sha256). [BUILD-002]';
 
   // ---------------------------------------------------------------------
   // Access control
@@ -828,11 +828,11 @@ const
     'modifica la maquina servidora y esta credencial no lo permite. ' +
     'Disponibles en este modo: leer, buscar, listar, navegar simbolos, ' +
     'diagnosticos, referencias, descargar, git de consulta y delphi_report ' +
-    '(para contarnos cualquier problema).';
+    '(para contarnos cualquier problema). [READ-002 DENIED]';
 
   SR_GIT_OPTION_FMT =
     'RECHAZADO: la opcion de git "%s" no esta permitida (puede escribir ' +
-    'ficheros, leer fuera del repositorio o ejecutar un comando).';
+    'ficheros, leer fuera del repositorio o ejecutar un comando). [GIT-003 DENIED]';
 
   // The gate used to read an argument with an exact, case-SENSITIVE name while
   // the RTTI binder resolves it ignoring case and "_". Two keys that differ
@@ -851,19 +851,19 @@ const
   // already armoured the same token for the XML sink; this is its twin mouth.
   SR_BUILD_PLATFORM_FMT =
     'RECHAZADO: "%s" no es una plataforma Delphi valida. Mira las que tiene ' +
-    'el proyecto con delphi_config command=view, y usa una de ellas tal cual.';
+    'el proyecto con delphi_config command=view, y usa una de ellas tal cual. [BUILD-003 DENIED]';
 
   SR_BUILD_TARGET_FMT =
     'RECHAZADO: "%s" no es un target valido. Usa Build (completo), Make ' +
     '(incremental), Clean o Deploy (compila y despliega: al PAServer del ' +
     'parametro profile en Linux/macOS, o empaqueta la app en Android). ' +
-    'Tras cambiar de plataforma usa Build.';
+    'Tras cambiar de plataforma usa Build. [BUILD-004 DENIED]';
 
   SN_BUILD_MANIFEST_NEW =
     'No .deployproj existed, so a MINIMAL deployment manifest was generated ' +
     'next to the project (the project output only, exec bit on). GUI apps ' +
     'need the richer manifest the IDE Deployment Manager writes (shared ' +
-    'libraries, assets); this one covers console/simple binaries.';
+    'libraries, assets); this one covers console/simple binaries. [BUILD-005]';
 
   SN_BUILD_DEPLOYED_FMT =
     'Deployed through profile "%s". On the target machine the files are ' +
@@ -876,7 +876,7 @@ const
     'deployedFiles counts what this run shipped (only with verbosity=verbose: ' +
     'quiet and normal do not print the copies); if it is missing there, ' +
     'nothing was sent: check the manifest with delphi_config command=view ' +
-    '(deployFiles) and add the missing entries with add-deployfile.';
+    '(deployFiles) and add the missing entries with add-deployfile. [BUILD-006]';
 
   { W1033 en un paquete: units de OTROS paquetes compiladas dentro del
     nuestro. El IDE ensena la lista y pregunta si anadirlos al requires
@@ -885,25 +885,25 @@ const
     'This package compiled %d units of OTHER packages into itself (W1033 ' +
     'implicitly imported): a duplicate of their code, which the IDE would ' +
     'have offered to fix by adding those packages to the requires clause; ' +
-    'implicitImports lists the units.%s%s';
+    'implicitImports lists the units.%s%s [BUILD-007]';
   SN_BUILD_REQUIRES_KNOWN_FMT =
     ' Their packages, read from the BPLs this install ships: %s. Add them ' +
-    'with delphi_config command=add-requires requires="%s" and build again.';
+    'with delphi_config command=add-requires requires="%s" and build again. [BUILD-008]';
   SN_BUILD_REQUIRES_UNKNOWN_FMT =
     ' No BPL of this install declares these units, so their package is not ' +
     'known here (a third-party package outside bin\, or units of your own ' +
-    'that belong in contains): %s.';
+    'that belong in contains): %s. [BUILD-009]';
   { Punto 8 (Hermes 2026-09-23, David 24-sep): units de un .dpk del PROPIO
     workspace. Solo pista: compilar e instalar paquetes no es cosa del server. }
   SN_BUILD_REQUIRES_WORKSPACE_FMT =
     'These units belong to packages of YOUR workspace, not to this install: ' +
     '%s. Build that package FIRST (until it compiles there is no .dcp to ' +
     'require), then add-requires it here and build again. Installing a ' +
-    'package in the IDE is the operator''s job, never yours.';
+    'package in the IDE is the operator''s job, never yours. [BUILD-010]';
 
   SN_BUILD_QUIET_DEPLOYED =
     'msbuild only prints the deploy copies at verbosity=verbose, so deployedFiles ' +
-    'cannot be counted here. Repeat with verbosity=verbose if you need the count.';
+    'cannot be counted here. Repeat with verbosity=verbose if you need the count. [BUILD-011]';
 
   { E0017 sobre <job>.wait.exe = el vigia de un remote-run anterior sigue
     vivo porque su programa sigue corriendo en el target. El deploy borra
@@ -916,24 +916,24 @@ const
     'command=kill name=%s project=%s job=%s) and deploy again. Careful: ' +
     'this failed deploy may already have deleted the job''s .pid on the ' +
     'target; if kill then answers "no job alive", close the program on the ' +
-    'target by hand (delphi_desktop) before deploying.';
+    'target by hand (delphi_desktop) before deploying. [BUILD-012]';
 
   SN_BUILD_DEPLOY_EMPTY_ENTRY =
     'The deployment manifest has an entry with an EMPTY local file for this ' +
     'platform (msbuild: Local file "" not found, skipped). Open it with ' +
-    'delphi_config command=view (deployFiles) and fix or remove that entry.';
+    'delphi_config command=view (deployFiles) and fix or remove that entry. [BUILD-013]';
 
   SN_BUILD_MANIFEST_FILLED_FMT =
     'The project''s .deployproj had NO files for %s (the IDE writes an empty ' +
     'group for a platform it never deployed): the project output was added ' +
     'for Debug and Release, like the IDE''s Deployment Manager would. Extra ' +
-    'files (a component''s .so) go in with delphi_config add-deployfile.';
+    'files (a component''s .so) go in with delphi_config add-deployfile. [BUILD-014]';
 
   SR_BUILD_CONFIG_FMT =
     'RECHAZADO: la configuracion "%s" lleva caracteres que el shell del ' +
     'build interpretaria. Una configuracion es un nombre simple (letras, ' +
     'digitos, espacio, ".", "_" y "-"): Debug, Release, o la que declare tu ' +
-    'proyecto. Mira las declaradas con delphi_config command=view.';
+    'proyecto. Mira las declaradas con delphi_config command=view. [BUILD-015 DENIED]';
 
   // delphi_delete/delphi_move park their target in a trash folder created
   // NEXT TO it. For a ROOT that folder lands in the root's PARENT - a write
@@ -965,18 +965,18 @@ const
     'query and fetch work there exactly like in your roots; every write, ' +
     'build, test, move and delete is refused. They are there to learn how ' +
     'things are done in this house, and they win over roots: a folder in ' +
-    'both is read-only. delphi_projects lists them with readOnly:true.';
+    'both is read-only. delphi_projects lists them with readOnly:true. [WS-003]';
 
   SR_JAIL_FMT =
     'RECHAZADO: "%s" esta FUERA de los workspaces permitidos. Este servidor ' +
     'solo opera dentro de: %s (configurado en DELPHI_MCP_ROOTS o ' +
-    'settings.ini [Workspace.<nombre>] Roots).';
+    'settings.ini [Workspace.<nombre>] Roots). [GUARD-002 DENIED]';
 
   SR_ROOTS_INVALID =
     'RECHAZADO: [Workspace.<nombre>] Roots esta configurado pero ninguna ' +
     'de sus ' +
     'rutas es valida (comillas de mas, unidad inexistente...). Por seguridad ' +
-    'se rechaza todo hasta corregir settings.ini / DELPHI_MCP_ROOTS.';
+    'se rechaza todo hasta corregir settings.ini / DELPHI_MCP_ROOTS. [WS-004 DENIED]';
 
   // An unserved "srvz:" used to be expanded to the REAL "Z:\", so the
   // rejection echoed a drive letter of the host - and the outbound mask only
@@ -987,7 +987,7 @@ const
   SR_UNIT_UNKNOWN_FMT =
     'RECHAZADO: "%s" no es una unidad de este servidor. Las unidades ' +
     'validas son: %s. Pide las rutas con delphi_workspace y usalas tal ' +
-    'como te las devuelve el servidor.';
+    'como te las devuelve el servidor. [CFG-006 DENIED]';
 
   // This is a pure DEVELOPMENT/COMPILE server: nothing runs on it except a
   // test project (AllowTests). Running a compiled artifact belongs on a real
@@ -1008,7 +1008,7 @@ const
   SR_BUILD_NOT_A_PROJECT_FMT =
     'error: "%s" no es un proyecto Delphi. delphi_build compila un .dproj. ' +
     'Localiza el del proyecto con delphi_projects, o mira los de una carpeta ' +
-    'con delphi_list.';
+    'con delphi_list. [BUILD-016 INVALID_PARAM]';
 
   SR_BUILD_HAZARD_FMT =
     'RECHAZADO: el proyecto contiene %s. Este servidor solo COMPILA, nunca ' +
@@ -1017,13 +1017,13 @@ const
     'imprime un mensaje o fija una propiedad SI se admite; un evento pre/post ' +
     'build de firma o copia tampoco rechaza: se compila sin ejecutarlo y se ' +
     'dice). Para que un proyecto de confianza ejecute de verdad sus tareas, el ' +
-    'operador lo habilita con [Workspace.<nombre>] AllowBuildScripts=1.';
+    'operador lo habilita con [Workspace.<nombre>] AllowBuildScripts=1. [BUILD-017 DENIED]';
   SN_BUILD_EVENTS_SKIPPED =
     'Compilado SIN ejecutar los eventos pre/post build del proyecto (firma, ' +
     'copias, EurekaLog...): este servidor solo compila. El binario vale para ' +
     'probar y ejecutar mientras trabajas; la version final, con firma, la ' +
     'compila el operador fuera de este servidor, donde esos eventos corren. ' +
-    'Con AllowBuildScripts=1 en el workspace se ejecutarian.';
+    'Con AllowBuildScripts=1 en el workspace se ejecutarian. [BUILD-018]';
 
   SR_BUILD_RESERVED_PROP_FMT =
     'RECHAZADO: el proyecto (o algo que importa) define %s, una propiedad ' +
@@ -1036,7 +1036,7 @@ const
     'compila, nunca ejecuta: quita esa propiedad del proyecto y de lo que ' +
     'importa (delphi_config no la escribe). Para que un proyecto de ' +
     'confianza ejecute de verdad sus tareas, el operador lo habilita con ' +
-    '[Workspace.<nombre>] AllowBuildScripts=1.';
+    '[Workspace.<nombre>] AllowBuildScripts=1. [BUILD-019 DENIED]';
 
   // ---------------------------------------------------------------------
   // vault_* (knowledge vault: Markdown notes linked with [[wikilinks]])
@@ -1105,7 +1105,7 @@ const
     'su context.md y su progress.md; (3) el resto de notas, solo bajo demanda ' +
     'cuando el indice indique que aplican (carga perezosa - nunca leas el ' +
     'vault en masa). Si el vault permite escritura, lee antes ' +
-    'AGENTS-VAULT-WRITE.md y respeta el idioma del vault.';
+    'AGENTS-VAULT-WRITE.md y respeta el idioma del vault. [VAULT-001]';
 
   SD_VAULT_PROMPT =
     'Carga el arranque del vault de conocimiento: sus reglas y el indice de ' +
@@ -1143,18 +1143,18 @@ const
     'RECHAZADO: esa ruta pertenece al VAULT DE CONOCIMIENTO, que no se toca ' +
     'con las tools de codigo. Usa vault_read / vault_search para consultarlo ' +
     '(y vault_append / vault_create / vault_patch si este servidor permite ' +
-    'escribir en el): asi queda copia de seguridad y se respetan sus reglas.';
+    'escribir en el): asi queda copia de seguridad y se respetan sus reglas. [VAULT-002 DENIED]';
 
   SR_VAULT_WOULD_EMPTY =
     'RECHAZADO: esa sustitucion dejaria la nota VACIA, y borrar conocimiento ' +
     'no es una operacion de este servidor (no hay delete ni reescritura ' +
     'total por diseno). Si de verdad hay que retirar la nota, diselo al ' +
-    'usuario y que lo haga una persona.';
+    'usuario y que lo haga una persona. [VAULT-003 DENIED]';
 
   SR_VAULT_JAIL =
     'RECHAZADO: esa ruta sale del vault. Usa una ruta RELATIVA dentro del ' +
     'vault (projects/x/context.md): sin unidades, sin rutas absolutas y sin ' +
-    '"..". Localiza notas con vault_search target=files.';
+    '"..". Localiza notas con vault_search target=files. [VAULT-004 DENIED]';
 
   SR_VAULT_MORE_FMT =
     #10'--- Mostradas las lineas %d..%d de %d. Pide el resto con ' +
@@ -1163,14 +1163,14 @@ const
   SR_VAULT_TARGET_FMT =
     'error: target="%s" no existe. Solo hay dos: files (busca en los NOMBRES ' +
     'de las notas, con glob: *.md, *delphi*) y content (busca DENTRO del ' +
-    'texto, con expresion regular). Por defecto, files.';
+    'texto, con expresion regular). Por defecto, files. [VAULT-005 NOT_FOUND]';
 
   SR_VAULT_SHOWN_FMT =
     #10'--- Mostradas las lineas %d..%d de %d (hasta el final).';
 
   SR_VAULT_PAST_END_FMT =
     'error: offset %d mas alla del final: "%s" tiene %d lineas. Pide desde ' +
-    'offset=1 o desde una linea que exista.';
+    'offset=1 o desde una linea que exista. [VAULT-006 INVALID_PARAM]';
 
   SN_VAULT_BOOTSTRAP =
     '# Arranque del vault: las reglas (AGENTS-VAULT.md) y el indice ' +
@@ -1183,7 +1183,7 @@ const
   // file - and it mirrors how the vault is read locally, one file per read.
   SN_VAULT_BOOTSTRAP_NEXT_FMT =
     #10'--- Falta %s (no cabe junto con lo anterior en una sola respuesta). ' +
-    'Pidelo entero con vault_read {path: "%s"}.';
+    'Pidelo entero con vault_read {path: "%s"}. [VAULT-007]';
 
   // Decia "en este servidor ([Vault] ReadOnly=1)" y otra vez las dos mitades
   // estaban caducadas: el ajuste es del WORKSPACE y la clave se llama
@@ -1193,7 +1193,7 @@ const
     'RECHAZADO: el vault de TU workspace esta en SOLO LECTURA ' +
     '(VaultReadOnly=1 en su seccion [Workspace.<nombre>] del settings.ini ' +
     'del servidor). Puedes consultarlo con vault_read y vault_search; si ' +
-    'necesitas escribir en el, pidelo con delphi_report.';
+    'necesitas escribir en el, pidelo con delphi_report. [VAULT-008 DENIED]';
 
   SR_VAULT_GOVERNANCE =
     'RECHAZADO: AGENTS-VAULT.md, AGENTS-VAULT-WRITE.md y MEMORY.md son los ' +
@@ -1201,7 +1201,7 @@ const
     'con supervision humana. Puedes leerlos (vault_read sin path). Si hace ' +
     'falta indexar una nota nueva, dilo en tu respuesta o mandalo en un ' +
     'delphi_report para que lo haga una persona; tu nota creada vale ' +
-    'igualmente aunque aun no este en el indice.';
+    'igualmente aunque aun no este en el indice. [VAULT-009 DENIED]';
 
 
   // ---------------------------------------------------------------------
@@ -1303,7 +1303,7 @@ const
   SR_PASERVER_CMD =
     'error: command debe ser platforms | packages | profiles | reseat | ' +
     'add-profile | remove-profile | test-connection | get-sdk | ' +
-    'reseat-sdk | remove-sdk | remote-run | kill | output';
+    'reseat-sdk | remove-sdk | remote-run | kill | output [PAS-001 INVALID_PARAM]';
   { Lo que significa un salto de linea al FINAL de "new", dicho igual en
     delphi_edit y delphi_textedit (LineasDeNew, Lsp.Patch). }
   SP_NEW_SALTO_FINAL =
@@ -1318,33 +1318,33 @@ const
   SR_PASERVER_JOB_NEEDS_FMT =
     'RECHAZADO: %s necesita "name" (el perfil), "project" (el .dproj de ' +
     'ese remote-run) y "job" (el jobId que devolvio). Solo se toca un ' +
-    'trabajo que este servidor arranco para ese proyecto en esa maquina.';
+    'trabajo que este servidor arranco para ese proyecto en esa maquina. [PAS-002 DENIED]';
   SR_REMOTERUN_BADJOB =
     'RECHAZADO: "job" no es un id de trabajo de este servidor (fecha-hora-' +
-    'fragmento, como lo devuelve remote-run).';
+    'fragmento, como lo devuelve remote-run). [RUN-001 DENIED]';
   SN_REMOTERUN_KILL_FMT =
     'Si se ha quedado colgado o ya no lo necesitas: delphi_paserver ' +
     'command=kill name=%s project=<el mismo .dproj> job=%s. Solo mata ese ' +
-    'trabajo: nada mas de esa maquina.';
+    'trabajo: nada mas de esa maquina. [RUN-002]';
   SN_REMOTERUN_KILL_NOTE =
     'kill mata SOLO el programa que ese trabajo arranco (el lanzador lee el ' +
     '<job>.pid que dejo su vigia, en la carpeta de ESE proyecto): con ' +
     'killed=false y "ya termino" no habia nada que matar. El ___RC del ' +
     'trabajo matado lo escribe su vigia en su propia salida: la lees con ' +
-    'command=output y el mismo job.';
+    'command=output y el mismo job. [RUN-003]';
   SN_REMOTERUN_OUTPUT_FMT =
     'Lo que escriba desde ahora -un error al cerrar, su codigo de salida- ' +
     'lo lees con delphi_paserver command=output name=%s project=<el mismo ' +
     '.dproj> job=%s: mientras vive, lo que lleve; al terminar, todo y su ' +
-    'codigo, y entonces se borra del target.';
+    'codigo, y entonces se borra del target. [RUN-004]';
   SN_REMOTERUN_OUTPUT_ALIVE_FMT =
     'Sigue vivo: esto es lo que lleva escrito. Pidelo otra vez cuando ' +
     'quieras; al terminar trae todo y su codigo de salida, y entonces se ' +
     'borra del target. Para pararlo: command=kill name=%s project=<el ' +
-    'mismo .dproj> job=%s.';
+    'mismo .dproj> job=%s. [RUN-005]';
   SN_REMOTERUN_OUTPUT_DONE =
     'Termino: su salida entera y su codigo de salida. Leida entera, se ha ' +
-    'borrado del target (como el buzon): pedirla otra vez ya no trae nada.';
+    'borrado del target (como el buzon): pedirla otra vez ya no trae nada. [RUN-006]';
   SR_REMOTERUN_NO_OUTPUT_FMT =
     'No hay salida del trabajo %s en el target: o ya se leyo entera (una ' +
     'salida terminada se borra al leerla), o termino antes de que volviera ' +
@@ -1355,7 +1355,7 @@ const
     'RECHAZADO: el proyecto "%s" no esta en la lista de proyectos que este ' +
     'servidor permite ejecutar en un target ' +
     '([Workspace.<nombre>] RemoteRunProjects). ' +
-    'Permitidos: %s.';
+    'Permitidos: %s. [RUN-007 DENIED]';
 
   SR_PASERVER_RUN_DISABLED =
     'RECHAZADO: la ejecucion remota esta APAGADA en este servidor. El ' +
@@ -1364,61 +1364,61 @@ const
     'que hay junto al ejecutable (o la variable DELPHI_MCP_ALLOW_REMOTE_RUN=1) ' +
     'y reinicia el servidor. Ademas, solo se ejecuta el binario que ese ' +
     'proyecto desplego, y solo si el proyecto esta en ' +
-    '[Workspace.<nombre>] RemoteRunProjects.';
+    '[Workspace.<nombre>] RemoteRunProjects. [PAS-003 DENIED]';
 
   SR_PASERVER_RUN_NEEDS =
     'RECHAZADO: remote-run necesita "name" (el perfil PAServer) y "project" ' +
     '(el .dproj cuyo programa desplegado quieres ejecutar). El servidor ' +
     'deriva la ruta en el target: <usuario>-<perfil>/<Proyecto>/<Proyecto>. ' +
-    'No se ejecuta ninguna otra cosa de la maquina remota.';
+    'No se ejecuta ninguna otra cosa de la maquina remota. [PAS-004 DENIED]';
 
   SR_PASERVER_RUN_NOPROJ_FMT =
     'RECHAZADO: no existe el proyecto %s en este servidor. remote-run ' +
-    'ejecuta lo que ese .dproj haya desplegado (delphi_build target=Deploy).';
+    'ejecuta lo que ese .dproj haya desplegado (delphi_build target=Deploy). [PAS-005 NOT_FOUND]';
 
   SR_PASERVER_RUN_EXENAME =
     'RECHAZADO: "exe" es opcional y, si se da, debe ser un NOMBRE de fichero ' +
     'de la carpeta de despliegue de ese proyecto (sin "/", sin "\\" y sin ' +
-    '".."). Por defecto se ejecuta el binario del proyecto.';
+    '".."). Por defecto se ejecuta el binario del proyecto. [PAS-006 DENIED]';
 
   SR_REMOTERUN_NO_PACLIENT =
     'error: ninguna instalacion de RAD Studio de este servidor trae ' +
-    'bin\paclient.exe: sin el no hay transporte a PAServer.';
+    'bin\paclient.exe: sin el no hay transporte a PAServer. [RUN-008 INVALID_PARAM]';
 
   SR_REMOTERUN_NOPROJLIST =
     'RECHAZADO: este workspace no declara RemoteRunProjects, asi que no '
     + 'puede ejecutar NADA en un target (se falla cerrado: lo que no se '
     + 'declara no existe). El operador anade RemoteRunProjects=<proy1>;'
-    + '<proy2> a la seccion de este workspace en el settings.ini.';
+    + '<proy2> a la seccion de este workspace en el settings.ini. [RUN-009 NOT_FOUND]';
 
   SR_REMOTERUN_PUT_FMT =
     'error: no se pudo enviar el trabajo al target (paclient exit %d): %s. ' +
-    'PAServer esta vivo? El perfil apunta al host correcto?';
+    'PAServer esta vivo? El perfil apunta al host correcto? [RUN-010 INVALID_PARAM]';
   SR_REMOTERUN_NO_RUNJOB_FMT =
     'RECHAZADO: falta el lanzador node\%s junto al servidor. PAServer solo ' +
     'arranca un binario sin argumentos: ese lanzador es quien lee el trabajo ' +
     'y ejecuta el programa (viaja en la release, carpeta node: McpRunJob para ' +
-    'un Linux, McpRunJob.exe para un Windows).';
+    'un Linux, McpRunJob.exe para un Windows). [RUN-011 DENIED]';
   SN_REMOTERUN_ENV_WIN_FMT =
     'Windows: el programa corre en la sesion interactiva %s del usuario de ' +
-    'PAServer, con escritorio';
+    'PAServer, con escritorio [RUN-012]';
   SN_REMOTERUN_ENV_WIN0 =
     'Windows: PAServer corre como SERVICIO, en la sesion 0, que no tiene ' +
     'escritorio: un programa con ventana no se vera ni se podra manejar. ' +
-    'Arranca PAServer dentro de la sesion del usuario (desde su escritorio)';
+    'Arranca PAServer dentro de la sesion del usuario (desde su escritorio) [RUN-013]';
   SN_REMOTERUN_ENV_INHERITED =
     'heredado del PAServer: DISPLAY/WAYLAND_DISPLAY ya venian puestos, nada ' +
-    'que anadir';
+    'que anadir [RUN-014]';
   SN_REMOTERUN_ENV_ADDED_FMT =
     'el PAServer del destino corre FUERA de la sesion grafica (un servicio): ' +
     'el guion ha completado %s con los de la sesion abierta, para que un ' +
-    'programa con ventana arranque igual';
+    'programa con ventana arranque igual [RUN-015]';
   SN_REMOTERUN_ENV_NONE =
     'sin sesion grafica en el destino: ni DISPLAY ni WAYLAND_DISPLAY, y no ' +
     'hay socket de X ni de Wayland del usuario del PAServer. Un programa de ' +
     'consola corre igual; uno con ventana morira al arrancar (GTK, exit 134). ' +
     'Hace falta una sesion abierta en el destino con el MISMO usuario que ' +
-    'corre PAServer';
+    'corre PAServer [RUN-016]';
   SR_REMOTERUN_TIMEOUT_FMT =
     'el programa SIGUE CORRIENDO en el target: no habia terminado a los %d s ' +
     'y NO se le mata, porque una aplicacion con ventana esta para quedarse. ' +
@@ -1435,16 +1435,16 @@ const
     'extension). exitCode/output vienen del programa. Si aparece ' +
     'stillRunning=true, no termino a tiempo y sigue vivo: "output" trae su ' +
     'salida PARCIAL, y el resto -hasta su codigo de salida- se lee despues ' +
-    'con command=output.';
+    'con command=output. [RUN-017]';
 
   SR_SHELL_META_FMT =
     'RECHAZADO: el argumento contiene "%s", un metacaracter de shell que ' +
-    'romperia la linea de comandos. Quitalo.';
+    'romperia la linea de comandos. Quitalo. [SYS-003 DENIED]';
 
   SR_PASERVER_SDK_PLATFORM_FMT =
     'RECHAZADO: get-sdk cubre hoy la plataforma Linux64 y el perfil "%s" es ' +
     'de %s. Para otras plataformas (macOS necesita un Mac real con PAServer) ' +
-    'reportalo con delphi_report: es la senal para construirlas.';
+    'reportalo con delphi_report: es la senal para construirlas. [PAS-007 DENIED]';
 
   SR_PASERVER_SDK_PULL_FMT =
     'error: fallo el pull del SDK en "%s" (paclient exit %d): %s -- El ' +
@@ -1455,50 +1455,50 @@ const
   SR_CONFIG_SDK_PLATFORM_FMT =
     'RECHAZADO: "%s" no es una plataforma Delphi valida. Validas: Win32, ' +
     'Win64, Win64x, WinARM64EC, OSX64, OSXARM64, Linux64, Android, Android64, ' +
-    'iOSDevice64, iOSSimARM64.';
+    'iOSDevice64, iOSSimARM64. [CFG-007 DENIED]';
 
   { add-platform con sdk/profile es UN gesto: si una parte se rechaza, el
     .dproj vuelve como estaba (Mcp.Tools.Config). }
   SN_CONFIG_ADDPLATFORM_NADA =
     'Nada escrito: la plataforma TAMPOCO se ha anadido (plataforma, SDK y ' +
-    'perfil van en un solo gesto; corrige y repitelo entero).';
+    'perfil van en un solo gesto; corrige y repitelo entero). [CFG-008]';
   SR_CONFIG_SDK_NOEXISTE_FMT =
     'RECHAZADO: no hay ningun SDK llamado "%s". Registrados para %s: %s. Se ' +
     'traen con delphi_paserver command=get-sdk (uno por maquina destino, cada ' +
-    'uno en su carpeta).';
+    'uno en su carpeta). [CFG-009 DENIED]';
 
   SN_CONFIG_SDK_PUESTO_FMT =
     'El proyecto compilara %s con el SDK %s (antes: %s). Es la propiedad ' +
     'PlatformSDK, la misma que pone el IDE en Project Options, asi que vale ' +
     'para delphi_build y para compilar desde el IDE. Copia previa del .dproj ' +
-    'en __delphi-patch.';
+    'en __delphi-patch. [CFG-010]';
 
   SN_CONFIG_SDK_QUITADO_FMT =
     'El proyecto ya no fija SDK para %s (antes: %s): volvera a usar el que el ' +
-    'SDK Manager tenga por defecto para esa plataforma. Registrados: %s.';
+    'SDK Manager tenga por defecto para esa plataforma. Registrados: %s. [CFG-011]';
 
   SR_BUILD_SDK_NOEXISTE_FMT =
     'RECHAZADO: no tengo ningun SDK llamado "%s". Registrados para esta ' +
     'plataforma: %s. Se traen con delphi_paserver command=get-sdk (uno por ' +
-    'maquina destino, cada uno en su carpeta).';
+    'maquina destino, cada uno en su carpeta). [BUILD-020 DENIED]';
 
   SR_BUILD_SDK_VARIOS_FMT =
     'RECHAZADO: hay VARIOS SDK de %s y nadie dice cual usar: %s. No elijo yo ' +
     '- enlazar con el sysroot equivocado da un binario que muere en el ' +
     'destino con "GLIBC_2.xx not found". Pasa sdk=<nombre> en esta llamada, o ' +
-    'fijalo en el proyecto (PlatformSDK) para no repetirlo nunca mas.';
+    'fijalo en el proyecto (PlatformSDK) para no repetirlo nunca mas. [BUILD-021 DENIED]';
 
   SN_BUILD_SDK_PROYECTO_FMT =
-    'El SDK lo manda el proyecto (PlatformSDK=%s); no lo he tocado.';
+    'El SDK lo manda el proyecto (PlatformSDK=%s); no lo he tocado. [BUILD-022]';
 
   SN_BUILD_SDK_DEFAULT_FMT =
     'He compilado con %s, que es el SDK por defecto de esta plataforma en el ' +
     'SDK Manager del IDE. Hay mas de uno (%s): para otro, pasa sdk=<nombre> ' +
-    'o fijalo en el proyecto (PlatformSDK) y no habra que repetirlo.';
+    'o fijalo en el proyecto (PlatformSDK) y no habra que repetirlo. [BUILD-023]';
 
   SN_BUILD_SDK_ELEGIDO_FMT =
     'He compilado con %s. Hay mas de uno registrado (%s): si este no es el ' +
-    'que querias, pasa sdk=<nombre> o fijalo en el proyecto.';
+    'que querias, pasa sdk=<nombre> o fijalo en el proyecto. [BUILD-024]';
 
   SN_BUILD_SDK_MEZCLA_FMT =
     'AVISO: el SDK %s apunta a un sysroot con DOS distros dentro (%s): tiene ' +
@@ -1506,7 +1506,7 @@ const
     'libc.so.6 y dos arboles de gcc, y las rutas de ambos van al linker. Lo ' +
     'que salga de aqui compila, pero contra una mezcla que nadie eligio. ' +
     'Vuelve a traerte el SDK con delphi_paserver command=get-sdk (ahora cada ' +
-    'maquina va a su propia carpeta).';
+    'maquina va a su propia carpeta). [BUILD-025]';
 
   SP_PASERVER_SDK =
     'get-sdk optional: the NAME of the SDK to write (a folder of its own, ' +
@@ -1524,40 +1524,40 @@ const
 
   SR_PASERVER_SDK_NOFILE_FMT =
     'RECHAZADO: no tengo ningun SDK llamado "%s" (delphi_paserver ' +
-    'command=profiles los lista). Se traen con command=get-sdk.';
+    'command=profiles los lista). Se traen con command=get-sdk. [PAS-008 DENIED]';
 
   SN_PASERVER_SDK_REMOVED =
     'Quitado de en medio: su fichero .sdk y su asiento del SDK Manager (el ' +
     'IDE deja de listarlo en su proximo arranque). El SYSROOT sigue EN DISCO ' +
     'y son gigas: la ruta va en "sysrootLeftBehind" y la borras tu cuando ' +
-    'quieras. Borrar carpetas asi no es cosa de una tool.';
+    'quieras. Borrar carpetas asi no es cosa de una tool. [PAS-009]';
 
   SN_PASERVER_SDK_RESEAT =
     'Asientos del SDK Manager reescritos desde los SDK que ya estaban en ' +
     'disco - sin red y sin volver a bajarse nada. El IDE lee esa lista al ' +
     'ARRANCAR, asi que los vera en su proximo inicio. Si sigues sin verlos, ' +
     'el servidor que escribio el asiento no era el que arrancaste tu: ' +
-    'relanzalo desde tu sesion y repite.';
+    'relanzalo desde tu sesion y repite. [PAS-010]';
 
   SR_PASERVER_SDK_OTRA_FMT =
     'RECHAZADO: el SDK "%s" ya existe y es de %s; este perfil es de %s. NO lo ' +
     'superpongo: dos distros en la misma carpeta dejan dos libc y dos arboles ' +
     'de gcc, y el linker acaba mezclandolos sin avisar. Lanza get-sdk sin ' +
-    '"sdk" (se llamara %s) o dame otro nombre.';
+    '"sdk" (se llamara %s) o dame otro nombre. [PAS-011 DENIED]';
 
   SN_PASERVER_SDK_GENERIC_FMT =
     'Este sysroot trae glibc %s. La regla para tener UN SOLO SDK que sirva ' +
     'para todos tus Linux: compila SIEMPRE con la glibc mas VIEJA de tu ' +
     'parque - un binario enlazado con una glibc vieja corre en las nuevas, y ' +
     'al reves muere con "GLIBC_2.xx not found". delphi_paserver ' +
-    'command=profiles lista la glibc de cada SDK que tengas.';
+    'command=profiles lista la glibc de cada SDK que tengas. [PAS-012]';
 
   SN_PASERVER_SDK_MEZCLA_FMT =
     'AVISO: %s tiene DENTRO dos distros (el arbol de Debian/Ubuntu y el de ' +
     'Red Hat/Fedora a la vez), asi que lleva dos libc.so.6 y dos arboles de ' +
     'gcc, y las rutas de ambos van al linker. Viene de cuando get-sdk volcaba ' +
     'todos los targets en una sola carpeta. Bajalos otra vez (ahora cada uno ' +
-    'va a la suya) y borra esta a mano cuando no te haga falta.';
+    'va a la suya) y borra esta a mano cuando no te haga falta. [PAS-013]';
 
   SN_PASERVER_SDK_OK =
     'SDK provisioned: the target libraries now live on this server, in a ' +
@@ -1566,83 +1566,83 @@ const
     'one folder per SDK, and the project says which one it builds with ' +
     '(delphi_build sdk=<name>, or the project''s own PlatformSDK). Note: C++ ' +
     'headers are NOT pulled (this server links Delphi); re-run get-sdk after ' +
-    'OS/toolchain upgrades on the target.';
+    'OS/toolchain upgrades on the target. [PAS-014]';
 
   SR_PASERVER_NAME_FMT =
     'RECHAZADO: "%s" no vale como nombre de perfil. Usa letras, digitos, ' +
     '"_" o "-" (max 64): el nombre se convierte en un fichero ' +
-    '<nombre>.profile en el servidor.';
+    '<nombre>.profile en el servidor. [PAS-015 DENIED]';
 
   SR_PASERVER_HOST_FMT =
     'RECHAZADO: "%s" no vale como host. Usa un hostname o una IP (letras, ' +
-    'digitos, ".", "-" y ":" para IPv6), sin espacios ni comillas.';
+    'digitos, ".", "-" y ":" para IPv6), sin espacios ni comillas. [PAS-016 DENIED]';
 
   SR_PASERVER_PORT_FMT =
     'RECHAZADO: "%s" no es un puerto valido (1-65535). El PAServer escucha ' +
-    'por defecto en el 64211.';
+    'por defecto en el 64211. [PAS-017 DENIED]';
 
   SR_PASERVER_PLATFORM_FMT =
     'RECHAZADO: "%s" no es una plataforma de paclient. Validas: Win32, ' +
-    'Win64, WinARM64EC, OSX64, Linux64.';
+    'Win64, WinARM64EC, OSX64, Linux64. [PAS-018 DENIED]';
 
   SR_PASERVER_PASSWORD =
     'RECHAZADO: la password lleva comillas dobles o caracteres de control, ' +
     'que romperian la linea de comandos de paclient. Configura en el ' +
-    'PAServer una password sin esos caracteres y vuelve a llamar.';
+    'PAServer una password sin esos caracteres y vuelve a llamar. [PAS-019 DENIED]';
 
   SR_PASERVER_NO_PACLIENT =
     'error: ninguna instalacion de RAD Studio de este servidor trae ' +
-    'bin\paclient.exe, necesario para gestionar perfiles PAServer.';
+    'bin\paclient.exe, necesario para gestionar perfiles PAServer. [PAS-020 INVALID_PARAM]';
 
   SR_PASERVER_NEED_FMT =
     'RECHAZADO: add-profile necesita "%s". Parametros: name (nombre del ' +
     'perfil), host (IP o hostname del PAServer), password (la del ' +
     'PAServer); opcionales port (default 64211) y platform (default ' +
-    'Linux64).';
+    'Linux64). [PAS-021 DENIED]';
 
   SR_PASERVER_NO_PROFILE_FMT =
     'RECHAZADO: no existe el perfil "%s". Lista los registrados con ' +
     'command=profiles, o crea uno con command=add-profile (name, host, ' +
     'password; opcionales port y platform). Para saber solo si HAY RUTA ' +
     'hasta tu PAServer, llama a test-connection con host y port SIN name ' +
-    '(sondeo TCP, sin credenciales).';
+    '(sondeo TCP, sin credenciales). [PAS-022 NOT_FOUND]';
 
   SN_PASERVER_PROFILE_OK =
     'Profile stored with the password encrypted inside, and REGISTERED in ' +
     'the IDE too (its Connection Profile Manager reads the registry, not ' +
     'the .profile folder - measured 2026-09-19). Verify the link with ' +
     'command=test-connection, then delphi_build with this platform builds ' +
-    'against the target PAServer.';
+    'against the target PAServer. [PAS-023]';
   SR_PASERVER_PROFILE_EXISTS_FMT =
     'RECHAZADO: ya existe un perfil "%s" (apunta a %s). Una credencial no ' +
     'se machaca en silencio: usalo tal cual (test-connection name=%0:s) o ' +
-    'retiralo antes con command=remove-profile.';
+    'retiralo antes con command=remove-profile. [PAS-024 DENIED]';
   SN_PASERVER_DUP_HOST_FMT =
     'ojo: el perfil "%s" ya apunta a ese mismo host y puerto - valora ' +
-    'reutilizarlo en vez de duplicar perfiles.';
+    'reutilizarlo en vez de duplicar perfiles. [PAS-025]';
 
   SN_PASERVER_CONNECTED =
     'PAServer alive and credentials accepted. delphi_build can now target ' +
-    'this platform through the profile.';
+    'this platform through the profile. [PAS-026]';
 
   SN_PASERVER_TCP_OK =
     'TCP route open: this server reaches that host:port. This only proves ' +
     'the route - the full PAServer handshake with credentials is ' +
-    'test-connection with a profile name (add-profile first).';
+    'test-connection with a profile name (add-profile first). [PAS-027]';
 
   SN_PASERVER_TCP_FAIL =
     'No TCP route from this server to that host:port. Check, in order: the ' +
     'PAServer is running and listening there; if the target is a container ' +
     'or behind NAT, the port is published/forwarded on the reachable host ' +
     '(and then use THAT host ip here); firewalls on both sides allow the ' +
-    'port.';
+    'port. [PAS-028]';
 
   // ---------------------------------------------------------------------
   // delphi_adb (Android devices hanging off THIS server's machine/network)
   // ---------------------------------------------------------------------
   SR_FETCHTARGET_BADPATH =
     'RECHAZADO: el fichero a traer se nombra RELATIVO a la carpeta que el ' +
-    'proyecto desplego (p.ej. "captura.png"). Nada de rutas absolutas ni "..".';
+    'proyecto desplego (p.ej. "captura.png"). Nada de rutas absolutas ni "..". [FETCH-001 DENIED]';
   SR_FETCHTARGET_FAIL_FMT =
     'no pude traer el fichero del target (paclient %d): %s';
   SR_FETCHTARGET_NOFILE_FMT =
@@ -1719,7 +1719,7 @@ const
     'that order and released in reverse, one gesture. Works on both targets.';
   SR_ADBLINUX_MODIFIERS_BAD_FMT =
     'RECHAZADO: modifiers no conoce "%s": vale ctrl, shift, alt y super ' +
-    '(separados por comas).';
+    '(separados por comas). [DESK-001 DENIED]';
   SP_ADBLINUX_CODE =
     'key. Linux target: the Linux key code (evdev), NOT an X11 keycode: ' +
     'Escape 1, Tab 15, Enter 28, left Alt 56, Super 125. Windows target: the ' +
@@ -1738,7 +1738,7 @@ const
     'With x,y it presses there first to focus the field.';
   SR_ADBLINUX_NEEDTEXT =
     'RECHAZADO: type necesita "text". Si ademas pasas x e y, pulsa ahi antes ' +
-    'de escribir: es el gesto real, "escribe esto aqui", y arranca una sola vez.';
+    'de escribir: es el gesto real, "escribe esto aqui", y arranca una sola vez. [DESK-002 DENIED]';
   SR_ADBLINUX_NONODE =
     'delphi_desktop: ni "project" ni nodo empaquetado para ese sistema. O el ' +
     'operador deja el nodo junto al servidor (node\McpDesktopNode para un ' +
@@ -1783,7 +1783,7 @@ const
     'frame (below): the server converts - never divide or add yourself. Its ' +
     'temp file was consumed: need it again, take another screenshot; ' +
     'inline=false gives file + download instead; a capture with out= is ' +
-    'yours and stays.';
+    'yours and stays. [CAPT-001]';
 
   SR_BORRADO_DENEGADO_FMT =
     'NO BORRO "%s": %s. El borrador de arboles solo borra dentro de una ' +
@@ -1795,7 +1795,7 @@ const
     'RECHAZADO: "%s" no se mueve ni se borra entera: es o contiene %s, que ' +
     'este workspace no puede escribir. Mover una carpeta o tirarla a la ' +
     'papelera se lleva TODO lo de dentro. Mueve o borra por separado lo de ' +
-    'dentro que SI es tuyo.';
+    'dentro que SI es tuyo. [MOVE-001 DENIED]';
 
   SN_LUGAR_PROTEGIDO =
     'un sitio protegido (una raiz de workspace, un proyecto de referencia, ' +
@@ -1806,7 +1806,7 @@ const
     'se mueve RENOMBRANDOLA en la misma unidad: entera o nada. Entre ' +
     'unidades habria que copiar y borrar fichero a fichero, que se queda a ' +
     'medias si algo falla y atraviesa los enlaces. Para llevarla alli: ' +
-    'delphi_move copy=true y despues delphi_delete del origen.';
+    'delphi_move copy=true y despues delphi_delete del origen. [MOVE-002 DENIED]';
 
   SN_COPY_LINKS_NOT_FOLLOWED_FMT =
     '  %d enlace(s) NO seguidos al copiar, porque apuntan a algo que este ' +
@@ -1817,7 +1817,7 @@ const
   SN_CAPTURE_OUT_TEMP_HINT =
     'Para una captura no hace falta out: omitelo y la imagen llega en la ' +
     'misma respuesta, sin fichero que recoger ni que acumular. out= es solo ' +
-    'para guardarla en una carpeta TUYA del proyecto.';
+    'para guardarla en una carpeta TUYA del proyecto. [CAPT-002]';
 
   SP_CAPTURE_FRAME =
     'tap/type: the "frame" of the screenshot you MEASURED ON, copied ' +
@@ -1828,16 +1828,16 @@ const
   SN_CAPTURE_FRAME_NOTE =
     'To press something you see in this image: tap (or type) with x,y ' +
     'measured ON THIS IMAGE and frame=<the frame above>, copied as it is. The ' +
-    'server converts scale, crop origin and display for you.';
+    'server converts scale, crop origin and display for you. [CAPT-003]';
 
   SR_CAPTURE_FRAME_BAD_FMT =
     'RECHAZADO: frame "%s" no tiene la forma de las capturas ' +
     '(<ancho>x<alto>@<ancho>x<alto>+<x>+<y>). Copialo TAL CUAL de la respuesta ' +
-    'de la captura sobre la que mediste; no pulse nada.';
+    'de la captura sobre la que mediste; no pulse nada. [CAPT-004 DENIED]';
 
   SR_CAPTURE_FRAME_OUT_FMT =
     'RECHAZADO: (%s,%s) cae fuera de la imagen de ese frame (%dx%d). Mide ' +
-    'sobre la imagen que trajo ese frame, o pide otra captura; no pulse nada.';
+    'sobre la imagen que trajo ese frame, o pide otra captura; no pulse nada. [CAPT-005 DENIED]';
 
   SP_ADBLINUX_WINDOW =
     'screenshot OPTIONAL: part of a window title; the answer is the capture ' +
@@ -1847,26 +1847,26 @@ const
     'On Linux the list holds the X11/Xwayland windows (every FMX ' +
     'application); a native Wayland window has no rectangle: use region.';
   SR_ADBLINUX_REGION_OR_WINDOW =
-    'RECHAZADO: region y window no se combinan: o un rectangulo o una ventana.';
+    'RECHAZADO: region y window no se combinan: o un rectangulo o una ventana. [DESK-003 DENIED]';
   SR_ADBLINUX_CROP_ONLY_SHOT =
     'RECHAZADO: region y window solo valen con command=screenshot (los gestos ' +
-    'siguen siendo sobre el escritorio entero).';
+    'siguen siendo sobre el escritorio entero). [DESK-004 DENIED]';
   SR_ADBLINUX_REGION_BAD =
     'RECHAZADO: region tiene que ser "x,y,w,h" con cuatro enteros y w,h > 0, ' +
-    'en pixeles de la captura del escritorio.';
+    'en pixeles de la captura del escritorio. [DESK-005 DENIED]';
   { La lista de ventanas viaja con cada captura (24-sep-2026): estas notas
     dicen que contiene en cada sistema, y en Linux como leer la vista que
     abre command=overview. }
   SN_DESKTOP_WINDOWS_WIN =
     'windows: todas las ventanas visibles de primer nivel, titulo y ' +
     'rectangulo en pixeles de ESTA captura (tap dentro de una). Para ' +
-    'recortar a una: screenshot window=<trozo de su titulo>.';
+    'recortar a una: screenshot window=<trozo de su titulo>. [DESK-006]';
   SN_DESKTOP_WINDOWS_LINUX =
     'windows: las ventanas X11/Xwayland -toda aplicacion FMX es una-, titulo ' +
     'y rectangulo en pixeles de ESTA captura. Las ventanas nativas Wayland ' +
     '(la terminal, Archivos, un navegador) NO salen en la lista aunque la ' +
     'captura las muestre: para esas, mira la imagen y usa region. Para ' +
-    'recortar a una de la lista: screenshot window=<trozo de su titulo>.';
+    'recortar a una de la lista: screenshot window=<trozo de su titulo>. [DESK-007]';
   SN_DESKTOP_OVERVIEW_LINUX =
     'Esta captura se tomo 0,8 s despues de pulsar Super: es la VISTA DE ' +
     'ACTIVIDADES, con cada ventana dibujada REDUCIDA y el icono de su ' +
@@ -1875,7 +1875,7 @@ const
     'vista, o key code=1 (Escape) para cerrarla sin elegir. La lista ' +
     '"windows" de esta respuesta trae las posiciones REALES de las ventanas ' +
     '(las de X11), no donde las dibuja la vista: para pulsar una aqui, mide ' +
-    'sobre la imagen.';
+    'sobre la imagen. [DESK-008]';
   SR_ADBLINUX_WINDOW_NOMATCH_FMT =
     'ninguna ventana visible lleva "%s" en el titulo: mira "windows" en esta ' +
     'misma respuesta y repite con un trozo de uno de esos titulos.';
@@ -1883,7 +1883,7 @@ const
     'RECORTE del escritorio: pasa a tap los x,y medidos en ESTA imagen con su ' +
     'frame y el servidor suma el origen; sin frame, tap x=(%d + tu x) y=(%d + ' +
     'tu y). Ante la duda (un dialogo que ' +
-    'haya salido fuera), captura el escritorio entero. Bajala con delphi_fetch';
+    'haya salido fuera), captura el escritorio entero. Bajala con delphi_fetch [DESK-009]';
   { Dos textos que sobrevivieron a delphi_desktop LOCAL (retirada en 1.0.16):
     los usa la tool por perfil cuando el destino es un Windows. }
   SD_DESKTOP_LOCKED =
@@ -1893,19 +1893,19 @@ const
   SR_DESKTOP_NEEDCODE =
     'RECHAZADO: el destino es Windows y key necesita "code" con el NOMBRE de ' +
     'la tecla: escape, enter, tab, space, backspace, delete, home, end, up, ' +
-    'down, left, right, super, alt, ctrl, shift o f1..f12.';
+    'down, left, right, super, alt, ctrl, shift o f1..f12. [DESK-010 DENIED]';
 
   SR_ADBLINUX_CMD =
-    'RECHAZADO: command debe ser screenshot, tap, type, key, overview o status.';
+    'RECHAZADO: command debe ser screenshot, tap, type, key, overview o status. [DESK-011 DENIED]';
   SR_ADBLINUX_NEEDPROFILE =
     'RECHAZADO: falta "profile", el perfil PAServer de la maquina cuyo ' +
-    'escritorio quieres (delphi_paserver command=profiles los lista).';
+    'escritorio quieres (delphi_paserver command=profiles los lista). [DESK-012 DENIED]';
   SR_ADBLINUX_NEEDXY =
     'RECHAZADO: tap necesita x e y, medidos sobre la captura que devuelve ' +
-    'command=screenshot.';
+    'command=screenshot. [DESK-013 DENIED]';
   SR_ADBLINUX_NEEDCODE =
     'RECHAZADO: key necesita "code", el codigo Linux de la tecla (Escape 1, ' +
-    'Tab 15, Enter 28).';
+    'Tab 15, Enter 28). [DESK-014 DENIED]';
   { Por que una respuesta de delphi_desktop viene SIN captura, cuando toda
     (menos status) la trae en esta misma llamada (Lsp.RemoteRun.
     MotivoSinCaptura). Decia "el nodo no dijo donde dejo la captura": la
@@ -1913,13 +1913,13 @@ const
   SR_DESKTOP_SIN_CAPTURA_FMT = 'no hay captura: %s.';
   SN_DESKTOP_MOTIVO_SIN_SESION =
     'el destino no tiene sesion grafica abierta (graphicalEnv): abre una ' +
-    'con el MISMO usuario que corre PAServer y repite';
+    'con el MISMO usuario que corre PAServer y repite [DESK-015]';
   SN_DESKTOP_MOTIVO_DENEGADA =
     'Windows la deniega: la sesion esta bloqueada, desconectada o sin ' +
-    'escritorio (hint)';
-  SN_DESKTOP_MOTIVO_NODO_FMT = 'el destino no pudo hacerla (%s)';
+    'escritorio (hint) [DESK-016]';
+  SN_DESKTOP_MOTIVO_NODO_FMT = 'el destino no pudo hacerla (%s) [DESK-017]';
   SN_DESKTOP_MOTIVO_NINGUNO =
-    'el nodo no dijo por que; su salida entera va en nodeOutput';
+    'el nodo no dijo por que; su salida entera va en nodeOutput [DESK-018]';
 
   SD_ADB =
     'Android devices for remote development: the phones/tablets hang off ' +
@@ -1996,7 +1996,7 @@ const
 
   SR_ADB_CMD =
     'error: command debe ser discover | devices | connect | disconnect | ' +
-    'install | run | logcat | screenshot | tap | key';
+    'install | run | logcat | screenshot | tap | key [ADB-001 INVALID_PARAM]';
 
   { El "out" de TODA la familia de capturas (delphi_desktop, delphi_adb_linux,
     delphi_adb): una regla y un texto, en CaptureTarget (Lsp.Guard). El
@@ -2005,28 +2005,28 @@ const
   SR_CAPTURE_EXT_FMT =
     'RECHAZADO: la captura es %0:s y "out" nombra un fichero %1:s. Llama al ' +
     'fichero %0:s, o pasa una CARPETA (que ya exista, o acabada en \) y el ' +
-    'nombre lo pongo yo. No escribo una imagen con la extension de otra.';
+    'nombre lo pongo yo. No escribo una imagen con la extension de otra. [CAPT-006 DENIED]';
 
   SR_ADB_NEED_XY =
     'RECHAZADO: tap necesita "x" e "y" (pixeles de pantalla; midelos sobre ' +
-    'un command=screenshot).';
+    'un command=screenshot). [ADB-002 DENIED]';
 
   SR_ADB_XY_FMT =
-    'RECHAZADO: "%s" no vale como coordenada de pantalla (solo digitos).';
+    'RECHAZADO: "%s" no vale como coordenada de pantalla (solo digitos). [ADB-003 DENIED]';
 
   SR_ADB_KEY_FMT =
     'RECHAZADO: "%s" no es una tecla permitida. Usa back | home | enter | ' +
-    'appswitch | wakeup | up | down | left | right | tab.';
+    'appswitch | wakeup | up | down | left | right | tab. [ADB-004 DENIED]';
 
   SR_ADB_ALLOWLIST_FMT =
     'RECHAZADO: el dispositivo "%s" no esta en la lista permitida de este ' +
     'workspace (AdbAllowedDevices= en su seccion del settings.ini; ausente ' +
-    '= ninguno). Fuera de esa lista, nada. El operador la amplia si procede.';
+    '= ninguno). Fuera de esa lista, nada. El operador la amplia si procede. [ADB-005 DENIED]';
 
   SR_ADB_ALLOWLIST_DEVICE =
     'RECHAZADO: los dispositivos van por lista del workspace ' +
     '(AdbAllowedDevices=): indica "device" explicitamente con uno de la ' +
-    'lista (command=devices los enumera).';
+    'lista (command=devices los enumera). [ADB-006 DENIED]';
 
   SN_ADB_GONE =
     'SIN CONEXION CON EL DISPOSITIVO. El adb por wifi se cae solo tras un ' +
@@ -2035,76 +2035,76 @@ const
     'dispositivos el puerto persiste); si no entra, que el developer ' +
     'reactive la depuracion inalambrica en el aparato y busca el puerto ' +
     'nuevo con command=discover (Android 11+ lo aleatoriza al reactivar). ' +
-    'command=devices dice que hay enganchado AHORA MISMO.';
+    'command=devices dice que hay enganchado AHORA MISMO. [ADB-007]';
 
   SR_ADB_OUT_LOG =
-    'RECHAZADO: el "out" de logcat debe terminar en .txt o .log.';
+    'RECHAZADO: el "out" de logcat debe terminar en .txt o .log. [ADB-008 DENIED]';
 
   SN_ADB_LOGFILE =
     'The dump is in this file ON THE SERVER. Read it in ranges with ' +
     'delphi_read (400 lines per call), search it with delphi_search, or ' +
-    'download it to your machine with delphi_fetch.';
+    'download it to your machine with delphi_fetch. [ADB-009]';
 
   SN_ADB_TAIL_FMT =
     '(logcat: %d lineas capturadas; van las %d MAS RECIENTES. Para el ' +
     'volcado completo repite con out=<fichero.txt> y leelo por rangos con ' +
-    'delphi_read, o acota con filter.)';
+    'delphi_read, o acota con filter.) [ADB-010]';
 
   SN_ADB_SCREENSHOT =
     'The device screen is in this PNG on the server - download it with ' +
     'delphi_fetch. Coordinates measured on it are exactly what ' +
     'command=tap takes: the image is the size of the display in force ' +
-    '("display": physical, override and density from wm size / wm density).';
+    '("display": physical, override and density from wm size / wm density). [ADB-011]';
   SN_ADB_TAP_SCALE_FMT =
     'The device screen is in this PNG on the server - download it with ' +
     'delphi_fetch. CAREFUL: the image is %dx%d but the display in force is ' +
     '%dx%d, and command=tap takes DISPLAY pixels: multiply what you measure ' +
     'on the image by tapScale (x by %s, y by %s) before tapping - or simply ' +
-    'pass frame with x,y measured on the image and the server converts.';
+    'pass frame with x,y measured on the image and the server converts. [ADB-012]';
 
   SR_ADB_NEED_APP =
     'RECHAZADO: run necesita "app" (el nombre del paquete instalado, p.ej. ' +
-    'com.embarcadero.MiApp - lo declaran los resultados de build e install).';
+    'com.embarcadero.MiApp - lo declaran los resultados de build e install). [ADB-013 DENIED]';
 
   SR_ADB_APP_FMT =
     'RECHAZADO: "%s" no vale como nombre de paquete Android. Letras, ' +
-    'digitos, ".", "_" y "-" (p.ej. com.embarcadero.MiApp).';
+    'digitos, ".", "_" y "-" (p.ej. com.embarcadero.MiApp). [ADB-014 DENIED]';
 
   SR_ADB_NO_SDK =
     'error: este servidor no tiene un SDK de Android configurado (no hay ' +
     'ningun .sdk con SDKAdbPath). Se instala una vez con el SDK Manager ' +
-    'del IDE; despues esta tool usa su adb.';
+    'del IDE; despues esta tool usa su adb. [ADB-015 INVALID_PARAM]';
 
   SR_ADB_NEED_ADDRESS =
     'RECHAZADO: connect/disconnect necesitan "address" (ip:puerto del ' +
-    'dispositivo con depuracion inalambrica activa, p.ej. 192.168.1.50:5555).';
+    'dispositivo con depuracion inalambrica activa, p.ej. 192.168.1.50:5555). [ADB-016 DENIED]';
 
   SR_ADB_NEED_APK =
     'RECHAZADO: install necesita "apk" (ruta del .apk compilado, dentro del ' +
     'workspace). Compila con delphi_build platform=Android64 target=Deploy ' +
-    '(el resultado declara donde queda el .apk).';
+    '(el resultado declara donde queda el .apk). [ADB-017 DENIED]';
 
   SR_ADB_TARGET_FMT =
     'RECHAZADO: "%s" no vale como direccion o serial de dispositivo. Usa ' +
     'letras, digitos, ".", ":", "_" y "-" (como los que lista ' +
-    'command=devices).';
+    'command=devices). [ADB-018 DENIED]';
 
   SN_ADB_DEVICES =
     'These devices hang off the SERVER machine. Attach one over the ' +
     'network with command=connect address=ip:port. Deploy an app to one: ' +
     'delphi_build platform=Android64 target=Deploy builds the .apk ' +
     '(generating the deployment manifest if the project has none), then ' +
-    'command=install puts it on the device.';
+    'command=install puts it on the device. [ADB-019]';
 
   SN_ADB_DISCOVER =
     'Devices announcing wireless debugging on the server''s network. Take ' +
     'an ip:port and command=connect to it (the device shows an authorize ' +
     'prompt the first time). Nothing here means none is announcing - the ' +
     'device''s wireless-debugging screen must be OPEN, or the developer can ' +
-    'read the ip:port off it and give it to you directly.';
+    'read the ip:port off it and give it to you directly. [ADB-020]';
 
   SR_ADB_LINES_FMT =
-    'RECHAZADO: "%s" no es un numero de lineas valido para logcat (1-5000).';
+    'RECHAZADO: "%s" no es un numero de lineas valido para logcat (1-5000). [ADB-021 DENIED]';
 
   // ---- /files download route + delphi_fetch ----
 
@@ -2126,7 +2126,7 @@ const
     'Desktop capture: it is deleted from the server the moment it has been ' +
     'fetched whole (last chunk served, or one GET on the download link). ' +
     'Nothing is cached or kept: if you need it again, take a new screenshot; ' +
-    'a capture requested with out= is yours and stays.';
+    'a capture requested with out= is yours and stays. [FETCH-002]';
 
   SN_FETCH_DOWNLOAD =
     'Direct download: GET this path on the SAME host:port you use for /mcp, ' +
@@ -2137,13 +2137,13 @@ const
   SN_FETCH_BIG_FMT =
     'This file is %s: use the "download" link (curl) - no chunk was ' +
     'included. For inline base64 chunks instead, pass maxbytes=1048576 (or ' +
-    'less) and loop offset until eof=true.';
+    'less) and loop offset until eof=true. [FETCH-003]';
 
   SR_FILES_NEED_PATH =
     'Falta el parametro path: GET /files?path=srvd:\...\fichero';
 
   SR_FILES_DIR =
-    'RECHAZADO: es un directorio. /files descarga ficheros, nunca lista carpetas.';
+    'RECHAZADO: es un directorio. /files descarga ficheros, nunca lista carpetas. [FILE-001 DENIED]';
 
   SR_FILES_MISSING =
     'No existe el fichero pedido.';
@@ -2156,7 +2156,7 @@ const
     'que el IDE registra en su Library Path (fuentes RTL/VCL/FMX y de ' +
     'componentes instalados), la raiz de instalacion de cada componente (un ' +
     'nivel por encima: Library, Redist, Examples) y sus subcarpetas. ' +
-    'delphi_workspace las enumera.';
+    'delphi_workspace las enumera. [READ-003]';
 
   // ---- delphi_config: search paths ----
 
@@ -2185,22 +2185,22 @@ const
   SR_CONFIG_PROFILE_LOCAL_FMT =
     'RECHAZADO: %s se compila y se ejecuta EN esta maquina, asi que no lleva ' +
     'perfil de PAServer. Los perfiles son para los destinos remotos ' +
-    '(Linux64, OSX64, Android...).';
+    '(Linux64, OSX64, Android...). [CFG-012 DENIED]';
 
   SR_CONFIG_PROFILE_NOEXISTE_FMT =
     'RECHAZADO: no hay ningun perfil llamado "%s". Registrados: %s. Se crean ' +
     'con delphi_paserver command=add-profile contra el PAServer vivo de esa ' +
-    'maquina.';
+    'maquina. [CFG-013 DENIED]';
 
   SN_CONFIG_PROFILE_PUESTO_FMT =
     'El proyecto desplegara y ejecutara %s por el perfil %s (antes: %s). Es ' +
     'la propiedad Profile, la que lee msbuild, asi que target=Deploy ya no ' +
     'necesita que se le diga el perfil en cada llamada. Copia previa del ' +
-    '.dproj en __delphi-patch.';
+    '.dproj en __delphi-patch. [CFG-014]';
 
   SN_CONFIG_PROFILE_QUITADO_FMT =
     'El proyecto ya no fija perfil para %s (antes: %s): volvera a usar el ' +
-    'activo de la plataforma. Registrados: %s.';
+    'activo de la plataforma. Registrados: %s. [CFG-015]';
 
   SP_CONFIG_PATH =
     'add/remove-searchpath: the unit search path to add or remove - a ' +
@@ -2222,36 +2222,36 @@ const
   SR_CONFIG_PATH_CHARS =
     'RECHAZADO: el path lleva caracteres no permitidos (< > " ; | o de ' +
     'control, y & salvo en un search path) o es demasiado largo. Una ruta ' +
-    'por llamada, sin ";".';
+    'por llamada, sin ";". [CFG-016 DENIED]';
 
   SR_CONFIG_PATH_MACRO_FMT =
     'RECHAZADO: no puedo resolver "%s" (macro desconocida o ruta invalida). ' +
-    'Usa una ruta real o una macro del IDE como $(BDS).';
+    'Usa una ruta real o una macro del IDE como $(BDS). [CFG-017 DENIED]';
 
   SR_CONFIG_PATH_MISSING_FMT =
     'RECHAZADO: la carpeta "%s" no existe en el servidor. Busca la ' +
-    'correcta con delphi_list (zona de biblioteca) antes de anadirla.';
+    'correcta con delphi_list (zona de biblioteca) antes de anadirla. [CFG-018 NOT_FOUND]';
 
   SN_CONFIG_PATH_ADDED_FMT =
     'ANADIDO "%s" al search path de %s (resuelve a %s). Los PropertyGroup de ' +
     'la plataforma se crearon como lo haria el IDE si no existian; copia ' +
     'previa del .dproj en __delphi-patch. Verifica con delphi_build ' +
-    '{platform:"%s"}.';
+    '{platform:"%s"}. [CFG-019]';
 
   SN_CONFIG_PATH_PRESENT_FMT =
-    '"%s" ya estaba en el search path de %s. Nada que cambiar.';
+    '"%s" ya estaba en el search path de %s. Nada que cambiar. [CFG-020]';
 
   SN_CONFIG_PATH_REMOVED_FMT =
-    'QUITADO "%s" del search path de %s. Copia previa del .dproj en __delphi-patch.';
+    'QUITADO "%s" del search path de %s. Copia previa del .dproj en __delphi-patch. [CFG-021]';
 
   SN_CONFIG_PATH_ABSENT_FMT =
-    '"%s" no esta en el search path de %s. Mira los actuales con command=view.';
+    '"%s" no esta en el search path de %s. Mira los actuales con command=view. [CFG-022]';
 
   SN_CONFIG_NO_PATHS =
     'The project declares no unit search paths of its own: the compiler ' +
     'finds units through the IDE library path of each platform. A platform ' +
     'added later gets none of that - add-searchpath fixes "unit not found" ' +
-    'on one platform only.';
+    'on one platform only. [CFG-023]';
 
   // ---- delphi_config: deployment files ----
 
@@ -2269,18 +2269,18 @@ const
 
   SR_CONFIG_DEPLOY_PLATFORM_FMT =
     'RECHAZADO: "%s" no es una plataforma Delphi valida (add/remove-deployfile ' +
-    'la necesita: Linux64, OSX64, Android64...).';
+    'la necesita: Linux64, OSX64, Android64...). [CFG-024 DENIED]';
 
   SR_CONFIG_DEPLOY_NOT_FILE_FMT =
-    'RECHAZADO: "%s" es una carpeta. add-deployfile lleva FICHEROS, uno por llamada.';
+    'RECHAZADO: "%s" es una carpeta. add-deployfile lleva FICHEROS, uno por llamada. [CFG-025 DENIED]';
 
   SR_CONFIG_DEPLOY_MISSING_FMT =
     'RECHAZADO: el fichero "%s" no existe en el servidor. Localizalo con ' +
-    'delphi_list (zona de biblioteca) antes de anadirlo.';
+    'delphi_list (zona de biblioteca) antes de anadirlo. [CFG-026 NOT_FOUND]';
 
   SR_CONFIG_REMOTEDIR_CHARS =
     'RECHAZADO: remotedir debe ser una carpeta relativa simple (sin "..", ' +
-    'sin ":", sin barra inicial ni caracteres especiales), p.ej. MiApp\lib\.';
+    'sin ":", sin barra inicial ni caracteres especiales), p.ej. MiApp\lib\. [CFG-027 DENIED]';
 
   SN_CONFIG_DEPLOY_ADDED_FMT =
     'ANADIDO al despliegue de %s: "%s" -> %s%s (Debug y Release). %sCopia ' +
@@ -2290,27 +2290,27 @@ const
     'configurado (si no, msbuild responde "Missing profile name" hasta en ' +
     'Win32). En remoto, delphi_paserver hace el despliegue de verdad; en ' +
     'local, el .deployproj queda escrito y el IDE lo usara al abrir el ' +
-    'proyecto.';
+    'proyecto. [CFG-028]';
 
   SN_CONFIG_DEPLOY_GENERATED =
     'El proyecto no tenia manifiesto de despliegue: se genero el estandar ' +
     '(el binario) antes de anadir el fichero.';
 
   SN_CONFIG_DEPLOY_PRESENT_FMT =
-    '"%s" ya viaja en el despliegue de %s. Nada que cambiar.';
+    '"%s" ya viaja en el despliegue de %s. Nada que cambiar. [CFG-029]';
 
   SN_CONFIG_DEPLOY_REMOVED_FMT =
-    'QUITADO "%s" del despliegue de %s (%d entradas). Copia previa en __delphi-patch.';
+    'QUITADO "%s" del despliegue de %s (%d entradas). Copia previa en __delphi-patch. [CFG-030]';
 
   SN_CONFIG_DEPLOY_ABSENT_FMT =
-    '"%s" no esta en el despliegue de %s. Mira las entradas con command=view.';
+    '"%s" no esta en el despliegue de %s. Mira las entradas con command=view. [CFG-031]';
 
   SN_CONFIG_NO_DEPLOYPROJ =
     'No deployment manifest (.deployproj) next to the project yet: ' +
     'add-deployfile writes one (with the binary in it) and adds your file. ' +
     'Note that RUNNING a deployment needs an IDE connection profile on this ' +
     'machine: without one, delphi_build target=Deploy fails with "Missing ' +
-    'profile name" even for Win32. delphi_paserver is what deploys remotely.';
+    'profile name" even for Win32. delphi_paserver is what deploys remotely. [CFG-032]';
 
   // ---- project units (Lsp.ProjectUnits: add-unit / remove-unit / create / delete / move) ----
 
@@ -2318,12 +2318,12 @@ const
     'Falta "project": el .dproj (o .dpr / .dpk) del proyecto.';
 
   SR_UNIT_PROJECT_EXT_FMT =
-    'RECHAZADO: "%s" no es un proyecto (.dproj, .dpr o .dpk).';
+    'RECHAZADO: "%s" no es un proyecto (.dproj, .dpr o .dpk). [CFG-033 DENIED]';
 
   SR_UNIT_NO_DPR_FMT =
     'RECHAZADO: no existe el fuente principal del proyecto (%s); las units ' +
     'se registran en el .dpr (uses) o en el .dpk (contains) y sin el no hay ' +
-    'proyecto.';
+    'proyecto. [CFG-034 NOT_FOUND]';
 
   SR_UNIT_NEED_PATH =
     'Falta "path": la unit .pas a registrar o quitar. Si tu cliente no ' +
@@ -2331,13 +2331,13 @@ const
 
   SR_UNIT_PAS_MISSING_FMT =
     'RECHAZADO: no existe %s. Para crear una unit nueva usa delphi_create ' +
-    'kind=unit (o form-vcl / form-fmx).';
+    'kind=unit (o form-vcl / form-fmx). [CFG-035 NOT_FOUND]';
 
   SR_UNIT_NOT_PAS_FMT =
-    'RECHAZADO: "%s" no es una unit .pas.';
+    'RECHAZADO: "%s" no es una unit .pas. [CFG-036 DENIED]';
 
   SR_UNIT_NO_HEADER_FMT =
-    'RECHAZADO: %s no tiene cabecera "unit X;" - no es una unit Delphi.';
+    'RECHAZADO: %s no tiene cabecera "unit X;" - no es una unit Delphi. [CFG-037 DENIED]';
 
   { La cabecera existe pero el nombre lleva letras fuera de A-Z/0-9/_. El
     compilador la acepta (medido 2026-09-23, RAD Studio 13: "unit UArtículos;"
@@ -2348,27 +2348,27 @@ const
     'A-Z/0-9/_ (acentos, enie...). El compilador las acepta, pero este ' +
     'servidor todavia no maneja nombres de unit asi: renombra la unit y el ' +
     'fichero a un nombre sin acentos (delphi_move), o pide el soporte con ' +
-    'delphi_report.';
+    'delphi_report. [CFG-038 DENIED]';
 
   SR_UNIT_HEADER_MISMATCH_FMT =
     'RECHAZADO: la cabecera dice "unit %s;" pero el fichero se llama %s. En ' +
-    'Delphi deben coincidir; arregla uno de los dos con delphi_edit / delphi_move.';
+    'Delphi deben coincidir; arregla uno de los dos con delphi_edit / delphi_move. [CFG-039 DENIED]';
 
   SR_UNIT_NO_USES_FMT =
-    'RECHAZADO: no encuentro la clausula de units (uses / contains) de %s.';
+    'RECHAZADO: no encuentro la clausula de units (uses / contains) de %s. [CFG-040 DENIED]';
 
   SN_UNIT_ADDED_FMT =
     'ANADIDA la unit %s (%s) al proyecto %s: clausula %s de %s + DCCReference ' +
-    'del .dproj. Copias previas en __delphi-patch.';
+    'del .dproj. Copias previas en __delphi-patch. [CFG-041]';
 
   SN_UNIT_ADDED_FORM_FMT =
     'ANADIDA la unit %s (%s) con su form %s: %s al proyecto %s: clausula %s ' +
-    'de %s%s + DCCReference del .dproj. Copias previas en __delphi-patch.';
+    'de %s%s + DCCReference del .dproj. Copias previas en __delphi-patch. [CFG-042]';
 
-  SN_UNIT_CREATEFORM = ' + Application.CreateForm';
+  SN_UNIT_CREATEFORM = ' + Application.CreateForm [CFG-043]';
 
   SN_UNIT_PRESENT_FMT =
-    'La unit %s ya estaba en %s. Nada que cambiar (entrada del .dproj refrescada).';
+    'La unit %s ya estaba en %s. Nada que cambiar (entrada del .dproj refrescada). [CFG-044]';
 
   { Estaba en la uses por el NOMBRE, sin clausula in: antes "ya estaba, nada
     que cambiar" y el build en F2613 porque dcc no encuentra una unit de otra
@@ -2377,120 +2377,120 @@ const
     'COMPLETADA la entrada de la unit %s en la uses de %s: estaba por el ' +
     'nombre pero SIN clausula in, y sin ella dcc no encuentra una unit de ' +
     'otra carpeta (F2613). Ahora es "%s in ''%s''" + DCCReference del ' +
-    '.dproj. Copia previa en __delphi-patch.';
+    '.dproj. Copia previa en __delphi-patch. [CFG-045]';
 
   SN_UNIT_NO_RUN_ANCHOR =
     'No hay Application.Run ni otro CreateForm en el .dpr: crea la instancia ' +
-    'del form donde proceda (delphi_edit).';
+    'del form donde proceda (delphi_edit). [CFG-046]';
 
   SN_UNIT_NO_ITEMGROUP =
     'El .dproj no tiene ItemGroup donde colgar el DCCReference; el IDE lo ' +
-    'completara al abrir el proyecto (MSBuild compila igual por el uses).';
+    'completara al abrir el proyecto (MSBuild compila igual por el uses). [CFG-047]';
 
   SN_UNIT_NO_DPROJ =
-    'El proyecto no tiene .dproj: solo se actualizo el .dpr.';
+    'El proyecto no tiene .dproj: solo se actualizo el .dpr. [CFG-048]';
 
   { add-requires: la clausula requires de un .dpk, lo que el IDE ofrece tras
     un build con W1033. }
   SR_REQUIRES_NOT_PACKAGE_FMT =
     'RECHAZADO: %s no es un paquete (.dpk): la clausula requires solo existe ' +
-    'en paquetes.';
+    'en paquetes. [CFG-049 DENIED]';
   SR_REQUIRES_BAD_NAME_FMT =
     'RECHAZADO: "%s" no es un nombre de paquete (letras, digitos, _ y ' +
-    'puntos, como en el IDE: vcl, dbrtl, fmx, IndyCore).';
+    'puntos, como en el IDE: vcl, dbrtl, fmx, IndyCore). [CFG-050 DENIED]';
   SR_REQUIRES_NEED_NAMES =
     'RECHAZADO: falta "requires": los nombres de paquete a anadir, ' +
-    'separados por ; (los que dijo requiresSuggested del build).';
+    'separados por ; (los que dijo requiresSuggested del build). [CFG-051 DENIED]';
   SN_REQUIRES_PRESENT_FMT =
-    'Todos esos paquetes ya estaban en el requires de %s. Nada que cambiar.';
+    'Todos esos paquetes ya estaban en el requires de %s. Nada que cambiar. [CFG-052]';
   SN_REQUIRES_ADDED_FMT =
     'ANADIDOS al requires de %s: %s. La clausula queda: %s. Vuelve a ' +
     'compilar: las units de esos paquetes dejan de duplicarse dentro del ' +
-    'tuyo. Copia previa en __delphi-patch.';
+    'tuyo. Copia previa en __delphi-patch. [CFG-053]';
 
   { adduses de delphi_edit (David, 2026-09-23): la unit entra en el uses de
     OTRA unit y la clausula la escribe el motor. }
   SR_ADDUSES_NOT_PAS_FMT =
     'RECHAZADO: adduses es para units (.pas); %s es un proyecto. Para meter ' +
     'una unit en un .dpr/.dpk usa delphi_config command=add-unit, que ademas ' +
-    'registra la DCCReference del .dproj.';
+    'registra la DCCReference del .dproj. [USES-002 DENIED]';
   SR_ADDUSES_NEED_NAMES =
     'RECHAZADO: falta "adduses": los nombres de unit a anadir, separados ' +
-    'por ; (System.SysUtils;UCliente).';
+    'por ; (System.SysUtils;UCliente). [USES-003 DENIED]';
   SR_ADDUSES_BAD_NAME_FMT =
     'RECHAZADO: "%s" no es un nombre de unit (letras, digitos, _ y puntos: ' +
-    'System.SysUtils, Modules.API).';
+    'System.SysUtils, Modules.API). [USES-004 DENIED]';
   SR_ADDUSES_BAD_SECTION_FMT =
     'RECHAZADO: "section"="%s" no vale: interface o implementation (por ' +
     'defecto implementation, que es donde va una unit nueva salvo que un ' +
-    'tipo suyo se use en la interfaz).';
+    'tipo suyo se use en la interfaz). [USES-005 DENIED]';
   SR_ADDUSES_NO_FILE_FMT =
-    'RECHAZADO: no existe %s.';
+    'RECHAZADO: no existe %s. [USES-006 NOT_FOUND]';
   SR_ADDUSES_NO_SECTION_FMT =
     'RECHAZADO: no encuentro la seccion %s en %s (una unit tiene interface e ' +
-    'implementation; si el fichero no es una unit, edita su uses con old/new).';
+    'implementation; si el fichero no es una unit, edita su uses con old/new). [USES-007 DENIED]';
   SN_ADDUSES_IN_OTHER_FMT =
     ' Ya estaban en %s, y una unit no puede ir en las dos secciones ' +
-    '(E2004): %s.';
+    '(E2004): %s. [USES-008]';
   SN_ADDUSES_PRESENT_OTHER_FMT =
     'Nada que escribir: %s ya esta en el uses de %s de %s, y una unit no ' +
     'puede ir en las dos secciones (E2004 Identifier redeclared). Si la ' +
-    'quieres en la otra, quitala primero con removeuses.';
+    'quieres en la otra, quitala primero con removeuses. [USES-009]';
   SN_ADDUSES_PRESENT_FMT =
-    'Ya estaba: %s en el uses de %s de %s. Nada que escribir.';
+    'Ya estaba: %s en el uses de %s de %s. Nada que escribir. [USES-010]';
   SN_ADDUSES_SOME_PRESENT_FMT =
-    ' Ya estaban: %s.';
+    ' Ya estaban: %s. [USES-011]';
   SN_ADDUSES_CREATED_FMT =
-    ' La seccion %s no tenia uses: creada debajo de la palabra de seccion.';
+    ' La seccion %s no tenia uses: creada debajo de la palabra de seccion. [USES-012]';
   SN_ADDUSES_ADDED_FMT =
     'ANADIDAS al uses de %s de %s: %s.%s%s Copia previa en __delphi-patch.'#10 +
-    'La clausula queda (releida del disco):'#10'%s';
+    'La clausula queda (releida del disco):'#10'%s [USES-013]';
 
   { removeuses: la inversa de adduses. }
   SR_REMOVEUSES_NOT_PAS_FMT =
     'RECHAZADO: removeuses es para units (.pas); %s es un proyecto. Para ' +
-    'sacar una unit de un .dpr/.dpk usa delphi_config command=remove-unit.';
+    'sacar una unit de un .dpr/.dpk usa delphi_config command=remove-unit. [USES-014 DENIED]';
   SR_REMOVEUSES_NEED_NAMES =
     'RECHAZADO: falta "removeuses": los nombres de unit a quitar, separados ' +
-    'por ; (UCliente;UOtra).';
+    'por ; (UCliente;UOtra). [USES-015 DENIED]';
   SN_REMOVEUSES_NO_CLAUSE_FMT =
-    'La seccion %s de %s no tiene uses: nada que quitar.';
+    'La seccion %s de %s no tiene uses: nada que quitar. [USES-016]';
   SN_REMOVEUSES_ABSENT_FMT =
-    'No estaba: %s en el uses de %s de %s. Nada que escribir.';
+    'No estaba: %s en el uses de %s de %s. Nada que escribir. [USES-017]';
   SN_REMOVEUSES_SOME_ABSENT_FMT =
-    ' No estaban: %s.';
+    ' No estaban: %s. [USES-018]';
   SN_REMOVEUSES_GONE_FMT =
-    '(la seccion %s se queda sin clausula uses: se ha quitado entera)';
+    '(la seccion %s se queda sin clausula uses: se ha quitado entera) [USES-019]';
   SN_REMOVEUSES_REMOVED_FMT =
     'QUITADAS del uses de %s de %s: %s.%s Copia previa en __delphi-patch.'#10 +
-    'La clausula queda (releida del disco):'#10'%s';
+    'La clausula queda (releida del disco):'#10'%s [USES-020]';
 
   SN_UNIT_REMOVED_FMT =
     'QUITADA la unit %s del proyecto %s (%s%s%s). El fichero %s sigue en ' +
     'disco; borralo con delphi_delete si ya no lo quieres. Copias previas en ' +
-    '__delphi-patch.';
+    '__delphi-patch. [CFG-054]';
 
   SN_UNIT_REMOVED_GONE_FMT =
     'QUITADA la unit %s del proyecto %s (%s%s%s). El fichero %s va a la ' +
-    'papelera con este mismo borrado. Copias previas en __delphi-patch.';
+    'papelera con este mismo borrado. Copias previas en __delphi-patch. [CFG-055]';
 
   SN_UNIT_ABSENT_FMT =
-    'La unit %s no esta en el proyecto %s. Mira las units con command=view.';
+    'La unit %s no esta en el proyecto %s. Mira las units con command=view. [CFG-056]';
 
   SN_UNIT_RENAME_NOT_WRITTEN_FMT =
     '  %d fichero(s) del proyecto NO reescritos porque este workspace no ' +
     'puede escribirlos (fuera de sus raices, en una referencia o de solo ' +
     'lectura): %s. Siguen nombrando la unit vieja; si son tuyos en otro ' +
-    'workspace, cambialos alli.';
+    'workspace, cambialos alli. [CFG-057]';
 
   SR_BUILD_SDK_NAME_FMT =
     'RECHAZADO: sdk "%s" no es un nombre de SDK: solo letras, cifras, ' +
-    '".", "-" y "_" (por ejemplo zorin18.sdk), sin carpeta.';
+    '".", "-" y "_" (por ejemplo zorin18.sdk), sin carpeta. [BUILD-026 DENIED]';
 
   SN_UNIT_RENAMED_FMT =
     'REAPUNTADA la unit %s (%s) -> %s (%s) en el proyecto %s (clausula %s + ' +
     'DCCReference del .dproj). Referencias reescritas: %d en %d fichero(s) ' +
-    '(uses de las demas units y calificadores UnitVieja.X).';
+    '(uses de las demas units y calificadores UnitVieja.X). [CFG-058]';
 
   SN_FILE_PROJECTS_UPDATED_FMT =
     '  proyectos actualizados (%d): %s';
@@ -2499,15 +2499,15 @@ const
     '  (ningun .dpr ni .dpk lo listaba, mirando desde su carpeta - y en un ' +
     'move, tambien desde la de destino - hacia arriba hasta ' +
     'el borde del workspace; si otro proyecto lo usa, quitalo con ' +
-    'delphi_config command=remove-unit)';
+    'delphi_config command=remove-unit) [FILE-002]';
 
   SN_FILE_COPY_NO_PROJECT =
     '  (una COPIA es una unit nueva que ningun proyecto lista todavia: ' +
-    'delphi_config command=add-unit cuando la quieras en uno)';
+    'delphi_config command=add-unit cuando la quieras en uno) [FILE-003]';
 
   SR_MOVE_COPY_FROM_TRASH =
     'RECHAZADO: copy=true desde la papelera no: para recuperar una copia ' +
-    'MUEVELA fuera (delphi_move sin copy), que es lo que hace un restore.';
+    'MUEVELA fuera (delphi_move sin copy), que es lo que hace un restore. [MOVE-003 DENIED]';
 
   SR_COPIA_DENTRO_DE_SI_FMT =
     'RECHAZADO: "%s" esta dentro de "%s": una carpeta no se copia ni se ' +
@@ -2519,7 +2519,7 @@ const
     'vive en dos sitios. Para arrancar un proyecto a partir de otro, ' +
     'delphi_create; para llevarlo a otro sitio de tu workspace, ' +
     'delphi_move sin copy. Un proyecto de REFERENCIA se lee donde esta: ' +
-    'de el se copian units o carpetas sin proyecto.';
+    'de el se copian units o carpetas sin proyecto. [MOVE-004 DENIED]';
 
   SP_MOVE_COPY =
     'true = COPY instead of move: the source stays untouched, no trash copy ' +
@@ -2533,7 +2533,7 @@ const
 
   SN_FILE_PROJECT_DENIED_FMT =
     '    %s: fuera de los workspaces permitidos, NO tocado (quita la unit ' +
-    'con delphi_config command=remove-unit desde un proyecto dentro de la jaula).';
+    'con delphi_config command=remove-unit desde un proyecto dentro de la jaula). [FILE-004]';
 
   SR_FILE_DELETE_LOCKED_FMT =
     'NO he borrado "%s" y NO he tocado NADA: algo tiene la carpeta abierta y ' +
@@ -2545,10 +2545,10 @@ const
 
   SN_FILE_PARTIAL_FMT =
     'ERROR %s: %s'#10'ATENCION: antes del fallo ya se habian aplicado estos ' +
-    'cambios (copias en __delphi-patch):%s';
+    'cambios (copias en __delphi-patch):%s [FILE-005]';
 
   SN_FILE_DESIGNER_TOO_FMT =
-    '  designer %s: %s';
+    '  designer %s: %s [FILE-006]';
 
   // ---- delphi_diagnostics ----
 
@@ -2556,7 +2556,7 @@ const
     '{"status":"in-progress","note":"El lint sigue en marcha en el LSP (las ' +
     'units grandes tardan mas de un minuto la primera vez). Vuelve a llamar a ' +
     'delphi_diagnostics con el mismo fichero: el lint NO se reinicia mientras ' +
-    'el fichero no cambie y la siguiente llamada devuelve el resultado."}';
+    'el fichero no cambie y la siguiente llamada devuelve el resultado."} [LSP-018]';
 
   // ---- delphi_styles ----
 
@@ -2590,18 +2590,18 @@ const
     'la sesion MCP (el servidor se actualizo).';
 
   SR_STYLES_MISSING_FMT =
-    'RECHAZADO: no existe %s. Localiza los estilos con delphi_list pattern=*.style.';
+    'RECHAZADO: no existe %s. Localiza los estilos con delphi_list pattern=*.style. [STYLE-001 NOT_FOUND]';
 
   SR_STYLES_NEED_FILE =
     'RECHAZADO: view/get/set/clone necesitan UN fichero .style de texto, no una ' +
-    'carpeta (delphi_list pattern=*.style la lista).';
+    'carpeta (delphi_list pattern=*.style la lista). [STYLE-002 DENIED]';
 
   SR_STYLES_BINARY_FMT =
     'RECHAZADO: %s es un estilo BINARIO (el producto de command=build), y ' +
     'este servidor no sabe LEERLO: el formato es un DFM compilado, no texto, ' +
     'asi que no puedo ni listarte sus StyleName. Trabaja sobre el .style de ' +
     'texto del que sale (mismo nombre sin el .bin) y vuelve a ejecutar ' +
-    'command=build. Si tu unica copia es el binario, dilo con delphi_report.';
+    'command=build. Si tu unica copia es el binario, dilo con delphi_report. [STYLE-003 DENIED]';
 
   SR_STYLES_NEED_STYLE =
     'Falta "style": el StyleName del estilo (command=view los lista).';
@@ -2611,7 +2611,7 @@ const
     '(Fill.Color, Size.Height, Visible...). command=get muestra el estilo.';
 
   SR_STYLES_PROP_CHARS_FMT =
-    'RECHAZADO: "%s" no es un nombre de propiedad (letras, digitos, puntos).';
+    'RECHAZADO: "%s" no es un nombre de propiedad (letras, digitos, puntos). [STYLE-004 DENIED]';
 
   SR_STYLES_NEED_VALUE =
     'Falta "value": el valor tal como se escribe en un .style (xFFF6ECDB, ' +
@@ -2620,68 +2620,68 @@ const
 
   SR_STYLES_VALUE_LINE =
     'RECHAZADO: value debe ser UNA linea. Los valores multilinea (colecciones, ' +
-    'binarios) se editan con delphi_textedit sobre el fichero.';
+    'binarios) se editan con delphi_textedit sobre el fichero. [STYLE-005 DENIED]';
 
   SR_STYLES_NEED_NAME =
     'Falta "name": el StyleName del estilo nuevo.';
 
   SR_STYLES_NAME_CHARS_FMT =
-    'RECHAZADO: "%s" no vale como StyleName (letras, digitos, punto, guion).';
+    'RECHAZADO: "%s" no vale como StyleName (letras, digitos, punto, guion). [STYLE-006 DENIED]';
 
   SR_STYLES_NAME_TAKEN_FMT =
     'RECHAZADO: ya existe un estilo ''%s'' en el fichero. Elige otro nombre o ' +
-    'cambia el existente con set.';
+    'cambia el existente con set. [STYLE-007 DENIED]';
 
   SR_STYLES_NO_TEXT_FMT =
     'RECHAZADO: no hay ningun .style de TEXTO en %s (los .bin.style y los ' +
     'binarios no cuentan). Exporta el estilo como texto desde el Bitmap Style ' +
-    'Designer o apunta a la carpeta correcta.';
+    'Designer o apunta a la carpeta correcta. [STYLE-008 DENIED]';
 
   SR_STYLES_NO_CONVERTER =
     'RECHAZADO: falta DelphiStyleConvert.exe junto al servidor (el conversor ' +
-    'texto<->binario). Avisa al operador: se despliega con el servidor.';
+    'texto<->binario). Avisa al operador: se despliega con el servidor. [STYLE-009 DENIED]';
 
   SN_STYLES_VIEW_NOTE =
     'StyleLookup of a control resolves to one of these StyleNames (case-' +
     'insensitive). get shows a style; set changes one property; clone adds a ' +
-    'variant. After editing run command=build so the app embeds the change.';
+    'variant. After editing run command=build so the app embeds the change. [STYLE-010]';
 
   SN_STYLES_PROP_SET_FMT =
     '%s: %s (estilo %s%s, %s). Copia previa en __delphi-patch. Recuerda ' +
-    'command=build para regenerar el binario que embebe la app.';
+    'command=build para regenerar el binario que embebe la app. [STYLE-011]';
 
   SN_STYLES_PROP_DELETED_FMT =
-    'QUITADA la propiedad %s del estilo %s%s (%s). Copia previa en __delphi-patch.';
+    'QUITADA la propiedad %s del estilo %s%s (%s). Copia previa en __delphi-patch. [STYLE-012]';
 
   SN_STYLES_PROP_ABSENT_FMT =
-    'La propiedad %s no esta en el estilo %s%s (nada que quitar; command=get lo muestra).';
+    'La propiedad %s no esta en el estilo %s%s (nada que quitar; command=get lo muestra). [STYLE-013]';
 
   SN_STYLES_CLONED_FMT =
     'CLONADO: nuevo estilo ''%s'' a partir de ''%s'' (lineas %d-%d de %s). ' +
     'Ajusta sus propiedades con set y regenera con build; en el .fmx se usa ' +
-    'con StyleLookup = ''%0:s''.';
+    'con StyleLookup = ''%0:s''. [STYLE-014]';
 
   SN_STYLES_DELETED_FMT =
     'BORRADO el estilo ''%s'' (lineas %d-%d de %s; quedan %d estilos). La ' +
     'copia previa del fichero esta en __delphi-patch (delphi_list la ' +
     'muestra): para deshacer, delphi_move de esa copia sobre el fichero. ' +
     'Regenera con build; un StyleLookup que lo usara queda sin estilo ' +
-    '(command=lint lo dira).';
+    '(command=lint lo dira). [STYLE-015]';
 
   SN_STYLES_LINT_NOTE =
     'lookupsWithoutStyle: a control with that StyleLookup will render with ' +
     'the default look (no error at runtime) - define the style (clone) or fix ' +
     'the name. duplicatedStyleNames: the last one wins silently. ' +
-    'lookupsStandard are names the platform default style provides.';
+    'lookupsStandard are names the platform default style provides. [STYLE-016]';
 
   SN_STYLES_NO_DEFAULTS =
     'The platform default style names could not be extracted (converter ' +
-    'missing): standard lookups such as buttonstyle may appear as missing.';
+    'missing): standard lookups such as buttonstyle may appear as missing. [STYLE-017]';
 
   SN_STYLES_BUILD_NOTE =
     'The .bin.style files are what the app embeds (.rc RCDATA -> .res). ' +
     'Rebuild the project afterwards (delphi_build target=Build) so the new ' +
-    '.res goes in; MSBuild reuses an old .res otherwise.';
+    '.res goes in; MSBuild reuses an old .res otherwise. [STYLE-018]';
 
   // ---- delphi_messages ----
 
@@ -2702,21 +2702,21 @@ const
 
   SN_MESSAGES_PENDING_FMT =
     #10#10'MENSAJES PENDIENTES: %d en tu buzon (%s). Leelos con ' +
-    'delphi_messages command=read.';
+    'delphi_messages command=read. [MSGS-001]';
 
   SN_MESSAGES_NONE_FMT =
-    'Sin mensajes para "%s".';
+    'Sin mensajes para "%s". [MSGS-002]';
 
   SN_MESSAGES_NONE_NO_AGENT =
     'Sin id de agente no hay buzon: pasa agent=<tu id> (el mismo "agent" ' +
-    'que das a delphi_report).';
+    'que das a delphi_report). [MSGS-003]';
 
   SN_MESSAGES_CHECK_FMT =
     'Mensajes pendientes: %d (command=read los entrega y los borra):';
 
   SN_MESSAGES_DELIVERED =
     '(leidos y borrados: no volveran a aparecer. Si piden algo, hazlo y, si ' +
-    'procede, responde con delphi_report.)';
+    'procede, responde con delphi_report.) [MSGS-004]';
 
   // ---- delphi_build: F2613 helper ----
 
@@ -2734,7 +2734,7 @@ const
     ' En un paquete, una unit que vive en OTRO paquete tuyo necesita las dos ' +
     'cosas: ese paquete en el requires (delphi_config command=add-requires) ' +
     'y la carpeta donde queda su .dcp (la salida de su build) en el search ' +
-    'path; el search path solo no basta, sin el requires dcc no abre el .dcp.';
+    'path; el search path solo no basta, sin el requires dcc no abre el .dcp. [BUILD-027]';
 
   // ---- delphi_rename_symbol ----
 
@@ -2774,13 +2774,13 @@ const
     'in __delphi-patch; refused with the blockers otherwise)';
 
   SR_RENAME_MODE =
-    'error: mode debe ser preview o apply.';
+    'error: mode debe ser preview o apply. [RENAME-001 INVALID_PARAM]';
 
   SR_RENAME_NEED_PATH =
-    'RECHAZADO: falta "path" (el fichero con el simbolo).';
+    'RECHAZADO: falta "path" (el fichero con el simbolo). [RENAME-002 DENIED]';
 
   SR_RENAME_NEED_NEWNAME =
-    'RECHAZADO: falta "newname" (el identificador nuevo).';
+    'RECHAZADO: falta "newname" (el identificador nuevo). [RENAME-003 DENIED]';
 
   SR_RENAME_NOT_APPLICABLE =
     'NO APLICADO: el rename no es aplicable y no se ha escrito nada. Los ' +
@@ -2803,7 +2803,7 @@ const
     'changeset (una edicion por linea, todo o nada, copia previa de cada ' +
     'fichero en __delphi-patch - "commit" trae el detalle). Recompila ' +
     '(delphi_build) para cerrar el ciclo, y repasa los "warnings": una ' +
-    'mencion en un comentario de OTRA linea conserva el nombre viejo.';
+    'mencion en un comentario de OTRA linea conserva el nombre viejo. [RENAME-004]';
 
   SR_RENAME_BAD_IDENT_FMT =
     '"%s" no es un identificador Delphi valido (letra o _ inicial, luego ' +
@@ -2846,11 +2846,11 @@ const
     'posible colision u homonimo.';
 
   SN_RENAME_DESIGNER_HIT_FMT =
-    '%d apariciones en %s';
+    '%d apariciones en %s [RENAME-005]';
 
   SN_RENAME_QUALIFIED_FMT =
     'La definicion es una cabecera CUALIFICADA ("%s"): al renombrarla cambia ' +
-    'SOLO la parte del metodo, nunca el nombre de la clase.';
+    'SOLO la parte del metodo, nunca el nombre de la clase. [RENAME-006]';
 
   { AVISO, no bloqueo: la tool renombra codigo. Hasta 2026-09-21 estas
     apariciones llegaban como "unverified" y tumbaban el rename entero; ahora
@@ -2859,7 +2859,7 @@ const
   SN_RENAME_MENTIONS_FMT =
     'El nombre viejo se queda escrito en %d comentario(s) o cadena(s): esta ' +
     'tool renombra CODIGO, no prosa. delphi_references te los lista en ' +
-    '"mentions" con su linea si quieres repasarlos a mano.';
+    '"mentions" con su linea si quieres repasarlos a mano. [RENAME-007]';
 
   SN_RENAME_PREVIEW_NOTE =
     'Preview: NOTHING was written. applicable=true means every occurrence ' +
@@ -2869,7 +2869,7 @@ const
     'them or do the rename by hand with the evidence given. Each change ' +
     'carries BOTH line numbers: "line" is 1-based (what delphi_read shows ' +
     'and what delphi_changeset''s atline expects) and "line0" is the ' +
-    'language server''s 0-based one. Use "line".';
+    'language server''s 0-based one. Use "line". [RENAME-008]';
 
   // ---- delphi_help ----
 
@@ -2892,7 +2892,7 @@ const
     'command=tool: nombre de la tool (delphi_edit, o solo "edit")';
 
   SR_HELP_CMD =
-    'error: command debe ser tasks | tool | conventions.';
+    'error: command debe ser tasks | tool | conventions. [HELP-001 INVALID_PARAM]';
 
   SR_HELP_NEED_NAME =
     'RECHAZADO: command=tool necesita "name". Las que hay:';
@@ -2904,15 +2904,15 @@ const
 
   SR_HELP_NO_TOOL_ALL_FMT =
     'RECHAZADO: no existe ninguna tool "%s", ni nada que se le parezca. ' +
-    'Estas son TODAS las que hay: %s';
+    'Estas son TODAS las que hay: %s [HELP-002 NOT_FOUND]';
 
   SR_HELP_NO_TOOL_FMT =
-    'RECHAZADO: no existe ninguna tool "%s". Se parecen a lo que pides: %s';
+    'RECHAZADO: no existe ninguna tool "%s". Se parecen a lo que pides: %s [HELP-003 NOT_FOUND]';
 
   SN_HELP_TOOL_NOTE =
     'Lo que manda es la descripcion de la tool: esta es la misma que sirve ' +
     'tools/list, solo que suelta. Si algo no casa con lo que hace de verdad, ' +
-    'dilo con delphi_report: los contratos se corrigen con casos reales.';
+    'dilo con delphi_report: los contratos se corrigen con casos reales. [HELP-004]';
 
   SN_HELP_TASKS =
     'QUE USO PARA CADA COSA (el detalle, en la descripcion de cada tool)'#10 +
@@ -2978,7 +2978,7 @@ const
     'que delphi_create acepta "content" con el fuente entero, o que ' +
     'delphi_edit acepta "edits" con varias ediciones de una vez.'#10 +
     #10 +
-    'Y las reglas comunes: delphi_help command=conventions.';
+    'Y las reglas comunes: delphi_help command=conventions. [HELP-005]';
 
   SN_HELP_CONVENTIONS =
     'REGLAS DE LA CASA (valen para todas las tools)'#10 +
@@ -3050,7 +3050,7 @@ const
     #10 +
     '13. SI ALGO NO SE PUEDE HACER POR AQUI, ESO ES UN HALLAZGO. Cuentalo con ' +
     'delphi_report (kind=limitation) con la llamada exacta y lo que ' +
-    'esperabas: este servidor se ha hecho entero con esos informes.';
+    'esperabas: este servidor se ha hecho entero con esos informes. [HELP-006]';
 
   // ---- delphi_test ----
 
@@ -3102,40 +3102,40 @@ const
   SR_TEST_PLATFORM_UNKNOWN_FMT =
     'RECHAZADO: "%s" no es una plataforma de Delphi. Antes te la aceptaba y ' +
     'ejecutaba Win64 sin decir nada. Validas para ejecutar aqui: Win32 y ' +
-    'Win64.';
+    'Win64. [TEST-001 DENIED]';
 
   SR_TEST_NOBINARY_NOBUILD =
     'error: me pediste nobuild=true (no compilar) y ahi no hay ningun ' +
     'binario que ejecutar. O compilas antes (quita nobuild, o delphi_build ' +
     'con esa MISMA plataforma y config), o apuntas a la config que si tiene ' +
-    'binario.';
+    'binario. [TEST-002 INVALID_PARAM]';
 
   SN_TEST_STALE_FMT =
     'OJO: %s es MAS NUEVO que el binario que acabo de ejecutar. Has tocado ' +
     'el codigo despues de compilarlo, asi que estos numeros son de la ' +
-    'version anterior. Quita nobuild=true y vuelve a lanzarlo.';
+    'version anterior. Quita nobuild=true y vuelve a lanzarlo. [TEST-003]';
 
   SN_TEST_NEAR_MISS_FMT =
     'OJO: hay %d linea(s) que PARECEN un resultado y NO he contado, la ' +
     'primera es "%s". Mira el formato en command=discover ("countsFormat"): ' +
     'la primera palabra tiene que ser PASS/PASSED/OK o FAIL/FAILED/ERROR. Si ' +
-    'esas lineas eran fallos tuyos, el veredicto de arriba se queda corto.';
+    'esas lineas eran fallos tuyos, el veredicto de arriba se queda corto. [TEST-004]';
 
   SR_TEST_NAME_NOT_PATH_FMT =
     'RECHAZADO: "%s" parece el NOMBRE del proyecto, y aqui hace falta su ' +
     'RUTA completa (la que te da delphi_projects en el campo "project"). ' +
     'Antes esto te contestaba que estaba fuera de los workspaces permitidos, ' +
-    'que es verdad de cualquier nombre suelto y no aclaraba nada.';
+    'que es verdad de cualquier nombre suelto y no aclaraba nada. [TEST-005 DENIED]';
 
   SR_TEST_CONFIG_FMT =
     'RECHAZADO: la configuracion "%s" no existe en este proyecto. Tiene ' +
     'estas: %s. (Antes te la aceptaba y compilaba en una carpeta con ese ' +
-    'nombre, que no es lo que querias.)';
+    'nombre, que no es lo que querias.) [TEST-006 NOT_FOUND]';
 
   SR_TEST_PLATFORM_FMT =
     'RECHAZADO: %s no se puede EJECUTAR en esta maquina, y ejecutar es de lo ' +
     'que va esta tool. Compila para esa plataforma con delphi_build y ' +
-    'llevatelo con delphi_paserver / delphi_adb.';
+    'llevatelo con delphi_paserver / delphi_adb. [TEST-007 DENIED]';
 
   SN_TEST_TIMEOUT_NOTE =
     'SE ACABO EL TIEMPO y he MATADO el proceso: no es que los tests fallen, ' +
@@ -3145,21 +3145,21 @@ const
     '"outputTail" viene vacio es porque la salida de un programa de consola ' +
     'se guarda en un buffer y solo se vuelca al terminar, asi que al matarlo ' +
     'se pierde; con Flush(Output) despues de cada linea la veras. Si esperas ' +
-    'que tarde, sube "timeoutms".';
+    'que tarde, sube "timeoutms". [TEST-008]';
 
   SN_TEST_NO_COUNTS_FAILED_FMT =
     'FALLO. No he sabido contar los tests (el runner no imprime un formato ' +
     'que yo entienda), pero ha devuelto codigo de salida %d, y eso es el ' +
     'propio runner diciendo que algo ha ido mal: NO lo des por bueno. Mira ' +
     'outputTail para ver que fallo, y si quieres el recuento pasa ' +
-    'countsFormat (primera palabra PASS/OK/FAIL/ERROR por linea).';
+    'countsFormat (primera palabra PASS/OK/FAIL/ERROR por linea). [TEST-009]';
 
   SN_TEST_NO_COUNTS =
     'Ha terminado bien pero NO he sabido contar ni un solo test, asi que no ' +
     'te digo "pass": que un binario acabe con exitCode 0 no demuestra que ' +
     'haya probado nada. O el proyecto no ejecuta tests, o su salida no sigue ' +
     'ninguno de los dos formatos que se leer (mira "countsFormat" en ' +
-    'command=discover).';
+    'command=discover). [TEST-010]';
 
   SN_TEST_CONSOLE_FORMAT =
     'Para que pueda contarte los tests, imprime UNA LINEA POR COMPROBACION ' +
@@ -3171,7 +3171,7 @@ const
     '"[ OK ] 12 algo" tampoco (empieza por corchete). Si imprimes lineas que ' +
     'se le parecen y no cuentan, te lo digo en "linesNotCounted". Y termina ' +
     'con ExitCode distinto de 0 si algo fallo. Con DUnitX no hace falta nada ' +
-    'de esto: se lee su resumen.';
+    'de esto: se lee su resumen. [TEST-011]';
 
   SN_TEST_RUNS_ON =
     'command=run compila Y ejecuta la MISMA plataforma: Win64 salvo que ' +
@@ -3180,37 +3180,37 @@ const
     'propia carpeta de salida y con ella como directorio actual; ESA carpeta ' +
     'es el unico sitio donde puede ESCRIBIR (el sandbox de baja integridad ' +
     'le niega %TEMP% y el resto del disco). Si tus tests tocan ficheros, ' +
-    'usalos con rutas RELATIVAS.';
+    'usalos con rutas RELATIVAS. [TEST-012]';
 
   SN_TEST_NOBUILD_NOTE =
     'nobuild=true: NO he compilado nada, he ejecutado el binario que ya ' +
     'estaba ahi ("builtAt" dice de cuando es). Si has tocado el codigo ' +
-    'despues de esa fecha, estos numeros son de otro programa.';
+    'despues de esa fecha, estos numeros son de otro programa. [TEST-013]';
 
   SR_TEST_CMD =
-    'error: command debe ser discover | run';
+    'error: command debe ser discover | run [TEST-014 INVALID_PARAM]';
 
   SR_TEST_NEED_PATH =
     'RECHAZADO: discover necesita "path" (la carpeta o el proyecto bajo el ' +
-    'que buscar).';
+    'que buscar). [TEST-015 DENIED]';
 
   SR_TEST_NEED_PROJECT =
     'RECHAZADO: run necesita "project" (el .dproj del proyecto de test). ' +
-    'command=discover te los lista.';
+    'command=discover te los lista. [TEST-016 DENIED]';
 
   SR_TEST_NOPATH_FMT =
-    'RECHAZADO: no existe %s.';
+    'RECHAZADO: no existe %s. [TEST-017 NOT_FOUND]';
 
   SR_TEST_NOTATEST_FMT =
     'RECHAZADO: %s no parece un proyecto de test. Cuenta como tal un .dpr ' +
     'que use DUnitX, o uno con {$APPTYPE CONSOLE} cuyo nombre diga ' +
     'test/tests/spec. Si el tuyo lo es y no lo detecto, dilo con ' +
-    'delphi_report: el criterio se afina con casos reales.';
+    'delphi_report: el criterio se afina con casos reales. [TEST-018 DENIED]';
 
   SR_TEST_NOBINARY =
     'error: no encuentro el binario del proyecto de test despues de ' +
     'compilar. Compila a mano con delphi_build y mira que declara en ' +
-    '"output".';
+    '"output". [TEST-019 INVALID_PARAM]';
 
   SR_TEST_DISABLED =
     'RECHAZADO: ejecutar tests esta APAGADO en este servidor. El operador lo ' +
@@ -3218,20 +3218,20 @@ const
     'junto al ' +
     'ejecutable (o DELPHI_MCP_ALLOW_TESTS=1) y reinicia. Es lo unico que se ' +
     'ejecuta en esta maquina: un binario de un proyecto de la jaula, en ' +
-    'sandbox y con timeout. command=discover si funciona sin el.';
+    'sandbox y con timeout. command=discover si funciona sin el. [TEST-020 DENIED]';
 
   SN_TEST_NONE =
     'No hay proyectos de test ahi debajo. Cuenta como tal un .dpr con DUnitX ' +
-    'o uno de consola cuyo nombre diga test/spec.';
+    'o uno de consola cuyo nombre diga test/spec. [TEST-021]';
 
   SN_TEST_DISCOVER_NOTE =
     'Ejecutalos con command=run project=<el .dproj de la lista>. Si alguno ' +
-    'trae hasDproj=false, compilalo antes con delphi_build sobre su .dpr.';
+    'trae hasDproj=false, compilalo antes con delphi_build sobre su .dpr. [TEST-022]';
 
   SN_TEST_BUILD_FAILED =
     'El proyecto de test NO compila, asi que no hay nada que ejecutar: mira ' +
     '"build.errors" (y "missingUnits" si falta alguna unidad). Arregla eso ' +
-    'primero.';
+    'primero. [TEST-023]';
 
   SN_TEST_RUN_NOTE =
     'result=pass|fail sale de "verdictFrom": counts (los numeros del ' +
@@ -3240,7 +3240,7 @@ const
     'termino bien sin que yo pudiera contar nada. failures lista las lineas ' +
     'de fallo tal cual las imprimio. Corrio en sandbox de baja integridad, ' +
     'con timeout, en su carpeta de salida, que es lo unico donde puede ' +
-    'escribir.';
+    'escribir. [TEST-024]';
 
   // ---- delphi_designer ----
 
@@ -3296,50 +3296,50 @@ const
     'info optional: only properties whose name contains this text';
 
   SR_DESIGNER_CMD =
-    'error: command debe ser info | prop | tree | get | lint | check-binding | layout';
+    'error: command debe ser info | prop | tree | get | lint | check-binding | layout [DSGN-001 INVALID_PARAM]';
 
   SR_DESIGNER_FRAMEWORK =
-    'RECHAZADO: framework debe ser vcl o fmx.';
+    'RECHAZADO: framework debe ser vcl o fmx. [DSGN-002 DENIED]';
 
   SR_DESIGNER_NEED_CLASS =
-    'RECHAZADO: falta "class" (la clase del componente, p.ej. TButton).';
+    'RECHAZADO: falta "class" (la clase del componente, p.ej. TButton). [DSGN-003 DENIED]';
 
   SR_DESIGNER_NEED_PROP =
-    'RECHAZADO: falta "prop" (la propiedad, p.ej. Align).';
+    'RECHAZADO: falta "prop" (la propiedad, p.ej. Align). [DSGN-004 DENIED]';
 
   SR_DESIGNER_NEED_PATH =
-    'RECHAZADO: falta "path" (el .dfm o .fmx).';
+    'RECHAZADO: falta "path" (el .dfm o .fmx). [DSGN-005 DENIED]';
 
   SR_DESIGNER_NEED_COMPONENT =
-    'RECHAZADO: falta "component" (el Name del componente en el form).';
+    'RECHAZADO: falta "component" (el Name del componente en el form). [DSGN-006 DENIED]';
 
   SR_DESIGNER_NOT_FORM =
-    'RECHAZADO: eso no es un designer (.dfm/.fmx).';
+    'RECHAZADO: eso no es un designer (.dfm/.fmx). [DSGN-007 DENIED]';
 
   { Un .dfm BINARIO ya se lee al vuelo (Lsp.DesignerBin, la conversion del
     propio IDE); solo uno danado sigue rechazado. Textos del 24-sep-2026,
     tras el reporte de Hermes (un form legacy dejaba ciego al agente). }
   SR_DESIGNER_BINARY_FMT =
-    'RECHAZADO: %s';
+    'RECHAZADO: %s [DSGN-008 DENIED]';
   SN_DESIGNER_BINARY_VIEW =
     'DFM BINARIO en disco, leido al vuelo como texto (lo que el IDE ensena ' +
     'en "Ver como texto"): lo que ves es fiel. Para EDITARLO pasalo a texto ' +
     'con command=to-text (copia previa) y desde ahi se edita como cualquier ' +
-    '.dfm; command=to-binary es el camino de vuelta.';
+    '.dfm; command=to-binary es el camino de vuelta. [DSGN-009]';
   SN_DESIGNER_TOTEXT_FMT =
     'CONVERTIDO %s a TEXTO: %d bytes binarios -> %d lineas, la misma ' +
     'conversion que hace el IDE. Copia previa: %s. El IDE lo abre igual y ' +
     'al guardar respeta el formato que encuentra; desde ahora se lee, se ' +
-    'busca y se edita como cualquier .dfm.';
+    'busca y se edita como cualquier .dfm. [DSGN-010]';
   SN_DESIGNER_TOBINARY_FMT =
     'CONVERTIDO %s a BINARIO: %d bytes, con el envoltorio de recurso que ' +
     'escribe el IDE. Copia previa: %s. Desde aqui se lee al vuelo, pero no ' +
-    'se edita hasta volver a pasarlo a texto.';
+    'se edita hasta volver a pasarlo a texto. [DSGN-011]';
   SN_DESIGNER_ALREADY_FMT =
-    '%s ya es %s: nada que hacer.';
+    '%s ya es %s: nada que hacer. [DSGN-012]';
   SR_DESIGNER_FMX_ALWAYS_TEXT =
     'RECHAZADO: un .fmx es siempre texto (FireMonkey no tiene formato ' +
-    'binario): to-text y to-binary son solo para .dfm.';
+    'binario): to-text y to-binary son solo para .dfm. [DSGN-013 DENIED]';
   SN_READ_BINARY_DESIGNER =
     'DFM BINARIO en disco, mostrado como texto (la conversion del propio IDE, ' +
     '"Ver como texto"). Lo que lees es fiel, pero NO se edita asi: ' +
@@ -3347,34 +3347,34 @@ const
     'y desde ahi se edita como cualquier .dfm.';
 
   SR_DESIGNER_EMPTY =
-    'RECHAZADO: el fichero no contiene ningun object.';
+    'RECHAZADO: el fichero no contiene ningun object. [DSGN-014 DENIED]';
 
   SR_DESIGNER_CLASS_FMT =
     'RECHAZADO: la clase "%s" no esta en la tabla %s de este servidor (no ' +
     'la publica el framework o el componente no esta enlazado en las tablas ' +
-    'generadas). delphi_components lista los packages instalados.';
+    'generadas). delphi_components lista los packages instalados. [DSGN-015 DENIED]';
 
   SR_DESIGNER_PROP_FMT =
     'RECHAZADO: %s no es una propiedad publicada de %s. command=info la ' +
-    'lista entera.';
+    'lista entera. [DSGN-016 DENIED]';
 
   SR_DESIGNER_COMPONENT_FMT =
     'RECHAZADO: no hay ningun componente "%s" en ese form (command=tree los ' +
-    'lista).';
+    'lista). [DSGN-017 DENIED]';
 
   SN_DESIGNER_INFO_NOTE =
     'Published properties from the framework''s own RTTI (inherited ' +
     'included). A property absent here does NOT stream in a .dfm/.fmx: do ' +
-    'not write it.';
+    'not write it. [DSGN-018]';
 
   SN_DESIGNER_TREE_NOTE =
     'Component tree of the TEXT designer. get shows one component; lint ' +
-    'checks classes, properties and enum values against the framework tables.';
+    'checks classes, properties and enum values against the framework tables. [DSGN-019]';
 
   SN_DESIGNER_LINT_OK_FMT =
     'LINT LIMPIO: %s no tiene clases desconocidas, propiedades no publicadas ' +
     'ni valores de enum invalidos, y si tiene .pas pareja cuadra con su clase ' +
-    '(check-binding: cada evento apunta a un metodo declarado y published).';
+    '(check-binding: cada evento apunta a un metodo declarado y published). [DSGN-020]';
 
   SN_DESIGNER_LINT_BAD_FMT =
     '%d avisos del designer en %s (clase desconocida, propiedad no publicada ' +
@@ -3386,11 +3386,11 @@ const
     'build pasa, porque el compilador no mira esto, y la app muere al CARGAR ' +
     'el form: un evento cableado a un metodo que no esta en published no se ' +
     'resuelve ("Invalid property value" / EReadError). Arreglalo antes de ' +
-    'desplegar: ***';
+    'desplegar: *** [DSGN-021]';
 
   SN_PATCH_INSERT_PUBLISHED_BY_EVENT_FMT =
     'seccion published elegida por la tool: el designer pareja %s cablea ' +
-    '''%s'' como evento, y el streaming solo resuelve metodos published';
+    '''%s'' como evento, y el streaming solo resuelve metodos published [EDIT-031]';
 
   // ---- delphi_git: ramas ----
 
@@ -3401,14 +3401,14 @@ const
     'entra vuelve a salir por dos sitios: dentro del binario (que luego se ' +
     'descarga) y citado palabra por palabra en los errores cuando el fichero ' +
     'no es Pascal. Las rutas de {$I} y {$R} tienen que quedarse dentro del ' +
-    'workspace.';
+    'workspace. [BUILD-028 DENIED]';
 
   SR_BUILD_OUTPUT_DENIED_FMT =
     'RECHAZADO: no compilo esto. El proyecto deja su salida en %s = %s, ' +
     'y ahi esta sesion no puede escribir: %s. Un build escribe el binario, ' +
     'los .dcu y el resto en las carpetas de salida del proyecto (y un ' +
     'Clean borra alli): tienen que quedar dentro del workspace. ' +
-    'delphi_config set-output coloca dentro las del binario y los .dcu.';
+    'delphi_config set-output coloca dentro las del binario y los .dcu. [BUILD-029 DENIED]';
 
   SR_BUILD_OUTPUT_UNDECLARED_FMT =
     'RECHAZADO: no compilo esto. El proyecto no declara %s para esta ' +
@@ -3417,13 +3417,13 @@ const
     '(tambien las de una referencia), los .bpl, .dcp y .hpp en sus ' +
     'carpetas globales. Declarala dentro del proyecto, por ejemplo ' +
     '.\$(Platform)\$(Config) como hace delphi_create (delphi_config ' +
-    'set-output pone la del binario y la de los .dcu).';
+    'set-output pone la del binario y la de los .dcu). [BUILD-030 DENIED]';
 
   SR_BUILD_OUTPUT_UNRESOLVED_FMT =
     'RECHAZADO: no compilo esto. No se a donde va la salida de %s = %s ' +
     '(una macro o un escape que este servidor no resuelve), y una carpeta ' +
     'de salida que no se puede comprobar no se aprueba. Escribela como ' +
-    'ruta relativa al proyecto, con $(Platform) y $(Config) si hace falta.';
+    'ruta relativa al proyecto, con $(Platform) y $(Config) si hace falta. [BUILD-031 DENIED]';
 
   SN_BUILD_LOCKED_OUTPUT =
     'F2039 "Could not create output file" casi nunca es un fallo de tu ' +
@@ -3434,7 +3434,7 @@ const
     'solo. Yo NO mato procesos de esta maquina: puede haber alguien ' +
     'trabajando con el IDE al otro lado. (Ya lo he reintentado varias veces ' +
     'durante unos segundos antes de contestarte: lo que lo tiene abierto no ' +
-    'es cosa de un momento.)';
+    'es cosa de un momento.) [BUILD-032]';
 
   SR_PACKAGE_RENAME_FMT =
     'ERROR: el zip se creo pero no he podido dejarlo en %s (alguien lo tiene ' +
@@ -3446,7 +3446,7 @@ const
   SN_BUILD_LOCKED_RETRY =
     'El binario estaba en uso (F2039) cuando empece - tipicamente una ' +
     'ejecucion de delphi_test todavia viva - asi que repeti el ' +
-    'build hasta que quedo libre. El resultado es bueno; solo tardo mas.';
+    'build hasta que quedo libre. El resultado es bueno; solo tardo mas. [BUILD-033]';
 
   // ---- delphi_config view: SDK y perfil por plataforma remota ----
   SN_CONFIG_REMOTE_NOTE =
@@ -3456,50 +3456,50 @@ const
     'command=get-sdk y luego set-sdk). profileSource: project | none (el ' +
     'proyecto no fija PAServer: delphi_build target=Deploy lo toma de ' +
     'profile=, o fijalo con command=set-profile). Android no lleva perfil: ' +
-    'despliega por delphi_adb.';
+    'despliega por delphi_adb. [CFG-059]';
 
   SN_BUILD_DEVLINK_DONE_FMT =
     'El enlazador pedia un nombre de DESARROLLO (libX.so) que el sysroot no ' +
     'traia, porque la maquina de la que se bajo no tiene el paquete -dev; la ' +
     'libreria si esta (libX.so.N). Lo he completado en el SDK con una copia ' +
-    '-%s- y he repetido el build. Nada que instalar en el destino.';
+    '-%s- y he repetido el build. Nada que instalar en el destino. [BUILD-034]';
   SN_BUILD_DEVLINK_MISSING_FMT =
     'El enlazador no encuentra %s y el sysroot no trae NINGUNA version de esa ' +
     'libreria: a la maquina destino le falta el paquete entero. Instala alli ' +
     'la libreria (con su -dev) y repite delphi_paserver get-sdk; o quita esa ' +
-    'dependencia del proyecto.';
+    'dependencia del proyecto. [BUILD-035]';
 
   SN_BUILD_DEFAULT_PLATFORM =
     'No me diste "platform", asi que he compilado Win32, que es el defecto de ' +
     'esta tool. OJO: delphi_test ejecuta Win64 por defecto, asi que si vas a ' +
     'pasar los tests despues, compila Win64 (platform=Win64) o dejale a ' +
-    'delphi_test que compile el solo.';
+    'delphi_test que compile el solo. [BUILD-036]';
 
   SR_PASERVER_IDE_OPEN =
     'RECHAZADO: el IDE (bds.exe) esta ABIERTO en el servidor y paclient no ' +
     'puede guardar perfiles mientras tanto (avisa W0013 pero sale con exit ' +
     '0 y NO guarda nada). El perfil NO se ha creado. Reintenta cuando el ' +
     'operador cierre el IDE, o pidele que cree el perfil desde el propio ' +
-    'IDE. Yo NO cierro el IDE: puede haber alguien trabajando con el.';
+    'IDE. Yo NO cierro el IDE: puede haber alguien trabajando con el. [PAS-029 DENIED]';
 
   SR_PASERVER_SDK_NOGROUP_FMT =
     'RECHAZADO: el sysroot del target de "%s" no encaja con ninguna ' +
     'distribucion que conozco. Probe los arboles gcc (%s) y las carpetas ' +
     'de librerias (%s) y ninguna variante entrego ficheros. Manda un ' +
     'delphi_report con la tripleta de tu distro (ls /usr/lib/gcc/) y la ' +
-    'anadimos.';
+    'anadimos. [PAS-030 DENIED]';
 
   SN_BUILD_QUEUED =
     'Este build ha esperado su turno: el servidor compila DE UNO EN UNO ' +
     'porque dos msbuild simultaneos se pisan los .dcu, los outputs y el ' +
     '.deployproj. "queuedMs" es lo que esperaste en cola, no lo que ' +
-    'tardo el compilador.';
+    'tardo el compilador. [BUILD-037]';
 
   SN_BUILD_FIRST_ERROR =
     'Empieza por "firstError": un solo error puede parir a los demas. Un ' +
     'E2009 (asignar un procedimiento suelto a un evento) provoca detras ' +
     'siete E2250 de Synchronize/Queue que parecen un problema de hilos y no ' +
-    'lo son. Arregla el primero y vuelve a compilar antes de tocar nada mas.';
+    'lo son. Arregla el primero y vuelve a compilar antes de tocar nada mas. [BUILD-038]';
 
   SN_LINT_UNKNOWN_CLASS_FMT =
     '"%s" no esta en la tabla %s de este servidor (sera de un paquete de ' +
@@ -3511,24 +3511,24 @@ const
     'que se llama igual que el .dfm.';
 
   SR_DESIGNER_NO_FORM_FMT =
-    'RECHAZADO: no existe el fichero de form %s.';
+    'RECHAZADO: no existe el fichero de form %s. [DSGN-022 NOT_FOUND]';
 
   SR_DESIGNER_NO_UNIT_FMT =
     'RECHAZADO: no encuentro la unit del form (%s). Si se llama de otra ' +
-    'forma, pasala en "unit".';
+    'forma, pasala en "unit". [DSGN-023 DENIED]';
 
   SN_DESIGNER_LAYOUT_OK =
     'La geometria CUADRA: nada mide cero, nada se sale de su contenedor, ' +
     'nada se solapa y a todos los alineados les queda hueco. Eso es lo que ' +
     'no se ve desde aqui: un form puede enlazar perfecto y ser una pila de ' +
-    'controles unos encima de otros.';
+    'controles unos encima de otros. [DSGN-024]';
 
   SN_DESIGNER_LAYOUT_BAD =
     'OJO: esto CARGA pero no se ve como crees. Nada de lo de abajo lo dice ' +
     'el compilador ni el enlazador: un control de tamano cero esta ahi y no ' +
     'se ve, uno que se sale del contenedor aparece recortado, y dos que se ' +
     'solapan hacen que el de arriba tape al de abajo. Arreglalo antes de ' +
-    'dar el formulario por bueno.';
+    'dar el formulario por bueno. [DSGN-025]';
 
   SN_DESIGNER_LAYOUT_HOW =
     'Como lo mido: resuelvo Align como TWinControl.AlignControls (cada ' +
@@ -3543,7 +3543,7 @@ const
     'rectangulo resuelto de cada control en coordenadas del form: eso es donde ' +
     'acaba cada cosa, para colocar la siguiente sin ver la pantalla. Es ' +
     'aproximado: el area util de un contenedor la tomo como su Width/Height, y ' +
-    'Anchors (que gobiernan el REDIMENSIONADO) no es lo que mido.';
+    'Anchors (que gobiernan el REDIMENSIONADO) no es lo que mido. [DSGN-026]';
 
   SN_COMPLETION_SNAPPED_FMT =
     'He ajustado la posicion de la columna %d a la %d: pediste completion de ' +
@@ -3556,7 +3556,7 @@ const
     'RECHAZADO: command=layout es solo para .dfm (VCL). Un .fmx coloca con otro ' +
     'modelo (Size.Width, Position.X, Align distinto) que este servidor todavia ' +
     'no resuelve; contestar "ok" sobre un .fmx seria mentir. Para .fmx usa de ' +
-    'momento tree/get/lint.';
+    'momento tree/get/lint. [DSGN-027 DENIED]';
 
   SR_DESIGNER_LAYOUT_TRUNC =
     'OJO: el .dfm parece TRUNCADO (hay mas objetos abiertos que "end" que los ' +
@@ -3567,53 +3567,53 @@ const
     'OJO: el form no trae ClientWidth/ClientHeight, solo Width/Height (el tamano ' +
     'de la VENTANA). He restado un marco nominal a 96 dpi para estimar el area ' +
     'util; cerca del borde derecho o inferior el recorte real puede variar unos ' +
-    'pixeles segun el BorderStyle.';
+    'pixeles segun el BorderStyle. [DSGN-028]';
 
   SR_DESIGNER_BINDING_NOT_FORM =
     'RECHAZADO: check-binding compara un FORM con su clase, asi que "path" ' +
     'tiene que ser el .dfm/.fmx. La unit va en "unit" (y si se llama igual ' +
-    'que el form no hace falta pasarla).';
+    'que el form no hace falta pasarla). [DSGN-029 DENIED]';
 
   SR_DESIGNER_BINDING_UNIT_EXT =
     'RECHAZADO: "unit" tiene que ser un .pas. Esta tool lee la clase del ' +
-    'form, no cualquier fichero de texto.';
+    'form, no cualquier fichero de texto. [DSGN-030 DENIED]';
 
   SR_DESIGNER_BINDING_NO_ROOT =
     'RECHAZADO: este fichero no empieza por un objeto de designer ("object ' +
-    '<Nombre>: <TClase>"), asi que no es un form que yo pueda comparar.';
+    '<Nombre>: <TClase>"), asi que no es un form que yo pueda comparar. [DSGN-031 DENIED]';
 
   SN_DESIGNER_BINDING_NOCLASS_FMT =
     'OJO: el .dfm dice que este form es de clase %s, pero esa clase NO esta ' +
     'declarada en %s. O el .dfm apunta a otra unit, o la clase se renombro ' +
     'solo en un sitio. No comparo nada mas hasta que eso cuadre: seria ' +
-    'inventarme el resultado.';
+    'inventarme el resultado. [DSGN-032]';
 
   SN_DESIGNER_BINDING_PARTIAL_FMT =
     'PARCIAL: la herencia sale de esta unit (%s), asi que los componentes y ' +
     'metodos heredados no los veo desde aqui. Lo que te digo que SOBRA o que ' +
     'FALTA seria mentira, asi que no lo listo; si te sale ok:true, leelo ' +
     'como "no he encontrado nada malo en lo que SI puedo ver". Para revisar ' +
-    'lo heredado, pasa check-binding tambien al form padre.';
+    'lo heredado, pasa check-binding tambien al form padre. [DSGN-033]';
 
   SN_DESIGNER_BINDING_OK =
     'El form y su clase CUADRAN: cada objeto del .dfm tiene su campo ' +
     'publicado, cada evento apunta a un metodo que existe, y no sobra ningun ' +
     'campo. Eso es lo que el compilador NO comprueba: un desajuste aqui ' +
-    'compila igual y revienta al crear la ventana.';
+    'compila igual y revienta al crear la ventana. [DSGN-034]';
 
   SN_DESIGNER_BINDING_BAD =
     'OJO: el .dfm y la clase NO cuadran. Esto compila igual y falla al CREAR ' +
     'el form, en ejecucion, con un mensaje que no senala aqui. Un objeto sin ' +
     'campo publicado llega a nil; un evento cuyo metodo no existe hace que ' +
     'el form no cargue. Arregla los tres listados antes de dar nada por ' +
-    'bueno.';
+    'bueno. [DSGN-035]';
 
   SN_DESIGNER_SET_NOTE =
     'Es un SET: en el .dfm/.fmx se escribe entre corchetes y separado por ' +
-    'comas, [goEditing, goTabs], y vacio es [].';
+    'comas, [goEditing, goTabs], y vacio es []. [DSGN-036]';
 
   SR_PACKAGE_NEED_DIR =
-    'error: delphi_package necesita "dir" (la carpeta a comprimir).';
+    'error: delphi_package necesita "dir" (la carpeta a comprimir). [PKG-001 INVALID_PARAM]';
 
   SP_FETCH_MAXBYTES =
     'OJO: pedir maxbytes<=1048576 (1 MB) FUERZA trozos base64 inline - justo ' +
@@ -3629,43 +3629,43 @@ const
     '($FF2A2A2A), identificador (claRed, True, TAlignLayout.Top), texto entre ' +
     'comillas simples (''Aceptar'') o conjunto ([a, b]). Si lo escribo tal ' +
     'cual, el fichero deja de poder leerse y solo te enterarias en ' +
-    'command=build.';
+    'command=build. [STYLE-019 DENIED]';
 
   SR_STYLES_RENAME_EMPTY =
-    'RECHAZADO: StyleName vacio. Un estilo sin nombre no lo encuentra nadie.';
+    'RECHAZADO: StyleName vacio. Un estilo sin nombre no lo encuentra nadie. [STYLE-020 DENIED]';
 
   SR_STYLES_RENAME_DUP_FMT =
     'RECHAZADO: en ese fichero ya hay un estilo llamado "%s". Dos estilos con ' +
     'el mismo StyleName es justo lo que caza el lint, y a partir de ahi ' +
-    'delete/get trabajan con el primero que encuentran. Elige otro nombre.';
+    'delete/get trabajan con el primero que encuentran. Elige otro nombre. [STYLE-021 DENIED]';
 
   SN_STYLES_RENAMED_FMT =
     'RENOMBRADO el estilo "%s" a "%s" en %s. OJO: los StyleLookup de tus ' +
     '.fmx que apuntaban al nombre viejo ya no encuentran nada; pasa ' +
-    'command=lint para ver cuales.';
+    'command=lint para ver cuales. [STYLE-022]';
 
   SN_CONFIG_PLAT_ALREADY_FMT =
     'La plataforma %s YA estaba deshabilitada: no he tocado nada (ni copia de ' +
-    'seguridad, que seria de un fichero identico). add-platform la reactiva.';
+    'seguridad, que seria de un fichero identico). add-platform la reactiva. [CFG-060]';
 
   SR_CONFIG_PLAT_LAST_FMT =
     'RECHAZADO: %s es la ULTIMA plataforma habilitada del proyecto y un ' +
     'proyecto sin ninguna no se puede compilar desde el IDE. Habilita antes ' +
-    'otra con add-platform y luego quita esta.';
+    'otra con add-platform y luego quita esta. [CFG-061 DENIED]';
 
   SR_CONFIG_OUTPUT_INVALID =
     'RECHAZADO: eso no vale como carpeta de salida. Tiene que ser un nombre ' +
     'RELATIVO y simple, como Compiled o bin\out: sin unidad ni ruta ' +
     'absoluta, sin ".." y sin caracteres especiales (los espacios si valen). ' +
     'Con ' +
-    'output=default se restaura el reparto estandar de RAD Studio.';
+    'output=default se restaura el reparto estandar de RAD Studio. [CFG-062 DENIED]';
 
   SN_CONFIG_DPR_ONLY =
     'Esto es el .dpr y a su lado no hay .dproj, asi que solo puedo decirte ' +
     'sus UNITS. El framework (VCL/FMX), las plataformas, las configuraciones, ' +
     'los search path y el despliegue viven en el .dproj: no los se, y no me ' +
     'los invento. add-unit y remove-unit si funcionan aqui; el resto de ' +
-    'comandos necesitan un .dproj.';
+    'comandos necesitan un .dproj. [CFG-063]';
 
   { Un .groupproj en delphi_config: view contestaba como si fuera un proyecto
     vacio, y una orden de escritura lo habria tocado como un .dproj
@@ -3674,104 +3674,104 @@ const
     'Es un GRUPO de proyectos (.groupproj), no un proyecto: no tiene ' +
     'plataformas ni configuraciones propias. Lista %d proyectos; %d no ' +
     'estan donde dice (fix-references los busca). Para configurar uno, pasa ' +
-    'SU .dproj en "project"; add-project y remove-project cambian la lista.';
+    'SU .dproj en "project"; add-project y remove-project cambian la lista. [CFG-064]';
   SR_CONFIG_GROUP_FMT =
     'error: %s es un GRUPO de proyectos, no un proyecto, y en un grupo ' +
     '"%s" no vale: valen view, add-project, remove-project y ' +
     'fix-references; para lo demas, pasa el .dproj del proyecto. No he ' +
-    'tocado nada.';
+    'tocado nada. [CFG-065 INVALID_PARAM]';
   { Un grupo que no se deja leer es un fallo de ESTE lado (Error: -> INTERNAL),
     no una llamada mal hecha. }
-  SR_CONFIG_GROUP_READ_FMT = 'Error: no pude leer el grupo %s: %s';
+  SR_CONFIG_GROUP_READ_FMT = 'Error: no pude leer el grupo %s: %s [CFG-066 INTERNAL]';
   SR_CONFIG_NOT_PROJECT_FMT =
     'error: %s no es un proyecto: delphi_config lee y cambia un .dproj ' +
-    '(o su .dpr/.dpk), y view tambien lista un grupo (.groupproj).';
+    '(o su .dpr/.dpk), y view tambien lista un grupo (.groupproj). [CFG-067 INVALID_PARAM]';
   { Grupos de proyectos en delphi_config (1.6.0): add-project y
     remove-project escriben lo que "Add existing project" del IDE. }
   SN_GRUPO_ANADIDO_FMT =
     'ANADIDO %s al grupo %s (Include="%s"), como "Add existing project" del ' +
     'IDE: su <Projects>, sus targets %s, :Clean y :Make, y su nombre en ' +
-    'Build, Clean y Make.';
-  SN_GRUPO_YA_ESTABA_FMT = '%s YA estaba en el grupo %s: no he tocado nada.';
+    'Build, Clean y Make. [GROUP-001]';
+  SN_GRUPO_YA_ESTABA_FMT = '%s YA estaba en el grupo %s: no he tocado nada. [GROUP-002]';
   SR_GRUPO_TARGET_DUP_FMT =
     'error: ya hay un target "%s" en el grupo %s, de OTRO proyecto: el ' +
     'IDE nombra los targets por el proyecto y dos no pueden llamarse igual. ' +
-    'No he tocado nada.';
+    'No he tocado nada. [GROUP-003 INVALID_PARAM]';
   SR_GRUPO_SIN_DPROJ_FMT =
     'RECHAZADO: no existe %s: a un grupo se anade un proyecto por su .dproj ' +
-    '(o su .dpr/.dpk, con el .dproj al lado).';
+    '(o su .dpr/.dpk, con el .dproj al lado). [GROUP-004 NOT_FOUND]';
   SR_GRUPO_FORMA_FMT =
     'error: %s no tiene la forma de un grupo del IDE (ni <PropertyGroup> ' +
-    'ni </Project>): no lo toco.';
-  SN_GRUPO_NO_ESTABA_FMT = '%s no esta en el grupo %s: no he tocado nada.';
+    'ni </Project>): no lo toco. [GROUP-005 INVALID_PARAM]';
+  SN_GRUPO_NO_ESTABA_FMT = '%s no esta en el grupo %s: no he tocado nada. [GROUP-006]';
   SN_GRUPO_QUITADO_FMT =
     'QUITADO %s del grupo %s: su <Projects>, sus %d targets, su nombre en ' +
     'Build, Clean y Make y en los DependsOnTargets de los que dependian de el, ' +
-    'y su ruta en las <Dependencies> de los demas (%d). El proyecto sigue en el disco.';
+    'y su ruta en las <Dependencies> de los demas (%d). El proyecto sigue en el disco. [GROUP-007]';
   SN_GRUPO_SIN_AGREGADO_FMT =
     '  OJO: el grupo no tiene el agregado %s con la forma del IDE ' +
-    '(<Target Name="X"><CallTarget Targets="..."/>): ahi no lo he anadido.';
+    '(<Target Name="X"><CallTarget Targets="..."/>): ahi no lo he anadido. [GROUP-008]';
   { Los de "la llamada estaba mal" empiezan por error: y no por RECHAZADO:
     el prefijo decide el code (INVALID_PARAM frente a DENIED, que es la
     politica) - MCPServer.ToolsManager. }
   SR_GRUPO_NECESITA_PATH =
     'error: add-project y remove-project necesitan "path": el .dproj (o ' +
-    'su .dpr/.dpk) del proyecto.';
+    'su .dpr/.dpk) del proyecto. [GROUP-009 INVALID_PARAM]';
   SR_GRUPO_SOLO_GRUPO_FMT =
     'error: %s es una orden de un GRUPO (.groupproj) y %s es un ' +
-    'proyecto: pasa el .groupproj en "project" y el proyecto en "path".';
+    'proyecto: pasa el .groupproj en "project" y el proyecto en "path". [GROUP-010 INVALID_PARAM]';
   { fix-references (1.6.0). }
   SN_ARREGLA_FMT =
     'fix-references de %s: %d re-apuntadas, %d que no aparecen en el ' +
-    'workspace y %d con varias candidatas (no adivino).';
+    'workspace y %d con varias candidatas (no adivino). [CFG-068]';
   SN_ARREGLA_VARIOS_FMT =
     '  con VARIAS candidatas del mismo nombre (decide tu: delphi_config ' +
-    'remove-unit/add-unit, o remove-project/add-project en un grupo): %s';
+    'remove-unit/add-unit, o remove-project/add-project en un grupo): %s [CFG-069]';
   SN_ARREGLA_FALLIDAS_FMT =
-    '  encontradas pero NO re-apuntadas (lo que dijo el proyecto): %s';
+    '  encontradas pero NO re-apuntadas (lo que dijo el proyecto): %s [CFG-070]';
   SN_ARREGLA_RUTAS_FMT =
     '  rutas de busqueda que no existen (no hay nombre que buscar: ' +
-    'remove-searchpath y add-searchpath): %s';
+    'remove-searchpath y add-searchpath): %s [CFG-071]';
   { La mudanza de delphi_move (1.6.0): las rutas relativas que cruzan el borde. }
   SN_REUBICA_FMT =
     '  rutas relativas que cruzaban el borde de lo movido, re-apuntadas: %d ' +
     'units de fuera en sus proyectos, %d rutas de busqueda o de salida del ' +
     '.dproj, %d directivas {$I}/{$R}/{$L}, %d proyectos en grupos de dentro y ' +
     '%d referencias de fuera que apuntaban dentro (directivas, units, rutas ' +
-    'y grupos, en lo que esta sesion puede escribir). En: %s.';
+    'y grupos, en lo que esta sesion puede escribir). En: %s. [MOVE-005]';
   SN_REUBICA_FALLOS_FMT =
     '  OJO, no pude re-apuntar en: %s. Revisalo con delphi_config ' +
-    'command=fix-references.';
+    'command=fix-references. [MOVE-006]';
   SN_REUBICA_SALTADAS_FMT =
     '  OJO, no he mirado dentro de estas carpetas, que se llaman como una ' +
     'salida del IDE (Win32, Debug...) pero tienen fuentes: %s. Si algo de ' +
-    'ahi apuntaba a lo movido, revisalo con delphi_config command=fix-references.';
+    'ahi apuntaba a lo movido, revisalo con delphi_config command=fix-references. [MOVE-007]';
 
   SR_CONFIG_NO_DPROJ_FMT =
     'RECHAZADO: %s es el .dpr (el fuente), y la configuracion del proyecto ' +
     '(framework, plataformas, rutas de busqueda, salida) vive en el .dproj. ' +
     'Ahi al lado no hay ningun %s. Si el proyecto no tiene .dproj, este ' +
     'servidor no puede configurarlo: creale uno con delphi_create o abrelo ' +
-    'una vez en el IDE. (add-unit y remove-unit si funcionan sobre el .dpr.)';
+    'una vez en el IDE. (add-unit y remove-unit si funcionan sobre el .dpr.) [CFG-072 DENIED]';
 
   SR_CREATE_BADNAME_FMT =
     'RECHAZADO: "%s" no es un identificador Pascal valido. Un nombre de unit ' +
     'es Letra/_ seguido de letras, digitos o _, con puntos entre segmentos si ' +
-    'quieres espacio de nombres (MiApp.Datos.Clientes).';
+    'quieres espacio de nombres (MiApp.Datos.Clientes). [CREATE-007 DENIED]';
 
   SR_CREATE_RESERVED_FMT =
     'RECHAZADO: "%s" es una palabra reservada de Delphi, asi que "%s" no ' +
     'puede llamarse asi: en cuanto entre en el uses del .dpr el compilador ' +
     'da E2029 y detras van 15 errores en cascada que no apuntan aqui. ' +
     'Ponle un prefijo (UBegin, MiApp.Begin no vale tampoco: el segmento debe ' +
-    'ser limpio).';
+    'ser limpio). [CREATE-008 DENIED]';
 
   SR_CREATE_RTLNAME_FMT =
     'RECHAZADO: "%s" es el nombre de una unit de la RTL/VCL. Un fichero con ' +
     'ese nombre junto al proyecto SECUESTRA a la de verdad y los errores que ' +
     'salen luego apuntan a cualquier sitio menos a esto. Ponle un prefijo ' +
     'tuyo (U%s) o un espacio de nombres TUYO (MiApp.%s): lo que no vale es ' +
-    'colgarlo de uno de Embarcadero (System., Vcl., FMX., Data...).';
+    'colgarlo de uno de Embarcadero (System., Vcl., FMX., Data...). [CREATE-009 DENIED]';
 
   SR_CREATE_RTLNS_FMT =
     'RECHAZADO: "%s" cuelga de "%s", que es un espacio de nombres de ' +
@@ -3779,7 +3779,7 @@ const
     'exactamente igual que usar el nombre a secas: en cuanto exista, la suya ' +
     'deja de encontrarse y el error que ves es que ha desaparecido algo tan ' +
     'basico como Exception. Usa un espacio de nombres tuyo (MiApp.%s no, ' +
-    'pero MiEmpresa.MiApp.LoQueSea si).';
+    'pero MiEmpresa.MiApp.LoQueSea si). [CREATE-010 DENIED]';
 
   SR_CREATE_PROJECT_KIND =
     'RECHAZADO: de proyectos solo se yo hacer cinco: kind=project-console, ' +
@@ -3787,7 +3787,7 @@ const
     'runtime, .dpk + .dproj) y kind=project-test (un runner DUnitX con su ' +
     'primer fixture, para delphi_test). (Y luego form-vcl, form-fmx, ' +
     'frame-vcl, frame-fmx, datamodule y unit, que van DENTRO de un proyecto ' +
-    'que ya existe.)';
+    'que ya existe.) [CREATE-011 DENIED]';
 
   { Un proyecto de test nace verde y con el camino escrito: como se anaden
     fixtures y como se corre. Hermes tuvo que recibir el esqueleto por nota
@@ -3800,7 +3800,7 @@ const
     'clase [TestFixture] y TDUnitX.RegisterTestFixture en su initialization; ' +
     'las units que pruebas entran por el uses del .dpr (delphi_config ' +
     'add-unit) o por add-searchpath a su carpeta. Sale con ExitCode 1 si ' +
-    'algun test falla.';
+    'algun test falla. [CREATE-012]';
 
   { Un paquete propio se TRABAJA, no se instala (David, 2026-09-23): se
     compila a BPL+DCP en su carpeta, sus units entran por la clausula
@@ -3811,16 +3811,16 @@ const
     'compila a <nombre>.bpl + <nombre>.dcp en Win64\Debug de esta carpeta; ' +
     'no se instala ni se registra en el IDE (eso no lo hace este servidor). ' +
     'Para que otro proyecto lo use, anade su carpeta de salida al search ' +
-    'path (delphi_config add-searchpath) o enlaza sus units directamente.';
+    'path (delphi_config add-searchpath) o enlaza sus units directamente. [CREATE-013]';
 
   SR_CREATE_NEED_DIR =
     'RECHAZADO: falta "dir", la carpeta donde crear el proyecto. Debe estar ' +
-    'dentro del workspace; delphi_workspace te dice cual es.';
+    'dentro del workspace; delphi_workspace te dice cual es. [CREATE-014 DENIED]';
 
   SR_CREATE_CLASH_FMT =
     'RECHAZADO: ahi ya hay un %s (en %s) y el scaffolder jamas sobreescribe. ' +
     'No he creado NADA: %s sigue sin existir. Un proyecto nuevo quiere su ' +
-    'propia carpeta; pon "dir" en una subcarpeta.';
+    'propia carpeta; pon "dir" en una subcarpeta. [CREATE-015 DENIED]';
 
   SN_CREATE_CONSOLE_FORM =
     'OJO: ese proyecto es de CONSOLA (no usa Vcl.Forms ni FMX.Forms), asi que ' +
@@ -3828,103 +3828,103 @@ const
     'que lo cree ni bucle de mensajes que lo muestre. Si de verdad quieres ' +
     'convertirlo en una aplicacion con ventana, hace falta cambiar el .dpr ' +
     '(uses del framework, Application.Initialize/CreateForm/Run) y quitar el ' +
-    '{$APPTYPE CONSOLE}.';
+    '{$APPTYPE CONSOLE}. [CREATE-016]';
 
   SR_CREATE_FRAMEWORK_FMT =
     'RECHAZADO: pides un %s pero %s es un proyecto %s. Mezclarlos compila mal ' +
     'y tarde: el form iria con su Application.CreateForm a un .dpr que usa el ' +
     'otro framework. Usa el kind que toca, o crea el form en un proyecto de ' +
-    'su tipo.';
+    'su tipo. [CREATE-017 DENIED]';
 
   SR_CREATE_CONTENT_NOUNIT =
     'RECHAZADO: el "content" que mandas no empieza por "unit <nombre>;", asi ' +
     'que no es una unit de Pascal. Manda el fuente COMPLETO (unit / ' +
     'interface / implementation / end.) o no mandes content y te dejo el ' +
-    'esqueleto vacio.';
+    'esqueleto vacio. [CREATE-018 DENIED]';
 
   SR_CREATE_CONTENT_NAME_FMT =
     'RECHAZADO: el fuente dice "unit %s" pero el fichero se llamaria %s.pas. ' +
-    'Delphi exige que coincidan. Corrige uno de los dos.';
+    'Delphi exige que coincidan. Corrige uno de los dos. [CREATE-019 DENIED]';
 
   SR_CREATE_CONTENT_NOEND =
     'RECHAZADO: el "content" no termina en "end." - parece cortado. Manda la ' +
     'unit entera; si es larga, usa delphi_upload por trozos y luego ' +
-    'delphi_config command=add-unit para registrarla.';
+    'delphi_config command=add-unit para registrarla. [CREATE-020 DENIED]';
 
   SR_CHANGESET_VIRT_MISSING_FMT =
     'RECHAZADO: no existe %s, ni lo crea ninguna operacion anterior de esta ' +
     'misma tanda. Si lo va a crear una posterior, ordena las operaciones: se ' +
-    'aplican en el orden en que las apilas.';
+    'aplican en el orden en que las apilas. [CHSET-001 NOT_FOUND]';
 
   SR_CHANGESET_VIRT_EXISTS_FMT =
     'RECHAZADO: %s ya existe (create jamas sobreescribe). Si lo que quieres ' +
     'es rehacerlo entero, apila primero kind=delete de ese mismo fichero y ' +
-    'luego el create: la tanda cuenta con lo que apilas, no solo con el disco.';
+    'luego el create: la tanda cuenta con lo que apilas, no solo con el disco. [CHSET-002 DENIED]';
 
   SR_CHANGESET_VIRT_DEST_FMT =
     'RECHAZADO: el destino %s ya existe (o lo crea una operacion anterior de ' +
-    'esta tanda). Elige otro nombre o borra ese primero.';
+    'esta tanda). Elige otro nombre o borra ese primero. [CHSET-003 DENIED]';
 
   SR_CHANGESET_UNSTAGE_N_FMT =
     'RECHAZADO: n=%d no vale; hay %d operaciones apiladas. Usa el numero que ' +
-    'te da command=preview, o n=0 para quitar la ultima.';
+    'te da command=preview, o n=0 para quitar la ultima. [CHSET-004 DENIED]';
 
   SN_CHANGESET_UNSTAGED_FMT =
     'Quitada la operacion %d (%s %s). Quedan %d apiladas. Nada se ha tocado ' +
-    'en disco: la tanda sigue viva.';
+    'en disco: la tanda sigue viva. [CHSET-005]';
 
   SN_CHANGESET_PREVIEW_VIRTUAL =
     'Ese fichero todavia no existe: lo crea una operacion anterior de esta ' +
     'misma tanda, asi que el ancla no se puede comprobar hasta el commit. Si ' +
-    'falla, el commit deshace la tanda entera como siempre.';
+    'falla, el commit deshace la tanda entera como siempre. [CHSET-006]';
 
   SR_UPLOAD_OFFSET_INSIDE_FMT =
     'RECHAZADO: offset %d cae DENTRO del fichero (tiene %d bytes) y escribir ' +
     'ahi se llevaria por delante todo lo que viene detras, sin copia ' +
     'recuperable. Para continuar una subida a trozos, el offset es el FINAL ' +
     'actual: usa offset=%d. Para reemplazar el fichero entero, offset=0 (esa ' +
-    'si deja copia).';
+    'si deja copia). [UPLOAD-001 DENIED]';
 
   SR_UPLOAD_BINARY_DESIGNER =
     'RECHAZADO: eso es un .dfm/.fmx BINARIO (firma TPF0 o envoltorio de ' +
     'recurso $FF) y este servidor no interpreta designers binarios: si lo ' +
     'subes, ninguna tool de aqui podra volver a leerlo ni arreglarlo, y si ' +
     'encima pisa un designer de texto vivo te quedas sin el original legible. ' +
-    'Sube el designer como TEXTO (empieza por "object <Nombre>: <TClase>").';
+    'Sube el designer como TEXTO (empieza por "object <Nombre>: <TClase>"). [UPLOAD-002 DENIED]';
 
   SR_UPLOAD_BAD_SHA_FMT =
     'RECHAZADO: "%s" no tiene forma de sha256 (son 64 digitos hexadecimales). ' +
     'No he subido nada. Antes daba la subida por mala y apartaba el fichero ' +
-    'como .corrupto, castigando al fichero por un error del parametro.';
+    'como .corrupto, castigando al fichero por un error del parametro. [UPLOAD-003 DENIED]';
 
   SR_UPLOAD_NO_CHUNK_FMT =
     'RECHAZADO: no mandas "chunkbase64", asi que no hay nada que subir, y ahi ' +
     'ya hay un fichero de %d bytes. Una llamada a medias NO lo vacia. Si ' +
     'quieres reemplazarlo, manda su contenido en base64; si quieres borrarlo, ' +
-    'delphi_delete.';
+    'delphi_delete. [UPLOAD-004 DENIED]';
 
   SR_UPLOAD_NO_CHUNK_NEW =
     'RECHAZADO: falta "chunkbase64", el contenido en base64. Para un fichero ' +
     'de texto vacio o con contenido, delphi_create / delphi_edit son mejor ' +
-    'herramienta; delphi_upload es para binarios y para trozos.';
+    'herramienta; delphi_upload es para binarios y para trozos. [UPLOAD-005 DENIED]';
 
   // Lsp.Base64: los rechazos del decodificador, con el nombre del parametro.
   SR_B64_ALPHABET_FMT =
-    'error: %s contiene caracteres que no son base64. No he escrito nada.';
+    'error: %s contiene caracteres que no son base64. No he escrito nada. [UPLOAD-006 INVALID_PARAM]';
 
   SR_B64_LEN_FMT =
     'RECHAZADO: %s tiene %d caracteres utiles y base64 va en grupos ' +
     'de 4: faltan o sobran caracteres, casi siempre al transcribir un trozo ' +
     'largo. No he escrito nada. Manda trozos mas cortos, o pasa chunkSha256 ' +
-    'con cada uno para que el fallo se vea en el trozo y no al final.';
+    'con cada uno para que el fallo se vea en el trozo y no al final. [UPLOAD-007 DENIED]';
 
   SR_B64_INVALID_FMT =
-    'error: %s no es base64 valido (%s)';
+    'error: %s no es base64 valido (%s) [UPLOAD-008 INVALID_PARAM]';
 
   SR_UPLOAD_CHUNK_SHA_MISMATCH_FMT =
     'RECHAZADO: el sha256 de ESTE trozo no coincide (recibido %s, esperado ' +
     '%s; %d bytes decodificados). No he escrito nada: el fichero sigue como ' +
-    'estaba. Reenvia el mismo trozo con el mismo offset.';
+    'estaba. Reenvia el mismo trozo con el mismo offset. [UPLOAD-009 DENIED]';
 
   SR_UPLOAD_SHA_MISMATCH_FMT =
     'el sha256 NO coincide: lo ensamblado difiere del origen, asi que NO lo ' +
@@ -3937,7 +3937,7 @@ const
     '__delphi-patch junto al fichero, una por dia: si ya habias sustituido ' +
     'ese fichero hoy, la copia que hay es la ORIGINAL de esta manana, que es ' +
     'la que vale). Si querias anadir al final y no reemplazar, usa offset=<el ' +
-    'tamano actual>, no offset=0.';
+    'tamano actual>, no offset=0. [UPLOAD-010]';
 
   SP_DELETE_PURGE =
     'true = BORRAR DE VERDAD, sin vuelta atras. Solo vale DENTRO de la ' +
@@ -3949,20 +3949,20 @@ const
     'RECHAZADO: purge=true solo se puede usar DENTRO de la papelera ' +
     '(__delphi-patch). Para un fichero vivo, borralo normal: va a la ' +
     'papelera, y si de verdad quieres que desaparezca, purgalo desde alli. ' +
-    'Ese doble paso es la red de la que dependen todas las demas tools.';
+    'Ese doble paso es la red de la que dependen todas las demas tools. [FILE-007 DENIED]';
 
   SR_GUARD_OWNER_MARKER =
     'RECHAZADO: los ficheros ".by" son el marcador de quien mando algo a la ' +
     'papelera. Los escribe el servidor y no se editan: reescribir uno es ' +
-    'adjudicarse el trabajo de otro agente.';
+    'adjudicarse el trabajo de otro agente. [GUARD-003 DENIED]';
   SR_GUARD_DEAD_TRASH =
     'RECHAZADO: __delphi-patch\\ es la papelera de copias recuperables. Se lee ' +
     'y se restaura, pero no se escribe dentro: esa copia es la ULTIMA version ' +
     'buena de un fichero y pisarla destruye justo lo que la papelera existe ' +
-    'para conservar. El fichero vivo esta un nivel mas arriba.';
+    'para conservar. El fichero vivo esta un nivel mas arriba. [GUARD-004 DENIED]';
   SR_GUARD_DEAD_IDE =
     'RECHAZADO: __history\\ y __recovery\\ son las copias muertas del IDE. No ' +
-    'se escribe en ellas; el fichero vivo esta en la carpeta del proyecto.';
+    'se escribe en ellas; el fichero vivo esta en la carpeta del proyecto. [GUARD-005 DENIED]';
 
   { Ni papelera ni copia muerta: la carpeta donde el servidor deja LO SUYO.
     Se lee -de ahi te bajas una captura con delphi_fetch- y se puede borrar
@@ -3973,41 +3973,41 @@ const
     'sitio para trabajar. Lo que hay ahi lo pone el servidor y se puede ' +
     'borrar entero en cualquier momento, asi que un fichero tuyo ahi dentro ' +
     'es un fichero que vas a perder. Leerla si puedes (bajate una captura ' +
-    'con delphi_fetch); escribe tu trabajo en el workspace.';
+    'con delphi_fetch); escribe tu trabajo en el workspace. [GUARD-006 DENIED]';
 
   SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT =
     'RECHAZADO: dentro de esa carpeta hay %d copia(s) que mandaron a la ' +
     'papelera otros agentes (%s). Una carpeta se purga entera o no se purga: ' +
-    'purga tus copias una a una, o pidele al operador que limpie la carpeta.';
+    'purga tus copias una a una, o pidele al operador que limpie la carpeta. [FILE-008 DENIED]';
 
   SR_FILE_PURGE_NOT_YOURS_FMT =
     'RECHAZADO: esa copia la mando a la papelera OTRO agente (%s), asi que no ' +
     'es tuya para purgarla. Limpia lo tuyo; lo de los demas lo quita su ' +
     'dueno o el operador. (Si de verdad esto lo llevas tu, conectate con el ' +
-    'mismo clientInfo.name con el que lo borraste.)';
+    'mismo clientInfo.name con el que lo borraste.) [FILE-009 DENIED]';
 
   SR_FILE_PURGE_NOT_ROOT =
     'RECHAZADO: eso es la carpeta __delphi-patch ENTERA, y ahi dentro hay ' +
     'copias de otros. Purga lo tuyo: la subcarpeta del dia, o la copia ' +
-    'concreta que quieras quitar de en medio.';
+    'concreta que quieras quitar de en medio. [FILE-010 DENIED]';
 
   SR_FILE_PURGE_FAILED_FMT =
     'RECHAZADO: no he podido borrar %s (%s). Si algo lo tiene abierto, ' +
-    'reintenta en un momento.';
+    'reintenta en un momento. [FILE-011 DENIED]';
 
   { delphi_delete DENTRO de una temporal del servidor: de un temporal no se
     restaura nada, asi que no hay copia (26-sep-2026). }
   SN_FILE_DELETE_TEMP_FMT =
     'BORRADO %s, sin copia: es un temporal del servidor (__delphi-temp), ' +
-    'y de un temporal no se restaura nada.';
+    'y de un temporal no se restaura nada. [FILE-012]';
   SR_FILE_DELETE_TEMP_ROOT_FMT =
     'RECHAZADO: %s es la carpeta de temporales del servidor ENTERA: es de ' +
     'todos sus agentes y se vacia sola al arrancar. Borra lo tuyo de ' +
-    'dentro (tu subcarpeta, una captura).';
+    'dentro (tu subcarpeta, una captura). [FILE-013 DENIED]';
 
   SN_FILE_PURGED_FMT =
     'PURGADO %s. Esto no tiene vuelta atras: era una copia de la papelera y ' +
-    'ya no esta.';
+    'ya no esta. [FILE-014]';
 
   SR_FILE_DELETE_EMPTY_SHELL_FMT =
     'CASI: TODO el contenido de %s esta ya fuera (copia recuperable en %s), ' +
@@ -4019,13 +4019,13 @@ const
 
   SN_FILE_DELETE_EMPTY_OK_FMT =
     'BORRADA la carpeta vacia %s. No he hecho copia: no habia nada dentro ' +
-    'que copiar.';
+    'que copiar. [FILE-015]';
 
   SR_FILE_DELETE_STUCK_FMT =
     'RECHAZADO: %s esta vacia pero no puedo quitarla: algo la tiene abierta ' +
     '(suele ser que es el directorio actual de algun proceso). No hay nada ' +
     'dentro, asi que no se pierde nada dejandola; si molesta, la quita el ' +
-    'operador.';
+    'operador. [FILE-016 DENIED]';
 
   SR_FILE_DELETE_PARTIAL_FMT =
     'A MEDIAS: la copia recuperable de %s SI esta hecha (%s), pero el ' +
@@ -4042,35 +4042,35 @@ const
     'dentro del .res, que luego se puede descargar; por ahi se ha sacado ' +
     'desde el win.ini hasta el fichero de configuracion con el token. Las ' +
     'rutas del .rc tienen que quedarse dentro del workspace, y mejor ' +
-    'relativas a la carpeta de estilos.';
+    'relativas a la carpeta de estilos. [STYLE-023 DENIED]';
 
   SR_STYLES_RC_DEEP =
     'RECHAZADO: los #include del manifiesto se anidan demasiado (mas de 8). ' +
-    'Aplana el .rc: si hace falta esa profundidad, algo raro pasa.';
+    'Aplana el .rc: si hace falta esa profundidad, algo raro pasa. [STYLE-024 DENIED]';
 
   SR_STYLES_RC_BADPATH_FMT =
     'RECHAZADO: no puedo resolver la ruta %s del .rc. Usa rutas relativas a ' +
-    'la carpeta del propio .rc.';
+    'la carpeta del propio .rc. [STYLE-025 DENIED]';
 
   SR_STYLES_RC_UNREADABLE_FMT =
     'RECHAZADO: no puedo leer el .rc (%s) para comprobar a que ficheros ' +
-    'apunta, asi que no lo compilo.';
+    'apunta, asi que no lo compilo. [STYLE-026 DENIED]';
 
   SR_PASERVER_PROFILE_NAME =
     'RECHAZADO: el nombre del perfil solo admite letras, digitos, punto, ' +
-    'guion y guion bajo.';
+    'guion y guion bajo. [PAS-031 DENIED]';
 
   SN_PASERVER_PROFILE_REMOVED_FMT =
     'BORRADO el perfil de conexion "%s". Ojo: los perfiles viven fuera del ' +
     'workspace (donde los guarda el IDE), asi que esto NO tiene papelera: no ' +
-    'hay vuelta atras salvo volver a crearlo con add-profile.';
+    'hay vuelta atras salvo volver a crearlo con add-profile. [PAS-032]';
 
   SR_PASERVER_HOST_DENIED_FMT =
     'RECHAZADO: no marco a "%s". Marcar es una conexion que abre ESTE ' +
     'servidor, asi que decidir a donde no te toca a ti: valen SOLO los ' +
     'hosts que el operador haya escrito en RemoteHosts del workspace ' +
     'activo (ahora mismo: %s). Tener un perfil del IDE apuntando alli NO ' +
-    'es permiso: el perfil dice COMO conectar, el workspace dice SI se puede.';
+    'es permiso: el perfil dice COMO conectar, el workspace dice SI se puede. [PAS-033 DENIED]';
 
   SR_GIT_REMOTE_OFF_FMT =
     'RECHAZADO: este servidor no habla con "%s". Una URL explicita en un ' +
@@ -4079,26 +4079,26 @@ const
     'permitidos en [Workspace.<nombre>] GitRemotes del settings.ini. Los ' +
     'remotos que el ' +
     'ya haya configurado en el repositorio SI funcionan: usa el nombre del ' +
-    'remoto (push origin main), no la URL.';
+    'remoto (push origin main), no la URL. [GIT-004 DENIED]';
 
   SR_GIT_REMOTE_HOST_FMT =
     'RECHAZADO: "%s" no esta entre los hosts que este servidor tiene ' +
     'permitidos (%s). Si hace falta uno mas, pidelo con delphi_report: lo ' +
-    'anade el operador.';
+    'anade el operador. [GIT-005 DENIED]';
 
   SN_GIT_HINT_OVERRIDE =
     'OJO con los "hint:" de ahi arriba: los escribe git, no yo, y algunos ' +
     'recomiendan justo lo que esta tool no deja hacer (--no-ff, rebase, dar ' +
     'la URL en la linea de comandos). Aqui la salida de un merge divergente ' +
     'es dejarlo estar y avisar a un humano, o merge args=--abort si te ' +
-    'quedaste a medias; y para un remoto, su NOMBRE, no su URL.';
+    'quedaste a medias; y para un remoto, su NOMBRE, no su URL. [GIT-006]';
 
   SR_GIT_MERGE_ARGS =
     'RECHAZADO: merge solo acepta el NOMBRE de una rama, o "--abort" para ' +
     'salir de un merge a medias. Nada de opciones: --no-ff (y cualquier otra ' +
     'que anule el --ff-only con el que se lanza) deja el repositorio en ' +
     'MERGING con conflictos a medio resolver, que es justo lo que este ' +
-    'comando promete que no puede pasar.';
+    'comando promete que no puede pasar. [GIT-007 DENIED]';
 
   SN_GIT_MERGE_ABORTED =
     'MERGE ABORTADO: el repositorio vuelve a como estaba antes de intentarlo.';
@@ -4107,31 +4107,31 @@ const
     'integra por fast-forward (sin commit de merge, sin conflictos a medias). ' +
     'No se ha tocado nada. Integrar ramas divergidas es cosa de una persona ' +
     '(merge o rebase a mano); si lo que quieres es ponerte al dia, switch a ' +
-    'la otra rama y sigue desde ahi.';
+    'la otra rama y sigue desde ahi. [GIT-008]';
 
   SR_GIT_MESSAGE_LINES =
     'error: "message" no admite saltos de linea en este comando (va en la ' +
     'linea de ordenes). commit y tag SI los admiten: ahi el mensaje se pasa ' +
-    'por fichero (-F) y puedes escribir asunto, linea en blanco y cuerpo.';
+    'por fichero (-F) y puedes escribir asunto, linea en blanco y cuerpo. [GIT-009 INVALID_PARAM]';
 
   SR_GIT_SWITCH_NEEDS =
     'RECHAZADO: switch necesita "args" con el nombre de la rama. Para crear ' +
     'una nueva y saltar a ella: args=<rama> create=true. Los cambios sin ' +
     'commitear viajan contigo; si git se queja, guardalos antes con ' +
-    'command=stash args=push.';
+    'command=stash args=push. [GIT-010 DENIED]';
 
   SR_GIT_MERGE_NEEDS =
     'RECHAZADO: merge necesita "args" con la rama a integrar. Siempre se ' +
     'hace --ff-only: si hiciera falta un commit de merge (o hubiera ' +
     'conflictos), se rechaza en vez de dejarlo a medias. Eso es cosa de una ' +
-    'persona, no de un agente adivinando.';
+    'persona, no de un agente adivinando. [GIT-011 DENIED]';
 
   { Dice lo que RECIBIO: contestaba "drop no esta" a un push con rutas que
     nadie habia pedido tirar (26-sep-2026). }
   SR_GIT_STASH_RUTA_FMT =
     'RECHAZADO: stash push -- "%s": no es una ruta de este repositorio ' +
     '(%s). Van ficheros o carpetas DENTRO del repo, relativos a "repo" o ' +
-    'absolutos, con su nombre tal cual: sin comodines. No se ha guardado nada.';
+    'absolutos, con su nombre tal cual: sin comodines. No se ha guardado nada. [GIT-012 DENIED]';
 
   SR_GIT_STASH_ARGS_FMT =
     'RECHAZADO: stash no entiende args="%s". Admite: push (guarda TODO, por ' +
@@ -4139,49 +4139,49 @@ const
     'HEAD y lo de antes queda en el stash, que es como se descartan los ' +
     'cambios de un fichero sin perderlos; sin opciones, y la etiqueta va ' +
     'en "message"); pop (recupera el ultimo) y list. drop no existe: ' +
-    'destruye trabajo sin vuelta atras.';
+    'destruye trabajo sin vuelta atras. [GIT-013 NOT_FOUND]';
 
   // ---- delphi_git worktree (1.4.0) ----
 
   SR_GIT_WORKTREE_ARGS =
     'RECHAZADO: worktree admite args=list (las copias de trabajo de este ' +
     'repo), add (path=<carpeta NUEVA dentro de tus raices> ref=<tag, rama o ' +
-    'commit>) o remove (path=<una que ensene list>).';
+    'commit>) o remove (path=<una que ensene list>). [GIT-014 DENIED]';
 
   SR_GIT_WORKTREE_PATH =
     'RECHAZADO: worktree add/remove necesitan "path": la carpeta de la copia ' +
     'de trabajo (add: una carpeta NUEVA dentro de tus raices, como el destino ' +
-    'de un clone).';
+    'de un clone). [GIT-015 DENIED]';
 
   SR_GIT_WORKTREE_EXISTS_FMT =
     'RECHAZADO: %s ya existe. Un worktree va en una carpeta NUEVA: elige otro ' +
-    'nombre, o quita antes la que hay.';
+    'nombre, o quita antes la que hay. [GIT-016 DENIED]';
 
   SR_GIT_WORKTREE_REF =
     'RECHAZADO: "ref" tiene que ser un tag, una rama o un commit (letras, ' +
     'cifras y . _ / ~ ^ -, sin empezar por guion): por ejemplo v1.3.2, main, ' +
-    'HEAD~3 o un hash.';
+    'HEAD~3 o un hash. [GIT-017 DENIED]';
 
   SR_GIT_WORKTREE_INSIDE_FMT =
     'RECHAZADO: el worktree no puede ir dentro del propio repositorio (%s): ' +
     'el arbol principal lo veria como una carpeta sin seguimiento y un ' +
-    '"add -A" se lo llevaria. Ponlo fuera, al lado.';
+    '"add -A" se lo llevaria. Ponlo fuera, al lado. [GIT-018 DENIED]';
 
   SR_GIT_WORKTREE_NOT_LISTED_FMT =
     'RECHAZADO: %s no es un worktree de este repositorio (command=worktree ' +
     'args=list ensena los que hay). remove solo quita esos, y nunca la copia ' +
-    'principal.';
+    'principal. [GIT-019 DENIED]';
 
   SR_GIT_WORKTREE_LINK_FMT =
     'RECHAZADO: no quito este worktree porque dentro hay un enlace (%s): git ' +
     'lo atravesaria y borraria lo que hay detras, que puede no ser tuyo. ' +
-    'Quita antes el enlace y repite.';
+    'Quita antes el enlace y repite. [GIT-020 DENIED]';
 
   SN_GIT_WORKTREE_ADDED_FMT =
     'Worktree listo en %s, con esa version suelta (detached): compila y ' +
     'prueba ahi (delphi_build, delphi_test) para comparar. Es tuyo de ' +
     'limpiar: quitalo con command=worktree args=remove y el mismo path cuando ' +
-    'acabes; args=list lo ensena mientras siga.';
+    'acabes; args=list lo ensena mientras siga. [GIT-021]';
 
   // ---- delphi_changeset ----
 
@@ -4246,45 +4246,45 @@ const
     'of the same changeset did to that file';
 
   SR_CHANGESET_CMD =
-    'error: command debe ser begin | stage | preview | commit | rollback | status';
+    'error: command debe ser begin | stage | preview | commit | rollback | status [CHSET-007 INVALID_PARAM]';
 
   SR_CHANGESET_TOO_MANY =
     'RECHAZADO: ya hay 8 changesets abiertos. Cierra alguno (commit o ' +
-    'rollback) o espera a que caduquen (30 min sin uso).';
+    'rollback) o espera a que caduquen (30 min sin uso). [CHSET-008 DENIED]';
 
   SR_CHANGESET_UNKNOWN =
     'RECHAZADO: ese changeset no existe (o caduco a los 30 min sin uso). ' +
-    'command=status lista los abiertos; command=begin abre uno nuevo.';
+    'command=status lista los abiertos; command=begin abre uno nuevo. [CHSET-009 NOT_FOUND]';
 
   SR_CHANGESET_KIND =
-    'RECHAZADO: kind debe ser edit | create | delete | delete-line | move.';
+    'RECHAZADO: kind debe ser edit | create | delete | delete-line | move. [CHSET-010 DENIED]';
 
   SR_CHANGESET_NEED_PATH =
-    'RECHAZADO: stage necesita "path" (el fichero que toca la operacion).';
+    'RECHAZADO: stage necesita "path" (el fichero que toca la operacion). [CHSET-011 DENIED]';
 
   SR_CHANGESET_NEED_DEST =
-    'RECHAZADO: kind=move necesita "dest" (el destino).';
+    'RECHAZADO: kind=move necesita "dest" (el destino). [CHSET-012 DENIED]';
 
   SR_CHANGESET_EDIT_NEEDS =
     'RECHAZADO: kind=edit necesita "old" (UNA linea completa copiada de ' +
-    'delphi_read) y opcionalmente "new" (el reemplazo) y "atline".';
+    'delphi_read) y opcionalmente "new" (el reemplazo) y "atline". [CHSET-013 DENIED]';
 
   SR_CHANGESET_DELLINE_NEEDS =
     'RECHAZADO: kind=delete-line necesita "atline" (el numero de linea, ' +
     '1-based) porque una linea EN BLANCO no tiene ancla usable. "old" es ' +
-    'opcional y, si lo das, tiene que coincidir con esa linea.';
+    'opcional y, si lo das, tiene que coincidir con esa linea. [CHSET-014 DENIED]';
 
   SR_CHANGESET_EMPTY =
-    'RECHAZADO: el changeset no tiene operaciones. stage anade una por llamada.';
+    'RECHAZADO: el changeset no tiene operaciones. stage anade una por llamada. [CHSET-015 DENIED]';
 
   SR_CHANGESET_NOT_PREVIEWED =
     'RECHAZADO: commit exige un preview LIMPIO previo (unresolved=0) y ' +
-    'posterior a la ultima operacion que apilaste o quitaste (stage o unstage). Llama a command=preview y revisa el resultado.';
+    'posterior a la ultima operacion que apilaste o quitaste (stage o unstage). Llama a command=preview y revisa el resultado. [CHSET-016 DENIED]';
 
   SR_CHANGESET_FILE_CHANGED_FMT =
     'RECHAZADO: FILE_CHANGED - estos ficheros cambiaron despues del preview: ' +
     '%s. Nada se ha tocado. Repite preview (los fingerprints se recalculan) ' +
-    'y vuelve a commit.';
+    'y vuelve a commit. [CHSET-017 DENIED]';
 
   SR_CHANGESET_ROLLED_BACK_FMT =
     'ROLLBACK COMPLETO: fallo la operacion %d de %d y TODOS los ficheros han ' +
@@ -4295,42 +4295,42 @@ const
     'RECHAZADO: %s es un fichero de proyecto y lo mantiene el IDE; el commit ' +
     'lo iba a rechazar de todas formas, y te habria tirado la tanda entera. ' +
     'Para tocar el proyecto usa delphi_config (add-unit, remove-unit, ' +
-    'add-platform, add-searchpath, set-output).';
+    'add-platform, add-searchpath, set-output). [CHSET-018 DENIED]';
 
   SN_CHANGESET_STATUS_NOTE =
     'Los ids salen recortados a proposito: los changesets se ven pero no se ' +
     'tocan sin el id completo, que solo tiene quien lo abrio. Si has perdido ' +
-    'el tuyo, abre otro; el viejo caduca solo a la media hora.';
+    'el tuyo, abre otro; el viejo caduca solo a la media hora. [CHSET-019]';
 
   SN_CHANGESET_BEGUN_FMT =
     'CHANGESET %s abierto. stage anade operaciones (una por llamada), ' +
-    'preview las resuelve, commit aplica todo o nada.';
+    'preview las resuelve, commit aplica todo o nada. [CHSET-020]';
 
   SN_CHANGESET_STAGED_FMT =
     'STAGED %s de %s (operacion %d del changeset). Nada tocado aun. ' +
     'command=preview es OBLIGATORIO antes del commit, y tiene que ser ' +
     'POSTERIOR a la ultima operacion que apiles: si apilas algo mas despues ' +
     'del preview, hay que volver a previsualizar. Si te equivocas en una, ' +
-    'command=unstage n=<numero> la quita sin tirar la tanda.';
+    'command=unstage n=<numero> la quita sin tirar la tanda. [CHSET-021]';
 
   SN_CHANGESET_DISCARDED =
-    'Changeset descartado. No se habia tocado ningun fichero.';
+    'Changeset descartado. No se habia tocado ningun fichero. [CHSET-022]';
 
   SN_CHANGESET_PREVIEW_OK =
     'Preview limpio: todas las anclas resuelven. commit aplica todo o nada; ' +
-    'si un fichero cambia antes del commit, se rechaza entero.';
+    'si un fichero cambia antes del commit, se rechaza entero. [CHSET-023]';
 
   SN_CHANGESET_PREVIEW_BAD =
     'Hay operaciones sin resolver (anchor NO ENCONTRADA o AMBIGUA). Quita la ' +
     'que falla con command=unstage n=<el numero que ves arriba> y vuelve a ' +
     'apilarla bien (con atline si el ancla sale mas de una vez): NO hace ' +
     'falta tirar la tanda entera. commit sigue bloqueado hasta un preview ' +
-    'limpio.';
+    'limpio. [CHSET-024]';
 
   SN_CHANGESET_COMMITTED_FMT =
     'COMMIT COMPLETO: %d operaciones aplicadas sobre %d ficheros. Esto es lo ' +
     'que ha cambiado:'#10'%s'#10'Los backups por fichero de __delphi-patch ' +
-    'siguen existiendo como siempre.';
+    'siguen existiendo como siempre. [CHSET-025]';
 
   // ---- delphi_components ----
 
@@ -4361,10 +4361,10 @@ const
     'OSX64, OSXARM64, Linux64, Android, Android64, iOSDevice64, iOSSimARM64.';
 
   SN_COMPONENTS_PLATFORM_HEAD_FMT =
-    'Library Search Path del IDE para %s (RAD Studio %s): %d carpetas registradas';
+    'Library Search Path del IDE para %s (RAD Studio %s): %d carpetas registradas [COMP-002]';
 
   SN_COMPONENTS_PLATFORM_COMPLETE_FMT =
-    'Todos los componentes registrados en otras plataformas lo estan tambien en %s.';
+    'Todos los componentes registrados en otras plataformas lo estan tambien en %s. [COMP-003]';
 
   SN_COMPONENTS_PLATFORM_MISSING_FMT =
     '%d componentes registrados en otras plataformas y NO en %s (candidatos ' +
@@ -4374,20 +4374,20 @@ const
     'Un componente sin Lib\<plataforma> compila desde fuente: delphi_config ' +
     'command=add-searchpath platform=<plataforma> path=<raiz>\Source (la ' +
     'carpeta que contenga los .pas; mirala con delphi_list). Si solo trae ' +
-    '.dcu/.so de otras plataformas, no sirve para esta: delphi_report.';
+    '.dcu/.so de otras plataformas, no sirve para esta: delphi_report. [COMP-004]';
 
   SR_COMPONENTS_MISSING =
     'No se encontro ninguna instalacion de RAD Studio en el servidor - ' +
     'sin IDE no hay packages que listar.';
 
   SN_COMPONENTS_NONE_FMT =
-    'Ningun package registrado contiene "%s". Lista completa: llama sin filter.';
+    'Ningun package registrado contiene "%s". Lista completa: llama sin filter. [COMP-005]';
 
   SN_COMPONENTS_NOTE =
     'These design packages are registered in the SERVER''s RAD Studio: ' +
     'their components and units are available to projects built here. ' +
     'Base RTL/VCL/FMX are always present and not listed. No install ' +
-    'command exists by design - report a missing library with delphi_report.';
+    'command exists by design - report a missing library with delphi_report. [COMP-006]';
 
   SN_BUILD_ANDROID_NEW =
     'No .deployproj existed, so the standard Android deployment manifest ' +
@@ -4396,14 +4396,14 @@ const
     'library), plus an AndroidManifest.template.xml seed and fallback ' +
     'version properties in the .dproj (package com.embarcadero.<project>, ' +
     'minSdk 23) when the project had none. Files the IDE Deployment ' +
-    'Manager already wrote are never overwritten.';
+    'Manager already wrote are never overwritten. [BUILD-039]';
 
   SN_BUILD_APK_NOTE =
     'This is the built .apk (debug-signed, sideloadable). msbuild does not ' +
     'install Android apps (DeviceId only auto-installs on iOS): put it on ' +
     'a device hanging off this server with delphi_adb command=install ' +
     'apk=<path> (optional device=<serial>), open it with command=run ' +
-    'app=<package>, and watch it with command=logcat.';
+    'app=<package>, and watch it with command=logcat. [BUILD-040]';
 
   // ---------------------------------------------------------------------
   // delphi_report (feedback channel - works at EVERY access level)
@@ -4441,7 +4441,7 @@ const
 
   SR_REPORT_EMPTY =
     'RECHAZADO: delphi_report necesita "message" con la descripcion del ' +
-    'problema. Cuenta que intentaste, que paso y que esperabas.';
+    'problema. Cuenta que intentaste, que paso y que esperabas. [REPORT-002 DENIED]';
 
   // delphi_report is the ONE write a read-only (even anonymous) credential may
   // perform, so it is also the one place such a client could grow the server's
@@ -4451,13 +4451,13 @@ const
   SR_REPORT_TOO_BIG_FMT =
     'RECHAZADO: el reporte ocupa %d KB y el limite son %d KB. Cuenta lo ' +
     'esencial (que intentaste, que paso, que esperabas) y parte lo demas en ' +
-    'varios reportes: se acumulan, no se sobreescriben.';
+    'varios reportes: se acumulan, no se sobreescriben. [REPORT-003 DENIED]';
 
   // 500 informes del mismo tipo, titulo y segundo: no pasa en la vida real,
   // pero un bucle de nombres sin techo tampoco se deja abierto.
   SR_REPORT_NO_NAME =
     'RECHAZADO: no encuentro un nombre libre para el reporte en la carpeta ' +
-    'reports. Cambia el "title" y reintenta.';
+    'reports. Cambia el "title" y reintenta. [REPORT-004 DENIED]';
 
   SN_REPORT_OK_FMT =
     'GRACIAS - reporte guardado como %s (v%s).'#10 +
