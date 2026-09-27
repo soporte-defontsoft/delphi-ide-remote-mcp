@@ -964,7 +964,7 @@ begin
       // hover knows the symbol, definition is not indexed yet: say "not yet",
       // never the enclosing routine (measured by Hermes, 2026-09-22)
       DefResp.Free;
-      Exit(MsgText(SN_LSP_WARMING) + NoSettingsNote(Settings));
+      Exit(MsgText(SR_LSP_WARMING) + NoSettingsNote(Settings));
     end
     else
     begin
@@ -984,7 +984,7 @@ begin
     if Pending then
     begin
       Resp.Free;
-      Exit(MsgText(SN_LSP_WARMING) + NoSettingsNote(Settings));
+      Exit(MsgText(SR_LSP_WARMING) + NoSettingsNote(Settings));
     end;
   end;
   Result := RenderResult(Resp, NoSettingsNote(Settings));

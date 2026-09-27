@@ -46,7 +46,7 @@ const
   SN_DELPHIVERSION_MISSING_FMT =
     'DelphiVersion=%s asked by this workspace is not installed (or ships no ' +
     'DelphiLSP): version %s answers instead - the newest with DelphiLSP. ' +
-    'delphi_installs lists what this machine has.';
+    'delphi_installs lists what this machine has. [WS-021]';
   SN_WORKSPACE_LIBZONE_OFF =
     'La zona de biblioteca esta APAGADA en este servidor ' +
     '([Workspace.<nombre>] ' +
@@ -156,7 +156,7 @@ const
     '*** AVISO (no bloquea): la linea %d abre un comentario de llave que ' +
     'lleva otra llave dentro. Pascal no anida llaves: el primer } lo cierra y ' +
     'lo que sigue es codigo, o una directiva de verdad si cita una de ' +
-    'llave-dolar. Si querias citarla, pon el comentario con // o con (* *). ***';
+    'llave-dolar. Si querias citarla, pon el comentario con // o con (* *). *** [EDIT-091]';
   SR_CREATE_INCLUDE_CONTENT =
     'RECHAZADO: kind=include necesita "content": un .inc vacio no sirve de nada. [CREATE-005 DENIED]';
   SN_CREATE_INCLUDE_FMT =
@@ -188,11 +188,11 @@ const
   { Calentamiento del motor: definition vacia con hover lleno (medido por
     Hermes, 2026-09-22). Es "todavia no", asi que va como error: (corrige y
     repite) y no como RECHAZADO (cambia de rumbo). }
-  SN_LSP_WARMING =
+  SR_LSP_WARMING =
     'error: el motor reconoce el simbolo en esa posicion (hover contesta) ' +
     'pero todavia no ha indexado su definicion: esta calentando esa unit. ' +
     'Repite la misma llamada en unos segundos; la posicion es correcta y no ' +
-    'hay nada que cambiar.';
+    'hay nada que cambiar. [LSP-025 INVALID_PARAM]';
   SR_REFS_WARMING_FMT =
     'error: el motor reconoce "%s" (hover contesta) pero todavia no tiene ' +
     'su definicion indexada: esta calentando esa unit. Repite la misma ' +
@@ -203,7 +203,7 @@ const
   SN_DEF_DECL_FALLBACK =
     ' [note: definition did not resolve at that position, so this is ' +
     'DelphiLSP''s DIRECT declaration answer - on a call site that is the ' +
-    'ENCLOSING routine, not the callee. Check the line before trusting it.]';
+    'ENCLOSING routine, not the callee. Check the line before trusting it.] [LSP-026]';
 
   SR_REFS_NO_DEFINITION_FMT =
     'RECHAZADO: el compilador no resuelve "%s" en esa posicion, asi que no ' +
@@ -464,7 +464,7 @@ const
     'ser codigo de terceros - un vendor, un submodulo, un clon de ' +
     'referencia - que se consulta pero no se toca. Si de verdad hay que ' +
     'cambiarlo, es el operador quien lo saca de ReadOnlyPaths= en su ' +
-    '[Workspace.<nombre>]: pidelo con delphi_report y di para que.';
+    '[Workspace.<nombre>]: pidelo con delphi_report y di para que. [GUARD-012 DENIED]';
 
   SN_PROJECTS_HIDDEN_FMT =
     '%d .dproj/.groupproj ocultos por ser COPIAS: copias de seguridad de ' +
@@ -533,10 +533,10 @@ const
     initialize en vez de trabajar contra un fantasma. }
   SR_SESSION_UNKNOWN =
     'Session not found: this server never issued that Mcp-Session-Id (it was ' +
-    'probably restarted). Send initialize again and use the new session id.';
+    'probably restarted). Send initialize again and use the new session id. [SYS-007 NOT_FOUND]';
   SR_SESSION_EXPIRED_FMT =
     'Session expired: no request on it for more than %s minutes ([Server] ' +
-    'SessionTimeoutMinutes). Send initialize again and use the new session id.';
+    'SessionTimeoutMinutes). Send initialize again and use the new session id. [SYS-008 NOT_FOUND]';
   { The HTTP gate without a valid token: what the client has to send and
     where the token lives. Said by the 401 body and by the tray when it
     copies the URL (issue #4, 2026-09-27: the URL alone got a bare 401).
@@ -670,27 +670,27 @@ const
     '(abajo). El ancla ("old") es la linea COMPLETA, copiada de ' +
     'delphi_read (la indentacion puede faltar); para cambiar solo ese ' +
     'trozo: fragment=<ese texto> atline=<su numero> y new. No he escrito ' +
-    'nada.';
+    'nada. [EDIT-092 DENIED]';
   SR_ANCLA_NO_ESTA_FMT =
     'RECHAZADO: el ancla no aparece en %s. No he escrito nada.'#10 +
-    'Ancla buscada: |%s|';
+    'Ancla buscada: |%s| [EDIT-093 DENIED]';
   SN_ANCLA_COPIALA =
     'Copia la linea literal de delphi_read (no la reconstruyas de memoria). [EDIT-014]';
   SN_ANCLA_INDENTACION_FMT =
     'OJO: la linea %d tiene ese MISMO texto con OTRA indentacion. Copiala ' +
-    'tal cual:';
+    'tal cual: [EDIT-094]';
   SN_ANCLA_CONTIENEN =
-    'Lineas que lo CONTIENEN:';
+    'Lineas que lo CONTIENEN: [EDIT-095]';
   SN_ANCLA_PARECIDA_FMT =
-    'La linea REAL mas parecida es la %d - comparala caracter a caracter:';
+    'La linea REAL mas parecida es la %d - comparala caracter a caracter: [EDIT-096]';
   SN_BLOQUE_LINEA_FALTA_FMT =
-    'La linea %d de tu bloque no esta ENTERA en el fichero: "%s".';
+    'La linea %d de tu bloque no esta ENTERA en el fichero: "%s". [EDIT-097]';
 
   SR_PATCH_BLOCK_MISSING_FMT =
     'RECHAZADO: no encuentro ese bloque de %d lineas. La primera que busco ' +
     'es "%s". El bloque se compara ENTERO y en orden (los espacios de los ' +
     'extremos de cada linea dan igual, el contenido no): reelee con ' +
-    'delphi_read y copialo de ahi.';
+    'delphi_read y copialo de ahi. [EDIT-098 DENIED]';
 
   SR_PATCH_BLOCK_AMBIGUOUS_FMT =
     'RECHAZADO: ese bloque aparece %d veces (empieza por "%s"), asi que no se ' +
@@ -757,7 +757,7 @@ const
     'ROLLBACK: fallo la edicion %d de %d y el fichero ha vuelto byte a byte a ' +
     'como estaba. NADA se ha aplicado, ni siquiera las anteriores. Esto es lo ' +
     'que paso:'#10'%s'#10'Corrige esa entrada (relee el fichero con ' +
-    'delphi_read y copia el ancla literal) y vuelve a mandarlas todas.';
+    'delphi_read y copia el ancla literal) y vuelve a mandarlas todas. [EDIT-099 DENIED]';
 
   SN_PATCH_EDITS_OK_FMT =
     'APLICADAS %d ediciones sobre %s, todas o ninguna:'#10'%s'#10'Copia ' +
@@ -783,7 +783,7 @@ const
     por motivo, solo las que no son cero (THiddenCount.Report, en
     Lsp.References). Cada parte dice que es y como verlo. }
   SN_HIDDEN_HEAD_FMT =
-    '%d entradas no salen aqui, y no todas por el mismo motivo:';
+    '%d entradas no salen aqui, y no todas por el mismo motivo: [LIST-012]';
   SN_HIDDEN_ARTIFACTS_FMT =
     '%d estan en carpetas de compilacion (Win32, Win64, Debug, Release, ' +
     'dcu, __history): existen en el disco, pasa esa carpeta como root ' +
@@ -846,7 +846,7 @@ const
   SR_ARG_DUPLICATE_FMT =
     'RECHAZADO: has mandado dos veces el parametro "%s" (las mayusculas y ' +
     'los "_" no lo hacen distinto). Manda cada parametro UNA sola vez, con ' +
-    'el nombre exacto que da tools/list en "inputSchema".';
+    'el nombre exacto que da tools/list en "inputSchema". [GUARD-013 DENIED]';
 
   // delphi_build composes a cmd.exe line (rsvars.bat && msbuild ...) and
   // platform/config/target travel through it UNQUOTED: a metacharacter there
@@ -948,21 +948,21 @@ const
     'trabajo: borrarlo o moverlo se llevaria el proyecto entero y dejaria la ' +
     'copia de seguridad FUERA de la jaula. Borra o mueve lo que hay DENTRO ' +
     '(delphi_list te lo ensena). Cambiar los roots es cosa del operador, en ' +
-    'settings.ini [Workspace.<nombre>] Roots.';
+    'settings.ini [Workspace.<nombre>] Roots. [GUARD-014 DENIED]';
 
   SR_AGENT_CONFINED_FMT =
     'RECHAZADO: el servidor esta en modo confinado y tu (agente "%s") solo ' +
     'puedes ESCRIBIR dentro de tu carpeta <root>\%s\... (o en una carpeta ' +
     'compartida que haya declarado el operador). Leer puedes leerlo todo; ' +
     'escribir, solo lo tuyo. Crea/edita bajo tu carpeta, o pide al operador que ' +
-    'marque esa carpeta como compartida.';
+    'marque esa carpeta como compartida. [GUARD-015 DENIED]';
 
   SR_REFERENCE_ROOT_FMT =
     'RECHAZADO: "%s" esta en un proyecto de REFERENCIA de este workspace ' +
     '(ReadOnlyRoots: %s). Se lee, se busca, se navega y se consulta su git, ' +
     'pero no se escribe, no se compila (compilar escribe dcu y exe) y no se ' +
     'mueve: esta ahi para aprender como se hacen las cosas en la casa, no ' +
-    'para cambiarlo. Lo tuyo son los roots de delphi_workspace.';
+    'para cambiarlo. Lo tuyo son los roots de delphi_workspace. [GUARD-016 DENIED]';
 
   SN_WORKSPACE_REFERENCE_NOTE =
     'readOnlyRoots are REFERENCE projects: read, search, navigate, git ' +
@@ -1133,7 +1133,7 @@ const
     '[Workspace.<nombre>] del settings.ini del servidor (y VaultReadOnly=0 ' +
     'si ademas ha de poder escribirse). Que estas tools aparezcan aqui solo ' +
     'significa que ALGUN workspace de este servidor tiene vault, no que sea ' +
-    'el tuyo. Si lo necesitas para tu trabajo, pidelo con delphi_report.';
+    'el tuyo. Si lo necesitas para tu trabajo, pidelo con delphi_report. [VAULT-035 INVALID_PARAM]';
 
   // No echo of the offending path on purpose: the outbound filter rewrites
   // server drive letters, so echoing "C:/Windows/win.ini" came back as
@@ -1160,17 +1160,17 @@ const
     'vault (projects/x/context.md): sin unidades, sin rutas absolutas y sin ' +
     '"..". Localiza notas con vault_search target=files. [VAULT-004 DENIED]';
 
-  SR_VAULT_MORE_FMT =
+  SN_VAULT_MORE_FMT =
     #10'--- Mostradas las lineas %d..%d de %d. Pide el resto con ' +
-    'vault_read {offset: %d} (y limit si quieres trozos mas pequenos).';
+    'vault_read {offset: %d} (y limit si quieres trozos mas pequenos). [VAULT-036]';
 
   SR_VAULT_TARGET_FMT =
     'error: target="%s" no existe. Solo hay dos: files (busca en los NOMBRES ' +
     'de las notas, con glob: *.md, *delphi*) y content (busca DENTRO del ' +
     'texto, con expresion regular). Por defecto, files. [VAULT-005 NOT_FOUND]';
 
-  SR_VAULT_SHOWN_FMT =
-    #10'--- Mostradas las lineas %d..%d de %d (hasta el final).';
+  SN_VAULT_SHOWN_FMT =
+    #10'--- Mostradas las lineas %d..%d de %d (hasta el final). [VAULT-037]';
 
   SR_VAULT_PAST_END_FMT =
     'error: offset %d mas alla del final: "%s" tiene %d lineas. Pide desde ' +
@@ -1180,7 +1180,7 @@ const
     '# Arranque del vault: las reglas (AGENTS-VAULT.md) y el indice ' +
     '(MEMORY.md).'#10 +
     'Carga perezosa: usa el indice para decidir que notas abrir con ' +
-    'vault_read; no leas el vault entero.'#10#10;
+    'vault_read; no leas el vault entero. [VAULT-038]'#10#10;
 
   // When rules + index do not fit in one result, the split is between FILES:
   // the first arrives whole and the second is asked for by name. Never half a
@@ -1353,7 +1353,7 @@ const
     'No hay salida del trabajo %s en el target: o ya se leyo entera (una ' +
     'salida terminada se borra al leerla), o termino antes de que volviera ' +
     'su remote-run (y ya la tuviste en su respuesta), o ese trabajo no es ' +
-    'de este proyecto en esa maquina.';
+    'de este proyecto en esa maquina. [RUN-018 INVALID_PARAM]';
 
   SR_REMOTERUN_PROJECT_DENIED_FMT =
     'RECHAZADO: el proyecto "%s" no esta en la lista de proyectos que este ' +
@@ -1423,13 +1423,13 @@ const
     'consola corre igual; uno con ventana morira al arrancar (GTK, exit 134). ' +
     'Hace falta una sesion abierta en el destino con el MISMO usuario que ' +
     'corre PAServer [RUN-016]';
-  SR_REMOTERUN_TIMEOUT_FMT =
+  SN_REMOTERUN_TIMEOUT_FMT =
     'el programa SIGUE CORRIENDO en el target: no habia terminado a los %d s ' +
     'y NO se le mata, porque una aplicacion con ventana esta para quedarse. ' +
     'En "output" tienes lo que llevaba escrito hasta ahora, y lo que ' +
     'escriba despues lo lees con command=output (outputNote). Si esperabas algo ' +
     'que termina, dale mas plazo con timeoutms; si es una GUI, ya esta en ' +
-    'marcha y puedes manejarla con delphi_desktop (carpeta %s del target).';
+    'marcha y puedes manejarla con delphi_desktop (carpeta %s del target). [RUN-019]';
 
   SN_REMOTERUN_NOTE =
     'Ejecutado en el target por PAServer, sin nada instalado alli. Solo se ' +
@@ -1449,12 +1449,6 @@ const
     'RECHAZADO: get-sdk cubre hoy la plataforma Linux64 y el perfil "%s" es ' +
     'de %s. Para otras plataformas (macOS necesita un Mac real con PAServer) ' +
     'reportalo con delphi_report: es la senal para construirlas. [PAS-007 DENIED]';
-
-  SR_PASERVER_SDK_PULL_FMT =
-    'error: fallo el pull del SDK en "%s" (paclient exit %d): %s -- El ' +
-    'sysroot puede haber quedado a medias; corrige la causa (PAServer vivo? ' +
-    'ruta existente en el target?) y vuelve a lanzar get-sdk: los pulls son ' +
-    'reanudables.';
 
   SR_CONFIG_SDK_PLATFORM_FMT =
     'RECHAZADO: "%s" no es una plataforma Delphi valida. Validas: Win32, ' +
@@ -1648,9 +1642,9 @@ const
     'RECHAZADO: el fichero a traer se nombra RELATIVO a la carpeta que el ' +
     'proyecto desplego (p.ej. "captura.png"). Nada de rutas absolutas ni "..". [FETCH-001 DENIED]';
   SR_FETCHTARGET_FAIL_FMT =
-    'no pude traer el fichero del target (paclient %d): %s';
+    'no pude traer el fichero del target (paclient %d): %s [FETCH-004 INTERNAL]';
   SR_FETCHTARGET_NOFILE_FMT =
-    'el target no dejo "%s" donde se esperaba: ¿corrio el programa que lo escribe?';
+    'el target no dejo "%s" donde se esperaba: ¿corrio el programa que lo escribe? [FETCH-005 NOT_FOUND]';
 
   SD_ADBLINUX =
     'The desktop of the machine behind a PAServer profile - a Linux target, ' +
@@ -1748,7 +1742,7 @@ const
     'operador deja el nodo junto al servidor (node\McpDesktopNode para un ' +
     'Linux, node\McpDesktopNode.exe para un Windows: la distribucion trae ' +
     'los dos, y entonces se despliega y actualiza solo), o pasa project= con ' +
-    'el .dproj del nodo desplegado via delphi_build target=Deploy.';
+    'el .dproj del nodo desplegado via delphi_build target=Deploy. [DESK-021 INVALID_PARAM]';
   { UNA descripcion para el "out" de toda la familia de capturas, porque es
     UNA regla (CaptureTarget, Lsp.Guard). Va aqui arriba porque una constante
     se declara antes de su primer uso. }
@@ -1793,7 +1787,7 @@ const
     'NO BORRO "%s": %s. El borrador de arboles solo borra dentro de una ' +
     'carpeta desechable del servidor (temporales, papelera) o una descarga ' +
     'temporal suya, y nunca una raiz de workspace, el vault, la carpeta del ' +
-    'servidor ni del sistema, ni nada que los contenga.';
+    'servidor ni del sistema, ni nada que los contenga. [GUARD-017 DENIED]';
 
   SR_MUDANZA_PROTEGIDA_FMT =
     'RECHAZADO: "%s" no se mueve ni se borra entera: es o contiene %s, que ' +
@@ -1803,7 +1797,7 @@ const
 
   SN_LUGAR_PROTEGIDO =
     'un sitio protegido (una raiz de workspace, un proyecto de referencia, ' +
-    'una carpeta de solo lectura o una carpeta del sistema)';
+    'una carpeta de solo lectura o una carpeta del sistema) [MOVE-008]';
 
   SR_MUDANZA_OTRA_UNIDAD_FMT =
     'RECHAZADO: "%s" y "%s" estan en unidades distintas, y una carpeta solo ' +
@@ -1816,7 +1810,7 @@ const
     '  %d enlace(s) NO seguidos al copiar, porque apuntan a algo que este ' +
     'workspace no puede leer (fuera de sus raices, de sus ReadOnlyRoots y de ' +
     'la zona de biblioteca): %s. Lo demas se ha copiado. Si ese contenido ' +
-    'hace falta, que el operador lo declare en ReadOnlyRoots.';
+    'hace falta, que el operador lo declare en ReadOnlyRoots. [FILE-032]';
 
   SN_CAPTURE_OUT_TEMP_HINT =
     'Para una captura no hace falta out: omitelo y la imagen llega en la ' +
@@ -1882,7 +1876,7 @@ const
     'sobre la imagen. [DESK-008]';
   SR_ADBLINUX_WINDOW_NOMATCH_FMT =
     'ninguna ventana visible lleva "%s" en el titulo: mira "windows" en esta ' +
-    'misma respuesta y repite con un trozo de uno de esos titulos.';
+    'misma respuesta y repite con un trozo de uno de esos titulos. [DESK-022 NOT_FOUND]';
   SN_ADBLINUX_CROP_NOTE_FMT =
     'RECORTE del escritorio: pasa a tap los x,y medidos en ESTA imagen con su ' +
     'frame y el servidor suma el origen; sin frame, tap x=(%d + tu x) y=(%d + ' +
@@ -1914,7 +1908,7 @@ const
     (menos status) la trae en esta misma llamada (Lsp.RemoteRun.
     MotivoSinCaptura). Decia "el nodo no dijo donde dejo la captura": la
     fontaneria, no el motivo (David, 26-sep-2026). }
-  SR_DESKTOP_SIN_CAPTURA_FMT = 'no hay captura: %s.';
+  SR_DESKTOP_SIN_CAPTURA_FMT = 'no hay captura: %s. [DESK-023 INTERNAL]';
   SN_DESKTOP_MOTIVO_SIN_SESION =
     'el destino no tiene sesion grafica abierta (graphicalEnv): abre una ' +
     'con el MISMO usuario que corre PAServer y repite [DESK-015]';
@@ -2136,7 +2130,7 @@ const
     'Direct download: GET this path on the SAME host:port you use for /mcp, ' +
     'with the SAME Authorization: Bearer header, e.g. ' +
     'curl -H "Authorization: Bearer <token>" -o <file> "http://<host>:<port><download>". ' +
-    'The response carries X-File-SHA256 to verify with sha256sum.';
+    'The response carries X-File-SHA256 to verify with sha256sum. [FETCH-006]';
 
   SN_FETCH_BIG_FMT =
     'This file is %s: use the "download" link (curl) - no chunk was ' +
@@ -2144,13 +2138,13 @@ const
     'less) and loop offset until eof=true. [FETCH-003]';
 
   SR_FILES_NEED_PATH =
-    'Falta el parametro path: GET /files?path=srvd:\...\fichero';
+    'Falta el parametro path: GET /files?path=srvd:\...\fichero [FILE-033 INVALID_PARAM]';
 
   SR_FILES_DIR =
     'RECHAZADO: es un directorio. /files descarga ficheros, nunca lista carpetas. [FILE-001 DENIED]';
 
   SR_FILES_MISSING =
-    'No existe el fichero pedido.';
+    'No existe el fichero pedido. [FILE-034 NOT_FOUND]';
 
   // Appended to a READ refusal outside the jail: the library zone exists,
   // but only the folders the IDE registers (and their subfolders) - not their
@@ -2221,7 +2215,7 @@ const
     'Falta "path": la carpeta a anadir/quitar del search path (p.ej. la ' +
     'carpeta Source de un componente instalado). Si tu esquema de tools no ' +
     'tiene el parametro "path", el servidor se actualizo despues de tu ' +
-    'conexion: reconecta la sesion MCP para recibir el esquema nuevo.';
+    'conexion: reconecta la sesion MCP para recibir el esquema nuevo. [CFG-095 INVALID_PARAM]';
 
   SR_CONFIG_PATH_CHARS =
     'RECHAZADO: el path lleva caracteres no permitidos (< > " ; | o de ' +
@@ -2269,7 +2263,7 @@ const
     'Falta "path": el fichero que debe viajar con el despliegue (p.ej. la ' +
     'libreria nativa que un componente carga en runtime). Si tu esquema de ' +
     'tools no tiene "path" ni "remotedir", el servidor se actualizo despues ' +
-    'de tu conexion: reconecta la sesion MCP para recibir el esquema nuevo.';
+    'de tu conexion: reconecta la sesion MCP para recibir el esquema nuevo. [CFG-096 INVALID_PARAM]';
 
   SR_CONFIG_DEPLOY_PLATFORM_FMT =
     'RECHAZADO: "%s" no es una plataforma Delphi valida (add/remove-deployfile ' +
@@ -2319,7 +2313,7 @@ const
   // ---- project units (Lsp.ProjectUnits: add-unit / remove-unit / create / delete / move) ----
 
   SR_UNIT_NEED_PROJECT =
-    'Falta "project": el .dproj (o .dpr / .dpk) del proyecto.';
+    'Falta "project": el .dproj (o .dpr / .dpk) del proyecto. [CFG-097 INVALID_PARAM]';
 
   SR_UNIT_PROJECT_EXT_FMT =
     'RECHAZADO: "%s" no es un proyecto (.dproj, .dpr o .dpk). [CFG-033 DENIED]';
@@ -2331,7 +2325,7 @@ const
 
   SR_UNIT_NEED_PATH =
     'Falta "path": la unit .pas a registrar o quitar. Si tu cliente no ' +
-    'muestra el parametro, reconecta la sesion MCP (el servidor se actualizo).';
+    'muestra el parametro, reconecta la sesion MCP (el servidor se actualizo). [CFG-098 INVALID_PARAM]';
 
   SR_UNIT_PAS_MISSING_FMT =
     'RECHAZADO: no existe %s. Para crear una unit nueva usa delphi_create ' +
@@ -2497,7 +2491,7 @@ const
     '(uses de las demas units y calificadores UnitVieja.X). [CFG-058]';
 
   SN_FILE_PROJECTS_UPDATED_FMT =
-    '  proyectos actualizados (%d): %s';
+    '  proyectos actualizados (%d): %s [FILE-035]';
 
   SN_FILE_PROJECTS_NONE =
     '  (ningun .dpr ni .dpk lo listaba, mirando desde su carpeta - y en un ' +
@@ -2516,7 +2510,7 @@ const
   SR_COPIA_DENTRO_DE_SI_FMT =
     'RECHAZADO: "%s" esta dentro de "%s": una carpeta no se copia ni se ' +
     'mueve dentro de si misma (se copiaria sin fin). Elige un destino fuera ' +
-    'de ella.';
+    'de ella. [MOVE-009 DENIED]';
 
   SR_MOVE_COPY_PROJECT_FMT =
     'RECHAZADO: eso es o contiene un proyecto (%s) y un proyecto nunca ' +
@@ -2545,7 +2539,7 @@ const
     'hay copia a medias en la papelera que pueda confundirte. Suele ser un .exe ' +
     'de un build anterior todavia corriendo, el IDE con el proyecto abierto, o ' +
     'un proceso git. Cierra lo que la bloquea y reintenta. (Yo no mato procesos ' +
-    'de esta maquina: puede haber alguien trabajando al otro lado.)';
+    'de esta maquina: puede haber alguien trabajando al otro lado.) [FILE-036 INTERNAL]';
 
   SN_FILE_PARTIAL_FMT =
     'ERROR %s: %s'#10'ATENCION: antes del fallo ya se habian aplicado estos ' +
@@ -2591,7 +2585,7 @@ const
   SR_STYLES_NEED_PATH =
     'Falta "path": el .style de texto (view/get/set/clone) o la carpeta de ' +
     'estilos (lint/build). Si tu cliente no muestra el parametro, reconecta ' +
-    'la sesion MCP (el servidor se actualizo).';
+    'la sesion MCP (el servidor se actualizo). [STYLE-030 INVALID_PARAM]';
 
   SR_STYLES_MISSING_FMT =
     'RECHAZADO: no existe %s. Localiza los estilos con delphi_list pattern=*.style. [STYLE-001 NOT_FOUND]';
@@ -2608,11 +2602,11 @@ const
     'command=build. Si tu unica copia es el binario, dilo con delphi_report. [STYLE-003 DENIED]';
 
   SR_STYLES_NEED_STYLE =
-    'Falta "style": el StyleName del estilo (command=view los lista).';
+    'Falta "style": el StyleName del estilo (command=view los lista). [STYLE-031 INVALID_PARAM]';
 
   SR_STYLES_NEED_PROP =
     'Falta "prop": la propiedad a cambiar, como aparece en el fichero ' +
-    '(Fill.Color, Size.Height, Visible...). command=get muestra el estilo.';
+    '(Fill.Color, Size.Height, Visible...). command=get muestra el estilo. [STYLE-032 INVALID_PARAM]';
 
   SR_STYLES_PROP_CHARS_FMT =
     'RECHAZADO: "%s" no es un nombre de propiedad (letras, digitos, puntos). [STYLE-004 DENIED]';
@@ -2620,14 +2614,14 @@ const
   SR_STYLES_NEED_VALUE =
     'Falta "value": el valor tal como se escribe en un .style (xFFF6ECDB, ' +
     '44.000000000000000000, True, ''texto'', Center). Para quitar la propiedad ' +
-    'usa delete=true.';
+    'usa delete=true. [STYLE-033 INVALID_PARAM]';
 
   SR_STYLES_VALUE_LINE =
     'RECHAZADO: value debe ser UNA linea. Los valores multilinea (colecciones, ' +
     'binarios) se editan con delphi_textedit sobre el fichero. [STYLE-005 DENIED]';
 
   SR_STYLES_NEED_NAME =
-    'Falta "name": el StyleName del estilo nuevo.';
+    'Falta "name": el StyleName del estilo nuevo. [STYLE-034 INVALID_PARAM]';
 
   SR_STYLES_NAME_CHARS_FMT =
     'RECHAZADO: "%s" no vale como StyleName (letras, digitos, punto, guion). [STYLE-006 DENIED]';
@@ -2716,7 +2710,7 @@ const
     'que das a delphi_report). [MSGS-003]';
 
   SN_MESSAGES_CHECK_FMT =
-    'Mensajes pendientes: %d (command=read los entrega y los borra):';
+    'Mensajes pendientes: %d (command=read los entrega y los borra): [MSGS-006]';
 
   SN_MESSAGES_DELIVERED =
     '(leidos y borrados: no volveran a aparecer. Si piden algo, hazlo y, si ' +
@@ -2789,18 +2783,18 @@ const
   SR_RENAME_NOT_APPLICABLE =
     'NO APLICADO: el rename no es aplicable y no se ha escrito nada. Los ' +
     '"blockers" dicen por que; arreglalos (o renombra a mano con la ' +
-    'evidencia de "changes") y repite.';
+    'evidencia de "changes") y repite. [RENAME-009 DENIED]';
 
   SR_RENAME_APPLY_FAILED_FMT =
     'NO APLICADO: el motor de changeset no lo dejo pasar y todo esta como ' +
-    'estaba (todo o nada). Motivo: %s';
+    'estaba (todo o nada). Motivo: %s [RENAME-010 DENIED]';
 
   SR_RENAME_LINE_GONE_FMT =
     'la linea %d de %s ya no existe: el fichero cambio entre el analisis y ' +
-    'la escritura';
+    'la escritura [RENAME-011 DENIED]';
 
   SR_RENAME_NOTHING_TO_STAGE =
-    'ninguna de las lineas de "changes" contiene el identificador';
+    'ninguna de las lineas de "changes" contiene el identificador [RENAME-012 DENIED]';
 
   SN_RENAME_APPLIED_NOTE =
     'APLICADO: cada linea de "changes" se ha escrito por el motor de ' +
@@ -2811,17 +2805,17 @@ const
 
   SR_RENAME_BAD_IDENT_FMT =
     '"%s" no es un identificador Delphi valido (letra o _ inicial, luego ' +
-    'letras/digitos/_).';
+    'letras/digitos/_). [RENAME-013 INVALID_PARAM]';
 
   SR_RENAME_RESERVED_FMT =
-    '"%s" es una palabra reservada de Delphi.';
+    '"%s" es una palabra reservada de Delphi. [RENAME-014 INVALID_PARAM]';
 
   SR_RENAME_SAME_NAME =
-    'El nombre nuevo es igual al actual.';
+    'El nombre nuevo es igual al actual. [RENAME-015 INVALID_PARAM]';
 
   SR_RENAME_LIBRARY =
     'La definicion del simbolo vive FUERA de los workspace roots (RTL o ' +
-    'componente instalado): eso no se renombra desde aqui.';
+    'componente instalado): eso no se renombra desde aqui. [RENAME-016 DENIED]';
 
   SR_RENAME_HOMONYMS_FMT =
     'Hay %d aparicion(es) del mismo nombre que el motor resuelve a OTRA ' +
@@ -2829,25 +2823,25 @@ const
     'haya que tocarlas... o puede que sean ESTA, vista desde un proyecto ' +
     'distinto con otra configuracion: eso es lo que paso en el campo, y el ' +
     'rename dijo que si mientras dejaba un proyecto sin compilar. Mira una ' +
-    'por una antes de aplicar nada; "scope" te dice donde he buscado.';
+    'por una antes de aplicar nada; "scope" te dice donde he buscado. [RENAME-017 DENIED]';
 
   SR_RENAME_UNVERIFIED_FMT =
     '%d referencias candidatas NO confirmadas semanticamente. La regla es ' +
     'estricta: una sola sin confirmar = no aplicable (un falso positivo ' +
-    'renombrado es un homonimo roto en silencio).';
+    'renombrado es un homonimo roto en silencio). [RENAME-018 DENIED]';
 
   SR_RENAME_DESIGNER_FMT =
     '%d apariciones en designers (.dfm/.fmx): renombrar un miembro publicado ' +
-    'rompe el binding del form (el IDE solo lo repara interactivamente).';
+    'rompe el binding del form (el IDE solo lo repara interactivamente). [RENAME-019 DENIED]';
 
   SR_RENAME_STRINGS_FMT =
     '%d apariciones dentro de literales de cadena (FindComponent, RTTI por ' +
     'nombre, StyleLookup...): un rename textual las dejaria apuntando a un ' +
-    'nombre que ya no existe y el compilador no avisa.';
+    'nombre que ya no existe y el compilador no avisa. [RENAME-020 DENIED]';
 
   SR_RENAME_COLLISION_FMT =
     'El nombre nuevo "%s" ya aparece %d veces en los ficheros afectados: ' +
-    'posible colision u homonimo.';
+    'posible colision u homonimo. [RENAME-021 DENIED]';
 
   SN_RENAME_DESIGNER_HIT_FMT =
     '%d apariciones en %s [RENAME-005]';
@@ -2899,12 +2893,12 @@ const
     'error: command debe ser tasks | tool | conventions. [HELP-001 INVALID_PARAM]';
 
   SR_HELP_NEED_NAME =
-    'RECHAZADO: command=tool necesita "name". Las que hay:';
+    'RECHAZADO: command=tool necesita "name". Las que hay: [HELP-007 DENIED]';
 
   SN_HELP_ASSUMED_FMT =
     '(No existe ninguna tool "%s"; he entendido que querias %s, que es la ' +
     'unica que se le parece. Si no era esa, delphi_help command=tasks las ' +
-    'lista todas.)';
+    'lista todas.) [HELP-008]';
 
   SR_HELP_NO_TOOL_ALL_FMT =
     'RECHAZADO: no existe ninguna tool "%s", ni nada que se le parezca. ' +
@@ -3383,7 +3377,7 @@ const
   SN_DESIGNER_LINT_BAD_FMT =
     '%d avisos del designer en %s (clase desconocida, propiedad no publicada ' +
     'o valor de enum inexistente, o el .dfm no cuadra con su clase: evento a ' +
-    'un metodo inexistente o NO published, objeto sin campo, nombre repetido):';
+    'un metodo inexistente o NO published, objeto sin campo, nombre repetido): [DSGN-038]';
 
   SN_DESIGNER_BINDING_LINT_HEADER =
     '*** AVISO DESIGNER: el form NO cuadra con su clase (check-binding). El ' +
@@ -3443,7 +3437,7 @@ const
   SR_PACKAGE_RENAME_FMT =
     'ERROR: el zip se creo pero no he podido dejarlo en %s (alguien lo tiene ' +
     'abierto: una descarga en curso, el explorador, un antivirus). Reintenta ' +
-    'en unos segundos.';
+    'en unos segundos. [PKG-002 INTERNAL]';
 
   // El otro lado de lo mismo: reintento y SALIO. Un build que de pronto tarda
   // cinco segundos de mas sin explicacion invita a pensar que algo va mal.
@@ -3508,7 +3502,7 @@ const
   SN_LINT_UNKNOWN_CLASS_FMT =
     '"%s" no esta en la tabla %s de este servidor (sera de un paquete de ' +
     'terceros, o no existe). No es un error por si mismo, pero NO he revisado ' +
-    'ninguna propiedad de ese objeto ni de lo que lleva dentro.';
+    'ninguna propiedad de ese objeto ni de lo que lleva dentro. [DSGN-039]';
 
   SP_DESIGNER_UNIT =
     'check-binding opcional: el .pas con la clase del form. Por defecto, el ' +
@@ -3554,7 +3548,7 @@ const
     'miembro (trigger ".") pero la columna caia sobre el identificador, no ' +
     'DESPUES del punto. "despues de Foo." es la columna del punto + 1; sobre el ' +
     'nombre, el LSP te devuelve el ambito global entero. Estos son los miembros ' +
-    'del tipo.';
+    'del tipo. [LSP-027]';
 
   SR_DESIGNER_LAYOUT_FMX =
     'RECHAZADO: command=layout es solo para .dfm (VCL). Un .fmx coloca con otro ' +
@@ -3562,10 +3556,10 @@ const
     'no resuelve; contestar "ok" sobre un .fmx seria mentir. Para .fmx usa de ' +
     'momento tree/get/lint. [DSGN-027 DENIED]';
 
-  SR_DESIGNER_LAYOUT_TRUNC =
+  SN_DESIGNER_LAYOUT_TRUNC =
     'OJO: el .dfm parece TRUNCADO (hay mas objetos abiertos que "end" que los ' +
     'cierran). Lo que te diga de la geometria puede estar incompleto: revisa ' +
-    'que el fichero termina en el "end" del form.';
+    'que el fichero termina en el "end" del form. [DSGN-040]';
 
   SN_DESIGNER_LAYOUT_ESTIMATED =
     'OJO: el form no trae ClientWidth/ClientHeight, solo Width/Height (el tamano ' +
@@ -3933,7 +3927,7 @@ const
   SR_UPLOAD_SHA_MISMATCH_FMT =
     'el sha256 NO coincide: lo ensamblado difiere del origen, asi que NO lo ' +
     'dejo publicado con su nombre. Lo he apartado en %s. Reenvia desde ' +
-    'offset=0.';
+    'offset=0. [UPLOAD-011 INVALID_PARAM]';
 
   SN_UPLOAD_REPLACED_FMT =
     'OJO: ahi ya habia un fichero (%d bytes) y esta subida lo ha SUSTITUIDO ' +
@@ -4013,13 +4007,13 @@ const
     'PURGADO %s. Esto no tiene vuelta atras: era una copia de la papelera y ' +
     'ya no esta. [FILE-014]';
 
-  SR_FILE_DELETE_EMPTY_SHELL_FMT =
+  SN_FILE_DELETE_EMPTY_SHELL_FMT =
     'CASI: TODO el contenido de %s esta ya fuera (copia recuperable en %s), ' +
     'y lo unico que queda es la carpeta VACIA, que no me deja quitarla ' +
     '(algun proceso la tiene como directorio actual). No te digo BORRADO ' +
     'porque el cascaron sigue ahi, pero no vuelvas a lanzar el borrado: no ' +
     'queda nada que copiar y cada intento solo ensucia la papelera. Que la ' +
-    'quite el operador, o dejala: esta vacia.';
+    'quite el operador, o dejala: esta vacia. [FILE-037]';
 
   SN_FILE_DELETE_EMPTY_OK_FMT =
     'BORRADA la carpeta vacia %s. No he hecho copia: no habia nada dentro ' +
@@ -4037,7 +4031,7 @@ const
     'compilacion en marcha, el IDE, o una carpeta que es el directorio ' +
     'actual de algun proceso). No te digo BORRADO porque no lo esta. ' +
     'Reintentalo dentro de un momento; si sigue igual, tiene que quitarlo el ' +
-    'operador a mano.';
+    'operador a mano. [FILE-038 INTERNAL]';
 
   SR_STYLES_RC_OUTSIDE_FMT =
     'RECHAZADO: el manifiesto %s de %s apunta a un fichero que esta FUERA de ' +
@@ -4104,8 +4098,6 @@ const
     'MERGING con conflictos a medio resolver, que es justo lo que este ' +
     'comando promete que no puede pasar. [GIT-007 DENIED]';
 
-  SN_GIT_MERGE_ABORTED =
-    'MERGE ABORTADO: el repositorio vuelve a como estaba antes de intentarlo.';
   SN_GIT_MERGE_DIVERGED =
     'MERGE RECHAZADO POR GIT: las dos ramas han divergido y esta tool solo ' +
     'integra por fast-forward (sin commit de merge, sin conflictos a medias). ' +
@@ -4293,7 +4285,7 @@ const
   SR_CHANGESET_ROLLED_BACK_FMT =
     'ROLLBACK COMPLETO: fallo la operacion %d de %d y TODOS los ficheros han ' +
     'vuelto byte a byte a como estaban antes del commit. Causa: %s -- El ' +
-    'changeset queda cerrado; corrige y monta otro.';
+    'changeset queda cerrado; corrige y monta otro. [CHSET-026 DENIED]';
 
   SR_CHANGESET_PROJECT_FILE_FMT =
     'RECHAZADO: %s es un fichero de proyecto y lo mantiene el IDE; el commit ' +
@@ -4362,7 +4354,7 @@ const
 
   SR_COMPONENTS_PLATFORM_FMT =
     'Plataforma "%s" no reconocida. Validas: Win32, Win64, Win64x, WinARM64EC, ' +
-    'OSX64, OSXARM64, Linux64, Android, Android64, iOSDevice64, iOSSimARM64.';
+    'OSX64, OSXARM64, Linux64, Android, Android64, iOSDevice64, iOSSimARM64. [COMP-008 INVALID_PARAM]';
 
   SN_COMPONENTS_PLATFORM_HEAD_FMT =
     'Library Search Path del IDE para %s (RAD Studio %s): %d carpetas registradas [COMP-002]';
@@ -4372,7 +4364,7 @@ const
 
   SN_COMPONENTS_PLATFORM_MISSING_FMT =
     '%d componentes registrados en otras plataformas y NO en %s (candidatos ' +
-    'cuando una build falle con F2613 "Unit X not found"):';
+    'cuando una build falle con F2613 "Unit X not found"): [COMP-009]';
 
   SN_COMPONENTS_PLATFORM_HINT =
     'Un componente sin Lib\<plataforma> compila desde fuente: delphi_config ' +
@@ -4382,7 +4374,7 @@ const
 
   SR_COMPONENTS_MISSING =
     'No se encontro ninguna instalacion de RAD Studio en el servidor - ' +
-    'sin IDE no hay packages que listar.';
+    'sin IDE no hay packages que listar. [COMP-010 INTERNAL]';
 
   SN_COMPONENTS_NONE_FMT =
     'Ningun package registrado contiene "%s". Lista completa: llama sin filter. [COMP-005]';
@@ -4466,7 +4458,7 @@ const
   SN_REPORT_OK_FMT =
     'GRACIAS - reporte guardado como %s (v%s).'#10 +
     'Lo leeremos con calma junto a los demas. Si descubres mas detalles, ' +
-    'manda otro reporte: se acumulan, no se sobreescriben.';
+    'manda otro reporte: se acumulan, no se sobreescriben. [REPORT-005]';
 
   // Mensajes que estaban en linea en DelphiLspMcp.dpr (paso 3c, 27-sep-2026)
   SL_SYS_READ_ONLY_MODE_READONLY =
@@ -6517,6 +6509,15 @@ const
 
   SE_LSP_WRITEFILE_LSP_STDIN_FAILED_FMT =
     'WriteFile to LSP stdin failed (%d)';
+
+  // El puerto ocupado al arrancar (issue #5, 27-sep-2026): Indy solo decia
+  // "Could not bind socket." - ni que puerto, ni por que, ni que hacer
+  SE_SYS_PORT_TAKEN_FMT =
+    'Could not listen on port %d (%s): another program is already ' +
+    'listening there - most often another copy of this server (the tray, ' +
+    'the DelphiLspMcp Windows service, or a terminal with --http) - or ' +
+    'Windows keeps that port reserved. Close the other one, or pick another ' +
+    'port with [Server] Port= in the settings.ini next to DelphiLspMcp.exe.';
 
   // ---------------------------------------------------------------------
   // Las ETIQUETAS de los mensajes (decision de David, 27-sep-2026)

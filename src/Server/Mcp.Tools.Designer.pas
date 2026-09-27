@@ -809,7 +809,7 @@ begin
       Boxes := TJSONArray.Create; Ret.AddPair('boxes', Boxes);
 
       if Opens > Closes then
-        Ret.AddPair('truncatedNote', MsgText(SR_DESIGNER_LAYOUT_TRUNC));
+        Ret.AddPair('truncatedNote', MsgText(SN_DESIGNER_LAYOUT_TRUNC));
 
       if (RootW <= 0) or (RootH <= 0) then
         NoRoom.Add(Format('%s no dice cuanto mide (%d x %d): sin el tamano del ' +

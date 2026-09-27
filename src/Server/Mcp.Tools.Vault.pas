@@ -601,10 +601,10 @@ begin
   // asking for 20..21 was told it had seen 1..21 and stopped asking for the
   // rest. It reports what it actually showed.
   if LastLine < Total then
-    Result := Result + #10 + MsgFmt(SR_VAULT_MORE_FMT,
+    Result := Result + #10 + MsgFmt(SN_VAULT_MORE_FMT,
       [First, LastLine, Total, LastLine + 1])
   else if First > 1 then
-    Result := Result + #10 + MsgFmt(SR_VAULT_SHOWN_FMT, [First, LastLine, Total]);
+    Result := Result + #10 + MsgFmt(SN_VAULT_SHOWN_FMT, [First, LastLine, Total]);
 end;
 
 { ------------------------------------------------------------ vault_append - }

@@ -26,6 +26,7 @@ uses
   IdSSLOpenSSL,
   {$ENDIF}
   IdServerIOHandler,
+  IdException, // [local change] EIdCouldNotBindSocket
   MCPServer.Types,
   MCPServer.Settings,
   MCPServer.JsonRpcProcessor;
@@ -273,7 +274,17 @@ begin
       Port := FPort;
     end;
   end;
-  FHTTPServer.Active := True;
+  // [local change] a port that cannot be bound says WHICH port, WHY (the
+  // inner socket error Indy keeps) and what to do - the bare "Could not
+  // bind socket." reached the operator of the tray (issue #5)
+  try
+    FHTTPServer.Active := True;
+  except
+    on E: EIdCouldNotBindSocket do
+      raise Exception.Create(MsgFmt(SE_SYS_PORT_TAKEN_FMT,
+        [FPort, IfThen(Assigned(E.InnerException), E.InnerException.Message,
+          E.Message).Replace(#13#10, ' ').Replace(#10, ' ')]));
+  end;
   FActive := True;
 
   TLogger.Info('MCP Server started on ' + FSettings.Protocol + '://' +

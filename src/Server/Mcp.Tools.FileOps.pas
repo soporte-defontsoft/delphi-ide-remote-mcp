@@ -526,7 +526,7 @@ begin
     // empty shell was left (measured 2026-08-25). Say which of the two it is.
     if TDirectory.Exists(Params.Path) and
        (Length(TDirectory.GetFileSystemEntries(Params.Path)) = 0) then
-      Result := MsgFmt(SR_FILE_DELETE_EMPTY_SHELL_FMT,
+      Result := MsgFmt(SN_FILE_DELETE_EMPTY_SHELL_FMT,
         [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash])
     else
       Result := MsgFmt(SR_FILE_DELETE_PARTIAL_FMT,

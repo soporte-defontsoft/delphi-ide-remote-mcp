@@ -532,7 +532,7 @@ begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('exitCode', TJSONNumber.Create(-1));
     Result.AddPair('stillRunning', TJSONBool.Create(True));
-    Result.AddPair('stillRunningNote', MsgFmt(SR_REMOTERUN_TIMEOUT_FMT,
+    Result.AddPair('stillRunningNote', MsgFmt(SN_REMOTERUN_TIMEOUT_FMT,
       [ATimeoutMs div 1000, DeployRel]));
     Result.AddPair('killNote', MsgFmt(SN_REMOTERUN_KILL_FMT, [AProfile, JobId]));
     if AGuardaSiSigue then
