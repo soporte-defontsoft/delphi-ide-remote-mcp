@@ -100,8 +100,8 @@ else:
     srv = j.get('server', {})
     print('NOTA: contesta la version %s (pid %s).' % (srv.get('version'),
                                                       srv.get('pid')))
-    check('V4 delphi_workspace dice mode=servicio, transport=http',
-          srv.get('mode') == 'servicio' and srv.get('transport') == 'http',
+    check('V4 delphi_workspace dice mode=service, transport=http',
+          srv.get('mode') == 'service' and srv.get('transport') == 'http',
           json.dumps(srv)[:240])
     if 'account' not in srv:
         print('NOTA: el servidor desplegado es anterior a "account"; V5 no se '

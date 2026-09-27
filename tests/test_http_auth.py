@@ -318,10 +318,11 @@ try:
               code == 200 and mc.es(body, 'SN_REPORT_OK_FMT'), '%s %s' % (code, body[:150]))
 
         # delphi_config: view reads (OK in RO), add-platform writes (refused)
-        code, body = call('delphi_config', {'repo': REPO, 'command': 'view',
+        code, body = call('delphi_config', {'command': 'view',
                                             'project': paspath.replace('.pas', '.dproj')},
                           RO_TOKEN)
-        check('ro: delphi_config view NO da SOLO LECTURA', not mc.es(body, 'SR_READ_ONLY_FMT'),
+        check('ro: delphi_config view NO da SOLO LECTURA (y la vista corre)',
+              not mc.es(body, 'SR_READ_ONLY_FMT') and code == 200 and not mc.fallo(body),
               '%s %s' % (code, body[:120]))
         code, body = call('delphi_config', {'command': 'add-platform',
                                             'platform': 'Linux64',

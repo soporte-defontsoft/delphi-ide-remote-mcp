@@ -136,7 +136,7 @@ begin
     end;
   end;
   // Fallback: the generic protocol, true of any vault.
-  Result := MsgText(SN_VAULT_INSTRUCTIONS);
+  Result := MsgText(SD_VAULT_INSTRUCTIONS);
 end;
 
 { TMCPPromptsManager }

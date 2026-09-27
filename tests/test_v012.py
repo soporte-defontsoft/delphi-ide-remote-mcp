@@ -272,7 +272,7 @@ check('git: --output rechazado en el gate (aun con token RW)',
 check('git: --output no escribio nada', not os.path.exists(PWN), PWN)
 out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -3"})
 check('git: log normal sigue funcionando (sin falso positivo)',
-      not mc.rechazado(out), out[:120])
+      mc.llego_a_git(out), out[:120])
 
 # ---- R4-A: fetch virtualizes its path, base64 payload untouched -----------
 import base64 as _b64
@@ -553,7 +553,7 @@ check('paserver: platforms distingue local vs remoto',
       any(p['platform'] == 'Win64' and p['buildsLocally'] for p in pf.get('platforms', []))
       and any(not p['buildsLocally'] for p in pf.get('platforms', [])), out[:150])
 out = call('delphi_paserver', {"command": "profiles"})
-check('paserver: profiles responde', 'profiles' in out, out[:120])
+check('paserver: profiles responde', isinstance(mc.como_json(out).get('profiles'), list), out[:120])
 
 # ---- delphi_move / delphi_delete with recoverable trash -------------------
 mvsrc = os.path.join(INSIDE, 'Mover.pas')

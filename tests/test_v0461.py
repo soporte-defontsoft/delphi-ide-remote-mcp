@@ -51,11 +51,11 @@ check('alias never overrides the real name', j.get('total') == 1 and j['files'][
 
 # --- delphi_read aliases
 r = call('delphi_read', {'path': os.path.join(BASE, 'Big.dproj'), 'startline': 602, 'endline': 602})
-check('read alias startline/endline', 'DCC_UnitSearchPath' in r and 'Unknown parameter' not in r, r[:200])
+check('read alias startline/endline', 'DCC_UnitSearchPath' in r and not mc.fallo(r), r[:200])
 
 # --- delphi_components alias
 r = call('delphi_components', {'query': 'zzz-no-such-package'})
-check('components alias query->filter', 'Unknown parameter' not in r and 'zzz-no-such-package' in r, r[:200])
+check('components alias query->filter', not mc.fallo(r) and 'zzz-no-such-package' in r, r[:200])
 
 # --- log flushed per line (the tray never closes the writer)
 r = call('delphi_workspace', {})

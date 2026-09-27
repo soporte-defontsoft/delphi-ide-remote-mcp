@@ -146,7 +146,7 @@ r = A.call('delphi_hover', {'path': GHOST, 'line': 0, 'character': 0})
 check('B5 hover igual', mc.resultado(r) != 'INTERNAL', r[:200])
 r = A.call('delphi_config', {'project': DPROJ, 'command': 'remove-unit', 'name': 'X'})
 check('B5 un parametro que no existe es "error:", no "Error executing tool:"',
-      mc.resultado(r) == 'INVALID_PARAM' and 'Unknown parameter' in r, r[:200])
+      mc.resultado(r) == 'INVALID_PARAM' and mc.abre(r, 'SR_SYS_UNKNOWN_PARAM_FMT'), r[:200])
 
 # ------------------------------------------------------------- B6/D3/D5 ----
 DELTA = os.path.join(CS, 'Delta.txt')
@@ -210,8 +210,8 @@ r = A.call('delphi_test', {'command': 'run', 'project': os.path.join(T, 'MiTest.
 check('P8 una plataforma inventada: RECHAZADA', mc.rechazado(J(r).get('error', '')) and mc.es(r, 'SR_TEST_PLATFORM_UNKNOWN_FMT'), r[:200])
 r = A.call('delphi_test', {'command': 'run', 'project': os.path.join(T, 'MiTest.dproj'),
                             'config': 'Release', 'nobuild': True}, t=300)
-check('P4 nobuild sin binario no dice que compilo',
-      not mc.es(r, 'SR_TEST_NOBINARY'), r[:250])
+check('P4 nobuild sin binario no dice que compilo: dice que NO hay binario',
+      mc.abre(r, 'SR_TEST_NOBINARY_NOBUILD') and not mc.es(r, 'SR_TEST_NOBINARY'), r[:250])
 
 # ------------------------------------------------------------------ P6/P7 --
 _r = A.call('delphi_changeset', {'command': 'begin'})
@@ -265,7 +265,7 @@ r = A.call('delphi_upload', {'path': os.path.join(BASE, 'x.bin'),
                               'chunkbase64': base64.b64encode(b'abc').decode(),
                               'sha256': 'no-es-un-hash'})
 check('un sha256 mal escrito rechaza el PARAMETRO, no castiga al fichero',
-      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_BAD_SHA_FMT') and not os.path.exists(os.path.join(BASE, 'x.bin.corrupto')), r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_BAD_SHA_FMT') and not os.path.exists(os.path.join(BASE, 'x.bin.corrupt')), r[:250])
 j = J(A.call('delphi_projects', {'name': 'no-hay-nada-asi'}))
 check('projects sin coincidencias dice cuantos hay', 'note' in j, str(j)[:200])
 

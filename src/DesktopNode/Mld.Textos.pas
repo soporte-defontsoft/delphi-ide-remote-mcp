@@ -49,7 +49,22 @@ const
     '  [NODE-011] Could not send the key: %s';
 
   SK_NODE_ALT_TAB_ENVIADO =
-    '  [NODE-012] ALT+TAB enviado';
+    '  [NODE-012] ALT+TAB sent';
+
+  SK_NODE_TECLA_ENVIADA_FMT =
+    '  [NODE-044] KEY %s%s sent';
+
+  SF_NODE_CON_MODIFICADORES_FMT =
+    ' with %d modifier(s)';
+
+  SN_NODE_RESPALDO_FMT =
+    '  [NODE-045] FALLBACK: %s';
+
+  SF_NODE_ESTADO_FMT =
+    '  STATE: %s';
+
+  SF_NODE_AUSENTE_FMT =
+    '     MISSING %s (%s)';
 
   SN_NODE_NO_ENVIAR_ALT_TAB_FMT =
     '  [NODE-013] Could not send Alt+Tab: %s';
@@ -86,7 +101,7 @@ const
     '  [NODE-019] %-16s COULD NOT OPEN: %s';
 
   SN_NODE_ABIERTA_SIMBOLOS_FMT =
-    '  [NODE-020] %-16s abierta, simbolos %d/%d';
+    '  [NODE-020] %-16s open, symbols %d/%d';
 
   SN_NODE_VENTANAS_SIN_OJOS_FMT =
     '  [NODE-021] windows: no X11 eyes (%s)';
@@ -187,19 +202,20 @@ const
     '  (today: Linux with GNOME, and Windows; macOS would be next)';
 
   SR_JOB_FORK_VIGIA_FALLO =
-    '[JOB-001 INVALID_PARAM] Fork of the watcher failed';
+    '[JOB-001 INTERNAL] Fork of the watcher failed';
 
   SR_JOB_FORK_PROGRAMA_FALLO =
-    '[JOB-002 INVALID_PARAM] Fork of the program failed';
+    '[JOB-002 INTERNAL] Fork of the program failed';
 
   SR_JOB_NO_PUDE_ENTRAR_FMT =
-    '[JOB-003 INVALID_PARAM] Could not enter %s: %s';
+    '[JOB-003 INTERNAL] Could not enter %s: %s';
 
   SR_JOB_NO_PUDE_ARRANCAR_FMT =
-    '[JOB-004 INVALID_PARAM] Could not start %s: %s';
+    '[JOB-004 INTERNAL] Could not start %s: %s';
 
   SR_JOB_KILL_NECESITA_ID =
-    '[JOB-005 DENIED] @kill needs the id of one of this server''s jobs.';
+    '[JOB-005 INVALID_PARAM] @kill needs the id of one of this server''s ' +
+    'jobs.';
 
   SN_JOB_NINGUN_TRABAJO_VIVO_FMT =
     '[JOB-006] No job %s is alive in this folder: either it already ' +
@@ -301,7 +317,7 @@ const
 
   // Textos que estaban en linea en Mld.Eis.pas (el resto, 27-sep-2026)
   SF_NODE_DESCRIPTOR_INVALIDO =
-    'descriptor invalido';
+    'invalid descriptor';
 
   
 
@@ -309,7 +325,7 @@ const
     'ei_new_sender returned no context';
 
   SF_NODE_BACKEND_FD_DEVOLVIO_FMT =
-    'ei_setup_backend_fd devolvio %d';
+    'ei_setup_backend_fd returned %d';
 
   SF_NODE_DISPOSITIVOS_NO_LISTOS_FMT =
     'the devices did not become ready within %d ms (pointer=%s ' +
@@ -397,7 +413,7 @@ const
     'input desktop: no name';
 
   SF_NODE_SESION_REMOTA =
-    '; sesion remota';
+    '; remote session';
 
   SF_NODE_SESION_CONSOLA =
     '; console session';
@@ -440,7 +456,7 @@ const
     'could not open libxkbcommon.so.0 (%s)';
 
   SF_NODE_XKB_CONTEXT_NEW_NIL =
-    'xkb_context_new devolvio nil';
+    'xkb_context_new returned nil';
 
   SF_NODE_XKB_NO_ENTENDIO_MAPA =
     'libxkbcommon did not understand the desktop keymap';
@@ -487,7 +503,7 @@ const
     'the watcher''s name';
 
   SR_JOB_EXCEPCION_FMT =
-    '[JOB-011 INVALID_PARAM] %s: %s';
+    '[JOB-011 INTERNAL] %s: %s';
 
   // Textos que estaban en linea en Mld.X11.pas (el resto, 27-sep-2026)
   SF_NODE_NO_HAY_LIB_FMT =

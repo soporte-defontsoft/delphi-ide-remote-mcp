@@ -179,7 +179,7 @@ begin
     on E: Exception do
     begin
       TLogger.Error(MsgFmt(SL_SYS_ERROR_STARTING_SERVER_FMT, [E.Message]));
-      TrayIcon.Hint := MsgFmt(SN_SYS_SERVICE_ERROR_FMT, [E.Message]);
+      TrayIcon.Hint := MsgFmt(SF_SYS_SERVICE_ERROR_FMT, [E.Message]);
     end;
   end;
 end;
@@ -222,9 +222,9 @@ begin
   Clipboard.AsText := FUrl;
   // The URL alone gets a 401 (issue #4, 2026-09-27): say, the moment it is
   // copied, what a client has to send with it - the same text as the 401.
-  TLogger.Info(MsgFmt(SL_SYS_SERVER_URL_COPIED_FMT, [FUrl, MsgText(SR_TOKEN_NEEDED)]));
+  TLogger.Info(MsgFmt(SL_SYS_SERVER_URL_COPIED_FMT, [FUrl, MsgText(SF_TOKEN_NEEDED)]));
   TrayIcon.BalloonTitle := MsgText(SN_SYS_SERVER_URL_COPIED);
-  TrayIcon.BalloonHint := MsgText(SR_TOKEN_NEEDED);
+  TrayIcon.BalloonHint := MsgText(SF_TOKEN_NEEDED);
   TrayIcon.ShowBalloonHint;
 end;
 

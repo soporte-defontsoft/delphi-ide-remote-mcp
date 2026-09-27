@@ -145,9 +145,10 @@ try:
           mc.es(r, 'SN_GRUPO_YA_ESTABA_FMT') and bytes_de('Todo.groupproj') == antes, r[:200])
     r = call('delphi_config', {'project': GRUPO, 'command': 'add-project',
                                'path': ruta('dup', 'App.dproj')})
-    # error: y no RECHAZADO: no es politica, es una llamada que no cabe
-    check('G3 otro proyecto con el MISMO nombre: error (dos targets App no caben)',
-          mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_GRUPO_TARGET_DUP_FMT') and bytes_de('Todo.groupproj') == antes,
+    # DENIED: la llamada es buena y la misma llamada volvera a fallar (la
+    # regla 11 desde la revision del 27-sep); lo que toca es renombrar uno
+    check('G3 otro proyecto con el MISMO nombre: se niega (dos targets App no caben)',
+          mc.resultado(r) == 'DENIED' and mc.es(r, 'SR_GRUPO_TARGET_DUP_FMT') and bytes_de('Todo.groupproj') == antes,
           r[:200])
     r = call('delphi_config', {'project': GRUPO, 'command': 'remove-project',
                                'path': ruta('otro', 'Otro.dproj')})
@@ -548,9 +549,9 @@ try:
     antes_r = bytes_de('w', 'ramas', 'Ramas.dpr')
     r = call('delphi_config', {'project': DPRR, 'command': 'add-unit', 'path': ruta('w', 'ramas', 'UNueva.pas')})
     check('W3 add-unit a un uses partido en ramas: se niega (no sabe en cual) y no toca nada',
-          mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_USES_EN_RAMAS_FMT') and bytes_de('w', 'ramas', 'Ramas.dpr') == antes_r, r[:250])
+          mc.resultado(r) == 'DENIED' and mc.abre(r, 'SR_USES_EN_RAMAS_FMT') and bytes_de('w', 'ramas', 'Ramas.dpr') == antes_r, r[:250])
     r = call('delphi_config', {'project': DPRR, 'command': 'remove-unit', 'path': ruta('w', 'ramas', 'ULin.pas')})
-    check('W3b ...y remove-unit tampoco lo reescribe', mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_USES_EN_RAMAS_FMT') and
+    check('W3b ...y remove-unit tampoco lo reescribe', mc.resultado(r) == 'DENIED' and mc.abre(r, 'SR_USES_EN_RAMAS_FMT') and
           bytes_de('w', 'ramas', 'Ramas.dpr') == antes_r, r[:250])
     j = mc.como_json(call('delphi_config', {'project': DPRR, 'section': 'units'}))
     nombres = [u.get('unit') for u in (j.get('units') or [])]

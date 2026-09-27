@@ -93,7 +93,7 @@ var
 begin
   Plat := CanonicalPlatform(ARawPlatform);
   if Plat = '' then
-    Exit(MsgFmt(SR_COMPONENTS_PLATFORM_FMT, [ARawPlatform]));
+    Exit(MsgFmt(SR_COMPONENTS_PLATFORM_FMT, [ARawPlatform, KnownPlatformsList]));
   Mine := IdePlatformLibraryPaths(AInfo.Version, Plat);
   UserDocs := ExcludeTrailingPathDelimiter(BdsUserDir(AInfo));
   CommonDocs := ExcludeTrailingPathDelimiter(BdsCommonDir(AInfo));

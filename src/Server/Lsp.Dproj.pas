@@ -94,6 +94,11 @@ function IsLocalPlatform(const APlatform: string): Boolean;
   Returns the correctly-cased canonical name, or '' if unknown. }
 function CanonicalPlatform(const AName: string): string;
 
+{ La lista de plataformas validas, para los mensajes que la ensenan: la
+  misma que valida CanonicalPlatform (estaba copiada a mano en tres textos
+  con 11 nombres mientras el validador aceptaba 13). }
+function KnownPlatformsList: string;
+
 { Una carpeta RELATIVA al proyecto, apta para acabar escrita DENTRO de un
   .dproj o de un .dpr: nombre simple o con niveles (Compiled, bin\out,
   Dominio\Modelos), sin unidad ni ruta absoluta, sin "..", y solo con
@@ -585,6 +590,11 @@ begin
   for Seg in AClean.Split(['\']) do
     if Seg.Trim = '' then Exit; // no empty segments (\\ , trailing, etc.)
   Result := True;
+end;
+
+function KnownPlatformsList: string;
+begin
+  Result := string.Join(', ', KNOWN_PLATFORMS);
 end;
 
 function CanonicalPlatform(const AName: string): string;

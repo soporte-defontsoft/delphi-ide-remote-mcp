@@ -174,7 +174,7 @@ begin
     if N > Shown then
     begin
       Ret.AddPair('truncated', TJSONBool.Create(True));
-      Ret.AddPair('hint', 'usa filter=<texto> para acotar');
+      Ret.AddPair('hint', MsgText(SN_DESIGNER_INFO_TRUNCATED));
     end;
     Ret.AddPair('note', MsgText(SN_DESIGNER_INFO_NOTE));
     Result := Ret.ToJSON;
@@ -240,7 +240,7 @@ begin
     ADoc := TStyleDoc.Create(APath);
   except
     on E: Exception do
-      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, E.Message));
+      Exit(MsgEnvuelve(SR_DESIGNER_ILEGIBLE_FMT, E.Message, [APath, E.Message]));
   end;
 end;
 

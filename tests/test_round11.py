@@ -62,7 +62,7 @@ open(RC, 'w', encoding='utf-8', newline='\r\n').write(
     'AUDSEC RCDATA "C:\\Windows\\win.ini"\r\n')
 r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
 check('S1 un .rc que apunta FUERA de la jaula: no se compila',
-      mc.rechazado(r) or mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT'), r[:300])
+      mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT'), r[:300])
 check('S1 ...y no queda ningun .res con eso dentro',
       not os.path.exists(os.path.join(ST, 'a.res')), os.listdir(ST))
 open(RC, 'w', encoding='utf-8', newline='\r\n').write(
@@ -70,12 +70,13 @@ open(RC, 'w', encoding='utf-8', newline='\r\n').write(
 r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
 # (el conversor de estilos vive junto al servidor desplegado, no junto a esta
 # copia; lo que se comprueba aqui es que el rechazo NO es por la jaula)
-check('S1 un .rc con rutas de dentro no lo veta la jaula',
-      not mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not mc.es(r, 'SR_JAIL_FMT'), r[:250])
+check('S1 un .rc con rutas de dentro no lo veta la jaula (y el build de estilos SI corre)',
+      not mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not mc.es(r, 'SR_JAIL_FMT') and
+      not mc.abre(r, 'SR_STYLES_NO_CONVERTER') and mc.resultado(r) != 'NO_ANSWER', r[:250])
 open(RC, 'w', encoding='utf-8', newline='\r\n').write(
     'ESCAPE RCDATA "..\\..\\..\\..\\Windows\\win.ini"\r\n')
 r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
-check('S1 ...y un ..\\..\\ tampoco cuela', mc.rechazado(r) or mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT'), r[:250])
+check('S1 ...y un ..\\..\\ tampoco cuela', mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT'), r[:250])
 
 # ------------------------------------------------------- S2/S3: los perfiles --
 # r11probe es un perfil DE VERDAD, fuera de la jaula: si una pasada anterior
@@ -126,10 +127,11 @@ open(UCALC, 'w', encoding='utf-8', newline='\r\n').write(
     '    function Doble(A: Integer): Integer;\n  end;\n\n'
     'implementation\n\nfunction TCalc.Doble(A: Integer): Integer;\nbegin\n'
     '    Result := A * 2;\nend;\n\nend.\n')
-A.call('delphi_config', {'project': os.path.join(P1, 'Lib.dproj'),
-                          'command': 'add-unit', 'unit': UCALC})
-check('C2 delphi_config acepta unit= como alias de path=',
-      os.path.exists(UCALC), '(la unit sigue ahi)')
+r = A.call('delphi_config', {'project': os.path.join(P1, 'Lib.dproj'),
+                              'command': 'add-unit', 'unit': UCALC})
+check('C2 delphi_config acepta unit= como alias de path= (y la unit ENTRA en el proyecto)',
+      not mc.fallo(r) and 'UCalc' in open(os.path.join(P1, 'Lib.dpr'), encoding='utf-8-sig').read() and
+      'UCalc.pas' in open(os.path.join(P1, 'Lib.dproj'), encoding='utf-8-sig').read(), r[:250])
 j = J(A.call('delphi_rename_symbol', {'path': UCALC, 'line': 7, 'character': 14,
                                        'newname': 'Triple'}, t=600))
 check('R1 el rename dice DONDE ha buscado', bool(j.get('scope')), str(j)[:300])
@@ -220,7 +222,7 @@ open(os.path.join(PF, 'Incl.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').wr
 r = A.call('delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
                              'platform': 'Win64', 'config': 'Debug'}, t=900)
 check('S4 un include de DENTRO, y el {$R *.res} de siempre, compilan igual',
-      not mc.rechazado(r), r[:250])
+      J(r).get('success') is True, r[:250])
 
 # ------------------------------------- lo que pidio el refactor (ronda 12) --
 BLK = os.path.join(BASE, 'UBloque.pas')
@@ -236,11 +238,13 @@ check('M1 un ancla de VARIAS lineas dentro de edits',
       mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and ' 1 ' in r.split('\n', 1)[0] and disk.count('Writeln(9);') == 1, r[:200])
 check('M1 ...y "occurrence" elige cual, sin contar lineas',
       disk.index('Writeln(9);') > disk.index('procedure Dos;'), disk)
-amb = json.dumps([{"old": "procedure Uno;\nbegin", "new": "procedure Uno;\nbegin"},
+amb = json.dumps([{"old": "procedure Uno;\nbegin", "new": "procedure Uno;\nbegin\n  // tocado"},
                   {"old": "  ESTO(1);\n  NO EXISTE(2);", "new": "x"}])
+antes = open(BLK, 'rb').read()
 r = A.call('delphi_edit', {'path': BLK, 'edits': amb})
-check('M1 un bloque que no existe se rechaza y se deshace todo',
-      mc.abre(r, 'SR_PATCH_EDITS_ROLLED_FMT') or mc.rechazado(r), r[:200])
+check('M1 un bloque que no existe se rechaza y se deshace todo (la primera, que SI cambiaba, tambien)',
+      mc.abre(r, 'SR_PATCH_EDITS_ROLLED_FMT') and mc.resultado(r) == 'NOT_FOUND' and
+      open(BLK, 'rb').read() == antes, r[:200])
 r = A.call('delphi_help', {})
 check('M3 el mapa dice COMO averiguar los parametros de una tool',
       'command=tool' in r and 'content' in r, r[-400:])

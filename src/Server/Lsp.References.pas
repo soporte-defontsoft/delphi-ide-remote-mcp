@@ -528,13 +528,13 @@ begin
   try
     Lines.Text := TLspClient.LoadSourceText(FullPath);
     if (ALine < 0) or (ALine >= Lines.Count) then
-      raise Exception.Create(MsgFmt(SE_LSP_LINE_OUT_RANGE_FMT, [ALine]));
+      raise Exception.Create(MsgFmt(SR_LSP_LINE_OUT_RANGE_FMT, [ALine]));
     Ident := IdentifierAt(Lines[ALine], ACharacter);
   finally
     Lines.Free;
   end;
   if Ident = '' then
-    raise Exception.Create(MsgText(SE_LSP_IDENTIFIER_GIVEN_POSITION));
+    raise Exception.Create(MsgText(SR_LSP_NO_IDENTIFIER));
 
   // Resolve the target location the compiler engine assigns to that symbol.
   var Pending: Boolean;

@@ -274,7 +274,7 @@ begin
   Result := FindStyle(AStyleName);
   if Result = nil then
   begin
-    AErr := MsgFmt(SF_STYLE_NINGUN_ESTILO_STYLENAME_FMT, [AStyleName, TPath.GetFileName(FPath)]);
+    AErr := MsgFmt(SR_STYLE_NINGUN_ESTILO_STYLENAME_FMT, [AStyleName, TPath.GetFileName(FPath)]);
     Exit;
   end;
   for Seg in AChildPath.Replace('\', '/').Split(['/'], TStringSplitOptions.ExcludeEmpty) do
@@ -282,7 +282,7 @@ begin
     Result := Result.Child(Seg.Trim);
     if Result = nil then
     begin
-      AErr := MsgFmt(SF_STYLE_NO_TIENE_UNA_PARTE_FMT, [AStyleName, Seg.Trim, AChildPath]);
+      AErr := MsgFmt(SR_STYLE_NO_TIENE_UNA_PARTE_FMT, [AStyleName, Seg.Trim, AChildPath]);
       Exit;
     end;
   end;
@@ -427,7 +427,7 @@ end;
 procedure TStyleDoc.Save;
 begin
   if FBinaryOnDisk then
-    raise Exception.Create(MsgFmt(SE_STYLE_BINARIO_NO_SE_GUARDA_FMT, [TPath.GetFileName(FPath)]));
+    raise Exception.Create(MsgFmt(SR_STYLE_BINARIO_NO_SE_GUARDA_FMT, [TPath.GetFileName(FPath)]));
   PatchSaveText(FPath, string.Join(FEol, FLines), FEnc);
   Reload;
 end;

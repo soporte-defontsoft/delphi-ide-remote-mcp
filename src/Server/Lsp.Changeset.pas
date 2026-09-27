@@ -44,6 +44,10 @@ function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
   copias y todo-o-nada, en vez de escribir ficheros por su cuenta. }
 function ChangesetBegin: string;
 
+{ "Hay demasiados changesets abiertos", con los numeros de verdad: lo dicen
+  dos sitios (begin y el rename) y los numeros viven aqui. }
+function MsgChangesetsLlenos: string;
+
 implementation
 
 uses
@@ -97,6 +101,11 @@ var
 const
   MAX_SETS = 8;
   TTL_MIN = 30;
+
+function MsgChangesetsLlenos: string;
+begin
+  Result := MsgFmt(SR_CHANGESET_TOO_MANY_FMT, [MAX_SETS, TTL_MIN]);
+end;
 
 constructor TChangeset.Create(const AId: string);
 begin
@@ -475,7 +484,7 @@ begin
     begin
       Id := ChangesetBegin;
       if Id = '' then
-        Exit(MsgText(SR_CHANGESET_TOO_MANY));
+        Exit(MsgChangesetsLlenos);
       Exit(MsgFmt(SN_CHANGESET_BEGUN_FMT, [Id]));
     end;
 
@@ -502,7 +511,7 @@ begin
 
     Id := AId.Trim;
     if (Id = '') or not GSets.TryGetValue(Id, C) then
-      Exit(MsgText(SR_CHANGESET_UNKNOWN));
+      Exit(MsgFmt(SR_CHANGESET_UNKNOWN_FMT, [TTL_MIN]));
     C.LastUsed := Now;
 
     if Cmd = 'rollback' then
@@ -759,8 +768,19 @@ begin
             Op := C.Ops[I];
             if (Op.AtLine > 0) and Deltas.ContainsKey(Op.Path.ToLower) then
               Op.AtLine := Op.AtLine + Deltas[Op.Path.ToLower];
-            Before := LineCountOf(Op.Path);
-            if not ApplyOne(Op, Err) then
+            // Una excepcion a mitad (una carpeta que no se puede crear, un
+            // fichero que alguien tiene abierto) es un fallo como otro
+            // cualquiera: se saltaba la restauracion de las copias y lo
+            // anterior quedaba aplicado (revision 27-sep-2026, medido)
+            var Ok := False;
+            try
+              Before := LineCountOf(Op.Path);
+              Ok := ApplyOne(Op, Err);
+            except
+              on E: Exception do
+                Err := MsgExcepcion(E.ClassName, E.Message);
+            end;
+            if not Ok then
             begin
               Applied := False;
               N := I + 1;
@@ -833,7 +853,7 @@ begin
             else if TFile.Exists(Snap.Path) then
               TFile.Delete(Snap.Path);
           GSets.Remove(Id);
-          Exit(MsgFmt(SR_CHANGESET_ROLLED_BACK_FMT, [N, OpCount, Err]));
+          Exit(MsgConCausa(SR_CHANGESET_ROLLED_BACK_FMT, Err, [N, OpCount, Err]));
         end;
         GSets.Remove(Id);
         Exit(MsgFmt(SN_CHANGESET_COMMITTED_FMT,

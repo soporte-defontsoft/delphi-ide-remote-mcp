@@ -53,6 +53,9 @@ type
 
 implementation
 
+uses
+  Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
+
 { TMCPSerializer }
 
 class constructor TMCPSerializer.Create;
@@ -118,9 +121,8 @@ begin
     begin
       KeyName := Pair.JsonString.Value;
       if KnownNorms.IndexOf(NormalizeKey(KeyName)) < 0 then
-        raise EArgumentException.CreateFmt(
-          'Unknown parameter "%s". Valid parameters: %s.',
-          [KeyName, String.Join(', ', KnownNorms.ToStringArray)]);
+        raise EArgumentException.Create(MsgFmt(SR_SYS_UNKNOWN_PARAM_FMT,
+          [KeyName, String.Join(', ', KnownNorms.ToStringArray)]));
     end;
   finally
     KnownNorms.Free;
@@ -140,7 +142,7 @@ begin
       PropValue := ConvertJsonToValue(JsonValue, RttiProp.PropertyType);
     except
       on E: EArgumentException do
-        raise EArgumentException.CreateFmt('Parameter "%s": %s', [LowerCase(RttiProp.Name), E.Message]);
+        raise EArgumentException.Create(MsgFmt(SR_SYS_PARAM_VALUE_FMT, [LowerCase(RttiProp.Name), E.Message]));
     end;
 
     if not PropValue.IsEmpty then
@@ -230,20 +232,17 @@ begin
     tkInteger:
       begin
         if not TryStrToInt64(Txt, I64) then
-          raise EArgumentException.CreateFmt(
-            'expected a whole number, got "%s".', [JsonValue.Value]);
+          raise EArgumentException.Create(MsgFmt(SF_SYS_EXPECTED_WHOLE_FMT, [JsonValue.Value]));
         if (I64 < Low(Integer)) or (I64 > High(Integer)) then
-          raise EArgumentException.CreateFmt(
-            'the number %s is outside the accepted range (%d..%d).',
-            [Txt, Low(Integer), High(Integer)]);
+          raise EArgumentException.Create(MsgFmt(SF_SYS_OUT_OF_RANGE_FMT,
+            [Txt, Low(Integer), High(Integer)]));
         Result := Integer(I64);
       end;
 
     tkInt64:
       begin
         if not TryStrToInt64(Txt, I64) then
-          raise EArgumentException.CreateFmt(
-            'expected a whole number, got "%s".', [JsonValue.Value]);
+          raise EArgumentException.Create(MsgFmt(SF_SYS_EXPECTED_WHOLE_FMT, [JsonValue.Value]));
         Result := I64;
       end;
 
@@ -254,8 +253,7 @@ begin
 {$ELSE}
         if not TryStrToFloat(Txt, Dbl, FormatSettings.Invariant) then
 {$ENDIF}
-          raise EArgumentException.CreateFmt(
-            'expected a number, got "%s".', [JsonValue.Value]);
+          raise EArgumentException.Create(MsgFmt(SF_SYS_EXPECTED_NUMBER_FMT, [JsonValue.Value]));
         Result := Dbl;
       end;
 
@@ -287,8 +285,7 @@ begin
         else if SameText(Txt, 'false') then
           Result := False
         else
-          raise EArgumentException.CreateFmt(
-            'expected true or false, got "%s".', [JsonValue.Value]);
+          raise EArgumentException.Create(MsgFmt(SF_SYS_EXPECTED_BOOL_FMT, [JsonValue.Value]));
       end
       else
       begin
@@ -339,9 +336,8 @@ begin
   end;
 
   if (Ordinal < EnumType.MinValue) or (Ordinal > EnumType.MaxValue) then
-    raise EArgumentException.CreateFmt(
-      'Invalid value "%s". Valid values: %s.',
-      [JsonValue.Value, GetEnumValueNames(EnumType)]);
+    raise EArgumentException.Create(MsgFmt(SF_SYS_INVALID_VALUE_FMT,
+      [JsonValue.Value, GetEnumValueNames(EnumType)]));
 
   Result := TValue.FromOrdinal(RttiType.Handle, Ordinal);
 end;

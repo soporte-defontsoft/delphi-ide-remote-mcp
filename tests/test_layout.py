@@ -262,7 +262,7 @@ p = os.path.join(BASE, 'Bin.dfm')
 open(p, 'wb').write(b'\xff\x0a\x00FORMBIN\x00TPF0\x08TFormBin\x00')
 r = call({'command': 'layout', 'path': p})
 check('L9 designer binario: RECHAZADO',
-      mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'damaged BINARY designer' in r, r[:160])
+      mc.abre(r, 'SR_DSGN_BINARIO_DANADO_FMT'), r[:160])
 p = os.path.join(BASE, 'algo.pas')
 open(p, 'w').write('unit algo;\ninterface\nimplementation\nend.\n')
 r = call({'command': 'layout', 'path': p})

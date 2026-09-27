@@ -7,7 +7,7 @@ program McpDesktopNode;
     Linux   -> portal XDG + libei + X11, cargados en caliente ([Mld.DBus],
                [Mld.Eis], [Mld.X11]). Hoy GNOME.
     Windows -> GDI y SendInput, que ya vienen con el sistema ([Mld.Win]).
-  El escritor de PNG y el contrato de salida (CAPTURA=<ruta>) son comunes. }
+  El escritor de PNG y el contrato de salida (CAPTURE=<ruta>) son comunes. }
 
 uses
   System.SysUtils,
@@ -75,7 +75,7 @@ var
       { El camino normal (BitBlt del escritorio) fallo y la captura salio por
         el de respaldo: se dice, porque le faltan el cursor y el fondo. }
       if Escritorio.Respaldo <> '' then
-        Writeln('  RESPALDO: ', Escritorio.Respaldo);
+        Writeln(MsgFmt(SN_NODE_RESPALDO_FMT, [Escritorio.Respaldo]));
       { La lista de ventanas viaja CON cada captura (David, 24-sep), en
         pixeles de la imagen. PROTEGIDA: si falla, falla la lista y se
         dice; la captura ya esta escrita y no se pierde por esto. }
@@ -109,7 +109,7 @@ begin
     { Siempre, no solo al fallar: la captura del DC de pantalla se niega a
       ratos sin causa conocida (2026-09-22) y hay que poder comparar el
       estado de los casos buenos con el de los malos. }
-    Writeln('  ESTADO: ', EstadoDelEscritorio);
+    Writeln(MsgFmt(SF_NODE_ESTADO_FMT, [EstadoDelEscritorio]));
     Writeln;
 
     { Mismas ordenes que en Linux y mismas coordenadas: las de LA CAPTURA. }
@@ -177,8 +177,8 @@ begin
       begin
         Hizo := Escritorio.Combinacion(Teclas);
         if Hizo then
-          Writeln('  TECLA ', Arg(Args),
-            IfThen(Args > 2, ' con ' + IntToStr(Args - 2) + ' modificador(es)', ''), ' enviada')
+          Writeln(MsgFmt(SK_NODE_TECLA_ENVIADA_FMT, [Arg(Args),
+            IfThen(Args > 2, MsgFmt(SF_NODE_CON_MODIFICADORES_FMT, [Args - 2]), '')]))
         else
           Writeln(MsgFmt(SN_NODE_NO_ENVIAR_TECLA_FMT, [Escritorio.Error]));
       end;
@@ -286,7 +286,7 @@ begin
       if L.Simbolo(S, P) then
         Inc(Buenos)
       else
-        Writeln(Format('     AUSENTE %s (%s)', [S, L.Error]));
+        Writeln(MsgFmt(SF_NODE_AUSENTE_FMT, [S, L.Error]));
     end;
     Writeln(MsgFmt(SN_NODE_ABIERTA_SIMBOLOS_FMT, [ALib, Buenos, Total]));
   finally
@@ -311,7 +311,7 @@ var
   SinOjos: Boolean;
 
   { La lista de ventanas que viaja CON la captura (David, 24-sep): detras de
-    cada CAPTURA=, en el mismo formato que el nodo Windows y en pixeles de
+    cada CAPTURE=, en el mismo formato que el nodo Windows y en pixeles de
     la imagen. Son los ojos X11: bajo Wayland ven lo que corre por Xwayland
     (toda aplicacion FMX), no las ventanas nativas Wayland. PROTEGIDA: si
     los ojos fallan, falla la lista y se dice; la captura ya esta escrita y
@@ -518,8 +518,8 @@ begin
             else
               Hizo := Manos.Combinacion(Codigos);
             if Hizo then
-              Writeln('  TECLA ', Arg(Args),
-                IfThen(Args > 2, ' con ' + IntToStr(Args - 2) + ' modificador(es)', ''), ' enviada')
+              Writeln(MsgFmt(SK_NODE_TECLA_ENVIADA_FMT, [Arg(Args),
+                IfThen(Args > 2, MsgFmt(SF_NODE_CON_MODIFICADORES_FMT, [Args - 2]), '')]))
             else
               Writeln(MsgFmt(SN_NODE_NO_ENVIAR_TECLA_FMT, [Manos.Error]));
           end

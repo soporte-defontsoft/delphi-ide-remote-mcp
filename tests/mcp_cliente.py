@@ -243,19 +243,34 @@ def fin(titulo, sin_checks=None):
 
 # ---------------------------------------------------------------- respuestas
 
+# Lo que texto() pone cuando NO hay respuesta: lo escribe texto() y lo lee
+# resultado(), que lo cuenta como fallo (antes lo daba por exito: un check
+# "no fallo" pasaba con el servidor caido; revision 27-sep-2026)
+SIN_TIMEOUT = '(timeout)'
+SIN_RPC = 'MCPERROR '
+SIN_CONTENIDO = '(no content)'
+NO_ANSWER = 'NO_ANSWER'
+
+
 def texto(msg, respaldo_json=False):
     """El texto de una respuesta de tools/call: content[0].text; 'MCPERROR
     <error>' si el JSON-RPC trae error; '(timeout)' si no llego. Sin texto:
     '(no content)', o el mensaje entero en JSON (recortado) con respaldo_json,
     que es lo que varias baterias ensenaban en el detalle de un FAIL."""
     if msg is None:
-        return '(timeout)'
+        return SIN_TIMEOUT
     if 'error' in msg:
-        return 'MCPERROR ' + json.dumps(msg['error'])[:300]
+        return SIN_RPC + json.dumps(msg['error'])[:300]
     c = (msg.get('result') or {}).get('content') or []
     if c and 'text' in c[0]:
         return c[0]['text']
-    return json.dumps(msg)[:400] if respaldo_json else '(no content)'
+    return json.dumps(msg)[:400] if respaldo_json else SIN_CONTENIDO
+
+
+def sin_respuesta(t):
+    """True si t es lo que texto() pone cuando no hubo respuesta."""
+    t = t or ''
+    return t == SIN_TIMEOUT or t == SIN_CONTENIDO or t.startswith(SIN_RPC)
 
 
 def entorno(extra=None):
@@ -388,6 +403,40 @@ def id_de(nombre):
     return ids_[0]
 
 
+def pascal_sin_comentarios(src):
+    """El fuente Pascal SIN comentarios ({ }, (* *), //), respetando los
+    literales: una llave o dos barras DENTRO de una cadena no abren nada.
+    Quitarlos con una regex se comia '{...}' de un literal JSON (medido en
+    test_catalogo el 27-sep: un uso sin helper desaparecia del recuento)."""
+    out, i, n = [], 0, len(src)
+    while i < n:
+        c = src[i]
+        if c == "'":
+            j = i + 1
+            while j < n:
+                if src[j] == "'" and src[j + 1:j + 2] == "'":
+                    j += 2
+                elif src[j] == "'" or src[j] == '\n':
+                    break
+                else:
+                    j += 1
+            out.append(src[i:j + 1])
+            i = j + 1
+        elif c == '{':
+            j = src.find('}', i)
+            i = n if j < 0 else j + 1
+        elif src.startswith('(*', i):
+            j = src.find('*)', i + 2)
+            i = n if j < 0 else j + 2
+        elif src.startswith('//', i):
+            j = src.find('\n', i)
+            i = n if j < 0 else j
+        else:
+            out.append(c)
+            i += 1
+    return ''.join(out)
+
+
 def es(t, nombre):
     """True si el texto trae el mensaje de esa constante, en cualquier sitio:
     es('...', 'SR_ANCLA_NO_ESTA_FMT'). Como HasMsg del servidor."""
@@ -395,22 +444,35 @@ def es(t, nombre):
 
 
 def abre(t, nombre):
-    """True si el mensaje que ABRE el texto es el de esa constante (su
-    etiqueta es la primera). Como EsMsg del servidor."""
-    return ids(t)[:1] == [id_de(nombre)]
+    """True si el mensaje que ABRE el texto es el de esa constante: su
+    etiqueta es lo primero (tras los blancos), como EsMsg del servidor. En
+    una respuesta JSON, el que abre su campo "error". Antes valia la primera
+    etiqueta EN CUALQUIER SITIO: un eco o un JSON que la citara abria."""
+    t = t or ''
+    if t.lstrip().startswith('{'):
+        err = como_json(t).get('error')
+        t = err if isinstance(err, str) else ''
+    m = ETIQUETA.match(t.lstrip())
+    return bool(m) and m.group(1) == id_de(nombre)
 
 
 def resultado(t):
     """El resultado de una respuesta como lo decide el servidor: el que
     declara la etiqueta que la abre; y si es un objeto JSON, el de su campo
     "error" (su etiqueta, o INVALID_PARAM si no la lleva), como
-    OutcomeDelTexto de ToolsManager. Un JSON de exito no declara nada."""
+    OutcomeDelTexto y ErrorDelObjeto de ToolsManager: null, false o ausente
+    es que no hay error; otra cosa que no sea texto, un error sin etiqueta.
+    Un JSON de exito no declara nada. Sin respuesta: NO_ANSWER."""
     t = t or ''
+    if sin_respuesta(t):
+        return NO_ANSWER
     if t.lstrip().startswith('{'):
         err = como_json(t).get('error')
-        if isinstance(err, str) and err.strip():
-            return outcome(err) or 'INVALID_PARAM'
-        return ''
+        if err is None or err is False:
+            return ''
+        if isinstance(err, str):
+            return (outcome(err) or 'INVALID_PARAM') if err.strip() else ''
+        return 'INVALID_PARAM'
     return outcome(t)
 
 def id_changeset(t):
@@ -423,13 +485,23 @@ def id_changeset(t):
     return m.group(0) if m else ''
 
 
+def llego_a_git(t):
+    """True si la orden LLEGO a git (y git contesto, bien o mal): no la paro
+    la puerta. Un exit<>0 es un fallo con su etiqueta (SR_GIT_EXIT_FMT) desde
+    el 27-sep-2026; antes "exit=N" salia como exito y las baterias lo
+    miraban con startswith('exit=')."""
+    return (t or '').startswith('exit=') or abre(t, 'SR_GIT_EXIT_FMT')
+
+
 def rechazado(t):
-    """Una negativa: DENIED o NOT_FOUND (lo que antes decia RECHAZADO)."""
-    return resultado(t) in ('DENIED', 'NOT_FOUND')
+    """Una negativa: DENIED, NOT_FOUND o INVALID_PARAM - como EsRechazo del
+    servidor (antes solo las dos primeras: el lector de las baterias no era
+    el del servidor). Sin respuesta no es una negativa: es un fallo."""
+    return resultado(t) in ('DENIED', 'NOT_FOUND', 'INVALID_PARAM')
 
 
 def fallo(t):
-    """Cualquier resultado de error, INTERNAL incluido."""
+    """Cualquier resultado de error, INTERNAL y NO_ANSWER incluidos."""
     return resultado(t) != ''
 
 

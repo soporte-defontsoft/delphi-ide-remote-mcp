@@ -109,11 +109,11 @@ begin
         dsResource: ObjectResourceToText(Entrada, Salida);
         dsTpf0: ObjectBinaryToText(Entrada, Salida);
       else
-        Exit(MsgText(SF_DSGN_NO_ES_DESIGNER_BINARIO));
+        Exit(MsgText(SR_DSGN_NO_ES_DESIGNER_BINARIO));
       end;
     except
       on E: Exception do
-        Exit(MsgFmt(SF_DSGN_BINARIO_DANADO_FMT, [E.ClassName, E.Message]));
+        Exit(MsgFmt(SR_DSGN_BINARIO_DANADO_FMT, [E.ClassName, E.Message]));
     end;
     SetLength(Bytes, Salida.Size);
     if Salida.Size > 0 then
@@ -131,7 +131,7 @@ function DesignerFileToText(const APath: string; out AText: string): string;
 begin
   AText := '';
   if not TFile.Exists(APath) then
-    Exit(MsgFmt(SF_CHSET_NO_EXISTE_FMT, [APath]));
+    Exit(MsgFmt(SR_NO_EXISTE_FMT, [APath]));
   Result := DesignerBinaryToText(TFile.ReadAllBytes(APath), AText);
 end;
 
@@ -153,7 +153,7 @@ begin
     // ANSI no puede representar se rechaza en vez de escribir '?'.
     Bytes := TEncoding.ANSI.GetBytes(AText);
     if TEncoding.ANSI.GetString(Bytes) <> AText then
-      Exit(MsgText(SF_DSGN_CARACTERES_NO_CABEN_ANSI));
+      Exit(MsgText(SR_DSGN_CARACTERES_NO_CABEN_ANSI));
     if Length(Bytes) > 0 then
       Entrada.WriteBuffer(Bytes[0], Length(Bytes));
     Entrada.Position := 0;
@@ -161,7 +161,7 @@ begin
       ObjectTextToResource(Entrada, Salida);
     except
       on E: Exception do
-        Exit(MsgFmt(SF_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [E.ClassName, E.Message]));
+        Exit(MsgFmt(SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [E.ClassName, E.Message]));
     end;
     SetLength(ABytes, Salida.Size);
     if Salida.Size > 0 then

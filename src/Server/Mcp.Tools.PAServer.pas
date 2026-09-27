@@ -899,7 +899,7 @@ begin
       Return.AddPair('delphiVersion', Info.Version);
       Return.AddPair('ideRegistered', TJSONBool.Create(True));
       if AvisoDup <> '' then
-        Return.AddPair('aviso', AvisoDup);
+        Return.AddPair('warning', AvisoDup);
       Return.AddPair('note', MsgText(SN_PASERVER_PROFILE_OK));
       Result := Return.ToJSON;
     finally

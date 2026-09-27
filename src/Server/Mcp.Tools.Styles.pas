@@ -539,7 +539,7 @@ begin
       if not TFile.Exists(Brcc) then
       begin
         Ret.AddPair('rc', TPath.GetFileName(Rc));
-        Ret.AddPair('rcError', MsgFmt(SN_STYLE_BRCC_NO_ENCONTRADO_FMT, [Brcc]));
+        Ret.AddPair('error', MsgFmt(SR_STYLE_BRCC_NO_ENCONTRADO_FMT, [Brcc]));
         AllOk := False;
         Break;
       end;
@@ -549,7 +549,7 @@ begin
       if RcDenied <> '' then
       begin
         Ret.AddPair('rc', TPath.GetFileName(Rc));
-        Ret.AddPair('rcError', RcDenied);
+        Ret.AddPair('error', RcDenied);
         AllOk := False;
         Break;
       end;
@@ -697,7 +697,7 @@ begin
       Result := MsgText(SR_STYLE_COMMAND_DEBE_SER);
   except
     on E: Exception do
-      Result := MsgEnvuelve(SR_FALLO_INTERNO_FMT, E.Message, [E.ClassName, E.Message]);
+      Result := MsgExcepcion(E.ClassName, E.Message);
   end;
   Result := MaskDriveText('delphi_styles', Result);
 end;

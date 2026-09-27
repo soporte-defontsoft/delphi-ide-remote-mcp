@@ -458,7 +458,7 @@ var
       ChangesetExecute('rollback', Id, '', '', '', '', '', '', 0);
     Id := '';
     PonResultado('applied', TJSONBool.Create(False));
-    PonResultado('note', TJSONString.Create(MsgFmt(SR_RENAME_APPLY_FAILED_FMT, [AMotivo])));
+    PonResultado('error', TJSONString.Create(MsgConCausa(SR_RENAME_APPLY_FAILED_FMT, AMotivo, [AMotivo])));
   end;
 
 begin
@@ -468,7 +468,7 @@ begin
           TJSONBool(Result.GetValue('applicable')).AsBoolean) then
   begin
     PonResultado('applied', TJSONBool.Create(False));
-    PonResultado('note', TJSONString.Create(MsgText(SR_RENAME_NOT_APPLICABLE)));
+    PonResultado('error', TJSONString.Create(MsgText(SR_RENAME_NOT_APPLICABLE)));
     Exit;
   end;
   Changes := Result.GetValue('changes') as TJSONArray;
@@ -480,7 +480,7 @@ begin
     Id := ChangesetBegin;
     if Id = '' then
     begin
-      Fallo(MsgText(SR_CHANGESET_TOO_MANY));
+      Fallo(MsgChangesetsLlenos);
       Exit;
     end;
     Apiladas := 0;

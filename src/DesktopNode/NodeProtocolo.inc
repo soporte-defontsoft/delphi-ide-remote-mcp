@@ -3,7 +3,7 @@
   Mcp.Tools.Desktop). Se incluye dentro de una seccion const, como
   NodeKey.inc. Estaba compuesto a mano en cinco sitios (revision del
   26-sep-2026). }
-  NODO_CAPTURA = 'CAPTURA=';           // CAPTURA=<ruta del png>
-  NODO_NO_PUDE = 'NO pude capturar:';  // NO pude capturar: <motivo>
-  NODO_VENTANAS = 'ventanas visibles:'; // '  <n> ventanas visibles:' abre la lista
-  NODO_VENTANA = 'VENTANA ';            // '  VENTANA x y ancho alto <titulo>'
+  NODO_CAPTURA = 'CAPTURE=';           // CAPTURE=<ruta del png>
+  NODO_NO_PUDE = 'Could not capture:'; // Could not capture: <motivo>
+  NODO_VENTANAS = 'visible windows:';  // '  <n> visible windows:' abre la lista
+  NODO_VENTANA = 'WINDOW ';             // '  WINDOW x y ancho alto <titulo>'

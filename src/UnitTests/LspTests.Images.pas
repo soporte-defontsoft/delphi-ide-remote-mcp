@@ -255,14 +255,14 @@ begin
   R := MotivoSinCaptura('  Error: Acceso denegado.', '');
   Assert.IsTrue(HasMsg(R, SN_DESKTOP_MOTIVO_DENEGADA), 'Windows bloqueado: ' + R);
   R := MotivoSinCaptura('-- 2. la pantalla'#10 +
-    '  NO pude capturar: org.freedesktop.DBus.Error.NoReply: sin respuesta'#10,
+    '  ' + NODO_NO_PUDE + ' org.freedesktop.DBus.Error.NoReply: no reply'#10,
     SN_REMOTERUN_ENV_INHERITED);
   Assert.IsTrue(R.Contains('NoReply'), 'el motivo del propio nodo: ' + R);
   // el NODO primero: el lanzador decia 'sin entorno' y tapaba lo que el nodo
   // habia mirado de verdad (revision 26-sep-2026)
-  R := MotivoSinCaptura('  NO pude capturar: NO hay sesion grafica abierta del usuario operador'#10,
+  R := MotivoSinCaptura('  ' + NODO_NO_PUDE + ' no graphical session open for the operator user'#10,
     SN_REMOTERUN_ENV_NONE);
-  Assert.IsTrue(R.Contains('operador'), 'el motivo del nodo gana al del entorno: ' + R);
+  Assert.IsTrue(R.Contains('operator user'), 'el motivo del nodo gana al del entorno: ' + R);
   R := MotivoSinCaptura('nodo listo', '');
   Assert.IsTrue(HasMsg(R, SN_DESKTOP_MOTIVO_NINGUNO), 'sin motivo: ' + R);
   Assert.IsTrue(EsMsg(R, SR_DESKTOP_SIN_CAPTURA_FMT), 'el motivo va en su mensaje: ' + R);

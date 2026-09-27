@@ -74,6 +74,9 @@ if only:
     batteries = [b for b in batteries if only in os.path.basename(b)]
 
 rows, total_ok, total_bad, failed = [], 0, 0, []
+# lo que una bateria dice que NO midio (NOTA/SKIP): una verde con su nucleo
+# saltado no se distinguia de una verde de verdad (revision 27-sep-2026)
+notas = []
 for b in batteries:
     name = os.path.basename(b)[:-3]
     t0 = time.time()
@@ -86,6 +89,8 @@ for b in batteries:
     # dijera por que (medido 2026-09-20, y es justo el pecado que este
     # release se dedica a arreglar en el servidor).
     bad = sum(1 for line in out.splitlines() if line.lstrip().startswith('FAIL'))
+    notas += ['%s: %s' % (name, line.strip()[:200]) for line in out.splitlines()
+              if line.lstrip().startswith(('NOTA', 'SKIP'))]
     # batteries print their own tally; trust rc for the verdict...
     verdict = 'OK  ' if r.returncode == 0 else 'FALLA'
     # ...salvo con 0 checks y sin decir por que: una que no mide nada no
@@ -102,8 +107,12 @@ for b in batteries:
     print('%-6s %-26s %4d ok  %3d fail  %5.1fs' % (
         verdict, name, ok, bad, time.time() - t0))
 
-print('\n== %d baterias | %d checks OK | %d fallos | %d baterias rojas ==' % (
-    len(rows), total_ok, total_bad, len(failed)))
+print('\n== %d baterias | %d checks OK | %d fallos | %d baterias rojas | %d notas ==' % (
+    len(rows), total_ok, total_bad, len(failed), len(notas)))
+if notas:
+    print('\n--- lo que las baterias dicen que NO midieron (NOTA/SKIP) ---')
+    for n in notas:
+        print('   ', n)
 for name, out, rc in failed:
     print('\n--- %s (rc=%d) ---' % (name, rc))
     motivo = [line for line in out.splitlines()

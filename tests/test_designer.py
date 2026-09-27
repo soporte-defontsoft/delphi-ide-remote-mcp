@@ -126,14 +126,14 @@ check('lint NO avisa de Left/Top de componentes no visuales',
 # ---- doctrina ----
 r = call('delphi_designer', {'command': 'tree', 'path': BIN})
 check('designer binario (TPF0) rechazado',
-      mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'damaged BINARY designer' in r, r[:200])
+      mc.abre(r, 'SR_DSGN_BINARIO_DANADO_FMT'), r[:200])
 for cmd in ('tree', 'get', 'lint', 'check-binding'):
     args = {'command': cmd, 'path': RESBIN}
     if cmd == 'get':
         args['component'] = 'X'
     r = call('delphi_designer', args)
-    check('binario envuelto en recurso ($FF) rechazado por ' + cmd,
-          mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'damaged BINARY designer' in r, r[:200])
+    check('binario envuelto en recurso ($FF) rechazado por ' + cmd + ' (el mismo mensaje en todos)',
+          mc.abre(r, 'SR_DSGN_BINARIO_DANADO_FMT'), r[:200])
 r = call('delphi_designer', {'command': 'tree', 'path': os.path.join(BASE, 'nx.dfm')})
 check('fichero inexistente',
       mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_NO_EXISTE_FMT') and 'nx.dfm' in r, r[:150])

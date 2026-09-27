@@ -121,8 +121,8 @@ try:
     txt = r['result']['content'][0]['text']
     d = json.loads(txt)
     srv = d.get('server') or {}
-    check('T2 el bloque server dice modo bandeja',
-          srv.get('mode') == 'bandeja', srv.get('mode'))
+    check('T2 el bloque server dice modo bandeja (tray)',
+          srv.get('mode') == 'tray', srv.get('mode'))
     check('T2b dice transporte http', srv.get('transport') == 'http',
           srv.get('transport'))
     check('T2c el pid es el proceso que hemos lanzado (%d)' % gui.pid,

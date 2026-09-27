@@ -70,7 +70,7 @@ r = A.call('delphi_git', {'repo': os.path.join(BASE, 'clon'), 'command': 'clone'
 check('R1 clone con URL no permitida: RECHAZADO', mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_OFF_FMT'), r[:200])
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'push', 'args': 'origin main'})
 check('R1 un remoto POR NOMBRE sigue permitido (no es una URL)',
-      not mc.rechazado(r), r[:200])
+      mc.llego_a_git(r), r[:200])
 
 B = spawn({'DELPHI_MCP_GIT_REMOTES': 'example.com'})
 r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'https://otro.example.org/x.git'})
@@ -78,7 +78,7 @@ check('R1 host fuera de la lista del operador: RECHAZADO nombrando la lista',
       mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_HOST_FMT') and 'example.com' in r, r[:250])
 r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'https://example.com/x.git'})
 check('R1 el host permitido SI pasa la puerta (falle luego lo que falle)',
-      not mc.rechazado(r), r[:200])
+      mc.llego_a_git(r), r[:200])
 B.mata()
 
 # --------------------------------------------------------------- B1: merge --
@@ -87,7 +87,7 @@ check('B1 merge con opciones: RECHAZADO (rompia el --ff-only)',
       mc.rechazado(r) and mc.es(r, 'SR_GIT_MERGE_ARGS') and 'ff-only' in r, r[:250])
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'merge', 'args': '--abort'})
 check('B1 merge --abort SI se acepta (la salida del merge a medias)',
-      not mc.rechazado(r), r[:200])
+      mc.llego_a_git(r), r[:200])
 
 # ------------------------------------------------------------- P4: comandos --
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'switchh'})
@@ -113,10 +113,10 @@ A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'AAA').de
 A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'BBB').decode(),
                          'offset': 0, 'sha256': '0' * 64})
 import glob
-q_backups = glob.glob(os.path.join(U, '__delphi-patch', '*', '*.corrupto'))
+q_backups = glob.glob(os.path.join(U, '__delphi-patch', '*', '*.corrupt'))
 check('F3 la segunda cuarentena no pisa a la primera sin copia',
-      open(BAD + '.corrupto', 'rb').read() == b'BBB' and len(q_backups) >= 1,
-      (open(BAD + '.corrupto', 'rb').read(), q_backups))
+      open(BAD + '.corrupt', 'rb').read() == b'BBB' and len(q_backups) >= 1,
+      (open(BAD + '.corrupt', 'rb').read(), q_backups))
 
 # ----------------------------------------------------------------- R3: rm ---
 D = os.path.join(BASE, 'paraborrar')

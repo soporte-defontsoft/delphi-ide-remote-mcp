@@ -511,7 +511,7 @@ THE FLOW, and it is the whole trick: `command=screenshot` brings the WHOLE deskt
 
 **How a gesture travels.** The same way as `remote-run`, on every system: a job file with the node's arguments one per line and the native launcher `node\McpRunJob` / `McpRunJob.exe` that PAServer starts - no shell in the path, so the text you type reaches the node untouched. A Windows PAServer must run **inside the user's session**: a Windows service lives in session 0, which has no desktop, and `graphicalEnv` says so.
 
-The target needs a graphical session open - a headless box has nothing to show - for the SAME user PAServer runs as. On GNOME **the screen-capture permission must have been granted once** on that machine, as part of setting it up; without it the desktop portal tries to ask, and when it cannot paint its dialog - a remote session, a locked screen - it answers nothing: the symptom is a mute 20-second timeout that names no cause. A locked Windows answers "Access denied" to any capture, and the tool says so in `hint`. An UNLOCKED Windows sometimes answers the same to the screen copy (measured 2026-09-22, one capture in a few); then the node composes the desktop window by window from the DWM surfaces (`PrintWindow`) and says so in a `RESPALDO:` line of `nodeOutput` - that capture has every window with its real pixels but no cursor and no taskbar, and `hint` is only given when there is no capture at all.
+The target needs a graphical session open - a headless box has nothing to show - for the SAME user PAServer runs as. On GNOME **the screen-capture permission must have been granted once** on that machine, as part of setting it up; without it the desktop portal tries to ask, and when it cannot paint its dialog - a remote session, a locked screen - it answers nothing: the symptom is a mute 20-second timeout that names no cause. A locked Windows answers "Access denied" to any capture, and the tool says so in `hint`. An UNLOCKED Windows sometimes answers the same to the screen copy (measured 2026-09-22, one capture in a few); then the node composes the desktop window by window from the DWM surfaces (`PrintWindow`) and says so in a `FALLBACK:` line of `nodeOutput` - that capture has every window with its real pixels but no cursor and no taskbar, and `hint` is only given when there is no capture at all.
 
 **Coordinates are real pixels** on both systems: the Windows node is DPI-aware, so what it reports matches the screenshot exactly; a tool that is NOT DPI-aware sees the same window somewhere else (on a 125% display, the same Notepad was at 600,254 for a non-aware caller and at 750,318 for the node). Measure on the screenshot or on `windows`, never mix in coordinates from another source.
 
@@ -748,7 +748,7 @@ Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .j
 2. **Open the port in THAT machine's firewall** - Windows' own or the antivirus suite's. Measured: the port answered nothing until a rule was added in ESET's firewall; Windows' was not the one blocking. `test-connection host=<ip> port=64211` with no name is the probe: `tcpReachable=false` with the machine answering a ping is a firewall.
 3. **Register the profile from here**: `add-profile name=<name> host=<ip> port=64211 password=<yours> platform=Win64`, then `test-connection name=<name>` for the full handshake. The host must be inside the workspace's `RemoteHosts`.
 
-From then on `delphi_desktop profile=<name>` does the rest by itself: the first gesture deploys the node (`nodeDeploy: desplegado`), and capture, `windows`, `window=` crops and `tap` work as on Linux. Nothing else is installed on that machine.
+From then on `delphi_desktop profile=<name>` does the rest by itself: the first gesture deploys the node (`nodeDeploy: deployed`), and capture, `windows`, `window=` crops and `tap` work as on Linux. Nothing else is installed on that machine.
 
 #### Setting up a new Linux target: what happens ON the machine, and what this server does
 
@@ -782,7 +782,7 @@ From then on this server does the rest with no hands anywhere: `get-sdk` (once p
 
 ### `delphi_messages`
 
-Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message addressed to your agent id or to everyone, once; check only lists what waits. While mail waits, every tool answer ends with a MENSAJES PENDIENTES line - read it then: it may change what you are doing.
+Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message addressed to your agent id or to everyone, once; check only lists what waits. While mail waits, every tool answer ends with a PENDING MESSAGES line - read it then: it may change what you are doing.
 
 *Access: read-only.*
 

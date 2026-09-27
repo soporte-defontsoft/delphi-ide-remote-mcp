@@ -138,8 +138,8 @@ check('...y la victima de fuera sigue intacta', os.listdir(VIC) == ['v.txt'], os
 os.rmdir(os.path.join(WT, 'Compiled', 'aFuera'))   # quita el ENLACE, nunca lo de detras
 open(os.path.join(WT, 'version.txt'), 'w').write('cambiado')
 out = wt(args='remove', path=WT)
-check('remove con cambios: git se niega (sin forzar) y la copia sigue', out.startswith('exit=')
-      and not out.startswith('exit=0') and os.path.isdir(WT), out)
+check('remove con cambios: git se niega (sin forzar) y la copia sigue',
+      mc.abre(out, 'SR_GIT_EXIT_FMT') and os.path.isdir(WT), out)
 g('checkout', '--', 'version.txt', cwd=WT)
 out = wt(args='remove', path=WT)
 check('remove limpio: quitado', out.startswith('exit=0') and not os.path.exists(WT), out)

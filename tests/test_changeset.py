@@ -164,7 +164,7 @@ check('stage fuera de la jaula rechazado', mc.rechazado(r) and mc.es(r, 'SR_JAIL
 r = cs({'command': 'stage', 'id': cid, 'kind': 'explotar', 'path': files[2]})
 check('kind invalido', mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_KIND'), r[:120])
 r = cs({'command': 'commit', 'id': 'noexiste'})
-check('id desconocido', mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_UNKNOWN'), r[:120])
+check('id desconocido', mc.resultado(r) == 'NOT_FOUND' and mc.abre(r, 'SR_CHANGESET_UNKNOWN_FMT'), r[:120])
 r = cs({'command': 'commit', 'id': cid})
 check('commit de changeset vacio rechazado', mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_EMPTY'), r[:150])
 r = cs({'command': 'rollback', 'id': cid})

@@ -271,7 +271,7 @@ begin
     PatchSaveText(A.Path, Text, EncNm); // backup + atomic + same encoding
   except
     on E: Exception do
-      Exit(MsgFmt(SR_TEXT_AL_CODIFICAR_FMT, [E.Message]));
+      Exit(MsgEnvuelve(SR_TEXT_AL_CODIFICAR_FMT, E.Message));
   end;
 
   if Cuantas > 1 then
@@ -337,7 +337,7 @@ begin
     Result := DoEditLine(A);
   except
     on E: Exception do
-      Result := MsgEnvuelve(SR_RECHAZADO_FMT, E.Message);
+      Result := MsgExcepcion(E.ClassName, E.Message);
   end;
 end;
 

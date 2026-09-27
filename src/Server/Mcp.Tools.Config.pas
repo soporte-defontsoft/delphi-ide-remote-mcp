@@ -258,9 +258,9 @@ begin
       Return.AddPair('frameworkType', Info.FrameworkType);
       Return.AddPair('appType', Info.AppType);
       if SameText(Info.FrameworkType, 'VCL') then
-        Return.AddPair('crossPlatform', MsgText(SN_CFG_NO_VCL_WINDOWS_ONLY))
+        Return.AddPair('crossPlatform', MsgText(SF_CFG_NO_VCL_WINDOWS_ONLY))
       else
-        Return.AddPair('crossPlatform', MsgText(SN_CFG_YES_FMX_CONSOLE_TARGET));
+        Return.AddPair('crossPlatform', MsgText(SF_CFG_YES_FMX_CONSOLE_TARGET));
     end;
     if (Sec = 'summary') or (Sec = 'all') or (Sec = 'platforms') then
     begin
@@ -385,7 +385,7 @@ begin
   // parameter (measured RCE via a crafted <Import> - field round 5, R5-B).
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
-    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
+    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
   Info := ReadDproj(ADproj);
   if Info.FrameworkType = '' then
     Exit(MsgText(SR_CFG_PUEDO_LEER_FRAMEWORK_DPROJ));
@@ -656,7 +656,7 @@ begin
     if LastDef = 0 then
       LastDef := Pos(LowerCase('<PropertyGroup Condition="''$(Config)''==''Base'' or ''$(Base)''!=''''">'), Low);
     if LastDef = 0 then
-      raise Exception.Create(MsgText(SE_CFG_ENCUENTRO_PROPERTYGROUP_CONFIGURACION));
+      raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_CONFIG));
     At := Pos('</propertygroup>', Low, LastDef);
     At := At + Length('</PropertyGroup>');
     AXml := Copy(AXml, 1, At - 1) + sLineBreak +
@@ -669,7 +669,7 @@ begin
   if not FindGroup(AXml, GroupCondition(APlatform), O, I, C) then
   begin
     if not FindGroup(AXml, GroupCondition(''), O, I, C) then
-      raise Exception.Create(MsgText(SE_CFG_ENCUENTRO_PROPERTYGROUP_BASE_BASE));
+      raise Exception.Create(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE));
     At := C + Length('</PropertyGroup>');
     AXml := Copy(AXml, 1, At - 1) + sLineBreak +
       '    <PropertyGroup Condition="' + GroupCondition(APlatform) + '">' + sLineBreak +
@@ -801,7 +801,7 @@ begin
   begin
     Plat := CanonicalPlatform(ARawPlatform);
     if Plat = '' then
-      Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT, [ARawPlatform.Trim]));
+      Exit(MsgFmt(SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
   end;
   Result := SearchPathDenied(ADproj, ARawPath, Show);
   if Result <> '' then
@@ -814,7 +814,7 @@ begin
       EnsurePlatformGroups(Xml, Plat);
   except
     on E: Exception do
-      Exit(MsgEnvuelve(SR_ERROR_FMT, E.Message));
+      Exit(MsgExcepcion(E.ClassName, E.Message));
   end;
   if not FindGroup(Xml, GroupCondition(Plat), O, I, C) then
     Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_FMT, [GroupCondition(Plat)]));
@@ -1372,7 +1372,7 @@ var
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
-    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
+    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
@@ -1448,7 +1448,7 @@ var
 begin
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
-    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim]));
+    Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
   if IsLocalPlatform(APlatform) then
     Exit(MsgFmt(SR_CONFIG_PROFILE_LOCAL_FMT, [APlatform]));
   Info := DiscoverRadStudio;
@@ -1602,17 +1602,20 @@ begin
       // El .dproj vuelve byte a byte, como una tanda.
       var Antes := TFile.ReadAllBytes(Proj);
       Result := AddPlatform(Proj, Params.Platform);
-      if not EsRechazo(Result) then
+      if not EsFallo(Result) then
       begin
         var Pega := '';
         if Params.Sdk.Trim <> '' then
           Pega := SetSdk(Proj, Params.Platform, Params.Sdk);
-        if (Params.Profile.Trim <> '') and not EsRechazo(Pega) then
+        if (Params.Profile.Trim <> '') and not EsFallo(Pega) then
           Pega := string.Join(sLineBreak, [Pega,
             SetProfile(Proj, Params.Platform, Params.Profile)]).Trim;
         var Rechazo := '';
         for var L in Pega.Replace(sLineBreak, #10).Split([#10]) do
-          if EsRechazo(L) then
+          // EsFallo, no EsRechazo: un INTERNAL (sin RAD Studio para el
+          // SDK) dejaba la plataforma anadida sin deshacer (revision
+          // 27-sep-2026)
+          if EsFallo(L) then
             Rechazo := L;
         if Rechazo <> '' then
         begin

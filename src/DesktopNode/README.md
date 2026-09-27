@@ -29,7 +29,7 @@ hanging it off the same dispatch:
 
 Nothing gets installed on the target in either case, and the output contract
 is identical: coordinates are pixels OF THE CAPTURE and the node answers with
-`CAPTURA=<path>`.
+`CAPTURE=<path>`.
 
 | Unit | Role |
 |---|---|

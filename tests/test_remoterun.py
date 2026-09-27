@@ -255,7 +255,8 @@ check('kill sin .pid: el proceso ha muerto de verdad', not any(f.endswith('.pid'
 r = call_off('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ})
 check('sin AllowRemoteRun: remote-run rechazado', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_RUN_DISABLED') and 'AllowRemoteRun' in r, r[:250])
 r = call_off('delphi_paserver', {'command': 'platforms'})
-check('sin AllowRemoteRun: el resto del tool intacto', 'platforms' in r, r[:150])
+check('sin AllowRemoteRun: el resto del tool intacto',
+      isinstance(mc.como_json(r).get('platforms'), list), r[:150])
 srv_off.mata()
 
 # 8) RemoteRunProjects: lista blanca de proyectos ejecutables. En el modo

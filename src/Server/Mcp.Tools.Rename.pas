@@ -106,7 +106,7 @@ begin
     end;
   except
     on E: Exception do
-      Result := MsgEnvuelve(SR_ERROR_FMT, E.Message);
+      Result := MsgExcepcion(E.ClassName, E.Message);
   end;
   Result := MaskDriveText('delphi_rename_symbol', Result);
 end;

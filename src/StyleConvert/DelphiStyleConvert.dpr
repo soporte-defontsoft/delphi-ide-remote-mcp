@@ -70,7 +70,7 @@ begin
       Defaults(ParamStr(2))
     else
     begin
-      Writeln(ErrOutput, 'Uso: DelphiStyleConvert tobin|totext <in> <out> | defaults <out>');
+      Writeln(ErrOutput, 'Usage: DelphiStyleConvert tobin|totext <in> <out> | defaults <out>');
       Halt(2);
     end;
     Writeln('OK');

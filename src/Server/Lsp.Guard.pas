@@ -3866,6 +3866,13 @@ var
   Full, R: string;
 begin
   AMotivo := mvNinguno;
+  // Una ruta VACIA es un parametro que falta, no una ruta invalida: el eco
+  // de "Invalid path: " vacio no decia cual (revision 27-sep-2026)
+  if APath.Trim = '' then
+  begin
+    AMotivo := mvRutaInvalida;
+    Exit(MsgText(SR_GUARD_RUTA_VACIA));
+  end;
   // Name normalization first: it applies with or without a jail configured.
   Result := PathAnomaly(APath);
   if Result <> '' then
@@ -4209,7 +4216,10 @@ begin
   // Refused for reading: say that a library zone exists and how to see it.
   // Field 2026-08-22: an agent listed the PARENT of a registered component
   // folder, got the plain jail refusal, and concluded list and read disagreed.
-  if EsRechazo(Result) then
+  // Solo si la zona EXISTE y solo para quien esta fuera de la jaula: se
+  // pegaba a toda negativa, con la zona apagada (contradecia a WS-001) y a
+  // las rutas invalidas (revision 27-sep-2026)
+  if (Motivo = mvFueraDeJaula) and LibraryZoneEnabled then
     Result := Result + ' ' + MsgText(SN_READ_ZONE_HINT);
 end;
 

@@ -141,7 +141,7 @@ out = call('delphi_upload', {"path": os.path.join(OUTSIDE, 'Subido.bin'),
 check('upload: fuera vetado', denied(out), out[:150])
 out = call('delphi_upload', {"path": os.path.join(INSIDE, 'Subido.bin'),
                              "offset": 0, "chunkbase64": "AAAA"})
-check('upload: dentro permitido', 'written' in out, out[:150])
+check('upload: dentro permitido', 'written' in mc.como_json(out), out[:150])
 out = call('delphi_git', {"repo": os.path.join(OUTSIDE, 'clonado'),
                           "command": "clone",
                           "message": "https://example.com/x.git"})
@@ -203,7 +203,7 @@ if os.path.exists(_holad):
         'pwned &gt; R7MARKER.txt" /></Target></Project>')
     _b = _b64.b64encode(_evil.encode('utf-8')).decode()
     out = call('delphi_upload', {"path": _holad, "offset": 0, "chunkbase64": _b})
-    check('R7: upload del .dproj llega (no hay filtro de extension)', 'written' in out, out[:150])
+    check('R7: upload del .dproj llega (no hay filtro de extension)', 'written' in mc.como_json(out), out[:150])
     # R7 HIGH: upload backed the original up before truncating it
     _bk = _glob.glob(os.path.join(INSIDE, 'Hola', '__delphi-patch', '**', 'Hola.dproj'), recursive=True)
     check('R7 HIGH: upload respaldo el .dproj antes de pisarlo', len(_bk) > 0, _bk)
@@ -244,7 +244,7 @@ if os.path.exists(_holad):
         subido = upload_dproj(_clean.replace('</Project>', payload + '</Project>'))
         out = build_default(_holad)
         check('R7 evasion (%s): build RECHAZADO' % label,
-              'written' in subido and peligro(out, motivo), out[:160])
+              'written' in mc.como_json(subido) and peligro(out, motivo), out[:160])
     # Build EVENTS are not a refusal any more (2026-09-24): the project builds
     # with them EMPTIED on the msbuild line and says so - the event never runs.
     _mev = os.path.join(INSIDE, 'Hola', 'M.txt')
@@ -292,7 +292,7 @@ if os.path.exists(_holad):
         out = build_default(_holad)
         # el <Exec> del .targets, traido POR ESE <Import>: el escaner lo siguio
         check('R8 CRITICAL (%s): build RECHAZADO' % label,
-              'written' in subido and
+              'written' in mc.como_json(subido) and
               peligro(out, '%s, brought in by <Import> "%s"' % (EXEC_TASK, macro)), out[:180])
         check('R8 CRITICAL (%s): el payload importado NO se ejecuto' % label,
               not os.path.exists(_m8), _m8)
@@ -332,7 +332,7 @@ if os.path.exists(_holad):
             '<Target Name="Plant" BeforeTargets="Build">' + task + '</Target></Project>'))
         out = build_default(_holad)
         check('R9: <Target> con <%s> (planta/borra) RECHAZADO' % label,
-              'written' in subido and peligro(out, 'a <%s> task' % label), out[:180])
+              'written' in mc.como_json(subido) and peligro(out, 'a <%s> task' % label), out[:180])
     # AllowBuildScripts is its own opt-in: a trusted project with an <Exec>
     # (e.g. signing) may build, and nothing else runs on the server.
     _sign = _clean.replace('</Project>',
@@ -455,7 +455,7 @@ for opt in ('--separate-git-dir=C:\\evil', '--template=C:\\evil',
 out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -5"})
 # permitido = la orden LLEGO a git (su exit=, aqui 128: INSIDE no es un repo)
 check('git: log --oneline sigue permitido (sin falso positivo)',
-      not gitclean(out) and out.startswith('exit='), out[:120])
+      not gitclean(out) and mc.llego_a_git(out), out[:120])
 
 # --- the gate must read an argument the way the BINDER resolves it ----------
 # The gate used TJSONObject.TryGetValue (case-SENSITIVE) while the RTTI binder

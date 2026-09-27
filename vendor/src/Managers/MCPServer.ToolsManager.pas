@@ -88,6 +88,24 @@ begin
     Result := 'INVALID_PARAM';
 end;
 
+{ [local change 2026-09-27] El texto del campo "error" de un objeto: UNA
+  lectura para las dos ramas. Un texto es el error; null, false o ausente es
+  que no lo hay; cualquier otra cosa (un objeto, true) es un error sin
+  texto. Antes "error": null salia INVALID_PARAM y un "error" objeto, ok:true. }
+function ErrorDelObjeto(AObj: TJSONObject): string;
+var
+  V: TJSONValue;
+begin
+  Result := '';
+  V := AObj.GetValue('error');
+  if (V = nil) or (V is TJSONNull) or ((V is TJSONBool) and not TJSONBool(V).AsBoolean) then
+    Exit;
+  if V is TJSONString then
+    Result := V.Value.Trim
+  else
+    Result := V.ToJSON;
+end;
+
 { TMCPToolsManager }
 
 constructor TMCPToolsManager.Create;
@@ -191,6 +209,11 @@ begin
       // caller's, and dressing it as an internal failure sent agents chasing
       // ghosts (measured 2026-08-25). EArgumentException is the deserializer
       // saying the call was wrong, so it goes out as a plain refusal.
+      // [local change 2026-09-27] ...pero un indice fuera de rango DENTRO del
+      // servidor tambien es un EArgumentException (la RTL lo hereda asi): eso
+      // es lo inesperado, no una llamada mal hecha
+      on E: EArgumentOutOfRangeException do
+        Result := MsgExcepcion(E.ClassName, E.Message);
       on E: EArgumentException do
         Result := MsgEnvuelve(SR_ERROR_FMT, E.Message);
       // [local change 2026-09-26] ...and a REFUSAL that travelled as an
@@ -213,7 +236,7 @@ function TMCPToolsManager.BuildToolCallResponse(const ResultValue: TValue): TJSO
 var
   ContentArray: TJSONArray;
   ContentItem: TJSONObject;
-  ErrorValue: TJSONValue;
+
   HasError: Boolean;
   JsonResult: TJSONObject;
   TextValue: string;
@@ -226,6 +249,16 @@ begin
     // take ownership so it is passed through verbatim and freed with the
     // response (no clone, no leak of the original array).
     Result.AddPair('content', ResultValue.AsType<TJSONArray>);
+    // [local change 2026-09-27] el texto que acompana a una imagen declara
+    // su resultado igual que uno suelto: la proxima tool que adjunte en un
+    // camino de fallo no puede salir como exito
+    for var It in ResultValue.AsType<TJSONArray> do
+      if (It is TJSONObject) and (TJSONObject(It).GetValue<string>('type', '') = 'text') then
+      begin
+        if OutcomeDelTexto(TJSONObject(It).GetValue<string>('text', ''), False) <> '' then
+          Result.AddPair('isError', TJSONBool.Create(True));
+        Break;
+      end;
   end
   else if ResultValue.IsType<string> then
   begin
@@ -244,10 +277,12 @@ begin
     // release audit 2026-08-26): the human text stays the contract verbatim,
     // but the result now ALSO carries structuredContent {ok, code} so a
     // client or a small model never has to parse Spanish prefixes.
-    //   DENIED        refused by policy (jail, guard, ownership, read-only)
+    //   DENIED        a rule refuses it or something stands in the way (jail,
+    //                 read-only, ownership, a file another process holds)
     //   NOT_FOUND     the named file/project/thing is not there
-    //   INVALID_PARAM the call itself was wrong (bad command, bad value)
+    //   INVALID_PARAM the call itself is malformed (missing or bad value)
     //   INTERNAL      this server broke inside - worth a delphi_report
+    //   (la regla 11 de delphi_help conventions; la cabecera de Lsp.Texts)
     // The jail's anti-probing property survives: outside-the-jail answers use
     // one fixed text whether the target exists or not, so they all map to
     // DENIED; NOT_FOUND only ever comes from in-jail "no existe" texts.
@@ -295,10 +330,7 @@ begin
     // mismo: si hay error, no hay ok.
     if Assigned(Structured) and (OutcomeCode = '') then
     begin
-      var ErrVal := Structured.GetValue('error');
-      var ErrTxt := '';
-      if Assigned(ErrVal) then
-        ErrTxt := ErrVal.Value.Trim;
+      var ErrTxt := ErrorDelObjeto(Structured);
       if ErrTxt <> '' then
       begin
         OutcomeCode := OutcomeDelTexto(ErrTxt, True);
@@ -328,8 +360,7 @@ begin
     JsonResult := ResultValue.AsType<TJsonObject>;
     Result.AddPair('structuredContent', TJSONObject(JsonResult.Clone));
 
-    ErrorValue := JsonResult.GetValue('error');
-    HasError := Assigned(ErrorValue) and (ErrorValue.Value <> '');
+    HasError := ErrorDelObjeto(JsonResult) <> '';
     if HasError then
 {$IF COMPILERVERSION <= 29}
       Result.AddPair('isError', TJSONTrue.Create);

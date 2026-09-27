@@ -266,6 +266,9 @@ uses
 const
   DEFAULT_MASKS: array [0 .. 7] of string =
     ('*.pas', '*.dpr', '*.dpk', '*.inc', '*.dfm', '*.fmx', '*.dproj', '*.groupproj');
+  // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo
+  // numero (la nota lo llevaba copiado a mano)
+  LIST_CAP = 500;
 
 { Recursive file walk that TOLERATES unreadable subdirectories. Delphi's
   TDirectory.GetFiles(soAllDirectories) aborts the WHOLE enumeration on the
@@ -600,7 +603,7 @@ begin
           Continue;
         end;
         Inc(Total);
-        if Arr.Count < 500 then
+        if Arr.Count < LIST_CAP then
           Arr.Add(F);
       end;
       Return.AddPair('total', TJSONNumber.Create(Total));
@@ -654,7 +657,7 @@ begin
         // son copias y cuantas ficheros vivos (Hermes, 2026-09-22).
         if Params.IncludeTrash and (SkipReason(RelToRoot(F, Root), False) = SKIP_TRASH) then
           Inc(ShownTrash);
-        if Arr.Count < 500 then
+        if Arr.Count < LIST_CAP then
         begin
           Entry := TJSONObject.Create;
           Arr.Add(Entry);
@@ -678,14 +681,16 @@ begin
       Return.AddPair('shownTrash', TJSONNumber.Create(ShownTrash));
       Return.AddPair('trashNote', MsgFmt(SN_LIST_SHOWN_TRASH_FMT, [Total, ShownTrash]));
     end;
-    if Total > Arr.Count then
+    // Una sola nota de lo que falta: con mas de 500 salian DOS claves
+    // "shownNote" en el mismo objeto (revision 27-sep-2026)
+    if Arr.Count >= LIST_CAP then
+      Return.AddPair('shownNote', MsgFmt(SN_LIST_CAPPED_FMT, [LIST_CAP]))
+    else if Total > Arr.Count then
       Return.AddPair('shownNote', MsgFmt(SN_SEARCH_CAPPED_FMT,
         [Arr.Count, Total]));
     // Say WHICH, because "42 hidden" plus the wrong reason sends the reader
     // hunting for build output that is not there (measured 2026-08-25).
     Ocultos.Report(Return);
-    if Arr.Count >= 500 then
-      Return.AddPair('shownNote', MsgText(SN_LIST_CAPPED));
     // Without "pattern" only Delphi files are listed. That is a filter, and a
     // filter nobody mentioned reads as "there is nothing else here".
     if Params.Pattern.Trim = '' then
@@ -1100,7 +1105,13 @@ begin
     except
       // it was not ours to remove after all: leave it
     end;
-  Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
+  // Un git que dice que no (exit<>0) es un fallo: salia como exito y el
+  // agente no lo distinguia de uno que funciono (revision 27-sep-2026). Su
+  // salida va detras, que es la que explica que paso.
+  if ExitCode <> 0 then
+    Result := MsgFmt(SR_GIT_EXIT_FMT, [ExitCode, Output.Trim])
+  else
+    Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
   // Una respuesta que es solo "exit=0" no se distingue de una que se ha roto
   // por el camino, y lo primero que hace quien la recibe es repetirla. El
   // silencio de git SIGNIFICA cosas distintas segun la orden, asi que se
@@ -1245,21 +1256,21 @@ var
   Modo, Transporte, P: string;
   I: Integer;
 begin
-  Modo := 'consola';
+  Modo := 'console';
   Transporte := 'stdio';
   for I := 1 to ParamCount do
   begin
     P := ParamStr(I).ToLower.TrimLeft(['-', '/']);
     if MatchText(P, ['service', 'install', 'uninstall']) then
-      Modo := 'servicio'
+      Modo := 'service'
     else if MatchText(P, ['gui', 'tray']) then
-      Modo := 'bandeja'
+      Modo := 'tray'
     else if P.StartsWith('http') then
       Transporte := 'http';
   end;
   // La bandeja y el servicio SIEMPRE sirven por HTTP (ambos llaman a
   // CreateHttpServer); solo la consola puede estar en stdio.
-  if Modo <> 'consola' then
+  if Modo <> 'console' then
     Transporte := 'http';
   Srv := TJSONObject.Create;
   ADestino.AddPair('server', Srv);
@@ -2005,7 +2016,7 @@ begin
         // The file on disk is now KNOWN to be wrong. Leaving it in place under
         // its real name means the next reader takes corruption for content:
         // park it aside and say where (field round 8).
-        Quarantine := FullPath + '.corrupto';
+        Quarantine := FullPath + '.corrupt';
         try
           // A second failed upload used to overwrite the first quarantine
           // with no copy at all - the one write path that did not respect
@@ -2025,7 +2036,7 @@ begin
         end;
         if Quarantine = '' then
           Quarantine := FullPath;
-        Return.AddPair('warning', MsgFmt(SR_UPLOAD_SHA_MISMATCH_FMT, [Quarantine]));
+        Return.AddPair('error', MsgFmt(SR_UPLOAD_SHA_MISMATCH_FMT, [Quarantine]));
       end;
     end;
     Result := Return.ToJSON;

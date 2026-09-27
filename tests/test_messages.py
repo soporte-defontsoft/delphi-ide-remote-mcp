@@ -2,7 +2,7 @@ r"""E2E battery for delphi_messages: the operator's mailbox (the way back of
 delphi_report). Messages are .md files in messages\<agent>\ next to the server
 exe - one box per agent, none "for everyone" (a notice for all goes into each
 agent's folder, 2026-09-25). While the caller's own mail waits EVERY tool
-answer ends with a MENSAJES PENDIENTES line; read delivers it and DELETES it,
+answer ends with a PENDING MESSAGES line; read delivers it and DELETES it,
 like a capture: nothing is kept aside, nothing is purged later.
 
 Usage:  python tests/test_messages.py [path-to-DelphiLspMcp.exe]

@@ -256,6 +256,18 @@ var
   EsWin, HayVentana, ConRecorte: Boolean;
   RX, RY, RW, RH, AnchoOrig, AltoOrig, PX, PY: Integer;
   Ventanas: TJSONArray;
+
+  { Sin captura: en screenshot/overview la llamada FALLO y va en "error"
+    (como "screenshotError" salia ok:true); en un gesto la captura es un
+    anadido - el gesto si se hizo - y se queda en screenshotError. Un sitio
+    para los tres caminos sin captura (revision 27-sep-2026). }
+  procedure SinCaptura(const AMotivo: string);
+  begin
+    if ((Cmd = 'screenshot') or (Cmd = 'overview')) and (Return.GetValue('error') = nil) then
+      Return.AddPair('error', AMotivo)
+    else
+      Return.AddPair('screenshotError', AMotivo);
+  end;
 begin
   Cmd := Params.Command.Trim.ToLower;
   if Cmd = '' then
@@ -434,7 +446,7 @@ begin
       Solo cuando NO hubo captura: desde 1.0.16 el nodo tiene un respaldo
       (PrintWindow) y su linea RESPALDO cita el mismo error con captura hecha. }
     if (RutaDeCaptura(Salida) = '') and CapturaDenegada(Salida) then
-      Return.AddPair('hint', SD_DESKTOP_LOCKED);
+      Return.AddPair('hint', MsgText(SN_DESKTOP_LOCKED));
 
     { La captura vive en la carpeta que el nodo desplego; se trae aqui por el
       mismo transporte que lo llevo alli. }
@@ -515,7 +527,7 @@ begin
           end;
         end;
         if Fallo <> '' then
-          Return.AddPair('screenshotError', Fallo)
+          SinCaptura(Fallo)
         else
         begin
           Return.AddPair('screenshot', Local);
@@ -540,7 +552,7 @@ begin
         end;
       end
       else
-        Return.AddPair('screenshotError', Fallo);
+        SinCaptura(Fallo);
     end
     else if (Cmd <> 'status') and (Remota = '') then
     begin
@@ -550,7 +562,7 @@ begin
       var Entorno := '';
       if Res.GetValue('graphicalEnv') <> nil then
         Entorno := Res.GetValue<string>('graphicalEnv');
-      Return.AddPair('screenshotError', MotivoSinCaptura(Salida, Entorno));
+      SinCaptura(MotivoSinCaptura(Salida, Entorno));
     end;
 
       Result := Return.ToJSON;

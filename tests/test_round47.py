@@ -144,7 +144,7 @@ try:
     shot = call('delphi_desktop', {'command': 'screenshot'}) if HAY_NODO else ''
     if not HAY_NODO:
         print('NOTA: no hay node/McpDesktopNode.exe; R1/R2 no se miden.')
-    elif 'NO pude capturar' in shot or '"screenshot"' not in shot:
+    elif 'Could not capture' in shot or '"screenshot"' not in shot:
         # Desde 1.0.16 el escritorio solo se alcanza por PAServer y un perfil
         # (ni hay perfil aqui ni remote-run encendido): se dice el motivo REAL
         # que da el servidor, no se supone una sesion bloqueada.

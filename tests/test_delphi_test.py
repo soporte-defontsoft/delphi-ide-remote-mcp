@@ -81,7 +81,9 @@ begin
   Comprobar('esta MAL a proposito', 1 = 2);
 end.
 """)
-A.call('delphi_create', {'kind': 'project-console', 'name': 'NormalApp', 'dir': os.path.join(BASE, 'NormalApp')})
+r = A.call('delphi_create', {'kind': 'project-console', 'name': 'NormalApp', 'dir': os.path.join(BASE, 'NormalApp')})
+check('NormalApp creado (sin el, "no cuenta un proyecto normal" no mide nada)',
+      os.path.isfile(os.path.join(BASE, 'NormalApp', 'NormalApp.dpr')), r[:200])
 
 # ---- discover ----
 j = J(A.call('delphi_test', {'command': 'discover', 'path': BASE}))

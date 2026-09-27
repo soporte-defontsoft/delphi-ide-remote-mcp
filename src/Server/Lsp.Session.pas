@@ -419,7 +419,7 @@ begin
   if Denied <> '' then
     raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then
-    raise ELspSession.Create(MsgFmt(SE_LSP_FILE_FOUND_FMT, [AFilePath]));
+    raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFilePath]));
 
   Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
   DocKey := Key + '|' + FullPath.ToLower;
@@ -472,7 +472,7 @@ begin
   if Denied <> '' then
     raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then
-    raise ELspSession.Create(MsgFmt(SE_LSP_FILE_FOUND_FMT, [AFilePath]));
+    raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFilePath]));
 
   Client := GetClient(FullPath, True, ASettingsUsed, Key, RootDir);
   Uri := TLspClient.PathToUri(FullPath);

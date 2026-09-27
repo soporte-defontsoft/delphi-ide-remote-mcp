@@ -134,7 +134,7 @@ begin
       else if D = Best then
         Inc(Ties);
     end;
-    if (Best <= 2) and (Ties = 1) then
+    if (Best <= 1) and (Ties = 1) then
       Exit(MsgFmt(SN_HELP_ASSUMED_FMT, [AName.Trim, BestName]) + #10 +
         OneTool(BestName));
     if Close = '' then

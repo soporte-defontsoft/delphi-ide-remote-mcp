@@ -248,7 +248,7 @@ begin
     Add(MsgText(SL_SYS_BEARER_AUTH_ENABLED))
   else
   begin
-    Add(NOTE_WARNING_PREFIX + MsgFmt(SL_SYS_NO_CREDENTIALS_FMT, [MsgText(SR_TOKEN_NEEDED)]));
+    Add(NOTE_WARNING_PREFIX + MsgFmt(SL_SYS_NO_CREDENTIALS_FMT, [MsgText(SF_TOKEN_NEEDED)]));
     // CreateHttpServer's fail-safe, said here with ITS condition: the .dpr
     // used to say it, only in terminal mode, whenever the interface was
     // 127.0.0.1 - credentials or not - and pointing at [Security], a

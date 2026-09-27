@@ -189,7 +189,7 @@ check('.fmx: to-text rechazado (siempre texto)', mc.rechazado(r) and mc.es(r, 'S
 BAD = os.path.join(BASE, 'Roto.dfm')
 open(BAD, 'wb').write(b'\xff\x0a\x00TROTO\x00\x30\x10\x10\x00\x00\x00TPF0basura sin sentido')
 r = call('delphi_designer', {'command': 'tree', 'path': BAD})
-check('binario danado: RECHAZADO con motivo', mc.rechazado(r) and 'damaged BINARY designer' in r, r[:200])
+check('binario danado: RECHAZADO con motivo', mc.abre(r, 'SR_DSGN_BINARIO_DANADO_FMT') and 'Stream read error' in r, r[:200])
 r = call('delphi_read', {'path': BAD})
 check('delphi_read de un binario danado: RECHAZADO', mc.rechazado(r), r[:200])
 r = call('delphi_designer', {'command': 'to-text', 'path': BAD})

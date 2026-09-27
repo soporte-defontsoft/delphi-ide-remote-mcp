@@ -340,11 +340,11 @@ try:
     srv = d.get('server', {})
     check('workspace: ficha del servidor (version, modo, transporte, pid)',
           srv.get('version', '') != '' and
-          srv.get('mode') in ('consola', 'bandeja', 'servicio') and
+          srv.get('mode') in ('console', 'tray', 'service') and
           srv.get('transport') in ('stdio', 'http') and
           isinstance(srv.get('pid'), int) and srv['pid'] > 0, str(srv)[:200])
     check('workspace: lanzado por la bateria = consola por stdio',
-          srv.get('mode') == 'consola' and srv.get('transport') == 'stdio',
+          srv.get('mode') == 'console' and srv.get('transport') == 'stdio',
           str(srv)[:200])
     check('workspace: dice desde cuando vive y con que exe',
           srv.get('startedAt', '').startswith('20') and
@@ -377,7 +377,7 @@ try:
     check('git: tag sin args lista (permitido)', out.startswith('exit=0'), out[:150])
     out = call('delphi_git', {"repo": tmpgit, "command": "push"})
     check('git: push permitido (falla sin remote, pero NO por whitelist)',
-          out.startswith('exit=') and not mc.es(out, 'SR_GIT_UNKNOWN_COMMAND_FMT'), out[:150])
+          mc.llego_a_git(out) and not mc.es(out, 'SR_GIT_UNKNOWN_COMMAND_FMT'), out[:150])
 
     # identity via whitelisted config + commit with normal punctuation
     out = call('delphi_git', {"repo": tmpgit, "command": "config",
@@ -477,9 +477,9 @@ try:
         out2 = call('delphi_git', {"repo": dest, "command": "clone",
             "message": "https://github.com/soporte-defontsoft/delphi-lsp-mcp-service.git"})
         check('git clone: no re-clona sobre un repo existente',
-              mc.resultado(out2) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out2, 'SR_GIT_YA_ES_REPOSITORIO_FMT'), out2[:120])
+              mc.resultado(out2) == 'DENIED' and mc.abre(out2, 'SR_GIT_YA_ES_REPOSITORIO_FMT'), out2[:120])
         out3 = call('delphi_git', {"repo": dest, "command": "pull"}, 300)
-        check('git pull: permitido', out3.startswith('exit='), out3[:120])
+        check('git pull: permitido', mc.llego_a_git(out3), out3[:120])
     else:
         print('SKIP - git clone (sin red o repo inaccesible):', out[:100])
     out = call('delphi_git', {"repo": dest, "command": "clone",

@@ -57,7 +57,7 @@ var
   Enc, Ext: string;
 begin
   if TFile.Exists(APath) then
-    raise Exception.Create(MsgFmt(SE_CREATE_EXISTE_SCAFFOLDER_JAMAS_SOBREESCRI_FMT, [APath]));
+    raise Exception.Create(MsgFmt(SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT, [APath]));
   CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(APath)));
   Ext := LowerCase(TPath.GetExtension(APath));
   if Ext = '.dproj' then
@@ -496,7 +496,7 @@ begin
         '  System.SysUtils;' + CRLF + CRLF +
         'begin' + CRLF +
         '  try' + CRLF +
-        '    Writeln(''' + AName + ' funcionando'');' + CRLF +
+        '    Writeln(''' + AName + ' running'');' + CRLF +
         '  except' + CRLF +
         '    on E: Exception do' + CRLF +
         '      Writeln(E.ClassName, '': '', E.Message);' + CRLF +
@@ -805,7 +805,7 @@ begin
 
   // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference)
   Result := AddProjectUnit(ADprPath, PasPath);
-  if EsRechazo(Result) then
+  if EsFallo(Result) then
     Result := MsgFmt(SK_CREATE_CREADOS_NO_REGISTRADOS_FMT, [AUnitName, DesignerExt, Result])
   else
     Result := MsgFmt(SK_CREATE_CREADO_FORM_FMT,
@@ -915,7 +915,7 @@ begin
     Exit;
   WriteNewFile(PasPath, Body);
   Result := AddProjectUnit(ADprPath, PasPath);
-  if EsRechazo(Result) then
+  if EsFallo(Result) then
     Result := MsgFmt(SK_CREATE_CREADA_NO_REGISTRADA_FMT, [AUnitName, Result])
   else
     Result := MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,

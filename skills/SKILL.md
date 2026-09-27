@@ -71,7 +71,7 @@ handshake.
   grammar - a wrong property name or enum value compiles fine and then
   **crashes the form at load time on the target, silently**. The server
   lints designer edits against tables generated from the framework's own
-  metadata: an `AVISO DESIGNER` warning in the edit result is measured
+  metadata: an `DESIGNER WARNING` warning in the edit result is measured
   truth - fix it before building. FMX property spelling is not VCL:
   `Size.Width` (not `Size.X`), `TextSettings.Font.Size` (not
   `Font.Size`), `TextSettings.HorzAlign = Center` (not `taCenter`).
@@ -144,7 +144,7 @@ handshake.
 
 ## Mail from the operator
 
-- Any tool answer may end with `MENSAJES PENDIENTES: N`. When it does, call
+- Any tool answer may end with `PENDING MESSAGES: N`. When it does, call
   `delphi_messages command=read agent=<your id>` before going on: the
   operator answered a report of yours or changed the plan. Messages are
   delivered once; act on them and, when an answer is due, reply with
@@ -233,7 +233,7 @@ which has no desktop) and the session must be unlocked - a locked Windows
 answers "Access denied" to any capture, and the tool says so in `hint`. (An
 unlocked one may refuse the screen copy now and then; the node then composes
 the desktop from the windows themselves and `nodeOutput` carries a
-`RESPALDO:` line: same coordinates, no cursor, no taskbar.) On
+`FALLBACK:` line: same coordinates, no cursor, no taskbar.) On
 GNOME the screen-capture permission must have been granted once - a mute
 screenshot timeout means exactly that permission.
 

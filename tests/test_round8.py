@@ -103,7 +103,7 @@ j = J(A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'ab
 check('#26 sha que no cuadra: NO queda publicado con su nombre',
       j.get('verified') is False and not os.path.exists(BAD), str(j)[:300])
 check('#26 ...y se dice donde ha quedado apartado',
-      str(j.get('quarantined', '')).endswith('.corrupto') and os.path.exists(BAD + '.corrupto'),
+      str(j.get('quarantined', '')).endswith('.corrupt') and os.path.exists(BAD + '.corrupt'),
       str(j)[:300])
 
 # -------------------------------------------------------------------- #7 --
@@ -310,7 +310,7 @@ open(FMX, 'w', encoding='utf-8').write(
     "end\r\n")
 r = A.call('delphi_designer', {'command': 'lint', 'path': FMX})
 check('#16 Viewport.* (lo escribe el propio IDE) NO se denuncia',
-      'Viewport' not in r, r[:300])
+      mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT') and 'Viewport' not in r, r[:300])
 
 # ---------------------------------------------------------------- #8 #27 --
 r = A.call('vault_read', {'path': 'projects/nota.md', 'offset': 5, 'limit': 3})

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """El catalogo de mensajes (Lsp.Texts.pas), SIN servidor: la forma de sus
-etiquetas. Decision de David (27-sep-2026): cada mensaje lleva al FINAL de su
-texto [AREA-NNN] o, si es un rechazo, [AREA-NNN RESULTADO]; las baterias y el
+etiquetas. Decision de David (27-sep-2026): cada mensaje EMPIEZA por
+[AREA-NNN] o, si es un rechazo, [AREA-NNN RESULTADO]; las baterias y el
 servidor lo reconocen por el id y no por la frase, asi el texto se puede
 traducir sin romper nada.
 
@@ -11,11 +11,18 @@ traducir sin romper nada.
       servidor (Lsp.Texts.MSG_TAG_REGEX): un formato, dos lectores vigilados
   C2  todo lo que PARECE una etiqueta lo es (nada de [CFG-07] o [CFG-007 DENEGADO])
   C3  ningun id se repite en el catalogo, y cada mensaje lleva una como mucho
-  C4  la etiqueta va al FINAL del mensaje
+  C4  la etiqueta ABRE el mensaje
+  C4b todo SR_/SK_/SN_ la lleva (antes solo se contaba)
   C5  un rechazo (SR_) etiquetado declara su resultado; un resultado bueno
       (SK_) o una nota (SN_) no; las descripciones (SD_, SP_) y el log (SL_) no
       llevan etiqueta
-Y cuenta lo que falta por etiquetar (no falla por eso mientras se migra).
+  C6  un rechazo que dice que FALTA un parametro o que uno no vale declara
+      INVALID_PARAM (la regla 11: "corrige la llamada y repite"); la revision
+      del 27-sep encontro 70 que decian DENIED ("no insistas")
+  C7  el catalogo esta en ingles (palabras que solo son castellano)
+  C8  un SR_ no va en un campo JSON que no sea "error": ahi nadie lo lee y
+      la respuesta sale como exito (upload, rename, captura: 27-sep)
+  C9  todo uso de una constante del catalogo pasa por su helper
 
 Usage:  python tests/test_catalogo.py
 """
@@ -102,32 +109,59 @@ check('C4 la etiqueta ABRE el mensaje', not p['al_medio'], p['al_medio'][:10])
 check('C5 rechazos con resultado; notas y buenos sin el; descripciones, log, excepciones y trozos sin '
       'etiqueta', not p['reglas'], p['reglas'][:10])
 
-# lo que falta, por prefijo: informa, no falla (se migra por areas)
-for pref in ('SR_', 'SK_', 'SN_'):
-    tot = [n for n in C if n.startswith(pref)]
-    con = [n for n in tot if mc.ETIQUETA.search(C[n])]
-    print('  info: %s etiquetados %d de %d' % (pref, len(con), len(tot)))
-# las llamadas que aun no pasan por Msg/MsgFmt (David: todo mensaje por un
-# helper, para poder traducirlo un dia): informa mientras se migra
+sin = [n for n in C if n[:3] in ('SR_', 'SK_', 'SN_') and not mc.ETIQUETA.match(C[n].lstrip(' \r\n'))]
+check('C4b todo SR_/SK_/SN_ lleva su etiqueta', not sin, sin[:10])
+
+# C6: el resultado de un parametro que falta o no vale
+PARAM = re.compile(r'(^Missing "|^"\w+" is missing|\bneeds? "|\bis not a valid\b|^\w+ must be\b|'
+                   r'^Command must be)', re.I)
+# lo que PARECE un parametro y no lo es: la llamada es buena y la tool no
+# hace eso (cambia de rumbo)
+NO_ES_PARAM = {'SR_STYLES_VALUE_LINE'}
+mal = []
+for n, t in C.items():
+    cuerpo = re.sub(r'^\s*\[[^\]]+\]\s*', '', t)
+    if n.startswith('SR_') and n.split('@')[0] not in NO_ES_PARAM and PARAM.search(cuerpo[:100]) \
+            and mc.outcome(t) != 'INVALID_PARAM':
+        mal.append('%s %s' % (n, mc.outcome(t)))
+check('C6 un parametro que falta o no vale es INVALID_PARAM', not mal, mal[:10])
+e6 = [n for n, t in {'SR_X': '[CFG-001 DENIED] Missing "path".'}.items()
+      if PARAM.search(re.sub(r'^\s*\[[^\]]+\]\s*', '', t)) and mc.outcome(t) != 'INVALID_PARAM']
+check('C6 ...y el comprobador sabe fallar', e6 == ['SR_X'], e6)
+
+# C7: castellano (palabras que en ingles no existen o no salen en un mensaje)
+ES = re.compile(r"\b(el|los|las|del|que|una|unas|por|para|con|esta|este|pero|como|donde|hay|puede|"
+                r"fichero|carpeta|pude|enviad[oa]|devolvio|simbolos|abierta|sesion|nada|todo|cuando|"
+                r"tambien|aqui|antes|despues|linea|lineas|falta|debe|necesita)\b", re.I)
+es_ = ['%s: %s' % (n, m.group(0)) for n, t in C.items() for m in ES.finditer(t)]
+check('C7 el catalogo esta en ingles', not es_, es_[:10])
 import glob
+FUENTES = [f for f in glob.glob(os.path.join(mc.REPO, 'src', 'Server', '*.pas')) +
+           glob.glob(os.path.join(mc.REPO, 'vendor', 'src', '**', '*.pas'), recursive=True) +
+           glob.glob(os.path.join(mc.REPO, 'src', 'DesktopNode', '*.pas')) +
+           glob.glob(os.path.join(mc.REPO, 'src', 'DesktopNode', '*.dpr')) +
+           glob.glob(os.path.join(mc.REPO, 'src', 'RunJob', '*.dpr'))
+           if '__' not in f and not f.endswith(('Lsp.Texts.pas', 'Mld.Textos.pas'))]
+LIMPIAS = {f: mc.pascal_sin_comentarios(open(f, encoding='utf-8-sig', errors='replace').read())
+           for f in FUENTES}
+
+# C8: un SR_ en un campo JSON que no es "error"
+fuera = []
+for f, fuente in LIMPIAS.items():
+    for m in re.finditer(r"(?:AddPair|PonResultado)\('(\w+)'[^;]*?\b(SR_[A-Z0-9_]+)", fuente):
+        if m.group(1) != 'error':
+            fuera.append('%s: %s <- %s' % (os.path.basename(f), m.group(1), m.group(2)))
+check('C8 un fallo (SR_) solo va en el campo "error" de un JSON', not fuera, fuera[:10])
+# C9: todo uso de un mensaje pasa por su helper (David: para poder
+# traducirlo un dia; y el helper es quien sabe de etiquetas)
 NOMBRES = set(n.split('@')[0] for n in C if n[:3] in ('SR_', 'SN_', 'SK_'))
-directas = 0
-for f in glob.glob(os.path.join(mc.REPO, 'src', 'Server', '*.pas')) + \
-        glob.glob(os.path.join(mc.REPO, 'vendor', 'src', '**', '*.pas'), recursive=True) + \
-        glob.glob(os.path.join(mc.REPO, 'src', 'DesktopNode', '*.pas')) + \
-        glob.glob(os.path.join(mc.REPO, 'src', 'DesktopNode', '*.dpr')) + \
-        glob.glob(os.path.join(mc.REPO, 'src', 'RunJob', '*.dpr')):
-    if '__' in f or f.endswith(('Lsp.Texts.pas', 'Mld.Textos.pas')):
-        continue
-    # sin comentarios de ningun tipo: una constante citada en uno no es un uso
-    fuente = re.sub(r'\{[^}]*\}|\(\*.*?\*\)', '', open(f, encoding='utf-8-sig', errors='replace').read(),
-                    flags=re.S)
+directas = []
+for f, fuente in LIMPIAS.items():
     for l in fuente.splitlines():
-        if l.strip().startswith('//'):
-            continue
-        for m in re.finditer(r'(\w+)?\(?\s*\b(S[RNK]_[A-Z0-9_]+)\b', l):
-            if m.group(2) in NOMBRES and not re.search(
-                    r'\b(MsgText|MsgFmt|MsgEnvuelve|HasMsg|EsMsg|MsgTag)\(\s*(\w+,\s*)?%s\b' % m.group(2), l):
-                directas += 1
-print('  info: usos de una constante del catalogo sin el helper MsgText/MsgFmt: %d' % directas)
+        for m in re.finditer(r'\b(S[RNK]_[A-Z0-9_]+)\b', l):
+            if m.group(1) in NOMBRES and not re.search(
+                    r'\b(MsgText|MsgFmt|MsgEnvuelve|MsgConCausa|HasMsg|EsMsg|MsgTag)\(\s*(\w+,\s*)?%s\b'
+                    % m.group(1), l):
+                directas.append('%s: %s' % (os.path.basename(f), l.strip()[:120]))
+check('C9 todo mensaje sale por su helper (MsgText/MsgFmt/...)', not directas, directas[:10])
 fin('catalogo')

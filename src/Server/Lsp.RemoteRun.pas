@@ -47,7 +47,7 @@ const
 { La clave con la que el nodo reconoce que le llama ESTE servidor. Vive en
   un solo sitio para que los dos proyectos no se desincronicen. }
 {$I ..\DesktopNode\NodeKey.inc}
-{ Lo que escribe el nodo (CAPTURA=, NO pude capturar:), en UN sitio. }
+{ Lo que escribe el nodo (CAPTURE=, Could not capture:), en UN sitio. }
 {$I ..\DesktopNode\NodeProtocolo.inc}
 
 { El nodo de escritorio EMPAQUETADO con el servidor: node\McpDesktopNode
@@ -63,7 +63,7 @@ function BundledNodePath(const APlataforma: string): string; overload;
   con el del nodo empaquetado y, si falta o difiere, sube binario nuevo
   (flag 1 = ejecutable) y sello. Se comprueba UNA vez por perfil y proceso:
   los gestos siguientes no pagan el viaje. AAccion queda en '' (al dia),
-  'desplegado' o 'actualizado'. Devuelve '' si bien, o el motivo. }
+  'deployed' o 'updated'. Devuelve '' si bien, o el motivo. }
 function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
 
 { La plataforma del perfil (Profile_platform de su .profile): Linux64, Win64...
@@ -340,6 +340,18 @@ begin
   ACodigo := StrToIntDef(PrimerTrozo(Cola, [#10, #13]).Trim, -1);
 end;
 
+{ Un "no" del LANZADOR (el programa no esta, no es nativo...) llega como la
+  salida del trabajo, con exit<>0 y su etiqueta de fallo delante: eso no es
+  un programa que acabo mal, es una llamada que fallo - va en "error" y la
+  respuesta sale como fallo (salia ok:true; revision 27-sep-2026). Un
+  programa que corre y sale con 1 sigue siendo success=false sin error. }
+procedure PonFalloDelLanzador(AObj: TJSONObject; const ASalida: string;
+  ACodigo: Integer);
+begin
+  if (ACodigo <> 0) and EsFallo(ASalida) then
+    AObj.AddPair('error', ASalida.TrimLeft.Split([#10])[0].Trim);
+end;
+
 { Un id de trabajo lo compone ESTE servidor (fecha-hora-fragmento): otra
   cosa no es un id, y el lanzador lo usa para nombrar un fichero. Lo
   comprueban kill y output. }
@@ -523,6 +535,7 @@ begin
     Result.AddPair('success', TJSONBool.Create(Codigo = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Codigo));
     Result.AddPair('output', Salida);
+    PonFalloDelLanzador(Result, Salida, Codigo);
   end
   else
   begin
@@ -630,6 +643,7 @@ begin
     Result.AddPair('success', TJSONBool.Create(Codigo = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Codigo));
     Result.AddPair('output', Salida);
+    PonFalloDelLanzador(Result, Salida, Codigo);
     // leida ENTERA = borrada, como el buzon y las capturas: en el target
     // no se acumula nada que alguien ya tiene
     Ops := Format('"--Remove=%s/%s.out"', [DeployRel, AJobId]);
@@ -756,9 +770,9 @@ begin
     if Rc <> 0 then
       Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
     if RemotoSha = '' then
-      AAccion := 'desplegado'
+      AAccion := 'deployed'
     else
-      AAccion := 'actualizado';
+      AAccion := 'updated';
   end;
   if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) < 0 then
     GNodoAlDia.Add(AProfile.Trim.ToLower);

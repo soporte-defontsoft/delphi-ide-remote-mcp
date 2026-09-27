@@ -107,11 +107,9 @@ def burst(worker, n=N):
 
 
 def bad(text):
-    """A tool answer that is NOT a success."""
-    t = (text or '').upper()
-    # (TIMEOUT) / (NO CONTENT): lo que mc.texto() dice cuando no llega nada
-    return (mc.fallo(text or '') or 'MCPERROR' in t or
-            'EXCEPCION' in t or 'FALLID' in t or '(TIMEOUT)' in t or '(NO CONTENT)' in t)
+    """A tool answer that is NOT a success: mc.fallo ya cuenta tambien lo que
+    no llego (timeout, error JSON-RPC, sin contenido)."""
+    return mc.fallo(text or '')
 
 
 try:

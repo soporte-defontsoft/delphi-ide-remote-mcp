@@ -151,7 +151,7 @@ var
   Values: TArray<string>;
 begin
   if not FileExists(ADprojPath) then
-    raise ELspConfigFabricator.Create(MsgFmt(SE_BUILD_DPROJ_FOUND_FMT, [ADprojPath]));
+    raise ELspConfigFabricator.Create(MsgFmt(SR_BUILD_DPROJ_NO_EXISTE_FMT, [ADprojPath]));
   if not AInfo.Found then
     raise ELspConfigFabricator.Create(MsgText(SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED));
 

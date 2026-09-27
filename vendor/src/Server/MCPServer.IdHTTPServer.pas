@@ -128,6 +128,23 @@ uses
   Lsp.Texts, // [local change] the 404 texts of a dead session
   MCPServer.Logger;
 
+{ [local change 2026-09-27] El cuerpo de los dos 401: dice que mandar y
+  donde vive el token (issue #4), compuesto como JSON de verdad (el texto
+  iba pegado dentro de un literal) y con los textos del catalogo. }
+function UnauthorizedBody: string;
+var
+  O: TJSONObject;
+begin
+  O := TJSONObject.Create;
+  try
+    O.AddPair('error', MsgText(SR_SYS_UNAUTHORIZED));
+    O.AddPair('hint', MsgText(SF_TOKEN_NEEDED));
+    Result := O.ToJSON;
+  finally
+    O.Free;
+  end;
+end;
+
 // [local change] Issued session ids. The upstream server echoes whatever
 // Mcp-Session-Id a client sends and never checks it, so a client that
 // persists its session across a SERVER RESTART keeps using a dead id and is
@@ -192,10 +209,6 @@ const
   HTTP_METHOD_NOT_ALLOWED = 405;
   HTTP_NOT_ACCEPTABLE = 406;
   HTTP_FORBIDDEN = 403;
-  // [local change] a 401 says what to send and where the token lives (it
-  // was a bare error: issue #4, 2026-09-27). One body for both 401s below.
-  UNAUTHORIZED_BODY = '{"error":"missing or invalid bearer token","hint":"' +
-    SR_TOKEN_NEEDED + '"}';
 
   // CORS Max Age (24 hours in seconds)
   CORS_MAX_AGE = 86400;
@@ -343,7 +356,7 @@ begin
           ResponseInfo.ResponseNo := 401;
           ResponseInfo.ResponseText := 'Unauthorized';
           ResponseInfo.ContentType := 'application/json';
-          ResponseInfo.ContentText := UNAUTHORIZED_BODY;
+          ResponseInfo.ContentText := UnauthorizedBody;
           Exit;
         end;
       end
@@ -373,7 +386,7 @@ begin
         ResponseInfo.ResponseNo := 401;
         ResponseInfo.ResponseText := 'Unauthorized';
         ResponseInfo.ContentType := 'application/json';
-        ResponseInfo.ContentText := UNAUTHORIZED_BODY;
+        ResponseInfo.ContentText := UnauthorizedBody;
         Exit;
       end;
       // Worker threads are reused: flag the access level on EVERY request.
@@ -745,13 +758,25 @@ begin
   // [local change] ...and it announces the NEW id even when a stale one came
   // in the header: a client re-initializing after a 404 used to get the old
   // id echoed back and the new one never registered (found by the battery).
+  // [local change 2026-09-27] ...y solo el result.sessionId, como el camino
+  // JSON de abajo: la regex sobre TODA la respuesta cogia tambien un
+  // "sessionId" que viniera en el structuredContent de una tool y registraba
+  // una sesion fantasma
   if Pos('"sessionId"', JSONResponse) > 0 then
   begin
-    var M := TRegEx.Match(JSONResponse, '"sessionId"\s*:\s*"([^"]+)"');
-    if M.Success then
-    begin
-      ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := M.Groups[1].Value;
-      BindInitializeIdentity(RequestBody, M.Groups[1].Value); // [local change] registers the session too
+    var Resp := TJSONObject.ParseJSONValue(JSONResponse);
+    try
+      if (Resp is TJSONObject) and (TJSONObject(Resp).GetValue('result') is TJSONObject) then
+      begin
+        var Sid := TJSONObject(TJSONObject(Resp).GetValue('result')).GetValue('sessionId');
+        if Sid is TJSONString then
+        begin
+          ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := Sid.Value;
+          BindInitializeIdentity(RequestBody, Sid.Value); // [local change] registers the session too
+        end;
+      end;
+    finally
+      Resp.Free;
     end;
   end;
 

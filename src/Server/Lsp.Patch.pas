@@ -268,7 +268,7 @@ function TrashOriginalName(const AName: string): string;
   sirve para todas y una copia nueva no puede inventarse una convencion. }
 
 { La carpeta del dia dentro de la papelera, al lado del fichero.
-  ASub: '' = la raiz del dia, 'deleted' / 'antes-restaurar' = su cajon. }
+  ASub: '' = la raiz del dia, 'deleted' / 'before-restore' = su cajon. }
 function TrashDayDir(const APath, ASub: string): string;
 
 { El nombre de una copia: el nombre real + el sello. La unica forma. }
@@ -324,6 +324,7 @@ uses
 const
   BACKUP_SUB = '__delphi-patch';
   RETENTION_DAYS = 15;
+  MAX_EDITS = 50; // entradas de una tanda
   MAX_READ_LINES = 400;
   SOURCE_EXTS: array [0 .. 3] of string = ('.pas', '.dpr', '.dpk', '.inc');
   DESIGNER_EXTS: array [0 .. 1] of string = ('.dfm', '.fmx');
@@ -1222,8 +1223,8 @@ begin
   try
     if Arr.Count = 0 then
       Exit(MsgText(SR_PATCH_EDITS_EMPTY));
-    if Arr.Count > 50 then
-      Exit(MsgText(SR_PATCH_EDITS_TOOMANY));
+    if Arr.Count > MAX_EDITS then
+      Exit(MsgFmt(SR_PATCH_EDITS_TOOMANY_FMT, [MAX_EDITS]));
     if not TFile.Exists(APath) then
       Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
     Copia := TFile.ReadAllBytes(APath); // la red: el fichero antes de nada
@@ -1316,6 +1317,7 @@ begin
       N := 0;
       Fallo := 0;
       var Avisos: TArray<string> := [];
+      var Causa := ''; // la negativa de la entrada que cayo: da el resultado
       for V in Arr do
       begin
         Inc(N);
@@ -1364,6 +1366,7 @@ begin
           if Mal <> '' then
           begin
             Fallo := N;
+            Causa := Mal;
             Sb.AppendLine(Format('  %d: %s', [N, Mal.Replace(#10, ' ')]));
             Break;
           end;
@@ -1373,6 +1376,7 @@ begin
         if EsBloque and (Hasta[N - 1] > 0) then
         begin
           Fallo := N;
+          Causa := MsgText(SR_RANGE_WITH_BLOCK);
           Sb.AppendLine(Format('  %d: %s', [N, MsgText(SR_RANGE_WITH_BLOCK)]));
           Break;
         end;
@@ -1425,6 +1429,7 @@ begin
         if EsFallo(Una) then
         begin
           Fallo := N;
+          Causa := Una;
           // #10, no AppendLine (CRLF en Windows): el mensaje que lo envuelve
           // separa con #10 y el eco salia con los dos (test_round34, 26-sep)
           Sb.Append(Format('  %d: %s', [N, Una.Replace(#10, ' ')])).Append(#10);
@@ -1449,7 +1454,7 @@ begin
       if Fallo > 0 then
       begin
         TFile.WriteAllBytes(APath, Copia); // todo o nada, byte a byte
-        Exit(MsgFmt(SR_PATCH_EDITS_ROLLED_FMT,
+        Exit(MsgConCausa(SR_PATCH_EDITS_ROLLED_FMT, Causa,
           [Fallo, Arr.Count, Sb.ToString.TrimRight]));
       end;
       Result := MsgFmt(SN_PATCH_EDITS_OK_FMT,
@@ -1567,7 +1572,7 @@ begin
   finally
     Sb.Free;
   end;
-  Result := NotaBin + MsgFmt(SF_EDIT_LECTURA_NUMERADA_FMT,
+  Result := NotaBin + MsgFmt(SK_EDIT_LECTURA_NUMERADA_FMT,
     [TPath.GetFileName(APath), EncName(K), Eol, Summary(M), IniL, FinL,
      Length(Lines), Body, Cut]);
 end;
@@ -1710,7 +1715,7 @@ begin
           AtomicWrite(A.Path, EncodeText(Skel, NewK));
         except
           on E: Exception do
-            Exit(MsgFmt(SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT, [E.Message]));
+            Exit(MsgEnvuelve(SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT, E.Message));
         end;
         var CM := Measure(TFile.ReadAllBytes(A.Path));
         Exit(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
@@ -1811,7 +1816,7 @@ begin
           // la reconocia: ni salia en delphi_list includetrash ni se podia
           // restaurar como es debido. Ahora el sello lo pone el nombrador y
           // lo que distingue a esta copia es su CAJON, no su nombre.
-          var PreCopy := TPath.Combine(TrashDayDir(A.Path, 'antes-restaurar'),
+          var PreCopy := TPath.Combine(TrashDayDir(A.Path, 'before-restore'),
             TrashStampedName(TPath.GetFileName(A.Path)));
           CrearCarpeta(TPath.GetDirectoryName(PreCopy));
           TFile.Copy(A.Path, PreCopy);
@@ -1979,10 +1984,15 @@ begin
           var AnclaDpr := Lines[IAfter];
           var RDpr := DoEdit(A.Path, AnclaDpr,
             AnclaDpr + #10#10 + string.Join(#10, CodeLines), IAfter + 1, False);
+          // Si el motor se nego (un caracter que no cabe, la jaula), la
+          // respuesta ES esa negativa: envuelta en el "colocada en" salia
+          // como exito sin haber escrito nada (revision 27-sep-2026, medido)
+          if EsFallo(RDpr) then
+            Exit(RDpr);
           var NotaVis := '';
           if A.Visible then
             NotaVis := #10 + MsgText(SF_EDIT_VISIBLE_IGNORADO_PROGRAM);
-          Exit(MsgFmt(SF_EDIT_INSERT_RUTINA_DPR_FMT,
+          Exit(MsgFmt(SK_EDIT_INSERT_RUTINA_DPR_FMT,
             [IAfter + 1, AnclaDpr.Trim, RDpr, NotaVis]));
         end;
 
@@ -2006,6 +2016,8 @@ begin
         begin
           var R := DoEdit(A.Path, FrontLine,
             string.Join(#10, CodeLines) + #10#10 + FrontLine, FrontIdx + 1, False);
+          if EsFallo(R) then
+            Exit(R);
           var Extra := '';
           if A.Visible and EsMsg(R, SK_EDIT_ESCRITO_EN_FMT) then
           begin
@@ -2027,7 +2039,7 @@ begin
             else
               Extra := #10 + MsgText(SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION);
           end;
-          Exit(MsgFmt(SF_EDIT_INSERT_RUTINA_ANTES_FMT,
+          Exit(MsgFmt(SK_EDIT_INSERT_RUTINA_ANTES_FMT,
             [FrontIdx + 1, FrontLine.Trim, R, Extra]));
         end;
 
@@ -2205,7 +2217,7 @@ begin
         var AnclaDecl := Lines[IDecl - 1];
         R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
         if not EsMsg(R1, SK_EDIT_ESCRITO_EN_FMT) then
-          Exit(MsgFmt(SR_EDIT_INSERT_FALLO_MITAD1_FMT, [A.ClassName_, R1]));
+          Exit(MsgConCausa(SR_EDIT_INSERT_FALLO_MITAD1_FMT, R1, [A.ClassName_, R1]));
         end;
         var FirmaCual := TRegEx.Replace(Firma,
           '^(procedure|function|constructor|destructor)(\s+)', '$1$2' + A.ClassName_ + '.', [roIgnoreCase]);
@@ -2214,13 +2226,13 @@ begin
         if not EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
         begin
           if DeclNota <> '' then
-            Exit(MsgFmt(SR_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT, [R2]));
+            Exit(MsgConCausa(SR_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT, R2, [R2]));
           Exit(MsgFmt(SR_EDIT_INSERT_A_MEDIAS_FMT, [R2]));
         end;
         if DeclNota <> '' then
-          Exit(MsgFmt(SF_EDIT_INSERT_METODO_SOLO_IMPL_FMT,
+          Exit(MsgFmt(SK_EDIT_INSERT_METODO_SOLO_IMPL_FMT,
             [A.ClassName_, DeclNota, Copy(FirmaCual, 1, 70), R2]));
-        Exit(MsgFmt(SF_EDIT_INSERT_METODO_DOS_MITADES_FMT,
+        Exit(MsgFmt(SK_EDIT_INSERT_METODO_DOS_MITADES_FMT,
           [A.ClassName_, IfThen(NotaPublished <> '', #10'  ' + NotaPublished, ''),
            DeclLinea.Trim, R1, Copy(FirmaCual, 1, 70), R2]));
       end;
@@ -2248,7 +2260,7 @@ begin
         False, A.ToLine);
     except
       on E: Exception do
-        Result := MsgEnvuelve(SR_FALLO_INTERNO_FMT, E.Message, [E.ClassName, E.Message]);
+        Result := MsgExcepcion(E.ClassName, E.Message);
     end;
   finally
     GLock.Leave;
@@ -2306,6 +2318,16 @@ begin
   finally
     Res.Free;
   end;
+end;
+
+{ Una linea que es solo estructura (end, begin, un parentesis...) se repite
+  legitimamente encima o debajo de otra igual: un form y su ultimo
+  componente acaban los dos en "end". El aviso de "ancla repetida" saltaba
+  al insertar un objeto al final de un .dfm (revision 27-sep-2026). }
+function EsSoloEstructura(const S: string): Boolean;
+begin
+  Result := MatchText(S.Trim, ['end', 'end;', 'end.', 'begin', 'else', 'try',
+    'finally', 'except', ')', ');', 'end)', 'end);']);
 end;
 
 function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
@@ -2452,13 +2474,18 @@ begin
           LastNew := Parts[High(Parts)];
         end;
         if (HitIdx > 0) and (Lines[HitIdx - 1].Trim <> '') and
+           not EsSoloEstructura(NewFirst) and
            (Lines[HitIdx - 1].Trim = NewFirst.Trim) then
           Warnings.Add(MsgFmt(SN_EDIT_DUP_ABOVE_FMT, [HitIdx, NewFirst.Trim]));
         // Con un rango, la linea de debajo esta DENTRO de lo que se va: no
         // es una duplicacion, es material a punto de desaparecer.
+        // El numero es el de la linea en el fichero RESULTANTE (el que la
+        // respuesta ensena): debajo de todo lo insertado, no del ancla
         if (Cuantas = 1) and (HitIdx < High(Lines)) and (Lines[HitIdx + 1].Trim <> '') and
+           not EsSoloEstructura(LastNew) and
            (Lines[HitIdx + 1].Trim = LastNew.Trim) then
-          Warnings.Add(MsgFmt(SN_EDIT_DUP_BELOW_FMT, [HitIdx + 2, LastNew.Trim]));
+          Warnings.Add(MsgFmt(SN_EDIT_DUP_BELOW_FMT,
+            [HitIdx + Length(Replacement.Split([#10])) + 1, LastNew.Trim]));
       end;
       Lines[HitIdx] := Prefix + Replacement;
       Quita := Cuantas - 1; // la del ancla se queda, con el texto nuevo

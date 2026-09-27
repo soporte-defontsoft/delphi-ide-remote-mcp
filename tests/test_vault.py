@@ -41,6 +41,8 @@ w('projects/delphi/context.md',
   'Enlaza a [[Convenciones]].\n\n## Estado\n\n- linea viva uno\n- linea viva dos\n')
 w('projects/delphi/log.md', '# Bitacora\n\n- entrada antigua\n')
 w('conventions/estilo.md', '# Estilo\n\nEscribe en espanol. UTF-8 siempre.\n')
+# fuera de projects/, para que "subfolder acota" tenga algo que quitar
+w('conventions/fuera.md', '# Fuera\n\n- linea viva de fuera\n')
 # A CRLF note with accents and an em-dash: a vault edited on Windows looks like
 # this, and it is what caught the stray-CR bug (LF-only fixtures hid it).
 w('conventions/crlf.md',
@@ -88,7 +90,7 @@ check('registro: las 5 tools de vault existen con VaultPath + VaultReadOnly=0',
 # ===========================================================================
 instr = s.init.get('instructions', '')
 check('initialize: con vault, "instructions" trae el protocolo de arranque',
-      'vault_read' in instr and mc.es(instr, 'SN_VAULT_INSTRUCTIONS'), instr[:200])
+      'vault_read' in instr and instr.strip() == mc.catalogo()['SD_VAULT_INSTRUCTIONS'].strip(), instr[:200])
 check('initialize: instructions es CORTO (viaja en cada prompt)',
       0 < len(instr) < 2000, len(instr))
 check('initialize: declara la capability prompts',
@@ -224,7 +226,7 @@ check('search content: ruta + linea + texto',
       'estilo.md' in out and ':' in out and 'UTF-8' in out, out[:200])
 out = s.call('vault_search', {"target": "content", "pattern": "linea viva",
                               "subfolder": "projects"})
-check('search content: subfolder acota', 'context.md' in out, out[:200])
+check('search content: subfolder acota', 'context.md' in out and 'fuera.md' not in out, out[:200])
 out = s.call('vault_search', {"target": "content", "pattern": "no-existe-esto-xyz"})
 check('search: sin resultados lo dice y recuerda el indice',
       mc.es(out, 'SN_VAULT_SIN_RESULTADOS_RECUERDA_INDICE_FMT'), out[:150])
@@ -541,7 +543,7 @@ try:
     _sin = _texto(_http('tok-sin-vault', 'tools/call',
                         {"name": "vault_read", "arguments": {}}, 6))
     check('por-workspace: el que NO lo declara no lo ve (no se hereda nada)',
-          mc.resultado(_sin) in ('INVALID_PARAM', 'NOT_FOUND') and mc.abre(_sin, 'SR_VAULT_UNSET')
+          mc.resultado(_sin) == 'DENIED' and mc.abre(_sin, 'SR_VAULT_UNSET')
           and 'indice compartido' not in _sin, _sin[:150])
     check('por-workspace: el rechazo habla de TU workspace, no del servidor',
           # la frase del SERVIDOR sale del catalogo (la espanola ya no podia
