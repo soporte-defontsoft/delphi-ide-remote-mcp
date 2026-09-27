@@ -339,6 +339,23 @@ out = call('delphi_edit', {"path": ADDU, "removeuses": "X", "section": "interfac
 check('removeuses: seccion sin uses lo dice', 'no tiene uses' in out, out[:200])
 out = call('delphi_edit', {"path": DPRX, "removeuses": "X"})
 check('removeuses: en un .dpr remite a remove-unit', out.startswith('RECHAZADO') and 'remove-unit' in out, out[:200])
+# un // detras de la coma es de la entrada de ANTES: quitar la ULTIMA no mete el
+# ; en el comentario (medido 27-sep: la clausula quedaba sin cerrar), y quitar una
+# del medio no baja el comentario a una linea suya
+CMT = os.path.join(DIR, 'ConComentario.pas')
+open(CMT, 'wb').write(CRLF.join([
+    'unit ConComentario;', '', 'interface', '', 'implementation', '', 'uses',
+    '  UA,   // la de antes, con su nota', '  UB,', '  UC,   // otra nota', '  UD;', '',
+    'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": CMT, "removeuses": "UD"})
+_src = open(CMT, 'rb').read().decode('ascii')
+check('removeuses: quitar la ULTIMA deja el ; delante del // de la anterior',
+      out.startswith('QUITADAS') and '  UC;   // otra nota\r\n' in _src, _src)
+out = call('delphi_edit', {"path": CMT, "removeuses": "UB"})
+_src = open(CMT, 'rb').read().decode('ascii')
+check('removeuses: quitar una del medio deja el // en SU linea',
+      out.startswith('QUITADAS') and 'uses\r\n  UA,   // la de antes, con su nota\r\n  UC;   // otra nota\r\n' in _src,
+      _src)
 # la vecina de una entrada envuelta en directiva: la directiva se queda y la
 # vecina conserva UNA sangria (medido en vivo: salia con dos)
 IFD = os.path.join(DIR, 'ConIfdef.pas')

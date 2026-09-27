@@ -30,7 +30,8 @@ interface
 uses
   System.SysUtils,
   MCPServer.Tool.Base,
-  MCPServer.Types;
+  MCPServer.Types,
+  Lsp.Texts;
 
 type
   TVaultSearchParams = class
@@ -40,14 +41,14 @@ type
     FSubfolder: string;
     FMaxResults: Integer;
   public
-    [SchemaDescription('files (buscar por NOMBRE de nota, patron glob como *reunion*.md) | content (buscar DENTRO de las notas, pattern es una expresion regular)')]
+    [SchemaDescription(SP_VAULT_TARGET)]
     property Target: string read FTarget write FTarget;
-    [SchemaDescription('Glob de nombre si target=files (*.md, *delphi*), o expresion regular si target=content')]
+    [SchemaDescription(SP_VAULT_PATTERN)]
     [Required]
     property Pattern: string read FPattern write FPattern;
-    [SchemaDescription('Opcional: carpeta relativa del vault para acotar la busqueda (projects, conventions...)')]
+    [SchemaDescription(SP_VAULT_SUBFOLDER)]
     property Subfolder: string read FSubfolder write FSubfolder;
-    [SchemaDescription('Maximo de resultados (defecto 50)')]
+    [SchemaDescription(SP_VAULT_MAXRESULTS)]
     property MaxResults: Integer read FMaxResults write FMaxResults;
   end;
 
@@ -57,11 +58,11 @@ type
     FOffset: Integer;
     FLimit: Integer;
   public
-    [SchemaDescription('Ruta RELATIVA de la nota dentro del vault (projects/x/context.md). SIN path devuelve las reglas + el indice: hazlo al empezar')]
+    [SchemaDescription(SP_VAULT_PATH)]
     property Path: string read FPath write FPath;
-    [SchemaDescription('Opcional: primera linea a devolver (1 = principio)')]
+    [SchemaDescription(SP_VAULT_OFFSET)]
     property Offset: Integer read FOffset write FOffset;
-    [SchemaDescription('Opcional: cuantas lineas devolver desde offset')]
+    [SchemaDescription(SP_VAULT_LIMIT)]
     property Limit: Integer read FLimit write FLimit;
   end;
 
@@ -71,13 +72,13 @@ type
     FContent: string;
     FAnchor: string;
   public
-    [SchemaDescription('Ruta RELATIVA de la nota (debe existir)')]
+    [SchemaDescription(SP_VAULT_PATH_2)]
     [Required]
     property Path: string read FPath write FPath;
-    [SchemaDescription('Contenido markdown a anadir. En espanol')]
+    [SchemaDescription(SP_VAULT_CONTENT)]
     [Required]
     property Content: string read FContent write FContent;
-    [SchemaDescription('Opcional: texto UNICO tras el cual insertar. Sin anchor, anade al final del fichero')]
+    [SchemaDescription(SP_VAULT_ANCHOR)]
     property Anchor: string read FAnchor write FAnchor;
   end;
 
@@ -86,10 +87,10 @@ type
     FPath: string;
     FContent: string;
   public
-    [SchemaDescription('Ruta RELATIVA de la nota nueva (debe NO existir; nunca sobreescribe)')]
+    [SchemaDescription(SP_VAULT_PATH_3)]
     [Required]
     property Path: string read FPath write FPath;
-    [SchemaDescription('Contenido markdown completo, con la estructura/plantilla que pida el vault')]
+    [SchemaDescription(SP_VAULT_CONTENT_2)]
     [Required]
     property Content: string read FContent write FContent;
   end;
@@ -100,13 +101,13 @@ type
     FOldText: string;
     FNewText: string;
   public
-    [SchemaDescription('Ruta RELATIVA de la nota')]
+    [SchemaDescription(SP_VAULT_PATH_4)]
     [Required]
     property Path: string read FPath write FPath;
-    [SchemaDescription('Texto a sustituir: debe aparecer EXACTAMENTE UNA VEZ en el fichero')]
+    [SchemaDescription(SP_VAULT_OLD_TEXT)]
     [Required]
     property Old_Text: string read FOldText write FOldText;
-    [SchemaDescription('Texto nuevo que lo sustituye')]
+    [SchemaDescription(SP_VAULT_NEW_TEXT)]
     [Required]
     property New_Text: string read FNewText write FNewText;
   end;
@@ -160,7 +161,6 @@ uses
   MCPServer.Logger,
   Lsp.Guard,
   Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
-  Lsp.Texts,
   Mcp.Vault.Session;
 
 const

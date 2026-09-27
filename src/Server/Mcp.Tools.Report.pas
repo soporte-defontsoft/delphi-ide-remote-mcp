@@ -32,14 +32,14 @@ type
     FFrom: string;
     FAgent: string;
   public
-    [SchemaDescription('The report itself: what you tried, what happened, what you expected. Markdown welcome, several paragraphs are fine')]
+    [SchemaDescription(SP_REPORT_MESSAGE)]
     [Required]
     property Message: string read FMessage write FMessage;
-    [SchemaDescription('Optional one-line summary (becomes part of the file name)')]
+    [SchemaDescription(SP_REPORT_TITLE)]
     property Title: string read FTitle write FTitle;
-    [SchemaDescription('Optional: bug | limitation | suggestion | question (default: bug)')]
+    [SchemaDescription(SP_REPORT_KIND)]
     property Kind: string read FKind write FKind;
-    [SchemaDescription('Optional: who is reporting (agent/model name, project) - helps us read the history later')]
+    [SchemaDescription(SP_REPORT_FROM)]
     property From: string read FFrom write FFrom;
     [SchemaDescription(SP_REPORT_AGENT)]
     property Agent: string read FAgent write FAgent;

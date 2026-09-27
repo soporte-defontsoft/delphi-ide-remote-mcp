@@ -56,10 +56,10 @@ type
     FLine: Integer;
     FCharacter: Integer;
   public
-    [SchemaDescription('Zero-based line number of the identifier')]
+    [SchemaDescription(SP_LSP_LINE)]
     [Required]
     property Line: Integer read FLine write FLine;
-    [SchemaDescription('Zero-based character (column) inside the identifier')]
+    [SchemaDescription(SP_LSP_CHARACTER)]
     [Required]
     property Character: Integer read FCharacter write FCharacter;
   end;
@@ -68,7 +68,7 @@ type
   private
     FTrigger: string;
   public
-    [SchemaDescription('Optional trigger character, e.g. "." (empty = manual invocation)')]
+    [SchemaDescription(SP_LSP_TRIGGER)]
     property Trigger: string read FTrigger write FTrigger;
   end;
 
@@ -76,7 +76,7 @@ type
   private
     FKind: string;
   public
-    [SchemaDescription('Optional: definition (default) | declaration (jump to the interface declaration) | implementation (jump to the method body)')]
+    [SchemaDescription(SP_LSP_KIND)]
     property Kind: string read FKind write FKind;
   end;
 
@@ -668,14 +668,7 @@ constructor TDelphiSymbolsTool.Create;
 begin
   inherited;
   FName := 'delphi_symbols';
-  FDescription := 'Document symbol tree of a Delphi unit (classes, methods, ' +
-    'properties, sections) with 0-based ranges, straight from the official ' +
-    'DelphiLSP engine. Works even without project settings. Big trees come ' +
-    'back as a compact summary by default (mode/filter control it); a ' +
-    'FOLDER answers with the interface digest of every unit inside. The ' +
-    'engine parses as the COMPILER would for Windows: code inside an ' +
-    'inactive {$IFDEF} (LINUX, ANDROID, MACOS...) is not in the tree, and ' +
-    'nothing says so - for those blocks use delphi_search or delphi_read.';
+  FDescription := SD_LSP_SYMBOLS;
 end;
 
 // PositionOutOfRange vivia AQUI, en la implementation, o sea invisible para
@@ -915,16 +908,7 @@ constructor TDelphiDefinitionTool.Create;
 begin
   inherited;
   FName := 'delphi_definition';
-  FDescription := 'Resolve the identifier at a 0-based line:character ' +
-    'position in a Delphi source file, using the official DelphiLSP engine ' +
-    '(compiler-grade, cross-unit, including RTL/VCL sources). Point INSIDE ' +
-    'the identifier. kind selects the half of the unit (a Delphi method ' +
-    'exists in BOTH): definition (default) = the BODY in the ' +
-    'implementation section; declaration = the interface declaration OF THE ' +
-    'TARGET SYMBOL (on a call site the tool chains definition->declaration, ' +
-    'so you get the callee, never the enclosing method). ' +
-    '(kind=implementation is accepted but DelphiLSP answers it like ' +
-    'declaration - measured.) Requires project settings for full answers.';
+  FDescription := SD_LSP_DEFINITION;
 end;
 
 function TDelphiDefinitionTool.ExecuteWithParams(const Params: TDelphiDefinitionParams): string;
@@ -1012,11 +996,7 @@ constructor TDelphiSignatureTool.Create;
 begin
   inherited;
   FName := 'delphi_signature';
-  FDescription := 'Signature help (parameter completion) for the call under ' +
-    'a 0-based line:character position: the routine signatures with their ' +
-    'parameter list, from the official DelphiLSP engine - the IDE''s ' +
-    'Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right ' +
-    'after "(" or a ","). Requires project settings for full answers.';
+  FDescription := SD_LSP_SIGNATURE;
 end;
 
 function TDelphiSignatureTool.ExecuteWithParams(const Params: TDelphiPositionParams): string;
@@ -1052,10 +1032,7 @@ constructor TDelphiHoverTool.Create;
 begin
   inherited;
   FName := 'delphi_hover';
-  FDescription := 'Type/signature information for the identifier at a 0-based ' +
-    'line:character position (official DelphiLSP engine). IMPORTANT: hover ' +
-    'answers on identifier USAGES (call sites, type references); hovering a ' +
-    'declaration itself returns null. Requires project settings for full answers.';
+  FDescription := SD_LSP_HOVER;
 end;
 
 function TDelphiHoverTool.ExecuteWithParams(const Params: TDelphiPositionParams): string;
@@ -1090,9 +1067,7 @@ constructor TDelphiCompletionTool.Create;
 begin
   inherited;
   FName := 'delphi_completion';
-  FDescription := 'Code completion candidates at a 0-based line:character ' +
-    'position (official DelphiLSP engine). Returns at most 50 items ' +
-    '(label/kind/detail) plus the total count.';
+  FDescription := SD_LSP_COMPLETION;
 end;
 
 function TDelphiCompletionTool.ExecuteWithParams(const Params: TDelphiCompletionParams): string;

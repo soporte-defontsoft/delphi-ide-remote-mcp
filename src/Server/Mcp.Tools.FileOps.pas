@@ -21,7 +21,7 @@ type
     FPath: string;
     FPurge: Boolean;
   public
-    [SchemaDescription('Absolute path of the file or folder to delete (inside the workspace roots). Moved to a recoverable trash, not hard-deleted')]
+    [SchemaDescription(SP_FILE_PATH)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
@@ -35,11 +35,11 @@ type
     FDest: string;
     FCopy: Boolean;
   public
-    [SchemaDescription('Absolute path of the file or folder to move (inside the workspace roots)')]
+    [SchemaDescription(SP_FILE_PATH_2)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
-    [SchemaDescription('Destination absolute path (inside the workspace roots). Parent folders are created. Renames when the parent is the same')]
+    [SchemaDescription(SP_FILE_DEST)]
     [Required]
     [RutaDelServidor]
     property Dest: string read FDest write FDest;
@@ -309,20 +309,7 @@ constructor TDelphiDeleteTool.Create;
 begin
   inherited;
   FName := 'delphi_delete';
-  FDescription := 'Delete a file or folder inside the workspace. NOT a hard ' +
-    'delete: the target is moved to a recoverable trash ' +
-    '(__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. ' +
-    'The one exception is the server''s __delphi-temp: nothing is restored ' +
-    'from a temp, so what you delete inside it goes for good (the temp ' +
-    'folder itself is refused: it is every agent''s). ' +
-    'Jailed to the workspace roots, refused in read-only mode. A folder ' +
-    'that is or holds a workspace root, a reference project or a read-only ' +
-    'folder is refused (it would go along). Use it to ' +
-    'clean up stray files and leftovers. Deleting a unit (.pas) also trashes ' +
-    'its .dfm/.fmx and takes it out of every project that lists it - looked ' +
-    'for from its folder UP to the edge of the workspace, however deep the ' +
-    'unit sits (uses, CreateForm, DCCReference). To keep ' +
-    'the file but drop it from a project use delphi_config command=remove-unit.';
+  FDescription := SD_FILE_DELETE;
 end;
 
 function TDelphiDeleteTool.ExecuteWithParams(const Params: TDelphiDeleteParams): string;
@@ -564,42 +551,7 @@ constructor TDelphiMoveTool.Create;
 begin
   inherited;
   FName := 'delphi_move';
-  FDescription := 'Move or rename a file or folder inside the workspace, or COPY ' +
-    'it with copy=true. The destination must be inside the workspace ' +
-    'roots, and so must the source of a move; the source of a COPY only ' +
-    'has to be readable (your roots, your ReadOnlyRoots, the library ' +
-    'zone): a copy is how something is brought in from a reference ' +
-    'project, its original untouched. Parent ' +
-    'folders of the destination are created. The source is copied to the ' +
-    'recoverable trash first. Jailed, refused in read-only mode. A FOLDER ' +
-    'moves only as a rename on the same drive, whole or not at all (links ' +
-    'inside travel as links); to another drive, copy=true and then ' +
-    'delphi_delete. A folder that is or holds a root, a reference or a ' +
-    'read-only folder is refused. Moving or ' +
-    'renaming a unit (.pas) moves its .dfm/.fmx with it, rewrites its "unit X;" ' +
-    'header on a rename, and re-points every project that lists it: the .dpr ' +
-    'uses and DCCReference, the uses of every other unit of the project and ' +
-    'every qualified UnitOld.X reference in them - looked for from its folder UP to the edge of the ' +
-    'workspace, however deep the unit sits. Moving a whole FOLDER re-points ' +
-    'every unit inside it the same way: reorganise freely, the projects follow. ' +
-    'And every RELATIVE path that crosses the border of what moved is ' +
-    're-pointed in the same call, once the unit and its designer are in place: ' +
-    'inside what moved, the units from outside each project lists, the .dproj ' +
-    'search/output paths, icon, manifest, .rc, deployed files and .optset, ' +
-    'the {$I}/{$R}/{$L} directives (only if the file was where the directive ' +
-    'says - one found through the include path is left alone) and the ' +
-    'projects and dependencies of a .groupproj; outside it, in everything ' +
-    'this session can write (a sibling project, an {$I} from another unit, a ' +
-    'group and its dependencies), whatever pointed inside - a project moved ' +
-    'one level deeper still compiles. What it could not re-point is named, ' +
-    'for delphi_config command=fix-references. ' +
-    'copy=true is the same door with a different last step: the source stays, ' +
-    'no trash copy is taken, a copied unit named differently gets its "unit X;" ' +
-    'header rewritten and its .dfm/.fmx copied along, and NO project is made ' +
-    'to list the copy (a new unit nobody lists yet: delphi_config add-unit); ' +
-    'what the copy points to outside IS re-pointed, so it compiles where it ' +
-    'lands. Refused for a folder holding a .dproj/.dpk - a project never ' +
-    'lives in two places; start one from another with delphi_create.';
+  FDescription := SD_FILE_MOVE;
 end;
 
 function TDelphiMoveTool.ExecuteWithParams(const Params: TDelphiMoveParams): string;

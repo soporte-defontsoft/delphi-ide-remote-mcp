@@ -28,28 +28,28 @@ type
     FFilter: string;
     FDelete: Boolean;
   public
-    [SchemaDescription('view (styles of a .style file: StyleName, class, lines) | get (one style, whole text) | set (one property of a style or of one of its parts) | clone (a new style copied from an existing one) | delete (remove a whole style by StyleName; the __delphi-patch copy is the way back) | lint (duplicated StyleNames, StyleLookup values of the project''s .fmx that no style defines, design tokens missing in a theme, .rc entries without file) | build (every text .style of the folder -> .bin.style, then the .rc -> .res with brcc32)')]
+    [SchemaDescription(SP_STYLE_COMMAND)]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_STYLES_PATH)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
-    [SchemaDescription('lint: the project .dproj (or a folder) whose .fmx/.pas files are scanned for StyleLookup. Default: the parent folder of the styles folder')]
+    [SchemaDescription(SP_STYLE_PROJECT)]
     [RutaDelServidor]
     property Project: string read FProject write FProject;
-    [SchemaDescription('get/set/clone: the StyleName of the style (top-level object of the container), e.g. buttonstyle or cardstyle')]
+    [SchemaDescription(SP_STYLE_STYLE)]
     property Style: string read FStyle write FStyle;
-    [SchemaDescription('set optional: a part inside the style, by StyleName or object name, as a path: background or background/text')]
+    [SchemaDescription(SP_STYLE_CHILD)]
     property Child: string read FChild write FChild;
-    [SchemaDescription('set: the property, as written in the file: Fill.Color, Size.Height, Visible, TextSettings.Font.Size...')]
+    [SchemaDescription(SP_STYLE_PROP)]
     property Prop: string read FProp write FProp;
-    [SchemaDescription('set: the value EXACTLY as it appears in a .style file: xFFF6ECDB (colors AARRGGBB), 44.000000000000000000 (floats), True/False, ''text'' (strings quoted), Center (enums)')]
+    [SchemaDescription(SP_STYLE_VALUE)]
     property Value: string read FValue write FValue;
-    [SchemaDescription('clone: the StyleName of the new style')]
+    [SchemaDescription(SP_STYLE_NAME)]
     property Name: string read FName write FName;
-    [SchemaDescription('view optional: substring the StyleName must contain')]
+    [SchemaDescription(SP_STYLE_FILTER)]
     property Filter: string read FFilter write FFilter;
-    [SchemaDescription('set: true = remove the property instead of setting it')]
+    [SchemaDescription(SP_STYLE_DELETE)]
     property Delete: Boolean read FDelete write FDelete;
   end;
 

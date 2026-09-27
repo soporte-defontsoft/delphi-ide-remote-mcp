@@ -30,15 +30,15 @@ type
     FContent: string;
     FEol: string;
   public
-    [SchemaDescription('Absolute path of the text file (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml ... any plain text - Delphi files are refused, use delphi_edit)')]
+    [SchemaDescription(SP_TEXT_PATH)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
-    [SchemaDescription('EDIT mode: the exact line to replace - ONE full line copied literally from delphi_read (everything after the | bar). Leading indentation may be omitted')]
+    [SchemaDescription(SP_EDIT_OLD)]
     property Old: string read FOld write FOld;
     [SchemaDescription('EDIT mode: the new text; may be several lines. Empty = blank the line' + SP_NEW_SALTO_FINAL)]
     property New: string read FNew write FNew;
-    [SchemaDescription('EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence')]
+    [SchemaDescription(SP_TEXT_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;
     [SchemaDescription(SP_PATCH_TOLINE)]
     property ToLine: Integer read FToLine write FToLine;
@@ -51,13 +51,13 @@ type
     property Edits: string read FEdits write FEdits;
     [SchemaDescription(SP_PATCH_FRAGMENT)]
     property Fragment: string read FFragment write FFragment;
-    [SchemaDescription('DELETE mode: true = quita ENTERA la linea anclada en "old" (old + new vacio solo la deja en blanco). Aqui no va "new"')]
+    [SchemaDescription(SP_TEXT_DELETE)]
     property Delete: Boolean read FDelete write FDelete;
-    [SchemaDescription('CREATE mode: true = create a NEW file (never overwrites). UTF-8, parent directories created')]
+    [SchemaDescription(SP_TEXT_CREATE_)]
     property Create_: Boolean read FCreate write FCreate;
-    [SchemaDescription('CREATE mode: the initial content of the new file (may be empty)')]
+    [SchemaDescription(SP_TEXT_CONTENT)]
     property Content: string read FContent write FContent;
-    [SchemaDescription('CREATE mode: line endings, "crlf" (default) or "lf"')]
+    [SchemaDescription(SP_TEXT_EOL)]
     property Eol: string read FEol write FEol;
   end;
 
@@ -79,21 +79,7 @@ constructor TDelphiTextEditTool.Create;
 begin
   inherited;
   FName := 'delphi_textedit';
-  FDescription := 'SAFE editing of plain-text NON-Delphi files (.md .txt ' +
-    '.html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): ' +
-    'docs, web assets, tests, scripts, config. Same ' +
-    'discipline as delphi_edit - one-full-line unique anchor (old/new, ' +
-    'atline tie-break; for a LONG line such as a README paragraph, ' +
-    'fragment + atline + new changes just a piece of it), DELETE mode ' +
-    '(delete=true + old), several edits on ' +
-    'the SAME file in one all-or-nothing call ("edits", where an anchor may ' +
-    'be ONE line or a contiguous BLOCK), ' +
-    'real encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), ' +
-    'line endings preserved, automatic backup, atomic write - without the ' +
-    'Pascal gates. CREATE mode (create=true + content) for new files, never ' +
-    'overwrites. Whole-file rewrites are refused. Delphi sources/designers ' +
-    'are refused (use delphi_edit) and so are .dproj and binaries. Read ' +
-    'first with delphi_read and copy the anchor exactly.';
+  FDescription := SD_TEXT_TEXTEDIT;
 end;
 
 function TDelphiTextEditTool.ExecuteWithParams(const Params: TDelphiTextEditParams): string;

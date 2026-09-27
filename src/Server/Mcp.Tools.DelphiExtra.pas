@@ -21,7 +21,7 @@ type
   private
     FPath: string;
   public
-    [SchemaDescription('Absolute path of the Delphi source file to lint (.pas/.dpr)')]
+    [SchemaDescription(SP_BUILD_PATH)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
@@ -33,14 +33,14 @@ type
     FLine: Integer;
     FCharacter: Integer;
   public
-    [SchemaDescription('Absolute path of the Delphi source file')]
+    [SchemaDescription(SP_BUILD_PATH_2)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
-    [SchemaDescription('Zero-based line of the identifier to find references for')]
+    [SchemaDescription(SP_BUILD_LINE)]
     [Required]
     property Line: Integer read FLine write FLine;
-    [SchemaDescription('Zero-based character inside the identifier')]
+    [SchemaDescription(SP_BUILD_CHARACTER)]
     [Required]
     property Character: Integer read FCharacter write FCharacter;
   end;
@@ -56,27 +56,27 @@ type
     FSdk: string;
     FVerbosity: string;
   public
-    [SchemaDescription('Absolute path of the .dproj to build')]
+    [SchemaDescription(SP_BUILD_PROJECT)]
     [Required]
     [RutaDelServidor]
     property Project: string read FProject write FProject;
-    [SchemaDescription('Target platform (default Win32): Win32/Win64 build natively here. Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and their SDK pulled once (delphi_paserver get-sdk). Building is LOCAL against that SDK and does NOT use profile - a PAServer profile is only needed for target=Deploy')]
+    [SchemaDescription(SP_BUILD_PLATFORM)]
     [SchemaDefault('Win32')]
     property Platform: string read FPlatform write FPlatform;
-    [SchemaDescription('Debug or Release (default Debug)')]
+    [SchemaDescription(SP_BUILD_CONFIG)]
     [SchemaDefault('Debug')]
     property Config: string read FConfig write FConfig;
-    [SchemaDescription('Build (full, default), Make (incremental), Clean, or Deploy (always builds first, then deploys: to the PAServer of "profile" for Linux/macOS, or packages the app for Android). After switching platforms use Build')]
+    [SchemaDescription(SP_BUILD_TARGET)]
     [SchemaDefault('Build')]
     property Target: string read FTarget write FTarget;
-    [SchemaDescription('Connection profile name for target=Deploy on a PAServer platform (see delphi_paserver command=profiles). The deployed files land on the target under its PAServer scratch dir, in <profile>/<project name>/')]
+    [SchemaDescription(SP_BUILD_PROFILE)]
     property Profile: string read FProfile write FProfile;
-    [SchemaDescription('Which platform SDK to link against, by name (delphi_paserver command=profiles lists them with their glibc). One SDK = one folder, the same model as the Android SDKs. Omit it and the project decides (its own PlatformSDK), or the only one there is; with several and no hint the build is refused instead of guessing')]
+    [SchemaDescription(SP_BUILD_SDK)]
     property Sdk: string read FSdk write FSdk;
     [SchemaDescription(SP_BUILD_VERBOSITY)]
     [SchemaDefault('quiet')]
     property Verbosity: string read FVerbosity write FVerbosity;
-    [SchemaDescription('Android device serial for target=Deploy on Android platforms (see delphi_adb command=devices; attach one over wifi with command=connect)')]
+    [SchemaDescription(SP_BUILD_DEVICEID)]
     property DeviceId: string read FDeviceId write FDeviceId;
   end;
 
@@ -120,17 +120,7 @@ constructor TDelphiDiagnosticsTool.Create;
 begin
   inherited;
   FName := 'delphi_diagnostics';
-  FDescription := 'Compiler-grade errors/warnings/hints for one Delphi source ' +
-    'file (Error Insight via the official DelphiLSP linter), WITHOUT building. ' +
-    'Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions (range) and line1, the 1-based line delphi_read shows. ' +
-    'Severity is the LSP scale: 1=error, 2=warning, 3=information, 4=hint. ' +
-    'The description used to stop at "3=hint", so a diagnostic arriving as 4 ' +
-    'had no meaning to read it by; the "hints" counter groups 3 and 4 ' +
-    'together, and the per-diagnostic severity tells them apart. ' +
-    'Lints the CURRENT on-disk content. ' +
-    'A big unit can take over a minute the first time: the answer then says ' +
-    'the lint is in progress - call again with the same file and the result ' +
-    'is returned (the lint is not restarted while the file is unchanged).';
+  FDescription := SD_BUILD_DIAGNOSTICS;
 end;
 
 function TDelphiDiagnosticsTool.ExecuteWithParams(
@@ -211,16 +201,7 @@ constructor TDelphiReferencesTool.Create;
 begin
   inherited;
   FName := 'delphi_references';
-  FDescription := 'Find references to the identifier at a 0-based ' +
-    'line:character position. Hybrid method (DelphiLSP has no native ' +
-    'references): project-wide text scan, then every candidate is validated ' +
-    'by asking the compiler engine for its definition - only candidates ' +
-    'resolving to the SAME symbol are confirmed, homonyms are rejected. ' +
-    'A name written in a COMMENT or inside a string literal is not a ' +
-    'reference and does not count as unverified: those go to "mentions", ' +
-    'listed but harmless - they used to block delphi_rename_symbol, which ' +
-    'refuses on a single unverified candidate. ' +
-    'Bounded work: leftovers are listed as unverified, never silently dropped.';
+  FDescription := SD_BUILD_REFERENCES;
 end;
 
 function TDelphiReferencesTool.ExecuteWithParams(
@@ -251,27 +232,7 @@ constructor TDelphiBuildTool.Create;
 begin
   inherited;
   FName := 'delphi_build';
-  FDescription := 'Build a Delphi project for real with MSBuild on this ' +
-    'machine. How much comes back is yours to choose with "verbosity": ' +
-    'quiet (DEFAULT) = errors and the summary, a few lines, which is what a ' +
-    '"does it still compile" build needs; normal = warnings too; verbose = ' +
-    'everything. It sets the msbuild verbosity as well, so quiet really asks ' +
-    'for less. Rsvars is located via the registry; the answer carries the ' +
-    'success flag, the compiler errors/warnings, the output tail and which ' +
-    'Delphi built. Use this as the closing verification after editing - the ' +
-    'linter does not link nor produce binaries. Compile-only: a project that ' +
-    'would EXECUTE a shell during build (a custom <Target>/<Exec>, a foreign ' +
-    '<Import>) is refused unless the workspace declares AllowBuildScripts=1; ' +
-    'its pre/post build EVENTS (signing, copies) are skipped instead, and ' +
-    'buildEventsSkipped says so - the binary is for working and testing, the ' +
-    'final one is built where the events run. For a ' +
-    'package (.dpk) the answer adds implicitImports (units of OTHER packages ' +
-    'it compiled into itself, W1033) and requiresSuggested (their packages, ' +
-    'read from the BPLs of this install - or, for a unit of a .dpk of your ' +
-    'own workspace, that package, with requiresWorkspaceNote telling you to ' +
-    'build it first), the list delphi_config ' +
-    'add-requires takes; a unit dcc cannot find at all is F2613 and comes ' +
-    'back in missingUnits instead.';
+  FDescription := SD_BUILD_BUILD;
 end;
 
 function TDelphiBuildTool.ExecuteWithParams(const Params: TDelphiBuildParams): string;

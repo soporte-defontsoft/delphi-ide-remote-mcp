@@ -894,6 +894,21 @@ end;
   two spaces when it had none). Measured 2026-08-23: the indent was applied
   TWICE (join + a second replace) and every add/remove-unit re-indented the
   whole clause to four spaces - a 40-line cosmetic diff on a real project. }
+{ Donde empieza el comentario // de una linea (1-based), fuera de comillas;
+  0 si no tiene. }
+function ComentarioDeLinea(const ALinea: string): Integer;
+var
+  EnCadena: Boolean;
+begin
+  EnCadena := False;
+  for var I := 1 to Length(ALinea) - 1 do
+    if ALinea[I] = '''' then
+      EnCadena := not EnCadena
+    else if not EnCadena and (ALinea[I] = '/') and (ALinea[I + 1] = '/') then
+      Exit(I);
+  Result := 0;
+end;
+
 function ReplaceUses(const Dpr: string; const U: TUsesClause; const AEntries: TArray<string>): string;
 var
   Body, NL, Indent, Clause, E: string;
@@ -915,19 +930,64 @@ begin
   else
     Indent := '  ';
   SetLength(Parts, Length(AEntries));
-  for I := 0 to High(AEntries) do
+  // un // que va detras de la coma es de la entrada de ANTES (esta en su
+  // misma linea), aunque el troceo por comas lo deje al principio de la
+  // siguiente: se le devuelve a su dueno, y el separador (la coma o el ;)
+  // va DELANTE de el. Si no, quitar la ultima entrada dejaba el ; dentro
+  // del comentario y la clausula sin cerrar, y cada reescritura bajaba el
+  // comentario a una linea suya (medido 27-sep con removeuses).
+  var Entradas := Copy(AEntries);
+  var Colas: TArray<string>;
+  SetLength(Colas, Length(Entradas));
+  for I := 1 to High(Entradas) do
+  begin
+    var Texto := Entradas[I].Replace(#13#10, #10);
+    var P := Texto.IndexOf(#10);
+    var Primera := IfThen(P >= 0, Copy(Texto, 1, P), '').Trim;
+    // solo si en el original iba detras de SU coma: uno que estaba en una
+    // linea suya no sube; y con el hueco que tenia (las entradas llegan
+    // recortadas: el hueco sale del texto original de la clausula)
+    var MC := TRegEx.Match(Clause, ',([ \t]*)' + TRegEx.Escape(Primera));
+    if Primera.StartsWith('//') and MC.Success then
+    begin
+      Colas[I - 1] := IfThen(MC.Groups[1].Value <> '', MC.Groups[1].Value, ' ') + Primera;
+      Entradas[I] := Copy(Texto, P + 2, MaxInt);
+    end;
+  end;
+  for I := 0 to High(Entradas) do
   begin
     // a multi-line entry (directives around it) keeps its lines indented too:
     // cada linea se reindenta desde cero, que la que venia con su sangria
     // propia (la vecina de una entrada quitada) salia con las dos (medido
     // en vivo con removeuses, 2026-09-23)
-    var Lineas := AEntries[I].Replace(#13#10, #10).Split([#10]);
+    var Lineas := Entradas[I].Replace(#13#10, #10).Split([#10]);
     for var J := 0 to High(Lineas) do
       Lineas[J] := Lineas[J].Trim;
+    // el separador, detras de la ultima linea con codigo y delante de su //
+    var K := High(Lineas);
+    while (K > 0) and Lineas[K].StartsWith('//') do
+      Dec(K);
+    var Sep := IfThen(I < High(Entradas), ',', ';');
+    var C := ComentarioDeLinea(Lineas[K]);
+    if C > 0 then
+    begin
+      var Codigo := Copy(Lineas[K], 1, C - 1);
+      var Hueco := Copy(Codigo, Length(Codigo.TrimRight) + 1, MaxInt);
+      if Hueco = '' then
+      begin
+        // el que tenia en el original, detras de su separador
+        var MH := TRegEx.Match(Clause, '[,;]([ \t]*)' + TRegEx.Escape(Copy(Lineas[K], C, MaxInt)));
+        Hueco := IfThen(MH.Success and (MH.Groups[1].Value <> ''), MH.Groups[1].Value, ' ');
+      end;
+      Lineas[K] := Codigo.TrimRight + Sep + Hueco + Copy(Lineas[K], C, MaxInt);
+    end
+    else
+      Lineas[K] := Lineas[K] + Sep;
+    Lineas[High(Lineas)] := Lineas[High(Lineas)] + Colas[I];
     E := string.Join(NL + Indent, Lineas);
     Parts[I] := Indent + E;
   end;
-  Body := IfThen(U.Keyword <> '', U.Keyword, 'uses') + NL + string.Join(',' + NL, Parts) + ';';
+  Body := IfThen(U.Keyword <> '', U.Keyword, 'uses') + NL + string.Join(NL, Parts);
   Body := TRegEx.Replace(Body, '[ \t]+(\r?\n)', '$1'); // no trailing blanks
   Result := Copy(Dpr, 1, U.StartPos - 1) + Body + Copy(Dpr, U.EndPos + 1, MaxInt);
 end;
@@ -1262,7 +1322,20 @@ begin
       Carry := Prefix; // its directive/comment stays, glued to the next entry
     end;
   if (Carry <> '') and (Length(Result) > 0) then
-    Result[High(Result)] := Result[High(Result)] + #10 + Carry;
+  begin
+    // un // en la primera linea del prefijo iba detras de la coma de la
+    // anterior: vuelve a SU linea (ReplaceUses pone el ; delante de el)
+    var C := Carry.Replace(#13#10, #10);
+    var P := C.IndexOf(#10);
+    var Primera := IfThen(P >= 0, Copy(C, 1, P), C);
+    if Primera.TrimLeft.StartsWith('//') then
+    begin
+      Result[High(Result)] := Result[High(Result)] + Primera.TrimRight;
+      C := IfThen(P >= 0, Copy(C, P + 2, MaxInt), '');
+    end;
+    if C.Trim <> '' then
+      Result[High(Result)] := Result[High(Result)] + #10 + C;
+  end;
 end;
 
 function RemoveProjectUnitNucleo(const AProject, APasPath: string;

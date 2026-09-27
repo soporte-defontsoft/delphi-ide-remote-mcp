@@ -33,22 +33,22 @@ type
     FWholeWord: Boolean;
     FPattern: string;
   public
-    [SchemaDescription('Directory to search recursively (project root) - or ONE file (a .dproj, .dpr, .inc, .xml...) to search inside it in a single call')]
+    [SchemaDescription(SP_WS_ROOT)]
     [Required]
     [RutaDelServidor]
     property Root: string read FRoot write FRoot;
-    [SchemaDescription('Literal text to find (case-insensitive - it is Pascal)')]
+    [SchemaDescription(SP_WS_QUERY)]
     [Required]
     property Query: string read FQuery write FQuery;
-    [SchemaDescription('Maximum hits to return PER PAGE (default 100, cap 500 PER PAGE - it is not a global limit: the offset walk covers the FULL hit list)')]
+    [SchemaDescription(SP_WS_MAXRESULTS)]
     [SchemaDefault('100')]
     property MaxResults: Integer read FMaxResults write FMaxResults;
-    [SchemaDescription('Skip the first N matches of the FULL hit list (not of the current page) - pagination: pass the nextOffset of the previous answer to get the next page; walking nextOffset until hasMore=false reaches every hit, however many')]
+    [SchemaDescription(SP_WS_OFFSET)]
     [SchemaDefault('0')]
     property Offset: Integer read FOffset write FOffset;
-    [SchemaDescription('true = match whole identifiers only (word boundaries)')]
+    [SchemaDescription(SP_WS_WHOLEWORD)]
     property WholeWord: Boolean read FWholeWord write FWholeWord;
-    [SchemaDescription('Optional file mask to search instead of the Delphi set, e.g. *.style, *.ini, *.md, *.rc (one mask)')]
+    [SchemaDescription(SP_WS_PATTERN)]
     property Pattern: string read FPattern write FPattern;
   end;
 
@@ -59,15 +59,15 @@ type
     FDirs: Boolean;
     FIncludeTrash: Boolean;
   public
-    [SchemaDescription('Directory to list recursively')]
+    [SchemaDescription(SP_WS_ROOT_2)]
     [Required]
     [RutaDelServidor]
     property Root: string read FRoot write FRoot;
-    [SchemaDescription('Filename mask, e.g. *.pas (default: Delphi source and project files)')]
+    [SchemaDescription(SP_WS_PATTERN_2)]
     property Pattern: string read FPattern write FPattern;
-    [SchemaDescription('true = list SUBDIRECTORIES of root (one level, explorer-style) instead of files')]
+    [SchemaDescription(SP_WS_DIRS)]
     property Dirs: Boolean read FDirs write FDirs;
-    [SchemaDescription('true = also show the recoverable trash (__delphi-patch, where delphi_delete moves files) so you can find and restore a deleted file with delphi_move. Default false (trash hidden).')]
+    [SchemaDescription(SP_WS_INCLUDETRASH)]
     property IncludeTrash: Boolean read FIncludeTrash write FIncludeTrash;
   end;
 
@@ -78,15 +78,15 @@ type
     FMaxResults: Integer;
     FOffset: Integer;
   public
-    [SchemaDescription('Directory to search under. Empty = the roots configured in settings.ini [Workspace.<name>] Roots (semicolon-separated)')]
+    [SchemaDescription(SP_WS_ROOT_3)]
     [RutaDelServidor]
     property Root: string read FRoot write FRoot;
-    [SchemaDescription('Optional name filter (substring, case-insensitive), e.g. "comunicador"')]
+    [SchemaDescription(SP_WS_NAME)]
     property Name: string read FName write FName;
-    [SchemaDescription('Maximum projects to return PER PAGE (default 50, cap 300). A work machine holds thousands of .dproj: the full list does not fit in an answer')]
+    [SchemaDescription(SP_WS_MAXRESULTS_2)]
     [SchemaDefault('50')]
     property MaxResults: Integer read FMaxResults write FMaxResults;
-    [SchemaDescription('Skip the first N projects of the FULL list - pagination: pass the nextOffset of the previous answer to get the next page')]
+    [SchemaDescription(SP_WS_OFFSET_2)]
     [SchemaDefault('0')]
     property Offset: Integer read FOffset write FOffset;
   end;
@@ -101,23 +101,23 @@ type
     FPath: string;
     FRef: string;
   public
-    [SchemaDescription('Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots)')]
+    [SchemaDescription(SP_WS_REPO)]
     [Required]
     [RutaDelServidor]
     property Repo: string read FRepo write FRepo;
-    [SchemaDescription('One of: status | diff | log | show | branch | switch | merge | stash | add | commit | init | push | tag | config | clone | pull | fetch | worktree. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push|pop|list (never drop); push -- <paths> parks ONLY those paths and sets them back to HEAD - how you discard one file''s changes without losing them (pop brings them back); its label goes in message. config: args=user.name|user.email + value in message. clone: URL in message, destination in repo. worktree: args=list | add (path=<a NEW folder inside your roots>, ref=<tag|branch|commit>: another version of the repo next to it, detached, to build and compare) | remove (path=<one that list shows>; refused with changes or with a link inside)')]
+    [SchemaDescription(SP_WS_COMMAND)]
     [Required]
     property Command: string read FCommand write FCommand;
-    [SchemaDescription('Optional extra arguments (paths, --staged, a commit hash...). They are SPLIT ON SPACES into argv, so a path with spaces goes in double quotes: args="mis notas.txt". There is no shell involved, but shell metacharacters (; | & ` $ < >) are rejected anyway - if a legitimate git option needs one (--pretty=format:...), ask for it with delphi_report instead of trying to smuggle it')]
+    [SchemaDescription(SP_WS_ARGS)]
     property Args: string read FArgs write FArgs;
-    [SchemaDescription('switch: true = create the branch and move to it (git switch -c). Ignored by every other command')]
+    [SchemaDescription(SP_WS_CREATE)]
     property Create: Boolean read FCreate write FCreate;
-    [SchemaDescription('commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL')]
+    [SchemaDescription(SP_WS_MESSAGE)]
     property Message: string read FMessage write FMessage;
-    [SchemaDescription('worktree add: a NEW folder inside your roots for the second working copy (like the destination of a clone). worktree remove: a folder that command=worktree args=list shows')]
+    [SchemaDescription(SP_WS_PATH)]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
-    [SchemaDescription('worktree add: the tag, branch or commit to put there, detached - a version to build and compare, not a place to work (v1.3.2, main, HEAD~3, a commit hash)')]
+    [SchemaDescription(SP_WS_REF)]
     property Ref: string read FRef write FRef;
   end;
 
@@ -175,11 +175,11 @@ type
     FOffset: Integer;
     FMaxBytes: Integer;
   public
-    [SchemaDescription('Absolute path of the file to download from the server')]
+    [SchemaDescription(SP_WS_PATH_2)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
-    [SchemaDescription('Byte offset to start from (0 = beginning). Loop increasing it until eof=true and reassemble')]
+    [SchemaDescription(SP_WS_OFFSET_3)]
     property Offset: Integer read FOffset write FOffset;
     [SchemaDescription(SP_FETCH_MAXBYTES)]
     property MaxBytes: Integer read FMaxBytes write FMaxBytes;
@@ -200,18 +200,18 @@ type
     FSha256: string;
     FChunkSha256: string;
   public
-    [SchemaDescription('Absolute path of the file to write ON the server (inside the workspace roots)')]
+    [SchemaDescription(SP_WS_PATH_3)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
-    [SchemaDescription('One chunk of the file, base64-encoded. offset=0 truncates/creates; later offsets append')]
+    [SchemaDescription(SP_WS_CHUNKBASE64)]
     [Required]
     property ChunkBase64: string read FChunkBase64 write FChunkBase64;
-    [SchemaDescription('Byte offset this chunk starts at (0 = beginning). Send chunks in order, increasing offset by the bytes written')]
+    [SchemaDescription(SP_WS_OFFSET_4)]
     property Offset: Integer read FOffset write FOffset;
-    [SchemaDescription('Optional: on the LAST chunk, the whole-file SHA-256; the server verifies the assembled file and reports verified true/false')]
+    [SchemaDescription(SP_WS_SHA256)]
     property Sha256: string read FSha256 write FSha256;
-    [SchemaDescription('Optional: the SHA-256 of THIS chunk (of its decoded bytes). Verified BEFORE the chunk is written, so a slip in transit is caught at the chunk that carried it, with nothing on disk')]
+    [SchemaDescription(SP_WS_CHUNKSHA256)]
     property ChunkSha256: string read FChunkSha256 write FChunkSha256;
   end;
 
@@ -227,10 +227,10 @@ type
     FDir: string;
     FOutFile: string;
   public
-    [SchemaDescription('Directory to package (e.g. the build output Win64\Debug). Recursive; *.dcu and dcu\ intermediates excluded')]
+    [SchemaDescription(SP_WS_DIR)]
     [RutaDelServidor]
     property Dir: string read FDir write FDir;
-    [SchemaDescription('Optional zip path (default: sibling of dir, named <dirname>-deploy.zip). Must be inside the workspace roots')]
+    [SchemaDescription(SP_WS_OUTFILE)]
     [RutaDelServidor]
     property OutFile: string read FOutFile write FOutFile;
   end;
@@ -358,14 +358,7 @@ constructor TDelphiSearchTool.Create;
 begin
   inherited;
   FName := 'delphi_search';
-  FDescription := 'Search Delphi sources recursively for a literal text ' +
-    '(case-insensitive), skipping IDE artifacts BELOW the root (__history, ' +
-    'Win32/Win64, dcu, .git, the server''s __delphi-temp...): naming such ' +
-    'a folder as root searches inside it, and when files are skipped the ' +
-    'result says how many and why ("hidden" + "note"). Files are decoded ' +
-    'with their real encoding, so accented ' +
-    'text matches correctly. Returns path, 1-based line and the line text ' +
-    '(same numbering as delphi_read).';
+  FDescription := SD_WS_SEARCH;
 end;
 
 function RelToRoot(const AFull, ARoot: string): string; forward;
@@ -512,17 +505,7 @@ constructor TDelphiListTool.Create;
 begin
   inherited;
   FName := 'delphi_list';
-  FDescription := 'List Delphi files under a directory recursively (sources ' +
-    'and project files by default, or a custom mask), skipping IDE ' +
-    'artifacts BELOW the root: naming a build-output folder (Win32/Win64/' +
-    'Debug/Release...) as root lists inside it, and when entries are ' +
-    'hidden the result says how many. Returns path, size and last-write ' +
-    'time. Capped at 500 entries. With dirs=true it lists the ' +
-    'SUBDIRECTORIES of root instead (one level, explorer-style) - use that ' +
-    'to browse the machine and decide where to create or look for ' +
-    'projects. With includeTrash=true it also shows the recoverable trash ' +
-    '(__delphi-patch) so you can find a file deleted by delphi_delete and ' +
-    'restore it with delphi_move.';
+  FDescription := SD_WS_LIST;
 end;
 
 { Path relative to the listing root, in the '\seg\' shape SkipIdeArtifacts
@@ -735,21 +718,7 @@ constructor TDelphiGitTool.Create;
 begin
   inherited;
   FName := 'delphi_git';
-  FDescription := 'Whitelisted git operations on a repository of this ' +
-    'machine, so a remote agent can bring in code and version its work: ' +
-    'status, diff, log, show, branch, switch, merge, stash, add, commit, ' +
-    'init, push, tag, config, clone, pull, fetch, worktree. **clone** is the fast way ' +
-    'to get a whole repo onto ' +
-    'the server (URL in "message", destination directory in "repo", jailed ' +
-    'to the workspace roots) - far better than recreating files one by one. ' +
-    '**worktree** puts ANOTHER version of the repo next to it (args=add, ' +
-    'path=<a new folder inside your roots>, ref=<tag|branch|commit>) to build ' +
-    'and test it and compare - how you check an old release from a remote ' +
-    'machine without touching anybody''s working tree; args=list shows them ' +
-    'and args=remove takes one away (it is yours to clean up). ' +
-    'commit/tag messages and config values also travel in "message"; push/' +
-    'pull use the credentials and remotes stored on the server. No arbitrary ' +
-    'git commands, no shell.';
+  FDescription := SD_WS_GIT;
 end;
 
 { Los argumentos LIBRES del usuario, recompuestos desde el argv que valida la
@@ -1170,15 +1139,7 @@ constructor TDelphiInstallsTool.Create;
 begin
   inherited;
   FName := 'delphi_installs';
-  FDescription := 'List EVERY RAD Studio / Delphi installation discovered on ' +
-    'this machine (a machine may host several versions side by side): ' +
-    'version, root directory, whether it ships DelphiLSP.exe (semantic ' +
-    'engine) and rsvars.bat (msbuild), plus the name, personality, edition ' +
-    'and build each one states about itself ("RAD Studio 13", "Delphi 13", ' +
-    '"Enterprise", "37.0.59082.6021"). Also reports which one is ACTIVE for ' +
-    'the LSP tools: the one the workspace asks for with DelphiVersion= when ' +
-    'it is installed ("requested" / "requestedNote" say so), otherwise the ' +
-    'newest with DelphiLSP. Read-only, no parameters.';
+  FDescription := SD_WS_INSTALLS;
 end;
 
 function TDelphiInstallsTool.ExecuteWithParams(const Params: TDelphiInstallsParams): string;
@@ -1503,14 +1464,7 @@ constructor TDelphiProjectsTool.Create;
 begin
   inherited;
   FName := 'delphi_projects';
-  FDescription := 'Locate Delphi projects (.dproj/.groupproj) under a ' +
-    'directory - or under the workspace roots configured in settings.ini ' +
-    '[Workspace.<name>] Roots when root is empty. Optional name filter. ' +
-    'Use this ' +
-    'to answer "open project X" without knowing the disk layout. Answers in ' +
-    'PAGES (maxresults, default 50; offset + nextOffset to walk them): a ' +
-    'work machine holds thousands of .dproj and the whole list does not fit ' +
-    'in one answer.';
+  FDescription := SD_WS_PROJECTS;
 end;
 
 { The git repository a path belongs to (the folder holding .git), '' when
@@ -1906,17 +1860,7 @@ constructor TDelphiUploadTool.Create;
 begin
   inherited;
   FName := 'delphi_upload';
-  FDescription := 'Upload a file TO the server in base64 chunks - the mirror ' +
-    'of delphi_fetch, for material you cannot recreate by editing: binaries ' +
-    '(.res, icons, images), binary designer files, archives, reference ' +
-    'material. Send chunks in order: offset=0 creates/truncates, later ' +
-    'offsets append and must match the current size. Pass sha256 on the LAST ' +
-    'chunk to have the server verify the assembled file, and chunkSha256 on ' +
-    'ANY chunk to have that chunk checked BEFORE it is written. Jailed to the ' +
-    'workspace roots; parent directories are created. A fresh upload over an ' +
-    'existing file backs the old one up to the recoverable trash first. For ' +
-    'SOURCE CODE prefer delphi_edit / delphi_textedit (they audit encoding and ' +
-    'keep backups).';
+  FDescription := SD_WS_UPLOAD;
 end;
 
 function TDelphiUploadTool.ExecuteWithParams(const Params: TDelphiUploadParams): string;
@@ -2107,10 +2051,7 @@ constructor TDelphiPackageTool.Create;
 begin
   inherited;
   FName := 'delphi_package';
-  FDescription := 'Zip a build-output directory ON the server into a single ' +
-    'deploy artifact (recursive, *.dcu intermediates excluded), ready to ' +
-    'download with ONE delphi_fetch. The standard way to bring a GUI app to ' +
-    'the client machine: delphi_build -> delphi_package -> delphi_fetch.';
+  FDescription := SD_WS_PACKAGE;
 end;
 
 function TDelphiPackageTool.ExecuteWithParams(const Params: TDelphiPackageParams): string;

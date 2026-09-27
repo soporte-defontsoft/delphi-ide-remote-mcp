@@ -21,13 +21,13 @@ type
     FFromLine: Integer;
     FToLine: Integer;
   public
-    [SchemaDescription('Absolute path of the Delphi file (.pas/.dpr/.dpk/.inc/.dfm/.fmx)')]
+    [SchemaDescription(SP_EDIT_PATH)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
-    [SchemaDescription('First line to show, 1-based (0 = from the start)')]
+    [SchemaDescription(SP_EDIT_FROMLINE)]
     property FromLine: Integer read FFromLine write FFromLine;
-    [SchemaDescription('Last line to show, 1-based (0 = to the end; capped at 400 lines per call)')]
+    [SchemaDescription(SP_EDIT_TOLINE)]
     property ToLine: Integer read FToLine write FToLine;
   end;
 
@@ -55,15 +55,15 @@ type
     FSection: string;
     FRemoveUses: string;
   public
-    [SchemaDescription('Absolute path of the Delphi file')]
+    [SchemaDescription(SP_EDIT_PATH_2)]
     [Required]
     [RutaDelServidor]
     property Path: string read FPath write FPath;
-    [SchemaDescription('EDIT mode: the exact line to replace - ONE full line copied literally from delphi_read (everything after the | bar). Leading indentation may be omitted')]
+    [SchemaDescription(SP_EDIT_OLD)]
     property Old: string read FOld write FOld;
     [SchemaDescription('EDIT mode: the new text; may be several lines (to insert code, anchor on an existing line and return it inside new together with the added code)' + SP_NEW_SALTO_FINAL)]
     property New: string read FNew write FNew;
-    [SchemaDescription('EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence (the rejection lists the valid numbers)')]
+    [SchemaDescription(SP_EDIT_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;
     [SchemaDescription(SP_PATCH_TOLINE)]
     property ToLine: Integer read FToLine write FToLine;
@@ -71,33 +71,33 @@ type
     property Edits: string read FEdits write FEdits;
     [SchemaDescription(SP_PATCH_FRAGMENT)]
     property Fragment: string read FFragment write FFragment;
-    [SchemaDescription('DELETE mode: true = remove the "old" anchored line ENTIRELY (old+new="" only blanks it). No "new" here')]
+    [SchemaDescription(SP_EDIT_DELETE)]
     property Delete: Boolean read FDelete write FDelete;
-    [SchemaDescription('INSERT mode (preferred for NEW routines/methods): "rutina-global" or "metodo". The tool places the block at the legal boundary (in a .dpr: between uses and the main begin; in a unit: before the final end./initialization); with "metodo" it also writes the class declaration. Pass code, not old/new')]
+    [SchemaDescription(SP_EDIT_INSERT)]
     property Insert: string read FInsert write FInsert;
-    [SchemaDescription('INSERT mode: the COMPLETE block (unqualified signature + begin..end;). NEVER include end.')]
+    [SchemaDescription(SP_EDIT_CODE)]
     property Code: string read FCode write FCode;
-    [SchemaDescription('INSERT "metodo": exact class name (e.g. TFichaPedidos)')]
+    [SchemaDescription(SP_EDIT_INCLASS)]
     property InClass: string read FInClass write FInClass;
-    [SchemaDescription('INSERT "metodo" optional: section for the declaration (private/protected/public/published); empty = end of class. "published" works on form classes even without an explicit keyword: the declaration lands in the implicit published section right after the class header - the place for event handlers')]
+    [SchemaDescription(SP_EDIT_VISIBILITY)]
     property Visibility: string read FVisibility write FVisibility;
-    [SchemaDescription('INSERT "rutina-global" optional: true = also declare it in the interface section (visible outside the unit)')]
+    [SchemaDescription(SP_EDIT_VISIBLE)]
     property Visible: Boolean read FVisible write FVisible;
-    [SchemaDescription('CREATE mode: true = create the .pas (never overwrites). Then register it in the .dpr uses clause')]
+    [SchemaDescription(SP_EDIT_CREATEUNIT)]
     property CreateUnit: Boolean read FCreateUnit write FCreateUnit;
-    [SchemaDescription('CREATE mode: the COMPLETE file content in one call (empty = standard IDE skeleton). Use this when you already know the whole unit: one call instead of create + N patches')]
+    [SchemaDescription(SP_EDIT_CONTENT)]
     property Content: string read FContent write FContent;
-    [SchemaDescription('CREATE mode: line endings, "crlf" (default, Delphi standard) or "lf"')]
+    [SchemaDescription(SP_EDIT_EOL)]
     property Eol: string read FEol write FEol;
-    [SchemaDescription('RESTORE mode: true = restore the file from this tool''s backup. First call shows what would be LOST; repeat with confirm=true to execute')]
+    [SchemaDescription(SP_EDIT_RESTORE)]
     property Restore: Boolean read FRestore write FRestore;
-    [SchemaDescription('Only with restore: execute after having seen the losses')]
+    [SchemaDescription(SP_EDIT_CONFIRM)]
     property Confirm: Boolean read FConfirm write FConfirm;
-    [SchemaDescription('ADDUSES mode: unit names to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCliente). The engine writes the commas and the terminator, creates the clause under the section keyword when there is none, and skips the names already there, in this section or in the other one (idempotent; a unit cannot be in both, E2004). For a .dpr/.dpk use delphi_config add-unit instead')]
+    [SchemaDescription(SP_EDIT_ADDUSES)]
     property AddUses: string read FAddUses write FAddUses;
-    [SchemaDescription('ADDUSES mode: "interface" or "implementation" (default implementation: a new unit goes there unless one of its types is used in the interface)')]
+    [SchemaDescription(SP_EDIT_SECTION)]
     property Section: string read FSection write FSection;
-    [SchemaDescription('REMOVEUSES mode: unit names to take out of the uses clause of "section", separated by ; - the inverse of adduses. A directive around the entry stays glued to its neighbour, and the clause goes whole when it empties. Names not there are reported, not an error. For a .dpr/.dpk use delphi_config remove-unit')]
+    [SchemaDescription(SP_EDIT_REMOVEUSES)]
     property RemoveUses: string read FRemoveUses write FRemoveUses;
   end;
 
@@ -131,12 +131,7 @@ constructor TDelphiReadTool.Create;
 begin
   inherited;
   FName := 'delphi_read';
-  FDescription := 'Read a Delphi source file DECODED CORRECTLY (CP1252 / ' +
-    'UTF-8 with or without BOM / UTF-16 detected for real). Returns numbered lines in ' +
-    'the format number|content - to build a delphi_edit anchor, copy ' +
-    'everything after the bar, exactly. ALWAYS use this instead of a generic ' +
-    'read for Delphi files: generic reads turn CP1252 accents into U+FFFD ' +
-    'and poison every anchor built from them.';
+  FDescription := SD_EDIT_READ;
 end;
 
 function TDelphiReadTool.ExecuteWithParams(const Params: TDelphiReadParams): string;
@@ -150,30 +145,7 @@ constructor TDelphiPatchTool.Create;
 begin
   inherited;
   FName := 'delphi_edit';
-  FDescription := 'SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus ' +
-    'text .dfm/.fmx) preserving the real encoding and line endings. Modes: ' +
-    'EDIT (old = ONE full line copied from delphi_read + new; for a LONG ' +
-    'line, fragment + atline + new changes just a piece of it), DELETE ' +
-    '(delete=true + old: removes the line entirely), INSERT ' +
-    '(insert="rutina-global"|"metodo" + code: the tool picks the legal spot ' +
-    '- also inside a .dpr - and, for methods, writes BOTH halves: ' +
-    'declaration and qualified implementation), CREATE (createunit=true; ' +
-    'new files honour the encoding configured in the IDE) and RESTORE ' +
-    '(restore=true, two-step), ADDUSES (adduses="UnitA;UnitB" + ' +
-    'section=interface|implementation: the units land in that section''s ' +
-    'uses clause, commas and terminator written by the engine, the clause ' +
-    'created under the section keyword when there is none, names already ' +
-    'there skipped) and REMOVEUSES (removeuses="UnitA", the inverse: the ' +
-    'clause goes whole when it empties; a .dpr/.dpk goes through ' +
-    'delphi_config add-unit / remove-unit). It ' +
-    'refuses to rewrite whole files, refuses ' +
-    'binary designer files (TPF0), makes automatic backups, writes ' +
-    'atomically, and audits the result (encoding, EOLs, mojibake, end. ' +
-    'structure, and a brace comment with another brace inside: Pascal does ' +
-    'not nest them, the first closing brace ends it - WARNED, never refused, ' +
-    'in a batch too) reporting the REAL lines read back from disk - use that as ' +
-    'evidence. Never edit Delphi files with generic tools: CP1252 sources ' +
-    'get destroyed.';
+  FDescription := SD_EDIT_PATCH;
 end;
 
 // Several anchored edits on ONE file, in one call, all or nothing.

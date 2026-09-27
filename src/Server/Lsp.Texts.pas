@@ -5547,6 +5547,893 @@ const
   SN_COMPONENTS_DESIGN_PACKAGES_FMT =
     '%d design packages en RAD Studio %s%s%s: [COMP-007]';
 
+  // Descripciones que estaban en linea en Mcp.Tools.Config.pas (paso 3d, 27-sep-2026)
+  SP_CFG_PROJECT =
+    'Absolute path of the project .dproj (its .dpr/.dpk resolves to it). ' +
+    'A .groupproj (a project group) takes view, add-project, ' +
+    'remove-project and fix-references; every other command is refused';
+
+  SP_CFG_COMMAND =
+    'view (default: project summary; section= brings the detail per ' +
+    'area) | add-platform (enable a platform) | remove-platform (disable ' +
+    'it again) | set-output (put every binary under one folder, e.g. ' +
+    'Compiled) | set-version (the project VERSION: the Windows ' +
+    'VERSIONINFO numbers and the FileVersion/ProductVersion keys, which ' +
+    'have to agree) | set-sdk (the SDK this project builds a remote ' +
+    'platform with, by name; "none" goes back to the SDK Manager ' +
+    'default) | set-profile (the PAServer profile it deploys and runs ' +
+    'that platform with; "none" falls back to the platform''s active ' +
+    'profile) | add-searchpath (add a unit search path for one platform, ' +
+    'or for all) | remove-searchpath (take it out again) | ' +
+    'add-deployfile (ship an extra file with the build on one platform: ' +
+    'a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it ' +
+    'out again) | add-unit (register an existing .pas in the project: ' +
+    'uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) ' +
+    '| remove-unit (take it out of the project; the file stays on disk) ' +
+    '| add-requires (packages only: add package names to the requires ' +
+    'clause of the .dpk - what the IDE offers after a build reports ' +
+    'W1033, and what delphi_build lists in requiresSuggested) | ' +
+    'fix-references (re-point what the project - or a .groupproj - lists ' +
+    'and is no longer where it says, moved by hand: the file is found ' +
+    'again by its name inside the workspace; one match is re-pointed, ' +
+    'none or several are reported, never guessed) | add-project / ' +
+    'remove-project (on a .groupproj, path = the .dproj: what the IDE''s ' +
+    'Add existing project writes - the <Projects> item, its three ' +
+    'targets and its name in Build/Clean/Make - or takes out)';
+
+  SP_CFG_PLATFORM =
+    'add/remove-platform: the platform, from the fixed set ' +
+    'Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android' +
+    '64|iOSDevice64|iOSSimARM64 (anything else is refused). ' +
+    'add/remove-searchpath: the platform whose search path changes; ' +
+    'empty = the base group (every platform). add/remove-deployfile: the ' +
+    'platform the file ships on (required)';
+
+  SP_CFG_OUTPUT =
+    'set-output: the output folder for binaries, a simple relative name ' +
+    'like Compiled (default). The .exe goes to ' +
+    '<folder>\$(Platform)\$(Config) and .dcu to ' +
+    '<folder>\Dcu\$(Platform)\$(Config). Use "default" to restore the ' +
+    'RAD Studio layout. No absolute paths, no "..".';
+
+  SP_CFG_REQUIRES =
+    'add-requires: the package names to add to the requires clause of ' +
+    'the .dpk, separated by ; (vcl;dbrtl) - take them from ' +
+    'requiresSuggested of the delphi_build answer. Names already there ' +
+    'are kept, not repeated';
+
+  SD_CFG_CONFIG =
+    'See and manage a project''s build configurations and target ' +
+    'PLATFORMS. command=view (read-only) reports the framework (VCL is ' +
+    'Windows-only; FMX and console cross platforms), the build ' +
+    'configurations (Debug/Release/custom) and every platform with ' +
+    'whether it is enabled, whether THIS project can target it, and ' +
+    'whether it needs a remote PAServer profile. command=add-platform ' +
+    'enables a platform in the .dproj (a curated edit of the <Platforms> ' +
+    'block only); remove-platform disables it again. command=set-version ' +
+    'writes the project VERSION where it has to agree with itself: the ' +
+    'Windows VERSIONINFO numbers AND the FileVersion/ProductVersion ' +
+    'keys, which is exactly what drifts when a release is cut by hand (a ' +
+    '-beta suffix is accepted and ignored, and Android/iOS numbering is ' +
+    'not touched). On a .groupproj (a project group): view lists its ' +
+    'projects, and add-project / remove-project (path = the .dproj) ' +
+    'write what the IDE''s Add existing project writes. ' +
+    'command=fix-references, on a project or a group, re-points what is ' +
+    'no longer where it says (moved by hand), finding it by its name in ' +
+    'the workspace - one match only, never a guess. command=set-output ' +
+    'puts every binary under one folder (output=Compiled by default): a ' +
+    'curated edit that sets DCC_ExeOutput/DCC_DcuOutput, keeping the ' +
+    'per-platform/config subfolders. command=add-searchpath adds a unit ' +
+    'search path (where the compiler looks for .pas/.dcu, e.g. the ' +
+    'Source folder of an installed component) to ONE platform - the ' +
+    'IDE''s Project Options > Search path - creating the platform''s ' +
+    'property groups exactly as the IDE would; a platform added to a ' +
+    'project inherits NO search paths from the others, which is the ' +
+    'usual reason a unit is "not found" on the new platform only. ' +
+    'remove-searchpath takes it out again. command=add-deployfile ships ' +
+    'an extra file with the build on ONE platform - the IDE''s Deployment ' +
+    'Manager: the native library a component loads at runtime ' +
+    '(.so/.dylib/.dll), data files - written into the .deployproj as the ' +
+    'IDE does (Debug and Release), generating the standard manifest ' +
+    'first if the project has none; remove-deployfile takes it out ' +
+    'again. command=add-unit / remove-unit is the IDE''s Add to project / ' +
+    'Remove from project for an EXISTING .pas (uses of the .dpr, ' +
+    'CreateForm for forms, DCCReference of the .dproj); the file stays ' +
+    'on disk. To BUILD a specific combination use delphi_build with ' +
+    'platform+config.';
+
+  // Descripciones que estaban en linea en Mcp.Tools.DelphiExtra.pas (paso 3d, 27-sep-2026)
+  SP_BUILD_PATH =
+    'Absolute path of the Delphi source file to lint (.pas/.dpr)';
+
+  SP_BUILD_PATH_2 =
+    'Absolute path of the Delphi source file';
+
+  SP_BUILD_LINE =
+    'Zero-based line of the identifier to find references for';
+
+  SP_BUILD_CHARACTER =
+    'Zero-based character inside the identifier';
+
+  SP_BUILD_PROJECT =
+    'Absolute path of the .dproj to build';
+
+  SP_BUILD_PLATFORM =
+    'Target platform (default Win32): Win32/Win64 build natively here. ' +
+    'Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform ' +
+    'enabled in the project (delphi_config) and their SDK pulled once ' +
+    '(delphi_paserver get-sdk). Building is LOCAL against that SDK and ' +
+    'does NOT use profile - a PAServer profile is only needed for ' +
+    'target=Deploy';
+
+  SP_BUILD_CONFIG =
+    'Debug or Release (default Debug)';
+
+  SP_BUILD_TARGET =
+    'Build (full, default), Make (incremental), Clean, or Deploy (always ' +
+    'builds first, then deploys: to the PAServer of "profile" for ' +
+    'Linux/macOS, or packages the app for Android). After switching ' +
+    'platforms use Build';
+
+  SP_BUILD_PROFILE =
+    'Connection profile name for target=Deploy on a PAServer platform ' +
+    '(see delphi_paserver command=profiles). The deployed files land on ' +
+    'the target under its PAServer scratch dir, in <profile>/<project ' +
+    'name>/';
+
+  SP_BUILD_SDK =
+    'Which platform SDK to link against, by name (delphi_paserver ' +
+    'command=profiles lists them with their glibc). One SDK = one ' +
+    'folder, the same model as the Android SDKs. Omit it and the project ' +
+    'decides (its own PlatformSDK), or the only one there is; with ' +
+    'several and no hint the build is refused instead of guessing';
+
+  SP_BUILD_DEVICEID =
+    'Android device serial for target=Deploy on Android platforms (see ' +
+    'delphi_adb command=devices; attach one over wifi with ' +
+    'command=connect)';
+
+  SD_BUILD_DIAGNOSTICS =
+    'Compiler-grade errors/warnings/hints for one Delphi source file ' +
+    '(Error Insight via the official DelphiLSP linter), WITHOUT ' +
+    'building. Real compiler codes (E2003, W1000, H2164...) with exact ' +
+    '0-based positions (range) and line1, the 1-based line delphi_read ' +
+    'shows. Severity is the LSP scale: 1=error, 2=warning, ' +
+    '3=information, 4=hint. The description used to stop at "3=hint", so ' +
+    'a diagnostic arriving as 4 had no meaning to read it by; the ' +
+    '"hints" counter groups 3 and 4 together, and the per-diagnostic ' +
+    'severity tells them apart. Lints the CURRENT on-disk content. A big ' +
+    'unit can take over a minute the first time: the answer then says ' +
+    'the lint is in progress - call again with the same file and the ' +
+    'result is returned (the lint is not restarted while the file is ' +
+    'unchanged).';
+
+  SD_BUILD_REFERENCES =
+    'Find references to the identifier at a 0-based line:character ' +
+    'position. Hybrid method (DelphiLSP has no native references): ' +
+    'project-wide text scan, then every candidate is validated by asking ' +
+    'the compiler engine for its definition - only candidates resolving ' +
+    'to the SAME symbol are confirmed, homonyms are rejected. A name ' +
+    'written in a COMMENT or inside a string literal is not a reference ' +
+    'and does not count as unverified: those go to "mentions", listed ' +
+    'but harmless - they used to block delphi_rename_symbol, which ' +
+    'refuses on a single unverified candidate. Bounded work: leftovers ' +
+    'are listed as unverified, never silently dropped.';
+
+  SD_BUILD_BUILD =
+    'Build a Delphi project for real with MSBuild on this machine. How ' +
+    'much comes back is yours to choose with "verbosity": quiet ' +
+    '(DEFAULT) = errors and the summary, a few lines, which is what a ' +
+    '"does it still compile" build needs; normal = warnings too; verbose ' +
+    '= everything. It sets the msbuild verbosity as well, so quiet ' +
+    'really asks for less. Rsvars is located via the registry; the ' +
+    'answer carries the success flag, the compiler errors/warnings, the ' +
+    'output tail and which Delphi built. Use this as the closing ' +
+    'verification after editing - the linter does not link nor produce ' +
+    'binaries. Compile-only: a project that would EXECUTE a shell during ' +
+    'build (a custom <Target>/<Exec>, a foreign <Import>) is refused ' +
+    'unless the workspace declares AllowBuildScripts=1; its pre/post ' +
+    'build EVENTS (signing, copies) are skipped instead, and ' +
+    'buildEventsSkipped says so - the binary is for working and testing, ' +
+    'the final one is built where the events run. For a package (.dpk) ' +
+    'the answer adds implicitImports (units of OTHER packages it ' +
+    'compiled into itself, W1033) and requiresSuggested (their packages, ' +
+    'read from the BPLs of this install - or, for a unit of a .dpk of ' +
+    'your own workspace, that package, with requiresWorkspaceNote ' +
+    'telling you to build it first), the list delphi_config add-requires ' +
+    'takes; a unit dcc cannot find at all is F2613 and comes back in ' +
+    'missingUnits instead.';
+
+  // Descripciones que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3d, 27-sep-2026)
+  SP_LSP_LINE =
+    'Zero-based line number of the identifier';
+
+  SP_LSP_CHARACTER =
+    'Zero-based character (column) inside the identifier';
+
+  SP_LSP_TRIGGER =
+    'Optional trigger character, e.g. "." (empty = manual invocation)';
+
+  SP_LSP_KIND =
+    'Optional: definition (default) | declaration (jump to the interface ' +
+    'declaration) | implementation (jump to the method body)';
+
+  SD_LSP_SYMBOLS =
+    'Document symbol tree of a Delphi unit (classes, methods, ' +
+    'properties, sections) with 0-based ranges, straight from the ' +
+    'official DelphiLSP engine. Works even without project settings. Big ' +
+    'trees come back as a compact summary by default (mode/filter ' +
+    'control it); a FOLDER answers with the interface digest of every ' +
+    'unit inside. The engine parses as the COMPILER would for Windows: ' +
+    'code inside an inactive {$IFDEF} (LINUX, ANDROID, MACOS...) is not ' +
+    'in the tree, and nothing says so - for those blocks use ' +
+    'delphi_search or delphi_read.';
+
+  SD_LSP_DEFINITION =
+    'Resolve the identifier at a 0-based line:character position in a ' +
+    'Delphi source file, using the official DelphiLSP engine ' +
+    '(compiler-grade, cross-unit, including RTL/VCL sources). Point ' +
+    'INSIDE the identifier. kind selects the half of the unit (a Delphi ' +
+    'method exists in BOTH): definition (default) = the BODY in the ' +
+    'implementation section; declaration = the interface declaration OF ' +
+    'THE TARGET SYMBOL (on a call site the tool chains ' +
+    'definition->declaration, so you get the callee, never the enclosing ' +
+    'method). (kind=implementation is accepted but DelphiLSP answers it ' +
+    'like declaration - measured.) Requires project settings for full ' +
+    'answers.';
+
+  SD_LSP_SIGNATURE =
+    'Signature help (parameter completion) for the call under a 0-based ' +
+    'line:character position: the routine signatures with their ' +
+    'parameter list, from the official DelphiLSP engine - the IDE''s ' +
+    'Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right ' +
+    'after "(" or a ","). Requires project settings for full answers.';
+
+  SD_LSP_HOVER =
+    'Type/signature information for the identifier at a 0-based ' +
+    'line:character position (official DelphiLSP engine). IMPORTANT: ' +
+    'hover answers on identifier USAGES (call sites, type references); ' +
+    'hovering a declaration itself returns null. Requires project ' +
+    'settings for full answers.';
+
+  SD_LSP_COMPLETION =
+    'Code completion candidates at a 0-based line:character position ' +
+    '(official DelphiLSP engine). Returns at most 50 items ' +
+    '(label/kind/detail) plus the total count.';
+
+  // Descripciones que estaban en linea en Mcp.Tools.DelphiPatch.pas (paso 3d, 27-sep-2026)
+  SP_EDIT_PATH =
+    'Absolute path of the Delphi file (.pas/.dpr/.dpk/.inc/.dfm/.fmx)';
+
+  SP_EDIT_FROMLINE =
+    'First line to show, 1-based (0 = from the start)';
+
+  SP_EDIT_TOLINE =
+    'Last line to show, 1-based (0 = to the end; capped at 400 lines per ' +
+    'call)';
+
+  SP_EDIT_PATH_2 =
+    'Absolute path of the Delphi file';
+
+  SP_EDIT_OLD =
+    'EDIT mode: the exact line to replace - ONE full line copied ' +
+    'literally from delphi_read (everything after the | bar). Leading ' +
+    'indentation may be omitted';
+
+  SP_EDIT_ATLINE =
+    'EDIT mode tie-break when the anchor appears on several lines: ' +
+    '1-based line number of the exact occurrence (the rejection lists ' +
+    'the valid numbers)';
+
+  SP_EDIT_DELETE =
+    'DELETE mode: true = remove the "old" anchored line ENTIRELY ' +
+    '(old+new="" only blanks it). No "new" here';
+
+  SP_EDIT_INSERT =
+    'INSERT mode (preferred for NEW routines/methods): "rutina-global" ' +
+    'or "metodo". The tool places the block at the legal boundary (in a ' +
+    '.dpr: between uses and the main begin; in a unit: before the final ' +
+    'end./initialization); with "metodo" it also writes the class ' +
+    'declaration. Pass code, not old/new';
+
+  SP_EDIT_CODE =
+    'INSERT mode: the COMPLETE block (unqualified signature + ' +
+    'begin..end;). NEVER include end.';
+
+  SP_EDIT_INCLASS =
+    'INSERT "metodo": exact class name (e.g. TFichaPedidos)';
+
+  SP_EDIT_VISIBILITY =
+    'INSERT "metodo" optional: section for the declaration ' +
+    '(private/protected/public/published); empty = end of class. ' +
+    '"published" works on form classes even without an explicit keyword: ' +
+    'the declaration lands in the implicit published section right after ' +
+    'the class header - the place for event handlers';
+
+  SP_EDIT_VISIBLE =
+    'INSERT "rutina-global" optional: true = also declare it in the ' +
+    'interface section (visible outside the unit)';
+
+  SP_EDIT_CREATEUNIT =
+    'CREATE mode: true = create the .pas (never overwrites). Then ' +
+    'register it in the .dpr uses clause';
+
+  SP_EDIT_CONTENT =
+    'CREATE mode: the COMPLETE file content in one call (empty = ' +
+    'standard IDE skeleton). Use this when you already know the whole ' +
+    'unit: one call instead of create + N patches';
+
+  SP_EDIT_EOL =
+    'CREATE mode: line endings, "crlf" (default, Delphi standard) or "lf"';
+
+  SP_EDIT_RESTORE =
+    'RESTORE mode: true = restore the file from this tool''s backup. ' +
+    'First call shows what would be LOST; repeat with confirm=true to ' +
+    'execute';
+
+  SP_EDIT_CONFIRM =
+    'Only with restore: execute after having seen the losses';
+
+  SP_EDIT_ADDUSES =
+    'ADDUSES mode: unit names to add to a uses clause of this .pas, ' +
+    'separated by ; (System.SysUtils;UCliente). The engine writes the ' +
+    'commas and the terminator, creates the clause under the section ' +
+    'keyword when there is none, and skips the names already there, in ' +
+    'this section or in the other one (idempotent; a unit cannot be in ' +
+    'both, E2004). For a .dpr/.dpk use delphi_config add-unit instead';
+
+  SP_EDIT_SECTION =
+    'ADDUSES mode: "interface" or "implementation" (default ' +
+    'implementation: a new unit goes there unless one of its types is ' +
+    'used in the interface)';
+
+  SP_EDIT_REMOVEUSES =
+    'REMOVEUSES mode: unit names to take out of the uses clause of ' +
+    '"section", separated by ; - the inverse of adduses. A directive ' +
+    'around the entry stays glued to its neighbour, and the clause goes ' +
+    'whole when it empties. Names not there are reported, not an error. ' +
+    'For a .dpr/.dpk use delphi_config remove-unit';
+
+  SD_EDIT_READ =
+    'Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or ' +
+    'without BOM / UTF-16 detected for real). Returns numbered lines in ' +
+    'the format number|content - to build a delphi_edit anchor, copy ' +
+    'everything after the bar, exactly. ALWAYS use this instead of a ' +
+    'generic read for Delphi files: generic reads turn CP1252 accents ' +
+    'into U+FFFD and poison every anchor built from them.';
+
+  SD_EDIT_PATCH =
+    'SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text ' +
+    '.dfm/.fmx) preserving the real encoding and line endings. Modes: ' +
+    'EDIT (old = ONE full line copied from delphi_read + new; for a LONG ' +
+    'line, fragment + atline + new changes just a piece of it), DELETE ' +
+    '(delete=true + old: removes the line entirely), INSERT ' +
+    '(insert="rutina-global"|"metodo" + code: the tool picks the legal ' +
+    'spot - also inside a .dpr - and, for methods, writes BOTH halves: ' +
+    'declaration and qualified implementation), CREATE (createunit=true; ' +
+    'new files honour the encoding configured in the IDE) and RESTORE ' +
+    '(restore=true, two-step), ADDUSES (adduses="UnitA;UnitB" + ' +
+    'section=interface|implementation: the units land in that section''s ' +
+    'uses clause, commas and terminator written by the engine, the ' +
+    'clause created under the section keyword when there is none, names ' +
+    'already there skipped) and REMOVEUSES (removeuses="UnitA", the ' +
+    'inverse: the clause goes whole when it empties; a .dpr/.dpk goes ' +
+    'through delphi_config add-unit / remove-unit). It refuses to ' +
+    'rewrite whole files, refuses binary designer files (TPF0), makes ' +
+    'automatic backups, writes atomically, and audits the result ' +
+    '(encoding, EOLs, mojibake, end. structure, and a brace comment with ' +
+    'another brace inside: Pascal does not nest them, the first closing ' +
+    'brace ends it - WARNED, never refused, in a batch too) reporting ' +
+    'the REAL lines read back from disk - use that as evidence. Never ' +
+    'edit Delphi files with generic tools: CP1252 sources get destroyed.';
+
+  // Descripciones que estaban en linea en Mcp.Tools.FileOps.pas (paso 3d, 27-sep-2026)
+  SP_FILE_PATH =
+    'Absolute path of the file or folder to delete (inside the workspace ' +
+    'roots). Moved to a recoverable trash, not hard-deleted';
+
+  SP_FILE_PATH_2 =
+    'Absolute path of the file or folder to move (inside the workspace ' +
+    'roots)';
+
+  SP_FILE_DEST =
+    'Destination absolute path (inside the workspace roots). Parent ' +
+    'folders are created. Renames when the parent is the same';
+
+  SD_FILE_DELETE =
+    'Delete a file or folder inside the workspace. NOT a hard delete: ' +
+    'the target is moved to a recoverable trash ' +
+    '(__delphi-patch\<date>\deleted\ next to it), so a mistake can be ' +
+    'undone. The one exception is the server''s __delphi-temp: nothing is ' +
+    'restored from a temp, so what you delete inside it goes for good ' +
+    '(the temp folder itself is refused: it is every agent''s). Jailed to ' +
+    'the workspace roots, refused in read-only mode. A folder that is or ' +
+    'holds a workspace root, a reference project or a read-only folder ' +
+    'is refused (it would go along). Use it to clean up stray files and ' +
+    'leftovers. Deleting a unit (.pas) also trashes its .dfm/.fmx and ' +
+    'takes it out of every project that lists it - looked for from its ' +
+    'folder UP to the edge of the workspace, however deep the unit sits ' +
+    '(uses, CreateForm, DCCReference). To keep the file but drop it from ' +
+    'a project use delphi_config command=remove-unit.';
+
+  SD_FILE_MOVE =
+    'Move or rename a file or folder inside the workspace, or COPY it ' +
+    'with copy=true. The destination must be inside the workspace roots, ' +
+    'and so must the source of a move; the source of a COPY only has to ' +
+    'be readable (your roots, your ReadOnlyRoots, the library zone): a ' +
+    'copy is how something is brought in from a reference project, its ' +
+    'original untouched. Parent folders of the destination are created. ' +
+    'The source is copied to the recoverable trash first. Jailed, ' +
+    'refused in read-only mode. A FOLDER moves only as a rename on the ' +
+    'same drive, whole or not at all (links inside travel as links); to ' +
+    'another drive, copy=true and then delphi_delete. A folder that is ' +
+    'or holds a root, a reference or a read-only folder is refused. ' +
+    'Moving or renaming a unit (.pas) moves its .dfm/.fmx with it, ' +
+    'rewrites its "unit X;" header on a rename, and re-points every ' +
+    'project that lists it: the .dpr uses and DCCReference, the uses of ' +
+    'every other unit of the project and every qualified UnitOld.X ' +
+    'reference in them - looked for from its folder UP to the edge of ' +
+    'the workspace, however deep the unit sits. Moving a whole FOLDER ' +
+    're-points every unit inside it the same way: reorganise freely, the ' +
+    'projects follow. And every RELATIVE path that crosses the border of ' +
+    'what moved is re-pointed in the same call, once the unit and its ' +
+    'designer are in place: inside what moved, the units from outside ' +
+    'each project lists, the .dproj search/output paths, icon, manifest, ' +
+    '.rc, deployed files and .optset, the {$I}/{$R}/{$L} directives ' +
+    '(only if the file was where the directive says - one found through ' +
+    'the include path is left alone) and the projects and dependencies ' +
+    'of a .groupproj; outside it, in everything this session can write ' +
+    '(a sibling project, an {$I} from another unit, a group and its ' +
+    'dependencies), whatever pointed inside - a project moved one level ' +
+    'deeper still compiles. What it could not re-point is named, for ' +
+    'delphi_config command=fix-references. copy=true is the same door ' +
+    'with a different last step: the source stays, no trash copy is ' +
+    'taken, a copied unit named differently gets its "unit X;" header ' +
+    'rewritten and its .dfm/.fmx copied along, and NO project is made to ' +
+    'list the copy (a new unit nobody lists yet: delphi_config ' +
+    'add-unit); what the copy points to outside IS re-pointed, so it ' +
+    'compiles where it lands. Refused for a folder holding a .dproj/.dpk ' +
+    '- a project never lives in two places; start one from another with ' +
+    'delphi_create.';
+
+  // Descripciones que estaban en linea en Mcp.Tools.Messages.pas (paso 3d, 27-sep-2026)
+  SP_MSGS_COMMAND =
+    'read (default: deliver every pending message in your box, then ' +
+    'DELETE it: a message is read once) | check (titles and dates of ' +
+    'what is pending, nothing consumed)';
+
+  SP_MSGS_AGENT =
+    'Your agent id - the same value you give delphi_report as "agent" ' +
+    '(e.g. dsh, hermes). Omitted: the id your client declared at the ' +
+    'handshake';
+
+  // Descripciones que estaban en linea en Mcp.Tools.Scaffold.pas (paso 3d, 27-sep-2026)
+  SP_CREATE_KIND =
+    'What to create: project-console | project-vcl | project-fmx | ' +
+    'project-package (a runtime package: .dpk + .dproj, requires rtl; ' +
+    'its units go in with kind=unit or add-unit, into the contains ' +
+    'clause; it is built to BPL+DCP in its own folder and never ' +
+    'installed in the IDE) | project-test (a DUnitX console runner plus ' +
+    'its first fixture, green at birth - what delphi_test discovers and ' +
+    'runs; DUnitX ships with RAD Studio) | form-vcl | form-fmx | ' +
+    'frame-vcl | frame-fmx | datamodule | unit (a plain .pas) | include ' +
+    '(a .inc with its content; never registered, used with {$I}). ' +
+    'Everything but projects and includes is registered in the project ' +
+    'given - except a unit with NO project and an ABSOLUTE dir, created ' +
+    'standalone';
+
+  SP_CREATE_DIR =
+    'Projects: ABSOLUTE target directory (created if missing). ' +
+    'Everything else (unit, form, frame, data module): optional ' +
+    'SUBFOLDER of the project, RELATIVE to it and as deep as you like ' +
+    '(Dominio\Modelos\Dto) - created if missing, and the unit is ' +
+    'registered with that relative path. The folder layout is yours to ' +
+    'decide. No absolute paths, no drive, no "..": what you create in a ' +
+    'project hangs from that project. Empty = next to the .dpr. ' +
+    'kind=unit or include WITHOUT project: the ABSOLUTE folder where the ' +
+    'standalone file is created';
+
+  SP_CREATE_NAME =
+    'Projects: project name. Forms, frames, data modules and units: unit ' +
+    'name (e.g. UClientes)';
+
+  SP_CREATE_PROJECT =
+    'Everything but projects: absolute path of the project .dpr, .dpk or ' +
+    '.dproj to register the new unit in (uses of a program, contains of ' +
+    'a package). kind=unit may go without it, with an ABSOLUTE dir: the ' +
+    'unit is created standalone, listed by no project yet (for a uses ' +
+    'split in {$IFDEF} branches, add it to its branch with delphi_edit). ' +
+    'kind=include: optional, and dir is then relative to it';
+
+  SP_CREATE_FORMNAME =
+    'Forms/frames/data modules optional: instance name without the T ' +
+    '(default: Form+unit, Frame+unit, DM+unit)';
+
+  SP_CREATE_CONTENT =
+    'kind=unit optional: the FULL source of the unit. It is written as ' +
+    'it comes (CRLF) and registered in the project in the same call - no ' +
+    'need to create an empty skeleton and then rewrite it. Its `unit X;` ' +
+    'must match "name", and it must end in `end.`. Without this, a ' +
+    'standard empty skeleton is written. kind=include: REQUIRED, the ' +
+    'text of the .inc';
+
+  SD_CREATE_CREATE =
+    'Create a NEW Delphi project (console/VCL/FMX: .dpr + buildable ' +
+    '.dproj + main form; a runtime PACKAGE: .dpk + .dproj, built to ' +
+    'BPL+DCP in its folder, never installed; or a TEST project: a DUnitX ' +
+    'console runner with its first fixture, what delphi_test runs) or a ' +
+    'NEW form, frame or data module (VCL/FMX: .pas + .dfm/.fmx pair, ' +
+    'registered in the .dpr uses - with Application.CreateForm for forms ' +
+    'and data modules - and in the .dproj). IDE-equivalent skeletons, ' +
+    'CRLF, source encoding follows the IDE''s configured default ' +
+    '(UTF-8/ANSI), never overwrites anything. kind=unit creates a plain ' +
+    '.pas and registers it in the project (uses of the .dpr + ' +
+    'DCCReference of the .dproj); forms get their Application.CreateForm ' +
+    'too. An EXISTING .pas joins a project with delphi_config ' +
+    'command=add-unit. kind=unit with NO project and an ABSOLUTE dir ' +
+    'creates it STANDALONE (no project lists it yet); kind=include ' +
+    'creates a .inc with its content. A uses clause split in {$IFDEF} ' +
+    'branches (each ending in its own ";") is never rewritten by ' +
+    'add-unit, remove-unit or a rename - it would land in the wrong ' +
+    'branch: edit the branch with delphi_edit.';
+
+  // Descripciones que estaban en linea en Mcp.Tools.Styles.pas (paso 3d, 27-sep-2026)
+  SP_STYLE_COMMAND =
+    'view (styles of a .style file: StyleName, class, lines) | get (one ' +
+    'style, whole text) | set (one property of a style or of one of its ' +
+    'parts) | clone (a new style copied from an existing one) | delete ' +
+    '(remove a whole style by StyleName; the __delphi-patch copy is the ' +
+    'way back) | lint (duplicated StyleNames, StyleLookup values of the ' +
+    'project''s .fmx that no style defines, design tokens missing in a ' +
+    'theme, .rc entries without file) | build (every text .style of the ' +
+    'folder -> .bin.style, then the .rc -> .res with brcc32)';
+
+  SP_STYLE_PROJECT =
+    'lint: the project .dproj (or a folder) whose .fmx/.pas files are ' +
+    'scanned for StyleLookup. Default: the parent folder of the styles ' +
+    'folder';
+
+  SP_STYLE_STYLE =
+    'get/set/clone: the StyleName of the style (top-level object of the ' +
+    'container), e.g. buttonstyle or cardstyle';
+
+  SP_STYLE_CHILD =
+    'set optional: a part inside the style, by StyleName or object name, ' +
+    'as a path: background or background/text';
+
+  SP_STYLE_PROP =
+    'set: the property, as written in the file: Fill.Color, Size.Height, ' +
+    'Visible, TextSettings.Font.Size...';
+
+  SP_STYLE_VALUE =
+    'set: the value EXACTLY as it appears in a .style file: xFFF6ECDB ' +
+    '(colors AARRGGBB), 44.000000000000000000 (floats), True/False, ' +
+    '''text'' (strings quoted), Center (enums)';
+
+  SP_STYLE_NAME =
+    'clone: the StyleName of the new style';
+
+  SP_STYLE_FILTER =
+    'view optional: substring the StyleName must contain';
+
+  SP_STYLE_DELETE =
+    'set: true = remove the property instead of setting it';
+
+  // Descripciones que estaban en linea en Mcp.Tools.TextEdit.pas (paso 3d, 27-sep-2026)
+  SP_TEXT_PATH =
+    'Absolute path of the text file (.md .txt .html .js .css .sql .py ' +
+    '.bat .ini .json .yml .xml ... any plain text - Delphi files are ' +
+    'refused, use delphi_edit)';
+
+  SP_TEXT_ATLINE =
+    'EDIT mode tie-break when the anchor appears on several lines: ' +
+    '1-based line number of the exact occurrence';
+
+  SP_TEXT_DELETE =
+    'DELETE mode: true = quita ENTERA la linea anclada en "old" (old + ' +
+    'new vacio solo la deja en blanco). Aqui no va "new"';
+
+  SP_TEXT_CREATE_ =
+    'CREATE mode: true = create a NEW file (never overwrites). UTF-8, ' +
+    'parent directories created';
+
+  SP_TEXT_CONTENT =
+    'CREATE mode: the initial content of the new file (may be empty)';
+
+  SP_TEXT_EOL =
+    'CREATE mode: line endings, "crlf" (default) or "lf"';
+
+  SD_TEXT_TEXTEDIT =
+    'SAFE editing of plain-text NON-Delphi files (.md .txt .html .js ' +
+    '.css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, ' +
+    'web assets, tests, scripts, config. Same discipline as delphi_edit ' +
+    '- one-full-line unique anchor (old/new, atline tie-break; for a ' +
+    'LONG line such as a README paragraph, fragment + atline + new ' +
+    'changes just a piece of it), DELETE mode (delete=true + old), ' +
+    'several edits on the SAME file in one all-or-nothing call ("edits", ' +
+    'where an anchor may be ONE line or a contiguous BLOCK), real ' +
+    'encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), line endings ' +
+    'preserved, automatic backup, atomic write - without the Pascal ' +
+    'gates. CREATE mode (create=true + content) for new files, never ' +
+    'overwrites. Whole-file rewrites are refused. Delphi ' +
+    'sources/designers are refused (use delphi_edit) and so are .dproj ' +
+    'and binaries. Read first with delphi_read and copy the anchor ' +
+    'exactly.';
+
+  // Descripciones que estaban en linea en Mcp.Tools.Vault.pas (paso 3d, 27-sep-2026)
+  SP_VAULT_TARGET =
+    'files (buscar por NOMBRE de nota, patron glob como *reunion*.md) | ' +
+    'content (buscar DENTRO de las notas, pattern es una expresion ' +
+    'regular)';
+
+  SP_VAULT_PATTERN =
+    'Glob de nombre si target=files (*.md, *delphi*), o expresion ' +
+    'regular si target=content';
+
+  SP_VAULT_SUBFOLDER =
+    'Opcional: carpeta relativa del vault para acotar la busqueda ' +
+    '(projects, conventions...)';
+
+  SP_VAULT_MAXRESULTS =
+    'Maximo de resultados (defecto 50)';
+
+  SP_VAULT_PATH =
+    'Ruta RELATIVA de la nota dentro del vault (projects/x/context.md). ' +
+    'SIN path devuelve las reglas + el indice: hazlo al empezar';
+
+  SP_VAULT_OFFSET =
+    'Opcional: primera linea a devolver (1 = principio)';
+
+  SP_VAULT_LIMIT =
+    'Opcional: cuantas lineas devolver desde offset';
+
+  SP_VAULT_PATH_2 =
+    'Ruta RELATIVA de la nota (debe existir)';
+
+  SP_VAULT_CONTENT =
+    'Contenido markdown a anadir. En espanol';
+
+  SP_VAULT_ANCHOR =
+    'Opcional: texto UNICO tras el cual insertar. Sin anchor, anade al ' +
+    'final del fichero';
+
+  SP_VAULT_PATH_3 =
+    'Ruta RELATIVA de la nota nueva (debe NO existir; nunca sobreescribe)';
+
+  SP_VAULT_CONTENT_2 =
+    'Contenido markdown completo, con la estructura/plantilla que pida ' +
+    'el vault';
+
+  SP_VAULT_PATH_4 =
+    'Ruta RELATIVA de la nota';
+
+  SP_VAULT_OLD_TEXT =
+    'Texto a sustituir: debe aparecer EXACTAMENTE UNA VEZ en el fichero';
+
+  SP_VAULT_NEW_TEXT =
+    'Texto nuevo que lo sustituye';
+
+  // Descripciones que estaban en linea en Mcp.Tools.Workspace.pas (paso 3d, 27-sep-2026)
+  SP_WS_ROOT =
+    'Directory to search recursively (project root) - or ONE file (a ' +
+    '.dproj, .dpr, .inc, .xml...) to search inside it in a single call';
+
+  SP_WS_QUERY =
+    'Literal text to find (case-insensitive - it is Pascal)';
+
+  SP_WS_MAXRESULTS =
+    'Maximum hits to return PER PAGE (default 100, cap 500 PER PAGE - it ' +
+    'is not a global limit: the offset walk covers the FULL hit list)';
+
+  SP_WS_OFFSET =
+    'Skip the first N matches of the FULL hit list (not of the current ' +
+    'page) - pagination: pass the nextOffset of the previous answer to ' +
+    'get the next page; walking nextOffset until hasMore=false reaches ' +
+    'every hit, however many';
+
+  SP_WS_WHOLEWORD =
+    'true = match whole identifiers only (word boundaries)';
+
+  SP_WS_PATTERN =
+    'Optional file mask to search instead of the Delphi set, e.g. ' +
+    '*.style, *.ini, *.md, *.rc (one mask)';
+
+  SP_WS_ROOT_2 =
+    'Directory to list recursively';
+
+  SP_WS_PATTERN_2 =
+    'Filename mask, e.g. *.pas (default: Delphi source and project files)';
+
+  SP_WS_DIRS =
+    'true = list SUBDIRECTORIES of root (one level, explorer-style) ' +
+    'instead of files';
+
+  SP_WS_INCLUDETRASH =
+    'true = also show the recoverable trash (__delphi-patch, where ' +
+    'delphi_delete moves files) so you can find and restore a deleted ' +
+    'file with delphi_move. Default false (trash hidden).';
+
+  SP_WS_ROOT_3 =
+    'Directory to search under. Empty = the roots configured in ' +
+    'settings.ini [Workspace.<name>] Roots (semicolon-separated)';
+
+  SP_WS_NAME =
+    'Optional name filter (substring, case-insensitive), e.g. ' +
+    '"comunicador"';
+
+  SP_WS_MAXRESULTS_2 =
+    'Maximum projects to return PER PAGE (default 50, cap 300). A work ' +
+    'machine holds thousands of .dproj: the full list does not fit in an ' +
+    'answer';
+
+  SP_WS_OFFSET_2 =
+    'Skip the first N projects of the FULL list - pagination: pass the ' +
+    'nextOffset of the previous answer to get the next page';
+
+  SP_WS_REPO =
+    'Path of the git repository (or any path inside it). For clone: the ' +
+    'DESTINATION directory (created if needed, must be inside the ' +
+    'workspace roots)';
+
+  SP_WS_COMMAND =
+    'One of: status | diff | log | show | branch | switch | merge | ' +
+    'stash | add | commit | init | push | tag | config | clone | pull | ' +
+    'fetch | worktree. switch: args=<branch> (create=true for a new ' +
+    'one). merge: args=<branch>, always --ff-only (a merge needing a ' +
+    'commit is refused, not left half-done). stash: args=push|pop|list ' +
+    '(never drop); push -- <paths> parks ONLY those paths and sets them ' +
+    'back to HEAD - how you discard one file''s changes without losing ' +
+    'them (pop brings them back); its label goes in message. config: ' +
+    'args=user.name|user.email + value in message. clone: URL in ' +
+    'message, destination in repo. worktree: args=list | add (path=<a ' +
+    'NEW folder inside your roots>, ref=<tag|branch|commit>: another ' +
+    'version of the repo next to it, detached, to build and compare) | ' +
+    'remove (path=<one that list shows>; refused with changes or with a ' +
+    'link inside)';
+
+  SP_WS_ARGS =
+    'Optional extra arguments (paths, --staged, a commit hash...). They ' +
+    'are SPLIT ON SPACES into argv, so a path with spaces goes in double ' +
+    'quotes: args="mis notas.txt". There is no shell involved, but shell ' +
+    'metacharacters (; | & ` $ < >) are rejected anyway - if a ' +
+    'legitimate git option needs one (--pretty=format:...), ask for it ' +
+    'with delphi_report instead of trying to smuggle it';
+
+  SP_WS_CREATE =
+    'switch: true = create the branch and move to it (git switch -c). ' +
+    'Ignored by every other command';
+
+  SP_WS_MESSAGE =
+    'commit: the commit message. tag: makes the tag annotated. config: ' +
+    'the value. clone: the repository URL';
+
+  SP_WS_PATH =
+    'worktree add: a NEW folder inside your roots for the second working ' +
+    'copy (like the destination of a clone). worktree remove: a folder ' +
+    'that command=worktree args=list shows';
+
+  SP_WS_REF =
+    'worktree add: the tag, branch or commit to put there, detached - a ' +
+    'version to build and compare, not a place to work (v1.3.2, main, ' +
+    'HEAD~3, a commit hash)';
+
+  SP_WS_PATH_2 =
+    'Absolute path of the file to download from the server';
+
+  SP_WS_OFFSET_3 =
+    'Byte offset to start from (0 = beginning). Loop increasing it until ' +
+    'eof=true and reassemble';
+
+  SP_WS_PATH_3 =
+    'Absolute path of the file to write ON the server (inside the ' +
+    'workspace roots)';
+
+  SP_WS_CHUNKBASE64 =
+    'One chunk of the file, base64-encoded. offset=0 truncates/creates; ' +
+    'later offsets append';
+
+  SP_WS_OFFSET_4 =
+    'Byte offset this chunk starts at (0 = beginning). Send chunks in ' +
+    'order, increasing offset by the bytes written';
+
+  SP_WS_SHA256 =
+    'Optional: on the LAST chunk, the whole-file SHA-256; the server ' +
+    'verifies the assembled file and reports verified true/false';
+
+  SP_WS_CHUNKSHA256 =
+    'Optional: the SHA-256 of THIS chunk (of its decoded bytes). ' +
+    'Verified BEFORE the chunk is written, so a slip in transit is ' +
+    'caught at the chunk that carried it, with nothing on disk';
+
+  SP_WS_DIR =
+    'Directory to package (e.g. the build output Win64\Debug). ' +
+    'Recursive; *.dcu and dcu\ intermediates excluded';
+
+  SP_WS_OUTFILE =
+    'Optional zip path (default: sibling of dir, named ' +
+    '<dirname>-deploy.zip). Must be inside the workspace roots';
+
+  SD_WS_SEARCH =
+    'Search Delphi sources recursively for a literal text ' +
+    '(case-insensitive), skipping IDE artifacts BELOW the root ' +
+    '(__history, Win32/Win64, dcu, .git, the server''s __delphi-temp...): ' +
+    'naming such a folder as root searches inside it, and when files are ' +
+    'skipped the result says how many and why ("hidden" + "note"). Files ' +
+    'are decoded with their real encoding, so accented text matches ' +
+    'correctly. Returns path, 1-based line and the line text (same ' +
+    'numbering as delphi_read).';
+
+  SD_WS_LIST =
+    'List Delphi files under a directory recursively (sources and ' +
+    'project files by default, or a custom mask), skipping IDE artifacts ' +
+    'BELOW the root: naming a build-output folder ' +
+    '(Win32/Win64/Debug/Release...) as root lists inside it, and when ' +
+    'entries are hidden the result says how many. Returns path, size and ' +
+    'last-write time. Capped at 500 entries. With dirs=true it lists the ' +
+    'SUBDIRECTORIES of root instead (one level, explorer-style) - use ' +
+    'that to browse the machine and decide where to create or look for ' +
+    'projects. With includeTrash=true it also shows the recoverable ' +
+    'trash (__delphi-patch) so you can find a file deleted by ' +
+    'delphi_delete and restore it with delphi_move.';
+
+  SD_WS_GIT =
+    'Whitelisted git operations on a repository of this machine, so a ' +
+    'remote agent can bring in code and version its work: status, diff, ' +
+    'log, show, branch, switch, merge, stash, add, commit, init, push, ' +
+    'tag, config, clone, pull, fetch, worktree. **clone** is the fast ' +
+    'way to get a whole repo onto the server (URL in "message", ' +
+    'destination directory in "repo", jailed to the workspace roots) - ' +
+    'far better than recreating files one by one. **worktree** puts ' +
+    'ANOTHER version of the repo next to it (args=add, path=<a new ' +
+    'folder inside your roots>, ref=<tag|branch|commit>) to build and ' +
+    'test it and compare - how you check an old release from a remote ' +
+    'machine without touching anybody''s working tree; args=list shows ' +
+    'them and args=remove takes one away (it is yours to clean up). ' +
+    'commit/tag messages and config values also travel in "message"; ' +
+    'push/pull use the credentials and remotes stored on the server. No ' +
+    'arbitrary git commands, no shell.';
+
+  SD_WS_INSTALLS =
+    'List EVERY RAD Studio / Delphi installation discovered on this ' +
+    'machine (a machine may host several versions side by side): ' +
+    'version, root directory, whether it ships DelphiLSP.exe (semantic ' +
+    'engine) and rsvars.bat (msbuild), plus the name, personality, ' +
+    'edition and build each one states about itself ("RAD Studio 13", ' +
+    '"Delphi 13", "Enterprise", "37.0.59082.6021"). Also reports which ' +
+    'one is ACTIVE for the LSP tools: the one the workspace asks for ' +
+    'with DelphiVersion= when it is installed ("requested" / ' +
+    '"requestedNote" say so), otherwise the newest with DelphiLSP. ' +
+    'Read-only, no parameters.';
+
+  SD_WS_PROJECTS =
+    'Locate Delphi projects (.dproj/.groupproj) under a directory - or ' +
+    'under the workspace roots configured in settings.ini ' +
+    '[Workspace.<name>] Roots when root is empty. Optional name filter. ' +
+    'Use this to answer "open project X" without knowing the disk ' +
+    'layout. Answers in PAGES (maxresults, default 50; offset + ' +
+    'nextOffset to walk them): a work machine holds thousands of .dproj ' +
+    'and the whole list does not fit in one answer.';
+
+  SD_WS_UPLOAD =
+    'Upload a file TO the server in base64 chunks - the mirror of ' +
+    'delphi_fetch, for material you cannot recreate by editing: binaries ' +
+    '(.res, icons, images), binary designer files, archives, reference ' +
+    'material. Send chunks in order: offset=0 creates/truncates, later ' +
+    'offsets append and must match the current size. Pass sha256 on the ' +
+    'LAST chunk to have the server verify the assembled file, and ' +
+    'chunkSha256 on ANY chunk to have that chunk checked BEFORE it is ' +
+    'written. Jailed to the workspace roots; parent directories are ' +
+    'created. A fresh upload over an existing file backs the old one up ' +
+    'to the recoverable trash first. For SOURCE CODE prefer delphi_edit ' +
+    '/ delphi_textedit (they audit encoding and keep backups).';
+
+  SD_WS_PACKAGE =
+    'Zip a build-output directory ON the server into a single deploy ' +
+    'artifact (recursive, *.dcu intermediates excluded), ready to ' +
+    'download with ONE delphi_fetch. The standard way to bring a GUI app ' +
+    'to the client machine: delphi_build -> delphi_package -> ' +
+    'delphi_fetch.';
+
   // ---------------------------------------------------------------------
   // Las ETIQUETAS de los mensajes (decision de David, 27-sep-2026)
   // ---------------------------------------------------------------------

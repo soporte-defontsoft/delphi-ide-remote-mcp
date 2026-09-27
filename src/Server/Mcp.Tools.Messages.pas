@@ -20,7 +20,8 @@ interface
 uses
   System.SysUtils,
   MCPServer.Tool.Base,
-  MCPServer.Types;
+  MCPServer.Types,
+  Lsp.Texts;
 
 type
   TDelphiMessagesParams = class
@@ -28,9 +29,9 @@ type
     FCommand: string;
     FAgent: string;
   public
-    [SchemaDescription('read (default: deliver every pending message in your box, then DELETE it: a message is read once) | check (titles and dates of what is pending, nothing consumed)')]
+    [SchemaDescription(SP_MSGS_COMMAND)]
     property Command: string read FCommand write FCommand;
-    [SchemaDescription('Your agent id - the same value you give delphi_report as "agent" (e.g. dsh, hermes). Omitted: the id your client declared at the handshake')]
+    [SchemaDescription(SP_MSGS_AGENT)]
     property Agent: string read FAgent write FAgent;
   end;
 
@@ -63,8 +64,7 @@ uses
   System.Generics.Collections,
   MCPServer.Registration,
   Lsp.Guard,
-  Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
-  Lsp.Texts;
+  Lsp.Patch;   // DecodeSourceBytes: el lector de la casa
 
 const
   MESSAGES_DIR = 'messages';
