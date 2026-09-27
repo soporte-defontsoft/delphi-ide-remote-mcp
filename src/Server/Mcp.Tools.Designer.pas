@@ -231,7 +231,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(APath) then
-    Exit(MsgFmt(SR_DSGN_NO_EXISTE_FMT, [APath]));
+    Exit(MsgFmt(SR_NO_EXISTE_FMT, [APath]));
   if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   // Un binario se lee al vuelo (TStyleDoc lo convierte); solo uno danado
@@ -240,7 +240,7 @@ begin
     ADoc := TStyleDoc.Create(APath);
   except
     on E: Exception do
-      Exit(MsgFmt(SR_DESIGNER_BINARY_FMT, [E.Message]));
+      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, E.Message));
   end;
 end;
 
@@ -321,7 +321,7 @@ begin
     O := FindByName(Doc.Root, AName.Trim);
     if O = nil then
       Exit(MsgFmt(SR_DESIGNER_COMPONENT_FMT, [AName]));
-    Result := Format('%s (%s) lineas %d-%d de %s:'#13#10'%s',
+    Result := MsgFmt(SF_DSGN_BLOQUE_LINEAS_FMT,
       [O.ObjName, O.ClassName_, O.StartLine, O.EndLine,
        TPath.GetFileName(APath), Doc.BlockText(O)]);
   finally
@@ -588,12 +588,10 @@ var
       if not InhUnknown then
       begin
         if (HasW and (W = 0)) or (HasH and (H = 0)) then
-          Zero.Add(Format('%s: %s (linea %d) mide %s x %s: con un lado a cero no ' +
-            'se ve, aunque el form cargue', [Nm, Cls, Kid.StartLine,
+          Zero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [Nm, Cls, Kid.StartLine,
             IfThen(HasW, IntToStr(W), '?'), IfThen(HasH, IntToStr(H), '?')]));
         if (NeedW and not HasW) or (NeedH and not HasH) then
-          Unknown.Add(Format('%s: %s (linea %d) no lleva %s en el .dfm; con ' +
-            'align %s hace falta para saber donde acaba', [Nm, Cls, Kid.StartLine,
+          Unknown.Add(MsgFmt(SF_DSGN_NO_LLEVA_EN_DFM_FMT, [Nm, Cls, Kid.StartLine,
             IfThen(NeedW and not HasW, 'Width', 'Height'), Align]));
       end;
       if W < 0 then W := 0;
@@ -622,8 +620,7 @@ var
         Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := RT + MgnT;
         Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RT + MgnT + H;
         if AKnown and (RT + MgnT + H + MgnB > RB) then
-          NoRoom.Add(Format('%s (linea %d) no cabe entero en "%s": de %d px de ' +
-            'alto solo se ven %d, el resto queda fuera', [Nm, Kid.StartLine,
+          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ALTO_FUERA_FMT, [Nm, Kid.StartLine,
             AWhere, H, Max(0, RB - RT - MgnT)]));
         RT := Min(RB, RT + MgnT + H + MgnB);
       end
@@ -632,8 +629,7 @@ var
         Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := Max(RT, RB - MgnB - H);
         Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RB - MgnB;
         if AKnown and (RB - MgnB - H - MgnT < RT) then
-          NoRoom.Add(Format('%s (linea %d) no cabe entero en "%s": de %d px de ' +
-            'alto solo se ven %d', [Nm, Kid.StartLine, AWhere, H, Max(0, RB - RT - MgnB)]));
+          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ALTO_FMT, [Nm, Kid.StartLine, AWhere, H, Max(0, RB - RT - MgnB)]));
         RB := Max(RT, RB - MgnB - H - MgnT);
       end
       else if SameText(Align, 'alLeft') then
@@ -641,8 +637,7 @@ var
         Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := RT + MgnT;
         Kids[Cnt].X2 := RL + MgnL + W; Kids[Cnt].Y2 := RB - MgnB;
         if AKnown and (RL + MgnL + W + MgnR > RR) then
-          NoRoom.Add(Format('%s (linea %d) no cabe entero en "%s": de %d px de ' +
-            'ancho solo se ven %d', [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL - MgnL)]));
+          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ANCHO_FMT, [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL - MgnL)]));
         RL := Min(RR, RL + MgnL + W + MgnR);
       end
       else if SameText(Align, 'alRight') then
@@ -650,8 +645,7 @@ var
         Kids[Cnt].X1 := Max(RL, RR - MgnR - W); Kids[Cnt].Y1 := RT + MgnT;
         Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RB - MgnB;
         if AKnown and (RR - MgnR - W - MgnL < RL) then
-          NoRoom.Add(Format('%s (linea %d) no cabe entero en "%s": de %d px de ' +
-            'ancho solo se ven %d', [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL - MgnR)]));
+          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ANCHO_FMT, [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL - MgnR)]));
         RR := Max(RL, RR - MgnR - W - MgnL);
       end
       else if SameText(Align, 'alClient') then
@@ -671,8 +665,7 @@ var
         if AKnown and not AScroll and not Managed and not InhUnknown and
            SameText(Align, 'alNone') and
            ((X < 0) or (Y < 0) or (X + W > AClientW) or (Y + H > AClientH)) then
-          Outside.Add(Format('%s: %s (linea %d) ocupa de (%d,%d) a (%d,%d), y ' +
-            '"%s" solo mide %d x %d: se sale y esa parte no se ve', [Nm, Cls,
+          Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [Nm, Cls,
             Kid.StartLine, X, Y, X + W, Y + H, AWhere, AClientW, AClientH]));
       end;
 
@@ -720,13 +713,10 @@ var
                (Kids[K].Y1 < Kids[J].Y2) and (Kids[J].Y1 < Kids[K].Y2) then
             begin
               if Kids[K].Client and Kids[J].Client then
-                Overlap.Add(Format('%s (linea %d) y %s (linea %d) son ambos ' +
-                  'alClient en "%s": la VCL les da el rectangulo ENTERO a los ' +
-                  'dos, asi que se tapan al 100%%', [Kids[K].Nm, Kids[K].Line,
+                Overlap.Add(MsgFmt(SF_DSGN_AMBOS_ALCLIENT_FMT, [Kids[K].Nm, Kids[K].Line,
                   Kids[J].Nm, Kids[J].Line, AWhere]))
               else
-                Overlap.Add(Format('%s (linea %d) y %s (linea %d) se solapan en ' +
-                  '"%s": comparten de (%d,%d) a (%d,%d), uno tapa al otro',
+                Overlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT,
                   [Kids[K].Nm, Kids[K].Line, Kids[J].Nm, Kids[J].Line, AWhere,
                    Max(Kids[K].X1, Kids[J].X1), Max(Kids[K].Y1, Kids[J].Y1),
                    Min(Kids[K].X2, Kids[J].X2), Min(Kids[K].Y2, Kids[J].Y2)]));
@@ -812,8 +802,7 @@ begin
         Ret.AddPair('truncatedNote', MsgText(SN_DESIGNER_LAYOUT_TRUNC));
 
       if (RootW <= 0) or (RootH <= 0) then
-        NoRoom.Add(Format('%s no dice cuanto mide (%d x %d): sin el tamano del ' +
-          'form no puedo situar nada', [Doc.Root.ObjName, RootW, RootH]))
+        NoRoom.Add(MsgFmt(SF_DSGN_NO_DICE_CUANTO_MIDE_FMT, [Doc.Root.ObjName, RootW, RootH]))
       else
         Walk(Doc.Root, RootW, RootH, 0, 0, Doc.Root.ObjName, not Estimated, False);
 
@@ -844,7 +833,7 @@ begin
   if Denied <> '' then
     Exit(Denied);
   if not TFile.Exists(APath) then
-    Exit(MsgFmt(SR_DSGN_NO_EXISTE_FMT, [APath]));
+    Exit(MsgFmt(SR_NO_EXISTE_FMT, [APath]));
   if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   IsFmx := APath.EndsWith('.fmx', True);
@@ -853,7 +842,7 @@ begin
   begin
     EncName := DesignerFileToText(APath, Text);
     if EncName <> '' then
-      Exit(MsgFmt(SR_DESIGNER_BINARY_FMT, [EncName]));
+      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, EncName));
   end
   else
     Text := PatchLoadText(APath, EncName);
@@ -892,7 +881,7 @@ begin
     Exit;
   Ruta := TPath.GetFullPath(APath);
   if not TFile.Exists(Ruta) then
-    Exit(MsgFmt(SR_DSGN_NO_EXISTE_FMT, [Ruta]));
+    Exit(MsgFmt(SR_NO_EXISTE_FMT, [Ruta]));
   if not MatchText(TPath.GetExtension(Ruta), ['.dfm', '.fmx']) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   if SameText(TPath.GetExtension(Ruta), '.fmx') then
@@ -902,10 +891,10 @@ begin
   if AToText then
   begin
     if Forma = dsText then
-      Exit(MsgFmt(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), 'texto']));
+      Exit(MsgFmt(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), MsgText(SF_DSGN_TEXTO)]));
     Err := DesignerBinaryToText(B, Texto);
     if Err <> '' then
-      Exit('RECHAZADO: ' + Err);
+      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
     Copia := BackupFile(Ruta);
     PatchSaveText(Ruta, Texto, 'utf8');
     Result := MsgFmt(SN_DESIGNER_TOTEXT_FMT, [TPath.GetFileName(Ruta), Length(B),
@@ -914,11 +903,11 @@ begin
   else
   begin
     if Forma <> dsText then
-      Exit(MsgFmt(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), 'binario']));
+      Exit(MsgFmt(SN_DESIGNER_ALREADY_FMT, [TPath.GetFileName(Ruta), MsgText(SF_DSGN_BINARIO)]));
     Texto := PatchLoadText(Ruta, Err); // Err recibe el nombre del encoding
     Err := DesignerTextToBinary(Texto, Bin);
     if Err <> '' then
-      Exit('RECHAZADO: ' + Err);
+      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
     Copia := BackupFile(Ruta);
     AtomicWrite(Ruta, Bin);
     Result := MsgFmt(SN_DESIGNER_TOBINARY_FMT, [TPath.GetFileName(Ruta), Length(Bin), Copia]);

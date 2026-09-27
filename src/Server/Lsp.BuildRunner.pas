@@ -1510,11 +1510,10 @@ begin
           // IfThen evalua los DOS brazos: con un linker sin --sysroot (Android)
           // Groups[1] lanzaba "Index out of bounds (1)" y tumbaba la respuesta
           // entera del build con verbosity=normal (medido 2026-09-23, G.23).
-          var Sysroot := '(ninguno)';
+          var Sysroot := MsgText(SF_NINGUNO);
           if MSys.Success then
             Sysroot := MSys.Groups[1].Value;
-          Linea := Format('  Linker command line: --sysroot %s  (+%d rutas -L omitidas: ' +
-            'son 2 KB identicos en cada build)',
+          Linea := MsgFmt(SF_BUILD_LINKER_RESUMIDA_FMT,
             [Sysroot,
              TRegEx.Matches(Linea, '(?:^|\s)-L\s*\S+').Count]);
         end;

@@ -159,8 +159,8 @@ begin
 
   FUrl := Format('http://%s:%d%s',
     [FHost.Settings.Host, FHost.Settings.Port, FHost.Settings.Endpoint]);
-  Caption := 'DelphiLSP MCP Service v' + SERVER_VERSION + ' - ' + FUrl;
-  TrayIcon.Hint := 'DelphiLSP MCP Service v' + SERVER_VERSION + sLineBreak + FUrl;
+  Caption := MsgFmt(SF_SYS_TRAY_CAPTION_FMT, [SERVER_VERSION, FUrl]);
+  TrayIcon.Hint := MsgFmt(SF_SYS_TRAY_HINT_FMT, [SERVER_VERSION, FUrl]);
   // A TTrayIcon with an empty Icon draws NOTHING - not even a default one, so
   // the notification area just showed a blank slot. The application icon is
   // the project's own (Icon_MainIcon), so the tray and the taskbar agree.

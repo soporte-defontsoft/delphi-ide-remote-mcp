@@ -147,8 +147,8 @@ begin
   try
     O := Doc.Resolve(AStyle, AChild, Err);
     if O = nil then
-      Exit('RECHAZADO: ' + Err);
-    Result := Format('%s (%s) lineas %d-%d de %s:'#10'%s',
+      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
+    Result := MsgFmt(SF_STYLE_BLOQUE_LINEAS_FMT,
       [IfThen(O.StyleName <> '', O.StyleName, O.ObjName), O.ClassName_, O.StartLine,
        O.EndLine, TPath.GetFileName(Doc.Path), Doc.BlockText(O)]);
   finally
@@ -200,7 +200,7 @@ begin
   try
     O := Doc.Resolve(AStyle, AChild, Err);
     if O = nil then
-      Exit('RECHAZADO: ' + Err);
+      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
     // StyleName is not a property like the others: writing it RENAMES the
     // style. Done blind it produced two styles with the same name in one
     // file, and after that `delete` silently took the first of the two
@@ -228,7 +228,7 @@ begin
     end;
     Line := Doc.SetProp(O, AProp.Trim, AValue.Trim, WasThere);
     Doc.Save;
-    Result := MsgFmt(SN_STYLES_PROP_SET_FMT, [IfThen(WasThere, 'CAMBIADA', 'ANADIDA'), Line.Trim,
+    Result := MsgFmt(SN_STYLES_PROP_SET_FMT, [IfThen(WasThere, MsgText(SF_STYLE_CAMBIADA), MsgText(SF_STYLE_ANADIDA)), Line.Trim,
       AStyle, IfThen(AChild <> '', '/' + AChild, ''), TPath.GetFileName(Doc.Path)]);
   finally
     Doc.Free;
@@ -352,7 +352,7 @@ begin
             Issue := TJSONObject.Create;
             Issue.AddPair('file', TPath.GetFileName(F));
             Issue.AddPair('style', O.StyleName);
-            Issue.AddPair('lines', Format('%d y %d', [Seen[N], O.StartLine]));
+            Issue.AddPair('lines', MsgFmt(SF_STYLE_LINEAS_Y_FMT, [Seen[N], O.StartLine]));
             Dups.AddElement(Issue);
           end
           else
@@ -697,7 +697,7 @@ begin
       Result := MsgText(SR_STYLE_COMMAND_DEBE_SER);
   except
     on E: Exception do
-      Result := 'ERROR ' + E.ClassName + ': ' + E.Message;
+      Result := MsgEnvuelve(SR_FALLO_INTERNO_FMT, E.Message, [E.ClassName, E.Message]);
   end;
   Result := MaskDriveText('delphi_styles', Result);
 end;

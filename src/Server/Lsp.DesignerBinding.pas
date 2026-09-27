@@ -240,11 +240,11 @@ begin
         if (SkipBelow >= 0) and (Depth > SkipBelow) then
           Continue;
         if Seen.IndexOf(Nm) >= 0 then
-          Dups.Add(Format('%s (linea %d del .dfm) repite un nombre ya usado en este form: al cargarlo salta EComponentError', [Nm, I + 1]))
+          Dups.Add(MsgFmt(SF_DSGN_REPITE_UN_NOMBRE_FMT, [Nm, I + 1]))
         else
           Seen.Add(Nm);
         if Complete and (Fields.IndexOfName(Nm) < 0) then
-          Miss.Add(Format('%s: %s (linea %d del .dfm) no tiene campo publicado en la clase', [Nm, Cl2, I + 1]));
+          Miss.Add(MsgFmt(SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT, [Nm, Cl2, I + 1]));
         if SameText(M.Groups[1].Value, 'inline') then
           SkipBelow := Depth;
         Continue;
@@ -260,7 +260,7 @@ begin
         Continue;
       if TRegEx.IsMatch(L, '^(On[A-Za-z_]\w*)\s*=\s*$') then
       begin
-        Empty.Add(Format('"%s" (linea %d del .dfm) se ha quedado sin valor: el .dfm no es valido y el enlazador lo rechaza sin decirte que linea', [L, I + 1]));
+        Empty.Add(MsgFmt(SF_DSGN_QUEDADO_SIN_VALOR_FMT, [L, I + 1]));
         Continue;
       end;
       M := TRegEx.Match(L, EVENT_LINE_RE);
@@ -273,9 +273,9 @@ begin
         // Declared, but not where the form loader can find it: the one case
         // the compiler and the first version of this tool both waved through.
         if AnyMethods.IndexOf(Handler) >= 0 then
-          NotPub.Add(Format('%s = %s (linea %d del .dfm): %s existe pero NO esta en published; el cargador del form solo ve metodos publicados, asi que esto revienta con EReadError al crear la ventana', [Ev, Handler, I + 1, Handler]))
+          NotPub.Add(MsgFmt(SF_DSGN_NO_ESTA_EN_PUBLISHED_FMT, [Ev, Handler, I + 1, Handler]))
         else if Complete then
-          MissEv.Add(Format('%s = %s (linea %d del .dfm): el metodo %s no esta declarado', [Ev, Handler, I + 1, Handler]));
+          MissEv.Add(MsgFmt(SF_DSGN_METODO_NO_DECLARADO_FMT, [Ev, Handler, I + 1, Handler]));
       end;
     end;
 
@@ -323,7 +323,7 @@ begin
   // Un binario DANADO antes de buscar la unit: "no encuentro la unit" sobre
   // un form ilegible manda a buscar un fichero que nunca fue el problema.
   if IsBinaryDesignerFile(ADfm) and (DesignerFileToText(ADfm, Enc) <> '') then
-    Exit(MsgFmt(SR_DESIGNER_BINARY_FMT, [Enc]));
+    Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Enc));
   if Pas = '' then
     Pas := TPath.ChangeExtension(ADfm, '.pas');
   if not TFile.Exists(Pas) then
@@ -367,7 +367,7 @@ begin
           Res.Add('  ' + Arr.Items[I].Value);
     if O.TryGetValue<TJSONArray>('fieldsWithoutComponent', Arr) then
       for I := 0 to Arr.Count - 1 do
-        Res.Add('  campo publicado sin objeto en el designer: ' + Arr.Items[I].Value);
+        Res.Add(MsgFmt(SF_DSGN_CAMPO_SIN_OBJETO_FMT, [Arr.Items[I].Value]));
     if (Res.Count = 0) and not O.GetValue<Boolean>('ok', True) and
        O.TryGetValue<string>('note', S) then
       Res.Add('  ' + S);

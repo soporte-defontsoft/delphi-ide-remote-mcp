@@ -206,7 +206,7 @@ begin
       // ghosts (measured 2026-08-25). EArgumentException is the deserializer
       // saying the call was wrong, so it goes out as a plain refusal.
       on E: EArgumentException do
-        Result := 'error: ' + E.Message;
+        Result := MsgEnvuelve(SR_ERROR_FMT, E.Message);
       // [local change 2026-09-26] ...and a REFUSAL that travelled as an
       // exception is a refusal too: a check deep inside (the jail in
       // Lsp.Session, "the compiler does not resolve X" in Lsp.References)
@@ -216,10 +216,7 @@ begin
       // [local change 2026-09-27] y un mensaje del catalogo con etiqueta de
       // resultado tambien: dice el mismo lo que es
       on E: Exception do
-        if EsRechazo(E.Message) or (MsgOutcome(E.Message) <> '') then
-          Result := E.Message
-        else
-          Result := MsgFmt(SR_SYS_TOOL_FAILED_FMT, [E.Message]);
+        Result := MsgEnvuelve(SR_SYS_TOOL_FAILED_FMT, E.Message);
     end;
   finally
     Owned.Free;
@@ -414,7 +411,7 @@ var
 begin
   if not ExtractToolNameAndArguments(Params, ToolName, Arguments) then
   begin
-    Result := TValue.From<TJSONObject>(BuildToolCallResponse('Error: Invalid tool parameters'));
+    Result := TValue.From<TJSONObject>(BuildToolCallResponse(MsgText(SR_SYS_INVALID_TOOL_PARAMS)));
     Exit;
   end;
 
@@ -435,7 +432,7 @@ begin
   if FTools.TryGetValue(ToolName, Tool) then
     resultValue := ExecuteTool(Tool, Arguments)
   else
-    ResultValue := TValue.From('Error: Tool not found: ' + ToolName);
+    ResultValue := TValue.From(MsgFmt(SR_SYS_TOOL_NOT_FOUND_FMT, [ToolName]));
 
   // [local change] outbound filter: one place to rewrite textual results.
   if Assigned(ResultFilter) and ResultValue.IsType<string> then

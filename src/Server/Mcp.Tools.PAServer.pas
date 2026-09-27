@@ -146,9 +146,9 @@ begin
     // plain text, so prefer -password for ad-hoc runs (mind `ps` shows it).
     Result := MsgFmt(SN_PAS_LINUX_FETCH_TAR_FMT, [TPath.GetFileName(AFile)])
   else if N.EndsWith('.pkg') then
-    Result := 'macOS: fetch, then open the .pkg to install, and run PAServer (port 64211).'
+    Result := MsgText(SN_PAS_MACOS_FETCH_OPEN_PKG)
   else if N.Contains('arm') then
-    Result := 'Windows on ARM: fetch and run the setup, then start PAServer.'
+    Result := MsgText(SN_PAS_WINARM_FETCH_RUN_SETUP)
   else
     Result := MsgText(SN_PAS_WINDOWS_FETCH_RUN_SETUP);
 end;
@@ -518,7 +518,7 @@ begin
   if not TFile.Exists(Ficha) then
   begin
     if SysrootMezclado(Raiz) then
-      Result.AddPair('warning', 'dos distros dentro del mismo sysroot');
+      Result.AddPair('warning', MsgText(SN_PAS_DOS_DISTROS_MISMO_SYSROOT));
     Exit;
   end;
   O := nil;
@@ -538,7 +538,7 @@ begin
     O.Free;
   end;
   if SysrootMezclado(Raiz) then
-    Result.AddPair('warning', 'dos distros dentro del mismo sysroot');
+    Result.AddPair('warning', MsgText(SN_PAS_DOS_DISTROS_MISMO_SYSROOT));
 end;
 
 function ListProfiles: string;
@@ -664,11 +664,11 @@ begin
         Local := MatchText(Plat, ['Win32', 'Win64', 'Win64x', 'WinARM64EC']);
         Obj.AddPair('buildsLocally', TJSONBool.Create(Local));
         if Local then
-          Obj.AddPair('status', 'ready (native Windows target, no PAServer needed)')
+          Obj.AddPair('status', MsgText(SF_PAS_STATUS_READY_NATIVE))
         else if HasProfileFor(Info.Version, Plat) then
-          Obj.AddPair('status', 'ready (SDK present)')
+          Obj.AddPair('status', MsgText(SF_PAS_STATUS_READY_SDK))
         else
-          Obj.AddPair('status', 'needs a PAServer profile + SDK (see command=packages)');
+          Obj.AddPair('status', MsgText(SF_PAS_STATUS_NEEDS_PROFILE_SDK));
       end;
     end;
     Return.AddPair('note', MsgText(SN_PAS_WINDOWS_PLATFORMS_BUILD_NATIVELY));
@@ -977,7 +977,7 @@ begin
     if SameText(A.Trim, H) or (A.Trim = '*') or (A.Trim = '0.0.0.0') then
       Exit; // '*' / 0.0.0.0: el operador declaro CUALQUIER host
   Result := MsgFmt(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim,
-    IfThen(Allowed <> '', Allowed, '(ninguno)')]);
+    IfThen(Allowed <> '', Allowed, MsgText(SF_NINGUNO))]);
 end;
 
 function TcpProbe(const AHost, APort: string): string;
@@ -1085,7 +1085,7 @@ begin
       Exit(TcpProbe(Params.Host.Trim,
         IfThen(Params.Port.Trim <> '', Params.Port.Trim, '64211')));
     end;
-    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, ['(sin name)']));
+    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [MsgText(SF_PAS_SIN_NAME)]));
   end;
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
@@ -1304,7 +1304,7 @@ var
 begin
   ProfName := Params.Name.Trim;
   if ProfName = '' then
-    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, ['(sin name)']));
+    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [MsgText(SF_PAS_SIN_NAME)]));
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
   ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');
@@ -1386,7 +1386,7 @@ begin
       if ((ExitCode = 0) and (NFiles > 0)) or YaEstaba then
       begin
         if YaEstaba then
-          PullObj.AddPair('status', 'already up to date')
+          PullObj.AddPair('status', MsgText(SF_PAS_PULL_ALREADY_UP_TO_DATE))
         else
           PullObj.AddPair('status', 'ok');
         if Pull.Group = 'gcc' then
@@ -1397,7 +1397,7 @@ begin
       else
         // a distro simply does not have this variant: normal, keep going -
         // the GROUP check below decides whether the pull as a whole worked
-        PullObj.AddPair('status', 'skipped (not on this target)');
+        PullObj.AddPair('status', MsgText(SF_PAS_PULL_SKIPPED_NOT_TARGET));
       Inc(TotalFiles, NFiles);
       Inc(TotalBytes, NBytes);
     end;

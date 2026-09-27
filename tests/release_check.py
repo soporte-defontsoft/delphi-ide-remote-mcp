@@ -55,6 +55,24 @@ exe = os.path.join(REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'Delph
 check('built exe exists', os.path.exists(exe), exe)
 
 
+def newest_source(folder):
+    t = 0.0
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d not in ('Win64', 'Win32', 'Linux64', 'Compiled', '__delphi-patch', '__history')]
+        for f in files:
+            if f.lower().endswith(('.pas', '.dpr', '.inc', '.dproj')):
+                t = max(t, os.path.getmtime(os.path.join(root, f)))
+    return t
+# ...y no mas viejo que sus fuentes: con un build FALLIDO el exe de antes
+# seguia ahi y las 86 baterias salieron en verde probando el codigo de
+# ayer (medido el 27-sep-2026: E2034 en Lsp.Scaffold y la puerta dijo OK).
+if os.path.exists(exe):
+    check('built exe not older than its sources (src/Server, vendor/src)',
+          os.path.getmtime(exe) >= max(newest_source(os.path.join(REPO, 'src', 'Server')),
+                                       newest_source(os.path.join(REPO, 'vendor', 'src'))),
+          'the sources changed after the exe (a failed build?): run BuildGroup.bat quiet build Release')
+
+
 def exe_version(path):
     size = ctypes.windll.version.GetFileVersionInfoSizeW(path, None)
     if not size:
@@ -150,14 +168,6 @@ CONTENT = [
 # binaries of the code it publishes, so a missing one, or one older than
 # the newest source of its project, is a FAIL here - not a stale binary
 # quietly zipped from whatever was on disk.
-def newest_source(folder):
-    t = 0.0
-    for root, dirs, files in os.walk(folder):
-        dirs[:] = [d for d in dirs if d not in ('Win64', 'Win32', 'Linux64', 'Compiled', '__delphi-patch', '__history')]
-        for f in files:
-            if f.lower().endswith(('.pas', '.dpr', '.inc', '.dproj')):
-                t = max(t, os.path.getmtime(os.path.join(root, f)))
-    return t
 for binario, fuente in (('McpDesktopNode', 'DesktopNode'), ('McpDesktopNode.exe', 'DesktopNode'),
                         ('McpRunJob', 'RunJob'), ('McpRunJob.exe', 'RunJob')):
     b = os.path.join(REPO, 'node', binario)

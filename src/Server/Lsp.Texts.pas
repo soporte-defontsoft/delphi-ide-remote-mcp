@@ -2541,9 +2541,9 @@ const
     'un proceso git. Cierra lo que la bloquea y reintenta. (Yo no mato procesos ' +
     'de esta maquina: puede haber alguien trabajando al otro lado.) [FILE-036 INTERNAL]';
 
-  SN_FILE_PARTIAL_FMT =
+  SR_FILE_PARTIAL_FMT =
     'ERROR %s: %s'#10'ATENCION: antes del fallo ya se habian aplicado estos ' +
-    'cambios (copias en __delphi-patch):%s [FILE-005]';
+    'cambios (copias en __delphi-patch):%s [FILE-005 INTERNAL]';
 
   SN_FILE_DESIGNER_TOO_FMT =
     '  designer %s: %s [FILE-006]';
@@ -3317,8 +3317,6 @@ const
   { Un .dfm BINARIO ya se lee al vuelo (Lsp.DesignerBin, la conversion del
     propio IDE); solo uno danado sigue rechazado. Textos del 24-sep-2026,
     tras el reporte de Hermes (un form legacy dejaba ciego al agente). }
-  SR_DESIGNER_BINARY_FMT =
-    'RECHAZADO: %s [DSGN-008 DENIED]';
   SN_DESIGNER_BINARY_VIEW =
     'DFM BINARIO en disco, leido al vuelo como texto (lo que el IDE ensena ' +
     'en "Ver como texto"): lo que ves es fiel. Para EDITARLO pasalo a texto ' +
@@ -4768,6 +4766,9 @@ const
     'RECHAZADO: "%s" esta en una carpeta excluida (backups, .git, ' +
     '.obsidian): no es conocimiento del vault. [VAULT-012 DENIED]';
 
+  SN_VAULT_RESULTADOS_FMT =
+    '%d resultado(s)%s: [VAULT-040]';
+
   SN_VAULT_SIN_RESULTADOS_RECUERDA_INDICE_FMT =
     'Sin resultados para "%s" (%s). Recuerda: el indice (vault_read sin ' +
     'path) dice que notas existen y para que sirven.%s [VAULT-013]';
@@ -5005,9 +5006,6 @@ const
     ' [hint: hover only answers on usages, not on declarations] [LSP-024]';
 
   // Mensajes que estaban en linea en Mcp.Tools.Designer.pas (paso 3c a mano, 27-sep-2026)
-  SR_DSGN_NO_EXISTE_FMT =
-    'RECHAZADO: no existe %s [DSGN-037 NOT_FOUND]';
-
   // Mensajes que estaban en linea en Mcp.Tools.Styles.pas (paso 3c a mano, 27-sep-2026)
   SN_STYLE_BRCC_NO_ENCONTRADO_FMT =
     'brcc32.exe no encontrado en %s [STYLE-028]';
@@ -5249,20 +5247,20 @@ const
     'RECHAZADO: la firma no llega a cerrarse con '';''. Empieza en |%s| ' +
     '[EDIT-071 DENIED]';
 
-  SN_EDIT_INSERT_FALLO_MITAD1_FMT =
+  SR_EDIT_INSERT_FALLO_MITAD1_FMT =
     'INSERT metodo - FALLO en la mitad 1 (declaracion en la clase %s):'#10 +
-    '%s [EDIT-072]';
+    '%s [EDIT-072 DENIED]';
 
-  SN_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT =
+  SR_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT =
     'INSERT metodo - FALLO en la implementacion (la declaracion ya ' +
     'existia y no se toco; el fichero NO ha cambiado).'#10 +
-    '%s [EDIT-073]';
+    '%s [EDIT-073 DENIED]';
 
-  SN_EDIT_INSERT_A_MEDIAS_FMT =
+  SR_EDIT_INSERT_A_MEDIAS_FMT =
     'INSERT metodo - mitad 1 (declaracion) ESCRITA pero FALLO en la ' +
     'mitad 2 (implementacion). El fichero ha quedado A MEDIAS: restaura ' +
     'con restore:true y reintenta.'#10 +
-    '%s [EDIT-074]';
+    '%s [EDIT-074 DENIED]';
 
   SR_EDIT_NEW_SIN_ANCLA =
     'RECHAZADO: has pasado "new" sin ancla ("old" vacio). Esta tool ' +
@@ -5403,8 +5401,8 @@ const
   SN_FILE_UNITS_CARPETA_QUITADAS_FMT =
     '  units de la carpeta quitadas de sus proyectos (%d): [FILE-019]';
 
-  SN_FILE_ERROR_MOVER_PAPELERA_FMT =
-    'ERROR al mover a la papelera: %s [FILE-020]';
+  SR_FILE_ERROR_MOVER_PAPELERA_FMT =
+    'ERROR al mover a la papelera: %s [FILE-020 INTERNAL]';
 
   SK_FILE_BORRADO_PAPELERA_FMT =
     'BORRADO %s (movido a la papelera recuperable).'#10 +
@@ -6519,6 +6517,619 @@ const
     'Windows keeps that port reserved. Close the other one, or pick another ' +
     'port with [Server] Port= in the settings.ini next to DelphiLspMcp.exe.';
 
+  // Textos que estaban en linea en DelphiLspMcp.dpr (el resto, 27-sep-2026)
+  SL_SYS_SERVICE_HTTP_FMT =
+    'DelphiLSP MCP Service v%s (HTTP :%s%s)';
+
+  // Textos que estaban en linea en Lsp.BuildRunner.pas (el resto, 27-sep-2026)
+  SF_NINGUNO =
+    '(ninguno)';
+
+  SF_BUILD_LINKER_RESUMIDA_FMT =
+    '  Linker command line: --sysroot %s  (+%d rutas -L omitidas: son 2 ' +
+    'KB identicos en cada build)';
+
+  // Textos que estaban en linea en Lsp.Scaffold.pas (el resto, 27-sep-2026)
+  SF_CREATE_CLASE_FRAME =
+    'frame';
+
+  SF_CREATE_CLASE_DATA_MODULE =
+    'data module';
+
+  SF_CREATE_CLASE_FORM =
+    'form';
+
+  // Textos que estaban en linea en Lsp.Service.pas (el resto, 27-sep-2026)
+  SD_SYS_SERVICE_DESCRIPTION =
+    'Remote control of Delphi over MCP: semantic navigation, safe ' +
+    'editing, build and git for AI agents working from any platform.';
+
+  SF_SYS_ALL_INTERFACES =
+    'all interfaces';
+
+  SL_SYS_STOPPING_FMT =
+    '%s stopping: %s';
+
+  // Textos que estaban en linea en Lsp.Transport.Process.pas (el resto, 27-sep-2026)
+  SE_LSP_CREATEPIPE_STDOUT_FAILED =
+    'CreatePipe (stdout) failed';
+
+  SE_LSP_CREATEPIPE_STDIN_FAILED =
+    'CreatePipe (stdin) failed';
+
+  // Textos que estaban en linea en Mcp.Tools.Adb.pas (el resto, 27-sep-2026)
+  SK_ADB_KEY_ENVIADA_FMT =
+    'KEY %s %s [ADB-026]';
+
+  // Textos que estaban en linea en Mcp.Tools.DelphiLsp.pas (el resto, 27-sep-2026)
+  SN_LSP_NO_SE_PUEDE_LEER =
+    'no se puede leer [LSP-028]';
+
+  // Textos que estaban en linea en Mcp.Tools.PAServer.pas (el resto, 27-sep-2026)
+  SN_PAS_MACOS_FETCH_OPEN_PKG =
+    'macOS: fetch, then open the .pkg to install, and run PAServer (port ' +
+    '64211). [PAS-046]';
+
+  SN_PAS_WINARM_FETCH_RUN_SETUP =
+    'Windows on ARM: fetch and run the setup, then start PAServer. ' +
+    '[PAS-047]';
+
+  SN_PAS_DOS_DISTROS_MISMO_SYSROOT =
+    'dos distros dentro del mismo sysroot [PAS-048]';
+
+  SF_PAS_STATUS_READY_NATIVE =
+    'ready (native Windows target, no PAServer needed)';
+
+  SF_PAS_STATUS_READY_SDK =
+    'ready (SDK present)';
+
+  SF_PAS_STATUS_NEEDS_PROFILE_SDK =
+    'needs a PAServer profile + SDK (see command=packages)';
+
+  SF_PAS_SIN_NAME =
+    '(sin name)';
+
+  SF_PAS_PULL_ALREADY_UP_TO_DATE =
+    'already up to date';
+
+  SF_PAS_PULL_SKIPPED_NOT_TARGET =
+    'skipped (not on this target)';
+
+  // Textos que estaban en linea en Mcp.Tools.Workspace.pas (el resto, 27-sep-2026)
+  SF_GIT_TRUNCATED =
+    '... (truncated)';
+
+  SF_WS_UPTIME_S_FMT =
+    '%ds';
+
+  SF_WS_UPTIME_M_S_FMT =
+    '%dm %ds';
+
+  SF_WS_UPTIME_H_M_FMT =
+    '%dh %dm';
+
+  SF_WS_UPTIME_D_H_FMT =
+    '%dd %dh';
+
+  SD_WS_WORKSPACE_FMT =
+    'The lay of the land on the SERVER: the workspace roots this server ' +
+    'operates within (your entire allowed universe here), the access ' +
+    'level (read-write / read-only), the [Workspace.<name>] section of ' +
+    'the server this token is scoped to ("workspace"), and the active ' +
+    'RAD Studio by version AND by name (activeDelphiName / Personality / ' +
+    'Edition / Build, read from the installation - use them when you ' +
+    'look anything up for this Delphi). It also says WHO is answering ' +
+    '("server"): version, how this process was started (tray / service / ' +
+    'console), transport, pid, uptime, the open sessions and the Windows ' +
+    'account it runs as - the way to check a deployment without looking ' +
+    'at the machine from outside. %s Call this FIRST. Read-only, no ' +
+    'parameters.';
+
+  SF_WS_JAIL_NONE =
+    'none (no [Workspace.<name>] Roots: a tokenless local process may ' +
+    'look at any path, never touch - see "access")';
+
+  SF_WS_SUBCARPETAS_REGISTRADAS_FMT =
+    '%s  (+%d subcarpetas registradas)';
+
+  // Textos que estaban en linea en UTrayMain.pas (el resto, 27-sep-2026)
+  SF_SYS_TRAY_CAPTION_FMT =
+    'DelphiLSP MCP Service v%s - %s';
+
+  SF_SYS_TRAY_HINT_FMT =
+    'DelphiLSP MCP Service v%s'#13#10 +
+    '%s';
+
+  // Textos que estaban en linea en Lsp.Patch.pas (el resto, 27-sep-2026)
+  SF_EDIT_METRICAS_FMT =
+    'bytes=%d saltos=%d CRLF=%d LFsueltos=%d acentos=%d corrupcion=%d';
+
+  SF_EDIT_COPIA_YA_EXISTIA_FMT =
+    'ya existia (%s)';
+
+  SF_EDIT_EDAD_MIN_FMT =
+    '%d min';
+
+  SF_EDIT_EDAD_HORAS_MIN_FMT =
+    '%d h %.2d min';
+
+  SF_EDIT_EDAD_DIAS_FMT =
+    '%d dias';
+
+  SF_EDIT_PISTA_Y_MAS_FMT =
+    '  ...y %d mas';
+
+  SF_EDIT_NO_ES_OBJETO_FMT =
+    '  %d: no es un objeto {old,new}';
+
+  SF_EDIT_LINEA_QUITADA_FMT =
+    '%d| (linea quitada)';
+
+  SF_EDIT_OK_BLOQUE_LINEAS_FMT =
+    '  %d OK (bloque de %d lineas)';
+
+  SF_EDIT_OK_ANCLA_FMT =
+    '  %d OK: %s';
+
+  SR_EDIT_DESDE_MAS_ALLA_FINAL_FMT =
+    '%s  encoding=%s  finales=%s  %s'#10 +
+    'El fichero tiene %d lineas; desde=%d esta mas alla del final. ' +
+    '[EDIT-100 INVALID_PARAM]';
+
+  SF_EDIT_LECTURA_NUMERADA_FMT =
+    '%s  encoding=%s  finales=%s  %s'#10 +
+    'Lineas %d-%d de %d (formato numero|contenido: el ancla se copia ' +
+    'desde justo despues de la barra):'#10 +
+    '%s%s';
+
+  SF_EDIT_CONTENIDO_APORTADO =
+    'contenido aportado';
+
+  SF_EDIT_ESQUELETO_ESTANDAR_IDE =
+    'esqueleto estandar del IDE';
+
+  SF_EDIT_NINGUNA_YA_EN_COPIA =
+    '  (ninguna: el fichero actual no tiene lineas que no esten ya en la ' +
+    'copia)';
+
+  SF_EDIT_Y_MAS_FMT =
+    '  ... y %d mas';
+
+  SF_EDIT_VISIBLE_IGNORADO_PROGRAM =
+    '(visible ignorado: un program no tiene seccion interface)';
+
+  SF_EDIT_INSERT_RUTINA_DPR_FMT =
+    'INSERT rutina-global (.dpr): colocada DESPUES de la linea %d ' +
+    '(|%s|), entre el uses y el bloque principal - la frontera legal en ' +
+    'un program.'#10 +
+    '%s%s';
+
+  SF_EDIT_VISIBLE_DECLARACION_ANADIDA_FMT =
+    '--- visible: declaracion ''%s'' anadida al final del interface ---';
+
+  SF_EDIT_VISIBLE_NO_PUDE_ANADIR =
+    '*** visible: NO pude anadir la declaracion en interface - hazla con ' +
+    'old/new. ***';
+
+  SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION =
+    '*** visible: no encuentro una linea ''implementation'' unica; anade ' +
+    'la declaracion con old/new. ***';
+
+  SF_EDIT_INSERT_RUTINA_ANTES_FMT =
+    'INSERT rutina-global: colocada ANTES de la linea %d (|%s|), la ' +
+    'frontera legal elegida por la tool.'#10 +
+    '%s%s';
+
+  SF_EDIT_CLASE_YA_DECLARABA_FMT =
+    'la clase YA declaraba ''%s'' (linea %d) y NO se anade segunda ' +
+    'declaracion (si querias un OVERLOAD, su declaracion va con old/new)';
+
+  SF_EDIT_INSERT_METODO_SOLO_IMPL_FMT =
+    'INSERT metodo en %s: %s. Solo se ha escrito la implementacion.'#10 +
+    '--- Implementacion ''%s'' en la frontera legal ---'#10 +
+    '%s';
+
+  SF_EDIT_INSERT_METODO_DOS_MITADES_FMT =
+    'INSERT metodo en %s: la tool ha hecho las DOS mitades.%s'#10 +
+    '--- Mitad 1: declaracion ''%s'' dentro de la clase ---'#10 +
+    '%s'#10 +
+    '--- Mitad 2: implementacion ''%s'' en la frontera legal ---'#10 +
+    '%s';
+
+  SF_EDIT_NO_LOCALIZAR_LINEA_NUEVA =
+    '(no he sabido localizar la linea nueva)';
+
+  SN_EDIT_POSIBLE_INSERCION_METODO_FMT =
+    '*** POSIBLE INSERCION DENTRO DE UN METODO: la firma ''%s'' ha quedado ' +
+    'con ''%s'' encima, que parece un statement. Comprueba el balance ' +
+    'begin/end; si el metodo quedo partido, restaura con restore:true. ' +
+    '*** [EDIT-101]';
+
+  SF_EDIT_ECO_ESCRITURA_FMT =
+    '%s'#10 +
+    '  encoding=%s  finales=%s  copia=%s'#10 +
+    '  antes:   %s'#10 +
+    '  despues: %s'#10 +
+    '  lineas resultantes leidas del disco:'#10 +
+    '%s';
+
+  // Textos que estaban en linea en Lsp.TextEdit.pas (el resto, 27-sep-2026)
+  SF_TEXT_ASCII_COMPATIBLES =
+    'ascii (utf8/cp1252 compatibles)';
+
+  // Textos que estaban en linea en Mcp.Tools.TextEdit.pas (el resto, 27-sep-2026)
+  SP_TEXT_NEW =
+    'EDIT mode: the new text; may be several lines. Empty = blank the ' +
+    'line';
+
+  // Textos que estaban en linea en Mcp.Tools.DelphiPatch.pas (el resto, 27-sep-2026)
+  SP_EDIT_NEW =
+    'EDIT mode: the new text; may be several lines (to insert code, ' +
+    'anchor on an existing line and return it inside new together with ' +
+    'the added code)';
+
+  // Textos que estaban en linea en Lsp.Changeset.pas (el resto, 27-sep-2026)
+  SF_CHSET_YA_EXISTE_FMT =
+    'ya existe %s';
+
+  SF_CHSET_NO_EXISTE_FMT =
+    'no existe %s';
+
+  SF_CHSET_LINEA_NO_EXISTE_FMT =
+    'la linea %d no existe (%s tiene %d)';
+
+  SF_CHSET_LINEA_NO_ESPERADA_FMT =
+    'la linea %d no es la esperada (es "%s")';
+
+  SF_CHSET_DESTINO_YA_EXISTE_FMT =
+    'el destino ya existe: %s';
+
+  SF_CHSET_ANCLA_PENDIENTE =
+    'pendiente';
+
+  SF_CHSET_ANCLA_NO_ENCONTRADA =
+    'NO ENCONTRADA';
+
+  SF_CHSET_ANCLA_AMBIGUA =
+    'AMBIGUA (fija atline)';
+
+  SF_CHSET_MISMO_NUMERO_LINEAS =
+    '  (mismo numero de lineas)';
+
+  SF_CHSET_LINEAS_EN_TOTAL_FMT =
+    '  (%s%d lineas en total)';
+
+  // Textos que estaban en linea en Mcp.Tools.Config.pas (el resto, 27-sep-2026)
+  SN_CFG_NO_VCL_WINDOWS_ONLY =
+    'no (VCL = Windows only; use FMX or a console app to target ' +
+    'Linux/macOS/mobile) [CFG-099]';
+
+  SN_CFG_YES_FMX_CONSOLE_TARGET =
+    'yes (FMX/console can target other platforms) [CFG-100]';
+
+  SR_CFG_NO_ENCUENTRO_BLOQUE_PLATFORMS =
+    'error: no encuentro un bloque <Platforms>...</Platforms> en el ' +
+    '.dproj. [CFG-101 INVALID_PARAM]';
+
+  SR_CFG_PLATFORM_FORMA_INESPERADA =
+    'error: el <Platform> del .dproj tiene una forma inesperada. ' +
+    '[CFG-102 INVALID_PARAM]';
+
+  SF_CFG_RAD_STUDIO_DEFAULT =
+    '(RAD Studio default)';
+
+  SF_CFG_SIN_DEFINIR =
+    '(sin definir)';
+
+  SF_CFG_TODAS_PLATAFORMAS_BASE =
+    'todas las plataformas (grupo base)';
+
+  SR_CFG_DEPLOYPROJ_SIN_CIERRE_PROJECT =
+    'error: el .deployproj no tiene </Project>; abrelo en el IDE y ' +
+    'reintenta. [CFG-103 INVALID_PARAM]';
+
+  SF_CFG_NINGUNA =
+    '(ninguna)';
+
+  SF_CFG_SUFIJO_NO_VA_DPROJ_FMT =
+    'El sufijo "%s" no va al .dproj (el VERSIONINFO es numerico): eso ' +
+    'vive en SERVER_VERSION y en el CHANGELOG, y de eso te encargas tu.';
+
+  SF_CFG_EN_NUMEROS_Y_CLAVES_FMT =
+    '%s en los numeros y %s en las claves';
+
+  // Textos que estaban en linea en Lsp.Dproj.pas (el resto, 27-sep-2026)
+  SF_CFG_VCL_SOLO_WINDOWS_FMT =
+    'el proyecto es VCL y VCL solo existe en Windows (Vcl.Forms no ' +
+    'compila para %s). Para multiplataforma con interfaz usa FMX; sin ' +
+    'interfaz, una app de consola.';
+
+  SF_CFG_HAZARD_TASK_FMT =
+    'a <%s> task (executes a program or writes files during build)';
+
+  SF_CFG_HAZARD_SHELL_COMMAND_FMT =
+    'a non-empty <%s> shell command';
+
+  SF_CFG_HAZARD_IMPORT_UNC_FMT =
+    'an <Import> from a UNC path (%s)';
+
+  SF_CFG_HAZARD_IMPORT_PROFUNDO_FMT =
+    'an <Import> chain too deep to verify (%s)';
+
+  SF_CFG_HAZARD_IMPORT_NO_VERIFICABLE_FMT =
+    'an <Import> whose path cannot be verified (%s)';
+
+  SF_CFG_HAZARD_IMPORT_NO_ESTA_FMT =
+    'an <Import> of a file that is not there to be checked (%s)';
+
+  SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT =
+    'an <Import> that cannot be read to be checked (%s)';
+
+  SF_CFG_HAZARD_POR_IMPORT_FMT =
+    '%s, brought in by <Import> "%s"';
+
+  // Textos que estaban en linea en Lsp.ProjectUnits.pas (el resto, 27-sep-2026)
+  SF_USES_EL_FICHERO =
+    '(el fichero)';
+
+  SF_USES_DCCREFERENCE_DEL_DPROJ =
+    ', DCCReference del .dproj';
+
+  SF_USES_REAPUNTADAS_FMT =
+    '  re-apuntadas: %s';
+
+  SF_USES_NO_ENCONTRADAS_WORKSPACE_FMT =
+    '  no encontradas en el workspace: %s';
+
+  // Textos que estaban en linea en Mcp.Tools.Components.pas (el resto, 27-sep-2026)
+  SF_COMP_NO_EXISTE =
+    '  (no existe)';
+
+  SF_COMP_REGISTRADO_EN_FMT =
+    '  %s   (registrado en: %s)';
+
+  SF_COMP_DESHABILITADO =
+    ' (DESHABILITADO)';
+
+  SF_COMP_CON_FILTRO_FMT =
+    ' con "%s"';
+
+  SF_COMP_DESHABILITADOS_FMT =
+    ' (%d deshabilitados)';
+
+  // Textos que estaban en linea en Mcp.Tools.Vault.pas (el resto, 27-sep-2026)
+  SF_VAULT_CONTENIDO =
+    'contenido';
+
+  SF_VAULT_NOMBRES =
+    'nombres';
+
+  SF_VAULT_SOLO_NOMBRES_NOTAS =
+    ' Solo se han mirado los NOMBRES de las notas: para buscar dentro ' +
+    'del texto repite con target=content.';
+
+  SF_VAULT_TOPE_ALCANZADO =
+    ' (tope alcanzado)';
+
+  SN_VAULT_CABECERA_NOTA_FMT =
+    '# %s (%d lineas) [VAULT-039]';
+
+  SL_VAULT_APPEND_FMT =
+    'vault_append: %s';
+
+  SF_VAULT_TRAS_EL_ANCHOR =
+    'tras el anchor';
+
+  SF_VAULT_AL_FINAL =
+    'al final';
+
+  SF_VAULT_SIN_COPIA =
+    '(sin copia)';
+
+  SL_VAULT_CREATE_FMT =
+    'vault_create: %s';
+
+  SL_VAULT_PATCH_FMT =
+    'vault_patch: %s';
+
+  // Textos que estaban en linea en Mcp.Vault.Session.pas (el resto, 27-sep-2026)
+  SD_VAULT_PROMPT_TITLE =
+    'Cargar el vault de conocimiento';
+
+  // Textos que estaban en linea en Lsp.TestRunner.pas (el resto, 27-sep-2026)
+  SF_TEST_USA_DUNITX =
+    'usa DUnitX';
+
+  SF_TEST_CONSOLA_NOMBRE_TEST =
+    'consola y el nombre dice test';
+
+  SF_TEST_CONSOLA_PASS_FAIL =
+    'consola (PASS/FAIL + ExitCode)';
+
+  // Textos que estaban en linea en Mcp.Tools.Designer.pas (el resto, 27-sep-2026)
+  SF_DSGN_BLOQUE_LINEAS_FMT =
+    '%s (%s) lineas %d-%d de %s:'#13#10 +
+    '%s';
+
+  SF_DSGN_LADO_A_CERO_FMT =
+    '%s: %s (linea %d) mide %s x %s: con un lado a cero no se ve, aunque ' +
+    'el form cargue';
+
+  SF_DSGN_NO_LLEVA_EN_DFM_FMT =
+    '%s: %s (linea %d) no lleva %s en el .dfm; con align %s hace falta ' +
+    'para saber donde acaba';
+
+  SF_DSGN_NO_CABE_ALTO_FUERA_FMT =
+    '%s (linea %d) no cabe entero en "%s": de %d px de alto solo se ven ' +
+    '%d, el resto queda fuera';
+
+  SF_DSGN_NO_CABE_ALTO_FMT =
+    '%s (linea %d) no cabe entero en "%s": de %d px de alto solo se ven ' +
+    '%d';
+
+  SF_DSGN_NO_CABE_ANCHO_FMT =
+    '%s (linea %d) no cabe entero en "%s": de %d px de ancho solo se ven ' +
+    '%d';
+
+  SF_DSGN_OCUPA_SE_SALE_FMT =
+    '%s: %s (linea %d) ocupa de (%d,%d) a (%d,%d), y "%s" solo mide %d x ' +
+    '%d: se sale y esa parte no se ve';
+
+  SF_DSGN_AMBOS_ALCLIENT_FMT =
+    '%s (linea %d) y %s (linea %d) son ambos alClient en "%s": la VCL ' +
+    'les da el rectangulo ENTERO a los dos, asi que se tapan al 100%%';
+
+  SF_DSGN_SE_SOLAPAN_FMT =
+    '%s (linea %d) y %s (linea %d) se solapan en "%s": comparten de ' +
+    '(%d,%d) a (%d,%d), uno tapa al otro';
+
+  SF_DSGN_NO_DICE_CUANTO_MIDE_FMT =
+    '%s no dice cuanto mide (%d x %d): sin el tamano del form no puedo ' +
+    'situar nada';
+
+  SF_DSGN_TEXTO =
+    'texto';
+
+  SF_DSGN_BINARIO =
+    'binario';
+
+  // Textos que estaban en linea en Lsp.DesignerBin.pas (el resto, 27-sep-2026)
+  SF_DSGN_NO_ES_DESIGNER_BINARIO =
+    'no es un designer binario: empieza como texto';
+
+  SF_DSGN_BINARIO_DANADO_FMT =
+    'designer BINARIO danado o que no es un .dfm: no pude convertirlo a ' +
+    'texto (%s: %s)';
+
+  SF_DSGN_CARACTERES_NO_CABEN_ANSI =
+    'el texto lleva caracteres que no caben en la pagina de codigos ANSI ' +
+    'de esta maquina: en un .dfm de texto se escriben como #NNNN (codigo ' +
+    'decimal del caracter, fuera de las comillas), como hace el IDE. ' +
+    'Corrigelos y repite.';
+
+  SF_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT =
+    'no pude convertir el texto a designer binario (%s: %s)';
+
+  // Textos que estaban en linea en Lsp.DesignerBinding.pas (el resto, 27-sep-2026)
+  SF_DSGN_REPITE_UN_NOMBRE_FMT =
+    '%s (linea %d del .dfm) repite un nombre ya usado en este form: al ' +
+    'cargarlo salta EComponentError';
+
+  SF_DSGN_NO_TIENE_CAMPO_PUBLICADO_FMT =
+    '%s: %s (linea %d del .dfm) no tiene campo publicado en la clase';
+
+  SF_DSGN_QUEDADO_SIN_VALOR_FMT =
+    '"%s" (linea %d del .dfm) se ha quedado sin valor: el .dfm no es ' +
+    'valido y el enlazador lo rechaza sin decirte que linea';
+
+  SF_DSGN_NO_ESTA_EN_PUBLISHED_FMT =
+    '%s = %s (linea %d del .dfm): %s existe pero NO esta en published; ' +
+    'el cargador del form solo ve metodos publicados, asi que esto ' +
+    'revienta con EReadError al crear la ventana';
+
+  SF_DSGN_METODO_NO_DECLARADO_FMT =
+    '%s = %s (linea %d del .dfm): el metodo %s no esta declarado';
+
+  SF_DSGN_CAMPO_SIN_OBJETO_FMT =
+    '  campo publicado sin objeto en el designer: %s';
+
+  // Textos que estaban en linea en Lsp.Styles.pas (el resto, 27-sep-2026)
+  SF_STYLE_NINGUN_ESTILO_STYLENAME_FMT =
+    'No hay ningun estilo con StyleName ''%s'' en %s. Mira los nombres con ' +
+    'command=view.';
+
+  SF_STYLE_NO_TIENE_UNA_PARTE_FMT =
+    'El estilo ''%s'' no tiene una parte ''%s'' (child=%s). command=get lo ' +
+    'muestra entero.';
+
+  SE_STYLE_BINARIO_NO_SE_GUARDA_FMT =
+    'RECHAZADO: %s es un .dfm BINARIO en disco: se lee al vuelo pero no ' +
+    'se guarda asi. Pasalo a texto con delphi_designer command=to-text y ' +
+    'repite.';
+
+  // Textos que estaban en linea en Mcp.Tools.Styles.pas (el resto, 27-sep-2026)
+  SF_STYLE_BLOQUE_LINEAS_FMT =
+    '%s (%s) lineas %d-%d de %s:'#10 +
+    '%s';
+
+  SF_STYLE_CAMBIADA =
+    'CAMBIADA';
+
+  SF_STYLE_ANADIDA =
+    'ANADIDA';
+
+  // Textos que estaban en linea en Mcp.Tools.FileOps.pas (el resto, 27-sep-2026)
+  SF_FILE_SIGUE_AHI_DESPUES_BORRARLO =
+    'sigue ahi despues de borrarlo';
+
+  SF_FILE_ERROR_FMT =
+    'ERROR %s';
+
+  SF_FILE_TAMBIEN_A_PAPELERA =
+    'tambien a la papelera';
+
+  SF_FILE_AL_MOVER_PAPELERA =
+    'al mover a la papelera';
+
+  SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT =
+    'RECHAZADO: una unit .pas solo se mueve a otro nombre .pas (%s). ' +
+    '[MOVE-010 DENIED]';
+
+  SF_MOVE_ORIGEN_YA_EN_PAPELERA =
+    '(el origen ya estaba en la papelera: no hago copia de una copia)';
+
+  SF_STYLE_LINEAS_Y_FMT =
+    '%d y %d';
+
+  SR_MOVE_ERROR_AL_COPIAR_FMT =
+    'ERROR al copiar: %s [MOVE-011 INTERNAL]';
+
+  SR_MOVE_ERROR_AL_MOVER_FMT =
+    'ERROR al mover: %s [MOVE-012 INTERNAL]';
+
+  SK_MOVE_MOVIDO_FMT =
+    'MOVIDO'#10 +
+    '  de: %s'#10 +
+    '  a:  %s [MOVE-013]';
+
+  SK_MOVE_COPIADO_FMT =
+    'COPIADO'#10 +
+    '  de: %s'#10 +
+    '  a:  %s [MOVE-014]';
+
+  SF_MOVE_COPIADO_CON_UNIT =
+    'copiado con la unit';
+
+  SF_MOVE_MOVIDO_CON_UNIT =
+    'movido con la unit';
+
+  SN_MOVE_CABECERA_REESCRITA_FMT =
+    '  cabecera reescrita: unit %s; [MOVE-015]';
+
+  SN_MOVE_ERROR_REESCRIBIR_CABECERA_FMT =
+    '  ERROR al reescribir la cabecera (sigue diciendo unit %s;): %s ' +
+    '[MOVE-016]';
+
+  // Textos que estaban en linea en Lsp.Guard.pas (el resto, 27-sep-2026)
+  SL_GUARD_WORKSPACE_JAIL_ROOTS_FMT =
+    'Workspace jail (roots, %d): %s';
+
+  SF_GUARD_RUTA_VACIA_O_RELATIVA =
+    'ruta vacia o relativa';
+
+  SF_GUARD_RUTA_INVALIDA =
+    'ruta invalida';
+
+  SF_GUARD_UNIDAD_O_RECURSO_ENTERO =
+    'es una unidad o un recurso compartido entero';
+
+  SF_GUARD_NO_DENTRO_DESECHABLE_FMT =
+    'no esta dentro de una carpeta desechable (%s) ni es una descarga ' +
+    'temporal';
+
+  SF_GUARD_CONTIENE_LUGAR_PROTEGIDO_FMT =
+    'es o contiene un lugar protegido (%s)';
+
   // ---------------------------------------------------------------------
   // Las ETIQUETAS de los mensajes (decision de David, 27-sep-2026)
   // ---------------------------------------------------------------------
@@ -6545,9 +7156,22 @@ const
   { EL fallo interno de una tool: la excepcion que nadie espero, envuelta por
     ToolsManager. Era un literal alli, y Lsp.Guard lo reconocia por su texto. }
   SR_SYS_TOOL_FAILED_FMT = 'Error executing tool: %s [SYS-006 INTERNAL]';
-  { Una excepcion dentro del motor de delphi_edit: salia como 'ERROR: ...',
-    que ninguna regla reconocia, y la tool daba EXITO (visto 27-sep). }
-  SR_EDIT_FALLO_INTERNO_FMT = 'ERROR: %s: %s [EDIT-090 INTERNAL]';
+  { Una excepcion que nadie esperaba, con su clase y su mensaje: salia como
+    'ERROR: ...', que ninguna regla reconocia, y la tool daba EXITO (visto
+    27-sep en delphi_edit; y en delphi_styles igual). }
+  SR_FALLO_INTERNO_FMT = 'ERROR: %s: %s [SYS-009 INTERNAL]';
+  { Los envoltorios de siempre, uno por forma: el motivo que trae otro
+    sitio (una funcion que devuelve el porque, el mensaje de una excepcion)
+    con la marca y el resultado de la respuesta. }
+  SR_RECHAZADO_FMT = 'RECHAZADO: %s [SYS-010 DENIED]';
+  SR_ERROR_FMT = 'error: %s [SYS-011 INVALID_PARAM]';
+  SR_NO_EXISTE_FMT = 'RECHAZADO: no existe %s [SYS-012 NOT_FOUND]';
+  { Los dos de ToolsManager antes de llegar a la tool: una peticion sin
+    nombre de tool o sin argumentos legibles, y una tool que no existe.
+    Salian como 'Error:', o sea INTERNAL: no se rompio nada, la llamada
+    estaba mal. }
+  SR_SYS_INVALID_TOOL_PARAMS = 'Error: Invalid tool parameters [SYS-013 INVALID_PARAM]';
+  SR_SYS_TOOL_NOT_FOUND_FMT = 'Error: Tool not found: %s [SYS-014 NOT_FOUND]';
   SL_MSG_FORMAT_FMT = 'Mensaje %s: los argumentos no cuadran con su formato (%s): "%s"';
 
 { Los ids de las etiquetas que trae AText, en orden. }
@@ -6572,6 +7196,15 @@ function MsgText(const AMsg: string): string;
   mensaje, no revienta la tool con una excepcion de conversion: devuelve
   el mensaje sin formatear con el motivo detras, y lo anota en el log. }
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;
+{ EL paso de una CAUSA por un envoltorio del catalogo (RECHAZADO: %s,
+  error: %s, Error executing tool: %s...): si la causa ya es un mensaje
+  que declara su resultado, sale tal cual (envolverla le quitaria la
+  etiqueta y el resultado cambiaria: un <Exec> en delphi_test pasaba de
+  DENIED a INVALID_PARAM); si no, se envuelve. Con AArgs, los argumentos
+  del envoltorio cuando no son solo la causa (clase + mensaje). }
+function MsgEnvuelve(const AMsg, ACausa: string): string; overload;
+function MsgEnvuelve(const AMsg, ACausa: string;
+  const AArgs: array of const): string; overload;
 
 { El resultado de un MENSAJE (lo que devuelve una funcion, lo que trae una
   excepcion; para una RESPUESTA entera, MsgOutcome): el que declara su
@@ -6679,6 +7312,20 @@ begin
       TLogger.Error(Format(SL_MSG_FORMAT_FMT, [MsgTag(AMsg), E.Message, Copy(AMsg, 1, 60)]));
     end;
   end;
+end;
+
+function MsgEnvuelve(const AMsg, ACausa: string): string;
+begin
+  Result := MsgEnvuelve(AMsg, ACausa, [ACausa]);
+end;
+
+function MsgEnvuelve(const AMsg, ACausa: string;
+  const AArgs: array of const): string;
+begin
+  if EsFallo(ACausa) then
+    Result := ACausa
+  else
+    Result := MsgFmt(AMsg, AArgs);
 end;
 
 function ResultadoPorTexto(const AText: string; AEsError: Boolean): string;

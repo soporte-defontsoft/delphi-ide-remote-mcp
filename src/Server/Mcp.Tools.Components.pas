@@ -106,7 +106,7 @@ begin
     begin
       Sb.Append('  ').Append(P);
       if not TDirectory.Exists(P) then
-        Sb.Append('  (no existe)');
+        Sb.Append(MsgText(SF_COMP_NO_EXISTE));
       Sb.AppendLine;
       Root := ComponentRootOf(P);
       if (Root <> '') and not MineRoots.Contains(Root) then
@@ -147,7 +147,7 @@ begin
     begin
       Sb.AppendLine(MsgFmt(SN_COMPONENTS_PLATFORM_MISSING_FMT, [N, Plat]));
       for Pair in Missing do
-        Sb.AppendLine(Format('  %s   (registrado en: %s)', [Pair.Key, Pair.Value]));
+        Sb.AppendLine(MsgFmt(SF_COMP_REGISTRADO_EN_FMT, [Pair.Key, Pair.Value]));
       Sb.AppendLine;
       Sb.AppendLine(MsgText(SN_COMPONENTS_PLATFORM_HINT));
     end;
@@ -210,15 +210,15 @@ begin
         Inc(Off);
       Sb.Append(P.Description).Append('  [').Append(P.BplFile).Append(']');
       if P.Disabled then
-        Sb.Append(' (DESHABILITADO)');
+        Sb.Append(MsgText(SF_COMP_DESHABILITADO));
       Sb.AppendLine;
     end;
     if Shown = 0 then
       Exit(MsgFmt(SN_COMPONENTS_NONE_FMT, [Filter]));
     Result := MsgFmt(SN_COMPONENTS_DESIGN_PACKAGES_FMT,
       [Shown, Info.Version,
-       IfThen(Filter <> '', ' con "' + Filter + '"', ''),
-       IfThen(Off > 0, Format(' (%d deshabilitados)', [Off]), '')]) +
+       IfThen(Filter <> '', MsgFmt(SF_COMP_CON_FILTRO_FMT, [Filter]), ''),
+       IfThen(Off > 0, MsgFmt(SF_COMP_DESHABILITADOS_FMT, [Off]), '')]) +
       sLineBreak + sLineBreak + Sb.ToString.TrimRight +
       sLineBreak + sLineBreak + MsgText(SN_COMPONENTS_NOTE);
   finally

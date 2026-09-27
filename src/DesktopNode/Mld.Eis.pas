@@ -83,7 +83,10 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Diagnostics, Posix.SysMman;
+  System.SysUtils,
+  System.Diagnostics,
+  Posix.SysMman,
+  Mld.Textos;
 
 const
   { enum ei_device_capability }
@@ -188,7 +191,7 @@ function TManos.Resolver: Boolean;
   begin
     Result := FLib.Simbolo(ASimbolo, ADir);
     if not Result then
-      FError := Format('falta %s en %s (%s)', [ASimbolo, FLib.Nombre, FLib.Error]);
+      FError := MsgFmt(SF_NODE_FALTA_EN_FMT, [ASimbolo, FLib.Nombre, FLib.Error]);
   end;
 
 begin
@@ -302,13 +305,13 @@ begin
   Result := False;
   if ADescriptor < 0 then
   begin
-    FError := 'descriptor invalido';
+    FError := MsgText(SF_NODE_DESCRIPTOR_INVALIDO);
     Exit;
   end;
   if not FLib.Abierta then
     if not FLib.Abrir('libei.so.1') then
     begin
-      FError := 'no hay libei en esta maquina: ' + FLib.Error;
+      FError := MsgFmt(SF_NODE_NO_HAY_LIB_FMT, ['libei', FLib.Error]);
       Exit;
     end;
   if not Resolver then
@@ -316,7 +319,7 @@ begin
   FEi := EiNuevo(nil);
   if FEi = nil then
   begin
-    FError := 'ei_new_sender no devolvio contexto';
+    FError := MsgText(SF_NODE_NO_DEVOLVIO_CONTEXTO);
     Exit;
   end;
   U := UTF8String(ANombre);
@@ -325,7 +328,7 @@ begin
   Rc := EiBackendFd(FEi, ADescriptor);
   if Rc <> 0 then
   begin
-    FError := Format('ei_setup_backend_fd devolvio %d', [Rc]);
+    FError := MsgFmt(SF_NODE_BACKEND_FD_DEVOLVIO_FMT, [Rc]);
     Exit;
   end;
   Reloj := TStopwatch.StartNew;
@@ -337,8 +340,7 @@ begin
   end;
   Result := FListo;
   if not Result then
-    FError := Format('los dispositivos no llegaron a estar listos en %d ms ' +
-      '(puntero=%s teclado=%s)', [AMs, BoolToStr(FPuntero <> nil, True),
+    FError := MsgFmt(SF_NODE_DISPOSITIVOS_NO_LISTOS_FMT, [AMs, BoolToStr(FPuntero <> nil, True),
       BoolToStr(FTeclado <> nil, True)]);
 end;
 
@@ -349,7 +351,7 @@ begin
   Result := False;
   if not FListo then
   begin
-    FError := 'el canal no esta listo';
+    FError := MsgText(SF_NODE_CANAL_NO_ESTA_LISTO);
     Exit;
   end;
   if FEscala <= 0 then
@@ -358,9 +360,8 @@ begin
   Ly := AY / FEscala;
   if (Lx < 0) or (Ly < 0) or (Lx >= FRegion.Ancho) or (Ly >= FRegion.Alto) then
   begin
-    FError := Format('(%.0f,%.0f) de la captura cae fuera de la pantalla ' +
-      '(escala %.2f, region %dx%d)',
-      [AX, AY, FEscala, FRegion.Ancho, FRegion.Alto]);
+    FError := MsgFmt(SF_NODE_CAE_FUERA_PANTALLA_FMT,
+      [FormatFloat('0', AX), FormatFloat('0', AY), FormatFloat('0.00', FEscala), FRegion.Ancho, FRegion.Alto]);
     Exit;
   end;
   EiEmpezar(FPuntero, FSecuencia);
@@ -420,12 +421,12 @@ begin
   if FMapaMirado then
     Exit;
   FMapaMirado := True;
-  FMapaNota := 'teclado: tabla fija (americano)';
+  FMapaNota := MsgText(SF_NODE_TECLADO_TABLA_FIJA);
   if FTeclado = nil then
     Exit;
   if not (FLib.Simbolo('ei_device_keyboard_get_keymap', Dir)) then
   begin
-    FMapaNota := FMapaNota + ' - esta libei no entrega el mapa';
+    FMapaNota := FMapaNota + MsgText(SF_NODE_LIBEI_NO_ENTREGA_MAPA);
     Exit;
   end;
   EiMapaDe := TEiMapaDe(Dir);
@@ -436,7 +437,7 @@ begin
   Mapa := EiMapaDe(FTeclado);
   if Mapa = nil then
   begin
-    FMapaNota := FMapaNota + ' - el escritorio no entrego su mapa';
+    FMapaNota := FMapaNota + MsgText(SF_NODE_ESCRITORIO_NO_ENTREGO_MAPA);
     Exit;
   end;
   Fd := EiMapaFd(Mapa);
@@ -446,7 +447,7 @@ begin
   Vista := mmap(nil, Tam, PROT_READ, MAP_PRIVATE, Fd, 0);
   if NativeInt(Vista) = -1 then
   begin
-    FMapaNota := FMapaNota + ' - no pude leer el mapa del escritorio';
+    FMapaNota := FMapaNota + MsgText(SF_NODE_NO_LEER_MAPA_ESCRITORIO);
     Exit;
   end;
   try
@@ -457,7 +458,7 @@ begin
   end;
   FMapa := TMapaTeclado.Create;
   if FMapa.Cargar(@Copia[0]) then
-    FMapaNota := Format('teclado: el del escritorio (%s, %d caracteres)',
+    FMapaNota := MsgFmt(SF_NODE_TECLADO_DEL_ESCRITORIO_FMT,
       [FMapa.Distribucion, FMapa.Cuantas])
   else
     FMapaNota := FMapaNota + ' - ' + FMapa.Error;
@@ -468,12 +469,12 @@ begin
   Result := False;
   if not FListo then
   begin
-    FError := 'el canal no esta listo';
+    FError := MsgText(SF_NODE_CANAL_NO_ESTA_LISTO);
     Exit;
   end;
   if FTeclado = nil then
   begin
-    FError := 'el escritorio no dio teclado';
+    FError := MsgText(SF_NODE_ESCRITORIO_NO_DIO_TECLADO);
     Exit;
   end;
   EiEmpezar(FTeclado, FSecuencia);
@@ -517,7 +518,7 @@ begin
   Result := False;
   if not FListo then
   begin
-    FError := 'el canal no esta listo';
+    FError := MsgText(SF_NODE_CANAL_NO_ESTA_LISTO);
     Exit;
   end;
   MirarMapa;
@@ -534,10 +535,8 @@ begin
       var Secuencia: TArray<TPulsacion>;
       if not FMapa.Secuencia(Ord(C), Secuencia) then
       begin
-        FError := Format('el teclado del escritorio (%s) no tiene una tecla ' +
-          'que de el caracter "%s" (posicion %d), ni directa ni por tecla ' +
-          'muerta (%d teclas muertas en el mapa)',
-          [FMapa.Distribucion, C, I, FMapa.CuantasMuertas]);
+        FError := MsgFmt(SF_NODE_TECLADO_SIN_TECLA_FMT,
+          [FMapa.Distribucion, string(C), I, FMapa.CuantasMuertas]);
         Exit;
       end;
       for var P in Secuencia do
@@ -575,7 +574,7 @@ begin
       '.': Codigo := 52;  ',': Codigo := 51;  '/': Codigo := 53;
     else
       begin
-        FError := Format('no se teclear el caracter "%s" (posicion %d)', [C, I]);
+        FError := MsgFmt(SF_NODE_NO_SE_TECLEAR_FMT, [string(C), I]);
         Exit;
       end;
     end;

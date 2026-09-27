@@ -2989,8 +2989,8 @@ begin
     SetLength(Shown, Length(Roots));
     for I := 0 to High(Roots) do
       Shown[I] := ExcludeTrailingPathDelimiter(Roots[I]);
-    Result := 'Workspace jail (roots, ' + Length(Roots).ToString + '): ' +
-      string.Join('  |  ', Shown);
+    Result := MsgFmt(SL_GUARD_WORKSPACE_JAIL_ROOTS_FMT, [Length(Roots),
+      string.Join('  |  ', Shown)]);
   end;
 end;
 
@@ -3328,15 +3328,15 @@ var
 begin
   Result := '';
   if (ADir.Trim = '') or not TPath.IsPathRooted(ADir.Trim) then
-    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, 'ruta vacia o relativa']));
+    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_RUTA_VACIA_O_RELATIVA)]));
   try
     Full := ExcludeTrailingPathDelimiter(TPath.GetFullPath(ADir.Trim));
   except
-    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, 'ruta invalida']));
+    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_RUTA_INVALIDA)]));
   end;
   if (Length(Full) <= 3) or (Full.StartsWith('\\') and
      (Length(Full.Substring(2).Split(['\'], TStringSplitOptions.ExcludeEmpty)) <= 2)) then
-    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, 'es una unidad o un recurso compartido entero']));
+    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_UNIDAD_O_RECURSO_ENTERO)]));
   // la ruta REAL del padre + el nombre (ver la nota de la interface)
   Real := RutaDelEnlace(Full);
   // (1) lista blanca
@@ -3357,12 +3357,12 @@ begin
   end;
   if not Desechable then
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir,
-      'no esta dentro de una carpeta desechable (' +
-      string.Join(', ', CarpetasDesechables) + ') ni es una descarga temporal']));
+      MsgFmt(SF_GUARD_NO_DENTRO_DESECHABLE_FMT,
+      [string.Join(', ', CarpetasDesechables)])]));
   // (2) lista negra: ni ser ni contener un lugar protegido
   P := LugarProtegidoEn(Real);
   if P <> '' then
-    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, 'es o contiene un lugar protegido (' + P + ')']));
+    Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgFmt(SF_GUARD_CONTIENE_LUGAR_PROTEGIDO_FMT, [P])]));
 end;
 
 function PrimerTrozo(const S: string; const ASeps: array of Char): string;

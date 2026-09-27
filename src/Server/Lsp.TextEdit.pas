@@ -144,7 +144,7 @@ begin
   // (medido 2026-09-21, bateria test_round40).
   Result := MsgFmt(SK_TEXT_CREADO_ENCODING_FINALES_FMT,
     [MaskDriveText('', A.Path),
-     IfThen(IsAscii(Text), 'ascii (utf8/cp1252 compatibles)', 'utf8'),
+     IfThen(IsAscii(Text), MsgText(SF_TEXT_ASCII_COMPATIBLES), 'utf8'),
      EolName, Length(TFile.ReadAllBytes(A.Path))]);
 end;
 
@@ -337,7 +337,7 @@ begin
     Result := DoEditLine(A);
   except
     on E: Exception do
-      Result := 'RECHAZADO: ' + E.Message;
+      Result := MsgEnvuelve(SR_RECHAZADO_FMT, E.Message);
   end;
 end;
 

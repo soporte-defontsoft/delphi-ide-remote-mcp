@@ -101,7 +101,8 @@ uses
   Lsp.Patch,
   Lsp.BuildRunner,
   Lsp.Guard,
-  Lsp.DesignerBin;
+  Lsp.DesignerBin,
+  Lsp.Texts;
 
 { TStyleObj }
 
@@ -273,8 +274,7 @@ begin
   Result := FindStyle(AStyleName);
   if Result = nil then
   begin
-    AErr := Format('No hay ningun estilo con StyleName ''%s'' en %s. Mira los ' +
-      'nombres con command=view.', [AStyleName, TPath.GetFileName(FPath)]);
+    AErr := MsgFmt(SF_STYLE_NINGUN_ESTILO_STYLENAME_FMT, [AStyleName, TPath.GetFileName(FPath)]);
     Exit;
   end;
   for Seg in AChildPath.Replace('\', '/').Split(['/'], TStringSplitOptions.ExcludeEmpty) do
@@ -282,8 +282,7 @@ begin
     Result := Result.Child(Seg.Trim);
     if Result = nil then
     begin
-      AErr := Format('El estilo ''%s'' no tiene una parte ''%s'' (child=%s). ' +
-        'command=get lo muestra entero.', [AStyleName, Seg.Trim, AChildPath]);
+      AErr := MsgFmt(SF_STYLE_NO_TIENE_UNA_PARTE_FMT, [AStyleName, Seg.Trim, AChildPath]);
       Exit;
     end;
   end;
@@ -428,9 +427,7 @@ end;
 procedure TStyleDoc.Save;
 begin
   if FBinaryOnDisk then
-    raise Exception.Create('RECHAZADO: ' + TPath.GetFileName(FPath) +
-      ' es un .dfm BINARIO en disco: se lee al vuelo pero no se guarda asi. ' +
-      'Pasalo a texto con delphi_designer command=to-text y repite.');
+    raise Exception.Create(MsgFmt(SE_STYLE_BINARIO_NO_SE_GUARDA_FMT, [TPath.GetFileName(FPath)]));
   PatchSaveText(FPath, string.Join(FEol, FLines), FEnc);
   Reload;
 end;

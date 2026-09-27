@@ -258,10 +258,9 @@ begin
       Return.AddPair('frameworkType', Info.FrameworkType);
       Return.AddPair('appType', Info.AppType);
       if SameText(Info.FrameworkType, 'VCL') then
-        Return.AddPair('crossPlatform', 'no (VCL = Windows only; use FMX or a ' +
-          'console app to target Linux/macOS/mobile)')
+        Return.AddPair('crossPlatform', MsgText(SN_CFG_NO_VCL_WINDOWS_ONLY))
       else
-        Return.AddPair('crossPlatform', 'yes (FMX/console can target other platforms)');
+        Return.AddPair('crossPlatform', MsgText(SN_CFG_YES_FMX_CONSOLE_TARGET));
     end;
     if (Sec = 'summary') or (Sec = 'all') or (Sec = 'platforms') then
     begin
@@ -391,7 +390,7 @@ begin
   if Info.FrameworkType = '' then
     Exit(MsgText(SR_CFG_PUEDO_LEER_FRAMEWORK_DPROJ));
   if not Info.CanTarget(APlatform, Reason) then
-    Exit(Format('RECHAZADO: %s', [Reason]));
+    Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Reason));
   for P in Info.Platforms do
     if SameText(P.Name, APlatform) then
     begin
@@ -421,7 +420,7 @@ begin
   ClosePos := Pos('</Platforms>', Xml);
   OpenPos := Pos('<Platforms>', Xml);
   if (ClosePos = 0) or (OpenPos = 0) or (ClosePos < OpenPos) then
-    Exit('error: no encuentro un bloque <Platforms>...</Platforms> en el .dproj.');
+    Exit(MsgText(SR_CFG_NO_ENCUENTRO_BLOQUE_PLATFORMS));
   // indentation = whitespace before </Platforms>
   LineStart := ClosePos;
   while (LineStart > 1) and not CharInSet(Xml[LineStart - 1], [#10, #13]) do
@@ -464,7 +463,7 @@ begin
   var ValStart := TagPos + Length(Tag);
   var ValEnd := Pos('<', Xml, ValStart);
   if ValEnd = 0 then
-    Exit('error: el <Platform> del .dproj tiene una forma inesperada.');
+    Exit(MsgText(SR_CFG_PLATFORM_FORMA_INESPERADA));
   // Idempotence, like add-platform already had: repeating the call used to
   // answer "DESHABILITADA" again and take a backup of a no-op, filling the
   // trash with identical copies of an unchanged .dproj (field round 8).
@@ -531,7 +530,7 @@ begin
   Restore := SameText(ARawFolder.Trim, 'default') or SameText(ARawFolder.Trim, 'reset');
   if Restore then
   begin
-    Clean := '(RAD Studio default)';
+    Clean := MsgText(SF_CFG_RAD_STUDIO_DEFAULT);
     ExeInner := '.\$(Platform)\$(Config)';
     DcuInner := '.\$(Platform)\$(Config)\dcu';
   end
@@ -577,8 +576,8 @@ begin
 
   PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := MsgFmt(SN_CFG_SALIDA_BINARIOS_FIJADA_AHORA_FMT,
-    [Clean, sLineBreak, ExeInner, IfThen(OldExe = '', '(sin definir)', OldExe),
-     sLineBreak, DcuInner, IfThen(OldDcu = '', '(sin definir)', OldDcu), sLineBreak]);
+    [Clean, sLineBreak, ExeInner, IfThen(OldExe = '', MsgText(SF_CFG_SIN_DEFINIR), OldExe),
+     sLineBreak, DcuInner, IfThen(OldDcu = '', MsgText(SF_CFG_SIN_DEFINIR), OldDcu), sLineBreak]);
 end;
 
 { ---- unit search paths ---------------------------------------------------
@@ -815,7 +814,7 @@ begin
       EnsurePlatformGroups(Xml, Plat);
   except
     on E: Exception do
-      Exit('error: ' + E.Message);
+      Exit(MsgEnvuelve(SR_ERROR_FMT, E.Message));
   end;
   if not FindGroup(Xml, GroupCondition(Plat), O, I, C) then
     Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_FMT, [GroupCondition(Plat)]));
@@ -824,7 +823,7 @@ begin
     for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
       if SameText(XmlUnescape(P), Path) then
         Exit(MsgFmt(SN_CONFIG_PATH_PRESENT_FMT,
-          [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
+          [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]));
     NewInner := XmlEscape(Path) + ';' + Copy(Xml, VS, VE - VS);
     Xml := Copy(Xml, 1, VS - 1) + NewInner + Copy(Xml, VE, MaxInt);
   end
@@ -834,7 +833,7 @@ begin
       Copy(Xml, I, MaxInt);
   PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := MsgFmt(SN_CONFIG_PATH_ADDED_FMT,
-    [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat), Show,
+    [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat), Show,
      IfThen(Plat = '', 'Win64', Plat)]);
 end;
 
@@ -859,7 +858,7 @@ begin
   if not FindGroup(Xml, GroupCondition(Plat), O, I, C) or
      not FindSearchTag(Xml, I, C, ElS, VS, VE, ElE) then
     Exit(MsgFmt(SN_CONFIG_PATH_ABSENT_FMT,
-      [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
+      [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]));
   Found := False;
   Keep := TList<string>.Create;
   try
@@ -870,7 +869,7 @@ begin
         Keep.Add(P);
     if not Found then
       Exit(MsgFmt(SN_CONFIG_PATH_ABSENT_FMT,
-        [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
+        [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]));
     Rest := string.Join(';', Keep.ToArray);
   finally
     Keep.Free;
@@ -896,7 +895,7 @@ begin
     Xml := Copy(Xml, 1, VS - 1) + Rest + Copy(Xml, VE, MaxInt);
   PatchSaveText(ADproj, Xml, Enc);
   Result := MsgFmt(SN_CONFIG_PATH_REMOVED_FMT,
-    [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]);
+    [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]);
 end;
 
 { view: the search paths per group, as the .dproj states them (macros kept). }
@@ -1129,7 +1128,7 @@ begin
     Exit(MsgFmt(SN_CONFIG_DEPLOY_PRESENT_FMT, [Full, Plat]));
   ClosePos := Pos('</project>', LowerCase(Xml));
   if ClosePos = 0 then
-    Exit('error: el .deployproj no tiene </Project>; abrelo en el IDE y reintenta.');
+    Exit(MsgText(SR_CFG_DEPLOYPROJ_SIN_CIERRE_PROJECT));
   // The IDE writes `UMain.pas`, not `D:\proyectos\x\UMain.pas`: an absolute
   // Include makes the .deployproj stop being portable and stop matching what
   // the IDE itself generates for the same file (field round 8). Relative
@@ -1331,7 +1330,7 @@ begin
   if M.Success then
     AntesKey := M.Groups[1].Value
   else
-    AntesKey := '(ninguna)';
+    AntesKey := MsgText(SF_CFG_NINGUNA);
 
   // Los numeros: se sustituyen donde ya estan (en TODOS los grupos que los
   // lleven) y el que falte entra justo detras del anterior de la serie, que
@@ -1358,12 +1357,10 @@ begin
   PatchSaveText(ADproj, Xml, Enc);
   Nota := '';
   if Sufijo <> '' then
-    Nota := Eol + 'El sufijo "' + Sufijo + '" no va al .dproj (el VERSIONINFO ' +
-      'es numerico): eso vive en SERVER_VERSION y en el CHANGELOG, y de eso ' +
-      'te encargas tu.';
+    Nota := Eol + MsgFmt(SF_CFG_SUFIJO_NO_VA_DPROJ_FMT, [Sufijo]);
   Result := MsgFmt(SN_CONFIG_VERSION_OK_FMT,
     [Cuatro, IfThen(AntesNum = AntesKey, AntesNum,
-     AntesNum + ' en los numeros y ' + AntesKey + ' en las claves'), Nota]);
+     MsgFmt(SF_CFG_EN_NUMEROS_Y_CLAVES_FMT, [AntesNum, AntesKey])), Nota]);
 end;
 
 function SetSdk(const ADproj, ARawPlatform, ARawSdk: string): string;
@@ -1429,10 +1426,10 @@ begin
   PatchSaveText(ADproj, Xml, Enc);
   if Quitar then
     Result := MsgFmt(SN_CONFIG_SDK_QUITADO_FMT,
-      [APlatform, IfThen(Antes = '', '(ninguno)', Antes), Disponibles])
+      [APlatform, IfThen(Antes = '', MsgText(SF_NINGUNO), Antes), Disponibles])
   else
     Result := MsgFmt(SN_CONFIG_SDK_PUESTO_FMT,
-      [APlatform, Sdk, IfThen(Antes = '', '(ninguno)', Antes)]);
+      [APlatform, Sdk, IfThen(Antes = '', MsgText(SF_NINGUNO), Antes)]);
 end;
 
 { El PAServer del proyecto. La mitad gemela de set-sdk: en el IDE, "anadir a
@@ -1481,7 +1478,7 @@ begin
   Xml := PatchLoadText(ADproj, Enc);
   EnsurePlatformGroups(Xml, APlatform);
   if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
-    Exit('error: no encuentro el PropertyGroup de ' + APlatform + ' en el .dproj');
+    Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_DE_FMT, [APlatform]));
 
   Antes := '';
   TagIni := Pos(LowerCase('<Profile>'), LowerCase(Xml), I);
@@ -1511,10 +1508,10 @@ begin
   PatchSaveText(ADproj, Xml, Enc);
   if Quitar then
     Result := MsgFmt(SN_CONFIG_PROFILE_QUITADO_FMT,
-      [APlatform, IfThen(Antes = '', '(ninguno)', Antes), Disponibles])
+      [APlatform, IfThen(Antes = '', MsgText(SF_NINGUNO), Antes), Disponibles])
   else
     Result := MsgFmt(SN_CONFIG_PROFILE_PUESTO_FMT,
-      [APlatform, Perfil, IfThen(Antes = '', '(ninguno)', Antes)]);
+      [APlatform, Perfil, IfThen(Antes = '', MsgText(SF_NINGUNO), Antes)]);
 end;
 
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;

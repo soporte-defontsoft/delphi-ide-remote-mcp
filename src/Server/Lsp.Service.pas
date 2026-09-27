@@ -40,9 +40,6 @@ type
 const
   SERVICE_NAME = 'DelphiLspMcp';
   SERVICE_DISPLAY = 'DelphiLSP MCP Service';
-  SERVICE_DESCRIPTION = 'Remote control of Delphi over MCP: semantic ' +
-    'navigation, safe editing, build and git for AI agents working from ' +
-    'any platform.';
   { The switch that tells this exe to run under the SCM. Baked into the
     registered ImagePath by ServiceAfterInstall - see there for why. }
   SERVICE_SWITCH = '/service';
@@ -102,7 +99,7 @@ begin
     if not Reg.OpenKey(Key, False) then
       Exit;
     try
-      Reg.WriteString('Description', SERVICE_DESCRIPTION);
+      Reg.WriteString('Description', MsgText(SD_SYS_SERVICE_DESCRIPTION));
       // The SCM launches whatever ImagePath says, and Delphi registers it
       // WITHOUT arguments. Running with no arguments is the terminal mode, so
       // the service would start itself as a console and never answer the SCM:
@@ -136,7 +133,7 @@ begin
     FHttp := FHost.CreateHttpServer(0); // port from settings.ini / default
     FHttp.Start;
     TLogger.Info(MsgFmt(SL_SYS_LISTENING_FMT,
-      [IfThen(FHttp.BindIP = '', 'all interfaces', FHttp.BindIP),
+      [IfThen(FHttp.BindIP = '', MsgText(SF_SYS_ALL_INTERFACES), FHttp.BindIP),
        FHost.Settings.Port, FHost.Settings.Endpoint]));
     Started := True;
   except
@@ -164,7 +161,7 @@ begin
     FreeAndNil(FHost);
   except
     on E: Exception do
-      LogMessage(Format('%s stopping: %s', [SERVICE_DISPLAY, E.Message]),
+      LogMessage(MsgFmt(SL_SYS_STOPPING_FMT, [SERVICE_DISPLAY, E.Message]),
         EVENTLOG_WARNING_TYPE);
   end;
   Stopped := True;

@@ -163,7 +163,7 @@ begin
     TLogger.Info(MsgFmt(SL_FILES_GET_FMT, [Full, Stream.Size]));
   except
     on E: Exception do
-      Answer(ResponseInfo, 500, 'error: ' + E.Message);
+      Answer(ResponseInfo, 500, MsgFmt(SR_ERROR_FMT, [E.Message]));
   end;
 end;
 

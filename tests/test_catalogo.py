@@ -28,20 +28,8 @@ TEXTS = os.path.join(mc.REPO, 'src', 'Server', 'Lsp.Texts.pas')
 src = open(TEXTS, encoding='utf-8-sig').read()
 
 
-def constantes(t):
-    """{NOMBRE: texto} de las constantes de cadena: sus literales juntos, sin
-    comentarios. Lo que no es literal (otra constante, #10) se salta o se
-    traduce; basta para leer etiquetas."""
-    t = re.sub(r'//[^\n]*', '', t)
-    t = re.sub(r'\{[^}]*\}', '', t)
-    out = {}
-    for m in re.finditer(r'^\s{2}([A-Z][A-Z0-9_]+)\s*=\s*(.*?);\s*$', t, re.M | re.S):
-        nombre, expr = m.group(1), m.group(2)
-        if nombre in out or expr.count("'") == 0:
-            continue
-        partes = re.findall(r"'((?:[^']|'')*)'|#(\d+)", expr)
-        out[nombre] = ''.join(a.replace("''", "'") if a or not b else chr(int(b)) for a, b in partes)
-    return out
+# un solo lector del catalogo para todas las baterias
+constantes = mc.constantes
 
 
 C = constantes(src)
@@ -85,7 +73,9 @@ def problemas(consts):
                 p['reglas'].append('%s: un rechazo sin resultado' % nombre)
             if pref in ('SK_', 'SN_') and tg.group(2):
                 p['reglas'].append('%s: %s declara %s' % (nombre, pref, tg.group(2)))
-            if pref in ('SD_', 'SP_', 'SL_', 'SE_'):
+            # SF_: un trozo que va dentro de otro mensaje o la plantilla de una
+            # linea de un listado (el resto, 27-sep): tampoco lleva etiqueta
+            if pref in ('SD_', 'SP_', 'SL_', 'SE_', 'SF_'):
                 p['reglas'].append('%s: %s no lleva etiqueta' % (nombre, pref))
     p['repetidas'] = [i for i, n in ids.items() if n > 1]
     return p
@@ -109,7 +99,8 @@ check('C2 todo lo que parece una etiqueta lo es', not p['malas'], p['malas'][:10
 check('C3 ningun id repetido', not p['repetidas'], p['repetidas'][:10])
 check('C3b una etiqueta por mensaje como mucho', not p['varias'], p['varias'][:10])
 check('C4 la etiqueta va al FINAL del mensaje', not p['al_medio'], p['al_medio'][:10])
-check('C5 rechazos con resultado; notas, buenos, descripciones y log sin el', not p['reglas'], p['reglas'][:10])
+check('C5 rechazos con resultado; notas y buenos sin el; descripciones, log, excepciones y trozos sin '
+      'etiqueta', not p['reglas'], p['reglas'][:10])
 
 # lo que falta, por prefijo: informa, no falla (se migra por areas)
 for pref in ('SR_', 'SK_', 'SN_'):
@@ -136,7 +127,7 @@ for f in glob.glob(os.path.join(mc.REPO, 'src', 'Server', '*.pas')) + \
             continue
         for m in re.finditer(r'(\w+)?\(?\s*\b(S[RNK]_[A-Z0-9_]+)\b', l):
             if m.group(2) in NOMBRES and not re.search(
-                    r'\b(MsgText|MsgFmt|HasMsg|MsgTag)\(\s*(\w+,\s*)?%s\b' % m.group(2), l):
+                    r'\b(MsgText|MsgFmt|MsgEnvuelve|HasMsg|EsMsg|MsgTag)\(\s*(\w+,\s*)?%s\b' % m.group(2), l):
                 directas += 1
 print('  info: usos de una constante del catalogo sin el helper MsgText/MsgFmt: %d' % directas)
 fin('catalogo')

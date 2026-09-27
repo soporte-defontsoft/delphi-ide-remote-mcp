@@ -169,7 +169,7 @@ begin
         Prompt := TJSONObject.Create;
         Arr.AddElement(Prompt);
         Prompt.AddPair('name', 'vault');
-        Prompt.AddPair('title', 'Cargar el vault de conocimiento');
+        Prompt.AddPair('title', MsgText(SD_VAULT_PROMPT_TITLE));
         Prompt.AddPair('description', SD_VAULT_PROMPT);
         Prompt.AddPair('arguments', TJSONArray.Create);
       end;

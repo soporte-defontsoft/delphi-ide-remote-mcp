@@ -44,7 +44,10 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.ZLib;
+  System.SysUtils,
+  System.Classes,
+  System.ZLib,
+  Mld.Textos;
 
 { ------------------------------------------------------------------ CRC32 }
 var
@@ -208,7 +211,7 @@ begin
   Img := FOjos.Imagen(AVentana);
   if Img = nil then
   begin
-    FError := 'no pude leer la imagen de la ventana: ' + FOjos.Error;
+    FError := MsgFmt(SF_NODE_NO_LEER_IMAGEN_VENTANA_FMT, [FOjos.Error]);
     Exit;
   end;
   try
@@ -217,19 +220,19 @@ begin
     Bpp := Img.BitsPerPixel;
     if (Ancho <= 0) or (Alto <= 0) or (Img.Datos = nil) then
     begin
-      FError := 'la ventana no devolvio pixeles';
+      FError := MsgText(SF_NODE_VENTANA_SIN_PIXELES);
       Exit;
     end;
     if (Bpp <> 32) and (Bpp <> 24) then
     begin
-      FError := Format('formato de pixel no contemplado: %d bits', [Bpp]);
+      FError := MsgFmt(SF_NODE_FORMATO_PIXEL_NO_CONTEMPLADO_FMT, [Bpp]);
       Exit;
     end;
 
     Result := GuardarPNG(ARuta, PByte(Img.Datos), Ancho, Alto,
       Img.BytesPerLine, Bpp);
     if not Result then
-      FError := 'no pude escribir el PNG en ' + ARuta;
+      FError := MsgFmt(SF_NODE_NO_ESCRIBIR_PNG_FMT, [ARuta]);
   finally
     FOjos.LiberarImagen(Img);
   end;

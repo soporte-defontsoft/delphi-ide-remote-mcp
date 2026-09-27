@@ -300,7 +300,7 @@ begin
   if StillThere(APath) then
     Result := MsgFmt(SR_FILE_PURGE_FAILED_FMT,
       [TPath.GetFileName(ExcludeTrailingPathDelimiter(APath)),
-       'sigue ahi despues de borrarlo']);
+       MsgText(SF_FILE_SIGUE_AHI_DESPUES_BORRARLO)]);
 end;
 
 { TDelphiDeleteTool }
@@ -334,7 +334,7 @@ begin
     if IsBackupRoot(Params.Path) then
       Exit(MsgText(SR_FILE_PURGE_NOT_ROOT));
     if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
-      Exit(MsgFmt(SR_DSGN_NO_EXISTE_FMT, [Params.Path]));
+      Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
     var CanonPurge := LongCanonical(Params.Path);
     if CanonPurge.ToLower.EndsWith('.by') then
     begin
@@ -380,7 +380,7 @@ begin
     if EsLaTemporal then
       Exit(MsgFmt(SR_FILE_DELETE_TEMP_ROOT_FMT, [Params.Path]));
     if not StillThere(Params.Path) then
-      Exit('RECHAZADO: no existe ' + Params.Path);
+      Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
     Denied := BorraDeVerdad(Params.Path);
     if Denied <> '' then
       Exit(Denied);
@@ -390,7 +390,7 @@ begin
   if IsBackupPath(Params.Path) then
     Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_BORRA_FMT, [BACKUP_SUB]));
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
-    Exit('RECHAZADO: no existe ' + Params.Path);
+    Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
   // Una carpeta a la papelera se lleva TODO lo de dentro: ni ser ni contener
   // una raiz, una referencia o una carpeta de solo lectura. La puerta de
   // arriba solo mira la ruta que le pasan (2026-09-25). Tambien la vacia:
@@ -437,7 +437,7 @@ begin
         R := RemoveProjectUnit(P, Params.Path, True);
       except
         on E: Exception do
-          R := 'ERROR ' + E.Message;
+          R := MsgFmt(SF_FILE_ERROR_FMT, [E.Message]);
       end;
       ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
     end;
@@ -451,11 +451,11 @@ begin
       try
         MoveToTrash(ChangeFileExt(Params.Path, Ext), Trash);
         DesignerNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-          [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), 'tambien a la papelera']);
+          [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), MsgText(SF_FILE_TAMBIEN_A_PAPELERA)]);
       except
         on E: Exception do
           DesignerNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-            [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), 'ERROR ' + E.Message]);
+            [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), MsgFmt(SF_FILE_ERROR_FMT, [E.Message])]);
       end;
   end
   else if TDirectory.Exists(Params.Path) then
@@ -485,7 +485,7 @@ begin
             R := RemoveProjectUnit(P, U, True);
           except
             on E: Exception do
-              R := 'ERROR ' + E.Message;
+              R := MsgFmt(SF_FILE_ERROR_FMT, [E.Message]);
           end;
         Inc(Cuantas);
         ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
@@ -509,9 +509,9 @@ begin
           [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
            E.Message]));
       if (ProjNote <> '') or (DesignerNote <> '') then
-        Exit(MsgFmt(SN_FILE_PARTIAL_FMT, ['al mover a la papelera', E.Message,
+        Exit(MsgFmt(SR_FILE_PARTIAL_FMT, [MsgText(SF_FILE_AL_MOVER_PAPELERA), E.Message,
           #10 + DesignerNote + #10 + ProjNote]));
-      Exit(MsgFmt(SN_FILE_ERROR_MOVER_PAPELERA_FMT, [E.Message]));
+      Exit(MsgEnvuelve(SR_FILE_ERROR_MOVER_PAPELERA_FMT, E.Message));
     end;
   end;
   // Say BORRADO only if it is gone. An auditor working through MCP found a
@@ -649,8 +649,7 @@ begin
   if IsUnit then
   begin
     if TPath.GetExtension(Params.Dest).ToLower <> '.pas' then
-      Exit('RECHAZADO: una unit .pas solo se mueve a otro nombre .pas (' +
-        TPath.GetFileName(Params.Dest) + ').');
+      Exit(MsgFmt(SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT, [TPath.GetFileName(Params.Dest)]));
     if not TRegEx.IsMatch(NewStem, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
       Exit(MsgFmt(SR_FILE_IDENTIFICADOR_UNIT_FMT, [NewStem]));
     for Ext in ['.dfm', '.fmx'] do
@@ -668,7 +667,7 @@ begin
     if Params.Copy then
       BackupNote := ''
     else if DesdePapelera then
-      BackupNote := '(el origen ya estaba en la papelera: no hago copia de una copia)'
+      BackupNote := MsgText(SF_MOVE_ORIGEN_YA_EN_PAPELERA)
     else
     begin
       BackupNote := TrashPathFor(Params.Path);
@@ -706,10 +705,10 @@ begin
       end;
   except
     on E: Exception do
-      Exit('ERROR al ' + IfThen(Params.Copy, 'copiar', 'mover') + ': ' + E.Message);
+      Exit(IfThen(Params.Copy, MsgEnvuelve(SR_MOVE_ERROR_AL_COPIAR_FMT, E.Message), MsgEnvuelve(SR_MOVE_ERROR_AL_MOVER_FMT, E.Message)));
   end;
-  Result := Format('%s'#10'  de: %s'#10'  a:  %s',
-    [IfThen(Params.Copy, 'COPIADO', 'MOVIDO'), Params.Path, Params.Dest]);
+  Result := IfThen(Params.Copy, MsgFmt(SK_MOVE_COPIADO_FMT, [Params.Path, Params.Dest]),
+    MsgFmt(SK_MOVE_MOVIDO_FMT, [Params.Path, Params.Dest]));
   if Length(NoSeguidos) > 0 then
     Result := Result + #10 + MsgFmt(SN_COPY_LINKS_NOT_FOLLOWED_FMT,
       [Length(NoSeguidos), string.Join(', ', NoSeguidos)]);
@@ -732,7 +731,7 @@ begin
         TFile.Move(Gemelo, ChangeFileExt(Params.Dest, Ext));
       PairNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
         [TPath.GetFileName(ChangeFileExt(Params.Dest, Ext)),
-         IfThen(Params.Copy, 'copiado con la unit', 'movido con la unit')]);
+         IfThen(Params.Copy, MsgText(SF_MOVE_COPIADO_CON_UNIT), MsgText(SF_MOVE_MOVIDO_CON_UNIT))]);
       if DesdePapelera and TFile.Exists(Gemelo + '.by') then
         try
           TFile.Delete(Gemelo + '.by');
@@ -741,7 +740,7 @@ begin
     except
       on E: Exception do
         PairNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-          [TPath.GetFileName(Gemelo), 'ERROR ' + E.Message]);
+          [TPath.GetFileName(Gemelo), MsgFmt(SF_FILE_ERROR_FMT, [E.Message])]);
     end;
   end;
   if PairNote <> '' then
@@ -754,11 +753,10 @@ begin
     Src := TRegEx.Replace(Src, '^(\s*unit\s+)' + TRegEx.Escape(OldStem) + '(\s*;)',
       '${1}' + NewStem + '${2}', [roIgnoreCase, roMultiline]);
     PatchSaveText(Params.Dest, Src, Enc);
-    Result := Result + #10 + '  cabecera reescrita: unit ' + NewStem + ';';
+    Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_REESCRITA_FMT, [NewStem]);
   except
     on E: Exception do
-      Result := Result + #10 + '  ERROR al reescribir la cabecera (sigue diciendo unit ' +
-        OldStem + ';): ' + E.Message;
+      Result := Result + #10 + MsgFmt(SN_MOVE_ERROR_REESCRIBIR_CABECERA_FMT, [OldStem, E.Message]);
   end;
 
   ProjNote := '';
@@ -773,7 +771,7 @@ begin
       R := RenameProjectUnit(P, Params.Path, Params.Dest);
     except
       on E: Exception do
-        R := 'ERROR ' + E.Message;
+        R := MsgFmt(SF_FILE_ERROR_FMT, [E.Message]);
     end;
     ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
   end;

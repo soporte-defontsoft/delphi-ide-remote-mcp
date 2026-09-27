@@ -425,7 +425,7 @@ begin
     end;
   end;
   kill(APid, SIGKILL);
-  AComo := 'SIGKILL (no atendio al SIGTERM en 3 s)';
+  AComo := MsgText(SF_JOB_SIGKILL_NO_ATENDIO);
 end;
 {$ENDIF}
 
@@ -514,7 +514,7 @@ begin
        not RutaLarga(string(PWideChar(@Ruta[0]))).StartsWith(
          IncludeTrailingPathDelimiter(RutaLarga(ACarpeta)), True) then
     begin
-      AComo := 'ese pid ya es de otro programa, fuera de esta carpeta: no se toca';
+      AComo := MsgText(SF_JOB_PID_DE_OTRO_PROGRAMA);
       Exit(False);
     end;
     Result := TerminateProcess(H, 137);
@@ -580,7 +580,7 @@ begin
       OPEN_EXISTING, 0, 0);
     if HOut = INVALID_HANDLE_VALUE then
     begin
-      AError := 'no pude abrir la salida ' + ASalida;
+      AError := MsgFmt(SF_JOB_NO_ABRIR_SALIDA_FMT, [ASalida]);
       Exit;
     end;
     SI.dwFlags := STARTF_USESTDHANDLES;
@@ -727,7 +727,7 @@ begin
           // sin .pid (un deploy fallido se lo llevo): el vigia, que sigue
           // vivo con el programa, lleva el pid en el nombre
           Pid := PidDelVigia(Carpeta, Args[0].Trim);
-          Origen := 'nombre del vigia';
+          Origen := MsgText(SF_JOB_NOMBRE_DEL_VIGIA);
         end;
         if Pid = 0 then
           Anade(Salida, MsgFmt(SN_JOB_NINGUN_TRABAJO_VIVO_FMT, [Args[0].Trim]) + #10'___RC=3'#10)
@@ -776,6 +776,6 @@ begin
   except
     on E: Exception do
       if Salida <> '' then
-        Anade(Salida, 'error: ' + E.ClassName + ': ' + E.Message + #10'___RC=-1'#10);
+        Anade(Salida, MsgFmt(SR_JOB_EXCEPCION_FMT, [E.ClassName, E.Message]) + #10'___RC=-1'#10);
   end;
 end.

@@ -809,7 +809,7 @@ begin
     Result := MsgFmt(SK_CREATE_CREADOS_NO_REGISTRADOS_FMT, [AUnitName, DesignerExt, Result])
   else
     Result := MsgFmt(SK_CREATE_CREADO_FORM_FMT,
-      [IfThen(Kind.StartsWith('frame'), 'frame', IfThen(Kind = 'datamodule', 'data module', 'form')),
+      [IfThen(Kind.StartsWith('frame'), MsgText(SF_CREATE_CLASE_FRAME), IfThen(Kind = 'datamodule', MsgText(SF_CREATE_CLASE_DATA_MODULE), MsgText(SF_CREATE_CLASE_FORM))),
        AUnitName, FormName, Kind, AUnitName + DesignerExt, Result,
        IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]);
 end;

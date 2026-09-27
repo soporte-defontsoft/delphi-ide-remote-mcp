@@ -61,7 +61,9 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Diagnostics;
+  System.SysUtils,
+  System.Diagnostics,
+  Mld.Textos;
 
 { Declarada aqui porque CapturarEscritorio la usa antes de su sitio. }
 function DesdeUri(const AUri: string): string; forward;
@@ -181,7 +183,7 @@ function TConexionBus.Resolver: Boolean;
   begin
     Result := FLib.Simbolo(ASimbolo, ADir);
     if not Result then
-      FError := Format('falta %s en %s (%s)', [ASimbolo, FLib.Nombre, FLib.Error]);
+      FError := MsgFmt(SF_NODE_FALTA_EN_FMT, [ASimbolo, FLib.Nombre, FLib.Error]);
   end;
 
 begin
@@ -220,7 +222,7 @@ begin
   if not FLib.Abierta then
     if not FLib.Abrir('libdbus-1.so.3') then
     begin
-      FError := 'no hay libdbus en esta maquina: ' + FLib.Error;
+      FError := MsgFmt(SF_NODE_NO_HAY_LIB_FMT, ['libdbus', FLib.Error]);
       Exit(False);
     end;
   if not Resolver then
@@ -242,7 +244,7 @@ begin
 
   if FConn = nil then
   begin
-    FError := 'el bus no devolvio conexion (sin DBUS_SESSION_BUS_ADDRESS?)';
+    FError := MsgText(SF_NODE_BUS_NO_DEVOLVIO_CONEXION);
     Exit(False);
   end;
 
@@ -272,14 +274,14 @@ begin
   Result := False;
   if FConn = nil then
   begin
-    FError := 'no hay conexion con el bus';
+    FError := MsgText(SF_NODE_NO_HAY_CONEXION_BUS);
     Exit;
   end;
   Msg := DbusMsgNew('org.freedesktop.DBus', '/org/freedesktop/DBus',
     'org.freedesktop.DBus', 'ListNames');
   if Msg = nil then
   begin
-    FError := 'no se pudo construir el mensaje';
+    FError := MsgText(SF_NODE_NO_CONSTRUIR_MENSAJE);
     Exit;
   end;
   FillChar(Err, SizeOf(Err), 0);
@@ -293,7 +295,7 @@ begin
     end;
     if Resp = nil then
     begin
-      FError := 'el bus no respondio';
+      FError := MsgText(SF_NODE_BUS_NO_RESPONDIO);
       Exit;
     end;
     try
@@ -301,12 +303,12 @@ begin
       FillChar(Sub, SizeOf(Sub), 0);
       if not DbusIterInit(Resp, @Iter) then
       begin
-        FError := 'respuesta sin argumentos';
+        FError := MsgText(SF_NODE_RESPUESTA_SIN_ARGUMENTOS);
         Exit;
       end;
       if DbusIterTipo(@Iter) <> DBUS_TYPE_ARRAY then
       begin
-        FError := 'se esperaba un array de cadenas';
+        FError := MsgText(SF_NODE_ESPERABA_ARRAY_CADENAS);
         Exit;
       end;
       DbusIterEntrar(@Iter, @Sub);
@@ -344,14 +346,14 @@ begin
   Result := False;
   if FConn = nil then
   begin
-    FError := 'no hay conexion con el bus';
+    FError := MsgText(SF_NODE_NO_HAY_CONEXION_BUS);
     Exit;
   end;
   Msg := DbusMsgNew('org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig',
     'org.gnome.Mutter.DisplayConfig', 'GetCurrentState');
   if Msg = nil then
   begin
-    FError := 'no se pudo construir el mensaje';
+    FError := MsgText(SF_NODE_NO_CONSTRUIR_MENSAJE);
     Exit;
   end;
   FillChar(Err, SizeOf(Err), 0);
@@ -365,21 +367,21 @@ begin
     end;
     if Resp = nil then
     begin
-      FError := 'el escritorio no respondio';
+      FError := MsgText(SF_NODE_ESCRITORIO_NO_RESPONDIO);
       Exit;
     end;
     try
       FillChar(It, SizeOf(It), 0);
       if not DbusIterInit(Resp, @It) then
       begin
-        FError := 'respuesta sin argumentos';
+        FError := MsgText(SF_NODE_RESPUESTA_SIN_ARGUMENTOS);
         Exit;
       end;
       DbusIterSiguiente(@It);
       DbusIterSiguiente(@It);
       if DbusIterTipo(@It) <> DBUS_TYPE_ARRAY then
       begin
-        FError := 'el tercer argumento no es el array de monitores logicos';
+        FError := MsgText(SF_NODE_TERCER_ARGUMENTO_NO_ARRAY);
         Exit;
       end;
       FillChar(Arr, SizeOf(Arr), 0);
@@ -444,7 +446,7 @@ begin
   Result := False;
   if FConn = nil then
   begin
-    FError := 'no hay conexion con el bus';
+    FError := MsgText(SF_NODE_NO_HAY_CONEXION_BUS);
     Exit;
   end;
   UD := UTF8String(ADestino); UR := UTF8String(ARuta);
@@ -453,7 +455,7 @@ begin
     MarshaledAString(PAnsiChar(UI)), MarshaledAString(PAnsiChar(UM)));
   if Msg = nil then
   begin
-    FError := 'no se pudo construir el mensaje';
+    FError := MsgText(SF_NODE_NO_CONSTRUIR_MENSAJE);
     Exit;
   end;
   try
@@ -468,7 +470,7 @@ begin
         Pc := MarshaledAString(PAnsiChar(Us[I]));
         if not DbusIterAppend(@It, DBUS_TYPE_STRING, @Pc) then
         begin
-          FError := 'no se pudo anadir un argumento';
+          FError := MsgText(SF_NODE_NO_ANADIR_ARGUMENTO);
           Exit;
         end;
       end;
@@ -485,7 +487,7 @@ begin
       end;
       Result := ARespuesta <> nil;
       if not Result then
-        FError := 'sin respuesta';
+        FError := MsgText(SF_NODE_SIN_RESPUESTA);
     finally
       DbusErrorFree(@Err);
     end;
@@ -541,7 +543,7 @@ begin
   try
     if not PrimeraCadena(Resp, ARuta) then
     begin
-      FError := 'CreateSession no devolvio ruta de sesion';
+      FError := MsgText(SF_NODE_CREATESESSION_SIN_RUTA_SESION);
       Exit;
     end;
   finally
@@ -580,7 +582,7 @@ begin
   Result := False;
   if FConn = nil then
   begin
-    FError := 'no hay conexion con el bus';
+    FError := MsgText(SF_NODE_NO_HAY_CONEXION_BUS);
     Exit;
   end;
   UD := UTF8String(ADestino); UR := UTF8String(ARuta);
@@ -589,7 +591,7 @@ begin
     MarshaledAString(PAnsiChar(UI)), MarshaledAString(PAnsiChar(UM)));
   if Msg = nil then
   begin
-    FError := 'no se pudo construir el mensaje';
+    FError := MsgText(SF_NODE_NO_CONSTRUIR_MENSAJE);
     Exit;
   end;
   try
@@ -607,7 +609,7 @@ begin
     UF := UTF8String('{sv}');
     if not DbusIterAbrir(@It, DBUS_TYPE_ARRAY, MarshaledAString(PAnsiChar(UF)), @Arr) then
     begin
-      FError := 'no pude abrir el diccionario';
+      FError := MsgText(SF_NODE_NO_ABRIR_DICCIONARIO);
       Exit;
     end;
     if ATipoValor <> #0 then
@@ -649,7 +651,7 @@ begin
       end;
       Result := ARespuesta <> nil;
       if not Result then
-        FError := 'sin respuesta';
+        FError := MsgText(SF_NODE_SIN_RESPUESTA);
     finally
       DbusErrorFree(@Err);
     end;
@@ -675,7 +677,7 @@ begin
   try
     if not PrimeraCadena(Resp, ARutaRd) then
     begin
-      FError := 'CreateSession no devolvio ruta';
+      FError := MsgText(SF_NODE_CREATESESSION_NO_DEVOLVIO_RUTA);
       Exit;
     end;
   finally
@@ -687,7 +689,7 @@ begin
   try
     if not PrimeraCadena(Resp, Id) then
     begin
-      FError := 'no pude leer SessionId';
+      FError := MsgText(SF_NODE_NO_LEER_SESSIONID);
       Exit;
     end;
   finally
@@ -699,7 +701,7 @@ begin
   try
     if not PrimeraCadena(Resp, ARutaSc) then
     begin
-      FError := 'ScreenCast.CreateSession no devolvio ruta';
+      FError := MsgText(SF_NODE_SCREENCAST_NO_DEVOLVIO_RUTA);
       Exit;
     end;
   finally
@@ -748,19 +750,19 @@ begin
     FillChar(It, SizeOf(It), 0);
     if not DbusIterInit(Resp, @It) then
     begin
-      FError := 'ConnectToEIS no devolvio nada';
+      FError := MsgText(SF_NODE_CONNECTTOEIS_NO_DEVOLVIO_NADA);
       Exit;
     end;
     if DbusIterTipo(@It) <> DBUS_TYPE_UNIX_FD then
     begin
-      FError := Format('ConnectToEIS devolvio tipo %d, se esperaba un descriptor',
+      FError := MsgFmt(SF_NODE_CONNECTTOEIS_DEVOLVIO_TIPO_FMT,
         [DbusIterTipo(@It)]);
       Exit;
     end;
     DbusIterLeer(@It, @ADescriptor);
     Result := ADescriptor >= 0;
     if not Result then
-      FError := 'el descriptor recibido no es valido';
+      FError := MsgText(SF_NODE_DESCRIPTOR_NO_VALIDO);
   finally
     DbusMsgUnref(Resp);
   end;
@@ -785,7 +787,7 @@ begin
   FError := '';
   if FConn = nil then
   begin
-    FError := 'no hay conexion con el bus';
+    FError := MsgText(SF_NODE_NO_HAY_CONEXION_BUS);
     Exit;
   end;
   { La respuesta llega como SEÑAL sobre el objeto de peticion: hay que pedir
@@ -796,7 +798,7 @@ begin
   DbusAnadirFiltro(FConn, MarshaledAString(PAnsiChar(U)), @Err);
   if DbusErrorIsSet(@Err) then
   begin
-    FError := 'no pude suscribirme a la respuesta: ' + Texto(Err.Mensaje);
+    FError := MsgFmt(SF_NODE_NO_SUSCRIBIRME_RESPUESTA_FMT, [Texto(Err.Mensaje)]);
     DbusErrorFree(@Err);
     Exit;
   end;
@@ -810,7 +812,7 @@ begin
   try
     if not PrimeraCadena(Resp, Peticion) then
     begin
-      FError := 'el portal no devolvio objeto de peticion';
+      FError := MsgText(SF_NODE_PORTAL_SIN_OBJETO_PETICION);
       Exit;
     end;
   finally
@@ -835,13 +837,13 @@ begin
         DbusIterLeer(@It, @Codigo);
       if Codigo <> 0 then
       begin
-        FError := Format('el portal rechazo la captura (codigo %d)', [Codigo]);
+        FError := MsgFmt(SF_NODE_PORTAL_RECHAZO_CAPTURA_FMT, [Codigo]);
         Exit;
       end;
       DbusIterSiguiente(@It);
       if DbusIterTipo(@It) <> DBUS_TYPE_ARRAY then
       begin
-        FError := 'la respuesta no trae resultados';
+        FError := MsgText(SF_NODE_RESPUESTA_SIN_RESULTADOS);
         Exit;
       end;
       FillChar(Arr, SizeOf(Arr), 0);
@@ -870,13 +872,13 @@ begin
       end;
       if Uri = '' then
       begin
-        FError := 'la respuesta no trae la direccion del fichero';
+        FError := MsgText(SF_NODE_RESPUESTA_SIN_DIRECCION);
         Exit;
       end;
       AFichero := DesdeUri(Uri);
       Result := AFichero <> '';
       if not Result then
-        FError := 'no entiendo la direccion ' + Uri;
+        FError := MsgFmt(SF_NODE_NO_ENTIENDO_DIRECCION_FMT, [Uri]);
       Exit;
     finally
       DbusMsgUnref(Msg);
@@ -888,7 +890,7 @@ begin
     pantalla bloqueada- y no devolvio ni respuesta ni error. Quien lee esto
     es un agente que no ve esa pantalla: hay que decirle QUE PEDIR, porque
     reintentar no arregla nada. }
-  FError := Format('el portal se quedo callado %d ms: ni respuesta ni error. ' + 'Lo normal es que no llegara a mostrar el dialogo del permiso de ' + 'captura (pasa en sesion remota o con la pantalla bloqueada). Pide al ' + 'operador que conceda UNA vez la captura de pantalla en esa maquina, ' + 'con la pantalla delante; despues esto funciona en silencio', [AMs]);
+  FError := MsgFmt(SF_NODE_PORTAL_QUEDO_CALLADO_FMT, [AMs]);
 end;
 
 function DesdeUri(const AUri: string): string;

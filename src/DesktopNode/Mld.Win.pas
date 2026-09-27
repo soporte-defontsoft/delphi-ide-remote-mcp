@@ -77,8 +77,12 @@ implementation
 {$IFDEF MSWINDOWS}
 
 uses
-  System.SysUtils, System.Math, System.Generics.Collections, Winapi.Dwmapi,
-  Mld.Captura;
+  System.SysUtils,
+  System.Math,
+  System.Generics.Collections,
+  Winapi.Dwmapi,
+  Mld.Captura,
+  Mld.Textos;
 
 const
   { No estan en Winapi.Windows de esta version; valores de la API de Win32. }
@@ -110,27 +114,26 @@ var
 begin
   D := OpenInputDesktop(0, False, DESKTOP_READOBJECTS);
   if D = 0 then
-    Result := 'escritorio de entrada: no se pudo abrir (' +
-      SysErrorMessage(GetLastError) + ')'
+    Result := MsgFmt(SF_NODE_ESCRITORIO_ENTRADA_NO_ABRIR_FMT, [SysErrorMessage(GetLastError)])
   else
   try
     Largo := 0;
     if GetUserObjectInformation(D, UOI_NAME, @Nombre[0], SizeOf(Nombre), Largo) then
-      Result := 'escritorio de entrada: ' + string(PChar(@Nombre[0]))
+      Result := MsgFmt(SF_NODE_ESCRITORIO_ENTRADA_FMT, [string(PChar(@Nombre[0]))])
     else
-      Result := 'escritorio de entrada: sin nombre';
+      Result := MsgText(SF_NODE_ESCRITORIO_ENTRADA_SIN_NOMBRE);
   finally
     CloseDesktop(D);
   end;
   if GetSystemMetrics(SM_REMOTESESSION) <> 0 then
-    Result := Result + '; sesion remota'
+    Result := Result + MsgText(SF_NODE_SESION_REMOTA)
   else
-    Result := Result + '; sesion de consola';
+    Result := Result + MsgText(SF_NODE_SESION_CONSOLA);
   Foco := GetForegroundWindow;
   if (Foco <> 0) and (GetWindowText(Foco, Titulo, Length(Titulo)) > 0) then
-    Result := Result + '; foco en "' + string(PChar(@Titulo[0])) + '"'
+    Result := Result + MsgFmt(SF_NODE_FOCO_EN_FMT, [string(PChar(@Titulo[0]))])
   else
-    Result := Result + '; sin ventana con foco';
+    Result := Result + MsgText(SF_NODE_SIN_VENTANA_FOCO);
 end;
 
 type
@@ -244,14 +247,14 @@ begin
   DCPantalla := GetDC(0);
   if DCPantalla = 0 then
   begin
-    FError := 'no pude abrir el contexto de la pantalla';
+    FError := MsgText(SF_NODE_NO_ABRIR_CONTEXTO_PANTALLA);
     Exit;
   end;
   try
     DCMemoria := CreateCompatibleDC(DCPantalla);
     if DCMemoria = 0 then
     begin
-      FError := 'no pude crear el contexto en memoria';
+      FError := MsgText(SF_NODE_NO_CREAR_CONTEXTO_MEMORIA);
       Exit;
     end;
     try
@@ -268,7 +271,7 @@ begin
       Bmp := CreateDIBSection(DCMemoria, Info, DIB_RGB_COLORS, Pixeles, 0, 0);
       if (Bmp = 0) or (Pixeles = nil) then
       begin
-        FError := 'no pude reservar la imagen';
+        FError := MsgText(SF_NODE_NO_RESERVAR_IMAGEN);
         Exit;
       end;
       try
@@ -288,13 +291,13 @@ begin
                FIzq, FSup, SRCCOPY or CAPTUREBLT) then
           begin
             Cod := GetLastError;   { antes de formatear nada: FormatMessage lo pisa }
-            FError := Format('con CAPTUREBLT: %s [%d]', [SysErrorMessage(Cod), Cod]);
+            FError := MsgFmt(SF_NODE_CON_CAPTUREBLT_FMT, [SysErrorMessage(Cod), Cod]);
             if (GetEnvironmentVariable('MCPDESKTOP_SIN_BITBLT') = '1') or
                not BitBlt(DCMemoria, 0, 0, FAncho, FAlto, DCPantalla,
                  FIzq, FSup, SRCCOPY) then
             begin
               Cod := GetLastError;
-              FError := Format('la copia de pantalla fallo (%s; sin el: %s [%d]; %s)',
+              FError := MsgFmt(SF_NODE_COPIA_PANTALLA_FALLO_FMT,
                 [FError, SysErrorMessage(Cod), Cod, EstadoDelEscritorio]);
               { RESPALDO: el DC de pantalla niega la copia a ratos (medido
                 2026-09-22 con la sesion activa: "Acceso denegado" en un
@@ -307,7 +310,7 @@ begin
               FillChar(Pixeles^, FAncho * FAlto * 4, $40);
               if ComponerPorVentanas(DCMemoria) = 0 then
                 Exit;
-              FRespaldo := 'PrintWindow ventana a ventana, porque ' + FError;
+              FRespaldo := MsgFmt(SF_NODE_PRINTWINDOW_PORQUE_FMT, [FError]);
             end;
             FError := '';
           end;
@@ -318,7 +321,7 @@ begin
           por eso el escritor de PNG es EL MISMO para los dos sistemas. }
         Result := GuardarPNG(ARuta, PByte(Pixeles), FAncho, FAlto, FAncho * 4, 32);
         if not Result then
-          FError := 'no pude escribir el PNG en ' + ARuta;
+          FError := MsgFmt(SF_NODE_NO_ESCRIBIR_PNG_FMT, [ARuta]);
       finally
         DeleteObject(Bmp);
       end;
@@ -395,7 +398,7 @@ begin
   Enviadas := SendInput(Length(AEntradas), AEntradas[0], SizeOf(TInput));
   Result := Enviadas = UINT(Length(AEntradas));
   if not Result then
-    FError := Format('el sistema acepto %d de %d entradas (%s)',
+    FError := MsgFmt(SF_NODE_SISTEMA_ACEPTO_ENTRADAS_FMT,
       [Enviadas, Length(AEntradas), SysErrorMessage(GetLastError)]);
 end;
 
@@ -408,7 +411,7 @@ begin
   FError := '';
   if (AX < 0) or (AY < 0) or (AX >= FAncho) or (AY >= FAlto) then
   begin
-    FError := Format('el pixel (%d,%d) se sale de la captura (%dx%d)',
+    FError := MsgFmt(SF_NODE_PIXEL_FUERA_CAPTURA_FMT,
       [AX, AY, FAncho, FAlto]);
     Exit(False);
   end;

@@ -41,7 +41,8 @@ uses
   System.Generics.Collections,
   Lsp.Client, // PathToUri / UriToPath
   Lsp.Guard,  // ExpandIdeMacros
-  Lsp.Dproj;  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
+  Lsp.Dproj,
+  Lsp.Texts;  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
 
 const
   STANDARD_ALIASES =
@@ -150,9 +151,9 @@ var
   Values: TArray<string>;
 begin
   if not FileExists(ADprojPath) then
-    raise ELspConfigFabricator.CreateFmt('.dproj not found: %s', [ADprojPath]);
+    raise ELspConfigFabricator.Create(MsgFmt(SE_BUILD_DPROJ_FOUND_FMT, [ADprojPath]));
   if not AInfo.Found then
-    raise ELspConfigFabricator.Create('No RAD Studio installation discovered.');
+    raise ELspConfigFabricator.Create(MsgText(SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED));
 
   DprojDir := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
 

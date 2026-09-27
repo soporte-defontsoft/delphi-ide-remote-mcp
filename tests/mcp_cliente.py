@@ -299,6 +299,87 @@ def outcome(t):
     return m.group(2) or ''
 
 
+def constantes(t):
+    """{NOMBRE: texto} de las constantes de cadena de un catalogo Pascal: sus
+    literales juntos, sin comentarios. Lo que no es literal (otra constante,
+    #10) se salta o se traduce; basta para leer etiquetas. EL lector del
+    catalogo para las baterias (test_catalogo lo usa tambien)."""
+    t = re.sub(r'//[^\n]*', '', t)
+    t = re.sub(r'\{[^}]*\}', '', t)
+    out = {}
+    for m in re.finditer(r'^\s{2}([A-Z][A-Z0-9_]+)\s*=\s*(.*?);\s*$', t, re.M | re.S):
+        nombre, expr = m.group(1), m.group(2)
+        if nombre in out or expr.count("'") == 0:
+            continue
+        partes = re.findall(r"'((?:[^']|'')*)'|#(\d+)", expr)
+        out[nombre] = ''.join(a.replace("''", "'") if a or not b else chr(int(b)) for a, b in partes)
+    return out
+
+
+_CATALOGO = {}
+
+
+def catalogo():
+    """{NOMBRE: texto} de Lsp.Texts y de Mld.Textos (el del nodo y el
+    lanzador), leidos una vez por bateria."""
+    if not _CATALOGO:
+        for rel in (('src', 'Server', 'Lsp.Texts.pas'), ('src', 'DesktopNode', 'Mld.Textos.pas')):
+            with open(os.path.join(REPO, *rel), encoding='utf-8-sig') as fh:
+                for n, tx in constantes(fh.read()).items():
+                    _CATALOGO.setdefault(n, tx)
+    return _CATALOGO
+
+
+def id_de(nombre):
+    """El id de la etiqueta de una constante del catalogo ('EDIT-007'). Una
+    constante que no existe o no lleva etiqueta es un fallo de la BATERIA."""
+    ids_ = ids(catalogo().get(nombre, ''))
+    if not ids_:
+        raise KeyError('%s: no esta en el catalogo o no lleva etiqueta' % nombre)
+    return ids_[0]
+
+
+def es(t, nombre):
+    """True si el texto trae el mensaje de esa constante, en cualquier sitio:
+    es('...', 'SR_ANCLA_NO_ESTA_FMT'). Como HasMsg del servidor."""
+    return id_de(nombre) in ids(t)
+
+
+def abre(t, nombre):
+    """True si el mensaje que ABRE el texto es el de esa constante (su
+    etiqueta es la primera). Como EsMsg del servidor."""
+    return ids(t)[:1] == [id_de(nombre)]
+
+
+def resultado(t):
+    """El resultado de una respuesta como lo decide el servidor: el de la
+    etiqueta (outcome) y, si no declara ninguno, la regla vieja que lee como
+    EMPIEZA el texto - la misma que ResultadoPorTexto, mientras dure la
+    migracion (se va el dia que la etiqueta pase al principio)."""
+    r = outcome(t)
+    t = t or ''
+    if r or t.lstrip().startswith(('{', '[')):
+        return r
+    low = t.lower()
+    if t.startswith('RECHAZADO'):
+        return 'NOT_FOUND' if 'no existe' in low else 'DENIED'
+    if t.startswith('error:'):
+        return 'NOT_FOUND' if ('no existe' in low or 'not found' in low) else 'INVALID_PARAM'
+    if t.startswith(('Error:', 'Error executing tool:', 'LSP error:')):
+        return 'INTERNAL'
+    return ''
+
+
+def rechazado(t):
+    """Una negativa: DENIED o NOT_FOUND (lo que antes decia RECHAZADO)."""
+    return resultado(t) in ('DENIED', 'NOT_FOUND')
+
+
+def fallo(t):
+    """Cualquier resultado de error, INTERNAL incluido."""
+    return resultado(t) != ''
+
+
 def como_json(t):
     """El texto de una tool como objeto; {} si no lo es."""
     try:

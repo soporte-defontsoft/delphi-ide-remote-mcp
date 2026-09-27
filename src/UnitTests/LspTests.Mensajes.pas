@@ -21,6 +21,7 @@ type
     [Test] procedure ElResultadoLoDeclaraLaEtiqueta;
     [Test] procedure ElHelperNoRevienta;
     [Test] procedure LosLectoresDelResultado;
+    [Test] procedure ElEnvoltorioRespetaLaCausa;
   end;
 
 implementation
@@ -130,6 +131,26 @@ begin
   Assert.IsTrue(EsMsg(Format(EJ_BUENO, ['A.pas']) + #10'12| RECHAZADO [CFG-007 INVALID_PARAM]', EJ_BUENO));
   Assert.IsFalse(EsMsg('RECHAZADO: x [CFG-007 INVALID_PARAM]'#10'eco: ESCRITO en A.pas. [EDIT-001]', EJ_BUENO),
     'un ESCRITO citado en el eco no convierte un rechazo en exito');
+end;
+
+procedure TEtiquetasTests.ElEnvoltorioRespetaLaCausa;
+const
+  ENVOLTORIO = 'error: %s [SYS-998 INVALID_PARAM]';
+  INTERNO = 'ERROR: %s: %s [SYS-997 INTERNAL]';
+var
+  Causa: string;
+begin
+  // una causa que no es un mensaje con resultado: se envuelve
+  Assert.AreEqual('error: falta la clave [SYS-998 INVALID_PARAM]', MsgEnvuelve(ENVOLTORIO, 'falta la clave'));
+  Assert.AreEqual('INVALID_PARAM', ResultadoDe(MsgEnvuelve(ENVOLTORIO, 'falta la clave')));
+  // una que YA lo es sale tal cual: envolverla le quitaba la etiqueta y el
+  // resultado cambiaba (un <Exec> en delphi_test pasaba de DENIED a INVALID_PARAM)
+  Causa := 'RECHAZADO: el .dproj ejecuta ordenes en el build [BUILD-017 DENIED]';
+  Assert.AreEqual(Causa, MsgEnvuelve(ENVOLTORIO, Causa));
+  Assert.AreEqual('DENIED', ResultadoDe(MsgEnvuelve(ENVOLTORIO, Causa)));
+  // con argumentos propios del envoltorio (clase + mensaje)
+  Assert.AreEqual('ERROR: EFoo: roto [SYS-997 INTERNAL]', MsgEnvuelve(INTERNO, 'roto', ['EFoo', 'roto']));
+  Assert.AreEqual(Causa, MsgEnvuelve(INTERNO, Causa, ['ELspSession', Causa]));
 end;
 
 initialization

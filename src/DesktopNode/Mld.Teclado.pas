@@ -60,7 +60,8 @@ type
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  Mld.Textos;
 
 const
   XKB_FORMATO_TEXTO_V1 = 1;
@@ -193,7 +194,7 @@ var
   begin
     Result := FLib.Simbolo(ASimbolo, ADir);
     if not Result then
-      FError := Format('falta %s en libxkbcommon (%s)', [ASimbolo, FLib.Error]);
+      FError := MsgFmt(SF_NODE_FALTA_EN_FMT, [ASimbolo, 'libxkbcommon', FLib.Error]);
   end;
 
 begin
@@ -202,12 +203,12 @@ begin
   FMuertas.Clear;
   if ATexto = nil then
   begin
-    FError := 'el escritorio no entrego mapa de teclado';
+    FError := MsgText(SF_NODE_ESCRITORIO_SIN_MAPA_TECLADO);
     Exit;
   end;
   if not FLib.Abierta and not FLib.Abrir('libxkbcommon.so.0') then
   begin
-    FError := 'no pude abrir libxkbcommon.so.0 (' + FLib.Error + ')';
+    FError := MsgFmt(SF_NODE_NO_ABRIR_LIBXKBCOMMON_FMT, [FLib.Error]);
     Exit;
   end;
   if not (Uno('xkb_context_new', Dir)) then Exit;
@@ -234,14 +235,14 @@ begin
   Ctx := CtxNuevo(0);
   if Ctx = nil then
   begin
-    FError := 'xkb_context_new devolvio nil';
+    FError := MsgText(SF_NODE_XKB_CONTEXT_NEW_NIL);
     Exit;
   end;
   try
     Mapa := MapaDeTexto(Ctx, ATexto, XKB_FORMATO_TEXTO_V1, 0);
     if Mapa = nil then
     begin
-      FError := 'libxkbcommon no entendio el mapa del escritorio';
+      FError := MsgText(SF_NODE_XKB_NO_ENTENDIO_MAPA);
       Exit;
     end;
     try
@@ -292,7 +293,7 @@ begin
         end;
       Result := FTeclas.Count > 0;
       if not Result then
-        FError := 'el mapa del escritorio no trae ningun caracter';
+        FError := MsgText(SF_NODE_MAPA_SIN_CARACTERES);
     finally
       MapaUnref(Mapa);
     end;

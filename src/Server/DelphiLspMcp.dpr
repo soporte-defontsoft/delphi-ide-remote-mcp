@@ -185,9 +185,9 @@ begin
 
     if HasFlag('--http') then
     begin
-      TLogger.Info('DelphiLSP MCP Service v' + Host.Settings.ServerVersion +
-        ' (HTTP :' + FlagValue('--http', Host.Settings.Port).ToString +
-        Host.Settings.Endpoint + ')');
+      TLogger.Info(MsgFmt(SL_SYS_SERVICE_HTTP_FMT, [Host.Settings.ServerVersion,
+        FlagValue('--http', Host.Settings.Port).ToString,
+        Host.Settings.Endpoint]));
       ShutdownEvent := TEvent.Create(nil, True, False, '');
       try
         SetConsoleCtrlHandler(@ConsoleCtrl, True);

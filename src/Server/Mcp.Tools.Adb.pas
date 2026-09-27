@@ -506,7 +506,7 @@ begin
       Exit(MsgFmt(SR_ADB_KEY_FMT, [Params.Key.Trim]));
     Output := RunAdb(Adb, DevArg + 'shell input keyevent ' + KEY_CODES[N],
       15000, ExitCode);
-    Result := GoneHint(('KEY ' + KEY_NAMES[N] + ' ' + Output.Trim).Trim);
+    Result := GoneHint(MsgFmt(SK_ADB_KEY_ENVIADA_FMT, [KEY_NAMES[N], Output.Trim]).Trim);
   end
   else
     Result := MsgText(SR_ADB_CMD);

@@ -920,7 +920,7 @@ begin
   // ramas no se reescribe - la unit caeria en la rama que no toca, o la
   // clausula perderia su forma. Los llamadores lo dicen antes, con el fichero.
   if U.EnRamas then
-    raise Exception.Create(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, '(el fichero)']));
+    raise Exception.Create(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, MsgText(SF_USES_EL_FICHERO)]));
   NL := IfThen(Dpr.Contains(#13#10), #13#10, #10);
   // the indent of the first entry line of the existing clause
   Clause := Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1);
@@ -1408,7 +1408,7 @@ begin
   Result := Format(IfThen(AFileGoesToo, MsgText(SN_UNIT_REMOVED_GONE_FMT),
     MsgText(SN_UNIT_REMOVED_FMT)), [UnitName, TPath.GetFileName(Dpr),
     IfThen(InDpr, U.Keyword, '-'), IfThen(N > 0, ' + CreateForm', ''),
-    IfThen(InDproj, ', DCCReference del .dproj', ''), TPath.GetFileName(APasPath)]);
+    IfThen(InDproj, MsgText(SF_USES_DCCREFERENCE_DEL_DPROJ), ''), TPath.GetFileName(APasPath)]);
 end;
 
 function RemoveProjectUnit(const AProject, APasPath: string;
@@ -2881,9 +2881,9 @@ begin
   Result := MsgFmt(SN_ARREGLA_FMT, [TPath.GetFileName(AProject), Length(Hechos),
     Length(Sin), Length(Varios)]);
   if Length(Hechos) > 0 then
-    Result := Result + #10 + '  re-apuntadas: ' + string.Join('; ', Hechos);
+    Result := Result + #10 + MsgFmt(SF_USES_REAPUNTADAS_FMT, [string.Join('; ', Hechos)]);
   if Length(Sin) > 0 then
-    Result := Result + #10 + '  no encontradas en el workspace: ' + string.Join('; ', Sin);
+    Result := Result + #10 + MsgFmt(SF_USES_NO_ENCONTRADAS_WORKSPACE_FMT, [string.Join('; ', Sin)]);
   if Length(Varios) > 0 then
     Result := Result + #10 + MsgFmt(SN_ARREGLA_VARIOS_FMT, [string.Join('; ', Varios)]);
   if Length(RutasFaltan) > 0 then

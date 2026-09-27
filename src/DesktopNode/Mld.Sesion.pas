@@ -40,7 +40,12 @@ function SesionGrafica: TSesionGrafica;
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.Classes, Posix.Unistd, Posix.SysStat;
+  System.SysUtils,
+  System.IOUtils,
+  System.Classes,
+  Posix.Unistd,
+  Posix.SysStat,
+  Mld.Textos;
 
 function RuntimeDelUsuario: string;
 begin
@@ -136,10 +141,7 @@ begin
     Exit;
   end;
   if not Result.Hay then
-    Result.Motivo := 'NO hay sesion grafica abierta del usuario ' + NombreDelUsuario +
-      ' en esta maquina. Pidele al operador que inicie sesion en el escritorio ' +
-      '(o abra una sesion remota) con ese usuario y vuelve a intentarlo: sin ' +
-      'escritorio no hay nada que ver ni que pulsar.';
+    Result.Motivo := MsgFmt(SF_NODE_SIN_SESION_GRAFICA_FMT, [NombreDelUsuario]);
 end;
 
 end.

@@ -78,8 +78,11 @@ type
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, Posix.Stdlib,
-  Mld.Sesion; // EL detector de sesion, el mismo que usa el lanzador
+  System.SysUtils,
+  System.IOUtils,
+  Posix.Stdlib,
+  Mld.Sesion,
+  Mld.Textos; // EL detector de sesion, el mismo que usa el lanzador
 
 const
   IsViewable = 2;
@@ -171,7 +174,7 @@ function TOjos.Resolver: Boolean;
   begin
     Result := FLib.Simbolo(ASimbolo, ADir);
     if not Result then
-      FError := Format('falta %s en %s (%s)', [ASimbolo, FLib.Nombre, FLib.Error]);
+      FError := MsgFmt(SF_NODE_FALTA_EN_FMT, [ASimbolo, FLib.Nombre, FLib.Error]);
   end;
 
 begin
@@ -217,7 +220,7 @@ begin
       end;
   except
     on E: Exception do
-      FError := 'no pude mirar ' + RuntimeDelUsuario + ': ' + E.Message;
+      FError := MsgFmt(SF_NODE_NO_PUDE_MIRAR_FMT, [RuntimeDelUsuario, E.Message]);
   end;
   if Mejor <> '' then
   begin
@@ -233,7 +236,7 @@ begin
   if not FLib.Abierta then
     if not FLib.Abrir('libX11.so.6') then
     begin
-      FError := 'no hay libX11 en esta maquina: ' + FLib.Error;
+      FError := MsgFmt(SF_NODE_NO_HAY_LIB_FMT, ['libX11', FLib.Error]);
       Exit(False);
     end;
   if not Resolver then
@@ -332,7 +335,7 @@ begin
   FError := '';
   if FDisp = nil then
   begin
-    FError := 'no hay conexion con X11';
+    FError := MsgText(SF_NODE_SIN_CONEXION_X11);
     Exit(False);
   end;
   Recorrer(XDefaultRootWindow(FDisp));
@@ -405,7 +408,7 @@ begin
   FError := '';
   if FDisp = nil then
   begin
-    FError := 'no hay conexion con X11';
+    FError := MsgText(SF_NODE_SIN_CONEXION_X11);
     Exit(False);
   end;
   TamanoRaiz(RaizW, RaizH);
@@ -413,7 +416,7 @@ begin
   Num := 0;
   if XQueryTree(FDisp, XDefaultRootWindow(FDisp), Raiz, Padre, Hijos, Num) = 0 then
   begin
-    FError := 'no pude leer el arbol de ventanas de X11';
+    FError := MsgText(SF_NODE_NO_LEER_ARBOL_X11);
     Exit(False);
   end;
   if Hijos <> nil then
@@ -461,24 +464,24 @@ begin
   FError := '';
   if FDisp = nil then
   begin
-    FError := 'no hay conexion con X11';
+    FError := MsgText(SF_NODE_SIN_CONEXION_X11);
     Exit;
   end;
   FillChar(At, SizeOf(At), 0);
   if XGetWindowAttributes(FDisp, AVentana, At) = 0 then
   begin
-    FError := 'esa ventana ya no existe';
+    FError := MsgText(SF_NODE_VENTANA_YA_NO_EXISTE);
     Exit;
   end;
   if At.MapState <> IsViewable then
   begin
-    FError := 'la ventana no esta visible: no hay nada que capturar';
+    FError := MsgText(SF_NODE_VENTANA_NO_VISIBLE);
     Exit;
   end;
   Result := XGetImage(FDisp, AVentana, 0, 0, At.Ancho, At.Alto,
     TodosLosPlanos, ZPixmap);
   if Result = nil then
-    FError := 'XGetImage no devolvio imagen (ventana tapada o sin respaldo)';
+    FError := MsgText(SF_NODE_XGETIMAGE_SIN_IMAGEN);
 end;
 
 procedure TOjos.LiberarImagen(AImagen: PXImage);
@@ -506,13 +509,11 @@ begin
       '.mutter-Xwaylandauth.*')) > 0;
   except
     on E: Exception do
-      Exit('no pude mirar ' + RuntimeDelUsuario + ': ' + E.Message);
+      Exit(MsgFmt(SF_NODE_NO_PUDE_MIRAR_FMT, [RuntimeDelUsuario, E.Message]));
   end;
   if (S.WaylandDisplay <> '') and not HayXauth then
-    Exit('Hay sesion Wayland pero no encuentro la autorizacion de Xwayland ' +
-      '(.mutter-Xwaylandauth.*). Pidele al operador que abra alguna ' +
-      'aplicacion en esa sesion, o comprueba que Xwayland este activo.');
-  Result := 'Hay sesion grafica, pero no pude conectar con ella.';
+    Exit(MsgText(SF_NODE_XWAYLAND_SIN_AUTORIZACION));
+  Result := MsgText(SF_NODE_SESION_SIN_CONECTAR);
 end;
 
 function TOjos.DondeEstaElPuntero(out AX, AY: Integer): Boolean;
@@ -526,13 +527,13 @@ begin
   Result := False;
   if FDisp = nil then
   begin
-    FError := 'no hay conexion con X11';
+    FError := MsgText(SF_NODE_SIN_CONEXION_X11);
     Exit;
   end;
   Result := XQueryPointer(FDisp, XDefaultRootWindow(FDisp), Raiz, Hijo,
     AX, AY, Vx, Vy, Mascara) <> 0;
   if not Result then
-    FError := 'el puntero no esta en esta pantalla';
+    FError := MsgText(SF_NODE_PUNTERO_FUERA_PANTALLA);
 end;
 
 end.

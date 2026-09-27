@@ -76,7 +76,7 @@ begin
   Name := TPath.GetFileNameWithoutExtension(ADpr);
   if TRegEx.IsMatch(Text, '(?i)\bDUnitX\.') then
   begin
-    AWhy := 'usa DUnitX';
+    AWhy := MsgText(SF_TEST_USA_DUNITX);
     Exit(tkDUnitX);
   end;
   // por el lector de directivas: una comentada no hace de un programa una consola
@@ -87,7 +87,7 @@ begin
   if Consola and
      TRegEx.IsMatch(Name, '(?i)(test|tests|spec)') then
   begin
-    AWhy := 'consola y el nombre dice test';
+    AWhy := MsgText(SF_TEST_CONSOLA_NOMBRE_TEST);
     Exit(tkConsole);
   end;
 end;
@@ -96,7 +96,7 @@ function KindName(K: TTestKind): string;
 begin
   case K of
     tkDUnitX: Result := 'DUnitX';
-    tkConsole: Result := 'consola (PASS/FAIL + ExitCode)';
+    tkConsole: Result := MsgText(SF_TEST_CONSOLA_PASS_FAIL);
   else
     Result := '';
   end;

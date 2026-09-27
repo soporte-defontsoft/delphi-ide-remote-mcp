@@ -4,7 +4,7 @@ unit Lsp.Changeset;
   single-file engine could not give: when one operation touches five files
   and the fifth fails, files one to four must not stay changed (today the
   project tools can only REPORT a partial change; measured origin:
-  SN_FILE_PARTIAL_FMT). A changeset makes the whole batch land or none of it.
+  SR_FILE_PARTIAL_FMT). A changeset makes the whole batch land or none of it.
 
   Life cycle (delphi_changeset):
 
@@ -323,7 +323,7 @@ begin
       begin
         if TFile.Exists(Op.Path) then
         begin
-          AError := 'ya existe ' + Op.Path;
+          AError := MsgFmt(SF_CHSET_YA_EXISTE_FMT, [Op.Path]);
           Exit;
         end;
         CrearCarpeta(TPath.GetDirectoryName(Op.Path));
@@ -338,7 +338,7 @@ begin
       begin
         if not TFile.Exists(Op.Path) then
         begin
-          AError := 'no existe ' + Op.Path;
+          AError := MsgFmt(SF_CHSET_NO_EXISTE_FMT, [Op.Path]);
           Exit;
         end;
         TFile.Delete(Op.Path); // the snapshot is the way back
@@ -348,7 +348,7 @@ begin
       begin
         if not TFile.Exists(Op.Path) then
         begin
-          AError := 'no existe ' + Op.Path;
+          AError := MsgFmt(SF_CHSET_NO_EXISTE_FMT, [Op.Path]);
           Exit;
         end;
         var Txt := PatchLoadText(Op.Path, Enc);
@@ -356,13 +356,13 @@ begin
         var Ls := Txt.Replace(#13#10, #10).Split([#10]);
         if (Op.AtLine < 1) or (Op.AtLine > Length(Ls)) then
         begin
-          AError := Format('la linea %d no existe (%s tiene %d)',
+          AError := MsgFmt(SF_CHSET_LINEA_NO_EXISTE_FMT,
             [Op.AtLine, TPath.GetFileName(Op.Path), Length(Ls)]);
           Exit;
         end;
         if (Op.OldLine <> '') and (Ls[Op.AtLine - 1] <> Op.OldLine) then
         begin
-          AError := Format('la linea %d no es la esperada (es "%s")',
+          AError := MsgFmt(SF_CHSET_LINEA_NO_ESPERADA_FMT,
             [Op.AtLine, Ls[Op.AtLine - 1]]);
           Exit;
         end;
@@ -374,12 +374,12 @@ begin
       begin
         if not TFile.Exists(Op.Path) then
         begin
-          AError := 'no existe ' + Op.Path;
+          AError := MsgFmt(SF_CHSET_NO_EXISTE_FMT, [Op.Path]);
           Exit;
         end;
         if TFile.Exists(Op.Dest) then
         begin
-          AError := 'el destino ya existe: ' + Op.Dest;
+          AError := MsgFmt(SF_CHSET_DESTINO_YA_EXISTE_FMT, [Op.Dest]);
           Exit;
         end;
         CrearCarpeta(TPath.GetDirectoryName(Op.Dest));
@@ -685,7 +685,7 @@ begin
           begin
             // staged over a file an earlier op of this same batch creates:
             // there is nothing to anchor against until commit runs
-            Obj.AddPair('anchor', 'pendiente');
+            Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_PENDIENTE));
             Obj.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_VIRTUAL));
             Continue;
           end;
@@ -702,11 +702,11 @@ begin
             case AnchorCount(Text, Op.OldLine, Op.AtLine) of
               1: Obj.AddPair('anchor', 'ok');
               0: begin
-                   Obj.AddPair('anchor', 'NO ENCONTRADA');
+                   Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_NO_ENCONTRADA));
                    Inc(N);
                  end;
             else
-              Obj.AddPair('anchor', 'AMBIGUA (fija atline)');
+              Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_AMBIGUA));
               Inc(N);
             end;
           end;
@@ -830,8 +830,8 @@ begin
             Deltas2.TryGetValue(FPath.ToLower, D);
             Audit.AppendLine(Format('  %s: %s%s',
               [MaskDriveText('delphi_changeset', FPath), Kinds,
-               IfThen(D = 0, '  (mismo numero de lineas)',
-                 Format('  (%s%d lineas en total)',
+               IfThen(D = 0, MsgText(SF_CHSET_MISMO_NUMERO_LINEAS),
+                 MsgFmt(SF_CHSET_LINEAS_EN_TOTAL_FMT,
                    [IfThen(D > 0, '+', ''), D]))]));
           end;
           AuditText := Audit.ToString.TrimRight;

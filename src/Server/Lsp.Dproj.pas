@@ -226,7 +226,8 @@ uses
   System.Classes,
   System.StrUtils,
   System.IOUtils,
-  System.Generics.Collections;
+  System.Generics.Collections,
+  Lsp.Texts;
 
 { El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
   entre comillas: un Condition="'$(A)'>'1'" no la cierra. 0 si no hay. }
@@ -467,9 +468,7 @@ begin
   // VCL is Windows-only: Vcl.Forms does not exist on Linux/macOS/mobile.
   if SameText(FrameworkType, 'VCL') and not IsLocalPlatform(APlatform) then
   begin
-    AReason := Format('el proyecto es VCL y VCL solo existe en Windows ' +
-      '(Vcl.Forms no compila para %s). Para multiplataforma con interfaz usa ' +
-      'FMX; sin interfaz, una app de consola.', [APlatform]);
+    AReason := MsgFmt(SF_CFG_VCL_SOLO_WINDOWS_FMT, [APlatform]);
     Exit(False);
   end;
   Result := True;
@@ -1132,7 +1131,7 @@ begin
   // AllowBuildScripts del workspace (checked by the caller), never here.
   for var Danger in DANGER_TASKS do
     if HasElement(Low, Danger) then
-      Exit(Format('a <%s> task (executes a program or writes files during build)',
+      Exit(MsgFmt(SF_CFG_HAZARD_TASK_FMT,
         [Danger]));
 
   // RAD Studio build-event commands: only a NON-EMPTY one runs a shell.
@@ -1152,7 +1151,7 @@ begin
       if (TagEnd = 0) or (CloseP = 0) then
         Break;
       if Copy(AXml, TagEnd + 1, CloseP - TagEnd - 1).Trim <> '' then
-        Exit(Format('a non-empty <%s> shell command', [Tag]));
+        Exit(MsgFmt(SF_CFG_HAZARD_SHELL_COMMAND_FMT, [Tag]));
       Scan := CloseP + 1;
     end;
   end;
@@ -1181,29 +1180,29 @@ begin
       begin
         V := Copy(AXml, ValStart, ValEnd - ValStart).Trim;
         if V.StartsWith('\\') or V.StartsWith('//') then
-          Exit('an <Import> from a UNC path (' + V + ')');
+          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_UNC_FMT, [V]));
         if IsStockImport(LowerCase(V)) then
         begin
           Scan := TagEnd + 1;
           Continue; // the IDE's own targets: trusted, not read
         end;
         if ADepth >= 4 then
-          Exit('an <Import> chain too deep to verify (' + V + ')');
+          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_PROFUNDO_FMT, [V]));
         Resolved := ResolveImportPath(V, AProjectFile);
         if Resolved = '' then
-          Exit('an <Import> whose path cannot be verified (' + V + ')');
+          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_VERIFICABLE_FMT, [V]));
         if not TFile.Exists(Resolved) then
-          Exit('an <Import> of a file that is not there to be checked (' + V + ')');
+          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_ESTA_FMT, [V]));
         Imported := '';
         try
           Imported := TFile.ReadAllText(Resolved);
         except
-          Exit('an <Import> that cannot be read to be checked (' + V + ')');
+          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT, [V]));
         end;
         // Recurse: the imported file is held to exactly the same standard.
         Result := HazardScan(Imported, Resolved, ADepth + 1, AIgnoreBuildEvents);
         if Result <> '' then
-          Exit(Format('%s, brought in by <Import> "%s"', [Result, V]));
+          Exit(MsgFmt(SF_CFG_HAZARD_POR_IMPORT_FMT, [Result, V]));
       end;
     end;
     Scan := TagEnd + 1;

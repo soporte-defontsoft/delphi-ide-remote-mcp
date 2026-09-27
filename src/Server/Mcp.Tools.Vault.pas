@@ -533,12 +533,11 @@ begin
     end;
     if Hits = 0 then
       Result := MsgFmt(SN_VAULT_SIN_RESULTADOS_RECUERDA_INDICE_FMT,
-        [Pat, IfThen(ByContent, 'contenido', 'nombres'),
-         IfThen(ByContent, '', ' Solo se han mirado los NOMBRES de las notas: ' +
-           'para buscar dentro del texto repite con target=content.')])
+        [Pat, IfThen(ByContent, MsgText(SF_VAULT_CONTENIDO), MsgText(SF_VAULT_NOMBRES)),
+         IfThen(ByContent, '', MsgText(SF_VAULT_SOLO_NOMBRES_NOTAS))])
     else
-      Result := Format('%d resultado(s)%s:'#10#10, [Hits,
-        IfThen(Hits >= Max, ' (tope alcanzado)', '')]) + Sb.ToString;
+      Result := MsgFmt(SN_VAULT_RESULTADOS_FMT, [Hits,
+        IfThen(Hits >= Max, MsgText(SF_VAULT_TOPE_ALCANZADO), '')]) + #10#10 + Sb.ToString;
   finally
     Sb.Free;
     Notes.Free;
@@ -596,7 +595,7 @@ begin
   Result := Numbered(Text, Params.Offset, Params.Limit, Total, LastLine);
   if (First > 1) and (First > Total) then
     Exit(MsgFmt(SR_VAULT_PAST_END_FMT, [First, Rel, Total]));
-  Result := Format('# %s (%d lineas)'#10#10, [Rel, Total]) + Result;
+  Result := MsgFmt(SN_VAULT_CABECERA_NOTA_FMT, [Rel, Total]) + #10#10 + Result;
   // The footer used to say "lineas 1..N" whatever the offset was, so a reader
   // asking for 20..21 was told it had seen 1..21 and stopped asking for the
   // rest. It reports what it actually showed.
@@ -671,11 +670,11 @@ begin
     Backup);
   if Result <> '' then
     Exit;
-  TLogger.Info('vault_append: ' + VaultRelative(Full));
+  TLogger.Info(MsgFmt(SL_VAULT_APPEND_FMT, [VaultRelative(Full)]));
   Result := MsgFmt(SK_VAULT_ANADIDO_COPIA_PREVIA_FMT,
     [VaultRelative(Full),
-     IfThen(Anchor.Trim <> '', 'tras el anchor', 'al final'),
-     IfThen(Backup = '', '(sin copia)', VaultRelative(Backup))]);
+     IfThen(Anchor.Trim <> '', MsgText(SF_VAULT_TRAS_EL_ANCHOR), MsgText(SF_VAULT_AL_FINAL)),
+     IfThen(Backup = '', MsgText(SF_VAULT_SIN_COPIA), VaultRelative(Backup))]);
 end;
 
 { ------------------------------------------------------------ vault_create - }
@@ -716,7 +715,7 @@ begin
   finally
     GVaultWrite.Leave;
   end;
-  TLogger.Info('vault_create: ' + VaultRelative(Full));
+  TLogger.Info(MsgFmt(SL_VAULT_CREATE_FMT, [VaultRelative(Full)]));
   Result := MsgFmt(SK_VAULT_CREADA_NOTA_RECUERDA_ENLAZARLA_FMT,
     [VaultRelative(Full)]);
 end;
@@ -767,9 +766,9 @@ begin
     Backup);
   if Result <> '' then
     Exit;
-  TLogger.Info('vault_patch: ' + VaultRelative(Full));
+  TLogger.Info(MsgFmt(SL_VAULT_PATCH_FMT, [VaultRelative(Full)]));
   Result := MsgFmt(SN_VAULT_MODIFICADA_SUSTITUCION_COPIA_PREVIA_FMT,
-    [VaultRelative(Full), IfThen(Backup = '', '(sin copia)', VaultRelative(Backup))]);
+    [VaultRelative(Full), IfThen(Backup = '', MsgText(SF_VAULT_SIN_COPIA), VaultRelative(Backup))]);
 end;
 
 initialization

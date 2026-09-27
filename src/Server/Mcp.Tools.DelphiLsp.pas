@@ -721,7 +721,7 @@ begin
   try
     Text := PatchLoadText(APath, Enc);
   except
-    Result.AddPair('error', 'no se puede leer');
+    Result.AddPair('error', MsgText(SN_LSP_NO_SE_PUEDE_LEER));
     Exit;
   end;
   Lines := Text.Replace(#13#10, #10).Split([#10]);

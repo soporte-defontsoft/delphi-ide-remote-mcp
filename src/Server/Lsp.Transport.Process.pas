@@ -92,14 +92,14 @@ begin
   SA.bInheritHandle := True;
 
   if not CreatePipe(FChildStdOutRead, ChildStdOutWrite, @SA, 0) then
-    raise ELspTransport.Create('CreatePipe (stdout) failed');
+    raise ELspTransport.Create(MsgText(SE_LSP_CREATEPIPE_STDOUT_FAILED));
   SetHandleInformation(FChildStdOutRead, HANDLE_FLAG_INHERIT, 0);
 
   if not CreatePipe(ChildStdInRead, FChildStdInWrite, @SA, 0) then
   begin
     CloseHandle(FChildStdOutRead);
     CloseHandle(ChildStdOutWrite);
-    raise ELspTransport.Create('CreatePipe (stdin) failed');
+    raise ELspTransport.Create(MsgText(SE_LSP_CREATEPIPE_STDIN_FAILED));
   end;
   SetHandleInformation(FChildStdInWrite, HANDLE_FLAG_INHERIT, 0);
 

@@ -1090,7 +1090,7 @@ begin
       TFile.Delete(MsgFile);
   end;
   if Length(Output) > 30000 then
-    Output := Copy(Output, 1, 30000) + #10'... (truncated)';
+    Output := Copy(Output, 1, 30000) + #10 + MsgText(SF_GIT_TRUNCATED);
   // A clone that did not happen must not leave its empty destination lying
   // around for the caller to clean up by hand (field round 10).
   if (ExitCode <> 0) and SameText(Cmd, 'clone') and TDirectory.Exists(Repo) then
@@ -1200,12 +1200,12 @@ var
 begin
   Segs := SecondsBetween(Now, ADesde);
   if Segs < 60 then
-    Exit(Format('%ds', [Segs]));
+    Exit(MsgFmt(SF_WS_UPTIME_S_FMT, [Segs]));
   if Segs < 3600 then
-    Exit(Format('%dm %ds', [Segs div 60, Segs mod 60]));
+    Exit(MsgFmt(SF_WS_UPTIME_M_S_FMT, [Segs div 60, Segs mod 60]));
   if Segs < 86400 then
-    Exit(Format('%dh %dm', [Segs div 3600, (Segs mod 3600) div 60]));
-  Result := Format('%dd %dh', [Segs div 86400, (Segs mod 86400) div 3600]);
+    Exit(MsgFmt(SF_WS_UPTIME_H_M_FMT, [Segs div 3600, (Segs mod 3600) div 60]));
+  Result := MsgFmt(SF_WS_UPTIME_D_H_FMT, [Segs div 86400, (Segs mod 86400) div 3600]);
 end;
 
 { QUIEN esta contestando: version, como se arranco este proceso y cuanto lleva
@@ -1305,17 +1305,7 @@ constructor TDelphiWorkspaceTool.Create;
 begin
   inherited;
   FName := 'delphi_workspace';
-  FDescription := 'The lay of the land on the SERVER: the workspace roots ' +
-    'this server operates within (your entire allowed universe here), the ' +
-    'access level (read-write / read-only), the [Workspace.<name>] section ' +
-    'of the server this token is scoped to ("workspace"), and the active RAD Studio by ' +
-    'version AND by name (activeDelphiName / Personality / Edition / Build, ' +
-    'read from the installation - use them when you look anything up for ' +
-    'this Delphi). It also says WHO is answering ("server"): version, how ' +
-    'this process was started (tray / service / console), transport, pid, ' +
-    'uptime, the open sessions and the Windows account it runs as - the way ' +
-    'to check a deployment without looking at the machine from outside. ' +
-    MsgText(SN_VIRTUAL_DRIVES) + ' Call this FIRST. Read-only, no parameters.';
+  FDescription := MsgFmt(SD_WS_WORKSPACE_FMT, [MsgText(SN_VIRTUAL_DRIVES)]);
 end;
 
 function TDelphiWorkspaceTool.ExecuteWithParams(const Params: TDelphiWorkspaceParams): string;
@@ -1356,8 +1346,7 @@ begin
     if Length(Roots) = 0 then
       // Sin Roots solo queda el proceso local sin token: mira, no toca. Decir
       // "unrestricted" al lado de access=read-only era contradecirse (22-sep).
-      Return.AddPair('jail', 'none (no [Workspace.<name>] Roots: a tokenless ' +
-        'local process may look at any path, never touch - see "access")')
+      Return.AddPair('jail', MsgText(SF_WS_JAIL_NONE))
     else
       Return.AddPair('jail', 'active');
     // El NOMBRE de la seccion [Workspace.<nombre>] que autentico esta
@@ -1408,7 +1397,7 @@ begin
       end;
       for var I := 0 to Tops.Count - 1 do
         if Counts[I] > 0 then
-          ExtraArr.Add(Format('%s  (+%d subcarpetas registradas)',
+          ExtraArr.Add(MsgFmt(SF_WS_SUBCARPETAS_REGISTRADAS_FMT,
             [ExcludeTrailingPathDelimiter(Tops[I]), Counts[I]]))
         else
           ExtraArr.Add(ExcludeTrailingPathDelimiter(Tops[I]));

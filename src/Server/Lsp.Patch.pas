@@ -565,7 +565,7 @@ begin
   // put "lineas=38" three words away from "Lineas 1-39 de 39" in the same
   // answer, and the reader had to decide which of the two was lying
   // (measured 2026-08-25). Neither was: they counted different things.
-  Result := Format('bytes=%d saltos=%d CRLF=%d LFsueltos=%d acentos=%d corrupcion=%d',
+  Result := MsgFmt(SF_EDIT_METRICAS_FMT,
     [M.Bytes, M.LF, M.CRLF, M.Loose, M.High, M.Corruption]);
 end;
 
@@ -708,7 +708,7 @@ begin
   if Motivo <> '' then
     raise Exception.Create(Motivo);
   if TFile.Exists(Dest) then
-    Exit('ya existia (' + MaskDriveText('', Dest) + ')');
+    Exit(MsgFmt(SF_EDIT_COPIA_YA_EXISTIA_FMT, [MaskDriveText('', Dest)]));
   CrearCarpeta(DayDir);
   // "Existe?" y "copia" no son un solo gesto: dos escrituras del mismo fichero
   // a la vez pasaban las dos por el if y la segunda moria con "Cannot create
@@ -721,7 +721,7 @@ begin
   except
     on E: Exception do
       if TFile.Exists(Dest) then
-        Exit('ya existia (' + MaskDriveText('', Dest) + ')')
+        Exit(MsgFmt(SF_EDIT_COPIA_YA_EXISTIA_FMT, [MaskDriveText('', Dest)]))
       else
         raise;
   end;
@@ -771,11 +771,11 @@ begin
   if Mins < 0 then
     Mins := 0;
   if Mins < 60 then
-    Result := Format('%d min', [Mins])
+    Result := MsgFmt(SF_EDIT_EDAD_MIN_FMT, [Mins])
   else if Mins < 24 * 60 then
-    Result := Format('%d h %.2d min', [Mins div 60, Mins mod 60])
+    Result := MsgFmt(SF_EDIT_EDAD_HORAS_MIN_FMT, [Mins div 60, Mins mod 60])
   else
-    Result := Format('%d dias', [Mins div (24 * 60)]);
+    Result := MsgFmt(SF_EDIT_EDAD_DIAS_FMT, [Mins div (24 * 60)]);
 end;
 
 function TrashFolderName: string;
@@ -892,7 +892,7 @@ begin
   begin
     ADentro := True;
     if N > 5 then
-      Result := Result + Format(#10'  ...y %d mas', [N - 5]);
+      Result := Result + #10 + MsgFmt(SF_EDIT_PISTA_Y_MAS_FMT, [N - 5]);
     Exit(#10 + MsgText(SN_ANCLA_CONTIENEN) + Result);
   end;
   // 3. la linea real que mas se le parece por el principio
@@ -1322,7 +1322,7 @@ begin
         if not (V is TJSONObject) then
         begin
           Fallo := N;
-          Sb.AppendLine(Format('  %d: no es un objeto {old,new}', [N]));
+          Sb.AppendLine(MsgFmt(SF_EDIT_NO_ES_OBJETO_FMT, [N]));
           Break;
         end;
         Obj := TJSONObject(V);
@@ -1416,7 +1416,7 @@ begin
           if Cambio < Length(DespuesL) then
             Eco := Format('%d| %s', [Cambio + 1, DespuesL[Cambio].Trim])
           else if Delta < 0 then
-            Eco := Format('%d| (linea quitada)', [Cambio + 1]);
+            Eco := MsgFmt(SF_EDIT_LINEA_QUITADA_FMT, [Cambio + 1]);
         except
           // si no se puede releer, mejor no tocar lo pendiente
         end;
@@ -1436,10 +1436,10 @@ begin
           if LA.Trim.StartsWith('***') then
             Avisos := Avisos + [Format('  %d: %s', [N, LA.Trim])];
         if EsBloque then
-          Una := Format('  %d OK (bloque de %d lineas)',
+          Una := MsgFmt(SF_EDIT_OK_BLOQUE_LINEAS_FMT,
             [N, Length(LineasDelAncla(Anc))])
         else
-          Una := Format('  %d OK: %s',
+          Una := MsgFmt(SF_EDIT_OK_ANCLA_FMT,
             [N, Anc.Trim.Substring(0, Min(70, Length(Anc.Trim)))]);
         if Eco <> '' then
           Una := Una + '  ->  ' + Eco.Substring(0, Min(90, Length(Eco)));
@@ -1526,7 +1526,7 @@ begin
   begin
     NotaBin := DesignerBinaryToText(B, Text);
     if NotaBin <> '' then
-      Exit('RECHAZADO: ' + NotaBin);
+      Exit(MsgEnvuelve(SR_RECHAZADO_FMT, NotaBin));
     B := TEncoding.UTF8.GetBytes(Text);
     NotaBin := MsgText(SN_READ_BINARY_DESIGNER) + #10;
   end;
@@ -1543,8 +1543,7 @@ begin
   IniL := AFrom;
   if IniL < 1 then IniL := 1;
   if IniL > Length(Lines) then
-    Exit(Format('%s  encoding=%s  finales=%s  %s'#10 +
-      'El fichero tiene %d lineas; desde=%d esta mas alla del final.',
+    Exit(MsgFmt(SR_EDIT_DESDE_MAS_ALLA_FINAL_FMT,
       [TPath.GetFileName(APath), EncName(K), Eol, Summary(M), Length(Lines), IniL]));
   FinL := ATo;
   if (FinL <= 0) or (FinL > Length(Lines)) then FinL := Length(Lines);
@@ -1567,8 +1566,7 @@ begin
   finally
     Sb.Free;
   end;
-  Result := NotaBin + Format('%s  encoding=%s  finales=%s  %s'#10 +
-    'Lineas %d-%d de %d (formato numero|contenido: el ancla se copia desde justo despues de la barra):'#10'%s%s',
+  Result := NotaBin + MsgFmt(SF_EDIT_LECTURA_NUMERADA_FMT,
     [TPath.GetFileName(APath), EncName(K), Eol, Summary(M), IniL, FinL,
      Length(Lines), Body, Cut]);
 end;
@@ -1694,13 +1692,13 @@ begin
             Skel := Skel.Replace(#10, #13#10);
           if not Skel.EndsWith(#10) then
             if SameText(A.Eol, 'lf') then Skel := Skel + #10 else Skel := Skel + #13#10;
-          Note := 'contenido aportado';
+          Note := MsgText(SF_EDIT_CONTENIDO_APORTADO);
         end
         else
         begin
           Skel := Format('unit %s;'#13#10#13#10'interface'#13#10#13#10 +
             'implementation'#13#10#13#10'end.'#13#10, [UnitName]);
-          Note := 'esqueleto estandar del IDE';
+          Note := MsgText(SF_EDIT_ESQUELETO_ESTANDAR_IDE);
         end;
         CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
         // New files honour the encoding the IDE is configured to use.
@@ -1776,7 +1774,7 @@ begin
           begin
             var Lista: string;
             if Losses.Count = 0 then
-              Lista := '  (ninguna: el fichero actual no tiene lineas que no esten ya en la copia)'
+              Lista := MsgText(SF_EDIT_NINGUNA_YA_EN_COPIA)
             else
             begin
               var Top := Losses.Count;
@@ -1784,7 +1782,7 @@ begin
               var SbL := TStringBuilder.Create;
               try
                 for I := 0 to Top - 1 do SbL.AppendLine(Losses[I]);
-                if Losses.Count > 25 then SbL.Append(Format('  ... y %d mas', [Losses.Count - 25]));
+                if Losses.Count > 25 then SbL.Append(MsgFmt(SF_EDIT_Y_MAS_FMT, [Losses.Count - 25]));
                 Lista := SbL.ToString.TrimRight;
               finally
                 SbL.Free;
@@ -1982,9 +1980,8 @@ begin
             AnclaDpr + #10#10 + string.Join(#10, CodeLines), IAfter + 1, False);
           var NotaVis := '';
           if A.Visible then
-            NotaVis := #10'(visible ignorado: un program no tiene seccion interface)';
-          Exit(Format('INSERT rutina-global (.dpr): colocada DESPUES de la linea %d ' +
-            '(|%s|), entre el uses y el bloque principal - la frontera legal en un program.'#10'%s%s',
+            NotaVis := #10 + MsgText(SF_EDIT_VISIBLE_IGNORADO_PROGRAM);
+          Exit(MsgFmt(SF_EDIT_INSERT_RUTINA_DPR_FMT,
             [IAfter + 1, AnclaDpr.Trim, RDpr, NotaVis]));
         end;
 
@@ -2022,14 +2019,14 @@ begin
               if not Decl.EndsWith(';') then Decl := Decl + ';';
               var R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
               if EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
-                Extra := #10'--- visible: declaracion ''' + Decl + ''' anadida al final del interface ---'#10 + R2
+                Extra := #10 + MsgFmt(SF_EDIT_VISIBLE_DECLARACION_ANADIDA_FMT, [Decl]) + #10 + R2
               else
-                Extra := #10'*** visible: NO pude anadir la declaracion en interface - hazla con old/new. ***'#10 + R2;
+                Extra := #10 + MsgText(SF_EDIT_VISIBLE_NO_PUDE_ANADIR) + #10 + R2;
             end
             else
-              Extra := #10'*** visible: no encuentro una linea ''implementation'' unica; anade la declaracion con old/new. ***';
+              Extra := #10 + MsgText(SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION);
           end;
-          Exit(Format('INSERT rutina-global: colocada ANTES de la linea %d (|%s|), la frontera legal elegida por la tool.'#10'%s%s',
+          Exit(MsgFmt(SF_EDIT_INSERT_RUTINA_ANTES_FMT,
             [FrontIdx + 1, FrontLine.Trim, R, Extra]));
         end;
 
@@ -2110,8 +2107,7 @@ begin
         var DeclNota := '';
         var NotaPublished := '';
         if IDeclExiste >= 0 then
-          DeclNota := Format('la clase YA declaraba ''%s'' (linea %d) y NO se anade ' +
-            'segunda declaracion (si querias un OVERLOAD, su declaracion va con old/new)',
+          DeclNota := MsgFmt(SF_EDIT_CLASE_YA_DECLARABA_FMT,
             [Nombre, IDeclExiste + 1])
         else
         begin
@@ -2208,7 +2204,7 @@ begin
         var AnclaDecl := Lines[IDecl - 1];
         R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
         if not EsMsg(R1, SK_EDIT_ESCRITO_EN_FMT) then
-          Exit(MsgFmt(SN_EDIT_INSERT_FALLO_MITAD1_FMT, [A.ClassName_, R1]));
+          Exit(MsgFmt(SR_EDIT_INSERT_FALLO_MITAD1_FMT, [A.ClassName_, R1]));
         end;
         var FirmaCual := TRegEx.Replace(Firma,
           '^(procedure|function|constructor|destructor)(\s+)', '$1$2' + A.ClassName_ + '.', [roIgnoreCase]);
@@ -2217,16 +2213,13 @@ begin
         if not EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
         begin
           if DeclNota <> '' then
-            Exit(MsgFmt(SN_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT, [R2]));
-          Exit(MsgFmt(SN_EDIT_INSERT_A_MEDIAS_FMT, [R2]));
+            Exit(MsgFmt(SR_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT, [R2]));
+          Exit(MsgFmt(SR_EDIT_INSERT_A_MEDIAS_FMT, [R2]));
         end;
         if DeclNota <> '' then
-          Exit(Format('INSERT metodo en %s: %s. Solo se ha escrito la implementacion.'#10 +
-            '--- Implementacion ''%s'' en la frontera legal ---'#10'%s',
+          Exit(MsgFmt(SF_EDIT_INSERT_METODO_SOLO_IMPL_FMT,
             [A.ClassName_, DeclNota, Copy(FirmaCual, 1, 70), R2]));
-        Exit(Format('INSERT metodo en %s: la tool ha hecho las DOS mitades.%s'#10 +
-          '--- Mitad 1: declaracion ''%s'' dentro de la clase ---'#10'%s'#10 +
-          '--- Mitad 2: implementacion ''%s'' en la frontera legal ---'#10'%s',
+        Exit(MsgFmt(SF_EDIT_INSERT_METODO_DOS_MITADES_FMT,
           [A.ClassName_, IfThen(NotaPublished <> '', #10'  ' + NotaPublished, ''),
            DeclLinea.Trim, R1, Copy(FirmaCual, 1, 70), R2]));
       end;
@@ -2254,7 +2247,7 @@ begin
         False, A.ToLine);
     except
       on E: Exception do
-        Result := MsgFmt(SR_EDIT_FALLO_INTERNO_FMT, [E.ClassName, E.Message]);
+        Result := MsgEnvuelve(SR_FALLO_INTERNO_FMT, E.Message, [E.ClassName, E.Message]);
     end;
   finally
     GLock.Leave;
@@ -2292,7 +2285,7 @@ begin
     begin
       if I >= 8 then
       begin
-        Res.Add(Format('  ... y %d mas', [Length(Raw) - 8]));
+        Res.Add(MsgFmt(SF_EDIT_Y_MAS_FMT, [Length(Raw) - 8]));
         Break;
       end;
       Res.Add(Raw[I]);
@@ -2503,7 +2496,7 @@ begin
     var AfterText := DecodeBytes(After, K);
     var AfterLines := SplitToLines(AfterText);
 
-    var Ctx := '(no he sabido localizar la linea nueva)';
+    var Ctx := MsgText(SF_EDIT_NO_LOCALIZAR_LINEA_NUEVA);
     // El sitio se SABE: la sustitucion empieza justo donde estaba el ancla.
     // Buscar la primera linea del texto nuevo DESDE ARRIBA sacaba otra
     // region entera cuando esa linea es de las que se repiten - un "begin",
@@ -2599,7 +2592,7 @@ begin
           TRegEx.IsMatch(Encima, '^(if|while|for|case|repeat|until|raise|exit|inc|dec|with|begin|try)\b', [roIgnoreCase]);
         if EsStmt then
         begin
-          Warnings.Add(Format('*** POSIBLE INSERCION DENTRO DE UN METODO: la firma ''%s'' ha quedado con ''%s'' encima, que parece un statement. Comprueba el balance begin/end; si el metodo quedo partido, restaura con restore:true. ***',
+          Warnings.Add(MsgFmt(SN_EDIT_POSIBLE_INSERCION_METODO_FMT,
             [Copy(NewLines[J], 1, 60), Copy(Encima, 1, 60)]));
           Break;
         end;
@@ -2622,8 +2615,7 @@ begin
     else if Replacement = '' then
       Accion := MsgFmt(SK_EDIT_BLANQUEADA_LINEA_FMT,
         [HitIdx + 1, TPath.GetFileName(APath)]);
-    Result := Format('%s'#10'  encoding=%s  finales=%s  copia=%s'#10 +
-      '  antes:   %s'#10'  despues: %s'#10'  lineas resultantes leidas del disco:'#10'%s',
+    Result := MsgFmt(SF_EDIT_ECO_ESCRITURA_FMT,
       [Accion, EncName(K), Eol, CopyNote, Summary(M), Summary(D), Ctx]);
     if Warnings.Count > 0 then
       Result := Result + #10 + Warnings.Text.TrimRight;

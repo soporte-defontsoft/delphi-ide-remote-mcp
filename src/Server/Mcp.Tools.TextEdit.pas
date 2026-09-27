@@ -36,7 +36,7 @@ type
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_EDIT_OLD)]
     property Old: string read FOld write FOld;
-    [SchemaDescription('EDIT mode: the new text; may be several lines. Empty = blank the line' + SP_NEW_SALTO_FINAL)]
+    [SchemaDescription(SP_TEXT_NEW + SP_NEW_SALTO_FINAL)]
     property New: string read FNew write FNew;
     [SchemaDescription(SP_TEXT_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;

@@ -33,7 +33,9 @@ type
 implementation
 
 uses
-  System.SysUtils, Posix.Dlfcn;
+  System.SysUtils,
+  Posix.Dlfcn,
+  Mld.Textos;
 
 const
   { Linux x86-64: la RTL solo declara estas constantes para Android. }
@@ -92,7 +94,7 @@ begin
   ADireccion := nil;
   if FHandle = 0 then
   begin
-    FError := 'la libreria no esta abierta';
+    FError := MsgText(SF_NODE_LIBRERIA_NO_ABIERTA);
     Exit(False);
   end;
   U := UTF8String(ASimbolo);

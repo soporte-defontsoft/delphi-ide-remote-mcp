@@ -46,7 +46,9 @@ function DesignerTextToBinary(const AText: string; out ABytes: TBytes): string;
 implementation
 
 uses
-  System.Classes, System.IOUtils;
+  System.Classes,
+  System.IOUtils,
+  Lsp.Texts;
 
 function DesignerShapeOf(const ABytes: TBytes): TDesignerShape;
 begin
@@ -107,12 +109,11 @@ begin
         dsResource: ObjectResourceToText(Entrada, Salida);
         dsTpf0: ObjectBinaryToText(Entrada, Salida);
       else
-        Exit('no es un designer binario: empieza como texto');
+        Exit(MsgText(SF_DSGN_NO_ES_DESIGNER_BINARIO));
       end;
     except
       on E: Exception do
-        Exit('designer BINARIO danado o que no es un .dfm: no pude convertirlo ' +
-          'a texto (' + E.ClassName + ': ' + E.Message + ')');
+        Exit(MsgFmt(SF_DSGN_BINARIO_DANADO_FMT, [E.ClassName, E.Message]));
     end;
     SetLength(Bytes, Salida.Size);
     if Salida.Size > 0 then
@@ -130,7 +131,7 @@ function DesignerFileToText(const APath: string; out AText: string): string;
 begin
   AText := '';
   if not TFile.Exists(APath) then
-    Exit('no existe ' + APath);
+    Exit(MsgFmt(SF_CHSET_NO_EXISTE_FMT, [APath]));
   Result := DesignerBinaryToText(TFile.ReadAllBytes(APath), AText);
 end;
 
@@ -152,10 +153,7 @@ begin
     // ANSI no puede representar se rechaza en vez de escribir '?'.
     Bytes := TEncoding.ANSI.GetBytes(AText);
     if TEncoding.ANSI.GetString(Bytes) <> AText then
-      Exit('el texto lleva caracteres que no caben en la pagina de codigos ' +
-        'ANSI de esta maquina: en un .dfm de texto se escriben como #NNNN ' +
-        '(codigo decimal del caracter, fuera de las comillas), como hace el ' +
-        'IDE. Corrigelos y repite.');
+      Exit(MsgText(SF_DSGN_CARACTERES_NO_CABEN_ANSI));
     if Length(Bytes) > 0 then
       Entrada.WriteBuffer(Bytes[0], Length(Bytes));
     Entrada.Position := 0;
@@ -163,8 +161,7 @@ begin
       ObjectTextToResource(Entrada, Salida);
     except
       on E: Exception do
-        Exit('no pude convertir el texto a designer binario (' + E.ClassName +
-          ': ' + E.Message + ')');
+        Exit(MsgFmt(SF_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [E.ClassName, E.Message]));
     end;
     SetLength(ABytes, Salida.Size);
     if Salida.Size > 0 then
