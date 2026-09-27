@@ -109,4 +109,21 @@ for pref in ('SR_', 'SK_', 'SN_'):
     tot = [n for n in C if n.startswith(pref)]
     con = [n for n in tot if mc.ETIQUETA.search(C[n])]
     print('  info: %s etiquetados %d de %d' % (pref, len(con), len(tot)))
+# las llamadas que aun no pasan por Msg/MsgFmt (David: todo mensaje por un
+# helper, para poder traducirlo un dia): informa mientras se migra
+import glob
+NOMBRES = set(n for n in C if n[:3] in ('SR_', 'SN_', 'SK_'))
+directas = 0
+for f in glob.glob(os.path.join(mc.REPO, 'src', 'Server', '*.pas')) + \
+        glob.glob(os.path.join(mc.REPO, 'vendor', 'src', '**', '*.pas'), recursive=True):
+    if '__' in f or f.endswith('Lsp.Texts.pas'):
+        continue
+    for l in open(f, encoding='utf-8-sig', errors='replace').read().splitlines():
+        if l.strip().startswith('//'):
+            continue
+        for m in re.finditer(r'(\w+)?\(?\s*\b(S[RNK]_[A-Z0-9_]+)\b', l):
+            if m.group(2) in NOMBRES and not re.search(
+                    r'\b(Msg|MsgFmt|HasMsg|MsgTag)\(\s*(\w+,\s*)?%s\b' % m.group(2), l):
+                directas += 1
+print('  info: usos de una constante del catalogo sin el helper Msg/MsgFmt: %d' % directas)
 fin('catalogo')

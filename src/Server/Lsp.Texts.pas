@@ -4486,6 +4486,8 @@ const
   { Y cuando la etiqueta y la regla vieja no coinciden: la etiqueta manda,
     pero cada caso es un cambio de comportamiento que hay que mirar. }
   SL_MSG_OUTCOME_DIFFERS_FMT = 'Resultado distinto: la etiqueta dice %s y el texto decia "%s" en "%s"';
+  { MsgFmt con unos argumentos que no cuadran con los % del mensaje. }
+  SL_MSG_FORMAT_FMT = 'Mensaje %s: los argumentos no cuadran con su formato (%s): "%s"';
 
 { Los ids de las etiquetas que trae AText, en orden. }
 function MsgIds(const AText: string): TArray<string>;
@@ -4499,10 +4501,22 @@ function HasMsg(const AText, AMsg: string): Boolean;
   abre la respuesta; '' si esa no declara ninguno o no hay etiquetas. }
 function MsgOutcome(const AText: string): string;
 
+{ EL paso de todo mensaje del catalogo hacia fuera (David, 27-sep-2026:
+  para poder traducir un dia el mensaje de cada constante). Hoy devuelve el
+  texto tal cual; cuando haya traducciones las buscara aqui, por el id de
+  su etiqueta, y ninguna llamada tendra que cambiar. }
+function Msg(const AMsg: string): string;
+{ Lo mismo con los argumentos de Format. Si no cuadran con los % del
+  mensaje, no revienta la tool con una excepcion de conversion: devuelve
+  el mensaje sin formatear con el motivo detras, y lo anota en el log. }
+function MsgFmt(const AMsg: string; const AArgs: array of const): string;
+
 implementation
 
 uses
-  System.RegularExpressions;
+  System.SysUtils,
+  System.RegularExpressions,
+  MCPServer.Logger;
 
 function MsgIds(const AText: string): TArray<string>;
 begin
@@ -4546,6 +4560,24 @@ begin
   // un grupo opcional que no participa puede no contarse en Groups
   if M.Success and (M.Groups.Count > 2) and M.Groups[2].Success then
     Result := M.Groups[2].Value;
+end;
+
+function Msg(const AMsg: string): string;
+begin
+  Result := AMsg;
+end;
+
+function MsgFmt(const AMsg: string; const AArgs: array of const): string;
+begin
+  try
+    Result := Format(Msg(AMsg), AArgs);
+  except
+    on E: Exception do
+    begin
+      Result := Msg(AMsg) + ' (' + E.Message + ')';
+      TLogger.Error(Format(SL_MSG_FORMAT_FMT, [MsgTag(AMsg), E.Message, Copy(AMsg, 1, 60)]));
+    end;
+  end;
 end;
 
 end.

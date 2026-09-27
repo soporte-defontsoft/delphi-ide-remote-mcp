@@ -19,6 +19,7 @@ type
     [Test] procedure LoQueNoEsEtiqueta;
     [Test] procedure ElMensajePorSuConstante;
     [Test] procedure ElResultadoLoDeclaraLaEtiqueta;
+    [Test] procedure ElHelperNoRevienta;
   end;
 
 implementation
@@ -80,6 +81,20 @@ begin
     'una nota delante');
   Assert.AreEqual('NOT_FOUND', MsgOutcome('RECHAZADO: no existe X. [FILE-004 NOT_FOUND]'#10 +
     'nota [EDIT-040]'#10'y otro [WS-003 DENIED]'), 'el rechazo delante');
+end;
+
+procedure TEtiquetasTests.ElHelperNoRevienta;
+var
+  S: string;
+begin
+  // hoy el texto tal cual; con traducciones, por el id
+  Assert.AreEqual(EJ_SIN, Msg(EJ_SIN));
+  Assert.AreEqual('ESCRITO en A.pas. [EDIT-001]', MsgFmt(EJ_BUENO, ['A.pas']));
+  // unos argumentos que no cuadran: el mensaje sin formatear y el motivo,
+  // nunca una excepcion de conversion en mitad de una tool
+  S := MsgFmt(EJ_BUENO, [42]);
+  Assert.IsTrue(S.StartsWith(EJ_BUENO), S);
+  Assert.IsTrue(MsgIds(S)[0] = 'EDIT-001', 'conserva su etiqueta: ' + S);
 end;
 
 initialization
