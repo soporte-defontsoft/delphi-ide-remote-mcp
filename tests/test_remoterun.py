@@ -287,5 +287,21 @@ r = call_lz('delphi_read', {'path': SCRIPT, 'fromline': 1, 'toline': 1})
 check('LibraryZone=0: el root sigue legible', not mc.fallo(r), r[:200])
 srv_lz.mata()
 
+# 9) un PAServer que no contesta (E0003): DENIED -algo se interpone- y no
+#    INTERNAL -el servidor se rompio-, con que mirar (28-sep: tres
+#    destinos apagados contestaban INTERNAL, tambien a desktop status)
+SIN = os.path.join(SCRATCH, '_sin_paserver')
+open(SIN, 'w').write('x')
+try:
+    r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                                 'exe': PROJNAME + '.exe', 'timeoutms': 20000}, t=180)
+finally:
+    os.remove(SIN)
+j = json.loads(r) if r.startswith('{') else {}
+check('PAServer que no contesta: DENIED y que mirar (era INTERNAL)',
+      mc.abre(j.get('error', ''), 'SR_REMOTERUN_PUT_FMT') and
+      j.get('error', '').startswith('[RUN-010 DENIED]') and 'E0003' in j.get('error', ''),
+      r[:300])
+
 srv.mata()
 mc.fin('remote-run')

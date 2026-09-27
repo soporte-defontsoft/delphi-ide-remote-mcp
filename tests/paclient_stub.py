@@ -91,6 +91,15 @@ def ejecutar(lanzador):
         time.sleep(0.2)
 
 
+# Un PAServer que no contesta, como lo cuenta paclient de verdad (medido el
+# 2026-09-28 contra tres destinos apagados): la bateria lo pide con este
+# fichero en la scratch.
+if os.path.exists(os.path.join(SCRATCH, '_sin_paserver')):
+    print('Platform Assistant Client  Version 37.1.10.6')
+    print('Connecting to 192.0.2.1 on port 64211... ')
+    print("Error: E0003 Connection to '192.0.2.1' on port 64211 failed")
+    sys.exit(1)
+
 for arg in sys.argv[1:]:
     if arg.startswith('--put='):
         spec = arg[len('--put='):]

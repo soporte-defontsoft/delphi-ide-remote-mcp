@@ -1530,7 +1530,7 @@ const
     'settings.ini.';
 
   SR_REMOTERUN_PUT_FMT =
-    '[RUN-010 INTERNAL] Could not send the job to the target ' +
+    '[RUN-010 DENIED] Could not send the job to the target ' +
     '(paclient exit %d): %s. Is PAServer alive? Does the profile point ' +
     'to the right host?';
   SR_REMOTERUN_NO_RUNJOB_FMT =
@@ -1815,7 +1815,7 @@ const
     'folder the project deployed (e.g. "capture.png"). No absolute paths ' +
     'and no "..".';
   SR_FETCHTARGET_FAIL_FMT =
-    '[FETCH-004 INTERNAL] Could not fetch the file from the target ' +
+    '[FETCH-004 DENIED] Could not fetch the file from the target ' +
     '(paclient %d): %s';
   SR_FETCHTARGET_NOFILE_FMT =
     '[FETCH-005 NOT_FOUND] The target did not leave "%s" where expected: ' +
@@ -2104,7 +2104,7 @@ const
     MotivoSinCaptura). Decia "el nodo no dijo donde dejo la captura": la
     fontaneria, no el motivo (David, 26-sep-2026). }
   SR_DESKTOP_SIN_CAPTURA_FMT =
-    '[DESK-023 INTERNAL] No screenshot: %s.';
+    '[DESK-023 DENIED] No screenshot: %s.';
   SN_DESKTOP_MOTIVO_SIN_SESION =
     '[DESK-015] the target has no graphical session open (graphicalEnv): ' +
     'open one with the SAME user that runs PAServer and repeat';
