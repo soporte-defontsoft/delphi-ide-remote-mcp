@@ -88,10 +88,13 @@ check('changes INCLUYE la linea de la definicion',
 check('cero sin confirmar', j.get('unverified') == 0, r[:200])
 
 # 2. invalid ident / reserved
-j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': '9mal'}))
-check('identificador invalido bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_BAD_IDENT_FMT') for b in j.get('blockers', [])), str(j)[:250])
-j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'begin'}))
-check('palabra reservada bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_RESERVED_FMT') for b in j.get('blockers', [])), str(j)[:250])
+r = call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': '9mal'})
+j = J(r)
+# y es un FALLO (INVALID_PARAM en "error"): salia como un exito con blockers
+check('identificador invalido bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_BAD_IDENT_FMT') for b in j.get('blockers', [])) and mc.resultado(r) == 'INVALID_PARAM', str(j)[:250])
+r = call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'begin'})
+j = J(r)
+check('palabra reservada bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_RESERVED_FMT') for b in j.get('blockers', [])) and mc.resultado(r) == 'INVALID_PARAM', str(j)[:250])
 
 # 3. string literal hit: renaming ConCadena
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 5, 'character': 9, 'newname': 'OtraCosa'}))

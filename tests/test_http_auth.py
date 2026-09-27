@@ -227,7 +227,9 @@ try:
 
         # delphi_styles is mixed: view/get/lint read, set/clone/build write
         code, body = call('delphi_styles', {'path': tmpdir3, 'command': 'lint'}, RO_TOKEN)
-        check('ro: delphi_styles lint permitido en RO', not mc.es(body, 'SR_READ_ONLY_FMT'),
+        check('ro: delphi_styles lint permitido en RO',
+              code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT') and
+              mc.resultado(mc.texto(json.loads(body))) not in ('INTERNAL', 'NO_ANSWER'),
               '%s %s' % (code, body[:120]))
         for cmd in ('set', 'clone', 'delete', 'build'):
             code, body = call('delphi_styles', {'path': tmpdir3, 'command': cmd,

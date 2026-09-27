@@ -1379,7 +1379,11 @@ begin
   Disponibles := string.Join(', ', SdksDePlataforma(Info.Version, APlatform));
 
   Sdk := ARawSdk.Trim;
-  Quitar := SameText(Sdk, 'none') or SameText(Sdk, 'default') or (Sdk = '');
+  // sin sdk quitaba el que el proyecto tuviera fijado contestando exito: para
+  // quitarlo esta "none" (tercera revision, 27-sep-2026)
+  if Sdk = '' then
+    Exit(MsgFmt(SR_CFG_NEED_SDK_FMT, [APlatform, Disponibles]));
+  Quitar := SameText(Sdk, 'none') or SameText(Sdk, 'default');
   if not Quitar then
   begin
     if not Sdk.ToLower.EndsWith('.sdk') then
@@ -1466,7 +1470,9 @@ begin
   end;
 
   Perfil := ARawProfile.Trim;
-  Quitar := SameText(Perfil, 'none') or SameText(Perfil, 'default') or (Perfil = '');
+  if Perfil = '' then
+    Exit(MsgFmt(SR_CFG_NEED_PROFILE_FMT, [APlatform, Disponibles]));
+  Quitar := SameText(Perfil, 'none') or SameText(Perfil, 'default');
   if not Quitar then
   begin
     if not TRegEx.IsMatch(Perfil, '^[A-Za-z0-9_.-]+$') then
@@ -1634,7 +1640,7 @@ begin
           var NoVolvio := Foto.Restaura;
           Result := Rechazo + ' ' + MsgText(SN_CONFIG_ADDPLATFORM_NADA);
           if NoVolvio <> '' then
-            Result := Result + #10 + MsgFmt(SN_FOTO_NO_VOLVIO_FMT, [NoVolvio]);
+            Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Rechazo]);
         end
         else if Pega <> '' then
           Result := Result + sLineBreak + Pega;

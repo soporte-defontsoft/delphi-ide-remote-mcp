@@ -335,7 +335,8 @@ try:
     d1 = call('delphi_read', {'path': dentro})
     d2 = call('delphi_list', {'root': JAIL})
     check('G3 lo de DENTRO de la jaula sigue pasando',
-          not mc.es(d1, JAULA) and not mc.es(d2, JAULA), (d1 + ' | ' + d2)[:240])
+          not mc.es(d1, JAULA) and not mc.es(d2, JAULA) and not mc.fallo(d1) and not mc.fallo(d2),
+          (d1 + ' | ' + d2)[:240])
 
     # ------------------------------------------------------------------ G5
     # El demonio de adb tiene que sobrevivir a la llamada: nacia dentro del

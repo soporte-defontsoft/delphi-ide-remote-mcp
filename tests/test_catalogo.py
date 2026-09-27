@@ -148,18 +148,20 @@ LIMPIAS = {f: mc.pascal_sin_comentarios(open(f, encoding='utf-8-sig', errors='re
 # C8: un SR_ en un campo JSON que no es "error"
 fuera = []
 for f, fuente in LIMPIAS.items():
-    for m in re.finditer(r"(?:AddPair|PonResultado)\('(\w+)'[^;]*?\b(SR_[A-Z0-9_]+)", fuente):
+    # hasta el ';' o el SIGUIENTE AddPair: en un if-then-else de Pascal no hay
+    # ';' entre las dos ramas, y el campo de una se llevaba el SR_ de la otra
+    for m in re.finditer(r"(?:AddPair|PonResultado)\('(\w+)'(?:(?!AddPair|PonResultado)[^;])*?\b(SR_[A-Z0-9_]+)", fuente):
         if m.group(1) != 'error':
             fuera.append('%s: %s <- %s' % (os.path.basename(f), m.group(1), m.group(2)))
 # ...y cualquier campo que se LLAME error sin serlo: el fallo metido en una
 # variable no llevaba SR_ en la misma sentencia (la captura sin imagen lo
 # hacia). Declarados: screenshotError (un GESTO hecho cuya captura fallo: el
-# gesto si se hizo) y rcError (el .rc que brcc32 no compilo: un resultado del
-# build, como success=false en delphi_build).
+# gesto si se hizo). rcError ya no existe: un .rc que no compila es un fallo
+# y va en "error" (tercera revision, 27-sep-2026).
 # isError es el campo del PROTOCOLO y firstError el primer error del
 # compilador en el resultado de un build (success=false no es un fallo de la
 # llamada)
-CAMPOS_ERROR_DECLARADOS = {'screenshotError', 'rcError', 'isError', 'firstError'}
+CAMPOS_ERROR_DECLARADOS = {'screenshotError', 'isError', 'firstError'}
 for f, fuente in LIMPIAS.items():
     for m in re.finditer(r"(?:AddPair|PonResultado)\('(\w*[Ee]rror)'", fuente):
         if m.group(1) != 'error' and m.group(1) not in CAMPOS_ERROR_DECLARADOS:

@@ -531,6 +531,19 @@ begin
     end;
     Ret.AddPair('stylesDir', MaskDriveText('delphi_styles', Dir));
     Ret.AddPair('converted', Arr);
+    // Un estilo que no convirtio es un FALLO: salia exito con ok:false y una
+    // nota que mandaba recompilar, y el .rc metia los .bin.style de antes
+    // (tercera revision, 27-sep-2026)
+    if not AllOk then
+    begin
+      var Malos := 0;
+      for var It in Arr do
+        if not TJSONObject(It).GetValue<Boolean>('ok', True) then
+          Inc(Malos);
+      Ret.AddPair('error', MsgFmt(SR_STYLES_BUILD_CONVERT_FMT, [Malos, Arr.Count]));
+      Ret.AddPair('ok', TJSONBool.Create(False));
+      Exit(Ret.ToJSON);
+    end;
     // the .rc -> .res, with the product's resource compiler
     for Rc in TDirectory.GetFiles(Dir, '*.rc') do
     begin
@@ -562,13 +575,15 @@ begin
         Ret.AddPair('resBytes', TJSONNumber.Create(TFile.GetSize(Res)))
       else
       begin
-        Ret.AddPair('rcError', Out.Trim);
+        Ret.AddPair('error', MsgFmt(SR_STYLES_BUILD_RC_FMT, [TPath.GetFileName(Rc), Out.Trim]));
         AllOk := False;
       end;
       Break; // one manifest per styles folder
     end;
     Ret.AddPair('ok', TJSONBool.Create(AllOk));
-    Ret.AddPair('note', MsgText(SN_STYLES_BUILD_NOTE));
+    // "recompila el proyecto" solo cuando hay un .res nuevo que meter
+    if AllOk then
+      Ret.AddPair('note', MsgText(SN_STYLES_BUILD_NOTE));
     Result := Ret.ToJSON;
   finally
     Ret.Free;

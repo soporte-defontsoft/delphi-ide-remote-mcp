@@ -143,7 +143,7 @@ for tool in ('delphi_symbols',):
           mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_LSP_NO_FILE_FMT'),
           r[:200])
 r = A.call('delphi_hover', {'path': GHOST, 'line': 0, 'character': 0})
-check('B5 hover igual', mc.resultado(r) != 'INTERNAL', r[:200])
+check('B5 hover igual', mc.rechazado(r), r[:200])
 r = A.call('delphi_config', {'project': DPROJ, 'command': 'remove-unit', 'name': 'X'})
 check('B5 un parametro que no existe es "error:", no "Error executing tool:"',
       mc.resultado(r) == 'INVALID_PARAM' and mc.abre(r, 'SR_SYS_UNKNOWN_PARAM_FMT'), r[:200])
@@ -261,6 +261,10 @@ check('F5b un clone rechazado no deja la carpeta destino',
 r = A.call('delphi_help', {'command': 'tool', 'name': 'delphi_edt'})
 check('help aguanta una errata de una letra',
       'delphi_edit' in r and (mc.es(r, 'SN_HELP_ASSUMED_FMT') or '"tool"' in r), r[:250])
+# ...pero no una de DOS: delphi_nope contestaba el contrato de delphi_move
+r = A.call('delphi_help', {'command': 'tool', 'name': 'delphi_nope'})
+check('help NO asume una tool a dos letras', mc.resultado(r) == 'NOT_FOUND' and
+      not mc.es(r, 'SN_HELP_ASSUMED_FMT'), r[:250])
 r = A.call('delphi_upload', {'path': os.path.join(BASE, 'x.bin'),
                               'chunkbase64': base64.b64encode(b'abc').decode(),
                               'sha256': 'no-es-un-hash'})

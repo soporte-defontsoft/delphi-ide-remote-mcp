@@ -199,6 +199,15 @@ check('build: conversion OK', d['converted'][0]['ok'] is True and d['converted']
 check('build: .bin.style creado con firma FMX', open(os.path.join(STY, 'Battery.bin.style'), 'rb').read(9) == b'FMX_STYLE', '')
 check('build: .rc -> .res', d.get('rcOk') is True and os.path.exists(os.path.join(STY, 'Battery.Estilos.res')), out[:300])
 check('build: ok', d['ok'] is True, d)
+# un .rc que brcc32 no compila es un FALLO (salia exito con rcError y la nota
+# de recompilar el proyecto; tercera revision)
+_RC = os.path.join(STY, 'Battery.Estilos.rc')
+open(_RC, 'w', encoding='utf-8').write('BATTERY RCDATA "Battery.bin.style"\nOTRO RCDATA "falta.bin"\n')
+out = call('delphi_styles', {"path": STY, "command": "build"})
+d = mc.como_json(out)
+check('build: un .rc que no compila es un fallo con su motivo (y sin "recompila")',
+      mc.abre(d.get('error', ''), 'SR_STYLES_BUILD_RC_FMT') and 'note' not in d, out[:300])
+open(_RC, 'w', encoding='utf-8').write('BATTERY RCDATA "Battery.bin.style"\n')
 # the binary must not be editable
 out = call('delphi_styles', {"path": os.path.join(STY, 'Battery.bin.style'), "command": "view"})
 check('binario rechazado para editar/ver', mc.rechazado(out) and mc.es(out, 'SR_STYLES_BINARY_FMT'), out)

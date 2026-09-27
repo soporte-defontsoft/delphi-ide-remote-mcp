@@ -142,7 +142,7 @@ begin
   else
     URI := '';
   if URI = '' then
-    raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_PARAM_FMT, ['uri']));
+    raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_METHOD_PARAM_FMT, ['uri']));
   if not FResources.ContainsKey(URI) then
     raise EArgumentException.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
 

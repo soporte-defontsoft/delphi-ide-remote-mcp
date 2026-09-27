@@ -316,6 +316,7 @@ Move or rename a file or folder inside the workspace. Both source and destinatio
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the file or folder to move (inside the workspace roots) |
 | `dest` | string | **yes** | Destination absolute path (inside the workspace roots). Parent folders are created. Renames when the parent is the same |
+| `copy` | boolean | optional | true = COPY instead of move: the source stays untouched, no trash copy is taken, and NO project is re-pointed (the copy is a new unit nobody lists yet - delphi_config add-unit). A copied unit named differently gets its "unit X;" header rewritten and its .dfm/.fmx copied along. The source only has to be READABLE (your roots, ReadOnlyRoots, the library zone): the way to bring a file in from a reference project. Refused for a folder that holds a .dproj/.dpk (a project never lives in two places) and for anything inside the trash. |
 
 Both refuse a workspace **root** itself: the trash folder is created next to the
 target, so for a root it would land in the root's parent - a write outside the
@@ -400,7 +401,7 @@ Zip a build-output directory ON the server into a single deploy artifact (recurs
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `dir` | string | **yes** | Directory to package (e.g. the build output Win64\Debug). Recursive; *.dcu and dcu\ intermediates excluded |
-| `outfile` | string | optional | Optional zip path (default: sibling of dir, named <dirname>-deploy.zip). Must be inside the workspace roots |
+| `outfile` | string | optional | Optional zip path, ending in .zip (default: sibling of dir, named <dirname>-deploy.zip). An existing .zip there is replaced. Must be inside the workspace roots |
 
 
 ## Cross-platform: build configs, remote platforms & devices
@@ -416,7 +417,7 @@ See and manage a project's build configurations and target PLATFORMS. command=vi
 | `project` | string | **yes** | Absolute path of the project .dproj (its .dpr/.dpk resolves to it). A `.groupproj` (a project group) takes `view` (its projects), `add-project`, `remove-project` and `fix-references`; every other command is refused, and a file that is not a project is refused too (1.6.0) |
 | `section` | string | optional | view: summary (default) \| platforms \| searchpaths \| deploy \| units \| all — which detail the view brings (platform states and reasons, unit search paths per group, deployment files, project units, or everything at once) |
 | `command` | string | optional | view (default: project summary; section= brings the detail per area) \| add-platform (enable a platform; with `sdk` and/or `profile` it also leaves them set on the project, which is what the IDE's own dialog does: platform + connection + SDK in one gesture) \| remove-platform (disable it again) \| set-output (put every binary under one folder, e.g. Compiled) \| set-version (the project VERSION: the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys, which have to agree; Android and iOS numbering is not touched) \| set-sdk (the SDK this PROJECT builds a platform with - its own PlatformSDK, which is the IDE's model; \"none\" goes back to the SDK Manager default)  \| set-profile (the PAServer profile this PROJECT deploys and runs a platform with - its own Profile property; the twin of set-sdk, because adding a target to a project is giving it BOTH) \| add-searchpath (add a unit search path for one platform, or for all) \| remove-searchpath (take it out again) \| add-deployfile (ship an extra file with the build on one platform: a component's runtime .so/.dll/.dylib) \| remove-deployfile (take it out again) \| add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) \| remove-unit (take it out of the project; the file stays on disk) \| add-requires (packages only: add package names to the requires clause of the .dpk - what the IDE offers after a build reports W1033, and what delphi_build lists in requiresSuggested) \| fix-references (re-point what the project - or a .groupproj - lists and is no longer where it says, moved by hand: the file is found again by its NAME inside the workspace; one match is re-pointed, none or several are reported, never guessed; search paths that do not exist are reported) \| add-project / remove-project (on a .groupproj, `path` = the .dproj: what the IDE's *Add existing project* writes - the `<Projects>` item, its three targets and its name in Build/Clean/Make - or takes out) |
-| `platform` | string | optional | add/remove-platform: the platform, from the fixed set Win32\|Win64\|Win64x\|WinARM64EC\|OSX64\|OSXARM64\|Linux64\|Android\|Android64\|iOSDevice64\|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required) |
+| `platform` | string | optional | add/remove-platform: the Delphi platform name (Win32, Win64, Linux64, Android64...; a name the server does not know is refused with the full list). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required) |
 | `path` | string | optional | add/remove-searchpath: the unit search path to add or remove - a folder where the compiler looks for .pas/.dcu, e.g. the Source folder of an installed component. IDE macros like `$(BDS)` accepted; relative paths resolve from the project folder. Must resolve inside the workspace or the library zone and exist. add/remove-unit: the .pas to register in / take out of the project. add/remove-deployfile: the file to ship (e.g. a component's `Library\Linux64\libzbar.so`) add/remove-project: the .dproj to add to / take out of the .groupproj given in `project`. |
 | `remotedir` | string | optional | add-deployfile: destination folder on the target, relative to the deployment root (the IDE's RemoteDir). Default: the project folder, next to the binary - or, for a .so on Android, the apk's `library\lib\<abi>\`. No absolute paths, no `..` |
 | `sdk` | string | optional | set-sdk: the SDK by name (`delphi_paserver command=profiles` lists them with their glibc). `none` removes the setting and falls back to the SDK Manager default |
@@ -488,10 +489,13 @@ Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.168.1.163;SERIA
 | `apk` | string | optional | install: path of the .apk (inside the workspace). Build it with `delphi_build target=Deploy` |
 | `app` | string | optional | run: package name of the installed app (e.g. com.embarcadero.MiApp - the build/install results state it) |
 | `out` | string | optional | screenshot / logcat: optional since 1.0.14 — a FOLDER, or a FILE whose extension matches (`.png` for screenshot, `.txt`/`.log` for logcat); empty = `__delphi-temp\<agent>` under the workspace. screenshot: where the PNG lands; the capture itself travels in the answer (with `inline=false`, the file stays and the answer carries its download link). logcat: dump into a file instead of answering inline — then read it in RANGES with `delphi_read` (400 lines/call). Inside the workspace |
-| `x` / `y` | string | optional | tap: coordinates in DISPLAY pixels, measured on a screenshot - when that answer carried `tapScale`, multiply by it first |
+| `x` / `y` | string | optional | tap: coordinates measured on a screenshot. Pass that screenshot's `frame` and the server converts to DISPLAY pixels; without `frame` they are DISPLAY pixels (multiply by `tapScale` when the answer carried it) |
 | `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |
 | `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package) |
 | `lines` | string | optional | logcat: how many recent lines to capture (default 300, max 5000; 0 = default). Inline answers carry at most the newest 400 — bigger dumps via `out=` |
+| `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image content item (scaled to maxwidth) and its temp file is consumed on the spot - one call, nothing to download. false = file + download link instead (a client without vision, or one that wants the bytes). |
+| `maxwidth` | number | optional | Inline only: the image is scaled down to this width before it travels (0 = 1280, enough to read a desktop). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels for tap. |
+| `frame` | string | optional | tap/type: the "frame" of the screenshot you MEASURED ON, copied verbatim. With it, x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display) - no arithmetic on your side. Without it, x,y are capture pixels, as always. |
 
 ### `delphi_desktop`
 
@@ -533,6 +537,9 @@ The target needs a graphical session open - a headless box has nothing to show -
 | `out` | string | optional | screenshot: folder (or file with the capture's real extension) where the PNG lands, jailed like any path of ours. The capture travels in the answer; with `inline=false` the file stays and the answer carries its download link |
 | `region` | string | optional | screenshot: `x,y,w,h` in DESKTOP pixels - the answer is only that piece of the same capture, at full resolution, with `origin {x,y}`: what you measure on the crop is pressed at (origin.x + x, origin.y + y) |
 | `window` | string | optional | screenshot: part of a window title - the capture cropped to the first window of the `windows` list whose title contains it, with `origin` like region, plus the whole list. On Linux the list holds the X11/Xwayland windows (every FMX application); a native Wayland window has no rectangle: use `region` |
+| `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image content item (scaled to maxwidth) and its temp file is consumed on the spot - one call, nothing to download. false = file + download link instead (a client without vision, or one that wants the bytes). |
+| `maxwidth` | number | optional | Inline only: the image is scaled down to this width before it travels (0 = 1280, enough to read a desktop). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels for tap. |
+| `frame` | string | optional | tap/type: the "frame" of the screenshot you MEASURED ON, copied verbatim. With it, x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display) - no arithmetic on your side. Without it, x,y are capture pixels, as always. |
 
 ### `delphi_components`
 
@@ -597,7 +604,7 @@ FMX STYLES of a project, by StyleName: the text .style files (what the Bitmap St
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `command` | string | optional | view (styles of a .style file: StyleName, class, lines) \| get (one style, whole text) \| set (one property of a style or of one of its parts) \| clone (a new style copied from an existing one) \| delete (remove a whole style by StyleName; the __delphi-patch copy is the way back) \| lint (duplicated StyleNames, StyleLookup values of the project's .fmx that no style defines, design tokens missing in a theme, .rc entries without file) \| build (every text .style of the folder -> .bin.style, then the .rc -> .res with brcc32) |
-| `path` | string | **yes** | The text .style file (view/get/set/clone) or the styles FOLDER (lint/build; a file is accepted too). Binary styles (FMX_STYLE / .bin.style) are refused for editing: edit the text one and run build |
+| `path` | string | **yes** | The text .style file (view/get/set/clone) or the styles FOLDER (lint/build). Binary styles (FMX_STYLE / .bin.style) are refused for editing: edit the text one and run build |
 | `project` | string | optional | lint: the project .dproj (or a folder) whose .fmx/.pas files are scanned for StyleLookup. Default: the parent folder of the styles folder |
 | `style` | string | optional | get/set/clone: the StyleName of the style (top-level object of the container), e.g. buttonstyle or cardstyle |
 | `child` | string | optional | set optional: a part inside the style, by StyleName or object name, as a path: background or background/text |
@@ -653,7 +660,7 @@ Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for m
 
 ### `delphi_git`
 
-Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work: status, diff, log, show, branch, switch (args=<branch>, create=true for a new one), merge (always --ff-only), stash (args=push|pop|list, never drop), add, commit, init, push, tag, config, clone, pull, fetch, worktree (args=list, or add/remove with path= and ref=). A git that exits non-zero is an ERROR: `[GIT-036 DENIED] exit=N` with git's own output after it; a success starts with `exit=0`. **clone** is the fast way to get a whole repo onto the server (URL in "message", destination directory in "repo", jailed to the workspace roots) - far better than recreating files one by one. commit/tag messages and config values also travel in "message"; push/pull use the credentials and remotes stored on the server. No arbitrary git commands, no shell.
+Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work: status, diff, log, show, branch, switch (args=<branch>, create=true for a new one), merge (always --ff-only), stash (args=push|pop|list, never drop), add, commit, init, push, tag, config, clone, pull, fetch, worktree (args=list, or add/remove with path= and ref=). A git that exits non-zero is an ERROR: `[GIT-036 DENIED] exit=N` with git's own output after it; a success starts with `exit=0` (`diff --quiet` / `--exit-code` with differences answers `exit=1`, and that is a success too). **clone** is the fast way to get a whole repo onto the server (URL in "message", destination directory in "repo", jailed to the workspace roots) - far better than recreating files one by one. commit/tag messages and config values also travel in "message"; push/pull use the credentials and remotes stored on the server. No arbitrary git commands, no shell.
 
 *Access: mixed (query commands read-only; write commands read-write).*
 
@@ -721,7 +728,7 @@ Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .j
 ### Bring a repository onto the server, work, commit
 1. `delphi_git {command:"clone", message:"https://...", repo:"srvd:\...\dest"}` — the whole repo in one call, jailed.
 2. Edit with the tools above.
-3. `delphi_git {command:"add", args:"-A"}` → `{command:"commit", message:"..."}` → `{command:"push"}` (uses the server's stored credentials). Set identity first with `{command:"config", args:"user.name", message:"..."}`.
+3. `delphi_git {command:"add", repo:"...", args:"-A"}` → `{command:"commit", repo:"...", message:"..."}` → `{command:"push", repo:"..."}` (uses the server's stored credentials). Set identity first with `{command:"config", repo:"...", args:"user.name", message:"..."}`.
 
 ### Send a file TO the server
 `delphi_upload {path, offset:0, chunkbase64:"..."}` per chunk (increasing `offset`); on the last chunk pass the whole-file `sha256` to have the server verify the reassembly. For binaries you cannot recreate by editing (`.res`, icons).

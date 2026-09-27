@@ -546,11 +546,7 @@ try:
           mc.resultado(_sin) == 'DENIED' and mc.abre(_sin, 'SR_VAULT_UNSET')
           and 'indice compartido' not in _sin, _sin[:150])
     check('por-workspace: el rechazo habla de TU workspace, no del servidor',
-          # la frase del SERVIDOR sale del catalogo (la espanola ya no podia
-          # salir: verde sin mirar nada tras la traduccion)
-          mc.es(_sin, 'SR_VAULT_UNSET') and
-          mc.catalogo()['SE_VAULT_KNOWLEDGE_VAULT_CONFIGURED_SERVER'] not in _sin,
-          _sin[:200])
+          mc.es(_sin, 'SR_VAULT_UNSET') and '[Workspace.' in _sin, _sin[:200])
     check('por-workspace: manda a la clave que existe de verdad',
           'VaultPath' in _sin and '[Workspace.' in _sin and '[Vault]' not in _sin,
           _sin[:200])

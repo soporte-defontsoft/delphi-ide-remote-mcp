@@ -271,7 +271,7 @@ uses
   Lsp.DesignerBin; // DirectedMessagesPending, para la ficha del servidor
 
 // la tool git va por delante de su compositor
-function GitExito(const ACuerpo: string): string; forward;
+function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =
@@ -1125,10 +1125,19 @@ begin
   // Un git que dice que no (exit<>0) es un fallo: salia como exito y el
   // agente no lo distinguia de uno que funciono (revision 27-sep-2026). Su
   // salida va detras, que es la que explica que paso.
-  if ExitCode <> 0 then
+  // diff con --quiet / --exit-code contesta exit=1 cuando HAY diferencias: es
+  // su respuesta, no un fallo (tercera revision: salia GIT-036 DENIED). Con
+  // --no-index no: un fichero que no esta tambien da 1 (medido).
+  var DiffConCambios := SameText(Cmd, 'diff') and (ExitCode = 1) and
+    (ContainsText(Params.Args, '--quiet') or ContainsText(Params.Args, '--exit-code')) and
+    not ContainsText(Params.Args, '--no-index');
+  if DiffConCambios then
+    Result := GitExito(MsgText(SN_GIT_DIFF_HAY_CAMBIOS) +
+      IfThen(Output.Trim <> '', #10 + Output.Trim, ''), 1)
+  else if ExitCode <> 0 then
     Result := MsgFmt(SR_GIT_EXIT_FMT, [ExitCode, Output.Trim])
   else
-    Result := GitExito(Output.Trim);
+    Result := GitExito(Output.Trim, 0);
   // Una respuesta que es solo "exit=0" no se distingue de una que se ha roto
   // por el camino, y lo primero que hace quien la recibe es repetirla. El
   // silencio de git SIGNIFICA cosas distintas segun la orden, asi que se
@@ -1136,9 +1145,9 @@ begin
   if (ExitCode = 0) and (Output.Trim = '') then
   begin
     if SameText(Cmd, 'diff') then
-      Result := GitExito(MsgText(SN_GIT_DIFF_CLEAN))
+      Result := GitExito(MsgText(SN_GIT_DIFF_CLEAN), 0)
     else
-      Result := GitExito(MsgFmt(SN_GIT_SILENT_OK_FMT, [Cmd]));
+      Result := GitExito(MsgFmt(SN_GIT_SILENT_OK_FMT, [Cmd]), 0);
   end;
   // Un worktree nuevo es de quien lo pidio: se lo dice, con como quitarlo.
   if (ExitCode = 0) and (Cmd = 'worktree') and SameText(Params.Args.Trim, 'add') then
@@ -1224,9 +1233,9 @@ var
 { La respuesta de git que acabo bien: "exit=0" y lo que dijo. El formato que
   leen los agentes y las baterias, compuesto en UN sitio (estaba a mano tres
   veces). La que acabo mal es SR_GIT_EXIT_FMT. }
-function GitExito(const ACuerpo: string): string;
+function GitExito(const ACuerpo: string; AExit: Integer): string;
 begin
-  Result := 'exit=0'#10 + ACuerpo;
+  Result := 'exit=' + IntToStr(AExit) + #10 + ACuerpo;
 end;
 
 { Cuanto lleva en marcha, en algo que se lee de un vistazo. }
@@ -2117,6 +2126,10 @@ begin
   Result := CarpetaEnVezDeFichero(OutZip);
   if Result <> '' then
     Exit;
+  // outfile=notas.txt la sustituia por un zip, sin copia y contestando exito
+  // (tercera revision, 27-sep-2026, medido en vivo): el paquete es un .zip
+  if not SameText(TPath.GetExtension(OutZip), '.zip') then
+    Exit(MsgFmt(SR_PACKAGE_OUTFILE_ZIP_FMT, [OutZip]));
   // El zip se arma con nombre propio y se pone en su sitio de un golpe al
   // final. Empaquetar sobre el nombre definitivo hacia que dos llamadas a la
   // vez sobre la misma carpeta se estorbasen - una borraba el zip que la otra

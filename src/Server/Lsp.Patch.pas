@@ -218,6 +218,11 @@ procedure PatchSaveText(const APath, AText, AEncName: string);
 procedure EnterFileEdit;
 procedure LeaveFileEdit;
 
+{ El "eol" de quien crea un fichero: '' si vale (crlf, lf, o vacio = crlf); si
+  no, la negativa. UNA regla para delphi_textedit y delphi_edit createunit: la
+  segunda aceptaba "mac" y creaba en CRLF (tercera revision, 27-sep-2026). }
+function EolDesconocido(const AEol: string): string;
+
 { Encoding for NEW Delphi files, honouring the IDE's configured default
   (Tools > Options > Editor): 'utf8-bom' when the IDE is set to UTF-8,
   'cp1252' when ANSI. }
@@ -639,6 +644,13 @@ end;
 procedure LeaveFileEdit;
 begin
   GLock.Leave;
+end;
+
+function EolDesconocido(const AEol: string): string;
+begin
+  Result := '';
+  if (AEol <> '') and not MatchText(AEol, ['crlf', 'lf']) then
+    Result := MsgFmt(SR_TEXT_EOL_FMT, [AEol]);
 end;
 
 procedure AtomicWrite(const APath: string; const B: TBytes);
@@ -1168,7 +1180,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(APath) then
-    Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
+    Exit(NoEsFichero(APath, MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [APath])));
   Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Replace(#13, #10)
     .Split([#10]);
   if (Length(Lines) > 0) and (Lines[High(Lines)] = '') then
@@ -1245,13 +1257,18 @@ begin
       [Length(AEditsJson), Copy(AEditsJson.Trim, 1, 60)]));
   end;
   Arr := TJSONArray(V);
+  // El cerrojo de escritura para la tanda ENTERA: la rama de bloque escribia
+  // sin el, y dos agentes sobre el mismo fichero perdian ediciones con OK
+  // (tercera revision, 27-sep-2026, medido en vivo). Recursivo: la edicion
+  // suelta que se llama por dentro lo vuelve a tomar sin bloquearse.
+  EnterFileEdit;
   try
     if Arr.Count = 0 then
       Exit(MsgText(SR_PATCH_EDITS_EMPTY));
     if Arr.Count > MAX_EDITS then
       Exit(MsgFmt(SR_PATCH_EDITS_TOOMANY_FMT, [MAX_EDITS]));
     if not TFile.Exists(APath) then
-      Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
+      Exit(NoEsFichero(APath, MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [APath])));
     Foto.Toma([APath]); // la red: el fichero antes de nada
     Sb := TStringBuilder.Create;
     try
@@ -1291,6 +1308,12 @@ begin
                 Conocido := True;
             if not Conocido then
               Exit(MsgFmt(SR_PATCH_EDIT_KEY_FMT,
+                [N + 1, Par.JsonString.Value]));
+            // un "new" que llega como objeto se leia como '' y la linea
+            // quedaba en blanco contestando OK (tercera revision, medido)
+            if MatchStr(Par.JsonString.Value, ['old', 'new', 'fragment']) and
+               not (Par.JsonValue is TJSONString) then
+              Exit(MsgFmt(SR_PATCH_EDIT_NO_TEXTO_FMT,
                 [N + 1, Par.JsonString.Value]));
           end;
           Hasta[N] := O2.GetValue<Integer>('toline', 0);
@@ -1386,8 +1409,17 @@ begin
           else if Obj.GetValue<Integer>('occurrence', 0) > 0 then
             Otros := 'occurrence';
           var NueLinea: string;
-          var Mal := FragmentoALinea(APath, Frag, Nue,
-            Obj.GetValue<Integer>('atline', 0), Otros, Anc, NueLinea);
+          var Mal: string;
+          // lee el fichero: una excepcion aqui (otro proceso lo tiene) es el
+          // fallo de ESTA entrada, con su deshacer; se escapaba sin el
+          // (tercera revision, 27-sep-2026)
+          try
+            Mal := FragmentoALinea(APath, Frag, Nue,
+              Obj.GetValue<Integer>('atline', 0), Otros, Anc, NueLinea);
+          except
+            on E: Exception do
+              Mal := MsgExcepcion(E.ClassName, E.Message);
+          end;
           if Mal <> '' then
           begin
             Fallo := N;
@@ -1490,8 +1522,10 @@ begin
         var NoVolvio := Foto.Restaura; // todo o nada, byte a byte
         Result := MsgConCausa(SR_PATCH_EDITS_ROLLED_FMT, Causa,
           [Fallo, Arr.Count, Sb.ToString.TrimRight]);
+        // lo que no volvio MANDA: la cabecera decia "todo volvio" y el
+        // aviso iba detras (tercera revision)
         if NoVolvio <> '' then
-          Result := Result + #10 + MsgFmt(SN_FOTO_NO_VOLVIO_FMT, [NoVolvio]);
+          Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Sb.ToString.TrimRight]);
         Exit;
       end;
       Result := MsgFmt(SN_PATCH_EDITS_OK_FMT,
@@ -1502,6 +1536,7 @@ begin
       Sb.Free;
     end;
   finally
+    LeaveFileEdit;
     Arr.Free;
   end;
 end;
@@ -1719,6 +1754,9 @@ begin
       begin
         if Ext <> '.pas' then
           Exit(MsgText(SR_EDIT_CREATEUNIT_SOLO_CREA_UNITS));
+        var MalEol := EolDesconocido(A.Eol);
+        if MalEol <> '' then
+          Exit(MalEol);
         if TFile.Exists(A.Path) then
           Exit(MsgFmt(SR_EDIT_EXISTE_CREATEUNIT_JAMAS_SOBREESCRIBE_FMT, [TPath.GetFileName(A.Path)]));
         var UnitName := TPath.GetFileNameWithoutExtension(A.Path);
@@ -1765,7 +1803,7 @@ begin
       end;
 
       if not TFile.Exists(A.Path) then
-        Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [A.Path]));
+        Exit(NoEsFichero(A.Path, MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [A.Path])));
 
       B := TFile.ReadAllBytes(A.Path);
       // Two binary shapes exist (measured with the IDE's own convert.exe):
@@ -1806,6 +1844,12 @@ begin
           Exit(MsgFmt(SR_EDIT_HAY_COPIA_SOLO_PUEDO_FMT,
             [TPath.GetFileName(A.Path), BACKUP_SUB]));
 
+        // la copia se LEE por la puerta de leer, y la de antes de restaurar se
+        // ESCRIBE por la de escribir, como en BackupFile: un __delphi-patch que
+        // fuera un enlace no lleva ni una ni otra fuera (tercera revision)
+        var VetoCopia := ReadPathDenied(Src);
+        if VetoCopia <> '' then
+          Exit(VetoCopia);
         var BkBytes := TFile.ReadAllBytes(Src);
         var NowLines := SplitToLines(Text);
         var BkSet := TDictionary<string, Boolean>.Create;
@@ -1859,6 +1903,11 @@ begin
           // lo que distingue a esta copia es su CAJON, no su nombre.
           var PreCopy := TPath.Combine(TrashDayDir(A.Path, 'before-restore'),
             TrashStampedName(TPath.GetFileName(A.Path)));
+          VetoCopia := EscrituraDenegada(TPath.GetDirectoryName(PreCopy));
+          if VetoCopia = '' then
+            VetoCopia := EscrituraDenegada(PreCopy);
+          if VetoCopia <> '' then
+            Exit(VetoCopia);
           CrearCarpeta(TPath.GetDirectoryName(PreCopy));
           TFile.Copy(A.Path, PreCopy);
           AtomicWrite(A.Path, BkBytes);

@@ -1040,7 +1040,7 @@ var
 begin
   ProfName := Params.Name.Trim;
   if ProfName = '' then
-    Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['name']));
+    Exit(MsgText(SR_PASERVER_NEED_NAME));
   if not TRegEx.IsMatch(ProfName, '^[A-Za-z0-9_.-]+$') then
     Exit(MsgText(SR_PASERVER_PROFILE_NAME));
   Info := DiscoverRadStudio;
@@ -1676,7 +1676,7 @@ begin
   if Nombre = '' then
     Nombre := SoloAlfanumerico(Params.Name);
   if Nombre = '' then
-    Exit(MsgFmt(SR_PASERVER_NEED_FMT, ['sdk']));
+    Exit(MsgText(SR_PASERVER_NEED_SDK));
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));

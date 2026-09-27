@@ -295,6 +295,10 @@ const
     'compared. The command went fine; git prints nothing when there are ' +
     'no changes.)';
 
+  SN_GIT_DIFF_HAY_CAMBIOS =
+    '[GIT-037] exit=1 from diff means there ARE differences (--quiet and ' +
+    '--exit-code answer that way): it is not a failure.';
+
   SN_GIT_SILENT_OK_FMT =
     '[GIT-002] (git %s finished fine, and it prints nothing when it ' +
     'succeeds. It is not a lost answer: it is this command''s success.)';
@@ -703,6 +707,11 @@ const
     'which does not exist. The fields of an edit are: old, new, atline, ' +
     'toline, delete, occurrence, fragment (all lowercase). Nothing was ' +
     'written.';
+
+  SR_PATCH_EDIT_NO_TEXTO_FMT =
+    '[EDIT-107 INVALID_PARAM] Entry %d: "%s" must be a text (a JSON ' +
+    'string), not an object, an array, a number or a boolean. Nothing ' +
+    'was written.';
 
   SR_PATCH_BLOCK_SHORT =
     '[EDIT-013 INVALID_PARAM] That multi-line "old" is left with a single line ' +
@@ -1219,6 +1228,10 @@ const
     'server has a vault, not that it is yours. If you need it for your ' +
     'work, ask for it with delphi_report.';
 
+  SR_VAULT_PROMPT_NO_EXISTE_FMT =
+    '[VAULT-041 NOT_FOUND] Prompt "%s" does not exist (prompts/list ' +
+    'names the ones there are).';
+
   // No echo of the offending path on purpose: the outbound filter rewrites
   // server drive letters, so echoing "C:/Windows/win.ini" came back as
   // "srvc:/Windows/win.ini" - something the agent never sent, confusing to
@@ -1558,6 +1571,15 @@ const
     '[CFG-007 INVALID_PARAM] "%s" is not a valid Delphi platform. Valid: ' +
     '%s.';
 
+  SR_CFG_NEED_SDK_FMT =
+    '[CFG-105 INVALID_PARAM] Missing "sdk": the SDK to pin for %s ' +
+    '(registered: %s), or "none" to remove the pin. Nothing was written.';
+
+  SR_CFG_NEED_PROFILE_FMT =
+    '[CFG-106 INVALID_PARAM] Missing "profile": the PAServer profile to ' +
+    'pin for %s (registered: %s), or "none" to remove the pin. Nothing ' +
+    'was written.';
+
   { add-platform con sdk/profile es UN gesto: si una parte se rechaza, el
     .dproj vuelve como estaba (Mcp.Tools.Config). }
   SN_CONFIG_ADDPLATFORM_NADA =
@@ -1725,6 +1747,10 @@ const
   SR_PASERVER_NEED_NAME =
     '[PAS-049 INVALID_PARAM] Missing "name": the PAServer profile ' +
     '(command=profiles lists them).';
+
+  SR_PASERVER_NEED_SDK =
+    '[PAS-050 INVALID_PARAM] Missing "sdk": the name of the SDK (its ' +
+    '.sdk file, e.g. fedora44).';
 
   SN_PASERVER_PROFILE_OK =
     '[PAS-023] Profile stored with the password encrypted inside, and ' +
@@ -2782,9 +2808,9 @@ const
     'Edits keep encoding and leave a __delphi-patch copy.';
 
   SP_STYLES_PATH =
-    'The text .style file (view/get/set/clone) or the styles FOLDER (lint/' +
-    'build; a file is accepted too). Binary styles (FMX_STYLE / .bin.style) ' +
-    'are refused for editing: edit the text one and run build.';
+    'The text .style file (view/get/set/clone) or the styles FOLDER ' +
+    '(lint/build). Binary styles (FMX_STYLE / .bin.style) are refused ' +
+    'for editing: edit the text one and run build.';
 
   SR_STYLES_NEED_PATH =
     '[STYLE-030 INVALID_PARAM] Missing "path": the text .style ' +
@@ -3372,7 +3398,7 @@ const
     'in the "project" field).';
 
   SR_TEST_CONFIG_FMT =
-    '[TEST-006 NOT_FOUND] The configuration "%s" does not exist in this ' +
+    '[CFG-107 NOT_FOUND] The configuration "%s" does not exist in this ' +
     'project. It has these: %s.';
 
   SR_TEST_PLATFORM_FMT =
@@ -3897,6 +3923,11 @@ const
   SR_PACKAGE_NEED_DIR =
     '[PKG-001 INVALID_PARAM] delphi_package needs "dir" (the folder to ' +
     'compress).';
+
+  SR_PACKAGE_OUTFILE_ZIP_FMT =
+    '[PKG-003 INVALID_PARAM] outfile must end in .zip (%s): the package ' +
+    'is a zip, and an existing .zip there is replaced. Nothing was ' +
+    'written.';
 
   SP_FETCH_MAXBYTES =
     'NOTE: asking for maxbytes<=1048576 (1 MB) FORCES inline base64 ' +
@@ -4580,6 +4611,11 @@ const
   SR_CHANGESET_CMD =
     '[CHSET-007 INVALID_PARAM] Command must be begin | stage | unstage | ' +
     'preview | commit | rollback | status';
+
+  SR_CHANGESET_NEED_ID =
+    '[CHSET-028 INVALID_PARAM] Missing "id": the changeset ' +
+    '(command=begin opens one and gives its id; command=status lists the ' +
+    'open ones).';
 
   SR_CHANGESET_TOO_MANY_FMT =
     '[CHSET-008 DENIED] There are already %d open changesets. Close one ' +
@@ -5290,8 +5326,10 @@ const
     '| init | push | tag | config | clone | pull | fetch | worktree';
 
   SR_GIT_EXIT_FMT =
-    '[GIT-036 DENIED] exit=%d - git did not do it; its own answer ' +
-    'follows and says why:'#10 +
+    '[GIT-036 DENIED] exit=%d - git ended with an error; its own answer ' +
+    'follows and says why. A command that fails can still have changed ' +
+    'the working tree (a merge or a stash pop with conflicts): look at ' +
+    'git status before repeating it.'#10 +
     '%s';
 
   SL_GIT_NETWORK_FMT =
@@ -5365,6 +5403,16 @@ const
     '[STYLE-028 INTERNAL] brcc32.exe (the resource compiler of RAD ' +
     'Studio) is not in %s: the installation on this server is ' +
     'incomplete. Tell the operator with delphi_report.';
+
+  SR_STYLES_BUILD_CONVERT_FMT =
+    '[STYLE-039 DENIED] %d of %d styles did not convert ' +
+    '(converted[].error says why): the .rc was not compiled, so nothing ' +
+    'new is embedded until they do.';
+
+  SR_STYLES_BUILD_RC_FMT =
+    '[STYLE-040 DENIED] %s did not compile, so there is no new .res to ' +
+    'embed. brcc32 said:'#10 +
+    '%s';
 
   SR_STYLE_COMMAND_DEBE_SER =
     '[STYLE-029 INVALID_PARAM] Command must be view | get | set | clone ' +
@@ -5549,6 +5597,10 @@ const
     '[GUARD-018 INVALID_PARAM] No path given: the path parameter of this ' +
     'call (path, root, project, dest...) is empty or missing. Pass an ' +
     'absolute path, as delphi_workspace and the listings return it.';
+
+  SR_GUARD_FICHERO_EN_RUTA_FMT =
+    '[GUARD-019 INVALID_PARAM] %s cannot be created: %s is a FILE, not a ' +
+    'folder. Choose another path.';
 
   // Mensajes que estaban en linea en Lsp.BuildRunner.pas (paso 3c a mano, 27-sep-2026)
   SL_BUILD_DELPHI_BUILD_REFUSED_FMT =
@@ -6718,8 +6770,9 @@ const
     'Recursive; *.dcu and dcu\ intermediates excluded';
 
   SP_WS_OUTFILE =
-    'Optional zip path (default: sibling of dir, named ' +
-    '<dirname>-deploy.zip). Must be inside the workspace roots';
+    'Optional zip path, ending in .zip (default: sibling of dir, named ' +
+    '<dirname>-deploy.zip). An existing .zip there is replaced. Must be ' +
+    'inside the workspace roots';
 
   SD_WS_SEARCH =
     'Search Delphi sources recursively for a literal text ' +
@@ -6852,12 +6905,6 @@ const
     'and try again.';
 
   // Excepciones que estaban en linea en Mcp.Vault.Session.pas (paso 3e, 27-sep-2026)
-  SE_VAULT_UNKNOWN_PROMPT_FMT =
-    'Unknown prompt: %s';
-
-  SE_VAULT_KNOWLEDGE_VAULT_CONFIGURED_SERVER =
-    'No knowledge vault is configured on this server.';
-
   // Excepciones que estaban en linea en Lsp.Client.pas (paso 3e, 27-sep-2026)
   SE_LSP_LSP_REQUEST_TIMED_OUT_FMT =
     'LSP request "%s" timed out after %d ms';
@@ -7569,9 +7616,12 @@ const
   SR_FALLO_INTERNO_FMT =
     '[SYS-009 INTERNAL] ERROR: %s: %s';
 
-  SN_FOTO_NO_VOLVIO_FMT =
-    '[SYS-018] WARNING: these files could NOT be put back as they were ' +
-    '(another process holds them?):'#10 +
+  SR_FOTO_NO_VOLVIO_FMT =
+    '[SYS-018 DENIED] It failed halfway and the undo could NOT put ' +
+    'everything back: these files are still CHANGED (another process ' +
+    'holds them?):'#10 +
+    '%s'#10 +
+    'Look at them before anything else. What failed:'#10 +
     '%s';
   { Los envoltorios de siempre, uno por forma: el motivo que trae otro
     sitio (una funcion que devuelve el porque, el mensaje de una excepcion)
@@ -7601,6 +7651,10 @@ const
     'client''s tool list does not show it, the server was updated after ' +
     'you connected: reconnect the MCP session, or read the current ' +
     'contract with delphi_help command=tool.';
+
+  SR_SYS_MISSING_METHOD_PARAM_FMT =
+    '[SYS-026 INVALID_PARAM] Missing "%s": this method requires it. ' +
+    'Nothing was done.';
 
   SR_SYS_METODO_NO_EXISTE_FMT =
     '[SYS-021 NOT_FOUND] Method "%s" does not exist here (or is not ' +

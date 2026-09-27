@@ -375,7 +375,8 @@ for nombre in RESERVADAS:
 # PlatformSDK la fija el proyecto (delphi_config set-sdk): esta puerta NO la toca
 out = build(proyecto_con('res-platformsdk', con_propiedad('PlatformSDK', 'algo.sdk')))
 check('R PlatformSDK (legitima del proyecto) NO la rechaza esta puerta',
-      not mc.es(out, 'SR_BUILD_RESERVED_PROP_FMT'), out[:300])
+      not mc.es(out, 'SR_BUILD_RESERVED_PROP_FMT') and mc.resultado(out) not in ('INTERNAL', 'NO_ANSWER'),
+      out[:300])
 # y un proyecto sin ninguna de ellas sigue compilando
 out = build(proyecto_con('res-limpio', lambda x, d: x))
 try:

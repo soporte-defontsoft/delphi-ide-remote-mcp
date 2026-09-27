@@ -94,6 +94,7 @@ uses
   Lsp.Discovery,
   Lsp.Dproj,
   Lsp.Guard,
+  Lsp.Patch,     // BackupFile: la copia antes de pisar el out= de logcat
   Lsp.Imagen,
   Lsp.InlineImages, // DeliverCapture: la entrega de una captura, la de toda la casa
   Lsp.BuildRunner;
@@ -276,7 +277,9 @@ begin
     // out= vetted BEFORE touching adb (fail fast)
     if Params.Out.Trim <> '' then
     begin
-      Denied := PathDenied(Params.Out);
+      // out= ESCRIBE: la puerta de escribir (solo lectura incluida), no la de
+      // la jaula a secas (tercera revision, 27-sep-2026)
+      Denied := EscrituraDenegada(Params.Out);
       if Denied <> '' then
         Exit(Denied);
       if not (Params.Out.Trim.ToLower.EndsWith('.txt') or
@@ -329,6 +332,10 @@ begin
       var OutDir := TPath.GetDirectoryName(Params.Out.Trim);
       if OutDir <> '' then
         CrearCarpeta(OutDir);
+      // un fichero que ya estaba (unas notas.txt) se pisaba sin copia: la
+      // copia de antes de tocarlo, como toda tool que escribe
+      if TFile.Exists(Params.Out.Trim) then
+        BackupFile(Params.Out.Trim);
       TFile.WriteAllText(Params.Out.Trim, Txt, TEncoding.UTF8);
       Return := TJSONObject.Create;
       try

@@ -143,7 +143,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(Params.Path) then
-    Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [Params.Path]));
+    Exit(NoEsFichero(Params.Path, MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [Params.Path])));
   if not MatchText(TPath.GetExtension(Params.Path),
        ['.pas', '.dpr', '.dpk', '.inc']) then
     Exit(MsgFmt(SR_DIAG_NOT_SOURCE_FMT,

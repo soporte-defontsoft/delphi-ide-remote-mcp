@@ -356,7 +356,7 @@ begin
   Result := '';
   AInfo := Default(TUnitInfo);
   if not TFile.Exists(APasPath) then
-    Exit(MsgFmt(SR_UNIT_PAS_MISSING_FMT, [APasPath]));
+    Exit(NoEsFichero(APasPath, MsgFmt(SR_UNIT_PAS_MISSING_FMT, [APasPath])));
   if TPath.GetExtension(APasPath).ToLower <> '.pas' then
     Exit(MsgFmt(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   AInfo.PasPath := TPath.GetFullPath(APasPath);

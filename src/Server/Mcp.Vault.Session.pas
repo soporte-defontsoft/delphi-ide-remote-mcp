@@ -179,10 +179,13 @@ begin
       Name := '';
       if Assigned(Params) then
         Params.TryGetValue<string>('name', Name);
-      if not SameText(Name, 'vault') then
-        raise Exception.Create(MsgFmt(SE_VAULT_UNKNOWN_PROMPT_FMT, [Name]));
-      if not VaultConfigured then
-        raise Exception.Create(MsgText(SE_VAULT_KNOWLEDGE_VAULT_CONFIGURED_SERVER));
+      // Como resources/read: lo que falta en la llamada es -32602 con su
+      // etiqueta, y un prompt que no esta (tampoco sin vault: prompts/list no
+      // lo trae) es NOT_FOUND; salia -32603 sin etiqueta (tercera revision)
+      if Name = '' then
+        raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_METHOD_PARAM_FMT, ['name']));
+      if not SameText(Name, 'vault') or not VaultConfigured then
+        raise EArgumentException.Create(MsgFmt(SR_VAULT_PROMPT_NO_EXISTE_FMT, [Name]));
       Res.AddPair('description', SD_VAULT_PROMPT);
       Arr := TJSONArray.Create;
       Res.AddPair('messages', Arr);

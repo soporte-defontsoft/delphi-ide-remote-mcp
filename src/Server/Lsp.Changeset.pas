@@ -419,6 +419,13 @@ begin
     for I := 0 to C.Ops.Count - 1 do
     begin
       Op := C.Ops[I];
+      // Una CARPETA donde la operacion pide un fichero: el preview la daba por
+      // buena y el commit reventaba con otro motivo (tercera revision)
+      Result := CarpetaEnVezDeFichero(Op.Path);
+      if (Result = '') and (Op.Kind = opMove) then
+        Result := CarpetaEnVezDeFichero(Op.Dest);
+      if Result <> '' then
+        Exit;
       case Op.Kind of
         opCreate:
           begin
@@ -531,7 +538,9 @@ begin
     if not MatchStr(Cmd, ['stage', 'unstage', 'undo', 'preview', 'commit', 'rollback']) then
       Exit(MsgText(SR_CHANGESET_CMD));
     Id := AId.Trim;
-    if (Id = '') or not GSets.TryGetValue(Id, C) then
+    if Id = '' then
+      Exit(MsgText(SR_CHANGESET_NEED_ID));
+    if not GSets.TryGetValue(Id, C) then
       Exit(MsgFmt(SR_CHANGESET_UNKNOWN_FMT, [TTL_MIN]));
     C.LastUsed := Now;
 
@@ -754,7 +763,10 @@ begin
       // not always reproduce. A local is nil because we say so, never by luck.
       Deltas2 := nil;
       Changed := TList<string>.Create;
-
+      // El cerrojo de escritura de la huella al deshacer: sin el, lo que otro
+      // agente escribia a mitad del commit se lo llevaba la vuelta atras
+      // (tercera revision, 27-sep-2026, medido)
+      EnterFileEdit;
       try
         for P in C.Fingerprints.Keys do
           if FingerprintBytes(P) <> C.Fingerprints[P] then
@@ -788,23 +800,32 @@ begin
             try
               Before := LineCountOf(Op.Path);
               Ok := ApplyOne(Op, Err);
+              // contar las lineas de DESPUES tambien lee el fichero, y otro
+              // proceso lo puede tener: dentro del mismo try, o la excepcion
+              // salia sin deshacer nada (tercera revision, medido)
+              if Ok then
+              begin
+                After := LineCountOf(Op.Path);
+                if After <> Before then
+                begin
+                  var Acc := 0;
+                  Deltas.TryGetValue(Op.Path.ToLower, Acc);
+                  Deltas.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
+                  Deltas2.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
+                end;
+              end;
             except
               on E: Exception do
+              begin
+                Ok := False;
                 Err := MsgExcepcion(E.ClassName, E.Message);
+              end;
             end;
             if not Ok then
             begin
               Applied := False;
               N := I + 1;
               Break;
-            end;
-            After := LineCountOf(Op.Path);
-            if After <> Before then
-            begin
-              var Acc := 0;
-              Deltas.TryGetValue(Op.Path.ToLower, Acc);
-              Deltas.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
-              Deltas2.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
             end;
           end;
         finally
@@ -862,14 +883,14 @@ begin
           GSets.Remove(Id);
           Result := MsgConCausa(SR_CHANGESET_ROLLED_BACK_FMT, Err, [N, OpCount, Err]);
           if NoVolvio <> '' then
-            Result := Result + #10 + MsgFmt(SN_FOTO_NO_VOLVIO_FMT, [NoVolvio]);
+            Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Err]);
           Exit;
         end;
         GSets.Remove(Id);
         Exit(MsgFmt(SN_CHANGESET_COMMITTED_FMT,
           [OpCount, FileCount, AuditText]));
       finally
-
+        LeaveFileEdit;
         Changed.Free;
         Deltas2.Free; // nil-safe: TObject.Free checks Self
       end;

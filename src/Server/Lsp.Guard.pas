@@ -433,6 +433,13 @@ function EscrituraDenegada(const APath: string): string;
   (segunda revision, 27-sep-2026). }
 function CarpetaEnVezDeFichero(const APath: string): string;
 
+{ Un FICHERO que no esta: si en su sitio hay una CARPETA lo dice (el texto de
+  CarpetaEnVezDeFichero, INVALID_PARAM); si no, devuelve AMsgNoExiste, el "no
+  existe" de quien pregunta. Para el "if not TFile.Exists" de las tools que
+  piden un fichero: una carpeta decia "no existe" (NOT_FOUND) en build,
+  diagnostics, designer, add-unit y delphi_edit (tercera revision, 27-sep-2026). }
+function NoEsFichero(const APath, AMsgNoExiste: string): string;
+
 type
   { LA FOTO de unos ficheros ANTES de tocarlos, y su vuelta atras: el "todo
     o nada" de la tanda de edits, del commit de un changeset y de
@@ -1815,6 +1822,8 @@ begin
 end;
 
 procedure CrearCarpeta(const ADir: string);
+var
+  D: string;
 begin
   if ADir = '' then
     Exit;
@@ -1824,7 +1833,19 @@ begin
     // Si despues del intento la carpeta esta, alguien gano la carrera y es
     // exactamente lo que queriamos. Si no esta, el fallo es de verdad.
     if not TDirectory.Exists(ADir) then
+    begin
+      // Un FICHERO en el camino (U.pas\sub) es una ruta equivocada, no un
+      // fallo del servidor: salia EInOutError como INTERNAL en cinco tools
+      // (tercera revision, 27-sep-2026)
+      D := ExcludeTrailingPathDelimiter(ADir);
+      while (D <> '') and (D <> TPath.GetDirectoryName(D)) do
+      begin
+        if TFile.Exists(D) then
+          raise Exception.Create(MsgFmt(SR_GUARD_FICHERO_EN_RUTA_FMT, [ADir, D]));
+        D := TPath.GetDirectoryName(D);
+      end;
       raise;
+    end;
   end;
 end;
 
@@ -2033,6 +2054,13 @@ begin
   Result := '';
   if (APath.Trim <> '') and TDirectory.Exists(APath) then
     Result := MsgFmt(SR_LSP_IS_FOLDER_FMT, [APath]);
+end;
+
+function NoEsFichero(const APath, AMsgNoExiste: string): string;
+begin
+  Result := CarpetaEnVezDeFichero(APath);
+  if Result = '' then
+    Result := AMsgNoExiste;
 end;
 
 procedure TFotoDeFicheros.Toma(const ARutas: array of string);
@@ -3281,7 +3309,11 @@ begin
       LowerCase(TGUID.NewGuid.ToString.Substring(1, 6)), AExt]));
   if O <> '' then
   begin
-    Result := WriteTargetDenied(AFile);
+    // la puerta de ESCRIBIR, la de todas (solo lectura incluida): una sesion
+    // de solo lectura pisaba un .png con out= (tercera revision)
+    Result := EscrituraDenegada(AFile);
+    if Result = '' then
+      Result := WriteTargetDenied(AFile);
     // Una captura no se guarda en los temporales del servidor: 90 capturas y
     // 66 MB de Hermes en una __delphi-temp anidada que la purga del arranque
     // no alcanza (25-sep-2026). Se omite out y llega en la respuesta (David:

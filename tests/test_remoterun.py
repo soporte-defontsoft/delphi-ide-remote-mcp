@@ -130,14 +130,15 @@ check('exe con separadores rechazado por el server', mc.rechazado(r) and mc.es(r
 # 5) exe inexistente -> runnerError
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'noexiste.exe', 'timeoutms': 20000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
-check('exe inexistente en target', mc.es(json.dumps(j), 'SR_JOB_NO_EXISTE_FMT'), r[:250])
+# la negativa del lanzador va en "error" (salia en "output" de un exito)
+check('exe inexistente en target', mc.abre(j.get('error', ''), 'SR_JOB_NO_EXISTE_FMT'), r[:250])
 
 # 5b) un SCRIPT de la misma carpeta de despliegue: rechazado (no es nativo)
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
                              'exe': 'run.py', 'timeoutms': 20000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('script en la carpeta de deploy rechazado (solo binario nativo)',
-      mc.es(json.dumps(j), 'SR_JOB_NO_EJECUTABLE_NATIVO_FMT'), r[:300])
+      mc.abre(j.get('error', ''), 'SR_JOB_NO_EJECUTABLE_NATIVO_FMT'), r[:300])
 # 5c) proyecto inexistente
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE,
                              'project': os.path.join(PRJDIR, 'NoHay.dproj')})

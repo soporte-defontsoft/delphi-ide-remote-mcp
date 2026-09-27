@@ -1178,7 +1178,7 @@ begin
   if Denied <> '' then
     raise Exception.Create(Denied);
   if not FileExists(ADprojPath) then
-    raise Exception.Create(MsgFmt(SR_BUILD_DPROJ_NO_EXISTE_FMT, [ADprojPath]));
+    raise Exception.Create(NoEsFichero(ADprojPath, MsgFmt(SR_BUILD_DPROJ_NO_EXISTE_FMT, [ADprojPath])));
   // A TYPE check, before anything reads the file or spawns anything. Without
   // it the hazard scan below was a substring search standing in for one, and
   // it failed in both directions at once (measured 2026-09-20): CHANGELOG.md

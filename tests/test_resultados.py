@@ -46,6 +46,18 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E22 un comando de changeset mal escrito es INVALID_PARAM (decia "ese
       changeset no existe")
   E23 delphi_create con un "project" que no es un proyecto no escribe nada
+  Tercera revision:
+  E24 delphi_package con un outfile que no es .zip (lo sustituia por el zip)
+  E25 git diff --quiet con diferencias no es un fallo (exit=1 es su respuesta)
+  E26 crear DENTRO de un fichero es INVALID_PARAM (salia INTERNAL)
+  E27 changeset: crear donde hay una CARPETA se niega en el preview
+  E28 changeset sin id es INVALID_PARAM
+  E29 compilar una CARPETA es INVALID_PARAM (decia "no existe")
+  E30 una entrada con "new" que no es texto (dejaba la linea en blanco con OK)
+  E31 createunit con un eol que no existe (creaba en CRLF)
+  E32 set-sdk / set-profile sin valor (quitaban el pin con exito)
+  E33 dos agentes a la vez sobre un fichero: lo que cada uno recibio como OK
+      esta en el disco (la tanda de delphi_edit no tomaba el cerrojo)
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
 """
@@ -130,7 +142,9 @@ try:
             'delphi_components', {'platform': 'Amiga500'}, 'INVALID_PARAM', 'SR_COMPONENTS_PLATFORM_FMT')
 
     res, sc, t = llama('delphi_styles', {'command': 'view', 'path': ESTILO})
-    check('E6 y un exito sigue siendo exito', not res.get('isError') and sc.get('ok') is not False, t[:200])
+    check('E6 y un exito sigue siendo exito',
+          t.strip() != '' and not mc.fallo(t) and not res.get('isError') and sc.get('ok') is not False,
+          t[:200])
 
     res, sc, t = llama('delphi_read', {'path': ECO})
     check('E8 delphi_read devuelve el contenido tal cual aunque cite etiquetas con resultado',
@@ -231,6 +245,108 @@ try:
             'delphi_create', {'kind': 'form-vcl', 'name': 'FZ', 'project': ECO}, 'INVALID_PARAM',
             'SR_UNIT_PROJECT_EXT_FMT')
     check('E23 ...y no escribe nada', not os.path.exists(os.path.join(JAIL, 'FZ.pas')), os.listdir(JAIL))
+
+    # ---- tercera revision ----
+    NOTAS = os.path.join(JAIL, 'notas.txt')
+    open(NOTAS, 'w').write('mis notas\n')
+    rechazo('E24 delphi_package con un outfile que no es .zip: INVALID_PARAM', 'delphi_package',
+            {'dir': NOREPO, 'outfile': NOTAS}, 'INVALID_PARAM', 'SR_PACKAGE_OUTFILE_ZIP_FMT')
+    check('E24 ...y las notas siguen siendo las notas', open(NOTAS).read() == 'mis notas\n',
+          open(NOTAS, 'rb').read()[:20])
+
+    GREPO = os.path.join(JAIL, 'grepo')
+    os.makedirs(GREPO)
+    llama('delphi_git', {'repo': GREPO, 'command': 'init'})
+    llama('delphi_git', {'repo': GREPO, 'command': 'config', 'args': 'user.name', 'message': 'Probe Bot'})
+    llama('delphi_git', {'repo': GREPO, 'command': 'config', 'args': 'user.email', 'message': 'probe@example.com'})
+    open(os.path.join(GREPO, 'a.txt'), 'w').write('uno\n')
+    llama('delphi_git', {'repo': GREPO, 'command': 'add', 'args': 'a.txt'})
+    res, sc, t = llama('delphi_git', {'repo': GREPO, 'command': 'commit', 'message': 'uno'})
+    open(os.path.join(GREPO, 'a.txt'), 'w').write('dos\n')
+    res, sc, t = llama('delphi_git', {'repo': GREPO, 'command': 'diff', 'args': '--quiet'})
+    check('E25 git diff --quiet con diferencias es un exito que lo dice (exit=1)',
+          not res.get('isError') and t.startswith('exit=1') and mc.es(t, 'SN_GIT_DIFF_HAY_CAMBIOS'),
+          '%s | %s' % (json.dumps(sc)[:120], t[:200]))
+
+    rechazo('E26 crear DENTRO de un fichero es INVALID_PARAM (salia INTERNAL)', 'delphi_textedit',
+            {'path': os.path.join(ECO, 'x.txt'), 'create': True, 'content': 'x'}, 'INVALID_PARAM',
+            'SR_GUARD_FICHERO_EN_RUTA_FMT')
+
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    cid3 = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': cid3, 'kind': 'create', 'path': NOREPO,
+                               'content': 'x'})
+    res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': cid3})
+    check('E27 changeset: crear donde hay una CARPETA se niega en el preview (INVALID_PARAM)',
+          cid3 != '' and mc.abre(t, 'SR_LSP_IS_FOLDER_FMT') and mc.resultado(t) == 'INVALID_PARAM',
+          '%s | %s' % (json.dumps(sc)[:120], t[:200]))
+    llama('delphi_changeset', {'command': 'rollback', 'id': cid3})
+
+    rechazo('E28 changeset sin id: INVALID_PARAM (decia "ese changeset no existe")', 'delphi_changeset',
+            {'command': 'stage', 'kind': 'create', 'path': os.path.join(JAIL, 'n.txt'), 'content': 'x'},
+            'INVALID_PARAM', 'SR_CHANGESET_NEED_ID')
+
+    rechazo('E29 compilar una CARPETA es INVALID_PARAM (decia "no existe")', 'delphi_build',
+            {'project': NOREPO, 'platform': 'Win64'}, 'INVALID_PARAM', 'SR_LSP_IS_FOLDER_FMT')
+
+    rechazo('E30 una entrada con "new" que no es texto: INVALID_PARAM (dejaba la linea en blanco con OK)',
+            'delphi_edit', {'path': U1252, 'edits': json.dumps([{'old': 'implementation', 'new': {'x': 1}}])},
+            'INVALID_PARAM', 'SR_PATCH_EDIT_NO_TEXTO_FMT')
+    check('E30 ...y el fichero sigue igual', open(U1252, 'rb').read() == U1252_ANTES, '')
+
+    MAC = os.path.join(JAIL, 'Mac.pas')
+    rechazo('E31 createunit con un eol que no existe: INVALID_PARAM (creaba en CRLF)', 'delphi_edit',
+            {'path': MAC, 'createunit': True, 'eol': 'mac'}, 'INVALID_PARAM', 'SR_TEXT_EOL_FMT')
+    check('E31 ...y no crea nada', not os.path.exists(MAC), os.listdir(JAIL))
+
+    DPCFG = os.path.join(PCFG, 'Cfg.dproj')
+    DPCFG_ANTES = open(DPCFG, 'rb').read()
+    rechazo('E32 set-sdk sin sdk: INVALID_PARAM (quitaba el que hubiera, con exito)', 'delphi_config',
+            {'project': DPCFG, 'command': 'set-sdk', 'platform': 'Linux64'}, 'INVALID_PARAM',
+            'SR_CFG_NEED_SDK_FMT')
+    rechazo('E32 set-profile sin profile: INVALID_PARAM', 'delphi_config',
+            {'project': DPCFG, 'command': 'set-profile', 'platform': 'Linux64'}, 'INVALID_PARAM',
+            'SR_CFG_NEED_PROFILE_FMT')
+    check('E32 ...y el .dproj no se toca', open(DPCFG, 'rb').read() == DPCFG_ANTES, '')
+
+    # dos agentes a la vez: el 1 alterna un bloque con una TANDA, el 2 sube
+    # una marca con ediciones sueltas (medido en vivo el 27-sep: el 2 recibia
+    # OK para "marca 1" y en el disco quedaba "marca 0")
+    import threading
+    BIG = os.path.join(JAIL, 'Big.pas')
+    llama('delphi_edit', {'path': BIG, 'createunit': True})
+    relleno = '\n'.join('// relleno %d' % i for i in range(20000))
+    llama('delphi_edit', {'path': BIG, 'old': 'implementation',
+                          'new': 'implementation\n\nprocedure A;\nbegin\nend;\n\n// marca 0\n' + relleno})
+    cli2 = mc.Http(PORT, TOK, t=180, respaldo_json=True)
+    cli2.session('resultados-2')
+    BX = 'procedure A;\nbegin\nend;'
+    BY = 'procedure A;\nbegin\n  // y\nend;'
+    est = {'a1': BX, 'a2': 0}
+
+    def agente1():
+        for _ in range(10):
+            otro = BY if est['a1'] == BX else BX
+            r = cli.call_msg('delphi_edit', {'path': BIG, 'edits': json.dumps([{'old': est['a1'], 'new': otro}])},
+                             300)
+            if (r or {}).get('result') and not r['result'].get('isError'):
+                est['a1'] = otro
+
+    def agente2():
+        for _ in range(10):
+            n = est['a2']
+            r = cli2.call_msg('delphi_edit', {'path': BIG, 'old': '// marca %d' % n,
+                                              'new': '// marca %d' % (n + 1)}, 300)
+            if (r or {}).get('result') and not r['result'].get('isError'):
+                est['a2'] = n + 1
+
+    h1, h2 = threading.Thread(target=agente1), threading.Thread(target=agente2)
+    h1.start(); h2.start(); h1.join(); h2.join()
+    disco = open(BIG, encoding='utf-8-sig').read().replace('\r\n', '\n')
+    check('E33 dos agentes a la vez: lo que cada uno recibio como OK esta en el disco',
+          est['a2'] == 10 and ('// marca %d\n' % est['a2']) in disco and est['a1'] in disco,
+          'agente2 OK hasta marca %d; en disco: %s' % (est['a2'],
+                                                      [l for l in disco.split('\n') if 'marca' in l]))
 
     # un segundo servidor al MISMO puerto que el que ya escucha
     b = subprocess.run([EXE, '--http', str(PORT)], cwd=EXEDIR, capture_output=True, timeout=60,

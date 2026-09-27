@@ -117,8 +117,9 @@ begin
   Result := CarpetaEnVezDeFichero(A.Path);
   if Result <> '' then
     Exit;
-  if (A.Eol <> '') and not MatchText(A.Eol, ['crlf', 'lf']) then
-    Exit(MsgFmt(SR_TEXT_EOL_FMT, [A.Eol]));
+  Result := EolDesconocido(A.Eol);
+  if Result <> '' then
+    Exit;
   if TFile.Exists(A.Path) then
     Exit(MsgFmt(SR_TEXT_YA_EXISTE_NUNCA_SOBREESCRIBE_FMT, [A.Path]));
   Dir := TPath.GetDirectoryName(A.Path);
