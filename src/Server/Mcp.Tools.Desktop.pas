@@ -145,12 +145,12 @@ begin
   Lineas := ASalida.Split([#10]);
   Desde := 0;
   for I := 0 to High(Lineas) do
-    if Lineas[I].Contains('ventanas visibles') then
+    if Lineas[I].Contains(NODO_VENTANAS) then
       Desde := I;
   for I := Desde to High(Lineas) do
   begin
     L := Lineas[I];
-    if not L.TrimLeft.StartsWith('VENTANA ') then
+    if not L.TrimLeft.StartsWith(NODO_VENTANA) then
       Continue;
     // "VENTANA x y w h <titulo con espacios>": Split con tope TIRA el resto
     // (medido: "Experiencia de entrada" quedaba en "Experiencia"), asi que

@@ -805,7 +805,7 @@ begin
 
   // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference)
   Result := AddProjectUnit(ADprPath, PasPath);
-  if Result.StartsWith('RECHAZADO') then
+  if EsRechazo(Result) then
     Result := MsgFmt(SK_CREATE_CREADOS_NO_REGISTRADOS_FMT, [AUnitName, DesignerExt, Result])
   else
     Result := MsgFmt(SK_CREATE_CREADO_FORM_FMT,
@@ -915,7 +915,7 @@ begin
     Exit;
   WriteNewFile(PasPath, Body);
   Result := AddProjectUnit(ADprPath, PasPath);
-  if Result.StartsWith('RECHAZADO') then
+  if EsRechazo(Result) then
     Result := MsgFmt(SK_CREATE_CREADA_NO_REGISTRADA_FMT, [AUnitName, Result])
   else
     Result := MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,

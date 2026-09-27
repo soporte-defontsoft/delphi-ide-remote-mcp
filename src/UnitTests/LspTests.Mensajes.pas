@@ -20,6 +20,7 @@ type
     [Test] procedure ElMensajePorSuConstante;
     [Test] procedure ElResultadoLoDeclaraLaEtiqueta;
     [Test] procedure ElHelperNoRevienta;
+    [Test] procedure LosLectoresDelResultado;
   end;
 
 implementation
@@ -108,6 +109,27 @@ begin
   Assert.IsTrue((Length(MsgIds(S)) = 1) and (MsgIds(S)[0] = 'CREATE-099'), S);
   Assert.AreEqual('', MsgOutcome(S), 'un exito sigue siendolo');
   Assert.IsTrue(S.Contains('RECHAZADO: el .dpr no existe.'), 'el texto de dentro se queda: ' + S);
+end;
+
+procedure TEtiquetasTests.LosLectoresDelResultado;
+begin
+  // por la etiqueta: la PRIMERA del mensaje
+  Assert.AreEqual('INVALID_PARAM', ResultadoDe(Format(EJ_RECHAZO, ['Win99'])));
+  Assert.AreEqual('', ResultadoDe(Format(EJ_BUENO, ['A.pas'])), 'un exito no declara nada');
+  Assert.IsTrue(EsRechazo(Format(EJ_RECHAZO, ['Win99'])), 'rechazo');
+  Assert.IsFalse(EsRechazo('Error executing tool: x [SYS-999 INTERNAL]'), 'INTERNAL no es un rechazo');
+  Assert.IsTrue(EsFallo('Error executing tool: x [SYS-999 INTERNAL]'), 'pero si un fallo');
+  // sin etiqueta, la regla vieja (mientras quede algun mensaje sin ella)
+  Assert.AreEqual('NOT_FOUND', ResultadoDe('RECHAZADO: no existe X.'));
+  Assert.AreEqual('INVALID_PARAM', ResultadoDe('error: falta "path"'));
+  Assert.IsFalse(EsFallo('ESCRITO en A.pas'), 'sin etiqueta y sin marca: exito');
+  // un rechazo aun SIN etiqueta con una nota etiquetada detras sigue siendo
+  // un rechazo (la puerta del 27-sep: la tanda se aplicaba en vez de deshacerse)
+  Assert.IsTrue(EsFallo('RECHAZADO: el ancla no esta.'#10'la mas parecida es la 3 [EDIT-099]'), 'rechazo + nota');
+  // EsMsg mira la PRIMERA etiqueta: el eco que viene detras no cuenta
+  Assert.IsTrue(EsMsg(Format(EJ_BUENO, ['A.pas']) + #10'12| RECHAZADO [CFG-007 INVALID_PARAM]', EJ_BUENO));
+  Assert.IsFalse(EsMsg('RECHAZADO: x [CFG-007 INVALID_PARAM]'#10'eco: ESCRITO en A.pas. [EDIT-001]', EJ_BUENO),
+    'un ESCRITO citado en el eco no convierte un rechazo en exito');
 end;
 
 initialization

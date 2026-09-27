@@ -81,9 +81,9 @@ var
         dice; la captura ya esta escrita y no se pierde por esto. }
       try
         Lista := Escritorio.Ventanas;
-        Writeln(Format('  %d ventanas visibles:', [Length(Lista)]));
+        Writeln(Format('  %d ' + NODO_VENTANAS, [Length(Lista)]));
         for V in Lista do
-          Writeln(Format('  VENTANA %d %d %d %d %s',
+          Writeln(Format('  ' + NODO_VENTANA + '%d %d %d %d %s',
             [V.X, V.Y, V.Ancho, V.Alto, V.Titulo]));
       except
         on E: Exception do
@@ -350,10 +350,10 @@ var
       end
       else
         Writeln(MsgText(SN_NODE_VENTANAS_SIN_CONVERTIR));
-      Writeln(Format('  %d ventanas visibles:', [Length(Lista)]));
+      Writeln(Format('  %d ' + NODO_VENTANAS, [Length(Lista)]));
       Writeln(MsgText(SN_NODE_NATIVAS_WAYLAND_NO_SALEN));
       for V in Lista do
-        Writeln(Format('  VENTANA %d %d %d %d %s',
+        Writeln(Format('  ' + NODO_VENTANA + '%d %d %d %d %s',
           [Round(V.X * FX), Round(V.Y * FY), Round(V.Ancho * FX), Round(V.Alto * FY), V.Titulo]));
     except
       on E: Exception do

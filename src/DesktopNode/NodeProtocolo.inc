@@ -5,3 +5,5 @@
   26-sep-2026). }
   NODO_CAPTURA = 'CAPTURA=';           // CAPTURA=<ruta del png>
   NODO_NO_PUDE = 'NO pude capturar:';  // NO pude capturar: <motivo>
+  NODO_VENTANAS = 'ventanas visibles:'; // '  <n> ventanas visibles:' abre la lista
+  NODO_VENTANA = 'VENTANA ';            // '  VENTANA x y ancho alto <titulo>'

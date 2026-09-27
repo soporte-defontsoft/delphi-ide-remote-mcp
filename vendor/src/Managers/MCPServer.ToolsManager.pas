@@ -85,28 +85,10 @@ uses
   un fallo aunque no lo diga. }
 function OutcomeDelTexto(const AText: string; AEsError: Boolean): string;
 var
-  Low, PorTexto: string;
+  PorTexto: string;
 begin
-  // la regla de siempre, leyendo como EMPIEZA el texto
-  PorTexto := '';
-  Low := AText.ToLower;
-  if AText.StartsWith('RECHAZADO') then
-  begin
-    if Low.Contains('no existe') then
-      PorTexto := 'NOT_FOUND'
-    else
-      PorTexto := 'DENIED';
-  end
-  else if AText.StartsWith('error:') or AEsError then
-  begin
-    if Low.Contains('no existe') or Low.Contains('not found') then
-      PorTexto := 'NOT_FOUND'
-    else
-      PorTexto := 'INVALID_PARAM';
-  end
-  else if AText.StartsWith('Error:') or AText.StartsWith('Error executing tool:') or
-          AText.StartsWith('LSP error:') then
-    PorTexto := 'INTERNAL';
+  // la regla de siempre, leyendo como EMPIEZA el texto (vive en Lsp.Texts)
+  PorTexto := ResultadoPorTexto(AText, AEsError);
   // la etiqueta manda; si no coincide con la regla, es un cambio que mirar
   Result := MsgOutcome(AText);
   if Result <> '' then
@@ -234,10 +216,10 @@ begin
       // [local change 2026-09-27] y un mensaje del catalogo con etiqueta de
       // resultado tambien: dice el mismo lo que es
       on E: Exception do
-        if E.Message.StartsWith('RECHAZADO') or (MsgOutcome(E.Message) <> '') then
+        if EsRechazo(E.Message) or (MsgOutcome(E.Message) <> '') then
           Result := E.Message
         else
-          Result := 'Error executing tool: ' + E.Message;
+          Result := MsgFmt(SR_SYS_TOOL_FAILED_FMT, [E.Message]);
     end;
   finally
     Owned.Free;

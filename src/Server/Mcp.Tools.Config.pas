@@ -1605,18 +1605,17 @@ begin
       // El .dproj vuelve byte a byte, como una tanda.
       var Antes := TFile.ReadAllBytes(Proj);
       Result := AddPlatform(Proj, Params.Platform);
-      if not Result.StartsWith('RECHAZADO') and not Result.StartsWith('error') then
+      if not EsRechazo(Result) then
       begin
         var Pega := '';
         if Params.Sdk.Trim <> '' then
           Pega := SetSdk(Proj, Params.Platform, Params.Sdk);
-        if (Params.Profile.Trim <> '') and not Pega.StartsWith('RECHAZADO') and
-           not Pega.StartsWith('error') then
+        if (Params.Profile.Trim <> '') and not EsRechazo(Pega) then
           Pega := string.Join(sLineBreak, [Pega,
             SetProfile(Proj, Params.Platform, Params.Profile)]).Trim;
         var Rechazo := '';
         for var L in Pega.Replace(sLineBreak, #10).Split([#10]) do
-          if L.StartsWith('RECHAZADO') or L.StartsWith('error') then
+          if EsRechazo(L) then
             Rechazo := L;
         if Rechazo <> '' then
         begin

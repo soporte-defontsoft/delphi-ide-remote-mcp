@@ -26,6 +26,10 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
+  { La marca de las notas de arranque que son un AVISO: la escriben las SL_
+    de Lsp.Guard y la lee Lsp.Host para ponerles el prefijo de aviso. Una
+    constante para los dos lados: al traducir cambia en un sitio. }
+  SL_MARCA_AVISO = 'AVISO';
   SERVER_VERSION = '1.6.2';
 
   // ---------------------------------------------------------------------
@@ -5138,49 +5142,49 @@ const
 
   // Mensajes que estaban en linea en Lsp.Guard.pas (paso 3c a mano, 27-sep-2026)
   SL_GUARD_MISMO_VALOR_TOKEN_FMT =
-    'AVISO: [Workspace.%s] tiene el MISMO valor en Token= y ' +
+    SL_MARCA_AVISO + ': [Workspace.%s] tiene el MISMO valor en Token= y ' +
     'ReadOnlyToken=: no se sabe si quien entra puede escribir. CERRADO ' +
     '(fail closed) hasta que sean distintos.';
 
   SL_GUARD_COMPARTEN_UN_TOKEN_FMT =
-    'AVISO: [Workspace.%s] y [Workspace.%s] comparten un token ' +
+    SL_MARCA_AVISO + ': [Workspace.%s] y [Workspace.%s] comparten un token ' +
     '(copia-pega): con el mismo secreto no se sabe que jaula toca. Los ' +
     'DOS quedan CERRADOS (fail closed) hasta que cada uno tenga el suyo.';
 
   SL_GUARD_SECCION_DOS_VECES_CERRADO_FMT =
-    'AVISO: la seccion [%s] aparece DOS veces en settings.ini y el ini ' +
+    SL_MARCA_AVISO + ': la seccion [%s] aparece DOS veces en settings.ini y el ini ' +
     'solo lee la primera. Ese workspace queda CERRADO (fail closed) ' +
     'hasta que sea una sola.';
 
   SL_GUARD_SECCION_DOS_VECES_FUSIONALAS_FMT =
-    'AVISO: la seccion [%s] aparece DOS veces en settings.ini y el ini ' +
+    SL_MARCA_AVISO + ': la seccion [%s] aparece DOS veces en settings.ini y el ini ' +
     'solo lee la primera: fusionalas.';
 
   SL_GUARD_REPITE_CLAVE_CERRADO_FMT =
-    'AVISO: [%s] repite la clave %s y el ini solo lee la primera. Ese ' +
+    SL_MARCA_AVISO + ': [%s] repite la clave %s y el ini solo lee la primera. Ese ' +
     'workspace queda CERRADO (fail closed) hasta que la clave sea una ' +
     'sola.';
 
   SL_GUARD_REPITE_CLAVE_IGNORA_FMT =
-    'AVISO: [%s] repite la clave %s: el ini solo lee la primera y la ' +
+    SL_MARCA_AVISO + ': [%s] repite la clave %s: el ini solo lee la primera y la ' +
     'segunda se ignora en silencio.';
 
   SL_GUARD_ROOTS_NO_PARSEA_FMT =
-    'AVISO: [Workspace.%s] Roots= no parsea: ese workspace no admite a ' +
+    SL_MARCA_AVISO + ': [Workspace.%s] Roots= no parsea: ese workspace no admite a ' +
     'NADIE (fail closed). Revisa la ruta.';
 
   SL_GUARD_SIN_TOKEN_IGNORADA_FMT =
-    'AVISO: [Workspace.%s] sin Token= ni ReadOnlyToken=: seccion ' +
+    SL_MARCA_AVISO + ': [Workspace.%s] sin Token= ni ReadOnlyToken=: seccion ' +
     'IGNORADA. La clave es Token= (AuthToken= tambien vale como alias).';
 
   SL_GUARD_WORKSPACE_SIN_PUNTO =
-    'AVISO: la seccion [Workspace] (sin punto) ya NO existe y se IGNORA ' +
+    SL_MARCA_AVISO + ': la seccion [Workspace] (sin punto) ya NO existe y se IGNORA ' +
     'entera: sus Roots, sus tokens y sus permisos no valen nada. Desde ' +
     'v0.98 nada es global - renombrala a [Workspace.<nombre>] y dale un ' +
     'Token=.';
 
   SL_GUARD_WORKSPACE_MAL_ESCRITO_FMT =
-    'AVISO: la seccion [%s] parece un workspace mal escrito y se IGNORA. ' +
+    SL_MARCA_AVISO + ': la seccion [%s] parece un workspace mal escrito y se IGNORA. ' +
     'El formato es [Workspace.<nombre>] (con el punto).';
 
   SR_GUARD_RUTA_INVALIDA_FMT =
@@ -6537,6 +6541,12 @@ const
     pero cada caso es un cambio de comportamiento que hay que mirar. }
   SL_MSG_OUTCOME_DIFFERS_FMT = 'Resultado distinto: la etiqueta dice %s y el texto decia "%s" en "%s"';
   { MsgFmt con unos argumentos que no cuadran con los % del mensaje. }
+  { EL fallo interno de una tool: la excepcion que nadie espero, envuelta por
+    ToolsManager. Era un literal alli, y Lsp.Guard lo reconocia por su texto. }
+  SR_SYS_TOOL_FAILED_FMT = 'Error executing tool: %s [SYS-006 INTERNAL]';
+  { Una excepcion dentro del motor de delphi_edit: salia como 'ERROR: ...',
+    que ninguna regla reconocia, y la tool daba EXITO (visto 27-sep). }
+  SR_EDIT_FALLO_INTERNO_FMT = 'ERROR: %s: %s [EDIT-090 INTERNAL]';
   SL_MSG_FORMAT_FMT = 'Mensaje %s: los argumentos no cuadran con su formato (%s): "%s"';
 
 { Los ids de las etiquetas que trae AText, en orden. }
@@ -6562,10 +6572,28 @@ function MsgText(const AMsg: string): string;
   el mensaje sin formatear con el motivo detras, y lo anota en el log. }
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;
 
+{ El resultado de un MENSAJE (lo que devuelve una funcion, lo que trae una
+  excepcion; para una RESPUESTA entera, MsgOutcome): el que declara su
+  primera etiqueta. Si esa no declara ninguno, o no hay etiqueta, la regla
+  vieja (ResultadoPorTexto), mientras quede algun mensaje sin ella. }
+function ResultadoDe(const AText: string): string;
+{ Un rechazo: DENIED, NOT_FOUND o INVALID_PARAM. }
+function EsRechazo(const AText: string): Boolean;
+{ Cualquier resultado de error, INTERNAL incluido. }
+function EsFallo(const AText: string): Boolean;
+{ True si la PRIMERA etiqueta de AText es la de la constante AMsg: "este
+  resultado ES ese mensaje" (un eco que venga detras no cuenta). }
+function EsMsg(const AText, AMsg: string): Boolean;
+{ La regla VIEJA, leyendo como EMPIEZA el texto (RECHAZADO, error:, Error:),
+  en UN sitio mientras dura la migracion: la usan ResultadoDe y
+  ToolsManager. Se borra al traducir, y el compilador dira quien queda. }
+function ResultadoPorTexto(const AText: string; AEsError: Boolean = False): string;
+
 implementation
 
 uses
   System.SysUtils,
+  System.StrUtils,
   System.RegularExpressions,
   MCPServer.Logger;
 
@@ -6650,6 +6678,63 @@ begin
       TLogger.Error(Format(SL_MSG_FORMAT_FMT, [MsgTag(AMsg), E.Message, Copy(AMsg, 1, 60)]));
     end;
   end;
+end;
+
+function ResultadoPorTexto(const AText: string; AEsError: Boolean): string;
+var
+  Low: string;
+begin
+  Result := '';
+  Low := AText.ToLower;
+  if AText.StartsWith('RECHAZADO') then
+  begin
+    if Low.Contains('no existe') then
+      Result := 'NOT_FOUND'
+    else
+      Result := 'DENIED';
+  end
+  else if AText.StartsWith('error:') or AEsError then
+  begin
+    if Low.Contains('no existe') or Low.Contains('not found') then
+      Result := 'NOT_FOUND'
+    else
+      Result := 'INVALID_PARAM';
+  end
+  else if AText.StartsWith('Error:') or AText.StartsWith('Error executing tool:') or
+          AText.StartsWith('LSP error:') then
+    Result := 'INTERNAL';
+end;
+
+function ResultadoDe(const AText: string): string;
+var
+  M: TMatch;
+begin
+  M := TRegEx.Match(AText, MSG_TAG_REGEX);
+  if M.Success and (M.Groups.Count > 2) and M.Groups[2].Success then
+    Exit(M.Groups[2].Value);
+  // la primera etiqueta no declara nada, o no hay: la regla vieja. Un
+  // rechazo AUN sin etiqueta con notas etiquetadas detras (el ancla que no
+  // esta + sus pistas) salia como exito y una tanda con una entrada mala
+  // se aplicaba en vez de deshacerse (puerta del 27-sep, 8 fallos)
+  Result := ResultadoPorTexto(AText);
+end;
+
+function EsRechazo(const AText: string): Boolean;
+begin
+  Result := MatchStr(ResultadoDe(AText), ['DENIED', 'NOT_FOUND', 'INVALID_PARAM']);
+end;
+
+function EsFallo(const AText: string): Boolean;
+begin
+  Result := ResultadoDe(AText) <> '';
+end;
+
+function EsMsg(const AText, AMsg: string): Boolean;
+var
+  Ids: TArray<string>;
+begin
+  Ids := MsgIds(AText);
+  Result := (MsgTag(AMsg) <> '') and (Length(Ids) > 0) and (Ids[0] = MsgTag(AMsg));
 end;
 
 end.

@@ -4209,7 +4209,7 @@ begin
   // Refused for reading: say that a library zone exists and how to see it.
   // Field 2026-08-22: an agent listed the PARENT of a registered component
   // folder, got the plain jail refusal, and concluded list and read disagreed.
-  if Result.StartsWith('RECHAZADO') then
+  if EsRechazo(Result) then
     Result := Result + ' ' + MsgText(SN_READ_ZONE_HINT);
 end;
 
@@ -4418,8 +4418,7 @@ begin
   if MatchText(AToolName, ['delphi_read', 'vault_read', 'vault_search',
                            'delphi_search', 'delphi_edit',
                            'delphi_textedit']) and
-     not (AText.StartsWith('RECHAZADO') or AText.StartsWith('error') or
-          AText.StartsWith('Error executing tool: ')) then
+     not EsFallo(AText) then
     Exit(AText);
   Letters := ServedDriveLetters;
   if (Letters = '') or (AText = '') then

@@ -258,7 +258,7 @@ begin
       // rechaza con ese prefijo lo que no es un proyecto (regla 11: corrige
       // y repite), y ese mensaje se estaba re-lanzando y saliendo disfrazado
       // de averia interna - justo lo que este try/except existe para evitar.
-      if E.Message.StartsWith('RECHAZADO') or E.Message.StartsWith('error:') then
+      if EsRechazo(E.Message) then
         Exit(E.Message)
       else
         raise;

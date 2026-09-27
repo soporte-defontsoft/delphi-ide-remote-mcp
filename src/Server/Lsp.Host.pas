@@ -260,7 +260,7 @@ begin
   // here as the "default" workspace; misconfigured sections stop vanishing
   // silently (operator decision 2026-09-11).
   for var WsNote in WorkspaceStartupNotes do
-    if WsNote.StartsWith('AVISO') then
+    if WsNote.StartsWith(SL_MARCA_AVISO) then
       Add(NOTE_WARNING_PREFIX + WsNote)
     else
       Add(WsNote);

@@ -1388,8 +1388,7 @@ begin
           Una := AAplicaUna(Anc, Nue, EnLinea, Hasta[N - 1], Borra);
         end;
         var Eco := '';
-        if (AntesL <> nil) and not (Una.StartsWith('RECHAZADO') or
-                                    Una.StartsWith('error')) then
+        if (AntesL <> nil) and not EsFallo(Una) then
         try
           var DespuesL := PatchLoadText(APath, EncTmp)
             .Replace(#13#10, #10).Split([#10]);
@@ -1423,7 +1422,7 @@ begin
         end;
         // El motor dice RECHAZADO / error cuando se nego; cualquier otra cosa
         // es una edicion aplicada con su auditoria.
-        if Una.StartsWith('RECHAZADO') or Una.StartsWith('error') then
+        if EsFallo(Una) then
         begin
           Fallo := N;
           // #10, no AppendLine (CRLF en Windows): el mensaje que lo envuelve
@@ -2010,7 +2009,7 @@ begin
           var R := DoEdit(A.Path, FrontLine,
             string.Join(#10, CodeLines) + #10#10 + FrontLine, FrontIdx + 1, False);
           var Extra := '';
-          if A.Visible and R.StartsWith('ESCRITO') then
+          if A.Visible and EsMsg(R, SK_EDIT_ESCRITO_EN_FMT) then
           begin
             var ImpIdx: Integer;
             if FindUniqueLine(SplitToLines(DecodeBytes(TFile.ReadAllBytes(A.Path), K)),
@@ -2022,7 +2021,7 @@ begin
               var Decl := string.Join(#10, FirmaLineas);
               if not Decl.EndsWith(';') then Decl := Decl + ';';
               var R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
-              if R2.StartsWith('ESCRITO') then
+              if EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
                 Extra := #10'--- visible: declaracion ''' + Decl + ''' anadida al final del interface ---'#10 + R2
               else
                 Extra := #10'*** visible: NO pude anadir la declaracion en interface - hazla con old/new. ***'#10 + R2;
@@ -2208,14 +2207,14 @@ begin
         if not DeclLinea.EndsWith(';') then DeclLinea := DeclLinea + ';';
         var AnclaDecl := Lines[IDecl - 1];
         R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
-        if not R1.StartsWith('ESCRITO') then
+        if not EsMsg(R1, SK_EDIT_ESCRITO_EN_FMT) then
           Exit(MsgFmt(SN_EDIT_INSERT_FALLO_MITAD1_FMT, [A.ClassName_, R1]));
         end;
         var FirmaCual := TRegEx.Replace(Firma,
           '^(procedure|function|constructor|destructor)(\s+)', '$1$2' + A.ClassName_ + '.', [roIgnoreCase]);
         CodeLines[IFirmaIni] := FirmaCual;
         var R2 := DoEdit(A.Path, FrontLine, string.Join(#10, CodeLines) + #10#10 + FrontLine, 0, False);
-        if not R2.StartsWith('ESCRITO') then
+        if not EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
         begin
           if DeclNota <> '' then
             Exit(MsgFmt(SN_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT, [R2]));
@@ -2255,7 +2254,7 @@ begin
         False, A.ToLine);
     except
       on E: Exception do
-        Result := 'ERROR: ' + E.ClassName + ': ' + E.Message;
+        Result := MsgFmt(SR_EDIT_FALLO_INTERNO_FMT, [E.ClassName, E.Message]);
     end;
   finally
     GLock.Leave;

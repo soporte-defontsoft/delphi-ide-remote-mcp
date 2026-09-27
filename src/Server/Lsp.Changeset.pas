@@ -315,8 +315,7 @@ begin
           T.AtLine := Op.AtLine;
           R := ExecuteTextEdit(T);
         end;
-        Result := not (R.StartsWith('RECHAZADO') or R.StartsWith('ERROR') or
-          R.StartsWith('error'));
+        Result := not EsFallo(R);
         if not Result then
           AError := R;
       end;
