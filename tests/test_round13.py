@@ -26,7 +26,7 @@ Usage:  python tests/test_round13.py [path-to-DelphiLspMcp.exe]
 """
 import os, glob, ctypes
 # 'mc' es aqui una copia de la papelera (R3): el modulo entra por sus nombres
-from mcp_cliente import carpeta, copia_exe, entorno, Stdio, check, fin
+from mcp_cliente import carpeta, copia_exe, entorno, Stdio, check, fin, es, abre, rechazado
 
 BASE = carpeta('round13')
 EXE = copia_exe(BASE)
@@ -71,7 +71,7 @@ shortcopy = copy.replace(os.path.join(BASE, '__delphi-patch'),
 
 def por_la_papelera(r):
     """Rechazado por la guarda de la PAPELERA, no por otra puerta."""
-    return 'RECHAZADO' in r and 'es la papelera' in r and 'FUERA de los workspaces' not in r
+    return rechazado(r) and es(r, 'SR_GUARD_DEAD_TRASH') and not es(r, 'SR_JAIL_FMT')
 
 
 import base64
@@ -106,7 +106,7 @@ open(planted, 'w').write('fantasma')
 folder = os.path.dirname(os.path.dirname(rc))  # ...\<date>
 r = call('delphi_delete', {'path': folder, 'purge': True})
 check('R2 un .by huerfano/plantado NO bloquea la purga de la carpeta',
-      'PURGADO' in r and not os.path.exists(rc), r[:180])
+      abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(rc), r[:180])
 
 # ---- R3: orphan / own markers are sweepable; legit restore is clean --------
 open(os.path.join(BASE, 'mio.txt'), 'w').write('mio\n')
@@ -116,7 +116,7 @@ by = mc + '.by'
 check('R3 al borrar, la copia lleva su marcador', os.path.exists(by), by)
 r = call('delphi_move', {'path': mc, 'dest': os.path.join(BASE, 'mio_vuelto.txt')})
 check('R3 restaurar con move barre el .by (no deja huerfano)',
-      'MOVIDO' in r and not os.path.exists(by) and not os.path.exists(mc), r[:120])
+      abre(r, 'SK_MOVE_MOVIDO_FMT') and not os.path.exists(by) and not os.path.exists(mc), r[:120])
 
 # an orphan .by left around: its owner can purge it
 open(os.path.join(BASE, 'x.txt'), 'w').write('x\n')
@@ -125,7 +125,7 @@ xc = copies_of('x.txt')[0]
 os.remove(xc)  # copy gone, marker orphaned
 r = call('delphi_delete', {'path': xc + '.by', 'purge': True})
 check('R3 un .by huerfano se puede purgar',
-      'PURGADO' in r and not os.path.exists(xc + '.by'), r[:150])
+      abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(xc + '.by'), r[:150])
 
 # ---- counter-tests: nothing over-tightened ----------
 # still cannot purge someone else's LIVE copy or its marker
@@ -136,26 +136,26 @@ ac = copies_of('suyo.txt')[0]
 sess('otro')
 r = call('delphi_delete', {'path': ac, 'purge': True})
 check('contra: no purgo la copia VIVA de otro agente',
-      'RECHAZADO' in r and 'alicia' in r and os.path.exists(ac), r[:180])
+      rechazado(r) and es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and 'alicia' in r and os.path.exists(ac), r[:180])
 r = call('delphi_delete', {'path': ac + '.by', 'purge': True})
 check('contra: ni su marcador vivo',
-      'RECHAZADO' in r and os.path.exists(ac + '.by'), r[:180])
+      rechazado(r) and es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and os.path.exists(ac + '.by'), r[:180])
 # ...but the owner still can
 sess('alicia')
 r = call('delphi_delete', {'path': ac, 'purge': True})
 check('contra: el dueno SI purga la suya',
-      'PURGADO' in r and not os.path.exists(ac), r[:150])
+      abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(ac), r[:150])
 # the jail still holds
 r = call('delphi_read', {'path': 'C:\\Windows\\win.ini'})
-check('contra: la carcel sigue firme', 'RECHAZADO' in r and 'FUERA de los workspaces' in r, r[:120])
+check('contra: la carcel sigue firme', rechazado(r) and es(r, 'SR_JAIL_FMT'), r[:120])
 # a normal delete + restore round trip still works
 open(os.path.join(BASE, 'ida.txt'), 'w').write('ida\n')
 r = call('delphi_delete', {'path': os.path.join(BASE, 'ida.txt')})
-check('contra: borrar sigue funcionando', 'BORRADO' in r, r[:120])
+check('contra: borrar sigue funcionando', abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT'), r[:120])
 ic = copies_of('ida.txt')[0]
 r = call('delphi_move', {'path': ic, 'dest': os.path.join(BASE, 'ida.txt')})
 check('contra: restaurar sigue funcionando',
-      'MOVIDO' in r and os.path.exists(os.path.join(BASE, 'ida.txt')), r[:120])
+      abre(r, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(os.path.join(BASE, 'ida.txt')), r[:120])
 
 srv.mata()
 fin('round-13 battery')

@@ -44,7 +44,7 @@ time.sleep(0.3)
 
 # ---- config sections -------------------------------------------------------
 r = call('delphi_create', {'kind': 'project-console', 'name': 'SecCfg', 'dir': BASE})
-check('scaffold para config', 'CREADO' in r, r)
+check('scaffold para config', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r)
 dproj = glob.glob(os.path.join(BASE, '**', 'SecCfg.dproj'), recursive=True)[0]
 
 rsum = call('delphi_config', {'project': dproj})
@@ -87,7 +87,7 @@ check('C6 el summary pesa bastante menos que all',
       len(rsum) < len(rall), (len(rsum), len(rall)))
 r = call('delphi_config', {'project': dproj, 'section': 'Marte'})
 check('C7 section invalida se rechaza con la lista',
-      r.startswith('error: section debe ser') and 'summary' in r and 'units' in r, r)
+      mc.resultado(r) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(r, 'SR_CFG_SECTION_DEBE_SER_SUMMARY') and 'summary' in r and 'units' in r, r)
 
 # ---- symbols modes ---------------------------------------------------------
 big = os.path.join(BASE, 'Big.pas')
@@ -152,7 +152,7 @@ check('S4 filter encuentra el simbolo con kind, linea y contenedor',
 
 r = call('delphi_symbols', {'path': big, 'mode': 'arbol'})
 check('S5 mode invalido se rechaza explicando los validos',
-      r.startswith('error: mode debe ser') and 'summary' in r and 'full' in r, r)
+      mc.resultado(r) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(r, 'SR_LSP_MODE_DEBE_SER_SUMMARY') and 'summary' in r and 'full' in r, r)
 
 srv.mata()
 mc.fin('round-16 battery')

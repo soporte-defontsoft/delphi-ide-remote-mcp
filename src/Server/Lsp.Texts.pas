@@ -35,7 +35,7 @@ const
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
   // ---------------------------------------------------------------------
-  SN_VIRTUAL_DRIVES =
+  SF_VIRTUAL_DRIVES =
     'Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only ' +
     'exist inside this MCP: use them verbatim in every path argument and ' +
     'you will receive them back in results. They are NEVER your own local ' +
@@ -256,7 +256,7 @@ const
     + 'una palabra reservada, un literal o un comentario, y no hay simbolo '
     + 'que resolver. Para ver que hay en esa linea, delphi_read; para localizar '
     + 'un simbolo por nombre, delphi_symbols filter=<nombre>, que te da la '
-    + 'linea ya separada en 1-based y 0-based.';
+    + 'linea ya separada en 1-based y 0-based. [LSP-029]';
 
   SN_GIT_DIFF_CLEAN =
     '(sin diferencias: no hay NADA cambiado respecto a lo comparado. La orden ' +
@@ -1116,7 +1116,7 @@ const
     'notas. Uselo al empezar, o para recargar el indice a mitad de una sesion ' +
     'larga.';
 
-  SN_VAULT_PROMPT_HEADER =
+  SF_VAULT_PROMPT_HEADER =
     'Estas son las reglas y el indice del vault de conocimiento de este ' +
     'servidor. Trabaja con carga perezosa: carga solo las notas que el indice ' +
     'indique que aplican a tu tarea, con vault_read.';
@@ -2290,7 +2290,7 @@ const
     'local, el .deployproj queda escrito y el IDE lo usara al abrir el ' +
     'proyecto. [CFG-028]';
 
-  SN_CONFIG_DEPLOY_GENERATED =
+  SF_CONFIG_DEPLOY_GENERATED =
     'El proyecto no tenia manifiesto de despliegue: se genero el estandar ' +
     '(el binario) antes de anadir el fichero.';
 
@@ -2724,7 +2724,7 @@ const
     'delphi_config command=add-searchpath platform=<plataforma> path=<carpeta> ' +
     'y repite la build. Sin candidatos: el componente no esta instalado o no ' +
     'trae fuente para esta plataforma (delphi_components platform=<plataforma>, ' +
-    'y si falta, delphi_report).';
+    'y si falta, delphi_report). [BUILD-042]';
   { En un paquete el F2613 tiene otra salida mas: la unit vive en OTRO
     paquete propio (Hermes, bateria 1.2 A.2, 2026-09-23): hace falta el
     requires Y el .dcp a mano; el search path solo no lo resuelve. }
@@ -3340,7 +3340,7 @@ const
     'DFM BINARIO en disco, mostrado como texto (la conversion del propio IDE, ' +
     '"Ver como texto"). Lo que lees es fiel, pero NO se edita asi: ' +
     'delphi_designer command=to-text lo pasa a texto en disco (copia previa) ' +
-    'y desde ahi se edita como cualquier .dfm.';
+    'y desde ahi se edita como cualquier .dfm. [READ-004]';
 
   SR_DESIGNER_EMPTY =
     'RECHAZADO: el fichero no contiene ningun object. [DSGN-014 DENIED]';

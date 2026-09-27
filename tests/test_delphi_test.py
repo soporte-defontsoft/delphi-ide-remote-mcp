@@ -28,7 +28,7 @@ B = spawn({'DELPHI_MCP_ALLOW_TESTS': '1'})     # con el interruptor
 
 # ---- fixtures: una suite verde y una roja, y un proyecto que NO es test ----
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'VerdeTest', 'dir': os.path.join(BASE, 'VerdeTest')})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 VERDE = os.path.join(BASE, 'VerdeTest', 'VerdeTest.dpr')
 open(VERDE, 'w', encoding='utf-8-sig', newline='\r\n').write(
 """program VerdeTest;
@@ -90,11 +90,11 @@ check('discover encuentra las dos suites', 'VerdeTest.dpr' in names and 'RojoTes
 check('discover NO cuenta un proyecto normal', 'NormalApp.dpr' not in names, names)
 check('discover dice el framework y el porque', all(p.get('framework') and p.get('why') for p in j.get('projects', [])), str(j)[:250])
 j = J(A.call('delphi_test', {'command': 'discover', 'path': os.path.join(BASE, 'NormalApp')}))
-check('carpeta sin tests: total 0 con explicacion', j.get('total') == 0 and 'test' in (j.get('note') or ''), str(j)[:250])
+check('carpeta sin tests: total 0 con explicacion', j.get('total') == 0 and mc.es(j.get('note') or '', 'SN_TEST_NONE'), str(j)[:250])
 
 # ---- el interruptor ----
 r = A.call('delphi_test', {'command': 'run', 'project': VERDE})
-check('sin AllowTests: run RECHAZADO nombrando el interruptor', 'RECHAZADO' in r and 'AllowTests' in r, r[:250])
+check('sin AllowTests: run RECHAZADO nombrando el interruptor', mc.rechazado(r) and mc.es(r, 'SR_TEST_DISABLED'), r[:250])
 r = A.call('delphi_test', {'command': 'discover', 'path': BASE})
 check('sin AllowTests: discover SI funciona', r.startswith('{'), r[:150])
 
@@ -114,13 +114,13 @@ check('suite roja: exitCode distinto de 0', j.get('exitCode') not in (0, None), 
 
 # ---- contratos ----
 r = B.call('delphi_test', {'command': 'run', 'project': os.path.join(BASE, 'NormalApp', 'NormalApp.dpr')})
-check('un proyecto que no es test: rechazado y explicado', 'RECHAZADO' in r and 'DUnitX' in r, r[:300])
+check('un proyecto que no es test: rechazado y explicado', mc.es(r, 'SR_TEST_NOTATEST_FMT'), r[:300])
 r = B.call('delphi_test', {'command': 'run'})
-check('run sin project rechazado con pista', 'RECHAZADO' in r and 'discover' in r, r[:200])
+check('run sin project rechazado con pista', mc.rechazado(r) and mc.es(r, 'SR_TEST_NEED_PROJECT'), r[:200])
 r = B.call('delphi_test', {'command': 'volar', 'path': BASE})
-check('comando invalido', 'discover' in r and 'run' in r, r[:150])
+check('comando invalido', mc.es(r, 'SR_TEST_CMD'), r[:150])
 r = B.call('delphi_test', {'command': 'run', 'project': 'C:\\Windows\\x.dproj'})
-check('fuera de la jaula rechazado', 'RECHAZADO' in r, r[:200])
+check('fuera de la jaula rechazado', mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:200])
 
 # una suite que NO compila: se dice, no se ejecuta nada viejo
 # ojo: Delphi IGNORA lo que va despues de "end." - hay que romperlo DENTRO

@@ -80,12 +80,12 @@ def Server(env):
 # ---- 1) the reference project, made for real by a server that OWNS the folder
 maker = Server({'DELPHI_MCP_ROOTS': REF + ';' + BOTH})
 out = maker.call('delphi_create', {'kind': 'project-console', 'dir': os.path.join(REF, 'Ref'), 'name': 'Ref'})
-check('fixture: proyecto de referencia creado', out.startswith('CREADO'), out[:200])
+check('fixture: proyecto de referencia creado', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out[:200])
 out = maker.call('delphi_create', {'kind': 'unit', 'name': 'URefUtil',
                                    'project': os.path.join(REF, 'Ref', 'Ref.dpr')})
-check('fixture: unit de referencia creada', out.startswith('CREADO') or out.startswith('CREADA'), out[:200])
+check('fixture: unit de referencia creada', mc.abre(out, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT'), out[:200])
 out = maker.call('delphi_create', {'kind': 'project-console', 'dir': os.path.join(BOTH, 'Ambos'), 'name': 'Ambos'})
-check('fixture: proyecto en la carpeta doble creado', out.startswith('CREADO'), out[:200])
+check('fixture: proyecto en la carpeta doble creado', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out[:200])
 maker.cierra(0.5)
 REF_PAS = os.path.join(REF, 'Ref', 'URefUtil.pas')
 REF_DPROJ = os.path.join(REF, 'Ref', 'Ref.dproj')
@@ -102,7 +102,7 @@ call = srv.call
 
 
 def refused_as_reference(out):
-    return out.startswith('RECHAZADO') and 'REFERENCIA' in out
+    return mc.rechazado(out) and mc.es(out, 'SR_REFERENCE_ROOT_FMT')
 
 
 # workspace announces them
@@ -110,7 +110,7 @@ out = call('delphi_workspace', {})
 try:
     d = json.loads(out)
     check('workspace: readOnlyRoots listados', any(r.lower().endswith('referencia') for r in d.get('readOnlyRoots', [])), out[:300])
-    check('workspace: nota de referencia', 'reference' in d.get('readOnlyRootsNote', '').lower(), out[:300])
+    check('workspace: nota de referencia', mc.es(d.get('readOnlyRootsNote', ''), 'SN_WORKSPACE_REFERENCE_NOTE'), out[:300])
     check('workspace: la referencia NO esta entre los roots', not any(r.lower().endswith('referencia') for r in d.get('roots', [])), out[:300])
 except Exception as e:
     check('workspace: parsea', False, '%s | %s' % (e, out[:200]))
@@ -135,7 +135,7 @@ check('projects root=referencia: listar es leer, no se rechaza',
 out = call('delphi_read', {'path': REF_PAS})
 check('read en la referencia', 'unit URefUtil' in out, out[:200])
 out = call('delphi_search', {'root': REF, 'query': 'URefUtil'})
-check('search en la referencia', 'URefUtil' in out and not out.startswith('RECHAZADO'), out[:200])
+check('search en la referencia', 'URefUtil' in out and not mc.rechazado(out), out[:200])
 out = call('delphi_list', {'path': os.path.join(REF, 'Ref')})
 check('list en la referencia', 'URefUtil.pas' in out, out[:200])
 out = call('delphi_symbols', {'path': REF_PAS})
@@ -156,18 +156,18 @@ check('move en la referencia: RECHAZADO', refused_as_reference(out), out[:200])
 # copy only READS its source (David, 2026-09-25): a unit comes in from a
 # reference, a whole project does not, and outside everything stays outside
 out = call('delphi_move', {'path': REF_PAS, 'dest': os.path.join(MINE, 'UCopia.pas'), 'copy': True})
-check('copy DESDE la referencia a mis roots: COPIADO (copiar solo LEE el origen)', out.startswith('COPIADO') and os.path.exists(os.path.join(MINE, 'UCopia.pas')), out[:200])
+check('copy DESDE la referencia a mis roots: COPIADO (copiar solo LEE el origen)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(MINE, 'UCopia.pas')), out[:200])
 check('...la copia es mia: cabecera renombrada', os.path.exists(os.path.join(MINE, 'UCopia.pas')) and 'unit UCopia;' in open(os.path.join(MINE, 'UCopia.pas')).read(), out[:200])
 out = call('delphi_move', {'path': os.path.join(REF, 'Ref'), 'dest': os.path.join(MINE, 'RefCopia'), 'copy': True})
-check('copy del PROYECTO de referencia entero: RECHAZADO (nunca en dos sitios)', out.startswith('RECHAZADO') and not os.path.exists(os.path.join(MINE, 'RefCopia')), out[:200])
+check('copy del PROYECTO de referencia entero: RECHAZADO (nunca en dos sitios)', mc.rechazado(out) and mc.es(out, 'SR_MOVE_COPY_PROJECT_FMT') and not os.path.exists(os.path.join(MINE, 'RefCopia')), out[:200])
 out = call('delphi_move', {'path': os.path.join(OUT, 'Fuera.pas'), 'dest': os.path.join(MINE, 'UFuera.pas'), 'copy': True})
-check('copy desde FUERA de todo: RECHAZADO (no se puede leer)', out.startswith('RECHAZADO') and not os.path.exists(os.path.join(MINE, 'UFuera.pas')), out[:200])
+check('copy desde FUERA de todo: RECHAZADO (no se puede leer)', mc.rechazado(out) and mc.es(out, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(MINE, 'UFuera.pas')), out[:200])
 out = call('delphi_delete', {'path': REF_PAS})
 check('delete en la referencia: RECHAZADO', refused_as_reference(out), out[:200])
 out = call('delphi_build', {'project': REF_DPROJ})
 check('build de la referencia: RECHAZADO (compilar escribe)', refused_as_reference(out), out[:200])
 out = call('delphi_designer', {'command': 'to-text', 'path': os.path.join(REF, 'Ref', 'X.dfm')})
-check('to-text en la referencia: RECHAZADO o inexistente, nunca escrito', out.startswith('RECHAZADO') or 'no existe' in out, out[:200])
+check('to-text en la referencia: RECHAZADO o inexistente, nunca escrito', mc.rechazado(out), out[:200])
 check('la referencia sigue byte a byte', open(REF_PAS, 'rb').read() == before, '')
 
 # precedence: the doubled folder is read-only although it is a root
@@ -178,7 +178,7 @@ check('carpeta en Roots Y ReadOnlyRoots: leer OK', 'program Ambos' in out, out[:
 
 # git: the QUERY half works on a reference repository, the writing half does not
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'status'})
-check('git status en la referencia: consulta OK', out.startswith('exit=0') and not out.startswith('RECHAZADO'), out[:200])
+check('git status en la referencia: consulta OK', out.startswith('exit=0') and not mc.rechazado(out), out[:200])
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'log'})
 check('git log en la referencia: consulta OK', out.startswith('exit=0') and out.rstrip().endswith(' ref'), out[:200])
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'add', 'args': '-A'})
@@ -211,14 +211,14 @@ subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(CE, 'aRef'), os.path.j
 subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(CE, 'aFuera'), OUT], capture_output=True)
 check('fixture: dos junctions (a la referencia y a fuera)', os.path.isdir(os.path.join(CE, 'aRef')) and os.path.isdir(os.path.join(CE, 'aFuera')), CE)
 out = call('delphi_move', {'path': CE, 'dest': os.path.join(MINE, 'copia'), 'copy': True})
-check('copy: COPIADO', out.startswith('COPIADO'), out[:200])
+check('copy: COPIADO', mc.abre(out, 'SK_MOVE_COPIADO_FMT'), out[:200])
 check('copy: lo propio se copia', os.path.exists(os.path.join(MINE, 'copia', 'propio.txt')), out[:200])
 check('copy: el junction a la REFERENCIA se sigue (se podia leer)', os.path.exists(os.path.join(MINE, 'copia', 'aRef', 'nota.txt')), out[:300])
 check('copy: el junction a FUERA no se sigue: nada de fuera entra', not os.path.exists(os.path.join(MINE, 'copia', 'aFuera')), out[:300])
-check('copy: la respuesta dice que enlace no se siguio', 'NO seguidos' in out and 'aFuera' in out, out[:400])
+check('copy: la respuesta dice que enlace no se siguio', mc.es(out, 'SN_COPY_LINKS_NOT_FOLLOWED_FMT') and 'aFuera' in out, out[:400])
 out = call('delphi_move', {'path': CE, 'dest': os.path.join(MINE, 'movida')})
 fuga = [os.path.join(r, f) for r, d, fs in os.walk(os.path.join(MINE, '__delphi-patch')) for f in fs if f.startswith('Fuera')]
-check('move: la copia de seguridad en la papelera tampoco se trae lo de fuera', out.startswith('MOVIDO') and not fuga, str(fuga)[:200] + ' ' + out[:200])
+check('move: la copia de seguridad en la papelera tampoco se trae lo de fuera', mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and not fuga, str(fuga)[:200] + ' ' + out[:200])
 # the hole of v0.16..v1.3.0: TDirectory.Move walked the junctions, brought
 # what was behind them into the jail and DELETED it from its place
 check('move: lo de detras del junction a FUERA sigue en su sitio', os.path.exists(os.path.join(OUT, 'Fuera.pas')), os.listdir(OUT))
@@ -231,13 +231,13 @@ for j in (os.path.join(MINE, 'movida', 'aRef'), os.path.join(MINE, 'movida', 'aF
 
 # a folder that HOLDS a reference is refused whole; what is mine next to it is not
 out = call('delphi_delete', {'path': os.path.join(MINE, 'conref')})
-check('delete de la carpeta que CONTIENE una referencia: RECHAZADO', out.startswith('RECHAZADO') and 'contiene' in out, out[:300])
+check('delete de la carpeta que CONTIENE una referencia: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_MUDANZA_PROTEGIDA_FMT'), out[:300])
 out = call('delphi_move', {'path': os.path.join(MINE, 'conref'), 'dest': os.path.join(MINE, 'conref2')})
-check('move de la carpeta que CONTIENE una referencia: RECHAZADO', out.startswith('RECHAZADO') and 'contiene' in out, out[:300])
+check('move de la carpeta que CONTIENE una referencia: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_MUDANZA_PROTEGIDA_FMT'), out[:300])
 check('...y la referencia de dentro sigue en su sitio', os.path.exists(os.path.join(NEST, 'dentro.txt')) and not os.path.exists(os.path.join(MINE, 'conref2')), '')
 check('...sin copias en la papelera de un move rechazado', not os.path.exists(os.path.join(MINE, '__delphi-patch')) or not any('conref' in f for r, d, fs in os.walk(os.path.join(MINE, '__delphi-patch')) for f in d + fs), '')
 out = call('delphi_delete', {'path': os.path.join(MINE, 'conref', 'mio.txt')})
-check('lo mio de al lado de la referencia SI se borra', out.startswith('BORRADO'), out[:200])
+check('lo mio de al lado de la referencia SI se borra', mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT'), out[:200])
 
 # a folder moves only as a rename: to another drive it is refused whole
 if HAY_OTRA:
@@ -245,18 +245,18 @@ if HAY_OTRA:
     os.makedirs(VIA, exist_ok=True)
     open(os.path.join(VIA, 'v.txt'), 'w').write('v')
     out = call('delphi_move', {'path': VIA, 'dest': os.path.join(OTRA, 'viajera')})
-    check('move de carpeta a OTRA unidad: RECHAZADO con el camino (copy + delete)', out.startswith('RECHAZADO') and 'unidades distintas' in out and 'copy=true' in out, out[:300])
+    check('move de carpeta a OTRA unidad: RECHAZADO con el camino (copy + delete)', mc.rechazado(out) and mc.es(out, 'SR_MUDANZA_OTRA_UNIDAD_FMT') and 'copy=true' in out, out[:300])
     check('...y no se ha movido ni copiado nada', os.path.exists(os.path.join(VIA, 'v.txt')) and not os.path.exists(os.path.join(OTRA, 'viajera')), '')
     out = call('delphi_move', {'path': VIA, 'dest': os.path.join(OTRA, 'viajera'), 'copy': True})
-    check('copy=true a otra unidad: COPIADO (el camino legitimo)', out.startswith('COPIADO') and os.path.exists(os.path.join(OTRA, 'viajera', 'v.txt')), out[:200])
+    check('copy=true a otra unidad: COPIADO (el camino legitimo)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(OTRA, 'viajera', 'v.txt')), out[:200])
 else:
     print('  (sin otra unidad en esta maquina: el rechazo entre unidades no se mide)')
 
 # my own roots still work, and outside is still outside
 out = call('delphi_edit', {'path': os.path.join(MINE, 'Mio.pas'), 'old': 'unit Mio;', 'new': 'unit Mio; // mio'})
-check('mis roots: escribir sigue OK', out.startswith('ESCRITO'), out[:200])
+check('mis roots: escribir sigue OK', mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT'), out[:200])
 out = call('delphi_read', {'path': os.path.join(OUT, 'Fuera.pas')})
-check('fuera de todo: sigue vetado', out.startswith('RECHAZADO') and 'FUERA' in out, out[:200])
+check('fuera de todo: sigue vetado', mc.rechazado(out) and mc.es(out, 'SR_JAIL_FMT'), out[:200])
 
 srv.cierra(0.5)
 srv.p.wait(10)  # su exe esta en BASE: muerto del todo antes de barrerla

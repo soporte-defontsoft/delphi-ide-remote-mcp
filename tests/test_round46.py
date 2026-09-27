@@ -106,14 +106,14 @@ try:
         r = call('delphi_read',
                  {'path': os.path.join(JAIL, 'vendor', 'out', 'secreto.txt')})
         check('J1 leer a traves del junction bajo ReadOnlyPaths se rechaza',
-              'ultrasecreto-r46' not in r and 'RECHAZADO' in r and 'ENLACE' in r, r[:240])
+              'ultrasecreto-r46' not in r and mc.rechazado(r) and mc.es(r, 'SR_JAIL_LINK_FMT'), r[:240])
         r = call('delphi_fetch',
                  {'path': os.path.join(JAIL, 'vendor', 'out', 'secreto.txt')})
         # fetch sirve en BASE64: el secreto servido nunca se veria en claro,
         # asi que "no contiene ultrasecreto" pasaba aunque lo sirviera
         check('J1b ...y delphi_fetch tampoco lo sirve',
               'ultrasecreto-r46' not in r and 'chunkBase64' not in r
-              and 'RECHAZADO' in r and 'ENLACE' in r, r[:240])
+              and mc.rechazado(r) and mc.es(r, 'SR_JAIL_LINK_FMT'), r[:240])
     else:
         print('NOTA: mklink /J fallo en este sistema de ficheros; '
               'J1/J1b no se miden.')
@@ -132,7 +132,7 @@ try:
     r = call('delphi_edit', {'path': pobre, 'old': 'unit Pobre;',
                              'new': 'unit Rico;'})
     check('T5 delphi_edit tambien rechaza escribir en __delphi-temp',
-          'RECHAZADO' in r and 'temporales' in r, r[:240])
+          mc.rechazado(r) and mc.es(r, 'SR_GUARD_DEAD_TEMP'), r[:240])
     os.remove(pobre)
 
     # ------------------------------------------------------------------ T6
@@ -164,11 +164,11 @@ try:
                          'new': 'const K = 2;'})
     r = call('delphi_edit', {'path': uno, 'restore': True})
     check('T3 el aviso de RESTAURAR no filtra la letra real del disco',
-          'RESTAURAR' in r and not filtra(r) and 'srv' in r.lower(),
+          mc.abre(r, 'SN_EDIT_RESTAURAR_NADA_HECHO_FMT') and not filtra(r) and 'srv' in r.lower(),
           r[:240])
     r = call('delphi_edit', {'path': uno, 'restore': True, 'confirm': True})
     check('T3b ...y el RESTAURADO (con Src y PreCopy) tampoco',
-          'RESTAURADO' in r and not filtra(r), r[:280])
+          mc.abre(r, 'SK_EDIT_RESTAURADO_DESDE_FMT') and not filtra(r), r[:280])
 
     # ------------------------------------------------------------------ T4
     # El centinela de letra no servida es 'srv0' (el viejo 'srvx' ERA la
@@ -177,10 +177,10 @@ try:
     # disco y sin filtrar ninguna letra real.
     r = call('delphi_read', {'path': 'srv0:\\loque\\sea.pas'})
     check('T4 el centinela srv0: se rechaza por nombre',
-          'RECHAZADO' in r and not filtra(r), r[:240])
+          mc.rechazado(r) and mc.es(r, 'SR_UNIT_UNKNOWN_FMT') and not filtra(r), r[:240])
     r = call('delphi_read', {'path': 'srvq:\\loque\\sea.pas'})
     check('T4b una unidad virtual no servida tambien',
-          'RECHAZADO' in r and not filtra(r), r[:240])
+          mc.rechazado(r) and mc.es(r, 'SR_UNIT_UNKNOWN_FMT') and not filtra(r), r[:240])
 
     # ------------------------------------------------------------------ T7
     # Solo purga la PRIMERA instancia viva del exe: la premisa "no pueden

@@ -75,7 +75,7 @@ try:
     r = cli.call('delphi_textedit',
              {'path': os.path.join(base, 'x.txt'), 'create': True, 'content': 'x'})
     check('T3 reader: una tool oculta sigue siendo llamable (no es un permiso)',
-          'CREADO' in r or 'ESCRITO' in r or os.path.exists(os.path.join(base, 'x.txt')), r[:160])
+          mc.abre(r, 'SK_TEXT_CREADO_ENCODING_FINALES_FMT') or os.path.exists(os.path.join(base, 'x.txt')), r[:160])
 finally:
     proc.kill()
 

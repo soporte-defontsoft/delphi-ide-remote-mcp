@@ -111,13 +111,13 @@ try:
     sdk_file(os.path.join(PROFILES_DIR, 'dos.sdk'))
     out = srv.call('delphi_build', {"project": dproj, "platform": "Linux64"})
     check('dos SDK sin pista: RECHAZADO en vez de elegir a ciegas',
-          out.startswith('RECHAZADO') and 'uno.sdk' in out and 'dos.sdk' in out, out)
+          mc.rechazado(out) and mc.es(out, 'SR_BUILD_SDK_VARIOS_FMT') and 'uno.sdk' in out and 'dos.sdk' in out, out)
 
     # --- 2) un nombre que no existe ---------------------------------------
     out = srv.call('delphi_build', {"project": dproj, "platform": "Linux64",
                                     "sdk": "nomeinventes"})
     check('sdk inexistente: RECHAZADO listando los que hay',
-          out.startswith('RECHAZADO') and 'uno.sdk' in out, out)
+          mc.rechazado(out) and mc.es(out, 'SR_BUILD_SDK_NOEXISTE_FMT') and 'uno.sdk' in out, out)
 
     # --- 3) lo que diga el PROYECTO manda ---------------------------------
     with open(dproj, encoding='utf-8', errors='replace') as f:
@@ -167,7 +167,7 @@ try:
     out = srv.call('delphi_config', {"project": dproj, "command": "set-sdk",
                                      "platform": "Linux64", "sdk": "nomeinventes"})
     check('set-sdk de un SDK que no existe: RECHAZADO',
-          out.startswith('RECHAZADO') and 'uno.sdk' in out, out[:200])
+          mc.rechazado(out) and mc.es(out, 'SR_CONFIG_SDK_NOEXISTE_FMT') and 'uno.sdk' in out, out[:200])
     out = srv.call('delphi_config', {"project": dproj, "command": "set-sdk",
                                      "platform": "Linux64", "sdk": "uno"})
     with open(dproj, encoding='utf-8', errors='replace') as f:
@@ -227,7 +227,7 @@ try:
     with open(dproj, encoding='utf-8', errors='replace') as f:
         xml = f.read()
     check('add-platform con sdk lo deja puesto en el proyecto',
-          out.startswith('ANADIDA') and 'RECHAZADO' not in out
+          mc.abre(out, 'SK_CFG_ANADIDA_PLATAFORMA_DPROJ_FMT') and not mc.es(out, 'SR_CONFIG_SDK_NOEXISTE_FMT')
           and sdk_del_grupo(xml, 'OSX64') == ['mac.sdk'], out[:250])
     # ...y es TODO O NADA: con un SDK que no existe, la plataforma TAMPOCO se
     # anade (hasta el 26-sep quedaba anadida con el rechazo del SDK detras,
@@ -236,7 +236,7 @@ try:
     out = srv.call('delphi_config', {"project": dproj, "command": "add-platform",
                                      "platform": "Android64", "sdk": "noexiste"})
     check('add-platform con un sdk que no existe no deja NADA escrito (ni la plataforma)',
-          out.startswith('RECHAZADO') and 'TAMPOCO' in out
+          mc.rechazado(out) and mc.es(out, 'SN_CONFIG_ADDPLATFORM_NADA')
           and open(dproj, 'rb').read() == antes_bytes, out[:250])
 
     # cada .sdk declara SU plataforma: uno de Android no vale para Linux64
@@ -244,7 +244,7 @@ try:
     out = srv.call('delphi_config', {"project": dproj, "command": "set-sdk",
                                      "platform": "Linux64", "sdk": "androidfalso"})
     check('set-sdk no cuela un SDK de OTRA plataforma',
-          out.startswith('RECHAZADO'), out[:200])
+          mc.rechazado(out) and mc.es(out, 'SR_CONFIG_SDK_NOEXISTE_FMT'), out[:200])
 
     # --- 5-ter) la otra mitad: el PAServer del proyecto --------------------
     # "Anadir a un proyecto" en el IDE es dar de alta las DOS cosas: la
@@ -253,11 +253,11 @@ try:
     out = srv.call('delphi_config', {"project": dproj, "command": "set-profile",
                                      "platform": "Win64", "profile": "loquesea"})
     check('set-profile en una plataforma LOCAL: RECHAZADO',
-          out.startswith('RECHAZADO') and 'PAServer' in out, out[:200])
+          mc.rechazado(out) and mc.es(out, 'SR_CONFIG_PROFILE_LOCAL_FMT'), out[:200])
     out = srv.call('delphi_config', {"project": dproj, "command": "set-profile",
                                      "platform": "Linux64", "profile": "no-existe-este"})
     check('set-profile de un perfil que no existe: RECHAZADO',
-          out.startswith('RECHAZADO'), out[:200])
+          mc.rechazado(out) and mc.es(out, 'SR_CONFIG_PROFILE_NOEXISTE_FMT'), out[:200])
 
     # --- 6) quitar un SDK: se desregistra, pero los gigas NO se tocan ------
     raiz_limpia = os.path.join(BASE, 'sysroot-limpio')
@@ -268,7 +268,7 @@ try:
           os.path.isdir(raiz_limpia) and 'sysrootLeftBehind' in out, out[:300])
     out = srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "limpio"})
     check('remove-sdk de uno que no existe: RECHAZADO',
-          out.startswith('RECHAZADO'), out[:200])
+          mc.rechazado(out) and mc.es(out, 'SR_PASERVER_SDK_NOFILE_FMT'), out[:200])
 finally:
     srv.mata()
 

@@ -146,7 +146,7 @@ try:
         if foto:
             g = call('delphi_fetch', {'path': foto})
             check('T4 y delphi_fetch SI puede bajarsela, como promete la tool',
-                  'FUERA de los workspaces' not in g and
+                  not mc.es(g, 'SR_JAIL_FMT') and
                   ('sha256' in g.lower() or 'bytes' in g.lower() or
                    'base64' in g.lower()), g[:280])
         else:
@@ -192,7 +192,7 @@ try:
     d = call('delphi_textedit', {'path': os.path.join(TEMP_JAULA, 'mio.txt'),
                                  'create': True, 'content': 'no'})
     check('T5 escribir DENTRO de __delphi-temp se rechaza',
-          'RECHAZADO' in d and 'temporales' in d, d[:240])
+          mc.rechazado(d) and mc.es(d, 'SR_GUARD_DEAD_TEMP'), d[:240])
 
     # ------------------------------------------------------------------ T6
     # Y no ensucia los listados: no es papelera, es temporal, asi que se
@@ -237,13 +237,13 @@ try:
     j1 = mc.como_json(l1)
     check('T6d la temporal se cuenta como temporal del servidor, no como compilacion',
           j1.get('hiddenServerTemp', 0) >= 1 and
-          'temporales del servidor' in j1.get('note', '') and
+          mc.es(j1.get('note', ''), 'SN_HIDDEN_TEMP_FMT') and
           j1.get('hidden') == cajones(j1), l1[:300])
     s1 = call('delphi_search', {'root': JAIL, 'query': 'cebo de T6', 'pattern': '*.png'})
     js = mc.como_json(s1)
     check('T6e delphi_search tampoco la ensena, pero DICE que la salto y por que',
           js.get('total') == 0 and js.get('hiddenServerTemp', 0) >= 1 and
-          'temporales del servidor' in js.get('note', '') and
+          mc.es(js.get('note', ''), 'SN_HIDDEN_TEMP_FMT') and
           js.get('hidden') == cajones(js), s1[:300])
     # En el modo dirs, una carpeta de cada motivo: la temporal, una de
     # compilacion (Win64, que antes no entraba en ningun cajon) y una de otra
@@ -275,11 +275,11 @@ try:
     open(os.path.join(TEMP_JAULA, 'suelto-t8.txt'), 'w').write('tmp')
     d1 = call('delphi_delete', {'path': os.path.join(TEMP_JAULA, 'borrame-t8')})
     check('T8 borrar una carpeta DENTRO de la temporal: sin copia en ningun sitio',
-          d1.startswith('BORRADO') and 'sin copia' in d1 and not rastro('borrame-t8'),
+          mc.abre(d1, 'SN_FILE_DELETE_TEMP_FMT') and not rastro('borrame-t8'),
           d1[:200] + ' | ' + str(rastro('borrame-t8'))[:200])
     d2 = call('delphi_delete', {'path': os.path.join(TEMP_JAULA, 'suelto-t8.txt')})
     check('T8b ...y un fichero suelto, igual',
-          d2.startswith('BORRADO') and 'sin copia' in d2 and not rastro('suelto-t8'),
+          mc.abre(d2, 'SN_FILE_DELETE_TEMP_FMT') and not rastro('suelto-t8'),
           d2[:200] + ' | ' + str(rastro('suelto-t8'))[:200])
     # una papelera que YA esta dentro de la temporal (la dejaba la version
     # anterior) es un temporal mas: se borra, no se protege como papelera
@@ -288,11 +288,11 @@ try:
     open(os.path.join(vieja, 'vieja-t8.png'), 'wb').write(b'y')
     d3 = call('delphi_delete', {'path': os.path.join(TEMP_JAULA, '__delphi-patch')})
     check('T8c una papelera DENTRO de la temporal tambien se borra, sin copia',
-          d3.startswith('BORRADO') and not rastro('vieja-t8'),
+          mc.abre(d3, 'SN_FILE_DELETE_TEMP_FMT') and not rastro('vieja-t8'),
           d3[:200] + ' | ' + str(rastro('vieja-t8'))[:200])
     d4 = call('delphi_delete', {'path': TEMP_JAULA})
     check('T8d la temporal ENTERA no: es de todos los agentes del servidor',
-          d4.startswith('RECHAZADO') and 'ENTERA' in d4 and os.path.isdir(TEMP_JAULA),
+          mc.rechazado(d4) and mc.es(d4, 'SR_FILE_DELETE_TEMP_ROOT_FMT') and os.path.isdir(TEMP_JAULA),
           d4[:200])
     # La promesa de Lsp.References.pas ("que los dos digan lo mismo no se
     # deja a la buena fe: lo comprueba la bateria") no la comprobaba nadie

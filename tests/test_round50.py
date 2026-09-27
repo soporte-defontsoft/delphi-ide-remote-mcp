@@ -61,12 +61,12 @@ def rechazo_dir(r, malo=None):
     que repite la "dir" rechazada: tal cual si es relativa; con unidad, sale
     enmascarada y solo se mira que la nombre."""
     eco = '"dir"="%s"' % malo if malo and not os.path.isabs(malo) else '"dir"="'
-    return (r.startswith('RECHAZADO') and eco in r
-            and 'no vale para crear DENTRO de un proyecto' in r)
+    return (mc.rechazado(r) and eco in r
+            and mc.es(r, 'SR_CREATE_SUBDIR_REL_FMT'))
 
 
 def rechazo_jaula(r):
-    return r.startswith('RECHAZADO') and 'FUERA de los workspaces permitidos' in r
+    return mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT')
 
 
 def compila():
@@ -77,7 +77,7 @@ def compila():
 try:
     r = call('delphi_create', {'kind': 'project-console', 'name': 'Tienda',
                                'dir': PROY})
-    check('D0 proyecto creado', r.startswith('CREADO'), r[:160])
+    check('D0 proyecto creado', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:160])
 
     # ------------------------------------------------------------------- D
     r = call('delphi_create', {'kind': 'unit', 'name': 'UCliente',

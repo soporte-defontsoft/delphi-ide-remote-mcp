@@ -69,7 +69,8 @@ ws = json.loads(out)
 check('workspace: roots salen con unidad virtual',
       ws['roots'] and ws['roots'][0].lower().startswith('srv' + DRIVE.lower() + ':'), out)
 check('workspace: la unidad real no viaja', (DRIVE + ':\\') not in out, out)
-check('workspace: la nota explica las unidades virtuales', 'srv' in ws.get('note', ''), out)
+check('workspace: la nota explica las unidades virtuales',
+      mc.es(ws.get('note', ''), 'SN_WORKSPACE_NOTE'), out)
 
 out = call('delphi_read', {"path": os.path.join(INSIDE, 'nada.pas')})
 check('read: rechazo "no existe" enmascarado (la exencion es solo para contenido)',
@@ -80,7 +81,7 @@ os.makedirs(OUTSIDE, exist_ok=True)
 out = call('delphi_edit', {"path": os.path.join(OUTSIDE, 'x.pas'),
                            "old": "a", "new": "b"})
 check('rechazo enjaulado: roots del mensaje enmascarados',
-      'FUERA de los workspaces' in out and 'srv' + DRIVE.lower() + ':' in out
+      mc.es(out, 'SR_JAIL_FMT') and 'srv' + DRIVE.lower() + ':' in out
       and (DRIVE + ':\\') not in out, out)
 
 # ---- inbound expansion: whole cycle through the virtual unit --------------
@@ -89,7 +90,7 @@ check('read por unidad virtual', 'unit Dentro' in out, out)
 
 out = call('delphi_edit', {"path": V_PAS, "old": "unit Dentro;",
                            "new": "unit Dentro; // virtual"})
-check('edit por unidad virtual', out.startswith('ESCRITO'), out)
+check('edit por unidad virtual', mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT'), out)
 
 # ---- byte fidelity: read/fetch content is NEVER masked --------------------
 out = call('delphi_read', {"path": os.path.join(INSIDE, 'contenido.txt')})
@@ -106,17 +107,19 @@ check('search: falso positivo NO enmascarado', 'HEAsrv' not in out, out)
 # ---- delete / blank ------------------------------------------------------
 out = call('delphi_edit', {"path": V_PAS, "old": "procedure Uno;",
                            "new": "", "atline": 5})
-check('blanquear linea: mensaje claro', 'BLANQUEADA la linea 5' in out, out)
+check('blanquear linea: mensaje claro',
+      mc.abre(out, 'SK_EDIT_BLANQUEADA_LINEA_FMT') and ' 5 ' in out.split('\n')[0], out)
 
 out = call('delphi_edit', {"path": V_PAS, "old": "  Nombre: string;", "delete": True})
 check('delete: rechaza ancla inexistente en este fichero',
-      'RECHAZADO' in out and 'no aparece' in out, out)
+      mc.rechazado(out) and mc.es(out, 'SR_ANCLA_NO_ESTA_FMT'), out)
 
 out = call('delphi_read', {"path": V_PAS})
 lines_before = out.count('\n')
 out = call('delphi_edit', {"path": V_PAS, "old": "unit Dentro; // virtual",
                            "delete": True})
-check('delete: borra la linea entera', 'BORRADA la linea 1' in out, out)
+check('delete: borra la linea entera',
+      mc.abre(out, 'SK_EDIT_BORRADA_LINEA_FMT') and ' 1 ' in out.split('\n')[0], out)
 out = call('delphi_read', {"path": V_PAS})
 check('delete: la linea ya no existe', 'unit Dentro; // virtual' not in out
       and out.count('\n') == lines_before - 1, out)
@@ -126,7 +129,8 @@ call('delphi_edit', {"path": V_PAS, "old": "interface",
 
 out = call('delphi_edit', {"path": V_PAS, "old": "implementation",
                            "new": "algo", "delete": True})
-check('delete: new junto a delete rechazado', 'RECHAZADO' in out and 'delete:true no lleva' in out, out)
+check('delete: new junto a delete rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_DELETE_TRUE_LLEVA_NEW'), out)
 
 # ---- B3: rutina-global inside a .dpr -------------------------------------
 DPR_PATH = os.path.join(INSIDE, 'Mini.dpr')
@@ -142,7 +146,8 @@ check('dpr: rutina entre uses y begin principal',
 
 out = call('delphi_edit', {"path": DPR_PATH, "insert": "metodo",
                            "inclass": "TX", "code": "procedure Nada;\nbegin\nend;"})
-check('dpr: insert metodo rechazado con guia', 'no aplica a un .dpr' in out, out)
+check('dpr: insert metodo rechazado con guia',
+      mc.es(out, 'SR_EDIT_INSERT_METODO_APLICA_DPR'), out)
 
 # ---- C1: metodo en la seccion published implicita -------------------------
 UF = os.path.join(INSIDE, 'UF.pas')
@@ -163,12 +168,14 @@ out = call('delphi_edit', {"path": UF, "insert": "metodo", "inclass": "TFormPrue
                            "visibility": "protected",
                            "code": "procedure Otra;\nbegin\nend;"})
 check('visibility inexistente distinta de published: sigue rechazada',
-      'RECHAZADO' in out and "no tiene seccion 'protected'" in out, out)
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_CLASE_TIENE_SECCION_OMITE_FMT')
+      and "'protected'" in out, out)
 
 # ---- B2: acentos= sin contar el BOM ---------------------------------------
 NU = os.path.join(INSIDE, 'Nueva.Unidad.pas')
 out = call('delphi_edit', {"path": NU, "createunit": True})
-check('createunit: informa el encoding del IDE', 'el configurado en el IDE' in out, out)
+check('createunit: informa el encoding del IDE',
+      mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out)
 out = call('delphi_read', {"path": NU})
 check('acentos=0 en unit nueva sin acentos (BOM fuera de la cuenta)',
       'acentos=0' in out, out)
@@ -217,7 +224,8 @@ before = set(_glob.glob(os.path.join(RDIR, '*.md')))
 out = call('delphi_report', {"message": "Al usar delphi_x paso Y, esperaba Z.",
                              "title": "Prueba de la bateria",
                              "kind": "bug", "from": "test_v012"})
-check('report: aceptado y guardado', 'GRACIAS' in out and '.md' in out, out[:150])
+check('report: aceptado y guardado',
+      mc.abre(out, 'SN_REPORT_OK_FMT') and '.md' in out, out[:150])
 after = set(_glob.glob(os.path.join(RDIR, '*.md')))
 new_files = after - before
 check('report: creo exactamente 1 fichero .md', len(new_files) == 1, new_files)
@@ -226,7 +234,8 @@ if new_files:
     check('report: lleva version, fecha y mensaje',
           'Server version' in txt and 'Date' in txt and 'esperaba Z' in txt, txt[:200])
 out = call('delphi_report', {"message": ""})
-check('report: mensaje vacio rechazado', 'RECHAZADO' in out, out[:120])
+check('report: mensaje vacio rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_REPORT_EMPTY'), out[:120])
 
 # ---- delphi_report: "agent" groups reports in a folder per emitter ---------
 ADIR = os.path.join(RDIR, 'bateria-v012')
@@ -234,7 +243,7 @@ out = call('delphi_report', {"message": "reporte con carpeta de agente",
                              "title": "agente", "kind": "question",
                              "agent": "Bateria V012!"})
 check('report agent: aceptado y cita la subcarpeta',
-      'GRACIAS' in out and 'bateria-v012/' in out, out[:150])
+      mc.abre(out, 'SN_REPORT_OK_FMT') and 'bateria-v012/' in out, out[:150])
 afiles = _glob.glob(os.path.join(ADIR, '*.md'))
 check('report agent: el .md cae en reports/<agente>/ (slug normalizado)',
       len(afiles) == 1, afiles)
@@ -250,17 +259,17 @@ out = call('delphi_report', {"message": "sin agente sigue en la raiz",
                              "title": "raiz", "kind": "question"})
 saved_name = out.split('como ')[-1].split(' (v')[0] if 'como ' in out else '?'
 check('report sin agent: sigue en la raiz de reports',
-      'GRACIAS' in out and '/' not in saved_name, out[:150])
+      mc.abre(out, 'SN_REPORT_OK_FMT') and '/' not in saved_name, out[:150])
 
 # ---- git dangerous options refused at the GATE (both access levels) --------
 PWN = os.path.join(INSIDE, 'PWNED.txt')
 out = call('delphi_git', {"repo": INSIDE, "command": "diff", "args": "--output=" + PWN})
 check('git: --output rechazado en el gate (aun con token RW)',
-      'RECHAZADO' in out and 'git' in out, out[:150])
+      mc.rechazado(out) and mc.es(out, 'SR_GIT_OPTION_FMT') and 'git' in out, out[:150])
 check('git: --output no escribio nada', not os.path.exists(PWN), PWN)
 out = call('delphi_git', {"repo": INSIDE, "command": "log", "args": "--oneline -3"})
 check('git: log normal sigue funcionando (sin falso positivo)',
-      'RECHAZADO' not in out, out[:120])
+      not mc.rechazado(out), out[:120])
 
 # ---- R4-A: fetch virtualizes its path, base64 payload untouched -----------
 import base64 as _b64
@@ -311,23 +320,25 @@ check('config: view lista plataformas con estado',
 
 out = call('delphi_config', {"project": VCLP, "command": "add-platform", "platform": "Linux64"})
 check('config: add-platform Linux64 en VCL RECHAZADO (regla VCL!=FMX)',
-      'RECHAZADO' in out and 'VCL' in out, out[:150])
+      mc.rechazado(out) and 'VCL' in out, out[:150])
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "Linux64"})
 # shape, not data: the fixture is a copy of the live .dproj, so Linux64 may
 # arrive undeclared (ANADIDA) or declared-but-disabled (HABILITADA) - both
 # mean "the console project accepted the platform"
 check('config: add-platform Linux64 en consola aceptado',
-      ('ANADIDA' in out) or ('HABILITADA' in out), out[:150])
+      mc.abre(out, 'SK_CFG_ANADIDA_PLATAFORMA_DPROJ_FMT')
+      or mc.abre(out, 'SN_CFG_HABILITADA_PLATAFORMA_ESTABA_DECLARAD_FMT'), out[:150])
 
 # R5-B: platform name is whitelisted - XML injection into the .dproj refused
 inj = 'Win64"/><Import Project=' + chr(34) + 'evilshare' + chr(34) + '/><X y='
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": inj})
 check('R5-B: inyeccion XML por el nombre de plataforma RECHAZADA',
-      'RECHAZADO' in out and 'no es una plataforma' in out, out[:150])
+      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_SDK_PLATFORM_FMT'), out[:150])
 check('R5-B: el payload no se escribio en el .dproj',
       'evilshare' not in open(CON, encoding='utf-8-sig').read(), 'injected!')
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "NoExiste99"})
-check('R5-B: plataforma inventada RECHAZADA', 'RECHAZADO' in out, out[:120])
+check('R5-B: plataforma inventada RECHAZADA',
+      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_SDK_PLATFORM_FMT'), out[:120])
 # before removing: R6-A - view must report Linux64 as ENABLED (it was just added)
 _plats = {p['name']: p.get('enabled') for p in json.loads(call('delphi_config', {"project": CON, "section": "all"})).get('platforms', [])}
 check('R6-A: view reporta enabled=True para una plataforma activa (Linux64)',
@@ -336,7 +347,8 @@ check('R6-A: view reporta enabled=True para Win64 (value=True en el .dproj)',
       _plats.get('Win64') is True, _plats)
 # R5-C: remove-platform (with backup)
 out = call('delphi_config', {"project": CON, "command": "remove-platform", "platform": "Linux64"})
-check('R5-C: remove-platform deshabilita', 'DESHABILITADA' in out, out[:120])
+check('R5-C: remove-platform deshabilita',
+      mc.abre(out, 'SN_CFG_DESHABILITADA_PLATAFORMA_QUEDA_DECLAR_FMT'), out[:120])
 out = call('delphi_config', {"project": CON, "section": "all"})
 _plats = {p['name']: p.get('enabled') for p in json.loads(out).get('platforms', [])}
 check('R6-A: Linux64 queda DECLARADA pero enabled=False tras remove-platform',
@@ -354,12 +366,14 @@ check('set-output: DCC_DcuOutput bajo Compiled\\Dcu',
 # injection through the folder name is refused (no XML metacharacters reach the file)
 out = call('delphi_config', {"project": CON, "command": "set-output",
                              "output": 'x</DCC_ExeOutput><Import Project=' + chr(34) + 'evilshare' + chr(34) + '/>'})
-check('set-output: inyeccion por el nombre de carpeta RECHAZADA', out.startswith('RECHAZADO'), out[:120])
+check('set-output: inyeccion por el nombre de carpeta RECHAZADA',
+      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_OUTPUT_INVALID'), out[:120])
 check('set-output: el payload no se escribio en el .dproj',
       'evilshare' not in open(CON, encoding='utf-8-sig').read(), 'injected!')
 # absolute path refused
 out = call('delphi_config', {"project": CON, "command": "set-output", "output": r"C:\Temp\out"})
-check('set-output: ruta absoluta RECHAZADA', out.startswith('RECHAZADO'), out[:120])
+check('set-output: ruta absoluta RECHAZADA',
+      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_OUTPUT_INVALID'), out[:120])
 
 # ---- delphi_config set-version: los cuatro sitios que deben coincidir ------
 # Subir de version era lo UNICO del ritual de release que obligaba a salir del
@@ -386,7 +400,8 @@ for _mala in ('', '1', 'uno.dos', '1.2.3.4.5', '1.2.99999'):
     out = call('delphi_config', {"project": CON, "command": "set-version",
                                  "version": _mala})
     check('set-version: version "%s" RECHAZADA' % _mala,
-          out.startswith('RECHAZADO'), out[:120])
+          mc.rechazado(out) and (mc.es(out, 'SR_CONFIG_VERSION_VACIA')
+                                 or mc.es(out, 'SR_CONFIG_VERSION_FORMATO_FMT')), out[:120])
 out = call('delphi_config', {"project": CON, "section": "all"})
 check('set-version: el .dproj sigue siendo valido despues',
       'Debug' in json.loads(out).get('configurations', []), out[:150])
@@ -403,7 +418,7 @@ _spdir = os.path.join(INSIDE, 'libs-extra')
 os.makedirs(_spdir, exist_ok=True)
 out = call('delphi_config', {"project": CON, "command": "add-searchpath",
                              "platform": "Linux64", "path": _spdir})
-check('searchpath: anadido a Linux64', out.startswith('ANADIDO'), out[:160])
+check('searchpath: anadido a Linux64', mc.abre(out, 'SN_CONFIG_PATH_ADDED_FMT'), out[:160])
 _x = open(CON, encoding='utf-8-sig').read()
 check('searchpath: grupo DEFINER Base_Linux64 creado como el IDE',
       "('$(Platform)'=='Linux64' and '$(Base)'=='true') or '$(Base_Linux64)'!=''" in _x
@@ -413,32 +428,38 @@ check('searchpath: DCC_UnitSearchPath (SINGULAR, el nombre real) en el grupo de 
       and 'DCC_UnitSearchPaths' not in _x, 'tag missing or misspelt')
 out = call('delphi_config', {"project": CON, "command": "add-searchpath",
                              "platform": "Linux64", "path": _spdir})
-check('searchpath: repetir = ya estaba, sin cambios', 'ya estaba' in out, out[:120])
+check('searchpath: repetir = ya estaba, sin cambios',
+      mc.es(out, 'SN_CONFIG_PATH_PRESENT_FMT'), out[:120])
 _v = json.loads(call('delphi_config', {"project": CON, "section": "all"}))
 check('searchpath: view lo ensena por plataforma (ruta enmascarada srvX:)',
       any(e.lower().endswith('libs-extra') and e.lower().startswith('srv')
           for e in (_v.get('searchPaths') or {}).get('Linux64', [])), str(_v.get('searchPaths'))[:160])
 out = call('delphi_config', {"project": CON, "command": "add-searchpath",
                              "platform": "Linux64", "path": os.path.join(INSIDE, 'no-existe-zz')})
-check('searchpath: carpeta inexistente RECHAZADA', out.startswith('RECHAZADO') and 'no existe' in out, out[:140])
+check('searchpath: carpeta inexistente RECHAZADA',
+      mc.resultado(out) == 'NOT_FOUND' and mc.es(out, 'SR_CONFIG_PATH_MISSING_FMT'), out[:140])
 out = call('delphi_config', {"project": CON, "command": "add-searchpath",
                              "platform": "Linux64", "path": r'C:\Windows\System32'})
-check('searchpath: fuera de la jaula RECHAZADO', out.startswith('RECHAZADO') and 'FUERA' in out, out[:140])
+check('searchpath: fuera de la jaula RECHAZADO',
+      mc.rechazado(out) and mc.es(out, 'SR_JAIL_FMT'), out[:140])
 out = call('delphi_config', {"project": CON, "command": "add-searchpath",
                              "platform": "Linux64", "path": _spdir + '"><Import Project="evil"/>'})
-check('searchpath: inyeccion XML por el path RECHAZADA', out.startswith('RECHAZADO'), out[:140])
+check('searchpath: inyeccion XML por el path RECHAZADA',
+      mc.rechazado(out) and mc.es(out, 'SR_GUARD_RUTA_INVALIDA_FMT'), out[:140])
 check('searchpath: el payload no toco el .dproj', 'evil' not in open(CON, encoding='utf-8-sig').read(), 'injected!')
 out = call('delphi_config', {"project": CON, "command": "add-searchpath",
                              "platform": "Commodore64", "path": _spdir})
-check('searchpath: plataforma invalida RECHAZADA', out.startswith('RECHAZADO'), out[:120])
+check('searchpath: plataforma invalida RECHAZADA',
+      mc.rechazado(out) and mc.es(out, 'SR_CFG_PLATAFORMA_DELPHI_VALIDA_VALIDAS_FMT'), out[:120])
 out = call('delphi_config', {"project": CON, "command": "remove-searchpath",
                              "platform": "Linux64", "path": _spdir})
-check('searchpath: quitado', out.startswith('QUITADO'), out[:120])
+check('searchpath: quitado', mc.abre(out, 'SN_CONFIG_PATH_REMOVED_FMT'), out[:120])
 check('searchpath: elemento eliminado del .dproj',
       'DCC_UnitSearchPath' not in open(CON, encoding='utf-8-sig').read(), 'still there')
 out = call('delphi_config', {"project": CON, "command": "remove-searchpath",
                              "platform": "Linux64", "path": _spdir})
-check('searchpath: quitar lo que no esta responde honesto', 'no esta' in out, out[:120])
+check('searchpath: quitar lo que no esta responde honesto',
+      mc.es(out, 'SN_CONFIG_PATH_ABSENT_FMT'), out[:120])
 
 # ---- delphi_config add-deployfile / remove-deployfile -----------------------
 # Field 2026-08-22: a component's runtime library (OBR's libzbar.so on Linux)
@@ -451,7 +472,8 @@ _deployproj = CON[:-6] + '.deployproj'
 check('deployfile: CON no tiene manifiesto de despliegue al empezar', not os.path.exists(_deployproj), _deployproj)
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Linux64", "path": _dep})
-check('deployfile: anadido (manifiesto generado primero)', out.startswith('ANADIDO') and 'genero el estandar' in out, out[:200])
+check('deployfile: anadido (manifiesto generado primero)',
+      mc.abre(out, 'SN_CONFIG_DEPLOY_ADDED_FMT') and 'genero el estandar' in out, out[:200])
 _x = open(_deployproj, encoding='utf-8-sig').read()
 # v0.62: la entrada va RELATIVA al proyecto cuando el fichero cuelga de el, y
 # absoluta cuando no; el IDE hace lo mismo. Cuenta las dos formas.
@@ -465,7 +487,8 @@ check('deployfile: el .dproj importa el manifiesto',
       '$(MSBuildProjectName).deployproj' in open(CON, encoding='utf-8-sig').read(), 'import line missing')
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Linux64", "path": _dep})
-check('deployfile: repetir = ya viaja, sin cambios', 'ya viaja' in out, out[:120])
+check('deployfile: repetir = ya viaja, sin cambios',
+      mc.es(out, 'SN_CONFIG_DEPLOY_PRESENT_FMT'), out[:120])
 _v = json.loads(call('delphi_config', {"project": CON, "section": "all"}))
 check('deployfile: view lo ensena por plataforma (una linea por fichero, junto al binario)',
       sum('libfake.so' in e for e in (_v.get('deployFiles') or {}).get('Linux64', [])) == 1
@@ -477,22 +500,29 @@ check('deployfile: .so en Android64 va a library/lib/arm64-v8a por defecto',
       'arm64-v8a' in out, out[:200])
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Linux64", "path": os.path.join(INSIDE, 'libs-extra')})
-check('deployfile: una carpeta RECHAZADA', out.startswith('RECHAZADO') and 'carpeta' in out, out[:120])
+check('deployfile: una carpeta RECHAZADA',
+      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_DEPLOY_NOT_FILE_FMT'), out[:120])
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Linux64", "path": _dep + '.nope'})
-check('deployfile: fichero inexistente RECHAZADO', out.startswith('RECHAZADO') and 'no existe' in out, out[:120])
+check('deployfile: fichero inexistente RECHAZADO',
+      mc.resultado(out) == 'NOT_FOUND' and mc.es(out, 'SR_CONFIG_DEPLOY_MISSING_FMT'), out[:120])
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Linux64", "path": r'C:\Windows\System32\kernel32.dll'})
-check('deployfile: fuera de la jaula RECHAZADO', out.startswith('RECHAZADO') and 'FUERA' in out, out[:120])
+check('deployfile: fuera de la jaula RECHAZADO',
+      mc.rechazado(out) and mc.es(out, 'SR_JAIL_FMT'), out[:120])
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "Linux64", "path": _dep, "remotedir": '..' + chr(92) + '..' + chr(92) + 'etc' + chr(92)})
-check('deployfile: remotedir con .. RECHAZADO', out.startswith('RECHAZADO') and 'remotedir' in out, out[:120])
+check('deployfile: remotedir con .. RECHAZADO',
+      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_REMOTEDIR_CHARS') and 'remotedir' in out,
+      out[:120])
 out = call('delphi_config', {"project": CON, "command": "add-deployfile",
                              "platform": "", "path": _dep})
-check('deployfile: sin plataforma RECHAZADO', out.startswith('RECHAZADO'), out[:120])
+check('deployfile: sin plataforma RECHAZADO',
+      mc.rechazado(out) and mc.es(out, 'SR_CONFIG_DEPLOY_PLATFORM_FMT'), out[:120])
 out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
                              "platform": "Linux64", "path": _dep})
-check('deployfile: quitado (2 entradas)', out.startswith('QUITADO') and '2 entradas' in out, out[:120])
+check('deployfile: quitado (2 entradas)',
+      mc.abre(out, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and '(2 ' in out, out[:120])
 _x = open(_deployproj, encoding='utf-8-sig').read()
 # Desde v0.62 la entrada se escribe RELATIVA al proyecto, como la escribe el
 # IDE (una ruta absoluta hacia que el .deployproj no fuese portable, y ademas
@@ -506,7 +536,8 @@ check('deployfile: la entrada NO lleva ruta absoluta (portable)',
       ('<DeployFile Include="' + _dep + '"') not in _x, _x[-300:])
 out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
                              "platform": "Linux64", "path": _dep})
-check('deployfile: quitar lo que no esta responde honesto', 'no esta' in out, out[:120])
+check('deployfile: quitar lo que no esta responde honesto',
+      mc.es(out, 'SN_CONFIG_DEPLOY_ABSENT_FMT'), out[:120])
 
 # ---- delphi_paserver: read subcommands ------------------------------------
 out = call('delphi_paserver', {"command": "packages"})
@@ -526,13 +557,15 @@ mvsrc = os.path.join(INSIDE, 'Mover.pas')
 open(mvsrc, 'wb').write(SRC.replace('Dentro', 'Mover').encode('cp1252'))
 mvdst = os.path.join(INSIDE, 'movidos', 'Mover.pas')
 out = call('delphi_move', {"path": mvsrc, "dest": mvdst})
-check('move: aceptado y crea carpeta destino', 'MOVIDO' in out and os.path.exists(mvdst)
+check('move: aceptado y crea carpeta destino',
+      mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(mvdst)
       and not os.path.exists(mvsrc), out[:120])
 out = call('delphi_move', {"path": mvdst, "dest": os.path.join(OUTSIDE, 'x.pas')})
-check('move: destino fuera de la jaula rechazado', 'FUERA de los workspaces' in out, out[:120])
+check('move: destino fuera de la jaula rechazado', mc.es(out, 'SR_JAIL_FMT'), out[:120])
 
 out = call('delphi_delete', {"path": mvdst})
-check('delete: mueve a papelera (no borrado duro)', 'BORRADO' in out and not os.path.exists(mvdst), out[:120])
+check('delete: mueve a papelera (no borrado duro)',
+      mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(mvdst), out[:120])
 import glob as _g2
 trash = _g2.glob(os.path.join(INSIDE, '**', '__delphi-patch', '**', 'deleted', '*'), recursive=True)
 check('delete: el fichero esta recuperable en la papelera', len(trash) > 0, trash)
@@ -541,13 +574,15 @@ if trash:
     rec = os.path.join(INSIDE, 'Recuperado.pas')
     out = call('delphi_move', {"path": trash[0], "dest": rec})
     check('R5-A: restaurar desde la papelera con delphi_move PERMITIDO',
-          'MOVIDO' in out and os.path.exists(rec), out[:120])
+          mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and os.path.exists(rec), out[:120])
     out = call('delphi_move', {"path": rec, "dest": os.path.join(INSIDE, '__delphi-patch', 'x.pas')})
-    check('R5-A: meter ficheros DENTRO de la papelera a mano rechazado', 'RECHAZADO' in out, out[:120])
+    check('R5-A: meter ficheros DENTRO de la papelera a mano rechazado',
+          mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TRASH'), out[:120])
 out = call('delphi_delete', {"path": os.path.join(OUTSIDE, 'Fuera.pas')})
-check('delete: fuera de la jaula rechazado', 'FUERA de los workspaces' in out, out[:120])
+check('delete: fuera de la jaula rechazado', mc.es(out, 'SR_JAIL_FMT'), out[:120])
 out = call('delphi_delete', {"path": os.path.join(INSIDE, 'movidos', '__delphi-patch')})
-check('delete: no se puede borrar la propia papelera', 'RECHAZADO' in out, out[:120])
+check('delete: no se puede borrar la propia papelera',
+      mc.rechazado(out) and mc.es(out, 'SR_FILE_PAPELERA_NO_SE_BORRA_FMT'), out[:120])
 
 # R6-B: the trash is hidden from delphi_list by default, but discoverable with
 # includeTrash=true so a deleted file can be found and restored.
@@ -595,17 +630,18 @@ check('read: contenido que empieza por "Error" sigue verbatim',
 # the agent believed it had filtered and had not.
 out = call('delphi_read', {"path": IN_PAS, "fromline": "abc"})
 check('tipos: fromline no numerico rechazado con el nombre del parametro',
-      'fromline' in out.lower() and 'whole number' in out, out[:200])
+      mc.resultado(out) == 'INVALID_PARAM' and 'fromline' in out.lower()
+      and 'whole number' in out, out[:200])
 out = call('delphi_list', {"root": INSIDE, "dirs": "quiza"})
 check('tipos: booleano invalido rechazado',
-      'true or false' in out, out[:200])
+      mc.resultado(out) == 'INVALID_PARAM' and 'true or false' in out, out[:200])
 # ...but what parses cleanly is still accepted (clients that send text)
 out = call('delphi_read', {"path": IN_PAS, "fromline": "2", "toline": "4"})
 check('tipos: numero en texto ("2") sigue valiendo',
-      'RECHAZADO' not in out and 'Error executing tool' not in out, out[:200])
+      not mc.fallo(out), out[:200])
 out = call('delphi_list', {"root": INSIDE, "dirs": "TRUE"})
 check('tipos: booleano en texto ("TRUE") sigue valiendo',
-      '"dirs"' in out and 'Error executing tool' not in out, out[:150])
+      '"dirs"' in out and not mc.fallo(out), out[:150])
 # JSON null means "not provided", never the string 'null' nor 0
 out = call('delphi_read', {"path": IN_PAS, "fromline": None})
 check('tipos: null se trata como ausente (no como 0 ni "null")',
@@ -614,9 +650,9 @@ check('tipos: null se trata como ausente (no como 0 ni "null")',
 # ---- delphi_report: the only write a read-only client may do, now bounded -
 out = call('delphi_report', {"kind": "bug", "title": "cap", "message": "x" * (300 * 1024)})
 check('report: un reporte gigante se rechaza',
-      'RECHAZADO' in out and 'KB' in out, out[:200])
+      mc.rechazado(out) and mc.es(out, 'SR_REPORT_TOO_BIG_FMT') and 'KB' in out, out[:200])
 out = call('delphi_report', {"kind": "bug", "title": "cap-ok", "message": "prueba de la bateria"})
-check('report: un reporte normal sigue pasando', out.startswith('GRACIAS'), out[:150])
+check('report: un reporte normal sigue pasando', mc.abre(out, 'SN_REPORT_OK_FMT'), out[:150])
 
 # ---- unserved virtual units: no drive enumeration (field round 10) -------
 # "srvz:" used to expand to the REAL "Z:\", so the rejection echoed a drive of
@@ -635,7 +671,7 @@ if GHOST:
                        ('delphi_list', {"root": GV, "dirs": True})):
         out = call(tool, args)
         check(tool + ': unidad no servida rechazada por nombre',
-              'no es una unidad de este servidor' in out, out)
+              mc.es(out, 'SR_UNIT_UNKNOWN_FMT'), out)
         check(tool + ': la letra real NO viaja de vuelta',
               REAL.search(out) is None, out)
     # rule 4: a rejection always names the legitimate way in
@@ -667,7 +703,7 @@ check('roots entrecomillados + espacios: jaula funcional', 'unit X;' in out, out
 
 out = one_shot('C:\\<invalido>|malo', 'delphi_read', {"path": os.path.join(QDIR, 'X.pas')})
 check('roots invalidos: fallo CERRADO (todo rechazado)',
-      'ninguna de sus rutas es valida' in out, out)
+      mc.es(out, 'SR_ROOTS_INVALID'), out)
 
 # ---- the vault is a served root of its OWN ------------------------------
 # subst gives a drive that is neither workspace root nor library zone, so the
@@ -684,7 +720,7 @@ if VDRV:
                            {"path": 'srv' + VDRV + ':\\nota.md'},
                            {'DELPHI_MCP_VAULT_PATH': VDRV + ':\\'})
             check('vault en otra unidad: su letra ES una unidad servida',
-                  'no es una unidad de este servidor' not in out, out)
+                  not mc.es(out, 'SR_UNIT_UNKNOWN_FMT'), out)
             check('vault en otra unidad: la letra real no viaja',
                   re.search(r'(?<!srv)' + VDRV + r':\\', out, re.I) is None, out)
         finally:

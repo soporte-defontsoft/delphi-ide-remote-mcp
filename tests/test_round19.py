@@ -52,7 +52,7 @@ try:
     for n in NOMBRES:
         r = cli.call('delphi_create', {'kind': 'project-console', 'name': n,
                                        'dir': os.path.join(BASE, n)})
-        check('scaffold %s' % n, 'CREADO' in r, r)
+        check('scaffold %s' % n, mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r)
     dpr = {n: glob.glob(os.path.join(BASE, '**', n + '.dpr'), recursive=True)[0]
            for n in NOMBRES}
 
@@ -104,7 +104,7 @@ try:
     r = cli.call('delphi_config', {'project': dpr['WarmA'][:-4] + '.dproj',
                                    'command': 'add-searchpath', 'path': sub})
     check('L2 add-searchpath toca el .dproj',
-          'ANADIDO' in r or 'ya estaba' in r, r[:160])
+          mc.abre(r, 'SN_CONFIG_PATH_ADDED_FMT') or mc.abre(r, 'SN_CONFIG_PATH_PRESENT_FMT'), r[:160])
     r = cli.call('delphi_symbols', {'path': dpr['WarmA']})
     check('L2 tras cambiar el .dproj, symbols sigue respondiendo (cache invalidada)',
           r.lstrip().startswith('[') and 'selectionRange' in r, r[:150])

@@ -80,33 +80,33 @@ datefolder = os.path.dirname(os.path.dirname(copy))  # ...\__delphi-patch\<date>
 # S1 - the one that destroyed real work
 r = call('delphi_delete', {'path': datefolder, 'purge': True})
 check('S1 purgar una CARPETA con copias ajenas: RECHAZADO',
-      'RECHAZADO' in r and 'otroagente' in r and os.path.exists(copy), r[:220])
+      mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT') and 'otroagente' in r and os.path.exists(copy), r[:220])
 r = call('delphi_delete', {'path': os.path.dirname(copy), 'purge': True})
 check('S1 tampoco por la subcarpeta "deleted"',
-      'RECHAZADO' in r and os.path.exists(copy), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT') and os.path.exists(copy), r[:200])
 
 # S2 - the owner marker is not a text file you can rewrite
 r = call('delphi_textedit', {'path': copy + '.by', 'old': 'otroagente',
                              'new': 'round12'})
 check('S2 el marcador .by no se edita',
-      'RECHAZADO' in r and open(copy + '.by').read().strip() == 'otroagente',
+      mc.rechazado(r) and mc.es(r, 'SR_GUARD_OWNER_MARKER') and open(copy + '.by').read().strip() == 'otroagente',
       r[:200])
 r = call('delphi_delete', {'path': copy + '.by', 'purge': True})
 check('S2 el marcador .by no se purga suelto',
-      'RECHAZADO' in r and os.path.exists(copy + '.by'), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and os.path.exists(copy + '.by'), r[:200])
 
 # S3/S4 - the trash is not a scratchpad
 before = open(copy, encoding='utf-8').read()
 r = call('delphi_textedit', {'path': copy, 'old': 'de otro agente',
                              'new': 'pisado'})
 check('S3 no se escribe dentro de la papelera',
-      'RECHAZADO' in r and open(copy, encoding='utf-8').read() == before,
+      mc.rechazado(r) and mc.es(r, 'SR_GUARD_DEAD_TRASH') and open(copy, encoding='utf-8').read() == before,
       r[:200])
 check('S4 y por tanto no hay papelera dentro de la papelera',
       not os.path.exists(os.path.join(os.path.dirname(copy), '__delphi-patch')))
 r = call('delphi_textedit', {'path': os.path.join(BASE, '__history', 'x.txt'),
                              'create': True, 'content': 'x'})
-check('S3 __history tampoco es escribible', 'RECHAZADO' in r, r[:160])
+check('S3 __history tampoco es escribible', mc.rechazado(r) and mc.es(r, 'SR_GUARD_DEAD_IDE'), r[:160])
 
 # you can still purge what is yours
 mine = W('mio.txt', 'mio\r\n')
@@ -114,7 +114,7 @@ call('delphi_delete', {'path': mine})
 mycopy = trash_copies('mio.txt')[0]
 r = call('delphi_delete', {'path': mycopy, 'purge': True})
 check('S1 lo tuyo se sigue purgando',
-      'PURGADO' in r and not os.path.exists(mycopy), r[:160])
+      mc.abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(mycopy), r[:160])
 
 # ------------------------------------------------------------------- upload
 DFM_OK = ("object Form1: TForm1\r\n  Caption = 'x'\r\n"
@@ -124,17 +124,17 @@ import base64
 tpf0 = base64.b64encode(b'TPF0\x06TForm1\x05Form1\x00\x00').decode()
 r = call('delphi_upload', {'path': live, 'chunkbase64': tpf0, 'offset': 0})
 check('D1 upload NO pisa un .dfm de texto con un binario TPF0',
-      'RECHAZADO' in r and open(live, encoding='utf-8',
+      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_BINARY_DESIGNER') and open(live, encoding='utf-8',
                                newline='').read() == DFM_OK,
       r[:220])
 resw = base64.b64encode(b'\xff\x0a\x00FORM1\x00TPF0').decode()
 r = call('delphi_upload', {'path': os.path.join(BASE, 'proj', 'Nuevo.dfm'),
                            'chunkbase64': resw, 'offset': 0})
 check('D1 tampoco crea uno nuevo envuelto en recurso ($FF)',
-      'RECHAZADO' in r and not os.path.exists(
+      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_BINARY_DESIGNER') and not os.path.exists(
           os.path.join(BASE, 'proj', 'Nuevo.dfm')), r[:200])
 r = call('delphi_upload', {'path': live + '.by', 'chunkbase64': tpf0})
-check('S2 upload tampoco escribe marcadores .by', 'RECHAZADO' in r, r[:160])
+check('S2 upload tampoco escribe marcadores .by', mc.rechazado(r) and mc.es(r, 'SR_GUARD_OWNER_MARKER'), r[:160])
 
 # ------------------------------------------------------------- check-binding
 PAS_HEAD = ("unit UMain;\r\n\r\ninterface\r\n\r\nuses Vcl.Forms, Vcl.StdCtrls;"
@@ -177,12 +177,12 @@ check('F1 y publicado sigue dando ok', o.get('ok') is True, o)
 # F2 - the jail
 r = binding(dfm, pas_ok, unit='C:\\Windows\\win.ini')
 check('F2 "unit" pasa por la carcel',
-      'RECHAZADO' in r and 'FUERA' in r.upper(), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:200])
 r = binding(dfm, pas_ok, unit='C:\\Windows\\no-existe-esto-jamas.pas')
 check('F2 y no delata si un fichero de fuera existe o no',
-      'RECHAZADO' in r and 'FUERA' in r.upper(), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:200])
 r = binding(dfm, pas_ok, unit=os.path.join(BASE, 'victima.txt'))
-check('F2 "unit" tiene que ser un .pas', 'RECHAZADO' in r, r[:180])
+check('F2 "unit" tiene que ser un .pas', mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_BINDING_UNIT_EXT'), r[:180])
 
 # F3 - a second class must not vouch for anything
 dfm3 = ("object FormMain: TFormMain\r\n  object BtnFantasma: TButton\r\n"
@@ -245,7 +245,7 @@ check('F8 "OnClick =" vacio: .dfm invalido, avisado',
 # F9 - a .pas is not a form
 r = call('delphi_designer', {'command': 'check-binding',
                              'path': os.path.join(BASE, 'bind', 'UMain.pas')})
-check('F9 un .pas como "path" se rechaza', 'RECHAZADO' in r, r[:180])
+check('F9 un .pas como "path" se rechaza', mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_BINDING_NOT_FORM'), r[:180])
 
 # root class not declared in the unit
 dfm10 = "object X: TNoExiste\r\n  object Btn: TButton\r\n  end\r\nend\r\n"

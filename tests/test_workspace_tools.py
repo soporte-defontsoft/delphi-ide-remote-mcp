@@ -198,7 +198,7 @@ out = call('delphi_projects', {})
 # v0.98: la bateria declara su jaula, asi que sin root explicito descubre
 # DENTRO de ella (el estado "sin configurar" ya no existe: o jaula o RO)
 check('projects: sin root explicito descubre dentro de la jaula',
-      '"total"' in out and 'RECHAZADO' not in out, out[:200])
+      '"total"' in out and not mc.rechazado(out), out[:200])
 
 # --- fetch (chunked download with sha256) ---
 LIC = os.path.join(REPO, 'LICENSE')
@@ -239,7 +239,7 @@ try:
           d2.get('eof') is True and d2.get('consumedOnServer') is True and got == payload and not os.path.exists(cap),
           json.dumps(d2)[:200])
     out = call('delphi_fetch', {"path": cap, "offset": 0})
-    check('captura: pedirla otra vez es "no existe" (nada cacheado)', out.startswith('error: no existe'), out[:120])
+    check('captura: pedirla otra vez es "no existe" (nada cacheado)', mc.resultado(out) == 'NOT_FOUND' and mc.es(out, 'SR_WS_NO_EXISTE_FMT'), out[:120])
     d3 = json.loads(call('delphi_fetch', {"path": LIC, "offset": 0, "maxbytes": 400}))
     check('un fichero normal no se consume', 'consumedOnServer' not in d3 and os.path.exists(LIC), json.dumps(d3)[:120])
 finally:
@@ -267,9 +267,9 @@ check('git: diff --stat', out.startswith('exit=0') and bool(_stat(_git.stdout))
       and _stat(out)[1:] == _stat(_git.stdout) and 'changed' in _stat(out)[-1],
       (out[:120], _git.stdout[-120:]))
 out = call('delphi_git', {"repo": REPO, "command": "rebase"})
-check('git: comando fuera de whitelist rechaza', out.startswith('error: unknown command'), out[:120])
+check('git: comando fuera de whitelist rechaza', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_UNKNOWN_COMMAND_FMT'), out[:120])
 out = call('delphi_git', {"repo": REPO, "command": "log", "args": "; del *"})
-check('git: metacaracteres rechazados', out.startswith('error: shell metacharacters'), out[:120])
+check('git: metacaracteres rechazados', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_SHELL_METACHARS_ARGS'), out[:120])
 
 # --- delphi_signature + definition kind variants (real LSP semantics) ---
 GUARD = os.path.join(SRC, 'Lsp.Guard.pas')
@@ -293,7 +293,7 @@ if sig_line >= 0:
     # the refusal OF THE PARAMETER, naming the valid kinds - not any RECHAZADO
     # (a jail refusal passed too)
     check('definition: kind invalido rechaza',
-          out.startswith('RECHAZADO') and 'kind debe ser' in out
+          mc.rechazado(out) and mc.es(out, 'SR_LSP_KIND_DEBE_SER_DEFINITION')
           and 'definition | declaration | implementation' in out, out[:120])
 else:
     check('signature: ancla de test encontrada en Lsp.Guard.pas', False, 'no anchor')
@@ -329,7 +329,7 @@ try:
     d = json.loads(out)
     check('workspace: expone roots', isinstance(d.get('roots'), list), out[:200])
     check('workspace: avisa que son rutas del servidor',
-          'REMOTE' in d.get('note', '') or 'server' in d.get('note', '').lower(),
+          mc.es(d.get('note', ''), 'SN_WORKSPACE_NOTE'),
           out[:200])
     check('workspace: nivel de acceso', d.get('access') in ('read-write', 'read-only'),
           out[:200])
@@ -377,7 +377,7 @@ try:
     check('git: tag sin args lista (permitido)', out.startswith('exit=0'), out[:150])
     out = call('delphi_git', {"repo": tmpgit, "command": "push"})
     check('git: push permitido (falla sin remote, pero NO por whitelist)',
-          out.startswith('exit=') and 'unknown command' not in out, out[:150])
+          out.startswith('exit=') and not mc.es(out, 'SR_GIT_UNKNOWN_COMMAND_FMT'), out[:150])
 
     # identity via whitelisted config + commit with normal punctuation
     out = call('delphi_git', {"repo": tmpgit, "command": "config",
@@ -389,7 +389,7 @@ try:
     out = call('delphi_git', {"repo": tmpgit, "command": "config",
                               "args": "core.sshCommand", "message": "evil"})
     check('git: config fuera de user.name/email rechazado',
-          out.startswith('error:'), out[:150])
+          mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_CONFIG_ONLY_ACCEPTS_USER'), out[:150])
     with open(os.path.join(tmpgit, 'nota.txt'), 'w') as f:
         f.write('hola\n')
     call('delphi_git', {"repo": tmpgit, "command": "add", "args": "."})
@@ -432,11 +432,11 @@ try:
     out = call('delphi_upload', {"path": os.path.join(tmpup, 'X.bin'), "offset": 99,
                                  "chunkbase64": "AAAA"})
     check('upload: offset>0 sobre fichero inexistente rechaza',
-          out.startswith('error:'), out[:120])
+          mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_WS_OFFSET_FICHERO_NO_EXISTE'), out[:120])
     out = call('delphi_upload', {"path": os.path.join(tmpup, 'Y.bin'), "offset": 0,
                                  "chunkbase64": "no-es-base64!!"})
     check('upload: base64 invalido rechaza (no escribe basura)',
-          out.startswith('error:') and not os.path.exists(os.path.join(tmpup, 'Y.bin')),
+          mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_B64_ALPHABET_FMT') and not os.path.exists(os.path.join(tmpup, 'Y.bin')),
           out[:120])
     # 2026-09-25 (hermes): a chunk with a character lost or gained in transit
     # decoded to 2 extra bytes and only the whole-file sha at the END caught
@@ -446,11 +446,11 @@ try:
     good = base64.b64encode(b'0123456789abcdef').decode()
     out = call('delphi_upload', {"path": zb, "offset": 0, "chunkbase64": good[:-1]})
     check('upload: base64 con longitud no multiplo de 4 rechaza sin escribir',
-          out.startswith('RECHAZADO') and 'grupos de 4' in out and not os.path.exists(zb), out[:160])
+          mc.rechazado(out) and mc.es(out, 'SR_B64_LEN_FMT') and not os.path.exists(zb), out[:160])
     out = call('delphi_upload', {"path": zb, "offset": 0, "chunkbase64": good,
                                  "chunksha256": '0' * 64})
     check('upload: chunkSha256 que no coincide rechaza sin escribir',
-          out.startswith('RECHAZADO') and 'ESTE trozo' in out and not os.path.exists(zb), out[:160])
+          mc.rechazado(out) and mc.es(out, 'SR_UPLOAD_CHUNK_SHA_MISMATCH_FMT') and not os.path.exists(zb), out[:160])
     out = call('delphi_upload', {"path": zb, "offset": 0, "chunkbase64": good,
                                  "chunksha256": hashlib.sha256(b'0123456789abcdef').hexdigest()})
     try:
@@ -461,7 +461,7 @@ try:
         check('upload: chunkSha256 correcto parsea', False, '%s | %s' % (e, out[:160]))
     out = call('delphi_upload', {"path": zb, "offset": 0, "chunkbase64": good, "chunksha256": 'zz'})
     check('upload: chunkSha256 con forma mala rechaza el parametro, el fichero sigue',
-          out.startswith('RECHAZADO') and 'sha256' in out and open(zb, 'rb').read() == b'0123456789abcdef', out[:160])
+          mc.rechazado(out) and mc.es(out, 'SR_UPLOAD_BAD_SHA_FMT') and open(zb, 'rb').read() == b'0123456789abcdef', out[:160])
 finally:
     mc.borra(tmpup)
 
@@ -477,14 +477,14 @@ try:
         out2 = call('delphi_git', {"repo": dest, "command": "clone",
             "message": "https://github.com/soporte-defontsoft/delphi-lsp-mcp-service.git"})
         check('git clone: no re-clona sobre un repo existente',
-              out2.startswith('error:'), out2[:120])
+              mc.resultado(out2) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out2, 'SR_GIT_YA_ES_REPOSITORIO_FMT'), out2[:120])
         out3 = call('delphi_git', {"repo": dest, "command": "pull"}, 300)
         check('git pull: permitido', out3.startswith('exit='), out3[:120])
     else:
         print('SKIP - git clone (sin red o repo inaccesible):', out[:100])
     out = call('delphi_git', {"repo": dest, "command": "clone",
                               "message": "file:///C:/Windows"})
-    check('git clone: URL no http/ssh rechazada', out.startswith('error:'), out[:120])
+    check('git clone: URL no http/ssh rechazada', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_CLONE_URLS_ACCEPTED'), out[:120])
 finally:
     mc.borra(tmpcl)
 
@@ -494,13 +494,13 @@ try:
     md = os.path.join(tmptxt, 'README.md')
     out = call('delphi_textedit', {"path": md, "create": True,
         "content": "# Titulo\r\nlinea con acentos: gestoria admision\r\nfin\r\n"})
-    check('textedit: create .md', out.startswith('CREADO'), out[:150])
+    check('textedit: create .md', mc.abre(out, 'SK_TEXT_CREADO_ENCODING_FINALES_FMT'), out[:150])
     out = call('delphi_textedit', {"path": md, "create": True, "content": "x"})
-    check('textedit: create nunca sobreescribe', 'RECHAZADO' in out, out[:150])
+    check('textedit: create nunca sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_TEXT_YA_EXISTE_NUNCA_SOBREESCRIBE_FMT'), out[:150])
     out = call('delphi_textedit', {"path": md,
         "old": "linea con acentos: gestoria admision",
         "new": "linea EDITADA por MCP"})
-    check('textedit: edit con ancla', out.startswith('OK'), out[:200])
+    check('textedit: edit con ancla', mc.abre(out, 'SK_TEXT_OK_LINEA_FMT'), out[:200])
     body = open(md, 'rb').read().decode('utf-8')
     check('textedit: contenido correcto en disco',
           'linea EDITADA por MCP' in body and '# Titulo' in body and 'fin' in body, body[:120])
@@ -518,14 +518,14 @@ try:
         {"old": "cuatro", "new": "CUATRO"}])})
     cuerpo = open(lote, 'rb').read().decode('utf-8')
     check('textedit: varias ediciones en una sola llamada',
-          out.startswith('APLICADAS') and cuerpo == 'UNO\ntres\nCUATRO\n',
+          mc.abre(out, 'SN_PATCH_EDITS_OK_FMT') and cuerpo == 'UNO\ntres\nCUATRO\n',
           (out[:90], repr(cuerpo)))
     out = call('delphi_textedit', {"path": lote, "edits": json.dumps([
         {"old": "UNO", "new": "roto"},
         {"old": "esta linea no existe", "new": "x"}])})
     cuerpo = open(lote, 'rb').read().decode('utf-8')
     check('textedit: si una falla, el fichero vuelve byte a byte',
-          'ROLLBACK' in out and cuerpo == 'UNO\ntres\nCUATRO\n',
+          mc.es(out, 'SR_PATCH_EDITS_ROLLED_FMT') and cuerpo == 'UNO\ntres\nCUATRO\n',
           (out[:90], repr(cuerpo)))
     # Ancla de BLOQUE dentro del lote: sin esto, un parrafo largo no se podia
     # tocar - TOOLS.md tiene parrafos de 3 KB en UNA linea y el ancla es "una
@@ -552,34 +552,34 @@ try:
     out = call('delphi_textedit', {"path": lote, "old": "tres", "delete": True})
     cuerpo = open(lote, 'rb').read().decode('utf-8')
     check('textedit: delete quita la linea ENTERA (no la deja en blanco)',
-          out.startswith('OK') and cuerpo == 'UNO\nCUATRO\n',
+          mc.abre(out, 'SK_TEXT_OK_BORRADA_LINEA_FMT') and cuerpo == 'UNO\nCUATRO\n',
           (out[:90], repr(cuerpo)))
     out = call('delphi_textedit', {"path": md, "old": "no existe esta linea",
                                    "new": "x"})
-    check('textedit: ancla inexistente rechaza', 'RECHAZADO' in out, out[:150])
+    check('textedit: ancla inexistente rechaza', mc.rechazado(out) and mc.es(out, 'SR_ANCLA_NO_ESTA_FMT'), out[:150])
     out = call('delphi_textedit', {"path": md, "new": "reescritura entera"})
-    check('textedit: reescritura sin ancla rechaza', 'RECHAZADO' in out, out[:150])
+    check('textedit: reescritura sin ancla rechaza', mc.rechazado(out) and mc.es(out, 'SR_TEXT_FALTA_ANCLA_OLD_ESTA'), out[:150])
     out = call('delphi_textedit', {"path": os.path.join(SRC, 'Lsp.Guard.pas'),
                                    "old": "interface", "new": "x"})
-    check('textedit: .pas vetado (usa delphi_edit)', 'RECHAZADO' in out and 'delphi_edit' in out, out[:150])
+    check('textedit: .pas vetado (usa delphi_edit)', mc.rechazado(out) and mc.es(out, 'SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT') and 'delphi_edit' in out, out[:150])
     out = call('delphi_textedit', {"path": os.path.join(SRC, 'DelphiLspMcp.dproj'),
                                    "old": "x", "new": "y"})
-    check('textedit: .dproj vetado', 'RECHAZADO' in out, out[:150])
+    check('textedit: .dproj vetado', mc.rechazado(out) and mc.es(out, 'SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT'), out[:150])
     html = os.path.join(tmptxt, 'index.html')
     out = call('delphi_textedit', {"path": html, "create": True,
         "content": "<html><body>hola</body></html>\r\n"})
-    check('textedit: crea .html (proyectos web)', out.startswith('CREADO'), out[:120])
+    check('textedit: crea .html (proyectos web)', mc.abre(out, 'SK_TEXT_CREADO_ENCODING_FINALES_FMT'), out[:120])
     out = call('delphi_textedit', {"path": html,
         "old": "<html><body>hola</body></html>",
         "new": "<html><body>hola MCP</body></html>"})
-    check('textedit: edita .html', out.startswith('OK'), out[:150])
+    check('textedit: edita .html', mc.abre(out, 'SK_TEXT_OK_LINEA_FMT'), out[:150])
     # backup exists next to the file
     bdir = os.path.join(tmptxt, '__delphi-patch')
     check('textedit: backup automatico creado', os.path.isdir(bdir), bdir)
 finally:
     mc.borra(tmptxt)
 out = call('delphi_git', {"repo": REPO, "command": "commit"})
-check('git: commit sin message rechaza', 'needs the "message"' in out, out[:120])
+check('git: commit sin message rechaza', mc.es(out, 'SR_GIT_COMMIT_NEEDS_MESSAGE'), out[:120])
 
 servidor.cierra()
 mc.fin('workspace battery')

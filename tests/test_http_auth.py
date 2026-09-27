@@ -71,7 +71,7 @@ try:
         return code, body
     code, body = post_sid({"jsonrpc": "2.0", "id": 9, "method": "tools/list", "params": {}},
                           '{BASURA-NO-EMITIDA-JAMAS}')
-    check('http: sesion desconocida -> 404 con motivo', code == 404 and 'Session not found' in body,
+    check('http: sesion desconocida -> 404 con motivo', code == 404 and mc.es(body, 'SR_SESSION_UNKNOWN'),
           '%s %s' % (code, body[:160]))
     code, body = post_sid(INIT, '{BASURA-NO-EMITIDA-JAMAS}')
     check('http: initialize con sesion vieja SI pasa (es el arreglo)',
@@ -213,7 +213,7 @@ try:
 
         code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',
                                           'new': 'interface // x'}, RO_TOKEN)
-        check('ro: token RO NO puede editar', 'SOLO LECTURA' in body,
+        check('ro: token RO NO puede editar', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:150]))
 
         for tool, args in (('delphi_changeset', {'command': 'begin'}),
@@ -222,45 +222,45 @@ try:
                            ('delphi_create', {'kind': 'project-console',
                                               'dir': tmpdir3, 'name': 'X'})):
             code, body = call(tool, args, RO_TOKEN)
-            check('ro: token RO NO puede %s' % tool, 'SOLO LECTURA' in body,
+            check('ro: token RO NO puede %s' % tool, mc.es(body, 'SR_READ_ONLY_FMT'),
                   '%s %s' % (code, body[:120]))
 
         # delphi_styles is mixed: view/get/lint read, set/clone/build write
         code, body = call('delphi_styles', {'path': tmpdir3, 'command': 'lint'}, RO_TOKEN)
-        check('ro: delphi_styles lint permitido en RO', 'SOLO LECTURA' not in body,
+        check('ro: delphi_styles lint permitido en RO', not mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
         for cmd in ('set', 'clone', 'delete', 'build'):
             code, body = call('delphi_styles', {'path': tmpdir3, 'command': cmd,
                                                 'style': 'x', 'prop': 'y', 'value': 'z', 'name': 'n'}, RO_TOKEN)
-            check('ro: delphi_styles %s RECHAZADO en RO' % cmd, 'SOLO LECTURA' in body,
+            check('ro: delphi_styles %s RECHAZADO en RO' % cmd, mc.es(body, 'SR_READ_ONLY_FMT'),
                   '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'status'},
                           RO_TOKEN)
         check('ro: git status permitido en RO',
-              code == 200 and 'SOLO LECTURA' not in body,
+              code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'commit',
                                          'message': 'nope'}, RO_TOKEN)
-        check('ro: git commit RECHAZADO en RO', 'SOLO LECTURA' in body,
+        check('ro: git commit RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'branch',
                                          'args': 'nueva-rama'}, RO_TOKEN)
-        check('ro: git branch con args RECHAZADO en RO', 'SOLO LECTURA' in body,
+        check('ro: git branch con args RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_textedit', {'path': tmpdir3 + '\\x.md',
                                               'create': True,
                                               'content': 'nope'}, RO_TOKEN)
-        check('ro: delphi_textedit RECHAZADO en RO', 'SOLO LECTURA' in body,
+        check('ro: delphi_textedit RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'tag'},
                           RO_TOKEN)
         check('ro: git tag sin args (listar) permitido en RO',
-              code == 200 and 'SOLO LECTURA' not in body,
+              code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
         # tag with a message = annotated tag = a WRITE. The gate must catch it
@@ -268,14 +268,14 @@ try:
         code, body = call('delphi_git', {'repo': REPO, 'command': 'tag',
                                          'message': 'v1'}, RO_TOKEN)
         check('ro: git tag con message (anotado) RECHAZADO en RO',
-              'SOLO LECTURA' in body, '%s %s' % (code, body[:120]))
+              mc.es(body, 'SR_READ_ONLY_FMT'), '%s %s' % (code, body[:120]))
 
         # jail/file-write escape: diff --output must be refused (would let a
         # read-only client write a file anywhere on disk).
         code, body = call('delphi_git', {'repo': REPO, 'command': 'diff',
                                          'args': '--output=' + tmpdir3 + '\\PWN.txt'},
                           RO_TOKEN)
-        check('ro: git diff --output RECHAZADO en RO', 'RECHAZADO' in body,
+        check('ro: git diff --output RECHAZADO en RO', mc.rechazado(mc.texto(mc.como_json(body))),
               '%s %s' % (code, body[:120]))
         check('ro: git diff --output no escribio el fichero',
               not os.path.exists(tmpdir3 + '\\PWN.txt'), tmpdir3)
@@ -293,7 +293,7 @@ try:
                                                 spelling: 'add-platform',
                                                 'platform': 'Linux64'}, RO_TOKEN)
             check('ro: delphi_config con "%s" sigue siendo SOLO LECTURA' % spelling,
-                  'SOLO LECTURA' in body, '%s %s' % (code, body[:130]))
+                  mc.es(body, 'SR_READ_ONLY_FMT'), '%s %s' % (code, body[:130]))
         # SIEMPRE: sin el .dproj de la muestra no hay nada que medir, y eso
         # es un FAIL, no un check que desaparece
         check('ro: el .dproj no fue modificado por el escape de mayusculas',
@@ -305,7 +305,7 @@ try:
         code, body = call('delphi_git', {'repo': REPO, 'command': 'tag',
                                          'args': 'v9', 'Message': 'x'}, RO_TOKEN)
         check('ro: git tag anotado via "Message" RECHAZADO en RO',
-              'SOLO LECTURA' in body or 'RECHAZADO' in body,
+              mc.es(body, 'SR_READ_ONLY_FMT') or mc.rechazado(mc.texto(mc.como_json(body))),
               '%s %s' % (code, body[:130]))
 
         # delphi_report is the ONE write available read-only, by design: the
@@ -315,61 +315,61 @@ try:
                            'title': 'RO puede reportar', 'from': 'test_http_auth'},
                           RO_TOKEN)
         check('ro: delphi_report PERMITIDO en RO (canal de feedback)',
-              code == 200 and 'GRACIAS' in body, '%s %s' % (code, body[:150]))
+              code == 200 and mc.es(body, 'SN_REPORT_OK_FMT'), '%s %s' % (code, body[:150]))
 
         # delphi_config: view reads (OK in RO), add-platform writes (refused)
         code, body = call('delphi_config', {'repo': REPO, 'command': 'view',
                                             'project': paspath.replace('.pas', '.dproj')},
                           RO_TOKEN)
-        check('ro: delphi_config view NO da SOLO LECTURA', 'SOLO LECTURA' not in body,
+        check('ro: delphi_config view NO da SOLO LECTURA', not mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
         code, body = call('delphi_config', {'command': 'add-platform',
                                             'platform': 'Linux64',
                                             'project': paspath.replace('.pas', '.dproj')},
                           RO_TOKEN)
-        check('ro: delphi_config add-platform RECHAZADO en RO', 'SOLO LECTURA' in body,
+        check('ro: delphi_config add-platform RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
         # delphi_paserver is read-only, always available
         code, body = call('delphi_paserver', {'command': 'platforms'}, RO_TOKEN)
-        check('ro: delphi_paserver PERMITIDO en RO', code == 200 and 'SOLO LECTURA' not in body,
+        check('ro: delphi_paserver PERMITIDO en RO', code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
         # delphi_components is pure read (a registry listing, no process
         # spawned): fine in RO, and any RAD install registers Embarcadero's
         # own design packages, so the unfiltered list always mentions them
         code, body = call('delphi_components', {}, RO_TOKEN)
         check('ro: delphi_components PERMITIDO en RO y lista packages',
-              code == 200 and 'SOLO LECTURA' not in body and 'Embarcadero' in body,
+              code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT') and 'Embarcadero' in body,
               '%s %s' % (code, body[:150]))
         code, body = call('delphi_components', {'filter': 'zz-no-existe-zz'}, RO_TOKEN)
         check('ro: delphi_components filter sin resultados responde honesto',
-              'Ningun package' in body, '%s %s' % (code, body[:150]))
+              mc.es(body, 'SN_COMPONENTS_NONE_FMT'), '%s %s' % (code, body[:150]))
         # delete/move are mutating: refused read-only
         code, body = call('delphi_delete', {'path': paspath}, RO_TOKEN)
-        check('ro: delphi_delete RECHAZADO en RO', 'SOLO LECTURA' in body, '%s %s' % (code, body[:120]))
+        check('ro: delphi_delete RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'), '%s %s' % (code, body[:120]))
         code, body = call('delphi_move', {'path': paspath, 'dest': paspath + '.x'}, RO_TOKEN)
-        check('ro: delphi_move RECHAZADO en RO', 'SOLO LECTURA' in body, '%s %s' % (code, body[:120]))
+        check('ro: delphi_move RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'), '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'push'},
                           RO_TOKEN)
-        check('ro: git push RECHAZADO en RO', 'SOLO LECTURA' in body,
+        check('ro: git push RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_upload', {'path': tmpdir3 + '\\x.bin',
                                             'offset': 0,
                                             'chunkbase64': 'AAAA'}, RO_TOKEN)
-        check('ro: delphi_upload RECHAZADO en RO', 'SOLO LECTURA' in body,
+        check('ro: delphi_upload RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'clone',
                                          'message': 'https://example.com/x.git'},
                           RO_TOKEN)
-        check('ro: git clone RECHAZADO en RO', 'SOLO LECTURA' in body,
+        check('ro: git clone RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_edit', {'path': paspath, 'old': 'interface',
                                           'new': 'interface'}, TOKEN)
         check('ro: token completo SI pasa la puerta',
-              code == 200 and 'SOLO LECTURA' not in body,
+              code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:150]))
 
         # v0.98 final (David): el anonimo NO EXISTE - o un workspace con su
@@ -451,11 +451,11 @@ try:
               hdr.get('X-File-SHA256', '').lower() == hashlib.sha256(b'hola mundo\r\n').hexdigest(),
               hdr.get('X-File-SHA256'))
         code, hdr, data = get('srv%s:%s' % (drive, os.path.join(tmpdir4, 'outside', 'secret.txt')[2:]), TOKEN)
-        check('files: fuera de la jaula -> 403 FUERA', code == 403 and b'FUERA' in data,
+        check('files: fuera de la jaula -> 403 FUERA', code == 403 and mc.es(data.decode('utf-8', 'replace'), 'SR_JAIL_FMT'),
               '%s %r' % (code, data[:120]))
         check('files: el rechazo no ensena letras reales', b'"' + jail4[:2].encode() not in data, data[:160])
         code, hdr, data = get(vjail + '\\sub', TOKEN)
-        check('files: directorio -> 403', code == 403 and b'directorio' in data, '%s %r' % (code, data[:100]))
+        check('files: directorio -> 403', code == 403 and mc.es(data.decode('utf-8', 'replace'), 'SR_FILES_DIR'), '%s %r' % (code, data[:100]))
         code, hdr, data = get(vjail + '\\nada.bin', TOKEN)
         check('files: no existe -> 404', code == 404, '%s %r' % (code, data[:100]))
         code, hdr, data = get('', TOKEN, raw_url=BASE + '/files')
@@ -464,10 +464,10 @@ try:
         check('files: POST -> 405', code == 405, code)
         code, hdr, data = get('srvz:\\Windows\\win.ini', TOKEN)
         check('files: unidad no servida rechazada POR NOMBRE (sin tocar disco)',
-              code == 403 and b'no servida' in data and b'Windows' not in data.split(b'srvz:')[0],
+              code == 403 and mc.es(data.decode('utf-8', 'replace'), 'SR_FILES_UNIDAD_VIRTUAL_NO_SERVIDA_FMT') and b'Windows' not in data.split(b'srvz:')[0],
               '%s %r' % (code, data[:140]))
         code, hdr, data = get('sub\\x.txt', TOKEN)
-        check('files: ruta relativa -> 400 absoluta', code == 400 and b'absoluta' in data,
+        check('files: ruta relativa -> 400 absoluta', code == 400 and mc.es(data.decode('utf-8', 'replace'), 'SR_FILES_RUTA_ABSOLUTA'),
               '%s %r' % (code, data[:100]))
 
         # delphi_fetch: small file = chunk + link; big file = link ONLY
@@ -480,7 +480,7 @@ try:
         js = json.loads(json.loads(body)['result']['content'][0]['text'])
         check('fetch: fichero > 4 MB responde SOLO enlace (sin chunk, con sha256)',
               'chunkBase64' not in js and js.get('bytes') == 0 and js.get('sha256') == big_sha
-              and 'download' in js and '"download" link' in js.get('note', ''),
+              and 'download' in js and mc.es(js.get('note', ''), 'SN_FETCH_BIG_FMT'),
               body[:300])
         check('fetch: la respuesta del fichero grande es corta',
               len(body) < 4000, len(body))
@@ -569,7 +569,7 @@ try:
         time.sleep(4)
         code, _, body = cli5.post({"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {}}, sid5, accept=JSON)
         check('ttl: 4 s sin usarla -> 404 "Session expired" con el plazo',
-              code == 404 and 'Session expired' in body and '0.05' in body, '%s %s' % (code, body[:200]))
+              code == 404 and mc.es(body, 'SR_SESSION_EXPIRED_FMT') and '0.05' in body, '%s %s' % (code, body[:200]))
         code, h, body = cli5.post(INIT, sid5, accept=JSON)
         sid5b = h.get('Mcp-Session-Id')
         check('ttl: initialize con la sesion caducada abre otra nueva',

@@ -4418,7 +4418,11 @@ begin
   if MatchText(AToolName, ['delphi_read', 'vault_read', 'vault_search',
                            'delphi_search', 'delphi_edit',
                            'delphi_textedit']) and
-     not EsFallo(AText) then
+     // la RESPUESTA no es una negativa: se mira como EMPIEZA (MsgOutcome +
+     // la regla de la marca), nunca una etiqueta de DENTRO: un delphi_read de
+     // Lsp.Texts trae [X DENIED] en sus lineas, se tomaba por negativa y se
+     // enmascaraba el CONTENIDO ('%s:' salia '%srv0:', medido 27-sep)
+     (MsgOutcome(AText) = '') and (ResultadoPorTexto(AText) = '') then
     Exit(AText);
   Letters := ServedDriveLetters;
   if (Letters = '') or (AText = '') then

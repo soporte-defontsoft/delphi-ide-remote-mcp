@@ -2275,7 +2275,7 @@ end;
   contaban el intento como hecho (revision 26-sep-2026). }
 function Reapuntada(const AResp: string): Boolean;
 begin
-  Result := AResp.StartsWith(SN_UNIT_RENAMED_FMT.Substring(0, SN_UNIT_RENAMED_FMT.IndexOf(' ')));
+  Result := EsMsg(AResp, SN_UNIT_RENAMED_FMT);
 end;
 
 function ReapuntaUnits(const AProyecto, ABaseVieja: string;

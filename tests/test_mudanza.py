@@ -76,7 +76,7 @@ try:
     open(ruta('inc', 'comun.inc'), 'w', newline='\r\n').write('// comun\n')
     APP = ruta('app')
     r = call('delphi_create', {'kind': 'project-console', 'name': 'App', 'dir': APP})
-    check('mundo: el proyecto se crea', 'CREADO' in r, r[:200])
+    check('mundo: el proyecto se crea', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
     DPROJ = os.path.join(APP, 'App.dproj')
     r = call('delphi_create', {'kind': 'unit', 'name': 'UDentro', 'project': DPROJ})
     r = call('delphi_config', {'project': DPROJ, 'command': 'add-unit',
@@ -118,7 +118,7 @@ try:
     r = call('delphi_config', {'project': GRUPO, 'command': 'add-project', 'path': DPROJ})
     g = leer('Todo.groupproj')
     check('G1 add-project: el item, los tres targets y los agregados, como el IDE',
-          r.startswith('ANADIDO') and
+          mc.abre(r, 'SN_GRUPO_ANADIDO_FMT') and
           g.count('<Projects Include="app\\App.dproj">') == 1 and
           g.count('<MSBuild Projects="app\\App.dproj"') == 3 and
           '<Target Name="App:Clean">' in g and '<Target Name="App:Make">' in g and
@@ -129,24 +129,24 @@ try:
                                'path': ruta('otro', 'Otro.dproj')})
     g = leer('Todo.groupproj')
     check('G1b ...el segundo se suma a la lista y a los agregados',
-          r.startswith('ANADIDO') and
+          mc.abre(r, 'SN_GRUPO_ANADIDO_FMT') and
           re.search(r'<CallTarget Targets="App;Otro"/>', g) is not None and
           re.search(r'<CallTarget Targets="App:Clean;Otro:Clean"/>', g) is not None, g[-600:])
     antes = bytes_de('Todo.groupproj')
     r = call('delphi_config', {'project': GRUPO, 'command': 'add-project', 'path': DPROJ})
     check('G2 anadir el que ya esta: YA estaba, sin tocar el fichero',
-          'YA estaba' in r and bytes_de('Todo.groupproj') == antes, r[:200])
+          mc.es(r, 'SN_GRUPO_YA_ESTABA_FMT') and bytes_de('Todo.groupproj') == antes, r[:200])
     r = call('delphi_config', {'project': GRUPO, 'command': 'add-project',
                                'path': ruta('dup', 'App.dproj')})
     # error: y no RECHAZADO: no es politica, es una llamada que no cabe
     check('G3 otro proyecto con el MISMO nombre: error (dos targets App no caben)',
-          r.startswith('error:') and 'target' in r and bytes_de('Todo.groupproj') == antes,
+          mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_GRUPO_TARGET_DUP_FMT') and bytes_de('Todo.groupproj') == antes,
           r[:200])
     r = call('delphi_config', {'project': GRUPO, 'command': 'remove-project',
                                'path': ruta('otro', 'Otro.dproj')})
     g = leer('Todo.groupproj')
     check('G4 remove-project: fuera el item, sus targets y su nombre en los agregados',
-          r.startswith('QUITADO') and 'Otro' not in g and
+          mc.abre(r, 'SN_GRUPO_QUITADO_FMT') and 'Otro' not in g and
           re.search(r'<CallTarget Targets="App"/>', g) is not None and
           os.path.exists(ruta('otro', 'Otro.dproj')), r[:200] + ' | ' + g[-400:])
     j = mc.como_json(call('delphi_config', {'project': GRUPO}))
@@ -155,7 +155,7 @@ try:
     r = call('delphi_config', {'project': DPROJ, 'command': 'add-project',
                                'path': ruta('otro', 'Otro.dproj')})
     check('G6 add-project sobre un PROYECTO: rechazado como llamada erronea, es una orden de un grupo',
-          r.startswith('error:') and 'GRUPO' in r, r[:200])
+          mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_GRUPO_SOLO_GRUPO_FMT'), r[:200])
     # G7 un grupo con Build pero SIN Clean ni Make: se anade a Build y se crean
     #    los que faltan (eran dos caminos: todos o ninguno)
     G7P = ruta('G7.groupproj')
@@ -164,8 +164,8 @@ try:
     r = call('delphi_config', {'project': G7P, 'command': 'add-project', 'path': DPROJ})
     g7 = open(G7P, encoding='utf-8-sig').read()
     check('G7 Build existente y Clean/Make que faltan: a la lista de Build, y los otros dos creados',
-          r.startswith('ANADIDO') and 'Targets="Otro;App"' in g7 and
-          'Targets="App:Clean"' in g7 and 'Targets="App:Make"' in g7 and 'OJO' not in r,
+          mc.abre(r, 'SN_GRUPO_ANADIDO_FMT') and 'Targets="Otro;App"' in g7 and
+          'Targets="App:Clean"' in g7 and 'Targets="App:Make"' in g7 and not mc.es(r, 'SN_GRUPO_SIN_AGREGADO_FMT'),
           r[:200] + ' | ' + g7[-500:])
 
     # ------------------------------------------------------------ M: la mudanza
@@ -174,7 +174,7 @@ try:
     dpr = leer('src', 'app', 'App.dpr')
     dproj = leer('src', 'app', 'App.dproj')
     check('M la respuesta dice que re-apunto las rutas que cruzaban el borde',
-          r.startswith('MOVIDO') and 'cruzaban el borde' in r, r[:400])
+          mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and mc.es(r, 'SN_REUBICA_FMT'), r[:400])
     check('M1 la unit de FUERA: ..\\..\\lib en el .dpr; la de dentro, intacta',
           "'..\\..\\lib\\ULib.pas'" in dpr and "'UDentro.pas'" in dpr, dpr[:400])
     check('M1b ...y en el DCCReference del .dproj',
@@ -207,7 +207,7 @@ try:
     # tienen que seguir llegando desde la copia.
     r = call('delphi_move', {'path': NUEVO, 'dest': ruta('copia'), 'copy': True})
     check('C1 copiar la carpeta de un PROYECTO sigue RECHAZADO (nunca en dos sitios)',
-          r.startswith('RECHAZADO') and not os.path.exists(ruta('copia')), r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_MOVE_COPY_PROJECT_FMT') and not os.path.exists(ruta('copia')), r[:200])
     os.makedirs(ruta('modulos'))
     open(ruta('modulos', 'UMod.pas'), 'w', newline='\r\n').write(
         'unit UMod;\n\ninterface\n\n{$I ..\\inc\\comun.inc}\n\nimplementation\n\nend.\n')
@@ -234,7 +234,7 @@ try:
     shutil.copy(ruta('amb2', 'UAmb.pas'), ruta('amb3', 'UAmb.pas'))
     r = call('delphi_config', {'project': ruta('dup', 'App.dproj'), 'command': 'fix-references'})
     check('F2 dos candidatas del mismo nombre: se DICE y no se adivina',
-          'VARIAS' in r and 'UAmb' in r and "'..\\amb1\\UAmb.pas'" in leer('dup', 'App.dpr'),
+          mc.es(r, 'SN_ARREGLA_VARIOS_FMT') and 'UAmb' in r and "'..\\amb1\\UAmb.pas'" in leer('dup', 'App.dpr'),
           r[:400])
     open(ruta('Fix.groupproj'), 'w', encoding='utf-8-sig', newline='').write(
         GRUPO_VACIO.replace('    <ProjectExtensions>',
@@ -270,7 +270,7 @@ try:
                                'path': ruta('R&D', 'lib', 'UAmp.pas')})
     # QUITADA: que la haya encontrado y quitado, no que nunca llegara a entrar
     check('X2 ...y remove-unit la vuelve a encontrar (el lector desescapa)',
-          r.startswith('QUITADA') and 'UAmp' not in leer('src', 'app', 'App.dproj') and
+          mc.abre(r, 'SN_UNIT_REMOVED_FMT') and 'UAmp' not in leer('src', 'app', 'App.dproj') and
           xml_valido(DP), r[:200])
     r = call('delphi_create', {'kind': 'project-console', 'name': 'Rd', 'dir': ruta('R&D', 'rd')})
     r = call('delphi_config', {'project': GRUPO, 'command': 'add-project',
@@ -299,7 +299,7 @@ try:
           '..\\..\\R&D\\comun' in rutas, r[:200] + ' | ' + str(rutas))
     r = call('delphi_config', {'project': DP, 'command': 'fix-references'})
     check('X5 ...y fix-references no la da por perdida (su lector desescapa)',
-          r.startswith('fix-references de') and 'que no existen' not in r and
+          mc.abre(r, 'SN_ARREGLA_FMT') and not mc.es(r, 'SN_ARREGLA_RUTAS_FMT') and
           'R&amp;D' not in r, r[:300])
     # add-deployfile rechaza & en la ruta (por esa puerta no entra); lo que
     # se prueba es el LECTOR: una entrada con &amp; como la escribe el IDE
@@ -347,7 +347,7 @@ try:
     linea = [l for l in leer('r2', 'herm', 'Herm2.dpr').split('\n') if 'UFicha in' in l]
     check('R2 unit con form de un proyecto HERMANO: re-apuntada y con su form (.dpr y DCCReference)',
           len(linea) == 1 and "forms\\UFicha.pas'" in linea[0] and '{' in linea[0] and
-          '<Form>' in leer('r2', 'herm', 'Herm2.dproj') and 'OJO' not in r,
+          '<Form>' in leer('r2', 'herm', 'Herm2.dproj') and not mc.es(r, 'SN_REUBICA_FALLOS_FMT') and not mc.es(r, 'SN_REUBICA_SALTADAS_FMT'),
           str(linea) + ' | ' + r[:300])
     # R3 y un RENAME de esa unit: el hermano pasa a la nueva (se buscaba por el
     #    nombre NUEVO en su .dpr, no se encontraba y se contaba como hecho)
@@ -355,7 +355,7 @@ try:
                              'dest': ruta('r2', 'app', 'forms', 'UFichaNueva.pas')})
     check('R3 rename de una unit de un proyecto HERMANO: el hermano lista la nueva',
           'UFichaNueva in' in leer('r2', 'herm', 'Herm2.dpr') and
-          'UFicha in' not in leer('r2', 'herm', 'Herm2.dpr') and 'OJO' not in r,
+          'UFicha in' not in leer('r2', 'herm', 'Herm2.dpr') and not mc.es(r, 'SN_REUBICA_FALLOS_FMT') and not mc.es(r, 'SN_REUBICA_SALTADAS_FMT'),
           leer('r2', 'herm', 'Herm2.dpr')[:400] + ' | ' + r[:300])
 
     # R4 grupos con DEPENDENCIAS, como las escribe el IDE: DependsOnTargets en
@@ -388,11 +388,11 @@ try:
     r = call('delphi_config', {'project': GA, 'command': 'remove-project', 'path': ruta('r4', 'app', 'App4.dproj')})
     ga = open(GA, encoding='utf-8-sig').read()
     check('R4a quitar un proyecto CON DependsOnTargets: fuera sus tres targets (la regex los exigia sin nada)',
-          r.startswith('QUITADO') and 'App4' not in ga and xml_valido(GA), r[:200] + ' | ' + ga[-600:])
+          mc.abre(r, 'SN_GRUPO_QUITADO_FMT') and 'App4' not in ga and xml_valido(GA), r[:200] + ' | ' + ga[-600:])
     r = call('delphi_config', {'project': GB, 'command': 'remove-project', 'path': ruta('r4', 'pkg', 'Pkg4.dproj')})
     gb = open(GB, encoding='utf-8-sig').read()
     check('R4b quitar la DEPENDENCIA: fuera de los DependsOnTargets y de las <Dependencies> de los demas',
-          r.startswith('QUITADO') and 'Pkg4' not in gb and '<Dependencies/>' in gb and
+          mc.abre(r, 'SN_GRUPO_QUITADO_FMT') and 'Pkg4' not in gb and '<Dependencies/>' in gb and
           'Name="App4">' in gb and xml_valido(GB), r[:200] + ' | ' + gb[-700:])
     GC = grupo_con_deps('C.groupproj')
     r = call('delphi_move', {'path': ruta('r4', 'pkg'), 'dest': ruta('r4', 'libs', 'pkg')})
@@ -411,9 +411,9 @@ try:
     r = call('delphi_config', {'project': G5, 'command': 'add-project', 'path': ruta('r5', 'Rd&x.dproj')})
     g5 = open(G5, encoding='utf-8-sig').read()
     check('R5 add-project de "Rd&x.dproj": el grupo sigue siendo XML (Name="Rd&amp;x")',
-          r.startswith('ANADIDO') and xml_valido(G5) and 'Name="Rd&amp;x"' in g5, r[:200] + ' | ' + g5[-500:])
+          mc.abre(r, 'SN_GRUPO_ANADIDO_FMT') and xml_valido(G5) and 'Name="Rd&amp;x"' in g5, r[:200] + ' | ' + g5[-500:])
     r = call('delphi_config', {'project': G5, 'command': 'remove-project', 'path': ruta('r5', 'Rd&x.dproj')})
-    check('R5b ...y remove-project lo quita entero', r.startswith('QUITADO') and 'Rd&amp;x' not in
+    check('R5b ...y remove-project lo quita entero', mc.abre(r, 'SN_GRUPO_QUITADO_FMT') and 'Rd&amp;x' not in
           open(G5, encoding='utf-8-sig').read() and xml_valido(G5), r[:200])
 
     # R6 una directiva SIN comillas cuya ruta nueva lleva un espacio: con comillas
@@ -459,7 +459,7 @@ try:
         '        <Projects Include="..\\fuera9\\NoExiste.dproj"/>\r\n    </ItemGroup>\r\n    <ProjectExtensions>'))
     r = call('delphi_config', {'project': G9, 'command': 'fix-references'})
     check('R9 fix-references de un grupo: de lo de FUERA de la jaula no dice ni si existe',
-          r.startswith('fix-references de') and 'NoExiste' not in r and 'Existe.dproj' not in r, r[:300])
+          mc.abre(r, 'SN_ARREGLA_FMT') and 'NoExiste' not in r and 'Existe.dproj' not in r, r[:300])
 
     # R10 las entidades de una lista que la mudanza NO toca quedan byte a byte
     call('delphi_create', {'kind': 'project-console', 'name': 'App10', 'dir': ruta('r10', 'app')})
@@ -486,7 +486,7 @@ try:
     try:
         r = call('delphi_move', {'path': ruta('r11', 'enlace'), 'dest': ruta('r11', 'enlace2')})
         check('R11 mover un junction: la victima de fuera sale intacta y no se intento reescribir',
-              open(os.path.join(VIC, 'victima', 'UVic.pas'), 'rb').read() == antes11 and 'OJO' not in r,
+              open(os.path.join(VIC, 'victima', 'UVic.pas'), 'rb').read() == antes11 and not mc.es(r, 'SN_REUBICA_FALLOS_FMT') and not mc.es(r, 'SN_REUBICA_SALTADAS_FMT'),
               r[:300])
     finally:
         for j in (ruta('r11', 'enlace'), ruta('r11', 'enlace2')):
@@ -499,11 +499,11 @@ try:
     j = mc.como_json(call('delphi_config', {'project': DP, 'section': 'searchpaths'}))
     rutas = [p for v in (j.get('searchPaths') or {}).values() for p in v]
     check('X7 add-searchpath de una carpeta R&D: aceptado, escapado en el .dproj y view da la ruta',
-          r.startswith('ANADIDO') and xml_valido(DP) and any(p.endswith('R&D\\lib') for p in rutas),
+          mc.abre(r, 'SN_CONFIG_PATH_ADDED_FMT') and xml_valido(DP) and any(p.endswith('R&D\\lib') for p in rutas),
           r[:200] + ' | ' + str(rutas))
     r = call('delphi_config', {'project': DP, 'command': 'remove-searchpath', 'path': ruta('R&D', 'lib')})
     check('X7b ...y remove-searchpath la encuentra y la quita (compara el valor de verdad)',
-          r.startswith('QUITADO') and 'R&amp;D\\lib;' not in leer('src', 'app', 'App.dproj'), r[:200])
+          mc.abre(r, 'SN_CONFIG_PATH_REMOVED_FMT') and 'R&amp;D\\lib;' not in leer('src', 'app', 'App.dproj'), r[:200])
 
     # ------------------------------------------------ W: el muro del 26-sep
     # Ninguna tool creaba un fuente SUELTO (.pas/.inc) sin darlo de alta en
@@ -513,21 +513,21 @@ try:
     os.makedirs(ruta('w'))
     r = call('delphi_create', {'kind': 'unit', 'name': 'USola', 'dir': ruta('w', 'comun')})
     check('W1 kind=unit SIN proyecto y con dir absoluto: una unit SUELTA, que nadie lista',
-          r.startswith('CREADA') and 'SUELTA' in r and os.path.exists(ruta('w', 'comun', 'USola.pas')) and
+          mc.abre(r, 'SN_CREATE_UNIT_SUELTA_FMT') and os.path.exists(ruta('w', 'comun', 'USola.pas')) and
           'unit USola;' in leer('w', 'comun', 'USola.pas') and 'USola' not in leer('src', 'app', 'App.dpr'), r[:200])
     r = call('delphi_create', {'kind': 'unit', 'name': 'UOtra', 'dir': 'relativa'})
     check('W1b sin proyecto y con dir RELATIVO: sigue pidiendo el proyecto (o una carpeta absoluta)',
-          r.startswith('RECHAZADO') and 'absoluta' in r.lower() and not os.path.exists(ruta('relativa')), r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_CREATE_UNIT_NEED_PROJECT') and not os.path.exists(ruta('relativa')), r[:200])
     r = call('delphi_create', {'kind': 'include', 'name': 'comun.inc', 'dir': ruta('w', 'comun'),
                                'content': "  COMUN = 'x';\n"})
     check('W2 kind=include con su content: un .inc, con CRLF',
-          r.startswith('CREADO') and bytes_de('w', 'comun', 'comun.inc').endswith(b"  COMUN = 'x';\r\n"), r[:200])
+          mc.abre(r, 'SN_CREATE_INCLUDE_FMT') and bytes_de('w', 'comun', 'comun.inc').endswith(b"  COMUN = 'x';\r\n"), r[:200])
     r = call('delphi_create', {'kind': 'include', 'name': 'comun', 'dir': ruta('w', 'comun'), 'content': '// otro'})
     check('W2b un .inc que ya existe: no se sobreescribe',
-          r.startswith('RECHAZADO') and os.path.exists(ruta('w', 'comun', 'comun.inc')) and
+          mc.rechazado(r) and mc.es(r, 'SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT') and os.path.exists(ruta('w', 'comun', 'comun.inc')) and
           b'otro' not in bytes_de('w', 'comun', 'comun.inc'), r[:200])
     r = call('delphi_create', {'kind': 'include', 'name': 'vacio', 'dir': ruta('w', 'comun')})
-    check('W2c kind=include sin content: rechazado', r.startswith('RECHAZADO') and
+    check('W2c kind=include sin content: rechazado', mc.rechazado(r) and mc.es(r, 'SR_CREATE_INCLUDE_CONTENT') and
           not os.path.exists(ruta('w', 'comun', 'vacio.inc')), r[:200])
 
     # un .dpr con el uses partido en ramas, como el del nodo (cada rama con su ';')
@@ -541,9 +541,9 @@ try:
     antes_r = bytes_de('w', 'ramas', 'Ramas.dpr')
     r = call('delphi_config', {'project': DPRR, 'command': 'add-unit', 'path': ruta('w', 'ramas', 'UNueva.pas')})
     check('W3 add-unit a un uses partido en ramas: se niega (no sabe en cual) y no toca nada',
-          r.startswith('error:') and 'ramas' in r and bytes_de('w', 'ramas', 'Ramas.dpr') == antes_r, r[:250])
+          mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_USES_EN_RAMAS_FMT') and bytes_de('w', 'ramas', 'Ramas.dpr') == antes_r, r[:250])
     r = call('delphi_config', {'project': DPRR, 'command': 'remove-unit', 'path': ruta('w', 'ramas', 'ULin.pas')})
-    check('W3b ...y remove-unit tampoco lo reescribe', r.startswith('error:') and
+    check('W3b ...y remove-unit tampoco lo reescribe', mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_USES_EN_RAMAS_FMT') and
           bytes_de('w', 'ramas', 'Ramas.dpr') == antes_r, r[:250])
     j = mc.como_json(call('delphi_config', {'project': DPRR, 'section': 'units'}))
     nombres = [u.get('unit') for u in (j.get('units') or [])]
@@ -568,7 +568,7 @@ try:
     r = call('delphi_config', {'project': ruta('w', 'plano', 'Plano.dproj'), 'command': 'add-unit',
                                'path': ruta('w', 'plano', 'UB.pas')})
     check('W5 un // {$IFDEF} COMENTADO dentro del uses no lo parte en ramas: add-unit entra',
-          r.startswith('ANADIDA') and "UB in 'UB.pas'" in leer('w', 'plano', 'Plano.dpr'), r[:250])
+          mc.abre(r, 'SN_UNIT_ADDED_FMT') and "UB in 'UB.pas'" in leer('w', 'plano', 'Plano.dpr'), r[:250])
 
     # W6 el AVISO de delphi_edit (David, 27-sep): un comentario de llave que cita
     #    una directiva de llave-dolar se cierra en el primer } (no bloquea)
@@ -576,15 +576,15 @@ try:
     r = call('delphi_edit', {'path': UA, 'old': 'implementation',
                              'new': 'implementation\n\n{ cita {$IFDEF X} aqui }'})
     check('W6 delphi_edit avisa de un comentario de llave con otra llave dentro (y lo aplica)',
-          'AVISO (no bloquea)' in r and '{$IFDEF X}' in leer('w', 'plano', 'UA.pas'), r[:400])
+          mc.es(r, 'SN_AVISO_LLAVE_ANIDADA_FMT') and '{$IFDEF X}' in leer('w', 'plano', 'UA.pas'), r[:400])
     r = call('delphi_edit', {'path': UA, 'edits': json.dumps([
         {'old': 'interface', 'new': 'interface\n\n{ otra {$I x.inc} }'}])})
     check('W6b ...tambien dentro de una TANDA (la tanda se comia los avisos del motor)',
-          r.startswith('APLICADA') and 'AVISO (no bloquea)' in r, r[:400])
+          mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and mc.es(r, 'SN_AVISO_LLAVE_ANIDADA_FMT'), r[:400])
     r = call('delphi_edit', {'path': UA, 'old': 'interface',
                              'new': 'interface\n\n// {$IFDEF X}\n(* { dentro *)\n{ normal }'})
     check('W6c un // o un (* *) con llaves dentro, o un comentario normal: sin aviso',
-          'AVISO (no bloquea)' not in r and r.startswith('ESCRITO'), r[:300])
+          not mc.es(r, 'SN_AVISO_LLAVE_ANIDADA_FMT') and mc.abre(r, 'SK_EDIT_ESCRITO_EN_FMT'), r[:300])
 finally:
     srv.mata()
     mc.borra(BASE)

@@ -84,11 +84,11 @@ try:
     # -------------------------------------------------------------------- L3
     t = call('delphi_edit', {'path': AJENA, 'old': 'procedure Saluda;',
                              'new': 'procedure Saludado;', 'atline': 5})
-    check('L3 editar dentro se RECHAZA', 'RECHAZADO' in t, t[:200])
+    check('L3 editar dentro se RECHAZA', mc.rechazado(t) and mc.es(t, 'SR_READONLY_PATH_FMT'), t[:200])
     check('L3b la negativa nombra la clave que lo decide',
           'ReadOnlyPaths' in t, t[:250])
     check('L3c y lo distingue de la jaula: dice que leer SI puede',
-          'SOLO LECTURA' in t.upper() and 'delphi_read' in t, t[:250])
+          mc.es(t, 'SR_READONLY_PATH_FMT') and 'delphi_read' in t, t[:250])
 
     # -------------------------------------------------------------------- L4
     check('L4 tras la negativa el fichero sigue byte a byte igual',
@@ -97,14 +97,14 @@ try:
     # -------------------------------------------------------------------- L5
     t = call('delphi_textedit', {'path': os.path.join(VENDOR, 'LEEME.md'),
                                  'old': 'no tocar', 'new': 'tocado'})
-    check('L5 textedit tampoco entra', 'RECHAZADO' in t, t[:200])
+    check('L5 textedit tampoco entra', mc.rechazado(t) and mc.es(t, 'SR_READONLY_PATH_FMT'), t[:200])
     t = call('delphi_textedit', {'path': os.path.join(VENDOR, 'Nuevo.md'),
                                  'create': True, 'content': 'x'})
-    check('L5b crear dentro tampoco', 'RECHAZADO' in t, t[:200])
+    check('L5b crear dentro tampoco', mc.rechazado(t) and mc.es(t, 'SR_READONLY_PATH_FMT'), t[:200])
     check('L5c ...y de verdad no se ha creado',
           not os.path.exists(os.path.join(VENDOR, 'Nuevo.md')), 'existe')
     t = call('delphi_delete', {'path': AJENA})
-    check('L5d borrar dentro tampoco', 'RECHAZADO' in t, t[:200])
+    check('L5d borrar dentro tampoco', mc.rechazado(t) and mc.es(t, 'SR_READONLY_PATH_FMT'), t[:200])
     check('L5e ...y el fichero sigue ahi', os.path.exists(AJENA), 'no esta')
 
     # -------------------------------------------------------------------- L6
@@ -112,7 +112,7 @@ try:
                              'new': 'procedure Saludado;', 'atline': 5})
     check('L6 fuera de esa carpeta se escribe igual que siempre: la regla no '
           'se desborda al resto de la jaula',
-          'RECHAZADO' not in t and 'Saludado' in open(MIA).read(), t[:200])
+          not mc.rechazado(t) and 'Saludado' in open(MIA).read(), t[:200])
 
     # -------------------------------------------------------------------- L7
     # La entrada ABSOLUTA esta fuera del root: manda la jaula, y la negativa
@@ -124,7 +124,7 @@ try:
     t = call('delphi_read', {'path': os.path.join(AJENO, 'Fuera.pas')})
     check('L7 una ReadOnlyPaths absoluta FUERA del root no abre nada: '
           'sigue mandando la jaula',
-          t.startswith('RECHAZADO') and 'FUERA de los workspaces permitidos' in t
+          mc.rechazado(t) and mc.es(t, 'SR_JAIL_FMT')
           and 'ReadOnlyPaths' not in t and 'procedure Saluda' not in t,
           t[:250])
 finally:

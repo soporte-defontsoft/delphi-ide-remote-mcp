@@ -97,12 +97,12 @@ try:
     call('delphi_git', {'repo': repo, 'command': 'commit', 'message': 'uno'})
     d = call('delphi_git', {'repo': repo, 'command': 'diff'})
     check('D3 git diff en arbol limpio dice que no hay diferencias',
-          'sin diferencias' in d and len(d.strip()) > len('exit=0') + 5, d[:200])
+          mc.es(d, 'SN_GIT_DIFF_CLEAN') and len(d.strip()) > len('exit=0') + 5, d[:200])
 
     # ------------------------------------------------------------------ D4
     a = call('delphi_git', {'repo': repo, 'command': 'add', 'args': '-A'})
     check('D4 una orden muda dice que su silencio ES el exito',
-          'exit=0' in a and 'terminado bien' in a, a[:200])
+          'exit=0' in a and mc.es(a, 'SN_GIT_SILENT_OK_FMT'), a[:200])
 
     # ------------------------------------------------------------------ D5
     desc = esquema('delphi_diagnostics')['description']

@@ -36,7 +36,7 @@ srv = mc.Stdio(EXE, mc.entorno(env), nombre='guard-battery')
 call = srv.call
 
 def denied(out):
-    return 'FUERA de los workspaces' in out or ('MCPERROR' in out and 'FUERA' in out)
+    return mc.es(out, 'SR_JAIL_FMT')
 
 IN_PAS = os.path.join(INSIDE, 'Dentro.pas')
 OUT_PAS = os.path.join(OUTSIDE, 'Fuera.pas')
@@ -45,7 +45,7 @@ OUT_PAS = os.path.join(OUTSIDE, 'Fuera.pas')
 out = call('delphi_read', {"path": IN_PAS})
 check('dentro: read permitido', 'unit Dentro' in out, out)
 out = call('delphi_edit', {"path": IN_PAS, "old": "unit Dentro;", "new": "unit Dentro; // ok"})
-check('dentro: edit permitido', out.startswith('ESCRITO'), out)
+check('dentro: edit permitido', mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT'), out)
 
 # outside: every door closed
 out = call('delphi_read', {"path": OUT_PAS})
@@ -79,7 +79,7 @@ check('fuera: primo de prefijo (permitido2) vetado', denied(out), out)
 # a console project built on the fly (R7 below reuses it); delphi_run itself is gone
 out = call('delphi_create', {"kind": "project-console", "dir": os.path.join(INSIDE, 'Hola'),
                              "name": "Hola"})
-check('run: proyecto de prueba creado', out.startswith('CREADO'), out)
+check('run: proyecto de prueba creado', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out)
 out = call('delphi_build', {"project": os.path.join(INSIDE, 'Hola', 'Hola.dproj'),
                             "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
 try:
@@ -89,7 +89,7 @@ except Exception:
 check('run: proyecto de prueba compila', ok, out[:150])
 out = call('delphi_run', {"path": os.path.join(INSIDE, 'Hola', 'Win64', 'Debug', 'Hola.exe')}, 30)
 check('run: delphi_run ya no existe (retirada 2026-09-23: una sola via de ejecucion, remote-run)',
-      'Tool not found' in out, out[:150])
+      mc.es(out, 'SR_SYS_TOOL_NOT_FOUND_FMT'), out[:150])
 
 # --- filesystem sandbox (B0b): a program run here cannot write outside its
 #     folder. Since 2026-09-23 the only thing that runs on this server is a
@@ -185,7 +185,7 @@ def peligro(out, motivo):
     """El build lo paro el ESCANER DE PELIGROS (SR_BUILD_HAZARD_FMT) y por el
     motivo de ESTE payload - no la jaula, ni la puerta de parametros, ni el
     payload de la vuelta anterior si la subida de este no llego."""
-    return out.startswith('RECHAZADO: el proyecto contiene ') and motivo in out
+    return mc.rechazado(out) and mc.es(out, 'SR_BUILD_HAZARD_FMT') and motivo in out
 
 
 EXEC_TASK = 'a <exec> task (executes a program or writes files during build)'
@@ -308,7 +308,7 @@ if os.path.exists(_holad):
     upload_dproj(_clean)
     out = build_default(_holad)
     check('R7: un .dproj NORMAL sigue compilando (sin falso positivo)',
-          'RECHAZADO' not in out and compilo(out), out[:200])
+          not mc.rechazado(out) and compilo(out), out[:200])
 
     # --- R9 (field): the hazard scanner no longer refuses an INERT custom
     #     <Target>. Refusing EVERY target was a false positive as serious as a
@@ -319,7 +319,7 @@ if os.path.exists(_holad):
         '<Message Text="solo un mensaje" Importance="high" /></Target></Project>'))
     out = build_default(_holad)
     check('R9 FP: <Target> INERTE (solo <Message>) NO se rechaza',
-          'el proyecto contiene' not in out and compilo(out), out[:200])
+          not mc.es(out, 'SR_BUILD_HAZARD_FMT') and compilo(out), out[:200])
     # a <Target> that PLANTS/DELETES a file by arbitrary path IS still refused,
     # target wrapper or not - those are the real "runs/writes during build".
     for task, label in (
@@ -343,21 +343,21 @@ if os.path.exists(_holad):
                                    "config": "Debug", "target": "Build"},
                   {'DELPHI_MCP_ALLOW_BUILD_SCRIPTS': '1'}, 600)
     check('R9: AllowBuildScripts deja compilar un <Target><Exec> de confianza',
-          'el proyecto contiene' not in out and compilo(out), out[:200])
+          not mc.es(out, 'SR_BUILD_HAZARD_FMT') and compilo(out), out[:200])
     upload_dproj(_clean)  # leave a clean project for later sections
 
 # --- B0c: Windows name-normalization bypasses (trailing dot/space, ADS) ---
 # cada uno por la guarda de NORMALIZACION de nombres, con su motivo
 for probe, label, motivo in (
         (INSIDE + '\\Evade.pas.', 'punto final',
-         'el nombre "Evade.pas." empieza o termina en punto o espacio'),
+         'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT'),
         (INSIDE + '\\Evade2.pas ', 'espacio final',
-         'el nombre "Evade2.pas " empieza o termina en punto o espacio'),
+         'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT'),
         (INSIDE + '\\Evade3.pas::$DATA', 'flujo ADS',
-         'Evade3.pas::$DATA" contiene ":" fuera de la unidad (flujo alternativo de datos)')):
+         'SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT')):
     out = call('delphi_textedit', {"path": probe, "create": True, "content": "x"})
     check('bypass %s: textedit lo rechaza' % label,
-          out.startswith('RECHAZADO') and motivo in out, out[:120])
+          mc.rechazado(out) and mc.es(out, motivo) and os.path.basename(probe) in out, out[:120])
 check('bypass: ningun .pas colado en disco',
       not any(f.startswith('Evade') for f in os.listdir(INSIDE)),
       os.listdir(INSIDE))
@@ -418,7 +418,7 @@ else:
 # --- git args: file-writing / path-reading options rejected on read commands
 #     (a jail escape usable even read-only; found in the field audit) ---
 def gitclean(out):
-    return 'RECHAZADO' in out and 'opcion de git' in out
+    return mc.rechazado(out) and mc.es(out, 'SR_GIT_OPTION_FMT')
 
 # --output writes a file: even a "read" command (diff/show) must refuse it,
 # whether the target is inside the jail or an absolute path outside it.
@@ -477,7 +477,7 @@ _dup = os.path.join(INSIDE, 'PWNED_dup.txt')
 out = call('delphi_git', {"repo": INSIDE, "command": "diff",
                           "args": "--oneline", "Args": "--output=" + _dup})
 check('gate: parametro duplicado (args + Args) rechazado',
-      'RECHAZADO' in out and 'dos veces' in out, out[:150])
+      mc.rechazado(out) and mc.es(out, 'SR_ARG_DUPLICATE_FMT'), out[:150])
 check('gate: el duplicado no escribio el fichero', not os.path.exists(_dup), _dup)
 
 # --- delphi_build: platform/config/target reach a cmd.exe line -------------
@@ -492,7 +492,7 @@ for param, payload in (('platform', 'Win64 && cmd /c echo x > '),
             "target": "Build"}
     args[param] = payload + _m
     out = call('delphi_build', args, 300)
-    check('build: inyeccion por "%s" rechazada' % param, 'RECHAZADO' in out, out[:130])
+    check('build: inyeccion por "%s" rechazada' % param, mc.rechazado(out), out[:130])
     check('build: inyeccion por "%s" no ejecuto nada' % param,
           not os.path.exists(_m), _m)
 
@@ -500,7 +500,7 @@ for param, payload in (('platform', 'Win64 && cmd /c echo x > '),
 out = call('delphi_build', {"project": _holad, "platform": "Win64",
                             "config": "Release Demo", "target": "Make"}, 300)
 check('build: una configuracion propia con espacio NO se rechaza',
-      'RECHAZADO' not in out and llego_a_msbuild(out), out[:130])
+      not mc.rechazado(out) and llego_a_msbuild(out), out[:130])
 
 # --- the workspace ROOT is the jail, not a file ----------------------------
 # delete/move park their target in a trash folder created NEXT TO it: for a
@@ -515,7 +515,7 @@ for tool, args in (('delphi_delete', {"path": INSIDE}),
                                     "dest": os.path.join(INSIDE, 'movida')})):
     out = call(tool, args)
     check('%s: el root mismo rechazado' % tool,
-          'RECHAZADO' in out and 'WORKSPACE ROOT' in out, out[:150])
+          mc.rechazado(out) and mc.es(out, 'SR_ROOT_ITSELF_FMT'), out[:150])
 check('root: el workspace sigue existiendo', os.path.isdir(INSIDE), INSIDE)
 check('root: no se creo papelera FUERA de la jaula',
       not os.path.exists(os.path.join(BASE, '__delphi-patch')), BASE)
@@ -524,7 +524,7 @@ _victim = os.path.join(INSIDE, 'Borrame.pas')
 open(_victim, 'wb').write(SRC.replace('Dentro', 'Borrame').encode('cp1252'))
 out = call('delphi_delete', {"path": _victim})
 check('root: borrar un fichero DENTRO sigue permitido',
-      'RECHAZADO' not in out and not os.path.exists(_victim), out[:130])
+      not mc.rechazado(out) and not os.path.exists(_victim), out[:130])
 
 srv.cierra()
 mc.fin('guard battery')

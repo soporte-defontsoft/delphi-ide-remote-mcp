@@ -54,7 +54,7 @@ def crea(cli, path):
     CREADO de ESE fichero y el fichero esta en disco con ese contenido (antes
     valia cualquier respuesta sin RECHAZADO: un timeout o un error pasaban)."""
     r = cli.call('delphi_textedit', {'path': path, 'create': True, 'content': 'x'})
-    return (r.startswith('CREADO') and os.path.basename(path) in r and os.path.isfile(path)
+    return (mc.abre(r, 'SK_TEXT_CREADO_ENCODING_FINALES_FMT') and os.path.basename(path) in r and os.path.isfile(path)
             and open(path, encoding='utf-8').read() == 'x')
 
 
@@ -76,14 +76,14 @@ try:
     r = a.call('delphi_textedit',
                {'path': os.path.join(base, 'bob', 'hack.txt'), 'create': True, 'content': 'x'})
     check('C2 ON: NO escribe en la carpeta de otro agente',
-          'RECHAZADO' in r and 'confinado' in r and
+          mc.rechazado(r) and mc.es(r, 'SR_AGENT_CONFINED_FMT') and
           not os.path.exists(os.path.join(base, 'bob', 'hack.txt')), r)
     check('C3 ON: una carpeta compartida es escribible',
           crea(a, os.path.join(base, 'shared', 's.txt')))
     r = a.call('delphi_textedit',
                {'path': os.path.join(base, 'loose.txt'), 'create': True, 'content': 'x'})
     check('C4 ON: escribir suelto en la raiz se rechaza',
-          'RECHAZADO' in r and not os.path.exists(os.path.join(base, 'loose.txt')), r)
+          mc.rechazado(r) and mc.es(r, 'SR_AGENT_CONFINED_FMT') and not os.path.exists(os.path.join(base, 'loose.txt')), r)
     r = a.call('delphi_read', {'path': os.path.join(base, 'bob', 'b.pas')})
     # el contenido de verdad, en el formato numero|linea del read
     check('C5 ON: leer NO esta confinado (lee el arbol entero)', '1|unit b;' in r, r)

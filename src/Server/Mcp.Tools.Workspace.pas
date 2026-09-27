@@ -1305,7 +1305,7 @@ constructor TDelphiWorkspaceTool.Create;
 begin
   inherited;
   FName := 'delphi_workspace';
-  FDescription := MsgFmt(SD_WS_WORKSPACE_FMT, [MsgText(SN_VIRTUAL_DRIVES)]);
+  FDescription := MsgFmt(SD_WS_WORKSPACE_FMT, [MsgText(SF_VIRTUAL_DRIVES)]);
 end;
 
 function TDelphiWorkspaceTool.ExecuteWithParams(const Params: TDelphiWorkspaceParams): string;

@@ -76,13 +76,13 @@ try:
     r = sf.call('delphi_textedit',
                 {'path': os.path.join(ANCHO, 'hack.txt'), 'create': True, 'content': 'x'})
     check('W2 Fino NO escribe fuera (un nivel arriba)',
-          'RECHAZADO' in r and not os.path.exists(os.path.join(ANCHO, 'hack.txt')), r[:160])
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(ANCHO, 'hack.txt')), r[:160])
     r = sf.call('delphi_read', {'path': os.path.join(ANCHO, 'otra', 's.pas')})
     check('W2 frontera DURA: Fino ni siquiera LEE fuera de su root',
-          'RECHAZADO' in r and 'unit s' not in r, r[:160])
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT') and 'unit s' not in r, r[:160])
     r = sf.call('delphi_list', {'root': JAIL})
     check('W2 Fino tampoco lista el arbol del operador',
-          'RECHAZADO' in r and 'fuera.txt' not in r, r[:160])
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT') and 'fuera.txt' not in r, r[:160])
 
     # W3: Ancho - overlap never subtracts
     sa = session(TA, 'ancho')
@@ -95,7 +95,7 @@ try:
     check('W3 Ancho escribe en su arbol', os.path.exists(os.path.join(ANCHO, 'suyo.txt')), r[:160])
     r = sa.call('delphi_read', {'path': os.path.join(JAIL, 'fuera.txt')})
     check('W3 Ancho no sale de su workspace (zona del operador vetada)',
-          'RECHAZADO' in r and 'operador' not in r, r[:160])
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT') and 'operador' not in r, r[:160])
 
     # W4: operator token - everything, as always
     so = session(OP, 'operador')
@@ -114,10 +114,10 @@ try:
     # el rechazo CONCRETO del modo lectura, y el fichero sin crear (antes
     # bastaba con que no existiera: un timeout o cualquier error pasaban)
     check('W5 token RO no escribe ni dentro',
-          r.startswith('RECHAZADO') and 'SOLO LECTURA' in r and
+          mc.rechazado(r) and mc.es(r, 'SR_READ_ONLY_FMT') and
           not os.path.exists(os.path.join(FINO, 'ro.txt')), r[:160])
     r = sro.call('delphi_read', {'path': os.path.join(ANCHO, 'otra', 's.pas')})
-    check('W5 token RO tampoco lee fuera de sus roots', 'RECHAZADO' in r, r[:160])
+    check('W5 token RO tampoco lee fuera de sus roots', mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:160])
 
     # W6: per-workspace Profile trims only that token's listing
     names_f = sf.toolnames()

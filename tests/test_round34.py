@@ -112,7 +112,7 @@ try:
         {'old': 'esta linea no existe en ninguna parte', 'new': 'x'},
     ])})
     check('B5 todo-o-nada: la tanda con una entrada mala se deshace entera',
-          'ROLLBACK' in r, r[:160])
+          mc.es(r, 'SR_PATCH_EDITS_ROLLED_FMT'), r[:160])
     check('B5b ...y el fichero vuelve byte a byte',
           open(f, 'rb').read() == antes, 'el fichero cambio')
 finally:

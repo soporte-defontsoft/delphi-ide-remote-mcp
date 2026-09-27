@@ -47,15 +47,15 @@ intact = (os.path.exists(os.path.join(sub, 'a.txt')) and
           os.path.exists(os.path.join(sub, 'locked.exe')) and
           open(os.path.join(sub, 'a.txt')).read() == 'a' * 100)
 check('D1 carpeta bloqueada: no la borra y NO toca nada',
-      'NO he tocado NADA' in r1 and intact, r1)
+      mc.es(r1, 'SR_FILE_DELETE_LOCKED_FMT') and intact, r1)
 check('D1 no deja copia a medias en la papelera (ni al reintentar)',
       len(copies()) == 0, copies())
-check('D1 el reintento tampoco duplica ni gutea', 'NO he tocado NADA' in r2 and intact, r2)
+check('D1 el reintento tampoco duplica ni gutea', mc.es(r2, 'SR_FILE_DELETE_LOCKED_FMT') and intact, r2)
 
 # D2 - once unlocked, it deletes cleanly
 lh.close()
 r3 = call('delphi_delete', {'path': sub})
-check('D2 sin lock, borra limpio', 'BORRADO' in r3 and not os.path.exists(sub), r3)
+check('D2 sin lock, borra limpio', mc.abre(r3, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(sub), r3)
 check('D2 y AHORA si hay una copia recuperable', len(copies()) == 1, copies())
 
 srv.mata()

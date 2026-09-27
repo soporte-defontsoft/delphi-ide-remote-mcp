@@ -133,40 +133,40 @@ check('get: bloque entero', out.startswith('formheader (TLayout) lineas 7-29') a
 out = call('delphi_styles', {"path": S, "command": "get", "style": "formheader", "child": "background"})
 check('get: parte por child', 'background (TRectangle)' in out and 'Fill.Color = xFFF6ECDB' in out and 'cabecera' not in out, out[:300])
 out = call('delphi_styles', {"path": S, "command": "get", "style": "noexiste"})
-check('get: estilo inexistente rechazado con pista', 'RECHAZADO' in out and 'command=view' in out, out)
+check('get: estilo inexistente rechazado con pista', mc.rechazado(out) and 'command=view' in out, out)
 
 # ---- set ----
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "background", "prop": "Fill.Color", "value": "xFF112233"})
-check('set: CAMBIADA', out.startswith('CAMBIADA'), out[:200])
+check('set: CAMBIADA', mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and out.startswith('CAMBIADA'), out[:200])
 txt = rd(S)
 check('set: valor en disco con la indentacion original', '      Fill.Color = xFF112233' in txt and 'xFFF6ECDB' not in txt, txt)
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "value": "0.500000000000000000"})
-check('set: ANADIDA tras StyleName', out.startswith('ANADIDA'), out[:200])
+check('set: ANADIDA tras StyleName', mc.abre(out, 'SN_STYLES_PROP_SET_FMT') and out.startswith('ANADIDA'), out[:200])
 txt = rd(S)
 i = txt.index("StyleName = 'formheader'"); j = txt.index('Opacity = 0.5')
 check('set: la nueva propiedad va justo tras el StyleName', 0 < j - i < 40, txt[i:j + 40])
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "background/text", "prop": "X", "value": "1"})
-check('set: child inexistente rechazado', 'RECHAZADO' in out and 'no tiene una parte' in out, out)
+check('set: child inexistente rechazado', mc.rechazado(out) and 'no tiene una parte' in out, out)
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "delete": True})
-check('set delete: QUITADA', out.startswith('QUITADA') and 'Opacity' not in rd(S), out[:200])
+check('set delete: QUITADA', mc.abre(out, 'SN_STYLES_PROP_DELETED_FMT') and 'Opacity' not in rd(S), out[:200])
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Fill Color", "value": "x"})
-check('set: prop con espacios rechazada', 'RECHAZADO' in out, out)
+check('set: prop con espacios rechazada', mc.rechazado(out) and mc.es(out, 'SR_STYLES_PROP_CHARS_FMT'), out)
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Visible"})
-check('set: sin value pide value (y menciona delete)', 'Falta "value"' in out and 'delete=true' in out, out)
+check('set: sin value pide value (y menciona delete)', mc.es(out, 'SR_STYLES_NEED_VALUE') and 'delete=true' in out, out)
 check('set: copia previa en __delphi-patch', os.path.isdir(os.path.join(STY, '__delphi-patch')))
 
 # ---- clone ----
 out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle", "name": "cardstyle_alt"})
-check('clone: CLONADO', out.startswith('CLONADO'), out[:200])
+check('clone: CLONADO', mc.abre(out, 'SN_STYLES_CLONED_FMT'), out[:200])
 d = json.loads(call('delphi_styles', {"path": S}))
 names = [x['style'] for x in d['styles']]
 check('clone: el nuevo va justo detras del origen', names.index('cardstyle_alt') == names.index('cardstyle') + 1, names)
 check('clone: partes copiadas', [x for x in d['styles'] if x['style'] == 'cardstyle_alt'][0]['parts'] == 2, d['styles'])
 check('clone: el origen intacto', rd(S).count("StyleName = 'cardstyle'") == 1 and rd(S).count("StyleName = 'cardstyle_alt'") == 1, '')
 out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle", "name": "cardstyle_alt"})
-check('clone: nombre ocupado rechazado', 'RECHAZADO' in out and 'ya existe' in out, out)
+check('clone: nombre ocupado rechazado', mc.rechazado(out) and mc.es(out, 'SR_STYLES_NAME_TAKEN_FMT'), out)
 out = call('delphi_styles', {"path": S, "command": "clone", "style": "cardstyle", "name": "mal nombre"})
-check('clone: nombre invalido rechazado', 'RECHAZADO' in out, out)
+check('clone: nombre invalido rechazado', mc.rechazado(out) and mc.es(out, 'SR_STYLES_NAME_CHARS_FMT'), out)
 
 # ---- lint ----
 out = call('delphi_styles', {"path": STY, "command": "lint", "project": PRJ})
@@ -193,7 +193,7 @@ check('build: .rc -> .res', d.get('rcOk') is True and os.path.exists(os.path.joi
 check('build: ok', d['ok'] is True, d)
 # the binary must not be editable
 out = call('delphi_styles', {"path": os.path.join(STY, 'Battery.bin.style'), "command": "view"})
-check('binario rechazado para editar/ver', 'RECHAZADO' in out and 'BINARIO' in out, out)
+check('binario rechazado para editar/ver', mc.rechazado(out) and mc.es(out, 'SR_STYLES_BINARY_FMT'), out)
 # lint again: clean except the duplicate
 out = call('delphi_styles', {"path": STY, "command": "lint", "project": PRJ})
 d = json.loads(out)
@@ -201,11 +201,11 @@ check('lint tras build: rc limpio', d['rcMissingFiles'] == [], d['rcMissingFiles
 
 # ---- refusals ----
 out = call('delphi_styles', {"path": STY, "command": "get", "style": "x"})
-check('get sobre carpeta rechazado', 'RECHAZADO' in out and 'UN fichero' in out, out)
+check('get sobre carpeta rechazado', mc.rechazado(out) and mc.es(out, 'SR_STYLES_NEED_FILE'), out)
 out = call('delphi_styles', {"command": "view"})
-check('sin path: pide path + reconectar', 'Falta "path"' in out and 'reconecta' in out, out)
+check('sin path: pide path + reconectar', mc.es(out, 'SR_STYLES_NEED_PATH'), out)
 out = call('delphi_styles', {"path": r'C:\Windows\win.ini', "command": "view"})
-check('fuera de la jaula rechazado', 'RECHAZADO' in out or 'error' in out.lower(), out[:200])
+check('fuera de la jaula rechazado', mc.rechazado(out) and mc.es(out, 'SR_JAIL_FMT'), out[:200])
 
 # ---- delphi_search pattern ----
 out = call('delphi_search', {"root": STY, "query": "StyleName = 'cardstyle'", "pattern": "*.style", "maxresults": 5})
@@ -214,19 +214,19 @@ check('search pattern=*.style: encuentra', d['total'] >= 1 and d['filesScanned']
 out = call('delphi_search', {"root": STY, "query": "cardstyle", "maxresults": 5})
 check('search sin pattern: sigue sin barrer .style', json.loads(out)['filesScanned'] == 0, out[:200])
 out = call('delphi_search', {"root": STY, "query": "x", "pattern": "*.style;*.ini"})
-check('search pattern compuesto rechazado', 'RECHAZADO' in out, out[:200])
+check('search pattern compuesto rechazado', mc.rechazado(out) and mc.es(out, 'SR_WS_PATTERN_DEBE_SER_MASCARA'), out[:200])
 
 # ---- delete ----
 out = call('delphi_styles', {"path": S, "command": "delete", "style": "cardstyle_alt"})
-check('delete: BORRADO con lineas y contador', out.startswith('BORRADO') and 'quedan' in out, out[:200])
+check('delete: BORRADO con lineas y contador', mc.abre(out, 'SN_STYLES_DELETED_FMT'), out[:200])
 d = json.loads(call('delphi_styles', {"path": S}))
 names = [x['style'] for x in d['styles']]
 check('delete: el estilo ya no esta y el origen sigue', 'cardstyle_alt' not in names and 'cardstyle' in names, names)
 check('delete: el resto del fichero intacto (formheader 7-29)', [x for x in d['styles'] if x['style'] == 'formheader'][0]['lines'] == '7-29', d['styles'])
 out = call('delphi_styles', {"path": S, "command": "delete", "style": "noexiste"})
-check('delete: estilo inexistente rechazado', 'RECHAZADO' in out, out)
+check('delete: estilo inexistente rechazado', mc.rechazado(out) and mc.es(out, 'SR_STYLE_HAY_NINGUN_ESTILO_COMMAND_FMT'), out)
 out = call('delphi_styles', {"path": S, "command": "delete"})
-check('delete: sin style pide style', 'style' in out.lower() and not out.startswith('BORRADO'), out)
+check('delete: sin style pide style', mc.es(out, 'SR_STYLES_NEED_STYLE') and not mc.abre(out, 'SN_STYLES_DELETED_FMT'), out)
 
 srv.cierra()
 

@@ -241,7 +241,7 @@ try:
 
     # ------------------------------------------------------------------ M7
     check('M7 la respuesta dice que las menciones no bloquean un rename',
-          'rename' in j.get('mentionsNote', '').lower(),
+          mc.es(j.get('mentionsNote', ''), 'SN_REFS_MENTIONS_FMT'),
           str(j.get('mentionsNote'))[:200])
 
     # ------------------------------------------------------------------ M8
@@ -257,7 +257,7 @@ try:
           'blockers=%s' % json.dumps(rn.get('blockers'))[:260])
     check('M8b ...con las menciones contadas y avisadas, no escondidas',
           rn.get('mentions') == 2 and
-          any('coment' in w.lower() for w in rn.get('warnings', [])),
+          any(mc.es(w, 'SN_RENAME_MENTIONS_FMT') for w in rn.get('warnings', [])),
           'mentions=%s warnings=%s' % (rn.get('mentions'),
                                        rn.get('warnings')))
 finally:

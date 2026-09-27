@@ -94,7 +94,7 @@ try:
     for t in threads: t.start()
     for t in threads: t.join()
 
-    ok_reports = sum(1 for r in results if r and 'ANADIDO' in r)
+    ok_reports = sum(1 for r in results if r and mc.abre(r, 'SK_VAULT_ANADIDO_COPIA_PREVIA_FMT'))
     collisions = sum(1 for r in results if r and ('Cannot create' in r or 'No se puede' in r))
     disk = open(os.path.join(VAULT, 'conc', 'base.md'), encoding='utf-8').read()
     on_disk = sum(1 for i in range(N) if ('MARK-%02d' % i) in disk)
@@ -124,7 +124,7 @@ try:
     for t in threads2: t.join()
     created = sum(1 for i in range(N)
                   if os.path.exists(os.path.join(VAULT, 'conc', 'n%02d.md' % i)))
-    creport = sum(1 for r in cres if r and 'CREADA' in r)
+    creport = sum(1 for r in cres if r and mc.abre(r, 'SK_VAULT_CREADA_NOTA_RECUERDA_ENLAZARLA_FMT'))
     check('conc-create: las %d notas distintas existen en disco' % N, created == N,
           '%d/%d creadas' % (created, N))
     check('conc-create: %d exitos reportados (sin choque)' % N, creport == N,
@@ -135,7 +135,7 @@ try:
         "old_text": open(os.path.join(VAULT, 'conc', 'base.md'), encoding='utf-8').read(),
         "new_text": ""})
     check('lock: patch que vaciaria la nota sigue RECHAZADO',
-          'RECHAZAD' in out and ('VACIA' in out or 'vacia' in out), out[:150])
+          mc.rechazado(out) and mc.es(out, 'SR_VAULT_WOULD_EMPTY'), out[:150])
 finally:
     proc.kill()
 

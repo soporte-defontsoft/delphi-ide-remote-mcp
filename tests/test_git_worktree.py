@@ -71,7 +71,7 @@ def Server(env):
 def rechazado(out):
     # RECHAZADO de la tool: un 'error: unknown command' de un servidor sin
     # worktree no cuenta (pasaria por el motivo equivocado)
-    return out.startswith('RECHAZADO')
+    return mc.rechazado(out)
 
 
 print('== git-worktree battery ==')
@@ -88,41 +88,52 @@ check('list: solo la copia principal', out.startswith('exit=0') and 'repo-v1' no
 out = wt(args='add', path=WT, ref='v1')
 check('add: crea la copia con la version v1', out.startswith('exit=0') and os.path.isfile(os.path.join(WT, 'version.txt'))
       and open(os.path.join(WT, 'version.txt')).read() == 'uno', out)
-check('add: dice que es suya de limpiar y como', 'args=remove' in out, out)
+check('add: dice que es suya de limpiar y como',
+      mc.es(out, 'SN_GIT_WORKTREE_ADDED_FMT') and 'args=remove' in out, out)
 check('...y el arbol principal sigue en su version', open(os.path.join(REPO, 'version.txt')).read() == 'dos', '')
 out = wt(args='list')
 check('list: la ensena', 'repo-v1' in out, out)
 
 # ---- add: what is refused
 out = wt(args='add', path=WT, ref='v1')
-check('add a una carpeta que ya existe: RECHAZADO', rechazado(out) and 'ya existe' in out, out)
+check('add a una carpeta que ya existe: RECHAZADO',
+      rechazado(out) and mc.es(out, 'SR_GIT_WORKTREE_EXISTS_FMT'), out)
 out = wt(args='add', path=os.path.join(OUT, 'wt'), ref='v1')
-check('add fuera de las raices: RECHAZADO', rechazado(out) and not os.path.exists(os.path.join(OUT, 'wt')), out)
+check('add fuera de las raices: RECHAZADO', rechazado(out) and mc.es(out, 'SR_JAIL_FMT')
+      and not os.path.exists(os.path.join(OUT, 'wt')), out)
 out = wt(args='add', path=os.path.join(REPO, 'dentro'), ref='v1')
-check('add dentro del propio repo: RECHAZADO', rechazado(out) and not os.path.exists(os.path.join(REPO, 'dentro')), out)
+check('add dentro del propio repo: RECHAZADO', rechazado(out) and mc.es(out, 'SR_GIT_WORKTREE_INSIDE_FMT')
+      and not os.path.exists(os.path.join(REPO, 'dentro')), out)
 out = wt(args='add', path=os.path.join(MINE, '__delphi-temp', 'wt'), ref='v1')
-check('add en una carpeta muerta: RECHAZADO', rechazado(out) and not os.path.exists(os.path.join(MINE, '__delphi-temp', 'wt')), out)
+check('add en una carpeta muerta: RECHAZADO', rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TEMP')
+      and not os.path.exists(os.path.join(MINE, '__delphi-temp', 'wt')), out)
 for ref in ('-x', 'v1;dir', 'v1 --orphan', ''):
     out = wt(args='add', path=os.path.join(MINE, 'r'), ref=ref)
-    check('add con ref raro: RECHAZADO (%r)' % ref, rechazado(out) and not os.path.exists(os.path.join(MINE, 'r')), out)
+    check('add con ref raro: RECHAZADO (%r)' % ref, rechazado(out) and mc.es(out, 'SR_GIT_WORKTREE_REF')
+          and not os.path.exists(os.path.join(MINE, 'r')), out)
 subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(MINE, 'aFuera'), OUT], capture_output=True)
 out = wt(args='add', path=os.path.join(MINE, 'aFuera', 'wt'), ref='v1')
 check('add a traves de un junction a fuera: RECHAZADO (ruta real)', rechazado(out)
+      and mc.es(out, 'SR_JAIL_LINK_FMT')
       and not os.path.exists(os.path.join(OUT, 'wt')), out)
 out = wt(args='nada')
-check('worktree con un args que no es list/add/remove: RECHAZADO', rechazado(out), out)
+check('worktree con un args que no es list/add/remove: RECHAZADO',
+      rechazado(out) and mc.es(out, 'SR_GIT_WORKTREE_ARGS'), out)
 
 # ---- remove: only what list shows, never across a link, never with changes
 out = wt(args='remove', path=os.path.join(MINE, 'otra'))
-check('remove de algo que no es worktree: RECHAZADO', rechazado(out), out)
+check('remove de algo que no es worktree: RECHAZADO',
+      rechazado(out) and mc.es(out, 'SR_GIT_WORKTREE_NOT_LISTED_FMT'), out)
 out = wt(args='remove', path=REPO)
-check('remove de la copia principal: RECHAZADO', rechazado(out) and os.path.isdir(REPO), out)
+check('remove de la copia principal: RECHAZADO',
+      rechazado(out) and mc.es(out, 'SR_GIT_WORKTREE_NOT_LISTED_FMT') and os.path.isdir(REPO), out)
 os.makedirs(os.path.join(WT, 'Compiled'))
 subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(WT, 'Compiled', 'aFuera'), VIC], capture_output=True)
 check('fixture: junction a la victima en una carpeta ignorada del worktree',
       os.path.isjunction(os.path.join(WT, 'Compiled', 'aFuera')), '')
 out = wt(args='remove', path=WT)
-check('remove con un enlace dentro: RECHAZADO', rechazado(out) and 'enlace' in out and os.path.isdir(WT), out)
+check('remove con un enlace dentro: RECHAZADO',
+      rechazado(out) and mc.es(out, 'SR_GIT_WORKTREE_LINK_FMT') and os.path.isdir(WT), out)
 check('...y la victima de fuera sigue intacta', os.listdir(VIC) == ['v.txt'], os.listdir(VIC))
 os.rmdir(os.path.join(WT, 'Compiled', 'aFuera'))   # quita el ENLACE, nunca lo de detras
 open(os.path.join(WT, 'version.txt'), 'w').write('cambiado')
@@ -143,7 +154,8 @@ out = ro.call('delphi_git', {'repo': REPO, 'command': 'worktree', 'args': 'list'
 check('solo lectura: list SI', out.startswith('exit=0'), out)
 out = ro.call('delphi_git', {'repo': REPO, 'command': 'worktree', 'args': 'add',
                              'path': os.path.join(MINE, 'ro-wt'), 'ref': 'v1'})
-check('solo lectura: add RECHAZADO', rechazado(out) and not os.path.exists(os.path.join(MINE, 'ro-wt')), out)
+check('solo lectura: add RECHAZADO', rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT')
+      and not os.path.exists(os.path.join(MINE, 'ro-wt')), out)
 ro.cierra()
 
 borra(BASE)

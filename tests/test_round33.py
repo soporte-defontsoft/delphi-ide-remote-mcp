@@ -84,12 +84,12 @@ call = cli.call
 # "error: no existe" o un ancla que no casa tambien pasaban por negativa.
 def fuera(t):
     """rechazado por estar FUERA de las raices (la ruta textual ya sale)."""
-    return t.startswith('RECHAZADO') and 'FUERA de los workspaces permitidos' in t
+    return mc.rechazado(t) and mc.es(t, 'SR_JAIL_FMT')
 
 
 def por_enlace(t):
     """rechazado porque un tramo del camino es un ENLACE que sale de la jaula."""
-    return t.startswith('RECHAZADO') and 'ENLACE (junction o symlink)' in t
+    return mc.rechazado(t) and mc.es(t, 'SR_JAIL_LINK_FMT')
 
 
 try:

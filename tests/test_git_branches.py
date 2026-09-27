@@ -76,7 +76,7 @@ r = git({'command': 'stash', 'args': 'drop'})
 # ...y el rechazo dice lo que RECIBIO: contestaba "drop no esta" a un push con
 # rutas que nadie habia pedido tirar (1.5.1)
 check('stash drop NO existe (destruye)',
-      'RECHAZADO' in r and 'args="drop"' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_ARGS_FMT') and 'args="drop"' in r, r[:200])
 
 # ---- stash push con RUTAS: descartar unos ficheros sin perderlos (1.5.1) ----
 # Hasta la 1.5.0 no habia forma de devolver UN fichero a HEAD por el MCP (ni
@@ -101,26 +101,28 @@ check('...y pop devuelve lo descartado',
 antes = git({'command': 'stash', 'args': 'list'})
 r = git({'command': 'stash', 'args': 'push -u'})
 check('stash push con una OPCION rechazado, diciendo lo que recibio',
-      'RECHAZADO' in r and 'args="push -u"' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_ARGS_FMT') and 'args="push -u"' in r, r[:200])
 r = git({'command': 'stash', 'args': 'push -- ../fuera.txt'})
 check('stash push -- <ruta FUERA del repo> rechazado, y no guarda nada',
-      'RECHAZADO' in r and 'no es una ruta de este repositorio' in r and
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_RUTA_FMT') and
       git({'command': 'stash', 'args': 'list'}) == antes and
       'descartable' in leer('a.txt'), r[:200])
 r = git({'command': 'stash', 'args': 'push -- "*.txt"'})
 check('stash push -- <comodin> rechazado: un comodin no es un nombre',
-      'RECHAZADO' in r and 'no es una ruta de este repositorio' in r and
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_STASH_RUTA_FMT') and
       'descartable' in leer('a.txt') and 'se queda' in leer('d.txt'), r[:200])
 git({'command': 'add', 'args': '.'})
 git({'command': 'commit', 'message': 'lo de antes del stash con rutas'})
 
 # ---- contratos ----
 r = git({'command': 'switch'})
-check('switch sin rama rechazado con pista', 'RECHAZADO' in r and 'stash' in r, r[:250])
+check('switch sin rama rechazado con pista',
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_SWITCH_NEEDS') and 'stash' in r, r[:250])
 r = git({'command': 'merge'})
-check('merge sin rama rechazado', 'RECHAZADO' in r, r[:200])
+check('merge sin rama rechazado', mc.rechazado(r) and mc.es(r, 'SR_GIT_MERGE_NEEDS'), r[:200])
 r = git({'command': 'switch', 'args': 'tarea-1; rm -rf /'})
-check('metacaracteres rechazados', 'RECHAZADO' in r or 'error' in r.lower(), r[:200])
+check('metacaracteres rechazados',
+      mc.fallo(r) and mc.es(r, 'SR_GIT_SHELL_METACHARS_ARGS'), r[:200])
 
 srv.mata()
 
@@ -144,7 +146,7 @@ r = git({'command': 'stash', 'args': 'push -- ro/x.txt'})
 # el rechazo de la PUERTA (referencia de solo lectura), no el de la gramatica:
 # un servidor que lo rechazase todo pasaba este check
 check('stash push -- <ruta de SOLO LECTURA> rechazado por la puerta de escritura',
-      r.startswith('RECHAZADO') and 'REFERENCIA' in r and
+      mc.rechazado(r) and mc.es(r, 'SR_REFERENCE_ROOT_FMT') and
       'tocado' in leer('ro/x.txt'), r[:200])
 r = git({'command': 'stash', 'args': 'push -- a.txt'})
 check('...y una ruta escribible del mismo repo si se descarta',

@@ -31,7 +31,7 @@ def sha_all():
 # ---- fixture project ----
 PRJ = os.path.join(BASE, 'Ren')
 r = call('delphi_create', {'kind': 'project-console', 'name': 'Ren', 'dir': PRJ})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 call('delphi_create', {'kind': 'unit', 'name': 'UCalc', 'project': os.path.join(PRJ, 'Ren.dpr')})
 UCALC = os.path.join(PRJ, 'UCalc.pas')
 open(UCALC, 'w', encoding='utf-8-sig', newline='\r\n').write(
@@ -89,24 +89,24 @@ check('cero sin confirmar', j.get('unverified') == 0, r[:200])
 
 # 2. invalid ident / reserved
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': '9mal'}))
-check('identificador invalido bloquea', j.get('applicable') is False and any('identificador' in b for b in j.get('blockers', [])), str(j)[:250])
+check('identificador invalido bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_BAD_IDENT_FMT') for b in j.get('blockers', [])), str(j)[:250])
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'begin'}))
-check('palabra reservada bloquea', j.get('applicable') is False and any('reservada' in b for b in j.get('blockers', [])), str(j)[:250])
+check('palabra reservada bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_RESERVED_FMT') for b in j.get('blockers', [])), str(j)[:250])
 
 # 3. string literal hit: renaming ConCadena
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 5, 'character': 9, 'newname': 'OtraCosa'}))
-check('mencion en literal de cadena bloquea', j.get('applicable') is False and any('literales' in b or 'cadena' in b for b in j.get('blockers', [])), str(j)[:400])
+check('mencion en literal de cadena bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_STRINGS_FMT') for b in j.get('blockers', [])), str(j)[:400])
 
 # 4. collision: rename Doble -> Existente (word already there)
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'Existente'}))
-check('colision con nombre existente bloquea', j.get('applicable') is False and any('colision' in b or 'aparece' in b for b in j.get('blockers', [])), str(j)[:300])
+check('colision con nombre existente bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_COLLISION_FMT') for b in j.get('blockers', [])), str(j)[:300])
 
 # 5. designer hit: a dfm mentioning the identifier
 DFM = os.path.join(PRJ, 'UCalc.dfm')
 open(DFM, 'w', encoding='utf-8', newline='\r\n').write(
     "object F: TF\n  OnClick = Doble\nend\n")
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'Duplica'}))
-check('mencion en designer bloquea', j.get('applicable') is False and any('designer' in b or '.dfm' in b for b in j.get('blockers', [])), str(j)[:400])
+check('mencion en designer bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_DESIGNER_FMT') for b in j.get('blockers', [])), str(j)[:400])
 os.remove(DFM)
 
 # 6. RTL symbol refused (definition outside the jail): IntToStr usage
@@ -122,7 +122,7 @@ li = next(i for i, l in enumerate(lines) if 'IntToStr' in l)
 co = lines[li].index('IntToStr') + 2
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': li, 'character': co, 'newname': 'MiIntToStr'}))
 check('simbolo de la RTL bloqueado (definicion fuera del workspace)',
-      j.get('applicable') is False and any('FUERA' in b or 'RTL' in b for b in j.get('blockers', [])), str(j)[:400])
+      j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_LIBRARY') for b in j.get('blockers', [])), str(j)[:400])
 
 # 7. mode=apply on a NON applicable rename: nothing written (ConCadena has a
 # string-literal hit). Until 1.0.17 apply was refused outright.
@@ -141,7 +141,7 @@ check('la tool no escribio NADA hasta aqui (solo el fixture cambio a proposito)'
 # through the changeset engine, and the project still builds.
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'Duplica', 'mode': 'apply'}))
 check('apply aplicable: applied=true con el commit del changeset',
-      j.get('applied') is True and 'COMMIT COMPLETO' in j.get('commit', ''), str(j)[:400])
+      j.get('applied') is True and mc.abre(j.get('commit', ''), 'SN_CHANGESET_COMMITTED_FMT'), str(j)[:400])
 check('apply: una edicion por linea tocada (4: decl, impl, uso, dpr)', j.get('editsApplied') == 4, j.get('editsApplied'))
 import re as _re
 uc = open(UCALC, encoding='utf-8-sig').read(); dp = open(DPR, encoding='utf-8-sig').read()

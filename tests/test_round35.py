@@ -112,7 +112,8 @@ try:
     check('R2 edit: el gemelo Pascal borra el mismo rango',
           'procedure Sobra' not in txt and 'procedure Queda' in txt, r[:160])
     check('R2b ...y la estructura sigue sana (un solo end. al final)',
-          txt.count('\nend.') == 1 and 'ESTRUCTURA ROTA' not in r,
+          txt.count('\nend.') == 1 and not mc.es(r, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT') and
+          not mc.es(r, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA'),
           r[:200])
 
     # ------------------------------------------------------------------ R3
@@ -132,7 +133,7 @@ try:
     antes = open(f, 'rb').read()
     r = call('delphi_textedit',
              {'path': f, 'old': 'cuatro', 'toline': 2, 'delete': True})
-    check('R4 rango al reves: rechazado', 'toline=2' in r and 'ANTES' in r,
+    check('R4 rango al reves: rechazado', 'toline=2' in r and mc.es(r, 'SR_RANGE_BACKWARDS_FMT'),
           r[:200])
     check('R4b ...y el fichero intacto', open(f, 'rb').read() == antes,
           'el fichero cambio')
@@ -141,7 +142,7 @@ try:
     r = call('delphi_textedit',
              {'path': f, 'old': 'dos', 'toline': 99, 'delete': True})
     check('R5 toline mas alla del final: rechazado',
-          'toline=99' in r and '6 lineas' in r, r[:200])
+          mc.es(r, 'SR_RANGE_BEYOND_FMT') and 'toline=99' in r and '6 lineas' in r, r[:200])
     check('R5b ...y el fichero intacto', open(f, 'rb').read() == antes,
           'el fichero cambio')
 
@@ -149,7 +150,7 @@ try:
     r = call('delphi_textedit',
              {'path': f, 'old': 'uno', 'toline': 6, 'delete': True})
     check('R6 un rango que se lleva el fichero entero: rechazado',
-          r.startswith('RECHAZADO') and 'ENTERO' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_RANGE_WHOLE_FMT'), r[:200])
     check('R6b ...y el fichero intacto', open(f, 'rb').read() == antes,
           'el fichero cambio')
 
@@ -180,7 +181,7 @@ try:
     # el rechazo CONCRETO de la tanda (antes valia cualquier texto con
     # 'toline' y 'error': un envoltorio JSON-RPC, o un aplicado que lo nombrara)
     check('R8 ancla de bloque + toline: rechazado',
-          r.startswith('ROLLBACK') and 'NADA se ha aplicado' in r and
+          mc.abre(r, 'SR_PATCH_EDITS_ROLLED_FMT') and
           '"toline" no se combina con un ancla de VARIAS lineas' in r, r[:300])
     check('R8b ...y el fichero intacto', open(f, 'rb').read() == antes,
           'el fichero cambio')
@@ -191,7 +192,7 @@ try:
              {'path': nuevo, 'create': True, 'content': 'hola\n',
               'toline': 3})
     check('R9 toline en un modo que no va por lineas: rechazado, no ignorado',
-          'toline' in r and not os.path.exists(nuevo), r[:200])
+          mc.es(r, 'SR_RANGE_WRONG_MODE_FMT') and 'toline' in r and not os.path.exists(nuevo), r[:200])
 
     # ------------------------------------------------------------------ R10
     # El recuento de bytes altos de delphi_edit comparaba lo que entra con lo
@@ -210,7 +211,7 @@ try:
              {'path': fa, 'old': 'procedure Fuera;', 'toline': 11,
               'delete': True})
     check('R10 los acentos del tramo no disparan la alarma de acentos',
-          'ACENTOS FUERA DE CUADRO' not in r and 'procedure Fuera' not in
+          not mc.es(r, 'SN_EDIT_ACENTOS_FUERA_CUADRO_FMT') and 'procedure Fuera' not in
           open(fa, encoding='utf-8').read(), r[:240])
 
     # ------------------------------------------------------------------ R13
@@ -223,7 +224,7 @@ try:
             {'old': 'dos', 'new': 'DOS', malo: 1},
         ])})
         check('R13 el campo inventado "%s" se rechaza (no se ignora)' % malo,
-              malo in r and bueno in r and r.startswith('RECHAZADO'), r[:200])
+              malo in r and bueno in r and mc.rechazado(r) and mc.es(r, 'SR_PATCH_EDIT_KEY_FMT'), r[:200])
     check('R13b ...y el fichero intacto', open(f, 'rb').read() == antes,
           'el fichero cambio')
 
@@ -243,7 +244,7 @@ try:
         {'old': 'solo', 'new': 'CAMBIADA', 'occurrence': 3},
     ])})
     check('R14 occurrence fuera de rango se rechaza, no se ignora',
-          r.startswith('RECHAZADO') and 'occurrence 3' in r and
+          mc.rechazado(r) and mc.es(r, 'SR_PATCH_OCCURRENCE_FMT') and 'occurrence 3' in r and
           'solo hay 1' in r, r[:220])
     check('R14b ...y no ha tocado la unica aparicion que hay',
           open(f, 'rb').read() == antes, open(f).read()[:80])
@@ -255,7 +256,7 @@ try:
         {'old': 'rep', 'new': 'CAMBIADA', 'occurrence': 5},
     ])})
     check('R14c con el ancla repetida tampoco pasa de largo',
-          'RECHAZADO' in r and open(f2, 'rb').read() == antes2, r[:220])
+          mc.rechazado(r) and open(f2, 'rb').read() == antes2, r[:220])
     # R16: un ancla VACIA con occurrence en una tanda tumbaba la tool con un
     # Access violation (el mensaje de rechazo hacia ''.Split()[0]; medido
     # 2026-09-26 contra produccion). Se rechaza como cualquier otra.
@@ -263,7 +264,7 @@ try:
         {'old': '', 'new': 'CAMBIADA', 'occurrence': 5},
     ])})
     check('R16 ancla vacia + occurrence: se rechaza, sin Access violation',
-          'RECHAZADO' in r and 'Access violation' not in r and
+          mc.rechazado(r) and 'Access violation' not in r and
           open(f2, 'rb').read() == antes2, r[:220])
 
     # R17: el salto FINAL de new, una regla (LineasDeNew): uno es el fin de
@@ -294,7 +295,7 @@ try:
     re_ = call('delphi_edit', {'path': fp, 'old': 'WriteLn(3)', 'new': 'WriteLn(4)'})
     rt = call('delphi_textedit', {'path': ft, 'old': 'WriteLn(3)', 'new': 'WriteLn(4)'})
     check('R18 delphi_edit con un TROZO de linea: dice que esta DENTRO, en que linea y como',
-          re_.startswith('RECHAZADO') and 'DENTRO' in re_ and 'no aparece' not in re_ and
+          mc.rechazado(re_) and mc.es(re_, 'SR_ANCLA_DENTRO_FMT') and not mc.es(re_, 'SR_ANCLA_NO_ESTA_FMT') and
           '15|  WriteLn(3);' in re_ and 'fragment=' in re_ and
           open(fp, 'rb').read() == antes_p, re_[:300])
     check('R18b ...y delphi_textedit, su gemela, dice LO MISMO',
@@ -303,11 +304,11 @@ try:
     rb = call('delphi_textedit', {'path': ft, 'edits': json.dumps(
         [{'old': 'begin\nWriteLn(3)', 'new': 'begin\n  WriteLn(4);'}])})
     check('R18c un bloque dice QUE linea no esta entera, con la misma pista',
-          'RECHAZADO' in rb and 'La linea 2 de tu bloque' in rb and  # en tanda: ROLLBACK + el motivo
+          mc.abre(rb, 'SR_PATCH_EDITS_ROLLED_FMT') and 'La linea 2 de tu bloque' in rb and  # en tanda: ROLLBACK + el motivo
           '15|  WriteLn(3);' in rb and open(ft, 'rb').read() == antes_t, rb[:300])
     rn = call('delphi_edit', {'path': fp, 'old': 'WriteLn(99);', 'new': 'x'})
     check('R18d lo que no esta en ningun sitio sigue siendo "no aparece"',
-          rn.startswith('RECHAZADO') and 'no aparece' in rn and 'DENTRO' not in rn, rn[:200])
+          mc.rechazado(rn) and mc.es(rn, 'SR_ANCLA_NO_ESTA_FMT') and not mc.es(rn, 'SR_ANCLA_DENTRO_FMT'), rn[:200])
 
     # ------------------------------------------------------------------ R11
     for apodo in ('to', 'endline'):

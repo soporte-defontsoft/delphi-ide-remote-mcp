@@ -44,11 +44,6 @@ function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
   copias y todo-o-nada, en vez de escribir ficheros por su cuenta. }
 function ChangesetBegin: string;
 
-{ Verdadero si la respuesta de ChangesetExecute es la de exito de ese texto
-  (el trozo fijo que precede al primer %). Un solo sitio que sepa como suena
-  el exito, para quien encadena stage/preview/commit desde codigo. }
-function ChangesetRespondio(const ARespuesta, ATextoFmt: string): Boolean;
-
 implementation
 
 uses
@@ -447,19 +442,6 @@ begin
   finally
     GLock.Leave;
   end;
-end;
-
-function ChangesetRespondio(const ARespuesta, ATextoFmt: string): Boolean;
-var
-  P: Integer;
-  Fijo: string;
-begin
-  P := ATextoFmt.IndexOf('%');
-  if P > 0 then
-    Fijo := ATextoFmt.Substring(0, P)
-  else
-    Fijo := ATextoFmt;
-  Result := (Fijo <> '') and ARespuesta.StartsWith(Fijo);
 end;
 
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,

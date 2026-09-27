@@ -131,7 +131,7 @@ try:
         # resuelve la definicion fuera ("no busco sus usos"). Un timeout, un
         # error cualquiera o la negativa cruda de la jaula no son ninguna.
         contesta = j.get('identifier') == IDENT
-        se_niega = (r.startswith('error:') and 'FUERA de este workspace' in r
+        se_niega = (mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT')
                     and IDENT in r)
         print('  (jaula %s: el motor %s)' % (quien, 'contesta con referencias' if contesta else
               'resuelve fuera y se niega' if se_niega else 'NO da ninguna salida legitima'))
@@ -149,7 +149,7 @@ try:
         # Y no puede morir con la negativa cruda de la jaula: eso es el
         # sintoma de haber dado por buena una ruta que no era de aqui.
         check('X2%s ...ni muere con un RECHAZADO de jaula' % quien.lower(),
-              (contesta or se_niega) and 'FUERA de los workspaces permitidos' not in r,
+              (contesta or se_niega) and not mc.es(r, 'SR_JAIL_FMT'),
               r[:240])
 
         # -------------------------------------------------------------- X3
@@ -163,7 +163,7 @@ try:
         check('X3%s la respuesta habla de su propio fichero'
               % quien.lower(),
               (contesta and propia in defe.lower().replace('srvc:', 'c:')) or
-              (se_niega and 'SIN CONFIGURAR' in r and 'delphi_definition' in r),
+              (se_niega and mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT') and 'delphi_definition' in r),
               'identifier=%s definition=%s | %s' % (j.get('identifier'), defe, r[:200]))
         # X3-b: mira SOLO dentro de su jaula - o no mira en ningun sitio
         check('X3%s-b ...y solo mira dentro de su jaula'
@@ -171,7 +171,7 @@ try:
               (contesta and bool(j.get('scope')) and
                all(propia in s.lower().replace('srvc:', 'c:')
                    for s in j.get('scope', []))) or
-              (se_niega and 'no busco sus usos' in r),
+              (se_niega and mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT')),
               'scope=%s | %s' % (j.get('scope'), r[:200]))
 finally:
     for s in (a, b):

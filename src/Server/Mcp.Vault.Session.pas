@@ -192,7 +192,7 @@ begin
       Content := TJSONObject.Create;
       Msg.AddPair('content', Content);
       Content.AddPair('type', 'text');
-      Content.AddPair('text', MsgText(SN_VAULT_PROMPT_HEADER) + sLineBreak + sLineBreak +
+      Content.AddPair('text', MsgText(SF_VAULT_PROMPT_HEADER) + sLineBreak + sLineBreak +
         VaultBootstrapText(BOOTSTRAP_BUDGET));
     end;
     Result := TValue.From<TJSONObject>(Res);

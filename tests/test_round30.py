@@ -96,19 +96,19 @@ open(PROJ, 'w', encoding='utf-8').write('<Project/>')
 
 r = call('delphi_desktop', {"command": "bailar", "profile": "x", "project": PROJ})
 check('un command inventado se rechaza con la lista buena',
-      r.startswith('RECHAZADO') and 'screenshot' in r, r[:160])
+      mc.rechazado(r) and mc.es(r, 'SR_ADBLINUX_CMD'), r[:160])
 
 r = call('delphi_desktop', {"command": "tap", "profile": "x", "project": PROJ})
 check('tap sin coordenadas se rechaza diciendo de donde salen',
-      r.startswith('RECHAZADO') and 'screenshot' in r, r[:160])
+      mc.rechazado(r) and mc.es(r, 'SR_ADBLINUX_NEEDXY'), r[:160])
 
 r = call('delphi_desktop', {"command": "type", "profile": "x", "project": PROJ})
 check('type sin texto se rechaza y explica el gesto de un solo viaje',
-      r.startswith('RECHAZADO') and 'x e y' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_ADBLINUX_NEEDTEXT'), r[:200])
 
 r = call('delphi_desktop', {"command": "key", "profile": "x", "project": PROJ})
 check('key sin codigo se rechaza con ejemplos',
-      r.startswith('RECHAZADO') and ('Escape' in r or 'Tab' in r), r[:160])
+      mc.rechazado(r) and mc.es(r, 'SR_ADBLINUX_NEEDCODE'), r[:160])
 
 # El cebo va en una carpeta PROPIA y se recoge. Estaba suelto en la raiz de
 # %TEMP% y ahi se quedaba: un .dproj de 10 bytes llamado literalmente
@@ -126,7 +126,7 @@ try:
     r = call('delphi_desktop', {"command": "screenshot", "profile": "x", "project": fuera})
     # por la JAULA, no por cualquier cosa (el perfil "x" tampoco existe)
     check('un proyecto fuera de la jaula se rechaza',
-          r.startswith('RECHAZADO') and 'FUERA de los workspaces' in r, r[:160])
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:160])
 finally:
     mc.borra(cebo)
 
@@ -135,6 +135,6 @@ print()
 # refused naming the valid four, before anything travels to any target
 r = call('delphi_desktop', {'command': 'key', 'profile': 'x', 'code': '37', 'modifiers': 'hyper'})
 check('key modifiers=hyper rechazado nombrando los validos',
-      'RECHAZADO' in r and 'hyper' in r and 'ctrl' in r and 'super' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_ADBLINUX_MODIFIERS_BAD_FMT') and 'hyper' in r, r[:200])
 srv.cierra()
 mc.fin('round30')

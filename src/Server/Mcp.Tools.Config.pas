@@ -1145,7 +1145,7 @@ begin
   PatchSaveText(DeployProj, Xml, Enc); // __delphi-patch copy first
   Result := MsgFmt(SN_CONFIG_DEPLOY_ADDED_FMT,
     [Plat, Full, RemoteDir, TPath.GetFileName(Full),
-     IfThen(Generated, MsgText(SN_CONFIG_DEPLOY_GENERATED) + ' ', ''), Plat]);
+     IfThen(Generated, MsgText(SF_CONFIG_DEPLOY_GENERATED) + ' ', ''), Plat]);
 end;
 
 function RemoveDeployFile(const ADproj, ARawPlatform, ARawPath: string): string;

@@ -26,7 +26,7 @@ except Exception: j = {}
 check('search root=file: one hit at the right line', j.get('total') == 1 and j['hits'][0]['line'] == 602, r[:300])
 check('search root=file: filesScanned = 1', j.get('filesScanned') == 1, r[:200])
 r = call('delphi_search', {'root': os.path.join(BASE, 'Nope.dproj'), 'query': 'x'})
-check('search root=missing file: error', 'not found' in r, r)
+check('search root=missing file: error', mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_WS_DIR_NOT_FOUND_FMT'), r)
 # alias: text -> query
 r = call('delphi_search', {'root': BASE, 'text': 'DCC_UnitSearchPath'})
 try: j = json.loads(r)
@@ -35,7 +35,7 @@ check('search alias text->query', j.get('total') == 1, r[:200])
 
 # --- delphi_list
 r = call('delphi_list', {'root': BASE, 'pattern': '*.{pas,dfm}'})
-check('list: braces refused with hint', 'RECHAZADO' in r and ';' in r, r[:200])
+check('list: braces refused with hint', mc.rechazado(r) and mc.es(r, 'SR_WS_PATTERN_ADMITE_LLAVES_EXPANSION') and ';' in r, r[:200])
 r = call('delphi_list', {'root': BASE, 'pattern': '*.pas;*.dfm'})
 try: j = json.loads(r)
 except Exception: j = {}

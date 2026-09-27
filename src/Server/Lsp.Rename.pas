@@ -512,7 +512,7 @@ begin
       if Nueva = Vieja then
         Continue; // una fila que no lleva el nombre (no deberia pasar): nada que apilar
       R := ChangesetExecute('stage', Id, 'edit', P, '', Vieja, Nueva, '', L0 + 1);
-      if not ChangesetRespondio(R, MsgText(SN_CHANGESET_STAGED_FMT)) then
+      if not EsMsg(R, SN_CHANGESET_STAGED_FMT) then
       begin
         Fallo(R);
         Exit;
@@ -539,7 +539,7 @@ begin
     end;
     R := ChangesetExecute('commit', Id, '', '', '', '', '', '', 0);
     Id := ''; // commit consume el changeset, haya ido bien o mal
-    if not ChangesetRespondio(R, MsgText(SN_CHANGESET_COMMITTED_FMT)) then
+    if not EsMsg(R, SN_CHANGESET_COMMITTED_FMT) then
     begin
       Fallo(R);
       Exit;

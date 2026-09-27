@@ -32,7 +32,7 @@ def build_ok(dproj):
 # --- console project ---
 CDIR = os.path.join(BASE, 'HolaConsola')
 out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "HolaConsola"})
-check('create: proyecto console', out.startswith('CREADO'), out)
+check('create: proyecto console', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out)
 ok, err = build_ok(os.path.join(CDIR, 'HolaConsola.dproj'))
 check('build: proyecto console COMPILA', ok, err)
 
@@ -55,14 +55,14 @@ try:
 except Exception as e:
     check('build: output parsea', False, '%s | %s' % (e, out[:200]))
 out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "HolaConsola"})
-check('create: jamas sobreescribe', 'RECHAZADO' in out, out)
+check('create: jamas sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_CREATE_YA_EXISTE_PROYECTO_FMT'), out)
 
 # --- test project (24-sep-2026): a DUnitX runner + first fixture, green at
 # birth. Hermes had to get this skeleton by note (test 27); now the tool
 # writes it and delphi_test recognises it. DUnitX ships with RAD Studio.
 TDIR = os.path.join(BASE, 'HolaTest')
 out = call('delphi_create', {"kind": "project-test", "dir": TDIR, "name": "HolaTest"})
-check('create: proyecto test (DUnitX)', out.startswith('CREADO') and 'delphi_test' in out and 'AllowTests' in out, out[:300])
+check('create: proyecto test (DUnitX)', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT') and 'delphi_test' in out and 'AllowTests' in out, out[:300])
 check('create test: .dpr + .dproj + UHolaTest.pas', all(os.path.isfile(os.path.join(TDIR, f)) for f in ('HolaTest.dpr', 'HolaTest.dproj', 'UHolaTest.pas')), str(os.listdir(TDIR)))
 _dpr = open(os.path.join(TDIR, 'HolaTest.dpr'), encoding='utf-8-sig').read()
 check('create test: el runner usa DUnitX y sale con ExitCode 1 si falla', 'DUnitX.TestFramework' in _dpr and 'ExitCode := 1' in _dpr, _dpr[:200])
@@ -72,9 +72,9 @@ check('build: proyecto test COMPILA (DUnitX en el Library Path)', ok, err)
 out = call('delphi_test', {"command": "discover", "path": TDIR})
 check('delphi_test discover lo reconoce como DUnitX', 'DUnitX' in out and 'HolaTest' in out, out[:300])
 out = call('delphi_create', {"kind": "project-test", "dir": TDIR, "name": "HolaTest"})
-check('create test: jamas sobreescribe', 'RECHAZADO' in out, out[:200])
+check('create test: jamas sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_CREATE_YA_EXISTE_PROYECTO_FMT'), out[:200])
 out = call('delphi_create', {"kind": "project-web", "dir": TDIR, "name": "Web"})
-check('create: el rechazo de kind nombra project-test', 'RECHAZADO' in out and 'project-test' in out, out[:300])
+check('create: el rechazo de kind nombra project-test', mc.rechazado(out) and mc.es(out, 'SR_CREATE_PROJECT_KIND') and 'project-test' in out, out[:300])
 
 # --- runtime package (1.2 candidate, pulled forward on 2026-09-23: Hermes'
 # battery 1.2 case 1 could not even start a package by tools) ---
@@ -82,7 +82,7 @@ PDIR = os.path.join(BASE, 'PaqueteUno')
 PDPK = os.path.join(PDIR, 'PaqueteUno.dpk')
 PDPROJ = os.path.join(PDIR, 'PaqueteUno.dproj')
 out = call('delphi_create', {"kind": "project-package", "dir": PDIR, "name": "PaqueteUno"})
-check('package: CREADO', out.startswith('CREADO') and 'contains' in out, out[:300])
+check('package: CREADO', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT') and 'contains' in out, out[:300])
 check('package: .dpk + .dproj', os.path.isfile(PDPK) and os.path.isfile(PDPROJ), os.listdir(PDIR) if os.path.isdir(PDIR) else 'sin carpeta')
 _k = open(PDPK, 'rb').read().decode('utf-8-sig')
 check('package: requires rtl, sin contains', 'requires' in _k and 'rtl;' in _k and 'contains' not in _k, _k)
@@ -100,7 +100,7 @@ except Exception as e:
     check('package: build parsea', False, '%s | %s' % (e, out[:200]))
 # the first unit OPENS the contains clause
 out = call('delphi_create', {"kind": "unit", "name": "UPkgUno", "project": PDPK})
-check('package: kind=unit registra en contains', out.startswith('CREADA') and 'ANADIDA' in out, out[:300])
+check('package: kind=unit registra en contains', mc.abre(out, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and 'ANADIDA' in out, out[:300])
 _k = open(PDPK, 'rb').read().decode('utf-8-sig')
 check('package: contains estrenada antes de end.', "contains\r\n  UPkgUno in 'UPkgUno.pas';" in _k and _k.index('contains') < _k.index('end.'), _k)
 check('package: requires intacta', "requires\r\n  rtl;" in _k, _k)
@@ -110,7 +110,7 @@ os.makedirs(_sub, exist_ok=True)
 _dos = os.path.join(_sub, 'UPkgDos.pas')
 open(_dos, 'wb').write('unit UPkgDos;\r\n\r\ninterface\r\n\r\nfunction Dos: Integer;\r\n\r\nimplementation\r\n\r\nfunction Dos: Integer;\r\nbegin\r\n  Result := 2;\r\nend;\r\n\r\nend.\r\n'.encode('utf-8-sig'))
 out = call('delphi_config', {"project": PDPROJ, "command": "add-unit", "path": _dos})
-check('package: add-unit por el .dproj (resuelve al .dpk)', out.startswith('ANADIDA'), out[:300])
+check('package: add-unit por el .dproj (resuelve al .dpk)', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:300])
 _k = open(PDPK, 'rb').read().decode('utf-8-sig')
 check('package: contains con dos entradas y coma', "UPkgUno in 'UPkgUno.pas',\r\n  UPkgDos in 'src\\UPkgDos.pas';" in _k, _k)
 check('package: DCCReference de las dos', 'Include="UPkgUno.pas"' in open(PDPROJ, 'rb').read().decode('utf-8-sig') and 'Include="src\\UPkgDos.pas"' in open(PDPROJ, 'rb').read().decode('utf-8-sig'), '')
@@ -128,7 +128,7 @@ check('package: con dos units COMPILA', ok, err)
 # with the VCL inside, invisible in quiet)
 out = call('delphi_create', {"kind": "unit", "name": "UUsaVcl", "project": PDPK, "content":
     "unit UUsaVcl;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Dialogs, Data.DB;\r\n\r\nprocedure Saluda;\r\n\r\nimplementation\r\n\r\nprocedure Saluda;\r\nbegin\r\n  ShowMessage('hola');\r\nend;\r\n\r\nend.\r\n"})
-check('package: unit que usa Vcl y Data', out.startswith('CREADA'), out[:200])
+check('package: unit que usa Vcl y Data', mc.abre(out, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT'), out[:200])
 out = call('delphi_build', {"project": PDPROJ, "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
 try:
     d = json.loads(out)
@@ -141,11 +141,11 @@ try:
 except Exception as e:
     check('package: build con W1033 parsea', False, '%s | %s' % (e, out[:200])); _sug = 'vcl;dbrtl'; _bpl_gordo = 0
 out = call('delphi_config', {"project": PDPROJ, "command": "add-requires", "requires": _sug})
-check('package: add-requires ANADIDOS', out.startswith('ANADIDOS'), out[:200])
+check('package: add-requires ANADIDOS', mc.abre(out, 'SN_REQUIRES_ADDED_FMT'), out[:200])
 _k = open(PDPK, 'rb').read().decode('utf-8-sig')
 check('package: requires con rtl, vcl y dbrtl, una por linea', "requires\r\n  rtl,\r\n" in _k and 'vcl' in _k.split('contains')[0] and 'dbrtl' in _k.split('contains')[0], _k)
 out = call('delphi_config', {"project": PDPROJ, "command": "add-requires", "requires": "vcl"})
-check('package: add-requires idempotente', 'ya estaban' in out, out[:200])
+check('package: add-requires idempotente', mc.es(out, 'SN_REQUIRES_PRESENT_FMT'), out[:200])
 out = call('delphi_build', {"project": PDPROJ, "platform": "Win64", "config": "Debug", "target": "Build"}, 600)
 try:
     d = json.loads(out)
@@ -154,26 +154,26 @@ try:
 except Exception as e:
     check('package: build con requires parsea', False, '%s | %s' % (e, out[:200]))
 out = call('delphi_config', {"project": PDPROJ, "command": "remove-unit", "path": os.path.join(PDIR, 'UUsaVcl.pas')})
-check('package: remove-unit de la unit VCL dice contains', out.startswith('QUITADA') and '(contains' in out, out[:200])
+check('package: remove-unit de la unit VCL dice contains', mc.abre(out, 'SN_UNIT_REMOVED_FMT') and '(contains' in out, out[:200])
 out = call('delphi_config', {"project": PDPROJ, "command": "remove-unit", "path": os.path.join(PDIR, 'UPkgUno.pas')})
-check('package: remove-unit', out.startswith('QUITADA') or 'quitada' in out.lower(), out[:200])
+check('package: remove-unit', mc.abre(out, 'SN_UNIT_REMOVED_FMT'), out[:200])
 _k = open(PDPK, 'rb').read().decode('utf-8-sig')
 check('package: contains se queda con la otra', "contains\r\n  UPkgDos in 'src\\UPkgDos.pas';" in _k and 'UPkgUno' not in _k, _k)
 ok, err = build_ok(PDPROJ)
 check('package: tras remove-unit COMPILA', ok, err)
 out = call('delphi_create', {"kind": "project-package", "dir": PDIR, "name": "PaqueteUno"})
-check('package: jamas sobreescribe', 'RECHAZADO' in out, out)
+check('package: jamas sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_CREATE_YA_EXISTE_PROYECTO_FMT'), out)
 
 # --- VCL project + extra form ---
 VDIR = os.path.join(BASE, 'HolaVcl')
 out = call('delphi_create', {"kind": "project-vcl", "dir": VDIR, "name": "HolaVcl"})
-check('create: proyecto VCL', out.startswith('CREADO'), out)
+check('create: proyecto VCL', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out)
 ok, err = build_ok(os.path.join(VDIR, 'HolaVcl.dproj'))
 check('build: proyecto VCL COMPILA', ok, err)
 
 out = call('delphi_create', {"kind": "form-vcl", "name": "UClientes",
                              "project": os.path.join(VDIR, 'HolaVcl.dpr')})
-check('create: form VCL + alta en dpr', out.startswith('CREADO'), out)
+check('create: form VCL + alta en dpr', mc.abre(out, 'SK_CREATE_CREADO_FORM_FMT'), out)
 dpr = open(os.path.join(VDIR, 'HolaVcl.dpr'), 'rb').read().decode('utf-8-sig')
 check('form: registrado en uses y CreateForm',
       "UClientes in 'UClientes.pas'" in dpr and 'TFormUClientes' in dpr, dpr[-300:])
@@ -198,13 +198,13 @@ except Exception:
 # --- new unit in a NEW subfolder of an existing project ---
 out = call('delphi_edit', {"path": os.path.join(VDIR, 'nucleo', 'UUtilidades.pas'),
                            "createunit": True})
-check('createunit: en subcarpeta NUEVA', out.startswith('CREADA')
+check('createunit: en subcarpeta NUEVA', mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT')
       and os.path.exists(os.path.join(VDIR, 'nucleo', 'UUtilidades.pas')), out)
 
 # --- FMX project ---
 FDIR = os.path.join(BASE, 'HolaFmx')
 out = call('delphi_create', {"kind": "project-fmx", "dir": FDIR, "name": "HolaFmx"})
-check('create: proyecto FMX', out.startswith('CREADO'), out)
+check('create: proyecto FMX', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out)
 ok, err = build_ok(os.path.join(FDIR, 'HolaFmx.dproj'))
 check('build: proyecto FMX COMPILA', ok, err)
 
@@ -212,7 +212,7 @@ check('build: proyecto FMX COMPILA', ok, err)
 out = call('delphi_edit', {"path": os.path.join(VDIR, 'Lsp.BuildRunner.pas'),
                            "createunit": True})
 check('createunit: nombre dotted (Lsp.BuildRunner) aceptado',
-      out.startswith('CREADA') and 'Lsp.BuildRunner' in out, out[:150])
+      mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT') and 'Lsp.BuildRunner' in out, out[:150])
 
 # --- M1: whole unit content in ONE call (create-with-content) + eol ---
 uc = ("unit Mi.Unidad.Nueva;\n\ninterface\n\nfunction Saluda: string;\n\n"
@@ -220,7 +220,7 @@ uc = ("unit Mi.Unidad.Nueva;\n\ninterface\n\nfunction Saluda: string;\n\n"
       "  Result := '¡hola gestoría!';\nend;\n\nend.")
 up = os.path.join(VDIR, 'Mi.Unidad.Nueva.pas')
 out = call('delphi_edit', {"path": up, "createunit": True, "content": uc})
-check('createunit: unit COMPLETA en una llamada', out.startswith('CREADA'), out[:200])
+check('createunit: unit COMPLETA en una llamada', mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out[:200])
 raw = open(up, 'rb').read()
 check('createunit content: UTF-8 con BOM y CRLF (sin LF sueltos)',
       raw[:3] == b'\xef\xbb\xbf' and raw.count(b'\n') == raw.count(b'\r\n'),
@@ -237,7 +237,7 @@ bp = os.path.join(VDIR, 'BlankMe.pas')
 call('delphi_edit', {"path": bp, "createunit": True})
 out = call('delphi_edit', {"path": bp, "old": "interface", "new": ""})
 check('edit: new="" blanquea la linea sin AccessViolation',
-      'BLANQUEADA la linea' in out and 'AccessViolation' not in out, out[:150])
+      mc.es(out, 'SK_EDIT_BLANQUEADA_LINEA_FMT') and 'AccessViolation' not in out, out[:150])
 
 # --- scaffold ships a basic .gitignore (remote agent may edit it later) ---
 gi = os.path.join(VDIR, '.gitignore')
@@ -249,7 +249,7 @@ out = call('delphi_edit', {"path": os.path.join(VDIR, 'UMain.pas'),
     "insert": "metodo", "inclass": "TFormMain", "visibility": "public",
     "code": "function Saludar: string;\r\nbegin\r\n  Result := '¡Bienvenida, gestoría!';\r\nend;"})
 check('edit: acentos en fichero utf8-bom SIN falso positivo',
-      'ESCRITO' in out and 'FUERA DE CUADRO' not in out, out[:300])
+      mc.es(out, 'SK_EDIT_ESCRITO_EN_FMT') and not mc.es(out, 'SN_EDIT_ACENTOS_FUERA_CUADRO_FMT'), out[:300])
 body = open(os.path.join(VDIR, 'UMain.pas'), 'rb').read().decode('utf-8-sig')
 check('edit: literal con acentos intacto en disco',
       '¡Bienvenida, gestoría!' in body, body[-200:])
@@ -260,7 +260,7 @@ check('lsp: symbols inicial (didOpen)', 'TFormMain' in out, out[:150])
 out = call('delphi_edit', {"path": os.path.join(VDIR, 'UMain.pas'),
     "insert": "metodo", "inclass": "TFormMain", "visibility": "public",
     "code": "procedure Despedir;\r\nbegin\r\n  Caption := 'adios';\r\nend;"})
-check('lsp: insert posterior al didOpen', 'ESCRITO' in out, out[:200])
+check('lsp: insert posterior al didOpen', mc.es(out, 'SK_EDIT_ESCRITO_EN_FMT'), out[:200])
 out = call('delphi_symbols', {"path": os.path.join(VDIR, 'UMain.pas')}, 300)
 check('lsp: symbols VE el metodo nuevo (buffer refrescado, no rancio)',
       'Despedir' in out, out[:300])

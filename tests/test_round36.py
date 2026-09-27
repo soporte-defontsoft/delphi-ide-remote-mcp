@@ -177,7 +177,7 @@ try:
     check('S6 filter no casa por TIPO (buscaba dentro de la firma)',
           fs['total'] == 0, json.dumps(fs)[:200])
     check('S6b ...y el cero se explica, no se deja a secas',
-          'NOMBRE' in fs.get('note', ''), json.dumps(fs)[:200])
+          mc.es(fs.get('note', ''), 'SN_SYMBOLS_FILTER_NONE'), json.dumps(fs)[:200])
 
     # ------------------------------------------------------------------ S8
     fu = sinaviso(call('delphi_symbols', {'path': PAS, 'mode': 'full'}))
@@ -203,11 +203,13 @@ try:
     r = call('delphi_textedit', {'path': os.path.join(JAIL, 'u', 'x.md'),
                                  'old': 'a\nb', 'new': 'z'})
     check('S10 el rechazo del ancla multilinea manda a edits y a toline',
-          'edits' in r and 'toline' in r and 'una llamada por linea' not in r,
+          mc.es(r, 'SR_PATCH_ANCHOR_MULTILINE') and 'edits' in r and 'toline' in r
+          and 'una llamada por linea' not in r,
           r[:240])
     r2 = call('delphi_edit', {'path': PAS, 'old': 'begin\nend;', 'new': 'x'})
     check('S10b ...y el gemelo Pascal dice lo MISMO',
-          'edits' in r2 and 'toline' in r2, r2[:240])
+          mc.es(r2, 'SR_PATCH_ANCHOR_MULTILINE') and 'edits' in r2
+          and 'toline' in r2, r2[:240])
 finally:
     try:
         proc.kill()

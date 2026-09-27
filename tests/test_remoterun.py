@@ -77,10 +77,10 @@ call_off = srv_off.call
 
 # 1) needs name+exe
 r = call('delphi_paserver', {'command': 'remote-run'})
-check('sin name/exe rechazado', 'RECHAZADO' in r, r[:150])
+check('sin name/exe rechazado', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_RUN_NEEDS'), r[:150])
 # 2) shell metachar refused
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'args': 'a; rm -rf /'})
-check('metacaracter rechazado', 'RECHAZADO' in r and ';' in r, r[:150])
+check('metacaracter rechazado', mc.rechazado(r) and mc.es(r, 'SR_SHELL_META_FMT') and ';' in r, r[:150])
 
 # 3) happy path
 # exe=<nombre simple> de la MISMA carpeta de despliegue (en Linux el binario
@@ -92,13 +92,13 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project'
 j = json.loads(r) if r.startswith('{') else {}
 check('exitCode del programa (7)', j.get('exitCode') == 7, r[:300])
 check('output capturado', 'hola desde el target' in (j.get('output') or ''), r[:300])
-check('note explica el mecanismo', 'PAServer' in (j.get('note') or ''), r[:200])
+check('note explica el mecanismo', mc.es(j.get('note'), 'SN_REMOTERUN_NOTE'), r[:200])
 # v1.0.16: el lanzador cuenta el entorno grafico y el servidor lo traduce. El
 # que corre aqui es el de Windows, que dice en que SESION corre (la 0, de los
 # servicios, no tiene escritorio); y la linea ___ENV= que lo trae nunca llega
 # al output del programa.
 check('graphicalEnv: el resultado dice en que sesion de Windows corrio el programa',
-      'sesion' in (j.get('graphicalEnv') or '').lower(), r[:300])
+      mc.es(j.get('graphicalEnv'), 'SN_REMOTERUN_ENV_WIN_FMT') or mc.es(j.get('graphicalEnv'), 'SN_REMOTERUN_ENV_WIN0'), r[:300])
 check('graphicalEnv: la linea ___ENV= no se cuela en el output', '___ENV' not in (j.get('output') or ''), r[:300])
 # v0.85: two agents firing in the same millisecond used to collide on a
 # timestamp-only jobId; now it carries a GUID fragment
@@ -126,26 +126,26 @@ check('...y las comillas dobles siguen agrupando un argumento con espacios',
 # 4) exe fuera de la scratch -> runnerError
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': '..\\..\\fuera.exe', 'timeoutms': 20000})
 j = json.loads(r) if r.startswith('{') else {}
-check('exe con separadores rechazado por el server', 'RECHAZADO' in r, r[:250])
+check('exe con separadores rechazado por el server', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_RUN_EXENAME'), r[:250])
 # 5) exe inexistente -> runnerError
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'noexiste.exe', 'timeoutms': 20000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
-check('exe inexistente en target', 'no existe' in json.dumps(j), r[:250])
+check('exe inexistente en target', mc.es(json.dumps(j), 'SR_JOB_NO_EXISTE_FMT'), r[:250])
 
 # 5b) un SCRIPT de la misma carpeta de despliegue: rechazado (no es nativo)
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
                              'exe': 'run.py', 'timeoutms': 20000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('script en la carpeta de deploy rechazado (solo binario nativo)',
-      'ejecutable nativo' in json.dumps(j), r[:300])
+      mc.es(json.dumps(j), 'SR_JOB_NO_EJECUTABLE_NATIVO_FMT'), r[:300])
 # 5c) proyecto inexistente
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE,
                              'project': os.path.join(PRJDIR, 'NoHay.dproj')})
-check('proyecto inexistente rechazado', 'RECHAZADO' in r, r[:200])
+check('proyecto inexistente rechazado', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_RUN_NOPROJ_FMT'), r[:200])
 # 5d) proyecto fuera de la jaula
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE,
                              'project': 'C:\\Windows\\x.dproj'})
-check('proyecto fuera de la jaula rechazado', 'RECHAZADO' in r, r[:200])
+check('proyecto fuera de la jaula rechazado', mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:200])
 
 # 6) un programa que NO termina: sigue vivo y devuelve su salida PARCIAL.
 # Es el cambio de fondo al retirar el runner (19-sep-2026): antes se mataba
@@ -165,7 +165,7 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE,
 j = json.loads(r) if r.startswith('{') else {}
 check('no termina: stillRunning en vez de matarlo', j.get('stillRunning') is True, r[:300])
 check('no termina: devuelve la salida PARCIAL', 'arrancando' in (j.get('output') or ''), r[:300])
-check('no termina: lo dice sin hablar de errores', 'SIGUE CORRIENDO' in (j.get('stillRunningNote') or ''), r[:300])
+check('no termina: lo dice sin hablar de errores', mc.es(j.get('stillRunningNote'), 'SN_REMOTERUN_TIMEOUT_FMT'), r[:300])
 # 1.5.0: la salida de un programa que SIGUE vivo se queda en el target, y lo
 # que escriba despues se lee con command=output (antes se borraba al volver:
 # el AV de Galatea tras el login solo se veia en el journal de Zorin).
@@ -173,7 +173,7 @@ job6 = j.get('jobId') or ''
 OUT6 = os.path.join(DEPLOY, job6 + '.out')
 check('no termina: su salida SE QUEDA en el target para leerla despues', os.path.isfile(OUT6), os.listdir(DEPLOY))
 check('no termina: la respuesta dice como leerla (outputNote)',
-      'command=output' in (j.get('outputNote') or '') and job6 in (j.get('outputNote') or ''), r[:500])
+      mc.es(j.get('outputNote'), 'SN_REMOTERUN_OUTPUT_FMT') and 'command=output' in (j.get('outputNote') or '') and job6 in (j.get('outputNote') or ''), r[:500])
 r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=120)
 jo = json.loads(r) if r.startswith('{') else {}
 check('output con el programa vivo: lo que lleva, stillRunning=true, y la salida sigue alli',
@@ -188,10 +188,10 @@ os.remove(ESPERA)
 job6 = j.get('jobId')
 r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
-check("kill: mata el trabajo vivo por su .pid", j.get('killed') is True and 'por .pid' in (j.get('output') or ''), r[:900])
+check("kill: mata el trabajo vivo por su .pid", j.get('killed') is True and mc.es(j.get('output'), 'SK_JOB_TERMINADO_EL_TRABAJO_FMT') and '.pid' in (j.get('output') or ''), r[:900])
 r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
-check('kill: repetido, ya no hay trabajo (killed=false, sin error)', j.get('killed') is False and 'ya termino' in (j.get('output') or ''), r[:300])
+check('kill: repetido, ya no hay trabajo (killed=false, sin error)', j.get('killed') is False and mc.es(j.get('output'), 'SN_JOB_NINGUN_TRABAJO_VIVO_FMT'), r[:300])
 # el vigia remata la salida del matado con su ___RC: output la lee entera y la borra
 dl = time.time() + 20
 while True:
@@ -205,11 +205,11 @@ check('output tras kill: terminado, con su codigo y lo que escribio',
 check('output leido entero: la salida se BORRA del target (como el buzon)', not os.path.exists(OUT6), os.listdir(DEPLOY))
 r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=120)
 jo = json.loads(r) if r.startswith('{') else {}
-check('output otra vez: ya no hay nada, y lo dice', jo.get('success') is False and 'No hay salida' in (jo.get('error') or ''), r[:300])
+check('output otra vez: ya no hay nada, y lo dice', jo.get('success') is False and mc.es(jo.get('error'), 'SR_REMOTERUN_NO_OUTPUT_FMT'), r[:300])
 r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': '..\\x'})
-check('output: un job que no es un id de este servidor se rechaza', 'RECHAZADO' in r, r[:200])
+check('output: un job que no es un id de este servidor se rechaza', mc.rechazado(mc.como_json(r).get('error', '')) and mc.es(r, 'SR_REMOTERUN_BADJOB'), r[:200])
 r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ})
-check('output sin job: RECHAZADO, y dice que le falta', 'RECHAZADO' in r and 'output necesita' in r, r[:200])
+check('output sin job: RECHAZADO, y dice que le falta', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_JOB_NEEDS_FMT') and 'output' in r, r[:200])
 
 # 6c) EL caso: un programa que escribe DESPUES de que vuelva su remote-run y
 # termina con un codigo. Antes eso se escribia en un fichero ya borrado.
@@ -248,12 +248,12 @@ if os.path.isfile(pidf):
     os.remove(pidf)   # lo que hace un deploy fallido antes de rendirse
 r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6b}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
-check('kill sin .pid: lo mata por el nombre del vigia', j.get('killed') is True and 'nombre del vigia' in (j.get('output') or ''), r[:300])
+check('kill sin .pid: lo mata por el nombre del vigia', j.get('killed') is True and mc.es(j.get('output'), 'SK_JOB_TERMINADO_EL_TRABAJO_FMT') and 'nombre del vigia' in (j.get('output') or ''), r[:300])
 check('kill sin .pid: el proceso ha muerto de verdad', not any(f.endswith('.pid') for f in os.listdir(DEPLOY)), os.listdir(DEPLOY))
 
 # 7) sin AllowRemoteRun: remote-run RECHAZADO, install-runner permitido
 r = call_off('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ})
-check('sin AllowRemoteRun: remote-run rechazado', 'RECHAZADO' in r and 'AllowRemoteRun' in r, r[:250])
+check('sin AllowRemoteRun: remote-run rechazado', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_RUN_DISABLED') and 'AllowRemoteRun' in r, r[:250])
 r = call_off('delphi_paserver', {'command': 'platforms'})
 check('sin AllowRemoteRun: el resto del tool intacto', 'platforms' in r, r[:150])
 srv_off.mata()
@@ -267,9 +267,9 @@ env_wl = dict(env); env_wl['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'OtroProyecto'
 srv_wl = mc.Stdio(EXE, env_wl, nombre='wl')
 call_wl = srv_wl.call
 r = call_wl('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ})
-check('proyecto fuera de RemoteRunProjects rechazado', 'RECHAZADO' in r and 'RemoteRunProjects' in r, r[:250])
+check('proyecto fuera de RemoteRunProjects rechazado', mc.rechazado(r) and mc.es(r, 'SR_REMOTERUN_PROJECT_DENIED_FMT') and 'RemoteRunProjects' in r, r[:250])
 r = call_wl('delphi_workspace', {})
-check('LibraryZone=1 por defecto: zona anunciada', 'readableExtra' in r and 'RTL' in r, r[:200])
+check('LibraryZone=1 por defecto: zona anunciada', 'readableExtra' in r and mc.es(r, 'SN_WS_READONLY_TERRITORY'), r[:200])
 srv_wl.mata()
 
 # 9) LibraryZone=0: la lectura se limita a los roots
@@ -278,11 +278,11 @@ srv_lz = mc.Stdio(EXE, env_lz, nombre='lz')
 call_lz = srv_lz.call
 RTL = r'C:\Program Files (x86)\Embarcadero\Studio\37.0\source\rtl\sys\System.SysUtils.pas'
 r = call_lz('delphi_read', {'path': RTL, 'fromline': 1, 'toline': 2})
-check('LibraryZone=0: la RTL deja de ser legible', 'RECHAZADO' in r, r[:200])
+check('LibraryZone=0: la RTL deja de ser legible', mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:200])
 r = call_lz('delphi_workspace', {})
-check('LibraryZone=0: se anuncia apagada y sin carpetas', 'APAGADA' in r and '"readableExtra":[]' in r.replace(' ', ''), r[:300])
+check('LibraryZone=0: se anuncia apagada y sin carpetas', mc.es(r, 'SN_WORKSPACE_LIBZONE_OFF') and '"readableExtra":[]' in r.replace(' ', ''), r[:300])
 r = call_lz('delphi_read', {'path': SCRIPT, 'fromline': 1, 'toline': 1})
-check('LibraryZone=0: el root sigue legible', 'RECHAZADO' not in r, r[:200])
+check('LibraryZone=0: el root sigue legible', not mc.rechazado(r), r[:200])
 srv_lz.mata()
 
 srv.mata()

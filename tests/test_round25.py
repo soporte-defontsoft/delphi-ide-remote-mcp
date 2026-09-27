@@ -68,7 +68,7 @@ try:
     # unica via de ejecucion es remote-run): tool desconocida
     r = call('runner-25', s_run, 'delphi_run', {'path': ghost})
     check('C1 delphi_run retirada: tool desconocida para todo token',
-          'Tool not found' in r, r[:200])
+          mc.es(r, 'SR_SYS_TOOL_NOT_FOUND_FMT'), r[:200])
 
 
     # C3: declarar AllowTests=0 y no declararlo dan lo mismo (apagado), y
@@ -77,11 +77,11 @@ try:
     r = call('notest-25', s_nt, 'delphi_test',
              {'command': 'run', 'project': os.path.join(JAIL, 'X.dproj')})
     check('C3 AllowTests=0 declarado: tests rechazados',
-          'AllowTests' in r or 'deshabilitad' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_TEST_DISABLED'), r[:200])
     r = call('op-25', s_op, 'delphi_test',
              {'command': 'run', 'project': os.path.join(JAIL, 'X.dproj')})
     check('C3b Operador no declara tests: rechazados tambien (nada se hereda)',
-          'AllowTests' in r or 'deshabilitad' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_TEST_DISABLED'), r[:200])
     # El proyecto va en la carpeta DEL AGENTE: el Runner esta confinado (C4) y
     # con X.dproj en la raiz lo paraba el CONFINAMIENTO - el check pasaba
     # porque ese rechazo no nombra AllowTests, no porque el gate de tests
@@ -89,14 +89,14 @@ try:
     r = call('runner-25', s_run, 'delphi_test',
              {'command': 'run', 'project': os.path.join(JAIL, 'agente', 'X.dproj')})
     check('C3c Runner declara AllowTests=1: los tests pasan el gate',
-          'AllowTests' not in r and 'deshabilitad' not in r and 'confinado' not in r
-          and 'no existe' in r and 'X.dproj' in r, r[:200])
+          not mc.es(r, 'SR_TEST_DISABLED') and not mc.es(r, 'SR_AGENT_CONFINED_FMT')
+          and mc.es(r, 'SR_TEST_NOPATH_FMT') and 'X.dproj' in r, r[:200])
 
     # C4: confinement only inside the workspace
     r = call('runner-25', s_run, 'delphi_textedit',
              {'path': os.path.join(JAIL, 'suelto.txt'), 'create': True, 'content': 'x'})
     check('C4 confinamiento del workspace: su agente NO escribe suelto en la raiz',
-          'RECHAZADO' in r and 'confinado' in r and
+          mc.rechazado(r) and mc.es(r, 'SR_AGENT_CONFINED_FMT') and
           not os.path.exists(os.path.join(JAIL, 'suelto.txt')), r[:200])
     r = call('runner-25', s_run, 'delphi_textedit',
              {'path': os.path.join(JAIL, 'agente', 'mio.txt'), 'create': True, 'content': 'x'})

@@ -14,6 +14,10 @@ delphi_components. David: "Arreglarlos".
   E6  y un exito sigue siendo exito (delphi_styles view de un .style bueno)
   E7  un puerto ocupado dice CUAL y que hacer (issue #5: Indy solo decia
       "Could not bind socket." y el operador de la bandeja no sabia mas)
+  E8  delphi_read devuelve el fichero TAL CUAL aunque traiga etiquetas con
+      resultado: una linea con [CFG-001 DENIED] hacia que la lectura se
+      tomara por una negativa y se enmascarara el contenido ('%s:' salia
+      '%srv0:', medido 27-sep leyendo Lsp.Texts)
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
 """
@@ -35,6 +39,10 @@ open(ESTILO, 'w').write('object TStyleContainer\n'
                         '    StyleName = \'boton\'\n'
                         '  end\n'
                         'end\n')
+ECO = os.path.join(JAIL, 'eco.txt')
+open(ECO, 'w').write('uno [CFG-001 DENIED]\n'
+                     "  '%s (%s) lineas %d-%d de %s:'#10 +\n"
+                     'Roots=D:\\Projects\\Galatea\n')
 DPROJ = os.path.join(JAIL, 'App.dproj')
 open(DPROJ, 'w').write('<?xml version="1.0" encoding="utf-8"?>\n'
                        '<Project><PropertyGroup><MainSource>App.dpr</MainSource>'
@@ -80,6 +88,10 @@ try:
     res = (r or {}).get('result', {})
     check('E6 y un exito sigue siendo exito', not res.get('isError') and
           res.get('structuredContent', {}).get('ok') is not False, mc.texto(r, True)[:200])
+
+    t = mc.texto(cli.call_msg('delphi_read', {'path': ECO}), True)
+    check('E8 delphi_read devuelve el contenido tal cual aunque cite etiquetas con resultado',
+          "de %s:'#10" in t and 'Roots=D:\\Projects\\Galatea' in t and 'srv0' not in t, t[-300:])
 
     # un segundo servidor al MISMO puerto que el que ya escucha
     b = subprocess.run([EXE, '--http', str(PORT)], cwd=EXEDIR, capture_output=True, timeout=60,

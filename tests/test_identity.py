@@ -66,10 +66,10 @@ try:
     # I3
     r = cli.call('delphi_delete', {'path': ca[0], 'purge': True}, sid=bob)
     check('I3 otro agente NO puede purgar tu copia',
-          'RECHAZADO' in r and 'alice' in r and os.path.exists(ca[0]), r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and 'alice' in r and os.path.exists(ca[0]), r[:200])
     r = cli.call('delphi_delete', {'path': ca[0], 'purge': True}, sid=alice)
     check('I3 pero tu SI purgas la tuya',
-          'PURGADO' in r and not os.path.exists(ca[0]), r[:150])
+          mc.abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(ca[0]), r[:150])
 
     # I4 - a session with no name is trusted with anyone's trash
     cli.call('delphi_delete', {'path': os.path.join(BASE, 'b.txt')}, sid=bob)
@@ -78,7 +78,7 @@ try:
     assert anon and anon not in (alice, bob), anon
     r = cli.call('delphi_delete', {'path': cb[0], 'purge': True}, sid=anon)
     check('I4 una sesion sin nombre (operador) purga cualquier copia',
-          'PURGADO' in r and not os.path.exists(cb[0]), r[:150])
+          mc.abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(cb[0]), r[:150])
 finally:
     proc.kill()
 

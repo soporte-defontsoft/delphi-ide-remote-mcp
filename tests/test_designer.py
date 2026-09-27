@@ -77,7 +77,7 @@ check('info con filter acota', j.get('total', 99) <= 3 and any(p['name'] == 'Cap
 r = call('delphi_designer', {'command': 'info', 'class': 'TClaseInventada', 'framework': 'vcl'})
 # el rechazo CONCRETO de la tabla de clases, no uno cualquiera
 check('info clase desconocida rechazada',
-      r.startswith('RECHAZADO') and '"TClaseInventada" no esta en la tabla VCL' in r, r[:150])
+      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_CLASS_FMT') and '"TClaseInventada"' in r and 'VCL' in r, r[:150])
 j = J(call('delphi_designer', {'command': 'info', 'class': 'TLayout', 'framework': 'fmx'}))
 check('info FMX (TLayout)', j.get('class') == 'TLayout' and j.get('framework') == 'FMX', str(j)[:150])
 
@@ -85,7 +85,8 @@ check('info FMX (TLayout)', j.get('class') == 'TLayout' and j.get('framework') =
 j = J(call('delphi_designer', {'command': 'prop', 'class': 'TPanel', 'prop': 'Align', 'framework': 'vcl'}))
 check('prop TPanel.Align: enum con miembros', j.get('kind') == 'enum' and 'alTop' in (j.get('members') or ''), str(j)[:250])
 r = call('delphi_designer', {'command': 'prop', 'class': 'TPanel', 'prop': 'NoExiste', 'framework': 'vcl'})
-check('prop inexistente rechazada con pista', 'RECHAZADO' in r and 'info' in r, r[:200])
+check('prop inexistente rechazada con pista',
+      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_PROP_FMT') and 'info' in r, r[:200])
 
 # ---- tree ----
 j = J(call('delphi_designer', {'command': 'tree', 'path': DFM}))
@@ -102,44 +103,46 @@ check('get: bloque del componente', 'BotonUno (TButton)' in r and "Caption = 'Un
 r = call('delphi_designer', {'command': 'get', 'path': DFM, 'component': 'NoEsta'})
 # el form SI se leyo y el componente no esta en el (no un fichero ilegible)
 check('get: componente inexistente',
-      r.startswith('RECHAZADO') and 'ningun componente "NoEsta" en ese form' in r, r[:150])
+      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_COMPONENT_FMT') and '"NoEsta"' in r, r[:150])
 
 # ---- lint ----
 r = call('delphi_designer', {'command': 'lint', 'path': DFM})
-check('lint limpio en el form bueno', 'LINT LIMPIO' in r, r[:200])
+check('lint limpio en el form bueno', mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:200])
 r = call('delphi_designer', {'command': 'lint', 'path': BAD})
 # una clase DESCONOCIDA no es aviso: los componentes de terceros no estan en
 # las tablas y son legitimos; sus propiedades simplemente no se comprueban
 # los negativos del lint exigen que el lint HAYA CORRIDO sobre ese fichero
 # (su cabecera de avisos): un timeout o un error tampoco nombran clRed
 check('lint NO inventa avisos dentro de la clase desconocida',
-      'avisos del designer en Roto.dfm' in r and 'clRed' not in r and 'Color' not in r, r[:400])
+      mc.abre(r, 'SN_DESIGNER_LINT_BAD_FMT') and 'Roto.dfm' in r and 'clRed' not in r and 'Color' not in r, r[:400])
 check('lint pilla la propiedad no publicada', 'Alineacion' in r, r[:400])
 check('lint pilla el valor de enum inexistente', 'alMarte' in r, r[:400])
 # field report 2026-08-24: Left/Top on non-visual components are the form
 # designer's own placement - the IDE writes them in every form with a
 # TImageList/TPopupMenu and no class publishes them: pure noise
 check('lint NO avisa de Left/Top de componentes no visuales',
-      'avisos del designer en Roto.dfm' in r and '"Left"' not in r and '"Top"' not in r, r[:400])
+      mc.abre(r, 'SN_DESIGNER_LINT_BAD_FMT') and 'Roto.dfm' in r and '"Left"' not in r and '"Top"' not in r, r[:400])
 
 # ---- doctrina ----
 r = call('delphi_designer', {'command': 'tree', 'path': BIN})
-check('designer binario (TPF0) rechazado', 'RECHAZADO' in r and 'BINARIO' in r, r[:200])
+check('designer binario (TPF0) rechazado',
+      mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'BINARIO' in r, r[:200])
 for cmd in ('tree', 'get', 'lint', 'check-binding'):
     args = {'command': cmd, 'path': RESBIN}
     if cmd == 'get':
         args['component'] = 'X'
     r = call('delphi_designer', args)
     check('binario envuelto en recurso ($FF) rechazado por ' + cmd,
-          'RECHAZADO' in r and 'BINARIO' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'BINARIO' in r, r[:200])
 r = call('delphi_designer', {'command': 'tree', 'path': os.path.join(BASE, 'nx.dfm')})
-check('fichero inexistente', 'no existe' in r and 'nx.dfm' in r, r[:150])
+check('fichero inexistente',
+      mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_NO_EXISTE_FMT') and 'nx.dfm' in r, r[:150])
 r = call('delphi_designer', {'command': 'tree', 'path': 'C:\\Windows\\win.ini'})
 # la puerta que para esta ruta es la JAULA (win.ini esta fuera de las raices)
 check('fuera de jaula / no designer rechazado',
-      r.startswith('RECHAZADO') and 'FUERA de los workspaces' in r, r[:150])
+      mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:150])
 r = call('delphi_designer', {'command': 'volar'})
-check('comando invalido', 'command debe ser' in r and not r.startswith('MCPERROR'), r[:120])
+check('comando invalido', mc.es(r, 'SR_DESIGNER_CMD') and not r.startswith('MCPERROR'), r[:120])
 
 # ---- eventos por nombre contra el .pas pareja, en lint, al ESCRIBIR y en insert=metodo ----
 # hermes 25-sep-2026: OnClick = btnHelpClick con el handler en public (insert=metodo
@@ -202,21 +205,21 @@ r = call('delphi_designer', {'command': 'lint', 'path': EV})
 check('lint: el handler en private se avisa (el cargador solo ve published)', 'btnHelpClick' in r and 'NO esta en published' in r, r[:600])
 check('lint: el handler inexistente se avisa', 'btnNadaClick' in r and 'no esta declarado' in r, r[:600])
 check('lint: el handler published NO se avisa',
-      'avisos del designer en UEv.dfm' in r and 'btnOkClick' not in r, r[:600])
+      mc.abre(r, 'SN_DESIGNER_LINT_BAD_FMT') and 'UEv.dfm' in r and 'btnOkClick' not in r, r[:600])
 r = call('delphi_edit', {'path': EV, 'old': "    Caption = '?'", 'new': "    Caption = 'Ayuda'"})
-check('ESCRIBIR el designer avisa al momento del evento no resoluble', r.startswith('ESCRITO') and 'btnHelpClick' in r and 'NO cuadra con su clase' in r, r[:700])
+check('ESCRIBIR el designer avisa al momento del evento no resoluble', mc.abre(r, 'SK_EDIT_ESCRITO_EN_FMT') and 'btnHelpClick' in r and mc.es(r, 'SN_DESIGNER_BINDING_LINT_HEADER'), r[:700])
 r = call('delphi_edit', {'path': EVP, 'insert': 'metodo', 'inclass': 'TFormEv', 'code': 'procedure btnNadaClick(Sender: TObject);\nbegin\nend;'})
 src = open(EVP, encoding='utf-8').read()
-check('insert=metodo sin visibility + evento cableado en el designer -> published, y lo dice', 'published elegida por la tool' in r and src.index('procedure btnNadaClick') < src.index('  private'), r[:500])
+check('insert=metodo sin visibility + evento cableado en el designer -> published, y lo dice', mc.es(r, 'SN_PATCH_INSERT_PUBLISHED_BY_EVENT_FMT') and src.index('procedure btnNadaClick') < src.index('  private'), r[:500])
 r = call('delphi_designer', {'command': 'lint', 'path': EV})
 check('tras el insert, el lint ya no avisa de btnNadaClick (y sigue avisando de btnHelpClick)', 'btnNadaClick' not in r and 'btnHelpClick' in r, r[:500])
 r = call('delphi_designer', {'command': 'lint', 'path': DFM})
-check('lint de un designer SIN .pas pareja sigue limpio (no hay contra que comparar)', 'LINT LIMPIO' in r, r[:200])
+check('lint de un designer SIN .pas pareja sigue limpio (no hay contra que comparar)', mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:200])
 
 r = call('delphi_designer', {'command': 'totext', 'path': BIN})
 # aceptado = llego al conversor (el BIN de prueba esta danado: lo dice el)
 check('to-text sin guion (totext) se acepta como alias: no es "comando invalido"',
-      'command debe ser' not in r and 'convertirlo a texto' in r, r[:200])
+      not mc.es(r, 'SR_DESIGNER_CMD') and 'convertirlo a texto' in r, r[:200])
 
 srv.mata()
 mc.fin('designer battery')

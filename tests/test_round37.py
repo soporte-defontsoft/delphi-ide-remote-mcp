@@ -69,7 +69,7 @@ try:
           os.path.exists(pas) and os.path.exists(dfm))
 
     borrado = call('delphi_delete', {'path': pas})
-    check('setup: borrado a la papelera', 'papelera' in borrado.lower() and
+    check('setup: borrado a la papelera', mc.abre(borrado, 'SK_FILE_BORRADO_PAPELERA_FMT') and
           not os.path.exists(pas) and not os.path.exists(dfm), borrado[:200])
 
     # ------------------------------------------------------------------ T1
@@ -111,7 +111,7 @@ try:
     check('T3 la unit vuelve', os.path.exists(pas), rest[:200])
     check('T3b y su .dfm vuelve CON ella', os.path.exists(dfm), rest[:260])
     check('T4 ...y la respuesta lo dice',
-          'dfm' in rest.lower(), rest[:260])
+          mc.es(rest, 'SN_FILE_DESIGNER_TOO_FMT'), rest[:260])
 
     # ------------------------------------------------------------------ T5
     anidada = []
@@ -149,7 +149,7 @@ try:
                          'new': 'implementation' + chr(10) + chr(10) +
                                 '// linea que se perdera al restaurar'})
     r = call('delphi_edit', {'path': umain, 'restore': True, 'confirm': True})
-    check('T8 setup: restaurado', 'RESTAURADO' in r, r[:200])
+    check('T8 setup: restaurado', mc.abre(r, 'SK_EDIT_RESTAURADO_DESDE_FMT'), r[:200])
     previas = []
     for r_, d_, f_ in os.walk(os.path.join(PROY, '__delphi-patch')):
         for x in f_:

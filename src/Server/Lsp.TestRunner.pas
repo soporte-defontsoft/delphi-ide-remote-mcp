@@ -305,7 +305,7 @@ begin
   // workspaces", which is true of any relative name and explains nothing
   // (field round 12).
   if (AProject.Trim <> '') and not TPath.IsPathRooted(AProject.Trim) and
-     not AProject.Contains('') and not AProject.Contains('/') then
+     not AProject.Contains('\') and not AProject.Contains('/') then
   begin
     Result.AddPair('error', MsgFmt(SR_TEST_NAME_NOT_PATH_FMT, [AProject.Trim]));
     Exit;

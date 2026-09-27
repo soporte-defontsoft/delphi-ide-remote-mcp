@@ -23,22 +23,28 @@ call = srv.call
 
 # --- delphi_components platform=X -------------------------------------------
 r = call('delphi_components', {'platform': 'Linux64'})
-check('platform view header', 'Library Search Path del IDE para Linux64' in r, r)
-check('platform view lists folders', 'carpetas registradas' in r and 'srvc:' in r, r)
+check('platform view header', mc.abre(r, 'SN_COMPONENTS_PLATFORM_HEAD_FMT')
+      and 'Linux64' in r.split('\n')[0], r)
+check('platform view lists folders',
+      mc.es(r, 'SN_COMPONENTS_PLATFORM_HEAD_FMT') and 'srvc:' in r, r)
 check('platform view names candidates or completeness',
-      'registrados en otras plataformas' in r or 'lo estan tambien en Linux64' in r, r)
+      mc.es(r, 'SN_COMPONENTS_PLATFORM_MISSING_FMT')
+      or mc.es(r, 'SN_COMPONENTS_PLATFORM_COMPLETE_FMT'), r)
 check('platform view never shows the IDE own documents tree as a candidate',
       '\\Studio\\37.0   (registrado' not in r, r)
 r = call('delphi_components', {'platform': 'Marte'})
-check('unknown platform refused with the list', 'no reconocida' in r and 'Linux64' in r, r)
+check('unknown platform refused with the list',
+      mc.es(r, 'SR_COMPONENTS_PLATFORM_FMT') and 'Linux64' in r, r)
 r = call('delphi_components', {'platform': 'win64'})
-check('platform is canonicalized (win64 -> Win64)', 'para Win64 ' in r, r)
+check('platform is canonicalized (win64 -> Win64)',
+      mc.abre(r, 'SN_COMPONENTS_PLATFORM_HEAD_FMT') and ' Win64 ' in r.split('\n')[0], r)
 r = call('delphi_components', {})
-check('no platform = packages list as before', 'design packages' in r, r)
+check('no platform = packages list as before',
+      mc.abre(r, 'SN_COMPONENTS_DESIGN_PACKAGES_FMT'), r)
 
 # --- delphi_build: missingUnits ----------------------------------------------
 r = call('delphi_create', {'kind': 'project-console', 'name': 'MissU', 'dir': BASE})
-check('project created', 'CREADO' in r, r)
+check('project created', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r)
 dprs = glob.glob(os.path.join(BASE, '**', 'MissU.dpr'), recursive=True)
 check('dpr on disk', bool(dprs))
 dpr = dprs[0]
@@ -67,7 +73,8 @@ check('note explains add-searchpath', 'add-searchpath' in (j.get('missingUnitsNo
 folder = tg.get('sourceFolders', [''])[0]
 if folder:
     r = call('delphi_config', {'command': 'add-searchpath', 'project': dproj, 'platform': 'Linux64', 'path': folder})
-    check('add-searchpath accepted', 'RECHAZADO' not in r and 'error' not in r.lower()[:20], r)
+    check('add-searchpath accepted',
+          not mc.fallo(r) and mc.abre(r, 'SN_CONFIG_PATH_ADDED_FMT'), r)
     r = call('delphi_build', {'project': dproj, 'platform': 'Linux64', 'config': 'Debug'})
     try: j = json.loads(r)
     except Exception: j = {}

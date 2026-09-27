@@ -60,15 +60,15 @@ A = spawn()
 r = A.call('delphi_paserver', {'command': 'test-connection', 'host': '198.51.100.9',
                                 'port': '3131'}, t=120)
 check('R1 sondear un host a mano: RECHAZADO (era el mismo SSRF que git)',
-      'RECHAZADO' in r and 'RemoteHosts' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_PASERVER_HOST_DENIED_FMT') and 'RemoteHosts' in r, r[:250])
 r = A.call('delphi_paserver', {'command': 'test-connection', 'host': 'example.com',
                                 'port': '80'}, t=120)
-check('R1 ...y a Internet tambien', 'RECHAZADO' in r, r[:200])
+check('R1 ...y a Internet tambien', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_HOST_DENIED_FMT'), r[:200])
 B = spawn({'DELPHI_MCP_REMOTE_HOSTS': '198.51.100.9'})
 r = B.call('delphi_paserver', {'command': 'test-connection', 'host': '198.51.100.9',
                                 'port': '59999'}, t=120)
 check('R1 el host que el operador permite SI se sondea',
-      'RECHAZADO' not in r and 'tcpReachable' in r, r[:200])
+      not mc.es(r, 'SR_PASERVER_HOST_DENIED_FMT') and 'tcpReachable' in r, r[:200])
 B.mata()
 
 # -------------------------------------------------------------- R3: commit --
@@ -84,7 +84,7 @@ A.call('delphi_changeset', {'command': 'preview', 'id': CID})
 A.call('delphi_textedit', {'path': N, 'old': 'tres', 'new': 'TRES'})
 r = A.call('delphi_changeset', {'command': 'commit', 'id': CID})
 check('R3 fichero cambiado tras el preview: RECHAZADO, sin Access Violation',
-      'FILE_CHANGED' in r and 'Access violation' not in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_FILE_CHANGED_FMT') and 'Access violation' not in r, r[:250])
 check('R3 ...y el fichero sigue como lo dejo el de fuera',
       open(N, encoding='utf-8').read().count('TRES') == 1, open(N, encoding='utf-8').read())
 A.call('delphi_changeset', {'command': 'rollback', 'id': CID})
@@ -92,16 +92,16 @@ A.call('delphi_changeset', {'command': 'rollback', 'id': CID})
 # --------------------------------------------------------------- B2: RTL ----
 PRJ = os.path.join(BASE, 'App')
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'App', 'dir': PRJ})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 DPROJ = os.path.join(PRJ, 'App.dproj')
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'System.SysUtils', 'project': DPROJ})
 check('B2 un nombre CUALIFICADO de la RTL: RECHAZADO',
-      'RECHAZADO' in r and not os.path.exists(os.path.join(PRJ, 'System.SysUtils.pas')),
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_RTLNS_FMT') and not os.path.exists(os.path.join(PRJ, 'System.SysUtils.pas')),
       r[:250])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'Vcl.Forms', 'project': DPROJ})
-check('B2 ...y cualquier otro espacio de Embarcadero', 'RECHAZADO' in r, r[:200])
+check('B2 ...y cualquier otro espacio de Embarcadero', mc.rechazado(r) and mc.es(r, 'SR_CREATE_RTLNS_FMT'), r[:200])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'MiEmpresa.Datos', 'project': DPROJ})
-check('B2 un espacio de nombres PROPIO sigue valiendo', r.startswith('CREADA'), r[:200])
+check('B2 un espacio de nombres PROPIO sigue valiendo', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT'), r[:200])
 r = A.call('delphi_create', {'kind': 'project-web', 'name': 'X', 'dir': os.path.join(BASE, 'X')})
 check('B4 un kind de proyecto inventado nombra los que existen',
       'project-console' in r and 'project-vcl' in r, r[:250])
@@ -112,7 +112,7 @@ os.makedirs(os.path.join(D, 'sub'))
 open(os.path.join(D, 'sub', 'a.txt'), 'w').write('a')
 r = A.call('delphi_delete', {'path': D})
 check('B3 borrado de carpeta: o BORRADO de verdad, o dice exactamente que queda',
-      ('BORRADO' in r and not os.path.isdir(D)) or ('CASI' in r or 'A MEDIAS' in r),
+      (mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.isdir(D)) or (mc.es(r, 'SN_FILE_DELETE_EMPTY_SHELL_FMT') or mc.es(r, 'SR_FILE_DELETE_PARTIAL_FMT')),
       (r[:200], os.path.isdir(D)))
 if os.path.isdir(D):
     import glob
@@ -134,13 +134,13 @@ for tool in ('delphi_symbols',):
     # repite" - con un fichero que falta como ejemplo literal. Lo que esta
     # linea vigila de verdad (que no salga como fallo interno) no cambia.
     check('B5 %s con un fichero que no esta: "error:", no fallo interno' % tool,
-          r.startswith('error:') and not r.startswith('Error executing'),
+          mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_LSP_NO_FILE_FMT'),
           r[:200])
 r = A.call('delphi_hover', {'path': GHOST, 'line': 0, 'character': 0})
-check('B5 hover igual', not r.startswith('Error executing tool'), r[:200])
+check('B5 hover igual', mc.resultado(r) != 'INTERNAL', r[:200])
 r = A.call('delphi_config', {'project': DPROJ, 'command': 'remove-unit', 'name': 'X'})
 check('B5 un parametro que no existe es "error:", no "Error executing tool:"',
-      r.startswith('error:') and 'Unknown parameter' in r, r[:200])
+      mc.resultado(r) == 'INVALID_PARAM' and 'Unknown parameter' in r, r[:200])
 
 # ------------------------------------------------------------- B6/D3/D5 ----
 DELTA = os.path.join(CS, 'Delta.txt')
@@ -183,7 +183,7 @@ check('P1b sin pattern se dice que solo salen ficheros Delphi',
 # --------------------------------------------------------------- P2/P3/P4 --
 T = os.path.join(BASE, 'MiTest')
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'MiTest', 'dir': T})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 open(os.path.join(T, 'MiTest.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
     "program MiTest;\n\n{$APPTYPE CONSOLE}\n\nuses\n  System.SysUtils;\n\nbegin\n"
     "  Writeln('PASS uno');\n"
@@ -201,11 +201,11 @@ check('P2 el senuelo entre corchetes NO cuenta pero SE DECLARA',
       j.get('linesNotCounted', 0) >= 1, str(j)[:350])
 r = A.call('delphi_test', {'command': 'run', 'project': os.path.join(T, 'MiTest.dproj'),
                             'platform': 'Marte'}, t=300)
-check('P8 una plataforma inventada: RECHAZADA', 'RECHAZADO' in r, r[:200])
+check('P8 una plataforma inventada: RECHAZADA', mc.rechazado(J(r).get('error', '')) and mc.es(r, 'SR_TEST_PLATFORM_UNKNOWN_FMT'), r[:200])
 r = A.call('delphi_test', {'command': 'run', 'project': os.path.join(T, 'MiTest.dproj'),
                             'config': 'Release', 'nobuild': True}, t=300)
 check('P4 nobuild sin binario no dice que compilo',
-      'despues de compilar' not in r, r[:250])
+      not mc.es(r, 'SR_TEST_NOBINARY'), r[:250])
 
 # ------------------------------------------------------------------ P6/P7 --
 _r = A.call('delphi_changeset', {'command': 'begin'})
@@ -217,9 +217,9 @@ TXT = os.path.join(BASE, 'Nota2.txt')
 open(TXT, 'w', encoding='utf-8').write('esto no es pascal\n')
 r = A.call('delphi_hover', {'path': TXT, 'line': 0, 'character': 1})
 check('P7 hover sobre algo que no es Delphi lo dice',
-      'RECHAZADO' in r and 'Delphi' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_LSP_NOT_SOURCE_FMT'), r[:200])
 r = A.call('delphi_definition', {'path': TXT, 'line': 0, 'character': 1})
-check('P7 definition igual', 'RECHAZADO' in r and 'Delphi' in r, r[:200])
+check('P7 definition igual', mc.rechazado(r) and mc.es(r, 'SR_LSP_NOT_SOURCE_FMT'), r[:200])
 
 # ------------------------------------------------------------------- D1 ----
 UPAS = os.path.join(PRJ, 'UCalc.pas')
@@ -249,17 +249,17 @@ check('D1 ...y la columna, para dos apariciones en una misma linea',
 r = A.call('delphi_git', {'repo': os.path.join(BASE, 'clon6'), 'command': 'clone',
                            'message': 'http://[::1]:3131/mcp'})
 check('F5 una URL IPv6 se lee como host, no como "["',
-      'RECHAZADO' in r and '::1' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_OFF_FMT') and '::1' in r, r[:250])
 check('F5b un clone rechazado no deja la carpeta destino',
       not os.path.isdir(os.path.join(BASE, 'clon6')), os.path.isdir(os.path.join(BASE, 'clon6')))
 r = A.call('delphi_help', {'command': 'tool', 'name': 'delphi_edt'})
 check('help aguanta una errata de una letra',
-      'delphi_edit' in r and ('he entendido' in r or '"tool"' in r), r[:250])
+      'delphi_edit' in r and (mc.es(r, 'SN_HELP_ASSUMED_FMT') or '"tool"' in r), r[:250])
 r = A.call('delphi_upload', {'path': os.path.join(BASE, 'x.bin'),
                               'chunkbase64': base64.b64encode(b'abc').decode(),
                               'sha256': 'no-es-un-hash'})
 check('un sha256 mal escrito rechaza el PARAMETRO, no castiga al fichero',
-      'RECHAZADO' in r and not os.path.exists(os.path.join(BASE, 'x.bin.corrupto')), r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_BAD_SHA_FMT') and not os.path.exists(os.path.join(BASE, 'x.bin.corrupto')), r[:250])
 j = J(A.call('delphi_projects', {'name': 'no-hay-nada-asi'}))
 check('projects sin coincidencias dice cuantos hay', 'note' in j, str(j)[:200])
 

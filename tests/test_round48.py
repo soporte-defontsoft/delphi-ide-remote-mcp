@@ -98,12 +98,12 @@ def prepara():
     mc.borra(BASE); os.makedirs(os.path.join(BASE, 'jaula'))
     s = Srv(NUEVO, 'setup', [('setup', os.path.join(BASE, 'jaula'))])
     try:
-        c1 = (s.call('setup', 'delphi_create', {'kind': 'project-console', 'name': 'P', 'dir': PROY})[:160])
+        c1 = s.call('setup', 'delphi_create', {'kind': 'project-console', 'name': 'P', 'dir': PROY})
         dpr = os.path.join(PROY, 'P.dpr')
-        c2 = (s.call('setup', 'delphi_create', {'kind': 'unit', 'name': 'Base', 'project': dpr, 'content': BASEPAS.replace('\n', '\r\n')})[:160])
-        c3 = (s.call('setup', 'delphi_create', {'kind': 'unit', 'name': 'Hoja', 'project': dpr, 'dir': 'sub', 'content': HOJA.replace('\n', '\r\n')})[:160])
+        c2 = s.call('setup', 'delphi_create', {'kind': 'unit', 'name': 'Base', 'project': dpr, 'content': BASEPAS.replace('\n', '\r\n')})
+        c3 = s.call('setup', 'delphi_create', {'kind': 'unit', 'name': 'Hoja', 'project': dpr, 'dir': 'sub', 'content': HOJA.replace('\n', '\r\n')})
         check('M0 el escenario se monta por el propio MCP (proyecto + unit + unit en subcarpeta)',
-              c1.startswith('CREADO') and c2.startswith('CREADA') and c3.startswith('CREADA'), c1 + c2 + c3)
+              mc.abre(c1, 'SK_CREATE_CREADO_PROYECTO_FMT') and mc.abre(c2, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and mc.abre(c3, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT'), c1 + c2 + c3)
     finally:
         s.para()
 
@@ -135,12 +135,12 @@ try:
           # buena es "sin resolver" (null), y sin nombrar Base.pas
           d.startswith('null') and 'base.pas' not in d.lower(), d[:240])
     check('K3 ...ni delphi_references le habla de una definicion de FUERA',
-          'no resuelve "Doble"' in r and 'FUERA de este workspace' not in r, r[:240])
+          mc.es(r, 'SR_REFS_NO_DEFINITION_FMT') and 'Doble' in r and not mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT'), r[:240])
     # K3b: esa negativa es del LLAMANTE y viaja como tal. Hasta el 26-sep salia
     # como 'Error executing tool: RECHAZADO...' (se lanzaba como excepcion y el
     # despachador la vestia de fallo interno): lo destapo K3 al endurecerlo.
     check('K3b ...y esa negativa llega como RECHAZADO, no como fallo interno del servidor',
-          r.startswith('RECHAZADO') and not r.startswith('Error executing tool'), r[:240])
+          mc.rechazado(r) and mc.resultado(r) != 'INTERNAL', r[:240])
     if os.path.exists(ZIP12):
         z = os.path.join(BASE, 'v12')
         os.makedirs(z)

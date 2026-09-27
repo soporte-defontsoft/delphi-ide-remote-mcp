@@ -80,13 +80,13 @@ ORIG = open(VICTIM, 'rb').read()
 
 r = A.call('delphi_upload', {'path': VICTIM})
 check('#5 upload sin chunk: RECHAZADO, no truncado',
-      'RECHAZADO' in r and open(VICTIM, 'rb').read() == ORIG, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_NO_CHUNK_FMT') and open(VICTIM, 'rb').read() == ORIG, r[:200])
 r = A.call('delphi_upload', {'path': VICTIM, 'chunkbase64': ''})
 check('#5 chunk vacio explicito tampoco vacia el fichero',
-      'RECHAZADO' in r and open(VICTIM, 'rb').read() == ORIG, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_NO_CHUNK_FMT') and open(VICTIM, 'rb').read() == ORIG, r[:200])
 r = A.call('delphi_upload', {'path': os.path.join(UP, 'nuevo.bin')})
 check('#5 sin chunk sobre fichero que no existe: tambien rechazado',
-      'RECHAZADO' in r and not os.path.exists(os.path.join(UP, 'nuevo.bin')), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_NO_CHUNK_NEW') and not os.path.exists(os.path.join(UP, 'nuevo.bin')), r[:200])
 
 j = J(A.call('delphi_upload', {'path': VICTIM,
                                 'chunkbase64': base64.b64encode(b'X').decode(), 'offset': 0}))
@@ -112,7 +112,7 @@ check('#26 ...y se dice donde ha quedado apartado',
 # masker treat the drive letter as part of a word.
 PROJ = os.path.join(BASE, 'FugaTest')
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'FugaTest', 'dir': PROJ})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 DPR = os.path.join(PROJ, 'FugaTest.dpr')
 open(DPR, 'w', encoding='utf-8-sig', newline='\r\n').write(
     'program FugaTest;\n\n{$APPTYPE CONSOLE}\n\nbegin\n  esto no compila;\nend.\n')
@@ -130,44 +130,44 @@ check('#7 ...y las virtuales si estan (la respuesta no viene vacia)',
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'begin',
                               'project': os.path.join(PROJ, 'FugaTest.dproj')})
 check('#2 palabra reservada como nombre de unit: RECHAZADO',
-      'RECHAZADO' in r and 'reservada' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_RESERVED_FMT'), r[:200])
 check('#2 ...y no ha creado el fichero', not os.path.exists(os.path.join(PROJ, 'begin.pas')))
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'System',
                               'project': os.path.join(PROJ, 'FugaTest.dproj')})
 check('#3 nombre de unit de la RTL: RECHAZADO',
-      'RECHAZADO' in r and 'RTL' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_RTLNAME_FMT'), r[:200])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'MiApp.Datos',
                               'project': os.path.join(PROJ, 'FugaTest.dproj')})
-check('un nombre con espacio de nombres SI se acepta', r.startswith('CREADA'), r[:200])
+check('un nombre con espacio de nombres SI se acepta', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') or mc.abre(r, 'SK_CREATE_CREADA_NO_REGISTRADA_FMT'), r[:200])
 
 VCLDIR = os.path.join(BASE, 'ProyVcl')
 r = A.call('delphi_create', {'kind': 'project-vcl', 'name': 'ProyVcl', 'dir': VCLDIR})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 r = A.call('delphi_create', {'kind': 'project-fmx', 'name': 'OtroFmx', 'dir': VCLDIR})
 check('#1 colision: RECHAZADO y NADA creado',
-      'RECHAZADO' in r and not os.path.exists(os.path.join(VCLDIR, 'OtroFmx.dpr')), r[:250])
-check('#1 ...y el mensaje dice que no ha creado nada', 'NADA' in r.upper(), r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_CLASH_FMT') and not os.path.exists(os.path.join(VCLDIR, 'OtroFmx.dpr')), r[:250])
+check('#1 ...y el mensaje dice que no ha creado nada', mc.es(r, 'SR_CREATE_CLASH_FMT'), r[:250])
 r = A.call('delphi_create', {'kind': 'form-fmx', 'name': 'UCruzado',
                               'project': os.path.join(VCLDIR, 'ProyVcl.dproj')})
 check('#4 form FMX en un proyecto VCL: RECHAZADO',
-      'RECHAZADO' in r and 'VCL' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_FRAMEWORK_FMT') and 'VCL' in r, r[:250])
 check('#4 ...y no ha dejado el .pas', not os.path.exists(os.path.join(VCLDIR, 'UCruzado.pas')))
 r = A.call('delphi_create', {'kind': 'form-vcl', 'name': 'UBueno',
                               'project': os.path.join(VCLDIR, 'ProyVcl.dproj')})
-check('#4 el form del framework que toca SI entra', r.startswith('CREADO'), r[:200])
+check('#4 el form del framework que toca SI entra', mc.abre(r, 'SK_CREATE_CREADO_FORM_FMT'), r[:200])
 
 # ------------------------------------------------------------------- #10 --
 r = A.call('delphi_package', {})
 check('#10 delphi_package sin dir: refusal, no error interno',
-      'necesita "dir"' in r and 'Error executing tool' not in r, r[:200])
+      mc.es(r, 'SR_PACKAGE_NEED_DIR') and mc.resultado(r) != 'INTERNAL', r[:200])
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'Suelto'})
 check('#10 delphi_create de proyecto sin dir: refusal con la pista',
-      'RECHAZADO' in r and 'dir' in r and 'Error executing tool' not in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_NEED_DIR') and 'dir' in r and mc.resultado(r) != 'INTERNAL', r[:200])
 
 # -------------------------------------------------------------------- #C1 --
 SANO = os.path.join(BASE, 'Sano')
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'Sano', 'dir': SANO})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 SANODPROJ = os.path.join(SANO, 'Sano.dproj')
 CONT = 'unit ULlena;\r\n\r\ninterface\r\n\r\nfunction Doble(A: Integer): Integer;\r\n\r\n' \
        'implementation\r\n\r\nfunction Doble(A: Integer): Integer;\r\nbegin\r\n' \
@@ -176,17 +176,17 @@ r = A.call('delphi_create', {'kind': 'unit', 'name': 'ULlena', 'content': CONT,
                               'project': SANODPROJ})
 disk = open(os.path.join(SANO, 'ULlena.pas'), 'rb').read().decode('utf-8-sig')
 check('#C1 create con content: crea CON el contenido y lo registra',
-      r.startswith('CREADA') and 'Result := A * 2;' in disk and 'NO se pudo registrar' not in r,
+      mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and 'Result := A * 2;' in disk and not mc.es(r, 'SK_CREATE_CREADA_NO_REGISTRADA_FMT'),
       (r[:200], disk[:80]))
 check('#C1 el contenido llega entero y en CRLF', disk.count('\r\n') >= 10 and disk.endswith('end.\r\n'),
       repr(disk[-20:]))
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'UOtra', 'content': 'unit NoCoincide;\nend.\n',
                               'project': os.path.join(PROJ, 'FugaTest.dproj')})
 check('#C1 content cuyo "unit" no casa con el nombre: RECHAZADO',
-      'RECHAZADO' in r and not os.path.exists(os.path.join(SANO, 'UOtra.pas')), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_CONTENT_NAME_FMT') and not os.path.exists(os.path.join(SANO, 'UOtra.pas')), r[:200])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'UCorta', 'content': 'unit UCorta;\ninterface\n',
                               'project': os.path.join(PROJ, 'FugaTest.dproj')})
-check('#C1 content cortado (sin end.): RECHAZADO', 'RECHAZADO' in r, r[:200])
+check('#C1 content cortado (sin end.): RECHAZADO', mc.rechazado(r) and mc.es(r, 'SR_CREATE_CONTENT_NOEND'), r[:200])
 
 # -------------------------------------------------------------------- #6 --
 SOLO = os.path.join(BASE, 'soloDpr')
@@ -203,7 +203,7 @@ check('#6 ...no inventa framework ni plataformas',
 check('#6 ...pero SI da las units', any(u.get('unit') == 'UAlgo' for u in j.get('units', [])), str(j)[:300])
 r = A.call('delphi_config', {'project': SOLODPR, 'command': 'add-platform', 'platform': 'Win64'})
 check('#6 un comando que necesita .dproj sobre un .dpr: refusal clara',
-      'RECHAZADO' in r and '.dproj' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CONFIG_NO_DPROJ_FMT') and '.dproj' in r, r[:250])
 j = J(A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dpr')}))
 check('#6 con .dproj al lado, el .dpr se resuelve solo',
       j.get('frameworkType', '') != '' and j.get('hasDproj') is not False, str(j)[:250])
@@ -225,29 +225,29 @@ j = J(A.call('delphi_config', {'project': GPROJ}))
 ps = j.get('projects', [])
 check('#6b view de un .groupproj: lista SUS proyectos, sin inventar plataformas',
       len(ps) == 2 and [p.get('exists') for p in ps] == [True, False] and
-      'platformsEnabled' not in j and 'frameworkType' not in j and 'GRUPO' in j.get('note', ''),
+      'platformsEnabled' not in j and 'frameworkType' not in j and mc.es(j.get('note', ''), 'SN_CONFIG_GROUP_VIEW_FMT'),
       str(j)[:300])
 r = A.call('delphi_config', {'project': GPROJ, 'command': 'add-platform', 'platform': 'Win64'})
 check('#6b ...una orden de escritura sobre el grupo: rechazada (INVALID_PARAM) y sin tocarlo',
-      r.startswith('error:') and 'GRUPO' in r and open(GPROJ, 'rb').read() == antes_g, r[:250])
+      mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_CONFIG_GROUP_FMT') and open(GPROJ, 'rb').read() == antes_g, r[:250])
 r = A.call('delphi_config', {'project': os.path.join(SOLO, 'UAlgo.pas')})
 check('#6b ...y lo que no es un proyecto no se lee como si lo fuera',
-      r.startswith('error:') and 'no es un proyecto' in r, r[:250])
+      mc.resultado(r) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(r, 'SR_CONFIG_NOT_PROJECT_FMT'), r[:250])
 
 # ------------------------------------------------------------------- #11 --
 r = A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dproj'),
                               'command': 'add-platform', 'platform': 'Win32'})
 r = A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dproj'),
                               'command': 'remove-platform', 'platform': 'Win32'})
-check('#11 remove-platform funciona con otra habilitada', 'DESHABILITADA' in r, r[:200])
+check('#11 remove-platform funciona con otra habilitada', mc.abre(r, 'SN_CFG_DESHABILITADA_PLATAFORMA_QUEDA_DECLAR_FMT'), r[:200])
 r2 = A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dproj'),
                                'command': 'remove-platform', 'platform': 'Win32'})
 check('#11 repetirlo es idempotente y NO hace copia de un no-op',
-      'YA estaba' in r2 and 'no he tocado nada' in r2.lower(), r2[:200])
+      mc.es(r2, 'SN_CONFIG_PLAT_ALREADY_FMT'), r2[:200])
 r = A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dproj'),
                               'command': 'remove-platform', 'platform': 'Win64'})
 check('#11 quitar la ULTIMA plataforma: RECHAZADO',
-      'RECHAZADO' in r and 'ULTIMA' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CONFIG_PLAT_LAST_FMT'), r[:250])
 
 # ---------------------------------------------------------------- #12 #13 --
 STY = os.path.join(BASE, 'estilos')
@@ -267,18 +267,18 @@ SFILE = os.path.join(STY, 'Mi.style')
 r = A.call('delphi_styles', {'command': 'set', 'path': SFILE, 'style': 'cardstyle',
                               'prop': 'Fill.Color', 'value': 'no soy un color'})
 check('#12 valor imposible en un .style: RECHAZADO antes de escribir',
-      'RECHAZADO' in r and 'no soy un color' not in open(SFILE, encoding='utf-8').read(), r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_STYLES_VALUE_GRAMMAR_FMT') and 'no soy un color' not in open(SFILE, encoding='utf-8').read(), r[:250])
 r = A.call('delphi_styles', {'command': 'set', 'path': SFILE, 'style': 'cardstyle',
                               'prop': 'Fill.Color', 'value': 'xFF112233'})
-check('#12 un valor legal SI se escribe', 'CAMBIADA' in r, r[:200])
+check('#12 un valor legal SI se escribe', mc.abre(r, 'SN_STYLES_PROP_SET_FMT'), r[:200])
 r = A.call('delphi_styles', {'command': 'set', 'path': SFILE, 'style': 'cardstyle',
                               'prop': 'StyleName', 'value': "'buttonstyle'"})
 check('#13 renombrar a un StyleName que ya existe: RECHAZADO',
-      'RECHAZADO' in r and open(SFILE, encoding='utf-8').read().count("'buttonstyle'") == 1, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_STYLES_RENAME_DUP_FMT') and open(SFILE, encoding='utf-8').read().count("'buttonstyle'") == 1, r[:250])
 r = A.call('delphi_styles', {'command': 'set', 'path': SFILE, 'style': 'cardstyle',
                               'prop': 'StyleName', 'value': "'tarjeta'"})
 check('#13 un rename limpio se permite y se DICE que es un rename',
-      'RENOMBRADO' in r and "'tarjeta'" in open(SFILE, encoding='utf-8').read(), r[:250])
+      mc.abre(r, 'SN_STYLES_RENAMED_FMT') and "'tarjeta'" in open(SFILE, encoding='utf-8').read(), r[:250])
 
 # ------------------------------------------------------------------- #17 --
 j = J(A.call('delphi_designer', {'command': 'prop', 'class': 'TStringGrid', 'prop': 'Options'}))
@@ -314,14 +314,14 @@ check('#16 Viewport.* (lo escribe el propio IDE) NO se denuncia',
 
 # ---------------------------------------------------------------- #8 #27 --
 r = A.call('vault_read', {'path': 'projects/nota.md', 'offset': 5, 'limit': 3})
-check('#8 el pie dice el rango REAL mostrado', 'lineas 5..7 de 41' in r, r[-200:])
+check('#8 el pie dice el rango REAL mostrado', any('5..7' in l and '41' in l for l in r.splitlines() if mc.es(l, 'SN_VAULT_MORE_FMT')), r[-200:])
 check('#8 ...y el cuerpo es ese rango', 'linea 5' in r and 'linea 8' not in r, r[:300])
 r = A.call('vault_read', {'path': 'projects/nota.md', 'offset': 99999})
 check('#28 offset pasado del final: se explica, no se calla',
-      'mas alla del final' in r and '41 lineas' in r, r[:200])
+      mc.es(r, 'SR_VAULT_PAST_END_FMT') and '41' in r, r[:200])
 r = A.call('vault_search', {'target': 'contents', 'pattern': 'linea'})
 check('#27 target invalido: RECHAZADO en vez de caer a files en silencio',
-      'no existe' in r and 'files' in r and 'content' in r, r[:250])
+      mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_VAULT_TARGET_FMT') and 'files' in r and 'content' in r, r[:250])
 r = A.call('vault_search', {'target': 'content', 'pattern': 'linea 3'})
 check('#27 el target bueno sigue funcionando', 'nota.md' in r, r[:200])
 
@@ -340,29 +340,29 @@ r = A.call('delphi_changeset', {'command': 'begin'})
 CID = r.split()[-1].strip('.') if r else ''
 CID = [w for w in r.replace('.', ' ').split() if '-' in w][0]
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'delete', 'path': UNO})
-check('M1 delete se apila', 'apilada' in r.lower() or 'stage' in r.lower() or 'borra' in r.lower(), r[:200])
+check('M1 delete se apila', mc.abre(r, 'SN_CHANGESET_STAGED_FMT'), r[:200])
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'create', 'path': UNO,
                                  'content': 'unit Uno;\r\ninterface\r\nimplementation\r\nend.\r\n'})
 check('M1 create del MISMO fichero tras el delete: se acepta (la tanda es un plan)',
-      'RECHAZADO' not in r, r[:250])
+      not mc.rechazado(r), r[:250])
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'create',
                                  'path': os.path.join(CS, 'Dos.pas'), 'content': 'unit Dos;\r\nend.\r\n'})
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'create',
                                  'path': os.path.join(CS, 'Dos.pas'), 'content': 'x'})
 check('M1 crear DOS veces el mismo fichero en la misma tanda: RECHAZADO',
-      'RECHAZADO' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_VIRT_EXISTS_FMT'), r[:250])
 r = A.call('delphi_changeset', {'command': 'unstage', 'id': CID})
 check('M1b unstage quita la ultima y dice cuantas quedan',
-      'Quitada' in r and 'Quedan 2' in r, r[:250])
+      mc.abre(r, 'SN_CHANGESET_UNSTAGED_FMT') and ' 2 ' in r, r[:250])
 r = A.call('delphi_changeset', {'command': 'unstage', 'id': CID, 'n': 99})
 check('M1b unstage con n imposible: RECHAZADO con el numero bueno',
-      'RECHAZADO' in r and '2' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_UNSTAGE_N_FMT') and '2' in r, r[:250])
 r = A.call('delphi_changeset', {'command': 'preview', 'id': CID})
 check('M1 preview aguanta una operacion sobre algo que aun no existe',
-      'RECHAZADO' not in r and 'error' not in r[:40].lower(), r[:250])
+      not mc.fallo(r), r[:250])
 r = A.call('delphi_changeset', {'command': 'commit', 'id': CID})
 check('M1 la tanda delete+create se aplica entera',
-      os.path.exists(UNO) and 'RECHAZADO' not in r, r[:250])
+      os.path.exists(UNO) and not mc.rechazado(r), r[:250])
 
 # --------------------------------------------------------------------- #9 --
 MBOX = os.path.join(BASE, 'messages')
@@ -380,7 +380,7 @@ check('#9 el aviso NO nombra el buzon ajeno', 'otro' not in t, t[-250:])
 # saltarse la unica linea que importara cuando el correo si sea suyo. Ese
 # recuento vive ahora en delphi_workspace, que es la llamada de orientacion.
 check('#9 ...y NO anuncia el correo ajeno en cada respuesta',
-      'para agentes concretos' not in t, t[-250:])
+      not mc.es(t, 'SN_MESSAGES_PENDING_FMT'), t[-250:])
 check('#9b ...pero se puede saber que lo hay, en la ficha del servidor',
       json.loads(t).get('server', {}).get('mailboxes') == 1, t[-250:])
 # Desde 2026-09-25 no hay buzon "para todos": el aviso que va en cada
@@ -390,7 +390,7 @@ open(os.path.join(MBOX, 'r8', '20260825-general.md'), 'w', encoding='utf-8').wri
     '# general\n\npara ti\n')
 t = MSG.call('delphi_workspace', {})
 check('#9 el correo PROPIO si se anuncia como tuyo',
-      'en tu buzon (r8)' in t, t[-250:])
+      mc.es(t, 'SN_MESSAGES_PENDING_FMT') and '(r8)' in t, t[-250:])
 # El aviso se pegaba DETRAS del resultado: con correo esperando, cualquier
 # respuesta JSON dejaba de poder parsearse (json.loads reventaba de la nada,
 # y solo mientras hubiera correo). Ahora entra DENTRO del objeto.
@@ -398,7 +398,7 @@ jw = J(t)
 check('#9 con correo esperando, una respuesta JSON SIGUE siendo JSON',
       jw != {} and 'roots' in jw, t[:120])
 check('#9 ...y el aviso viaja dentro, en "mailbox"',
-      'en tu buzon (r8)' in jw.get('mailbox', ''), str(jw.get('mailbox'))[:150])
+      mc.es(jw.get('mailbox', ''), 'SN_MESSAGES_PENDING_FMT') and '(r8)' in jw.get('mailbox', ''), str(jw.get('mailbox'))[:150])
 MSG.mata()
 
 # ------------------------------------------------------------------- #19 --
@@ -408,7 +408,7 @@ EXTRA = os.path.join(SANO, 'datos.txt')
 open(EXTRA, 'w', encoding='utf-8').write('x' + chr(10))
 r = A.call('delphi_config', {'project': SANODPROJ, 'command': 'add-deployfile',
                               'platform': 'Win32', 'path': EXTRA}, t=600)
-if 'RECHAZADO' in r or r.startswith('error'):
+if mc.rechazado(r) or mc.resultado(r) in ('INVALID_PARAM', 'NOT_FOUND'):
     check('#19 add-deployfile disponible en esta maquina', False, r[:200])
 else:
     dep = os.path.join(SANO, 'Sano.deployproj')
@@ -417,7 +417,7 @@ else:
           'Include="datos.txt"' in xml and SANO not in xml, xml[-400:] if xml else '(sin .deployproj)')
     r2 = A.call('delphi_config', {'project': SANODPROJ, 'command': 'remove-deployfile',
                                    'platform': 'Win32', 'path': EXTRA})
-    check('#19 ...y remove-deployfile la encuentra', 'QUITADO' in r2, r2[:200])
+    check('#19 ...y remove-deployfile la encuentra', mc.abre(r2, 'SN_CONFIG_DEPLOY_REMOVED_FMT'), r2[:200])
 
 # ------------------------------------------------- M4: delphi_help ---------
 r = A.call('delphi_help', {})
@@ -426,7 +426,7 @@ check('M4 help por defecto: la tabla tarea -> tool',
 check('M4 ...y cabe en poco: es un atajo, no el catalogo', len(r) < 4000, len(r))
 r = A.call('delphi_help', {'command': 'conventions'})
 check('M4 conventions dice lo que vale para todas',
-      'srvd:' in r and 'ancla' in r.lower() and '__delphi-patch' in r, r[:200])
+      'srvd:' in r and mc.es(r, 'SN_HELP_CONVENTIONS') and '__delphi-patch' in r, r[:200])
 j = J(A.call('delphi_help', {'command': 'tool', 'name': 'edit'}))
 check('M4 una tool suelta: descripcion + parametros',
       j.get('tool') == 'delphi_edit' and 'properties' in j.get('parameters', {}), str(j)[:200])
@@ -434,7 +434,7 @@ j = J(A.call('delphi_help', {'name': 'delphi_changeset'}))
 check('M4 con solo name, la intencion es obvia', j.get('tool') == 'delphi_changeset', str(j)[:200])
 r = A.call('delphi_help', {'command': 'tool', 'name': 'noexiste'})
 check('M4 tool inventada: RECHAZADO diciendo cuales hay',
-      'RECHAZADO' in r and 'delphi_edit' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_HELP_NO_TOOL_ALL_FMT') and 'delphi_edit' in r, r[:200])
 # #24 el schema decia classname_/create_ y la prosa class=/create=true
 sc = tools_schema(A)
 props = set(sc['delphi_designer']['inputSchema']['properties']) |         set(sc['delphi_textedit']['inputSchema']['properties'])

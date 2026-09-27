@@ -86,7 +86,7 @@ try:
     # no morir Y contestar: la nota, con su cabecera y su primera linea
     check('V1 vault_read de una nota en CP1252 no muere',
           'EEncodingError' not in r and 'No mapping' not in r and
-          r.startswith('# vieja.md') and '1|# Nota vieja' in r, r[:240])
+          mc.abre(r, 'SN_VAULT_CABECERA_NOTA_FMT') and 'vieja.md' in r.split('\n', 1)[0] and '1|# Nota vieja' in r, r[:240])
     check('V2 ...y los acentos llegan bien, no como U+FFFD',
           'camión' in r and '�' not in r, r[:240])
     r = call('vault_search', {'pattern': 'lleva', 'target': 'content'})

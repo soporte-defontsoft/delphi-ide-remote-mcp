@@ -40,7 +40,7 @@ t = call('delphi_workspace', {})
 # nombra ni se cuenta ahi (v1.0.4-beta: seis mensajes ajenos dejaban la linea
 # clavada ~40 llamadas); ese recuento vive en la ficha de delphi_workspace.
 check('aviso del correo PROPIO al final de cualquier tool',
-      'MENSAJES PENDIENTES: 1 en tu buzon (messages-battery)' in t, t[-200:])
+      mc.es(t, 'SN_MESSAGES_PENDING_FMT') and 'MENSAJES PENDIENTES: 1 en tu buzon (messages-battery)' in t, t[-200:])
 check('el aviso NO nombra el buzon de otro agente', 'dsh' not in t, t[-200:])
 check('un .md suelto en la raiz ya no es correo de nadie',
       'TODOS' not in t and 'Aviso general' not in t, t[-200:])
@@ -50,31 +50,31 @@ check('la ficha del servidor cuenta el correo de los buzones, sin decir de quien
       json.dumps(w.get('server', {}))[:200])
 t = call('delphi_messages', {"command": "check", "agent": "dsh"})
 check('check lista sin consumir, solo su buzon',
-      'pendientes: 1' in t and 'Reconecta' in t and 'Aviso general' not in t, t)
+      mc.es(t, 'SN_MESSAGES_CHECK_FMT') and 'pendientes: 1' in t and 'Reconecta' in t and 'Aviso general' not in t, t)
 check('check no borra', os.path.exists(os.path.join(MSG, 'dsh', '20260823-0100-deploy.md')))
 t = call('delphi_messages', {"agent": "dsh"})
 check('read entrega el suyo', 'MENSAJE 1/1' in t and 'Sigue con target=Deploy' in t
-      and 'Aviso general' not in t and 'borrados' in t, t)
+      and 'Aviso general' not in t and mc.es(t, 'SN_MESSAGES_DELIVERED'), t)
 check('leido = BORRADO, y no queda copia en ningun sitio',
       not os.path.exists(os.path.join(MSG, 'dsh', '20260823-0100-deploy.md'))
       and not os.path.exists(os.path.join(MSG, '_entregados')), os.listdir(MSG))
 t = call('delphi_messages', {"agent": "dsh"})
-check('segunda lectura: nada', t.startswith('Sin mensajes para "dsh"'), t)
+check('segunda lectura: nada', mc.abre(t, 'SN_MESSAGES_NONE_FMT') and 'dsh' in t, t)
 t = call('delphi_messages', {})
 check('sin agent: la identidad del handshake lee SU buzon',
       'MENSAJE 1/1' in t and 'Correo propio' in t, t)
 t = call('delphi_workspace', {})
-check('leido: el aviso se apaga', 'MENSAJES PENDIENTES' not in t, t[-120:])
+check('leido: el aviso se apaga', not mc.es(t, 'SN_MESSAGES_PENDING_FMT'), t[-120:])
 check('el .md de la raiz sigue ahi: ni se entrega ni se borra (es del operador)',
       os.path.exists(os.path.join(MSG, '20260823-0059-aviso.md')))
 t = call('delphi_messages', {"command": "x"})
-check('command invalido', t.startswith('error:'), t)
+check('command invalido', mc.resultado(t) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(t, 'SR_MSGS_COMMAND_READ_CHECK'), t)
 # the agent id is slugged like delphi_report: no path tricks
 open(os.path.join(MSG, 'dsh', 'otro.md'), 'w', encoding='utf-8').write('# Otro\n\nhola\n')
 t = call('delphi_messages', {"agent": "..\\dsh"})
 check('agent se normaliza (sin ..)', 'MENSAJE 1/1' in t and 'hola' in t, t)
 t = call('delphi_messages', {"command": "read", "agent": "dsh"})
-check('tras leer, vacio', t.startswith('Sin mensajes'), t)
+check('tras leer, vacio', mc.abre(t, 'SN_MESSAGES_NONE_FMT'), t)
 
 srv.cierra()
 mc.fin('messages battery')

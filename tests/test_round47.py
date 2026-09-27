@@ -85,7 +85,7 @@ try:
     # que no diga "No mapping" (un timeout tampoco lo dice)
     check('C1 un hijo que emite CESU-8 ya no mata la llamada',
           s.startswith('exit=0') and 'No mapping' not in s and
-          'Error executing tool' not in s, s[:240])
+          mc.resultado(s) != 'INTERNAL', s[:240])
     check('C2 ...y el ASCII de los dos lados llega entero',
           'MARCA-ANTES' in s and 'MARCA-DESPUES' in s, s[:240])
 

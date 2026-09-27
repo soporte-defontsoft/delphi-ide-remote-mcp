@@ -88,7 +88,7 @@ check('registro: las 5 tools de vault existen con VaultPath + VaultReadOnly=0',
 # ===========================================================================
 instr = s.init.get('instructions', '')
 check('initialize: con vault, "instructions" trae el protocolo de arranque',
-      'vault_read' in instr and 'perezosa' in instr.lower(), instr[:200])
+      'vault_read' in instr and mc.es(instr, 'SN_VAULT_INSTRUCTIONS'), instr[:200])
 check('initialize: instructions es CORTO (viaja en cada prompt)',
       0 < len(instr) < 2000, len(instr))
 check('initialize: declara la capability prompts',
@@ -125,10 +125,10 @@ check('aislamiento: vault_read llega al vault aunque este fuera de los roots',
       'Estilo' in out, out[:150])
 out = s.call('delphi_read', {"path": os.path.join(VAULT, 'MEMORY.md')})
 check('aislamiento: las tools de CODIGO no pueden leer el vault',
-      'RECHAZADO' in out, out[:150])
+      mc.rechazado(out) and mc.es(out, 'SR_VAULT_NOT_CODE'), out[:150])
 out = s.call('vault_read', {"path": "Codigo.pas"})
 check('aislamiento: las tools de VAULT no sirven codigo (.md only)',
-      'RECHAZADO' in out, out[:150])
+      mc.rechazado(out) and mc.es(out, 'SR_VAULT_NOTA_MD_VAULT_SOLO_FMT'), out[:150])
 out = s.call('delphi_read', {"path": os.path.join(WORK, 'Codigo.pas')})
 check('aislamiento: el workspace de codigo sigue funcionando normal',
       'unit Codigo' in out, out[:120])
@@ -151,7 +151,7 @@ out = s.call('vault_read', {"path": "projects/delphi/context.md", "offset": 6, "
 check('read: offset/limit acota', '6|' in out and '1|# Contexto' not in out, out[:200])
 out = s.call('vault_read', {"path": "projects/delphi/grande.md"})
 check('read: nota enorme PAGINADA con el offset exacto de continuacion',
-      'Mostradas las lineas' in out and 'offset' in out, out[-220:])
+      mc.es(out, 'SN_VAULT_MORE_FMT') and 'offset' in out, out[-220:])
 check('read: la pagina cabe en el presupuesto por-resultado',
       len(out) < 75000, len(out))
 # the continuation offset the server hands back must actually work
@@ -203,11 +203,11 @@ for probe, label in ((r'..\..\Windows\System32\drivers\etc\hosts', 'escape con .
                      (r'C:\Windows\win.ini', 'ruta absoluta'),
                      (r'..\otro-vault\x.md', 'salto a carpeta hermana')):
     out = s.call('vault_read', {"path": probe})
-    check('jaula: %s rechazado' % label, 'RECHAZADO' in out, out[:150])
+    check('jaula: %s rechazado' % label, mc.rechazado(out) and mc.es(out, 'SR_VAULT_JAIL'), out[:150])
 out = s.call('vault_read', {"path": "conventions/estilo.txt"})
-check('jaula: fichero que no es .md rechazado', 'RECHAZADO' in out, out[:150])
+check('jaula: fichero que no es .md rechazado', mc.rechazado(out) and mc.es(out, 'SR_VAULT_NOTA_MD_VAULT_SOLO_FMT'), out[:150])
 out = s.call('vault_read', {"path": "backups/mcp/vieja/secreto.md"})
-check('exclusion: backups/ no es legible', 'RECHAZADO' in out, out[:150])
+check('exclusion: backups/ no es legible', mc.rechazado(out) and mc.es(out, 'SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT'), out[:150])
 
 # ===========================================================================
 # 5. Search: files and content
@@ -227,9 +227,9 @@ out = s.call('vault_search', {"target": "content", "pattern": "linea viva",
 check('search content: subfolder acota', 'context.md' in out, out[:200])
 out = s.call('vault_search', {"target": "content", "pattern": "no-existe-esto-xyz"})
 check('search: sin resultados lo dice y recuerda el indice',
-      'Sin resultados' in out, out[:150])
+      mc.es(out, 'SN_VAULT_SIN_RESULTADOS_RECUERDA_INDICE_FMT'), out[:150])
 out = s.call('vault_search', {"target": "files", "pattern": "*.md", "subfolder": "../.."})
-check('search: subfolder con .. rechazado', 'RECHAZADO' in out, out[:150])
+check('search: subfolder con .. rechazado', mc.rechazado(out) and mc.es(out, 'SR_VAULT_JAIL'), out[:150])
 
 # ===========================================================================
 # 6. Governance files are never writable
@@ -237,7 +237,7 @@ check('search: subfolder con .. rechazado', 'RECHAZADO' in out, out[:150])
 for gov in ('MEMORY.md', 'AGENTS-VAULT.md', 'AGENTS-VAULT-WRITE.md'):
     out = s.call('vault_append', {"path": gov, "content": "- intruso\n"})
     check('gobierno: %s no se puede escribir' % gov,
-          'RECHAZADO' in out and 'GOBIERNO' in out.upper(), out[:150])
+          mc.rechazado(out) and mc.es(out, 'SR_VAULT_GOVERNANCE'), out[:150])
 check('gobierno: MEMORY.md intacto en disco',
       'intruso' not in open(os.path.join(VAULT, 'MEMORY.md'), encoding='utf-8').read())
 
@@ -250,14 +250,14 @@ for probe, label in (('MEMORY.md ', 'espacio final'),
                      ('MEMORY.md  ', 'dos espacios'),
                      ('notas /idea.md', 'espacio en la carpeta')):
     out = s.call('vault_append', {"path": probe, "content": "- intruso\n"})
-    check('R9 CRITICAL: gobierno/nombre con %s RECHAZADO' % label, 'RECHAZADO' in out, out[:130])
+    check('R9 CRITICAL: gobierno/nombre con %s RECHAZADO' % label, mc.rechazado(out) and mc.es(out, 'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT'), out[:130])
 check('R9 CRITICAL: ningun intruso llego a MEMORY.md',
       'intruso' not in open(os.path.join(VAULT, 'MEMORY.md'), encoding='utf-8').read())
 for probe in ('MEMORY.md ', 'MEMORY.md.'):
     out = s.call('vault_create', {"path": probe, "content": "x"})
-    check('R9: create con "%s" tambien RECHAZADO' % probe, 'RECHAZADO' in out, out[:130])
+    check('R9: create con "%s" tambien RECHAZADO' % probe, mc.rechazado(out) and mc.es(out, 'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT'), out[:130])
 out = s.call('vault_append', {"path": "backups/mcp/vieja/secreto.md", "content": "x"})
-check('gobierno: escribir en backups/ rechazado', 'RECHAZADO' in out, out[:150])
+check('gobierno: escribir en backups/ rechazado', mc.rechazado(out) and mc.es(out, 'SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT'), out[:150])
 
 # ===========================================================================
 # 7. vault_append (with and without anchor) + the mechanical backup
@@ -266,7 +266,7 @@ LOG = os.path.join(VAULT, 'projects', 'delphi', 'log.md')
 before = open(LOG, encoding='utf-8').read()
 out = s.call('vault_append', {"path": "projects/delphi/log.md",
                               "content": "- entrada nueva con acentos: gestoria\n"})
-check('append: sin anchor anade al final', 'ANADIDO' in out, out[:200])
+check('append: sin anchor anade al final', mc.abre(out, 'SK_VAULT_ANADIDO_COPIA_PREVIA_FMT'), out[:200])
 after = open(LOG, encoding='utf-8').read()
 check('append: el contenido esta y lo viejo se conserva',
       'entrada nueva' in after and 'entrada antigua' in after, after[:200])
@@ -280,21 +280,21 @@ if bk:
 # anchor
 out = s.call('vault_append', {"path": "projects/delphi/context.md",
                               "content": "- linea insertada", "anchor": "## Estado"})
-check('append: con anchor inserta tras el ancla', 'ANADIDO' in out, out[:200])
+check('append: con anchor inserta tras el ancla', mc.abre(out, 'SK_VAULT_ANADIDO_COPIA_PREVIA_FMT'), out[:200])
 ctx = open(os.path.join(VAULT, 'projects', 'delphi', 'context.md'), encoding='utf-8').read()
 check('append: la insercion va DESPUES del anchor y antes del resto',
       ctx.index('linea insertada') > ctx.index('## Estado')
       and ctx.index('linea insertada') < ctx.index('linea viva uno'), ctx[-250:])
 out = s.call('vault_append', {"path": "projects/delphi/context.md",
                               "content": "x", "anchor": "no-existe-este-ancla"})
-check('append: anchor inexistente da error claro', out.startswith('error'), out[:150])
+check('append: anchor inexistente da error claro', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_VAULT_ANCHOR_APARECE_NOTA_LEE'), out[:150])
 out = s.call('vault_append', {"path": "projects/delphi/context.md",
                               "content": "x", "anchor": "linea viva"})
 check('append: anchor duplicado se rechaza (pide uno unico)',
-      'VARIAS veces' in out, out[:150])
+      mc.es(out, 'SR_VAULT_ANCHOR_APARECE_VARIAS_VECES'), out[:150])
 out = s.call('vault_append', {"path": "projects/delphi/no-existe.md", "content": "x"})
 check('append: nota inexistente redirige a vault_create',
-      out.startswith('error') and 'vault_create' in out, out[:150])
+      mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_VAULT_NOTA_EXISTE_VAULT_APPEND_FMT') and 'vault_create' in out, out[:150])
 
 # el fichero resultante sigue siendo UTF-8 sin BOM
 raw = open(LOG, 'rb').read()
@@ -307,12 +307,12 @@ check('UTF-8: los acentos se guardaron como UTF-8', 'gestoria' in raw.decode('ut
 out = s.call('vault_create', {"path": "decisiones/nueva-decision.md",
                               "content": "# Decision\n\nProbamos el vault remoto.\n"})
 check('create: crea la nota y recuerda enlazarla en el indice',
-      'CREADA' in out and 'wikilink' in out.lower(), out[:200])
+      mc.abre(out, 'SK_VAULT_CREADA_NOTA_RECUERDA_ENLAZARLA_FMT'), out[:200])
 check('create: la nota existe en disco',
       os.path.exists(os.path.join(VAULT, 'decisiones', 'nueva-decision.md')))
 out = s.call('vault_create', {"path": "decisiones/nueva-decision.md", "content": "# Otra\n"})
 check('create: NUNCA sobreescribe una nota existente',
-      'RECHAZADO' in out and 'YA existe' in out, out[:200])
+      mc.rechazado(out) and mc.es(out, 'SR_VAULT_NOTA_EXISTE_VAULT_CREATE_FMT'), out[:200])
 check('create: el rechazo dejo la nota original intacta',
       'Probamos el vault remoto' in open(os.path.join(
           VAULT, 'decisiones', 'nueva-decision.md'), encoding='utf-8').read())
@@ -324,15 +324,15 @@ CTX = os.path.join(VAULT, 'projects', 'delphi', 'context.md')
 before_ctx = open(CTX, encoding='utf-8').read()
 out = s.call('vault_patch', {"path": "projects/delphi/context.md",
                              "old_text": "- linea viva dos", "new_text": "- linea viva DOS (cerrada)"})
-check('patch: sustituye el fragmento unico', 'MODIFICADA' in out, out[:200])
+check('patch: sustituye el fragmento unico', mc.abre(out, 'SN_VAULT_MODIFICADA_SUSTITUCION_COPIA_PREVIA_FMT'), out[:200])
 check('patch: el cambio esta en disco',
       'linea viva DOS (cerrada)' in open(CTX, encoding='utf-8').read())
 out = s.call('vault_patch', {"path": "projects/delphi/context.md",
                              "old_text": "texto-que-no-esta", "new_text": "x"})
-check('patch: old_text ausente da error', out.startswith('error') and 'no aparece' in out, out[:150])
+check('patch: old_text ausente da error', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_VAULT_OLD_TEXT_APARECE_NOTA'), out[:150])
 out = s.call('vault_patch', {"path": "projects/delphi/log.md",
                              "old_text": "\n", "new_text": "x"})
-check('patch: old_text duplicado se rechaza', 'VARIAS veces' in out, out[:150])
+check('patch: old_text duplicado se rechaza', mc.es(out, 'SR_VAULT_OLD_TEXT_APARECE_VARIAS'), out[:150])
 
 # R9: a patch that empties the note is a DELETE, and there is no delete here
 VACIA = os.path.join(VAULT, 'conventions', 'vaciable.md')
@@ -340,7 +340,7 @@ w('conventions/vaciable.md', '# Unica\n')
 _todo = open(VACIA, encoding='utf-8').read()
 out = s.call('vault_patch', {"path": "conventions/vaciable.md",
                              "old_text": _todo.strip(), "new_text": ""})
-check('R9: patch que VACIARIA la nota rechazado', 'RECHAZADO' in out, out[:150])
+check('R9: patch que VACIARIA la nota rechazado', mc.rechazado(out) and mc.es(out, 'SR_VAULT_WOULD_EMPTY'), out[:150])
 check('R9: la nota conserva su contenido',
       open(VACIA, encoding='utf-8').read().strip() != '', 'quedo vacia')
 
@@ -359,7 +359,7 @@ check('ReadOnly=1: las de escritura se registran pero RECHAZAN por peticion',
       'vault_append' in names, names)
 out = s2.call('vault_append', {"path": "projects/delphi/log.md", "content": "- x\n"})
 check('ReadOnly=1: vault_append rechazado (vault de solo lectura)',
-      'RECHAZADO' in out or 'solo lectura' in out.lower(), out[:200])
+      mc.rechazado(out) and mc.es(out, 'SR_VAULT_READONLY'), out[:200])
 out = s2.call('vault_read', {"path": "conventions/estilo.md"})
 check('ReadOnly=1: la lectura sigue funcionando', 'Estilo' in out, out[:120])
 s2.close()
@@ -370,11 +370,11 @@ s2.close()
 s3 = Server(extra_args=['--readonly'])
 out = s3.call('vault_append', {"path": "projects/delphi/log.md", "content": "- intruso\n"})
 check('credencial RO: vault_append rechazado en la puerta',
-      'SOLO LECTURA' in out, out[:180])
+      mc.es(out, 'SR_READ_ONLY_FMT'), out[:180])
 out = s3.call('vault_create', {"path": "otra.md", "content": "x"})
-check('credencial RO: vault_create rechazado en la puerta', 'SOLO LECTURA' in out, out[:180])
+check('credencial RO: vault_create rechazado en la puerta', mc.es(out, 'SR_READ_ONLY_FMT'), out[:180])
 out = s3.call('vault_patch', {"path": "projects/delphi/log.md", "old_text": "a", "new_text": "b"})
-check('credencial RO: vault_patch rechazado en la puerta', 'SOLO LECTURA' in out, out[:180])
+check('credencial RO: vault_patch rechazado en la puerta', mc.es(out, 'SR_READ_ONLY_FMT'), out[:180])
 out = s3.call('vault_read', {"path": "conventions/estilo.md"})
 check('credencial RO: vault_read PERMITIDO (es lectura pura)', 'Estilo' in out, out[:120])
 check('credencial RO: no se escribio nada',
@@ -455,16 +455,16 @@ check('dentro-del-root: vault_read SI llega a la nota', 'contenido original' in 
 _note = os.path.join(INROOT, 'notas', 'idea.md')
 out = s7.call('delphi_read', {"path": _note})
 check('dentro-del-root: delphi_read NO puede leer el vault',
-      'VAULT DE CONOCIMIENTO' in out, out[:180])
+      mc.es(out, 'SR_VAULT_NOT_CODE'), out[:180])
 out = s7.call('delphi_edit', {"path": _note, "old": "contenido original", "new": "pisado"})
 check('dentro-del-root: delphi_edit NO puede reescribir una nota',
-      'VAULT DE CONOCIMIENTO' in out, out[:180])
+      mc.es(out, 'SR_VAULT_NOT_CODE'), out[:180])
 check('dentro-del-root: la nota sigue intacta en disco',
       'contenido original' in open(_note, encoding='utf-8').read())
 out = s7.call('delphi_textedit', {"path": os.path.join(INROOT, 'MEMORY.md'),
                                   "create": True, "content": "intruso"})
 check('dentro-del-root: delphi_textedit NO puede tocar el indice',
-      'VAULT DE CONOCIMIENTO' in out, out[:180])
+      mc.es(out, 'SR_VAULT_NOT_CODE'), out[:180])
 out = s7.call('delphi_list', {"root": WORK, "pattern": "*.md"})
 check('dentro-del-root: delphi_list no sirve notas del vault',
       mc.como_json(out).get('total') == 0 and mc.como_json(out).get('files') == []
@@ -541,10 +541,10 @@ try:
     _sin = _texto(_http('tok-sin-vault', 'tools/call',
                         {"name": "vault_read", "arguments": {}}, 6))
     check('por-workspace: el que NO lo declara no lo ve (no se hereda nada)',
-          _sin.startswith('error: TU workspace no declara vault')
+          mc.resultado(_sin) in ('INVALID_PARAM', 'NOT_FOUND') and mc.abre(_sin, 'SR_VAULT_UNSET')
           and 'indice compartido' not in _sin, _sin[:150])
     check('por-workspace: el rechazo habla de TU workspace, no del servidor',
-          'TU workspace' in _sin and 'este servidor no tiene vault' not in _sin,
+          mc.es(_sin, 'SR_VAULT_UNSET') and 'este servidor no tiene vault' not in _sin,
           _sin[:200])
     check('por-workspace: manda a la clave que existe de verdad',
           'VaultPath' in _sin and '[Workspace.' in _sin and '[Vault]' not in _sin,
@@ -559,14 +559,14 @@ try:
                         {"name": "vault_append",
                          "arguments": {"path": "MEMORY.md", "content": "x"}}, 8))
     check('por-workspace: escribir sin vault dice SIN VAULT, no "solo lectura"',
-          'TU workspace no declara vault' in _esc and
-          'SOLO LECTURA' not in _esc, _esc[:200])
+          mc.es(_esc, 'SR_VAULT_UNSET') and
+          not mc.es(_esc, 'SR_VAULT_READONLY') and not mc.es(_esc, 'SR_READ_ONLY_FMT'), _esc[:200])
     # Y el de verdad-solo-lectura (VaultReadOnly=1) nombra SU clave, no [Vault]
     _ro = _texto(_http('tok-con-vault', 'tools/call',
                        {"name": "vault_append",
                         "arguments": {"path": "MEMORY.md", "content": "x"}}, 9))
     check('por-workspace: el vault de solo lectura nombra VaultReadOnly, no [Vault]',
-          'SOLO LECTURA' in _ro and 'VaultReadOnly' in _ro and '[Vault]' not in _ro,
+          mc.es(_ro, 'SR_VAULT_READONLY') and 'VaultReadOnly' in _ro and '[Vault]' not in _ro,
           _ro[:200])
 
     _lst = _http('tok-sin-vault', 'tools/list', {}, 7)

@@ -66,7 +66,7 @@ check('read: acentos correctos', GESTORIA in out, out)
 out = call('delphi_edit', {"path": PAS,
     "old": "  Writeln('%s');" % GESTORIA,
     "new": "  Writeln('%s moderna');" % GESTORIA})
-check('edit: escribe', out.startswith('ESCRITO'), out)
+check('edit: escribe', mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT'), out)
 nb = open(PAS, 'rb').read()
 check('edit: bytes cp1252 intactos', b'gestor\xeda moderna' in nb, nb[:60])
 check('edit: sin BOM, CRLF', not nb.startswith(b'\xef') and b'\r\n' in nb[:20])
@@ -77,59 +77,59 @@ out = call('delphi_edit', {"path": PAS, "old": "begin\n  X := 1;", "new": "x"})
 # se puede. La negativa antigua mandaba a "una llamada por linea", consejo que
 # caduco dos veces -cuando "edits" acepto bloques y cuando llego "toline"- y
 # una bateria pegada a sus palabras habria defendido el consejo caducado.
-check('gate: ancla multilinea', 'RECHAZADO' in out and 'edits' in out and
+check('gate: ancla multilinea', mc.rechazado(out) and mc.es(out, 'SR_PATCH_ANCHOR_MULTILINE') and 'edits' in out and
       'toline' in out, out)
 out = call('delphi_edit', {"path": PAS, "old": "  Writeln('inventada');", "new": "x"})
-check('gate: ancla inexistente', 'RECHAZADO' in out and 'no aparece' in out, out)
+check('gate: ancla inexistente', mc.rechazado(out) and mc.es(out, 'SR_ANCLA_NO_ESTA_FMT'), out)
 out = call('delphi_edit', {"path": PAS, "old": "  X := 1;", "new": "  X := 2;"})
-check('gate: ancla repetida lista lineas', 'RECHAZADO' in out and 'veces' in out, out)
+check('gate: ancla repetida lista lineas', mc.rechazado(out) and mc.es(out, 'SR_EDIT_ANCLA_NO_UNICA_FMT'), out)
 out = call('delphi_edit', {"path": PAS, "old": "  X := 1;", "new": "  X := 2;", "atline": 11})
-check('edit: atline desempata', out.startswith('ESCRITO'), out)
+check('edit: atline desempata', mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT'), out)
 out = call('delphi_edit', {"path": PAS, "new": "algo"})
-check('gate: reescritura total prohibida', 'RECHAZADO' in out and 'NUNCA reescribe' in out, out)
+check('gate: reescritura total prohibida', mc.rechazado(out) and mc.es(out, 'SR_EDIT_NEW_SIN_ANCLA'), out)
 out = call('delphi_edit', {"path": PAS, "old": "procedure Otro;",
                             "new": "procedure Otro; // marca ✔"})
-check('gate: caracter fuera de cp1252 con consejo #$', 'RECHAZADO' in out and '#$2714' in out, out)
+check('gate: caracter fuera de cp1252 con consejo #$', mc.rechazado(out) and mc.es(out, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and '#$2714' in out, out)
 out = call('delphi_edit', {"path": PAS, "old": "linea con �", "new": "x"})
-check('gate: U+FFFD en ancla', 'RECHAZADO' in out and 'U+FFFD' in out, out)
+check('gate: U+FFFD en ancla', mc.rechazado(out) and mc.es(out, 'SR_EDIT_TU_ANCLA_LLEVA_CARACTER'), out)
 out = call('delphi_edit', {"path": DFM, "old": "a", "new": "b"})
-check('gate: designer binario TPF0', 'RECHAZADO' in out and 'TPF0' in out, out)
+check('gate: designer binario TPF0', mc.rechazado(out) and mc.es(out, 'SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT'), out)
 out = call('delphi_edit', {"path": DFM_FF, "old": "a", "new": "b"})
 check('gate: designer binario con envoltorio $FF (formato real del IDE)',
-      'RECHAZADO' in out and 'BINARIO' in out, out)
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT'), out)
 out = call('delphi_edit', {"path": os.path.join(DIR, '__history', 'x.pas'),
                             "old": "a", "new": "b"})
-check('gate: __history vetado', 'RECHAZADO' in out and '__history' in out, out)
+check('gate: __history vetado', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_IDE'), out)
 
 # --- mojibake warning on new text ---
 out = call('delphi_edit', {"path": PAS, "old": "procedure Otro;",
                             "new": "procedure Otro; // gestorÃ³n"})
-check('aviso: mojibake en texto nuevo', 'MOJIBAKE' in out, out)
+check('aviso: mojibake en texto nuevo', mc.es(out, 'SN_EDIT_FIRMA_MOJIBAKE_NUEVO'), out)
 call('delphi_edit', {"path": PAS,
     "old": "procedure Otro; // gestorÃ³n", "new": "procedure Otro;"})
 
 # --- semantic insert ---
 code = "procedure Nueva;\nbegin\n  Writeln('nueva');\nend;"
 out = call('delphi_edit', {"path": PAS, "insert": "rutina-global", "code": code})
-check('insert: rutina-global', 'INSERT rutina-global' in out and 'ESCRITO' in out, out)
+check('insert: rutina-global', 'INSERT rutina-global' in out and mc.es(out, 'SK_EDIT_ESCRITO_EN_FMT'), out)
 txt = open(PAS, 'rb').read().decode('cp1252')
 check('insert: colocada antes del end.', txt.rstrip().endswith('end.')
       and 'procedure Nueva;' in txt, txt[-90:])
 out = call('delphi_edit', {"path": PAS, "insert": "rutina-global",
                             "code": "procedure Mala;\nbegin\nend"})
-check('gate: end sin punto y coma', 'RECHAZADO' in out and 'punto y coma' in out, out)
+check('gate: end sin punto y coma', mc.rechazado(out) and mc.es(out, 'SR_EDIT_BLOQUE_TERMINA_END_SIN'), out)
 out = call('delphi_edit', {"path": PAS, "insert": "rutina-global",
                             "code": "x := 1;\nend;"})
-check('gate: code sin firma de rutina', 'RECHAZADO' in out and 'firma' in out, out)
+check('gate: code sin firma de rutina', mc.rechazado(out) and mc.es(out, 'SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT'), out)
 out = call('delphi_edit', {"path": PAS, "insert": "rutina-global",
                             "code": "procedure P;\nbegin\nend;\nend."})
-check('gate: code con end.', 'RECHAZADO' in out and "end." in out, out)
+check('gate: code con end.', mc.rechazado(out) and mc.es(out, 'SR_EDIT_BLOQUE_TRAE_END_SOLO'), out)
 
 # --- insert metodo: both halves ---
 mcode = "procedure Ping;\nbegin\n  // nada\nend;"
 out = call('delphi_edit', {"path": PAS, "insert": "metodo", "code": mcode,
                             "inclass": "TCosa"})
-check('insert metodo: clase inexistente rechaza', 'RECHAZADO' in out, out)
+check('insert metodo: clase inexistente rechaza', mc.rechazado(out) and mc.es(out, 'SR_EDIT_ENCUENTRO_CLASS_FMT'), out)
 
 CLS = os.path.join(DIR, 'ConClase.pas')
 with open(CLS, 'wb') as f:
@@ -198,13 +198,13 @@ NU = os.path.join(DIR, 'Naciente.pas')
 if os.path.exists(NU):
     os.remove(NU)
 out = call('delphi_edit', {"path": NU, "createunit": True})
-check('createunit: crea', out.startswith('CREADA'), out)
+check('createunit: crea', mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out)
 nb2 = open(NU, 'rb').read()
 check('createunit: UTF-8 BOM + CRLF + esqueleto',
       nb2.startswith(b'\xef\xbb\xbf') and b'\r\n' in nb2 and b'unit Naciente;' in nb2,
       nb2[:40])
 out = call('delphi_edit', {"path": NU, "createunit": True})
-check('createunit: jamas sobreescribe', 'RECHAZADO' in out and 'YA EXISTE' in out, out)
+check('createunit: jamas sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_EDIT_EXISTE_CREATEUNIT_JAMAS_SOBREESCRIBE_FMT'), out)
 
 # --- designer lint: known cross-framework property mistakes warn at edit
 # time (field, Fase 3: they crash the app at form-load, silently on Android;
@@ -225,14 +225,14 @@ out = call('delphi_edit', {"path": FMX,
            "    TextSettings.HorzAlignment = Center\r\n"
            "    TextSettings.HorzAlign = taCenter"})
 check('lint fmx: defectos resueltos contra las tablas GENERADAS del framework',
-      'AVISO DESIGNER' in out and 'TControlSize' in out and 'Width' in out
+      mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and 'TControlSize' in out and 'Width' in out
       and 'TextSettings' in out and 'HorzAlign' in out
-      and 'Leading' in out and 'CRASHEA' in out, out[-900:])
+      and 'Leading' in out, out[-900:])
 out = call('delphi_edit', {"path": FMX,
     "old": "    Size.X = 100.000000",
     "new": "    Size.Width = 100.000000000000000000"})
 check('lint fmx: cubre el fichero ENTERO (los defectos restantes siguen avisando)',
-      'AVISO DESIGNER' in out and 'no existe en TLabel' in out, out[-600:])
+      mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and 'no existe en TLabel' in out, out[-600:])
 FMX2 = os.path.join(DIR, 'Limpio.fmx')
 with open(FMX2, 'wb') as f:
     f.write(('object FormMain: TFormMain\r\n'
@@ -245,7 +245,8 @@ with open(FMX2, 'wb') as f:
 out = call('delphi_edit', {"path": FMX2,
     "old": "    Text = 'Salir'", "new": "    Text = 'Cerrar'"})
 check('lint fmx: un designer LIMPIO no genera aviso',
-      'ESCRITO' in out and 'AVISO DESIGNER' not in out, out[-300:])
+      mc.es(out, 'SK_EDIT_ESCRITO_EN_FMT') and not mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT')
+      and not mc.es(out, 'SN_DESIGNER_BINDING_LINT_HEADER'), out[-300:])
 VDFM = os.path.join(DIR, 'LintV.dfm')
 with open(VDFM, 'wb') as f:
     f.write(('object Form1: TForm1\r\n'
@@ -258,7 +259,7 @@ out = call('delphi_edit', {"path": VDFM,
     "old": "    Left = 8",
     "new": "    Left = 8\r\n    Position.X = 20.000000\r\n    Align = Client"})
 check('lint dfm: FMX-ismos avisados en el sentido inverso',
-      'AVISO DESIGNER' in out and 'no existe en TButton' in out
+      mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and 'no existe en TButton' in out
       and 'alClient' in out, out[-600:])
 
 # --- la verificacion ensena LA region editada, no otra igual ---------------
@@ -295,50 +296,50 @@ open(ADDU, 'wb').write(CRLF.join([
     'type', '  TX = class end;', '', 'implementation', '', '{$R *.res} // uses (en comentario, no cuenta)', '',
     'end.', '']).encode('cp1252'))
 out = call('delphi_edit', {"path": ADDU, "adduses": "System.SysUtils; Modules.API"})
-check('adduses: implementation sin uses -> se crea', out.startswith('ANADIDAS') and 'creada' in out, out[:300])
+check('adduses: implementation sin uses -> se crea', mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'creada' in out, out[:300])
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('adduses: clausula nueva bajo implementation, con puntos en los nombres',
       'implementation\r\n\r\nuses\r\n  System.SysUtils, Modules.API;\r\n\r\n{$R' in _src, _src)
 check('adduses: la de interface no se toca', 'interface\r\n\r\nuses\r\n  System.Classes;\r\n' in _src, _src)
 out = call('delphi_edit', {"path": ADDU, "adduses": "UOtra", "section": "implementation"})
 _src = open(ADDU, 'rb').read().decode('cp1252')
-check('adduses: anade al final de la clausula existente', out.startswith('ANADIDAS') and 'Modules.API,\r\n  UOtra;' in _src, out[:300])
+check('adduses: anade al final de la clausula existente', mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'Modules.API,\r\n  UOtra;' in _src, out[:300])
 check('adduses: el eco trae la clausula releida', 'UOtra;' in out.split('releida del disco')[-1], out[:300])
 out = call('delphi_edit', {"path": ADDU, "adduses": "System.Classes", "section": "interface"})
-check('adduses: idempotente (ya estaba)', out.startswith('Ya estaba'), out[:200])
+check('adduses: idempotente (ya estaba)', mc.abre(out, 'SN_ADDUSES_PRESENT_FMT'), out[:200])
 out = call('delphi_edit', {"path": ADDU, "adduses": "UInterfaz;System.Classes", "section": "interface"})
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('adduses: interface con uses -> anade la que falta y dice cual estaba',
-      out.startswith('ANADIDAS') and 'Ya estaban: System.Classes' in out and 'System.Classes,\r\n  UInterfaz;' in _src, out[:300])
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'Ya estaban: System.Classes' in out and 'System.Classes,\r\n  UInterfaz;' in _src, out[:300])
 _antes = open(ADDU, 'rb').read()
 out = call('delphi_edit', {"path": ADDU, "adduses": "System.Classes"})
 check('adduses: ya esta en la OTRA seccion -> no la repite (E2004) y lo dice',
-      out.startswith('Nada que escribir') and 'interface' in out and open(ADDU, 'rb').read() == _antes, out[:200])
+      mc.abre(out, 'SN_ADDUSES_PRESENT_OTHER_FMT') and 'interface' in out and open(ADDU, 'rb').read() == _antes, out[:200])
 out = call('delphi_edit', {"path": ADDU, "adduses": "2Mal"})
-check('adduses: nombre invalido rechazado', out.startswith('RECHAZADO'), out[:200])
+check('adduses: nombre invalido rechazado', mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_BAD_NAME_FMT'), out[:200])
 out = call('delphi_edit', {"path": ADDU, "adduses": "X", "section": "initialization"})
-check('adduses: seccion invalida rechazada', out.startswith('RECHAZADO'), out[:200])
+check('adduses: seccion invalida rechazada', mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_BAD_SECTION_FMT'), out[:200])
 DPRX = os.path.join(DIR, 'Prog.dpr')
 open(DPRX, 'wb').write(b'program Prog;\r\nbegin\r\nend.\r\n')
 out = call('delphi_edit', {"path": DPRX, "adduses": "X"})
-check('adduses: en un .dpr remite a add-unit', out.startswith('RECHAZADO') and 'add-unit' in out, out[:200])
+check('adduses: en un .dpr remite a add-unit', mc.rechazado(out) and mc.es(out, 'SR_ADDUSES_NOT_PAS_FMT') and 'add-unit' in out, out[:200])
 check('adduses: cp1252 intacto (sin BOM, CRLF)', not open(ADDU, 'rb').read().startswith(b'\xef\xbb\xbf') and b'\n' not in open(ADDU, 'rb').read().replace(b'\r\n', b''))
 # --- removeuses: la inversa ---
 out = call('delphi_edit', {"path": ADDU, "removeuses": "UOtra"})
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('removeuses: quita de implementation y la clausula sigue bien cerrada',
-      out.startswith('QUITADAS') and 'UOtra' not in _src and 'System.SysUtils,\r\n  Modules.API;\r\n' in _src, out[:300])
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'UOtra' not in _src and 'System.SysUtils,\r\n  Modules.API;\r\n' in _src, out[:300])
 out = call('delphi_edit', {"path": ADDU, "removeuses": "UOtra"})
-check('removeuses: la que no esta -> nada que escribir', out.startswith('No estaba'), out[:200])
+check('removeuses: la que no esta -> nada que escribir', mc.abre(out, 'SN_REMOVEUSES_ABSENT_FMT'), out[:200])
 out = call('delphi_edit', {"path": ADDU, "removeuses": "System.Classes;UInterfaz;UNoEsta", "section": "interface"})
 _src = open(ADDU, 'rb').read().decode('cp1252')
 check('removeuses: la clausula vacia se va entera y lo dice',
-      out.startswith('QUITADAS') and 'No estaban: UNoEsta' in out and 'se ha quitado entera' in out
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'No estaban: UNoEsta' in out and 'se ha quitado entera' in out
       and 'interface\r\n\r\ntype\r\n' in _src and _src.count('\r\nuses\r\n') == 1, _src)
 out = call('delphi_edit', {"path": ADDU, "removeuses": "X", "section": "interface"})
-check('removeuses: seccion sin uses lo dice', 'no tiene uses' in out, out[:200])
+check('removeuses: seccion sin uses lo dice', mc.es(out, 'SN_REMOVEUSES_NO_CLAUSE_FMT'), out[:200])
 out = call('delphi_edit', {"path": DPRX, "removeuses": "X"})
-check('removeuses: en un .dpr remite a remove-unit', out.startswith('RECHAZADO') and 'remove-unit' in out, out[:200])
+check('removeuses: en un .dpr remite a remove-unit', mc.rechazado(out) and mc.es(out, 'SR_REMOVEUSES_NOT_PAS_FMT') and 'remove-unit' in out, out[:200])
 # un // detras de la coma es de la entrada de ANTES: quitar la ULTIMA no mete el
 # ; en el comentario (medido 27-sep: la clausula quedaba sin cerrar), y quitar una
 # del medio no baja el comentario a una linea suya
@@ -350,11 +351,11 @@ open(CMT, 'wb').write(CRLF.join([
 out = call('delphi_edit', {"path": CMT, "removeuses": "UD"})
 _src = open(CMT, 'rb').read().decode('ascii')
 check('removeuses: quitar la ULTIMA deja el ; delante del // de la anterior',
-      out.startswith('QUITADAS') and '  UC;   // otra nota\r\n' in _src, _src)
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and '  UC;   // otra nota\r\n' in _src, _src)
 out = call('delphi_edit', {"path": CMT, "removeuses": "UB"})
 _src = open(CMT, 'rb').read().decode('ascii')
 check('removeuses: quitar una del medio deja el // en SU linea',
-      out.startswith('QUITADAS') and 'uses\r\n  UA,   // la de antes, con su nota\r\n  UC;   // otra nota\r\n' in _src,
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA,   // la de antes, con su nota\r\n  UC;   // otra nota\r\n' in _src,
       _src)
 # la vecina de una entrada envuelta en directiva: la directiva se queda y la
 # vecina conserva UNA sangria (medido en vivo: salia con dos)
@@ -365,13 +366,13 @@ open(IFD, 'wb').write(CRLF.join([
 out = call('delphi_edit', {"path": IFD, "removeuses": "Winapi.Windows", "section": "interface"})
 _src = open(IFD, 'rb').read().decode('cp1252')
 check('removeuses: la directiva se queda y la vecina con una sola sangria',
-      out.startswith('QUITADAS') and '  {$IFDEF MSWINDOWS}\r\n  {$ENDIF}\r\n  System.SysUtils;' in _src, _src)
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and '  {$IFDEF MSWINDOWS}\r\n  {$ENDIF}\r\n  System.SysUtils;' in _src, _src)
 
 # --- restore: two steps, byte-identical ---
 out = call('delphi_edit', {"path": PAS, "restore": True})
-check('restore: paso 1 solo avisa', 'NO he hecho nada' in out and 'SE PERDERAN' in out, out)
+check('restore: paso 1 solo avisa', mc.es(out, 'SN_EDIT_RESTAURAR_NADA_HECHO_FMT'), out)
 out = call('delphi_edit', {"path": PAS, "restore": True, "confirm": True})
-check('restore: paso 2 ejecuta', out.startswith('RESTAURADO'), out)
+check('restore: paso 2 ejecuta', mc.abre(out, 'SK_EDIT_RESTAURADO_DESDE_FMT'), out)
 check('restore: bytes identicos al original', open(PAS, 'rb').read() == ORIG)
 
 print()
@@ -388,7 +389,7 @@ out = call('delphi_edit', {'path': _occ, 'edits': json.dumps([
     {'old': "  Writeln('x');", 'new': "  Writeln('A');", 'occurrence': 1},
     {'old': "  Writeln('x');", 'new': "  Writeln('B');", 'occurrence': 1}])})
 check('tanda: dos entradas a la MISMA linea (occurrence 1 y 1) -> RECHAZADO en la puerta',
-      'RECHAZADO' in out and 'MISMA linea' in out and 'ANTES de la tanda' in out, out[:220])
+      mc.rechazado(out) and mc.es(out, 'SR_PATCH_OCCURRENCE_DUP_FMT'), out[:220])
 check('tanda rechazada: el fichero no se toco',
       open(_occ, encoding='utf-8').read().count("Writeln('x')") == 3, '')
 out = call('delphi_edit', {'path': _occ, 'edits': json.dumps([
@@ -396,13 +397,13 @@ out = call('delphi_edit', {'path': _occ, 'edits': json.dumps([
     {'old': "  Writeln('x');", 'new': "  Writeln('A');", 'occurrence': 1}])})
 _t = open(_occ, encoding='utf-8', newline='').read()
 check('tanda de abajo arriba (occurrence 2, luego 1): aplicada en su sitio',
-      out.startswith('APLICADAS') and "Writeln('A');\r\n  Writeln('B');\r\n  Writeln('x');" in _t, out[:900] + ' | ' + _t[-120:])
+      mc.abre(out, 'SN_PATCH_EDITS_OK_FMT') and "Writeln('A');\r\n  Writeln('B');\r\n  Writeln('x');" in _t, out[:900] + ' | ' + _t[-120:])
 out = call('delphi_edit', {'path': _occ, 'edits': json.dumps([
     {'old': "  Writeln('A');", 'new': "  Writeln('A');\r\n  Writeln('A2');"},
     {'old': "  Writeln('x');", 'new': "  Writeln('C');", 'occurrence': 1}])})
 _t = open(_occ, encoding='utf-8', newline='').read()
 check('tanda: una entrada anade lineas y la siguiente occurrence se arrastra bien',
-      out.startswith('APLICADAS') and "Writeln('A2');\r\n  Writeln('B');\r\n  Writeln('C');" in _t, out[:900] + ' | ' + _t[-140:])
+      mc.abre(out, 'SN_PATCH_EDITS_OK_FMT') and "Writeln('A2');\r\n  Writeln('B');\r\n  Writeln('C');" in _t, out[:900] + ' | ' + _t[-140:])
 
 # 2026-09-25 (hermes): a client that sends "edits" as a REAL JSON array (the
 # description says "array", the schema says string) got '' from the vendor
@@ -413,15 +414,15 @@ out = call('delphi_edit', {'path': _occ, 'edits': [
     {'old': "  Writeln('C');", 'new': "  Writeln('D');"}]})
 _t = open(_occ, encoding='utf-8').read()
 check('tanda: "edits" como ARRAY JSON real (no cadena) se aplica',
-      out.startswith('APLICADAS') and "Writeln('D');" in _t, out[:200])
+      mc.abre(out, 'SN_PATCH_EDITS_OK_FMT') and "Writeln('D');" in _t, out[:200])
 out = call('delphi_edit', {'path': _occ, 'edits': json.dumps(json.dumps([
     {'old': "  Writeln('D');", 'new': "  Writeln('E');"}]))})
 _t = open(_occ, encoding='utf-8').read()
 check('tanda: "edits" codificado dos veces (cadena JSON dentro de cadena) se desenvuelve',
-      out.startswith('APLICADAS') and "Writeln('E');" in _t, out[:200])
+      mc.abre(out, 'SN_PATCH_EDITS_OK_FMT') and "Writeln('E');" in _t, out[:200])
 out = call('delphi_edit', {'path': _occ, 'edits': '{"old": "x", "new": "y"}'})
 check('tanda: "edits" que no es array -> RECHAZADO diciendo cuantos caracteres llegaron y como empieza',
-      out.startswith('RECHAZADO') and 'Han llegado 24 caracteres' in out and '{"old": "x"' in out, out[:300])
+      mc.rechazado(out) and mc.es(out, 'SR_PATCH_EDITS_JSON_FMT') and 'Han llegado 24 caracteres' in out and '{"old": "x"' in out, out[:300])
 
 srv.cierra()
 mc.fin('delphi_edit battery')

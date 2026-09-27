@@ -110,7 +110,7 @@ def bad(text):
     """A tool answer that is NOT a success."""
     t = (text or '').upper()
     # (TIMEOUT) / (NO CONTENT): lo que mc.texto() dice cuando no llega nada
-    return ('RECHAZAD' in t or t.startswith('ERROR') or 'MCPERROR' in t or
+    return (mc.fallo(text or '') or 'MCPERROR' in t or
             'EXCEPCION' in t or 'FALLID' in t or '(TIMEOUT)' in t or '(NO CONTENT)' in t)
 
 

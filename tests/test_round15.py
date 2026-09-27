@@ -82,7 +82,7 @@ try:
     # ---- E2: concurrent builds are serialized ----------------------------
     for name in ('BQa', 'BQb'):
         r = cli.call('delphi_create', {'kind': 'project-console', 'name': name, 'dir': BASE}, sid=sid)
-        check('E2 scaffold %s' % name, 'CREADO' in r, r)
+        check('E2 scaffold %s' % name, mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r)
     dprojs = {n: glob.glob(os.path.join(BASE, '**', n + '.dproj'), recursive=True)[0]
               for n in ('BQa', 'BQb')}
 
@@ -138,7 +138,7 @@ try:
           len(queued) == 1 and queued[0]['queuedMs'] >= 500,
           {'alice': ra.get('queuedMs'), 'bob': rb.get('queuedMs')})
     check('E2 the queued one explains itself (queuedNote)',
-          bool(queued) and 'DE UNO EN UNO' in queued[0].get('queuedNote', ''),
+          bool(queued) and mc.es(queued[0].get('queuedNote', ''), 'SN_BUILD_QUEUED'),
           queued and queued[0].get('queuedNote'))
 finally:
     proc.kill()

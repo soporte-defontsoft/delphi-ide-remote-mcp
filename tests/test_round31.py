@@ -158,31 +158,31 @@ try:
     t = call('delphi_build', {
         'project': os.path.join(REPO, 'CHANGELOG.md'), 'platform': 'Win64'})
     check('R3 build sobre un .md se niega por no ser un proyecto',
-          'no es un proyecto' in t.lower(), t[:200])
+          mc.es(t, 'SR_BUILD_NOT_A_PROJECT_FMT'), t[:200])
     # Ojo con buscar 'exec' a secas: el envoltorio "Error executing tool:"
     # lo contiene, y el primer intento de este check dio un falso rojo.
     # R3b/R3c miran la negativa CONCRETA ("no es un proyecto" como error de
     # la tool): lo que no dice NO vale nada si no ha dicho eso.
     check('R3b y NO se inventa una tarea <exec> ni nombra AllowBuildScripts',
-          'no es un proyecto' in t.lower() and
+          mc.es(t, 'SR_BUILD_NOT_A_PROJECT_FMT') and
           'AllowBuildScripts' not in t and '<exec>' not in t.lower(), t[:200])
     check('R3c la negativa no se disfraza de fallo interno del servidor',
-          t.startswith('error:') and 'no es un proyecto' in t.lower(), t[:200])
+          mc.resultado(t) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(t, 'SR_BUILD_NOT_A_PROJECT_FMT'), t[:200])
 
     # ----------------------------------------------------------------- R4
     t = call('delphi_read', {'path': os.path.join(REPO, 'src')})
     check('R4 delphi_read sobre una CARPETA lo dice',
-          'CARPETA' in t and 'delphi_list' in t, t[:200])
+          mc.es(t, 'SR_LSP_IS_FOLDER_FMT') and 'delphi_list' in t, t[:200])
     t = call('delphi_read', {
         'path': os.path.join(REPO, 'src', 'Server', 'NoExisteJamas.pas')})
     check('R4b un fichero que falta es "error:", no "RECHAZADO:" (regla 11)',
-          t.strip().startswith('error:') and 'RECHAZADO' not in t, t[:200])
+          mc.resultado(t) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(t, 'SR_LSP_NO_FILE_FMT'), t[:200])
 
     # ----------------------------------------------------------------- R5
     t = call('delphi_list', {
         'root': os.path.join(REPO, 'README.md')})
     check('R5 delphi_list sobre un FICHERO lo dice',
-          'FICHERO' in t and 'delphi_read' in t, t[:200])
+          mc.es(t, 'SR_LIST_IS_FILE_FMT') and 'delphi_read' in t, t[:200])
 
     # ----------------------------------------------------------------- R6
     r = cli.call_msg('delphi_test', {
@@ -199,8 +199,8 @@ try:
     t = call('delphi_help', {'command': 'tasks'})
     # la respuesta de VERDAD (la tabla de tasks), y sin el correo ajeno
     check('R7 la respuesta no anuncia el correo de otros agentes',
-          t.startswith('QUE USO PARA CADA COSA') and
-          'agentes concretos' not in t and 'otro-agente' not in t, t[-200:])
+          mc.abre(t, 'SN_HELP_TASKS') and
+          not mc.es(t, 'SN_MESSAGES_PENDING_FMT') and 'otro-agente' not in t, t[-200:])
     w = json.loads(call('delphi_workspace', {}))
     check('R7b ese correo se cuenta en delphi_workspace, que es la llamada '
           'de orientacion', w.get('server', {}).get('mailboxes') == 1,

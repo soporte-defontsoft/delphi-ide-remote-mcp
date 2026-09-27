@@ -78,7 +78,7 @@ def rechazada_por_jaula(txt):
     """La negativa de la jaula, no otra cualquiera. Se mira el texto de
     PathDenied para no dar por bueno un 'no hay nodo' o un 'perfil
     desconocido', que tambien empiezan por RECHAZADO."""
-    return 'FUERA de los workspaces permitidos' in txt
+    return mc.es(txt, 'SR_JAIL_FMT')
 
 
 def nada_en(d):
@@ -91,7 +91,7 @@ def llego_al_dispositivo(txt):
     """La regla del "out" dejo pasar la llamada y lo que fallo fue el
     dispositivo (ficticio: nadie contesta en DEV), no otra negativa
     cualquiera."""
-    return DEV in txt and 'SIN CONEXION CON EL DISPOSITIVO' in txt
+    return DEV in txt and mc.es(txt, 'SN_ADB_GONE')
 
 
 try:
@@ -149,17 +149,17 @@ try:
     g = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
                             'out': os.path.join(JAIL, 'foto.jpg')})
     check('W5 un fichero con la extension de OTRO formato se rechaza',
-          'RECHAZADO' in g and '.png' in g and '.jpg' in g, g[:280])
+          mc.rechazado(g) and mc.es(g, 'SR_CAPTURE_EXT_FMT') and '.png' in g and '.jpg' in g, g[:280])
     h = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
                             'out': os.path.join(JAIL, 'foto.png')})
     check('W5b ...con la suya pasa la regla (lo que falle sera el dispositivo)',
-          'No escribo una imagen' not in h and not rechazada_por_jaula(h)
+          not mc.es(h, 'SR_CAPTURE_EXT_FMT') and not rechazada_por_jaula(h)
           and llego_al_dispositivo(h),
           h[:280])
     i = call('delphi_adb', {'command': 'screenshot', 'device': DEV,
                             'out': os.path.join(JAIL, 'capturas')})
     check('W5c ...y una CARPETA tambien vale ya en delphi_adb',
-          'No escribo una imagen' not in i and 'terminar en .png' not in i
+          not mc.es(i, 'SR_CAPTURE_EXT_FMT') and 'terminar en .png' not in i
           and not rechazada_por_jaula(i) and llego_al_dispositivo(i), i[:280])
     j = call('delphi_adb', {'command': 'screenshot', 'device': DEV})
     check('W5d ...y sin "out" ya no se rechaza: tiene un defecto, como sus hermanas',
@@ -177,7 +177,8 @@ try:
     f = call('delphi_desktop', {'command': 'screenshot', 'profile': 'x',
                                 'out': DIR_DENTRO})
     check('W4 un "out" DENTRO de la jaula no muere por la ruta',
-          not rechazada_por_jaula(f) and 'RemoteRunProjects' in f
+          not rechazada_por_jaula(f) and mc.es(f, 'SR_REMOTERUN_PROJECT_DENIED_FMT')
+          and 'RemoteRunProjects' in f
           and 'McpDesktopNode' in f, f[:280])
     check('W4c ...y fuera sigue vacio', nada_en(FUERA),
           'hay algo bajo %s: %s' % (FUERA, os.listdir(FUERA)))

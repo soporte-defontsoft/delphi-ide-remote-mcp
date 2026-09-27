@@ -24,7 +24,7 @@ def cs(args):
     return r
 def begin():
     r = cs({'command': 'begin'})
-    if 'CHANGESET ' not in r:
+    if not mc.abre(r, 'SN_CHANGESET_BEGUN_FMT'):
         print('BEGIN FALLO:', r[:300])
         sys.exit(2)
     return r.split('CHANGESET ')[1].split(' ')[0]
@@ -42,18 +42,18 @@ cid = begin()
 check('begin devuelve id', bool(cid), cid)
 r = cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': A_PATH,
         'old': 'const C1 = 1;', 'new': 'const C1 = 111;'})
-check('stage edit', 'STAGED edit' in r, r[:150])
+check('stage edit', mc.abre(r, 'SN_CHANGESET_STAGED_FMT') and ' edit ' in r, r[:150])
 r = cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': os.path.join(BASE, 'Nuevo.md'),
         'content': '# nuevo\n'})
-check('stage create', 'STAGED create' in r, r[:150])
+check('stage create', mc.abre(r, 'SN_CHANGESET_STAGED_FMT') and ' create ' in r, r[:150])
 r = cs({'command': 'stage', 'id': cid, 'kind': 'move', 'path': B_PATH,
         'dest': os.path.join(BASE, 'DosMovido.txt')})
-check('stage move', 'STAGED move' in r, r[:150])
+check('stage move', mc.abre(r, 'SN_CHANGESET_STAGED_FMT') and ' move ' in r, r[:150])
 r = cs({'command': 'preview', 'id': cid})
 j = json.loads(r)
 check('preview limpio', j.get('unresolved') == 0 and j.get('files') == 4, r[:300])
 r = cs({'command': 'commit', 'id': cid})
-check('commit completo', 'COMMIT COMPLETO' in r, r[:200])
+check('commit completo', mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT'), r[:200])
 disk = open(A_PATH, 'rb').read()
 check('edit aplicado con encoding intacto', b'C1 = 111' in disk and b'gesti\xf3n' in disk and b'\r\n' in disk, disk[:80])
 check('create aplicado', os.path.exists(os.path.join(BASE, 'Nuevo.md')))
@@ -82,7 +82,7 @@ r = cs({'command': 'preview', 'id': cid})
 j = json.loads(r)
 check('preview del lote resuelve (la trampa es en apply)', j.get('unresolved') == 0, r[:300])
 r = cs({'command': 'commit', 'id': cid})
-check('commit falla y hace ROLLBACK COMPLETO', 'ROLLBACK COMPLETO' in r, r[:250])
+check('commit falla y hace ROLLBACK COMPLETO', mc.abre(r, 'SR_CHANGESET_ROLLED_BACK_FMT'), r[:250])
 after = {p: sha(p) for p in files}
 check('CERO cambios netos tras el rollback (byte a byte)', before == after,
       [p for p in files if before[p] != after[p]])
@@ -95,7 +95,7 @@ cs({'command': 'preview', 'id': cid})
 open(files[0], 'ab').write(b'linea externa\r\n')  # somebody else writes
 h = sha(files[0])
 r = cs({'command': 'commit', 'id': cid})
-check('commit rechazado por FILE_CHANGED', 'FILE_CHANGED' in r, r[:250])
+check('commit rechazado por FILE_CHANGED', mc.es(r, 'SR_CHANGESET_FILE_CHANGED_FMT'), r[:250])
 check('y no ha tocado nada', sha(files[0]) == h)
 
 # ---- 4. commit sin preview limpio bloqueado ----
@@ -106,7 +106,7 @@ r = cs({'command': 'preview', 'id': cid})
 j = json.loads(r)
 check('preview marca la ancla ausente', j.get('unresolved') == 1, r[:250])
 r = cs({'command': 'commit', 'id': cid})
-check('commit bloqueado sin preview limpio', 'RECHAZADO' in r and 'preview' in r.lower(), r[:200])
+check('commit bloqueado sin preview limpio', mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_NOT_PREVIEWED'), r[:200])
 cs({'command': 'rollback', 'id': cid})
 
 # ---- 6. fricciones de campo (report hermes 2026-08-24) ----
@@ -120,7 +120,7 @@ for n, w in ((1, 'uno'), (2, 'dos'), (3, 'tres')):
         'old': w, 'new': w + ' cambiado'})
 cs({'command': 'preview', 'id': cid})
 r = cs({'command': 'commit', 'id': cid})
-check('F1: el commit cuenta las operaciones reales (3, no 0)', '3 operaciones' in r, r[:200])
+check('F1: el commit cuenta las operaciones reales (3, no 0)', mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and '3 operaciones' in r, r[:200])
 check('F1: y los cambios estan en disco', open(f1, 'rb').read().count(b'cambiado') == 3, open(f1, 'rb').read())
 
 # F2: delete-line borra una linea EN BLANCO (que no tiene ancla usable)
@@ -128,13 +128,13 @@ f2 = os.path.join(BASE, 'f2.txt')
 open(f2, 'wb').write(b'alfa\r\n\r\nbeta\r\n')
 cid = begin()
 r = cs({'command': 'stage', 'id': cid, 'kind': 'delete-line', 'path': f2, 'atline': 2})
-check('F2: stage delete-line', 'STAGED delete-line' in r, r[:150])
+check('F2: stage delete-line', mc.abre(r, 'SN_CHANGESET_STAGED_FMT') and ' delete-line ' in r, r[:150])
 cs({'command': 'preview', 'id': cid})
 r = cs({'command': 'commit', 'id': cid})
 check('F2: la linea en blanco desaparece', open(f2, 'rb').read() == b'alfa\r\nbeta\r\n', open(f2, 'rb').read())
 cid = begin()
 r = cs({'command': 'stage', 'id': cid, 'kind': 'delete-line', 'path': f2})
-check('F2: delete-line sin atline rechazado con el motivo', 'RECHAZADO' in r and 'atline' in r, r[:200])
+check('F2: delete-line sin atline rechazado con el motivo', mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_DELLINE_NEEDS') and 'atline' in r, r[:200])
 cs({'command': 'rollback', 'id': cid})
 
 # F3: las atline se rebasan contra lo que hicieron las ops anteriores
@@ -151,22 +151,22 @@ r = cs({'command': 'preview', 'id': cid})
 j = json.loads(r)
 check('F3: preview limpio', j.get('unresolved') == 0, r[:250])
 r = cs({'command': 'commit', 'id': cid})
-check('F3: commit aplica las dos (atline rebasada, no ROLLBACK)', 'COMMIT COMPLETO' in r and '2 operaciones' in r, r[:250])
+check('F3: commit aplica las dos (atline rebasada, no ROLLBACK)', mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and '2 operaciones' in r, r[:250])
 disk = open(f3, 'rb').read()
 check('F3: resultado correcto en disco', b'L1a' in disk and b'L1b' in disk and b'L3 cambiada' in disk, disk)
 
 # ---- 5. jaula y contratos ----
 cid = begin()
 r = cs({'command': 'stage', 'id': cid, 'kind': 'edit', 'path': 'C:\\Windows\\win.ini', 'old': 'x', 'new': 'y'})
-check('stage fuera de la jaula rechazado', 'RECHAZADO' in r, r[:150])
+check('stage fuera de la jaula rechazado', mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:150])
 r = cs({'command': 'stage', 'id': cid, 'kind': 'explotar', 'path': files[2]})
-check('kind invalido', 'RECHAZADO' in r, r[:120])
+check('kind invalido', mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_KIND'), r[:120])
 r = cs({'command': 'commit', 'id': 'noexiste'})
-check('id desconocido', 'RECHAZADO' in r, r[:120])
+check('id desconocido', mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_UNKNOWN'), r[:120])
 r = cs({'command': 'commit', 'id': cid})
-check('commit de changeset vacio rechazado', 'RECHAZADO' in r, r[:150])
+check('commit de changeset vacio rechazado', mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_EMPTY'), r[:150])
 r = cs({'command': 'rollback', 'id': cid})
-check('rollback descarta', 'descartado' in r, r[:120])
+check('rollback descarta', mc.abre(r, 'SN_CHANGESET_DISCARDED'), r[:120])
 r = cs({'command': 'status'})
 check('status responde JSON', r.startswith('{'), r[:120])
 

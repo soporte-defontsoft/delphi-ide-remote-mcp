@@ -107,7 +107,8 @@ except Exception:
 out = srv.call('delphi_paserver', {"command": "packages"})
 check('packages: lista el PAServer de Linux', 'LinuxPAServer' in out, out[:200])
 check('packages: el hint de Linux avisa del bucle de stdin y del passfile',
-      'sleep infinity' in out and '-password' in out and 'passfile' in out,
+      mc.es(out, 'SN_PAS_LINUX_FETCH_TAR_FMT') and 'sleep infinity' in out
+      and '-password' in out and 'passfile' in out,
       out[:400])
 
 out = srv.call('delphi_paserver', {"command": "profiles"})
@@ -120,45 +121,59 @@ except Exception:
 # --- dispatcher: unknown command names the new ones ---
 out = srv.call('delphi_paserver', {"command": "nonsense"})
 check('command invalido: menciona add-profile, test-connection y get-sdk',
-      'add-profile' in out and 'test-connection' in out and 'get-sdk' in out,
+      mc.es(out, 'SR_PASERVER_CMD') and 'add-profile' in out
+      and 'test-connection' in out and 'get-sdk' in out,
       out[:200])
 
 # --- get-sdk: functional validation (the happy path needs a live PAServer,
 # exercised in the field; here the refusal paths and the gate) ---
 out = srv.call('delphi_paserver', {"command": "get-sdk"})
-check('get-sdk sin name: rechazo con camino', 'RECHAZADO' in out and 'add-profile' in out, out[:250])
+check('get-sdk sin name: rechazo con camino',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NO_PROFILE_FMT') and 'add-profile' in out,
+      out[:250])
 out = srv.call('delphi_paserver', {"command": "get-sdk", "name": "no-such-profile"})
-check('get-sdk perfil inexistente: rechazado', 'RECHAZADO' in out and 'no-such-profile' in out, out[:250])
+check('get-sdk perfil inexistente: rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NO_PROFILE_FMT') and 'no-such-profile' in out,
+      out[:250])
 
 # --- gate vetting (argument filter, BOTH access levels) ---
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": "bad name!",
                                    "host": "127.0.0.1", "password": "x"})
-check('gate: nombre con espacio/simbolo rechazado', 'RECHAZADO' in out and 'nombre' in out, out[:200])
+check('gate: nombre con espacio/simbolo rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NAME_FMT'), out[:200])
 
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1; rm -rf /", "password": "x"})
-check('gate: host con metacaracteres rechazado', 'RECHAZADO' in out and 'host' in out, out[:200])
+check('gate: host con metacaracteres rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_HOST_FMT') and 'host' in out, out[:200])
 
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1", "port": "99999", "password": "x"})
-check('gate: puerto fuera de rango rechazado', 'RECHAZADO' in out and 'puerto' in out, out[:200])
+check('gate: puerto fuera de rango rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PORT_FMT'), out[:200])
 
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1", "platform": "Commodore64", "password": "x"})
-check('gate: plataforma desconocida rechazada', 'RECHAZADO' in out and 'paclient' in out, out[:200])
+check('gate: plataforma desconocida rechazada',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PLATFORM_FMT') and 'paclient' in out,
+      out[:200])
 
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1", "password": 'has"quote'})
-check('gate: password con comillas rechazada', 'RECHAZADO' in out and 'password' in out, out[:200])
+check('gate: password con comillas rechazada',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PASSWORD') and 'password' in out, out[:200])
 
 # --- add-profile: functional validation of required params ---
 out = srv.call('delphi_paserver', {"command": "add-profile", "host": "127.0.0.1",
                                    "password": "x"})
-check('add-profile sin name: pide name', 'RECHAZADO' in out and '"name"' in out, out[:200])
+check('add-profile sin name: pide name',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NEED_FMT') and '"name"' in out, out[:200])
 
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1"})
-check('add-profile sin password: pide password', 'RECHAZADO' in out and '"password"' in out, out[:200])
+check('add-profile sin password: pide password',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NEED_FMT') and '"password"' in out,
+      out[:200])
 
 # --- add-profile happy path: real profile written by paclient --local ---
 out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
@@ -177,7 +192,9 @@ if not ide_open:
         d = json.loads(out)
         check('add-profile: responde JSON con profile/platform',
               d.get('profile') == PROF_NAME and d.get('platform') == 'Linux64', out[:250])
-        check('add-profile: note guia el siguiente paso', 'test-connection' in d.get('note', ''), out[:250])
+        check('add-profile: note guia el siguiente paso',
+              mc.es(d.get('note', ''), 'SN_PASERVER_PROFILE_OK')
+              and 'test-connection' in d.get('note', ''), out[:250])
     except Exception:
         check('add-profile: parsea', False, out[:300])
 
@@ -206,7 +223,8 @@ if not ide_open:
 # --- test-connection with unknown profile ---
 out = srv.call('delphi_paserver', {"command": "test-connection", "name": "no-such-profile"})
 check('test-connection perfil inexistente: rechazo con camino',
-      'RECHAZADO' in out and 'add-profile' in out, out[:250])
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NO_PROFILE_FMT') and 'add-profile' in out,
+      out[:250])
 
 # --- raw TCP probe: closed port ---
 out = srv.call('delphi_paserver', {"command": "test-connection", "host": "127.0.0.1",
@@ -214,7 +232,8 @@ out = srv.call('delphi_paserver', {"command": "test-connection", "host": "127.0.
 try:
     d = json.loads(out)
     check('probe TCP puerto cerrado: tcpReachable=false', d.get('tcpReachable') is False, out[:250])
-    check('probe TCP: note con diagnostico NAT/firewall', 'NAT' in d.get('note', ''), out[:300])
+    check('probe TCP: note con diagnostico NAT/firewall',
+          mc.es(d.get('note', ''), 'SN_PASERVER_TCP_FAIL'), out[:300])
 except Exception:
     check('probe TCP: parsea', False, out[:300])
 
@@ -251,16 +270,19 @@ srv.cierra()
 # --- read-only process: write commands refused, reads pass ---
 ro = Server(('--readonly',))
 out = ro.call('delphi_paserver', {"command": "platforms"})
-check('readonly: platforms sigue abierto', 'platforms' in out and 'RECHAZADO' not in out
+check('readonly: platforms sigue abierto', 'platforms' in out and not mc.rechazado(out)
       and isinstance(mc.como_json(out).get('platforms'), list), out[:150])
 out = ro.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                   "host": "127.0.0.1", "password": "x"})
-check('readonly: add-profile rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
+check('readonly: add-profile rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT'), out[:250])
 out = ro.call('delphi_paserver', {"command": "test-connection", "host": "127.0.0.1",
                                   "port": DEAD_PORT})
-check('readonly: test-connection rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
+check('readonly: test-connection rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT'), out[:250])
 out = ro.call('delphi_paserver', {"command": "get-sdk", "name": PROF_NAME})
-check('readonly: get-sdk rechazado', 'RECHAZADO' in out and 'SOLO LECTURA' in out, out[:250])
+check('readonly: get-sdk rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT'), out[:250])
 ro.cierra()
 
 cleanup_profile()

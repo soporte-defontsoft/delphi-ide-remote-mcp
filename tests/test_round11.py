@@ -62,7 +62,7 @@ open(RC, 'w', encoding='utf-8', newline='\r\n').write(
     'AUDSEC RCDATA "C:\\Windows\\win.ini"\r\n')
 r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
 check('S1 un .rc que apunta FUERA de la jaula: no se compila',
-      'RECHAZADO' in r or 'FUERA' in r, r[:300])
+      mc.rechazado(r) or mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT'), r[:300])
 check('S1 ...y no queda ningun .res con eso dentro',
       not os.path.exists(os.path.join(ST, 'a.res')), os.listdir(ST))
 open(RC, 'w', encoding='utf-8', newline='\r\n').write(
@@ -71,11 +71,11 @@ r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
 # (el conversor de estilos vive junto al servidor desplegado, no junto a esta
 # copia; lo que se comprueba aqui es que el rechazo NO es por la jaula)
 check('S1 un .rc con rutas de dentro no lo veta la jaula',
-      'FUERA' not in r, r[:250])
+      not mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not mc.es(r, 'SR_JAIL_FMT'), r[:250])
 open(RC, 'w', encoding='utf-8', newline='\r\n').write(
     'ESCAPE RCDATA "..\\..\\..\\..\\Windows\\win.ini"\r\n')
 r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
-check('S1 ...y un ..\\..\\ tampoco cuela', 'RECHAZADO' in r or 'FUERA' in r, r[:250])
+check('S1 ...y un ..\\..\\ tampoco cuela', mc.rechazado(r) or mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT'), r[:250])
 
 # ------------------------------------------------------- S2/S3: los perfiles --
 # r11probe es un perfil DE VERDAD, fuera de la jaula: si una pasada anterior
@@ -86,7 +86,7 @@ r = A.call('delphi_paserver', {'command': 'add-profile', 'name': 'r11probe',
                                 'host': '198.51.100.9', 'port': '64211',
                                 'password': 'x', 'platform': 'Linux64'}, t=300)
 check('S2 crear un perfil hacia un host no permitido: RECHAZADO',
-      'RECHAZADO' in r and 'RemoteHosts' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_PASERVER_HOST_DENIED_FMT') and 'RemoteHosts' in r, r[:250])
 B = spawn({'DELPHI_MCP_REMOTE_HOSTS': '198.51.100.9'})
 # r11probe es un perfil DE VERDAD, fuera de la jaula (un .profile en %APPDATA%
 # y su asiento en HKCU): se quita SIEMPRE, pase lo que pase en medio
@@ -97,17 +97,17 @@ try:
                                    'password': 'x', 'platform': 'Linux64'}, t=300)
     # with the IDE open on the server, paclient cannot save profiles (W0013,
     # now answered as a clear refusal): tolerate it - a human may be working
-    created = ('RECHAZADO' not in r) and ('W0013' not in r) and ('bds.exe' not in r)
+    created = (not mc.rechazado(r)) and ('W0013' not in r) and ('bds.exe' not in r)
     check('S2 con el host permitido, el perfil SI se crea (o el IDE abierto se explica)',
           created or 'bds.exe' in r, r[:250])
     if created:
         r = B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
-        borrado = 'BORRADO' in r
+        borrado = mc.abre(r, 'SN_PASERVER_PROFILE_REMOVED_FMT')
         check('S3 y se puede volver a borrar desde aqui', borrado, r[:200])
     else:
         check('S3 y se puede volver a borrar desde aqui', True, '(no se llego a crear)')
     r = B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'no-existe-r11'}, t=120)
-    check('S3 borrar un perfil que no existe se explica', 'RECHAZADO' in r, r[:200])
+    check('S3 borrar un perfil que no existe se explica', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_NO_PROFILE_FMT'), r[:200])
 finally:
     if created and not borrado:
         try:
@@ -119,7 +119,7 @@ finally:
 # ------------------------------------------------- R1/R2: el rename honesto --
 P1 = os.path.join(BASE, 'Lib')
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'Lib', 'dir': P1})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 UCALC = os.path.join(P1, 'UCalc.pas')
 open(UCALC, 'w', encoding='utf-8', newline='\r\n').write(
     'unit UCalc;\n\ninterface\n\ntype\n  TCalc = class\n  public\n'
@@ -140,13 +140,13 @@ check('R2 el cambio de la definicion trae anchor, como los demas',
 # ------------------------------------------------------------------ C1/C3 ----
 T = os.path.join(BASE, 'MiTest')
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'MiTest', 'dir': T})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 open(os.path.join(T, 'MiTest.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
     "program MiTest;\n\n{$APPTYPE CONSOLE}\n\nuses\n  System.SysUtils;\n\nbegin\n"
     "  Writeln('PASS uno');\nend.\n")
 r = A.call('delphi_test', {'project': os.path.join(T, 'MiTest.dproj')}, t=900)
 check('C1 delphi_test con solo "project" se entiende como run',
-      'discover necesita' not in r and ('"result"' in r or 'result' in r), r[:250])
+      not mc.es(r, 'SR_TEST_NEED_PATH') and ('"result"' in r or 'result' in r), r[:250])
 A.call('delphi_config', {'project': os.path.join(T, 'MiTest.dproj'),
                           'command': 'add-searchpath', 'path': P1})
 j = J(A.call('delphi_projects', {}))
@@ -167,14 +167,14 @@ edits = json.dumps([{"old": "    FA: Integer;", "new": "    FA: Integer;\r\n    
 r = A.call('delphi_edit', {'path': W, 'edits': edits})
 disk = open(W, encoding='utf-8').read()
 check('W1 tres ediciones sobre un fichero en UNA llamada',
-      'APLICADAS 3' in r and 'FB: string;' in disk and 'Uno(A: Integer)' in disk, r[:250])
+      mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and ' 3 ' in r.split('\n', 1)[0] and 'FB: string;' in disk and 'Uno(A: Integer)' in disk, r[:250])
 bad = json.dumps([{"old": "    procedure Uno(A: Integer);", "new": "    procedure Uno(A, C: Integer);"},
                   {"old": "ESTA LINEA NO EXISTE", "new": "x"}])
 r = A.call('delphi_edit', {'path': W, 'edits': bad})
 check('W1 si una falla, se deshacen TODAS (byte a byte)',
-      'ROLLBACK' in r and open(W, encoding='utf-8').read() == disk, r[:250])
+      mc.abre(r, 'SR_PATCH_EDITS_ROLLED_FMT') and open(W, encoding='utf-8').read() == disk, r[:250])
 r = A.call('delphi_edit', {'path': W, 'edits': 'esto no es json'})
-check('W1 un "edits" que no es JSON se explica', 'RECHAZADO' in r and 'JSON' in r, r[:200])
+check('W1 un "edits" que no es JSON se explica', mc.rechazado(r) and mc.es(r, 'SR_PATCH_EDITS_JSON_FMT'), r[:200])
 
 # W2: orientarse en codigo ajeno costaba un delphi_read por fichero
 jd = J(A.call('delphi_symbols', {'path': P1}))
@@ -199,18 +199,18 @@ FUERA = os.path.join(TOP, 'FUERA-R11.inc')   # fuera de la jaula, dentro de la b
 open(FUERA, 'w', encoding='utf-8').write('SECRETO_UNO = 1;\n')
 PF = os.path.join(BASE, 'Incl')
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'Incl', 'dir': PF})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 open(os.path.join(PF, 'Incl.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
     "program Incl;\n\n{$APPTYPE CONSOLE}\n\nconst\n{$I '" + FUERA + "'}\n\n"
     "begin\n  Writeln(SECRETO_UNO);\nend.\n")
 r = A.call('delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
                              'platform': 'Win64', 'config': 'Debug'}, t=900)
 check('S4 un {$I} que apunta FUERA de la jaula: no se compila',
-      r.startswith('RECHAZADO') and '{$I' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_BUILD_INCLUDE_OUTSIDE_FMT') and '{$I' in r, r[:250])
 check('S4 ...y no viene ni una palabra del fichero de fuera',
       'SECRETO_UNO' not in r, r[:250])
 check('S4 ...y es un RECHAZO, no un "Error executing tool"',
-      not r.startswith('Error executing tool'), r[:120])
+      mc.resultado(r) != 'INTERNAL', r[:120])
 # lo normal sigue compilando: {$R *.res} y un include de dentro
 open(os.path.join(PF, 'dentro.inc'), 'w', encoding='utf-8', newline='\r\n').write(
     'SECRETO_UNO = 1;\n')
@@ -220,7 +220,7 @@ open(os.path.join(PF, 'Incl.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').wr
 r = A.call('delphi_build', {'project': os.path.join(PF, 'Incl.dproj'),
                              'platform': 'Win64', 'config': 'Debug'}, t=900)
 check('S4 un include de DENTRO, y el {$R *.res} de siempre, compilan igual',
-      not r.startswith('RECHAZADO'), r[:250])
+      not mc.rechazado(r), r[:250])
 
 # ------------------------------------- lo que pidio el refactor (ronda 12) --
 BLK = os.path.join(BASE, 'UBloque.pas')
@@ -233,20 +233,20 @@ blk = json.dumps([{"old": "  Writeln(1);\n  Writeln(2);", "new": "  Writeln(9);"
 r = A.call('delphi_edit', {'path': BLK, 'edits': blk})
 disk = open(BLK, encoding='utf-8').read()
 check('M1 un ancla de VARIAS lineas dentro de edits',
-      'APLICADAS 1' in r and disk.count('Writeln(9);') == 1, r[:200])
+      mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and ' 1 ' in r.split('\n', 1)[0] and disk.count('Writeln(9);') == 1, r[:200])
 check('M1 ...y "occurrence" elige cual, sin contar lineas',
       disk.index('Writeln(9);') > disk.index('procedure Dos;'), disk)
 amb = json.dumps([{"old": "procedure Uno;\nbegin", "new": "procedure Uno;\nbegin"},
                   {"old": "  ESTO(1);\n  NO EXISTE(2);", "new": "x"}])
 r = A.call('delphi_edit', {'path': BLK, 'edits': amb})
 check('M1 un bloque que no existe se rechaza y se deshace todo',
-      'ROLLBACK' in r or 'RECHAZADO' in r, r[:200])
+      mc.abre(r, 'SR_PATCH_EDITS_ROLLED_FMT') or mc.rechazado(r), r[:200])
 r = A.call('delphi_help', {})
 check('M3 el mapa dice COMO averiguar los parametros de una tool',
       'command=tool' in r and 'content' in r, r[-400:])
 r = A.call('delphi_test', {'command': 'run', 'project': 'MiTest'})
 check('C9 un NOMBRE de proyecto se explica como tal, no como jaula',
-      'RUTA' in r and 'delphi_projects' in r, r[:250])
+      mc.es(r, 'SR_TEST_NAME_NOT_PATH_FMT') and 'delphi_projects' in r, r[:250])
 
 # ------------------------------- la MISMA raiz, dos puertas mas (ronda 12) --
 # S5: el guard del .rc miraba solo las lineas del fichero de arriba. Un .rc
@@ -263,7 +263,7 @@ open(os.path.join(ST2, 'b.rc'), 'w', encoding='utf-8', newline='\r\n').write(
     'LEGIT RCDATA "b.bin.style"\r\n#include "inner.txt"\r\n')
 r = A.call('delphi_styles', {'command': 'build', 'path': ST2}, t=300)
 check('S5 un #include que trae una ruta de fuera: RECHAZADO',
-      'RECHAZADO' in r and 'inner.txt' in r, r[:300])
+      mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT') and 'inner.txt' in r, r[:300])
 check('S5 ...y no queda .res con nada dentro',
       not os.path.exists(os.path.join(ST2, 'b.res')), os.listdir(ST2))
 
@@ -272,7 +272,7 @@ check('S5 ...y no queda .res con nada dentro',
 r1 = A.call('delphi_symbols', {'path': 'C:\\Windows\\NoExisteJamas.pas'})
 r2 = A.call('delphi_symbols', {'path': SRC})
 check('S6 fuera de la jaula: el MISMO rechazo exista o no',
-      ('FUERA' in r1) and ('FUERA' in r2), (r1[:90], r2[:90]))
+      mc.es(r1, 'SR_JAIL_FMT') and mc.es(r2, 'SR_JAIL_FMT'), (r1[:90], r2[:90]))
 
 # ---------------------------------------- el ultimo muro: borrar de verdad --
 # Cinco agentes en un dia dejaron 112 MB de copias que ninguno podia quitar, y
@@ -282,7 +282,7 @@ PU = os.path.join(BASE, 'purgar.txt')
 open(PU, 'w', encoding='utf-8').write('x')
 r = A.call('delphi_delete', {'path': PU, 'purge': True})
 check('P1 purge sobre un fichero VIVO: RECHAZADO (la papelera no se salta)',
-      'RECHAZADO' in r and os.path.exists(PU), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_ONLY_TRASH') and os.path.exists(PU), r[:200])
 r = A.call('delphi_delete', {'path': PU})
 import glob as _glob
 _cop = [x for x in _glob.glob(os.path.join(BASE, '__delphi-patch', '*', 'deleted', 'purgar.txt-*'))
@@ -291,11 +291,11 @@ check('P1 el borrado normal sigue dejando copia', len(_cop) == 1, r[:150])
 if _cop:
     r = A.call('delphi_delete', {'path': _cop[0], 'purge': True})
     check('P2 purge de la copia: se va de verdad',
-          'PURGADO' in r and not os.path.exists(_cop[0]), r[:200])
+          mc.abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(_cop[0]), r[:200])
 r = A.call('delphi_delete', {'path': os.path.join(BASE, '__delphi-patch'),
                               'purge': True})
 check('P3 la papelera ENTERA no se purga de una (ahi hay copias de otros)',
-      'RECHAZADO' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_ROOT'), r[:200])
 
 A.mata()
 mc.fin('round-11 battery')

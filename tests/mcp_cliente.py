@@ -299,20 +299,75 @@ def outcome(t):
     return m.group(2) or ''
 
 
+def _fin_literal(t, i):
+    """Posicion tras el literal Pascal que empieza en t[i] == "'" ('' dentro)."""
+    i += 1
+    while True:
+        if t[i] == "'" and t[i + 1:i + 2] == "'":
+            i += 2
+        elif t[i] == "'":
+            return i + 1
+        else:
+            i += 1
+
+
 def constantes(t):
-    """{NOMBRE: texto} de las constantes de cadena de un catalogo Pascal: sus
-    literales juntos, sin comentarios. Lo que no es literal (otra constante,
-    #10) se salta o se traduce; basta para leer etiquetas. EL lector del
+    """{NOMBRE: texto} de las constantes de cadena de un catalogo Pascal, con
+    un tokenizador: literales ('' dentro), #nn y #$hh, y comentarios //, { } y
+    (* *) solo FUERA de los literales. El lector de antes quitaba los { } con
+    una regex y se comia los de DENTRO de un texto ({$I %s.inc}, {old,new}):
+    29 textos mal leidos y uno entero perdido, que test_catalogo no vigilaba
+    (medido 27-sep-2026). Una referencia a otra constante del mismo catalogo
+    (SL_MARCA_AVISO + '...') se resuelve; sLineBreak es CRLF. EL lector del
     catalogo para las baterias (test_catalogo lo usa tambien)."""
-    t = re.sub(r'//[^\n]*', '', t)
-    t = re.sub(r'\{[^}]*\}', '', t)
+    crudo = {}
+    for m in re.finditer(r'^  ([A-Z][A-Z0-9_]*)\s*=', t, re.M):
+        antes = t[:m.start()]
+        if antes.rfind('{') > antes.rfind('}'):
+            continue                      # dentro de un comentario { }
+        i, toks = m.end(), []
+        while True:
+            c = t[i]
+            if c == "'":
+                j = _fin_literal(t, i)
+                toks.append(('s', t[i + 1:j - 1].replace("''", "'"))); i = j
+            elif c == '#':
+                n = re.match(r'#(\$[0-9A-Fa-f]+|\d+)', t[i:])
+                v = n.group(1)
+                toks.append(('s', chr(int(v[1:], 16) if v.startswith('$') else int(v)))); i += n.end()
+            elif t.startswith('//', i):
+                i = t.index('\n', i)
+            elif c == '{':
+                i = t.index('}', i) + 1
+            elif t.startswith('(*', i):
+                i = t.index('*)', i) + 2
+            elif c.isalpha() or c == '_':
+                n = re.match(r'[A-Za-z_]\w*', t[i:])
+                toks.append(('r', n.group(0))); i += n.end()
+            elif c == ';':
+                break
+            else:
+                i += 1
+        if any(k == 's' for k, _ in toks):
+            crudo.setdefault(m.group(1), toks)
     out = {}
-    for m in re.finditer(r'^\s{2}([A-Z][A-Z0-9_]+)\s*=\s*(.*?);\s*$', t, re.M | re.S):
-        nombre, expr = m.group(1), m.group(2)
-        if nombre in out or expr.count("'") == 0:
-            continue
-        partes = re.findall(r"'((?:[^']|'')*)'|#(\d+)", expr)
-        out[nombre] = ''.join(a.replace("''", "'") if a or not b else chr(int(b)) for a, b in partes)
+
+    def texto(nombre, pila=()):
+        if nombre in out:
+            return out[nombre]
+        partes = []
+        for k, v in crudo[nombre]:
+            if k == 's':
+                partes.append(v)
+            elif v == 'sLineBreak':
+                partes.append('\r\n')
+            elif v in crudo and v not in pila:
+                partes.append(texto(v, pila + (nombre,)))
+        out[nombre] = ''.join(partes)
+        return out[nombre]
+
+    for nombre in crudo:
+        texto(nombre)
     return out
 
 

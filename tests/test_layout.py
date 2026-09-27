@@ -257,18 +257,18 @@ check('un form sin tamano se dice, no se adivina',
 
 # L9 - doctrine
 r = call({'command': 'layout', 'path': 'C:\\Windows\\win.ini'})
-check('L9 fuera de la carcel: RECHAZADO', 'RECHAZADO' in r, r[:160])
+check('L9 fuera de la carcel: RECHAZADO', mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:160])
 p = os.path.join(BASE, 'Bin.dfm')
 open(p, 'wb').write(b'\xff\x0a\x00FORMBIN\x00TPF0\x08TFormBin\x00')
 r = call({'command': 'layout', 'path': p})
 check('L9 designer binario: RECHAZADO',
-      'RECHAZADO' in r and 'BINARIO' in r, r[:160])
+      mc.rechazado(r) and mc.es(r, 'SR_RECHAZADO_FMT') and 'BINARIO' in r, r[:160])
 p = os.path.join(BASE, 'algo.pas')
 open(p, 'w').write('unit algo;\ninterface\nimplementation\nend.\n')
 r = call({'command': 'layout', 'path': p})
-check('L9 un .pas no es un designer', 'RECHAZADO' in r, r[:160])
+check('L9 un .pas no es un designer', mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_NOT_FORM'), r[:160])
 r = call({'command': 'volar', 'path': 'x'})
-check('layout aparece en el error de comando', 'layout' in r, r[:200])
+check('layout aparece en el error de comando', mc.es(r, 'SR_DESIGNER_CMD') and 'layout' in r, r[:200])
 
 # ============================================================
 # Round-8 report (agent layout9): VCL semantics correct forms need.
@@ -337,7 +337,8 @@ check('Bug4 un .dfm truncado se avisa', 'truncatedNote' in o, o)
 p_fmx = os.path.join(BASE, 'F.fmx')
 open(p_fmx, 'w', newline='').write('object F: TF\n  object R: TRectangle\n  end\nend\n')
 r = call({'command': 'layout', 'path': p_fmx})
-check('FP7 un .fmx se rechaza (no se contesta ok en falso)', 'RECHAZADO' in r, r[:120])
+check('FP7 un .fmx se rechaza (no se contesta ok en falso)',
+      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_LAYOUT_FMX'), r[:120])
 
 o = layout('OldForm', DFMS['OldForm'])
 check('FN3 un form sin ClientWidth se estima y lo declara',

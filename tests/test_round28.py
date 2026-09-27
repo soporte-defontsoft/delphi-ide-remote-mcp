@@ -72,9 +72,9 @@ check('preparada: la implementacion SI se escribio',
 # ---- 3. metodo ENTERO: rechazo con las dos lineas y el camino ----
 pas = fresh('Caso3.pas')
 out = edit(pas, 'procedure Existente;', '  FValor := 4;')
-check('entero: RECHAZADO', out.startswith('RECHAZADO') and 'ya existe ENTERO' in out, out[:250])
+check('entero: RECHAZADO', mc.rechazado(out) and mc.es(out, 'SR_EDIT_EXISTE_ENTERO_DECLARACION_LINEA_FMT'), out[:250])
 check('entero: da las dos lineas y el camino old/new',
-      'declaracion en linea' in out and 'old/new' in out, out[:300])
+      mc.es(out, 'SR_EDIT_EXISTE_ENTERO_DECLARACION_LINEA_FMT') and 'old/new' in out, out[:300])
 t = open(pas, encoding='utf-8', newline='').read()
 check('entero: el fichero NO cambio', t == BASE, len(t))
 
@@ -84,7 +84,7 @@ HUERFANA = BASE.replace('end.' + CRLF, CRLF.join([
 pas = fresh('Caso4.pas', HUERFANA)
 out = edit(pas, 'procedure Huerfana;', '  FValor := 5;')
 check('huerfana: RECHAZADO incoherente',
-      out.startswith('RECHAZADO') and 'no la declara' in out, out[:250])
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_EXISTE_IMPLEMENTACION_LINEA_PERO_FMT'), out[:250])
 
 srv.cierra()
 mc.fin('round28 (insert metodo idempotente)')

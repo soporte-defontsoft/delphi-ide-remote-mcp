@@ -73,7 +73,7 @@ r = call('delphi_edit', {"path": pas, "insert": "metodo", "inclass": "TCosa",
                                  '  Result := False;' + CRLF + 'end;'})
 t = leer(pas)
 cl = clase_de(t)
-check('multilinea: aceptada', not r.startswith('RECHAZADO'), r)
+check('multilinea: aceptada', not mc.rechazado(r), r)
 check('multilinea: la clase recibe la firma ENTERA',
       'const AArgs: array of string; out ARespuesta: Pointer): Boolean;' in cl, cl[-300:])
 check('multilinea: la declaracion NO queda partida',
@@ -95,7 +95,7 @@ r = call('delphi_edit', {"path": pas, "insert": "metodo", "inclass": "TCosa",
                                  '  FValor := 7;' + CRLF + 'end;'})
 t = leer(pas)
 cl = clase_de(t)
-check('comentario: aceptado', not r.startswith('RECHAZADO'), r)
+check('comentario: aceptado', not mc.rechazado(r), r)
 check('comentario: la clase recibe SOLO la firma',
       'procedure Documentada;' in cl and 'Documenta lo que hace' not in cl, cl[-260:])
 check('comentario: el comentario viaja con la implementacion',
@@ -109,7 +109,7 @@ r = call('delphi_edit', {"path": pas, "insert": "metodo", "inclass": "TCosa",
                          "code": 'procedure SinCerrar(A: Integer' + CRLF +
                                  'begin' + CRLF + '  FValor := A;' + CRLF + 'end;'})
 check('sin cerrar: rechazada con motivo claro',
-      r.startswith('RECHAZADO') and 'cerrar' in r.lower(), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_EDIT_FIRMA_NO_CIERRA_FMT'), r[:200])
 check('sin cerrar: el fichero NO se toca', leer(pas) == BASE, 'fichero modificado')
 
 # ------------------------------------------- 4. una linea sigue funcionando
@@ -129,7 +129,7 @@ r = call('delphi_edit', {"path": pas, "insert": "metodo", "inclass": "TCosa",
                          "code": 'procedure TCosa.Cualificada;' + CRLF + 'begin' + CRLF +
                                  '  FValor := 3;' + CRLF + 'end;'})
 check('cualificada: se sigue rechazando',
-      r.startswith('RECHAZADO') and 'CUALIFICADA' in r, r[:160])
+      mc.rechazado(r) and mc.es(r, 'SR_EDIT_FIRMA_VIENE_CUALIFICADA_CLASE'), r[:160])
 
 # --------------------- 6. rutina-global visible: interface con firma ENTERA
 UNIT_G = CRLF.join([

@@ -60,32 +60,32 @@ os.makedirs(REPOD)
 A.call('delphi_git', {'repo': REPOD, 'command': 'init'})
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'http://127.0.0.1:3131/mcp'})
 check('R1 una URL explicita a localhost: RECHAZADA sin conectar',
-      'RECHAZADO' in r and 'GitRemotes' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_OFF_FMT') and 'GitRemotes' in r, r[:250])
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'https://198.51.100.7/evil.git'})
-check('R1 ...y a un host cualquiera tambien', 'RECHAZADO' in r, r[:200])
+check('R1 ...y a un host cualquiera tambien', mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_OFF_FMT'), r[:200])
 r = A.call('delphi_git', {'repo': os.path.join(BASE, 'clon'), 'command': 'clone',
                           'message': 'https://198.51.100.7/evil.git'})
-check('R1 clone con URL no permitida: RECHAZADO', 'RECHAZADO' in r, r[:200])
+check('R1 clone con URL no permitida: RECHAZADO', mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_OFF_FMT'), r[:200])
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'push', 'args': 'origin main'})
 check('R1 un remoto POR NOMBRE sigue permitido (no es una URL)',
-      'RECHAZADO' not in r, r[:200])
+      not mc.rechazado(r), r[:200])
 
 B = spawn({'DELPHI_MCP_GIT_REMOTES': 'example.com'})
 r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'https://otro.example.org/x.git'})
 check('R1 host fuera de la lista del operador: RECHAZADO nombrando la lista',
-      'RECHAZADO' in r and 'example.com' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_HOST_FMT') and 'example.com' in r, r[:250])
 r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'https://example.com/x.git'})
 check('R1 el host permitido SI pasa la puerta (falle luego lo que falle)',
-      'RECHAZADO' not in r, r[:200])
+      not mc.rechazado(r), r[:200])
 B.mata()
 
 # --------------------------------------------------------------- B1: merge --
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'merge', 'args': '--no-ff otra'})
 check('B1 merge con opciones: RECHAZADO (rompia el --ff-only)',
-      'RECHAZADO' in r and 'ff-only' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_MERGE_ARGS') and 'ff-only' in r, r[:250])
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'merge', 'args': '--abort'})
 check('B1 merge --abort SI se acepta (la salida del merge a medias)',
-      'RECHAZADO' not in r, r[:200])
+      not mc.rechazado(r), r[:200])
 
 # ------------------------------------------------------------- P4: comandos --
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'switchh'})
@@ -122,7 +122,7 @@ os.makedirs(os.path.join(D, 'dentro'))
 open(os.path.join(D, 'dentro', 'f.txt'), 'w').write('x')
 r = A.call('delphi_delete', {'path': D})
 check('R3 borrar una carpeta la quita DE VERDAD, y solo entonces dice BORRADO',
-      ('BORRADO' in r) == (not os.path.isdir(D)), (r[:150], os.path.isdir(D)))
+      mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') == (not os.path.isdir(D)), (r[:150], os.path.isdir(D)))
 
 # ------------------------------------------------------- F2/F4/M3 changeset --
 CS = os.path.join(BASE, 'tanda')
@@ -142,18 +142,18 @@ A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'create', 'pa
 A.call('delphi_changeset', {'command': 'unstage', 'id': CID, 'n': 1})
 r = A.call('delphi_changeset', {'command': 'preview', 'id': CID})
 check('F2 preview VUELVE a validar el plan tras un unstage',
-      'RECHAZADO' in r and 'ya existe' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_VIRT_EXISTS_FMT'), r[:250])
 A.call('delphi_changeset', {'command': 'rollback', 'id': CID})
 
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'Proy', 'dir': os.path.join(BASE, 'Proy')})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 r = A.call('delphi_changeset', {'command': 'begin'})
 CID2 = [w for w in r.replace('.', ' ').split() if w.count('-') >= 2][0]
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID2, 'kind': 'edit',
                                 'path': os.path.join(BASE, 'Proy', 'Proy.dproj'),
                                 'old': '<Platform>Win32</Platform>', 'new': 'x'})
 check('M3 un .dproj se rechaza EN EL STAGE, no en el commit',
-      'RECHAZADO' in r and 'delphi_config' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_PROJECT_FILE_FMT') and 'delphi_config' in r, r[:250])
 A.call('delphi_changeset', {'command': 'rollback', 'id': CID2})
 
 # ------------------------------------------------------------- B4/P8/B3 ----
@@ -161,56 +161,56 @@ PAS = os.path.join(BASE, 'Proy', 'UAlgo.pas')
 open(PAS, 'w', encoding='utf-8').write('unit UAlgo;\r\ninterface\r\nimplementation\r\nend.\r\n')
 r = A.call('delphi_read', {'path': PAS, 'fromline': 4, 'toline': 2})
 check('B4 rango al reves: RECHAZADO en vez de cuerpo vacio',
-      'RECHAZADO' in r and 'reves' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_READ_RANGE_FMT'), r[:200])
 TXT = os.path.join(BASE, 'notas.txt')
 open(TXT, 'w', encoding='utf-8').write('esto no es pascal\n')
 r = A.call('delphi_symbols', {'path': TXT})
 check('P8 symbols sobre algo que no es Delphi: lo dice, no devuelve []',
-      'RECHAZADO' in r and '.pas' in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_LSP_NOT_SOURCE_FMT') and '.pas' in r, r[:200])
 r = A.call('delphi_diagnostics', {'path': TXT}, t=120)
 check('B3 diagnostics sobre algo que no es Delphi: RECHAZADO, sin bucle',
-      'RECHAZADO' in r and 'in-progress' not in r, r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_DIAG_NOT_SOURCE_FMT') and not mc.es(r, 'SN_DIAG_IN_PROGRESS'), r[:200])
 
 # ------------------------------------------------------------------- C1/C2 --
 # sin project y con un dir RELATIVO: lo que falta, dicho (con uno ABSOLUTO,
 # desde la 1.6.0, es una unit SUELTA: C1b)
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'USuelta', 'dir': 'relativa'})
 check('C1 kind=unit sin project: dice exactamente lo que falta',
-      'RECHAZADO' in r and 'project' in r and 'dir' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_UNIT_NEED_PROJECT') and 'project' in r and 'dir' in r, r[:250])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'USuelta', 'dir': BASE})
 check('C1b kind=unit sin project y con dir ABSOLUTO: la unit SUELTA (1.6.0)',
-      r.startswith('CREADA') and 'SUELTA' in r and os.path.exists(os.path.join(BASE, 'USuelta.pas')), r[:250])
+      mc.abre(r, 'SN_CREATE_UNIT_SUELTA_FMT') and os.path.exists(os.path.join(BASE, 'USuelta.pas')), r[:250])
 j = J(A.call('delphi_list', {'path': os.path.join(BASE, 'Proy')}))
 check('C2 delphi_list acepta path= igual que root=', j.get('total', 0) >= 1, str(j)[:200])
 
 # --------------------------------------------------------------------- P7 ---
 r = A.call('delphi_projects', {'root': os.path.join(BASE, 'no-existe-esto')})
 check('P7 un root inexistente es un ERROR, no "0 proyectos"',
-      'error' in r.lower() and 'no existe' in r, r[:200])
+      mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_PROJECTS_NO_ROOT_FMT'), r[:200])
 
 # ----------------------------------------------------------------- C3/B2 ----
 TDIR = os.path.join(BASE, 'MiTest')
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'MiTest', 'dir': TDIR})
-assert 'CREADO' in r, r
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 open(os.path.join(TDIR, 'MiTest.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(
     "program MiTest;\n\n{$APPTYPE CONSOLE}\n\nuses\n  System.SysUtils;\n\n"
     "begin\n  Writeln('PASS uno');\n  Sleep(120000);\nend.\n")
 j = J(A.call('delphi_test', {'command': 'discover', 'path': TDIR}))
 check('C3 discover dice EN QUE plataforma se ejecutara y donde puede escribir',
       'Win64' in (j.get('runsOn') or '') and
-      'escribir' in (j.get('runsOn') or '').lower(), str(j)[:400])
+      mc.es(j.get('runsOn') or '', 'SN_TEST_RUNS_ON'), str(j)[:400])
 check('M4 ...y que formato de salida se cuenta',
       any('PASS' in (p.get('countsFormat') or '') for p in j.get('projects', [])), str(j)[:400])
 j = J(A.call('delphi_test', {'command': 'run', 'project': os.path.join(TDIR, 'MiTest.dproj'),
                              'timeoutms': 3000}, t=900))
 check('B2 un test cortado por tiempo se DISTINGUE de uno que falla',
       j.get('result') == 'timeout' and j.get('timedOut') is True, str(j)[:400])
-check('B2 ...y explica por que no hay salida', 'buffer' in (j.get('timeoutNote') or ''), str(j)[:300])
+check('B2 ...y explica por que no hay salida', mc.es(j.get('timeoutNote') or '', 'SN_TEST_TIMEOUT_NOTE'), str(j)[:300])
 check('C3 el resultado dice la plataforma que corrio', j.get('platform') == 'Win64', str(j)[:250])
 r = A.call('delphi_test', {'command': 'run', 'project': os.path.join(TDIR, 'MiTest.dproj'),
                            'config': 'Inventada'}, t=900)
 check('F3(test) una config que no existe: RECHAZADA nombrando las que hay',
-      'RECHAZADO' in r and 'Debug' in r, r[:250])
+      mc.rechazado(mc.como_json(r).get('error', '')) and mc.es(r, 'SR_TEST_CONFIG_FMT') and 'Debug' in r, r[:250])
 
 # --------------------------------------------------------------------- F6 ---
 # El enmascarado ya no es una lista blanca C/D... y al generalizarlo se comio
@@ -229,13 +229,13 @@ r = A.call('delphi_create', {'kind': 'unit', 'name': 'UBorrar',
                              'project': os.path.join(BASE, 'Proy', 'Proy.dproj')})
 r = A.call('delphi_delete', {'path': UNIT})
 check('C7 el mensaje de borrado no se contradice a si mismo',
-      'BORRADO' in r and 'sigue en disco' not in r, r[:300])
+      mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') and not mc.es(r, 'SN_UNIT_REMOVED_FMT'), r[:300])
 r = A.call('delphi_report', {'kind': 'invento', 'title': 'x', 'message': 'y', 'agent': 'r9'})
 check('F11 un kind inventado se archiva como bug PERO se dice',
-      'no es un kind' in r, r[:250])
+      mc.es(r, 'SN_REPORT_KIND_FMT'), r[:250])
 r = A.call('delphi_components', {'platform': 'Win64', 'filter': 'algo'})
 check('F12 components avisa de que ha ignorado el filter',
-      'IGNORADO' in r or 'ignorado' in r.lower(), r[:250])
+      mc.es(r, 'SN_COMPONENTS_FILTER_IGNORED_FMT'), r[:250])
 
 A.mata()
 mc.fin('round-9 battery')

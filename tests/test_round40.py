@@ -88,7 +88,8 @@ try:
     c = call('delphi_textedit', {'path': nuevo, 'create': True,
                                  'content': 'choque'})
     check('L3 y la negativa de "ya existe" sigue enmascarada',
-          sin_letra_real(c) and 'RECHAZADO' in c, c[:200])
+          sin_letra_real(c) and mc.rechazado(c)
+          and mc.es(c, 'SR_TEXT_YA_EXISTE_NUNCA_SOBREESCRIBE_FMT'), c[:200])
 
     # ------------------------------------------------------------------ L4
     pas = os.path.join(JAIL, 'UPath.pas')
@@ -129,7 +130,8 @@ try:
     # manera, aqui se ve.
     z = call('delphi_list', {'root': 'srvz:\\loquesea'})
     check('L8 una unidad que no se sirve se rechaza POR NOMBRE',
-          'srvz' in z and 'RECHAZADO' in z, z[:240])
+          'srvz' in z and mc.rechazado(z) and mc.es(z, 'SR_UNIT_UNKNOWN_FMT'),
+          z[:240])
     check('L8b ...y las validas se nombran con la misma forma que las rutas',
           VIRT in z, z[:240])
 

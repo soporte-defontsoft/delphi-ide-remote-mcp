@@ -69,26 +69,30 @@ try:
     r = call('delphi_textedit', {'path': MD, 'fragment': '68', 'new': '69',
                                  'atline': 3})
     check('F1 un trozo que sale DOS veces en la linea se rechaza, no se adivina',
-          r.startswith('RECHAZADO') and '2 veces' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_FRAG_SEVERAL_FMT'), r[:200])
     r = call('delphi_textedit', {'path': MD, 'fragment': '1570', 'new': '1575'})
     check('F2 sin atline se rechaza: un fragmento nunca se busca por el fichero',
-          r.startswith('RECHAZADO') and 'atline' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_FRAG_NEEDS_ATLINE') and 'atline' in r,
+          r[:200])
     r = call('delphi_textedit', {'path': MD, 'fragment': 'CAMIÓN',
                                  'new': 'tren', 'atline': 3})
     check('F3 distingue mayusculas, y el rechazo ensena la linea real',
-          r.startswith('RECHAZADO') and 'no aparece' in r and '3|' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_FRAG_NOTFOUND_FMT') and '3|' in r,
+          r[:200])
     r = call('delphi_textedit', {'path': MD, 'fragment': '1570', 'new': '1575',
                                  'atline': 3, 'old': '# Prueba'})
     check('F4 fragment + old: dos formas de decir donde, se rechaza',
-          r.startswith('RECHAZADO') and '"old"' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_FRAG_MIXED_FMT') and '"old"' in r,
+          r[:200])
     r = call('delphi_textedit', {'path': MD, 'fragment': '1570',
                                  'new': 'a\nb', 'atline': 3})
     check('F5 un salto de linea en "new" se rechaza en este modo',
-          r.startswith('RECHAZADO') and 'saltos' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_FRAG_MULTILINE'), r[:200])
     r = call('delphi_textedit', {'path': MD, 'fragment': '1570', 'new': '1575',
                                  'atline': 99})
     check('F6 atline mas alla del final se rechaza',
-          r.startswith('RECHAZADO') and '99' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_FRAG_BEYOND_FMT') and '99' in r,
+          r[:200])
     check('F7 ...y tras seis rechazos el fichero sigue byte a byte',
           open(MD, 'rb').read() == antes)
     r = call('delphi_textedit', {'path': AJENO, 'fragment': 'SECRETO',
@@ -102,7 +106,8 @@ try:
                                  'atline': 3})
     esperado = antes.replace(b'1570', b'1575')
     check('T1 delphi_textedit cambia SOLO el trozo: el resto, byte a byte',
-          r.startswith('OK') and open(MD, 'rb').read() == esperado, r[:200])
+          mc.abre(r, 'SK_TEXT_OK_LINEA_FMT') and open(MD, 'rb').read() == esperado,
+          r[:200])
     r = call('delphi_textedit', {'path': MD, 'fragment': '1.0.14',
                                  'new': '1.0.15', 'atline': 5})
     esperado = esperado.replace(b'1.0.14', b'1.0.15')
@@ -122,18 +127,19 @@ try:
         {'fragment': '1.0.14', 'new': '1.0.15', 'atline': 5}])})
     esperado = antes.replace(b'68', b'69').replace(b'1.0.14', b'1.0.15')
     check('B1 tanda: dos trozos de la MISMA linea en orden, y otro mas abajo',
-          r.startswith('APLICADAS') and open(MD, 'rb').read() == esperado,
+          mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and open(MD, 'rb').read() == esperado,
           r[:240])
     planta()
     r = call('delphi_textedit', {'path': MD, 'edits': json.dumps([
         {'fragment': '1570', 'new': '1575', 'atline': 3},
         {'fragment': 'no-esta', 'new': 'x', 'atline': 3}])})
     check('B2 tanda: si una falla, todo o nada - el fichero vuelve byte a byte',
-          'ROLLBACK' in r and open(MD, 'rb').read() == antes, r[:240])
+          mc.es(r, 'SR_PATCH_EDITS_ROLLED_FMT') and open(MD, 'rb').read() == antes,
+          r[:240])
     r = call('delphi_textedit', {'path': MD, 'edits': json.dumps([
         {'fragment': '1570', 'new': '1575', 'atline': 3, 'delete': True}])})
     check('B3 tanda: fragment + delete se rechaza',
-          'ROLLBACK' in r and '"delete"' in r and
+          mc.es(r, 'SR_PATCH_EDITS_ROLLED_FMT') and '"delete"' in r and
           open(MD, 'rb').read() == antes, r[:240])
 
     # ---------------------------------------------------------- delphi_edit
@@ -141,7 +147,7 @@ try:
     r = call('delphi_edit', {'path': PAS, 'fragment': '68', 'new': '69',
                              'atline': 6})
     check('E1 delphi_edit: el trozo cambia y el CP1252 sigue siendo CP1252',
-          r.startswith('ESCRITO') and
+          mc.abre(r, 'SK_EDIT_ESCRITO_EN_FMT') and
           open(PAS, 'rb').read() == pas0.replace(b'68', b'69'), r[:240])
     r = call('delphi_edit', {'path': PAS, 'fragment': 'camión',
                              'new': 'camión grande', 'atline': 6})
@@ -151,11 +157,13 @@ try:
               'camión grande'.encode('cp1252')), r[:240])
     r = call('delphi_edit', {'path': PAS, 'fragment': '69', 'new': '70',
                              'atline': 6, 'insert': 'rutina-global'})
-    check('E3 fragment + insert se rechaza', r.startswith('RECHAZADO'), r[:200])
+    check('E3 fragment + insert se rechaza',
+          mc.rechazado(r) and mc.es(r, 'SR_FRAG_MIXED_FMT'), r[:200])
     r = call('delphi_edit', {'path': MD, 'fragment': '1570', 'new': '1',
                              'atline': 3})
     check('E4 cada gemela sigue vigilando su extension (un .md no es de delphi_edit)',
-          r.startswith('RECHAZADO') and 'delphi_textedit' in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT')
+          and 'delphi_textedit' in r, r[:200])
 
     # ------------------------------------------------------------ changeset
     planta()
@@ -172,13 +180,15 @@ try:
                                    'kind': 'edit', 'path': MD,
                                    'fragment': '68', 'new': '69', 'atline': 3})
     check('C1 changeset: el fragmento se resuelve al apuntar (stage)',
-          s1.startswith('STAGED') and s2.startswith('STAGED'), s1[:120] + s2[:120])
+          mc.abre(s1, 'SN_CHANGESET_STAGED_FMT')
+          and mc.abre(s2, 'SN_CHANGESET_STAGED_FMT'), s1[:120] + s2[:120])
     check('C2 ...y el ambiguo se rechaza AHI, no en el commit',
-          s3.startswith('RECHAZADO') and '2 veces' in s3, s3[:200])
+          mc.rechazado(s3) and mc.es(s3, 'SR_FRAG_SEVERAL_FMT'), s3[:200])
     pv = call('delphi_changeset', {'command': 'preview', 'id': cid})
     cm = call('delphi_changeset', {'command': 'commit', 'id': cid})
     check('C3 preview limpio y commit: los dos ficheros, solo su trozo',
-          '"unresolved":0' in pv.replace(' ', '') and 'COMMIT COMPLETO' in cm and
+          '"unresolved":0' in pv.replace(' ', '') and
+          mc.es(cm, 'SN_CHANGESET_COMMITTED_FMT') and
           open(PAS, 'rb').read() == pas0.replace(b'68', b'69') and
           open(MD, 'rb').read() == antes.replace(b'1570', b'1575'),
           pv[:160] + ' | ' + cm[:160])
@@ -186,7 +196,7 @@ try:
     # La regla de siempre no se ha movido: un trozo en "old" NO es un ancla.
     r = call('delphi_textedit', {'path': MD, 'old': '1575', 'new': '1'})
     check('Z1 el ancla de linea completa sigue intacta: un trozo en "old" se rechaza',
-          r.startswith('RECHAZADO'), r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_ANCLA_DENTRO_FMT'), r[:200])
 finally:
     try:
         proc.kill()
