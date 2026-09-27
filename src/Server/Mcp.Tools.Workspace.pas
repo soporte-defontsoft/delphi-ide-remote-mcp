@@ -387,9 +387,9 @@ begin
   // delphi_read calls of 400 lines (field 2026-08-22, a 1909-line .dproj).
   var SingleFile := TFile.Exists(Params.Root) and not TDirectory.Exists(Params.Root);
   if not SingleFile and not TDirectory.Exists(Params.Root) then
-    Exit('error: directory not found: ' + Params.Root);
+    Exit(MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Params.Root]));
   if Params.Query = '' then
-    Exit('error: empty query');
+    Exit(MsgText(SR_WS_EMPTY_QUERY));
   Max := Params.MaxResults;
   if Max <= 0 then Max := 100;
   if Max > 500 then Max := 500;
@@ -570,7 +570,7 @@ begin
     // delante (medido 2026-09-20 sobre README.md).
     if TFile.Exists(Root) then
       Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [Root]));
-    Exit('error: directory not found: ' + Root);
+    Exit(MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Root]));
   end;
   // Shell-style brace expansion is NOT a mask: *.{pas,dfm} matched nothing
   // silently (field 2026-08-22). Say so instead of returning an empty list.
@@ -684,7 +684,7 @@ begin
             Entry.AddPair('modified',
               FormatDateTime('yyyy-mm-dd hh:nn:ss', TFile.GetLastWriteTime(F)));
           except
-            Entry.AddPair('note', 'size/date unavailable (path too long?)');
+            Entry.AddPair('note', MsgText(SN_WS_SIZE_DATE_UNAVAILABLE));
           end;
         end;
       end;
@@ -784,7 +784,7 @@ begin
   MsgFile := '';
   Repo := Params.Repo;
   if Repo = '' then
-    Exit('error: missing repo');
+    Exit(MsgText(SR_GIT_MISSING_REPO));
   // En un proyecto de REFERENCIA (ReadOnlyRoots) vale la mitad de CONSULTA
   // de git - la misma clasificacion que la credencial de solo lectura, en
   // UNA funcion (Lsp.Guard.GitCommandIsQuery). Lo demas pasa por la puerta
@@ -806,11 +806,11 @@ begin
       CrearCarpeta(Repo);
   end
   else if not TDirectory.Exists(Repo) then
-    Exit('error: directory not found: ' + Repo);
+    Exit(MsgFmt(SR_GIT_DIR_NOT_FOUND_FMT, [Repo]));
 
   for B in BadChars do
     if Params.Args.Contains(B) then
-      Exit('error: shell metacharacters are not allowed in args');
+      Exit(MsgText(SR_GIT_SHELL_METACHARS_ARGS));
   // The message never goes through a shell (git is spawned with a direct
   // command line): normal punctuation is welcome. Line breaks are refused
   // ONLY for the commands that embed the message in the command line -
@@ -846,7 +846,7 @@ begin
   else if Cmd = 'commit' then
   begin
     if Params.Message.Trim = '' then
-      Exit('error: commit needs the "message" parameter');
+      Exit(MsgText(SR_GIT_COMMIT_NEEDS_MESSAGE));
     // -F <file>: the message reaches git byte-exact. Embedding it in the
     // command line mangled double quotes (measured in the field: " -> '').
     // Temporal DEL SERVIDOR, y de los que importan: lleva el mensaje que
@@ -868,16 +868,15 @@ begin
       Exit(MsgText(SR_GIT_CLONE_NEEDS_REPOSITORY_URL));
     if not (Url.StartsWith('https://') or Url.StartsWith('http://') or
             Url.StartsWith('git://') or Url.StartsWith('ssh://')) then
-      Exit('error: only https/http/git/ssh URLs are accepted for clone');
+      Exit(MsgText(SR_GIT_CLONE_URLS_ACCEPTED));
     for B in BadChars do
       if Url.Contains(B) then
-        Exit('error: shell metacharacters are not allowed in the URL');
+        Exit(MsgText(SR_GIT_SHELL_METACHARS_URL));
     if Url.Contains('--upload-pack') or Url.Contains('--config') or
        Url.StartsWith('-') then
-      Exit('error: that URL is not allowed');
+      Exit(MsgText(SR_GIT_URL_NOT_ALLOWED));
     if TDirectory.Exists(TPath.Combine(Repo, '.git')) then
-      Exit('error: "' + Repo + '" ya es un repositorio git. Usa pull para ' +
-        'actualizarlo, o clona en otra carpeta.');
+      Exit(MsgFmt(SR_GIT_YA_ES_REPOSITORIO_FMT, [Repo]));
     // The destination is created before we get here, so a refusal left an
     // empty folder lying around that the caller had to clean up by hand.
     // (the destination folder is created above; if the clone fails it is
@@ -904,7 +903,7 @@ begin
             SameText(Params.Args.Trim, 'user.email')) then
       Exit(MsgText(SR_GIT_CONFIG_ONLY_ACCEPTS_USER));
     if Params.Message.Trim = '' then
-      Exit('error: config needs the value in the "message" parameter');
+      Exit(MsgText(SR_GIT_CONFIG_NEEDS_VALUE));
     GitArgs := 'config ' + Params.Args.Trim.ToLower + ' ' +
       EnComillas(Params.Message);
   end
@@ -1107,13 +1106,10 @@ begin
       Exit(MsgText(SR_GIT_WORKTREE_ARGS));
   end
   else
-    Exit('error: unknown command "' + Params.Command +
-      '". Allowed: status | diff | log | show | branch | switch | merge | ' +
-      'stash | add | commit | init | push | tag | config | clone | pull | ' +
-      'fetch | worktree');
+    Exit(MsgFmt(SR_GIT_UNKNOWN_COMMAND_FMT, [Params.Command]));
 
   if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push']) then
-    TLogger.Warning(Format('delphi_git: NETWORK %s repo=%s %s',
+    TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT,
       [Cmd, Repo, Params.Message]));
 
   try
@@ -1165,9 +1161,7 @@ begin
   // the fix is already whitelisted, say so (measured 2026-08-24).
   if (ExitCode <> 0) and Output.Contains('Author identity unknown') then
     Result := Result + #10 +
-      'Pista: configura la identidad del repo y repite: delphi_git ' +
-      'command=config args=user.name message=<nombre> y despues ' +
-      'command=config args=user.email message=<email>.';
+      MsgText(SN_GIT_PISTA_CONFIGURA_IDENTIDAD);
 end;
 
 { TDelphiInstallsTool }
@@ -1462,9 +1456,7 @@ begin
       Tops.Free;
     end;
     if LibraryZoneEnabled then
-      Return.AddPair('readableExtraNote', 'Read-only territory: RTL/VCL/FMX ' +
-        'sources, installed components and SDKs. Reading tools may enter it; ' +
-        'writing tools never can.')
+      Return.AddPair('readableExtraNote', MsgText(SN_WS_READONLY_TERRITORY))
     else
       Return.AddPair('readableExtraNote', MsgText(SN_WORKSPACE_LIBZONE_OFF));
     if IsReadOnlyNow then
@@ -1615,10 +1607,7 @@ begin
     // while every other tool was correctly jailed (measured 2026-08-24).
     Roots := WorkspaceRoots;
     if Length(Roots) = 0 then
-      Exit('error: no root given and no workspace roots configured. Pass ' +
-        '"root", or configure [Workspace.<name>] Roots in settings.ini next ' +
-        'to the ' +
-        'server exe (or the DELPHI_MCP_ROOTS environment variable).');
+      Exit(MsgText(SR_WS_NO_ROOT_GIVEN));
     // ...y los proyectos de REFERENCIA, marcados abajo como readOnly. Si se
     // solapan (una raiz dentro de una referencia o al reves) se recorre UNA
     // vez: la referencia manda y la marca sale por fichero.
@@ -1834,12 +1823,12 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(FullPath) then
-    Exit('error: no existe ' + FullPath);
+    Exit(MsgFmt(SR_WS_NO_EXISTE_FMT, [FullPath]));
   MaxB := Params.MaxBytes;
   if (MaxB <= 0) or (MaxB > MAX_CHUNK) then
     MaxB := MAX_CHUNK;
   if Params.Offset < 0 then
-    Exit('error: offset negativo');
+    Exit(MsgText(SR_WS_OFFSET_NEGATIVO));
 
   Stream := TFileStream.Create(FullPath, fmOpenRead or fmShareDenyWrite);
   try
@@ -1853,7 +1842,7 @@ begin
       Sha := CachedFileSha256(FullPath);
 
     if Params.Offset > Size then
-      Exit('error: offset mas alla del final (size=' + IntToStr(Size) + ')');
+      Exit(MsgFmt(SR_WS_OFFSET_MAS_ALLA_FINAL_FMT, [Size]));
     LinkOnly := GFilesServed and (Size > BIG_FILE) and (Params.Offset = 0) and
       ((Params.MaxBytes <= 0) or (Params.MaxBytes > SMALL_CHUNK));
     Stream.Position := Params.Offset;
@@ -1944,7 +1933,7 @@ begin
   if Result <> '' then
     Exit;
   if Params.Offset < 0 then
-    Exit('error: offset negativo');
+    Exit(MsgText(SR_WS_OFFSET_NEGATIVO));
   if SkipIdeArtifacts(LongCanonical(FullPath)) then
     Exit(MsgText(SR_WS_RUTA_ARTEFACTOS_IDE_HISTORY));
   // (las carpetas muertas: WriteTargetDenied, arriba)
@@ -2021,7 +2010,7 @@ begin
         Backup := BackupFile(FullPath);
       except
         on E: Exception do
-          Backup := 'FALLO la copia de seguridad: ' + E.Message;
+          Backup := MsgFmt(SN_WS_FALLO_COPIA_SEGURIDAD_FMT, [E.Message]);
       end;
   end;
 
@@ -2030,13 +2019,12 @@ begin
   else
   begin
     if not TFile.Exists(FullPath) then
-      Exit('error: offset>0 pero el fichero no existe todavia; empieza por offset=0');
+      Exit(MsgText(SR_WS_OFFSET_FICHERO_NO_EXISTE));
     Stream := TFileStream.Create(FullPath, fmOpenReadWrite or fmShareDenyWrite);
   end;
   try
     if Params.Offset > Stream.Size then
-      Exit(Format('error: offset %d mas alla del final actual (size=%d); ' +
-        'envia los trozos EN ORDEN', [Params.Offset, Stream.Size]));
+      Exit(MsgFmt(SR_WS_OFFSET_ENVIA_EN_ORDEN_FMT, [Params.Offset, Stream.Size]));
     // ...and an offset that lands INSIDE the file is just as wrong: the write
     // truncates whatever came after it, with no copy taken (this is not
     // offset=0, so the backup above did not run). Measured 2026-08-25: a
@@ -2146,7 +2134,7 @@ begin
     if TFile.Exists(Dir) then
       Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [Dir]))
     else
-      Exit('error: directory not found: ' + Dir);
+      Exit(MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Dir]));
 
   if Params.OutFile <> '' then
     OutZip := TPath.GetFullPath(Params.OutFile)
@@ -2245,11 +2233,7 @@ begin
     Return.AddPair('uncompressedBytes', TJSONNumber.Create(TotalBytes));
     Return.AddPair('zipBytes', TJSONNumber.Create(TFile.GetSize(OutZip)));
     if Elfs > 0 then
-      Return.AddPair('linuxNote', Format(
-        '%d Linux executable(s) inside. A zip made on Windows keeps no Unix ' +
-        'permissions, so after unzipping on the target they are NOT ' +
-        'executable: run chmod +x <file> once (a Deploy through PAServer ' +
-        'does not have this problem).', [Elfs]));
+      Return.AddPair('linuxNote', MsgFmt(SN_WS_LINUX_EXECUTABLES_FMT, [Elfs]));
     // The next step used to be prose and a model had to GUESS the zip
     // name (one invented Win64-Release-deploy.zip - hermes' blind eval).
     // Hand it the exact call instead.
@@ -2259,7 +2243,7 @@ begin
     var NextArgs := TJSONObject.Create;
     NextCall.AddPair('arguments', NextArgs);
     NextArgs.AddPair('path', OutZip);
-    Return.AddPair('next', 'download it with delphi_fetch (chunked, sha256-verified); big zips answer a download link - do NOT set maxbytes');
+    Return.AddPair('next', MsgText(SN_WS_DOWNLOAD_WITH_FETCH));
     Result := Return.ToJSON;
   finally
     Return.Free;

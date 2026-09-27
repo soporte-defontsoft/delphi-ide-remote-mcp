@@ -1535,9 +1535,7 @@ begin
   // 9 MB de mojibake quemaron un contexto para nada (medido 2026-08-24).
   // La regla es LooksBinaryBytes, la misma que delphi_textedit.
   if LooksBinaryBytes(B) then
-    Exit('RECHAZADO: ' + APath + ' es un fichero BINARIO (byte NUL en los ' +
-      'primeros 64 KB): no se puede leer como texto numerado. Para bajarlo ' +
-      'usa delphi_fetch (o el campo download de /files).');
+    Exit(MsgFmt(SR_EDIT_FICHERO_BINARIO_NUL_FMT, [APath]));
   K := DetectEnc(B);
   Text := DecodeBytes(B, K);
   M := Measure(B);
@@ -1560,8 +1558,7 @@ begin
   if FinL - IniL + 1 > MAX_READ_LINES then
   begin
     FinL := IniL + MAX_READ_LINES - 1;
-    Cut := Format(#10'... recortado en la linea %d de %d. Pide otro tramo con from/to.',
-      [FinL, Length(Lines)]);
+    Cut := #10 + MsgFmt(SN_EDIT_RECORTADO_EN_LINEA_FMT, [FinL, Length(Lines)]);
   end;
   Sb := TStringBuilder.Create;
   try
@@ -1637,7 +1634,7 @@ begin
 
       PLower := LongCanonical(A.Path).ToLower.Replace('/', '\');
       if PLower.Contains('\' + BACKUP_SUB + '\') then
-        Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la carpeta de copias de seguridad de esta tool. Copias muertas: no se leen, no se editan. El fichero vivo esta un nivel mas arriba.');
+        Exit(MsgFmt(SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT, [BACKUP_SUB]));
       if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
         Exit(MsgText(SR_EDIT_HISTORY_RECOVERY_SON_COPIAS));
 
@@ -1715,20 +1712,16 @@ begin
           AtomicWrite(A.Path, EncodeText(Skel, NewK));
         except
           on E: Exception do
-            Exit('RECHAZADO al codificar el contenido: ' + E.Message +
-              #10'Usa literales Pascal nativos (#$XXXX) para caracteres fuera del juego.');
+            Exit(MsgFmt(SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT, [E.Message]));
         end;
         var CM := Measure(TFile.ReadAllBytes(A.Path));
-        Exit(Format('CREADA %s (unit %s) - %s, encoding %s (el configurado en el IDE), %s.'#10 +
-          'Verificacion (releido de disco): %s'#10 +
-          'SIGUIENTE PASO - el ALTA en el uses del .dpr (sin alta, la unit no forma parte del proyecto). ' +
-          'El .dproj lo mantiene el IDE: no lo edites.',
+        Exit(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
           [TPath.GetFileName(A.Path), UnitName, Note, EncName(NewK),
            IfThen(SameText(A.Eol, 'lf'), 'LF', 'CRLF'), Summary(CM)]));
       end;
 
       if not TFile.Exists(A.Path) then
-        Exit('RECHAZADO: no existe ' + A.Path);
+        Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [A.Path]));
 
       B := TFile.ReadAllBytes(A.Path);
       // Two binary shapes exist (measured with the IDE's own convert.exe):
@@ -1809,13 +1802,7 @@ begin
             // Hora de CREACION de la copia: la de modificacion la hereda del
             // original (TFile.Copy) y puede ser de dias antes.
             var Sello := TFile.GetCreationTime(Src);
-            Exit(Format('RESTAURAR %s desde %s: aun NO he hecho nada.'#10 +
-              'La copia se hizo el %s (hace %s): es la PRIMERA de ese dia de este ' +
-              'fichero, y no sabe quien lo ha editado desde entonces. Si otro agente lo ' +
-              'toco despues de esa hora, restaurar se lleva TAMBIEN su trabajo; para ' +
-              'deshacer con precision usa delphi_git (diff, stash).'#10 +
-              'Estas %d lineas del fichero ACTUAL no estan en la copia y SE PERDERAN:'#10'%s'#10 +
-              'Si de verdad quieres restaurar, repite con confirm: true.',
+            Exit(MsgFmt(SN_EDIT_RESTAURAR_NADA_HECHO_FMT,
               [TPath.GetFileName(A.Path), MaskDriveText('', Src),
                FormatDateTime('yyyy-mm-dd hh:nn', Sello), EdadLegible(Now - Sello),
                Losses.Count, Lista]));
@@ -1831,9 +1818,7 @@ begin
           CrearCarpeta(TPath.GetDirectoryName(PreCopy));
           TFile.Copy(A.Path, PreCopy);
           AtomicWrite(A.Path, BkBytes);
-          Exit(Format('RESTAURADO %s desde %s'#10'  ahora: %s'#10 +
-            '  OJO: se han perdido %d lineas que tenias escritas. Rehaz y RE-VERIFICA cada tarea de este fichero.'#10 +
-            '  (estado previo guardado en %s)',
+          Exit(MsgFmt(SK_EDIT_RESTAURADO_DESDE_FMT,
             [TPath.GetFileName(A.Path), MaskDriveText('', Src), Summary(Measure(TFile.ReadAllBytes(A.Path))),
              Losses.Count, MaskDriveText('', PreCopy)]));
         finally
@@ -1910,7 +1895,7 @@ begin
         var MF := TRegEx.Match(Firma,
           '^(procedure|function|constructor|destructor)\s+([A-Za-z_]\w*)\s*([.(;:])?', [roIgnoreCase]);
         if not MF.Success then
-          Exit(Format('RECHAZADO: el bloque no empieza por una firma de rutina (puede llevar comentario encima). Primera linea util: |%s|', [Copy(Firma, 1, 80)]));
+          Exit(MsgFmt(SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT, [Copy(Firma, 1, 80)]));
         if MF.Groups[3].Value = '.' then
           Exit(MsgText(SR_EDIT_FIRMA_VIENE_CUALIFICADA_CLASE));
         var IFirmaFin := IFirmaIni;
@@ -1947,7 +1932,7 @@ begin
             Break;
         end;
         if not FirmaCerrada then
-          Exit(Format('RECHAZADO: la firma no llega a cerrarse con '';''. Empieza en |%s|', [Copy(Firma, 1, 80)]));
+          Exit(MsgFmt(SR_EDIT_FIRMA_NO_CIERRA_FMT, [Copy(Firma, 1, 80)]));
         var FirmaLineas := TArray<string>.Create();
         for I := IFirmaIni to IFirmaFin do
           if I = IFirmaFin then
@@ -2224,7 +2209,7 @@ begin
         var AnclaDecl := Lines[IDecl - 1];
         R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
         if not R1.StartsWith('ESCRITO') then
-          Exit(Format('INSERT metodo - FALLO en la mitad 1 (declaracion en la clase %s):'#10'%s', [A.ClassName_, R1]));
+          Exit(MsgFmt(SN_EDIT_INSERT_FALLO_MITAD1_FMT, [A.ClassName_, R1]));
         end;
         var FirmaCual := TRegEx.Replace(Firma,
           '^(procedure|function|constructor|destructor)(\s+)', '$1$2' + A.ClassName_ + '.', [roIgnoreCase]);
@@ -2233,10 +2218,8 @@ begin
         if not R2.StartsWith('ESCRITO') then
         begin
           if DeclNota <> '' then
-            Exit('INSERT metodo - FALLO en la implementacion (la declaracion ya ' +
-              'existia y no se toco; el fichero NO ha cambiado).'#10 + R2);
-          Exit('INSERT metodo - mitad 1 (declaracion) ESCRITA pero FALLO en la mitad 2 (implementacion). ' +
-            'El fichero ha quedado A MEDIAS: restaura con restore:true y reintenta.'#10 + R2);
+            Exit(MsgFmt(SN_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT, [R2]));
+          Exit(MsgFmt(SN_EDIT_INSERT_A_MEDIAS_FMT, [R2]));
         end;
         if DeclNota <> '' then
           Exit(Format('INSERT metodo en %s: %s. Solo se ha escrito la implementacion.'#10 +
@@ -2262,9 +2245,7 @@ begin
       // new without anchor: measured pattern where generic edit tools rewrite
       // the whole file. Explicit rejection, never creative interpretation.
       if (not A.HasOld or (A.OldLine = '')) and A.HasNew then
-        Exit('RECHAZADO: has pasado "new" sin ancla ("old" vacio). Esta tool NUNCA reescribe un fichero entero.'#10 +
-          '- Para editar: old = la linea COMPLETA a sustituir, copiada de delphi_read.'#10 +
-          '- Para leer: usa delphi_read.');
+        Exit(MsgText(SR_EDIT_NEW_SIN_ANCLA));
       if not A.HasOld then
         Exit(MsgText(SR_EDIT_FALTAN_PARAMETROS_MODOS_OLD));
       if not A.HasNew then
@@ -2321,11 +2302,7 @@ begin
       ExtName := '.fmx'
     else
       ExtName := '.dfm';
-    Res.Insert(0, '*** AVISO DESIGNER: propiedades que el streaming del ' +
-      ExtName + ' NO conoce (contrastado con las tablas generadas del ' +
-      'propio framework). El build las empaqueta igual (solo valida ' +
-      'gramatica) y la app CRASHEA al cargar el form en runtime - en ' +
-      'Android muere sin mensaje. Corrigelas antes de desplegar: ***');
+    Res.Insert(0, MsgFmt(SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT, [ExtName]));
     end;
     if Length(Bind) > 0 then
     begin
@@ -2412,8 +2389,7 @@ begin
       var Nums := '';
       for I in Hits do
         Nums := Nums + IntToStr(I + 1) + ', ';
-      Exit(Format('RECHAZADO: el ancla aparece %d veces (lineas %s), no es unica. No he escrito nada.'#10 +
-        'Elige otra linea unica si existe; solo si NO existe (firma repetida interface/implementation) repite con atline: <numero>.',
+      Exit(MsgFmt(SR_EDIT_ANCLA_NO_UNICA_FMT,
         [Hits.Count, Nums.TrimRight([',', ' '])]));
     end;
 
@@ -2515,9 +2491,7 @@ begin
         var Hex := 'XXXX';
         var MU := TRegEx.Match(E.Message, 'U\+([0-9A-F]+)');
         if MU.Success then Hex := MU.Groups[1].Value;
-        Exit(Format('RECHAZADO: %s. El fichero esta en %s y el texto nuevo lleva caracteres que no caben. No he escrito nada.'#10 +
-          'SALIDA LEGITIMA SIN CONVERTIR: literal nativo Pascal - #$%s concatenado (''antes '' + #$%s + '' despues'') ' +
-          'o ChrW($%s) / WideChar($%s) - el fuente queda ASCII y conserva su encoding. Declaralo en el informe.',
+        Exit(MsgFmt(SR_EDIT_CARACTERES_NO_CABEN_FMT,
           [E.Message, EncName(K), Hex, Hex, Hex, Hex]));
       end;
     end;
@@ -2571,28 +2545,26 @@ begin
     end;
 
     if D.Corruption > M.Corruption then
-      Warnings.Add('*** HAN APARECIDO CARACTERES DE CORRUPCION. Restaura con restore:true y PARA. ***');
+      Warnings.Add(MsgText(SN_EDIT_CARACTERES_CORRUPCION));
     if (M.High = 0) and (D.High > 0) then
-      Warnings.Add(Format('(el fichero era ASCII puro y he escrito los caracteres ' +
-        'nuevos en %s, el encoding que el IDE tiene configurado para ficheros ' +
-        'sin BOM. Si este proyecto usa otro, dilo en tu informe.)', [EncName(K)]));
+      Warnings.Add(MsgFmt(SN_EDIT_ERA_ASCII_PURO_FMT, [EncName(K)]));
     var Salen := HighCount(Salido);
     var Entran := HighCount(Prefix + Replacement) - HighCount(Prefix);
     if (Salen >= 0) and (Entran >= 0) and (D.High <> M.High - Salen + Entran) then
-      Warnings.Add(Format('*** ACENTOS FUERA DE CUADRO: esperaba %d bytes altos y hay %d. Restaura con restore:true y PARA. ***',
+      Warnings.Add(MsgFmt(SN_EDIT_ACENTOS_FUERA_CUADRO_FMT,
         [M.High - Salen + Entran, D.High]));
     var Ajenos: Boolean;
     if Eol = 'CRLF' then Ajenos := D.Loose > M.Loose else Ajenos := D.CRLF > M.CRLF;
     if Ajenos then
-      Warnings.Add(Format('*** FINALES DE LINEA AJENOS: el fichero es %s y han entrado del otro estilo. Restaura con restore:true y PARA. ***', [Eol]));
+      Warnings.Add(MsgFmt(SN_EDIT_FINALES_LINEA_AJENOS_FMT, [Eol]));
     var FmNew := MojibakeLines(Replacement);
     if (Length(FmNew) > 0) and (Length(MojibakeLines(AOld)) = 0) then
-      Warnings.Add('*** FIRMA DE MOJIBAKE EN TU TEXTO NUEVO. Si querias escribir un acento, pon el caracter LIMPIO; si copias adrede una corrupcion existente, declaralo. ***');
+      Warnings.Add(MsgText(SN_EDIT_FIRMA_MOJIBAKE_NUEVO));
     for var Aviso in AvisosDeLlaves(APath, Replacement, HitIdx) do
       Warnings.Add(Aviso);
     if AIsDesigner then
     begin
-      Warnings.Add('(fichero del designer en formato texto: editado, pero lo gobierna el IDE. MENCIONALO en tu informe.)');
+      Warnings.Add(MsgText(SN_EDIT_DESIGNER_FORMATO_TEXTO));
       for var LintW in DesignerLint(APath, AfterLines) do
         Warnings.Add(LintW);
     end;
@@ -2602,14 +2574,14 @@ begin
       var EA := CountEndDot(Text);
       var ED := CountEndDot(AfterText);
       if (EA = 1) and (ED <> 1) then
-        Warnings.Add(Format('*** ESTRUCTURA ROTA: el fichero tenia UN ''end.'' y ahora tiene %d. Restaura con restore:true y PARA. ***', [ED]))
+        Warnings.Add(MsgFmt(SN_EDIT_ESTRUCTURA_ROTA_END_FMT, [ED]))
       else if EA = 1 then
       begin
         var Ult := High(AfterLines);
         while (Ult >= 0) and (AfterLines[Ult].Trim = '') do
           Dec(Ult);
         if (Ult >= 0) and not TRegEx.IsMatch(AfterLines[Ult], '^[ \t]*end\.[ \t]*$') then
-          Warnings.Add('*** ESTRUCTURA ROTA: el ''end.'' ya no es la ultima linea - lo que quede detras desaparece de la compilacion. Restaura con restore:true y PARA. ***');
+          Warnings.Add(MsgText(SN_EDIT_ESTRUCTURA_ROTA_ULTIMA));
       end;
       var NewLines := Replacement.Split([#10]);
       for var J := 0 to High(NewLines) do
@@ -2635,7 +2607,7 @@ begin
       end;
     end;
 
-    var Accion := 'ESCRITO en ' + TPath.GetFileName(APath);
+    var Accion := MsgFmt(SK_EDIT_ESCRITO_EN_FMT, [TPath.GetFileName(APath)]);
     if Cuantas > 1 then
     begin
       if ADelete then
@@ -2646,11 +2618,10 @@ begin
           [Cuantas, HitIdx + 1, HitIdx + Cuantas, TPath.GetFileName(APath)]);
     end
     else if ADelete then
-      Accion := Format('BORRADA la linea %d de %s (la linea ya no existe)',
+      Accion := MsgFmt(SK_EDIT_BORRADA_LINEA_FMT,
         [HitIdx + 1, TPath.GetFileName(APath)])
     else if Replacement = '' then
-      Accion := Format('BLANQUEADA la linea %d de %s (sigue existiendo, vacia; ' +
-        'para eliminarla del todo usa delete:true)',
+      Accion := MsgFmt(SK_EDIT_BLANQUEADA_LINEA_FMT,
         [HitIdx + 1, TPath.GetFileName(APath)]);
     Result := Format('%s'#10'  encoding=%s  finales=%s  copia=%s'#10 +
       '  antes:   %s'#10'  despues: %s'#10'  lineas resultantes leidas del disco:'#10'%s',

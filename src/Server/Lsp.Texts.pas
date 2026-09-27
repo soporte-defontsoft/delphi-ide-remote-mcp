@@ -4858,6 +4858,695 @@ const
   SL_SYS_TRAY_ICON_SERVER_RUNNING =
     'Tray icon = server running. Double-click it for this log.';
 
+  // Mensajes que estaban en linea en Mcp.Tools.Vault.pas (paso 3c a mano, 27-sep-2026)
+  SR_VAULT_NO_PUDO_LEER_NOTA_FMT =
+    'error: no se pudo leer la nota (%s) [VAULT-026 INVALID_PARAM]';
+
+  SR_VAULT_FALTA_PATTERN =
+    'error: falta "pattern" [VAULT-027 INVALID_PARAM]';
+
+  SR_VAULT_SUBCARPETA_NO_EXISTE_FMT =
+    'error: la subcarpeta "%s" no existe en el vault [VAULT-028 ' +
+    'NOT_FOUND]';
+
+  SR_VAULT_PATTERN_REGEX_INVALIDA_FMT =
+    'error: "pattern" no es una expresion regular valida (%s) [VAULT-029 ' +
+    'INVALID_PARAM]';
+
+  SR_VAULT_FALTA_CONTENT_APPEND =
+    'error: falta "content" [VAULT-030 INVALID_PARAM]';
+
+  SR_VAULT_FALTA_OLD_TEXT =
+    'error: falta "old_text" [VAULT-031 INVALID_PARAM]';
+
+  // Mensajes que estaban en linea en Mcp.Vault.Session.pas (paso 3c a mano, 27-sep-2026)
+  SN_VAULT_BOOT_NO_PUDO_LEER_FMT =
+    '(no se pudo leer: %s) [VAULT-032]';
+
+  SN_VAULT_BOOT_NO_TIENE_FMT =
+    '(este vault no tiene %s) [VAULT-033]';
+
+  SN_VAULT_CONTINUA_READ_SIN_PATH =
+    '(...) Continua con vault_read sin path. [VAULT-034]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Messages.pas (paso 3c a mano, 27-sep-2026)
+  SR_MSGS_COMMAND_READ_CHECK =
+    'error: command debe ser read | check [MSGS-005 INVALID_PARAM]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Report.pas (paso 3c a mano, 27-sep-2026)
+  SL_REPORT_DELPHI_REPORT_FROM_FMT =
+    'delphi_report: %s (%s) from "%s"';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Workspace.pas (paso 3c a mano, 27-sep-2026)
+  SR_WS_DIR_NOT_FOUND_FMT =
+    'error: directory not found: %s [WS-008 NOT_FOUND]';
+
+  SR_WS_EMPTY_QUERY =
+    'error: empty query [WS-009 INVALID_PARAM]';
+
+  SN_WS_SIZE_DATE_UNAVAILABLE =
+    'size/date unavailable (path too long?) [WS-010]';
+
+  SR_GIT_MISSING_REPO =
+    'error: missing repo [GIT-025 INVALID_PARAM]';
+
+  SR_GIT_DIR_NOT_FOUND_FMT =
+    'error: directory not found: %s [GIT-026 NOT_FOUND]';
+
+  SR_GIT_SHELL_METACHARS_ARGS =
+    'error: shell metacharacters are not allowed in args [GIT-027 ' +
+    'INVALID_PARAM]';
+
+  SR_GIT_COMMIT_NEEDS_MESSAGE =
+    'error: commit needs the "message" parameter [GIT-028 INVALID_PARAM]';
+
+  SR_GIT_CLONE_URLS_ACCEPTED =
+    'error: only https/http/git/ssh URLs are accepted for clone [GIT-029 ' +
+    'INVALID_PARAM]';
+
+  SR_GIT_SHELL_METACHARS_URL =
+    'error: shell metacharacters are not allowed in the URL [GIT-030 ' +
+    'INVALID_PARAM]';
+
+  SR_GIT_URL_NOT_ALLOWED =
+    'error: that URL is not allowed [GIT-031 INVALID_PARAM]';
+
+  SR_GIT_YA_ES_REPOSITORIO_FMT =
+    'error: "%s" ya es un repositorio git. Usa pull para actualizarlo, o ' +
+    'clona en otra carpeta. [GIT-032 INVALID_PARAM]';
+
+  SR_GIT_CONFIG_NEEDS_VALUE =
+    'error: config needs the value in the "message" parameter [GIT-033 ' +
+    'INVALID_PARAM]';
+
+  SR_GIT_UNKNOWN_COMMAND_FMT =
+    'error: unknown command "%s". Allowed: status | diff | log | show | ' +
+    'branch | switch | merge | stash | add | commit | init | push | tag ' +
+    '| config | clone | pull | fetch | worktree [GIT-034 INVALID_PARAM]';
+
+  SL_GIT_NETWORK_FMT =
+    'delphi_git: NETWORK %s repo=%s %s';
+
+  SN_GIT_PISTA_CONFIGURA_IDENTIDAD =
+    'Pista: configura la identidad del repo y repite: delphi_git ' +
+    'command=config args=user.name message=<nombre> y despues ' +
+    'command=config args=user.email message=<email>. [GIT-035]';
+
+  SN_WS_READONLY_TERRITORY =
+    'Read-only territory: RTL/VCL/FMX sources, installed components and ' +
+    'SDKs. Reading tools may enter it; writing tools never can. [WS-011]';
+
+  SR_WS_NO_ROOT_GIVEN =
+    'error: no root given and no workspace roots configured. Pass ' +
+    '"root", or configure [Workspace.<name>] Roots in settings.ini next ' +
+    'to the server exe (or the DELPHI_MCP_ROOTS environment variable). ' +
+    '[WS-012 INVALID_PARAM]';
+
+  SR_WS_NO_EXISTE_FMT =
+    'error: no existe %s [WS-013 NOT_FOUND]';
+
+  SR_WS_OFFSET_NEGATIVO =
+    'error: offset negativo [WS-014 INVALID_PARAM]';
+
+  SR_WS_OFFSET_MAS_ALLA_FINAL_FMT =
+    'error: offset mas alla del final (size=%d) [WS-015 INVALID_PARAM]';
+
+  SN_WS_FALLO_COPIA_SEGURIDAD_FMT =
+    'FALLO la copia de seguridad: %s [WS-016]';
+
+  SR_WS_OFFSET_FICHERO_NO_EXISTE =
+    'error: offset>0 pero el fichero no existe todavia; empieza por ' +
+    'offset=0 [WS-017 NOT_FOUND]';
+
+  SR_WS_OFFSET_ENVIA_EN_ORDEN_FMT =
+    'error: offset %d mas alla del final actual (size=%d); envia los ' +
+    'trozos EN ORDEN [WS-018 INVALID_PARAM]';
+
+  SN_WS_LINUX_EXECUTABLES_FMT =
+    '%d Linux executable(s) inside. A zip made on Windows keeps no Unix ' +
+    'permissions, so after unzipping on the target they are NOT ' +
+    'executable: run chmod +x <file> once (a Deploy through PAServer ' +
+    'does not have this problem). [WS-019]';
+
+  SN_WS_DOWNLOAD_WITH_FETCH =
+    'download it with delphi_fetch (chunked, sha256-verified); big zips ' +
+    'answer a download link - do NOT set maxbytes [WS-020]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3c a mano, 27-sep-2026)
+  SN_LSP_NO_SETTINGS_WARNING =
+    ' [warning: no .delphilsp.json project settings found for this file ' +
+    '- semantic answers may be null. Generate one in the IDE (Code ' +
+    'Insight > Generate LSP config + Reload LSP Server).] [LSP-021]';
+
+  SR_LSP_ERROR_FMT =
+    'LSP error: %s [LSP-022 INTERNAL]';
+
+  SN_LSP_HINT_INSIDE_CALL =
+    ' [hint: the position must be INSIDE the call parentheses, right ' +
+    'after ( or ,] [LSP-023]';
+
+  SN_LSP_HINT_HOVER_USAGES =
+    ' [hint: hover only answers on usages, not on declarations] [LSP-024]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Designer.pas (paso 3c a mano, 27-sep-2026)
+  SR_DSGN_NO_EXISTE_FMT =
+    'RECHAZADO: no existe %s [DSGN-037 NOT_FOUND]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Styles.pas (paso 3c a mano, 27-sep-2026)
+  SN_STYLE_BRCC_NO_ENCONTRADO_FMT =
+    'brcc32.exe no encontrado en %s [STYLE-028]';
+
+  SR_STYLE_COMMAND_DEBE_SER =
+    'error: command debe ser view | get | set | clone | delete | lint | ' +
+    'build [STYLE-029 INVALID_PARAM]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Config.pas (paso 3c a mano, 27-sep-2026)
+  SR_CFG_SECTION_DEBE_SER_SUMMARY =
+    'error: section debe ser summary | platforms | searchpaths | deploy ' +
+    '| units | all [CFG-085 INVALID_PARAM]';
+
+  SK_CFG_ANADIDA_PLATAFORMA_DPROJ_FMT =
+    'ANADIDA la plataforma %s al .dproj (bloque <Platforms>). El IDE ' +
+    'completara sus PropertyGroups al abrir el proyecto; para un ' +
+    'proyecto sencillo MSBuild ya la compila. Verifica con delphi_build ' +
+    '{platform:"%s"}. Si necesita PAServer, prepara el perfil con ' +
+    'delphi_paserver. [CFG-086]';
+
+  SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE =
+    'error: no encuentro el PropertyGroup base ("$(Base)") del .dproj; ' +
+    'abre el proyecto una vez en el IDE y reintenta. [CFG-087 ' +
+    'INVALID_PARAM]';
+
+  SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_FMT =
+    'error: no encuentro el PropertyGroup %s del .dproj. [CFG-088 ' +
+    'INVALID_PARAM]';
+
+  SR_CFG_NO_PUDE_GENERAR_MANIFIESTO_FMT =
+    'error: no pude generar el manifiesto de despliegue: %s [CFG-089 ' +
+    'INVALID_PARAM]';
+
+  SR_CFG_NO_EXISTE_NO_PUDO_GENERAR_FMT =
+    'error: no existe %s y no se pudo generar. [CFG-090 NOT_FOUND]';
+
+  SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_DE_FMT =
+    'error: no encuentro el PropertyGroup de %s en el .dproj [CFG-091 ' +
+    'INVALID_PARAM]';
+
+  SR_CFG_QUEDO_INCONSISTENTE_PLATFORMSDK =
+    'error: el .dproj quedo inconsistente al quitar el PlatformSDK ' +
+    'previo [CFG-092 INVALID_PARAM]';
+
+  SR_CFG_QUEDO_INCONSISTENTE_PROFILE =
+    'error: el .dproj quedo inconsistente al quitar el Profile previo ' +
+    '[CFG-093 INVALID_PARAM]';
+
+  SR_CFG_NO_EXISTE_PROYECTO_FMT =
+    'error: no existe el proyecto %s [CFG-094 NOT_FOUND]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.PAServer.pas (paso 3c a mano, 27-sep-2026)
+  SN_PAS_LINUX_FETCH_TAR_FMT =
+    'Linux: fetch, then `tar xzf %s && cd PAServer-*` and run it KEEPING ' +
+    'STDIN OPEN if headless: `sh -c ''sleep infinity | ./paserver ' +
+    '-port=64211 -password=<pwd>''` (listens on 64211). Warnings: ' +
+    '`./paserver &` with stdin at EOF spins its prompt at 100%% CPU ' +
+    '(keep the sleep pipe); and -passfile with a plain-text password was ' +
+    'rejected on login in the field - pass -password inline instead, and ' +
+    'keep the process supervised. [PAS-038]';
+
+  SN_PAS_PROFILES_EN_DISCO =
+    'profiles = los .profile en disco (lo que usan paclient, MSBuild y ' +
+    'las tools de este servidor). ideRegistrySeats = las claves ' +
+    'RemoteProfiles del registro, de donde el IDE saca SU lista. Si un ' +
+    'nombre esta en una y no en la otra, ahi esta la explicacion de lo ' +
+    'que el IDE ensena o deja de ensenar. [PAS-039]';
+
+  SN_PAS_NO_CONNECTION_PROFILES_SDKS =
+    'No connection profiles or SDKs yet. They are created against a ' +
+    'running PAServer on the target machine. [PAS-040]';
+
+  SR_PAS_PACLIENT_EXIT_FMT =
+    'error: paclient exit %d: %s [PAS-041 INVALID_PARAM]';
+
+  SR_PAS_NO_PUDE_BORRAR_PERFIL_FMT =
+    'error: no pude borrar el perfil: %s [PAS-042 INVALID_PARAM]';
+
+  SN_PAS_TAMBIEN_CARPETA_VACIA_SDKS =
+    ' Tambien su carpeta vacia en SDKs. [PAS-043]';
+
+  SN_PAS_TOTALFILES_TOTALBYTES_COUNT =
+    'totalFiles/totalBytes count what was copied in THIS run. The pull ' +
+    'is incremental: over a sysroot already on disk it brings only what ' +
+    'changed on the target, so a small number - or zero, "already up to ' +
+    'date" - is the normal answer of a re-run, not an empty SDK. ' +
+    '[PAS-044]';
+
+  SR_PAS_NO_PUDE_BORRAR_FMT =
+    'error: no pude borrar %s: %s [PAS-045 INVALID_PARAM]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Adb.pas (paso 3c a mano, 27-sep-2026)
+  SN_ADB_LOGCAT_VACIO_CONTENGAN_FMT =
+    '(logcat vacio: sin lineas que contengan "%s") [ADB-022]';
+
+  SN_ADB_LOGCAT_VACIO_SIN_LINEAS =
+    '(logcat vacio: sin lineas) [ADB-025]';
+
+  SR_ADB_NO_EXISTE_APK_FMT =
+    'error: no existe el .apk: %s [ADB-023 NOT_FOUND]';
+
+  SK_ADB_TAP_EN_FMT =
+    'TAP en (%d,%d) %s [ADB-024]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Desktop.pas (paso 3c a mano, 27-sep-2026)
+  SN_DESK_COLOCAR_CAPTURA_BAJADA_FMT =
+    'no pude colocar la captura bajada: %s [DESK-019]';
+
+  SN_DESK_MIDE_PIXEL_SOBRE_IMAGEN =
+    'mide el pixel SOBRE esta imagen y pasalo a command=tap; bajala con ' +
+    'download o delphi_fetch. Al recogerla ENTERA se borra del servidor: ' +
+    'si la necesitas otra vez, pide otra captura (una pedida con out= no ' +
+    'se borra) [DESK-020]';
+
+  // Mensajes que estaban en linea en Lsp.Imagen.pas (paso 3c a mano, 27-sep-2026)
+  SN_CAPT_RECORTE_FUERA_CAPTURA_FMT =
+    'el recorte cae fuera de la captura (%dx%d) [CAPT-007]';
+
+  SN_CAPT_NO_PUDE_RECORTAR_FMT =
+    'no pude recortar la captura: %s [CAPT-008]';
+
+  SN_CAPT_NO_PUDE_ESCALAR_FMT =
+    'no pude escalar la captura: %s [CAPT-009]';
+
+  // Mensajes que estaban en linea en Lsp.Guard.pas (paso 3c a mano, 27-sep-2026)
+  SL_GUARD_MISMO_VALOR_TOKEN_FMT =
+    'AVISO: [Workspace.%s] tiene el MISMO valor en Token= y ' +
+    'ReadOnlyToken=: no se sabe si quien entra puede escribir. CERRADO ' +
+    '(fail closed) hasta que sean distintos.';
+
+  SL_GUARD_COMPARTEN_UN_TOKEN_FMT =
+    'AVISO: [Workspace.%s] y [Workspace.%s] comparten un token ' +
+    '(copia-pega): con el mismo secreto no se sabe que jaula toca. Los ' +
+    'DOS quedan CERRADOS (fail closed) hasta que cada uno tenga el suyo.';
+
+  SL_GUARD_SECCION_DOS_VECES_CERRADO_FMT =
+    'AVISO: la seccion [%s] aparece DOS veces en settings.ini y el ini ' +
+    'solo lee la primera. Ese workspace queda CERRADO (fail closed) ' +
+    'hasta que sea una sola.';
+
+  SL_GUARD_SECCION_DOS_VECES_FUSIONALAS_FMT =
+    'AVISO: la seccion [%s] aparece DOS veces en settings.ini y el ini ' +
+    'solo lee la primera: fusionalas.';
+
+  SL_GUARD_REPITE_CLAVE_CERRADO_FMT =
+    'AVISO: [%s] repite la clave %s y el ini solo lee la primera. Ese ' +
+    'workspace queda CERRADO (fail closed) hasta que la clave sea una ' +
+    'sola.';
+
+  SL_GUARD_REPITE_CLAVE_IGNORA_FMT =
+    'AVISO: [%s] repite la clave %s: el ini solo lee la primera y la ' +
+    'segunda se ignora en silencio.';
+
+  SL_GUARD_ROOTS_NO_PARSEA_FMT =
+    'AVISO: [Workspace.%s] Roots= no parsea: ese workspace no admite a ' +
+    'NADIE (fail closed). Revisa la ruta.';
+
+  SL_GUARD_SIN_TOKEN_IGNORADA_FMT =
+    'AVISO: [Workspace.%s] sin Token= ni ReadOnlyToken=: seccion ' +
+    'IGNORADA. La clave es Token= (AuthToken= tambien vale como alias).';
+
+  SL_GUARD_WORKSPACE_SIN_PUNTO =
+    'AVISO: la seccion [Workspace] (sin punto) ya NO existe y se IGNORA ' +
+    'entera: sus Roots, sus tokens y sus permisos no valen nada. Desde ' +
+    'v0.98 nada es global - renombrala a [Workspace.<nombre>] y dale un ' +
+    'Token=.';
+
+  SL_GUARD_WORKSPACE_MAL_ESCRITO_FMT =
+    'AVISO: la seccion [%s] parece un workspace mal escrito y se IGNORA. ' +
+    'El formato es [Workspace.<nombre>] (con el punto).';
+
+  SR_GUARD_RUTA_INVALIDA_FMT =
+    'RECHAZADO: ruta invalida: %s [GUARD-011 DENIED]';
+
+  // Mensajes que estaban en linea en Lsp.BuildRunner.pas (paso 3c a mano, 27-sep-2026)
+  SL_BUILD_DELPHI_BUILD_REFUSED_FMT =
+    'delphi_build: REFUSED "%s" - %s';
+
+  SL_BUILD_DELPHI_BUILD_TARGET_FMT =
+    'delphi_build: BUILD "%s" %s/%s target=%s%s';
+
+  // Mensajes que estaban en linea en Mcp.Tools.DelphiExtra.pas (paso 3c a mano, 27-sep-2026)
+  SN_BUILD_NO_PROJECT_SETTINGS =
+    ' [warning: no project settings found - results may be incomplete] ' +
+    '[BUILD-041]';
+
+  // Mensajes que estaban en linea en Lsp.Patch.pas (paso 3c a mano, 27-sep-2026)
+  SR_EDIT_FICHERO_BINARIO_NUL_FMT =
+    'RECHAZADO: %s es un fichero BINARIO (byte NUL en los primeros 64 ' +
+    'KB): no se puede leer como texto numerado. Para bajarlo usa ' +
+    'delphi_fetch (o el campo download de /files). [EDIT-063 DENIED]';
+
+  SN_EDIT_RECORTADO_EN_LINEA_FMT =
+    '... recortado en la linea %d de %d. Pide otro tramo con from/to. ' +
+    '[EDIT-064]';
+
+  SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT =
+    'RECHAZADO: %s\ es la carpeta de copias de seguridad de esta tool. ' +
+    'Copias muertas: no se leen, no se editan. El fichero vivo esta un ' +
+    'nivel mas arriba. [EDIT-065 DENIED]';
+
+  SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT =
+    'RECHAZADO al codificar el contenido: %s'#10 +
+    'Usa literales Pascal nativos (#$XXXX) para caracteres fuera del ' +
+    'juego. [EDIT-066 DENIED]';
+
+  SK_EDIT_CREADA_UNIT_FMT =
+    'CREADA %s (unit %s) - %s, encoding %s (el configurado en el IDE), ' +
+    '%s.'#10 +
+    'Verificacion (releido de disco): %s'#10 +
+    'SIGUIENTE PASO - el ALTA en el uses del .dpr (sin alta, la unit no ' +
+    'forma parte del proyecto). El .dproj lo mantiene el IDE: no lo ' +
+    'edites. [EDIT-067]';
+
+  SN_EDIT_RESTAURAR_NADA_HECHO_FMT =
+    'RESTAURAR %s desde %s: aun NO he hecho nada.'#10 +
+    'La copia se hizo el %s (hace %s): es la PRIMERA de ese dia de este ' +
+    'fichero, y no sabe quien lo ha editado desde entonces. Si otro ' +
+    'agente lo toco despues de esa hora, restaurar se lleva TAMBIEN su ' +
+    'trabajo; para deshacer con precision usa delphi_git (diff, stash).'#10 +
+    'Estas %d lineas del fichero ACTUAL no estan en la copia y SE ' +
+    'PERDERAN:'#10 +
+    '%s'#10 +
+    'Si de verdad quieres restaurar, repite con confirm: true. [EDIT-068]';
+
+  SK_EDIT_RESTAURADO_DESDE_FMT =
+    'RESTAURADO %s desde %s'#10 +
+    '  ahora: %s'#10 +
+    '  OJO: se han perdido %d lineas que tenias escritas. Rehaz y ' +
+    'RE-VERIFICA cada tarea de este fichero.'#10 +
+    '  (estado previo guardado en %s) [EDIT-069]';
+
+  SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT =
+    'RECHAZADO: el bloque no empieza por una firma de rutina (puede ' +
+    'llevar comentario encima). Primera linea util: |%s| [EDIT-070 ' +
+    'DENIED]';
+
+  SR_EDIT_FIRMA_NO_CIERRA_FMT =
+    'RECHAZADO: la firma no llega a cerrarse con '';''. Empieza en |%s| ' +
+    '[EDIT-071 DENIED]';
+
+  SN_EDIT_INSERT_FALLO_MITAD1_FMT =
+    'INSERT metodo - FALLO en la mitad 1 (declaracion en la clase %s):'#10 +
+    '%s [EDIT-072]';
+
+  SN_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT =
+    'INSERT metodo - FALLO en la implementacion (la declaracion ya ' +
+    'existia y no se toco; el fichero NO ha cambiado).'#10 +
+    '%s [EDIT-073]';
+
+  SN_EDIT_INSERT_A_MEDIAS_FMT =
+    'INSERT metodo - mitad 1 (declaracion) ESCRITA pero FALLO en la ' +
+    'mitad 2 (implementacion). El fichero ha quedado A MEDIAS: restaura ' +
+    'con restore:true y reintenta.'#10 +
+    '%s [EDIT-074]';
+
+  SR_EDIT_NEW_SIN_ANCLA =
+    'RECHAZADO: has pasado "new" sin ancla ("old" vacio). Esta tool ' +
+    'NUNCA reescribe un fichero entero.'#10 +
+    '- Para editar: old = la linea COMPLETA a sustituir, copiada de ' +
+    'delphi_read.'#10 +
+    '- Para leer: usa delphi_read. [EDIT-075 DENIED]';
+
+  SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT =
+    '*** AVISO DESIGNER: propiedades que el streaming del %s NO conoce ' +
+    '(contrastado con las tablas generadas del propio framework). El ' +
+    'build las empaqueta igual (solo valida gramatica) y la app CRASHEA ' +
+    'al cargar el form en runtime - en Android muere sin mensaje. ' +
+    'Corrigelas antes de desplegar: *** [EDIT-076]';
+
+  SR_EDIT_ANCLA_NO_UNICA_FMT =
+    'RECHAZADO: el ancla aparece %d veces (lineas %s), no es unica. No ' +
+    'he escrito nada.'#10 +
+    'Elige otra linea unica si existe; solo si NO existe (firma repetida ' +
+    'interface/implementation) repite con atline: <numero>. [EDIT-077 ' +
+    'NOT_FOUND]';
+
+  SR_EDIT_CARACTERES_NO_CABEN_FMT =
+    'RECHAZADO: %s. El fichero esta en %s y el texto nuevo lleva ' +
+    'caracteres que no caben. No he escrito nada.'#10 +
+    'SALIDA LEGITIMA SIN CONVERTIR: literal nativo Pascal - #$%s ' +
+    'concatenado (''antes '' + #$%s + '' despues'') o ChrW($%s) / ' +
+    'WideChar($%s) - el fuente queda ASCII y conserva su encoding. ' +
+    'Declaralo en el informe. [EDIT-078 DENIED]';
+
+  SN_EDIT_CARACTERES_CORRUPCION =
+    '*** HAN APARECIDO CARACTERES DE CORRUPCION. Restaura con ' +
+    'restore:true y PARA. *** [EDIT-079]';
+
+  SN_EDIT_ERA_ASCII_PURO_FMT =
+    '(el fichero era ASCII puro y he escrito los caracteres nuevos en ' +
+    '%s, el encoding que el IDE tiene configurado para ficheros sin BOM. ' +
+    'Si este proyecto usa otro, dilo en tu informe.) [EDIT-080]';
+
+  SN_EDIT_ACENTOS_FUERA_CUADRO_FMT =
+    '*** ACENTOS FUERA DE CUADRO: esperaba %d bytes altos y hay %d. ' +
+    'Restaura con restore:true y PARA. *** [EDIT-081]';
+
+  SN_EDIT_FINALES_LINEA_AJENOS_FMT =
+    '*** FINALES DE LINEA AJENOS: el fichero es %s y han entrado del ' +
+    'otro estilo. Restaura con restore:true y PARA. *** [EDIT-082]';
+
+  SN_EDIT_FIRMA_MOJIBAKE_NUEVO =
+    '*** FIRMA DE MOJIBAKE EN TU TEXTO NUEVO. Si querias escribir un ' +
+    'acento, pon el caracter LIMPIO; si copias adrede una corrupcion ' +
+    'existente, declaralo. *** [EDIT-083]';
+
+  SN_EDIT_DESIGNER_FORMATO_TEXTO =
+    '(fichero del designer en formato texto: editado, pero lo gobierna ' +
+    'el IDE. MENCIONALO en tu informe.) [EDIT-084]';
+
+  SN_EDIT_ESTRUCTURA_ROTA_END_FMT =
+    '*** ESTRUCTURA ROTA: el fichero tenia UN ''end.'' y ahora tiene %d. ' +
+    'Restaura con restore:true y PARA. *** [EDIT-085]';
+
+  SN_EDIT_ESTRUCTURA_ROTA_ULTIMA =
+    '*** ESTRUCTURA ROTA: el ''end.'' ya no es la ultima linea - lo que ' +
+    'quede detras desaparece de la compilacion. Restaura con ' +
+    'restore:true y PARA. *** [EDIT-086]';
+
+  SK_EDIT_ESCRITO_EN_FMT =
+    'ESCRITO en %s [EDIT-087]';
+
+  SK_EDIT_BORRADA_LINEA_FMT =
+    'BORRADA la linea %d de %s (la linea ya no existe) [EDIT-088]';
+
+  SK_EDIT_BLANQUEADA_LINEA_FMT =
+    'BLANQUEADA la linea %d de %s (sigue existiendo, vacia; para ' +
+    'eliminarla del todo usa delete:true) [EDIT-089]';
+
+  // Mensajes que estaban en linea en Lsp.Scaffold.pas (paso 3c a mano, 27-sep-2026)
+  SR_CREATE_IDENTIFICADOR_NOMBRE_PROYECTO_FMT =
+    'RECHAZADO: ''%s'' no es un identificador Pascal valido para nombre de ' +
+    'proyecto. [CREATE-022 DENIED]';
+
+  SR_CREATE_YA_EXISTE_PROYECTO_FMT =
+    'RECHAZADO: ya existe un proyecto %s en %s. El scaffolder jamas ' +
+    'sobreescribe. [CREATE-023 DENIED]';
+
+  SK_CREATE_CREADO_PROYECTO_FMT =
+    'CREADO proyecto %s (%s) en %s'#10 +
+    '  ficheros: %s'#10 +
+    'Fuentes en %s (el encoding configurado en el IDE) + CRLF. ' +
+    'Compilable ya con delphi_build (el IDE enriquecera el .dproj al ' +
+    'abrirlo).%s [CREATE-024]';
+
+  SR_CREATE_NO_EXISTE_DPR_FMT =
+    'RECHAZADO: no existe el .dpr %s [CREATE-025 NOT_FOUND]';
+
+  SR_CREATE_IDENTIFICADOR_FORM_FMT =
+    'RECHAZADO: ''%s'' no es un identificador valido de form. [CREATE-026 ' +
+    'DENIED]';
+
+  SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT =
+    'RECHAZADO: %s ya existe. El scaffolder jamas sobreescribe. ' +
+    '[CREATE-027 DENIED]';
+
+  SK_CREATE_CREADOS_NO_REGISTRADOS_FMT =
+    'CREADOS %s.pas/%s pero NO se pudo registrar: %s [CREATE-028]';
+
+  SK_CREATE_CREADO_FORM_FMT =
+    'CREADO %s %s (T%s, %s) con su %s.'#10 +
+    '%s%s [CREATE-029]';
+
+  SR_CREATE_NO_EXISTE_PROYECTO_FMT =
+    'RECHAZADO: no existe el proyecto %s [CREATE-030 NOT_FOUND]';
+
+  SR_CREATE_UNIT_YA_EXISTE_ADD_UNIT_FMT =
+    'RECHAZADO: %s ya existe. El scaffolder jamas sobreescribe. Para ' +
+    'registrarla en el proyecto usa delphi_config command=add-unit. ' +
+    '[CREATE-031 DENIED]';
+
+  SK_CREATE_CREADA_NO_REGISTRADA_FMT =
+    'CREADA %s.pas pero NO se pudo registrar: %s [CREATE-032]';
+
+  SK_CREATE_CREADA_UNIT_LINEAS_FMT =
+    'CREADA la unit %s (%s), %d lineas.'#10 +
+    '%s [CREATE-033]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Scaffold.pas (paso 3c a mano, 27-sep-2026)
+  SR_CREATE_KIND_DEBE_SER_ALL =
+    'RECHAZADO: kind debe ser project-console | project-vcl | ' +
+    'project-fmx | project-package | project-test | form-vcl | form-fmx ' +
+    '| frame-vcl | frame-fmx | datamodule | unit | include. [CREATE-034 ' +
+    'DENIED]';
+
+  // Mensajes que estaban en linea en Mcp.Tools.FileOps.pas (paso 3c a mano, 27-sep-2026)
+  SR_FILE_PAPELERA_NO_SE_BORRA_FMT =
+    'RECHAZADO: %s\ es la papelera/copias de esta tool. No se borra ' +
+    'desde aqui (purgala manualmente si de verdad quieres). [FILE-018 ' +
+    'DENIED]';
+
+  SN_FILE_UNITS_CARPETA_QUITADAS_FMT =
+    '  units de la carpeta quitadas de sus proyectos (%d): [FILE-019]';
+
+  SN_FILE_ERROR_MOVER_PAPELERA_FMT =
+    'ERROR al mover a la papelera: %s [FILE-020]';
+
+  SK_FILE_BORRADO_PAPELERA_FMT =
+    'BORRADO %s (movido a la papelera recuperable).'#10 +
+    '  copia: %s'#10 +
+    '  Para recuperarlo: delphi_move con path=esa copia y dest=donde lo ' +
+    'quieras (restaurar desde la papelera esta permitido). [FILE-021]';
+
+  SR_FILE_PAPELERA_NO_SE_MUEVE_FMT =
+    'RECHAZADO: %s\ es la carpeta de papelera; no se mueve entera. ' +
+    '[FILE-022 DENIED]';
+
+  SR_FILE_NO_MUEVAS_DENTRO_PAPELERA_FMT =
+    'RECHAZADO: no muevas ficheros DENTRO de la papelera (%s\); es para ' +
+    'las copias que hace la tool. Muevelos a una carpeta normal. ' +
+    '[FILE-023 DENIED]';
+
+  SR_FILE_NO_EXISTE_ORIGEN_FMT =
+    'RECHAZADO: no existe el origen %s [FILE-024 NOT_FOUND]';
+
+  SR_FILE_DESTINO_YA_EXISTE_FMT =
+    'RECHAZADO: el destino ya existe: %s (no sobreescribo). [FILE-025 ' +
+    'DENIED]';
+
+  SR_FILE_IDENTIFICADOR_UNIT_FMT =
+    'RECHAZADO: ''%s'' no es un identificador valido de unit (el nombre ' +
+    'del fichero es el nombre de la unit). [FILE-026 DENIED]';
+
+  SR_FILE_YA_EXISTE_NO_SOBREESCRIBO_FMT =
+    'RECHAZADO: ya existe %s (no sobreescribo). [FILE-027 DENIED]';
+
+  SN_FILE_COPIA_SEGURIDAD_EN_FMT =
+    '  (copia de seguridad en %s) [FILE-028]';
+
+  // Mensajes que estaban en linea en Lsp.Files.pas (paso 3c a mano, 27-sep-2026)
+  SR_FILES_UNIDAD_VIRTUAL_NO_SERVIDA_FMT =
+    'RECHAZADO: unidad virtual no servida: %s (delphi_workspace dice ' +
+    'cuales existen) [FILE-029 DENIED]';
+
+  SR_FILES_RUTA_ABSOLUTA =
+    'RECHAZADO: la ruta debe ser absoluta, en la forma ' +
+    'srvd:\carpeta\fichero [FILE-030 DENIED]';
+
+  SR_FILES_RUTA_INVALIDA_FMT =
+    'RECHAZADO: ruta invalida (%s) [FILE-031 DENIED]';
+
+  SL_FILES_GET_FMT =
+    'files: GET %s (%d bytes)';
+
+  // Mensajes que estaban en linea en Lsp.TextEdit.pas (paso 3c a mano, 27-sep-2026)
+  SR_TEXT_YA_EXISTE_NUNCA_SOBREESCRIBE_FMT =
+    'RECHAZADO: %s ya existe. Esta tool nunca sobreescribe; edita con ' +
+    'old/new. [TEXT-005 DENIED]';
+
+  SK_TEXT_CREADO_ENCODING_FINALES_FMT =
+    'CREADO %s  encoding=%s  finales=%s  bytes=%d [TEXT-006]';
+
+  SR_TEXT_NO_EXISTE_CREARLO_FMT =
+    'RECHAZADO: no existe %s. Para crearlo usa create=true. [TEXT-007 ' +
+    'NOT_FOUND]';
+
+  SR_TEXT_PARECE_BINARIO_FMT =
+    'RECHAZADO: %s parece BINARIO (bytes nulos). Esta tool es solo para ' +
+    'texto. [TEXT-008 DENIED]';
+
+  SR_TEXT_ANCLA_APARECE_LINEAS_FMT =
+    'RECHAZADO: el ancla aparece en %d lineas (%s). Repite con ' +
+    'atline=<numero> para elegir la ocurrencia exacta. [TEXT-009 DENIED]';
+
+  SR_TEXT_AL_CODIFICAR_FMT =
+    'RECHAZADO al codificar: %s [TEXT-010 DENIED]';
+
+  SK_TEXT_RANGO_VERIFICACION_FMT =
+    '%s  encoding=%s  (backup en %s\)'#10 +
+    'Verificacion (releido de disco):'#10 +
+    '%s [TEXT-011]';
+
+  SK_TEXT_OK_BORRADA_LINEA_FMT =
+    'OK borrada la linea %d de %s  encoding=%s  (backup en %s\)'#10 +
+    'Verificacion (releido de disco):'#10 +
+    '%s [TEXT-012]';
+
+  SK_TEXT_OK_LINEA_FMT =
+    'OK linea %d de %s  encoding=%s  (backup en %s\)'#10 +
+    'Verificacion (releido de disco):'#10 +
+    '%s [TEXT-013]';
+
+  // Mensajes que estaban en linea en UTrayMain.pas (paso 3c a mano, 27-sep-2026)
+  SL_SYS_LOG_LINES_DROPPED_FMT =
+    '... %d log lines dropped (buffer full) ...';
+
+  SL_SYS_ERROR_STARTING_SERVER_FMT =
+    'ERROR starting the server: %s';
+
+  SN_SYS_SERVICE_ERROR_FMT =
+    'DelphiLSP MCP Service - ERROR: %s [SYS-004]';
+
+  SL_SYS_SERVER_URL_COPIED_FMT =
+    'Server URL copied to the clipboard: %s. %s';
+
+  SN_SYS_SERVER_URL_COPIED =
+    'Server URL copied [SYS-005]';
+
+  // Mensajes que estaban en linea en Lsp.Service.pas (paso 3c a mano, 27-sep-2026)
+  SL_SYS_COULD_NOT_START_FMT =
+    '%s could not start: %s';
+
+  // Mensajes que estaban en linea en Lsp.Host.pas (paso 3c a mano, 27-sep-2026)
+  SL_SYS_KNOWLEDGE_VAULT_FMT =
+    'Knowledge vault: %s (%s)';
+
+  SL_SYS_BEARER_AUTH_ENABLED =
+    'Bearer auth enabled (per-workspace tokens).';
+
+  SL_SYS_NO_CREDENTIALS_FMT =
+    'No credentials: there is no [Workspace.<name>] section with Token=. ' +
+    'Every HTTP request gets 401; only the local stdio mode works. %s';
+
+  SL_SYS_NO_BINDIP_LOCALHOST_ONLY =
+    'And no [Server] BindIP: HTTP listens on 127.0.0.1 ONLY. To expose ' +
+    'it to the network, add a [Workspace.<name>] section with Token=.';
+
+  // Mensajes que estaban en linea en Lsp.LogSink.pas (paso 3c a mano, 27-sep-2026)
+  SL_SYS_LOG_EN_DISCO_FMT =
+    'Log en disco: %s (actual.log en vivo; un bloque cada %d lineas, se ' +
+    'guardan los %d mas nuevos - [Log] LinesPerFile/MaxFiles en ' +
+    'settings.ini).';
+
+  SL_SYS_LOG_LINEAS_DESCARTADAS_FMT =
+    '... %d lineas de log descartadas (buffer lleno) ...';
+
+  // Mensajes que estaban en linea en DelphiLspMcp.dpr (paso 3c a mano, 27-sep-2026)
+  SL_SYS_SERVICE_STDIO_FMT =
+    'DelphiLSP MCP Service v%s (stdio)';
+
+  // Mensajes que estaban en linea en Mcp.Tools.Components.pas (paso 3c a mano, 27-sep-2026)
+  SN_COMPONENTS_DESIGN_PACKAGES_FMT =
+    '%d design packages en RAD Studio %s%s%s: [COMP-007]';
+
   // ---------------------------------------------------------------------
   // Las ETIQUETAS de los mensajes (decision de David, 27-sep-2026)
   // ---------------------------------------------------------------------
@@ -4891,8 +5580,9 @@ function MsgTag(const AMsg: string): string;
   con el id que lleva LA CONSTANTE, asi que el id se escribe en un solo
   sitio: HasMsg(Respuesta, SK_EDIT_WRITTEN). }
 function HasMsg(const AText, AMsg: string): Boolean;
-{ El resultado que declara la PRIMERA etiqueta de AText, la del mensaje que
-  abre la respuesta; '' si esa no declara ninguno o no hay etiquetas. }
+{ El resultado que declara el mensaje que ABRE la respuesta: la primera
+  etiqueta, si esta en la primera linea; '' si no hay, si esa no declara
+  ninguno, o si la respuesta es JSON (la decide su campo error). }
 function MsgOutcome(const AText: string): string;
 
 { EL paso de todo mensaje del catalogo hacia fuera (David, 27-sep-2026:
@@ -4947,12 +5637,24 @@ var
   M: TMatch;
 begin
   Result := '';
+  // una respuesta JSON no se juzga por etiquetas: sus datos pueden citar
+  // cualquier texto; la decide su campo error (ToolsManager)
+  if AText.TrimLeft.StartsWith('{') or AText.TrimLeft.StartsWith('[') then
+    Exit;
   // manda la PRIMERA etiqueta, como la regla de siempre miraba como EMPIEZA
   // el texto: un rechazo anadido dentro de una respuesta buena (un aviso,
   // una linea de una tanda) no la convierte en error
   M := TRegEx.Match(AText, MSG_TAG_REGEX);
+  if not M.Success then
+    Exit;
+  // y solo si esta en la PRIMERA linea, la del mensaje que abre la respuesta:
+  // lo que viene detras (un fichero leido, un eco, una lista) puede traer algo
+  // con forma de etiqueta y no declara nada (medido 27-sep: cada delphi_read
+  // de Lsp.Texts salia DENIED por una linea del propio fichero)
+  if (AText.IndexOf(#10) >= 0) and (M.Index - 1 > AText.IndexOf(#10)) then
+    Exit;
   // un grupo opcional que no participa puede no contarse en Groups
-  if M.Success and (M.Groups.Count > 2) and M.Groups[2].Success then
+  if (M.Groups.Count > 2) and M.Groups[2].Success then
     Result := M.Groups[2].Value;
 end;
 
@@ -4965,6 +5667,15 @@ function MsgFmt(const AMsg: string; const AArgs: array of const): string;
 begin
   try
     Result := Format(MsgText(AMsg), AArgs);
+    // un mensaje metido dentro de otro por un %s pierde su etiqueta: habla el
+    // de fuera, cuya etiqueta es la ULTIMA (va al final de su texto). Si no,
+    // la de dentro seria la primera y decidiria el resultado
+    if MsgTag(AMsg) <> '' then
+    begin
+      var Tags := TRegEx.Matches(Result, '\s?' + MSG_TAG_REGEX);
+      for var K := Tags.Count - 2 downto 0 do
+        Delete(Result, Tags[K].Index, Tags[K].Length);
+    end;
   except
     on E: Exception do
     begin

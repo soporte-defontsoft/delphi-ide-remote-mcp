@@ -163,7 +163,7 @@ begin
   if Cmd = '' then
     Cmd := 'read';
   if not MatchText(Cmd, ['read', 'check']) then
-    Exit('error: command debe ser read | check');
+    Exit(MsgText(SR_MSGS_COMMAND_READ_CHECK));
   // Your id, without typing it: the handshake bound clientInfo.name to this
   // session, so the box knows who is asking. An explicit agent= still wins
   // (an operator reading a specific box, an agent whose name differs from its

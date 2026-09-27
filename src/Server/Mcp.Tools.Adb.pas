@@ -306,9 +306,8 @@ begin
     else
       Txt := Output.TrimRight;
     if Txt.Trim = '' then
-      Txt := '(logcat vacio: sin lineas' +
-        IfThen(Params.Filter.Trim <> '', ' que contengan "' +
-          Params.Filter.Trim + '"', '') + ')';
+      Txt := IfThen(Params.Filter.Trim <> '', MsgFmt(SN_ADB_LOGCAT_VACIO_CONTENGAN_FMT,
+        [Params.Filter.Trim]), MsgText(SN_ADB_LOGCAT_VACIO_SIN_LINEAS));
     if Params.Out.Trim <> '' then
     begin
       // The dump goes to a FILE the agent reads in ranges (delphi_read
@@ -367,7 +366,7 @@ begin
     if Denied <> '' then
       Exit(Denied);
     if not TFile.Exists(Params.Apk) then
-      Exit('error: no existe el .apk: ' + Params.Apk);
+      Exit(MsgFmt(SR_ADB_NO_EXISTE_APK_FMT, [Params.Apk]));
     Output := RunAdb(Adb, DevArg + 'install -r "' + Params.Apk + '"',
       180000, ExitCode);
     Result := GoneHint(Output);
@@ -498,8 +497,7 @@ begin
       Exit(FP);
     Output := RunAdb(Adb, DevArg + 'shell input tap ' + IntToStr(PX) + ' ' +
       IntToStr(PY), 15000, ExitCode);
-    Result := GoneHint(('TAP en (' + IntToStr(PX) + ',' + IntToStr(PY) +
-      ') ' + Output.Trim).Trim);
+    Result := GoneHint(MsgFmt(SK_ADB_TAP_EN_FMT, [PX, PY, Output.Trim]).Trim);
   end
   else if Cmd = 'key' then
   begin

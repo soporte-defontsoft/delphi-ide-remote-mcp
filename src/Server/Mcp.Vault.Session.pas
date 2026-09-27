@@ -84,10 +84,10 @@ begin
           Body := DecodeSourceBytes(TFile.ReadAllBytes(Full)).TrimRight;
         except
           on E: Exception do
-            Body := '(no se pudo leer: ' + E.Message + ')';
+            Body := MsgFmt(SN_VAULT_BOOT_NO_PUDO_LEER_FMT, [E.Message]);
         end
       else
-        Body := '(este vault no tiene ' + Boot + ')';
+        Body := MsgFmt(SN_VAULT_BOOT_NO_TIENE_FMT, [Boot]);
       // Split BETWEEN files, never inside one: half a rules file is worse
       // than a second call, and a whole file is what the same vault gives
       // you when read locally.
@@ -131,7 +131,7 @@ begin
     begin
       if Length(Result) > MAX_INSTRUCTIONS then
         Result := Copy(Result, 1, MAX_INSTRUCTIONS) + sLineBreak +
-          '(...) Continua con vault_read sin path.';
+          MsgText(SN_VAULT_CONTINUA_READ_SIN_PATH);
       Exit;
     end;
   end;

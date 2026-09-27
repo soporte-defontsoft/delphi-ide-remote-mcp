@@ -215,7 +215,7 @@ begin
     end;
     if Shown = 0 then
       Exit(MsgFmt(SN_COMPONENTS_NONE_FMT, [Filter]));
-    Result := Format('%d design packages en RAD Studio %s%s%s:',
+    Result := MsgFmt(SN_COMPONENTS_DESIGN_PACKAGES_FMT,
       [Shown, Info.Version,
        IfThen(Filter <> '', ' con "' + Filter + '"', ''),
        IfThen(Off > 0, Format(' (%d deshabilitados)', [Off]), '')]) +

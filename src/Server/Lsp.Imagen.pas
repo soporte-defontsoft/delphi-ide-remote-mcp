@@ -40,9 +40,11 @@ uses
   System.SysUtils,
   System.Classes,
   System.Types,
-  Winapi.Windows, // SetStretchBltMode(HALFTONE): escalar sin dientes de sierra
+  Winapi.Windows,
+  // SetStretchBltMode(HALFTONE): escalar sin dientes de sierra
   Vcl.Graphics,
-  Vcl.Imaging.pngimage;
+  Vcl.Imaging.pngimage,
+  Lsp.Texts;
 
 function TamanoPng(const AFichero: string; out W, H: Integer): Boolean;
 const
@@ -106,7 +108,7 @@ begin
       if Y + H > Png.Height then
         H := Png.Height - Y;
       if (W <= 0) or (H <= 0) then
-        Exit(Format('el recorte cae fuera de la captura (%dx%d)',
+        Exit(MsgFmt(SN_CAPT_RECORTE_FUERA_CAPTURA_FMT,
           [Png.Width, Png.Height]));
       Entera := TBitmap.Create;
       Trozo := TBitmap.Create;
@@ -130,7 +132,7 @@ begin
     end;
   except
     on E: Exception do
-      Result := 'no pude recortar la captura: ' + E.Message;
+      Result := MsgFmt(SN_CAPT_NO_PUDE_RECORTAR_FMT, [E.Message]);
   end;
 end;
 
@@ -188,7 +190,7 @@ begin
     on E: Exception do
     begin
       ASalida := nil;
-      Result := 'no pude escalar la captura: ' + E.Message;
+      Result := MsgFmt(SN_CAPT_NO_PUDE_ESCALAR_FMT, [E.Message]);
     end;
   end;
 end;

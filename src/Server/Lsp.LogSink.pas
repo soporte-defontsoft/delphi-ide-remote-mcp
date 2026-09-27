@@ -90,7 +90,8 @@ uses
   System.SyncObjs,
   System.IOUtils,
   MCPServer.Logger,
-  Lsp.Guard; // ServerDir, LogIniSettings, CrearCarpeta, EsEnlace
+  Lsp.Guard,
+  Lsp.Texts; // ServerDir, LogIniSettings, CrearCarpeta, EsEnlace
 
 const
   LIVE_LOG_NAME = 'actual.log';
@@ -148,9 +149,7 @@ end;
 function LogSinkNote: string;
 begin
   LeeAjustes;
-  Result := Format('Log en disco: %s (actual.log en vivo; un bloque cada %d ' +
-    'lineas, se guardan los %d mas nuevos - [Log] LinesPerFile/MaxFiles en ' +
-    'settings.ini).', [LogDir, GLinesPerFile, GMaxFiles]);
+  Result := MsgFmt(SL_SYS_LOG_EN_DISCO_FMT, [LogDir, GLinesPerFile, GMaxFiles]);
 end;
 
 { EL nombre de un bloque y, debajo, su inverso: quien escribe (CierraBloque)
@@ -371,8 +370,7 @@ begin
     end;
     try
       if Dropped > 0 then
-        Chunk.Add(Format('... %d lineas de log descartadas (buffer lleno) ...',
-          [Dropped]));
+        Chunk.Add(MsgFmt(SL_SYS_LOG_LINEAS_DESCARTADAS_FMT, [Dropped]));
       if Anade(Chunk) then
       begin
         Inc(GLinesInLive, Chunk.Count);

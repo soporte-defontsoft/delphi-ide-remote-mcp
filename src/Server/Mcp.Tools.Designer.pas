@@ -231,7 +231,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(APath) then
-    Exit('RECHAZADO: no existe ' + APath);
+    Exit(MsgFmt(SR_DSGN_NO_EXISTE_FMT, [APath]));
   if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   // Un binario se lee al vuelo (TStyleDoc lo convierte); solo uno danado
@@ -844,7 +844,7 @@ begin
   if Denied <> '' then
     Exit(Denied);
   if not TFile.Exists(APath) then
-    Exit('RECHAZADO: no existe ' + APath);
+    Exit(MsgFmt(SR_DSGN_NO_EXISTE_FMT, [APath]));
   if not MatchText(TPath.GetExtension(APath), ['.dfm', '.fmx']) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   IsFmx := APath.EndsWith('.fmx', True);
@@ -892,7 +892,7 @@ begin
     Exit;
   Ruta := TPath.GetFullPath(APath);
   if not TFile.Exists(Ruta) then
-    Exit('RECHAZADO: no existe ' + Ruta);
+    Exit(MsgFmt(SR_DSGN_NO_EXISTE_FMT, [Ruta]));
   if not MatchText(TPath.GetExtension(Ruta), ['.dfm', '.fmx']) then
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   if SameText(TPath.GetExtension(Ruta), '.fmx') then

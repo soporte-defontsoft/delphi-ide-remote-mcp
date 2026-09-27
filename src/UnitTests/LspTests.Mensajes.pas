@@ -81,6 +81,12 @@ begin
     'una nota delante');
   Assert.AreEqual('NOT_FOUND', MsgOutcome('RECHAZADO: no existe X. [FILE-004 NOT_FOUND]'#10 +
     'nota [EDIT-040]'#10'y otro [WS-003 DENIED]'), 'el rechazo delante');
+  // lo que viene DETRAS de la primera linea no declara nada: un fichero leido
+  // que cita una etiqueta no convierte la lectura en error (27-sep)
+  Assert.AreEqual('', MsgOutcome('Lsp.Texts.pas  encoding=utf8'#10 +
+    '12|    ''RECHAZADO: x. [CFG-001 DENIED]'';'), 'un fichero leido');
+  // y una respuesta JSON tampoco: la decide su campo error
+  Assert.AreEqual('', MsgOutcome('{"hits":["[CFG-001 DENIED]"]}'), 'JSON');
 end;
 
 procedure TEtiquetasTests.ElHelperNoRevienta;
@@ -95,6 +101,13 @@ begin
   S := MsgFmt(EJ_BUENO, [42]);
   Assert.IsTrue(S.StartsWith(EJ_BUENO), S);
   Assert.IsTrue(MsgIds(S)[0] = 'EDIT-001', 'conserva su etiqueta: ' + S);
+  // un mensaje metido dentro de otro por un %s pierde su etiqueta: habla el de
+  // fuera (si no, el DENIED de dentro decidiria el resultado de un exito)
+  S := MsgFmt('CREADA la unit, pero NO se pudo registrar: %s [CREATE-099]',
+    ['RECHAZADO: el .dpr no existe. [CFG-001 NOT_FOUND]']);
+  Assert.IsTrue((Length(MsgIds(S)) = 1) and (MsgIds(S)[0] = 'CREATE-099'), S);
+  Assert.AreEqual('', MsgOutcome(S), 'un exito sigue siendolo');
+  Assert.IsTrue(S.Contains('RECHAZADO: el .dpr no existe.'), 'el texto de dentro se queda: ' + S);
 end;
 
 initialization

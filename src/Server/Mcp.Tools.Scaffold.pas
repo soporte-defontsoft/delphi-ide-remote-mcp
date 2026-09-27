@@ -50,7 +50,8 @@ implementation
 
 uses
   MCPServer.Registration,
-  Lsp.Scaffold;
+  Lsp.Scaffold,
+  Lsp.Texts;
 
 constructor TDelphiCreateTool.Create;
 begin
@@ -94,8 +95,7 @@ begin
     Result := CreateDelphiInclude(Params.Project, Params.Name, Params.Content,
       Params.Dir)
   else
-    Result := 'RECHAZADO: kind debe ser project-console | project-vcl | project-fmx | project-package | project-test | ' +
-      'form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit | include.';
+    Result := MsgText(SR_CREATE_KIND_DEBE_SER_ALL);
 end;
 
 initialization

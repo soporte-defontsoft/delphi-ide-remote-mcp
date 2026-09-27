@@ -185,7 +185,7 @@ begin
 
   // UTF-8 with BOM: these are documents for humans, not Delphi sources.
   TFile.WriteAllText(Path, Body, TEncoding.UTF8);
-  TLogger.Info(Format('delphi_report: %s (%s) from "%s"',
+  TLogger.Info(MsgFmt(SL_REPORT_DELPHI_REPORT_FROM_FMT,
     [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path), Kind,
      Params.From.Trim]));
 

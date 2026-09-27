@@ -100,16 +100,14 @@ begin
     P := ExpandDriveValue(P);
     if VirtualUnitLetter(P) <> #0 then
     begin
-      Answer(ResponseInfo, 403, 'RECHAZADO: unidad virtual no servida: ' +
-        Copy(P, 1, 5) + ' (delphi_workspace dice cuales existen)');
+      Answer(ResponseInfo, 403, MsgFmt(SR_FILES_UNIDAD_VIRTUAL_NO_SERVIDA_FMT, [Copy(P, 1, 5)]));
       Exit;
     end;
     // Absolute server paths only (X:\...): a relative value would resolve
     // against the server process' working directory - not the client's.
     if (Length(P) < 3) or (P[2] <> ':') or not CharInSet(P[3], ['\', '/']) then
     begin
-      Answer(ResponseInfo, 400, 'RECHAZADO: la ruta debe ser absoluta, en la ' +
-        'forma srvd:\carpeta\fichero');
+      Answer(ResponseInfo, 400, MsgText(SR_FILES_RUTA_ABSOLUTA));
       Exit;
     end;
     try
@@ -117,7 +115,7 @@ begin
     except
       on E: Exception do
       begin
-        Answer(ResponseInfo, 400, 'RECHAZADO: ruta invalida (' + E.Message + ')');
+        Answer(ResponseInfo, 400, MsgFmt(SR_FILES_RUTA_INVALIDA_FMT, [E.Message]));
         Exit;
       end;
     end;
@@ -162,7 +160,7 @@ begin
     ResponseInfo.ContentStream := Stream; // streamed, never loaded whole
     ResponseInfo.FreeContentStream := True;
     // The server log is the operator's own: the real path is fine here.
-    TLogger.Info(Format('files: GET %s (%d bytes)', [Full, Stream.Size]));
+    TLogger.Info(MsgFmt(SL_FILES_GET_FMT, [Full, Stream.Size]));
   except
     on E: Exception do
       Answer(ResponseInfo, 500, 'error: ' + E.Message);

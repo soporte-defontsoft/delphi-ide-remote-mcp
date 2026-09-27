@@ -144,7 +144,7 @@ begin
     begin
       // A service that dies silently is the worst kind: say why in the event
       // log, where an operator with no console will actually find it.
-      LogMessage(Format('%s could not start: %s', [SERVICE_DISPLAY, E.Message]),
+      LogMessage(MsgFmt(SL_SYS_COULD_NOT_START_FMT, [SERVICE_DISPLAY, E.Message]),
         EVENTLOG_ERROR_TYPE);
       TLogger.Error(E);
       Started := False;

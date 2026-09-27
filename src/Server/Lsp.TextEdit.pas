@@ -114,8 +114,7 @@ var
   Dir, Text, EolName: string;
 begin
   if TFile.Exists(A.Path) then
-    Exit('RECHAZADO: ' + A.Path + ' ya existe. Esta tool nunca sobreescribe; ' +
-      'edita con old/new.');
+    Exit(MsgFmt(SR_TEXT_YA_EXISTE_NUNCA_SOBREESCRIBE_FMT, [A.Path]));
   Dir := TPath.GetDirectoryName(A.Path);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
     CrearCarpeta(Dir);
@@ -143,7 +142,7 @@ begin
   // solo puede pasar unidades virtuales. Su gemela delphi_edit nunca fallo
   // porque imprime el NOMBRE del fichero: asi es como derivan dos gemelas
   // (medido 2026-09-21, bateria test_round40).
-  Result := Format('CREADO %s  encoding=%s  finales=%s  bytes=%d',
+  Result := MsgFmt(SK_TEXT_CREADO_ENCODING_FINALES_FMT,
     [MaskDriveText('', A.Path),
      IfThen(IsAscii(Text), 'ascii (utf8/cp1252 compatibles)', 'utf8'),
      EolName, Length(TFile.ReadAllBytes(A.Path))]);
@@ -159,12 +158,11 @@ var
   EndsWithEol: Boolean;
 begin
   if not TFile.Exists(A.Path) then
-    Exit('RECHAZADO: no existe ' + A.Path + '. Para crearlo usa create=true.');
+    Exit(MsgFmt(SR_TEXT_NO_EXISTE_CREARLO_FMT, [A.Path]));
   // La regla "esto no es texto" es LooksBinaryBytes (Lsp.Patch), la misma de
   // delphi_read: aqui habia una copia con otra ventana y sin UTF-16.
   if LooksBinaryBytes(TFile.ReadAllBytes(A.Path)) then
-    Exit('RECHAZADO: ' + TPath.GetFileName(A.Path) +
-      ' parece BINARIO (bytes nulos). Esta tool es solo para texto.');
+    Exit(MsgFmt(SR_TEXT_PARECE_BINARIO_FMT, [TPath.GetFileName(A.Path)]));
   // El gemelo de la negativa de delphi_edit, y por eso comparten el texto:
   // decian cosas distintas de la misma regla, y la de aqui ni siquiera
   // mencionaba que en "edits" el ancla SI puede ser un bloque.
@@ -200,8 +198,7 @@ begin
       S := '';
       for I in Matches do
         S := S + IntToStr(I + 1) + ' ';
-      Exit(Format('RECHAZADO: el ancla aparece en %d lineas (%s). Repite con ' +
-        'atline=<numero> para elegir la ocurrencia exacta.',
+      Exit(MsgFmt(SR_TEXT_ANCLA_APARECE_LINEAS_FMT,
         [Length(Matches), S.Trim]));
     end;
     for I in Matches do
@@ -274,23 +271,20 @@ begin
     PatchSaveText(A.Path, Text, EncNm); // backup + atomic + same encoding
   except
     on E: Exception do
-      Exit('RECHAZADO al codificar: ' + E.Message);
+      Exit(MsgFmt(SR_TEXT_AL_CODIFICAR_FMT, [E.Message]));
   end;
 
   if Cuantas > 1 then
-    Exit(Format('%s  encoding=%s  (backup en %s\)'#10 +
-      'Verificacion (releido de disco):'#10'%s',
+    Exit(MsgFmt(SK_TEXT_RANGO_VERIFICACION_FMT,
       [Format(IfThen(A.DeleteLine, MsgText(SN_RANGE_DELETED_FMT), MsgText(SN_RANGE_REPLACED_FMT)),
          [Cuantas, Target + 1, Target + Cuantas, TPath.GetFileName(A.Path)]),
        EncNm, '__delphi-patch',
        ReadNumbered(A.Path, Target, Target + Length(NewLines) + 1)]));
   if A.DeleteLine then
-    Exit(Format('OK borrada la linea %d de %s  encoding=%s  (backup en %s\)'#10 +
-      'Verificacion (releido de disco):'#10'%s',
+    Exit(MsgFmt(SK_TEXT_OK_BORRADA_LINEA_FMT,
       [Target + 1, TPath.GetFileName(A.Path), EncNm, '__delphi-patch',
        ReadNumbered(A.Path, Target, Target + 2)]));
-  Result := Format('OK linea %d de %s  encoding=%s  (backup en %s\)'#10 +
-    'Verificacion (releido de disco):'#10'%s',
+  Result := MsgFmt(SK_TEXT_OK_LINEA_FMT,
     [Target + 1, TPath.GetFileName(A.Path), EncNm, '__delphi-patch',
      ReadNumbered(A.Path, Target, Target + Length(NewLines) + 1)]);
 end;
@@ -361,7 +355,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(APath) then
-    Exit('RECHAZADO: no existe ' + APath + '. Para crearlo usa create=true.');
+    Exit(MsgFmt(SR_TEXT_NO_EXISTE_CREARLO_FMT, [APath]));
   Result := AplicaTanda(APath, AEditsJson,
     function(const AOld, ANew: string; AAtLine, AToLine: Integer;
       ADelete: Boolean): string

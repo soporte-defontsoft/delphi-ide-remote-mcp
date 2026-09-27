@@ -539,7 +539,7 @@ begin
       if not TFile.Exists(Brcc) then
       begin
         Ret.AddPair('rc', TPath.GetFileName(Rc));
-        Ret.AddPair('rcError', 'brcc32.exe no encontrado en ' + Brcc);
+        Ret.AddPair('rcError', MsgFmt(SN_STYLE_BRCC_NO_ENCONTRADO_FMT, [Brcc]));
         AllOk := False;
         Break;
       end;
@@ -694,7 +694,7 @@ begin
     else if Cmd = 'build' then
       Result := BuildStyles(Params.Path)
     else
-      Result := 'error: command debe ser view | get | set | clone | delete | lint | build';
+      Result := MsgText(SR_STYLE_COMMAND_DEBE_SER);
   except
     on E: Exception do
       Result := 'ERROR ' + E.ClassName + ': ' + E.Message;

@@ -1263,9 +1263,7 @@ begin
     begin
       GWorkspaces[I].Invalid := True;
       GWorkspaceNotes := GWorkspaceNotes +
-        ['AVISO: [Workspace.' + GWorkspaces[I].Name + '] tiene el MISMO valor en ' +
-         'Token= y ReadOnlyToken=: no se sabe si quien entra puede escribir. ' +
-         'CERRADO (fail closed) hasta que sean distintos.'];
+        [MsgFmt(SL_GUARD_MISMO_VALOR_TOKEN_FMT, [GWorkspaces[I].Name])];
     end;
     for J := I + 1 to High(GWorkspaces) do
       if Comparten(GWorkspaces[I], GWorkspaces[J]) then
@@ -1273,10 +1271,8 @@ begin
         GWorkspaces[I].Invalid := True;
         GWorkspaces[J].Invalid := True;
         GWorkspaceNotes := GWorkspaceNotes +
-          ['AVISO: [Workspace.' + GWorkspaces[I].Name + '] y [Workspace.' +
-           GWorkspaces[J].Name + '] comparten un token (copia-pega): con el ' +
-           'mismo secreto no se sabe que jaula toca. Los DOS quedan CERRADOS ' +
-           '(fail closed) hasta que cada uno tenga el suyo.'];
+          [MsgFmt(SL_GUARD_COMPARTEN_UN_TOKEN_FMT, [GWorkspaces[I].Name,
+           GWorkspaces[J].Name])];
       end;
   end;
   // 2. la misma clave dos veces en una seccion, o la misma seccion dos veces
@@ -1305,14 +1301,11 @@ begin
           begin
             Cierra(Seccion.Substring(Length('Workspace.')));
             GWorkspaceNotes := GWorkspaceNotes +
-              ['AVISO: la seccion [' + Seccion + '] aparece DOS veces en ' +
-               'settings.ini y el ini solo lee la primera. Ese workspace ' +
-               'queda CERRADO (fail closed) hasta que sea una sola.'];
+              [MsgFmt(SL_GUARD_SECCION_DOS_VECES_CERRADO_FMT, [Seccion])];
           end
           else
             GWorkspaceNotes := GWorkspaceNotes +
-              ['AVISO: la seccion [' + Seccion + '] aparece DOS veces en ' +
-               'settings.ini y el ini solo lee la primera: fusionalas.'];
+              [MsgFmt(SL_GUARD_SECCION_DOS_VECES_FUSIONALAS_FMT, [Seccion])];
         end
         else
           Secciones.Add(Seccion);
@@ -1328,14 +1321,11 @@ begin
         begin
           Cierra(Seccion.Substring(Length('Workspace.')));
           GWorkspaceNotes := GWorkspaceNotes +
-            ['AVISO: [' + Seccion + '] repite la clave ' + T.Substring(0, P).Trim +
-             ' y el ini solo lee la primera. Ese workspace queda CERRADO ' +
-             '(fail closed) hasta que la clave sea una sola.'];
+            [MsgFmt(SL_GUARD_REPITE_CLAVE_CERRADO_FMT, [Seccion, T.Substring(0, P).Trim])];
         end
         else
           GWorkspaceNotes := GWorkspaceNotes +
-            ['AVISO: [' + Seccion + '] repite la clave ' + T.Substring(0, P).Trim +
-             ': el ini solo lee la primera y la segunda se ignora en silencio.'];
+            [MsgFmt(SL_GUARD_REPITE_CLAVE_IGNORA_FMT, [Seccion, T.Substring(0, P).Trim])];
       end
       else
         Claves.Add(Clave);
@@ -1455,15 +1445,12 @@ begin
                 .Split([',', ';'], TStringSplitOptions.ExcludeEmpty);
             if W.Invalid then
               GWorkspaceNotes := GWorkspaceNotes +
-                ['AVISO: [Workspace.' + W.Name + '] Roots= no parsea: ese ' +
-                 'workspace no admite a NADIE (fail closed). Revisa la ruta.'];
+                [MsgFmt(SL_GUARD_ROOTS_NO_PARSEA_FMT, [W.Name])];
             if (W.Token <> '') or (W.ReadOnlyToken <> '') then
               GWorkspaces := GWorkspaces + [W]
             else
               GWorkspaceNotes := GWorkspaceNotes +
-                ['AVISO: [Workspace.' + W.Name + '] sin Token= ni ' +
-                 'ReadOnlyToken=: seccion IGNORADA. La clave es Token= ' +
-                 '(AuthToken= tambien vale como alias).'];
+                [MsgFmt(SL_GUARD_SIN_TOKEN_IGNORADA_FMT, [W.Name])];
           end
           else if SameText(S, 'Workspace') then
             // [Workspace] without the dot is the v0.97 section, and it was
@@ -1475,18 +1462,13 @@ begin
             // own instructions got no jail, no token, and not one word
             // anywhere saying why. It gets the loudest note of the three.
             GWorkspaceNotes := GWorkspaceNotes +
-              ['AVISO: la seccion [Workspace] (sin punto) ya NO existe y se ' +
-               'IGNORA entera: sus Roots, sus tokens y sus permisos no ' +
-               'valen nada. Desde v0.98 nada es global - renombrala a ' +
-               '[Workspace.<nombre>] y dale un Token=.']
+              [MsgText(SL_GUARD_WORKSPACE_SIN_PUNTO)]
           else if S.ToLower.StartsWith('work') then
             // [Workopenclaw], [WorkspaceX]... a workspace section spelled
             // wrong used to vanish silently and its token answered 401 with
             // no clue anywhere (measured 2026-09-10). Name the fix.
             GWorkspaceNotes := GWorkspaceNotes +
-              ['AVISO: la seccion [' + S + '] parece un workspace mal ' +
-               'escrito y se IGNORA. El formato es [Workspace.<nombre>] ' +
-               '(con el punto).'];
+              [MsgFmt(SL_GUARD_WORKSPACE_MAL_ESCRITO_FMT, [S])];
       finally
         Secs.Free;
       end;
@@ -3615,7 +3597,7 @@ begin
       TPath.GetFullPath(AOrigen))));
     UD := ExtractFileDrive(RealPath(ADestino));
   except
-    Exit('RECHAZADO: ruta invalida: ' + AOrigen);
+    Exit(MsgFmt(SR_GUARD_RUTA_INVALIDA_FMT, [AOrigen]));
   end;
   if not SameText(UO, UD) then
     Result := MsgFmt(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]);
@@ -3912,7 +3894,7 @@ begin
     Full := TPath.GetFullPath(APath);
   except
     AMotivo := mvRutaInvalida;
-    Exit('RECHAZADO: ruta invalida: ' + APath);
+    Exit(MsgFmt(SR_GUARD_RUTA_INVALIDA_FMT, [APath]));
   end;
   // Un proyecto de REFERENCIA (ReadOnlyRoots) manda sobre Roots: una
   // carpeta declarada en los dos sitios, o una raiz que caiga dentro de una

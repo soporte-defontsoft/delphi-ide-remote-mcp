@@ -266,8 +266,7 @@ begin
     Sec := 'summary';
   if not MatchText(Sec, ['summary', 'platforms', 'searchpaths', 'deploy',
     'units', 'all']) then
-    Exit('error: section debe ser summary | platforms | searchpaths | ' +
-      'deploy | units | all');
+    Exit(MsgText(SR_CFG_SECTION_DEBE_SER_SUMMARY));
   // A bare .dpr with no .dproj beside it: the units CAN be read (they are in
   // the .dpr itself) but the framework, the platforms and the configurations
   // cannot - they live in the .dproj. Answering with all of them empty plus
@@ -467,11 +466,7 @@ begin
   NewLine := Indent + '    ' + Format('<Platform value="%s">True</Platform>', [APlatform]) + sLineBreak;
   Xml := Copy(Xml, 1, LineStart - 1) + NewLine + Copy(Xml, LineStart, MaxInt);
   PatchSaveText(ADproj, Xml, Enc);
-  Result := Format('ANADIDA la plataforma %s al .dproj (bloque <Platforms>). ' +
-    'El IDE completara sus PropertyGroups al abrir el proyecto; para un ' +
-    'proyecto sencillo MSBuild ya la compila. Verifica con delphi_build ' +
-    '{platform:"%s"}. Si necesita PAServer, prepara el perfil con ' +
-    'delphi_paserver.', [APlatform, APlatform]);
+  Result := MsgFmt(SK_CFG_ANADIDA_PLATAFORMA_DPROJ_FMT, [APlatform, APlatform]);
 end;
 
 { Disable a platform (flip its <Platform value="X">True</Platform> to False).
@@ -604,8 +599,7 @@ begin
     BasePos := Pos(LowerCase('<PropertyGroup Condition="''$(Base)''!=''''">'),
                    LowerCase(Xml));
     if BasePos = 0 then
-      Exit('error: no encuentro el PropertyGroup base ("$(Base)") del .dproj; ' +
-        'abre el proyecto una vez en el IDE y reintenta.');
+      Exit(MsgText(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_BASE));
     InsertAt := Pos('>', Xml, BasePos) + 1;
     if OldDcu = '' then
       Xml := Copy(Xml, 1, InsertAt - 1) + sLineBreak +
@@ -862,7 +856,7 @@ begin
       Exit('error: ' + E.Message);
   end;
   if not FindGroup(Xml, GroupCondition(Plat), O, I, C) then
-    Exit('error: no encuentro el PropertyGroup ' + GroupCondition(Plat) + ' del .dproj.');
+    Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_FMT, [GroupCondition(Plat)]));
   if FindSearchTag(Xml, I, C, ElS, VS, VE, ElE) then
   begin
     for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
@@ -1161,10 +1155,10 @@ begin
       EnsureDeployManifest(ADproj, Plat, Info.RootDir, Generated);
     except
       on E: Exception do
-        Exit('error: no pude generar el manifiesto de despliegue: ' + E.Message);
+        Exit(MsgFmt(SR_CFG_NO_PUDE_GENERAR_MANIFIESTO_FMT, [E.Message]));
     end;
     if not TFile.Exists(DeployProj) then
-      Exit('error: no existe ' + DeployProj + ' y no se pudo generar.');
+      Exit(MsgFmt(SR_CFG_NO_EXISTE_NO_PUDO_GENERAR_FMT, [DeployProj]));
   end;
 
   Xml := PatchLoadText(DeployProj, Enc);
@@ -1441,7 +1435,7 @@ begin
   Xml := PatchLoadText(ADproj, Enc);
   EnsurePlatformGroups(Xml, APlatform);
   if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
-    Exit('error: no encuentro el PropertyGroup de ' + APlatform + ' en el .dproj');
+    Exit(MsgFmt(SR_CFG_NO_ENCUENTRO_PROPERTYGROUP_DE_FMT, [APlatform]));
 
   // lo que hubiera DENTRO de ese grupo, no en cualquier sitio del fichero
   Antes := '';
@@ -1463,7 +1457,7 @@ begin
     end;
     Xml := Copy(Xml, 1, TagIni - 1) + Copy(Xml, TagFin, MaxInt);
     if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
-      Exit('error: el .dproj quedo inconsistente al quitar el PlatformSDK previo');
+      Exit(MsgText(SR_CFG_QUEDO_INCONSISTENTE_PLATFORMSDK));
   end;
 
   if not Quitar then
@@ -1545,7 +1539,7 @@ begin
     end;
     Xml := Copy(Xml, 1, TagIni - 1) + Copy(Xml, TagFin, MaxInt);
     if not FindGroup(Xml, GroupCondition(APlatform), O, I, C) then
-      Exit('error: el .dproj quedo inconsistente al quitar el Profile previo');
+      Exit(MsgText(SR_CFG_QUEDO_INCONSISTENTE_PROFILE));
   end;
 
   if not Quitar then
@@ -1577,7 +1571,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(Params.Project) then
-    Exit('error: no existe el proyecto ' + Params.Project);
+    Exit(MsgFmt(SR_CFG_NO_EXISTE_PROYECTO_FMT, [Params.Project]));
   // Arriving with the .dpr in hand is the common case - delphi_create's own
   // schema says its "project" takes ".dpr (or .dproj)". `view` used to answer
   // for it anyway, with an empty framework, no platforms, no configurations

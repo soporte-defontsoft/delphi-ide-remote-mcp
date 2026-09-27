@@ -144,13 +144,7 @@ begin
     // reject that exact string on login, while -password=<pwd> inline
     // authenticated first try - the passfile does not seem to be read as
     // plain text, so prefer -password for ad-hoc runs (mind `ps` shows it).
-    Result := 'Linux: fetch, then `tar xzf ' + TPath.GetFileName(AFile) +
-      ' && cd PAServer-*` and run it KEEPING STDIN OPEN if headless: ' +
-      '`sh -c ''sleep infinity | ./paserver -port=64211 -password=<pwd>''` ' +
-      '(listens on 64211). Warnings: `./paserver &` with stdin at EOF spins ' +
-      'its prompt at 100% CPU (keep the sleep pipe); and -passfile with a ' +
-      'plain-text password was rejected on login in the field - pass ' +
-      '-password inline instead, and keep the process supervised.'
+    Result := MsgFmt(SN_PAS_LINUX_FETCH_TAR_FMT, [TPath.GetFileName(AFile)])
   else if N.EndsWith('.pkg') then
     Result := 'macOS: fetch, then open the .pkg to install, and run PAServer (port 64211).'
   else if N.Contains('arm') then
@@ -619,14 +613,9 @@ begin
         Reg.Free;
       end;
     end;
-    Return.AddPair('note', 'profiles = los .profile en disco (lo que usan ' +
-      'paclient, MSBuild y las tools de este servidor). ideRegistrySeats = ' +
-      'las claves RemoteProfiles del registro, de donde el IDE saca SU ' +
-      'lista. Si un nombre esta en una y no en la otra, ahi esta la ' +
-      'explicacion de lo que el IDE ensena o deja de ensenar.');
+    Return.AddPair('note', MsgText(SN_PAS_PROFILES_EN_DISCO));
     if (Profs.Count = 0) and (Sdks.Count = 0) then
-      Return.AddPair('note2', 'No connection profiles or SDKs yet. They are ' +
-        'created against a running PAServer on the target machine.');
+      Return.AddPair('note2', MsgText(SN_PAS_NO_CONNECTION_PROFILES_SDKS));
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -926,7 +915,7 @@ begin
     Result := MsgText(SR_PASERVER_IDE_OPEN)
   else
     // paclient's output never carries the password (it echoes it encrypted).
-    Result := 'error: paclient exit ' + IntToStr(ExitCode) + ': ' + Output.Trim;
+    Result := MsgFmt(SR_PAS_PACLIENT_EXIT_FMT, [ExitCode, Output.Trim]);
 end;
 
 { test-connection WITHOUT a profile: a raw TCP dial of host:port - the quick
@@ -1064,7 +1053,7 @@ begin
     TFile.Delete(ProfileFile);
   except
     on E: Exception do
-      Exit('error: no pude borrar el perfil: ' + E.Message);
+      Exit(MsgFmt(SR_PAS_NO_PUDE_BORRAR_PERFIL_FMT, [E.Message]));
   end;
   BorrarPerfilDelIde(Info.Version, ProfName);
   Result := MsgFmt(SN_PASERVER_PROFILE_REMOVED_FMT, [ProfName]);
@@ -1074,7 +1063,7 @@ begin
   // RemoveDir solo se lleva una carpeta vacia; si tiene algo, se queda.
   var Huerfana := TPath.Combine(IdeSdksDir(Info.Version), ProfName);
   if TDirectory.Exists(Huerfana) and RemoveDir(Huerfana) then
-    Result := Result + ' Tambien su carpeta vacia en SDKs.';
+    Result := Result + MsgText(SN_PAS_TAMBIEN_CARPETA_VACIA_SDKS);
 end;
 
 function TestConnection(const Params: TDelphiPAServerParams): string;
@@ -1514,10 +1503,7 @@ begin
     // Pocos ficheros (o ninguno) en una segunda pasada NO es un SDK vacio:
     // a un agente de campo se lo parecio (2026-08-21).
     Return.AddPair('incremental',
-      'totalFiles/totalBytes count what was copied in THIS run. The pull is ' +
-      'incremental: over a sysroot already on disk it brings only what ' +
-      'changed on the target, so a small number - or zero, "already up to ' +
-      'date" - is the normal answer of a re-run, not an empty SDK.');
+      MsgText(SN_PAS_TOTALFILES_TOTALBYTES_COUNT));
     Return.AddPair('note', MsgText(SN_PASERVER_SDK_OK));
     if Glibc <> '' then
       Return.AddPair('genericNote', MsgFmt(SN_PASERVER_SDK_GENERIC_FMT, [Glibc]));
@@ -1712,8 +1698,8 @@ begin
       TFile.Delete(Fichero);
     except
       on E: Exception do
-        Exit('error: no pude borrar ' + TPath.GetFileName(Fichero) + ': ' +
-          E.Message);
+        Exit(MsgFmt(SR_PAS_NO_PUDE_BORRAR_FMT,
+          [TPath.GetFileName(Fichero), E.Message]));
     end;
   end
   else if not AsientoDeSdkExiste(Info.Version, Nombre) then

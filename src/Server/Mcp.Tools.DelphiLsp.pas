@@ -212,9 +212,7 @@ end;
 function NoSettingsNote(const ASettings: string): string;
 begin
   if ASettings = '' then
-    Result := ' [warning: no .delphilsp.json project settings found for this ' +
-      'file - semantic answers may be null. Generate one in the IDE ' +
-      '(Code Insight > Generate LSP config + Reload LSP Server).]'
+    Result := MsgText(SN_LSP_NO_SETTINGS_WARNING)
   else
     Result := '';
 end;
@@ -271,7 +269,7 @@ begin
   try
     Err := AResp.GetValue('error');
     if Err <> nil then
-      Exit('LSP error: ' + Err.ToJSON + ANote);
+      Exit(MsgFmt(SR_LSP_ERROR_FMT, [Err.ToJSON]) + ANote);
     V := AResp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
       Exit(MsgText(SN_LSP_NULL_NOTE) + ANote);
@@ -878,7 +876,7 @@ begin
   try
     var Err := Resp.GetValue('error');
     if Err <> nil then
-      Exit('LSP error: ' + Err.ToJSON + Note);
+      Exit(MsgFmt(SR_LSP_ERROR_FMT, [Err.ToJSON]) + Note);
     var V := Resp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
       Exit(MsgText(SN_LSP_NULL_NOTE) + Note);
@@ -1043,7 +1041,7 @@ begin
   V := Resp.GetValue('result');
   if (V = nil) or (V is TJSONNull) then
     Result := RenderResult(Resp, NoSettingsNote(Settings) +
-      ' [hint: the position must be INSIDE the call parentheses, right after ( or ,]')
+      MsgText(SN_LSP_HINT_INSIDE_CALL))
   else
     Result := RenderResult(Resp, NoSettingsNote(Settings));
 end;
@@ -1083,7 +1081,7 @@ begin
   end
   else
     Result := RenderResult(Resp, NoSettingsNote(Settings) +
-      ' [hint: hover only answers on usages, not on declarations]');
+      MsgText(SN_LSP_HINT_HOVER_USAGES));
 end;
 
 { TDelphiCompletionTool }

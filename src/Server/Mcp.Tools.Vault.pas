@@ -354,7 +354,7 @@ begin
       Text := VaultLoad(AFull);
     except
       on E: Exception do
-        Exit('error: no se pudo leer la nota (' + E.Message + ')');
+        Exit(MsgFmt(SR_VAULT_NO_PUDO_LEER_NOTA_FMT, [E.Message]));
     end;
     Result := ATransform(Text, NewText);
     if Result <> '' then
@@ -456,7 +456,7 @@ begin
     Exit(MsgText(SR_VAULT_UNSET));
   Pat := Params.Pattern.Trim;
   if Pat = '' then
-    Exit('error: falta "pattern"');
+    Exit(MsgText(SR_VAULT_FALTA_PATTERN));
   // A target nobody recognises used to fall back to "files" in silence, so
   // `target=contents` (plural) answered with a list of note NAMES and the
   // caller concluded the vault had nothing inside (field round 8).
@@ -480,7 +480,7 @@ begin
       Exit;
     Root := TPath.GetDirectoryName(Probe);
     if not TDirectory.Exists(Root) then
-      Exit(Format('error: la subcarpeta "%s" no existe en el vault',
+      Exit(MsgFmt(SR_VAULT_SUBCARPETA_NO_EXISTE_FMT,
         [Params.Subfolder.Trim]));
   end;
 
@@ -489,8 +489,7 @@ begin
       Rx := TRegEx.Create(Pat, [roIgnoreCase]);
     except
       on E: Exception do
-        Exit('error: "pattern" no es una expresion regular valida (' +
-          E.Message + ')');
+        Exit(MsgFmt(SR_VAULT_PATTERN_REGEX_INVALIDA_FMT, [E.Message]));
     end;
 
   Notes := TStringList.Create;
@@ -585,7 +584,7 @@ begin
     Text := VaultLoad(Full);
   except
     on E: Exception do
-      Exit('error: no se pudo leer la nota (' + E.Message + ')');
+      Exit(MsgFmt(SR_VAULT_NO_PUDO_LEER_NOTA_FMT, [E.Message]));
   end;
   Rel := VaultRelative(Full);
   // An offset past the end used to answer with a header and NOTHING else -
@@ -639,7 +638,7 @@ begin
       [Params.Path.Trim]));
   Add := Params.Content;
   if Add.Trim = '' then
-    Exit('error: falta "content"');
+    Exit(MsgText(SR_VAULT_FALTA_CONTENT_APPEND));
   Anchor := Params.Anchor;
 
   // The read, the anchor search and the write happen as one atomic step under
@@ -747,7 +746,7 @@ begin
   if not TFile.Exists(Full) then
     Exit(MsgFmt(SR_VAULT_NOTA_EXISTE_FMT, [Params.Path.Trim]));
   if Params.Old_Text = '' then
-    Exit('error: falta "old_text"');
+    Exit(MsgText(SR_VAULT_FALTA_OLD_TEXT));
 
   // find-once + replace + empty-note guard all run atomically under the lock;
   // the empty-note guard lives in EditNoteLocked so both verbs share it.

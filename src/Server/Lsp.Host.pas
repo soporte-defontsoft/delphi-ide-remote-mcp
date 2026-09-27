@@ -239,26 +239,22 @@ begin
     Add(Jail);
   Add(VaultSeedNote);
   if VaultConfigured then
-    Add(Format('Knowledge vault: %s (%s)',
+    Add(MsgFmt(SL_SYS_KNOWLEDGE_VAULT_FMT,
       [VaultPath, IfThen(VaultWritable, 'read-write', 'read-only')]));
   // v0.91: authentication is workspaces or nothing. The old note lied the
   // moment tokens moved into [Workspace.*] sections (measured 2026-09-11:
   // production fully migrated and the log still cried "no token").
   if WorkspaceTokensConfigured then
-    Add('Bearer auth enabled (per-workspace tokens).')
+    Add(MsgText(SL_SYS_BEARER_AUTH_ENABLED))
   else
   begin
-    Add(NOTE_WARNING_PREFIX + 'No credentials: there is no ' +
-      '[Workspace.<name>] section with Token=. Every HTTP request gets 401; ' +
-      'only the local stdio mode works. ' + MsgText(SR_TOKEN_NEEDED));
+    Add(NOTE_WARNING_PREFIX + MsgFmt(SL_SYS_NO_CREDENTIALS_FMT, [MsgText(SR_TOKEN_NEEDED)]));
     // CreateHttpServer's fail-safe, said here with ITS condition: the .dpr
     // used to say it, only in terminal mode, whenever the interface was
     // 127.0.0.1 - credentials or not - and pointing at [Security], a
     // section retired in v0.98 (found by test_round24 on 2026-09-26).
     if Lsp.Guard.BindIP = '' then
-      Add(NOTE_WARNING_PREFIX + 'And no [Server] BindIP: HTTP listens on ' +
-        '127.0.0.1 ONLY. To expose it to the network, add a ' +
-        '[Workspace.<name>] section with Token=.');
+      Add(NOTE_WARNING_PREFIX + MsgText(SL_SYS_NO_BINDIP_LOCALHOST_ONLY));
   end;
   // One auth mechanism: workspaces. A legacy env pair shows up
   // here as the "default" workspace; misconfigured sections stop vanishing

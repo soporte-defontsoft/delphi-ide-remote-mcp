@@ -287,10 +287,16 @@ def tiene(t, msg_id):
 
 
 def outcome(t):
-    """El resultado que declara la PRIMERA etiqueta (la del mensaje que abre la
-    respuesta); '' si esa no declara ninguno o no hay etiquetas."""
-    m = ETIQUETA.search(t or '')
-    return (m.group(2) or '') if m else ''
+    """El resultado que declara el mensaje que ABRE la respuesta: la primera
+    etiqueta, si esta en la primera linea; '' si no hay, si esa no declara
+    ninguno, o si la respuesta es JSON (el mismo criterio que MsgOutcome)."""
+    t = t or ''
+    if t.lstrip().startswith(('{', '[')):
+        return ''
+    m = ETIQUETA.search(t)
+    if not m or ('\n' in t and m.start() > t.index('\n')):
+        return ''
+    return m.group(2) or ''
 
 
 def como_json(t):

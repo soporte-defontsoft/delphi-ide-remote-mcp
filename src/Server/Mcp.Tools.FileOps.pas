@@ -347,7 +347,7 @@ begin
     if IsBackupRoot(Params.Path) then
       Exit(MsgText(SR_FILE_PURGE_NOT_ROOT));
     if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
-      Exit('RECHAZADO: no existe ' + Params.Path);
+      Exit(MsgFmt(SR_DSGN_NO_EXISTE_FMT, [Params.Path]));
     var CanonPurge := LongCanonical(Params.Path);
     if CanonPurge.ToLower.EndsWith('.by') then
     begin
@@ -401,8 +401,7 @@ begin
       [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
   end;
   if IsBackupPath(Params.Path) then
-    Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la papelera/copias de esta tool. ' +
-      'No se borra desde aqui (purgala manualmente si de verdad quieres).');
+    Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_BORRA_FMT, [BACKUP_SUB]));
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
     Exit('RECHAZADO: no existe ' + Params.Path);
   // Una carpeta a la papelera se lleva TODO lo de dentro: ni ser ni contener
@@ -506,7 +505,7 @@ begin
       end;
     end;
     if Cuantas > 0 then
-      ProjNote := Format('  units de la carpeta quitadas de sus proyectos (%d):',
+      ProjNote := MsgFmt(SN_FILE_UNITS_CARPETA_QUITADAS_FMT,
         [Cuantas]) + ProjNote;
   except
     // una subcarpeta ilegible no impide borrar: se quita lo que se vio
@@ -525,7 +524,7 @@ begin
       if (ProjNote <> '') or (DesignerNote <> '') then
         Exit(MsgFmt(SN_FILE_PARTIAL_FMT, ['al mover a la papelera', E.Message,
           #10 + DesignerNote + #10 + ProjNote]));
-      Exit('ERROR al mover a la papelera: ' + E.Message);
+      Exit(MsgFmt(SN_FILE_ERROR_MOVER_PAPELERA_FMT, [E.Message]));
     end;
   end;
   // Say BORRADO only if it is gone. An auditor working through MCP found a
@@ -551,9 +550,7 @@ begin
       Result := Result + #10 + ProjNote;
     Exit;
   end;
-  Result := Format('BORRADO %s (movido a la papelera recuperable).'#10 +
-    '  copia: %s'#10'  Para recuperarlo: delphi_move con path=esa copia y ' +
-    'dest=donde lo quieras (restaurar desde la papelera esta permitido).',
+  Result := MsgFmt(SK_FILE_BORRADO_PAPELERA_FMT,
     [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash]);
   if DesignerNote <> '' then
     Result := Result + #10 + DesignerNote;
@@ -651,14 +648,13 @@ begin
   // tells the agent to do). What is refused: moving the trash FOLDER itself,
   // and moving anything INTO the trash by hand.
   if IsBackupRoot(Params.Path) then
-    Exit('RECHAZADO: ' + BACKUP_SUB + '\ es la carpeta de papelera; no se mueve entera.');
+    Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_MUEVE_FMT, [BACKUP_SUB]));
   if IsBackupPath(Params.Dest) then
-    Exit('RECHAZADO: no muevas ficheros DENTRO de la papelera (' + BACKUP_SUB +
-      '\); es para las copias que hace la tool. Muevelos a una carpeta normal.');
+    Exit(MsgFmt(SR_FILE_NO_MUEVAS_DENTRO_PAPELERA_FMT, [BACKUP_SUB]));
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
-    Exit('RECHAZADO: no existe el origen ' + Params.Path);
+    Exit(MsgFmt(SR_FILE_NO_EXISTE_ORIGEN_FMT, [Params.Path]));
   if TFile.Exists(Params.Dest) or TDirectory.Exists(Params.Dest) then
-    Exit('RECHAZADO: el destino ya existe: ' + Params.Dest + ' (no sobreescribo).');
+    Exit(MsgFmt(SR_FILE_DESTINO_YA_EXISTE_FMT, [Params.Dest]));
   // UNA CARPETA se mueve renombrandola o nada (MueveArbol, Lsp.Guard). Se
   // pregunta ANTES de la copia de seguridad: un rechazo no deja copias de
   // algo que no se va a mover.
@@ -704,11 +700,10 @@ begin
       Exit('RECHAZADO: una unit .pas solo se mueve a otro nombre .pas (' +
         TPath.GetFileName(Params.Dest) + ').');
     if not TRegEx.IsMatch(NewStem, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
-      Exit('RECHAZADO: ''' + NewStem + ''' no es un identificador valido de unit ' +
-        '(el nombre del fichero es el nombre de la unit).');
+      Exit(MsgFmt(SR_FILE_IDENTIFICADOR_UNIT_FMT, [NewStem]));
     for Ext in ['.dfm', '.fmx'] do
       if TFile.Exists(ChangeFileExt(Params.Dest, Ext)) then
-        Exit('RECHAZADO: ya existe ' + ChangeFileExt(Params.Dest, Ext) + ' (no sobreescribo).');
+        Exit(MsgFmt(SR_FILE_YA_EXISTE_NO_SOBREESCRIBO_FMT, [ChangeFileExt(Params.Dest, Ext)]));
     if not Params.Copy then
       Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
   end;
@@ -767,7 +762,7 @@ begin
     Result := Result + #10 + MsgFmt(SN_COPY_LINKS_NOT_FOLLOWED_FMT,
       [Length(NoSeguidos), string.Join(', ', NoSeguidos)]);
   if not Params.Copy then // una copia no necesita red: el origen sigue ahi
-    Result := Result + #10 + '  (copia de seguridad en ' + BackupNote + ')';
+    Result := Result + #10 + MsgFmt(SN_FILE_COPIA_SEGURIDAD_EN_FMT, [BackupNote]);
   if not IsUnit then
     Exit(Result + Reubicacion(DesdePapelera));
 

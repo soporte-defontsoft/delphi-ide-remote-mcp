@@ -208,8 +208,7 @@ begin
     end
     else
     begin
-      TLogger.Info('DelphiLSP MCP Service v' + Host.Settings.ServerVersion +
-        ' (stdio)');
+      TLogger.Info(MsgFmt(SL_SYS_SERVICE_STDIO_FMT, [Host.Settings.ServerVersion]));
       StdioTransport := TMCPStdioTransport.Create(Host.Registry, Host.Core);
       try
         StdioTransport.Run; // returns on stdin EOF (client disconnected)

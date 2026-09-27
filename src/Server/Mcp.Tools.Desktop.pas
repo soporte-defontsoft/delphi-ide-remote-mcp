@@ -475,7 +475,7 @@ begin
           // .tmp- se quedaba para siempre (una de Hermes, 25-sep-2026). Ahora
           // se dice y no queda nada.
           on E: Exception do
-            Fallo := 'no pude colocar la captura bajada: ' + E.Message;
+            Fallo := MsgFmt(SN_DESK_COLOCAR_CAPTURA_BAJADA_FMT, [E.Message]);
         end;
         try
           BorraArbol(Bajada); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
@@ -536,10 +536,7 @@ begin
           if ConRecorte then
             Return.AddPair('note', MsgFmt(SN_ADBLINUX_CROP_NOTE_FMT, [RX, RY]))
           else if not EnLinea then
-            Return.AddPair('note', 'mide el pixel SOBRE esta imagen y pasalo a ' +
-              'command=tap; bajala con download o delphi_fetch. Al recogerla ENTERA ' +
-              'se borra del servidor: si la necesitas otra vez, pide otra captura ' +
-              '(una pedida con out= no se borra)');
+            Return.AddPair('note', MsgText(SN_DESK_MIDE_PIXEL_SOBRE_IMAGEN));
         end;
       end
       else

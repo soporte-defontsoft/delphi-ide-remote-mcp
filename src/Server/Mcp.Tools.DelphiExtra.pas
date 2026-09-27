@@ -196,7 +196,7 @@ begin
       Return.AddPair('diagnostics', OutArr);
       Result := Return.ToJSON;
       if Settings = '' then
-        Result := Result + ' [warning: no project settings found - results may be incomplete]';
+        Result := Result + MsgText(SN_BUILD_NO_PROJECT_SETTINGS);
     finally
       Return.Free;
     end;

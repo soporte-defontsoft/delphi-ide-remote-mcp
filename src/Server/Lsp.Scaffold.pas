@@ -426,7 +426,7 @@ begin
     // work (field round 10).
     Exit(MsgText(SR_CREATE_PROJECT_KIND));
   if not TRegEx.IsMatch(AName, '^[A-Za-z_]\w*$') then
-    Exit('RECHAZADO: ''' + AName + ''' no es un identificador Pascal valido para nombre de proyecto.');
+    Exit(MsgFmt(SR_CREATE_IDENTIFICADOR_NOMBRE_PROYECTO_FMT, [AName]));
 
   Result := BadUnitName(AName);
   if Result <> '' then
@@ -441,7 +441,7 @@ begin
   Dpr := TPath.Combine(Dir, AName + IfThen(Kind = 'package', '.dpk', '.dpr'));
   if TFile.Exists(Dpr) or TFile.Exists(TPath.Combine(Dir, AName + '.dproj')) or
      TFile.Exists(TPath.Combine(Dir, AName + '.dpr')) or TFile.Exists(TPath.Combine(Dir, AName + '.dpk')) then
-    Exit('RECHAZADO: ya existe un proyecto ' + AName + ' en ' + Dir + '. El scaffolder jamas sobreescribe.');
+    Exit(MsgFmt(SR_CREATE_YA_EXISTE_PROYECTO_FMT, [AName, Dir]));
   // All or nothing. The files used to be written one by one, so a collision
   // on the THIRD of them (the UMain.pas of a project already living in that
   // folder) left an orphan .dpr behind - pointing at somebody else's unit,
@@ -644,9 +644,7 @@ begin
       Files.Add('.gitignore');
     end;
 
-    Result := Format('CREADO proyecto %s (%s) en %s'#10'  ficheros: %s'#10 +
-      'Fuentes en %s (el encoding configurado en el IDE) + CRLF. Compilable ' +
-      'ya con delphi_build (el IDE enriquecera el .dproj al abrirlo).%s',
+    Result := MsgFmt(SK_CREATE_CREADO_PROYECTO_FMT,
       [AName, Kind, Dir, string.Join(', ', Files.ToStringArray), NewFileEncName,
        IfThen(Kind = 'package', #10 + MsgText(SN_CREATE_PACKAGE_NOTE),
          IfThen(Kind = 'test', #10 + MsgFmt(SN_CREATE_TEST_NOTE_FMT, [AName, MainUnit]), ''))]);
@@ -729,7 +727,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(ADprPath) then
-    Exit('RECHAZADO: no existe el .dpr ' + ADprPath);
+    Exit(MsgFmt(SR_CREATE_NO_EXISTE_DPR_FMT, [ADprPath]));
   Result := BadUnitName(AUnitName);
   if Result <> '' then
     Exit;
@@ -764,14 +762,14 @@ begin
   if FormName.StartsWith('T') and (Length(FormName) > 1) and CharInSet(FormName[2], ['A'..'Z']) then
     FormName := FormName.Substring(1); // the T prefix goes on the class only
   if not TRegEx.IsMatch(FormName, '^[A-Za-z_]\w*$') then
-    Exit('RECHAZADO: ''' + FormName + ''' no es un identificador valido de form.');
+    Exit(MsgFmt(SR_CREATE_IDENTIFICADOR_FORM_FMT, [FormName]));
 
   Result := CarpetaEnElProyecto(ADprPath, ASubDir, Dir);
   if Result <> '' then
     Exit;
   PasPath := TPath.Combine(Dir, AUnitName + '.pas');
   if TFile.Exists(PasPath) then
-    Exit('RECHAZADO: ' + PasPath + ' ya existe. El scaffolder jamas sobreescribe.');
+    Exit(MsgFmt(SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT, [PasPath]));
 
   // 1) the pair of files
   DesignerExt := '.dfm';
@@ -808,9 +806,9 @@ begin
   // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference)
   Result := AddProjectUnit(ADprPath, PasPath);
   if Result.StartsWith('RECHAZADO') then
-    Result := 'CREADOS ' + AUnitName + '.pas/' + DesignerExt + ' pero NO se pudo registrar: ' + Result
+    Result := MsgFmt(SK_CREATE_CREADOS_NO_REGISTRADOS_FMT, [AUnitName, DesignerExt, Result])
   else
-    Result := Format('CREADO %s %s (T%s, %s) con su %s.'#10'%s%s',
+    Result := MsgFmt(SK_CREATE_CREADO_FORM_FMT,
       [IfThen(Kind.StartsWith('frame'), 'frame', IfThen(Kind = 'datamodule', 'data module', 'form')),
        AUnitName, FormName, Kind, AUnitName + DesignerExt, Result,
        IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]);
@@ -866,7 +864,7 @@ begin
   if Result <> '' then
     Exit;
   if TFile.Exists(ARuta) then
-    Exit('RECHAZADO: ' + ARuta + ' ya existe. El scaffolder jamas sobreescribe.');
+    Exit(MsgFmt(SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT, [ARuta]));
   WriteNewFile(ARuta, ABody);
 end;
 
@@ -896,7 +894,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(ADprPath) then
-    Exit('RECHAZADO: no existe el proyecto ' + ADprPath);
+    Exit(MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath]));
   Result := BadUnitName(AUnitName);
   if Result <> '' then
     Exit;
@@ -905,8 +903,7 @@ begin
     Exit;
   PasPath := TPath.Combine(Dir, AUnitName + '.pas');
   if TFile.Exists(PasPath) then
-    Exit('RECHAZADO: ' + PasPath + ' ya existe. El scaffolder jamas sobreescribe. ' +
-      'Para registrarla en el proyecto usa delphi_config command=add-unit.');
+    Exit(MsgFmt(SR_CREATE_UNIT_YA_EXISTE_ADD_UNIT_FMT, [PasPath]));
   // With content: create AND fill in one call. Two calls (create the skeleton,
   // then rewrite it whole) was the commonest sequence of all and the one an
   // anchor-based editor serves worst - there is nothing to anchor to in an
@@ -919,9 +916,9 @@ begin
   WriteNewFile(PasPath, Body);
   Result := AddProjectUnit(ADprPath, PasPath);
   if Result.StartsWith('RECHAZADO') then
-    Result := 'CREADA ' + AUnitName + '.pas pero NO se pudo registrar: ' + Result
+    Result := MsgFmt(SK_CREATE_CREADA_NO_REGISTRADA_FMT, [AUnitName, Result])
   else
-    Result := Format('CREADA la unit %s (%s), %d lineas.'#10'%s',
+    Result := MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,
       [AUnitName, PasPath, Length(Body.Split([CRLF])), Result]);
 end;
 
@@ -946,7 +943,7 @@ begin
     if Result <> '' then
       Exit;
     if not TFile.Exists(ADprPath) then
-      Exit('RECHAZADO: no existe el proyecto ' + ADprPath);
+      Exit(MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath]));
     Result := CarpetaEnElProyecto(ADprPath, ADir, Dir);
     if Result <> '' then
       Exit;

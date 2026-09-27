@@ -1214,7 +1214,7 @@ begin
     var Hazard := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), True);
     if Hazard <> '' then
     begin
-      TLogger.Warning(Format('delphi_build: REFUSED "%s" - %s',
+      TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
         [TPath.GetFullPath(ADprojPath), Hazard]));
       raise Exception.Create(MsgFmt(SR_BUILD_HAZARD_FMT, [Hazard]));
     end;
@@ -1238,7 +1238,7 @@ begin
   var IncBad := IncludeDirectivesDenied(ADprojPath);
   if IncBad <> '' then
   begin
-    TLogger.Warning(Format('delphi_build: REFUSED "%s" - %s',
+    TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
       [TPath.GetFullPath(ADprojPath), IncBad]));
     raise Exception.Create(IncBad);
   end;
@@ -1261,7 +1261,7 @@ begin
   var SalidaMala := SalidaDenegada(ADprojPath, Plat, Cfg);
   if SalidaMala <> '' then
   begin
-    TLogger.Warning(Format('delphi_build: REFUSED "%s" - %s',
+    TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
       [TPath.GetFullPath(ADprojPath), SalidaMala]));
     raise Exception.Create(SalidaMala);
   end;
@@ -1390,7 +1390,7 @@ begin
 
   // Security audit trail: a build can run arbitrary pre/post-build steps
   // declared in the .dproj, so record every one.
-  TLogger.Warning(Format('delphi_build: BUILD "%s" %s/%s target=%s%s',
+  TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_TARGET_FMT,
     [TPath.GetFullPath(ADprojPath), Plat, Cfg, Target, SdkArg]));
 
   // Los MISMOS flags que BuildWithParams.bat, que es el contrato de la casa
