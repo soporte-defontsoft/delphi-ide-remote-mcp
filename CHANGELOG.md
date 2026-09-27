@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.6.1] - 2026-09-27
+
+### Fixed
+
+- **The Linux launcher called Delphi's `ChDir`, not the POSIX `chdir`.**
+  `McpRunJob` sets the working folder of the program it starts, in the
+  child process just before `execv`. Plain `chdir` resolves to `System.ChDir`
+  (a `string`, and it raises on failure): the path went string - UTF-8 -
+  pointer - string - UTF-8 (warning W1057), and a failure would have raised
+  an exception in the child. The RTL names the POSIX call `__chdir` (as it
+  does `__close`); the launcher now calls it and, if it fails, writes
+  `error: no pude entrar en ...` and exits 127, like a failed `execv`.
+  Tested live: a remote-run on Zorin starts in its folder.
+
+- **Deploying copied the server and not `node\`.** Not in the product: in
+  the release routine. Production kept the desktop node of 2026-09-24 after
+  1.6.0 was deployed, so the server kept sending that one to the targets;
+  the published zip was right. The deploy now copies what the zip carries
+  (the exe and every file of `node\`) and checks each one's sha256.
+
 ## [1.6.0] - 2026-09-26
 
 ### Added

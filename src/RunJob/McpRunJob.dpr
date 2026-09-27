@@ -364,7 +364,14 @@ begin
       if Fd > 2 then
         __close(Fd);
     end;
-    chdir(PAnsiChar(UTF8String(ACarpeta)));
+    // __chdir es la de POSIX (chdir a secas es la ChDir de System: pide un
+    // string y lanza una excepcion, y aqui estamos en el hijo)
+    if __chdir(PAnsiChar(UTF8String(ACarpeta))) <> 0 then
+    begin
+      Anade(ASalida, 'error: no pude entrar en ' + ACarpeta + ': ' +
+        SysErrorMessage(GetLastError) + #10);
+      _exit(127);
+    end;
     SetLength(Strs, Length(AArgs) + 1);
     SetLength(Ptrs, Length(AArgs) + 2);
     Strs[0] := UTF8String(AExe);
