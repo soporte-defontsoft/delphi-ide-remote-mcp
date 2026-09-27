@@ -11,6 +11,7 @@ demas; aqui vive una vez.
 
 No es una bateria (no empieza por test_): run_all no la ejecuta.
 """
+import atexit
 import json, os, queue, shutil, socket, stat, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request
 
@@ -194,12 +195,47 @@ def adb_para():
 ADB_ANTES = adb_vivo()  # al importar = al empezar la bateria
 
 
-def fin(titulo):
-    """El recuento de la bateria y su codigo de salida: 1 si fallo algo.
-    Suelta, para el adb que ella arranco; dentro de run_all eso lo hace la
-    suite, una vez al final, para no parar el que otra esta usando."""
+def _para_adb_propio():
+    """Suelta (fuera de run_all), el adb que arranco ESTA bateria se para al
+    salir, pase por fin o reviente antes: una que lanzaba una excepcion antes
+    de fin dejaba vivo su adb (revision del 26-sep-2026). Dentro de run_all
+    lo para la suite, una vez al final. OJO, limite sabido: un adb que
+    arranque OTRO (el IDE, David) mientras la bateria corre no se distingue
+    del suyo, y se para tambien."""
     if not ADB_ANTES and not os.environ.get(SUITE) and adb_vivo():
         adb_para()
+
+
+atexit.register(_para_adb_propio)
+
+
+# La marca de una bateria que en ESTA maquina no tiene nada que medir (sin
+# el servicio instalado, sin el SDK) y lo dice: fin(sin_checks=) la escribe
+# y run_all la lee. Sin ella, 0 checks es ROJO (26-sep-2026: una bateria
+# que no media nada salia verde, con rc 0).
+SIN_CHECKS = 'SIN CHECKS:'
+
+
+def sin_checks_de(salida):
+    """EL lector de la marca que escribe fin(sin_checks=...): una LINEA que
+    empieza por SIN_CHECKS. Se buscaba en cualquier parte de la salida, y una
+    respuesta de tool que la citase habria dado por buena una bateria vacia."""
+    return any(l.startswith(SIN_CHECKS) for l in salida.splitlines())
+
+
+def fin(titulo, sin_checks=None):
+    """El recuento de la bateria y su codigo de salida: 1 si fallo algo, y
+    tambien si no midio NADA - salvo que diga por que en sin_checks.
+    Suelta, para el adb que ella arranco; dentro de run_all eso lo hace la
+    suite, una vez al final, para no parar el que otra esta usando."""
+    global F
+    if P == 0 and F == 0:
+        if sin_checks:
+            print('%s %s' % (SIN_CHECKS, sin_checks))
+        else:
+            F += 1
+            print('  FAIL %s: 0 checks - una bateria que no mide nada no sale '
+                  'verde (si aqui no hay nada que medir, fin(sin_checks=motivo))' % titulo)
     print()
     print('== %s: %d PASS / %d FAIL ==' % (titulo, P, F))
     sys.exit(1 if F else 0)

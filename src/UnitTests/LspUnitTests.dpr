@@ -9,7 +9,9 @@ uses
   LspTests.Encodings in 'LspTests.Encodings.pas',
   LspTests.DesignerBin in 'LspTests.DesignerBin.pas',
   LspTests.Dproj in 'LspTests.Dproj.pas',
-  LspTests.Images in 'LspTests.Images.pas';
+  LspTests.Images in 'LspTests.Images.pas',
+  LspTests.GitArgs in 'LspTests.GitArgs.pas',
+  LspTests.Pascal in 'LspTests.Pascal.pas';
 
 var
   Runner: ITestRunner;

@@ -258,6 +258,11 @@ begin
     '  NO pude capturar: org.freedesktop.DBus.Error.NoReply: sin respuesta'#10,
     SN_REMOTERUN_ENV_INHERITED);
   Assert.IsTrue(R.Contains('NoReply'), 'el motivo del propio nodo: ' + R);
+  // el NODO primero: el lanzador decia 'sin entorno' y tapaba lo que el nodo
+  // habia mirado de verdad (revision 26-sep-2026)
+  R := MotivoSinCaptura('  NO pude capturar: NO hay sesion grafica abierta del usuario operador'#10,
+    SN_REMOTERUN_ENV_NONE);
+  Assert.IsTrue(R.Contains('operador'), 'el motivo del nodo gana al del entorno: ' + R);
   R := MotivoSinCaptura('nodo listo', '');
   Assert.IsTrue(R.Contains('nodeOutput'), 'sin motivo: ' + R);
   Assert.IsFalse(R.Contains('dijo donde'), 'nunca la fontaneria: ' + R);

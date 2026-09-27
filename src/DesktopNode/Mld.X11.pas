@@ -78,7 +78,8 @@ type
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, Posix.Stdlib;
+  System.SysUtils, System.IOUtils, Posix.Stdlib,
+  Mld.Sesion; // EL detector de sesion, el mismo que usa el lanzador
 
 const
   IsViewable = 2;
@@ -197,7 +198,10 @@ begin
   if GetEnvironmentVariable('DISPLAY') = '' then
   begin
     N := Cadena('DISPLAY');
-    U := Cadena(':0');
+    // el X de ESTE usuario (no siempre es :0: un xrdp es :10)
+    U := Cadena(SesionGrafica.Display);
+    if U = '' then
+      U := Cadena(':0');
     setenv(MarshaledAString(PAnsiChar(N)), MarshaledAString(PAnsiChar(U)), 1);
   end;
   if GetEnvironmentVariable('XAUTHORITY') <> '' then
@@ -205,7 +209,7 @@ begin
   Mejor := '';
   MejorFecha := 0;
   try
-    for F in TDirectory.GetFiles('/run/user/1000', '.mutter-Xwaylandauth.*') do
+    for F in TDirectory.GetFiles(RuntimeDelUsuario, '.mutter-Xwaylandauth.*') do
       if (Mejor = '') or (TFile.GetLastWriteTime(F) > MejorFecha) then
       begin
         Mejor := F;
@@ -213,7 +217,7 @@ begin
       end;
   except
     on E: Exception do
-      FError := 'no pude mirar /run/user/1000: ' + E.Message;
+      FError := 'no pude mirar ' + RuntimeDelUsuario + ': ' + E.Message;
   end;
   if Mejor <> '' then
   begin
@@ -491,29 +495,20 @@ end;
 
 function TOjos.Diagnostico: string;
 var
-  Rt: string;
-  HayWayland, HayXauth, HayX: Boolean;
+  S: TSesionGrafica;
+  HayXauth: Boolean;
 begin
-  Rt := GetEnvironmentVariable('XDG_RUNTIME_DIR');
-  if Rt = '' then
-    Rt := '/run/user/1000';
-  HayWayland := False;
-  HayXauth := False;
-  HayX := False;
+  S := SesionGrafica;
+  if not S.Hay then
+    Exit(S.Motivo);
   try
-    HayWayland := Length(TDirectory.GetFileSystemEntries(Rt, 'wayland-*')) > 0;
-    HayXauth := Length(TDirectory.GetFileSystemEntries(Rt, '.mutter-Xwaylandauth.*')) > 0;
-    if TDirectory.Exists('/tmp/.X11-unix') then
-      HayX := Length(TDirectory.GetFileSystemEntries('/tmp/.X11-unix', 'X*')) > 0;
+    HayXauth := Length(TDirectory.GetFileSystemEntries(RuntimeDelUsuario,
+      '.mutter-Xwaylandauth.*')) > 0;
   except
     on E: Exception do
-      Exit('no pude mirar ' + Rt + ': ' + E.Message);
+      Exit('no pude mirar ' + RuntimeDelUsuario + ': ' + E.Message);
   end;
-  if not (HayWayland or HayX) then
-    Exit('NO hay sesion grafica abierta en esta maquina. Pidele al operador ' +
-      'que inicie sesion en el escritorio (o abra una sesion remota) y ' +
-      'vuelve a intentarlo: sin escritorio no hay nada que ver ni que pulsar.');
-  if HayWayland and not HayXauth then
+  if (S.WaylandDisplay <> '') and not HayXauth then
     Exit('Hay sesion Wayland pero no encuentro la autorizacion de Xwayland ' +
       '(.mutter-Xwaylandauth.*). Pidele al operador que abra alguna ' +
       'aplicacion en esa sesion, o comprueba que Xwayland este activo.');

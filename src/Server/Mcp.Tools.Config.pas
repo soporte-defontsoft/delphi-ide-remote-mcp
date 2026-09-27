@@ -38,11 +38,11 @@ type
     FVersion: string;
     FRequires: string;
   public
-    [SchemaDescription('Absolute path of the project .dproj')]
+    [SchemaDescription('Absolute path of the project .dproj (its .dpr/.dpk resolves to it). A .groupproj (a project group) takes view, add-project, remove-project and fix-references; every other command is refused')]
     [Required]
     [RutaDelServidor]
     property Project: string read FProject write FProject;
-    [SchemaDescription('view (default: project summary; section= brings the detail per area) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | set-version (the project VERSION: the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys, which have to agree) | set-sdk (the SDK this project builds a remote platform with, by name; "none" goes back to the SDK Manager default) | set-profile (the PAServer profile it deploys and runs that platform with; "none" falls back to the platform''s active profile) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk) | add-requires (packages only: add package names to the requires clause of the .dpk - what the IDE offers after a build reports W1033, and what delphi_build lists in requiresSuggested)')]
+    [SchemaDescription('view (default: project summary; section= brings the detail per area) | add-platform (enable a platform) | remove-platform (disable it again) | set-output (put every binary under one folder, e.g. Compiled) | set-version (the project VERSION: the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys, which have to agree) | set-sdk (the SDK this project builds a remote platform with, by name; "none" goes back to the SDK Manager default) | set-profile (the PAServer profile it deploys and runs that platform with; "none" falls back to the platform''s active profile) | add-searchpath (add a unit search path for one platform, or for all) | remove-searchpath (take it out again) | add-deployfile (ship an extra file with the build on one platform: a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it out again) | add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) | remove-unit (take it out of the project; the file stays on disk) | add-requires (packages only: add package names to the requires clause of the .dpk - what the IDE offers after a build reports W1033, and what delphi_build lists in requiresSuggested) | fix-references (re-point what the project - or a .groupproj - lists and is no longer where it says, moved by hand: the file is found again by its name inside the workspace; one match is re-pointed, none or several are reported, never guessed) | add-project / remove-project (on a .groupproj, path = the .dproj: what the IDE''s Add existing project writes - the <Projects> item, its three targets and its name in Build/Clean/Make - or takes out)')]
     [SchemaDefault('view')]
     property Command: string read FCommand write FCommand;
     [SchemaDescription('add/remove-platform: the platform, from the fixed set Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android64|iOSDevice64|iOSSimARM64 (anything else is refused). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required)')]
@@ -114,6 +114,12 @@ begin
     'VERSIONINFO numbers AND the FileVersion/ProductVersion keys, which is ' +
     'exactly what drifts when a release is cut by hand (a -beta suffix is ' +
     'accepted and ignored, and Android/iOS numbering is not touched). ' +
+    'On a .groupproj (a project group): view lists its projects, and ' +
+    'add-project / remove-project (path = the .dproj) write what the IDE''s ' +
+    'Add existing project writes. command=fix-references, on a project or a ' +
+    'group, re-points what is no longer where it says (moved by hand), ' +
+    'finding it by its name in the workspace - one match only, never a ' +
+    'guess. ' +
     'command=set-output puts every binary ' +
     'under one folder (output=Compiled by default): a curated edit that sets ' +
     'DCC_ExeOutput/DCC_DcuOutput, keeping the per-platform/config subfolders. ' +
@@ -141,6 +147,58 @@ procedure AddDeployFilesView(const ADproj: string; AReturn: TJSONObject); forwar
 function PlatformNeedsProfile(const APlatform: string): Boolean;
 begin
   Result := not IsLocalPlatform(APlatform);
+end;
+
+{ Lo que es un .groupproj: sus proyectos (<Projects Include>), por el lector
+  de atributos de la casa (Lsp.Dproj.AllTagAttr), con la ruta absoluta y si
+  esta - solo si la sesion puede leer ahi: de fuera no se dice ni que
+  existe. }
+function ViewGroup(const AGroup: string): string;
+var
+  O, E: TJSONObject;
+  Arr: TJSONArray;
+  Lista: TArray<string>;
+  Dir, Incl, Abs: string;
+  Faltan: Integer;
+begin
+  try
+    Lista := ProyectosDeGrupo(AGroup); // EL lector de grupos (Lsp.ProjectUnits)
+  except
+    on E: Exception do
+      Exit(Format(SR_CONFIG_GROUP_READ_FMT, [AGroup, E.Message]));
+  end;
+  Dir := TPath.GetDirectoryName(AGroup);
+  Faltan := 0;
+  O := TJSONObject.Create;
+  try
+    O.AddPair('group', AGroup);
+    Arr := TJSONArray.Create;
+    O.AddPair('projects', Arr);
+    for Incl in Lista do
+    begin
+      E := TJSONObject.Create;
+      Arr.Add(E);
+      E.AddPair('include', Incl);
+      try
+        Abs := TPath.GetFullPath(TPath.Combine(Dir, Incl));
+      except
+        Abs := '';
+      end;
+      if (Abs <> '') and (ReadPathDenied(Abs) = '') then
+      begin
+        E.AddPair('path', Abs);
+        E.AddPair('exists', TJSONBool.Create(TFile.Exists(Abs)));
+        if not TFile.Exists(Abs) then
+          Inc(Faltan);
+      end
+      else
+        E.AddPair('outsideWorkspace', TJSONBool.Create(True));
+    end;
+    O.AddPair('note', Format(SN_CONFIG_GROUP_VIEW_FMT, [Arr.Count, Faltan]));
+    Result := O.ToJSON;
+  finally
+    O.Free;
+  end;
 end;
 
 function ViewConfig(const ADproj, ASection: string): string;
@@ -475,7 +533,8 @@ end;
 { ValidOutputFolder (la regla de "carpeta relativa al proyecto, apta para
   escribirse en un .dproj") vive ahora en Lsp.Dproj: delphi_create necesita
   la misma para sus subcarpetas, y una regla asi no se escribe dos veces. }
-{ Inner text currently between <ATag>..</ATag> ('' if the tag is absent). }
+{ Inner text currently between <ATag>..</ATag> ('' if the tag is absent),
+  ya desescapado: la inversa de XmlElemento. }
 function TagInner(const AXml, ATag: string): string;
 var
   Low: string;
@@ -488,7 +547,7 @@ begin
   InnerStart := OpenPos + Length(ATag) + 2;
   ClosePos := Pos('</' + LowerCase(ATag) + '>', Low, InnerStart);
   if ClosePos = 0 then Exit;
-  Result := Copy(AXml, InnerStart, ClosePos - InnerStart);
+  Result := XmlUnescape(Copy(AXml, InnerStart, ClosePos - InnerStart));
 end;
 
 { Replace the inner text of an existing <ATag>..</ATag>. True if it existed. }
@@ -504,7 +563,7 @@ begin
   InnerStart := OpenPos + Length(ATag) + 2;
   ClosePos := Pos('</' + LowerCase(ATag) + '>', Low, InnerStart);
   if ClosePos = 0 then Exit;
-  AXml := Copy(AXml, 1, InnerStart - 1) + ANewInner + Copy(AXml, ClosePos, MaxInt);
+  AXml := Copy(AXml, 1, InnerStart - 1) + XmlEscape(ANewInner) + Copy(AXml, ClosePos, MaxInt);
   Result := True;
 end;
 
@@ -559,11 +618,11 @@ begin
     InsertAt := Pos('>', Xml, BasePos) + 1;
     if OldDcu = '' then
       Xml := Copy(Xml, 1, InsertAt - 1) + sLineBreak +
-        '        <DCC_DcuOutput>' + DcuInner + '</DCC_DcuOutput>' +
+        '        ' + XmlElemento('DCC_DcuOutput', DcuInner) +
         Copy(Xml, InsertAt, MaxInt);
     if OldExe = '' then
       Xml := Copy(Xml, 1, InsertAt - 1) + sLineBreak +
-        '        <DCC_ExeOutput>' + ExeInner + '</DCC_ExeOutput>' +
+        '        ' + XmlElemento('DCC_ExeOutput', ExeInner) +
         Copy(Xml, InsertAt, MaxInt);
   end;
 
@@ -699,6 +758,9 @@ begin
   Result := True;
 end;
 
+{ Las rutas de una lista ESCRITA en el .dproj (con sus entidades: el ';' de
+  un &amp; no separa), sin blancos ni vacias. Cada una sigue escrita:
+  XmlUnescape da su valor. }
 function SplitPaths(const AList: string): TArray<string>;
 var
   L: TList<string>;
@@ -706,13 +768,33 @@ var
 begin
   L := TList<string>.Create;
   try
-    for P in AList.Split([';']) do
+    for P in TrozosEscritos(AList) do
       if P.Trim <> '' then
         L.Add(P.Trim);
     Result := L.ToArray;
   finally
     L.Free;
   end;
+end;
+
+{ Los caracteres que no caben en una ruta de delphi_config: los de control,
+  el ';' (separa listas) y < > " | &, los de una linea de ordenes. Eran
+  tres copias del mismo veto (search path, fichero desplegado y su
+  carpeta remota). Un & en una ruta que SOLO acaba en el XML del .dproj
+  (un search path) ya no rompe nada desde que el escritor escapa
+  (XmlElemento): ahi se admite, y una carpeta R&D se puede anadir. Lo que
+  VIAJA al destino (el fichero desplegado y su carpeta remota) lo sigue
+  vetando: ese camino hasta PAServer no esta medido (David, 26-sep-2026). }
+function CaracterVetado(const ARaw: string; AAdmiteAmpersand: Boolean;
+  const AMas: TSysCharSet = []): Boolean;
+var
+  C: Char;
+begin
+  Result := False;
+  for C in ARaw do
+    if (Ord(C) < 32) or CharInSet(C, ['<', '>', '"', ';', '|'] + AMas) or
+       ((C = '&') and not AAdmiteAmpersand) then
+      Exit(True);
 end;
 
 { Vets a search path the way every read is vetted: expand the IDE's macros,
@@ -724,16 +806,14 @@ var
   Info: TRadStudioInfo;
   Vars: TStringList;
   Expanded: string;
-  C: Char;
 begin
   AShow := '';
   if ARaw.Trim = '' then
     Exit(SR_CONFIG_NEED_PATH);
   if Length(ARaw) > 400 then
     Exit(SR_CONFIG_PATH_CHARS);
-  for C in ARaw do
-    if (Ord(C) < 32) or CharInSet(C, ['<', '>', '"', ';', '&', '|']) then
-      Exit(SR_CONFIG_PATH_CHARS);
+  if CaracterVetado(ARaw, True) then
+    Exit(SR_CONFIG_PATH_CHARS);
   Expanded := ARaw.Trim;
   if Expanded.Contains('$(') then
   begin
@@ -801,15 +881,15 @@ begin
   if FindSearchTag(Xml, I, C, ElS, VS, VE, ElE) then
   begin
     for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
-      if SameText(P, Path) then
+      if SameText(XmlUnescape(P), Path) then
         Exit(Format(SN_CONFIG_PATH_PRESENT_FMT,
           [Path, IfThen(Plat = '', 'todas las plataformas (grupo base)', Plat)]));
-    NewInner := Path + ';' + Copy(Xml, VS, VE - VS);
+    NewInner := XmlEscape(Path) + ';' + Copy(Xml, VS, VE - VS);
     Xml := Copy(Xml, 1, VS - 1) + NewInner + Copy(Xml, VE, MaxInt);
   end
   else
     Xml := Copy(Xml, 1, I - 1) + sLineBreak +
-      '        <DCC_UnitSearchPath>' + Path + ';$(DCC_UnitSearchPath)</DCC_UnitSearchPath>' +
+      '        ' + XmlElemento('DCC_UnitSearchPath', Path + ';$(DCC_UnitSearchPath)') +
       Copy(Xml, I, MaxInt);
   PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := Format(SN_CONFIG_PATH_ADDED_FMT,
@@ -843,7 +923,7 @@ begin
   Keep := TList<string>.Create;
   try
     for P in SplitPaths(Copy(Xml, VS, VE - VS)) do
-      if SameText(P, Path) then
+      if SameText(XmlUnescape(P), Path) then
         Found := True
       else
         Keep.Add(P);
@@ -902,8 +982,8 @@ begin
     else
       Name := 'base';
     Arr := TJSONArray.Create;
-    for P in SplitPaths(XmlUnescape(TagM.Groups[1].Value)) do
-      Arr.Add(P);
+    for P in SplitPaths(TagM.Groups[1].Value) do
+      Arr.Add(XmlUnescape(P));
     Obj.AddPair(Name, Arr);
     Any := True;
   end;
@@ -952,7 +1032,6 @@ end;
 { '' = fine; else the refusal. AFull receives the resolved file. }
 function DeployFileDenied(const ADproj, ARaw: string; out AFull: string): string;
 var
-  C: Char;
   P: string;
 begin
   AFull := '';
@@ -960,8 +1039,7 @@ begin
     Exit(SR_CONFIG_DEPLOY_NEED_PATH);
   if Length(ARaw) > 400 then
     Exit(SR_CONFIG_PATH_CHARS);
-  for C in ARaw do
-    if (Ord(C) < 32) or CharInSet(C, ['<', '>', '"', ';', '&', '|']) then
+  if CaracterVetado(ARaw, False) then
       Exit(SR_CONFIG_PATH_CHARS);
   P := ARaw.Trim;
   if not TPath.IsPathRooted(P) then
@@ -983,15 +1061,12 @@ begin
 end;
 
 function RemoteDirDenied(const ARaw: string): string;
-var
-  C: Char;
 begin
   Result := '';
   if Length(ARaw) > 200 then
     Exit(SR_CONFIG_REMOTEDIR_CHARS);
-  for C in ARaw do
-    if (Ord(C) < 32) or CharInSet(C, ['<', '>', '"', ';', '&', '|', ':']) then
-      Exit(SR_CONFIG_REMOTEDIR_CHARS);
+  if CaracterVetado(ARaw, False, [':']) then
+    Exit(SR_CONFIG_REMOTEDIR_CHARS);
   if ARaw.Contains('..') or ARaw.StartsWith('\') or ARaw.StartsWith('/') then
     Exit(SR_CONFIG_REMOTEDIR_CHARS);
 end;
@@ -1033,7 +1108,7 @@ begin
     for M in TRegEx.Matches(AXml, '<DeployFile\s+Include="([^"]*)"[^>]*>.*?</DeployFile>',
       [roIgnoreCase, roSingleLine]) do
     begin
-      if not SameDeployFile(M.Groups[1].Value, ABaseDir, AFile) then
+      if not SameDeployFile(XmlUnescape(M.Groups[1].Value), ABaseDir, AFile) then
         Continue;
       // the enclosing ItemGroup decides the platform
       GroupStart := Low.LastIndexOf('<itemgroup', M.Index - 1) + 1;
@@ -1052,9 +1127,9 @@ end;
 function DeployEntryXml(const AFile, ARemoteDir, AConfig: string): string;
 begin
   Result :=
-    '        <DeployFile Include="' + AFile + '" Condition="''$(Config)''==''' + AConfig + '''">' + sLineBreak +
-    '            <RemoteDir>' + ARemoteDir + '</RemoteDir>' + sLineBreak +
-    '            <RemoteName>' + TPath.GetFileName(AFile) + '</RemoteName>' + sLineBreak +
+    '        <DeployFile ' + XmlAtributo('Include', AFile) + ' Condition="''$(Config)''==''' + AConfig + '''">' + sLineBreak +
+    '            ' + XmlElemento('RemoteDir', ARemoteDir) + sLineBreak +
+    '            ' + XmlElemento('RemoteName', TPath.GetFileName(AFile)) + sLineBreak +
     '            <DeployClass>File</DeployClass>' + sLineBreak +
     '            <Operation>0</Operation>' + sLineBreak +
     '            <LocalCommand/>' + sLineBreak +
@@ -1221,8 +1296,8 @@ begin
     // "Index out of bounds (1)" (el gemelo del de Lsp.BuildRunner, 2026-09-23)
     var Remoto := '';
     if RM.Success then
-      Remoto := RM.Groups[1].Value;
-    var Line := M.Groups[1].Value + ' -> ' + Remoto;
+      Remoto := XmlUnescape(RM.Groups[1].Value);
+    var Line := XmlUnescape(M.Groups[1].Value) + ' -> ' + Remoto;
     var Dup := False;
     for var V in Arr do
       if SameText(V.Value, Line) then
@@ -1307,7 +1382,7 @@ begin
   begin
     M := TRegEx.Match(Xml, '(?i)<' + Tags[I] + '>([^<]*)</' + Tags[I] + '>');
     if M.Success then
-      AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + M.Groups[1].Value
+      AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + XmlUnescape(M.Groups[1].Value)
     else
       AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + '0';
   end;
@@ -1325,12 +1400,11 @@ begin
   begin
     if TRegEx.IsMatch(Xml, '(?i)<' + Tags[I] + '>') then
       Xml := TRegEx.Replace(Xml, '(?i)<' + Tags[I] + '>[^<]*</' + Tags[I] + '>',
-        '<' + Tags[I] + '>' + N[I].ToString + '</' + Tags[I] + '>')
+        XmlElemento(Tags[I], N[I].ToString))
     else if Previo <> '' then
       Xml := TRegEx.Replace(Xml,
         '(?i)([ \t]*)(<' + Previo + '>[^<]*</' + Previo + '>)',
-        '$1$2' + Eol + '$1<' + Tags[I] + '>' + N[I].ToString +
-        '</' + Tags[I] + '>');
+        '$1$2' + Eol + '$1' + XmlElemento(Tags[I], N[I].ToString));
     Previo := Tags[I];
   end;
 
@@ -1390,8 +1464,8 @@ begin
   if (TagIni > 0) and (TagIni < C) then
   begin
     TagFin := Pos(LowerCase('</PlatformSDK>'), LowerCase(Xml), TagIni);
-    Antes := Copy(Xml, TagIni + Length('<PlatformSDK>'),
-      TagFin - TagIni - Length('<PlatformSDK>'));
+    Antes := XmlUnescape(Copy(Xml, TagIni + Length('<PlatformSDK>'),
+      TagFin - TagIni - Length('<PlatformSDK>')));
     TagFin := TagFin + Length('</PlatformSDK>');
     // se lleva por delante la linea entera, sangria incluida
     while (TagIni > 1) and CharInSet(Xml[TagIni - 1], [' ', #9]) do
@@ -1409,7 +1483,7 @@ begin
 
   if not Quitar then
     Xml := Copy(Xml, 1, I - 1) + sLineBreak +
-      '        <PlatformSDK>' + Sdk + '</PlatformSDK>' + Copy(Xml, I, MaxInt);
+      '        ' + XmlElemento('PlatformSDK', Sdk) + Copy(Xml, I, MaxInt);
 
   PatchSaveText(ADproj, Xml, Enc);
   if Quitar then
@@ -1473,8 +1547,8 @@ begin
   if (TagIni > 0) and (TagIni < C) then
   begin
     TagFin := Pos(LowerCase('</Profile>'), LowerCase(Xml), TagIni);
-    Antes := Copy(Xml, TagIni + Length('<Profile>'),
-      TagFin - TagIni - Length('<Profile>'));
+    Antes := XmlUnescape(Copy(Xml, TagIni + Length('<Profile>'),
+      TagFin - TagIni - Length('<Profile>')));
     TagFin := TagFin + Length('</Profile>');
     while (TagIni > 1) and CharInSet(Xml[TagIni - 1], [' ', #9]) do
       Dec(TagIni);
@@ -1491,7 +1565,7 @@ begin
 
   if not Quitar then
     Xml := Copy(Xml, 1, I - 1) + sLineBreak +
-      '        <Profile>' + Perfil + '</Profile>' + Copy(Xml, I, MaxInt);
+      '        ' + XmlElemento('Profile', Perfil) + Copy(Xml, I, MaxInt);
 
   PatchSaveText(ADproj, Xml, Enc);
   if Quitar then
@@ -1526,6 +1600,38 @@ begin
   // was not (field round 8). Configuration lives in the .dproj, so resolve
   // the sibling - and when there is none, say that instead of inventing.
   Proj := Params.Project;
+  // Un GRUPO no es un proyecto: view contestaba como si fuera uno vacio (el
+  // mismo "conocimiento inventado" que el .dpr suelto de arriba), y una
+  // orden de escritura lo habria tocado como un .dproj (26-sep-2026).
+  if SameText(TPath.GetExtension(Proj), '.groupproj') then
+  begin
+    if (Cmd = '') or (Cmd = 'view') then
+      Exit(ViewGroup(Proj));
+    // Las de un grupo (1.6.0): add-project y remove-project escriben lo que
+    // "Add existing project" del IDE; fix-references re-apunta lo que ya no
+    // esta donde dice. El proyecto de "path" solo se NOMBRA.
+    if MatchText(Cmd, ['add-project', 'remove-project', 'fix-references']) then
+    begin
+      if Cmd = 'fix-references' then
+        Exit(ArreglaReferencias(Proj));
+      if Params.Path.Trim = '' then
+        Exit(SR_GRUPO_NECESITA_PATH);
+      Result := ReadPathDenied(Params.Path);
+      if Result <> '' then
+        Exit;
+      EnterFileEdit;
+      try
+        if Cmd = 'add-project' then
+          Result := AnadeProyectoAGrupo(Proj, Params.Path)
+        else
+          Result := QuitaProyectoDeGrupo(Proj, Params.Path);
+      finally
+        LeaveFileEdit;
+      end;
+      Exit;
+    end;
+    Exit(Format(SR_CONFIG_GROUP_FMT, [TPath.GetFileName(Proj), Cmd]));
+  end;
   if MatchText(TPath.GetExtension(Proj), ['.dpr', '.dpk']) then
   begin
     Sibling := TPath.ChangeExtension(Proj, '.dproj');
@@ -1535,6 +1641,9 @@ begin
       Exit(Format(SR_CONFIG_NO_DPROJ_FMT,
         [TPath.GetFileName(Proj), TPath.GetFileName(Sibling)]));
   end;
+  // Y lo que no es un proyecto no se lee ni se escribe como si lo fuera.
+  if not MatchText(TPath.GetExtension(Proj), ['.dproj', '.dpr', '.dpk']) then
+    Exit(Format(SR_CONFIG_NOT_PROJECT_FMT, [TPath.GetFileName(Proj)]));
   if (Cmd = '') or (Cmd = 'view') then
     Exit(ViewConfig(Proj, Params.Section));
 
@@ -1615,11 +1724,16 @@ begin
       else
         Result := RemoveProjectUnit(Params.Project, Params.Path);
     end
+    else if Cmd = 'fix-references' then
+      Result := ArreglaReferencias(Params.Project)
+    else if (Cmd = 'add-project') or (Cmd = 'remove-project') then
+      Result := Format(SR_GRUPO_SOLO_GRUPO_FMT, [Cmd, TPath.GetFileName(Proj)])
     else
       Result := 'error: command debe ser view | add-platform | remove-platform | ' +
         'set-output | set-version | set-sdk | set-profile | add-searchpath | ' +
         'remove-searchpath | ' +
-        'add-deployfile | remove-deployfile | add-unit | remove-unit | add-requires';
+        'add-deployfile | remove-deployfile | add-unit | remove-unit | add-requires | ' +
+        'fix-references | add-project | remove-project (estas dos, en un .groupproj)';
   finally
     LeaveFileEdit;
   end;

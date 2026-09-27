@@ -71,7 +71,7 @@ var
 begin
   List := TList<string>.Create;
   try
-    for Item in XmlUnescape(ARaw).Split([';']) do
+    for Item in ARaw.Split([';']) do
     begin
       Expanded := Item.Trim
         .Replace('$(BDS)', ExcludeTrailingPathDelimiter(ABdsRoot), [rfReplaceAll, rfIgnoreCase])
@@ -236,14 +236,14 @@ begin
 
   // Defines: keep simple identifiers only (unexpanded $() and junk dropped).
   Defines := '';
-  for P in XmlUnescape(MergeProperty(Xml, 'DCC_Define')).Split([';']) do
+  for P in MergeProperty(Xml, 'DCC_Define').Split([';']) do
     if (P.Trim <> '') and not P.Contains('$(') and not P.Contains('\') then
       if Defines = '' then
         Defines := P.Trim
       else if not (';' + Defines + ';').Contains(';' + P.Trim + ';') then
         Defines := Defines + ';' + P.Trim;
 
-  Namespaces := XmlUnescape(MergeProperty(Xml, 'DCC_Namespace'))
+  Namespaces := MergeProperty(Xml, 'DCC_Namespace')
     .Replace('$(DCC_Namespace)', '', [rfReplaceAll, rfIgnoreCase]).Trim([';']);
   if Namespaces = '' then
     Namespaces := DEFAULT_NAMESPACES;

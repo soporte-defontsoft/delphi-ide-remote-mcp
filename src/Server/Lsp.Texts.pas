@@ -26,7 +26,7 @@ const
   // Identity
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
-  SERVER_VERSION = '1.5.4';
+  SERVER_VERSION = '1.6.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -136,8 +136,35 @@ const
     'ruta absoluta es solo para crear un PROYECTO nuevo.';
   SR_CREATE_UNIT_NEED_PROJECT =
     'RECHAZADO: kind=unit necesita "project" (la ruta del .dpr o .dproj al ' +
-    'que anadir la unit); la carpeta sale de ahi, NO de "dir". Ojo: "dir" si ' +
-    'lo usan los kind=project-*, que es lo que despista.';
+    'que anadir la unit); la carpeta sale de ahi, y "dir" es su subcarpeta. ' +
+    'Para una unit SUELTA que ningun proyecto lista todavia, sin project y con ' +
+    '"dir" = la carpeta ABSOLUTA donde crearla.';
+  SR_CREATE_SUELTO_DIR =
+    'RECHAZADO: sin "project", "dir" tiene que ser la carpeta ABSOLUTA ' +
+    'donde crear el fichero (dentro de tus raices).';
+  SN_CREATE_UNIT_SUELTA_FMT =
+    'CREADA la unit %s (%s), %d lineas, SUELTA: ningun proyecto la lista ' +
+    'todavia. Para meterla en uno: delphi_config command=add-unit; si su ' +
+    'uses esta partido en ramas {$IFDEF}, delphi_edit en la rama que toca.';
+  // Aviso de delphi_edit (no bloquea): un comentario de llave con otra llave
+  // dentro. Empieza por *** para que una tanda lo conserve.
+  SN_AVISO_LLAVE_ANIDADA_FMT =
+    '*** AVISO (no bloquea): la linea %d abre un comentario de llave que ' +
+    'lleva otra llave dentro. Pascal no anida llaves: el primer } lo cierra y ' +
+    'lo que sigue es codigo, o una directiva de verdad si cita una de ' +
+    'llave-dolar. Si querias citarla, pon el comentario con // o con (* *). ***';
+  SR_CREATE_INCLUDE_CONTENT =
+    'RECHAZADO: kind=include necesita "content": un .inc vacio no sirve de nada.';
+  SN_CREATE_INCLUDE_FMT =
+    'CREADO el include %s (%s), %d lineas. Se usa con {$I %s.inc} desde la ' +
+    'unit que lo necesite; no se registra en ningun proyecto.';
+  // Un uses partido en ramas IFDEF (cada rama acaba en su ;): error: y no
+  // RECHAZADO, no es politica; es una forma que un escritor no sabe tocar.
+  SR_USES_EN_RAMAS_FMT =
+    'error: la clausula %s de %s esta partida en ramas {$IFDEF} (cada rama ' +
+    'acaba en su propio ";") y no se en cual va la unit: la de una rama solo ' +
+    'existe en esa plataforma. Anadela, quitala o renombrala con delphi_edit ' +
+    'en la rama que toca. No he tocado nada.';
 
   SN_COMPONENTS_FILTER_IGNORED_FMT =
     '(He IGNORADO filter="%s": con platform= esto te da las rutas de ' +
@@ -2172,7 +2199,9 @@ const
     'zone). IDE macros like $(BDS) are accepted; relative paths resolve from ' +
     'the project folder. Must resolve inside the workspace or the library ' +
     'zone and exist. add/remove-unit: the .pas to register in / take out of ' +
-    'the project (add/remove-deployfile: the file to ship).';
+    'the project (add/remove-deployfile: the file to ship). ' +
+    'add/remove-project: the .dproj to add to / take out of the .groupproj ' +
+    'given in project.';
 
   SR_CONFIG_NEED_PATH =
     'Falta "path": la carpeta a anadir/quitar del search path (p.ej. la ' +
@@ -2181,8 +2210,9 @@ const
     'conexion: reconecta la sesion MCP para recibir el esquema nuevo.';
 
   SR_CONFIG_PATH_CHARS =
-    'RECHAZADO: el path lleva caracteres no permitidos (< > " ; & | o de ' +
-    'control) o es demasiado largo. Una ruta por llamada, sin ";".';
+    'RECHAZADO: el path lleva caracteres no permitidos (< > " ; | o de ' +
+    'control, y & salvo en un search path) o es demasiado largo. Una ruta ' +
+    'por llamada, sin ";".';
 
   SR_CONFIG_PATH_MACRO_FMT =
     'RECHAZADO: no puedo resolver "%s" (macro desconocida o ruta invalida). ' +
@@ -3626,6 +3656,86 @@ const
     'los search path y el despliegue viven en el .dproj: no los se, y no me ' +
     'los invento. add-unit y remove-unit si funcionan aqui; el resto de ' +
     'comandos necesitan un .dproj.';
+
+  { Un .groupproj en delphi_config: view contestaba como si fuera un proyecto
+    vacio, y una orden de escritura lo habria tocado como un .dproj
+    (26-sep-2026). }
+  SN_CONFIG_GROUP_VIEW_FMT =
+    'Es un GRUPO de proyectos (.groupproj), no un proyecto: no tiene ' +
+    'plataformas ni configuraciones propias. Lista %d proyectos; %d no ' +
+    'estan donde dice (fix-references los busca). Para configurar uno, pasa ' +
+    'SU .dproj en "project"; add-project y remove-project cambian la lista.';
+  SR_CONFIG_GROUP_FMT =
+    'error: %s es un GRUPO de proyectos, no un proyecto, y en un grupo ' +
+    '"%s" no vale: valen view, add-project, remove-project y ' +
+    'fix-references; para lo demas, pasa el .dproj del proyecto. No he ' +
+    'tocado nada.';
+  { Un grupo que no se deja leer es un fallo de ESTE lado (Error: -> INTERNAL),
+    no una llamada mal hecha. }
+  SR_CONFIG_GROUP_READ_FMT = 'Error: no pude leer el grupo %s: %s';
+  SR_CONFIG_NOT_PROJECT_FMT =
+    'error: %s no es un proyecto: delphi_config lee y cambia un .dproj ' +
+    '(o su .dpr/.dpk), y view tambien lista un grupo (.groupproj).';
+  { Grupos de proyectos en delphi_config (1.6.0): add-project y
+    remove-project escriben lo que "Add existing project" del IDE. }
+  SN_GRUPO_ANADIDO_FMT =
+    'ANADIDO %s al grupo %s (Include="%s"), como "Add existing project" del ' +
+    'IDE: su <Projects>, sus targets %s, :Clean y :Make, y su nombre en ' +
+    'Build, Clean y Make.';
+  SN_GRUPO_YA_ESTABA_FMT = '%s YA estaba en el grupo %s: no he tocado nada.';
+  SR_GRUPO_TARGET_DUP_FMT =
+    'error: ya hay un target "%s" en el grupo %s, de OTRO proyecto: el ' +
+    'IDE nombra los targets por el proyecto y dos no pueden llamarse igual. ' +
+    'No he tocado nada.';
+  SR_GRUPO_SIN_DPROJ_FMT =
+    'RECHAZADO: no existe %s: a un grupo se anade un proyecto por su .dproj ' +
+    '(o su .dpr/.dpk, con el .dproj al lado).';
+  SR_GRUPO_FORMA_FMT =
+    'error: %s no tiene la forma de un grupo del IDE (ni <PropertyGroup> ' +
+    'ni </Project>): no lo toco.';
+  SN_GRUPO_NO_ESTABA_FMT = '%s no esta en el grupo %s: no he tocado nada.';
+  SN_GRUPO_QUITADO_FMT =
+    'QUITADO %s del grupo %s: su <Projects>, sus %d targets, su nombre en ' +
+    'Build, Clean y Make y en los DependsOnTargets de los que dependian de el, ' +
+    'y su ruta en las <Dependencies> de los demas (%d). El proyecto sigue en el disco.';
+  SN_GRUPO_SIN_AGREGADO_FMT =
+    '  OJO: el grupo no tiene el agregado %s con la forma del IDE ' +
+    '(<Target Name="X"><CallTarget Targets="..."/>): ahi no lo he anadido.';
+  { Los de "la llamada estaba mal" empiezan por error: y no por RECHAZADO:
+    el prefijo decide el code (INVALID_PARAM frente a DENIED, que es la
+    politica) - MCPServer.ToolsManager. }
+  SR_GRUPO_NECESITA_PATH =
+    'error: add-project y remove-project necesitan "path": el .dproj (o ' +
+    'su .dpr/.dpk) del proyecto.';
+  SR_GRUPO_SOLO_GRUPO_FMT =
+    'error: %s es una orden de un GRUPO (.groupproj) y %s es un ' +
+    'proyecto: pasa el .groupproj en "project" y el proyecto en "path".';
+  { fix-references (1.6.0). }
+  SN_ARREGLA_FMT =
+    'fix-references de %s: %d re-apuntadas, %d que no aparecen en el ' +
+    'workspace y %d con varias candidatas (no adivino).';
+  SN_ARREGLA_VARIOS_FMT =
+    '  con VARIAS candidatas del mismo nombre (decide tu: delphi_config ' +
+    'remove-unit/add-unit, o remove-project/add-project en un grupo): %s';
+  SN_ARREGLA_FALLIDAS_FMT =
+    '  encontradas pero NO re-apuntadas (lo que dijo el proyecto): %s';
+  SN_ARREGLA_RUTAS_FMT =
+    '  rutas de busqueda que no existen (no hay nombre que buscar: ' +
+    'remove-searchpath y add-searchpath): %s';
+  { La mudanza de delphi_move (1.6.0): las rutas relativas que cruzan el borde. }
+  SN_REUBICA_FMT =
+    '  rutas relativas que cruzaban el borde de lo movido, re-apuntadas: %d ' +
+    'units de fuera en sus proyectos, %d rutas de busqueda o de salida del ' +
+    '.dproj, %d directivas {$I}/{$R}/{$L}, %d proyectos en grupos de dentro y ' +
+    '%d referencias de fuera que apuntaban dentro (directivas, units, rutas ' +
+    'y grupos, en lo que esta sesion puede escribir). En: %s.';
+  SN_REUBICA_FALLOS_FMT =
+    '  OJO, no pude re-apuntar en: %s. Revisalo con delphi_config ' +
+    'command=fix-references.';
+  SN_REUBICA_SALTADAS_FMT =
+    '  OJO, no he mirado dentro de estas carpetas, que se llaman como una ' +
+    'salida del IDE (Win32, Debug...) pero tienen fuentes: %s. Si algo de ' +
+    'ahi apuntaba a lo movido, revisalo con delphi_config command=fix-references.';
 
   SR_CONFIG_NO_DPROJ_FMT =
     'RECHAZADO: %s es el .dpr (el fuente), y la configuracion del proyecto ' +

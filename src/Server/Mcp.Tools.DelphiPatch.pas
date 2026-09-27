@@ -169,7 +169,9 @@ begin
     'refuses to rewrite whole files, refuses ' +
     'binary designer files (TPF0), makes automatic backups, writes ' +
     'atomically, and audits the result (encoding, EOLs, mojibake, end. ' +
-    'structure) reporting the REAL lines read back from disk - use that as ' +
+    'structure, and a brace comment with another brace inside: Pascal does ' +
+    'not nest them, the first closing brace ends it - WARNED, never refused, ' +
+    'in a batch too) reporting the REAL lines read back from disk - use that as ' +
     'evidence. Never edit Delphi files with generic tools: CP1252 sources ' +
     'get destroyed.';
 end;

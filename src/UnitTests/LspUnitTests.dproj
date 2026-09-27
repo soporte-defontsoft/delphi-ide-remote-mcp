@@ -172,6 +172,8 @@
         <DCCReference Include="LspTests.DesignerBin.pas"/>
         <DCCReference Include="LspTests.Dproj.pas"/>
         <DCCReference Include="LspTests.Images.pas"/>
+        <DCCReference Include="LspTests.GitArgs.pas"/>
+        <DCCReference Include="LspTests.Pascal.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

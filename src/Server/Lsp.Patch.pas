@@ -318,7 +318,8 @@ uses
   Lsp.Texts,
   Lsp.DesignerMeta,
   Lsp.DesignerBin,
-  Lsp.DesignerBinding;
+  Lsp.DesignerBinding,
+  Lsp.ProjectUnits; // LlavesAnidadas: el lexico Pascal de la casa
 
 const
   BACKUP_SUB = '__delphi-patch';
@@ -1011,6 +1012,19 @@ begin
     Result := [''];  // '' es una linea vacia, no ninguna
 end;
 
+// El aviso (no bloquea) para un comentario de llave con otra llave dentro en
+// el texto NUEVO de un fuente Pascal. ALineaBase: el indice (0-based) de la
+// primera linea que ocupa ese texto en el fichero. UN sitio para los dos
+// motores de delphi_edit (el de una linea y el de bloque).
+function AvisosDeLlaves(const APath, ANuevo: string; ALineaBase: Integer): TArray<string>;
+begin
+  Result := [];
+  if not MatchText(TPath.GetExtension(APath), ['.pas', '.dpr', '.dpk', '.inc', '.lpr']) then
+    Exit;
+  for var L in LlavesAnidadas(ANuevo) do
+    Result := Result + [Format(SN_AVISO_LLAVE_ANIDADA_FMT, [ALineaBase + L])];
+end;
+
 function ApplyBlockEdit(const APath, AOld, ANew: string;
   AOccurrence: Integer; AAtLine: Integer): string;
 var
@@ -1097,6 +1111,8 @@ begin
     Sb.Free;
   end;
   Result := Format(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
+  for var Aviso in AvisosDeLlaves(APath, string.Join(#10, NewLines), Hit) do
+    Result := Result + #10 + Aviso;
 end;
 
 function FragmentoALinea(const APath, AFrag, ANew: string; AAtLine: Integer;
@@ -1299,6 +1315,7 @@ begin
             Exit(Format(SR_PATCH_OCCURRENCE_DUP_FMT, [M + 1, N + 1, Ocurr[N]]));
       N := 0;
       Fallo := 0;
+      var Avisos: TArray<string> := [];
       for V in Arr do
       begin
         Inc(N);
@@ -1414,6 +1431,11 @@ begin
           Sb.Append(Format('  %d: %s', [N, Una.Replace(#10, ' ')])).Append(#10);
           Break;
         end;
+        // Los avisos del motor (*** ... ***) no se pierden al resumir la
+        // edicion en una linea: en una tanda no llegaban al agente.
+        for var LA in Una.Split([#10]) do
+          if LA.Trim.StartsWith('***') then
+            Avisos := Avisos + [Format('  %d: %s', [N, LA.Trim])];
         if EsBloque then
           Una := Format('  %d OK (bloque de %d lineas)',
             [N, Length(LineasDelAncla(Anc))])
@@ -1432,6 +1454,8 @@ begin
       end;
       Result := Format(SN_PATCH_EDITS_OK_FMT,
         [Arr.Count, TPath.GetFileName(APath), Sb.ToString.TrimRight]);
+      if Length(Avisos) > 0 then
+        Result := Result + #10 + string.Join(#10, Avisos);
     finally
       Sb.Free;
     end;
@@ -2577,6 +2601,8 @@ begin
     var FmNew := MojibakeLines(Replacement);
     if (Length(FmNew) > 0) and (Length(MojibakeLines(AOld)) = 0) then
       Warnings.Add('*** FIRMA DE MOJIBAKE EN TU TEXTO NUEVO. Si querias escribir un acento, pon el caracter LIMPIO; si copias adrede una corrupcion existente, declaralo. ***');
+    for var Aviso in AvisosDeLlaves(APath, Replacement, HitIdx) do
+      Warnings.Add(Aviso);
     if AIsDesigner then
     begin
       Warnings.Add('(fichero del designer en formato texto: editado, pero lo gobierna el IDE. MENCIONALO en tu informe.)');

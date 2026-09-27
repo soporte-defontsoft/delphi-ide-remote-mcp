@@ -526,10 +526,10 @@ var
 
   procedure Add(const AInclude, ADir, AFile, ACls: string; ARequired: Boolean);
   begin
-    SB.AppendLine('        <DeployFile Include="' + AInclude + '">');
-    SB.AppendLine('            <RemoteDir>' + AName + '\' + ADir + '</RemoteDir>');
-    SB.AppendLine('            <RemoteName>' + AFile + '</RemoteName>');
-    SB.AppendLine('            <DeployClass>' + ACls + '</DeployClass>');
+    SB.AppendLine('        <DeployFile ' + XmlAtributo('Include', AInclude) + '>');
+    SB.AppendLine('            ' + XmlElemento('RemoteDir', AName + '\' + ADir));
+    SB.AppendLine('            ' + XmlElemento('RemoteName', AFile));
+    SB.AppendLine('            ' + XmlElemento('DeployClass', ACls));
     SB.AppendLine('            <Operation>1</Operation>');
     SB.AppendLine('            <LocalCommand/>');
     SB.AppendLine('            <RemoteCommand/>');
@@ -609,9 +609,9 @@ begin
     Ext := '.exe';
   Include := IncludeTrailingPathDelimiter(OutDir) + AName + Ext;
   Result :=
-    '        <DeployFile Include="' + Include + '" Condition="''$(Config)''==''' + ACfg + '''">'#13#10 +
-    '            <RemoteDir>' + AName + '\</RemoteDir>'#13#10 +
-    '            <RemoteName>' + AName + Ext + '</RemoteName>'#13#10 +
+    '        <DeployFile ' + XmlAtributo('Include', Include) + ' Condition="''$(Config)''==''' + ACfg + '''">'#13#10 +
+    '            ' + XmlElemento('RemoteDir', AName + '\') + #13#10 +
+    '            ' + XmlElemento('RemoteName', AName + Ext) + #13#10 +
     '            <DeployClass>ProjectOutput</DeployClass>'#13#10 +
     '            <Operation>1</Operation>'#13#10 +
     '            <LocalCommand/>'#13#10 +
@@ -731,7 +731,7 @@ begin
         Jars := Jars + TPath.GetFileName(J);
       end;
     Dproj := Copy(Dproj, 1, LineStart - 1) + Indent +
-      Format(ANDROID_PROPS, [APlat, Indent, Indent, Indent, Jars, Indent,
+      Format(ANDROID_PROPS, [APlat, Indent, Indent, Indent, XmlEscape(Jars), Indent,
         Indent]) + sLineBreak + Copy(Dproj, LineStart, MaxInt);
     Changed := True;
   end;
@@ -779,9 +779,9 @@ begin
     Xml := Xml +
       '    <ItemGroup Condition="''$(Platform)''==''' + APlat +
         ''' And ''$(Config)''==''' + Cfg + '''">'#13#10 +
-      '        <DeployFile Include="' + APlat + '\' + Cfg + '\' + N + Ext + '">'#13#10 +
-      '            <RemoteDir>' + N + '\</RemoteDir>'#13#10 +
-      '            <RemoteName>' + N + Ext + '</RemoteName>'#13#10 +
+      '        <DeployFile ' + XmlAtributo('Include', APlat + '\' + Cfg + '\' + N + Ext) + '>'#13#10 +
+      '            ' + XmlElemento('RemoteDir', N + '\') + #13#10 +
+      '            ' + XmlElemento('RemoteName', N + Ext) + #13#10 +
       '            <DeployClass>ProjectOutput</DeployClass>'#13#10 +
       '            <Operation>1</Operation>'#13#10 +
       '            <LocalCommand/>'#13#10 +
@@ -888,7 +888,6 @@ function IncludeDirectivesDenied(const ADprojPath: string): string;
 var
   Dpr, Txt, Enc, Cand, Base: string;
   Files: TList<string>;
-  M: TMatch;
 begin
   Result := '';
   Dpr := TPath.ChangeExtension(ADprojPath, '.dpr');
@@ -913,19 +912,11 @@ begin
         Continue;
       end;
       Base := TPath.GetDirectoryName(F);
-      for M in TRegEx.Matches(Txt, '(?i)\{\$(I|INCLUDE|R|RESOURCE|L|LINK)\s+([^}]+)\}') do
+      // EL lector de estas directivas es Lsp.ProjectUnits.DirectivasDeFichero:
+      // lo comparte con la mudanza de delphi_move, que las re-apunta.
+      for var D in DirectivasDeFichero(Txt) do
       begin
-        Cand := M.Groups[2].Value.Trim.Trim(['''', '"']);
-        // a wildcard is the IDE's own boilerplate ({$R *.res}, {$R *.dfm})
-        if (Cand = '') or Cand.Contains('*') then
-          Continue;
-        // {$I+} / {$I-} and friends are switches, not files
-        if (Length(Cand) <= 1) or CharInSet(Cand[1], ['+', '-']) then
-          Continue;
-        // {$R file.res name}: only the first token is a path
-        Cand := PrimerTrozo(Cand, [' ', #9]).Trim(['''', '"']);
-        if Cand = '' then
-          Continue;
+        Cand := D.Ruta;
         if not TPath.IsPathRooted(Cand) then
           Cand := TPath.Combine(Base, Cand);
         try
@@ -935,7 +926,7 @@ begin
         end;
         if ReadPathDenied(Cand) <> '' then
           Exit(Format(SR_BUILD_INCLUDE_OUTSIDE_FMT,
-            [M.Groups[0].Value.Trim, TPath.GetFileName(F)]));
+            [D.Texto.Trim, TPath.GetFileName(F)]));
       end;
     end;
   finally
@@ -1068,10 +1059,10 @@ begin
   except
     Exit;
   end;
-  M := TRegEx.Match(Xml, '(?i)<Profile_librarypath>([^<]+)</Profile_librarypath>');
-  if not M.Success then
+  Rutas := TagValue(Xml, 'Profile_LibraryPath');
+  if Rutas = '' then
     Exit;
-  Rutas := M.Groups[1].Value.Replace('$(BDSPLATFORMSDKSDIR)',
+  Rutas := Rutas.Replace('$(BDSPLATFORMSDKSDIR)',
     IdeSdksDir(AVersion), [rfIgnoreCase]);
   Hechos := '';
   Faltan := '';
@@ -1141,7 +1132,6 @@ end;
 function SysrootMezcladoDeSdk(const AVersion, ASdkFile: string): string;
 var
   Xml, Raiz: string;
-  M: TMatch;
 begin
   Result := '';
   try
@@ -1149,10 +1139,9 @@ begin
   except
     Exit;
   end;
-  M := TRegEx.Match(Xml, '(?i)<Profile_sysroot>([^<]+)</Profile_sysroot>');
-  if not M.Success then
+  Raiz := TagValue(Xml, 'Profile_sysroot');
+  if Raiz = '' then
     Exit;
-  Raiz := M.Groups[1].Value.Trim;
   if Raiz.Contains('$(BDSPLATFORMSDKSDIR)') then
     Raiz := Raiz.Replace('$(BDSPLATFORMSDKSDIR)', IdeSdksDir(AVersion),
       [rfIgnoreCase]);

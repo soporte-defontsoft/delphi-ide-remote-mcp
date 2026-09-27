@@ -60,6 +60,7 @@ uses
   Posix.SysWait,
   Posix.Fcntl,
   Posix.Signal,
+  Mld.Sesion in '..\DesktopNode\Mld.Sesion.pas', // EL detector, el mismo que el nodo
 {$ENDIF}
   System.SysUtils,
   System.IOUtils,
@@ -252,7 +253,7 @@ end;
 function CompletaEntornoGrafico: string;
 var
   Runtime, Anadido, A, Mejor: string;
-  I: Integer;
+  Sesion: TSesionGrafica;
   Mas: TDateTime;
 begin
   Anadido := '';
@@ -269,17 +270,18 @@ begin
     PonEntorno('DBUS_SESSION_BUS_ADDRESS', 'unix:path=' + Runtime + '/bus');
     Anadido := Anadido + ' DBUS_SESSION_BUS_ADDRESS';
   end;
-  if (Entorno('WAYLAND_DISPLAY') = '') and (Runtime <> '') then
-    for I := 0 to 9 do
-      if EsSocket(Runtime + '/wayland-' + IntToStr(I)) then
-      begin
-        PonEntorno('WAYLAND_DISPLAY', 'wayland-' + IntToStr(I));
-        Anadido := Anadido + ' WAYLAND_DISPLAY';
-        Break;
-      end;
-  if (Entorno('DISPLAY') = '') and EsSocket('/tmp/.X11-unix/X0') then
+  // La sesion de ESTE usuario, por el detector que comparte con el nodo
+  // (Mld.Sesion): aqui solo se miraba X0, de cualquier dueno, y el nodo
+  // decia otra cosa (revision del 26-sep-2026).
+  Sesion := SesionGrafica;
+  if (Entorno('WAYLAND_DISPLAY') = '') and (Sesion.WaylandDisplay <> '') then
   begin
-    PonEntorno('DISPLAY', ':0');
+    PonEntorno('WAYLAND_DISPLAY', Sesion.WaylandDisplay);
+    Anadido := Anadido + ' WAYLAND_DISPLAY';
+  end;
+  if (Entorno('DISPLAY') = '') and (Sesion.Display <> '') then
+  begin
+    PonEntorno('DISPLAY', Sesion.Display);
     Anadido := Anadido + ' DISPLAY';
   end;
   if (Entorno('DISPLAY') <> '') and (Entorno('XAUTHORITY') = '') then
@@ -306,7 +308,8 @@ begin
       Anadido := Anadido + ' XAUTHORITY';
     end;
   end;
-  if (Entorno('DISPLAY') <> '') or (Entorno('WAYLAND_DISPLAY') <> '') then
+  // un DISPLAY heredado de una sesion que ya se cerro no es un entorno
+  if Sesion.Hay and ((Entorno('DISPLAY') <> '') or (Entorno('WAYLAND_DISPLAY') <> '')) then
     Result := '___ENV=1|' + Anadido.Trim + #10
   else
     Result := '___ENV=0|' + Anadido.Trim + #10;

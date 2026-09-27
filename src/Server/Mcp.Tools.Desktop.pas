@@ -218,8 +218,8 @@ var
 begin
   Result := '';
   for L in ASalida.Split([#10]) do
-    if L.TrimLeft.StartsWith('CAPTURA=') then
-      Result := L.Trim.Substring(8);
+    if L.TrimLeft.StartsWith(NODO_CAPTURA) then
+      Result := L.Trim.Substring(Length(NODO_CAPTURA));
 end;
 
 { El nombre del perfil, apto para un nombre de fichero (lo eligio el operador

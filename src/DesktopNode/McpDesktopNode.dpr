@@ -23,11 +23,13 @@ uses
   Mld.DBus in 'Mld.DBus.pas',
   Mld.Teclado in 'Mld.Teclado.pas',
   Mld.Eis in 'Mld.Eis.pas',
-  Mld.X11 in 'Mld.X11.pas';
+  Mld.X11 in 'Mld.X11.pas',
+  Mld.Sesion in 'Mld.Sesion.pas';
 {$ENDIF}
 
 const
 {$I NodeKey.inc}
+{$I NodeProtocolo.inc}
 
 { Los argumentos van DESPLAZADOS uno: el primero es la clave que prueba que
   llama el servidor MCP, y las ordenes empiezan detras. Todo el reparto de
@@ -68,7 +70,7 @@ var
   begin
     if Escritorio.Capturar(Ruta) then
     begin
-      Writeln('CAPTURA=', Ruta);
+      Writeln(NODO_CAPTURA, Ruta);
       { El camino normal (BitBlt del escritorio) fallo y la captura salio por
         el de respaldo: se dice, porque le faltan el cursor y el fondo. }
       if Escritorio.Respaldo <> '' then
@@ -88,7 +90,7 @@ var
       end;
     end
     else
-      Writeln('  NO pude capturar: ', Escritorio.Error);
+      Writeln('  ', NODO_NO_PUDE, ' ', Escritorio.Error);
   end;
 
 begin
@@ -306,6 +308,7 @@ var
   Captura, RutaSesion, RutaSc, Stream: string;
   Descriptor, ObjX, ObjY: Integer;
   Orden, Frase: string;
+  Sesion: TSesionGrafica;
   I: Integer;
   Hizo: Boolean;
   Ojos: TOjos;
@@ -392,6 +395,16 @@ begin
     end;
     Writeln;
 
+    { Sin sesion grafica de ESTE usuario el portal no contesta y el nodo se
+      quedaba 20 s esperandole antes de decir nada (medido en Zorin el
+      26-sep-2026). Se mira antes y se dice ya, con la linea que el
+      servidor lee como motivo (Lsp.RemoteRun.MotivoSinCaptura). }
+    Sesion := SesionGrafica;
+    if not Sesion.Hay then
+    begin
+      Writeln('  ', NODO_NO_PUDE, ' ', Sesion.Motivo);
+      Exit;
+    end;
     Bus := TConexionBus.Create;
     try
       if not Bus.Conectar then
@@ -412,12 +425,12 @@ begin
       if Bus.CapturarEscritorio(Captura, 20000) then
       begin
         Captura := RecogerCaptura(Captura);
-        Writeln('CAPTURA=', Captura);
+        Writeln(NODO_CAPTURA, Captura);
         ListarVentanas(Captura);
       end
       else
       begin
-        Writeln('  NO pude capturar: ', Bus.Error);
+        Writeln('  ', NODO_NO_PUDE, ' ', Bus.Error);
         Exit;
       end;
       Writeln;
@@ -553,7 +566,7 @@ begin
             if Bus.CapturarEscritorio(Captura, 20000) then
             begin
               Captura := RecogerCaptura(Captura);
-              Writeln('CAPTURA=', Captura);
+              Writeln(NODO_CAPTURA, Captura);
               ListarVentanas(Captura);
             end;
           end;

@@ -207,6 +207,32 @@ check('#6 un comando que necesita .dproj sobre un .dpr: refusal clara',
 j = J(A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dpr')}))
 check('#6 con .dproj al lado, el .dpr se resuelve solo',
       j.get('frameworkType', '') != '' and j.get('hasDproj') is not False, str(j)[:250])
+# El gemelo de #6 con un GRUPO: view de un .groupproj contestaba como un
+# proyecto vacio (sin plataformas ni configuraciones, crossPlatform "yes"), y
+# una orden de escritura lo habria tocado como un .dproj (26-sep-2026).
+GRUPO = os.path.join(BASE, 'grupo')
+os.makedirs(GRUPO)
+GPROJ = os.path.join(GRUPO, 'Todo.groupproj')
+rel = os.path.relpath(os.path.join(VCLDIR, 'ProyVcl.dproj'), GRUPO)
+open(GPROJ, 'w', encoding='utf-8').write(
+    '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\r\n'
+    '  <ItemGroup>\r\n'
+    '    <Projects Include="%s"><Dependencies/></Projects>\r\n'
+    '    <Projects Include="Falta\\Falta.dproj"><Dependencies/></Projects>\r\n'
+    '  </ItemGroup>\r\n</Project>\r\n' % rel)
+antes_g = open(GPROJ, 'rb').read()
+j = J(A.call('delphi_config', {'project': GPROJ}))
+ps = j.get('projects', [])
+check('#6b view de un .groupproj: lista SUS proyectos, sin inventar plataformas',
+      len(ps) == 2 and [p.get('exists') for p in ps] == [True, False] and
+      'platformsEnabled' not in j and 'frameworkType' not in j and 'GRUPO' in j.get('note', ''),
+      str(j)[:300])
+r = A.call('delphi_config', {'project': GPROJ, 'command': 'add-platform', 'platform': 'Win64'})
+check('#6b ...una orden de escritura sobre el grupo: rechazada (INVALID_PARAM) y sin tocarlo',
+      r.startswith('error:') and 'GRUPO' in r and open(GPROJ, 'rb').read() == antes_g, r[:250])
+r = A.call('delphi_config', {'project': os.path.join(SOLO, 'UAlgo.pas')})
+check('#6b ...y lo que no es un proyecto no se lee como si lo fuera',
+      r.startswith('error:') and 'no es un proyecto' in r, r[:250])
 
 # ------------------------------------------------------------------- #11 --
 r = A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dproj'),

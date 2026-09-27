@@ -172,9 +172,14 @@ check('B3 diagnostics sobre algo que no es Delphi: RECHAZADO, sin bucle',
       'RECHAZADO' in r and 'in-progress' not in r, r[:200])
 
 # ------------------------------------------------------------------- C1/C2 --
-r = A.call('delphi_create', {'kind': 'unit', 'name': 'USuelta', 'dir': BASE})
+# sin project y con un dir RELATIVO: lo que falta, dicho (con uno ABSOLUTO,
+# desde la 1.6.0, es una unit SUELTA: C1b)
+r = A.call('delphi_create', {'kind': 'unit', 'name': 'USuelta', 'dir': 'relativa'})
 check('C1 kind=unit sin project: dice exactamente lo que falta',
       'RECHAZADO' in r and 'project' in r and 'dir' in r, r[:250])
+r = A.call('delphi_create', {'kind': 'unit', 'name': 'USuelta', 'dir': BASE})
+check('C1b kind=unit sin project y con dir ABSOLUTO: la unit SUELTA (1.6.0)',
+      r.startswith('CREADA') and 'SUELTA' in r and os.path.exists(os.path.join(BASE, 'USuelta.pas')), r[:250])
 j = J(A.call('delphi_list', {'path': os.path.join(BASE, 'Proy')}))
 check('C2 delphi_list acepta path= igual que root=', j.get('total', 0) >= 1, str(j)[:200])
 

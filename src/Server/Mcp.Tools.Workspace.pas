@@ -258,6 +258,7 @@ uses
   Lsp.Patch,
   Lsp.ShaCache,
   Lsp.Base64,     // BytesToBase64 / Base64ToBytes: el codificador de la casa
+  Lsp.Dproj,      // RutasDeBusqueda: el search path de un .dproj, resuelto
   Lsp.Files,
   Mcp.Tools.Messages,
   Lsp.DesignerBin; // DirectedMessagesPending, para la ficha del servidor
@@ -752,12 +753,24 @@ begin
     'git commands, no shell.';
 end;
 
-{ Un valor de quien llama DENTRO de la linea de ordenes de git, entre
-  comillas dobles: una comilla suya no puede cerrar el argumento (se
-  cambia por dos simples). La usan config y stash push -m. }
-function EnComillas(const AValor: string): string;
+{ Los argumentos LIBRES del usuario, recompuestos desde el argv que valida la
+  puerta (TrocearArgs) con su inversa EnComillas: git.exe recibe EXACTAMENTE
+  los tokens que GitArgDenied/GitRemoteDenied aprobaron, sin que la puerta
+  tenga que adivinar como trocea el CRT de Windows la cadena cruda. Es la
+  parte (a) del arreglo del 26-sep-2026: el ejecutor obliga a git a leer lo
+  que leyo la puerta, en vez de pasar la cadena tal cual y confiar en que los
+  dos parsers coincidan. }
+function ArgvSeguro(const AArgs: string): string;
+var
+  Tok: string;
 begin
-  Result := '"' + AValor.Replace('"', '''''') + '"';
+  Result := '';
+  for Tok in TrocearArgs(AArgs) do
+  begin
+    if Result <> '' then
+      Result := Result + ' ';
+    Result := Result + EnComillas(Tok);
+  end;
 end;
 
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
@@ -814,22 +827,22 @@ begin
 
   Cmd := Params.Command.Trim.ToLower;
   if Cmd = 'status' then
-    GitArgs := 'status --porcelain=v1 -b ' + Params.Args
+    GitArgs := 'status --porcelain=v1 -b ' + ArgvSeguro(Params.Args)
   else if Cmd = 'diff' then
-    GitArgs := 'diff ' + Params.Args
+    GitArgs := 'diff ' + ArgvSeguro(Params.Args)
   else if Cmd = 'log' then
   begin
-    GitArgs := 'log --oneline -20 ' + Params.Args;
+    GitArgs := 'log --oneline -20 ' + ArgvSeguro(Params.Args);
   end
   else if Cmd = 'show' then
-    GitArgs := 'show --stat --format=medium ' + Params.Args
+    GitArgs := 'show --stat --format=medium ' + ArgvSeguro(Params.Args)
   else if Cmd = 'branch' then
-    GitArgs := 'branch -vv ' + Params.Args
+    GitArgs := 'branch -vv ' + ArgvSeguro(Params.Args)
   else if Cmd = 'add' then
   begin
     if Params.Args.Trim = '' then
       Exit('error: add needs args (paths, or -A for everything)');
-    GitArgs := 'add ' + Params.Args;
+    GitArgs := 'add ' + ArgvSeguro(Params.Args);
   end
   else if Cmd = 'commit' then
   begin
@@ -845,7 +858,7 @@ begin
     MsgFile := TPath.Combine(ServerTempDir('git'),
       'msg-' + TGUID.NewGuid.ToString + '.txt');
     TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
-    GitArgs := Format('commit -F "%s" %s', [MsgFile, Params.Args]);
+    GitArgs := Format('commit -F "%s" %s', [MsgFile, ArgvSeguro(Params.Args)]);
   end
   else if Cmd = 'clone' then
   begin
@@ -877,14 +890,14 @@ begin
     // (field round 9: git network args travel fairly verbatim). User args go
     // BEFORE "--" so legitimate options (--depth, --branch) still apply; they
     // were already vetted for dangerous flags at the single gate (GitArgDenied).
-    GitArgs := Format('clone %s -- "%s" .', [Params.Args, Url]);
+    GitArgs := Format('clone %s -- %s .', [ArgvSeguro(Params.Args), EnComillas(Url)]);
   end
   else if Cmd = 'pull' then
-    GitArgs := 'pull ' + Params.Args
+    GitArgs := 'pull ' + ArgvSeguro(Params.Args)
   else if Cmd = 'fetch' then
-    GitArgs := 'fetch ' + Params.Args
+    GitArgs := 'fetch ' + ArgvSeguro(Params.Args)
   else if Cmd = 'init' then
-    GitArgs := 'init ' + Params.Args
+    GitArgs := 'init ' + ArgvSeguro(Params.Args)
   else if Cmd = 'config' then
   begin
     // Only the commit identity, so a remote agent can commit on a fresh
@@ -909,9 +922,9 @@ begin
     if Params.Args.Trim = '' then
       Exit(SR_GIT_SWITCH_NEEDS);
     if Params.Create then
-      GitArgs := 'switch -c ' + Params.Args
+      GitArgs := 'switch -c ' + ArgvSeguro(Params.Args)
     else
-      GitArgs := 'switch ' + Params.Args;
+      GitArgs := 'switch ' + ArgvSeguro(Params.Args);
   end
   else if Cmd = 'merge' then
   begin
@@ -931,7 +944,7 @@ begin
               TStringSplitOptions.ExcludeEmpty)[0] <> Params.Args.Trim) then
       Exit(SR_GIT_MERGE_ARGS)
     else
-      GitArgs := 'merge --ff-only ' + Params.Args.Trim;
+      GitArgs := 'merge --ff-only ' + ArgvSeguro(Params.Args.Trim);
   end
   else if Cmd = 'stash' then
   begin
@@ -994,7 +1007,7 @@ begin
   else if Cmd = 'push' then
     // uses the SERVER's stored credentials/remotes - consistent with the
     // centralized model (the repo lives next to the compiler)
-    GitArgs := 'push ' + Params.Args
+    GitArgs := 'push ' + ArgvSeguro(Params.Args)
   else if Cmd = 'tag' then
   begin
     if Params.Message.Trim <> '' then
@@ -1005,10 +1018,10 @@ begin
       MsgFile := TPath.Combine(ServerTempDir('git'),
         'msg-' + TGUID.NewGuid.ToString + '.txt');
       TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
-      GitArgs := Format('tag -F "%s" %s', [MsgFile, Params.Args]);
+      GitArgs := Format('tag -F "%s" %s', [MsgFile, ArgvSeguro(Params.Args)]);
     end
     else
-      GitArgs := 'tag ' + Params.Args; // no args = list tags
+      GitArgs := 'tag ' + ArgvSeguro(Params.Args); // no args = list tags
   end
   else if Cmd = 'worktree' then
   begin
@@ -1555,8 +1568,7 @@ end;
   sources that are not its own. }
 function ProjectSearchDirs(const ADproj: string): TArray<string>;
 var
-  Xml, Resolved: string;
-  M: TMatch;
+  Xml: string;
   L: TStringList;
 begin
   Result := nil;
@@ -1569,22 +1581,10 @@ begin
   try
     L.Duplicates := dupIgnore;
     L.Sorted := True;
-    for M in TRegEx.Matches(Xml, '(?i)<DCC_UnitSearchPath>([^<]*)</DCC_UnitSearchPath>') do
-      for var Seg in M.Groups[1].Value.Split([';']) do
-      begin
-        if (Seg.Trim = '') or Seg.Contains('$(') then
-          Continue;
-        try
-          Resolved := Seg.Trim;
-          if not TPath.IsPathRooted(Resolved) then
-            Resolved := TPath.Combine(TPath.GetDirectoryName(ADproj), Resolved);
-          Resolved := TPath.GetFullPath(Resolved);
-        except
-          Continue;
-        end;
-        if TDirectory.Exists(Resolved) and (ReadPathDenied(Resolved) = '') then
-          L.Add(Resolved);
-      end;
+    for var R in RutasDeBusqueda(ADproj, Xml) do
+      if (R.Carpeta <> '') and TDirectory.Exists(R.Carpeta) and
+         (ReadPathDenied(R.Carpeta) = '') then
+        L.Add(R.Carpeta);
     Result := L.ToStringArray;
   finally
     L.Free;

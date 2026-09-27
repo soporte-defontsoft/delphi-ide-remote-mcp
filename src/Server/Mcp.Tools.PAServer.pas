@@ -497,7 +497,6 @@ end;
 function FichaDeSdk(const AVersion, ASdkFile: string): TJSONObject;
 var
   Xml, Raiz, Ficha: string;
-  M: TMatch;
   O: TJSONObject;
 begin
   Result := TJSONObject.Create;
@@ -508,10 +507,9 @@ begin
   except
     Exit;
   end;
-  M := TRegEx.Match(Xml, '(?i)<Profile_sysroot>([^<]+)</Profile_sysroot>');
-  if not M.Success then
+  Raiz := TagValue(Xml, 'Profile_sysroot');
+  if Raiz = '' then
     Exit;
-  Raiz := M.Groups[1].Value.Trim;
   Result.AddPair('sysroot', Raiz);
   // Los .sdk que escribe el IDE usan su macro; aqui se sabe a que apunta, y
   // sin expandirla no se podria decir nada de los SDK del SDK Manager.
@@ -820,8 +818,8 @@ begin
       '(?is)<Profile(Include|Library)\s+Include="([^"]+)">.*?' +
       '<FileMask>([^<]*)</FileMask>.*?<SubDirs>([^<]*)</SubDirs>') do
     begin
-      R.WriteString('Path' + IntToStr(I), M.Groups[2].Value);
-      R.WriteString('Mask' + IntToStr(I), M.Groups[3].Value.Trim);
+      R.WriteString('Path' + IntToStr(I), XmlUnescape(M.Groups[2].Value));
+      R.WriteString('Mask' + IntToStr(I), XmlUnescape(M.Groups[3].Value).Trim);
       if SameText(M.Groups[4].Value.Trim, 'True') then
         R.WriteString('IncludeSubDir' + IntToStr(I), '1')
       else
@@ -951,7 +949,6 @@ var
   Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
   ProfileFile, Xml: string;
-  M: TMatch;
 begin
   Result := '';
   Installs := DiscoverAllRadStudios;
@@ -968,9 +965,8 @@ begin
     except
       Continue;
     end;
-    M := TRegEx.Match(Xml, '(?i)<Profile_host>\s*([^<]+?)\s*</Profile_host>');
-    if M.Success then
-      Exit(ProbeHostDenied(M.Groups[1].Value));
+    if TagValue(Xml, 'Profile_host') <> '' then
+      Exit(ProbeHostDenied(TagValue(Xml, 'Profile_host')));
   end;
 end;
 
@@ -1462,12 +1458,12 @@ begin
       Sb.AppendLine('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="">');
       Sb.AppendLine('  <PropertyGroup>');
       Sb.AppendLine('    <Profile_platform>Linux64</Profile_platform>');
-      Sb.AppendLine('    <Profile_host>' + TagValue(ProfXml, 'Profile_host') + '</Profile_host>');
-      Sb.AppendLine('    <Profile_port>' + TagValue(ProfXml, 'Profile_port') + '</Profile_port>');
-      Sb.AppendLine('    <Profile_sdkname>' + SdkName + '.sdk</Profile_sdkname>');
-      Sb.AppendLine('    <Profile_displayname>Linux64 ' + SdkName +
-        ' (delphi_paserver get-sdk, profile ' + ProfName + ')</Profile_displayname>');
-      Sb.AppendLine('    <Profile_sysroot>' + SysRoot + '</Profile_sysroot>');
+      Sb.AppendLine('    ' + XmlElemento('Profile_host', TagValue(ProfXml, 'Profile_host')));
+      Sb.AppendLine('    ' + XmlElemento('Profile_port', TagValue(ProfXml, 'Profile_port')));
+      Sb.AppendLine('    ' + XmlElemento('Profile_sdkname', SdkName + '.sdk'));
+      Sb.AppendLine('    ' + XmlElemento('Profile_displayname', 'Linux64 ' + SdkName +
+        ' (delphi_paserver get-sdk, profile ' + ProfName + ')'));
+      Sb.AppendLine('    ' + XmlElemento('Profile_sysroot', SysRoot));
       Sb.AppendLine('    <Profile_startupobj>crt1.o;crti.o;crtbegin.o</Profile_startupobj>');
       Sb.AppendLine('    <Profile_endcodeobj>crtend.o;crtn.o</Profile_endcodeobj>');
       Sb.AppendLine('    <Profile_startupobjS>crti.o;crtbeginS.o</Profile_startupobjS>');
@@ -1478,14 +1474,14 @@ begin
       // build-time target, Cpp side). Without this property the link dies
       // with "cannot find -lgcc_s" even though the .sdk imports fine
       // (measured against the first live sysroot).
-      Sb.AppendLine('    <Profile_LibraryPath>' + string.Join(';', LibDirs.ToStringArray) + '</Profile_LibraryPath>');
+      Sb.AppendLine('    ' + XmlElemento('Profile_LibraryPath', string.Join(';', LibDirs.ToStringArray)));
       if TagValue(ProfXml, 'Profile_password') <> '' then
-        Sb.AppendLine('    <Profile_password>' + TagValue(ProfXml, 'Profile_password') + '</Profile_password>');
+        Sb.AppendLine('    ' + XmlElemento('Profile_password', TagValue(ProfXml, 'Profile_password')));
       Sb.AppendLine('  </PropertyGroup>');
       Sb.AppendLine('  <ItemGroup>');
       for D in LibDirs do
       begin
-        Sb.AppendLine('    <ProfileLibrary Include="' + D + '">');
+        Sb.AppendLine('    <ProfileLibrary ' + XmlAtributo('Include', D) + '>');
         Sb.AppendLine('      <FileMask>*</FileMask>');
         Sb.AppendLine('      <SubDirs>False</SubDirs>');
         Sb.AppendLine('    </ProfileLibrary>');
@@ -1557,7 +1553,6 @@ var
   YaEstaba: Boolean;
   Return: TJSONObject;
   Sembrados, Intactos: TJSONArray;
-  M: TMatch;
 begin
   Return := TJSONObject.Create;
   Sembrados := TJSONArray.Create;
@@ -1595,21 +1590,14 @@ begin
           Continue;
         end;
         Plat := 'Linux64';
-        M := TRegEx.Match(Texto, '<Profile_platform>([^<]*)</Profile_platform>');
-        if M.Success then
-          Plat := M.Groups[1].Value.Trim;
+        if TagValue(Texto, 'Profile_platform') <> '' then
+          Plat := TagValue(Texto, 'Profile_platform');
         Host := '';
-        M := TRegEx.Match(Texto, '<Profile_host>([^<]*)</Profile_host>');
-        if M.Success then
-          Host := M.Groups[1].Value.Trim;
+        Host := TagValue(Texto, 'Profile_host');
         Puerto := 64211;
-        M := TRegEx.Match(Texto, '<Profile_port>([^<]*)</Profile_port>');
-        if M.Success then
-          Puerto := StrToIntDef(M.Groups[1].Value.Trim, 64211);
+        Puerto := StrToIntDef(TagValue(Texto, 'Profile_port'), 64211);
         Pwd := '';
-        M := TRegEx.Match(Texto, '<Profile_password>([^<]*)</Profile_password>');
-        if M.Success then
-          Pwd := M.Groups[1].Value.Trim;   { ya viene cifrada: se copia tal cual }
+        Pwd := TagValue(Texto, 'Profile_password'); { ya viene cifrada: se copia tal cual }
         if Host = '' then
           Continue;
         RegistrarPerfilEnIde(Info.Version, Nombre, Plat, Host, Puerto, Pwd);
@@ -1635,7 +1623,6 @@ function ReseatSdk(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
   Nombre, Fichero, Xml, Raiz: string;
-  M: TMatch;
   Return: TJSONObject;
   Hechos: TJSONArray;
   Ficheros: TArray<string>;
@@ -1673,12 +1660,11 @@ begin
       end;
       // solo los de PAServer: los de Android los pone GetIt y no son cosa
       // nuestra
-      if not TRegEx.IsMatch(Xml, '(?i)<Profile_platform>\s*Linux64\s*<') then
+      if not SameText(TagValue(Xml, 'Profile_platform'), 'Linux64') then
         Continue;
-      M := TRegEx.Match(Xml, '(?i)<Profile_sysroot>([^<]+)</Profile_sysroot>');
-      if not M.Success then
+      Raiz := TagValue(Xml, 'Profile_sysroot');
+      if Raiz = '' then
         Continue;
-      Raiz := M.Groups[1].Value.Trim;
       // los .sdk que escribe el IDE usan su macro; aqui se sabe a que apunta
       if Raiz.Contains('$(BDSPLATFORMSDKSDIR)') then
         Raiz := Raiz.Replace('$(BDSPLATFORMSDKSDIR)',
@@ -1704,7 +1690,6 @@ function RemoveSdk(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
   Nombre, Fichero, Xml, Raiz: string;
-  M: TMatch;
   R: TRegistry;
   Return: TJSONObject;
 begin
@@ -1726,9 +1711,7 @@ begin
   begin
     try
       Xml := TFile.ReadAllText(Fichero);
-      M := TRegEx.Match(Xml, '(?i)<Profile_sysroot>([^<]+)</Profile_sysroot>');
-      if M.Success then
-        Raiz := M.Groups[1].Value.Trim;
+      Raiz := TagValue(Xml, 'Profile_sysroot');
     except
       Raiz := '';
     end;

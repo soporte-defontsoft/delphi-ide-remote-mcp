@@ -53,6 +53,7 @@ uses
   Lsp.BuildRunner,
   Lsp.References,
   Lsp.Patch,
+  Lsp.ProjectUnits, // DirectivasPascal: el lector de directivas
   Lsp.Texts;
 
 type
@@ -78,7 +79,12 @@ begin
     AWhy := 'usa DUnitX';
     Exit(tkDUnitX);
   end;
-  if TRegEx.IsMatch(Text, '(?i)\{\$APPTYPE\s+CONSOLE\}') and
+  // por el lector de directivas: una comentada no hace de un programa una consola
+  var Consola := False;
+  for var D in DirectivasPascal(Text) do
+    if (D.Nombre = 'APPTYPE') and SameText(D.Argumento.Trim, 'CONSOLE') then
+      Consola := True;
+  if Consola and
      TRegEx.IsMatch(Name, '(?i)(test|tests|spec)') then
   begin
     AWhy := 'consola y el nombre dice test';

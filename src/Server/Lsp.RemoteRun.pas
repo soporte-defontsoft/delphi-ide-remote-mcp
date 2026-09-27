@@ -47,6 +47,8 @@ const
 { La clave con la que el nodo reconoce que le llama ESTE servidor. Vive en
   un solo sitio para que los dos proyectos no se desincronicen. }
 {$I ..\DesktopNode\NodeKey.inc}
+{ Lo que escribe el nodo (CAPTURA=, NO pude capturar:), en UN sitio. }
+{$I ..\DesktopNode\NodeProtocolo.inc}
 
 { El nodo de escritorio EMPAQUETADO con el servidor: node\McpDesktopNode
   junto al exe. '' si la distribucion no lo trae. }
@@ -131,6 +133,7 @@ uses
   Lsp.BuildRunner,
   Lsp.Discovery,
   Lsp.Patch,     // DecodeSourceBytes: el lector de la casa
+  Lsp.Dproj,     // TagValue: el lector del .profile
   Lsp.Texts;
 
 var
@@ -212,9 +215,6 @@ begin
   Result := '';
 end;
 
-{ Trocea AArgs como lo haria quien los escribio: por espacios, y con comillas
-  DOBLES para agrupar un argumento que lleva espacios ("ruta con espacios"
-  uno dos). Las comillas dobles agrupan y se van; nada mas se interpreta. }
 function CapturaDenegada(const ASalida: string): Boolean;
 begin
   Result := ASalida.Contains('Acceso denegado') or
@@ -222,21 +222,22 @@ begin
 end;
 
 function MotivoSinCaptura(const ASalida, AEntorno: string): string;
-const
-  NO_PUDE = 'NO pude capturar:'; // lo escribe el nodo (src\DesktopNode)
 var
   L, Motivo: string;
 begin
   Motivo := '';
-  if AEntorno = SN_REMOTERUN_ENV_NONE then
-    Motivo := SN_DESKTOP_MOTIVO_SIN_SESION
-  else if CapturaDenegada(ASalida) then
-    Motivo := SN_DESKTOP_MOTIVO_DENEGADA
-  else
-    for L in ASalida.Split([#10]) do
-      if (Motivo = '') and L.Trim.StartsWith(NO_PUDE) then
-        Motivo := Format(SN_DESKTOP_MOTIVO_NODO_FMT,
-          [L.Trim.Substring(Length(NO_PUDE)).Trim]);
+  // Lo que dijo el NODO primero: es quien ha mirado, con el mismo detector
+  // de sesion que el lanzador (Mld.Sesion). El entorno del lanzador tapaba
+  // el motivo real del nodo (revision del 26-sep-2026).
+  for L in ASalida.Split([#10]) do
+    if (Motivo = '') and L.Trim.StartsWith(NODO_NO_PUDE) then
+      Motivo := Format(SN_DESKTOP_MOTIVO_NODO_FMT,
+        [L.Trim.Substring(Length(NODO_NO_PUDE)).Trim]);
+  if Motivo = '' then
+    if AEntorno = SN_REMOTERUN_ENV_NONE then
+      Motivo := SN_DESKTOP_MOTIVO_SIN_SESION
+    else if CapturaDenegada(ASalida) then
+      Motivo := SN_DESKTOP_MOTIVO_DENEGADA;
   if Motivo = '' then
     Motivo := SN_DESKTOP_MOTIVO_NINGUNO;
   Result := Format(SR_DESKTOP_SIN_CAPTURA_FMT, [Motivo]);
@@ -658,10 +659,11 @@ begin
   begin
     P := TPath.Combine(IdeProfilesDir(Info.Version), AProfile + '.profile');
     if TFile.Exists(P) then
-      with TRegEx.Match(TFile.ReadAllText(P),
-        '<Profile_platform>([^<]*)</Profile_platform>', [roIgnoreCase]) do
-        if Success then
-          Exit(Groups[1].Value.Trim);
+    begin
+      Result := TagValue(TFile.ReadAllText(P), 'Profile_platform');
+      if Result <> '' then
+        Exit;
+    end;
   end;
 end;
 

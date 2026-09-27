@@ -79,6 +79,7 @@ uses
   Lsp.Guard,
   Lsp.Texts,
   System.RegularExpressions,
+  Lsp.Dproj,        // RutasDeBusqueda: el search path de un .dproj, resuelto
   Lsp.ProjectUnits;
 
 type
@@ -116,8 +117,7 @@ end;
 function ProjectsSearching(const ADir: string): TArray<string>;
 var
   L: TStringList;
-  Target, Root, Xml, Resolved: string;
-  M: TMatch;
+  Target, Root, Xml: string;
 begin
   Result := nil;
   if ADir = '' then
@@ -141,22 +141,10 @@ begin
         except
           Continue;
         end;
-        for M in TRegEx.Matches(Xml, '(?i)<DCC_UnitSearchPath>([^<]*)</DCC_UnitSearchPath>') do
-          for var Seg in M.Groups[1].Value.Split([';']) do
-          begin
-            if (Seg.Trim = '') or Seg.Contains('$(') then
-              Continue;
-            try
-              Resolved := Seg.Trim;
-              if not TPath.IsPathRooted(Resolved) then
-                Resolved := TPath.Combine(TPath.GetDirectoryName(Dproj), Resolved);
-              Resolved := IncludeTrailingPathDelimiter(TPath.GetFullPath(Resolved)).ToLower;
-            except
-              Continue;
-            end;
-            if Resolved = Target then
-              L.Add(TPath.GetDirectoryName(Dproj));
-          end;
+        for var R in RutasDeBusqueda(Dproj, Xml) do
+          if (R.Carpeta <> '') and
+             (IncludeTrailingPathDelimiter(R.Carpeta).ToLower = Target) then
+            L.Add(TPath.GetDirectoryName(Dproj));
       end;
     end;
     Result := L.ToStringArray;

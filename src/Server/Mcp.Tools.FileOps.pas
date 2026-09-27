@@ -585,11 +585,23 @@ begin
     'every qualified UnitOld.X reference in them - looked for from its folder UP to the edge of the ' +
     'workspace, however deep the unit sits. Moving a whole FOLDER re-points ' +
     'every unit inside it the same way: reorganise freely, the projects follow. ' +
+    'And every RELATIVE path that crosses the border of what moved is ' +
+    're-pointed in the same call, once the unit and its designer are in place: ' +
+    'inside what moved, the units from outside each project lists, the .dproj ' +
+    'search/output paths, icon, manifest, .rc, deployed files and .optset, ' +
+    'the {$I}/{$R}/{$L} directives (only if the file was where the directive ' +
+    'says - one found through the include path is left alone) and the ' +
+    'projects and dependencies of a .groupproj; outside it, in everything ' +
+    'this session can write (a sibling project, an {$I} from another unit, a ' +
+    'group and its dependencies), whatever pointed inside - a project moved ' +
+    'one level deeper still compiles. What it could not re-point is named, ' +
+    'for delphi_config command=fix-references. ' +
     'copy=true is the same door with a different last step: the source stays, ' +
     'no trash copy is taken, a copied unit named differently gets its "unit X;" ' +
-    'header rewritten and its .dfm/.fmx copied along, and NO project is ' +
-    're-pointed (the copy is a new unit nobody lists yet: delphi_config ' +
-    'add-unit). Refused for a folder holding a .dproj/.dpk - a project never ' +
+    'header rewritten and its .dfm/.fmx copied along, and NO project is made ' +
+    'to list the copy (a new unit nobody lists yet: delphi_config add-unit); ' +
+    'what the copy points to outside IS re-pointed, so it compiles where it ' +
+    'lands. Refused for a folder holding a .dproj/.dpk - a project never ' +
     'lives in two places; start one from another with delphi_create.';
 end;
 
@@ -598,6 +610,23 @@ var
   Denied, BackupNote, Ext, Enc, Src, OldStem, NewStem, ProjNote, P, R, PairNote: string;
   Projects, NoSeguidos: TArray<string>;
   IsUnit: Boolean;
+
+  { La mudanza de las rutas relativas (ReubicaArbol), AL FINAL: con el
+    designer ya junto a la unit y la cabecera reescrita, que es lo que
+    RenameProjectUnit lee. Iba antes: un proyecto HERMANO perdia el nombre
+    del form, y un rename fallaba y se contaba como hecho (revision del
+    26-sep-2026). Es tambien lo que re-apunta las units de una CARPETA en
+    los proyectos de fuera: aqui habia un recorrido propio, y eran dos. }
+  function Reubicacion(ADesdePapelera: Boolean): string;
+  begin
+    Result := '';
+    if ADesdePapelera or not (TDirectory.Exists(Params.Dest) or TFile.Exists(Params.Dest)) then
+      Exit;
+    var Reubica := ReubicaArbol(Params.Path, Params.Dest, Params.Copy);
+    if Reubica <> '' then
+      Result := #10 + Reubica;
+  end;
+
 begin
   if Params.Dest.Trim = '' then
     Exit('RECHAZADO: delphi_move necesita "dest" (ruta destino).');
@@ -683,32 +712,6 @@ begin
     if not Params.Copy then
       Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
   end;
-  // UNA CARPETA ENTERA: se apunta ANTES de moverla que unit de dentro lista
-  // que proyecto, porque despues las rutas viejas ya no existen. Una carpeta
-  // se movia y la funcion se iba sin mirar ningun proyecto: contestaba
-  // "MOVIDO", el .dpr seguia diciendo in 'Dominio\Modelos\UCliente.pas' y el
-  // build moria con F1026 - reorganizar carpetas, que es justo decidir la
-  // estructura, dejaba el proyecto sin compilar con una respuesta de exito
-  // (medido en vivo el 2026-09-21). Un proyecto que vive DENTRO de la carpeta
-  // viaja con ella y sus rutas relativas siguen valiendo: no se toca.
-  var Mudanza := TStringList.Create; // proyecto|unit vieja
-  try
-  if TDirectory.Exists(Params.Path) and not DesdePapelera and not Params.Copy then
-  try
-    var Raiz := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path));
-    for var U in TDirectory.GetFiles(Params.Path, '*.pas',
-      TSearchOption.soAllDirectories) do
-    begin
-      if IsBackupPath(U) then
-        Continue;
-      for var Pr in ProjectsUsingUnit(U, Params.Dest) do
-        if not StartsText(Raiz, IncludeTrailingPathDelimiter(
-             TPath.GetDirectoryName(TPath.GetFullPath(Pr)))) then
-          Mudanza.Add(Pr + '|' + TPath.GetFullPath(U));
-    end;
-  except
-    // una subcarpeta ilegible no impide mover: se re-apunta lo que se vio
-  end;
   try
     // Safety copy of the source into the trash before relocating... salvo que
     // el origen YA sea una copia de la papelera. Hacer una copia de una copia
@@ -765,35 +768,8 @@ begin
       [Length(NoSeguidos), string.Join(', ', NoSeguidos)]);
   if not Params.Copy then // una copia no necesita red: el origen sigue ahi
     Result := Result + #10 + '  (copia de seguridad en ' + BackupNote + ')';
-  if Mudanza.Count > 0 then
-  begin
-    var RaizVieja := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path));
-    var RaizNueva := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Dest));
-    var Notas := '';
-    for var Linea in Mudanza do
-    begin
-      var Pr := Linea.Substring(0, Linea.IndexOf('|'));
-      var Vieja := Linea.Substring(Linea.IndexOf('|') + 1);
-      var Nueva := RaizNueva + Vieja.Substring(Length(RaizVieja));
-      if PathDenied(Pr) <> '' then
-        R := Format(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(Pr)])
-      else
-        try
-          R := RenameProjectUnit(Pr, Vieja, Nueva);
-        except
-          on E: Exception do
-            R := 'ERROR ' + E.Message;
-        end;
-      Notas := Notas + #10 + '    ' + TPath.GetFileName(Pr) + ': ' + R.Replace(#10, ' ');
-    end;
-    Result := Result + #10 + Format('  units de la carpeta re-apuntadas en sus proyectos (%d):',
-      [Mudanza.Count]) + Notas;
-  end;
-  finally
-    Mudanza.Free;
-  end;
   if not IsUnit then
-    Exit;
+    Exit(Result + Reubicacion(DesdePapelera));
 
   // the designer pair travels with the unit
   PairNote := '';
@@ -861,7 +837,7 @@ begin
     ProjNote := SN_FILE_COPY_NO_PROJECT
   else
     ProjNote := SN_FILE_PROJECTS_NONE;
-  Result := Result + #10 + ProjNote;
+  Result := Result + #10 + ProjNote + Reubicacion(DesdePapelera);
 end;
 
 initialization

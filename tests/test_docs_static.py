@@ -107,4 +107,23 @@ for f in glob.glob(os.path.join(HERE, '*.py')):
         bad.append(os.path.basename(f))
 check('tests/ compila sin SyntaxWarnings', not bad, bad)
 
+# ---- el veredicto del arnes -------------------------------------------
+# Una bateria que no mide nada no sale verde (26-sep-2026): se prueba con
+# dos baterias de una linea, sin servidor.
+import subprocess, sys  # noqa: E402
+vacia = subprocess.run([sys.executable, '-c', 'import mcp_cliente as mc; mc.fin("vacia")'],
+                       cwd=HERE, capture_output=True, text=True, timeout=60)
+check('arnes: una bateria con 0 checks sale ROJA',
+      vacia.returncode == 1 and 'FAIL' in vacia.stdout, vacia.stdout[-200:])
+dicha = subprocess.run([sys.executable, '-c',
+                        'import mcp_cliente as mc; mc.fin("vacia", sin_checks="aqui no hay nada")'],
+                       cwd=HERE, capture_output=True, text=True, timeout=60)
+import mcp_cliente as _mc  # noqa: E402
+check('arnes: ...salvo que diga por que (sin_checks), y lo deja escrito',
+      dicha.returncode == 0 and _mc.sin_checks_de(dicha.stdout), dicha.stdout[-200:])
+check('arnes: la marca se LEE como se escribe (una linea que empieza por ella), '
+      'no en cualquier parte: una respuesta que la citase no vale',
+      _mc.sin_checks_de('x\n' + _mc.SIN_CHECKS + ' motivo\n') and
+      not _mc.sin_checks_de('  PASS algo que cita ' + _mc.SIN_CHECKS + ' por dentro'), '')
+
 fin('docs static')

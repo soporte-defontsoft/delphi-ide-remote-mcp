@@ -36,11 +36,16 @@ URL = os.environ.get('DELPHI_MCP_URL', 'http://127.0.0.1:3131/mcp')
 TOK = os.environ.get('DELPHI_MCP_TOKEN', '')
 
 q = subprocess.run(['sc.exe', 'query', SERVICIO], capture_output=True, text=True)
-if q.returncode != 0:
+# 1060 = el servicio no existe: solo eso es "aqui no se mide". Otro fallo del
+# SCM (5 acceso denegado, 1722...) salia verde como si no hubiera servicio.
+if q.returncode == 1060:
     print('NOTA: en esta maquina no hay servicio %s instalado; el modo servicio '
           'no se mide aqui.' % SERVICIO)
-    mc.fin('test_service_smoke')
+    mc.fin('test_service_smoke',
+           sin_checks='no hay servicio %s en esta maquina' % SERVICIO)
 
+check('V0 el SCM contesta por el servicio (sc query)', q.returncode == 0,
+      (q.stdout + q.stderr).strip()[:200])
 check('V1 el SCM da el servicio por RUNNING', 'RUNNING' in q.stdout,
       q.stdout.strip()[:200])
 
@@ -115,9 +120,15 @@ else:
         c = call('delphi_textedit', {'path': f, 'create': True,
                                      'content': 'humo\r\n'})
         d = call('delphi_delete', {'path': f})
-        check('V7 una escritura de verdad, y su limpieza',
-              c.startswith('CREADO') and 'RECHAZ' not in d.upper(),
-              c[:120] + ' | ' + d[:120])
+        # y la copia que delphi_delete deja en la papelera de esa raiz: se
+        # quedaba una por pasada en produccion (revision del 26-sep-2026)
+        copia = next((l.split('copia:', 1)[1].strip() for l in d.split('\n')
+                      if l.strip().startswith('copia:')), '')
+        pu = call('delphi_delete', {'path': copia, 'purge': True}) if copia else '(sin copia)'
+        check('V7 una escritura de verdad, y su limpieza (la copia de la papelera tambien)',
+              c.startswith('CREADO') and 'RECHAZ' not in d.upper() and copia != '' and
+              'RECHAZ' not in pu.upper(),
+              c[:120] + ' | ' + d[:120] + ' | ' + pu[:120])
     else:
         print('NOTA: token de solo lectura; V7 no se mide.')
 

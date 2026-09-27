@@ -21,6 +21,10 @@ function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
 function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string;
   const ASubDir: string = ''): string;
 
+{ Un .inc con su content: en la subcarpeta ADir del proyecto dado o, sin
+  proyecto, en la carpeta ABSOLUTA ADir. No se registra en ningun sitio. }
+function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;
+
 implementation
 
 uses
@@ -99,24 +103,24 @@ begin
   if (AFormUnit <> '') and (AFormName = '') then
     // Una unit sin form (el fixture de un proyecto de test): la referencia
     // a secas, como la escribe el IDE para un .pas cualquiera.
-    FormRef := '        <DCCReference Include="' + AFormUnit + '.pas"/>' + CRLF
+    FormRef := '        <DCCReference ' + XmlAtributo('Include', AFormUnit + '.pas') + '/>' + CRLF
   else if AFormUnit <> '' then
     FormRef :=
-      '        <DCCReference Include="' + AFormUnit + '.pas">' + CRLF +
-      '            <Form>' + AFormName + '</Form>' + CRLF +
-      '            <FormType>' + AFormType + '</FormType>' + CRLF +
+      '        <DCCReference ' + XmlAtributo('Include', AFormUnit + '.pas') + '>' + CRLF +
+      '            ' + XmlElemento('Form', AFormName) + CRLF +
+      '            ' + XmlElemento('FormType', AFormType) + CRLF +
       '        </DCCReference>' + CRLF;
   Result :=
     '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">' + CRLF +
     '    <PropertyGroup>' + CRLF +
-    '        <ProjectGuid>' + AGuid + '</ProjectGuid>' + CRLF +
-    '        <MainSource>' + AName + MainExt + '</MainSource>' + CRLF +
+    '        ' + XmlElemento('ProjectGuid', AGuid) + CRLF +
+    '        ' + XmlElemento('MainSource', AName + MainExt) + CRLF +
     '        <Base>True</Base>' + CRLF +
     '        <Config Condition="''$(Config)''==''''">Debug</Config>' + CRLF +
-    '        <ProjectName Condition="''$(ProjectName)''==''''">' + AName + '</ProjectName>' + CRLF +
+    '        <ProjectName Condition="''$(ProjectName)''==''''">' + XmlEscape(AName) + '</ProjectName>' + CRLF +
     '        <TargetedPlatforms>3</TargetedPlatforms>' + CRLF +
-    '        <AppType>' + AAppType + '</AppType>' + CRLF +
-    '        <FrameworkType>' + AFramework + '</FrameworkType>' + CRLF +
+    '        ' + XmlElemento('AppType', AAppType) + CRLF +
+    '        ' + XmlElemento('FrameworkType', AFramework) + CRLF +
     '        <ProjectVersion>20.4</ProjectVersion>' + CRLF +
     '        <Platform Condition="''$(Platform)''==''''">Win64</Platform>' + CRLF +
     '    </PropertyGroup>' + CRLF +
@@ -144,7 +148,7 @@ begin
     '        <Base>true</Base>' + CRLF +
     '    </PropertyGroup>' + CRLF +
     '    <PropertyGroup Condition="''$(Base)''!=''''">' + CRLF +
-    '        <SanitizedProjectName>' + AName + '</SanitizedProjectName>' + CRLF +
+    '        ' + XmlElemento('SanitizedProjectName', AName) + CRLF +
     '        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>' + CRLF +
     '        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>' + CRLF +
     PkgProps +
@@ -170,11 +174,11 @@ begin
     '    </ItemGroup>' + CRLF +
     '    <ProjectExtensions>' + CRLF +
     '        <Borland.Personality>Delphi.Personality.12</Borland.Personality>' + CRLF +
-    '        <Borland.ProjectType>' + ProjectType + '</Borland.ProjectType>' + CRLF +
+    '        ' + XmlElemento('Borland.ProjectType', ProjectType) + CRLF +
     '        <BorlandProject>' + CRLF +
     '            <Delphi.Personality>' + CRLF +
     '                <Source>' + CRLF +
-    '                    <Source Name="MainSource">' + AName + MainExt + '</Source>' + CRLF +
+    '                    <Source Name="MainSource">' + XmlEscape(AName + MainExt) + '</Source>' + CRLF +
     '                </Source>' + CRLF +
     '            </Delphi.Personality>' + CRLF +
     '            <Platforms>' + CRLF +
@@ -812,18 +816,82 @@ begin
        IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]);
 end;
 
+{ El fuente de una unit: el content del agente, comprobado (su `unit X;` es
+  el nombre, acaba en `end.`) y con CRLF; sin content, el esqueleto vacio. ''
+  en ABody y el motivo en el resultado si no vale. UNA regla para la unit de
+  un proyecto y para la suelta. }
+function CuerpoDeUnit(const AUnitName, AContent: string; out ABody: string): string;
+var
+  M: TMatch;
+begin
+  Result := '';
+  ABody := AContent;
+  if ABody.Trim <> '' then
+  begin
+    M := TRegEx.Match(ABody, '(?im)^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;');
+    if not M.Success then
+      Exit(SR_CREATE_CONTENT_NOUNIT);
+    if not SameText(M.Groups[1].Value, AUnitName) then
+      Exit(Format(SR_CREATE_CONTENT_NAME_FMT, [M.Groups[1].Value, AUnitName]));
+    if not TRegEx.IsMatch(ABody, '(?im)^\s*end\s*\.') then
+      Exit(SR_CREATE_CONTENT_NOEND);
+    ABody := ABody.Replace(#13#10, #10).Replace(#13, #10).Replace(#10, CRLF);
+    if not ABody.EndsWith(CRLF) then
+      ABody := ABody + CRLF;
+  end
+  else
+    ABody :=
+      'unit ' + AUnitName + ';' + CRLF + CRLF +
+      'interface' + CRLF + CRLF +
+      'implementation' + CRLF + CRLF +
+      'end.' + CRLF;
+end;
+
+{ Un fuente SUELTO en una carpeta ABSOLUTA de la jaula, que ningun proyecto
+  lista todavia: una unit que comparten dos programas desde ramas IFDEF de
+  sus uses, o un .inc. No habia tool para crearlo (el muro del 26-sep-2026:
+  delphi_textedit rechaza las extensiones Delphi y kind=unit exigia
+  proyecto). Misma puerta, mismo escritor y la misma codificacion que todo lo
+  que crea el scaffolder; jamas sobreescribe. }
+function CreaFuenteSuelto(const ADir, ANombre, AExt, ABody: string; out ARuta: string): string;
+begin
+  ARuta := '';
+  Result := BadUnitName(ANombre);
+  if Result <> '' then
+    Exit;
+  if (ADir.Trim = '') or not TPath.IsPathRooted(ADir.Trim) then
+    Exit(SR_CREATE_SUELTO_DIR);
+  ARuta := TPath.Combine(TPath.GetFullPath(ADir.Trim), ANombre + AExt);
+  Result := WriteTargetDenied(ARuta);
+  if Result <> '' then
+    Exit;
+  if TFile.Exists(ARuta) then
+    Exit('RECHAZADO: ' + ARuta + ' ya existe. El scaffolder jamas sobreescribe.');
+  WriteNewFile(ARuta, ABody);
+end;
+
 function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string;
   const ASubDir: string): string;
 var
   Dir, PasPath, Body: string;
-  M: TMatch;
 begin
   // kind=unit takes "project"; "dir" is the SUBFOLDER of that project (see
   // CarpetaEnElProyecto). Passing dir= without project answered "RECHAZADO:
   // ruta invalida: " with an empty path and cost four calls to decode
-  // (measured 2026-08-25).
+  // (measured 2026-08-25). Sin proyecto y con una carpeta ABSOLUTA, la unit
+  // se crea SUELTA: nadie la lista todavia (el muro del 26-sep-2026).
   if ADprPath.Trim = '' then
-    Exit(SR_CREATE_UNIT_NEED_PROJECT);
+  begin
+    if (ASubDir.Trim = '') or not TPath.IsPathRooted(ASubDir.Trim) then
+      Exit(SR_CREATE_UNIT_NEED_PROJECT);
+    Result := CuerpoDeUnit(AUnitName, AContent, Body);
+    if Result <> '' then
+      Exit;
+    Result := CreaFuenteSuelto(ASubDir, AUnitName, '.pas', Body, PasPath);
+    if Result <> '' then
+      Exit;
+    Exit(Format(SN_CREATE_UNIT_SUELTA_FMT, [AUnitName, PasPath, Length(Body.Split([CRLF]))]));
+  end;
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
     Exit;
@@ -845,26 +913,9 @@ begin
   // empty unit (field round 8). The name still has to agree with the file:
   // registering UFoo.pas whose source says `unit UBar` is a lie the compiler
   // discovers much later.
-  Body := AContent;
-  if Body.Trim <> '' then
-  begin
-    M := TRegEx.Match(Body, '(?im)^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;');
-    if not M.Success then
-      Exit(SR_CREATE_CONTENT_NOUNIT);
-    if not SameText(M.Groups[1].Value, AUnitName) then
-      Exit(Format(SR_CREATE_CONTENT_NAME_FMT, [M.Groups[1].Value, AUnitName]));
-    if not TRegEx.IsMatch(Body, '(?im)^\s*end\s*\.') then
-      Exit(SR_CREATE_CONTENT_NOEND);
-    Body := Body.Replace(#13#10, #10).Replace(#13, #10).Replace(#10, CRLF);
-    if not Body.EndsWith(CRLF) then
-      Body := Body + CRLF;
-  end
-  else
-    Body :=
-      'unit ' + AUnitName + ';' + CRLF + CRLF +
-      'interface' + CRLF + CRLF +
-      'implementation' + CRLF + CRLF +
-      'end.' + CRLF;
+  Result := CuerpoDeUnit(AUnitName, AContent, Body);
+  if Result <> '' then
+    Exit;
   WriteNewFile(PasPath, Body);
   Result := AddProjectUnit(ADprPath, PasPath);
   if Result.StartsWith('RECHAZADO') then
@@ -872,6 +923,38 @@ begin
   else
     Result := Format('CREADA la unit %s (%s), %d lineas.'#10'%s',
       [AUnitName, PasPath, Length(Body.Split([CRLF])), Result]);
+end;
+
+function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;
+var
+  Dir, Nombre, Ruta, Body: string;
+begin
+  // un .inc no se registra en ningun sitio: se usa con {$I} desde una unit
+  Nombre := AName.Trim;
+  if SameText(TPath.GetExtension(Nombre), '.inc') then
+    Nombre := TPath.ChangeExtension(Nombre, '').TrimRight(['.']);
+  if AContent.Trim = '' then
+    Exit(SR_CREATE_INCLUDE_CONTENT);
+  Body := AContent.Replace(#13#10, #10).Replace(#13, #10).Replace(#10, CRLF);
+  if not Body.EndsWith(CRLF) then
+    Body := Body + CRLF;
+  Dir := ADir;
+  if ADprPath.Trim <> '' then
+  begin
+    // con proyecto, "dir" es su subcarpeta, como para una unit
+    Result := WriteTargetDenied(ADprPath);
+    if Result <> '' then
+      Exit;
+    if not TFile.Exists(ADprPath) then
+      Exit('RECHAZADO: no existe el proyecto ' + ADprPath);
+    Result := CarpetaEnElProyecto(ADprPath, ADir, Dir);
+    if Result <> '' then
+      Exit;
+  end;
+  Result := CreaFuenteSuelto(Dir, Nombre, '.inc', Body, Ruta);
+  if Result <> '' then
+    Exit;
+  Result := Format(SN_CREATE_INCLUDE_FMT, [Nombre, Ruta, Length(Body.Split([CRLF])), Nombre]);
 end;
 
 end.

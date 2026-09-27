@@ -86,10 +86,16 @@ for b in batteries:
     # dijera por que (medido 2026-09-20, y es justo el pecado que este
     # release se dedica a arreglar en el servidor).
     bad = sum(1 for line in out.splitlines() if line.lstrip().startswith('FAIL'))
-    # batteries print their own tally; trust rc for the verdict
+    # batteries print their own tally; trust rc for the verdict...
     verdict = 'OK  ' if r.returncode == 0 else 'FALLA'
-    if r.returncode != 0:
-        failed.append((name, out))
+    # ...salvo con 0 checks y sin decir por que: una que no mide nada no
+    # sale verde, pase por mc.fin o se le olvide (la marca la pone mc.fin)
+    if r.returncode == 0 and ok == 0 and bad == 0 and not mc.sin_checks_de(out):
+        verdict = 'FALLA'
+        bad = 1
+        out += '\nFAIL 0 checks: la bateria no midio nada y no dijo por que'
+    if verdict == 'FALLA':
+        failed.append((name, out, r.returncode))
     total_ok += ok
     total_bad += bad
     rows.append((verdict, name, ok, bad, time.time() - t0))
@@ -98,10 +104,18 @@ for b in batteries:
 
 print('\n== %d baterias | %d checks OK | %d fallos | %d baterias rojas ==' % (
     len(rows), total_ok, total_bad, len(failed)))
-for name, out in failed:
-    print('\n--- %s ---' % name)
-    for line in out.splitlines():
-        if line.lstrip().startswith('FAIL') or 'Error' in line or 'Traceback' in line:
+for name, out, rc in failed:
+    print('\n--- %s (rc=%d) ---' % (name, rc))
+    motivo = [line for line in out.splitlines()
+              if line.lstrip().startswith('FAIL') or 'Error' in line or 'Traceback' in line]
+    for line in motivo:
+        print('   ', line[:220])
+    # Roja sin decir por que: se ensena el final. El 26-sep-2026
+    # test_readonly_roots salio roja con 57 PASS y 0 FAIL y aqui no quedo
+    # ni una linea: una bateria roja tiene que decir por que.
+    if not motivo:
+        print('    (sin FAIL ni Traceback; sus ultimas lineas:)')
+        for line in out.splitlines()[-8:]:
             print('   ', line[:220])
 # ...ni un adb vivo que no estuviera antes de empezar (mc.ADB_ANTES)...
 if not mc.ADB_ANTES and mc.adb_vivo():

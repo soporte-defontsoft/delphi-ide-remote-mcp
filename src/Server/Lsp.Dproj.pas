@@ -34,13 +34,14 @@ type
   { Una carpeta donde un build deja ficheros, tal como la declara el proyecto. }
   TBuildOutputDir = record
     Tag: string;   // DCC_ExeOutput, DCC_DcuOutput...
-    Value: string; // el valor tal como esta escrito
+    Value: string; // el valor escrito, ya desescapado
     Dir: string;   // absoluto y resuelto; '' si no se sabe resolver
   end;
 
 { ---- tolerant XML primitives (shared) ---- }
 
-{ Inner texts of <ATag ...>...</ATag>, in document order. SIN distinguir
+{ Inner texts of <ATag ...>...</ATag>, in document order, YA DESESCAPADOS
+  (&amp; -> &): el valor de verdad, la inversa de XmlElemento. SIN distinguir
   mayusculas y con cualquier blanco tras el nombre: MSBuild no distingue
   mayusculas en el nombre de una propiedad, y una puerta lee con esta. }
 function AllTagValues(const AXml, ATag: string): TArray<string>;
@@ -53,6 +54,28 @@ function AllTagAttr(const AXml, ATag, AAttr: string): TArray<string>;
 function MergeProperty(const AXml, APropName: string): string;
 
 function XmlUnescape(const S: string): string;
+{ Los trozos de una lista de MSBuild (a;b;c) tal como esta ESCRITA en el XML,
+  con sus entidades: el ';' de un &amp; no separa. Para reescribir en su sitio
+  SOLO el trozo que cambia: XmlUnescape de cada trozo da su valor, y XmlEscape
+  del nuevo es lo que se escribe. Trocear la lista desescapada y escaparla
+  entera de vuelta reescribia tambien lo que no se tocaba (&#38; -> &amp;#38;,
+  revision del 26-sep-2026). }
+function TrozosEscritos(const AEscrito: string): TArray<string>;
+{ La inversa de XmlUnescape, para escribir un valor en un atributo o en el
+  texto de un elemento: un & o unas comillas en una ruta (una carpeta R&D)
+  rompen el fichero. }
+function XmlEscape(const S: string): string;
+{ EL escritor de un atributo: Nombre="valor escapado". Una ruta con & o
+  comillas (una carpeta R&D) rompia el .dproj, el .deployproj o el grupo:
+  nueve sitios lo componian a mano (26-sep-2026). Su lector es AllTagAttr,
+  que devuelve el valor ya desescapado. }
+function XmlAtributo(const ANombre, AValor: string): string;
+{ EL escritor de un elemento de texto: <ATag>valor escapado</ATag>. Un & en
+  una ruta (una carpeta R&D) escrito tal cual rompia el .dproj, el
+  .deployproj o el .profile, y una treintena de sitios lo componian a mano
+  (26-sep-2026). Sus lectores (AllTagValues, TagValue, PlatformProperty)
+  devuelven el valor ya desescapado. }
+function XmlElemento(const ATag, AValor: string): string;
 
 { ---- .dproj reading ---- }
 
@@ -91,9 +114,18 @@ const
   PACLIENT_PLATFORMS: array[0..4] of string =
     ('Win32', 'Win64', 'WinARM64EC', 'OSX64', 'Linux64');
 
+  { Las propiedades con las que dcc decide DONDE deja lo que produce:
+    -E exe/dll, -NU dcu, -LE bpl, -LN dcp, -NH hpp, -NO obj, -NB bpi. UNA
+    lista: la puerta del build (BuildOutputDirs) y la mudanza, que las
+    re-apunta (estaba repetida en Lsp.ProjectUnits, revision 26-sep). }
+  BUILD_OUTPUT_TAGS: array [0 .. 6] of string = (
+    'DCC_ExeOutput', 'DCC_DcuOutput', 'DCC_BplOutput', 'DCC_DcpOutput',
+    'DCC_HppOutput', 'DCC_ObjOutput', 'DCC_BpiOutput');
+
 { Value of <ATag>...</ATag> in a small TRUSTED XML (our own .profile/.sdk
   files, written by paclient or by this server). Not a general parser on
-  purpose. One definition, shared by delphi_paserver and delphi_adb. }
+  purpose. One definition, shared by delphi_paserver, delphi_adb and
+  remote-run. Ya desescapado, como AllTagValues: la inversa de XmlElemento. }
 function TagValue(const AXml, ATag: string): string;
 
 { El valor de una propiedad DE PLATAFORMA (PlatformSDK, Profile...): la del
@@ -104,6 +136,22 @@ function TagValue(const AXml, ATag: string): string;
   <PlatformSDK> del fichero" le daba a un build OSX64 el SDK de Linux64
   (paisaje del 2026-09-22). '' si no hay. }
 function PlatformProperty(const AXml, APlatform, ATag: string): string;
+
+type
+  { Una entrada del search path de un proyecto: tal como esta escrita (ya
+    desescapada) y resuelta contra la carpeta del .dproj. Carpeta = '' si
+    no se deja resolver (lleva caracteres que no son de ruta). }
+  TRutaDeBusqueda = record
+    Escrita: string;
+    Carpeta: string;
+  end;
+
+{ Las entradas del search path (DCC_UnitSearchPath) de un .dproj, en orden
+  de documento, sin las vacias ni las que llevan una macro sin resolver.
+  Si existen o si se pueden leer lo decide quien llama. Era el mismo bucle
+  escrito tres veces: el informe de fix-references, delphi_projects y los
+  proyectos que compilan contra una carpeta (26-sep-2026). }
+function RutasDeBusqueda(const ADprojPath, AXml: string): TArray<TRutaDeBusqueda>;
 
 { Whether a project would EXECUTE a shell during a build: a custom MSBuild
   <Target> or <Exec> task (with or without an XML namespace prefix), a
@@ -256,7 +304,7 @@ begin
       end;
       if CloseP = 0 then
         Break;
-      List.Add(Copy(AXml, P, CloseP - P));
+      List.Add(XmlUnescape(Copy(AXml, P, CloseP - P))); // el valor de verdad
       P := Q + 1;
     end;
     Result := List.ToArray;
@@ -316,7 +364,8 @@ begin
         if (ValEnd = 0) or (ValEnd > TagEnd) then
           Break;
         if Nombre = Attr then
-          List.Add(Copy(AXml, K + 1, ValEnd - K - 1));
+          // el valor DE VERDAD: la inversa de XmlAtributo
+          List.Add(XmlUnescape(Copy(AXml, K + 1, ValEnd - K - 1)));
         A := ValEnd + 1;
       end;
       P := TagEnd + 1;
@@ -338,8 +387,56 @@ end;
 
 function XmlUnescape(const S: string): string;
 begin
-  Result := S.Replace('&amp;', '&').Replace('&lt;', '<').Replace('&gt;', '>')
-    .Replace('&quot;', '"').Replace('&apos;', '''');
+  // &amp; el ULTIMO: si va primero, el &amp;lt; que escribe XmlEscape('&lt;')
+  // se desescapa dos veces y sale '<' (no era la inversa, revision 26-sep)
+  Result := S.Replace('&lt;', '<').Replace('&gt;', '>').Replace('&quot;', '"')
+    .Replace('&apos;', '''').Replace('&amp;', '&');
+end;
+
+function TrozosEscritos(const AEscrito: string): TArray<string>;
+var
+  I, J, Ini: Integer;
+begin
+  Result := [];
+  Ini := 1;
+  I := 1;
+  while I <= Length(AEscrito) do
+  begin
+    if AEscrito[I] = '&' then
+    begin
+      // una entidad (&amp; &#38; &#x26;) llega hasta su ';', que no separa
+      J := I + 1;
+      while (J <= Length(AEscrito)) and
+            CharInSet(AEscrito[J], ['#', 'a'..'z', 'A'..'Z', '0'..'9']) do
+        Inc(J);
+      if (J > I + 1) and (J <= Length(AEscrito)) and (AEscrito[J] = ';') then
+        I := J;
+    end
+    else if AEscrito[I] = ';' then
+    begin
+      Result := Result + [Copy(AEscrito, Ini, I - Ini)];
+      Ini := I + 1;
+    end;
+    Inc(I);
+  end;
+  Result := Result + [Copy(AEscrito, Ini, MaxInt)];
+end;
+
+function XmlEscape(const S: string): string;
+begin
+  // & primero: si no, el de los &lt; que se acaban de poner se doblaria
+  Result := S.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;')
+    .Replace('"', '&quot;');
+end;
+
+function XmlAtributo(const ANombre, AValor: string): string;
+begin
+  Result := ANombre + '="' + XmlEscape(AValor) + '"';
+end;
+
+function XmlElemento(const ATag, AValor: string): string;
+begin
+  Result := '<' + ATag + '>' + XmlEscape(AValor) + '</' + ATag + '>';
 end;
 
 { TDprojInfo }
@@ -534,7 +631,7 @@ begin
       if not Cond.Contains('base_') then
         Cond := ''; // grupo base o incondicional: no es de ninguna plataforma
     end;
-    Valor := Trim(Copy(AXml, TagEnd, CloseP - TagEnd));
+    Valor := Trim(XmlUnescape(Copy(AXml, TagEnd, CloseP - TagEnd)));
     if Cond = '' then
     begin
       if Reserva = '' then
@@ -549,15 +646,39 @@ end;
 
 function TagValue(const AXml, ATag: string): string;
 var
-  P, Q: Integer;
+  V: TArray<string>;
 begin
-  Result := '';
-  P := Pos('<' + ATag + '>', AXml);
-  if P = 0 then Exit;
-  P := P + Length(ATag) + 2;
-  Q := Pos('</' + ATag + '>', AXml);
-  if Q > P then
-    Result := Copy(AXml, P, Q - P).Trim;
+  // el primero, por el lector de la casa: sin distinguir mayusculas y con
+  // atributos, como todos (distinguia, y un lector de regex con (?i) que
+  // paso a llamarlo dejo de leer lo que leia)
+  V := AllTagValues(AXml, ATag);
+  if Length(V) > 0 then
+    Result := V[0].Trim
+  else
+    Result := '';
+end;
+
+function RutasDeBusqueda(const ADprojPath, AXml: string): TArray<TRutaDeBusqueda>;
+var
+  R: TRutaDeBusqueda;
+begin
+  Result := [];
+  for var V in AllTagValues(AXml, 'DCC_UnitSearchPath') do
+    for var Seg in V.Split([';']) do
+    begin
+      R.Escrita := Seg.Trim;
+      if (R.Escrita = '') or R.Escrita.Contains('$(') then
+        Continue;
+      try
+        R.Carpeta := R.Escrita;
+        if not TPath.IsPathRooted(R.Carpeta) then
+          R.Carpeta := TPath.Combine(TPath.GetDirectoryName(ADprojPath), R.Carpeta);
+        R.Carpeta := TPath.GetFullPath(R.Carpeta);
+      except
+        R.Carpeta := '';
+      end;
+      Result := Result + [R];
+    end;
 end;
 
 { True when the XML contains an element whose LOCAL name is AName, with or
@@ -625,13 +746,6 @@ begin
             APathLow.Contains('usertools.proj') or
             APathLow.EndsWith('.deployproj');
 end;
-
-const
-  // Las propiedades con las que dcc decide DONDE deja lo que produce:
-  // -E exe/dll, -NU dcu, -LE bpl, -LN dcp, -NH hpp, -NO obj, -NB bpi.
-  BUILD_OUTPUT_TAGS: array [0 .. 6] of string = (
-    'DCC_ExeOutput', 'DCC_DcuOutput', 'DCC_BplOutput', 'DCC_DcpOutput',
-    'DCC_HppOutput', 'DCC_ObjOutput', 'DCC_BpiOutput');
 
 { Las macros comunes de una carpeta de salida, para una plataforma/config.
   Lo que conserva '$(' no se sabe resolver aqui. UNA copia: la usan
@@ -714,7 +828,7 @@ begin
           Item.Tag := Tag;
           Item.Value := V.Trim;
           Item.Dir := '';
-          Cand := ExpandOutputMacros(XmlUnescape(Item.Value), Dir, Base,
+          Cand := ExpandOutputMacros(Item.Value, Dir, Base,
             APlatform, AConfig).Trim;
           if Cand = '' then
             Continue; // vacia: la del IDE por defecto (BuildOutputUndeclared)
@@ -816,12 +930,12 @@ begin
       Break;
     Cond := '';
     for V in AllTagAttr(Copy(AXml, Ini, TagEnd - Ini + 1), 'PropertyGroup', 'Condition') do
-      Cond := LowerCase(XmlUnescape(V)).Replace(' ', '', [rfReplaceAll])
+      Cond := LowerCase(V).Replace(' ', '', [rfReplaceAll])
         .Replace(#9, '', [rfReplaceAll]).Replace(#13, '', [rfReplaceAll])
         .Replace(#10, '', [rfReplaceAll]);
     if MatchStr(Cond, Validas) then
       for V in AllTagValues(Copy(AXml, P, CloseP - P), ATag) do
-        Result := XmlUnescape(V).Trim; // el ultimo gana
+        Result := V.Trim; // el ultimo gana
     P := CloseP + 1;
   end;
 end;
@@ -853,10 +967,10 @@ begin
   for Xml in Chain do
   begin
     for V in AllTagValues(Xml, 'AppType') do
-      if SameText(XmlUnescape(V).Trim, 'Package') then
+      if SameText(V.Trim, 'Package') then
         Paquete := True;
     for V in AllTagValues(Xml, 'DCC_CBuilderOutput') do
-      if (XmlUnescape(V).Trim <> '') and not SameText(XmlUnescape(V).Trim, 'None') then
+      if (V.Trim <> '') and not SameText(V.Trim, 'None') then
         Cpp := True;
   end;
   if not Declara('DCC_DcuOutput') then
@@ -948,7 +1062,7 @@ begin
     Dirs.Add('.\$(Platform)\$(Config)'); // the IDE default when unset
     for D in Dirs do
     begin
-      Cand := Expand(XmlUnescape(D));
+      Cand := Expand(D);
       if (Cand = '') or Cand.Contains('$(') then
         Continue; // still macro-based: not resolvable here
       if not TPath.IsPathRooted(Cand) then
