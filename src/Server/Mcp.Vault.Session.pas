@@ -180,9 +180,9 @@ begin
       if Assigned(Params) then
         Params.TryGetValue<string>('name', Name);
       if not SameText(Name, 'vault') then
-        raise Exception.CreateFmt('Unknown prompt: %s', [Name]);
+        raise Exception.Create(MsgFmt(SE_VAULT_UNKNOWN_PROMPT_FMT, [Name]));
       if not VaultConfigured then
-        raise Exception.Create('No knowledge vault is configured on this server.');
+        raise Exception.Create(MsgText(SE_VAULT_KNOWLEDGE_VAULT_CONFIGURED_SERVER));
       Res.AddPair('description', SD_VAULT_PROMPT);
       Arr := TJSONArray.Create;
       Res.AddPair('messages', Arr);

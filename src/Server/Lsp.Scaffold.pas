@@ -57,7 +57,7 @@ var
   Enc, Ext: string;
 begin
   if TFile.Exists(APath) then
-    raise Exception.CreateFmt('%s YA EXISTE - el scaffolder jamas sobreescribe.', [APath]);
+    raise Exception.Create(MsgFmt(SE_CREATE_EXISTE_SCAFFOLDER_JAMAS_SOBREESCRI_FMT, [APath]));
   CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(APath)));
   Ext := LowerCase(TPath.GetExtension(APath));
   if Ext = '.dproj' then

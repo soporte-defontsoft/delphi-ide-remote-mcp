@@ -231,7 +231,7 @@ begin
   else
     // Un motivo nuevo en SkipReason sin su cajon aqui se perderia de la
     // cuenta en silencio: mejor que se vea en la primera bateria.
-    raise Exception.CreateFmt('THiddenCount: motivo sin cajon "%s"', [AReason]);
+    raise Exception.Create(MsgFmt(SE_LSP_THIDDENCOUNT_MOTIVO_SIN_CAJON_FMT, [AReason]));
 end;
 
 function THiddenCount.Total: Integer;
@@ -528,13 +528,13 @@ begin
   try
     Lines.Text := TLspClient.LoadSourceText(FullPath);
     if (ALine < 0) or (ALine >= Lines.Count) then
-      raise Exception.CreateFmt('Line %d out of range', [ALine]);
+      raise Exception.Create(MsgFmt(SE_LSP_LINE_OUT_RANGE_FMT, [ALine]));
     Ident := IdentifierAt(Lines[ALine], ACharacter);
   finally
     Lines.Free;
   end;
   if Ident = '' then
-    raise Exception.Create('No identifier at the given position');
+    raise Exception.Create(MsgText(SE_LSP_IDENTIFIER_GIVEN_POSITION));
 
   // Resolve the target location the compiler engine assigns to that symbol.
   var Pending: Boolean;

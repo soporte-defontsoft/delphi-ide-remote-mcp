@@ -50,6 +50,9 @@ type
 
 implementation
 
+uses
+  Lsp.Texts;
+
 const
   READ_CHUNK = 65536;
 
@@ -82,7 +85,7 @@ begin
   if FRunning then
     Exit;
   if not FileExists(FExePath) then
-    raise ELspTransport.CreateFmt('LSP executable not found: %s', [FExePath]);
+    raise ELspTransport.Create(MsgFmt(SE_LSP_LSP_EXECUTABLE_FOUND_FMT, [FExePath]));
 
   FillChar(SA, SizeOf(SA), 0);
   SA.nLength := SizeOf(SA);
@@ -122,8 +125,8 @@ begin
     CloseHandle(ChildStdInRead);
     CloseHandle(ChildStdOutWrite);
     CloseHandles;
-    raise ELspTransport.CreateFmt('CreateProcess failed (%d) for %s',
-      [GetLastError, FExePath]);
+    raise ELspTransport.Create(MsgFmt(SE_LSP_CREATEPROCESS_FAILED_FMT,
+      [GetLastError, FExePath]));
   end;
 
   // These ends now belong to the child.
@@ -202,7 +205,7 @@ var
   Written: DWORD;
 begin
   if FChildStdInWrite = INVALID_HANDLE_VALUE then
-    raise ELspTransport.Create('Transport not started');
+    raise ELspTransport.Create(MsgText(SE_LSP_TRANSPORT_STARTED));
 
   Body := TEncoding.UTF8.GetBytes(AJson);
   Header := AnsiString(Format('Content-Length: %d'#13#10#13#10, [Length(Body)]));
@@ -215,7 +218,7 @@ begin
   FWriteLock.Enter;
   try
     if not WriteFile(FChildStdInWrite, Frame[0], Length(Frame), Written, nil) then
-      raise ELspTransport.CreateFmt('WriteFile to LSP stdin failed (%d)', [GetLastError]);
+      raise ELspTransport.Create(MsgFmt(SE_LSP_WRITEFILE_LSP_STDIN_FAILED_FMT, [GetLastError]));
   finally
     FWriteLock.Leave;
   end;

@@ -85,7 +85,7 @@ def problemas(consts):
                 p['reglas'].append('%s: un rechazo sin resultado' % nombre)
             if pref in ('SK_', 'SN_') and tg.group(2):
                 p['reglas'].append('%s: %s declara %s' % (nombre, pref, tg.group(2)))
-            if pref in ('SD_', 'SP_', 'SL_'):
+            if pref in ('SD_', 'SP_', 'SL_', 'SE_'):
                 p['reglas'].append('%s: %s no lleva etiqueta' % (nombre, pref))
     p['repetidas'] = [i for i, n in ids.items() if n > 1]
     return p

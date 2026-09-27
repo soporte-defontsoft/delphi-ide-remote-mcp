@@ -256,7 +256,7 @@ begin
   SA.nLength := SizeOf(SA);
   SA.bInheritHandle := True;
   if not CreatePipe(ReadH, WriteH, @SA, 0) then
-    raise Exception.Create('CreatePipe failed');
+    raise Exception.Create(MsgText(SE_BUILD_CREATEPIPE_FAILED));
   SetHandleInformation(ReadH, HANDLE_FLAG_INHERIT, 0);
 
   FillChar(SI, SizeOf(SI), 0);
@@ -303,7 +303,7 @@ begin
       if Job <> 0 then CloseHandle(Job);
       CloseHandle(ReadH);
       CloseHandle(WriteH);
-      raise Exception.CreateFmt('CreateProcess failed (%d)', [GetLastError]);
+      raise Exception.Create(MsgFmt(SE_BUILD_CREATEPROCESS_FAILED_FMT, [GetLastError]));
     end;
   if Job <> 0 then
     AssignProcessToJobObject(Job, PI.hProcess);
@@ -1178,7 +1178,7 @@ begin
   if Denied <> '' then
     raise Exception.Create(Denied);
   if not FileExists(ADprojPath) then
-    raise Exception.CreateFmt('.dproj not found: %s', [ADprojPath]);
+    raise Exception.Create(MsgFmt(SE_BUILD_DPROJ_FOUND_FMT, [ADprojPath]));
   // A TYPE check, before anything reads the file or spawns anything. Without
   // it the hazard scan below was a substring search standing in for one, and
   // it failed in both directions at once (measured 2026-09-20): CHANGELOG.md
@@ -1244,9 +1244,9 @@ begin
   end;
   Info := DiscoverRadStudio;
   if not Info.Found then
-    raise Exception.Create('No RAD Studio installation discovered.');
+    raise Exception.Create(MsgText(SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED));
   if not FileExists(Info.RsVarsBat) then
-    raise Exception.CreateFmt('rsvars.bat not found: %s', [Info.RsVarsBat]);
+    raise Exception.Create(MsgFmt(SE_BUILD_RSVARS_BAT_FOUND_FMT, [Info.RsVarsBat]));
 
   Plat := APlatform;
   if Plat = '' then

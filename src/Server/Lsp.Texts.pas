@@ -6434,6 +6434,86 @@ const
     'to the client machine: delphi_build -> delphi_package -> ' +
     'delphi_fetch.';
 
+  // Excepciones que estaban en linea en Lsp.BuildRunner.pas (paso 3e, 27-sep-2026)
+  SE_BUILD_CREATEPIPE_FAILED =
+    'CreatePipe failed';
+
+  SE_BUILD_CREATEPROCESS_FAILED_FMT =
+    'CreateProcess failed (%d)';
+
+  SE_BUILD_DPROJ_FOUND_FMT =
+    '.dproj not found: %s';
+
+  SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED =
+    'No RAD Studio installation discovered.';
+
+  SE_BUILD_RSVARS_BAT_FOUND_FMT =
+    'rsvars.bat not found: %s';
+
+  // Excepciones que estaban en linea en Lsp.Patch.pas (paso 3e, 27-sep-2026)
+  SE_EDIT_CARACTER_EXISTE_CP1252_FMT =
+    'el caracter "%s" (U+%s) no existe en CP1252';
+
+  SE_EDIT_RENAME_ATOMICO_FALLIDO_FMT =
+    'rename atomico fallido (%d)';
+
+  // Excepciones que estaban en linea en Lsp.References.pas (paso 3e, 27-sep-2026)
+  SE_LSP_THIDDENCOUNT_MOTIVO_SIN_CAJON_FMT =
+    'THiddenCount: motivo sin cajon "%s"';
+
+  SE_LSP_LINE_OUT_RANGE_FMT =
+    'Line %d out of range';
+
+  SE_LSP_IDENTIFIER_GIVEN_POSITION =
+    'No identifier at the given position';
+
+  // Excepciones que estaban en linea en Lsp.Scaffold.pas (paso 3e, 27-sep-2026)
+  SE_CREATE_EXISTE_SCAFFOLDER_JAMAS_SOBREESCRI_FMT =
+    '%s YA EXISTE - el scaffolder jamas sobreescribe.';
+
+  // Excepciones que estaban en linea en Mcp.Tools.Config.pas (paso 3e, 27-sep-2026)
+  SE_CFG_ENCUENTRO_PROPERTYGROUP_CONFIGURACION =
+    'no encuentro los PropertyGroup de configuracion base del .dproj; ' +
+    'abre el proyecto una vez en el IDE y reintenta.';
+
+  SE_CFG_ENCUENTRO_PROPERTYGROUP_BASE_BASE =
+    'no encuentro el PropertyGroup base ("$(Base)") del .dproj; abre el ' +
+    'proyecto una vez en el IDE y reintenta.';
+
+  // Excepciones que estaban en linea en Mcp.Vault.Session.pas (paso 3e, 27-sep-2026)
+  SE_VAULT_UNKNOWN_PROMPT_FMT =
+    'Unknown prompt: %s';
+
+  SE_VAULT_KNOWLEDGE_VAULT_CONFIGURED_SERVER =
+    'No knowledge vault is configured on this server.';
+
+  // Excepciones que estaban en linea en Lsp.Client.pas (paso 3e, 27-sep-2026)
+  SE_LSP_LSP_REQUEST_TIMED_OUT_FMT =
+    'LSP request "%s" timed out after %d ms';
+
+  SE_LSP_LSP_RESPONSE_VALID_JSON_FMT =
+    'LSP response to "%s" is not valid JSON';
+
+  // Excepciones que estaban en linea en Lsp.Session.pas (paso 3e, 27-sep-2026)
+  SE_LSP_RAD_STUDIO_INSTALLATION_DELPHILSP =
+    'No RAD Studio installation with DelphiLSP.exe found in the registry.';
+
+  SE_LSP_FILE_FOUND_FMT =
+    'File not found: %s';
+
+  // Excepciones que estaban en linea en Lsp.Transport.Process.pas (paso 3e, 27-sep-2026)
+  SE_LSP_LSP_EXECUTABLE_FOUND_FMT =
+    'LSP executable not found: %s';
+
+  SE_LSP_CREATEPROCESS_FAILED_FMT =
+    'CreateProcess failed (%d) for %s';
+
+  SE_LSP_TRANSPORT_STARTED =
+    'Transport not started';
+
+  SE_LSP_WRITEFILE_LSP_STDIN_FAILED_FMT =
+    'WriteFile to LSP stdin failed (%d)';
+
   // ---------------------------------------------------------------------
   // Las ETIQUETAS de los mensajes (decision de David, 27-sep-2026)
   // ---------------------------------------------------------------------

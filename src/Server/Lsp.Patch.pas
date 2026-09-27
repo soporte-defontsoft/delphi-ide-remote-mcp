@@ -513,8 +513,8 @@ begin
     else if GHighMap.TryGetValue(C, BB) then
       Result[I - 1] := BB
     else
-      raise Exception.CreateFmt(
-        'el caracter "%s" (U+%s) no existe en CP1252', [C, IntToHex(Ord(C), 4)]);
+      raise Exception.Create(
+        MsgFmt(SE_EDIT_CARACTER_EXISTE_CP1252_FMT, [C, IntToHex(Ord(C), 4)]));
   end;
 end;
 
@@ -641,7 +641,7 @@ begin
   if not MoveFileEx(PChar(Tmp), PChar(APath), MOVEFILE_REPLACE_EXISTING) then
   begin
     TFile.Delete(Tmp);
-    raise Exception.CreateFmt('rename atomico fallido (%d)', [GetLastError]);
+    raise Exception.Create(MsgFmt(SE_EDIT_RENAME_ATOMICO_FALLIDO_FMT, [GetLastError]));
   end;
 end;
 

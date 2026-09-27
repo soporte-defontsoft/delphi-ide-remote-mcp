@@ -657,8 +657,7 @@ begin
     if LastDef = 0 then
       LastDef := Pos(LowerCase('<PropertyGroup Condition="''$(Config)''==''Base'' or ''$(Base)''!=''''">'), Low);
     if LastDef = 0 then
-      raise Exception.Create('no encuentro los PropertyGroup de configuracion base del .dproj; ' +
-        'abre el proyecto una vez en el IDE y reintenta.');
+      raise Exception.Create(MsgText(SE_CFG_ENCUENTRO_PROPERTYGROUP_CONFIGURACION));
     At := Pos('</propertygroup>', Low, LastDef);
     At := At + Length('</PropertyGroup>');
     AXml := Copy(AXml, 1, At - 1) + sLineBreak +
@@ -671,8 +670,7 @@ begin
   if not FindGroup(AXml, GroupCondition(APlatform), O, I, C) then
   begin
     if not FindGroup(AXml, GroupCondition(''), O, I, C) then
-      raise Exception.Create('no encuentro el PropertyGroup base ("$(Base)") del .dproj; ' +
-        'abre el proyecto una vez en el IDE y reintenta.');
+      raise Exception.Create(MsgText(SE_CFG_ENCUENTRO_PROPERTYGROUP_BASE_BASE));
     At := C + Length('</PropertyGroup>');
     AXml := Copy(AXml, 1, At - 1) + sLineBreak +
       '    <PropertyGroup Condition="' + GroupCondition(APlatform) + '">' + sLineBreak +

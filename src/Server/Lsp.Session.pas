@@ -95,6 +95,9 @@ type
 
 implementation
 
+uses
+  Lsp.Texts;
+
 function TLspSession.EnsureExe: string;
 var
   Info: TRadStudioInfo;
@@ -105,7 +108,7 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found or (Info.DelphiLspExe = '') then
     raise ELspSession.Create(
-      'No RAD Studio installation with DelphiLSP.exe found in the registry.');
+      MsgText(SE_LSP_RAD_STUDIO_INSTALLATION_DELPHILSP));
   Result := Info.DelphiLspExe;
 end;
 
@@ -416,7 +419,7 @@ begin
   if Denied <> '' then
     raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then
-    raise ELspSession.CreateFmt('File not found: %s', [AFilePath]);
+    raise ELspSession.Create(MsgFmt(SE_LSP_FILE_FOUND_FMT, [AFilePath]));
 
   Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
   DocKey := Key + '|' + FullPath.ToLower;
@@ -469,7 +472,7 @@ begin
   if Denied <> '' then
     raise ELspSession.Create(Denied);
   if not FileExists(FullPath) then
-    raise ELspSession.CreateFmt('File not found: %s', [AFilePath]);
+    raise ELspSession.Create(MsgFmt(SE_LSP_FILE_FOUND_FMT, [AFilePath]));
 
   Client := GetClient(FullPath, True, ASettingsUsed, Key, RootDir);
   Uri := TLspClient.PathToUri(FullPath);

@@ -106,7 +106,8 @@ implementation
 uses
   Lsp.Patch,
   Lsp.DesignerBin,
-  System.StrUtils; // DecodeSourceBytes: el detector de encoding de delphi_read
+  System.StrUtils,
+  Lsp.Texts; // DecodeSourceBytes: el detector de encoding de delphi_read
 
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);
@@ -236,8 +237,8 @@ begin
     finally
       FLock.Leave;
     end;
-    raise ELspClient.CreateFmt('LSP request "%s" timed out after %d ms',
-      [AMethod, ATimeoutMs]);
+    raise ELspClient.Create(MsgFmt(SE_LSP_LSP_REQUEST_TIMED_OUT_FMT,
+      [AMethod, ATimeoutMs]));
   end;
 
   FLock.Enter;
@@ -249,7 +250,7 @@ begin
   end;
   Result := TJSONObject.ParseJSONValue(Raw) as TJSONObject;
   if Result = nil then
-    raise ELspClient.CreateFmt('LSP response to "%s" is not valid JSON', [AMethod]);
+    raise ELspClient.Create(MsgFmt(SE_LSP_LSP_RESPONSE_VALID_JSON_FMT, [AMethod]));
 end;
 
 function TLspClient.RequestWithRetry(const AMethod, AParamsJson: string;
