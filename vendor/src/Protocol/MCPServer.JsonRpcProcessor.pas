@@ -223,7 +223,7 @@ begin
           ErrorCode := JSONRPC_PARSE_ERROR
         else if E is EMetodoNoExiste then
           ErrorCode := JSONRPC_METHOD_NOT_FOUND
-        else if E is EArgumentException then
+        else if EsFalloDelLlamador(E) then // la misma regla que ToolsManager
           ErrorCode := JSONRPC_INVALID_PARAMS;
 
         Result := CreateErrorResponse(ExtractRequestID(JSONRequest), ErrorCode, E.Message);

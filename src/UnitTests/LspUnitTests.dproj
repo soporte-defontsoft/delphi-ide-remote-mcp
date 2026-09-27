@@ -175,6 +175,7 @@
         <DCCReference Include="LspTests.GitArgs.pas"/>
         <DCCReference Include="LspTests.Pascal.pas"/>
         <DCCReference Include="LspTests.Mensajes.pas"/>
+        <DCCReference Include="LspTests.Foto.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

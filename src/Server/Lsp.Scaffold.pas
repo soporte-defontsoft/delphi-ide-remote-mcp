@@ -731,7 +731,7 @@ begin
   if not MatchText(TPath.GetExtension(ADprPath), ['.dpr', '.dproj', '.dpk']) then
     Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
   if not TFile.Exists(ADprPath) then
-    Exit(MsgFmt(SR_CREATE_NO_EXISTE_DPR_FMT, [ADprPath]));
+    Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_DPR_FMT, [ADprPath])));
   Result := BadUnitName(AUnitName);
   if Result <> '' then
     Exit;
@@ -900,7 +900,7 @@ begin
   if not MatchText(TPath.GetExtension(ADprPath), ['.dpr', '.dproj', '.dpk']) then
     Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
   if not TFile.Exists(ADprPath) then
-    Exit(MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath]));
+    Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath])));
   Result := BadUnitName(AUnitName);
   if Result <> '' then
     Exit;
@@ -949,7 +949,7 @@ begin
     if Result <> '' then
       Exit;
     if not TFile.Exists(ADprPath) then
-      Exit(MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath]));
+      Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath])));
     Result := CarpetaEnElProyecto(ADprPath, ADir, Dir);
     if Result <> '' then
       Exit;

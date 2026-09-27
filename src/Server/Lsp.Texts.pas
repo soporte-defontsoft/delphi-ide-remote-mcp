@@ -153,6 +153,12 @@ const
     'Narrow it (a more specific pattern, or a subfolder) before drawing ' +
     'conclusions from this listing.';
 
+  SN_SEARCH_MASK_NO_MATCH_FMT =
+    '[SEARCH-002] The mask "%s" matched no file here, so nothing was ' +
+    'searched: "total 0" does NOT mean the text is not there. ONE mask ' +
+    '(*.pas) or several separated by ";" (*.pas;*.dfm); without pattern, ' +
+    'the Delphi sources are searched.';
+
   SR_CREATE_SUBDIR_REL_FMT =
     '[CREATE-001 INVALID_PARAM] "dir"="%s" is not valid for creating INSIDE a ' +
     'project. Here "dir" is a SUBFOLDER of the project, relative to it ' +
@@ -1979,10 +1985,11 @@ const
     'out= is only for saving it in a folder of YOURS in the project.';
 
   SP_CAPTURE_FRAME =
-    'tap/type: the "frame" of the screenshot you MEASURED ON, copied ' +
-    'verbatim. With it, x,y are pixels of THAT image and the server converts ' +
-    'them (inline scale, crop origin, device display) - no arithmetic on your ' +
-    'side. Without it, x,y are capture pixels, as always.';
+    'tap (and type, on delphi_desktop): the "frame" of the screenshot ' +
+    'you MEASURED ON, copied verbatim. With it, x,y are pixels of THAT ' +
+    'image and the server converts them (inline scale, crop origin, ' +
+    'device display) - no arithmetic on your side. Without it, x,y are ' +
+    'capture pixels, as always.';
 
   SN_CAPTURE_FRAME_NOTE =
     '[CAPT-003] To press something you see in this image: tap (or type) ' +
@@ -3230,9 +3237,7 @@ const
     '  see and use a target''s desktop ..... delphi_desktop'#10#10 +
     'GIT AND MEMORY'#10 +
     '  branches, commit, diff, stash ...... delphi_git'#10 +
-    '  project memory ..................... vault_read, vault_search'#10 +
-    '  write to the memory ................ vault_append, vault_patch, ' +
-    'vault_create'#10#10 +
+    '%s'#10 +
     'TALKING TO WHOEVER RUNS THE SERVER'#10 +
     '  report a failure or a friction ..... delphi_report'#10 +
     '  read what was left for you ......... delphi_messages'#10#10 +
@@ -3243,6 +3248,13 @@ const
     'with the whole source, or that delphi_edit accepts "edits" with ' +
     'several edits at once.'#10#10 +
     'And the common rules: delphi_help command=conventions.';
+
+  SF_HELP_TASKS_VAULT_LEER =
+    '  project memory ..................... vault_read, vault_search'#10;
+
+  SF_HELP_TASKS_VAULT_ESCRIBIR =
+    '  write to the memory ................ vault_append, vault_patch, ' +
+    'vault_create'#10;
 
   SN_HELP_CONVENTIONS =
     '[HELP-006] HOUSE RULES (they apply to every tool)'#10#10 +
@@ -5255,6 +5267,10 @@ const
     '[VAULT-029 INVALID_PARAM] "pattern" is not a valid regular ' +
     'expression (%s)';
 
+  SR_VAULT_PATTERN_MASCARA_INVALIDA_FMT =
+    '[VAULT-042 INVALID_PARAM] "pattern" is not a valid file mask (%s): ' +
+    '* and ? are wildcards, [abc] a set of characters.';
+
   SR_VAULT_FALTA_CONTENT_APPEND =
     '[VAULT-030 INVALID_PARAM] Missing "content"';
 
@@ -5601,6 +5617,17 @@ const
   SR_GUARD_FICHERO_EN_RUTA_FMT =
     '[GUARD-019 INVALID_PARAM] %s cannot be created: %s is a FILE, not a ' +
     'folder. Choose another path.';
+
+  SR_GUARD_FICHERO_EN_CARPETA_SERVIDOR_FMT =
+    '[GUARD-020 DENIED] %s is a FILE where the server keeps its own ' +
+    'folder (the recoverable copies or its temporary files): nothing can ' +
+    'be written next to it until that file is renamed or removed. If ' +
+    'your tools cannot, report it (delphi_report).';
+
+  SR_GUARD_RUTA_RELATIVA_FMT =
+    '[GUARD-021 INVALID_PARAM] "%s" is a RELATIVE path: this server ' +
+    'takes absolute paths, inside its roots (%s). Repeat with the full ' +
+    'path.';
 
   // Mensajes que estaban en linea en Lsp.BuildRunner.pas (paso 3c a mano, 27-sep-2026)
   SL_BUILD_DELPHI_BUILD_REFUSED_FMT =
@@ -7175,6 +7202,16 @@ const
     '  resulting lines read back from disk:'#10 +
     '%s';
 
+  SN_EDIT_RELECTURA_FALLIDA_FMT =
+    '[EDIT-108] WRITTEN, but the file could not be re-read to show it ' +
+    '(another process took it right after: %s). What is shown is what ' +
+    'was written.';
+
+  SR_EDIT_VISIBLE_DESHECHO_FMT =
+    '[EDIT-109 DENIED] visible=true: the declaration could not be added ' +
+    'to the interface, so NOTHING was written (the routine would have ' +
+    'been private to the unit, which is not what you asked for). %s';
+
   // Textos que estaban en linea en Lsp.TextEdit.pas (el resto, 27-sep-2026)
   SF_TEXT_ASCII_COMPATIBLES =
     'ascii (utf8/cp1252 compatible)';
@@ -7618,11 +7655,15 @@ const
 
   SR_FOTO_NO_VOLVIO_FMT =
     '[SYS-018 DENIED] It failed halfway and the undo could NOT put ' +
-    'everything back: these files are still CHANGED (another process ' +
-    'holds them?):'#10 +
+    'everything back: these files are NOT as they were before (each line ' +
+    'says why):'#10 +
     '%s'#10 +
     'Look at them before anything else. What failed:'#10 +
     '%s';
+
+  SF_FOTO_CAMBIADO_POR_OTRO =
+    'someone else changed it after this operation wrote it; left as it ' +
+    'is, so nothing of theirs was undone';
   { Los envoltorios de siempre, uno por forma: el motivo que trae otro
     sitio (una funcion que devuelve el porque, el mensaje de una excepcion)
     con la marca y el resultado de la respuesta. }
@@ -7656,6 +7697,11 @@ const
     '[SYS-026 INVALID_PARAM] Missing "%s": this method requires it. ' +
     'Nothing was done.';
 
+  SR_FICHERO_OCUPADO_FMT =
+    '[SYS-027 DENIED] Another process has the file open and does not ' +
+    'share it (the IDE, a build, an antivirus...): close it or wait a ' +
+    'moment, then repeat. Windows said: %s';
+
   SR_SYS_METODO_NO_EXISTE_FMT =
     '[SYS-021 NOT_FOUND] Method "%s" does not exist here (or is not ' +
     'available).';
@@ -7679,9 +7725,6 @@ const
   SE_SYS_METODO_NO_ATENDIDO_FMT =
     'Method %s is not handled by %s.';
 
-  SR_SYS_NEGATIVO_FMT =
-    '[SYS-020 INVALID_PARAM] "%s" cannot be negative (it came as %d).';
-
   SN_LIST_DIRS_CAPPED_FMT =
     '[LIST-013] Only the first %d folders are listed ("total" says how ' +
     'many there are): go down to a subfolder.';
@@ -7691,6 +7734,9 @@ const
 
   SF_SYS_EXPECTED_WHOLE_FMT =
     'expected a whole number, got "%s".';
+
+  SF_SYS_NO_NEGATIVO_FMT =
+    'a whole number that is not negative was expected, got "%s".';
 
   SF_SYS_EXPECTED_NUMBER_FMT =
     'expected a number, got "%s".';
@@ -7750,6 +7796,13 @@ function MsgEnvuelve(const AMsg, ACausa: string;
   resultado en la causa, se queda el del envoltorio. }
 function MsgConCausa(const AMsg, ACausa: string;
   const AArgs: array of const): string;
+{ "El que llama se equivoco": una EArgumentException, que es como el
+  deserializador dice que la llamada esta mal - salvo EArgumentOutOfRange-
+  Exception, que la RTL hereda de ella y es un indice fuera de rango DENTRO del
+  servidor, lo inesperado. UN lector para los dos que lo preguntan (el gestor
+  de tools y el procesador JSON-RPC: la regla estaba escrita en uno solo;
+  verificacion de la tercera ronda). AExcepcion es una Exception. }
+function EsFalloDelLlamador(AExcepcion: TObject): Boolean;
 { Lo que sale de una excepcion CAPTURADA: si su mensaje ya declara un
   resultado (un SR_ lanzado a proposito: el que llama se equivoco, algo no
   existe), sale tal cual; si no, es lo inesperado - INTERNAL, con la clase.
@@ -7846,9 +7899,27 @@ begin
   Result := MsgEnvuelve(AMsg, ACausa, [ACausa]);
 end;
 
+function EsFalloDelLlamador(AExcepcion: TObject): Boolean;
+begin
+  Result := (AExcepcion is EArgumentException) and
+    not (AExcepcion is EArgumentOutOfRangeException);
+end;
+
+{ Un fichero que otro proceso tiene abierto sin compartir: la causa trae el
+  texto del sistema (el de SysErrorMessage, en el idioma de Windows) y ningun
+  resultado. Era INTERNAL en cada tool que lo cogia (verificacion de la
+  tercera ronda): se reconoce AQUI, donde toda causa se envuelve. }
+function FicheroOcupado(const ACausa: string): Boolean;
+begin
+  Result := ACausa.Contains(SysErrorMessage(32).Trim) or   // ERROR_SHARING_VIOLATION
+    ACausa.Contains(SysErrorMessage(33).Trim);             // ERROR_LOCK_VIOLATION
+end;
+
 function MsgEnvuelve(const AMsg, ACausa: string;
   const AArgs: array of const): string;
 begin
+  if not EsFallo(ACausa) and FicheroOcupado(ACausa) then
+    Exit(MsgFmt(SR_FICHERO_OCUPADO_FMT, [ACausa.Trim]));
   if EsFallo(ACausa) then
     Result := ACausa
   else

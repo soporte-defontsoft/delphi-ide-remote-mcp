@@ -312,7 +312,24 @@ begin
   FDescription := SD_FILE_DELETE;
 end;
 
+function BorrarNucleo(const Params: TDelphiDeleteParams): string; forward;
+
 function TDelphiDeleteTool.ExecuteWithParams(const Params: TDelphiDeleteParams): string;
+begin
+  // El cerrojo de escritura, como toda tool que escribe: un commit de
+  // changeset que fallaba a mitad deshacia lo que esta tool escribia
+  // entre medias, contestando OK a los dos (verificacion de la tercera
+  // revision, 27-sep-2026, medido). Perder una edicion con OK es peor que
+  // esperar (David).
+  EnterFileEdit;
+  try
+    Result := BorrarNucleo(Params);
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
+function BorrarNucleo(const Params: TDelphiDeleteParams): string;
 var
   Denied, Trash, ProjNote, DesignerNote, P, R, Ext: string;
   Projects: TArray<string>;
@@ -554,7 +571,26 @@ begin
   FDescription := SD_FILE_MOVE;
 end;
 
+function MoverNucleo(const Params: TDelphiMoveParams): string; forward;
+
 function TDelphiMoveTool.ExecuteWithParams(const Params: TDelphiMoveParams): string;
+begin
+  // El cerrojo de escritura, como toda tool que escribe: un commit de
+  // changeset que fallaba a mitad deshacia lo que esta tool escribia
+  // entre medias, contestando OK a los dos (verificacion de la tercera
+  // revision, 27-sep-2026, medido). Perder una edicion con OK es peor que
+  // esperar (David).
+  if Params.Copy then // una copia no toca lo de nadie y puede ser grande
+    Exit(MoverNucleo(Params));
+  EnterFileEdit;
+  try
+    Result := MoverNucleo(Params);
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
+function MoverNucleo(const Params: TDelphiMoveParams): string;
 var
   Denied, BackupNote, Ext, Enc, Src, OldStem, NewStem, ProjNote, P, R, PairNote: string;
   Projects, NoSeguidos: TArray<string>;

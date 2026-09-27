@@ -52,7 +52,8 @@ uses
   System.StrUtils,
   System.Math,
   System.JSON,
-  MCPServer.Registration;
+  MCPServer.Registration,
+  Lsp.Guard; // VaultConfigured / VaultWritable: la tabla no anuncia lo que no hay
 
 constructor TDelphiHelpTool.Create;
 begin
@@ -174,7 +175,10 @@ begin
   if Cmd = '' then
     Cmd := 'tasks';
   if MatchText(Cmd, ['tasks', 'task', 'index']) then
-    Result := MsgText(SN_HELP_TASKS)
+    // la memoria solo si el workspace tiene vault (tools/list no trae las
+    // vault_* sin el), y escribirla solo si es escribible
+    Result := MsgFmt(SN_HELP_TASKS, [IfThen(VaultConfigured, MsgText(SF_HELP_TASKS_VAULT_LEER) +
+      IfThen(VaultWritable, MsgText(SF_HELP_TASKS_VAULT_ESCRIBIR), ''), '')])
   else if MatchText(Cmd, ['conventions', 'rules', 'reglas']) then
     Result := MsgText(SN_HELP_CONVENTIONS)
   else if MatchText(Cmd, ['tool', 'tools']) then

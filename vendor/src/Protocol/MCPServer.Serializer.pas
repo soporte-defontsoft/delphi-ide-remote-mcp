@@ -247,6 +247,12 @@ begin
         if (I64 < Low(Integer)) or (I64 > High(Integer)) then
           raise EArgumentException.Create(MsgFmt(SF_SYS_OUT_OF_RANGE_FMT,
             [Txt, Low(Integer), High(Integer)]));
+        // [local change 2026-09-27] ningun entero del contrato es negativo
+        // (lineas, desplazamientos, maximos, tiempos): se aceptaba en
+        // silencio como el valor por defecto en unas tools y se rechazaba en
+        // otras, con cinco copias a mano. Una regla, aqui.
+        if I64 < 0 then
+          raise EArgumentException.Create(MsgFmt(SF_SYS_NO_NEGATIVO_FMT, [Txt]));
         Result := Integer(I64);
       end;
 
@@ -254,6 +260,8 @@ begin
       begin
         if not TryStrToInt64(Txt, I64) then
           raise EArgumentException.Create(MsgFmt(SF_SYS_EXPECTED_WHOLE_FMT, [JsonValue.Value]));
+        if I64 < 0 then
+          raise EArgumentException.Create(MsgFmt(SF_SYS_NO_NEGATIVO_FMT, [Txt]));
         Result := I64;
       end;
 

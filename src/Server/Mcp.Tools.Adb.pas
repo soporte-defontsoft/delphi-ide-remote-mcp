@@ -386,7 +386,7 @@ begin
     if Denied <> '' then
       Exit(Denied);
     if not TFile.Exists(Params.Apk) then
-      Exit(MsgFmt(SR_ADB_NO_EXISTE_APK_FMT, [Params.Apk]));
+      Exit(NoEsFichero(Params.Apk, MsgFmt(SR_ADB_NO_EXISTE_APK_FMT, [Params.Apk])));
     Output := RunAdb(Adb, DevArg + 'install -r "' + Params.Apk + '"',
       180000, ExitCode);
     Result := ResultadoAdb(Output, ExitCode);

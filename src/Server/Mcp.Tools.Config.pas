@@ -997,7 +997,7 @@ begin
   if TDirectory.Exists(P) then
     Exit(MsgFmt(SR_CONFIG_DEPLOY_NOT_FILE_FMT, [P]));
   if not TFile.Exists(P) then
-    Exit(MsgFmt(SR_CONFIG_DEPLOY_MISSING_FMT, [P]));
+    Exit(NoEsFichero(P, MsgFmt(SR_CONFIG_DEPLOY_MISSING_FMT, [P])));
 end;
 
 function RemoteDirDenied(const ARaw: string): string;
@@ -1119,7 +1119,7 @@ begin
         Exit(MsgFmt(SR_CFG_NO_PUDE_GENERAR_MANIFIESTO_FMT, [E.Message]));
     end;
     if not TFile.Exists(DeployProj) then
-      Exit(MsgFmt(SR_CFG_NO_EXISTE_NO_PUDO_GENERAR_FMT, [DeployProj]));
+      Exit(NoEsFichero(DeployProj, MsgFmt(SR_CFG_NO_EXISTE_NO_PUDO_GENERAR_FMT, [DeployProj])));
   end;
 
   Xml := PatchLoadText(DeployProj, Enc);
@@ -1539,7 +1539,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(Params.Project) then
-    Exit(MsgFmt(SR_CFG_NO_EXISTE_PROYECTO_FMT, [Params.Project]));
+    Exit(NoEsFichero(Params.Project, MsgFmt(SR_CFG_NO_EXISTE_PROYECTO_FMT, [Params.Project])));
   // Arriving with the .dpr in hand is the common case - delphi_create's own
   // schema says its "project" takes ".dpr (or .dproj)". `view` used to answer
   // for it anyway, with an empty framework, no platforms, no configurations

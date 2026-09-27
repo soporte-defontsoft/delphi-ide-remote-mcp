@@ -388,7 +388,7 @@ check('#9 el aviso NO nombra el buzon ajeno', 'otro' not in t, t[-250:])
 # saltarse la unica linea que importara cuando el correo si sea suyo. Ese
 # recuento vive ahora en delphi_workspace, que es la llamada de orientacion.
 check('#9 ...y NO anuncia el correo ajeno en cada respuesta',
-      not mc.es(t, 'SN_MESSAGES_PENDING_FMT'), t[-250:])
+      not mc.es(t, 'SN_MESSAGES_PENDING_FMT') and mc.resultado(t) not in ('INTERNAL', 'NO_ANSWER'), t[-250:])
 check('#9b ...pero se puede saber que lo hay, en la ficha del servidor',
       json.loads(t).get('server', {}).get('mailboxes') == 1, t[-250:])
 # Desde 2026-09-25 no hay buzon "para todos": el aviso que va en cada

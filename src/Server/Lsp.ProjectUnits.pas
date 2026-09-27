@@ -249,7 +249,7 @@ begin
     ADpr := Stem + '.dpr';
   ADproj := Stem + '.dproj';
   if not TFile.Exists(ADpr) then
-    Exit(MsgFmt(SR_UNIT_NO_DPR_FMT, [ADpr]));
+    Exit(NoEsFichero(ADpr, MsgFmt(SR_UNIT_NO_DPR_FMT, [ADpr])));
   // a missing .dproj is tolerated: the .dpr alone still builds with dcc, and
   // the IDE regenerates a .dproj on open. The dproj edits are then skipped.
 end;
@@ -1704,7 +1704,7 @@ begin
   EnterFileEdit;
   try
     if not TFile.Exists(APasPath) then
-      Exit(MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath]));
+      Exit(NoEsFichero(APasPath, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath])));
     Text := PatchLoadText(APasPath, Enc);
     Blank := BlankComments(Text);
     M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
@@ -1809,7 +1809,7 @@ begin
   EnterFileEdit;
   try
     if not TFile.Exists(APasPath) then
-      Exit(MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath]));
+      Exit(NoEsFichero(APasPath, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath])));
     Text := PatchLoadText(APasPath, Enc);
     Blank := BlankComments(Text);
     M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);

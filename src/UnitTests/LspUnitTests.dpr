@@ -3,6 +3,7 @@
 {$APPTYPE CONSOLE}
 
 uses
+  Winapi.Windows,
   System.SysUtils,
   DUnitX.TestFramework,
   DUnitX.Loggers.Console,
@@ -12,7 +13,8 @@ uses
   LspTests.Images in 'LspTests.Images.pas',
   LspTests.GitArgs in 'LspTests.GitArgs.pas',
   LspTests.Pascal in 'LspTests.Pascal.pas',
-  LspTests.Mensajes in 'LspTests.Mensajes.pas';
+  LspTests.Mensajes in 'LspTests.Mensajes.pas',
+  LspTests.Foto in 'LspTests.Foto.pas';
 
 var
   Runner: ITestRunner;
@@ -21,6 +23,12 @@ var
 
 begin
   try
+    // Una jaula propia si nadie le da otra: lanzado por un servidor de
+    // workspaces el ejecutor corria sin DELPHI_MCP_ROOTS, o sea en SOLO
+    // LECTURA, y las pruebas que escriben por la puerta de escritura (la foto
+    // del deshacer, LspTests.Foto) no median nada. Su carpeta, nada mas.
+    if GetEnvironmentVariable('DELPHI_MCP_ROOTS') = '' then
+      SetEnvironmentVariable('DELPHI_MCP_ROOTS', PChar(ExtractFileDir(ParamStr(0))));
     Runner := TDUnitX.CreateRunner;
     Logger := TDUnitXConsoleLogger.Create(True);
     Runner.AddLogger(Logger);

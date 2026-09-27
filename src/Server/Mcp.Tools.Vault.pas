@@ -494,6 +494,15 @@ begin
       on E: Exception do
         Exit(MsgFmt(SR_VAULT_PATTERN_REGEX_INVALIDA_FMT, [E.Message]));
     end;
+  // el gemelo para target=files: una mascara rota ("[a-") reventaba en el
+  // primer MatchesMask (INTERNAL) (verificacion de la tercera ronda)
+  if not ByContent then
+    try
+      MatchesMask('x', Pat);
+    except
+      on E: Exception do
+        Exit(MsgFmt(SR_VAULT_PATTERN_MASCARA_INVALIDA_FMT, [E.Message]));
+    end;
 
   Notes := TStringList.Create;
   Sb := TStringBuilder.Create;

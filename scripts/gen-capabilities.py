@@ -94,3 +94,5 @@ with open(out, 'w', encoding='utf-8') as f:
     json.dump(manifest, f, indent=2, ensure_ascii=False)
     f.write('\n')
 print('escrito %s: %d tools (v%s)' % (out, len(tools), version))
+# su carpeta de trabajo no se queda en el %TEMP% de la maquina
+shutil.rmtree(BASE, ignore_errors=True)

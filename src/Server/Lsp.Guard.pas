@@ -452,12 +452,32 @@ type
     FRutas: TArray<string>;
     FExistian: TArray<Boolean>;
     FBytes: TArray<TArray<Byte>>;
+    // lo que dejo la operacion en cada ruta (Anota): lo UNICO que el deshacer
+    // puede dar por suyo
+    FAnotado: TArray<Boolean>;
+    FExisteNuestro: TArray<Boolean>;
+    FNuestros: TArray<TArray<Byte>>;
+    // tamano y fecha de la foto: se leen aunque otro proceso tenga el fichero
+    // abierto sin compartir, y dicen si cambio cuando los bytes no se pueden leer
+    FTam: TArray<Int64>;
+    FFecha: TArray<TDateTime>;
+    // de una ruta que no existia: la primera carpeta que SI existia por
+    // encima (lo que la operacion cree debajo, el deshacer lo quita si vacio)
+    FAncestro: TArray<string>;
   public
     { Lee los bytes de cada ruta (la que no existe se apunta como tal). }
     procedure Toma(const ARutas: array of string);
+    { Apunta como esta AHORA una ruta de la foto: lo que la operacion acaba de
+      dejar en ella. Se llama tras cada paso hecho. Nunca lanza: si no puede
+      leerla, la ruta queda sin apuntar (el deshacer la trata como siempre). }
+    procedure Anota(const ARuta: string);
     { Deja cada fichero como estaba en la foto, por la puerta de escritura:
-      solo los que CAMBIARON, y el que no existia, fuera. Nunca lanza: lo
-      que no pudo volver lo devuelve, uno por linea ('' = todo volvio). }
+      solo los que CAMBIARON, y el que no existia, fuera. Lo que otro cambio
+      DESPUES de que la operacion lo escribiera (el disco ya no tiene lo
+      apuntado) no se toca: se dice. Nunca lanza: lo que no volvio lo
+      devuelve, uno por linea con su porque ('' = todo volvio). Perder una
+      edicion ajena con OK es peor que un deshacer incompleto que lo dice
+      (David, 27-sep-2026). }
     function Restaura: string;
     function Cuantos: Integer;
   end;
@@ -1841,7 +1861,12 @@ begin
       while (D <> '') and (D <> TPath.GetDirectoryName(D)) do
       begin
         if TFile.Exists(D) then
-          raise Exception.Create(MsgFmt(SR_GUARD_FICHERO_EN_RUTA_FMT, [ADir, D]));
+          // la papelera o los temporales del SERVIDOR tapados por un fichero:
+          // la ruta del agente era buena, estorba algo (DENIED, no INVALID)
+          if DeadCopyWriteDenied(D) <> '' then
+            raise Exception.Create(MsgFmt(SR_GUARD_FICHERO_EN_CARPETA_SERVIDOR_FMT, [D]))
+          else
+            raise Exception.Create(MsgFmt(SR_GUARD_FICHERO_EN_RUTA_FMT, [ADir, D]));
         D := TPath.GetDirectoryName(D);
       end;
       raise;
@@ -2063,6 +2088,25 @@ begin
     Result := AMsgNoExiste;
 end;
 
+{ Tamano y fecha de escritura de un fichero SIN abrirlo (FindFirst): se leen
+  aunque otro proceso lo tenga abierto sin compartir. False si no esta. }
+function HuellaDeFichero(const ARuta: string; out ATam: Int64;
+  out AFecha: TDateTime): Boolean;
+var
+  SR: TSearchRec;
+begin
+  ATam := -1;
+  AFecha := 0;
+  Result := FindFirst(ARuta, faAnyFile, SR) = 0;
+  if Result then
+    try
+      ATam := SR.Size;
+      AFecha := SR.TimeStamp;
+    finally
+      FindClose(SR);
+    end;
+end;
+
 procedure TFotoDeFicheros.Toma(const ARutas: array of string);
 var
   I: Integer;
@@ -2070,45 +2114,149 @@ begin
   SetLength(FRutas, Length(ARutas));
   SetLength(FExistian, Length(ARutas));
   SetLength(FBytes, Length(ARutas));
+  SetLength(FAnotado, Length(ARutas));
+  SetLength(FExisteNuestro, Length(ARutas));
+  SetLength(FNuestros, Length(ARutas));
+  SetLength(FTam, Length(ARutas));
+  SetLength(FFecha, Length(ARutas));
+  SetLength(FAncestro, Length(ARutas));
   for I := 0 to High(ARutas) do
   begin
     FRutas[I] := ARutas[I];
+    FAnotado[I] := False;
     FExistian[I] := TFile.Exists(ARutas[I]);
     if FExistian[I] then
-      FBytes[I] := TFile.ReadAllBytes(ARutas[I])
+    begin
+      FBytes[I] := TFile.ReadAllBytes(ARutas[I]);
+      HuellaDeFichero(ARutas[I], FTam[I], FFecha[I]);
+    end
     else
+    begin
       FBytes[I] := nil;
+      FAncestro[I] := ExtractFileDir(ARutas[I]);
+      while (FAncestro[I] <> '') and not TDirectory.Exists(FAncestro[I]) and
+            (ExtractFileDir(FAncestro[I]) <> FAncestro[I]) do
+        FAncestro[I] := ExtractFileDir(FAncestro[I]);
+    end;
   end;
 end;
 
+procedure TFotoDeFicheros.Anota(const ARuta: string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(FRutas) do
+    if SameText(FRutas[I], ARuta) then
+    try
+      FAnotado[I] := False;
+      FExisteNuestro[I] := TFile.Exists(FRutas[I]);
+      if FExisteNuestro[I] then
+        FNuestros[I] := TFile.ReadAllBytes(FRutas[I])
+      else
+        FNuestros[I] := nil;
+      FAnotado[I] := True;
+    except
+      // sin apuntar: el deshacer la trata como siempre
+    end;
+end;
+
 function TFotoDeFicheros.Restaura: string;
+
+  function Iguales(const A, B: TArray<Byte>): Boolean;
+  begin
+    Result := (Length(A) = Length(B)) and
+      ((Length(A) = 0) or CompareMem(@A[0], @B[0], Length(A)));
+  end;
+
 var
   I: Integer;
   Ahora: TArray<Byte>;
+  Existe: Boolean;
+  Veto, Ilegible: string;
+
+  { Las carpetas que la operacion creo por encima de una ruta que no existia
+    (un create en a\b\c.txt): se quitaban el fichero y quedaban a y b vacias.
+    RemoveDir solo quita una carpeta VACIA; por la puerta de escritura. }
+  procedure QuitaCarpetasNuevas(AIx: Integer);
+  var
+    D: string;
+  begin
+    D := ExtractFileDir(FRutas[AIx]);
+    while (FAncestro[AIx] <> '') and (Length(D) > Length(FAncestro[AIx])) and
+          (EscrituraDenegada(D) = '') do
+    begin
+      if not RemoveDir(D) then
+        Break; // no esta vacia (otro dejo algo) o no se puede: se queda
+      D := ExtractFileDir(D);
+    end;
+  end;
+
+  function MismaHuella(AIx: Integer): Boolean;
+  var
+    T: Int64;
+    D: TDateTime;
+  begin
+    Result := HuellaDeFichero(FRutas[AIx], T, D) and (T = FTam[AIx]) and (D = FFecha[AIx]);
+  end;
 begin
   Result := '';
   for I := 0 to High(FRutas) do
     try
-      // deshacer tambien escribe: por la misma puerta (un camino que dejo
-      // de ser escribible no se restaura por el)
-      if EscrituraDenegada(FRutas[I]) <> '' then
-        Continue;
-      if not FExistian[I] then
+      Existe := TFile.Exists(FRutas[I]);
+      Ahora := nil;
+      Ilegible := '';
+      if Existe then
+        try
+          Ahora := TFile.ReadAllBytes(FRutas[I]);
+        except
+          on E: Exception do
+            Ilegible := E.Message;
+        end;
+      // No se puede LEER (otro proceso lo tiene sin compartir): si su tamano
+      // y su fecha son los de la foto, no cambio y no hay nada que devolver.
+      // Se contaba como "no volvio" un fichero intacto (verificacion de la
+      // tercera ronda, medido: 38 de 44). Si cambio, ni se comprueba ni se
+      // escribe: se dice.
+      if Ilegible <> '' then
       begin
-        if TFile.Exists(FRutas[I]) then
-          TFile.Delete(FRutas[I]);
+        if not (FExistian[I] and MismaHuella(I)) then
+          Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + Ilegible;
         Continue;
       end;
       // lo que no cambio no se toca: un fichero que otro proceso tiene
       // abierto y nadie modifico no hace fallar el deshacer
-      if TFile.Exists(FRutas[I]) then
+      if (Existe = FExistian[I]) and (not Existe or Iguales(Ahora, FBytes[I])) then
       begin
-        Ahora := TFile.ReadAllBytes(FRutas[I]);
-        if (Length(Ahora) = Length(FBytes[I])) and ((Length(Ahora) = 0) or
-           CompareMem(@Ahora[0], @FBytes[I][0], Length(Ahora))) then
-          Continue;
+        if not FExistian[I] then
+          QuitaCarpetasNuevas(I);
+        Continue;
       end;
-      TFile.WriteAllBytes(FRutas[I], FBytes[I]);
+      // deshacer tambien escribe: por la misma puerta. Un camino que dejo de
+      // ser escribible no se restaura por el, y se DICE (se saltaba callado)
+      Veto := EscrituraDenegada(FRutas[I]);
+      if Veto <> '' then
+      begin
+        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + Veto;
+        Continue;
+      end;
+      // lo que hay NO es lo que dejo la operacion: alguien lo cambio despues
+      // (otro proceso, el IDE guardando). Se queda como esta y se dice; el
+      // deshacer borraba o pisaba su trabajo contestando "todo volvio"
+      // (verificacion de la tercera revision, 27-sep-2026, medido)
+      if FAnotado[I] and ((Existe <> FExisteNuestro[I]) or
+         (Existe and not Iguales(Ahora, FNuestros[I]))) then
+      begin
+        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' +
+          MsgText(SF_FOTO_CAMBIADO_POR_OTRO);
+        Continue;
+      end;
+      if not FExistian[I] then
+      begin
+        TFile.Delete(FRutas[I]);
+        QuitaCarpetasNuevas(I);
+      end
+      else
+        TFile.WriteAllBytes(FRutas[I], FBytes[I]);
     except
       on E: Exception do
         Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + E.Message;
@@ -4095,6 +4243,14 @@ begin
         AMotivo := mvConfinado;
       Exit;
     end;
+  // una ruta RELATIVA se resolvia contra la carpeta del servidor y salia
+  // "fuera de la jaula" (DENIED): es la llamada la que esta mal
+  // (verificacion de la tercera ronda)
+  if not TPath.IsPathRooted(APath) then
+  begin
+    AMotivo := mvRutaInvalida;
+    Exit(MsgFmt(SR_GUARD_RUTA_RELATIVA_FMT, [APath, string.Join(' | ', Roots)]));
+  end;
   AMotivo := mvFueraDeJaula;
   Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;

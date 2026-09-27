@@ -104,7 +104,19 @@ check('prompts/get vault: devuelve reglas + indice',
       'AGENTS-VAULT.md' in ptxt and 'MEMORY.md' in ptxt and 'Carga perezosa' in ptxt,
       ptxt[:200])
 bad = s.rpc('prompts/get', {"name": "no-existe"})
-check('prompts/get: un prompt desconocido da error', 'error' in bad, bad)
+# -32602 con su etiqueta, como resources/read (era -32603 sin etiqueta: el
+# check de antes, "hay error", pasaba con los dos)
+check('prompts/get: un prompt desconocido da error',
+      bad.get('error', {}).get('code') == -32602 and
+      mc.abre(bad.get('error', {}).get('message', ''), 'SR_VAULT_PROMPT_NO_EXISTE_FMT'), bad)
+bad = s.rpc('prompts/get', {})
+check('prompts/get sin name: -32602 y dice que falta',
+      bad.get('error', {}).get('code') == -32602 and
+      mc.abre(bad.get('error', {}).get('message', ''), 'SR_SYS_MISSING_METHOD_PARAM_FMT'), bad)
+bad = s.rpc('resources/read', {})
+check('resources/read sin uri: -32602 y dice que falta',
+      bad.get('error', {}).get('code') == -32602 and
+      mc.abre(bad.get('error', {}).get('message', ''), 'SR_SYS_MISSING_METHOD_PARAM_FMT'), bad)
 
 # a vault can override the instructions with its own "skill" file
 w('VAULT-INSTRUCTIONS.md', 'Vault de PRUEBA: escribe siempre en espanol. '
@@ -230,6 +242,9 @@ check('search content: subfolder acota', 'context.md' in out and 'fuera.md' not 
 out = s.call('vault_search', {"target": "content", "pattern": "no-existe-esto-xyz"})
 check('search: sin resultados lo dice y recuerda el indice',
       mc.es(out, 'SN_VAULT_SIN_RESULTADOS_RECUERDA_INDICE_FMT'), out[:150])
+out = s.call('vault_search', {"target": "files", "pattern": "[a-"})
+check('search files: una mascara rota es INVALID_PARAM (salia INTERNAL)',
+      mc.abre(out, 'SR_VAULT_PATTERN_MASCARA_INVALIDA_FMT') and mc.resultado(out) == 'INVALID_PARAM', out[:150])
 out = s.call('vault_search', {"target": "files", "pattern": "*.md", "subfolder": "../.."})
 check('search: subfolder con .. rechazado', mc.rechazado(out) and mc.es(out, 'SR_VAULT_JAIL'), out[:150])
 

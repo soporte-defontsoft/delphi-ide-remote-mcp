@@ -396,10 +396,6 @@ begin
     Exit(MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Params.Root]));
   if Params.Query = '' then
     Exit(MsgText(SR_WS_EMPTY_QUERY));
-  if Params.MaxResults < 0 then
-    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['maxresults', Params.MaxResults]));
-  if Params.Offset < 0 then
-    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['offset', Params.Offset]));
   Max := Params.MaxResults;
   if Max <= 0 then Max := 100;
   if Max > 500 then Max := 500;
@@ -508,6 +504,11 @@ begin
     if Total > Ofs + Hits.Count then
       Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Hits.Count));
     Return.AddPair('filesScanned', TJSONNumber.Create(FilesScanned));
+    // un "pattern" que no casa con ningun fichero: "total 0" se leia como
+    // "el texto no esta" (delphi_list ya lo decia; verificacion de la
+    // tercera ronda)
+    if (FilesScanned = 0) and (Params.Pattern.Trim <> '') and not SingleFile then
+      Return.AddPair('maskNote', MsgFmt(SN_SEARCH_MASK_NO_MATCH_FMT, [Params.Pattern.Trim]));
     Ocultos.Report(Return);
     Return.AddPair('hits', Hits);
     Result := Return.ToJSON;
@@ -1160,12 +1161,12 @@ begin
   // codigo a pelo (abierto menor del 22-sep). Se dice que significa.
   if (ExitCode <> 0) and SameText(Cmd, 'merge') and Output.Contains('fast-forward') then
     Result := Result + #10 + MsgText(SN_GIT_MERGE_DIVERGED);
-  if (ExitCode <> 0) and (Output.Contains('--no-ff') or Output.Contains('rebase') or
+  if (ExitCode <> 0) and not DiffConCambios and (Output.Contains('--no-ff') or Output.Contains('rebase') or
      Output.Contains('specify the URL')) then
     Result := Result + #10 + MsgText(SN_GIT_HINT_OVERRIDE);
   // A fresh repo has no author identity and commit dies with exit 128:
   // the fix is already whitelisted, say so (measured 2026-08-24).
-  if (ExitCode <> 0) and Output.Contains('Author identity unknown') then
+  if (ExitCode <> 0) and not DiffConCambios and Output.Contains('Author identity unknown') then
     Result := Result + #10 +
       MsgText(SN_GIT_PISTA_CONFIGURA_IDENTIDAD);
 end;
@@ -1614,10 +1615,6 @@ begin
   // Paginado como delphi_search: una maquina de trabajo tiene miles de .dproj
   // y la lista entera no cabe en una respuesta (medido: 7025 proyectos = 82 KB
   // = limite del cliente reventado, o sea la tool inservible sin "root").
-  if Params.Offset < 0 then
-    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['offset', Params.Offset]));
-  if Params.MaxResults < 0 then
-    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['maxresults', Params.MaxResults]));
   Ofs := Params.Offset;
   Max := Params.MaxResults;
   if Max <= 0 then
@@ -1807,9 +1804,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(FullPath) then
-    Exit(MsgFmt(SR_WS_NO_EXISTE_FMT, [FullPath]));
-  if Params.MaxBytes < 0 then
-    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['maxbytes', Params.MaxBytes]));
+    Exit(NoEsFichero(FullPath, MsgFmt(SR_WS_NO_EXISTE_FMT, [FullPath])));
   MaxB := Params.MaxBytes;
   if (MaxB <= 0) or (MaxB > MAX_CHUNK) then
     MaxB := MAX_CHUNK;
@@ -1895,7 +1890,24 @@ begin
   FDescription := SD_WS_UPLOAD;
 end;
 
+function SubirNucleo(const Params: TDelphiUploadParams): string; forward;
+
 function TDelphiUploadTool.ExecuteWithParams(const Params: TDelphiUploadParams): string;
+begin
+  // El cerrojo de escritura, como toda tool que escribe: un commit de
+  // changeset que fallaba a mitad deshacia lo que esta tool escribia
+  // entre medias, contestando OK a los dos (verificacion de la tercera
+  // revision, 27-sep-2026, medido). Perder una edicion con OK es peor que
+  // esperar (David).
+  EnterFileEdit;
+  try
+    Result := SubirNucleo(Params);
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
+function SubirNucleo(const Params: TDelphiUploadParams): string;
 var
   FullPath, Dir, Sha, Backup, Quarantine: string;
   Bytes: TBytes;
@@ -2130,6 +2142,13 @@ begin
   // (tercera revision, 27-sep-2026, medido en vivo): el paquete es un .zip
   if not SameText(TPath.GetExtension(OutZip), '.zip') then
     Exit(MsgFmt(SR_PACKAGE_OUTFILE_ZIP_FMT, [OutZip]));
+  // La carpeta del zip se crea, como en toda tool que escribe: una que no
+  // existia o un FICHERO en el camino salian INTERNAL (GUARD-019 ahora, desde
+  // CrearCarpeta). Y un .zip que ya estaba se copia antes de pisarlo: perder
+  // es peor que una copia de mas (verificacion de la tercera ronda, David)
+  CrearCarpeta(TPath.GetDirectoryName(OutZip));
+  if TFile.Exists(OutZip) then
+    BackupFile(OutZip);
   // El zip se arma con nombre propio y se pone en su sitio de un golpe al
   // final. Empaquetar sobre el nombre definitivo hacia que dos llamadas a la
   // vez sobre la misma carpeta se estorbasen - una borraba el zip que la otra

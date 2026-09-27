@@ -64,7 +64,8 @@ t = call('delphi_messages', {})
 check('sin agent: la identidad del handshake lee SU buzon',
       'MESSAGE 1/1' in t and 'Correo propio' in t, t)
 t = call('delphi_workspace', {})
-check('leido: el aviso se apaga', not mc.es(t, 'SN_MESSAGES_PENDING_FMT'), t[-120:])
+check('leido: el aviso se apaga', not mc.es(t, 'SN_MESSAGES_PENDING_FMT') and
+      mc.resultado(t) not in ('INTERNAL', 'NO_ANSWER'), t[-120:])
 check('el .md de la raiz sigue ahi: ni se entrega ni se borra (es del operador)',
       os.path.exists(os.path.join(MSG, '20260823-0059-aviso.md')))
 t = call('delphi_messages', {"command": "x"})

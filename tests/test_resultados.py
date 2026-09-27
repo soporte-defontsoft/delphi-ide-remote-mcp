@@ -58,6 +58,27 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E32 set-sdk / set-profile sin valor (quitaban el pin con exito)
   E33 dos agentes a la vez sobre un fichero: lo que cada uno recibio como OK
       esta en el disco (la tanda de delphi_edit no tomaba el cerrojo)
+  E34 un commit y un delphi_create del mismo fichero a la vez: lo que recibio
+      OK esta en el disco (el deshacer borraba lo que delphi_create creo)
+  E35 una tanda de delphi_textedit sobre una CARPETA es INVALID_PARAM (decia
+      "no existe, crealo con create=true")
+  E36 delphi_package: un FICHERO en el camino del outfile es INVALID_PARAM
+      (salia INTERNAL); una carpeta nueva se crea; un .zip que ya estaba se
+      copia antes de pisarlo
+  E37 una ruta RELATIVA es INVALID_PARAM (decia "fuera de la jaula", DENIED)
+  E38 un entero negativo es INVALID_PARAM en cualquier tool (se aceptaba
+      en silencio como el valor por defecto en delphi_read)
+  E39 delphi_search con una mascara que no casa con nada lo dice
+  E40 delphi_help no anuncia vault_* en un workspace sin vault
+  E41 createunit eol=lf sin content escribe LF (decia LF y escribia CRLF)
+  E42 git diff --exit-code con cambios no hereda las pistas de fallo
+  E43 un fichero que otro proceso tiene abierto es DENIED (era INTERNAL)
+  E44 insert rutina-global visible=true: si la declaracion no se puede,
+      no se escribe nada (salia exito con la rutina privada)
+  E45 el deshacer de un commit quita las carpetas que creo
+  E46 un FICHERO donde el servidor guarda sus copias es DENIED, no
+      INVALID_PARAM (la ruta del agente era buena)
+  E47 una entrada con "new": null es "sin new" (delete sigue borrando)
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
 """
@@ -347,6 +368,159 @@ try:
           est['a2'] == 10 and ('// marca %d\n' % est['a2']) in disco and est['a1'] in disco,
           'agente2 OK hasta marca %d; en disco: %s' % (est['a2'],
                                                       [l for l in disco.split('\n') if 'marca' in l]))
+
+    # un commit y un delphi_create del MISMO fichero a la vez (medido en la
+    # verificacion de la tercera ronda: delphi_create no tomaba el cerrojo,
+    # creaba con OK a mitad del commit, el commit fallaba por "ya existe" y su
+    # deshacer BORRABA el fichero del otro agente)
+    import time
+    CR = os.path.join(JAIL, 'carrera')
+    os.makedirs(CR)
+    fsc = []
+    for i in range(200):
+        p = os.path.join(CR, 'c%03d.txt' % i)
+        open(p, 'w', newline='\n').write('linea\n')
+        fsc.append(p)
+    UX = os.path.join(CR, 'UAgente2.pas')
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    cid4 = mc.id_changeset(t)
+    for p in fsc:
+        llama('delphi_changeset', {'command': 'stage', 'id': cid4, 'kind': 'edit', 'path': p,
+                                   'old': 'linea', 'new': 'linea del commit'})
+    llama('delphi_changeset', {'command': 'stage', 'id': cid4, 'kind': 'create', 'path': UX,
+                               'content': 'unit UAgente2;\ninterface\nimplementation\nend.\n'})
+    llama('delphi_changeset', {'command': 'preview', 'id': cid4})
+    fin_commit = {}
+
+    def hace_commit():
+        fin_commit['r'] = cli.call_msg('delphi_changeset', {'command': 'commit', 'id': cid4}, 300)
+
+    hc = threading.Thread(target=hace_commit)
+    hc.start()
+    t0 = time.time()
+    while time.time() - t0 < 60:
+        try:
+            if open(fsc[50]).read() != 'linea\n':
+                break
+        except OSError:
+            pass
+        time.sleep(0.001)
+    r2 = cli2.call_msg('delphi_create', {'kind': 'unit', 'name': 'UAgente2', 'dir': CR,
+                                         'content': 'unit UAgente2;\n\ninterface\n\n// DEL AGENTE 2\n\n'
+                                                    'implementation\n\nend.\n'}, 300)
+    hc.join()
+    ok2 = bool((r2 or {}).get('result')) and not r2['result'].get('isError')
+    okc = bool((fin_commit.get('r') or {}).get('result')) and not fin_commit['r']['result'].get('isError')
+    cont = open(UX).read() if os.path.exists(UX) else None
+    check('E34 un commit y un delphi_create del mismo fichero a la vez: lo que recibio OK esta en el disco',
+          ok2 != okc and cont is not None and (('DEL AGENTE 2' in cont) == ok2),
+          'create OK=%s, commit OK=%s, en disco: %r' % (ok2, okc, (cont or '')[:60]))
+
+    rechazo('E35 una tanda de delphi_textedit sobre una CARPETA: INVALID_PARAM (decia "no existe")',
+            'delphi_textedit', {'path': NOREPO, 'edits': json.dumps([{'old': 'a', 'new': 'b'}])},
+            'INVALID_PARAM', 'SR_LSP_IS_FOLDER_FMT')
+
+    PKD = os.path.join(JAIL, 'paq')
+    os.makedirs(PKD)
+    open(os.path.join(PKD, 'app.txt'), 'w').write('app\n')
+    rechazo('E36 package con un FICHERO en el camino del outfile: INVALID_PARAM (salia INTERNAL)',
+            'delphi_package', {'dir': PKD, 'outfile': os.path.join(ECO, 'p.zip')}, 'INVALID_PARAM',
+            'SR_GUARD_FICHERO_EN_RUTA_FMT')
+    res, sc, t = llama('delphi_package', {'dir': PKD, 'outfile': os.path.join(JAIL, 'nueva', 'sub', 'p.zip')})
+    check('E36 ...una carpeta que no existia se crea', not res.get('isError') and
+          os.path.exists(os.path.join(JAIL, 'nueva', 'sub', 'p.zip')), t[:200])
+    VAL = os.path.join(JAIL, 'valioso.zip')
+    open(VAL, 'wb').write(b'PK-lo-mio')
+    res, sc, t = llama('delphi_package', {'dir': PKD, 'outfile': VAL})
+    copias = [os.path.join(r, n) for r, d, fs in os.walk(os.path.join(JAIL, '__delphi-patch')) for n in fs
+              if n.startswith('valioso.zip')]
+    check('E36 ...y un .zip que ya estaba se copia antes de pisarlo',
+          not res.get('isError') and any(open(p, 'rb').read() == b'PK-lo-mio' for p in copias),
+          '%s | copias=%s' % (t[:150], copias))
+
+    rechazo('E37 una ruta RELATIVA es INVALID_PARAM (decia "fuera de la jaula")', 'delphi_textedit',
+            {'path': 'relativa\\x.txt', 'old': 'a', 'new': 'b'}, 'INVALID_PARAM', 'SR_GUARD_RUTA_RELATIVA_FMT')
+
+    rechazo('E38 un entero negativo es INVALID_PARAM (delphi_read lo tomaba por el defecto)', 'delphi_read',
+            {'path': NOTES, 'fromline': -2}, 'INVALID_PARAM', 'SR_SYS_PARAM_VALUE_FMT')
+
+    res, sc, t = llama('delphi_search', {'root': JAIL, 'query': 'First', 'pattern': '*.nadadenada'})
+    check('E39 delphi_search con una mascara que no casa con nada lo dice (maskNote)',
+          not res.get('isError') and mc.es(mc.como_json(t).get('maskNote', ''), 'SN_SEARCH_MASK_NO_MATCH_FMT'),
+          t[:250])
+
+    res, sc, t = llama('delphi_help', {})
+    check('E40 delphi_help no anuncia vault_* sin vault', not res.get('isError') and
+          'delphi_git' in t and 'vault_' not in t, t[-400:])
+
+    LFU = os.path.join(JAIL, 'Lf.pas')
+    res, sc, t = llama('delphi_edit', {'path': LFU, 'createunit': True, 'eol': 'lf'})
+    check('E41 createunit eol=lf sin content escribe LF',
+          not res.get('isError') and os.path.exists(LFU) and b'\r' not in open(LFU, 'rb').read(), t[:200])
+
+    open(os.path.join(GREPO, 'a.txt'), 'w').write('rebase\n')
+    res, sc, t = llama('delphi_git', {'repo': GREPO, 'command': 'diff', 'args': '--exit-code'})
+    check('E42 git diff --exit-code con cambios: exito, sin las pistas de un fallo',
+          not res.get('isError') and t.startswith('exit=1') and not mc.es(t, 'SN_GIT_HINT_OVERRIDE'), t[:300])
+
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+                                wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    k32.CreateFileW.restype = wintypes.HANDLE
+    OCUP = os.path.join(JAIL, 'ocupado.txt')
+    open(OCUP, 'w').write('alguien lo tiene\n')
+    h = k32.CreateFileW(OCUP, 0x80000000, 0, None, 3, 0x80, None)   # GENERIC_READ, sin compartir
+    try:
+        res, sc, t = llama('delphi_read', {'path': OCUP})
+    finally:
+        k32.CloseHandle(h)
+    check('E43 un fichero que otro proceso tiene abierto es DENIED (era INTERNAL)',
+          res.get('isError') is True and sc.get('code') == 'DENIED' and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT'),
+          '%s | %s' % (json.dumps(sc)[:120], t[:200]))
+
+    VIS = os.path.join(JAIL, 'Vis.pas')
+    open(VIS, 'w', newline='\r\n').write('unit Vis;\n\ninterface\n\n{\nimplementation\n}\n\n'
+                                          'implementation\n\nend.\n')
+    VIS_ANTES = open(VIS, 'rb').read()
+    res, sc, t = llama('delphi_edit', {'path': VIS, 'insert': 'rutina-global', 'visible': True,
+                                       'code': 'procedure Hola;\nbegin\nend;'})
+    check('E44 insert visible=true sin sitio para la declaracion: FALLO y nada escrito',
+          res.get('isError') is True and mc.abre(t, 'SR_EDIT_VISIBLE_DESHECHO_FMT') and
+          open(VIS, 'rb').read() == VIS_ANTES, '%s | %s' % (json.dumps(sc)[:120], t[:250]))
+
+    NV = os.path.join(JAIL, 'nv1')
+    N2 = os.path.join(JAIL, 'nueva2')
+    os.makedirs(N2)
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    cid5 = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': cid5, 'kind': 'create',
+                               'path': os.path.join(NV, 'nv2', 'c.txt'), 'content': 'x'})
+    llama('delphi_changeset', {'command': 'stage', 'id': cid5, 'kind': 'create',
+                               'path': os.path.join(N2, 'sub.txt'), 'content': 'x'})
+    llama('delphi_changeset', {'command': 'preview', 'id': cid5})
+    os.rmdir(N2)
+    open(N2, 'w').write('ahora soy un fichero')
+    res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': cid5})
+    check('E45 el deshacer de un commit quita las carpetas que creo',
+          res.get('isError') is True and not os.path.exists(NV), '%s | %s' % (t[:200], os.listdir(JAIL)))
+    os.remove(N2)
+
+    TAP = os.path.join(JAIL, 'tapada')
+    os.makedirs(TAP)
+    open(os.path.join(TAP, '__delphi-patch'), 'w').write('un fichero donde van las copias')
+    open(os.path.join(TAP, 'n.txt'), 'w').write('uno\n')
+    rechazo('E46 un FICHERO donde el servidor guarda sus copias es DENIED (la ruta era buena)',
+            'delphi_textedit', {'path': os.path.join(TAP, 'n.txt'), 'old': 'uno', 'new': 'dos'},
+            'DENIED', 'SR_GUARD_FICHERO_EN_CARPETA_SERVIDOR_FMT')
+
+    NUL = os.path.join(JAIL, 'nul.txt')
+    open(NUL, 'w').write('queda\nborrame\nqueda\n')
+    res, sc, t = llama('delphi_textedit', {'path': NUL, 'edits': json.dumps(
+        [{'old': 'borrame', 'new': None, 'delete': True}])})
+    check('E47 "new": null es "sin new": delete sigue borrando',
+          not res.get('isError') and open(NUL).read() == 'queda\nqueda\n', t[:200])
 
     # un segundo servidor al MISMO puerto que el que ya escucha
     b = subprocess.run([EXE, '--http', str(PORT)], cwd=EXEDIR, capture_output=True, timeout=60,

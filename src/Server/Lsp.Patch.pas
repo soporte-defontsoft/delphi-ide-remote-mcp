@@ -223,6 +223,18 @@ procedure LeaveFileEdit;
   segunda aceptaba "mac" y creaba en CRLF (tercera revision, 27-sep-2026). }
 function EolDesconocido(const AEol: string): string;
 
+{ Lo escrito, releido del disco para el eco de verificacion. Si otro proceso
+  lo coge justo despues y no se puede releer, la escritura YA se hizo: se
+  devuelven los bytes escritos y ANota lo dice. Salia INTERNAL con el cambio
+  aplicado, y quien obedece repetia una edicion ya hecha (verificacion de la
+  tercera ronda, medido). Nunca lanza. }
+function RelecturaDe(const APath: string; const AEscrito: TArray<Byte>;
+  out ANota: string): TArray<Byte>;
+
+{ ReadNumbered para el eco de lo que se acaba de escribir: si no se puede
+  releer, lo dice en vez de lanzar (la escritura ya se hizo). }
+function EcoNumerado(const APath: string; AFrom, ATo: Integer): string;
+
 { Encoding for NEW Delphi files, honouring the IDE's configured default
   (Tools > Options > Editor): 'utf8-bom' when the IDE is set to UTF-8,
   'cp1252' when ANSI. }
@@ -646,6 +658,31 @@ begin
   GLock.Leave;
 end;
 
+function RelecturaDe(const APath: string; const AEscrito: TArray<Byte>;
+  out ANota: string): TArray<Byte>;
+begin
+  ANota := '';
+  try
+    Result := TFile.ReadAllBytes(APath);
+  except
+    on E: Exception do
+    begin
+      Result := AEscrito;
+      ANota := MsgFmt(SN_EDIT_RELECTURA_FALLIDA_FMT, [E.Message]);
+    end;
+  end;
+end;
+
+function EcoNumerado(const APath: string; AFrom, ATo: Integer): string;
+begin
+  try
+    Result := ReadNumbered(APath, AFrom, ATo);
+  except
+    on E: Exception do
+      Result := MsgFmt(SN_EDIT_RELECTURA_FALLIDA_FMT, [E.Message]);
+  end;
+end;
+
 function EolDesconocido(const AEol: string): string;
 begin
   Result := '';
@@ -672,11 +709,28 @@ begin
     '.' + TPath.GetFileName(APath) + '.' +
     LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)) + '.delphi-patch-tmp');
   TFile.WriteAllBytes(Tmp, B);
-  if not MoveFileEx(PChar(Tmp), PChar(APath), MOVEFILE_REPLACE_EXISTING) then
+  // Un lector de un instante (el preview de un changeset, una busqueda, el
+  // antivirus) tiene el fichero abierto sin compartir el borrado y el rename
+  // rebota: se reintenta unos instantes antes de decir que algo lo tiene
+  // (verificacion de la tercera ronda: cuatro EDIT-106 con varias sesiones,
+  // todos del propio servidor; reintentar funcionaba)
+  var Renombrado := False;
+  var Codigo: DWORD := 0;
+  for var Intento := 1 to 5 do
   begin
-    // el codigo de Windows ANTES de borrar el temporal (despues salia 0), y
+    Renombrado := MoveFileEx(PChar(Tmp), PChar(APath), MOVEFILE_REPLACE_EXISTING);
+    if Renombrado then
+      Break;
+    // el codigo de Windows ANTES de borrar el temporal (despues salia 0)
+    Codigo := GetLastError;
+    if (Codigo <> ERROR_ACCESS_DENIED) and (Codigo <> ERROR_SHARING_VIOLATION) and
+       (Codigo <> ERROR_LOCK_VIOLATION) then
+      Break;
+    Sleep(100);
+  end;
+  if not Renombrado then
+  begin
     // un mensaje que declara lo que es: algo tiene el fichero abierto
-    var Codigo := GetLastError;
     TFile.Delete(Tmp);
     raise Exception.Create(MsgFmt(SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT,
       [TPath.GetFileName(APath), Codigo]));
@@ -1312,7 +1366,7 @@ begin
             // un "new" que llega como objeto se leia como '' y la linea
             // quedaba en blanco contestando OK (tercera revision, medido)
             if MatchStr(Par.JsonString.Value, ['old', 'new', 'fragment']) and
-               not (Par.JsonValue is TJSONString) then
+               not (Par.JsonValue is TJSONString) and not (Par.JsonValue is TJSONNull) then
               Exit(MsgFmt(SR_PATCH_EDIT_NO_TEXTO_FMT,
                 [N + 1, Par.JsonString.Value]));
           end;
@@ -1501,6 +1555,7 @@ begin
           Sb.Append(Format('  %d: %s', [N, Una.Replace(#10, ' ')])).Append(#10);
           Break;
         end;
+        Foto.Anota(APath); // lo que dejo esta entrada: lo unico que el deshacer da por suyo
         // Los avisos del motor (*** ... ***) no se pierden al resumir la
         // edicion en una linea: en una tanda no llegaban al agente. La marca
         // va detras de la etiqueta del aviso (MsgCuerpo)
@@ -1553,7 +1608,7 @@ begin
   // tool: File not found", que en las reglas de este servidor significa "me
   // he roto por dentro" y no era el caso (2026-08-25).
   if not TFile.Exists(APath) then
-    Exit(MsgFmt(SR_LSP_NO_FILE_FMT, [APath]));
+    Exit(NoEsFichero(APath, MsgFmt(SR_LSP_NO_FILE_FMT, [APath])));
   try
     Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
   except
@@ -1783,6 +1838,10 @@ begin
         begin
           Skel := Format('unit %s;'#13#10#13#10'interface'#13#10#13#10 +
             'implementation'#13#10#13#10'end.'#13#10, [UnitName]);
+          // eol=lf tambien sin content: decia "LF" y escribia CRLF
+          // (verificacion de la tercera ronda)
+          if SameText(A.Eol, 'lf') then
+            Skel := Skel.Replace(#13#10, #10);
           Note := MsgText(SF_EDIT_ESQUELETO_ESTANDAR_IDE);
         end;
         CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
@@ -1790,16 +1849,20 @@ begin
         var NewK := ekCp1252;
         if IdeWantsUtf8 then
           NewK := ekUtf8Bom;
+        var CreadoBytes: TArray<Byte> := nil;
         try
-          AtomicWrite(A.Path, EncodeText(Skel, NewK));
+          CreadoBytes := EncodeText(Skel, NewK);
+          AtomicWrite(A.Path, CreadoBytes);
         except
           on E: Exception do
             Exit(MsgEnvuelve(SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT, E.Message));
         end;
-        var CM := Measure(TFile.ReadAllBytes(A.Path));
+        var NotaCreada: string;
+        var CM := Measure(RelecturaDe(A.Path, CreadoBytes, NotaCreada));
         Exit(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
           [TPath.GetFileName(A.Path), UnitName, Note, EncName(NewK),
-           IfThen(SameText(A.Eol, 'lf'), 'LF', 'CRLF'), Summary(CM)]));
+           IfThen(SameText(A.Eol, 'lf'), 'LF', 'CRLF'), Summary(CM)]) +
+          IfThen(NotaCreada <> '', #10 + NotaCreada, ''));
       end;
 
       if not TFile.Exists(A.Path) then
@@ -1911,9 +1974,11 @@ begin
           CrearCarpeta(TPath.GetDirectoryName(PreCopy));
           TFile.Copy(A.Path, PreCopy);
           AtomicWrite(A.Path, BkBytes);
+          var NotaRest: string;
+          var Releido := RelecturaDe(A.Path, BkBytes, NotaRest);
           Exit(MsgFmt(SK_EDIT_RESTAURADO_DESDE_FMT,
-            [TPath.GetFileName(A.Path), MaskDriveText('', Src), Summary(Measure(TFile.ReadAllBytes(A.Path))),
-             Losses.Count, MaskDriveText('', PreCopy)]));
+            [TPath.GetFileName(A.Path), MaskDriveText('', Src), Summary(Measure(Releido)),
+             Losses.Count, MaskDriveText('', PreCopy)]) + IfThen(NotaRest <> '', #10 + NotaRest, ''));
         finally
           BkSet.Free;
           Losses.Free;
@@ -2104,6 +2169,12 @@ begin
 
         if A.Insert = 'rutina-global' then
         begin
+          // visible=true son DOS escrituras (el cuerpo y la declaracion): si la
+          // segunda no se puede, la primera se deshace; salia exito con una
+          // nota y la rutina privada (verificacion de la tercera ronda)
+          var FotoVis: TFotoDeFicheros;
+          if A.Visible then
+            FotoVis.Toma([A.Path]);
           var R := DoEdit(A.Path, FrontLine,
             string.Join(#10, CodeLines) + #10#10 + FrontLine, FrontIdx + 1, False);
           if EsFallo(R) then
@@ -2124,10 +2195,23 @@ begin
               if EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
                 Extra := #10 + MsgFmt(SF_EDIT_VISIBLE_DECLARACION_ANADIDA_FMT, [Decl]) + #10 + R2
               else
-                Extra := #10 + MsgText(SF_EDIT_VISIBLE_NO_PUDE_ANADIR) + #10 + R2;
+              begin
+                var NoVolvio := FotoVis.Restaura;
+                if NoVolvio <> '' then
+                  Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, R2]));
+                Exit(MsgConCausa(SR_EDIT_VISIBLE_DESHECHO_FMT, R2,
+                  [MsgText(SF_EDIT_VISIBLE_NO_PUDE_ANADIR) + #10 + R2]));
+              end;
             end
             else
-              Extra := #10 + MsgText(SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION);
+            begin
+              var NoVolvio := FotoVis.Restaura;
+              if NoVolvio <> '' then
+                Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio,
+                  MsgText(SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION)]));
+              Exit(MsgFmt(SR_EDIT_VISIBLE_DESHECHO_FMT,
+                [MsgText(SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION)]));
+            end;
           end;
           Exit(MsgFmt(SK_EDIT_INSERT_RUTINA_ANTES_FMT,
             [FrontIdx + 1, FrontLine.Trim, R, Extra]));
@@ -2603,7 +2687,8 @@ begin
     var CopyNote := BackupFile(APath);
     AtomicWrite(APath, NewBytes);
 
-    After := TFile.ReadAllBytes(APath);
+    var NotaRelectura: string;
+    After := RelecturaDe(APath, NewBytes, NotaRelectura);
     D := Measure(After);
     var AfterText := DecodeBytes(After, K);
     var AfterLines := SplitToLines(AfterText);
@@ -2731,6 +2816,8 @@ begin
       [Accion, EncName(K), Eol, CopyNote, Summary(M), Summary(D), Ctx]);
     if Warnings.Count > 0 then
       Result := Result + #10 + Warnings.Text.TrimRight;
+    if NotaRelectura <> '' then
+      Result := Result + #10 + NotaRelectura;
   finally
     Hits.Free;
     Warnings.Free;

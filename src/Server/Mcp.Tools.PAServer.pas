@@ -1188,7 +1188,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(AProj) then
-    Exit(MsgFmt(SR_PASERVER_RUN_NOPROJ_FMT, [AProj]));
+    Exit(NoEsFichero(AProj, MsgFmt(SR_PASERVER_RUN_NOPROJ_FMT, [AProj])));
   Result := RemoteRunProjectDenied(AProj);
 end;
 

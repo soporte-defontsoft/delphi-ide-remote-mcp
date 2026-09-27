@@ -214,6 +214,24 @@ cid = id_changeset(out)
 out = call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create', 'path': os.path.join(MINE, '__delphi-patch', 'colado.txt'), 'content': 'x'})
 check('M changeset create dentro de la papelera: RECHAZADO al preparar', mc.rechazado(out) and mc.es(out, 'SR_GUARD_DEAD_TRASH'), out[:200])
 call('delphi_changeset', {'command': 'rollback', 'id': cid})
+# R8 (tercera revision): restore confirm lee la copia y escribe la de antes de
+# restaurar por las puertas; un __delphi-patch que es un enlace hacia fuera no
+# lleva ni la lectura ni la escritura fuera (era seguro solo por casualidad)
+RS = os.path.join(MINE, 'rest')
+os.makedirs(RS, exist_ok=True)
+RSV = os.path.join(OUT, 'rest-victima')
+os.makedirs(os.path.join(RSV, '20260101'), exist_ok=True)
+open(os.path.join(RSV, '20260101', 'R.pas'), 'w').write('unit R;\ninterface\nimplementation\nend.\n')
+open(os.path.join(RS, 'R.pas'), 'w').write('unit R;\ninterface\n// hoy\nimplementation\nend.\n')
+subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(RS, '__delphi-patch'), RSV], capture_output=True)
+_victima = sorted(os.path.join(r, n) for r, d, fs in os.walk(RSV) for n in fs)
+_rpas = open(os.path.join(RS, 'R.pas'), 'rb').read()
+out = call('delphi_edit', {'path': os.path.join(RS, 'R.pas'), 'restore': True, 'confirm': True})
+check('R8 restore con __delphi-patch enlazado fuera: RECHAZADO, la victima y la unit intactas',
+      os.path.isjunction(os.path.join(RS, '__delphi-patch')) and mc.rechazado(out) and
+      sorted(os.path.join(r, n) for r, d, fs in os.walk(RSV) for n in fs) == _victima and
+      open(os.path.join(RS, 'R.pas'), 'rb').read() == _rpas, out[:200])
+os.rmdir(os.path.join(RS, '__delphi-patch'))  # el ENLACE, nunca su destino
 srv.cierra()
 
 # ---- D: read-only mode (local stdio with no roots) never rewrites a form

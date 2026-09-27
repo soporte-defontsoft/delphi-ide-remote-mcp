@@ -51,6 +51,7 @@ implementation
 
 uses
   MCPServer.Registration,
+  Lsp.Patch,     // EnterFileEdit / LeaveFileEdit: el cerrojo de escritura
   Lsp.Scaffold;
 
 constructor TDelphiCreateTool.Create;
@@ -60,7 +61,24 @@ begin
   FDescription := SD_CREATE_CREATE;
 end;
 
+function CrearNucleo(const Params: TDelphiCreateParams): string; forward;
+
 function TDelphiCreateTool.ExecuteWithParams(const Params: TDelphiCreateParams): string;
+begin
+  // El cerrojo de escritura, como toda tool que escribe: un commit de
+  // changeset que fallaba a mitad deshacia lo que esta tool escribia
+  // entre medias, contestando OK a los dos (verificacion de la tercera
+  // revision, 27-sep-2026, medido). Perder una edicion con OK es peor que
+  // esperar (David).
+  EnterFileEdit;
+  try
+    Result := CrearNucleo(Params);
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
+function CrearNucleo(const Params: TDelphiCreateParams): string;
 var
   K: string;
 begin

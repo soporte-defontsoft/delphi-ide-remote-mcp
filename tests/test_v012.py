@@ -723,7 +723,8 @@ if VDRV:
                            {"path": 'srv' + VDRV + ':\\nota.md'},
                            {'DELPHI_MCP_VAULT_PATH': VDRV + ':\\'})
             check('vault en otra unidad: su letra ES una unidad servida',
-                  not mc.es(out, 'SR_UNIT_UNKNOWN_FMT'), out)
+                  not mc.es(out, 'SR_UNIT_UNKNOWN_FMT') and mc.resultado(out) not in ('INTERNAL', 'NO_ANSWER'),
+                  out)
             check('vault en otra unidad: la letra real no viaja',
                   re.search(r'(?<!srv)' + VDRV + r':\\', out, re.I) is None, out)
         finally:

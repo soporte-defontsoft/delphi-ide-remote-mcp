@@ -170,7 +170,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(A.Path) then
-    Exit(MsgFmt(SR_TEXT_NO_EXISTE_CREARLO_FMT, [A.Path]));
+    Exit(NoEsFichero(A.Path, MsgFmt(SR_TEXT_NO_EXISTE_CREARLO_FMT, [A.Path])));
   // La regla "esto no es texto" es LooksBinaryBytes (Lsp.Patch), la misma de
   // delphi_read: aqui habia una copia con otra ventana y sin UTF-16.
   if LooksBinaryBytes(TFile.ReadAllBytes(A.Path)) then
@@ -291,14 +291,14 @@ begin
       [Format(IfThen(A.DeleteLine, MsgText(SN_RANGE_DELETED_FMT), MsgText(SN_RANGE_REPLACED_FMT)),
          [Cuantas, Target + 1, Target + Cuantas, TPath.GetFileName(A.Path)]),
        EncNm, '__delphi-patch',
-       ReadNumbered(A.Path, Target, Target + Length(NewLines) + 1)]));
+       EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]));
   if A.DeleteLine then
     Exit(MsgFmt(SK_TEXT_OK_BORRADA_LINEA_FMT,
       [Target + 1, TPath.GetFileName(A.Path), EncNm, '__delphi-patch',
-       ReadNumbered(A.Path, Target, Target + 2)]));
+       EcoNumerado(A.Path, Target, Target + 2)]));
   Result := MsgFmt(SK_TEXT_OK_LINEA_FMT,
     [Target + 1, TPath.GetFileName(A.Path), EncNm, '__delphi-patch',
-     ReadNumbered(A.Path, Target, Target + Length(NewLines) + 1)]);
+     EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]);
 end;
 
 { El trabajo; ExecuteTextEdit lo envuelve en el cerrojo de escritura. }
@@ -367,7 +367,7 @@ begin
   if Result <> '' then
     Exit;
   if not TFile.Exists(APath) then
-    Exit(MsgFmt(SR_TEXT_NO_EXISTE_CREARLO_FMT, [APath]));
+    Exit(NoEsFichero(APath, MsgFmt(SR_TEXT_NO_EXISTE_CREARLO_FMT, [APath])));
   Result := AplicaTanda(APath, AEditsJson,
     function(const AOld, ANew: string; AAtLine, AToLine: Integer;
       ADelete: Boolean): string

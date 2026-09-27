@@ -237,10 +237,11 @@ begin
       // [local change 2026-09-27] ...pero un indice fuera de rango DENTRO del
       // servidor tambien es un EArgumentException (la RTL lo hereda asi): eso
       // es lo inesperado, no una llamada mal hecha
-      on E: EArgumentOutOfRangeException do
-        Result := MsgExcepcion(E.ClassName, E.Message);
       on E: EArgumentException do
-        Result := MsgEnvuelve(SR_ERROR_FMT, E.Message);
+        if EsFalloDelLlamador(E) then
+          Result := MsgEnvuelve(SR_ERROR_FMT, E.Message)
+        else
+          Result := MsgExcepcion(E.ClassName, E.Message);
       // [local change 2026-09-26] ...and a REFUSAL that travelled as an
       // exception is a refusal too: a check deep inside (the jail in
       // Lsp.Session, "the compiler does not resolve X" in Lsp.References)

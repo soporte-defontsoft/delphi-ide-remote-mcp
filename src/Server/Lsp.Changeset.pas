@@ -805,6 +805,11 @@ begin
               // salia sin deshacer nada (tercera revision, medido)
               if Ok then
               begin
+                // lo que ESTE paso dejo: lo unico que el deshacer puede
+                // dar por suyo (Lsp.Guard.TFotoDeFicheros.Anota)
+                Foto.Anota(Op.Path);
+                if Op.Kind = opMove then
+                  Foto.Anota(Op.Dest);
                 After := LineCountOf(Op.Path);
                 if After <> Before then
                 begin
