@@ -158,8 +158,10 @@ try:
               'camión grande'.encode('cp1252')), r[:240])
     r = call('delphi_edit', {'path': PAS, 'fragment': '69', 'new': '70',
                              'atline': 6, 'insert': 'rutina-global'})
+    # desde la quinta revision lo dice la regla de los modos (EDIT-111), la
+    # misma para toda pareja de modos que no combinan
     check('E3 fragment + insert se rechaza',
-          mc.rechazado(r) and mc.es(r, 'SR_FRAG_MIXED_FMT'), r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_EDIT_MODOS_NO_COMBINAN_FMT'), r[:200])
     r = call('delphi_edit', {'path': MD, 'fragment': '1570', 'new': '1',
                              'atline': 3})
     check('E4 cada gemela sigue vigilando su extension (un .md no es de delphi_edit)',

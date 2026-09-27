@@ -48,6 +48,7 @@ type
     // la otra, que es exactamente como se pierden las tools: una constante
     // compartida y se acabo (2026-09-20).
     [SchemaDescription(SP_PATCH_EDITS)]
+    [JsonComoTexto]
     property Edits: string read FEdits write FEdits;
     [SchemaDescription(SP_PATCH_FRAGMENT)]
     property Fragment: string read FFragment write FFragment;
@@ -71,7 +72,9 @@ type
 implementation
 
 uses
-  MCPServer.Registration;
+  System.StrUtils,
+  MCPServer.Registration,
+  Lsp.Patch; // ModosQueNoCombinan: la regla de los modos, la de delphi_edit
 
 { TDelphiTextEditTool }
 
@@ -86,6 +89,14 @@ function TDelphiTextEditTool.ExecuteWithParams(const Params: TDelphiTextEditPara
 var
   A: TTextEditArgs;
 begin
+  // los modos que no combinan: uno por llamada (Lsp.Patch.ModosQueNoCombinan)
+  Result := ModosQueNoCombinan([
+    IfThen(Params.Edits.Trim <> '', 'edits'),
+    IfThen(Params.Create_, 'create'),
+    IfThen((Params.Old <> '') or (Params.New <> '') or (Params.Fragment <> '') or Params.Delete,
+      'old/new/fragment/delete')]);
+  if Result <> '' then
+    Exit;
   if Params.Edits.Trim <> '' then
     Exit(ExecuteTextEdits(Params.Path, Params.Edits));
   A := Default(TTextEditArgs);

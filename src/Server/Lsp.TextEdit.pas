@@ -182,6 +182,7 @@ begin
     Exit(MsgText(SR_PATCH_ANCHOR_MULTILINE));
 
   Text := PatchLoadText(A.Path, EncNm);
+  var Antes := Text; // para saber si la edicion cambia algo
   Eol := DominantEol(Text);
   EndsWithEol := Text.EndsWith(#10);
   Lines := Text.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
@@ -201,7 +202,9 @@ begin
     Exit(AnclaPerdida(Lines, A.OldLine, TPath.GetFileName(A.Path)));
 
   Target := -1;
-  if Length(Matches) = 1 then
+  // Un atline que no es el de la unica ocurrencia se rechaza, como en
+  // delphi_edit: se ignoraba y se editaba la otra linea (quinta revision)
+  if (Length(Matches) = 1) and (A.AtLine <= 0) then
     Target := Matches[0]
   else
   begin
@@ -278,6 +281,9 @@ begin
   end;
   if not EndsWithEol then
     SetLength(Text, Length(Text) - Length(Eol));
+  // Nada cambia: ni se escribe ni se copia (la gemela de delphi_edit, UN texto)
+  if Text = Antes then
+    Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [Target + 1, TPath.GetFileName(A.Path)]));
 
   try
     PatchSaveText(A.Path, Text, EncNm); // backup + atomic + same encoding
@@ -290,14 +296,14 @@ begin
     Exit(MsgFmt(SK_TEXT_RANGO_VERIFICACION_FMT,
       [Format(IfThen(A.DeleteLine, MsgText(SN_RANGE_DELETED_FMT), MsgText(SN_RANGE_REPLACED_FMT)),
          [Cuantas, Target + 1, Target + Cuantas, TPath.GetFileName(A.Path)]),
-       EncNm, '__delphi-patch',
+       EncNm, TrashFolderName,
        EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]));
   if A.DeleteLine then
     Exit(MsgFmt(SK_TEXT_OK_BORRADA_LINEA_FMT,
-      [Target + 1, TPath.GetFileName(A.Path), EncNm, '__delphi-patch',
+      [Target + 1, TPath.GetFileName(A.Path), EncNm, TrashFolderName,
        EcoNumerado(A.Path, Target, Target + 2)]));
   Result := MsgFmt(SK_TEXT_OK_LINEA_FMT,
-    [Target + 1, TPath.GetFileName(A.Path), EncNm, '__delphi-patch',
+    [Target + 1, TPath.GetFileName(A.Path), EncNm, TrashFolderName,
      EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]);
 end;
 

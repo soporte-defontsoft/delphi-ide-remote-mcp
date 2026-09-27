@@ -50,6 +50,13 @@ begin
   TLogger.Info('STDIO transport started - reading from stdin, writing to stdout');
   TLogger.Info('Logging to stderr');
 
+  // [local change 2026-09-27] MCP por stdio es UTF-8: sin esto Readln
+  // decodificaba con la pagina de codigos ANSI (CP1252) y "cancion" con
+  // tilde, o un simbolo, llegaba como mojibake que se escribia en disco
+  // contestando OK (quinta revision, medido). La salida ya viajaba en ASCII
+  // (ToJSON escapa a \uXXXX), pero se declara igual: un contrato para los dos.
+  SetTextCodePage(Input, CP_UTF8);
+  SetTextCodePage(Output, CP_UTF8);
   InputLine := '';
   while not Eof(Input) do
   begin

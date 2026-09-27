@@ -43,9 +43,8 @@ type
     FServer: TMCPIdHTTPServer;
     FUrl: string;
     FExiting: Boolean;
-    FLogBuf: TStringList;        // producer side: any thread appends under FLogLock
+    FLogBuzon: TBuzonDeLineas;   // producer side: any thread appends under FLogLock
     FLogLock: TCriticalSection;
-    FLogDropped: Integer;        // lines refused because the buffer hit its cap
     FLogTimer: TTimer;
     FLinesPerFile: Integer;
     procedure AddLog(const S: string);
@@ -68,10 +67,7 @@ procedure TFormTray.AddLog(const S: string);
 begin
   FLogLock.Enter;
   try
-    if FLogBuf.Count >= LOG_BUF_CAP then
-      Inc(FLogDropped)
-    else
-      FLogBuf.Add(FormatDateTime('hh:nn:ss', Now) + '  ' + S);
+    FLogBuzon.Anade(FormatDateTime('hh:nn:ss', Now) + '  ' + S);
   finally
     FLogLock.Leave;
   end;
@@ -84,25 +80,19 @@ end;
 procedure TFormTray.DrainLog(Sender: TObject);
 var
   Chunk: TStringList;
-  Dropped: Integer;
 begin
   FLogLock.Enter;
   try
-    if (FLogBuf.Count = 0) and (FLogDropped = 0) then
-      Exit;
-    Chunk := FLogBuf;
-    FLogBuf := TStringList.Create;
-    Dropped := FLogDropped;
-    FLogDropped := 0;
+    Chunk := FLogBuzon.Recoge; // con la nota de lo descartado, si la hay
   finally
     FLogLock.Leave;
   end;
+  if Chunk = nil then
+    Exit;
   try
     MemoLog.Lines.BeginUpdate;
     try
       MemoLog.Lines.AddStrings(Chunk);
-      if Dropped > 0 then
-        MemoLog.Lines.Add(MsgFmt(SL_SYS_LOG_LINES_DROPPED_FMT, [Dropped]));
     finally
       MemoLog.Lines.EndUpdate;
     end;
@@ -121,7 +111,7 @@ begin
   SetLogTap(nil);
   if Assigned(FLogTimer) then
     FLogTimer.Enabled := False;
-  FreeAndNil(FLogBuf);
+  FreeAndNil(FLogBuzon);
   FreeAndNil(FLogLock);
   inherited;
 end;
@@ -132,7 +122,7 @@ var
 begin
   Form := Self;
   FLogLock := TCriticalSection.Create;
-  FLogBuf := TStringList.Create;
+  FLogBuzon := TBuzonDeLineas.Create;
   FLinesPerFile := LogLinesPerFile; // [Log] has ONE reader: Lsp.LogSink
   FLogTimer := TTimer.Create(Self);
   FLogTimer.Interval := 500;

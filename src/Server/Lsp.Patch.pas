@@ -169,6 +169,13 @@ function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
   el fallo; se mueve al sitio donde ya miran todas. }
 function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
 
+{ El fichero es un fuente Delphi que EXISTE (.pas/.dpr/.dpk/.inc): '' si lo
+  es; si no, por este orden, carpeta (LSP-016), no esta (LSP-011) o no es
+  Pascal (LSP-017). UNA regla para las siete tools del LSP: symbols decia
+  "no es un fuente ()" de una carpeta y references mandaba un .txt al motor
+  (quinta revision). La jaula va antes y la pone quien llama. }
+function NoEsFuenteDelphi(const APath: string): string;
+
 { EL motor de tandas, escrito UNA vez.
 
   Aplica un array JSON de ediciones sobre UN fichero, EN ORDEN y TODO O NADA:
@@ -234,6 +241,19 @@ function RelecturaDe(const APath: string; const AEscrito: TArray<Byte>;
 { ReadNumbered para el eco de lo que se acaba de escribir: si no se puede
   releer, lo dice en vez de lanzar (la escritura ya se hizo). }
 function EcoNumerado(const APath: string; AFrom, ATo: Integer): string;
+
+{ Los MODOS de una llamada de delphi_edit / delphi_textedit que no combinan:
+  con mas de uno, la negativa (INVALID_PARAM); '' si hay uno o ninguno. Se
+  descartaba uno en silencio y se contestaba OK (adduses+removeuses solo
+  anadia; edits+old solo aplicaba la tanda; quinta revision). UNA regla para
+  las dos tools: cada una dice que modos le llegaron. }
+function ModosQueNoCombinan(const AModos: array of string): string;
+
+{ Un "content" de unit que no vale: sin "unit X;", con otro nombre que el
+  del fichero, o sin "end." (la negativa; '' si vale). UNA regla para
+  delphi_create y delphi_edit createunit: la segunda creaba Nueva.pas con
+  "unit Otra;" contestando CREATED (quinta revision). }
+function ContenidoDeUnitNoValido(const AUnitName, AContent: string): string;
 
 { Encoding for NEW Delphi files, honouring the IDE's configured default
   (Tools > Options > Editor): 'utf8-bom' when the IDE is set to UTF-8,
@@ -333,6 +353,7 @@ uses
   Lsp.Guard,
   Lsp.Discovery,
   Lsp.Texts,
+  MCPServer.Serializer, // MotivoEntero / MotivoBooleano: la regla de un parametro, UNA
   Lsp.DesignerMeta,
   Lsp.DesignerBin,
   Lsp.DesignerBinding,
@@ -681,6 +702,34 @@ begin
     on E: Exception do
       Result := MsgFmt(SN_EDIT_RELECTURA_FALLIDA_FMT, [E.Message]);
   end;
+end;
+
+function ContenidoDeUnitNoValido(const AUnitName, AContent: string): string;
+var
+  M: TMatch;
+begin
+  Result := '';
+  M := TRegEx.Match(AContent, '(?im)^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;');
+  if not M.Success then
+    Exit(MsgText(SR_CREATE_CONTENT_NOUNIT));
+  if not SameText(M.Groups[1].Value, AUnitName) then
+    Exit(MsgFmt(SR_CREATE_CONTENT_NAME_FMT, [M.Groups[1].Value, AUnitName]));
+  if not TRegEx.IsMatch(AContent, '(?im)^\s*end\s*\.') then
+    Exit(MsgText(SR_CREATE_CONTENT_NOEND));
+end;
+
+function ModosQueNoCombinan(const AModos: array of string): string;
+var
+  Presentes: TArray<string>;
+  M: string;
+begin
+  Result := '';
+  Presentes := [];
+  for M in AModos do
+    if M <> '' then
+      Presentes := Presentes + [M];
+  if Length(Presentes) > 1 then
+    Result := MsgFmt(SR_EDIT_MODOS_NO_COMBINAN_FMT, [string.Join(' + ', Presentes)]);
 end;
 
 function EolDesconocido(const AEol: string): string;
@@ -1281,6 +1330,35 @@ begin
   AFin := AToLine - 1;
 end;
 
+{ Un campo entero de una entrada de "edits", por la MISMA regla que un
+  parametro de la llamada (TMCPSerializer.MotivoEntero): 0 si no viene o es
+  null. Se valida antes en el repaso de claves, asi que aqui ya vale. }
+function EnteroDeEntrada(O: TJSONObject; const AClave: string): Integer;
+var
+  V: TJSONValue;
+  I64: Int64;
+begin
+  Result := 0;
+  V := O.Values[AClave];
+  if (V = nil) or (V is TJSONNull) then
+    Exit;
+  if TMCPSerializer.MotivoEntero(V, High(Integer), I64) = '' then
+    Result := Integer(I64);
+end;
+
+{ El booleano de una entrada, por la misma regla (MotivoBooleano). }
+function BooleanoDeEntrada(O: TJSONObject; const AClave: string): Boolean;
+var
+  V: TJSONValue;
+begin
+  Result := False;
+  V := O.Values[AClave];
+  if (V = nil) or (V is TJSONNull) then
+    Exit;
+  if TMCPSerializer.MotivoBooleano(V, Result) <> '' then
+    Result := False;
+end;
+
 function AplicaTanda(const APath, AEditsJson: string;
   const AAplicaUna: TAplicaUnaEdicion): string;
 var
@@ -1369,11 +1447,31 @@ begin
                not (Par.JsonValue is TJSONString) and not (Par.JsonValue is TJSONNull) then
               Exit(MsgFmt(SR_PATCH_EDIT_NO_TEXTO_FMT,
                 [N + 1, Par.JsonString.Value]));
+            // y los enteros y el booleano, por la regla de un parametro: se
+            // leian con un valor por defecto ("delete":"yes" dejaba la linea
+            // en blanco, "toline":-1 se ignoraba) contestando OK
+            if not (Par.JsonValue is TJSONNull) then
+            begin
+              var MotivoValor := '';
+              if MatchStr(Par.JsonString.Value, ['atline', 'toline', 'occurrence']) then
+              begin
+                var I64: Int64;
+                MotivoValor := TMCPSerializer.MotivoEntero(Par.JsonValue, High(Integer), I64);
+              end
+              else if Par.JsonString.Value = 'delete' then
+              begin
+                var B: Boolean;
+                MotivoValor := TMCPSerializer.MotivoBooleano(Par.JsonValue, B);
+              end;
+              if MotivoValor <> '' then
+                Exit(MsgFmt(SR_PATCH_EDIT_VALOR_FMT,
+                  [N + 1, Par.JsonString.Value, MotivoValor]));
+            end;
           end;
-          Hasta[N] := O2.GetValue<Integer>('toline', 0);
-          var Nth := O2.GetValue<Integer>('occurrence', 0);
+          Hasta[N] := EnteroDeEntrada(O2, 'toline');
+          var Nth := EnteroDeEntrada(O2, 'occurrence');
           var Anc2 := O2.GetValue<string>('old', '');
-          if (O2.GetValue<Integer>('atline', 0) = 0) and (Nth > 0) then
+          if (EnteroDeEntrada(O2, 'atline') = 0) and (Nth > 0) then
           begin
             // Las de BLOQUE tambien: era la tercera puerta del mismo bug y
             // se quedo abierta cuando se cerraron las de una linea.
@@ -1430,6 +1528,9 @@ begin
           Break;
         end;
         Obj := TJSONObject(V);
+        // antes de cada entrada: si otro proceso cambio el fichero desde la
+        // anterior, el deshacer no se lo llevara (TFotoDeFicheros.Vigila)
+        Foto.Vigila(APath);
         Anc := Obj.GetValue<string>('old', '');
         Nue := Obj.GetValue<string>('new', '');
         // El antes, para saber DONDE cambio y CUANTO y arrastrar lo pendiente.
@@ -1458,9 +1559,9 @@ begin
         begin
           var Otros := '';
           if Anc <> '' then Otros := 'old'
-          else if Obj.GetValue<Boolean>('delete', False) then Otros := 'delete'
+          else if BooleanoDeEntrada(Obj, 'delete') then Otros := 'delete'
           else if Hasta[N - 1] > 0 then Otros := 'toline'
-          else if Obj.GetValue<Integer>('occurrence', 0) > 0 then
+          else if EnteroDeEntrada(Obj, 'occurrence') > 0 then
             Otros := 'occurrence';
           var NueLinea: string;
           var Mal: string;
@@ -1469,7 +1570,7 @@ begin
           // (tercera revision, 27-sep-2026)
           try
             Mal := FragmentoALinea(APath, Frag, Nue,
-              Obj.GetValue<Integer>('atline', 0), Otros, Anc, NueLinea);
+              EnteroDeEntrada(Obj, 'atline'), Otros, Anc, NueLinea);
           except
             on E: Exception do
               Mal := MsgExcepcion(E.ClassName, E.Message);
@@ -1498,13 +1599,13 @@ begin
         try
           if EsBloque then
             Una := ApplyBlockEdit(APath, Anc, Nue,
-              Obj.GetValue<Integer>('occurrence', 0), Ocurr[N - 1])
+              EnteroDeEntrada(Obj, 'occurrence'), Ocurr[N - 1])
           else
           begin
-            EnLinea := Obj.GetValue<Integer>('atline', 0);
+            EnLinea := EnteroDeEntrada(Obj, 'atline');
             if EnLinea = 0 then
               EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
-            Borra := Obj.GetValue<Boolean>('delete', False);
+            Borra := BooleanoDeEntrada(Obj, 'delete');
             Una := AAplicaUna(Anc, Nue, EnLinea, Hasta[N - 1], Borra);
           end;
         except
@@ -1596,6 +1697,15 @@ begin
   end;
 end;
 
+function NoEsFuenteDelphi(const APath: string): string;
+begin
+  if not TFile.Exists(APath) then
+    Exit(NoEsFichero(APath, MsgFmt(SR_LSP_NO_FILE_FMT, [APath])));
+  Result := '';
+  if not MatchText(TPath.GetExtension(APath), ['.pas', '.dpr', '.dpk', '.inc']) then
+    Result := MsgFmt(SR_LSP_NOT_SOURCE_FMT, [TPath.GetFileName(APath)]);
+end;
+
 function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
 var
   Lines: TArray<string>;
@@ -1607,8 +1717,9 @@ begin
   // Una ruta que no esta llegaba al motor y volvia como "Error executing
   // tool: File not found", que en las reglas de este servidor significa "me
   // he roto por dentro" y no era el caso (2026-08-25).
-  if not TFile.Exists(APath) then
-    Exit(NoEsFichero(APath, MsgFmt(SR_LSP_NO_FILE_FMT, [APath])));
+  Result := NoEsFuenteDelphi(APath);
+  if Result <> '' then
+    Exit;
   try
     Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
   except
@@ -1673,6 +1784,15 @@ begin
   M := Measure(B);
   if M.CRLF > M.Loose then Eol := 'CRLF' else Eol := 'LF';
   Lines := SplitToLines(Text);
+  // El salto final CIERRA la ultima linea, no abre otra: "a\nb\n" son 2
+  // lineas, y se ensenaba una tercera vacia que no existe (quinta revision)
+  if (Length(Lines) > 1) and (Lines[High(Lines)] = '') then
+    SetLength(Lines, Length(Lines) - 1);
+  // Un fichero VACIO se lee: es un exito con cero lineas. Salia EDIT-100
+  // INVALID_PARAM ("from=1 is past the end") (quinta revision)
+  if (Length(Lines) = 0) and (AFrom <= 1) then
+    Exit(NotaBin + MsgFmt(SK_EDIT_LECTURA_VACIO_FMT,
+      [TPath.GetFileName(APath), EncName(K), Eol, Summary(M)]));
   IniL := AFrom;
   if IniL < 1 then IniL := 1;
   if IniL > Length(Lines) then
@@ -1767,7 +1887,7 @@ begin
         Exit(MsgFmt(SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT, [Ext]));
 
       PLower := LongCanonical(A.Path).ToLower.Replace('/', '\');
-      if PLower.Contains('\' + BACKUP_SUB + '\') then
+      if EnPapelera(A.Path) then
         Exit(MsgFmt(SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT, [BACKUP_SUB]));
       if PLower.Contains('\__history\') or PLower.Contains('\__recovery\') then
         Exit(MsgText(SR_EDIT_HISTORY_RECOVERY_SON_COPIAS));
@@ -1823,6 +1943,9 @@ begin
         var Note: string;
         if A.Content <> '' then
         begin
+          var MalContenido := ContenidoDeUnitNoValido(UnitName, A.Content);
+          if MalContenido <> '' then
+            Exit(MalContenido);
           // Whole known content in ONE call (replicating a file you already
           // have beats a create + N anchored patches). EOL normalized to
           // CRLF - the JSON channel often arrives LF-only - and the result
@@ -1852,10 +1975,17 @@ begin
         var CreadoBytes: TArray<Byte> := nil;
         try
           CreadoBytes := EncodeText(Skel, NewK);
-          AtomicWrite(A.Path, CreadoBytes);
         except
           on E: Exception do
             Exit(MsgEnvuelve(SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT, E.Message));
+        end;
+        // escribir es otra cosa que codificar: una ruta demasiado larga salia
+        // como "no se pudo codificar" (quinta revision)
+        try
+          AtomicWrite(A.Path, CreadoBytes);
+        except
+          on E: Exception do
+            Exit(MsgEnvuelve(SR_EDIT_NO_SE_ESCRIBIO_FMT, E.Message, [A.Path, E.Message]));
         end;
         var NotaCreada: string;
         var CM := Measure(RelecturaDe(A.Path, CreadoBytes, NotaCreada));
@@ -2182,35 +2312,48 @@ begin
           var Extra := '';
           if A.Visible and EsMsg(R, SK_EDIT_ESCRITO_EN_FMT) then
           begin
-            var ImpIdx: Integer;
-            if FindUniqueLine(SplitToLines(DecodeBytes(TFile.ReadAllBytes(A.Path), K)),
-              function(L: string): Boolean
+            FotoVis.Anota(A.Path);
+            // La segunda escritura puede LANZAR (otro proceso coge el fichero
+            // tras la primera): sin este try el cuerpo quedaba escrito y la
+            // declaracion no, contestando "cierralo y repite" - y repetir
+            // duplicaba la rutina (quinta revision, medido 12 de 12)
+            var FalloTexto := '';
+            var FalloCausa := '';
+            try
+              FotoVis.Vigila(A.Path);
+              var ImpIdx: Integer;
+              if FindUniqueLine(SplitToLines(DecodeBytes(TFile.ReadAllBytes(A.Path), K)),
+                function(L: string): Boolean
+                begin
+                  Result := L.Trim.ToLower = 'implementation';
+                end, ImpIdx) then
               begin
-                Result := L.Trim.ToLower = 'implementation';
-              end, ImpIdx) then
-            begin
-              var Decl := string.Join(#10, FirmaLineas);
-              if not Decl.EndsWith(';') then Decl := Decl + ';';
-              var R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
-              if EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
-                Extra := #10 + MsgFmt(SF_EDIT_VISIBLE_DECLARACION_ANADIDA_FMT, [Decl]) + #10 + R2
+                var Decl := string.Join(#10, FirmaLineas);
+                if not Decl.EndsWith(';') then Decl := Decl + ';';
+                var R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
+                if EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
+                  Extra := #10 + MsgFmt(SF_EDIT_VISIBLE_DECLARACION_ANADIDA_FMT, [Decl]) + #10 + R2
+                else
+                begin
+                  FalloCausa := R2;
+                  FalloTexto := MsgText(SF_EDIT_VISIBLE_NO_PUDE_ANADIR) + #10 + R2;
+                end;
+              end
               else
+                FalloTexto := MsgText(SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION);
+            except
+              on E: Exception do
               begin
-                var NoVolvio := FotoVis.Restaura;
-                if NoVolvio <> '' then
-                  Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, R2]));
-                Exit(MsgConCausa(SR_EDIT_VISIBLE_DESHECHO_FMT, R2,
-                  [MsgText(SF_EDIT_VISIBLE_NO_PUDE_ANADIR) + #10 + R2]));
+                FalloCausa := MsgExcepcion(E.ClassName, E.Message);
+                FalloTexto := FalloCausa;
               end;
-            end
-            else
+            end;
+            if FalloTexto <> '' then
             begin
               var NoVolvio := FotoVis.Restaura;
               if NoVolvio <> '' then
-                Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio,
-                  MsgText(SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION)]));
-              Exit(MsgFmt(SR_EDIT_VISIBLE_DESHECHO_FMT,
-                [MsgText(SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION)]));
+                Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, FalloTexto]));
+              Exit(MsgConCausa(SR_EDIT_VISIBLE_DESHECHO_FMT, FalloCausa, [FalloTexto]));
             end;
           end;
           Exit(MsgFmt(SK_EDIT_INSERT_RUTINA_ANTES_FMT,
@@ -2289,6 +2432,11 @@ begin
           Exit(MsgFmt(SR_EDIT_EXISTE_IMPLEMENTACION_LINEA_PERO_FMT,
             [A.ClassName_, Nombre, IImplExiste + 1]));
 
+        // Dos escrituras (la declaracion y la implementacion): todo o nada.
+        // Si la segunda falla o LANZA, la primera se deshace; quedaba "a
+        // medias" y, por la excepcion, ni eso se decia (quinta revision)
+        var FotoMet: TFotoDeFicheros;
+        FotoMet.Toma([A.Path]);
         var R1 := '';
         var DeclLinea := '';
         var DeclNota := '';
@@ -2396,12 +2544,23 @@ begin
         var FirmaCual := TRegEx.Replace(Firma,
           '^(procedure|function|constructor|destructor)(\s+)', '$1$2' + A.ClassName_ + '.', [roIgnoreCase]);
         CodeLines[IFirmaIni] := FirmaCual;
-        var R2 := DoEdit(A.Path, FrontLine, string.Join(#10, CodeLines) + #10#10 + FrontLine, 0, False);
+        FotoMet.Anota(A.Path);
+        var R2 := '';
+        try
+          FotoMet.Vigila(A.Path);
+          R2 := DoEdit(A.Path, FrontLine, string.Join(#10, CodeLines) + #10#10 + FrontLine, 0, False);
+        except
+          on E: Exception do
+            R2 := MsgExcepcion(E.ClassName, E.Message);
+        end;
         if not EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
         begin
           if DeclNota <> '' then
             Exit(MsgConCausa(SR_EDIT_INSERT_FALLO_IMPLEMENTACION_FMT, R2, [R2]));
-          Exit(MsgFmt(SR_EDIT_INSERT_A_MEDIAS_FMT, [R2]));
+          var NoVolvio := FotoMet.Restaura;
+          if NoVolvio <> '' then
+            Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, R2]));
+          Exit(MsgConCausa(SR_EDIT_INSERT_METODO_DESHECHO_FMT, R2, [R2]));
         end;
         if DeclNota <> '' then
           Exit(MsgFmt(SK_EDIT_INSERT_METODO_SOLO_IMPL_FMT,
@@ -2676,6 +2835,11 @@ begin
     var EolSep: string;
     if Eol = 'CRLF' then EolSep := #13#10 else EolSep := #10;
     Joined := string.Join(#10, Lines).Replace(#10, EolSep);
+    // Nada cambia (old == new): no se escribe ni se copia, y se dice.
+    // Contestaba WRITTEN con una copia de un fichero identico (quinta
+    // revision). La gemela, en Lsp.TextEdit.DoEditLine.
+    if Joined = Text then
+      Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [HitIdx + 1, TPath.GetFileName(APath)]));
 
     try
       NewBytes := EncodeText(Joined, K);

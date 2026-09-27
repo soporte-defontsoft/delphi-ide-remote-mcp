@@ -85,27 +85,37 @@ var
   cajon. Componerla a mano es como nacieron tres convenciones distintas para
   la misma papelera. }
 function TrashPathFor(const APath: string): string;
+var
+  Veto: string;
 begin
   Result := TPath.Combine(TrashDayDir(APath, 'deleted'),
     TrashStampedName(TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
+  // La papelera es un DESTINO: por la puerta de escribir, sobre la ruta REAL.
+  // Un __delphi-patch que fuera un enlace se llevaba el fichero borrado (y la
+  // copia previa de delphi_move) FUERA de la jaula, contestando "recoverable"
+  // (quinta revision, medido). Aqui, en el nombrador: una puerta para los dos.
+  Veto := EscrituraDenegada(TPath.GetDirectoryName(Result));
+  if Veto = '' then
+    Veto := EscrituraDenegada(Result);
+  if Veto <> '' then
+    raise Exception.Create(Veto);
 end;
 
 function IsBackupPath(const APath: string): Boolean;
-var
-  N: string;
 begin
-  N := ExcludeTrailingPathDelimiter(APath.ToLower.Replace('/', '\'));
-  // inside the trash, OR the trash folder itself (no trailing separator).
-  Result := N.Contains('\' + BACKUP_SUB + '\') or N.EndsWith('\' + BACKUP_SUB);
+  // inside the trash, OR the trash folder itself: EL lector de Lsp.Guard,
+  // sobre la ruta larga (aqui se miraba el texto y __DELP~1 no era papelera)
+  Result := EnPapelera(APath);
 end;
 
 { The trash/backup folder ITSELF (…\__delphi-patch), not something inside it.
   Moving/deleting the trash itself is refused; moving an item OUT of it (a
   restore) is allowed. }
 function IsBackupRoot(const APath: string): Boolean;
+var
+  EsLaCarpeta: Boolean;
 begin
-  Result := ExcludeTrailingPathDelimiter(APath.ToLower.Replace('/', '\'))
-    .EndsWith('\' + BACKUP_SUB);
+  Result := EnPapelera(APath, EsLaCarpeta) and EsLaCarpeta;
 end;
 
 { Clear the read-only bit on a whole tree. Git marks every object file
@@ -333,7 +343,24 @@ function BorrarNucleo(const Params: TDelphiDeleteParams): string;
 var
   Denied, Trash, ProjNote, DesignerNote, P, R, Ext: string;
   Projects: TArray<string>;
+  // borrar una UNIT es todo o nada: sus proyectos, su form y ella
+  FotoUnit: TFotoDeFicheros;
+  HayFotoUnit: Boolean;
+
+  { Lo que ya habia cambiado vuelve, y la respuesta lo dice con la causa. }
+  function DeshaceUnit(const ACausa: string): string;
+  var
+    NoVolvio: string;
+  begin
+    NoVolvio := FotoUnit.Restaura;
+    if NoVolvio <> '' then
+      Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, ACausa]));
+    Result := MsgConCausa(SR_FILE_UNIT_DESHECHO_FMT, ACausa,
+      [TPath.GetFileName(Params.Path), ACausa]);
+  end;
+
 begin
+  HayFotoUnit := False;
   Denied := PathDenied(Params.Path);
   if Denied <> '' then
     Exit(Denied);
@@ -443,6 +470,16 @@ begin
     // still readable, so the form class/variable are known), then trash the
     // designer pair with it.
     Projects := ProjectsUsingUnit(Params.Path);
+    // TODO O NADA (quinta revision): un .dproj que otro proceso tenia abierto
+    // dejaba el .dpr cambiado y la unit borrada, con un exito que escondia el
+    // error. La foto: cada proyecto (.dpr/.dpk y su .dproj) y el form.
+    var RutasFoto: TArray<string> := [];
+    for P in Projects do
+      RutasFoto := RutasFoto + [P, ChangeFileExt(P, '.dproj')];
+    for Ext in ['.dfm', '.fmx'] do
+      RutasFoto := RutasFoto + [ChangeFileExt(Params.Path, Ext)];
+    FotoUnit.Toma(RutasFoto);
+    HayFotoUnit := True;
     for P in Projects do
     begin
       if PathDenied(P) <> '' then
@@ -451,11 +488,16 @@ begin
         Continue;
       end;
       try
+        FotoUnit.Vigila(P);
         R := RemoveProjectUnit(P, Params.Path, True);
       except
         on E: Exception do
-          R := MsgFmt(SF_FILE_ERROR_FMT, [E.Message]);
+          Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
       end;
+      if EsFallo(R) then
+        Exit(DeshaceUnit(R));
+      FotoUnit.Anota(P);
+      FotoUnit.Anota(ChangeFileExt(P, '.dproj'));
       ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
     end;
     if Length(Projects) > 0 then
@@ -467,12 +509,12 @@ begin
       if TFile.Exists(ChangeFileExt(Params.Path, Ext)) then
       try
         MoveToTrash(ChangeFileExt(Params.Path, Ext), Trash);
+        FotoUnit.Anota(ChangeFileExt(Params.Path, Ext));
         DesignerNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
           [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), MsgText(SF_FILE_TAMBIEN_A_PAPELERA)]);
       except
         on E: Exception do
-          DesignerNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-            [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), MsgFmt(SF_FILE_ERROR_FMT, [E.Message])]);
+          Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
       end;
   end
   else if TDirectory.Exists(Params.Path) then
@@ -525,6 +567,9 @@ begin
         Exit(MsgFmt(SR_FILE_DELETE_LOCKED_FMT,
           [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
            E.Message]));
+      // una unit: sus proyectos y su form vuelven (todo o nada)
+      if HayFotoUnit then
+        Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
       if (ProjNote <> '') or (DesignerNote <> '') then
         Exit(MsgFmt(SR_FILE_PARTIAL_FMT, [MsgText(SF_FILE_AL_MOVER_PAPELERA), E.Message,
           #10 + DesignerNote + #10 + ProjNote]));
@@ -695,6 +740,10 @@ begin
       Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
   end;
   try
+    // La carpeta de destino PRIMERO: si no se puede (GUARD-019, un fichero en
+    // el camino) no se ha movido nada y tampoco debe quedar una copia del
+    // origen en la papelera (quinta revision).
+    CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(Params.Dest)));
     // Safety copy of the source into the trash before relocating... salvo que
     // el origen YA sea una copia de la papelera. Hacer una copia de una copia
     // dejaba una papelera DENTRO de la papelera, con el sello doblado, y cada
@@ -703,7 +752,7 @@ begin
     if Params.Copy then
       BackupNote := ''
     else if DesdePapelera then
-      BackupNote := MsgText(SF_MOVE_ORIGEN_YA_EN_PAPELERA)
+      BackupNote := '' // su nota es otra (SN_FILE_SIN_COPIA_DESDE_PAPELERA)
     else
     begin
       BackupNote := TrashPathFor(Params.Path);
@@ -714,7 +763,6 @@ begin
       else
         TFile.Copy(Params.Path, BackupNote);
     end;
-    CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(Params.Dest)));
     if Params.Copy then
     begin
       if TDirectory.Exists(Params.Path) then
@@ -748,8 +796,13 @@ begin
   if Length(NoSeguidos) > 0 then
     Result := Result + #10 + MsgFmt(SN_COPY_LINKS_NOT_FOLLOWED_FMT,
       [Length(NoSeguidos), string.Join(', ', NoSeguidos)]);
-  if not Params.Copy then // una copia no necesita red: el origen sigue ahi
-    Result := Result + #10 + MsgFmt(SN_FILE_COPIA_SEGURIDAD_EN_FMT, [BackupNote]);
+  // una copia no necesita red: el origen sigue ahi. Y lo que sale de la
+  // papelera tampoco: salia "(backup in (the source was already...))"
+  if not Params.Copy then
+    if DesdePapelera then
+      Result := Result + #10 + MsgText(SN_FILE_SIN_COPIA_DESDE_PAPELERA)
+    else
+      Result := Result + #10 + MsgFmt(SN_FILE_COPIA_SEGURIDAD_EN_FMT, [BackupNote]);
   if not IsUnit then
     Exit(Result + Reubicacion(DesdePapelera));
 

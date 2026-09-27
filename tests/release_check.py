@@ -125,6 +125,16 @@ else:
 # 6) package + sha256
 commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True,
                         text=True).stdout.strip()
+# 6a) Una version con tag YA se publico: su zip no se rehace. El gate corre
+# entre versiones con el numero de la anterior y pisaba el artefacto de la
+# 1.6.2 con codigo a medias (quinta revision). El paquete se arma igual, para
+# comprobar su contenido, pero en otra CARPETA (dev\): el nombre es uno.
+tag_commit = subprocess.run(['git', 'rev-list', '-n', '1', 'v' + ver], cwd=REPO,
+                            capture_output=True, text=True).stdout.strip()
+if tag_commit and tag_commit != commit:
+    check('v%s not published yet (bump the version before publishing)' % ver, False,
+          'tag v%s = %s, HEAD = %s' % (ver, tag_commit[:10], commit[:10]))
+    OUT = os.path.join(OUT, 'dev')
 os.makedirs(OUT, exist_ok=True)
 zip_name = 'DelphiLspMcp-v%s-win64.zip' % ver
 zip_path = os.path.join(OUT, zip_name)

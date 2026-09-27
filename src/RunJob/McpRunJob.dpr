@@ -77,6 +77,24 @@ const
   quien la lee (estaba escrita a mano dos veces). }
 const
   COMO_YA_TERMINADO = 'already finished';
+{ Las marcas que el SERVIDOR lee de la salida: del nombrador compartido con
+  el nodo y con Lsp.RemoteRun. }
+{$I ..\DesktopNode\NodeProtocolo.inc}
+
+{ La ultima linea de un trabajo: su codigo de salida. }
+function LineaRC(ACodigo: Int64): string;
+begin
+  Result := #10 + JOB_RC + IntToStr(ACodigo) + #10;
+end;
+
+{ La primera: el entorno grafico, <1|0>|<lo anadido>. }
+function LineaEnv(AGrafico: Boolean; const AAnadido: string): string;
+begin
+  if AGrafico then
+    Result := JOB_ENV + '1|' + AAnadido + #10
+  else
+    Result := JOB_ENV + '0|' + AAnadido + #10;
+end;
 
 { El fichero donde vive el PID de un trabajo mientras corre: <job>.pid, al
   lado de su <job>.out. Un unico nombrador para quien lo escribe (el vigia),
@@ -316,10 +334,8 @@ begin
     end;
   end;
   // un DISPLAY heredado de una sesion que ya se cerro no es un entorno
-  if Sesion.Hay and ((Entorno('DISPLAY') <> '') or (Entorno('WAYLAND_DISPLAY') <> '')) then
-    Result := '___ENV=1|' + Anadido.Trim + #10
-  else
-    Result := '___ENV=0|' + Anadido.Trim + #10;
+  Result := LineaEnv(Sesion.Hay and
+    ((Entorno('DISPLAY') <> '') or (Entorno('WAYLAND_DISPLAY') <> '')), Anadido.Trim);
 end;
 
 { Arranca el programa desatendido y deja un vigia. El VIGIA es el primer hijo
@@ -337,7 +353,7 @@ begin
   Vigia := fork;
   if Vigia < 0 then
   begin
-    Anade(ASalida, MsgText(SR_JOB_FORK_VIGIA_FALLO) + #10'___RC=-1'#10);
+    Anade(ASalida, MsgText(SR_JOB_FORK_VIGIA_FALLO) + LineaRC(-1));
     Exit;
   end;
   if Vigia > 0 then
@@ -347,7 +363,7 @@ begin
   Hijo := fork;
   if Hijo < 0 then
   begin
-    Anade(ASalida, MsgText(SR_JOB_FORK_PROGRAMA_FALLO) + #10'___RC=-1'#10);
+    Anade(ASalida, MsgText(SR_JOB_FORK_PROGRAMA_FALLO) + LineaRC(-1));
     _exit(1);
   end;
   if Hijo > 0 then
@@ -404,7 +420,7 @@ begin
   else
     Codigo := 128 + (Estado and $7F);  // muerto por senal, como el shell
   BorraPid(ASalida);
-  Anade(ASalida, #10'___RC=' + IntToStr(Codigo) + #10, False);
+  Anade(ASalida, LineaRC(Codigo), False);
   _exit(0);
 end;
 
@@ -458,7 +474,7 @@ begin
     H := OpenProcess(SYNCHRONIZE or PROCESS_QUERY_LIMITED_INFORMATION, False, APid);
   if H = 0 then
   begin
-    Anade(ASalida, #10'___RC=-1'#10);
+    Anade(ASalida, LineaRC(-1));
     Exit;
   end;
   try
@@ -469,7 +485,7 @@ begin
     CloseHandle(H);
   end;
   BorraPid(ASalida);
-  Anade(ASalida, #10'___RC=' + IntToStr(Integer(Codigo)) + #10, False);
+  Anade(ASalida, LineaRC(Integer(Codigo)), False);
 end;
 
 function QueryFullProcessImageNameW(hProcess: THandle; dwFlags: DWORD;
@@ -633,7 +649,7 @@ begin
   if Pid = 0 then
   begin
     Anade(ASalida, MsgFmt(SR_JOB_NO_PUDE_ARRANCAR_FMT, [ExtractFileName(AExe),
-      Err]) + #10'___RC=-1'#10);
+      Err]) + LineaRC(-1));
     Exit;
   end;
   EscribePid(ASalida, Pid);
@@ -704,9 +720,9 @@ begin
     // 1. el entorno / la sesion
 {$IFDEF MSWINDOWS}
     if SesionPropia = 0 then
-      Anade(Salida, '___ENV=0|win:0'#10)
+      Anade(Salida, LineaEnv(False, 'win:0'))
     else
-      Anade(Salida, '___ENV=1|win:' + IntToStr(SesionPropia) + #10);
+      Anade(Salida, LineaEnv(True, 'win:' + IntToStr(SesionPropia)));
 {$ELSE}
     Anade(Salida, CompletaEntornoGrafico);
 {$ENDIF}
@@ -717,7 +733,7 @@ begin
     if SameText(Exe, '@kill') then
     begin
       if (Length(Args) < 1) or not IdDeTrabajoValido(Args[0].Trim) then
-        Anade(Salida, MsgText(SR_JOB_KILL_NECESITA_ID) + #10'___RC=2'#10)
+        Anade(Salida, MsgText(SR_JOB_KILL_NECESITA_ID) + LineaRC(2))
       else
       begin
         var Pid: Int64 := 0;
@@ -736,18 +752,18 @@ begin
           Origen := MsgText(SF_JOB_NOMBRE_DEL_VIGIA);
         end;
         if Pid = 0 then
-          Anade(Salida, MsgFmt(SN_JOB_NINGUN_TRABAJO_VIVO_FMT, [Args[0].Trim]) + #10'___RC=3'#10)
+          Anade(Salida, MsgFmt(SN_JOB_NINGUN_TRABAJO_VIVO_FMT, [Args[0].Trim]) + LineaRC(3))
         else
         begin
           var Como := '';
           if MatarProceso(Pid, Carpeta, Como) then
             Anade(Salida, MsgFmt(SK_JOB_TERMINADO_EL_TRABAJO_FMT, [Args[0].Trim,
-              Pid, Origen, Como]) + #10'___RC=0'#10)
+              Pid, Origen, Como]) + LineaRC(0))
           else if Como = COMO_YA_TERMINADO then
-            Anade(Salida, MsgFmt(SN_JOB_NINGUN_TRABAJO_VIVO_FMT, [Args[0].Trim]) + #10'___RC=3'#10)
+            Anade(Salida, MsgFmt(SN_JOB_NINGUN_TRABAJO_VIVO_FMT, [Args[0].Trim]) + LineaRC(3))
           else
             Anade(Salida, MsgFmt(SR_JOB_NO_PUDE_MATAR_FMT, [Args[0].Trim,
-              Pid, Como, SysErrorMessage(GetLastError)]) + #10'___RC=1'#10);
+              Pid, Como, SysErrorMessage(GetLastError)]) + LineaRC(1));
           BorraPid(TPath.Combine(Carpeta, Args[0].Trim + '.out'));
         end;
       end;
@@ -764,12 +780,12 @@ begin
 {$ENDIF}
     if not FileExists(Exe) then
     begin
-      Anade(Salida, MsgFmt(SR_JOB_NO_EXISTE_FMT, [ExtractFileName(Exe)]) + #10'___RC=127'#10);
+      Anade(Salida, MsgFmt(SR_JOB_NO_EXISTE_FMT, [ExtractFileName(Exe)]) + LineaRC(127));
       Exit;
     end;
     if not EsBinarioNativo(Exe) then
     begin
-      Anade(Salida, MsgFmt(SR_JOB_NO_EJECUTABLE_NATIVO_FMT, [ExtractFileName(Exe)]) + #10'___RC=126'#10);
+      Anade(Salida, MsgFmt(SR_JOB_NO_EJECUTABLE_NATIVO_FMT, [ExtractFileName(Exe)]) + LineaRC(126));
       Exit;
     end;
 
@@ -782,6 +798,6 @@ begin
   except
     on E: Exception do
       if Salida <> '' then
-        Anade(Salida, MsgFmt(SR_JOB_EXCEPCION_FMT, [E.ClassName, E.Message]) + #10'___RC=-1'#10);
+        Anade(Salida, MsgFmt(SR_JOB_EXCEPCION_FMT, [E.ClassName, E.Message]) + LineaRC(-1));
   end;
 end.

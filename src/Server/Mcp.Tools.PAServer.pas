@@ -1053,7 +1053,7 @@ begin
     TFile.Delete(ProfileFile);
   except
     on E: Exception do
-      Exit(MsgFmt(SR_PAS_NO_PUDE_BORRAR_PERFIL_FMT, [E.Message]));
+      Exit(MsgEnvuelve(SR_PAS_NO_PUDE_BORRAR_PERFIL_FMT, E.Message));
   end;
   BorrarPerfilDelIde(Info.Version, ProfName);
   Result := MsgFmt(SN_PASERVER_PROFILE_REMOVED_FMT, [ProfName]);

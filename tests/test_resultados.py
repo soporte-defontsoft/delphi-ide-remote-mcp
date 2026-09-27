@@ -79,6 +79,39 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E46 un FICHERO donde el servidor guarda sus copias es DENIED, no
       INVALID_PARAM (la ruta del agente era buena)
   E47 una entrada con "new": null es "sin new" (delete sigue borrando)
+  Quinta revision:
+  E48 delete/move con la papelera enlazada FUERA de la jaula: DENIED, nada
+      se mueve (la copia caia en la victima)
+  E50 upload que no puede copiar lo que pisa: DENIED y no escribe
+  E51 stdio: el UTF-8 del cliente llega entero (se leia con la pagina de
+      la consola)
+  E52 una entrada de "edits" con un booleano o un entero que no lo es
+  E53 un texto que llega como lista es INVALID_PARAM; "edits" como lista si
+  E54 un .groupproj que otro tiene abierto es DENIED (SYS-027)
+  E55 una ruta de Linux o relativa: INVALID_PARAM en la entrada
+  E56 modos de delphi_edit que no combinan: INVALID_PARAM
+  E57 createunit con un content que no casa: INVALID_PARAM, nada creado
+  E58 delphi_create con un proyecto que no se deja registrar: nada creado
+  E59 borrar una unit con un proyecto que no se deja tocar: la unit sigue
+  E60 styles lint con un project que no existe: NOT_FOUND
+  E61 leer un fichero vacio es un exito; sin linea fantasma al final
+  E62 delphi_list includetrash con mascaras solapadas: cada fichero una vez
+  E63 un proyecto VCL para Linux64 se niega antes de compilar
+  E64 un move rechazado no deja copia en la papelera
+  E65 old == new: UNCHANGED, sin escribir ni copiar (las dos gemelas)
+  E66 textedit con un atline equivocado y ancla unica: se niega
+  E67 set-sdk en Win64: INVALID_PARAM
+  E69 las tools del LSP: carpeta, no esta, no es Pascal - una regla
+  E70 un paquete que se cae a medias no deja su .tmp
+  E71 el proyecto de tests lee su linea de comandos (--run:)
+  E72 una relativa en una tool que resuelve ANTES de preguntar a la jaula
+      (package, upload): la para la puerta, la ultima de sus reglas
+  E73 barra inicial / "C:x": ni relativa al proyecto ni completa (config path,
+      unit suelta): INVALID_PARAM, no resuelta contra la unidad del proceso
+  E74 la papelera por su alias 8.3 (__DELP~1) es la papelera tambien para
+      delphi_delete (un lector, EnPapelera; antes miraba el texto)
+  E75 la RAIZ por su alias 8.3 sigue siendo la raiz: no se borra (GUARD-014)
+  E76 un fichero de dentro por su alias 8.3 se lee (la jaula decia "fuera")
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
 """
@@ -521,6 +554,289 @@ try:
         [{'old': 'borrame', 'new': None, 'delete': True}])})
     check('E47 "new": null es "sin new": delete sigue borrando',
           not res.get('isError') and open(NUL).read() == 'queda\nqueda\n', t[:200])
+
+    # ---- quinta revision ------------------------------------------------
+    import stat
+
+    def copias_de(nombre):
+        return [os.path.join(r, n) for r, d, fs in os.walk(os.path.join(JAIL, '__delphi-patch'))
+                for n in fs if n.startswith(nombre)]
+
+    TJ = os.path.join(JAIL, 'tj')
+    os.makedirs(TJ)
+    VICT = os.path.join(BASE, 'victima')   # fuera de la jaula
+    os.makedirs(VICT)
+    open(os.path.join(VICT, 'suyo.txt'), 'w').write('de otro\n')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(TJ, '__delphi-patch'), VICT],
+                   capture_output=True)
+    XJ = os.path.join(TJ, 'x.txt')
+    open(XJ, 'w').write('x\n')
+    res, sc, t = llama('delphi_delete', {'path': XJ})
+    check('E48 delete con la papelera enlazada FUERA de la jaula: DENIED y nada se mueve',
+          os.path.isdir(os.path.join(TJ, '__delphi-patch')) and res.get('isError') is True and
+          sc.get('code') == 'DENIED' and os.path.exists(XJ) and os.listdir(VICT) == ['suyo.txt'],
+          '%s | %s | victima=%s' % (json.dumps(sc)[:100], t[:200], os.listdir(VICT)))
+    res, sc, t = llama('delphi_move', {'path': XJ, 'dest': os.path.join(TJ, 'y.txt')})
+    check('E48 ...y move (su copia previa va a esa papelera): DENIED y nada se mueve',
+          res.get('isError') is True and os.path.exists(XJ) and os.listdir(VICT) == ['suyo.txt'],
+          '%s | victima=%s' % (t[:200], os.listdir(VICT)))
+
+    res, sc, t = llama('delphi_upload', {'path': os.path.join(TAP, 'n.txt'), 'offset': 0,
+                                         'chunkbase64': base64.b64encode(b'nuevo\n').decode()})
+    check('E50 upload sin poder copiar lo que pisa: DENIED y no escribe',
+          res.get('isError') is True and sc.get('code') == 'DENIED' and
+          open(os.path.join(TAP, 'n.txt')).read() == 'uno\n', '%s | %s' % (json.dumps(sc)[:100], t[:200]))
+
+    UTF = os.path.join(JAIL, 'utf.txt')
+    st = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='utf8')
+    try:
+        st.send(json.dumps({"jsonrpc": "2.0", "id": 77, "method": "tools/call", "params": {
+            "name": "delphi_textedit",
+            "arguments": {"path": UTF, "create": True, "content": 'canción ✔ ñ\n'}}},
+            ensure_ascii=False))
+        rs = st.recv(77)
+    finally:
+        st.cierra()
+    en_disco = open(UTF, 'rb').read().decode('utf-8', 'replace') if os.path.exists(UTF) else None
+    check('E51 stdio: lo que el cliente manda en UTF-8 llega entero (acentos y un simbolo)',
+          rs is not None and en_disco is not None and 'canción ✔ ñ' in en_disco,
+          '%r | %s' % (en_disco, mc.texto(rs, True)[:150]))
+
+    NOTES_ANTES = open(NOTES, 'rb').read()
+    res, sc, t = llama('delphi_textedit', {'path': NOTES, 'edits': json.dumps(
+        [{'old': 'First line.', 'new': 'X', 'delete': 'yes'}])})
+    check('E52 una entrada de "edits" con un booleano que no lo es: INVALID_PARAM y nada escrito',
+          res.get('isError') is True and sc.get('code') == 'INVALID_PARAM' and
+          mc.es(t, 'SR_PATCH_EDIT_VALOR_FMT') and open(NOTES, 'rb').read() == NOTES_ANTES,
+          '%s | %s' % (json.dumps(sc)[:100], t[:200]))
+    res, sc, t = llama('delphi_textedit', {'path': NOTES, 'edits': json.dumps(
+        [{'old': 'First line.', 'new': 'X', 'toline': -1}])})
+    check('E52 ...y un entero negativo en una entrada, igual',
+          res.get('isError') is True and sc.get('code') == 'INVALID_PARAM' and
+          mc.es(t, 'SR_PATCH_EDIT_VALOR_FMT') and open(NOTES, 'rb').read() == NOTES_ANTES, t[:200])
+
+    rechazo('E53 un texto que llega como lista es INVALID_PARAM (se escribia su JSON)',
+            'delphi_textedit', {'path': NOTES, 'old': ['First line.'], 'new': 'X'},
+            'INVALID_PARAM', 'SR_SYS_PARAM_VALUE_FMT')
+    res, sc, t = llama('delphi_textedit', {'path': NOTES, 'edits': [{'old': 'Second line.',
+                                                                    'new': 'Second line.'}]})
+    check('E53 ...pero "edits" como lista JSON de verdad se acepta',
+          not res.get('isError') and open(NOTES, 'rb').read() == NOTES_ANTES, t[:200])
+
+    GRP = os.path.join(JAIL, 'Grupo.groupproj')
+    open(GRP, 'w').write('<Project><ItemGroup><Projects Include="App.dproj"/></ItemGroup></Project>\n')
+    h = k32.CreateFileW(GRP, 0x80000000, 0, None, 3, 0x80, None)
+    try:
+        res, sc, t = llama('delphi_config', {'command': 'view', 'project': GRP})
+    finally:
+        k32.CloseHandle(h)
+    check('E54 config view de un .groupproj que otro tiene abierto: DENIED (SYS-027)',
+          res.get('isError') is True and sc.get('code') == 'DENIED' and mc.es(t, 'SR_FICHERO_OCUPADO_FMT'),
+          '%s | %s' % (json.dumps(sc)[:100], t[:200]))
+
+    rechazo('E55 una ruta de Linux (/home/x) es INVALID_PARAM en la entrada',
+            'delphi_list', {'root': '/home/x'}, 'INVALID_PARAM', 'SR_GUARD_RUTA_RELATIVA_FMT')
+    rechazo('E55 ...y una relativa en delphi_search',
+            'delphi_search', {'root': 'rel\\dir', 'query': 'x'}, 'INVALID_PARAM', 'SR_GUARD_RUTA_RELATIVA_FMT')
+
+    LF_ANTES = open(LFU, 'rb').read()
+    res, sc, t = llama('delphi_edit', {'path': LFU, 'old': 'interface', 'new': 'x',
+                                       'edits': json.dumps([{'old': 'interface', 'new': 'y'}])})
+    check('E56 modos de delphi_edit que no combinan: INVALID_PARAM y nada escrito',
+          res.get('isError') is True and sc.get('code') == 'INVALID_PARAM' and
+          mc.abre(t, 'SR_EDIT_MODOS_NO_COMBINAN_FMT') and open(LFU, 'rb').read() == LF_ANTES, t[:200])
+
+    OTRA = os.path.join(JAIL, 'Otra.pas')
+    res, sc, t = llama('delphi_edit', {'path': OTRA, 'createunit': True,
+                                       'content': 'unit NoCasa;\n\ninterface\n\nimplementation\n\nend.\n'})
+    check('E57 createunit con un content cuyo "unit" no casa: INVALID_PARAM y nada creado',
+          res.get('isError') is True and sc.get('code') == 'INVALID_PARAM' and
+          mc.abre(t, 'SR_CREATE_CONTENT_NAME_FMT') and not os.path.exists(OTRA), t[:200])
+
+    PAN = os.path.join(JAIL, 'pan')
+    res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'Pan', 'dir': PAN})
+    DPR_PAN = os.path.join(PAN, 'Pan.dpr')
+    DPROJ_PAN = os.path.join(PAN, 'Pan.dproj')
+    check('E58 fixture: el proyecto se crea', os.path.exists(DPR_PAN) and os.path.exists(DPROJ_PAN), t[:200])
+    if os.path.exists(DPROJ_PAN):
+        ANT_DPR, ANT_DPROJ = open(DPR_PAN, 'rb').read(), open(DPROJ_PAN, 'rb').read()
+        os.chmod(DPROJ_PAN, stat.S_IREAD)
+        try:
+            res, sc, t = llama('delphi_create', {'kind': 'unit', 'name': 'UPan', 'project': DPROJ_PAN})
+        finally:
+            os.chmod(DPROJ_PAN, stat.S_IREAD | stat.S_IWRITE)
+        check('E58 delphi_create con un proyecto que no se deja registrar: fallo y NADA creado',
+              res.get('isError') is True and mc.abre(t, 'SR_CREATE_CREADA_NO_REGISTRADA_FMT') and
+              not os.path.exists(os.path.join(PAN, 'UPan.pas')) and
+              open(DPR_PAN, 'rb').read() == ANT_DPR and open(DPROJ_PAN, 'rb').read() == ANT_DPROJ,
+              '%s | %s | %s' % (json.dumps(sc)[:100], t[:250], os.listdir(PAN)))
+
+        res, sc, t = llama('delphi_create', {'kind': 'unit', 'name': 'UDel', 'project': DPROJ_PAN})
+        UDEL = os.path.join(PAN, 'UDel.pas')
+        check('E59 fixture: la unit se crea y registra', not res.get('isError') and os.path.exists(UDEL),
+              t[:200])
+        ANT_DPR = open(DPR_PAN, 'rb').read()
+        os.chmod(DPROJ_PAN, stat.S_IREAD)
+        try:
+            res, sc, t = llama('delphi_delete', {'path': UDEL})
+        finally:
+            os.chmod(DPROJ_PAN, stat.S_IREAD | stat.S_IWRITE)
+        check('E59 borrar una unit con un proyecto que no se deja tocar: fallo y la unit sigue',
+              res.get('isError') is True and mc.abre(t, 'SR_FILE_UNIT_DESHECHO_FMT') and
+              os.path.exists(UDEL) and open(DPR_PAN, 'rb').read() == ANT_DPR,
+              '%s | %s' % (json.dumps(sc)[:100], t[:250]))
+
+    rechazo('E60 styles lint con un project que no existe: NOT_FOUND',
+            'delphi_styles', {'command': 'lint', 'path': JAIL, 'project': os.path.join(JAIL, 'nada.dproj')},
+            'NOT_FOUND', 'SR_STYLES_PROJECT_NO_EXISTE_FMT')
+
+    VACIO = os.path.join(JAIL, 'vacio.txt')
+    open(VACIO, 'w').close()
+    res, sc, t = llama('delphi_read', {'path': VACIO})
+    check('E61 leer un fichero VACIO es un exito (salia EDIT-100 INVALID_PARAM)',
+          not res.get('isError') and mc.abre(t, 'SK_EDIT_LECTURA_VACIO_FMT'), t[:200])
+    res, sc, t = llama('delphi_read', {'path': NOTES})
+    check('E61 ..."a\\nb\\n" son 2 lineas, sin una tercera fantasma',
+          not res.get('isError') and 'Lines 1-2 of 2 ' in t and '3|' not in t, t[:300])
+
+    LT = os.path.join(JAIL, 'lt')
+    os.makedirs(LT)
+    for n in ('a.txt', 'b.txt', 'c.txt'):
+        open(os.path.join(LT, n), 'w').write(n + '\n')
+    llama('delphi_delete', {'path': os.path.join(LT, 'a.txt')})
+    res, sc, t = llama('delphi_list', {'root': LT, 'pattern': '*;*.txt', 'includetrash': True})
+    j = mc.como_json(t)
+    rutas = [f.get('path') for f in j.get('files', [])]
+    vivas = [r for r in rutas if '__delphi-patch' not in r]
+    check('E62 delphi_list includetrash con mascaras solapadas: cada fichero UNA vez',
+          len(vivas) == 2 and len(rutas) > 2 and len(set(rutas)) == len(rutas) and
+          j.get('total') == len(rutas) and j.get('shownTrash') == len(rutas) - len(vivas),
+          '%s | %s' % (j.get('total'), rutas))
+
+    VCLP = os.path.join(JAIL, 'Vc.dproj')
+    open(VCLP, 'w').write('<Project><PropertyGroup><FrameworkType>VCL</FrameworkType>'
+                          '<MainSource>Vc.dpr</MainSource></PropertyGroup></Project>\n')
+    open(os.path.join(JAIL, 'Vc.dpr'), 'w').write('program Vc;\n\nuses\n  Vcl.Forms;\n\nbegin\nend.\n')
+    res, sc, t = llama('delphi_build', {'project': VCLP, 'platform': 'Linux64'})
+    check('E63 compilar un proyecto VCL para Linux64 se niega ANTES (la regla de add-platform)',
+          res.get('isError') is True and sc.get('code') == 'DENIED' and mc.abre(t, 'SR_RECHAZADO_FMT') and
+          'VCL' in t and 'add-searchpath' not in t, '%s | %s' % (json.dumps(sc)[:100], t[:250]))
+
+    MV = os.path.join(JAIL, 'mv.txt')
+    open(MV, 'w').write('mv\n')
+    res, sc, t = llama('delphi_move', {'path': MV, 'dest': os.path.join(ECO, 'sub', 'mv.txt')})
+    check('E64 move rechazado (un FICHERO en el camino): no deja copia en la papelera',
+          res.get('isError') is True and os.path.exists(MV) and not copias_de('mv.txt'),
+          '%s | %s' % (t[:200], copias_de('mv.txt')))
+
+    antes_c = len(copias_de('Lf.pas'))
+    res, sc, t = llama('delphi_edit', {'path': LFU, 'old': 'interface', 'new': 'interface'})
+    check('E65 delphi_edit con old == new: UNCHANGED, sin escribir ni copiar',
+          not res.get('isError') and mc.abre(t, 'SN_EDIT_SIN_CAMBIOS_FMT') and
+          open(LFU, 'rb').read() == LF_ANTES and len(copias_de('Lf.pas')) == antes_c, t[:200])
+    antes_c = len(copias_de('NOTES.md'))
+    res, sc, t = llama('delphi_textedit', {'path': NOTES, 'old': 'First line.', 'new': 'First line.'})
+    check('E65 ...y su gemela delphi_textedit, igual',
+          not res.get('isError') and mc.abre(t, 'SN_EDIT_SIN_CAMBIOS_FMT') and
+          open(NOTES, 'rb').read() == NOTES_ANTES and len(copias_de('NOTES.md')) == antes_c, t[:200])
+
+    rechazo('E66 textedit con un atline que no es el de la unica ocurrencia: se niega (como delphi_edit)',
+            'delphi_textedit', {'path': NOTES, 'old': 'First line.', 'new': 'X', 'atline': 2},
+            'INVALID_PARAM', 'SR_TEXT_ATLINE_NINGUNA_OCURRENCIAS_FMT')
+
+    rechazo('E67 set-sdk en Win64: INVALID_PARAM (decia "Registered for Win64: .")',
+            'delphi_config', {'command': 'set-sdk', 'project': DPROJ, 'platform': 'Win64', 'sdk': 'x'},
+            'INVALID_PARAM', 'SR_CONFIG_SDK_LOCAL_FMT')
+
+    rechazo('E69 hover sobre una CARPETA: INVALID_PARAM (decia "no es un fuente ()")',
+            'delphi_hover', {'path': NOREPO, 'line': 0, 'character': 0}, 'INVALID_PARAM',
+            'SR_LSP_IS_FOLDER_FMT')
+    rechazo('E69 ...sobre un .pas que no existe: NOT_FOUND',
+            'delphi_hover', {'path': os.path.join(JAIL, 'nada.pas'), 'line': 0, 'character': 0},
+            'NOT_FOUND', 'SR_LSP_NO_FILE_FMT')
+    rechazo('E69 ...y references sobre un .txt: INVALID_PARAM (se lo mandaba al motor)',
+            'delphi_references', {'path': ECO, 'line': 0, 'character': 0}, 'INVALID_PARAM',
+            'SR_LSP_NOT_SOURCE_FMT')
+
+    PKF = os.path.join(JAIL, 'paqf')
+    os.makedirs(PKF)
+    open(os.path.join(PKF, 'a.txt'), 'w').write('a\n')
+    BLOQ = os.path.join(PKF, 'b.txt')
+    open(BLOQ, 'w').write('b\n')
+    h = k32.CreateFileW(BLOQ, 0x80000000, 0, None, 3, 0x80, None)
+    try:
+        res, sc, t = llama('delphi_package', {'dir': PKF, 'outfile': os.path.join(JAIL, 'paqf.zip')})
+    finally:
+        k32.CloseHandle(h)
+    tmps = [n for n in os.listdir(JAIL) if n.startswith('paqf.zip') and n.endswith('.tmp')]
+    check('E70 un paquete que se cae a medias no deja su .tmp',
+          res.get('isError') is True and not tmps, '%s | %s' % (t[:200], tmps))
+
+    TT = os.path.join(JAIL, 'tt')
+    res, sc, t = llama('delphi_create', {'kind': 'project-test', 'name': 'Tt', 'dir': TT})
+    TTDPR = os.path.join(TT, 'Tt.dpr')
+    check('E71 el proyecto de tests lee su linea de comandos (el filter de delphi_test)',
+          os.path.exists(TTDPR) and 'TDUnitX.CheckCommandLine;' in open(TTDPR).read(), t[:200])
+
+    # E55 mide list/search, que ya niegan la relativa ellas: pasaria sin la
+    # puerta. package y upload la resolvian contra la carpeta del proceso
+    # ANTES de mirar la jaula: solo las para la pasada de relativas.
+    rechazo('E72 delphi_package con dir relativo: INVALID_PARAM en la puerta',
+            'delphi_package', {'dir': 'rel\\dir'}, 'INVALID_PARAM', 'SR_GUARD_RUTA_RELATIVA_FMT')
+    rechazo('E72 ...y delphi_upload con path relativo, sin escribir nada',
+            'delphi_upload', {'path': 'subido.txt', 'chunkbase64': 'aG9sYQ=='},
+            'INVALID_PARAM', 'SR_GUARD_RUTA_RELATIVA_FMT')
+    check('E72 ...y el upload no dejo el fichero junto al proceso',
+          not os.path.exists(os.path.join(EXEDIR, 'subido.txt')) and
+          not os.path.exists(os.path.join(os.getcwd(), 'subido.txt')), os.getcwd())
+
+    # TPath.IsPathRooted da por completas "\x" y "C:x": se resolvian contra la
+    # unidad del PROCESO (fuera: un DENIED enganoso; dentro: donde nadie dijo)
+    if os.path.exists(DPROJ_PAN):
+        rechazo('E73 add-searchpath con "\\lib": INVALID_PARAM, ni relativa ni completa',
+                'delphi_config', {'project': DPROJ_PAN, 'command': 'add-searchpath',
+                                  'path': '\\lib'}, 'INVALID_PARAM', 'SR_CONFIG_PATH_A_MEDIAS_FMT')
+        rechazo('E73 ...y add-deployfile con "C:x.txt"', 'delphi_config',
+                {'project': DPROJ_PAN, 'command': 'add-deployfile', 'platform': 'Win64',
+                 'path': 'C:x.txt'}, 'INVALID_PARAM', 'SR_CONFIG_PATH_A_MEDIAS_FMT')
+    rechazo('E73 ...y una unit suelta con dir "\\suelta": INVALID_PARAM', 'delphi_create',
+            {'kind': 'unit', 'name': 'USuelta', 'dir': '\\suelta'},
+            'INVALID_PARAM', 'SR_CREATE_UNIT_NEED_PROJECT')
+
+    # La papelera se reconocia de dos formas: la puerta de escritura sobre la
+    # ruta larga, delphi_delete / delphi_move sobre el texto tal cual
+    import ctypes
+    E74 = os.path.join(JAIL, 'e74')
+    os.makedirs(E74)
+    open(os.path.join(E74, 'borrame.txt'), 'w').write('x')
+    llama('delphi_delete', {'path': os.path.join(E74, 'borrame.txt')})
+    PAPE = os.path.join(E74, '__delphi-patch')
+    buf = ctypes.create_unicode_buffer(1024)
+    CORTA = buf.value if ctypes.windll.kernel32.GetShortPathNameW(PAPE, buf, 1024) else ''
+    if os.path.isdir(PAPE) and CORTA and os.path.basename(CORTA).lower() != '__delphi-patch':
+        rechazo('E74 delete de la papelera por su alias 8.3 (%s): DENIED, la papelera'
+                % os.path.basename(CORTA),
+                'delphi_delete', {'path': CORTA}, 'DENIED', 'SR_FILE_PAPELERA_NO_SE_BORRA_FMT')
+        check('E74 ...y la papelera sigue ahi', os.path.isdir(PAPE), os.listdir(E74))
+    else:
+        print('NOTA: E74 sin medir: este volumen no da nombres 8.3 (%r)' % CORTA)
+
+    # La jaula comparaba el TEXTO con las raices: con OTROS nombres cortos que
+    # los declarados, una carpeta suya salia "fuera" (FormaLarga, 28-sep). Y
+    # la raiz misma por su alias tiene que seguir siendo LA RAIZ: si solo
+    # casase la contencion, entraria como "dentro" y se podria borrar.
+    JAIL_CORTA = buf.value if ctypes.windll.kernel32.GetShortPathNameW(JAIL, buf, 1024) else ''
+    if JAIL_CORTA and JAIL_CORTA.lower() != JAIL.lower():
+        rechazo('E75 borrar la RAIZ por su alias 8.3: DENIED, es la raiz (%s)' % JAIL_CORTA[-30:],
+                'delphi_delete', {'path': JAIL_CORTA}, 'DENIED', 'SR_ROOT_ITSELF_FMT')
+        check('E75 ...y la raiz sigue ahi', os.path.isdir(JAIL), JAIL)
+        LEIBLE = os.path.join(JAIL, 'UE76.pas')
+        open(LEIBLE, 'w').write('unit UE76; // dentro\n')
+        res, sc, t = llama('delphi_read', {'path': os.path.join(JAIL_CORTA, 'UE76.pas')})
+        check('E76 un fichero de dentro por su alias 8.3 se lee',
+              not res.get('isError') and 'dentro' in t, t[:200])
+    else:
+        print('NOTA: E75/E76 sin medir: la jaula no tiene otro nombre 8.3 (%r)' % JAIL_CORTA)
 
     # un segundo servidor al MISMO puerto que el que ya escucha
     b = subprocess.run([EXE, '--http', str(PORT)], cwd=EXEDIR, capture_output=True, timeout=60,

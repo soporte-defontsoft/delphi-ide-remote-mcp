@@ -1267,6 +1267,38 @@ begin
     Result := Result + #10 + Note;
 end;
 
+{ Un cambio del proyecto (el .dpr/.dpk y su .dproj) TODO O NADA: si la accion
+  lanza o falla a mitad (un .dproj que otro proceso tiene abierto), lo ya
+  escrito vuelve. Registrar una unit escribia el .dpr y contestaba "repite"
+  con el .dproj sin tocar (quinta revision). }
+function ProyectoTodoONada(const AProject: string; const AAccion: TFunc<string>): string;
+var
+  Dpr, Dproj, NoVolvio: string;
+  Foto: TFotoDeFicheros;
+begin
+  if ResolveProjectPair(AProject, Dpr, Dproj) <> '' then
+    Exit(AAccion()); // la accion dira lo que no cuadra; no hay que deshacer
+  Foto.Toma([Dpr, Dproj]);
+  try
+    Result := AAccion();
+  except
+    on E: Exception do
+    begin
+      NoVolvio := Foto.Restaura;
+      if NoVolvio <> '' then
+        raise Exception.Create(MsgFmt(SR_FOTO_NO_VOLVIO_FMT,
+          [NoVolvio, MsgExcepcion(E.ClassName, E.Message)]));
+      raise;
+    end;
+  end;
+  if EsFallo(Result) then
+  begin
+    NoVolvio := Foto.Restaura;
+    if NoVolvio <> '' then
+      Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Result]);
+  end;
+end;
+
 function AddProjectUnit(const AProject, APasPath: string): string;
 begin
   // Registrar una unidad es leer el .dpr, modificarlo y escribirlo: dos
@@ -1275,7 +1307,11 @@ begin
   // de escritura por delante, el .dpr deja de ser una carrera.
   EnterFileEdit;
   try
-    Result := AddProjectUnitNucleo(AProject, APasPath);
+    Result := ProyectoTodoONada(AProject,
+      function: string
+      begin
+        Result := AddProjectUnitNucleo(AProject, APasPath);
+      end);
   finally
     LeaveFileEdit;
   end;
@@ -1416,7 +1452,11 @@ function RemoveProjectUnit(const AProject, APasPath: string;
 begin
   EnterFileEdit;
   try
-    Result := RemoveProjectUnitNucleo(AProject, APasPath, AFileGoesToo);
+    Result := ProyectoTodoONada(AProject,
+      function: string
+      begin
+        Result := RemoveProjectUnitNucleo(AProject, APasPath, AFileGoesToo);
+      end);
   finally
     LeaveFileEdit;
   end;
@@ -1636,7 +1676,14 @@ begin
         Result := Result + [P];
       end;
     except
-      Result := [];
+      // un proyecto que otro proceso tiene abierto NO es "no lista nada":
+      // borrar una unit contestaba "ningun .dpr la listaba" y el build
+      // siguiente fallaba con F1026 (quinta revision). Ese error sube; lo
+      // demas (un proyecto que no se entiende) sigue siendo "nada"
+      on E: EFOpenError do
+        raise;
+      on E: Exception do
+        Result := [];
     end;
   finally
     Includes.Free;

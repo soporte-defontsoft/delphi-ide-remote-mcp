@@ -670,7 +670,7 @@ begin
   Result := True;
 end;
 
-procedure EnsureDeployManifest(const ADprojPath, APlat, ABdsRoot: string;
+procedure EnsureDeployManifestNucleo(const ADprojPath, APlat, ABdsRoot: string;
   out AGenerated: Boolean);
 const
   // The exact line the IDE writes into every .dproj it saves. Projects
@@ -745,8 +745,10 @@ begin
     var Tpl := TPath.Combine(TPath.GetDirectoryName(ADprojPath),
       'AndroidManifest.template.xml');
     var Seed := TPath.Combine(ABdsRoot, 'ObjRepos\en\Android\AndroidManifest.xml');
+    // por el escritor que pregunta a la puerta (AtomicWrite), no TFile.Copy:
+    // en una raiz de solo lectura esto escribia igual (quinta revision)
     if (not TFile.Exists(Tpl)) and TFile.Exists(Seed) then
-      TFile.Copy(Seed, Tpl);
+      AtomicWrite(Tpl, TFile.ReadAllBytes(Seed));
   end;
   // 2) the manifest itself, only when the project has none - BUT an IDE
   //    manifest written before the platform was ever deployed from the IDE
@@ -762,7 +764,7 @@ begin
   end;
   if APlat.StartsWith('Android', True) then
   begin
-    TFile.WriteAllText(F, AndroidDeployXml(N, APlat, ABdsRoot), TEncoding.ASCII);
+    AtomicWrite(F, TEncoding.ASCII.GetBytes(AndroidDeployXml(N, APlat, ABdsRoot)));
     AGenerated := True;
     Exit;
   end;
@@ -791,8 +793,22 @@ begin
       '        </DeployFile>'#13#10 +
       '    </ItemGroup>'#13#10;
   Xml := Xml + '</Project>'#13#10;
-  TFile.WriteAllText(F, Xml, TEncoding.ASCII);
+  AtomicWrite(F, TEncoding.ASCII.GetBytes(Xml));
   AGenerated := True;
+end;
+
+{ El manifiesto se escribe con el cerrojo de escritura, como todo lo que
+  escribe: el build lo tomaba solo con el suyo, y un delphi_edit del .dproj
+  a la vez se pisaba con el import que se anade aqui (quinta revision). }
+procedure EnsureDeployManifest(const ADprojPath, APlat, ABdsRoot: string;
+  out AGenerated: Boolean);
+begin
+  EnterFileEdit;
+  try
+    EnsureDeployManifestNucleo(ADprojPath, APlat, ABdsRoot, AGenerated);
+  finally
+    LeaveFileEdit;
+  end;
 end;
 
 { F2613 "Unit 'X' not found" / F1026 "File not found: 'X.dcu'": the unit
@@ -1257,9 +1273,21 @@ begin
   if not FileExists(Info.RsVarsBat) then
     raise Exception.Create(MsgFmt(SE_BUILD_RSVARS_BAT_FOUND_FMT, [Info.RsVarsBat]));
 
-  Plat := APlatform;
+  // La plataforma con SU nombre (un nombrador: CanonicalPlatform). La puerta
+  // la valida sin mirar mayusculas y aqui llegaba tal cual: platform=win64
+  // compilaba a una carpeta "win64" y msbuild caia con MSB4018 (quinta
+  // revision).
+  Plat := CanonicalPlatform(APlatform);
+  if (Plat = '') and (APlatform.Trim <> '') then
+    raise Exception.Create(MsgFmt(SR_BUILD_PLATFORM_FMT, [APlatform.Trim]));
   if Plat = '' then
     Plat := 'Win32';
+  // Lo que el proyecto no puede ser en esa plataforma (VCL fuera de Windows)
+  // se dice ANTES de compilar, con la regla de add-platform (CanTarget): el
+  // build caia con F2613 Vcl.Forms y la pista mandaba a add-searchpath.
+  var NoPuede := '';
+  if not ReadDproj(ADprojPath).CanTarget(Plat, NoPuede) then
+    raise Exception.Create(MsgEnvuelve(SR_RECHAZADO_FMT, NoPuede));
   Cfg := AConfig;
   if Cfg = '' then
     Cfg := 'Debug';

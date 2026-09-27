@@ -32,6 +32,7 @@ type
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_TEST_PROJECT)]
     [RutaDelServidor]
+    [RutaRelativa] // un NOMBRE suelto lo explica la tool (TEST-005): lo que da delphi_projects
     property Project: string read FProject write FProject;
     [SchemaDescription(SP_TEST_CONFIG)]
     [SchemaDefault('Debug')]

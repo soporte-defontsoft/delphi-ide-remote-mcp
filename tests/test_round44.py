@@ -124,35 +124,13 @@ try:
     # capturas cayeron en __delphi-temp\<agente>\desktop del workspace.
     # Se dice, porque una bateria que calla lo que no ha medido es una
     # bateria que miente en verde.
-    PUEDE = False
-    s = ''
     print('NOTA: T3 y T4 no se miden aqui desde 1.0.16 (el escritorio va por '
           'PAServer y perfil); medidos en vivo el 2026-09-22.')
-    if PUEDE:
-        check('T3 la captura por defecto cae DENTRO del workspace',
-              bool(pngs(TEMP_JAULA)),
-              'no hay png bajo %s | %s' % (TEMP_JAULA, s[:200]))
     # Esta SI se mide siempre: aunque la captura falle, lo que no puede pasar
     # es que el servidor vuelva a tocar el %TEMP% de la maquina.
     check('T3b el servidor no vuelve a tocar el %TEMP% de la maquina',
           all(not os.path.isdir(v) for v in VIEJAS),
           'han vuelto: %s' % [v for v in VIEJAS if os.path.isdir(v)])
-    if PUEDE:
-
-        # -------------------------------------------------------------- T4
-        # Y ahora lo que la tool promete por escrito: "bajatela con
-        # delphi_fetch". Con el defecto viejo esto era imposible.
-        foto = pngs(TEMP_JAULA)[0] if pngs(TEMP_JAULA) else ''
-        if foto:
-            g = call('delphi_fetch', {'path': foto})
-            check('T4 y delphi_fetch SI puede bajarsela, como promete la tool',
-                  not mc.es(g, 'SR_JAIL_FMT') and
-                  ('sha256' in g.lower() or 'bytes' in g.lower() or
-                   'base64' in g.lower()), g[:280])
-        else:
-            check('T4 y delphi_fetch SI puede bajarsela', False,
-                  'no hubo captura que bajar')
-
 
     # ------------------------------------------------------------------ T7
     # "__delphi-temp puede limpiarse entero en cada arranque del server"
@@ -167,14 +145,17 @@ try:
     # falta que nadie pida una captura para que la carpeta se vacie. Esa
     # dependencia era justo el fallo del primer intento.
     if True:
+        # Una captura de la vez anterior, PLANTADA donde las deja el servidor
+        # (__delphi-temp\<agente>\desktop): desde 1.0.16 esta bateria no
+        # captura, "antes" salia vacia y T7b pasaba sin medir nada.
+        cap = os.path.join(TEMP_JAULA, 'r44', 'desktop', 'captura-vieja.png')
+        os.makedirs(os.path.dirname(cap), exist_ok=True)
+        open(cap, 'wb').write(b'\x89PNG\r\n\x1a\n')
         antes = pngs(TEMP_JAULA)
+        check('T7b fixture: hay una captura de la vez anterior', bool(antes), TEMP_JAULA)
         proc.kill()
         time.sleep(1.5)
         # Una migaja de la "ejecucion anterior" que tiene que desaparecer.
-        # Se crea la carpeta si no esta: si T3 no llego a dejar la captura
-        # -dos baterias peleandose por el nodo del escritorio, que es UNO por
-        # maquina- esto reventaba con FileNotFoundError en vez de medir. Una
-        # bateria informa, no se cae.
         os.makedirs(TEMP_JAULA, exist_ok=True)
         vieja = os.path.join(TEMP_JAULA, 'de-la-vez-anterior.txt')
         open(vieja, 'w').write('x')
@@ -304,6 +285,12 @@ try:
     check('T6c el literal del lector coincide con el nombrador',
           "Result := '__delphi-temp';" in g_src and "'\\__delphi-temp\\'" in r_src,
           'el nombrador o el lector han cambiado de carpeta sin avisarse')
+    # ...y la PAPELERA, su hermana, por el mismo motivo: su nombrador es
+    # BACKUP_SUB / TrashFolderName (Lsp.Patch)
+    p_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Patch.pas'), 'rb').read().decode('utf-8', 'replace')
+    check('T6d el literal de la papelera del lector coincide con su nombrador',
+          "BACKUP_SUB = '__delphi-patch';" in p_src and "'\\__delphi-patch\\'" in r_src,
+          'el nombrador o el lector de la papelera han cambiado sin avisarse')
 finally:
     try:
         proc.kill()

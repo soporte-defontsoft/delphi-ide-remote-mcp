@@ -189,9 +189,7 @@ function TManos.Resolver: Boolean;
 
   function Uno(const ASimbolo: string; out ADir: Pointer): Boolean;
   begin
-    Result := FLib.Simbolo(ASimbolo, ADir);
-    if not Result then
-      FError := MsgFmt(SF_NODE_FALTA_EN_FMT, [ASimbolo, FLib.Nombre, FLib.Error]);
+    Result := FLib.SimboloOMotivo(ASimbolo, ADir, FError);
   end;
 
 begin

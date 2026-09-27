@@ -254,7 +254,8 @@ check('la clase raiz del .dfm tiene que existir en la unit',
       o.get('ok') is False and 'TNoExiste' in json.dumps(o), o)
 
 # and the tool is discoverable at all
-r = call('delphi_designer', {'command': 'volar', 'path': 'x'})
+# ruta de relleno ABSOLUTA y dentro: la relativa la niega la puerta (GUARD-021)
+r = call('delphi_designer', {'command': 'volar', 'path': os.path.join(BASE, 'x.dfm')})
 check('el error de comando nombra check-binding', 'check-binding' in r, r[:200])
 
 srv.mata()

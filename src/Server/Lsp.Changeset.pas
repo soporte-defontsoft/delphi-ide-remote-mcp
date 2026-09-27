@@ -339,7 +339,12 @@ begin
           AError := MsgFmt(SF_CHSET_NO_EXISTE_FMT, [Op.Path]);
           Exit;
         end;
-        TFile.Delete(Op.Path); // the snapshot is the way back
+        // La foto deshace si el commit falla; si SALE BIEN, el fichero se iba
+        // sin copia mientras la respuesta decia que las copias de siempre en
+        // __delphi-patch seguian ahi (quinta revision, medido): la copia de
+        // antes de tocarlo, como toda tool que escribe
+        BackupFile(Op.Path);
+        TFile.Delete(Op.Path);
         Result := True;
       end;
     opDeleteLine:
@@ -798,6 +803,11 @@ begin
             // anterior quedaba aplicado (revision 27-sep-2026, medido)
             var Ok := False;
             try
+              // antes de cada paso: lo que otro proceso cambio entre medias no
+              // se lo lleva el deshacer (TFotoDeFicheros.Vigila)
+              Foto.Vigila(Op.Path);
+              if Op.Kind = opMove then
+                Foto.Vigila(Op.Dest);
               Before := LineCountOf(Op.Path);
               Ok := ApplyOne(Op, Err);
               // contar las lineas de DESPUES tambien lee el fichero, y otro

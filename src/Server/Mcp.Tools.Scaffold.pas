@@ -27,6 +27,7 @@ type
     property Kind: string read FKind write FKind;
     [SchemaDescription(SP_CREATE_DIR)]
     [RutaDelServidor]
+    [RutaRelativa] // dentro de un proyecto, una subcarpeta suya (relativa)
     property Dir: string read FDir write FDir;
     [SchemaDescription(SP_CREATE_NAME)]
     [Required]

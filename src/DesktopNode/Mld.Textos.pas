@@ -384,16 +384,6 @@ const
   SF_NODE_NO_LEER_ARBOL_X11 =
     'could not read the X11 window tree';
 
-  SF_NODE_VENTANA_YA_NO_EXISTE =
-    'that window no longer exists';
-
-  SF_NODE_VENTANA_NO_VISIBLE =
-    'the window is not visible: there is nothing to capture';
-
-  SF_NODE_XGETIMAGE_SIN_IMAGEN =
-    'XGetImage returned no image (window covered or without backing ' +
-    'store)';
-
   SF_NODE_XWAYLAND_SIN_AUTORIZACION =
     'There is a Wayland session but I cannot find the Xwayland ' +
     'authorization (.mutter-Xwaylandauth.*). Ask the operator to open ' +
@@ -401,9 +391,6 @@ const
 
   SF_NODE_SESION_SIN_CONECTAR =
     'There is a graphical session, but I could not connect to it.';
-
-  SF_NODE_PUNTERO_FUERA_PANTALLA =
-    'the pointer is not on this screen';
 
   // Textos que estaban en linea en Mld.Win.pas (el resto, 27-sep-2026)
   SF_NODE_ESCRITORIO_ENTRADA_NO_ABRIR_FMT =
@@ -468,15 +455,6 @@ const
     'the desktop keymap carries no characters';
 
   // Textos que estaban en linea en Mld.Captura.pas (el resto, 27-sep-2026)
-  SF_NODE_NO_LEER_IMAGEN_VENTANA_FMT =
-    'could not read the window image: %s';
-
-  SF_NODE_VENTANA_SIN_PIXELES =
-    'the window returned no pixels';
-
-  SF_NODE_FORMATO_PIXEL_NO_CONTEMPLADO_FMT =
-    'unsupported pixel format: %d bits';
-
   SF_NODE_NO_ESCRIBIR_PNG_FMT =
     'could not write the PNG to %s';
 

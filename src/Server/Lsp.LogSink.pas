@@ -46,6 +46,9 @@
 
 interface
 
+uses
+  System.Classes;
+
 const
   { Tope de lineas esperando a ser escritas (aqui y en la ventana de la
     bandeja). Sin tope, un disco o una ventana que no drenan acumulan memoria
@@ -57,6 +60,28 @@ type
   { Quien ve cada linea ademas del disco (la ventana de la bandeja). Se llama
     desde el hilo que registra, dentro del cerrojo del log: ha de ser breve. }
   TLogTap = reference to procedure(const ALine: string);
+
+  { UN buzon de lineas acotado: lo que llega de cualquier hilo espera aqui a
+    que alguien lo recoja, sin pasar de LOG_BUF_CAP; lo que no cabe se cuenta
+    y se dice al recogerlo. Lo usan el disco y la ventana de la bandeja: el
+    buffer, el tope, la cuenta y la nota estaban escritos dos veces, y la nota
+    ya decia dos cosas ("dropped" y "discarded"). Sin cerrojo propio: lo pone
+    quien lo usa, porque el del log guarda tambien el gancho y el cierre. }
+  TBuzonDeLineas = class
+  private
+    FLineas: TStringList;
+    FDescartadas: Integer;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Anade(const ALinea: string);
+    { Se lleva lo acumulado y deja el buzon vacio (nil si no habia nada); la
+      nota de lo descartado va la ULTIMA. La lista es de quien la recoge. }
+    function Recoge: TStringList;
+    { Lo que no se pudo entregar vuelve DELANTE de lo que llego despues, para
+      que el orden sea el de los hechos; lo que no cabe se cuenta. }
+    procedure Devuelve(ALineas: TStringList);
+  end;
 
 { Enciende el log en disco. Idempotente: TMcpHost.Create lo llama siempre. }
 procedure StartLogSink;
@@ -86,7 +111,6 @@ implementation
 uses
   Winapi.Windows,
   System.SysUtils,
-  System.Classes,
   System.SyncObjs,
   System.IOUtils,
   MCPServer.Logger,
@@ -110,8 +134,7 @@ type
 var
   GLock: TCriticalSection;      // el buffer, el tap y el cierre
   GDrainLock: TCriticalSection; // una escritura a disco a la vez
-  GBuf: TStringList;
-  GDropped: Integer;
+  GBuzon: TBuzonDeLineas;
   GTap: TLogTap;
   GClosed: Boolean;
   GStop: TEvent;
@@ -120,6 +143,57 @@ var
   GLinesPerFile: Integer = 2000;
   GMaxFiles: Integer = 10;
   GLinesInLive: Integer;        // las de actual.log que ha visto ESTE proceso
+
+constructor TBuzonDeLineas.Create;
+begin
+  inherited Create;
+  FLineas := TStringList.Create;
+end;
+
+destructor TBuzonDeLineas.Destroy;
+begin
+  FLineas.Free;
+  inherited;
+end;
+
+procedure TBuzonDeLineas.Anade(const ALinea: string);
+begin
+  if FLineas.Count >= LOG_BUF_CAP then
+    Inc(FDescartadas)
+  else
+    FLineas.Add(ALinea);
+end;
+
+function TBuzonDeLineas.Recoge: TStringList;
+begin
+  if (FLineas.Count = 0) and (FDescartadas = 0) then
+    Exit(nil);
+  Result := FLineas;
+  FLineas := TStringList.Create;
+  if FDescartadas > 0 then
+    Result.Add(MsgFmt(SL_SYS_LOG_LINEAS_DESCARTADAS_FMT, [FDescartadas]));
+  FDescartadas := 0;
+end;
+
+procedure TBuzonDeLineas.Devuelve(ALineas: TStringList);
+var
+  Nuevo: TStringList;
+  S: string;
+begin
+  Nuevo := TStringList.Create;
+  for S in ALineas do
+    if Nuevo.Count < LOG_BUF_CAP then
+      Nuevo.Add(S)
+    else
+      Inc(FDescartadas);
+  for S in FLineas do
+    if Nuevo.Count < LOG_BUF_CAP then
+      Nuevo.Add(S)
+    else
+      Inc(FDescartadas);
+  FLineas.Free;
+  FLineas := Nuevo;
+end;
 
 function LogDir: string;
 begin
@@ -319,28 +393,12 @@ begin
     Poda(Dir);
 end;
 
-{ Lo que no se pudo escribir vuelve DELANTE de lo que llego despues, para
-  que en disco el orden sea el de los hechos. Lo que no cabe se cuenta. }
+{ Lo que no se pudo escribir vuelve al buzon (TBuzonDeLineas.Devuelve). }
 procedure Devuelve(AChunk: TStringList);
-var
-  Nuevo: TStringList;
-  S: string;
 begin
   GLock.Enter;
   try
-    Nuevo := TStringList.Create;
-    for S in AChunk do
-      if Nuevo.Count < LOG_BUF_CAP then
-        Nuevo.Add(S)
-      else
-        Inc(GDropped);
-    for S in GBuf do
-      if Nuevo.Count < LOG_BUF_CAP then
-        Nuevo.Add(S)
-      else
-        Inc(GDropped);
-    GBuf.Free;
-    GBuf := Nuevo;
+    GBuzon.Devuelve(AChunk);
   finally
     GLock.Leave;
   end;
@@ -349,28 +407,22 @@ end;
 procedure FlushLogSink;
 var
   Chunk: TStringList;
-  Dropped: Integer;
 begin
   if not Assigned(GDrainLock) then
     Exit;
   Chunk := nil;
-  Dropped := 0;
   GDrainLock.Enter;
   try
     GLock.Enter;
     try
-      if (GBuf = nil) or ((GBuf.Count = 0) and (GDropped = 0)) then
-        Exit;
-      Chunk := GBuf;
-      GBuf := TStringList.Create;
-      Dropped := GDropped;
-      GDropped := 0;
+      if GBuzon <> nil then
+        Chunk := GBuzon.Recoge;
     finally
       GLock.Leave;
     end;
+    if Chunk = nil then
+      Exit;
     try
-      if Dropped > 0 then
-        Chunk.Add(MsgFmt(SL_SYS_LOG_LINEAS_DESCARTADAS_FMT, [Dropped]));
       if Anade(Chunk) then
       begin
         Inc(GLinesInLive, Chunk.Count);
@@ -468,10 +520,7 @@ begin
   try
     if GClosed then
       Exit;
-    if GBuf.Count >= LOG_BUF_CAP then
-      Inc(GDropped)
-    else
-      GBuf.Add(L);
+    GBuzon.Anade(L);
     if Assigned(GTap) then
       try
         GTap(L);
@@ -517,7 +566,7 @@ end;
 initialization
   GLock := TCriticalSection.Create;
   GDrainLock := TCriticalSection.Create;
-  GBuf := TStringList.Create;
+  GBuzon := TBuzonDeLineas.Create;
   GStop := TEvent.Create(nil, True, False, '');
 
 finalization
@@ -540,7 +589,7 @@ finalization
   FlushLogSink; // lo ultimo que se registro
   FreeAndNil(GStop);
   FreeAndNil(GDrainLock);
-  FreeAndNil(GBuf);
+  FreeAndNil(GBuzon);
   // GLock NO se libera: un hilo que registre en el ultimo instante aun lo
   // toma en Recibe (el logger no espera a nadie al quitar el gancho). Son
   // unos bytes al salir del proceso.

@@ -267,7 +267,8 @@ p = os.path.join(BASE, 'algo.pas')
 open(p, 'w').write('unit algo;\ninterface\nimplementation\nend.\n')
 r = call({'command': 'layout', 'path': p})
 check('L9 un .pas no es un designer', mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_NOT_FORM'), r[:160])
-r = call({'command': 'volar', 'path': 'x'})
+# ruta de relleno ABSOLUTA y dentro: la relativa la niega la puerta (GUARD-021)
+r = call({'command': 'volar', 'path': os.path.join(BASE, 'x.dfm')})
 check('layout aparece en el error de comando', mc.es(r, 'SR_DESIGNER_CMD') and 'layout' in r, r[:200])
 
 # ============================================================

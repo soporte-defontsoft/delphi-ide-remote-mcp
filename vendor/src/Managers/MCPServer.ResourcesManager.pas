@@ -166,7 +166,7 @@ begin
         ContentItem.AddPair('text', ResourceText);
       except
         on E: Exception do
-          raise Exception.Create(MsgFmt(SR_SYS_RECURSO_ILEGIBLE_FMT, [URI, E.Message]));
+          raise Exception.Create(MsgEnvuelve(SR_SYS_RECURSO_ILEGIBLE_FMT, E.Message, [URI, E.Message]));
       end;
     end
     else

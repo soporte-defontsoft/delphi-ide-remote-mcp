@@ -17,20 +17,6 @@ uses
   Mld.Dyn;
 
 type
-  PXImage = ^TXImage;
-  { struct _XImage de Xlib. Solo se nombran los campos que se usan; el resto
-    esta para que las posiciones cuadren. }
-  TXImage = record
-    Ancho, Alto: Integer;
-    XOffset, Formato: Integer;
-    Datos: PByte;
-    ByteOrder, BitmapUnit, BitmapBitOrder, BitmapPad: Integer;
-    Depth, BytesPerLine, BitsPerPixel: Integer;
-    RedMask, GreenMask, BlueMask: NativeUInt;
-    ObData: Pointer;
-    FCrear, FDestruir, FPixel, FPonPixel, FSubImagen, FSumaPixel: Pointer;
-  end;
-
   TVentana = record
     Id: NativeUInt;
     Titulo: string;
@@ -52,8 +38,6 @@ type
     constructor Create;
     destructor Destroy; override;
     function Abrir: Boolean;
-    { Todas las ventanas del escritorio, de la raiz hacia abajo. }
-    function Enumerar(out AVentanas: TArray<TVentana>): Boolean;
     { Las ventanas PRINCIPALES: las hijas de la raiz que se ven y tienen
       nombre, con titulo y PID propios o -si no los llevan: bajo Mutter el
       marco y el cliente son ventanas distintas- los del primer descendiente
@@ -64,11 +48,6 @@ type
       pasar un rectangulo de X11 a pixeles de la imagen (bajo Xwayland la
       raiz no mide lo que el monitor: 5504x2304 frente a 3440x1440, medido). }
     function TamanoRaiz(out AAncho, AAlto: Integer): Boolean;
-    { Pixeles de una ventana; nil deja el motivo en Error. }
-    function Imagen(AVentana: NativeUInt): PXImage;
-    procedure LiberarImagen(AImagen: PXImage);
-    { Donde esta el puntero, en coordenadas FISICAS de X11. }
-    function DondeEstaElPuntero(out AX, AY: Integer): Boolean;
     { Por que no hay ojos, en palabras que el AGENTE pueda repetirle al
       operador para que abra sesion grafica. }
     function Diagnostico: string;
@@ -121,12 +100,6 @@ type
     APropiedad: NativeUInt; ADesde, ALargo: NativeInt; ABorrar: Integer;
     ATipoPedido: NativeUInt; out ATipoReal: NativeUInt; out AFormato: Integer;
     out ANum, ARestan: NativeUInt; out ADatos: Pointer): Integer; cdecl;
-  TXQueryPointer = function(ADisp: Pointer; AVent: NativeUInt;
-    out ARaiz, AHijo: NativeUInt; out ARx, ARy, AVx, AVy: Integer;
-    out AMascara: Cardinal): Integer; cdecl;
-  TXGetImage = function(ADisp: Pointer; ADibujable: NativeUInt;
-    AX, AY: Integer; AAncho, AAlto: Cardinal; APlanos: NativeUInt;
-    AFormato: Integer): PXImage; cdecl;
 
 var
   XOpenDisplay: TXOpenDisplay;
@@ -138,8 +111,6 @@ var
   XFree: TXFree;
   XInternAtom: TXInternAtom;
   XGetWindowProperty: TXGetWindowProperty;
-  XGetImage: TXGetImage;
-  XQueryPointer: TXQueryPointer;
 
 function Texto(A: MarshaledAString): string;
 begin
@@ -172,9 +143,7 @@ function TOjos.Resolver: Boolean;
 
   function Uno(const ASimbolo: string; out ADir: Pointer): Boolean;
   begin
-    Result := FLib.Simbolo(ASimbolo, ADir);
-    if not Result then
-      FError := MsgFmt(SF_NODE_FALTA_EN_FMT, [ASimbolo, FLib.Nombre, FLib.Error]);
+    Result := FLib.SimboloOMotivo(ASimbolo, ADir, FError);
   end;
 
 begin
@@ -187,9 +156,7 @@ begin
     Uno('XFetchName', Pointer(@XFetchName)) and
     Uno('XFree', Pointer(@XFree)) and
     Uno('XInternAtom', Pointer(@XInternAtom)) and
-    Uno('XGetWindowProperty', Pointer(@XGetWindowProperty)) and
-    Uno('XGetImage', Pointer(@XGetImage)) and
-    Uno('XQueryPointer', Pointer(@XQueryPointer));
+    Uno('XGetWindowProperty', Pointer(@XGetWindowProperty));
 end;
 
 procedure TOjos.PrepararEntorno;
@@ -284,63 +251,6 @@ begin
       Result := PCardinal(Datos)^;
     XFree(Datos);
   end;
-end;
-
-function TOjos.Enumerar(out AVentanas: TArray<TVentana>): Boolean;
-var
-  Acc: TArray<TVentana>;
-
-  procedure Recorrer(AVentana: NativeUInt);
-  var
-    Raiz, Padre: NativeUInt;
-    Hijos: PNativeUInt;
-    Num, I: Cardinal;
-    At: TXWindowAttributes;
-    V: TVentana;
-    P: PNativeUInt;
-  begin
-    FillChar(At, SizeOf(At), 0);
-    if XGetWindowAttributes(FDisp, AVentana, At) <> 0 then
-    begin
-      V := Default(TVentana);
-      V.Id := AVentana;
-      V.X := At.X;
-      V.Y := At.Y;
-      V.Ancho := At.Ancho;
-      V.Alto := At.Alto;
-      V.Visible := At.MapState = IsViewable;
-      V.Titulo := LeerTitulo(AVentana);
-      V.Pid := LeerPid(AVentana);
-      Acc := Acc + [V];
-    end;
-    Hijos := nil;
-    Num := 0;
-    if XQueryTree(FDisp, AVentana, Raiz, Padre, Hijos, Num) = 0 then
-      Exit;
-    if Hijos <> nil then
-    try
-      P := Hijos;
-      for I := 1 to Num do
-      begin
-        Recorrer(P^);
-        Inc(P);
-      end;
-    finally
-      XFree(Hijos);
-    end;
-  end;
-
-begin
-  AVentanas := nil;
-  FError := '';
-  if FDisp = nil then
-  begin
-    FError := MsgText(SF_NODE_SIN_CONEXION_X11);
-    Exit(False);
-  end;
-  Recorrer(XDefaultRootWindow(FDisp));
-  AVentanas := Acc;
-  Result := True;
 end;
 
 function TOjos.TamanoRaiz(out AAncho, AAlto: Integer): Boolean;
@@ -453,49 +363,6 @@ begin
   Result := True;
 end;
 
-function TOjos.Imagen(AVentana: NativeUInt): PXImage;
-const
-  ZPixmap = 2;
-  TodosLosPlanos = NativeUInt($FFFFFFFFFFFFFFFF);
-var
-  At: TXWindowAttributes;
-begin
-  Result := nil;
-  FError := '';
-  if FDisp = nil then
-  begin
-    FError := MsgText(SF_NODE_SIN_CONEXION_X11);
-    Exit;
-  end;
-  FillChar(At, SizeOf(At), 0);
-  if XGetWindowAttributes(FDisp, AVentana, At) = 0 then
-  begin
-    FError := MsgText(SF_NODE_VENTANA_YA_NO_EXISTE);
-    Exit;
-  end;
-  if At.MapState <> IsViewable then
-  begin
-    FError := MsgText(SF_NODE_VENTANA_NO_VISIBLE);
-    Exit;
-  end;
-  Result := XGetImage(FDisp, AVentana, 0, 0, At.Ancho, At.Alto,
-    TodosLosPlanos, ZPixmap);
-  if Result = nil then
-    FError := MsgText(SF_NODE_XGETIMAGE_SIN_IMAGEN);
-end;
-
-procedure TOjos.LiberarImagen(AImagen: PXImage);
-type
-  TDestruir = function(AImg: PXImage): Integer; cdecl;
-begin
-  if AImagen = nil then
-    Exit;
-  if AImagen.FDestruir <> nil then
-    TDestruir(AImagen.FDestruir)(AImagen)
-  else if Assigned(XFree) then
-    XFree(AImagen);
-end;
-
 function TOjos.Diagnostico: string;
 var
   S: TSesionGrafica;
@@ -514,26 +381,6 @@ begin
   if (S.WaylandDisplay <> '') and not HayXauth then
     Exit(MsgText(SF_NODE_XWAYLAND_SIN_AUTORIZACION));
   Result := MsgText(SF_NODE_SESION_SIN_CONECTAR);
-end;
-
-function TOjos.DondeEstaElPuntero(out AX, AY: Integer): Boolean;
-var
-  Raiz, Hijo: NativeUInt;
-  Vx, Vy: Integer;
-  Mascara: Cardinal;
-begin
-  AX := 0;
-  AY := 0;
-  Result := False;
-  if FDisp = nil then
-  begin
-    FError := MsgText(SF_NODE_SIN_CONEXION_X11);
-    Exit;
-  end;
-  Result := XQueryPointer(FDisp, XDefaultRootWindow(FDisp), Raiz, Hijo,
-    AX, AY, Vx, Vy, Mascara) <> 0;
-  if not Result then
-    FError := MsgText(SF_NODE_PUNTERO_FUERA_PANTALLA);
 end;
 
 end.

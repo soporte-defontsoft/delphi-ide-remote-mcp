@@ -285,11 +285,26 @@ const
   first failure - measured on the Android NDK, whose deep paths exceed the
   classic limit and killed an entire delphi_list. One bad folder must never
   hide the rest of the tree. }
-function WalkFiles(const ADir, AMask: string;
-  AConPapelera: Boolean = False): TArray<string>;
+function WalkFiles(const ADir: string; const AMasks: TArray<string>;
+  AConPapelera: Boolean = False): TArray<string>; overload;
 var
   Acc: TStringList;
   Vistos: TStringList; // rutas REALES de los enlaces ya seguidos: corta ciclos
+  // Cada fichero UNA vez: dos mascaras que se solapan ("*;*.pas") o la
+  // pasada de la papelera (mascara + '-*', que "*" ya cubre) lo contaban dos
+  // veces - total 7 para 3 ficheros (quinta revision). Acc guarda el orden
+  // del paseo; esto solo responde "ya esta", en O(1): un arbol como el NDK
+  // tiene decenas de miles de ficheros.
+  Unicos: TDictionary<string, Boolean>;
+
+  procedure Anade(const F: string);
+  begin
+    if not Unicos.ContainsKey(LowerCase(F)) then
+    begin
+      Unicos.Add(LowerCase(F), True);
+      Acc.Add(F);
+    end;
+  end;
 
   procedure Recurse(const D: string);
   var
@@ -300,9 +315,10 @@ var
       // puede LEER: EnlaceLegible, la regla del copiador. Un junction a
       // cualquier sitio ensenaba, buscaba y empaquetaba lo que la puerta de
       // lectura no deja leer (auditoria 25-sep-2026).
-      for F in TDirectory.GetFiles(D, AMask, TSearchOption.soTopDirectoryOnly) do
-        if not EsEnlace(F) or EnlaceLegible(F) then
-          Acc.Add(F);
+      for var Mascara in AMasks do
+        for F in TDirectory.GetFiles(D, Mascara, TSearchOption.soTopDirectoryOnly) do
+          if not EsEnlace(F) or EnlaceLegible(F) then
+            Anade(F);
     except
       // unreadable folder: skip its files, still try its children
     end;
@@ -312,13 +328,13 @@ var
     // las copias de seguridad -que SI conservan su nombre- y escondia justo
     // lo BORRADO, que es lo unico que ese flag promete. La mascara se abre
     // solo aqui y solo cuando lo piden: los demas que llaman no se enteran.
-    if AConPapelera and
-       D.ToLower.Replace('/', '\').Contains('\__delphi-patch\') then
+    if AConPapelera and EnPapelera(D) then
     try
-      for F in TDirectory.GetFiles(D, AMask + '-*',
-        TSearchOption.soTopDirectoryOnly) do
-        if not F.ToLower.EndsWith('.by') then // el marcador de quien lo tiro
-          Acc.Add(F);
+      for var Mascara in AMasks do
+        for F in TDirectory.GetFiles(D, Mascara + '-*',
+          TSearchOption.soTopDirectoryOnly) do
+          if not F.ToLower.EndsWith('.by') then // el marcador de quien lo tiro
+            Anade(F);
     except
       // idem
     end;
@@ -348,15 +364,23 @@ var
 begin
   Acc := TStringList.Create;
   Vistos := TStringList.Create;
+  Unicos := TDictionary<string, Boolean>.Create;
   try
     Vistos.Sorted := True;
     Vistos.Add(LowerCase(RealPath(ADir)));
     Recurse(ADir);
     Result := Acc.ToStringArray;
   finally
+    Unicos.Free;
     Vistos.Free;
     Acc.Free;
   end;
+end;
+
+function WalkFiles(const ADir, AMask: string;
+  AConPapelera: Boolean = False): TArray<string>; overload;
+begin
+  Result := WalkFiles(ADir, [AMask], AConPapelera);
 end;
 
 function IsIdentChar(C: Char): Boolean; inline;
@@ -421,8 +445,7 @@ begin
     if SingleFile then
       Targets := [Params.Root]
     else
-      for Mask in Masks do
-        Targets := Targets + WalkFiles(Params.Root, Mask);
+      Targets := WalkFiles(Params.Root, Masks); // un paseo, cada fichero una vez
     // La MISMA regla que delphi_list, su gemela: los artefactos se filtran
     // sobre la ruta RELATIVA a la raiz, y si quien llama nombro una carpeta
     // de compilacion, es que la quiere ver. Aqui se filtraba la ABSOLUTA y
@@ -649,8 +672,13 @@ begin
   ShownTrash := 0;
   RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
   try
+    // Un paseo con todas las mascaras: cada fichero sale UNA vez aunque dos
+    // mascaras casen con el ("*;*.pas") o la papelera lo vea dos veces
+    var Limpias: TArray<string> := [];
     for Mask in Masks do
-      for F in WalkFiles(Root, Mask.Trim, Params.IncludeTrash) do
+      if Mask.Trim <> '' then
+        Limpias := Limpias + [Mask.Trim];
+      for F in WalkFiles(Root, Limpias, Params.IncludeTrash) do
       begin
         // The vault is the vault_* tools' business, even when it sits inside a
         // root: listing its notes would invite edits behind its back.
@@ -1996,12 +2024,15 @@ begin
       OldSize := TFile.GetSize(FullPath);
     except
     end;
+    // Sin la copia de antes NO se escribe: se sustituia el fichero igual,
+    // contestando exito con "backup FAILED" en un campo (quinta revision,
+    // medido; sus gemelas se niegan). Perder es peor que no subir.
     if not SkipIdeArtifacts(FullPath, False) then
       try
         Backup := BackupFile(FullPath);
       except
         on E: Exception do
-          Backup := MsgFmt(SN_WS_FALLO_COPIA_SEGURIDAD_FMT, [E.Message]);
+          Exit(MsgEnvuelve(SR_WS_FALLO_COPIA_SEGURIDAD_FMT, E.Message, [E.Message]));
       end;
   end;
 
@@ -2070,10 +2101,10 @@ begin
           // the trash (2026-08-25). Park the older one properly first.
           if TFile.Exists(Quarantine) then
           begin
-            try
-              BackupFile(Quarantine);
-            except
-            end;
+            // sin su copia, la cuarentena de antes NO se borra: se perdia
+            // (quinta revision). Si la copia falla, el fichero malo se queda
+            // con su nombre y el error lo dice.
+            BackupFile(Quarantine);
             TFile.Delete(Quarantine);
           end;
           TFile.Move(FullPath, Quarantine);
@@ -2160,6 +2191,10 @@ begin
   Count := 0;
   TotalBytes := 0;
   var Elfs := 0; // ejecutables de Linux (cabecera #$7F'ELF') que van dentro
+  // Un zip que se cae a medias (SYS-027: un fichero que otro tiene abierto)
+  // no deja su .tmp en el workspace: cada reintento dejaba otro (quinta
+  // revision). El paquete es desechable; el temporal, mas.
+  try
   Zip := TZipFile.Create;
   try
     Zip.Open(EnProceso, zmWrite);
@@ -2206,6 +2241,14 @@ begin
     Zip.Close;
   finally
     Zip.Free;
+  end;
+  except
+    try
+      if TFile.Exists(EnProceso) then
+        TFile.Delete(EnProceso);
+    except
+    end;
+    raise;
   end;
   // Un solo gesto del sistema: nadie ve nunca un zip a medias con el nombre
   // bueno (packages are disposable artifacts, always fresh). Reintentado unos

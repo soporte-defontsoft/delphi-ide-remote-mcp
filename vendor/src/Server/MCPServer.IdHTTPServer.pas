@@ -156,6 +156,31 @@ end;
 // until then: two writers for one thing), and a session also EXPIRES there
 // after SessionTimeoutMinutes idle.
 
+// [local change 2026-09-28] Is this request the handshake? By its "method",
+// not by the word anywhere in the body: arguments:{"command":"initialize"}
+// got a tool run on a dead session past the 404 gate (fifth review).
+function EsPeticionInitialize(const ARequestBody: string): Boolean;
+var
+  V, M: TJSONValue;
+begin
+  Result := False;
+  V := nil;
+  try
+    try
+      V := TJSONObject.ParseJSONValue(ARequestBody);
+      if V is TJSONObject then
+      begin
+        M := TJSONObject(V).GetValue('method');
+        Result := (M is TJSONString) and (M.Value = 'initialize');
+      end;
+    except
+      Result := False;
+    end;
+  finally
+    V.Free;
+  end;
+end;
+
 // [local change] Bind the handshake's clientInfo.name to the session id the
 // server just issued, so later calls on that session carry an identity the
 // caller cannot re-forge per request (it would need this id, a secret).
@@ -571,7 +596,7 @@ begin
   // the answer the streamable-HTTP contract defines, so the client
   // re-initializes instead of working against a ghost. An initialize
   // request carrying a stale id is welcome: it is the fix.
-  if (SessionID <> '') and (Pos('"initialize"', RequestBody) = 0) then
+  if (SessionID <> '') and not EsPeticionInitialize(RequestBody) then
   begin
     Estado := SessionState(SessionID);
     if Estado <> ssAlive then

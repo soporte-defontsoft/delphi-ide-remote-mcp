@@ -425,6 +425,10 @@ begin
       ExitCode);
     if (ExitCode <> 0) or DeviceGone(Output) then
       Exit(ResultadoAdb(Output, ExitCode));
+    // out= un .png que ya estaba: adb pull lo pisaba sin copia (su gemelo
+    // logcat ya la hacia; quinta revision)
+    if TFile.Exists(Destino) then
+      BackupFile(Destino);
     Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
       Destino + '"', 60000, ExitCode);
     RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitCode);

@@ -42,6 +42,17 @@ type
     // Single normalization rule shared by lookup and validation
     class function NormalizeKey(const Name: string): string; inline;
 
+    // [local change 2026-09-27] La regla de un entero y de un booleano del
+    // contrato, UNA: la usan este deserializador y lo que llega DENTRO de un
+    // parametro (las entradas de "edits" de delphi_edit/delphi_textedit, que
+    // no pasan por el: "delete":"yes" dejaba la linea en blanco y
+    // "toline":-1 se ignoraba, contestando OK). '' si vale; si no, el motivo
+    // sin etiqueta: quien llama lo envuelve con el nombre del campo.
+    class function MotivoEntero(const JsonValue: TJSONValue; AMaximo: Int64;
+      out AValor: Int64): string;
+    class function MotivoBooleano(const JsonValue: TJSONValue;
+      out AValor: Boolean): string;
+
     class constructor Create;
     class destructor Destroy;
 
@@ -55,6 +66,7 @@ implementation
 
 uses
   MCPServer.Schema.Generator, // IsRequiredProperty: el lector de [Required]
+  Lsp.Attributes, // [JsonComoTexto]: el texto que acepta un JSON como valor
   Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
 
 { TMCPSerializer }
@@ -142,18 +154,37 @@ begin
     // BORRABA el fragmento, delphi_hover sin line miraba la linea 0. Venir
     // basta: un texto vacio puede ser legitimo (new_text '' borra a
     // proposito).
+    // [local change 2026-09-27] el parametro se nombra como lo publica el
+    // esquema: "create_" (el nombre Pascal) no lo reconoce nadie
+    var NombreJson := TMCPSchemaGenerator.GetPropertyJsonName(RttiProp, RttiType);
     if ((not Assigned(JsonValue)) or (JsonValue is TJSONNull)) and
        TMCPSchemaGenerator.IsRequiredProperty(RttiProp) then
-      raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_PARAM_FMT, [LowerCase(RttiProp.Name)]));
+      raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_PARAM_FMT, [NombreJson]));
 
     if not Assigned(JsonValue) then
       Continue;
+
+    // [local change 2026-09-27] Un array o un objeto donde va un TEXTO se
+    // convertia en su texto JSON y se escribia tal cual (new=["a","b"] quedaba
+    // en el .pas contestando OK; quinta revision). Solo lo acepta el
+    // parametro que lo declara ([JsonComoTexto]: "edits").
+    if ((JsonValue is TJSONObject) or (JsonValue is TJSONArray)) and
+       (RttiProp.PropertyType.TypeKind in [tkString, tkLString, tkWString, tkUString]) then
+    begin
+      var AceptaJson := False;
+      for var Attr in RttiProp.GetAttributes do
+        if Attr is JsonComoTextoAttribute then
+          AceptaJson := True;
+      if not AceptaJson then
+        raise EArgumentException.Create(MsgFmt(SR_SYS_PARAM_VALUE_FMT,
+          [NombreJson, MsgText(SF_SYS_EXPECTED_TEXT)]));
+    end;
 
     try
       PropValue := ConvertJsonToValue(JsonValue, RttiProp.PropertyType);
     except
       on E: EArgumentException do
-        raise EArgumentException.Create(MsgFmt(SR_SYS_PARAM_VALUE_FMT, [LowerCase(RttiProp.Name), E.Message]));
+        raise EArgumentException.Create(MsgFmt(SR_SYS_PARAM_VALUE_FMT, [NombreJson, E.Message]));
     end;
 
     if not PropValue.IsEmpty then
@@ -205,12 +236,57 @@ begin
   end;
 end;
 
+class function TMCPSerializer.MotivoEntero(const JsonValue: TJSONValue;
+  AMaximo: Int64; out AValor: Int64): string;
+var
+  Txt: string;
+begin
+  Result := '';
+  Txt := Trim(JsonValue.Value);
+  if not TryStrToInt64(Txt, AValor) then
+    Exit(MsgFmt(SF_SYS_EXPECTED_WHOLE_FMT, [JsonValue.Value]));
+  // ningun entero del contrato es negativo (lineas, desplazamientos,
+  // maximos, tiempos): se aceptaba en silencio como el valor por defecto en
+  // unas tools y se rechazaba en otras, con cinco copias a mano
+  if AValor < 0 then
+    Exit(MsgFmt(SF_SYS_NO_NEGATIVO_FMT, [Txt]));
+  if AValor > AMaximo then
+    Exit(MsgFmt(SF_SYS_OUT_OF_RANGE_FMT, [Txt, 0, AMaximo]));
+end;
+
+class function TMCPSerializer.MotivoBooleano(const JsonValue: TJSONValue;
+  out AValor: Boolean): string;
+var
+  Txt: string;
+begin
+  Result := '';
+  AValor := False;
+{$IF COMPILERVERSION <= 29}
+  if (JsonValue is TJSONTrue) or (JsonValue is TJSONFalse) then
+    AValor := JsonValue is TJSONTrue
+{$ELSE}
+  if JsonValue is TJSONBool then
+    AValor := (JsonValue as TJSONBool).AsBoolean
+{$ENDIF}
+  else
+  begin
+    // anything but the two spellings is a mistake, not a False: "yes", "1"
+    // or a typo used to switch the flag OFF in silence
+    Txt := Trim(JsonValue.Value);
+    if SameText(Txt, 'true') then
+      AValor := True
+    else if not SameText(Txt, 'false') then
+      Result := MsgFmt(SF_SYS_EXPECTED_BOOL_FMT, [JsonValue.Value]);
+  end;
+end;
+
 class function TMCPSerializer.ConvertJsonToValue(const JsonValue: TJSONValue; const RttiType: TRttiType): TValue;
 var
   NestedInstance: TObject;
   I64: Int64;
   Dbl: Double;
-  Txt: string;
+  Txt, Motivo: string;
+  Bool: Boolean;
 begin
   Result := TValue.Empty;
 
@@ -242,26 +318,18 @@ begin
   case RttiType.TypeKind of
     tkInteger:
       begin
-        if not TryStrToInt64(Txt, I64) then
-          raise EArgumentException.Create(MsgFmt(SF_SYS_EXPECTED_WHOLE_FMT, [JsonValue.Value]));
-        if (I64 < Low(Integer)) or (I64 > High(Integer)) then
-          raise EArgumentException.Create(MsgFmt(SF_SYS_OUT_OF_RANGE_FMT,
-            [Txt, Low(Integer), High(Integer)]));
-        // [local change 2026-09-27] ningun entero del contrato es negativo
-        // (lineas, desplazamientos, maximos, tiempos): se aceptaba en
-        // silencio como el valor por defecto en unas tools y se rechazaba en
-        // otras, con cinco copias a mano. Una regla, aqui.
-        if I64 < 0 then
-          raise EArgumentException.Create(MsgFmt(SF_SYS_NO_NEGATIVO_FMT, [Txt]));
+        // [local change 2026-09-27] la regla del entero, UNA (MotivoEntero)
+        Motivo := MotivoEntero(JsonValue, High(Integer), I64);
+        if Motivo <> '' then
+          raise EArgumentException.Create(Motivo);
         Result := Integer(I64);
       end;
 
     tkInt64:
       begin
-        if not TryStrToInt64(Txt, I64) then
-          raise EArgumentException.Create(MsgFmt(SF_SYS_EXPECTED_WHOLE_FMT, [JsonValue.Value]));
-        if I64 < 0 then
-          raise EArgumentException.Create(MsgFmt(SF_SYS_NO_NEGATIVO_FMT, [Txt]));
+        Motivo := MotivoEntero(JsonValue, High(Int64), I64);
+        if Motivo <> '' then
+          raise EArgumentException.Create(Motivo);
         Result := I64;
       end;
 
@@ -289,22 +357,13 @@ begin
     tkEnumeration:
       if RttiType.Handle = TypeInfo(Boolean) then
       begin
-{$IF COMPILERVERSION <= 29}
-        if (JsonValue is TJSONTrue) or (JsonValue is TJSONFalse) then
-          Result := JsonValue is TJSONTrue
-{$ELSE}
-        if JsonValue is TJSONBool then
-          Result := (JsonValue as TJSONBool).AsBoolean
-{$ENDIF}
-        // [local change] anything but the two spellings is a mistake, not a
-        // False: "yes", "1" or a typo used to switch the flag OFF in silence,
-        // so the client believed it had asked for something it never got.
-        else if SameText(Txt, 'true') then
-          Result := True
-        else if SameText(Txt, 'false') then
-          Result := False
-        else
-          raise EArgumentException.Create(MsgFmt(SF_SYS_EXPECTED_BOOL_FMT, [JsonValue.Value]));
+        // [local change] la regla del booleano, UNA (MotivoBooleano): solo
+        // las dos grafias; "yes", "1" o una errata apagaban la opcion en
+        // silencio y el cliente creia haber pedido algo que nunca tuvo
+        Motivo := MotivoBooleano(JsonValue, Bool);
+        if Motivo <> '' then
+          raise EArgumentException.Create(Motivo);
+        Result := Bool;
       end
       else
       begin

@@ -67,6 +67,28 @@ type
   { Azucar para escribirlo como los demas: [RutaDelServidor] }
   RutaDelServidor = RutaDelServidorAttribute;
 
+  { Una ruta DEL SERVIDOR con la que la tool se ocupa ELLA de un valor
+    RELATIVO: lo resuelve contra una base suya -delphi_config.path (la
+    carpeta del proyecto, o una macro del IDE) y delphi_create.dir (una
+    subcarpeta del proyecto)- o lo explica -delphi_test.project, donde un
+    NOMBRE suelto es lo que da delphi_projects (TEST-005)-. En las demas, la
+    puerta de entrada rechaza una relativa, la ultima de sus reglas: se
+    resolvia contra la carpeta del PROCESO (quinta revision). }
+  RutaRelativaAttribute = class(TCustomAttribute)
+  end;
+
+  RutaRelativa = RutaRelativaAttribute;
+
+  { Marca un parametro de TEXTO que acepta un JSON (array u objeto) como
+    valor: el deserializador se lo pasa como su texto JSON. Sin la marca, un
+    array o un objeto donde va un texto es INVALID_PARAM: new=["a","b"] se
+    escribia en el .pas tal cual, contestando OK (quinta revision). Lo lleva
+    "edits", que es un array por contrato. }
+  JsonComoTextoAttribute = class(TCustomAttribute)
+  end;
+
+  JsonComoTexto = JsonComoTextoAttribute;
+
 implementation
 
 end.

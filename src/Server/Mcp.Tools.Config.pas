@@ -57,6 +57,7 @@ type
     // pasada y el censo salio 37+2 cuando es 39+2 (auditoria 2026-09-21).
     [SchemaDescription(SP_CONFIG_PATH)]
     [RutaDelServidor]
+    [RutaRelativa] // relativa al proyecto, o una macro del IDE ($(BDS)...)
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_CONFIG_SECTION)]
     [SchemaDefault('summary')]
@@ -129,7 +130,7 @@ begin
     Lista := ProyectosDeGrupo(AGroup); // EL lector de grupos (Lsp.ProjectUnits)
   except
     on E: Exception do
-      Exit(MsgFmt(SR_CONFIG_GROUP_READ_FMT, [AGroup, E.Message]));
+      Exit(MsgEnvuelve(SR_CONFIG_GROUP_READ_FMT, E.Message, [AGroup, E.Message]));
   end;
   Dir := TPath.GetDirectoryName(AGroup);
   Faltan := 0;
@@ -739,6 +740,34 @@ begin
       Exit(True);
 end;
 
+{ Una ruta que el agente da en "path" RELATIVA a la carpeta del proyecto, o
+  completa: su forma completa en AFull, o la negativa (AEco es lo que el
+  agente escribio, para el texto). Estaba escrita a mano tres veces -search
+  path, add-deployfile, remove-deployfile- con TPath.IsPathRooted, que da por
+  completas "\x", "/x" y "C:x" y las resolvia contra la unidad del PROCESO:
+  ni la carpeta del proyecto ni una que el agente nombrase (CFG-109). }
+function RutaEnLaCarpeta(const ACarpeta, AValor, AEco: string;
+  out AFull: string): string;
+var
+  P: string;
+begin
+  AFull := '';
+  Result := '';
+  P := AValor.Trim;
+  try
+    if not EsRutaAbsoluta(P) then
+    begin
+      if TPath.IsPathRooted(P) then
+        Exit(MsgFmt(SR_CONFIG_PATH_A_MEDIAS_FMT, [AEco.Trim]));
+      P := TPath.Combine(ACarpeta, P);
+    end;
+    AFull := TPath.GetFullPath(P);
+  except
+    on E: Exception do
+      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [AEco.Trim]));
+  end;
+end;
+
 { Vets a search path the way every read is vetted: expand the IDE's macros,
   resolve relative to the project, then the read jail (roots + library zone)
   and existence. Returns '' when fine, else the refusal. AShow is the
@@ -775,15 +804,10 @@ begin
     if Expanded.Contains('$(') then
       Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
   end;
-  if not TPath.IsPathRooted(Expanded) then
-    Expanded := TPath.Combine(TPath.GetDirectoryName(ADproj), Expanded);
-  try
-    Expanded := TPath.GetFullPath(Expanded);
-  except
-    on E: Exception do
-      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
-  end;
-  AShow := Expanded;
+  Result := RutaEnLaCarpeta(TPath.GetDirectoryName(ADproj), Expanded, ARaw, AShow);
+  if Result <> '' then
+    Exit;
+  Expanded := AShow;
   Result := ReadPathDenied(Expanded);
   if Result <> '' then
     Exit;
@@ -981,15 +1005,9 @@ begin
     Exit(MsgText(SR_CONFIG_PATH_CHARS));
   if CaracterVetado(ARaw, False) then
       Exit(MsgText(SR_CONFIG_PATH_CHARS));
-  P := ARaw.Trim;
-  if not TPath.IsPathRooted(P) then
-    P := TPath.Combine(TPath.GetDirectoryName(ADproj), P);
-  try
-    P := TPath.GetFullPath(P);
-  except
-    on E: Exception do
-      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
-  end;
+  Result := RutaEnLaCarpeta(TPath.GetDirectoryName(ADproj), ARaw, ARaw, P);
+  if Result <> '' then
+    Exit;
   AFull := P;
   Result := ReadPathDenied(P);
   if Result <> '' then
@@ -1116,7 +1134,7 @@ begin
       EnsureDeployManifest(ADproj, Plat, Info.RootDir, Generated);
     except
       on E: Exception do
-        Exit(MsgFmt(SR_CFG_NO_PUDE_GENERAR_MANIFIESTO_FMT, [E.Message]));
+        Exit(MsgEnvuelve(SR_CFG_NO_PUDE_GENERAR_MANIFIESTO_FMT, E.Message));
     end;
     if not TFile.Exists(DeployProj) then
       Exit(NoEsFichero(DeployProj, MsgFmt(SR_CFG_NO_EXISTE_NO_PUDO_GENERAR_FMT, [DeployProj])));
@@ -1159,15 +1177,9 @@ begin
     Exit(MsgFmt(SR_CONFIG_DEPLOY_PLATFORM_FMT, [ARawPlatform.Trim]));
   if ARawPath.Trim = '' then
     Exit(MsgText(SR_CONFIG_DEPLOY_NEED_PATH));
-  Full := ARawPath.Trim;
-  if not TPath.IsPathRooted(Full) then
-    Full := TPath.Combine(TPath.GetDirectoryName(ADproj), Full);
-  try
-    Full := TPath.GetFullPath(Full);
-  except
-    on E: Exception do
-      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARawPath.Trim]));
-  end;
+  Result := RutaEnLaCarpeta(TPath.GetDirectoryName(ADproj), ARawPath, ARawPath, Full);
+  if Result <> '' then
+    Exit;
   DeployProj := DeployProjPath(ADproj);
   if not TFile.Exists(DeployProj) then
     Exit(MsgFmt(SN_CONFIG_DEPLOY_ABSENT_FMT, [Full, Plat]));
@@ -1373,10 +1385,16 @@ begin
   APlatform := CanonicalPlatform(ARawPlatform);
   if APlatform = '' then
     Exit(MsgFmt(SR_CONFIG_SDK_PLATFORM_FMT, [ARawPlatform.Trim, KnownPlatformsList]));
+  // la regla de su gemela set-profile: Win64 contestaba "Registered for
+  // Win64: ." (quinta revision)
+  if IsLocalPlatform(APlatform) then
+    Exit(MsgFmt(SR_CONFIG_SDK_LOCAL_FMT, [APlatform]));
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
   Disponibles := string.Join(', ', SdksDePlataforma(Info.Version, APlatform));
+  if Disponibles = '' then
+    Disponibles := MsgText(SF_NINGUNO);
 
   Sdk := ARawSdk.Trim;
   // sin sdk quitaba el que el proyecto tuviera fijado contestando exito: para
@@ -1465,6 +1483,8 @@ begin
       for F in TDirectory.GetFiles(Dir, '*.profile') do
         L.Add(TPath.GetFileNameWithoutExtension(F));
     Disponibles := string.Join(', ', L.ToStringArray);
+    if Disponibles = '' then
+      Disponibles := MsgText(SF_NINGUNO); // como set-sdk: nunca "Registered: ."
   finally
     L.Free;
   end;

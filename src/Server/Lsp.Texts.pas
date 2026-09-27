@@ -155,9 +155,9 @@ const
 
   SN_SEARCH_MASK_NO_MATCH_FMT =
     '[SEARCH-002] The mask "%s" matched no file here, so nothing was ' +
-    'searched: "total 0" does NOT mean the text is not there. ONE mask ' +
-    '(*.pas) or several separated by ";" (*.pas;*.dfm); without pattern, ' +
-    'the Delphi sources are searched.';
+    'searched: "total 0" does NOT mean the text is not there. pattern ' +
+    'takes ONE mask (*.pas, *.dfm); without pattern, the Delphi sources ' +
+    'are searched.';
 
   SR_CREATE_SUBDIR_REL_FMT =
     '[CREATE-001 INVALID_PARAM] "dir"="%s" is not valid for creating INSIDE a ' +
@@ -535,9 +535,8 @@ const
     'files, pass its full path.';
 
   SR_LSP_NOT_SOURCE_FMT =
-    '[LSP-017 INVALID_PARAM] %s is not a Delphi source (%s), so there ' +
-    'are no symbols to extract. This tool works on .pas, .dpr, .dpk and ' +
-    '.inc.';
+    '[LSP-017 INVALID_PARAM] %s is not a Delphi source: the language ' +
+    'tools work on .pas, .dpr, .dpk and .inc files.';
 
   { La descripcion del parametro, compartida por delphi_edit y
     delphi_textedit: lo que hace no depende de si el fichero es Pascal. }
@@ -580,9 +579,10 @@ const
     inactividad. 404 con motivo, para que el cliente vuelva a hacer
     initialize en vez de trabajar contra un fantasma. }
   SR_SESSION_UNKNOWN =
-    '[SYS-007 NOT_FOUND] Session not found: this server never issued ' +
-    'that Mcp-Session-Id (it was probably restarted). Send initialize ' +
-    'again and use the new session id.';
+    '[SYS-007 NOT_FOUND] Session not found: this server does not know ' +
+    'that Mcp-Session-Id (it was restarted since, or the session was ' +
+    'closed or expired long ago). Send initialize again and use the new ' +
+    'session id.';
   SR_SESSION_EXPIRED_FMT =
     '[SYS-008 NOT_FOUND] Session expired: no request on it for more than ' +
     '%s minutes ([Server] SessionTimeoutMinutes). Send initialize again ' +
@@ -718,6 +718,23 @@ const
     '[EDIT-107 INVALID_PARAM] Entry %d: "%s" must be a text (a JSON ' +
     'string), not an object, an array, a number or a boolean. Nothing ' +
     'was written.';
+
+  SR_EDIT_MODOS_NO_COMBINAN_FMT =
+    '[EDIT-111 INVALID_PARAM] These modes do not combine in one call: %s. ' +
+    'Nothing was done: send them in separate calls (one of edits, ' +
+    'adduses, removeuses, insert, createunit, restore, create, or one ' +
+    'edit with old/new, fragment or delete).';
+
+  SR_EDIT_NO_SE_ESCRIBIO_FMT =
+    '[EDIT-112 DENIED] Could not write %s: %s';
+
+  SN_EDIT_SIN_CAMBIOS_FMT =
+    '[EDIT-113] UNCHANGED: line %d of %s already says exactly that, so ' +
+    'nothing was written and no backup was taken.';
+
+  SR_PATCH_EDIT_VALOR_FMT =
+    '[EDIT-110 INVALID_PARAM] Entry %d, "%s": %s Nothing was written (the ' +
+    'same rule as a parameter of the call).';
 
   SR_PATCH_BLOCK_SHORT =
     '[EDIT-013 INVALID_PARAM] That multi-line "old" is left with a single line ' +
@@ -2297,7 +2314,7 @@ const
 
   SR_ADB_LINES_FMT =
     '[ADB-021 INVALID_PARAM] "%s" is not a valid number of lines for logcat ' +
-    '(1-5000).';
+    '(1-5000; 0 or nothing = the default, 300).';
 
   // ---- /files download route + delphi_fetch ----
 
@@ -2384,6 +2401,10 @@ const
     'takes no PAServer profile. Profiles are for remote targets ' +
     '(Linux64, OSX64, Android...).';
 
+  SR_CONFIG_SDK_LOCAL_FMT =
+    '[CFG-108 INVALID_PARAM] %s is compiled ON this machine, so it takes ' +
+    'no SDK. SDKs are for remote targets (Linux64, OSX64, Android...).';
+
   SR_CONFIG_PROFILE_NOEXISTE_FMT =
     '[CFG-013 NOT_FOUND] There is no profile named "%s". Registered: %s. ' +
     'Profiles are created with delphi_paserver command=add-profile ' +
@@ -2425,6 +2446,13 @@ const
   SR_CONFIG_PATH_MACRO_FMT =
     '[CFG-017 INVALID_PARAM] I cannot resolve "%s" (unknown macro or invalid ' +
     'path). Use a real path or an IDE macro such as $(BDS).';
+
+  SR_CONFIG_PATH_A_MEDIAS_FMT =
+    '[CFG-109 INVALID_PARAM] "%s" hangs from the root of a drive (a leading ' +
+    '\ or /, or a drive with no \ after it, as in C:x): that is neither ' +
+    'relative to the project nor a full path, and it would land on ' +
+    'whatever drive the server happens to be on. Give it relative to the ' +
+    'project folder (sub\file.ext) or in full (D:\...).';
 
   SR_CONFIG_PATH_MISSING_FMT =
     '[CFG-018 NOT_FOUND] The folder "%s" does not exist on the server. ' +
@@ -2830,8 +2858,9 @@ const
     'delphi_list pattern=*.style.';
 
   SR_STYLES_NEED_FILE =
-    '[STYLE-002 INVALID_PARAM] view/get/set/clone need ONE text .style file, ' +
-    'not a folder (delphi_list pattern=*.style lists it).';
+    '[STYLE-002 INVALID_PARAM] view/get/set/clone/delete need ONE text ' +
+    '.style file - not a folder, not a file of another kind (delphi_list ' +
+    'pattern=*.style lists them).';
 
   SR_STYLES_NEED_FOLDER_FMT =
     '[STYLE-038 INVALID_PARAM] lint and build take the styles FOLDER, ' +
@@ -2883,6 +2912,10 @@ const
     '[STYLE-008 NOT_FOUND] There is no TEXT .style in %s (.bin.style files ' +
     'and binaries do not count). Export the style as text from the ' +
     'Bitmap Style Designer or point to the right folder.';
+
+  SR_STYLES_PROJECT_NO_EXISTE_FMT =
+    '[STYLE-041 NOT_FOUND] project=%s does not exist: give the .dproj (or ' +
+    'its folder) whose .fmx/.pas the lint checks the StyleLookup of.';
 
   SR_STYLES_NO_CONVERTER =
     '[STYLE-009 INTERNAL] DelphiStyleConvert.exe (the text<->binary ' +
@@ -3366,7 +3399,9 @@ const
 
   SP_TEST_FILTER =
     'run optional: test filter for frameworks that support it (DUnitX ' +
-    '--run:); a hand-written console runner ignores it';
+    '--run:, read by TDUnitX.CheckCommandLine: the project from ' +
+    'delphi_create kind=project-test calls it); a runner that does not ' +
+    'read its command line ignores it';
 
   SP_TEST_TIMEOUT =
     'run optional: maximum run time in milliseconds (120000 by default, ' +
@@ -5376,8 +5411,9 @@ const
   SR_WS_OFFSET_MAS_ALLA_FINAL_FMT =
     '[WS-015 INVALID_PARAM] offset beyond the end (size=%d)';
 
-  SN_WS_FALLO_COPIA_SEGURIDAD_FMT =
-    '[WS-016] The backup FAILED: %s';
+  SR_WS_FALLO_COPIA_SEGURIDAD_FMT =
+    '[WS-016 DENIED] The copy of the previous content could not be taken, ' +
+    'so NOTHING was written (the file is as it was): %s';
 
   SR_WS_OFFSET_FICHERO_NO_EXISTE =
     '[WS-017 INVALID_PARAM] offset>0 but the file does not exist yet; start ' +
@@ -5706,10 +5742,10 @@ const
     'changed).'#10 +
     '%s';
 
-  SR_EDIT_INSERT_A_MEDIAS_FMT =
-    '[EDIT-074 DENIED] INSERT method - half 1 (declaration) WRITTEN but ' +
-    'FAILED in half 2 (implementation). The file is left HALF-DONE: ' +
-    'restore with restore:true and retry.'#10 +
+  SR_EDIT_INSERT_METODO_DESHECHO_FMT =
+    '[EDIT-074 DENIED] INSERT method - the declaration was written but the ' +
+    'implementation FAILED, so the declaration was UNDONE: the file has NOT ' +
+    'changed (a declaration without its body does not compile).'#10 +
     '%s';
 
   SR_EDIT_NEW_SIN_ANCLA =
@@ -5803,9 +5839,6 @@ const
     'builds now with delphi_build (the IDE will enrich the .dproj when ' +
     'it opens it).%s';
 
-  SR_CREATE_NO_EXISTE_DPR_FMT =
-    '[CREATE-025 NOT_FOUND] The project %s does not exist';
-
   SR_CREATE_IDENTIFICADOR_FORM_FMT =
     '[CREATE-026 INVALID_PARAM] ''%s'' is not a valid form identifier.';
 
@@ -5814,13 +5847,15 @@ const
     'overwrites.';
 
   SR_CREATE_CREADOS_NO_REGISTRADOS_FMT =
-    '[CREATE-028 DENIED] CREATED %s.pas/%s but they could NOT be ' +
-    'registered: %s';
+    '[CREATE-028 DENIED] %s.pas/%s could NOT be registered in the ' +
+    'project, so they were removed: NOTHING was created. The cause: %s';
 
   SK_CREATE_CREADO_FORM_FMT =
     '[CREATE-029] CREATED %s %s (T%s, %s) with its %s.'#10 +
     '%s%s';
 
+  // UNA para las dos gemelas de delphi_create (form y unit): la de forms
+  // tenia la suya, CREATE-025, con el mismo texto (retirada el 28-sep)
   SR_CREATE_NO_EXISTE_PROYECTO_FMT =
     '[CREATE-030 NOT_FOUND] The project %s does not exist';
 
@@ -5830,8 +5865,8 @@ const
     'command=add-unit.';
 
   SR_CREATE_CREADA_NO_REGISTRADA_FMT =
-    '[CREATE-032 DENIED] CREATED %s.pas but it could NOT be registered: ' +
-    '%s';
+    '[CREATE-032 DENIED] %s.pas could NOT be registered in the project, ' +
+    'so it was removed: NOTHING was created. The cause: %s';
 
   SK_CREATE_CREADA_UNIT_LINEAS_FMT =
     '[CREATE-033] CREATED unit %s (%s), %d lines.'#10 +
@@ -5854,6 +5889,11 @@ const
 
   SR_FILE_ERROR_MOVER_PAPELERA_FMT =
     '[FILE-020 INTERNAL] Moving to the trash failed: %s';
+
+  SR_FILE_UNIT_DESHECHO_FMT =
+    '[FILE-039 DENIED] %s could not be deleted, and what had already ' +
+    'changed (its projects, its form) was put back: NOTHING was changed. ' +
+    'The cause: %s';
 
   SK_FILE_BORRADO_PAPELERA_FMT =
     '[FILE-021] DELETED %s (moved to the recoverable trash).'#10 +
@@ -5922,7 +5962,7 @@ const
     'atline=<number> to pick the exact occurrence.';
 
   SR_TEXT_AL_CODIFICAR_FMT =
-    '[TEXT-010 DENIED] Could not encode: %s';
+    '[TEXT-010 DENIED] Could not write the file: %s';
 
   SR_TEXT_EOL_FMT =
     '[TEXT-014 INVALID_PARAM] eol "%s" does not exist: crlf (the ' +
@@ -5944,9 +5984,6 @@ const
     '%s';
 
   // Mensajes que estaban en linea en UTrayMain.pas (paso 3c a mano, 27-sep-2026)
-  SL_SYS_LOG_LINES_DROPPED_FMT =
-    '... %d log lines dropped (buffer full) ...';
-
   SL_SYS_ERROR_STARTING_SERVER_FMT =
     'ERROR starting the server: %s';
 
@@ -6113,7 +6150,9 @@ const
     'target=Deploy';
 
   SP_BUILD_CONFIG =
-    'Debug or Release (default Debug)';
+    'A configuration the project declares, e.g. Debug or Release (default ' +
+    'Debug); one it does not declare is refused (delphi_config ' +
+    'command=view lists them)';
 
   SP_BUILD_TARGET =
     'Build (full, default), Make (incremental), Clean, or Deploy (always ' +
@@ -7129,6 +7168,10 @@ const
     'after the bar):'#10 +
     '%s%s';
 
+  SK_EDIT_LECTURA_VACIO_FMT =
+    '[READ-006] %s  encoding=%s  eol=%s  %s'#10 +
+    'The file is EMPTY (0 lines).';
+
   SF_EDIT_CONTENIDO_APORTADO =
     'supplied content';
 
@@ -7459,8 +7502,9 @@ const
 
   SR_DSGN_BINARIO_DANADO_FMT =
     '[DSGN-044 DENIED] Damaged BINARY designer, or not a .dfm: could not ' +
-    'convert it to text (%s: %s). Its last good copy is in the ' +
-    '__delphi-patch trash next to it.';
+    'convert it to text (%s: %s). If this server ever wrote it, its ' +
+    'copies are in the __delphi-patch trash next to it (delphi_list ' +
+    'includetrash=true shows them).';
 
   SR_DSGN_CARACTERES_NO_CABEN_ANSI =
     '[DSGN-045 DENIED] The text has characters that do not fit in the ' +
@@ -7538,9 +7582,9 @@ const
     '[MOVE-010 INVALID_PARAM] A .pas unit can only be moved to another .pas ' +
     'name (%s).';
 
-  SF_MOVE_ORIGEN_YA_EN_PAPELERA =
-    '(the source was already in the trash: I do not make a copy of a ' +
-    'copy)';
+  SN_FILE_SIN_COPIA_DESDE_PAPELERA =
+    '  [FILE-040] (no backup: the source was already in the trash, and a ' +
+    'copy of a copy is not made)';
 
   SF_STYLE_LINEAS_Y_FMT =
     '%d and %d';
@@ -7664,6 +7708,11 @@ const
   SF_FOTO_CAMBIADO_POR_OTRO =
     'someone else changed it after this operation wrote it; left as it ' +
     'is, so nothing of theirs was undone';
+
+  SF_FOTO_CAMBIADO_DURANTE =
+    'someone else changed it WHILE the operation was running; left as it ' +
+    'is (it may hold part of this operation), so nothing of theirs was ' +
+    'undone';
   { Los envoltorios de siempre, uno por forma: el motivo que trae otro
     sitio (una funcion que devuelve el porque, el mensaje de una excepcion)
     con la marca y el resultado de la respuesta. }
@@ -7734,6 +7783,9 @@ const
 
   SF_SYS_EXPECTED_WHOLE_FMT =
     'expected a whole number, got "%s".';
+
+  SF_SYS_EXPECTED_TEXT =
+    'expected a text (a JSON string), got a JSON array or object.';
 
   SF_SYS_NO_NEGATIVO_FMT =
     'a whole number that is not negative was expected, got "%s".';

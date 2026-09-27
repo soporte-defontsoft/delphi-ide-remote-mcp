@@ -230,6 +230,15 @@ end;
 { Resolves a vault-relative path to a full path inside the vault. Returns ''
   on success (AFull set), or the rejection message. The jail is strict: no
   absolute paths, no drive letters, no ".." escape, .md only. }
+{ La ruta REAL (enlaces resueltos) sigue dentro del vault: UNA regla para la
+  nota (VaultResolve) y para su copia (VaultBackup), que escribia por un
+  enlace en backups\ sin mirar (quinta revision). }
+function DentroDelVault(const AFull: string): Boolean;
+begin
+  Result := StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(VaultPath))),
+    IncludeTrailingPathDelimiter(RealPath(AFull)));
+end;
+
 function VaultResolve(const ARel: string; out AFull: string): string;
 var
   Rel, Full, Root: string;
@@ -271,8 +280,7 @@ begin
   // ...y por la ruta REAL: un enlace dentro del vault no saca la nota fuera.
   // Nada fuera de su sitio se escribe, por ningun camino (norma de David,
   // 25-sep-2026; el vault no tiene enlaces propios: 'Obsidian no toca el vault').
-  if not StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(Root))),
-       IncludeTrailingPathDelimiter(RealPath(Full))) then
+  if not DentroDelVault(Full) then
     Exit(MsgText(SR_VAULT_JAIL));
   AFull := Full;
   Result := '';
@@ -305,6 +313,10 @@ begin
     'mcp\' + GSessionStamp), VaultRelative(AFull));
   if TFile.Exists(Dest) then
     Exit(Dest); // already preserved earlier in this run: keep the original
+  // la copia tampoco sale del vault por un enlace; sin copia no se escribe
+  // la nota (la excepcion corta antes de VaultSave)
+  if not DentroDelVault(Dest) then
+    raise Exception.Create(MsgText(SR_VAULT_JAIL));
   DestDir := TPath.GetDirectoryName(Dest);
   if not TDirectory.Exists(DestDir) then
     CrearCarpeta(DestDir);
@@ -354,7 +366,7 @@ begin
       Text := VaultLoad(AFull);
     except
       on E: Exception do
-        Exit(MsgFmt(SR_VAULT_NO_PUDO_LEER_NOTA_FMT, [E.Message]));
+        Exit(MsgEnvuelve(SR_VAULT_NO_PUDO_LEER_NOTA_FMT, E.Message));
     end;
     Result := ATransform(Text, NewText);
     if Result <> '' then
@@ -595,7 +607,7 @@ begin
     Text := VaultLoad(Full);
   except
     on E: Exception do
-      Exit(MsgFmt(SR_VAULT_NO_PUDO_LEER_NOTA_FMT, [E.Message]));
+      Exit(MsgEnvuelve(SR_VAULT_NO_PUDO_LEER_NOTA_FMT, E.Message));
   end;
   Rel := VaultRelative(Full);
   // An offset past the end used to answer with a header and NOTHING else -

@@ -26,6 +26,8 @@ type
     [Test] procedure BorraElQueCreoLaOperacion;
     [Test] procedure NoBorraElQueOtroCambioDespues;
     [Test] procedure SinAnotarDeshaceComoSiempre;
+    [Test] procedure VigilaVeLoQueOtroCambioEntrePasos;
+    [Test] procedure VigilaSinCambiosDeshaceComoSiempre;
   end;
 
 implementation
@@ -131,6 +133,44 @@ begin
   Escribe('a.txt', 'antes');
   Foto.Toma([Ruta('a.txt')]);
   Escribe('a.txt', 'la operacion');
+  R := Foto.Restaura;
+  Assert.AreEqual('', R, 'todo volvio');
+  Assert.AreEqual('antes', Lee('a.txt'));
+end;
+
+{ Otro escribe ENTRE dos pasos de la operacion y el segundo paso escribe
+  encima: devolver la foto se llevaria lo del otro, asi que el deshacer lo
+  deja y lo dice (quinta revision: Vigila antes de cada paso). }
+procedure TFotoTests.VigilaVeLoQueOtroCambioEntrePasos;
+var
+  Foto: TFotoDeFicheros;
+  R: string;
+begin
+  Escribe('a.txt', 'antes');
+  Foto.Toma([Ruta('a.txt')]);
+  Escribe('a.txt', 'paso 1');
+  Foto.Anota(Ruta('a.txt'));
+  Escribe('a.txt', 'otro agente');
+  Foto.Vigila(Ruta('a.txt'));
+  Escribe('a.txt', 'paso 2 sobre lo del otro');
+  Foto.Anota(Ruta('a.txt'));
+  R := Foto.Restaura;
+  Assert.AreEqual('paso 2 sobre lo del otro', Lee('a.txt'), 'lo del otro no se pierde');
+  Assert.IsTrue(R.Contains(MsgText(SF_FOTO_CAMBIADO_DURANTE)), 'y se dice: ' + R);
+end;
+
+procedure TFotoTests.VigilaSinCambiosDeshaceComoSiempre;
+var
+  Foto: TFotoDeFicheros;
+  R: string;
+begin
+  Escribe('a.txt', 'antes');
+  Foto.Toma([Ruta('a.txt')]);
+  Escribe('a.txt', 'paso 1');
+  Foto.Anota(Ruta('a.txt'));
+  Foto.Vigila(Ruta('a.txt'));
+  Escribe('a.txt', 'paso 2');
+  Foto.Anota(Ruta('a.txt'));
   R := Foto.Restaura;
   Assert.AreEqual('', R, 'todo volvio');
   Assert.AreEqual('antes', Lee('a.txt'));

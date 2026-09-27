@@ -3,7 +3,7 @@
 Usage:  python tests/test_http_auth.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green.
 """
-import hashlib, json, os, shutil, time, urllib.error, urllib.parse, urllib.request
+import hashlib, json, os, shutil, subprocess, time, urllib.error, urllib.parse, urllib.request
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -73,6 +73,12 @@ try:
                           '{BASURA-NO-EMITIDA-JAMAS}')
     check('http: sesion desconocida -> 404 con motivo', code == 404 and mc.es(body, 'SR_SESSION_UNKNOWN'),
           '%s %s' % (code, body[:160]))
+    # la puerta del 404 mira el "method", no la palabra en el cuerpo: con
+    # arguments:{"command":"initialize"} la tool corria en una sesion muerta
+    code, body = post_sid({"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": {
+        "name": "delphi_help", "arguments": {"command": "initialize"}}}, '{BASURA-NO-EMITIDA-JAMAS}')
+    check('http: "initialize" dentro de los argumentos no abre una sesion muerta (404)',
+          code == 404 and mc.es(body, 'SR_SESSION_UNKNOWN'), '%s %s' % (code, body[:160]))
     code, body = post_sid(INIT, '{BASURA-NO-EMITIDA-JAMAS}')
     check('http: initialize con sesion vieja SI pasa (es el arreglo)',
           code == 200 and 'delphi-lsp-mcp-service' in body, '%s %s' % (code, body[:120]))
@@ -119,7 +125,7 @@ try:
                 'delphi_components', 'delphi_styles', 'delphi_messages',
                 'delphi_changeset', 'delphi_designer', 'delphi_rename_symbol',
                 'delphi_test', 'delphi_help']
-    check('http: tools/list = 37 tools', sorted(names) == sorted(expected), names)
+    check('http: tools/list = %d tools' % len(expected), sorted(names) == sorted(expected), names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",
@@ -176,8 +182,18 @@ finally:
 # --- read-only access: ReadOnlyToken (el anonimo murio en v0.98: 401) --------
 RO_PORT = mc.puerto_libre()
 RO_TOKEN = 'ro-token-456'
-REPO = mc.REPO
+
 tmpdir3 = mc.carpeta('http-ro')  # fixed, see above
+# El repo de las pruebas de git en solo lectura, DENTRO de la jaula del
+# workspace RO: con el del proyecto (fuera de Roots) las paraba la JAULA, y
+# ni el modo solo lectura ni el filtro de --output se median (quinta revision)
+REPO = os.path.join(tmpdir3, 'repo-ro')
+os.makedirs(REPO)
+for _g in (['init', '-q'], ['config', 'user.name', 'Probe Bot'], ['config', 'user.email', 'probe@example.com']):
+    subprocess.run(['git', '-C', REPO] + _g, capture_output=True)
+open(os.path.join(REPO, 'a.txt'), 'w').write('uno\n')
+subprocess.run(['git', '-C', REPO, 'add', 'a.txt'], capture_output=True)
+subprocess.run(['git', '-C', REPO, 'commit', '-q', '-m', 'uno'], capture_output=True)
 try:
     exe3 = mc.copia_exe(tmpdir3)
     paspath = os.path.join(tmpdir3, 'Sample.pas')
@@ -239,8 +255,9 @@ try:
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'status'},
                           RO_TOKEN)
-        check('ro: git status permitido en RO',
-              code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT'),
+        check('ro: git status permitido en RO (git contesta)',
+              code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT') and
+              mc.texto(json.loads(body)).startswith('exit=0'),
               '%s %s' % (code, body[:120]))
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'commit',
@@ -261,8 +278,9 @@ try:
 
         code, body = call('delphi_git', {'repo': REPO, 'command': 'tag'},
                           RO_TOKEN)
-        check('ro: git tag sin args (listar) permitido en RO',
-              code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT'),
+        check('ro: git tag sin args (listar) permitido en RO (git contesta)',
+              code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT') and
+              mc.texto(json.loads(body)).startswith('exit=0'),
               '%s %s' % (code, body[:120]))
 
         # tag with a message = annotated tag = a WRITE. The gate must catch it
@@ -277,8 +295,9 @@ try:
         code, body = call('delphi_git', {'repo': REPO, 'command': 'diff',
                                          'args': '--output=' + tmpdir3 + '\\PWN.txt'},
                           RO_TOKEN)
-        check('ro: git diff --output RECHAZADO en RO', mc.rechazado(mc.texto(mc.como_json(body))),
-              '%s %s' % (code, body[:120]))
+        check('ro: git diff --output RECHAZADO en RO (por la puerta, no por la jaula)',
+              mc.rechazado(mc.texto(json.loads(body))) and not mc.llego_a_git(mc.texto(json.loads(body)))
+              and not mc.es(body, 'SR_JAIL_FMT'), '%s %s' % (code, body[:120]))
         check('ro: git diff --output no escribio el fichero',
               not os.path.exists(tmpdir3 + '\\PWN.txt'), tmpdir3)
 
@@ -304,11 +323,12 @@ try:
               and os.path.getmtime(_dproj) == _mtime,
               _dproj if _before is not None else 'no hay .dproj de la muestra: ' + _dproj)
         # same class on git: an annotated tag hidden behind "Message"
+        # sin args: SOLO el "Message" lo convierte en escritura (con args='v9'
+        # ya lo era, y el check no vigilaba la ortografia)
         code, body = call('delphi_git', {'repo': REPO, 'command': 'tag',
-                                         'args': 'v9', 'Message': 'x'}, RO_TOKEN)
+                                         'Message': 'x'}, RO_TOKEN)
         check('ro: git tag anotado via "Message" RECHAZADO en RO',
-              mc.es(body, 'SR_READ_ONLY_FMT') or mc.rechazado(mc.texto(mc.como_json(body))),
-              '%s %s' % (code, body[:130]))
+              mc.es(body, 'SR_READ_ONLY_FMT'), '%s %s' % (code, body[:130]))
 
         # delphi_report is the ONE write available read-only, by design: the
         # restricted agents are the ones most likely to hit a wall.
@@ -335,7 +355,8 @@ try:
               '%s %s' % (code, body[:120]))
         # delphi_paserver is read-only, always available
         code, body = call('delphi_paserver', {'command': 'platforms'}, RO_TOKEN)
-        check('ro: delphi_paserver PERMITIDO en RO', code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT'),
+        check('ro: delphi_paserver PERMITIDO en RO', code == 200 and not mc.es(body, 'SR_READ_ONLY_FMT') and
+              mc.resultado(mc.texto(json.loads(body))) not in ('INTERNAL', 'NO_ANSWER'),
               '%s %s' % (code, body[:120]))
         # delphi_components is pure read (a registry listing, no process
         # spawned): fine in RO, and any RAD install registers Embarcadero's

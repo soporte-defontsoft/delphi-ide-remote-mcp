@@ -167,8 +167,10 @@ try:
     rc0 = call('delphi_create', {"kind": "project-console", "dir": PRJDIR,
                                  "name": "Conc"})
     dprs = glob.glob(os.path.join(PRJDIR, '**', '*.dpr'), recursive=True)
+    # crear un proyecto console no necesita RAD Studio: si falla, es un
+    # FALLO del servidor, no algo que no se pudo medir (quinta revision)
     if not dprs:
-        skip('C mismo .dpr', 'no pude crear el proyecto: ' + str(rc0)[:150])
+        check('C fixture: delphi_create project-console crea el proyecto', False, str(rc0)[:150])
     else:
         DPR = dprs[0]
         NU = 8
@@ -261,11 +263,11 @@ try:
     # serializes msbuild against msbuild, but it is released before the program
     # runs - so the compiler can find its own output file locked by a run.
     RUNDIR = os.path.join(JAIL, 'runp')
-    call('delphi_create', {"kind": "project-console", "dir": RUNDIR,
-                           "name": "ConcRun"})
+    rc1 = call('delphi_create', {"kind": "project-console", "dir": RUNDIR,
+                                 "name": "ConcRun"})
     rdprs = glob.glob(os.path.join(RUNDIR, '**', 'ConcRun.dpr'), recursive=True)
     if not rdprs:
-        skip('H build con el exe corriendo', 'no pude crear el proyecto console')
+        check('H fixture: delphi_create project-console crea el proyecto', False, str(rc1)[:150])
     else:
         RDPR = rdprs[0]
         RPROJ = RDPR[:-4] + '.dproj'   # msbuild builds the .dproj, not the .dpr

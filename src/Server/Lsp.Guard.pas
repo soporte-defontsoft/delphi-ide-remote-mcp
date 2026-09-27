@@ -440,6 +440,18 @@ function CarpetaEnVezDeFichero(const APath: string): string;
   diagnostics, designer, add-unit y delphi_edit (tercera revision, 27-sep-2026). }
 function NoEsFichero(const APath, AMsgNoExiste: string): string;
 
+{ LA regla de "ruta completa": <letra>:\ (o :/) o un UNC. "\x", "/x" y "C:x"
+  NO lo son, y TPath.IsPathRooted si las da por buenas: se resolvian contra
+  la unidad o la carpeta del PROCESO, que el agente no nombro. Toda tool que
+  pregunte "me han dado una ruta completa?" pregunta esto. }
+function EsRutaAbsoluta(const AValue: string): Boolean;
+
+{ Una ruta que NO es absoluta (<letra>:\ o UNC, la regla de EsRutaAbsoluta):
+  la negativa GUARD-021 (INVALID_PARAM); '' si es absoluta o esta vacia. La
+  usa PathDenied (y por ella la segunda pasada de la puerta de entrada,
+  ArgPathOutsideDenied) y delphi_create para un proyecto nuevo - una regla. }
+function RutaRelativaDenegada(const APath: string): string;
+
 type
   { LA FOTO de unos ficheros ANTES de tocarlos, y su vuelta atras: el "todo
     o nada" de la tanda de edits, del commit de un changeset y de
@@ -464,6 +476,9 @@ type
     // de una ruta que no existia: la primera carpeta que SI existia por
     // encima (lo que la operacion cree debajo, el deshacer lo quita si vacio)
     FAncestro: TArray<string>;
+    // otro la cambio ENTRE dos pasos de la operacion (Vigila): el deshacer no
+    // la toca, porque lleva trabajo ajeno mezclado
+    FAjeno: TArray<Boolean>;
   public
     { Lee los bytes de cada ruta (la que no existe se apunta como tal). }
     procedure Toma(const ARutas: array of string);
@@ -471,6 +486,12 @@ type
       dejar en ella. Se llama tras cada paso hecho. Nunca lanza: si no puede
       leerla, la ruta queda sin apuntar (el deshacer la trata como siempre). }
     procedure Anota(const ARuta: string);
+    { Antes de cada paso: si el disco ya no es lo ultimo que se sabe de la
+      ruta (la foto, o lo que dejo el paso anterior), otro la cambio entre
+      medias - otro proceso, que el cerrojo solo ordena a los de este - y el
+      paso siguiente lo absorberia como propio. Se marca y el deshacer la deja
+      y lo dice (quinta revision: 15 de 15 veces se perdia). Nunca lanza. }
+    procedure Vigila(const ARuta: string);
     { Deja cada fichero como estaba en la foto, por la puerta de escritura:
       solo los que CAMBIARON, y el que no existia, fuera. Lo que otro cambio
       DESPUES de que la operacion lo escribiera (el disco ya no tiene lo
@@ -638,6 +659,14 @@ function DeadCopyWriteDenied(const APath: string): string;
   a ser el cuarto (26-sep-2026). }
 function EnTemporal(const APath: string): Boolean; overload;
 function EnTemporal(const APath: string; out AEsLaCarpeta: Boolean): Boolean; overload;
+
+{ La misma pregunta para la PAPELERA (__delphi-patch, TrashFolderName de
+  Lsp.Patch). La hacian a mano cinco sitios con dos formas: la puerta de
+  escritura y delphi_edit sobre la ruta canonica larga, y delphi_delete /
+  delphi_move / el recorredor de includetrash sobre el texto tal cual - un
+  alias 8.3 (__DELP~1) era la papelera para unos y no para otros. }
+function EnPapelera(const APath: string): Boolean; overload;
+function EnPapelera(const APath: string; out AEsLaCarpeta: Boolean): Boolean; overload;
 
 { EL gate de DESTINO de escritura: la jaula (PathDenied) y las carpetas
   muertas (DeadCopyWriteDenied), en ese orden. Todo escritor que cree o
@@ -1798,14 +1827,23 @@ begin
     Result := DeadCopyWriteDenied(APath);
 end;
 
-function EnTemporal(const APath: string; out AEsLaCarpeta: Boolean): Boolean;
+{ APath ES la carpeta ANombre o esta dentro de una, sobre la ruta canonica
+  larga. Las dos carpetas del servidor que se reconocen por su nombre -la
+  temporal y la papelera- preguntan aqui; la siguiente, tambien. }
+function EnCarpetaLlamada(const APath, ANombre: string;
+  out AEsLaCarpeta: Boolean): Boolean;
 var
   P, T: string;
 begin
   P := ExcludeTrailingPathDelimiter(LongCanonical(APath)).ToLower.Replace('/', '\');
-  T := '\' + TempFolderName.ToLower;
+  T := '\' + ANombre.ToLower;
   AEsLaCarpeta := P.EndsWith(T);
   Result := AEsLaCarpeta or P.Contains(T + '\');
+end;
+
+function EnTemporal(const APath: string; out AEsLaCarpeta: Boolean): Boolean;
+begin
+  Result := EnCarpetaLlamada(APath, TempFolderName, AEsLaCarpeta);
 end;
 
 function EnTemporal(const APath: string): Boolean;
@@ -1813,6 +1851,18 @@ var
   EsLaCarpeta: Boolean;
 begin
   Result := EnTemporal(APath, EsLaCarpeta);
+end;
+
+function EnPapelera(const APath: string; out AEsLaCarpeta: Boolean): Boolean;
+begin
+  Result := EnCarpetaLlamada(APath, TrashFolderName, AEsLaCarpeta);
+end;
+
+function EnPapelera(const APath: string): Boolean;
+var
+  EsLaCarpeta: Boolean;
+begin
+  Result := EnPapelera(APath, EsLaCarpeta);
 end;
 
 function DeadCopyWriteDenied(const APath: string): string;
@@ -1828,7 +1878,7 @@ begin
   P := LongCanonical(APath).ToLower.Replace('/', '\');
   if P.EndsWith('.by') then
     Exit(MsgText(SR_GUARD_OWNER_MARKER));
-  if P.Contains('\__delphi-patch\') or P.EndsWith('\__delphi-patch') then
+  if EnPapelera(APath) then
     Exit(MsgText(SR_GUARD_DEAD_TRASH));
   // La carpeta de temporales del servidor, por el mismo motivo y uno propio:
   // se puede borrar entera en cualquier momento, asi que escribir ahi es
@@ -2107,6 +2157,13 @@ begin
     end;
 end;
 
+{ Los mismos bytes: el comparador de la foto (Vigila y Restaura). }
+function BytesIguales(const A, B: TArray<Byte>): Boolean;
+begin
+  Result := (Length(A) = Length(B)) and
+    ((Length(A) = 0) or CompareMem(@A[0], @B[0], Length(A)));
+end;
+
 procedure TFotoDeFicheros.Toma(const ARutas: array of string);
 var
   I: Integer;
@@ -2120,10 +2177,12 @@ begin
   SetLength(FTam, Length(ARutas));
   SetLength(FFecha, Length(ARutas));
   SetLength(FAncestro, Length(ARutas));
+  SetLength(FAjeno, Length(ARutas));
   for I := 0 to High(ARutas) do
   begin
     FRutas[I] := ARutas[I];
     FAnotado[I] := False;
+    FAjeno[I] := False;
     FExistian[I] := TFile.Exists(ARutas[I]);
     if FExistian[I] then
     begin
@@ -2160,12 +2219,41 @@ begin
     end;
 end;
 
+procedure TFotoDeFicheros.Vigila(const ARuta: string);
+var
+  I: Integer;
+  Existe, Esperado: Boolean;
+  Ahora, Sabido: TArray<Byte>;
+begin
+  for I := 0 to High(FRutas) do
+    if SameText(FRutas[I], ARuta) and not FAjeno[I] then
+    try
+      // lo ultimo que se sabe de ella: lo que dejo el paso anterior, o la foto
+      if FAnotado[I] then
+      begin
+        Esperado := FExisteNuestro[I];
+        Sabido := FNuestros[I];
+      end
+      else
+      begin
+        Esperado := FExistian[I];
+        Sabido := FBytes[I];
+      end;
+      Existe := TFile.Exists(FRutas[I]);
+      Ahora := nil;
+      if Existe then
+        Ahora := TFile.ReadAllBytes(FRutas[I]);
+      FAjeno[I] := (Existe <> Esperado) or (Existe and not BytesIguales(Ahora, Sabido));
+    except
+      // no se puede leer: el paso fallara o no; el deshacer lo mirara
+    end;
+end;
+
 function TFotoDeFicheros.Restaura: string;
 
   function Iguales(const A, B: TArray<Byte>): Boolean;
   begin
-    Result := (Length(A) = Length(B)) and
-      ((Length(A) = 0) or CompareMem(@A[0], @B[0], Length(A)));
+    Result := BytesIguales(A, B);
   end;
 
 var
@@ -2237,6 +2325,14 @@ begin
       if Veto <> '' then
       begin
         Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + Veto;
+        Continue;
+      end;
+      // otro la cambio ENTRE dos pasos: lleva su trabajo mezclado con el de
+      // la operacion, y deshacer se lo llevaria (Vigila)
+      if FAjeno[I] then
+      begin
+        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' +
+          MsgText(SF_FOTO_CAMBIADO_DURANTE);
         Continue;
       end;
       // lo que hay NO es lo que dejo la operacion: alguien lo cambio despues
@@ -2744,6 +2840,21 @@ begin
       Exit(MsgText(SR_PASERVER_PASSWORD));
 end;
 
+{ La forma con la que se COMPARA un sitio con una raiz: la canonica LARGA,
+  con separador final. Una raiz declarada con nombres cortos (DFONTA~1) y una
+  ruta que llega con OTROS nombres cortos (DELPHI~1\RESULT~1) son el mismo
+  sitio, y por el texto no casaban: la jaula decia "fuera" de una carpeta
+  suya (28-sep, medido). Todas las comparaciones de raiz la usan A LA VEZ -
+  contencion (PathDenied), identidad (RootItselfDenied), confinamiento y
+  referencias -: si solo la usase la contencion, la raiz misma por su alias
+  8.3 entraria como "dentro" sin ser "la raiz", y se podria borrar (el
+  incidente de las dos formas del CLAUDE.md). La separacion final se
+  conserva: quitarla antes convertia "D:\" en "D:", la carpeta actual. }
+function FormaLarga(const APath: string): string;
+begin
+  Result := IncludeTrailingPathDelimiter(LongCanonical(APath));
+end;
+
 { '' unless APath IS one of the configured roots (the jail itself). With no
   roots configured (unrestricted local mode) there is no jail to protect and
   nothing is refused - same model as PathDenied. }
@@ -2759,8 +2870,9 @@ begin
   except
     Exit; // an unparseable path is PathDenied's business, not ours
   end;
+  var FullLargo := FormaLarga(Full);
   for R in WorkspaceRoots do
-    if SameText(R, Full) then
+    if SameText(R, Full) or SameText(FormaLarga(R), FullLargo) then
       Exit(MsgFmt(SR_ROOT_ITSELF_FMT, [ExcludeTrailingPathDelimiter(R)]));
 end;
 
@@ -2865,6 +2977,13 @@ begin
               ((AValue[1] = '/') and (AValue[2] = '/'))));
 end;
 
+function RutaRelativaDenegada(const APath: string): string;
+begin
+  Result := '';
+  if (APath.Trim <> '') and not EsRutaAbsoluta(APath.Trim) then
+    Result := MsgFmt(SR_GUARD_RUTA_RELATIVA_FMT, [APath, string.Join(' | ', WorkspaceRoots)]);
+end;
+
 { EL SUELO DE LA JAULA, en la puerta y para TODAS las tools.
 
   La regla ya estaba en una sola funcion (PathDenied / ReadPathDenied). Lo que
@@ -2899,11 +3018,14 @@ end;
   unico de fallo y un parametro sin marca es una ruta sin jaula (dictamen de
   la auditoria del 21-sep). No se quitan.
 
-  SOLO RUTAS ABSOLUTAS, a proposito. Una relativa se resuelve contra una base
-  que solo conoce la tool (delphi_config.path va contra la carpeta del
-  proyecto); la puerta la resolveria contra el directorio del proceso y
-  rechazaria llamadas correctas. La auditoria propuso comprobarlas tambien:
-  verificado contra el codigo, aqui seria un falso positivo seguro. }
+  LAS RELATIVAS, en una SEGUNDA pasada y la ULTIMA. Una relativa que la tool
+  resuelve contra una base suya (delphi_config.path va contra la carpeta del
+  proyecto) o que explica ella (un NOMBRE en delphi_test.project) lleva
+  [RutaRelativa] y la puerta no la mira. Las demas se resolvian contra la
+  carpeta del PROCESO y se niegan (quinta revision) - pero al final de
+  ToolCallDenied: en el sitio de las absolutas se adelantaba a la negativa
+  propia de cada tool (el profile sucio de delphi_build, el solo lectura de
+  adb install, la unidad no servida por su nombre; gate del 28-sep). }
 var
   GRutasNuestras: TDictionary<string, Boolean> = nil; // 'tool|parametro'
 
@@ -2933,13 +3055,23 @@ begin
       if not Supports(Tool, IMCPToolParams, Con) then
         Continue;
       for Prop in Ctx.GetType(Con.ParamsClass).GetProperties do
+      begin
+        // el valor del mapa: si la ruta acepta un valor RELATIVO que la tool
+        // resuelve contra una base suya ([RutaRelativa])
+        var EsRuta := False;
+        var AceptaRelativa := False;
         for Attr in Prop.GetAttributes do
           if Attr is RutaDelServidorAttribute then
-            // La MISMA normalizacion con la que el binder casa argumento y
-            // propiedad: un solo nombrador, o la puerta miraria un nombre y
-            // la tool recibiria otro.
-            Mapa.AddOrSetValue(LowerCase(Nombre) + '|' +
-              TMCPSerializer.NormalizeKey(Prop.Name), True);
+            EsRuta := True
+          else if Attr is RutaRelativaAttribute then
+            AceptaRelativa := True;
+        if EsRuta then
+          // La MISMA normalizacion con la que el binder casa argumento y
+          // propiedad: un solo nombrador, o la puerta miraria un nombre y
+          // la tool recibiria otro.
+          Mapa.AddOrSetValue(LowerCase(Nombre) + '|' +
+            TMCPSerializer.NormalizeKey(Prop.Name), AceptaRelativa);
+      end;
     end;
   finally
     Ctx.Free;
@@ -2959,8 +3091,13 @@ begin
   Result := RutasNuestras.Count;
 end;
 
+{ Las DOS pasadas del suelo, una funcion: ARelativas=False mira las rutas
+  absolutas y va en su sitio de siempre; ARelativas=True mira las que no lo
+  son y va la ultima. Las dos preguntan lo que preguntaria la tool
+  (ReadPathDenied) y en su orden: una unidad virtual no servida (srvz:\,
+  srv0:\) sale por su NOMBRE, no como "relativa". }
 function ArgPathOutsideDenied(const AToolName: string;
-  const AArguments: TJSONObject): string;
+  const AArguments: TJSONObject; ARelativas: Boolean): string;
 var
   I: Integer;
   P: TJSONPair;
@@ -2980,11 +3117,20 @@ begin
     P := AArguments.Pairs[I];
     if not (P.JsonValue is TJSONString) then
       Continue;
-    if not Mapa.ContainsKey(LowerCase(AToolName) + '|' +
-         TMCPSerializer.NormalizeKey(P.JsonString.Value)) then
+    var Clave := LowerCase(AToolName) + '|' + TMCPSerializer.NormalizeKey(P.JsonString.Value);
+    if not Mapa.ContainsKey(Clave) then
       Continue;
     V := TJSONString(P.JsonValue).Value;
-    if not EsRutaAbsoluta(V) then
+    // un parametro opcional vacio no es una ruta: si falta, lo dice la tool
+    if V.Trim = '' then
+      Continue;
+    if EsRutaAbsoluta(V) = ARelativas then
+      Continue;
+    // Una relativa que la tool resuelve contra una base suya, o que explica
+    // ella ([RutaRelativa]), es de la tool. En las demas se resolvia contra
+    // la carpeta del proceso (fuera: DENIED enganoso; dentro, si el servidor
+    // se lanzo desde una raiz: aceptada y escrita donde nadie dijo).
+    if ARelativas and Mapa[Clave] then
       Continue;
     Result := ReadPathDenied(V);
     if Result <> '' then
@@ -3000,7 +3146,7 @@ begin
     (SameText(Trim(ACmd), 'worktree') and SameText(Trim(AArgs), 'list'));
 end;
 
-function ToolCallDenied(const AToolName: string;
+function ReglasDeLaLlamadaDenegadas(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
   Cmd, GitArgs, GitMsg: string;
@@ -3038,8 +3184,8 @@ begin
   // EL SUELO de la jaula, para todas las tools: todo argumento marcado
   // [RutaDelServidor] que sea una ruta absoluta tiene que caer dentro de lo
   // que este workspace puede LEER. Redundante a proposito - la nota larga
-  // esta sobre ArgPathOutsideDenied.
-  Result := ArgPathOutsideDenied(AToolName, AArguments);
+  // esta sobre ArgPathOutsideDenied. Las RELATIVAS, al final (ToolCallDenied).
+  Result := ArgPathOutsideDenied(AToolName, AArguments, False);
   if Result <> '' then
     Exit;
   // Universal git-argument filter (BOTH access levels): a dangerous option
@@ -3182,6 +3328,16 @@ begin
   end;
 end;
 
+{ La puerta de cada llamada: sus reglas y, la ULTIMA, la pasada de las rutas
+  relativas del suelo (la nota sobre el suelo dice por que la ultima). }
+function ToolCallDenied(const AToolName: string;
+  const AArguments: TJSONObject): string;
+begin
+  Result := ReglasDeLaLlamadaDenegadas(AToolName, AArguments);
+  if Result = '' then
+    Result := ArgPathOutsideDenied(AToolName, AArguments, True);
+end;
+
 function WorkspaceRoots: TArray<string>;
 begin
   // A token-scoped session sees ITS workspace's roots as the whole world:
@@ -3220,7 +3376,7 @@ begin
     // Formas LARGAS canonicas en los dos lados: una raiz declarada con
     // nombres cortos (DFONTA~1) y una ruta que llega resuelta (RealPath la
     // alarga) son el mismo sitio. Comparar texto contra texto no casaba.
-    Full := IncludeTrailingPathDelimiter(LongCanonical(TPath.GetFullPath(APath)));
+    Full := FormaLarga(APath);
     // ...y por la ruta REAL: un junction dentro de una raiz que apunte a una
     // referencia (o a una declarada DENTRO de la raiz) llevaba a ella con
     // un texto que no la nombra, y se escribia (auditoria 25-sep-2026).
@@ -3229,7 +3385,7 @@ begin
     Exit;
   end;
   for R in WorkspaceReadOnlyRoots do
-    if StartsText(IncludeTrailingPathDelimiter(LongCanonical(ExcludeTrailingPathDelimiter(R))), Full) or
+    if StartsText(FormaLarga(R), Full) or
        StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(R))), Real) then
       Exit(ExcludeTrailingPathDelimiter(R));
 end;
@@ -3600,7 +3756,7 @@ var
   Desechable: Boolean;
 begin
   Result := '';
-  if (ADir.Trim = '') or not TPath.IsPathRooted(ADir.Trim) then
+  if (ADir.Trim = '') or not EsRutaAbsoluta(ADir.Trim) then
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_RUTA_VACIA_O_RELATIVA)]));
   try
     Full := ExcludeTrailingPathDelimiter(TPath.GetFullPath(ADir.Trim));
@@ -4153,6 +4309,18 @@ begin
     AMotivo := mvAnomalia;
     Exit;
   end;
+  // Solo rutas ABSOLUTAS (<letra>:\ o UNC, la regla de EsRutaAbsoluta). Una
+  // relativa se resolvia contra la carpeta del PROCESO: fuera de la jaula
+  // decia "fuera" (DENIED) y, si el servidor se lanzo desde dentro de una
+  // raiz (stdio), se aceptaba y escribia donde nadie habia dicho; un
+  // "/home/x" de un cliente Linux, igual (quinta revision). Aqui, a la
+  // entrada, para todo camino que pase por la puerta.
+  Result := RutaRelativaDenegada(APath);
+  if Result <> '' then
+  begin
+    AMotivo := mvRutaInvalida;
+    Exit;
+  end;
   // The knowledge vault belongs to the vault_* tools ALONE, wherever it sits.
   // If it happens to live inside a workspace root, the code tools must still
   // keep out - otherwise delphi_edit could rewrite a note behind the vault's
@@ -4195,10 +4363,13 @@ begin
     AMotivo := mvEnlaceFuera;
     Exit(MsgFmt(SR_JAIL_LINK_FMT, [APath]));
   end;
+  var FullLargo := FormaLarga(Full);
   for R in Roots do
-    if StartsText(R, IncludeTrailingPathDelimiter(Full)) then
+    if StartsText(R, IncludeTrailingPathDelimiter(Full)) or
+       StartsText(FormaLarga(R), FullLargo) then
     begin
-      // Dentro POR EL TEXTO. Falta que lo este DE VERDAD: un junction o un
+      // Dentro POR EL TEXTO (el declarado o el largo, FormaLarga). Falta que
+      // lo este DE VERDAD: un junction o un
       // symlink plantado en la jaula apuntaba fuera y el sistema de ficheros
       // servia el destino tan tranquilo (ver RealPath, y la bateria
       // test_round33 que lo reproduce).
@@ -4238,19 +4409,12 @@ begin
           Exit(MsgFmt(SR_READONLY_PATH_FMT,
             [APath, ExcludeTrailingPathDelimiter(Ro)]));
         end;
-      Result := AgentConfineDenied(Full, R);
+      // las dos en la forma larga: el tramo del agente se cuenta desde la raiz
+      Result := AgentConfineDenied(ExcludeTrailingPathDelimiter(FullLargo), FormaLarga(R));
       if Result <> '' then
         AMotivo := mvConfinado;
       Exit;
     end;
-  // una ruta RELATIVA se resolvia contra la carpeta del servidor y salia
-  // "fuera de la jaula" (DENIED): es la llamada la que esta mal
-  // (verificacion de la tercera ronda)
-  if not TPath.IsPathRooted(APath) then
-  begin
-    AMotivo := mvRutaInvalida;
-    Exit(MsgFmt(SR_GUARD_RUTA_RELATIVA_FMT, [APath, string.Join(' | ', Roots)]));
-  end;
   AMotivo := mvFueraDeJaula;
   Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;

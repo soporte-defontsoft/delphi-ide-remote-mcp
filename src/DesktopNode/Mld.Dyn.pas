@@ -25,6 +25,12 @@ type
     procedure Cerrar;
     { Resuelve un simbolo. False deja el motivo en Error. }
     function Simbolo(const ASimbolo: string; out ADireccion: Pointer): Boolean;
+    { Lo mismo, y si falta deja en AMotivo el texto de siempre: que simbolo,
+      de que libreria y por que (SF_NODE_FALTA_EN_FMT). Estaba escrito cuatro
+      veces (Mld.X11, Mld.DBus, Mld.Eis, Mld.Teclado) y el de Teclado ya
+      ponia el nombre de la libreria a mano. }
+    function SimboloOMotivo(const ASimbolo: string; out ADireccion: Pointer;
+      var AMotivo: string): Boolean;
     function Abierta: Boolean;
     property Nombre: string read FNombre;
     property Error: string read FError;
@@ -103,6 +109,14 @@ begin
   Result := ADireccion <> nil;
   if not Result then
     FError := ErrorDl;
+end;
+
+function TLibreria.SimboloOMotivo(const ASimbolo: string; out ADireccion: Pointer;
+  var AMotivo: string): Boolean;
+begin
+  Result := Simbolo(ASimbolo, ADireccion);
+  if not Result then
+    AMotivo := MsgFmt(SF_NODE_FALTA_EN_FMT, [ASimbolo, FNombre, FError]);
 end;
 
 end.

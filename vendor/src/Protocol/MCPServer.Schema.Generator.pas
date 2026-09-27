@@ -12,9 +12,12 @@ type
   TMCPSchemaGenerator = class
   private
     class function GetJsonTypeFromRttiType(RttiType: TRttiType): string;
-    class function GetPropertyJsonName(Prop: TRttiProperty; RType: TRttiType): string;
     class function CreateEnumValuesArray(RttiType: TRttiType): TJSONArray;
   public
+    // [local change 2026-09-27] publica: el deserializador nombra un
+    // parametro como lo publica el esquema ("create", no el "create_" de
+    // Pascal): un nombrador para los dos
+    class function GetPropertyJsonName(Prop: TRttiProperty; RType: TRttiType): string;
     // [local change 2026-09-27] publica: el deserializador la usa para
     // HACER CUMPLIR lo que el esquema publica (un solo lector del atributo)
     class function IsRequiredProperty(Prop: TRttiProperty): Boolean;

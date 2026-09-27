@@ -68,6 +68,7 @@ type
     [SchemaDescription(SP_PATCH_TOLINE)]
     property ToLine: Integer read FToLine write FToLine;
     [SchemaDescription(SP_PATCH_EDITS)]
+    [JsonComoTexto]
     property Edits: string read FEdits write FEdits;
     [SchemaDescription(SP_PATCH_FRAGMENT)]
     property Fragment: string read FFragment write FFragment;
@@ -123,6 +124,7 @@ uses
   System.JSON,
   Lsp.Guard,
   Lsp.ProjectUnits,
+  System.StrUtils, // IfThen: la lista de modos de ModosQueNoCombinan
   MCPServer.Registration;
 
 { TDelphiReadTool }
@@ -197,6 +199,18 @@ function TDelphiPatchTool.ExecuteWithParams(const Params: TDelphiPatchParams): s
 var
   A: TPatchArgs;
 begin
+  // los modos que no combinan: uno por llamada (Lsp.Patch.ModosQueNoCombinan)
+  Result := ModosQueNoCombinan([
+    IfThen(Params.Edits.Trim <> '', 'edits'),
+    IfThen(Params.AddUses.Trim <> '', 'adduses'),
+    IfThen(Params.RemoveUses.Trim <> '', 'removeuses'),
+    IfThen(Params.Insert.Trim <> '', 'insert'),
+    IfThen(Params.CreateUnit, 'createunit'),
+    IfThen(Params.Restore, 'restore'),
+    IfThen((Params.Old <> '') or (Params.New <> '') or (Params.Fragment <> '') or Params.Delete,
+      'old/new/fragment/delete')]);
+  if Result <> '' then
+    Exit;
   if Params.Edits.Trim <> '' then
   begin
     Result := WriteTargetDenied(Params.Path);

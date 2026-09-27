@@ -1,45 +1,23 @@
 ﻿unit Mld.Captura;
 
-{ La otra mitad de los OJOS: capturar el contenido de una ventana y guardarlo
-  en PNG, sin ImageMagick ni ninguna herramienta externa.
+{ El escritor de PNG del nodo, sin ImageMagick ni ninguna herramienta externa.
 
   El PNG se escribe a mano (firma + IHDR + IDAT + IEND) porque es un formato
   sencillo y la RTL ya trae el deflate que necesita (System.ZLib). Asi el
   binario sigue sin depender de nada instalado en la maquina destino.
 
-  Captura en coordenadas FISICAS de X11 (5504x2304 en el equipo medido), que
-  NO son las logicas del escritorio: ver el modelo de coordenadas en
-  [Mld.X11]. }
+  Aqui vivia tambien TCamara, la captura por XGetImage de una ventana de X11:
+  nadie la llamaba desde que la captura de Linux va por el portal del
+  escritorio, y se retiro el 28-sep-2026 con lo que solo ella usaba. }
 
 interface
 
-{$IFDEF LINUX}
-uses
-  Mld.X11;
-{$ENDIF}
-
-{ El escritor de PNG es COMUN a los dos sistemas: tanto X11 como un DIB de
-  Windows entregan los canales en orden BGR, asi que la misma rutina sirve
-  para el escritorio Linux y para el de Windows ([Mld.Win]).
+{ Los pixeles llegan en orden BGR (un DIB de Windows, [Mld.Win]); en el PNG
+  van en RGB.
   ADatos apunta al primer pixel de la primera fila; ABytesPorLinea es el
   salto real entre filas (puede llevar relleno). }
 function GuardarPNG(const ARuta: string; ADatos: PByte;
   AAncho, AAlto, ABytesPorLinea, ABpp: Integer): Boolean;
-
-{$IFDEF LINUX}
-type
-  TCamara = class
-  private
-    FOjos: TOjos;
-    FError: string;
-  public
-    constructor Create(AOjos: TOjos);
-    { Captura la ventana AVentana entera y la guarda como PNG en ARuta.
-      False deja el motivo en Error. }
-    function Capturar(AVentana: NativeUInt; const ARuta: string): Boolean;
-    property Error: string read FError;
-  end;
-{$ENDIF}
 
 implementation
 
@@ -192,51 +170,5 @@ begin
   end;
   Result := True;
 end;
-
-{$IFDEF LINUX}
-{ ---------------------------------------------------------------- camara }
-constructor TCamara.Create(AOjos: TOjos);
-begin
-  inherited Create;
-  FOjos := AOjos;
-end;
-
-function TCamara.Capturar(AVentana: NativeUInt; const ARuta: string): Boolean;
-var
-  Img: PXImage;
-  Ancho, Alto, Bpp: Integer;
-begin
-  Result := False;
-  FError := '';
-  Img := FOjos.Imagen(AVentana);
-  if Img = nil then
-  begin
-    FError := MsgFmt(SF_NODE_NO_LEER_IMAGEN_VENTANA_FMT, [FOjos.Error]);
-    Exit;
-  end;
-  try
-    Ancho := Img.Ancho;
-    Alto := Img.Alto;
-    Bpp := Img.BitsPerPixel;
-    if (Ancho <= 0) or (Alto <= 0) or (Img.Datos = nil) then
-    begin
-      FError := MsgText(SF_NODE_VENTANA_SIN_PIXELES);
-      Exit;
-    end;
-    if (Bpp <> 32) and (Bpp <> 24) then
-    begin
-      FError := MsgFmt(SF_NODE_FORMATO_PIXEL_NO_CONTEMPLADO_FMT, [Bpp]);
-      Exit;
-    end;
-
-    Result := GuardarPNG(ARuta, PByte(Img.Datos), Ancho, Alto,
-      Img.BytesPerLine, Bpp);
-    if not Result then
-      FError := MsgFmt(SF_NODE_NO_ESCRIBIR_PNG_FMT, [ARuta]);
-  finally
-    FOjos.LiberarImagen(Img);
-  end;
-end;
-{$ENDIF}
 
 end.

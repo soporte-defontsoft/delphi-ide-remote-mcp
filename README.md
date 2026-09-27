@@ -117,8 +117,10 @@ was re-checked against the running server by an agent whose job was to disprove 
 something is *not* solved, or only half solved, it says so.
 
 **"An AI will corrupt my `.dfm`."** The likeliest failure. Three defences, in order: a **binary**
-`.dfm`/`.fmx` is refused by every tool that reads or writes one — both shapes, the raw `TPF0`
-stream and the resource-wrapped form it actually takes on disk. A **text** one is validated by
+`.dfm`/`.fmx` is never written as text — every tool that writes refuses it, in both shapes, the raw
+`TPF0` stream and the resource-wrapped form it actually takes on disk; `delphi_read` and the
+`delphi_designer` readers show it as text on the fly, with the IDE's own conversion, and say so;
+and `delphi_designer to-text` / `to-binary` convert it on disk, backup first. A **text** one is validated by
 `delphi_designer lint` against the framework's real RTTI tables (what the class actually
 publishes, not a guessed list): properties that do not exist, properties that exist but are not
 published, bad enum values and bad set members, each with its line, *before* MSBuild ever sees
@@ -134,8 +136,7 @@ controls and anything falling outside its container, but it cannot tell you the 
 Nothing here edits a `.dfm` structurally (add/move/remove a component is hand-anchored text
 editing). Members inside an inactive `{$IFDEF}` are counted as if they compiled. Neither `lint`
 nor `check-binding` checks that a component's class matches its field's type, that a handler's
-signature fits the event, or that `Action = X` points at something real. And a binary designer
-cannot be converted to text from here: that one still needs the IDE.
+signature fits the event, or that `Action = X` points at something real.
 
 **"MSBuild output will flood the context."** `delphi_build` never returns raw log. It returns one
 already-extracted line per problem in `errors[]` and `warnings[]` — file, line, code and message,
@@ -568,7 +569,7 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   second, so a process killed from outside loses half a second, not hours. Every
   `LinesPerFile` lines it is *renamed* to `logs\yyyymmdd-hhnnss.log` (a block) and rotation
   keeps the newest `MaxFiles` blocks; a `.log` of another name is never touched. A clean
-  stop logs `parado` and flushes the tail. Several processes with the same exe (a local stdio
+  stop logs `stopped` and flushes the tail. Several processes with the same exe (a local stdio
   client next to the service) share the file safely, and nothing is ever written or pruned
   through a link planted at `logs\`. Passwords and tokens in a request are masked before
   they reach it, and a base64 run (an inline capture inside a response, an upload, a

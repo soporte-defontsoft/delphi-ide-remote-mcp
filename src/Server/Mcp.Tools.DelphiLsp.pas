@@ -684,9 +684,8 @@ begin
   Result := ReadPathDenied(APath);
   if Result <> '' then
     Exit;
-  if not MatchText(TPath.GetExtension(APath), ['.pas', '.dpr', '.dpk', '.inc']) then
-    Result := MsgFmt(SR_LSP_NOT_SOURCE_FMT,
-      [TPath.GetFileName(APath), TPath.GetExtension(APath)]);
+  // la regla de las siete (Lsp.Patch): carpeta, no esta, no es Pascal
+  Result := NoEsFuenteDelphi(APath);
 end;
 
 { What a unit OFFERS, from its interface section alone: the declarations a

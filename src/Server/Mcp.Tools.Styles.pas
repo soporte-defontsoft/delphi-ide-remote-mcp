@@ -320,10 +320,18 @@ begin
     Exit(MsgFmt(SR_STYLES_NO_TEXT_FMT, [Dir]));
   if AProject.Trim <> '' then
   begin
+    // uno que no esta es NOT_FOUND, y lo que se recorre pasa por la puerta de
+    // LEER: se recorria otra carpeta (o la del proceso) contestando ok:true
+    // (quinta revision)
+    if not TDirectory.Exists(AProject) and not TFile.Exists(AProject) then
+      Exit(MsgFmt(SR_STYLES_PROJECT_NO_EXISTE_FMT, [AProject]));
     if TDirectory.Exists(AProject) then
       ProjDir := TPath.GetFullPath(AProject)
     else
       ProjDir := TPath.GetDirectoryName(TPath.GetFullPath(AProject));
+    Result := ReadPathDenied(ProjDir);
+    if Result <> '' then
+      Exit;
   end
   else
     ProjDir := TPath.GetDirectoryName(Dir); // the styles folder's parent

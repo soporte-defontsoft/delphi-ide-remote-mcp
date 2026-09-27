@@ -173,9 +173,10 @@ end;
     PAPELERA   se salta salvo que te lo pidan (includeTrash=true), porque de
                ahi SI se restaura.
 
-  El nombre de la carpeta de temporales lo pone TempFolderName (Lsp.Guard) y
-  aqui va literal porque un array const no puede llamar a una funcion. Que
-  los dos digan lo mismo no se deja a la buena fe: lo comprueba la bateria. }
+  El nombre de la carpeta de temporales lo pone TempFolderName (Lsp.Guard), y
+  el de la papelera TrashFolderName (Lsp.Patch); aqui van literales porque un
+  array const no puede llamar a una funcion. Que digan lo mismo no se deja a
+  la buena fe: lo comprueba la bateria (test_round44 T6c y T6d). }
 const
   CARPETAS_ARTEFACTO: array [0 .. 6] of string = (
     '\__history\', '\__recovery\', '\win32\', '\win64\', '\debug\',

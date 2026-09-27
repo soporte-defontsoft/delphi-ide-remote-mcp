@@ -14,7 +14,8 @@ uses
   LspTests.GitArgs in 'LspTests.GitArgs.pas',
   LspTests.Pascal in 'LspTests.Pascal.pas',
   LspTests.Mensajes in 'LspTests.Mensajes.pas',
-  LspTests.Foto in 'LspTests.Foto.pas';
+  LspTests.Foto in 'LspTests.Foto.pas',
+  LspTests.Log in 'LspTests.Log.pas';
 
 var
   Runner: ITestRunner;
@@ -29,6 +30,8 @@ begin
     // del deshacer, LspTests.Foto) no median nada. Su carpeta, nada mas.
     if GetEnvironmentVariable('DELPHI_MCP_ROOTS') = '' then
       SetEnvironmentVariable('DELPHI_MCP_ROOTS', PChar(ExtractFileDir(ParamStr(0))));
+    // --run:<filtro> (el filter de delphi_test): sin esto corria todo
+    TDUnitX.CheckCommandLine;
     Runner := TDUnitX.CreateRunner;
     Logger := TDUnitXConsoleLogger.Create(True);
     Runner.AddLogger(Logger);

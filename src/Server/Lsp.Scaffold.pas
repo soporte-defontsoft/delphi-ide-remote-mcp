@@ -433,6 +433,11 @@ begin
     Exit;
   if ADir.Trim = '' then
     Exit(MsgText(SR_CREATE_NEED_DIR));
+  // un PROYECTO nuevo va en una ruta absoluta: la relativa (que dir admite
+  // dentro de un proyecto) se resolvia aqui contra la carpeta del proceso
+  Result := RutaRelativaDenegada(ADir);
+  if Result <> '' then
+    Exit;
 
   Dir := TPath.GetFullPath(ADir);
   Result := WriteTargetDenied(Dir);
@@ -516,6 +521,8 @@ begin
       // esqueleto viajo por nota; ahora lo escribe la tool y delphi_test
       // lo reconoce (usa DUnitX) y lo corre. Sale con ExitCode 1 si algo
       // falla: el veredicto de delphi_test no depende de leer la consola.
+      // CheckCommandLine es lo que lee --run: sin el, el filter de
+      // delphi_test corria TODOS los tests (quinta revision).
       WriteNewFile(Dpr,
         'program ' + AName + ';' + CRLF + CRLF +
         '{$APPTYPE CONSOLE}' + CRLF + CRLF +
@@ -530,6 +537,8 @@ begin
         '  Results: IRunResults;' + CRLF + CRLF +
         'begin' + CRLF +
         '  try' + CRLF +
+        '    // --run:<filtro> (el filter de delphi_test) se lee aqui' + CRLF +
+        '    TDUnitX.CheckCommandLine;' + CRLF +
         '    Runner := TDUnitX.CreateRunner;' + CRLF +
         '    Logger := TDUnitXConsoleLogger.Create(True);' + CRLF +
         '    Runner.AddLogger(Logger);' + CRLF +
@@ -638,7 +647,7 @@ begin
         '*.map' + CRLF + '*.drc' + CRLF + '*.rsm' + CRLF +
         '*.local' + CRLF + '*.identcache' + CRLF + '*.projdata' + CRLF +
         '*.tvsconfig' + CRLF + '*.stat' + CRLF + '*.~*' + CRLF +
-        '__delphi-patch/' + CRLF + '__delphi-temp/' + CRLF +
+        TrashFolderName + '/' + CRLF + TempFolderName + '/' + CRLF +
         '__history/' + CRLF + '__recovery/' + CRLF +
         '*-deploy.zip' + CRLF + '*.delphilsp.json' + CRLF);
       Files.Add('.gitignore');
@@ -731,7 +740,7 @@ begin
   if not MatchText(TPath.GetExtension(ADprPath), ['.dpr', '.dproj', '.dpk']) then
     Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
   if not TFile.Exists(ADprPath) then
-    Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_DPR_FMT, [ADprPath])));
+    Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath])));
   Result := BadUnitName(AUnitName);
   if Result <> '' then
     Exit;
@@ -775,6 +784,12 @@ begin
   if TFile.Exists(PasPath) then
     Exit(MsgFmt(SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT, [PasPath]));
 
+  // TODO O NADA (quinta revision): si el registro no se puede (o lanza: un
+  // .dproj que otro proceso tiene abierto), el par creado se quita. Quedaba
+  // creado, la respuesta decia "repite" y repetir chocaba con "ya existe".
+  var FotoCrea: TFotoDeFicheros;
+  FotoCrea.Toma([PasPath, TPath.Combine(Dir, AUnitName + '.dfm'),
+    TPath.Combine(Dir, AUnitName + '.fmx')]);
   // 1) the pair of files
   DesignerExt := '.dfm';
   if Kind = 'vcl' then
@@ -808,9 +823,19 @@ begin
   end;
 
   // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference)
-  Result := AddProjectUnit(ADprPath, PasPath);
+  try
+    Result := AddProjectUnit(ADprPath, PasPath);
+  except
+    on E: Exception do
+      Result := MsgExcepcion(E.ClassName, E.Message);
+  end;
   if EsFallo(Result) then
-    Result := MsgConCausa(SR_CREATE_CREADOS_NO_REGISTRADOS_FMT, Result, [AUnitName, DesignerExt, Result])
+  begin
+    var NoVolvio := FotoCrea.Restaura;
+    if NoVolvio <> '' then
+      Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Result]));
+    Result := MsgConCausa(SR_CREATE_CREADOS_NO_REGISTRADOS_FMT, Result, [AUnitName, DesignerExt, Result]);
+  end
   else
     Result := MsgFmt(SK_CREATE_CREADO_FORM_FMT,
       [IfThen(Kind.StartsWith('frame'), MsgText(SF_CREATE_CLASE_FRAME), IfThen(Kind = 'datamodule', MsgText(SF_CREATE_CLASE_DATA_MODULE), MsgText(SF_CREATE_CLASE_FORM))),
@@ -823,20 +848,15 @@ end;
   en ABody y el motivo en el resultado si no vale. UNA regla para la unit de
   un proyecto y para la suelta. }
 function CuerpoDeUnit(const AUnitName, AContent: string; out ABody: string): string;
-var
-  M: TMatch;
 begin
   Result := '';
   ABody := AContent;
   if ABody.Trim <> '' then
   begin
-    M := TRegEx.Match(ABody, '(?im)^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;');
-    if not M.Success then
-      Exit(MsgText(SR_CREATE_CONTENT_NOUNIT));
-    if not SameText(M.Groups[1].Value, AUnitName) then
-      Exit(MsgFmt(SR_CREATE_CONTENT_NAME_FMT, [M.Groups[1].Value, AUnitName]));
-    if not TRegEx.IsMatch(ABody, '(?im)^\s*end\s*\.') then
-      Exit(MsgText(SR_CREATE_CONTENT_NOEND));
+    // la regla del content, la de delphi_edit createunit (Lsp.Patch)
+    Result := ContenidoDeUnitNoValido(AUnitName, ABody);
+    if Result <> '' then
+      Exit;
     ABody := ABody.Replace(#13#10, #10).Replace(#13, #10).Replace(#10, CRLF);
     if not ABody.EndsWith(CRLF) then
       ABody := ABody + CRLF;
@@ -861,7 +881,7 @@ begin
   Result := BadUnitName(ANombre);
   if Result <> '' then
     Exit;
-  if (ADir.Trim = '') or not TPath.IsPathRooted(ADir.Trim) then
+  if (ADir.Trim = '') or not EsRutaAbsoluta(ADir.Trim) then
     Exit(MsgText(SR_CREATE_SUELTO_DIR));
   ARuta := TPath.Combine(TPath.GetFullPath(ADir.Trim), ANombre + AExt);
   Result := WriteTargetDenied(ARuta);
@@ -884,7 +904,7 @@ begin
   // se crea SUELTA: nadie la lista todavia (el muro del 26-sep-2026).
   if ADprPath.Trim = '' then
   begin
-    if (ASubDir.Trim = '') or not TPath.IsPathRooted(ASubDir.Trim) then
+    if (ASubDir.Trim = '') or not EsRutaAbsoluta(ASubDir.Trim) then
       Exit(MsgText(SR_CREATE_UNIT_NEED_PROJECT));
     Result := CuerpoDeUnit(AUnitName, AContent, Body);
     if Result <> '' then
@@ -919,10 +939,23 @@ begin
   Result := CuerpoDeUnit(AUnitName, AContent, Body);
   if Result <> '' then
     Exit;
+  // todo o nada, como el form: si no se registra, la unit creada se quita
+  var FotoCrea: TFotoDeFicheros;
+  FotoCrea.Toma([PasPath]);
   WriteNewFile(PasPath, Body);
-  Result := AddProjectUnit(ADprPath, PasPath);
+  try
+    Result := AddProjectUnit(ADprPath, PasPath);
+  except
+    on E: Exception do
+      Result := MsgExcepcion(E.ClassName, E.Message);
+  end;
   if EsFallo(Result) then
-    Result := MsgConCausa(SR_CREATE_CREADA_NO_REGISTRADA_FMT, Result, [AUnitName, Result])
+  begin
+    var NoVolvio := FotoCrea.Restaura;
+    if NoVolvio <> '' then
+      Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Result]));
+    Result := MsgConCausa(SR_CREATE_CREADA_NO_REGISTRADA_FMT, Result, [AUnitName, Result]);
+  end
   else
     Result := MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,
       [AUnitName, PasPath, Length(Body.Split([CRLF])), Result]);

@@ -282,7 +282,7 @@ var
   P: Integer;
 begin
   Result := '';
-  if not ATexto.StartsWith('___ENV=') then
+  if not ATexto.StartsWith(JOB_ENV) then
     Exit;
   P := ATexto.IndexOf(#10);
   if P < 0 then
@@ -295,7 +295,7 @@ begin
     Linea := ATexto.Substring(0, P);
     ATexto := ATexto.Substring(P + 1);
   end;
-  Linea := Linea.Substring(Length('___ENV=')).Trim([#13, ' ']);
+  Linea := Linea.Substring(Length(JOB_ENV)).Trim([#13, ' ']);
   P := Linea.IndexOf('|');
   if P < 0 then
     Exit;
@@ -329,12 +329,12 @@ var
 begin
   ACodigo := -1;
   ASalida := ATexto;
-  P := ATexto.LastIndexOf('___RC=');
+  P := ATexto.LastIndexOf(JOB_RC);
   Result := P >= 0;
   if not Result then
     Exit;
   ASalida := ATexto.Substring(0, P).TrimRight;
-  Cola := ATexto.Substring(P + Length('___RC=')).Trim;
+  Cola := ATexto.Substring(P + Length(JOB_RC)).Trim;
   // un ___RC= a medio escribir (output lo trae mientras el vigia escribe)
   // deja la cola vacia: PrimerTrozo, no Split()[0]
   ACodigo := StrToIntDef(PrimerTrozo(Cola, [#10, #13]).Trim, -1);
