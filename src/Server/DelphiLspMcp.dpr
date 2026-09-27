@@ -185,6 +185,7 @@ begin
 
     if HasFlag('--http') then
     begin
+      GTransporteServidor := 'http';
       TLogger.Info(MsgFmt(SL_SYS_SERVICE_HTTP_FMT, [Host.Settings.ServerVersion,
         FlagValue('--http', Host.Settings.Port).ToString,
         Host.Settings.Endpoint]));
@@ -258,10 +259,19 @@ begin
     // /install and /uninstall are TServiceApplication's own switches, so they
     // have to reach the service branch too - otherwise installing the service
     // would just start a terminal.
+    // la rama elegida es la que cuenta delphi_workspace (un solo lector)
     if HasMode('service') or HasMode('install') or HasMode('uninstall') then
-      RunService
+    begin
+      GModoServidor := 'service';
+      GTransporteServidor := 'http';
+      RunService;
+    end
     else if HasMode('gui') or HasMode('tray') then
-      RunTray
+    begin
+      GModoServidor := 'tray';
+      GTransporteServidor := 'http';
+      RunTray;
+    end
     else
       RunTerminal;
   except

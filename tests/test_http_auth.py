@@ -322,7 +322,8 @@ try:
                                             'project': paspath.replace('.pas', '.dproj')},
                           RO_TOKEN)
         check('ro: delphi_config view NO da SOLO LECTURA (y la vista corre)',
-              not mc.es(body, 'SR_READ_ONLY_FMT') and code == 200 and not mc.fallo(body),
+              not mc.es(body, 'SR_READ_ONLY_FMT') and code == 200 and
+              not mc.fallo(mc.texto(json.loads(body))),
               '%s %s' % (code, body[:120]))
         code, body = call('delphi_config', {'command': 'add-platform',
                                             'platform': 'Linux64',

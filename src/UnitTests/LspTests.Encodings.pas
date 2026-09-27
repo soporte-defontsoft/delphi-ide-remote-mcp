@@ -130,11 +130,11 @@ end;
 
 procedure TEncodingTests.Cp1252RechazaLoQueNoCabe;
 begin
-  Assert.WillRaise(
+  Assert.WillRaiseDescendant(
     procedure
     begin
       EncodeText('ok ' + Chr($2714), ekCp1252);
-    end, Exception, 'un caracter fuera de CP1252 no se cuela como mojibake');
+    end, Exception, 'un caracter fuera de CP1252 no se cuela como mojibake (lanza su ECaracterNoCabe, que declara DENIED)');
 end;
 
 procedure TEncodingTests.MeasureCuentaCrlfYAcentosEnUtf16;

@@ -1529,6 +1529,9 @@ begin
     Result := WriteTargetDenied(Params.Project);
   if Result <> '' then
     Exit;
+  Result := CarpetaEnVezDeFichero(Params.Project);
+  if Result <> '' then
+    Exit;
   if not TFile.Exists(Params.Project) then
     Exit(MsgFmt(SR_CFG_NO_EXISTE_PROYECTO_FMT, [Params.Project]));
   // Arriving with the .dpr in hand is the common case - delphi_create's own
@@ -1600,16 +1603,25 @@ begin
       // anadida con el rechazo detras (medio gesto; visto al endurecer
       // test_sdk el 26-sep, David: "si ya tenemos el rechazo, la quitamos").
       // El .dproj vuelve byte a byte, como una tanda.
-      var Antes := TFile.ReadAllBytes(Proj);
+      var Foto: TFotoDeFicheros;
+      Foto.Toma([Proj]);
       Result := AddPlatform(Proj, Params.Platform);
       if not EsFallo(Result) then
       begin
         var Pega := '';
-        if Params.Sdk.Trim <> '' then
-          Pega := SetSdk(Proj, Params.Platform, Params.Sdk);
-        if (Params.Profile.Trim <> '') and not EsFallo(Pega) then
-          Pega := string.Join(sLineBreak, [Pega,
-            SetProfile(Proj, Params.Platform, Params.Profile)]).Trim;
+        // un paso que LANZA (EnsurePlatformGroups sin su PropertyGroup) es
+        // un fallo como el que se devuelve: se saltaba el deshacer y la
+        // plataforma quedaba anadida (segunda revision, 27-sep-2026)
+        try
+          if Params.Sdk.Trim <> '' then
+            Pega := SetSdk(Proj, Params.Platform, Params.Sdk);
+          if (Params.Profile.Trim <> '') and not EsFallo(Pega) then
+            Pega := string.Join(sLineBreak, [Pega,
+              SetProfile(Proj, Params.Platform, Params.Profile)]).Trim;
+        except
+          on E: Exception do
+            Pega := MsgExcepcion(E.ClassName, E.Message);
+        end;
         var Rechazo := '';
         for var L in Pega.Replace(sLineBreak, #10).Split([#10]) do
           // EsFallo, no EsRechazo: un INTERNAL (sin RAD Studio para el
@@ -1619,8 +1631,10 @@ begin
             Rechazo := L;
         if Rechazo <> '' then
         begin
-          TFile.WriteAllBytes(Proj, Antes);
+          var NoVolvio := Foto.Restaura;
           Result := Rechazo + ' ' + MsgText(SN_CONFIG_ADDPLATFORM_NADA);
+          if NoVolvio <> '' then
+            Result := Result + #10 + MsgFmt(SN_FOTO_NO_VOLVIO_FMT, [NoVolvio]);
         end
         else if Pega <> '' then
           Result := Result + sLineBreak + Pega;

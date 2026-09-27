@@ -13,9 +13,11 @@ type
   private
     class function GetJsonTypeFromRttiType(RttiType: TRttiType): string;
     class function GetPropertyJsonName(Prop: TRttiProperty; RType: TRttiType): string;
-    class function IsRequiredProperty(Prop: TRttiProperty): Boolean;
     class function CreateEnumValuesArray(RttiType: TRttiType): TJSONArray;
   public
+    // [local change 2026-09-27] publica: el deserializador la usa para
+    // HACER CUMPLIR lo que el esquema publica (un solo lector del atributo)
+    class function IsRequiredProperty(Prop: TRttiProperty): Boolean;
     class function GenerateSchema(Cls: TClass): TJSONObject;
     class function GenerateSchemaFromInstance(Instance: TObject): TJSONObject;
   end;

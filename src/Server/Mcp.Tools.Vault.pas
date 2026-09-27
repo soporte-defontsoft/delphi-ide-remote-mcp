@@ -487,6 +487,9 @@ begin
   if ByContent then
     try
       Rx := TRegEx.Create(Pat, [roIgnoreCase]);
+      // la compilacion es perezosa: sin esto una regex rota reventaba en el
+      // primer IsMatch (INTERNAL) o contestaba "sin resultados"
+      Rx.IsMatch('');
     except
       on E: Exception do
         Exit(MsgFmt(SR_VAULT_PATTERN_REGEX_INVALIDA_FMT, [E.Message]));

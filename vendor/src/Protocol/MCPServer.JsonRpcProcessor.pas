@@ -31,7 +31,15 @@ const
   JSONRPC_INVALID_PARAMS = -32602;
   JSONRPC_INTERNAL_ERROR = -32603;
 
+type
+  { [local change 2026-09-27] Un metodo que no existe: su CLASE decide el
+    codigo JSON-RPC (-32601), no su texto. }
+  EMetodoNoExiste = class(Exception);
+
 implementation
+
+uses
+  Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
 
 { TMCPJsonRpcProcessor }
 
@@ -47,12 +55,12 @@ var
 begin
   ParsedValue := TJSONObject.ParseJSONValue(RequestBody);
   if not Assigned(ParsedValue) then
-    raise Exception.Create('Invalid JSON');
+    raise EArgumentException.Create(MsgText(SR_SYS_JSON_INVALIDO));
 
   if not (ParsedValue is TJSONObject) then
   begin
     ParsedValue.Free;
-    raise Exception.Create('JSON-RPC request must be an object');
+    raise EArgumentException.Create(MsgText(SR_SYS_JSON_NO_OBJETO));
   end;
 
   Result := ParsedValue as TJSONObject;
@@ -116,11 +124,11 @@ var
   Manager: IMCPCapabilityManager;
 begin
   if not Assigned(ManagerRegistry) then
-    raise Exception.Create('Manager registry not initialized');
+    raise Exception.Create(MsgText(SE_SYS_SIN_REGISTRO));
 
   Manager := ManagerRegistry.GetManagerForMethod(MethodName);
   if not Assigned(Manager) then
-    raise Exception.CreateFmt('Method [%s] not found. The method does not exist or is not available.', [MethodName]);
+    raise EMetodoNoExiste.Create(MsgFmt(SR_SYS_METODO_NO_EXISTE_FMT, [MethodName]));
 
   Result := Manager.ExecuteMethod(MethodName, Params);
 end;
@@ -208,11 +216,15 @@ begin
 
         // If parsing failed, JSONRequest is still nil: report a JSON-RPC parse
         // error (-32700). ExtractRequestID is nil-safe and yields a null id.
+        // [local change 2026-09-27] el codigo por la CLASE de la excepcion,
+        // nunca por lo que diga su texto (se buscaba "not found" en el)
         ErrorCode := JSONRPC_INTERNAL_ERROR;
         if not Assigned(JSONRequest) then
           ErrorCode := JSONRPC_PARSE_ERROR
-        else if Pos('not found', E.Message) > 0 then
-          ErrorCode := JSONRPC_METHOD_NOT_FOUND;
+        else if E is EMetodoNoExiste then
+          ErrorCode := JSONRPC_METHOD_NOT_FOUND
+        else if E is EArgumentException then
+          ErrorCode := JSONRPC_INVALID_PARAMS;
 
         Result := CreateErrorResponse(ExtractRequestID(JSONRequest), ErrorCode, E.Message);
       end;

@@ -283,7 +283,7 @@ check('LibraryZone=0: la RTL deja de ser legible', mc.rechazado(r) and mc.es(r, 
 r = call_lz('delphi_workspace', {})
 check('LibraryZone=0: se anuncia apagada y sin carpetas', mc.es(r, 'SN_WORKSPACE_LIBZONE_OFF') and '"readableExtra":[]' in r.replace(' ', ''), r[:300])
 r = call_lz('delphi_read', {'path': SCRIPT, 'fromline': 1, 'toline': 1})
-check('LibraryZone=0: el root sigue legible', not mc.rechazado(r), r[:200])
+check('LibraryZone=0: el root sigue legible', not mc.fallo(r), r[:200])
 srv_lz.mata()
 
 srv.mata()

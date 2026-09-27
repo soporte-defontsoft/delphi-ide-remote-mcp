@@ -72,6 +72,12 @@ const
   PROCESS_QUERY_LIMITED_INFORMATION = $1000; // no esta en Winapi.Windows
 {$ENDIF}
 
+{ La senal de MatarProceso a su llamador: el pid ya no existe (el trabajo
+  termino), no un fallo al matar. Una constante para quien la escribe y
+  quien la lee (estaba escrita a mano dos veces). }
+const
+  COMO_YA_TERMINADO = 'already finished';
+
 { El fichero donde vive el PID de un trabajo mientras corre: <job>.pid, al
   lado de su <job>.out. Un unico nombrador para quien lo escribe (el vigia),
   quien lo borra (el vigia) y quien lo lee (@kill). }
@@ -504,7 +510,7 @@ begin
     // dejo su fichero (con el pid en el nombre) pero el programa ya no esta:
     // un trabajo terminado, no un fallo al matar.
     if GetLastError = ERROR_INVALID_PARAMETER then
-      AComo := 'already finished';
+      AComo := COMO_YA_TERMINADO;
     Exit;
   end;
   AComo := 'TerminateProcess';
@@ -737,10 +743,10 @@ begin
           if MatarProceso(Pid, Carpeta, Como) then
             Anade(Salida, MsgFmt(SK_JOB_TERMINADO_EL_TRABAJO_FMT, [Args[0].Trim,
               Pid, Origen, Como]) + #10'___RC=0'#10)
-          else if Como = 'already finished' then
+          else if Como = COMO_YA_TERMINADO then
             Anade(Salida, MsgFmt(SN_JOB_NINGUN_TRABAJO_VIVO_FMT, [Args[0].Trim]) + #10'___RC=3'#10)
           else
-            Anade(Salida, MsgFmt(SN_JOB_NO_PUDE_MATAR_FMT, [Args[0].Trim,
+            Anade(Salida, MsgFmt(SR_JOB_NO_PUDE_MATAR_FMT, [Args[0].Trim,
               Pid, Como, SysErrorMessage(GetLastError)]) + #10'___RC=1'#10);
           BorraPid(TPath.Combine(Carpeta, Args[0].Trim + '.out'));
         end;

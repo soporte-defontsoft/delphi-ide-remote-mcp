@@ -25,28 +25,28 @@ const
   SN_NODE_VENTANAS_LISTA_CAPTURA =
     '  [NODE-004] windows: the list comes with the screenshot below';
 
-  SN_NODE_NO_PUDE_PULSAR_CAMPO_FMT =
-    '  [NODE-005] Could not click on the field: %s';
+  SR_NODE_NO_PUDE_PULSAR_CAMPO_FMT =
+    '  [NODE-005 DENIED] Could not click on the field: %s';
 
   SK_NODE_ESCRITO_EN_PIXEL_FMT =
     '  [NODE-006] WRITTEN "%s" at pixel (%d,%d) (typed; the focus is NOT ' +
     'verified: check it on the screenshot)';
 
-  SN_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT =
-    '  [NODE-007] The click worked but I could not type: %s';
+  SR_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT =
+    '  [NODE-007 DENIED] The click worked but I could not type: %s';
 
   SK_NODE_ESCRITO_TECLEADO_FMT =
     '  [NODE-008] WRITTEN: %s (typed; the focus is NOT verified: check ' +
     'it on the screenshot)';
 
-  SN_NODE_NO_PUDE_ESCRIBIR_FMT =
-    '  [NODE-009] Could not type: %s';
+  SR_NODE_NO_PUDE_ESCRIBIR_FMT =
+    '  [NODE-009 DENIED] Could not type: %s';
 
-  SN_NODE_NO_CONOZCO_TECLA_FMT =
-    '  [NODE-010] Unknown key %s';
+  SR_NODE_NO_CONOZCO_TECLA_FMT =
+    '  [NODE-010 INVALID_PARAM] Unknown key %s';
 
-  SN_NODE_NO_ENVIAR_TECLA_FMT =
-    '  [NODE-011] Could not send the key: %s';
+  SR_NODE_NO_ENVIAR_TECLA_FMT =
+    '  [NODE-011 DENIED] Could not send the key: %s';
 
   SK_NODE_ALT_TAB_ENVIADO =
     '  [NODE-012] ALT+TAB sent';
@@ -66,14 +66,17 @@ const
   SF_NODE_AUSENTE_FMT =
     '     MISSING %s (%s)';
 
-  SN_NODE_NO_ENVIAR_ALT_TAB_FMT =
-    '  [NODE-013] Could not send Alt+Tab: %s';
+  SR_NODE_NO_ENVIAR_ALT_TAB_FMT =
+    '  [NODE-013 DENIED] Could not send Alt+Tab: %s';
 
   SK_NODE_CLIC_EN_PIXEL_FMT =
     '  [NODE-014] CLICK at pixel (%d,%d) of the screenshot';
 
-  SN_NODE_NO_PUDE_PULSAR_FMT =
-    '  [NODE-015] Could not click: %s';
+  SR_NODE_NO_PUDE_PULSAR_FMT =
+    '  [NODE-015 DENIED] Could not click: %s';
+
+  SR_NODE_EXCEPCION_FMT =
+    '[NODE-046 INTERNAL] The node failed: %s: %s';
 
   SN_NODE_USO_ENUMERA_VENTANAS =
     '  [NODE-016] usage: <x> <y>   click that pixel of the screenshot' +
@@ -156,8 +159,8 @@ const
   SK_NODE_SUPER_ENVIADO =
     '  [NODE-037] SUPER sent: overview of all the windows';
 
-  SN_NODE_NO_ABRIR_VISTA_FMT =
-    '  [NODE-038] Could not open the overview: %s';
+  SR_NODE_NO_ABRIR_VISTA_FMT =
+    '  [NODE-038 DENIED] Could not open the overview: %s';
 
   SK_NODE_ESCRITO_PIXEL_MAPA_FMT =
     '  [NODE-039] WRITTEN "%s" at pixel (%d,%d)  [%s] (typed; the focus ' +
@@ -224,8 +227,8 @@ const
   SK_JOB_TERMINADO_EL_TRABAJO_FMT =
     '[JOB-007] Job %s terminated (pid %d from %s, %s).';
 
-  SN_JOB_NO_PUDE_MATAR_FMT =
-    '[JOB-008] Could not kill job %s (pid %d): %s - %s';
+  SR_JOB_NO_PUDE_MATAR_FMT =
+    '[JOB-008 DENIED] Could not kill job %s (pid %d): %s - %s';
 
   SR_JOB_NO_EXISTE_FMT =
     '[JOB-009 NOT_FOUND] %s does not exist in this project''s deployed ' +

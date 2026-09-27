@@ -426,6 +426,35 @@ function ProtegidoDenegado(const ADir: string): string;
   nada: el escritor lanza. }
 function EscrituraDenegada(const APath: string): string;
 
+{ Una CARPETA donde la tool pide un FICHERO: '' si no lo es; si lo es, "es
+  una CARPETA, no un fichero" (INVALID_PARAM), el mismo texto que ya daba
+  delphi_read. Un sitio para las tools que piden un fichero: siete
+  contestaban "no existe" o un INTERNAL del sistema ante una carpeta
+  (segunda revision, 27-sep-2026). }
+function CarpetaEnVezDeFichero(const APath: string): string;
+
+type
+  { LA FOTO de unos ficheros ANTES de tocarlos, y su vuelta atras: el "todo
+    o nada" de la tanda de edits, del commit de un changeset y de
+    add-platform con sdk/perfil. Estaba escrita tres veces, solo una se
+    protegia de una excepcion y ninguna de un deshacer que fallara (un
+    fichero que otro proceso tiene abierto: el deshacer lanzaba y el
+    changeset se quedaba colgado). Revision 27-sep-2026. }
+  TFotoDeFicheros = record
+  private
+    FRutas: TArray<string>;
+    FExistian: TArray<Boolean>;
+    FBytes: TArray<TArray<Byte>>;
+  public
+    { Lee los bytes de cada ruta (la que no existe se apunta como tal). }
+    procedure Toma(const ARutas: array of string);
+    { Deja cada fichero como estaba en la foto, por la puerta de escritura:
+      solo los que CAMBIARON, y el que no existia, fuera. Nunca lanza: lo
+      que no pudo volver lo devuelve, uno por linea ('' = todo volvio). }
+    function Restaura: string;
+    function Cuantos: Integer;
+  end;
+
 { Vacia la casa del servidor al arrancar. Lo que hay ahi pertenece a la
   llamada que lo creo y ninguna llamada sobrevive a un reinicio, asi que al
   arrancar TODO lo que quede es basura de una ejecucion anterior - la que
@@ -1999,6 +2028,70 @@ begin
   Result := PathDenied(APath);
 end;
 
+function CarpetaEnVezDeFichero(const APath: string): string;
+begin
+  Result := '';
+  if (APath.Trim <> '') and TDirectory.Exists(APath) then
+    Result := MsgFmt(SR_LSP_IS_FOLDER_FMT, [APath]);
+end;
+
+procedure TFotoDeFicheros.Toma(const ARutas: array of string);
+var
+  I: Integer;
+begin
+  SetLength(FRutas, Length(ARutas));
+  SetLength(FExistian, Length(ARutas));
+  SetLength(FBytes, Length(ARutas));
+  for I := 0 to High(ARutas) do
+  begin
+    FRutas[I] := ARutas[I];
+    FExistian[I] := TFile.Exists(ARutas[I]);
+    if FExistian[I] then
+      FBytes[I] := TFile.ReadAllBytes(ARutas[I])
+    else
+      FBytes[I] := nil;
+  end;
+end;
+
+function TFotoDeFicheros.Restaura: string;
+var
+  I: Integer;
+  Ahora: TArray<Byte>;
+begin
+  Result := '';
+  for I := 0 to High(FRutas) do
+    try
+      // deshacer tambien escribe: por la misma puerta (un camino que dejo
+      // de ser escribible no se restaura por el)
+      if EscrituraDenegada(FRutas[I]) <> '' then
+        Continue;
+      if not FExistian[I] then
+      begin
+        if TFile.Exists(FRutas[I]) then
+          TFile.Delete(FRutas[I]);
+        Continue;
+      end;
+      // lo que no cambio no se toca: un fichero que otro proceso tiene
+      // abierto y nadie modifico no hace fallar el deshacer
+      if TFile.Exists(FRutas[I]) then
+      begin
+        Ahora := TFile.ReadAllBytes(FRutas[I]);
+        if (Length(Ahora) = Length(FBytes[I])) and ((Length(Ahora) = 0) or
+           CompareMem(@Ahora[0], @FBytes[I][0], Length(Ahora))) then
+          Continue;
+      end;
+      TFile.WriteAllBytes(FRutas[I], FBytes[I]);
+    except
+      on E: Exception do
+        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + E.Message;
+    end;
+end;
+
+function TFotoDeFicheros.Cuantos: Integer;
+begin
+  Result := Length(FRutas);
+end;
+
 { Trocea una linea de comando con las reglas del runtime de C de Windows
   (CommandLineToArgvW), las mismas que aplica git.exe (spawn directo, sin
   shell): las comillas dobles agrupan y desaparecen, "" dentro de comillas es
@@ -2468,7 +2561,7 @@ begin
       Exit(MsgFmt(SR_PASERVER_PORT_FMT, [V]));
   V := ArgStr(AArguments, 'platform').Trim;
   if (V <> '') and not MatchText(V, PACLIENT_PLATFORMS) then
-    Exit(MsgFmt(SR_PASERVER_PLATFORM_FMT, [V]));
+    Exit(MsgFmt(SR_PASERVER_PLATFORM_FMT, [V, PaclientPlatformsList]));
   V := ArgStr(AArguments, 'password');
   for C in V do
     if (C < ' ') or (C = '"') then

@@ -428,6 +428,18 @@ begin
 
     Return := TJSONObject.Create;
     try // su gemela de Windows ya lo protegia; esta no (auditoria 2026-09-21)
+    { Un gesto que el nodo NO pudo hacer (no pulso, no escribio, una tecla
+      que no conoce, una excepcion) lo dice con su etiqueta de fallo en una
+      linea: va a "error". Salia ok:true con el motivo enterrado en
+      nodeOutput (segunda revision, 27-sep-2026). Si RemoteRun ya trae su
+      "error", manda ese (una sola clave). }
+    if Res.GetValue('error') = nil then
+      for var L in Salida.Replace(#13, '').Split([#10]) do
+        if EsFallo(L.Trim) then
+        begin
+          Return.AddPair('error', L.Trim);
+          Break;
+        end;
     Return.AddPair('command', Cmd);
     Return.AddPair('profile', Params.Profile.Trim);
     if Nota <> '' then

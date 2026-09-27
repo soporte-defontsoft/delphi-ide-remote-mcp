@@ -63,7 +63,7 @@ if 'exit=0' not in r: git({'command': 'switch', 'args': 'main'})
 open(os.path.join(REPO_T, 'd.txt'), 'w').write('tronco\n')
 git({'command': 'add', 'args': '.'}); git({'command': 'commit', 'message': 'en tronco'})
 r = git({'command': 'merge', 'args': 'divergente'})
-check('merge no fast-forward RECHAZADO (no lo deja a medias)', 'exit=0' not in r, r[:250])
+check('merge no fast-forward RECHAZADO (no lo deja a medias)', mc.abre(r, 'SR_GIT_EXIT_FMT'), r[:250])
 
 # ---- stash: aparcar para poder cambiar de rama ----
 open(os.path.join(REPO_T, 'a.txt'), 'a').write('cambio sin commitear\n')

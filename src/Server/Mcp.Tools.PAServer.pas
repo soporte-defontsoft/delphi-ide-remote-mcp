@@ -661,7 +661,7 @@ begin
         Arr.AddElement(Obj);
         Obj.AddPair('platform', Plat);
         Obj.AddPair('delphiVersion', Info.Version);
-        Local := MatchText(Plat, ['Win32', 'Win64', 'Win64x', 'WinARM64EC']);
+        Local := IsLocalPlatform(Plat); // la lista de Lsp.Dproj, no una copia
         Obj.AddPair('buildsLocally', TJSONBool.Create(Local));
         if Local then
           Obj.AddPair('status', MsgText(SF_PAS_STATUS_READY_NATIVE))
@@ -1085,7 +1085,7 @@ begin
       Exit(TcpProbe(Params.Host.Trim,
         IfThen(Params.Port.Trim <> '', Params.Port.Trim, '64211')));
     end;
-    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [MsgText(SF_PAS_SIN_NAME)]));
+    Exit(MsgText(SR_PASERVER_NEED_NAME));
   end;
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
@@ -1304,7 +1304,7 @@ var
 begin
   ProfName := Params.Name.Trim;
   if ProfName = '' then
-    Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [MsgText(SF_PAS_SIN_NAME)]));
+    Exit(MsgText(SR_PASERVER_NEED_NAME));
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
   ProfileFile := TPath.Combine(ProfilesDir(Info.Version), ProfName + '.profile');

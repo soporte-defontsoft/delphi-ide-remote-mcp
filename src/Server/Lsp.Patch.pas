@@ -480,6 +480,28 @@ begin
   end;
 end;
 
+type
+  { Un caracter que no cabe en la pagina de codigos del fichero. Lleva SU
+    codigo (el lector lo sacaba del texto con una regex) y su mensaje ya es
+    la negativa entera, con su resultado: una tanda o un changeset que la
+    reciben como excepcion dicen DENIED, no INTERNAL (revision 27-sep-2026). }
+  ECaracterNoCabe = class(Exception)
+  public
+    Codigo: Integer;
+    constructor Crea(ACaracter: Char; AK: TEncKind);
+  end;
+
+constructor ECaracterNoCabe.Crea(ACaracter: Char; AK: TEncKind);
+var
+  Hex: string;
+begin
+  Codigo := Ord(ACaracter);
+  Hex := IntToHex(Codigo, 4);
+  inherited Create(MsgFmt(SR_EDIT_CARACTERES_NO_CABEN_FMT,
+    [MsgFmt(SF_EDIT_CARACTER_NO_EXISTE_FMT, [ACaracter, Hex, EncName(AK)]), EncName(AK),
+     Hex, Hex, Hex, Hex]));
+end;
+
 function EncodeText(const S: string; K: TEncKind): TBytes;
 var
   I: Integer;
@@ -514,8 +536,7 @@ begin
     else if GHighMap.TryGetValue(C, BB) then
       Result[I - 1] := BB
     else
-      raise Exception.Create(
-        MsgFmt(SE_EDIT_CARACTER_EXISTE_CP1252_FMT, [C, IntToHex(Ord(C), 4)]));
+      raise ECaracterNoCabe.Crea(C, K);
   end;
 end;
 
@@ -641,8 +662,12 @@ begin
   TFile.WriteAllBytes(Tmp, B);
   if not MoveFileEx(PChar(Tmp), PChar(APath), MOVEFILE_REPLACE_EXISTING) then
   begin
+    // el codigo de Windows ANTES de borrar el temporal (despues salia 0), y
+    // un mensaje que declara lo que es: algo tiene el fichero abierto
+    var Codigo := GetLastError;
     TFile.Delete(Tmp);
-    raise Exception.Create(MsgFmt(SE_EDIT_RENAME_ATOMICO_FALLIDO_FMT, [GetLastError]));
+    raise Exception.Create(MsgFmt(SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT,
+      [TPath.GetFileName(APath), Codigo]));
   end;
 end;
 
@@ -1196,7 +1221,7 @@ var
   Arr: TJSONArray;
   V: TJSONValue;
   Obj: TJSONObject;
-  Copia: TBytes;
+  Foto: TFotoDeFicheros;
   Sb: TStringBuilder;
   Una, Anc, Nue: string;
   N, Fallo, EnLinea: Integer;
@@ -1227,7 +1252,7 @@ begin
       Exit(MsgFmt(SR_PATCH_EDITS_TOOMANY_FMT, [MAX_EDITS]));
     if not TFile.Exists(APath) then
       Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [APath]));
-    Copia := TFile.ReadAllBytes(APath); // la red: el fichero antes de nada
+    Foto.Toma([APath]); // la red: el fichero antes de nada
     Sb := TStringBuilder.Create;
     try
       // "occurrence" se resuelve AQUI, UNA VEZ, contra el fichero ORIGINAL, y
@@ -1380,16 +1405,25 @@ begin
           Sb.AppendLine(Format('  %d: %s', [N, MsgText(SR_RANGE_WITH_BLOCK)]));
           Break;
         end;
-        if EsBloque then
-          Una := ApplyBlockEdit(APath, Anc, Nue,
-            Obj.GetValue<Integer>('occurrence', 0), Ocurr[N - 1])
-        else
-        begin
-          EnLinea := Obj.GetValue<Integer>('atline', 0);
-          if EnLinea = 0 then
-            EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
-          Borra := Obj.GetValue<Boolean>('delete', False);
-          Una := AAplicaUna(Anc, Nue, EnLinea, Hasta[N - 1], Borra);
+        // Una excepcion es un fallo como otro cualquiera: se saltaba el
+        // deshacer y la entrada anterior quedaba escrita - lo mismo que se
+        // arreglo en el commit de un changeset y quedo aqui sin arreglar
+        // (segunda revision, 27-sep-2026, medido por dos agentes)
+        try
+          if EsBloque then
+            Una := ApplyBlockEdit(APath, Anc, Nue,
+              Obj.GetValue<Integer>('occurrence', 0), Ocurr[N - 1])
+          else
+          begin
+            EnLinea := Obj.GetValue<Integer>('atline', 0);
+            if EnLinea = 0 then
+              EnLinea := Ocurr[N - 1]; // resuelto arriba y ya desplazado
+            Borra := Obj.GetValue<Boolean>('delete', False);
+            Una := AAplicaUna(Anc, Nue, EnLinea, Hasta[N - 1], Borra);
+          end;
+        except
+          on E: Exception do
+            Una := MsgExcepcion(E.ClassName, E.Message);
         end;
         var Eco := '';
         if (AntesL <> nil) and not EsFallo(Una) then
@@ -1453,9 +1487,12 @@ begin
       end;
       if Fallo > 0 then
       begin
-        TFile.WriteAllBytes(APath, Copia); // todo o nada, byte a byte
-        Exit(MsgConCausa(SR_PATCH_EDITS_ROLLED_FMT, Causa,
-          [Fallo, Arr.Count, Sb.ToString.TrimRight]));
+        var NoVolvio := Foto.Restaura; // todo o nada, byte a byte
+        Result := MsgConCausa(SR_PATCH_EDITS_ROLLED_FMT, Causa,
+          [Fallo, Arr.Count, Sb.ToString.TrimRight]);
+        if NoVolvio <> '' then
+          Result := Result + #10 + MsgFmt(SN_FOTO_NO_VOLVIO_FMT, [NoVolvio]);
+        Exit;
       end;
       Result := MsgFmt(SN_PATCH_EDITS_OK_FMT,
         [Arr.Count, TPath.GetFileName(APath), Sb.ToString.TrimRight]);
@@ -1625,6 +1662,10 @@ begin
       // 2026-09-21: la regla entro en 1 de los 3 guardianes y delphi_edit
       // era el que faltaba).
       // -> ahora dentro de WriteTargetDenied, arriba (25-sep-2026).
+      // una carpeta decia "extension '' no soportada"
+      Result := CarpetaEnVezDeFichero(A.Path);
+      if Result <> '' then
+        Exit;
       Ext := LowerCase(TPath.GetExtension(A.Path));
       IsSource := False;
       for var E in SOURCE_EXTS do
@@ -2506,14 +2547,8 @@ begin
     try
       NewBytes := EncodeText(Joined, K);
     except
-      on E: Exception do
-      begin
-        var Hex := 'XXXX';
-        var MU := TRegEx.Match(E.Message, 'U\+([0-9A-F]+)');
-        if MU.Success then Hex := MU.Groups[1].Value;
-        Exit(MsgFmt(SR_EDIT_CARACTERES_NO_CABEN_FMT,
-          [E.Message, EncName(K), Hex, Hex, Hex, Hex]));
-      end;
+      on E: ECaracterNoCabe do
+        Exit(E.Message); // la negativa entera la compone la excepcion
     end;
 
     var CopyNote := BackupFile(APath);

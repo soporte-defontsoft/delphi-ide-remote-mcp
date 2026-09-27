@@ -169,7 +169,7 @@ check('delphi_designer lint sobre el UTF-16: limpio', mc.abre(r, 'SN_DESIGNER_LI
 U16BE = os.path.join(BASE, 'notas_be.txt')
 open(U16BE, 'wb').write(b'\xfe\xff' + 'uno\r\ndos: canci\u00f3n\r\ntres\r\n'.encode('utf-16-be'))
 r = call('delphi_textedit', {'path': U16BE, 'old': 'tres', 'new': 'tres (editada)'})
-check('delphi_textedit edita un UTF-16 BE (antes: "parece BINARIO")', 'encoding=utf16-be' in r and not mc.rechazado(r), r[:200])
+check('delphi_textedit edita un UTF-16 BE (antes: "parece BINARIO")', 'encoding=utf16-be' in r and not mc.fallo(r), r[:200])
 b = open(U16BE, 'rb').read()
 check('...y en disco sigue UTF-16 BE con BOM y el acento', b[:2] == b'\xfe\xff' and b[2:].decode('utf-16-be') == 'uno\r\ndos: canci\u00f3n\r\ntres (editada)\r\n', b[:40].hex())
 EXE_BIN = os.path.join(BASE, 'no_texto.bin')

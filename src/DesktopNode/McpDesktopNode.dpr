@@ -132,7 +132,7 @@ begin
         Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
       Hizo := Escritorio.Pulsar(ObjX, ObjY);
       if not Hizo then
-        Writeln(MsgFmt(SN_NODE_NO_PUDE_PULSAR_CAMPO_FMT, [Escritorio.Error]))
+        Writeln(MsgFmt(SR_NODE_NO_PUDE_PULSAR_CAMPO_FMT, [Escritorio.Error]))
       else
       begin
         Sleep(250);
@@ -140,7 +140,7 @@ begin
         if Hizo then
           Writeln(MsgFmt(SK_NODE_ESCRITO_EN_PIXEL_FMT, [Frase, ObjX, ObjY]))
         else
-          Writeln(MsgFmt(SN_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Escritorio.Error]));
+          Writeln(MsgFmt(SR_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Escritorio.Error]));
       end;
     end
     else if (Orden = 'texto') and (Args >= 2) then
@@ -152,7 +152,7 @@ begin
       if Hizo then
         Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_FMT, [Frase]))
       else
-        Writeln(MsgFmt(SN_NODE_NO_PUDE_ESCRIBIR_FMT, [Escritorio.Error]));
+        Writeln(MsgFmt(SR_NODE_NO_PUDE_ESCRIBIR_FMT, [Escritorio.Error]));
     end
     else if (Orden = 'tecla') and (Args >= 2) then
     begin
@@ -172,7 +172,7 @@ begin
         Teclas := Teclas + [Tecla];
       end;
       if Tecla = 0 then
-        Writeln(MsgFmt(SN_NODE_NO_CONOZCO_TECLA_FMT, [Arg(I)]))
+        Writeln(MsgFmt(SR_NODE_NO_CONOZCO_TECLA_FMT, [Arg(I)]))
       else
       begin
         Hizo := Escritorio.Combinacion(Teclas);
@@ -180,7 +180,7 @@ begin
           Writeln(MsgFmt(SK_NODE_TECLA_ENVIADA_FMT, [Arg(Args),
             IfThen(Args > 2, MsgFmt(SF_NODE_CON_MODIFICADORES_FMT, [Args - 2]), '')]))
         else
-          Writeln(MsgFmt(SN_NODE_NO_ENVIAR_TECLA_FMT, [Escritorio.Error]));
+          Writeln(MsgFmt(SR_NODE_NO_ENVIAR_TECLA_FMT, [Escritorio.Error]));
       end;
     end
     else if Orden = 'altab' then
@@ -189,7 +189,7 @@ begin
       if Hizo then
         Writeln(MsgText(SK_NODE_ALT_TAB_ENVIADO))
       else
-        Writeln(MsgFmt(SN_NODE_NO_ENVIAR_ALT_TAB_FMT, [Escritorio.Error]));
+        Writeln(MsgFmt(SR_NODE_NO_ENVIAR_ALT_TAB_FMT, [Escritorio.Error]));
     end
     else if Args >= 2 then
     begin
@@ -201,7 +201,7 @@ begin
         if Hizo then
           Writeln(MsgFmt(SK_NODE_CLIC_EN_PIXEL_FMT, [ObjX, ObjY]))
         else
-          Writeln(MsgFmt(SN_NODE_NO_PUDE_PULSAR_FMT, [Escritorio.Error]));
+          Writeln(MsgFmt(SR_NODE_NO_PUDE_PULSAR_FMT, [Escritorio.Error]));
       end;
     end
     else
@@ -467,7 +467,7 @@ begin
             if Hizo then
               Writeln(MsgText(SK_NODE_SUPER_ENVIADO))
             else
-              Writeln(MsgFmt(SN_NODE_NO_ABRIR_VISTA_FMT, [Manos.Error]));
+              Writeln(MsgFmt(SR_NODE_NO_ABRIR_VISTA_FMT, [Manos.Error]));
           end
           else if (Orden = 'escribe') and (Args >= 4) then
           begin
@@ -480,7 +480,7 @@ begin
               Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
             Hizo := Manos.Pulsar(ObjX, ObjY);
             if not Hizo then
-              Writeln(MsgFmt(SN_NODE_NO_PUDE_PULSAR_CAMPO_FMT, [Manos.Error]))
+              Writeln(MsgFmt(SR_NODE_NO_PUDE_PULSAR_CAMPO_FMT, [Manos.Error]))
             else
             begin
               Sleep(250);
@@ -489,7 +489,7 @@ begin
                 Writeln(MsgFmt(SK_NODE_ESCRITO_PIXEL_MAPA_FMT,
                   [Frase, ObjX, ObjY, Manos.MapaNota]))
               else
-                Writeln(MsgFmt(SN_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Manos.Error]));
+                Writeln(MsgFmt(SR_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Manos.Error]));
             end;
           end
           else if (Orden = 'texto') and (Args >= 2) then
@@ -502,7 +502,7 @@ begin
             if Hizo then
               Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_MAPA_FMT, [Frase, Manos.MapaNota]))
             else
-              Writeln(MsgFmt(SN_NODE_NO_PUDE_ESCRIBIR_FMT, [Manos.Error]));
+              Writeln(MsgFmt(SR_NODE_NO_PUDE_ESCRIBIR_FMT, [Manos.Error]));
           end
           else if (Orden = 'tecla') and (Args >= 2) then
           begin
@@ -521,7 +521,7 @@ begin
               Writeln(MsgFmt(SK_NODE_TECLA_ENVIADA_FMT, [Arg(Args),
                 IfThen(Args > 2, MsgFmt(SF_NODE_CON_MODIFICADORES_FMT, [Args - 2]), '')]))
             else
-              Writeln(MsgFmt(SN_NODE_NO_ENVIAR_TECLA_FMT, [Manos.Error]));
+              Writeln(MsgFmt(SR_NODE_NO_ENVIAR_TECLA_FMT, [Manos.Error]));
           end
           else if Orden = 'altab' then
           begin
@@ -530,7 +530,7 @@ begin
             if Hizo then
               Writeln(MsgText(SK_NODE_ALT_TAB_ENVIADO))
             else
-              Writeln(MsgFmt(SN_NODE_NO_ENVIAR_ALT_TAB_FMT, [Manos.Error]));
+              Writeln(MsgFmt(SR_NODE_NO_ENVIAR_ALT_TAB_FMT, [Manos.Error]));
           end
           else if Args >= 2 then
           begin
@@ -542,7 +542,7 @@ begin
               if Hizo then
                 Writeln(MsgFmt(SK_NODE_CLIC_EN_PIXEL_FMT, [ObjX, ObjY]))
               else
-                Writeln(MsgFmt(SN_NODE_NO_PUDE_PULSAR_FMT, [Manos.Error]));
+                Writeln(MsgFmt(SR_NODE_NO_PUDE_PULSAR_FMT, [Manos.Error]));
             end;
           end
           else
@@ -593,7 +593,12 @@ begin
     Writeln(MsgText(SN_NODE_TODAVIA_NO_TIENE_MANOS));
 {$ENDIF}
   except
+    // con su etiqueta y exit 1: salia sin etiqueta y con exit 0, y el
+    // servidor contestaba "sin motivo" (segunda revision, 27-sep-2026)
     on E: Exception do
-      Writeln(E.ClassName, ': ', E.Message);
+    begin
+      Writeln(MsgFmt(SR_NODE_EXCEPCION_FMT, [E.ClassName, E.Message]));
+      ExitCode := 1;
+    end;
   end;
 end.

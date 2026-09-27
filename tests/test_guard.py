@@ -308,7 +308,7 @@ if os.path.exists(_holad):
     upload_dproj(_clean)
     out = build_default(_holad)
     check('R7: un .dproj NORMAL sigue compilando (sin falso positivo)',
-          not mc.rechazado(out) and compilo(out), out[:200])
+          not mc.fallo(out) and compilo(out), out[:200])
 
     # --- R9 (field): the hazard scanner no longer refuses an INERT custom
     #     <Target>. Refusing EVERY target was a false positive as serious as a
@@ -496,11 +496,22 @@ for param, payload in (('platform', 'Win64 && cmd /c echo x > '),
     check('build: inyeccion por "%s" no ejecuto nada' % param,
           not os.path.exists(_m), _m)
 
-# anti-over-tightening: a project may declare its OWN configuration names
+# anti-over-tightening: a project may declare its OWN configuration names.
+# El proyecto la DECLARA: desde el 27-sep una que no declara es NOT_FOUND
+# (ConfigDesconocida), y eso no mediria la puerta de argumentos.
+_hola_antes = open(_holad, 'rb').read()
+_hola_t = _hola_antes.decode('utf-8-sig')
+assert _hola_t.count('<BuildConfiguration Include="Debug">') == 1
+_bom = b'\xef\xbb\xbf' if _hola_antes.startswith(b'\xef\xbb\xbf') else b''
+open(_holad, 'wb').write(_bom + _hola_t.replace(
+    '<BuildConfiguration Include="Debug">',
+    '<BuildConfiguration Include="Release Demo"><Key>Cfg_9</Key><CfgParent>Base</CfgParent>'
+    '</BuildConfiguration><BuildConfiguration Include="Debug">').encode('utf-8'))
 out = call('delphi_build', {"project": _holad, "platform": "Win64",
                             "config": "Release Demo", "target": "Make"}, 300)
+open(_holad, 'wb').write(_hola_antes)
 check('build: una configuracion propia con espacio NO se rechaza',
-      not mc.rechazado(out) and llego_a_msbuild(out), out[:130])
+      not mc.fallo(out) and llego_a_msbuild(out), out[:130])
 
 # --- the workspace ROOT is the jail, not a file ----------------------------
 # delete/move park their target in a trash folder created NEXT TO it: for a
@@ -524,7 +535,7 @@ _victim = os.path.join(INSIDE, 'Borrame.pas')
 open(_victim, 'wb').write(SRC.replace('Dentro', 'Borrame').encode('cp1252'))
 out = call('delphi_delete', {"path": _victim})
 check('root: borrar un fichero DENTRO sigue permitido',
-      not mc.rechazado(out) and not os.path.exists(_victim), out[:130])
+      not mc.fallo(out) and not os.path.exists(_victim), out[:130])
 
 srv.cierra()
 mc.fin('guard battery')

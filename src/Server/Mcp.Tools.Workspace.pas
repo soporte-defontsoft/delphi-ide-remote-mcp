@@ -227,6 +227,7 @@ type
     FDir: string;
     FOutFile: string;
   public
+    [Required]
     [SchemaDescription(SP_WS_DIR)]
     [RutaDelServidor]
     property Dir: string read FDir write FDir;
@@ -241,6 +242,12 @@ type
   public
     constructor Create; override;
   end;
+
+var
+  { Como arranco ESTE proceso: lo fija el .dpr en la rama que elige (un solo
+    lector de la linea de ordenes) y lo cuenta delphi_workspace. }
+  GModoServidor: string = 'console';     // console | service | tray
+  GTransporteServidor: string = 'stdio'; // stdio | http
 
 implementation
 
@@ -262,6 +269,9 @@ uses
   Lsp.Files,
   Mcp.Tools.Messages,
   Lsp.DesignerBin; // DirectedMessagesPending, para la ficha del servidor
+
+// la tool git va por delante de su compositor
+function GitExito(const ACuerpo: string): string; forward;
 
 const
   DEFAULT_MASKS: array [0 .. 7] of string =
@@ -386,12 +396,16 @@ begin
     Exit(MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Params.Root]));
   if Params.Query = '' then
     Exit(MsgText(SR_WS_EMPTY_QUERY));
+  if Params.MaxResults < 0 then
+    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['maxresults', Params.MaxResults]));
+  if Params.Offset < 0 then
+    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['offset', Params.Offset]));
   Max := Params.MaxResults;
   if Max <= 0 then Max := 100;
   if Max > 500 then Max := 500;
   Q := Params.Query.ToLower;
   var Ofs := Params.Offset;
-  if Ofs < 0 then Ofs := 0;
+
 
   Return := TJSONObject.Create;
   Hits := TJSONArray.Create;
@@ -607,6 +621,9 @@ begin
           Arr.Add(F);
       end;
       Return.AddPair('total', TJSONNumber.Create(Total));
+      // el recorte se dice, como en el modo ficheros (callaba)
+      if Total > Arr.Count then
+        Return.AddPair('shownNote', MsgFmt(SN_LIST_DIRS_CAPPED_FMT, [LIST_CAP]));
       Ocultos.Report(Return);
       Return.AddPair('dirs', Arr);
       Result := Return.ToJSON;
@@ -1111,7 +1128,7 @@ begin
   if ExitCode <> 0 then
     Result := MsgFmt(SR_GIT_EXIT_FMT, [ExitCode, Output.Trim])
   else
-    Result := Format('exit=%d'#10'%s', [ExitCode, Output.Trim]);
+    Result := GitExito(Output.Trim);
   // Una respuesta que es solo "exit=0" no se distingue de una que se ha roto
   // por el camino, y lo primero que hace quien la recibe es repetirla. El
   // silencio de git SIGNIFICA cosas distintas segun la orden, asi que se
@@ -1119,9 +1136,9 @@ begin
   if (ExitCode = 0) and (Output.Trim = '') then
   begin
     if SameText(Cmd, 'diff') then
-      Result := 'exit=0'#10 + MsgText(SN_GIT_DIFF_CLEAN)
+      Result := GitExito(MsgText(SN_GIT_DIFF_CLEAN))
     else
-      Result := 'exit=0'#10 + MsgFmt(SN_GIT_SILENT_OK_FMT, [Cmd]);
+      Result := GitExito(MsgFmt(SN_GIT_SILENT_OK_FMT, [Cmd]));
   end;
   // Un worktree nuevo es de quien lo pidio: se lo dice, con como quitarlo.
   if (ExitCode = 0) and (Cmd = 'worktree') and SameText(Params.Args.Trim, 'add') then
@@ -1204,6 +1221,14 @@ end;
 var
   GArranque: TDateTime; // cuando empezo a vivir ESTE proceso
 
+{ La respuesta de git que acabo bien: "exit=0" y lo que dijo. El formato que
+  leen los agentes y las baterias, compuesto en UN sitio (estaba a mano tres
+  veces). La que acabo mal es SR_GIT_EXIT_FMT. }
+function GitExito(const ACuerpo: string): string;
+begin
+  Result := 'exit=0'#10 + ACuerpo;
+end;
+
 { Cuanto lleva en marcha, en algo que se lee de un vistazo. }
 function TiempoEnMarcha(const ADesde: TDateTime): string;
 var
@@ -1256,22 +1281,11 @@ var
   Modo, Transporte, P: string;
   I: Integer;
 begin
-  Modo := 'console';
-  Transporte := 'stdio';
-  for I := 1 to ParamCount do
-  begin
-    P := ParamStr(I).ToLower.TrimLeft(['-', '/']);
-    if MatchText(P, ['service', 'install', 'uninstall']) then
-      Modo := 'service'
-    else if MatchText(P, ['gui', 'tray']) then
-      Modo := 'tray'
-    else if P.StartsWith('http') then
-      Transporte := 'http';
-  end;
-  // La bandeja y el servicio SIEMPRE sirven por HTTP (ambos llaman a
-  // CreateHttpServer); solo la consola puede estar en stdio.
-  if Modo <> 'console' then
-    Transporte := 'http';
+  // Lo fija el .dpr en la rama que elige al arrancar: releer la linea de
+  // ordenes aqui, con otras reglas, decia transport=http con un "/http"
+  // suelto sirviendo por stdio (segunda revision, 27-sep-2026)
+  Modo := GModoServidor;
+  Transporte := GTransporteServidor;
   Srv := TJSONObject.Create;
   ADestino.AddPair('server', Srv);
   Srv.AddPair('version', SERVER_VERSION);
@@ -1591,9 +1605,11 @@ begin
   // Paginado como delphi_search: una maquina de trabajo tiene miles de .dproj
   // y la lista entera no cabe en una respuesta (medido: 7025 proyectos = 82 KB
   // = limite del cliente reventado, o sea la tool inservible sin "root").
+  if Params.Offset < 0 then
+    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['offset', Params.Offset]));
+  if Params.MaxResults < 0 then
+    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['maxresults', Params.MaxResults]));
   Ofs := Params.Offset;
-  if Ofs < 0 then
-    Ofs := 0;
   Max := Params.MaxResults;
   if Max <= 0 then
     Max := 50;
@@ -1772,12 +1788,19 @@ var
   Return: TJSONObject;
   LinkOnly: Boolean;
 begin
+  // la guarda PRIMERO: con path vacio, GetFullPath lanzaba el texto de la
+  // RTL ("Invalid characters in path"); la guarda dice que falta la ruta
+  Result := ReadPathDenied(Params.Path); // downloading is reading
+  if Result <> '' then
+    Exit;
   FullPath := TPath.GetFullPath(Params.Path);
-  Result := ReadPathDenied(FullPath); // downloading is reading
+  Result := CarpetaEnVezDeFichero(FullPath);
   if Result <> '' then
     Exit;
   if not TFile.Exists(FullPath) then
     Exit(MsgFmt(SR_WS_NO_EXISTE_FMT, [FullPath]));
+  if Params.MaxBytes < 0 then
+    Exit(MsgFmt(SR_SYS_NEGATIVO_FMT, ['maxbytes', Params.MaxBytes]));
   MaxB := Params.MaxBytes;
   if (MaxB <= 0) or (MaxB > MAX_CHUNK) then
     MaxB := MAX_CHUNK;
@@ -1874,6 +1897,9 @@ var
 begin
   FullPath := TPath.GetFullPath(Params.Path);
   Result := WriteTargetDenied(FullPath); // writing: the strict jail + dead folders, never the library zone
+  if Result <> '' then
+    Exit;
+  Result := CarpetaEnVezDeFichero(FullPath); // un fmCreate sobre una carpeta era un INTERNAL
   if Result <> '' then
     Exit;
   if Params.Offset < 0 then
@@ -2084,6 +2110,11 @@ begin
       TPath.GetFileName(ExcludeTrailingPathDelimiter(Dir)) + '-deploy.zip');
   // el zip es un destino: la puerta de destino (jaula + carpetas muertas)
   Result := WriteTargetDenied(OutZip);
+  if Result <> '' then
+    Exit;
+  // un outfile que es una CARPETA acababa en "alguien lo tiene abierto,
+  // reintenta" - un bucle sin fin para quien obedece
+  Result := CarpetaEnVezDeFichero(OutZip);
   if Result <> '' then
     Exit;
   // El zip se arma con nombre propio y se pone en su sitio de un golpe al

@@ -37,6 +37,9 @@ type
 
 implementation
 
+uses
+  Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
+
 { TMCPRegistry }
 
 class procedure TMCPRegistry.EnsureInitialized;
@@ -73,7 +76,7 @@ begin
   if FTools.TryGetValue(Name, Factory) then
     Result := Factory()
   else
-    raise Exception.CreateFmt('Tool not found: %s', [Name]);
+    raise Exception.Create(MsgFmt(SR_SYS_TOOL_NOT_FOUND_FMT, [Name]));
 end;
 
 class function TMCPRegistry.CreateResource(const URI: string): IMCPResource;
@@ -85,7 +88,7 @@ begin
   if FResources.TryGetValue(URI, Factory) then
     Result := Factory()
   else
-    raise Exception.CreateFmt('Resource not found: %s', [URI]);
+    raise EArgumentException.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
 end;
 
 class function TMCPRegistry.GetToolNames: TArray<string>;

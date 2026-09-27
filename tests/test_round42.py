@@ -131,7 +131,7 @@ try:
         # resuelve la definicion fuera ("no busco sus usos"). Un timeout, un
         # error cualquiera o la negativa cruda de la jaula no son ninguna.
         contesta = j.get('identifier') == IDENT
-        se_niega = (mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT')
+        se_niega = (mc.resultado(r) == 'DENIED' and mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT')
                     and IDENT in r)
         print('  (jaula %s: el motor %s)' % (quien, 'contesta con referencias' if contesta else
               'resuelve fuera y se niega' if se_niega else 'NO da ninguna salida legitima'))

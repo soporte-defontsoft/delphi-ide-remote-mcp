@@ -142,7 +142,7 @@ r = call('delphi_designer', {'command': 'tree', 'path': 'C:\\Windows\\win.ini'})
 check('fuera de jaula / no designer rechazado',
       mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:150])
 r = call('delphi_designer', {'command': 'volar'})
-check('comando invalido', mc.es(r, 'SR_DESIGNER_CMD') and not r.startswith('MCPERROR'), r[:120])
+check('comando invalido', mc.es(r, 'SR_DESIGNER_CMD') and not mc.sin_respuesta(r), r[:120])
 
 # ---- eventos por nombre contra el .pas pareja, en lint, al ESCRIBIR y en insert=metodo ----
 # hermes 25-sep-2026: OnClick = btnHelpClick con el handler en public (insert=metodo

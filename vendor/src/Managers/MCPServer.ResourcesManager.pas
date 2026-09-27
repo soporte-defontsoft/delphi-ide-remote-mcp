@@ -34,7 +34,8 @@ type
 implementation
 
 uses
-  MCPServer.Registration;
+  MCPServer.Registration,
+  Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
 
 { TMCPResourcesManager }
 
@@ -131,11 +132,19 @@ var
   URI: string;
   URIValue: TJSONValue;
 begin
-  URIValue := Params.GetValue('uri');
+  // [local change 2026-09-27] sin params (o sin uri) era un Access Violation;
+  // un recurso que no existe, un "exito" con el error dentro del texto
+  URIValue := nil;
+  if Assigned(Params) then
+    URIValue := Params.GetValue('uri');
   if Assigned(URIValue) then
     URI := URIValue.Value
   else
     URI := '';
+  if URI = '' then
+    raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_PARAM_FMT, ['uri']));
+  if not FResources.ContainsKey(URI) then
+    raise EArgumentException.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
 
   TLogger.Info('MCP ReadResource called for URI: ' + URI);
 
@@ -157,16 +166,13 @@ begin
         ContentItem.AddPair('text', ResourceText);
       except
         on E: Exception do
-        begin
-          ContentItem.AddPair('text', 'Error reading resource: ' + E.Message);
-        end;
+          raise Exception.Create(MsgFmt(SR_SYS_RECURSO_ILEGIBLE_FMT, [URI, E.Message]));
       end;
     end
     else
     begin
-      ContentItem.AddPair('uri', URI);
-      ContentItem.AddPair('mimeType', 'text/plain');
-      ContentItem.AddPair('text', 'Error: Resource not found: ' + URI);
+      // (no se llega: comprobado arriba)
+      raise EArgumentException.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
     end;
     
     Result := TValue.From<TJSONObject>(ResultJSON);

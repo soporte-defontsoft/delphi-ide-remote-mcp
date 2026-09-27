@@ -106,6 +106,31 @@ begin
     Result := V.ToJSON;
 end;
 
+{ [local change 2026-09-27] El resultado de una respuesta en TEXTO: la
+  etiqueta que la abre o, si es un objeto JSON, la de su campo "error". UNA
+  lectura para las dos ramas (texto suelto, y texto que acompana a una
+  imagen: esa miraba solo la etiqueta y un JSON con "error" salia ok). }
+function OutcomeDeLaRespuesta(const AText: string): string;
+var
+  V: TJSONValue;
+  Err: string;
+begin
+  Result := OutcomeDelTexto(AText, False);
+  if (Result <> '') or not AText.TrimLeft.StartsWith('{') then
+    Exit;
+  V := TJSONObject.ParseJSONValue(AText);
+  try
+    if V is TJSONObject then
+    begin
+      Err := ErrorDelObjeto(TJSONObject(V));
+      if Err <> '' then
+        Result := OutcomeDelTexto(Err, True);
+    end;
+  finally
+    V.Free;
+  end;
+end;
+
 { TMCPToolsManager }
 
 constructor TMCPToolsManager.Create;
@@ -255,7 +280,7 @@ begin
     for var It in ResultValue.AsType<TJSONArray> do
       if (It is TJSONObject) and (TJSONObject(It).GetValue<string>('type', '') = 'text') then
       begin
-        if OutcomeDelTexto(TJSONObject(It).GetValue<string>('text', ''), False) <> '' then
+        if OutcomeDeLaRespuesta(TJSONObject(It).GetValue<string>('text', '')) <> '' then
           Result.AddPair('isError', TJSONBool.Create(True));
         Break;
       end;
@@ -287,7 +312,7 @@ begin
     // one fixed text whether the target exists or not, so they all map to
     // DENIED; NOT_FOUND only ever comes from in-jail "no existe" texts.
     // [local change 2026-09-27] el resultado, de UNA funcion (OutcomeDelTexto)
-    var OutcomeCode := OutcomeDelTexto(TextValue, False);
+    var OutcomeCode := OutcomeDeLaRespuesta(TextValue);
     // [local change 2026-09-19] structuredContent ES la salida de la tool para
     // el protocolo, asi que un cliente que lo entienda ENSEÑA ESO Y ESCONDE
     // 'content'. Publicando aqui solo {ok, code} el agente recibia
@@ -328,15 +353,8 @@ begin
     // delphi_test (proyecto que no existe) y delphi_build (build fallido).
     // El campo "error" del objeto manda sobre lo que el objeto diga de si
     // mismo: si hay error, no hay ok.
-    if Assigned(Structured) and (OutcomeCode = '') then
-    begin
-      var ErrTxt := ErrorDelObjeto(Structured);
-      if ErrTxt <> '' then
-      begin
-        OutcomeCode := OutcomeDelTexto(ErrTxt, True);
-        Structured.RemovePair('ok').Free; // el suyo mentia; abajo se pone el bueno
-      end;
-    end;
+    if Assigned(Structured) and (OutcomeCode <> '') and (ErrorDelObjeto(Structured) <> '') then
+      Structured.RemovePair('ok').Free; // el suyo mentia; abajo se pone el bueno
     if Assigned(Structured) then
     begin
       Result.AddPair('structuredContent', Structured);

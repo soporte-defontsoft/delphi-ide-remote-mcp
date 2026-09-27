@@ -670,11 +670,15 @@ begin
     Exit(MsgFmt(SR_STYLES_MISSING_FMT, [Params.Path]));
   if MatchText(Cmd, ['view', 'get', 'set', 'clone', 'delete']) then
   begin
-    if TDirectory.Exists(Params.Path) then
-      Exit(MsgText(SR_STYLES_NEED_FILE));
+    if TDirectory.Exists(Params.Path) or
+       not SameText(TPath.GetExtension(Params.Path), '.style') then
+      Exit(MsgText(SR_STYLES_NEED_FILE)); // un .txt daba un view vacio "correcto"
     if IsBinaryStyle(Params.Path) then
       Exit(MsgFmt(SR_STYLES_BINARY_FMT, [TPath.GetFileName(Params.Path)]));
   end;
+  // lint/build con un FICHERO se pasaban en silencio a su carpeta
+  if MatchText(Cmd, ['lint', 'build']) and TFile.Exists(Params.Path) then
+    Exit(MsgFmt(SR_STYLES_NEED_FOLDER_FMT, [Params.Path]));
   if MatchText(Cmd, ['get', 'set', 'clone', 'delete']) and (Params.Style.Trim = '') then
     Exit(MsgText(SR_STYLES_NEED_STYLE));
   try

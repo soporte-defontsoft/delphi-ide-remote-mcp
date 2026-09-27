@@ -1126,7 +1126,7 @@ const
   // ---------------------------------------------------------------------
   // vault_* (knowledge vault: Markdown notes linked with [[wikilinks]])
   // These descriptions ARE the doctrine the agent sees: lazy loading, write
-  // in Spanish, log vs progress discipline, read the write-rules before
+  // in the vault's language, log vs progress discipline, read the write-rules before
   // creating. What can be enforced by code lives in Mcp.Tools.Vault.
   // ---------------------------------------------------------------------
   SD_VAULT_SEARCH =
@@ -1284,8 +1284,9 @@ const
   // vault (ver SR_VAULT_UNSET), que es otra cosa.
   SR_VAULT_READONLY =
     '[VAULT-008 DENIED] The vault of YOUR workspace is READ-ONLY ' +
-    '(VaultReadOnly=1 in its [Workspace.<name>] section of the server''s ' +
-    'settings.ini). You can consult it with vault_read and vault_search; ' +
+    '(read-only is the default; VaultReadOnly=0 in its ' +
+    '[Workspace.<name>] section of the server''s settings.ini opens it ' +
+    'for writing). You can consult it with vault_read and vault_search; ' +
     'if you need to write to it, ask for it with delphi_report.';
 
   SR_VAULT_GOVERNANCE =
@@ -1391,8 +1392,8 @@ const
     'The PAServer password (add-profile). Used once to create the profile, ' +
     'stored encrypted, never shown back';
   SP_PASERVER_PLATFORM =
-    'Platform of the profile: Win32 | Win64 | WinARM64EC | OSX64 | ' +
-    'Linux64. Default: Linux64';
+    'Platform of the profile, one that paclient takes (Linux64, OSX64, ' +
+    'Win64...; a wrong one is refused with the list). Default: Linux64';
 
   SR_PASERVER_CMD =
     '[PAS-001 INVALID_PARAM] Command must be platforms | packages | ' +
@@ -1696,8 +1697,7 @@ const
     'listens on 64211 by default.';
 
   SR_PASERVER_PLATFORM_FMT =
-    '[PAS-018 INVALID_PARAM] "%s" is not a paclient platform. Valid: Win32, ' +
-    'Win64, WinARM64EC, OSX64, Linux64.';
+    '[PAS-018 INVALID_PARAM] "%s" is not a paclient platform. Valid: %s.';
 
   SR_PASERVER_PASSWORD =
     '[PAS-019 INVALID_PARAM] The password contains double quotes or control ' +
@@ -1721,6 +1721,10 @@ const
     'platform). To know only whether there IS A ROUTE to your PAServer, ' +
     'call test-connection with host and port WITHOUT name (TCP probe, no ' +
     'credentials).';
+
+  SR_PASERVER_NEED_NAME =
+    '[PAS-049 INVALID_PARAM] Missing "name": the PAServer profile ' +
+    '(command=profiles lists them).';
 
   SN_PASERVER_PROFILE_OK =
     '[PAS-023] Profile stored with the password encrypted inside, and ' +
@@ -1848,14 +1852,15 @@ const
     'profile''s platform and refuses the other kind: a number on Windows ' +
     'would press a different key.';
   SP_ADBLINUX_TEXT =
-    'type: the text to write, key by key, with the keyboard layout the ' +
-    'TARGET desktop really has (it hands its keymap over): any character ' +
-    'that layout gives with a key, Shift or AltGr - accents of its own keys, ' +
-    'punctuation, @ # and so on. A character that layout has no key for ' +
-    '(one that needs a dead key, an emoji) is refused BY NAME instead of ' +
-    'writing something else, and the answer says which keyboard was used. ' +
-    'It is typed as TEXT, never run: quotes, ; and $ arrive as characters. ' +
-    'With x,y it presses there first to focus the field.';
+    'type: the text to write. On Windows it is typed as Unicode (accents ' +
+    'and emojis arrive). On Linux, key by key with the keyboard layout ' +
+    'the TARGET desktop really has (it hands its keymap over): any ' +
+    'character that layout gives with a key, Shift or AltGr, or through ' +
+    'one of its dead keys (the acute accent then i gives the accented ' +
+    'i); one it cannot compose (an emoji) is refused BY NAME instead of ' +
+    'writing something else, and the answer says which keyboard was ' +
+    'used. It is typed as TEXT, never run: quotes, ; and $ arrive as ' +
+    'characters. With x,y it presses there first to focus the field.';
   SR_ADBLINUX_NEEDTEXT =
     '[DESK-002 INVALID_PARAM] type needs "text". If you also pass x and y, it ' +
     'presses there before writing: that is the real gesture, "write this ' +
@@ -2172,14 +2177,21 @@ const
     '(AdbAllowedDevices=): pass "device" explicitly with one from the ' +
     'list (command=devices lists them).';
 
-  SN_ADB_GONE =
-    '[ADB-007] NO CONNECTION TO THE DEVICE. adb over wifi drops by ' +
-    'itself after a while of inactivity - that is the device, not this ' +
-    'server. What to do: retry command=connect to the SAME ip:port (on ' +
-    'many devices the port persists); if it does not get in, have the ' +
-    'developer re-enable wireless debugging on the device and find the ' +
-    'new port with command=discover (Android 11+ randomizes it on ' +
-    're-enable). command=devices says what is attached RIGHT NOW.';
+  SR_ADB_GONE_FMT =
+    '[ADB-007 DENIED] NO CONNECTION TO THE DEVICE. adb over wifi drops ' +
+    'by itself after a while of inactivity - that is the device, not ' +
+    'this server. What to do: retry command=connect to the SAME ip:port ' +
+    '(on many devices the port persists); if it does not get in, have ' +
+    'the developer re-enable wireless debugging on the device and find ' +
+    'the new port with command=discover (Android 11+ randomizes it on ' +
+    're-enable). command=devices says what is attached RIGHT NOW.'#10 +
+    'adb said:'#10 +
+    '%s';
+
+  SR_ADB_FALLO_FMT =
+    '[ADB-027 DENIED] exit=%d - adb did not do it; its own answer ' +
+    'follows and says why:'#10 +
+    '%s';
 
   SR_ADB_OUT_LOG =
     '[ADB-008 INVALID_PARAM] The logcat "out" must end in .txt or .log.';
@@ -2584,9 +2596,10 @@ const
   { adduses de delphi_edit (David, 2026-09-23): la unit entra en el uses de
     OTRA unit y la clausula la escribe el motor. }
   SR_ADDUSES_NOT_PAS_FMT =
-    '[USES-002 DENIED] adduses is for units (.pas); %s is a project. To ' +
-    'put a unit into a .dpr/.dpk use delphi_config command=add-unit, ' +
-    'which also registers the DCCReference in the .dproj.';
+    '[USES-002 INVALID_PARAM] adduses is for units (.pas); %s is a ' +
+    'project. To put a unit into a .dpr/.dpk use delphi_config ' +
+    'command=add-unit, which also registers the DCCReference in the ' +
+    '.dproj.';
   SR_ADDUSES_NEED_NAMES =
     '[USES-003 INVALID_PARAM] Missing "adduses": the unit names to add, ' +
     'separated by ; (System.SysUtils;UCustomer).';
@@ -2626,8 +2639,8 @@ const
 
   { removeuses: la inversa de adduses. }
   SR_REMOVEUSES_NOT_PAS_FMT =
-    '[USES-014 DENIED] removeuses is for units (.pas); %s is a project. ' +
-    'To take a unit out of a .dpr/.dpk use delphi_config ' +
+    '[USES-014 INVALID_PARAM] removeuses is for units (.pas); %s is a ' +
+    'project. To take a unit out of a .dpr/.dpk use delphi_config ' +
     'command=remove-unit.';
   SR_REMOVEUSES_NEED_NAMES =
     '[USES-015 INVALID_PARAM] Missing "removeuses": the unit names to remove, ' +
@@ -2786,6 +2799,10 @@ const
   SR_STYLES_NEED_FILE =
     '[STYLE-002 INVALID_PARAM] view/get/set/clone need ONE text .style file, ' +
     'not a folder (delphi_list pattern=*.style lists it).';
+
+  SR_STYLES_NEED_FOLDER_FMT =
+    '[STYLE-038 INVALID_PARAM] lint and build take the styles FOLDER, ' +
+    'not one file (%s): pass its folder.';
 
   SR_STYLES_BINARY_FMT =
     '[STYLE-003 DENIED] %s is BINARY (a compiled style, the product of ' +
@@ -4158,6 +4175,10 @@ const
     'operation of this batch creates it). Choose another name or delete ' +
     'that one first.';
 
+  SR_CHANGESET_PADRE_FICHERO_FMT =
+    '[CHSET-027 INVALID_PARAM] %s cannot be created: %s is a FILE, not a ' +
+    'folder. Choose another path.';
+
   SR_CHANGESET_UNSTAGE_N_FMT =
     '[CHSET-004 INVALID_PARAM] n=%d is not valid; there are %d stacked ' +
     'operations. Use the number command=preview gives you, or n=0 to ' +
@@ -4830,9 +4851,9 @@ const
 
   // Mensajes que estaban en linea en Lsp.Patch.pas (paso 3c, 27-sep-2026)
   SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT =
-    '[EDIT-032 DENIED] Extension "%s" is not supported. This tool is ' +
-    'only for Delphi files; for non-Delphi text (.md .py .html .js .ini ' +
-    '...) use delphi_textedit.';
+    '[EDIT-032 INVALID_PARAM] Extension "%s" is not supported. This tool ' +
+    'is only for Delphi files; for non-Delphi text (.md .py .html .js ' +
+    '.ini ...) use delphi_textedit.';
 
   SR_EDIT_HISTORY_RECOVERY_SON_COPIAS =
     '[EDIT-033 DENIED] __history\ and __recovery\ are dead copies kept ' +
@@ -4973,9 +4994,9 @@ const
 
   // Mensajes que estaban en linea en Lsp.TextEdit.pas (paso 3c, 27-sep-2026)
   SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT =
-    '[TEXT-001 DENIED] "%s" is a Delphi file. For sources and designers ' +
-    'use delphi_edit; project files (.dproj) are maintained by the IDE / ' +
-    'delphi_create.';
+    '[TEXT-001 INVALID_PARAM] "%s" is a Delphi file. For sources and ' +
+    'designers use delphi_edit; project files (.dproj) are maintained by ' +
+    'the IDE / delphi_create.';
 
   SR_TEXT_ATLINE_NINGUNA_OCURRENCIAS_FMT =
     '[TEXT-002 INVALID_PARAM] atline=%d is none of the occurrences (%s).';
@@ -5704,7 +5725,7 @@ const
     'it opens it).%s';
 
   SR_CREATE_NO_EXISTE_DPR_FMT =
-    '[CREATE-025 NOT_FOUND] The .dpr %s does not exist';
+    '[CREATE-025 NOT_FOUND] The project %s does not exist';
 
   SR_CREATE_IDENTIFICADOR_FORM_FMT =
     '[CREATE-026 INVALID_PARAM] ''%s'' is not a valid form identifier.';
@@ -5713,8 +5734,9 @@ const
     '[CREATE-027 DENIED] %s already exists. The scaffolder never ' +
     'overwrites.';
 
-  SK_CREATE_CREADOS_NO_REGISTRADOS_FMT =
-    '[CREATE-028] CREATED %s.pas/%s but they could NOT be registered: %s';
+  SR_CREATE_CREADOS_NO_REGISTRADOS_FMT =
+    '[CREATE-028 DENIED] CREATED %s.pas/%s but they could NOT be ' +
+    'registered: %s';
 
   SK_CREATE_CREADO_FORM_FMT =
     '[CREATE-029] CREATED %s %s (T%s, %s) with its %s.'#10 +
@@ -5728,8 +5750,9 @@ const
     'overwrites. To register it in the project use delphi_config ' +
     'command=add-unit.';
 
-  SK_CREATE_CREADA_NO_REGISTRADA_FMT =
-    '[CREATE-032] CREATED %s.pas but it could NOT be registered: %s';
+  SR_CREATE_CREADA_NO_REGISTRADA_FMT =
+    '[CREATE-032 DENIED] CREATED %s.pas but it could NOT be registered: ' +
+    '%s';
 
   SK_CREATE_CREADA_UNIT_LINEAS_FMT =
     '[CREATE-033] CREATED unit %s (%s), %d lines.'#10 +
@@ -5821,6 +5844,10 @@ const
 
   SR_TEXT_AL_CODIFICAR_FMT =
     '[TEXT-010 DENIED] Could not encode: %s';
+
+  SR_TEXT_EOL_FMT =
+    '[TEXT-014 INVALID_PARAM] eol "%s" does not exist: crlf (the ' +
+    'default) or lf.';
 
   SK_TEXT_RANGO_VERIFICACION_FMT =
     '[TEXT-011] %s  encoding=%s  (backup in %s\)'#10 +
@@ -5923,12 +5950,11 @@ const
     'targets and its name in Build/Clean/Make - or takes out)';
 
   SP_CFG_PLATFORM =
-    'add/remove-platform: the platform, from the fixed set ' +
-    'Win32|Win64|Win64x|WinARM64EC|OSX64|OSXARM64|Linux64|Android|Android' +
-    '64|iOSDevice64|iOSSimARM64 (anything else is refused). ' +
-    'add/remove-searchpath: the platform whose search path changes; ' +
-    'empty = the base group (every platform). add/remove-deployfile: the ' +
-    'platform the file ships on (required)';
+    'add/remove-platform: the Delphi platform name (Win32, Win64, ' +
+    'Linux64, Android64...; a name the server does not know is refused ' +
+    'with the full list). add/remove-searchpath: the platform whose ' +
+    'search path changes; empty = the base group (every platform). ' +
+    'add/remove-deployfile: the platform the file ships on (required)';
 
   SP_CFG_OUTPUT =
     'set-output: the output folder for binaries, a simple relative name ' +
@@ -6678,7 +6704,9 @@ const
 
   SP_WS_SHA256 =
     'Optional: on the LAST chunk, the whole-file SHA-256; the server ' +
-    'verifies the assembled file and reports verified true/false';
+    'verifies the assembled file: if it does not match, the call FAILS ' +
+    '(error) and the file is set aside as <name>.corrupt instead of ' +
+    'being published';
 
   SP_WS_CHUNKSHA256 =
     'Optional: the SHA-256 of THIS chunk (of its decoded bytes). ' +
@@ -6785,6 +6813,10 @@ const
     '[BUILD-043 NOT_FOUND] The project %s does not exist. ' +
     'delphi_projects lists the .dproj files of your roots.';
 
+  SR_BUILD_VERBOSITY_FMT =
+    '[BUILD-044 INVALID_PARAM] verbosity "%s" does not exist: quiet (the ' +
+    'default), normal or verbose.';
+
   SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED =
     'No RAD Studio installation discovered.';
 
@@ -6792,11 +6824,13 @@ const
     'rsvars.bat not found: %s';
 
   // Excepciones que estaban en linea en Lsp.Patch.pas (paso 3e, 27-sep-2026)
-  SE_EDIT_CARACTER_EXISTE_CP1252_FMT =
-    'the character "%s" (U+%s) does not exist in CP1252';
+  SF_EDIT_CARACTER_NO_EXISTE_FMT =
+    'The character "%s" (U+%s) does not exist in %s';
 
-  SE_EDIT_RENAME_ATOMICO_FALLIDO_FMT =
-    'atomic rename failed (%d)';
+  SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT =
+    '[EDIT-106 DENIED] Could not replace %s (Windows error %d): another ' +
+    'process holds it (the IDE, a build, an antivirus, an open viewer). ' +
+    'Nothing was written; close it and repeat.';
 
   // Excepciones que estaban en linea en Lsp.References.pas (paso 3e, 27-sep-2026)
   SE_LSP_THIDDENCOUNT_MOTIVO_SIN_CAJON_FMT =
@@ -7534,6 +7568,11 @@ const
     27-sep en delphi_edit; y en delphi_styles igual). }
   SR_FALLO_INTERNO_FMT =
     '[SYS-009 INTERNAL] ERROR: %s: %s';
+
+  SN_FOTO_NO_VOLVIO_FMT =
+    '[SYS-018] WARNING: these files could NOT be put back as they were ' +
+    '(another process holds them?):'#10 +
+    '%s';
   { Los envoltorios de siempre, uno por forma: el motivo que trae otro
     sitio (una funcion que devuelve el porque, el mensaje de una excepcion)
     con la marca y el resultado de la respuesta. }
@@ -7548,13 +7587,50 @@ const
     Salian como 'Error:', o sea INTERNAL: no se rompio nada, la llamada
     estaba mal. }
   SR_SYS_INVALID_TOOL_PARAMS =
-    '[SYS-013 INVALID_PARAM] Error: Invalid tool parameters';
+    '[SYS-013 INVALID_PARAM] Invalid tool parameters';
   SR_SYS_TOOL_NOT_FOUND_FMT =
-    '[SYS-014 NOT_FOUND] Error: Tool not found: %s';
+    '[SYS-014 NOT_FOUND] Tool not found: %s';
 
   SR_SYS_UNKNOWN_PARAM_FMT =
     '[SYS-015 INVALID_PARAM] Unknown parameter "%s". Valid parameters: ' +
     '%s.';
+
+  SR_SYS_MISSING_PARAM_FMT =
+    '[SYS-019 INVALID_PARAM] Missing "%s": this tool requires it ' +
+    '(tools/list names it in "required"). Nothing was done. If your ' +
+    'client''s tool list does not show it, the server was updated after ' +
+    'you connected: reconnect the MCP session, or read the current ' +
+    'contract with delphi_help command=tool.';
+
+  SR_SYS_METODO_NO_EXISTE_FMT =
+    '[SYS-021 NOT_FOUND] Method "%s" does not exist here (or is not ' +
+    'available).';
+
+  SR_SYS_RECURSO_NO_EXISTE_FMT =
+    '[SYS-022 NOT_FOUND] Resource "%s" does not exist (resources/list ' +
+    'names the ones there are).';
+
+  SR_SYS_RECURSO_ILEGIBLE_FMT =
+    '[SYS-023 INTERNAL] Could not read resource "%s": %s';
+
+  SR_SYS_JSON_INVALIDO =
+    '[SYS-024 INVALID_PARAM] The request is not valid JSON.';
+
+  SR_SYS_JSON_NO_OBJETO =
+    '[SYS-025 INVALID_PARAM] A JSON-RPC request must be an object.';
+
+  SE_SYS_SIN_REGISTRO =
+    'The manager registry is not initialized.';
+
+  SE_SYS_METODO_NO_ATENDIDO_FMT =
+    'Method %s is not handled by %s.';
+
+  SR_SYS_NEGATIVO_FMT =
+    '[SYS-020 INVALID_PARAM] "%s" cannot be negative (it came as %d).';
+
+  SN_LIST_DIRS_CAPPED_FMT =
+    '[LIST-013] Only the first %d folders are listed ("total" says how ' +
+    'many there are): go down to a subfolder.';
 
   SR_SYS_PARAM_VALUE_FMT =
     '[SYS-016 INVALID_PARAM] Parameter "%s": %s';

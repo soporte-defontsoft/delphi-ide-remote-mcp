@@ -128,7 +128,7 @@ if os.path.isdir(D):
     check('B3 reintentar sobre el cascaron vacio NO hace otra copia', after == before,
           (before, after, r[:150]))
 else:
-    check('B3 reintentar sobre el cascaron vacio NO hace otra copia', True, '(se borro entera)')
+    print('NOTA: B3 no se mide: la carpeta se borro entera a la primera (no quedo cascaron)')
 
 # ------------------------------------------------------------------- B5 -----
 GHOST = os.path.join(PRJ, 'NoExiste.pas')

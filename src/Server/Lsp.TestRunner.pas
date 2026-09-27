@@ -316,6 +316,14 @@ begin
     Result.AddPair('error', Denied);
     Exit;
   end;
+  // un proyecto, o nada: con cualquier otra cosa (un .txt, una carpeta) se
+  // derivaba un .dpr que no existe y se contestaba "no existe" de un
+  // fichero que si existia (segunda revision, 27-sep-2026)
+  if not MatchText(TPath.GetExtension(AProject), ['.dproj', '.dpr']) then
+  begin
+    Result.AddPair('error', MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [AProject]));
+    Exit;
+  end;
   Dproj := AProject;
   if SameText(TPath.GetExtension(Dproj), '.dpr') then
     Dproj := TPath.ChangeExtension(Dproj, '.dproj');
@@ -341,10 +349,10 @@ begin
   // and built into Win64\Inventada\ (measured 2026-08-25). Say the ones
   // that exist instead.
   Info := ReadDproj(Dproj);
-  if (Length(Info.Configs) > 0) and not Info.HasConfig(Cfg) then
+  var Mala := ConfigDesconocida(Dproj, Cfg);
+  if Mala <> '' then
   begin
-    Result.AddPair('error', MsgFmt(SR_TEST_CONFIG_FMT,
-      [Cfg, string.Join(', ', Info.Configs)]));
+    Result.AddPair('error', Mala);
     Exit;
   end;
   // Which platform this runs on was hardcoded and never said out loud, so an

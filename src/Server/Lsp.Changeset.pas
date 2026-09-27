@@ -77,12 +77,6 @@ type
     Content: string;   // create
   end;
 
-  TSnapshot = record
-    Path: string;
-    Existed: Boolean;
-    Bytes: TBytes;
-  end;
-
   TChangeset = class
     Id: string;
     Ops: TList<TStagedOp>;
@@ -400,6 +394,24 @@ var
   I, J: Integer;
   Op: TStagedOp;
   Sub: TChangeset;
+
+  { La carpeta de un fichero nuevo no puede ser un FICHERO (existente o
+    creado antes en la tanda): el preview lo daba por bueno y el commit
+    reventaba con el texto del sistema (segunda revision, 27-sep-2026).
+    Devuelve la ruta que estorba, o ''. }
+  function PadreFichero(const APath: string): string;
+  var
+    D: string;
+  begin
+    Result := '';
+    D := TPath.GetDirectoryName(APath);
+    while (D <> '') and (D <> TPath.GetDirectoryName(D)) do
+    begin
+      if WillExist(Sub, D) then
+        Exit(D);
+      D := TPath.GetDirectoryName(D);
+    end;
+  end;
 begin
   Result := '';
   Sub := TChangeset.Create('probe');
@@ -409,8 +421,12 @@ begin
       Op := C.Ops[I];
       case Op.Kind of
         opCreate:
-          if WillExist(Sub, Op.Path) then
-            Exit(MsgFmt(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
+          begin
+            if WillExist(Sub, Op.Path) then
+              Exit(MsgFmt(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
+            if PadreFichero(Op.Path) <> '' then
+              Exit(MsgFmt(SR_CHANGESET_PADRE_FICHERO_FMT, [Op.Path, PadreFichero(Op.Path)]));
+          end;
         opEdit, opDeleteLine, opDelete:
           if not WillExist(Sub, Op.Path) then
             Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
@@ -420,6 +436,8 @@ begin
               Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
             if WillExist(Sub, Op.Dest) then
               Exit(MsgFmt(SR_CHANGESET_VIRT_DEST_FMT, [Op.Dest]));
+            if PadreFichero(Op.Dest) <> '' then
+              Exit(MsgFmt(SR_CHANGESET_PADRE_FICHERO_FMT, [Op.Dest, PadreFichero(Op.Dest)]));
           end;
       end;
       Sub.Ops.Add(Op);
@@ -464,8 +482,7 @@ var
   Arr: TJSONArray;
   P: string;
   N, I: Integer;
-  Snaps: TList<TSnapshot>;
-  Snap: TSnapshot;
+  Foto: TFotoDeFicheros;
   Changed: TList<string>;
   Applied: Boolean;
   OpCount, FileCount, Before, After: Integer;
@@ -509,6 +526,10 @@ begin
       end;
     end;
 
+    // el COMANDO antes que el id: {} o un comando mal escrito contestaban
+    // "ese changeset no existe" (segunda revision, 27-sep-2026)
+    if not MatchStr(Cmd, ['stage', 'unstage', 'undo', 'preview', 'commit', 'rollback']) then
+      Exit(MsgText(SR_CHANGESET_CMD));
     Id := AId.Trim;
     if (Id = '') or not GSets.TryGetValue(Id, C) then
       Exit(MsgFmt(SR_CHANGESET_UNKNOWN_FMT, [TTL_MIN]));
@@ -733,7 +754,7 @@ begin
       // not always reproduce. A local is nil because we say so, never by luck.
       Deltas2 := nil;
       Changed := TList<string>.Create;
-      Snaps := TList<TSnapshot>.Create;
+
       try
         for P in C.Fingerprints.Keys do
           if FingerprintBytes(P) <> C.Fingerprints[P] then
@@ -742,16 +763,7 @@ begin
           Exit(MsgFmt(SR_CHANGESET_FILE_CHANGED_FMT,
             [string.Join('; ', Changed.ToArray)]));
         // 2. byte snapshots of everything BEFORE the first change
-        for P in TouchedPaths(C) do
-        begin
-          Snap.Path := P;
-          Snap.Existed := TFile.Exists(P);
-          if Snap.Existed then
-            Snap.Bytes := TFile.ReadAllBytes(P)
-          else
-            Snap.Bytes := nil;
-          Snaps.Add(Snap);
-        end;
+        Foto.Toma(TouchedPaths(C));
         // 3. apply in order; any failure = restore every snapshot
         Applied := True;
         Err := '';
@@ -803,7 +815,7 @@ begin
         // commit said "0 operaciones aplicadas" having applied 16 (field
         // report 2026-08-24). Never read a freed object.
         OpCount := C.Ops.Count;
-        FileCount := Snaps.Count;
+        FileCount := Foto.Cuantos;
         // What actually changed, file by file. delphi_edit has always
         // answered with an audit of its own edit; commit answered with two
         // numbers, so after a 16-operation batch nobody could tell WHICH
@@ -843,23 +855,21 @@ begin
         end;
         if not Applied then
         begin
-          // deshacer tambien escribe: por la misma puerta (un camino que dejo
-          // de ser escribible no se restaura por el)
-          for Snap in Snaps do
-            if EscrituraDenegada(Snap.Path) <> '' then
-              Continue
-            else if Snap.Existed then
-              TFile.WriteAllBytes(Snap.Path, Snap.Bytes)
-            else if TFile.Exists(Snap.Path) then
-              TFile.Delete(Snap.Path);
+          // el deshacer no lanza (Lsp.Guard.TFotoDeFicheros): el changeset
+          // se cierra SIEMPRE; antes una restauracion que fallaba lo dejaba
+          // abierto, ocupando uno de los huecos durante 30 minutos
+          var NoVolvio := Foto.Restaura;
           GSets.Remove(Id);
-          Exit(MsgConCausa(SR_CHANGESET_ROLLED_BACK_FMT, Err, [N, OpCount, Err]));
+          Result := MsgConCausa(SR_CHANGESET_ROLLED_BACK_FMT, Err, [N, OpCount, Err]);
+          if NoVolvio <> '' then
+            Result := Result + #10 + MsgFmt(SN_FOTO_NO_VOLVIO_FMT, [NoVolvio]);
+          Exit;
         end;
         GSets.Remove(Id);
         Exit(MsgFmt(SN_CHANGESET_COMMITTED_FMT,
           [OpCount, FileCount, AuditText]));
       finally
-        Snaps.Free;
+
         Changed.Free;
         Deltas2.Free; // nil-safe: TObject.Free checks Self
       end;

@@ -129,8 +129,8 @@ check('command invalido: menciona add-profile, test-connection y get-sdk',
 # exercised in the field; here the refusal paths and the gate) ---
 out = srv.call('delphi_paserver', {"command": "get-sdk"})
 check('get-sdk sin name: rechazo con camino',
-      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NO_PROFILE_FMT') and 'add-profile' in out,
-      out[:250])
+      mc.abre(out, 'SR_PASERVER_NEED_NAME') and mc.resultado(out) == 'INVALID_PARAM' and
+      'command=profiles' in out, out[:250])
 out = srv.call('delphi_paserver', {"command": "get-sdk", "name": "no-such-profile"})
 check('get-sdk perfil inexistente: rechazado',
       mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NO_PROFILE_FMT') and 'no-such-profile' in out,
@@ -270,7 +270,7 @@ srv.cierra()
 # --- read-only process: write commands refused, reads pass ---
 ro = Server(('--readonly',))
 out = ro.call('delphi_paserver', {"command": "platforms"})
-check('readonly: platforms sigue abierto', 'platforms' in out and not mc.rechazado(out)
+check('readonly: platforms sigue abierto', 'platforms' in out and not mc.fallo(out)
       and isinstance(mc.como_json(out).get('platforms'), list), out[:150])
 out = ro.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                   "host": "127.0.0.1", "password": "x"})

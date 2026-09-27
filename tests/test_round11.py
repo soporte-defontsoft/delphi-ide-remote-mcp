@@ -72,7 +72,8 @@ r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
 # copia; lo que se comprueba aqui es que el rechazo NO es por la jaula)
 check('S1 un .rc con rutas de dentro no lo veta la jaula (y el build de estilos SI corre)',
       not mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not mc.es(r, 'SR_JAIL_FMT') and
-      not mc.abre(r, 'SR_STYLES_NO_CONVERTER') and mc.resultado(r) != 'NO_ANSWER', r[:250])
+      not mc.abre(r, 'SR_STYLES_NO_CONVERTER') and mc.resultado(r) != 'NO_ANSWER' and
+      os.path.exists(os.path.join(ST, 'a.res')), (r[:250], os.listdir(ST)))
 open(RC, 'w', encoding='utf-8', newline='\r\n').write(
     'ESCAPE RCDATA "..\\..\\..\\..\\Windows\\win.ini"\r\n')
 r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
@@ -98,7 +99,7 @@ try:
                                    'password': 'x', 'platform': 'Linux64'}, t=300)
     # with the IDE open on the server, paclient cannot save profiles (W0013,
     # now answered as a clear refusal): tolerate it - a human may be working
-    created = (not mc.rechazado(r)) and ('W0013' not in r) and ('bds.exe' not in r)
+    created = (not mc.fallo(r)) and ('W0013' not in r) and ('bds.exe' not in r)
     check('S2 con el host permitido, el perfil SI se crea (o el IDE abierto se explica)',
           created or 'bds.exe' in r, r[:250])
     if created:
@@ -106,7 +107,7 @@ try:
         borrado = mc.abre(r, 'SN_PASERVER_PROFILE_REMOVED_FMT')
         check('S3 y se puede volver a borrar desde aqui', borrado, r[:200])
     else:
-        check('S3 y se puede volver a borrar desde aqui', True, '(no se llego a crear)')
+        print('NOTA: S3 no se mide: el perfil no se llego a crear (%s)' % r[:120])
     r = B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'no-existe-r11'}, t=120)
     check('S3 borrar un perfil que no existe se explica', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_NO_PROFILE_FMT'), r[:200])
 finally:
@@ -136,8 +137,11 @@ j = J(A.call('delphi_rename_symbol', {'path': UCALC, 'line': 7, 'character': 14,
                                        'newname': 'Triple'}, t=600))
 check('R1 el rename dice DONDE ha buscado', bool(j.get('scope')), str(j)[:300])
 defchg = [c for c in j.get('changes', []) if c.get('kind') == 'definition']
-check('R2 el cambio de la definicion trae anchor, como los demas',
-      (not defchg) or all('anchor' in c for c in defchg), str(defchg)[:250])
+if defchg:
+    check('R2 el cambio de la definicion trae anchor, como los demas',
+          all('anchor' in c for c in defchg), str(defchg)[:250])
+else:
+    print('NOTA: R2 no se mide: el motor devolvio la definicion entre los usos (no hay cambio "definition")')
 
 # ------------------------------------------------------------------ C1/C3 ----
 T = os.path.join(BASE, 'MiTest')

@@ -6,7 +6,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 
 - **Paths** use virtual drive units (`srvd:\...`, `srvc:\...`) — call `delphi_workspace` first to learn the roots.
 - **Positions** for the semantic tools are 0-based (line and character), like the LSP. Point *inside* the identifier. Every answer that names a location also carries the 1-based line next to it (`line1` in definition, hover, signature, references and diagnostics; `line` + `line0` in symbols, search and rename): the 1-based one is what `delphi_read` shows and `delphi_edit` takes.
-- **Access**: with a read-only credential only the read-only tools run; mutating ones are refused at the gate. Without a workspace token there is no access at all (HTTP 401; a tokenless local stdio process is read-only).
+- **Access**: with a read-only credential only the read-only tools run; mutating ones are refused at the gate. Without a workspace token there is no access at all (HTTP 401; a tokenless local stdio process is read-only unless `DELPHI_MCP_ROOTS` gives it roots).
 - **Required column**: every schema carries its real `required` list (the same one `delphi_help command=tool` returns); the table below says the same — the rest are optional and have sensible defaults, as their descriptions note.
 
 
@@ -56,7 +56,7 @@ Resolve the identifier at a 0-based line:character position in a Delphi source f
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | optional | Optional: definition (default) \| declaration (jump to the interface declaration) \| implementation (jump to the method body) |
+| `kind` | string | optional | Optional: definition (default) \| declaration (jump to the interface declaration) \| implementation (accepted, but DelphiLSP answers it like declaration - measured) |
 | `line` | integer | **yes** | Zero-based line number of the identifier |
 | `character` | integer | **yes** | Zero-based character (column) inside the identifier |
 | `path` | string | **yes** | Absolute path of the Delphi source file (.pas/.dpr) |
@@ -218,7 +218,7 @@ SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx) preser
 | `inclass` | string | optional | INSERT "metodo": exact class name (e.g. TFichaPedidos) |
 | `visibility` | string | optional | INSERT "metodo" optional: section for the declaration (private/protected/public/published); empty = end of class. "published" works on form classes even without an explicit keyword: the declaration lands in the implicit published section right after the class header - the place for event handlers |
 | `visible` | boolean | optional | INSERT "rutina-global" optional: true = also declare it in the interface section (visible outside the unit) |
-| `createunit` | boolean | optional | CREATE mode: true = create the .pas (never overwrites). Then register it in the .dpr uses clause |
+| `createunit` | boolean | optional | CREATE mode: true = create the .pas (never overwrites). Then register it with `delphi_config command=add-unit` |
 | `content` | string | optional | CREATE mode: the COMPLETE file content in one call (empty = standard IDE skeleton). Use this when you already know the whole unit: one call instead of create + N patches |
 | `eol` | string | optional | CREATE mode: line endings, "crlf" (default, Delphi standard) or "lf" |
 | `restore` | boolean | optional | RESTORE mode: true = restore the file from this tool's backup. First call shows what would be LOST; repeat with confirm=true to execute |
@@ -337,10 +337,10 @@ Build a Delphi project for real with MSBuild on this machine (rsvars located via
 | `platform` | string | optional | Target platform (default Win32): Win32/Win64 build natively here. Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and their SDK pulled once (delphi_paserver get-sdk). Building is LOCAL against that SDK and does NOT use profile — a PAServer profile is only needed for target=Deploy |
 | `config` | string | optional | Debug or Release (default Debug), or any configuration the project declares. A simple name: letters, digits, space, `.`, `_`, `-` |
 | `target` | string | optional | Build (full, default), Make (incremental), Clean, or Deploy (always builds first, then deploys: to the PAServer of `profile` for Linux/macOS, or packages the app for Android). After switching platforms use Build |
-| `profile` | string | optional | Connection profile name for target=Deploy on a PAServer platform (see `delphi_paserver command=profiles`). The deployed files land on the target under its PAServer scratch dir, in `<profile>/<project name>/` |
+| `profile` | string | optional | Connection profile name for target=Deploy on a PAServer platform (see `delphi_paserver command=profiles`). The deployed files land on the target under its PAServer scratch dir, in `<windows user>-<profile>/<project name>/` |
 | `sdk` | string | optional | Which platform SDK to link against, BY NAME (`delphi_paserver command=profiles` lists them with their glibc). One SDK = one folder, the same model as the Android SDKs |
 | `verbosity` | string | optional (default `quiet`) | How much of the build comes back, the same contract as the house build script: `quiet` = errors + summary (a few lines, what "does it still compile" needs; msbuild is not even asked for the warnings, so none are reported rather than reporting zero), `normal` = warnings and milestones, `verbose` = everything, linker command line included |
-| `deviceid` | string | optional | Android device serial for target=Deploy on Android platforms (see `delphi_adb command=devices`) — measured: msbuild only auto-installs on iOS; on Android install the built .apk with `delphi_adb command=install` |
+| `deviceid` | string | optional | Device id for target=Deploy. Measured: msbuild only installs on iOS devices with it; for Android, Deploy builds the .apk and `delphi_adb command=install` puts it on a device |
 
 **Which SDK a cross-platform build links against**, in this order: what the call asks for (`sdk`), what the PROJECT declares (its own `PlatformSDK` property — the IDE's model), the **default of the IDE's own SDK Manager** for that platform (an explicit choice of the operator, so it wins over any guess of ours), and otherwise the only one registered. Every answer says which one it used and why, in `sdk` and `sdkNote`. Only with several SDKs, no default and no hint is the build **refused, naming them**: linking against the wrong sysroot produces a binary that dies on the target with `GLIBC_2.xx not found`, which is a far worse way to find out. The answer always carries the `sdk` it used, and `sdkWarning` when that sysroot holds two distributions at once (what the old get-sdk left behind by pulling every target into one folder).
 
@@ -365,7 +365,7 @@ Deploy declares the built `.apk` as `output`.
 
 ### `delphi_help`
 
-THE MAP of this server, so an agent does not have to spend context working it out. `command=tasks` (the default) gives the task → tool table, one line each: what do I use to read, to edit, to compile, to change several files at once, to rename, to test, to deploy. `command=tool name=<tool>` gives ONE tool in full (description + parameters) without asking for `tools/list`, which returns all 42 at once. `command=conventions` gives the rules that hold for every tool: paths and virtual drives, the jail, anchored editing, the backups, encodings. Start here after connecting.
+THE MAP of this server, so an agent does not have to spend context working it out. `command=tasks` (the default) gives the task → tool table, one line each: what do I use to read, to edit, to compile, to change several files at once, to rename, to test, to deploy. `command=tool name=<tool>` gives ONE tool in full (description + parameters) without asking for `tools/list`, which returns them all at once. `command=conventions` gives the rules that hold for every tool: paths and virtual drives, the jail, anchored editing, the backups, encodings. Start here after connecting.
 
 *Access: read-only.*
 
@@ -472,7 +472,7 @@ image inline in the answer, or file + `download` with `inline=false`, always wit
 a `frame`; `tap` with `frame=` converts to DISPLAY pixels, so `tapScale` no longer
 has to be applied by hand.
 
-Android devices for remote development: the phones/tablets hang off THIS server (USB or wifi adb), while you program from anywhere. command=discover finds devices ANNOUNCING wireless debugging on the server's network (mDNS) and hands you each one's ip:port; command=devices lists what adb has ATTACHED (the same list the IDE shows as deploy targets); command=connect attaches one over the network (the device shows an authorize prompt the first time); command=disconnect detaches it; command=install installs a built .apk; command=run launches the installed app (the IDE's "Deploy and Run"); command=logcat hands you the device log (a bounded dump, optionally filtered) - remote debugging of the deployed app; command=screenshot grabs the device screen to a PNG you then `delphi_fetch` (your remote EYES) and command=tap / command=key touch the screen and press navigation keys (your remote HANDS) - enough to drive the deployed app end to end. The adb used is the IDE's own Android SDK's, discovered per install. Typical flow: discover → connect → devices → `delphi_build target=Deploy` → install → run → screenshot → tap → logcat.
+Android devices for remote development: the phones/tablets hang off THIS server (USB or wifi adb), while you program from anywhere. command=discover finds devices ANNOUNCING wireless debugging on the server's network (mDNS) and hands you each one's ip:port; command=devices lists what adb has ATTACHED (the same list the IDE shows as deploy targets); command=connect attaches one over the network (the device shows an authorize prompt the first time); command=disconnect detaches it; command=install installs a built .apk; command=run launches the installed app (the IDE's "Deploy and Run"); command=logcat hands you the device log (a bounded dump, optionally filtered) - remote debugging of the deployed app; command=screenshot returns the device screen in the same answer (your remote EYES) and command=tap / command=key touch the screen and press navigation keys (your remote HANDS) - enough to drive the deployed app end to end. The adb used is the IDE's own Android SDK's, discovered per install. Typical flow: discover → connect → devices → `delphi_build target=Deploy` → install → run → screenshot → tap → logcat.
 
 **The screenshot says what the display really is.** Every `screenshot` answer carries `image` (the PNG's size) and `display` - the device's `physical` size, its `override` size when one is set and its `density`, from `wm size` / `wm density` - because `input tap` takes pixels of the display in force, not of the picture. Normally they are the same and what you measure on the image is what you tap; when they differ (a device that captures at another scale) the answer carries `tapScale {x, y}` and its note says to multiply first. A rotated display (WxH against HxW) is not a scale: screencap and input share the orientation.
 
@@ -487,7 +487,7 @@ Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.168.1.163;SERIA
 | `device` | string | **yes** for install/run/tap/key/logcat/screenshot | Device serial or ip:port (from command=devices). REQUIRED for every device-addressing command, and it must be in the workspace's `AdbAllowedDevices` list |
 | `apk` | string | optional | install: path of the .apk (inside the workspace). Build it with `delphi_build target=Deploy` |
 | `app` | string | optional | run: package name of the installed app (e.g. com.embarcadero.MiApp - the build/install results state it) |
-| `out` | string | optional | screenshot / logcat: optional since 1.0.14 — a FOLDER, or a FILE whose extension matches (`.png` for screenshot, `.txt`/`.log` for logcat); empty = `__delphi-temp\<agent>` under the workspace. screenshot: where the PNG lands (then delphi_fetch it). logcat: dump into a file instead of answering inline — then read it in RANGES with `delphi_read` (400 lines/call). Inside the workspace |
+| `out` | string | optional | screenshot / logcat: optional since 1.0.14 — a FOLDER, or a FILE whose extension matches (`.png` for screenshot, `.txt`/`.log` for logcat); empty = `__delphi-temp\<agent>` under the workspace. screenshot: where the PNG lands; the capture itself travels in the answer (with `inline=false`, the file stays and the answer carries its download link). logcat: dump into a file instead of answering inline — then read it in RANGES with `delphi_read` (400 lines/call). Inside the workspace |
 | `x` / `y` | string | optional | tap: coordinates in DISPLAY pixels, measured on a screenshot - when that answer carried `tapScale`, multiply by it first |
 | `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |
 | `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package) |
@@ -515,7 +515,7 @@ The target needs a graphical session open - a headless box has nothing to show -
 
 **Coordinates are real pixels** on both systems: the Windows node is DPI-aware, so what it reports matches the screenshot exactly; a tool that is NOT DPI-aware sees the same window somewhere else (on a 125% display, the same Notepad was at 600,254 for a non-aware caller and at 750,318 for the node). Measure on the screenshot or on `windows`, never mix in coordinates from another source.
 
-**A crop when you need detail, the whole desktop when you need the truth.** A small dialog on a 3440-pixel screen is unreadable in the whole-desktop image - the API shrinks every picture to one fixed size, so a crop buys detail, not tokens. `screenshot region="x,y,w,h"` returns only that piece of the SAME capture (cropped on the server, `Lsp.Imagen`, so it works on every target), and `screenshot window="<part of a title>"` does the measuring for you on a Windows target (the node lists the visible windows with their rectangles; on Linux the desktop does not hand rectangles out, so `window` is refused there and you use `region`). Every cropped answer carries `origin {x,y}`, `region` and `croppedFrom`, and its note spells the rule: what you measure on the crop is pressed at (origin.x + x, origin.y + y) - one frame, one coordinate space, never a second one. Against the old trap (a modal opened elsewhere and the agent, looking at one window, never saw it): on Windows every cropped answer also carries the full `windows` list, so a dialog outside the crop still shows by title; on Linux the rule is the old one - when in doubt, capture the whole desktop. Measured 2026-09-22.
+**A crop when you need detail, the whole desktop when you need the truth.** A small dialog on a 3440-pixel screen is unreadable in the whole-desktop image - the API shrinks every picture to one fixed size, so a crop buys detail, not tokens. `screenshot region="x,y,w,h"` returns only that piece of the SAME capture (cropped on the server, `Lsp.Imagen`, so it works on every target), and `screenshot window="<part of a title>"` does the measuring for you on a Windows target (the node lists the visible windows with their rectangles; on Linux the node lists the X11/Xwayland windows it can see - native Wayland windows do not appear, and for those you use `region`). Every cropped answer carries `origin {x,y}`, `region` and `croppedFrom`, and its note spells the rule: what you measure on the crop is pressed at (origin.x + x, origin.y + y) - one frame, one coordinate space, never a second one. Against the old trap (a modal opened elsewhere and the agent, looking at one window, never saw it): on Windows every cropped answer also carries the full `windows` list, so a dialog outside the crop still shows by title; on Linux the rule is the old one - when in doubt, capture the whole desktop. Measured 2026-09-22.
 
 **The target machine is the unit of exclusion, not the call.** `profile` says which machine every gesture goes to - the server never remembers a "current profile" - so one agent can drive two machines at the same time and nothing mixes. Gestures to the SAME profile are serialized (the node writes its capture in its own deploy folder on that machine), and each capture lands here named after its profile, so two machines answering at once never overwrite one another.
 
@@ -530,7 +530,7 @@ The target needs a graphical session open - a headless box has nothing to show -
 | `text` | string | optional | type: the text to write, key by key. On Linux it uses the keyboard layout the TARGET desktop really has (the desktop hands its keymap over): any character that layout gives with a key, Shift or AltGr; a character it has no key for is refused BY NAME, and the answer says which keyboard was used. On Windows it is typed as Unicode. Typed as TEXT, never run: quotes, `;` and `$` arrive as characters. With `x`,`y` it presses there first to focus the field: one trip, one startup |
 | `code` | string | optional | key. Linux target: the Linux (evdev) key code - Escape 1, Tab 15, Enter 28, left Alt 56, Super 125. Windows target: the key NAME - escape, enter, tab, space, backspace, delete, home, end, up, down, left, right, super, alt, ctrl, shift, f1..f12 |
 | `modifiers` | string | optional | key: modifier keys held while `code` is pressed - `ctrl`, `shift`, `alt`, `super`, comma separated (Ctrl+K on Linux: `code=37 modifiers=ctrl`). Pressed in that order, released in reverse, one gesture, both targets |
-| `out` | string | optional | screenshot: folder (or file with the capture's real extension) where the PNG lands, jailed like any path of ours. Retrieve it with `delphi_fetch` |
+| `out` | string | optional | screenshot: folder (or file with the capture's real extension) where the PNG lands, jailed like any path of ours. The capture travels in the answer; with `inline=false` the file stays and the answer carries its download link |
 | `region` | string | optional | screenshot: `x,y,w,h` in DESKTOP pixels - the answer is only that piece of the same capture, at full resolution, with `origin {x,y}`: what you measure on the crop is pressed at (origin.x + x, origin.y + y) |
 | `window` | string | optional | screenshot: part of a window title - the capture cropped to the first window of the `windows` list whose title contains it, with `origin` like region, plus the whole list. On Linux the list holds the X11/Xwayland windows (every FMX application); a native Wayland window has no rectangle: use `region` |
 
@@ -645,24 +645,27 @@ Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for m
 | `path` | string | **yes** | Absolute path of the file to write ON the server (inside the workspace roots) |
 | `chunkbase64` | string | **yes** | One chunk of the file, base64-encoded. offset=0 truncates/creates; later offsets append |
 | `offset` | integer | optional | Byte offset this chunk starts at (0 = beginning). Send chunks in order, increasing offset by the bytes written |
-| `sha256` | string | optional | Optional: on the LAST chunk, the whole-file SHA-256; the server verifies the assembled file and reports verified true/false |
+| `sha256` | string | optional | Optional: on the LAST chunk, the whole-file SHA-256; the server verifies the assembled file: if it does not match, the call FAILS (error) and the file is set aside as `<name>.corrupt` instead of being published |
+| `chunksha256` | string | optional | Optional: the SHA-256 of THIS chunk (of its decoded bytes), verified BEFORE the chunk is written: a slip in transit is caught at the chunk that carried it, with nothing on disk |
 
 
 ## Version control
 
 ### `delphi_git`
 
-Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work: status, diff, log, show, branch, switch (args=<branch>, create=true for a new one), merge (always --ff-only), stash (args=push|pop|list, never drop), add, commit, init, push, tag, config, clone, pull, fetch. **clone** is the fast way to get a whole repo onto the server (URL in "message", destination directory in "repo", jailed to the workspace roots) - far better than recreating files one by one. commit/tag messages and config values also travel in "message"; push/pull use the credentials and remotes stored on the server. No arbitrary git commands, no shell.
+Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work: status, diff, log, show, branch, switch (args=<branch>, create=true for a new one), merge (always --ff-only), stash (args=push|pop|list, never drop), add, commit, init, push, tag, config, clone, pull, fetch, worktree (args=list, or add/remove with path= and ref=). A git that exits non-zero is an ERROR: `[GIT-036 DENIED] exit=N` with git's own output after it; a success starts with `exit=0`. **clone** is the fast way to get a whole repo onto the server (URL in "message", destination directory in "repo", jailed to the workspace roots) - far better than recreating files one by one. commit/tag messages and config values also travel in "message"; push/pull use the credentials and remotes stored on the server. No arbitrary git commands, no shell.
 
 *Access: mixed (query commands read-only; write commands read-write).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `repo` | string | **yes** | Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots) |
-| `command` | string | **yes** | One of: status \| diff \| log \| show \| branch \| switch \| merge \| stash \| add \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch (stash: args=push\|pop\|list, never drop - `push -- <paths>` parks ONLY those paths and sets them back to HEAD, the way to discard one file's changes without losing them (`pop` brings them back), label in message, each path inside the repo, literal and through the write gate (1.5.1); config: args=user.name\|user.email + value in message; clone: URL in message, destination in repo) |
+| `command` | string | **yes** | One of: status \| diff \| log \| show \| branch \| switch \| merge \| stash \| add \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch \| worktree (stash: args=push\|pop\|list, never drop - `push -- <paths>` parks ONLY those paths and sets them back to HEAD, the way to discard one file's changes without losing them (`pop` brings them back), label in message, each path inside the repo, literal and through the write gate (1.5.1); config: args=user.name\|user.email + value in message; clone: URL in message, destination in repo) |
 | `args` | string | optional | Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected |
 | `create` | boolean | optional | `switch`: true = create the branch and move to it (`git switch -c`). Ignored by every other command |
 | `message` | string | optional | commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL |
+| `path` | string | optional | worktree add/remove: the folder of the working copy (add: a NEW folder inside your roots) |
+| `ref` | string | optional | worktree add: the tag, branch or commit to check out |
 
 
 ## Feedback
@@ -774,7 +777,7 @@ From then on this server does the rest with no hands anywhere: `get-sdk` (once p
 2. `delphi_adb {command:"connect", address:"192.168.1.163:5556"}` — attach it (the device asks to authorize the first time); `{command:"devices"}` lists what is attached.
 3. `delphi_config {project, command:"add-platform", platform:"Android64"}` then `delphi_build {project, platform:"Android64", config:"Debug", target:"Deploy"}` — the server generates the deployment manifest if the project has none and the result declares the built `.apk`.
 4. `delphi_adb {command:"install", apk:"...\bin\App.apk", device:"..."}` → `{command:"run", app:"com.embarcadero.App", device:"..."}` — the IDE's "Deploy and Run", by tools.
-5. `delphi_adb {command:"screenshot", out:"...\pantalla.png", device:"..."}` (then `delphi_fetch` it), `{command:"tap", x, y}`, `{command:"key", key:"back"}`, `{command:"logcat", filter:"MiApp"}` — your remote eyes and hands to drive and debug it.
+5. `delphi_adb {command:"screenshot", device:"..."}` (the screen comes back in the answer), `{command:"tap", x, y, device:"..."}`, `{command:"key", key:"back", device:"..."}`, `{command:"logcat", filter:"MyApp", device:"..."}` — your remote eyes and hands to drive and debug it.
 
 ### Report a problem
 `delphi_report {message, title, kind:"bug"|"limitation"|"suggestion"|"question", from}` — stored as a dated markdown next to the server exe. Works even read-only; use it whenever a tool blocks something you believe is legitimate.
@@ -782,16 +785,16 @@ From then on this server does the rest with no hands anywhere: `get-sdk` (once p
 
 ### `delphi_messages`
 
-Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message addressed to your agent id or to everyone, once; check only lists what waits. While mail waits, every tool answer ends with a PENDING MESSAGES line - read it then: it may change what you are doing.
+Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message in YOUR box and deletes it (a message is read once and nothing is kept); check only lists what waits. While mail waits, every tool answer ends with a PENDING MESSAGES line - read it then: it may change what you are doing.
 
 *Access: read-only.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | read (default: deliver every pending message for this agent, then mark it delivered) \| check (titles and dates of what is pending, nothing consumed) |
-| `agent` | string | optional | Your agent id - the same value you give delphi_report as "agent" (e.g. dsh, hermes). Messages addressed to everyone are delivered too |
+| `command` | string | optional | read (default: deliver every pending message for this agent, and delete it) \| check (titles and dates of what is pending, nothing consumed) |
+| `agent` | string | optional | Your agent id - the same value you give delphi_report as "agent" (e.g. dsh, hermes). There is no box "for everyone" |
 
-Operator side: drop a `.md` in `messages\<agent>\` or `messages\` next to the server exe (`scripts\Enviar-Mensaje.ps1 -Agente dsh -Titulo ... -Texto ...`). A message addressed to ONE agent moves to `messages\_entregados\<agent>\` when it is delivered. A message left in the ROOT is for **everyone**: it stays there and each agent gets a copy in `messages\_entregados\<agent>\` as the mark that it already read it — so it reaches all of them and none of them twice. Retire it when it has been seen (after `MessagesRetentionDays`, 30 by default, the marks are purged and it would be delivered again). A caller with no identity — stdio, the operator's own console — still takes it off the board, the same rule the recoverable trash uses.
+Operator side: drop a `.md` in `messages\<agent>\` next to the server exe (`scripts\Enviar-Mensaje.ps1 -Agente dsh -Titulo ... -Texto ...`). The agent gets it once and reading DELETES it: nothing is kept aside and nothing is purged later. There is no box "for everyone": a notice for all is dropped once per agent. An agent with no id has no mailbox.
 
 ## Knowledge vault (optional — only for workspaces that declare `VaultPath=`)
 
@@ -837,19 +840,19 @@ Searches the knowledge vault (Markdown notes linked with [[wikilinks]]). PROTOCO
 
 ### `vault_append`
 
-Appends content to an existing note of the vault (log entries, progress updates). ALWAYS writes in Spanish. Log format: a dated entry under the day's section. In progress.md keep its snapshot structure: live status lines, the history goes to the log - do not pile up; when you close an item, remove its line with vault_patch instead of appending "done". The server keeps a copy of the original before writing.
+Appends content to an existing note of the vault (log entries, progress updates). Writes in the vault's language (AGENTS-VAULT-WRITE.md says which). Log format: a dated entry under the day's section. In progress.md keep its snapshot structure: live status lines, the history goes to the log - do not pile up; when you close an item, remove its line with vault_patch instead of appending "done". The server keeps a copy of the original before writing.
 
 *Access: read-write only, and VaultReadOnly=0 in the workspace.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | RELATIVE path of the note (it must exist) |
-| `content` | string | **yes** | Markdown content to append. In Spanish |
+| `content` | string | **yes** | Markdown content to append, in the vault's language |
 | `anchor` | string | optional | Optional: UNIQUE text after which to insert. Without anchor, appends at the end of the file |
 
 ### `vault_create`
 
-Creates a new note in the vault. BEFORE creating: read AGENTS-VAULT-WRITE.md (the decision tree of where each thing goes, and templates) and link the note with [[wikilinks]] from the project's notes (context.md, log.md, progress.md) - never from MEMORY.md, the root index, which is refused. Writes in Spanish. Do not reorganize folders or move existing notes - that needs a human OK. It never overwrites: if the note exists, it is refused.
+Creates a new note in the vault. BEFORE creating: read AGENTS-VAULT-WRITE.md (the decision tree of where each thing goes, and templates) and link the note with [[wikilinks]] from the project's notes (context.md, log.md, progress.md) - never from MEMORY.md, the root index, which is refused. Writes in the vault's language. Do not reorganize folders or move existing notes - that needs a human OK. It never overwrites: if the note exists, it is refused.
 
 *Access: read-write only, and VaultReadOnly=0 in the workspace.*
 

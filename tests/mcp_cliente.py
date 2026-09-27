@@ -264,13 +264,15 @@ def texto(msg, respaldo_json=False):
     c = (msg.get('result') or {}).get('content') or []
     if c and 'text' in c[0]:
         return c[0]['text']
-    return json.dumps(msg)[:400] if respaldo_json else SIN_CONTENIDO
+    # con respaldo_json el detalle va DETRAS de la marca: sin_respuesta la
+    # sigue reconociendo (era una cuarta forma que nadie leia)
+    return SIN_CONTENIDO + ' ' + json.dumps(msg)[:400] if respaldo_json else SIN_CONTENIDO
 
 
 def sin_respuesta(t):
     """True si t es lo que texto() pone cuando no hubo respuesta."""
     t = t or ''
-    return t == SIN_TIMEOUT or t == SIN_CONTENIDO or t.startswith(SIN_RPC)
+    return t == SIN_TIMEOUT or t.startswith(SIN_CONTENIDO) or t.startswith(SIN_RPC)
 
 
 def entorno(extra=None):
@@ -483,6 +485,15 @@ def id_changeset(t):
     pueda comprobar que existe. '' si no hay ninguno."""
     m = re.search(r'\b\d{6}-\d+(?:-[0-9A-F]+)?\b', t or '')
     return m.group(0) if m else ''
+
+
+def llego_a_adb(t):
+    """True si la orden LLEGO a adb (y adb contesto, bien o mal): no la paro
+    la puerta, ni fue un timeout. Desde el 27-sep un dispositivo que no esta
+    o un adb que acaba con error son FALLOS con su etiqueta (SR_ADB_GONE_FMT,
+    SR_ADB_FALLO_FMT); antes salian como exito con una nota. Estaba copiado
+    a mano en dos baterias."""
+    return abre(t, 'SR_ADB_GONE_FMT') or abre(t, 'SR_ADB_FALLO_FMT') or not fallo(t)
 
 
 def llego_a_git(t):

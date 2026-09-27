@@ -2,20 +2,20 @@
   Deja un mensaje en el buzon de un agente (delphi_messages).
 
     .\Enviar-Mensaje.ps1 -Agente dsh -Titulo "Reconecta" -Texto "El server se reinicio; sigue con el Deploy."
-    .\Enviar-Mensaje.ps1 -Titulo "Aviso" -Texto "Ventana a las 02:00"     # para todos
 
-  El agente lo recibe al final de su siguiente llamada a cualquier tool
-  (MENSAJES PENDIENTES) y lo lee con delphi_messages. Entregado una vez;
-  queda copia en messages\_entregados.
+
+  El agente lo recibe al final de su siguiente llamada a cualquier tool (la
+  linea PENDING MESSAGES) y lo lee con delphi_messages: se entrega una vez y
+  se BORRA al leerlo. No hay buzon "para todos": un aviso para todos se deja
+  una vez por agente (un mensaje sin -Agente iba a una carpeta que nadie lee).
 #>
 param(
-  [string]$Agente = '',
+  [Parameter(Mandatory)][string]$Agente,
   [Parameter(Mandatory)][string]$Titulo,
   [Parameter(Mandatory)][string]$Texto,
   [string]$Servidor = 'C:\Delphi-mcp-Server'
 )
-$dir = Join-Path $Servidor 'messages'
-if ($Agente) { $dir = Join-Path $dir (($Agente -replace '[^A-Za-z0-9]+', '-').Trim('-').ToLower()) }
+$dir = Join-Path (Join-Path $Servidor 'messages') (($Agente -replace '[^A-Za-z0-9]+', '-').Trim('-').ToLower())
 New-Item -ItemType Directory -Force $dir | Out-Null
 $slug = (($Titulo -replace '[^A-Za-z0-9]+', '-').Trim('-').ToLower())
 if ($slug.Length -gt 40) { $slug = $slug.Substring(0, 40) }

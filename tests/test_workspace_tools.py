@@ -198,7 +198,7 @@ out = call('delphi_projects', {})
 # v0.98: la bateria declara su jaula, asi que sin root explicito descubre
 # DENTRO de ella (el estado "sin configurar" ya no existe: o jaula o RO)
 check('projects: sin root explicito descubre dentro de la jaula',
-      '"total"' in out and not mc.rechazado(out), out[:200])
+      '"total"' in out and not mc.fallo(out), out[:200])
 
 # --- fetch (chunked download with sha256) ---
 LIC = os.path.join(REPO, 'LICENSE')

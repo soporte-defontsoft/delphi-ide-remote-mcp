@@ -109,7 +109,8 @@ uses
   MCPServer.Registration,
   Lsp.References,
   Lsp.Patch,      // PositionOutOfRange: la misma validacion que las otras cinco
-  Lsp.BuildRunner;
+  Lsp.BuildRunner,
+  Lsp.Guard;      // ReadPathDenied: la guarda antes que nada (ruta vacia)
 
 const
   DIAG_WAIT_MS = 40000; // under the 60 s most MCP clients allow per call
@@ -138,6 +139,9 @@ begin
   // call would bring the result. An obedient agent stayed in that loop until
   // it ran out of budget (measured 2026-08-25). It never was a Delphi source:
   // say so once.
+  Result := ReadPathDenied(Params.Path); // la guarda primero: ruta vacia = GUARD-018
+  if Result <> '' then
+    Exit;
   if not TFile.Exists(Params.Path) then
     Exit(MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [Params.Path]));
   if not MatchText(TPath.GetExtension(Params.Path),
@@ -215,7 +219,9 @@ begin
   // este servidor significa "me he roto por dentro". Era el caller el que se
   // equivoco, y el mensaje rico ya existia: solo estaba en una unidad que
   // esta no podia ver.
-  Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
+  Result := ReadPathDenied(Params.Path); // la guarda primero: ruta vacia = GUARD-018
+  if Result = '' then
+    Result := PositionOutOfRange(Params.Path, Params.Line, Params.Character);
   if Result <> '' then
     Exit;
   R := FindDelphiReferences(Params.Path, Params.Line, Params.Character);

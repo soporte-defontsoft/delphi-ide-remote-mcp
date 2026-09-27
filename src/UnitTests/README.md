@@ -9,6 +9,10 @@ area:
 | `LspTests.Encodings` | The ONE encoding detector of `Lsp.Patch` and its inverses: UTF-8 with and without BOM, CP1252, UTF-16 LE/BE by BOM, the round trip of every kind, `EncKindOf(EncName(k)) = k`, the BOM lengths, what CP1252 refuses, `Measure` on UTF-16, and the "is this text at all" rule (a NUL byte, never for UTF-16). |
 | `LspTests.DesignerBin` | The shape of a designer file (text, raw TPF0, resource-wrapped binary), the RTL round trip text -> binary -> text, accents as `#NNN`, what falls outside ANSI, a damaged binary. |
 | `LspTests.Dproj` | The build-hazard scan: a clean project, a build event, the same event ignored on request, an empty event, an `Exec` task that stays a hazard whatever is ignored. |
+| `LspTests.GitArgs` | The git argument splitter (`TrocearArgs`, the Windows CRT rules) and its inverse (`EnComillas`): what the gate validates is exactly what git receives. |
+| `LspTests.Images` | The captures: the frame token and its inverse, the inline delivery, the reason a screenshot did not happen (`MotivoSinCaptura`). |
+| `LspTests.Mensajes` | The message catalog: every tag, the outcome a message declares, `MsgEnvuelve` (a cause that already declares one passes through) and the readers of the result. |
+| `LspTests.Pascal` | The Pascal lexer: directives that are real (never inside a comment or a string), and a brace comment with another brace inside. |
 
 It links the engine units from `../Server` (search path) and the vendored MCP
 plumbing from `../../vendor`. It does **not** ship. It runs in every regression:

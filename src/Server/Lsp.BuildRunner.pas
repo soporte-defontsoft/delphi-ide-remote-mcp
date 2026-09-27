@@ -1192,6 +1192,15 @@ begin
   if not SameText(TPath.GetExtension(ADprojPath), '.dproj') then
     raise Exception.Create(MsgFmt(SR_BUILD_NOT_A_PROJECT_FMT,
       [TPath.GetFileName(ADprojPath)]));
+  // Una configuracion que el proyecto no tiene, o una verbosidad inventada,
+  // se aceptaban en silencio: "Relase" compilaba en Win64\Relase\ con los
+  // ajustes de Base (segunda revision, 27-sep-2026). La regla de la
+  // configuracion es la de delphi_test (Lsp.Dproj.ConfigDesconocida).
+  Denied := ConfigDesconocida(ADprojPath, IfThen(AConfig.Trim = '', 'Debug', AConfig.Trim));
+  if Denied <> '' then
+    raise Exception.Create(Denied);
+  if (AVerbosity <> '') and not MatchText(AVerbosity, ['quiet', 'normal', 'verbose']) then
+    raise Exception.Create(MsgFmt(SR_BUILD_VERBOSITY_FMT, [AVerbosity]));
   // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
   // shell-running / file-planting MSBuild tasks (a planted <Target><Exec>, a
   // build-event, a foreign <Import>) and refuse unless build scripts were

@@ -177,11 +177,22 @@ begin
     L.Contains('waiting for device');
 end;
 
-function GoneHint(const AOutput: string): string;
+{ LO que contesta una orden de adb: si el dispositivo no esta (adb lo dice
+  con sus palabras) o adb acabo con error, un FALLO con su salida detras;
+  si no, AExito (o la salida tal cual). Un sitio: GoneHint pegaba una NOTA a
+  la salida cruda y un screenshot, un install o un tap sin dispositivo
+  salian como exito sin haberse hecho (segunda revision, 27-sep-2026). }
+function ResultadoAdb(const AOutput: string; AExitCode: Integer;
+  const AExito: string = ''): string;
 begin
-  Result := AOutput.Trim;
-  if DeviceGone(Result) then
-    Result := Result + sLineBreak + MsgText(SN_ADB_GONE);
+  if DeviceGone(AOutput) then
+    Exit(MsgFmt(SR_ADB_GONE_FMT, [AOutput.Trim]));
+  if AExitCode <> 0 then
+    Exit(MsgFmt(SR_ADB_FALLO_FMT, [AExitCode, AOutput.Trim]));
+  if AExito <> '' then
+    Result := AExito
+  else
+    Result := AOutput.Trim;
 end;
 
 const
@@ -251,6 +262,8 @@ begin
     // A bounded DUMP (-d), never a stream: a request/response tool cannot
     // tail. -t N is the last N lines; filter is applied here, not as an adb
     // tag spec, so it matches anywhere in the line.
+    if (Params.Lines.Trim <> '') and not TryStrToInt(Params.Lines.Trim, N) then
+      Exit(MsgFmt(SR_ADB_LINES_FMT, [Params.Lines.Trim])); // 'abc' pasaba como 300
     N := StrToIntDef(Params.Lines.Trim, 300);
     // clients that type every parameter send lines=0 for "unset" (measured
     // in the field: hermes' client fills all fields with zero defaults) -
@@ -277,7 +290,7 @@ begin
     begin
       Output := RunAdb(Adb, DevArg + 'get-state', 10000, ExitCode);
       if DeviceGone(Output) or (ExitCode <> 0) then
-        Exit(GoneHint(Output));
+        Exit(ResultadoAdb(Output, ExitCode));
     end;
     Output := RunAdb(Adb, DevArg + 'logcat -d -v time -t ' + IntToStr(N),
       45000, ExitCode);
@@ -289,7 +302,7 @@ begin
     // filter, the out= file and the 400-line cap in one move. The get-state
     // precheck above already answers for a device gone BEFORE the call.
     if (ExitCode <> 0) and DeviceGone(Output) then
-      Exit(GoneHint(Output));
+      Exit(ResultadoAdb(Output, ExitCode));
     var Txt: string;
     if Params.Filter.Trim <> '' then
     begin
@@ -356,7 +369,7 @@ begin
       Exit(MsgText(SR_ADB_NEED_ADDRESS));
     // adb's own output line already says connected/failed - pass it through
     Output := RunAdb(Adb, Cmd + ' ' + Params.Address.Trim, 30000, ExitCode);
-    Result := GoneHint(Output);
+    Result := ResultadoAdb(Output, ExitCode);
   end
   else if Cmd = 'install' then
   begin
@@ -369,7 +382,7 @@ begin
       Exit(MsgFmt(SR_ADB_NO_EXISTE_APK_FMT, [Params.Apk]));
     Output := RunAdb(Adb, DevArg + 'install -r "' + Params.Apk + '"',
       180000, ExitCode);
-    Result := GoneHint(Output);
+    Result := ResultadoAdb(Output, ExitCode);
   end
   else if Cmd = 'run' then
   begin
@@ -381,7 +394,7 @@ begin
     // the server machine. Vetted at the gate.
     Output := RunAdb(Adb, DevArg + 'shell am start -n ' + Params.App.Trim +
       '/com.embarcadero.firemonkey.FMXNativeActivity', 30000, ExitCode);
-    Result := GoneHint(Output);
+    Result := ResultadoAdb(Output, ExitCode);
   end
   else if Cmd = 'screenshot' then
   begin
@@ -404,12 +417,16 @@ begin
     Output := RunAdb(Adb, DevArg + 'shell screencap -p ' + DevPng, 30000,
       ExitCode);
     if (ExitCode <> 0) or DeviceGone(Output) then
-      Exit(GoneHint(Output));
+      Exit(ResultadoAdb(Output, ExitCode));
     Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
       Destino + '"', 60000, ExitCode);
     RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitCode);
     if not TFile.Exists(Destino) then
-      Exit(GoneHint(Output));
+    begin
+      if ExitCode = 0 then
+        ExitCode := 1; // no hay captura: es un fallo aunque adb dijera 0
+      Exit(ResultadoAdb(Output, ExitCode));
+    end;
     Return := TJSONObject.Create;
     try
       Return.AddPair('screenshot', Destino);
@@ -497,7 +514,7 @@ begin
       Exit(FP);
     Output := RunAdb(Adb, DevArg + 'shell input tap ' + IntToStr(PX) + ' ' +
       IntToStr(PY), 15000, ExitCode);
-    Result := GoneHint(MsgFmt(SK_ADB_TAP_EN_FMT, [PX, PY, Output.Trim]).Trim);
+    Result := ResultadoAdb(Output, ExitCode, MsgFmt(SK_ADB_TAP_EN_FMT, [PX, PY, Output.Trim]).Trim);
   end
   else if Cmd = 'key' then
   begin
@@ -506,7 +523,7 @@ begin
       Exit(MsgFmt(SR_ADB_KEY_FMT, [Params.Key.Trim]));
     Output := RunAdb(Adb, DevArg + 'shell input keyevent ' + KEY_CODES[N],
       15000, ExitCode);
-    Result := GoneHint(MsgFmt(SK_ADB_KEY_ENVIADA_FMT, [KEY_NAMES[N], Output.Trim]).Trim);
+    Result := ResultadoAdb(Output, ExitCode, MsgFmt(SK_ADB_KEY_ENVIADA_FMT, [KEY_NAMES[N], Output.Trim]).Trim);
   end
   else
     Result := MsgText(SR_ADB_CMD);

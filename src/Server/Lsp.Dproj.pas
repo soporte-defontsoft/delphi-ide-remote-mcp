@@ -83,6 +83,16 @@ function XmlElemento(const ATag, AValor: string): string;
   blank), never raises. }
 function ReadDproj(const ADprojPath: string): TDprojInfo;
 
+{ La negativa de una configuracion que el proyecto no tiene ('' = la tiene,
+  o el proyecto no declara ninguna). UNA regla para delphi_test y
+  delphi_build: aceptarla en silencio compilaba en Win64\<Inventada>\ con
+  los ajustes de Base (medido el 2026-08-25 en test y el 27-sep en build). }
+function ConfigDesconocida(const ADproj, AConfig: string): string;
+
+{ Las plataformas de paclient, para los mensajes que las ensenan: las de
+  PACLIENT_PLATFORMS, la misma lista que valida (estaban copiadas a mano). }
+function PaclientPlatformsList: string;
+
 { True when APlatform is one that never needs a remote profile/SDK (it builds
   natively on this Windows host). }
 function IsLocalPlatform(const APlatform: string): Boolean;
@@ -477,6 +487,21 @@ begin
     Exit(False);
   end;
   Result := True;
+end;
+
+function PaclientPlatformsList: string;
+begin
+  Result := string.Join(', ', PACLIENT_PLATFORMS);
+end;
+
+function ConfigDesconocida(const ADproj, AConfig: string): string;
+var
+  Info: TDprojInfo;
+begin
+  Result := '';
+  Info := ReadDproj(ADproj);
+  if (Length(Info.Configs) > 0) and not Info.HasConfig(AConfig) then
+    Result := MsgFmt(SR_TEST_CONFIG_FMT, [AConfig, string.Join(', ', Info.Configs)]);
 end;
 
 function ReadDproj(const ADprojPath: string): TDprojInfo;

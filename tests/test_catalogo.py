@@ -151,6 +151,19 @@ for f, fuente in LIMPIAS.items():
     for m in re.finditer(r"(?:AddPair|PonResultado)\('(\w+)'[^;]*?\b(SR_[A-Z0-9_]+)", fuente):
         if m.group(1) != 'error':
             fuera.append('%s: %s <- %s' % (os.path.basename(f), m.group(1), m.group(2)))
+# ...y cualquier campo que se LLAME error sin serlo: el fallo metido en una
+# variable no llevaba SR_ en la misma sentencia (la captura sin imagen lo
+# hacia). Declarados: screenshotError (un GESTO hecho cuya captura fallo: el
+# gesto si se hizo) y rcError (el .rc que brcc32 no compilo: un resultado del
+# build, como success=false en delphi_build).
+# isError es el campo del PROTOCOLO y firstError el primer error del
+# compilador en el resultado de un build (success=false no es un fallo de la
+# llamada)
+CAMPOS_ERROR_DECLARADOS = {'screenshotError', 'rcError', 'isError', 'firstError'}
+for f, fuente in LIMPIAS.items():
+    for m in re.finditer(r"(?:AddPair|PonResultado)\('(\w*[Ee]rror)'", fuente):
+        if m.group(1) != 'error' and m.group(1) not in CAMPOS_ERROR_DECLARADOS:
+            fuera.append('%s: campo %s' % (os.path.basename(f), m.group(1)))
 check('C8 un fallo (SR_) solo va en el campo "error" de un JSON', not fuera, fuera[:10])
 # C9: todo uso de un mensaje pasa por su helper (David: para poder
 # traducirlo un dia; y el helper es quien sabe de etiquetas)

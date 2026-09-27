@@ -168,8 +168,8 @@ handshake.
   job is stuck or no longer wanted, the same answer's `killNote` gives the
   call: `delphi_paserver command=kill name= project= job=<jobId>` - it
   stops only that job, on that machine.
-- Only the NATIVE binary that project deployed can run (the launch script
-  verifies the file signature). Remember
+- Only the NATIVE binary that project deployed can run (the native
+  launcher, McpRunJob, verifies the file signature). Remember
   `target=Deploy` REWRITES that folder: copy state you need before
   redeploying.
 
@@ -331,8 +331,9 @@ Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
   For the full dump pass `out=srvd:\...\dump.txt`, then read it in
   ranges or download it. Validate app behaviour by logging from your app
   and filtering on your own tag: `filter=MyTag`.
-- `screenshot` writes a PNG **on the server** (`out=...png`); download
-  with `delphi_fetch` if you can actually view images. If you cannot,
+- `screenshot` returns the device screen **in the same answer** (with
+  `inline=false`, a file on the server and its download link). If you
+  cannot view images,
   do not guess from pixel heuristics - a nearly-empty FMX form is a
   uniform (238,238,238) gray that looks like a launcher. Prefer logcat
   evidence.
@@ -340,14 +341,15 @@ Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
   not your .fmx logical coordinates. Phones scale (a 360-logical-wide
   form is 720 physical at scale 2.0). If your taps land nowhere, your
   layout probably overflowed the screen: fix the form with `Align`.
-- A wifi-adb device can drop its connection by itself. A `SIN CONEXION`
-  answer tells you the recovery path; reconnecting may need a human hand
+- A wifi-adb device can drop its connection by itself. An
+  `[ADB-007 DENIED] NO CONNECTION TO THE DEVICE` answer tells you the
+  recovery path; reconnecting may need a human hand
   on the device - say so instead of looping.
 
 ## After the server is updated
 
 Your client caches the tool schemas when it connects. If a refusal asks
-for a parameter your schema does not have (e.g. "Falta path"), the
+for a parameter your schema does not have (e.g. `Missing "path"`), the
 server was updated after you connected: reconnect the MCP session (or
 restart your client) and fetch the tools again. `initialize` tells you
 the server version. A NEW optional parameter your cached schema does not
@@ -358,11 +360,18 @@ SessionTimeoutMinutes`, default 720): re-initialize, it is not a failure.
 
 ## When you hit a wall
 
+Every refusal or failure starts with its tag, `[AREA-NNN OUTCOME]`, and
+the OUTCOME says what to do (rule 11 of `delphi_help command=conventions`):
+`INVALID_PARAM` - fix the call and repeat; `NOT_FOUND` - find the right
+name and repeat; `DENIED` - the same call will fail again: do what the
+reason says, or change course; `INTERNAL` - the server broke: report it.
+
 `delphi_report` files your report (bug / limitation / suggestion /
 question) on the server for the operator - it works at EVERY access
-level and it is the correct move when a tool refuses you, something
-looks broken, or a package you need is missing. One honest report beats
-twenty blind retries.
+level and it is the correct move on an `INTERNAL`, when something looks
+broken, when a `DENIED` stops work you need (a feature the operator
+turned off), or when a package you need is missing. One honest report
+beats twenty blind retries.
 
 ## Access levels
 

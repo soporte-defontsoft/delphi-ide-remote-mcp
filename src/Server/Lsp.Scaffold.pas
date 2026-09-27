@@ -726,6 +726,10 @@ begin
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
     Exit;
+  // "project" tiene que ser un PROYECTO antes de escribir nada: con un .txt
+  // se creaban el .pas y el .dfm y luego no se podian registrar
+  if not MatchText(TPath.GetExtension(ADprPath), ['.dpr', '.dproj', '.dpk']) then
+    Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
   if not TFile.Exists(ADprPath) then
     Exit(MsgFmt(SR_CREATE_NO_EXISTE_DPR_FMT, [ADprPath]));
   Result := BadUnitName(AUnitName);
@@ -806,7 +810,7 @@ begin
   // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference)
   Result := AddProjectUnit(ADprPath, PasPath);
   if EsFallo(Result) then
-    Result := MsgFmt(SK_CREATE_CREADOS_NO_REGISTRADOS_FMT, [AUnitName, DesignerExt, Result])
+    Result := MsgConCausa(SR_CREATE_CREADOS_NO_REGISTRADOS_FMT, Result, [AUnitName, DesignerExt, Result])
   else
     Result := MsgFmt(SK_CREATE_CREADO_FORM_FMT,
       [IfThen(Kind.StartsWith('frame'), MsgText(SF_CREATE_CLASE_FRAME), IfThen(Kind = 'datamodule', MsgText(SF_CREATE_CLASE_DATA_MODULE), MsgText(SF_CREATE_CLASE_FORM))),
@@ -893,6 +897,8 @@ begin
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
     Exit;
+  if not MatchText(TPath.GetExtension(ADprPath), ['.dpr', '.dproj', '.dpk']) then
+    Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
   if not TFile.Exists(ADprPath) then
     Exit(MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath]));
   Result := BadUnitName(AUnitName);
@@ -916,7 +922,7 @@ begin
   WriteNewFile(PasPath, Body);
   Result := AddProjectUnit(ADprPath, PasPath);
   if EsFallo(Result) then
-    Result := MsgFmt(SK_CREATE_CREADA_NO_REGISTRADA_FMT, [AUnitName, Result])
+    Result := MsgConCausa(SR_CREATE_CREADA_NO_REGISTRADA_FMT, Result, [AUnitName, Result])
   else
     Result := MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,
       [AUnitName, PasPath, Length(Body.Split([CRLF])), Result]);

@@ -679,7 +679,11 @@ end;
   `[]` for a .txt reads as "this unit has no symbols" (measured 2026-08-25). }
 function NotDelphiSource(const APath: string): string;
 begin
-  Result := '';
+  // la guarda PRIMERO: sin ruta decia "() no es un fuente Delphi"; ahora
+  // GUARD-018 (falta la ruta), y fuera de la jaula su negativa de siempre
+  Result := ReadPathDenied(APath);
+  if Result <> '' then
+    Exit;
   if not MatchText(TPath.GetExtension(APath), ['.pas', '.dpr', '.dpk', '.inc']) then
     Result := MsgFmt(SR_LSP_NOT_SOURCE_FMT,
       [TPath.GetFileName(APath), TPath.GetExtension(APath)]);

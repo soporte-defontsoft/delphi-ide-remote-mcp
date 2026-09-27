@@ -73,7 +73,7 @@ r = call('delphi_edit', {"path": pas, "insert": "metodo", "inclass": "TCosa",
                                  '  Result := False;' + CRLF + 'end;'})
 t = leer(pas)
 cl = clase_de(t)
-check('multilinea: aceptada', not mc.rechazado(r), r)
+check('multilinea: aceptada', not mc.fallo(r), r)
 check('multilinea: la clase recibe la firma ENTERA',
       'const AArgs: array of string; out ARespuesta: Pointer): Boolean;' in cl, cl[-300:])
 check('multilinea: la declaracion NO queda partida',
@@ -95,7 +95,7 @@ r = call('delphi_edit', {"path": pas, "insert": "metodo", "inclass": "TCosa",
                                  '  FValor := 7;' + CRLF + 'end;'})
 t = leer(pas)
 cl = clase_de(t)
-check('comentario: aceptado', not mc.rechazado(r), r)
+check('comentario: aceptado', not mc.fallo(r), r)
 check('comentario: la clase recibe SOLO la firma',
       'procedure Documentada;' in cl and 'Documenta lo que hace' not in cl, cl[-260:])
 check('comentario: el comentario viaja con la implementacion',

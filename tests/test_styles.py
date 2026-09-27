@@ -211,7 +211,8 @@ check('lint tras build: rc limpio', d['rcMissingFiles'] == [], d['rcMissingFiles
 out = call('delphi_styles', {"path": STY, "command": "get", "style": "x"})
 check('get sobre carpeta rechazado', mc.rechazado(out) and mc.es(out, 'SR_STYLES_NEED_FILE'), out)
 out = call('delphi_styles', {"command": "view"})
-check('sin path: pide path + reconectar', mc.es(out, 'SR_STYLES_NEED_PATH'), out)
+check('sin path: pide path + reconectar',
+      mc.abre(out, 'SR_SYS_MISSING_PARAM_FMT') and '"path"' in out and 'reconnect' in out, out)
 out = call('delphi_styles', {"path": r'C:\Windows\win.ini', "command": "view"})
 check('fuera de la jaula rechazado', mc.rechazado(out) and mc.es(out, 'SR_JAIL_FMT'), out[:200])
 

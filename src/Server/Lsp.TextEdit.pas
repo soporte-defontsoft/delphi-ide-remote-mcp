@@ -113,6 +113,12 @@ function DoCreate(const A: TTextEditArgs): string;
 var
   Dir, Text, EolName: string;
 begin
+  // create=true sobre una CARPETA salia "atomic rename failed" (INTERNAL)
+  Result := CarpetaEnVezDeFichero(A.Path);
+  if Result <> '' then
+    Exit;
+  if (A.Eol <> '') and not MatchText(A.Eol, ['crlf', 'lf']) then
+    Exit(MsgFmt(SR_TEXT_EOL_FMT, [A.Eol]));
   if TFile.Exists(A.Path) then
     Exit(MsgFmt(SR_TEXT_YA_EXISTE_NUNCA_SOBREESCRIBE_FMT, [A.Path]));
   Dir := TPath.GetDirectoryName(A.Path);
@@ -157,6 +163,11 @@ var
   Sb: TStringBuilder;
   EndsWithEol: Boolean;
 begin
+  // una carpeta decia "no existe; creala con create=true" - y el agente que
+  // obedecia recibia un INTERNAL
+  Result := CarpetaEnVezDeFichero(A.Path);
+  if Result <> '' then
+    Exit;
   if not TFile.Exists(A.Path) then
     Exit(MsgFmt(SR_TEXT_NO_EXISTE_CREARLO_FMT, [A.Path]));
   // La regla "esto no es texto" es LooksBinaryBytes (Lsp.Patch), la misma de

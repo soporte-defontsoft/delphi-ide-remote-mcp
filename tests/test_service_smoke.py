@@ -129,8 +129,8 @@ else:
         copia = m.group(0) if m else ''
         pu = call('delphi_delete', {'path': copia, 'purge': True}) if copia else '(sin copia)'
         check('V7 una escritura de verdad, y su limpieza (la copia de la papelera tambien)',
-              mc.abre(c, 'SK_TEXT_CREADO_ENCODING_FINALES_FMT') and not mc.rechazado(d) and copia != '' and
-              not mc.rechazado(pu),
+              mc.abre(c, 'SK_TEXT_CREADO_ENCODING_FINALES_FMT') and not mc.fallo(d) and copia != '' and
+              not mc.fallo(pu),
               c[:120] + ' | ' + d[:120] + ' | ' + pu[:120])
     else:
         print('NOTA: token de solo lectura; V7 no se mide.')

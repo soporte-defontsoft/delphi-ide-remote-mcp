@@ -80,13 +80,16 @@ ORIG = open(VICTIM, 'rb').read()
 
 r = A.call('delphi_upload', {'path': VICTIM})
 check('#5 upload sin chunk: RECHAZADO, no truncado',
-      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_NO_CHUNK_FMT') and open(VICTIM, 'rb').read() == ORIG, r[:200])
+      mc.abre(r, 'SR_SYS_MISSING_PARAM_FMT') and open(VICTIM, 'rb').read() == ORIG, r[:200])
 r = A.call('delphi_upload', {'path': VICTIM, 'chunkbase64': ''})
 check('#5 chunk vacio explicito tampoco vacia el fichero',
       mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_NO_CHUNK_FMT') and open(VICTIM, 'rb').read() == ORIG, r[:200])
 r = A.call('delphi_upload', {'path': os.path.join(UP, 'nuevo.bin')})
 check('#5 sin chunk sobre fichero que no existe: tambien rechazado',
-      mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_NO_CHUNK_NEW') and not os.path.exists(os.path.join(UP, 'nuevo.bin')), r[:200])
+      mc.abre(r, 'SR_SYS_MISSING_PARAM_FMT') and not os.path.exists(os.path.join(UP, 'nuevo.bin')), r[:200])
+r = A.call('delphi_upload', {'path': os.path.join(UP, 'nuevo.bin'), 'chunkbase64': ''})
+check('#5 chunk vacio sobre fichero que no existe: rechazado con su motivo',
+      mc.abre(r, 'SR_UPLOAD_NO_CHUNK_NEW') and not os.path.exists(os.path.join(UP, 'nuevo.bin')), r[:200])
 
 j = J(A.call('delphi_upload', {'path': VICTIM,
                                 'chunkbase64': base64.b64encode(b'X').decode(), 'offset': 0}))
@@ -138,7 +141,7 @@ check('#3 nombre de unit de la RTL: RECHAZADO',
       mc.rechazado(r) and mc.es(r, 'SR_CREATE_RTLNAME_FMT'), r[:200])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'MiApp.Datos',
                               'project': os.path.join(PROJ, 'FugaTest.dproj')})
-check('un nombre con espacio de nombres SI se acepta', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') or mc.abre(r, 'SK_CREATE_CREADA_NO_REGISTRADA_FMT'), r[:200])
+check('un nombre con espacio de nombres SI se acepta', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') or mc.abre(r, 'SR_CREATE_CREADA_NO_REGISTRADA_FMT'), r[:200])
 
 VCLDIR = os.path.join(BASE, 'ProyVcl')
 r = A.call('delphi_create', {'kind': 'project-vcl', 'name': 'ProyVcl', 'dir': VCLDIR})
@@ -159,7 +162,10 @@ check('#4 el form del framework que toca SI entra', mc.abre(r, 'SK_CREATE_CREADO
 # ------------------------------------------------------------------- #10 --
 r = A.call('delphi_package', {})
 check('#10 delphi_package sin dir: refusal, no error interno',
-      mc.es(r, 'SR_PACKAGE_NEED_DIR') and mc.resultado(r) != 'INTERNAL', r[:200])
+      mc.abre(r, 'SR_SYS_MISSING_PARAM_FMT') and mc.resultado(r) == 'INVALID_PARAM', r[:200])
+r = A.call('delphi_package', {'dir': ''})
+check('#10 delphi_package con dir vacio: su motivo, INVALID_PARAM',
+      mc.abre(r, 'SR_PACKAGE_NEED_DIR') and mc.resultado(r) == 'INVALID_PARAM', r[:200])
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'Suelto'})
 check('#10 delphi_create de proyecto sin dir: refusal con la pista',
       mc.rechazado(r) and mc.es(r, 'SR_CREATE_NEED_DIR') and 'dir' in r and mc.resultado(r) != 'INTERNAL', r[:200])
@@ -176,7 +182,7 @@ r = A.call('delphi_create', {'kind': 'unit', 'name': 'ULlena', 'content': CONT,
                               'project': SANODPROJ})
 disk = open(os.path.join(SANO, 'ULlena.pas'), 'rb').read().decode('utf-8-sig')
 check('#C1 create con content: crea CON el contenido y lo registra',
-      mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and 'Result := A * 2;' in disk and not mc.es(r, 'SK_CREATE_CREADA_NO_REGISTRADA_FMT'),
+      mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and 'Result := A * 2;' in disk and not mc.es(r, 'SR_CREATE_CREADA_NO_REGISTRADA_FMT'),
       (r[:200], disk[:80]))
 check('#C1 el contenido llega entero y en CRLF', disk.count('\r\n') >= 10 and disk.endswith('end.\r\n'),
       repr(disk[-20:]))
@@ -345,7 +351,7 @@ check('M1 delete se apila', mc.abre(r, 'SN_CHANGESET_STAGED_FMT'), r[:200])
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'create', 'path': UNO,
                                  'content': 'unit Uno;\r\ninterface\r\nimplementation\r\nend.\r\n'})
 check('M1 create del MISMO fichero tras el delete: se acepta (la tanda es un plan)',
-      not mc.rechazado(r), r[:250])
+      not mc.fallo(r), r[:250])
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'create',
                                  'path': os.path.join(CS, 'Dos.pas'), 'content': 'unit Dos;\r\nend.\r\n'})
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID, 'kind': 'create',
@@ -362,8 +368,9 @@ r = A.call('delphi_changeset', {'command': 'preview', 'id': CID})
 check('M1 preview aguanta una operacion sobre algo que aun no existe',
       not mc.fallo(r), r[:250])
 r = A.call('delphi_changeset', {'command': 'commit', 'id': CID})
-check('M1 la tanda delete+create se aplica entera',
-      os.path.exists(UNO) and not mc.rechazado(r), r[:250])
+check('M1 la tanda delete+create se aplica entera (el Uno.pas NUEVO en el disco)',
+      not mc.fallo(r) and os.path.exists(UNO) and
+      b'unit Uno;\r\ninterface\r\nimplementation' in open(UNO, 'rb').read(), r[:250])
 
 # --------------------------------------------------------------------- #9 --
 MBOX = os.path.join(BASE, 'messages')

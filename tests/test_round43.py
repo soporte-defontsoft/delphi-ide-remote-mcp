@@ -91,7 +91,7 @@ def llego_al_dispositivo(txt):
     """La regla del "out" dejo pasar la llamada y lo que fallo fue el
     dispositivo (ficticio: nadie contesta en DEV), no otra negativa
     cualquiera."""
-    return DEV in txt and mc.es(txt, 'SN_ADB_GONE')
+    return DEV in txt and mc.abre(txt, 'SR_ADB_GONE_FMT')
 
 
 try:

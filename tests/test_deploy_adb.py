@@ -39,8 +39,7 @@ def paso_por_adb(out):
     """La orden LLEGO a adb: su 'device not found' vuelve diagnosticado por
     el servidor (SIN CONEXION). Un rechazo, un timeout o un error MCP no lo
     traen - 'que no diga RECHAZADO' lo cumplian tambien esos."""
-    return (mc.es(out, 'SN_ADB_GONE') and mc.outcome(out) not in ('DENIED', 'NOT_FOUND')
-            and not out.startswith('MCPERROR'))
+    return mc.abre(out, 'SR_ADB_GONE_FMT')
 
 
 def lista_devices(out):
@@ -124,7 +123,7 @@ check('adb install apk inexistente: error honesto',
 out = srv.call('delphi_adb', {"command": "logcat", "device": "ZZZ-NO-EXISTE",
                               "lines": "5"}, t=60)
 check('adb dispositivo perdido: aviso SIN CONEXION con camino de reconexion',
-      mc.es(out, 'SN_ADB_GONE') and 'connect' in out and 'discover' in out,
+      mc.abre(out, 'SR_ADB_GONE_FMT') and 'connect' in out and 'discover' in out,
       out[:300])
 
 # clients that type every param send lines=0 for "unset" (hermes' client,
@@ -132,7 +131,7 @@ check('adb dispositivo perdido: aviso SIN CONEXION con camino de reconexion',
 out = srv.call('delphi_adb', {"command": "logcat", "lines": "0",
                               "device": "ZZZ-NO-EXISTE"}, t=60)
 check('adb logcat lines=0: tratado como default (no rechazo de rango)',
-      not mc.es(out, 'SR_ADB_LINES_FMT') and mc.es(out, 'SN_ADB_GONE'), out[:250])
+      not mc.es(out, 'SR_ADB_LINES_FMT') and mc.abre(out, 'SR_ADB_GONE_FMT'), out[:250])
 out = srv.call('delphi_adb', {"command": "logcat", "lines": "99999",
                               "device": "ZZZ-NO-EXISTE"})
 check('adb logcat lines=99999: rechazado',
@@ -319,8 +318,8 @@ check('allowlist: connect a IP fuera de lista rechazado',
 out = al.call('delphi_adb', {"command": "disconnect", "address": "10.9.9.9:5555"})
 # pasar la puerta = el disconnect llego a adb, que contesta por esa direccion
 check('allowlist: address de la lista pasa la puerta (matchea por host)',
-      not mc.es(out, 'SR_ADB_ALLOWLIST_FMT') and mc.outcome(out) not in ('DENIED', 'NOT_FOUND')
-      and '10.9.9.9:5555' in out and not out.startswith('MCPERROR'), out[:200])
+      not mc.es(out, 'SR_ADB_ALLOWLIST_FMT') and mc.llego_a_adb(out)
+      and '10.9.9.9:5555' in out, out[:200])
 out = al.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X"})
 check('allowlist: comando sin device explicito rechazado',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_DEVICE') and 'AllowedDevices' in out
@@ -348,7 +347,7 @@ check('sin lista: hasta un connect explicito se rechaza (lista vacia = nada)',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_FMT'), out[:250])
 out = noal.call('delphi_adb', {"command": "devices"}, t=60)
 check('sin lista: listar devices sigue abierto (es solo mirar)',
-      not mc.rechazado(out) and lista_devices(out), out[:200])
+      not mc.fallo(out) and lista_devices(out), out[:200])
 noal.cierra()
 
 mc.fin('deploy-adb battery')

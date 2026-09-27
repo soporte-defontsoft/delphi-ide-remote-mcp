@@ -150,6 +150,8 @@ begin
     if not IsValidIdent_(ANewName) then
     begin
       Blockers.Add(MsgFmt(SR_RENAME_BAD_IDENT_FMT, [ANewName]));
+      // un nombre ilegal es una llamada mal hecha, no "no aplicable"
+      Result.AddPair('error', MsgFmt(SR_RENAME_BAD_IDENT_FMT, [ANewName]));
       Result.AddPair('applicable', TJSONBool.Create(False));
       Result.AddPair('blockers', Blockers);
       Blockers := nil;
@@ -158,6 +160,7 @@ begin
     if MatchText(ANewName, RESERVED) then
     begin
       Blockers.Add(MsgFmt(SR_RENAME_RESERVED_FMT, [ANewName]));
+      Result.AddPair('error', MsgFmt(SR_RENAME_RESERVED_FMT, [ANewName]));
       Result.AddPair('applicable', TJSONBool.Create(False));
       Result.AddPair('blockers', Blockers);
       Blockers := nil;
@@ -459,6 +462,9 @@ var
     Id := '';
     PonResultado('applied', TJSONBool.Create(False));
     PonResultado('error', TJSONString.Create(MsgConCausa(SR_RENAME_APPLY_FAILED_FMT, AMotivo, [AMotivo])));
+    // la nota del preview ("repite con mode=apply") contradice el fallo
+    if Result.GetValue('note') <> nil then
+      Result.RemovePair('note').Free;
   end;
 
 begin
@@ -468,7 +474,11 @@ begin
           TJSONBool(Result.GetValue('applicable')).AsBoolean) then
   begin
     PonResultado('applied', TJSONBool.Create(False));
-    PonResultado('error', TJSONString.Create(MsgText(SR_RENAME_NOT_APPLICABLE)));
+    // el preview ya puede traer su propio error (un nombre ilegal): manda
+    if Result.GetValue('error') = nil then
+      PonResultado('error', TJSONString.Create(MsgText(SR_RENAME_NOT_APPLICABLE)));
+    if Result.GetValue('note') <> nil then
+      Result.RemovePair('note').Free;
     Exit;
   end;
   Changes := Result.GetValue('changes') as TJSONArray;

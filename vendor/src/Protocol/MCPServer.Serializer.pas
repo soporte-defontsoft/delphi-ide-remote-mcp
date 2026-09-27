@@ -54,6 +54,7 @@ type
 implementation
 
 uses
+  MCPServer.Schema.Generator, // IsRequiredProperty: el lector de [Required]
   Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
 
 { TMCPSerializer }
@@ -134,6 +135,16 @@ begin
       Continue;
 
     JsonValue := GetJsonValueCaseInsensitive(Json, RttiProp.Name);
+
+    // [local change 2026-09-27] Un parametro OBLIGATORIO (el [Required] que
+    // tools/list publica) que no viene es una llamada mal hecha: se saltaba
+    // y la tool trabajaba con su valor por defecto - vault_patch sin new_text
+    // BORRABA el fragmento, delphi_hover sin line miraba la linea 0. Venir
+    // basta: un texto vacio puede ser legitimo (new_text '' borra a
+    // proposito).
+    if ((not Assigned(JsonValue)) or (JsonValue is TJSONNull)) and
+       TMCPSchemaGenerator.IsRequiredProperty(RttiProp) then
+      raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_PARAM_FMT, [LowerCase(RttiProp.Name)]));
 
     if not Assigned(JsonValue) then
       Continue;

@@ -23,8 +23,9 @@ La revision del 27-sep (antes de publicar la 1.7.0) encontro fallos que
 salian como EXITO o con el resultado equivocado; cada uno, aqui:
   E9  insert rutina-global que el motor rechaza (un caracter que no cabe en
       CP1252): era un exito que no escribia nada
-  E10 un commit de changeset que revienta a mitad (crear dentro de un
-      FICHERO): no deshacia lo ya aplicado
+  E10 un commit de changeset que revienta a mitad (la carpeta de una
+      operacion aparece como FICHERO entre el preview y el commit): no
+      deshacia lo ya aplicado
   E11 git con exit<>0 es un fallo (salia como exito)
   E12 una subida cuya sha no cuadra es un fallo (iba en "warning", ok:true)
   E13 un fichero que SE LLAMA como una etiqueta se lee como exito (la
@@ -33,6 +34,18 @@ salian como EXITO o con el resultado equivocado; cada uno, aqui:
   E15 una tanda que cae porque un ancla no esta es NOT_FOUND (el envoltorio
       decia DENIED siempre)
   E16 compilar un .dproj que no existe es NOT_FOUND (salia INTERNAL)
+
+La segunda revision (27-sep, antes de publicar) encontro mas:
+  E17 crear dentro de un FICHERO se niega en el PREVIEW (reventaba en commit)
+  E18 un parametro obligatorio que falta es INVALID_PARAM (se trabajaba con
+      su valor por defecto: vault_patch sin new_text BORRABA el fragmento)
+  E19 una TANDA que revienta a mitad deshace la primera edicion (la dejaba)
+  E20 compilar con una configuracion que el proyecto no tiene es NOT_FOUND
+      (compilaba en Win64/Relase/ con los ajustes de Base)
+  E21 una CARPETA donde va un fichero es INVALID_PARAM (decia "no existe")
+  E22 un comando de changeset mal escrito es INVALID_PARAM (decia "ese
+      changeset no existe")
+  E23 delphi_create con un "project" que no es un proyecto no escribe nada
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
 """
@@ -105,7 +118,7 @@ def rechazo(nombre, tool, args, code, constante):
 
 try:
     rechazo('E1 delphi_styles sin path es un error INVALID_PARAM',
-            'delphi_styles', {'command': 'view'}, 'INVALID_PARAM', 'SR_STYLES_NEED_PATH')
+            'delphi_styles', {'command': 'view'}, 'INVALID_PARAM', 'SR_SYS_MISSING_PARAM_FMT')
     rechazo('E2 delphi_styles get sin style es un error INVALID_PARAM',
             'delphi_styles', {'command': 'get', 'path': ESTILO}, 'INVALID_PARAM', 'SR_STYLES_NEED_STYLE')
     rechazo('E3 delphi_config add-unit sin path es un error INVALID_PARAM',
@@ -131,23 +144,38 @@ try:
           mc.abre(t, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and open(U1252, 'rb').read() == U1252_ANTES,
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
-    # E10: la segunda operacion revienta (su carpeta padre es un FICHERO)
+    # E10: la carpeta de la segunda operacion aparece como FICHERO entre el
+    # preview y el commit: lo imprevisible revienta a mitad y todo se deshace
+    NUEVA = os.path.join(JAIL, 'nueva')
     res, sc, t = llama('delphi_changeset', {'command': 'begin'})
     cid = mc.id_changeset(t)
     llama('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit', 'path': NOTES,
                                'old': 'Second line.', 'new': 'Second line, cs.'})
     llama('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create',
-                               'path': os.path.join(NOTES, 'sub.txt'), 'content': 'x'})
-    llama('delphi_changeset', {'command': 'preview', 'id': cid})
+                               'path': os.path.join(NUEVA, 'sub.txt'), 'content': 'x'})
+    res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': cid})
+    limpio = mc.como_json(t).get('unresolved') == 0
+    open(NUEVA, 'w').write('ahora soy un fichero')
     res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': cid})
     check('E10 un commit que revienta a mitad es un fallo y DESHACE lo aplicado',
-          cid != '' and res.get('isError') is True and mc.abre(t, 'SR_CHANGESET_ROLLED_BACK_FMT') and
-          open(NOTES).read() == 'First line.\nSecond line.\n',
+          cid != '' and limpio and res.get('isError') is True and
+          mc.abre(t, 'SR_CHANGESET_ROLLED_BACK_FMT') and open(NOTES).read() == 'First line.\nSecond line.\n',
           '%s | %s | %r' % (json.dumps(sc)[:120], t[:200], open(NOTES).read()))
+    os.remove(NUEVA)
+
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    cid2 = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': cid2, 'kind': 'create',
+                               'path': os.path.join(NOTES, 'sub.txt'), 'content': 'x'})
+    res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': cid2})
+    check('E17 crear dentro de un FICHERO se niega en el preview (INVALID_PARAM)',
+          mc.abre(t, 'SR_CHANGESET_PADRE_FICHERO_FMT') and mc.resultado(t) == 'INVALID_PARAM',
+          '%s | %s' % (json.dumps(sc)[:120], t[:200]))
+    llama('delphi_changeset', {'command': 'rollback', 'id': cid2})
 
     res, sc, t = llama('delphi_git', {'command': 'status', 'repo': NOREPO})
     check('E11 git con exit<>0 es un fallo que lo dice (y trae la salida de git)',
-          res.get('isError') is True and mc.abre(t, 'SR_GIT_EXIT_FMT') and 'exit=' in t and 'git' in t.lower(),
+          res.get('isError') is True and mc.abre(t, 'SR_GIT_EXIT_FMT') and 'not a git repository' in t,
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
     BAD = os.path.join(JAIL, 'subida.bin')
@@ -162,8 +190,8 @@ try:
     check('E13 un fichero que se llama como una etiqueta se lee como exito',
           not res.get('isError') and 'contenido normal' in t, '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
-    rechazo('E14 sin ruta: INVALID_PARAM, y dice que falta', 'delphi_read', {}, 'INVALID_PARAM',
-            'SR_GUARD_RUTA_VACIA')
+    rechazo('E14 sin ruta: INVALID_PARAM, y dice que falta', 'delphi_read', {'path': ''},
+            'INVALID_PARAM', 'SR_GUARD_RUTA_VACIA')
 
     tanda = json.dumps([{'old': 'First line.', 'new': 'First line!'},
                         {'old': 'ESTA LINEA NO EXISTE', 'new': 'x'}])
@@ -173,6 +201,36 @@ try:
     rechazo('E16 compilar un .dproj que no existe es NOT_FOUND', 'delphi_build',
             {'project': os.path.join(JAIL, 'NoEsta.dproj'), 'platform': 'Win64'}, 'NOT_FOUND',
             'SR_BUILD_DPROJ_NO_EXISTE_FMT')
+
+    rechazo('E18 un parametro obligatorio que falta es INVALID_PARAM (no su valor por defecto)',
+            'delphi_hover', {'path': U1252, 'character': 0}, 'INVALID_PARAM', 'SR_SYS_MISSING_PARAM_FMT')
+
+    tanda = json.dumps([{'old': 'interface', 'new': 'interface // uno'},
+                        {'old': 'implementation\n\nend.', 'new': 'implementation\n// ✔\nend.'}])
+    res, sc, t = llama('delphi_edit', {'path': U1252, 'edits': tanda})
+    check('E19 una tanda que revienta a mitad deshace la primera edicion (DENIED, no INTERNAL)',
+          res.get('isError') is True and sc.get('code') == 'DENIED' and
+          mc.abre(t, 'SR_PATCH_EDITS_ROLLED_FMT') and open(U1252, 'rb').read() == U1252_ANTES,
+          '%s | %s' % (json.dumps(sc)[:120], t[:200]))
+
+    PCFG = os.path.join(JAIL, 'Cfg')
+    llama('delphi_create', {'kind': 'project-console', 'name': 'Cfg', 'dir': PCFG})
+    rechazo('E20 compilar con una configuracion que el proyecto no tiene es NOT_FOUND',
+            'delphi_build', {'project': os.path.join(PCFG, 'Cfg.dproj'), 'platform': 'Win64',
+                             'config': 'Relase'}, 'NOT_FOUND', 'SR_TEST_CONFIG_FMT')
+    check('E20 ...y no queda la carpeta Relase', not os.path.exists(os.path.join(PCFG, 'Win64', 'Relase')),
+          os.listdir(PCFG))
+
+    rechazo('E21 una CARPETA donde va un fichero es INVALID_PARAM', 'delphi_textedit',
+            {'path': NOREPO, 'old': 'a', 'new': 'b'}, 'INVALID_PARAM', 'SR_LSP_IS_FOLDER_FMT')
+
+    rechazo('E22 un comando de changeset mal escrito es INVALID_PARAM (no "no existe")',
+            'delphi_changeset', {'command': 'stauts'}, 'INVALID_PARAM', 'SR_CHANGESET_CMD')
+
+    rechazo('E23 delphi_create con un "project" que no es un proyecto: INVALID_PARAM',
+            'delphi_create', {'kind': 'form-vcl', 'name': 'FZ', 'project': ECO}, 'INVALID_PARAM',
+            'SR_UNIT_PROJECT_EXT_FMT')
+    check('E23 ...y no escribe nada', not os.path.exists(os.path.join(JAIL, 'FZ.pas')), os.listdir(JAIL))
 
     # un segundo servidor al MISMO puerto que el que ya escucha
     b = subprocess.run([EXE, '--http', str(PORT)], cwd=EXEDIR, capture_output=True, timeout=60,

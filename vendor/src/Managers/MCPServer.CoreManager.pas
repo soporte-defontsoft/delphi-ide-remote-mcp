@@ -42,7 +42,8 @@ type
 implementation
 
 uses
-  Lsp.Guard; // [local change] per-session agent identity
+  Lsp.Guard,
+  Lsp.Texts; // [local change] per-session agent identity
 
 { TMCPCoreManager }
 
@@ -77,7 +78,7 @@ begin
   else if Method = 'ping' then
     Result := Ping
   else
-    raise Exception.CreateFmt('Method %s not handled by %s', [Method, GetCapabilityName]);
+    raise Exception.Create(MsgFmt(SE_SYS_METODO_NO_ATENDIDO_FMT, [Method, GetCapabilityName]));
 end;
 
 function TMCPCoreManager.Initialize(const Params: TJSONObject): TValue;

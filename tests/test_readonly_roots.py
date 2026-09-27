@@ -135,7 +135,7 @@ check('projects root=referencia: listar es leer, no se rechaza',
 out = call('delphi_read', {'path': REF_PAS})
 check('read en la referencia', 'unit URefUtil' in out, out[:200])
 out = call('delphi_search', {'root': REF, 'query': 'URefUtil'})
-check('search en la referencia', 'URefUtil' in out and not mc.rechazado(out), out[:200])
+check('search en la referencia', 'URefUtil' in out and not mc.fallo(out), out[:200])
 out = call('delphi_list', {'path': os.path.join(REF, 'Ref')})
 check('list en la referencia', 'URefUtil.pas' in out, out[:200])
 out = call('delphi_symbols', {'path': REF_PAS})
@@ -178,7 +178,7 @@ check('carpeta en Roots Y ReadOnlyRoots: leer OK', 'program Ambos' in out, out[:
 
 # git: the QUERY half works on a reference repository, the writing half does not
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'status'})
-check('git status en la referencia: consulta OK', out.startswith('exit=0') and not mc.rechazado(out), out[:200])
+check('git status en la referencia: consulta OK', out.startswith('exit=0') and not mc.fallo(out), out[:200])
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'log'})
 check('git log en la referencia: consulta OK', out.startswith('exit=0') and out.rstrip().endswith(' ref'), out[:200])
 out = call('delphi_git', {'repo': REF_GIT, 'command': 'add', 'args': '-A'})
@@ -250,7 +250,7 @@ if HAY_OTRA:
     out = call('delphi_move', {'path': VIA, 'dest': os.path.join(OTRA, 'viajera'), 'copy': True})
     check('copy=true a otra unidad: COPIADO (el camino legitimo)', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(OTRA, 'viajera', 'v.txt')), out[:200])
 else:
-    print('  (sin otra unidad en esta maquina: el rechazo entre unidades no se mide)')
+    print('NOTA: sin otra unidad en esta maquina: el rechazo entre unidades no se mide')
 
 # my own roots still work, and outside is still outside
 out = call('delphi_edit', {'path': os.path.join(MINE, 'Mio.pas'), 'old': 'unit Mio;', 'new': 'unit Mio; // mio'})

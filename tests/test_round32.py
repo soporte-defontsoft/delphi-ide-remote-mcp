@@ -112,7 +112,7 @@ try:
                              'new': 'procedure Saludado;', 'atline': 5})
     check('L6 fuera de esa carpeta se escribe igual que siempre: la regla no '
           'se desborda al resto de la jaula',
-          not mc.rechazado(t) and 'Saludado' in open(MIA).read(), t[:200])
+          not mc.fallo(t) and 'Saludado' in open(MIA).read(), t[:200])
 
     # -------------------------------------------------------------------- L7
     # La entrada ABSOLUTA esta fuera del root: manda la jaula, y la negativa
