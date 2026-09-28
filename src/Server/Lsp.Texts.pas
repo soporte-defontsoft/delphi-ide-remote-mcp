@@ -153,6 +153,12 @@ const
     'Narrow it (a more specific pattern, or a subfolder) before drawing ' +
     'conclusions from this listing.';
 
+  { Los ficheros que no se dejaron leer en una busqueda de carpeta: se
+    caia la busqueda entera (SYS-027) por uno solo (sexta revision). }
+  SN_SEARCH_ILEGIBLES_FMT =
+    '[SEARCH-003] %d file(s) could not be read (another process holds ' +
+    'them, or no permission) and were skipped: %s';
+
   SN_SEARCH_MASK_NO_MATCH_FMT =
     '[SEARCH-002] The mask "%s" matched no file here, so nothing was ' +
     'searched: "total 0" does NOT mean the text is not there. pattern ' +
@@ -213,10 +219,6 @@ const
     '[REPORT-001] (NOTE: "%s" is not one of the kinds I handle, so I ' +
     'filed it as "bug". The valid ones: bug, limitation, suggestion, ' +
     'question.)';
-
-  SR_DIAG_NOT_SOURCE_FMT =
-    '[LSP-001 INVALID_PARAM] %s is not a Delphi source (%s). The linter ' +
-    'only reviews .pas, .dpr, .dpk and .inc.';
 
   { Calentamiento del motor: definition vacia con hover lleno (medido por
     Hermes, 2026-09-22). Es "todavia no", asi que va como error: (corrige y
@@ -656,9 +658,9 @@ const
     'and I will not guess which one. Nothing was written. Lengthen it ' +
     'with what is next to it until it is unique. The real line is:'#10 +
     '  %d|%s';
-  SR_FRAG_SAME =
-    '[EDIT-009 INVALID_PARAM] "new" is the same as "fragment": there is nothing ' +
-    'to change.';
+  // EDIT-009 ("new" igual a "fragment") se retiro el 28-sep: era un ERROR
+  // donde la edicion suelta dice una NOTA (EDIT-113, sin cambios); ahora un
+  // fragment que no cambia nada va por ese mismo camino.
 
   SP_PATCH_EDITS =
     'SEVERAL edits on THIS SAME file, in a single call and ALL OR ' +
@@ -721,9 +723,13 @@ const
 
   SR_EDIT_MODOS_NO_COMBINAN_FMT =
     '[EDIT-111 INVALID_PARAM] These modes do not combine in one call: %s. ' +
-    'Nothing was done: send them in separate calls (one of edits, ' +
-    'adduses, removeuses, insert, createunit, restore, create, or one ' +
-    'edit with old/new, fragment or delete).';
+    'Nothing was done: send them in separate calls, one mode per call.';
+
+  { "content" sin el modo que lo usa (create / createunit): se ignoraba en
+    silencio (sexta revision). }
+  SR_EDIT_CONTENT_SIN_MODO_FMT =
+    '[EDIT-115 INVALID_PARAM] "content" only goes with %s=true (it would ' +
+    'be ignored). Nothing was done.';
 
   SR_EDIT_NO_SE_ESCRIBIO_FMT =
     '[EDIT-112 DENIED] Could not write %s: %s';
@@ -734,7 +740,7 @@ const
 
   SR_PATCH_EDIT_VALOR_FMT =
     '[EDIT-110 INVALID_PARAM] Entry %d, "%s": %s Nothing was written (the ' +
-    'same rule as a parameter of the call).';
+    'same rule as the whole-number and true/false parameters of the call).';
 
   SR_PATCH_BLOCK_SHORT =
     '[EDIT-013 INVALID_PARAM] That multi-line "old" is left with a single line ' +
@@ -850,6 +856,13 @@ const
     '%s'#10 +
     'Fix that entry (re-read the file with delphi_read and copy the ' +
     'literal anchor) and send them all again.';
+
+  { Una tanda en la que NINGUNA entrada cambia nada: decia APPLIED y
+    prometia una copia que no existia (sexta revision). }
+  SN_PATCH_EDITS_SIN_CAMBIOS_FMT =
+    '[EDIT-114] UNCHANGED: none of the %d edits changes %s (each one ' +
+    'already says what the file says), so nothing was written and no ' +
+    'backup was taken.';
 
   SN_PATCH_EDITS_OK_FMT =
     '[EDIT-028] APPLIED %d edits on %s, all or none:'#10 +
@@ -1123,6 +1136,14 @@ const
     '[BUILD-016 INVALID_PARAM] "%s" is not a Delphi project. ' +
     'delphi_build compiles a .dproj. Find the project''s .dproj with ' +
     'delphi_projects, or look at the ones in a folder with delphi_list.';
+
+  { El .dproj no se pudo LEER para comprobar que no ejecuta nada: se
+    compilaba igual, con el escaner mirando un texto vacio (sexta revision:
+    fallaba ABIERTO). Ahora no se compila. }
+  SR_BUILD_DPROJ_ILEGIBLE_FMT =
+    '[BUILD-045 DENIED] I could not read %s to check that the build runs ' +
+    'nothing (%s), so it is not built. If another process holds it, ' +
+    'close it and repeat.';
 
   SR_BUILD_HAZARD_FMT =
     '[BUILD-017 DENIED] The project contains %s. This server only ' +
@@ -2387,14 +2408,16 @@ const
     '(delphi_paserver command=profiles lists them with their glibc). One SDK ' +
     '= one folder, and the project choosing is the IDE''s own model - without ' +
     'it everything rides on the SDK Manager default. "none" removes the ' +
-    'setting and goes back to that default.';
+    'setting and goes back to that default. add-platform takes it too, ' +
+    'set in the same call (all or nothing).';
 
   SP_CONFIG_PROFILE =
     'set-profile: the PAServer connection profile this PROJECT deploys and ' +
     'runs that platform with (delphi_paserver command=profiles lists them). ' +
     'The twin of set-sdk: in the IDE, adding a target to a project is giving ' +
     'it BOTH - the connection and the SDK. "none" removes it and falls back ' +
-    'to the platform''s active profile.';
+    'to the platform''s active profile. add-platform takes it too, set in ' +
+    'the same call (all or nothing).';
 
   SR_CONFIG_PROFILE_LOCAL_FMT =
     '[CFG-012 INVALID_PARAM] %s is compiled and run ON this machine, so it ' +
@@ -2447,12 +2470,18 @@ const
     '[CFG-017 INVALID_PARAM] I cannot resolve "%s" (unknown macro or invalid ' +
     'path). Use a real path or an IDE macro such as $(BDS).';
 
+  { Un parametro que no es del comando: se ignoraba (set-output con path=
+    contestaba "puesto en Compiled", el valor por defecto; sexta revision). }
+  SR_CONFIG_NO_ES_DEL_COMANDO_FMT =
+    '[CFG-110 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.';
+
   SR_CONFIG_PATH_A_MEDIAS_FMT =
     '[CFG-109 INVALID_PARAM] "%s" hangs from the root of a drive (a leading ' +
-    '\ or /, or a drive with no \ after it, as in C:x): that is neither ' +
+    '\ or /, or a drive letter with no \ after it): that is neither ' +
     'relative to the project nor a full path, and it would land on ' +
     'whatever drive the server happens to be on. Give it relative to the ' +
-    'project folder (sub\file.ext) or in full (D:\...).';
+    'project folder (sub\file.ext) or in full, drive letter and all.';
 
   SR_CONFIG_PATH_MISSING_FMT =
     '[CFG-018 NOT_FOUND] The folder "%s" does not exist on the server. ' +
@@ -2844,7 +2873,7 @@ const
 
   SP_STYLES_PATH =
     'The text .style file (view/get/set/clone) or the styles FOLDER ' +
-    '(lint/build). Binary styles (FMX_STYLE / .bin.style) are refused ' +
+    '(lint/build; a file there stands for its folder). Binary styles (FMX_STYLE / .bin.style) are refused ' +
     'for editing: edit the text one and run build.';
 
   SR_STYLES_NEED_PATH =
@@ -2862,9 +2891,12 @@ const
     '.style file - not a folder, not a file of another kind (delphi_list ' +
     'pattern=*.style lists them).';
 
-  SR_STYLES_NEED_FOLDER_FMT =
-    '[STYLE-038 INVALID_PARAM] lint and build take the styles FOLDER, ' +
-    'not one file (%s): pass its folder.';
+  { lint/build con un FICHERO: su carpeta, como en la 1.6.2 (documentado:
+    "a file is accepted too"), pero DICIENDOLO. La quinta revision lo cambio
+    por un rechazo (STYLE-038, retirado) que rompia a quien lo usaba. }
+  SN_STYLES_CARPETA_DEL_FICHERO_FMT =
+    '[STYLE-042] %s is a file: lint and build work on a whole styles ' +
+    'folder, so they ran on its folder, %s.';
 
   SR_STYLES_BINARY_FMT =
     '[STYLE-003 DENIED] %s is BINARY (a compiled style, the product of ' +
@@ -4754,6 +4786,19 @@ const
     'the anchor appears more than once): there is NO need to throw away ' +
     'the whole batch. commit stays blocked until a clean preview.';
 
+  { Un commit que deja todo como estaba: decia COMMIT COMPLETE, "this is what
+    changed" y las copias de siempre (sexta revision). }
+  { Un parametro que no es de ese kind: se ignoraba en silencio (kind=create
+    con old/new, kind=edit con content; sexta revision). }
+  SR_CHANGESET_NO_ES_DE_KIND_FMT =
+    '[CHSET-030 INVALID_PARAM] "%s" does not go with kind=%s (it would ' +
+    'be ignored). Nothing was staged: stage it again without it.';
+
+  SN_CHANGESET_SIN_CAMBIOS_FMT =
+    '[CHSET-029] UNCHANGED: the %d operations leave every file exactly as ' +
+    'it was, so nothing was written and no backup was taken. The ' +
+    'changeset is closed.';
+
   SN_CHANGESET_COMMITTED_FMT =
     '[CHSET-025] COMMIT COMPLETE: %d operations applied to %d files. ' +
     'This is what changed:'#10 +
@@ -4921,6 +4966,15 @@ const
     '[GUARD-008] Workspace jail: NONE - trusted LOCAL mode (it only ' +
     'exists in a stdio process launched by the operator; every HTTP ' +
     'client comes in with a workspace token or gets 401).';
+
+  { Dos formas que caian en GUARD-009 con un motivo que no era el suyo
+    ("alternate data stream"; sexta revision). }
+  SR_GUARD_PREFIJO_DISPOSITIVO_FMT =
+    '[GUARD-022 INVALID_PARAM] "%s" uses a device or long-path prefix ' +
+    '(\\?\ or \\.\): give the plain path.';
+  SR_GUARD_UNIDAD_SIN_BARRA_FMT =
+    '[GUARD-023 INVALID_PARAM] "%s": a unit needs a \ right after the ' +
+    'colon (%s\...).';
 
   SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT =
     '[GUARD-009 DENIED] The path "%s" contains ":" outside the drive ' +
@@ -5946,6 +6000,14 @@ const
     '[TEXT-005 DENIED] %s already exists. This tool never overwrites; ' +
     'edit with old/new.';
 
+  { ...y si esta VACIO no hay ancla para old/new: se decia lo mismo y no
+    habia salida (sexta revision). }
+  SR_TEXT_YA_EXISTE_VACIO_FMT =
+    '[TEXT-015 DENIED] %s already exists and is EMPTY, so there is no ' +
+    'line for old/new to anchor on, and this tool never overwrites. ' +
+    'Write it whole with delphi_upload, or delete it (delphi_delete) and ' +
+    'create it again.';
+
   SK_TEXT_CREADO_ENCODING_FINALES_FMT =
     '[TEXT-006] CREATED %s  encoding=%s  eol=%s  bytes=%d';
 
@@ -6070,7 +6132,8 @@ const
     'Linux64, Android64...; a name the server does not know is refused ' +
     'with the full list). add/remove-searchpath: the platform whose ' +
     'search path changes; empty = the base group (every platform). ' +
-    'add/remove-deployfile: the platform the file ships on (required)';
+    'add/remove-deployfile: the platform the file ships on (required). ' +
+    'set-sdk / set-profile: the platform whose SDK or profile is set';
 
   SP_CFG_OUTPUT =
     'set-output: the output folder for binaries, a simple relative name ' +
@@ -7158,6 +7221,9 @@ const
   SF_EDIT_OK_ANCLA_FMT =
     '  %d OK: %s';
 
+  SF_EDIT_SIN_CAMBIOS_ANCLA_FMT =
+    '  %d UNCHANGED (it already says that): %s';
+
   SR_EDIT_DESDE_MAS_ALLA_FINAL_FMT =
     '[EDIT-100 INVALID_PARAM] %s  encoding=%s  eol=%s  %s'#10 +
     'The file has %d lines; from=%d is past the end.';
@@ -7751,6 +7817,38 @@ const
     'share it (the IDE, a build, an antivirus...): close it or wait a ' +
     'moment, then repeat. Windows said: %s';
 
+  { El error 5 de Windows, sin saber cual de sus tres causas es (la
+    cuenta de ella la da MotivoDelSistema). Salia INTERNAL en unas tools
+    y DENIED en otras (sexta revision). }
+  SR_ACCESO_DENEGADO_FMT =
+    '[SYS-028 DENIED] Windows refused access: %s. It is one of three: ' +
+    'the file or folder is marked read-only, another process holds it ' +
+    'without sharing it, or this server''s account may not write ' +
+    'there. Nothing was done. Repeating only helps in the second case.';
+
+  { El atributo de SOLO LECTURA de un fichero que se iba a sustituir:
+    se decia "otro proceso lo tiene, cierralo y repite" (EDIT-106) y el
+    agente repetia para siempre (sexta revision, medido). }
+  { "arguments" que no es un objeto: se cambiaba en silencio por un objeto vacio y el
+    agente leia "falta path" habiendolo mandado (dentro de un texto JSON,
+    como lo mandan algunos puentes; sexta revision). }
+  SR_SYS_ARGUMENTOS_NO_OBJETO_FMT =
+    '[SYS-030 INVALID_PARAM] "arguments" has to be a JSON object ' +
+    '({"path": ...}); it came as %s. Nothing was done.';
+  SF_SYS_ARGS_TEXTO =
+    'a string (a JSON encoded twice? send the object itself)';
+  SF_SYS_ARGS_LISTA =
+    'an array';
+  SF_SYS_ARGS_OTRO =
+    'a number or a boolean';
+
+  SR_SOLO_LECTURA_ATRIBUTO_FMT =
+    '[SYS-029 DENIED] %s is marked READ-ONLY on disk (its read-only ' +
+    'attribute is set). Nothing was written. It is not a lock, so ' +
+    'repeating will not help: the attribute has to be cleared first ' +
+    '(this server does not clear it: it may be deliberate), or work on ' +
+    'a copy.';
+
   SR_SYS_METODO_NO_EXISTE_FMT =
     '[SYS-021 NOT_FOUND] Method "%s" does not exist here (or is not ' +
     'available).';
@@ -7961,17 +8059,24 @@ end;
   texto del sistema (el de SysErrorMessage, en el idioma de Windows) y ningun
   resultado. Era INTERNAL en cada tool que lo cogia (verificacion de la
   tercera ronda): se reconoce AQUI, donde toda causa se envuelve. }
-function FicheroOcupado(const ACausa: string): Boolean;
+{ Lo que Windows dijo, en el mensaje con etiqueta que le toca, o '' si la
+  causa no es de las suyas conocidas: EL clasificador de "el sistema no
+  dejo". Solo reconocia 32 y 33; el 5 salia INTERNAL (SYS-006, MOVE-012). }
+function MotivoDelSistema(const ACausa: string): string;
 begin
-  Result := ACausa.Contains(SysErrorMessage(32).Trim) or   // ERROR_SHARING_VIOLATION
-    ACausa.Contains(SysErrorMessage(33).Trim);             // ERROR_LOCK_VIOLATION
+  Result := '';
+  if ACausa.Contains(SysErrorMessage(32).Trim) or   // ERROR_SHARING_VIOLATION
+     ACausa.Contains(SysErrorMessage(33).Trim) then // ERROR_LOCK_VIOLATION
+    Result := MsgFmt(SR_FICHERO_OCUPADO_FMT, [ACausa.Trim])
+  else if ACausa.Contains(SysErrorMessage(5).Trim) then // ERROR_ACCESS_DENIED
+    Result := MsgFmt(SR_ACCESO_DENEGADO_FMT, [ACausa.Trim]);
 end;
 
 function MsgEnvuelve(const AMsg, ACausa: string;
   const AArgs: array of const): string;
 begin
-  if not EsFallo(ACausa) and FicheroOcupado(ACausa) then
-    Exit(MsgFmt(SR_FICHERO_OCUPADO_FMT, [ACausa.Trim]));
+  if not EsFallo(ACausa) and (MotivoDelSistema(ACausa) <> '') then
+    Exit(MotivoDelSistema(ACausa));
   if EsFallo(ACausa) then
     Result := ACausa
   else

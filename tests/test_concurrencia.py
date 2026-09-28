@@ -286,9 +286,13 @@ try:
         except Exception:
             built = False
         exe = glob.glob(os.path.join(RUNDIR, '**', 'ConcRun.exe'), recursive=True)
-        if not built or not exe:
-            skip('H build con el exe corriendo',
-                 'el primer build no salio (RAD Studio / msbuild?): ' + str(b1)[:200])
+        if (not built or not exe) and \
+                mc.catalogo()['SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED'] in str(b1):
+            skip('H build con el exe corriendo', 'no hay RAD Studio en esta maquina')
+        elif not built or not exe:
+            # con RAD Studio, un primer build que no sale es un fallo: se decia
+            # SKIP y la bateria quedaba en verde sin medir H (sexta revision)
+            check('H fixture: el primer build sale', False, str(b1)[:200])
         else:
             res = {}
 
@@ -323,6 +327,19 @@ try:
                   str(res.get('run'))[:200])
             check('H build con el exe corriendo: el build NO falla por el exe en uso',
                   ok_build, re.sub(r'\s+', ' ', why_build)[:300])
+    # ------------------------------------------------------------------ S
+    # S: initialize a la vez -> ids DISTINTOS. El id vivia en UN campo del
+    # manager, compartido por los hilos de Indy: dos agentes se llevaban el
+    # mismo y uno leia (y borraba) el buzon del otro (sexta revision: 10 de
+    # 150 rondas con 4 a la vez, 36 de 40 con 32). Pasa tras cada despliegue,
+    # cuando todos los agentes vivos re-inicializan casi a la vez.
+    repes = 0
+    for ronda in range(20):
+        ids = burst(lambda i: session('s%d-%d' % (ronda, i)), 8)
+        if len(set(ids)) != len(ids) or not all(ids):
+            repes += 1
+    check('S initialize a la vez: cada sesion con SU id (20 rondas de 8)', repes == 0,
+          '%d rondas con un id repetido o vacio' % repes)
 finally:
     proc.kill()
 

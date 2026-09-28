@@ -128,6 +128,28 @@ uses
   Lsp.Texts, // [local change] the 404 texts of a dead session
   MCPServer.Logger;
 
+{ [local change 2026-09-28] El cuerpo del 404 de una sesion muerta: un error
+  JSON-RPC de verdad (con "id", que la especificacion exige: null, porque
+  la peticion no se ha leido), compuesto como JSON y no pegado en un
+  literal - el gemelo del 401 de abajo (sexta revision). }
+function SesionMuertaBody(const AMotivo: string): string;
+var
+  O, E: TJSONObject;
+begin
+  O := TJSONObject.Create;
+  try
+    O.AddPair('jsonrpc', '2.0');
+    O.AddPair('id', TJSONNull.Create);
+    E := TJSONObject.Create;
+    O.AddPair('error', E);
+    E.AddPair('code', TJSONNumber.Create(-32001));
+    E.AddPair('message', AMotivo);
+    Result := O.ToJSON;
+  finally
+    O.Free;
+  end;
+end;
+
 { [local change 2026-09-27] El cuerpo de los dos 401: dice que mandar y
   donde vive el token (issue #4), compuesto como JSON de verdad (el texto
   iba pegado dentro de un literal) y con los textos del catalogo. }
@@ -220,6 +242,45 @@ begin
   // no clientInfo still owns a live session, and only a registered one
   // survives the 404 gate below
   BindSessionIdentity(ANewId, Nombre);
+end;
+
+// [local change 2026-09-28] El anuncio de la sesion, UNA vez para los dos
+// caminos (SSE y JSON). Estaba escrito dos veces y habian derivado: el JSON
+// con 'as' (una respuesta en lote, que es un array, lanzaba EInvalidCast) y
+// sin la cabecera de la sesion en curso cuando "sessionId" salia en otro
+// sitio del cuerpo (sexta revision). La cabecera repite la sesion que vino;
+// solo el result.sessionId de un initialize anuncia (y registra) una NUEVA,
+// aunque en la cabecera viniera una caducada.
+procedure AnunciaSesion(AResponseInfo: TIdHTTPResponseInfo;
+  const ARequestBody, AResponse, ASessionID: string);
+var
+  Resp, Res, Sid: TJSONValue;
+begin
+  if ASessionID <> '' then
+    AResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := ASessionID;
+  if Pos('"sessionId"', AResponse) = 0 then
+    Exit;
+  Resp := nil;
+  try
+    try
+      Resp := TJSONObject.ParseJSONValue(AResponse);
+    except
+      Exit; // una respuesta que no se deja leer no anuncia nada
+    end;
+    if not (Resp is TJSONObject) then
+      Exit;
+    Res := TJSONObject(Resp).GetValue('result');
+    if not (Res is TJSONObject) then
+      Exit;
+    Sid := TJSONObject(Res).GetValue('sessionId');
+    if (Sid is TJSONString) and (Sid.Value <> '') then
+    begin
+      AResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := Sid.Value;
+      BindInitializeIdentity(ARequestBody, Sid.Value); // la registra tambien
+    end;
+  finally
+    Resp.Free;
+  end;
 end;
 
 const
@@ -545,7 +606,11 @@ begin
       ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionID;
 
     ResponseInfo.ResponseNo := HTTP_OK;
-    ResponseInfo.ContentText := ''; // Empty SSE stream, close immediately
+    // Empty SSE stream, closed at once - but NOT an empty body: Indy fills an
+    // empty one with its HTML page ("<HTML><BODY><B>200 OK..."), which is
+    // not an event stream (sexta revision). An SSE comment is: clients
+    // ignore it.
+    ResponseInfo.ContentText := ': no server-initiated messages' + #10#10;
 
     // Note: GET endpoint for SSE streams is optional per MCP spec 2025-03-26
     // Server MAY keep connection open to send server-initiated notifications/requests
@@ -608,9 +673,7 @@ begin
         Motivo := MsgText(SR_SESSION_UNKNOWN);
       ResponseInfo.ResponseNo := 404;
       ResponseInfo.ContentType := 'application/json';
-      ResponseInfo.ContentText :=
-        '{"jsonrpc":"2.0","error":{"code":-32001,"message":"' +
-        Motivo.Replace('\', '\\').Replace('"', '\"') + '"}}';
+      ResponseInfo.ContentText := SesionMuertaBody(Motivo);
       TLogger.Info('Refused dead session id: ' + SessionID);
       Exit;
     end;
@@ -772,38 +835,13 @@ begin
   ResponseInfo.CustomHeaders.Values['Connection'] := 'keep-alive';
   ResponseInfo.CustomHeaders.Values['X-Accel-Buffering'] := 'no';
 
-  if SessionID <> '' then
-    ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionID;
-
   JSONResponse := FJsonRpcProcessor.ProcessRequest(RequestBody, SessionID);
 
   // [local change] initialize over SSE must ALSO announce the session in the
-  // Mcp-Session-Id header (the JSON path already did): a client strict with
-  // the streamable-HTTP spec never reads result.sessionId (field 2026-08-23).
-  // [local change] ...and it announces the NEW id even when a stale one came
-  // in the header: a client re-initializing after a 404 used to get the old
-  // id echoed back and the new one never registered (found by the battery).
-  // [local change 2026-09-27] ...y solo el result.sessionId, como el camino
-  // JSON de abajo: la regex sobre TODA la respuesta cogia tambien un
-  // "sessionId" que viniera en el structuredContent de una tool y registraba
-  // una sesion fantasma
-  if Pos('"sessionId"', JSONResponse) > 0 then
-  begin
-    var Resp := TJSONObject.ParseJSONValue(JSONResponse);
-    try
-      if (Resp is TJSONObject) and (TJSONObject(Resp).GetValue('result') is TJSONObject) then
-      begin
-        var Sid := TJSONObject(TJSONObject(Resp).GetValue('result')).GetValue('sessionId');
-        if Sid is TJSONString then
-        begin
-          ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := Sid.Value;
-          BindInitializeIdentity(RequestBody, Sid.Value); // [local change] registers the session too
-        end;
-      end;
-    finally
-      Resp.Free;
-    end;
-  end;
+  // Mcp-Session-Id header: a client strict with the streamable-HTTP spec never
+  // reads result.sessionId (field 2026-08-23). Lo hace AnunciaSesion, el mismo
+  // para los dos caminos.
+  AnunciaSesion(ResponseInfo, RequestBody, JSONResponse, SessionID);
 
   if JSONResponse <> '' then
   begin
@@ -831,9 +869,6 @@ procedure TMCPIdHTTPServer.HandlePostRequestJSON(RequestInfo: TIdHTTPRequestInfo
   ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const SessionID: string);
 var
   ResponseBody: string;
-  ResponseJSON: TJSONObject;
-  ResultObj: TJSONObject;
-  SessionValue: TJSONValue;
 begin
   TLogger.Info('Handling POST request with JSON response');
 
@@ -848,28 +883,8 @@ begin
   ResponseInfo.ContentType := 'application/json';
   ResponseInfo.CustomHeaders.Values['Connection'] := 'keep-alive';
 
-  // [local change] an initialize announces the NEW id even when a stale one
-  // came in the header (see the SSE twin above)
-  if Pos('"sessionId"', ResponseBody) > 0 then
-  begin
-    ResponseJSON := TJSONObject.ParseJSONValue(ResponseBody) as TJSONObject;
-    try
-      ResultObj := ResponseJSON.GetValue('result') as TJSONObject;
-      if Assigned(ResultObj) then
-      begin
-        SessionValue := ResultObj.GetValue('sessionId');
-        if Assigned(SessionValue) then
-        begin
-          ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionValue.Value;
-          BindInitializeIdentity(RequestBody, SessionValue.Value); // [local change] registers the session too
-        end;
-      end;
-    finally
-      ResponseJSON.Free;
-    end;
-  end
-  else if SessionID <> '' then
-    ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionID;
+  // [local change] la sesion se anuncia con el mismo helper que el camino SSE
+  AnunciaSesion(ResponseInfo, RequestBody, ResponseBody, SessionID);
 
   ResponseInfo.ContentStream := TStringStream.Create(ResponseBody, TEncoding.UTF8);
   ResponseInfo.FreeContentStream := True;

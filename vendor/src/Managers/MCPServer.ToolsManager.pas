@@ -453,6 +453,24 @@ begin
 
   TLogger.Info('MCP CallTool called for tool: ' + ToolName);
 
+  // [local change 2026-09-28] "arguments" que no es un objeto se dice: se
+  // cambiaba en silencio por {} y el agente leia "falta path" habiendolo
+  // mandado dentro de un texto JSON. null y una lista VACIA siguen siendo
+  // "sin argumentos" (clientes que los mandan asi).
+  var ArgsCrudos := Params.GetValue('arguments');
+  if Assigned(ArgsCrudos) and not (ArgsCrudos is TJSONObject) and
+     not (ArgsCrudos is TJSONNull) and
+     not ((ArgsCrudos is TJSONArray) and (TJSONArray(ArgsCrudos).Count = 0)) then
+  begin
+    var Llego := MsgText(SF_SYS_ARGS_OTRO);
+    if ArgsCrudos is TJSONString then
+      Llego := MsgText(SF_SYS_ARGS_TEXTO)
+    else if ArgsCrudos is TJSONArray then
+      Llego := MsgText(SF_SYS_ARGS_LISTA);
+    Exit(TValue.From<TJSONObject>(BuildToolCallResponse(
+      MsgFmt(SR_SYS_ARGUMENTOS_NO_OBJETO_FMT, [Llego]))));
+  end;
+
   // [local change] the host's access-control gate runs before ANY tool.
   if Assigned(ToolGate) then
   begin

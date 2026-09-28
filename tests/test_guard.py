@@ -205,7 +205,9 @@ if os.path.exists(_holad):
     out = call('delphi_upload', {"path": _holad, "offset": 0, "chunkbase64": _b})
     check('R7: upload del .dproj llega (no hay filtro de extension)', 'written' in mc.como_json(out), out[:150])
     # R7 HIGH: upload backed the original up before truncating it
-    _bk = _glob.glob(os.path.join(INSIDE, 'Hola', '__delphi-patch', '**', 'Hola.dproj'), recursive=True)
+    # la copia se busca con el lector de la papelera (mc.copias): el glob de
+    # antes buscaba el nombre sin sello y se puso rojo con el cajon nuevo
+    _bk = mc.copias(os.path.join(INSIDE, 'Hola'), 'Hola.dproj', 'CAJON_SUSTITUIDOS')
     check('R7 HIGH: upload respaldo el .dproj antes de pisarlo', len(_bk) > 0, _bk)
     # R7 CRITICAL: a compile-only server (no AllowBuildScripts) refuses the hazardous
     # project and never runs the injected <Exec>.

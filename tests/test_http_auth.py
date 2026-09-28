@@ -82,6 +82,21 @@ try:
     code, body = post_sid(INIT, '{BASURA-NO-EMITIDA-JAMAS}')
     check('http: initialize con sesion vieja SI pasa (es el arreglo)',
           code == 200 and 'delphi-lsp-mcp-service' in body, '%s %s' % (code, body[:120]))
+    # el anuncio de la sesion es UNO para los dos caminos (sexta revision: estaba
+    # escrito dos veces y el JSON habia derivado): un initialize con una sesion
+    # muerta anuncia la NUEVA en la cabecera, y una llamada normal repite la suya
+    for camino, acc in [('JSON', 'application/json'), ('SSE', mc.ACCEPT_STREAMABLE)]:
+        _, h, b = mc.post(URL, INIT, TOKEN, '{BASURA-NO-EMITIDA-JAMAS}', accept=acc, t=60)
+        nuevo = h.get('Mcp-Session-Id') or ''
+        check('http: initialize con sesion muerta anuncia la NUEVA en la cabecera (%s)' % camino,
+              nuevo not in ('', '{BASURA-NO-EMITIDA-JAMAS}') and
+              ('"sessionId":"%s"' % nuevo) in b.replace(' ', ''),
+              'header=%s body=%s' % (nuevo, b[:160]))
+        _, h, b = mc.post(URL, {"jsonrpc": "2.0", "id": 12, "method": "tools/list",
+                                "params": {}}, TOKEN, nuevo, accept=acc, t=60)
+        check('http: una llamada normal repite su sesion en la cabecera (%s)' % camino,
+              nuevo != '' and h.get('Mcp-Session-Id') == nuevo and 'delphi_build' in b,
+              'header=%s' % h.get('Mcp-Session-Id'))
     code, body = post_sid({"jsonrpc": "2.0", "id": 10, "method": "tools/list", "params": {}}, sid)
     check('http: la sesion emitida por este proceso sigue valiendo', code == 200 and 'delphi_build' in body,
           '%s %s' % (code, body[:120]))
@@ -136,15 +151,19 @@ try:
 
     # --- malformed "arguments" must NEVER crash the binder (measured AV:
     # arguments as [], absent, or a string reached Tool.Execute as nil) ---
-    for label, params in [('array', {"name": "delphi_installs", "arguments": []}),
-                          ('ausente', {"name": "delphi_installs"}),
-                          ('string', {"name": "delphi_installs",
-                                      "arguments": "hola"})]:
+    # [] y ausente son "sin argumentos" y la tool corre; un string (un JSON
+    # codificado dos veces) se DICE con SYS-030: corria con {} y contestaba
+    # "Missing path", que engana (sexta revision)
+    for label, params, espera in [
+            ('array', {"name": "delphi_installs", "arguments": []}, 'installs'),
+            ('ausente', {"name": "delphi_installs"}, 'installs'),
+            ('string', {"name": "delphi_installs", "arguments": "hola"},
+             '[SYS-030 INVALID_PARAM]')]:
         code, body = post({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
                            "params": params}, TOKEN)
         check('http: arguments malformado (%s) sin Access violation' % label,
               code == 200 and 'Access violation' not in body
-              and 'installs' in body, '%s %s' % (code, body[:200]))
+              and espera in body, '%s %s' % (code, body[:200]))
 finally:
     proc.kill()
 
@@ -447,8 +466,7 @@ try:
     try:
         URL = 'http://127.0.0.1:%d/mcp' % FILES_PORT
         BASE = 'http://127.0.0.1:%d' % FILES_PORT
-        drive = jail4[0].lower()
-        vjail = 'srv%s:%s' % (drive, jail4[2:])          # D:\x -> srvd:\x
+        vjail = mc.virtual(jail4)                        # D:\x -> srvd:\x
 
         def get(path_value, token, method='GET', raw_url=None):
             url = raw_url or (BASE + '/files?path=' + urllib.parse.quote(path_value, safe=''))
@@ -475,7 +493,7 @@ try:
         check('files: X-File-SHA256 correcto',
               hdr.get('X-File-SHA256', '').lower() == hashlib.sha256(b'hola mundo\r\n').hexdigest(),
               hdr.get('X-File-SHA256'))
-        code, hdr, data = get('srv%s:%s' % (drive, os.path.join(tmpdir4, 'outside', 'secret.txt')[2:]), TOKEN)
+        code, hdr, data = get(mc.virtual(os.path.join(tmpdir4, 'outside', 'secret.txt')), TOKEN)
         check('files: fuera de la jaula -> 403 FUERA', code == 403 and mc.es(data.decode('utf-8', 'replace'), 'SR_JAIL_FMT'),
               '%s %r' % (code, data[:120]))
         check('files: el rechazo no ensena letras reales', b'"' + jail4[:2].encode() not in data, data[:160])

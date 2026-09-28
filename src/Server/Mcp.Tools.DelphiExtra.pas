@@ -142,12 +142,11 @@ begin
   Result := ReadPathDenied(Params.Path); // la guarda primero: ruta vacia = GUARD-018
   if Result <> '' then
     Exit;
-  if not TFile.Exists(Params.Path) then
-    Exit(NoEsFichero(Params.Path, MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [Params.Path])));
-  if not MatchText(TPath.GetExtension(Params.Path),
-       ['.pas', '.dpr', '.dpk', '.inc']) then
-    Exit(MsgFmt(SR_DIAG_NOT_SOURCE_FMT,
-      [TPath.GetFileName(Params.Path), TPath.GetExtension(Params.Path)]));
+  // la regla de las otras siete tools del LSP (Lsp.Patch.NoEsFuenteDelphi):
+  // tenia su copia, con otros ids (LSP-001/EDIT-027; sexta revision)
+  Result := NoEsFuenteDelphi(Params.Path);
+  if Result <> '' then
+    Exit;
   // Answer well inside the usual MCP client timeout (60 s): a slow lint keeps
   // running on the LSP, and the next call on the same text collects it.
   P := TLspSession.Instance.LintFile(Params.Path, DIAG_WAIT_MS, Settings);

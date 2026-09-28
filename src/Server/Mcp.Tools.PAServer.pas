@@ -1018,7 +1018,11 @@ begin
       Return.AddPair('note', MsgText(SN_PASERVER_TCP_OK))
     else
     begin
-      Return.AddPair('error', Err);
+      // un INFORME, como su gemela con perfil (connected:false): el
+      // texto de Indy iba en "error" sin etiqueta y la llamada salia
+      // INVALID_PARAM ("corrige la llamada") con la llamada bien hecha
+      // (sexta revision)
+      Return.AddPair('reason', Err);
       Return.AddPair('note', MsgText(SN_PASERVER_TCP_FAIL));
     end;
     Result := Return.ToJSON;
@@ -1343,6 +1347,13 @@ begin
     finally
       Ficha.Free;
     end;
+  // El destino contesta? ANTES de crear nada: con el PAServer apagado cada
+  // descarga salia "skipped (not on this target)" y el final culpaba a la
+  // distro (PAS-030; sexta revision). paclient solo con el perfil conecta y
+  // se autentica, como test-connection.
+  Output := RunCaptured('"' + PaClient + '" --timeout=20 "' + ProfName + '"', 45000, ExitCode);
+  if ExitCode <> 0 then
+    Exit(MsgFmt(SR_FETCHTARGET_FAIL_FMT, [ExitCode, Output.Trim]));
   CrearCarpeta(SysRoot);
 
   Return := TJSONObject.Create;

@@ -124,21 +124,29 @@ var
 begin
   RttiType := FContext.GetType(Instance.ClassType);
 
+  // [local change 2026-09-28] casar por la clave normalizada, pero LISTAR
+  // con el nombre publicado (GetPropertyJsonName, el del esquema y el de
+  // SYS-016/019): se listaba "oldtext" donde el esquema dice "old_text"
+  var Publicados := TStringList.Create;
   KnownNorms := TStringList.Create;
   try
     for RttiProp in RttiType.GetProperties do
       if RttiProp.IsWritable then
+      begin
         KnownNorms.Add(NormalizeKey(RttiProp.Name));
+        Publicados.Add(TMCPSchemaGenerator.GetPropertyJsonName(RttiProp, RttiType));
+      end;
 
     for Pair in Json do
     begin
       KeyName := Pair.JsonString.Value;
       if KnownNorms.IndexOf(NormalizeKey(KeyName)) < 0 then
         raise EArgumentException.Create(MsgFmt(SR_SYS_UNKNOWN_PARAM_FMT,
-          [KeyName, String.Join(', ', KnownNorms.ToStringArray)]));
+          [KeyName, String.Join(', ', Publicados.ToStringArray)]));
     end;
   finally
     KnownNorms.Free;
+    Publicados.Free;
   end;
 
   for RttiProp in RttiType.GetProperties do

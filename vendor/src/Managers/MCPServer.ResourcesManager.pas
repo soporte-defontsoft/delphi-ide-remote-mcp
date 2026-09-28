@@ -137,7 +137,9 @@ begin
   URIValue := nil;
   if Assigned(Params) then
     URIValue := Params.GetValue('uri');
-  if Assigned(URIValue) then
+  // null es "falta", como en las tools: su .Value es el texto 'null' y salia
+  // NOT_FOUND "Resource null" (sexta revision)
+  if Assigned(URIValue) and not (URIValue is TJSONNull) then
     URI := URIValue.Value
   else
     URI := '';

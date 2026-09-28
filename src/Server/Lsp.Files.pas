@@ -105,7 +105,9 @@ begin
     end;
     // Absolute server paths only (X:\...): a relative value would resolve
     // against the server process' working directory - not the client's.
-    if (Length(P) < 3) or (P[2] <> ':') or not CharInSet(P[3], ['\', '/']) then
+    // LA regla de ruta completa (Lsp.Guard.EsRutaAbsoluta): aqui estaba a
+    // mano, sin UNC y sin mirar la letra (sexta revision)
+    if not EsRutaAbsoluta(P) then
     begin
       Answer(ResponseInfo, 400, MsgText(SR_FILES_RUTA_ABSOLUTA));
       Exit;

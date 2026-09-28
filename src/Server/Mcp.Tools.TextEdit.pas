@@ -97,6 +97,9 @@ begin
       'old/new/fragment/delete')]);
   if Result <> '' then
     Exit;
+  // content es de create: sin el, se ignoraba en silencio
+  if (Params.Content <> '') and not Params.Create_ then
+    Exit(MsgFmt(SR_EDIT_CONTENT_SIN_MODO_FMT, ['create']));
   if Params.Edits.Trim <> '' then
     Exit(ExecuteTextEdits(Params.Path, Params.Edits));
   A := Default(TTextEditArgs);

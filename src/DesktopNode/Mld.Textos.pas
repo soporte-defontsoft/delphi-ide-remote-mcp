@@ -204,17 +204,20 @@ const
     sLineBreak +
     '  (today: Linux with GNOME, and Windows; macOS would be next)';
 
+  // JOB-001..004 son el SISTEMA del destino que no deja (fork, la carpeta,
+  // arrancar el binario): DENIED, no INTERNAL (sexta revision, la misma
+  // regla que RUN-010)
   SR_JOB_FORK_VIGIA_FALLO =
-    '[JOB-001 INTERNAL] Fork of the watcher failed';
+    '[JOB-001 DENIED] Fork of the watcher failed';
 
   SR_JOB_FORK_PROGRAMA_FALLO =
-    '[JOB-002 INTERNAL] Fork of the program failed';
+    '[JOB-002 DENIED] Fork of the program failed';
 
   SR_JOB_NO_PUDE_ENTRAR_FMT =
-    '[JOB-003 INTERNAL] Could not enter %s: %s';
+    '[JOB-003 DENIED] Could not enter %s: %s';
 
   SR_JOB_NO_PUDE_ARRANCAR_FMT =
-    '[JOB-004 INTERNAL] Could not start %s: %s';
+    '[JOB-004 DENIED] Could not start %s: %s';
 
   SR_JOB_KILL_NECESITA_ID =
     '[JOB-005 INVALID_PARAM] @kill needs the id of one of this server''s ' +

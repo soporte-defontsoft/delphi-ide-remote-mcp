@@ -217,6 +217,12 @@ if not ide_open:
         d = json.loads(out)
         check('test-connection perfil muerto: connected=false', d.get('connected') is False, out[:250])
         check('test-connection: trae el output de paclient', 'E0003' in d.get('paclientOutput', ''), out[:300])
+        # get-sdk con el PAServer apagado: lo dice (DENIED, con E0003) ANTES de
+        # crear nada; culpaba a la distro con PAS-030 (sexta revision)
+        out2 = srv.call('delphi_paserver', {'command': 'get-sdk', 'name': PROF_NAME}, t=120)
+        check('get-sdk con el PAServer apagado: FETCH-004 DENIED con E0003, no la culpa a la distro',
+              mc.rechazado(out2) and mc.es(out2, 'SR_FETCHTARGET_FAIL_FMT') and 'E0003' in out2,
+              out2[:300])
     except Exception:
         check('test-connection: parsea', False, out[:300])
 
@@ -234,6 +240,9 @@ try:
     check('probe TCP puerto cerrado: tcpReachable=false', d.get('tcpReachable') is False, out[:250])
     check('probe TCP: note con diagnostico NAT/firewall',
           mc.es(d.get('note', ''), 'SN_PASERVER_TCP_FAIL'), out[:300])
+    # un informe, no un fallo de la llamada: salia INVALID_PARAM (sexta revision)
+    check('probe TCP puerto cerrado: es un INFORME (sin "error"), con su motivo',
+          not mc.fallo(out) and 'error' not in d and d.get('reason'), out[:250])
 except Exception:
     check('probe TCP: parsea', False, out[:300])
 

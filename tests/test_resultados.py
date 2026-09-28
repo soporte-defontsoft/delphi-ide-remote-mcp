@@ -111,6 +111,16 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E74 la papelera por su alias 8.3 (__DELP~1) es la papelera tambien para
       delphi_delete (un lector, EnPapelera; antes miraba el texto)
   E75 la RAIZ por su alias 8.3 sigue siendo la raiz: no se borra (GUARD-014)
+  E77 una tanda o un changeset que no cambian nada: UNCHANGED, sin escribir
+      ni prometer copias (decian APPLIED / COMMIT COMPLETE)
+  E78 un form con su designer ya en disco: nada creado (quedaba el .pas)
+  E79 un fichero de SOLO LECTURA (atributo): SYS-029, no "otro lo tiene"
+  E80 borrar una carpeta que no se puede mover: sus proyectos intactos
+  E81 LSP-004 cuenta las lineas como delphi_read (sin la fantasma)
+  E82 buscar en una carpeta con UN fichero bloqueado: los aciertos de los
+      demas y la nota SEARCH-003 (se caia entera con SYS-027)
+  E83 delphi_config con un parametro que no es de su comando: CFG-110
+      (set-output con path= contestaba exito poniendo el valor por defecto)
   E76 un fichero de dentro por su alias 8.3 se lee (la jaula decia "fuera")
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
@@ -119,6 +129,7 @@ import base64
 import json
 import os
 import subprocess
+import time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -565,21 +576,34 @@ try:
     TJ = os.path.join(JAIL, 'tj')
     os.makedirs(TJ)
     VICT = os.path.join(BASE, 'victima')   # fuera de la jaula
-    os.makedirs(VICT)
+    # La papelera de OTRO proyecto, con su carpeta del dia y su cajon: es el
+    # montaje en el que el codigo de antes SI fugaba (contestaba DELETED y
+    # dejaba la copia dentro de la victima). Sin la carpeta del dia fallaba
+    # antes de escribir y el check caia solo por el codigo (sexta revision).
+    os.makedirs(os.path.join(VICT, time.strftime('%Y%m%d'), 'deleted'))
     open(os.path.join(VICT, 'suyo.txt'), 'w').write('de otro\n')
-    subprocess.run(['cmd', '/c', 'mklink', '/J', os.path.join(TJ, '__delphi-patch'), VICT],
-                   capture_output=True)
+
+    def arbol(d):
+        return sorted(os.path.relpath(os.path.join(r, n), d)
+                      for r, ds, fs in os.walk(d) for n in fs + ds)
+    ANTES_VICT = arbol(VICT)
+    JUNCTION = os.path.join(TJ, '__delphi-patch')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', JUNCTION, VICT], capture_output=True)
+    # sin el junction la prueba mide otra cosa (una papelera normal): se dice
+    check('E48 fixture: la papelera es de verdad un junction a la victima',
+          os.path.isjunction(JUNCTION), JUNCTION)
     XJ = os.path.join(TJ, 'x.txt')
     open(XJ, 'w').write('x\n')
     res, sc, t = llama('delphi_delete', {'path': XJ})
     check('E48 delete con la papelera enlazada FUERA de la jaula: DENIED y nada se mueve',
-          os.path.isdir(os.path.join(TJ, '__delphi-patch')) and res.get('isError') is True and
-          sc.get('code') == 'DENIED' and os.path.exists(XJ) and os.listdir(VICT) == ['suyo.txt'],
-          '%s | %s | victima=%s' % (json.dumps(sc)[:100], t[:200], os.listdir(VICT)))
+          os.path.isdir(JUNCTION) and res.get('isError') is True and
+          sc.get('code') == 'DENIED' and os.path.exists(XJ) and arbol(VICT) == ANTES_VICT,
+          '%s | %s | victima=%s' % (json.dumps(sc)[:100], t[:200], arbol(VICT)))
     res, sc, t = llama('delphi_move', {'path': XJ, 'dest': os.path.join(TJ, 'y.txt')})
-    check('E48 ...y move (su copia previa va a esa papelera): DENIED y nada se mueve',
-          res.get('isError') is True and os.path.exists(XJ) and os.listdir(VICT) == ['suyo.txt'],
-          '%s | victima=%s' % (t[:200], os.listdir(VICT)))
+    # control: el codigo de antes tambien lo paraba (fallaba al copiar)
+    check('E48 ...y move (control, su copia previa va a esa papelera): DENIED y nada se mueve',
+          res.get('isError') is True and os.path.exists(XJ) and arbol(VICT) == ANTES_VICT,
+          '%s | victima=%s' % (t[:200], arbol(VICT)))
 
     res, sc, t = llama('delphi_upload', {'path': os.path.join(TAP, 'n.txt'), 'offset': 0,
                                          'chunkbase64': base64.b64encode(b'nuevo\n').decode()})
@@ -809,10 +833,13 @@ try:
     E74 = os.path.join(JAIL, 'e74')
     os.makedirs(E74)
     open(os.path.join(E74, 'borrame.txt'), 'w').write('x')
-    llama('delphi_delete', {'path': os.path.join(E74, 'borrame.txt')})
+    res, sc, t = llama('delphi_delete', {'path': os.path.join(E74, 'borrame.txt')})
+    # sin este borrado no hay papelera y la NOTA de abajo mentiria ("sin 8.3")
+    check('E74 fixture: el borrado que crea la papelera funciona',
+          not res.get('isError') and not os.path.exists(os.path.join(E74, 'borrame.txt')),
+          t[:200])
     PAPE = os.path.join(E74, '__delphi-patch')
-    buf = ctypes.create_unicode_buffer(1024)
-    CORTA = buf.value if ctypes.windll.kernel32.GetShortPathNameW(PAPE, buf, 1024) else ''
+    CORTA = mc.corta(PAPE)
     if os.path.isdir(PAPE) and CORTA and os.path.basename(CORTA).lower() != '__delphi-patch':
         rechazo('E74 delete de la papelera por su alias 8.3 (%s): DENIED, la papelera'
                 % os.path.basename(CORTA),
@@ -825,7 +852,7 @@ try:
     # los declarados, una carpeta suya salia "fuera" (FormaLarga, 28-sep). Y
     # la raiz misma por su alias tiene que seguir siendo LA RAIZ: si solo
     # casase la contencion, entraria como "dentro" y se podria borrar.
-    JAIL_CORTA = buf.value if ctypes.windll.kernel32.GetShortPathNameW(JAIL, buf, 1024) else ''
+    JAIL_CORTA = mc.corta(JAIL)
     if JAIL_CORTA and JAIL_CORTA.lower() != JAIL.lower():
         rechazo('E75 borrar la RAIZ por su alias 8.3: DENIED, es la raiz (%s)' % JAIL_CORTA[-30:],
                 'delphi_delete', {'path': JAIL_CORTA}, 'DENIED', 'SR_ROOT_ITSELF_FMT')
@@ -837,6 +864,116 @@ try:
               not res.get('isError') and 'dentro' in t, t[:200])
     else:
         print('NOTA: E75/E76 sin medir: la jaula no tiene otro nombre 8.3 (%r)' % JAIL_CORTA)
+
+    # E78 un form cuyo designer ya esta en disco: CREATE-027 y NADA creado (el
+    # .pas se quedaba y repetir chocaba con "ya existe"; sexta revision)
+    if os.path.exists(DPROJ_PAN):
+        open(os.path.join(PAN, 'UFicha.dfm'), 'w').write('object FormFicha: TFormFicha\nend\n')
+        res, sc, t = llama('delphi_create', {'kind': 'form-vcl', 'name': 'UFicha',
+                                              'project': DPROJ_PAN})
+        check('E78 form con su .dfm ya en disco: CREATE-027 y ningun .pas creado',
+              res.get('isError') is True and mc.abre(t, 'SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT') and
+              'UFicha.dfm' in t and not os.path.exists(os.path.join(PAN, 'UFicha.pas')), t[:200])
+
+    # E79 SOLO LECTURA (atributo): SYS-029, que no es "otro proceso lo tiene"
+    # (EDIT-106 mandaba repetir para siempre) ni SYS-006 INTERNAL (upload)
+    import stat as _stat
+    RO = os.path.join(JAIL, 'solo_lectura.txt')
+    open(RO, 'w', newline='\n').write('fijo\n')
+    os.chmod(RO, _stat.S_IREAD)
+    try:
+        res, sc, t = llama('delphi_textedit', {'path': RO, 'old': 'fijo', 'new': 'otro'})
+        check('E79 editar un fichero de solo lectura: SYS-029 DENIED y nada escrito',
+              res.get('isError') is True and mc.abre(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT') and
+              open(RO).read() == 'fijo\n', t[:200])
+        res, sc, t = llama('delphi_upload', {'path': RO, 'chunkbase64': base64.b64encode(b'x\n').decode()})
+        check('E79 ...y subir encima: SYS-029 DENIED, no SYS-006 INTERNAL',
+              res.get('isError') is True and mc.abre(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT') and
+              open(RO).read() == 'fijo\n', t[:200])
+    finally:
+        os.chmod(RO, _stat.S_IREAD | _stat.S_IWRITE)
+
+    # E80 borrar una CARPETA que no se puede mover (un fichero abierto dentro):
+    # "no he tocado NADA" era mentira, sus units ya habian salido de los
+    # proyectos (sexta revision). Ahora vuelven.
+    if os.path.exists(DPROJ_PAN):
+        res, sc, t = llama('delphi_create', {'kind': 'unit', 'name': 'UModulo',
+                                              'project': DPROJ_PAN, 'dir': 'mods'})
+        UMOD = os.path.join(PAN, 'mods', 'UModulo.pas')
+        DPR_ANTES = open(DPR_PAN, 'rb').read()
+        check('E80 fixture: la unit de la carpeta esta en el proyecto',
+              os.path.exists(UMOD) and b'UModulo' in DPR_ANTES, t[:200])
+        abierto = open(UMOD, 'r')
+        try:
+            res, sc, t = llama('delphi_delete', {'path': os.path.join(PAN, 'mods')})
+        finally:
+            abierto.close()
+        check('E80 borrar una carpeta que no se deja mover: FILE-036 y el proyecto INTACTO',
+              res.get('isError') is True and mc.abre(t, 'SR_FILE_DELETE_LOCKED_FMT') and
+              os.path.exists(UMOD) and open(DPR_PAN, 'rb').read() == DPR_ANTES,
+              '%s | lista UModulo: %s' % (t[:200], b'UModulo' in open(DPR_PAN, 'rb').read()))
+
+    # E81 LSP-004 cuenta como delphi_read: sin la linea fantasma del salto final
+    TRES = os.path.join(JAIL, 'Tres.pas')
+    open(TRES, 'w', newline='\n').write('unit Tres;\ninterface\nend.\n')
+    res, sc, t = llama('delphi_hover', {'path': TRES, 'line': 3, 'character': 0})
+    check('E81 LSP-004: "has 3 lines" como delphi_read (decia 4)',
+          res.get('isError') is True and mc.abre(t, 'SR_LSP_LINE_RANGE_FMT') and 'has 3 lines' in t,
+          t[:200])
+
+    # E82 una busqueda de CARPETA no se cae entera por un fichero bloqueado
+    BUSCA = os.path.join(JAIL, 'e82')
+    os.makedirs(BUSCA)
+    open(os.path.join(BUSCA, 'UUno.pas'), 'w').write('unit UUno; // aguja\n')
+    BLOQ = os.path.join(BUSCA, 'UDos.pas')
+    open(BLOQ, 'w').write('unit UDos; // aguja\n')
+    hb = k32.CreateFileW(BLOQ, 0x80000000, 0, None, 3, 0x80, None)  # sin compartir
+    try:
+        res, sc, t = llama('delphi_search', {'root': BUSCA, 'query': 'aguja'})
+    finally:
+        k32.CloseHandle(hb)
+    j = mc.como_json(t)
+    check('E82 buscar en una carpeta con un fichero bloqueado: los demas y SEARCH-003',
+          not res.get('isError') and j.get('total') == 1 and
+          mc.es(j.get('unreadableNote', ''), 'SN_SEARCH_ILEGIBLES_FMT') and
+          'UDos.pas' in j.get('unreadableNote', ''), t[:300])
+
+    # E83 un parametro que no es del comando se DICE: set-output con path=
+    # contestaba "puesto en Compiled" (el valor por defecto) ignorando path
+    ANTES = open(DPROJ, 'rb').read()
+    t = rechazo('E83 set-output con path= (el suyo es output): CFG-110', 'delphi_config',
+                {'command': 'set-output', 'project': DPROJ, 'path': '.\\bin'},
+                'INVALID_PARAM', 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT')
+    check('E83 ...nombra lo que toma el comando y el .dproj no se toco',
+          'set-output takes output' in t and open(DPROJ, 'rb').read() == ANTES, t[:200])
+    rechazo('E83 view con platform= tampoco se ignora', 'delphi_config',
+            {'command': 'view', 'project': DPROJ, 'platform': 'Win64'},
+            'INVALID_PARAM', 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT')
+
+    # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
+    # APPLIED / COMMIT COMPLETE prometiendo copias que no existian
+    SIN = os.path.join(JAIL, 'e77')
+    os.makedirs(SIN)
+    T77 = os.path.join(SIN, 'igual.txt')
+    open(T77, 'w', newline='\n').write('uno\ndos\n')
+    res, sc, t = llama('delphi_textedit', {'path': T77, 'edits': json.dumps(
+        [{'old': 'uno', 'new': 'uno'}, {'old': 'dos', 'new': 'dos'}])})
+    check('E77 tanda en la que nada cambia: UNCHANGED y sin papelera',
+          not res.get('isError') and mc.abre(t, 'SN_PATCH_EDITS_SIN_CAMBIOS_FMT') and
+          not os.path.exists(os.path.join(SIN, '__delphi-patch')), t[:200])
+    res, sc, t = llama('delphi_textedit', {'path': T77, 'fragment': 'no', 'new': 'no',
+                                           'atline': 1})
+    check('E77 ...y fragment == new: la misma nota (era un error EDIT-009)',
+          not res.get('isError') and mc.abre(t, 'SN_EDIT_SIN_CAMBIOS_FMT'), t[:200])
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    cid = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'edit',
+                               'path': T77, 'old': 'uno', 'new': 'uno'})
+    llama('delphi_changeset', {'command': 'preview', 'id': cid})
+    res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': cid})
+    check('E77 ...y un changeset que no cambia nada: UNCHANGED',
+          not res.get('isError') and mc.abre(t, 'SN_CHANGESET_SIN_CAMBIOS_FMT') and
+          not os.path.exists(os.path.join(SIN, '__delphi-patch')), t[:200])
 
     # un segundo servidor al MISMO puerto que el que ya escucha
     b = subprocess.run([EXE, '--http', str(PORT)], cwd=EXEDIR, capture_output=True, timeout=60,

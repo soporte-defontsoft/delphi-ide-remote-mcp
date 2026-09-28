@@ -22,7 +22,10 @@ type
 
   TMCPCoreManager = class(TInterfacedObject, IMCPCapabilityManager)
   private
-    FSessionID: string;
+    // [local change 2026-09-28] sin FSessionID: era UN campo del unico
+    // manager, compartido por todos los hilos de Indy, y dos initialize a la
+    // vez podian llevarse el MISMO id (medido: 10 de 150 rondas con 4) - un
+    // agente leia y borraba el buzon del otro. El id vive en Initialize.
     FSettings: TMCPSettings;
   public
     class var Instructions: TMCPInstructionsFunc; // [local change]
@@ -35,8 +38,6 @@ type
     
     function Initialize(const Params: TJSONObject): TValue;
     function Ping: TValue;
-    
-    property SessionID: string read FSessionID;
   end;
 
 implementation
@@ -51,7 +52,6 @@ constructor TMCPCoreManager.Create(ASettings: TMCPSettings);
 begin
   inherited Create;
   FSettings := ASettings;
-  FSessionID := '';
 end;
 
 function TMCPCoreManager.GetCapabilityName: string;
@@ -114,14 +114,14 @@ begin
     end;
   end;
   
-  FSessionID := TGuid.NewGuid.ToString;
+  var SesionId := TGuid.NewGuid.ToString; // de ESTA llamada (ver la nota de la clase)
   // [local change] stdio is one process = one client: no session header ever
   // arrives, so bind the identity here and now, for the life of the process.
   // Over HTTP this thread's identity is reset per request anyway, and the
   // real binding is session id -> name in the HTTP layer.
   if Assigned(ClientName) then
   begin
-    BindSessionIdentity(FSessionID, ClientName.Value);
+    BindSessionIdentity(SesionId, ClientName.Value);
     SetThreadIdentity(ClientName.Value);
   end;
   
@@ -164,7 +164,7 @@ begin
 {$ENDIF}
     end;
 
-    ResultJSON.AddPair('sessionId', FSessionID);
+    ResultJSON.AddPair('sessionId', SesionId);
 
     ServerInfo := TJSONObject.Create;
     ResultJSON.AddPair('serverInfo', ServerInfo);
@@ -179,7 +179,7 @@ begin
         ResultJSON.AddPair('instructions', Text);
     end;
     
-    TLogger.Info('Created new MCP session: ' + FSessionID);
+    TLogger.Info('Created new MCP session: ' + SesionId);
     
     Result := TValue.From<TJSONObject>(ResultJSON);
   except

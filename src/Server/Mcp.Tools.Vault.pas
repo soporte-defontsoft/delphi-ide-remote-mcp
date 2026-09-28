@@ -419,7 +419,9 @@ begin
   // String.Replace without rfReplaceAll only ever touches the FIRST match -
   // which left a stray CR at the end of every line (measured against a real
   // CRLF vault; an LF-only test fixture hid it).
-  Lines := AText.Replace(#13#10, #10, [rfReplaceAll]).Split([#10]);
+  // ...y sin la linea fantasma del salto final: la MISMA regla que
+  // delphi_read (Lsp.Patch.LineasDelTexto; sexta revision: 5 lineas salian 6)
+  Lines := LineasDelTexto(AText);
   ATotalLines := Length(Lines);
   First := 1;
   if AOffset > 0 then

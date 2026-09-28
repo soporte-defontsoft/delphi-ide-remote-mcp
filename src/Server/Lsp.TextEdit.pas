@@ -111,7 +111,7 @@ end;
 
 function DoCreate(const A: TTextEditArgs): string;
 var
-  Dir, Text, EolName: string;
+  Dir, Text, EolName, EncVacio: string;
 begin
   // create=true sobre una CARPETA salia "atomic rename failed" (INTERNAL)
   Result := CarpetaEnVezDeFichero(A.Path);
@@ -121,7 +121,16 @@ begin
   if Result <> '' then
     Exit;
   if TFile.Exists(A.Path) then
+  begin
+    // vacio (o solo blancos): no hay ancla posible, se dice que camino hay
+    try
+      if PatchLoadText(A.Path, EncVacio).Trim = '' then
+        Exit(MsgFmt(SR_TEXT_YA_EXISTE_VACIO_FMT, [A.Path]));
+    except
+      // no se puede leer: la negativa de siempre
+    end;
     Exit(MsgFmt(SR_TEXT_YA_EXISTE_NUNCA_SOBREESCRIBE_FMT, [A.Path]));
+  end;
   Dir := TPath.GetDirectoryName(A.Path);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
     CrearCarpeta(Dir);
@@ -185,9 +194,7 @@ begin
   var Antes := Text; // para saber si la edicion cambia algo
   Eol := DominantEol(Text);
   EndsWithEol := Text.EndsWith(#10);
-  Lines := Text.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
-  if EndsWithEol and (Length(Lines) > 0) and (Lines[High(Lines)] = '') then
-    SetLength(Lines, Length(Lines) - 1); // drop the phantom line after final EOL
+  Lines := LineasDelTexto(Text); // sin la fantasma del salto final (Lsp.Patch)
 
   // One-full-line anchor: trimmed comparison, so indentation may be omitted.
   SetLength(Matches, 0);

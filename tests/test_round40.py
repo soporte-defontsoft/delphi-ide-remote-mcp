@@ -35,7 +35,7 @@ EXE = mc.copia_exe(EXEDIR)
 # La letra REAL donde vive la jaula (la temp de la maquina), y su forma
 # virtual. No se dan por supuestas: la temp puede no estar en C:.
 DRIVE = os.path.splitdrive(JAIL)[0].upper()          # 'C:'
-VIRT = 'srv' + DRIVE[0].lower() + ':'                # 'srvc:'
+VIRT = mc.virtual(DRIVE)                             # 'srvc:'
 # Una ruta ABSOLUTA dentro del CONTENIDO de un fichero. No es de este
 # servidor: es texto del fichero, y tiene que viajar intacto para que sirva
 # de ancla. El enmascarador tapa CUALQUIER letra, no solo las servidas, asi

@@ -23,7 +23,7 @@ INSIDE = os.path.join(BASE, 'permitido')
 os.makedirs(INSIDE)
 
 DRIVE = INSIDE[0].upper()            # the real drive of the jail
-VJAIL = 'srv' + DRIVE.lower() + INSIDE[1:]   # its virtual form
+VJAIL = mc.virtual(INSIDE)   # its virtual form
 
 SRC = ('unit Dentro;\r\n\r\ninterface\r\n\r\nprocedure Uno;\r\n\r\n'
        'implementation\r\n\r\nprocedure Uno;\r\nbegin\r\nend;\r\n\r\nend.\r\n')
@@ -61,27 +61,27 @@ call = srv.call
 
 
 IN_PAS = os.path.join(INSIDE, 'Dentro.pas')
-V_PAS = 'srv' + DRIVE.lower() + IN_PAS[1:]
+V_PAS = mc.virtual(IN_PAS)
 
 # ---- virtual drive units: outbound masking -------------------------------
 out = call('delphi_workspace', {})
 ws = json.loads(out)
 check('workspace: roots salen con unidad virtual',
-      ws['roots'] and ws['roots'][0].lower().startswith('srv' + DRIVE.lower() + ':'), out)
+      ws['roots'] and ws['roots'][0].lower().startswith(mc.virtual(DRIVE + ':')), out)
 check('workspace: la unidad real no viaja', (DRIVE + ':\\') not in out, out)
 check('workspace: la nota explica las unidades virtuales',
       mc.es(ws.get('note', ''), 'SN_WORKSPACE_NOTE'), out)
 
 out = call('delphi_read', {"path": os.path.join(INSIDE, 'nada.pas')})
 check('read: rechazo "no existe" enmascarado (la exencion es solo para contenido)',
-      'srv' + DRIVE.lower() + ':' in out and (DRIVE + ':\\') not in out, out)
+      mc.virtual(DRIVE + ':') in out and (DRIVE + ':\\') not in out, out)
 
 OUTSIDE = os.path.join(BASE, 'prohibido')
 os.makedirs(OUTSIDE, exist_ok=True)
 out = call('delphi_edit', {"path": os.path.join(OUTSIDE, 'x.pas'),
                            "old": "a", "new": "b"})
 check('rechazo enjaulado: roots del mensaje enmascarados',
-      mc.es(out, 'SR_JAIL_FMT') and 'srv' + DRIVE.lower() + ':' in out
+      mc.es(out, 'SR_JAIL_FMT') and mc.virtual(DRIVE + ':') in out
       and (DRIVE + ':\\') not in out, out)
 
 # ---- inbound expansion: whole cycle through the virtual unit --------------
@@ -282,7 +282,7 @@ try:
 except Exception:
     fd = {}
 check('R4-A: fetch devuelve el path virtualizado',
-      fd.get('path', '').lower().startswith('srv' + DRIVE.lower() + ':'), out[:150])
+      fd.get('path', '').lower().startswith(mc.virtual(DRIVE + ':')), out[:150])
 ok_b64 = False
 try:
     _b64.b64decode(fd.get('chunkBase64', ''), validate=True)
@@ -426,8 +426,10 @@ _x = open(CON, encoding='utf-8-sig').read()
 check('searchpath: grupo DEFINER Base_Linux64 creado como el IDE',
       "('$(Platform)'=='Linux64' and '$(Base)'=='true') or '$(Base_Linux64)'!=''" in _x
       and '<Base_Linux64>true</Base_Linux64>' in _x, 'definer missing')
+# la ruta queda en su forma LARGA: la entrada alarga las de los argumentos
+# (el alias 8.3 de %TEMP% no se escribe en un proyecto)
 check('searchpath: DCC_UnitSearchPath (SINGULAR, el nombre real) en el grupo de valores',
-      '<DCC_UnitSearchPath>' + _spdir + ';$(DCC_UnitSearchPath)</DCC_UnitSearchPath>' in _x
+      '<DCC_UnitSearchPath>' + mc.larga(_spdir) + ';$(DCC_UnitSearchPath)</DCC_UnitSearchPath>' in _x
       and 'DCC_UnitSearchPaths' not in _x, 'tag missing or misspelt')
 out = call('delphi_config', {"project": CON, "command": "add-searchpath",
                              "platform": "Linux64", "path": _spdir})
@@ -626,7 +628,7 @@ ERRPAS = os.path.join(INSIDE, 'Error.txt')
 open(ERRPAS, 'wb').write(('Error: algo fallo en ' + DRIVE + ':\\carpeta\\f.txt\r\n').encode('cp1252'))
 out = call('delphi_read', {"path": ERRPAS})
 check('read: contenido que empieza por "Error" sigue verbatim',
-      (DRIVE + ':\\carpeta\\f.txt') in out and 'srv' + DRIVE.lower() not in out, out[:200])
+      (DRIVE + ':\\carpeta\\f.txt') in out and mc.virtual(DRIVE + ':') not in out, out[:200])
 
 # ---- argument types: a wrong value is an ERROR, never a silent default ----
 # 'abc' used to become 0 (StrToIntDef) and any boolean but "true" became False:
@@ -665,7 +667,7 @@ FREE = [c for c in 'zyxwvuts' if not os.path.exists(c + ':\\')]
 check('prueba viable: quedan letras sin unidad real', len(FREE) >= 2, FREE)
 GHOST = FREE[0] if FREE else None
 if GHOST:
-    GV = 'srv' + GHOST + ':\\secreto\\x.pas'
+    GV = mc.virtual(GHOST + ':\\secreto\\x.pas')
     REAL = re.compile(r'(?<!srv)' + GHOST + r':\\', re.I)  # the real form only
     for tool, args in (('delphi_read', {"path": GV}),
                        ('delphi_edit', {"path": GV, "old": "a", "new": "b"}),
@@ -680,7 +682,7 @@ if GHOST:
     # rule 4: a rejection always names the legitimate way in
     out = call('delphi_read', {"path": GV})
     check('unidad no servida: el rechazo ofrece las unidades validas',
-          'srv' + DRIVE.lower() + ':' in out, out)
+          mc.virtual(DRIVE + ':') in out, out)
     # and a SERVED unit keeps working (the fix must not close the door)
     out = call('delphi_read', {"path": V_PAS})
     check('unidad servida: sigue resolviendo (sin falso positivo)',
@@ -720,7 +722,7 @@ if VDRV:
     if subst.returncode == 0:
         try:
             out = one_shot(INSIDE, 'delphi_read',
-                           {"path": 'srv' + VDRV + ':\\nota.md'},
+                           {"path": mc.virtual(VDRV + ':\\nota.md')},
                            {'DELPHI_MCP_VAULT_PATH': VDRV + ':\\'})
             check('vault en otra unidad: su letra ES una unidad servida',
                   not mc.es(out, 'SR_UNIT_UNKNOWN_FMT') and mc.resultado(out) not in ('INTERNAL', 'NO_ANSWER'),

@@ -68,13 +68,11 @@ call('delphi_delete', {'path': victim})
 
 
 def trash_copies(stem):
-    return [x for x in glob.glob(os.path.join(
-        BASE, '__delphi-patch', '*', 'deleted', stem + '-*'))
-        if not x.endswith('.by')]
+    return mc.copias(BASE, stem, 'CAJON_BORRADOS')
 
 
 copy = trash_copies('victima.txt')[0]
-open(copy + '.by', 'w').write('otroagente')          # simulate another owner
+open(mc.marca_dueno(copy), 'w').write('otroagente')  # simulate another owner
 datefolder = os.path.dirname(os.path.dirname(copy))  # ...\__delphi-patch\<date>
 
 # S1 - the one that destroyed real work
@@ -86,7 +84,7 @@ check('S1 tampoco por la subcarpeta "deleted"',
       mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_FOLDER_NOT_YOURS_FMT') and os.path.exists(copy), r[:200])
 
 # S2 - the owner marker is not a text file you can rewrite
-r = call('delphi_textedit', {'path': copy + '.by', 'old': 'otroagente',
+r = call('delphi_textedit', {'path': mc.marca_dueno(copy), 'old': 'otroagente',
                              'new': 'round12'})
 check('S2 el marcador .by no se edita',
       mc.rechazado(r) and mc.es(r, 'SR_GUARD_OWNER_MARKER') and open(copy + '.by').read().strip() == 'otroagente',

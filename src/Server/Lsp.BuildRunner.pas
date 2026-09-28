@@ -1235,7 +1235,15 @@ begin
   if not AllowBuildScripts then
   begin
     var ProjXml := '';
-    try ProjXml := TFile.ReadAllText(ADprojPath); except end;
+    // sin leerlo NO se compila: el escaner miraba un texto vacio y daba el
+    // .dproj por limpio (fallaba ABIERTO; sexta revision)
+    try
+      ProjXml := TFile.ReadAllText(ADprojPath);
+    except
+      on E: Exception do
+        raise Exception.Create(MsgFmt(SR_BUILD_DPROJ_ILEGIBLE_FMT,
+          [TPath.GetFileName(ADprojPath), E.Message]));
+    end;
     var Hazard := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), True);
     if Hazard <> '' then
     begin
@@ -1359,6 +1367,10 @@ begin
   // CodeGear.Profiles.Targets), y si no, el unico que haya - o el
   // <Plataforma>.sdk historico, para no romper lo que ya compilaba. Con
   // varios y sin pistas NO se elige a ciegas: se dice y se para.
+  // sdk= en una plataforma que se compila AQUI no significa nada: set-sdk ya lo
+  // dice (CFG-108) y aqui se ignoraba en silencio (sexta revision)
+  if IsLocalPlatform(Plat) and (ASdk.Trim <> '') then
+    raise Exception.Create(MsgFmt(SR_CONFIG_SDK_LOCAL_FMT, [Plat]));
   var SdkArg := '';
   if not IsLocalPlatform(Plat) then
   begin

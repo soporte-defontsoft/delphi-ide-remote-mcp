@@ -219,7 +219,9 @@ end;
 
 function NormPath(const P: string): string;
 begin
-  Result := TPath.GetFullPath(P).Replace('/', '\').ToLower;
+  // la forma LARGA (Lsp.Guard.LongCanonical): UPROVE~1.PAS y
+  // UProveedorModelo.pas son el mismo fichero (sexta revision)
+  Result := LongCanonical(P).ToLower;
 end;
 
 function ResolveProjectPair(const AProject: string; out ADpr, ADproj: string): string;
@@ -1983,7 +1985,8 @@ var
   P: TProjectUnit;
 begin
   Result := [];
-  Stem := TPath.GetFileNameWithoutExtension(APasPath);
+  // el nombre de la unit sale del nombre LARGO: el de UPROVE~1.PAS no es UPROVE~1
+  Stem := TPath.GetFileNameWithoutExtension(LongCanonical(APasPath));
   Dir := TPath.GetDirectoryName(TPath.GetFullPath(APasPath));
   // Se sube desde la carpeta de la unit HASTA EL BORDE DE LA JAULA. Solo
   // miraba la carpeta y su madre, asi que en cuanto un proyecto tenia

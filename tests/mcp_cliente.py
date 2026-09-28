@@ -12,6 +12,8 @@ demas; aqui vive una vez.
 No es una bateria (no empieza por test_): run_all no la ejecuta.
 """
 import atexit
+import ctypes
+import glob
 import json, os, queue, re, shutil, socket, stat, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.request
 
@@ -28,6 +30,79 @@ PROTOCOLO = '2025-06-18'
 def exe_origen():
     """El exe bajo prueba: el primer argumento de la bateria, o el compilado."""
     return sys.argv[1] if len(sys.argv) > 1 else EXE_COMPILADO
+
+
+def corta(ruta):
+    """El alias 8.3 de una ruta que existe ('' si no lo hay). Uno para todas
+    las baterias: estaba escrito a mano tres veces (28-sep-2026)."""
+    buf = ctypes.create_unicode_buffer(1024)
+    n = ctypes.windll.kernel32.GetShortPathNameW(ruta, buf, 1024)
+    return buf.value if n else ''
+
+
+def larga(ruta):
+    """La inversa de corta(): la forma LARGA de una ruta que existe (la misma
+    si no se puede). Es la que escribe el servidor desde que la entrada alarga
+    las rutas de los argumentos (sexta revision)."""
+    buf = ctypes.create_unicode_buffer(1024)
+    n = ctypes.windll.kernel32.GetLongPathNameW(ruta, buf, 1024)
+    return buf.value if n else ruta
+
+
+def virtual(ruta):
+    """Como ENSENA el servidor una ruta suya: 'D:\\x' -> 'srvd:\\x' (el
+    enmascarador de salida). La compone esta funcion y la lee real(), su
+    inversa: estaba a mano en cinco baterias (28-sep-2026)."""
+    if len(ruta) >= 2 and ruta[1] == ':':
+        return 'srv' + ruta[0].lower() + ruta[1:]
+    return ruta
+
+
+def real(texto):
+    """La inversa de virtual(), tambien DENTRO de un texto: 'srvd:\\x' ->
+    'd:\\x', para cualquier unidad (la de a mano solo entendia la c)."""
+    return re.sub(r'(?i)(?<![a-z])srv([a-z]):', r'\1:', texto)
+
+
+_PAPELERA = {}
+
+
+def _papelera():
+    """Las constantes de la papelera, leidas de Lsp.Patch - el nombrador del
+    servidor -: la carpeta, los cajones y la marca de dueno. Las baterias no
+    las escriben a mano: tres checks buscaban la forma de antes de la sexta
+    revision y se pusieron rojos por eso, no por el servidor (28-sep-2026)."""
+    if not _PAPELERA:
+        with open(os.path.join(REPO, 'src', 'Server', 'Lsp.Patch.pas'),
+                  encoding='utf-8-sig', errors='replace') as fh:
+            t = fh.read()
+        for n in ('BACKUP_SUB', 'CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
+                  'CAJON_SUSTITUIDOS', 'MARCA_DUENO_EXT'):
+            _PAPELERA[n] = re.search(r"\b%s\s*=\s*'([^']*)'" % n, t).group(1)
+    return _PAPELERA
+
+
+def marca_dueno(copia):
+    """La marca de dueno de una copia sellada (MarcaDeDueno del servidor)."""
+    return copia + _papelera()['MARCA_DUENO_EXT']
+
+
+def es_marca_dueno(nombre):
+    """La inversa: este fichero es la marca de dueno de una copia."""
+    return nombre.lower().endswith(_papelera()['MARCA_DUENO_EXT'].lower())
+
+
+def copias(carpeta, nombre, cajon=None):
+    """Las copias SELLADAS de <nombre> en la papelera de <carpeta>, de todos los
+    dias, sin sus marcas: el lector de lo que compone TrashPathFor
+    (<carpeta>\\__delphi-patch\\<dia>\\<cajon>\\<nombre>-<hhnnsszzz>). cajon
+    es el NOMBRE de la constante de Lsp.Patch (CAJON_BORRADOS,
+    CAJON_SUSTITUIDOS, CAJON_ANTES_DE_RESTAURAR); None, todos."""
+    p = _papelera()
+    patron = os.path.join(carpeta, p['BACKUP_SUB'], '*', p[cajon] if cajon else '*',
+                          glob.escape(nombre) + '-*')
+    sello = re.compile(re.escape(nombre) + r'-\d{9}$', re.I)
+    return sorted(f for f in glob.glob(patron) if sello.match(os.path.basename(f)))
 
 
 def borra(ruta):

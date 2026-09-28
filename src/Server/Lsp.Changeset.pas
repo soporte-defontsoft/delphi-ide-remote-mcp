@@ -343,7 +343,9 @@ begin
         // sin copia mientras la respuesta decia que las copias de siempre en
         // __delphi-patch seguian ahi (quinta revision, medido): la copia de
         // antes de tocarlo, como toda tool que escribe
-        BackupFile(Op.Path);
+        // la copia del contenido ACTUAL, sellada: la diaria (BackupFile) es
+        // la de la primera version del dia y lo de despues se perdia (sexta revision)
+        GuardaContenidoActual(Op.Path, CAJON_BORRADOS);
         TFile.Delete(Op.Path);
         Result := True;
       end;
@@ -567,6 +569,17 @@ begin
       else if AKind = 'move' then Op.Kind := opMove
       else
         Exit(MsgText(SR_CHANGESET_KIND));
+      // lo que no es de este kind se dice, no se ignora: content solo va con
+      // create; old/new/fragment, solo con edit (sexta revision)
+      if (Op.Kind <> opCreate) and (AContent <> '') then
+        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['content', AKind]));
+      if (Op.Kind <> opEdit) and
+         ((AOldLine <> '') or (ANewText <> '') or (AFragment <> '')) then
+        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['old/new/fragment', AKind]));
+      if (Op.Kind <> opMove) and (ADest.Trim <> '') then
+        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['dest', AKind]));
+      if (Op.Kind in [opCreate, opDelete, opMove]) and (AAtLine > 0) then
+        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['atline', AKind]));
       if APath.Trim = '' then
         Exit(MsgText(SR_CHANGESET_NEED_PATH));
       // Lo que se escribe o se borra, por la puerta de DESTINO (jaula +
@@ -902,6 +915,10 @@ begin
           Exit;
         end;
         GSets.Remove(Id);
+        // nada cambio en disco (ediciones que ya decian lo que dice el
+        // fichero): se dice, sin prometer copias que no hay
+        if Foto.Cambiados = 0 then
+          Exit(MsgFmt(SN_CHANGESET_SIN_CAMBIOS_FMT, [OpCount]));
         Exit(MsgFmt(SN_CHANGESET_COMMITTED_FMT,
           [OpCount, FileCount, AuditText]));
       finally

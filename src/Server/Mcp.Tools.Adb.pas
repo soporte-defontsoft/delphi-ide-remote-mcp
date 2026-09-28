@@ -94,7 +94,7 @@ uses
   Lsp.Discovery,
   Lsp.Dproj,
   Lsp.Guard,
-  Lsp.Patch,     // BackupFile: la copia antes de pisar el out= de logcat
+  Lsp.Patch,     // GuardaContenidoActual: la copia antes de pisar un out=
   Lsp.Imagen,
   Lsp.InlineImages, // DeliverCapture: la entrega de una captura, la de toda la casa
   Lsp.BuildRunner;
@@ -280,6 +280,11 @@ begin
       // out= ESCRIBE: la puerta de escribir (solo lectura incluida), no la de
       // la jaula a secas (tercera revision, 27-sep-2026)
       Denied := EscrituraDenegada(Params.Out);
+      // ...y nunca dentro de la papelera ni de las copias del IDE (lo muerto
+      // que NO es temporal): la temporal si vale, es sitio para volcados
+      // (sexta revision: se podia escribir dentro de __delphi-patch)
+      if (Denied = '') and not EnTemporal(Params.Out) then
+        Denied := DeadCopyWriteDenied(Params.Out);
       if Denied <> '' then
         Exit(Denied);
       if not (Params.Out.Trim.ToLower.EndsWith('.txt') or
@@ -334,8 +339,7 @@ begin
         CrearCarpeta(OutDir);
       // un fichero que ya estaba (unas notas.txt) se pisaba sin copia: la
       // copia de antes de tocarlo, como toda tool que escribe
-      if TFile.Exists(Params.Out.Trim) then
-        BackupFile(Params.Out.Trim);
+      GuardaContenidoActual(Params.Out.Trim); // el que habia, sellado (si lo habia)
       TFile.WriteAllText(Params.Out.Trim, Txt, TEncoding.UTF8);
       Return := TJSONObject.Create;
       try
@@ -427,10 +431,17 @@ begin
       Exit(ResultadoAdb(Output, ExitCode));
     // out= un .png que ya estaba: adb pull lo pisaba sin copia (su gemelo
     // logcat ya la hacia; quinta revision)
-    if TFile.Exists(Destino) then
-      BackupFile(Destino);
-    Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
-      Destino + '"', 60000, ExitCode);
+    // con el cerrojo de escritura, como todo escritor (sexta revision): la
+    // copia sellada de lo que habia y el pull que lo sustituye, sin que otro
+    // escritor se cuele entre los dos (el pull tiene su tope de tiempo)
+    EnterFileEdit;
+    try
+      GuardaContenidoActual(Destino); // el que habia, sellado (si lo habia)
+      Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
+        Destino + '"', 60000, ExitCode);
+    finally
+      LeaveFileEdit;
+    end;
     RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitCode);
     if not TFile.Exists(Destino) then
     begin

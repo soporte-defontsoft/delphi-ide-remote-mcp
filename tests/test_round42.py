@@ -119,7 +119,9 @@ try:
     for quien in ('A', 'B'):
         r = respuestas[quien]
         otra = ajena[quien]
-        propia = {'A': jailA, 'B': jailB}[quien].lower()
+        # en su forma LARGA: el servidor alarga las rutas que recibe y ensena
+        # esa (la temp de Windows llega en 8.3)
+        propia = mc.larga({'A': jailA, 'B': jailB}[quien]).lower()
         try:
             j = json.loads(r)
         except Exception:
@@ -162,14 +164,14 @@ try:
         # el porque (SIN CONFIGURAR, mira con delphi_definition) si se niega
         check('X3%s la respuesta habla de su propio fichero'
               % quien.lower(),
-              (contesta and propia in defe.lower().replace('srvc:', 'c:')) or
+              (contesta and propia in mc.real(defe.lower())) or
               (se_niega and mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT') and 'delphi_definition' in r),
               'identifier=%s definition=%s | %s' % (j.get('identifier'), defe, r[:200]))
         # X3-b: mira SOLO dentro de su jaula - o no mira en ningun sitio
         check('X3%s-b ...y solo mira dentro de su jaula'
               % quien.lower(),
               (contesta and bool(j.get('scope')) and
-               all(propia in s.lower().replace('srvc:', 'c:')
+               all(propia in mc.real(s.lower())
                    for s in j.get('scope', []))) or
               (se_niega and mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT')),
               'scope=%s | %s' % (j.get('scope'), r[:200]))

@@ -895,7 +895,8 @@ begin
     Err := DesignerBinaryToText(B, Texto);
     if Err <> '' then
       Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
-    Copia := BackupFile(Ruta);
+    // el fichero ENTERO cambia de forma: su contenido actual, sellado
+    Copia := MaskDriveText('', GuardaContenidoActual(Ruta));
     PatchSaveText(Ruta, Texto, 'utf8');
     Result := MsgFmt(SN_DESIGNER_TOTEXT_FMT, [TPath.GetFileName(Ruta), Length(B),
       Length(Texto.Replace(#13#10, #10).TrimRight([#10]).Split([#10])), Copia]);
@@ -908,7 +909,7 @@ begin
     Err := DesignerTextToBinary(Texto, Bin);
     if Err <> '' then
       Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Err));
-    Copia := BackupFile(Ruta);
+    Copia := MaskDriveText('', GuardaContenidoActual(Ruta));
     AtomicWrite(Ruta, Bin);
     Result := MsgFmt(SN_DESIGNER_TOBINARY_FMT, [TPath.GetFileName(Ruta), Length(Bin), Copia]);
   end;
@@ -917,27 +918,12 @@ end;
 { La respuesta de un comando de lectura sobre un .dfm binario lleva la nota:
   lo que ves es fiel, pero en disco es binario. }
 function ConNotaBinario(const AResult: string): string;
-var
-  V: TJSONValue;
 begin
   Result := AResult;
   // a un RECHAZO no se le pega "lo que ves es fiel": no se ha ensenado nada
   if EsFallo(AResult) then
     Exit;
-  V := TJSONObject.ParseJSONValue(AResult);
-  if V = nil then
-    Exit(AResult + #10 + MsgText(SN_DESIGNER_BINARY_VIEW));
-  try
-    if V is TJSONObject then
-    begin
-      TJSONObject(V).AddPair('binaryOnDiskNote', MsgText(SN_DESIGNER_BINARY_VIEW));
-      Result := V.ToJSON;
-    end
-    else
-      Result := AResult + #10 + MsgText(SN_DESIGNER_BINARY_VIEW);
-  finally
-    V.Free;
-  end;
+  Result := ConNota(AResult, 'binaryOnDiskNote', MsgText(SN_DESIGNER_BINARY_VIEW));
 end;
 
 { El gesto; ExecuteWithParams lo envuelve en el cerrojo de escritura. }

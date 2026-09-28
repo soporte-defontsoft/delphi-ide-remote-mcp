@@ -113,7 +113,10 @@ A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'AAA').de
 A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'BBB').decode(),
                          'offset': 0, 'sha256': '0' * 64})
 import glob
-q_backups = glob.glob(os.path.join(U, '__delphi-patch', '*', '*.corrupt'))
+# la de antes, sellada con su contenido ACTUAL en el cajon de lo sustituido
+# (sexta revision; la copia diaria solo guardaba la primera del dia)
+q_backups = [f for f in mc.copias(U, os.path.basename(BAD) + '.corrupt', 'CAJON_SUSTITUIDOS')
+             if open(f, 'rb').read() == b'AAA']
 check('F3 la segunda cuarentena no pisa a la primera sin copia',
       open(BAD + '.corrupt', 'rb').read() == b'BBB' and len(q_backups) >= 1,
       (open(BAD + '.corrupt', 'rb').read(), q_backups))
@@ -171,7 +174,8 @@ check('P8 symbols sobre algo que no es Delphi: lo dice, no devuelve []',
       mc.rechazado(r) and mc.es(r, 'SR_LSP_NOT_SOURCE_FMT') and '.pas' in r, r[:200])
 r = A.call('delphi_diagnostics', {'path': TXT}, t=120)
 check('B3 diagnostics sobre algo que no es Delphi: RECHAZADO, sin bucle',
-      mc.rechazado(r) and mc.es(r, 'SR_DIAG_NOT_SOURCE_FMT') and mc.como_json(r).get('status') != 'in-progress', r[:200])
+      # desde la sexta revision, el texto de las ocho tools del LSP (LSP-017)
+      mc.rechazado(r) and mc.es(r, 'SR_LSP_NOT_SOURCE_FMT') and mc.como_json(r).get('status') != 'in-progress', r[:200])
 
 # ------------------------------------------------------------------- C1/C2 --
 # sin project y con un dir RELATIVO: lo que falta, dicho (con uno ABSOLUTO,

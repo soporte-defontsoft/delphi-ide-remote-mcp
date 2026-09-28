@@ -96,9 +96,12 @@ j = J(A.call('delphi_upload', {'path': VICTIM,
 check('upload que sustituye lo DICE y dice donde esta la copia',
       j.get('replaced') is True and j.get('previousSize') == len(ORIG) and bool(j.get('backup')),
       str(j)[:300])
-backups = glob.glob(os.path.join(UP, '__delphi-patch', '*', 'victima.pas'))
+# la copia la NOMBRA la respuesta: el glob con la forma de antes era otro
+# nombrador escrito a mano (sexta revision: la copia va a su cajon)
+_copia = mc.real(j.get('backup', ''))
 check('la copia recuperable existe y es el contenido de antes',
-      len(backups) == 1 and open(backups[0], 'rb').read() == ORIG, backups)
+      bool(_copia) and os.path.isfile(_copia) and open(_copia, 'rb').read() == ORIG,
+      str(j.get('backup')))
 
 BAD = os.path.join(UP, 'corrupto.bin')
 j = J(A.call('delphi_upload', {'path': BAD, 'chunkbase64': base64.b64encode(b'abc').decode(),
@@ -320,11 +323,12 @@ check('#16 Viewport.* (lo escribe el propio IDE) NO se denuncia',
 
 # ---------------------------------------------------------------- #8 #27 --
 r = A.call('vault_read', {'path': 'projects/nota.md', 'offset': 5, 'limit': 3})
-check('#8 el pie dice el rango REAL mostrado', any('5..7' in l and '41' in l for l in r.splitlines() if mc.es(l, 'SN_VAULT_MORE_FMT')), r[-200:])
+# 40 lineas, las que escribe el fixture: decia 41, la fantasma del salto final
+check('#8 el pie dice el rango REAL mostrado', any('5..7 of 40' in l for l in r.splitlines() if mc.es(l, 'SN_VAULT_MORE_FMT')), r[-200:])
 check('#8 ...y el cuerpo es ese rango', 'linea 5' in r and 'linea 8' not in r, r[:300])
 r = A.call('vault_read', {'path': 'projects/nota.md', 'offset': 99999})
 check('#28 offset pasado del final: se explica, no se calla',
-      mc.es(r, 'SR_VAULT_PAST_END_FMT') and '41' in r, r[:200])
+      mc.es(r, 'SR_VAULT_PAST_END_FMT') and 'has 40 lines' in r, r[:200])
 r = A.call('vault_search', {'target': 'contents', 'pattern': 'linea'})
 check('#27 target invalido: RECHAZADO en vez de caer a files en silencio',
       mc.resultado(r) == 'INVALID_PARAM' and mc.es(r, 'SR_VAULT_TARGET_FMT') and 'files' in r and 'content' in r, r[:250])

@@ -169,6 +169,16 @@ function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
   el fallo; se mueve al sitio donde ya miran todas. }
 function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
 
+{ Las LINEAS de un texto, como las cuenta delphi_read: los tres saltos
+  (CRLF, LF, CR) son uno, y el salto final CIERRA la ultima linea, no abre
+  otra ("a\nb\n" son 2; "" son 0). Estaba escrito cuatro veces con dos
+  condiciones distintas, y vault_read y LSP-004 no lo aplicaban: la nota de
+  5 lineas salia de 6, y el LSP decia 21 donde delphi_read decia 20
+  (sexta revision). CuantasLineasReales es la misma regla para quien
+  necesita conservar la fantasma (para volver a unir el texto). }
+function LineasDelTexto(const AText: string): TArray<string>;
+function CuantasLineasReales(const ALines: TArray<string>): Integer;
+
 { El fichero es un fuente Delphi que EXISTE (.pas/.dpr/.dpk/.inc): '' si lo
   es; si no, por este orden, carpeta (LSP-016), no esta (LSP-011) o no es
   Pascal (LSP-017). UNA regla para las siete tools del LSP: symbols decia
@@ -314,6 +324,45 @@ function TrashStampedName(const AName: string): string;
 { El nombre de la carpeta de copias ('__delphi-patch'), para quien tenga que
   reconocerla. Estaba declarada DOS veces, aqui y en Mcp.Tools.FileOps. }
 function TrashFolderName: string;
+
+const
+  { Los CAJONES de la papelera de un dia (TrashDayDir): en que carpeta cae una
+    copia sellada. El nombre lo pone TrashStampedName; lo que distingue una
+    copia de otra es su cajon, no su nombre. Estaban escritos a mano
+    ('deleted' en Mcp.Tools.FileOps, 'before-restore' en el restore). }
+  CAJON_BORRADOS = 'deleted';                  // delete, changeset delete, la copia previa de move
+  CAJON_ANTES_DE_RESTAURAR = 'before-restore'; // lo que habia antes de un restore
+  CAJON_SUSTITUIDOS = 'replaced';              // lo que habia antes de pisar un fichero ENTERO
+  { La marca de DUENO de una copia sellada: "<copia>.by", con el agente que la
+    dejo (la purga solo deja purgar lo propio). }
+  MARCA_DUENO_EXT = '.by';
+
+{ La ruta de una copia SELLADA de APath en el cajon ACajon de su papelera,
+  por la puerta de escribir sobre la ruta REAL (lanza la negativa): un
+  __delphi-patch que fuera un enlace se llevaba la copia FUERA de la jaula
+  (quinta revision). Vivia en Mcp.Tools.FileOps, donde Lsp.Changeset no la
+  alcanzaba, y el restore la escribia aparte, a mano. }
+function TrashPathFor(const APath, ACajon: string): string;
+
+{ Guarda el contenido ACTUAL de APath (un fichero) sellado en ACajon, con su
+  marca de dueno, y devuelve la ruta de la copia ('' si no habia fichero).
+  Para todo lo que PISA o BORRA un fichero entero: la copia de BackupFile es
+  UNA por fichero y dia -la version previa al primer cambio-, asi que lo
+  escrito despues se perdia al sustituirlo o borrarlo (sexta revision, medido:
+  changeset delete tras dos ediciones dejo solo la de la manana). Lanza si no
+  se puede: pisar sin copia no se hace. }
+function GuardaContenidoActual(const APath: string;
+  const ACajon: string = CAJON_SUSTITUIDOS): string;
+
+{ La marca de dueno: su nombrador, su inversa y quien la reconoce. Estaba
+  escrita a mano en catorce sitios. }
+function MarcaDeDueno(const ACopia: string): string;
+function CopiaDeLaMarca(const AMarca: string): string;
+function EsMarcaDeDueno(const ARuta: string): Boolean;
+{ Deja "<copia>.by" con el agente que la tiro; sin identidad, nada. }
+procedure WriteOwnerMarker(const ATrash: string);
+{ El agente dueno de una copia, '' si no consta. }
+function TrashOwner(const APath: string): string;
 
 { Tira las carpetas de dia caducadas (RETENTION_DAYS) de UNA papelera. Coste
   medido cuando no hay nada que tirar, que es casi siempre: 0,012 ms - leer
@@ -747,6 +796,10 @@ begin
   // llama puede haberse olvidado, o escribir un fichero que no le pasaron
   // sino que saco de un .dpr (auditoria 25-sep-2026).
   Motivo := EscrituraDenegada(APath);
+  // ...y un fichero con el atributo de solo lectura no se sustituye: se
+  // dice ANTES, que el rename lo tomaba por "otro proceso lo tiene"
+  if Motivo = '' then
+    Motivo := SoloLecturaDenegado(APath);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
   // El temporal lleva un fragmento GUID: con nombre fijo, dos escrituras del
@@ -870,9 +923,22 @@ begin
   Result := MaskDriveText('', Dest);
 end;
 
+function CuantasLineasReales(const ALines: TArray<string>): Integer;
+begin
+  Result := Length(ALines);
+  if (Result > 0) and (ALines[Result - 1] = '') then
+    Dec(Result); // la fantasma que deja el salto final
+end;
+
 function SplitToLines(const T: string): TArray<string>;
 begin
   Result := T.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
+end;
+
+function LineasDelTexto(const AText: string): TArray<string>;
+begin
+  Result := SplitToLines(AText);
+  SetLength(Result, CuantasLineasReales(Result));
 end;
 
 function IsAllWhitespace(const S: string): Boolean;
@@ -939,6 +1005,73 @@ begin
   Result := AName + '-' + FormatDateTime('hhnnsszzz', Now);
 end;
 
+function TrashPathFor(const APath, ACajon: string): string;
+var
+  Veto: string;
+begin
+  Result := TPath.Combine(TrashDayDir(APath, ACajon),
+    TrashStampedName(TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
+  // La papelera es un DESTINO: por la puerta de escribir, sobre la ruta REAL.
+  Veto := EscrituraDenegada(TPath.GetDirectoryName(Result));
+  if Veto = '' then
+    Veto := EscrituraDenegada(Result);
+  if Veto <> '' then
+    raise Exception.Create(Veto);
+end;
+
+function MarcaDeDueno(const ACopia: string): string;
+begin
+  Result := ACopia + MARCA_DUENO_EXT;
+end;
+
+function EsMarcaDeDueno(const ARuta: string): Boolean;
+begin
+  Result := EndsText(MARCA_DUENO_EXT, ARuta);
+end;
+
+function CopiaDeLaMarca(const AMarca: string): string;
+begin
+  Result := AMarca;
+  if EsMarcaDeDueno(AMarca) then
+    SetLength(Result, Length(AMarca) - Length(MARCA_DUENO_EXT));
+end;
+
+procedure WriteOwnerMarker(const ATrash: string);
+var
+  Who: string;
+begin
+  Who := CurrentAgent;
+  if Who = '' then
+    Exit;
+  try
+    TFile.WriteAllText(MarcaDeDueno(ATrash), Who, TEncoding.ASCII);
+  except
+    // a missing marker just means "nobody's": never fatal
+  end;
+end;
+
+function TrashOwner(const APath: string): string;
+begin
+  Result := '';
+  try
+    if TFile.Exists(MarcaDeDueno(APath)) then
+      Result := TFile.ReadAllText(MarcaDeDueno(APath)).Trim([' ', #9, #13, #10, #$FEFF]);
+  except
+    Result := '';
+  end;
+end;
+
+function GuardaContenidoActual(const APath, ACajon: string): string;
+begin
+  Result := '';
+  if not TFile.Exists(APath) then
+    Exit;
+  Result := TrashPathFor(APath, ACajon); // la puerta, o la negativa
+  CrearCarpeta(TPath.GetDirectoryName(Result));
+  TFile.Copy(APath, Result);
+  WriteOwnerMarker(Result);
+end;
+
 function TrashOriginalName(const AName: string): string;
 var
   M: TMatch;
@@ -988,7 +1121,7 @@ begin
   if (AN <= 0) or (AAnchor.Trim = '') then
     Exit;
   try
-    Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
+    Lines := LineasDelTexto(PatchLoadText(APath, Enc)); // los saltos como el motor (CR tambien)
   except
     Exit;
   end;
@@ -1275,8 +1408,8 @@ begin
   if AFrag.Contains(#10) or AFrag.Contains(#13) or
      ANew.Contains(#10) or ANew.Contains(#13) then
     Exit(MsgText(SR_FRAG_MULTILINE));
-  if AFrag = ANew then
-    Exit(MsgText(SR_FRAG_SAME));
+  // new == fragment ya no es un error (EDIT-009): la linea sale igual y el
+  // motor lo dice como la edicion suelta, UNCHANGED (EDIT-113)
   // Los rechazos de aqui ENSENAN la linea: que no sea la de un fichero que
   // este token no puede leer. La puerta ya lo mira; esto es el cinturon.
   Result := ReadPathDenied(APath);
@@ -1284,10 +1417,7 @@ begin
     Exit;
   if not TFile.Exists(APath) then
     Exit(NoEsFichero(APath, MsgFmt(SR_PATCH_EDITS_NOFILE_FMT, [APath])));
-  Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Replace(#13, #10)
-    .Split([#10]);
-  if (Length(Lines) > 0) and (Lines[High(Lines)] = '') then
-    SetLength(Lines, Length(Lines) - 1); // la fantasma del salto final
+  Lines := LineasDelTexto(PatchLoadText(APath, Enc));
   if AAtLine > Length(Lines) then
     Exit(MsgFmt(SR_FRAG_BEYOND_FMT,
       [AAtLine, TPath.GetFileName(APath), Length(Lines)]));
@@ -1517,6 +1647,7 @@ begin
       N := 0;
       Fallo := 0;
       var Avisos: TArray<string> := [];
+      var SinCambios := 0; // entradas que el motor contesto EDIT-113
       var Causa := ''; // la negativa de la entrada que cayo: da el resultado
       for V in Arr do
       begin
@@ -1663,7 +1794,14 @@ begin
         for var LA in Una.Split([#10]) do
           if MsgCuerpo(LA.Trim).StartsWith('***') then
             Avisos := Avisos + [Format('  %d: %s', [N, LA.Trim])];
-        if EsBloque then
+        if EsMsg(Una, SN_EDIT_SIN_CAMBIOS_FMT) then
+        begin
+          // no cambio nada: se dice, no se cuenta como OK (sexta revision)
+          Inc(SinCambios);
+          Una := MsgFmt(SF_EDIT_SIN_CAMBIOS_ANCLA_FMT,
+            [N, Anc.Trim.Substring(0, Min(70, Length(Anc.Trim)))]);
+        end
+        else if EsBloque then
           Una := MsgFmt(SF_EDIT_OK_BLOQUE_LINEAS_FMT,
             [N, Length(LineasDelAncla(Anc))])
         else
@@ -1684,8 +1822,12 @@ begin
           Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Sb.ToString.TrimRight]);
         Exit;
       end;
-      Result := MsgFmt(SN_PATCH_EDITS_OK_FMT,
-        [Arr.Count, TPath.GetFileName(APath), Sb.ToString.TrimRight]);
+      if SinCambios = Arr.Count then
+        Result := MsgFmt(SN_PATCH_EDITS_SIN_CAMBIOS_FMT,
+          [Arr.Count, TPath.GetFileName(APath)])
+      else
+        Result := MsgFmt(SN_PATCH_EDITS_OK_FMT,
+          [Arr.Count, TPath.GetFileName(APath), Sb.ToString.TrimRight]);
       if Length(Avisos) > 0 then
         Result := Result + #10 + string.Join(#10, Avisos);
     finally
@@ -1702,7 +1844,7 @@ begin
   if not TFile.Exists(APath) then
     Exit(NoEsFichero(APath, MsgFmt(SR_LSP_NO_FILE_FMT, [APath])));
   Result := '';
-  if not MatchText(TPath.GetExtension(APath), ['.pas', '.dpr', '.dpk', '.inc']) then
+  if not MatchText(TPath.GetExtension(APath), SOURCE_EXTS) then // la lista de la unit
     Result := MsgFmt(SR_LSP_NOT_SOURCE_FMT, [TPath.GetFileName(APath)]);
 end;
 
@@ -1721,7 +1863,7 @@ begin
   if Result <> '' then
     Exit;
   try
-    Lines := PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]);
+    Lines := LineasDelTexto(PatchLoadText(APath, Enc)); // como delphi_read
   except
     Exit;
   end;
@@ -1783,11 +1925,9 @@ begin
   Text := DecodeBytes(B, K);
   M := Measure(B);
   if M.CRLF > M.Loose then Eol := 'CRLF' else Eol := 'LF';
-  Lines := SplitToLines(Text);
   // El salto final CIERRA la ultima linea, no abre otra: "a\nb\n" son 2
   // lineas, y se ensenaba una tercera vacia que no existe (quinta revision)
-  if (Length(Lines) > 1) and (Lines[High(Lines)] = '') then
-    SetLength(Lines, Length(Lines) - 1);
+  Lines := LineasDelTexto(Text);
   // Un fichero VACIO se lee: es un exito con cero lineas. Salia EDIT-100
   // INVALID_PARAM ("from=1 is past the end") (quinta revision)
   if (Length(Lines) = 0) and (AFrom <= 1) then
@@ -2094,15 +2234,18 @@ begin
           // la reconocia: ni salia en delphi_list includetrash ni se podia
           // restaurar como es debido. Ahora el sello lo pone el nombrador y
           // lo que distingue a esta copia es su CAJON, no su nombre.
-          var PreCopy := TPath.Combine(TrashDayDir(A.Path, 'before-restore'),
-            TrashStampedName(TPath.GetFileName(A.Path)));
-          VetoCopia := EscrituraDenegada(TPath.GetDirectoryName(PreCopy));
-          if VetoCopia = '' then
-            VetoCopia := EscrituraDenegada(PreCopy);
-          if VetoCopia <> '' then
-            Exit(VetoCopia);
-          CrearCarpeta(TPath.GetDirectoryName(PreCopy));
-          TFile.Copy(A.Path, PreCopy);
+          // Y el hueco que dejaba: esta copia la hace ahora el mismo helper que
+          // todo lo que pisa un fichero entero (GuardaContenidoActual).
+          var PreCopy: string;
+          try
+            PreCopy := GuardaContenidoActual(A.Path, CAJON_ANTES_DE_RESTAURAR);
+          except
+            on E: Exception do
+              if EsFallo(E.Message) then
+                Exit(E.Message) // la negativa de la puerta, tal cual
+              else
+                raise;
+          end;
           AtomicWrite(A.Path, BkBytes);
           var NotaRest: string;
           var Releido := RelecturaDe(A.Path, BkBytes, NotaRest);
@@ -2762,9 +2905,7 @@ begin
     // PRIMERA de un tramo que acaba en AToLine, incluida. Las reglas de un
     // rango no tienen nada de Pascal, asi que viven en RangoHasta y de ahi
     // tira tambien el motor de texto plano: una sola puerta.
-    var Reales := Length(Lines);
-    if (Reales > 0) and (Lines[Reales - 1] = '') then
-      Dec(Reales); // la linea fantasma que deja el salto final del fichero
+    var Reales := CuantasLineasReales(Lines); // sin la fantasma del salto final
     var Fin: Integer;
     var MalRango := RangoHasta(APath, HitIdx, AToLine, Reales, Fin);
     if MalRango <> '' then

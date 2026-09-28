@@ -1540,6 +1540,62 @@ begin
       [APlatform, Perfil, IfThen(Antes = '', MsgText(SF_NINGUNO), Antes)]);
 end;
 
+{ Los parametros de CADA comando, ademas de project y command. Uno que no es
+  del comando se dice: set-output con path=".\bin" contestaba "puesto en
+  Compiled" (su valor por defecto) ignorando lo que se pidio (sexta revision).
+  En UNA tabla: el comando que se anada lleva su fila, y nada mas. }
+function ParametroQueSobra(const ACmd: string; const P: TDelphiConfigParams;
+  out ASuyos: string): string;
+const
+  COMANDOS: array [0 .. 16, 0 .. 1] of string = (
+    ('view', 'section'),
+    ('add-platform', 'platform sdk profile'),
+    ('remove-platform', 'platform'),
+    ('set-output', 'output'),
+    ('add-searchpath', 'platform path'),
+    ('remove-searchpath', 'platform path'),
+    ('add-deployfile', 'platform path remotedir'),
+    ('remove-deployfile', 'platform path'),
+    ('set-version', 'version'),
+    ('set-sdk', 'platform sdk'),
+    ('set-profile', 'platform profile'),
+    ('add-requires', 'requires'),
+    ('add-unit', 'path'),
+    ('remove-unit', 'path'),
+    ('fix-references', ''),
+    ('add-project', 'path'),
+    ('remove-project', 'path'));
+var
+  I: Integer;
+  Cmd, Suyos: string;
+  Hay: Boolean;
+begin
+  Result := '';
+  ASuyos := '';
+  Cmd := ACmd;
+  if Cmd = '' then
+    Cmd := 'view';
+  Hay := False;
+  for I := Low(COMANDOS) to High(COMANDOS) do
+    if SameText(COMANDOS[I, 0], Cmd) then
+    begin
+      Hay := True;
+      ASuyos := COMANDOS[I, 1];
+    end;
+  if not Hay then
+    Exit; // un comando que no existe lo dice su propia negativa
+  Suyos := ' ' + ASuyos + ' ';
+  if (P.Platform.Trim <> '') and not Suyos.Contains(' platform ') then Exit('platform');
+  if (P.Sdk.Trim <> '') and not Suyos.Contains(' sdk ') then Exit('sdk');
+  if (P.Profile.Trim <> '') and not Suyos.Contains(' profile ') then Exit('profile');
+  if (P.Path.Trim <> '') and not Suyos.Contains(' path ') then Exit('path');
+  if (P.Section.Trim <> '') and not Suyos.Contains(' section ') then Exit('section');
+  if (P.RemoteDir.Trim <> '') and not Suyos.Contains(' remotedir ') then Exit('remotedir');
+  if (P.Version.Trim <> '') and not Suyos.Contains(' version ') then Exit('version');
+  if (P.Output.Trim <> '') and not Suyos.Contains(' output ') then Exit('output');
+  if (P.Requires.Trim <> '') and not Suyos.Contains(' requires ') then Exit('requires');
+end;
+
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
 var
   Cmd, Proj, Sibling: string;
@@ -1547,6 +1603,12 @@ begin
   if Params.Project.Trim = '' then
     Exit(MsgText(SR_CFG_DELPHI_CONFIG_NECESITA_PROJECT));
   Cmd := Params.Command.Trim.ToLower;
+  // un parametro que no es de este comando se dice, no se ignora
+  var Suyos: string;
+  var Sobra := ParametroQueSobra(Cmd, Params, Suyos);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'view', Cmd),
+      IfThen(Cmd = '', 'view', Cmd), IfThen(Suyos = '', MsgText(SF_NINGUNO), Suyos)]));
   // view solo LEE el .dproj (y vale en un proyecto de REFERENCIA); todo lo
   // demas lo escribe y pasa por la puerta de escritura.
   if (Cmd = '') or (Cmd = 'view') then

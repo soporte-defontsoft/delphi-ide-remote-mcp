@@ -114,7 +114,8 @@ uses
   Lsp.Imagen,
   Mcp.Tools.PAServer,
   Lsp.InlineImages, // DeliverCapture: como se entrega una captura, la misma en toda tool
-  Lsp.RemoteRun;
+  Lsp.RemoteRun,
+  Lsp.Patch;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
 function ParseRegion(const ATexto: string; out X, Y, W, H: Integer): Boolean;
@@ -492,7 +493,21 @@ begin
       begin
         try
           CrearCarpeta(Destino);
-          TFile.Move(Local, Propia);
+          // un out= que ya estaba: su contenido, sellado, y se sustituye, como
+          // hace su gemela de adb (sexta revision: aqui fallaba el Move y la
+          // captura no se colocaba)
+          // con el cerrojo de escritura, como todo escritor (sexta revision)
+          EnterFileEdit;
+          try
+            if TFile.Exists(Propia) then
+            begin
+              GuardaContenidoActual(Propia);
+              TFile.Delete(Propia);
+            end;
+            TFile.Move(Local, Propia);
+          finally
+            LeaveFileEdit;
+          end;
           Local := Propia;
         except
           // Antes la imagen se quedaba 'donde cayo', dentro de la .tmp-, y la

@@ -333,7 +333,7 @@ var
       for var Mascara in AMasks do
         for F in TDirectory.GetFiles(D, Mascara + '-*',
           TSearchOption.soTopDirectoryOnly) do
-          if not F.ToLower.EndsWith('.by') then // el marcador de quien lo tiro
+          if not EsMarcaDeDueno(F) then // el marcador de quien lo tiro
             Anade(F);
     except
       // idem
@@ -458,6 +458,7 @@ begin
     // contestaba "total 0" con medio arbol sin mirar (revision de
     // baterias, 26-sep-2026).
     var Ocultos := Default(THiddenCount);
+    var Ilegibles: TArray<string> := [];
     for F in Targets do
       begin
         if not SingleFile and InVault(F) then
@@ -471,8 +472,18 @@ begin
             Continue;
           end;
         end;
+        // UN fichero que no se deja leer no tumba la busqueda de toda la
+        // carpeta: se salta y se dice (sexta revision). En la de UN
+        // fichero, el fallo es la respuesta.
+        try
+          Text := TLspClient.LoadSourceText(F);
+        except
+          if SingleFile then
+            raise;
+          Ilegibles := Ilegibles + [MaskDriveText('', F)];
+          Continue;
+        end;
         Inc(FilesScanned);
-        Text := TLspClient.LoadSourceText(F);
         if not Text.ToLower.Contains(Q) then
           Continue;
         Lines := Text.Replace(#13#10, #10).Split([#10]);
@@ -527,6 +538,9 @@ begin
     if Total > Ofs + Hits.Count then
       Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Hits.Count));
     Return.AddPair('filesScanned', TJSONNumber.Create(FilesScanned));
+    if Length(Ilegibles) > 0 then
+      Return.AddPair('unreadableNote', MsgFmt(SN_SEARCH_ILEGIBLES_FMT,
+        [Length(Ilegibles), string.Join(', ', Copy(Ilegibles, 0, 5))]));
     // un "pattern" que no casa con ningun fichero: "total 0" se leia como
     // "el texto no esta" (delphi_list ya lo decia; verificacion de la
     // tercera ronda)
@@ -818,14 +832,14 @@ begin
     Exit;
   if TFile.Exists(Repo) then
     Repo := TPath.GetDirectoryName(Repo);
-  // clone is the one command whose target directory does not exist yet: it
-  // is created (inside the jail, already checked above).
-  if SameText(Params.Command.Trim, 'clone') then
-  begin
-    if not TDirectory.Exists(Repo) then
-      CrearCarpeta(Repo);
-  end
-  else if not TDirectory.Exists(Repo) then
+  // clone is the one command whose target directory may not exist yet: it
+  // is created (inside the jail, already checked above) right before git
+  // runs, and a failed clone removes it only if THIS clone created it. Se
+  // creaba aqui arriba: un rechazo de la URL la dejaba, y la limpieza de
+  // abajo borraba una carpeta vacia que ya estaba (la raiz vacia de otro
+  // workspace; sexta revision).
+  var CreadaPorElClone := False;
+  if not SameText(Params.Command.Trim, 'clone') and not TDirectory.Exists(Repo) then
     Exit(MsgFmt(SR_GIT_DIR_NOT_FOUND_FMT, [Repo]));
 
   for B in BadChars do
@@ -897,10 +911,13 @@ begin
       Exit(MsgText(SR_GIT_URL_NOT_ALLOWED));
     if TDirectory.Exists(TPath.Combine(Repo, '.git')) then
       Exit(MsgFmt(SR_GIT_YA_ES_REPOSITORIO_FMT, [Repo]));
-    // The destination is created before we get here, so a refusal left an
-    // empty folder lying around that the caller had to clean up by hand.
-    // (the destination folder is created above; if the clone fails it is
-    // removed again below, so a refusal leaves nothing behind)
+    // El destino se crea AQUI, pasadas todas las negativas: un rechazo no
+    // deja nada, y si el clone falla se quita solo si lo creo el.
+    if not TDirectory.Exists(Repo) then
+    begin
+      CrearCarpeta(Repo);
+      CreadaPorElClone := True;
+    end;
     // clone into "." of the (jailed, existing) destination directory. The "--"
     // separator guarantees the URL is a POSITIONAL, never parsed as an option,
     // whatever it contains - defence in depth over the leading-"-" check above
@@ -1144,7 +1161,8 @@ begin
     Output := Copy(Output, 1, 30000) + #10 + MsgText(SF_GIT_TRUNCATED);
   // A clone that did not happen must not leave its empty destination lying
   // around for the caller to clean up by hand (field round 10).
-  if (ExitCode <> 0) and SameText(Cmd, 'clone') and TDirectory.Exists(Repo) then
+  if (ExitCode <> 0) and SameText(Cmd, 'clone') and CreadaPorElClone and
+     TDirectory.Exists(Repo) then
     try
       if Length(TDirectory.GetFileSystemEntries(Repo)) = 0 then
         TDirectory.Delete(Repo, False);
@@ -1949,6 +1967,9 @@ begin
   if Result <> '' then
     Exit;
   Result := CarpetaEnVezDeFichero(FullPath); // un fmCreate sobre una carpeta era un INTERNAL
+  // ...y uno de solo lectura, SYS-006 INTERNAL "Cannot create file" (sexta revision)
+  if Result = '' then
+    Result := SoloLecturaDenegado(FullPath);
   if Result <> '' then
     Exit;
   if Params.Offset < 0 then
@@ -2029,7 +2050,9 @@ begin
     // medido; sus gemelas se niegan). Perder es peor que no subir.
     if not SkipIdeArtifacts(FullPath, False) then
       try
-        Backup := BackupFile(FullPath);
+        // la copia del contenido ACTUAL, sellada: la diaria (BackupFile) es
+        // la de la primera version del dia y lo de despues se perdia (sexta revision)
+        Backup := MaskDriveText('', GuardaContenidoActual(FullPath));
       except
         on E: Exception do
           Exit(MsgEnvuelve(SR_WS_FALLO_COPIA_SEGURIDAD_FMT, E.Message, [E.Message]));
@@ -2104,7 +2127,7 @@ begin
             // sin su copia, la cuarentena de antes NO se borra: se perdia
             // (quinta revision). Si la copia falla, el fichero malo se queda
             // con su nombre y el error lo dice.
-            BackupFile(Quarantine);
+            GuardaContenidoActual(Quarantine); // la actual, sellada
             TFile.Delete(Quarantine);
           end;
           TFile.Move(FullPath, Quarantine);
@@ -2178,8 +2201,6 @@ begin
   // CrearCarpeta). Y un .zip que ya estaba se copia antes de pisarlo: perder
   // es peor que una copia de mas (verificacion de la tercera ronda, David)
   CrearCarpeta(TPath.GetDirectoryName(OutZip));
-  if TFile.Exists(OutZip) then
-    BackupFile(OutZip);
   // El zip se arma con nombre propio y se pone en su sitio de un golpe al
   // final. Empaquetar sobre el nombre definitivo hacia que dos llamadas a la
   // vez sobre la misma carpeta se estorbasen - una borraba el zip que la otra
@@ -2255,14 +2276,33 @@ begin
   // instantes: si DOS empaquetados del mismo sitio se cruzan, el destino esta
   // siendo reemplazado por el otro justo en ese momento y el rename rebota
   // (medido 2026-09-20 en la bateria de concurrencia).
+  // Se COLOCA con el cerrojo de escritura, como todo escritor: la copia
+  // sellada del .zip que habia y el rename, sin que otro escritor se cuele
+  // entre los dos (sexta revision: dos empaquetados al mismo out= sellaban
+  // la misma copia y el zip de en medio se perdia). Solo la colocacion: el
+  // empaquetado, que tarda, no bloquea a nadie.
   var Renombrado := False;
-  for var Intento := 1 to 5 do
-  begin
-    Renombrado := MoveFileEx(PChar(EnProceso), PChar(OutZip),
-      MOVEFILE_REPLACE_EXISTING);
-    if Renombrado then
-      Break;
-    Sleep(200);
+  EnterFileEdit;
+  try
+    try
+      GuardaContenidoActual(OutZip); // el .zip que habia, sellado (si lo habia)
+    except
+      try
+        TFile.Delete(EnProceso);
+      except
+      end;
+      raise;
+    end;
+    for var Intento := 1 to 5 do
+    begin
+      Renombrado := MoveFileEx(PChar(EnProceso), PChar(OutZip),
+        MOVEFILE_REPLACE_EXISTING);
+      if Renombrado then
+        Break;
+      Sleep(200);
+    end;
+  finally
+    LeaveFileEdit;
   end;
   if not Renombrado then
   begin

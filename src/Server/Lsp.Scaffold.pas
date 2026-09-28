@@ -783,6 +783,16 @@ begin
   PasPath := TPath.Combine(Dir, AUnitName + '.pas');
   if TFile.Exists(PasPath) then
     Exit(MsgFmt(SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT, [PasPath]));
+  // ...y su designer: un .dfm/.fmx que ya estaba hacia saltar el SEGUNDO
+  // WriteNewFile con el .pas ya escrito (sexta revision). Todo se mira
+  // ANTES de escribir nada, como en CreateDelphiProject.
+  if MatchText(Kind, ['fmx', 'frame-fmx']) then
+    DesignerExt := '.fmx'
+  else
+    DesignerExt := '.dfm';
+  if TFile.Exists(TPath.Combine(Dir, AUnitName + DesignerExt)) then
+    Exit(MsgFmt(SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT,
+      [TPath.Combine(Dir, AUnitName + DesignerExt)]));
 
   // TODO O NADA (quinta revision): si el registro no se puede (o lanza: un
   // .dproj que otro proceso tiene abierto), el par creado se quita. Quedaba
@@ -790,8 +800,10 @@ begin
   var FotoCrea: TFotoDeFicheros;
   FotoCrea.Toma([PasPath, TPath.Combine(Dir, AUnitName + '.dfm'),
     TPath.Combine(Dir, AUnitName + '.fmx')]);
-  // 1) the pair of files
+  // 1) the pair of files - y si uno de los dos no se puede escribir (un
+  // disco, un permiso), el otro no se queda: la misma foto lo deshace
   DesignerExt := '.dfm';
+  try
   if Kind = 'vcl' then
   begin
     WriteNewFile(PasPath, VclFormPas(AUnitName, FormName));
@@ -820,6 +832,17 @@ begin
     Fmx := SameText(ReadDproj(ChangeFileExt(TPath.GetFullPath(ADprPath), '.dproj')).FrameworkType, 'FMX');
     WriteNewFile(PasPath, DataModulePas(AUnitName, FormName, Fmx));
     WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), DataModuleDfm(FormName));
+  end;
+  except
+    on E: Exception do
+    begin
+      var NoVolvioPar := FotoCrea.Restaura;
+      if NoVolvioPar <> '' then
+        Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvioPar, E.Message]));
+      if EsFallo(E.Message) then
+        Exit(E.Message); // la negativa de WriteNewFile, tal cual
+      Exit(MsgExcepcion(E.ClassName, E.Message));
+    end;
   end;
 
   // 2) register in the .dpr (uses + CreateForm) and the .dproj (DCCReference)

@@ -446,6 +446,22 @@ function NoEsFichero(const APath, AMsgNoExiste: string): string;
   pregunte "me han dado una ruta completa?" pregunta esto. }
 function EsRutaAbsoluta(const AValue: string): Boolean;
 
+{ '' salvo que APath sea un FICHERO con el atributo de solo lectura: su
+  negativa (SYS-029). Para quien SUSTITUYE el contenido de un fichero
+  (AtomicWrite, delphi_upload): renombrarlo o borrarlo si se puede con el
+  atributo puesto, asi que no va en la puerta de escritura. Se decia "otro
+  proceso lo tiene, cierralo y repite" y el agente repetia para siempre
+  (sexta revision). }
+function SoloLecturaDenegado(const APath: string): string;
+
+{ Pega una NOTA a una respuesta sin romperla: si es un objeto JSON, va
+  dentro como un campo mas (AClave); si es prosa, detras (ASeparador + la
+  nota). Un JSON con una linea de prosa detras dejaba de parsear (lo midio
+  el buzon, 2026-08-25). Estaba escrito dos veces (Lsp.Host.WithMailboxNote
+  y Mcp.Tools.Designer.ConNotaBinario) y delphi_styles iba a ser la tercera. }
+function ConNota(const AText, AClave, ANota: string;
+  const ASeparador: string = #10): string;
+
 { Una ruta que NO es absoluta (<letra>:\ o UNC, la regla de EsRutaAbsoluta):
   la negativa GUARD-021 (INVALID_PARAM); '' si es absoluta o esta vacia. La
   usa PathDenied (y por ella la segunda pasada de la puerta de entrada,
@@ -501,6 +517,10 @@ type
       (David, 27-sep-2026). }
     function Restaura: string;
     function Cuantos: Integer;
+    { Cuantas rutas de la foto son HOY distintas de como estaban (existir
+      o no, o sus bytes). Una que no se puede leer cuenta como distinta.
+      Para decir UNCHANGED cuando una operacion no cambio nada. }
+    function Cambiados: Integer;
   end;
 
 { Vacia la casa del servidor al arrancar. Lo que hay ahi pertenece a la
@@ -1727,8 +1747,16 @@ begin
       S.Nombre := Clean;
       S.UltimoUso := Now;
       GSesiones.Add(S);
+      // lleno: se va la que lleva MAS tiempo sin usarse, no la mas vieja (una
+      // sesion en uso contestaba 404 tras 256 initialize de otros; sexta revision)
       while GSesiones.Count > SESIONES_MAX do
-        GSesiones.Delete(0);
+      begin
+        var Menos := 0;
+        for var K := 1 to GSesiones.Count - 1 do
+          if GSesiones[K].UltimoUso < GSesiones[Menos].UltimoUso then
+            Menos := K;
+        GSesiones.Delete(Menos);
+      end;
     end;
   finally
     GIdentLock.Leave;
@@ -1876,7 +1904,7 @@ begin
   // perfectly correct - the ".by" rule passed only because it has no slash.
   // canonical first: an 8.3 alias like __DELP~1 IS the trash
   P := LongCanonical(APath).ToLower.Replace('/', '\');
-  if P.EndsWith('.by') then
+  if EsMarcaDeDueno(P) then // la marca de dueno (Lsp.Patch)
     Exit(MsgText(SR_GUARD_OWNER_MARKER));
   if EnPapelera(APath) then
     Exit(MsgText(SR_GUARD_DEAD_TRASH));
@@ -1942,6 +1970,38 @@ begin
       if Result then
         SetString(ASalida, PChar(@Buf[0]), N);
     end);
+end;
+
+{ La forma con la que se COMPARA un sitio con otro: la canonica LARGA, con
+  separador final. Una raiz declarada con nombres cortos (DFONTA~1) y una
+  ruta que llega con OTROS nombres cortos (DELPHI~1\RESULT~1) son el mismo
+  sitio, y por el texto no casaban: la jaula decia "fuera" de una carpeta
+  suya (28-sep, medido). Todas las comparaciones de sitio la usan A LA VEZ -
+  contencion (PathDenied), identidad (RootItselfDenied), confinamiento,
+  referencias, el vault, los lugares protegidos, lo protegido de la purga -:
+  si solo la usase una, un sitio por su alias 8.3 seria "dentro" para una y
+  "otro" para la de al lado, y se podria borrar (el incidente de las dos
+  formas del CLAUDE.md; la sexta revision lo midio con la raiz de OTRO
+  workspace, un ReadOnlyPaths, una referencia y el vault). La separacion
+  final se conserva: quitarla antes convertia "D:\" en "D:", la carpeta
+  actual. }
+function FormaLarga(const APath: string): string;
+begin
+  Result := IncludeTrailingPathDelimiter(LongCanonical(APath));
+end;
+
+{ APath ES ALugar o esta DENTRO, los dos en la forma larga: EL comparador
+  de "esta en ese sitio". Un lugar vacio no contiene nada. }
+function EnLugar(const APath, ALugar: string): Boolean;
+begin
+  Result := False;
+  if (APath.Trim = '') or (ALugar.Trim = '') then
+    Exit;
+  try
+    Result := StartsText(FormaLarga(ALugar.Trim), FormaLarga(APath.Trim));
+  except
+    Result := False; // una ruta que no parsea no esta en ningun sitio
+  end;
 end;
 
 function GitRemoteHosts: string;
@@ -2060,12 +2120,7 @@ begin
   Vault := VaultPath;
   if Vault = '' then
     Exit;
-  try
-    Result := StartsText(IncludeTrailingPathDelimiter(Vault),
-      IncludeTrailingPathDelimiter(TPath.GetFullPath(APath)));
-  except
-    Result := False;
-  end;
+  Result := EnLugar(APath, Vault); // la forma larga: KNOWLE~1 es el vault
 end;
 
 function VaultWritable: Boolean;
@@ -2362,6 +2417,23 @@ end;
 function TFotoDeFicheros.Cuantos: Integer;
 begin
   Result := Length(FRutas);
+end;
+
+function TFotoDeFicheros.Cambiados: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to High(FRutas) do
+    if FExistian[I] <> TFile.Exists(FRutas[I]) then
+      Inc(Result)
+    else if FExistian[I] then
+      try
+        if not BytesIguales(TFile.ReadAllBytes(FRutas[I]), FBytes[I]) then
+          Inc(Result);
+      except
+        Inc(Result); // no se puede leer: no se da por igual
+      end;
 end;
 
 { Trocea una linea de comando con las reglas del runtime de C de Windows
@@ -2840,21 +2912,6 @@ begin
       Exit(MsgText(SR_PASERVER_PASSWORD));
 end;
 
-{ La forma con la que se COMPARA un sitio con una raiz: la canonica LARGA,
-  con separador final. Una raiz declarada con nombres cortos (DFONTA~1) y una
-  ruta que llega con OTROS nombres cortos (DELPHI~1\RESULT~1) son el mismo
-  sitio, y por el texto no casaban: la jaula decia "fuera" de una carpeta
-  suya (28-sep, medido). Todas las comparaciones de raiz la usan A LA VEZ -
-  contencion (PathDenied), identidad (RootItselfDenied), confinamiento y
-  referencias -: si solo la usase la contencion, la raiz misma por su alias
-  8.3 entraria como "dentro" sin ser "la raiz", y se podria borrar (el
-  incidente de las dos formas del CLAUDE.md). La separacion final se
-  conserva: quitarla antes convertia "D:\" en "D:", la carpeta actual. }
-function FormaLarga(const APath: string): string;
-begin
-  Result := IncludeTrailingPathDelimiter(LongCanonical(APath));
-end;
-
 { '' unless APath IS one of the configured roots (the jail itself). With no
   roots configured (unrestricted local mode) there is no jail to protect and
   nothing is refused - same model as PathDenied. }
@@ -2967,6 +3024,43 @@ const
   un falso positivo ahi rechaza una llamada legitima sin que nadie sepa por
   que. Las formas raras (la unidad sin separador, los nombres con punto o
   espacio al final) las sigue cazando PathAnomaly dentro de PathDenied. }
+function ConNota(const AText, AClave, ANota: string;
+  const ASeparador: string): string;
+var
+  V: TJSONValue;
+  T: string;
+begin
+  Result := AText;
+  if ANota = '' then
+    Exit;
+  T := AText.TrimRight;
+  if T.StartsWith('{') and T.EndsWith('}') then
+  begin
+    V := TJSONObject.ParseJSONValue(T);
+    if V is TJSONObject then
+      try
+        TJSONObject(V).AddPair(AClave, ANota.Trim);
+        Exit(V.ToJSON);
+      finally
+        V.Free;
+      end
+    else
+      V.Free;
+  end;
+  Result := AText + ASeparador + ANota;
+end;
+
+function SoloLecturaDenegado(const APath: string): string;
+var
+  A: Cardinal;
+begin
+  Result := '';
+  A := GetFileAttributes(PChar(APath));
+  if (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_DIRECTORY) = 0) and
+     ((A and FILE_ATTRIBUTE_READONLY) <> 0) then
+    Result := MsgFmt(SR_SOLO_LECTURA_ATRIBUTO_FMT, [TPath.GetFileName(APath)]);
+end;
+
 function EsRutaAbsoluta(const AValue: string): Boolean;
 begin
   Result := ((Length(AValue) >= 3) and (AValue[2] = ':') and
@@ -3138,6 +3232,92 @@ begin
   end;
 end;
 
+type
+  TTraduceArg = reference to function(const ANombre, AValor: string): string;
+
+{ Reescribe EN SU SITIO los argumentos de texto de una llamada: ATraduce
+  recibe el nombre y el valor y devuelve el valor nuevo (el mismo = sin
+  tocar). El recorrido de las dos normalizaciones de la entrada -la unidad
+  virtual (ExpandVirtualDrives) y el nombre largo (AlargaRutas)-, escrito
+  una vez: la tercera, si llega, es otra ATraduce. }
+procedure ReescribeCadenas(const AArguments: TJSONObject; const ATraduce: TTraduceArg);
+var
+  I: Integer;
+  P: TJSONPair;
+  Names, Vals: TStringList;
+  V, N: string;
+begin
+  if not Assigned(AArguments) then
+    Exit;
+  Names := TStringList.Create;
+  Vals := TStringList.Create;
+  try
+    for I := 0 to AArguments.Count - 1 do
+    begin
+      P := AArguments.Pairs[I];
+      if not (P.JsonValue is TJSONString) then
+        Continue;
+      V := TJSONString(P.JsonValue).Value;
+      N := ATraduce(P.JsonString.Value, V);
+      if N <> V then
+      begin
+        Names.Add(P.JsonString.Value);
+        Vals.Add(N);
+      end;
+    end;
+    for I := 0 to Names.Count - 1 do
+    begin
+      AArguments.RemovePair(Names[I]).Free;
+      AArguments.AddPair(Names[I], Vals[I]);
+    end;
+  finally
+    Names.Free;
+    Vals.Free;
+  end;
+end;
+
+{ Una ruta marcada [RutaDelServidor] que trae un nombre corto 8.3 (~) llega a
+  la tool en su forma LARGA, como una unidad virtual llega ya traducida. Todo
+  lo que sale de una ruta -el nombre de una unit, "es la raiz", "es un lugar
+  protegido", "es el vault"- se miraba en el texto: UPROVE~1.PAS no era la
+  unit UProveedorModelo y el .dpr la seguia listando tras borrarla, y
+  OTHERW~1 no era la raiz de otro workspace y se borraba (sexta revision). La
+  regla vive aqui, en la entrada, para todas las tools a la vez; las
+  comparaciones de dentro usan ademas FormaLarga, por las raices y lugares
+  que el operador declara en 8.3. Solo absolutas: una relativa es de la tool
+  o de la negativa GUARD-021. }
+procedure AlargaRutas(const AToolName: string; const AArguments: TJSONObject);
+var
+  Mapa: TDictionary<string, Boolean>;
+  Tool: string;
+begin
+  Mapa := RutasNuestras;
+  Tool := LowerCase(AToolName);
+  ReescribeCadenas(AArguments,
+    function(const ANombre, AValor: string): string
+    begin
+      Result := AValor;
+      if (AValor.IndexOf('~') < 0) or not EsRutaAbsoluta(AValor) or
+         not Mapa.ContainsKey(Tool + '|' + TMCPSerializer.NormalizeKey(ANombre)) then
+        Exit;
+      // Alargar NUNCA cambia a que fichero se refiere la llamada. La forma
+      // canonica de Windows quita el punto o el espacio final y deshace un
+      // ::$DATA: "X.pas." pasaba a ser "X.pas" y "X.pas::$DATA" otra ruta,
+      // que se CREABA (medido, test_guard B0c). Una ruta con anomalia sigue
+      // tal cual y su negativa (PathAnomaly) la ve como vino.
+      if PathAnomaly(AValor) <> '' then
+        Exit;
+      try
+        Result := LongCanonical(AValor);
+      except
+        Exit(AValor); // una ruta que no parsea sigue a su negativa tal cual
+      end;
+      // la separacion final, como venia: una carpeta se nombra igual
+      if AValor.EndsWith('\') or AValor.EndsWith('/') then
+        Result := IncludeTrailingPathDelimiter(Result);
+    end);
+end;
+
 function GitCommandIsQuery(const ACmd, AArgs, AMessage: string): Boolean;
 begin
   Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show']) or
@@ -3162,6 +3342,8 @@ begin
   // arguments become real server paths before any check or any tool.
   ExpandVirtualDrives(AArguments);
   ApplyArgAliases(AToolName, AArguments);
+  // ...y el nombre LARGO de las rutas marcadas (AlargaRutas)
+  AlargaRutas(AToolName, AArguments);
   Result := '';
   // Read-only comes FIRST for the tools it refuses outright. The argument
   // filters below are universal on purpose, but letting one of them answer
@@ -3448,6 +3630,13 @@ begin
     end;
     Exit(MsgFmt(SR_UNIT_UNKNOWN_FMT, [APath, List]));
   end;
+  // Un prefijo de dispositivo o de ruta extendida, y una unidad virtual sin
+  // su barra, con SU motivo: caian en el de abajo, "alternate data stream"
+  // (sexta revision)
+  if StartsText('\\?\', APath) or StartsText('\\.\', APath) then
+    Exit(MsgFmt(SR_GUARD_PREFIJO_DISPOSITIVO_FMT, [APath]));
+  if (Length(APath) >= 5) and StartsText('srv', APath) and (APath[5] = ':') then
+    Exit(MsgFmt(SR_GUARD_UNIDAD_SIN_BARRA_FMT, [APath, Copy(APath, 1, 5)]));
   // ':' is legal only as the drive separator (C:\...): anywhere else it
   // opens an Alternate Data Stream, which hides content from every check.
   Rest := APath;
@@ -3727,8 +3916,11 @@ end;
   detras, y un junction en el camino no hace pasar una ruta por otra. }
 function RutaDelEnlace(const AFull: string): string;
 begin
+  // el ultimo tramo en su nombre LARGO: tal como lo escribia el agente,
+  // OTHERW~1 no era la raiz de otro workspace y se borraba (sexta
+  // revision). GetLongPathName no atraviesa el enlace.
   Result := IncludeTrailingPathDelimiter(RealPath(ExtractFileDir(AFull))) +
-    ExtractFileName(AFull);
+    ExtractFileName(LongCanonical(AFull));
 end;
 
 { El lugar protegido (tal como esta declarado) que AReal ES o CONTIENE; ''
@@ -4162,8 +4354,7 @@ var
   begin
     Result := False;
     for P in AProtegidas do
-      if (P.Trim <> '') and StartsText(IncludeTrailingPathDelimiter(P.Trim),
-           IncludeTrailingPathDelimiter(D)) then
+      if EnLugar(D, P) then // una referencia declarada en 8.3 tambien
         Exit(True);
   end;
 
@@ -4394,6 +4585,14 @@ begin
       begin
         AMotivo := mvEnlaceFuera;
         Exit(MsgFmt(SR_JAIL_LINK_FMT, [APath]));
+      end;
+      // ...y el vault por la ruta REAL: un junction de la raiz que apunte
+      // dentro de el llevaba a el con un texto que no lo nombra (sexta
+      // revision; lo paraba de rebote un fallo de CrearCarpeta).
+      if InVault(Verdad) then
+      begin
+        AMotivo := mvVault;
+        Exit(MsgText(SR_VAULT_NOT_CODE));
       end;
       // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO
       // LECTURA: un vendor/, un submodulo, un clon de referencia con su
@@ -4778,41 +4977,14 @@ end;
   parameters are never touched: their text belongs to files/messages, not to
   the path namespace. }
 procedure ExpandVirtualDrives(const AArguments: TJSONObject);
-var
-  I: Integer;
-  P: TJSONPair;
-  Names, Vals: TStringList;
-  V, N: string;
 begin
-  if not Assigned(AArguments) then
-    Exit;
-  Names := TStringList.Create;
-  Vals := TStringList.Create;
-  try
-    for I := 0 to AArguments.Count - 1 do
+  ReescribeCadenas(AArguments,
+    function(const ANombre, AValor: string): string
     begin
-      P := AArguments.Pairs[I];
-      if not (P.JsonValue is TJSONString) then
-        Continue;
-      if MatchText(P.JsonString.Value, PARAMS_CON_CONTENIDO) then
-        Continue;
-      V := TJSONString(P.JsonValue).Value;
-      N := ExpandDriveValue(V);
-      if N <> V then
-      begin
-        Names.Add(P.JsonString.Value);
-        Vals.Add(N);
-      end;
-    end;
-    for I := 0 to Names.Count - 1 do
-    begin
-      AArguments.RemovePair(Names[I]).Free;
-      AArguments.AddPair(Names[I], Vals[I]);
-    end;
-  finally
-    Names.Free;
-    Vals.Free;
-  end;
+      Result := AValor;
+      if not MatchText(ANombre, PARAMS_CON_CONTENIDO) then
+        Result := ExpandDriveValue(AValor);
+    end);
 end;
 
 function MaskDriveText(const AToolName, AText: string): string;

@@ -699,9 +699,23 @@ begin
     if IsBinaryStyle(Params.Path) then
       Exit(MsgFmt(SR_STYLES_BINARY_FMT, [TPath.GetFileName(Params.Path)]));
   end;
-  // lint/build con un FICHERO se pasaban en silencio a su carpeta
+  // lint/build con un FICHERO: su carpeta, como en la 1.6.2, y DICHO (se
+  // hacia en silencio; un rechazo rompia un contrato documentado)
+  var Ruta := Params.Path;
+  var NotaCarpeta := '';
   if MatchText(Cmd, ['lint', 'build']) and TFile.Exists(Params.Path) then
-    Exit(MsgFmt(SR_STYLES_NEED_FOLDER_FMT, [Params.Path]));
+  begin
+    Ruta := TPath.GetDirectoryName(TPath.GetFullPath(Params.Path));
+    NotaCarpeta := MsgFmt(SN_STYLES_CARPETA_DEL_FICHERO_FMT,
+      [TPath.GetFileName(Params.Path), Ruta]);
+    // build ESCRIBE en la carpeta: su puerta, sobre la carpeta
+    if Cmd = 'build' then
+    begin
+      Denied := WriteTargetDenied(Ruta);
+      if Denied <> '' then
+        Exit(Denied);
+    end;
+  end;
   if MatchText(Cmd, ['get', 'set', 'clone', 'delete']) and (Params.Style.Trim = '') then
     Exit(MsgText(SR_STYLES_NEED_STYLE));
   try
@@ -717,15 +731,17 @@ begin
     else if Cmd = 'delete' then
       Result := DeleteStyle(Params.Path, Params.Style.Trim)
     else if Cmd = 'lint' then
-      Result := LintStyles(Params.Path, Params.Project.Trim)
+      Result := LintStyles(Ruta, Params.Project.Trim)
     else if Cmd = 'build' then
-      Result := BuildStyles(Params.Path)
+      Result := BuildStyles(Ruta)
     else
       Result := MsgText(SR_STYLE_COMMAND_DEBE_SER);
   except
     on E: Exception do
       Result := MsgExcepcion(E.ClassName, E.Message);
   end;
+  if (NotaCarpeta <> '') and not EsFallo(Result) then
+    Result := ConNota(Result, 'folderNote', NotaCarpeta);
   Result := MaskDriveText('delphi_styles', Result);
 end;
 

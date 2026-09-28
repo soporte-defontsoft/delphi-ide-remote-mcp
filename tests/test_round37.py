@@ -135,7 +135,7 @@ try:
     # ------------------------------------------------------------------ T6
     quedan = []
     for r_, d_, f_ in os.walk(os.path.join(PROY, '__delphi-patch')):
-        quedan += [x for x in f_ if x.lower().endswith('.by')]
+        quedan += [x for x in f_ if mc.es_marca_dueno(x)]
     check('T6 los marcadores .by de lo restaurado se barren',
           not any('UFicha' in x for x in quedan), str(quedan)[:240])
 
@@ -153,7 +153,9 @@ try:
     previas = []
     for r_, d_, f_ in os.walk(os.path.join(PROY, '__delphi-patch')):
         for x in f_:
-            if x.startswith('UMain.pas') and x != 'UMain.pas':
+            # la marca de dueno de la copia no es otra copia (la lleva desde la
+            # sexta revision, como toda copia sellada)
+            if x.startswith('UMain.pas') and x != 'UMain.pas' and not mc.es_marca_dueno(x):
                 previas.append(os.path.join(r_, x))
     check('T8b la copia previa al restore lleva el sello del NOMBRADOR',
           previas and all(p.split('-')[-1].isdigit() and

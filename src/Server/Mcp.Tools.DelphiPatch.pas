@@ -211,6 +211,9 @@ begin
       'old/new/fragment/delete')]);
   if Result <> '' then
     Exit;
+  // content es de createunit: sin el, se ignoraba en silencio
+  if (Params.Content <> '') and not Params.CreateUnit then
+    Exit(MsgFmt(SR_EDIT_CONTENT_SIN_MODO_FMT, ['createunit']));
   if Params.Edits.Trim <> '' then
   begin
     Result := WriteTargetDenied(Params.Path);

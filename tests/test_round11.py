@@ -293,8 +293,7 @@ check('P1 purge sobre un fichero VIVO: RECHAZADO (la papelera no se salta)',
       mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_ONLY_TRASH') and os.path.exists(PU), r[:200])
 r = A.call('delphi_delete', {'path': PU})
 import glob as _glob
-_cop = [x for x in _glob.glob(os.path.join(BASE, '__delphi-patch', '*', 'deleted', 'purgar.txt-*'))
-        if not x.endswith('.by')]
+_cop = mc.copias(BASE, 'purgar.txt', 'CAJON_BORRADOS')
 check('P1 el borrado normal sigue dejando copia', len(_cop) == 1, r[:150])
 if _cop:
     r = A.call('delphi_delete', {'path': _cop[0], 'purge': True})

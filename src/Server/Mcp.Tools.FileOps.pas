@@ -80,27 +80,6 @@ var
   // separarse: ahora la dice su duenno.
   BACKUP_SUB: string;
 
-{ Where a deleted/overwritten item is parked, next to it: recoverable.
-  La ruta entera la compone EL NOMBRADOR (Lsp.Patch): aqui solo se elige el
-  cajon. Componerla a mano es como nacieron tres convenciones distintas para
-  la misma papelera. }
-function TrashPathFor(const APath: string): string;
-var
-  Veto: string;
-begin
-  Result := TPath.Combine(TrashDayDir(APath, 'deleted'),
-    TrashStampedName(TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
-  // La papelera es un DESTINO: por la puerta de escribir, sobre la ruta REAL.
-  // Un __delphi-patch que fuera un enlace se llevaba el fichero borrado (y la
-  // copia previa de delphi_move) FUERA de la jaula, contestando "recoverable"
-  // (quinta revision, medido). Aqui, en el nombrador: una puerta para los dos.
-  Veto := EscrituraDenegada(TPath.GetDirectoryName(Result));
-  if Veto = '' then
-    Veto := EscrituraDenegada(Result);
-  if Veto <> '' then
-    raise Exception.Create(Veto);
-end;
-
 function IsBackupPath(const APath: string): Boolean;
 begin
   // inside the trash, OR the trash folder itself: EL lector de Lsp.Guard,
@@ -140,8 +119,6 @@ begin
   end;
 end;
 
-procedure WriteOwnerMarker(const ATrash: string); forward;
-
 { El gemelo designer de una unit: al lado, si es un fichero vivo; y buscando
   por el nombre ORIGINAL si venimos de la papelera, donde cada copia lleva SU
   propio sello de hora - el del .dfm no es el del .pas, se guardaron con
@@ -165,7 +142,7 @@ begin
     for var F in TDirectory.GetFiles(Dir, AStem + AExt + '-*') do
     begin
       // ".by" es el marcador de quien lo tiro, no el fichero
-      if F.ToLower.EndsWith('.by') then
+      if EsMarcaDeDueno(F) then
         Continue;
       if (Mejor = '') or (TFile.GetLastWriteTime(F) > TFile.GetLastWriteTime(Mejor)) then
         Mejor := F;
@@ -178,7 +155,7 @@ end;
 
 procedure MoveToTrash(const APath: string; out ATrash: string);
 begin
-  ATrash := TrashPathFor(APath);
+  ATrash := TrashPathFor(APath, CAJON_BORRADOS);
   CrearCarpeta(TPath.GetDirectoryName(ATrash));
   if TDirectory.Exists(APath) then
     // EL mudador (Lsp.Guard): renombrar o nada, con su guard. Nacio AQUI el
@@ -193,33 +170,6 @@ begin
   // marker (or an unknown agent) is nobody's in particular and any caller may
   // purge it - which keeps the operator's own cleanup, and stdio, working.
   WriteOwnerMarker(ATrash);
-end;
-
-{ Drop "<trashpath>.by" holding the agent that trashed it, best-effort. }
-procedure WriteOwnerMarker(const ATrash: string);
-var
-  Who: string;
-begin
-  Who := CurrentAgent;
-  if Who = '' then
-    Exit;
-  try
-    TFile.WriteAllText(ATrash + '.by', Who, TEncoding.ASCII);
-  except
-    // a missing marker just means "nobody's": never fatal
-  end;
-end;
-
-{ The agent that owns a trashed item, '' when nobody is recorded. }
-function TrashOwner(const APath: string): string;
-begin
-  Result := '';
-  try
-    if TFile.Exists(APath + '.by') then
-      Result := TFile.ReadAllText(APath + '.by').Trim([' ', #9, #13, #10, #$FEFF]);
-  except
-    Result := '';
-  end;
 end;
 
 { Who else's work is inside this purge, '' when none.
@@ -254,13 +204,13 @@ begin
   try
     Others.Duplicates := dupIgnore;
     Others.Sorted := True;
-    for F in TDirectory.GetFiles(APath, '*.by', TSearchOption.soAllDirectories) do
+    for F in TDirectory.GetFiles(APath, '*' + MARCA_DUENO_EXT, TSearchOption.soAllDirectories) do
     begin
       // A marker only OWNS the copy sitting next to it. An orphan .by (its copy
       // already restored or purged) or a file someone just renamed to .by marks
       // nothing - counting its content as an owner let a planted .by make a
       // whole folder unpurgeable by anyone (measured 2026-08-25).
-      Sib := Copy(F, 1, Length(F) - 3);
+      Sib := CopiaDeLaMarca(F);
       if not (TFile.Exists(Sib) or TDirectory.Exists(Sib)) then
         Continue;
       Owner := TrashOwner(Sib);
@@ -380,13 +330,13 @@ begin
     if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
       Exit(MsgFmt(SR_NO_EXISTE_FMT, [Params.Path]));
     var CanonPurge := LongCanonical(Params.Path);
-    if CanonPurge.ToLower.EndsWith('.by') then
+    if EsMarcaDeDueno(CanonPurge) then
     begin
       // A live marker for someone else's copy is off limits - removing it would
       // orphan their copy for the taking. But an orphan marker (copy already
       // restored/purged) or your own is yours to sweep: otherwise the trash
       // could never be left clean by the agent that made it.
-      var SibMk := Copy(CanonPurge, 1, Length(CanonPurge) - 3);
+      var SibMk := CopiaDeLaMarca(CanonPurge);
       var Mk := TrashOwner(SibMk); // owner is THIS marker's content
       if (TFile.Exists(SibMk) or TDirectory.Exists(SibMk)) and
          (CurrentAgent <> '') and (Mk <> '') and not SameText(Mk, CurrentAgent) then
@@ -403,8 +353,8 @@ begin
     if Denied <> '' then
       Exit(Denied);
     try
-      if TFile.Exists(Params.Path + '.by') then
-        TFile.Delete(Params.Path + '.by');
+      if TFile.Exists(MarcaDeDueno(Params.Path)) then
+        TFile.Delete(MarcaDeDueno(Params.Path));
     except
     end;
     Exit(MsgFmt(SN_FILE_PURGED_FMT,
@@ -527,28 +477,58 @@ begin
     // de la carpeta se va con ella: no se toca.
     var Raiz := IncludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path));
     var Cuantas := 0;
-    for var U in TDirectory.GetFiles(Params.Path, '*.pas',
-      TSearchOption.soAllDirectories) do
-    begin
-      if IsBackupPath(U) then
-        Continue;
-      for P in ProjectsUsingUnit(U) do
+    // TODO O NADA, como la unit suelta (sexta revision): las units salian de
+    // sus proyectos y, si luego no se podia mover la carpeta, la respuesta
+    // decia "no he tocado NADA" con los .dpr/.dproj ya cambiados. Primero se
+    // ven TODOS los pares proyecto-unit, se toma la foto de cada proyecto, y
+    // un fallo en cualquiera lo deshace todo.
+    var ProyPares, UnitPares: TArray<string>;
+    var Fotos := TStringList.Create;
+    try
+      Fotos.Sorted := True;
+      Fotos.Duplicates := dupIgnore;
+      for var U in TDirectory.GetFiles(Params.Path, '*.pas',
+        TSearchOption.soAllDirectories) do
       begin
-        if StartsText(Raiz, IncludeTrailingPathDelimiter(
-             TPath.GetDirectoryName(TPath.GetFullPath(P)))) then
+        if IsBackupPath(U) then
           Continue;
-        if PathDenied(P) <> '' then
-          R := MsgFmt(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)])
-        else
-          try
-            R := RemoveProjectUnit(P, U, True);
-          except
-            on E: Exception do
-              R := MsgFmt(SF_FILE_ERROR_FMT, [E.Message]);
-          end;
-        Inc(Cuantas);
-        ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
+        for P in ProjectsUsingUnit(U) do
+        begin
+          if StartsText(Raiz, IncludeTrailingPathDelimiter(
+               TPath.GetDirectoryName(TPath.GetFullPath(P)))) then
+            Continue;
+          ProyPares := ProyPares + [P];
+          UnitPares := UnitPares + [U];
+          Fotos.Add(P);
+          Fotos.Add(ChangeFileExt(P, '.dproj'));
+        end;
       end;
+      FotoUnit.Toma(Fotos.ToStringArray);
+      HayFotoUnit := True;
+    finally
+      Fotos.Free;
+    end;
+    for var I := 0 to High(ProyPares) do
+    begin
+      P := ProyPares[I];
+      if PathDenied(P) <> '' then
+        R := MsgFmt(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)])
+      else
+      begin
+        try
+          FotoUnit.Vigila(P);
+          R := RemoveProjectUnit(P, UnitPares[I], True);
+        except
+          on E: Exception do
+            Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
+        end;
+        if EsFallo(R) then
+          Exit(DeshaceUnit(R));
+        FotoUnit.Anota(P);
+        FotoUnit.Anota(ChangeFileExt(P, '.dproj'));
+      end;
+      Inc(Cuantas);
+      ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
     end;
     if Cuantas > 0 then
       ProjNote := MsgFmt(SN_FILE_UNITS_CARPETA_QUITADAS_FMT,
@@ -564,9 +544,19 @@ begin
       // A locked FOLDER move fails as a whole and leaves the tree intact: say so
       // plainly, because "error" used to read as "and who knows what it did".
       if TDirectory.Exists(Params.Path) then
+      begin
+        // ...y los proyectos de fuera que ya soltaron sus units vuelven a
+        // listarlas: "no he tocado NADA" tiene que ser verdad
+        if HayFotoUnit then
+        begin
+          var NoVolvio := FotoUnit.Restaura;
+          if NoVolvio <> '' then
+            Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, E.Message]));
+        end;
         Exit(MsgFmt(SR_FILE_DELETE_LOCKED_FMT,
           [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
            E.Message]));
+      end;
       // una unit: sus proyectos y su form vuelven (todo o nada)
       if HayFotoUnit then
         Exit(DeshaceUnit(MsgExcepcion(E.ClassName, E.Message)));
@@ -755,7 +745,7 @@ begin
       BackupNote := '' // su nota es otra (SN_FILE_SIN_COPIA_DESDE_PAPELERA)
     else
     begin
-      BackupNote := TrashPathFor(Params.Path);
+      BackupNote := TrashPathFor(Params.Path, CAJON_BORRADOS);
       CrearCarpeta(TPath.GetDirectoryName(BackupNote));
       if TDirectory.Exists(Params.Path) then
         // EL copiador: no sigue un enlace a lo que no se puede leer (25-sep-2026)
@@ -782,9 +772,9 @@ begin
     // Restoring a copy OUT of the trash leaves its owner marker behind with
     // nothing to mark: sweep it, so the agent that restores can leave the
     // trash clean instead of a litter of .by files only the operator can lift.
-    if IsBackupPath(Params.Path) and TFile.Exists(Params.Path + '.by') then
+    if IsBackupPath(Params.Path) and TFile.Exists(MarcaDeDueno(Params.Path)) then
       try
-        TFile.Delete(Params.Path + '.by');
+        TFile.Delete(MarcaDeDueno(Params.Path));
       except
       end;
   except
@@ -821,9 +811,9 @@ begin
       PairNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
         [TPath.GetFileName(ChangeFileExt(Params.Dest, Ext)),
          IfThen(Params.Copy, MsgText(SF_MOVE_COPIADO_CON_UNIT), MsgText(SF_MOVE_MOVIDO_CON_UNIT))]);
-      if DesdePapelera and TFile.Exists(Gemelo + '.by') then
+      if DesdePapelera and TFile.Exists(MarcaDeDueno(Gemelo)) then
         try
-          TFile.Delete(Gemelo + '.by');
+          TFile.Delete(MarcaDeDueno(Gemelo));
         except
         end;
     except

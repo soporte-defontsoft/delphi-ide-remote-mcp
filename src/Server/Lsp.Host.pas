@@ -131,26 +131,9 @@ end;
   there was mail (measured 2026-08-25). Inside the object it goes, as one
   more field; only a prose answer gets it appended. }
 function WithMailboxNote(const AText, ANote: string): string;
-var
-  Obj: TJSONObject;
-  T: string;
 begin
-  Result := AText;
-  if ANote = '' then
-    Exit;
-  T := AText.TrimRight;
-  if T.StartsWith('{') and T.EndsWith('}') then
-  begin
-    Obj := TJSONObject.ParseJSONValue(T) as TJSONObject;
-    if Assigned(Obj) then
-      try
-        Obj.AddPair('mailbox', ANote.Trim);
-        Exit(Obj.ToJSON);
-      finally
-        Obj.Free;
-      end;
-  end;
-  Result := AText + ANote;
+  // EL helper de Lsp.Guard; la nota del buzon ya trae su propio salto
+  Result := ConNota(AText, 'mailbox', ANote, '');
 end;
 
 procedure TMcpHost.Wire;

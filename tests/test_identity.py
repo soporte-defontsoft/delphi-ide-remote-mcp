@@ -40,8 +40,7 @@ cli = mc.Http(PORT, TOKEN)
 
 
 def trashed(name):
-    return [x for x in glob.glob(os.path.join(BASE, '__delphi-patch', '*', 'deleted', name + '-*'))
-            if not x.endswith('.by')]
+    return mc.copias(BASE, name, 'CAJON_BORRADOS')
 
 
 try:
@@ -60,8 +59,8 @@ try:
     cli.call('delphi_delete', {'path': os.path.join(BASE, 'a.txt')}, sid=alice)
     ca = trashed('a.txt')
     check('I2 la copia lleva marcador de quien la borro',
-          bool(ca) and os.path.exists(ca[0] + '.by') and
-          open(ca[0] + '.by').read().strip().endswith('alice'), ca)
+          bool(ca) and os.path.exists(mc.marca_dueno(ca[0])) and
+          open(mc.marca_dueno(ca[0])).read().strip().endswith('alice'), ca)
 
     # I3
     r = cli.call('delphi_delete', {'path': ca[0], 'purge': True}, sid=bob)
