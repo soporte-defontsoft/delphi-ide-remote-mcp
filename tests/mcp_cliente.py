@@ -231,7 +231,14 @@ def check(name, ok, detail=''):
         F += 1
         # en UNA linea: un detalle con saltos partiria el FAIL, y una linea suya
         # que empezara por PASS/FAIL le cambiaria la cuenta a run_all
-        print('  FAIL', name, '|', ' '.join(str(detail).splitlines())[:300])
+        linea = '  FAIL %s | %s' % (name, ' '.join(str(detail).splitlines())[:300])
+        # un detalle que no cabe en la pagina de la consola (un 日本 con la salida
+        # redirigida en CP1252) reventaba la bateria justo en el FAIL que tenia que
+        # contar, y los checks de despues no se veian (E148 contra la novena)
+        try:
+            print(linea)
+        except UnicodeEncodeError:
+            print(linea.encode('ascii', 'backslashreplace').decode('ascii'))
     return ok
 
 

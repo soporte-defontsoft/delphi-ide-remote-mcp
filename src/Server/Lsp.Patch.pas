@@ -214,6 +214,16 @@ function ConSalto(const AText, ASalto: string): string;
   sus designers; el resto, el de texto. Vivia en Lsp.Changeset con su
   propia lista; aqui sale de las del motor (novena revision). }
 function EsDelMotorPascal(const APath: string): Boolean;
+{ Donde cayo un cambio entre AAntes y ADespues, para mover los numeros de
+  linea de lo que viene despues: ADesde es la primera linea (1-based) del
+  texto de ANTES que queda POR DEBAJO de lo cambiado (prefijo y sufijo
+  comunes), y ADelta cuanto se movio. Lo de encima no se mueve. UNA regla
+  para la tanda (AplicaTanda) y el commit del changeset: el commit movia todo
+  por el cambio del fichero ENTERO y editaba la linea equivocada con COMMIT
+  COMPLETE (decima revision). LineaTrasCambio aplica el movimiento (0 = sin
+  linea, se queda en 0). }
+procedure ZonaDelCambio(const AAntes, ADespues: TArray<string>; out ADesde, ADelta: Integer);
+function LineaTrasCambio(ALinea, ADesde, ADelta: Integer): Integer;
 { El texto acaba en un salto de linea (LF, CRLF o un CR suelto). Se miraba
   de dos formas (solo LF en delphi_textedit; octava revision). }
 function TieneSaltoFinal(const AText: string): Boolean;
@@ -632,8 +642,7 @@ begin
   Codigo := Ord(ACaracter);
   Hex := IntToHex(Codigo, 4);
   inherited Create(MsgFmt(SR_EDIT_CARACTERES_NO_CABEN_FMT,
-    [MsgFmt(SF_EDIT_CARACTER_NO_EXISTE_FMT, [ACaracter, Hex, EncName(AK)]), EncName(AK),
-     Hex, Hex, Hex, Hex]));
+    [MsgFmt(SF_EDIT_CARACTER_NO_EXISTE_FMT, [ACaracter, Hex, EncName(AK)]), EncName(AK)]));
 end;
 
 function EncodeText(const S: string; K: TEncKind): TBytes;
@@ -1063,6 +1072,28 @@ function EsDelMotorPascal(const APath: string): Boolean;
 begin
   Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS) or
     MatchText(TPath.GetExtension(APath), DESIGNER_EXTS);
+end;
+
+procedure ZonaDelCambio(const AAntes, ADespues: TArray<string>; out ADesde, ADelta: Integer);
+var
+  Pre, Suf: Integer;
+begin
+  ADelta := Length(ADespues) - Length(AAntes);
+  Pre := 0;
+  while (Pre < Length(AAntes)) and (Pre < Length(ADespues)) and (AAntes[Pre] = ADespues[Pre]) do
+    Inc(Pre);
+  Suf := 0;
+  while (Suf < Length(AAntes) - Pre) and (Suf < Length(ADespues) - Pre) and
+        (AAntes[High(AAntes) - Suf] = ADespues[High(ADespues) - Suf]) do
+    Inc(Suf);
+  ADesde := Length(AAntes) - Suf + 1;
+end;
+
+function LineaTrasCambio(ALinea, ADesde, ADelta: Integer): Integer;
+begin
+  Result := ALinea;
+  if (ALinea > 0) and (ALinea >= ADesde) then
+    Result := ALinea + ADelta;
 end;
 
 function LineasDelTexto(const AText: string): TArray<string>;
@@ -1993,14 +2024,19 @@ begin
           while (Cambio < Length(AntesL)) and (Cambio < Length(DespuesL)) and
                 (AntesL[Cambio] = DespuesL[Cambio]) do
             Inc(Cambio);
+          // lo de DEBAJO de lo cambiado se mueve (la regla de todos,
+          // ZonaDelCambio: la primera linea distinta sola no veia una
+          // insercion cuya primera linea nueva era la vieja)
           if Delta <> 0 then
+          begin
+            var Desde, DeltaZ: Integer;
+            ZonaDelCambio(AntesL, DespuesL, Desde, DeltaZ);
             for var K := N to High(Ocurr) do
             begin
-              if Ocurr[K] > Cambio + 1 then // Ocurr 1-based, Cambio 0-based
-                Inc(Ocurr[K], Delta);
-              if Hasta[K] > Cambio + 1 then
-                Inc(Hasta[K], Delta);
+              Ocurr[K] := LineaTrasCambio(Ocurr[K], Desde, DeltaZ);
+              Hasta[K] := LineaTrasCambio(Hasta[K], Desde, DeltaZ);
             end;
+          end;
           // EL ECO DE VERIFICACION, releido del disco. Una edicion suelta lo
           // devuelve desde siempre; una TANDA solo decia "OK: <ancla>", que
           // es lo que PEDISTE, no lo que PASO. Y la propia tool recomienda
@@ -3224,7 +3260,14 @@ begin
       NewBytes := EncodeText(Joined, K);
     except
       on E: ECaracterNoCabe do
-        Exit(E.Message); // la negativa entera la compone la excepcion
+      begin
+        // la negativa la compone la excepcion; la salida del literal Pascal,
+        // solo en un fuente (decima revision)
+        if MatchText(TPath.GetExtension(APath), SOURCE_EXTS) then
+          Exit(E.Message + MsgFmt(SF_EDIT_LITERAL_PASCAL_FMT, [IntToHex(E.Codigo, 4),
+            IntToHex(E.Codigo, 4), IntToHex(E.Codigo, 4), IntToHex(E.Codigo, 4)]));
+        Exit(E.Message);
+      end;
     end;
 
     var CopyNote := BackupFile(APath);

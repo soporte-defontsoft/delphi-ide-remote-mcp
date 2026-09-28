@@ -5923,8 +5923,12 @@ const
 
   SR_EDIT_CARACTERES_NO_CABEN_FMT =
     '[EDIT-078 DENIED] %s. The file is in %s and the new text carries ' +
-    'characters that do not fit. Nothing written.'#10 +
-    'LEGITIMATE WAY OUT WITHOUT CONVERTING: a native Pascal literal - ' +
+    'characters that do not fit. Nothing written.';
+  { ...y en un FUENTE Pascal, la salida sin convertir. Solo ahi: la llevaba
+    la negativa de todos, y un .ini o un .bat recibian el consejo de un
+    literal Pascal (decima revision). }
+  SF_EDIT_LITERAL_PASCAL_FMT =
+    #10'LEGITIMATE WAY OUT WITHOUT CONVERTING: a native Pascal literal - ' +
     '#$%s concatenated (''before '' + #$%s + '' after'') or ChrW($%s) / ' +
     'WideChar($%s) - the source stays ASCII and keeps its encoding. ' +
     'Declare it in the report.';
@@ -7748,6 +7752,12 @@ const
     '[MOVE-017 DENIED] Its form %s could not go with the unit (%s): the unit ' +
     'is back at %s and no project was touched. Nothing was done.';
 
+  { La causa de un MOVE-017 cuando el deshacer NO pudo devolverlo todo: va
+    dentro de SYS-018, que dice que no todo volvio - el MOVE-017 entero
+    decia "the unit is back... Nothing was done" debajo (decima revision). }
+  SF_MOVE_FORM_NO_VA_FMT =
+    'Its form %s could not go with the unit (%s).';
+
   SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT =
     '[MOVE-010 INVALID_PARAM] A .pas unit can only be moved to another .pas ' +
     'name (%s).';
@@ -7761,6 +7771,13 @@ const
 
   SR_MOVE_ERROR_AL_COPIAR_FMT =
     '[MOVE-011 INTERNAL] Copy failed: %s';
+
+  { La copia a medias de una carpeta, en su bajada, cuando ni ella se deja
+    quitar (otro proceso tiene un fichero suyo): se dice donde queda
+    (decima revision). }
+  SF_MOVE_BAJADA_QUEDA_FMT =
+    'The partial copy could not be removed: it is in %s (delete it with ' +
+    'delphi_delete once nothing holds it).';
 
   SR_MOVE_ERROR_AL_MOVER_FMT =
     '[MOVE-012 INTERNAL] Move failed: %s';
@@ -7786,6 +7803,13 @@ const
 
   SN_MOVE_ERROR_REESCRIBIR_CABECERA_FMT =
     '  [MOVE-016] ERROR rewriting the header (it still says unit %s;): %s';
+
+  { La cabecera no se encontro (o ya decia otro nombre): no se toca y se
+    dice. MOVE-015 decia "rewritten" sin mirar si cambio algo (decima). }
+  SN_MOVE_CABECERA_NO_ENCONTRADA_FMT =
+    '  [MOVE-018] header NOT rewritten: I did not find "unit %s" at the ' +
+    'head of the file. Make it "unit %s;" with delphi_edit, or the build ' +
+    'stops with E1038.';
 
   // Textos que estaban en linea en Lsp.Guard.pas (el resto, 27-sep-2026)
   SL_GUARD_WORKSPACE_JAIL_ROOTS_FMT =

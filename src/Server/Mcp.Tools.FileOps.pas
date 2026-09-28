@@ -178,7 +178,7 @@ begin
     if TDirectory.Exists(ACopia) then
       BorraArbol(ACopia)
     else if TFile.Exists(ACopia) then
-      TFile.Delete(ACopia);
+      BorraLoNuestro(ACopia); // la copia de un +R es +R (decima revision)
   except
     // se queda: es una copia en la papelera, no hace dano
   end;
@@ -306,12 +306,7 @@ begin
       // (2026-09-21): BorraArbol no.
       BorraArbol(APath)
     else
-    begin
-      if (TFile.GetAttributes(APath) * [TFileAttribute.faReadOnly]) <> [] then
-        TFile.SetAttributes(APath,
-          TFile.GetAttributes(APath) - [TFileAttribute.faReadOnly]);
-      TFile.Delete(APath);
-    end;
+      BorraLoNuestro(APath);
   except
     on E: Exception do
       Exit(MsgFmt(SR_FILE_PURGE_FAILED_FMT,
@@ -888,12 +883,22 @@ begin
           CopiaArbol(Params.Path, Bajada, False, NoSeguidos);
           MueveArbol(Bajada, Params.Dest); // renombrar o nada
         except
-          try
-            BorraArbol(Bajada);
-          except
-            // se queda una __tmp- que dice lo que es
+          on E: Exception do
+          begin
+            var Queda := '';
+            try
+              BorraArbol(Bajada);
+            except
+              Queda := Bajada;
+            end;
+            if TDirectory.Exists(Bajada) then
+              Queda := Bajada;
+            // lo que se queda, se dice (decima revision)
+            if Queda <> '' then
+              raise Exception.Create(E.Message.TrimRight + #10 +
+                MsgFmt(SF_MOVE_BAJADA_QUEDA_FMT, [Queda]));
+            raise;
           end;
-          raise;
         end;
       end
       else
@@ -918,13 +923,9 @@ begin
       // de un copy=true (el destino no existia: es suya) ni las carpetas
       // de destino que creo (novena revision)
       QuitaCopiaDeSeguridad(BackupNote, AncestroCopia);
-      // (la de una carpeta la quita su propia bajada; un FICHERO a medias, aqui)
-      if Params.Copy and TFile.Exists(Params.Dest) then
-        try
-          TFile.Delete(Params.Dest);
-        except
-          // lo que no se pudo quitar lo dice FILE-025 si se repite
-        end;
+      // (la de una carpeta la quita su propia bajada. La de un FICHERO no se
+      // borra: CopyFile ya quita lo suyo, y copy=true va sin cerrojo - si
+      // falla porque el destino YA existe, es de otro; se borraba, decima)
       QuitaCarpetasCreadas(CarpetaDestino, AncestroDestino);
       Exit(IfThen(Params.Copy, MsgEnvuelve(SR_MOVE_ERROR_AL_COPIAR_FMT, E.Message), MsgEnvuelve(SR_MOVE_ERROR_AL_MOVER_FMT, E.Message)));
     end;
@@ -976,7 +977,7 @@ begin
         for var K := High(DisenosA) downto 0 do
           try
             if Params.Copy then
-              TFile.Delete(DisenosA[K])
+              BorraLoNuestro(DisenosA[K]) // la copia de un +R es +R
             else
               TFile.Move(DisenosA[K], DisenosDe[K]);
           except
@@ -986,7 +987,7 @@ begin
           end;
         try
           if Params.Copy then
-            TFile.Delete(Params.Dest)
+            BorraLoNuestro(Params.Dest)
           else
             TFile.Move(Params.Dest, Params.Path);
         except
@@ -995,12 +996,14 @@ begin
               Params.Dest + ': ' + E2.Message.Trim;
         end;
         QuitaCopiaDeSeguridad(BackupNote, AncestroCopia);
-        var Causa := MsgFmt(SR_MOVE_FORM_NO_VA_FMT, [TPath.GetFileName(Gemelo),
-          E.Message.Trim, Params.Path]);
+        // lo que no volvio lo dice SYS-018, con la causa sola: el MOVE-017
+        // entero decia debajo "the unit is back... Nothing was done" (decima)
         if NoVolvio <> '' then
-          Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Causa]));
+          Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, MsgFmt(SF_MOVE_FORM_NO_VA_FMT,
+            [TPath.GetFileName(Gemelo), E.Message.Trim])]));
         QuitaCarpetasCreadas(CarpetaDestino, AncestroDestino);
-        Exit(Causa);
+        Exit(MsgFmt(SR_MOVE_FORM_NO_VA_FMT, [TPath.GetFileName(Gemelo),
+          E.Message.Trim, Params.Path]));
       end;
     end;
   end;
@@ -1015,14 +1018,23 @@ begin
   if PairNote <> '' then
     Result := Result + #10 + PairNote;
 
-  // a rename: the header must follow the file name
+  // a rename: the header must follow the file name. La encuentra SU lector
+  // (con directivas detras: "unit X platform;"); si no esta o dice otro
+  // nombre, no se toca y se DICE - MOVE-015 decia "rewritten" sin mirar si la
+  // regex habia cambiado algo, y el build caia en E1038 (decima revision)
   if not SameText(OldStem, NewStem) then
   try
     Src := PatchLoadText(Params.Dest, Enc);
-    Src := TRegEx.Replace(Src, '^(\s*unit\s+)' + TRegEx.Escape(OldStem) + '(\s*;)',
-      '${1}' + NewStem + '${2}', [roIgnoreCase, roMultiline]);
-    PatchSaveText(Params.Dest, Src, Enc);
-    Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_REESCRITA_FMT, [NewStem]);
+    var Cab: string;
+    var Ini: Integer;
+    if CabeceraDeUnit(Src, Cab, Ini) and SameText(Cab, OldStem) then
+    begin
+      Src := Copy(Src, 1, Ini - 1) + NewStem + Copy(Src, Ini + Length(Cab), MaxInt);
+      PatchSaveText(Params.Dest, Src, Enc);
+      Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_REESCRITA_FMT, [NewStem]);
+    end
+    else
+      Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_NO_ENCONTRADA_FMT, [OldStem, NewStem]);
   except
     on E: Exception do
       Result := Result + #10 + MsgFmt(SN_MOVE_ERROR_REESCRIBIR_CABECERA_FMT, [OldStem, E.Message]);

@@ -8,7 +8,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [1.7.0] - 2026-09-28
 
-Nine rounds of five independent reviewers read this release before it went
+Ten rounds of five independent reviewers read this release before it went
 out, running it against servers of their own; what they found is fixed
 below. Each fix a battery can provoke has a check that fails if it comes
 back; the rest (a desktop node's capture, an undo that cannot put a file
@@ -173,10 +173,10 @@ server's stderr) were verified by reading.
   `occurrence` in a `delphi_edit` batch: it counted with another rule and
   refused a legitimate anchor (`[EDIT-062]`).
 - **One line break, one splitter.** On a file with mixed line endings a
-  line edit wrote the whole file in LF, a block edit in CRLF and
-  `delphi_textedit` in CRLF; a file of lone CRs read as `eol=LF breaks=0`,
-  a line edit turned it into LF and a block edit could not find its anchor;
-  `uno\rdos\rtres\r` lost its final break in `delphi_textedit`. Every writer
+  block edit wrote the whole file in CRLF, and on a tie a line edit chose
+  LF and `delphi_textedit` CRLF; a file of lone CRs read as `eol=LF
+  breaks=0`, a line edit turned it into LF and a block edit could not find
+  its anchor. Every writer
   now joins with the file's dominant break (CRLF, LF or CR: the one that
   appears most) and every reader splits with one splitter that takes a lone
   CR as a break - the designer binding check, the rename engine, the unit
@@ -195,6 +195,24 @@ server's stderr) were verified by reading.
   or edits. Every anchor of a changeset resolves against the file as it is
   BEFORE the changeset; the description says so (two edits of one line
   belong in one `delphi_edit edits=` call).
+- **A changeset commit edited the wrong line and said COMMIT COMPLETE.** It
+  moved the `atline` of a later step by the change of the WHOLE file, even
+  when that change fell below the line: deleting lines 10 and then 5
+  deleted 10 and 4, and an edit that added lines at the end moved a later
+  `atline=2` onto a duplicate further down. Only what changed ABOVE a line
+  moves it now - the rule a `delphi_edit` batch uses, now written once.
+- **Removing a project's LAST unit left a clause that does not compile.**
+  `delphi_config remove-unit` of the only unit of a `.dpk` or a `.dpr`
+  left the word `contains` / `uses` alone and answered REMOVED; the clause
+  goes whole now (what `removeuses` already did, now in the one writer of
+  the clause), and `add-unit` starts a program's `uses` again right after
+  its header, as it did for a package's `contains` (it said `[CFG-040]`).
+- **A renamed unit whose header carries a directive kept its old name.**
+  `delphi_move` of `unit UOld platform;` to `UNew.pas` said "header
+  rewritten" (`[MOVE-015]`) without looking whether anything changed, and
+  the build stopped at E1038; `add-unit` said such a unit had no header.
+  One reader finds the header now (directives and comments allowed), and
+  when it does not name the file, `[MOVE-018]` says so and leaves it.
 - **What would be ignored is said, not ignored**, through one rule
   (`Lsp.Guard.ParametroQueNoVa`) shared by `delphi_config`, `delphi_create`,
   `delphi_edit`, `delphi_textedit`, `delphi_styles`, `delphi_git` and
@@ -304,9 +322,6 @@ server's stderr) were verified by reading.
   The schemas publish whole-number parameters as `integer` (they said
   `number`, and `1.5` was refused). A stdio client that closes the server's
   stderr no longer stops it at startup.
-- `delphi_search` of a folder where every file that matches the mask is held
-  by another process no longer adds "the mask matched no file" (`[SEARCH-002]`)
-  to the `[SEARCH-003]` that names them.
 - Texts: `[UPLOAD-010]` said the backup of a replaced file was "the ORIGINAL
   from this morning", and it is what the file said just before; rule 4 of
   `delphi_help command=conventions` describes both kinds of copy (an edit:
@@ -357,6 +372,15 @@ server's stderr) were verified by reading.
     unit renamed while it has the read-only attribute is refused before
     anything moves (its `unit X;` could not be rewritten). A project that
     cannot be re-pointed is still named in the answer.
+  - An undo removes what its own operation created even when it inherited
+    the read-only attribute of its original (a copy of a read-only file is
+    read-only), and a file it puts back gets that attribute back: a
+    changeset that moved a read-only file and then failed left both files,
+    the original without its attribute (`[SYS-018]`); a failed `copy=true`
+    of a read-only unit kept its copy; and every retry of a failed move of
+    one left a read-only safety copy in the trash. A `[SYS-018]` over a
+    unit whose form could not move no longer quotes `[MOVE-017]`'s "the
+    unit is back... Nothing was done" underneath.
   - A move or a delete that did not happen leaves nothing behind: a failed
     move took its safety copy (and the drawer it created) with it only on
     some paths, and each retry left another; it left the destination folders
@@ -685,7 +709,7 @@ server's stderr) were verified by reading.
   `[CREATE-035]`, `[CFG-110]`, `[STYLE-043]`, `[GIT-038]`, `[MOVE-017]`,
   `[TEXT-015]`, `[BUILD-045]`, `[FILE-041]`; new notes: `[EDIT-114]` and `[CHSET-029]`
   (UNCHANGED), `[SEARCH-003]` (`unreadableNote`), `[STYLE-042]`
-  (`folderNote`). The launcher's refusals on a target
+  (`folderNote`), `[MOVE-018]` (a header not rewritten). The launcher's refusals on a target
   (`[JOB-001]`..`[JOB-004]`) are `DENIED`.
 - A request with `"id": null` is answered (`-32600`, `[SYS-031]`): it was
   taken for a notification and never answered. Only a request WITHOUT an
@@ -737,7 +761,7 @@ server's stderr) were verified by reading.
   `docs/CAPABILITIES.json` carries the version being released (it said
   1.5.0 from v1.5.1 to v1.6.2).
 - The last three rounds' fixes each have a check (`test_resultados`
-  E84-E142, `test_alias83` A8-A13, `test_vault`'s read-only note), and
+  E84-E154, `test_alias83` A8-A13, `test_vault`'s read-only note), and
   the eighth round's were run against the previous build to see them go
   red. A check that looks at the BYTES of a multi-line edit on a CRLF file
   (E128) is new: no battery did, and a line-break change made while this

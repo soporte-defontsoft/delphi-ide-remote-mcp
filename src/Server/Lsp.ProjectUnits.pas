@@ -97,6 +97,15 @@ function WorkspacePackagesWithUnit(const ADpkPath, AUnitName: string): TArray<st
 // StyleLookup mentioned in a comment became a lint "finding").
 function BlankComments(const S: string): string;
 
+{ La cabecera "unit X;" de un .pas: el nombre tal cual y donde empieza
+  (1-based), fuera de comentarios y con las directivas que admite detras
+  (platform, deprecated, library, experimental). False si no la hay. UN
+  lector: InspectUnit la leia con una regex que solo casaba "unit X;" y
+  delphi_move la reescribia con otra igual - "unit X platform;" ni se
+  registraba ni se reescribia, y MOVE-015 decia que si (decima revision). }
+function CabeceraDeUnit(const ASrc: string; out ANombre: string;
+  out AInicio: Integer): Boolean;
+
 type
   // Una directiva de compilacion DE VERDAD de un texto Pascal, en sus dos
   // formas (llave-dolar y parentesis-asterisco-dolar): nunca la que va dentro
@@ -358,8 +367,9 @@ end;
 
 function InspectUnit(const APasPath: string; out AInfo: TUnitInfo): string;
 var
-  Enc, Src, Stem, DName, DClass: string;
+  Enc, Src, Stem, DName, DClass, Cab: string;
   M: TMatch;
+  Ini: Integer;
 begin
   Result := '';
   AInfo := Default(TUnitInfo);
@@ -369,19 +379,15 @@ begin
     Exit(MsgFmt(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   AInfo.PasPath := TPath.GetFullPath(APasPath);
   Src := PatchLoadText(AInfo.PasPath, Enc);
-  M := TRegEx.Match(Src, '^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;', [roIgnoreCase, roMultiline]);
-  if not M.Success then
-  begin
-    // Hay cabecera, pero con letras fuera de A-Z/0-9/_ (acentos): dcc la
-    // compila (medido 2026-09-23 con RAD Studio 13) y este servidor aun no
-    // la maneja. Decir "no tiene cabecera" era falso y mandaba al agente a
-    // buscar un fallo que no existia (Hermes, bateria 1.2).
-    M := TRegEx.Match(Src, '^\s*unit\s+([^\s;]+)\s*;', [roIgnoreCase, roMultiline]);
-    if M.Success then
-      Exit(MsgFmt(SR_UNIT_HEADER_NONASCII_FMT, [TPath.GetFileName(APasPath), M.Groups[1].Value]));
+  if not CabeceraDeUnit(Src, Cab, Ini) then
     Exit(MsgFmt(SR_UNIT_NO_HEADER_FMT, [TPath.GetFileName(APasPath)]));
-  end;
-  AInfo.UnitName := M.Groups[1].Value;
+  // Hay cabecera, pero con letras fuera de A-Z/0-9/_ (acentos): dcc la
+  // compila (medido 2026-09-23 con RAD Studio 13) y este servidor aun no
+  // la maneja. Decir "no tiene cabecera" era falso y mandaba al agente a
+  // buscar un fallo que no existia (Hermes, bateria 1.2).
+  if not TRegEx.IsMatch(Cab, '^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$') then
+    Exit(MsgFmt(SR_UNIT_HEADER_NONASCII_FMT, [TPath.GetFileName(APasPath), Cab]));
+  AInfo.UnitName := Cab;
   Stem := TPath.GetFileNameWithoutExtension(AInfo.PasPath);
   if not SameText(Stem, AInfo.UnitName) then
     Exit(MsgFmt(SR_UNIT_HEADER_MISMATCH_FMT, [AInfo.UnitName, TPath.GetFileName(APasPath)]));
@@ -533,6 +539,24 @@ begin
     Result := Sb.ToString;
   finally
     Sb.Free;
+  end;
+end;
+
+function CabeceraDeUnit(const ASrc: string; out ANombre: string;
+  out AInicio: Integer): Boolean;
+var
+  M: TMatch;
+begin
+  ANombre := '';
+  AInicio := 0;
+  M := TRegEx.Match(BlankComments(ASrc),
+    '^\s*unit\s+([^\s;]+)(?:\s+(?:platform|deprecated|library|experimental)\b[^;]*)?\s*;',
+    [roIgnoreCase, roMultiline]);
+  Result := M.Success;
+  if Result then
+  begin
+    AInicio := M.Groups[1].Index;
+    ANombre := Copy(ASrc, AInicio, M.Groups[1].Length);
   end;
 end;
 
@@ -929,6 +953,16 @@ begin
   // clausula perderia su forma. Los llamadores lo dicen antes, con el fichero.
   if U.EnRamas then
     raise Exception.Create(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, MsgText(SF_USES_EL_FICHERO)]));
+  // sin entradas no hay clausula: la palabra sola no compila, y quitar la
+  // ULTIMA unit de un .dpr/.dpk la dejaba asi diciendo OK (decima revision).
+  // Se va entera con los saltos que la seguian; removeuses lo hacia a mano.
+  if Length(AEntries) = 0 then
+  begin
+    var Fin := U.EndPos + 1;
+    while (Fin <= Length(Dpr)) and CharInSet(Dpr[Fin], [#10, #13]) do
+      Inc(Fin);
+    Exit(Copy(Dpr, 1, U.StartPos - 1) + Copy(Dpr, Fin, MaxInt));
+  end;
   NL := SaltoDominante(Dpr);
   // the indent of the first entry line of the existing clause
   Clause := Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1);
@@ -1194,6 +1228,23 @@ begin
       PatchSaveText(Dpr, Text, Enc);
       Text := PatchLoadText(Dpr, Enc);
       U := FindUses(Text);
+    end
+    else
+    begin
+      // Un programa al que se le quito su ULTIMA unit tampoco la tiene (se va
+      // entera: decima revision): la estrena justo tras la cabecera.
+      var MCab := TRegEx.Match(Text, '(?im)^\s*(program|library)\b[^;]*;');
+      if MCab.Success then
+      begin
+        Estrenada := True;
+        var NL := SaltoDominante(Text);
+        var Tras := MCab.Index + MCab.Length;
+        Text := Copy(Text, 1, Tras - 1) + NL + NL + 'uses' + NL + '  ' +
+          BuildEntry(Info, Include) + ';' + Copy(Text, Tras, MaxInt);
+        PatchSaveText(Dpr, Text, Enc);
+        Text := PatchLoadText(Dpr, Enc);
+        U := FindUses(Text);
+      end;
     end;
     if not U.Found then
       Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
@@ -1854,7 +1905,7 @@ var
   M: TMatch;
   U: TUsesClause;
   Names, Entries, Quitadas, NoEstaban: TArray<string>;
-  PosSec, Fin: Integer;
+  PosSec: Integer;
 begin
   if not SameText(TPath.GetExtension(APasPath), '.pas') then
     Exit(MsgFmt(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
@@ -1901,15 +1952,7 @@ begin
     if Length(Quitadas) = 0 then
       Exit(MsgFmt(SN_REMOVEUSES_ABSENT_FMT, [string.Join(', ', Names), Sec,
         TPath.GetFileName(APasPath)]));
-    if Length(Entries) = 0 then
-    begin
-      Fin := U.EndPos + 1;
-      while (Fin <= Length(Text)) and CharInSet(Text[Fin], [#10, #13]) do
-        Inc(Fin);
-      Text := Copy(Text, 1, U.StartPos - 1) + Copy(Text, Fin, MaxInt);
-    end
-    else
-      Text := ReplaceUses(Text, U, Entries);
+    Text := ReplaceUses(Text, U, Entries); // vacia: la clausula entera fuera
     PatchSaveText(APasPath, Text, Enc);
     // el eco, releido del disco
     Text := PatchLoadText(APasPath, Enc);

@@ -84,8 +84,8 @@ On top of that:
   `AGENTS-VAULT-WRITE.md` and `MEMORY.md`. The rules and the index are curated
   by a human. An agent that needs a new note indexed says so in its answer.
 - **Strict jail**: relative paths only, no drives, no `..`, `.md` only, and
-  `backups/`, `.git/`, `.obsidian/`, `.claude/` and `*.bak*` are excluded from
-  both reads and searches.
+  `backups/`, `.git/`, `.obsidian/`, `.claude/`, `.trash/` and `*.bak*` are
+  excluded from both reads and searches.
 - **UTF-8 in, UTF-8 without BOM out.** A vault is UTF-8; none of the CP1252
   machinery used for Delphi sources applies here.
 - **Long notes are truncated** at about 70 000 characters, at a line boundary,

@@ -183,6 +183,17 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
       no sigue enlaces; E139 occurrence con la regla del motor; E140 el
       create de un changeset con CR sueltos; E141 el preview avisa del +R
       de un edit; E142 GROUP-005 dice lo que falta; E92b la regla del commit
+  Decima revision:
+  E143 el commit de un changeset mueve el atline solo por lo cambiado ENCIMA
+      (borraba o editaba la linea equivocada con COMMIT COMPLETE); E144 el
+      rename en un .dproj LF; E145 el +R de un delete-line en el preview; E146
+      renombrar una unit con su .dpr bloqueado; E147 una junction rota sobrevive a
+      un move que falla; E148 EDIT-078 sin consejo Pascal en un fichero de texto
+  E149-E151 los deshaceres quitan lo suyo aunque traiga el +R del original, y
+      el original vuelve con su +R (changeset, copy=true, la copia de seguridad);
+      E152 la ultima unit de un .dpk/.dpr se va con su clausula, y add-unit la
+      estrena; E153 una cabecera con directivas se reescribe, y MOVE-018 si no
+      esta; E154 SYS-018 no dice "the unit is back"
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
 """
@@ -1893,6 +1904,251 @@ try:
               not mc.copias(D139, 'ro92b.txt'), t[:300])
     finally:
         os.chmod(R92, stat.S_IREAD | stat.S_IWRITE)
+
+    # ------------------------------------------------------------ decima revision
+    # E143 el commit de un changeset mueve el atline de lo que viene despues solo
+    # por lo que cambio POR ENCIMA (movia por el cambio del fichero entero:
+    # COMMIT COMPLETE en la linea equivocada; ya en la 1.6.2)
+    D143 = os.path.join(JAIL, 'e143')
+    os.makedirs(D143)
+    T143 = os.path.join(D143, 'blancos.txt')
+    open(T143, 'w', newline='\n').write('uno\ndos\ntres\ncuatro\n\nseis\nsiete\nocho\nnueve\n\nonce\ndoce\n')
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c143 = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': c143, 'kind': 'delete-line', 'path': T143, 'atline': 10})
+    llama('delphi_changeset', {'command': 'stage', 'id': c143, 'kind': 'delete-line', 'path': T143, 'atline': 5})
+    llama('delphi_changeset', {'command': 'preview', 'id': c143})
+    res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c143})
+    b143 = open(T143, newline='').read()
+    check('E143 borrar las lineas 10 y luego 5: quedan "cuatro" y "nueve" (borraba la 4)',
+          not res.get('isError') and b143 == 'uno\ndos\ntres\ncuatro\nseis\nsiete\nocho\nnueve\nonce\ndoce\n',
+          '%s | %r' % (t[:160], b143))
+    X143 = os.path.join(D143, 'dup.txt')
+    open(X143, 'w', newline='\n').write('a\nx = 1\nb\nx = 1\nc\nfin\n')
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c143b = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': c143b, 'kind': 'edit', 'path': X143,
+                               'old': 'fin', 'new': 'fin\nmas1\nmas2'})
+    llama('delphi_changeset', {'command': 'stage', 'id': c143b, 'kind': 'edit', 'path': X143,
+                               'old': 'x = 1', 'new': 'x = 2', 'atline': 2})
+    llama('delphi_changeset', {'command': 'preview', 'id': c143b})
+    res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c143b})
+    b143b = open(X143, newline='').read()
+    check('E143 ...un edit que anade lineas DEBAJO no mueve el atline 2 (editaba la 4)',
+          not res.get('isError') and b143b == 'a\nx = 2\nb\nx = 1\nc\nfin\nmas1\nmas2\n',
+          '%s | %r' % (t[:160], b143b))
+
+    # E144 renombrar una unit en un .dproj LF lo deja en LF (el tercer escritor)
+    if os.path.exists(DPROJ129) and os.path.exists(os.path.join(D129, 'UOtra.pas')):
+        res, sc, t = llama('delphi_move', {'path': os.path.join(D129, 'UOtra.pas'),
+                                           'dest': os.path.join(D129, 'UOtraBis.pas')})
+        b144 = open(DPROJ129, 'rb').read()
+        check('E144 renombrar una unit en un .dproj LF: sigue en LF',
+              not res.get('isError') and b'UOtraBis' in b144 and b'\r\n' not in b144, t[:200])
+
+    # E145 el preview avisa del +R tambien para un delete-line
+    P145 = os.path.join(D143, 'ro145.txt')
+    open(P145, 'w').write('a\nb\n')
+    os.chmod(P145, stat.S_IREAD)
+    try:
+        res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+        c145 = mc.id_changeset(t)
+        llama('delphi_changeset', {'command': 'stage', 'id': c145, 'kind': 'delete-line', 'path': P145,
+                                   'atline': 1})
+        res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c145})
+        check('E145 preview de un delete-line sobre un +R: no sale limpio (SYS-029)',
+              mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])
+        llama('delphi_changeset', {'command': 'rollback', 'id': c145})
+    finally:
+        if os.path.exists(P145):
+            os.chmod(P145, stat.S_IREAD | stat.S_IWRITE)
+
+    # E146 mover (renombrar) una unit con su .dpr bloqueado: SYS-027 y nada movido
+    U146 = os.path.join(D131, 'UUnaSuelta.pas')
+    if os.path.exists(U146):
+        h146 = k32.CreateFileW(DPR131, 0x80000000, 0, None, 3, 0x80, None)
+        try:
+            res, sc, t = llama('delphi_move', {'path': U146, 'dest': os.path.join(D131, 'UUnaSuelta2.pas')})
+        finally:
+            k32.CloseHandle(h146)
+        check('E146 renombrar una unit con su .dpr bloqueado: SYS-027 y sigue donde estaba (MOVED con el .dpr roto)',
+              res.get('isError') is True and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT') and os.path.exists(U146) and
+              not os.path.exists(os.path.join(D131, 'UUnaSuelta2.pas')), t[:250])
+
+    # E147 un move que falla no quita una junction ROTA del usuario (el deshacer
+    # la tomaba por carpeta creada: TDirectory.Exists dice False de ella)
+    D147 = os.path.join(JAIL, 'e147')
+    os.makedirs(D147)
+    F147 = os.path.join(D147, 'f.txt')
+    open(F147, 'w').write('f\n')
+    ROTA = os.path.join(D147, 'rota')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', ROTA, os.path.join(BASE, 'no_existe_147')], capture_output=True)
+    if os.path.lexists(ROTA):
+        res, sc, t = llama('delphi_move', {'path': F147, 'dest': os.path.join(ROTA, 'g.txt')})
+        check('E147 un move a traves de una junction rota falla y la junction SIGUE (la quitaba)',
+              res.get('isError') is True and os.path.lexists(ROTA) and os.path.exists(F147), t[:200])
+        if os.path.lexists(ROTA):  # el enlace (el fallo que vigila lo quitaba)
+            os.rmdir(ROTA)
+    else:
+        check('E147 fixture: mklink /J crea la junction rota', False, ROTA)
+
+    # E148 EDIT-078 no aconseja un literal Pascal en un fichero de TEXTO
+    T148 = os.path.join(D147, 'ansi.txt')
+    open(T148, 'wb').write('canción\r\n'.encode('cp1252'))
+    t = rechazo('E148 textedit con un caracter que no cabe en CP1252: EDIT-078', 'delphi_textedit',
+                {'path': T148, 'old': 'canción', 'new': '日本'}, 'DENIED',
+                'SR_EDIT_CARACTERES_NO_CABEN_FMT')
+    check('E148 ...sin el consejo del literal Pascal (era para los fuentes)', '#$' not in t and 'ChrW' not in t,
+          t[:300])
+
+    # E149 el deshacer de un changeset devuelve el +R: move de un +R y edit del
+    # destino (el preview no ve el +R que llega por el move, el commit se niega).
+    # El deshacer no podia borrar el destino +R ni le devolvia el atributo al
+    # original: SYS-018 con los dos ficheros, el original sin +R
+    D149 = os.path.join(JAIL, 'e149')
+    os.makedirs(D149)
+    R149 = os.path.join(D149, 'ro.txt')
+    R149b = os.path.join(D149, 'ro2.txt')
+    open(R149, 'w', newline='\n').write('uno\ndos\n')
+    os.chmod(R149, stat.S_IREAD)
+    try:
+        res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+        c149 = mc.id_changeset(t)
+        llama('delphi_changeset', {'command': 'stage', 'id': c149, 'kind': 'move', 'path': R149,
+                                   'dest': R149b})
+        llama('delphi_changeset', {'command': 'stage', 'id': c149, 'kind': 'edit', 'path': R149b,
+                                   'old': 'uno', 'new': 'UNO'})
+        llama('delphi_changeset', {'command': 'preview', 'id': c149})
+        res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c149})
+        check('E149 changeset move de un +R + edit del destino: deshecho ENTERO (salia SYS-018)',
+              res.get('isError') is True and mc.abre(t, 'SR_CHANGESET_ROLLED_BACK_FMT') and
+              os.path.exists(R149) and not os.path.exists(R149b) and
+              open(R149, newline='').read() == 'uno\ndos\n', '%s | %s' % (t[:300], os.listdir(D149)))
+        check('E149 ...y el original vuelve con su +R (volvia sin el)',
+              os.path.exists(R149) and not os.access(R149, os.W_OK), os.listdir(D149))
+    finally:
+        for f in (R149, R149b):
+            if os.path.exists(f):
+                os.chmod(f, stat.S_IREAD | stat.S_IWRITE)
+
+    # E150 copy=true de una unit +R cuyo .dfm no se deja leer: MOVE-017 y la copia
+    # fuera (la copia de un +R es +R: TFile.Delete fallaba, SYS-018 y se quedaba)
+    D150 = os.path.join(JAIL, 'e150')
+    os.makedirs(D150)
+    P150 = os.path.join(D150, 'URc.pas')
+    F150 = os.path.join(D150, 'URc.dfm')
+    open(P150, 'w').write('unit URc;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
+    open(F150, 'w').write('object Rc: TRc\nend\n')
+    os.chmod(P150, stat.S_IREAD)
+    h150 = k32.CreateFileW(F150, 0x80000000, 0, None, 3, 0x80, None)  # ni leer
+    try:
+        res, sc, t = llama('delphi_move', {'path': P150, 'dest': os.path.join(D150, 'sub', 'URc.pas'),
+                                           'copy': True})
+    finally:
+        k32.CloseHandle(h150)
+    try:
+        check('E150 copy=true de una unit +R con el .dfm bloqueado: MOVE-017 y ni copia ni carpeta sub',
+              res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and
+              not os.path.exists(os.path.join(D150, 'sub')), '%s | %s' % (t[:300], os.listdir(D150)))
+    finally:
+        os.chmod(P150, stat.S_IREAD | stat.S_IWRITE)
+        if os.path.exists(os.path.join(D150, 'sub', 'URc.pas')):
+            os.chmod(os.path.join(D150, 'sub', 'URc.pas'), stat.S_IREAD | stat.S_IWRITE)
+
+    # E151 mover dos veces una unit +R cuyo .dfm no se deja mover: ninguna copia
+    # en la papelera (la copia de seguridad era +R y cada reintento dejaba una)
+    D151 = os.path.join(JAIL, 'e151')
+    os.makedirs(D151)
+    P151 = os.path.join(D151, 'URm.pas')
+    F151 = os.path.join(D151, 'URm.dfm')
+    open(P151, 'w').write('unit URm;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
+    open(F151, 'w').write('object Rm: TRm\nend\n')
+    os.chmod(P151, stat.S_IREAD)
+    h151 = k32.CreateFileW(F151, 0x80000000, 1, None, 3, 0x80, None)  # leer si; mover no
+    try:
+        for _ in range(2):
+            res, sc, t = llama('delphi_move', {'path': P151, 'dest': os.path.join(D151, 'sub', 'URm.pas')})
+    finally:
+        k32.CloseHandle(h151)
+    try:
+        check('E151 mover dos veces una unit +R con el .dfm bloqueado: MOVE-017 y sin copias en la papelera',
+              res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and os.path.exists(P151) and
+              not mc.copias(D151), '%s | %s' % (t[:250], mc.copias(D151)))
+        check('E151 ...y la unit sigue en su sitio con su +R', os.path.exists(P151) and
+              not os.access(P151, os.W_OK), os.listdir(D151))
+    finally:
+        os.chmod(P151, stat.S_IREAD | stat.S_IWRITE)
+        for f in mc.copias(D151):
+            os.chmod(f, stat.S_IREAD | stat.S_IWRITE)
+
+    # E152 quitar la ULTIMA unit de un paquete o de un programa quita la clausula
+    # entera (dejaba la palabra sola: no compila, con OK); y add-unit la vuelve a
+    # estrenar en el programa (decia CFG-040)
+    D152 = os.path.join(JAIL, 'e152')
+    os.makedirs(D152)
+    U152 = os.path.join(D152, 'USola.pas')
+    open(U152, 'w', newline='\r\n').write('unit USola;\n\ninterface\n\nimplementation\n\nend.\n')
+    DPK152 = os.path.join(D152, 'PkSola.dpk')
+    open(DPK152, 'w', newline='\r\n').write("package PkSola;\n\nrequires\n  rtl;\n\ncontains\n"
+                                            "  USola in 'USola.pas';\n\nend.\n")
+    res, sc, t = llama('delphi_config', {'project': DPK152, 'command': 'remove-unit', 'path': U152})
+    b152 = open(DPK152, newline='').read()
+    check('E152 quitar la ultima unit de un .dpk: sin clausula contains (quedaba "contains" solo)',
+          not res.get('isError') and b152 == 'package PkSola;\r\n\r\nrequires\r\n  rtl;\r\n\r\nend.\r\n',
+          '%s | %r' % (t[:200], b152))
+    DPR152 = os.path.join(D152, 'PrSola.dpr')
+    open(DPR152, 'w', newline='\r\n').write("program PrSola;\n\nuses\n  USola in 'USola.pas';\n\nbegin\nend.\n")
+    res, sc, t = llama('delphi_config', {'project': DPR152, 'command': 'remove-unit', 'path': U152})
+    b152 = open(DPR152, newline='').read()
+    check('E152 ...y de un .dpr: sin uses (quedaba "uses" solo)',
+          not res.get('isError') and b152 == 'program PrSola;\r\n\r\nbegin\r\nend.\r\n',
+          '%s | %r' % (t[:200], b152))
+    res, sc, t = llama('delphi_config', {'project': DPR152, 'command': 'add-unit', 'path': U152})
+    b152 = open(DPR152, newline='').read()
+    check('E152 ...y add-unit la vuelve a estrenar tras la cabecera (decia CFG-040)',
+          not res.get('isError') and
+          b152 == "program PrSola;\r\n\r\nuses\r\n  USola in 'USola.pas';\r\n\r\nbegin\r\nend.\r\n",
+          '%s | %r' % (t[:200], b152))
+
+    # E153 renombrar una unit con directivas en la cabecera ("unit X platform;")
+    # la reescribe, y add-unit la lee; si la cabecera no dice el nombre, MOVE-018
+    # y no "rewritten" (MOVE-015 lo decia sin cambiar nada: el build daba E1038)
+    D153 = os.path.join(JAIL, 'e153')
+    os.makedirs(D153)
+    P153 = os.path.join(D153, 'UPlat.pas')
+    Q153 = os.path.join(D153, 'UPlat2.pas')
+    open(P153, 'w', newline='\r\n').write('unit UPlat platform;\n\ninterface\n\nimplementation\n\nend.\n')
+    res, sc, t = llama('delphi_move', {'path': P153, 'dest': Q153})
+    b153 = open(Q153, newline='').read() if os.path.exists(Q153) else ''
+    check('E153 renombrar "unit UPlat platform;": la cabecera sigue al fichero (MOVE-015 sin hacerlo)',
+          not res.get('isError') and b153.startswith('unit UPlat2 platform;\r\n') and
+          mc.es(t, 'SN_MOVE_CABECERA_REESCRITA_FMT'), '%s | %r' % (t[:300], b153[:60]))
+    P153b = os.path.join(D153, 'UMal.pas')
+    Q153b = os.path.join(D153, 'UMal2.pas')
+    open(P153b, 'w', newline='\r\n').write('unit OtroNombre;\n\ninterface\n\nimplementation\n\nend.\n')
+    res, sc, t = llama('delphi_move', {'path': P153b, 'dest': Q153b})
+    b153 = open(Q153b, newline='').read() if os.path.exists(Q153b) else ''
+    check('E153 ...una cabecera que no dice el nombre: MOVE-018, sin "rewritten" y sin tocarla',
+          mc.es(t, 'SN_MOVE_CABECERA_NO_ENCONTRADA_FMT') and not mc.es(t, 'SN_MOVE_CABECERA_REESCRITA_FMT') and
+          b153.startswith('unit OtroNombre;\r\n'), '%s | %r' % (t[:300], b153[:60]))
+    DPR153 = os.path.join(D153, 'Pl.dpr')
+    open(DPR153, 'w', newline='\r\n').write('program Pl;\n\nuses\n  System.SysUtils;\n\nbegin\nend.\n')
+    res, sc, t = llama('delphi_config', {'project': DPR153, 'command': 'add-unit', 'path': Q153})
+    check('E153 ...y add-unit lee "unit UPlat2 platform;" (decia que no tenia cabecera)',
+          not res.get('isError') and "UPlat2 in 'UPlat2.pas'" in open(DPR153).read(), t[:200])
+
+    # E154 el SYS-018 de un move cuyo form no va Y cuyo deshacer no pudo con todo
+    # no dice debajo "the unit is back... Nothing was done": lleva la causa sola.
+    # Que falle la VUELTA no se puede provocar de forma determinista desde aqui
+    # (haria falta bloquear lo recien movido entre dos llamadas del servidor):
+    # se mira el catalogo y quien lo compone
+    TXT154 = open(os.path.join(mc.REPO, 'src', 'Server', 'Lsp.Texts.pas'), encoding='utf-8').read()
+    FO154 = open(os.path.join(mc.REPO, 'src', 'Server', 'Mcp.Tools.FileOps.pas'), encoding='utf-8').read()
+    m154 = re.search(r"SF_MOVE_FORM_NO_VA_FMT\s*=\s*'([^']*)'", TXT154)
+    check('E154 la causa de MOVE-017 dentro de SYS-018 no dice que la unit volvio',
+          bool(m154) and 'back' not in m154.group(1) and 'Nothing' not in m154.group(1) and
+          re.search(r'SR_FOTO_NO_VOLVIO_FMT, \[NoVolvio, MsgFmt\(SF_MOVE_FORM_NO_VA_FMT', FO154) is not None,
+          m154.group(1) if m154 else 'sin SF_MOVE_FORM_NO_VA_FMT')
 
     # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
     # APPLIED / COMMIT COMPLETE prometiendo copias que no existian

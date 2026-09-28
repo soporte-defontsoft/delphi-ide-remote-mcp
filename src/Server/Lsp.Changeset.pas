@@ -183,13 +183,19 @@ begin
     Result := Copy(AId, 1, P) + '...';
 end;
 
-function LineCountOf(const APath: string): Integer;
+{ Las lineas de un fichero como las cuenta delphi_read; ninguna si no esta. }
+function LineasDeFichero(const APath: string): TArray<string>;
 var
   Enc: string;
 begin
   if not TFile.Exists(APath) then
-    Exit(0);
-  Result := Length(LineasDelTexto(PatchLoadText(APath, Enc))); // como delphi_read
+    Exit(nil);
+  Result := LineasDelTexto(PatchLoadText(APath, Enc));
+end;
+
+function LineCountOf(const APath: string): Integer;
+begin
+  Result := Length(LineasDeFichero(APath)); // como delphi_read
 end;
 
 function KindName(K: TOpKind): string;
@@ -510,8 +516,7 @@ var
   Changed: TList<string>;
   Applied: Boolean;
   OpCount, FileCount, Before, After: Integer;
-  Deltas: TDictionary<string, Integer>;
-  Deltas2: TDictionary<string, Integer>;  // survives the block that frees Deltas
+  Deltas2: TDictionary<string, Integer>;  // el cambio de lineas de cada fichero, para el informe
   Audit: TStringBuilder;
   Seen: TStringList;
   AuditText: string;
@@ -868,15 +873,20 @@ begin
         // Earlier operations MOVE the lines later ones pin with atline: the
         // preview resolves against the original text, the commit applies
         // against the mutated one (field 2026-08-24). Every op is rebased
-        // by what the previous ones did to ITS file.
-        Deltas := TDictionary<string, Integer>.Create;
+        // by what the previous ones did ABOVE its line in ITS file (the rule
+        // of the batch, Lsp.Patch.ZonaDelCambio): it moved by the change of
+        // the WHOLE file, and a change BELOW shifted the line - COMMIT
+        // COMPLETE on the wrong line (tenth review)
         Deltas2 := TDictionary<string, Integer>.Create;
-        try
+        var Lineas: TArray<Integer>;
+        SetLength(Lineas, C.Ops.Count);
+        for I := 0 to C.Ops.Count - 1 do
+          Lineas[I] := C.Ops[I].AtLine;
+        begin
           for I := 0 to C.Ops.Count - 1 do
           begin
             Op := C.Ops[I];
-            if (Op.AtLine > 0) and Deltas.ContainsKey(Op.Path.ToLower) then
-              Op.AtLine := Op.AtLine + Deltas[Op.Path.ToLower];
+            Op.AtLine := Lineas[I];
             // Una excepcion a mitad (una carpeta que no se puede crear, un
             // fichero que alguien tiene abierto) es un fallo como otro
             // cualquiera: se saltaba la restauracion de las copias y lo
@@ -888,7 +898,8 @@ begin
               Foto.Vigila(Op.Path);
               if Op.Kind = opMove then
                 Foto.Vigila(Op.Dest);
-              Before := LineCountOf(Op.Path);
+              var AntesL := LineasDeFichero(Op.Path);
+              Before := Length(AntesL);
               Ok := ApplyOne(Op, Err);
               // contar las lineas de DESPUES tambien lee el fichero, y otro
               // proceso lo puede tener: dentro del mismo try, o la excepcion
@@ -900,13 +911,20 @@ begin
                 Foto.Anota(Op.Path);
                 if Op.Kind = opMove then
                   Foto.Anota(Op.Dest);
-                After := LineCountOf(Op.Path);
+                var DespuesL := LineasDeFichero(Op.Path);
+                After := Length(DespuesL);
                 if After <> Before then
                 begin
                   var Acc := 0;
-                  Deltas.TryGetValue(Op.Path.ToLower, Acc);
-                  Deltas.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
+                  Deltas2.TryGetValue(Op.Path.ToLower, Acc);
                   Deltas2.AddOrSetValue(Op.Path.ToLower, Acc + (After - Before));
+                  // las siguientes de ESTE fichero: solo lo que queda por
+                  // debajo de lo que cambio este paso se mueve
+                  var Desde, Delta: Integer;
+                  ZonaDelCambio(AntesL, DespuesL, Desde, Delta);
+                  for var J := I + 1 to C.Ops.Count - 1 do
+                    if SameText(C.Ops[J].Path, Op.Path) then
+                      Lineas[J] := LineaTrasCambio(Lineas[J], Desde, Delta);
                 end;
               end;
             except
@@ -923,8 +941,6 @@ begin
               Break;
             end;
           end;
-        finally
-          Deltas.Free;
         end;
         // Counts BEFORE dropping the changeset: GSets owns it, so Remove
         // FREES C and reading C.Ops.Count afterwards returned 0 - the

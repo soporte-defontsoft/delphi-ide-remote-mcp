@@ -499,6 +499,18 @@ function ParametroQueNoVa(const AModo: string; const ATabla, AEnviados: array of
   (sexta revision). }
 function SoloLecturaDenegado(const APath: string): string;
 
+{ Quita el atributo de solo lectura a un FICHERO; una carpeta o un enlace
+  no se tocan (lo de detras no es de la operacion). Nunca lanza. Estaba a
+  mano en BorraDeVerdad y hacia falta en cada deshacer (decima revision). }
+procedure QuitaSoloLectura(const APath: string);
+
+{ Borra un fichero que ESTA operacion acaba de dejar: la copia de algo que
+  al final no se hizo, lo que un deshacer quita. Una copia hereda el +R del
+  original, y TFile.Delete fallaba y la dejaba (decima revision: dos copias
+  +R en la papelera, la copia=true que se quedaba). Lanza como
+  TFile.Delete; quien llama ya paso la puerta de escritura. }
+procedure BorraLoNuestro(const APath: string);
+
 { Pega una NOTA a una respuesta sin romperla: si es un objeto JSON, va
   dentro como un campo mas (AClave); si es prosa, detras (ASeparador + la
   nota). Un JSON con una linea de prosa detras dejaba de parsear (lo midio
@@ -540,6 +552,9 @@ type
     // otro la cambio ENTRE dos pasos de la operacion (Vigila): el deshacer no
     // la toca, porque lleva trabajo ajeno mezclado
     FAjeno: TArray<Boolean>;
+    // sus atributos en la foto: el deshacer devuelve el +R (un fichero
+    // reescrito o que vuelve de un move lo perdia; decima revision)
+    FAtrib: TArray<Cardinal>;
   public
     { Lee los bytes de cada ruta (la que no existe se apunta como tal). }
     procedure Toma(const ARutas: array of string);
@@ -2344,12 +2359,14 @@ begin
   SetLength(FFecha, Length(ARutas));
   SetLength(FAncestro, Length(ARutas));
   SetLength(FAjeno, Length(ARutas));
+  SetLength(FAtrib, Length(ARutas));
   for I := 0 to High(ARutas) do
   begin
     FRutas[I] := ARutas[I];
     FAnotado[I] := False;
     FAjeno[I] := False;
     FExistian[I] := TFile.Exists(ARutas[I]);
+    FAtrib[I] := GetFileAttributes(PChar(ARutas[I]));
     if FExistian[I] then
     begin
       FBytes[I] := TFile.ReadAllBytes(ARutas[I]);
@@ -2500,13 +2517,23 @@ begin
           MsgText(SF_FOTO_CAMBIADO_POR_OTRO);
         Continue;
       end;
+      // lo que la operacion dejo puede traer el +R de un original (un move,
+      // una copia): se quita para borrarlo o reescribirlo, y el fichero
+      // vuelve con el atributo de la foto (decima revision)
       if not FExistian[I] then
       begin
-        TFile.Delete(FRutas[I]);
+        BorraLoNuestro(FRutas[I]);
         QuitaCarpetasNuevas(I);
       end
       else
+      begin
+        QuitaSoloLectura(FRutas[I]);
         TFile.WriteAllBytes(FRutas[I], FBytes[I]);
+        if (FAtrib[I] <> INVALID_FILE_ATTRIBUTES) and
+           ((FAtrib[I] and FILE_ATTRIBUTE_READONLY) <> 0) then
+          SetFileAttributes(PChar(FRutas[I]),
+            GetFileAttributes(PChar(FRutas[I])) or FILE_ATTRIBUTE_READONLY);
+      end;
     except
       on E: Exception do
         Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + E.Message;
@@ -3164,6 +3191,23 @@ begin
   if (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_DIRECTORY) = 0) and
      ((A and FILE_ATTRIBUTE_READONLY) <> 0) then
     Result := MsgFmt(SR_SOLO_LECTURA_ATRIBUTO_FMT, [TPath.GetFileName(APath)]);
+end;
+
+procedure QuitaSoloLectura(const APath: string);
+var
+  A: Cardinal;
+begin
+  A := GetFileAttributes(PChar(APath));
+  if (A = INVALID_FILE_ATTRIBUTES) or ((A and FILE_ATTRIBUTE_DIRECTORY) <> 0) or
+     ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) or ((A and FILE_ATTRIBUTE_READONLY) = 0) then
+    Exit;
+  SetFileAttributes(PChar(APath), A and not FILE_ATTRIBUTE_READONLY);
+end;
+
+procedure BorraLoNuestro(const APath: string);
+begin
+  QuitaSoloLectura(APath);
+  TFile.Delete(APath);
 end;
 
 function EsRutaAbsoluta(const AValue: string): Boolean;
@@ -5042,7 +5086,10 @@ end;
 function PrimerAncestroQueExiste(const ARuta: string): string;
 begin
   Result := ARuta;
-  while (Result <> '') and not TDirectory.Exists(Result) and
+  // un ENLACE existe aunque su destino no (una junction a una unidad
+  // desmontada): TDirectory.Exists dice False, y el deshacer la tomaba
+  // por creada y la quitaba (decima revision)
+  while (Result <> '') and not TDirectory.Exists(Result) and not EsEnlace(Result) and
         (ExtractFileDir(Result) <> Result) do
     Result := ExtractFileDir(Result);
 end;
@@ -5056,7 +5103,8 @@ begin
     while (AAncestro <> '') and (Length(D) > Length(ExcludeTrailingPathDelimiter(AAncestro))) and
           (EscrituraDenegada(D) = '') do
     begin
-      if not RemoveDir(D) then
+      // un enlace no lo creo nadie aqui: nunca se quita (decima revision)
+      if EsEnlace(D) or not RemoveDir(D) then
         Break; // no esta vacia (otro dejo algo) o no se puede: se queda
       D := ExtractFileDir(D);
     end;

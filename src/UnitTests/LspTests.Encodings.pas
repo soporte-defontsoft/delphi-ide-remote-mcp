@@ -46,6 +46,7 @@ type
     [Test] procedure TroceadorConSaltoYSuInversa;
     [Test] procedure ConSaltoNormalizaLosTres;
     [Test] procedure MotorPascalPorExtension;
+    [Test] procedure ZonaDelCambioMueveLoDeDebajo;
   end;
 
 implementation
@@ -241,6 +242,24 @@ begin
   Assert.AreEqual('a'#13#10'b'#13#10'c'#13#10, ConSalto('a'#13'b'#10'c'#13#10, #13#10));
   Assert.AreEqual('a'#10'b'#10, ConSalto('a'#13#10'b'#13, #10));
   Assert.AreEqual('sin saltos', ConSalto('sin saltos', #13#10));
+end;
+
+procedure TNombradorTests.ZonaDelCambioMueveLoDeDebajo;
+var
+  Desde, Delta: Integer;
+begin
+  // una insercion cuya primera linea nueva es la vieja: la de debajo se mueve
+  ZonaDelCambio(['a', 'b', 'c'], ['a', 'X', 'b', 'c'], Desde, Delta);
+  Assert.AreEqual<Integer>(3, LineaTrasCambio(2, Desde, Delta), 'b baja una');
+  Assert.AreEqual<Integer>(1, LineaTrasCambio(1, Desde, Delta), 'lo de encima no se mueve');
+  // un borrado: lo de debajo sube, lo de encima se queda
+  ZonaDelCambio(['a', 'b', 'c'], ['a', 'c'], Desde, Delta);
+  Assert.AreEqual<Integer>(2, LineaTrasCambio(3, Desde, Delta));
+  Assert.AreEqual<Integer>(1, LineaTrasCambio(1, Desde, Delta));
+  // una linea por tres, y 0 (sin linea) se queda en 0
+  ZonaDelCambio(['a', 'b', 'c'], ['a', 'X', 'Y', 'Z', 'c'], Desde, Delta);
+  Assert.AreEqual<Integer>(5, LineaTrasCambio(3, Desde, Delta));
+  Assert.AreEqual<Integer>(0, LineaTrasCambio(0, Desde, Delta));
 end;
 
 procedure TNombradorTests.MotorPascalPorExtension;
