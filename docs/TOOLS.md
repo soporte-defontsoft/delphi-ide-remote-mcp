@@ -2,7 +2,7 @@
 
 Every tool this MCP server exposes, with its parameters, types and access level.
 
-> **This page is written by hand and it does drift.** It used to claim it was generated from `tools/list` "so it never drifts from the code", and an audit on 2026-09-20 found it missing the headline features of three releases (`delphi_edit`'s `edits`, `delphi_search`'s `offset`, `delphi_list`'s `includetrash`, `delphi_test`'s `platform`, `delphi_changeset`'s `unstage` — all documented below since 2026-09-22). The authority is the server itself: **`delphi_help command=tool name=<tool>`** returns the live schema of one tool, and `docs/CAPABILITIES.json` IS generated from `tools/list`. When this page and the server disagree, the server is right.
+> **The contract of every tool below - its description and its parameter table - is GENERATED from the live `tools/list`** by `scripts/tools_md.py`, between two `<!-- contract -->` markers inside each section, and `tests/test_docs_consistency.py` fails when a block differs from the server; the notes around each block (history, worked examples, the *Access* line) are written by hand. Until 2026-09-28 the whole page was written by hand: an audit on 2026-09-20 found it missing the headline features of three releases, and a measurement on 2026-09-28 found 35 of 41 descriptions and 127 parameter texts saying something other than the server, with 4 parameters missing. The authority is still the server itself: **`delphi_help command=tool name=<tool>`** returns the live schema of one tool, and `docs/CAPABILITIES.json` is generated from the same `tools/list`. To refresh this page after changing a tool: `python scripts/tools_md.py`.
 
 - **Paths** use virtual drive units (`srvd:\...`, `srvc:\...`) — call `delphi_workspace` first to learn the roots.
 - **Positions** for the semantic tools are 0-based (line and character), like the LSP. Point *inside* the identifier. Every answer that names a location also carries the 1-based line next to it (`line1` in definition, hover, signature, references and diagnostics; `line` + `line0` in symbols, search and rename): the 1-based one is what `delphi_read` shows and `delphi_edit` takes.
@@ -36,267 +36,331 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 
 ### `delphi_symbols`
 
-Document symbol tree of a Delphi unit (classes, methods, properties, sections) with 0-based ranges, straight from the official DelphiLSP engine. Works even without project settings. Big trees come back as a compact summary by default (`mode`/`filter` control it); a FOLDER answers with the interface digest of every unit inside. The engine parses as the COMPILER would for Windows: code inside an inactive `{$IFDEF}` (LINUX, ANDROID, MACOS...) is not in the tree, and nothing says so - for those blocks use `delphi_search` or `delphi_read`.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-**Since v1.0.7 each symbol also carries `decl`: the declaration as it is WRITTEN IN THE SOURCE.** DelphiLSP's `name` is not a name, it is a rendered signature, and it is lossy — `function Alta(const A: string; B: Integer = 0): Boolean` comes back as `Alta(const A: string; B: Integer)` and `FBuffer: array [0..7] of Byte` as `FBuffer: Byte`. The tree, the kinds and the lines are still the language server's; only the way a declaration is written is read from the file.
-
-*Access: read-only OK.*
+Document symbol tree of a Delphi unit (classes, methods, properties, sections) with 0-based ranges, straight from the official DelphiLSP engine. Works even without project settings. Big trees come back as a compact summary by default (mode/filter control it); a FOLDER answers with the interface digest of every unit inside. The engine parses as the COMPILER would for Windows: code inside an inactive {$IFDEF} (LINUX, ANDROID, MACOS...) is not in the tree, and nothing says so - for those blocks use delphi_search or delphi_read.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | Absolute path of the Delphi source file (.pas/.dpr) — or a folder for the per-unit interface digest |
-| `mode` | string | optional | File only: `summary` = the skeleton (each section with its members and line; containers say how many they hold), `full` = the complete LSP tree with ranges. Empty = automatic: full when the tree is small, summary when it is big (the answer says which and how much the full one weighed) |
-| `filter` | string | optional | Name search inside a file's tree (substring, case-insensitive): returns ONLY the matching symbols, each with its clean `name`, the real `decl`, kind, line, line0 and container. Ignores `mode`. The cheap way to find one method without the whole tree. It matches the NAME, not the signature: to search text inside sources use `delphi_search` |
+| `path` | string | **yes** | A Delphi file (.pas/.dpr) for its full symbols... or a FOLDER, and then you get at once what each unit in it OFFERS (its interface section: types, classes, routines, properties and its uses), without bodies. That is what you need to find your way around code you did not write, and it costs ONE call instead of one per file. |
+| `mode` | string | optional | For a FILE only: "summary" = the skeleton (each section with its members and its line; containers say how many they hold), "full" = the complete LSP tree with ranges. Empty = automatic: full if the tree is small, summary if it is large (the answer says which one was used and how big the full one was). |
+| `filter` | string | optional | Searches by name inside the tree of a file (substring, case-insensitive): returns ONLY the matching symbols, with their kind, their declaration as written in the source (decl), their line and the container they live in. Ignores mode. It is the cheap way to find a method without bringing the whole tree. |
+<!-- /contract -->
+
+*Access: read-only OK.*
+
+**Since v1.0.7 each symbol also carries `decl`: the declaration as it is WRITTEN IN THE SOURCE.** DelphiLSP's `name` is not a name, it is a rendered signature, and it is lossy — `function Alta(const A: string; B: Integer = 0): Boolean` comes back as `Alta(const A: string; B: Integer)` and `FBuffer: array [0..7] of Byte` as `FBuffer: Byte`. The tree, the kinds and the lines are still the language server's; only the way a declaration is written is read from the file.
 
 ### `delphi_definition`
 
-Resolve the identifier at a 0-based line:character position in a Delphi source file, using the official DelphiLSP engine (compiler-grade, cross-unit, including RTL/VCL sources). Point INSIDE the identifier. kind selects the half of the unit (a Delphi method exists in BOTH): definition (default) = the BODY in the implementation section; declaration = the interface declaration OF THE TARGET SYMBOL (on a call site the tool chains definition->declaration, so you get the callee, never the enclosing method). (kind=implementation is accepted but DelphiLSP answers it like declaration - measured.) Requires project settings for full answers.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Resolve the identifier at a 0-based line:character position in a Delphi source file, using the official DelphiLSP engine (compiler-grade, cross-unit, including RTL/VCL sources). Point INSIDE the identifier. kind selects the half of the unit (a Delphi method exists in BOTH): definition (default) = the BODY in the implementation section; declaration = the interface declaration OF THE TARGET SYMBOL (on a call site the tool chains definition->declaration, so you get the callee; when definition does not resolve, the answer is the direct declaration and a note says so). (kind=implementation is accepted but DelphiLSP answers it like declaration - measured.) Requires project settings for full answers.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `kind` | string | optional | Optional: definition (default) \| declaration (jump to the interface declaration) \| implementation (accepted, but DelphiLSP answers it like declaration - measured) |
 | `line` | integer | **yes** | Zero-based line number of the identifier |
 | `character` | integer | **yes** | Zero-based character (column) inside the identifier |
-| `path` | string | **yes** | Absolute path of the Delphi source file (.pas/.dpr) |
+| `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a folder: these tools resolve a position inside a source. To see at once what each unit of a folder offers, that is delphi_symbols. |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `delphi_signature`
 
-Signature help (parameter completion) for the call under a 0-based line:character position: the routine signatures with their parameter list, from the official DelphiLSP engine - the IDE's Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right after "(" or a ","). Requires project settings for full answers.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Signature help (parameter completion) for the call under a 0-based line:character position: the routine signatures with their parameter list, from the official DelphiLSP engine - the IDE's Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right after "(" or a ","). Requires project settings for full answers.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `line` | integer | **yes** | Zero-based line number of the identifier |
 | `character` | integer | **yes** | Zero-based character (column) inside the identifier |
-| `path` | string | **yes** | Absolute path of the Delphi source file (.pas/.dpr) |
+| `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a folder: these tools resolve a position inside a source. To see at once what each unit of a folder offers, that is delphi_symbols. |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `delphi_hover`
 
-Type/signature information for the identifier at a 0-based line:character position (official DelphiLSP engine). IMPORTANT: hover answers on identifier USAGES (call sites, type references); hovering a declaration itself returns null. Requires project settings for full answers.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Type/signature information for the identifier at a 0-based line:character position (official DelphiLSP engine). IMPORTANT: hover answers on identifier USAGES (call sites, type references); hovering a declaration itself returns null. Requires project settings for full answers.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `line` | integer | **yes** | Zero-based line number of the identifier |
 | `character` | integer | **yes** | Zero-based character (column) inside the identifier |
-| `path` | string | **yes** | Absolute path of the Delphi source file (.pas/.dpr) |
+| `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a folder: these tools resolve a position inside a source. To see at once what each unit of a folder offers, that is delphi_symbols. |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `delphi_completion`
 
-Code completion candidates at a 0-based line:character position (official DelphiLSP engine). Returns at most 50 items (label/kind/detail) plus the total count.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Code completion candidates at a 0-based line:character position (official DelphiLSP engine). Returns at most 50 items (label/kind/detail) plus the total count.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `trigger` | string | optional | Optional trigger character, e.g. "." (empty = manual invocation) |
 | `line` | integer | **yes** | Zero-based line number of the identifier |
 | `character` | integer | **yes** | Zero-based character (column) inside the identifier |
-| `path` | string | **yes** | Absolute path of the Delphi source file (.pas/.dpr) |
+| `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc). ONE file goes here, not a folder: these tools resolve a position inside a source. To see at once what each unit of a folder offers, that is delphi_symbols. |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `delphi_references`
 
-Find references to the identifier at a 0-based line:character position. Hybrid method (DelphiLSP has no native references): project-wide text scan, then every candidate is validated by asking the compiler engine for its definition - only candidates resolving to the SAME symbol are confirmed, homonyms are rejected. Bounded work: leftovers are listed as unverified, never silently dropped.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Find references to the identifier at a 0-based line:character position. Hybrid method (DelphiLSP has no native references): project-wide text scan, then every candidate is validated by asking the compiler engine for its definition - only candidates resolving to the SAME symbol are confirmed, homonyms are rejected. A name written in a COMMENT or inside a string literal is not a reference and does not count as unverified: those go to "mentions", listed but harmless. Bounded work: leftovers are listed as unverified, never silently dropped.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the Delphi source file |
 | `line` | integer | **yes** | Zero-based line of the identifier to find references for |
 | `character` | integer | **yes** | Zero-based character inside the identifier |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `delphi_diagnostics`
 
-Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight via the official DelphiLSP linter), WITHOUT building. Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions (range) and line1, the 1-based line delphi_read shows. Severity: 1=error, 2=warning, 3=information, 4=hint. Lints the CURRENT on-disk content.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight via the official DelphiLSP linter), WITHOUT building. Real compiler codes (E2003, W1000, H2164...) with exact 0-based positions (range) and line1, the 1-based line delphi_read shows. Severity is the LSP scale: 1=error, 2=warning, 3=information, 4=hint. The "hints" counter groups 3 and 4 together; the per-diagnostic severity tells them apart. Lints the CURRENT on-disk content. A big unit can take over a minute the first time: the answer then says the lint is in progress - call again with the same file and the result is returned (the lint is not restarted while the file is unchanged).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the Delphi source file to lint (.pas/.dpr) |
+<!-- /contract -->
 
+*Access: read-only OK.*
 
 ## Read files & explore
 
 ### `delphi_read`
 
-Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or without BOM / UTF-16 detected for real). Returns numbered lines in the format number|content - to build a delphi_edit anchor, copy everything after the bar, exactly. ALWAYS use this instead of a generic read for Delphi files: generic reads turn CP1252 accents into U+FFFD and poison every anchor built from them.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or without BOM / UTF-16 detected for real). Returns numbered lines in the format number|content - to build a delphi_edit anchor, copy everything after the bar, exactly. ALWAYS use this instead of a generic read for Delphi files: generic reads turn CP1252 accents into U+FFFD and poison every anchor built from them.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the Delphi file (.pas/.dpr/.dpk/.inc/.dfm/.fmx) |
 | `fromline` | integer | optional | First line to show, 1-based (0 = from the start) |
 | `toline` | integer | optional | Last line to show, 1-based (0 = to the end; capped at 400 lines per call) |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `delphi_search`
 
-Search Delphi sources recursively for a literal text (case-insensitive), skipping IDE artifacts BELOW the root (__history, Win32/Win64, dcu, .git, the server's __delphi-temp...): naming such a folder as root searches inside it, and when files are skipped the result says how many and why (`hidden` + `note`, the same fields as `delphi_list`). Files are decoded with their real encoding, so accented text matches correctly. Returns path, 1-based line and the line text (same numbering as delphi_read).
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Search Delphi sources recursively for a literal text (case-insensitive), skipping IDE artifacts BELOW the root (__history, Win32/Win64, dcu, .git, the server's __delphi-temp...): naming such a folder as root searches inside it, and when files are skipped the result says how many and why ("hidden" + "note"). Files are decoded with their real encoding, so accented text matches correctly. Returns path, 1-based line and the line text (same numbering as delphi_read).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `root` | string | **yes** | Directory to search recursively (project root) - or ONE file (a .dproj, .dpr, .inc, .xml...) to search inside it in a single call |
 | `query` | string | **yes** | Literal text to find (case-insensitive - it is Pascal) |
-| `maxresults` | integer | optional | Maximum hits to return PER PAGE (default 100, cap 500 per page — not a global limit: the offset walk covers the full hit list) |
-| `offset` | integer | optional | Skip the first N matches of the FULL hit list (default 0): pagination — pass the `nextOffset` of the previous answer and walk it until `hasMore=false` |
+| `maxresults` | integer | optional | Maximum hits to return PER PAGE (default 100, cap 500 PER PAGE - it is not a global limit: the offset walk covers the FULL hit list) |
+| `offset` | integer | optional | Skip the first N matches of the FULL hit list (not of the current page) - pagination: pass the nextOffset of the previous answer to get the next page; walking nextOffset until hasMore=false reaches every hit, however many |
 | `wholeword` | boolean | optional | true = match whole identifiers only (word boundaries) |
 | `pattern` | string | optional | Optional file mask to search instead of the Delphi set, e.g. *.style, *.ini, *.md, *.rc (one mask) |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `delphi_list`
 
-List Delphi files under a directory recursively (sources and project files by default, or a custom mask), skipping IDE artifacts. Returns path, size and last-write time. Capped at 500 entries. With dirs=true it lists the SUBDIRECTORIES of root instead (one level, explorer-style) - use that to browse the machine and decide where to create or look for projects.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-What it does not show is counted BY REASON (1.5.0, one counter shared with `delphi_search`): `hidden` is the total, and each reason that is not zero gets its field - `hiddenBuildArtifacts` (Win32/Win64/Debug/Release/dcu/__history: pass that folder as root to see it), `hiddenServerTemp` (the server's `__delphi-temp`: never shown, not even with includetrash), `hiddenGitInternals` (.git), `hiddenTrash` (`__delphi-patch`: includetrash shows it) and, in dirs mode only, `hiddenToolFolders` (.vs, .github, __pycache__...). The `note` says what each one is and how to see it. Until 1.5.0 the server temp was counted as a build folder, with the advice to pass it as root.
-
-*Access: read-only OK.*
+List Delphi files under a directory recursively (sources and project files by default, or a custom mask), skipping IDE artifacts BELOW the root: naming a build-output folder (Win32/Win64/Debug/Release...) as root lists inside it, and when entries are hidden the result says how many. Returns path, size and last-write time. Capped at 500 entries. With dirs=true it lists the SUBDIRECTORIES of root instead (one level, explorer-style) - use that to browse the machine and decide where to create or look for projects. With includeTrash=true it also shows the recoverable trash (__delphi-patch) so you can find a file deleted by delphi_delete and restore it with delphi_move.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `root` | string | **yes** | Directory to list recursively |
 | `pattern` | string | optional | Filename mask, e.g. *.pas (default: Delphi source and project files) |
 | `dirs` | boolean | optional | true = list SUBDIRECTORIES of root (one level, explorer-style) instead of files |
-| `includetrash` | boolean | optional | true = also show the recoverable trash `__delphi-patch` (default false: skipped like the other IDE artifacts). With it on, the answer says how many of the entries are trash copies and how many their owner markers (`shownTrash`, `shownMarkers`, `trashNote`) |
+| `includetrash` | boolean | optional | true = also show the recoverable trash (__delphi-patch, where delphi_delete moves files) so you can find and restore a deleted file with delphi_move. Default false (trash hidden). |
+<!-- /contract -->
+
+*Access: read-only OK.*
+
+What it does not show is counted BY REASON (1.5.0, one counter shared with `delphi_search`): `hidden` is the total, and each reason that is not zero gets its field - `hiddenBuildArtifacts` (Win32/Win64/Debug/Release/dcu/__history: pass that folder as root to see it), `hiddenServerTemp` (the server's `__delphi-temp`: never shown, not even with includetrash), `hiddenGitInternals` (.git), `hiddenTrash` (`__delphi-patch`: includetrash shows it) and, in dirs mode only, `hiddenToolFolders` (.vs, .github, __pycache__...). The `note` says what each one is and how to see it. Until 1.5.0 the server temp was counted as a build folder, with the advice to pass it as root.
 
 ### `delphi_projects`
 
-Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots configured in settings.ini [Workspace.<name>] Roots when root is empty. Optional name filter. Use this to answer "open project X" without knowing the disk layout. Answers in PAGES (`maxresults`, default 50; `offset` + `nextOffset` to walk them), and when there are more it also reports `byFolder` - the ten folders holding the most - so the next call can narrow `root` instead of walking pages. That matters on a broad jail: measured on a server whose root was a whole drive, 6420 of 7025 projects were third-party component sources and their backups, and the operator's own were 73.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots configured in settings.ini [Workspace.<name>] Roots when root is empty. Optional name filter. Use this to answer "open project X" without knowing the disk layout. Answers in PAGES (maxresults, default 50; offset + nextOffset to walk them): a work machine holds thousands of .dproj and the whole list does not fit in one answer.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `root` | string | optional | Directory to search under. Empty = the roots configured in settings.ini [Workspace.<name>] Roots (semicolon-separated) |
-| `name` | string | optional | Optional name filter (substring, case-insensitive), e.g. "comunicador" |
-| `maxresults` | integer | optional (default 50) | Maximum projects to return PER PAGE (cap 300) |
-| `offset` | integer | optional (default 0) | Skip the first N projects of the FULL list - pass the `nextOffset` of the previous answer |
+| `name` | string | optional | Optional name filter (substring, case-insensitive), e.g. "messenger" |
+| `maxresults` | integer | optional | Maximum projects to return PER PAGE (default 50, cap 300). A work machine holds thousands of .dproj: the full list does not fit in an answer |
+| `offset` | integer | optional | Skip the first N projects of the FULL list - pagination: pass the nextOffset of the previous answer to get the next page |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `delphi_installs`
 
-List EVERY RAD Studio / Delphi installation discovered on this machine (a machine may host several versions side by side): version, root directory, whether it ships DelphiLSP.exe (semantic engine) and rsvars.bat (msbuild). Also reports which one is ACTIVE for the calling workspace: the version its `DelphiVersion=` asks for when installed, otherwise the newest with DelphiLSP - and, when the requested one is missing, `requested` plus a `requestedNote` saying which one answers instead (the same note `delphi_workspace` gives as `delphiVersionNote`). Each install carries its own `name`, `personality`, `edition` and `build`, read from the registry and `bds.exe`. Read-only, no parameters.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+List EVERY RAD Studio / Delphi installation discovered on this machine (a machine may host several versions side by side): version, root directory, whether it ships DelphiLSP.exe (semantic engine) and rsvars.bat (msbuild), plus the name, personality, edition and build each one states about itself ("RAD Studio 13", "Delphi 13", "Enterprise", "37.0.59082.6021"). Also reports which one is ACTIVE for the LSP tools: the one the workspace asks for with DelphiVersion= when it is installed ("requested" / "requestedNote" say so), otherwise the newest with DelphiLSP. Read-only, no parameters.
 
 No parameters.
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `delphi_workspace`
 
-The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), the `[Workspace.<name>]` section of the server this token is scoped to (`workspace`), and the active RAD Studio - by BDS number (`activeDelphi`), by NAME as the IDE registers itself (`activeDelphiName` "RAD Studio 13", `activeDelphiPersonality` "Delphi 13": the words to search the web with), its edition and exact build from `bds.exe` (`activeDelphiEdition`, `activeDelphiBuild`) and its folder (`activeDelphiRoot`) - all read from the installation, a field the machine lacks is absent; when the workspace pinned a `DelphiVersion=` that is not installed, `delphiVersionRequested` and `delphiVersionNote` say so. It also says WHO is answering (`server`): version, how this process was started (tray / service / console), transport, pid and uptime - the way to check a deployment without looking at the machine from outside. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only, no parameters.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), the [Workspace.<name>] section of the server this token is scoped to ("workspace"), and the active RAD Studio by version AND by name (activeDelphiName / Personality / Edition / Build, read from the installation - use them when you look anything up for this Delphi). It also says WHO is answering ("server"): version, how this process was started (tray / service / console), transport, pid, uptime, the open sessions and the Windows account it runs as - the way to check a deployment without looking at the machine from outside. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only, no parameters.
 
 No parameters.
+<!-- /contract -->
 
+*Access: read-only OK.*
 
 ## Edit code safely  (read-write only)
 
 ### `delphi_edit`
 
-SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx) preserving the real encoding and line endings. Modes: EDIT (old = ONE full line copied from delphi_read + new), DELETE (delete=true + old: removes the line entirely), INSERT (insert="rutina-global"|"metodo" + code: the tool picks the legal spot - also inside a .dpr - and, for methods, writes BOTH halves: declaration and qualified implementation), CREATE (createunit=true; new files honour the encoding configured in the IDE) and RESTORE (restore=true, two-step) and ADDUSES (adduses="UnitA;UnitB" + section=interface|implementation: the units land in that section's uses clause, commas and terminator written by the engine, the clause created under the section keyword when there is none, names already there skipped) and REMOVEUSES (removeuses="UnitA", the inverse: the clause goes whole when it empties; a .dpr/.dpk goes through delphi_config add-unit / remove-unit). It refuses to rewrite whole files, refuses binary designer files (TPF0), makes automatic backups, writes atomically, and audits the result (encoding, EOLs, mojibake, end. structure, and - 1.6.0 - a brace comment with another brace inside: Pascal does not nest them, the first closing brace ends it; warned, never refused, in a batch too) reporting the REAL lines read back from disk - use that as evidence. Never edit Delphi files with generic tools: CP1252 sources get destroyed.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write.*
+SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx) preserving the real encoding and line endings. Modes: EDIT (old = ONE full line copied from delphi_read + new; for a LONG line, fragment + atline + new changes just a piece of it), DELETE (delete=true + old: removes the line entirely), INSERT (insert="rutina-global"|"metodo" + code: the tool picks the legal spot - also inside a .dpr - and, for methods, writes BOTH halves: declaration and qualified implementation), CREATE (createunit=true; new files honour the encoding configured in the IDE) and RESTORE (restore=true, two-step), ADDUSES (adduses="UnitA;UnitB" + section=interface|implementation: the units land in that section's uses clause, commas and terminator written by the engine, the clause created under the section keyword when there is none, names already there skipped) and REMOVEUSES (removeuses="UnitA", the inverse: the clause goes whole when it empties; a .dpr/.dpk goes through delphi_config add-unit / remove-unit). It refuses to rewrite whole files, refuses binary designer files (TPF0), makes automatic backups, writes atomically, and audits the result (encoding, EOLs, mojibake, end. structure, and a brace comment with another brace inside: Pascal does not nest them, the first closing brace ends it - WARNED, never refused, in a batch too) reporting the REAL lines read back from disk - use that as evidence. Never edit Delphi files with generic tools: CP1252 sources get destroyed.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the Delphi file |
 | `old` | string | optional | EDIT mode: the exact line to replace - ONE full line copied literally from delphi_read (everything after the \| bar). Leading indentation may be omitted |
-| `new` | string | optional | EDIT mode: the new text; may be several lines (to insert code, anchor on an existing line and return it inside new together with the added code). One trailing line break is the end of the last line and is dropped; each extra one is a blank line (end `new` with two breaks to leave one blank line after it). Same rule for one-line and block anchors. |
+| `new` | string | optional | EDIT mode: the new text; may be several lines (to insert code, anchor on an existing line and return it inside new together with the added code). One trailing line break is the end of the last line and is dropped; each extra one is a blank line (end new with two breaks to leave one blank line after it). Same rule for one-line and block anchors |
 | `atline` | integer | optional | EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence (the rejection lists the valid numbers) |
-| `toline` | integer | optional | RANGE (1-based, included): the LAST line of the stretch. With it `old` stops being the line to touch and becomes the FIRST of a range that ends here: `delete:true` removes them all, `new` replaces them all with that text. The way to drop or replace a whole method without pasting it as the anchor. Refused if the range runs backwards, runs past the end of the file, or swallows the file whole |
-| `edits` | string | optional | Several edits on THIS SAME file, in one call and ALL OR NOTHING: a JSON array `[{"old":"...","new":"...","atline":12},...]` applied IN ORDER. An anchor may be ONE full line or a contiguous BLOCK of lines, matched whole and in order; `"occurrence": 1, 2...` picks which one when it repeats (better than `atline` inside a batch: line numbers MOVE as earlier entries add or remove lines; `occurrence` counts on the file as it is BEFORE the batch, so after an entry changes occurrence 1 the next one asks for 2 - two entries on the same line are refused); `"delete": true` removes the line; `"toline": N` makes that entry a range. Ranges are dragged too, so an earlier entry that adds lines corrects the later `toline` by itself. For a LONG line an entry may carry `"fragment"` instead of `"old"`: `{"fragment":"68","new":"69","atline":12}` changes just that piece of line 12. A field that is not one of old/new/atline/toline/delete/occurrence/fragment is REFUSED, not ignored. If one entry fails the file goes back byte for byte and the answer names it. Changes across SEVERAL files are delphi_changeset. `edits` is the whole call: old/new/fragment/delete beside it are another mode (EDIT-111) and atline/toline go INSIDE each entry (EDIT-115) - refused, not ignored |
-| `fragment` | string | optional | FRAGMENT mode, for LONG lines (a long string, a long comment): instead of `old`, the exact piece of text to change INSIDE one line, with `atline` = that line's 1-based number (MANDATORY) and `new` = what replaces just that piece. The rest of the line is kept byte for byte. Case-sensitive, and the fragment must appear EXACTLY ONCE in that line: zero or several is a refusal that shows the real line. The engine then matches the WHOLE line again before writing, so the full-line rule is not relaxed. No line breaks; does not combine with old, delete or toline, nor with another mode (insert, createunit, restore) |
+| `toline` | integer | optional | RANGE (1-based, inclusive): the LAST line of the range. With this, "old" stops being the line to change and becomes the FIRST line of a range that ends here: with delete:true they all go, and with "new" they are all replaced by that text. It is the way to drop or replace a whole method without pasting it as an anchor. Refused if the range is backwards, goes past the end of the file or takes the whole file. |
+| `edits` | string | optional | SEVERAL edits on THIS SAME file, in a single call and ALL OR NOTHING: a JSON array [{"old":"...","new":"...","atline":12}, ...] applied IN ORDER. Each entry accepts two forms of anchor: ONE LINE (the same as a single edit) or a BLOCK of several consecutive lines in "old", searched for whole and in order - useful for replacing in one piece the body of a method or a long documentation paragraph. If the anchor appears more than once, break the tie with "occurrence": 1, 2... (better than "atline" inside a batch: line numbers MOVE as earlier entries add or remove lines, and "occurrence" does not: it counts on the file as it was BEFORE the batch, so if one entry changes occurrence 1, the next entry asks for 2, not for 1 again; two entries on the same line are refused). "delete": true removes the line; and with "toline": <number> the anchor stops being ONE line and becomes a RANGE - from the anchor's line to that one, both included - that is removed whole (delete) or replaced by "new". It is the way to drop a method without pasting it whole as an anchor. Inside a batch the range shifts too: if an earlier entry added or removed lines, "toline" is corrected on its own. If an entry fails, the file goes back byte for byte to how it was and you are told which one failed. For a LONG line, an entry can carry "fragment" instead of "old": {"fragment":"68","new":"69","atline":12} changes only that piece of line 12 (atline mandatory, and the piece exactly once in it). If the change touches SEVERAL files, that is delphi_changeset. "edits" is the whole call: old/new/fragment/delete are another mode (EDIT-111) and atline/toline go INSIDE each entry (EDIT-115). |
+| `fragment` | string | optional | FRAGMENT mode, for LONG lines (a README paragraph, a long string): instead of "old", pass "fragment" = the exact piece of text to change INSIDE one line, "atline" = that line's 1-based number (MANDATORY, from delphi_read) and "new" = what replaces just that piece. The rest of the line is kept byte for byte. It is case-sensitive, and the fragment must appear EXACTLY ONCE in that line: zero or several is a refusal that shows you the real line - lengthen the fragment until it is unique. One line only (no line breaks in "fragment" nor, in this mode, in "new"); it does not combine with old, delete or toline, nor with another mode (insert, createunit, restore, create). Inside "edits" it is the same: {"fragment":"68","new":"69","atline":12}. |
 | `delete` | boolean | optional | DELETE mode: true = remove the "old" anchored line ENTIRELY (old+new="" only blanks it). No "new" here |
 | `insert` | string | optional | INSERT mode (preferred for NEW routines/methods): "rutina-global" or "metodo". The tool places the block at the legal boundary (in a .dpr: between uses and the main begin; in a unit: before the final end./initialization); with "metodo" it also writes the class declaration. Pass code, not old/new |
 | `code` | string | optional | INSERT mode: the COMPLETE block (unqualified signature + begin..end;). NEVER include end. |
-| `inclass` | string | optional | INSERT "metodo": exact class name (e.g. TFichaPedidos) |
+| `inclass` | string | optional | INSERT "metodo": exact class name (e.g. TOrderForm) |
 | `visibility` | string | optional | INSERT "metodo" optional: section for the declaration (private/protected/public/published); empty = end of class. "published" works on form classes even without an explicit keyword: the declaration lands in the implicit published section right after the class header - the place for event handlers |
 | `visible` | boolean | optional | INSERT "rutina-global" optional: true = also declare it in the interface section (visible outside the unit) |
-| `createunit` | boolean | optional | CREATE mode: true = create the .pas (never overwrites). Then register it with `delphi_config command=add-unit` |
+| `createunit` | boolean | optional | CREATE mode: true = create the .pas (never overwrites). Then register it with delphi_config command=add-unit |
 | `content` | string | optional | CREATE mode: the COMPLETE file content in one call (empty = standard IDE skeleton). Use this when you already know the whole unit: one call instead of create + N patches |
 | `eol` | string | optional | CREATE mode: line endings, "crlf" (default, Delphi standard) or "lf" |
 | `restore` | boolean | optional | RESTORE mode: true = restore the file from this tool's backup. First call shows what would be LOST; repeat with confirm=true to execute |
 | `confirm` | boolean | optional | Only with restore: execute after having seen the losses |
-| `adduses` | string | optional | ADDUSES mode: unit names to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCliente). The engine writes the commas and the terminator, creates the clause under the section keyword when there is none, and skips the names already there, in this section or in the other one (idempotent; a unit cannot be in both, E2004). For a .dpr/.dpk use delphi_config add-unit instead |
+| `adduses` | string | optional | ADDUSES mode: unit names to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCustomer). The engine writes the commas and the terminator, creates the clause under the section keyword when there is none, and skips the names already there, in this section or in the other one (idempotent; a unit cannot be in both, E2004). For a .dpr/.dpk use delphi_config add-unit instead |
 | `section` | string | optional | ADDUSES mode: "interface" or "implementation" (default implementation: a new unit goes there unless one of its types is used in the interface) |
 | `removeuses` | string | optional | REMOVEUSES mode: unit names to take out of the uses clause of "section", separated by ; - the inverse of adduses. A directive around the entry stays glued to its neighbour, and the clause goes whole when it empties. Names not there are reported, not an error. For a .dpr/.dpk use delphi_config remove-unit |
+<!-- /contract -->
+
+*Access: read-write.*
 
 ### `delphi_changeset`
 
-MULTI-FILE TRANSACTIONS: when one change touches several files, either the whole batch lands or none of it. Flow: `begin` (returns an id) → `stage` one operation per call (kind=edit|create|delete|move; nothing touches disk yet) → `preview` (resolves every edit anchor, rehearses each edit and create with the engine - encoding, read-only attribute, binary content, the write gate - and fingerprints every file the batch will touch) → `commit` (fingerprints re-checked — a file changed since preview refuses the WHOLE batch —, byte snapshots taken, operations applied in order; any failure restores every file byte-exact and reports which operation failed). `rollback` discards a staged batch; `status` lists open changesets. Edits use the delphi_edit contract (old = ONE full line, unique; `atline` pins a duplicate). Every anchor resolves against the file as it is BEFORE the changeset: an edit cannot anchor on a line an earlier edit of the same changeset writes (for several edits of one file, `delphi_edit edits=`). A changeset expires after 30 minutes unused.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write only.*
+MULTI-FILE TRANSACTIONS: when one change touches several files, either the whole batch lands or none of it. Flow: command=begin (returns an id) -> stage one operation per call (kind=edit|create|delete|move; nothing touches disk yet) -> preview (resolves every edit anchor, rehearses each edit and create with the engine - encoding, read-only attribute, binary content, the write gate - and fingerprints every file the batch will touch) -> commit (fingerprints re-checked - a file changed since preview refuses the WHOLE batch -, byte snapshots taken, operations applied in order; any failure restores every file byte-exact and reports which operation failed). rollback discards a staged batch; status lists open changesets. Edits use the delphi_edit contract: old = ONE full line, unique in the file (atline pins a duplicate) - or, for a LONG line, fragment + atline + new, resolved against the file when you stage it. Every anchor resolves against the file as it is BEFORE the changeset: an edit cannot anchor on a line an earlier edit of the same changeset writes (for several edits of one file, delphi_edit edits=). A changeset expires after 30 minutes unused. Use it for renames, refactors and any change where a half-applied batch would leave the project broken; for one file, plain delphi_edit is simpler.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | begin (new changeset → id) \| stage (add ONE operation) \| preview (resolve anchors, rehearse each edit and create with the engine - encoding, read-only attribute, binary content, the write gate - and fingerprint files; required before commit) \| commit (apply all or nothing) \| unstage (take operation `n` back out of the batch; n=0 = the last one) \| rollback (discard) \| status (list open ones) |
+| `command` | string | optional | begin (new changeset -> id) \| stage (add ONE operation) \| unstage (take operation "n" back out; n=0 = the last one) \| preview (resolve anchors, rehearse each edit and create with the engine, fingerprint files; required before commit) \| commit (apply all or nothing) \| rollback (discard) \| status (list open ones) |
 | `id` | string | optional | The changeset id returned by begin (every command except begin/status) |
-| `n` | integer | optional | unstage: the number of the staged operation to take back out (as `status` lists them); 0 = the last one |
-| `kind` | string | optional | stage: edit (replace ONE line by anchor; Delphi sources and plain text alike) \| create (new file, never overwrites) \| delete (the WHOLE FILE) \| delete-line (remove ONE line by `atline` — the only way to remove a BLANK line) \| move (destination must not exist) |
+| `kind` | string | optional | stage: edit (replace ONE line by anchor) \| create (new file, never overwrites) \| delete (the WHOLE FILE is removed; the snapshot is the way back) \| delete-line (remove ONE line by atline - the only way to remove a BLANK line, which has no usable anchor) \| move (rename/move, destination must not exist) |
 | `path` | string | optional | stage: the file the operation touches (inside the workspace roots) |
 | `dest` | string | optional | stage kind=move: the destination path |
-| `old` | string | optional | stage kind=edit: the anchor — ONE full line copied verbatim from delphi_read, unique in the file (or use fragment + atline instead). kind=delete-line: optional, the line you expect at atline - compared like an anchor, and the preview refuses when it is not that one |
-| `new` | string | optional | stage kind=edit: the replacement text (may span several lines). One trailing line break is the end of the last line and is dropped; each extra one is a blank line (end `new` with two breaks to leave one blank line after it). Same rule for one-line and block anchors. |
-| `fragment` | string | optional | stage kind=edit, instead of `old`: a piece of ONE long line, with `atline` mandatory; same rules as in `delphi_edit`. It is resolved against the file when you stage it, so an ambiguous fragment is refused there and not at commit |
+| `old` | string | optional | stage kind=edit: the anchor - ONE full line copied verbatim from delphi_read, unique in the file (or use fragment + atline instead). kind=delete-line: optional, the line you expect at atline - compared like an anchor, and the preview refuses when it is not that one |
+| `new` | string | optional | stage kind=edit: the replacement text (may span several lines). One trailing line break is the end of the last line and is dropped; each extra one is a blank line (end new with two breaks to leave one blank line after it). Same rule for one-line and block anchors |
 | `content` | string | optional | stage kind=create: the whole content of the new file |
-| `atline` | integer | optional | stage kind=edit: 1-based line number to pin the anchor when the same line appears more than once. REQUIRED for kind=delete-line. Line numbers are rebased automatically against what earlier operations of the same changeset did to that file |
+| `atline` | integer | optional | stage kind=edit optional: 1-based line number to pin the anchor when the same line appears more than once. REQUIRED for kind=delete-line. Line numbers are rebased automatically against what earlier operations of the same changeset did to that file |
+| `fragment` | string | optional | FRAGMENT mode, for LONG lines (a README paragraph, a long string): instead of "old", pass "fragment" = the exact piece of text to change INSIDE one line, "atline" = that line's 1-based number (MANDATORY, from delphi_read) and "new" = what replaces just that piece. The rest of the line is kept byte for byte. It is case-sensitive, and the fragment must appear EXACTLY ONCE in that line: zero or several is a refusal that shows you the real line - lengthen the fragment until it is unique. One line only (no line breaks in "fragment" nor, in this mode, in "new"); it does not combine with old, delete or toline, nor with another mode (insert, createunit, restore, create). Inside "edits" it is the same: {"fragment":"68","new":"69","atline":12}. |
+| `n` | integer | optional | unstage: number of the operation to remove, the one preview shows (0 or empty = the last one staged) |
+<!-- /contract -->
+
+*Access: read-write only.*
 
 ### `delphi_textedit`
 
-SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, web assets, tests, scripts, config. Same discipline as delphi_edit - one-full-line unique anchor (old/new, atline tie-break), DELETE mode (delete=true + old), several edits on the SAME file in one all-or-nothing call (`edits`), real encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), line endings preserved, automatic backup, atomic write - without the Pascal gates. CREATE mode (create=true + content) for new files, never overwrites. Whole-file rewrites are refused. Delphi sources/designers are refused (use delphi_edit) and so are .dproj and binaries. Read first with delphi_read and copy the anchor exactly.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write.*
+SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml - ANY plain text): docs, web assets, tests, scripts, config. Same discipline as delphi_edit - one-full-line unique anchor (old/new, atline tie-break; for a LONG line such as a README paragraph, fragment + atline + new changes just a piece of it), DELETE mode (delete=true + old), several edits on the SAME file in one all-or-nothing call ("edits", where an anchor may be ONE line or a contiguous BLOCK), real encoding preserved (UTF-8 +/- BOM / CP1252 / UTF-16), line endings preserved, automatic backup, atomic write - without the Pascal gates. CREATE mode (create=true + content) for new files, never overwrites. Whole-file rewrites are refused. Delphi sources/designers are refused (use delphi_edit) and so are .dproj and binaries. Read first with delphi_read and copy the anchor exactly.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the text file (.md .txt .html .js .css .sql .py .bat .ini .json .yml .xml ... any plain text - Delphi files are refused, use delphi_edit) |
 | `old` | string | optional | EDIT mode: the exact line to replace - ONE full line copied literally from delphi_read (everything after the \| bar). Leading indentation may be omitted |
-| `new` | string | optional | EDIT mode: the new text; may be several lines. Empty = blank the line. One trailing line break is the end of the last line and is dropped; each extra one is a blank line (end `new` with two breaks to leave one blank line after it). Same rule for one-line and block anchors. |
-| `fragment` | string | optional | FRAGMENT mode, for LONG lines (a README paragraph): instead of `old`, the exact piece of text to change INSIDE one line, with `atline` = that line's 1-based number (MANDATORY) and `new` = what replaces just that piece. The rest of the line is kept byte for byte. Case-sensitive, and the fragment must appear EXACTLY ONCE in that line: zero or several is a refusal that shows the real line. No line breaks; does not combine with old, delete or toline, nor with create |
+| `new` | string | optional | EDIT mode: the new text; may be several lines. Empty = blank the line. One trailing line break is the end of the last line and is dropped; each extra one is a blank line (end new with two breaks to leave one blank line after it). Same rule for one-line and block anchors |
 | `atline` | integer | optional | EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence |
-| `toline` | integer | optional | RANGE (1-based, included): the LAST line of the stretch. With it `old` stops being the line to touch and becomes the FIRST of a range that ends here: `delete:true` removes them all, `new` replaces them all with that text. Refused if the range runs backwards, runs past the end of the file, or swallows the file whole |
-| `edits` | string | optional | Several edits on THIS SAME file, in one call and ALL OR NOTHING: a JSON array `[{"old":"...","new":"...","atline":12},...]` applied IN ORDER. An anchor may be ONE full line or a contiguous BLOCK of lines, matched whole and in order; `"occurrence": 1, 2...` picks which one when it repeats (better than `atline` inside a batch: line numbers MOVE as earlier entries add or remove lines; `occurrence` counts on the file as it is BEFORE the batch, so after an entry changes occurrence 1 the next one asks for 2 - two entries on the same line are refused); `"delete": true` removes the line; `"toline": N` makes that entry a range. Ranges are dragged too, so an earlier entry that adds lines corrects the later `toline` by itself. For a LONG line an entry may carry `"fragment"` instead of `"old"`: `{"fragment":"68","new":"69","atline":12}` changes just that piece of line 12. A field that is not one of old/new/atline/toline/delete/occurrence/fragment is REFUSED, not ignored. If one entry fails the file goes back byte for byte and the answer names it. Changes across SEVERAL files are delphi_changeset. `edits` is the whole call: old/new/fragment/delete beside it are another mode (EDIT-111) and atline/toline go INSIDE each entry (EDIT-115) - refused, not ignored |
-| `delete` | boolean | optional | DELETE mode: true = remove the line anchored by `old` ENTIRELY (old + empty new only blanks it). No `new` here |
+| `toline` | integer | optional | RANGE (1-based, inclusive): the LAST line of the range. With this, "old" stops being the line to change and becomes the FIRST line of a range that ends here: with delete:true they all go, and with "new" they are all replaced by that text. It is the way to drop or replace a whole method without pasting it as an anchor. Refused if the range is backwards, goes past the end of the file or takes the whole file. |
+| `edits` | string | optional | SEVERAL edits on THIS SAME file, in a single call and ALL OR NOTHING: a JSON array [{"old":"...","new":"...","atline":12}, ...] applied IN ORDER. Each entry accepts two forms of anchor: ONE LINE (the same as a single edit) or a BLOCK of several consecutive lines in "old", searched for whole and in order - useful for replacing in one piece the body of a method or a long documentation paragraph. If the anchor appears more than once, break the tie with "occurrence": 1, 2... (better than "atline" inside a batch: line numbers MOVE as earlier entries add or remove lines, and "occurrence" does not: it counts on the file as it was BEFORE the batch, so if one entry changes occurrence 1, the next entry asks for 2, not for 1 again; two entries on the same line are refused). "delete": true removes the line; and with "toline": <number> the anchor stops being ONE line and becomes a RANGE - from the anchor's line to that one, both included - that is removed whole (delete) or replaced by "new". It is the way to drop a method without pasting it whole as an anchor. Inside a batch the range shifts too: if an earlier entry added or removed lines, "toline" is corrected on its own. If an entry fails, the file goes back byte for byte to how it was and you are told which one failed. For a LONG line, an entry can carry "fragment" instead of "old": {"fragment":"68","new":"69","atline":12} changes only that piece of line 12 (atline mandatory, and the piece exactly once in it). If the change touches SEVERAL files, that is delphi_changeset. "edits" is the whole call: old/new/fragment/delete are another mode (EDIT-111) and atline/toline go INSIDE each entry (EDIT-115). |
+| `fragment` | string | optional | FRAGMENT mode, for LONG lines (a README paragraph, a long string): instead of "old", pass "fragment" = the exact piece of text to change INSIDE one line, "atline" = that line's 1-based number (MANDATORY, from delphi_read) and "new" = what replaces just that piece. The rest of the line is kept byte for byte. It is case-sensitive, and the fragment must appear EXACTLY ONCE in that line: zero or several is a refusal that shows you the real line - lengthen the fragment until it is unique. One line only (no line breaks in "fragment" nor, in this mode, in "new"); it does not combine with old, delete or toline, nor with another mode (insert, createunit, restore, create). Inside "edits" it is the same: {"fragment":"68","new":"69","atline":12}. |
+| `delete` | boolean | optional | DELETE mode: true = remove the "old" anchored line ENTIRELY (old + an empty new only blanks it). No "new" here |
 | `create` | boolean | optional | CREATE mode: true = create a NEW file (never overwrites). UTF-8, parent directories created |
 | `content` | string | optional | CREATE mode: the initial content of the new file (may be empty) |
 | `eol` | string | optional | CREATE mode: line endings, "crlf" (default) or "lf" |
-
-### `delphi_create`
-
-Create a NEW Delphi project (console/VCL/FMX: .dpr + buildable .dproj + main form), a standalone unit or `.inc` (1.6.0: kind=unit with no project and an absolute `dir`, kind=include; a uses clause split in `{$IFDEF}` branches is never rewritten by add-unit/remove-unit/rename - edit its branch with delphi_edit) or a NEW form, frame or data module (VCL/FMX: .pas + .dfm/.fmx pair, registered in the .dpr uses - with Application.CreateForm for forms and data modules - and in the .dproj). IDE-equivalent skeletons, CRLF, source encoding follows the IDE's configured default (UTF-8/ANSI), never overwrites anything. kind=unit creates a plain .pas and registers it in the project (uses of the .dpr + DCCReference of the .dproj); forms get their Application.CreateForm too. An EXISTING .pas joins a project with delphi_config command=add-unit.
+<!-- /contract -->
 
 *Access: read-write.*
 
+### `delphi_create`
+
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+Create a NEW Delphi project (console/VCL/FMX: .dpr + buildable .dproj + main form; a runtime PACKAGE: .dpk + .dproj, built to BPL+DCP in its folder, never installed; or a TEST project: a DUnitX console runner with its first fixture, what delphi_test runs) or a NEW form, frame or data module (VCL/FMX: .pas + .dfm/.fmx pair, registered in the .dpr uses - with Application.CreateForm for forms and data modules - and in the .dproj). IDE-equivalent skeletons, CRLF, source encoding follows the IDE's configured default (UTF-8/ANSI), never overwrites anything. kind=unit creates a plain .pas and registers it in the project (uses of the .dpr + DCCReference of the .dproj); forms get their Application.CreateForm too. An EXISTING .pas joins a project with delphi_config command=add-unit. kind=unit with NO project and an ABSOLUTE dir creates it STANDALONE (no project lists it yet); kind=include creates a .inc with its content. A uses clause split in {$IFDEF} branches (each ending in its own ";") is never rewritten by add-unit, remove-unit or a rename - it would land in the wrong branch: edit the branch with delphi_edit.
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | **yes** | What to create: project-console \| project-vcl \| project-fmx \| project-package (a runtime package: .dpk + .dproj, requires rtl; units go into its contains clause with kind=unit or add-unit; built to BPL+DCP in its own folder, never installed in the IDE) \| project-test (a DUnitX console runner plus its first fixture, green at birth - what delphi_test discovers and runs; DUnitX ships with RAD Studio) \| form-vcl \| form-fmx \| frame-vcl \| frame-fmx \| datamodule \| unit (a plain .pas). Everything but projects is registered in the project given |
-| `dir` | string | optional | Projects: ABSOLUTE target directory (created if missing). Everything else (unit, form, frame, data module): optional SUBFOLDER of the project, RELATIVE to it and as deep as you like (`Dominio\Modelos\Dto`) - created if missing, and the unit is registered with that relative path. The folder layout is yours to decide. No absolute paths, no drive, no `..`. Empty = next to the .dpr |
-| `name` | string | **yes** | Projects: project name. Forms, frames, data modules and units: unit name (e.g. UClientes) |
-| `project` | string | optional | Everything but projects: absolute path of the project .dpr (or .dproj) to register the new unit in. kind=unit may go without it, with an ABSOLUTE `dir`: the unit is created standalone, listed by no project yet (1.6.0). kind=include: optional, `dir` then relative to it |
+| `kind` | string | **yes** | What to create: project-console \| project-vcl \| project-fmx \| project-package (a runtime package: .dpk + .dproj, requires rtl; its units go in with kind=unit or add-unit, into the contains clause; it is built to BPL+DCP in its own folder and never installed in the IDE) \| project-test (a DUnitX console runner plus its first fixture, green at birth - what delphi_test discovers and runs; DUnitX ships with RAD Studio) \| form-vcl \| form-fmx \| frame-vcl \| frame-fmx \| datamodule \| unit (a plain .pas) \| include (a .inc with its content; never registered, used with {$I}). Everything but projects and includes is registered in the project given - except a unit with NO project and an ABSOLUTE dir, created standalone |
+| `dir` | string | optional | Projects: ABSOLUTE target directory (created if missing). Everything else (unit, form, frame, data module): optional SUBFOLDER of the project, RELATIVE to it and as deep as you like (Domain\Models\Dto) - created if missing, and the unit is registered with that relative path. The folder layout is yours to decide. No absolute paths, no drive, no "..": what you create in a project hangs from that project. Empty = next to the .dpr. kind=unit or include WITHOUT project: the ABSOLUTE folder where the standalone file is created |
+| `name` | string | **yes** | Projects: project name. Forms, frames, data modules and units: unit name (e.g. UCustomers) |
+| `project` | string | optional | Everything but projects: absolute path of the project .dpr, .dpk or .dproj to register the new unit in (uses of a program, contains of a package). kind=unit may go without it, with an ABSOLUTE dir: the unit is created standalone, listed by no project yet (for a uses split in {$IFDEF} branches, add it to its branch with delphi_edit). kind=include: optional, and dir is then relative to it |
 | `formname` | string | optional | Forms/frames/data modules optional: instance name without the T (default: Form+unit, Frame+unit, DM+unit) |
-| `content` | string | optional | kind=unit: the FULL source of the unit, instead of the skeleton; its `unit X;` must match `name`. kind=include (1.6.0): REQUIRED, the text of the .inc |
+| `content` | string | optional | kind=unit optional: the FULL source of the unit. It is written as it comes (CRLF) and registered in the project in the same call - no need to create an empty skeleton and then rewrite it. Its `unit X;` must match "name", and it must end in `end.`. Without this, a standard empty skeleton is written. kind=include: REQUIRED, the text of the .inc |
+<!-- /contract -->
 
+*Access: read-write.*
 
 ## Manage files  (read-write only)
 
 ### `delphi_delete`
 
-Delete a file or folder inside the workspace. NOT a hard delete: the target is moved to a recoverable trash (__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. The one exception is the server's `__delphi-temp`: nothing is restored from a temp, so what you delete inside it goes for good - a trash already sitting inside it included - and the temp folder itself is refused, because it is every agent's (1.5.4). Jailed to the workspace roots, refused in read-only mode. Use it to clean up stray files and leftovers. Deleting a unit (.pas) also trashes its .dfm/.fmx and takes it out of every project that lists it (uses, CreateForm, DCCReference) - looked for from its folder UP to the edge of the workspace. Deleting a whole FOLDER takes the units inside it out of the project too. To keep the file but drop it from a project use delphi_config command=remove-unit.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write.*
+Delete a file or folder inside the workspace. NOT a hard delete: the target is moved to a recoverable trash (__delphi-patch\<date>\deleted\ next to it), so a mistake can be undone. The one exception is the server's __delphi-temp: nothing is restored from a temp, so what you delete inside it goes for good (the temp folder itself is refused: it is every agent's). Jailed to the workspace roots, refused in read-only mode. A folder that is or holds a workspace root, a reference project or a read-only folder is refused (it would go along). Use it to clean up stray files and leftovers. Deleting a unit (.pas) also trashes its .dfm/.fmx and takes it out of every project that lists it - looked for from its folder UP to the edge of the workspace, however deep the unit sits (uses, CreateForm, DCCReference). To keep the file but drop it from a project use delphi_config command=remove-unit.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the file or folder to delete (inside the workspace roots). Moved to a recoverable trash, not hard-deleted |
-| `purge` | boolean | optional | true = the one HARD delete: allowed only INSIDE the trash `__delphi-patch`, and only for what the same agent trashed. Everything else is always the recoverable move |
+| `purge` | boolean | optional | true = DELETE FOR REAL, with no way back. Only valid INSIDE the trash (__delphi-patch): it is for cleaning up your own copies when you no longer need them, not for skipping the trash. A live file always goes through it first, and that cannot be turned off. |
+<!-- /contract -->
+
+*Access: read-write.*
 
 ### `delphi_move`
+
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+Move or rename a file or folder inside the workspace, or COPY it with copy=true. The destination must be inside the workspace roots, and so must the source of a move; the source of a COPY only has to be readable (your roots, your ReadOnlyRoots, the library zone): a copy is how something is brought in from a reference project, its original untouched. Parent folders of the destination are created. The source is copied to the recoverable trash first. Jailed, refused in read-only mode. A FOLDER moves only as a rename on the same drive, whole or not at all (links inside travel as links); to another drive, copy=true and then delphi_delete. A folder that is or holds a root, a reference or a read-only folder is refused. Moving or renaming a unit (.pas) moves its .dfm/.fmx with it, rewrites its "unit X;" header on a rename, and re-points every project that lists it: the .dpr uses and DCCReference, the uses of every other unit of the project and every qualified UnitOld.X reference in them - looked for from its folder UP to the edge of the workspace, however deep the unit sits; all or nothing: a project that cannot be re-pointed (read-only, open elsewhere) refuses the whole move with nothing changed (MOVE-019). Moving a whole FOLDER re-points every unit inside it the same way: reorganise freely, the projects follow. And every RELATIVE path that crosses the border of what moved is re-pointed in the same call, once the unit and its designer are in place: inside what moved, the units from outside each project lists, the .dproj search/output paths, icon, manifest, .rc, deployed files and .optset, the {$I}/{$R}/{$L} directives (only if the file was where the directive says - one found through the include path is left alone) and the projects and dependencies of a .groupproj; outside it, in everything this session can write (a sibling project, an {$I} from another unit, a group and its dependencies), whatever pointed inside - a project moved one level deeper still compiles. What it could not re-point is named, for delphi_config command=fix-references. copy=true is the same door with a different last step: the source stays, no trash copy is taken, a copied unit named differently gets its "unit X;" header rewritten and its .dfm/.fmx copied along, and NO project is made to list the copy (a new unit nobody lists yet: delphi_config add-unit); what the copy points to outside IS re-pointed, so it compiles where it lands. Refused for a folder holding a .dproj/.dpk - a project never lives in two places; start one from another with delphi_create.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | **yes** | Absolute path of the file or folder to move (inside the workspace roots) |
+| `dest` | string | **yes** | Destination absolute path (inside the workspace roots). Parent folders are created. Renames when the parent is the same |
+| `copy` | boolean | optional | true = COPY instead of move: the source stays untouched, no trash copy is taken, and NO project is re-pointed (the copy is a new unit nobody lists yet - delphi_config add-unit). A copied unit named differently gets its "unit X;" header rewritten and its .dfm/.fmx copied along. The source only has to be READABLE (your roots, ReadOnlyRoots, the library zone): the way to bring a file in from a reference project. Refused for a folder that holds a .dproj/.dpk (a project never lives in two places) and for anything inside the trash. |
+<!-- /contract -->
+
+*Access: read-write.*
 
 `copy=true` (1.2.2) copies instead of moving, through the same gate: the source
 stays, no trash copy is taken, a copied unit named differently gets its `unit X;`
@@ -308,40 +372,32 @@ lives in two places; `delphi_create` starts one from another) and from the trash
 
 **Relative paths that cross the border are re-pointed (1.6.0).** Moving a folder (or a file) makes every RELATIVE path that crosses its border point somewhere else, so `delphi_move` re-points them in the same call, with the IDE's relative form, once the unit and its designer file are in place. Inside what moved: the units from OUTSIDE that each project lists (`.dpr`/`.dpk` and `DCCReference`), the `.dproj`'s search and output paths, its icon, manifest, `.rc` files, deployed files and imported `.optset`, the `{$I}`/`{$R}`/`{$L}` directives (only when the file was where the directive says: one the compiler finds through the include path is left alone) and the projects and dependencies of each `.groupproj`. Outside it, in everything this session can write - a sibling project, an `{$I}` from another unit, a group and its dependencies -, whatever pointed inside. What points inside what moved travels with it and is not touched. A path with `&` is escaped in the XML. The answer counts what it re-pointed and where; what it could not is named, for `delphi_config command=fix-references`.
 
-Move or rename a file or folder inside the workspace. Both source and destination must be inside the workspace roots; parent folders of the destination are created. The source is copied to the recoverable trash first. Jailed, refused in read-only mode. Moving or renaming a unit (.pas) moves its .dfm/.fmx with it, rewrites its "unit X;" header on a rename, and re-points every project that lists it: the .dpr uses and DCCReference, the uses of every other unit of the project and every qualified `UnitOld.X` reference in them (outside string literals) - looked for from its folder UP to the edge of the workspace, however deep the unit sits. All or nothing: a project that cannot be re-pointed (read-only, open elsewhere) refuses the whole move with nothing changed (`MOVE-019`), like a designer file that cannot follow (`MOVE-017`). Moving a whole FOLDER re-points the units inside it too.
-
-*Access: read-write.*
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `path` | string | **yes** | Absolute path of the file or folder to move (inside the workspace roots) |
-| `dest` | string | **yes** | Destination absolute path (inside the workspace roots). Parent folders are created. Renames when the parent is the same |
-| `copy` | boolean | optional | true = COPY instead of move: the source stays untouched, no trash copy is taken, and NO project is re-pointed (the copy is a new unit nobody lists yet - delphi_config add-unit). A copied unit named differently gets its "unit X;" header rewritten and its .dfm/.fmx copied along. The source only has to be READABLE (your roots, ReadOnlyRoots, the library zone): the way to bring a file in from a reference project. Refused for a folder that holds a .dproj/.dpk (a project never lives in two places) and for anything inside the trash. |
-
 Both refuse a workspace **root** itself: the trash folder is created next to the
 target, so for a root it would land in the root's parent - a write outside the
 jail - and take the whole workspace with it. Delete or move what lives *inside*
 a root. Changing the roots is the operator's job, in `settings.ini`.
 
-
 ## Build, run, package  (read-write only)
 
 ### `delphi_build`
 
-Build a Delphi project for real with MSBuild on this machine (rsvars located via registry). Returns success flag, compiler errors/warnings and the output tail. Use this as the closing verification after editing - the linter does not link nor produce binaries. Compile-only: a project that would EXECUTE a shell during build (a custom `<Target>`/`<Exec>`, a foreign `<Import>`) is refused unless the workspace declares `AllowBuildScripts=1`; its pre/post build EVENTS (signing, copies) are skipped instead, with `buildEventsSkipped` and a note - the binary is for working and testing, the final one is built where the events run. For a package (.dpk) the answer adds `implicitImports` (units of OTHER packages it compiled into itself, W1033) and `requiresSuggested` (their packages, read from the BPLs of this install - or, for a unit that lives in a `.dpk` of your own workspace, that package, found by climbing the folders from the one being built, with `requiresWorkspaceNote` telling you to build it first: installing packages stays the operator's job), the list `delphi_config add-requires` takes; a unit dcc cannot find at all is F2613 and comes back in `missingUnits` instead.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write.*
+Build a Delphi project for real with MSBuild on this machine. How much comes back is yours to choose with "verbosity": quiet (DEFAULT) = errors and the summary, a few lines, which is what a "does it still compile" build needs; normal = warnings too; verbose = everything. It sets the msbuild verbosity as well, so quiet really asks for less. Rsvars is located via the registry; the answer carries the success flag, the compiler errors/warnings, the output tail and which Delphi built. Use this as the closing verification after editing - the linter does not link nor produce binaries. Compile-only: a project that would EXECUTE a shell during build (a custom <Target>/<Exec>, a foreign <Import>) is refused unless the workspace declares AllowBuildScripts=1; its pre/post build EVENTS (signing, copies) are skipped instead, and buildEventsSkipped says so - the binary is for working and testing, the final one is built where the events run. For a package (.dpk) the answer adds implicitImports (units of OTHER packages it compiled into itself, W1033) and requiresSuggested (their packages, read from the BPLs of this install - or, for a unit of a .dpk of your own workspace, that package, with requiresWorkspaceNote telling you to build it first), the list delphi_config add-requires takes; a unit dcc cannot find at all is F2613 and comes back in missingUnits instead.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string | **yes** | Absolute path of the .dproj to build |
-| `platform` | string | optional | Target platform (default Win32): Win32/Win64 build natively here. Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and their SDK pulled once (delphi_paserver get-sdk). Building is LOCAL against that SDK and does NOT use profile — a PAServer profile is only needed for target=Deploy |
-| `config` | string | optional | A configuration the project declares, e.g. Debug or Release (default Debug); one it does not declare is refused (`delphi_config command=view` lists them). A simple name: letters, digits, space, `.`, `_`, `-` |
-| `target` | string | optional | Build (full, default), Make (incremental), Clean, or Deploy (always builds first, then deploys: to the PAServer of `profile` for Linux/macOS, or packages the app for Android). After switching platforms use Build |
-| `profile` | string | optional | Connection profile name for target=Deploy on a PAServer platform (see `delphi_paserver command=profiles`). The deployed files land on the target under its PAServer scratch dir, in `<windows user>-<profile>/<project name>/` |
-| `sdk` | string | optional | Which platform SDK to link against, BY NAME (`delphi_paserver command=profiles` lists them with their glibc). One SDK = one folder, the same model as the Android SDKs |
-| `verbosity` | string | optional (default `quiet`) | How much of the build comes back, the same contract as the house build script: `quiet` = errors + summary (a few lines, what "does it still compile" needs; msbuild is not even asked for the warnings, so none are reported rather than reporting zero), `normal` = warnings and milestones, `verbose` = everything, linker command line included |
-| `deviceid` | string | optional | Device id for target=Deploy. Measured: msbuild only installs on iOS devices with it; for Android, Deploy builds the .apk and `delphi_adb command=install` puts it on a device |
+| `platform` | string | optional | Target platform (default Win32): Win32/Win64 build natively here. Linux64/OSX64/OSXARM64/Android64/iOSDevice64... need the platform enabled in the project (delphi_config) and their SDK pulled once (delphi_paserver get-sdk). Building is LOCAL against that SDK and does NOT use profile - a PAServer profile is only needed for target=Deploy |
+| `config` | string | optional | A configuration the project declares, e.g. Debug or Release (default Debug); one it does not declare is refused (delphi_config command=view lists them) |
+| `target` | string | optional | Build (full, default), Make (incremental), Clean, or Deploy (always builds first, then deploys: to the PAServer of "profile" for Linux/macOS, or packages the app for Android). After switching platforms use Build |
+| `profile` | string | optional | Connection profile name for target=Deploy on a PAServer platform (see delphi_paserver command=profiles). The deployed files land on the target under its PAServer scratch dir, in <windows user>-<profile>/<project name>/ |
+| `sdk` | string | optional | Which platform SDK to link against, by name (delphi_paserver command=profiles lists them with their glibc). One SDK = one folder, the same model as the Android SDKs. Omit it and the project decides (its own PlatformSDK), or the only one there is; with several and no hint the build is refused instead of guessing |
+| `verbosity` | string | optional | How much of the build comes back, the same contract as the house build script: quiet (DEFAULT) = errors + the summary, a few lines, cheapest for "does it still compile"; normal = warnings and msbuild milestones; verbose = everything, including the linker command line whole - use it when a quiet error is not clear enough. It picks the msbuild verbosity too, so quiet really does ask for less, it does not just hide it. |
+| `deviceid` | string | optional | Device id for target=Deploy. msbuild only installs on iOS devices with it; for Android, Deploy builds the .apk and delphi_adb command=install puts it on a device (delphi_adb command=devices lists them) |
+<!-- /contract -->
+
+*Access: read-write.*
 
 **Which SDK a cross-platform build links against**, in this order: what the call asks for (`sdk`), what the PROJECT declares (its own `PlatformSDK` property — the IDE's model), the **default of the IDE's own SDK Manager** for that platform (an explicit choice of the operator, so it wins over any guess of ours), and otherwise the only one registered. Every answer says which one it used and why, in `sdk` and `sdkNote`. Only with several SDKs, no default and no hint is the build **refused, naming them**: linking against the wrong sysroot produces a binary that dies on the target with `GLIBC_2.xx not found`, which is a far worse way to find out. The answer always carries the `sdk` it used, and `sdkWarning` when that sysroot holds two distributions at once (what the old get-sdk left behind by pulling every target into one folder).
 
@@ -366,69 +422,99 @@ Deploy declares the built `.apk` as `output`.
 
 ### `delphi_help`
 
-THE MAP of this server, so an agent does not have to spend context working it out. `command=tasks` (the default) gives the task → tool table, one line each: what do I use to read, to edit, to compile, to change several files at once, to rename, to test, to deploy. `command=tool name=<tool>` gives ONE tool in full (description + parameters) without asking for `tools/list`, which returns them all at once. `command=conventions` gives the rules that hold for every tool: paths and virtual drives, the jail, anchored editing, the backups, encodings. Start here after connecting.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+THE MAP of this server, so you do not have to work it out by trial and error. command=tasks (default) gives the task -> tool table, one line each: what to use to read, to edit, to build, for several files at once, to rename, for tests, to deploy. command=tool name=<tool> gives ONE whole tool (description + parameters) without asking for tools/list again, which brings them ALL at once. command=conventions gives the rules that apply to all of them: paths and virtual drives, the jail, how editing by anchor works, backups and encodings. Start here if you have just connected.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | tasks (task -> tool table; default) \| tool (one whole tool, with "name") \| conventions (the rules common to all of them) |
+| `name` | string | optional | command=tool: name of the tool (delphi_edit, or just "edit") |
+<!-- /contract -->
 
 *Access: read-only.*
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `command` | string | optional | tasks (task → tool table; the default) \| tool (one tool in full, with `name`) \| conventions (the rules common to all) |
-| `name` | string | optional | `command=tool`: the tool's name (`delphi_edit`, or just `edit`) |
-
 ### `delphi_test`
 
-TESTS — the difference between "it compiles" and "it works". `discover path=<folder or project>` lists the test projects underneath (a `.dpr` using DUnitX, or a console one whose name says test/tests/spec). `run project=<the test .dproj>` builds and runs that runner and answers STRUCTURED: `total`, `passed`, `failed`, the failing lines, `exitCode`, `durationMs` and a bounded tail of what it printed. Two dialects are understood: DUnitX's own summary and the plain `PASS`/`FAIL` + ExitCode convention of a hand-written console runner. The verdict says where it came from (`verdictFrom: counts | exitCode`) and never guesses. Running tests IS execution: its own switch, `AllowTests=1` declared in the calling workspace, and the one thing that ever runs on this server; the binary is built here, comes from a project of the jail, and runs in a low-integrity sandbox, with a timeout. Without the switch, `discover` still works and `run` is refused.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+TESTS: the difference between "it compiles" and "it works". command=discover path=<folder or project> lists the test projects underneath (a .dpr that uses DUnitX, or a console one whose name says test/spec). command=run project=<.dproj of the test> builds and runs that runner and returns the STRUCTURED result: total, passed, failed, the list of failures, exitCode, duration and the tail of what it printed. It understands two dialects: the DUnitX summary and the PASS/FAIL + ExitCode convention of a hand-written console runner. The verdict says where it comes from (verdictFrom: counts or exitCode) and never invents it. Running tests is RUNNING, and it is the only thing that runs on this server: it has its own switch [Workspace.<name>] AllowTests; the binary is built here, comes from a project in the jail and runs in a low-integrity sandbox, with a timeout. Without that switch, discover works and run is refused.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | discover (list the test projects under "path") \| run (build and run the one in "project"). Default: discover |
+| `path` | string | optional | discover: folder (or project) under which to look for test projects |
+| `project` | string | optional | run: the .dproj (or .dpr) of the test project to run |
+| `config` | string | optional | run: configuration to build and run (Debug by default) |
+| `filter` | string | optional | run optional: test filter for frameworks that support it (DUnitX --run:, read by TDUnitX.CheckCommandLine: the project from delphi_create kind=project-test calls it); a runner that does not read its command line ignores it |
+| `timeoutms` | integer | optional | run optional: maximum run time in milliseconds (120000 by default, maximum 600000). A test that hangs is cut off, and the answer says so |
+| `platform` | string | optional | run optional: platform to build and run (Win64 by default). Only platforms of THIS machine: the binary runs here |
+| `nobuild` | boolean | optional | run optional: true = do NOT build first, run the binary that already exists. By default it builds (running an old binary is lying) |
+<!-- /contract -->
 
 *Access: mixed (discover read-only; run read-write + AllowTests).*
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `command` | string | optional | discover (list test projects under `path`) \| run (build and run the one in `project`). Default: discover |
-| `path` | string | optional | discover: folder (or project) to search under |
-| `project` | string | optional | run: the `.dproj` (or `.dpr`) of the test project |
-| `config` | string | optional | run: configuration to build and run (Debug by default) |
-| `platform` | string | optional | run: platform to build and run on (default Win64) — the platforms of THIS machine only, Win32/Win64: the runner executes here |
-| `filter` | string | optional | run: test filter for frameworks that support it (DUnitX `--run:`); a hand-written runner ignores it |
-| `timeoutms` | integer | optional | run: max milliseconds (120000 default, 600000 max). A hanging test is cut and said so |
-| `nobuild` | boolean | optional | run: true = do not build first, run the existing binary. By default it builds (running a stale binary is a lie) |
-
 ### `delphi_package`
 
-Zip a build-output directory ON the server into a single deploy artifact (recursive, *.dcu intermediates excluded), ready to download with ONE delphi_fetch. The standard way to bring a GUI app to the client machine: delphi_build -> delphi_package -> delphi_fetch.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write.*
+Zip a build-output directory ON the server into a single deploy artifact (recursive, *.dcu intermediates excluded), ready to download with ONE delphi_fetch. The standard way to bring a GUI app to the client machine: delphi_build -> delphi_package -> delphi_fetch.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `dir` | string | **yes** | Directory to package (e.g. the build output Win64\Debug). Recursive; *.dcu and dcu\ intermediates excluded |
 | `outfile` | string | optional | Optional zip path, ending in .zip (default: sibling of dir, named <dirname>-deploy.zip). An existing .zip there is replaced. Must be inside the workspace roots |
+<!-- /contract -->
 
+*Access: read-write.*
 
 ## Cross-platform: build configs, remote platforms & devices
 
 ### `delphi_config`
 
-See and manage a project's build configurations and target PLATFORMS. command=view (read-only) answers a SUMMARY by default — framework (VCL is Windows-only; FMX and console cross platforms), build configurations, enabled platforms and counts of the rest, plus `remoteTargets`: each ENABLED remote platform with the `sdk` and the PAServer `profile` it builds and deploys with and where each comes from (`sdkSource` / `profileSource`: `project`, IDE default, or none - with the command that fixes it); `section=platforms` carries the same four fields on every remote platform — and `section=platforms|searchpaths|deploy|units|all` brings each detail on demand (platform states and reasons, unit search paths per group, deployment files, project units, or the old everything-at-once view). command=add-platform enables a platform in the .dproj (a curated edit of the `<Platforms>` block only) and, when given `sdk` and/or `profile`, leaves both set on the project in the same call - adding a target to a project is one gesture, the same three things the IDE's dialog asks for; remove-platform disables it again. command=set-profile does the same for the PAServer connection - the `Profile` property - so a `target=Deploy` no longer needs to be told the profile on every call; in the IDE both halves are one gesture, because adding a target to a project IS giving it a connection and an SDK. command=set-sdk fixes WHICH platform SDK this project builds a platform with - the `PlatformSDK` property, the same one the IDE writes from Project Options, and the way the model is meant to work: many SDKs registered, and the project choosing. Without it the build rides on the SDK Manager default, which is a fallback, not a decision. command=set-version writes the project VERSION where it has to agree with itself: the Windows VERSIONINFO numbers (VerInfo_MajorVer/MinorVer/Release/Build) AND the FileVersion/ProductVersion keys, which is exactly what drifts when a release is cut by hand; a suffix like -beta is accepted and ignored because the VERSIONINFO is numeric, and Android (versionCode/versionName) and iOS (CFBundleVersion) are NOT touched - that numbering is a different thing. command=set-output puts every binary under one folder (output=Compiled by default): a curated edit that sets DCC_ExeOutput/DCC_DcuOutput, keeping the per-platform/config subfolders. command=add-searchpath adds a unit search path (where the compiler looks for .pas/.dcu, e.g. the Source folder of an installed component) to ONE platform - the IDE's Project Options > Search path - creating the platform's property groups exactly as the IDE would; a platform added to a project inherits NO search paths from the others, which is the usual reason a unit is "not found" on the new platform only. remove-searchpath takes it out again. command=add-deployfile ships an extra file with the build on ONE platform - the IDE's Deployment Manager: the native library a component loads at runtime (.so/.dylib/.dll), data files - written into the .deployproj as the IDE does (Debug and Release), generating the standard manifest first if the project has none; remove-deployfile takes it out again. command=add-unit / remove-unit is the IDE's Add to project / Remove from project for an EXISTING .pas (uses of the .dpr, CreateForm for forms, DCCReference of the .dproj); the file stays on disk. To BUILD a specific combination use delphi_build with platform+config.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: mixed (view read-only; every other command read-write).*
+See and manage a project's build configurations and target PLATFORMS. command=view (read-only) reports the framework (VCL is Windows-only; FMX and console cross platforms), the build configurations (Debug/Release/custom) and every platform with whether it is enabled, whether THIS project can target it, and whether it needs a remote PAServer profile. command=add-platform enables a platform in the .dproj (a curated edit of the <Platforms> block only); remove-platform disables it again. command=set-version writes the project VERSION where it has to agree with itself: the Windows VERSIONINFO numbers AND the FileVersion/ProductVersion keys, which is exactly what drifts when a release is cut by hand (a -beta suffix is accepted and ignored, and Android/iOS numbering is not touched). On a .groupproj (a project group): view lists its projects, and add-project / remove-project (path = the .dproj) write what the IDE's Add existing project writes. command=fix-references, on a project or a group, re-points what is no longer where it says (moved by hand), finding it by its name in the workspace - one match only, never a guess. command=set-output puts every binary under one folder (output=Compiled by default): a curated edit that sets DCC_ExeOutput/DCC_DcuOutput, keeping the per-platform/config subfolders. command=add-searchpath adds a unit search path (where the compiler looks for .pas/.dcu, e.g. the Source folder of an installed component) to ONE platform - the IDE's Project Options > Search path - creating the platform's property groups exactly as the IDE would; a platform added to a project inherits NO search paths from the others, which is the usual reason a unit is "not found" on the new platform only. remove-searchpath takes it out again. command=add-deployfile ships an extra file with the build on ONE platform - the IDE's Deployment Manager: the native library a component loads at runtime (.so/.dylib/.dll), data files - written into the .deployproj as the IDE does (Debug and Release), generating the standard manifest first if the project has none; remove-deployfile takes it out again. command=add-unit / remove-unit is the IDE's Add to project / Remove from project for an EXISTING .pas (uses of the .dpr, CreateForm for forms, DCCReference of the .dproj); the file stays on disk. To BUILD a specific combination use delphi_build with platform+config.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `project` | string | **yes** | Absolute path of the project .dproj (its .dpr/.dpk resolves to it). A `.groupproj` (a project group) takes `view` (its projects), `add-project`, `remove-project` and `fix-references`; every other command is refused, and a file that is not a project is refused too (1.6.0) |
-| `section` | string | optional | view: summary (default) \| platforms \| searchpaths \| deploy \| units \| all — which detail the view brings (platform states and reasons, unit search paths per group, deployment files, project units, or everything at once) |
-| `command` | string | optional | view (default: project summary; section= brings the detail per area) \| add-platform (enable a platform; with `sdk` and/or `profile` it also leaves them set on the project, which is what the IDE's own dialog does: platform + connection + SDK in one gesture) \| remove-platform (disable it again) \| set-output (put every binary under one folder, e.g. Compiled) \| set-version (the project VERSION: the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys, which have to agree; Android and iOS numbering is not touched) \| set-sdk (the SDK this PROJECT builds a platform with - its own PlatformSDK, which is the IDE's model; \"none\" goes back to the SDK Manager default)  \| set-profile (the PAServer profile this PROJECT deploys and runs a platform with - its own Profile property; the twin of set-sdk, because adding a target to a project is giving it BOTH) \| add-searchpath (add a unit search path for one platform, or for all) \| remove-searchpath (take it out again) \| add-deployfile (ship an extra file with the build on one platform: a component's runtime .so/.dll/.dylib) \| remove-deployfile (take it out again) \| add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) \| remove-unit (take it out of the project; the file stays on disk) \| add-requires (packages only: add package names to the requires clause of the .dpk - what the IDE offers after a build reports W1033, and what delphi_build lists in requiresSuggested) \| fix-references (re-point what the project - or a .groupproj - lists and is no longer where it says, moved by hand: the file is found again by its NAME inside the workspace; one match is re-pointed, none or several are reported, never guessed; search paths that do not exist are reported) \| add-project / remove-project (on a .groupproj, `path` = the .dproj: what the IDE's *Add existing project* writes - the `<Projects>` item, its three targets and its name in Build/Clean/Make - or takes out) |
+| `project` | string | **yes** | Absolute path of the project .dproj (its .dpr/.dpk resolves to it). A .groupproj (a project group) takes view, add-project, remove-project and fix-references; every other command is refused |
+| `command` | string | optional | view (default: project summary; section= brings the detail per area) \| add-platform (enable a platform) \| remove-platform (disable it again) \| set-output (put every binary under one folder, e.g. Compiled) \| set-version (the project VERSION: the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys, which have to agree) \| set-sdk (the SDK this project builds a remote platform with, by name; "none" goes back to the SDK Manager default) \| set-profile (the PAServer profile it deploys and runs that platform with; "none" falls back to the platform's active profile) \| add-searchpath (add a unit search path for one platform, or for all) \| remove-searchpath (take it out again) \| add-deployfile (ship an extra file with the build on one platform: a component's runtime .so/.dll/.dylib) \| remove-deployfile (take it out again) \| add-unit (register an existing .pas in the project: uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) \| remove-unit (take it out of the project; the file stays on disk) \| add-requires (packages only: add package names to the requires clause of the .dpk - what the IDE offers after a build reports W1033, and what delphi_build lists in requiresSuggested) \| fix-references (re-point what the project - or a .groupproj - lists and is no longer where it says, moved by hand: the file is found again by its name inside the workspace; one match is re-pointed, none or several are reported, never guessed) \| add-project / remove-project (on a .groupproj, path = the .dproj: what the IDE's Add existing project writes - the <Projects> item, its three targets and its name in Build/Clean/Make - or takes out) |
 | `platform` | string | optional | add/remove-platform: the Delphi platform name (Win32, Win64, Linux64, Android64...; a name the server does not know is refused with the full list). add/remove-searchpath: the platform whose search path changes; empty = the base group (every platform). add/remove-deployfile: the platform the file ships on (required). set-sdk / set-profile: the platform whose SDK or profile is set |
-| `path` | string | optional | add/remove-searchpath: the unit search path to add or remove - a folder where the compiler looks for .pas/.dcu, e.g. the Source folder of an installed component. IDE macros like `$(BDS)` accepted; relative paths resolve from the project folder. Must resolve inside the workspace or the library zone and exist. add/remove-unit: the .pas to register in / take out of the project. add/remove-deployfile: the file to ship (e.g. a component's `Library\Linux64\libzbar.so`) add/remove-project: the .dproj to add to / take out of the .groupproj given in `project`. |
-| `remotedir` | string | optional | add-deployfile: destination folder on the target, relative to the deployment root (the IDE's RemoteDir). Default: the project folder, next to the binary - or, for a .so on Android, the apk's `library\lib\<abi>\`. No absolute paths, no `..` |
-| `sdk` | string | optional | set-sdk: the SDK by name (`delphi_paserver command=profiles` lists them with their glibc). `none` removes the setting and falls back to the SDK Manager default. add-platform takes it too, set in the same call (all or nothing) |
-| `profile` | string | optional | set-profile: the PAServer connection profile by name (`delphi_paserver command=profiles` lists them). Refused on local platforms - Windows builds here and takes no profile. `none` removes the setting. add-platform takes it too, set in the same call (all or nothing) |
-| `output` | string | optional | set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to `<folder>\$(Platform)\$(Config)` and .dcu to `<folder>\Dcu\$(Platform)\$(Config)`. Use "default" to restore the RAD Studio layout. No absolute paths, no ".." |
-| `version` | string | optional | set-version: the version to write, 2 to 4 numbers (1.2, 1.2.3, 1.2.3.4); a suffix like -beta is accepted and ignored, because the VERSIONINFO is numeric. It goes to the Windows VerInfo numbers AND to the FileVersion/ProductVersion keys at once - they have to agree and that is exactly what drifts when they are edited by hand. Android (versionCode/versionName) and iOS (CFBundleVersion) are NOT touched |
+| `sdk` | string | optional | set-sdk: the SDK this PROJECT builds that platform with, by name (delphi_paserver command=profiles lists them with their glibc). One SDK = one folder, and the project choosing is the IDE's own model - without it everything rides on the SDK Manager default. "none" removes the setting and goes back to that default. add-platform takes it too, set in the same call (all or nothing). |
+| `profile` | string | optional | set-profile: the PAServer connection profile this PROJECT deploys and runs that platform with (delphi_paserver command=profiles lists them). The twin of set-sdk: in the IDE, adding a target to a project is giving it BOTH - the connection and the SDK. "none" removes it and falls back to the platform's active profile. add-platform takes it too, set in the same call (all or nothing). |
+| `path` | string | optional | add/remove-searchpath: the unit search path to add or remove - a folder where the compiler looks for .pas/.dcu, e.g. the Source folder of an installed component (delphi_workspace lists the readable library zone). IDE macros like $(BDS) are accepted; relative paths resolve from the project folder. Must resolve inside the workspace or the library zone and exist. add/remove-unit: the .pas to register in / take out of the project (add/remove-deployfile: the file to ship). add/remove-project: the .dproj to add to / take out of the .groupproj given in project. |
+| `section` | string | optional | For view only: summary (default: framework, configurations, active platforms and counts) \| platforms (each platform with its state and its reasons) \| searchpaths (paths by group) \| deploy (files by platform) \| units (all the units of the project) \| all (everything together, large). |
+| `remotedir` | string | optional | add-deployfile: destination folder on the target, relative to the deployment root (the IDE's RemoteDir). Default: the project folder, next to the binary - or, for a .so on Android, the apk's library\lib\<abi>\. No absolute paths, no "..". |
+| `version` | string | optional | set-version: the version to write, 2 to 4 numbers (1.2, 1.2.3, 1.2.3.4); a suffix like -beta is accepted and ignored, because the VERSIONINFO is numeric. It goes to the Windows VerInfo numbers AND to the FileVersion/ProductVersion keys at once - they have to agree and that is exactly what drifts when they are edited by hand. Android (versionCode/versionName) and iOS (CFBundleVersion) are NOT touched. |
+| `output` | string | optional | set-output: the output folder for binaries, a simple relative name like Compiled (default). The .exe goes to <folder>\$(Platform)\$(Config) and .dcu to <folder>\Dcu\$(Platform)\$(Config). Use "default" to restore the RAD Studio layout. No absolute paths, no "..". |
 | `requires` | string | optional | add-requires: the package names to add to the requires clause of the .dpk, separated by ; (vcl;dbrtl) - take them from requiresSuggested of the delphi_build answer. Names already there are kept, not repeated |
+<!-- /contract -->
+
+*Access: mixed (view read-only; every other command read-write).*
 
 ### `delphi_paserver`
 
-The bridge for building and running on OTHER platforms (Linux, macOS) through the Platform Assistant (PAServer). command=packages lists the PAServer installers that ship with each Delphi install (download them with delphi_fetch and run them on the target machine); command=platforms shows which platforms this server can target; command=profiles lists the registered connection profiles and SDKs; command=add-profile registers a connection profile against a live PAServer (the password is used once by `paclient` to write the profile and stored ENCRYPTED, never shown back) - and since v0.98 it also writes the twin seat the IDE keeps in the registry (`RemoteProfiles\<name>`), refuses to overwrite an existing name and warns when another profile already points at the same host:port. The IDE builds its Connection Profile Manager list from THAT registry key, and it reads it **at startup**: a profile created while the IDE is running appears at its next start, not before. If a profile exists on disk but the IDE does not list it, `command=reseat` repairs exactly that - it walks the `.profile` files and writes the missing seats, reading each encrypted password from its own file, so it needs no PAServer and nobody ever has to know a password. (Measured 2026-09-20 on a live setup: two profiles invisible in the IDE, one `reseat`, and both appeared in the registry and in the IDE's list.) The other half is what actually builds: `paclient`, MSBuild and every tool here read the `.profile` FILES - connecting, pulling an SDK, building, deploying and running on a target all work from them, with or without a seat; command=test-connection with name dials the PAServer of that profile (full handshake, credentials included), and with host+port and NO name it is a raw TCP reachability probe - the quick "does this server reach my PAServer at all?" answer, no credentials involved; command=get-sdk pulls the platform SDK/sysroot (the libraries the linker needs) from the PAServer of profile `name` and registers it for delphi_build AND in the IDE's SDK Manager (path table read from that install's own Linux64.defaultsdkpaths, nothing hardcoded) - run it once per target (can take minutes; re-run after OS upgrades on the target). Building for the platform is delphi_build once profile and SDK exist. command=remote-run EXECUTES a program on the target of profile `name` and returns its exit code and output (optional `exe` naming another file of the SAME deploy folder, `args` and `timeoutms`) - and NOTHING has to be installed on the target: the server uploads a job file (the binary, the output file, one argument per line) and the native launcher `node\McpRunJob` (paclient's put flag 3 on Linux, 5 on Windows), which PAServer starts - no shell anywhere in the path. The launcher checks the binary is native (ELF/PE) so only the NATIVE BINARY that project deployed ever runs - never another file of the machine, never a script sitting in the folder. The program's output lands in a file ending in an `___RC=<code>` sentinel; while the sentinel is missing the program is still running, and when the timeout expires it is NOT killed: you get `stillRunning: true` plus its PARTIAL output (a GUI app is meant to stay up - drive it with delphi_desktop).
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+The bridge for building and running on OTHER platforms (Linux, macOS) through the Platform Assistant (PAServer). command=packages lists the PAServer installers that ship with each Delphi install (download them with delphi_fetch and run them on the target machine); command=platforms shows which platforms this server can target; command=profiles lists the registered connection profiles and SDKs; command=add-profile registers a connection profile against a live PAServer (name, host, password; optional port, platform) with the password stored encrypted; command=test-connection with name dials the PAServer of that profile (full handshake, credentials included), and with host+port and NO name it is a raw TCP reachability probe - the quick "does this server reach my PAServer at all?" answer, no credentials involved; command=get-sdk pulls the platform SDK/sysroot (the libraries the linker needs) from the PAServer of profile "name" and registers it, so delphi_build can link for that platform - run it once per target (can take minutes; re-run after OS upgrades on the target). Building for the platform is delphi_build once profile and SDK exist; enabling a platform in a project is delphi_config.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | platforms (what this server can target + profile/SDK status) \| packages (PAServer installers to download and run on the target) \| profiles (registered connection profiles and SDKs) \| reseat (write the missing IDE seats for profiles already on disk: no PAServer, no password needed) \| add-profile (register a connection profile: name, host, password; optional port, platform - the host must be one the workspace allows in RemoteHosts, because registering a profile IS declaring where this machine may connect; an existing name is refused, never overwritten, and the new profile shows up in the IDE too) \| remove-profile (delete a profile by name, from the IDE list too; they live outside the workspace, so there is no trash for them) \| test-connection (with name: full handshake against that profile; with host+port and no name: raw TCP reachability probe, same host rule) \| get-sdk (pull the SDK/sysroot from the PAServer of profile "name" into a folder OF ITS OWN, named after the target distribution, and register it for delphi_build AND in the IDE SDK Manager; can take minutes) \| reseat-sdk (re-write the IDE SDK Manager seat of an SDK already on disk - no network, nothing downloaded again; "sdk" names one, no name does them all) \| remove-sdk (take an SDK out of the way: its .sdk file and its IDE seat; the sysroot stays on disk and the answer says where) \| remote-run (execute "exe" on the target of profile "name" and return its exit code and output - NOTHING has to be installed there: PAServer itself runs it. It runs the program THAT PROJECT deployed and nothing else on that machine, and it does NOT kill what has not finished when the timeout expires - a program with a window is meant to stay up, so you get its partial output and stillRunning=true) \| kill (stop a program a remote-run left running: name, project and the "job" id that answer gave you; only a job of THAT project on THAT machine can be killed) \| output (what a remote-run job has written SINCE its answer came back - an error on closing, its exit code: same name, project and job as kill; while it lives you get what it wrote so far, once it ended the whole of it and its exit code, and then its output is deleted on the target). Default: platforms |
+| `name` | string | optional | Profile name (letters, digits, "_", "-"): add-profile creates it, test-connection dials it |
+| `host` | string | optional | Host or IP where the target PAServer listens (add-profile, or test-connection without name for a raw TCP probe) |
+| `port` | string | optional | Port of the target PAServer (add-profile / test-connection). Default: 64211 |
+| `password` | string | optional | The PAServer password (add-profile). Used once to create the profile, stored encrypted, never shown back |
+| `platform` | string | optional | Platform of the profile, one that paclient takes (Linux64, OSX64, Win64...; a wrong one is refused with the list). Default: Linux64 |
+| `project` | string | optional | remote-run: the .dproj whose DEPLOYED program you want to run. The server derives the path on the target itself (<user>-<profile>/<Project>/<Project>, what target=Deploy wrote): nothing else of the remote machine can be executed |
+| `exe` | string | optional | remote-run OPTIONAL: another file OF THAT SAME deploy folder to run instead of the project binary - a plain file name, no path separators. Default: the project binary |
+| `args` | string | optional | remote-run: optional command-line arguments for the program (no shell metacharacters) |
+| `job` | string | optional | kill / output: the "jobId" a remote-run answer gave you (the program that run left running on the target). Together with name and project: only a job of THAT project on THAT machine can be killed or read |
+| `sdk` | string | optional | get-sdk optional: the NAME of the SDK to write (a folder of its own, like the IDE does with the Android ones). Default: the target distro read from its /etc/os-release (zorin18, fedora44, ubuntu2404). Pass it to keep one SDK as "the one this shop builds with" |
+| `active` | string | optional | get-sdk optional, "yes" to make this the ACTIVE SDK of the platform - the bold entry of the IDE SDK Manager, the one a project builds with when it declares none ("Make the selected SDK active" in the IDE dialog). Default: NOTHING is touched. Pulling a sysroot is not deciding what this machine builds with: that belongs to the project (delphi_config command=set-sdk) or to you. |
+| `timeoutms` | integer | optional | remote-run: max milliseconds to wait for the program (default 30000, max 300000) |
+<!-- /contract -->
 
 *Access: mixed (platforms / packages / profiles read-only; reseat / add-profile / remove-profile / test-connection / get-sdk / reseat-sdk / remove-sdk / remote-run / kill read-write).*
 
@@ -439,22 +525,6 @@ The bridge for building and running on OTHER platforms (Linux, macOS) through th
 `command=reseat-sdk` is the SDK twin of `reseat`: it re-writes the IDE's SDK Manager seats from the SDKs already on disk, with no network and nothing downloaded again. It exists because that seat lives in the REGISTRY, so it only lands where the operator's own server can write it — if the SDK shows up for `delphi_build` but not in the IDE, run this from the server you started yourself and reopen the IDE (it reads that list at startup).
 
 **You do NOT need one SDK per Linux, and that is the point.** A binary linked against an OLD glibc runs on newer distributions; the reverse dies with `GLIBC_2.xx not found`. So keep pulling each target into its own folder, and build everything with the one whose glibc is the OLDEST in your fleet — `command=profiles` reports the `glibc` of every SDK you have (the IDE's own included) plus a `warning` on any folder that holds two distributions.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `command` | string | optional | platforms (what this server can target + profile/SDK status) \| packages (PAServer installers) \| profiles (registered profiles and SDKs, plus what the IDE's own registry holds: `ideRegistrySeats` for the connection profiles, `ideSdkSeats` for the SDKs and `ideSdkDefaults` for the SDK each platform builds with when nobody says - files on one side, registry on the other, and the pair tells you why the IDE shows what it shows) \| reseat (write the missing IDE seats for profiles already on disk; no PAServer, no passwords needed) \| add-profile (register a profile: name, host, password; optional port, platform) \| remove-profile (delete one by name) \| test-connection (with name: full handshake; with host+port and no name: raw TCP probe) \| get-sdk (pull the SDK/sysroot of profile "name" into a folder of its own, named after the target distribution) \| reseat-sdk (re-write the IDE SDK Manager seats of the SDKs already on disk - no network, nothing downloaded again) \| remove-sdk (take an SDK out of the way: its `.sdk` file and its IDE seat. The sysroot itself - gigabytes - is NOT deleted: the answer says where it is) \| remote-run (run the program `project` DEPLOYED on the target of profile "name"; the remote path is derived by the server, never given; nothing installed on the target - PAServer itself launches it) \| kill (stop a program a remote-run left running: `name`, `project`, `job`) \| output (what a remote-run job has written since its answer came back: same `name`, `project`, `job`; alive, what it wrote so far; ended, all of it and its exit code, and then it is deleted on the target). Default: platforms |
-| `name` | string | optional | Profile name (letters, digits, `_`, `-`): add-profile creates it, test-connection dials it, get-sdk pulls from it |
-| `sdk` | string | optional | get-sdk: the NAME for the SDK it writes (its own folder). Default: the target's distribution, read from its `/etc/os-release` — `zorin18`, `fedora44`, `ubuntu2404` |
-| `active` | string | optional | get-sdk: make this the ACTIVE SDK of the platform — the bold entry of the IDE's SDK Manager, the one a project builds with when it declares none (the dialog's "Make the selected SDK active"). Default: NOTHING is touched; `si`/`yes`/`true`/`1` makes it active, anything else leaves the seat alone |
-| `host` | string | optional | Host or IP where the target PAServer listens (add-profile, or test-connection without name for the raw TCP probe) |
-| `port` | string | optional | Port of the target PAServer (add-profile / test-connection). Default: 64211 |
-| `password` | string | optional | The PAServer password (add-profile). Used once to create the profile, stored encrypted, never shown back - and masked in the server logs |
-| `platform` | string | optional | Platform of the profile: Win32 \| Win64 \| WinARM64EC \| OSX64 \| Linux64. Default: Linux64 |
-| `project` | string | optional | remote-run: the `.dproj` whose DEPLOYED program you want to run. The server derives the remote path (`<user>-<profile>/<Project>/<Project>`) — nothing else of the target can be executed |
-| `exe` | string | optional | remote-run: another file OF THAT SAME deploy folder instead of the project binary — a plain file name, no separators, no `..` |
-| `args` | string | optional | remote-run: command-line arguments for the program (no shell metacharacters) |
-| `timeoutms` | integer | optional | remote-run: max milliseconds to wait for the program (default 30000, max 300000) |
-| `job` | string | optional | kill / output: the `jobId` a remote-run answer gave you. With `name` and `project`: only a job of THAT project on THAT machine can be killed |
 
 `remote-run` also needs TWO declarations in the calling workspace: `AllowRemoteRun=1` and a `RemoteRunProjects=` list naming the project (an empty list allows nothing - fail closed). OFF by default, and the only way this product executes a program.
 
@@ -468,36 +538,64 @@ The launcher also takes care of the **graphical environment** of the target. On 
 
 ### `delphi_adb`
 
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+Android devices for remote development: the phones/tablets hang off THIS server (USB or wifi adb), while you program from anywhere. command=discover finds devices ANNOUNCING wireless debugging on the server's network (mDNS) and hands you each one's ip:port - so you never need to know the address up front; command=devices lists what adb has ATTACHED (the same list the IDE shows as deploy targets); command=connect attaches one over the network (address ip:port from discover; the device shows an authorize prompt the first time); command=disconnect detaches it; command=install installs a built .apk on a device (apk path inside the workspace; "device" names it - every command that touches a device needs it, from the workspace allowlist). The adb used is the one from the IDE's own Android SDK, discovered per install. Building the .apk is delphi_build target=Deploy (the deployment manifest is generated when the project has none). command=logcat hands you the device log (a bounded dump - the last lines, optionally filtered), so you can debug what your deployed app did on the device from anywhere. command=screenshot (the device screen, in the same answer) plus command=tap and command=key are your remote eyes and hands on the device - enough to drive the deployed app. Typical flow: discover -> connect -> devices -> delphi_build target=Deploy -> install -> run -> screenshot -> tap -> logcat.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | discover (find devices announcing wireless debugging by mDNS, with their ip:port) \| devices (list attached devices; default) \| connect (attach over the network: address) \| disconnect (detach: address) \| install (put an .apk on a device: apk, device) \| run (launch an installed app on the device: app, device - the IDE's "Deploy and Run") \| logcat (the device log, bounded dump: device, optional filter and lines) \| screenshot (the device screen, delivered in this same answer: device, optional out - your remote eyes) \| tap (touch the screen: x, y in pixels measured on a screenshot, device) \| key (press a navigation key: key, device) |
+| `address` | string | optional | ip:port of the device for connect/disconnect (from command=discover, or the device's wireless-debugging screen) |
+| `device` | string | optional | Device serial or ip:port (from command=devices). REQUIRED for every command that touches a device (install/run/tap/key/logcat/screenshot) and it must be in the workspace's AdbAllowedDevices= list: the device is named, never implied, even when only one is attached |
+| `apk` | string | optional | Path of the .apk to install (inside the workspace) |
+| `app` | string | optional | run: package name of the installed app to launch (e.g. com.embarcadero.MyApp - the build/install results state it) |
+| `out` | string | optional | screenshot: where the capture lands, optional. "out" may be a FOLDER (existing, or ending in \ - the server names the file) or a FILE whose extension matches the capture's real format (a mismatch is refused, naming the format). Empty = __delphi-temp\<agent> inside the workspace, wiped on server restart. On THIS server, jailed like any of our paths. The capture travels in the answer; with inline=false it stays there and the answer carries its download link. logcat: optional .txt/.log FILE to dump into INSTEAD of answering inline - then read it in ranges with delphi_read. |
+| `x` | string | optional | tap: X measured on a screenshot. Pass that screenshot's frame and the server converts to DISPLAY pixels; without frame, X is DISPLAY pixels (multiply by tapScale.x when the answer carried it) |
+| `y` | string | optional | tap: Y measured on a screenshot. Pass that screenshot's frame and the server converts to DISPLAY pixels; without frame, Y is DISPLAY pixels (multiply by tapScale.y when the answer carried it) |
+| `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |
+| `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package). Optional |
+| `lines` | string | optional | logcat: how many recent lines to capture (default 300, max 5000; 0 = the default). Inline answers carry at most the newest 400 - for a bigger dump pass out=<file.txt> and read it in ranges. Optional |
+| `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image content item (scaled to maxwidth) and its temp file is consumed on the spot - one call, nothing to download. false = file + download link instead (a client without vision, or one that wants the bytes). |
+| `maxwidth` | integer | optional | Inline only: the image is scaled down to this width before it travels (0 = 1280, enough to read a desktop). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels for tap. |
+| `frame` | string | optional | tap (and type, on delphi_desktop): the "frame" of the screenshot you MEASURED ON, copied verbatim. With it, x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display) - no arithmetic on your side. Without it, x,y are capture pixels, as always. |
+<!-- /contract -->
+
+*Access: mixed (discover / devices / logcat / screenshot read-only; connect / disconnect / install / run / tap / key read-write).*
+
 Since 1.3.1 `screenshot` is delivered like `delphi_desktop`'s (same helper): the
 image inline in the answer, or file + `download` with `inline=false`, always with
 a `frame`; `tap` with `frame=` converts to DISPLAY pixels, so `tapScale` no longer
 has to be applied by hand.
 
-Android devices for remote development: the phones/tablets hang off THIS server (USB or wifi adb), while you program from anywhere. command=discover finds devices ANNOUNCING wireless debugging on the server's network (mDNS) and hands you each one's ip:port; command=devices lists what adb has ATTACHED (the same list the IDE shows as deploy targets); command=connect attaches one over the network (the device shows an authorize prompt the first time); command=disconnect detaches it; command=install installs a built .apk; command=run launches the installed app (the IDE's "Deploy and Run"); command=logcat hands you the device log (a bounded dump, optionally filtered) - remote debugging of the deployed app; command=screenshot returns the device screen in the same answer (your remote EYES) and command=tap / command=key touch the screen and press navigation keys (your remote HANDS) - enough to drive the deployed app end to end. The adb used is the IDE's own Android SDK's, discovered per install. Typical flow: discover → connect → devices → `delphi_build target=Deploy` → install → run → screenshot → tap → logcat.
-
 **The screenshot says what the display really is.** Every `screenshot` answer carries `image` (the PNG's size) and `display` - the device's `physical` size, its `override` size when one is set and its `density`, from `wm size` / `wm density` - because `input tap` takes pixels of the display in force, not of the picture. Normally they are the same and what you measure on the image is what you tap; when they differ (a device that captures at another scale) the answer carries `tapScale {x, y}` and its note says to multiply first. A rotated display (WxH against HxW) is not a scale: screencap and input share the orientation.
-
-*Access: mixed (discover / devices / logcat / screenshot read-only; connect / disconnect / install / run / tap / key read-write).*
 
 Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.168.1.163;SERIAL123` in its section (semicolon list; an IP entry covers any port wifi debugging negotiates). Targets outside the workspace list are refused at BOTH access levels, every device-addressing command must name its `device` explicitly, and an absent list means NO devices (v0.98).
 
+### `delphi_desktop`
+
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+The desktop of the machine behind a PAServer profile - a Linux target, a Windows target, or THIS server itself when a PAServer runs in its own user session - the way adb gives you an Android one: SEE the screen and ACT on it. The machine hangs off a PAServer profile (the same profiles delphi_paserver builds and deploys with) and runs a small Delphi node that this server deploys AND UPDATES there BY ITSELF, the right binary for that system - leave "project" empty and the node bundled with the server is pushed on first use, then refreshed whenever the server ships a newer one; nothing else is installed on the target and nothing is compiled. THE FLOW, and it is the whole trick: command=screenshot brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel you want, and command=tap presses exactly there (x, y measured on that screenshot - the node converts the screen scale itself, you never deal with logical vs physical coordinates). command=type writes text, and given x and y it presses there FIRST - the real gesture is "write this here", and one trip pays the startup once instead of twice. command=key presses one key: on a Linux target by its Linux code (Escape 1, Tab 15, Enter 28), on a Windows target by NAME (escape, enter, tab, f4) - the tool reads the profile's platform and refuses the other kind. Every answer with a capture carries "windows": title and rectangle of each window in pixels of that capture (Windows: every visible top-level window; Linux: the X11/Xwayland ones, which is every FMX application - native Wayland windows are not listed, the capture still shows them) - tap inside one, or crop to it with window=. command=overview brings them ALL into view when one covers another (Linux: the Super overview, every window reduced with its icon below - tap one or Escape; Windows: a fresh capture with the list). command=status says whether the desktop is reachable at all and, when it is not, what to ask the operator for; every answer carries graphicalEnv, the session the node ran in. The target needs a graphical session open for the user PAServer runs as; a headless box, a locked Windows or a Windows service (session 0) has nothing to show. It was delphi_adb_linux until 1.0.15; that name no longer exists.
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | discover \| devices (default) \| connect \| disconnect \| install \| run \| logcat \| screenshot \| tap \| key |
-| `address` | string | optional | ip:port of the device for connect/disconnect (from command=discover, or the device's wireless-debugging screen) |
-| `device` | string | **yes** for install/run/tap/key/logcat/screenshot | Device serial or ip:port (from command=devices). REQUIRED for every device-addressing command, and it must be in the workspace's `AdbAllowedDevices` list |
-| `apk` | string | optional | install: path of the .apk (inside the workspace). Build it with `delphi_build target=Deploy` |
-| `app` | string | optional | run: package name of the installed app (e.g. com.embarcadero.MyApp - the build/install results state it) |
-| `out` | string | optional | screenshot / logcat: optional since 1.0.14 — a FOLDER, or a FILE whose extension matches (`.png` for screenshot, `.txt`/`.log` for logcat); empty = `__delphi-temp\<agent>` under the workspace. screenshot: where the PNG lands; the capture itself travels in the answer (with `inline=false`, the file stays and the answer carries its download link). logcat: dump into a file instead of answering inline — then read it in RANGES with `delphi_read` (400 lines/call). Inside the workspace |
-| `x` / `y` | string | optional | tap: coordinates measured on a screenshot. Pass that screenshot's `frame` and the server converts to DISPLAY pixels; without `frame` they are DISPLAY pixels (multiply by `tapScale` when the answer carried it) |
-| `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |
-| `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package) |
-| `lines` | string | optional | logcat: how many recent lines to capture (default 300, max 5000; 0 = default). Inline answers carry at most the newest 400 — bigger dumps via `out=` |
+| `command` | string | optional | screenshot (the whole desktop, brought here as a PNG; default) \| tap (press at x,y MEASURED ON THAT SCREENSHOT) \| type (write "text" - with x,y it presses there FIRST, which is the real gesture: "write this here", and pays the startup once. WRITTEN means the keys were SENT: nothing verifies where the focus was, so read the screenshot every answer brings; a press 14 px below the field lands outside it) \| key (one key: Linux code on a Linux target, key NAME on a Windows one) \| overview (bring EVERY window into view when one covers another: on Linux the Super overview, on Windows a fresh capture; the "windows" list itself comes with every capture) \| status (is the desktop reachable, and what to ask for if not) |
+| `profile` | string | **yes** | PAServer profile of the target machine - a Linux, a Windows, or this server itself when a PAServer runs in its user session (delphi_paserver command=profiles lists them). The desktop is THAT machine's, never the agent's. |
+| `project` | string | optional | OPTIONAL: empty = the node BUNDLED with this server (node\McpDesktopNode next to the exe) is deployed to the target on first use and updated when its version changes - nothing to compile. Give the absolute path of the node's .dproj only when you develop the node itself and deployed it with delphi_build target=Deploy. |
+| `x` | string | optional | tap: horizontal pixel MEASURED ON THE SCREENSHOT this tool returned (pass its frame too and the server converts) |
+| `y` | string | optional | tap: vertical pixel MEASURED ON THE SCREENSHOT this tool returned (pass its frame too and the server converts) |
+| `code` | string | optional | key. Linux target: the Linux key code (evdev), NOT an X11 keycode: Escape 1, Tab 15, Enter 28, left Alt 56, Super 125. Windows target: the key NAME - escape, enter, tab, space, backspace, delete, home, end, up, down, left, right, super, alt, ctrl, shift, f1..f12. The tool reads the profile's platform and refuses the other kind: a number on Windows would press a different key. |
+| `modifiers` | string | optional | key OPTIONAL: modifier keys held while the key is pressed, comma separated - ctrl, shift, alt, super (Ctrl+K: code=37 modifiers=ctrl on Linux, code=k... on Windows: code=<name> modifiers=ctrl). Pressed in that order and released in reverse, one gesture. Works on both targets. |
+| `text` | string | optional | type: the text to write. On Windows it is typed as Unicode (accents and emojis arrive). On Linux, key by key with the keyboard layout the TARGET desktop really has (it hands its keymap over): any character that layout gives with a key, Shift or AltGr, or through one of its dead keys (the acute accent then i gives the accented i); one it cannot compose (an emoji) is refused BY NAME instead of writing something else, and the answer says which keyboard was used. It is typed as TEXT, never run: quotes, ; and $ arrive as characters. With x,y it presses there first to focus the field. |
+| `out` | string | optional | screenshot: where the capture lands. "out" may be a FOLDER (existing, or ending in \ - the server names the file) or a FILE whose extension matches the capture's real format (a mismatch is refused, naming the format). Empty = __delphi-temp\<agent> inside the workspace, wiped on server restart. On THIS server, jailed like any of our paths. The capture travels in the answer; with inline=false it stays there and the answer carries its download link. |
+| `region` | string | optional | screenshot OPTIONAL: "x,y,w,h" in DESKTOP pixels - the answer is only that piece of the same capture, at full resolution (a small dialog on a big screen is unreadable in the whole-desktop image: the API shrinks every image to one fixed size, so a crop is how you get the detail). The answer carries origin {x,y}: what you measure on the crop is pressed at (origin.x + x, origin.y + y). One frame, one coordinate space. When in doubt - a dialog may have opened elsewhere - capture the whole desktop. |
+| `window` | string | optional | screenshot OPTIONAL: part of a window title; the answer is the capture cropped to the first window of the "windows" list whose title contains it (case-insensitive), with origin {x,y} like region, plus the whole list - so a dialog that popped up OUTSIDE the crop still shows in it. On Linux the list holds the X11/Xwayland windows (every FMX application); a native Wayland window has no rectangle: use region. |
 | `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image content item (scaled to maxwidth) and its temp file is consumed on the spot - one call, nothing to download. false = file + download link instead (a client without vision, or one that wants the bytes). |
 | `maxwidth` | integer | optional | Inline only: the image is scaled down to this width before it travels (0 = 1280, enough to read a desktop). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels for tap. |
-| `frame` | string | optional | tap/type: the "frame" of the screenshot you MEASURED ON, copied verbatim. With it, x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display) - no arithmetic on your side. Without it, x,y are capture pixels, as always. |
+| `frame` | string | optional | tap (and type, on delphi_desktop): the "frame" of the screenshot you MEASURED ON, copied verbatim. With it, x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display) - no arithmetic on your side. Without it, x,y are capture pixels, as always. |
+<!-- /contract -->
 
-### `delphi_desktop`
+*Access: read-write (tap, type and key act on the target's desktop; screenshot and status are read-only in spirit but travel the same path), refused to a read-only credential. It runs under the SAME workspace switches as remote-run: `AllowRemoteRun=1`, `McpDesktopNode` (or the wildcard `all`) in `RemoteRunProjects`, and the profile's host inside `RemoteHosts` - the server's own desktop is just the profile whose host is `127.0.0.1`. Remember whose screen a profile may be: an operator's own machine is in frame, whatever they have open.*
 
 Since 1.3.1 a screenshot is **one step**: the image travels in the same answer
 (an MCP `image` content item, scaled to `maxwidth`, 1280 by default) and its temp
@@ -523,53 +621,58 @@ The target needs a graphical session open - a headless box has nothing to show -
 
 **The target machine is the unit of exclusion, not the call.** `profile` says which machine every gesture goes to - the server never remembers a "current profile" - so one agent can drive two machines at the same time and nothing mixes. Gestures to the SAME profile are serialized (the node writes its capture in its own deploy folder on that machine), and each capture lands here named after its profile, so two machines answering at once never overwrite one another.
 
-*Access: read-write (tap, type and key act on the target's desktop; screenshot and status are read-only in spirit but travel the same path), refused to a read-only credential. It runs under the SAME workspace switches as remote-run: `AllowRemoteRun=1`, `McpDesktopNode` (or the wildcard `all`) in `RemoteRunProjects`, and the profile's host inside `RemoteHosts` - the server's own desktop is just the profile whose host is `127.0.0.1`. Remember whose screen a profile may be: an operator's own machine is in frame, whatever they have open.*
+### `delphi_components`
+
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+What this server's RAD Studio has INSTALLED to program with: every component/design package REGISTERED in the IDE (Known Packages - the same list the IDE loads into its palette), whatever the install channel: GetIt, a vendor installer or manual. Each line is the package's description plus its .bpl file; disabled packages are marked, IDE-plumbing packages are excluded. Read-only by design - there is no install command; if a library you need is missing, say so with delphi_report. The base RTL units are always available and never appear here.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | screenshot (default) \| tap \| type \| key \| overview \| status |
-| `profile` | string | required | PAServer profile of the target machine - a Linux, a Windows, or this server itself when a PAServer runs in its user session (`delphi_paserver command=profiles` lists them). The desktop is THAT machine's, never the agent's |
-| `project` | string | optional | Empty (normal): the BUNDLED node is deployed/updated automatically. A .dproj path only when developing the node itself (deployed via `delphi_build target=Deploy`) |
-| `x` / `y` | string | optional | tap: the pixel MEASURED ON THE SCREENSHOT this tool returned |
-| `text` | string | optional | type: the text to write, key by key. On Linux it uses the keyboard layout the TARGET desktop really has (the desktop hands its keymap over): any character that layout gives with a key, Shift or AltGr; a character it has no key for is refused BY NAME, and the answer says which keyboard was used. On Windows it is typed as Unicode. Typed as TEXT, never run: quotes, `;` and `$` arrive as characters. With `x`,`y` it presses there first to focus the field: one trip, one startup |
-| `code` | string | optional | key. Linux target: the Linux (evdev) key code - Escape 1, Tab 15, Enter 28, left Alt 56, Super 125. Windows target: the key NAME - escape, enter, tab, space, backspace, delete, home, end, up, down, left, right, super, alt, ctrl, shift, f1..f12 |
-| `modifiers` | string | optional | key: modifier keys held while `code` is pressed - `ctrl`, `shift`, `alt`, `super`, comma separated (Ctrl+K on Linux: `code=37 modifiers=ctrl`). Pressed in that order, released in reverse, one gesture, both targets |
-| `out` | string | optional | screenshot: folder (or file with the capture's real extension) where the PNG lands, jailed like any path of ours. The capture travels in the answer; with `inline=false` the file stays and the answer carries its download link |
-| `region` | string | optional | screenshot: `x,y,w,h` in DESKTOP pixels - the answer is only that piece of the same capture, at full resolution, with `origin {x,y}`: what you measure on the crop is pressed at (origin.x + x, origin.y + y) |
-| `window` | string | optional | screenshot: part of a window title - the capture cropped to the first window of the `windows` list whose title contains it, with `origin` like region, plus the whole list. On Linux the list holds the X11/Xwayland windows (every FMX application); a native Wayland window has no rectangle: use `region` |
-| `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image content item (scaled to maxwidth) and its temp file is consumed on the spot - one call, nothing to download. false = file + download link instead (a client without vision, or one that wants the bytes). |
-| `maxwidth` | integer | optional | Inline only: the image is scaled down to this width before it travels (0 = 1280, enough to read a desktop). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels for tap. |
-| `frame` | string | optional | tap/type: the "frame" of the screenshot you MEASURED ON, copied verbatim. With it, x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display) - no arithmetic on your side. Without it, x,y are capture pixels, as always. |
-
-### `delphi_components`
-
-What this server's RAD Studio has INSTALLED to program with: every component/design package REGISTERED in the IDE (Known Packages — the same list the IDE loads into its palette), whatever the install channel: GetIt, a vendor installer or manual. Each line is the package's description plus its `.bpl` file; disabled packages are marked, IDE-plumbing packages are excluded. Read-only by design — there is no install command; if a library you need is missing, say so with delphi_report. The base RTL units are always available and never appear here.
+| `filter` | string | optional | Optional: only entries whose description or file name contains this text (case-insensitive), e.g. "FMX", "TMS", "JEDI". |
+| `platform` | string | optional | Optional: a platform (Win32\|Win64\|Linux64\|Android64\|OSX64\|iOSDevice64...) to see instead the IDE's Library Search Path FOR THAT PLATFORM, expanded, plus the component install roots other platforms register and this one does not - the list to walk when a build on a new platform fails with F2613 (unit not found): delphi_config add-searchpath to the Source folder. |
+<!-- /contract -->
 
 *Access: read-only (always available).*
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `filter` | string | optional | Only entries whose description or file name contains this text (case-insensitive), e.g. "FMX", "TMS", "JEDI" |
-| `platform` | string | optional | A platform (Win32, Win64, Linux64, Android64, OSX64, iOSDevice64...) to see instead the IDE's Library Search Path FOR THAT PLATFORM, expanded, plus the component install roots other platforms register and this one does not — the list to walk when a build on a new platform fails with F2613 (unit not found): `delphi_config add-searchpath` to the Source folder |
-
-
 ### `delphi_rename_symbol`
 
-SEMANTIC RENAME. Point at the identifier (path + 0-based line/character, same convention as delphi_definition) and give `newname`. `mode=preview` (default, never writes) lists every CONFIRMED occurrence (each one re-resolved against the same definition), the files touched, and whether the rename is APPLICABLE. The rule is strict on purpose: one single unverified reference, a hit in a `.dfm`/`.fmx` (form bindings break), a hit inside a string literal (FindComponent/RTTI/StyleLookup by name), a symbol whose definition lives outside the workspace (RTL/components), or a collision with the new name = `applicable=false` with the reasons.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-**`mode=apply` (1.0.17) writes it - through the changeset engine, not on its own.** The same analysis runs first; when applicable, every touched line is staged as one edit (the identifier replaced as a WORD, so a qualified header `TClass.Method` keeps its class and two occurrences on one line change at once), the batch is previewed and committed: all files or none, fingerprints re-checked, a byte snapshot of each file taken first and a copy in `__delphi-patch` as with any edit. The answer is the preview's plus `applied`, `editsApplied` and the `commit` audit; not applicable = `applied:false`, nothing written, blockers given. Mentions in comments are renamed only on lines that also carry a real occurrence; the rest come back as `warnings`. Rebuild afterwards - the tool does not.
-
-*Access: preview read-only; apply read-write (jailed and refused to a read-only credential, like every write).*
+SEMANTIC RENAME of a Delphi symbol. Point at the identifier (path + 0-based line/character, same convention as delphi_definition) and give newname: mode=preview (default, never writes) lists every CONFIRMED occurrence (each one re-resolved against the same definition), the files touched, and whether the rename is APPLICABLE; mode=apply does the same and, when applicable, WRITES it through the changeset engine - one edit per touched line, preview, commit: all files or none, fingerprints, a backup of each in __delphi-patch - and answers with the commit. The rule is strict on purpose, for both modes: one single unverified reference, a hit in a .dfm/.fmx (form bindings break), a hit inside a string literal (FindComponent/RTTI/StyleLookup by name), a symbol whose definition lives outside the workspace (RTL/components), or a collision with the new name = applicable=false with the reasons, and apply writes nothing. Mentions in comments are renamed only on the lines that also carry a real occurrence; the rest are reported as warnings for you to look at. Rebuild afterwards.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | The .pas/.dpr with the symbol (any occurrence works) |
-| `line` | integer | **yes** | Zero-based line of the identifier |
+| `line` | integer | **yes** | Zero-based line of the identifier (same convention as delphi_definition) |
 | `character` | integer | **yes** | Zero-based column inside the identifier |
 | `newname` | string | **yes** | The new identifier (legal Delphi name, no reserved words) |
-| `mode` | string | optional | preview (default; never writes) \| apply (writes the rename when applicable, through the changeset engine: all files or none, backups in `__delphi-patch`) |
+| `mode` | string | optional | preview (default; never writes) \| apply (writes the rename when applicable, through the changeset engine: all files or none, backups in __delphi-patch; refused with the blockers otherwise) |
+<!-- /contract -->
+
+*Access: preview read-only; apply read-write (jailed and refused to a read-only credential, like every write).*
+
+**`mode=apply` (1.0.17) writes it - through the changeset engine, not on its own.** The same analysis runs first; when applicable, every touched line is staged as one edit (the identifier replaced as a WORD, so a qualified header `TClass.Method` keeps its class and two occurrences on one line change at once), the batch is previewed and committed: all files or none, fingerprints re-checked, a byte snapshot of each file taken first and a copy in `__delphi-patch` as with any edit. The answer is the preview's plus `applied`, `editsApplied` and the `commit` audit; not applicable = `applied:false`, nothing written, blockers given. Mentions in comments are renamed only on lines that also carry a real occurrence; the rest come back as `warnings`. Rebuild afterwards - the tool does not.
 
 ### `delphi_designer`
+
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+FORMS AND COMPONENTS, structured - never guess what a class publishes or what a form contains. command=info class=TButton: every property the framework really publishes for that class (kind and type; events apart), from RTTI tables generated at release time. prop class=X prop=Y: one property in detail, with the legal members when it is an enum/set. tree path=<.dfm|.fmx>: the component tree (name, class, line). get path=... component=<Name>: that component's block verbatim. lint path=...: unknown classes, properties the class does not publish, enum values that do not exist. A BINARY .dfm is read on the fly (the IDE's own conversion, the answer says so) and to-text / to-binary convert it on disk with a backup. Read-only otherwise: editing a form is phase 2 and will go through delphi_changeset; today use delphi_edit on the .dfm/.fmx with the property line as anchor, then this lint to verify.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | info (what a class publishes) \| prop (one property in detail) \| tree (component tree of a .dfm/.fmx; a binary one is read on the fly) \| get (one component's block) \| lint (designer lint on demand) \| check-binding (does the .dfm agree with the class in the .pas: components with no published field, events naming a method that is not published, published fields with no component, duplicate names - all of which COMPILE and then throw when the form is created) \| layout (WHERE things end up on a VCL .dfm: resolves Align and returns the resolved rectangle of every control plus controls of size zero, outside their container, overlapping, or clipped by the bands around them - a form can bind perfectly and still be unusable) \| to-text (a BINARY .dfm becomes text on disk, the IDE's own conversion, backup first - reading never needs it: tree/get/lint/layout and delphi_read already read a binary .dfm on the fly) \| to-binary (the way back, the resource-wrapped form the IDE writes). Default: info |
+| `path` | string | optional | tree/get/lint/check-binding/layout/to-text/to-binary: the .dfm or .fmx file (a binary .dfm is read on the fly; the answer says so) |
+| `classname` | string | optional | info/prop: the component class, e.g. TButton, TEdit, TLayout |
+| `prop` | string | optional | prop: the property name, e.g. Align, Caption, TextSettings |
+| `component` | string | optional | get: the component Name as it appears in the form (object <Name>: <Class>) |
+| `unit` | string | optional | check-binding, optional: the .pas with the form's class. By default, the one with the same name as the .dfm. |
+| `framework` | string | optional | info/prop: vcl \| fmx. Optional when path is given (.dfm=vcl, .fmx=fmx); default vcl |
+| `filter` | string | optional | info optional: only properties whose name contains this text |
+<!-- /contract -->
+
+*Access: mixed (to-text / to-binary read-write; every other command read-only).*
 
 Since 1.2.3 `check-binding` is not only on request: `lint` includes it when the
 `.pas` sits next to the form, every write to a designer through `delphi_edit`
@@ -578,33 +681,18 @@ method in `published` when the paired designer already wires it as an event. An
 event to a method that is not `published` builds fine and kills the form at load
 time ("Invalid property value"): the loader only sees published methods.
 
-FORMS AND COMPONENTS, structured — never guess what a class publishes or what a form contains. `info class=TButton`: every property the framework really publishes for that class (kind and type, events apart), from RTTI tables generated at release time (`src/DesignerMetaDump`). `prop class=X prop=Y`: one property in detail, with the legal members when it is an enum/set and the runtime class of class-typed properties. `tree path=<.dfm|.fmx>`: the component tree (name, class, line). `get path=... component=<Name>`: that component's block verbatim. `lint path=...`: unknown classes (warned once per class; root, inherited and inline excluded), properties the class does not publish, enum values that do not exist. `check-binding path=<.dfm|.fmx>` (+ `unit` when the .pas is not beside it): does the designer agree with the form class in the .pas — components with no published field, events naming a method that is not published, published fields with no component, duplicate names, all of which compile and then throw when the form is created. `layout path=<.dfm>`: WHERE things end up on a VCL form — resolves Align and returns every control's rectangle plus the ones of size zero, outside their container, overlapping or clipped by the bands around them. A BINARY .dfm is read on the fly (the IDE's own conversion, and the answer says so); `to-text` / `to-binary` convert it on disk, backup first. Read-only otherwise: editing a form is phase 2 and will go through `delphi_changeset`.
-
-*Access: mixed (to-text / to-binary read-write; every other command read-only).*
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `command` | string | optional | info (what a class publishes) \| prop (one property in detail) \| tree (component tree of a .dfm/.fmx; a BINARY .dfm is read on the fly, the IDE's own conversion, and the answer says so) \| get (one component's block) \| lint (designer lint on demand) \| check-binding (does the .dfm agree with the class in the .pas: components with no published field, events naming a method that is not published, published fields with no component, duplicate names - all of which COMPILE and then throw when the form is created) \| layout (WHERE things end up on a VCL .dfm: resolves Align and returns the resolved rectangle of every control plus controls of size zero, outside their container, overlapping, or clipped by the bands around them - a form can bind perfectly and still be unusable) \| to-text (a BINARY .dfm becomes text on disk, the same conversion the IDE runs on "View as Text", backup in `__delphi-patch` first; reading never needs it, editing does) \| to-binary (the way back: the resource-wrapped form the IDE writes, reproduced byte for byte). Default: info |
-| `path` | string | optional | tree/get/lint/check-binding/layout/to-text/to-binary: the .dfm or .fmx file. A binary .dfm is read on the fly (`binaryOnDiskNote` in the answer); a damaged one is refused with the RTL's reason; `.fmx` is always text |
-| `unit` | string | optional | check-binding: the .pas of the form, when it is not next to the designer file (default: the same name beside it) |
-| `classname` | string | optional | info/prop: the component class, e.g. TButton, TEdit, TLayout (`class` accepted as alias) |
-| `prop` | string | optional | prop: the property name, e.g. Align, Caption, TextSettings |
-| `component` | string | optional | get: the component Name as it appears in the form |
-| `framework` | string | optional | info/prop: vcl \| fmx. Optional when path is given (.dfm=vcl, .fmx=fmx); default vcl |
-| `filter` | string | optional | info: only properties whose name contains this text |
-
 ## FMX styles
 
 ### `delphi_styles`
 
-FMX STYLES of a project, by StyleName: the text .style files (what the Bitmap Style Designer exports and a style pipeline keeps as source of truth). command=view lists the styles of a file (StyleName, class, lines, parts); get shows one whole; set changes or adds ONE property of a style or of a part inside it (child=background/text), value written exactly as the file does (xAARRGGBB colors, floats with 18 decimals, quoted strings); clone copies a style under a new StyleName - the way to add a variant; lint checks the whole thing: duplicated StyleNames, StyleLookup values in the project's .fmx/.pas that NO style defines (the platform default style counts), design tokens missing in a theme of a *Tokens.ini, .rc entries whose file is missing; build converts every text .style of the folder to .bin.style (the form an app embeds: embedded TEXT loads but does not resolve StyleLookup) and compiles the folder's .rc to .res with brcc32. Binary styles are never edited. Edits keep encoding and leave a __delphi-patch copy.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: mixed (view / get / lint read-only; set / clone / delete / build read-write).*
+FMX STYLES of a project, by StyleName: the text .style files (what the Bitmap Style Designer exports and a style pipeline keeps as source of truth). command=view lists the styles of a file (StyleName, class, lines, parts); get shows one whole; set changes or adds ONE property of a style or of a part inside it (child=background/text), value written exactly as the file does (xAARRGGBB colors, floats with 18 decimals, quoted strings); clone copies a style under a new StyleName - the way to add a variant; delete removes a whole style by StyleName (the copy in __delphi-patch is the way back); lint checks the whole thing: duplicated StyleNames, StyleLookup values in the project's .fmx/.pas that NO style defines (the platform default style counts), design tokens missing in a theme of a *Tokens.ini, .rc entries whose file is missing; build converts every text .style of the folder to .bin.style (the form an app embeds: embedded TEXT loads but does not resolve StyleLookup) and compiles the folder's .rc to .res with brcc32. Binary styles are never edited. Edits keep encoding and leave a __delphi-patch copy.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `command` | string | optional | view (styles of a .style file: StyleName, class, lines) \| get (one style, whole text) \| set (one property of a style or of one of its parts) \| clone (a new style copied from an existing one) \| delete (remove a whole style by StyleName; the __delphi-patch copy is the way back) \| lint (duplicated StyleNames, StyleLookup values of the project's .fmx that no style defines, design tokens missing in a theme, .rc entries without file) \| build (every text .style of the folder -> .bin.style, then the .rc -> .res with brcc32) |
-| `path` | string | **yes** | The text .style file (view/get/set/clone) or the styles FOLDER (lint/build; a file there stands for its folder). Binary styles (FMX_STYLE / .bin.style) are refused for editing: edit the text one and run build |
+| `path` | string | **yes** | The text .style file (view/get/set/clone) or the styles FOLDER (lint/build; a file there stands for its folder). Binary styles (FMX_STYLE / .bin.style) are refused for editing: edit the text one and run build. |
 | `project` | string | optional | lint: the project .dproj (or a folder) whose .fmx/.pas files are scanned for StyleLookup. Default: the parent folder of the styles folder |
 | `style` | string | optional | get/set/clone: the StyleName of the style (top-level object of the container), e.g. buttonstyle or cardstyle |
 | `child` | string | optional | set optional: a part inside the style, by StyleName or object name, as a path: background or background/text |
@@ -613,6 +701,9 @@ FMX STYLES of a project, by StyleName: the text .style files (what the Bitmap St
 | `name` | string | optional | clone: the StyleName of the new style |
 | `filter` | string | optional | view optional: substring the StyleName must contain |
 | `delete` | boolean | optional | set: true = remove the property instead of setting it |
+<!-- /contract -->
+
+*Access: mixed (view / get / lint read-only; set / clone / delete / build read-write).*
 
 The server ships `DelphiStyleConvert.exe` next to its own exe for `build` and for the platform default style names used by `lint`.
 
@@ -620,15 +711,18 @@ The server ships `DelphiStyleConvert.exe` next to its own exe for `build` and fo
 
 ### `delphi_fetch`
 
-Download a file FROM the server - the "get the deploy" tool: after delphi_build, fetch the exe (and any companion files listed with delphi_list) to run GUI apps on YOUR machine. Two ways: (1) the `download` field of the answer is a direct HTTP GET on this same server (`/files?path=...`) - run it with curl and your same Bearer token - the standard way for any file, installers and binaries included; (2) base64 chunks inline, for small files or clients without a shell: loop offset until eof=true, concatenate the decoded chunks, verify the sha256 (whole file, returned on the offset=0 call). Files over 4 MB answer with the download link only; pass maxbytes<=1048576 explicitly to get inline chunks instead. Jailed to the workspace roots and the read-only library zone.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Download a file FROM the server - the "get the deploy" tool: after delphi_build, fetch the exe (and any companion files listed with delphi_list) to run GUI apps on YOUR machine. Two ways: (1) the "download" field of the answer is a direct HTTP GET on this same server (/files?path=...): run it with curl and your same Bearer token - the standard way for any file, installers and binaries included; (2) base64 chunks inline, for small files or clients without a shell: loop offset until eof=true, concatenate the decoded chunks, verify the sha256 (whole file, returned on the offset=0 call). Files over 4 MB answer with the download link only; pass maxbytes<=1048576 explicitly to get inline chunks instead. Jailed to the workspace roots and the read-only library zone.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the file to download from the server |
 | `offset` | integer | optional | Byte offset to start from (0 = beginning). Loop increasing it until eof=true and reassemble |
-| `maxbytes` | integer | optional | Bytes per chunk (default and cap: 8388608 = 8 MB). On a file over 4 MB, an explicit value ≤ 1048576 is the opt-in for inline chunks instead of the link-only answer |
+| `maxbytes` | integer | optional | NOTE: asking for maxbytes<=1048576 (1 MB) FORCES inline base64 chunks - exactly the opposite of what you want with a large file. For a large download OMIT this parameter: above 4 MB the answer carries the download LINK and no inline chunk ("inline":false, "bytes":0), which is the cheap way. maxbytes only sets the chunk size (max 8388608) when the content goes inline. |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 **Answer fields** (HTTP hosts): `path`, `size`, `offset`, `bytes`, `eof`, `sha256` (offset=0), `chunkBase64` (omitted on the link-only answer), **`download`** (relative URL, e.g. `/files?path=srvd%3A%5C...`), `downloadNote` (the exact `curl`), `note` (on the link-only answer).
 
@@ -643,53 +737,60 @@ curl -H "Authorization: Bearer $TOKEN" -o LinuxPAServer37.0.tar.gz \
 
 ### `delphi_upload`
 
-Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for material you cannot recreate by editing: binaries (.res, icons, images), binary designer files, archives, reference material. Send chunks in order: offset=0 creates/truncates, later offsets append and must match the current size. Pass sha256 on the LAST chunk to have the server verify the assembled file. Jailed to the workspace roots; parent directories are created. For SOURCE CODE prefer delphi_edit / delphi_textedit (they audit encoding and keep backups).
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write.*
+Upload a file TO the server in base64 chunks - the mirror of delphi_fetch, for material you cannot recreate by editing: binaries (.res, icons, images), binary designer files, archives, reference material. Send chunks in order: offset=0 creates/truncates, later offsets append and must match the current size. Pass sha256 on the LAST chunk to have the server verify the assembled file, and chunkSha256 on ANY chunk to have that chunk checked BEFORE it is written. Jailed to the workspace roots; parent directories are created. A fresh upload over an existing file backs the old one up to the recoverable trash first. For SOURCE CODE prefer delphi_edit / delphi_textedit (they audit encoding and keep backups).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | Absolute path of the file to write ON the server (inside the workspace roots) |
 | `chunkbase64` | string | **yes** | One chunk of the file, base64-encoded. offset=0 truncates/creates; later offsets append |
 | `offset` | integer | optional | Byte offset this chunk starts at (0 = beginning). Send chunks in order, increasing offset by the bytes written |
-| `sha256` | string | optional | Optional: on the LAST chunk, the whole-file SHA-256; the server verifies the assembled file: if it does not match, the call FAILS (error) and the file is set aside as `<name>.corrupt` instead of being published |
-| `chunksha256` | string | optional | Optional: the SHA-256 of THIS chunk (of its decoded bytes), verified BEFORE the chunk is written: a slip in transit is caught at the chunk that carried it, with nothing on disk |
+| `sha256` | string | optional | Optional: on the LAST chunk, the whole-file SHA-256; the server verifies the assembled file: if it does not match, the call FAILS (error) and the file is set aside as <name>.corrupt instead of being published |
+| `chunksha256` | string | optional | Optional: the SHA-256 of THIS chunk (of its decoded bytes). Verified BEFORE the chunk is written, so a slip in transit is caught at the chunk that carried it, with nothing on disk |
+<!-- /contract -->
 
+*Access: read-write.*
 
 ## Version control
 
 ### `delphi_git`
 
-Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work: status, diff, log, show, branch, switch (args=<branch>, create=true for a new one), merge (always --ff-only), stash (args=push|pop|list, never drop), add, commit, init, push, tag, config, clone, pull, fetch, worktree (args=list, or add/remove with path= and ref=). A git that exits non-zero is an ERROR: `[GIT-036 DENIED] exit=N` with git's own output after it; a success starts with `exit=0` (`diff --quiet` / `--exit-code` with differences answers `exit=1`, and that is a success too). **clone** is the fast way to get a whole repo onto the server (URL in "message", destination directory in "repo", jailed to the workspace roots) - far better than recreating files one by one. commit/tag messages and config values also travel in "message"; push/pull use the credentials and remotes stored on the server. No arbitrary git commands, no shell.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: mixed (query commands read-only; write commands read-write).*
+Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work: status, diff, log, show, branch, switch, merge, stash, add, commit, init, push, tag, config, clone, pull, fetch, worktree. **clone** is the fast way to get a whole repo onto the server (URL in "message", destination directory in "repo", jailed to the workspace roots) - far better than recreating files one by one. **worktree** puts ANOTHER version of the repo next to it (args=add, path=<a new folder inside your roots>, ref=<tag|branch|commit>) to build and test it and compare - how you check an old release from a remote machine without touching anybody's working tree; args=list shows them and args=remove takes one away (it is yours to clean up). commit/tag messages and config values also travel in "message"; push/pull use the credentials and remotes stored on the server. No arbitrary git commands, no shell.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `repo` | string | **yes** | Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots) |
-| `command` | string | **yes** | One of: status \| diff \| log \| show \| branch \| switch \| merge \| stash \| add \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch \| worktree (stash: args=push\|pop\|list, never drop - `push -- <paths>` parks ONLY those paths and sets them back to HEAD, the way to discard one file's changes without losing them (`pop` brings them back), label in message, each path inside the repo, literal and through the write gate (1.5.1); config: args=user.name\|user.email + value in message; clone: URL in message, destination in repo) |
-| `args` | string | optional | Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected |
-| `create` | boolean | optional | `switch`: true = create the branch and move to it (`git switch -c`). Only for `switch`: with any other command it is refused (GIT-038) |
+| `command` | string | **yes** | One of: status \| diff \| log \| show \| branch \| switch \| merge \| stash \| add \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch \| worktree. switch: args=<branch> (create=true for a new one). merge: args=<branch>, always --ff-only (a merge needing a commit is refused, not left half-done). stash: args=push\|pop\|list (never drop); push -- <paths> parks ONLY those paths and sets them back to HEAD - how you discard one file's changes without losing them (pop brings them back); its label goes in message. config: args=user.name\|user.email + value in message. clone: URL in message, destination in repo. worktree: args=list \| add (path=<a NEW folder inside your roots>, ref=<tag\|branch\|commit>: another version of the repo next to it, detached, to build and compare) \| remove (path=<one that list shows>; refused with changes or with a link inside) |
+| `args` | string | optional | Optional extra arguments (paths, --staged, a commit hash...). They are SPLIT ON SPACES into argv, so a path with spaces goes in double quotes: args="my notes.txt". There is no shell involved, but shell metacharacters (; \| & ` $ < >) are rejected anyway - if a legitimate git option needs one (--pretty=format:...), ask for it with delphi_report instead of trying to smuggle it |
+| `create` | boolean | optional | switch: true = create the branch and move to it (git switch -c). Only for switch: with any other command it is refused (GIT-038) |
 | `message` | string | optional | commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL |
-| `path` | string | optional | worktree add/remove: the folder of the working copy (add: a NEW folder inside your roots) |
-| `ref` | string | optional | worktree add: the tag, branch or commit to check out |
+| `path` | string | optional | worktree add: a NEW folder inside your roots for the second working copy (like the destination of a clone). worktree remove: a folder that command=worktree args=list shows |
+| `ref` | string | optional | worktree add: the tag, branch or commit to put there, detached - a version to build and compare, not a place to work (v1.3.2, main, HEAD~3, a commit hash) |
+<!-- /contract -->
 
+*Access: mixed (query commands read-only; write commands read-write).*
 
 ## Feedback
 
 ### `delphi_report`
 
-Report a problem, limitation or suggestion about THIS MCP server directly to its maintainers. Use it whenever a tool refuses something you believe is legitimate, an answer looks wrong, a message is confusing, or you had to work around a missing capability - that feedback is what fixes the server. Each report is stored as its own timestamped markdown file in a reports folder next to the server executable, with the server version and the date; pass a short stable `agent` id and your reports get their own subfolder, separate from other agents. Available at EVERY access level, read-only included. Be concrete: what you tried, what happened, what you expected.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Report a problem, limitation or suggestion about THIS MCP server directly to its maintainers. Use it whenever a tool refuses something you believe is legitimate, an answer looks wrong, a message is confusing, or you had to work around a missing capability - that feedback is what fixes the server. Each report is stored as its own timestamped markdown file in a reports folder next to the server executable, with the server version and the date; pass a short stable "agent" id and your reports get their own subfolder, separate from other agents. Available at EVERY access level, read-only included. Be concrete: what you tried, what happened, what you expected.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `message` | string | **yes** | The report itself: what you tried, what happened, what you expected. Markdown welcome, several paragraphs are fine. Up to 256 KB per report - split a longer one, reports accumulate and are never overwritten |
+| `message` | string | **yes** | The report itself: what you tried, what happened, what you expected. Markdown welcome, several paragraphs are fine |
 | `title` | string | optional | Optional one-line summary (becomes part of the file name) |
 | `kind` | string | optional | Optional: bug \| limitation \| suggestion \| question (default: bug) |
 | `from` | string | optional | Optional: who is reporting (agent/model name, project) - helps us read the history later |
-| `agent` | string | optional | Optional short id of the reporting agent (e.g. "hermes"): its reports are stored in a folder of that name, separate from other agents. Keep it STABLE across your reports. Letters, digits and dashes |
+| `agent` | string | optional | Optional short id of the reporting agent (e.g. "hermes"): its reports are stored in a folder of that name, separate from other agents. Keep it STABLE across your reports. Letters, digits and dashes; anything else is normalized away |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ---
 
@@ -792,14 +893,18 @@ From then on this server does the rest with no hands anywhere: `get-sdk` (once p
 
 ### `delphi_messages`
 
-Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message in YOUR box and deletes it (a message is read once and nothing is kept); check only lists what waits. While mail waits, every tool answer ends with a PENDING MESSAGES line - read it then: it may change what you are doing.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only.*
+Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message in YOUR box and DELETES it: a message is read once and nothing is kept. check only lists what waits. While mail for you waits, every tool answer ends with a PENDING MESSAGES line - read it then: it may change what you are doing.
+HONESTLY, ABOUT PRIVACY: the box is indexed by the agent id YOU declare, and nothing ties that id to whoever is calling - everyone here shares one token. So anyone using this server can list, and consume, the mail of any id they can guess, and a consumed message is gone: it does not reach the one it was for. Treat this as a shared noticeboard, not as private post: read YOUR id, and do not go through other people's. Nothing secret should be sent through here.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | read (default: deliver every pending message for this agent, and delete it) \| check (titles and dates of what is pending, nothing consumed) |
-| `agent` | string | optional | Your agent id - the same value you give delphi_report as "agent" (e.g. dsh, hermes). There is no box "for everyone" |
+| `command` | string | optional | read (default: deliver every pending message in your box, then DELETE it: a message is read once) \| check (titles and dates of what is pending, nothing consumed) |
+| `agent` | string | optional | Your agent id - the same value you give delphi_report as "agent" (e.g. dsh, hermes). Omitted: the id your client declared at the handshake |
+<!-- /contract -->
+
+*Access: read-only.*
 
 Operator side: drop a `.md` in `messages\<agent>\` next to the server exe (`scripts\Enviar-Mensaje.ps1 -Agente dsh -Titulo ... -Texto ...`). The agent gets it once and reading DELETES it: nothing is kept aside and nothing is purged later. There is no box "for everyone": a notice for all is dropped once per agent. An agent with no id has no mailbox.
 
@@ -822,60 +927,76 @@ Full explanation: [VAULT.md](VAULT.md).
 
 ### `vault_read`
 
-Reads a note of the knowledge vault by relative path. WITHOUT path it returns the rules (AGENTS-VAULT.md) + the index (MEMORY.md): do that when you start. The [[wikilinks]] in the content refer to other notes - find them with vault_search target=files.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-only OK.*
+Reads a note of the knowledge vault by relative path. WITHOUT path it returns the rules (AGENTS-VAULT.md) + the index (MEMORY.md): do that when starting. The [[wikilinks]] in the content refer to other notes - locate them with vault_search target=files. NOTE: the vault this server serves is the one its operator has exposed (the VaultPath= of YOUR [Workspace.<name>] in settings.ini), which may be a COPY and not the user's live folder: if something sounds outdated, ask before taking it as good.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | optional | RELATIVE path of the note inside the vault (projects/x/context.md). WITHOUT path it returns the rules + the index: do that when you start |
-| `offset` | integer | optional | Optional: first line to return (1 = the start) |
+| `offset` | integer | optional | Optional: first line to return (1 = beginning) |
 | `limit` | integer | optional | Optional: how many lines to return from offset |
-
-### `vault_search`
-
-Searches the knowledge vault (Markdown notes linked with [[wikilinks]]). PROTOCOL: when you start a task, first call vault_read WITHOUT path to get the rules and the index; decide from the index's descriptions which notes to load with vault_read - lazy loading, never read the vault in bulk.
+<!-- /contract -->
 
 *Access: read-only OK.*
 
+### `vault_search`
+
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+Searches the knowledge vault (Markdown notes linked with [[wikilinks]]). PROTOCOL: when starting a task, first call vault_read WITHOUT path to get the rules and the index; decide from the index descriptions which notes to load with vault_read - lazy loading, never read the vault in bulk.
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `target` | string | optional (default files) | files (search by note NAME, a glob pattern such as *meeting*.md) \| content (search INSIDE the notes, pattern is a regular expression) |
-| `pattern` | string | **yes** | Name glob if target=files (*.md, *delphi*), or regular expression if target=content |
-| `subfolder` | string | optional | Optional: relative folder of the vault to narrow the search (projects, conventions...) |
+| `target` | string | optional | files (search by note NAME, a glob pattern such as *meeting*.md) \| content (search INSIDE the notes, pattern is a regular expression) |
+| `pattern` | string | **yes** | Name glob if target=files (*.md, *delphi*), or a regular expression if target=content |
+| `subfolder` | string | optional | Optional: vault-relative folder to narrow the search (projects, conventions...) |
 | `maxresults` | integer | optional | Maximum number of results (default 50) |
+<!-- /contract -->
+
+*Access: read-only OK.*
 
 ### `vault_append`
 
-Appends content to an existing note of the vault (log entries, progress updates). Writes in the vault's language (AGENTS-VAULT-WRITE.md says which). Log format: a dated entry under the day's section. In progress.md keep its snapshot structure: live status lines, the history goes to the log - do not pile up; when you close an item, remove its line with vault_patch instead of appending "done". The server keeps a copy of the original before writing.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write only, and VaultReadOnly=0 in the workspace.*
+Appends content to an existing vault note (log entries, progress updates). Write in the vault's language (AGENTS-VAULT-WRITE.md says which). Log format: dated entry under the section of the day. In progress.md respect its snapshot structure: live status lines, the history goes in log - do not accumulate; if you close a matter, delete its line with vault_patch instead of adding "done". The server keeps a copy of the original before writing.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | RELATIVE path of the note (it must exist) |
-| `content` | string | **yes** | Markdown content to append, in the vault's language |
-| `anchor` | string | optional | Optional: UNIQUE text after which to insert. Without anchor, appends at the end of the file |
+| `path` | string | **yes** | RELATIVE path of the note (must exist) |
+| `content` | string | **yes** | Markdown content to add, in the vault's language |
+| `anchor` | string | optional | Optional: UNIQUE text after which to insert. Without anchor, it is appended at the end of the file |
+<!-- /contract -->
+
+*Access: read-write only, and VaultReadOnly=0 in the workspace.*
 
 ### `vault_create`
 
-Creates a new note in the vault. BEFORE creating: read AGENTS-VAULT-WRITE.md (the decision tree of where each thing goes, and templates) and link the note with [[wikilinks]] from the project's notes (context.md, log.md, progress.md) - never from MEMORY.md, the root index, which is refused. Writes in the vault's language. Do not reorganize folders or move existing notes - that needs a human OK. It never overwrites: if the note exists, it is refused.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write only, and VaultReadOnly=0 in the workspace.*
+Creates a new note in the vault. BEFORE creating: read AGENTS-VAULT-WRITE.md (decision tree of where each thing goes, and templates) and link the note with [[wikilinks]] from the project notes (context.md, log.md, progress.md) - NOT from MEMORY.md: that root index is governance and is always refused; if the note deserves an entry there, ask for it in your answer or in a delphi_report and a person will do it. Write in the vault's language (AGENTS-VAULT-WRITE.md says which). Do not reorganize folders or move existing notes - that requires a human OK. It never overwrites: if the note exists, it is refused.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | RELATIVE path of the new note (it must NOT exist; never overwrites) |
+| `path` | string | **yes** | RELATIVE path of the new note (must NOT exist; never overwrites) |
 | `content` | string | **yes** | Full markdown content, with the structure/template the vault asks for |
+<!-- /contract -->
+
+*Access: read-write only, and VaultReadOnly=0 in the workspace.*
 
 ### `vault_patch`
 
-A precise edit of a note: replaces old_text (UNIQUE in the file) with new_text. To strike closed lines of a progress note or fix a fact. To add content use vault_append; for large rewrites, stop and ask the user. The server keeps a copy of the original before writing.
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-*Access: read-write only, and VaultReadOnly=0 in the workspace.*
+Targeted edit of a note: replaces old_text (UNIQUE in the file) with new_text. For striking closed lines of a progress or correcting a fact. To add content use vault_append; for large rewrites, stop and ask the user. The server keeps a copy of the original before writing.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | **yes** | RELATIVE path of the note |
 | `old_text` | string | **yes** | Text to replace: it must appear EXACTLY ONCE in the file |
-| `new_text` | string | **yes** | The new text that replaces it |
+| `new_text` | string | **yes** | New text that replaces it |
+<!-- /contract -->
+
+*Access: read-write only, and VaultReadOnly=0 in the workspace.*
+

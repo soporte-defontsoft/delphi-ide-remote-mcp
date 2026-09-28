@@ -66,6 +66,21 @@ missing = [t for t in TOOLS if t not in documented]
 extra = [t for t in documented if t not in TOOLS]
 check('TOOLS.md documenta TODAS las tools', not missing, missing)
 check('TOOLS.md no documenta tools inexistentes', not extra, extra)
+# ...y el CONTRATO de cada una (description + tabla de parametros) es el bloque
+# que genera scripts/tools_md.py desde tools/list: medido el 28-sep-2026, a
+# mano, 35 de 41 descripciones y 127 parametros decian otra cosa que el
+# servidor y 4 parametros faltaban, sin que ninguna bateria lo viera
+import sys
+sys.path.insert(0, os.path.join(REPO, 'scripts'))
+import tools_md
+TOOLS_FULL = resp['result']['tools']
+sin_bloque = [t['name'] for t in TOOLS_FULL if tools_md.bloque_en(toolsmd, t['name']) is None]
+check('TOOLS.md: cada tool tiene su bloque de contrato generado (scripts/tools_md.py)',
+      not sin_bloque, sin_bloque)
+drift = [t['name'] for t in TOOLS_FULL
+         if tools_md.bloque_en(toolsmd, t['name']) not in (None, tools_md.render(t))]
+check('TOOLS.md: ningun bloque de contrato difiere del tools/list vivo (python scripts/tools_md.py)',
+      not drift, drift)
 
 # ---- CAPABILITIES.json -------------------------------------------------
 cap_path = os.path.join(REPO, 'docs', 'CAPABILITIES.json')

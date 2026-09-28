@@ -8,6 +8,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/TOOLS.md` no longer drifts from the server.** The contract of
+  every tool (its description and its parameter table) is generated from
+  the live `tools/list` by `scripts/tools_md.py`, between two
+  `<!-- contract -->` markers inside each `### tool` section; the notes
+  around each block (history, worked examples, the *Access* line) stay
+  hand-written. `tests/test_docs_consistency.py` fails when a tool has no
+  block or a block differs from the server. Measured before: 35 of 41
+  descriptions and 127 parameter texts said something other than the
+  server, 4 parameters (`x`, `y` of `delphi_adb` and `delphi_desktop`) were
+  missing, and no battery saw it. `scripts/livetools.py` is the one fetch
+  of the live `tools/list` for both generators (`gen-capabilities.py` used
+  to carry its own copy).
+
 ### Fixed
 
 - **A unit move whose project could not be re-pointed answered MOVED with
