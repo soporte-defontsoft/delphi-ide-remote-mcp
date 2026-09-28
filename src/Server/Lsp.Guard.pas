@@ -884,6 +884,36 @@ function EnComillas(const AValor: string): string;
   la consulta ToolCallDenied y la consulta la propia tool. }
 function GitCommandIsQuery(const ACmd, AArgs, AMessage: string): Boolean;
 
+type
+  { El ACCESO de una tool para una credencial de solo lectura: la lee entera
+    (atLectura), la niega entera (atEscritura) o depende del comando (atMixta:
+    Lecturas = lo que LEE; lo que no este ahi se niega, cerrado). UNA tabla
+    (ACCESOS, en ConstruyeAccesos): la mira la puerta (LecturaDenegada) y la
+    anuncia tools/list (annotations.readOnlyHint y _meta.access /
+    readOnlyCommands, AnunciaAcceso), de donde TOOLS.md saca su linea Access
+    y test_http_auth mide el anuncio contra la puerta. Antes la lista de
+    mutantes estaba DOS veces en la puerta (una con delphi_desktop y otra
+    sin) y cada mixta en su if; la linea Access del doc, a mano (28-sep-2026). }
+  TAccesoTool = (atLectura, atEscritura, atMixta);
+  TAccesoDeTool = record
+    Tool: string;
+    Acceso: TAccesoTool;
+    Lecturas: TArray<string>; // atMixta: los comandos que leen ('' = el primero)
+    Parametro: string;        // atMixta: el parametro que lleva el comando
+  end;
+
+{ La fila de la tabla para una tool; lo que no esta en ella LEE. }
+function AccesoDeTool(const ATool: string): TAccesoDeTool;
+{ '' si una credencial de solo lectura puede hacer ESTA llamada; si no, la
+  negativa READ-002 con lo que pedia. delphi_git decide por argumentos
+  (GitCommandIsQuery: branch/tag sin ellos listan, worktree solo list), el
+  resto por la tabla. Fuera del modo solo lectura, siempre ''. }
+function LecturaDenegada(const AToolName: string; const AArguments: TJSONObject): string;
+{ Lo que tools/list anuncia de la tool, desde la tabla: annotations
+  (readOnlyHint, MCP) y _meta (access: read-only | read-write | mixed;
+  las mixtas, commandParameter y readOnlyCommands). }
+procedure AnunciaAcceso(const AToolName: string; const AEntry: TJSONObject);
+
 function ToolCallDenied(const AToolName: string;
   const AArguments: TJSONObject): string;
 
@@ -3541,10 +3571,144 @@ begin
     (SameText(Trim(ACmd), 'worktree') and SameText(Trim(AArgs), 'list'));
 end;
 
+var
+  GAccesos: TArray<TAccesoDeTool>;
+
+procedure AnadeAcceso(const ATool: string; AAcceso: TAccesoTool;
+  const ALecturas: TArray<string>; const AParametro: string = 'command');
+var
+  F: TAccesoDeTool;
+begin
+  F.Tool := ATool;
+  F.Acceso := AAcceso;
+  F.Lecturas := ALecturas;
+  F.Parametro := AParametro;
+  GAccesos := GAccesos + [F];
+end;
+
+{ LA tabla (ACCESOS). Lo que no esta aqui LEE. Las mixtas listan lo que LEE:
+  un comando desconocido se niega, cerrado (una credencial de solo lectura
+  reescribia forms por un comando que no estaba en ninguna lista; auditoria
+  25-sep-2026). }
+procedure ConstruyeAccesos;
+begin
+  GAccesos := [];
+  // enteras de escritura: negadas de plano en modo solo lectura
+  AnadeAcceso('delphi_edit', atEscritura, []);
+  AnadeAcceso('delphi_textedit', atEscritura, []);
+  AnadeAcceso('delphi_create', atEscritura, []);
+  AnadeAcceso('delphi_changeset', atEscritura, []);
+  AnadeAcceso('delphi_build', atEscritura, []);
+  AnadeAcceso('delphi_package', atEscritura, []);
+  AnadeAcceso('delphi_upload', atEscritura, []);
+  AnadeAcceso('delphi_delete', atEscritura, []);
+  AnadeAcceso('delphi_move', atEscritura, []);
+  // tap, type y key actuan sobre el escritorio del destino; screenshot y
+  // status leen en espiritu pero viajan por el mismo camino
+  AnadeAcceso('delphi_desktop', atEscritura, []);
+  // el vault: leerlo vale en solo lectura, escribirlo nunca
+  AnadeAcceso('vault_append', atEscritura, []);
+  AnadeAcceso('vault_create', atEscritura, []);
+  AnadeAcceso('vault_patch', atEscritura, []);
+  // mixtas: "view" lee, "add-platform" escribe el .dproj
+  AnadeAcceso('delphi_config', atMixta, ['view']);
+  // discover solo mira; run construye y EJECUTA
+  AnadeAcceso('delphi_test', atMixta, ['discover']);
+  AnadeAcceso('delphi_styles', atMixta, ['view', 'get', 'lint']);
+  // los listados leen; add-profile escribe un perfil en el servidor y
+  // test-connection marca al destino con su credencial guardada
+  AnadeAcceso('delphi_paserver', atMixta, ['platforms', 'packages', 'profiles']);
+  // to-text / to-binary reescriben el .dfm/.fmx; el resto mira
+  AnadeAcceso('delphi_designer', atMixta, ['info', 'prop', 'tree', 'get', 'lint',
+    'check-binding', 'binding', 'layout']);
+  // mirar el dispositivo (lista, log, pantalla) no cambia nada;
+  // connect/disconnect/install/run/tap/key mutan o ejecutan
+  AnadeAcceso('delphi_adb', atMixta, ['discover', 'devices', 'logcat', 'screenshot']);
+  // git decide por ARGUMENTOS (GitCommandIsQuery): branch y tag solo listan
+  // sin ellos, worktree solo list. Esta lista es lo que se ANUNCIA
+  AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show', 'branch', 'tag',
+    'worktree list']);
+  // preview lee; apply escribe por el motor de changesets (lo negaba el
+  // escritor al llegar a escribir; ahora la puerta, a la entrada, como a todas)
+  AnadeAcceso('delphi_rename_symbol', atMixta, ['preview'], 'mode');
+end;
+
+function AccesoDeTool(const ATool: string): TAccesoDeTool;
+var
+  F: TAccesoDeTool;
+begin
+  for F in GAccesos do
+    if SameText(F.Tool, ATool) then
+      Exit(F);
+  Result.Tool := ATool;
+  Result.Acceso := atLectura;
+  Result.Lecturas := [];
+  Result.Parametro := '';
+end;
+
+function LecturaDenegada(const AToolName: string; const AArguments: TJSONObject): string;
+var
+  F: TAccesoDeTool;
+  Cmd: string;
+begin
+  Result := '';
+  if not IsReadOnlyNow then
+    Exit;
+  F := AccesoDeTool(AToolName);
+  case F.Acceso of
+    atLectura:
+      Exit;
+    atEscritura:
+      Exit(WriteDenied(AToolName));
+  end;
+  Cmd := Trim(ArgStr(AArguments, F.Parametro));
+  if SameText(AToolName, 'delphi_git') then
+  begin
+    // la mitad de consulta de git depende de los argumentos: la MISMA
+    // clasificacion que usa la propia tool (GitCommandIsQuery)
+    if GitCommandIsQuery(Cmd, ArgStr(AArguments, 'args'), ArgStr(AArguments, 'message')) then
+      Exit;
+    Exit(WriteDenied(Trim(AToolName + ' ' + Cmd)));
+  end;
+  if (Cmd = '') or MatchText(Cmd, F.Lecturas) then
+    Exit;
+  Result := WriteDenied(AToolName + ' ' + Cmd);
+end;
+
+procedure AnunciaAcceso(const AToolName: string; const AEntry: TJSONObject);
+var
+  F: TAccesoDeTool;
+  Ann, Meta: TJSONObject;
+  Arr: TJSONArray;
+  S: string;
+begin
+  F := AccesoDeTool(AToolName);
+  Ann := TJSONObject.Create;
+  Ann.AddPair('readOnlyHint', TJSONBool.Create(F.Acceso = atLectura));
+  AEntry.AddPair('annotations', Ann);
+  Meta := TJSONObject.Create;
+  case F.Acceso of
+    atLectura:
+      Meta.AddPair('access', 'read-only');
+    atEscritura:
+      Meta.AddPair('access', 'read-write');
+    atMixta:
+      begin
+        Meta.AddPair('access', 'mixed');
+        Meta.AddPair('commandParameter', F.Parametro);
+        Arr := TJSONArray.Create;
+        for S in F.Lecturas do
+          Arr.Add(S);
+        Meta.AddPair('readOnlyCommands', Arr);
+      end;
+  end;
+  AEntry.AddPair('_meta', Meta);
+end;
+
 function ReglasDeLaLlamadaDenegadas(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
-  Cmd, GitArgs, GitMsg: string;
+  GitArgs: string;
 begin
   // Duplicate parameter names FIRST, before normalization and before any other
   // check: two keys that normalize the same would let the gate inspect one
@@ -3565,24 +3729,16 @@ begin
   // ...y el nombre LARGO de las rutas marcadas (AlargaRutas)
   AlargaRutas(AToolName, AArguments);
   Result := '';
-  // Read-only comes FIRST for the tools it refuses outright. The argument
-  // filters below are universal on purpose, but letting one of them answer
-  // first meant a read-only server explained a git remote policy instead of
-  // saying the obvious thing: nothing writes here (v0.62).
-  if IsReadOnlyNow and
-     MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
-       'delphi_changeset', 'delphi_build', 'delphi_package',
-       'delphi_upload', 'delphi_delete', 'delphi_move', 'delphi_desktop',
-       'vault_append', 'vault_create', 'vault_patch']) then
-    Exit(WriteDenied(AToolName));
-  // ...and the same for the WRITING half of delphi_git: on a read-only server
-  // a clone has no business being explained in terms of remote policy.
-  if IsReadOnlyNow and SameText(AToolName, 'delphi_git') then
-  begin
-    Cmd := ArgStr(AArguments, 'command');
-    if not GitCommandIsQuery(Cmd, ArgStr(AArguments, 'args'), ArgStr(AArguments, 'message')) then
-      Exit(WriteDenied(Trim('delphi_git ' + Cmd)));
-  end;
+  // Read-only comes FIRST, for EVERY tool: LA tabla de accesos (ACCESOS,
+  // LecturaDenegada), la misma que anuncia tools/list. The argument filters
+  // below are universal on purpose, but letting one of them answer first
+  // meant a read-only server explained a git remote policy instead of
+  // saying the obvious thing: nothing writes here (v0.62). La lista de
+  // mutantes estaba DOS veces (una con delphi_desktop, otra sin) y cada
+  // mixta en su if, al final de la puerta (28-sep-2026)
+  Result := LecturaDenegada(AToolName, AArguments);
+  if Result <> '' then
+    Exit;
   // EL SUELO de la jaula, para todas las tools: todo argumento marcado
   // [RutaDelServidor] que sea una ruta absoluta tiene que caer dentro de lo
   // que este workspace puede LEER. Redundante a proposito - la nota larga
@@ -3644,89 +3800,6 @@ begin
     Result := AdbArgDenied(AArguments);
     if Result <> '' then
       Exit;
-  end;
-  if not IsReadOnlyNow then
-    Exit;
-  // Fully mutating tools: refused outright in read-only mode.
-  if MatchText(AToolName, ['delphi_edit', 'delphi_textedit', 'delphi_create',
-    'delphi_changeset',
-    'delphi_build', 'delphi_package', 'delphi_upload',
-    'delphi_delete', 'delphi_move',
-    // The knowledge vault: reading is fine read-only, writing never is.
-    'vault_append', 'vault_create', 'vault_patch']) then
-    Exit(WriteDenied(AToolName));
-  // delphi_config is mixed: "view" reads, "add-platform" writes the .dproj.
-  if SameText(AToolName, 'delphi_config') then
-  begin
-    Cmd := ArgStr(AArguments, 'command');
-    if (Trim(Cmd) = '') or SameText(Trim(Cmd), 'view') then
-      Exit;
-    Exit(WriteDenied('delphi_config ' + Cmd));
-  end;
-  // delphi_test is mixed: discover only looks; run builds and EXECUTES.
-  if SameText(AToolName, 'delphi_test') then
-  begin
-    Cmd := Trim(ArgStr(AArguments, 'command'));
-    if (Cmd = '') or SameText(Cmd, 'discover') then
-      Exit;
-    Exit(WriteDenied('delphi_test ' + Cmd));
-  end;
-  // delphi_styles is mixed: view/get/lint read; set/clone/build write.
-  if SameText(AToolName, 'delphi_styles') then
-  begin
-    Cmd := Trim(ArgStr(AArguments, 'command'));
-    if (Cmd = '') or MatchText(Cmd, ['view', 'get', 'lint']) then
-      Exit;
-    Exit(WriteDenied('delphi_styles ' + Cmd));
-  end;
-  // delphi_paserver is mixed: the listing commands read; add-profile writes a
-  // connection profile on the server and test-connection dials the target
-  // with its stored credential.
-  if SameText(AToolName, 'delphi_paserver') then
-  begin
-    Cmd := Trim(ArgStr(AArguments, 'command'));
-    if (Cmd = '') or MatchText(Cmd, ['platforms', 'packages', 'profiles']) then
-      Exit;
-    Exit(WriteDenied('delphi_paserver ' + Cmd));
-  end;
-  // delphi_designer is mixed: to-text / to-binary rewrite the .dfm/.fmx; the
-  // rest looks. Listed by what READS, so an unknown command fails closed
-  // (it was in no list at all: a read-only credential rewrote forms -
-  // audit 2026-09-25).
-  if SameText(AToolName, 'delphi_designer') then
-  begin
-    Cmd := Trim(ArgStr(AArguments, 'command'));
-    if (Cmd = '') or MatchText(Cmd, ['info', 'prop', 'tree', 'get', 'lint',
-      'check-binding', 'binding', 'layout']) then
-      Exit;
-    Exit(WriteDenied('delphi_designer ' + Cmd));
-  end;
-  // delphi_adb is mixed: discovering, listing and reading the device log are
-  // reads; attaching/detaching a device or installing an app are writes.
-  if SameText(AToolName, 'delphi_adb') then
-  begin
-    Cmd := Trim(ArgStr(AArguments, 'command'));
-    // Reads: looking at the device (list, log, screen) changes nothing.
-    // connect/disconnect/install/run/tap/key mutate or execute -> write.
-    if (Cmd = '') or MatchText(Cmd, ['discover', 'devices', 'logcat',
-      'screenshot']) then
-      Exit;
-    Exit(WriteDenied('delphi_adb ' + Cmd));
-  end;
-  // delphi_git is mixed: query commands pass, anything that can change the
-  // repo or the remote is refused ("branch"/"tag" only LIST when called
-  // without arguments; with arguments they create -> write).
-  if SameText(AToolName, 'delphi_git') then
-  begin
-    Cmd := ArgStr(AArguments, 'command');
-    GitArgs := ArgStr(AArguments, 'args');
-    GitMsg := ArgStr(AArguments, 'message');
-    // Pure query commands pass - la MISMA clasificacion que el modo solo
-    // lectura y las referencias, GitCommandIsQuery: aqui habia una copia
-    // a mano, y el worktree list de la 1.4.0 solo lo habria aprendido una.
-    if GitCommandIsQuery(Cmd, GitArgs, GitMsg) then
-      Exit;
-    Exit(WriteDenied(Trim('delphi_git ' + Cmd)));
   end;
 end;
 
@@ -5651,6 +5724,7 @@ initialization
   GIdentLock := TCriticalSection.Create;
   GSesiones := TList<TSesion>.Create;
   GCaducadas := TStringList.Create;
+  ConstruyeAccesos; // la tabla de accesos, antes de la primera llamada
 
 finalization
 

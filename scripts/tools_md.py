@@ -34,12 +34,32 @@ def _tipo(p):
     return t or 'any'
 
 
+def _acceso(tool):
+    """La linea *Access* desde lo que el servidor anuncia (_meta.access, la
+    tabla de accesos de su puerta); None si el servidor no lo anuncia."""
+    meta = tool.get('_meta') or {}
+    acc = meta.get('access')
+    if acc == 'read-only':
+        return '*Access: read-only OK.*'
+    if acc == 'read-write':
+        return '*Access: read-write (refused to a read-only credential).*'
+    if acc == 'mixed':
+        p = meta.get('commandParameter') or 'command'
+        cmds = ' / '.join(meta.get('readOnlyCommands') or [])
+        return ('*Access: mixed (`%s` %s read-only; every other %s read-write, '
+                'refused to a read-only credential).*' % (p, cmds, p))
+    return None
+
+
 def render(tool):
     """El bloque de contrato de una tool (tools/list -> Markdown)."""
     schema = tool.get('inputSchema') or {}
     props = schema.get('properties') or {}
     req = schema.get('required') or []
     lines = [MARCA_INI, '', (tool.get('description') or '').replace('\r\n', '\n').strip(), '']
+    acceso = _acceso(tool)
+    if acceso:
+        lines += [acceso, '']
     if props:
         lines += ['| Parameter | Type | Required | Description |', '|---|---|---|---|']
         for name, p in props.items():

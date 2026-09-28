@@ -40,6 +40,21 @@ the MCP `initialize` response (`serverInfo.version`).
   place) in the snapshot; `FicherosDelRename` is the one list that both the
   rename and the move photograph. A folder move keeps its per-project note
   (`[MOVE-006]`), now with each project either re-pointed whole or untouched.
+- **One access table.** Which tools a read-only credential may call lived
+  in the gate as a chain of ifs: the list of fully mutating tools written
+  TWICE (one copy with `delphi_desktop`, the other without) and each mixed
+  tool in its own branch, and `docs/TOOLS.md` carried the same knowledge a
+  third time, by hand. Now `Lsp.Guard` has ONE table (`ConstruyeAccesos`):
+  the gate consults it (`LecturaDenegada`, first thing for every tool), and
+  `tools/list` announces it for every tool as `annotations.readOnlyHint`
+  (MCP) plus `_meta.access` (`read-only` | `read-write` | `mixed`, with
+  `commandParameter` and `readOnlyCommands`). `scripts/tools_md.py` renders
+  the *Access* line of each contract block from that announcement, and
+  `test_http_auth` measures the announcement against the gate, tool by tool
+  with a read-only token (six checks). `delphi_rename_symbol mode=apply` is
+  now refused at the gate for a read-only credential, like every write
+  (the writer refused it deeper, with another text). `CAPABILITIES.json`
+  carries the `access` map.
 - **JSON-RPC edges** (ninth review, measured on 1.7.1): a body with a
   `method` that is not a string and no `id` (`{"method":5}`) was taken for a
   notification and answered with a silent 202; it is a malformed request

@@ -183,6 +183,16 @@ begin
     begin
       Result := ToolHiddenFromList(ToolName);
     end;
+  // Lo que tools/list anuncia de cada tool ademas de su esquema:
+  // annotations.readOnlyHint (MCP) y _meta.access / readOnlyCommands, desde
+  // LA tabla de accesos de la puerta (Lsp.Guard.AnunciaAcceso). TOOLS.md
+  // saca de ahi su linea Access y test_http_auth mide el anuncio contra la
+  // puerta (28-sep-2026).
+  TMCPToolsManager.ToolDecorator :=
+    procedure(const ToolName: string; const Entry: TJSONObject)
+    begin
+      AnunciaAcceso(ToolName, Entry);
+    end;
   TMCPToolsManager.ResultFilter :=
     function(const ToolName, AText: string): string
     begin

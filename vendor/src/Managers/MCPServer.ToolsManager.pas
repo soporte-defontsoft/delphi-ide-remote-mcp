@@ -35,6 +35,13 @@ type
   TToolResultWrapper = reference to function(const ToolName: string;
     const AText: string): TJSONArray;
 
+  // [local change 2026-09-28] optional decorator of every tools/list entry,
+  // called with the entry once name/description/schemas are in: the host
+  // adds what only it knows (annotations.readOnlyHint, _meta.access from
+  // its access table), in one place for every tool.
+  TToolDecorator = reference to procedure(const ToolName: string;
+    const Entry: TJSONObject);
+
   TMCPToolsManager = class(TInterfacedObject, IMCPCapabilityManager)
   strict private
     function ExtractToolNameAndArguments(const Params: System.JSON.TJSONObject; out ToolName: string; out Arguments: TJSONObject): Boolean;
@@ -67,6 +74,8 @@ type
     // the listing (it stays CALLABLE - this trims token surface for small
     // models, it is not a permission; permissions live in ToolGate).
     class var ListFilter: TToolListFilter;
+    // [local change 2026-09-28] see TToolDecorator
+    class var ToolDecorator: TToolDecorator;
   end;
 
 implementation
@@ -412,7 +421,9 @@ begin
     Result.AddPair('outputSchema', SchemaClone);
     Schema.Free;
   end;
-
+  // [local change 2026-09-28] the host's say on the entry (see TToolDecorator)
+  if Assigned(ToolDecorator) then
+    ToolDecorator(Tool.Name, Result);
 end;
 
 function TMCPToolsManager.BuildToolListResponse: TJSONObject;

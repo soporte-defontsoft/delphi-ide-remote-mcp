@@ -297,6 +297,58 @@ try:
         check('ro: delphi_textedit RECHAZADO en RO', mc.es(body, 'SR_READ_ONLY_FMT'),
               '%s %s' % (code, body[:120]))
 
+        # EL ANUNCIO contra LA PUERTA (28-sep-2026): tools/list dice de cada
+        # tool annotations.readOnlyHint y _meta.access (read-only / read-write
+        # / mixed + readOnlyCommands), desde la MISMA tabla que consulta la
+        # puerta (Lsp.Guard ACCESOS). Tool por tool con el token RO: lo
+        # anunciado read-write, READ-002; lo mixto, READ-002 con un comando que
+        # no lee y NUNCA con uno anunciado como lectura; lo read-only, nunca
+        code, body = post({"jsonrpc": "2.0", "id": 40, "method": "tools/list"}, TOKEN)
+        anunciadas = json.loads(body)['result']['tools']
+        sin_meta, mal_hint, mal_rw, mal_ro, mal_mix_no, mal_mix_si = [], [], [], [], [], []
+        for t in anunciadas:
+            meta = t.get('_meta') or {}
+            acc = meta.get('access')
+            hint = (t.get('annotations') or {}).get('readOnlyHint')
+            if acc not in ('read-only', 'read-write', 'mixed'):
+                sin_meta.append(t['name'])
+                continue
+            if hint != (acc == 'read-only'):
+                mal_hint.append('%s: hint %r, access %s' % (t['name'], hint, acc))
+            if acc == 'read-write':
+                code, body = call(t['name'], {}, RO_TOKEN)
+                if not mc.es(body, 'SR_READ_ONLY_FMT'):
+                    mal_rw.append(t['name'])
+            elif acc == 'read-only':
+                code, body = call(t['name'], {}, RO_TOKEN)
+                if mc.es(body, 'SR_READ_ONLY_FMT'):
+                    mal_ro.append(t['name'])
+            else:
+                p = meta.get('commandParameter') or 'command'
+                code, body = call(t['name'], {p: 'zz-no-lee'}, RO_TOKEN)
+                if not mc.es(body, 'SR_READ_ONLY_FMT'):
+                    mal_mix_no.append(t['name'])
+                for c in meta.get('readOnlyCommands') or []:
+                    args = {p: c.split(' ')[0]}
+                    if ' ' in c:
+                        args['args'] = c.split(' ', 1)[1]
+                    code, body = call(t['name'], args, RO_TOKEN)
+                    if mc.es(body, 'SR_READ_ONLY_FMT'):
+                        mal_mix_si.append('%s %s' % (t['name'], c))
+        check('anuncio: toda tool de tools/list lleva _meta.access', not sin_meta, sin_meta)
+        check('anuncio: readOnlyHint == (access read-only)', not mal_hint, mal_hint)
+        check('anuncio: lo anunciado read-write lo niega la puerta al token RO', not mal_rw, mal_rw)
+        check('anuncio: lo anunciado read-only NO lo niega la puerta', not mal_ro, mal_ro)
+        check('anuncio: en las mixtas, un comando que no lee se niega (cerrado)', not mal_mix_no, mal_mix_no)
+        check('anuncio: en las mixtas, cada comando anunciado como lectura pasa la puerta',
+              not mal_mix_si, mal_mix_si)
+        # rename_symbol: apply se niega A LA ENTRADA (antes lo negaba el escritor
+        # al llegar a escribir, con otro texto)
+        code, body = call('delphi_rename_symbol', {'path': paspath, 'line': 0, 'character': 5,
+                                                   'newname': 'Otra', 'mode': 'apply'}, RO_TOKEN)
+        check('ro: rename_symbol apply RECHAZADO en RO a la entrada (READ-002)',
+              mc.es(body, 'SR_READ_ONLY_FMT'), '%s %s' % (code, body[:120]))
+
         code, body = call('delphi_git', {'repo': REPO, 'command': 'tag'},
                           RO_TOKEN)
         check('ro: git tag sin args (listar) permitido en RO (git contesta)',

@@ -33,6 +33,9 @@ manifest = {
     "optionalTools": len(vault_tools),
     "toolNames": tools,
     "optionalToolNames": vault_tools,
+    # what a read-only credential may call, from the server's own access
+    # table (tools/list _meta.access): read-only | read-write | mixed
+    "access": {t['name']: (t.get('_meta') or {}).get('access') for t in sorted(lista, key=lambda t: t['name'])},
     "lspBacked": lsp_backed,
     "engines": {
         "semantics": "DelphiLSP.exe (Embarcadero, kept warm per workspace)",
