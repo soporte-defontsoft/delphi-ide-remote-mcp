@@ -283,6 +283,13 @@ try:
         r = cu.call_msg('delphi_read', {'path': unc(CONOTRO) + '\\propio.txt'}, 120)
         check('A13 ...y un UNC fuera de ella sigue fuera (GUARD-002)',
               mc.abre(mc.texto(r, True), 'SR_JAIL_FMT'), mc.texto(r, True)[:200])
+        # A14 el host que el servidor enmascara como srvhost VUELVE: con un solo
+        # host UNC declarado, \\srvhost\... es ese host (nadie lo leia de vuelta
+        # y el agente no podia repetir lo que le ensenaban; novena revision)
+        r = cu.call_msg('delphi_read', {'path': '\\\\srvhost' + UNC_DECL[len('\\\\localhost'):] + '\\f.txt'}, 120)
+        t = mc.texto(r, True)
+        check('A14 \\\\srvhost\\... vuelve al unico host UNC declarado y se lee',
+              'por unc' in t and not mc.fallo(t), t[:200])
     else:
         print('NOTA: A13 sin medir: %s no responde' % unc(UNCDIR))
 

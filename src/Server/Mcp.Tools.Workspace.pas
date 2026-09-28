@@ -819,12 +819,9 @@ begin
 end;
 
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
-const
-  BadChars: array [0 .. 8] of string = (';', '|', '&', '`', '$', '<', '>', #13, #10);
 var
   Cmd, GitArgs, Repo, Output, MsgFile: string;
   ExitCode: Cardinal;
-  B: string;
   Destino, Enlace: string; // worktree
 begin
   MsgFile := '';
@@ -860,9 +857,10 @@ begin
   if not SameText(Params.Command.Trim, 'clone') and not TDirectory.Exists(Repo) then
     Exit(MsgFmt(SR_GIT_DIR_NOT_FOUND_FMT, [Repo]));
 
-  for B in BadChars do
-    if Params.Args.Contains(B) then
-      Exit(MsgText(SR_GIT_SHELL_METACHARS_ARGS));
+  // UNA lista de metacaracteres (Lsp.Guard.ShellArgDenied): la tool tenia
+  // su copia (novena revision)
+  if ShellArgDenied(Params.Args) <> '' then
+    Exit(MsgText(SR_GIT_SHELL_METACHARS_ARGS));
   // The message never goes through a shell (git is spawned with a direct
   // command line): normal punctuation is welcome. Line breaks are refused
   // ONLY for the commands that embed the message in the command line -
@@ -880,17 +878,32 @@ begin
   // lo que no va con el comando se dice (Lsp.Guard.ParametroQueNoVa): commit
   // con path hacia un commit de TODO el indice (octava revision). Solo los
   // parametros de UN comando; args es de todos y lo mira el filtro
+  // stash y worktree tienen SUBcomando (el primer trozo de args): la tabla
+  // era por comando, y stash list admitia message, worktree list path y
+  // worktree remove ref (novena revision)
+  var ModoGit := Cmd;
+  if Cmd = 'stash' then
+  begin
+    var TrozosSub := TrocearArgs(Params.Args);
+    // (sin IfThen: evalua las dos ramas y TrozosSub[0] sin trozos era un AV)
+    ModoGit := 'stash push';
+    if Length(TrozosSub) > 0 then
+      ModoGit := 'stash ' + LowerCase(TrozosSub[0]);
+  end
+  else if Cmd = 'worktree' then
+    ModoGit := 'worktree ' + Params.Args.Trim.ToLower;
   var SuyosGit: string;
-  var SobraGit := ParametroQueNoVa(Cmd, [
+  var SobraGit := ParametroQueNoVa(ModoGit, [
       'status', '', 'diff', '', 'log', '', 'show', '', 'branch', '', 'add', '',
       'pull', '', 'fetch', '', 'init', '', 'merge', '', 'push', '',
       'commit', 'message', 'clone', 'message', 'config', 'message',
-      'stash', 'message', 'tag', 'message', 'switch', 'create',
-      'worktree', 'path ref'],
+      'stash push', 'message', 'stash pop', '', 'stash list', '',
+      'tag', 'message', 'switch', 'create',
+      'worktree add', 'path ref', 'worktree list', '', 'worktree remove', 'path'],
     ['message', Params.Message, '', 'path', Params.Path, '', 'ref', Params.Ref, '',
      'create', IfThen(Params.Create, 'true'), ''], SuyosGit);
   if SobraGit <> '' then
-    Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, Cmd, Cmd, ONinguno(SuyosGit)]));
+    Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, ModoGit, ModoGit, ONinguno(SuyosGit)]));
   if Cmd = 'status' then
     GitArgs := 'status --porcelain=v1 -b ' + ArgvSeguro(Params.Args)
   else if Cmd = 'diff' then
@@ -935,9 +948,8 @@ begin
     if not (Url.StartsWith('https://') or Url.StartsWith('http://') or
             Url.StartsWith('git://') or Url.StartsWith('ssh://')) then
       Exit(MsgText(SR_GIT_CLONE_URLS_ACCEPTED));
-    for B in BadChars do
-      if Url.Contains(B) then
-        Exit(MsgText(SR_GIT_SHELL_METACHARS_URL));
+    if ShellArgDenied(Url) <> '' then
+      Exit(MsgText(SR_GIT_SHELL_METACHARS_URL));
     if Url.Contains('--upload-pack') or Url.Contains('--config') or
        Url.StartsWith('-') then
       Exit(MsgText(SR_GIT_URL_NOT_ALLOWED));

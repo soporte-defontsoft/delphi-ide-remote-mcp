@@ -93,7 +93,7 @@ GOOD = """object FormMain: TFormMain
 end
 """
 o = layout('Bien', GOOD)
-check('L1 un form correcto sale limpio', o.get('ok') is True, o)
+check('L1 un form correcto sale limpio', o.get('clean') is True, o)
 check('L5 Align resuelto: el alClient recibe el hueco que queda',
       o.get('clientWidth') == 500 and o.get('clientHeight') == 300, o)
 check('L7 un TTimer no tiene geometria que juzgar',
@@ -120,14 +120,14 @@ end
 """
 o = layout('Over', OVER)
 check('L2 dos controles solapados: uno tapa al otro',
-      o.get('ok') is False and len(o.get('overlapping', [])) == 1
+      o.get('clean') is False and len(o.get('overlapping', [])) == 1
       and 'BtnA' in json.dumps(o) and 'BtnB' in json.dumps(o), o)
 
 # ...and two that merely touch do NOT overlap
 TOUCH = OVER.replace('Left = 60', 'Left = 110')
 o = layout('Touch', TOUCH)
 check('L2 dos controles pegados NO se solapan (sin falso positivo)',
-      o.get('ok') is True, o)
+      o.get('clean') is True, o)
 
 # L3 - a side of zero
 ZERO = """object F: TF
@@ -143,7 +143,7 @@ end
 """
 o = layout('Zero', ZERO)
 check('L3 un control con un lado a cero',
-      o.get('ok') is False and len(o.get('zeroSize', [])) == 1, o)
+      o.get('clean') is False and len(o.get('zeroSize', [])) == 1, o)
 
 # L4 - outside the container, and the container is a nested panel
 OUT = """object F: TF
@@ -171,14 +171,14 @@ end
 o = layout('Out', OUT)
 txt = json.dumps(o, ensure_ascii=False)
 check('L4 se sale por la derecha del panel que lo contiene',
-      o.get('ok') is False and 'BtnFuera' in txt and 'Panel1' in txt, o)
+      o.get('clean') is False and 'BtnFuera' in txt and 'Panel1' in txt, o)
 check('L4 y tambien por abajo', 'BtnAlto' in txt, o)
 
 # L4b - negative coordinates count as outside too
 NEG = OUT.replace('Left = 360', 'Left = -20').replace('Left = 10', 'Left = 10')
 o = layout('Neg', NEG)
 check('L4 una coordenada negativa tambien se sale',
-      o.get('ok') is False and 'BtnFuera' in json.dumps(o), o)
+      o.get('clean') is False and 'BtnFuera' in json.dumps(o), o)
 
 # L5 - aligned children eating the whole parent
 NOROOM = """object F: TF
@@ -203,7 +203,7 @@ end
 """
 o = layout('NoRoom', NOROOM)
 check('L5 los alineados consumen el form y al siguiente no le queda sitio',
-      o.get('ok') is False and len(o.get('clipped', [])) >= 1, o)
+      o.get('clean') is False and len(o.get('clipped', [])) >= 1, o)
 
 # L6 - a second alClient
 TWOCLIENT = """object F: TF
@@ -223,7 +223,7 @@ end
 """
 o = layout('TwoClient', TWOCLIENT)
 check('L6 el segundo alClient no recibe nada',
-      o.get('ok') is False and 'M2' in json.dumps(o), o)
+      o.get('clean') is False and 'M2' in json.dumps(o), o)
 
 # L8 - a size the .dfm never wrote
 NOSIZE = """object F: TF
@@ -253,7 +253,7 @@ end
 """
 o = layout('NoForm', NOFORM)
 check('un form sin tamano se dice, no se adivina',
-      o.get('ok') is False and len(o.get('clipped', [])) == 1, o)
+      o.get('clean') is False and len(o.get('clipped', [])) == 1, o)
 
 # L9 - doctrine
 r = call({'command': 'layout', 'path': 'C:\\Windows\\win.ini'})
@@ -291,41 +291,41 @@ DFMS['Trunc'] = 'object F: TF\n  ClientWidth = 100\n  ClientHeight = 100\n  obje
 DFMS['OldForm'] = 'object F: TF\n  Width = 544\n  Height = 375\n  object btnAbajo: TButton\n    Left = 16\n    Top = 345\n    Width = 75\n    Height = 25\n  end\nend\n'
 
 o = layout('Scroll', DFMS['Scroll'])
-check('S1 un TScrollBox con contenido mayor NO es error', o.get('ok') is True, o)
+check('S1 un TScrollBox con contenido mayor NO es error', o.get('clean') is True, o)
 
 o = layout('Hidden', DFMS['Hidden'])
-check('S2 un panel Visible=False no cuenta (ni como segundo alClient)', o.get('ok') is True, o)
+check('S2 un panel Visible=False no cuenta (ni como segundo alClient)', o.get('clean') is True, o)
 o = layout('Swap', DFMS['Swap'])
-check('S2 dos controles en el mismo hueco, uno oculto: sin solape', o.get('ok') is True, o)
+check('S2 dos controles en el mismo hueco, uno oculto: sin solape', o.get('clean') is True, o)
 
 o = layout('Deco', DFMS['Deco'])
-check('S4 un TBevel de marco no "tapa" a los controles de dentro', o.get('ok') is True, o)
+check('S4 un TBevel de marco no "tapa" a los controles de dentro', o.get('clean') is True, o)
 
 o = layout('Defaults', DFMS['Defaults'])
-check('S6 StatusBar/ToolBar por defecto van a su banda, no se solapan', o.get('ok') is True, o)
+check('S6 StatusBar/ToolBar por defecto van a su banda, no se solapan', o.get('clean') is True, o)
 
 o = layout('Grid', DFMS['Grid'])
-check('S3 los hijos alClient de un TGridPanel no se marcan como solape', o.get('ok') is True, o)
+check('S3 los hijos alClient de un TGridPanel no se marcan como solape', o.get('clean') is True, o)
 
 o = layout('Cover', DFMS['Cover'])
 check('FN2 un alClient que tapa a un alNone SI se detecta',
-      o.get('ok') is False and len(o.get('overlapping', [])) == 1, o)
+      o.get('clean') is False and len(o.get('overlapping', [])) == 1, o)
 
 o = layout('TwoClient', DFMS['TwoClient'])
 check('Bug3 dos alClient visibles se tapan al 100%',
-      o.get('ok') is False and len(o.get('overlapping', [])) == 1 and '100%' in json.dumps(o), o)
+      o.get('clean') is False and len(o.get('overlapping', [])) == 1 and '100%' in json.dumps(o), o)
 
 o = layout('ClientFirst', DFMS['ClientFirst'])
-check('alClient declarado ANTES de un alBottom no se solapa con el', o.get('ok') is True, o)
+check('alClient declarado ANTES de un alBottom no se solapa con el', o.get('clean') is True, o)
 
 o = layout('Tab', DFMS['Tab'])
 check('FN1 el contenido de un TTabSheet SI se revisa',
-      o.get('ok') is False and len(o.get('zeroSize', [])) == 1 and len(o.get('overlapping', [])) == 1, o)
+      o.get('clean') is False and len(o.get('zeroSize', [])) == 1 and len(o.get('overlapping', [])) == 1, o)
 
 o = layout('Boxes', DFMS['Boxes'])
 bx = {b['name']: b for b in o.get('boxes', [])}
 check('MURO boxes: el rectangulo resuelto de cada control, en coords del form',
-      o.get('ok') is True and len(bx) == 3 and bx['Grid']['y'] == 40 and bx['Grid']['h'] == 260
+      o.get('clean') is True and len(bx) == 3 and bx['Grid']['y'] == 40 and bx['Grid']['h'] == 260
       and bx['Btn']['x'] == 8 and bx['Btn']['y'] == 8 and bx['Btn']['parent'] == 'Barra', o)
 
 o = layout('Overflow', DFMS['Overflow'])
@@ -347,16 +347,16 @@ check('FN3 un form sin ClientWidth se estima y lo declara',
 
 
 o = layout('PC', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object PageControl1: TPageControl\n    Align = alClient\n    Width = 400\n    Height = 300\n    object TabSheet1: TTabSheet\n    end\n    object TabSheet2: TTabSheet\n    end\n    object TabSheet3: TTabSheet\n    end\n  end\nend\n")
-check('R10 un TPageControl con varias TTabSheet NO es solape', o.get('ok') is True, o)
+check('R10 un TPageControl con varias TTabSheet NO es solape', o.get('clean') is True, o)
 
 o = layout('Flow', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 200\n  object FlowPanel1: TFlowPanel\n    Align = alClient\n    Width = 400\n    Height = 200\n    object B1: TButton\n      Left = 1\n      Top = 1\n      Width = 100\n      Height = 40\n    end\n    object B2: TButton\n      Left = 1\n      Top = 1\n      Width = 100\n      Height = 40\n    end\n  end\nend\n")
-check('R10 los hijos de un TFlowPanel no se juzgan por Left/Top', o.get('ok') is True, o)
+check('R10 los hijos de un TFlowPanel no se juzgan por Left/Top', o.get('clean') is True, o)
 
 o = layout('Rel', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 200\n  object RelativePanel1: TRelativePanel\n    Align = alClient\n    Width = 400\n    Height = 200\n    object E1: TEdit\n      Left = 0\n      Top = 0\n      Width = 100\n      Height = 23\n    end\n    object E2: TEdit\n      Left = 0\n      Top = 0\n      Width = 100\n      Height = 23\n    end\n  end\nend\n")
-check('R10 los hijos de un TRelativePanel tampoco', o.get('ok') is True, o)
+check('R10 los hijos de un TRelativePanel tampoco', o.get('clean') is True, o)
 
 o = layout('Custom', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 200\n  object P1: TPanel\n    Align = alCustom\n    Left = 0\n    Top = 0\n    Width = 100\n    Height = 100\n  end\n  object P2: TPanel\n    Align = alCustom\n    Left = 0\n    Top = 0\n    Width = 100\n    Height = 100\n  end\nend\n")
-check('R10 alCustom no se juzga por coordenadas de diseno', o.get('ok') is True, o)
+check('R10 alCustom no se juzga por coordenadas de diseno', o.get('clean') is True, o)
 
 o = layout('Margins', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object PanelTop: TPanel\n    AlignWithMargins = True\n    Align = alTop\n    Width = 400\n    Height = 50\n  end\n  object PanelClient: TPanel\n    Align = alClient\n    Width = 400\n    Height = 244\n  end\nend\n")
 bx = {b['name']: b for b in o.get('boxes', [])}

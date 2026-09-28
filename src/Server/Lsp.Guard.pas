@@ -75,7 +75,12 @@ function ToolHiddenFromList(const AToolName: string): Boolean;
 type
   TMotivoVeto = (mvNinguno, mvAnomalia, mvVault, mvRootsInvalidos,
     mvRutaInvalida, mvEnlaceFuera, mvSoloLectura, mvConfinado,
-    mvFueraDeJaula, mvReferencia);
+    mvFueraDeJaula, mvReferencia, mvRutaLarga);
+
+const
+  { Lo mas larga que puede ser una ruta que se ESCRIBE: MAX_PATH (259) menos
+    el sufijo temporal del escritor atomico (27). Leer no tiene tope. }
+  RUTA_ESCRIBIBLE_MAX = 259 - 27;
 
 function PathDenied(const APath: string): string; overload;
 function PathDenied(const APath: string;
@@ -4878,6 +4883,20 @@ begin
     AMotivo := mvRutaInvalida;
     Exit;
   end;
+  // MAX_PATH: el escritor atomico anade su sufijo temporal (27 caracteres) y
+  // de 233 a 259 una escritura moria como SYS-009 INTERNAL "Cannot create
+  // file", con las carpetas ya creadas (novena revision, R9). Sin
+  // longPathAware en el manifiesto (que ademas depende de una politica de
+  // la maquina) la respuesta honesta es negar la ESCRITURA con la medida, a
+  // la entrada; leer una ruta larga sigue valiendo (ReadPathDenied perdona)
+  // por la longitud de lo que llega (ya alargado a la entrada): GetFullPath
+  // LANZA con caracteres invalidos, y una ruta con < o > que la tool negaba
+  // con su texto salia como -32602 (test_v012, primera puerta de la 1.7.2)
+  if Length(APath) > RUTA_ESCRIBIBLE_MAX then
+  begin
+    AMotivo := mvRutaLarga;
+    Exit(MsgFmt(SR_GUARD_RUTA_LARGA_FMT, [Length(APath), RUTA_ESCRIBIBLE_MAX]));
+  end;
   // Un UNC que no es de ningun sitio declarado: fuera, por TEXTO, antes de
   // InVault / ReadOnlyRootOf, que lo resuelven en el disco (SMB hacia el
   // host que diga el agente; septima revision). Tambien para quien llama a
@@ -5265,6 +5284,46 @@ begin
   Result := UncFueraDeLugares(APath) or EsPrefijoDeDispositivo(APath);
 end;
 
+{ Los lugares que el operador declaro (raices, referencias, solo lectura, el
+  vault, la zona de biblioteca): UNA lista para quien pregunta por un UNC
+  (UncFueraDeLugares) y para el host que vuelve de srvhost (HostUncDeclarado). }
+function LugaresDeclarados: TArray<string>;
+begin
+  Result := WorkspaceRoots + WorkspaceReadOnlyRoots + WorkspaceReadOnlyPaths;
+  if VaultPath <> '' then
+    Result := Result + [VaultPath];
+  if LibraryZoneEnabled then
+    Result := Result + LibraryRoots;
+end;
+
+{ El host UNC de los lugares declarados, si es UNO solo ('' si ninguno o
+  varios): lo que \\srvhost\ significa al volver del agente. }
+function HostUncDeclarado: string;
+var
+  L, H: string;
+  I: Integer;
+begin
+  Result := '';
+  if Length(WorkspaceRoots) = 0 then
+    Exit;
+  for L in LugaresDeclarados do
+  begin
+    H := L.Trim.Replace('/', '\');
+    if not H.StartsWith('\\') or EsPrefijoDeDispositivo(H) then
+      Continue;
+    H := H.Substring(2);
+    I := H.IndexOf('\');
+    if I > 0 then
+      H := H.Substring(0, I);
+    if H = '' then
+      Continue;
+    if Result = '' then
+      Result := H
+    else if not SameText(Result, H) then
+      Exit(''); // dos hosts: no se adivina
+  end;
+end;
+
 function UncFueraDeLugares(const APath: string): Boolean;
 var
   P, L: string;
@@ -5276,11 +5335,7 @@ begin
     Exit(False);
   if Length(WorkspaceRoots) = 0 then
     Exit(False);
-  Lugares := WorkspaceRoots + WorkspaceReadOnlyRoots + WorkspaceReadOnlyPaths;
-  if VaultPath <> '' then
-    Lugares := Lugares + [VaultPath];
-  if LibraryZoneEnabled then
-    Lugares := Lugares + LibraryRoots;
+  Lugares := LugaresDeclarados;
   P := IncludeTrailingPathDelimiter(P);
   for L in Lugares do
   begin
@@ -5340,6 +5395,10 @@ begin
       Exit('');
     // Un proyecto de REFERENCIA (ReadOnlyRoots) es justo eso: se lee.
     mvReferencia:
+      Exit('');
+    // Una ruta mas larga que MAX_PATH menos el sufijo del escritor: se lee;
+    // lo que no se puede es escribirla (GUARD-028)
+    mvRutaLarga:
       Exit('');
     // Outside the jail - but READING library territory is legitimate. Solo
     // para quien esta fuera DE VERDAD: la negativa del enlace
@@ -5468,11 +5527,23 @@ end;
 function ExpandDriveValue(const AValue: string): string;
 var
   Letter: Char;
+  Host, V: string;
 begin
   Result := AValue;
   Letter := VirtualUnitLetter(AValue);
   if (Letter <> #0) and (Pos(Letter, ServedDriveLetters) > 0) then
-    Result := Letter + Copy(AValue, 5, MaxInt);
+    Exit(Letter + Copy(AValue, 5, MaxInt));
+  // el HOST de un UNC sale enmascarado como srvhost (MaskDriveText) y nadie
+  // lo leia de vuelta: el agente no podia repetir lo que el servidor le
+  // ensenaba (GUARD-002). Vuelve solo si el operador declaro UN unico host
+  // UNC entre sus lugares (novena revision, M5b)
+  V := AValue.Replace('/', '\');
+  if StartsText('\\srvhost\', V) then
+  begin
+    Host := HostUncDeclarado;
+    if Host <> '' then
+      Result := '\\' + Host + Copy(V, Length('\\srvhost') + 1, MaxInt);
+  end;
 end;
 
 { Rewrites the string arguments of a tools/call in place. Content-carrying
@@ -5490,6 +5561,10 @@ begin
 end;
 
 function MaskDriveText(const AToolName, AText: string): string;
+const
+  // las tools cuyo ECO es contenido del disco (la nota de abajo dice por que)
+  TOOLS_ECO: array [0 .. 5] of string = ('delphi_read', 'vault_read', 'vault_search',
+    'delphi_search', 'delphi_edit', 'delphi_textedit');
 var
   Sb: TStringBuilder;
   Letters: string;
@@ -5544,15 +5619,26 @@ begin
   // absolutas", que era FALSO y es justo lo que hizo que nadie mirara. Lo
   // caza ya la bateria test_round40, en las dos direcciones: que no salga la
   // letra real, y que el contenido del disco NO venga enmascarado.
-  if MatchText(AToolName, ['delphi_read', 'vault_read', 'vault_search',
-                           'delphi_search', 'delphi_edit',
-                           'delphi_textedit']) and
+  if MatchText(AToolName, TOOLS_ECO) and
      // la RESPUESTA no es una negativa: se mira como EMPIEZA (MsgOutcome +
      // la regla de la marca), nunca una etiqueta de DENTRO: un delphi_read de
      // Lsp.Texts trae [X DENIED] en sus lineas, se tomaba por negativa y se
      // enmascaraba el CONTENIDO ('%s:' salia '%srv0:', medido 27-sep)
      (MsgOutcome(AText) = '') then
     Exit(AText);
+  // ...y en la NEGATIVA de una de esas tools, las lineas que CITAN el disco
+  // ("  65|texto": el formato de delphi_read y de las pistas EDIT-094..096)
+  // son contenido y se dejan tal cual; el resto de la negativa (rutas del
+  // guard, mensajes) se enmascara linea a linea. Una pista enmascarada no
+  // servia de ancla (novena revision, M5a)
+  if MatchText(AToolName, TOOLS_ECO) and (AText.IndexOf(#10) >= 0) then
+  begin
+    var Lineas := AText.Split([#10]);
+    for var K := 0 to High(Lineas) do
+      if not TRegEx.IsMatch(Lineas[K], '^\s*\d+\|') then
+        Lineas[K] := MaskDriveText('', Lineas[K]);
+    Exit(string.Join(#10, Lineas));
+  end;
   Letters := ServedDriveLetters;
   if (Letters = '') or (AText = '') then
     Exit(AText);

@@ -2390,6 +2390,45 @@ try:
           res.get('isError') is True and mc.es(t, 'SR_CHANGESET_NO_VA_CON_COMANDO_FMT'), t[:200])
     llama('delphi_changeset', {'command': 'rollback', 'id': c173})
 
+    # E174 una ruta mas larga que MAX_PATH menos el sufijo del escritor: GUARD-028
+    # a la entrada, sin fichero ni carpetas (era SYS-009 INTERNAL "Cannot create
+    # file" con las carpetas ya creadas); LEERLA sigue valiendo
+    D174 = os.path.join(JAIL, 'e174')
+    # 250 caracteres justos: mas de 232 (no se escribe) y menos de 260 (se lee)
+    P174 = os.path.join(D174, 'x' * (250 - len(D174) - 7), 'f.txt')
+    rechazo('E174 crear en una ruta de %d caracteres: GUARD-028 (era SYS-009 INTERNAL)' % len(P174),
+            'delphi_textedit', {'path': P174, 'create': True, 'content': 'x'}, 'INVALID_PARAM',
+            'SR_GUARD_RUTA_LARGA_FMT')
+    check('E174 ...y no deja carpetas por el camino', not os.path.exists(D174), D174)
+    os.makedirs(os.path.dirname(P174), exist_ok=True)
+    open(P174, 'w').write('largo\n')
+    res, sc, t = llama('delphi_read', {'path': P174})
+    check('E174 ...leer una ruta larga sigue valiendo', not res.get('isError') and 'largo' in t, t[:200])
+    res, sc, t = llama('delphi_textedit', {'path': P174, 'old': 'largo', 'new': 'corto'})
+    check('E174 ...editarla: GUARD-028, sin tocarla', res.get('isError') is True and
+          mc.abre(t, 'SR_GUARD_RUTA_LARGA_FMT') and open(P174).read() == 'largo\n', t[:200])
+
+    # E175 la negativa de una tool exenta del enmascarado (textedit) que CITA
+    # lineas del disco: las lineas citadas van tal cual (con su D:\), lo demas
+    # de la negativa enmascarado. Una pista enmascarada no servia de ancla
+    D175 = os.path.join(JAIL, 'e175')
+    os.makedirs(D175)
+    P175 = os.path.join(D175, 'rutas.txt')
+    open(P175, 'w', newline='\n').write("uno\nx := 'D:\\Datos\\algo.txt';\ntres\n")
+    res, sc, t = llama('delphi_textedit', {'path': P175, 'old': "'D:\\Datos", 'new': 'y'})
+    check('E175 la pista EDIT-095 cita la linea con su D:\\ sin enmascarar',
+          res.get('isError') is True and mc.es(t, 'SN_ANCLA_CONTIENEN') and
+          "2|x := 'D:\\Datos\\algo.txt';" in t and 'srvd:\\Datos' not in t, t[:300])
+
+    # E176 git: las tablas de "lo que no va" por SUBcomando (stash list con
+    # message, worktree list con path): eran por comando
+    rechazo('E176 git stash list con message: no va con el subcomando', 'delphi_git',
+            {'command': 'stash', 'args': 'list', 'repo': NOREPO, 'message': 'x'},
+            'INVALID_PARAM', 'SR_GIT_NO_VA_CON_COMANDO_FMT')
+    rechazo('E176 git worktree list con path: no va con el subcomando', 'delphi_git',
+            {'command': 'worktree', 'args': 'list', 'repo': NOREPO, 'path': NOTES},
+            'INVALID_PARAM', 'SR_GIT_NO_VA_CON_COMANDO_FMT')
+
     # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
     # APPLIED / COMMIT COMPLETE prometiendo copias que no existian
     SIN = os.path.join(JAIL, 'e77')

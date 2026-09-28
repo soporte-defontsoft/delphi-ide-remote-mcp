@@ -6,7 +6,19 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.7.2] - 2026-09-28
+
+The list the 1.7.1 review left behind, closed point by point before David steps away for a few days of testing: every item is either done here or decided and written down (the vault keeps the decisions).
+
+### Changed
+
+- **`clean` instead of `ok` for a domain verdict.** `delphi_designer
+  command=check-binding` and `command=layout` and `delphi_styles
+  command=lint` answered `structuredContent.ok: false` meaning "the form does
+  not add up" / "there are findings", while everywhere else `ok: false` (with
+  `code`) means "the call failed". Two meanings in one field: the domain
+  verdict is now `clean` (true = nothing found). `ok` keeps its one meaning.
+  A client reading `ok` from those three answers must read `clean`.
 
 ### Added
 
@@ -55,6 +67,33 @@ the MCP `initialize` response (`serverInfo.version`).
   now refused at the gate for a read-only credential, like every write
   (the writer refused it deeper, with another text). `CAPABILITIES.json`
   carries the `access` map.
+- **A path too long to write is refused honestly** (`[GUARD-028
+  INVALID_PARAM]`, with the length and the limit: MAX_PATH minus the atomic
+  writer's temporary suffix, 232). From 233 to 259 characters a create or an
+  edit died as `[SYS-009 INTERNAL] Cannot create file` with the folders
+  already created. Reading a long path still works. A `longPathAware`
+  manifest was considered and dropped: it depends on a machine policy.
+- **Quoted lines in a refusal are not masked.** The refusals of the tools
+  whose echo is disk content (`delphi_edit`, `delphi_textedit`...) quote real
+  lines (`[EDIT-094..096]`, `  65|text`); the outbound mask rewrote a `D:\`
+  inside them, so the hint could not be copied as an anchor. Lines in that
+  format stay verbatim; the rest of the refusal is masked line by line.
+- **`\\srvhost\...` comes back.** The mask replaces the host of a UNC path
+  with `srvhost` and nothing read it back, so an agent could not repeat a
+  path the server had shown it (`[GUARD-002]`). When the operator declares
+  exactly ONE UNC host among the roots, reference roots, read-only paths, the
+  vault and the library zone, `\\srvhost\` is that host again on the way
+  in. `LugaresDeclarados` is the one list of declared places.
+- **`delphi_git` minors**: `stash` refusing its arguments said
+  `[GIT-013 NOT_FOUND]` (it is `INVALID_PARAM`); the tool carried its own
+  copy of the shell metacharacter list (`ShellArgDenied` is the one rule);
+  the "what does not go with the command" tables are per SUBcommand for
+  `stash` (push / pop / list) and `worktree` (add / list / remove): `stash
+  list` accepted `message`, `worktree list` accepted `path`.
+- **Batteries**: `run_all` removes the `.delphilsp.json` caches the server
+  leaves in `%LOCALAPPDATA%` for the batteries' own projects (131 measured);
+  the ninth review's control of `test_round48` runs when the 1.0.12 zip is
+  in `release-out`.
 - **JSON-RPC edges** (ninth review, measured on 1.7.1): a body with a
   `method` that is not a string and no `id` (`{"method":5}`) was taken for a
   notification and answered with a silent 202; it is a malformed request

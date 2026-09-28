@@ -109,6 +109,34 @@ def copias(carpeta, nombre=None, cajon=None, bajo=False):
                   if sello.match(os.path.basename(f)))
 
 
+def limpia_caches_lsp():
+    """Las caches .delphilsp.json que el servidor deja en %LOCALAPPDATA%\\DelphiLspMcp\\configs
+    para los proyectos de las baterias (bajo RAIZ) o para proyectos que ya no
+    existen: basura de la maquina (131 medidas el 28-sep-2026). Devuelve cuantas
+    quito. Las de proyectos vivos fuera de RAIZ no se tocan."""
+    from urllib.parse import unquote
+    carpeta = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'DelphiLspMcp', 'configs')
+    if not os.path.isdir(carpeta):
+        return 0
+    quitadas = 0
+    raiz = os.path.normcase(os.path.abspath(RAIZ))
+    for f in glob.glob(os.path.join(carpeta, '*.delphilsp.json')):
+        try:
+            proyecto = json.load(open(f, encoding='utf-8-sig')).get('settings', {}).get('project', '')
+        except Exception:
+            continue
+        if not proyecto.startswith('file:///'):
+            continue
+        ruta = unquote(proyecto[len('file:///'):]).replace('/', os.sep)
+        if os.path.normcase(os.path.abspath(ruta)).startswith(raiz) or not os.path.exists(ruta):
+            try:
+                os.remove(f)
+                quitadas += 1
+            except OSError:
+                pass
+    return quitadas
+
+
 def borra(ruta):
     """Borra un arbol aunque tenga ficheros de SOLO LECTURA (los objetos de un
     .git los son): rmtree con ignore_errors los dejaba ahi, y la pasada

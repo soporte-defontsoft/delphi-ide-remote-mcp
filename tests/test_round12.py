@@ -163,14 +163,14 @@ pas = PAS_HEAD + ("  TFormMain = class(TForm)\r\n    BtnDel: TButton;\r\n"
                   "  end;\r\n\r\nimplementation\r\n\r\nend.\r\n")
 o = J(binding(dfm, pas))
 check('F1 manejador declarado en private: NO cuadra',
-      o.get('ok') is False and len(o.get('eventsWithMethodNotPublished', [])) == 1,
+      o.get('clean') is False and len(o.get('eventsWithMethodNotPublished', [])) == 1,
       o)
 # ...and published is still fine
 pas_ok = PAS_HEAD + ("  TFormMain = class(TForm)\r\n    BtnDel: TButton;\r\n"
                      "    procedure BtnDelClick(Sender: TObject);\r\n"
                      "  end;\r\n\r\nimplementation\r\n\r\nend.\r\n")
 o = J(binding(dfm, pas_ok))
-check('F1 y publicado sigue dando ok', o.get('ok') is True, o)
+check('F1 y publicado sigue dando ok', o.get('clean') is True, o)
 
 # F2 - the jail
 r = binding(dfm, pas_ok, unit='C:\\Windows\\win.ini')
@@ -191,7 +191,7 @@ pas3 = PAS_HEAD + ("  TFormMain = class(TForm)\r\n  end;\r\n\r\n"
                    "\r\nimplementation\r\n\r\nend.\r\n")
 o = J(binding(dfm3, pas3))
 check('F3 otra clase de la misma unit no avala nada',
-      o.get('ok') is False and len(o.get('componentsWithoutField', [])) == 1
+      o.get('clean') is False and len(o.get('componentsWithoutField', [])) == 1
       and len(o.get('eventsWithoutMethod', [])) == 1, o)
 
 # F4 - multiple declaration and qualified type
@@ -203,7 +203,7 @@ pas4 = PAS_HEAD + ("  TFormMain = class(TForm)\r\n    BtnA, BtnB: TButton;\r\n"
                    "implementation\r\n\r\nend.\r\n")
 o = J(binding(dfm4, pas4))
 check('F4 "A, B: TButton;" y tipo cualificado se entienden',
-      o.get('ok') is True, o)
+      o.get('clean') is True, o)
 
 # F5 - inline frames belong to the frame
 dfm5 = ("object FormMain: TFormMain\r\n  inline Barra: TBarra\r\n"
@@ -212,7 +212,7 @@ pas5 = PAS_HEAD + ("  TFormMain = class(TForm)\r\n    Barra: TBarra;\r\n"
                    "  end;\r\n\r\nimplementation\r\n\r\nend.\r\n")
 o = J(binding(dfm5, pas5))
 check('F5 los hijos de un frame inline no son del form',
-      o.get('ok') is True, o)
+      o.get('clean') is True, o)
 
 # F6 - inheritance leaving the unit: honesty, not invention
 dfm6 = ("inherited Child: TChild\r\n  inherited PanelTop: TPanel\r\n  end\r\n"
@@ -231,14 +231,14 @@ pas7 = PAS_HEAD + ("  TFormMain = class(TForm)\r\n    Btn: TButton;\r\n"
                    "  end;\r\n\r\nimplementation\r\n\r\nend.\r\n")
 o = J(binding(dfm7, pas7))
 check('F7 nombre de componente repetido (EComponentError)',
-      o.get('ok') is False and len(o.get('duplicateNames', [])) == 1, o)
+      o.get('clean') is False and len(o.get('duplicateNames', [])) == 1, o)
 
 # F8 - an event with no value is an invalid .dfm
 dfm8 = ("object FormMain: TFormMain\r\n  object Btn: TButton\r\n"
         "    OnClick = \r\n  end\r\nend\r\n")
 o = J(binding(dfm8, pas7))
 check('F8 "OnClick =" vacio: .dfm invalido, avisado',
-      o.get('ok') is False and len(o.get('eventsWithNoHandler', [])) == 1, o)
+      o.get('clean') is False and len(o.get('eventsWithNoHandler', [])) == 1, o)
 
 # F9 - a .pas is not a form
 r = call('delphi_designer', {'command': 'check-binding',
@@ -249,7 +249,7 @@ check('F9 un .pas como "path" se rechaza', mc.rechazado(r) and mc.es(r, 'SR_DESI
 dfm10 = "object X: TNoExiste\r\n  object Btn: TButton\r\n  end\r\nend\r\n"
 o = J(binding(dfm10, pas7))
 check('la clase raiz del .dfm tiene que existir en la unit',
-      o.get('ok') is False and 'TNoExiste' in json.dumps(o), o)
+      o.get('clean') is False and 'TNoExiste' in json.dumps(o), o)
 
 # and the tool is discoverable at all
 # ruta de relleno ABSOLUTA y dentro: la relativa la niega la puerta (GUARD-021)

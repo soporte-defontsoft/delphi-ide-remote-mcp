@@ -478,7 +478,8 @@ begin
     Ret.AddPair('lookupsWithoutStyle', Missing);
     Ret.AddPair('tokensMissing', Tokens);
     Ret.AddPair('rcMissingFiles', Rc);
-    Ret.AddPair('ok', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
+    // clean = sin hallazgos; ok es "la llamada fue bien" (novena revision)
+    Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
       (Tokens.Count = 0) and (Rc.Count = 0)));
     if Length(PlatformDefaultStyleNames) = 0 then
       Ret.AddPair('note', MsgText(SN_STYLES_NO_DEFAULTS))

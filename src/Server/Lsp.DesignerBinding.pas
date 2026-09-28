@@ -286,7 +286,9 @@ begin
           '(?im)^\s*(?:object|inherited|inline)\s+' + TRegEx.Escape(Fields.Names[I]) + '\s*:') then
           Extra.Add(Fields.Names[I]);
 
-    Ret.AddPair('ok', TJSONBool.Create(ClassFound and (Miss.Count = 0) and
+    // clean = el form cuadra. Se llamaba ok, el mismo nombre que "la llamada
+    // fue bien" en toda tool: dos significados en un campo (novena revision)
+    Ret.AddPair('clean', TJSONBool.Create(ClassFound and (Miss.Count = 0) and
       (MissEv.Count = 0) and (NotPub.Count = 0) and (Extra.Count = 0) and
       (Dups.Count = 0) and (Empty.Count = 0)));
     if not ClassFound then
@@ -375,7 +377,7 @@ begin
     if O.TryGetValue<TJSONArray>('fieldsWithoutComponent', Arr) then
       for I := 0 to Arr.Count - 1 do
         Res.Add(MsgFmt(SF_DSGN_CAMPO_SIN_OBJETO_FMT, [Arr.Items[I].Value]));
-    if (Res.Count = 0) and not O.GetValue<Boolean>('ok', True) and
+    if (Res.Count = 0) and not O.GetValue<Boolean>('clean', True) and
        O.TryGetValue<string>('note', S) then
       Res.Add('  ' + S);
     Result := Res.ToStringArray;

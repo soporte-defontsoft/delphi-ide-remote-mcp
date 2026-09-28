@@ -187,7 +187,7 @@ check('lint: los StyleLookup en COMENTARIOS del .pas no cuentan (//, llaves, par
 check('lint: buttonstyle es estandar (estilo por defecto de la plataforma)', d['lookupsStandard'] == 1, d)
 check('lint: token ausente en un tema', len(d['tokensMissing']) == 1 and d['tokensMissing'][0]['theme'] == 'oscuro' and d['tokensMissing'][0]['token'] == 'accent', d['tokensMissing'])
 check('lint: .rc con fichero ausente', len(d['rcMissingFiles']) == 1 and d['rcMissingFiles'][0]['missing'] == 'NoExiste.bin.style', d['rcMissingFiles'])
-check('lint: ok=false', d['ok'] is False, d['ok'])
+check('lint: clean=false (era ok, el nombre de "la llamada fue bien")', d['clean'] is False, d.get('clean'))
 check('lint: rutas enmascaradas', 'srv' in d['stylesDir'] and ':' in d['stylesDir'], d['stylesDir'])
 
 # ---- build ----

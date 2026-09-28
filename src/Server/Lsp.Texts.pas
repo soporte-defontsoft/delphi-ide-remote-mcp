@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.7.1';
+  SERVER_VERSION = '1.7.2';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -4013,7 +4013,7 @@ const
   SR_DESIGNER_LAYOUT_FMX =
     '[DSGN-027 DENIED] command=layout is only for .dfm (VCL). A .fmx ' +
     'lays out with another model (Size.Width, Position.X, a different ' +
-    'Align) that this server does not resolve yet; answering "ok" on a ' +
+    'Align) that this server does not resolve yet; answering clean:true on a ' +
     '.fmx would be a lie. For .fmx use tree/get/lint for now.';
 
   SN_DESIGNER_LAYOUT_TRUNC =
@@ -4052,7 +4052,7 @@ const
     '[DSGN-033] PARTIAL: the inheritance goes outside this unit (%s), so ' +
     'I cannot see the inherited components and methods from here. ' +
     'Anything I called EXTRA or MISSING would be false, so I do not list ' +
-    'it; if you get ok:true, read it as "I found nothing wrong in what I ' +
+    'it; if you get clean:true, read it as "I found nothing wrong in what I ' +
     'CAN see". To check the inherited part, run check-binding on the ' +
     'parent form too.';
 
@@ -4657,7 +4657,7 @@ const
     'wildcards. Nothing was saved.';
 
   SR_GIT_STASH_ARGS_FMT =
-    '[GIT-013 NOT_FOUND] stash does not understand args="%s". It ' +
+    '[GIT-013 INVALID_PARAM] stash does not understand args="%s". It ' +
     'accepts: push (saves EVERYTHING, the default); push -- <paths> ' +
     '(saves ONLY those: they go back to how they are in HEAD and what ' +
     'was there before stays in the stash, which is how you discard a ' +
@@ -5853,6 +5853,13 @@ const
     '[GUARD-021 INVALID_PARAM] "%s" is a RELATIVE path: this server ' +
     'takes absolute paths, inside its roots (%s). Repeat with the full ' +
     'path.';
+
+  { De 233 a 259 caracteres una escritura moria como SYS-009 INTERNAL con las
+    carpetas ya creadas (novena revision, R9): la medida, a la entrada. }
+  SR_GUARD_RUTA_LARGA_FMT =
+    '[GUARD-028 INVALID_PARAM] The path is %d characters long and this ' +
+    'server writes up to %d (Windows MAX_PATH minus the atomic writer''s ' +
+    'temporary suffix). Reading it is fine; to write, use a shorter path.';
 
   // Mensajes que estaban en linea en Lsp.BuildRunner.pas (paso 3c a mano, 27-sep-2026)
   SL_BUILD_DELPHI_BUILD_REFUSED_FMT =

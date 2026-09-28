@@ -806,7 +806,8 @@ begin
       else
         Walk(Doc.Root, RootW, RootH, 0, 0, Doc.Root.ObjName, not Estimated, False);
 
-      Ret.AddPair('ok', TJSONBool.Create((Zero.Count = 0) and (Outside.Count = 0)
+      // clean = sin problemas de layout; ok es "la llamada fue bien" (novena)
+      Ret.AddPair('clean', TJSONBool.Create((Zero.Count = 0) and (Outside.Count = 0)
         and (Overlap.Count = 0) and (NoRoom.Count = 0)));
       if Estimated then
         Ret.AddPair('estimatedNote', MsgText(SN_DESIGNER_LAYOUT_ESTIMATED));
