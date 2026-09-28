@@ -903,7 +903,14 @@ begin
     ['message', Params.Message, '', 'path', Params.Path, '', 'ref', Params.Ref, '',
      'create', IfThen(Params.Create, 'true'), ''], SuyosGit);
   if SobraGit <> '' then
-    Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, ModoGit, ModoGit, ONinguno(SuyosGit)]));
+  begin
+    // como viaja en el cable: command=stash args=pop, no "command=stash pop"
+    // (un agente lo repetia literal y caia en GIT-034; r11b H5)
+    var Muestra := Cmd;
+    if ModoGit <> Cmd then
+      Muestra := Cmd + ' args=' + Copy(ModoGit, Length(Cmd) + 2, MaxInt);
+    Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, Muestra, Muestra, ONinguno(SuyosGit)]));
+  end;
   if Cmd = 'status' then
     GitArgs := 'status --porcelain=v1 -b ' + ArgvSeguro(Params.Args)
   else if Cmd = 'diff' then

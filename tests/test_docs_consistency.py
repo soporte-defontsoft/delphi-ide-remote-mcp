@@ -94,5 +94,9 @@ if os.path.exists(cap_path):
     check('manifest: core/optional', cap.get('coreTools') == CORE and
           cap.get('optionalTools') == len(VAULT_TOOLS), cap)
     check('manifest: lspBacked', sorted(cap.get('lspBacked', [])) == sorted(LSP_BACKED), cap.get('lspBacked'))
+    # el mapa access del manifiesto es el anuncio vivo (nadie lo media; r11c H7)
+    vivo = {t['name']: (t.get('_meta') or {}).get('access') for t in resp['result']['tools']}
+    check('manifest: access == _meta.access de tools/list', cap.get('access') == vivo,
+          [k for k in vivo if cap.get('access', {}).get(k) != vivo[k]])
 
 mc.fin('docs consistency')

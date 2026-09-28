@@ -2429,6 +2429,63 @@ try:
             {'command': 'worktree', 'args': 'list', 'repo': NOREPO, 'path': NOTES},
             'INVALID_PARAM', 'SR_GIT_NO_VA_CON_COMANDO_FMT')
 
+    # E174b la regla de la ruta larga NO abre la jaula: una ruta larga FUERA de
+    # las raices sigue negada al leer, listar y descargar (la 1.7.2 la servia:
+    # GUARD-028 salia de PathDenied antes de la jaula y la lectura lo perdonaba;
+    # undecima revision, r11a/r11c)
+    F174 = os.path.join(BASE, 'fuera174')
+    P174b = os.path.join(F174, 'x' * (250 - len(F174) - 7), 'f.txt')
+    os.makedirs(os.path.dirname(P174b), exist_ok=True)
+    open(P174b, 'w').write('SECRETO fuera de la jaula\n')
+    res, sc, t = llama('delphi_read', {'path': P174b})
+    check('E174b leer una ruta LARGA fuera de la jaula: GUARD-002, no el contenido',
+          res.get('isError') is True and mc.abre(t, 'SR_JAIL_FMT') and 'SECRETO' not in t, t[:200])
+    res, sc, t = llama('delphi_list', {'root': os.path.dirname(P174b), 'pattern': '*.txt'})
+    check('E174b ...ni se lista', res.get('isError') is True and mc.abre(t, 'SR_JAIL_FMT'), t[:200])
+    code, h, b = files_get(P174b)
+    check('E174b .../files tampoco la sirve (403 GUARD-002)', code == 403 and b'GUARD-002' in b and b'SECRETO' not in b,
+          '%s %r' % (code, b[:160]))
+    # E174c ...y las rutas que el servidor COMPONE (la copia de la papelera, la
+    # carpeta del dia) no se miden con el tope del escritor: un delete a 200 y
+    # un edit a 215 caracteres siguen yendo (la 1.7.2 los negaba desde 191)
+    D174c = os.path.join(JAIL, 'e174c')
+    P174c = os.path.join(D174c, 'y' * (200 - len(D174c) - 7), 'b.txt')
+    os.makedirs(os.path.dirname(P174c), exist_ok=True)
+    open(P174c, 'w').write('b\n')
+    res, sc, t = llama('delphi_delete', {'path': P174c})
+    check('E174c borrar un fichero de %d caracteres va (su copia en la papelera pasa de 232)' % len(P174c),
+          not res.get('isError') and not os.path.exists(P174c), t[:200])
+    P174d = os.path.join(D174c, 'z' * (215 - len(D174c) - 7), 'a.txt')
+    os.makedirs(os.path.dirname(P174d), exist_ok=True)
+    open(P174d, 'w', newline='\n').write('uno\n')
+    res, sc, t = llama('delphi_textedit', {'path': P174d, 'old': 'uno', 'new': 'dos'})
+    check('E174c editar un fichero de %d caracteres va (la carpeta del dia pasa de 232)' % len(P174d),
+          not res.get('isError') and open(P174d).read() == 'dos\n', t[:200])
+
+    # E177 MOVE-019 con DOS proyectos y una unit que se NOMBRA a si misma (un
+    # comentario "UMv"): el rename del primero reescribe la unit por segunda
+    # vez y, si el segundo falla, el deshacer la tomaba por cambiada "por otro"
+    # y dejaba la unit vieja con la cabecera nueva (undecima revision, r11a H3)
+    D177 = os.path.join(JAIL, 'e177')
+    llama('delphi_create', {'kind': 'project-console', 'name': 'Pq', 'dir': D177})
+    llama('delphi_create', {'kind': 'project-console', 'name': 'Pr', 'dir': D177})
+    DPQ, DPR177 = os.path.join(D177, 'Pq.dproj'), os.path.join(D177, 'Pr.dproj')
+    res, sc, t = llama('delphi_create', {'kind': 'unit', 'name': 'UMv', 'project': DPQ,
+                                         'content': 'unit UMv;\n\n{ UMv: helpers; see UMv.Foo }\n\ninterface\n\nimplementation\n\nend.\n'})
+    U177 = os.path.join(D177, 'UMv.pas')
+    llama('delphi_config', {'command': 'add-unit', 'project': DPR177, 'path': U177})
+    ANT177 = [open(f, 'rb').read() for f in (U177, os.path.join(D177, 'Pq.dpr'), DPQ, os.path.join(D177, 'Pr.dpr'), DPR177)]
+    check('E177 fixture: la unit se nombra a si misma y la listan dos proyectos',
+          b'see UMv.Foo' in ANT177[0] and b'UMv' in ANT177[3], ANT177[0][:80])
+    N177 = os.path.join(D177, 'UMw.pas')
+    with mc.solo_lectura(DPR177):
+        res, sc, t = llama('delphi_move', {'path': U177, 'dest': N177})
+    check('E177 el segundo proyecto no se deja: MOVE-019 y la unit vuelve BYTE A BYTE (cabecera y comentario)',
+          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and 'SYS-018' not in t and
+          os.path.exists(U177) and not os.path.exists(N177) and
+          [open(f, 'rb').read() for f in (U177, os.path.join(D177, 'Pq.dpr'), DPQ, os.path.join(D177, 'Pr.dpr'), DPR177)] == ANT177,
+          '%s | %r' % (t[:300], open(U177, 'rb').read()[:60] if os.path.exists(U177) else None))
+
     # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
     # APPLIED / COMMIT COMPLETE prometiendo copias que no existian
     SIN = os.path.join(JAIL, 'e77')

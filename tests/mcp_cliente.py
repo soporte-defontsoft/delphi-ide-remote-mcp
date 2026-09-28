@@ -119,7 +119,7 @@ def limpia_caches_lsp():
     if not os.path.isdir(carpeta):
         return 0
     quitadas = 0
-    raiz = os.path.normcase(os.path.abspath(RAIZ))
+    raiz = os.path.normcase(os.path.abspath(RAIZ)) + os.sep  # con separador: no casa delphi-mcp-tests-otro
     for f in glob.glob(os.path.join(carpeta, '*.delphilsp.json')):
         try:
             proyecto = json.load(open(f, encoding='utf-8-sig')).get('settings', {}).get('project', '')

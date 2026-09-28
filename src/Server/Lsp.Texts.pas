@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.7.2';
+  SERVER_VERSION = '1.7.3';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -955,10 +955,10 @@ const
   // ---------------------------------------------------------------------
   SR_READ_ONLY_FMT =
     '[READ-002 DENIED] READ-ONLY access. The operation "%s" modifies the ' +
-    'server machine and this credential does not allow it. Available in ' +
-    'this mode: read, search, list, navigate symbols, diagnostics, ' +
-    'references, download, read-only git and delphi_report (to tell us ' +
-    'about any problem).';
+    'server machine and this credential does not allow it. What each tool ' +
+    'allows in this mode is announced by tools/list: annotations.readOnlyHint, ' +
+    'and _meta.access with readOnlyCommands (and readOnlyWhen) for the mixed ' +
+    'ones. delphi_report is available to tell us about any problem.';
 
   SR_GIT_OPTION_FMT =
     '[GIT-003 DENIED] The git option "%s" is not allowed (it can write ' +
@@ -3671,9 +3671,9 @@ const
 
   SD_DESIGNER =
     'FORMS AND COMPONENTS, structured - never guess what a class publishes ' +
-    'or what a form contains. command=info class=TButton: every property ' +
+    'or what a form contains. command=info classname=TButton: every property ' +
     'the framework really publishes for that class (kind and type; events ' +
-    'apart), from RTTI tables generated at release time. prop class=X ' +
+    'apart), from RTTI tables generated at release time. prop classname=X ' +
     'prop=Y: one property in detail, with the legal members when it is an ' +
     'enum/set. tree path=<.dfm|.fmx>: the component tree (name, class, ' +
     'line). get path=... component=<Name>: that component''s block verbatim. ' +
@@ -3733,7 +3733,7 @@ const
     '[DSGN-002 INVALID_PARAM] framework must be vcl or fmx.';
 
   SR_DESIGNER_NEED_CLASS =
-    '[DSGN-003 INVALID_PARAM] "class" is missing (the class of the component, ' +
+    '[DSGN-003 INVALID_PARAM] "classname" is missing (the class of the component, ' +
     'e.g. TButton).';
 
   SR_DESIGNER_NEED_PROP =
@@ -3811,8 +3811,12 @@ const
   SN_DESIGNER_INFO_FILTRO_VACIO_FMT =
     '[DSGN-048] No published property or event of %s contains "%s" (it ' +
     'publishes %d; the filter is a substring of the name, case-insensitive). ' +
-    'Not an RTTI failure: the class simply has no such member (an FMX text ' +
-    'control keeps its font in TextSettings, not in Font).';
+    'Not an RTTI failure: the class simply has no such member.';
+
+  { La coda solo cuando toca: FMX y un filtro que busca la fuente (salia en
+    cualquier clase y framework; undecima revision, r11b) }
+  SF_DESIGNER_FUENTE_FMX =
+    ' An FMX text control keeps its font in TextSettings, not in Font.';
 
   SN_DESIGNER_INFO_TRUNCATED =
     '[DSGN-042] The list is truncated: filter=<text> narrows it to the ' +
@@ -5866,9 +5870,10 @@ const
   { De 233 a 259 caracteres una escritura moria como SYS-009 INTERNAL con las
     carpetas ya creadas (novena revision, R9): la medida, a la entrada. }
   SR_GUARD_RUTA_LARGA_FMT =
-    '[GUARD-028 INVALID_PARAM] The path is %d characters long and this ' +
-    'server writes up to %d (Windows MAX_PATH minus the atomic writer''s ' +
-    'temporary suffix). Reading it is fine; to write, use a shorter path.';
+    '[GUARD-028 INVALID_PARAM] The path is %d characters long (measured on ' +
+    'its long form) and this server writes up to %d (Windows MAX_PATH minus ' +
+    'the atomic writer''s temporary suffix). Reading it is fine; to write, ' +
+    'use a shorter path.';
 
   // Mensajes que estaban en linea en Lsp.BuildRunner.pas (paso 3c a mano, 27-sep-2026)
   SL_BUILD_DELPHI_BUILD_REFUSED_FMT =

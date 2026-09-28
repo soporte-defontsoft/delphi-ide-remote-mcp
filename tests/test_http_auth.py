@@ -313,7 +313,9 @@ try:
             if acc not in ('read-only', 'read-write', 'mixed'):
                 sin_meta.append(t['name'])
                 continue
-            if hint != (acc == 'read-only'):
+            # el hint MCP es "no modifica su entorno": una lectura con efecto
+            # (un reporte escrito, un mensaje consumido) lo anuncia en falso
+            if hint != (acc == 'read-only' and not meta.get('sideEffect')):
                 mal_hint.append('%s: hint %r, access %s' % (t['name'], hint, acc))
             if acc == 'read-write':
                 code, body = call(t['name'], {}, RO_TOKEN)
@@ -336,12 +338,30 @@ try:
                     if mc.es(body, 'SR_READ_ONLY_FMT'):
                         mal_mix_si.append('%s %s' % (t['name'], c))
         check('anuncio: toda tool de tools/list lleva _meta.access', not sin_meta, sin_meta)
-        check('anuncio: readOnlyHint == (access read-only)', not mal_hint, mal_hint)
+        check('anuncio: readOnlyHint == (access read-only sin sideEffect)', not mal_hint, mal_hint)
+        cuando = {t['name']: (t.get('_meta') or {}).get('readOnlyWhen') for t in anunciadas}
+        check('anuncio: git y adb anuncian sus lecturas CONDICIONADAS (readOnlyWhen)',
+              set((cuando.get('delphi_git') or {})) == {'branch', 'tag', 'worktree'} and
+              set((cuando.get('delphi_adb') or {})) == {'logcat'}, cuando)
+        efectos = {t['name']: (t.get('_meta') or {}).get('sideEffect') for t in anunciadas}
+        check('anuncio: report y messages dicen su efecto y readOnlyHint false',
+              bool(efectos.get('delphi_report')) and bool(efectos.get('delphi_messages')), efectos)
         check('anuncio: lo anunciado read-write lo niega la puerta al token RO', not mal_rw, mal_rw)
         check('anuncio: lo anunciado read-only NO lo niega la puerta', not mal_ro, mal_ro)
         check('anuncio: en las mixtas, un comando que no lee se niega (cerrado)', not mal_mix_no, mal_mix_no)
         check('anuncio: en las mixtas, cada comando anunciado como lectura pasa la puerta',
               not mal_mix_si, mal_mix_si)
+        # las mixtas SIN el parametro del comando: el defecto de cada una es una
+        # lectura... salvo delphi_test, cuyo vacio con project es run (r11c/r11d)
+        code, body = call('delphi_test', {'project': tmpdir3 + '\\Sample.dproj'}, RO_TOKEN)
+        check('ro: delphi_test sin command con project (= run) RECHAZADO en RO a la entrada',
+              mc.es(body, 'SR_READ_ONLY_FMT') and 'delphi_test run' in body, '%s %s' % (code, body[:160]))
+        code, body = call('delphi_test', {'path': tmpdir3}, RO_TOKEN)
+        check('ro: delphi_test sin command con path (= discover) pasa la puerta',
+              not mc.es(body, 'SR_READ_ONLY_FMT'), '%s %s' % (code, body[:160]))
+        code, body = call('delphi_adb', {'command': 'logcat', 'out': tmpdir3 + '\\log.txt'}, RO_TOKEN)
+        check('ro: adb logcat con out= (escribe el log) RECHAZADO en RO a la entrada',
+              mc.es(body, 'SR_READ_ONLY_FMT') and 'logcat out=' in body, '%s %s' % (code, body[:160]))
         # rename_symbol: apply se niega A LA ENTRADA (antes lo negaba el escritor
         # al llegar a escribir, con otro texto)
         code, body = call('delphi_rename_symbol', {'path': paspath, 'line': 0, 'character': 5,

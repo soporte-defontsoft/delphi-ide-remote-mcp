@@ -260,11 +260,13 @@ begin
   if not TryStrToInt64(Txt, AValor) then
   begin
     var Real: Double;
-    if TryStrToFloat(Txt, Real, TFormatSettings.Invariant) and (Frac(Real) = 0) and
-       (Abs(Real) < 9007199254740992.0) then
-      AValor := Trunc(Real)
-    else
+    if not (TryStrToFloat(Txt, Real, TFormatSettings.Invariant) and (Frac(Real) = 0)) then
       Exit(MsgFmt(SF_SYS_EXPECTED_WHOLE_FMT, [JsonValue.Value]));
+    // un entero que un double no representa exacto (>= 2^53) esta fuera de
+    // rango, no "no es entero" (undecima revision, r11c)
+    if Abs(Real) >= 9007199254740992.0 then
+      Exit(MsgFmt(SF_SYS_OUT_OF_RANGE_FMT, [Txt, 0, AMaximo]));
+    AValor := Trunc(Real);
   end;
   // ningun entero del contrato es negativo (lineas, desplazamientos,
   // maximos, tiempos): se aceptaba en silencio como el valor por defecto en

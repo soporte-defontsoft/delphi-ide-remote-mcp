@@ -6,10 +6,71 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
-## [Unreleased]
+## [1.7.3] - 2026-09-28
+
+The eleventh review round (five read-only reviewers over everything 1.7.2 brought): one real regression of 1.7.2 in the jail, fixed here, and the rest measured and closed. Production has run the [DSGN-047]/[DSGN-048] fix since 13:36 with serverInfo.version still saying 1.7.2.
 
 ### Fixed
 
+- **SECURITY (regression of 1.7.2): a path longer than 232 characters
+  outside the jail could be READ.** The new long-path rule (`[GUARD-028]`)
+  left `PathDenied` before the jail checks and the read gate pardoned it, so
+  `delphi_read`, `delphi_list`, `delphi_fetch` and `/files` served any long
+  path on the machine (measured by two reviewers; through a junction and on
+  a vault note too). The rule now lives where the writer measures it
+  (`RutaLargaDenegada`: `WriteTargetDenied` on the argument, before folders
+  are created, and the atomic writer itself); reads never see it, and the
+  paths the server composes (trash copies, the day folder) are no longer
+  measured with it (1.7.2 refused deletes from 191 characters and edits from
+  209; 1.7.1 did them). `test_resultados` E174b/E174c.
+- **`MOVE-019` with two projects and a unit that names itself**: the first
+  project's rename rewrites the unit a second time (`UOld` qualifiers and
+  comments) without the snapshot knowing; when the second project failed,
+  the undo took the unit for "changed by someone else" and left the OLD file
+  with the NEW header. Everything a rename rewrites is noted in the snapshot
+  after each project. E177.
+- **A read-only credential could run tests** by calling `delphi_test` with
+  `project` and no `command`: the tool resolves that to `run`, the gate
+  pardoned the empty command as a read (the writer of the output folder
+  stopped it deeper). One resolver (`ComandoDeTest`) for the tool and the
+  gate; `delphi_adb logcat out=` (it writes the log) is refused at the gate
+  too, and `screenshot` is refused there for a read-only credential instead
+  of being announced as read-only: it writes the capture file, which the
+  writer already refused with a real device (the battery only saw the
+  no-device answer).
+- **`delphi_git`'s access announcement promised what the gate does not
+  give**: `branch` and `tag` read only without arguments, `worktree` only
+  with `args=list`. The announcement lists the unconditional reads and a
+  `readOnlyWhen` map for the conditional ones; `docs/TOOLS.md` says the same.
+- `readOnlyHint` is false for `delphi_report` (it writes a report file on
+  the server) and `delphi_messages` (`read` consumes the message): the MCP
+  hint means "does not modify its environment"; `_meta.sideEffect` says
+  which. A read-only credential may still call both.
+- `[READ-002]` no longer lists "what is available" by hand (it was short and
+  stale): it points at the announcement in `tools/list`.
+- `delphi_designer`: `classname` is the one name of the class parameter in
+  the description and in `[DSGN-003]` (`class` keeps working as an alias);
+  `[DSGN-048]` adds its TextSettings sentence only for FMX and a filter
+  about the font.
+- `[GIT-038]` for a subcommand says `command=stash args=pop` as it travels
+  (an agent repeated `command="stash pop"` and got `[GIT-034]`).
+- `[GUARD-028]` says the length is measured on the long form of the path.
+- An integer beyond 2^53 (`1e20`) is refused as out of range, not as "not
+  a whole number".
+- `/files` chooses its HTTP status by the message's outcome in the last two
+  places that still did it by hand.
+- `docs/TOOLS.md`: the migration to generated blocks had dropped six
+  hand-written paragraphs whose information the live description lacks
+  (the answer format of `delphi_git`, `byFolder` of `delphi_projects`, the
+  fields of `delphi_workspace` and `delphi_config view`, `durationMs` of
+  `delphi_test`, why `reseat` exists); they are back as notes under the
+  blocks. Placeholders like `<name>` inside generated blocks are escaped
+  (GFM took them for HTML tags). The Access line of the blocks names the
+  conditional reads and the side effects.
+- Batteries: `run_all` keeps the LSP caches when a battery is red (they are
+  evidence); the announcement checks send the mixed tools a call without
+  the command parameter; `test_docs_consistency` compares the `access` map
+  of `CAPABILITIES.json` with the live announcement.
 - `delphi_designer`: the refusal `[DSGN-047]` named the class parameter `class`
   while it is `classname` (Hermes, first report of the 1.7.2 test round); and
   `command=info` with a `filter` that matches nothing answered `total: 0` and
@@ -37,12 +98,12 @@ The list the 1.7.1 review left behind, closed point by point before David steps 
   every tool (its description and its parameter table) is generated from
   the live `tools/list` by `scripts/tools_md.py`, between two
   `<!-- contract -->` markers inside each `### tool` section; the notes
-  around each block (history, worked examples, the *Access* line) stay
-  hand-written. `tests/test_docs_consistency.py` fails when a tool has no
+  around each block (history, worked examples) stay hand-written.
+  `tests/test_docs_consistency.py` fails when a tool has no
   block or a block differs from the server. Measured before: 35 of 41
   descriptions and 127 parameter texts said something other than the
-  server, 4 parameters (`x`, `y` of `delphi_adb` and `delphi_desktop`) were
-  missing, and no battery saw it. `scripts/livetools.py` is the one fetch
+  server, two parameters (`x` and `y` of `delphi_adb` and `delphi_desktop`)
+  shared one row, and no battery saw it. `scripts/livetools.py` is the one fetch
   of the live `tools/list` for both generators (`gen-capabilities.py` used
   to carry its own copy).
 

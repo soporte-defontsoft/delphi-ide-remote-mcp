@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-09-28 (current release v1.7.2; 41 tools - `delphi_run` retired).
+Status page as of 2026-09-28 (current release v1.7.3; 41 tools - `delphi_run` retired).
 
 ## Delivered
 
@@ -29,6 +29,7 @@ Status page as of 2026-09-28 (current release v1.7.2; 41 tools - `delphi_run` re
 - `delphi_paserver command=output` for a `remote-run` job (1.5.0)
 - `delphi_move` re-points relative paths across the border; `delphi_config` on a `.groupproj` (`add-project` / `remove-project`); `fix-references`; standalone sources in `delphi_create` (1.6.0)
 - Every message tagged with its outcome from one catalog, the server in English, and ten review rounds of all or nothing, the jail and the contract (1.7.0)
+- The changeset preview rehearses with the engines; a unit move whose project cannot be re-pointed is all or nothing (`MOVE-019`); `docs/TOOLS.md` contract blocks generated from `tools/list`; one access table that the gate consults and `tools/list` announces (`annotations.readOnlyHint`, `_meta.access`); `clean` for domain verdicts; long paths refused honestly (1.7.1-1.7.3)
 
 ## Open
 

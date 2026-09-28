@@ -76,14 +76,9 @@ var
   Cmd: string;
   Ret: TJSONObject;
 begin
-  Cmd := Params.Command.Trim.ToLower;
-  // "project" only exists for run. Falling back to discover and then
-  // complaining that discover needs "path" cost a call, and the call after it
-  // was delphi_help (field round 11).
-  if (Cmd = '') and (Params.Project.Trim <> '') and (Params.Path.Trim = '') then
-    Cmd := 'run';
-  if Cmd = '' then
-    Cmd := 'discover';
+  // el comando efectivo: LA regla vive en Lsp.Guard.ComandoDeTest, la misma
+  // que aplica la puerta de solo lectura (undecima revision)
+  Cmd := ComandoDeTest(Params.Command, Params.Project, Params.Path);
   if not MatchText(Cmd, ['discover', 'run']) then
     Exit(MsgText(SR_TEST_CMD));
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa): discover

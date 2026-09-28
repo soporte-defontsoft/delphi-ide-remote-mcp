@@ -135,7 +135,7 @@ begin
     P := RequestInfo.Params.Values['path'];
     if P.Trim = '' then
     begin
-      Answer(ResponseInfo, 400, MsgText(SR_FILES_NEED_PATH));
+      Answer(ResponseInfo, CodigoHttp(MsgText(SR_FILES_NEED_PATH)), MsgText(SR_FILES_NEED_PATH));
       Exit;
     end;
     // Same door as a tools/call argument: srvX: expands only for served
@@ -145,7 +145,8 @@ begin
     P := ExpandDriveValue(P);
     if VirtualUnitLetter(P) <> #0 then
     begin
-      Answer(ResponseInfo, 403, MsgFmt(SR_FILES_UNIDAD_VIRTUAL_NO_SERVIDA_FMT, [Copy(P, 1, 5)]));
+      var MUnidad := MsgFmt(SR_FILES_UNIDAD_VIRTUAL_NO_SERVIDA_FMT, [Copy(P, 1, 5)]);
+      Answer(ResponseInfo, CodigoHttp(MUnidad), MUnidad);
       Exit;
     end;
     // Una ruta RELATIVA la niega la puerta de lectura como a toda tool

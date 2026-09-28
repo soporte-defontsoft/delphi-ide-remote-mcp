@@ -174,7 +174,12 @@ begin
     // un filtro sin resultado lo dice (DSGN-048): total:0 a secas se leia
     // como un fallo de RTTI (Hermes, 28-sep-2026)
     if (AFilter <> '') and (N = 0) then
-      Ret.AddPair('hint', MsgFmt(SN_DESIGNER_INFO_FILTRO_VACIO_FMT, [Cls, AFilter, Names.Count]));
+    begin
+      var Pista := MsgFmt(SN_DESIGNER_INFO_FILTRO_VACIO_FMT, [Cls, AFilter, Names.Count]);
+      if (AFramework = 'fmx') and ContainsText(AFilter, 'font') then
+        Pista := Pista + MsgText(SF_DESIGNER_FUENTE_FMX);
+      Ret.AddPair('hint', Pista);
+    end;
     if N > Shown then
     begin
       Ret.AddPair('truncated', TJSONBool.Create(True));

@@ -113,9 +113,9 @@ handshake.
 
 ## Forms (.dfm/.fmx)
 
-- Never guess what a class publishes: `delphi_designer info class=TButton`
+- Never guess what a class publishes: `delphi_designer info classname=TButton`
   (add `framework=fmx` for FMX) lists the REAL published properties and
-  events; `prop class=TPanel prop=Align` gives the legal enum members.
+  events; `prop classname=TPanel prop=Align` gives the legal enum members.
 - `tree path=<form>` shows the component tree; `get component=<Name>` one
   block. After editing a form with `delphi_edit`, run `delphi_designer lint
   path=<form>`: a property the class does not publish or an enum value that
@@ -380,7 +380,10 @@ beats twenty blind retries.
 ## Access levels
 
 A workspace may also declare `ReadOnlyRoots`: reference projects outside your roots that you can read, search and navigate to learn how things are done in this house, never write (bring a unit or a folder in with `delphi_move copy=true`; a whole project stays where it is) - `delphi_workspace` lists them and `delphi_projects` flags them `readOnly`. A read-only credential can read, search, navigate, diagnose, list
-components, fetch files, take screenshots and file reports - but every
+components, fetch files and file reports (a screenshot writes a capture
+file, so `delphi_adb screenshot` and `delphi_desktop` are refused too) -
+`tools/list` announces what each tool allows in this mode
+(`annotations.readOnlyHint`, `_meta.access`, `readOnlyCommands`) - but every
 mutating tool (edit/create/build/run/install/tap...) is refused at the
 gate. If you are read-only and need a change, report it; do not fish
 for bypasses (there are none).

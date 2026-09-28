@@ -876,6 +876,11 @@ begin
   // ...y un fichero con el atributo de solo lectura no se sustituye: se
   // dice ANTES, que el rename lo tomaba por "otro proceso lo tiene"
   Motivo := SustitucionDenegada(APath);
+  // ...y la medida de este escritor: el temporal de abajo anade 27
+  // caracteres, y de 233 a 259 moria como SYS-009 (GUARD-028, la misma
+  // pregunta que WriteTargetDenied hace a la entrada)
+  if Motivo = '' then
+    Motivo := RutaLargaDenegada(APath);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
   // El temporal lleva un fragmento GUID: con nombre fijo, dos escrituras del
@@ -1394,6 +1399,8 @@ begin
   if AEnsayo then
   begin
     var Motivo := SustitucionDenegada(APath); // lo que preguntara el escritor
+    if Motivo = '' then
+      Motivo := RutaLargaDenegada(APath); // ...y su medida (GUARD-028)
     if Motivo <> '' then
       raise Exception.Create(Motivo);
     Exit;

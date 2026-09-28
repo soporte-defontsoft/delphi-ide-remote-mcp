@@ -75,12 +75,26 @@ function ToolHiddenFromList(const AToolName: string): Boolean;
 type
   TMotivoVeto = (mvNinguno, mvAnomalia, mvVault, mvRootsInvalidos,
     mvRutaInvalida, mvEnlaceFuera, mvSoloLectura, mvConfinado,
-    mvFueraDeJaula, mvReferencia, mvRutaLarga);
+    mvFueraDeJaula, mvReferencia);
 
 const
   { Lo mas larga que puede ser una ruta que se ESCRIBE: MAX_PATH (259) menos
     el sufijo temporal del escritor atomico (27). Leer no tiene tope. }
   RUTA_ESCRIBIBLE_MAX = 259 - 27;
+
+{ La medida del escritor atomico (GUARD-028): '' si cabe. La preguntan
+  WriteTargetDenied (el DESTINO que nombra el agente, antes de crear
+  carpetas) y el propio escritor (AtomicWrite y su ensayo). NUNCA en
+  PathDenied: alli se perdonaba al leer y abria la jaula a la lectura de
+  toda ruta larga, y median tambien las copias de la papelera, que
+  TFile.Copy escribe hasta MAX_PATH entero (1.7.2; undecima revision). }
+function RutaLargaDenegada(const APath: string): string;
+
+{ El comando efectivo de delphi_test: sin command, "project" (y sin path)
+  significa run y lo demas discover. LA regla de la tool, aqui para que la
+  puerta de solo lectura la aplique igual: '' + project llegaba al
+  constructor y lo paraba el escritor (undecima revision, r11c). }
+function ComandoDeTest(const ACmd, AProject, APath: string): string;
 
 function PathDenied(const APath: string): string; overload;
 function PathDenied(const APath: string;
@@ -905,6 +919,15 @@ type
     Acceso: TAccesoTool;
     Lecturas: TArray<string>; // atMixta: los comandos que leen ('' = el primero)
     Parametro: string;        // atMixta: el parametro que lleva el comando
+    // atMixta: comandos que leen SOLO con una condicion (pares comando,
+    // condicion en texto): se anuncian como readOnlyWhen; quien decide es la
+    // puerta (git por GitCommandIsQuery, adb logcat por out=)
+    Condiciones: TArray<string>;
+    // atLectura con un efecto fuera del workspace (un reporte que se
+    // escribe, un mensaje que se consume): la credencial de solo lectura
+    // puede llamarla, pero readOnlyHint (MCP: "no modifica su entorno") es
+    // falso y _meta.sideEffect lo dice (undecima revision)
+    Efecto: string;
   end;
 
 { La fila de la tabla para una tool; lo que no esta en ella LEE. }
@@ -1993,11 +2016,34 @@ begin
     Result := ADefault;
 end;
 
+function RutaLargaDenegada(const APath: string): string;
+begin
+  Result := '';
+  if Length(APath) > RUTA_ESCRIBIBLE_MAX then
+    Result := MsgFmt(SR_GUARD_RUTA_LARGA_FMT, [Length(APath), RUTA_ESCRIBIBLE_MAX]);
+end;
+
+function ComandoDeTest(const ACmd, AProject, APath: string): string;
+begin
+  Result := ACmd.Trim.ToLower;
+  // "project" only exists for run. Falling back to discover and then
+  // complaining that discover needs "path" cost a call, and the call after it
+  // was delphi_help (field round 11).
+  if (Result = '') and (AProject.Trim <> '') and (APath.Trim = '') then
+    Result := 'run';
+  if Result = '' then
+    Result := 'discover';
+end;
+
 function WriteTargetDenied(const APath: string): string;
 begin
   Result := PathDenied(APath);
   if Result = '' then
     Result := DeadCopyWriteDenied(APath);
+  // ...y la medida del escritor atomico (GUARD-028), sobre el destino que
+  // el agente nombra y antes de que nadie cree carpetas por el camino
+  if Result = '' then
+    Result := RutaLargaDenegada(APath);
 end;
 
 { APath ES la carpeta ANombre o esta dentro de una, sobre la ruta canonica
@@ -3580,7 +3626,8 @@ var
   GAccesos: TArray<TAccesoDeTool>;
 
 procedure AnadeAcceso(const ATool: string; AAcceso: TAccesoTool;
-  const ALecturas: TArray<string>; const AParametro: string = 'command');
+  const ALecturas: TArray<string>; const AParametro: string = 'command';
+  const ACondiciones: TArray<string> = nil; const AEfecto: string = '');
 var
   F: TAccesoDeTool;
 begin
@@ -3588,6 +3635,8 @@ begin
   F.Acceso := AAcceso;
   F.Lecturas := ALecturas;
   F.Parametro := AParametro;
+  F.Condiciones := ACondiciones;
+  F.Efecto := AEfecto;
   GAccesos := GAccesos + [F];
 end;
 
@@ -3626,13 +3675,27 @@ begin
   // to-text / to-binary reescriben el .dfm/.fmx; el resto mira
   AnadeAcceso('delphi_designer', atMixta, ['info', 'prop', 'tree', 'get', 'lint',
     'check-binding', 'binding', 'layout']);
-  // mirar el dispositivo (lista, log, pantalla) no cambia nada;
+  // mirar el dispositivo (lista, log) no cambia nada; screenshot y logcat
+  // con out= ESCRIBEN una captura/un fichero en la jaula (CaptureTarget):
+  // no son lecturas para una credencial de solo lectura (r11a H5);
   // connect/disconnect/install/run/tap/key mutan o ejecutan
-  AnadeAcceso('delphi_adb', atMixta, ['discover', 'devices', 'logcat', 'screenshot']);
-  // git decide por ARGUMENTOS (GitCommandIsQuery): branch y tag solo listan
-  // sin ellos, worktree solo list. Esta lista es lo que se ANUNCIA
-  AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show', 'branch', 'tag',
-    'worktree list']);
+  AnadeAcceso('delphi_adb', atMixta, ['discover', 'devices', 'logcat'], 'command',
+    ['logcat', 'without out= (out= writes the log to a file)']);
+  // git decide por ARGUMENTOS (GitCommandIsQuery): se anuncia lo
+  // INCONDICIONAL como lectura y lo condicionado con su condicion (branch y
+  // tag listan solo sin args ni message; worktree solo args=list). Se
+  // anunciaban branch/tag como lecturas y la puerta los negaba con args
+  // (r11b H1, r11c H3)
+  AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show'], 'command',
+    ['branch', 'without args or message (then it lists)',
+     'tag', 'without args or message (then it lists)',
+     'worktree', 'with args=list']);
+  // lecturas para la puerta, con un EFECTO fuera del workspace: el hint MCP
+  // "no modifica su entorno" es falso y se dice (r11e H6)
+  AnadeAcceso('delphi_report', atLectura, [], 'command', nil,
+    'writes a report file on the server for the operator');
+  AnadeAcceso('delphi_messages', atLectura, [], 'command', nil,
+    'command=read consumes (deletes) the message it delivers');
   // preview lee; apply escribe por el motor de changesets (lo negaba el
   // escritor al llegar a escribir; ahora la puerta, a la entrada, como a todas)
   AnadeAcceso('delphi_rename_symbol', atMixta, ['preview'], 'mode');
@@ -3649,6 +3712,8 @@ begin
   Result.Acceso := atLectura;
   Result.Lecturas := [];
   Result.Parametro := '';
+  Result.Condiciones := nil;
+  Result.Efecto := '';
 end;
 
 function LecturaDenegada(const AToolName: string; const AArguments: TJSONObject): string;
@@ -3667,6 +3732,14 @@ begin
       Exit(WriteDenied(AToolName));
   end;
   Cmd := Trim(ArgStr(AArguments, F.Parametro));
+  // delphi_test: sin command, project significa run: LA regla de la tool
+  // (ComandoDeTest); '' se perdonaba y llegaba al constructor (r11c H2)
+  if SameText(AToolName, 'delphi_test') then
+    Cmd := ComandoDeTest(Cmd, ArgStr(AArguments, 'project'), ArgStr(AArguments, 'path'));
+  // delphi_adb logcat con out= escribe el log en un fichero: no lee
+  if SameText(AToolName, 'delphi_adb') and SameText(Cmd, 'logcat') and
+     (Trim(ArgStr(AArguments, 'out')) <> '') then
+    Exit(WriteDenied(AToolName + ' logcat out='));
   if SameText(AToolName, 'delphi_git') then
   begin
     // la mitad de consulta de git depende de los argumentos: la MISMA
@@ -3689,7 +3762,9 @@ var
 begin
   F := AccesoDeTool(AToolName);
   Ann := TJSONObject.Create;
-  Ann.AddPair('readOnlyHint', TJSONBool.Create(F.Acceso = atLectura));
+  // el hint MCP es "no modifica su entorno": una lectura con efecto fuera
+  // del workspace (un reporte, un mensaje consumido) no lo cumple
+  Ann.AddPair('readOnlyHint', TJSONBool.Create((F.Acceso = atLectura) and (F.Efecto = '')));
   AEntry.AddPair('annotations', Ann);
   Meta := TJSONObject.Create;
   case F.Acceso of
@@ -3705,8 +3780,21 @@ begin
         for S in F.Lecturas do
           Arr.Add(S);
         Meta.AddPair('readOnlyCommands', Arr);
+        if Length(F.Condiciones) > 0 then
+        begin
+          var Cuando := TJSONObject.Create;
+          var K := 0;
+          while K + 1 <= High(F.Condiciones) do
+          begin
+            Cuando.AddPair(F.Condiciones[K], F.Condiciones[K + 1]);
+            Inc(K, 2);
+          end;
+          Meta.AddPair('readOnlyWhen', Cuando);
+        end;
       end;
   end;
+  if F.Efecto <> '' then
+    Meta.AddPair('sideEffect', F.Efecto);
   AEntry.AddPair('_meta', Meta);
 end;
 
@@ -4883,20 +4971,6 @@ begin
     AMotivo := mvRutaInvalida;
     Exit;
   end;
-  // MAX_PATH: el escritor atomico anade su sufijo temporal (27 caracteres) y
-  // de 233 a 259 una escritura moria como SYS-009 INTERNAL "Cannot create
-  // file", con las carpetas ya creadas (novena revision, R9). Sin
-  // longPathAware en el manifiesto (que ademas depende de una politica de
-  // la maquina) la respuesta honesta es negar la ESCRITURA con la medida, a
-  // la entrada; leer una ruta larga sigue valiendo (ReadPathDenied perdona)
-  // por la longitud de lo que llega (ya alargado a la entrada): GetFullPath
-  // LANZA con caracteres invalidos, y una ruta con < o > que la tool negaba
-  // con su texto salia como -32602 (test_v012, primera puerta de la 1.7.2)
-  if Length(APath) > RUTA_ESCRIBIBLE_MAX then
-  begin
-    AMotivo := mvRutaLarga;
-    Exit(MsgFmt(SR_GUARD_RUTA_LARGA_FMT, [Length(APath), RUTA_ESCRIBIBLE_MAX]));
-  end;
   // Un UNC que no es de ningun sitio declarado: fuera, por TEXTO, antes de
   // InVault / ReadOnlyRootOf, que lo resuelven en el disco (SMB hacia el
   // host que diga el agente; septima revision). Tambien para quien llama a
@@ -5395,10 +5469,6 @@ begin
       Exit('');
     // Un proyecto de REFERENCIA (ReadOnlyRoots) es justo eso: se lee.
     mvReferencia:
-      Exit('');
-    // Una ruta mas larga que MAX_PATH menos el sufijo del escritor: se lee;
-    // lo que no se puede es escribirla (GUARD-028)
-    mvRutaLarga:
       Exit('');
     // Outside the jail - but READING library territory is legitimate. Solo
     // para quien esta fuera DE VERDAD: la negativa del enlace

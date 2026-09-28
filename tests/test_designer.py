@@ -80,6 +80,10 @@ j = J(call('delphi_designer', {'command': 'info', 'class': 'TLabel', 'framework'
 check('info con filter sin resultado: total 0 y la pista DSGN-048 (no es un fallo de RTTI)',
       j.get('total') == 0 and mc.es(j.get('hint', ''), 'SN_DESIGNER_INFO_FILTRO_VACIO_FMT') and 'TextSettings' in j.get('hint', ''),
       str(j)[:250])
+j = J(call('delphi_designer', {'command': 'info', 'class': 'TButton', 'framework': 'vcl', 'filter': 'Colour'}))
+check('info VCL con filter sin resultado: DSGN-048 sin la coda FMX de TextSettings (salia siempre)',
+      j.get('total') == 0 and mc.es(j.get('hint', ''), 'SN_DESIGNER_INFO_FILTRO_VACIO_FMT') and 'TextSettings' not in j.get('hint', ''),
+      str(j)[:250])
 r = call('delphi_designer', {'command': 'prop', 'class': 'TButton', 'framework': 'vcl', 'prop': 'Caption', 'filter': 'x'})
 check('prop con filter: DSGN-047 nombra classname, el parametro real (decia class)',
       mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_NO_VA_CON_COMANDO_FMT') and 'classname' in r, r[:200])

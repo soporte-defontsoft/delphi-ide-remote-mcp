@@ -4,14 +4,17 @@
 parameter table - generated from the real tools/list of the exe, between two
 markers inside each "### `tool`" section; the prose around them (notes,
 history, the Access line) is written by hand and stays. Run it after changing
-a tool's contract, and in the release ritual next to gen-capabilities.py:
+a tool's contract, and in the release ritual next to gen-capabilities.py
+(the Access line inside each block comes from the server's own access table,
+tools/list _meta.access; only the notes around the block are hand-written):
 
     python scripts/tools_md.py [ruta-al-DelphiLspMcp.exe]
 
 tests/test_docs_consistency.py falla si a una tool le falta el bloque o si
 alguno difiere de lo que renderiza esto. Medido el 28-sep-2026, antes: 35 de
 41 descripciones y 127 parametros del TOOLS.md a mano decian otra cosa que el
-servidor, 4 parametros faltaban y ninguna bateria lo veia."""
+servidor, dos parametros (x e y de adb/desktop) compartian fila y ninguna
+bateria lo veia."""
 import io, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -22,9 +25,15 @@ MARCA_INI = ('<!-- contract: generated from tools/list by scripts/tools_md.py - 
 MARCA_FIN = '<!-- /contract -->'
 
 
+def _texto(s):
+    """Texto de una description en Markdown: un <name> lo tomaria GFM por una
+    etiqueta HTML y se lo comeria (39 marcadores en los bloques; r11c H4)."""
+    return re.sub(r'<(?=[A-Za-z/])', r'\\<', (s or ''))
+
+
 def _celda(s):
     """Una celda de tabla Markdown: sin saltos y con la barra escapada."""
-    return re.sub(r'\s+', ' ', (s or '')).replace('|', '\\|').strip()
+    return _texto(re.sub(r'\s+', ' ', (s or '')).replace('|', '\\|').strip())
 
 
 def _tipo(p):
@@ -40,13 +49,20 @@ def _acceso(tool):
     meta = tool.get('_meta') or {}
     acc = meta.get('access')
     if acc == 'read-only':
+        if meta.get('sideEffect'):
+            return '*Access: read-only OK (side effect: %s).*' % meta['sideEffect']
         return '*Access: read-only OK.*'
     if acc == 'read-write':
         return '*Access: read-write (refused to a read-only credential).*'
     if acc == 'mixed':
         p = meta.get('commandParameter') or 'command'
         cmds = ' / '.join(meta.get('readOnlyCommands') or [])
-        return ('*Access: mixed (`%s` %s read-only; every other %s read-write, '
+        cuando = '; '.join('%s only %s' % (k, v) for k, v in (meta.get('readOnlyWhen') or {}).items())
+        if cuando:
+            cmds = '%s read-only; %s' % (cmds, cuando)
+        else:
+            cmds = cmds + ' read-only'
+        return ('*Access: mixed (`%s` %s; every other %s read-write, '
                 'refused to a read-only credential).*' % (p, cmds, p))
     return None
 
@@ -56,7 +72,7 @@ def render(tool):
     schema = tool.get('inputSchema') or {}
     props = schema.get('properties') or {}
     req = schema.get('required') or []
-    lines = [MARCA_INI, '', (tool.get('description') or '').replace('\r\n', '\n').strip(), '']
+    lines = [MARCA_INI, '', _texto((tool.get('description') or '').replace('\r\n', '\n').strip()), '']
     acceso = _acceso(tool)
     if acceso:
         lines += [acceso, '']

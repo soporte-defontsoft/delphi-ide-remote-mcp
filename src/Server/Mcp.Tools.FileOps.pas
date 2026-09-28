@@ -1024,11 +1024,17 @@ begin
       FotoUnit.Toma(RutasFoto.ToStringArray);
     except
       // un proyecto que no se deja LEER (otro proceso lo tiene) no se va a
-      // poder re-apuntar: la unit vuelve, y se dice cual
+      // poder re-apuntar: la unit vuelve, y se dice cual (por su nombre,
+      // como los otros dos emisores de MOVE-019; r11b H7)
       on E: Exception do
-        Exit(DeshaceMove(MsgFmt(SR_MOVE_PROYECTO_NO_VA_FMT, [string.Join(', ', Projects),
+      begin
+        var Nombres := '';
+        for var Q in Projects do
+          Nombres := Nombres + IfThen(Nombres <> '', ', ') + TPath.GetFileName(Q);
+        Exit(DeshaceMove(MsgFmt(SR_MOVE_PROYECTO_NO_VA_FMT, [Nombres,
           E.Message.Trim, Params.Path]), MsgFmt(SF_MOVE_PROYECTO_NO_VA_FMT,
-          [string.Join(', ', Projects), E.Message.Trim])));
+          [Nombres, E.Message.Trim])));
+      end;
     end;
   finally
     RutasFoto.Free;
@@ -1065,14 +1071,6 @@ begin
           E.Message.Trim, Params.Path]), MsgFmt(SF_MOVE_FORM_NO_VA_FMT,
           [TPath.GetFileName(Gemelo), E.Message.Trim])));
     end;
-  end;
-  // lo restaurado ya no vuelve a la papelera: fuera sus marcas (la de la
-  // unit y las de sus designers)
-  if DesdePapelera then
-  begin
-    QuitaMarcaDeDueno(Params.Path);
-    for var K := 0 to High(DisenosDe) do
-      QuitaMarcaDeDueno(DisenosDe[K]);
   end;
   if PairNote <> '' then
     Result := Result + #10 + PairNote;
@@ -1130,7 +1128,27 @@ begin
         Params.Path]), MsgFmt(SF_MOVE_PROYECTO_NO_VA_FMT, [TPath.GetFileName(P), R])));
     FotoUnit.Anota(P);
     FotoUnit.Anota(ChangeFileExt(P, '.dproj'));
+    // ...y todo lo que ese rename pudo reescribir (las units del proyecto y
+    // la propia en su sitio nuevo): sin anotar, el deshacer las tomaba por
+    // cambiadas "por otro" y dejaba la unit vieja con la cabecera nueva
+    // (undecima revision, r11a: dos proyectos y una unit que se nombra)
+    if not SameText(OldStem, NewStem) then
+    begin
+      var NoEsc: TArray<string>;
+      for var Fr in FicherosDelRename(P, Params.Dest, NoEsc) do
+        FotoUnit.Anota(Fr);
+    end;
     ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
+  end;
+  // lo restaurado ya no vuelve a la papelera: fuera sus marcas (la de la
+  // unit y las de sus designers). AL FINAL: quitadas antes del bucle de
+  // proyectos, un MOVE-019 devolvia la copia a la papelera sin dueno y otro
+  // agente podia purgarla (r11a H4)
+  if DesdePapelera then
+  begin
+    QuitaMarcaDeDueno(Params.Path);
+    for var K := 0 to High(DisenosDe) do
+      QuitaMarcaDeDueno(DisenosDe[K]);
   end;
   if Length(Projects) > 0 then
     ProjNote := MsgFmt(SN_FILE_PROJECTS_UPDATED_FMT, [Length(Projects),
