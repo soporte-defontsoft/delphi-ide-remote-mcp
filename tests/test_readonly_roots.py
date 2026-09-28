@@ -191,6 +191,22 @@ out = call('delphi_config', {'project': REF_DPROJ, 'command': 'view'})
 check('config view en la referencia: OK', mc.como_json(out).get('appType') == 'Console' and 'Ref.dproj' in out, out[:200])
 out = call('delphi_config', {'project': REF_DPROJ, 'command': 'set-version', 'version': '9.9.9'})
 check('config set-version en la referencia: RECHAZADO', refused_as_reference(out), out[:200])
+# add-unit / remove-unit only NAME the unit: one from the reference goes into MY
+# project (its .dcu lands in my output) and the reference is never written; one
+# from outside everything is still refused (12th review: the gate asked the
+# WRITE question for a path nobody writes)
+out = call('delphi_create', {'kind': 'project-console', 'dir': os.path.join(MINE, 'MioApp'), 'name': 'MioApp'})
+check('fixture: proyecto propio para listar units', mc.abre(out, 'SK_CREATE_CREADO_PROYECTO_FMT'), out[:200])
+MIO_DPROJ = os.path.join(MINE, 'MioApp', 'MioApp.dproj')
+MIO_DPR = os.path.join(MINE, 'MioApp', 'MioApp.dpr')
+out = call('delphi_config', {'project': MIO_DPROJ, 'command': 'add-unit', 'path': REF_PAS})
+check('config add-unit de una unit de la REFERENCIA en mi proyecto: OK (solo se nombra)',
+      not mc.fallo(out) and 'URefUtil' in open(MIO_DPR, encoding='utf-8-sig').read(), out[:200])
+check('...y la referencia sigue byte a byte', open(REF_PAS, 'rb').read() == before, '')
+out = call('delphi_config', {'project': MIO_DPROJ, 'command': 'remove-unit', 'path': REF_PAS})
+check('config remove-unit de la misma: OK', not mc.fallo(out) and 'URefUtil' not in open(MIO_DPR, encoding='utf-8-sig').read(), out[:200])
+out = call('delphi_config', {'project': MIO_DPROJ, 'command': 'add-unit', 'path': os.path.join(OUT, 'Fuera.pas')})
+check('config add-unit de una unit de FUERA de todo: RECHAZADO (jaula)', mc.rechazado(out) and mc.es(out, 'SR_JAIL_FMT') and 'Fuera' not in open(MIO_DPR, encoding='utf-8-sig').read(), out[:200])
 
 # rename: preview reads, apply writes
 out = call('delphi_rename_symbol', {'path': REF_PAS, 'line': 1, 'character': 6, 'newname': 'UOtra', 'mode': 'apply'})

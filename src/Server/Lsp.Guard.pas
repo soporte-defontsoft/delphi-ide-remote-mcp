@@ -988,6 +988,15 @@ function AccesoDeTool(const ATool: string): TAccesoDeTool;
   negativa READ-002 con lo que pedia. delphi_git decide por argumentos
   (GitCommandIsQuery: branch/tag sin ellos listan, worktree solo list), el
   resto por la tabla. Fuera del modo solo lectura, siempre ''. }
+{ LA clasificacion de una llamada: LEE o ESCRIBE, por la tabla ACCESOS y los
+  argumentos (el comando de una mixta, ComandoDeTest, logcat out=, la mitad
+  de consulta de git). AQue: como se nombra la llamada en una negativa. La
+  hacen la puerta de solo lectura (LecturaDenegada) y el suelo de la jaula
+  (ArgPathOutsideDenied): una tool que ESCRIBE no lleva la pista de lectura
+  de la zona en su negativa (duodecima revision, r12c). Vivia dentro de
+  LecturaDenegada y el suelo no la podia usar. }
+function LlamadaLee(const AToolName: string; const AArguments: TJSONObject;
+  out AQue: string): Boolean;
 function LecturaDenegada(const AToolName: string; const AArguments: TJSONObject): string;
 { Lo que tools/list anuncia de la tool, desde la tabla: annotations
   (readOnlyHint, MCP) y _meta (access: read-only | read-write | mixed;
@@ -3516,7 +3525,7 @@ function ArgPathOutsideDenied(const AToolName: string;
 var
   I: Integer;
   P: TJSONPair;
-  V: string;
+  V, Que: string;
   Mapa: TDictionary<string, Boolean>;
 begin
   Result := '';
@@ -3547,7 +3556,13 @@ begin
     // se lanzo desde una raiz: aceptada y escrita donde nadie dijo).
     if ARelativas and Mapa[Clave] then
       Continue;
-    Result := ReadPathDenied(V);
+    // Quien LEE recibe la negativa de lectura (con la pista de la zona);
+    // quien ESCRIBE, la jaula a secas: una pista de lectura en la negativa
+    // de un textedit create despistaba (duodecima revision, r12c)
+    if LlamadaLee(AToolName, AArguments, Que) then
+      Result := ReadPathDenied(V)
+    else
+      Result := JaulaDenegada(V);
     if Result <> '' then
       Exit;
   end;
@@ -3768,20 +3783,19 @@ begin
   Result.Efecto := '';
 end;
 
-function LecturaDenegada(const AToolName: string; const AArguments: TJSONObject): string;
+function LlamadaLee(const AToolName: string; const AArguments: TJSONObject;
+  out AQue: string): Boolean;
 var
   F: TAccesoDeTool;
   Cmd: string;
 begin
-  Result := '';
-  if not IsReadOnlyNow then
-    Exit;
+  AQue := AToolName;
   F := AccesoDeTool(AToolName);
   case F.Acceso of
     atLectura:
-      Exit;
+      Exit(True);
     atEscritura:
-      Exit(WriteDenied(AToolName));
+      Exit(False);
   end;
   Cmd := Trim(ArgStr(AArguments, F.Parametro));
   // delphi_test: sin command, project significa run: LA regla de la tool
@@ -3791,18 +3805,30 @@ begin
   // delphi_adb logcat con out= escribe el log en un fichero: no lee
   if SameText(AToolName, 'delphi_adb') and SameText(Cmd, 'logcat') and
      (Trim(ArgStr(AArguments, 'out')) <> '') then
-    Exit(WriteDenied(AToolName + ' logcat out='));
+  begin
+    AQue := AToolName + ' logcat out=';
+    Exit(False);
+  end;
   if SameText(AToolName, 'delphi_git') then
   begin
     // la mitad de consulta de git depende de los argumentos: la MISMA
     // clasificacion que usa la propia tool (GitCommandIsQuery)
-    if GitCommandIsQuery(Cmd, ArgStr(AArguments, 'args'), ArgStr(AArguments, 'message')) then
-      Exit;
-    Exit(WriteDenied(Trim(AToolName + ' ' + Cmd)));
+    AQue := Trim(AToolName + ' ' + Cmd);
+    Exit(GitCommandIsQuery(Cmd, ArgStr(AArguments, 'args'), ArgStr(AArguments, 'message')));
   end;
-  if (Cmd = '') or MatchText(Cmd, F.Lecturas) then
+  AQue := AToolName + ' ' + Cmd;
+  Result := (Cmd = '') or MatchText(Cmd, F.Lecturas);
+end;
+
+function LecturaDenegada(const AToolName: string; const AArguments: TJSONObject): string;
+var
+  Que: string;
+begin
+  Result := '';
+  if not IsReadOnlyNow then
     Exit;
-  Result := WriteDenied(AToolName + ' ' + Cmd);
+  if not LlamadaLee(AToolName, AArguments, Que) then
+    Result := WriteDenied(Que);
 end;
 
 procedure AnunciaAcceso(const AToolName: string; const AEntry: TJSONObject);

@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.5] - 2026-09-28
+
+The two observations the twelfth review round left, done the same evening so the list of known pendings stays empty (David: no version ships with a pending list): a unit of a reference can be listed in your own project, and a tool that writes no longer carries the reading hint in its jail refusal.
+
+### Fixed
+
+- **A unit of a reference project (or of a `ReadOnlyPaths` folder) could not
+  be listed in your own `.dpr`**: `delphi_config add-unit` / `remove-unit`
+  asked the WRITE question for a path nobody writes (the unit is only named;
+  its `.dcu` lands in the project's output). They ask the read question now;
+  a unit outside everything is still refused. `test_readonly_roots` +4.
+- **A tool that writes got the reading hint in its refusal**: the jail floor
+  at the entrance (`ArgPathOutsideDenied`) answered every path parameter with
+  the read refusal, so a `delphi_textedit create` outside the roots said
+  `[GUARD-002]` followed by `[READ-003]` "for READING, the library zone is
+  allowed". The classification "does this call read or write" lived inside
+  the read-only gate; it is one reader now (`LlamadaLee`: the access table,
+  the command of a mixed tool, `ComandoDeTest`, `logcat out=`, git's query
+  half) used by the read-only gate and by the floor, which gives the read
+  refusal to a call that reads and the plain jail to one that writes.
+  `test_guard` +2.
+
 ## [1.7.4] - 2026-09-28
 
 Two questions, two helpers: the read gate has no pardons any more. The common gate that answered reading and writing with a table of pardons is split into a read question and a write question, the three kinds of write are written down as a contract, and one generic jail battery measures every path parameter of the contract in every form against a victim outside the roots. The twelfth review round (four read-only reviewers on this change alone) measured the split call by call against 1.7.3 with zero differences and found two capture fixes on the way. Nothing changes for a client; it is what keeps the 1.7.2 regression from having a second edition.

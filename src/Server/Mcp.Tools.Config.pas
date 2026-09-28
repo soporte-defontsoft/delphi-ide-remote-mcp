@@ -1745,7 +1745,10 @@ begin
         Exit(MsgText(SR_UNIT_NEED_PATH));
       Result := WriteTargetDenied(Params.Project);
       if Result = '' then
-        Result := PathDenied(Params.Path); // la unit solo se NOMBRA
+        // la unit solo se NOMBRA: la pregunta es la de LEER. Una unit de una
+        // referencia o de vendor va al .dpr propio (su .dcu cae en la salida
+        // del proyecto) y no se le escribe nada (duodecima revision, r12a)
+        Result := ReadPathDenied(Params.Path);
       if Result <> '' then
         Exit;
       if Cmd = 'add-unit' then
