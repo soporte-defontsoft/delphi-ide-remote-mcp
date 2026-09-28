@@ -4977,11 +4977,11 @@ const
     'colon (%s\...).';
 
   SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT =
-    '[GUARD-009 DENIED] The path "%s" contains ":" outside the drive ' +
+    '[GUARD-009 INVALID_PARAM] The path "%s" contains ":" outside the drive ' +
     '(alternate data stream). Use a normal file name.';
 
   SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT =
-    '[GUARD-010 DENIED] The name "%s" starts or ends with a dot or a ' +
+    '[GUARD-010 INVALID_PARAM] The name "%s" starts or ends with a dot or a ' +
     'space; Windows trims them when it opens the file, so the real name ' +
     'would be a different one ("%s"). Ask for the exact name, with ' +
     'nothing added around it.';
