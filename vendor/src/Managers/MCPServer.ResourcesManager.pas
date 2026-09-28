@@ -35,6 +35,7 @@ implementation
 
 uses
   MCPServer.Registration,
+  MCPServer.JsonRpcProcessor, // [local change] ERecursoNoExiste
   Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
 
 { TMCPResourcesManager }
@@ -130,7 +131,6 @@ var
   ResourceText: string;
   ResultJSON: TJSONObject;
   URI: string;
-  URIValue: TJSONValue;
 begin
   // [local change 2026-09-27] sin params (o sin uri) era un Access Violation;
   // un recurso que no existe, un "exito" con el error dentro del texto
@@ -140,8 +140,9 @@ begin
   URI := CampoDeTexto(Params, 'uri');
   if URI = '' then
     raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_METHOD_PARAM_FMT, ['uri']));
+  // -32002, el codigo de MCP para un recurso que no existe (octava revision)
   if not FResources.ContainsKey(URI) then
-    raise EArgumentException.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
+    raise ERecursoNoExiste.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
 
   TLogger.Info('MCP ReadResource called for URI: ' + URI);
 
@@ -169,7 +170,7 @@ begin
     else
     begin
       // (no se llega: comprobado arriba)
-      raise EArgumentException.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
+      raise ERecursoNoExiste.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
     end;
     
     Result := TValue.From<TJSONObject>(ResultJSON);

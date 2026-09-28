@@ -590,7 +590,7 @@ var
   F, Mask, Root, Reason: string;
   Masks: TArray<string>;
   Entry: TJSONObject;
-  Total, ShownTrash: Integer;
+  Total, ShownTrash, ShownMarcas: Integer;
   Ocultos: THiddenCount;
   RootInArtifacts: Boolean;
 begin
@@ -687,6 +687,7 @@ begin
   Total := 0;
   Ocultos := Default(THiddenCount);
   ShownTrash := 0;
+  ShownMarcas := 0;
   RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));
   try
     // Un paseo con todas las mascaras: cada fichero sale UNA vez aunque dos
@@ -720,9 +721,11 @@ begin
         // son copias y cuantas ficheros vivos (Hermes, 2026-09-22).
         // ...copias: la marca de dueno de una copia (.by) no es otra copia
         // (septima revision)
-        if Params.IncludeTrash and (SkipReason(RelToRoot(F, Root), False) = SKIP_TRASH) and
-           not EsMarcaDeDueno(F) then
-          Inc(ShownTrash);
+        if Params.IncludeTrash and (SkipReason(RelToRoot(F, Root), False) = SKIP_TRASH) then
+          if EsMarcaDeDueno(F) then
+            Inc(ShownMarcas)
+          else
+            Inc(ShownTrash);
         if Arr.Count < LIST_CAP then
         begin
           Entry := TJSONObject.Create;
@@ -742,10 +745,11 @@ begin
       end;
     Return.AddPair('total', TJSONNumber.Create(Total));
     Return.AddPair('shown', TJSONNumber.Create(Arr.Count));
-    if ShownTrash > 0 then
+    if ShownTrash + ShownMarcas > 0 then
     begin
       Return.AddPair('shownTrash', TJSONNumber.Create(ShownTrash));
-      Return.AddPair('trashNote', MsgFmt(SN_LIST_SHOWN_TRASH_FMT, [Total, ShownTrash]));
+      Return.AddPair('trashNote', MsgFmt(SN_LIST_SHOWN_TRASH_FMT,
+        [Total, ShownTrash, ShownMarcas]));
     end;
     // Una sola nota de lo que falta: con mas de 500 salian DOS claves
     // "shownNote" en el mismo objeto (revision 27-sep-2026)
@@ -871,6 +875,20 @@ begin
   // single gate (Lsp.Guard.ToolCallDenied), before this handler runs.
 
   Cmd := Params.Command.Trim.ToLower;
+  // lo que no va con el comando se dice (Lsp.Guard.ParametroQueNoVa): commit
+  // con path hacia un commit de TODO el indice (octava revision). Solo los
+  // parametros de UN comando; args es de todos y lo mira el filtro
+  var SuyosGit: string;
+  var SobraGit := ParametroQueNoVa(Cmd, [
+      'status', '', 'diff', '', 'log', '', 'show', '', 'branch', '', 'add', '',
+      'pull', '', 'fetch', '', 'init', '', 'merge', '', 'push', '',
+      'commit', 'message', 'clone', 'message', 'config', 'message',
+      'stash', 'message', 'tag', 'message', 'switch', 'create',
+      'worktree', 'path ref'],
+    ['message', Params.Message, '', 'path', Params.Path, '', 'ref', Params.Ref, '',
+     'create', IfThen(Params.Create, 'true'), ''], SuyosGit);
+  if SobraGit <> '' then
+    Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, Cmd, Cmd, ONinguno(SuyosGit)]));
   if Cmd = 'status' then
     GitArgs := 'status --porcelain=v1 -b ' + ArgvSeguro(Params.Args)
   else if Cmd = 'diff' then
@@ -2252,6 +2270,15 @@ begin
       // El formato se excluyo en cinco sitios y se olvido aqui
       // (auditoria 2026-09-21).
       if EnTemporal(F) then
+        Continue;
+      // un vault (de cualquier workspace) no va en un entregable: los otros
+      // recorredores ya lo saltaban (octava revision)
+      if InVault(F) then
+        Continue;
+      // ...ni la papelera: no es contenido (la regla de list y del copiador),
+      // y un enlace aparcado en ella hacia que el zip se leyera a si mismo
+      // (SYS-027 "repite" para siempre; octava revision)
+      if EnPapelera(F) then
         Continue;
       if SameText(TPath.GetExtension(F), '.dcu') then
         Continue;

@@ -575,8 +575,11 @@ check('delete: mueve a papelera (no borrado duro)',
 import glob as _g2
 # el lector de la papelera: sin las marcas .by (trash[0] acertaba por el orden
 # alfabetico frente a la marca)
-trash = mc.copias(INSIDE, None, 'CAJON_BORRADOS', bajo=True)
-check('delete: el fichero esta recuperable en la papelera', len(trash) > 0, trash)
+# la del DELETE, en la papelera junto al fichero: bajo=True encontraba
+# tambien la copia de seguridad del move de arriba, y el check pasaba por
+# ella (y R5-A restauraba esa; octava revision)
+trash = mc.copias(os.path.join(INSIDE, 'movidos'), 'Mover.pas', 'CAJON_BORRADOS')
+check('delete: el fichero esta recuperable en la papelera', len(trash) == 1, trash)
 # R5-A: restore from the trash via delphi_move (the path delete's message names)
 if trash:
     rec = os.path.join(INSIDE, 'Recuperado.pas')

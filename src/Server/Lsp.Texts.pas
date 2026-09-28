@@ -592,6 +592,12 @@ const
     '[SYS-008 NOT_FOUND] Session expired: no request on it for more than ' +
     '%s minutes ([Server] SessionTimeoutMinutes). Send initialize again ' +
     'and use the new session id.';
+  { La que se cerro para hacer sitio: salia SYS-007 "el servidor se
+    reinicio" (octava revision). }
+  SR_SESSION_EXPULSADA_FMT =
+    '[SYS-033 NOT_FOUND] Session closed to make room: the server keeps ' +
+    'at most %d sessions, and this one had gone longest without a ' +
+    'request. Send initialize again and use the new session id.';
   { The HTTP gate without a valid token: what the client has to send and
     where the token lives. Said by the 401 body and by the tray when it
     copies the URL (issue #4, 2026-09-27: the URL alone got a bare 401).
@@ -917,9 +923,12 @@ const
     '__pycache__...), which dirs mode does not show: pass one as root to ' +
     'see inside';
 
+  { Las marcas de dueno (.by) se cuentan aparte: la nota las llamaba
+    "live files" (octava revision). }
   SN_LIST_SHOWN_TRASH_FMT =
-    '[LIST-008] Of the %d entries, %d are trash copies (__delphi-patch), ' +
-    'listed because includetrash=true; the rest are live files.';
+    '[LIST-008] Of the %d entries, %d are trash copies (__delphi-patch) ' +
+    'and %d their owner markers (.by), listed because includetrash=true; ' +
+    'the rest are live files.';
 
   SN_LIST_DEFAULT_MASK =
     '[LIST-009] Without "pattern" only Delphi files are listed (*.pas, ' +
@@ -2016,10 +2025,13 @@ const
     'links. To take it there: delphi_move copy=true and then ' +
     'delphi_delete of the source.';
 
+  { ...y lo que es un VAULT (de las tools vault_*, de cualquier workspace):
+    se copiaba el de OTRO workspace (octava revision). }
   SN_COPY_LINKS_NOT_FOLLOWED_FMT =
-    '  [FILE-032] %d link(s) NOT followed when copying, because they ' +
-    'point to something this workspace cannot read (outside its roots, ' +
-    'its ReadOnlyRoots and the library zone): %s. The rest has been ' +
+    '  [FILE-032] %d item(s) NOT copied: links that point to something ' +
+    'this workspace cannot read (outside its roots, its ReadOnlyRoots and ' +
+    'the library zone), or a knowledge vault (it belongs to the vault_* ' +
+    'tools): %s. The rest has been ' +
     'copied. If that content is needed, the operator declares it in ' +
     'ReadOnlyRoots.';
 
@@ -2914,6 +2926,12 @@ const
   { lint/build con un FICHERO: su carpeta, como en la 1.6.2 (documentado:
     "a file is accepted too"), pero DICIENDOLO. La quinta revision lo cambio
     por un rechazo (STYLE-038, retirado) que rompia a quien lo usaba. }
+  { Un parametro que no es del comando: delete con child/prop borraba el
+    estilo ENTERO pidiendo una parte (octava revision). }
+  SR_STYLES_NO_VA_CON_COMANDO_FMT =
+    '[STYLE-043 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.';
+
   SN_STYLES_CARPETA_DEL_FICHERO_FMT =
     '[STYLE-042] %s is a file: lint and build work on a whole styles ' +
     'folder, so they ran on its folder, %s.';
@@ -3000,7 +3018,8 @@ const
   SN_STYLES_DELETED_FMT =
     '[STYLE-015] DELETED style ''%s'' (lines %d-%d of %s; %d styles left). ' +
     'The previous copy of the file is in __delphi-patch (delphi_list ' +
-    'shows it): to undo, delphi_move that copy over the file. Regenerate ' +
+    'shows it): to undo, delphi_delete the file (it goes to the trash ' +
+    'too) and delphi_move that copy back to its name. Regenerate ' +
     'with build; a StyleLookup that used it is left without a style ' +
     '(command=lint will say so).';
 
@@ -3641,7 +3660,7 @@ const
 
   SP_DESIGNER_COMMAND =
     'info (what a class publishes) | prop (one property in detail) | tree ' +
-    '(component tree of a text .dfm/.fmx) | get (one component''s block) | ' +
+    '(component tree of a .dfm/.fmx; a binary one is read on the fly) | get (one component''s block) | ' +
     'lint (designer lint on demand) | check-binding (does the .dfm agree ' +
     'with the class in the .pas: components with no published field, events ' +
     'naming a method that is not published, published fields with no ' +
@@ -4128,7 +4147,8 @@ const
     'group by its .dproj (or its .dpr/.dpk, with the .dproj next to it).';
   SR_GRUPO_FORMA_FMT =
     '[GROUP-005 DENIED] %s does not have the shape of an IDE ' +
-    'group (neither <PropertyGroup> nor </Project>): I do not touch it.';
+    'group (neither a </Projects> item nor a </PropertyGroup>): I do not ' +
+    'touch it.';
   SN_GRUPO_NO_ESTABA_FMT =
     '[GROUP-006] %s is not in the group %s: I did not touch anything.';
   SN_GRUPO_QUITADO_FMT =
@@ -4699,7 +4719,9 @@ const
 
   SP_CHANGESET_OLD =
     'stage kind=edit: the anchor - ONE full line copied verbatim from ' +
-    'delphi_read, unique in the file (or use fragment + atline instead)';
+    'delphi_read, unique in the file (or use fragment + atline instead). ' +
+    'kind=delete-line: optional, the line you expect at atline - compared ' +
+    'like an anchor, and the preview refuses when it is not that one';
 
   SP_CHANGESET_NEW =
     'stage kind=edit: the replacement text (may span several lines)' +
@@ -4817,7 +4839,13 @@ const
     con old/new, kind=edit con content; sexta revision). }
   SR_CHANGESET_NO_ES_DE_KIND_FMT =
     '[CHSET-030 INVALID_PARAM] "%s" does not go with kind=%s (it would ' +
-    'be ignored). Nothing was staged: stage it again without it.';
+    'be ignored). Nothing was staged: kind=%s takes %s.';
+
+  { ...y un parametro que no es del COMANDO: commit / preview con kind,
+    path, old o n se ignoraban (octava revision). }
+  SR_CHANGESET_NO_VA_CON_COMANDO_FMT =
+    '[CHSET-031 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.';
 
   { Un commit que deja todo como estaba: decia COMMIT COMPLETE, "this is what
     changed" y las copias de siempre (sexta revision). Sin prometer "no
@@ -5016,7 +5044,15 @@ const
     (septima revision). }
   SR_GUARD_BARRA_FINAL_FMT =
     '[GUARD-025 INVALID_PARAM] "%s" ends in a separator (\ or /), which ' +
-    'names a FOLDER, and a FILE goes here. Drop the separator at the end.';
+    'names a FOLDER, and it is a FILE (or a file goes there): a file is ' +
+    'named without it. Drop the separator at the end.';
+
+  { Un nombre de mas de 255 caracteres: Windows no lo admite, y salia
+    SYS-009 INTERNAL al escribir (octava revision). }
+  SR_GUARD_NOMBRE_LARGO_FMT =
+    '[GUARD-026 INVALID_PARAM] A name in the path has %d characters ' +
+    '("%s..."), and Windows allows at most 255 in one name. Use a ' +
+    'shorter name.';
 
   SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT =
     '[GUARD-009 INVALID_PARAM] The path "%s" contains ":" outside the drive ' +
@@ -5026,8 +5062,11 @@ const
     '[GUARD-010 INVALID_PARAM] The name "%s" starts or ends with a space, ' +
     'or ends with a dot. Windows drops a trailing dot or space when it ' +
     'opens the file, so it would be a different name, and a leading ' +
-    'space is almost always a slip. Did you mean "%s"? Ask for the ' +
-    'exact name.';
+    'space is almost always a slip.%s Ask for the exact name.';
+  { La sugerencia de GUARD-010, solo si queda un nombre: "..." sugeria
+    'Did you mean ""?' (octava revision). }
+  SF_GUARD_QUIZAS_FMT =
+    ' Did you mean "%s"?';
 
   // Mensajes que estaban en linea en Lsp.Patch.pas (paso 3c, 27-sep-2026)
   SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT =
@@ -5467,6 +5506,12 @@ const
   SR_GIT_CONFIG_NEEDS_VALUE =
     '[GIT-033 INVALID_PARAM] Config needs the value in the "message" ' +
     'parameter';
+
+  { Un parametro que no es del comando: commit con path hacia un commit de
+    TODO el indice, no de ese fichero (octava revision). }
+  SR_GIT_NO_VA_CON_COMANDO_FMT =
+    '[GIT-038 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s (and args).';
 
   SR_GIT_UNKNOWN_COMMAND_FMT =
     '[GIT-034 INVALID_PARAM] Unknown command "%s". Allowed: status | ' +
@@ -7441,9 +7486,6 @@ const
     '[CFG-103 DENIED] The .deployproj has no </Project>; open it ' +
     'in the IDE and try again.';
 
-  SF_CFG_NINGUNA =
-    '(none)';
-
   SF_CFG_SUFIJO_NO_VA_DPROJ_FMT =
     'The suffix "%s" does not go into the .dproj (the VERSIONINFO is ' +
     'numeric): keep it wherever your project records its version (a ' +
@@ -7689,6 +7731,12 @@ const
   SF_FILE_AL_MOVER_PAPELERA =
     'while moving to the trash';
 
+  { Una unit cuyo form no se pudo mover: salia MOVED con la unit en su sitio
+    nuevo, el form en el viejo y el .dpr re-apuntado (octava revision). }
+  SR_MOVE_FORM_NO_VA_FMT =
+    '[MOVE-017 DENIED] Its form %s could not go with the unit (%s): the unit ' +
+    'is back at %s and no project was touched. Nothing was done.';
+
   SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT =
     '[MOVE-010 INVALID_PARAM] A .pas unit can only be moved to another .pas ' +
     'name (%s).';
@@ -7889,10 +7937,10 @@ const
     agente repetia para siempre (sexta revision, medido). }
   SR_SOLO_LECTURA_ATRIBUTO_FMT =
     '[SYS-029 DENIED] %s is marked READ-ONLY on disk (its read-only ' +
-    'attribute is set). Nothing was written. It is not a lock, so ' +
-    'repeating will not help: the attribute has to be cleared first ' +
-    '(this server does not clear it: it may be deliberate), or work on ' +
-    'a copy.';
+    'attribute is set). Nothing was written, moved or deleted. It is ' +
+    'not a lock, so repeating will not help: the attribute has to be ' +
+    'cleared first (this server does not clear it: it may be ' +
+    'deliberate); to change its content meanwhile, work on a copy.';
 
   SR_SYS_METODO_NO_EXISTE_FMT =
     '[SYS-021 NOT_FOUND] Method "%s" does not exist here (or is not ' +
@@ -7988,6 +8036,9 @@ function MsgText(const AMsg: string): string;
   mensaje, no revienta la tool con una excepcion de conversion: devuelve
   el mensaje sin formatear con el motivo detras, y lo anota en el log. }
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;
+{ Una lista para un mensaje, o "(none)" si esta vacia: estaba escrito a mano
+  siete veces (IfThen(X = '', SF_NINGUNO, X); octava revision). }
+function ONinguno(const ALista: string): string;
 { EL paso de una CAUSA por un envoltorio del catalogo (RECHAZADO: %s,
   error: %s, Error executing tool: %s...): si la causa ya es un mensaje
   que declara su resultado, sale tal cual (envolverla le quitaria la
@@ -8097,6 +8148,14 @@ begin
   Result := AMsg;
 end;
 
+function ONinguno(const ALista: string): string;
+begin
+  if ALista.Trim = '' then
+    Result := MsgText(SF_NINGUNO)
+  else
+    Result := ALista;
+end;
+
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;
 begin
   try
@@ -8125,13 +8184,6 @@ begin
     not (AExcepcion is EArgumentOutOfRangeException);
 end;
 
-{ Un fichero que otro proceso tiene abierto sin compartir: la causa trae el
-  texto del sistema (el de SysErrorMessage, en el idioma de Windows) y ningun
-  resultado. Era INTERNAL en cada tool que lo cogia (verificacion de la
-  tercera ronda): se reconoce AQUI, donde toda causa se envuelve. }
-{ Lo que Windows dijo, en el mensaje con etiqueta que le toca, o '' si la
-  causa no es de las suyas conocidas: EL clasificador de "el sistema no
-  dejo". Solo reconocia 32 y 33; el 5 salia INTERNAL (SYS-006, MOVE-012). }
 function CampoDeTexto(const AObj: TJSONValue; const ANombre: string): string;
 var
   V: TJSONValue;
@@ -8144,6 +8196,13 @@ begin
     Result := TJSONString(V).Value;
 end;
 
+{ Un fichero que otro proceso tiene abierto sin compartir: la causa trae el
+  texto del sistema (el de SysErrorMessage, en el idioma de Windows) y ningun
+  resultado. Era INTERNAL en cada tool que lo cogia (verificacion de la
+  tercera ronda): se reconoce AQUI, donde toda causa se envuelve. }
+{ Lo que Windows dijo, en el mensaje con etiqueta que le toca, o '' si la
+  causa no es de las suyas conocidas: EL clasificador de "el sistema no
+  dejo". Solo reconocia 32 y 33; el 5 salia INTERNAL (SYS-006, MOVE-012). }
 function MotivoDelSistema(const ACausa: string): string;
 begin
   Result := '';

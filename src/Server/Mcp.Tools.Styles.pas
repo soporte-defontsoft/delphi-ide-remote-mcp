@@ -396,7 +396,7 @@ begin
         Text := PatchLoadText(F, EncF);
         if F.EndsWith('.pas', True) then
           Text := BlankComments(Text); // a lookup in a comment is not a lookup
-        Lines := Text.Replace(#13#10, #10).Split([#10]);
+        Lines := SplitToLines(Text); // las lineas como las numera delphi_read
         for I := 0 to High(Lines) do
         begin
           M := TRegEx.Match(Lines[I], 'StyleLookup\s*(?:=|:=)\s*''([^'']+)''', [roIgnoreCase]);
@@ -683,6 +683,24 @@ begin
     Cmd := 'view';
   if Params.Path.Trim = '' then
     Exit(MsgText(SR_STYLES_NEED_PATH));
+  // lo que no va con el comando se dice (Lsp.Guard.ParametroQueNoVa): delete
+  // con child/prop borraba el estilo ENTERO pidiendo una parte, y delete es a
+  // la vez un comando y un booleano de set (octava revision)
+  var Suyos: string;
+  var Sobra := ParametroQueNoVa(Cmd, [
+      'view', 'filter',
+      'get', 'style child',
+      'set', 'style child prop value delete',
+      'clone', 'style name',
+      'delete', 'style',
+      'lint', 'project',
+      'build', ''],
+    ['project', Params.Project, '', 'style', Params.Style, '',
+     'child', Params.Child, '', 'prop', Params.Prop, '', 'value', Params.Value, '',
+     'name', Params.Name, '', 'filter', Params.Filter, '',
+     'delete', IfThen(Params.Delete, 'true'), ''], Suyos);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_STYLES_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, ONinguno(Suyos)]));
   if MatchText(Cmd, ['set', 'clone', 'delete', 'build']) then
     Denied := WriteTargetDenied(Params.Path)
   else

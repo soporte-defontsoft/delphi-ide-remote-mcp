@@ -218,10 +218,17 @@ begin
       SetConsoleTextAttribute(ConsoleHandle, LOG_LEVEL_COLORS[Level]);
       {$ENDIF}
 
-      if FUseStdErr then
-        WriteLn(ErrOutput, LogLine)
-      else
-        WriteLn(LogLine);
+      // [local change 2026-09-28] un cliente que cierra el stderr (o una
+      // consola que no esta) no tumba el servidor al arrancar: el log de
+      // consola se apaga y el de fichero sigue (octava revision)
+      try
+        if FUseStdErr then
+          WriteLn(ErrOutput, LogLine)
+        else
+          WriteLn(LogLine);
+      except
+        FLogToConsole := False;
+      end;
 
       {$IFDEF MSWINDOWS}
       SetConsoleTextAttribute(ConsoleHandle, 7);

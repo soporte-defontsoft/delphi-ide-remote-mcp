@@ -95,6 +95,34 @@ begin
   end;
 end;
 
+{ El nombre de la descarga en Content-Disposition: en ASCII para quien solo
+  lee filename, y el de verdad en filename* (RFC 6266 / 5987, UTF-8 en
+  %XX): "cancion" con tilde llegaba "canci?n" (octava revision). }
+function DisposicionDeDescarga(const ANombre: string): string;
+const
+  ATTR_CHAR = ['A'..'Z', 'a'..'z', '0'..'9', '!', '#', '$', '&', '+', '-',
+    '.', '^', '_', '`', '|', '~'];
+var
+  Ascii, Codificado: string;
+  C: Char;
+  B: Byte;
+begin
+  Ascii := '';
+  for C in ANombre do
+    if (Ord(C) >= 32) and (Ord(C) < 127) and (C <> '"') and (C <> '\') then
+      Ascii := Ascii + C
+    else
+      Ascii := Ascii + '_';
+  Codificado := '';
+  for B in TEncoding.UTF8.GetBytes(ANombre) do
+    if (B < 128) and CharInSet(Char(B), ATTR_CHAR) then
+      Codificado := Codificado + Char(B)
+    else
+      Codificado := Codificado + '%' + IntToHex(B, 2);
+  Result := 'attachment; filename="' + Ascii + '"; filename*=UTF-8' + '''''' +
+    Codificado;
+end;
+
 procedure ServeFile(RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo);
 var
@@ -102,8 +130,10 @@ var
   Stream: TStream;
 begin
   try
-    P := RequestInfo.Params.Values['path'].Trim;
-    if P = '' then
+    // la ruta TAL CUAL a las reglas, como la de una tool: "a b.txt " servia
+    // "a b.txt" y las tools daban GUARD-010 (octava revision)
+    P := RequestInfo.Params.Values['path'];
+    if P.Trim = '' then
     begin
       Answer(ResponseInfo, 400, MsgText(SR_FILES_NEED_PATH));
       Exit;
@@ -172,8 +202,7 @@ begin
       Stream := TFileStream.Create(Full, fmOpenRead or fmShareDenyWrite);
     ResponseInfo.ResponseNo := 200;
     ResponseInfo.ContentType := 'application/octet-stream';
-    ResponseInfo.ContentDisposition := 'attachment; filename="' +
-      TPath.GetFileName(Full) + '"';
+    ResponseInfo.ContentDisposition := DisposicionDeDescarga(TPath.GetFileName(Full));
     ResponseInfo.CustomHeaders.Values['X-File-SHA256'] := Sha;
     ResponseInfo.ContentLength := Stream.Size;
     ResponseInfo.ContentStream := Stream; // streamed, never loaded whole
@@ -182,7 +211,12 @@ begin
     TLogger.Info(MsgFmt(SL_FILES_GET_FMT, [Full, Stream.Size]));
   except
     on E: Exception do
-      Answer(ResponseInfo, 500, MsgExcepcion(E.ClassName, E.Message));
+    begin
+      // el codigo por el resultado, tambien aqui: un fichero que otro tiene
+      // abierto (SYS-027 DENIED) salia 500 "el servidor se rompio" (octava)
+      var M := MsgExcepcion(E.ClassName, E.Message);
+      Answer(ResponseInfo, CodigoHttp(M), M);
+    end;
   end;
 end;
 

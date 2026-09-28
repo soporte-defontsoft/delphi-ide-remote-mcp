@@ -90,4 +90,4 @@ tool reference is [docs/TOOLS.md](docs/TOOLS.md).
 | The tray refuses to start, port taken | The service, or another tray, is already listening on that port: one or the other. Or Windows reserves that port (Hyper-V and WSL take ranges; `netsh interface ipv4 show excludedportrange protocol=tcp` lists them): change `[Server] Port=`. The message names the port and the socket error. |
 | `delphi_projects` finds nothing | `Roots=` does not point where the projects are (typo, wrong drive, forward slashes). |
 | A project with installed components fails with `F2613 unit not found` | The server runs as a user that is not the IDE's. Same exe, other account: no library paths. |
-| Only reading works, every write is refused | A local stdio process without a token is read-only by design. Give it the workspace token (`DELPHI_MCP_TOKEN`), or connect over HTTP with the Bearer. |
+| Only reading works, every write is refused | A local stdio process without a token is read-only by design (unless it was launched with `DELPHI_MCP_ROOTS`, the harness/dev mode). Give it the workspace token (`DELPHI_MCP_TOKEN`), or connect over HTTP with the Bearer. |

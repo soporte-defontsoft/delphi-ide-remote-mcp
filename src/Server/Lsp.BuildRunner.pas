@@ -666,7 +666,7 @@ begin
         Entries + '    </ItemGroup>'#13#10 + Copy(Xml, P + 1, MaxInt);
     end;
   end;
-  PatchSaveText(ADeployProj, Xml, Enc);
+  PatchSaveConSuSalto(ADeployProj, Xml, Enc);
   Result := True;
 end;
 
@@ -736,7 +736,7 @@ begin
     Changed := True;
   end;
   if Changed then
-    PatchSaveText(ADprojPath, Dproj, Enc);
+    PatchSaveConSuSalto(ADprojPath, Dproj, Enc);
   // 1c) Android: the AndroidManifest.template.xml seed the IDE would write,
   //     copied from the product's ObjRepos - never invented, never
   //     overwritten (an existing template is the project's own).

@@ -537,7 +537,7 @@ begin
         '  Results: IRunResults;' + CRLF + CRLF +
         'begin' + CRLF +
         '  try' + CRLF +
-        '    // --run:<filtro> (el filter de delphi_test) se lee aqui' + CRLF +
+        '    // --run:<filter> (delphi_test''s filter) is read here' + CRLF +
         '    TDUnitX.CheckCommandLine;' + CRLF +
         '    Runner := TDUnitX.CreateRunner;' + CRLF +
         '    Logger := TDUnitXConsoleLogger.Create(True);' + CRLF +
@@ -563,10 +563,10 @@ begin
         '  T' + AName + ' = class' + CRLF +
         '  public' + CRLF +
         '    [Test]' + CRLF +
-        '    procedure Esqueleto;' + CRLF +
+        '    procedure Skeleton;' + CRLF +
         '  end;' + CRLF + CRLF +
         'implementation' + CRLF + CRLF +
-        'procedure T' + AName + '.Esqueleto;' + CRLF +
+        'procedure T' + AName + '.Skeleton;' + CRLF +
         'begin' + CRLF +
         '  Assert.AreEqual(4, 2 + 2, ''the test project skeleton runs'');' + CRLF +
         'end;' + CRLF + CRLF +

@@ -19,6 +19,7 @@ Usage:  python tests/test_round42.py [path-to-DelphiLspMcp.exe]
 """
 import json
 import os
+import urllib.parse
 import time
 import uuid
 import mcp_cliente as mc
@@ -147,7 +148,10 @@ try:
         # jaula: el texto crudo contra su forma 8.3 no podia casar nunca y X1
         # pasaba sin medir (septima revision). El control: la misma lectura
         # SI ve la jaula propia cuando el motor contesta.
-        visto = mc.real(r.replace('\\\\', '\\')).lower()
+        # ...y con barras normales o en una URI file:/// (el motor habla en
+        # URIs): solo se miraban las invertidas (octava revision)
+        crudo = urllib.parse.unquote(r).replace('\\\\', '\\')
+        visto = mc.real(crudo.replace('file:///', '').replace('/', '\\')).lower()
         formas = {otra.lower(), mc.larga(otra).lower(), (mc.corta(otra) or otra).lower()}
         check('X1%s la respuesta de la jaula %s no nombra la otra jaula'
               % (quien.lower(), quien),

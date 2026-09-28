@@ -26,6 +26,12 @@ A10 la purga del arranque no vacia el __delphi-temp de un vault ni el de
     un ReadOnlyPaths de OTRO workspace anidado en esta raiz
 A11 las tools vault_* por el alias 8.3: el fichero de gobierno y la
     carpeta excluida siguen siendolo
+A12 copy=true y delphi_package de una carpeta con el vault de OTRO
+    workspace: el vault no va (los otros recorredores ya lo saltaban)
+A13 una raiz UNC declarada en 8.3: se lee por su forma larga y por la
+    corta (todo era GUARD-002), y un UNC fuera de ella sigue fuera
+A5 y A10 llevan su control: una temporal normal SI se purgo (sin el, un
+    arranque que no purgara nada los dejaba en verde)
 
 Si el volumen no da nombres 8.3, los A se dicen NOTA y no se miden.
 
@@ -37,6 +43,7 @@ import glob
 import json
 import os
 import time
+import zipfile
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -67,8 +74,10 @@ os.makedirs(TEMP_REF)
 MIGA_REF = os.path.join(TEMP_REF, 'de-la-referencia.txt')
 open(MIGA_REF, 'w').write('de la referencia\n')
 # A9/A10: el vault de OTRO workspace y un ReadOnlyPaths suyo, anidados aqui
-VAULT_OTRO = os.path.join(JAIL, 'vaultdeotro')
+CONOTRO = os.path.join(JAIL, 'conotro')                   # A12: la carpeta que lo contiene
+VAULT_OTRO = os.path.join(CONOTRO, 'vaultdeotro')
 os.makedirs(VAULT_OTRO)
+open(os.path.join(CONOTRO, 'propio.txt'), 'w').write('propio\n')
 open(os.path.join(VAULT_OTRO, 'AGENTS-VAULT.md'), 'w').write('# de otro\n')
 RO_OTRO = os.path.join(OTRA, 'soloconsulta')
 os.makedirs(RO_OTRO)
@@ -78,11 +87,28 @@ for _d in (VAULT, VAULT_OTRO, RO_OTRO):
     MIGAS.append(os.path.join(_d, '__delphi-temp', 'miga.txt'))
     open(MIGAS[-1], 'w').write('no me purgues\n')
 os.makedirs(os.path.join(VAULT, '.obsidian'))  # A11: la carpeta excluida
+# el CONTROL de A5/A10: una temporal normal, anidada, que la purga SI vacia
+PURGAME = os.path.join(JAIL, 'normal', '__delphi-temp', 'purgame.txt')
+os.makedirs(os.path.dirname(PURGAME))
+open(PURGAME, 'w').write('purgame\n')
+
+
+def unc(p):
+    """La misma carpeta por el recurso administrativo local (\\\\localhost\\C$\\...)."""
+    return '\\\\localhost\\%s$%s' % (p[0], p[2:])
+
+
+# A13: una raiz UNC, declarada por su alias 8.3 si lo tiene
+UNCDIR = os.path.join(BASE, 'uncrootfolder')
+os.makedirs(UNCDIR)
+open(os.path.join(UNCDIR, 'f.txt'), 'w').write('por unc\n')
+HAYUNC = os.path.isdir(unc(UNCDIR))
+UNC_DECL = unc(corta(UNCDIR) or UNCDIR)
 
 HAY83 = all(corta(p) and os.path.basename(corta(p)).lower() != os.path.basename(p).lower()
             for p in (OTRA, OTRA2, CONT, VAULT, REF))
 
-TOK, TOK2 = 'a83', 'otro'
+TOK, TOK2, TOK3 = 'a83', 'otro', 'unc'
 PORT = mc.puerto_libre()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
@@ -100,6 +126,10 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     'Roots=%s;%s' % (OTRA, corta(OTRA2) or OTRA2),
     'ReadOnlyPaths=%s' % RO_OTRO,
     'VaultPath=%s' % VAULT_OTRO,
+    '',
+    '[Workspace.Unc]',
+    'Token=%s' % TOK3,
+    'Roots=%s' % UNC_DECL,
     '',
 ]))
 
@@ -147,6 +177,8 @@ try:
         # A5 la purga del arranque ya paso: la referencia declarada en 8.3
         check('A5 la purga del arranque no vacio el __delphi-temp de una referencia declarada en 8.3',
               os.path.exists(MIGA_REF), TEMP_REF)
+        check('A5 ...control: la purga SI corrio (una temporal normal quedo vacia)',
+              not os.path.exists(PURGAME), PURGAME)
         # A11 las tools vault_* por el alias 8.3: comparaban el TEXTO
         AVC = os.path.basename(corta(os.path.join(VAULT, 'AGENTS-VAULT.md')))
         res, sc, t = llama('vault_append', {'path': AVC, 'content': 'intruso'})
@@ -205,10 +237,53 @@ try:
           res.get('isError') is True and mc.abre(t, 'SR_VAULT_NOT_CODE') and
           open(AVO).read() == '# de otro\n', t[:200])
     niega('A9 ...ni se borra', 'delphi_delete', {'path': VAULT_OTRO}, 'SR_VAULT_NOT_CODE', AVO)
+    VOC = corta(VAULT_OTRO)
+    if VOC and os.path.basename(VOC).lower() != 'vaultdeotro':
+        res, sc, t = llama('delphi_textedit', {'path': os.path.join(VOC, 'AGENTS-VAULT.md'),
+                                               'old': '# de otro', 'new': '# mio'})
+        check('A9 ...ni por su alias 8.3 (%s)' % os.path.basename(VOC),
+              res.get('isError') is True and mc.abre(t, 'SR_VAULT_NOT_CODE') and
+              open(AVO).read() == '# de otro\n', t[:200])
+        niega('A9 ...ni se borra por su alias', 'delphi_delete', {'path': VOC}, 'SR_VAULT_NOT_CODE', AVO)
+    else:
+        print('NOTA: A9 por alias sin medir: el vault de otro no tiene alias 8.3 (%r)' % VOC)
     # A10 la purga del arranque ya paso
     check('A10 la purga del arranque no vacio los temporales de los vaults ni de un '
           'ReadOnlyPaths de otro workspace', all(os.path.exists(m) for m in MIGAS),
           [m for m in MIGAS if not os.path.exists(m)])
+    check('A10 ...control: la purga SI corrio (una temporal normal quedo vacia)',
+          not os.path.exists(PURGAME), PURGAME)
+
+    # A12 copiar o empaquetar la carpeta que contiene el vault de OTRO
+    # workspace: lo propio va, el vault no (octava revision)
+    COPIA = os.path.join(JAIL, 'copiaotro')
+    res, sc, t = llama('delphi_move', {'path': CONOTRO, 'dest': COPIA, 'copy': True})
+    check('A12 copy=true de una carpeta con el vault de otro: lo propio si, el vault no',
+          not res.get('isError') and os.path.exists(os.path.join(COPIA, 'propio.txt')) and
+          not os.path.exists(os.path.join(COPIA, 'vaultdeotro')), t[:250])
+    ZA = os.path.join(JAIL, 'conotro.zip')
+    res, sc, t = llama('delphi_package', {'dir': CONOTRO, 'outfile': ZA})
+    nombres = zipfile.ZipFile(ZA).namelist() if os.path.exists(ZA) else []
+    check('A12 ...y delphi_package tampoco lo mete en el zip',
+          not res.get('isError') and any(n.endswith('propio.txt') for n in nombres) and
+          not any('vaultdeotro' in n for n in nombres), '%s | %s' % (t[:160], nombres))
+
+    # A13 una raiz UNC declarada (en 8.3 si tiene alias): el control positivo de
+    # E84 (un UNC de un sitio declarado SI se lee) y la regresion de la octava
+    # revision (declarada en 8.3, todo salia GUARD-002)
+    if HAYUNC:
+        cu = mc.Http(PORT, TOK3, t=180, respaldo_json=True)
+        cu.session('alias83-unc')
+        for nombre, ruta in (('mixta', unc(UNCDIR)), ('larga', unc(mc.larga(UNCDIR))), ('declarada', UNC_DECL)):
+            r = cu.call_msg('delphi_read', {'path': ruta + '\\f.txt'}, 120)
+            t = mc.texto(r, True)
+            check('A13 una raiz UNC declarada como %s se lee por su forma %s' % (UNC_DECL, nombre),
+                  'por unc' in t and not mc.fallo(t), t[:200])
+        r = cu.call_msg('delphi_read', {'path': unc(JAIL) + '\\propio.txt'}, 120)
+        check('A13 ...y un UNC fuera de ella sigue fuera (GUARD-002)',
+              mc.abre(mc.texto(r, True), 'SR_JAIL_FMT'), mc.texto(r, True)[:200])
+    else:
+        print('NOTA: A13 sin medir: %s no responde' % unc(UNCDIR))
 
     # A6 vault_read: la nota de 3 lineas es de 3 (salia de 4, con un 4| vacio)
     open(os.path.join(VAULT, 'nota.md'), 'w', newline='\n').write('# t\nuno\ndos\n')

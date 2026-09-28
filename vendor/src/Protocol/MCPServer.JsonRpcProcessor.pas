@@ -13,7 +13,6 @@ type
   TMCPJsonRpcProcessor = class
   private
     FManagerRegistry: IMCPManagerRegistry;
-    class function ParseJSONRequest(const RequestBody: string): TJSONObject;
     class function ExtractRequestID(JSONRequest: TJSONObject): TValue;
     class function CreateJSONResponse(const RequestID: TValue): TJSONObject;
     class procedure AddRequestIDToResponse(Response: TJSONObject; const RequestID: TValue);
@@ -28,6 +27,13 @@ type
       stdio lo componian a mano, con id null siempre (septima revision). }
     class function ErrorParaElCuerpo(const ARequestBody: string; ACodigo: Integer;
       const AMensaje: string): string;
+    { [local change 2026-09-28] UNA regla para "esto no se contesta": una
+      notificacion (method sin id) o una respuesta del cliente (result o
+      error sin method), sueltas o en un lote no vacio de ellas. La usan
+      ProcessRequest (stdio calla) y el HTTP (su 202): eran dos, y una
+      respuesta del cliente oia 202 por HTTP y SYS-032 por stdio; un
+      objeto vacio no oia nada y un lote vacio un 202 (octava revision). }
+    class function NoSeContesta(AValor: TJSONValue): Boolean;
   end;
 
 const
@@ -36,11 +42,15 @@ const
   JSONRPC_METHOD_NOT_FOUND = -32601;
   JSONRPC_INVALID_PARAMS = -32602;
   JSONRPC_INTERNAL_ERROR = -32603;
+  JSONRPC_RESOURCE_NOT_FOUND = -32002; // [local change] el de MCP
 
 type
   { [local change 2026-09-27] Un metodo que no existe: su CLASE decide el
     codigo JSON-RPC (-32601), no su texto. }
   EMetodoNoExiste = class(Exception);
+  { [local change 2026-09-28] Un recurso que no existe: -32002, el codigo
+    de MCP (salia -32602; octava revision). Es un fallo del llamador. }
+  ERecursoNoExiste = class(EArgumentException);
 
 implementation
 
@@ -53,23 +63,6 @@ constructor TMCPJsonRpcProcessor.Create(ManagerRegistry: IMCPManagerRegistry);
 begin
   inherited Create;
   FManagerRegistry := ManagerRegistry;
-end;
-
-class function TMCPJsonRpcProcessor.ParseJSONRequest(const RequestBody: string): TJSONObject;
-var
-  ParsedValue: TJSONValue;
-begin
-  ParsedValue := TJSONObject.ParseJSONValue(RequestBody);
-  if not Assigned(ParsedValue) then
-    raise EArgumentException.Create(MsgText(SR_SYS_JSON_INVALIDO));
-
-  if not (ParsedValue is TJSONObject) then
-  begin
-    ParsedValue.Free;
-    raise EArgumentException.Create(MsgText(SR_SYS_JSON_NO_OBJETO));
-  end;
-
-  Result := ParsedValue as TJSONObject;
 end;
 
 class function TMCPJsonRpcProcessor.ExtractRequestID(JSONRequest: TJSONObject): TValue;
@@ -132,6 +125,28 @@ begin
     V.Free;
   end;
   Result := CreateErrorResponse(Id, ACodigo, AMensaje);
+end;
+
+class function TMCPJsonRpcProcessor.NoSeContesta(AValor: TJSONValue): Boolean;
+var
+  O: TJSONObject;
+  I: Integer;
+begin
+  if AValor is TJSONObject then
+  begin
+    O := TJSONObject(AValor);
+    if O.GetValue('method') <> nil then
+      Exit(O.GetValue('id') = nil);
+    Exit((O.GetValue('result') <> nil) or (O.GetValue('error') <> nil));
+  end;
+  // un lote (el protocolo 2025-03-26 los tenia): solo si todo lo que
+  // trae son objetos que no se contestan; el vacio es -32600
+  Result := (AValor is TJSONArray) and (TJSONArray(AValor).Count > 0);
+  if Result then
+    for I := 0 to TJSONArray(AValor).Count - 1 do
+      if not (TJSONArray(AValor).Items[I] is TJSONObject) or
+         not NoSeContesta(TJSONArray(AValor).Items[I]) then
+        Exit(False);
 end;
 
 class function TMCPJsonRpcProcessor.CreateJSONResponse(const RequestID: TValue): TJSONObject;
@@ -201,14 +216,36 @@ var
   Params: TJSONObject;
   ParamsValue: TJSONValue;
   RequestID: TValue;
+  Valor: TJSONValue;
 begin
   Result := '';
   JSONRequest := nil;
   JSONResponse := nil;
+  Valor := nil;
 
   try
     try
-      JSONRequest := ParseJSONRequest(RequestBody);
+      // [local change 2026-09-28] JSON que no se lee: -32700; lo que no se
+      // contesta (NoSeContesta, la regla del HTTP tambien): nada; lo que no
+      // es un objeto (un lote con peticiones, [], un valor suelto): -32600,
+      // una peticion mal formada, no un JSON roto (octava revision)
+      Valor := TJSONObject.ParseJSONValue(RequestBody);
+      if not Assigned(Valor) then
+        Exit(CreateErrorResponse(TValue.Empty, JSONRPC_PARSE_ERROR,
+          MsgText(SR_SYS_JSON_INVALIDO)));
+      if NoSeContesta(Valor) then
+      begin
+        if CampoDeTexto(Valor, 'method') = 'notifications/initialized' then
+          TLogger.Info('MCP Initialized notification received')
+        else
+          TLogger.Info('Notification or client response received: ' +
+            CampoDeTexto(Valor, 'method'));
+        Exit;
+      end;
+      if not (Valor is TJSONObject) then
+        Exit(CreateErrorResponse(TValue.Empty, JSONRPC_INVALID_REQUEST,
+          MsgText(SR_SYS_JSON_NO_OBJETO)));
+      JSONRequest := TJSONObject(Valor);
 
       RequestID := ExtractRequestID(JSONRequest);
 
@@ -216,25 +253,16 @@ begin
       // un numero no son un nombre de metodo
       MethodName := CampoDeTexto(JSONRequest, 'method');
 
-      // Notifications (requests WITHOUT an id member) should not have a response
-      if JSONRequest.GetValue('id') = nil then
-      begin
-        if MethodName = 'notifications/initialized' then
-          TLogger.Info('MCP Initialized notification received')
-        else
-          TLogger.Info('Notification received: ' + MethodName);
-        Exit;
-      end;
-
-      // [local change 2026-09-28] un id que no es texto ni entero (null
-      // incluido: MCP no lo admite) y un method que no es texto son una
-      // peticion mal formada: -32600, con su etiqueta
-      if not IdValido(JSONRequest.GetValue('id')) then
-        Exit(CreateErrorResponse(TValue.Empty, JSONRPC_INVALID_REQUEST,
-          MsgText(SR_SYS_ID_NO_VALIDO)));
+      // [local change 2026-09-28] sin method (un {} tambien: no es una
+      // notificacion ni una respuesta) o con un id que no es texto ni
+      // entero (null incluido: MCP no lo admite): una peticion mal
+      // formada, -32600, con su etiqueta
       if MethodName = '' then
         Exit(CreateErrorResponse(RequestID, JSONRPC_INVALID_REQUEST,
           MsgText(SR_SYS_METODO_NO_TEXTO)));
+      if not IdValido(JSONRequest.GetValue('id')) then
+        Exit(CreateErrorResponse(TValue.Empty, JSONRPC_INVALID_REQUEST,
+          MsgText(SR_SYS_ID_NO_VALIDO)));
 
       JSONResponse := CreateJSONResponse(RequestID);
 
@@ -267,10 +295,12 @@ begin
         // [local change 2026-09-27] el codigo por la CLASE de la excepcion,
         // nunca por lo que diga su texto (se buscaba "not found" en el)
         ErrorCode := JSONRPC_INTERNAL_ERROR;
-        if not Assigned(JSONRequest) then
+        if not Assigned(Valor) then
           ErrorCode := JSONRPC_PARSE_ERROR
         else if E is EMetodoNoExiste then
           ErrorCode := JSONRPC_METHOD_NOT_FOUND
+        else if E is ERecursoNoExiste then
+          ErrorCode := JSONRPC_RESOURCE_NOT_FOUND
         else if EsFalloDelLlamador(E) then // la misma regla que ToolsManager
           ErrorCode := JSONRPC_INVALID_PARAMS;
 
@@ -278,7 +308,7 @@ begin
       end;
     end;
   finally
-    JSONRequest.Free;
+    Valor.Free; // JSONRequest es Valor visto como objeto
     JSONResponse.Free;
   end;
 end;

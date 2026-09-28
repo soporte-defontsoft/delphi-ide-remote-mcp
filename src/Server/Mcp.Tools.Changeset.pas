@@ -63,6 +63,7 @@ type
 implementation
 
 uses
+  System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.Changeset;
@@ -76,6 +77,24 @@ end;
 
 function TDelphiChangesetTool.ExecuteWithParams(const Params: TDelphiChangesetParams): string;
 begin
+  // lo que no va con el COMANDO se dice (Lsp.Guard.ParametroQueNoVa): commit
+  // o preview con kind / path / old / n se ignoraban (octava revision). Lo
+  // de cada kind lo mira stage (CHSET-030)
+  var Suyos: string;
+  var Sobra := ParametroQueNoVa(Params.Command.Trim.ToLower, [
+      'begin', '',
+      'status', 'id',
+      'stage', 'id kind path dest old new content atline fragment',
+      'unstage', 'id n', 'undo', 'id n',
+      'preview', 'id', 'commit', 'id', 'rollback', 'id'],
+    ['id', Params.Id, '', 'kind', Params.Kind, '', 'path', Params.Path, '',
+     'dest', Params.Dest, '', 'old', Params.Old, '', 'new', Params.New, '',
+     'content', Params.Content, '', 'fragment', Params.Fragment, '',
+     'atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
+     'n', IfThen(Params.N <> 0, IntToStr(Params.N)), ''], Suyos);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_CHANGESET_NO_VA_CON_COMANDO_FMT, [Sobra, Params.Command.Trim.ToLower,
+      Params.Command.Trim.ToLower, ONinguno(Suyos)]));
   Result := ChangesetExecute(Params.Command, Params.Id, Params.Kind.Trim.ToLower,
     Params.Path, Params.Dest, Params.Old, Params.New, Params.Content,
     Params.AtLine, Params.N, Params.Fragment);

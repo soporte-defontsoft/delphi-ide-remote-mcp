@@ -220,7 +220,11 @@ end;
 function NormPath(const P: string): string;
 begin
   // la forma LARGA (Lsp.Guard.LongCanonical): UPROVE~1.PAS y
-  // UProveedorModelo.pas son el mismo fichero (sexta revision)
+  // UProveedorModelo.pas son el mismo fichero (sexta revision). Salvo un
+  // UNC que no es de ningun sitio declarado: estas rutas salen de lo que
+  // dice un .dpr, y alargarla abria SMB hacia ese host (octava revision)
+  if UncFueraDeLugares(P) then
+    Exit(P.ToLower);
   Result := LongCanonical(P).ToLower;
 end;
 
@@ -294,10 +298,10 @@ begin
   begin
     if DesignerBinaryToText(B, Enc) <> '' then
       Exit;
-    Lines := Enc.Replace(#13#10, #10).Split([#10]);
+    Lines := SplitToLines(Enc); // el troceador de todos: un CR suelto es salto
   end
   else
-    Lines := PatchLoadText(ADesigner, Enc).Replace(#13#10, #10).Split([#10]);
+    Lines := SplitToLines(PatchLoadText(ADesigner, Enc));
   for Line in Lines do
   begin
     M := TRegEx.Match(Line, '^\s*(object|inherited)\s+(\w+)\s*:\s*(\w+)', [roIgnoreCase]);
@@ -962,7 +966,7 @@ begin
     // cada linea se reindenta desde cero, que la que venia con su sangria
     // propia (la vecina de una entrada quitada) salia con las dos (medido
     // en vivo con removeuses, 2026-09-23)
-    var Lineas := Entradas[I].Replace(#13#10, #10).Split([#10]);
+    var Lineas := SplitToLines(Entradas[I]);
     for var J := 0 to High(Lineas) do
       Lineas[J] := Lineas[J].Trim;
     // el separador, detras de la ultima linea con codigo y delante de su //
@@ -1012,7 +1016,7 @@ begin
   if TRegEx.IsMatch(Dpr, '\bCreateForm\s*\(\s*' + TRegEx.Escape(AInfo.ClassName) + '\s*,', [roIgnoreCase]) then
     Exit(True); // already there
   NL := SaltoDominante(Dpr);
-  Lines := Dpr.Replace(#13#10, #10).Split([#10]);
+  Lines := SplitToLines(Dpr); // el troceador del motor: un CR suelto es salto
   Last := -1;
   RunAt := -1;
   for I := 0 to High(Lines) do
@@ -1057,7 +1061,7 @@ var
 begin
   Result := 0;
   NL := SaltoDominante(Dpr);
-  Lines := Dpr.Replace(#13#10, #10).Split([#10]);
+  Lines := SplitToLines(Dpr);
   if AClassName <> '' then
     Pat := '^\s*Application\.CreateForm\s*\(\s*' + TRegEx.Escape(AClassName) + '\s*,'
   else if AFormName <> '' then

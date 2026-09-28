@@ -312,7 +312,7 @@ redistributed.
 claude mcp add delphi -- C:/path/to/DelphiLspMcp.exe
 ```
 
-Without a token that local process is **read-only** (it can look, never touch). To let it write, give it a workspace's `Token=` in its environment — it then lives inside that workspace's `Roots`, exactly like an HTTP client with the Bearer:
+Without a token that local process is **read-only** (it can look, never touch) - unless it was launched with its own jail in `DELPHI_MCP_ROOTS`, the harness/dev mode. To let it write, give it a workspace's `Token=` in its environment — it then lives inside that workspace's `Roots`, exactly like an HTTP client with the Bearer:
 
 ```bash
 claude mcp add delphi -e DELPHI_MCP_TOKEN=YOUR_TOKEN -- C:/path/to/DelphiLspMcp.exe
@@ -396,7 +396,8 @@ section is completely inert.
    in v0.98). A caller authenticates *only* through a `[Workspace.<name>]`
    section — its own `Token`, optional `ReadOnlyToken`, its `Roots` and its
    configs. Tokenless HTTP is always **401**; a tokenless *local* stdio
-   process may look, never touch (read-only).
+   process may look, never touch (read-only) - unless it declares its
+   own jail with `DELPHI_MCP_ROOTS` (see 2).
 2. **The jail** — where each credential may touch disk: a world of its own
    per workspace token. (A locally launched process may declare a private
    jail with `DELPHI_MCP_ROOTS` and the other `DELPHI_MCP_*` variables —

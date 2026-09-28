@@ -270,7 +270,9 @@ begin
         end;
         if not HasDef then
         begin
-          Lines := PatchLoadText(DefPath, EncName).Replace(#13#10, #10).Split([#10]);
+          // las lineas como las cuenta el LSP (CRLF, LF o CR): el troceador
+          // de todos (Lsp.Patch.SplitToLines)
+          Lines := SplitToLines(PatchLoadText(DefPath, EncName));
           if (DefLine >= 0) and (DefLine < Length(Lines)) then
           begin
             Chg := TJSONObject.Create;
@@ -504,7 +506,7 @@ begin
       Hechas.Add(P + '|' + IntToStr(L0));
       if not Textos.TryGetValue(P.ToLower, Lineas) then
       begin
-        Lineas := PatchLoadText(P, EncName).Replace(#13#10, #10).Split([#10]);
+        Lineas := SplitToLines(PatchLoadText(P, EncName));
         Textos.Add(P.ToLower, Lineas);
       end;
       if (L0 < 0) or (L0 >= Length(Lineas)) then

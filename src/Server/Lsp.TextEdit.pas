@@ -176,14 +176,11 @@ begin
   Text := PatchLoadText(A.Path, EncNm);
   var Antes := Text; // para saber si la edicion cambia algo
   Eol := SaltoDominante(Text); // el de todos (Lsp.Patch)
-  EndsWithEol := Text.EndsWith(#10);
+  EndsWithEol := TieneSaltoFinal(Text); // un CR suelto tambien ("uno\rdos\r" lo perdia)
   Lines := LineasDelTexto(Text); // sin la fantasma del salto final (Lsp.Patch)
 
   // One-full-line anchor: trimmed comparison, so indentation may be omitted.
-  SetLength(Matches, 0);
-  for I := 0 to High(Lines) do
-    if Trim(Lines[I]) = Trim(A.OldLine) then
-      Matches := Matches + [I];
+  Matches := LineasDondeCasaElAncla(Lines, A.OldLine, False); // la regla del motor
 
   if Length(Matches) = 0 then
     // La negativa es la de delphi_edit, su gemela: UN texto

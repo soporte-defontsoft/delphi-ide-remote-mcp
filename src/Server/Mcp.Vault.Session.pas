@@ -176,9 +176,9 @@ begin
     end
     else // prompts/get
     begin
-      Name := '';
-      if Assigned(Params) then
-        Params.TryGetValue<string>('name', Name);
+      // el lector de todos los campos del cliente (null o no texto = falta):
+      // "name": 5 buscaba el prompt "5" (octava revision)
+      Name := CampoDeTexto(Params, 'name');
       // Como resources/read: lo que falta en la llamada es -32602 con su
       // etiqueta, y un prompt que no esta (tampoco sin vault: prompts/list no
       // lo trae) es NOT_FOUND; salia -32603 sin etiqueta (tercera revision)

@@ -51,6 +51,7 @@ type
 implementation
 
 uses
+  System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,     // ParametroQueNoVa: lo que no va con el kind se dice
   Lsp.Patch,     // EnterFileEdit / LeaveFileEdit: el cerrojo de escritura
@@ -95,9 +96,12 @@ begin
   // lo que no es de este kind se dice (Lsp.Guard.ParametroQueNoVa): content
   // con un proyecto o un form, formname con una unit, se ignoraban y
   // contestaba CREATED con el esqueleto de siempre (septima revision)
-  if K.StartsWith('project-') then
+  // solo los kinds que EXISTEN: uno que no, lo dice su negativa (CREATE-034),
+  // no una tabla que lo daba por bueno (octava revision)
+  if MatchText(K, ['project-console', 'project-vcl', 'project-fmx',
+      'project-package', 'project-test']) then
     Familia := 'project'
-  else if K.StartsWith('form-') or K.StartsWith('frame-') or (K = 'datamodule') then
+  else if MatchText(K, ['form-vcl', 'form-fmx', 'frame-vcl', 'frame-fmx', 'datamodule']) then
     Familia := 'form'
   else
     Familia := K;

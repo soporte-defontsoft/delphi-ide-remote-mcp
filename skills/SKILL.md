@@ -132,7 +132,8 @@ handshake.
   value=xFF112233` changes one property (value exactly as the file writes
   it), `clone style=cardstyle name=cardstyle_alt` adds a variant and
   `delete style=cardstyle_alt` removes one (the `__delphi-patch` copy is
-  the way back: `delphi_move` it over the file).
+  the way back: `delphi_delete` the file, then `delphi_move` the copy back
+  to its name - `delphi_move` never overwrites).
 - Before and after touching a `.fmx`: `delphi_styles command=lint
   path=<Styles folder> project=<.dproj>` - a `StyleLookup` that no style
   defines renders with the default look and nobody tells you.

@@ -287,6 +287,18 @@ check('append: sin anchor anade al final', mc.abre(out, 'SK_VAULT_ANADIDO_COPIA_
 after = open(LOG, encoding='utf-8').read()
 check('append: el contenido esta y lo viejo se conserva',
       'entrada nueva' in after and 'entrada antigua' in after, after[:200])
+# una nota con el atributo de solo lectura: SYS-029 (salia SYS-028 "acceso
+# denegado", y un agente lo tomaba por un permiso; octava revision)
+RO_NOTA = os.path.join(VAULT, 'projects', 'delphi', 'ro.md')
+open(RO_NOTA, 'w', encoding='utf-8').write('# fija\n')
+os.chmod(RO_NOTA, 0o444)
+try:
+    out = s.call('vault_append', {"path": "projects/delphi/ro.md", "content": "- x\n"})
+    check('append: una nota +R es SYS-029 y no se toca',
+          mc.abre(out, 'SR_SOLO_LECTURA_ATRIBUTO_FMT') and
+          open(RO_NOTA, encoding='utf-8').read() == '# fija\n', out[:200])
+finally:
+    os.chmod(RO_NOTA, 0o666)
 
 bk = glob.glob(os.path.join(VAULT, 'backups', 'mcp', '*', 'projects', 'delphi', 'log.md'))
 check('BACKUP (regla 11): copia previa creada en backups/mcp/<stamp>/', len(bk) == 1, bk)

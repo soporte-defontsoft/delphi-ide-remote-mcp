@@ -204,44 +204,51 @@ begin
   end;
 end;
 
-{ Resolves one edit anchor against the CURRENT text: 1 = unique, 0 = absent,
-  >1 = ambiguous (AtLine may pin it). }
-{ The 1-based line an anchor resolves to, 0 when it does not resolve. }
-function AnchorLine(const AText, ALine: string; AAtLine: Integer): Integer;
-var
-  Lines: TArray<string>;
-  I: Integer;
+{ Los ficheros que edita el motor de Pascal (delphi_edit); el resto, el de
+  texto. UNA lista para el commit (que motor aplica) y el create (que
+  codificacion), que la tenian escrita cada uno (octava revision). }
+function EsDelMotorPascal(const APath: string): Boolean;
 begin
-  Result := 0;
-  Lines := LineasDelTexto(AText); // los saltos como delphi_read (CR tambien)
-  if (AAtLine > 0) and (AAtLine <= Length(Lines)) and
-     (Lines[AAtLine - 1].Trim = ALine.Trim) then
-    Exit(AAtLine);
-  for I := 0 to High(Lines) do
-    if Lines[I].Trim = ALine.Trim then
-    begin
-      if Result <> 0 then
-        Exit(0); // more than one: ambiguous, no single line to name
-      Result := I + 1;
-    end;
+  Result := MatchText(TPath.GetExtension(APath),
+    ['.pas', '.dpr', '.dpk', '.inc', '.dfm', '.fmx']);
 end;
 
-function AnchorCount(const AText, ALine: string; AAtLine: Integer): Integer;
-var
-  Lines: TArray<string>;
-  I: Integer;
+{ Como resuelve un ancla el motor que la va a aplicar (la misma pregunta,
+  Lsp.Patch.LineasDondeCasaElAncla): cuantas lineas casan (1 = unica, 0 =
+  no esta, >1 = ambigua) y cual (1-based, 0 si no hay una). Con atline, la
+  de atline si es de las que casan, como en los motores. El preview
+  preguntaba con OTRA regla (exacta en una funcion, recortada en la otra) y
+  decia limpio lo que el commit deshacia (octava revision). }
+{ La linea de un delete-line es la de old, con la regla del motor del
+  fichero (sin la sangria en Pascal, recortadas en texto): se comparaba
+  exacta (octava revision). }
+function LineaEsLaDeOld(const ALinea, AOld, APath: string): Boolean;
 begin
-  Result := 0;
-  Lines := LineasDelTexto(AText);
+  Result := Length(LineasDondeCasaElAncla([ALinea], AOld, EsDelMotorPascal(APath))) > 0;
+end;
+
+function ResuelveAncla(const AText, APath, ALine: string; AAtLine: Integer;
+  out ALinea: Integer): Integer;
+var
+  Hits: TArray<Integer>;
+  H: Integer;
+begin
+  ALinea := 0;
+  Hits := LineasDondeCasaElAncla(LineasDelTexto(AText), ALine, EsDelMotorPascal(APath));
   if AAtLine > 0 then
   begin
-    if (AAtLine <= Length(Lines)) and (Lines[AAtLine - 1] = ALine) then
-      Result := 1;
+    Result := 0;
+    for H in Hits do
+      if H + 1 = AAtLine then
+      begin
+        Result := 1;
+        ALinea := AAtLine;
+      end;
     Exit;
   end;
-  for I := 0 to High(Lines) do
-    if Lines[I] = ALine then
-      Inc(Result);
+  Result := Length(Hits);
+  if Result = 1 then
+    ALinea := Hits[0] + 1;
 end;
 
 { Whether APath will be there when its turn comes, GIVEN the ops already
@@ -290,8 +297,7 @@ begin
         // the plain-text one - a transaction that could not touch a .md or a
         // .json next to the code would be half a transaction (field
         // 2026-08-24).
-        if MatchText(TPath.GetExtension(Op.Path),
-          ['.pas', '.dpr', '.dpk', '.inc', '.dfm', '.fmx']) then
+        if EsDelMotorPascal(Op.Path) then
         begin
           FillChar(A, SizeOf(A), 0);
           A.Path := Op.Path;
@@ -325,7 +331,7 @@ begin
           Exit;
         end;
         CrearCarpeta(TPath.GetDirectoryName(Op.Path));
-        if MatchText(TPath.GetExtension(Op.Path), ['.pas', '.dpr', '.dpk', '.inc', '.dfm', '.fmx']) then
+        if EsDelMotorPascal(Op.Path) then
           Enc := NewFileEncName
         else
           Enc := 'utf8';
@@ -367,14 +373,14 @@ begin
         var Txt := PatchLoadText(Op.Path, Enc);
         var Eol := SaltoDominante(Txt);
         var Ls := LineasDelTexto(Txt);
-        var SaltoFinal := Txt.EndsWith(#10) or Txt.EndsWith(#13);
+        var SaltoFinal := TieneSaltoFinal(Txt);
         if (Op.AtLine < 1) or (Op.AtLine > Length(Ls)) then
         begin
           AError := MsgFmt(SF_CHSET_LINEA_NO_EXISTE_FMT,
             [Op.AtLine, TPath.GetFileName(Op.Path), Length(Ls)]);
           Exit;
         end;
-        if (Op.OldLine <> '') and (Ls[Op.AtLine - 1] <> Op.OldLine) then
+        if (Op.OldLine <> '') and not LineaEsLaDeOld(Ls[Op.AtLine - 1], Op.OldLine, Op.Path) then
         begin
           AError := MsgFmt(SF_CHSET_LINEA_NO_ESPERADA_FMT,
             [Op.AtLine, Ls[Op.AtLine - 1]]);
@@ -581,19 +587,23 @@ begin
       else if AKind = 'move' then Op.Kind := opMove
       else
         Exit(MsgText(SR_CHANGESET_KIND));
-      // lo que no es de este kind se dice, no se ignora: content solo va con
-      // create; new/fragment, solo con edit; old, con edit y con delete-line,
-      // que lo compara con su linea (se rechazaba; septima revision)
-      if (Op.Kind <> opCreate) and (AContent <> '') then
-        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['content', AKind]));
-      if (Op.Kind <> opEdit) and ((ANewText <> '') or (AFragment <> '')) then
-        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['new/fragment', AKind]));
-      if not (Op.Kind in [opEdit, opDeleteLine]) and (AOldLine <> '') then
-        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['old', AKind]));
-      if (Op.Kind <> opMove) and (ADest.Trim <> '') then
-        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['dest', AKind]));
-      if (Op.Kind in [opCreate, opDelete, opMove]) and (AAtLine > 0) then
-        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['atline', AKind]));
+      // lo que no es de este kind se dice, no se ignora - por la regla de
+      // todas las tools de varios modos (Lsp.Guard.ParametroQueNoVa): era
+      // una copia propia que no decia lo que el kind toma (octava revision).
+      // delete-line toma old: lo compara con su linea
+      var SuyosK: string;
+      var SobraK := ParametroQueNoVa(KindName(Op.Kind), [
+          'edit', 'old new fragment atline',
+          'create', 'content',
+          'delete', '',
+          'delete-line', 'atline old',
+          'move', 'dest'],
+        ['content', AContent, '', 'old', AOldLine, '', 'new', ANewText, '',
+         'fragment', AFragment, '', 'dest', ADest, '',
+         'atline', IfThen(AAtLine > 0, IntToStr(AAtLine)), ''], SuyosK);
+      if SobraK <> '' then
+        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, [SobraK, AKind, AKind,
+          ONinguno('path ' + SuyosK)]));
       if APath.Trim = '' then
         Exit(MsgText(SR_CHANGESET_NEED_PATH));
       // Lo que se escribe o se borra, por la puerta de DESTINO (jaula +
@@ -605,6 +615,15 @@ begin
         Denied := WriteTargetDenied(APath);
       if Denied <> '' then
         Exit(Denied);
+      // un fichero con separador final nombra una CARPETA (GUARD-025), y una
+      // carpeta en su sitio no es un fichero: se dice al apilar, no en el
+      // preview (octava revision)
+      if Op.Kind in [opEdit, opCreate, opDelete, opDeleteLine] then
+      begin
+        Denied := CarpetaEnVezDeFichero(APath);
+        if Denied <> '' then
+          Exit(Denied);
+      end;
       Op.Path := TPath.GetFullPath(APath);
       // What the commit is going to refuse, refuse now. A .dproj staged
       // happily, previewed "clean" and then blew up at commit, taking the
@@ -677,6 +696,13 @@ begin
             Denied := WriteTargetDenied(ADest);
             if Denied <> '' then
               Exit(Denied);
+            // el destino de un FICHERO no acaba en separador (GUARD-025)
+            if TFile.Exists(Op.Path) then
+            begin
+              Denied := CarpetaEnVezDeFichero(ADest);
+              if Denied <> '' then
+                Exit(Denied);
+            end;
             Op.Dest := TPath.GetFullPath(ADest);
             if not WillExist(C, Op.Path) then
               Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
@@ -742,6 +768,14 @@ begin
             Obj.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_VIRTUAL));
             Continue;
           end;
+          // delete de un fichero +R: el commit lo rechaza (SYS-029) y deshace la
+          // tanda; el preview decia limpio (octava revision)
+          if (Op.Kind = opDelete) and TFile.Exists(Op.Path) and
+             (SoloLecturaDenegado(Op.Path) <> '') then
+          begin
+            Obj.AddPair('anchor', SoloLecturaDenegado(Op.Path));
+            Inc(N);
+          end;
           // delete-line: el preview dice lo que el commit va a rechazar (una
           // linea que no existe, o que no es la de old); decia "clean" y el
           // commit deshacia la tanda entera (septima revision)
@@ -755,7 +789,7 @@ begin
                 [Op.AtLine, TPath.GetFileName(Op.Path), Length(Ls)]));
               Inc(N);
             end
-            else if (Op.OldLine <> '') and (Ls[Op.AtLine - 1] <> Op.OldLine) then
+            else if (Op.OldLine <> '') and not LineaEsLaDeOld(Ls[Op.AtLine - 1], Op.OldLine, Op.Path) then
             begin
               Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_NO_ESPERADA_FMT,
                 [Op.AtLine, Ls[Op.AtLine - 1]]));
@@ -772,9 +806,10 @@ begin
             // only one of the three that never showed its own (field round
             // 10) - which is also the earliest warning that an anchor
             // resolved somewhere unexpected.
-            Obj.AddPair('atline', TJSONNumber.Create(
-              AnchorLine(Text, Op.OldLine, Op.AtLine)));
-            case AnchorCount(Text, Op.OldLine, Op.AtLine) of
+            var LineaAncla: Integer;
+            var CuantasAncla := ResuelveAncla(Text, Op.Path, Op.OldLine, Op.AtLine, LineaAncla);
+            Obj.AddPair('atline', TJSONNumber.Create(LineaAncla));
+            case CuantasAncla of
               1: Obj.AddPair('anchor', 'ok');
               0: begin
                    Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_NO_ENCONTRADA));

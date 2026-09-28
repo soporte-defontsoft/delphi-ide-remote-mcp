@@ -85,7 +85,6 @@ type
     procedure HandlePostRequestJSON(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const SessionID: string);
     function GetNextEventID: string;
     function AcceptsSSE(const AcceptHeader: string): Boolean;
-    function IsRequestOnlyNotificationsOrResponses(JSONRequest: TJSONValue): Boolean;
   public
     constructor Create(Owner: TComponent); override;
     destructor Destroy; override;
@@ -148,6 +147,8 @@ begin
   if Estado = ssExpired then
     Motivo := MsgFmt(SR_SESSION_EXPIRED_FMT,
       [FormatFloat('0.##', SessionTimeoutMinutes, TFormatSettings.Invariant)])
+  else if Estado = ssEvicted then
+    Motivo := MsgFmt(SR_SESSION_EXPULSADA_FMT, [SESIONES_MAX])
   else
     Motivo := MsgText(SR_SESSION_UNKNOWN);
   AResponseInfo.ResponseNo := 404;
@@ -271,7 +272,9 @@ procedure AnunciaSesion(AResponseInfo: TIdHTTPResponseInfo;
 var
   Resp, Res, Sid: TJSONValue;
 begin
-  if ASessionID <> '' then
+  // ...si sigue VIVA: un initialize que falla con una cabecera muerta la
+  // devolvia en la cabecera de un 200 (octava revision)
+  if (ASessionID <> '') and (SessionState(ASessionID) = ssAlive) then
     AResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := ASessionID;
   if Pos('"sessionId"', AResponse) = 0 then
     Exit;
@@ -606,12 +609,14 @@ var
 begin
   AcceptHeader := RequestInfo.RawHeaders.Values['Accept'];
 
+  // la misma puerta que el POST: una sesion muerta es 404, no un flujo...
+  // ni la ficha del endpoint (el GET sin event-stream no la tenia; octava)
+  if SesionMuertaContesta(RequestInfo.RawHeaders.Values['Mcp-Session-Id'], '',
+       ResponseInfo) then
+    Exit;
+
   if AcceptsSSE(AcceptHeader) then
   begin
-    // la misma puerta que el POST: una sesion muerta es 404, no un flujo
-    if SesionMuertaContesta(RequestInfo.RawHeaders.Values['Mcp-Session-Id'], '',
-         ResponseInfo) then
-      Exit;
     TLogger.Debug('Received GET request - opening SSE stream for server-initiated messages');
 
     ResponseInfo.ContentType := 'text/event-stream';
@@ -687,7 +692,9 @@ begin
   try
     JSONRequest := TJSONObject.ParseJSONValue(RequestBody);
 
-    if Assigned(JSONRequest) and IsRequestOnlyNotificationsOrResponses(JSONRequest) then
+    // [local change 2026-09-28] la regla del procesador, la de stdio: eran
+    // dos (octava revision)
+    if TMCPJsonRpcProcessor.NoSeContesta(JSONRequest) then
     begin
       TLogger.Info('Request contains only notifications/responses, returning 202 Accepted');
       ResponseInfo.ResponseNo := HTTP_ACCEPTED;
@@ -775,49 +782,6 @@ end;
 function TMCPIdHTTPServer.AcceptsSSE(const AcceptHeader: string): Boolean;
 begin
   Result := Pos('text/event-stream', AcceptHeader) > 0;
-end;
-
-function TMCPIdHTTPServer.IsRequestOnlyNotificationsOrResponses(JSONRequest: TJSONValue): Boolean;
-var
-  Arr: TJSONArray;
-  ErrorValue: TJSONValue;
-  I: Integer;
-  IdValue: TJSONValue;
-  MethodValue: TJSONValue;
-  Obj: TJSONObject;
-  ResultValue: TJSONValue;
-begin
-  if JSONRequest is TJSONObject then
-  begin
-    Obj := JSONRequest as TJSONObject;
-    MethodValue := Obj.GetValue('method');
-    IdValue := Obj.GetValue('id');
-    ResultValue := Obj.GetValue('result');
-    ErrorValue := Obj.GetValue('error');
-
-    if Assigned(MethodValue) and not Assigned(IdValue) then
-      Exit(True);
-
-    if Assigned(ResultValue) or Assigned(ErrorValue) then
-      Exit(True);
-
-    Result := False;
-  end
-  else if JSONRequest is TJSONArray then
-  begin
-    Arr := JSONRequest as TJSONArray;
-    Result := True;
-    for I := 0 to Arr.Count - 1 do
-    begin
-      if not IsRequestOnlyNotificationsOrResponses(Arr.Items[I]) then
-      begin
-        Result := False;
-        Break;
-      end;
-    end;
-  end
-  else
-    Result := False;
 end;
 
 procedure TMCPIdHTTPServer.HandlePostRequestSSE(RequestInfo: TIdHTTPRequestInfo;

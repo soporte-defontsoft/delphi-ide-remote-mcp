@@ -338,8 +338,9 @@ begin
     DesignerFileToText(ADfm, DfmTxt) // sano: comprobado arriba
   else
     DfmTxt := PatchLoadText(ADfm, Enc);
-  Result := BindingReport(DfmTxt.Replace(#13#10, #10).Split([#10]),
-    PatchLoadText(Pas, Enc).Replace(#13#10, #10).Split([#10]), Pas);
+  // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto)
+  Result := BindingReport(SplitToLines(DfmTxt),
+    SplitToLines(PatchLoadText(Pas, Enc)), Pas);
 end;
 
 function DesignerBindingWarnings(const ADfm: string;
@@ -356,7 +357,7 @@ begin
   Pas := TPath.ChangeExtension(ADfm, '.pas');
   if not TFile.Exists(Pas) then
     Exit;
-  S := BindingReport(ADfmLines, PatchLoadText(Pas, Enc).Replace(#13#10, #10).Split([#10]), Pas);
+  S := BindingReport(ADfmLines, SplitToLines(PatchLoadText(Pas, Enc)), Pas);
   J := TJSONObject.ParseJSONValue(S);
   if not (J is TJSONObject) then
   begin
@@ -401,7 +402,7 @@ begin
     Txt := PatchLoadText(ADfm, Enc);
   // La misma expresion que el informe, y como la aplica el informe: sobre
   // cada linea RECORTADA (empieza por ^On, sin sangria).
-  for var Linea in Txt.Replace(#13#10, #10).Split([#10]) do
+  for var Linea in SplitToLines(Txt) do
   begin
     M := TRegEx.Match(Linea.Trim, EVENT_LINE_RE);
     if M.Success and SameText(M.Groups[2].Value, AMethod) then

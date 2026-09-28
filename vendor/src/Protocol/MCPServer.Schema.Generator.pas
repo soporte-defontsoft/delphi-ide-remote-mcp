@@ -129,7 +129,9 @@ end;
 class function TMCPSchemaGenerator.GetJsonTypeFromRttiType(RttiType: TRttiType): string;
 begin
   case RttiType.TypeKind of
-    tkInteger, tkInt64: Result := 'number';
+    // [local change 2026-09-28] el binder solo acepta enteros: "number"
+    // prometia 1.5 (octava revision)
+    tkInteger, tkInt64: Result := 'integer';
     tkFloat: Result := 'number';
     tkString, tkLString, tkWString, tkUString: Result := 'string';
     tkEnumeration:

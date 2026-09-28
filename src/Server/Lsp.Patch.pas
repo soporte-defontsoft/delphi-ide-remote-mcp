@@ -177,6 +177,14 @@ function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
   (sexta revision). CuantasLineasReales es la misma regla para quien
   necesita conservar la fantasma (para volver a unir el texto). }
 function LineasDelTexto(const AText: string): TArray<string>;
+{ Las lineas (0-based) donde casa un ancla de UNA linea, con la regla del
+  motor que la aplica: el de Pascal (APascal, delphi_edit) la linea entera o
+  el mismo texto tras su sangria; el de texto (delphi_textedit), las dos
+  recortadas. El preview del changeset preguntaba con OTRA regla y decia
+  limpio lo que el commit rechazaba (octava revision): UNA pregunta para
+  los motores y para su preview. }
+function LineasDondeCasaElAncla(const ALines: TArray<string>; const AAncla: string;
+  APascal: Boolean): TArray<Integer>;
 function CuantasLineasReales(const ALines: TArray<string>): Integer;
 
 { El salto de linea DOMINANTE de un texto (CRLF, LF o CR suelto: el que mas
@@ -185,6 +193,16 @@ function CuantasLineasReales(const ALines: TArray<string>): Integer;
   ocho sitios como "CRLF si hay alguno", que no veia un CR suelto (septima
   revision). }
 function SaltoDominante(const AText: string): string;
+{ Las lineas de un texto CON la fantasma del salto final (un CR suelto es
+  salto): para quien vuelve a unir el texto con su salto. LineasDelTexto es
+  esta sin la fantasma. UN troceador: habia cinco a mano que no veian el CR
+  suelto (octava revision). }
+function SplitToLines(const T: string): TArray<string>;
+{ El texto acaba en un salto de linea (LF, CRLF o un CR suelto). Se miraba
+  de dos formas (solo LF en delphi_textedit; octava revision). }
+function TieneSaltoFinal(const AText: string): Boolean;
+{ El NOMBRE de un salto, el que dicen las respuestas: 'CRLF', 'LF' o 'CR'. }
+function NombreDelSalto(const ASalto: string): string;
 
 { El fichero es un fuente Delphi que EXISTE (.pas/.dpr/.dpk/.inc): '' si lo
   es; si no, por este orden, carpeta (LSP-016), no esta (LSP-011) o no es
@@ -226,6 +244,12 @@ function AplicaTanda(const APath, AEditsJson: string;
   the pre-edit backup and writes atomically. AEncName as in delphi_read. }
 function PatchLoadText(const APath: string; out AEncName: string): string;
 procedure PatchSaveText(const APath, AText, AEncName: string);
+{ PatchSaveText para quien EDITA un texto insertando bloques compuestos con
+  sLineBreak (los escritores del .dproj): si el fichero en disco no tiene
+  ningun CRLF, los CRLF del texto nuevo solo pueden ser los insertados, y
+  toman el salto del fichero. Un .dproj en LF quedaba mezclado (octava
+  revision). No es para una copia, que va con los bytes de su origen. }
+procedure PatchSaveConSuSalto(const APath, AText, AEncName: string);
 
 { EL cerrojo de escritura del servidor, prestado a los otros motores.
 
@@ -681,8 +705,9 @@ begin
   // put "lineas=38" three words away from "Lineas 1-39 de 39" in the same
   // answer, and the reader had to decide which of the two was lying
   // (measured 2026-08-25). Neither was: they counted different things.
+  // los saltos son LF y CR suelto: un fichero de solo CR decia breaks=0
   Result := MsgFmt(SF_EDIT_METRICAS_FMT,
-    [M.Bytes, M.LF, M.CRLF, M.Loose, M.High, M.Corruption]);
+    [M.Bytes, M.LF + M.CR - M.CRLF, M.CRLF, M.Loose, M.High, M.Corruption]);
 end;
 
 function ByteCp(C: Char): Integer;
@@ -707,7 +732,7 @@ var
 begin
   L := TList<Integer>.Create;
   try
-    Lines := T.Replace(#13#10, #10).Split([#10]);
+    Lines := SplitToLines(T); // el troceador de todos (el CR suelto es salto)
     for I := 0 to High(Lines) do
       for J := 1 to Length(Lines[I]) - 1 do
       begin
@@ -985,6 +1010,21 @@ begin
     Result := #13#10; // el de Windows, tambien sin ningun salto aun
 end;
 
+function TieneSaltoFinal(const AText: string): Boolean;
+begin
+  Result := AText.EndsWith(#10) or AText.EndsWith(#13);
+end;
+
+function NombreDelSalto(const ASalto: string): string;
+begin
+  if ASalto = #13#10 then
+    Result := 'CRLF'
+  else if ASalto = #13 then
+    Result := 'CR'
+  else
+    Result := 'LF';
+end;
+
 function IsAllWhitespace(const S: string): Boolean;
 var
   C: Char;
@@ -993,6 +1033,24 @@ begin
     if (C <> ' ') and (C <> #9) then
       Exit(False);
   Result := True;
+end;
+
+function LineasDondeCasaElAncla(const ALines: TArray<string>; const AAncla: string;
+  APascal: Boolean): TArray<Integer>;
+var
+  I: Integer;
+begin
+  Result := [];
+  for I := 0 to High(ALines) do
+    if APascal then
+    begin
+      if (ALines[I] = AAncla) or
+         (ALines[I].EndsWith(AAncla) and
+          IsAllWhitespace(Copy(ALines[I], 1, Length(ALines[I]) - Length(AAncla)))) then
+        Result := Result + [I];
+    end
+    else if Trim(ALines[I]) = Trim(AAncla) then
+      Result := Result + [I];
 end;
 
 function DecodeSourceBytes(const B: TArray<Byte>): string;
@@ -1181,6 +1239,20 @@ begin
   AtomicWrite(APath, EncodeText(AText, K));
 end;
 
+procedure PatchSaveConSuSalto(const APath, AText, AEncName: string);
+var
+  Enc, Antes, Texto: string;
+begin
+  Texto := AText;
+  if TFile.Exists(APath) and (Pos(#13#10, Texto) > 0) then
+  begin
+    Antes := PatchLoadText(APath, Enc);
+    if Pos(#13#10, Antes) = 0 then
+      Texto := Texto.Replace(#13#10, SaltoDominante(Antes));
+  end;
+  PatchSaveText(APath, Texto, AEncName);
+end;
+
 function NthOccurrenceLine(const APath, AAnchor: string; AN: Integer): Integer;
 var
   Lines: TArray<string>;
@@ -1320,7 +1392,7 @@ end;
   el editor de quien llama. }
 function LineasDelAncla(const AOld: string): TArray<string>;
 begin
-  Result := AOld.Replace(#13#10, #10).Split([#10]);
+  Result := SplitToLines(AOld); // el troceador del motor: un CR suelto es salto
   while (Length(Result) > 1) and (Result[High(Result)].Trim = '') do
     SetLength(Result, Length(Result) - 1);
 end;
@@ -1335,7 +1407,7 @@ begin
     Exit;
   try
     var Idx := BuscaBloque(
-      PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]),
+      SplitToLines(PatchLoadText(APath, Enc)),
       LineasDelAncla(AOld), AN, Cuantas);
     if Idx >= 0 then
       Result := Idx + 1; // 1-based, como atline
@@ -1379,7 +1451,8 @@ var
 begin
   Text := PatchLoadText(APath, Enc);
   Eol := SaltoDominante(Text); // el de todos (era otra copia de "CRLF si hay alguno")
-  Lines := Text.Replace(#13#10, #10).Split([#10]);
+  Lines := SplitToLines(Text); // un CR suelto es salto (daba EDIT-098 en un
+                               // fichero de solo CR; octava revision)
   OldLines := LineasDelAncla(AOld);
   if Length(OldLines) < 2 then
     Exit(MsgText(SR_PATCH_BLOCK_SHORT));
@@ -1745,8 +1818,7 @@ begin
         var EncTmp: string;
         var AntesL: TArray<string>;
         try
-          AntesL := PatchLoadText(APath, EncTmp)
-            .Replace(#13#10, #10).Split([#10]);
+          AntesL := SplitToLines(PatchLoadText(APath, EncTmp));
         except
           AntesL := nil;
         end;
@@ -1818,8 +1890,7 @@ begin
         var Eco := '';
         if (AntesL <> nil) and not EsFallo(Una) then
         try
-          var DespuesL := PatchLoadText(APath, EncTmp)
-            .Replace(#13#10, #10).Split([#10]);
+          var DespuesL := SplitToLines(PatchLoadText(APath, EncTmp));
           var Delta := Length(DespuesL) - Length(AntesL);
           // La primera linea que difiere: de ahi para abajo todo se mueve, y
           // ademas es DONDE cayo esta edicion.
@@ -1996,7 +2067,9 @@ begin
   K := DetectEnc(B);
   Text := DecodeBytes(B, K);
   M := Measure(B);
-  if M.CRLF > M.Loose then Eol := 'CRLF' else Eol := 'LF';
+  // el salto por la regla de todos (SaltoDominante): esta decia LF de un
+  // fichero de solo CR, y en empate LF donde la otra decia CRLF (octava)
+  Eol := NombreDelSalto(SaltoDominante(Text));
   // El salto final CIERRA la ultima linea, no abre otra: "a\nb\n" son 2
   // lineas, y se ensenaba una tercera vacia que no existe (quinta revision)
   Lines := LineasDelTexto(Text);
@@ -2923,7 +2996,7 @@ begin
   K := DetectEnc(B);
   Text := DecodeBytes(B, K);
   M := Measure(B);
-  if M.CRLF > M.Loose then Eol := 'CRLF' else Eol := 'LF';
+  Eol := NombreDelSalto(SaltoDominante(Text)); // la regla de todos
 
   if (Pos(#13, AOld) > 0) or (Pos(#10, AOld) > 0) then
     Exit(MsgText(SR_PATCH_ANCHOR_MULTILINE));
@@ -2936,11 +3009,8 @@ begin
   Hits := TList<Integer>.Create;
   Warnings := TStringList.Create;
   try
-    for I := 0 to High(Lines) do
-      if (Lines[I] = AOld) or
-         (Lines[I].EndsWith(AOld) and
-          IsAllWhitespace(Copy(Lines[I], 1, Length(Lines[I]) - Length(AOld)))) then
-        Hits.Add(I);
+    for I in LineasDondeCasaElAncla(Lines, AOld, True) do // la regla del motor
+      Hits.Add(I);
 
     if Hits.Count = 0 then
       // Por que no casa: UN texto para delphi_edit, delphi_textedit y la
@@ -3045,9 +3115,8 @@ begin
     end;
 
     var Joined: string;
-    var EolSep: string;
-    if Eol = 'CRLF' then EolSep := #13#10 else EolSep := #10;
-    Joined := string.Join(#10, Lines).Replace(#10, EolSep);
+    var EolSep := SaltoDominante(Text); // el mismo salto que dice la cabecera
+    Joined := string.Join(EolSep, Lines);
     // Nada cambia (old == new): no se escribe ni se copia, y se dice.
     // Contestaba WRITTEN con una copia de un fichero identico (quinta
     // revision). La gemela, en Lsp.TextEdit.DoEditLine.
@@ -3068,7 +3137,7 @@ begin
     After := RelecturaDe(APath, NewBytes, NotaRelectura);
     D := Measure(After);
     var AfterText := DecodeBytes(After, K);
-    var AfterLines := SplitToLines(AfterText);
+    var AfterLines := LineasDelTexto(AfterText); // el eco sin la fantasma ("6|" de 5)
 
     var Ctx := MsgText(SF_EDIT_NO_LOCALIZAR_LINEA_NUEVA);
     // El sitio se SABE: la sustitucion empieza justo donde estaba el ancla.
@@ -3120,7 +3189,12 @@ begin
       Warnings.Add(MsgFmt(SN_EDIT_ACENTOS_FUERA_CUADRO_FMT,
         [M.High - Salen + Entran, D.High]));
     var Ajenos: Boolean;
-    if Eol = 'CRLF' then Ajenos := D.Loose > M.Loose else Ajenos := D.CRLF > M.CRLF;
+    if Eol = 'CRLF' then
+      Ajenos := D.Loose > M.Loose
+    else if Eol = 'CR' then
+      Ajenos := D.LF > M.LF
+    else
+      Ajenos := D.CRLF > M.CRLF;
     if Ajenos then
       Warnings.Add(MsgFmt(SN_EDIT_FINALES_LINEA_AJENOS_FMT, [Eol]));
     var FmNew := MojibakeLines(Replacement);

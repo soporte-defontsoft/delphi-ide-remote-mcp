@@ -140,19 +140,50 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
       no es la tool "null", el 404 lleva el id, el GET con sesion muerta es
       404, el 202 va sin cuerpo, SYS-015 de una tool sin parametros
   E95 dos copias del mismo fichero en el mismo golpe de reloj (~15 ms): la
-      segunda tenia el mismo nombre sellado y la operacion fallaba
+      segunda tenia el mismo nombre sellado y la operacion fallaba (E95b,
+      determinista: los sellos de los proximos 400 ms ocupados)
+  Octava revision:
+  E96 delphi_delete de un fichero +R: SYS-029 (lo borraba)
+  E97 una carpeta que no se deja mover no deja su cajon vacio
+  E98 una tanda cuyo BLOQUE no cambia nada: EDIT-114
+  E99 delphi_package sobre un .zip +R: SYS-029
+  E100 buscar con CR sueltos: las lineas como delphi_read
+  E101 //?/ con barras normales: GUARD-022
+  E102 un bloque en un fichero mixto: el salto dominante, como una linea
+  E103 initialize con clientInfo que no es objeto
+  E104 mover una junction: el enlace, sin copia de lo de detras
+  E105-E107 la regla de parametros en styles, git y changeset
+  E108 un nombre de mas de 255: GUARD-026; E109 GUARD-010 de "..."
+  E110 un kind que no existe: CREATE-034 antes que CREATE-035
+  E111 delete-line compara old con la regla del motor; E112 el preview
+      ve el ancla como el motor
+  E113 /files: filename* y la ruta tal cual; E114 lo que no se contesta
+      (una regla para HTTP y stdio) y lo mal formado, -32600
+  E115 una sesion muerta no vuelve en la cabecera; el GET sin flujo, 404
+  E116 un recurso que no existe: -32002; E117 los enteros, integer
+  E118 un .dproj en LF sigue en LF; E119 deshacer el borrado de una unit
+      no deja la copia del form; E120 LIST-008 cuenta las marcas aparte
+  E121 project-test en ingles; E122 el zip sin la papelera
+  E123 mover una unit con su form: todo o nada (MOVE-017)
+  E124 / E125 el destino de un move y el create de un changeset con
+      separador final: GUARD-025
+  E127 la sesion cerrada para hacer sitio: SYS-033
   E76 un fichero de dentro por su alias 8.3 se lee (la jaula decia "fuera")
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
 """
 import base64
+import datetime
 import json
 import os
+import re
 import stat
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import zipfile
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -362,10 +393,10 @@ try:
 
     res, sc, t = llama('delphi_changeset', {'command': 'begin'})
     cid3 = mc.id_changeset(t)
-    llama('delphi_changeset', {'command': 'stage', 'id': cid3, 'kind': 'create', 'path': NOREPO,
-                               'content': 'x'})
-    res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': cid3})
-    check('E27 changeset: crear donde hay una CARPETA se niega en el preview (INVALID_PARAM)',
+    # se niega ya al APILAR (octava revision: stage mira lo que el preview)
+    res, sc, t = llama('delphi_changeset', {'command': 'stage', 'id': cid3, 'kind': 'create',
+                                            'path': NOREPO, 'content': 'x'})
+    check('E27 changeset: crear donde hay una CARPETA se niega al apilar (INVALID_PARAM)',
           cid3 != '' and mc.abre(t, 'SR_LSP_IS_FOLDER_FMT') and mc.resultado(t) == 'INVALID_PARAM',
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
     llama('delphi_changeset', {'command': 'rollback', 'id': cid3})
@@ -761,6 +792,11 @@ try:
           j.get('total') == len(rutas) and j.get('shownTrash') == len(
               [r for r in rutas if r not in vivas and not mc.es_marca_dueno(r)]),
           '%s | %s' % (j.get('total'), rutas))
+    marcas = [r for r in rutas if mc.es_marca_dueno(r)]
+    check('E120 LIST-008 cuenta las marcas .by aparte (las llamaba "live files")',
+          len(marcas) >= 1 and mc.abre(j.get('trashNote', ''), 'SN_LIST_SHOWN_TRASH_FMT') and
+          ('and %d their owner markers' % len(marcas)) in j.get('trashNote', ''),
+          '%s | %s' % (marcas, j.get('trashNote')))
 
     VCLP = os.path.join(JAIL, 'Vc.dproj')
     open(VCLP, 'w').write('<Project><PropertyGroup><FrameworkType>VCL</FrameworkType>'
@@ -1014,7 +1050,7 @@ try:
     res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c86})
     check('E86 delete-line atline=3 en un fichero de 2: el preview NO sale limpio',
           mc.como_json(t).get('unresolved') == 1 and 'has 2' in t, t[:300])
-    llama('delphi_changeset', {'command': 'discard', 'id': c86})
+    llama('delphi_changeset', {'command': 'rollback', 'id': c86})  # 'discard' no existe
     check('E86 ...y el fichero sigue igual', open(DL, newline='').read() == 'uno\ntres\n',
           repr(open(DL, newline='').read()))
 
@@ -1033,10 +1069,12 @@ try:
           'maskNote' not in j and mc.es(j.get('unreadableNote', ''), 'SN_SEARCH_ILEGIBLES_FMT'), t[:300])
 
     # E88 section con su valor por defecto (el que publica el esquema) no es CFG-110
-    res, sc, t = llama('delphi_config', {'command': 'fix-references', 'project': DPROJ,
+    # con un proyecto de verdad: con App.dproj (sin App.dpr) pasaba con un
+    # CFG-034 NOT_FOUND, sin llegar a usar el defecto (octava revision)
+    res, sc, t = llama('delphi_config', {'command': 'fix-references', 'project': P83,
                                          'section': 'summary'})
-    check('E88 fix-references con section=summary (el defecto): NO es CFG-110',
-          not mc.abre(t, 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT'), t[:200])
+    check('E88 fix-references con section=summary (el defecto): NO es CFG-110 y funciona',
+          not res.get('isError') and not mc.abre(t, 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT'), t[:200])
     rechazo('E88 ...y con section=platforms si (la regla sigue viva)', 'delphi_config',
             {'command': 'fix-references', 'project': DPROJ, 'section': 'platforms'},
             'INVALID_PARAM', 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT')
@@ -1086,11 +1124,15 @@ try:
         res, sc, t = llama('delphi_changeset', {'command': 'begin'})
         c92 = mc.id_changeset(t)
         llama('delphi_changeset', {'command': 'stage', 'id': c92, 'kind': 'delete', 'path': ROF})
-        llama('delphi_changeset', {'command': 'preview', 'id': c92})
+        # el PREVIEW ya lo dice (octava revision: salia limpio y caia el commit)
+        res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c92})
+        check('E92 changeset delete de un fichero +R: el preview dice SYS-029',
+              mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])
         res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c92})
-        check('E92 changeset delete de un fichero +R: SYS-029, sigue ahi y SIN copia en deleted',
-              res.get('isError') is True and mc.es(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT') and
+        check('E92 ...el commit no se hace: sigue ahi y SIN copia en deleted',
+              res.get('isError') is True and
               os.path.exists(ROF) and not mc.copias(JAIL, 'ro92.txt', 'CAJON_BORRADOS'), t[:300])
+        llama('delphi_changeset', {'command': 'rollback', 'id': c92})
     finally:
         os.chmod(ROF, stat.S_IWRITE)
 
@@ -1163,6 +1205,392 @@ try:
           not res.get('isError') and not os.path.exists(DOS) and cop95 == ['v0\n', 'v1\n'],
           '%s | %s' % (t[:200], cop95))
 
+    # E95b lo mismo, DETERMINISTA: E95 solo caia si las dos copias coincidian en
+    # el golpe de reloj (4 de 30 contra la version sin arreglo). Se plantan los
+    # nombres sellados de los proximos 400 ms en deleted\ y se borra: sin la
+    # espera al sello siguiente, la copia chocaba con uno plantado (FILE-020)
+    D95 = os.path.join(JAIL, 'e95b')
+    os.makedirs(D95)
+    F95 = os.path.join(D95, 'dos95.txt')
+    open(F95, 'w').write('v0\n')
+    PAP = mc._papelera()
+    ahora = datetime.datetime.now()
+    CAJ95 = os.path.join(D95, PAP['BACKUP_SUB'], ahora.strftime('%Y%m%d'), PAP['CAJON_BORRADOS'])
+    os.makedirs(CAJ95)
+    for ms in range(0, 400):
+        sello = (ahora + datetime.timedelta(milliseconds=ms)).strftime('%H%M%S%f')[:9]
+        open(os.path.join(CAJ95, 'dos95.txt-' + sello), 'w').write('plantado\n')
+    plantado_en = (datetime.datetime.now() - ahora).total_seconds()
+    res, sc, t = llama('delphi_delete', {'path': F95})
+    buenas = [c for c in mc.copias(D95, 'dos95.txt', 'CAJON_BORRADOS') if open(c).read() == 'v0\n']
+    check('E95b fixture: los sellos se plantan a tiempo (%.2f s de 0.40)' % plantado_en,
+          plantado_en < 0.3, plantado_en)
+    check('E95b con los sellos de los proximos 400 ms ocupados, el borrado espera al siguiente libre',
+          not res.get('isError') and not os.path.exists(F95) and len(buenas) == 1,
+          '%s | %s' % (t[:200], buenas))
+
+    # E96 delphi_delete de un fichero +R: SYS-029 (lo borraba; el changeset ya lo decia)
+    D96 = os.path.join(JAIL, 'e96')
+    os.makedirs(D96)
+    RO96 = os.path.join(D96, 'ro96.txt')
+    open(RO96, 'w').write('ro\n')
+    os.chmod(RO96, stat.S_IREAD)
+    try:
+        t = rechazo('E96 delphi_delete de un fichero +R: SYS-029 (lo borraba)', 'delphi_delete',
+                    {'path': RO96}, 'DENIED', 'SR_SOLO_LECTURA_ATRIBUTO_FMT')
+        check('E96 ...sigue ahi y no queda papelera', os.path.exists(RO96) and
+              not os.path.exists(os.path.join(D96, PAP['BACKUP_SUB'])), os.listdir(D96))
+    finally:
+        os.chmod(RO96, stat.S_IREAD | stat.S_IWRITE)
+
+    # E97 una carpeta que no se deja mover no deja su cajon del dia vacio
+    D97 = os.path.join(JAIL, 'e97')
+    os.makedirs(os.path.join(D97, 'dentro'))
+    F97 = os.path.join(D97, 'dentro', 'f.txt')
+    open(F97, 'w').write('x\n')
+    abierto = open(F97, 'r')
+    try:
+        res, sc, t = llama('delphi_delete', {'path': os.path.join(D97, 'dentro')})
+    finally:
+        abierto.close()
+    check('E97 una carpeta que no se deja mover: fallo, sigue ahi y SIN papelera vacia a su lado',
+          res.get('isError') is True and os.path.exists(F97) and
+          not os.path.exists(os.path.join(D97, PAP['BACKUP_SUB'])), '%s | %s' % (t[:200], os.listdir(D97)))
+
+    # E98 una tanda con un BLOQUE que no cambia nada: UNCHANGED (EDIT-114)
+    D98 = os.path.join(JAIL, 'e98')
+    os.makedirs(D98)
+    B98 = os.path.join(D98, 'Bloque.pas')
+    open(B98, 'w', newline='\r\n').write('unit Bloque;\ninterface\nimplementation\nend.\n')
+    res, sc, t = llama('delphi_edit', {'path': B98, 'edits': json.dumps(
+        [{'old': 'interface\nimplementation', 'new': 'interface\nimplementation'}])})
+    check('E98 una tanda cuyo bloque no cambia nada: EDIT-114 y sin papelera',
+          not res.get('isError') and mc.abre(t, 'SN_PATCH_EDITS_SIN_CAMBIOS_FMT') and
+          not os.path.exists(os.path.join(D98, PAP['BACKUP_SUB'])), t[:200])
+
+    # E99 delphi_package sobre un .zip +R: SYS-029 (decia "reintenta en unos segundos")
+    D99 = os.path.join(JAIL, 'e99')
+    os.makedirs(os.path.join(D99, 'src'))
+    open(os.path.join(D99, 'src', 'a.txt'), 'w').write('a\n')
+    Z99 = os.path.join(D99, 'out.zip')
+    open(Z99, 'wb').write(b'PK\x05\x06' + b'\0' * 18)
+    os.chmod(Z99, stat.S_IREAD)
+    try:
+        rechazo('E99 delphi_package sobre un .zip +R: SYS-029', 'delphi_package',
+                {'dir': os.path.join(D99, 'src'), 'outfile': Z99}, 'DENIED', 'SR_SOLO_LECTURA_ATRIBUTO_FMT')
+    finally:
+        os.chmod(Z99, stat.S_IREAD | stat.S_IWRITE)
+
+    # E100 buscar en un fichero de CR sueltos: las lineas como delphi_read
+    D100 = os.path.join(JAIL, 'e100')
+    os.makedirs(D100)
+    open(os.path.join(D100, 'cr.txt'), 'wb').write(b'uno\rdos\raguja\r')
+    res, sc, t = llama('delphi_search', {'root': D100, 'query': 'aguja', 'pattern': '*.txt'})
+    lineas = [h.get('line') for h in mc.como_json(t).get('hits', [])]
+    check('E100 buscar en un fichero de CR sueltos: linea 3 (el CR suelto es salto)',
+          lineas == [3], '%s | %s' % (lineas, t[:200]))
+
+    # E101 //?/ con barras normales es un prefijo de dispositivo como \\?\
+    rechazo('E101 //?/ con barras normales: GUARD-022', 'delphi_read',
+            {'path': '//?/' + NOTES.replace('\\', '/')}, 'INVALID_PARAM', 'SR_GUARD_PREFIJO_DISPOSITIVO_FMT')
+
+    # E102 el salto DOMINANTE en un bloque: un fichero LF con un CRLF queda en
+    # LF (el bloque unia con CRLF si habia alguno; una edicion de linea, con LF)
+    D102 = os.path.join(JAIL, 'e102')
+    os.makedirs(D102)
+    MX = os.path.join(D102, 'mx.txt')
+    open(MX, 'wb').write(b'uno\ndos\r\ntres\ncuatro\ncinco\n')
+    res, sc, t = llama('delphi_textedit', {'path': MX, 'edits': json.dumps(
+        [{'old': 'tres\ncuatro', 'new': 'TRES\nCUATRO'}])})
+    b102 = open(MX, 'rb').read()
+    check('E102 un bloque en un fichero LF con un CRLF: todo en LF, como una edicion de linea',
+          not res.get('isError') and b102 == b'uno\ndos\nTRES\nCUATRO\ncinco\n', '%s | %r' % (t[:160], b102))
+
+    # E103 un clientInfo que no es un objeto no rompe el initialize
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': 21, 'method': 'initialize', 'params': {
+        'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': 5}}, sid='{NUEVA-E103}',
+        accept='application/json')
+    check('E103 initialize con clientInfo=5: sesion nueva (era -32603 "Invalid class typecast")',
+          code == 200 and '"result"' in b and '-32603' not in b and bool(h.get('Mcp-Session-Id')),
+          '%s %s' % (code, b[:200]))
+
+    # E104 mover una junction: se mueve el ENLACE, sin copia de lo de detras (la
+    # copia de seguridad copiaba el arbol al que apunta; a un antepasado fallaba)
+    D104 = os.path.join(JAIL, 'e104')
+    os.makedirs(D104)
+    L104 = os.path.join(D104, 'arriba')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', L104, JAIL], capture_output=True)
+    if os.path.isdir(L104):
+        L104B = os.path.join(D104, 'arriba2')
+        res, sc, t = llama('delphi_move', {'path': L104, 'dest': L104B})
+        es_enlace = os.path.lexists(L104B) and bool(
+            os.lstat(L104B).st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+        check('E104 mover una junction a un antepasado: se mueve el enlace y no hay copia',
+              not res.get('isError') and not os.path.lexists(L104) and es_enlace and
+              os.path.exists(NOTES) and not mc.copias(D104, 'arriba', 'CAJON_BORRADOS'), t[:200])
+        if os.path.lexists(L104B):
+            os.rmdir(L104B)  # el enlace, no lo de detras
+    else:
+        check('E104 fixture: mklink /J crea la junction', False, L104)
+
+    # E105 styles delete con child: se borraba el estilo ENTERO
+    ANT105 = open(ESTILO, 'rb').read()
+    rechazo('E105 styles delete con child: STYLE-043 (borraba el estilo entero)', 'delphi_styles',
+            {'command': 'delete', 'path': ESTILO, 'style': 'boton', 'child': 'x'},
+            'INVALID_PARAM', 'SR_STYLES_NO_VA_CON_COMANDO_FMT')
+    check('E105 ...el .style sin tocar', open(ESTILO, 'rb').read() == ANT105, '')
+
+    # E106 git commit con path: commiteaba TODO el indice
+    rechazo('E106 git commit con path: GIT-038 (commiteaba todo el indice)', 'delphi_git',
+            {'command': 'commit', 'repo': NOREPO, 'message': 'x', 'path': NOTES},
+            'INVALID_PARAM', 'SR_GIT_NO_VA_CON_COMANDO_FMT')
+
+    # E107 changeset: lo que no va con el comando (CHSET-031) y lo que no va con
+    # el kind, diciendo lo que el kind toma (CHSET-030)
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c107 = mc.id_changeset(t)
+    rechazo('E107 changeset commit con kind: CHSET-031 (se ignoraba)', 'delphi_changeset',
+            {'command': 'commit', 'id': c107, 'kind': 'edit'}, 'INVALID_PARAM',
+            'SR_CHANGESET_NO_VA_CON_COMANDO_FMT')
+    t = rechazo('E107 stage create con old: CHSET-030', 'delphi_changeset',
+                {'command': 'stage', 'id': c107, 'kind': 'create', 'path': os.path.join(JAIL, 'n107.txt'),
+                 'content': 'x', 'old': 'y'}, 'INVALID_PARAM', 'SR_CHANGESET_NO_ES_DE_KIND_FMT')
+    check('E107 ...y dice lo que toma create', 'takes path content' in t, t[:200])
+    llama('delphi_changeset', {'command': 'rollback', 'id': c107})
+
+    # E108 un nombre de mas de 255 caracteres: SYS-009 INTERNAL al escribir
+    rechazo('E108 un nombre de 300 caracteres: GUARD-026', 'delphi_textedit',
+            {'path': os.path.join(JAIL, 'n' * 300 + '.txt'), 'create': True, 'content': 'x'},
+            'INVALID_PARAM', 'SR_GUARD_NOMBRE_LARGO_FMT')
+
+    # E109 GUARD-010 de "...": sugeria 'Did you mean ""?'
+    t = rechazo('E109 una carpeta "...": GUARD-010', 'delphi_read',
+                {'path': os.path.join(JAIL, '...', 'x.txt')}, 'INVALID_PARAM',
+                'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT')
+    check('E109 ...sin sugerir un nombre vacio', 'Did you mean ""' not in t, t[:200])
+
+    # E110 un kind que no existe lo dice antes que la regla de parametros
+    rechazo('E110 kind=project-foo con content: CREATE-011 (CREATE-035 decia lo que toma)',
+            'delphi_create', {'kind': 'project-foo', 'name': 'Foo', 'dir': os.path.join(JAIL, 'foo'),
+                              'content': 'x'}, 'INVALID_PARAM', 'SR_CREATE_PROJECT_KIND')
+    rechazo('E110 ...kind=frame-foo: CREATE-021', 'delphi_create',
+            {'kind': 'frame-foo', 'name': 'Foo', 'dir': os.path.join(JAIL, 'foo'), 'content': 'x'},
+            'INVALID_PARAM', 'SR_CREATE_KIND_DEBE_SER_FORM')
+    rechazo('E110 ...y kind=widget: CREATE-034', 'delphi_create',
+            {'kind': 'widget', 'name': 'Foo', 'dir': os.path.join(JAIL, 'foo'), 'content': 'x'},
+            'INVALID_PARAM', 'SR_CREATE_KIND_DEBE_SER_ALL')
+
+    # E111 delete-line compara old con la regla del motor (sin la sangria en Pascal)
+    D111 = os.path.join(JAIL, 'e111')
+    os.makedirs(D111)
+    P111 = os.path.join(D111, 'Dl.pas')
+    open(P111, 'w', newline='\n').write('unit Dl;\ninterface\n  const X = 1;\nimplementation\nend.\n')
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c111 = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': c111, 'kind': 'delete-line', 'path': P111,
+                               'atline': 3, 'old': 'const X = 1;'})
+    res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c111})
+    check('E111 delete-line con old sin la sangria (Pascal): el preview sale limpio',
+          mc.como_json(t).get('unresolved') == 0, t[:300])
+    res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c111})
+    check('E111 ...y el commit borra esa linea',
+          not res.get('isError') and open(P111, newline='').read() ==
+          'unit Dl;\ninterface\nimplementation\nend.\n', '%s | %r' % (t[:160], open(P111, newline='').read()))
+
+    # E112 el preview ve el ancla como el motor: dos lineas que casan (con y sin
+    # sangria) salian limpias en el preview y el commit hacia ROLLBACK EDIT-077
+    P112 = os.path.join(D111, 'Pr.pas')
+    open(P112, 'w', newline='\n').write('program Pr;\nbegin\nWriteln(1);\n  Writeln(1);\nend.\n')
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c112 = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': c112, 'kind': 'edit', 'path': P112,
+                               'old': 'Writeln(1);', 'new': 'Writeln(2);'})
+    res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c112})
+    check('E112 un ancla que el motor ve dos veces: el preview no sale limpio',
+          mc.como_json(t).get('unresolved') == 1, t[:300])
+    llama('delphi_changeset', {'command': 'rollback', 'id': c112})
+
+    # E113 /files: el nombre con tilde en filename*, y la ruta TAL CUAL a las reglas
+    ACC = os.path.join(JAIL, 'canci\u00f3n.txt')
+    open(ACC, 'w').write('x\n')
+
+    def files_get(ruta):
+        req = urllib.request.Request('http://127.0.0.1:%d/files?path=%s' % (
+            PORT, urllib.parse.quote(ruta, safe='')), headers={'Authorization': 'Bearer ' + TOK})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.status, r.headers, r.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers, e.read()
+
+    code, h, b = files_get(ACC)
+    cd = (h.get('Content-Disposition') or '') if h else ''
+    check('E113 /files de un nombre con tilde: filename* en UTF-8 (llegaba "canci?n")',
+          code == 200 and "filename*=UTF-8''canci%C3%B3n.txt" in cd, '%s %s' % (code, cd))
+    code, h, b = files_get(NOTES + ' ')
+    check('E113 /files con un espacio al final: 400 GUARD-010 (servia el fichero sin el espacio)',
+          code == 400 and b'GUARD-010' in b, '%s %r' % (code, b[:160]))
+
+    # E114 protocolo: UNA regla para lo que no se contesta, y lo mal formado es -32600
+    code, h, b = cli.post({}, accept='application/json')
+    check('E114 {}: -32600 (no recibia nada)', '-32600' in b, '%s %r' % (code, b[:160]))
+    code, h, b = cli.post([], accept='application/json')
+    check('E114 []: -32600 (era un 202)', code == 200 and '-32600' in b, '%s %r' % (code, b[:160]))
+    code, h, b = cli.post([{'jsonrpc': '2.0', 'id': 31, 'method': 'tools/list'}], accept='application/json')
+    check('E114 un lote con peticiones: -32600 (era -32700 "no es JSON")',
+          '-32600' in b and '-32700' not in b, '%s %r' % (code, b[:160]))
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': 32, 'result': {}}, accept='application/json')
+    check('E114 una respuesta del cliente por HTTP: 202 sin cuerpo', code == 202 and b == '',
+          '%s %r' % (code, b[:160]))
+    code, h, b = cli.post([{'jsonrpc': '2.0', 'method': 'notifications/x'}], accept='application/json')
+    check('E114 un lote solo de notificaciones: 202', code == 202 and b == '', '%s %r' % (code, b[:160]))
+    std = mc.Stdio(EXE, env=mc.entorno(), nombre='e114')
+    try:
+        std.send({'jsonrpc': '2.0', 'id': 33, 'result': {}})
+        std.send({'jsonrpc': '2.0', 'id': 34, 'method': 'tools/list'})
+        vistos = []
+        fin114 = time.time() + 60
+        while time.time() < fin114 and 34 not in vistos:
+            try:
+                vistos.append(json.loads(std.q.get(timeout=1)).get('id'))
+            except Exception:
+                pass
+        check('E114 ...y por stdio la misma regla: sin respuesta (contestaba SYS-032)',
+              34 in vistos and 33 not in vistos, vistos)
+    finally:
+        std.cierra()
+
+    # E115 una sesion muerta: un initialize que falla no la devuelve en la
+    # cabecera, y el GET sin flujo tambien es 404
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': 1.5, 'method': 'initialize', 'params': {}},
+                          sid='{MUERTA-E115}', accept='application/json')
+    check('E115 un initialize que falla con una sesion muerta: no la devuelve en la cabecera',
+          '-32600' in b and (h.get('Mcp-Session-Id') if h else None) != '{MUERTA-E115}',
+          '%s %s %s' % (code, h.get('Mcp-Session-Id') if h else None, b[:160]))
+    req = urllib.request.Request(cli.url, method='GET', headers={
+        'Accept': 'application/json', 'Authorization': 'Bearer ' + TOK, 'Mcp-Session-Id': '{MUERTA-E115}'})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            gcode = r.status
+    except urllib.error.HTTPError as e:
+        gcode = e.code
+    check('E115 el GET sin event-stream con una sesion muerta es 404 (era 200 sin puerta)',
+          gcode == 404, gcode)
+
+    # E116 un recurso que no existe es -32002, el codigo de MCP (era -32602)
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': 41, 'method': 'resources/read',
+                           'params': {'uri': 'nope://x'}}, accept='application/json')
+    check('E116 resources/read de un recurso que no existe: -32002', '-32002' in b, '%s %r' % (code, b[:160]))
+
+    # E117 los enteros se publican como integer (el binder solo acepta enteros)
+    m117 = cli.request('tools/list')
+    props = next((x.get('inputSchema', {}).get('properties', {})
+                  for x in ((m117 or {}).get('result') or {}).get('tools', [])
+                  if x.get('name') == 'delphi_read'), {})
+    check('E117 delphi_read fromline es "integer" en el esquema (decia "number")',
+          props.get('fromline', {}).get('type') == 'integer', props.get('fromline'))
+
+    # E118 un .dproj en LF sigue en LF tras delphi_config (quedaba mezclado)
+    D118 = os.path.join(JAIL, 'e118')
+    os.makedirs(os.path.join(D118, 'lib'))
+    LF118 = os.path.join(D118, 'Lf.dproj')
+    open(LF118, 'w', newline='\n').write(
+        '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
+        '    <PropertyGroup>\n'
+        '        <MainSource>Lf.dpr</MainSource>\n'
+        '    </PropertyGroup>\n'
+        '    <PropertyGroup Condition="\'$(Base)\'!=\'\'">\n'
+        '        <DCC_Namespace>System</DCC_Namespace>\n'
+        '    </PropertyGroup>\n'
+        '</Project>\n')
+    res, sc, t = llama('delphi_config', {'command': 'add-searchpath', 'project': LF118, 'path': 'lib'})
+    b118 = open(LF118, 'rb').read()
+    check('E118 add-searchpath en un .dproj en LF: sigue en LF',
+          not res.get('isError') and b'DCC_UnitSearchPath' in b118 and b'\r\n' not in b118,
+          '%s | %r' % (t[:160], b118[:300]))
+
+    # E119 deshacer el borrado de una unit no deja la copia de su form en deleted\
+    D119 = os.path.join(JAIL, 'e119')
+    os.makedirs(D119)
+    P119 = os.path.join(D119, 'UFo.pas')
+    F119 = os.path.join(D119, 'UFo.dfm')
+    open(P119, 'w').write('unit UFo;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
+    open(F119, 'w').write('object Fo: TFo\nend\n')
+    ANT119 = open(F119, 'rb').read()
+    h119 = k32.CreateFileW(P119, 0x80000000, 1, None, 3, 0x80, None)  # leer si; mover no
+    try:
+        res, sc, t = llama('delphi_delete', {'path': P119})
+    finally:
+        k32.CloseHandle(h119)
+    check('E119 borrar una unit cuyo .pas no se deja mover: el form vuelve y SIN su copia',
+          res.get('isError') is True and os.path.exists(P119) and open(F119, 'rb').read() == ANT119 and
+          not mc.copias(D119, 'UFo.dfm') and not os.path.exists(os.path.join(D119, PAP['BACKUP_SUB'])),
+          '%s | %s' % (t[:250], os.listdir(D119)))
+
+    # E121 lo que genera project-test, en ingles
+    D121 = os.path.join(JAIL, 'e121')
+    res, sc, t = llama('delphi_create', {'kind': 'project-test', 'name': 'PruebasX', 'dir': D121})
+    gen = ''
+    for raiz, _d, fs in os.walk(D121):
+        for f in fs:
+            if f.lower().endswith(('.pas', '.dpr')):
+                gen += open(os.path.join(raiz, f), encoding='utf-8', errors='replace').read()
+    check('E121 project-test genera en ingles (Skeleton; ni Esqueleto ni "filtro")',
+          not res.get('isError') and 'Skeleton' in gen and 'Esqueleto' not in gen and 'filtro' not in gen,
+          t[:200])
+
+    # E122 delphi_package no mete la papelera en el zip
+    D122 = os.path.join(JAIL, 'e122')
+    SRC122 = os.path.join(D122, 'src')
+    os.makedirs(os.path.join(SRC122, PAP['BACKUP_SUB'], ahora.strftime('%Y%m%d')))
+    open(os.path.join(SRC122, 'a.txt'), 'w').write('a\n')
+    open(os.path.join(SRC122, PAP['BACKUP_SUB'], ahora.strftime('%Y%m%d'), 'a.txt'), 'w').write('antes\n')
+    Z122 = os.path.join(D122, 'p.zip')
+    res, sc, t = llama('delphi_package', {'dir': SRC122, 'outfile': Z122})
+    nombres = zipfile.ZipFile(Z122).namelist() if os.path.exists(Z122) else []
+    check('E122 delphi_package: a.txt dentro y la papelera fuera',
+          not res.get('isError') and any(n.endswith('a.txt') for n in nombres) and
+          not any(PAP['BACKUP_SUB'] in n for n in nombres), '%s | %s' % (t[:160], nombres))
+
+    # E123 mover una unit cuyo form no se deja mover: todo o nada (MOVE-017)
+    D123 = os.path.join(JAIL, 'e123')
+    os.makedirs(D123)
+    P123 = os.path.join(D123, 'UMv.pas')
+    F123 = os.path.join(D123, 'UMv.dfm')
+    open(P123, 'w').write('unit UMv;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
+    open(F123, 'w').write('object Mv: TMv\nend\n')
+    h123 = k32.CreateFileW(F123, 0x80000000, 1, None, 3, 0x80, None)  # leer si; mover no
+    try:
+        res, sc, t = llama('delphi_move', {'path': P123, 'dest': os.path.join(D123, 'sub', 'UMv.pas')})
+    finally:
+        k32.CloseHandle(h123)
+    check('E123 mover una unit cuyo .dfm no se deja: MOVE-017 y NADA movido',
+          res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and os.path.exists(P123) and
+          os.path.exists(F123) and not os.path.exists(os.path.join(D123, 'sub', 'UMv.pas')),
+          '%s | %s' % (t[:250], os.listdir(D123)))
+    check('E123 ...y sin copia de seguridad en la papelera', not mc.copias(D123),
+          mc.copias(D123))
+
+    # E124 el DESTINO de un move con separador final: GUARD-025 (creaba la carpeta)
+    D124 = os.path.join(JAIL, 'e124')
+    os.makedirs(D124)
+    G124 = os.path.join(D124, 'g.txt')
+    open(G124, 'w').write('g\n')
+    rechazo('E124 move a "h.txt\\": GUARD-025', 'delphi_move',
+            {'path': G124, 'dest': os.path.join(D124, 'h.txt') + '\\'}, 'INVALID_PARAM',
+            'SR_GUARD_BARRA_FINAL_FMT')
+    check('E124 ...sin carpeta h.txt, el origen sigue y sin copia',
+          not os.path.exists(os.path.join(D124, 'h.txt')) and os.path.exists(G124) and
+          not mc.copias(D124), os.listdir(D124))
+
+    # E125 un changeset que crea "n.txt\" se para al apilar (solo lo paraba el preview)
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c125 = mc.id_changeset(t)
+    rechazo('E125 stage create de "n.txt\\": GUARD-025 al apilar', 'delphi_changeset',
+            {'command': 'stage', 'id': c125, 'kind': 'create', 'path': os.path.join(D124, 'n.txt') + '\\',
+             'content': 'x'}, 'INVALID_PARAM', 'SR_GUARD_BARRA_FINAL_FMT')
+    llama('delphi_changeset', {'command': 'rollback', 'id': c125})
+
     # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
     # APPLIED / COMMIT COMPLETE prometiendo copias que no existian
     SIN = os.path.join(JAIL, 'e77')
@@ -1187,6 +1615,25 @@ try:
     check('E77 ...y un changeset que no cambia nada: UNCHANGED',
           not res.get('isError') and mc.abre(t, 'SN_CHANGESET_SIN_CAMBIOS_FMT') and
           not os.path.exists(os.path.join(SIN, '__delphi-patch')), t[:200])
+
+    # E127 la sesion que se cierra para hacer sitio lo dice (SYS-033): decia "el
+    # servidor se reinicio". Al final: se lleva tambien la de la bateria
+    TOPE = int(re.search(r'\bSESIONES_MAX\s*=\s*(\d+)', open(os.path.join(
+        mc.REPO, 'src', 'Server', 'Lsp.Guard.pas'), encoding='utf-8', errors='replace').read()).group(1))
+
+    def sesion_nueva(nombre):
+        code, h, b = mc.post(cli.url, {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
+            'protocolVersion': '2025-03-26', 'capabilities': {},
+            'clientInfo': {'name': nombre, 'version': '1'}}}, TOK, None, 'application/json')
+        return h.get('Mcp-Session-Id') if h else None
+
+    PRIMERA = sesion_nueva('e127-primera')
+    for i in range(TOPE + 4):
+        sesion_nueva('e127-%d' % i)
+    code, h, b = mc.post(cli.url, {'jsonrpc': '2.0', 'id': 51, 'method': 'tools/list'}, TOK, PRIMERA,
+                         'application/json')
+    check('E127 una sesion cerrada para hacer sitio (%d): 404 SYS-033' % TOPE,
+          bool(PRIMERA) and code == 404 and 'SYS-033' in b, '%s %r' % (code, b[:200]))
 
     # un segundo servidor al MISMO puerto que el que ya escucha
     b = subprocess.run([EXE, '--http', str(PORT)], cwd=EXEDIR, capture_output=True, timeout=60,

@@ -977,7 +977,7 @@ begin
     if SameText(A.Trim, H) or (A.Trim = '*') or (A.Trim = '0.0.0.0') then
       Exit; // '*' / 0.0.0.0: el operador declaro CUALQUIER host
   Result := MsgFmt(SR_PASERVER_HOST_DENIED_FMT, [AHost.Trim,
-    IfThen(Allowed <> '', Allowed, MsgText(SF_NINGUNO))]);
+    ONinguno(Allowed)]);
 end;
 
 function TcpProbe(const AHost, APort: string): string;

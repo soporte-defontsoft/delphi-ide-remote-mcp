@@ -143,11 +143,8 @@ begin
       // una tool sin parametros decia "Valid parameters: ." (septima revision)
       if KnownNorms.IndexOf(NormalizeKey(KeyName)) < 0 then
       begin
-        var Validos := String.Join(', ', Publicados.ToStringArray);
-        if Validos = '' then
-          Validos := MsgText(SF_NINGUNO);
         raise EArgumentException.Create(MsgFmt(SR_SYS_UNKNOWN_PARAM_FMT,
-          [KeyName, Validos]));
+          [KeyName, ONinguno(String.Join(', ', Publicados.ToStringArray))]));
       end;
     end;
   finally

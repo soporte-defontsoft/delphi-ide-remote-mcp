@@ -38,6 +38,7 @@ type
 implementation
 
 uses
+  MCPServer.JsonRpcProcessor, // [local change] ERecursoNoExiste: -32002
   Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
 
 { TMCPRegistry }
@@ -88,7 +89,7 @@ begin
   if FResources.TryGetValue(URI, Factory) then
     Result := Factory()
   else
-    raise EArgumentException.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
+    raise ERecursoNoExiste.Create(MsgFmt(SR_SYS_RECURSO_NO_EXISTE_FMT, [URI]));
 end;
 
 class function TMCPRegistry.GetToolNames: TArray<string>;

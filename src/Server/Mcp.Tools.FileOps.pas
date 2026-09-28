@@ -153,7 +153,29 @@ begin
   Result := Mejor;
 end;
 
-procedure MoveToTrash(const APath: string; out ATrash: string);
+{ La copia en la papelera de algo que al final no se hizo (un move que
+  fallo, el form de un borrado de unit que se deshizo), fuera: es nuestra y
+  recien hecha, y dejarla sumaba una copia por reintento; con su marca de
+  dueno y las carpetas que se crearon para ella (octava revision). Nunca
+  lanza. }
+procedure QuitaCopiaDeSeguridad(const ACopia, AAncestro: string);
+begin
+  if ACopia = '' then
+    Exit;
+  try
+    if TDirectory.Exists(ACopia) then
+      BorraArbol(ACopia)
+    else if TFile.Exists(ACopia) then
+      TFile.Delete(ACopia);
+    if TFile.Exists(MarcaDeDueno(ACopia)) then
+      TFile.Delete(MarcaDeDueno(ACopia));
+  except
+    // se queda: es una copia en la papelera, no hace dano
+  end;
+  QuitaCarpetasCreadas(ExtractFileDir(ACopia), AAncestro);
+end;
+
+procedure MoveToTrash(const APath: string; out ATrash, AAncestro: string); overload;
 var
   Ancestro: string;
 begin
@@ -189,6 +211,14 @@ begin
   // marker (or an unknown agent) is nobody's in particular and any caller may
   // purge it - which keeps the operator's own cleanup, and stdio, working.
   WriteOwnerMarker(ATrash);
+  AAncestro := Ancestro; // para quien tenga que deshacerlo (QuitaCopiaDeSeguridad)
+end;
+
+procedure MoveToTrash(const APath: string; out ATrash: string); overload;
+var
+  Ancestro: string;
+begin
+  MoveToTrash(APath, ATrash, Ancestro);
 end;
 
 { Who else's work is inside this purge, '' when none.
@@ -315,21 +345,31 @@ var
   // borrar una UNIT es todo o nada: sus proyectos, su form y ella
   FotoUnit: TFotoDeFicheros;
   HayFotoUnit: Boolean;
+  // las copias del form en la papelera y desde donde crearon carpetas
+  CopiasForm, AncestrosForm: TArray<string>;
 
   { Lo que ya habia cambiado vuelve, y la respuesta lo dice con la causa. }
   function DeshaceUnit(const ACausa: string): string;
   var
     NoVolvio: string;
+    I: Integer;
   begin
     NoVolvio := FotoUnit.Restaura;
+    // algo no volvio: la copia de la papelera se queda, puede ser la unica
     if NoVolvio <> '' then
       Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, ACausa]));
+    // el form volvio de la foto: su copia en la papelera sobra (se
+    // quedaba suelta en deleted\; octava revision)
+    for I := 0 to High(CopiasForm) do
+      QuitaCopiaDeSeguridad(CopiasForm[I], AncestrosForm[I]);
     Result := MsgConCausa(SR_FILE_UNIT_DESHECHO_FMT, ACausa,
       [TPath.GetFileName(Params.Path), ACausa]);
   end;
 
 begin
   HayFotoUnit := False;
+  CopiasForm := [];
+  AncestrosForm := [];
   Denied := PathDenied(Params.Path);
   if Denied <> '' then
     Exit(Denied);
@@ -477,7 +517,10 @@ begin
     for Ext in ['.dfm', '.fmx'] do
       if TFile.Exists(ChangeFileExt(Params.Path, Ext)) then
       try
-        MoveToTrash(ChangeFileExt(Params.Path, Ext), Trash);
+        var AncestroForm: string;
+        MoveToTrash(ChangeFileExt(Params.Path, Ext), Trash, AncestroForm);
+        CopiasForm := CopiasForm + [Trash];
+        AncestrosForm := AncestrosForm + [AncestroForm];
         FotoUnit.Anota(ChangeFileExt(Params.Path, Ext));
         DesignerNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
           [TPath.GetFileName(ChangeFileExt(Params.Path, Ext)), MsgText(SF_FILE_TAMBIEN_A_PAPELERA)]);
@@ -708,6 +751,11 @@ begin
     Exit(MsgFmt(SR_FILE_NO_EXISTE_ORIGEN_FMT, [Params.Path]));
   if TFile.Exists(Params.Dest) or TDirectory.Exists(Params.Dest) then
     Exit(MsgFmt(SR_FILE_DESTINO_YA_EXISTE_FMT, [Params.Dest]));
+  // un FICHERO que va a una ruta con separador final: esa ruta nombra una
+  // CARPETA, y dest es el NUEVO nombre (GUARD-025). Se creaba la carpeta, se
+  // dejaba una copia en la papelera y fallaba INTERNAL (octava revision)
+  if TFile.Exists(Params.Path) and (CarpetaEnVezDeFichero(Params.Dest) <> '') then
+    Exit(CarpetaEnVezDeFichero(Params.Dest));
   // UNA CARPETA se mueve renombrandola o nada (MueveArbol, Lsp.Guard). Se
   // pregunta ANTES de la copia de seguridad: un rechazo no deja copias de
   // algo que no se va a mover.
@@ -759,6 +807,9 @@ begin
     if not Params.Copy then
       Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
   end;
+  // la carpeta que YA existia por encima de la copia de seguridad: lo que se
+  // cree debajo se quita si el move falla (octava revision)
+  var AncestroCopia := '';
   try
     // La carpeta de destino PRIMERO: si no se puede (GUARD-019, un fichero en
     // el camino) no se ha movido nada y tampoco debe quedar una copia del
@@ -773,9 +824,15 @@ begin
       BackupNote := ''
     else if DesdePapelera then
       BackupNote := '' // su nota es otra (SN_FILE_SIN_COPIA_DESDE_PAPELERA)
+    else if EsEnlace(ExcludeTrailingPathDelimiter(Params.Path)) then
+      // un ENLACE se mueve como enlace y lo de detras no se toca: nada que
+      // guardar, y copiarlo era copiar su destino (una junction a un
+      // antepasado copiaba la jaula en su papelera y fallaba; octava revision)
+      BackupNote := ''
     else
     begin
       BackupNote := TrashPathFor(Params.Path, CAJON_BORRADOS);
+      AncestroCopia := PrimerAncestroQueExiste(TPath.GetDirectoryName(BackupNote));
       CrearCarpeta(TPath.GetDirectoryName(BackupNote));
       if TDirectory.Exists(Params.Path) then
         // EL copiador: no sigue un enlace a lo que no se puede leer (25-sep-2026)
@@ -809,7 +866,12 @@ begin
       end;
   except
     on E: Exception do
+    begin
+      // un move que no se hizo no deja su copia de seguridad ni su cajon:
+      // cada reintento dejaba otra (octava revision)
+      QuitaCopiaDeSeguridad(BackupNote, AncestroCopia);
       Exit(IfThen(Params.Copy, MsgEnvuelve(SR_MOVE_ERROR_AL_COPIAR_FMT, E.Message), MsgEnvuelve(SR_MOVE_ERROR_AL_MOVER_FMT, E.Message)));
+    end;
   end;
   Result := IfThen(Params.Copy, MsgFmt(SK_MOVE_COPIADO_FMT, [Params.Path, Params.Dest]),
     MsgFmt(SK_MOVE_MOVIDO_FMT, [Params.Path, Params.Dest]));
@@ -821,7 +883,7 @@ begin
   if not Params.Copy then
     if DesdePapelera then
       Result := Result + #10 + MsgText(SN_FILE_SIN_COPIA_DESDE_PAPELERA)
-    else
+    else if BackupNote <> '' then // un enlace no lleva copia (lo de detras no se toca)
       Result := Result + #10 + MsgFmt(SN_FILE_COPIA_SEGURIDAD_EN_FMT, [BackupNote]);
   if not IsUnit then
     Exit(Result + Reubicacion(DesdePapelera));
@@ -848,8 +910,22 @@ begin
         end;
     except
       on E: Exception do
-        PairNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
-          [TPath.GetFileName(Gemelo), MsgFmt(SF_FILE_ERROR_FMT, [E.Message])]);
+      begin
+        // TODO O NADA: una unit sin su form es un proyecto roto que decia
+        // MOVED. La unit vuelve (o su copia se quita) y ningun proyecto se
+        // toca: todavia no se ha re-apuntado ninguno (octava revision)
+        try
+          if Params.Copy then
+            TFile.Delete(Params.Dest)
+          else
+            TFile.Move(Params.Dest, Params.Path);
+        except
+          // lo dice la negativa: nombra donde quedo cada uno
+        end;
+        QuitaCopiaDeSeguridad(BackupNote, AncestroCopia);
+        Exit(MsgFmt(SR_MOVE_FORM_NO_VA_FMT, [TPath.GetFileName(Gemelo),
+          E.Message.Trim, Params.Path]));
+      end;
     end;
   end;
   if PairNote <> '' then

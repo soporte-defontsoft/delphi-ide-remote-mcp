@@ -95,8 +95,8 @@ On top of that:
 ## Setting it up
 
 ```ini
-[Workspace.MiEquipo]
-Token=su-secreto
+[Workspace.MyTeam]
+Token=your-secret
 Roots=D:\Projects\MyWorkspace
 VaultPath=D:\Vaults\MyKnowledge
 VaultReadOnly=1     ; 0 to also allow append/create/patch

@@ -676,7 +676,11 @@ function CurrentAgentOr(const ADefault: string): string;
   cliente vuelve a hacer initialize. Un initialize con un id viejo siempre
   pasa: es el arreglo, no el problema. }
 type
-  TSessionState = (ssUnknown, ssExpired, ssAlive);
+  // ssEvicted: cerrada para hacer sitio (SESIONES_MAX); salia "desconocida"
+  TSessionState = (ssUnknown, ssExpired, ssAlive, ssEvicted);
+const
+  SESIONES_MAX = 256;
+type
   TSesion = record
     Id, Nombre: string;
     UltimoUso: TDateTime;
@@ -1702,7 +1706,6 @@ end;
 const
   SESSION_TIMEOUT_DEFAULT_MIN = 720; // 12 h de inactividad
   MINUTOS_POR_DIA = 1440;
-  SESIONES_MAX = 256;
 
 { Bajo GIdentLock. -1 = no esta. }
 function IndiceDeSesion(const AId: string): Integer;
@@ -1723,11 +1726,17 @@ end;
 { Bajo GIdentLock. Una sesion que caduca se RECUERDA (las ultimas 512): la
   purga de cualquier peticion se llevaba todas las caducadas, y la segunda
   que volvia oia "desconocida, el servidor se reinicio" (SYS-007) en vez de
-  "caducada" (SYS-008; septima revision). }
-procedure RecuerdaCaducada(const AId: string);
+  "caducada" (SYS-008; septima revision). Y con SU motivo, en el campo (el
+  Object), no en otra lista: la expulsada por el tope tambien oia SYS-007
+  (octava revision). }
+procedure RecuerdaCaducada(const AId: string; AEstado: TSessionState = ssExpired);
+var
+  K: Integer;
 begin
-  if GCaducadas.IndexOf(AId) < 0 then
-    GCaducadas.Add(AId);
+  K := GCaducadas.IndexOf(AId);
+  if K < 0 then
+    K := GCaducadas.Add(AId);
+  GCaducadas.Objects[K] := TObject(NativeInt(Ord(AEstado)));
   while GCaducadas.Count > 512 do
     GCaducadas.Delete(0);
 end;
@@ -1800,6 +1809,7 @@ begin
         for var K := 1 to GSesiones.Count - 1 do
           if GSesiones[K].UltimoUso < GSesiones[Menos].UltimoUso then
             Menos := K;
+        RecuerdaCaducada(GSesiones[Menos].Id, ssEvicted);
         GSesiones.Delete(Menos);
       end;
     end;
@@ -1824,9 +1834,10 @@ begin
     I := IndiceDeSesion(Id);
     if I < 0 then
     begin
-      // purgada por otra peticion: si caduco, se dice caducada
-      if GCaducadas.IndexOf(Id) >= 0 then
-        Result := ssExpired
+      // purgada por otra peticion (o expulsada por el tope): con su motivo
+      var K := GCaducadas.IndexOf(Id);
+      if K >= 0 then
+        Result := TSessionState(NativeInt(GCaducadas.Objects[K]))
       else
         Result := ssUnknown;
     end
@@ -3773,9 +3784,17 @@ begin
     // there. Rejecting them here refused legitimate parent-directory paths.
     if (Name = '.') or (Name = '..') then
       Continue;
+    // mas de 255 no es un nombre de Windows: SYS-009 INTERNAL al escribir
+    // (octava revision)
+    if Length(Name) > 255 then
+      Exit(MsgFmt(SR_GUARD_NOMBRE_LARGO_FMT, [Length(Name), Copy(Name, 1, 40)]));
     if Name.Trim([' ']).TrimRight([' ', '.']) <> Name then
-      Exit(MsgFmt(SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT,
-        [Name, Name.Trim([' ']).TrimRight([' ', '.'])]));
+    begin
+      var Sugerido := Name.Trim([' ']).TrimRight([' ', '.']);
+      if Sugerido <> '' then
+        Sugerido := MsgFmt(SF_GUARD_QUIZAS_FMT, [Sugerido]);
+      Exit(MsgFmt(SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT, [Name, Sugerido]));
+    end;
   end;
 end;
 
@@ -4231,6 +4250,14 @@ var
       Nombre := TPath.GetFileName(E);
       if not AConPapelera and SameText(Nombre, TrashFolderName) then
         Continue; // la papelera del origen no es contenido
+      // un VAULT (de cualquier workspace) es de las tools vault_*: no se
+      // copia, y se dice con lo no seguido (el de OTRO workspace salia
+      // entero en la copia; octava revision)
+      if InVault(E) then
+      begin
+        NoSeg.Add(E);
+        Continue;
+      end;
       if not EsEnlace(E) or SeSigue(E) then
         Copia(E, TPath.Combine(D, Nombre));
     end;
@@ -5042,9 +5069,25 @@ begin
     Lugares := Lugares + LibraryRoots;
   P := IncludeTrailingPathDelimiter(P);
   for L in Lugares do
+  begin
     if (L.Trim <> '') and
        StartsText(IncludeTrailingPathDelimiter(L.Trim.Replace('/', '\')), P) then
       Exit(False);
+    // ...y por la forma LARGA de un sitio declarado en 8.3: la entrada ya
+    // alargo la ruta del agente y una raiz UNC declarada con ~ lo negaba
+    // TODO (octava revision). La E/S es sobre el sitio del operador, no
+    // sobre lo que manda el agente.
+    if (L.IndexOf('~') >= 0) and StartsText(FormaLarga(L.Trim.Replace('/', '\')), P) then
+      Exit(False);
+    // ...y una ruta del agente con segmentos en 8.3 (C$\Users\DAVID~1\...\largo):
+    // se alarga ELLA, pero solo si su recurso (\\servidor\recurso) es el de
+    // un sitio declarado - la E/S va a un host que declaro el operador, nunca
+    // a uno que nombre el agente (octava revision, A13 de test_alias83)
+    if (P.IndexOf('~') >= 0) and
+       SameText(ExtractFileDrive(P), ExtractFileDrive(L.Trim.Replace('/', '\'))) and
+       StartsText(FormaLarga(L.Trim.Replace('/', '\')), FormaLarga(P)) then
+      Exit(False);
+  end;
   Result := True;
 end;
 

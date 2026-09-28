@@ -162,7 +162,7 @@ begin
   else
     Text := PatchLoadText(FPath, FEnc);
   FEol := SaltoDominante(Text);
-  FLines := Text.Replace(#13#10, #10).Split([#10]);
+  FLines := SplitToLines(Text); // el troceador de todos: un CR suelto es salto
   Parse;
 end;
 

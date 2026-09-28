@@ -416,7 +416,7 @@ begin
     if ValEnd > 0 then
     begin
       Xml := Copy(Xml, 1, ValStart - 1) + 'True' + Copy(Xml, ValEnd, MaxInt);
-      PatchSaveText(ADproj, Xml, Enc);
+      PatchSaveConSuSalto(ADproj, Xml, Enc);
       Exit(MsgFmt(SN_CFG_HABILITADA_PLATAFORMA_ESTABA_DECLARAD_FMT, [APlatform]));
     end;
   end;
@@ -434,7 +434,7 @@ begin
   Indent := Copy(Xml, LineStart, ClosePos - LineStart);
   NewLine := Indent + '    ' + Format('<Platform value="%s">True</Platform>', [APlatform]) + sLineBreak;
   Xml := Copy(Xml, 1, LineStart - 1) + NewLine + Copy(Xml, LineStart, MaxInt);
-  PatchSaveText(ADproj, Xml, Enc);
+  PatchSaveConSuSalto(ADproj, Xml, Enc);
   Result := MsgFmt(SK_CFG_ANADIDA_PLATAFORMA_DPROJ_FMT, [APlatform, APlatform]);
 end;
 
@@ -481,7 +481,7 @@ begin
   if EnabledPlatformCount(Xml) <= 1 then
     Exit(MsgFmt(SR_CONFIG_PLAT_LAST_FMT, [APlatform]));
   Xml := Copy(Xml, 1, ValStart - 1) + 'False' + Copy(Xml, ValEnd, MaxInt);
-  PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+  PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := MsgFmt(SN_CFG_DESHABILITADA_PLATAFORMA_QUEDA_DECLAR_FMT, [APlatform]);
 end;
 
@@ -580,7 +580,7 @@ begin
         Copy(Xml, InsertAt, MaxInt);
   end;
 
-  PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+  PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := MsgFmt(SN_CFG_SALIDA_BINARIOS_FIJADA_AHORA_FMT,
     [Clean, sLineBreak, ExeInner, IfThen(OldExe = '', MsgText(SF_CFG_SIN_DEFINIR), OldExe),
      sLineBreak, DcuInner, IfThen(OldDcu = '', MsgText(SF_CFG_SIN_DEFINIR), OldDcu), sLineBreak]);
@@ -860,7 +860,7 @@ begin
     Xml := Copy(Xml, 1, I - 1) + sLineBreak +
       '        ' + XmlElemento('DCC_UnitSearchPath', Path + ';$(DCC_UnitSearchPath)') +
       Copy(Xml, I, MaxInt);
-  PatchSaveText(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
+  PatchSaveConSuSalto(ADproj, Xml, Enc); // backs up the .dproj to __delphi-patch first
   Result := MsgFmt(SN_CONFIG_PATH_ADDED_FMT,
     [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat), Show,
      IfThen(Plat = '', 'Win64', Plat)]);
@@ -922,7 +922,7 @@ begin
   end
   else
     Xml := Copy(Xml, 1, VS - 1) + Rest + Copy(Xml, VE, MaxInt);
-  PatchSaveText(ADproj, Xml, Enc);
+  PatchSaveConSuSalto(ADproj, Xml, Enc);
   Result := MsgFmt(SN_CONFIG_PATH_REMOVED_FMT,
     [Path, IfThen(Plat = '', MsgText(SF_CFG_TODAS_PLATAFORMAS_BASE), Plat)]);
 end;
@@ -1165,7 +1165,7 @@ begin
     DeployEntryXml(Include, RemoteDir, 'Release') +
     '    </ItemGroup>' + sLineBreak;
   Xml := Copy(Xml, 1, ClosePos - 1) + Block + Copy(Xml, ClosePos, MaxInt);
-  PatchSaveText(DeployProj, Xml, Enc); // __delphi-patch copy first
+  PatchSaveConSuSalto(DeployProj, Xml, Enc); // __delphi-patch copy first
   Result := MsgFmt(SN_CONFIG_DEPLOY_ADDED_FMT,
     [Plat, Full, RemoteDir, TPath.GetFileName(Full),
      IfThen(Generated, MsgText(SF_CONFIG_DEPLOY_GENERATED) + ' ', ''), Plat]);
@@ -1209,7 +1209,7 @@ begin
   Xml := TRegEx.Replace(Xml,
     '[ \t]*<ItemGroup Condition="''\$\(Platform\)''==''' + Plat + '''">\s*</ItemGroup>\r?\n?', '',
     [roIgnoreCase]);
-  PatchSaveText(DeployProj, Xml, Enc);
+  PatchSaveConSuSalto(DeployProj, Xml, Enc);
   Result := MsgFmt(SN_CONFIG_DEPLOY_REMOVED_FMT, [Full, Plat, Length(Spans)]);
 end;
 
@@ -1344,7 +1344,7 @@ begin
   if M.Success then
     AntesKey := M.Groups[1].Value
   else
-    AntesKey := MsgText(SF_CFG_NINGUNA);
+    AntesKey := MsgText(SF_NINGUNO);
 
   // Los numeros: se sustituyen donde ya estan (en TODOS los grupos que los
   // lleven) y el que falte entra justo detras del anterior de la serie, que
@@ -1368,7 +1368,7 @@ begin
   Xml := TRegEx.Replace(Xml, '(?i)ProductVersion=[\d.]*',
     'ProductVersion=' + Cuatro);
 
-  PatchSaveText(ADproj, Xml, Enc);
+  PatchSaveConSuSalto(ADproj, Xml, Enc);
   Nota := '';
   if Sufijo <> '' then
     Nota := Eol + MsgFmt(SF_CFG_SUFIJO_NO_VA_DPROJ_FMT, [Sufijo]);
@@ -1394,9 +1394,7 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_COMPONENTS_MISSING));
-  Disponibles := string.Join(', ', SdksDePlataforma(Info.Version, APlatform));
-  if Disponibles = '' then
-    Disponibles := MsgText(SF_NINGUNO);
+  Disponibles := ONinguno(string.Join(', ', SdksDePlataforma(Info.Version, APlatform)));
 
   Sdk := ARawSdk.Trim;
   // sin sdk quitaba el que el proyecto tuviera fijado contestando exito: para
@@ -1447,13 +1445,13 @@ begin
     Xml := Copy(Xml, 1, I - 1) + sLineBreak +
       '        ' + XmlElemento('PlatformSDK', Sdk) + Copy(Xml, I, MaxInt);
 
-  PatchSaveText(ADproj, Xml, Enc);
+  PatchSaveConSuSalto(ADproj, Xml, Enc);
   if Quitar then
     Result := MsgFmt(SN_CONFIG_SDK_QUITADO_FMT,
-      [APlatform, IfThen(Antes = '', MsgText(SF_NINGUNO), Antes), Disponibles])
+      [APlatform, ONinguno(Antes), Disponibles])
   else
     Result := MsgFmt(SN_CONFIG_SDK_PUESTO_FMT,
-      [APlatform, Sdk, IfThen(Antes = '', MsgText(SF_NINGUNO), Antes)]);
+      [APlatform, Sdk, ONinguno(Antes)]);
 end;
 
 { El PAServer del proyecto. La mitad gemela de set-sdk: en el IDE, "anadir a
@@ -1484,9 +1482,7 @@ begin
     if TDirectory.Exists(Dir) then
       for F in TDirectory.GetFiles(Dir, '*.profile') do
         L.Add(TPath.GetFileNameWithoutExtension(F));
-    Disponibles := string.Join(', ', L.ToStringArray);
-    if Disponibles = '' then
-      Disponibles := MsgText(SF_NINGUNO); // como set-sdk: nunca "Registered: ."
+    Disponibles := ONinguno(string.Join(', ', L.ToStringArray)); // nunca "Registered: ."
   finally
     L.Free;
   end;
@@ -1533,13 +1529,13 @@ begin
     Xml := Copy(Xml, 1, I - 1) + sLineBreak +
       '        ' + XmlElemento('Profile', Perfil) + Copy(Xml, I, MaxInt);
 
-  PatchSaveText(ADproj, Xml, Enc);
+  PatchSaveConSuSalto(ADproj, Xml, Enc);
   if Quitar then
     Result := MsgFmt(SN_CONFIG_PROFILE_QUITADO_FMT,
-      [APlatform, IfThen(Antes = '', MsgText(SF_NINGUNO), Antes), Disponibles])
+      [APlatform, ONinguno(Antes), Disponibles])
   else
     Result := MsgFmt(SN_CONFIG_PROFILE_PUESTO_FMT,
-      [APlatform, Perfil, IfThen(Antes = '', MsgText(SF_NINGUNO), Antes)]);
+      [APlatform, Perfil, ONinguno(Antes)]);
 end;
 
 { Los parametros de CADA comando, ademas de project y command. Uno que no es
@@ -1589,7 +1585,7 @@ begin
   var Sobra := ParametroQueSobra(Cmd, Params, Suyos);
   if Sobra <> '' then
     Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'view', Cmd),
-      IfThen(Cmd = '', 'view', Cmd), IfThen(Suyos = '', MsgText(SF_NINGUNO), Suyos)]));
+      IfThen(Cmd = '', 'view', Cmd), ONinguno(Suyos)]));
   // view solo LEE el .dproj (y vale en un proyecto de REFERENCIA); todo lo
   // demas lo escribe y pasa por la puerta de escritura.
   if (Cmd = '') or (Cmd = 'view') then
