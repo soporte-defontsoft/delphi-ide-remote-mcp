@@ -135,8 +135,11 @@ begin
   if AValor is TJSONObject then
   begin
     O := TJSONObject(AValor);
+    // [local change 2026-09-28] una notificacion es un method de TEXTO sin
+    // id: {"method":5} sin id no es una notificacion sino una peticion mal
+    // formada, y se contesta (-32600 con id null); se callaba (202)
     if O.GetValue('method') <> nil then
-      Exit(O.GetValue('id') = nil);
+      Exit((O.GetValue('id') = nil) and (O.GetValue('method') is TJSONString));
     Exit((O.GetValue('result') <> nil) or (O.GetValue('error') <> nil));
   end;
   // un lote (el protocolo 2025-03-26 los tenia): solo si todo lo que
@@ -281,7 +284,12 @@ begin
           JSONResponse.AddPair('result', ExecuteResult.AsString)
         else
           JSONResponse.AddPair('result', ExecuteResult.ToString);
-      end;
+      end
+      else
+        // [local change 2026-09-28] una PETICION siempre lleva result o
+        // error (JSON-RPC 2.0): notifications/initialized con id contestaba
+        // {"jsonrpc","id"} sin result (novena revision, M2)
+        JSONResponse.AddPair('result', TJSONObject.Create);
 
       Result := JSONResponse.ToJSON;
 

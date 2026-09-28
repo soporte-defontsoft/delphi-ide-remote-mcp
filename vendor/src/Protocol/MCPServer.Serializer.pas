@@ -254,8 +254,18 @@ var
 begin
   Result := '';
   Txt := Trim(JsonValue.Value);
+  // [local change 2026-09-28] JSON Schema admite como integer un numero sin
+  // parte fraccionaria (1.0, 1e3): "1.0" se rechazaba con SYS-016 (novena
+  // revision, M3). 2^53: lo que un double representa exacto
   if not TryStrToInt64(Txt, AValor) then
-    Exit(MsgFmt(SF_SYS_EXPECTED_WHOLE_FMT, [JsonValue.Value]));
+  begin
+    var Real: Double;
+    if TryStrToFloat(Txt, Real, TFormatSettings.Invariant) and (Frac(Real) = 0) and
+       (Abs(Real) < 9007199254740992.0) then
+      AValor := Trunc(Real)
+    else
+      Exit(MsgFmt(SF_SYS_EXPECTED_WHOLE_FMT, [JsonValue.Value]));
+  end;
   // ningun entero del contrato es negativo (lineas, desplazamientos,
   // maximos, tiempos): se aceptaba en silencio como el valor por defecto en
   // unas tools y se rechazaba en otras, con cinco copias a mano

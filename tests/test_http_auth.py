@@ -514,7 +514,10 @@ try:
               code == 403 and mc.es(data.decode('utf-8', 'replace'), 'SR_FILES_UNIDAD_VIRTUAL_NO_SERVIDA_FMT') and b'Windows' not in data.split(b'srvz:')[0],
               '%s %r' % (code, data[:140]))
         code, hdr, data = get('sub\\x.txt', TOKEN)
-        check('files: ruta relativa -> 400 absoluta', code == 400 and mc.es(data.decode('utf-8', 'replace'), 'SR_FILES_RUTA_ABSOLUTA'),
+        # la misma negativa que a toda tool (GUARD-021): /files tenia un segundo
+        # lector de "ruta relativa" con su propio texto (FILE-030)
+        check('files: ruta relativa -> 400 GUARD-021 (la puerta de todos)',
+              code == 400 and mc.es(data.decode('utf-8', 'replace'), 'SR_GUARD_RUTA_RELATIVA_FMT'),
               '%s %r' % (code, data[:100]))
 
         # delphi_fetch: small file = chunk + link; big file = link ONLY

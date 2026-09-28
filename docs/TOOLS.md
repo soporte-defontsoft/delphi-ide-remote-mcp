@@ -276,7 +276,7 @@ MULTI-FILE TRANSACTIONS: when one change touches several files, either the whole
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `command` | string | optional | begin (new changeset -> id) \| stage (add ONE operation) \| unstage (take operation "n" back out; n=0 = the last one) \| preview (resolve anchors, rehearse each edit and create with the engine, fingerprint files; required before commit) \| commit (apply all or nothing) \| rollback (discard) \| status (list open ones) |
-| `id` | string | optional | The changeset id returned by begin (every command except begin/status) |
+| `id` | string | optional | The changeset id returned by begin (every command except begin and status) |
 | `kind` | string | optional | stage: edit (replace ONE line by anchor) \| create (new file, never overwrites) \| delete (the WHOLE FILE is removed; the snapshot is the way back) \| delete-line (remove ONE line by atline - the only way to remove a BLANK line, which has no usable anchor) \| move (rename/move, destination must not exist) |
 | `path` | string | optional | stage: the file the operation touches (inside the workspace roots) |
 | `dest` | string | optional | stage kind=move: the destination path |

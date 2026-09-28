@@ -40,6 +40,26 @@ the MCP `initialize` response (`serverInfo.version`).
   place) in the snapshot; `FicherosDelRename` is the one list that both the
   rename and the move photograph. A folder move keeps its per-project note
   (`[MOVE-006]`), now with each project either re-pointed whole or untouched.
+- **JSON-RPC edges** (ninth review, measured on 1.7.1): a body with a
+  `method` that is not a string and no `id` (`{"method":5}`) was taken for a
+  notification and answered with a silent 202; it is a malformed request
+  and now gets `-32600` with `id: null` and `[SYS-032]`. A REQUEST whose
+  handler returns nothing (`notifications/initialized` sent with an `id`)
+  answered `{"jsonrpc","id"}` without `result`; a request always carries
+  `result` or `error`, so it now gets `result: {}`. A JSON number with no
+  fractional part (`1.0`, `1e3`) is a valid integer in JSON Schema and was
+  refused with `[SYS-016]`; `1.5` still is.
+- **`/files`** chose its HTTP status two ways (by the message's outcome in
+  three places, by hand in three); it is one rule now (`CodigoHttp`). And it
+  carried a second reader of "the path is relative" with its own text
+  (`[FILE-030]`): the read gate already refuses a relative path for every
+  tool with `[GUARD-021]`, so `/files` answers the same (400).
+- `delphi_changeset status` said in its table that it takes `id` while the
+  parameter's description said the opposite; `status` lists every changeset
+  and takes no `id` (refused as "does not go with the command").
+- `test_vault` measures a junction of a root that points at the vault:
+  `delphi_list` and `delphi_search` do not enter it, `copy=true` and
+  `delphi_package` leave it out (five checks; nothing to fix).
 - `test_vault` covers the absent `VaultReadOnly=`: a workspace that names a
   vault without the key reads it and is refused a write (read-only by
   default).

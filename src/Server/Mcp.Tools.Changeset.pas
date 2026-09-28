@@ -83,7 +83,7 @@ begin
   var Suyos: string;
   var Sobra := ParametroQueNoVa(Params.Command.Trim.ToLower, [
       'begin', '',
-      'status', 'id',
+      'status', '', // status lista TODOS: su tabla decia id y SP_CHANGESET_ID no (novena)
       'stage', 'id kind path dest old new content atline fragment',
       'unstage', 'id n', 'undo', 'id n',
       'preview', 'id', 'commit', 'id', 'rollback', 'id'],

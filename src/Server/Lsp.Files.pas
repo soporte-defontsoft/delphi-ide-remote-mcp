@@ -148,15 +148,10 @@ begin
       Answer(ResponseInfo, 403, MsgFmt(SR_FILES_UNIDAD_VIRTUAL_NO_SERVIDA_FMT, [Copy(P, 1, 5)]));
       Exit;
     end;
-    // Absolute server paths only (X:\...): a relative value would resolve
-    // against the server process' working directory - not the client's.
-    // LA regla de ruta completa (Lsp.Guard.EsRutaAbsoluta): aqui estaba a
-    // mano, sin UNC y sin mirar la letra (sexta revision)
-    if not EsRutaAbsoluta(P) then
-    begin
-      Answer(ResponseInfo, 400, MsgText(SR_FILES_RUTA_ABSOLUTA));
-      Exit;
-    end;
+    // Una ruta RELATIVA la niega la puerta de lectura como a toda tool
+    // (GUARD-021, RutaRelativaDenegada a la entrada de PathDenied): aqui
+    // habia un segundo lector de la misma regla con su propio texto
+    // (FILE-030; novena revision, M6)
     // las reglas ven la ruta COMO LLEGA (downloading is reading): con
     // GetFullPath delante, "a.txt." era "a.txt" y la anomalia no se veia
     Denied := ReadPathDenied(P);
@@ -170,7 +165,10 @@ begin
     except
       on E: Exception do
       begin
-        Answer(ResponseInfo, 400, MsgFmt(SR_FILES_RUTA_INVALIDA_FMT, [E.Message]));
+        // el codigo por el resultado de la etiqueta, como en las demas
+        // negativas de esta ruta (se elegia de dos formas; novena, M4)
+        var M := MsgFmt(SR_FILES_RUTA_INVALIDA_FMT, [E.Message]);
+        Answer(ResponseInfo, CodigoHttp(M), M);
         Exit;
       end;
     end;
@@ -181,7 +179,7 @@ begin
     end;
     if not TFile.Exists(Full) then
     begin
-      Answer(ResponseInfo, 404, MsgText(SR_FILES_MISSING));
+      Answer(ResponseInfo, CodigoHttp(MsgText(SR_FILES_MISSING)), MsgText(SR_FILES_MISSING));
       Exit;
     end;
 

@@ -4743,7 +4743,7 @@ const
     '(0 or empty = the last one staged)';
 
   SP_CHANGESET_ID =
-    'The changeset id returned by begin (every command except begin/status)';
+    'The changeset id returned by begin (every command except begin and status)';
 
   SP_CHANGESET_KIND =
     'stage: edit (replace ONE line by anchor) | create (new file, never ' +
@@ -6125,10 +6125,6 @@ const
   SR_FILES_UNIDAD_VIRTUAL_NO_SERVIDA_FMT =
     '[FILE-029 DENIED] Virtual drive not served: %s (delphi_workspace ' +
     'tells which ones exist)';
-
-  SR_FILES_RUTA_ABSOLUTA =
-    '[FILE-030 INVALID_PARAM] The path must be absolute, in the form ' +
-    'srvd:\folder\file';
 
   SR_FILES_RUTA_INVALIDA_FMT =
     '[FILE-031 INVALID_PARAM] Invalid path (%s)';

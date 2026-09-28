@@ -1455,6 +1455,16 @@ try:
           '%s %r' % (code, b[:160]))
     code, h, b = cli.post([{'jsonrpc': '2.0', 'method': 'notifications/x'}], accept='application/json')
     check('E114 un lote solo de notificaciones: 202', code == 202 and b == '', '%s %r' % (code, b[:160]))
+    # E172 (1.7.2) lo mal formado SIN id tambien se contesta: {"method":5} sin
+    # id no es una notificacion (JSON-RPC pide -32600 con id null); se callaba
+    code, h, b = cli.post({'jsonrpc': '2.0', 'method': 5}, accept='application/json')
+    check('E172 {"method":5} sin id: -32600 con id null y SYS-032 (era un 202 mudo)',
+          code == 200 and '-32600' in b and 'SYS-032' in b and '"id":null' in b.replace(' ', ''),
+          '%s %r' % (code, b[:200]))
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': 7, 'method': 'notifications/initialized'},
+                          accept='application/json')
+    check('E172 notifications/initialized como PETICION: lleva result {} (contestaba sin result)',
+          code == 200 and mc.como_json(b).get('result') == {}, '%s %r' % (code, b[:200]))
     std = mc.Stdio(EXE, env=mc.entorno(), nombre='e114')
     try:
         std.send({'jsonrpc': '2.0', 'id': 33, 'result': {}})
@@ -1894,8 +1904,7 @@ try:
     # E145 el preview avisa del +R tambien para un delete-line
     P145 = os.path.join(D143, 'ro145.txt')
     open(P145, 'w').write('a\nb\n')
-    os.chmod(P145, stat.S_IREAD)
-    try:
+    with mc.solo_lectura(P145):
         res, sc, t = llama('delphi_changeset', {'command': 'begin'})
         c145 = mc.id_changeset(t)
         llama('delphi_changeset', {'command': 'stage', 'id': c145, 'kind': 'delete-line', 'path': P145,
@@ -1904,9 +1913,6 @@ try:
         check('E145 preview de un delete-line sobre un +R: no sale limpio (SYS-029)',
               mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])
         llama('delphi_changeset', {'command': 'rollback', 'id': c145})
-    finally:
-        if os.path.exists(P145):
-            os.chmod(P145, stat.S_IREAD | stat.S_IWRITE)
 
     # E146 mover (renombrar) una unit con su .dpr bloqueado: SYS-027 y nada movido
     U146 = os.path.join(D131, 'UUnaSuelta.pas')
@@ -2368,6 +2374,21 @@ try:
           not res.get('isError') and os.path.exists(N170) and not os.path.exists(U170) and
           all(b'UNuevo' in open(f, 'rb').read() for f in (DPR170, DPROJ170, DPR171, DPROJ171)) and
           open(N170, 'rb').read().startswith(b'\xef\xbb\xbfunit UNuevo;'), t[:300])
+
+    # E173 (1.7.2) 1.0 es un entero (JSON Schema): se rechazaba con SYS-016;
+    # 1.5 sigue sin serlo. Y changeset status no lleva id (su tabla decia que
+    # si y SP_CHANGESET_ID que no)
+    res, sc, t = llama('delphi_read', {'path': NOTES, 'fromline': 1.0, 'toline': 1.0})
+    check('E173 fromline=1.0 se acepta como entero (era SYS-016)',
+          not res.get('isError') and not mc.es(t, 'SR_SYS_PARAM_VALUE_FMT'), t[:200])
+    res, sc, t = llama('delphi_read', {'path': NOTES, 'fromline': 1.5})
+    check('E173 ...y 1.5 sigue siendo SYS-016', res.get('isError') is True and 'SYS-016' in t, t[:200])
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c173 = mc.id_changeset(t)
+    res, sc, t = llama('delphi_changeset', {'command': 'status', 'id': c173})
+    check('E173 changeset status con id: no va con el comando (su tabla lo admitia)',
+          res.get('isError') is True and mc.es(t, 'SR_CHANGESET_NO_VA_CON_COMANDO_FMT'), t[:200])
+    llama('delphi_changeset', {'command': 'rollback', 'id': c173})
 
     # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
     # APPLIED / COMMIT COMPLETE prometiendo copias que no existian
