@@ -6,6 +6,115 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.1] - 2026-09-28
+
+The list the tenth review left behind, measured again against 1.7.0 in
+production before touching anything (live probes plus three read-only
+audits of the code): what was real is fixed below, each with a check.
+
+### Fixed
+
+- **The changeset preview said "Clean" about what the commit was going to
+  refuse**: a `new` that does not fit the file's encoding (`[EDIT-078]`),
+  and the read-only attribute of a file an earlier `move` of the same batch
+  brings in (the preview looked at the disk, where the destination did not
+  exist yet; the commit then failed with `[SYS-029]`). The preview
+  reimplemented three of the commit's rules and lacked the rest; now the
+  engines REHEARSE: `PatchSaveText` and `DoEdit` do everything but write
+  (encoding, binary content, the write gate, the attribute) and the
+  preview asks them (`ApplyOne` in rehearsal mode) for every `edit` and
+  `create`. An edit of a file a `move` brings in resolves its anchor
+  against the move's source instead of answering "pending".
+- **A block edit reaching the LAST line of a file without a final line
+  break added one** (`uno\r\ndos\r\ntres` came out with `\r\n` after it; a
+  one-line edit kept the file as it was). `ApplyBlockEdit` now splices the
+  new lines the way `DoEdit` does, and the phantom line reproduces the final
+  break exactly.
+- **A changeset `edit` or `delete-line` staged with an `old` of several
+  lines** previewed NOT FOUND and advised `atline`; it is refused when staged
+  (`[CHSET-013]` / `[CHSET-014]`: one complete line), the way the commit
+  would have refused it. The "has a line break" test was written three
+  times in the engine (`TieneSalto` now, one).
+- **`[SYS-029]` said "Nothing was written" and left the day's copy in the
+  trash**: `delphi_edit`, `delphi_textedit` and `edits=` took the
+  `__delphi-patch\<day>\` copy before the writer refused the read-only
+  file. The copy now asks the writer's own question first
+  (`Lsp.Guard.SustitucionDenegada`: the write gate, then the attribute).
+- **`vault_patch` on a CRLF note**: an `old_text` of several lines never
+  matched (an agent sends LF) and a `new_text` of several lines put LF into
+  a CRLF note. The vault editor works in LF and saves with the note's
+  dominant break; `vault_append` inherits it.
+- **`delphi_move` of a unit with a `.dfm` AND a `.fmx`** named only the
+  last designer in its answer; both are named now.
+- **`delphi_textedit` with `old` and no `new`** blanked the line and
+  answered "OK line N"; it says what `delphi_edit` says (`[TEXT-016]`
+  BLANKED, `delete:true` to remove it).
+- **`copy=true` of a read-only unit**: to another name it was refused with
+  `[SYS-029]` about the SOURCE (which a copy never touches, and which cannot
+  be un-marked inside a `ReadOnlyRoots` folder); to the same name the copy
+  came out read-only. A copy made for the agent is the agent's: it no longer
+  inherits the attribute (`CopiaNuestra`, for a unit, its designer and a
+  folder), so the header of a renamed copy is rewritten. The safety copies
+  in the trash keep the attribute.
+- **A project that could not be read while `delphi_move` / `delphi_delete`
+  looked for the units it lists** (held by another process, or an ACL on
+  the way up to the root) came out as a bare `[SYS-028]` / `[SYS-027]` that
+  read like a write attempt. `[CFG-111]` names the project, says it was read
+  to see whether it lists the unit, and carries the cause (the outcome is
+  the cause's). The two searchers were twins; one helper.
+- **`copy=true` of a folder holding a junction to an ancestor of the
+  DESTINATION** copied the copy into itself, one real path deeper per
+  round, until Windows refused the name; the move then failed with
+  `[MOVE-011]`. The one rule for following a link when copying
+  (`SeSigueAlCopiar`, shared with the pre-copy project scan) refuses a link
+  whose target contains the destination, and names it in the answer.
+- **`delphi_edit` edited a `.pas` with NUL bytes**: the "this is not text"
+  rule (`LooksBinaryBytes`) only guarded `delphi_read` and
+  `delphi_textedit`; it guards the Pascal engine too (`[TEXT-008]`).
+- **`insert:"rutina-global"` of a routine that already exists** wrote a
+  duplicate in silence (dcc then stopped). It is written with a warning
+  (`[EDIT-116]`, the line where the other one is) - a warning, not a
+  refusal: whether it is the same routine is dcc's call, and `metodo`
+  refuses only because it writes both halves.
+- Two hand-written line-break normalizers in the `uses` writer did not see a
+  lone CR (a `//` after a comma was not put back on its line; a directive
+  could be glued to a comment); they use `ConSalto`, the one normalizer. The
+  engine's extension lists (`SOURCE_EXTS`, `DESIGNER_EXTS`, `PROJECT_EXTS`)
+  are published from `Lsp.Patch` and the six copies use them (the `.lpr`
+  one of the brace-comment warning never matched: the gate refuses `.lpr`).
+- `[STYLE-015]` said `delphi_list includetrash` shows the copy of a
+  `.style`; the default mask is the Delphi set, so it says `pattern=*.style`.
+
+### Changed
+
+- **The `Bearer` scheme no longer distinguishes case** (`bearer <token>`
+  got a 401; RFC 9110 says the scheme is case-insensitive) and admits more
+  than one space; the token still distinguishes case. One reader
+  (`BearerToken`) for the HTTP server and the workspaces.
+- **A name Windows reserves for a device** (`CON`, `PRN`, `AUX`, `NUL`,
+  `COM1-9`, `LPT1-9`, with or without an extension) is refused in any path
+  (`[GUARD-027 INVALID_PARAM]`). Measured on this Windows 11: `CON.txt` was
+  created as a normal file, which an Explorer on Windows 10 can neither
+  open nor delete; on other Windows it is the device itself.
+- **The schema says `minimum: 0` on every integer parameter**: the binder
+  refuses a negative integer everywhere, and the schema did not say so.
+- **"What does not go with the command is said"** (`[TEST-025]`,
+  `[DSGN-047]`, `[ADB-028]`, `[PAS-051]`): `delphi_test`, `delphi_designer`,
+  `delphi_adb` and `delphi_paserver` ignored a parameter of another command
+  in silence (`discover` with `filter`, `tree` with `class`, `devices` with
+  `key`, `platforms` with `sdk`); the rule the other seven tools already
+  follow. Only the parameter's NAME is echoed, never its value.
+
+### Tests
+
+- `test_resultados` E155-E168 (each fix above), E131/E146 updated for
+  `[CFG-111]`, a NOTE when the test jail path is long enough to hit
+  MAX_PATH by itself; `test_vault`'s CRLF `vault_patch` checks;
+  `mc.solo_lectura` / `mc.bloqueado`, two context managers for the
+  read-only attribute and a file held by another process that tolerate the
+  file being gone when the failure they guard comes back (a `finally` with
+  `os.chmod` used to crash the battery at that exact moment).
+
 ## [1.7.0] - 2026-09-28
 
 Ten rounds of five independent reviewers read this release before it went

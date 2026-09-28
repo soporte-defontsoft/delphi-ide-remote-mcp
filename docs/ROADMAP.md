@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-09-28 (current release v1.7.0; 41 tools - `delphi_run` retired).
+Status page as of 2026-09-28 (current release v1.7.1; 41 tools - `delphi_run` retired).
 
 ## Delivered
 
