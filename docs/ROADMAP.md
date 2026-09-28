@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-09-28 (current release v1.7.5; 41 tools - `delphi_run` retired).
+Status page as of 2026-09-28 (current release v1.7.6; 41 tools - `delphi_run` retired).
 
 ## Delivered
 
@@ -9,7 +9,7 @@ Status page as of 2026-09-28 (current release v1.7.5; 41 tools - `delphi_run` re
 - Designer: read, lint, check-binding, layout (0.5x)
 - Styles (0.5x)
 - `delphi_test` (0.58)
-- `delphi_git` switch / merge / stash (0.57); the whitelist now covers status, diff, log, show, branch, switch, merge, stash, add, commit, init, push, tag, config, clone, pull, fetch, worktree
+- `delphi_git` switch / merge / stash (0.57); the whitelist now covers status, diff, log, show, branch, switch, merge, stash, add, commit, init, push, tag, config, clone, pull, fetch, worktree, restore (1.7.6, always --staged)
 - PAServer chain, get-sdk per distro, remote-run + kill (0.5x–1.0.16)
 - adb, including display and tapScale (1.0.17)
 - One desktop tool through PAServer (`delphi_desktop profile=`), Linux + Windows node, PrintWindow fallback, region / window crops (1.0.16)

@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.6] - 2026-09-28
+
+The last item of the known list: delphi_git can undo an add (restore, always --staged, the working tree never touched). Hermes hit it in the field and deleted his .git to get out. The other item was decided: nothing is indexed in a read-only vault. The list of known pendings is empty.
+
+### Added
+
+- **`delphi_git restore`, always `--staged`: undo an `add`.** `args=<paths>`
+  (one or more; `.` = everything) leave the index and the working tree is
+  never touched; options (`--worktree`, `--source`...) are refused, so are
+  wildcards and paths outside the repo (`[GIT-039]`, `[GIT-040]`). To discard
+  a file's changes the way is still `stash push -- <paths>`. Hermes hit the
+  gap in the field: with neither `rm` nor `reset` in the whitelist, after an
+  `add -f` there was no way back and he deleted his `.git` to start over.
+  The path loop of `stash push` is one helper now (`RutasDeGit`), used by
+  both. `test_git_branches` +6.
+
+### Decided
+
+- Nothing is indexed in a read-only vault: Hermes' battery note lives in his
+  workspace's vault, not in the operator's (David, 28-sep-2026). The list of
+  known pendings is empty.
+
 ## [1.7.5] - 2026-09-28
 
 The two observations the twelfth review round left, done the same evening so the list of known pendings stays empty (David: no version ships with a pending list): a unit of a reference can be listed in your own project, and a tool that writes no longer carries the reading hint in its jail refusal.

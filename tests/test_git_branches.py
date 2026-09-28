@@ -114,6 +114,33 @@ check('stash push -- <comodin> rechazado: un comodin no es un nombre',
 git({'command': 'add', 'args': '.'})
 git({'command': 'commit', 'message': 'lo de antes del stash con rutas'})
 
+# ---- restore: deshacer un add sin tocar el arbol (1.7.6) ----
+# Hermes (28-sep-2026): sin rm ni reset en la lista, tras un add no habia forma de
+# deshacer el staging por el MCP y borro el .git para volver a empezar.
+open(os.path.join(REPO_T, 'e.txt'), 'w').write('nuevo\n')
+open(os.path.join(REPO_T, 'a.txt'), 'a').write('cambio en a\n')
+git({'command': 'add', 'args': '.'})
+r = git({'command': 'restore', 'args': 'e.txt'})
+st = git({'command': 'status', 'args': '--porcelain'})
+check('restore <ruta>: sale del indice y el fichero sigue en el arbol',
+      'exit=0' in r and os.path.exists(os.path.join(REPO_T, 'e.txt')) and '?? e.txt' in st and 'M  a.txt' in st,
+      r[:120] + ' | ' + st[:120])
+r = git({'command': 'restore', 'args': '.'})
+st = git({'command': 'status', 'args': '--porcelain'})
+check('restore .: nada staged y los cambios siguen en el arbol',
+      'exit=0' in r and ' M a.txt' in st and 'cambio en a' in leer('a.txt'), r[:120] + ' | ' + st[:120])
+r = git({'command': 'restore'})
+check('restore sin rutas: rechazado (no adivina)', mc.rechazado(r) and mc.es(r, 'SR_GIT_RESTORE_ARGS_FMT'), r[:200])
+r = git({'command': 'restore', 'args': '--worktree a.txt'})
+check('restore con una opcion: rechazado (nunca toca el arbol)',
+      mc.rechazado(r) and mc.es(r, 'SR_GIT_RESTORE_ARGS_FMT') and 'cambio en a' in leer('a.txt'), r[:200])
+r = git({'command': 'restore', 'args': '../fuera.txt'})
+check('restore <ruta fuera del repo>: rechazado', mc.rechazado(r) and mc.es(r, 'SR_GIT_RESTORE_RUTA_FMT'), r[:200])
+r = git({'command': 'restore', 'args': '*.txt'})
+check('restore <comodin>: rechazado (un comodin no es un nombre)', mc.rechazado(r) and mc.es(r, 'SR_GIT_RESTORE_RUTA_FMT'), r[:200])
+git({'command': 'add', 'args': '.'})
+git({'command': 'commit', 'message': 'tras el restore'})
+
 # ---- contratos ----
 r = git({'command': 'switch'})
 check('switch sin rama rechazado con pista',

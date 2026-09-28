@@ -818,6 +818,67 @@ begin
   end;
 end;
 
+{ Las RUTAS de un comando de git que las lleva (stash push -- <rutas>,
+  restore <rutas>): cada trozo desde ADesde es un fichero o carpeta DE ESTE
+  repo, con su nombre tal cual (sin opciones ni comodines), y sale como
+  :(literal)<relativa> entre comillas, listo para la linea de git. Con
+  AEscribeFicheros cada ruta pasa por la puerta del escritor (stash push
+  reescribe el fichero; restore --staged solo toca el indice). '' = bien;
+  si no, la negativa con los textos de ESE comando (AComando: 'stash' o
+  'restore'; cada texto sale por su helper, aqui dentro). Era el bucle de
+  stash push y restore iba a ser su gemelo (1.7.6). }
+function RutasDeGit(const ARepo, AArgs: string; const ATrozos: TArray<string>;
+  ADesde: Integer; AEscribeFicheros: Boolean; const AComando: string;
+  out ARutas: string): string;
+var
+  Base, Ruta, Rel: string;
+  I: Integer;
+begin
+  Result := '';
+  ARutas := '';
+  Base := IncludeTrailingPathDelimiter(TPath.GetFullPath(ARepo));
+  for I := ADesde to High(ATrozos) do
+  begin
+    if (I = ADesde) and (ATrozos[I] = '--') then
+      Continue;
+    // Rutas, no opciones: -u, -k, -p, --worktree... cambian lo que se guarda
+    // y lo que se toca, y ninguna hace falta.
+    if ATrozos[I].StartsWith('-') or (ATrozos[I].Trim = '') then
+      if SameText(AComando, 'restore') then
+        Exit(MsgFmt(SR_GIT_RESTORE_ARGS_FMT, [AArgs.Trim]))
+      else
+        Exit(MsgFmt(SR_GIT_STASH_ARGS_FMT, [AArgs.Trim]));
+    // Una ruta de ESTE repo, con su nombre tal cual: un comodin no es un
+    // nombre en Windows, y lo que GetFullPath no entiende no es una ruta.
+    Ruta := '';
+    try
+      if not (ATrozos[I].Contains('*') or ATrozos[I].Contains('?')) then
+        Ruta := ExcludeTrailingPathDelimiter(TPath.GetFullPath(
+          TPath.Combine(Base, ATrozos[I].Replace('/', '\'))));
+    except
+      Ruta := '';
+    end;
+    if (Ruta = '') or not StartsText(Base, IncludeTrailingPathDelimiter(Ruta)) then
+      if SameText(AComando, 'restore') then
+        Exit(MsgFmt(SR_GIT_RESTORE_RUTA_FMT, [ATrozos[I], ARepo]))
+      else
+        Exit(MsgFmt(SR_GIT_STASH_RUTA_FMT, [ATrozos[I], ARepo]));
+    // Devolver un fichero a HEAD es ESCRIBIRLO: la pregunta de todo
+    // escritor, por la ruta real de cada uno.
+    if AEscribeFicheros then
+    begin
+      Result := EscrituraDenegada(Ruta);
+      if Result <> '' then
+        Exit;
+    end;
+    Rel := Ruta.Substring(Length(Base)).Replace('\', '/');
+    if Rel = '' then
+      Rel := '.'; // la carpeta del propio repo
+    // :(literal): el nombre es el nombre, sin comodines ni magia.
+    ARutas := ARutas + ' ' + EnComillas(':(literal)' + Rel);
+  end;
+end;
+
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
 var
   Cmd, GitArgs, Repo, Output, MsgFile: string;
@@ -898,7 +959,7 @@ begin
       'pull', '', 'fetch', '', 'init', '', 'merge', '', 'push', '',
       'commit', 'message', 'clone', 'message', 'config', 'message',
       'stash push', 'message', 'stash pop', '', 'stash list', '',
-      'tag', 'message', 'switch', 'create',
+      'tag', 'message', 'switch', 'create', 'restore', '',
       'worktree add', 'path ref', 'worktree list', '', 'worktree remove', 'path'],
     ['message', Params.Message, '', 'path', Params.Path, '', 'ref', Params.Ref, '',
      'create', IfThen(Params.Create, 'true'), ''], SuyosGit);
@@ -1050,44 +1111,34 @@ begin
       GitArgs := 'stash push';
       if Params.Message.Trim <> '' then
         GitArgs := GitArgs + ' -m ' + EnComillas(Params.Message.Trim);
-      var Base := IncludeTrailingPathDelimiter(TPath.GetFullPath(Repo));
-      var Rutas := '';
-      for var I := 1 to High(Trozos) do
-      begin
-        if (I = 1) and (Trozos[I] = '--') then
-          Continue;
-        // Rutas, no opciones: -u, -k, -p... cambian lo que se guarda y lo
-        // que se toca, y ninguna hace falta para descartar.
-        if Trozos[I].StartsWith('-') or (Trozos[I].Trim = '') then
-          Exit(MsgFmt(SR_GIT_STASH_ARGS_FMT, [Params.Args.Trim]));
-        // Una ruta de ESTE repo, con su nombre tal cual: un comodin no es un
-        // nombre en Windows, y lo que GetFullPath no entiende no es una ruta.
-        var Ruta := '';
-        try
-          if not (Trozos[I].Contains('*') or Trozos[I].Contains('?')) then
-            Ruta := ExcludeTrailingPathDelimiter(TPath.GetFullPath(
-              TPath.Combine(Base, Trozos[I].Replace('/', '\'))));
-        except
-          Ruta := '';
-        end;
-        if (Ruta = '') or not StartsText(Base, IncludeTrailingPathDelimiter(Ruta)) then
-          Exit(MsgFmt(SR_GIT_STASH_RUTA_FMT, [Trozos[I], Repo]));
-        // Devolver un fichero a HEAD es ESCRIBIRLO: la pregunta de todo
-        // escritor, por la ruta real de cada uno.
-        Result := EscrituraDenegada(Ruta);
-        if Result <> '' then
-          Exit;
-        var Rel := Ruta.Substring(Length(Base)).Replace('\', '/');
-        if Rel = '' then
-          Rel := '.'; // la carpeta del propio repo
-        // :(literal): el nombre es el nombre, sin comodines ni magia.
-        Rutas := Rutas + ' ' + EnComillas(':(literal)' + Rel);
-      end;
+      // las rutas, por el helper de los comandos con rutas (RutasDeGit):
+      // cada una pasa por la puerta del escritor (se reescribe el fichero)
+      var Rutas: string;
+      Result := RutasDeGit(Repo, Params.Args, Trozos, 1, True, 'stash', Rutas);
+      if Result <> '' then
+        Exit;
       if Rutas <> '' then
         GitArgs := GitArgs + ' --' + Rutas;
     end
     else
       Exit(MsgFmt(SR_GIT_STASH_ARGS_FMT, [Params.Args.Trim]));
+  end
+  else if Cmd = 'restore' then
+  begin
+    // SIEMPRE --staged: deshacer un add. Solo rutas (una o mas; . = todo),
+    // sin opciones: --worktree/--source tocarian el arbol, y para descartar
+    // cambios esta stash push -- <rutas>. Hermes (28-sep-2026): sin rm ni
+    // reset en la lista, tras un add no habia forma de deshacer el staging
+    // y borro el .git para volver a empezar. El indice es del repo (la
+    // puerta ya paso por Repo): las rutas no vuelven a preguntar.
+    var Trozos := TrocearArgs(Params.Args);
+    var Rutas: string;
+    Result := RutasDeGit(Repo, Params.Args, Trozos, 0, False, 'restore', Rutas);
+    if Result <> '' then
+      Exit;
+    if Rutas = '' then
+      Exit(MsgFmt(SR_GIT_RESTORE_ARGS_FMT, [Params.Args.Trim]));
+    GitArgs := 'restore --staged --' + Rutas;
   end
   else if Cmd = 'push' then
     // uses the SERVER's stored credentials/remotes - consistent with the

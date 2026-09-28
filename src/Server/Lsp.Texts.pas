@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.7.5';
+  SERVER_VERSION = '1.7.6';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -4678,6 +4678,23 @@ const
     'in "message"); pop (restores the last one) and list. drop does not ' +
     'exist: it destroys work with no way back.';
 
+  { restore: SIEMPRE --staged. Hermes (28-sep-2026): tras un add no habia forma
+    de deshacer el staging por el MCP (ni rm ni reset en la lista) y borro el
+    .git para volver a empezar. El arbol de trabajo no se toca nunca: para
+    descartar cambios esta stash push -- <rutas>. }
+  SR_GIT_RESTORE_ARGS_FMT =
+    '[GIT-039 INVALID_PARAM] restore does not understand args="%s". It ' +
+    'takes ONLY paths, one or more (. = everything): args="a.txt src". ' +
+    'It is always --staged: those paths leave the index (the add is ' +
+    'undone) and the working tree is never touched; no options. To ' +
+    'discard a file''s changes, stash push -- <paths>. Nothing was done.';
+
+  SR_GIT_RESTORE_RUTA_FMT =
+    '[GIT-040 DENIED] restore -- "%s": that is not a path of this ' +
+    'repository (%s). It takes files or folders INSIDE the repo, ' +
+    'relative to "repo" or absolute, with their name as is: no ' +
+    'wildcards. Nothing was done.';
+
   // ---- delphi_git worktree (1.4.0) ----
 
   SR_GIT_WORKTREE_ARGS =
@@ -5576,7 +5593,7 @@ const
   SR_GIT_UNKNOWN_COMMAND_FMT =
     '[GIT-034 INVALID_PARAM] Unknown command "%s". Allowed: status | ' +
     'diff | log | show | branch | switch | merge | stash | add | commit ' +
-    '| init | push | tag | config | clone | pull | fetch | worktree';
+    '| init | push | tag | config | clone | pull | fetch | worktree | restore';
 
   SR_GIT_EXIT_FMT =
     '[GIT-036 DENIED] exit=%d - git ended with an error; its own answer ' +
@@ -6992,8 +7009,8 @@ const
 
   SP_WS_COMMAND =
     'One of: status | diff | log | show | branch | switch | merge | ' +
-    'stash | add | commit | init | push | tag | config | clone | pull | ' +
-    'fetch | worktree. switch: args=<branch> (create=true for a new ' +
+    'stash | add | restore | commit | init | push | tag | config | clone | ' +
+    'pull | fetch | worktree. switch: args=<branch> (create=true for a new ' +
     'one). merge: args=<branch>, always --ff-only (a merge needing a ' +
     'commit is refused, not left half-done). stash: args=push|pop|list ' +
     '(never drop); push -- <paths> parks ONLY those paths and sets them ' +
@@ -7004,7 +7021,10 @@ const
     'NEW folder inside your roots>, ref=<tag|branch|commit>: another ' +
     'version of the repo next to it, detached, to build and compare) | ' +
     'remove (path=<one that list shows>; refused with changes or with a ' +
-    'link inside)';
+    'link inside). restore: args=<paths> (one or more; . = everything), ' +
+    'always --staged: those paths leave the index and the working tree is ' +
+    'never touched - how you undo an add (to discard changes, stash push ' +
+    '-- <paths>)';
 
   SP_WS_ARGS =
     'Optional extra arguments (paths, --staged, a commit hash...). They ' +
@@ -7097,8 +7117,8 @@ const
   SD_WS_GIT =
     'Whitelisted git operations on a repository of this machine, so a ' +
     'remote agent can bring in code and version its work: status, diff, ' +
-    'log, show, branch, switch, merge, stash, add, commit, init, push, ' +
-    'tag, config, clone, pull, fetch, worktree. **clone** is the fast ' +
+    'log, show, branch, switch, merge, stash, add, restore, commit, init, ' +
+    'push, tag, config, clone, pull, fetch, worktree. **clone** is the fast ' +
     'way to get a whole repo onto the server (URL in "message", ' +
     'destination directory in "repo", jailed to the workspace roots) - ' +
     'far better than recreating files one by one. **worktree** puts ' +
