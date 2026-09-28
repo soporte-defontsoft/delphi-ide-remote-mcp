@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- **A unit move whose project could not be re-pointed answered MOVED with
+  the project broken.** Measured live against 1.7.1: with the `.dproj`
+  read-only, the `.dpr` was re-pointed, the `DCCReference` was not, and the
+  note under `[FILE-035]` said "nothing was written"; with the `.dpr`
+  read-only, the unit moved and the project kept listing the old path. Now
+  it is all or nothing, like the designer file that cannot follow
+  (`[MOVE-017]`) and like deleting a unit (`[FILE-039]`): `[MOVE-019 DENIED]`
+  names the project and the cause, the unit is back with its header and its
+  designer, and every project is as it was (a second project already
+  re-pointed comes back too). Where the rule lives: `RenameProjectUnit` now
+  goes through `ProyectoTodoONada` like add-unit and remove-unit, with the
+  files a rename rewrites (the project's units and the unit in its new
+  place) in the snapshot; `FicherosDelRename` is the one list that both the
+  rename and the move photograph. A folder move keeps its per-project note
+  (`[MOVE-006]`), now with each project either re-pointed whole or untouched.
+- `test_vault` covers the absent `VaultReadOnly=`: a workspace that names a
+  vault without the key reads it and is refused a write (read-only by
+  default).
+
 ## [1.7.1] - 2026-09-28
 
 The list the tenth review left behind, measured again against 1.7.0 in

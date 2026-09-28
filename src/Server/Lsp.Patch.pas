@@ -349,6 +349,10 @@ function NewFileEncName: string;
   overwritten (once per file per day). Returns a note / the backup path.
   Exposed so binary writers (delphi_upload) can be non-destructive too. }
 function BackupFile(const APath: string): string;
+{ La copia DIARIA que BackupFile hace de un fichero (__delphi-patch\<dia>\
+  <nombre>, sin sello): el nombrador, para quien tenga que quitarla porque la
+  escritura que la dejo se deshizo (el move de una unit que no acaba). }
+function CopiaDiariaDe(const APath: string): string;
 { Escritura atomica de bytes (temporal + MoveFileEx): la usa to-binary del
   disenador para dejar un .dfm binario como lo escribiria el IDE. }
 procedure AtomicWrite(const APath: string; const B: TArray<Byte>); // = TBytes
@@ -944,17 +948,22 @@ begin
   end;
 end;
 
+function CopiaDiariaDe(const APath: string): string;
+begin
+  // Esta copia NO lleva sello a proposito: es una por fichero y dia, la
+  // version previa al primer cambio del dia. Pero la CARPETA la pone el
+  // nombrador, como todas.
+  Result := TPath.Combine(TrashDayDir(APath, ''), TPath.GetFileName(APath));
+end;
+
 { Makes the pre-edit copy (once per file per day). Returns a note. }
 function BackupFile(const APath: string): string;
 var
   Dir, DayDir, Dest, Motivo: string;
 begin
   Dir := TPath.Combine(TPath.GetDirectoryName(APath), BACKUP_SUB);
-  // Esta copia NO lleva sello a proposito: es una por fichero y dia, la
-  // version previa al primer cambio del dia. Pero la CARPETA la pone el
-  // nombrador, como todas.
-  DayDir := TrashDayDir(APath, '');
-  Dest := TPath.Combine(DayDir, TPath.GetFileName(APath));
+  Dest := CopiaDiariaDe(APath);
+  DayDir := TPath.GetDirectoryName(Dest);
   // Lo que DEVUELVE esta funcion es para ENSENARLO (el "copia=" del eco de
   // delphi_edit, la respuesta de delphi_upload), nunca para volver a abrir
   // el fichero: por eso la ruta sale enmascarada, desde el unico sitio que

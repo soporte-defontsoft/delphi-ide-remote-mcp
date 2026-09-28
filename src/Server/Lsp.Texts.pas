@@ -6670,7 +6670,9 @@ const
     'project that lists it: the .dpr uses and DCCReference, the uses of ' +
     'every other unit of the project and every qualified UnitOld.X ' +
     'reference in them - looked for from its folder UP to the edge of ' +
-    'the workspace, however deep the unit sits. Moving a whole FOLDER ' +
+    'the workspace, however deep the unit sits; all or nothing: a project ' +
+    'that cannot be re-pointed (read-only, open elsewhere) refuses the ' +
+    'whole move with nothing changed (MOVE-019). Moving a whole FOLDER ' +
     're-points every unit inside it the same way: reorganise freely, the ' +
     'projects follow. And every RELATIVE path that crosses the border of ' +
     'what moved is re-pointed in the same call, once the unit and its ' +
@@ -7791,9 +7793,6 @@ const
   SF_FILE_SIGUE_AHI_DESPUES_BORRARLO =
     'still there after deleting it';
 
-  SF_FILE_ERROR_FMT =
-    'ERROR %s';
-
   SF_FILE_TAMBIEN_A_PAPELERA =
     'also moved to the trash';
 
@@ -7811,6 +7810,20 @@ const
     decia "the unit is back... Nothing was done" debajo (decima revision). }
   SF_MOVE_FORM_NO_VA_FMT =
     'Its form %s could not go with the unit (%s).';
+
+  { Un proyecto que no se deja re-apuntar (su .dpr o su .dproj en +R, abierto
+    sin compartir): salia MOVED con la unit en su sitio nuevo y el proyecto
+    apuntando al viejo, "ERROR" en una nota (medido en vivo, 28-sep-2026).
+    Todo o nada, como su form (MOVE-017) y como borrarla (FILE-039). }
+  SR_MOVE_PROYECTO_NO_VA_FMT =
+    '[MOVE-019 DENIED] Project %s could not be re-pointed (%s): the unit ' +
+    'is back at %s with its header and its designer file, and every ' +
+    'project is as it was. Nothing was done.';
+
+  { La causa de un MOVE-019 cuando el deshacer NO pudo devolverlo todo: va
+    dentro de SYS-018, que dice lo que no volvio. }
+  SF_MOVE_PROYECTO_NO_VA_FMT =
+    'Project %s could not be re-pointed (%s).';
 
   SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT =
     '[MOVE-010 INVALID_PARAM] A .pas unit can only be moved to another .pas ' +

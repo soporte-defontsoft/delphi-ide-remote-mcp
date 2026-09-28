@@ -62,6 +62,15 @@ function RemoveProjectUnit(const AProject, APasPath: string;
   or renamed by the caller; the new file's header decides the unit name). }
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
 
+{ Lo que un RENAME de unit reescribe ademas del .dpr/.dpk y su .dproj: cada
+  unit que el proyecto lista (sus uses y sus UnitVieja.X) y la unit en su
+  sitio nuevo, en absoluto y sin repetir; en ANoEscritos, lo que no puede
+  escribir (una ruta que nadie resuelve, fuera de las raices) y que la
+  respuesta nombra. UNA lista: la foto del todo-o-nada (la del propio rename
+  y la del move que lo llama) y el bucle que reescribe miran la misma. }
+function FicherosDelRename(const AProject, ANewPasPath: string;
+  out ANoEscritos: TArray<string>): TArray<string>;
+
 { Anade nombres de paquete a la clausula requires de un .dpk (la crea antes
   de contains / end. si no existe). Idempotente: los que ya estan no se
   repiten. Es lo que el IDE ofrece tras un build con W1033. }
@@ -1332,14 +1341,19 @@ end;
   lanza o falla a mitad (un .dproj que otro proceso tiene abierto), lo ya
   escrito vuelve. Registrar una unit escribia el .dpr y contestaba "repite"
   con el .dproj sin tocar (quinta revision). }
-function ProyectoTodoONada(const AProject: string; const AAccion: TFunc<string>): string;
+function ProyectoTodoONada(const AProject: string; const AMas: TArray<string>;
+  const AAccion: TFunc<string>): string; overload;
 var
   Dpr, Dproj, NoVolvio: string;
+  Rutas: TArray<string>;
   Foto: TFotoDeFicheros;
 begin
   if ResolveProjectPair(AProject, Dpr, Dproj) <> '' then
     Exit(AAccion()); // la accion dira lo que no cuadra; no hay que deshacer
-  Foto.Toma([Dpr, Dproj]);
+  // AMas: lo que la accion reescribe ADEMAS del par (un rename, las units)
+  Rutas := [Dpr, Dproj];
+  Rutas := Rutas + AMas;
+  Foto.Toma(Rutas);
   try
     Result := AAccion();
   except
@@ -1358,6 +1372,11 @@ begin
     if NoVolvio <> '' then
       Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Result]);
   end;
+end;
+
+function ProyectoTodoONada(const AProject: string; const AAccion: TFunc<string>): string; overload;
+begin
+  Result := ProyectoTodoONada(AProject, [], AAccion);
 end;
 
 function AddProjectUnit(const AProject, APasPath: string): string;
@@ -1523,7 +1542,8 @@ begin
   end;
 end;
 
-function RenameProjectUnitNucleo(const AProject, AOldPasPath, ANewPasPath: string): string;
+function RenameProjectUnitNucleo(const AProject, AOldPasPath, ANewPasPath: string;
+  const AFicheros, ANoEscritos: TArray<string>): string;
 var
   Dpr, Dproj, Enc, Text, OldName, OldInclude, Entry, NewInclude, Prefix, Core: string;
   U: TUsesClause;
@@ -1585,31 +1605,13 @@ begin
   // el proyecto lista, y la respuesta cuenta cuantas y donde.
   var NRefs := 0;
   var NFich := 0;
-  var Ficheros: TArray<string> := [Dpr];
-  for var PU in ProjectUnits(AProject, False) do
-    if PU.Include <> '' then
-      Ficheros := Ficheros + [TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(Dpr), PU.Include))];
   // Mismo nombre (move de carpeta sin renombrar): no hay nada que reescribir
   // y la cuenta decia "1 en 1 fichero" por sustituir X por X (medido en
-  // vivo, 2026-09-23).
-  // El .dpr puede listar ficheros de FUERA (..\Common, una referencia): se
-  // reescribe solo lo que esta sesion puede escribir, y lo demas se dice.
-  // El escritor tambien lo comprueba (EscrituraDenegada): esto es para
-  // contestarlo en vez de lanzar a mitad (auditoria 25-sep-2026).
-  var NoEscritos: TArray<string> := [];
+  // vivo, 2026-09-23). La lista, y lo que no se escribe, las da
+  // FicherosDelRename: la misma que fotografio el todo-o-nada
   if not SameText(OldName, Info.UnitName) then
-  for var Fich in Ficheros do
-    // lo que el .dpr nombra y nadie resuelve (un UNC ajeno, \\?\UNC\...): ni
-    // se mira si existe, que era SMB hacia ese host (novena revision)
-    if RutaSinTocarElDisco(Fich) then
-      NoEscritos := NoEscritos + [TPath.GetFileName(Fich)]
-    else if TFile.Exists(Fich) then
+    for var Fich in AFicheros do
     begin
-      if EscrituraDenegada(Fich) <> '' then
-      begin
-        NoEscritos := NoEscritos + [TPath.GetFileName(Fich)];
-        Continue;
-      end;
       var N := RenombrarIdentificadorUnit(Fich, OldName, Info.UnitName);
       if N > 0 then
       begin
@@ -1619,16 +1621,66 @@ begin
     end;
   Result := MsgFmt(SN_UNIT_RENAMED_FMT, [OldName, OldInclude, Info.UnitName, NewInclude,
     TPath.GetFileName(Dpr), U.Keyword, NRefs, NFich]);
-  if Length(NoEscritos) > 0 then
+  if Length(ANoEscritos) > 0 then
     Result := Result + #10 + MsgFmt(SN_UNIT_RENAME_NOT_WRITTEN_FMT,
-      [Length(NoEscritos), string.Join(', ', NoEscritos)]);
+      [Length(ANoEscritos), string.Join(', ', ANoEscritos)]);
+end;
+
+function FicherosDelRename(const AProject, ANewPasPath: string;
+  out ANoEscritos: TArray<string>): TArray<string>;
+var
+  Dpr, Dproj: string;
+  Todos: TArray<string>;
+begin
+  Result := [];
+  ANoEscritos := [];
+  if ResolveProjectPair(AProject, Dpr, Dproj) <> '' then
+    Exit; // el rename dira lo que no cuadra
+  Todos := [Dpr];
+  for var PU in ProjectUnits(AProject, False) do
+    if PU.Include <> '' then
+      Todos := Todos + [TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(Dpr), PU.Include))];
+  // la unit en su sitio nuevo: el .dpr todavia la lista por el viejo (que ya
+  // no existe y no entra)
+  Todos := Todos + [TPath.GetFullPath(ANewPasPath)];
+  for var Fich in Todos do
+    // lo que el .dpr nombra y nadie resuelve (un UNC ajeno): ni se mira si
+    // existe, que era SMB hacia ese host (novena revision)
+    if RutaSinTocarElDisco(Fich) then
+      ANoEscritos := ANoEscritos + [TPath.GetFileName(Fich)]
+    else if TFile.Exists(Fich) and (IndexText(Fich, Result) < 0) then
+      // El .dpr puede listar ficheros de FUERA (../Common, una referencia):
+      // se reescribe solo lo que esta sesion puede escribir, y lo demas se
+      // dice. El escritor tambien lo comprueba (EscrituraDenegada): esto es
+      // para contestarlo en vez de lanzar a mitad (auditoria 25-sep-2026)
+      if EscrituraDenegada(Fich) <> '' then
+        ANoEscritos := ANoEscritos + [TPath.GetFileName(Fich)]
+      else
+        Result := Result + [Fich];
 end;
 
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
+var
+  Ficheros, NoEscritos: TArray<string>;
 begin
   EnterFileEdit;
   try
-    Result := RenameProjectUnitNucleo(AProject, AOldPasPath, ANewPasPath);
+    // TODO O NADA, como registrar y quitar (ProyectoTodoONada): con el .dproj
+    // en +R el .dpr quedaba re-apuntado y el DCCReference no, y la respuesta
+    // decia "nothing was written" (medido en vivo, 28-sep-2026). En la foto,
+    // ademas del par, lo que un RENAME reescribe (las units del proyecto y
+    // la propia en su sitio nuevo); un move sin renombrar no las toca
+    Ficheros := [];
+    NoEscritos := [];
+    if not SameText(TPath.GetFileNameWithoutExtension(AOldPasPath),
+                    TPath.GetFileNameWithoutExtension(ANewPasPath)) then
+      Ficheros := FicherosDelRename(AProject, ANewPasPath, NoEscritos);
+    Result := ProyectoTodoONada(AProject, Ficheros,
+      function: string
+      begin
+        Result := RenameProjectUnitNucleo(AProject, AOldPasPath, ANewPasPath,
+          Ficheros, NoEscritos);
+      end);
   finally
     LeaveFileEdit;
   end;

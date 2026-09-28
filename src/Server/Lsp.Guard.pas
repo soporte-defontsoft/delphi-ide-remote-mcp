@@ -2377,23 +2377,32 @@ begin
   SetLength(FAncestro, Length(ARutas));
   SetLength(FAjeno, Length(ARutas));
   SetLength(FAtrib, Length(ARutas));
-  for I := 0 to High(ARutas) do
-  begin
-    FRutas[I] := ARutas[I];
-    FAnotado[I] := False;
-    FAjeno[I] := False;
-    FExistian[I] := TFile.Exists(ARutas[I]);
-    FAtrib[I] := GetFileAttributes(PChar(ARutas[I]));
-    if FExistian[I] then
+  // una foto a medias no es una foto: si una ruta no se deja leer (otro
+  // proceso la tiene sin compartir), la foto queda VACIA y se lanza. Con la
+  // mitad tomada, el deshacer borraba lo que no llego a leer (FExistian en
+  // falso) y vaciaba lo que leyo a medias (28-sep-2026)
+  try
+    for I := 0 to High(ARutas) do
     begin
-      FBytes[I] := TFile.ReadAllBytes(ARutas[I]);
-      HuellaDeFichero(ARutas[I], FTam[I], FFecha[I]);
-    end
-    else
-    begin
-      FBytes[I] := nil;
-      FAncestro[I] := PrimerAncestroQueExiste(ExtractFileDir(ARutas[I]));
+      FRutas[I] := ARutas[I];
+      FAnotado[I] := False;
+      FAjeno[I] := False;
+      FExistian[I] := TFile.Exists(ARutas[I]);
+      FAtrib[I] := GetFileAttributes(PChar(ARutas[I]));
+      if FExistian[I] then
+      begin
+        FBytes[I] := TFile.ReadAllBytes(ARutas[I]);
+        HuellaDeFichero(ARutas[I], FTam[I], FFecha[I]);
+      end
+      else
+      begin
+        FBytes[I] := nil;
+        FAncestro[I] := PrimerAncestroQueExiste(ExtractFileDir(ARutas[I]));
+      end;
     end;
+  except
+    SetLength(FRutas, 0);
+    raise;
   end;
 end;
 

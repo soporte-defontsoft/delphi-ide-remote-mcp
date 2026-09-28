@@ -718,6 +718,16 @@ var
   Denied, BackupNote, Ext, Enc, Src, OldStem, NewStem, ProjNote, P, R, PairNote: string;
   Projects, NoSeguidos, NoSegCopia: TArray<string>;
   IsUnit: Boolean;
+  AncestroCopia, CarpetaDestino, AncestroDestino: string;
+  // los designers ya movidos (de, a) y la foto de lo que se reescribe: mover
+  // una UNIT es todo o nada, como borrarla
+  DisenosDe, DisenosA: TArray<string>;
+  FotoUnit: TFotoDeFicheros;
+  // la copia diaria que deja la reescritura de la cabecera: si el move se
+  // deshace, se va con el (un move que no se hizo no deja copias; la
+  // carpeta de destino se quedaba por ella)
+  CopiaCabecera, AncestroCabecera: string;
+  HabiaCopiaCabecera: Boolean;
 
   { La mudanza de las rutas relativas (ReubicaArbol), AL FINAL: con el
     designer ya junto a la unit y la cabecera reescrita, que es lo que
@@ -733,6 +743,46 @@ var
     var Reubica := ReubicaArbol(Params.Path, Params.Dest, Params.Copy);
     if Reubica <> '' then
       Result := #10 + Reubica;
+  end;
+
+  { TODO O NADA: lo que el move ya reescribio vuelve de la foto (la cabecera
+    en el destino, los proyectos), los designers ya movidos y la unit vuelven
+    (o sus copias se quitan), y la respuesta es el rechazo. Lo que NO vuelve
+    se dice (SYS-018) con la causa sola. Era el deshacer del form (MOVE-017)
+    en linea; un proyecto que no se dejaba re-apuntar no deshacia nada. }
+  function DeshaceMove(const ARechazo, ACausa: string): string;
+  var
+    NoVolvio: string;
+  begin
+    NoVolvio := FotoUnit.Restaura;
+    for var K := High(DisenosA) downto 0 do
+      try
+        if Params.Copy then
+          BorraLoNuestro(DisenosA[K]) // la copia de un +R es +R
+        else
+          TFile.Move(DisenosA[K], DisenosDe[K]);
+      except
+        on E2: Exception do
+          NoVolvio := NoVolvio + IfThen(NoVolvio <> '', #10) + '  ' +
+            DisenosA[K] + ': ' + E2.Message.Trim;
+      end;
+    try
+      if Params.Copy then
+        BorraLoNuestro(Params.Dest)
+      else
+        TFile.Move(Params.Dest, Params.Path);
+    except
+      on E2: Exception do
+        NoVolvio := NoVolvio + IfThen(NoVolvio <> '', #10) + '  ' +
+          Params.Dest + ': ' + E2.Message.Trim;
+    end;
+    QuitaCopiaDeSeguridad(BackupNote, AncestroCopia);
+    if (CopiaCabecera <> '') and not HabiaCopiaCabecera then
+      QuitaCopiaDeSeguridad(CopiaCabecera, AncestroCabecera);
+    if NoVolvio <> '' then
+      Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, ACausa]));
+    QuitaCarpetasCreadas(CarpetaDestino, AncestroDestino);
+    Result := ARechazo;
   end;
 
 begin
@@ -829,11 +879,13 @@ begin
   end;
   // la carpeta que YA existia por encima de la copia de seguridad: lo que se
   // cree debajo se quita si el move falla (octava revision)
-  var AncestroCopia := '';
+  AncestroCopia := '';
+  CopiaCabecera := '';
+  HabiaCopiaCabecera := False;
   // ...y la que ya existia por encima del destino: un move que falla quita
   // las que creo para el (se quedaban vacias; novena revision)
-  var CarpetaDestino := TPath.GetDirectoryName(TPath.GetFullPath(Params.Dest));
-  var AncestroDestino := PrimerAncestroQueExiste(CarpetaDestino);
+  CarpetaDestino := TPath.GetDirectoryName(TPath.GetFullPath(Params.Dest));
+  AncestroDestino := PrimerAncestroQueExiste(CarpetaDestino);
   try
     // La carpeta de destino PRIMERO: si no se puede (GUARD-019, un fichero en
     // el camino) no se ha movido nada y tampoco debe quedar una copia del
@@ -945,11 +997,47 @@ begin
   if not IsUnit then
     Exit(Result + Reubicacion(DesdePapelera));
 
+  // TODO O NADA desde aqui, como borrarla (FILE-039): la foto de lo que el
+  // move va a REESCRIBIR - la unit en su sitio nuevo (su cabecera) y cada
+  // proyecto que la lista (.dpr, .dproj y, en un rename, las units que
+  // reescribe: la lista de FicherosDelRename, la misma del propio rename).
+  // Los designers no: van y vuelven por su nombre (DeshaceMove). Un
+  // proyecto que no se dejaba re-apuntar salia MOVED con el proyecto roto
+  // (medido en vivo, 28-sep-2026)
+  var RutasFoto := TStringList.Create;
+  try
+    RutasFoto.Sorted := True;
+    RutasFoto.Duplicates := dupIgnore;
+    RutasFoto.Add(Params.Dest);
+    for P in Projects do
+      if PathDenied(P) = '' then
+      begin
+        RutasFoto.Add(P);
+        RutasFoto.Add(ChangeFileExt(P, '.dproj'));
+        if not SameText(OldStem, NewStem) then
+        begin
+          var NoEscritos: TArray<string>;
+          RutasFoto.AddStrings(FicherosDelRename(P, Params.Dest, NoEscritos));
+        end;
+      end;
+    try
+      FotoUnit.Toma(RutasFoto.ToStringArray);
+    except
+      // un proyecto que no se deja LEER (otro proceso lo tiene) no se va a
+      // poder re-apuntar: la unit vuelve, y se dice cual
+      on E: Exception do
+        Exit(DeshaceMove(MsgFmt(SR_MOVE_PROYECTO_NO_VA_FMT, [string.Join(', ', Projects),
+          E.Message.Trim, Params.Path]), MsgFmt(SF_MOVE_PROYECTO_NO_VA_FMT,
+          [string.Join(', ', Projects), E.Message.Trim])));
+    end;
+  finally
+    RutasFoto.Free;
+  end;
+
   // the designer pair travels with the unit
   PairNote := '';
   // los designers ya movidos (de, a): si falla el siguiente vuelven (con
   // .dfm y .fmx, el .dfm se quedaba en el destino; novena revision)
-  var DisenosDe, DisenosA: TArray<string>;
   for Ext in DESIGNER_EXTS do
   begin
     var Gemelo := DesignerJunto(Params.Path, OldStem, Ext, DesdePapelera);
@@ -968,44 +1056,14 @@ begin
          IfThen(Params.Copy, MsgText(SF_MOVE_COPIADO_CON_UNIT), MsgText(SF_MOVE_MOVIDO_CON_UNIT))]);
     except
       on E: Exception do
-      begin
         // TODO O NADA: una unit sin su form es un proyecto roto que decia
         // MOVED. Los designers ya movidos y la unit vuelven (o sus copias
         // se quitan) y ningun proyecto se toca: todavia no se ha
         // re-apuntado ninguno (octava revision). Lo que NO vuelve se dice
         // (SYS-018): decia "the unit is back" aunque no volviera (novena)
-        var NoVolvio := '';
-        for var K := High(DisenosA) downto 0 do
-          try
-            if Params.Copy then
-              BorraLoNuestro(DisenosA[K]) // la copia de un +R es +R
-            else
-              TFile.Move(DisenosA[K], DisenosDe[K]);
-          except
-            on E2: Exception do
-              NoVolvio := NoVolvio + IfThen(NoVolvio <> '', #10) + '  ' +
-                DisenosA[K] + ': ' + E2.Message.Trim;
-          end;
-        try
-          if Params.Copy then
-            BorraLoNuestro(Params.Dest)
-          else
-            TFile.Move(Params.Dest, Params.Path);
-        except
-          on E2: Exception do
-            NoVolvio := NoVolvio + IfThen(NoVolvio <> '', #10) + '  ' +
-              Params.Dest + ': ' + E2.Message.Trim;
-        end;
-        QuitaCopiaDeSeguridad(BackupNote, AncestroCopia);
-        // lo que no volvio lo dice SYS-018, con la causa sola: el MOVE-017
-        // entero decia debajo "the unit is back... Nothing was done" (decima)
-        if NoVolvio <> '' then
-          Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, MsgFmt(SF_MOVE_FORM_NO_VA_FMT,
-            [TPath.GetFileName(Gemelo), E.Message.Trim])]));
-        QuitaCarpetasCreadas(CarpetaDestino, AncestroDestino);
-        Exit(MsgFmt(SR_MOVE_FORM_NO_VA_FMT, [TPath.GetFileName(Gemelo),
-          E.Message.Trim, Params.Path]));
-      end;
+        Exit(DeshaceMove(MsgFmt(SR_MOVE_FORM_NO_VA_FMT, [TPath.GetFileName(Gemelo),
+          E.Message.Trim, Params.Path]), MsgFmt(SF_MOVE_FORM_NO_VA_FMT,
+          [TPath.GetFileName(Gemelo), E.Message.Trim])));
     end;
   end;
   // lo restaurado ya no vuelve a la papelera: fuera sus marcas (la de la
@@ -1031,7 +1089,11 @@ begin
     if CabeceraDeUnit(Src, Cab, Ini) and SameText(Cab, OldStem) then
     begin
       Src := Copy(Src, 1, Ini - 1) + NewStem + Copy(Src, Ini + Length(Cab), MaxInt);
+      CopiaCabecera := CopiaDiariaDe(Params.Dest);
+      HabiaCopiaCabecera := TFile.Exists(CopiaCabecera);
+      AncestroCabecera := PrimerAncestroQueExiste(TPath.GetDirectoryName(CopiaCabecera));
       PatchSaveText(Params.Dest, Src, Enc);
+      FotoUnit.Anota(Params.Dest); // lo que dejo el move: el deshacer lo devuelve
       Result := Result + #10 + MsgFmt(SN_MOVE_CABECERA_REESCRITA_FMT, [NewStem]);
     end
     else
@@ -1049,12 +1111,25 @@ begin
       ProjNote := ProjNote + #10 + MsgFmt(SN_FILE_PROJECT_DENIED_FMT, [TPath.GetFileName(P)]);
       Continue;
     end;
+    // TODO O NADA, como su form (MOVE-017): un proyecto que no se deja
+    // re-apuntar (su .dpr o su .dproj en +R, abierto sin compartir) salia
+    // MOVED con la unit en su sitio nuevo y el proyecto apuntando al viejo,
+    // "ERROR" en una nota que decia "nothing was written" con el .dpr ya
+    // reescrito (medido en vivo, 28-sep-2026)
     try
+      FotoUnit.Vigila(P);
       R := RenameProjectUnit(P, Params.Path, Params.Dest);
     except
       on E: Exception do
-        R := MsgFmt(SF_FILE_ERROR_FMT, [E.Message]);
+        Exit(DeshaceMove(MsgFmt(SR_MOVE_PROYECTO_NO_VA_FMT, [TPath.GetFileName(P),
+          E.Message.Trim, Params.Path]), MsgFmt(SF_MOVE_PROYECTO_NO_VA_FMT,
+          [TPath.GetFileName(P), E.Message.Trim])));
     end;
+    if EsFallo(R) then
+      Exit(DeshaceMove(MsgFmt(SR_MOVE_PROYECTO_NO_VA_FMT, [TPath.GetFileName(P), R,
+        Params.Path]), MsgFmt(SF_MOVE_PROYECTO_NO_VA_FMT, [TPath.GetFileName(P), R])));
+    FotoUnit.Anota(P);
+    FotoUnit.Anota(ChangeFileExt(P, '.dproj'));
     ProjNote := ProjNote + #10 + '    ' + TPath.GetFileName(P) + ': ' + R.Replace(#10, ' ');
   end;
   if Length(Projects) > 0 then

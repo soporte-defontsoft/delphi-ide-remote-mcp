@@ -2086,8 +2086,17 @@ try:
     m154 = re.search(r"SF_MOVE_FORM_NO_VA_FMT\s*=\s*'([^']*)'", TXT154)
     check('E154 la causa de MOVE-017 dentro de SYS-018 no dice que la unit volvio',
           bool(m154) and 'back' not in m154.group(1) and 'Nothing' not in m154.group(1) and
-          re.search(r'SR_FOTO_NO_VOLVIO_FMT, \[NoVolvio, MsgFmt\(SF_MOVE_FORM_NO_VA_FMT', FO154) is not None,
+          re.search(r'SR_FOTO_NO_VOLVIO_FMT, \[NoVolvio, ACausa\]', FO154) is not None and
+          re.search(r'DeshaceMove\(MsgFmt\(SR_MOVE_FORM_NO_VA_FMT, [^;]*MsgFmt\(SF_MOVE_FORM_NO_VA_FMT',
+                    FO154, re.S) is not None,
           m154.group(1) if m154 else 'sin SF_MOVE_FORM_NO_VA_FMT')
+    # ...y la de MOVE-019, por el MISMO deshacer (DeshaceMove)
+    m170 = re.search(r"SF_MOVE_PROYECTO_NO_VA_FMT\s*=\s*'([^']*)'", TXT154)
+    check('E170 la causa de MOVE-019 dentro de SYS-018 tampoco dice que la unit volvio (el mismo deshacer)',
+          bool(m170) and 'back' not in m170.group(1) and 'Nothing' not in m170.group(1) and
+          re.search(r'DeshaceMove\(MsgFmt\(SR_MOVE_PROYECTO_NO_VA_FMT, [^;]*MsgFmt\(SF_MOVE_PROYECTO_NO_VA_FMT',
+                    FO154, re.S) is not None,
+          m170.group(1) if m170 else 'sin SF_MOVE_PROYECTO_NO_VA_FMT')
 
     # ------------------------------------------------------------ 1.7.1
     # E155 un bloque que llega a la ULTIMA linea de un fichero SIN salto final no
@@ -2302,6 +2311,63 @@ try:
     res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c169})
     check('E169 ...y el commit lo hace', not res.get('isError') and
           open(os.path.join(D169, 'mv2.txt'), 'rb').read() == b'UNO\ndos\n', t[:200])
+
+    # ------------------------------------------------------------ 1.7.2
+    # E170 mover una unit cuyo proyecto no se deja re-apuntar: TODO O NADA
+    # (MOVE-019), como su form (MOVE-017) y como borrarla (FILE-039). Salia
+    # MOVED con el .dpr re-apuntado, el .dproj no y "nothing was written" en
+    # una nota (medido en vivo, 28-sep-2026)
+    D170 = os.path.join(JAIL, 'e170')
+    llama('delphi_create', {'kind': 'project-console', 'name': 'Pm', 'dir': D170})
+    DPR170 = os.path.join(D170, 'Pm.dpr')
+    DPROJ170 = os.path.join(D170, 'Pm.dproj')
+    res, sc, t = llama('delphi_create', {'kind': 'unit', 'name': 'UMov', 'project': DPROJ170})
+    U170 = os.path.join(D170, 'UMov.pas')
+    check('E170 fixture: un proyecto con una unit registrada',
+          os.path.exists(U170) and os.path.exists(DPROJ170), t[:200])
+    ANT170 = [open(f, 'rb').read() for f in (DPR170, DPROJ170, U170)]
+    COPIAS170 = mc.copias(D170, 'UMov.pas', 'CAJON_BORRADOS')
+    N170 = os.path.join(D170, 'sub', 'UNuevo.pas')
+    with mc.solo_lectura(DPROJ170):
+        res, sc, t = llama('delphi_move', {'path': U170, 'dest': N170})
+    check('E170 move con el .dproj +R: MOVE-019 y NADA movido (la unit en su sitio, con su cabecera)',
+          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and
+          os.path.exists(U170) and not os.path.exists(N170) and
+          open(U170, 'rb').read() == ANT170[2], '%s | %s' % (t[:300], os.listdir(D170)))
+    check('E170 ...y el .dpr y el .dproj como estaban (el .dpr quedaba re-apuntado)',
+          [open(f, 'rb').read() for f in (DPR170, DPROJ170)] == ANT170[:2], t[:200])
+    check('E170 ...sin carpeta sub y sin copia nueva en la papelera',
+          not os.path.exists(os.path.join(D170, 'sub')) and
+          mc.copias(D170, 'UMov.pas', 'CAJON_BORRADOS') == COPIAS170, os.listdir(D170))
+    # con el .dpr +R falla el primer escritor: lo mismo
+    with mc.solo_lectura(DPR170):
+        res, sc, t = llama('delphi_move', {'path': U170, 'dest': N170})
+    check('E170 ...con el .dpr +R: MOVE-019, la unit en su sitio y el par intacto',
+          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and
+          os.path.exists(U170) and not os.path.exists(N170) and
+          [open(f, 'rb').read() for f in (DPR170, DPROJ170, U170)] == ANT170, t[:300])
+
+    # E171 DOS proyectos la listan y el segundo no se deja: el primero vuelve
+    # (la foto del move cubre todos), y sin el +R el rename va con los dos
+    llama('delphi_create', {'kind': 'project-console', 'name': 'Pn', 'dir': D170})
+    DPR171 = os.path.join(D170, 'Pn.dpr')
+    DPROJ171 = os.path.join(D170, 'Pn.dproj')
+    res, sc, t = llama('delphi_config', {'command': 'add-unit', 'project': DPROJ171, 'path': U170})
+    check('E171 fixture: la unit en dos proyectos', not res.get('isError') and
+          b'UMov' in open(DPR171, 'rb').read(), t[:200])
+    ANT171 = [open(f, 'rb').read() for f in (DPR170, DPROJ170, DPR171, DPROJ171, U170)]
+    with mc.solo_lectura(DPROJ171):
+        res, sc, t = llama('delphi_move', {'path': U170, 'dest': N170})
+    check('E171 el segundo proyecto no se deja: MOVE-019 y los DOS proyectos como estaban',
+          res.get('isError') is True and mc.abre(t, 'SR_MOVE_PROYECTO_NO_VA_FMT') and
+          os.path.exists(U170) and not os.path.exists(N170) and
+          [open(f, 'rb').read() for f in (DPR170, DPROJ170, DPR171, DPROJ171, U170)] == ANT171,
+          t[:300])
+    res, sc, t = llama('delphi_move', {'path': U170, 'dest': N170})
+    check('E171 ...sin +R el rename va y los dos proyectos la listan por el nombre nuevo',
+          not res.get('isError') and os.path.exists(N170) and not os.path.exists(U170) and
+          all(b'UNuevo' in open(f, 'rb').read() for f in (DPR170, DPROJ170, DPR171, DPROJ171)) and
+          open(N170, 'rb').read().startswith(b'\xef\xbb\xbfunit UNuevo;'), t[:300])
 
     # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
     # APPLIED / COMMIT COMPLETE prometiendo copias que no existian
