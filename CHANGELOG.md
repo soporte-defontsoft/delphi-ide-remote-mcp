@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- `delphi_designer`: the refusal `[DSGN-047]` named the class parameter `class`
+  while it is `classname` (Hermes, first report of the 1.7.2 test round); and
+  `command=info` with a `filter` that matches nothing answered `total: 0` and
+  an empty list, which a small model read as an RTTI failure - it now carries
+  `[DSGN-048]`: no member contains the filter, how many the class publishes,
+  and that an FMX text control keeps its font in `TextSettings`.
+
 ## [1.7.2] - 2026-09-28
 
 The list the 1.7.1 review left behind, closed point by point before David steps away for a few days of testing: every item is either done here or decided and written down (the vault keeps the decisions).

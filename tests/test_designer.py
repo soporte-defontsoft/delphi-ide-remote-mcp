@@ -74,6 +74,15 @@ check('info TButton (VCL): Caption y TabOrder publicados', 'Caption' in props an
 check('info: eventos aparte (OnClick)', any('OnClick' in e for e in j.get('events', [])), str(j.get('events'))[:200])
 j = J(call('delphi_designer', {'command': 'info', 'class': 'TButton', 'framework': 'vcl', 'filter': 'Cap'}))
 check('info con filter acota', j.get('total', 99) <= 3 and any(p['name'] == 'Caption' for p in j.get('properties', [])), str(j)[:200])
+# un filtro que no casa con nada lo DICE (DSGN-048): total:0 a secas se leia como
+# un fallo de RTTI (Hermes, 28-sep-2026: TLabel FMX con filter=Font)
+j = J(call('delphi_designer', {'command': 'info', 'class': 'TLabel', 'framework': 'fmx', 'filter': 'Font'}))
+check('info con filter sin resultado: total 0 y la pista DSGN-048 (no es un fallo de RTTI)',
+      j.get('total') == 0 and mc.es(j.get('hint', ''), 'SN_DESIGNER_INFO_FILTRO_VACIO_FMT') and 'TextSettings' in j.get('hint', ''),
+      str(j)[:250])
+r = call('delphi_designer', {'command': 'prop', 'class': 'TButton', 'framework': 'vcl', 'prop': 'Caption', 'filter': 'x'})
+check('prop con filter: DSGN-047 nombra classname, el parametro real (decia class)',
+      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_NO_VA_CON_COMANDO_FMT') and 'classname' in r, r[:200])
 r = call('delphi_designer', {'command': 'info', 'class': 'TClaseInventada', 'framework': 'vcl'})
 # el rechazo CONCRETO de la tabla de clases, no uno cualquiera
 check('info clase desconocida rechazada',

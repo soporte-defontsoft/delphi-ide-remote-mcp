@@ -3805,6 +3805,15 @@ const
     '(inherited included). A property absent here does NOT stream in a ' +
     '.dfm/.fmx: do not write it.';
 
+  { Un filtro que no casa con nada devolvia properties:[] y total:0 sin mas,
+    y un agente pequeno lo leia como un fallo de RTTI (Hermes, 28-sep-2026:
+    TLabel FMX con filter=Font; la fuente va en TextSettings). }
+  SN_DESIGNER_INFO_FILTRO_VACIO_FMT =
+    '[DSGN-048] No published property or event of %s contains "%s" (it ' +
+    'publishes %d; the filter is a substring of the name, case-insensitive). ' +
+    'Not an RTTI failure: the class simply has no such member (an FMX text ' +
+    'control keeps its font in TextSettings, not in Font).';
+
   SN_DESIGNER_INFO_TRUNCATED =
     '[DSGN-042] The list is truncated: filter=<text> narrows it to the ' +
     'properties whose name contains it.';

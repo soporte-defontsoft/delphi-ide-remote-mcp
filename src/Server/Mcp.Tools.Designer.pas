@@ -171,6 +171,10 @@ begin
       end;
     end;
     Ret.AddPair('total', TJSONNumber.Create(N));
+    // un filtro sin resultado lo dice (DSGN-048): total:0 a secas se leia
+    // como un fallo de RTTI (Hermes, 28-sep-2026)
+    if (AFilter <> '') and (N = 0) then
+      Ret.AddPair('hint', MsgFmt(SN_DESIGNER_INFO_FILTRO_VACIO_FMT, [Cls, AFilter, Names.Count]));
     if N > Shown then
     begin
       Ret.AddPair('truncated', TJSONBool.Create(True));
@@ -947,13 +951,15 @@ begin
   var Modo := IfThen(Cmd = 'binding', 'check-binding', Cmd);
   var Suyos: string;
   var Sobra := ParametroQueNoVa(Modo, [
-      'info', 'class framework filter',
-      'prop', 'class framework prop',
+      // el parametro se llama classname: la tabla decia class y DSGN-047 lo
+      // ensenaba con ese nombre (Hermes, 28-sep-2026, F2)
+      'info', 'classname framework filter',
+      'prop', 'classname framework prop',
       'tree', 'path', 'lint', 'path', 'layout', 'path',
       'get', 'path component',
       'check-binding', 'path unit',
       'to-text', 'path', 'to-binary', 'path'],
-    ['path', Params.Path, '', 'class', Params.ClassName_, '', 'prop', Params.Prop, '',
+    ['path', Params.Path, '', 'classname', Params.ClassName_, '', 'prop', Params.Prop, '',
      'component', Params.Component, '', 'unit', Params.Unit_, '',
      'framework', Params.Framework, '', 'filter', Params.Filter, ''], Suyos);
   if Sobra <> '' then
