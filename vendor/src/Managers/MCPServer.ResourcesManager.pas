@@ -134,15 +134,10 @@ var
 begin
   // [local change 2026-09-27] sin params (o sin uri) era un Access Violation;
   // un recurso que no existe, un "exito" con el error dentro del texto
-  URIValue := nil;
-  if Assigned(Params) then
-    URIValue := Params.GetValue('uri');
-  // null es "falta", como en las tools: su .Value es el texto 'null' y salia
-  // NOT_FOUND "Resource null" (sexta revision)
-  if Assigned(URIValue) and not (URIValue is TJSONNull) then
-    URI := URIValue.Value
-  else
-    URI := '';
+  // null (o algo que no es texto) es "falta", como en las tools: su .Value
+  // es el texto 'null' y salia NOT_FOUND "Resource null" (sexta revision).
+  // El lector de todos los campos del protocolo (septima)
+  URI := CampoDeTexto(Params, 'uri');
   if URI = '' then
     raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_METHOD_PARAM_FMT, ['uri']));
   if not FResources.ContainsKey(URI) then

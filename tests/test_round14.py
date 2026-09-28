@@ -30,8 +30,7 @@ call = srv.call
 
 
 def copies():
-    return [c for c in glob.glob(os.path.join(BASE, '**', '__delphi-patch', '**', 'proj-*'),
-                                 recursive=True) if not c.endswith('.by')]
+    return mc.copias(BASE, 'proj', bajo=True)  # el lector de la papelera
 
 sub = os.path.join(BASE, 'proj')
 os.makedirs(sub)

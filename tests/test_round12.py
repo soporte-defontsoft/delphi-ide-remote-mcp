@@ -87,11 +87,11 @@ check('S1 tampoco por la subcarpeta "deleted"',
 r = call('delphi_textedit', {'path': mc.marca_dueno(copy), 'old': 'otroagente',
                              'new': 'round12'})
 check('S2 el marcador .by no se edita',
-      mc.rechazado(r) and mc.es(r, 'SR_GUARD_OWNER_MARKER') and open(copy + '.by').read().strip() == 'otroagente',
+      mc.rechazado(r) and mc.es(r, 'SR_GUARD_OWNER_MARKER') and open(mc.marca_dueno(copy)).read().strip() == 'otroagente',
       r[:200])
-r = call('delphi_delete', {'path': copy + '.by', 'purge': True})
+r = call('delphi_delete', {'path': mc.marca_dueno(copy), 'purge': True})
 check('S2 el marcador .by no se purga suelto',
-      mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and os.path.exists(copy + '.by'), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and os.path.exists(mc.marca_dueno(copy)), r[:200])
 
 # S3/S4 - the trash is not a scratchpad
 before = open(copy, encoding='utf-8').read()
@@ -131,7 +131,7 @@ r = call('delphi_upload', {'path': os.path.join(BASE, 'proj', 'Nuevo.dfm'),
 check('D1 tampoco crea uno nuevo envuelto en recurso ($FF)',
       mc.rechazado(r) and mc.es(r, 'SR_UPLOAD_BINARY_DESIGNER') and not os.path.exists(
           os.path.join(BASE, 'proj', 'Nuevo.dfm')), r[:200])
-r = call('delphi_upload', {'path': live + '.by', 'chunkbase64': tpf0})
+r = call('delphi_upload', {'path': mc.marca_dueno(live), 'chunkbase64': tpf0})
 check('S2 upload tampoco escribe marcadores .by', mc.rechazado(r) and mc.es(r, 'SR_GUARD_OWNER_MARKER'), r[:160])
 
 # ------------------------------------------------------------- check-binding

@@ -189,7 +189,7 @@ var
 begin
   if not TFile.Exists(APath) then
     Exit(0);
-  Result := Length(PatchLoadText(APath, Enc).Replace(#13#10, #10).Split([#10]));
+  Result := Length(LineasDelTexto(PatchLoadText(APath, Enc))); // como delphi_read
 end;
 
 function KindName(K: TOpKind): string;
@@ -213,7 +213,7 @@ var
   I: Integer;
 begin
   Result := 0;
-  Lines := AText.Replace(#13#10, #10).Split([#10]);
+  Lines := LineasDelTexto(AText); // los saltos como delphi_read (CR tambien)
   if (AAtLine > 0) and (AAtLine <= Length(Lines)) and
      (Lines[AAtLine - 1].Trim = ALine.Trim) then
     Exit(AAtLine);
@@ -232,7 +232,7 @@ var
   I: Integer;
 begin
   Result := 0;
-  Lines := AText.Replace(#13#10, #10).Split([#10]);
+  Lines := LineasDelTexto(AText);
   if AAtLine > 0 then
   begin
     if (AAtLine <= Length(Lines)) and (Lines[AAtLine - 1] = ALine) then
@@ -345,6 +345,11 @@ begin
         // antes de tocarlo, como toda tool que escribe
         // la copia del contenido ACTUAL, sellada: la diaria (BackupFile) es
         // la de la primera version del dia y lo de despues se perdia (sexta revision)
+        // el atributo de solo lectura se dice antes, como en toda escritura
+        // (salia SYS-028 del TFile.Delete; septima revision)
+        AError := SoloLecturaDenegado(Op.Path);
+        if AError <> '' then
+          Exit;
         GuardaContenidoActual(Op.Path, CAJON_BORRADOS);
         TFile.Delete(Op.Path);
         Result := True;
@@ -356,9 +361,13 @@ begin
           AError := MsgFmt(SF_CHSET_NO_EXISTE_FMT, [Op.Path]);
           Exit;
         end;
+        // las lineas como delphi_read (sin la fantasma del salto final, y un CR
+        // suelto es salto): atline=4 en un fichero de 3 se aceptaba y solo
+        // quitaba el salto final, con COMMIT COMPLETE (septima revision)
         var Txt := PatchLoadText(Op.Path, Enc);
-        var Eol := IfThen(Txt.Contains(#13#10), #13#10, #10);
-        var Ls := Txt.Replace(#13#10, #10).Split([#10]);
+        var Eol := SaltoDominante(Txt);
+        var Ls := LineasDelTexto(Txt);
+        var SaltoFinal := Txt.EndsWith(#10) or Txt.EndsWith(#13);
         if (Op.AtLine < 1) or (Op.AtLine > Length(Ls)) then
         begin
           AError := MsgFmt(SF_CHSET_LINEA_NO_EXISTE_FMT,
@@ -372,7 +381,10 @@ begin
           Exit;
         end;
         Delete(Ls, Op.AtLine - 1, 1);
-        PatchSaveText(Op.Path, string.Join(Eol, Ls), Enc);
+        var Nuevo := string.Join(Eol, Ls);
+        if SaltoFinal and (Length(Ls) > 0) then
+          Nuevo := Nuevo + Eol;
+        PatchSaveText(Op.Path, Nuevo, Enc);
         Result := True;
       end;
     opMove:
@@ -570,12 +582,14 @@ begin
       else
         Exit(MsgText(SR_CHANGESET_KIND));
       // lo que no es de este kind se dice, no se ignora: content solo va con
-      // create; old/new/fragment, solo con edit (sexta revision)
+      // create; new/fragment, solo con edit; old, con edit y con delete-line,
+      // que lo compara con su linea (se rechazaba; septima revision)
       if (Op.Kind <> opCreate) and (AContent <> '') then
         Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['content', AKind]));
-      if (Op.Kind <> opEdit) and
-         ((AOldLine <> '') or (ANewText <> '') or (AFragment <> '')) then
-        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['old/new/fragment', AKind]));
+      if (Op.Kind <> opEdit) and ((ANewText <> '') or (AFragment <> '')) then
+        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['new/fragment', AKind]));
+      if not (Op.Kind in [opEdit, opDeleteLine]) and (AOldLine <> '') then
+        Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['old', AKind]));
       if (Op.Kind <> opMove) and (ADest.Trim <> '') then
         Exit(MsgFmt(SR_CHANGESET_NO_ES_DE_KIND_FMT, ['dest', AKind]));
       if (Op.Kind in [opCreate, opDelete, opMove]) and (AAtLine > 0) then
@@ -727,6 +741,28 @@ begin
             Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_PENDIENTE));
             Obj.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_VIRTUAL));
             Continue;
+          end;
+          // delete-line: el preview dice lo que el commit va a rechazar (una
+          // linea que no existe, o que no es la de old); decia "clean" y el
+          // commit deshacia la tanda entera (septima revision)
+          if Op.Kind = opDeleteLine then
+          begin
+            var Ls := LineasDelTexto(PatchLoadText(Op.Path, EncName));
+            Obj.AddPair('atline', TJSONNumber.Create(Op.AtLine));
+            if Op.AtLine > Length(Ls) then
+            begin
+              Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_NO_EXISTE_FMT,
+                [Op.AtLine, TPath.GetFileName(Op.Path), Length(Ls)]));
+              Inc(N);
+            end
+            else if (Op.OldLine <> '') and (Ls[Op.AtLine - 1] <> Op.OldLine) then
+            begin
+              Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_NO_ESPERADA_FMT,
+                [Op.AtLine, Ls[Op.AtLine - 1]]));
+              Inc(N);
+            end
+            else
+              Obj.AddPair('anchor', 'ok');
           end;
           if Op.Kind = opEdit then
           begin

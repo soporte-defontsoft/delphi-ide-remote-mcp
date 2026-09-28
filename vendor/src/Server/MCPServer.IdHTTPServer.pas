@@ -128,26 +128,45 @@ uses
   Lsp.Texts, // [local change] the 404 texts of a dead session
   MCPServer.Logger;
 
-{ [local change 2026-09-28] El cuerpo del 404 de una sesion muerta: un error
-  JSON-RPC de verdad (con "id", que la especificacion exige: null, porque
-  la peticion no se ha leido), compuesto como JSON y no pegado en un
-  literal - el gemelo del 401 de abajo (sexta revision). }
-function SesionMuertaBody(const AMotivo: string): string;
+{ [local change 2026-09-28] LA puerta de la sesion muerta, para el POST y el
+  GET: el GET no la tenia y contestaba 200 repitiendo la cabecera MUERTA
+  (septima revision). El 404 es un error JSON-RPC con el id de la peticion,
+  del compositor de todos (TMCPJsonRpcProcessor.ErrorParaElCuerpo): el
+  cuerpo compuesto aqui llevaba id null siempre. True si ha contestado. }
+function SesionMuertaContesta(const ASessionID, ARequestBody: string;
+  AResponseInfo: TIdHTTPResponseInfo): Boolean;
 var
-  O, E: TJSONObject;
+  Estado: TSessionState;
+  Motivo: string;
 begin
-  O := TJSONObject.Create;
-  try
-    O.AddPair('jsonrpc', '2.0');
-    O.AddPair('id', TJSONNull.Create);
-    E := TJSONObject.Create;
-    O.AddPair('error', E);
-    E.AddPair('code', TJSONNumber.Create(-32001));
-    E.AddPair('message', AMotivo);
-    Result := O.ToJSON;
-  finally
-    O.Free;
-  end;
+  Result := False;
+  if ASessionID = '' then
+    Exit;
+  Estado := SessionState(ASessionID);
+  if Estado = ssAlive then
+    Exit;
+  if Estado = ssExpired then
+    Motivo := MsgFmt(SR_SESSION_EXPIRED_FMT,
+      [FormatFloat('0.##', SessionTimeoutMinutes, TFormatSettings.Invariant)])
+  else
+    Motivo := MsgText(SR_SESSION_UNKNOWN);
+  AResponseInfo.ResponseNo := 404;
+  AResponseInfo.ContentType := 'application/json';
+  AResponseInfo.ContentText := TMCPJsonRpcProcessor.ErrorParaElCuerpo(ARequestBody,
+    -32001, Motivo);
+  TLogger.Info('Refused dead session id: ' + ASessionID);
+  Result := True;
+end;
+
+{ [local change 2026-09-28] Una respuesta SIN cuerpo (el 202 de una
+  notificacion, el 204, un POST SSE que no contesta nada): Indy rellena el
+  vacio con su pagina HTML ("<HTML><BODY><B>202 Accepted...") cuando
+  ContentLength es -1, y el 202 va sin cuerpo (MUST de la especificacion;
+  septima revision). }
+procedure SinCuerpo(AResponseInfo: TIdHTTPResponseInfo);
+begin
+  AResponseInfo.ContentText := '';
+  AResponseInfo.ContentLength := 0;
 end;
 
 { [local change 2026-09-27] El cuerpo de los dos 401: dice que mandar y
@@ -183,7 +202,7 @@ end;
 // got a tool run on a dead session past the 404 gate (fifth review).
 function EsPeticionInitialize(const ARequestBody: string): Boolean;
 var
-  V, M: TJSONValue;
+  V: TJSONValue;
 begin
   Result := False;
   V := nil;
@@ -192,8 +211,7 @@ begin
       V := TJSONObject.ParseJSONValue(ARequestBody);
       if V is TJSONObject then
       begin
-        M := TJSONObject(V).GetValue('method');
-        Result := (M is TJSONString) and (M.Value = 'initialize');
+        Result := CampoDeTexto(V, 'method') = 'initialize'; // el lector de todos
       end;
     except
       Result := False;
@@ -208,7 +226,7 @@ end;
 // caller cannot re-forge per request (it would need this id, a secret).
 procedure BindInitializeIdentity(const ARequestBody, ANewId: string);
 var
-  V, Root, Params, CInfo, NameV: TJSONValue;
+  V, Root, Params, CInfo: TJSONValue;
   Nombre: string;
 begin
   if (ANewId = '') then Exit;
@@ -223,13 +241,10 @@ begin
         Params := (Root as TJSONObject).GetValue('params');
         if Params is TJSONObject then
         begin
+          // el lector de todos: un name null o 5 daba la sesion "null" / "5",
+          // compartida por todos los clientes asi (septima revision)
           CInfo := (Params as TJSONObject).GetValue('clientInfo');
-          if CInfo is TJSONObject then
-          begin
-            NameV := (CInfo as TJSONObject).GetValue('name');
-            if Assigned(NameV) then
-              Nombre := NameV.Value;
-          end;
+          Nombre := CampoDeTexto(CInfo, 'name');
         end;
       end;
     except
@@ -593,6 +608,10 @@ begin
 
   if AcceptsSSE(AcceptHeader) then
   begin
+    // la misma puerta que el POST: una sesion muerta es 404, no un flujo
+    if SesionMuertaContesta(RequestInfo.RawHeaders.Values['Mcp-Session-Id'], '',
+         ResponseInfo) then
+      Exit;
     TLogger.Debug('Received GET request - opening SSE stream for server-initiated messages');
 
     ResponseInfo.ContentType := 'text/event-stream';
@@ -602,8 +621,7 @@ begin
     ResponseInfo.CustomHeaders.Values['X-Accel-Buffering'] := 'no';
 
     SessionID := RequestInfo.RawHeaders.Values['Mcp-Session-Id'];
-    if SessionID <> '' then
-      ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionID;
+    AnunciaSesion(ResponseInfo, '', '', SessionID);
 
     ResponseInfo.ResponseNo := HTTP_OK;
     // Empty SSE stream, closed at once - but NOT an empty body: Indy fills an
@@ -639,8 +657,6 @@ var
   JSONRequest: TJSONValue;
   RequestBody: string;
   SessionID: string;
-  Estado: TSessionState; // [local change]
-  Motivo: string;        // [local change]
 begin
   RequestBody := '';
   if Assigned(RequestInfo.PostStream) and (RequestInfo.PostStream.Size > 0) then
@@ -661,23 +677,9 @@ begin
   // the answer the streamable-HTTP contract defines, so the client
   // re-initializes instead of working against a ghost. An initialize
   // request carrying a stale id is welcome: it is the fix.
-  if (SessionID <> '') and not EsPeticionInitialize(RequestBody) then
-  begin
-    Estado := SessionState(SessionID);
-    if Estado <> ssAlive then
-    begin
-      if Estado = ssExpired then
-        Motivo := MsgFmt(SR_SESSION_EXPIRED_FMT,
-          [FormatFloat('0.##', SessionTimeoutMinutes, TFormatSettings.Invariant)])
-      else
-        Motivo := MsgText(SR_SESSION_UNKNOWN);
-      ResponseInfo.ResponseNo := 404;
-      ResponseInfo.ContentType := 'application/json';
-      ResponseInfo.ContentText := SesionMuertaBody(Motivo);
-      TLogger.Info('Refused dead session id: ' + SessionID);
-      Exit;
-    end;
-  end;
+  if not EsPeticionInitialize(RequestBody) and
+     SesionMuertaContesta(SessionID, RequestBody, ResponseInfo) then
+    Exit;
 
   AcceptHeader := RequestInfo.RawHeaders.Values['Accept'];
 
@@ -689,10 +691,8 @@ begin
     begin
       TLogger.Info('Request contains only notifications/responses, returning 202 Accepted');
       ResponseInfo.ResponseNo := HTTP_ACCEPTED;
-
-      if SessionID <> '' then
-        ResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := SessionID;
-
+      AnunciaSesion(ResponseInfo, '', '', SessionID);
+      SinCuerpo(ResponseInfo);
       Exit;
     end;
 
@@ -858,9 +858,7 @@ begin
     TLogger.Info('SSE response prepared with event ID: ' + EventID);
   end
   else
-  begin
-    ResponseInfo.ContentText := '';
-  end;
+    SinCuerpo(ResponseInfo);
 
   ResponseInfo.ResponseNo := HTTP_OK;
 end;
@@ -877,6 +875,7 @@ begin
   if ResponseBody = '' then
   begin
     ResponseInfo.ResponseNo := HTTP_NO_CONTENT;
+    SinCuerpo(ResponseInfo);
     Exit;
   end;
 

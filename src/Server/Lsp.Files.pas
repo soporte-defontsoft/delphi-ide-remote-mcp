@@ -63,6 +63,21 @@ begin
     TNetEncoding.URL.Encode(MaskDriveText(AToolName, AFullPath));
 end;
 
+{ El codigo HTTP de una negativa, por el RESULTADO que declara su etiqueta:
+  INVALID_PARAM 400, NOT_FOUND 404, INTERNAL 500, DENIED (y lo demas) 403.
+  Se decidia por rama y GUARD-009/010/022 o FILE-001 (INVALID_PARAM)
+  salian 403 (septima revision). }
+function CodigoHttp(const AMensaje: string): Integer;
+begin
+  Result := 403;
+  if MsgOutcome(AMensaje) = 'INVALID_PARAM' then
+    Result := 400
+  else if MsgOutcome(AMensaje) = 'NOT_FOUND' then
+    Result := 404
+  else if MsgOutcome(AMensaje) = 'INTERNAL' then
+    Result := 500;
+end;
+
 procedure Answer(ResponseInfo: TIdHTTPResponseInfo; ACode: Integer;
   const AMessage: string);
 var
@@ -112,6 +127,14 @@ begin
       Answer(ResponseInfo, 400, MsgText(SR_FILES_RUTA_ABSOLUTA));
       Exit;
     end;
+    // las reglas ven la ruta COMO LLEGA (downloading is reading): con
+    // GetFullPath delante, "a.txt." era "a.txt" y la anomalia no se veia
+    Denied := ReadPathDenied(P);
+    if Denied <> '' then
+    begin
+      Answer(ResponseInfo, CodigoHttp(Denied), Denied);
+      Exit;
+    end;
     try
       Full := TPath.GetFullPath(P);
     except
@@ -121,15 +144,9 @@ begin
         Exit;
       end;
     end;
-    Denied := ReadPathDenied(Full); // downloading is reading
-    if Denied <> '' then
-    begin
-      Answer(ResponseInfo, 403, Denied);
-      Exit;
-    end;
     if TDirectory.Exists(Full) then
     begin
-      Answer(ResponseInfo, 403, MsgText(SR_FILES_DIR));
+      Answer(ResponseInfo, CodigoHttp(MsgText(SR_FILES_DIR)), MsgText(SR_FILES_DIR));
       Exit;
     end;
     if not TFile.Exists(Full) then

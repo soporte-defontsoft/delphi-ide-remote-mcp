@@ -24,6 +24,9 @@ type
 
 implementation
 
+uses
+  Lsp.Texts; // [local change 2026-09-28] MsgExcepcion
+
 { TMCPStdioTransport }
 
 constructor TMCPStdioTransport.Create(ManagerRegistry: IMCPManagerRegistry; CoreManager: IMCPCapabilityManager);
@@ -42,8 +45,6 @@ end;
 
 procedure TMCPStdioTransport.Run;
 var
-  ErrorJson: TJSONObject;
-  ErrorObj: TJSONObject;
   InputLine: string;
   Response: string;
 begin
@@ -83,21 +84,11 @@ begin
       begin
         TLogger.Error('Error processing STDIO request: ' + E.Message);
 
-        // Build the error response with the JSON writer: hand-concatenated
-        // JSON with only '"' replaced emits invalid JSON whenever the message
-        // contains a backslash (e.g. a Windows path) or a control character.
-        ErrorJson := TJSONObject.Create;
-        try
-          ErrorJson.AddPair('jsonrpc', '2.0');
-          ErrorJson.AddPair('id', TJSONNull.Create);
-          ErrorObj := TJSONObject.Create;
-          ErrorJson.AddPair('error', ErrorObj);
-          ErrorObj.AddPair('code', TJSONNumber.Create(JSONRPC_INTERNAL_ERROR));
-          ErrorObj.AddPair('message', E.Message);
-          Writeln(Output, ErrorJson.ToJSON);
-        finally
-          ErrorJson.Free;
-        end;
+        // [local change 2026-09-28] el compositor de todos los errores JSON-RPC,
+        // con el id de la peticion y el mensaje con su etiqueta (salia id null y
+        // sin etiqueta; septima revision)
+        Writeln(Output, TMCPJsonRpcProcessor.ErrorParaElCuerpo(InputLine,
+          JSONRPC_INTERNAL_ERROR, MsgExcepcion(E.ClassName, E.Message)));
         Flush(Output);
       end;
     end;

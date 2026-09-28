@@ -195,12 +195,9 @@ begin
   if not Assigned(Params) then
     Exit;
     
-  NameValue := Params.GetValue('name');
-  if Assigned(NameValue) then
-  begin
-    ToolName := NameValue.Value;
-    Result := ToolName <> '';
-  end;
+  // [local change 2026-09-28] el lector de todos: null no es la tool "null"
+  ToolName := CampoDeTexto(Params, 'name');
+  Result := ToolName <> '';
   
   ArgsValue := Params.GetValue('arguments');
   if Assigned(ArgsValue) and (ArgsValue is TJSONObject) then

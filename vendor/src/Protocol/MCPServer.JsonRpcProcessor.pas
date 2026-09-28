@@ -19,9 +19,15 @@ type
     class procedure AddRequestIDToResponse(Response: TJSONObject; const RequestID: TValue);
     class function ExecuteMethodCall(ManagerRegistry: IMCPManagerRegistry; const MethodName: string; Params: TJSONObject): TValue;
     class function CreateErrorResponse(const RequestID: TValue; ErrorCode: Integer; const ErrorMessage: string): string;
+    class function IdValido(IdValue: TJSONValue): Boolean;
   public
     constructor Create(ManagerRegistry: IMCPManagerRegistry);
     function ProcessRequest(const RequestBody: string; const SessionID: string): string;
+    { [local change 2026-09-28] EL error JSON-RPC de una peticion en crudo,
+      con SU id (null si no se lee): el 404 de una sesion muerta y el de
+      stdio lo componian a mano, con id null siempre (septima revision). }
+    class function ErrorParaElCuerpo(const ARequestBody: string; ACodigo: Integer;
+      const AMensaje: string): string;
   end;
 
 const
@@ -87,12 +93,45 @@ begin
     Exit;
   end;
 
-  if IdValue is TJSONNumber then
-    Result := TValue.From<Int64>((IdValue as TJSONNumber).AsInt64)
+  // [local change 2026-09-28] un numero que no es entero (1.5, 1e30) no se
+  // convierte: AsInt64 lanzaba, y el manejador lo volvia a llamar
+  var N: Int64;
+  if (IdValue is TJSONNumber) and TryStrToInt64(IdValue.Value, N) then
+    Result := TValue.From<Int64>(N)
   else if IdValue is TJSONString then
     Result := TValue.From<string>((IdValue as TJSONString).Value)
   else
     Result := TValue.Empty;
+end;
+
+class function TMCPJsonRpcProcessor.IdValido(IdValue: TJSONValue): Boolean;
+var
+  N: Int64;
+begin
+  Result := (IdValue is TJSONString) or
+    ((IdValue is TJSONNumber) and TryStrToInt64(IdValue.Value, N));
+end;
+
+class function TMCPJsonRpcProcessor.ErrorParaElCuerpo(const ARequestBody: string;
+  ACodigo: Integer; const AMensaje: string): string;
+var
+  V: TJSONValue;
+  Id: TValue;
+begin
+  Id := TValue.Empty;
+  V := nil;
+  try
+    try
+      V := TJSONObject.ParseJSONValue(ARequestBody);
+      if V is TJSONObject then
+        Id := ExtractRequestID(TJSONObject(V));
+    except
+      Id := TValue.Empty; // un cuerpo que no se lee: id null
+    end;
+  finally
+    V.Free;
+  end;
+  Result := CreateErrorResponse(Id, ACodigo, AMensaje);
 end;
 
 class function TMCPJsonRpcProcessor.CreateJSONResponse(const RequestID: TValue): TJSONObject;
@@ -173,13 +212,12 @@ begin
 
       RequestID := ExtractRequestID(JSONRequest);
 
-      MethodValue := JSONRequest.GetValue('method');
-      MethodName := '';
-      if Assigned(MethodValue) then
-        MethodName := MethodValue.Value;
+      // [local change 2026-09-28] el lector de todos (CampoDeTexto): null o
+      // un numero no son un nombre de metodo
+      MethodName := CampoDeTexto(JSONRequest, 'method');
 
-      // Notifications (requests without id) should not have a response
-      if RequestID.IsEmpty then
+      // Notifications (requests WITHOUT an id member) should not have a response
+      if JSONRequest.GetValue('id') = nil then
       begin
         if MethodName = 'notifications/initialized' then
           TLogger.Info('MCP Initialized notification received')
@@ -187,6 +225,16 @@ begin
           TLogger.Info('Notification received: ' + MethodName);
         Exit;
       end;
+
+      // [local change 2026-09-28] un id que no es texto ni entero (null
+      // incluido: MCP no lo admite) y un method que no es texto son una
+      // peticion mal formada: -32600, con su etiqueta
+      if not IdValido(JSONRequest.GetValue('id')) then
+        Exit(CreateErrorResponse(TValue.Empty, JSONRPC_INVALID_REQUEST,
+          MsgText(SR_SYS_ID_NO_VALIDO)));
+      if MethodName = '' then
+        Exit(CreateErrorResponse(RequestID, JSONRPC_INVALID_REQUEST,
+          MsgText(SR_SYS_METODO_NO_TEXTO)));
 
       JSONResponse := CreateJSONResponse(RequestID);
 

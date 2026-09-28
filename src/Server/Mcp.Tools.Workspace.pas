@@ -486,7 +486,7 @@ begin
         Inc(FilesScanned);
         if not Text.ToLower.Contains(Q) then
           Continue;
-        Lines := Text.Replace(#13#10, #10).Split([#10]);
+        Lines := LineasDelTexto(Text); // numeradas como delphi_read (un CR suelto es salto)
         for I := 0 to High(Lines) do
         begin
           LineText := Lines[I];
@@ -544,7 +544,10 @@ begin
     // un "pattern" que no casa con ningun fichero: "total 0" se leia como
     // "el texto no esta" (delphi_list ya lo decia; verificacion de la
     // tercera ronda)
-    if (FilesScanned = 0) and (Params.Pattern.Trim <> '') and not SingleFile then
+    // ...y los que casaron pero no se dejaron leer (SEARCH-003) SI casaron: la
+    // mascara estaba bien (septima revision)
+    if (FilesScanned = 0) and (Length(Ilegibles) = 0) and
+       (Params.Pattern.Trim <> '') and not SingleFile then
       Return.AddPair('maskNote', MsgFmt(SN_SEARCH_MASK_NO_MATCH_FMT, [Params.Pattern.Trim]));
     Ocultos.Report(Return);
     Return.AddPair('hits', Hits);
@@ -715,7 +718,10 @@ begin
         // Con includetrash la papelera entra en el listado y deja de contarse
         // como oculta; el lector sigue queriendo saber cuantas de las entradas
         // son copias y cuantas ficheros vivos (Hermes, 2026-09-22).
-        if Params.IncludeTrash and (SkipReason(RelToRoot(F, Root), False) = SKIP_TRASH) then
+        // ...copias: la marca de dueno de una copia (.by) no es otra copia
+        // (septima revision)
+        if Params.IncludeTrash and (SkipReason(RelToRoot(F, Root), False) = SKIP_TRASH) and
+           not EsMarcaDeDueno(F) then
           Inc(ShownTrash);
         if Arr.Count < LIST_CAP then
         begin
@@ -826,6 +832,11 @@ begin
   if (ReadOnlyRootOf(Repo) <> '') and
      GitCommandIsQuery(Params.Command, Params.Args, Params.Message) then
     Result := ReadPathDenied(Repo)
+  // el destino de un clone es un sitio donde se ESCRIBE: la puerta de
+  // escritura (jaula + carpetas muertas), como su gemela worktree add. Se
+  // clonaba dentro de __delphi-temp, __delphi-patch o __history (septima)
+  else if SameText(Params.Command.Trim, 'clone') then
+    Result := WriteTargetDenied(Repo)
   else
     Result := PathDenied(Repo);
   if Result <> '' then
@@ -839,6 +850,7 @@ begin
   // abajo borraba una carpeta vacia que ya estaba (la raiz vacia de otro
   // workspace; sexta revision).
   var CreadaPorElClone := False;
+  var AncestroDelClone := ''; // lo que el clone cree debajo es suyo
   if not SameText(Params.Command.Trim, 'clone') and not TDirectory.Exists(Repo) then
     Exit(MsgFmt(SR_GIT_DIR_NOT_FOUND_FMT, [Repo]));
 
@@ -915,6 +927,7 @@ begin
     // deja nada, y si el clone falla se quita solo si lo creo el.
     if not TDirectory.Exists(Repo) then
     begin
+      AncestroDelClone := PrimerAncestroQueExiste(Repo);
       CrearCarpeta(Repo);
       CreadaPorElClone := True;
     end;
@@ -1149,26 +1162,38 @@ begin
     TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT,
       [Cmd, Repo, Params.Message]));
 
+  // Lo que REESCRIBE el arbol en local (switch, merge, stash, reset,
+  // restore, worktree...) toma el cerrojo de escritura, como todo escritor:
+  // un delphi_edit entre medias se perdia con OK. Las de RED no: clone crea
+  // una carpeta nueva, fetch y push no tocan el arbol, y pull -que si lo
+  // toca- tarda lo que tarde la red y pararia toda edicion del servidor:
+  // es la excepcion, y esta escrita (septima revision). Las consultas no
+  // escriben.
+  var ConCerrojo := not GitCommandIsQuery(Params.Command, Params.Args, Params.Message) and
+    not MatchText(Cmd, ['clone', 'pull', 'fetch', 'push']);
+  if ConCerrojo then
+    EnterFileEdit;
   try
-    Output := RunCaptured(Format('git.exe -C "%s" %s', [Repo, GitArgs]),
-      IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch']), 600000, 60000),
-      ExitCode);
+    try
+      Output := RunCaptured(Format('git.exe -C "%s" %s', [Repo, GitArgs]),
+        IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch']), 600000, 60000),
+        ExitCode);
+    finally
+      if (MsgFile <> '') and TFile.Exists(MsgFile) then
+        TFile.Delete(MsgFile);
+    end;
   finally
-    if (MsgFile <> '') and TFile.Exists(MsgFile) then
-      TFile.Delete(MsgFile);
+    if ConCerrojo then
+      LeaveFileEdit;
   end;
   if Length(Output) > 30000 then
     Output := Copy(Output, 1, 30000) + #10 + MsgText(SF_GIT_TRUNCATED);
   // A clone that did not happen must not leave its empty destination lying
   // around for the caller to clean up by hand (field round 10).
-  if (ExitCode <> 0) and SameText(Cmd, 'clone') and CreadaPorElClone and
-     TDirectory.Exists(Repo) then
-    try
-      if Length(TDirectory.GetFileSystemEntries(Repo)) = 0 then
-        TDirectory.Delete(Repo, False);
-    except
-      // it was not ours to remove after all: leave it
-    end;
+  // Todas las que creo (n1\n2\n3 dejaba n1\n2), vacias y por la puerta de
+  // escritura: la regla de la foto (septima revision)
+  if (ExitCode <> 0) and SameText(Cmd, 'clone') and CreadaPorElClone then
+    QuitaCarpetasCreadas(Repo, AncestroDelClone);
   // Un git que dice que no (exit<>0) es un fallo: salia como exito y el
   // agente no lo distinguia de uno que funciono (revision 27-sep-2026). Su
   // salida va detras, que es la que explica que paso.

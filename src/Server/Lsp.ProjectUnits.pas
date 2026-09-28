@@ -923,7 +923,7 @@ begin
   // clausula perderia su forma. Los llamadores lo dicen antes, con el fichero.
   if U.EnRamas then
     raise Exception.Create(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, MsgText(SF_USES_EL_FICHERO)]));
-  NL := IfThen(Dpr.Contains(#13#10), #13#10, #10);
+  NL := SaltoDominante(Dpr);
   // the indent of the first entry line of the existing clause
   Clause := Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1);
   M := TRegEx.Match(Clause, '\n([ \t]+)\S');
@@ -1011,7 +1011,7 @@ begin
   Result := False;
   if TRegEx.IsMatch(Dpr, '\bCreateForm\s*\(\s*' + TRegEx.Escape(AInfo.ClassName) + '\s*,', [roIgnoreCase]) then
     Exit(True); // already there
-  NL := IfThen(Dpr.Contains(#13#10), #13#10, #10);
+  NL := SaltoDominante(Dpr);
   Lines := Dpr.Replace(#13#10, #10).Split([#10]);
   Last := -1;
   RunAt := -1;
@@ -1056,7 +1056,7 @@ var
   Pat: string;
 begin
   Result := 0;
-  NL := IfThen(Dpr.Contains(#13#10), #13#10, #10);
+  NL := SaltoDominante(Dpr);
   Lines := Dpr.Replace(#13#10, #10).Split([#10]);
   if AClassName <> '' then
     Pat := '^\s*Application\.CreateForm\s*\(\s*' + TRegEx.Escape(AClassName) + '\s*,'
@@ -1182,7 +1182,7 @@ begin
       var MEnd := TRegEx.Match(Text, '(?im)^\s*end\s*\.');
       if not MEnd.Success then
         Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
-      var NL := IfThen(Text.Contains(#13#10), #13#10, #10);
+      var NL := SaltoDominante(Text);
       Text := Copy(Text, 1, MEnd.Index - 1) + 'contains' + NL + '  ' +
         BuildEntry(Info, Include) + ';' + NL + NL + Copy(Text, MEnd.Index, MaxInt);
       PatchSaveText(Dpr, Text, Enc);
@@ -1599,7 +1599,7 @@ begin
     EnterFileEdit;
     try
       Text := PatchLoadText(Dpr, Enc);
-      NL := IfThen(Text.Contains(#13#10), #13#10, #10);
+      NL := SaltoDominante(Text);
       // la clausula se localiza sobre el texto con los comentarios en blanco
       // (mismas posiciones) y se reescribe entera, un nombre por linea
       M := TRegEx.Match(BlankComments(Text), '^[ \t]*requires\b\s*(.*?);', [roIgnoreCase, roMultiline, roSingleline]);
@@ -1760,7 +1760,7 @@ begin
     if not M.Success then
       Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
     PosSec := M.Index + M.Length;
-    NL := IfThen(Text.Contains(#13#10), #13#10, #10);
+    NL := SaltoDominante(Text);
     U := FindUses(Text, PosSec);
     if U.Found and U.EnRamas then
       Exit(MsgFmt(SR_USES_EN_RAMAS_FMT, [U.Keyword, TPath.GetFileName(APasPath)]));
@@ -2632,10 +2632,7 @@ begin
     if MismoProyecto(AGroup, I, Proj) then
       Exit(MsgFmt(SN_GRUPO_YA_ESTABA_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup)]));
   Texto := PatchLoadText(AGroup, Enc);
-  if Texto.Contains(#13#10) then
-    NL := #13#10
-  else
-    NL := #10;
+  NL := SaltoDominante(Texto);
   Nombre := TPath.GetFileNameWithoutExtension(Proj);
   // El IDE nombra los targets por el proyecto: dos con el mismo nombre en un
   // grupo no caben. Se dice, no se inventa un sufijo.

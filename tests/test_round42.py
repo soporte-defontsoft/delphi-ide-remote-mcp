@@ -142,10 +142,20 @@ try:
         # EL INVARIANTE: pase lo que pase por dentro, en la respuesta no
         # puede salir una ruta de OTRO workspace. Este servidor sirve varios
         # [Workspace.X] con tokens distintos, asi que esto no es estetica.
+        # La respuesta NORMALIZADA (el JSON dobla las barras, el servidor
+        # enmascara la unidad: srvc:) contra TODAS las formas de la otra
+        # jaula: el texto crudo contra su forma 8.3 no podia casar nunca y X1
+        # pasaba sin medir (septima revision). El control: la misma lectura
+        # SI ve la jaula propia cuando el motor contesta.
+        visto = mc.real(r.replace('\\\\', '\\')).lower()
+        formas = {otra.lower(), mc.larga(otra).lower(), (mc.corta(otra) or otra).lower()}
         check('X1%s la respuesta de la jaula %s no nombra la otra jaula'
               % (quien.lower(), quien),
-              (contesta or se_niega) and otra.lower() not in r.lower(),
+              (contesta or se_niega) and not any(f in visto for f in formas),
               'se ha colado %s en: %s' % (otra, r[:240]))
+        if contesta:
+            check('X1%s-control la misma lectura SI ve la jaula propia' % quien.lower(),
+                  propia in visto, r[:240])
 
         # -------------------------------------------------------------- X2
         # Y no puede morir con la negativa cruda de la jaula: eso es el

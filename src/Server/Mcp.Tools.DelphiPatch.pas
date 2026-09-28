@@ -211,9 +211,36 @@ begin
       'old/new/fragment/delete')]);
   if Result <> '' then
     Exit;
-  // content es de createunit: sin el, se ignoraba en silencio
-  if (Params.Content <> '') and not Params.CreateUnit then
-    Exit(MsgFmt(SR_EDIT_CONTENT_SIN_MODO_FMT, ['createunit']));
+  // lo que no es del modo de la llamada se dice (Lsp.Guard.ParametroQueNoVa):
+  // content sin createunit (sexta revision), code sin insert, atline con
+  // edits, section con un old/new... se ignoraban (septima)
+  var Modo: string;
+  if Params.Edits.Trim <> '' then Modo := 'edits'
+  else if Params.AddUses.Trim <> '' then Modo := 'adduses'
+  else if Params.RemoveUses.Trim <> '' then Modo := 'removeuses'
+  else if Params.Insert.Trim <> '' then Modo := 'insert=' + Params.Insert.Trim.ToLower
+  else if Params.CreateUnit then Modo := 'createunit'
+  else if Params.Restore then Modo := 'restore'
+  else Modo := 'old/new';
+  var Suyos: string;
+  var Sobra := ParametroQueNoVa(Modo, [
+      'edits', 'edits',
+      'adduses', 'adduses section',
+      'removeuses', 'removeuses section',
+      'insert=rutina-global', 'insert code visible',
+      'insert=metodo', 'insert code inclass visibility',
+      'createunit', 'createunit content eol',
+      'restore', 'restore confirm',
+      'old/new', 'old new fragment delete atline toline'],
+    ['atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
+     'toline', IfThen(Params.ToLine <> 0, IntToStr(Params.ToLine)), '',
+     'code', Params.Code, '', 'inclass', Params.InClass, '',
+     'visibility', Params.Visibility, '', 'visible', IfThen(Params.Visible, 'true'), '',
+     'content', Params.Content, '', 'eol', Params.Eol, '',
+     'confirm', IfThen(Params.Confirm, 'true'), '', 'section', Params.Section, ''],
+    Suyos);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_EDIT_NO_VA_CON_MODO_FMT, [Sobra, Modo, Modo, Suyos]));
   if Params.Edits.Trim <> '' then
   begin
     Result := WriteTargetDenied(Params.Path);

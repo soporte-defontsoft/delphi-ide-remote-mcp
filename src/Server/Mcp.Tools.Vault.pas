@@ -282,6 +282,29 @@ begin
   // 25-sep-2026; el vault no tiene enlaces propios: 'Obsidian no toca el vault').
   if not DentroDelVault(Full) then
     Exit(MsgText(SR_VAULT_JAIL));
+  // La forma LARGA de lo que nombra el agente: el alias 8.3 es el mismo
+  // fichero y las reglas de NOMBRE (gobierno, carpetas excluidas, .md) se
+  // miraban en su texto: vault_patch AGENTS~1.MD reescribio AGENTS-VAULT.md
+  // y vault_create OBSIDI~1\x.md escribio en .obsidian (septima revision,
+  // medido). La raiz queda en su forma de siempre (VaultRelative la usa).
+  if Rel.IndexOf('~') >= 0 then
+  begin
+    try
+      var RaizLarga := IncludeTrailingPathDelimiter(
+        LongCanonical(ExcludeTrailingPathDelimiter(Root)));
+      var Largo := LongCanonical(Full);
+      if not StartsText(RaizLarga, Largo) then
+        Exit(MsgText(SR_VAULT_JAIL));
+      Rel := Largo.Substring(Length(RaizLarga));
+      Full := IncludeTrailingPathDelimiter(Root) + Rel;
+    except
+      Exit(MsgText(SR_VAULT_JAIL));
+    end;
+    if not SameText(TPath.GetExtension(Rel), '.md') then
+      Exit(MsgFmt(SR_VAULT_NOTA_MD_VAULT_SOLO_FMT, [ARel]));
+    if VaultExcluded(Rel) then
+      Exit(MsgFmt(SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT, [ARel]));
+  end;
   AFull := Full;
   Result := '';
 end;
@@ -376,6 +399,11 @@ begin
     // verbs: append only ever grows, so this never fires for it.
     if NewText.Trim = '' then
       Exit(MsgText(SR_VAULT_WOULD_EMPTY));
+    // una nota con el atributo de solo lectura se dice ANTES de copiarla (salia
+    // SYS-028 del WriteAllBytes, tras dejar la copia; septima revision)
+    Result := SoloLecturaDenegado(AFull);
+    if Result <> '' then
+      Exit;
     ABackup := VaultBackup(AFull); // rule 11, inside the lock: no same-second race
     VaultSave(AFull, NewText);
     Result := '';
@@ -538,7 +566,7 @@ begin
           Continue;
         end;
         LineNo := 0;
-        for Line in Text.Replace(#13#10, #10, [rfReplaceAll]).Split([#10]) do
+        for Line in LineasDelTexto(Text) do // numeradas como vault_read
         begin
           Inc(LineNo);
           if Rx.IsMatch(Line) then

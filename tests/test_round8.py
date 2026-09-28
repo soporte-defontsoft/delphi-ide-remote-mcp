@@ -99,8 +99,13 @@ check('upload que sustituye lo DICE y dice donde esta la copia',
 # la copia la NOMBRA la respuesta: el glob con la forma de antes era otro
 # nombrador escrito a mano (sexta revision: la copia va a su cajon)
 _copia = mc.real(j.get('backup', ''))
-check('la copia recuperable existe y es el contenido de antes',
-      bool(_copia) and os.path.isfile(_copia) and open(_copia, 'rb').read() == ORIG,
+# ...y esta en SU papelera (en su cajon): una copia escrita en otro sitio
+# pasaria el check de antes
+check('la copia recuperable existe, es el contenido de antes y esta en su papelera',
+      bool(_copia) and os.path.isfile(_copia) and open(_copia, 'rb').read() == ORIG and
+      # las dos en su forma LARGA: UP viene de %TEMP% en 8.3 y la respuesta, larga
+      os.path.normcase(mc.larga(_copia)) in [os.path.normcase(mc.larga(c)) for c in
+                                             mc.copias(UP, 'victima.pas', 'CAJON_SUSTITUIDOS')],
       str(j.get('backup')))
 
 BAD = os.path.join(UP, 'corrupto.bin')

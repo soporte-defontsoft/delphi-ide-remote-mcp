@@ -97,7 +97,7 @@ On top of that:
 ```ini
 [Workspace.MiEquipo]
 Token=su-secreto
-Roots=D:\Proyectos\MiEspacio
+Roots=D:\Projects\MyWorkspace
 VaultPath=D:\Vaults\MyKnowledge
 VaultReadOnly=1     ; 0 to also allow append/create/patch
 ```

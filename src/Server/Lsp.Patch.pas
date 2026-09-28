@@ -179,6 +179,13 @@ function PositionOutOfRange(const APath: string; ALine, AChar: Integer): string;
 function LineasDelTexto(const AText: string): TArray<string>;
 function CuantasLineasReales(const ALines: TArray<string>): Integer;
 
+{ El salto de linea DOMINANTE de un texto (CRLF, LF o CR suelto: el que mas
+  aparece; CRLF si no hay ninguno, el de Windows), para quien vuelve a unir
+  lineas. UNO: estaba en Lsp.TextEdit (DominantEol) y escrito a mano en otros
+  ocho sitios como "CRLF si hay alguno", que no veia un CR suelto (septima
+  revision). }
+function SaltoDominante(const AText: string): string;
+
 { El fichero es un fuente Delphi que EXISTE (.pas/.dpr/.dpk/.inc): '' si lo
   es; si no, por este orden, carpeta (LSP-016), no esta (LSP-011) o no es
   Pascal (LSP-017). UNA regla para las siete tools del LSP: symbols decia
@@ -832,10 +839,15 @@ begin
   end;
   if not Renombrado then
   begin
-    // un mensaje que declara lo que es: algo tiene el fichero abierto
     TFile.Delete(Tmp);
-    raise Exception.Create(MsgFmt(SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT,
-      [TPath.GetFileName(APath), Codigo]));
+    // la causa, por la regla de todas (MotivoDelSistema: ocupado SYS-027,
+    // acceso denegado SYS-028); otro codigo, con el texto de Windows. Aqui
+    // se decia "otro proceso lo tiene" de CUALQUIER codigo (septima revision)
+    Motivo := MotivoDelSistema(TPath.GetFileName(APath) + ': ' + SysErrorMessage(Codigo));
+    if Motivo = '' then
+      Motivo := MsgFmt(SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT,
+        [TPath.GetFileName(APath), Codigo, SysErrorMessage(Codigo).Trim]);
+    raise Exception.Create(Motivo);
   end;
 end;
 
@@ -941,6 +953,38 @@ begin
   SetLength(Result, CuantasLineasReales(Result));
 end;
 
+function SaltoDominante(const AText: string): string;
+var
+  I, Crlf, Lf, Cr: Integer;
+begin
+  Crlf := 0;
+  Lf := 0;
+  Cr := 0;
+  I := 1;
+  while I <= Length(AText) do
+  begin
+    if AText[I] = #13 then
+    begin
+      if (I < Length(AText)) and (AText[I + 1] = #10) then
+      begin
+        Inc(Crlf);
+        Inc(I);
+      end
+      else
+        Inc(Cr);
+    end
+    else if AText[I] = #10 then
+      Inc(Lf);
+    Inc(I);
+  end;
+  if (Lf > Crlf) and (Lf >= Cr) then
+    Result := #10
+  else if (Cr > Crlf) and (Cr > Lf) then
+    Result := #13
+  else
+    Result := #13#10; // el de Windows, tambien sin ningun salto aun
+end;
+
 function IsAllWhitespace(const S: string): Boolean;
 var
   C: Char;
@@ -1011,6 +1055,20 @@ var
 begin
   Result := TPath.Combine(TrashDayDir(APath, ACajon),
     TrashStampedName(TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
+  // Un nombre NUEVO siempre: el sello sale de Now, que avanza a golpes de
+  // ~15 ms, y dos sustituciones del mismo fichero en el mismo golpe (to-binary
+  // y enseguida to-text) tenian el mismo nombre: la copia no pisa y la segunda
+  // operacion fallaba (la puerta 18 lo cazo; septima revision). Se espera al
+  // sello siguiente: el formato no cambia y su lector (TrashOriginalName)
+  // tampoco.
+  var Espera := 0;
+  while (TFile.Exists(Result) or TDirectory.Exists(Result)) and (Espera < 100) do
+  begin
+    Sleep(5);
+    Inc(Espera);
+    Result := TPath.Combine(TrashDayDir(APath, ACajon),
+      TrashStampedName(TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
+  end;
   // La papelera es un DESTINO: por la puerta de escribir, sobre la ruta REAL.
   Veto := EscrituraDenegada(TPath.GetDirectoryName(Result));
   if Veto = '' then
@@ -1065,6 +1123,18 @@ function GuardaContenidoActual(const APath, ACajon: string): string;
 begin
   Result := '';
   if not TFile.Exists(APath) then
+    Exit;
+  // Quien guarda la copia va a PISAR o BORRAR el fichero entero: si tiene
+  // el atributo de solo lectura, se dice aqui, antes de copiar nada. Es el
+  // sitio de todos (upload, cuarentena, disenador, adb, escritorio,
+  // package, changeset delete, restore): package decia "alguien lo tiene
+  // abierto, reintenta" y dejaba copia (septima revision, medido)
+  var Motivo := SoloLecturaDenegado(APath);
+  if Motivo <> '' then
+    raise Exception.Create(Motivo);
+  // de un temporal no se restaura nada (la regla del borrado): su copia
+  // dejaba una papelera DENTRO de la temporal (septima revision)
+  if EnTemporal(APath) then
     Exit;
   Result := TrashPathFor(APath, ACajon); // la puerta, o la negativa
   CrearCarpeta(TPath.GetDirectoryName(Result));
@@ -1308,10 +1378,7 @@ var
   Sb: TStringBuilder;
 begin
   Text := PatchLoadText(APath, Enc);
-  if Text.Contains(#13#10) then
-    Eol := #13#10
-  else
-    Eol := #10;
+  Eol := SaltoDominante(Text); // el de todos (era otra copia de "CRLF si hay alguno")
   Lines := Text.Replace(#13#10, #10).Split([#10]);
   OldLines := LineasDelAncla(AOld);
   if Length(OldLines) < 2 then
@@ -1380,6 +1447,11 @@ begin
       if I < High(Lines) then
         Sb.Append(Eol);
     end;
+    // Nada cambia (el bloque ya dice eso): no se escribe ni se copia, y se
+    // dice, como la edicion de una linea. Reescribia el fichero identico y
+    // la tanda contestaba APPLIED (septima revision: la tercera puerta)
+    if Sb.ToString = Text then
+      Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [Hit + 1, TPath.GetFileName(APath)]));
     PatchSaveText(APath, Sb.ToString, Enc);
   finally
     Sb.Free;

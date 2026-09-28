@@ -41,6 +41,9 @@ unit Lsp.Texts;
 
 interface
 
+uses
+  System.JSON; // CampoDeTexto
+
 const
   // ---------------------------------------------------------------------
   // Identity
@@ -686,8 +689,9 @@ const
     'can carry "fragment" instead of "old": ' +
     '{"fragment":"68","new":"69","atline":12} changes only that piece of ' +
     'line 12 (atline mandatory, and the piece exactly once in it). If ' +
-    'the change touches SEVERAL files, that is delphi_changeset. When ' +
-    'you send "edits", old/new/atline/delete/toline/fragment are ignored.';
+    'the change touches SEVERAL files, that is delphi_changeset. "edits" ' +
+    'is the whole call: old/new/fragment/delete are another mode ' +
+    '(EDIT-111) and atline/toline go INSIDE each entry (EDIT-115).';
 
   { Los campos de una entrada de tanda se leen a mano, uno a uno, asi que un
     nombre que no existe no daba "Unknown parameter" como en los parametros
@@ -725,11 +729,13 @@ const
     '[EDIT-111 INVALID_PARAM] These modes do not combine in one call: %s. ' +
     'Nothing was done: send them in separate calls, one mode per call.';
 
-  { "content" sin el modo que lo usa (create / createunit): se ignoraba en
-    silencio (sexta revision). }
-  SR_EDIT_CONTENT_SIN_MODO_FMT =
-    '[EDIT-115 INVALID_PARAM] "content" only goes with %s=true (it would ' +
-    'be ignored). Nothing was done.';
+  { Un parametro que no es del modo de la llamada: se ignoraba en silencio
+    ("content" sin create / createunit, sexta revision; code sin insert,
+    eol sin create, atline con edits..., septima: la regla general,
+    Lsp.Guard.ParametroQueNoVa). }
+  SR_EDIT_NO_VA_CON_MODO_FMT =
+    '[EDIT-115 INVALID_PARAM] "%s" does not go with %s (it would be ' +
+    'ignored). Nothing was done: %s takes %s.';
 
   SR_EDIT_NO_SE_ESCRIBIO_FMT =
     '[EDIT-112 DENIED] Could not write %s: %s';
@@ -2472,6 +2478,12 @@ const
 
   { Un parametro que no es del comando: se ignoraba (set-output con path=
     contestaba "puesto en Compiled", el valor por defecto; sexta revision). }
+  { ...y el de delphi_create: formname con una unit, content con un
+    proyecto o un form se ignoraban (septima revision). }
+  SR_CREATE_NO_VA_CON_KIND_FMT =
+    '[CREATE-035 INVALID_PARAM] "%s" does not go with kind=%s (it would ' +
+    'be ignored). Nothing was created: kind=%s takes %s.';
+
   SR_CONFIG_NO_ES_DEL_COMANDO_FMT =
     '[CFG-110 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
     'be ignored). Nothing was done: %s takes %s.';
@@ -2822,6 +2834,14 @@ const
     '    [FILE-004] %s: outside the allowed workspaces, NOT touched ' +
     '(remove the unit with delphi_config command=remove-unit from a ' +
     'project inside the jail).';
+
+  { Una carpeta que no se pudo llevar a la papelera por otra cosa que un
+    bloqueo (una ruta demasiado larga para la papelera...): FILE-036 lo
+    atribuia todo a "algo la tiene abierta" (septima revision). }
+  SR_FILE_CARPETA_NO_MOVIDA_FMT =
+    '[FILE-041 DENIED] I have NOT deleted "%s" and I have NOT touched ' +
+    'ANYTHING: moving it to the trash failed (%s). The contents are still ' +
+    'INTACT in place.';
 
   SR_FILE_DELETE_LOCKED_FMT =
     '[FILE-036 DENIED] I have NOT deleted "%s" and I have NOT touched ' +
@@ -3336,10 +3356,15 @@ const
     'unique; if it appears twice, narrow it down with "atline". Never ' +
     'rewrite a whole file to change three lines: if the anchor fails, ' +
     'the file stays as it was and the answer tells you why.'#10#10 +
-    '4. BACKUPS. Every tool that writes leaves a copy of the original in ' +
-    'the __delphi-patch trash next to the file, BEFORE touching it, one ' +
-    'per day and file (the first one of the day is the original, which ' +
-    'is the one that counts). A live file ALWAYS goes through there ' +
+    '4. BACKUPS. Every tool that writes leaves a copy in the __delphi-patch ' +
+    'trash next to the file, BEFORE touching it. An EDIT keeps one copy ' +
+    'per day and file: the version before the first change of the day, ' +
+    'which is what restore brings back. Replacing or deleting a WHOLE ' +
+    'file (delphi_upload over one, delphi_delete, a changeset delete, ' +
+    'to-text / to-binary, an out= that already existed) keeps, EVERY ' +
+    'time, what the file said at that moment, stamped, in a drawer that ' +
+    'says why: deleted, replaced, before-restore (the answer names the ' +
+    'copy). A live file ALWAYS goes through there ' +
     'first: that is the safety net. When you no longer need a copy, ' +
     'delphi_delete with purge=true really deletes it, but ONLY inside ' +
     'the trash and only YOURS (see rule 12).'#10#10 +
@@ -4360,14 +4385,16 @@ const
     'assembled differs from the source, so I do NOT leave it published ' +
     'under its name. I set it aside in %s. Resend from offset=0.';
 
+  { Decia "una por dia, la de esta manana" y backup es la copia SELLADA de
+    lo que habia justo antes (sexta revision; el texto se quedo atras,
+    septima). }
   SN_UPLOAD_REPLACED_FMT =
     '[UPLOAD-010] NOTE: there was already a file there (%d bytes) and ' +
-    'this upload REPLACED it entirely. The copy of the previous content ' +
-    'is in "backup" (the __delphi-patch trash next to the file, one per ' +
-    'day: if you had already replaced that file today, the copy there is ' +
-    'the ORIGINAL from this morning, which is the one that counts). If ' +
-    'you wanted to append at the end and not replace, use offset=<the ' +
-    'current size>, not offset=0.';
+    'this upload REPLACED it entirely. What it said until now is in ' +
+    '"backup" (the replaced drawer of the __delphi-patch trash next to ' +
+    'the file: one stamped copy per replacement). If you wanted to ' +
+    'append at the end and not replace, use offset=<the current size>, ' +
+    'not offset=0.';
 
   SP_DELETE_PURGE =
     'true = DELETE FOR REAL, with no way back. Only valid INSIDE the ' +
@@ -4786,18 +4813,19 @@ const
     'the anchor appears more than once): there is NO need to throw away ' +
     'the whole batch. commit stays blocked until a clean preview.';
 
-  { Un commit que deja todo como estaba: decia COMMIT COMPLETE, "this is what
-    changed" y las copias de siempre (sexta revision). }
   { Un parametro que no es de ese kind: se ignoraba en silencio (kind=create
     con old/new, kind=edit con content; sexta revision). }
   SR_CHANGESET_NO_ES_DE_KIND_FMT =
     '[CHSET-030 INVALID_PARAM] "%s" does not go with kind=%s (it would ' +
     'be ignored). Nothing was staged: stage it again without it.';
 
+  { Un commit que deja todo como estaba: decia COMMIT COMPLETE, "this is what
+    changed" y las copias de siempre (sexta revision). Sin prometer "no
+    backup": un create+delete del mismo fichero deja la copia del delete
+    (septima revision). }
   SN_CHANGESET_SIN_CAMBIOS_FMT =
     '[CHSET-029] UNCHANGED: the %d operations leave every file exactly as ' +
-    'it was, so nothing was written and no backup was taken. The ' +
-    'changeset is closed.';
+    'it was, so nothing changed. The changeset is closed.';
 
   SN_CHANGESET_COMMITTED_FMT =
     '[CHSET-025] COMMIT COMPLETE: %d operations applied to %d files. ' +
@@ -4976,15 +5004,30 @@ const
     '[GUARD-023 INVALID_PARAM] "%s": a unit needs a \ right after the ' +
     'colon (%s\...).';
 
+  { Un comodin en una ruta: acababa en INTERNAL (upload SYS-006, textedit
+    SYS-009, move MOVE-012 dejando copia y carpeta; septima revision). }
+  SR_GUARD_COMODIN_FMT =
+    '[GUARD-024 INVALID_PARAM] "%s" has a wildcard (* or ?): a path names ' +
+    'ONE file or folder. To match several, use the mask parameter of the ' +
+    'tool (pattern) where it has one.';
+
+  { Un FICHERO con separador final (x.txt\): se leia como el fichero y fallaba
+    dentro de Windows (INTERNAL), o se CREABA una carpeta con su nombre
+    (septima revision). }
+  SR_GUARD_BARRA_FINAL_FMT =
+    '[GUARD-025 INVALID_PARAM] "%s" ends in a separator (\ or /), which ' +
+    'names a FOLDER, and a FILE goes here. Drop the separator at the end.';
+
   SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT =
     '[GUARD-009 INVALID_PARAM] The path "%s" contains ":" outside the drive ' +
     '(alternate data stream). Use a normal file name.';
 
   SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT =
-    '[GUARD-010 INVALID_PARAM] The name "%s" starts or ends with a dot or a ' +
-    'space; Windows trims them when it opens the file, so the real name ' +
-    'would be a different one ("%s"). Ask for the exact name, with ' +
-    'nothing added around it.';
+    '[GUARD-010 INVALID_PARAM] The name "%s" starts or ends with a space, ' +
+    'or ends with a dot. Windows drops a trailing dot or space when it ' +
+    'opens the file, so it would be a different name, and a leading ' +
+    'space is almost always a slip. Did you mean "%s"? Ask for the ' +
+    'exact name.';
 
   // Mensajes que estaban en linea en Lsp.Patch.pas (paso 3c, 27-sep-2026)
   SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT =
@@ -7009,10 +7052,12 @@ const
   SF_EDIT_CARACTER_NO_EXISTE_FMT =
     'The character "%s" (U+%s) does not exist in %s';
 
+  { Lo que el rename final no pudo con un codigo que no es "ocupado" ni
+    "acceso denegado" (esos, SYS-027 / SYS-028): decia "otro proceso lo
+    tiene" de cualquier codigo (septima revision). }
   SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT =
-    '[EDIT-106 DENIED] Could not replace %s (Windows error %d): another ' +
-    'process holds it (the IDE, a build, an antivirus, an open viewer). ' +
-    'Nothing was written; close it and repeat.';
+    '[EDIT-106 DENIED] Could not replace %s: Windows refused the final ' +
+    'rename (error %d: %s). Nothing was written.';
 
   // Excepciones que estaban en linea en Lsp.References.pas (paso 3e, 27-sep-2026)
   SE_LSP_THIDDENCOUNT_MOTIVO_SIN_CAJON_FMT =
@@ -7821,14 +7866,11 @@ const
     cuenta de ella la da MotivoDelSistema). Salia INTERNAL en unas tools
     y DENIED en otras (sexta revision). }
   SR_ACCESO_DENEGADO_FMT =
-    '[SYS-028 DENIED] Windows refused access: %s. It is one of three: ' +
-    'the file or folder is marked read-only, another process holds it ' +
-    'without sharing it, or this server''s account may not write ' +
-    'there. Nothing was done. Repeating only helps in the second case.';
+    '[SYS-028 DENIED] Windows refused access: %s. Usually one of three: ' +
+    'it is marked read-only, another process holds it without sharing ' +
+    'it, or this server''s account has no permission there. Repeating ' +
+    'only helps in the second case.';
 
-  { El atributo de SOLO LECTURA de un fichero que se iba a sustituir:
-    se decia "otro proceso lo tiene, cierralo y repite" (EDIT-106) y el
-    agente repetia para siempre (sexta revision, medido). }
   { "arguments" que no es un objeto: se cambiaba en silencio por un objeto vacio y el
     agente leia "falta path" habiendolo mandado (dentro de un texto JSON,
     como lo mandan algunos puentes; sexta revision). }
@@ -7842,6 +7884,9 @@ const
   SF_SYS_ARGS_OTRO =
     'a number or a boolean';
 
+  { El atributo de SOLO LECTURA de un fichero que se iba a sustituir:
+    se decia "otro proceso lo tiene, cierralo y repite" (EDIT-106) y el
+    agente repetia para siempre (sexta revision, medido). }
   SR_SOLO_LECTURA_ATRIBUTO_FMT =
     '[SYS-029 DENIED] %s is marked READ-ONLY on disk (its read-only ' +
     'attribute is set). Nothing was written. It is not a lock, so ' +
@@ -7852,6 +7897,20 @@ const
   SR_SYS_METODO_NO_EXISTE_FMT =
     '[SYS-021 NOT_FOUND] Method "%s" does not exist here (or is not ' +
     'available).';
+
+  { Un id que no es texto ni numero entero (1.5, 1e30, true, null, un
+    objeto): 1.5 lanzaba dos veces y salia un 500 sin etiqueta; true o un
+    objeto se tomaban por notificacion y el cliente esperaba para siempre
+    (septima revision). MCP: el id no puede ser null. }
+  SR_SYS_ID_NO_VALIDO =
+    '[SYS-031 INVALID_PARAM] "id" has to be a string or a whole number ' +
+    '(and not null). Nothing was done.';
+
+  { "method" que no es texto: null buscaba el metodo "null" (septima
+    revision). }
+  SR_SYS_METODO_NO_TEXTO =
+    '[SYS-032 INVALID_PARAM] "method" has to be the name of a method, ' +
+    'as a string. Nothing was done.';
 
   SR_SYS_RECURSO_NO_EXISTE_FMT =
     '[SYS-022 NOT_FOUND] Resource "%s" does not exist (resources/list ' +
@@ -7936,6 +7995,17 @@ function MsgFmt(const AMsg: string; const AArgs: array of const): string;
   DENIED a INVALID_PARAM); si no, se envuelve. Con AArgs, los argumentos
   del envoltorio cuando no son solo la causa (clase + mensaje). }
 function MsgEnvuelve(const AMsg, ACausa: string): string; overload;
+{ La negativa de un fallo del SISTEMA por su causa: ocupado (SYS-027),
+  acceso denegado (SYS-028); '' si no es de esos. La usan los envoltorios
+  y quien tiene el codigo de Windows en la mano (el rename de AtomicWrite). }
+function MotivoDelSistema(const ACausa: string): string;
+{ El TEXTO de un campo JSON que tiene que ser una cadena: '' si falta, es
+  null o no es texto. El .Value de un null es 'null' y el de un numero su
+  cifra: "method": null buscaba el metodo "null", "name": null la tool
+  "null", y dos clientInfo.name null compartian la sesion "null" (buzon,
+  papelera, confinamiento; septima revision). UN lector para los campos
+  que manda el cliente. }
+function CampoDeTexto(const AObj: TJSONValue; const ANombre: string): string;
 function MsgEnvuelve(const AMsg, ACausa: string;
   const AArgs: array of const): string; overload;
 
@@ -8062,6 +8132,18 @@ end;
 { Lo que Windows dijo, en el mensaje con etiqueta que le toca, o '' si la
   causa no es de las suyas conocidas: EL clasificador de "el sistema no
   dejo". Solo reconocia 32 y 33; el 5 salia INTERNAL (SYS-006, MOVE-012). }
+function CampoDeTexto(const AObj: TJSONValue; const ANombre: string): string;
+var
+  V: TJSONValue;
+begin
+  Result := '';
+  if not (AObj is TJSONObject) then
+    Exit;
+  V := TJSONObject(AObj).GetValue(ANombre);
+  if V is TJSONString then
+    Result := TJSONString(V).Value;
+end;
+
 function MotivoDelSistema(const ACausa: string): string;
 begin
   Result := '';

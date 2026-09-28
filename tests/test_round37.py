@@ -84,7 +84,7 @@ try:
     # ------------------------------------------------------------------ T2
     # sobre un listado que SI trae la papelera: vacio tambien "no tenia .by"
     check('T2 no se cuelan los marcadores .by',
-          bool(enpap) and not any(p.lower().endswith('.by') for p in rutas), str(rutas)[:300])
+          bool(enpap) and not any(mc.es_marca_dueno(p) for p in rutas), str(rutas)[:300])
 
     # ------------------------------------------------------------------ T7
     sin = json.loads(call('delphi_list', {'root': PROY}))
@@ -103,7 +103,7 @@ try:
     copia = ''
     for r_, d_, f_ in os.walk(PROY):
         for x in f_:
-            if x.startswith('UFicha.pas-') and not x.endswith('.by'):
+            if x.startswith('UFicha.pas-') and not mc.es_marca_dueno(x):
                 copia = os.path.join(r_, x)
     check('setup: la copia de la unit esta en la papelera', bool(copia), PROY)
     rest = call('delphi_move', {'path': copia, 'dest': pas}) if copia else \

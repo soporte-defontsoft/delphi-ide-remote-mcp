@@ -538,7 +538,8 @@ check('deployfile: Linux64 limpio, Android64 intacto',
       (_deps_in(_x) == 2)
       and "'$(Platform)'=='Android64'" in _x, 'unexpected manifest state')
 check('deployfile: la entrada NO lleva ruta absoluta (portable)',
-      ('<DeployFile Include="' + _dep + '"') not in _x, _x[-300:])
+      ('<DeployFile Include="' + _dep + '"') not in _x and
+      ('<DeployFile Include="' + mc.larga(_dep) + '"') not in _x, _x[-300:])
 out = call('delphi_config', {"project": CON, "command": "remove-deployfile",
                              "platform": "Linux64", "path": _dep})
 check('deployfile: quitar lo que no esta responde honesto',
@@ -572,7 +573,9 @@ out = call('delphi_delete', {"path": mvdst})
 check('delete: mueve a papelera (no borrado duro)',
       mc.abre(out, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(mvdst), out[:120])
 import glob as _g2
-trash = _g2.glob(os.path.join(INSIDE, '**', '__delphi-patch', '**', 'deleted', '*'), recursive=True)
+# el lector de la papelera: sin las marcas .by (trash[0] acertaba por el orden
+# alfabetico frente a la marca)
+trash = mc.copias(INSIDE, None, 'CAJON_BORRADOS', bajo=True)
 check('delete: el fichero esta recuperable en la papelera', len(trash) > 0, trash)
 # R5-A: restore from the trash via delphi_move (the path delete's message names)
 if trash:

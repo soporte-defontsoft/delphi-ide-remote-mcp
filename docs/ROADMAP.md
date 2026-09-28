@@ -22,6 +22,13 @@ Status page as of 2026-09-25 (current release v1.6.2; 41 tools - `delphi_run` re
 - HTTP session TTL (1.0.17)
 - Bounded per-client notification queue (200)
 - Dead keys and key modifiers on the desktop node; the `delphi_adb_linux` alias retired; unit rename follows into every unit and qualified reference; DUnitX failures listed; the engine's warm-up told apart from "not a symbol" (1.1.0)
+- Designer binary `.dfm` read on the fly, and `to-text` / `to-binary` conversion (1.1.2)
+- `delphi_create kind=project-test` and the engine's own DUnitX suite (1.2.0)
+- Reference projects: `[Workspace.<name>] ReadOnlyRoots=` (1.3.0)
+- `delphi_git worktree` (1.4.0)
+- `delphi_paserver command=output` for a `remote-run` job (1.5.0)
+- `delphi_move` re-points relative paths across the border; `delphi_config` on a `.groupproj` (`add-project` / `remove-project`); `fix-references`; standalone sources in `delphi_create` (1.6.0)
+- Every message tagged with its outcome from one catalog, the server in English, and seven review rounds of all or nothing, the jail and the contract (1.7.0)
 
 ## Open
 
@@ -35,7 +42,6 @@ Status page as of 2026-09-25 (current release v1.6.2; 41 tools - `delphi_run` re
 ## Parked (the operator keeps them on the list, not now)
 
 - Designer phase 2: structural `.dfm` edits validated by RTTI
-- `convert.exe` binary → text designer conversion
 - Reading the newest MCP spec and noting the differences
 
 ## Declined by the operator (do not re-propose)

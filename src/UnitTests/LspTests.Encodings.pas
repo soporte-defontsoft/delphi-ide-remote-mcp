@@ -32,10 +32,24 @@ type
     [Test] procedure LooksBinaryTextoYVacioNoSonBinario;
   end;
 
+  { Los pares que COMPONEN y LEEN un formato, y la inversa de cada uno: la
+    regla del nombrador unico, probada donde vive (septima revision: habia
+    baterias, no tests de la funcion). }
+  [TestFixture]
+  TNombradorTests = class
+  public
+    [Test] procedure SelloYSuInversaTambienEncadenados;
+    [Test] procedure MarcaDeDuenoYSuInversa;
+    [Test] procedure LineasComoDelphiRead;
+    [Test] procedure SaltoDominantePorClase;
+    [Test] procedure ParametroQueNoVaConSuDefecto;
+  end;
+
 implementation
 
 uses
   System.SysUtils,
+  Lsp.Guard, // ParametroQueNoVa
   Lsp.Patch;
 
 function B(const A: array of Byte): TArray<Byte>;
@@ -168,7 +182,56 @@ begin
   Assert.IsFalse(LooksBinaryBytes(nil), 'vacio');
 end;
 
+{ TNombradorTests }
+
+procedure TNombradorTests.SelloYSuInversaTambienEncadenados;
+begin
+  Assert.AreEqual('U.pas', TrashOriginalName(TrashStampedName('U.pas')));
+  // restaurar algo ya restaurado encadena sellos: la inversa los quita todos
+  Assert.AreEqual('U.pas', TrashOriginalName(TrashStampedName(TrashStampedName('U.pas'))));
+  Assert.AreEqual('', TrashOriginalName('U.pas'), 'un nombre sin sello no es una copia');
+end;
+
+procedure TNombradorTests.MarcaDeDuenoYSuInversa;
+begin
+  Assert.AreEqual('x-123456789', CopiaDeLaMarca(MarcaDeDueno('x-123456789')));
+  Assert.IsTrue(EsMarcaDeDueno(MarcaDeDueno('x-123456789')));
+  Assert.IsFalse(EsMarcaDeDueno('x-123456789'), 'la copia no es su marca');
+end;
+
+procedure TNombradorTests.LineasComoDelphiRead;
+begin
+  Assert.AreEqual<Integer>(2, Length(LineasDelTexto('a'#10'b'#10)), 'sin la fantasma del salto final');
+  Assert.AreEqual<Integer>(2, Length(LineasDelTexto('a'#13'b')), 'un CR suelto es salto');
+  Assert.AreEqual<Integer>(2, Length(LineasDelTexto('a'#13#10#13#10)), 'una linea vacia REAL cuenta');
+  Assert.AreEqual<Integer>(0, Length(LineasDelTexto('')), 'vacio: ninguna');
+end;
+
+procedure TNombradorTests.SaltoDominantePorClase;
+begin
+  Assert.AreEqual(string(#13#10), SaltoDominante('a'#13#10'b'#13#10));
+  Assert.AreEqual(string(#10), SaltoDominante('a'#10'b'#10'c'#13#10), 'el que mas aparece');
+  Assert.AreEqual(string(#13), SaltoDominante('a'#13'b'#13), 'un CR suelto tambien');
+  Assert.AreEqual(string(#13#10), SaltoDominante('sin saltos'), 'el de Windows si no hay');
+end;
+
+procedure TNombradorTests.ParametroQueNoVaConSuDefecto;
+var
+  Suyos: string;
+begin
+  Assert.AreEqual('path', ParametroQueNoVa('set-output', ['set-output', 'output'],
+    ['output', 'bin', '', 'path', '.\bin', ''], Suyos));
+  Assert.AreEqual('output', Suyos);
+  // el valor por defecto que publica el esquema no cuenta como enviado
+  Assert.AreEqual('', ParametroQueNoVa('set-output', ['set-output', 'output'],
+    ['section', 'summary', 'summary'], Suyos));
+  // un modo que no esta en la tabla no se mira: lo dice su propia negativa
+  Assert.AreEqual('', ParametroQueNoVa('otro', ['set-output', 'output'],
+    ['path', 'x', ''], Suyos));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TEncodingTests);
+  TDUnitX.RegisterTestFixture(TNombradorTests);
 
 end.

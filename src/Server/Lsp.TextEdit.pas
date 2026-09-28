@@ -70,23 +70,6 @@ begin
   Result := True;
 end;
 
-function DominantEol(const T: string): string;
-var
-  I, Crlf, Lf: Integer;
-begin
-  Crlf := 0;
-  Lf := 0;
-  for I := 1 to Length(T) do
-    if T[I] = #10 then
-      if (I > 1) and (T[I - 1] = #13) then
-        Inc(Crlf)
-      else
-        Inc(Lf);
-  if Lf > Crlf then
-    Result := #10
-  else
-    Result := #13#10; // Windows default, also for files with no EOL yet
-end;
 
 function LeadingWhite(const S: string): string;
 var
@@ -192,7 +175,7 @@ begin
 
   Text := PatchLoadText(A.Path, EncNm);
   var Antes := Text; // para saber si la edicion cambia algo
-  Eol := DominantEol(Text);
+  Eol := SaltoDominante(Text); // el de todos (Lsp.Patch)
   EndsWithEol := Text.EndsWith(#10);
   Lines := LineasDelTexto(Text); // sin la fantasma del salto final (Lsp.Patch)
 

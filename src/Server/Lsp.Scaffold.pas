@@ -935,7 +935,7 @@ begin
     Result := CreaFuenteSuelto(ASubDir, AUnitName, '.pas', Body, PasPath);
     if Result <> '' then
       Exit;
-    Exit(MsgFmt(SN_CREATE_UNIT_SUELTA_FMT, [AUnitName, PasPath, Length(Body.Split([CRLF]))]));
+    Exit(MsgFmt(SN_CREATE_UNIT_SUELTA_FMT, [AUnitName, PasPath, Length(LineasDelTexto(Body))]));
   end;
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
@@ -981,7 +981,7 @@ begin
   end
   else
     Result := MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,
-      [AUnitName, PasPath, Length(Body.Split([CRLF])), Result]);
+      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Result]);
 end;
 
 function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;
@@ -1013,7 +1013,8 @@ begin
   Result := CreaFuenteSuelto(Dir, Nombre, '.inc', Body, Ruta);
   if Result <> '' then
     Exit;
-  Result := MsgFmt(SN_CREATE_INCLUDE_FMT, [Nombre, Ruta, Length(Body.Split([CRLF])), Nombre]);
+  // las lineas como delphi_read: contaba la fantasma del salto final (septima revision)
+  Result := MsgFmt(SN_CREATE_INCLUDE_FMT, [Nombre, Ruta, Length(LineasDelTexto(Body)), Nombre]);
 end;
 
 end.

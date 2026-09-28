@@ -487,7 +487,7 @@ Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.168.1.163;SERIA
 | `address` | string | optional | ip:port of the device for connect/disconnect (from command=discover, or the device's wireless-debugging screen) |
 | `device` | string | **yes** for install/run/tap/key/logcat/screenshot | Device serial or ip:port (from command=devices). REQUIRED for every device-addressing command, and it must be in the workspace's `AdbAllowedDevices` list |
 | `apk` | string | optional | install: path of the .apk (inside the workspace). Build it with `delphi_build target=Deploy` |
-| `app` | string | optional | run: package name of the installed app (e.g. com.embarcadero.MiApp - the build/install results state it) |
+| `app` | string | optional | run: package name of the installed app (e.g. com.embarcadero.MyApp - the build/install results state it) |
 | `out` | string | optional | screenshot / logcat: optional since 1.0.14 — a FOLDER, or a FILE whose extension matches (`.png` for screenshot, `.txt`/`.log` for logcat); empty = `__delphi-temp\<agent>` under the workspace. screenshot: where the PNG lands; the capture itself travels in the answer (with `inline=false`, the file stays and the answer carries its download link). logcat: dump into a file instead of answering inline — then read it in RANGES with `delphi_read` (400 lines/call). Inside the workspace |
 | `x` / `y` | string | optional | tap: coordinates measured on a screenshot. Pass that screenshot's `frame` and the server converts to DISPLAY pixels; without `frame` they are DISPLAY pixels (multiply by `tapScale` when the answer carried it) |
 | `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |

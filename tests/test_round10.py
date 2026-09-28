@@ -122,9 +122,9 @@ check('B3 borrado de carpeta: o BORRADO de verdad, o dice exactamente que queda'
       (r[:200], os.path.isdir(D)))
 if os.path.isdir(D):
     import glob
-    before = len(glob.glob(os.path.join(BASE, '__delphi-patch', '*', 'deleted', '*')))
+    before = len(mc.copias(BASE, None, 'CAJON_BORRADOS'))
     r = A.call('delphi_delete', {'path': D})
-    after = len(glob.glob(os.path.join(BASE, '__delphi-patch', '*', 'deleted', '*')))
+    after = len(mc.copias(BASE, None, 'CAJON_BORRADOS'))
     check('B3 reintentar sobre el cascaron vacio NO hace otra copia', after == before,
           (before, after, r[:150]))
 else:

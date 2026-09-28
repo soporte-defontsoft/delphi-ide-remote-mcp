@@ -87,7 +87,7 @@ tool reference is [docs/TOOLS.md](docs/TOOLS.md).
 | You see | It means |
 |---|---|
 | `401` from the server | The request carries no `Authorization: Bearer <token>` header (a browser never does), or the Bearer is not the `Token=` of any `[Workspace.<name>]` - check for a stray space or quote. The 401's JSON `hint` says the same. |
-| The tray refuses to start, port taken | The service, or another tray, is already listening on that port. One or the other. |
+| The tray refuses to start, port taken | The service, or another tray, is already listening on that port: one or the other. Or Windows reserves that port (Hyper-V and WSL take ranges; `netsh interface ipv4 show excludedportrange protocol=tcp` lists them): change `[Server] Port=`. The message names the port and the socket error. |
 | `delphi_projects` finds nothing | `Roots=` does not point where the projects are (typo, wrong drive, forward slashes). |
 | A project with installed components fails with `F2613 unit not found` | The server runs as a user that is not the IDE's. Same exe, other account: no library paths. |
 | Only reading works, every write is refused | A local stdio process without a token is read-only by design. Give it the workspace token (`DELPHI_MCP_TOKEN`), or connect over HTTP with the Bearer. |

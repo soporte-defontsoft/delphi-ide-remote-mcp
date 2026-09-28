@@ -27,6 +27,7 @@ Usage:  python tests/test_round13.py [path-to-DelphiLspMcp.exe]
 import os, glob, ctypes
 # 'mc' es aqui una copia de la papelera (R3): el modulo entra por sus nombres
 from mcp_cliente import carpeta, copia_exe, entorno, Stdio, check, fin, es, abre, rechazado
+from mcp_cliente import copias, corta  # los lectores de la papelera y del 8.3, los de todos
 
 BASE = carpeta('round13')
 EXE = copia_exe(BASE)
@@ -38,15 +39,11 @@ call = srv.call
 
 
 def copies_of(stem):
-    return [x for x in glob.glob(os.path.join(
-        BASE, '**', '__delphi-patch', '**', stem + '-*'), recursive=True)
-        if not x.endswith('.by')]
+    return copias(BASE, stem, bajo=True)
 
 
 def short_dir(path):
-    buf = ctypes.create_unicode_buffer(1024)
-    ctypes.windll.kernel32.GetShortPathNameW(path, buf, 1024)
-    return buf.value
+    return corta(path)  # estaba a mano: la cuarta copia del lector 8.3
 
 
 # (aqui habia un sleep(0.3) sin motivo: el transporte stdio procesa las

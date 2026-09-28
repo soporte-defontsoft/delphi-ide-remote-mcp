@@ -446,6 +446,36 @@ function NoEsFichero(const APath, AMsgNoExiste: string): string;
   pregunte "me han dado una ruta completa?" pregunta esto. }
 function EsRutaAbsoluta(const AValue: string): Boolean;
 
+{ Un UNC (\\host\...) que no cae BAJO ningun sitio declarado - raices,
+  referencias, ReadOnlyPaths, el vault, la zona de librerias -, comparado por
+  TEXTO, sin tocar el disco. Resolverlo (RealPath abre un handle,
+  GetLongPathName lo recorre) ya es abrir SMB hacia el host que diga el
+  agente ANTES de saber que esta fuera: 21 s medidos por llamada, y la cuenta
+  del servicio se autentica si el host contesta (septima revision). Sin
+  jaula configurada, False: no hay nada que proteger. }
+function UncFueraDeLugares(const APath: string): Boolean;
+
+{ La primera carpeta que YA existe por encima de ARuta (ARuta incluida): lo
+  que una operacion cree debajo es suyo, y QuitaCarpetasCreadas lo quita si
+  queda vacio. UNA regla para la foto (un create en a\b\c.txt) y para el
+  clone (que en n1\n2\n3 fallido dejaba n1\n2; septima revision). }
+function PrimerAncestroQueExiste(const ARuta: string): string;
+{ Quita ADesde y sus padres, hasta AAncestro (sin el), mientras esten VACIOS,
+  por la puerta de escritura. Nunca lanza: lo que no se puede, se queda. }
+procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string);
+
+{ El PARAMETRO que no va con un modo (el comando de delphi_config, el kind
+  de delphi_create, el modo de delphi_edit...), '' si todos van. ATabla:
+  pares (modo, 'sus parametros separados por espacio'); AEnviados: ternas
+  (nombre, valor, valor por defecto que publica su esquema): uno vacio, o
+  con su valor por defecto, no se ha "enviado" - un cliente que rellena los
+  defaults no tropieza (CFG-110 rechazaba section=summary). ASuyos, los del
+  modo, para el mensaje. Un modo que no esta en la tabla no se mira: lo
+  dice su propia negativa. UNA regla para las tools de varios modos: cada
+  una escribia la suya o ignoraba en silencio (septima revision). }
+function ParametroQueNoVa(const AModo: string; const ATabla, AEnviados: array of string;
+  out ASuyos: string): string;
+
 { '' salvo que APath sea un FICHERO con el atributo de solo lectura: su
   negativa (SYS-029). Para quien SUSTITUYE el contenido de un fichero
   (AtomicWrite, delphi_upload): renombrarlo o borrarlo si se puede con el
@@ -937,6 +967,7 @@ var
   GAuthToken: string;
   GIdentLock: TCriticalSection;
   GSesiones: TList<TSesion>;  // sesiones HTTP: id, nombre atado en initialize, ultimo uso
+  GCaducadas: TStringList;    // las ultimas que caducaron: su motivo no se pierde al purgarlas
   GSessionTimeoutMin: Double = -1; // -1 = sin leer todavia
   GIniBindIP: string;              // [Server] BindIP
   GIniSessionTimeout: string;      // [Server] SessionTimeoutMinutes, sin parsear
@@ -1689,14 +1720,28 @@ begin
   Result := (ATopeMin > 0) and ((Now - S.UltimoUso) * MINUTOS_POR_DIA > ATopeMin);
 end;
 
-{ Bajo GIdentLock. }
+{ Bajo GIdentLock. Una sesion que caduca se RECUERDA (las ultimas 512): la
+  purga de cualquier peticion se llevaba todas las caducadas, y la segunda
+  que volvia oia "desconocida, el servidor se reinicio" (SYS-007) en vez de
+  "caducada" (SYS-008; septima revision). }
+procedure RecuerdaCaducada(const AId: string);
+begin
+  if GCaducadas.IndexOf(AId) < 0 then
+    GCaducadas.Add(AId);
+  while GCaducadas.Count > 512 do
+    GCaducadas.Delete(0);
+end;
+
 procedure PurgaSesionesCaducadas(ATopeMin: Double);
 var
   I: Integer;
 begin
   for I := GSesiones.Count - 1 downto 0 do
     if SesionCaducada(GSesiones[I], ATopeMin) then
+    begin
+      RecuerdaCaducada(GSesiones[I].Id);
       GSesiones.Delete(I);
+    end;
 end;
 
 function SessionTimeoutMinutes: Double;
@@ -1778,9 +1823,16 @@ begin
   try
     I := IndiceDeSesion(Id);
     if I < 0 then
-      Result := ssUnknown
+    begin
+      // purgada por otra peticion: si caduco, se dice caducada
+      if GCaducadas.IndexOf(Id) >= 0 then
+        Result := ssExpired
+      else
+        Result := ssUnknown;
+    end
     else if SesionCaducada(GSesiones[I], Tope) then
     begin
+      RecuerdaCaducada(Id);
       GSesiones.Delete(I);
       Result := ssExpired;
     end
@@ -2050,8 +2102,11 @@ begin
     Full := APath;
   end;
   Name := TPath.GetFileNameWithoutExtension(Full);
+  // la ruta, por la forma LARGA de los dos lados: una entrada del operador
+  // escrita en 8.3 no casaba nunca (fallaba cerrado; septima revision)
   for E in Lista do
-    if (E.Trim <> '') and (SameText(E.Trim, Name) or SameText(E.Trim, Full)) then
+    if (E.Trim <> '') and (SameText(E.Trim, Name) or
+       (EsRutaAbsoluta(E.Trim) and SameText(FormaLarga(E.Trim), FormaLarga(Full)))) then
       Exit;
   Result := MsgFmt(SR_REMOTERUN_PROJECT_DENIED_FMT,
     [Name, string.Join(', ', Lista)]);
@@ -2087,6 +2142,44 @@ begin
     Result := Result + '.0';
 end;
 
+{ Un VaultPath= como lo escribio el operador, en la forma con la que se
+  compara: sin blancos ni comillas, completo, sin separador final; '' si no
+  hay o no parsea. UNO: estaba a mano en VaultPath y en
+  VaultConfiguredAnywhere (septima revision). }
+function VaultNormalizado(const ACrudo: string): string;
+begin
+  Result := ACrudo.Trim.Trim(['"']).Trim;
+  if Result <> '' then
+    try
+      Result := ExcludeTrailingPathDelimiter(TPath.GetFullPath(Result));
+    except
+      Result := '';
+    end;
+end;
+
+{ Los vaults de TODOS los workspaces (y el del por defecto): un vault es de
+  las tools vault_* de SU workspace, y ninguna tool de codigo lo toca, sea
+  de quien sea. Solo miraba el del activo: con el token de A se reescribio
+  el AGENTS-VAULT.md del vault de B, que vivia en la raiz de A, y
+  delphi_delete se llevo el vault entero (septima revision, medido). }
+function TodosLosVaults: TArray<string>;
+var
+  W: TWorkspaceDef;
+  V: string;
+begin
+  LoadSecurity;
+  Result := [];
+  V := VaultNormalizado(GVaultPath);
+  if V <> '' then
+    Result := Result + [V];
+  for W in GWorkspaces do
+  begin
+    V := VaultNormalizado(W.VaultPath);
+    if V <> '' then
+      Result := Result + [V];
+  end;
+end;
+
 function VaultPath: string;
 begin
   LoadSecurity;
@@ -2094,16 +2187,9 @@ begin
   // workspace sin VaultPath= NO tiene vault. Solo el por defecto usa el
   // entorno / [Workspace].
   if HasActiveWS then
-    Result := ActiveWS.VaultPath
+    Result := VaultNormalizado(ActiveWS.VaultPath)
   else
-    Result := GVaultPath;
-  Result := Result.Trim.Trim(['"']).Trim;
-  if Result <> '' then
-    try
-      Result := ExcludeTrailingPathDelimiter(TPath.GetFullPath(Result));
-    except
-      Result := '';
-    end;
+    Result := VaultNormalizado(GVaultPath);
 end;
 
 function VaultConfigured: Boolean;
@@ -2117,10 +2203,10 @@ var
   Vault: string;
 begin
   Result := False;
-  Vault := VaultPath;
-  if Vault = '' then
-    Exit;
-  Result := EnLugar(APath, Vault); // la forma larga: KNOWLE~1 es el vault
+  // el vault de CUALQUIER workspace, no solo el del activo (TodosLosVaults)
+  for Vault in TodosLosVaults do
+    if EnLugar(APath, Vault) then // la forma larga: KNOWLE~1 es el vault
+      Exit(True);
 end;
 
 function VaultWritable: Boolean;
@@ -2145,19 +2231,11 @@ end;
   VaultConfigured, que resuelve el del workspace ACTIVO. }
 function VaultConfiguredAnywhere: Boolean;
 var
-  W: TWorkspaceDef;
   P: string;
 begin
-  LoadSecurity;
-  P := GVaultPath.Trim.Trim(['"']).Trim;
-  if (P <> '') and TDirectory.Exists(P) then
-    Exit(True);
-  for W in GWorkspaces do
-  begin
-    P := W.VaultPath.Trim.Trim(['"']).Trim;
-    if (P <> '') and TDirectory.Exists(P) then
+  for P in TodosLosVaults do
+    if TDirectory.Exists(P) then
       Exit(True);
-  end;
   Result := False;
 end;
 
@@ -2182,7 +2260,14 @@ end;
 function CarpetaEnVezDeFichero(const APath: string): string;
 begin
   Result := '';
-  if (APath.Trim <> '') and TDirectory.Exists(APath) then
+  if APath.Trim = '' then
+    Exit;
+  // un nombre que acaba en separador nombra una CARPETA, exista o no:
+  // textedit create y upload creaban una carpeta con el nombre del
+  // fichero (septima revision)
+  if APath.Trim.EndsWith('\') or APath.Trim.EndsWith('/') then
+    Exit(MsgFmt(SR_GUARD_BARRA_FINAL_FMT, [APath]));
+  if TDirectory.Exists(APath) then
     Result := MsgFmt(SR_LSP_IS_FOLDER_FMT, [APath]);
 end;
 
@@ -2247,10 +2332,7 @@ begin
     else
     begin
       FBytes[I] := nil;
-      FAncestro[I] := ExtractFileDir(ARutas[I]);
-      while (FAncestro[I] <> '') and not TDirectory.Exists(FAncestro[I]) and
-            (ExtractFileDir(FAncestro[I]) <> FAncestro[I]) do
-        FAncestro[I] := ExtractFileDir(FAncestro[I]);
+      FAncestro[I] := PrimerAncestroQueExiste(ExtractFileDir(ARutas[I]));
     end;
   end;
 end;
@@ -2321,17 +2403,8 @@ var
     (un create en a\b\c.txt): se quitaban el fichero y quedaban a y b vacias.
     RemoveDir solo quita una carpeta VACIA; por la puerta de escritura. }
   procedure QuitaCarpetasNuevas(AIx: Integer);
-  var
-    D: string;
   begin
-    D := ExtractFileDir(FRutas[AIx]);
-    while (FAncestro[AIx] <> '') and (Length(D) > Length(FAncestro[AIx])) and
-          (EscrituraDenegada(D) = '') do
-    begin
-      if not RemoveDir(D) then
-        Break; // no esta vacia (otro dejo algo) o no se puede: se queda
-      D := ExtractFileDir(D);
-    end;
+    QuitaCarpetasCreadas(ExtractFileDir(FRutas[AIx]), FAncestro[AIx]);
   end;
 
   function MismaHuella(AIx: Integer): Boolean;
@@ -2691,7 +2764,13 @@ begin
   Want := TMCPSerializer.NormalizeKey(AName);
   for P in AArguments do
     if TMCPSerializer.NormalizeKey(P.JsonString.Value) = Want then
+    begin
+      // null es "falta", como para el binder: su .Value es el texto 'null' y
+      // la puerta miraba un valor que la tool no recibe (septima revision)
+      if P.JsonValue is TJSONNull then
+        Exit('');
       Exit(P.JsonValue.Value);
+    end;
 end;
 
 { Two keys that normalize to the SAME parameter make the gate and the binder
@@ -3318,6 +3397,33 @@ begin
     end);
 end;
 
+{ La pasada de los UNC ajenos en la ENTRADA, sobre las rutas marcadas
+  [RutaDelServidor]: antes de alargarlas (AlargaRutas las resuelve) y antes de
+  que la tool haga nada con ellas. La negativa es la de la jaula (GUARD-002). }
+function UncAjenoEnArgumentos(const AToolName: string;
+  const AArguments: TJSONObject): string;
+var
+  Mapa: TDictionary<string, Boolean>;
+  Tool: string;
+  I: Integer;
+  P: TJSONPair;
+begin
+  Result := '';
+  if not Assigned(AArguments) then
+    Exit;
+  Mapa := RutasNuestras;
+  Tool := LowerCase(AToolName);
+  for I := 0 to AArguments.Count - 1 do
+  begin
+    P := AArguments.Pairs[I];
+    if (P.JsonValue is TJSONString) and
+       Mapa.ContainsKey(Tool + '|' + TMCPSerializer.NormalizeKey(P.JsonString.Value)) and
+       UncFueraDeLugares(TJSONString(P.JsonValue).Value) then
+      Exit(MsgFmt(SR_JAIL_FMT, [TJSONString(P.JsonValue).Value,
+        string.Join(' | ', WorkspaceRoots)]));
+  end;
+end;
+
 function GitCommandIsQuery(const ACmd, AArgs, AMessage: string): Boolean;
 begin
   Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show']) or
@@ -3342,6 +3448,11 @@ begin
   // arguments become real server paths before any check or any tool.
   ExpandVirtualDrives(AArguments);
   ApplyArgAliases(AToolName, AArguments);
+  // un UNC que no es de ningun sitio declarado, fuera por TEXTO antes de
+  // tocarlo: alargarlo abajo ya era abrir SMB hacia ese host
+  Result := UncAjenoEnArgumentos(AToolName, AArguments);
+  if Result <> '' then
+    Exit;
   // ...y el nombre LARGO de las rutas marcadas (AlargaRutas)
   AlargaRutas(AToolName, AArguments);
   Result := '';
@@ -3633,8 +3744,14 @@ begin
   // Un prefijo de dispositivo o de ruta extendida, y una unidad virtual sin
   // su barra, con SU motivo: caian en el de abajo, "alternate data stream"
   // (sexta revision)
-  if StartsText('\\?\', APath) or StartsText('\\.\', APath) then
+  // ...tambien con barras normales (//?/ salia GUARD-009; septima revision)
+  if StartsText('\\?\', APath.Replace('/', '\')) or
+     StartsText('\\.\', APath.Replace('/', '\')) then
     Exit(MsgFmt(SR_GUARD_PREFIJO_DISPOSITIVO_FMT, [APath]));
+  // un comodin no es parte de una ruta: acababa en INTERNAL dentro de
+  // Windows, y un move dejaba copia y carpeta (septima revision)
+  if (APath.IndexOf('*') >= 0) or (APath.IndexOf('?') >= 0) then
+    Exit(MsgFmt(SR_GUARD_COMODIN_FMT, [APath]));
   if (Length(APath) >= 5) and StartsText('srv', APath) and (APath[5] = ':') then
     Exit(MsgFmt(SR_GUARD_UNIDAD_SIN_BARRA_FMT, [APath, Copy(APath, 1, 5)]));
   // ':' is legal only as the drive separator (C:\...): anywhere else it
@@ -3898,17 +4015,33 @@ begin
   Result := Result.Trim(['-']).ToLower;
 end;
 
+{ Lo que no se toca de NINGUN workspace: sus referencias, sus ReadOnlyPaths
+  y sus vaults (y los del modo local). UNA lista para la purga del arranque
+  y para los lugares protegidos: la purga protegia solo lo del workspace
+  que recorria y el vault global, y vacio el __delphi-temp del vault de un
+  workspace y el de las ReadOnlyPaths de OTRO anidadas en su raiz
+  (septima revision, medido). }
+function SitiosQueNoSeTocan: TArray<string>;
+var
+  W: TWorkspaceDef;
+begin
+  LoadSecurity;
+  Result := GRoRoots + GRoPaths + TodosLosVaults;
+  for W in GWorkspaces do
+    Result := Result + W.ReadOnlyRoots + W.ReadOnlyPaths;
+end;
+
 function LugaresProtegidos: TArray<string>;
 var
   W: TWorkspaceDef;
 begin
   LoadSecurity;
-  Result := GRoots + GRoRoots + GRoPaths + [VaultPath, ExtractFileDir(ParamStr(0)),
+  Result := GRoots + SitiosQueNoSeTocan + [ExtractFileDir(ParamStr(0)),
     GetEnvironmentVariable('WINDIR'), GetEnvironmentVariable('ProgramFiles'),
     GetEnvironmentVariable('ProgramFiles(x86)'),
     GetEnvironmentVariable('USERPROFILE')];
   for W in GWorkspaces do
-    Result := Result + W.Roots + W.ReadOnlyRoots + W.ReadOnlyPaths;
+    Result := Result + W.Roots;
 end;
 
 { La ruta de un enlace se juzga por DONDE ESTA, no por adonde apunta: la ruta
@@ -4050,10 +4183,21 @@ begin
   Result := (ReadPathDenied(RealPath(P)) = '') or (ReadPathDenied(P) = '');
 end;
 
-{ ADestino cae DENTRO de AOrigen (o es el), por las rutas REALES. }
-function DentroDeSiMismo(const AOrigen, ADestino: string): Boolean;
+{ ADestino cae DENTRO de AOrigen (o es el), por las rutas REALES. Con
+  AOrigenEsElEnlace, el origen por SU ruta (RutaDelEnlace), no la de detras:
+  un MOVE renombra el enlace mismo, y por su destino una junction a un
+  antepasado caia "dentro de si misma" y no se podia ni borrar ni mover
+  (septima revision). Una copia lee a traves del enlace: la real. }
+function DentroDeSiMismo(const AOrigen, ADestino: string;
+  AOrigenEsElEnlace: Boolean = False): Boolean;
+var
+  O: string;
 begin
-  Result := StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(AOrigen))),
+  if AOrigenEsElEnlace then
+    O := RutaDelEnlace(ExcludeTrailingPathDelimiter(TPath.GetFullPath(AOrigen)))
+  else
+    O := RealPath(ExcludeTrailingPathDelimiter(AOrigen));
+  Result := StartsText(IncludeTrailingPathDelimiter(O),
     IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(ADestino))));
 end;
 
@@ -4210,7 +4354,7 @@ begin
   Result := ProtegidoDenegado(AOrigen);
   if Result <> '' then
     Exit;
-  if DentroDeSiMismo(AOrigen, ADestino) then
+  if DentroDeSiMismo(AOrigen, ADestino, True) then
     Exit(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
   // la unidad REAL de cada lado: un junction en el camino no la disfraza
   try
@@ -4421,10 +4565,8 @@ begin
   // workspace, cualquier proyecto de referencia y el vault.
   try
     LoadSecurity;
-    var Referencias: TArray<string> := nil;
-    for W in GWorkspaces do
-      Referencias := Referencias + W.ReadOnlyRoots;
-    Referencias := Referencias + GRoRoots + [VaultPath];
+    // lo que no se toca de NINGUN workspace (SitiosQueNoSeTocan)
+    var NoSeTocan := SitiosQueNoSeTocan;
     // Solo lo que es de ESTE proceso (TemporalEsMia): la temporal de cada
     // raiz se reclama aunque aun no exista -las llamadas la crearan-, y una
     // que ya es de otro servidor vivo no se toca.
@@ -4432,14 +4574,14 @@ begin
       for R in W.Roots do
       begin
         TemporalEsMia(TPath.Combine(R, TempFolderName));
-        for var T in TemporalesBajo(R, W.ReadOnlyPaths + Referencias) do
+        for var T in TemporalesBajo(R, NoSeTocan) do
           if TemporalEsMia(T) then
             VaciaDesechable(T);
       end;
     for R in GRoots do // modo local de lanzamiento (baterias)
     begin
       TemporalEsMia(TPath.Combine(R, TempFolderName));
-      for var T in TemporalesBajo(R, GRoPaths + Referencias) do
+      for var T in TemporalesBajo(R, NoSeTocan) do
         if TemporalEsMia(T) then
           VaciaDesechable(T);
     end;
@@ -4511,6 +4653,24 @@ begin
   begin
     AMotivo := mvRutaInvalida;
     Exit;
+  end;
+  // Un UNC que no es de ningun sitio declarado: fuera, por TEXTO, antes de
+  // InVault / ReadOnlyRootOf, que lo resuelven en el disco (SMB hacia el
+  // host que diga el agente; septima revision). Tambien para quien llama a
+  // la puerta desde dentro, no solo para la entrada.
+  if UncFueraDeLugares(APath) then
+  begin
+    AMotivo := mvFueraDeJaula;
+    Exit(MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', WorkspaceRoots)]));
+  end;
+  // Un FICHERO que llega con separador final (x.txt\) nombrado como carpeta:
+  // se leia como el fichero y fallaba dentro de Windows (INTERNAL, septima
+  // revision). Una carpeta con su separador es lo normal.
+  if (APath.EndsWith('\') or APath.EndsWith('/')) and
+     TFile.Exists(ExcludeTrailingPathDelimiter(APath.Replace('/', '\'))) then
+  begin
+    AMotivo := mvRutaInvalida;
+    Exit(MsgFmt(SR_GUARD_BARRA_FINAL_FMT, [APath]));
   end;
   // The knowledge vault belongs to the vault_* tools ALONE, wherever it sits.
   // If it happens to live inside a workspace root, the code tools must still
@@ -4801,6 +4961,91 @@ begin
     GLibLoaded := True;
   end;
   Result := GLibRoots;
+end;
+
+function ParametroQueNoVa(const AModo: string; const ATabla, AEnviados: array of string;
+  out ASuyos: string): string;
+var
+  I: Integer;
+  Hay: Boolean;
+  Suyos: string;
+begin
+  Result := '';
+  ASuyos := '';
+  Hay := False;
+  I := 0;
+  while I + 1 <= High(ATabla) do
+  begin
+    if SameText(ATabla[I], AModo) then
+    begin
+      Hay := True;
+      ASuyos := ATabla[I + 1];
+      Break;
+    end;
+    Inc(I, 2);
+  end;
+  if not Hay then
+    Exit;
+  Suyos := ' ' + LowerCase(ASuyos) + ' ';
+  I := 0;
+  while I + 2 <= High(AEnviados) do
+  begin
+    if (AEnviados[I + 1].Trim <> '') and
+       not SameText(AEnviados[I + 1].Trim, AEnviados[I + 2]) and
+       not Suyos.Contains(' ' + LowerCase(AEnviados[I]) + ' ') then
+      Exit(AEnviados[I]);
+    Inc(I, 3);
+  end;
+end;
+
+function PrimerAncestroQueExiste(const ARuta: string): string;
+begin
+  Result := ARuta;
+  while (Result <> '') and not TDirectory.Exists(Result) and
+        (ExtractFileDir(Result) <> Result) do
+    Result := ExtractFileDir(Result);
+end;
+
+procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string);
+var
+  D: string;
+begin
+  D := ExcludeTrailingPathDelimiter(ADesde);
+  try
+    while (AAncestro <> '') and (Length(D) > Length(ExcludeTrailingPathDelimiter(AAncestro))) and
+          (EscrituraDenegada(D) = '') do
+    begin
+      if not RemoveDir(D) then
+        Break; // no esta vacia (otro dejo algo) o no se puede: se queda
+      D := ExtractFileDir(D);
+    end;
+  except
+    // quitar lo creado nunca lanza
+  end;
+end;
+
+function UncFueraDeLugares(const APath: string): Boolean;
+var
+  P, L: string;
+  Lugares: TArray<string>;
+begin
+  P := APath.Trim.Replace('/', '\');
+  // los prefijos de dispositivo son de PathAnomaly (GUARD-022), no de aqui
+  if not P.StartsWith('\\') or P.StartsWith('\\?\') or P.StartsWith('\\.\') then
+    Exit(False);
+  if Length(WorkspaceRoots) = 0 then
+    Exit(False);
+  Lugares := WorkspaceRoots + WorkspaceReadOnlyRoots + WorkspaceReadOnlyPaths;
+  if VaultPath <> '' then
+    Lugares := Lugares + [VaultPath];
+  if LibraryZoneEnabled then
+    Lugares := Lugares + LibraryRoots;
+  P := IncludeTrailingPathDelimiter(P);
+  for L in Lugares do
+    if (L.Trim <> '') and
+       StartsText(IncludeTrailingPathDelimiter(L.Trim.Replace('/', '\')), P) then
+      Exit(False);
+  Result := True;
 end;
 
 function LibraryReadRoots: TArray<string>;
@@ -5221,10 +5466,12 @@ end;
 initialization
   GIdentLock := TCriticalSection.Create;
   GSesiones := TList<TSesion>.Create;
+  GCaducadas := TStringList.Create;
 
 finalization
 
   GSesiones.Free;
+  GCaducadas.Free;
   GIdentLock.Free;
 
 end.

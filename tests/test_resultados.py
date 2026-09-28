@@ -121,6 +121,26 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
       demas y la nota SEARCH-003 (se caia entera con SYS-027)
   E83 delphi_config con un parametro que no es de su comando: CFG-110
       (set-output con path= contestaba exito poniendo el valor por defecto)
+  E84 un UNC que no es de ningun sitio declarado: GUARD-002 al momento, sin
+      abrir SMB hacia ese host (21 s por llamada), tambien con un ~ dentro
+  E85 changeset delete-line con old (lo compara): CHSET-030 lo rechazaba
+  E86 delete-line pasada del final: el preview no dice limpio (se aceptaba y
+      solo quitaba el salto final)
+  E87 buscar donde TODO lo que casa esta bloqueado: SEARCH-003 sin SEARCH-002
+  E88 delphi_config: section con su valor por defecto no es CFG-110; otro si;
+      view de un .groupproj con section tambien
+  E89 delphi_create con un parametro que no es de su kind: CREATE-035
+  E90 delphi_edit / textedit con un parametro que no es del modo: EDIT-115
+      (code sin insert, eol sin create, atline con edits)
+  E91 la forma de la ruta: comodin GUARD-024, fichero con separador final
+      GUARD-025 (leer y crear; no queda una carpeta con su nombre)
+  E92 changeset delete de un fichero +R: SYS-029 y sin copia en deleted
+  E93 borrar una junction a un antepasado (era "dentro de si misma")
+  E94 protocolo: id 1.5 / null -> SYS-031, method null -> SYS-032, name null
+      no es la tool "null", el 404 lleva el id, el GET con sesion muerta es
+      404, el 202 va sin cuerpo, SYS-015 de una tool sin parametros
+  E95 dos copias del mismo fichero en el mismo golpe de reloj (~15 ms): la
+      segunda tenia el mismo nombre sellado y la operacion fallaba
   E76 un fichero de dentro por su alias 8.3 se lee (la jaula decia "fuera")
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
@@ -128,8 +148,11 @@ Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
 import base64
 import json
 import os
+import stat
 import subprocess
 import time
+import urllib.error
+import urllib.request
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -734,7 +757,9 @@ try:
     vivas = [r for r in rutas if '__delphi-patch' not in r]
     check('E62 delphi_list includetrash con mascaras solapadas: cada fichero UNA vez',
           len(vivas) == 2 and len(rutas) > 2 and len(set(rutas)) == len(rutas) and
-          j.get('total') == len(rutas) and j.get('shownTrash') == len(rutas) - len(vivas),
+          # shownTrash cuenta COPIAS: la marca de dueno (.by) no es otra (septima)
+          j.get('total') == len(rutas) and j.get('shownTrash') == len(
+              [r for r in rutas if r not in vivas and not mc.es_marca_dueno(r)]),
           '%s | %s' % (j.get('total'), rutas))
 
     VCLP = os.path.join(JAIL, 'Vc.dproj')
@@ -810,7 +835,9 @@ try:
     rechazo('E72 ...y delphi_upload con path relativo, sin escribir nada',
             'delphi_upload', {'path': 'subido.txt', 'chunkbase64': 'aG9sYQ=='},
             'INVALID_PARAM', 'SR_GUARD_RUTA_RELATIVA_FMT')
-    check('E72 ...y el upload no dejo el fichero junto al proceso',
+    # (control: con el servidor lanzado fuera de la jaula no puede fallar; mide
+    # que la negativa de arriba no escribio nada en ningun sitio)
+    check('E72 ...(control) y el upload no dejo el fichero junto al proceso',
           not os.path.exists(os.path.join(EXEDIR, 'subido.txt')) and
           not os.path.exists(os.path.join(os.getcwd(), 'subido.txt')), os.getcwd())
 
@@ -901,6 +928,7 @@ try:
                                               'project': DPROJ_PAN, 'dir': 'mods'})
         UMOD = os.path.join(PAN, 'mods', 'UModulo.pas')
         DPR_ANTES = open(DPR_PAN, 'rb').read()
+        DPROJ_ANTES = open(DPROJ_PAN, 'rb').read()
         check('E80 fixture: la unit de la carpeta esta en el proyecto',
               os.path.exists(UMOD) and b'UModulo' in DPR_ANTES, t[:200])
         abierto = open(UMOD, 'r')
@@ -910,7 +938,8 @@ try:
             abierto.close()
         check('E80 borrar una carpeta que no se deja mover: FILE-036 y el proyecto INTACTO',
               res.get('isError') is True and mc.abre(t, 'SR_FILE_DELETE_LOCKED_FMT') and
-              os.path.exists(UMOD) and open(DPR_PAN, 'rb').read() == DPR_ANTES,
+              os.path.exists(UMOD) and open(DPR_PAN, 'rb').read() == DPR_ANTES and
+              open(DPROJ_PAN, 'rb').read() == DPROJ_ANTES,  # el .dproj tambien vuelve
               '%s | lista UModulo: %s' % (t[:200], b'UModulo' in open(DPR_PAN, 'rb').read()))
 
     # E81 LSP-004 cuenta como delphi_read: sin la linea fantasma del salto final
@@ -940,15 +969,199 @@ try:
 
     # E83 un parametro que no es del comando se DICE: set-output con path=
     # contestaba "puesto en Compiled" (el valor por defecto) ignorando path
-    ANTES = open(DPROJ, 'rb').read()
+    # con un proyecto REAL (grupo $(Base)): con el App.dproj minimo la version
+    # de antes contestaba CFG-087 y no el exito callado que se arreglo
+    P83 = DPROJ_PAN if os.path.exists(DPROJ_PAN) else DPROJ
+    ANTES = open(P83, 'rb').read()
     t = rechazo('E83 set-output con path= (el suyo es output): CFG-110', 'delphi_config',
-                {'command': 'set-output', 'project': DPROJ, 'path': '.\\bin'},
+                {'command': 'set-output', 'project': P83, 'path': '.\\bin'},
                 'INVALID_PARAM', 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT')
     check('E83 ...nombra lo que toma el comando y el .dproj no se toco',
-          'set-output takes output' in t and open(DPROJ, 'rb').read() == ANTES, t[:200])
+          'set-output takes output' in t and open(P83, 'rb').read() == ANTES, t[:200])
     rechazo('E83 view con platform= tampoco se ignora', 'delphi_config',
             {'command': 'view', 'project': DPROJ, 'platform': 'Win64'},
             'INVALID_PARAM', 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT')
+
+    # E84 un UNC ajeno se niega por TEXTO: resolverlo (RealPath, el alargado de
+    # un ~) abria SMB hacia el host que dijera el agente. 192.0.2.1 es de
+    # documentacion y no contesta: con SMB de por medio serian ~20 s
+    for unc in (r'\\192.0.2.1\share\f.txt', r'\\192.0.2.1\share\PROGRA~1\f.txt'):
+        t0 = time.time()
+        res, sc, t = llama('delphi_read', {'path': unc})
+        dt = time.time() - t0
+        check('E84 %s: GUARD-002 en %.1f s, sin tocar la red' % (unc, dt),
+              res.get('isError') is True and mc.abre(t, 'SR_JAIL_FMT') and dt < 3, t[:160])
+
+    # E85 delete-line lleva old (lo compara con su linea): CHSET-030 lo rechazaba
+    DL = os.path.join(JAIL, 'dl.txt')
+    open(DL, 'w', newline='\n').write('uno\ndos\ntres\n')
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c85 = mc.id_changeset(t)
+    res, sc, t = llama('delphi_changeset', {'command': 'stage', 'id': c85, 'kind': 'delete-line',
+                                            'path': DL, 'atline': 2, 'old': 'dos'})
+    check('E85 delete-line con old se apila (CHSET-030 lo rechazaba)', not res.get('isError'), t[:200])
+    llama('delphi_changeset', {'command': 'preview', 'id': c85})
+    res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c85})
+    check('E85 ...y el commit borra ESA linea y conserva el salto final',
+          not res.get('isError') and open(DL, newline='').read() == 'uno\ntres\n',
+          '%s | %r' % (t[:160], open(DL, newline='').read()))
+
+    # E86 delete-line pasada del final: la fantasma del salto final contaba
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c86 = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': c86, 'kind': 'delete-line',
+                               'path': DL, 'atline': 3})
+    res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c86})
+    check('E86 delete-line atline=3 en un fichero de 2: el preview NO sale limpio',
+          mc.como_json(t).get('unresolved') == 1 and 'has 2' in t, t[:300])
+    llama('delphi_changeset', {'command': 'discard', 'id': c86})
+    check('E86 ...y el fichero sigue igual', open(DL, newline='').read() == 'uno\ntres\n',
+          repr(open(DL, newline='').read()))
+
+    # E87 todo lo que casa con la mascara esta bloqueado: no es "la mascara no caso"
+    B87 = os.path.join(JAIL, 'e87')
+    os.makedirs(B87)
+    SOLO = os.path.join(B87, 'solo.md')
+    open(SOLO, 'w').write('aguja\n')
+    hb = k32.CreateFileW(SOLO, 0x80000000, 0, None, 3, 0x80, None)  # sin compartir
+    try:
+        res, sc, t = llama('delphi_search', {'root': B87, 'query': 'aguja', 'pattern': '*.md'})
+    finally:
+        k32.CloseHandle(hb)
+    j = mc.como_json(t)
+    check('E87 todo lo que casa esta bloqueado: SEARCH-003 y SIN SEARCH-002',
+          'maskNote' not in j and mc.es(j.get('unreadableNote', ''), 'SN_SEARCH_ILEGIBLES_FMT'), t[:300])
+
+    # E88 section con su valor por defecto (el que publica el esquema) no es CFG-110
+    res, sc, t = llama('delphi_config', {'command': 'fix-references', 'project': DPROJ,
+                                         'section': 'summary'})
+    check('E88 fix-references con section=summary (el defecto): NO es CFG-110',
+          not mc.abre(t, 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT'), t[:200])
+    rechazo('E88 ...y con section=platforms si (la regla sigue viva)', 'delphi_config',
+            {'command': 'fix-references', 'project': DPROJ, 'section': 'platforms'},
+            'INVALID_PARAM', 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT')
+    if os.path.exists(GRP):
+        rechazo('E88 view de un .groupproj con section: CFG-110 (se ignoraba)', 'delphi_config',
+                {'command': 'view', 'project': GRP, 'section': 'platforms'},
+                'INVALID_PARAM', 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT')
+
+    # E89 delphi_create con un parametro que no es de su kind
+    rechazo('E89 delphi_create unit con formname: CREATE-035 (se ignoraba)', 'delphi_create',
+            {'kind': 'unit', 'name': 'USinForm', 'dir': JAIL, 'formname': 'FormX'},
+            'INVALID_PARAM', 'SR_CREATE_NO_VA_CON_KIND_FMT')
+    check('E89 ...y no se creo nada', not os.path.exists(os.path.join(JAIL, 'USinForm.pas')), '')
+    rechazo('E89 project-console con content: CREATE-035 (CREATED con el esqueleto)', 'delphi_create',
+            {'kind': 'project-console', 'name': 'ConX', 'dir': os.path.join(JAIL, 'conx'),
+             'content': 'program ConX; begin end.'}, 'INVALID_PARAM', 'SR_CREATE_NO_VA_CON_KIND_FMT')
+
+    # E90 delphi_edit / textedit: lo que no es del modo se dice
+    rechazo('E90 delphi_edit code sin insert: EDIT-115', 'delphi_edit',
+            {'path': U1252, 'old': 'interface', 'new': 'interface', 'code': 'x'},
+            'INVALID_PARAM', 'SR_EDIT_NO_VA_CON_MODO_FMT')
+    rechazo('E90 delphi_textedit eol sin create: EDIT-115', 'delphi_textedit',
+            {'path': NOTES, 'old': 'First line.', 'new': 'First line!', 'eol': 'lf'},
+            'INVALID_PARAM', 'SR_EDIT_NO_VA_CON_MODO_FMT')
+    rechazo('E90 edits con atline: EDIT-115 (se ignoraba en silencio)', 'delphi_textedit',
+            {'path': NOTES, 'edits': json.dumps([{'old': 'First line.', 'new': 'First line!'}]),
+             'atline': 3}, 'INVALID_PARAM', 'SR_EDIT_NO_VA_CON_MODO_FMT')
+    check('E90 ...NOTES sin tocar', open(NOTES).read() == 'First line.\nSecond line.\n',
+          repr(open(NOTES).read()))
+
+    # E91 la forma de la ruta, a la entrada
+    rechazo('E91 un comodin en la ruta: GUARD-024 (acababa INTERNAL)', 'delphi_textedit',
+            {'path': os.path.join(JAIL, 'm*.txt'), 'create': True, 'content': 'x'},
+            'INVALID_PARAM', 'SR_GUARD_COMODIN_FMT')
+    rechazo('E91 un fichero con separador final, leido: GUARD-025 (SYS-006 INTERNAL)', 'delphi_read',
+            {'path': NOTES + '\\'}, 'INVALID_PARAM', 'SR_GUARD_BARRA_FINAL_FMT')
+    rechazo('E91 ...y creado: GUARD-025', 'delphi_textedit',
+            {'path': os.path.join(JAIL, 'c7.txt') + '\\', 'create': True, 'content': 'x'},
+            'INVALID_PARAM', 'SR_GUARD_BARRA_FINAL_FMT')
+    check('E91 ...sin una carpeta c7.txt', not os.path.exists(os.path.join(JAIL, 'c7.txt')), '')
+
+    # E92 changeset delete de un fichero +R: SYS-029 antes de copiar
+    ROF = os.path.join(JAIL, 'ro92.txt')
+    open(ROF, 'w').write('ro\n')
+    os.chmod(ROF, stat.S_IREAD)
+    try:
+        res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+        c92 = mc.id_changeset(t)
+        llama('delphi_changeset', {'command': 'stage', 'id': c92, 'kind': 'delete', 'path': ROF})
+        llama('delphi_changeset', {'command': 'preview', 'id': c92})
+        res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c92})
+        check('E92 changeset delete de un fichero +R: SYS-029, sigue ahi y SIN copia en deleted',
+              res.get('isError') is True and mc.es(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT') and
+              os.path.exists(ROF) and not mc.copias(JAIL, 'ro92.txt', 'CAJON_BORRADOS'), t[:300])
+    finally:
+        os.chmod(ROF, stat.S_IWRITE)
+
+    # E93 una junction a un antepasado se borra (el enlace, no lo de detras)
+    JA = os.path.join(JAIL, 'e93')
+    os.makedirs(JA)
+    LNK = os.path.join(JA, 'arriba')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', LNK, JAIL], capture_output=True)
+    if os.path.isdir(LNK):
+        res, sc, t = llama('delphi_delete', {'path': LNK})
+        check('E93 borrar una junction a un antepasado: sale, y lo de detras sigue',
+              not res.get('isError') and not os.path.lexists(LNK) and os.path.exists(NOTES), t[:200])
+        for c in mc.copias(JA, 'arriba', 'CAJON_BORRADOS'):
+            os.rmdir(c)  # el enlace aparcado, no lo de detras
+    else:
+        check('E93 fixture: mklink /J crea la junction', False, LNK)
+
+    # E94 protocolo
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': 1.5, 'method': 'tools/list', 'params': {}},
+                          accept='application/json')
+    check('E94 id 1.5: -32600 con SYS-031 en JSON (era un 500 sin etiqueta)',
+          code == 200 and '-32600' in b and 'SYS-031' in b, '%s %s' % (code, b[:200]))
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': None, 'method': 'tools/list'},
+                          accept='application/json')
+    check('E94 id null: SYS-031 (se tomaba por notificacion y no se contestaba)',
+          code == 200 and 'SYS-031' in b, '%s %s' % (code, b[:200]))
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': 7, 'method': None}, accept='application/json')
+    check('E94 method null: SYS-032 con el id 7 (buscaba el metodo "null")',
+          'SYS-032' in b and '"id":7' in b.replace(' ', ''), '%s %s' % (code, b[:200]))
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': 8, 'method': 'tools/call', 'params': {'name': None}},
+                          accept='application/json')
+    check('E94 tools/call con name null: no busca la tool "null"',
+          'Tool not found: null' not in b and 'INVALID_PARAM' in b, '%s %s' % (code, b[:200]))
+    code, h, b = cli.post({'jsonrpc': '2.0', 'id': 11, 'method': 'tools/list'},
+                          sid='{MUERTA-E94}', accept='application/json')
+    check('E94 el 404 de una sesion muerta lleva el id de la peticion',
+          code == 404 and '"id":11' in b.replace(' ', ''), '%s %s' % (code, b[:200]))
+    req = urllib.request.Request(cli.url, method='GET', headers={
+        'Accept': 'text/event-stream', 'Authorization': 'Bearer ' + TOK, 'Mcp-Session-Id': '{MUERTA-E94}'})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            gcode = r.status
+    except urllib.error.HTTPError as e:
+        gcode = e.code
+    check('E94 el GET del flujo con una sesion muerta es 404 (era 200)', gcode == 404, gcode)
+    code, h, b = cli.post({'jsonrpc': '2.0', 'method': 'notifications/initialized'},
+                          accept='application/json')
+    check('E94 el 202 de una notificacion va SIN cuerpo (llevaba el HTML de Indy)',
+          code == 202 and b == '', '%s %r' % (code, b[:80]))
+    res, sc, t = llama('delphi_installs', {'zz': 1})
+    check('E94 SYS-015 de una tool sin parametros: "(none)" (decia "Valid parameters: .")',
+          mc.abre(t, 'SR_SYS_UNKNOWN_PARAM_FMT') and '(none)' in t, t[:200])
+
+    # E95 un commit que borra el mismo fichero DOS veces (delete, create,
+    # delete): las dos copias caen en el mismo golpe de reloj, tenian el mismo
+    # sello y la segunda no se podia escribir (la puerta 18 lo cazo con
+    # to-binary + to-text)
+    DOS = os.path.join(JAIL, 'dos95.txt')
+    open(DOS, 'w').write('v0\n')
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c95 = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': c95, 'kind': 'delete', 'path': DOS})
+    llama('delphi_changeset', {'command': 'stage', 'id': c95, 'kind': 'create', 'path': DOS,
+                               'content': 'v1\n'})
+    llama('delphi_changeset', {'command': 'stage', 'id': c95, 'kind': 'delete', 'path': DOS})
+    llama('delphi_changeset', {'command': 'preview', 'id': c95})
+    res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c95})
+    cop95 = sorted(open(c).read() for c in mc.copias(JAIL, 'dos95.txt', 'CAJON_BORRADOS'))
+    check('E95 dos copias del mismo fichero seguidas: las DOS, con nombres distintos',
+          not res.get('isError') and not os.path.exists(DOS) and cop95 == ['v0\n', 'v1\n'],
+          '%s | %s' % (t[:200], cop95))
 
     # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
     # APPLIED / COMMIT COMPLETE prometiendo copias que no existian

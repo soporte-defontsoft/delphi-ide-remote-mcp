@@ -52,6 +52,7 @@ implementation
 
 uses
   MCPServer.Registration,
+  Lsp.Guard,     // ParametroQueNoVa: lo que no va con el kind se dice
   Lsp.Patch,     // EnterFileEdit / LeaveFileEdit: el cerrojo de escritura
   Lsp.Scaffold;
 
@@ -80,10 +81,32 @@ begin
 end;
 
 function CrearNucleo(const Params: TDelphiCreateParams): string;
+const
+  // lo que lee cada familia de kind, ademas de kind y name
+  FAMILIAS: array [0 .. 7] of string = (
+    'project', 'dir',
+    'form', 'project formname dir',
+    'unit', 'project content dir',
+    'include', 'project content dir');
 var
-  K: string;
+  K, Familia, Suyos, Sobra: string;
 begin
   K := Params.Kind.Trim.ToLower;
+  // lo que no es de este kind se dice (Lsp.Guard.ParametroQueNoVa): content
+  // con un proyecto o un form, formname con una unit, se ignoraban y
+  // contestaba CREATED con el esqueleto de siempre (septima revision)
+  if K.StartsWith('project-') then
+    Familia := 'project'
+  else if K.StartsWith('form-') or K.StartsWith('frame-') or (K = 'datamodule') then
+    Familia := 'form'
+  else
+    Familia := K;
+  Sobra := ParametroQueNoVa(Familia, FAMILIAS,
+    ['dir', Params.Dir, '', 'project', Params.Project, '',
+     'formname', Params.FormName, '', 'content', Params.Content, ''], Suyos);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_CREATE_NO_VA_CON_KIND_FMT, [Sobra, Params.Kind.Trim,
+      Params.Kind.Trim, 'name ' + Suyos]));
   if K.StartsWith('project-') then
     Result := CreateDelphiProject(Params.Dir, Params.Name, K.Substring(8))
   else if K.StartsWith('form-') then

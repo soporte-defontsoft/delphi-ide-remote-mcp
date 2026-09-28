@@ -192,7 +192,7 @@ begin
   except
     Exit;
   end;
-  Lines := L.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
+  Lines := LineasDelTexto(L); // las del LSP: CR, LF y CRLF son saltos
   if (ALine < 0) or (ALine > High(Lines)) then
     Exit;
   L := Lines[ALine];
@@ -727,7 +727,7 @@ begin
     Result.AddPair('error', MsgText(SN_LSP_NO_SE_PUEDE_LEER));
     Exit;
   end;
-  Lines := Text.Replace(#13#10, #10).Split([#10]);
+  Lines := LineasDelTexto(Text); // las del LSP: CR, LF y CRLF son saltos
   Arr := TJSONArray.Create;
   Result.AddPair('declares', Arr);
   Cur := '';
@@ -885,8 +885,7 @@ begin
     // antes: esto anade verdad, no la sustituye.
     try
       var EncSim: string;
-      DecorateSymbolDecls(V, PatchLoadText(Params.Path, EncSim)
-        .Replace(#13#10, #10).Split([#10]));
+      DecorateSymbolDecls(V, LineasDelTexto(PatchLoadText(Params.Path, EncSim)));
     except
       // un fichero que el LSP si pudo abrir y nosotros no: mejor el arbol
       // pelado que ningun arbol
@@ -1107,7 +1106,7 @@ begin
   if Params.Trigger = '.' then
   begin
     var Enc: string;
-    var Lines := PatchLoadText(Params.Path, Enc).Replace(#13#10, #10).Split([#10]);
+    var Lines := LineasDelTexto(PatchLoadText(Params.Path, Enc));
     if (Params.Line >= 0) and (Params.Line <= High(Lines)) then
     begin
       var LineTxt := Lines[Params.Line];

@@ -140,9 +140,15 @@ begin
     for Pair in Json do
     begin
       KeyName := Pair.JsonString.Value;
+      // una tool sin parametros decia "Valid parameters: ." (septima revision)
       if KnownNorms.IndexOf(NormalizeKey(KeyName)) < 0 then
+      begin
+        var Validos := String.Join(', ', Publicados.ToStringArray);
+        if Validos = '' then
+          Validos := MsgText(SF_NINGUNO);
         raise EArgumentException.Create(MsgFmt(SR_SYS_UNKNOWN_PARAM_FMT,
-          [KeyName, String.Join(', ', Publicados.ToStringArray)]));
+          [KeyName, Validos]));
+      end;
     end;
   finally
     KnownNorms.Free;

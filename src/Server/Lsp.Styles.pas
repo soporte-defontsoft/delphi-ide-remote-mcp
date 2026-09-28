@@ -161,7 +161,7 @@ begin
   end
   else
     Text := PatchLoadText(FPath, FEnc);
-  FEol := IfThen(Text.Contains(#13#10), #13#10, #10);
+  FEol := SaltoDominante(Text);
   FLines := Text.Replace(#13#10, #10).Split([#10]);
   Parse;
 end;

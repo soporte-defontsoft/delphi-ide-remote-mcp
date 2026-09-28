@@ -92,17 +92,21 @@ def es_marca_dueno(nombre):
     return nombre.lower().endswith(_papelera()['MARCA_DUENO_EXT'].lower())
 
 
-def copias(carpeta, nombre, cajon=None):
+def copias(carpeta, nombre=None, cajon=None, bajo=False):
     """Las copias SELLADAS de <nombre> en la papelera de <carpeta>, de todos los
     dias, sin sus marcas: el lector de lo que compone TrashPathFor
     (<carpeta>\\__delphi-patch\\<dia>\\<cajon>\\<nombre>-<hhnnsszzz>). cajon
     es el NOMBRE de la constante de Lsp.Patch (CAJON_BORRADOS,
-    CAJON_SUSTITUIDOS, CAJON_ANTES_DE_RESTAURAR); None, todos."""
+    CAJON_SUSTITUIDOS, CAJON_ANTES_DE_RESTAURAR); None, todos. nombre None:
+    las de cualquier fichero. bajo=True: en TODAS las papeleras bajo carpeta
+    (hay una junto a cada carpeta de lo que se tiro)."""
     p = _papelera()
-    patron = os.path.join(carpeta, p['BACKUP_SUB'], '*', p[cajon] if cajon else '*',
-                          glob.escape(nombre) + '-*')
-    sello = re.compile(re.escape(nombre) + r'-\d{9}$', re.I)
-    return sorted(f for f in glob.glob(patron) if sello.match(os.path.basename(f)))
+    patron = os.path.join(os.path.join(carpeta, '**') if bajo else carpeta,
+                          p['BACKUP_SUB'], '*', p[cajon] if cajon else '*',
+                          (glob.escape(nombre) if nombre else '*') + '-*')
+    sello = re.compile((re.escape(nombre) if nombre else '.+') + r'-\d{9}$', re.I)
+    return sorted(f for f in glob.glob(patron, recursive=bajo)
+                  if sello.match(os.path.basename(f)))
 
 
 def borra(ruta):

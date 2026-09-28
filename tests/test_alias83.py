@@ -20,6 +20,12 @@ A7  un clone que falla no borra una carpeta vacia que ya estaba; uno
     rechazado no deja la suya
 A8  una ruta en 8.3 con punto final o ::$DATA: la negativa de la anomalia,
     y nada creado (alargarla le quitaba el punto y creaba "$DATA")
+A9  el vault de OTRO workspace, anidado en esta raiz: ni se edita ni se
+    borra con este token (solo se miraba el vault del activo)
+A10 la purga del arranque no vacia el __delphi-temp de un vault ni el de
+    un ReadOnlyPaths de OTRO workspace anidado en esta raiz
+A11 las tools vault_* por el alias 8.3: el fichero de gobierno y la
+    carpeta excluida siguen siendolo
 
 Si el volumen no da nombres 8.3, los A se dicen NOTA y no se miden.
 
@@ -60,6 +66,18 @@ TEMP_REF = os.path.join(REF, '__delphi-temp')
 os.makedirs(TEMP_REF)
 MIGA_REF = os.path.join(TEMP_REF, 'de-la-referencia.txt')
 open(MIGA_REF, 'w').write('de la referencia\n')
+# A9/A10: el vault de OTRO workspace y un ReadOnlyPaths suyo, anidados aqui
+VAULT_OTRO = os.path.join(JAIL, 'vaultdeotro')
+os.makedirs(VAULT_OTRO)
+open(os.path.join(VAULT_OTRO, 'AGENTS-VAULT.md'), 'w').write('# de otro\n')
+RO_OTRO = os.path.join(OTRA, 'soloconsulta')
+os.makedirs(RO_OTRO)
+MIGAS = []
+for _d in (VAULT, VAULT_OTRO, RO_OTRO):
+    os.makedirs(os.path.join(_d, '__delphi-temp'), exist_ok=True)
+    MIGAS.append(os.path.join(_d, '__delphi-temp', 'miga.txt'))
+    open(MIGAS[-1], 'w').write('no me purgues\n')
+os.makedirs(os.path.join(VAULT, '.obsidian'))  # A11: la carpeta excluida
 
 HAY83 = all(corta(p) and os.path.basename(corta(p)).lower() != os.path.basename(p).lower()
             for p in (OTRA, OTRA2, CONT, VAULT, REF))
@@ -74,11 +92,14 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     'ReadOnlyPaths=%s' % VENDOR,
     'ReadOnlyRoots=%s' % (corta(REF) or REF),
     'VaultPath=%s' % VAULT,
+    'VaultReadOnly=0',   # A11: las tools vault_* escriben
     'GitRemotes=127.0.0.1',
     '',
     '[Workspace.Otro]',
     'Token=%s' % TOK2,
     'Roots=%s;%s' % (OTRA, corta(OTRA2) or OTRA2),
+    'ReadOnlyPaths=%s' % RO_OTRO,
+    'VaultPath=%s' % VAULT_OTRO,
     '',
 ]))
 
@@ -126,6 +147,21 @@ try:
         # A5 la purga del arranque ya paso: la referencia declarada en 8.3
         check('A5 la purga del arranque no vacio el __delphi-temp de una referencia declarada en 8.3',
               os.path.exists(MIGA_REF), TEMP_REF)
+        # A11 las tools vault_* por el alias 8.3: comparaban el TEXTO
+        AVC = os.path.basename(corta(os.path.join(VAULT, 'AGENTS-VAULT.md')))
+        res, sc, t = llama('vault_append', {'path': AVC, 'content': 'intruso'})
+        check('A11 vault_append por el alias del fichero de gobierno (%s): VAULT governance' % AVC,
+              res.get('isError') is True and mc.abre(t, 'SR_VAULT_GOVERNANCE') and
+              open(os.path.join(VAULT, 'AGENTS-VAULT.md')).read() == '# reglas\n', t[:200])
+        OBC = os.path.basename(corta(os.path.join(VAULT, '.obsidian')))
+        if OBC and OBC.lower() != '.obsidian':
+            res, sc, t = llama('vault_create', {'path': OBC + '/x.md', 'content': '# x'})
+            check('A11 vault_create en .obsidian por su alias (%s): carpeta excluida' % OBC,
+                  res.get('isError') is True and
+                  mc.abre(t, 'SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT') and
+                  not os.path.exists(os.path.join(VAULT, '.obsidian', 'x.md')), t[:200])
+        else:
+            print('NOTA: A11 .obsidian sin medir: no tiene alias 8.3 (%r)' % OBC)
 
     # A4 una unit por su alias 8.3 sale de su proyecto
     PROY = os.path.join(JAIL, 'proy')
@@ -147,15 +183,32 @@ try:
 
     # A8 alargar una ruta NUNCA cambia a que fichero se refiere: la forma
     # canonica quita el punto final y deshace ::$DATA. En .txt, para que no
-    # la pare la negativa de los .pas (TEXT-001) por otro motivo.
-    for sufijo, motivo in (('Evade.txt.', 'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT'),
-                           ('Evade3.txt::$DATA', 'SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT')):
-        niega('A8 %s por el alias 8.3: la negativa de la anomalia' % sufijo, 'delphi_textedit',
-              {'path': os.path.join(corta(CONT), sufijo), 'create': True, 'content': 'x'},
-              motivo, CONT)
-    check('A8 ...y nada creado en la carpeta',
-          not [f for f in os.listdir(CONT) if f.startswith(('Evade', '$DATA'))],
-          os.listdir(CONT))
+    # la pare la negativa de los .pas (TEXT-001) por otro motivo. Solo con
+    # un ~ en la ruta se alarga: sin alias, NOTA (no se mediria nada)
+    if '~' in corta(CONT):
+        for sufijo, motivo in (('Evade.txt.', 'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT'),
+                               ('Evade3.txt::$DATA', 'SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT')):
+            niega('A8 %s por el alias 8.3: la negativa de la anomalia' % sufijo, 'delphi_textedit',
+                  {'path': os.path.join(corta(CONT), sufijo), 'create': True, 'content': 'x'},
+                  motivo, CONT)
+        check('A8 ...y nada creado en la carpeta',
+              not [f for f in os.listdir(CONT) if f.startswith(('Evade', '$DATA'))],
+              os.listdir(CONT))
+    else:
+        print('NOTA: A8 sin medir: la carpeta no tiene alias 8.3 (%r)' % corta(CONT))
+
+    # A9 el vault de OTRO workspace, anidado en esta raiz: tampoco es de las
+    # tools de codigo (solo se miraba el del activo)
+    AVO = os.path.join(VAULT_OTRO, 'AGENTS-VAULT.md')
+    res, sc, t = llama('delphi_textedit', {'path': AVO, 'old': '# de otro', 'new': '# mio'})
+    check('A9 el vault de otro workspace no se edita con este token',
+          res.get('isError') is True and mc.abre(t, 'SR_VAULT_NOT_CODE') and
+          open(AVO).read() == '# de otro\n', t[:200])
+    niega('A9 ...ni se borra', 'delphi_delete', {'path': VAULT_OTRO}, 'SR_VAULT_NOT_CODE', AVO)
+    # A10 la purga del arranque ya paso
+    check('A10 la purga del arranque no vacio los temporales de los vaults ni de un '
+          'ReadOnlyPaths de otro workspace', all(os.path.exists(m) for m in MIGAS),
+          [m for m in MIGAS if not os.path.exists(m)])
 
     # A6 vault_read: la nota de 3 lineas es de 3 (salia de 4, con un 4| vacio)
     open(os.path.join(VAULT, 'nota.md'), 'w', newline='\n').write('# t\nuno\ndos\n')

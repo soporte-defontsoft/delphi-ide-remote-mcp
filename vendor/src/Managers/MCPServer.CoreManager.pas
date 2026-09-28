@@ -100,18 +100,17 @@ begin
   ClientName := nil;
   ClientVersion := nil;
   
-  if Assigned(Params) then
+  // [local change 2026-09-28] clientInfo que no es un objeto era un
+  // -32603 "Invalid class typecast" sin etiqueta, y un name null o 5 daba
+  // la sesion "null" / "5" (compartida entre clientes): el lector de todos
+  ClientName := nil;
+  if Assigned(Params) and (Params.GetValue('clientInfo') is TJSONObject) then
   begin
-    ClientInfo := Params.GetValue('clientInfo') as TJSONObject;
-
-    if Assigned(ClientInfo) then
-    begin
+    ClientInfo := TJSONObject(Params.GetValue('clientInfo'));
+    if CampoDeTexto(ClientInfo, 'name') <> '' then
       ClientName := ClientInfo.GetValue('name');
-      ClientVersion := ClientInfo.GetValue('version');
-
-      if Assigned(ClientName) and Assigned(ClientVersion) then
-        TLogger.Info(Format('Client: %s v%s', [ClientName.Value, ClientVersion.Value]));
-    end;
+    TLogger.Info(Format('Client: %s v%s', [CampoDeTexto(ClientInfo, 'name'),
+      CampoDeTexto(ClientInfo, 'version')]));
   end;
   
   var SesionId := TGuid.NewGuid.ToString; // de ESTA llamada (ver la nota de la clase)

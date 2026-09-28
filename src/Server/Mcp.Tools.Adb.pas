@@ -339,13 +339,19 @@ begin
         CrearCarpeta(OutDir);
       // un fichero que ya estaba (unas notas.txt) se pisaba sin copia: la
       // copia de antes de tocarlo, como toda tool que escribe
-      GuardaContenidoActual(Params.Out.Trim); // el que habia, sellado (si lo habia)
-      TFile.WriteAllText(Params.Out.Trim, Txt, TEncoding.UTF8);
+      // con el cerrojo de escritura, como su gemela la captura (septima revision)
+      EnterFileEdit;
+      try
+        GuardaContenidoActual(Params.Out.Trim); // el que habia, sellado (si lo habia)
+        TFile.WriteAllText(Params.Out.Trim, Txt, TEncoding.UTF8);
+      finally
+        LeaveFileEdit;
+      end;
       Return := TJSONObject.Create;
       try
         Return.AddPair('logfile', Params.Out.Trim);
-        Return.AddPair('lines',
-          TJSONNumber.Create(Length(Txt.Split([#13#10, #10]))));
+        Return.AddPair('lines', // como delphi_read cuenta el fichero
+          TJSONNumber.Create(Length(LineasDelTexto(Txt))));
         Return.AddPair('size', TJSONNumber.Create(TFile.GetSize(Params.Out.Trim)));
         Return.AddPair('note', MsgText(SN_ADB_LOGFILE));
         Result := Return.ToJSON;

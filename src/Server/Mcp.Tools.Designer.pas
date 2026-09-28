@@ -848,8 +848,9 @@ begin
     Text := PatchLoadText(APath, EncName);
   // Tablas del framework + el form contra su clase (check-binding), en una
   // sola pasada: lint = todo lo que el compilador no mira.
-  Warns := DesignerMetaLint(IsFmx, Text.Replace(#13#10, #10).Split([#10])) +
-    DesignerBindingWarnings(APath, Text.Replace(#13#10, #10).Split([#10]));
+  // las lineas como delphi_read: los avisos citan su numero (septima revision)
+  Warns := DesignerMetaLint(IsFmx, LineasDelTexto(Text)) +
+    DesignerBindingWarnings(APath, LineasDelTexto(Text));
   if Length(Warns) = 0 then
     Result := MsgFmt(SN_DESIGNER_LINT_OK_FMT, [TPath.GetFileName(APath)])
   else
@@ -899,7 +900,7 @@ begin
     Copia := MaskDriveText('', GuardaContenidoActual(Ruta));
     PatchSaveText(Ruta, Texto, 'utf8');
     Result := MsgFmt(SN_DESIGNER_TOTEXT_FMT, [TPath.GetFileName(Ruta), Length(B),
-      Length(Texto.Replace(#13#10, #10).TrimRight([#10]).Split([#10])), Copia]);
+      Length(LineasDelTexto(Texto)), Copia]);
   end
   else
   begin

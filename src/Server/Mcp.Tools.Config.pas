@@ -23,6 +23,11 @@ uses
   Lsp.Texts,
   Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
+const
+  { El section que publica el esquema por defecto: el mismo valor en el
+    atributo y en la regla de "lo que no va" (que no lo cuenta como enviado). }
+  CFG_SECTION_POR_DEFECTO = 'summary';
+
 type
   TDelphiConfigParams = class
   private
@@ -60,7 +65,7 @@ type
     [RutaRelativa] // relativa al proyecto, o una macro del IDE ($(BDS)...)
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_CONFIG_SECTION)]
-    [SchemaDefault('summary')]
+    [SchemaDefault(CFG_SECTION_POR_DEFECTO)]
     property Section: string read FSection write FSection;
     // SIN marca, y es una de las dos unicas excepciones de todo el contrato:
     // esta carpeta esta EN LA MAQUINA DESTINO. Comprobarla contra nuestra
@@ -1320,10 +1325,7 @@ begin
   Xml := PatchLoadText(ADproj, Enc);
   if not TRegEx.IsMatch(Xml, '(?i)<VerInfo_MajorVer>') then
     Exit(MsgText(SR_CONFIG_VERSION_SIN_VERINFO));
-  if Xml.Contains(#13#10) then
-    Eol := #13#10
-  else
-    Eol := #10;
+  Eol := SaltoDominante(Xml); // el salto del fichero, la regla de todos
 
   // Lo que habia, para poder decirlo: los numeros por un lado y la clave por
   // otro, que es donde se ve si estaban descuadrados.
@@ -1543,57 +1545,36 @@ end;
 { Los parametros de CADA comando, ademas de project y command. Uno que no es
   del comando se dice: set-output con path=".\bin" contestaba "puesto en
   Compiled" (su valor por defecto) ignorando lo que se pidio (sexta revision).
-  En UNA tabla: el comando que se anada lleva su fila, y nada mas. }
+  En UNA tabla: el comando que se anada lleva su fila, y nada mas. La regla
+  es la de todas las tools de varios modos (Lsp.Guard.ParametroQueNoVa); el
+  section por defecto no cuenta como enviado (septima revision). }
 function ParametroQueSobra(const ACmd: string; const P: TDelphiConfigParams;
   out ASuyos: string): string;
 const
-  COMANDOS: array [0 .. 16, 0 .. 1] of string = (
-    ('view', 'section'),
-    ('add-platform', 'platform sdk profile'),
-    ('remove-platform', 'platform'),
-    ('set-output', 'output'),
-    ('add-searchpath', 'platform path'),
-    ('remove-searchpath', 'platform path'),
-    ('add-deployfile', 'platform path remotedir'),
-    ('remove-deployfile', 'platform path'),
-    ('set-version', 'version'),
-    ('set-sdk', 'platform sdk'),
-    ('set-profile', 'platform profile'),
-    ('add-requires', 'requires'),
-    ('add-unit', 'path'),
-    ('remove-unit', 'path'),
-    ('fix-references', ''),
-    ('add-project', 'path'),
-    ('remove-project', 'path'));
-var
-  I: Integer;
-  Cmd, Suyos: string;
-  Hay: Boolean;
+  COMANDOS: array [0 .. 33] of string = (
+    'view', 'section',
+    'add-platform', 'platform sdk profile',
+    'remove-platform', 'platform',
+    'set-output', 'output',
+    'add-searchpath', 'platform path',
+    'remove-searchpath', 'platform path',
+    'add-deployfile', 'platform path remotedir',
+    'remove-deployfile', 'platform path',
+    'set-version', 'version',
+    'set-sdk', 'platform sdk',
+    'set-profile', 'platform profile',
+    'add-requires', 'requires',
+    'add-unit', 'path',
+    'remove-unit', 'path',
+    'fix-references', '',
+    'add-project', 'path',
+    'remove-project', 'path');
 begin
-  Result := '';
-  ASuyos := '';
-  Cmd := ACmd;
-  if Cmd = '' then
-    Cmd := 'view';
-  Hay := False;
-  for I := Low(COMANDOS) to High(COMANDOS) do
-    if SameText(COMANDOS[I, 0], Cmd) then
-    begin
-      Hay := True;
-      ASuyos := COMANDOS[I, 1];
-    end;
-  if not Hay then
-    Exit; // un comando que no existe lo dice su propia negativa
-  Suyos := ' ' + ASuyos + ' ';
-  if (P.Platform.Trim <> '') and not Suyos.Contains(' platform ') then Exit('platform');
-  if (P.Sdk.Trim <> '') and not Suyos.Contains(' sdk ') then Exit('sdk');
-  if (P.Profile.Trim <> '') and not Suyos.Contains(' profile ') then Exit('profile');
-  if (P.Path.Trim <> '') and not Suyos.Contains(' path ') then Exit('path');
-  if (P.Section.Trim <> '') and not Suyos.Contains(' section ') then Exit('section');
-  if (P.RemoteDir.Trim <> '') and not Suyos.Contains(' remotedir ') then Exit('remotedir');
-  if (P.Version.Trim <> '') and not Suyos.Contains(' version ') then Exit('version');
-  if (P.Output.Trim <> '') and not Suyos.Contains(' output ') then Exit('output');
-  if (P.Requires.Trim <> '') and not Suyos.Contains(' requires ') then Exit('requires');
+  Result := ParametroQueNoVa(IfThen(ACmd = '', 'view', ACmd), COMANDOS,
+    ['platform', P.Platform, '', 'sdk', P.Sdk, '', 'profile', P.Profile, '',
+     'path', P.Path, '', 'section', P.Section, CFG_SECTION_POR_DEFECTO,
+     'remotedir', P.RemoteDir, '', 'version', P.Version, '',
+     'output', P.Output, '', 'requires', P.Requires, ''], ASuyos);
 end;
 
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
@@ -1635,7 +1616,17 @@ begin
   if SameText(TPath.GetExtension(Proj), '.groupproj') then
   begin
     if (Cmd = '') or (Cmd = 'view') then
+    begin
+      // view de un GRUPO no tiene secciones: section se ignoraba (septima
+      // revision). La misma regla, con la fila del grupo
+      var SuyosG: string;
+      var SobraG := ParametroQueNoVa('view', ['view', ''],
+        ['section', Params.Section, CFG_SECTION_POR_DEFECTO], SuyosG);
+      if SobraG <> '' then
+        Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [SobraG, 'view (.groupproj)',
+          'view (.groupproj)', MsgText(SF_NINGUNO)]));
       Exit(ViewGroup(Proj));
+    end;
     // Las de un grupo (1.6.0): add-project y remove-project escriben lo que
     // "Add existing project" del IDE; fix-references re-apunta lo que ya no
     // esta donde dice. El proyecto de "path" solo se NOMBRA.

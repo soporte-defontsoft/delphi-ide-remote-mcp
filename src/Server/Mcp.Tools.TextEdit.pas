@@ -74,6 +74,7 @@ implementation
 uses
   System.StrUtils,
   MCPServer.Registration,
+  Lsp.Guard, // ParametroQueNoVa: lo que no va con el modo se dice
   Lsp.Patch; // ModosQueNoCombinan: la regla de los modos, la de delphi_edit
 
 { TDelphiTextEditTool }
@@ -97,9 +98,23 @@ begin
       'old/new/fragment/delete')]);
   if Result <> '' then
     Exit;
-  // content es de create: sin el, se ignoraba en silencio
-  if (Params.Content <> '') and not Params.Create_ then
-    Exit(MsgFmt(SR_EDIT_CONTENT_SIN_MODO_FMT, ['create']));
+  // lo que no es del modo de la llamada se dice (Lsp.Guard.ParametroQueNoVa):
+  // content sin create (sexta revision), eol sin create, atline con edits
+  // (septima)
+  var Modo: string;
+  if Params.Edits.Trim <> '' then Modo := 'edits'
+  else if Params.Create_ then Modo := 'create'
+  else Modo := 'old/new';
+  var Suyos: string;
+  var Sobra := ParametroQueNoVa(Modo, [
+      'edits', 'edits',
+      'create', 'create content eol',
+      'old/new', 'old new fragment delete atline toline'],
+    ['atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
+     'toline', IfThen(Params.ToLine <> 0, IntToStr(Params.ToLine)), '',
+     'content', Params.Content, '', 'eol', Params.Eol, ''], Suyos);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_EDIT_NO_VA_CON_MODO_FMT, [Sobra, Modo, Modo, Suyos]));
   if Params.Edits.Trim <> '' then
     Exit(ExecuteTextEdits(Params.Path, Params.Edits));
   A := Default(TTextEditArgs);

@@ -97,6 +97,9 @@ check('exe VERSIONINFO == %s' % winver, ev == winver, ev or '(sin VERSIONINFO)')
 # 4) CAPABILITIES coherent
 cap = json.load(open(os.path.join(REPO, 'docs', 'CAPABILITIES.json'), encoding='utf-8'))
 check('CAPABILITIES coherent', cap.get('tools') == len(cap.get('toolNames', [])), cap.get('tools'))
+# ...y de ESTA version: decia 1.5.0 en los tags v1.5.1 a v1.6.2, porque solo
+# se miraba la cuenta de tools (septima revision)
+check('CAPABILITIES version == %s' % ver, cap.get('version') == ver, cap.get('version'))
 
 # 5) full regression
 if '--skip-regression' in sys.argv:

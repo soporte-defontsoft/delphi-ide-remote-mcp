@@ -84,7 +84,9 @@ try:
           code == 200 and 'delphi-lsp-mcp-service' in body, '%s %s' % (code, body[:120]))
     # el anuncio de la sesion es UNO para los dos caminos (sexta revision: estaba
     # escrito dos veces y el JSON habia derivado): un initialize con una sesion
-    # muerta anuncia la NUEVA en la cabecera, y una llamada normal repite la suya
+    # muerta anuncia la NUEVA en la cabecera, y una llamada normal repite la suya.
+    # Son de REGRESION: la deriva que se arreglo no se puede provocar desde
+    # fuera (solo initialize lleva sessionId); si vuelve a haber dos, lo ven.
     for camino, acc in [('JSON', 'application/json'), ('SSE', mc.ACCEPT_STREAMABLE)]:
         _, h, b = mc.post(URL, INIT, TOKEN, '{BASURA-NO-EMITIDA-JAMAS}', accept=acc, t=60)
         nuevo = h.get('Mcp-Session-Id') or ''
@@ -498,7 +500,9 @@ try:
               '%s %r' % (code, data[:120]))
         check('files: el rechazo no ensena letras reales', b'"' + jail4[:2].encode() not in data, data[:160])
         code, hdr, data = get(vjail + '\\sub', TOKEN)
-        check('files: directorio -> 403', code == 403 and mc.es(data.decode('utf-8', 'replace'), 'SR_FILES_DIR'), '%s %r' % (code, data[:100]))
+        # un directorio donde va un fichero es la peticion mal hecha (FILE-001
+        # INVALID_PARAM): 400, por el resultado de la negativa (septima revision)
+        check('files: directorio -> 400', code == 400 and mc.es(data.decode('utf-8', 'replace'), 'SR_FILES_DIR'), '%s %r' % (code, data[:100]))
         code, hdr, data = get(vjail + '\\nada.bin', TOKEN)
         check('files: no existe -> 404', code == 404, '%s %r' % (code, data[:100]))
         code, hdr, data = get('', TOKEN, raw_url=BASE + '/files')

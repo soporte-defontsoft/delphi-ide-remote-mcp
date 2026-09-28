@@ -26,7 +26,8 @@ r = call('delphi_components', {'platform': 'Linux64'})
 check('platform view header', mc.abre(r, 'SN_COMPONENTS_PLATFORM_HEAD_FMT')
       and 'Linux64' in r.split('\n')[0], r)
 check('platform view lists folders',
-      mc.es(r, 'SN_COMPONENTS_PLATFORM_HEAD_FMT') and 'srvc:' in r, r)
+      # enmascaradas en CUALQUIER unidad (daba por hecho que RAD Studio esta en C:)
+      mc.es(r, 'SN_COMPONENTS_PLATFORM_HEAD_FMT') and mc.real(r) != r, r)
 check('platform view names candidates or completeness',
       mc.es(r, 'SN_COMPONENTS_PLATFORM_MISSING_FMT')
       or mc.es(r, 'SN_COMPONENTS_PLATFORM_COMPLETE_FMT'), r)

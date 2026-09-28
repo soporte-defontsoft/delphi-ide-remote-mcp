@@ -154,18 +154,37 @@ begin
 end;
 
 procedure MoveToTrash(const APath: string; out ATrash: string);
+var
+  Ancestro: string;
 begin
+  // un FICHERO de solo lectura no se borra, como no se edita ni se pisa
+  // (SYS-029: puede ser deliberado); el changeset delete ya lo decia y
+  // delphi_delete lo borraba: UNA regla (septima revision)
+  if TFile.Exists(APath) then
+  begin
+    var Motivo := SoloLecturaDenegado(APath);
+    if Motivo <> '' then
+      raise Exception.Create(Motivo);
+  end;
   ATrash := TrashPathFor(APath, CAJON_BORRADOS);
+  Ancestro := PrimerAncestroQueExiste(TPath.GetDirectoryName(ATrash));
   CrearCarpeta(TPath.GetDirectoryName(ATrash));
-  if TDirectory.Exists(APath) then
-    // EL mudador (Lsp.Guard): renombrar o nada, con su guard. Nacio AQUI el
-    // 2026-08-25 (TDirectory.Move, al no poder renombrar, copiaba y borraba
-    // por su cuenta y vacio en la papelera una carpeta bloqueada) y se quedo
-    // aqui solo: delphi_move siguio un mes con TDirectory.Move y se trajo a
-    // la jaula y BORRO lo de detras de un junction (2026-09-25).
-    MueveArbol(APath, ATrash)
-  else
-    TFile.Move(APath, ATrash);
+  try
+    if TDirectory.Exists(APath) then
+      // EL mudador (Lsp.Guard): renombrar o nada, con su guard. Nacio AQUI el
+      // 2026-08-25 (TDirectory.Move, al no poder renombrar, copiaba y borraba
+      // por su cuenta y vacio en la papelera una carpeta bloqueada) y se quedo
+      // aqui solo: delphi_move siguio un mes con TDirectory.Move y se trajo a
+      // la jaula y BORRO lo de detras de un junction (2026-09-25).
+      MueveArbol(APath, ATrash)
+    else
+      TFile.Move(APath, ATrash);
+  except
+    // un borrado que no se hizo no deja su cajon del dia vacio (FILE-036
+    // decia "no he tocado NADA" con deleted\ recien creado; septima)
+    QuitaCarpetasCreadas(TPath.GetDirectoryName(ATrash), Ancestro);
+    raise;
+  end;
   // Who trashed it, so a later purge can be told "yours only". A file with no
   // marker (or an unknown agent) is nobody's in particular and any caller may
   // purge it - which keeps the operator's own cleanup, and stdio, working.
@@ -553,7 +572,18 @@ begin
           if NoVolvio <> '' then
             Exit(MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, E.Message]));
         end;
-        Exit(MsgFmt(SR_FILE_DELETE_LOCKED_FMT,
+        // la CAUSA manda, como en sus gemelas (el fichero suelto, delphi_move):
+        // una negativa con etiqueta (la papelera enlazada, un enlace a un
+        // antepasado) sale tal cual; "algo la tiene abierta" solo si Windows
+        // dijo eso; otro fallo, con su texto. Se decia "cierralo y repite" de
+        // todo, tambien de una ruta demasiado larga (septima revision)
+        if EsFallo(E.Message) then
+          Exit(E.Message);
+        if MotivoDelSistema(E.Message) <> '' then
+          Exit(MsgFmt(SR_FILE_DELETE_LOCKED_FMT,
+            [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
+             E.Message]));
+        Exit(MsgFmt(SR_FILE_CARPETA_NO_MOVIDA_FMT,
           [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
            E.Message]));
       end;

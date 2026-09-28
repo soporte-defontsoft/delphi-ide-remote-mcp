@@ -192,8 +192,11 @@ try:
     r = call('delphi_textedit',
              {'path': nuevo, 'create': True, 'content': 'hola\n',
               'toline': 3})
+    # la regla general de "lo que no va con el modo" (EDIT-115) contesta antes
+    # que la del motor (SR_RANGE_WRONG_MODE_FMT): las dos lo rechazan
     check('R9 toline en un modo que no va por lineas: rechazado, no ignorado',
-          mc.es(r, 'SR_RANGE_WRONG_MODE_FMT') and 'toline' in r and not os.path.exists(nuevo), r[:200])
+          (mc.es(r, 'SR_EDIT_NO_VA_CON_MODO_FMT') or mc.es(r, 'SR_RANGE_WRONG_MODE_FMT')) and
+          'toline' in r and not os.path.exists(nuevo), r[:200])
 
     # ------------------------------------------------------------------ R10
     # El recuento de bytes altos de delphi_edit comparaba lo que entra con lo
