@@ -8,7 +8,7 @@ existing at all when no vault is configured.
 
 Usage:  python tests/test_vault.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, glob
+import json, os, glob, subprocess, zipfile
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -511,6 +511,35 @@ out = s7.call('delphi_list', {"root": WORK, "pattern": "*.md"})
 check('dentro-del-root: delphi_list no sirve notas del vault',
       mc.como_json(out).get('total') == 0 and mc.como_json(out).get('files') == []
       and 'idea.md' not in out, out[:250])
+# ...y a traves de una JUNCTION de la raiz que apunte al vault: ni list ni
+# search entran, y copy=true / package no se lo llevan. La lista de la 1.7.1
+# lo tenia como SOSPECHA sin medir (hacia falta una junction en las raices):
+# los recorredores siguen un enlace solo si lo de detras se puede LEER
+# (EnlaceLegible), y el vault no se lee como codigo (SR_VAULT_NOT_CODE)
+PROY = os.path.join(WORK, 'proy')
+os.makedirs(PROY, exist_ok=True)
+open(os.path.join(PROY, 'a.txt'), 'w').write('a\n')
+ATAJO = os.path.join(PROY, 'atajo')
+subprocess.run(['cmd', '/c', 'mklink', '/J', ATAJO, INROOT], capture_output=True)
+check('junction-al-vault: fixture (la junction de la raiz llega al vault)',
+      os.path.isjunction(ATAJO) and os.path.exists(os.path.join(ATAJO, 'MEMORY.md')), ATAJO)
+out = s7.call('delphi_list', {"root": PROY, "pattern": "*.md"})
+check('junction-al-vault: delphi_list no entra',
+      mc.como_json(out).get('total') == 0 and 'idea.md' not in out, out[:200])
+out = s7.call('delphi_search', {"root": PROY, "query": "contenido original", "pattern": "*.md"})
+check('junction-al-vault: delphi_search no entra', mc.como_json(out).get('total') == 0, out[:200])
+COPIA = os.path.join(WORK, 'copia')
+out = s7.call('delphi_move', {"path": PROY, "dest": COPIA, "copy": True})
+check('junction-al-vault: copy=true copia a.txt y NO el vault, y lo dice como no seguido',
+      os.path.exists(os.path.join(COPIA, 'a.txt')) and not os.path.exists(os.path.join(COPIA, 'atajo'))
+      and mc.es(out, 'SN_COPY_LINKS_NOT_FOLLOWED_FMT'), (out[:300], os.listdir(COPIA) if os.path.isdir(COPIA) else None))
+Z = os.path.join(WORK, 'proy.zip')
+out = s7.call('delphi_package', {"dir": PROY, "outfile": Z})
+nombres = zipfile.ZipFile(Z).namelist() if os.path.exists(Z) else []
+check('junction-al-vault: delphi_package mete a.txt y NO el vault',
+      not mc.rechazado(out) and any(n.endswith('a.txt') for n in nombres)
+      and not any(('MEMORY.md' in n) or ('idea.md' in n) for n in nombres), (out[:200], nombres))
+mc.borra(ATAJO)  # el enlace, nunca lo de detras
 out = s7.call('delphi_read', {"path": os.path.join(WORK, 'Codigo.pas')})
 check('dentro-del-root: el codigo del workspace sigue accesible',
       'unit Codigo' in out, out[:120])
