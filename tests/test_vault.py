@@ -541,8 +541,10 @@ open(os.path.join(HDIR, 'settings.ini'), 'w', encoding='utf-8').write(
     'VaultReadOnly=1\n\n'
     '[Workspace.MismoVault]\nToken=tok-mismo-vault\nRoots=%s\nVaultPath=%s\n'
     'VaultReadOnly=1\n\n'
+    '[Workspace.PorDefecto]\nToken=tok-por-defecto\nRoots=%s\nVaultPath=%s\n\n'
     '[Workspace.SinVault]\nToken=tok-sin-vault\nRoots=%s\n'
     % (HPORT, os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
+       os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
        os.path.join(HDIR, 'codigo'), os.path.join(HDIR, 'vault-compartido'),
        os.path.join(HDIR, 'codigo')))
 _henv = mc.entorno()  # ni DELPHI_MCP_TOKEN ni VAULT_PATH heredados: manda el settings.ini
@@ -570,7 +572,7 @@ def _texto(resp):
 _INIT = {"protocolVersion": "2025-06-18", "capabilities": {},
          "clientInfo": {"name": "vault-battery", "version": "1"}}
 try:
-    for _tok in ('tok-con-vault', 'tok-mismo-vault', 'tok-sin-vault'):
+    for _tok in ('tok-con-vault', 'tok-mismo-vault', 'tok-por-defecto', 'tok-sin-vault'):
         _http(_tok, 'initialize', _INIT)
 
     _leen = []
@@ -579,6 +581,16 @@ try:
                                   {"name": "vault_read", "arguments": {}}, 5)))
     check('por-workspace: dos workspaces distintos comparten el MISMO vault',
           all('indice compartido' in t for t in _leen), [t[:80] for t in _leen])
+
+    # SIN VaultReadOnly= (la clave ausente): solo lectura POR DEFECTO. La bateria
+    # probaba 0 y 1 y no el defecto, que es la regla que importa (David, 28-sep:
+    # "por defecto readonly el vault de cada workspace, y parametro para write")
+    _def = _texto(_http('tok-por-defecto', 'tools/call', {"name": "vault_read", "arguments": {}}, 7))
+    check('por defecto (sin VaultReadOnly=): el workspace LEE su vault', 'indice compartido' in _def, _def[:120])
+    _def = _texto(_http('tok-por-defecto', 'tools/call',
+                        {"name": "vault_append", "arguments": {"path": "MEMORY.md", "content": "- x\n"}}, 8))
+    check('por defecto (sin VaultReadOnly=): NO escribe (solo lectura salvo VaultReadOnly=0)',
+          mc.rechazado(_def) and mc.es(_def, 'SR_VAULT_READONLY'), _def[:200])
 
     _sin = _texto(_http('tok-sin-vault', 'tools/call',
                         {"name": "vault_read", "arguments": {}}, 6))
