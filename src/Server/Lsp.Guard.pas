@@ -336,9 +336,12 @@ procedure VaciaDesechable(const ADir: string);
   fuera es lo que el operador declara, 'ReadOnlyRoots es para eso').
   AConPapelera: si copia tambien las papeleras (__delphi-patch) que haya
   dentro. Un bucle de enlaces se corta por la ruta real ya visitada. Lanza si
-  no puede copiar. }
+  no puede copiar. ASigueEnlaces=False: un enlace de DENTRO no se sigue (va
+  a ANoSeguidos): la copia de seguridad de un move, que los lleva como
+  enlaces; una junction a la raiz dentro de la carpeta metia la copia en su
+  propia papelera y el move fallaba (novena revision). }
 procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
-  out ANoSeguidos: TArray<string>);
+  out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean = True);
 
 { La decision de copy=true, sola: '' = se puede copiar AOrigen en ADestino.
   No, si ADestino cae DENTRO de AOrigen (se copiaria sin fin), ni si lo que
@@ -454,6 +457,18 @@ function EsRutaAbsoluta(const AValue: string): Boolean;
   del servicio se autentica si el host contesta (septima revision). Sin
   jaula configurada, False: no hay nada que proteger. }
 function UncFueraDeLugares(const APath: string): Boolean;
+{ Un prefijo de DISPOSITIVO o de ruta extendida (\\?\, \\.\, tambien con
+  barras normales): la entrada lo niega (GUARD-022) y nadie lo resuelve en
+  el disco. Estaba escrito dos veces, y NormPath resolvia un \\?\UNC\ leido
+  de un .dpr: SMB hacia ese host, 21 s (novena revision). }
+function EsPrefijoDeDispositivo(const APath: string): Boolean;
+{ Una ruta que un fichero NOMBRA (un .dpr, un .groupproj) y que nadie
+  resuelve en el disco: un UNC de ningun sitio declarado o un prefijo de
+  dispositivo. La E/S sobre ella iria a un host que eligio el fichero, no
+  el operador. UNA pregunta para NormPath y para quien abre los ficheros que
+  lista un proyecto (el rename hacia TFile.Exists sobre \\?\UNC\: 21 s de
+  SMB; novena revision). }
+function RutaSinTocarElDisco(const APath: string): Boolean;
 
 { La primera carpeta que YA existe por encima de ARuta (ARuta incluida): lo
   que una operacion cree debajo es suyo, y QuitaCarpetasCreadas lo quita si
@@ -3756,8 +3771,7 @@ begin
   // su barra, con SU motivo: caian en el de abajo, "alternate data stream"
   // (sexta revision)
   // ...tambien con barras normales (//?/ salia GUARD-009; septima revision)
-  if StartsText('\\?\', APath.Replace('/', '\')) or
-     StartsText('\\.\', APath.Replace('/', '\')) then
+  if EsPrefijoDeDispositivo(APath) then
     Exit(MsgFmt(SR_GUARD_PREFIJO_DISPOSITIVO_FMT, [APath]));
   // un comodin no es parte de una ruta: acababa en INTERNAL dentro de
   // Windows, y un move dejaba copia y carpeta (septima revision)
@@ -4221,14 +4235,14 @@ begin
 end;
 
 procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
-  out ANoSeguidos: TArray<string>);
+  out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean);
 var
   Vistos: TStringList;
   NoSeg: TStringList;
 
   function SeSigue(const P: string): Boolean;
   begin
-    Result := EnlaceLegible(P);
+    Result := ASigueEnlaces and EnlaceLegible(P);
     if not Result then
       NoSeg.Add(P);
   end;
@@ -5051,6 +5065,19 @@ begin
   end;
 end;
 
+function EsPrefijoDeDispositivo(const APath: string): Boolean;
+var
+  P: string;
+begin
+  P := APath.Trim.Replace('/', '\');
+  Result := StartsText('\\?\', P) or StartsText('\\.\', P);
+end;
+
+function RutaSinTocarElDisco(const APath: string): Boolean;
+begin
+  Result := UncFueraDeLugares(APath) or EsPrefijoDeDispositivo(APath);
+end;
+
 function UncFueraDeLugares(const APath: string): Boolean;
 var
   P, L: string;
@@ -5058,7 +5085,7 @@ var
 begin
   P := APath.Trim.Replace('/', '\');
   // los prefijos de dispositivo son de PathAnomaly (GUARD-022), no de aqui
-  if not P.StartsWith('\\') or P.StartsWith('\\?\') or P.StartsWith('\\.\') then
+  if not P.StartsWith('\\') or EsPrefijoDeDispositivo(P) then
     Exit(False);
   if Length(WorkspaceRoots) = 0 then
     Exit(False);

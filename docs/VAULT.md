@@ -88,9 +88,10 @@ On top of that:
   both reads and searches.
 - **UTF-8 in, UTF-8 without BOM out.** A vault is UTF-8; none of the CP1252
   machinery used for Delphi sources applies here.
-- **Long notes are truncated** at 100 000 characters with a note telling the
-  agent to page through with `offset`/`limit`, so one huge file cannot eat the
-  context window.
+- **Long notes are truncated** at about 70 000 characters, at a line boundary,
+  with a note telling the agent to page through with `offset`/`limit`, so one
+  huge file cannot eat the context window (a single line longer than that
+  comes whole).
 
 ## Setting it up
 

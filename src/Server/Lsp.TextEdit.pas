@@ -119,12 +119,15 @@ begin
     CrearCarpeta(Dir);
   // Line endings are explicit: the JSON channel often delivers LF-only text,
   // so CRLF (the Windows default here) is applied unless 'lf' is asked for.
-  Text := A.Content.Replace(#13#10, #10).Replace(#13, #10);
+  // el normalizador de todos (Lsp.Patch.ConSalto): un CR suelto tambien
   if SameText(A.Eol, 'lf') then
-    EolName := 'LF'
+  begin
+    Text := ConSalto(A.Content, #10);
+    EolName := 'LF';
+  end
   else
   begin
-    Text := Text.Replace(#10, #13#10);
+    Text := ConSalto(A.Content, #13#10);
     EolName := 'CRLF';
   end;
   // New text files are UTF-8 without BOM.

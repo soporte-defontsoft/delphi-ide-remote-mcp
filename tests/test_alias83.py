@@ -279,7 +279,8 @@ try:
             t = mc.texto(r, True)
             check('A13 una raiz UNC declarada como %s se lee por su forma %s' % (UNC_DECL, nombre),
                   'por unc' in t and not mc.fallo(t), t[:200])
-        r = cu.call_msg('delphi_read', {'path': unc(JAIL) + '\\propio.txt'}, 120)
+        # un fichero que EXISTE, fuera de la raiz UNC: el control honesto
+        r = cu.call_msg('delphi_read', {'path': unc(CONOTRO) + '\\propio.txt'}, 120)
         check('A13 ...y un UNC fuera de ella sigue fuera (GUARD-002)',
               mc.abre(mc.texto(r, True), 'SR_JAIL_FMT'), mc.texto(r, True)[:200])
     else:

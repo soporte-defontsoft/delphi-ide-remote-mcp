@@ -198,6 +198,22 @@ function SaltoDominante(const AText: string): string;
   esta sin la fantasma. UN troceador: habia cinco a mano que no veian el CR
   suelto (octava revision). }
 function SplitToLines(const T: string): TArray<string>;
+{ Las mismas lineas que SplitToLines, y en ASaltos el salto con que acaba
+  CADA una ('' la ultima): para quien reescribe unas lineas y tiene que
+  dejar las demas byte a byte, un fichero mixto tambien. UneConSusSaltos
+  es su inversa. El renombrado de una unit troceaba solo por LF: un
+  fichero de CR sueltos era UNA linea y no se reescribia (novena revision). }
+function SplitToLinesConSalto(const T: string; out ASaltos: TArray<string>): TArray<string>;
+function UneConSusSaltos(const ALineas, ASaltos: TArray<string>): string;
+{ El texto con TODOS sus saltos (CRLF, LF o CR suelto) como ASalto: UN
+  normalizador para quien crea o inserta texto. Estaba escrito seis veces,
+  y el create del changeset solo miraba CRLF y LF: "uno\rdos\r" salia
+  "uno\rdos\r\r\n" (novena revision). }
+function ConSalto(const AText, ASalto: string): string;
+{ Los ficheros que edita el motor de Pascal (delphi_edit): sus fuentes y
+  sus designers; el resto, el de texto. Vivia en Lsp.Changeset con su
+  propia lista; aqui sale de las del motor (novena revision). }
+function EsDelMotorPascal(const APath: string): Boolean;
 { El texto acaba en un salto de linea (LF, CRLF o un CR suelto). Se miraba
   de dos formas (solo LF en delphi_textedit; octava revision). }
 function TieneSaltoFinal(const AText: string): Boolean;
@@ -969,7 +985,84 @@ end;
 
 function SplitToLines(const T: string): TArray<string>;
 begin
-  Result := T.Replace(#13#10, #10).Replace(#13, #10).Split([#10]);
+  Result := ConSalto(T, #10).Split([#10]); // el normalizador de todos
+end;
+
+function SplitToLinesConSalto(const T: string; out ASaltos: TArray<string>): TArray<string>;
+var
+  I, N, Ini, K: Integer;
+begin
+  // primera pasada: cuantas lineas (los mismos cortes que SplitToLines)
+  N := 1;
+  I := 1;
+  while I <= Length(T) do
+  begin
+    if T[I] = #13 then
+    begin
+      Inc(N);
+      if (I < Length(T)) and (T[I + 1] = #10) then
+        Inc(I);
+    end
+    else if T[I] = #10 then
+      Inc(N);
+    Inc(I);
+  end;
+  SetLength(Result, N);
+  SetLength(ASaltos, N);
+  K := 0;
+  Ini := 1;
+  I := 1;
+  while I <= Length(T) do
+  begin
+    if (T[I] = #13) or (T[I] = #10) then
+    begin
+      Result[K] := Copy(T, Ini, I - Ini);
+      if (T[I] = #13) and (I < Length(T)) and (T[I + 1] = #10) then
+      begin
+        ASaltos[K] := #13#10;
+        Inc(I);
+      end
+      else
+        ASaltos[K] := T[I];
+      Inc(K);
+      Ini := I + 1;
+    end;
+    Inc(I);
+  end;
+  Result[K] := Copy(T, Ini, MaxInt);
+  ASaltos[K] := '';
+end;
+
+function UneConSusSaltos(const ALineas, ASaltos: TArray<string>): string;
+var
+  Sb: TStringBuilder;
+  I: Integer;
+begin
+  Sb := TStringBuilder.Create;
+  try
+    for I := 0 to High(ALineas) do
+    begin
+      Sb.Append(ALineas[I]);
+      if I <= High(ASaltos) then
+        Sb.Append(ASaltos[I]);
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+end;
+
+function ConSalto(const AText, ASalto: string): string;
+begin
+  Result := AText.Replace(#13#10, #10).Replace(#13, #10);
+  if ASalto <> #10 then
+    Result := Result.Replace(#10, ASalto);
+end;
+
+function EsDelMotorPascal(const APath: string): Boolean;
+begin
+  Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS) or
+    MatchText(TPath.GetExtension(APath), DESIGNER_EXTS);
 end;
 
 function LineasDelTexto(const AText: string): TArray<string>;
@@ -1267,14 +1360,16 @@ begin
   except
     Exit;
   end;
+  // con la regla del motor que va a aplicar la edicion (la de Pascal: la
+  // linea entera o tras su sangria); contaba con Trim y "  foo;  " era
+  // una ocurrencia que el motor no ve (EDIT-062; novena revision)
   Seen := 0;
-  for I := 0 to High(Lines) do
-    if Lines[I].Trim = AAnchor.Trim then
-    begin
-      Inc(Seen);
-      if Seen = AN then
-        Exit(I + 1);
-    end;
+  for I in LineasDondeCasaElAncla(Lines, AAnchor, EsDelMotorPascal(APath)) do
+  begin
+    Inc(Seen);
+    if Seen = AN then
+      Exit(I + 1);
+  end;
 end;
 
 { La pista de por que AOld no es una linea del fichero. ADentro = esta
@@ -1420,7 +1515,7 @@ function LineasDeNew(const ANew: string): TArray<string>;
 var
   S: string;
 begin
-  S := ANew.Replace(#13#10, #10).Replace(#13, #10);
+  S := ConSalto(ANew, #10);
   if S.EndsWith(#10) then
     S := S.Substring(0, S.Length - 1);
   Result := S.Split([#10]);
@@ -2235,9 +2330,7 @@ begin
           // have beats a create + N anchored patches). EOL normalized to
           // CRLF - the JSON channel often arrives LF-only - and the result
           // is audited below like any other write.
-          Skel := A.Content.Replace(#13#10, #10).Replace(#13, #10);
-          if not SameText(A.Eol, 'lf') then
-            Skel := Skel.Replace(#10, #13#10);
+          Skel := ConSalto(A.Content, IfThen(SameText(A.Eol, 'lf'), #10, #13#10));
           if not Skel.EndsWith(#10) then
             if SameText(A.Eol, 'lf') then Skel := Skel + #10 else Skel := Skel + #13#10;
           Note := MsgText(SF_EDIT_CONTENIDO_APORTADO);
@@ -3116,7 +3209,11 @@ begin
 
     var Joined: string;
     var EolSep := SaltoDominante(Text); // el mismo salto que dice la cabecera
-    Joined := string.Join(EolSep, Lines);
+    // unidas con LF y TODO LF al salto del fichero: la linea editada lleva
+    // dentro los saltos de un new de varias lineas (Replacement, en LF), y
+    // unir con EolSep los dejaba en LF - un fichero CRLF acababa mezclado
+    // (regresion de la octava revision, cazada en la novena por EDIT-082)
+    Joined := string.Join(#10, Lines).Replace(#10, EolSep);
     // Nada cambia (old == new): no se escribe ni se copia, y se dice.
     // Contestaba WRITTEN con una copia de un fichero identico (quinta
     // revision). La gemela, en Lsp.TextEdit.DoEditLine.

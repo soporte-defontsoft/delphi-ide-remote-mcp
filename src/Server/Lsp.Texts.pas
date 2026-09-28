@@ -3017,9 +3017,12 @@ const
 
   SN_STYLES_DELETED_FMT =
     '[STYLE-015] DELETED style ''%s'' (lines %d-%d of %s; %d styles left). ' +
-    'The previous copy of the file is in __delphi-patch (delphi_list ' +
-    'shows it): to undo, delphi_delete the file (it goes to the trash ' +
-    'too) and delphi_move that copy back to its name. Regenerate ' +
+    'The copy in __delphi-patch\<day>\ (delphi_list includetrash shows ' +
+    'it) is the file as it was before its FIRST change today: putting ' +
+    'it back (delphi_delete the file, then delphi_move that copy to its ' +
+    'name) also undoes the other changes of the day. To undo only this ' +
+    'one, read the style''s lines in that copy and put them back ' +
+    'with delphi_textedit. Regenerate ' +
     'with build; a StyleLookup that used it is left without a style ' +
     '(command=lint will say so).';
 
@@ -4145,10 +4148,15 @@ const
   SR_GRUPO_SIN_DPROJ_FMT =
     '[GROUP-004 NOT_FOUND] %s does not exist: a project is added to a ' +
     'group by its .dproj (or its .dpr/.dpk, with the .dproj next to it).';
+  { Con LO QUE FALTA en cada sitio: el texto nombraba una comprobacion que
+    solo era la de uno de los tres (novena revision). }
   SR_GRUPO_FORMA_FMT =
     '[GROUP-005 DENIED] %s does not have the shape of an IDE ' +
-    'group (neither a </Projects> item nor a </PropertyGroup>): I do not ' +
-    'touch it.';
+    'group (%s): I do not touch it.';
+  SF_GRUPO_SIN_SITIO_PROYECTO =
+    'neither a <Projects> item nor a </PropertyGroup> to add the project after';
+  SF_GRUPO_SIN_FINAL =
+    'no <Import nor </Project> to write its build targets before';
   SN_GRUPO_NO_ESTABA_FMT =
     '[GROUP-006] %s is not in the group %s: I did not touch anything.';
   SN_GRUPO_QUITADO_FMT =
@@ -4686,7 +4694,10 @@ const
     'discards a staged batch; status lists open changesets. Edits use the ' +
     'delphi_edit contract: old = ONE full line, unique in the file (atline ' +
     'pins a duplicate) - or, for a LONG line, fragment + atline + new, ' +
-    'resolved against the file when you stage it. A changeset expires ' +
+    'resolved against the file when you stage it. Every anchor resolves ' +
+    'against the file as it is BEFORE the changeset: an edit cannot ' +
+    'anchor on a line an earlier edit of the same changeset writes (for ' +
+    'several edits of one file, delphi_edit edits=). A changeset expires ' +
     'after 30 minutes unused. Use it ' +
     'for renames, refactors and any change where a half-applied batch would ' +
     'leave the project broken; for one file, plain delphi_edit is simpler.';
@@ -5334,8 +5345,8 @@ const
     'Markdown notes.';
 
   SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT =
-    '[VAULT-012 DENIED] "%s" is in an excluded folder (backups, .git, ' +
-    '.obsidian): it is not vault knowledge.';
+    '[VAULT-012 DENIED] "%s" is excluded from the vault (a .bak copy, or ' +
+    'inside %s): it is not vault knowledge.';
 
   SN_VAULT_RESULTADOS_FMT =
     '[VAULT-040] %d result(s)%s:';
@@ -6936,7 +6947,7 @@ const
 
   SP_WS_CREATE =
     'switch: true = create the branch and move to it (git switch -c). ' +
-    'Ignored by every other command';
+    'Only for switch: with any other command it is refused (GIT-038)';
 
   SP_WS_MESSAGE =
     'commit: the commit message. tag: makes the tag annotated. config: ' +

@@ -142,15 +142,17 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E95 dos copias del mismo fichero en el mismo golpe de reloj (~15 ms): la
       segunda tenia el mismo nombre sellado y la operacion fallaba (E95b,
       determinista: los sellos de los proximos 400 ms ocupados)
-  Octava revision:
+  Octava revision - los checks que les faltaban a arreglos de la SEPTIMA
+  (E95b, E96-E101, E103: contra la septima salen verdes, es lo esperado):
   E96 delphi_delete de un fichero +R: SYS-029 (lo borraba)
   E97 una carpeta que no se deja mover no deja su cajon vacio
   E98 una tanda cuyo BLOQUE no cambia nada: EDIT-114
   E99 delphi_package sobre un .zip +R: SYS-029
   E100 buscar con CR sueltos: las lineas como delphi_read
   E101 //?/ con barras normales: GUARD-022
-  E102 un bloque en un fichero mixto: el salto dominante, como una linea
   E103 initialize con clientInfo que no es objeto
+  ...y los de los arreglos de la OCTAVA (rojos contra la septima):
+  E102 un bloque en un fichero mixto: el salto dominante, como una linea
   E104 mover una junction: el enlace, sin copia de lo de detras
   E105-E107 la regla de parametros en styles, git y changeset
   E108 un nombre de mas de 255: GUARD-026; E109 GUARD-010 de "..."
@@ -169,6 +171,18 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
       separador final: GUARD-025
   E127 la sesion cerrada para hacer sitio: SYS-033
   E76 un fichero de dentro por su alias 8.3 se lee (la jaula decia "fuera")
+  Novena revision:
+  E128 REGRESION de la octava: un new de varias lineas en un fichero CRLF
+      metia LF; E129 add-unit / create con project en un .dproj LF
+  E130 renombrar una unit con usuarios en CR sueltos; E131 un proyecto
+      bloqueado no es "ninguno la lista" (unit y carpeta)
+  E132 un UNC con prefijo de dispositivo en un .dpr, sin SMB; E133 .dfm y .fmx, todo o nada;
+      E134 renombrar una unit +R se dice antes; E135 / E136 un move o una
+      copia que fallan no dejan carpetas ni copia a medias; E137 restaurar
+      con el form bloqueado conserva la marca; E138 la copia de seguridad
+      no sigue enlaces; E139 occurrence con la regla del motor; E140 el
+      create de un changeset con CR sueltos; E141 el preview avisa del +R
+      de un edit; E142 GROUP-005 dice lo que falta; E92b la regla del commit
 
 Usage:  python tests/test_resultados.py [path-to-DelphiLspMcp.exe]
 """
@@ -795,7 +809,7 @@ try:
     marcas = [r for r in rutas if mc.es_marca_dueno(r)]
     check('E120 LIST-008 cuenta las marcas .by aparte (las llamaba "live files")',
           len(marcas) >= 1 and mc.abre(j.get('trashNote', ''), 'SN_LIST_SHOWN_TRASH_FMT') and
-          ('and %d their owner markers' % len(marcas)) in j.get('trashNote', ''),
+          j.get('shownMarkers') == len(marcas),
           '%s | %s' % (marcas, j.get('trashNote')))
 
     VCLP = os.path.join(JAIL, 'Vc.dproj')
@@ -1223,8 +1237,17 @@ try:
     plantado_en = (datetime.datetime.now() - ahora).total_seconds()
     res, sc, t = llama('delphi_delete', {'path': F95})
     buenas = [c for c in mc.copias(D95, 'dos95.txt', 'CAJON_BORRADOS') if open(c).read() == 'v0\n']
-    check('E95b fixture: los sellos se plantan a tiempo (%.2f s de 0.40)' % plantado_en,
-          plantado_en < 0.3, plantado_en)
+    # la llamada EMPEZO dentro de la ventana y su copia se sello al final de
+    # ella: solo pudo esperar (una llamada tardia pasaba sin ejercitar nada)
+    sello95 = -1.0
+    if len(buenas) == 1:
+        s95 = buenas[0][-9:]
+        sello95 = (ahora.replace(hour=int(s95[0:2]), minute=int(s95[2:4]), second=int(s95[4:6]),
+                                 microsecond=int(s95[6:9]) * 1000) - ahora).total_seconds()
+    check('E95b fixture: la llamada empieza dentro de la ventana (%.2f s de 0.40)' % plantado_en,
+          plantado_en < 0.35, plantado_en)
+    check('E95b ...y su copia se sella al acabar la ventana (%.3f s): espero' % sello95,
+          0.399 <= sello95 <= 0.7, sello95)
     check('E95b con los sellos de los proximos 400 ms ocupados, el borrado espera al siguiente libre',
           not res.get('isError') and not os.path.exists(F95) and len(buenas) == 1,
           '%s | %s' % (t[:200], buenas))
@@ -1355,7 +1378,7 @@ try:
     t = rechazo('E107 stage create con old: CHSET-030', 'delphi_changeset',
                 {'command': 'stage', 'id': c107, 'kind': 'create', 'path': os.path.join(JAIL, 'n107.txt'),
                  'content': 'x', 'old': 'y'}, 'INVALID_PARAM', 'SR_CHANGESET_NO_ES_DE_KIND_FMT')
-    check('E107 ...y dice lo que toma create', 'takes path content' in t, t[:200])
+    check('E107 ...y dice lo que toma create (path content)', 'path content' in t, t[:200])
     llama('delphi_changeset', {'command': 'rollback', 'id': c107})
 
     # E108 un nombre de mas de 255 caracteres: SYS-009 INTERNAL al escribir
@@ -1590,6 +1613,286 @@ try:
             {'command': 'stage', 'id': c125, 'kind': 'create', 'path': os.path.join(D124, 'n.txt') + '\\',
              'content': 'x'}, 'INVALID_PARAM', 'SR_GUARD_BARRA_FINAL_FMT')
     llama('delphi_changeset', {'command': 'rollback', 'id': c125})
+
+    # ------------------------------------------------------------ novena revision
+    # E128 REGRESION de la octava: una edicion de UNA linea con un new de VARIAS
+    # en un fichero CRLF metia sus saltos en LF (el motor unia con el salto del
+    # fichero y los de dentro de la linea editada se quedaban). Ninguna bateria
+    # miraba los bytes tras un new multilinea; lo cazo EDIT-082 en vivo
+    D128 = os.path.join(JAIL, 'e128')
+    os.makedirs(D128)
+    P128 = os.path.join(D128, 'Multi.pas')
+    open(P128, 'wb').write(b'unit Multi;\r\ninterface\r\nimplementation\r\nend.\r\n')
+    res, sc, t = llama('delphi_edit', {'path': P128, 'old': 'implementation',
+                                       'new': 'implementation\n\nconst\n  X = 1;'})
+    b128 = open(P128, 'rb').read()
+    check('E128 un new de varias lineas en un fichero CRLF: todo CRLF (quedaba mezclado)',
+          not res.get('isError') and b128 == b'unit Multi;\r\ninterface\r\nimplementation\r\n\r\n'
+          b'const\r\n  X = 1;\r\nend.\r\n', '%s | %r' % (t[:160], b128))
+
+    # E129 registrar una unit en un .dproj en LF lo deja en LF (add-unit y
+    # delphi_create con project metian su DCCReference en CRLF)
+    D129 = os.path.join(JAIL, 'e129')
+    res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'Lf129', 'dir': D129})
+    DPROJ129 = os.path.join(D129, 'Lf129.dproj')
+    if os.path.exists(DPROJ129):
+        for f in (DPROJ129, os.path.join(D129, 'Lf129.dpr')):
+            datos = open(f, 'rb').read()  # ANTES de abrir para escribir (lo truncaba)
+            open(f, 'wb').write(datos.replace(b'\r\n', b'\n'))
+        res, sc, t = llama('delphi_create', {'kind': 'unit', 'name': 'UEnLf', 'project': DPROJ129})
+        b129 = open(DPROJ129, 'rb').read()
+        check('E129 delphi_create unit con project en un .dproj LF: sigue en LF',
+              not res.get('isError') and b'UEnLf' in b129 and b'\r\n' not in b129, t[:200])
+        open(os.path.join(D129, 'UOtra.pas'), 'w', newline='\n').write(
+            'unit UOtra;\ninterface\nimplementation\nend.\n')
+        res, sc, t = llama('delphi_config', {'command': 'add-unit', 'project': DPROJ129,
+                                             'path': os.path.join(D129, 'UOtra.pas')})
+        b129 = open(DPROJ129, 'rb').read()
+        check('E129 ...y add-unit tambien', not res.get('isError') and b'UOtra' in b129 and
+              b'\r\n' not in b129, t[:200])
+    else:
+        check('E129 fixture: el proyecto se crea', False, t[:200])
+
+    # E130 renombrar una unit cuyos usuarios estan en CR sueltos reescribe sus
+    # referencias (troceaba solo por LF: MOVED y el build caia)
+    D130 = os.path.join(JAIL, 'e130')
+    res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'Cr130', 'dir': D130})
+    DPROJ130 = os.path.join(D130, 'Cr130.dproj')
+    open(os.path.join(D130, 'UDos.pas'), 'wb').write(
+        b'unit UDos;\rinterface\rprocedure P;\rimplementation\rprocedure P;\rbegin\rend;\rend.\r')
+    UUNO = os.path.join(D130, 'UUno.pas')
+    open(UUNO, 'wb').write(
+        b'unit UUno;\rinterface\ruses UDos;\rimplementation\rprocedure Q;\rbegin\r  UDos.P;\rend;\rend.\r')
+    for u in ('UDos.pas', 'UUno.pas'):
+        llama('delphi_config', {'command': 'add-unit', 'project': DPROJ130, 'path': os.path.join(D130, u)})
+    res, sc, t = llama('delphi_move', {'path': os.path.join(D130, 'UDos.pas'),
+                                       'dest': os.path.join(D130, 'UTres.pas')})
+    b130 = open(UUNO, 'rb').read()
+    check('E130 renombrar UDos con usuarios en CR sueltos: UUno pasa a UTres, byte a byte',
+          not res.get('isError') and b130 == b130.replace(b'UDos', b'UTres') and
+          b'uses UTres;\r' in b130 and b'  UTres.P;\r' in b130 and b'\n' not in b130,
+          '%s | %r' % (t[:200], b130))
+
+    # E131 un proyecto que otro proceso tiene abierto NO es "ninguno la lista":
+    # la unit suelta (.dpr bloqueado) y la carpeta (.dproj bloqueado)
+    D131 = os.path.join(JAIL, 'e131')
+    res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'Lk131', 'dir': D131})
+    DPR131 = os.path.join(D131, 'Lk131.dpr')
+    DPROJ131 = os.path.join(D131, 'Lk131.dproj')
+    llama('delphi_create', {'kind': 'unit', 'name': 'UUnaSuelta', 'project': DPROJ131})
+    llama('delphi_create', {'kind': 'unit', 'name': 'UEnMods', 'project': DPROJ131, 'dir': 'mods'})
+    ANT131 = open(DPR131, 'rb').read()
+    h131 = k32.CreateFileW(DPR131, 0x80000000, 0, None, 3, 0x80, None)  # sin compartir
+    try:
+        res, sc, t = llama('delphi_delete', {'path': os.path.join(D131, 'UUnaSuelta.pas')})
+    finally:
+        k32.CloseHandle(h131)
+    check('E131 borrar una unit con su .dpr bloqueado: SYS-027 y la unit sigue (decia "ningun .dpr la lista")',
+          res.get('isError') is True and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT') and
+          os.path.exists(os.path.join(D131, 'UUnaSuelta.pas')) and open(DPR131, 'rb').read() == ANT131,
+          t[:250])
+    h131 = k32.CreateFileW(DPROJ131, 0x80000000, 0, None, 3, 0x80, None)
+    try:
+        res, sc, t = llama('delphi_delete', {'path': os.path.join(D131, 'mods')})
+    finally:
+        k32.CloseHandle(h131)
+    check('E131 ...y una carpeta con el .dproj bloqueado: SYS-027 y nada tocado (decia DELETED)',
+          res.get('isError') is True and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT') and
+          os.path.exists(os.path.join(D131, 'mods', 'UEnMods.pas')) and
+          open(DPR131, 'rb').read() == ANT131, t[:250])
+
+    # E132 un \\?\UNC\ leido de un .dpr no se resuelve en el disco (21 s de SMB)
+    D132 = os.path.join(JAIL, 'e132')
+    res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'Unc132', 'dir': D132})
+    DPR132 = os.path.join(D132, 'Unc132.dpr')
+    DPROJ132 = os.path.join(D132, 'Unc132.dproj')
+    llama('delphi_create', {'kind': 'unit', 'name': 'ULocal', 'project': DPROJ132})
+    txt132 = open(DPR132, encoding='utf-8-sig').read()
+    open(DPR132, 'w').write(txt132.replace(
+        'uses', "uses\n  ULejos in '\\\\?\\UNC\\10.255.255.1\\share\\a~1\\ULejos.pas',", 1))
+    t0 = time.time()
+    res, sc, t = llama('delphi_move', {'path': os.path.join(D132, 'ULocal.pas'),
+                                       'dest': os.path.join(D132, 'ULocal2.pas')})
+    dt = time.time() - t0
+    check('E132 mover una unit con un \\\\?\\UNC\\ en el .dpr: en %.1f s, sin SMB' % dt,
+          not res.get('isError') and dt < 5, t[:200])
+
+    # E133 una unit con .dfm Y .fmx: si el .fmx no se deja mover, el .dfm vuelve
+    # (se quedaba en el destino) y la carpeta de destino que se creo, tambien fuera
+    D133 = os.path.join(JAIL, 'e133')
+    os.makedirs(D133)
+    for ext, txt in (('.pas', 'unit UF;\ninterface\nimplementation\n{$R *.dfm}\nend.\n'),
+                     ('.dfm', 'object F: TF\nend\n'), ('.fmx', 'object F: TF\nend\n')):
+        open(os.path.join(D133, 'UF' + ext), 'w').write(txt)
+    h133 = k32.CreateFileW(os.path.join(D133, 'UF.fmx'), 0x80000000, 1, None, 3, 0x80, None)
+    try:
+        res, sc, t = llama('delphi_move', {'path': os.path.join(D133, 'UF.pas'),
+                                           'dest': os.path.join(D133, 'sub', 'VF.pas')})
+    finally:
+        k32.CloseHandle(h133)
+    check('E133 .dfm y .fmx con el .fmx bloqueado: MOVE-017, los tres en su sitio y sin carpeta sub',
+          res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and
+          all(os.path.exists(os.path.join(D133, 'UF' + e)) for e in ('.pas', '.dfm', '.fmx')) and
+          not os.path.exists(os.path.join(D133, 'sub')), '%s | %s' % (t[:250], os.listdir(D133)))
+
+    # E134 renombrar una unit +R: se dice ANTES de mover (MOVED con "unit UOld;")
+    D134 = os.path.join(JAIL, 'e134')
+    os.makedirs(D134)
+    P134 = os.path.join(D134, 'URo.pas')
+    open(P134, 'w').write('unit URo;\ninterface\nimplementation\nend.\n')
+    os.chmod(P134, stat.S_IREAD)
+    try:
+        rechazo('E134 renombrar una unit +R: SYS-029 y nada movido', 'delphi_move',
+                {'path': P134, 'dest': os.path.join(D134, 'URo2.pas')}, 'DENIED',
+                'SR_SOLO_LECTURA_ATRIBUTO_FMT')
+        check('E134 ...sigue donde estaba', os.path.exists(P134) and
+              not os.path.exists(os.path.join(D134, 'URo2.pas')), os.listdir(D134))
+    finally:
+        os.chmod(P134, stat.S_IREAD | stat.S_IWRITE)
+
+    # E135 un move que falla no deja las carpetas de destino que creo
+    D135 = os.path.join(JAIL, 'e135')
+    os.makedirs(D135)
+    F135 = os.path.join(D135, 'lk.txt')
+    open(F135, 'w').write('x\n')
+    h135 = k32.CreateFileW(F135, 0x80000000, 0, None, 3, 0x80, None)
+    try:
+        res, sc, t = llama('delphi_move', {'path': F135, 'dest': os.path.join(D135, 'n1', 'n2', 'n3', 'lk.txt')})
+    finally:
+        k32.CloseHandle(h135)
+    check('E135 un move que falla: sin n1\\n2\\n3 (quedaban vacias)',
+          res.get('isError') is True and not os.path.exists(os.path.join(D135, 'n1')), os.listdir(D135))
+
+    # E136 un copy=true que falla a mitad no deja la copia a medias
+    D136 = os.path.join(JAIL, 'e136')
+    os.makedirs(os.path.join(D136, 'src', 'z'))
+    open(os.path.join(D136, 'src', 'a.txt'), 'w').write('a\n')
+    B136 = os.path.join(D136, 'src', 'z', 'bloqueado.txt')
+    open(B136, 'w').write('b\n')
+    h136 = k32.CreateFileW(B136, 0x80000000, 0, None, 3, 0x80, None)
+    try:
+        res, sc, t = llama('delphi_move', {'path': os.path.join(D136, 'src'),
+                                           'dest': os.path.join(D136, 'dst'), 'copy': True})
+    finally:
+        k32.CloseHandle(h136)
+    check('E136 copy=true que falla a mitad: sin la copia a medias (el "repite" daba FILE-025)',
+          res.get('isError') is True and not os.path.exists(os.path.join(D136, 'dst')), t[:200])
+
+    # E137 restaurar una unit de la papelera con su form bloqueado: MOVE-017 y
+    # la copia conserva su marca de dueno (otro agente podia purgarla)
+    D137 = os.path.join(JAIL, 'e137')
+    os.makedirs(D137)
+    open(os.path.join(D137, 'UFicha.pas'), 'w').write('unit UFicha;\ninterface\nimplementation\n{$R *.dfm}\nend.\n')
+    open(os.path.join(D137, 'UFicha.dfm'), 'w').write('object Ficha: TFicha\nend\n')
+    llama('delphi_delete', {'path': os.path.join(D137, 'UFicha.pas')})
+    CP137 = mc.copias(D137, 'UFicha.pas', 'CAJON_BORRADOS')
+    CF137 = mc.copias(D137, 'UFicha.dfm', 'CAJON_BORRADOS')
+    if CP137 and CF137 and os.path.exists(mc.marca_dueno(CP137[0])):
+        h137 = k32.CreateFileW(CF137[0], 0x80000000, 1, None, 3, 0x80, None)
+        try:
+            res, sc, t = llama('delphi_move', {'path': CP137[0], 'dest': os.path.join(D137, 'UFicha.pas')})
+        finally:
+            k32.CloseHandle(h137)
+        check('E137 restaurar con el form bloqueado: MOVE-017 y la copia CON su marca de dueno',
+              res.get('isError') is True and mc.abre(t, 'SR_MOVE_FORM_NO_VA_FMT') and
+              os.path.exists(CP137[0]) and os.path.exists(mc.marca_dueno(CP137[0])), t[:250])
+    else:
+        check('E137 fixture: el borrado deja las dos copias con su marca', False, (CP137, CF137))
+
+    # E138 la copia de seguridad de un move de carpeta no sigue sus enlaces (una
+    # junction a la raiz dentro: MOVE-012 "nombre demasiado largo")
+    D138 = os.path.join(JAIL, 'e138')
+    os.makedirs(os.path.join(D138, 'carpeta'))
+    open(os.path.join(D138, 'carpeta', 'propio.txt'), 'w').write('p\n')
+    L138 = os.path.join(D138, 'carpeta', 'alaraiz')
+    subprocess.run(['cmd', '/c', 'mklink', '/J', L138, JAIL], capture_output=True)
+    if os.path.isdir(L138):
+        res, sc, t = llama('delphi_move', {'path': os.path.join(D138, 'carpeta'),
+                                           'dest': os.path.join(D138, 'carpeta2')})
+        copia138 = mc.copias(D138, 'carpeta', 'CAJON_BORRADOS')
+        check('E138 mover una carpeta con una junction a la raiz dentro: se mueve, y su copia no sigue el enlace',
+              not res.get('isError') and os.path.lexists(os.path.join(D138, 'carpeta2', 'alaraiz')) and
+              len(copia138) == 1 and os.path.exists(os.path.join(copia138[0], 'propio.txt')) and
+              not os.path.exists(os.path.join(copia138[0], 'alaraiz')), t[:250])
+        for lk in (os.path.join(D138, 'carpeta2', 'alaraiz'), L138):
+            if os.path.lexists(lk):
+                os.rmdir(lk)  # el enlace, no lo de detras
+    else:
+        check('E138 fixture: mklink /J crea la junction', False, L138)
+
+    # E139 occurrence cuenta con la regla del motor de Pascal: "  foo;  " no es
+    # una ocurrencia de "foo;" para el motor (daba EDIT-062)
+    D139 = os.path.join(JAIL, 'e139')
+    os.makedirs(D139)
+    P139 = os.path.join(D139, 'Occ.pas')
+    open(P139, 'wb').write(b'unit Occ;\r\ninterface\r\nimplementation\r\nprocedure X;\r\nbegin\r\n'
+                           b'  foo;  \r\n  foo;\r\nend;\r\nend.\r\n')
+    res, sc, t = llama('delphi_edit', {'path': P139, 'edits': json.dumps(
+        [{'old': 'foo;', 'new': 'bar;', 'occurrence': 1}])})
+    b139 = open(P139, 'rb').read()
+    check('E139 occurrence:1 con la regla del motor: edita "  foo;" (era EDIT-062)',
+          not res.get('isError') and b'  foo;  \r\n  bar;\r\n' in b139, '%s | %r' % (t[:200], b139))
+
+    # E140 el create de un changeset normaliza el CR suelto como sus gemelos
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c140 = mc.id_changeset(t)
+    P140 = os.path.join(D139, 'cr140.txt')
+    llama('delphi_changeset', {'command': 'stage', 'id': c140, 'kind': 'create', 'path': P140,
+                               'content': 'uno\rdos\r'})
+    llama('delphi_changeset', {'command': 'preview', 'id': c140})
+    res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c140})
+    b140 = open(P140, 'rb').read() if os.path.exists(P140) else b''
+    check('E140 changeset create de "uno\\rdos\\r": CRLF (salia "uno\\rdos\\r\\r\\n")',
+          b140 == b'uno\r\ndos\r\n', '%s | %r' % (t[:160], b140))
+
+    # E141 el preview avisa del +R tambien para un edit (salia limpio y el commit
+    # hacia ROLLBACK)
+    P141 = os.path.join(D139, 'ro141.txt')
+    open(P141, 'w').write('a\nb\n')
+    os.chmod(P141, stat.S_IREAD)
+    try:
+        res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+        c141 = mc.id_changeset(t)
+        llama('delphi_changeset', {'command': 'stage', 'id': c141, 'kind': 'edit', 'path': P141,
+                                   'old': 'a', 'new': 'z'})
+        res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c141})
+        check('E141 preview de un edit sobre un fichero +R: no sale limpio (SYS-029)',
+              mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])
+        llama('delphi_changeset', {'command': 'rollback', 'id': c141})
+    finally:
+        os.chmod(P141, stat.S_IREAD | stat.S_IWRITE)
+
+    # E142 GROUP-005 dice lo que FALTA: un grupo sin </Project> (decia que le
+    # faltaban un <Projects> y un </PropertyGroup> que si tenia)
+    if os.path.exists(DPROJ_PAN):
+        G142 = os.path.join(D139, 'Roto.groupproj')
+        open(G142, 'w').write(
+            '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
+            '  <PropertyGroup>\n    <ProjectGuid>{11111111-2222-3333-4444-555555555555}</ProjectGuid>\n'
+            '  </PropertyGroup>\n  <ItemGroup>\n    <Projects Include="Otro.dproj">\n'
+            '      <Dependencies/>\n    </Projects>\n  </ItemGroup>\n')
+        t = rechazo('E142 un grupo sin </Project>: GROUP-005', 'delphi_config',
+                    {'command': 'add-project', 'project': G142, 'path': DPROJ_PAN}, 'DENIED',
+                    'SR_GRUPO_FORMA_FMT')
+        check('E142 ...y nombra lo que falta', '</Project>' in t and '</PropertyGroup>' not in t, t[:250])
+
+    # E92b la regla del COMMIT: un +R que aparece DESPUES de un preview limpio lo
+    # para el commit (SYS-029), sin copia (E92 ya lo para el preview)
+    R92 = os.path.join(D139, 'ro92b.txt')
+    open(R92, 'w').write('x\n')
+    res, sc, t = llama('delphi_changeset', {'command': 'begin'})
+    c92b = mc.id_changeset(t)
+    llama('delphi_changeset', {'command': 'stage', 'id': c92b, 'kind': 'delete', 'path': R92})
+    res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c92b})
+    limpio = mc.como_json(t).get('unresolved') == 0
+    os.chmod(R92, stat.S_IREAD)
+    try:
+        res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c92b})
+        check('E92b +R tras un preview limpio: el commit lo para con SYS-029, sin copia',
+              limpio and res.get('isError') is True and 'SYS-029' in t and os.path.exists(R92) and
+              not mc.copias(D139, 'ro92b.txt'), t[:300])
+    finally:
+        os.chmod(R92, stat.S_IREAD | stat.S_IWRITE)
 
     # E77 una tanda y un changeset que no cambian nada lo DICEN: contestaban
     # APPLIED / COMMIT COMPLETE prometiendo copias que no existian

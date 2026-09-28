@@ -880,7 +880,7 @@ begin
     Result := ContenidoDeUnitNoValido(AUnitName, ABody);
     if Result <> '' then
       Exit;
-    ABody := ABody.Replace(#13#10, #10).Replace(#13, #10).Replace(#10, CRLF);
+    ABody := ConSalto(ABody, CRLF); // el normalizador de todos (Lsp.Patch)
     if not ABody.EndsWith(CRLF) then
       ABody := ABody + CRLF;
   end
@@ -994,7 +994,7 @@ begin
     Nombre := TPath.ChangeExtension(Nombre, '').TrimRight(['.']);
   if AContent.Trim = '' then
     Exit(MsgText(SR_CREATE_INCLUDE_CONTENT));
-  Body := AContent.Replace(#13#10, #10).Replace(#13, #10).Replace(#10, CRLF);
+  Body := ConSalto(AContent, CRLF);
   if not Body.EndsWith(CRLF) then
     Body := Body + CRLF;
   Dir := ADir;

@@ -105,8 +105,8 @@ Two design choices worth knowing before you enable it:
   or move — only append, create and anchored replace. A confused model cannot
   destroy accumulated knowledge.
 
-Off unless you configure it. Point it at an empty folder and the server creates
-a working starter vault for you; there is also a ready-made one in
+Off unless you configure it. Point `DELPHI_MCP_VAULT_PATH` (the local launch mode) at an empty folder and the server creates
+a working starter vault for you; for a `[Workspace.<name>] VaultPath=` copy the ready-made one in
 [`examples/vault/`](examples/vault/). **Full explanation: [docs/VAULT.md](docs/VAULT.md).**
 
 ## The four questions every Delphi developer asks first

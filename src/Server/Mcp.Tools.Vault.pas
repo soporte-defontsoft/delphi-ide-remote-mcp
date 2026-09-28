@@ -193,17 +193,29 @@ var
 
 { Folders that are never part of the knowledge: the server's own backups, git
   and tool metadata. Takes a vault-relative path with backslashes. }
-function VaultExcluded(const ARel: string): Boolean;
 const
-  Dirs: array [0 .. 4] of string = ('backups\', '.git\', '.obsidian\',
+  VAULT_EXCLUIDAS: array [0 .. 4] of string = ('backups\', '.git\', '.obsidian\',
     '.claude\', '.trash\');
+
+{ La negativa de lo excluido, con las carpetas de la lista que lo decide. }
+function MsgExcluida(const ARel: string): string;
+var
+  Nombres: string;
+begin
+  Nombres := '';
+  for var D in VAULT_EXCLUIDAS do
+    Nombres := Nombres + IfThen(Nombres <> '', ', ') + D.TrimRight(['\']);
+  Result := MsgFmt(SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT, [ARel, Nombres]);
+end;
+
+function VaultExcluded(const ARel: string): Boolean;
 var
   Low, D: string;
 begin
   Low := ARel.Replace('/', '\').ToLower;
   if Low.Contains('.bak') then
     Exit(True);
-  for D in Dirs do
+  for D in VAULT_EXCLUIDAS do
     if Low.StartsWith(D) or Low.Contains('\' + D) then
       Exit(True);
   Result := False;
@@ -267,7 +279,7 @@ begin
   if not SameText(TPath.GetExtension(Rel), '.md') then
     Exit(MsgFmt(SR_VAULT_NOTA_MD_VAULT_SOLO_FMT, [ARel]));
   if VaultExcluded(Rel) then
-    Exit(MsgFmt(SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT, [ARel]));
+    Exit(MsgExcluida(ARel));
   Root := VaultPath;
   try
     Full := TPath.GetFullPath(TPath.Combine(Root, Rel));
@@ -303,7 +315,7 @@ begin
     if not SameText(TPath.GetExtension(Rel), '.md') then
       Exit(MsgFmt(SR_VAULT_NOTA_MD_VAULT_SOLO_FMT, [ARel]));
     if VaultExcluded(Rel) then
-      Exit(MsgFmt(SR_VAULT_ESTA_CARPETA_EXCLUIDA_BACKUPS_FMT, [ARel]));
+      Exit(MsgExcluida(ARel));
   end;
   AFull := Full;
   Result := '';

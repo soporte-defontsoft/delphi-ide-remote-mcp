@@ -43,6 +43,9 @@ type
     [Test] procedure LineasComoDelphiRead;
     [Test] procedure SaltoDominantePorClase;
     [Test] procedure ParametroQueNoVaConSuDefecto;
+    [Test] procedure TroceadorConSaltoYSuInversa;
+    [Test] procedure ConSaltoNormalizaLosTres;
+    [Test] procedure MotorPascalPorExtension;
   end;
 
 implementation
@@ -213,6 +216,39 @@ begin
   Assert.AreEqual(string(#10), SaltoDominante('a'#10'b'#10'c'#13#10), 'el que mas aparece');
   Assert.AreEqual(string(#13), SaltoDominante('a'#13'b'#13), 'un CR suelto tambien');
   Assert.AreEqual(string(#13#10), SaltoDominante('sin saltos'), 'el de Windows si no hay');
+end;
+
+{ El troceador que conserva el salto de cada linea: con su inversa, byte a byte. }
+procedure TNombradorTests.TroceadorConSaltoYSuInversa;
+var
+  L, S: TArray<string>;
+  T: string;
+begin
+  T := 'a'#13'b'#13#10'c'#10'd';
+  L := SplitToLinesConSalto(T, S);
+  Assert.AreEqual<Integer>(Length(SplitToLines(T)), Length(L), 'los mismos cortes que SplitToLines');
+  Assert.AreEqual(string(#13), S[0], 'el CR suelto es SU salto');
+  Assert.AreEqual(string(#13#10), S[1]);
+  Assert.AreEqual(string(#10), S[2]);
+  Assert.AreEqual('', S[3], 'la ultima sin salto');
+  Assert.AreEqual(T, UneConSusSaltos(L, S), 'la inversa, byte a byte');
+  Assert.AreEqual('x'#13#10, UneConSusSaltos(SplitToLinesConSalto('x'#13#10, S), S),
+    'con el salto final (la fantasma)');
+end;
+
+procedure TNombradorTests.ConSaltoNormalizaLosTres;
+begin
+  Assert.AreEqual('a'#13#10'b'#13#10'c'#13#10, ConSalto('a'#13'b'#10'c'#13#10, #13#10));
+  Assert.AreEqual('a'#10'b'#10, ConSalto('a'#13#10'b'#13, #10));
+  Assert.AreEqual('sin saltos', ConSalto('sin saltos', #13#10));
+end;
+
+procedure TNombradorTests.MotorPascalPorExtension;
+begin
+  Assert.IsTrue(EsDelMotorPascal('X.pas') and EsDelMotorPascal('X.DPR') and
+    EsDelMotorPascal('X.inc') and EsDelMotorPascal('X.dfm') and EsDelMotorPascal('X.fmx'));
+  Assert.IsFalse(EsDelMotorPascal('X.txt') or EsDelMotorPascal('X.dproj'),
+    'el texto y el proyecto no son del motor de Pascal');
 end;
 
 procedure TNombradorTests.ParametroQueNoVaConSuDefecto;

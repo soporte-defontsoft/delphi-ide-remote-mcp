@@ -204,14 +204,6 @@ begin
   end;
 end;
 
-{ Los ficheros que edita el motor de Pascal (delphi_edit); el resto, el de
-  texto. UNA lista para el commit (que motor aplica) y el create (que
-  codificacion), que la tenian escrita cada uno (octava revision). }
-function EsDelMotorPascal(const APath: string): Boolean;
-begin
-  Result := MatchText(TPath.GetExtension(APath),
-    ['.pas', '.dpr', '.dpk', '.inc', '.dfm', '.fmx']);
-end;
 
 { Como resuelve un ancla el motor que la va a aplicar (la misma pregunta,
   Lsp.Patch.LineasDondeCasaElAncla): cuantas lineas casan (1 = unica, 0 =
@@ -668,8 +660,9 @@ begin
             // whatever arrived, so the same source produced a CRLF file one
             // way and an LF one the other (measured 2026-08-25). One project,
             // one convention.
-            Op.Content := AContent.Replace(#13#10, #10).Replace(#10, #13#10);
-            if (Op.Content <> '') and not Op.Content.EndsWith(#13#10) then
+            // con el normalizador de todos (un CR suelto tambien es salto)
+            Op.Content := ConSalto(AContent, #13#10);
+            if (Op.Content <> '') and not TieneSaltoFinal(Op.Content) then
               Op.Content := Op.Content + #13#10;
             if WillExist(C, Op.Path) then
               Exit(MsgFmt(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
@@ -768,13 +761,16 @@ begin
             Obj.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_VIRTUAL));
             Continue;
           end;
-          // delete de un fichero +R: el commit lo rechaza (SYS-029) y deshace la
-          // tanda; el preview decia limpio (octava revision)
-          if (Op.Kind = opDelete) and TFile.Exists(Op.Path) and
+          // un fichero +R que la operacion escribe (delete, edit, delete-line):
+          // el commit lo rechaza (SYS-029) y deshace la tanda; el preview decia
+          // limpio (octava revision el delete, novena los otros dos). Su ancla
+          // no se mira: la operacion no puede hacerse
+          if (Op.Kind in [opDelete, opEdit, opDeleteLine]) and TFile.Exists(Op.Path) and
              (SoloLecturaDenegado(Op.Path) <> '') then
           begin
             Obj.AddPair('anchor', SoloLecturaDenegado(Op.Path));
             Inc(N);
+            Continue;
           end;
           // delete-line: el preview dice lo que el commit va a rechazar (una
           // linea que no existe, o que no es la de old); decia "clean" y el

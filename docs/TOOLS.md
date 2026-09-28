@@ -163,7 +163,7 @@ What it does not show is counted BY REASON (1.5.0, one counter shared with `delp
 | `root` | string | **yes** | Directory to list recursively |
 | `pattern` | string | optional | Filename mask, e.g. *.pas (default: Delphi source and project files) |
 | `dirs` | boolean | optional | true = list SUBDIRECTORIES of root (one level, explorer-style) instead of files |
-| `includetrash` | boolean | optional | true = also show the recoverable trash `__delphi-patch` (default false: skipped like the other IDE artifacts). With it on, the answer says how many of the entries are trash copies (`shownTrash`, `trashNote`) |
+| `includetrash` | boolean | optional | true = also show the recoverable trash `__delphi-patch` (default false: skipped like the other IDE artifacts). With it on, the answer says how many of the entries are trash copies and how many their owner markers (`shownTrash`, `shownMarkers`, `trashNote`) |
 
 ### `delphi_projects`
 
@@ -175,8 +175,8 @@ Locate Delphi projects (.dproj/.groupproj) under a directory - or under the work
 |---|---|---|---|
 | `root` | string | optional | Directory to search under. Empty = the roots configured in settings.ini [Workspace.<name>] Roots (semicolon-separated) |
 | `name` | string | optional | Optional name filter (substring, case-insensitive), e.g. "comunicador" |
-| `maxresults` | number | optional (default 50) | Maximum projects to return PER PAGE (cap 300) |
-| `offset` | number | optional (default 0) | Skip the first N projects of the FULL list - pass the `nextOffset` of the previous answer |
+| `maxresults` | integer | optional (default 50) | Maximum projects to return PER PAGE (cap 300) |
+| `offset` | integer | optional (default 0) | Skip the first N projects of the FULL list - pass the `nextOffset` of the previous answer |
 
 ### `delphi_installs`
 
@@ -229,7 +229,7 @@ SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx) preser
 
 ### `delphi_changeset`
 
-MULTI-FILE TRANSACTIONS: when one change touches several files, either the whole batch lands or none of it. Flow: `begin` (returns an id) → `stage` one operation per call (kind=edit|create|delete|move; nothing touches disk yet) → `preview` (resolves every edit anchor and fingerprints every file the batch will touch) → `commit` (fingerprints re-checked — a file changed since preview refuses the WHOLE batch —, byte snapshots taken, operations applied in order; any failure restores every file byte-exact and reports which operation failed). `rollback` discards a staged batch; `status` lists open changesets. Edits use the delphi_edit contract (old = ONE full line, unique; `atline` pins a duplicate). A changeset expires after 30 minutes unused.
+MULTI-FILE TRANSACTIONS: when one change touches several files, either the whole batch lands or none of it. Flow: `begin` (returns an id) → `stage` one operation per call (kind=edit|create|delete|move; nothing touches disk yet) → `preview` (resolves every edit anchor and fingerprints every file the batch will touch) → `commit` (fingerprints re-checked — a file changed since preview refuses the WHOLE batch —, byte snapshots taken, operations applied in order; any failure restores every file byte-exact and reports which operation failed). `rollback` discards a staged batch; `status` lists open changesets. Edits use the delphi_edit contract (old = ONE full line, unique; `atline` pins a duplicate). Every anchor resolves against the file as it is BEFORE the changeset: an edit cannot anchor on a line an earlier edit of the same changeset writes (for several edits of one file, `delphi_edit edits=`). A changeset expires after 30 minutes unused.
 
 *Access: read-write only.*
 
@@ -494,7 +494,7 @@ Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.168.1.163;SERIA
 | `filter` | string | optional | logcat: only lines containing this text (e.g. your app tag or package) |
 | `lines` | string | optional | logcat: how many recent lines to capture (default 300, max 5000; 0 = default). Inline answers carry at most the newest 400 — bigger dumps via `out=` |
 | `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image content item (scaled to maxwidth) and its temp file is consumed on the spot - one call, nothing to download. false = file + download link instead (a client without vision, or one that wants the bytes). |
-| `maxwidth` | number | optional | Inline only: the image is scaled down to this width before it travels (0 = 1280, enough to read a desktop). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels for tap. |
+| `maxwidth` | integer | optional | Inline only: the image is scaled down to this width before it travels (0 = 1280, enough to read a desktop). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels for tap. |
 | `frame` | string | optional | tap/type: the "frame" of the screenshot you MEASURED ON, copied verbatim. With it, x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display) - no arithmetic on your side. Without it, x,y are capture pixels, as always. |
 
 ### `delphi_desktop`
@@ -538,7 +538,7 @@ The target needs a graphical session open - a headless box has nothing to show -
 | `region` | string | optional | screenshot: `x,y,w,h` in DESKTOP pixels - the answer is only that piece of the same capture, at full resolution, with `origin {x,y}`: what you measure on the crop is pressed at (origin.x + x, origin.y + y) |
 | `window` | string | optional | screenshot: part of a window title - the capture cropped to the first window of the `windows` list whose title contains it, with `origin` like region, plus the whole list. On Linux the list holds the X11/Xwayland windows (every FMX application); a native Wayland window has no rectangle: use `region` |
 | `inline` | string | optional | Default true: the screenshot comes back IN this answer as an image content item (scaled to maxwidth) and its temp file is consumed on the spot - one call, nothing to download. false = file + download link instead (a client without vision, or one that wants the bytes). |
-| `maxwidth` | number | optional | Inline only: the image is scaled down to this width before it travels (0 = 1280, enough to read a desktop). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels for tap. |
+| `maxwidth` | integer | optional | Inline only: the image is scaled down to this width before it travels (0 = 1280, enough to read a desktop). The answer says inlineScale: divide what you measure on the inline image by it to get capture pixels for tap. |
 | `frame` | string | optional | tap/type: the "frame" of the screenshot you MEASURED ON, copied verbatim. With it, x,y are pixels of THAT image and the server converts them (inline scale, crop origin, device display) - no arithmetic on your side. Without it, x,y are capture pixels, as always. |
 
 ### `delphi_components`
@@ -669,7 +669,7 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 | `repo` | string | **yes** | Path of the git repository (or any path inside it). For clone: the DESTINATION directory (created if needed, must be inside the workspace roots) |
 | `command` | string | **yes** | One of: status \| diff \| log \| show \| branch \| switch \| merge \| stash \| add \| commit \| init \| push \| tag \| config \| clone \| pull \| fetch \| worktree (stash: args=push\|pop\|list, never drop - `push -- <paths>` parks ONLY those paths and sets them back to HEAD, the way to discard one file's changes without losing them (`pop` brings them back), label in message, each path inside the repo, literal and through the write gate (1.5.1); config: args=user.name\|user.email + value in message; clone: URL in message, destination in repo) |
 | `args` | string | optional | Optional extra arguments (paths, --staged, a commit hash...). Shell metacharacters are rejected |
-| `create` | boolean | optional | `switch`: true = create the branch and move to it (`git switch -c`). Ignored by every other command |
+| `create` | boolean | optional | `switch`: true = create the branch and move to it (`git switch -c`). Only for `switch`: with any other command it is refused (GIT-038) |
 | `message` | string | optional | commit: the commit message. tag: makes the tag annotated. config: the value. clone: the repository URL |
 | `path` | string | optional | worktree add/remove: the folder of the working copy (add: a NEW folder inside your roots) |
 | `ref` | string | optional | worktree add: the tag, branch or commit to check out |
@@ -829,8 +829,8 @@ Reads a note of the knowledge vault by relative path. WITHOUT path it returns th
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `path` | string | optional | RELATIVE path of the note inside the vault (projects/x/context.md). WITHOUT path it returns the rules + the index: do that when you start |
-| `offset` | number | optional | Optional: first line to return (1 = the start) |
-| `limit` | number | optional | Optional: how many lines to return from offset |
+| `offset` | integer | optional | Optional: first line to return (1 = the start) |
+| `limit` | integer | optional | Optional: how many lines to return from offset |
 
 ### `vault_search`
 
@@ -843,7 +843,7 @@ Searches the knowledge vault (Markdown notes linked with [[wikilinks]]). PROTOCO
 | `target` | string | optional (default files) | files (search by note NAME, a glob pattern such as *meeting*.md) \| content (search INSIDE the notes, pattern is a regular expression) |
 | `pattern` | string | **yes** | Name glob if target=files (*.md, *delphi*), or regular expression if target=content |
 | `subfolder` | string | optional | Optional: relative folder of the vault to narrow the search (projects, conventions...) |
-| `maxresults` | number | optional | Maximum number of results (default 50) |
+| `maxresults` | integer | optional | Maximum number of results (default 50) |
 
 ### `vault_append`
 

@@ -131,9 +131,12 @@ handshake.
   shows one, `set style=cardstyle child=background prop=Fill.Color
   value=xFF112233` changes one property (value exactly as the file writes
   it), `clone style=cardstyle name=cardstyle_alt` adds a variant and
-  `delete style=cardstyle_alt` removes one (the `__delphi-patch` copy is
-  the way back: `delphi_delete` the file, then `delphi_move` the copy back
-  to its name - `delphi_move` never overwrites).
+  `delete style=cardstyle_alt` removes one. The way back is the
+  `__delphi-patch\<day>\` copy, which is the file BEFORE ITS FIRST CHANGE
+  TODAY: putting it back (`delphi_delete` the file, then `delphi_move` the
+  copy to its name - `delphi_move` never overwrites) undoes the day's other
+  changes too; to undo only one, read its lines in that copy and put them
+  back with `delphi_textedit`.
 - Before and after touching a `.fmx`: `delphi_styles command=lint
   path=<Styles folder> project=<.dproj>` - a `StyleLookup` that no style
   defines renders with the default look and nobody tells you.

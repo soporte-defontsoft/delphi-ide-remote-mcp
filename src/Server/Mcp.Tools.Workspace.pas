@@ -748,6 +748,8 @@ begin
     if ShownTrash + ShownMarcas > 0 then
     begin
       Return.AddPair('shownTrash', TJSONNumber.Create(ShownTrash));
+      // las marcas, en su campo tambien: solo estaban dentro del texto
+      Return.AddPair('shownMarkers', TJSONNumber.Create(ShownMarcas));
       Return.AddPair('trashNote', MsgFmt(SN_LIST_SHOWN_TRASH_FMT,
         [Total, ShownTrash, ShownMarcas]));
     end;

@@ -223,7 +223,9 @@ begin
   // UProveedorModelo.pas son el mismo fichero (sexta revision). Salvo un
   // UNC que no es de ningun sitio declarado: estas rutas salen de lo que
   // dice un .dpr, y alargarla abria SMB hacia ese host (octava revision)
-  if UncFueraDeLugares(P) then
+  // ...ni uno con prefijo de dispositivo (\\?\UNC\host\...): la pregunta de
+  // todos (Lsp.Guard.RutaSinTocarElDisco; novena revision)
+  if RutaSinTocarElDisco(P) then
     Exit(P.ToLower);
   Result := LongCanonical(P).ToLower;
 end;
@@ -1252,7 +1254,9 @@ begin
       else
         Text := Entry;
     end;
-    PatchSaveText(Dproj, Text, Enc);
+    // con el salto del .dproj (DccRefXml compone en CRLF): add-unit metia
+    // CRLF en un .dproj en LF (novena revision)
+    PatchSaveConSuSalto(Dproj, Text, Enc);
   end
   else
     Note := Note + IfThen(Note <> '', ' ', '') + MsgText(SN_UNIT_NO_DPROJ);
@@ -1436,7 +1440,7 @@ begin
     if FindDccRef(Text, Include, S, L) then
     begin
       Text := Copy(Text, 1, S - 1) + Copy(Text, S + L, MaxInt);
-      PatchSaveText(Dproj, Text, Enc);
+      PatchSaveConSuSalto(Dproj, Text, Enc);
       InDproj := True;
     end;
   end;
@@ -1521,7 +1525,7 @@ begin
       E := InsertDccRef(Text, DccRefXml(Info, NewInclude));
       Text := E;
     end;
-    PatchSaveText(Dproj, Text, Enc);
+    PatchSaveConSuSalto(Dproj, Text, Enc);
   end;
   // Las OTRAS units del proyecto y el propio .dpr: sus uses y toda referencia
   // CUALIFICADA (UnitVieja.Identificador) seguian nombrando la unit vieja y
@@ -1544,7 +1548,11 @@ begin
   var NoEscritos: TArray<string> := [];
   if not SameText(OldName, Info.UnitName) then
   for var Fich in Ficheros do
-    if TFile.Exists(Fich) then
+    // lo que el .dpr nombra y nadie resuelve (un UNC ajeno, \\?\UNC\...): ni
+    // se mira si existe, que era SMB hacia ese host (novena revision)
+    if RutaSinTocarElDisco(Fich) then
+      NoEscritos := NoEscritos + [TPath.GetFileName(Fich)]
+    else if TFile.Exists(Fich) then
     begin
       if EscrituraDenegada(Fich) <> '' then
       begin
@@ -1686,7 +1694,12 @@ begin
       // borrar una unit contestaba "ningun .dpr la listaba" y el build
       // siguiente fallaba con F1026 (quinta revision). Ese error sube; lo
       // demas (un proyecto que no se entiende) sigue siendo "nada"
-      on E: EFOpenError do
+      // ...por la CLASE que llega de verdad: TFile.ReadAllBytes lanza
+      // EInOutError, y el arreglo esperaba EFOpenError y no corria nunca (un
+      // .dpr bloqueado: "ningun .dpr la listaba"; novena revision)
+      on E: EInOutError do
+        raise;
+      on E: EFileStreamError do
         raise;
       on E: Exception do
         Result := [];
@@ -2038,7 +2051,7 @@ end;
 function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Integer;
 var
   Enc, Texto, Linea: string;
-  Lineas: TArray<string>;
+  Lineas, Saltos: TArray<string>;
   Re: TRegEx;
   M: TMatch;
   I, J, Comillas, Ultimo: Integer;
@@ -2047,7 +2060,10 @@ begin
   Result := 0;
   Texto := PatchLoadText(APath, Enc);
   Re := TRegEx.Create('(?<![\w.])' + TRegEx.Escape(AViejo) + '(?![\w])', [roIgnoreCase]);
-  Lineas := Texto.Split([#10]); // el #13 de un CRLF se queda en cada linea y vuelve intacto
+  // cada linea con SU salto, que vuelve intacto (Lsp.Patch.SplitToLinesConSalto):
+  // troceaba solo por LF, y un fichero de CR sueltos era UNA linea que empezaba
+  // por "unit" y no se reescribia (MOVED y el build caia; novena revision)
+  Lineas := SplitToLinesConSalto(Texto, Saltos);
   for I := 0 to High(Lineas) do
   begin
     Linea := Lineas[I];
@@ -2078,7 +2094,7 @@ begin
     end;
   end;
   if Result > 0 then
-    PatchSaveText(APath, string.Join(#10, Lineas), Enc);
+    PatchSaveText(APath, UneConSusSaltos(Lineas, Saltos), Enc);
 end;
 
 { ================================================ rutas que cruzan un borde }
@@ -2659,7 +2675,7 @@ begin
   begin
     P := Pos('</PropertyGroup>', Texto);
     if P = 0 then
-      Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup)]));
+      Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup), MsgText(SF_GRUPO_SIN_SITIO_PROYECTO)]));
     P := P + Length('</PropertyGroup>');
     Insert(NL + '    <ItemGroup>' + NL + Item + '    </ItemGroup>', Texto, P);
   end;
@@ -2679,7 +2695,7 @@ begin
   else
     P := AlFinal;
   if P = 0 then
-    Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup)]));
+    Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup), MsgText(SF_GRUPO_SIN_FINAL)]));
   Insert(Targets, Texto, P);
   // 3. su nombre en los agregados Build, Clean y Make, por UN camino (eran
   //    dos: crearlos todos si no habia ninguno, o anadir a sus listas): en la
@@ -2704,7 +2720,7 @@ begin
     begin
       P := AlFinal;
       if P = 0 then
-        Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup)]));
+        Exit(MsgFmt(SR_GRUPO_FORMA_FMT, [TPath.GetFileName(AGroup), MsgText(SF_GRUPO_SIN_FINAL)]));
       Insert('    <Target Name="' + Agregado + '">' + NL + '        <CallTarget ' +
         XmlAtributo('Targets', Nombre + Suf) + '/>' + NL + '    </Target>' + NL, Texto, P);
     end;
