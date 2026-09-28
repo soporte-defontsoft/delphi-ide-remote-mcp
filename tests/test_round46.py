@@ -117,7 +117,8 @@ try:
     else:
         print('NOTA: mklink /J fallo en este sistema de ficheros; '
               'J1/J1b no se miden.')
-    # El otro lado, siempre: el perdon LEGITIMO sigue vivo. Un guardian que
+    # El otro lado, siempre: lo LEGITIMO se sigue leyendo (ReadOnlyPaths solo
+    # importa al escribir; desde la 1.7.4 ya no es un perdon). Un guardian que
     # cierra de mas hace mas dano que el agujero.
     r = call('delphi_read', {'path': os.path.join(JAIL, 'vendor', 'normal.txt')})
     check('J1c un fichero REAL bajo ReadOnlyPaths se sigue leyendo',

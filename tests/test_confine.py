@@ -87,6 +87,17 @@ try:
     r = a.call('delphi_read', {'path': os.path.join(base, 'bob', 'b.pas')})
     # el contenido de verdad, en el formato numero|linea del read
     check('C5 ON: leer NO esta confinado (lee el arbol entero)', '1|unit b;' in r, r)
+    # una captura NUESTRA en la carpeta del agente confinado se consume al
+    # recogerla: hasta la 1.7.3 el consumo preguntaba a PathDenied, el
+    # confinamiento negaba __delphi-temp y las capturas de un agente confinado
+    # no se borraban nunca, con la respuesta diciendo 'consumida' (duodecima
+    # revision). La captura es nuestra por el NOMBRADOR (CasaDeEntregables).
+    CAP = os.path.join(base, '__delphi-temp', 'alice', 'desktop', 'cap.png')
+    os.makedirs(os.path.dirname(CAP), exist_ok=True)
+    open(CAP, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
+    r = a.call('delphi_fetch', {'path': CAP, 'offset': 0})
+    check('C7 ON: la captura del agente confinado se consume al recogerla',
+          mc.como_json(r).get('consumedOnServer') is True and not os.path.exists(CAP), r[:300])
 finally:
     proc.kill()
 

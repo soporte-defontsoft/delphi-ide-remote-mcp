@@ -1971,9 +1971,14 @@ begin
       // respuesta; una segunda peticion encontrara 'no existe'.
       if IsAgentCapture(FullPath) then
       begin
-        Return.AddPair('consumedOnServer',
-          TJSONBool.Create((not LinkOnly) and (Params.Offset + ChunkLen >= Size)));
-        Return.AddPair('consumedNote', MsgText(SN_FETCH_CAPTURE_CONSUMED));
+        // lo anuncia el MISMO decisor que borra (CapturaConsumible): una
+        // captura de una referencia decia "consumida" y seguia en disco
+        // (duodecima revision)
+        var Consumida := (not LinkOnly) and (Params.Offset + ChunkLen >= Size) and
+          CapturaConsumible(FullPath);
+        Return.AddPair('consumedOnServer', TJSONBool.Create(Consumida));
+        if Consumida then
+          Return.AddPair('consumedNote', MsgText(SN_FETCH_CAPTURE_CONSUMED));
       end;
       if LinkOnly then
         Return.AddPair('note', MsgFmt(SN_FETCH_BIG_FMT,

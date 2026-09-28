@@ -276,7 +276,7 @@ GUARD = os.path.join(SRC, 'Lsp.Guard.pas')
 lines = open(GUARD, 'rb').read().decode('utf-8-sig', 'replace').replace('\r\n', '\n').split('\n')
 sig_line = ident_line = -1
 for i, ln in enumerate(lines):
-    # v1.0.13: la llamada lleva el motivo (PathDenied(APath, Motivo)); el
+    # la llamada es PathDenied(APath) (hasta la 1.7.3 llevaba un motivo); el
     # ancla acepta las dos formas para no casarse con una firma.
     if 'Result := PathDenied(APath' in ln:
         sig_line = ident_line = i

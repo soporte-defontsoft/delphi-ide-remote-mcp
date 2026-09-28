@@ -198,15 +198,17 @@ begin
       AReturn.AddPair('inlineHeight', TJSONNumber.Create(H));
       AReturn.AddPair('inlineScale', TJSONNumber.Create(Escala));
       AReturn.AddPair('inlineBytes', TJSONNumber.Create(Length(Bytes)));
-      if IsAgentCapture(AFile) then
+      // consumida = borrada de verdad: lo dice quien borra (duodecima revision)
+      if ConsumeAgentCapture(AFile) then
       begin
-        ConsumeAgentCapture(AFile);
         AReturn.AddPair('consumed', TJSONBool.Create(True));
         // La ruta de un fichero que ya no existe es una invitacion a pedirlo
         // (hermes recompuso una esta manana): fuera. Toda tool de captura la
         // anuncia como 'screenshot'.
         AReturn.RemovePair('screenshot').Free;
-      end;
+      end
+      else if IsAgentCapture(AFile) then
+        AReturn.AddPair('consumed', TJSONBool.Create(False)); // no era nuestra: se queda
       AReturn.AddPair('inlineNote', MsgFmt(SN_CAPTURE_INLINE_NOTE_FMT,
         [FormatFloat('0.000', Escala, TFormatSettings.Invariant)]));
       Exit(True);

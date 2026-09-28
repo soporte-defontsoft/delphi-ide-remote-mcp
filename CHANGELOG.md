@@ -6,6 +6,82 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.4] - 2026-09-28
+
+Two questions, two helpers: the read gate has no pardons any more. The common gate that answered reading and writing with a table of pardons is split into a read question and a write question, the three kinds of write are written down as a contract, and one generic jail battery measures every path parameter of the contract in every form against a victim outside the roots. The twelfth review round (four read-only reviewers on this change alone) measured the split call by call against 1.7.3 with zero differences and found two capture fixes on the way. Nothing changes for a client; it is what keeps the 1.7.2 regression from having a second edition.
+
+### Changed
+
+- **The read gate has no pardons any more** (David: *"two questions, two
+  helpers"*). Until 1.7.3 one function, `PathDenied`, answered both "may this
+  session read here?" and "may it write here?", with a table of pardons by
+  motive (`TMotivoVeto`) that the read gate applied on top. Every new rule had
+  to land in the right place with respect to that table, and the long-path
+  rule of 1.7.2 landed before the jail with a pardon: the regression fixed in
+  1.7.3. Now `JaulaDenegada` is THE read question (roots, references, the
+  library zone, links out, the vault, name anomalies; no motives, no pardons),
+  `PathDenied` is THE write question (the jail first, then what only matters
+  for writing: a reference, `ReadOnlyPaths`, the confinement, the library
+  zone) and `ReadPathDenied` is the jail plus the library-zone hint. The rules
+  do not change, only where they live; `TMotivoVeto` is gone. Measured by a
+  reviewer call by call against the 1.7.3 binary: 82 comparisons, junctions
+  included, zero differences; `tools/list` identical. Nothing changes for a
+  client.
+- **Three kinds of write, written down** as a contract in the `Lsp.Guard`
+  interface, separated by who composes the path: the server's own house
+  (`ServerDir`: reports, the mailbox, logs, remote-run jobs, a commit
+  message) and the other houses that are not the workspace (the IDE's
+  profiles and SDK cards, the `%LOCALAPPDATA%` caches, the vault with its
+  own gate), composed by the server's namer and never asked to the gate; what
+  the agent names, and what the server derives from it, asked at the gate
+  and again by the atomic writers; and the server's own artifacts inside the
+  workspace, of two kinds: the deliverables (captures), placed and
+  recognized by one namer (`CasasDeEntregables` / `AgentTempDir`,
+  `CapturaConsumible`) with no gate at all, and the trash and owner marks,
+  which go through the writer's gate like any write.
+
+### Added
+
+- **`tests/test_jaula_generica.py`, one jail battery for the whole
+  contract**: the 40 `[RutaDelServidor]` parameters (read from the source,
+  checked against `tools/list` and `jailedParams`) against a victim outside
+  the roots in 13 forms (plain, forward slashes, upper case, the virtual
+  drive, an 8.3 alias, 250+ characters, traversal, a junction from inside the
+  jail, trailing dot, trailing space, `::$DATA`, `\\?\` and the administrative
+  UNC share): every call refused (a timeout is not a refusal), no secret in
+  the answer (text, identifier or base64), the victim untouched and nothing
+  new inside. Measured against the published 1.7.2 binary: the long form goes
+  red (`delphi_fetch`, `delphi_list`), the rest green. Measured by a reviewer:
+  all 40 pairs are refused by the jail itself (`[GUARD-002]`) in the plain and
+  long forms, none by a missing argument.
+- `test_guard` measures the library-zone hint (`[READ-003]`): with the zone
+  open on a path outside, absent on a name anomaly, absent with the zone off.
+  `test_confine` measures that a confined agent's capture is consumed;
+  `test_escritor_guardado` that a reference's capture answers
+  `consumedOnServer: false`.
+
+### Fixed
+
+- **A confined agent's captures were never consumed** (since agent
+  confinement exists): the consumer asked the write gate, the confinement
+  refused `__delphi-temp` (not the agent's folder), the capture stayed on
+  disk and the answer said `consumedOnServer: true` (the 41 MB measured on
+  25-sep, back for a confined agent). A capture is the server's by its
+  namer: `CapturaConsumible` asks whether the file sits under the
+  deliverables folder of one of this workspace's writable roots
+  (`CasasDeEntregables`, by the real path), never the gate. A reference or a
+  read-only folder is never such a folder, so
+  the protection of 25-sep stays, measured with a reference declared under
+  the server's own folder too (the first draft of today's contract had
+  widened "the server's house" to everything under the exe folder; dropped:
+  nobody needs a reader of "is this the house").
+- **`delphi_fetch` and the inline image said "consumed" of a capture they
+  did not delete** (a reference, a read-only folder, a confined agent): the
+  announcement was a second copy of the rule. `ConsumeAgentCapture` now
+  returns whether it deleted; `consumedOnServer`, `consumed` and
+  `[FETCH-002]` say what happened, and the `screenshot` path stays in the
+  answer when the file stays.
+
 ## [1.7.3] - 2026-09-28
 
 The eleventh review round (five read-only reviewers over everything 1.7.2 brought): one real regression of 1.7.2 in the jail, fixed here, and the rest measured and closed. Production has run the [DSGN-047]/[DSGN-048] fix since 13:36 with serverInfo.version still saying 1.7.2.

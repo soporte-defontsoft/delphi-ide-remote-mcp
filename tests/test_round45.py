@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """E2E battery: EL GUARDIAN de la jaula, parametro a parametro.
 
-La regla de la jaula vive en UNA funcion (PathDenied / ReadPathDenied). Lo que
+La regla de la jaula vive en DOS preguntas (JaulaDenegada al leer, PathDenied al
+escribir; desde la 1.7.4). Lo que
 no esta centralizado es acordarse de llamarla: ~60 llamadas a mano repartidas
 por una veintena de units, y nada obliga a una tool nueva -ni a un parametro
 nuevo de una vieja- a pasar por ahi. Medido el 2026-09-21: de los cinco

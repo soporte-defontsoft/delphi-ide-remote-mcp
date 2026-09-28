@@ -118,7 +118,7 @@ try:
     # La entrada ABSOLUTA esta fuera del root: manda la jaula, y la negativa
     # tiene que ser la de la jaula, no la de solo lectura. ReadOnlyPaths NO
     # es una puerta de entrada.
-    # La negativa CONCRETA de la jaula (PathDenied), y ni una linea del
+    # La negativa CONCRETA de la jaula (JaulaDenegada, al leer), y ni una linea del
     # fichero: antes valia cualquier texto con "error" - un envoltorio
     # JSON-RPC de error, o un RECHAZADO por otro motivo, pasaban.
     t = call('delphi_read', {'path': os.path.join(AJENO, 'Fuera.pas')})

@@ -122,6 +122,9 @@ open(CAP, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
 out = call('delphi_fetch', {'path': CAP, 'offset': 0})
 check('C fetch de una captura en la REFERENCIA: se sirve', '"chunkBase64"' in out or '"download"' in out, out[:200])
 check('C ...y NO se borra (solo se podia leer)', os.path.exists(CAP), out[:300])
+# ...y la respuesta lo dice: hasta la 1.7.3 anunciaba consumedOnServer:true de una
+# captura que seguia en disco (duodecima revision: el anuncio lo da quien borra)
+check('C ...y la respuesta dice consumedOnServer:false', mc.como_json(out).get('consumedOnServer') is False, out[:300])
 
 # ---- S: sdk is a file NAME, never a path or a metacharacter
 out = call('delphi_build', {'project': os.path.join(APP, 'App.dproj'), 'platform': 'Linux64', 'sdk': 'x&y.sdk'})

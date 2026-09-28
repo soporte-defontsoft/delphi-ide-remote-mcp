@@ -50,6 +50,13 @@ check('dentro: edit permitido', mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT'), out)
 # outside: every door closed
 out = call('delphi_read', {"path": OUT_PAS})
 check('fuera: read vetado', denied(out), out)
+# la pista de la zona de biblioteca (READ-003) va con la negativa de FUERA cuando
+# la zona esta abierta, y no con una ruta invalida (regla del 27-sep; sin
+# bateria hasta la duodecima revision: el partido de la puerta la reescribio)
+check('fuera: ...con la pista de la zona (READ-003)', mc.es(out, 'SN_READ_ZONE_HINT'), out)
+out = call('delphi_read', {"path": OUT_PAS + '.'})
+check('fuera con punto final: la anomalia, sin la pista de la zona',
+      mc.rechazado(out) and not denied(out) and not mc.es(out, 'SN_READ_ZONE_HINT'), out)
 out = call('delphi_edit', {"path": OUT_PAS, "old": "unit Fuera;", "new": "x"})
 check('fuera: edit vetado', denied(out), out)
 out = call('delphi_edit', {"path": os.path.join(OUTSIDE, 'Nueva.pas'), "createunit": True})
@@ -540,4 +547,12 @@ check('root: borrar un fichero DENTRO sigue permitido',
       not mc.fallo(out) and not os.path.exists(_victim), out[:130])
 
 srv.cierra()
+
+# --- la pista de la zona NO va con la zona APAGADA: la misma negativa de fuera,
+#     sin READ-003 (regla del 27-sep, medida desde la duodecima revision) ---
+srv2 = mc.Stdio(EXE, mc.entorno(dict(env, DELPHI_MCP_LIBRARY_ZONE='0')), nombre='guard-battery-sin-zona')
+out = srv2.call('delphi_read', {"path": OUT_PAS})
+check('fuera con la zona apagada: GUARD-002 sin la pista READ-003',
+      denied(out) and not mc.es(out, 'SN_READ_ZONE_HINT'), out)
+srv2.cierra()
 mc.fin('guard battery')

@@ -25,14 +25,16 @@ unit Lsp.Guard;
          reader as Roots. One locator (ReadOnlyRootOf) answers "is this
          path in a reference?" for the gate, the temp folders and
          delphi_projects. Nobody re-derives it.
-       - PathDenied (the WRITE gate) checks the reference list BEFORE the
-         roots, so a reference WINS: a folder declared in both lists, or a
-         root that lies inside a reference, is read-only. Its verdict
-         carries its own reason (mvReferencia) and its own text.
-       - ReadPathDenied (the READ gate) forgives mvReferencia and nothing
-         else new: the vault, path anomalies and a junction that leaves
-         the reference are still refused. The same RealPath check the
-         roots get: a link planted inside a reference opens nothing.
+       - JaulaDenegada (the READ question) lets a reference through like a
+         root: the vault, path anomalies and a junction that leaves the
+         reference are still refused, with the same RealPath check the
+         roots get (a link planted inside a reference opens nothing).
+       - PathDenied (the WRITE question) asks JaulaDenegada first and then
+         checks the reference list BEFORE the roots, so a reference WINS:
+         a folder declared in both lists, or a root that lies inside a
+         reference, is read-only. Until 1.7.3 this was one gate with a
+         table of pardons by reason (mvReferencia); since 1.7.4 there is
+         no pardon to get right.
        - Every tool that WRITES goes through PathDenied and therefore
          refuses a reference: edit, textedit, create, changeset, move (also
          copy=true, both ends), delete, upload, build, test run, package,
@@ -67,16 +69,6 @@ uses
   ToolCallDenied's job. delphi_help/messages/report always stay listed. }
 function ToolHiddenFromList(const AToolName: string): Boolean;
 
-{ Por que PathDenied dijo que no. Los perdones de ReadPathDenied van por
-  este MOTIVO y nunca por el texto de la negativa ni por recomprobar la
-  ruta: comparar texto se rompe en cuanto alguien reescribe un mensaje, y
-  recomprobar por texto perdonaba el junction que RealPath acababa de
-  cazar (auditoria 2026-09-21). }
-type
-  TMotivoVeto = (mvNinguno, mvAnomalia, mvVault, mvRootsInvalidos,
-    mvRutaInvalida, mvEnlaceFuera, mvSoloLectura, mvConfinado,
-    mvFueraDeJaula, mvReferencia);
-
 const
   { Lo mas larga que puede ser una ruta que se ESCRIBE: MAX_PATH (259) menos
     el sufijo temporal del escritor atomico (27). Leer no tiene tope. }
@@ -96,16 +88,29 @@ function RutaLargaDenegada(const APath: string): string;
   constructor y lo paraba el escritor (undecima revision, r11c). }
 function ComandoDeTest(const ACmd, AProject, APath: string): string;
 
-function PathDenied(const APath: string): string; overload;
-function PathDenied(const APath: string;
-  out AMotivo: TMotivoVeto): string; overload;
+{ LA PREGUNTA DE LECTURA: "esta ruta cae dentro de lo que esta sesion puede
+  LEER?" - las raices, las referencias (ReadOnlyRoots) y la zona de
+  biblioteca (RTL/VCL y componentes registrados, si esta abierta), sin un
+  enlace que salga, sin el vault y sin anomalias de nombre. Sin motivos ni
+  perdones: lo que aqui se niega no lo perdona nadie, y aqui NO se anade
+  nunca una regla de escritura. Hasta la 1.7.3 era "PathDenied menos una
+  tabla de perdones por motivo": cada regla nueva tenia que caer en el sitio
+  correcto respecto a esa tabla, y el tope de rutas largas de la 1.7.2 cayo
+  antes de la jaula con un perdon y abrio la lectura de toda ruta larga
+  (undecima revision; David: "dos preguntas, dos helpers"). }
+function JaulaDenegada(const APath: string): string; overload;
 
-{ Like PathDenied but for READING tools (read/search/list/fetch/LSP
-  navigation): the jail is extended with the LIBRARY ZONE - the RAD Studio
-  installation (RTL/VCL sources) and the IDE Library Search Path directories
-  (installed components) - so an agent can follow a definition into
-  System.Classes.pas or read a component's source. Read-only territory:
-  writing tools keep using PathDenied and can never touch it. }
+{ LA PREGUNTA DE ESCRITURA: la jaula (JaulaDenegada) y DESPUES lo que solo
+  importa al escribir - una referencia se lee y no se toca, un ReadOnlyPaths
+  igual, la zona de biblioteca nunca se escribe, el confinamiento por
+  agente. Las reglas de escritura se anaden aqui, y da igual en que orden:
+  la jaula ya paso, una regla mal puesta niega de mas y nunca abre. Los
+  escritores preguntan por EscrituraDenegada (suma el modo solo lectura) y
+  WriteTargetDenied (suma temporales, papelera y la medida del escritor). }
+function PathDenied(const APath: string): string;
+
+{ La puerta de las tools que LEEN (read/search/list/fetch/LSP): la jaula tal
+  cual, mas la pista de la zona de biblioteca en la negativa de fuera. }
 function ReadPathDenied(const APath: string): string;
 
 { The configured roots (empty array = unrestricted). }
@@ -241,6 +246,46 @@ function ServerDir(const ASub: string = ''): string;
 function ServerTempDir(const ASub: string = ''): string;
 function AgentTempDir(const ASub: string = ''): string;
 
+{ TRES CLASES DE ESCRITURA, y lo que las separa es QUIEN COMPONE LA RUTA
+  (David, 28-sep-2026):
+  1. LA CASA DEL SERVIDOR (ServerDir: reports, el buzon, los logs, los jobs
+     de remote-run, el mensaje de un commit, node.ver) y las otras casas que
+     no son del workspace (los perfiles y las fichas de SDK del IDE, las
+     caches de %LOCALAPPDATA%, el vault con su propia puerta VaultWritable).
+     La ruta la compone el servidor con su nombrador y el agente nunca la
+     nombra: lo que aporta (un titulo, un nombre de agente o de perfil, el
+     nombre de un proyecto para su cache) pasa por Slug, una regex o queda
+     acotado a UN tramo sin separadores. A la puerta de escritura NO se le
+     pregunta, y no hay un lector de "es la casa?": nadie lo necesita. La
+     puerta responde "puede ESTA SESION escribir aqui?", y la casa no es de
+     la sesion ni del workspace.
+  2. LO QUE NOMBRA EL AGENTE, y lo que el servidor deriva de ello (el .dproj
+     de la unit, los gemelos, la copia recuperable): la puerta a la entrada
+     (PathDenied y sus dos sumas, WriteTargetDenied y EscrituraDenegada).
+     Los escritores atomicos vuelven a preguntar por su cuenta (AtomicWrite,
+     BackupFile); un primitivo crudo corre solo sobre la ruta que la puerta
+     acaba de aprobar.
+  3. LOS ARTEFACTOS NUESTROS DENTRO DEL WORKSPACE, que son de dos clases:
+     - los ENTREGABLES (las capturas): los coloca el nombrador
+       (CasasDeEntregables / AgentTempDir: solo el __delphi-temp de una
+       raiz ESCRIBIBLE) y los reconoce el MISMO nombrador al consumirlos
+       (CapturaConsumible): sin puerta, ni al escribir ni al borrar. Por eso
+       una referencia nunca recibe capturas ni pierde las suyas al leerlas
+       (auditoria 25-sep-2026), y por eso un agente confinado consume las
+       suyas: hasta la 1.7.3 el consumo preguntaba a PathDenied, el
+       confinamiento negaba __delphi-temp y las capturas de un agente
+       confinado no se borraban nunca (duodecima revision).
+     - la PAPELERA y las marcas de dueno: pasan por la puerta del escritor
+       como cualquier escritura (una referencia no recibe papelera).
+  El error a no repetir: un solo if que mezcle la pregunta del agente (la
+  puerta) con la del servidor (su nombrador). Cada pregunta, a su lector. }
+{ Donde viven los ENTREGABLES: el __delphi-temp de cada raiz ESCRIBIBLE (una
+  referencia o un ReadOnlyPaths nunca). El escritor (AgentTempDir) usa la
+  PRIMERA; el lector (CapturaConsumible) acepta cualquiera. Sin ninguna, la
+  temporal de la casa del servidor. }
+function CasasDeEntregables: TArray<string>;
+function CasaDeEntregables(out AEnElServidor: Boolean): string;
+
 { Una CAPTURA (escritorio o Android) en una carpeta temporal del servidor (un
   .png bajo <...>\__delphi-temp\...\desktop|android\) se CONSUME al recogerla: quien la
   baja - delphi_fetch al servir el ultimo trozo, GET /files - la borra.
@@ -258,7 +303,14 @@ const
   CAPTURE_SUB_ANDROID = 'android';
 
 function IsAgentCapture(const APath: string): Boolean;
-procedure ConsumeAgentCapture(const APath: string); // nunca lanza
+{ Una captura es NUESTRA si esta donde nuestro nombrador la deja: bajo la
+  casa de entregables de este workspace, por la ruta real (una referencia o
+  un enlace nunca lo son). EL decisor del consumo: quien borra
+  (ConsumeAgentCapture) y quien lo anuncia (delphi_fetch, la imagen en linea)
+  preguntan aqui; hasta la 1.7.3 el anuncio lo calculaba por su cuenta y decia
+  "consumida" de una captura que seguia en disco (duodecima revision). }
+function CapturaConsumible(const APath: string): Boolean;
+function ConsumeAgentCapture(const APath: string): Boolean; // nunca lanza; True = borrada
 
 { DONDE CAE UNA CAPTURA: el "out" de toda la familia (delphi_desktop,
   delphi_adb_linux, delphi_adb), resuelto en UN sitio. Hasta la v1.0.13 era
@@ -4123,34 +4175,56 @@ begin
       [CAPTURE_SUB_DESKTOP, CAPTURE_SUB_ANDROID]);
 end;
 
-procedure ConsumeAgentCapture(const APath: string);
+function CapturaConsumible(const APath: string): Boolean;
+var
+  Real, Casa: string;
 begin
+  Result := False;
   if not IsAgentCapture(APath) then
     Exit;
-  // Consumir es BORRAR: el nombre no basta. Solo lo que esta sesion puede
-  // escribir, o lo que esta en la casa del servidor. Lo llaman lectores
-  // (delphi_fetch, la descarga), y una referencia con una carpeta de
+  // Nuestra por el NOMBRADOR, no por la puerta: bajo el __delphi-temp de una
+  // raiz ESCRIBIBLE de este workspace (el escritor elige la primera; el lector
+  // acepta cualquiera: un workspace con las raices en otro orden dejo la suya
+  // en la segunda) o bajo la temporal de la casa del servidor, por la ruta
+  // real. Una referencia no lo es (solo raices escribibles), un enlace tampoco
+  // (RealPath), y el confinamiento no pinta nada: es la carpeta que el propio
+  // nombrador dio a los agentes de esta jaula.
+  try
+    Real := IncludeTrailingPathDelimiter(RealPath(APath));
+    for Casa in CasasDeEntregables + [ServerTempDir('')] do
+      if StartsText(IncludeTrailingPathDelimiter(RealPath(Casa)), Real) then
+        Exit(True);
+  except
+    Result := False;
+  end;
+end;
+
+function ConsumeAgentCapture(const APath: string): Boolean;
+begin
+  // Consumir es BORRAR: el nombre no basta. Lo llaman lectores (delphi_fetch,
+  // la descarga, la imagen en linea), y una referencia con una carpeta de
   // capturas perdia sus ficheros al leerlos (auditoria 25-sep-2026).
-  if (PathDenied(APath) <> '') and not StartsText(
-       IncludeTrailingPathDelimiter(RealPath(ServerTempDir(''))), RealPath(APath)) then
+  Result := False;
+  if not CapturaConsumible(APath) then
     Exit;
   try
     if TFile.Exists(APath) then
+    begin
       TFile.Delete(APath);
+      Result := True;
+    end;
   except
     // recoger no puede fallar por no poder borrar
   end;
 end;
 
-function AgentTempDir(const ASub: string): string;
+function CasasDeEntregables: TArray<string>;
 var
-  Roots: TArray<string>;
-  Me, Casa, R, Ro: string;
+  R, Ro: string;
   SoloLectura: Boolean;
 begin
-  Roots := WorkspaceRoots;
-  Casa := '';
-  for R in Roots do
+  Result := [];
+  for R in WorkspaceRoots do
   begin
     SoloLectura := False;
     for Ro in WorkspaceReadOnlyPaths do
@@ -4159,20 +4233,36 @@ begin
     if ReadOnlyRootOf(R) <> '' then // raiz dentro de una referencia: manda la referencia
       SoloLectura := True;
     if not SoloLectura then
-    begin
-      Casa := TPath.Combine(ExcludeTrailingPathDelimiter(R), TempFolderName);
-      Break;
-    end;
+      Result := Result + [TPath.Combine(ExcludeTrailingPathDelimiter(R), TempFolderName)];
   end;
-  if Casa = '' then
-    Exit(ServerTempDir(ASub));
+end;
+
+function CasaDeEntregables(out AEnElServidor: Boolean): string;
+var
+  Casas: TArray<string>;
+begin
+  Casas := CasasDeEntregables;
+  AEnElServidor := Length(Casas) = 0;
+  if AEnElServidor then
+    Result := ServerTempDir('')
+  else
+    Result := Casas[0];
+end;
+
+function AgentTempDir(const ASub: string): string;
+var
+  Me: string;
+  EnElServidor: Boolean;
+begin
+  Result := CasaDeEntregables(EnElServidor);
+  if EnElServidor then
+    Exit(ServerTempDir(ASub)); // en la casa del servidor no hay carpeta por agente
   // El vaciado NO se hace aqui: se hace entero en el arranque, para todos
   // los workspaces del settings.ini (PurgeServerTemp). Hacerlo en el primer
   // uso se probo y no cumplia lo prometido - si nadie pedia un entregable,
   // nadie limpiaba. Y ademas seria peligroso a mitad de sesion: se llevaria
   // por delante la captura que otro agente acaba de pedir y aun no se ha
   // bajado.
-  Result := Casa;
   Me := CurrentAgent;
   if Me <> '' then
     Result := TPath.Combine(Result, Me);
@@ -4932,33 +5022,24 @@ begin
   Result := MsgFmt(SR_AGENT_CONFINED_FMT, [Me, Me]);
 end;
 
-function PathDenied(const APath: string): string;
-var
-  M: TMotivoVeto;
-begin
-  Result := PathDenied(APath, M);
-end;
+function LibraryRoots: TArray<string>; forward; // la zona, definida mas abajo
 
-function PathDenied(const APath: string; out AMotivo: TMotivoVeto): string;
+{ La jaula, con AFueraDeJaula = True cuando la negativa es "fuera de las
+  raices" (la pista de la zona de biblioteca va solo ahi). }
+function JaulaDenegada(const APath: string; out AFueraDeJaula: Boolean): string; overload;
 var
   Roots: TArray<string>;
   Full, R: string;
 begin
-  AMotivo := mvNinguno;
+  AFueraDeJaula := False;
   // Una ruta VACIA es un parametro que falta, no una ruta invalida: el eco
   // de "Invalid path: " vacio no decia cual (revision 27-sep-2026)
   if APath.Trim = '' then
-  begin
-    AMotivo := mvRutaInvalida;
     Exit(MsgText(SR_GUARD_RUTA_VACIA));
-  end;
   // Name normalization first: it applies with or without a jail configured.
   Result := PathAnomaly(APath);
   if Result <> '' then
-  begin
-    AMotivo := mvAnomalia;
     Exit;
-  end;
   // Solo rutas ABSOLUTAS (<letra>:\ o UNC, la regla de EsRutaAbsoluta). Una
   // relativa se resolvia contra la carpeta del PROCESO: fuera de la jaula
   // decia "fuera" (DENIED) y, si el servidor se lanzo desde dentro de una
@@ -4967,17 +5048,14 @@ begin
   // entrada, para todo camino que pase por la puerta.
   Result := RutaRelativaDenegada(APath);
   if Result <> '' then
-  begin
-    AMotivo := mvRutaInvalida;
     Exit;
-  end;
   // Un UNC que no es de ningun sitio declarado: fuera, por TEXTO, antes de
   // InVault / ReadOnlyRootOf, que lo resuelven en el disco (SMB hacia el
   // host que diga el agente; septima revision). Tambien para quien llama a
   // la puerta desde dentro, no solo para la entrada.
   if UncFueraDeLugares(APath) then
   begin
-    AMotivo := mvFueraDeJaula;
+    AFueraDeJaula := True;
     Exit(MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', WorkspaceRoots)]));
   end;
   // Un FICHERO que llega con separador final (x.txt\) nombrado como carpeta:
@@ -4985,50 +5063,33 @@ begin
   // revision). Una carpeta con su separador es lo normal.
   if (APath.EndsWith('\') or APath.EndsWith('/')) and
      TFile.Exists(ExcludeTrailingPathDelimiter(APath.Replace('/', '\'))) then
-  begin
-    AMotivo := mvRutaInvalida;
     Exit(MsgFmt(SR_GUARD_BARRA_FINAL_FMT, [APath]));
-  end;
   // The knowledge vault belongs to the vault_* tools ALONE, wherever it sits.
   // If it happens to live inside a workspace root, the code tools must still
   // keep out - otherwise delphi_edit could rewrite a note behind the vault's
   // back, skipping its automatic backup and its protected governance files.
   if InVault(APath) then
-  begin
-    AMotivo := mvVault;
     Exit(MsgText(SR_VAULT_NOT_CODE));
-  end;
   Roots := WorkspaceRoots;
   if GRootsInvalid then
-  begin
-    AMotivo := mvRootsInvalidos;
     Exit(MsgText(SR_ROOTS_INVALID));
-  end;
   if Length(Roots) = 0 then
     Exit; // no jail configured
   try
     Full := TPath.GetFullPath(APath);
   except
-    AMotivo := mvRutaInvalida;
     Exit(MsgFmt(SR_GUARD_RUTA_INVALIDA_FMT, [APath]));
   end;
-  // Un proyecto de REFERENCIA (ReadOnlyRoots) manda sobre Roots: una
-  // carpeta declarada en los dos sitios, o una raiz que caiga dentro de una
-  // referencia, es de SOLO LECTURA (David, 25-sep-2026). Por eso se mira
-  // ANTES de las raices. El motivo lo distingue, ReadPathDenied lo perdona y
-  // el texto dice que se lee y no se toca. El mismo repaso de enlaces que
-  // las raices: un junction plantado en la referencia que apunte fuera no
-  // abre nada.
+  // Una REFERENCIA (ReadOnlyRoots) se LEE: dentro de ella por la ruta REAL,
+  // el mismo repaso de enlaces que las raices (un junction plantado en la
+  // referencia que apunte fuera no abre nada). Que no se ESCRIBE lo dice
+  // PathDenied, que la mira antes que las raices.
   var Ref := ReadOnlyRootOf(APath);
   if Ref <> '' then
   begin
     if StartsText(IncludeTrailingPathDelimiter(RealPath(Ref)),
          IncludeTrailingPathDelimiter(RealPath(APath))) then
-    begin
-      AMotivo := mvReferencia;
-      Exit(MsgFmt(SR_REFERENCE_ROOT_FMT, [APath, Ref]));
-    end;
-    AMotivo := mvEnlaceFuera;
+      Exit('');
     Exit(MsgFmt(SR_JAIL_LINK_FMT, [APath]));
   end;
   var FullLargo := FormaLarga(Full);
@@ -5059,18 +5120,59 @@ begin
           Break;
         end;
       if not DentroDeVerdad then
-      begin
-        AMotivo := mvEnlaceFuera;
         Exit(MsgFmt(SR_JAIL_LINK_FMT, [APath]));
-      end;
       // ...y el vault por la ruta REAL: un junction de la raiz que apunte
       // dentro de el llevaba a el con un texto que no lo nombra (sexta
       // revision; lo paraba de rebote un fallo de CrearCarpeta).
       if InVault(Verdad) then
-      begin
-        AMotivo := mvVault;
         Exit(MsgText(SR_VAULT_NOT_CODE));
-      end;
+      Exit(''); // dentro de una raiz, de verdad: se lee
+    end;
+  // Fuera de las raices: la zona de biblioteca (RTL/VCL, componentes
+  // registrados) se LEE si esta abierta. Solo para quien esta fuera DE
+  // VERDAD: un enlace que sale, el vault y las anomalias ya se negaron
+  // arriba y nunca llegan aqui.
+  if LibraryZoneEnabled then
+    for R in LibraryRoots do
+      if StartsText(R, IncludeTrailingPathDelimiter(Full)) then
+        Exit('');
+  AFueraDeJaula := True;
+  Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
+end;
+
+function JaulaDenegada(const APath: string): string; overload;
+var
+  Fuera: Boolean;
+begin
+  Result := JaulaDenegada(APath, Fuera);
+end;
+
+function PathDenied(const APath: string): string;
+var
+  Roots: TArray<string>;
+  Full, R: string;
+begin
+  // PRIMERO la jaula, sin perdones; lo que sigue solo importa al escribir
+  Result := JaulaDenegada(APath);
+  if Result <> '' then
+    Exit;
+  Roots := WorkspaceRoots;
+  if Length(Roots) = 0 then
+    Exit; // no jail configured: tampoco reglas de escritura
+  Full := TPath.GetFullPath(APath); // ya no lanza: la jaula lo comprobo
+  // Un proyecto de REFERENCIA (ReadOnlyRoots) manda sobre Roots: una
+  // carpeta declarada en los dos sitios, o una raiz que caiga dentro de una
+  // referencia, es de SOLO LECTURA (David, 25-sep-2026). Por eso se mira
+  // ANTES de las raices; el texto dice que se lee y no se toca.
+  var Ref := ReadOnlyRootOf(APath);
+  if Ref <> '' then
+    Exit(MsgFmt(SR_REFERENCE_ROOT_FMT, [APath, Ref]));
+  var FullLargo := FormaLarga(Full);
+  for R in Roots do
+    if StartsText(R, IncludeTrailingPathDelimiter(Full)) or
+       StartsText(FormaLarga(R), FullLargo) then
+    begin
+      var Verdad := IncludeTrailingPathDelimiter(RealPath(APath));
       // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO
       // LECTURA: un vendor/, un submodulo, un clon de referencia con su
       // propio git. Se comprueba AQUI y no en el lector, y esa es justo la
@@ -5080,18 +5182,12 @@ begin
       for var Ro in WorkspaceReadOnlyPaths do
         if StartsText(Ro, IncludeTrailingPathDelimiter(Full)) or
            StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(Ro))), Verdad) then
-        begin
-          AMotivo := mvSoloLectura;
-          Exit(MsgFmt(SR_READONLY_PATH_FMT,
-            [APath, ExcludeTrailingPathDelimiter(Ro)]));
-        end;
+          Exit(MsgFmt(SR_READONLY_PATH_FMT, [APath, ExcludeTrailingPathDelimiter(Ro)]));
       // las dos en la forma larga: el tramo del agente se cuenta desde la raiz
-      Result := AgentConfineDenied(ExcludeTrailingPathDelimiter(FullLargo), FormaLarga(R));
-      if Result <> '' then
-        AMotivo := mvConfinado;
-      Exit;
+      Exit(AgentConfineDenied(ExcludeTrailingPathDelimiter(FullLargo), FormaLarga(R)));
     end;
-  AMotivo := mvFueraDeJaula;
+  // la jaula lo dejo pasar sin estar en una raiz: es zona de biblioteca,
+  // que se lee y nunca se escribe
   Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
 end;
 
@@ -5443,58 +5539,18 @@ end;
 
 function ReadPathDenied(const APath: string): string;
 var
-  Motivo: TMotivoVeto;
-  Full, R: string;
+  Fuera: Boolean;
 begin
-  Result := PathDenied(APath, Motivo);
-  if Result = '' then
-    Exit;
-  case Motivo of
-    // Confinement is a WRITE rule. A read that trips ONLY it is inside the
-    // jail and merely belongs to another agent - and reading the whole tree
-    // is allowed even under confinement (you see everything, you write only
-    // yours).
-    mvConfinado:
-      Exit('');
-    // ReadOnlyPaths es de escritura tambien, y ES SU RAZON DE SER: esa
-    // carpeta se lee, lo que no se hace es escribirla. El perdon va por el
-    // MOTIVO, no por el texto de la negativa ni por recomprobar la ruta
-    // aqui: la version anterior recomprobaba POR TEXTO (GetFullPath) y
-    // perdonaba tambien la negativa del junction que RealPath acababa de
-    // dar - delphi_fetch servia ficheros de FUERA de la jaula si el enlace
-    // caia bajo un ReadOnlyPath (auditoria 2026-09-21). PathDenied solo
-    // dice mvSoloLectura DESPUES de su comprobacion real de enlaces, asi
-    // que este perdon ya no necesita mirar nada mas.
-    mvSoloLectura:
-      Exit('');
-    // Un proyecto de REFERENCIA (ReadOnlyRoots) es justo eso: se lee.
-    mvReferencia:
-      Exit('');
-    // Outside the jail - but READING library territory is legitimate. Solo
-    // para quien esta fuera DE VERDAD: la negativa del enlace
-    // (mvEnlaceFuera) no se perdona, y la del vault y las anomalias
-    // tampoco - antes este repaso les daba una segunda oportunidad a
-    // todas, porque miraba el texto que quedara y no el motivo.
-    mvFueraDeJaula:
-      begin
-        try
-          Full := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
-        except
-          Exit; // keep the invalid-path rejection
-        end;
-        if LibraryZoneEnabled then
-          for R in LibraryRoots do
-            if StartsText(R, Full) then
-              Exit('');
-      end;
-  end;
+  // la jaula tal cual: sin perdones que acertar (hasta la 1.7.3 era PathDenied
+  // menos una tabla de perdones por motivo; ver JaulaDenegada)
+  Result := JaulaDenegada(APath, Fuera);
   // Refused for reading: say that a library zone exists and how to see it.
   // Field 2026-08-22: an agent listed the PARENT of a registered component
   // folder, got the plain jail refusal, and concluded list and read disagreed.
   // Solo si la zona EXISTE y solo para quien esta fuera de la jaula: se
   // pegaba a toda negativa, con la zona apagada (contradecia a WS-001) y a
   // las rutas invalidas (revision 27-sep-2026)
-  if (Motivo = mvFueraDeJaula) and LibraryZoneEnabled then
+  if (Result <> '') and Fuera and LibraryZoneEnabled then
     Result := Result + ' ' + MsgText(SN_READ_ZONE_HINT);
 end;
 
