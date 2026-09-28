@@ -6,6 +6,757 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.0] - 2026-09-28
+
+Nine rounds of five independent reviewers read this release before it went
+out, running it against servers of their own; what they found is fixed
+below. Each fix a battery can provoke has a check that fails if it comes
+back; the rest (a desktop node's capture, an undo that cannot put a file
+back, an exception inside `add-platform`, a client that closes the
+server's stderr) were verified by reading.
+
+### Changed
+
+- **The server speaks English** (issue #6): every answer, refusal, note,
+  tool and parameter description, log line and startup warning, and the
+  desktop node's and launcher's output too. Spanish survives in code
+  comments and in a few input values kept for compatibility
+  (`delphi_edit insert:"rutina-global"` / `"metodo"`, the desktop node's own
+  command verbs). The text Windows adds to an error (after "Windows said:")
+  comes in the machine's own language.
+- The explanation files that were still in Spanish are in English:
+  `docs/REVIEW-2026-08.md`, the field test (now
+  `docs/field-tests/FIELD-TEST-1.0.15-hermes.md`), the vault tools'
+  section of `docs/TOOLS.md`, and the example secrets, paths and section
+  names of `settings.example.ini`, `docs/VAULT.md` and `docs/TOOLS.md`. What
+  `delphi_create kind=project-test` generates is in English too. The code
+  comments stay in Spanish.
+- **Every message starts with its tag**: `[AREA-NNN]` for a success message
+  or a note, `[AREA-NNN OUTCOME]` for a refusal or a failure, e.g.
+  `[EDIT-093 NOT_FOUND] The anchor does not appear in...`. A listing or a
+  file's content carries no tag; a JSON answer carries it in its `error`
+  field. The OUTCOME is the same `code` published in `structuredContent`, and
+  it says what to do next (rule 11 of `delphi_help command=conventions`):
+  `INVALID_PARAM` = the call itself is malformed (a parameter missing, a
+  value with the wrong shape, two that do not combine, a path of the wrong
+  kind): fix the call and repeat; `NOT_FOUND` = the call is right but what it
+  names is not there (a file, an anchor, a profile); `DENIED` = the call is
+  right and the thing exists, but a rule refuses it or something stands in
+  the way (the jail, read-only, a feature the operator turned off, a file
+  another process holds): the same call will fail again, do what the reason
+  says; `INTERNAL` = the server broke or a piece of its installation is
+  missing: report it with `delphi_report`. The code that writes a message
+  DECLARES its outcome; the server no longer guesses it from how the text
+  starts (`RECHAZADO:`, `error:`), so rewording a message can never change a
+  result again. The id stays when the wording changes: agents and tests
+  recognize a message by its id, not by its phrase.
+- **Outcomes follow that rule everywhere.** The outcomes had first been
+  copied from the old wording: about 180 "parameter missing / not valid"
+  refusals said `DENIED` ("do not insist") and an agent following the rule
+  gave up instead of adding the parameter; an anchor that appears twice said
+  `NOT_FOUND`; a write whose final rename another process blocks said
+  `INTERNAL`. Around 250 messages were reclassified, and a catalog check
+  keeps new ones in line. A file another process holds (open without
+  sharing) is `[SYS-027 DENIED]` in every tool - close it or wait, and
+  repeat; it was `INTERNAL` wherever the server opened it. A relative path is
+  `[GUARD-021 INVALID_PARAM]` (it said "outside the allowed workspaces",
+  `DENIED`), and a negative number in any integer parameter is
+  `INVALID_PARAM` in every tool (`delphi_read fromline=-2`, `vault_read
+  offset=-3` and others took it for the default).
+- **A wrapper takes the outcome of its cause**: a batch or a changeset
+  commit rolled back because an anchor is not there is `NOT_FOUND`, not the
+  wrapper's own `DENIED`.
+- **Exceptions have one rule**: a caller error that travels as an exception
+  (a `.dproj` that does not exist, no identifier at that position, a
+  character that does not fit the file's codepage) keeps its outcome;
+  anything unexpected is `INTERNAL`. Before, the same cause came out
+  `DENIED`, `INVALID_PARAM` or `INTERNAL` depending on which tool caught it.
+- **Required parameters are enforced**, in one place for every tool: the
+  `required` list that `tools/list` publishes. A missing one is
+  `INVALID_PARAM`; before, the tool ran with its default - `vault_patch`
+  without `new_text` DELETED the fragment it was given, `delphi_hover`
+  without `line` looked at line 0.
+- **One catalog for every text**: `src/Server/Lsp.Texts.pas` for the server
+  and `src/DesktopNode/Mld.Textos.pas` for the programs that run on the
+  target (about 1,500 constants; about 1,800 texts that were written inline
+  across 60 units moved there, the vendor's included). Everything goes out
+  through one helper (`MsgText` / `MsgFmt`; `MsgEnvuelve` for a cause inside
+  a wrapper, `MsgConCausa` for a wrapper that takes its cause's outcome,
+  `MsgExcepcion` for a caught exception).
+- Values in Spanish that clients may read: `delphi_workspace` `server.mode`
+  is `console` / `service` / `tray` (it said `consola` / `servicio` /
+  `bandeja`, while its description already said the English ones);
+  `delphi_desktop` `nodeDeploy` is `deployed` / `updated`; `add-profile`
+  reports a duplicate in `warning` (was `aviso`); a quarantined upload ends in
+  `.corrupt` (was `.corrupto`); the copy taken before a restore goes to the
+  trash drawer `before-restore` (was `antes-restaurar`; old drawers are still
+  read). The desktop node speaks English too (`CAPTURE=`, `Could not
+  capture:`, `visible windows:`, `WINDOW`, `FALLBACK:`); a node already on a
+  target is replaced on first use, as always, because its binary changed.
+
+### Fixed
+
+- **A UNC path opened a connection before it was refused.** `delphi_read
+  path=\\host\share\f.txt` resolved the path on the disk to decide whether
+  it was inside - which is SMB to the host the agent named: 21 s per call
+  against an address that does not answer, and the service account
+  authenticating against one that does. A UNC path that is under no root,
+  reference, vault or library folder is now refused by its text, at the
+  entry, before anything touches it (`[GUARD-002]`). A UNC root declared
+  by its 8.3 alias is reached by any mix of short and long names: a path is
+  resolved on the disk only when its `\\server\share` is a declared
+  place's.
+- **Another workspace's vault was nobody's.** With workspace A's token, a
+  code tool edited the `AGENTS-VAULT.md` of workspace B's vault (which lived
+  inside A's root) and `delphi_delete` took B's vault to the trash; the
+  startup purge emptied the `__delphi-temp` of a named workspace's vault and
+  of another workspace's `ReadOnlyPaths` nested in a root. Every workspace's
+  vault, references and read-only folders are now places no code tool
+  writes and the purge leaves alone. The `vault_*` tools compared names as
+  text: `vault_append AGENTS~1.MD` rewrote `AGENTS-VAULT.md` and
+  `vault_create OBSIDI~1\x.md` wrote into `.obsidian`; they resolve the long
+  form first.
+- **A place named by its 8.3 short name escaped the rule of that place.**
+  Another workspace's root nested inside this one, named by its short
+  alias, was deleted - and purged for good; so was a folder that contains a
+  `ReadOnlyPaths` entry; the vault could be edited and deleted by the
+  `delphi_*` tools; deleting a unit left it listed in its `.dpr` (F1026 on
+  the next build); and a reference root declared in 8.3 had its
+  `__delphi-temp` emptied at startup. Path arguments are now turned into
+  their long form at the entry, so every rule sees one form, and the paths
+  in the answers come in that form. `\\?\` and `\\.\` paths are refused
+  (`[GUARD-022 INVALID_PARAM]`), and so is a drive without its backslash
+  (`srvc:Users`, `[GUARD-023 INVALID_PARAM]`).
+- **The trash kept the wrong version.** A changeset `delete` of a file
+  edited twice that day kept the morning's copy, not what the file said when
+  it was deleted, and a `delphi_upload` over a file edited that day sealed
+  the earlier copy. Every copy of a file that is replaced or deleted whole
+  is now taken at that moment, through one namer, into a drawer that says
+  why (`deleted`, `replaced`, `before-restore`): `delphi_delete` had its own
+  copy of the namer, and `delphi_upload`, a quarantined upload,
+  `delphi_designer to-text` / `to-binary`, `delphi_adb out=` and a changeset
+  `delete` each composed theirs. Two copies of the same file within one
+  tick of the clock (~15 ms) got the same stamped name and the second
+  operation failed: the namer waits for the next stamp.
+- **Two agents could get the same session.** The id an `initialize` issued
+  was kept in a field every connection shared: four agents initializing at
+  once (every client does after a deploy) got a repeated id about one time
+  in fifteen, and two agents with one id share a mailbox, a trash and a
+  confinement. Each `initialize` issues its own now, and a server with too
+  many sessions forgets the one used least recently, not the oldest.
+- **Deleting a folder is all or nothing too**: one that could not be moved
+  (a file inside held open) answered `[FILE-036]` "nothing touched" after
+  the projects that listed its units had been changed; they are put back
+  first now. `delphi_create` of a form whose `.dfm` could not be written
+  left the `.pas` behind: nothing is created. When Windows refuses a file,
+  the answer says which of its reasons it is, in every tool: another
+  process holds it (`[SYS-027 DENIED]`), access is denied (`[SYS-028
+  DENIED]`; `delphi_move` said `[MOVE-012 INTERNAL] System Error. Code: 5`),
+  or it has the read-only attribute (`[SYS-029 DENIED]`, checked before a
+  file is written, replaced or deleted whole - `delphi_delete` deleted it,
+  `delphi_package` over a read-only `.zip` said "retry in a few seconds",
+  `vault_append` / `vault_patch` gave `SYS-028`). `[FILE-036]` blamed a lock
+  for any folder that could not be moved to the trash: now the cause speaks
+  (a linked trash, a path too long: `[FILE-041]`), and a delete that did
+  not happen leaves no empty drawer. `[EDIT-106]` said "another process
+  holds it" of any error code. A junction to an ancestor folder can be
+  deleted and moved: the link is what moves (it was "inside itself").
+- **One count of lines**: `vault_read`, the "line N is past the end"
+  messages of the language tools and `delphi_edit`, `delphi_search`'s line
+  numbers after a lone CR, the lines `delphi_create` reports and a changeset
+  `delete-line` counted as `delphi_read` does not (the phantom line after
+  the final line break, or a CR not taken as a break). `delete-line
+  atline=4` on a file of 3 answered COMMIT COMPLETE and only removed the
+  final line break; its preview now checks that the line exists and is
+  `old` when given, and `old` is compared with the engine's rule (without
+  the indentation in Pascal, trimmed in text), as the commit does. So does
+  `occurrence` in a `delphi_edit` batch: it counted with another rule and
+  refused a legitimate anchor (`[EDIT-062]`).
+- **One line break, one splitter.** On a file with mixed line endings a
+  line edit wrote the whole file in LF, a block edit in CRLF and
+  `delphi_textedit` in CRLF; a file of lone CRs read as `eol=LF breaks=0`,
+  a line edit turned it into LF and a block edit could not find its anchor;
+  `uno\rdos\rtres\r` lost its final break in `delphi_textedit`. Every writer
+  now joins with the file's dominant break (CRLF, LF or CR: the one that
+  appears most) and every reader splits with one splitter that takes a lone
+  CR as a break - the designer binding check, the rename engine, the unit
+  registration in a `.dpr` and `delphi_styles` had their own, and renaming a
+  unit with `delphi_move` rewrote no reference in a source of lone CRs
+  (MOVED, and the project no longer compiled). The writers of
+  `delphi_config` (`add-unit` too), `delphi_create` and `delphi_build
+  target=Deploy` insert their XML in the `.dproj`'s own break (a `.dproj`
+  in LF ended up mixed), and every text that is created is normalized by
+  one routine (a changeset `create` of `uno\rdos\r` wrote `uno\rdos\r\r\n`).
+- **The changeset preview uses the engine's anchor rule**: `Writeln(1);` on
+  one line and `  Writeln(1);` on the next previewed clean and the commit
+  rolled back with `[EDIT-077]`; an anchor without its indentation was
+  NOT FOUND in the preview with `atline`. The preview also says what the
+  commit will refuse for a read-only file (`[SYS-029]`) that a step deletes
+  or edits. Every anchor of a changeset resolves against the file as it is
+  BEFORE the changeset; the description says so (two edits of one line
+  belong in one `delphi_edit edits=` call).
+- **What would be ignored is said, not ignored**, through one rule
+  (`Lsp.Guard.ParametroQueNoVa`) shared by `delphi_config`, `delphi_create`,
+  `delphi_edit`, `delphi_textedit`, `delphi_styles`, `delphi_git` and
+  `delphi_changeset`: a parameter that is not of the call's command, kind or
+  mode is `INVALID_PARAM`, naming what that mode takes - and the default a
+  schema publishes counts as not sent. `delphi_config set-output path=`
+  answered success with the default output (`[CFG-110]`; also `section` on a
+  group's `view`); `delphi_create` ignored `content` on a project or a form
+  and `formname` on a unit (`[CREATE-035]`; a kind that does not exist still
+  says so first, `[CREATE-034]`); `delphi_edit` / `delphi_textedit` ignored
+  `content` without `create` / `createunit`, `code` without `insert`, `eol`
+  without `create` and `atline` / `toline` beside `edits` (`[EDIT-115]`);
+  `delphi_styles delete style=x child=y` deleted the WHOLE style
+  (`[STYLE-043]`); `delphi_git commit path=f` committed the whole index
+  (`[GIT-038]`; `args` is every command's and the git filter decides it); a
+  changeset `commit` / `preview` with `kind`, `path`, `old` or `n` ignored
+  them (`[CHSET-031]`), and a step with a parameter its kind does not use is
+  `[CHSET-030]`, which now says what the kind takes. A batch, a block anchor
+  or a changeset whose edits change nothing answered APPLIED (or rewrote the
+  same bytes): now `[EDIT-114]` / `[EDIT-113]` / `[CHSET-029]` UNCHANGED.
+  The descriptions of `platform`, `sdk` and `profile` name every command
+  that takes them (`add-platform` takes `sdk` and `profile` too), and the
+  one of `edits` no longer says the other modes are ignored.
+- **Writers without the write lock**: `delphi_adb logcat out=` and the
+  `delphi_git` commands that rewrite the working tree locally (switch,
+  merge, stash, reset, restore, worktree...) take it. The network ones do
+  not, so a slow network does not stop every edit on the server: clone
+  creates a new folder and fetch / push leave the tree alone; `pull` is the
+  one exception. `git clone` into `__delphi-temp`, `__delphi-patch` or
+  `__history` is refused like `worktree add`, and a failed clone removes
+  every folder it created (`n1\n2\n3` left `n1\n2`). A file inside a temp
+  folder gets no trash copy: nothing is restored from a temp.
+- **The shape of a path is checked at the entry**: a wildcard (`*`, `?`) is
+  `[GUARD-024 INVALID_PARAM]` (it ended `INTERNAL`, and a move left a copy
+  and a folder behind); a FILE named with a trailing separator (`x.txt\`)
+  is `[GUARD-025 INVALID_PARAM]` (read: `INTERNAL`; create: a folder with
+  the file's name; `delphi_move` to `g.txt\` created the folder `g.txt`),
+  also as a move's destination and in a changeset step; `//?/` is a device
+  prefix like `\\?\` (`[GUARD-022]`); a name longer than 255 characters is
+  `[GUARD-026 INVALID_PARAM]` (it was `[SYS-009 INTERNAL]` when written).
+  `[GUARD-010]` no longer suggests an empty name for `...`.
+- `delphi_search` of a folder failed whole (`[SYS-027]`) when one file was
+  held by another process: that file is skipped and named (`unreadableNote`,
+  `[SEARCH-003]`).
+- `delphi_build` checked a `.dproj` it could not read as if it were empty
+  and built: now `[BUILD-045 DENIED]`. `sdk=` on a platform built on this
+  machine is `[CFG-108 INVALID_PARAM]`, as in `delphi_config` (it was
+  ignored).
+- `delphi_git clone` created its destination before checking the URL: a
+  refused clone left an empty folder, and the cleanup of a failed one could
+  remove an empty folder that was already there (another workspace's empty
+  root). It is created after every check, and removed only if the clone
+  created it.
+- `delphi_adb logcat out=` could write inside the trash. `delphi_desktop`'s
+  capture seal, delete and move, `delphi_package`'s seal and rename and
+  `delphi_adb`'s screenshot pull take the write lock like every other
+  writer.
+- `delphi_textedit create` on an existing EMPTY file says there is no line
+  to anchor on and what to do instead (`[TEXT-015 DENIED]`).
+- `delphi_styles lint` / `build` given a style FILE work on its folder, as
+  1.6.2 documented, and say so (`folderNote`, `[STYLE-042]`).
+- `delphi_paserver` with `host`/`port` that does not answer is a report
+  (`tcpReachable: false` and its `reason`), like the profile probe; it was
+  `INVALID_PARAM` with the socket's text. `get-sdk` with the target's
+  PAServer off reported every library as "skipped (not on this target)" and
+  ended blaming the distro (`[PAS-030]`): it asks the target first and
+  stops with `[FETCH-004 DENIED]`.
+- HTTP: `arguments` that is not a JSON object (a JSON encoded twice) is
+  `[SYS-030 INVALID_PARAM]` (the tool ran with no arguments and said
+  "Missing path"); a GET for the event stream answers an empty
+  SSE stream (it sent Indy's HTML page), and on a dead session it is a 404
+  like a POST; the 404 of a dead session is JSON with the request's `id`
+  (it said `null`); a 202 and a 204 go without a body (Indy's HTML page
+  again); a session purged after expiring still answers "expired", not
+  "unknown". An `id` that is not a string or a whole number (`1.5`, `1e30`,
+  `null`, `true`) is `-32600` with `[SYS-031 INVALID_PARAM]` - it was a 500
+  with no tag, or no answer at all; a `method` that is not a string is
+  `[SYS-032]`. `null` (or a number) where a text goes is a missing value in
+  every protocol field: `"name": null` looked for the tool "null", `"uri":
+  null` for the resource "null", and two clients whose `clientInfo.name`
+  was `null` shared the session "null" (mailbox, trash, confinement); a
+  `clientInfo` that is not an object was `-32603` "Invalid class
+  typecast". `[SYS-015]` lists parameters by their published names
+  (`old_text`, not `oldtext`), and says "(none)" for a tool without any.
+  `GET /files` checks the path as it came (before resolving it) with the
+  jail's own rule, and answers the HTTP code of the refusal's outcome (a
+  malformed path is 400, not 403) - also when the file fails while it is
+  being served (another process holds it: 403, it was 500); the path goes
+  to the rules as it came (`a b.txt ` served `a b.txt`), and the file name
+  travels in `filename*` too, so an accented name arrives whole. The
+  session is announced by one routine on the JSON and the SSE paths, and
+  only while it is alive: a failed `initialize` with a dead session id sent
+  it back in the header of a 200. A plain GET (no event stream) on a dead
+  session is a 404 too. A session the server closed to make room (it keeps
+  256) answers `[SYS-033 NOT_FOUND]` - it said the server had been
+  restarted.
+- JSON-RPC: one rule decides what gets no answer, for HTTP and stdio alike:
+  a notification (a `method` without `id`) or a client's response (`result`
+  or `error` without `method`), alone or in a non-empty batch of them. A
+  client's response got a 202 over HTTP and a `-32601` "Method [] not found"
+  over stdio;
+  `{}` got no answer at all and is `-32600`; an empty array got a 202 and a
+  batch with requests or a JSON that is not an object got `-32700` "not
+  valid JSON": both are `-32600`. `prompts/get` reads `name` with the rule
+  of every protocol field (`"name": 5` looked for the prompt "5"). An
+  unknown resource is `-32002`, the code MCP gives it (it was `-32602`).
+  The schemas publish whole-number parameters as `integer` (they said
+  `number`, and `1.5` was refused). A stdio client that closes the server's
+  stderr no longer stops it at startup.
+- `delphi_search` of a folder where every file that matches the mask is held
+  by another process no longer adds "the mask matched no file" (`[SEARCH-002]`)
+  to the `[SEARCH-003]` that names them.
+- Texts: `[UPLOAD-010]` said the backup of a replaced file was "the ORIGINAL
+  from this morning", and it is what the file said just before; rule 4 of
+  `delphi_help command=conventions` describes both kinds of copy (an edit:
+  one per day, what `restore` brings back; a file replaced or deleted
+  whole: every time, stamped, in its drawer). `[SYS-028]` no longer speaks
+  of writing when it answers a read, and `[SYS-029]` of writing when it
+  answers a delete or a move; `[GUARD-010]` says a trailing dot or space is
+  what Windows drops (a leading dot is fine); `[STYLE-015]` and the skill
+  told to undo a style delete with `delphi_move` over the file, which
+  `delphi_move` refuses (it never overwrites), and said the copy was the
+  previous one: it is the file before its first change of the day;
+  `delphi_list includetrash` counts the owner markers (`.by`) apart from the
+  copies (`shownTrash` counted them as copies); `[GROUP-005]` names what is
+  missing; `[VAULT-012]` names what the vault excludes; the `tree` command
+  of `delphi_designer` reads a binary form too; `create` of `delphi_git` is
+  refused with other commands, not ignored.
+- **Nothing is written through a link, not even a safety copy.** When a
+  folder's `__delphi-patch` trash was a junction to somewhere outside the
+  write roots, `delphi_delete` moved the file into it and `delphi_move` put
+  its safety copy there: outside the jail. The trash path now goes through
+  the write gate (DENIED, nothing moved). The vault's backup of a note checks
+  its real path like the note does, and the deployment manifest that
+  `delphi_build target=Deploy` writes (`.deployproj`,
+  `AndroidManifest.template.xml`) goes through the write gate and the write
+  lock instead of raw file calls.
+- **All or nothing, the rest of it.**
+  - The undo also notices a file another process changed BETWEEN two steps
+    of the same operation (a batch, a commit, an insert) and leaves it, saying
+    so, instead of restoring its snapshot over it.
+  - `delphi_edit insert:"metodo"`, and `insert:"rutina-global" visible=true`
+    whose declaration raised, undo what they wrote (`[EDIT-074 DENIED]`).
+  - `delphi_create` of a form or unit whose project cannot be registered (a
+    `.dproj` another program holds, a read-only one) removes the files it
+    created: nothing is created (`[CREATE-028]` / `[CREATE-032]` said
+    "CREATED ... but they could NOT be registered", and repeating hit
+    "already exists"). `delphi_config add-unit` / `remove-unit` put the
+    `.dpr` back when the `.dproj` step fails.
+  - `delphi_delete` of a unit puts the project back when any step fails
+    (`[FILE-039 DENIED]`), and a project it cannot read (another process
+    holds it) is no longer taken for "no project lists it" - neither when a
+    folder is deleted: they said DELETED and the `.dpr` kept listing the unit
+    (F1026 on the next build). Now `[SYS-027]` and nothing touched.
+  - A changeset `delete` step keeps a copy, like every other write.
+  - `delphi_move` of a unit whose `.dfm` could not be moved only noted it
+    and re-pointed the `.dpr` anyway: MOVED with a broken project. Now a
+    unit and its forms (`.dfm` and `.fmx`) move together or not at all
+    (`[MOVE-017]`), and what could not go back is named (`[SYS-018]`). A
+    unit renamed while it has the read-only attribute is refused before
+    anything moves (its `unit X;` could not be rewritten). A project that
+    cannot be re-pointed is still named in the answer.
+  - A move or a delete that did not happen leaves nothing behind: a failed
+    move took its safety copy (and the drawer it created) with it only on
+    some paths, and each retry left another; it left the destination folders
+    it created, and a `copy=true` that failed halfway left its partial copy
+    (so the "repeat" of the answer met "destination exists"); undoing a
+    unit's delete left the form's copy in `deleted\`. A unit restored from
+    the trash keeps its owner marker until its form is out too (a failed
+    restore left it unmarked, for anyone to purge).
+  - A link (junction) is moved as a link, with no safety copy: copying it
+    copied what it points to, and a junction to an ancestor folder could
+    not be moved at all (`[MOVE-009]` naming a trash copy). The safety copy
+    of a folder does not follow the links inside it either (a junction to
+    the root inside a folder failed its move with a path too long).
+- **What is not content is not copied or packaged**: `delphi_move copy=true`
+  and `delphi_package` took another workspace's vault inside the tree with
+  them (the other walkers skipped it), and `delphi_package` zipped the
+  trash - with a junction parked in it, the zip read itself and answered
+  `[SYS-027]` "repeat" forever. A UNC path read from a `.dpr` is not
+  resolved on the disk when it is under no declared place, nor a
+  `\\?\UNC\...` one (a delete asked the network for 21 s).
+- **Overwritten without a copy**: `delphi_upload` replaced a file whose copy
+  could not be taken and answered success with `"backup": "... FAILED"`: now
+  `[WS-016 DENIED]` and nothing is written. `delphi_adb screenshot out=` onto
+  an existing file copies it first, like `logcat` does.
+- **stdio read the client's UTF-8 with the console's code page**: accents and
+  symbols a local client sent arrived broken. Both directions are UTF-8.
+- **Values inside `edits` follow the rule of the top-level parameters**:
+  `atline` / `toline` / `occurrence` are non-negative whole numbers and
+  `delete` is a boolean (`"delete":"yes"` blanked the line, `"toline":-1`
+  was ignored, both with OK): `[EDIT-110 INVALID_PARAM]`, nothing written.
+- **A text parameter sent as an array or an object** was written as its JSON
+  text: now `[SYS-016 INVALID_PARAM]`. Only `edits` takes a real JSON array.
+- **A relative path, or a Linux one (`/home/x`), is refused at the entry** of
+  every tool that takes a server path (`[GUARD-021 INVALID_PARAM]`; the
+  `vault_*` tools take paths relative to the vault, on purpose), not only
+  where a later check happened to look (`delphi_package` and
+  `delphi_upload` resolved it against the server's own folder first). It is
+  the LAST rule of the entry: a dirty build profile, a read-only server or
+  an unserved virtual drive (`srvz:\`) are still named first. `delphi_config
+  add-searchpath` / `remove-searchpath path=` and `delphi_create dir=` keep
+  taking paths relative to the project (a unit for `add-unit` is named by
+  its full path), and `delphi_test project=` still explains a bare project
+  name (`[TEST-005]`). A path that
+  hangs from the root of an unnamed drive (`\lib`, `/lib`, `C:lib`) is not
+  taken as a full one any more: in `delphi_config path=` it is `[CFG-109
+  INVALID_PARAM]`, and a standalone unit's `dir` must be a full path.
+- **The jail compares the long names on both sides.** A folder inside the
+  roots written with OTHER 8.3 short names than the ones the root was
+  declared with (`...\DELPHI~1\RESULT~1\...`) came out "outside the allowed
+  workspaces"; and the trash was recognized in five places, three of which
+  read the text as it came, so its short name (`__DELP~1`) was the trash for
+  the write gate and not for `delphi_delete` / `delphi_move` / `delphi_list
+  includetrash`. Each question has one reader now, and the root by its short
+  name is still the root: `[GUARD-014]`, never deleted.
+- Modes of `delphi_edit` / `delphi_textedit` that do not combine (`edits`
+  with `old`, `create` with `old`...) did one and ignored the other: now
+  `[EDIT-111 INVALID_PARAM]`, nothing done. `delphi_edit createunit
+  content=` checks the content with `delphi_create`'s rule (its `unit X;` is
+  the file's name, it ends in `end.`).
+- `[SYS-027]` (a file another process holds) now also reaches `vault_*`,
+  `delphi_config view` of a group and the two messages that still wrapped
+  the system's text by hand.
+- `delphi_build`: `platform=win64` built into a `win64` folder and failed
+  with MSB4018 (the name is normalized); a VCL project for Linux64 is refused
+  before compiling, with `add-platform`'s rule (the build failed with F2613
+  and the hint sent the agent to add a search path for `Vcl.Forms`).
+- The project `delphi_create kind=project-test` writes calls
+  `TDUnitX.CheckCommandLine`, so `delphi_test filter=` runs only what it
+  names (it ran every test).
+- `delphi_read` of an empty file is a success (`[READ-006]`; it was
+  `[EDIT-100 INVALID_PARAM]`), and a file that ends in a line break no longer
+  shows a phantom empty line after its last one.
+- An edit whose `new` is what the line already says answers `[EDIT-113]
+  UNCHANGED` and writes nothing, not even a backup (both twins); it said
+  WRITTEN. `delphi_textedit` with an `atline` that is not where its only
+  anchor is refuses, like `delphi_edit` (it edited the other line).
+- The seven language tools answer one way for a folder, a file that does not
+  exist and a file that is not Pascal (`delphi_references` sent a `.txt` to
+  the engine; `delphi_symbols` said "not a Delphi source ()" of a folder).
+- `delphi_list includetrash=true` listed each trash copy twice, and
+  overlapping masks (`*;*.pas`) counted a file twice.
+- A `delphi_move` refused because a file stands in the destination's path
+  left a copy of the source in the trash; a `delphi_package` that failed
+  halfway left its `.tmp` next to the outfile.
+- `delphi_config set-sdk platform=Win64` answered "Registered for Win64: .":
+  a platform built on this machine takes no SDK (`[CFG-108
+  INVALID_PARAM]`, like `set-profile`), and an empty list of SDKs or profiles
+  says `(none)`. `delphi_styles lint` with a `project` that does not exist is
+  `[STYLE-041 NOT_FOUND]` (it linted nothing and came out clean).
+- HTTP: a request on a dead session that had the word `"initialize"`
+  anywhere in its body (`arguments:{"command":"initialize"}`) got past the
+  404 gate and ran; only a real `initialize` does now.
+- Texts that did not match what happens: DSGN-044 promised a copy in the
+  trash that may not exist; LSP-017 printed `()`; STYLE-002 told a `.txt` it
+  was "not a folder"; TEXT-010 said "could not encode" for a failed write;
+  FILE-028 printed `(backup in (the source was already in the trash...))`;
+  ADB-021 now says `lines=0` is the default; SYS-007 no longer says an
+  expired session was "never issued"; SEARCH-002 says `pattern` takes ONE
+  mask. The README no longer says a binary `.dfm` is refused by every tool:
+  it is read on the fly and converted with `to-text` / `to-binary`.
+- **All or nothing, for real.** A `delphi_changeset` commit, a `delphi_edit`
+  / `delphi_textedit` batch (`edits`) and `delphi_config add-platform` with
+  `sdk`/`profile` promise all or nothing, and an exception halfway (a folder
+  that cannot be created, a character that does not fit, a file another
+  process holds) left the earlier steps WRITTEN. Undoing could itself fail on
+  a locked file and leave a changeset open. The three now share one snapshot
+  (`Lsp.Guard.TFotoDeFicheros`): any failure restores every file byte for
+  byte, only what changed is rewritten, the undo never throws, and what could
+  not be put back is named - FIRST: the answer opens with `[SYS-018 DENIED]`,
+  the files still changed and what failed (it used to open with "rolled back
+  byte for byte" and put the warning after it). A commit whose step could
+  not re-read its file afterwards, and a batch entry with `fragment` that
+  could not read it, escaped the undo altogether: both undo now.
+- **Two agents on the same file lost edits and both got OK** (measured
+  live): a `delphi_edit` batch (`edits`) wrote without the write lock that
+  every other edit takes, and so did `delphi_create`, `delphi_upload`,
+  `delphi_move` and `delphi_delete` - a failing commit's undo took away what
+  they wrote in between. They all take it now (a `delphi_move copy=true`
+  does not: a copy touches nothing of anyone's), and a changeset commit
+  holds it from its fingerprint check to its undo. Losing an edit with OK is
+  worse than waiting.
+- **The undo never takes away someone else's work.** It notes what each step
+  of the operation left in every file; a file that is no longer that (the
+  IDE saved it, another process wrote it) is left as it is and named in the
+  answer, instead of being overwritten or deleted. It also removes the
+  folders the operation created, and a file it cannot re-read (another
+  process holds it) is only reported if its size or date changed.
+- **An edit that was written no longer answers `INTERNAL`** when the file
+  cannot be re-read right after (another process took it): it says it was
+  written (`[EDIT-108]`) and shows what was written.
+- **`delphi_edit insert:"rutina-global" visible=true` is all or nothing**:
+  when the declaration cannot go into the interface, nothing is written
+  (`[EDIT-109 DENIED]`); it answered success with the routine private to
+  the unit.
+- **`delphi_package outfile=` replaced ANY file with the zip**, with no copy
+  and a success (a `.pas`, a notes file): `outfile` must end in `.zip`
+  (`INVALID_PARAM`), a `.zip` already there is copied to the trash before it
+  is replaced, and a folder that does not exist yet is created (it was
+  `INTERNAL`).
+- **A batch entry whose `new` (or `old`, `fragment`) is not a string blanked
+  the line and answered OK**: now `INVALID_PARAM`, nothing written.
+- **Writes that did not ask the write gate**: `delphi_adb logcat out=` and a
+  capture's `out=` only checked the jail, so a read-only session could
+  overwrite a file, and logcat overwrote an existing file without a copy
+  (now it keeps one first); `delphi_edit restore confirm` read the copy and
+  wrote the before-restore copy without the read and write gates (it was
+  safe only by accident).
+- **Failures that reached the agent as SUCCESS** (`ok:true`, no `isError`):
+  - `delphi_edit insert:"rutina-global"` refused by the engine: "placed
+    before line N" and nothing written;
+  - an exception inside the `delphi_edit` engine answered `ERROR: ...` as a
+    success;
+  - `delphi_git` with a non-zero exit: now `[GIT-036 DENIED] exit=N` with
+    git's own output, and a reminder that a failed merge or stash pop can
+    still have changed the tree (`diff --quiet` / `--exit-code` with
+    differences answers `exit=1` as a success, without the hints of a
+    failure: that is git's answer);
+  - `delphi_adb` against a device that is not there, and any adb that exits
+    non-zero (screenshot, install, run, logcat, tap, key): now
+    `[ADB-007 DENIED]` / `[ADB-027 DENIED]` with adb's output;
+  - `delphi_desktop`: a gesture the node could not do (no click, no typing,
+    an unknown key) and the node's own crash; a screenshot or overview with
+    no capture;
+  - `delphi_upload` whose sha256 does not match (it said `warning`);
+  - `delphi_rename_symbol mode=apply` not applied (it said `note`), and a new
+    name that is not an identifier (a blocker instead of `INVALID_PARAM`);
+  - `delphi_styles build` refused by the `.rc` jail check, without
+    `brcc32`, with a style that did not convert or an `.rc` that brcc32
+    could not compile (it answered `ok:false` and a note saying to rebuild
+    the project, with no new `.res`);
+  - `delphi_config set-sdk` / `set-profile` without a value removed the
+    project's pin (`"none"` is the way to remove it): now `INVALID_PARAM`;
+  - remote-run refused by the launcher on the target, and a `kill` that
+    failed;
+  - `delphi_create` of a form or unit with a `project` that is not a project:
+    it wrote the files and then could not register them;
+  - a missing `path`/`project`/`style`/`prop`/`value`/`name` in
+    `delphi_config`, `delphi_styles` and the unit commands; an unknown
+    platform in `delphi_components`; "no RAD Studio installation"; the three
+    failures of an `insert:"metodo"`; the copy/move and trash errors of
+    `delphi_move` / `delphi_delete`; `delphi_package`'s upper-case `ERROR:`;
+    `delphi_read` past the end of the file.
+- Wrong outcome or wrong words: "Invalid tool parameters" and "Tool not
+  found" said `INTERNAL`; a FOLDER where a file goes said "does not exist" or
+  failed inside Windows (`delphi_test`, `delphi_fetch`, `delphi_config`,
+  `delphi_edit`, `delphi_textedit`, `delphi_upload`, `delphi_package`,
+  `delphi_build`, `delphi_diagnostics`, `delphi_designer`, and a changeset
+  whose preview passed it, and every other tool that asks for an existing
+  file); a FILE where a folder goes (`U.pas\sub\x.txt`) was `INTERNAL` in
+  six tools, now `[GUARD-019 INVALID_PARAM]` - and `[GUARD-020 DENIED]` when
+  that file sits where the server keeps its copies (the agent's path was
+  right); an empty
+  path said `Invalid path: ` with nothing after it; a mistyped changeset
+  command, or none `id`, said "that changeset does not exist"; a missing
+  profile `name` said the profile "(no name)" does not exist, and
+  `remove-profile` / `remove-sdk` without it spoke of `add-profile`; a
+  broken `vault_search` regex crashed or found nothing, and a broken file
+  mask was `INTERNAL` (now `[VAULT-042 INVALID_PARAM]`); `delphi_search`
+  with a `pattern` that matches no file said "total 0" as if the text were
+  not there (now a `maskNote`, `[SEARCH-002]`); `delphi_help` listed the
+  `vault_*` tools on a workspace without a vault; `prompts/get` with
+  an unknown or missing name was `-32603` and untagged (now `-32602` with
+  `[VAULT-041 NOT_FOUND]` / `[SYS-026 INVALID_PARAM]`, like
+  `resources/read`).
+- Values accepted in silence: `delphi_build` with a configuration the
+  project does not have built into `Win64\Relase\` with the base settings
+  (now `NOT_FOUND` with the list, the rule `delphi_test` already had), and an
+  unknown `verbosity`; an unknown `eol` in `delphi_textedit` and in
+  `delphi_edit createunit` (one rule for both; `createunit eol=lf` without
+  `content` said LF and wrote CRLF); `delphi_adb` `lines=abc`;
+  `delphi_styles view` of a file that is not a `.style`.
+- `delphi_edit removeuses` left the `;` inside a `//` comment when the last
+  unit it removed had one, and the clause stayed open: the unit no longer
+  compiled.
+- `add-platform` with `sdk`/`profile` is all or nothing also when the SDK
+  step fails with `INTERNAL` (it left the platform added).
+- `delphi_read` of a file whose NAME looks like a tag (`[OPS-001 DENIED]
+  notes.txt`) came out as a refusal with its content masked: the numbered
+  read now opens with its own tag, never with data.
+- The READING hint about the library zone was glued to every refusal, even
+  with the zone off and on invalid paths.
+- `delphi_help name=<typo>` assumed a tool two letters away (`delphi_nope`
+  answered `delphi_move`'s contract); now only one letter.
+- `delphi_list` over 500 entries put two `shownNote` keys in one object, its
+  folder mode cut the list without saying so, and the hidden-entries note
+  said "not all for the same reason" with one reason.
+- The designer answers a damaged binary `.dfm` with the same message from
+  every command.
+- The "line N is identical" warning of an edit named the wrong line and fired
+  on a form's closing `end`.
+- `delphi_workspace` read the command line again, with its own rules, to say
+  how the server was started (`/http` alone said `transport=http` while
+  serving stdio): the startup branch now sets it, one reader.
+- `structuredContent`: an `"error": null` or `false` in a tool's JSON is no
+  error, and the text that comes with an image declares its outcome like any
+  other. Over SSE, only `result.sessionId` of an `initialize` announces a
+  session. JSON-RPC error codes come from the exception's class, not from
+  "not found" in its text; `resources/read` without `uri` was an access
+  violation and an unknown resource answered as a success.
+- Texts that lied: `delphi_adb` `device` is required, not optional; its
+  screenshot arrives in the answer; deploying is `delphi_build target=Deploy`
+  (not `delphi_paserver`); `deviceid` only installs on iOS;
+  `kind=implementation` answers like `declaration`; a new unit is registered
+  with `delphi_config command=add-unit`; a rename preview is applied with
+  `mode=apply`; the vault is written in the vault's own language; the
+  identity rule no longer promises protection against an agent that lies
+  about its name; `delphi_desktop type` composes dead keys on Linux and types
+  Unicode on Windows. Value lists name every value, and the valid platforms
+  come from the validator itself.
+- `delphi_test`: a relative project path with a backslash was taken for a
+  bare project name (a `'\'` lost since v0.66).
+- Several texts printed two backslashes where one was meant.
+- `scripts\Enviar-Mensaje.ps1` without `-Agente` wrote where no agent reads:
+  `-Agente` is now required (there is no box "for everyone").
+- **A port that cannot be bound says which port, why and what to do**
+  (issue #5): the tray, the service and the terminal report the port, the
+  socket error (e.g. 10048, address in use) and the two usual causes:
+  another copy of this server (tray, service or a terminal with `--http`) or
+  a port Windows reserves - change `[Server] Port=`.
+
+### For client authors
+
+- Anything that parsed `RECHAZADO:` or `error:` at the start of an answer
+  must read `structuredContent.code` or the tag that opens the answer. JSON
+  answers keep their shape: their `error` field decides, and its text starts
+  with the tag. Codes you may have matched changed as described above.
+- Failures moved to `error`: a screenshot/overview without a capture
+  (a gesture whose capture failed keeps `screenshotError`), every failure of
+  `delphi_styles build` (the `.rc` jail refusal, a missing `brcc32`, an `.rc`
+  that does not compile, a style that does not convert; `rcError` is gone),
+  a rename apply that did not happen (was `note`), an upload whose sha256
+  does not match (was `warning`; the file is set aside as `<name>.corrupt`).
+- `delphi_git` and `delphi_adb` with a non-zero exit are errors (`isError`),
+  with `exit=N` and the tool's own output after the tag - except `git diff
+  --quiet` / `--exit-code` with differences, a success that starts `exit=1`.
+- A negative integer is refused by the deserializer for every tool
+  (`[SYS-016 INVALID_PARAM] Parameter "...": a whole number that is not
+  negative was expected`); a relative path is `[GUARD-021 INVALID_PARAM]`; a
+  file another process holds is `[SYS-027 DENIED]`. In a batch entry
+  (`edits`), `old` / `new` / `fragment` must be strings or `null` (absent).
+- A missing required parameter is `[SYS-019 INVALID_PARAM] Missing "..."`;
+  a protocol method's (`resources/read` without `uri`, `prompts/get` without
+  `name`) is `-32602` with `[SYS-026 INVALID_PARAM]`.
+- `delphi_package outfile=` must end in `.zip`.
+- A target PAServer that does not answer (`E0003`), a file that cannot be
+  fetched from the target and a desktop that gives no screenshot (no
+  graphical session, a locked Windows, the portal refusing) are `DENIED`
+  (`[RUN-010]`, `[FETCH-004]`, `[DESK-023]`): something stands in the way.
+  They were `INTERNAL`, which tells the agent the server broke - measured
+  2026-09-28 with three targets switched off, `delphi_desktop
+  command=status` included.
+- A text parameter sent as an array or object is `[SYS-016
+  INVALID_PARAM]`; in `edits`, `atline` / `toline` / `occurrence` must be
+  non-negative whole numbers and `delete` a boolean (`[EDIT-110]`).
+- `delphi_read`'s header is in English: `finales=` is `eol=` (which can
+  also say `CR`), `saltos` / `LFsueltos` / `acentos` / `corrupcion` are
+  `breaks` / `loneLF` / `accents` / `corruption` (the same metrics in
+  `delphi_edit`'s answers), `Lineas a-b de N` is `Lines a-b of N`, and the
+  header opens with its tag (`[READ-005]`, `[READ-006]` for an empty file).
+- Whole-number parameters are `"type": "integer"` in the schemas (were
+  `number`). An unknown resource is `-32002`. `{}`, `[]`, a batch with
+  requests and a JSON that is not an object are `-32600`; a client's
+  response gets no answer on either transport.
+- An edit that changes nothing answers `[EDIT-113]` (a note, not an error).
+  `delphi_read` of an empty file answers `[READ-006]`, and the line count no
+  longer includes a phantom line after the final line break.
+- `delphi_build` refuses a platform the project's framework cannot target
+  (VCL outside Windows) with `[SYS-010 DENIED]` before compiling.
+- The HTTP 401 body is `{"error":"[SYS-017 DENIED] Missing or invalid bearer
+  token.","hint":"..."}` (1.6.2 documented `"missing or invalid bearer
+  token"`).
+- Paths in answers come in their long form: an 8.3 alias sent in a
+  parameter (`C:\Users\DAVID~1\...`) comes back long.
+- A path whose SHAPE is wrong is `INVALID_PARAM` in every case: a `:`
+  outside the drive (`[GUARD-009]`) and a name that starts or ends with a
+  dot or a space (`[GUARD-010]`) said `DENIED`, while a relative path, a
+  device prefix or a drive without its backslash said `INVALID_PARAM`.
+- New refusals: `[SYS-028]` / `[SYS-029]` (access denied, read-only
+  attribute), `[SYS-030]` (`arguments` not an object), `[SYS-031]` /
+  `[SYS-032]` (an `id` or a `method` of the wrong type, `-32600`),
+  `[SYS-033]` (a session closed to make room), `[GUARD-022]` /
+  `[GUARD-023]` / `[GUARD-024]` / `[GUARD-025]` / `[GUARD-026]` (a device
+  prefix, a drive without its backslash, a wildcard, a file with a trailing
+  separator, a name over 255 characters), `[CHSET-030]`, `[CHSET-031]`,
+  `[EDIT-115]` (now any parameter that is not of the call's mode),
+  `[CREATE-035]`, `[CFG-110]`, `[STYLE-043]`, `[GIT-038]`, `[MOVE-017]`,
+  `[TEXT-015]`, `[BUILD-045]`, `[FILE-041]`; new notes: `[EDIT-114]` and `[CHSET-029]`
+  (UNCHANGED), `[SEARCH-003]` (`unreadableNote`), `[STYLE-042]`
+  (`folderNote`). The launcher's refusals on a target
+  (`[JOB-001]`..`[JOB-004]`) are `DENIED`.
+- A request with `"id": null` is answered (`-32600`, `[SYS-031]`): it was
+  taken for a notification and never answered. Only a request WITHOUT an
+  `id` is a notification.
+- `delphi_delete` of a file with the read-only attribute is refused
+  (`[SYS-029]`), like any other whole-file change.
+- `GET /files` answers the HTTP code of the refusal's outcome: 400 for a
+  malformed request (a folder where a file goes, a wildcard...), 403 for a
+  rule, 404 for what is not there.
+
+### Tests
+
+- The batteries recognize messages by constant (`mc.es`, `mc.abre`,
+  `mc.resultado`, `mc.llego_a_git`, `mc.llego_a_adb`), and a missing answer
+  (timeout, JSON-RPC error, no content) counts as a failure - it used to pass
+  every "did not fail" check. `release_check` refuses a server exe older than
+  its sources, `run_all` lists what batteries say they did not measure, and
+  `test_catalogo` fails on an untagged message, a "missing parameter" that is
+  not `INVALID_PARAM`, Spanish in the catalog, a failure put in a JSON field
+  other than `error`, and a message used without its helper.
+  `test_resultados` holds one check per fix of the reviews (two agents
+  editing one file at once included), `LspTests.Foto` the undo (a change
+  between two steps included), and the control checks that say "this still
+  works" need a real answer: a timeout or an `INTERNAL` no longer passes
+  them.
+- Checks that passed for the wrong reason: `test_git_argfilter` counted a
+  git that ran and failed as "the gate stopped it"; `test_http_auth`'s
+  read-only git checks ran against a repository outside the read-only
+  workspace, so the jail stopped them and neither read-only mode nor the
+  `--output` filter was measured; `test_concurrencia` skipped instead of
+  failing when the server could not create its fixture; `test_round44` T7b
+  ("the captures of the previous run do not survive") checked an empty list
+  since 1.0.16, and now plants one; `test_resultados` E48 (the trash behind
+  a junction) did not provoke the leak it guards; `test_concurrencia` H
+  skipped whenever its first build failed, even with RAD Studio installed
+  (only a missing RAD Studio skips it now).
+- `test_alias83` names every place by its 8.3 alias. The batteries compose
+  and read a server path's virtual form (`srvc:\...`) and its 8.3 / long
+  forms with one pair each in `mcp_cliente` (`virtual` / `real`, `corta` /
+  `larga`): it was written by hand in five batteries, and one reader only
+  understood drive `c`. The copies in the trash are found with one reader
+  (`copias`, with the owner marker's `marca_dueno` / `es_marca_dueno`) that
+  takes the folder, drawers and marker from `Lsp.Patch`'s own constants:
+  eight checks globbed the layout by hand, and three of them went red when
+  the drawers changed.
+- `release_check` no longer repackages a version that already has a tag: it
+  fails and packages into `release-out\dev\` (the gate runs between versions
+  and was overwriting the previous release's artifact), and it checks that
+  `docs/CAPABILITIES.json` carries the version being released (it said
+  1.5.0 from v1.5.1 to v1.6.2).
+- The last three rounds' fixes each have a check (`test_resultados`
+  E84-E142, `test_alias83` A8-A13, `test_vault`'s read-only note), and
+  the eighth round's were run against the previous build to see them go
+  red. A check that looks at the BYTES of a multi-line edit on a CRLF file
+  (E128) is new: no battery did, and a line-break change made while this
+  release was being written mixed them for a while (it never shipped). The
+  checks the reviews found blind see again: `test_round42` X1
+  (the other jail in 8.3, with forward slashes or inside a `file:///` URI,
+  against an answer in JSON and in the long form - with a control that must
+  see its own jail), `test_concurrencia` H, E62, E80, E83, E88 (it passed
+  with a `NOT_FOUND` on a project without its `.dpr`), E95 (two copies in
+  one clock tick only collided sometimes: E95b plants the next 400 ms of
+  stamped names first), `test_v012`'s recoverable delete (it passed on the
+  safety copy of an earlier move, and restored that one), and A5 / A10 (a
+  startup that purged nothing passed them: a control temp must be emptied).
+  A UNC root is checked positively too (A13, over `\\localhost\C$`). The engine's unit tests cover
+  the namers and their inverses (`TrashStampedName` / `TrashOriginalName`,
+  `MarcaDeDueno` / `CopiaDeLaMarca`, the splitter that keeps each line's
+  break and its inverse), `LineasDelTexto`, `SaltoDominante`, `ConSalto`
+  and the parameter rule.
+
 ## [1.6.2] - 2026-09-27
 
 ### Fixed
