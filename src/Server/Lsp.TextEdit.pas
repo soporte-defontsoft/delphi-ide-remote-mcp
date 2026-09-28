@@ -25,6 +25,7 @@ type
     CreateFile_: Boolean; // CREATE: new file (never overwrites)
     Content: string;      // CREATE: initial content (may be empty)
     Eol: string;          // CREATE: 'lf' = LF; anything else = CRLF (default)
+    Ensayo: Boolean;      // todo menos escribir (el preview de un changeset)
   end;
 
 function ExecuteTextEdit(const A: TTextEditArgs): string;
@@ -54,11 +55,9 @@ uses
   Lsp.Texts,
   Lsp.Patch;
 
-const
-  // These belong to other tools: Delphi sources/designers to delphi_edit,
-  // project files to the IDE / delphi_create.
-  DELPHI_EXTS: array [0 .. 7] of string = ('.pas', '.dpr', '.dpk', '.inc',
-    '.dfm', '.fmx', '.dproj', '.groupproj');
+// Las extensiones de otras tools (fuentes y designers de delphi_edit, los de
+// proyecto del IDE / delphi_create) son las listas del motor: SOURCE_EXTS,
+// DESIGNER_EXTS y PROJECT_EXTS de Lsp.Patch (aqui habia una copia; decima)
 
 function IsAscii(const S: string): Boolean;
 var
@@ -83,13 +82,12 @@ end;
 
 function ExtGate(const APath: string): string;
 var
-  Ext, E: string;
+  Ext: string;
 begin
   Result := '';
   Ext := LowerCase(TPath.GetExtension(APath));
-  for E in DELPHI_EXTS do
-    if E = Ext then
-      Exit(MsgFmt(SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT, [Ext]));
+  if MatchText(Ext, SOURCE_EXTS) or MatchText(Ext, DESIGNER_EXTS) or MatchText(Ext, PROJECT_EXTS) then
+    Exit(MsgFmt(SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT, [Ext]));
 end;
 
 function DoCreate(const A: TTextEditArgs): string;
@@ -173,7 +171,7 @@ begin
   // El gemelo de la negativa de delphi_edit, y por eso comparten el texto:
   // decian cosas distintas de la misma regla, y la de aqui ni siquiera
   // mencionaba que en "edits" el ancla SI puede ser un bloque.
-  if A.OldLine.Contains(#10) or A.OldLine.Contains(#13) then
+  if TieneSalto(A.OldLine) then
     Exit(MsgText(SR_PATCH_ANCHOR_MULTILINE));
 
   Text := PatchLoadText(A.Path, EncNm);
@@ -276,11 +274,13 @@ begin
     Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [Target + 1, TPath.GetFileName(A.Path)]));
 
   try
-    PatchSaveText(A.Path, Text, EncNm); // backup + atomic + same encoding
+    PatchSaveText(A.Path, Text, EncNm, A.Ensayo); // backup + atomic + same encoding (o el ensayo)
   except
     on E: Exception do
       Exit(MsgEnvuelve(SR_TEXT_AL_CODIFICAR_FMT, E.Message));
   end;
+  if A.Ensayo then
+    Exit(''); // nada escrito: nada que ensenar
 
   if Cuantas > 1 then
     Exit(MsgFmt(SK_TEXT_RANGO_VERIFICACION_FMT,
@@ -292,6 +292,12 @@ begin
     Exit(MsgFmt(SK_TEXT_OK_BORRADA_LINEA_FMT,
       [Target + 1, TPath.GetFileName(A.Path), EncNm, TrashFolderName,
        EcoNumerado(A.Path, Target, Target + 2)]));
+  // old sin new deja la linea en blanco: se dice, como delphi_edit (EDIT-089);
+  // contestaba "OK line N" (decima revision)
+  if (Length(NewLines) = 1) and (NewLines[0] = '') then
+    Exit(MsgFmt(SK_TEXT_BLANQUEADA_LINEA_FMT,
+      [Target + 1, TPath.GetFileName(A.Path), EncNm, TrashFolderName,
+       EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]));
   Result := MsgFmt(SK_TEXT_OK_LINEA_FMT,
     [Target + 1, TPath.GetFileName(A.Path), EncNm, TrashFolderName,
      EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]);

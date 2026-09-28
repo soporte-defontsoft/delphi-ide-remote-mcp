@@ -215,6 +215,24 @@ var
   N: Integer;
 begin
   Cmd := Params.Command.Trim.ToLower;
+  // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa): aqui se
+  // ignoraba en silencio (decima revision). device va con todos
+  var Suyos: string;
+  var Sobra := ParametroQueNoVa(IfThen(Cmd = '', 'devices', Cmd), [
+      'discover', '', 'devices', '',
+      'logcat', 'filter lines out',
+      'connect', 'address', 'disconnect', 'address',
+      'install', 'apk', 'run', 'app',
+      'screenshot', 'out inline maxwidth',
+      'tap', 'x y frame', 'key', 'key'],
+    ['address', Params.Address, '', 'apk', Params.Apk, '', 'app', Params.App, '',
+     'out', Params.Out, '', 'x', Params.X, '', 'y', Params.Y, '', 'key', Params.Key, '',
+     'filter', Params.Filter, '', 'lines', Params.Lines, '', 'inline', Params.Inline_, '',
+     'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
+     'frame', Params.Frame, ''], Suyos);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_ADB_NO_VA_CON_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'devices', Cmd),
+      IfThen(Cmd = '', 'devices', Cmd), Suyos]));
   Adb := FindAdb;
   if Adb = '' then
     Exit(MsgText(SR_ADB_NO_SDK));

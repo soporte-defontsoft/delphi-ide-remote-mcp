@@ -473,9 +473,9 @@ begin
         Allowed := True;
         ReadOnly := FAnonymousReadOnly;
       end
-      else if (FAuthToken <> '') and (Auth = 'Bearer ' + FAuthToken) then
+      else if (FAuthToken <> '') and (BearerToken(Auth) = FAuthToken) then
         Allowed := True // full read-write
-      else if (FReadOnlyToken <> '') and (Auth = 'Bearer ' + FReadOnlyToken) then
+      else if (FReadOnlyToken <> '') and (BearerToken(Auth) = FReadOnlyToken) then
       begin
         Allowed := True;
         ReadOnly := True;

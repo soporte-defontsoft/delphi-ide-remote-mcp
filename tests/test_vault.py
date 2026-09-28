@@ -363,6 +363,19 @@ out = s.call('vault_patch', {"path": "projects/delphi/log.md",
                              "old_text": "\n", "new_text": "x"})
 check('patch: old_text duplicado se rechaza', mc.es(out, 'SR_VAULT_OLD_TEXT_APARECE_VARIAS'), out[:150])
 
+# decima revision: una nota CRLF con un old y un new de VARIAS lineas: el old
+# llega con LF (asi lo manda un agente) y casaba solo de una linea; el new de
+# varias lineas metia LF en la nota (Pos directo + VaultSave tal cual)
+CRLFN = os.path.join(VAULT, 'conventions', 'crlf.md')
+out = s.call('vault_patch', {"path": "conventions/crlf.md",
+                             "old_text": "- Acentos: gestoria, accion, compilacion\n- Guion largo: memoria \u2014 indice",
+                             "new_text": "- Acentos: gestoria, accion, compilacion\n- Linea nueva\n- Guion largo: memoria \u2014 indice"})
+_b = open(CRLFN, 'rb').read()
+check('patch CRLF: un old de dos lineas (con LF) casa en una nota CRLF',
+      mc.abre(out, 'SN_VAULT_MODIFICADA_SUSTITUCION_COPIA_PREVIA_FMT'), out[:200])
+check('patch CRLF: el new de varias lineas sale en CRLF, sin LF sueltos',
+      b'- Linea nueva\r\n' in _b and _b.count(b'\n') == _b.count(b'\r\n'), _b)
+
 # R9: a patch that empties the note is a DELETE, and there is no delete here
 VACIA = os.path.join(VAULT, 'conventions', 'vaciable.md')
 w('conventions/vaciable.md', '# Unica\n')

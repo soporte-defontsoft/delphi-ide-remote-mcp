@@ -133,7 +133,10 @@ check('C6 ...y el comprobador sabe fallar', e6 == ['SR_X'], e6)
 ES = re.compile(r"\b(el|los|las|del|que|una|unas|por|para|con|esta|este|pero|como|donde|hay|puede|"
                 r"fichero|carpeta|pude|enviad[oa]|devolvio|simbolos|abierta|sesion|nada|todo|cuando|"
                 r"tambien|aqui|antes|despues|linea|lineas|falta|debe|necesita)\b", re.I)
-es_ = ['%s: %s' % (n, m.group(0)) for n, t in C.items() for m in ES.finditer(t)]
+# una sigla en MAYUSCULAS no es prosa castellana: CON es el dispositivo de Windows
+# que nombra GUARD-027, no la preposicion (decima revision)
+es_ = ['%s: %s' % (n, m.group(0)) for n, t in C.items() for m in ES.finditer(t)
+       if not m.group(0).isupper()]
 check('C7 el catalogo esta en ingles', not es_, es_[:10])
 import glob
 FUENTES = [f for f in glob.glob(os.path.join(mc.REPO, 'src', 'Server', '*.pas')) +

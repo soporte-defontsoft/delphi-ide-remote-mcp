@@ -499,6 +499,13 @@ function ParametroQueNoVa(const AModo: string; const ATabla, AEnviados: array of
   (sexta revision). }
 function SoloLecturaDenegado(const APath: string): string;
 
+{ "Puedo SUSTITUIR este fichero?": la puerta de escritura sobre la ruta real
+  y el atributo de solo lectura, en ese orden - lo que pregunta el escritor
+  (AtomicWrite) y lo que tiene que preguntar quien COPIA antes de que el
+  escritor se niegue (BackupFile): SYS-029 decia "nothing was written" con
+  la copia diaria ya hecha (decima revision). '' = se puede. }
+function SustitucionDenegada(const APath: string): string;
+
 { Quita el atributo de solo lectura a un FICHERO; una carpeta o un enlace
   no se tocan (lo de detras no es de la operacion). Nunca lanza. Estaba a
   mano en BorraDeVerdad y hacia falta en cada deshacer (decima revision). }
@@ -510,6 +517,13 @@ procedure QuitaSoloLectura(const APath: string);
   +R en la papelera, la copia=true que se quedaba). Lanza como
   TFile.Delete; quien llama ya paso la puerta de escritura. }
 procedure BorraLoNuestro(const APath: string);
+
+{ Copia un fichero PARA el agente (copy=true de una unit, de su designer o
+  de una carpeta): la copia es suya y no hereda el atributo de solo lectura
+  del original - heredado, la reescritura de la cabecera caia en SYS-029 y
+  la copia salia +R (decima revision). Las copias de la papelera NO pasan
+  por aqui: conservan el atributo. Lanza como TFile.Copy. }
+procedure CopiaNuestra(const AOrigen, ADestino: string);
 
 { Pega una NOTA a una respuesta sin romperla: si es un objeto JSON, va
   dentro como un campo mas (AClave); si es prosa, detras (ASeparador + la
@@ -938,6 +952,7 @@ uses
   System.SyncObjs,
   System.Generics.Collections,
   System.Rtti,
+  MCPServer.Types,      // BearerToken: UN lector de la cabecera Authorization
   MCPServer.Serializer, // NormalizeKey: ONE rule for argument names
   MCPServer.Tool.Base,     // IMCPToolParams: la clase de parametros de una tool
   MCPServer.Registration,  // el registro REAL de tools, no una lista nuestra
@@ -1348,14 +1363,16 @@ begin
     // fail closed: a workspace without a valid jail admits nobody
     if GWorkspaces[I].Invalid or (Length(GWorkspaces[I].Roots) = 0) then
       Continue;
+    // el esquema sin distinguir mayusculas y el token si (BearerToken):
+    // "bearer <token>" daba 401 (decima revision)
     if (GWorkspaces[I].Token <> '') and
-       (AAuth = 'Bearer ' + GWorkspaces[I].Token) then
+       (BearerToken(AAuth) = GWorkspaces[I].Token) then
     begin
       AWorkspaceIx := I;
       Exit(True);
     end;
     if (GWorkspaces[I].ReadOnlyToken <> '') and
-       (AAuth = 'Bearer ' + GWorkspaces[I].ReadOnlyToken) then
+       (BearerToken(AAuth) = GWorkspaces[I].ReadOnlyToken) then
     begin
       AWorkspaceIx := I;
       AReadOnly := True;
@@ -3193,6 +3210,13 @@ begin
     Result := MsgFmt(SR_SOLO_LECTURA_ATRIBUTO_FMT, [TPath.GetFileName(APath)]);
 end;
 
+function SustitucionDenegada(const APath: string): string;
+begin
+  Result := EscrituraDenegada(APath);
+  if Result = '' then
+    Result := SoloLecturaDenegado(APath);
+end;
+
 procedure QuitaSoloLectura(const APath: string);
 var
   A: Cardinal;
@@ -3208,6 +3232,12 @@ procedure BorraLoNuestro(const APath: string);
 begin
   QuitaSoloLectura(APath);
   TFile.Delete(APath);
+end;
+
+procedure CopiaNuestra(const AOrigen, ADestino: string);
+begin
+  TFile.Copy(AOrigen, ADestino);
+  QuitaSoloLectura(ADestino);
 end;
 
 function EsRutaAbsoluta(const AValue: string): Boolean;
@@ -3842,6 +3872,17 @@ begin
     // there. Rejecting them here refused legitimate parent-directory paths.
     if (Name = '.') or (Name = '..') then
       Continue;
+    // un nombre que Windows reserva para un dispositivo (CON, PRN, AUX, NUL,
+    // COM1-9, LPT1-9), con o sin extension: en este Windows 11 se crea como un
+    // fichero normal que un Explorer de Windows 10 no abre ni borra; en otros
+    // es el dispositivo mismo (decima revision, medido con CON.txt)
+    var Base := Name;
+    if Base.IndexOf('.') > 0 then
+      Base := Base.Substring(0, Base.IndexOf('.'));
+    if MatchText(Base.TrimRight, ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4',
+         'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6',
+         'LPT7', 'LPT8', 'LPT9']) then
+      Exit(MsgFmt(SR_GUARD_NOMBRE_RESERVADO_FMT, [Name, APath]));
     // mas de 255 no es un nombre de Windows: SYS-009 INTERNAL al escribir
     // (octava revision)
     if Length(Name) > 255 then
@@ -4278,6 +4319,17 @@ begin
     IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(ADestino))));
 end;
 
+{ LA regla de seguir un enlace al COPIAR, para el copiador (CopiaArbol) y
+  para quien mira antes lo que se va a copiar (CopiaDenegada): legible, y que
+  no lleve al DESTINO - una junction a un antepasado del destino copiaba la
+  copia dentro de si misma, con una ruta real nueva en cada vuelta, hasta
+  agotar la ruta (decima revision). }
+function SeSigueAlCopiar(const P, ADestino: string): Boolean;
+begin
+  // el enlace RESUELTO (RealPath: lo que hay detras), no su propio nombre
+  Result := EnlaceLegible(P) and not DentroDeSiMismo(P, ADestino);
+end;
+
 procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
   out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean);
 var
@@ -4286,7 +4338,7 @@ var
 
   function SeSigue(const P: string): Boolean;
   begin
-    Result := ASigueEnlaces and EnlaceLegible(P);
+    Result := ASigueEnlaces and SeSigueAlCopiar(P, ADestino);
     if not Result then
       NoSeg.Add(P);
   end;
@@ -4302,7 +4354,12 @@ var
     CrearCarpeta(D);
     for E in TDirectory.GetFiles(O) do
       if not EsEnlace(E) or SeSigue(E) then
-        TFile.Copy(E, TPath.Combine(D, TPath.GetFileName(E)), False);
+        // la copia CON papelera es la de seguridad de un move (conserva los
+        // atributos); la otra es la del agente (copy=true): sin el +R heredado
+        if AConPapelera then
+          TFile.Copy(E, TPath.Combine(D, TPath.GetFileName(E)), False)
+        else
+          CopiaNuestra(E, TPath.Combine(D, TPath.GetFileName(E)));
     for E in TDirectory.GetDirectories(O) do
     begin
       Nombre := TPath.GetFileName(E);
@@ -4356,14 +4413,14 @@ var
       Exit;
     Vistos.Add(LowerCase(RealPath(O)));
     for E in TDirectory.GetFiles(O) do
-      if EsProyecto(E) and (not EsEnlace(E) or EnlaceLegible(E)) then
+      if EsProyecto(E) and (not EsEnlace(E) or SeSigueAlCopiar(E, ADestino)) then
       begin
         Hallado := E;
         Exit;
       end;
     for E in TDirectory.GetDirectories(O) do
       if not SameText(TPath.GetFileName(E), TrashFolderName) and
-         (not EsEnlace(E) or EnlaceLegible(E)) then
+         (not EsEnlace(E) or SeSigueAlCopiar(E, ADestino)) then
         Busca(E);
   end;
 

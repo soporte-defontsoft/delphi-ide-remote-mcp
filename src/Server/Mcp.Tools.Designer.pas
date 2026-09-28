@@ -941,6 +941,22 @@ begin
     Cmd := 'to-text'
   else if Cmd = 'tobinary' then
     Cmd := 'to-binary';
+  // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa): aqui se
+  // ignoraba en silencio (decima revision)
+  var Modo := IfThen(Cmd = 'binding', 'check-binding', Cmd);
+  var Suyos: string;
+  var Sobra := ParametroQueNoVa(Modo, [
+      'info', 'class framework filter',
+      'prop', 'class framework prop',
+      'tree', 'path', 'lint', 'path', 'layout', 'path',
+      'get', 'path component',
+      'check-binding', 'path unit',
+      'to-text', 'path', 'to-binary', 'path'],
+    ['path', Params.Path, '', 'class', Params.ClassName_, '', 'prop', Params.Prop, '',
+     'component', Params.Component, '', 'unit', Params.Unit_, '',
+     'framework', Params.Framework, '', 'filter', Params.Filter, ''], Suyos);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_DESIGNER_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos]));
   if MatchText(Cmd, ['info', 'prop']) then
   begin
     Fw := ResolveFramework(Params.Framework, Params.Path);

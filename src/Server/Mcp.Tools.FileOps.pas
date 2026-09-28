@@ -487,7 +487,7 @@ begin
     var RutasFoto: TArray<string> := [];
     for P in Projects do
       RutasFoto := RutasFoto + [P, ChangeFileExt(P, '.dproj')];
-    for Ext in ['.dfm', '.fmx'] do
+    for Ext in DESIGNER_EXTS do
       RutasFoto := RutasFoto + [ChangeFileExt(Params.Path, Ext)];
     FotoUnit.Toma(RutasFoto);
     HayFotoUnit := True;
@@ -516,7 +516,7 @@ begin
         string.Join(', ', Projects)]) + ProjNote
     else
       ProjNote := MsgText(SN_FILE_PROJECTS_NONE);
-    for Ext in ['.dfm', '.fmx'] do
+    for Ext in DESIGNER_EXTS do
       if TFile.Exists(ChangeFileExt(Params.Path, Ext)) then
       try
         var AncestroForm: string;
@@ -816,13 +816,13 @@ begin
       Exit(MsgFmt(SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT, [TPath.GetFileName(Params.Dest)]));
     if not TRegEx.IsMatch(NewStem, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
       Exit(MsgFmt(SR_FILE_IDENTIFICADOR_UNIT_FMT, [NewStem]));
-    for Ext in ['.dfm', '.fmx'] do
+    for Ext in DESIGNER_EXTS do
       if TFile.Exists(ChangeFileExt(Params.Dest, Ext)) then
         Exit(MsgFmt(SR_FILE_YA_EXISTE_NO_SOBREESCRIBO_FMT, [ChangeFileExt(Params.Dest, Ext)]));
     // renombrarla es reescribir su cabecera (unit X;): con el atributo +R no
     // se puede, y se movia igual - MOVED con "unit UOld;" en UNew.pas y el
     // proyecto roto. Se dice ANTES de mover (novena revision)
-    if not SameText(OldStem, NewStem) and (SoloLecturaDenegado(Params.Path) <> '') then
+    if not Params.Copy and not SameText(OldStem, NewStem) and (SoloLecturaDenegado(Params.Path) <> '') then
       Exit(SoloLecturaDenegado(Params.Path));
     if not Params.Copy then
       Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
@@ -902,7 +902,7 @@ begin
         end;
       end
       else
-        TFile.Copy(Params.Path, Params.Dest);
+        CopiaNuestra(Params.Path, Params.Dest); // la copia es del agente: sin el +R del original
     end
     else if TDirectory.Exists(Params.Path) then
       MueveArbol(Params.Path, Params.Dest) // renombrar o nada
@@ -950,19 +950,20 @@ begin
   // los designers ya movidos (de, a): si falla el siguiente vuelven (con
   // .dfm y .fmx, el .dfm se quedaba en el destino; novena revision)
   var DisenosDe, DisenosA: TArray<string>;
-  for Ext in ['.dfm', '.fmx'] do
+  for Ext in DESIGNER_EXTS do
   begin
     var Gemelo := DesignerJunto(Params.Path, OldStem, Ext, DesdePapelera);
     if Gemelo = '' then
       Continue;
     try
       if Params.Copy then
-        TFile.Copy(Gemelo, ChangeFileExt(Params.Dest, Ext))
+        CopiaNuestra(Gemelo, ChangeFileExt(Params.Dest, Ext))
       else
         TFile.Move(Gemelo, ChangeFileExt(Params.Dest, Ext));
       DisenosDe := DisenosDe + [Gemelo];
       DisenosA := DisenosA + [ChangeFileExt(Params.Dest, Ext)];
-      PairNote := MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
+      // una nota por designer: con .dfm Y .fmx solo se nombraba el ultimo (decima)
+      PairNote := PairNote + IfThen(PairNote <> '', #10) + MsgFmt(SN_FILE_DESIGNER_TOO_FMT,
         [TPath.GetFileName(ChangeFileExt(Params.Dest, Ext)),
          IfThen(Params.Copy, MsgText(SF_MOVE_COPIADO_CON_UNIT), MsgText(SF_MOVE_MOVIDO_CON_UNIT))]);
     except

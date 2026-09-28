@@ -1467,6 +1467,12 @@ const
     'Platform of the profile, one that paclient takes (Linux64, OSX64, ' +
     'Win64...; a wrong one is refused with the list). Default: Linux64';
 
+  { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima).
+    Solo se nombra el parametro, nunca su valor (password). }
+  SR_PASERVER_NO_VA_CON_COMANDO_FMT =
+    '[PAS-051 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.';
+
   SR_PASERVER_CMD =
     '[PAS-001 INVALID_PARAM] Command must be platforms | packages | ' +
     'profiles | reseat | add-profile | remove-profile | test-connection ' +
@@ -2228,6 +2234,11 @@ const
     'the default). Inline answers carry at most the newest 400 - for a ' +
     'bigger dump pass out=<file.txt> and read it in ranges. Optional';
 
+  { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
+  SR_ADB_NO_VA_CON_COMANDO_FMT =
+    '[ADB-028 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.';
+
   SR_ADB_CMD =
     '[ADB-001 INVALID_PARAM] Command must be discover | devices | ' +
     'connect | disconnect | install | run | logcat | screenshot | tap | ' +
@@ -2651,6 +2662,13 @@ const
     '[CFG-040 DENIED] I cannot find the units clause (uses / contains) ' +
     'of %s.';
 
+  { Un proyecto del camino que no se puede LEER mientras se busca si lista
+    una unit (move / delete): salia el SYS-028 pelado y parecia un intento
+    de escribirlo (decima revision). El resultado es el de la causa. }
+  SR_PROYECTO_NO_LEIDO_AL_BUSCAR_FMT =
+    '[CFG-111 DENIED] %s could not be read while checking whether it lists ' +
+    'the unit %s - nothing was touched. %s';
+
   SN_UNIT_ADDED_FMT =
     '[CFG-041] ADDED unit %s (%s) to project %s: %s clause of %s + ' +
     'DCCReference in the .dproj. Backups in __delphi-patch.';
@@ -3017,7 +3035,7 @@ const
 
   SN_STYLES_DELETED_FMT =
     '[STYLE-015] DELETED style ''%s'' (lines %d-%d of %s; %d styles left). ' +
-    'The copy in __delphi-patch\<day>\ (delphi_list includetrash shows ' +
+    'The copy in __delphi-patch\<day>\ (delphi_list includetrash=true pattern=*.style shows ' +
     'it) is the file as it was before its FIRST change today: putting ' +
     'it back (delphi_delete the file, then delphi_move that copy to its ' +
     'name) also undoes the other changes of the day. To undo only this ' +
@@ -3586,6 +3604,11 @@ const
     'touched the code after that date, these numbers are from another ' +
     'program.';
 
+  { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
+  SR_TEST_NO_VA_CON_COMANDO_FMT =
+    '[TEST-025 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.';
+
   SR_TEST_CMD =
     '[TEST-014 INVALID_PARAM] Command must be discover | run';
 
@@ -3696,6 +3719,11 @@ const
 
   SP_DESIGNER_FILTER =
     'info optional: only properties whose name contains this text';
+
+  { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
+  SR_DESIGNER_NO_VA_CON_COMANDO_FMT =
+    '[DSGN-047 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
+    'be ignored). Nothing was done: %s takes %s.';
 
   SR_DESIGNER_CMD =
     '[DSGN-001 INVALID_PARAM] Command must be info | prop | tree | get | ' +
@@ -4686,8 +4714,10 @@ const
     'MULTI-FILE TRANSACTIONS: when one change touches several files, either ' +
     'the whole batch lands or none of it. Flow: command=begin (returns an ' +
     'id) -> stage one operation per call (kind=edit|create|delete|move; ' +
-    'nothing touches disk yet) -> preview (resolves every edit anchor and ' +
-    'fingerprints every file the batch will touch) -> commit (fingerprints ' +
+    'nothing touches disk yet) -> preview (resolves every edit anchor, ' +
+    'rehearses each edit and create with the engine - encoding, read-only ' +
+    'attribute, binary content, the write gate - and fingerprints every ' +
+    'file the batch will touch) -> commit (fingerprints ' +
     're-checked - a file changed since preview refuses the WHOLE batch -, ' +
     'byte snapshots taken, operations applied in order; any failure restores ' +
     'every file byte-exact and reports which operation failed). rollback ' +
@@ -4704,7 +4734,7 @@ const
 
   SP_CHANGESET_COMMAND =
     'begin (new changeset -> id) | stage (add ONE operation) | unstage (take ' +
-    'operation "n" back out; n=0 = the last one) | preview (resolve anchors + ' +
+    'operation "n" back out; n=0 = the last one) | preview (resolve anchors, rehearse each edit and create with the engine, ' +
     'fingerprint files; required before commit) | commit (apply all or ' +
     'nothing) | rollback (discard) | status (list open ones)';
 
@@ -5078,6 +5108,12 @@ const
     'Did you mean ""?' (octava revision). }
   SF_GUARD_QUIZAS_FMT =
     ' Did you mean "%s"?';
+
+  { Un nombre reservado de Windows en la ruta (decima revision). }
+  SR_GUARD_NOMBRE_RESERVADO_FMT =
+    '[GUARD-027 INVALID_PARAM] "%s" is a name Windows reserves for a device ' +
+    '(CON, PRN, AUX, NUL, COM1-9, LPT1-9), with or without an extension: ' +
+    'in %s. Choose another name.';
 
   // Mensajes que estaban en linea en Lsp.Patch.pas (paso 3c, 27-sep-2026)
   SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT =
@@ -5863,7 +5899,9 @@ const
     'The copy was taken on %s (%s ago): it is the FIRST copy of this ' +
     'file that day, and it does not know who has edited the file since. ' +
     'If another agent touched it after that time, restoring takes away ' +
-    'THEIR work TOO; to undo precisely use delphi_git (diff, stash).'#10 +
+    'THEIR work TOO; to undo precisely use delphi_git (diff, stash). ' +
+    'After a rename (delphi_move) the copy is the one the rename took; ' +
+    'earlier copies live under the old name.'#10 +
     'These %d lines of the CURRENT file are not in the copy and WILL BE ' +
     'LOST:'#10 +
     '%s'#10 +
@@ -6145,6 +6183,14 @@ const
 
   SK_TEXT_OK_LINEA_FMT =
     '[TEXT-013] OK line %d of %s  encoding=%s  (backup in %s\)'#10 +
+    'Verification (re-read from disk):'#10 +
+    '%s';
+
+  { old sin new: la linea queda en blanco y se DICE, como delphi_edit
+    (EDIT-089); contestaba "OK line" (decima revision). }
+  SK_TEXT_BLANQUEADA_LINEA_FMT =
+    '[TEXT-016] BLANKED line %d of %s (it still exists, empty; to remove ' +
+    'it completely use delete:true)  encoding=%s  (backup in %s\)'#10 +
     'Verification (re-read from disk):'#10 +
     '%s';
 
@@ -7380,6 +7426,14 @@ const
     '[EDIT-103] INSERT rutina-global: placed BEFORE line %d (|%s|), the ' +
     'legal boundary chosen by the tool.'#10 +
     '%s%s';
+
+  { Ya habia una rutina con ese nombre: se AVISA, no se niega (dcc dira si es
+    la misma; "metodo" si la niega porque escribe las dos mitades). Se
+    insertaba a ciegas (decima revision). }
+  SN_EDIT_RUTINA_YA_EXISTE_FMT =
+    '  [EDIT-116] WARNING: a routine named %s already exists at line %d (a ' +
+    'global routine, or a method declaration with that name). If it is the ' +
+    'same global routine, dcc will report the duplicate: check before building.';
 
   SF_EDIT_CLASE_YA_DECLARABA_FMT =
     'the class ALREADY declared ''%s'' (line %d) and NO second declaration ' +

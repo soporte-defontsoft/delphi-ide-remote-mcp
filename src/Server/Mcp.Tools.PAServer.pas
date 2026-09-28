@@ -1742,6 +1742,29 @@ var
   Cmd: string;
 begin
   Cmd := Params.Command.Trim.ToLower;
+  // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa), como en
+  // config, create, edit, textedit, styles, git y changeset; aqui se ignoraba
+  // en silencio (decima revision). Solo se nombra el PARAMETRO, nunca su valor
+  var Suyos: string;
+  var Sobra := ParametroQueNoVa(IfThen(Cmd = '', 'platforms', Cmd), [
+      'platforms', '', 'packages', '', 'profiles', '', 'reseat', '',
+      'add-profile', 'name host port password platform',
+      'remove-profile', 'name',
+      'test-connection', 'name host port',
+      'remote-run', 'name project job exe args timeoutms',
+      'kill', 'name project job',
+      'output', 'name project job',
+      'get-sdk', 'name sdk active',
+      'reseat-sdk', 'name sdk',
+      'remove-sdk', 'name sdk'],
+    ['name', Params.Name, '', 'host', Params.Host, '', 'port', Params.Port, '',
+     'password', Params.Password, '', 'platform', Params.Platform, '',
+     'project', Params.Project, '', 'exe', Params.Exe, '', 'args', Params.Args, '',
+     'job', Params.Job, '', 'sdk', Params.Sdk, '', 'active', Params.Active, '',
+     'timeoutms', IfThen(Params.TimeoutMs <> 0, IntToStr(Params.TimeoutMs)), ''], Suyos);
+  if Sobra <> '' then
+    Exit(MsgFmt(SR_PASERVER_NO_VA_CON_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'platforms', Cmd),
+      IfThen(Cmd = '', 'platforms', Cmd), Suyos]));
   if (Cmd = '') or (Cmd = 'platforms') then
     Result := ListPlatforms
   else if Cmd = 'packages' then

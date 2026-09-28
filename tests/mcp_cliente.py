@@ -132,6 +132,61 @@ def borra(ruta):
     shutil.rmtree(ruta, onexc=quita_ro)
 
 
+import contextlib
+
+
+@contextlib.contextmanager
+def solo_lectura(ruta):
+    """Pone el atributo +R a un fichero mientras dura el bloque y lo quita al
+    salir, aunque el fichero ya no este: el finally con os.chmod() reventaba la
+    bateria (FileNotFoundError) justo cuando volvia el fallo que vigilaba
+    (E134 contra la octava; decima revision). Un fichero que la operacion
+    movio o copio se destapa por su ruta nueva con el segundo argumento de
+    solo_lectura_quita, o borra() lo quita igual."""
+    os.chmod(ruta, stat.S_IREAD)
+    try:
+        yield ruta
+    finally:
+        solo_lectura_quita(ruta)
+
+
+def solo_lectura_quita(*rutas):
+    """Quita el +R de cada ruta que exista (nunca lanza)."""
+    for r in rutas:
+        try:
+            if os.path.exists(r):
+                os.chmod(r, stat.S_IREAD | stat.S_IWRITE)
+        except OSError:
+            pass
+
+
+_k32 = None
+
+
+@contextlib.contextmanager
+def bloqueado(ruta, lectura=False):
+    """Otro proceso "tiene" el fichero mientras dura el bloque: abierto con
+    CreateFileW sin compartir (lectura=False: ni leer) o compartiendo solo la
+    lectura (lectura=True: leer si, mover o escribir no). Estaba escrito 13
+    veces con los numeros a mano (0x80000000, 3, 0x80)."""
+    global _k32
+    if _k32 is None:
+        from ctypes import wintypes
+        _k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        _k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+                                     wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+        _k32.CreateFileW.restype = wintypes.HANDLE
+    GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL = 0x80000000, 1, 3, 0x80
+    h = _k32.CreateFileW(ruta, GENERIC_READ, FILE_SHARE_READ if lectura else 0, None,
+                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, None)
+    if h in (None, 0, -1, 0xFFFFFFFFFFFFFFFF):
+        raise OSError('no se pudo abrir sin compartir: %s' % ruta)
+    try:
+        yield h
+    finally:
+        _k32.CloseHandle(h)
+
+
 def carpeta(nombre):
     """<raiz temporal>\\<nombre>, vacia: lo que dejo una pasada anterior no
     puede sostener a esta. Si no se puede vaciar, lo dice (no sigue encima)."""

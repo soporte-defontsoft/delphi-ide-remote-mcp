@@ -271,7 +271,28 @@ begin
   end;
 end;
 
-function ApplyOne(const Op: TStagedOp; out AError: string): Boolean;
+{ Donde esta HOY en el disco el fichero que la operacion AIndice va a tocar en
+  APath: si un move anterior del lote lo trae de otro sitio, su origen (y el
+  origen del origen); '' si nada en el disco lo tiene todavia (lo estrena un
+  create del lote). El inverso de WillExist, para ENSAYAR contra el contenido
+  real - y su +R, que viaja con el (decima revision). }
+function RutaHoy(C: TChangeset; AIndice: Integer; const APath: string): string;
+var
+  J: Integer;
+begin
+  Result := APath;
+  for J := AIndice - 1 downto 0 do
+  begin
+    if (C.Ops[J].Kind = opMove) and SameText(C.Ops[J].Dest, Result) then
+      Result := C.Ops[J].Path
+    else if (C.Ops[J].Kind = opCreate) and SameText(C.Ops[J].Path, Result) then
+      Exit('');
+  end;
+  if not TFile.Exists(Result) then
+    Result := '';
+end;
+
+function ApplyOne(const Op: TStagedOp; out AError: string; AEnsayo: Boolean = False): Boolean;
 var
   A: TPatchArgs;
   T: TTextEditArgs;
@@ -288,6 +309,9 @@ begin
     AError := EscrituraDenegada(Op.Dest);
   if AError <> '' then
     Exit;
+  // ENSAYO (el preview): solo edit y create tienen un motor que ensayar
+  if AEnsayo and not (Op.Kind in [opEdit, opCreate]) then
+    Exit(True);
   case Op.Kind of
     opEdit:
       begin
@@ -304,6 +328,7 @@ begin
           A.HasOld := True;
           A.HasNew := True;
           A.AtLine := Op.AtLine;
+          A.Ensayo := AEnsayo;
           R := ExecutePatch(A);
         end
         else
@@ -315,6 +340,7 @@ begin
           T.HasOld := True;
           T.HasNew := True;
           T.AtLine := Op.AtLine;
+          T.Ensayo := AEnsayo;
           R := ExecuteTextEdit(T);
         end;
         Result := not EsFallo(R);
@@ -323,16 +349,33 @@ begin
       end;
     opCreate:
       begin
+        if EsDelMotorPascal(Op.Path) then
+          Enc := NewFileEncName
+        else
+          Enc := 'utf8';
+        // el ENSAYO codifica el contenido y pregunta la puerta sin escribir ni
+        // crear carpetas (decima revision). Si el fichero existe lo decide el
+        // PLAN (PlanConflict): en el disco puede seguir hasta que corra el
+        // delete anterior del mismo lote
+        if AEnsayo then
+        begin
+          try
+            PatchSaveText(Op.Path, Op.Content, Enc, True);
+          except
+            on E: Exception do
+            begin
+              AError := E.Message;
+              Exit;
+            end;
+          end;
+          Exit(True);
+        end;
         if TFile.Exists(Op.Path) then
         begin
           AError := MsgFmt(SF_CHSET_YA_EXISTE_FMT, [Op.Path]);
           Exit;
         end;
         CrearCarpeta(TPath.GetDirectoryName(Op.Path));
-        if EsDelMotorPascal(Op.Path) then
-          Enc := NewFileEncName
-        else
-          Enc := 'utf8';
         PatchSaveText(Op.Path, Op.Content, Enc);
         Result := True;
       end;
@@ -635,6 +678,11 @@ begin
           begin
             if (AOldLine = '') and (AFragment = '') then
               Exit(MsgText(SR_CHANGESET_EDIT_NEEDS));
+            // un old de VARIAS lineas se apilaba y el preview decia NOT FOUND
+            // aconsejando atline (decima revision): lo que el commit va a
+            // rechazar (EDIT-001), se rechaza ahora
+            if TieneSalto(AOldLine) then
+              Exit(MsgText(SR_CHANGESET_EDIT_NEEDS));
             Op.OldLine := AOldLine;
             Op.NewText := ANewText;
             Op.AtLine := AAtLine;
@@ -683,6 +731,8 @@ begin
             if not WillExist(C, Op.Path) then
               Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
             if AAtLine <= 0 then
+              Exit(MsgText(SR_CHANGESET_DELLINE_NEEDS));
+            if TieneSalto(AOldLine) then // old, si va, es UNA linea
               Exit(MsgText(SR_CHANGESET_DELLINE_NEEDS));
             Op.AtLine := AAtLine;
             Op.OldLine := AOldLine;
@@ -760,11 +810,19 @@ begin
           Obj.AddPair('path', Op.Path);
           if (Op.Kind in [opEdit, opDeleteLine]) and not TFile.Exists(Op.Path) then
           begin
-            // staged over a file an earlier op of this same batch creates:
-            // there is nothing to anchor against until commit runs
-            Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_PENDIENTE));
-            Obj.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_VIRTUAL));
-            Continue;
+            // un fichero que un move ANTERIOR del lote trae de otro sitio se
+            // ensaya contra el ORIGEN del move: el mismo contenido, y su +R
+            // viaja con el (el commit lo rechazaba con SYS-029 tras un preview
+            // limpio; decima revision). Uno que un create del lote estrena no
+            // tiene contra que ensayar hasta el commit
+            var Fuente := RutaHoy(C, I, Op.Path);
+            if Fuente = '' then
+            begin
+              Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_PENDIENTE));
+              Obj.AddPair('note', MsgText(SN_CHANGESET_PREVIEW_VIRTUAL));
+              Continue;
+            end;
+            Op.Path := Fuente; // la copia local; lo apilado no cambia
           end;
           // un fichero +R que la operacion escribe (delete, edit, delete-line):
           // el commit lo rechaza (SYS-029) y deshace la tanda; el preview decia
@@ -811,7 +869,17 @@ begin
             var CuantasAncla := ResuelveAncla(Text, Op.Path, Op.OldLine, Op.AtLine, LineaAncla);
             Obj.AddPair('atline', TJSONNumber.Create(LineaAncla));
             case CuantasAncla of
-              1: Obj.AddPair('anchor', 'ok');
+              1: // el ENSAYO del motor: todo lo que el commit va a comprobar
+                 // (codificacion, binario, la puerta, el +R) sin escribir; el
+                 // preview copiaba tres reglas del commit y le faltaban las
+                 // demas (decima revision)
+                 if ApplyOne(Op, Err, True) then
+                   Obj.AddPair('anchor', 'ok')
+                 else
+                 begin
+                   Obj.AddPair('anchor', Err);
+                   Inc(N);
+                 end;
               0: begin
                    Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_NO_ENCONTRADA));
                    Inc(N);
@@ -820,6 +888,12 @@ begin
               Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_AMBIGUA));
               Inc(N);
             end;
+          end;
+          // un create: la codificacion de su contenido y la puerta (decima)
+          if (Op.Kind = opCreate) and not ApplyOne(Op, Err, True) then
+          begin
+            Obj.AddPair('anchor', Err);
+            Inc(N);
           end;
         end;
         C.Fingerprints.Clear;

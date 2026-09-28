@@ -69,6 +69,10 @@ begin
 
         JsonType := GetJsonTypeFromRttiType(RttiProp.PropertyType);
         PropSchema.AddPair('type', JsonType);
+        // [local change 2026-09-28] el binder rechaza un entero negativo en
+        // TODOS los parametros (MotivoEntero): el esquema lo dice (decima)
+        if JsonType = 'integer' then
+          PropSchema.AddPair('minimum', TJSONNumber.Create(0));
 
         if JsonType = 'array' then
           PropSchema.AddPair('items', TJSONObject.Create);

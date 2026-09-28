@@ -40,6 +40,7 @@ type
     Eol: string;          // 'lf' = LF endings; anything else = CRLF (default)
     Restore: Boolean;
     Confirm: Boolean;
+    Ensayo: Boolean;      // todo menos escribir: el preview de un changeset pregunta al motor
   end;
 
 function ExecutePatch(const A: TPatchArgs): string;
@@ -210,10 +211,23 @@ function UneConSusSaltos(const ALineas, ASaltos: TArray<string>): string;
   y el create del changeset solo miraba CRLF y LF: "uno\rdos\r" salia
   "uno\rdos\r\r\n" (novena revision). }
 function ConSalto(const AText, ASalto: string): string;
+
+{ Si el texto lleva algun salto de linea (CR o LF): la pregunta "un ancla es
+  UNA linea" de DoEdit, DoEditLine, FragmentoALinea y el stage de un changeset
+  (decima revision: estaba escrita tres veces y al stage le faltaba). }
+function TieneSalto(const AText: string): Boolean;
 { Los ficheros que edita el motor de Pascal (delphi_edit): sus fuentes y
   sus designers; el resto, el de texto. Vivia en Lsp.Changeset con su
   propia lista; aqui sale de las del motor (novena revision). }
 function EsDelMotorPascal(const APath: string): Boolean;
+
+const
+  // LAS listas de extensiones del motor: quien pregunte por una extension
+  // Delphi las usa. Estaban copiadas en AvisosDeLlaves, FileOps (x4),
+  // ProjectUnits y TextEdit (decima revision)
+  SOURCE_EXTS: array [0 .. 3] of string = ('.pas', '.dpr', '.dpk', '.inc');
+  DESIGNER_EXTS: array [0 .. 1] of string = ('.dfm', '.fmx');
+  PROJECT_EXTS: array [0 .. 1] of string = ('.dproj', '.groupproj');
 { Donde cayo un cambio entre AAntes y ADespues, para mover los numeros de
   linea de lo que viene despues: ADesde es la primera linea (1-based) del
   texto de ANTES que queda POR DEBAJO de lo cambiado (prefijo y sufijo
@@ -269,7 +283,11 @@ function AplicaTanda(const APath, AEditsJson: string;
   decoded with the real encoding; save re-encodes with the SAME one, makes
   the pre-edit backup and writes atomically. AEncName as in delphi_read. }
 function PatchLoadText(const APath: string; out AEncName: string): string;
-procedure PatchSaveText(const APath, AText, AEncName: string);
+{ AEnsayo: todo lo que la escritura comprueba (la codificacion, la puerta y el
+  +R que pregunta el escritor) sin copiar ni escribir; lanza lo que lanzaria.
+  El preview de un changeset lo pide en vez de copiar las reglas del commit
+  (decima revision). }
+procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False);
 { PatchSaveText para quien EDITA un texto insertando bloques compuestos con
   sLineBreak (los escritores del .dproj): si el fichero en disco no tiene
   ningun CRLF, los CRLF del texto nuevo solo pueden ser los insertados, y
@@ -470,8 +488,7 @@ const
   RETENTION_DAYS = 15;
   MAX_EDITS = 50; // entradas de una tanda
   MAX_READ_LINES = 400;
-  SOURCE_EXTS: array [0 .. 3] of string = ('.pas', '.dpr', '.dpk', '.inc');
-  DESIGNER_EXTS: array [0 .. 1] of string = ('.dfm', '.fmx');
+  // SOURCE_EXTS / DESIGNER_EXTS / PROJECT_EXTS: en el interface
 
 var
   GLock: TCriticalSection;
@@ -852,11 +869,9 @@ begin
   // EL escritor pregunta el mismo (Lsp.Guard.EscrituraDenegada): quien lo
   // llama puede haberse olvidado, o escribir un fichero que no le pasaron
   // sino que saco de un .dpr (auditoria 25-sep-2026).
-  Motivo := EscrituraDenegada(APath);
   // ...y un fichero con el atributo de solo lectura no se sustituye: se
   // dice ANTES, que el rename lo tomaba por "otro proceso lo tiene"
-  if Motivo = '' then
-    Motivo := SoloLecturaDenegado(APath);
+  Motivo := SustitucionDenegada(APath);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
   // El temporal lleva un fragmento GUID: con nombre fijo, dos escrituras del
@@ -958,7 +973,9 @@ begin
   // La copia se escribe JUNTO al fichero: el fichero y su carpeta de copias
   // pasan la puerta, esta por la ruta REAL (un __delphi-patch que fuera un
   // junction llevaria la copia a donde apunte).
-  Motivo := EscrituraDenegada(APath);
+  // la MISMA pregunta que hara el escritor, con el +R incluido: si se va a
+  // negar, que se niegue antes de dejar la copia diaria (decima revision)
+  Motivo := SustitucionDenegada(APath);
   if Motivo = '' then
     Motivo := EscrituraDenegada(DayDir);
   if Motivo <> '' then
@@ -1059,6 +1076,11 @@ begin
   finally
     Sb.Free;
   end;
+end;
+
+function TieneSalto(const AText: string): Boolean;
+begin
+  Result := (Pos(#10, AText) > 0) or (Pos(#13, AText) > 0);
 end;
 
 function ConSalto(const AText, ASalto: string): string;
@@ -1353,14 +1375,23 @@ begin
   Result := DecodeBytes(B, K);
 end;
 
-procedure PatchSaveText(const APath, AText, AEncName: string);
+procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False);
 var
   K: TEncKind;
+  B: TBytes;
 begin
   K := EncKindOf(AEncName);
+  B := EncodeText(AText, K); // lanza ECaracterNoCabe: en el ensayo tambien
+  if AEnsayo then
+  begin
+    var Motivo := SustitucionDenegada(APath); // lo que preguntara el escritor
+    if Motivo <> '' then
+      raise Exception.Create(Motivo);
+    Exit;
+  end;
   if TFile.Exists(APath) then
     BackupFile(APath); // new files have nothing to back up
-  AtomicWrite(APath, EncodeText(AText, K));
+  AtomicWrite(APath, B);
 end;
 
 procedure PatchSaveConSuSalto(const APath, AText, AEncName: string);
@@ -1561,7 +1592,7 @@ end;
 function AvisosDeLlaves(const APath, ANuevo: string; ALineaBase: Integer): TArray<string>;
 begin
   Result := [];
-  if not MatchText(TPath.GetExtension(APath), ['.pas', '.dpr', '.dpk', '.inc', '.lpr']) then
+  if not MatchText(TPath.GetExtension(APath), SOURCE_EXTS) then // (.lpr no llegaba: ExecutePatch lo niega)
     Exit;
   for var L in LlavesAnidadas(ANuevo) do
     Result := Result + [MsgFmt(SN_AVISO_LLAVE_ANIDADA_FMT, [ALineaBase + L])];
@@ -1573,7 +1604,6 @@ var
   Enc, Text, Eol: string;
   Lines, OldLines, NewLines: TArray<string>;
   I, J, Hit, Count: Integer;
-  Sb: TStringBuilder;
 begin
   Text := PatchLoadText(APath, Enc);
   Eol := SaltoDominante(Text); // el de todos (era otra copia de "CRLF si hay alguno")
@@ -1633,28 +1663,21 @@ begin
   if Count > 1 then
     Exit(MsgFmt(SR_PATCH_BLOCK_AMBIGUOUS_FMT, [Count, OldLines[0].Trim]));
   NewLines := LineasDeNew(ANew);
-  Sb := TStringBuilder.Create;
-  try
-    for I := 0 to Hit - 1 do
-      Sb.Append(Lines[I]).Append(Eol);
-    if not ((Length(NewLines) = 1) and (NewLines[0] = '')) then
-      for I := 0 to High(NewLines) do
-        Sb.Append(NewLines[I]).Append(Eol);
-    for I := Hit + Length(OldLines) to High(Lines) do
-    begin
-      Sb.Append(Lines[I]);
-      if I < High(Lines) then
-        Sb.Append(Eol);
-    end;
-    // Nada cambia (el bloque ya dice eso): no se escribe ni se copia, y se
-    // dice, como la edicion de una linea. Reescribia el fichero identico y
-    // la tanda contestaba APPLIED (septima revision: la tercera puerta)
-    if Sb.ToString = Text then
-      Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [Hit + 1, TPath.GetFileName(APath)]));
-    PatchSaveText(APath, Sb.ToString, Enc);
-  finally
-    Sb.Free;
-  end;
+  // El empalme de DoEdit: las lineas nuevas sobre las del bloque y la union
+  // con la fantasma reproduce el salto final TAL CUAL. Montado a mano, un
+  // bloque que llegaba a la ultima linea de un fichero sin salto final se lo
+  // anadia (decima revision: un fichero de tres lineas sin salto final salia con uno)
+  var Nuevas := Copy(Lines, 0, Hit);
+  if not ((Length(NewLines) = 1) and (NewLines[0] = '')) then
+    Nuevas := Nuevas + NewLines;
+  Nuevas := Nuevas + Copy(Lines, Hit + Length(OldLines), MaxInt);
+  var Joined := string.Join(Eol, Nuevas);
+  // Nada cambia (el bloque ya dice eso): no se escribe ni se copia, y se
+  // dice, como la edicion de una linea. Reescribia el fichero identico y
+  // la tanda contestaba APPLIED (septima revision: la tercera puerta)
+  if Joined = Text then
+    Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [Hit + 1, TPath.GetFileName(APath)]));
+  PatchSaveText(APath, Joined, Enc);
   Result := MsgFmt(SN_PATCH_BLOCK_OK_FMT, [Length(OldLines), Hit + 1]);
   for var Aviso in AvisosDeLlaves(APath, string.Join(#10, NewLines), Hit) do
     Result := Result + #10 + Aviso;
@@ -1676,8 +1699,7 @@ begin
     Exit(MsgText(SR_FRAG_NEEDS_ATLINE));
   if (AFrag = '') or (Pos(#$FFFD, AFrag) > 0) then
     Exit(MsgText(SR_FRAG_EMPTY));
-  if AFrag.Contains(#10) or AFrag.Contains(#13) or
-     ANew.Contains(#10) or ANew.Contains(#13) then
+  if TieneSalto(AFrag) or TieneSalto(ANew) then
     Exit(MsgText(SR_FRAG_MULTILINE));
   // new == fragment ya no es un error (EDIT-009): la linea sale igual y el
   // motor lo dice como la edicion suelta, UNCHANGED (EDIT-113)
@@ -2246,7 +2268,7 @@ end;
 
 function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
   AIsDesigner: Boolean; ADelete: Boolean = False;
-  AToLine: Integer = 0): string; forward;
+  AToLine: Integer = 0; AEnsayo: Boolean = False): string; forward;
 
 function FindUniqueLine(const Lines: TArray<string>;
   const APred: TFunc<string, Boolean>; out AIdx: Integer): Boolean;
@@ -2301,6 +2323,12 @@ begin
         if E = Ext then IsDesigner := True;
       if not IsSource and not IsDesigner then
         Exit(MsgFmt(SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT, [Ext]));
+      // "esto no es texto" es LooksBinaryBytes, la regla de delphi_read y de
+      // delphi_textedit: este motor editaba un .pas con bytes NUL (decima).
+      // Solo un FUENTE: un designer binario (TPF0) tiene su negativa propia,
+      // que apunta a to-text
+      if IsSource and TFile.Exists(A.Path) and LooksBinaryBytes(TFile.ReadAllBytes(A.Path)) then
+        Exit(MsgFmt(SR_TEXT_PARECE_BINARIO_FMT, [TPath.GetFileName(A.Path)]));
 
       PLower := LongCanonical(A.Path).ToLower.Replace('/', '\');
       if EnPapelera(A.Path) then
@@ -2719,6 +2747,18 @@ begin
           // visible=true son DOS escrituras (el cuerpo y la declaracion): si la
           // segunda no se puede, la primera se deshace; salia exito con una
           // nota y la rutina privada (verificacion de la tercera ronda)
+          // una rutina con ese nombre que YA esta (global, o la declaracion de
+          // un metodo) se AVISA, no se niega: dcc dira si es la misma, y no
+          // somos la ninera (David, 23-sep). Se insertaba a ciegas (decima)
+          var YaEsta := '';
+          var RutinaRe := TRegEx.Create('^\s*(class\s+)?(procedure|function)\s+' +
+            TRegEx.Escape(MF.Groups[2].Value) + '\s*[(;:]', [roIgnoreCase]);
+          for I := 0 to High(Lines) do
+            if RutinaRe.IsMatch(Lines[I]) then
+            begin
+              YaEsta := #10 + MsgFmt(SN_EDIT_RUTINA_YA_EXISTE_FMT, [MF.Groups[2].Value, I + 1]);
+              Break;
+            end;
           var FotoVis: TFotoDeFicheros;
           if A.Visible then
             FotoVis.Toma([A.Path]);
@@ -2726,7 +2766,7 @@ begin
             string.Join(#10, CodeLines) + #10#10 + FrontLine, FrontIdx + 1, False);
           if EsFallo(R) then
             Exit(R);
-          var Extra := '';
+          var Extra := YaEsta;
           if A.Visible and EsMsg(R, SK_EDIT_ESCRITO_EN_FMT) then
           begin
             FotoVis.Anota(A.Path);
@@ -3007,7 +3047,7 @@ begin
         Exit(MsgText(SR_EDIT_HAS_PASADO_OLD_PERO));
 
       Result := DoEdit(A.Path, A.OldLine, A.NewText, A.AtLine, IsDesigner,
-        False, A.ToLine);
+        False, A.ToLine, A.Ensayo);
     except
       on E: Exception do
         Result := MsgExcepcion(E.ClassName, E.Message);
@@ -3082,7 +3122,7 @@ end;
 
 function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
   AIsDesigner: Boolean; ADelete: Boolean = False;
-  AToLine: Integer = 0): string;
+  AToLine: Integer = 0; AEnsayo: Boolean = False): string;
 var
   B, NewBytes, After: TBytes;
   K: TEncKind;
@@ -3127,7 +3167,7 @@ begin
   M := Measure(B);
   Eol := NombreDelSalto(SaltoDominante(Text)); // la regla de todos
 
-  if (Pos(#13, AOld) > 0) or (Pos(#10, AOld) > 0) then
+  if TieneSalto(AOld) then
     Exit(MsgText(SR_PATCH_ANCHOR_MULTILINE));
   if AOld.Trim = '' then
     Exit(MsgText(SR_EDIT_ANCLA_ESTA_VACIA_SOLO));
@@ -3270,6 +3310,10 @@ begin
       end;
     end;
 
+    // ENSAYO: hasta aqui todo lo que el motor comprueba; lo que preguntaria el
+    // escritor, y nada mas (el preview de un changeset; decima revision)
+    if AEnsayo then
+      Exit(SustitucionDenegada(APath));
     var CopyNote := BackupFile(APath);
     AtomicWrite(APath, NewBytes);
 

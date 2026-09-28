@@ -133,7 +133,21 @@ type
     property Tools: TArray<TMCPTool> read FTools write FTools;
   end;
 
+{ [local change 2026-09-28] El token de una cabecera Authorization con el
+  esquema Bearer: el esquema no distingue mayusculas (RFC 9110 11.1) y
+  admite mas de un espacio; el token si distingue. '' si no es Bearer. UN
+  lector para el servidor HTTP y para los workspaces (Lsp.Guard): cada uno
+  comparaba 'Bearer ' + token a pelo y "bearer" daba 401 (decima revision). }
+function BearerToken(const AAuthorization: string): string;
+
 implementation
+
+function BearerToken(const AAuthorization: string): string;
+begin
+  Result := '';
+  if (Length(AAuthorization) > 7) and SameText(Copy(AAuthorization, 1, 7), 'Bearer ') then
+    Result := Trim(Copy(AAuthorization, 8, MaxInt));
+end;
 
 { SchemaDefaultAttribute }
 

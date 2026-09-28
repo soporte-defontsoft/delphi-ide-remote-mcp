@@ -403,7 +403,12 @@ begin
       on E: Exception do
         Exit(MsgEnvuelve(SR_VAULT_NO_PUDO_LEER_NOTA_FMT, E.Message));
     end;
-    Result := ATransform(Text, NewText);
+    // el transform trabaja en LF y la nota vuelve a su salto dominante: un
+    // old de varias lineas no casaba en una nota CRLF y un new de varias
+    // lineas metia LF (decima revision). Una nota mixta sale al dominante,
+    // como en los demas editores
+    var Eol := SaltoDominante(Text);
+    Result := ATransform(ConSalto(Text, #10), NewText);
     if Result <> '' then
       Exit;
     // A replacement that leaves nothing behind is a disguised delete, and
@@ -417,7 +422,7 @@ begin
     if Result <> '' then
       Exit;
     ABackup := VaultBackup(AFull); // rule 11, inside the lock: no same-second race
-    VaultSave(AFull, NewText);
+    VaultSave(AFull, ConSalto(NewText, Eol));
     Result := '';
   finally
     GVaultWrite.Leave;
@@ -821,13 +826,15 @@ begin
       P: Integer;
     begin
       Result := '';
-      P := Pos(Params.Old_Text, ACurrent);
+      // ACurrent llega en LF (EditNoteLocked): old y new, igual
+      var Viejo := ConSalto(Params.Old_Text, #10);
+      P := Pos(Viejo, ACurrent);
       if P = 0 then
         Exit(MsgText(SR_VAULT_OLD_TEXT_APARECE_NOTA));
-      if Pos(Params.Old_Text, ACurrent, P + Length(Params.Old_Text)) > 0 then
+      if Pos(Viejo, ACurrent, P + Length(Viejo)) > 0 then
         Exit(MsgText(SR_VAULT_OLD_TEXT_APARECE_VARIAS));
-      ANewText := Copy(ACurrent, 1, P - 1) + Params.New_Text +
-        Copy(ACurrent, P + Length(Params.Old_Text), MaxInt);
+      ANewText := Copy(ACurrent, 1, P - 1) + ConSalto(Params.New_Text, #10) +
+        Copy(ACurrent, P + Length(Viejo), MaxInt);
     end,
     Backup);
   if Result <> '' then

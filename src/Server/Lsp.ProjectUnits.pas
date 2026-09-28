@@ -983,7 +983,7 @@ begin
   SetLength(Colas, Length(Entradas));
   for I := 1 to High(Entradas) do
   begin
-    var Texto := Entradas[I].Replace(#13#10, #10);
+    var Texto := ConSalto(Entradas[I], #10); // tambien el CR suelto (decima revision)
     var P := Texto.IndexOf(#10);
     var Primera := IfThen(P >= 0, Copy(Texto, 1, P), '').Trim;
     // solo si en el original iba detras de SU coma: uno que estaba en una
@@ -1422,7 +1422,7 @@ begin
   begin
     // un // en la primera linea del prefijo iba detras de la coma de la
     // anterior: vuelve a SU linea (ReplaceUses pone el ; delante de el)
-    var C := Carry.Replace(#13#10, #10);
+    var C := ConSalto(Carry, #10); // tambien el CR suelto (decima revision)
     var P := C.IndexOf(#10);
     var Primera := IfThen(P >= 0, Copy(C, 1, P), C);
     if Primera.TrimLeft.StartsWith('//') then
@@ -1996,6 +1996,27 @@ begin
   end;
 end;
 
+{ Las units de un proyecto (.dpr/.dpk) para BUSCAR una entre ellas, sin leer
+  el .dproj: si el proyecto no se puede leer (ACL, otro proceso), la negativa
+  dice que se leia para saber si lista la unit - salia el SYS-028 pelado y el
+  agente lo tomaba por un intento de escribirlo (decima revision). Los dos
+  buscadores eran gemelos. }
+function UnitsParaBuscar(const AProyecto, AUnit: string): TArray<TProjectUnit>;
+begin
+  try
+    Result := ProjectUnits(AProyecto, False);
+  except
+    on E: Exception do
+    begin
+      var Causa := MotivoDelSistema(E.Message);
+      if Causa = '' then
+        Causa := E.Message;
+      raise Exception.Create(MsgConCausa(SR_PROYECTO_NO_LEIDO_AL_BUSCAR_FMT, Causa,
+        [TPath.GetFileName(AProyecto), AUnit, Causa]));
+    end;
+  end;
+end;
+
 function WorkspacePackagesWithUnit(const ADpkPath, AUnitName: string): TArray<string>;
 var
   Dirs: TArray<string>;
@@ -2028,7 +2049,7 @@ begin
     begin
       if SameText(TPath.GetFullPath(F), TPath.GetFullPath(ADpkPath)) then
         Continue;
-      for P in ProjectUnits(F, False) do // el .dpk decide; sin leer .dproj
+      for P in UnitsParaBuscar(F, AUnitName) do // el .dpk decide; sin leer .dproj
         if SameText(P.UnitName, AUnitName) then
         begin
           Result := Result + [TPath.GetFullPath(F)];
@@ -2072,7 +2093,7 @@ begin
       Continue;
     for F in TDirectory.GetFiles(D, '*.dp?') do // .dpr y .dpk, no .dproj
       if MatchText(TPath.GetExtension(F), ['.dpr', '.dpk']) then
-      for P in ProjectUnits(F, False) do // the .dpr decides; no .dproj read
+      for P in UnitsParaBuscar(F, Stem) do // the .dpr decides; no .dproj read
         if SameText(P.UnitName, Stem) and
           (NormPath(TPath.Combine(TPath.GetDirectoryName(F), P.Include)) = NormPath(APasPath)) then
         begin
