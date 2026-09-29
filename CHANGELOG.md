@@ -6,6 +6,346 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.7] - 2026-09-29
+
+Three things. The server could not take away a folder that its own engine had as current directory - delete, move, purge, git worktree remove and a git command that drops the folder, after a single hover - and now it stops its engines first. delphi_git worked on the whole repository it found by climbing from the folder it was given, also when that repository started above the session's roots: a matter of the jail, as old as the tool, found by a reviewer of this patch and closed here. And every server says which machine it runs on (host), in serverInfo and in delphi_workspace. The first version of the first fix was written with the cause deduced; measuring it afterwards corrected the theory, and four rounds of reviewers before the tag found that it hung the server when two engines started together, twenty-one things more in what was written to fix that, fourteen more in the third round, and in the fourth five more doors in the jail of the remote, which had been closed that same afternoon - the fifth one in the fix of the other four. Each one was measured, or is said here to be read and not measured.
+
+### Security
+
+- **`delphi_git` read and rewrote a repository that lived outside the
+  workspace.** git does not work on the folder it is given: it climbs from it
+  until it finds the repository, and reads and rewrites THAT whole tree. The
+  tool's gate looked at the folder alone. Measured with a session whose only
+  root was `mono\a` and the `.git` in `mono`: `diff` showed the content of
+  `mono\b`, `stash` and `switch` rewrote it, and `commit` and `config` wrote
+  `mono\.git` - while `delphi_read` of the same file answered `[GUARD-002]`,
+  as it should. Now the three folders of the repository go through the gate
+  the folder went through - the root of the working tree, its git folder and
+  the common one (the main repository's, for a linked worktree) - and git
+  runs PINNED to them (`--git-dir`, `--work-tree`): it works where the gate
+  looked, not where it finds a repository when it looks again. A repository
+  that lives outside the roots answers `[GIT-041]`, from every command;
+  `init` and `clone` have no repository yet and make theirs in the folder
+  they are given. One reader asks git where the repository lives
+  (`DondeViveElRepo`) and counts only the lines of its answer that are a
+  folder that exists: the root used to be read whole from an output that has
+  git's warnings mixed in. Where there is no working tree - a bare
+  repository, or `repo` pointing at the `.git` folder itself - git is pinned
+  with `--bare`: with `--git-dir` alone it took the current directory for
+  the working tree, `status` listed the content of `.git` as sources and
+  `switch` wrote the branch's files inside `.git` (the third round,
+  measured with plain git before and after).
+- **The remote of `fetch`, `pull` and `push` was nobody's business when it
+  was a folder.** The remote is where git reads from or writes to. The
+  operator's list of hosts judges network addresses, and only those: a
+  folder was looked at by nobody. Measured through the tool, with a folder
+  outside the roots as the remote: `fetch` brought its history into the
+  repository and `push` wrote branches in it - given by its path, or by the
+  name of a remote of the repository. Now a remote is one of two things: a
+  network address, which the list of hosts judges as it did, or a folder
+  that goes through the jail's gate like any other path - the read gate to
+  bring, the write gate to send (`[GIT-044]`). A name is changed for the
+  address it has in the repository and judged by it; a relative path is
+  resolved from the root of the working tree, which is where git resolves
+  it from (measured); with no remote in the call, all the ones of the
+  repository are judged. And of the options, `fetch` and `push` take a short
+  list and no other (`[GIT-043]`): `--tags`, `--no-tags`, `--prune`,
+  `--depth=<n>`, `--unshallow` and `--all` to bring; `--tags`, `-u`,
+  `--set-upstream` and `--dry-run` to send. As old as the tool; a reviewer
+  of this patch measured it with plain git.
+- **`push` adds to the remote, and never overwrites or deletes what is
+  there** (`[GIT-046]`). `--force`, `--force-with-lease` and `--delete` went
+  out with the list of options, and that closed the word, not the fact:
+  measured through the tool, with the local history diverged from the
+  remote's, `args="origin +main"` rewrote the remote's branch and
+  `args="origin :sobra"` deleted it. What `push` sends, after the remote, is
+  names - a branch or a tag (`origin main`), or `local:remote` with a name
+  on each side (`origin HEAD:refs/heads/copy`) - and a name starts with a
+  letter or a digit and goes on with letters, digits and `. _ / -` (on the
+  left of `local:remote`, a version of the repository is fine too:
+  `HEAD~1`). What an agent does in its own repository is as it
+  was. With no names in the call the repository's configuration decides
+  what is sent, and that is judged too (`[GIT-048]`): from a mirror
+  repository (`clone --mirror`) a bare `push` deleted a branch of the remote
+  (measured). A remote configured as a mirror, or to push something that is
+  not names, is refused; with names in the call they decide, as before.
+- **What the address of a remote may be is a list** (`[GIT-045]`): the name
+  it has in the repository; a network address with its scheme (`https://`,
+  `http://`, `ssh://`, `git://`) or in the short form of ssh; or a folder,
+  by its path or as `file:///<drive>:/<path>` with nothing percent-encoded.
+  Measured through the tool in the fourth round: git decodes the `%xx` of a
+  `file://` address and the judge read it as it came - `mi%20repo.git` was
+  one folder for the judge and another for git -, and a remote of the
+  repository whose address was `file://C:/...`, with two slashes, passed for
+  a network address: `fetch` brought the history of a folder outside the
+  roots and `push` wrote a branch there. A name is changed for ALL its
+  addresses (git sends to each one), and when git does not answer what it
+  is asked in order to judge, the remote is not used (`[GIT-047]`): a
+  question that failed ended in "allowed" (read in the code).
+- **A remote that is a folder is looked at whole: the folder, and the
+  repository that lives there** (`[GIT-044]`). A folder inside the roots
+  whose `.git` is a pointer - a linked worktree - serves and writes the
+  repository the pointer names. Measured: with a worktree inside the roots
+  of a repository outside them as the remote, `fetch` brought the history
+  from outside and `push` wrote a branch there. The three folders of that
+  repository go through the gate, asked with the same reader as the
+  repository of the call (`DondeViveElRepo`). And a remote that is a folder
+  is a folder that IS THERE (`[GIT-049]`, which names the remotes the
+  repository does have: what it is asked most is `push origin main` in a
+  repository just made, with none): git opens more things than a
+  folder - the pointer file of a linked worktree, or a path it adds `.git`
+  to - and what it opened then was not what had been looked at. Measured by
+  the review of this same fix: with the remote at `<worktree>\.git`, which
+  is a file, `fetch` and `push` reached the repository outside again.
+- A remote of the repository whose address is ssh in its short form with no
+  user (`host:path`) was taken for a folder and refused: a regression of
+  this patch, measured by its fourth review and gone before it was
+  published. And the command line of git has ONE composer (`GitLinea`):
+  `-C` was written by hand in five places, and a `repo` ending in a
+  backslash ate the closing quote (measured in 1.7.6: `[GIT-036]`, "cannot
+  change to ...").
+- New battery `test_git_jaula` (33 checks: 21 commands refused with nothing
+  outside read or touched, a linked worktree of a repository outside, a bare
+  repository, `repo` at the `.git` itself, a path with spaces and an accent,
+  the remotes, what `push` sends, and the controls). With the question of
+  the repository taken out five of them are red; one more without `--bare`;
+  three without the rule of the remote; without the rule of what `push`
+  sends, its two and the two controls that come after them; and of the
+  eleven of the fourth round, eight against the build before each - the other
+  three are two controls and the rule of the relative path, which has a mutation
+  of its own (judged from the folder of the call, `fetch` from a subfolder
+  brought the history of a folder outside).
+
+### Added
+
+- **`host` in `serverInfo` and in `delphi_workspace`'s `server`: the machine
+  this server runs on.** Two servers of the same name and version (a 13.1 on
+  the workstation and a 13.2 on a VM, same token) answered with nothing that
+  told them apart: `serverInfo` was identical, the workspace had the same name
+  and no answer named the machine. One reader (`NombreDeMaquina`, next to the
+  account) feeds both; the vendor settings carry it as `MachineName` (local
+  change), never read from nor written to the ini. `test_http_auth`,
+  `test_workspace_tools` and `test_service_smoke` compare it with the
+  battery's own machine name (one helper); in the smoke of the deployed
+  service its absence is a failure from 1.7.7 on, decided by the version that
+  answers.
+
+### Changed
+
+- README, **About this project**: this server was born from a need of our
+  own and is shared in case it is useful to someone else; there is no
+  commercial plan behind it, and every version published stays MIT.
+
+### Fixed
+
+- **A folder the server's OWN engine held could not be deleted or moved, and
+  purging it or removing it as a worktree left an empty shell.** The server
+  keeps one DelphiLSP engine per project, alive from the first request. When
+  the engine loads the project's settings it makes the folder of the
+  project's main source its own current directory, and Windows will not
+  rename or delete the current directory of a live process; nothing ever
+  stopped an engine before the server itself stopped. Measured with the
+  engine launched by hand (free after `initialize`, held after
+  `workspace/didChangeConfiguration`; with the `.dpr` in a subfolder of the
+  `.dproj`, the folder held is the `.dpr`'s) and on ten of our tools: the
+  seven that do not start an engine leave the folder free. After a single
+  `delphi_hover`, `delphi_delete` of the project's folder answered
+  `[FILE-036]` - naming an exe, the IDE or git, when the process was the
+  server's own and the agent had no way to close it (Hermes, in the field) -
+  and `delphi_move` `[SYS-027]`. Two more doors were worse: `delphi_delete
+  purge=true` and `delphi_git worktree remove` deleted the content, failed on
+  the folder and left it empty (`[FILE-011]`, git exit 255). Now whoever
+  holds something of the server's under a folder registers a releaser in the
+  guard, and whoever takes a folder away calls them once the guard has
+  approved and before touching anything: the two walkers (`MueveArbol`,
+  `BorraArbol`), the empty-folder branch of `delphi_delete` and `git worktree
+  remove`. The LSP session retires the engines whose held folder is that
+  folder or sits inside it: the process is stopped and the object kept, so a
+  request of another agent in flight gets an error and not freed memory. A
+  link is judged by where it is, as the mover does: deleting a junction
+  stops nothing behind it. A subfolder of a warm project was never held
+  (measured) and its engine stays.
+- **Releasing and taking away are ONE thing.** The guard gives two notices,
+  always in a pair: the folder is about to go, and it is over. In between
+  the folder is leaving: no engine is started under it (`[LSP-032]`), and an
+  engine that another agent's first request was building at that moment is
+  waited for, refused and stopped. Measured with the notices taken out: the
+  delete of a folder answered `[FILE-036]` while a first hover was building
+  its engine. The first notice makes the session if there is none yet (the
+  first LSP request of the server's life, arriving while git rewrote the
+  tree, found no mark), and a mark that never gets its pair expires after
+  fifteen minutes - above the ten a `pull` may take; at two it lost its mark
+  half way through a slow one. And an engine is registered only if the file
+  its request is about, and the folder the engine holds, are still there
+  when the engine is ready: a window read in the code, that a probe did not
+  reach in sixteen tries - without the wait what happens is `[FILE-036]`,
+  not an engine left behind.
+- **A request in flight on an engine that is stopped is told at once**
+  (`[LSP-033]`: repeat it), and so is whoever waits for its diagnostics -
+  every one of them: the notice woke ONE waiter, and with two agents linting
+  two files of one project the other slept out its whole wait and came back
+  with "still working, call again" (measured; and, read in the code, so did
+  a waiter whose diagnostics were already in the queue when the one woken
+  was not the one they were for). A request
+  used to wait out its own timeout - 30 seconds a hover, 60 a symbols - and
+  answer that the engine took too long. A notification for a stopped engine
+  says `[LSP-033]` too (it came out as the transport's own error), and a
+  client taken out of the session's table is stopped for everybody at that
+  moment, under the same lock. What the session knows of a client's
+  documents is born and dies with THAT client: kept in tables of the
+  session, keyed by the project, the engine that came after one stopped by
+  git - same project, files untouched - inherited the dead one's notes.
+  Measured with the cleanup of those notes skipped: a diagnostics that was
+  in flight when git stopped its engine, repeated as `[LSP-033]` says, sent
+  nothing to the new engine, waited 40 s and answered "in progress", every
+  time; now it answers in two. Both texts name git now, not only a folder
+  that is moved or deleted. A request that could not be sent no
+  longer leaves its entry behind, the engines taken out of service are freed
+  when no request can still be on them instead of piling up until the server
+  stops, and stopping goes by what there is: a reader that had ended by
+  itself made the stop leave at once, with the process alive.
+- **An engine that ended by itself was never replaced.** The session kept
+  it in its table, and every request of its project answered the
+  transport's own error (`[SYS-006]`, "WriteFile to LSP stdin failed")
+  until the server stopped or the folder left. Measured with the engine
+  killed from outside: four hovers out of four. It has not been seen in the
+  field - not once in the logs of production - and it was there before this
+  patch. Now the session asks the system whether the engine's process goes
+  on before it hands a client out; one that is gone is taken out of the
+  table, as the one of a folder that leaves, and the request builds
+  another (D20 of `test_round14`; red without it). The ones taken out of
+  service before are freed there too, and `[LSP-033]` names this case: a
+  request in flight on an engine that ended by itself was told that its
+  folder was being moved.
+- **`delphi_git` that rewrites the tree left an empty folder behind.**
+  Switching to a branch without a project's folder, git deleted its files,
+  could not remove the folder - the engine's current directory - and said
+  `exit=0`. `switch`, `merge`, `stash` (push and pop) and `pull` stop the
+  engines of what they rewrite first; they start again on the next request.
+  What rewrites nothing stops nobody - `stash list` (a query now, for the
+  read-only credential too) and `switch` with `create` - and `stash push --
+  <paths>` stops the engines of those folders only: in the first version of
+  this fix each of them stopped every engine of the repository. `pull` does
+  its network half FIRST, as a `fetch`, with nobody stopped and nothing
+  marked; the pull that follows finds its commits there and is the one that
+  stops the engines (only a pull without options: with `--depth` or `--tags`
+  the fetch would bring something else). It used to release and let go
+  before it began, and an engine started while the network lasted held its
+  folder again.
+- **`delphi_git pull` integrated the way git pleased.** A pull is a
+  download and an integration, and the rule this tool has for the second -
+  fast-forward or nothing, what `merge` has always promised - was not
+  applied to it. Measured with the two histories diverged: a `pull` with no
+  option at all left a merge commit, `--rebase` rewrote the history and
+  `--squash` left the tree half way. Now it is always run with `--ff-only`,
+  and of the options it takes those of the download (`--tags`, `--no-tags`,
+  `--prune`, `--depth=<n>`, `--unshallow`): any other is refused
+  (`[GIT-042]`), because the caller's option came after the tool's own and
+  won. A pull that git refuses for diverged histories carries the note a
+  merge carries. `test_git_branches` +4; two of them are red with the rule
+  taken out.
+- **Several first requests on a cold project collided writing its
+  settings.** They all found no fabricated settings file and all wrote the
+  same one; the ones that lost answered `[SYS-027]`, "Cannot create file"
+  (measured in the 1.7.6 binary). One fabrication at a time now, and the
+  file goes in whole or not at all. A settings file that is there and cannot
+  be read fails the request, as it always did: for a moment in this patch it
+  read as stale, and that answer was cached.
+- **A settings file of the IDE that was rejected once was not looked at
+  again.** The answer for a folder is remembered while the file that decided
+  it does not change. With a `.delphilsp.json` that is rejected - stale, or
+  read while the IDE was half way through writing it - the `.dproj` decides,
+  and the IDE's file was not looked at again until the `.dproj` changed: the
+  IDE left it whole a moment later and the server went on with the settings
+  it had fabricated. The rejected file's stamp is remembered too, and a
+  change in it asks again. It was there before this patch; a reviewer read
+  it and a unit test measures it. And the stamp of a file is taken BEFORE
+  the file is read: taken after, a file read half written and completed in
+  between got the stamp of the whole file, which nobody had looked at
+  (fourth round; read in the code, not measured).
+- **Two children launched together took each other's pipes.** Every child
+  with redirected output inherits handles, and the pipe ends made for it are
+  inheritable from `CreatePipe` until the parent closes its copy: with two
+  launches overlapping, the second child kept the write end of the first
+  one's output. It was there before and only showed when the server stopped.
+  With the fix above an engine is stopped in a request thread that holds the
+  global write lock: the stopped engine's reader never saw the end of its
+  pipe, the stop did not return, and the delete hung with every writer of the
+  server behind it (measured: fourth round of four engines starting
+  together, twice out of two; it came back the moment the other engine was
+  killed from outside). Now there is ONE handle-inheriting launch at a time
+  (`EnterSpawn` / `LeaveSpawn`, in the LSP transport and in the build, git
+  and test runner), and stopping an engine never waits without a bound: the
+  process is waited for after it is terminated and a read that does not end
+  is cancelled. The transport closes the engine's stdin under its write
+  lock, and without it only when the engine is gone and the lock still does
+  not come. A reader that has to be left behind delivers nothing more, and
+  its object's memory is kept (read, not measured: the abandonment cannot
+  be forced).
+- **An engine that stops reading keeps its own project, and nobody else.**
+  The session had ONE lock for everything, held while an engine - any of
+  them - was written to: an engine that stopped reading its pipe kept every
+  LSP request of the server waiting, and in the first version of this patch
+  every delete and every move of a tree with them. Now the tables of clients
+  and folders have a lock held for moments: nothing is done under it that
+  asks the disk, an engine or anybody - the folders it compares come
+  resolved to their real paths, which on a network drive takes what the
+  network takes (the guard's reader of "this is inside that" comes in two
+  halves for that, resolve and compare, and is still one). And what is known
+  of a client's documents is the client's own, under a lock of its own.
+  The engines of a folder are stopped ALL AT ONCE: one after another, the
+  bounds of each stop (16 s for an engine that neither ends nor lets go of
+  its pipes) added up, under the global write lock of whoever was deleting.
+  The folder an engine will hold is read from its settings file only when
+  an engine has to be built (it was read and parsed on every request), and
+  the test runner relabels its folder before it takes the launch lock, not
+  inside it. Measured in the fourth round, with the engine of one project
+  suspended and two requests of that project waiting for it: a hover of
+  another project answered at once, and deleting the first project's folder
+  came back in two seconds and told the ones that waited `[LSP-033]` (P7 of
+  `test_lsp_paralelo`; against the session with one lock the other project
+  waited out its thirty seconds). What stays: while nobody takes its folder
+  away, the requests of the project of an engine that does not read wait
+  for it without a bound. The rest of this entry is read in the code; the
+  batteries below ran green on it.
+- `test_round14` +28 (D3-D20, each case with its own project and its own
+  repository; against the binary without the fix eleven of the first fifteen
+  are red, each for its own reason, and D15-D19 go red one by one with the
+  line of each git command taken out), a new battery over HTTP,
+  `test_lsp_paralelo` (11 checks; two of them say in a NOTE that they did not
+  measure when no round catches an engine half built or a diagnostics in
+  flight - a matter of timing, not of the server), and eleven unit tests
+  (`LspTests.Motor`; the
+  suite has 106 and the battery's floor says so). One of them is the rule
+  those two may leave unmeasured, with the moment fixed: under a folder that
+  is leaving no engine is started, and the refusal comes before one is
+  built (red with the first look at the mark taken out: 1.609 ms, an engine
+  built and thrown away). That an engine was STOPPED is measured by the pid
+  of the engine that was there: "nobody holds the folder" is also what a
+  folder that is gone says. Engines are counted by the
+  folder they HOLD (their current directory, read from the process) and the
+  new ones by their pid; the question fails aloud when it cannot be asked.
+  Against a server that hangs the battery over HTTP says so and ends: it
+  went on calling it, and died with a traceback before its last two checks.
+- **Every new check was run with its fix taken out, and what stayed green is
+  a guard and is called one.** The two collision checks of
+  `test_lsp_paralelo` (the collision is too rare over HTTP: the unit test is
+  the measure); P3 (the engines go when the server goes, with the fix or
+  without it); the unit test of the second stop; and the first check of P1
+  for each ONE of the two layers that keep a delete from hanging - with the
+  launch lock taken out the delete still comes back, in 1,4 s instead of
+  0,5, because the bounded stop is enough. The launch lock is measured by a
+  unit test instead: two engines launched together and one stopped with the
+  other alive took 1.016 ms in the third round without the lock (three slow
+  stops fail it, not one: the batteries run several at a time). P6 was red
+  against the tables of the session with their cleanup skipped, and is what
+  watches that a client's notes go with it. Some fixes have NO measure, only
+  a reading: stopping by what there is (a reader that had ended by itself),
+  the reader left behind, the engines of a folder stopped all at once,
+  nothing that asks the disk under the lock of the tables, the first notice
+  that makes the session, the stamps of the settings cache taken before
+  the read, and the remote that is not used when git does not answer.
+
 ## [1.7.6] - 2026-09-28
 
 The last item of the known list: delphi_git can undo an add (restore, always --staged, the working tree never touched). Hermes hit it in the field and deleted his .git to get out. The other item was decided: nothing is indexed in a read-only vault. The list of known pendings is empty.

@@ -16,9 +16,9 @@ it in the first call.
 
 ## Survey the landscape first (David, 2026-09-20)
 
-One act, four questions. You look at the landscape once - the one there is
-today AND the one this code will have tomorrow - and while you are
-there you ask all four:
+One act, four questions - and a fifth before any of it turns into code. You
+look at the landscape once - the one there is today AND the one this code
+will have tomorrow - and while you are there you ask the four:
 
 **1. Landscape before TOUCHING** — where else does this live? You do not fix
 where you happen to be looking; you fix where the rule lives. If there is a
@@ -48,11 +48,33 @@ one helper (`DeliverCapture` / `AttachImage`, `Lsp.Base64`,
 `CAPTURE_SUB_*` shared by namer and reader), and the next tool that
 captures now calls it.
 
+**5. Theories are measured first** (David, 2026-09-29) - a diagnosis is a
+theory until it is measured. Reproducing the failure says it exists; a fix
+that makes it go away says something the fix touches matters; neither says
+WHY. Before code changes for a cause, measure the cause itself and rule out
+the other suspects by name. Measured that day: `delphi_delete` of a project's
+folder answered FILE-036 after one hover. The theory - "the engine holds the
+project root open" - went into four units before anybody had looked at what
+the engine held. David asked whether the diagnosis was certain, and whether
+it was not one of OUR tools. Three probes, forty minutes: launched by hand,
+the engine does NOT hold the root it is given; it changes its own current
+directory to the folder of the project's main source when it loads the
+project settings, and Windows will not rename the current directory of a
+live process; of ten of our tools, the seven that do not start the engine
+leave the folder free. The idea of the fix stood - by luck, not by method -
+and its first version did not: three reviewers before the tag, and a probe
+for each of their theories, showed that it hung the server when two engines
+started together, stopped the engines behind a junction that was not
+moving, and released by the wrong folder. And the probe is measured too:
+the first matrix showed an empty column because it compared a short path
+with a long one, and a check that claimed to measure a cleanup passed with
+the cleanup taken out.
+
 In David's words: *"knowing how to write code is one thing, and knowing
 how to program is another"* - writing code solves today's line; programming leaves
 tomorrow's line somewhere to land.
 
-The practical part: **the same search answers all four.** Search for what the
+The practical part: **the same search answers the first four.** Search for what the
 function DOES, not for what you would call it, and that one pass turns up the
 other places the rule lives AND the function you were about to duplicate.
 Measured: searching for where paths were canonicalised turned up

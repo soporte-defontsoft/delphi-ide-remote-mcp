@@ -47,11 +47,33 @@ type
     FPending: TObjectDictionary<Integer, TPendingCall>;
     FNotifications: TObjectList<TJSONObject>;
     FNotifyEvent: TEvent;
+    FStopped: Boolean;
     procedure HandleRawMessage(const AJson: string);
     function NextId: Integer;
+    procedure Send(const AJson: string);
   public
     constructor Create(ATransport: TLspProcessTransport; AOwnsTransport: Boolean = True);
     destructor Destroy; override;
+
+    { Stops the engine process and keeps THIS object valid: whoever still
+      holds it (another agent's request in flight) gets an error, never freed
+      memory - and gets it AT ONCE: the requests waiting for an answer and
+      whoever waits for a notification are woken, instead of waiting out
+      their 30 or 60 seconds. For a client the session retires before it goes
+      away itself. }
+    procedure StopEngine;
+    { The WORD alone, without the process: from here on the client is
+      stopped for everybody - whoever waits on it is woken, and nothing else
+      is sent. It takes no time, so the session gives it UNDER its own lock,
+      at the moment it takes the client out of its table: "out of the table"
+      and "stopped" are then one thing for whoever looks under that lock.
+      The process is ended afterwards, outside (StopEngine). }
+    procedure Retire;
+    property Stopped: Boolean read FStopped;
+    { Does the engine's process go on? The system answers at once (the
+      transport's ProcessAlive). An engine may end by itself, or be ended
+      from outside: the session asks before it hands a client out. }
+    function EngineAlive: Boolean;
 
     // Raw JSON-RPC. AParamsJson is an already-serialized JSON value; pass
     // "{}" when there are no params. Returns the full response object;
@@ -111,6 +133,7 @@ uses
 
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);
+  NOTIFY_SLICE_MS = 250; // the longest a waiter sleeps without looking
   LSP_REQUEST_REMOVED = -32800;
 
 { TLspClient.TPendingCall }
@@ -152,6 +175,52 @@ begin
   inherited;
 end;
 
+procedure TLspClient.Retire;
+var
+  Call: TPendingCall;
+begin
+  FLock.Enter;
+  try
+    FStopped := True;
+    for Call in FPending.Values do
+      Call.Event.SetEvent;
+  finally
+    FLock.Leave;
+  end;
+  // one waiter is woken here; the others find out at their next look
+  // (WaitForNotification never sleeps longer than NOTIFY_SLICE_MS)
+  FNotifyEvent.SetEvent;
+end;
+
+function TLspClient.EngineAlive: Boolean;
+begin
+  Result := FTransport.ProcessAlive;
+end;
+
+procedure TLspClient.StopEngine;
+begin
+  // First the word, then the process: stopping it takes seconds, and nobody
+  // has to wait for that to know.
+  Retire;
+  FTransport.Stop;
+end;
+
+{ THE sender: what goes to a stopped engine is refused with the words of a
+  stopped engine, before and after trying. A notification sent while the
+  engine was being stopped came out as the transport's own error. }
+procedure TLspClient.Send(const AJson: string);
+begin
+  if FStopped then
+    raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
+  try
+    FTransport.SendJson(AJson);
+  except
+    if FStopped then
+      raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
+    raise;
+  end;
+end;
+
 function TLspClient.NextId: Integer;
 begin
   Result := TInterlocked.Increment(FNextId);
@@ -174,7 +243,7 @@ begin
       if Msg.GetValue('method') <> nil then
       begin
         // Server->client request: answer null so the server never blocks on us.
-        FTransport.SendJson(Format('{"jsonrpc":"2.0","id":%s,"result":null}',
+        Send(Format('{"jsonrpc":"2.0","id":%s,"result":null}',
           [IdVal.ToJSON]));
         Exit;
       end;
@@ -221,13 +290,30 @@ begin
   Call := TPendingCall.Create;
   FLock.Enter;
   try
+    if FStopped then
+    begin
+      Call.Free;
+      raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
+    end;
     FPending.Add(Id, Call); // dictionary owns Call
   finally
     FLock.Leave;
   end;
 
-  FTransport.SendJson(Format('{"jsonrpc":"2.0","id":%d,"method":"%s","params":%s}',
-    [Id, AMethod, AParamsJson]));
+  try
+    Send(Format('{"jsonrpc":"2.0","id":%d,"method":"%s","params":%s}',
+      [Id, AMethod, AParamsJson]));
+  except
+    // what was not sent waits for nothing: its entry stayed for the life of
+    // the client
+    FLock.Enter;
+    try
+      FPending.Remove(Id);
+    finally
+      FLock.Leave;
+    end;
+    raise;
+  end;
 
   if Call.Event.WaitFor(ATimeoutMs) <> wrSignaled then
   begin
@@ -248,6 +334,9 @@ begin
   finally
     FLock.Leave;
   end;
+  // woken with no answer: the engine was stopped under this request
+  if (Raw = '') and FStopped then
+    raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
   Result := TJSONObject.ParseJSONValue(Raw) as TJSONObject;
   if Result = nil then
     raise ELspClient.Create(MsgFmt(SE_LSP_LSP_RESPONSE_VALID_JSON_FMT, [AMethod]));
@@ -276,7 +365,7 @@ end;
 
 procedure TLspClient.Notify(const AMethod, AParamsJson: string);
 begin
-  FTransport.SendJson(Format('{"jsonrpc":"2.0","method":"%s","params":%s}',
+  Send(Format('{"jsonrpc":"2.0","method":"%s","params":%s}',
     [AMethod, AParamsJson]));
 end;
 
@@ -408,6 +497,10 @@ begin
   Result := nil;
   Deadline := GetTickCount64 + UInt64(ATimeoutMs);
   repeat
+    // a stopped engine notifies nothing: nil here would read as "it took too
+    // long", and it is not that
+    if FStopped then
+      raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
     FLock.Enter;
     try
       for I := 0 to FNotifications.Count - 1 do
@@ -437,8 +530,15 @@ begin
     Remaining := Integer(Int64(Deadline) - Int64(GetTickCount64));
     if Remaining <= 0 then
       Exit(nil);
+    // In SLICES, and one more look after the last one: the event wakes ONE
+    // waiter. With two on the same client (two agents linting two files of
+    // one project) the other one slept out its whole wait - told nothing of
+    // an engine that had been stopped, and with its own notification in the
+    // queue if the one woken was not the one it was for.
+    if Remaining > NOTIFY_SLICE_MS then
+      Remaining := NOTIFY_SLICE_MS;
     FNotifyEvent.WaitFor(Remaining);
-  until GetTickCount64 >= Deadline;
+  until False;
 end;
 
 class function TLspClient.PathToUri(const APath: string): string;

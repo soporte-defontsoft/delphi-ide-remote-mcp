@@ -51,6 +51,21 @@ function LabelDirLowIntegrity(const ADir: string): Boolean;
   2026-09-25). Best-effort. }
 procedure LabelDirTreeLowIntegrity(const ADir: string);
 
+{ ONE handle-inheriting launch at a time. CreateProcess with
+  bInheritHandles=True hands the child EVERY inheritable handle the process
+  has at that instant, and the pipe ends made for a child are inheritable
+  from CreatePipe until the parent closes its copy: two launches that
+  overlap, and one child takes the other's pipe. Measured 2026-09-29: with
+  two DelphiLSP engines starting together the second inherited the write end
+  of the first one's output; when the first was stopped its reader never saw
+  the end of the pipe and the stop did not return - a folder delete hung,
+  with the global write lock held, until the second engine was killed from
+  outside. Whoever launches inheriting handles wraps in this from the moment
+  it creates its pipes until it has closed the child's ends. The two that
+  do: the LSP transport and the build/git/test runner. }
+procedure EnterSpawn;
+procedure LeaveSpawn;
+
 implementation
 
 uses
@@ -60,6 +75,17 @@ uses
 var
   GLabeled: TStringList; // canonical roots already tree-labeled this process
   GLabeledLock: TObject;
+  GSpawnLock: TObject;
+
+procedure EnterSpawn;
+begin
+  System.TMonitor.Enter(GSpawnLock);
+end;
+
+procedure LeaveSpawn;
+begin
+  System.TMonitor.Exit(GSpawnLock);
+end;
 
 const
   SE_GROUP_INTEGRITY_ = $00000020;
@@ -241,6 +267,7 @@ begin
 end;
 
 initialization
+  GSpawnLock := TObject.Create;
   GLabeledLock := TObject.Create;
   GLabeled := TStringList.Create;
   GLabeled.Sorted := True;
@@ -249,5 +276,6 @@ initialization
 finalization
   GLabeled.Free;
   GLabeledLock.Free;
+  GSpawnLock.Free;
 
 end.

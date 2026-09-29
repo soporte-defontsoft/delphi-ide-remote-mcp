@@ -29,7 +29,7 @@ with another forty. This battery is the ones that became code.
 
 Usage:  python tests/test_round9.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, re, base64
+import json, os, re, base64, subprocess
 
 
 import mcp_cliente as mc
@@ -68,9 +68,20 @@ check('R1 ...y a un host cualquiera tambien', mc.rechazado(r) and mc.es(r, 'SR_G
 r = A.call('delphi_git', {'repo': os.path.join(BASE, 'clon'), 'command': 'clone',
                           'message': 'https://198.51.100.7/evil.git'})
 check('R1 clone con URL no permitida: RECHAZADO', mc.rechazado(r) and mc.es(r, 'SR_GIT_REMOTE_OFF_FMT'), r[:200])
+# (1.7.7) un nombre que NO es un remoto del repo - recien hecho, no tiene
+# ninguno - ya no llega a git, que decia que "origin" no parecia un
+# repositorio: se dice aqui, con los remotos que hay. El remoto de verdad
+# lo monta el git de la maquina (la tool no anade remotos): es andamio
 r = A.call('delphi_git', {'repo': REPOD, 'command': 'push', 'args': 'origin main'})
-check('R1 un remoto POR NOMBRE sigue permitido (no es una URL)',
-      mc.llego_a_git(r), r[:200])
+check('R1 un nombre que no es un remoto del repo: lo dice, con los que tiene (GIT-049)',
+      mc.es(r, 'SR_GIT_REMOTO_NO_ESTA_FMT') and '(none)' in r, r[:250])
+ORIGEN = os.path.join(BASE, 'origen.git')
+for orden, donde in ((['git', 'init', '-q', '--bare', ORIGEN], BASE),
+                     (['git', 'remote', 'add', 'origin', ORIGEN], REPOD)):
+    subprocess.run(orden, cwd=donde, capture_output=True)
+r = A.call('delphi_git', {'repo': REPOD, 'command': 'push', 'args': 'origin main'})
+check('R1 un remoto POR NOMBRE sigue permitido (no es una URL): llega a git, que no tiene que enviar',
+      mc.llego_a_git(r) and 'refspec' in r, r[:300])
 
 B = spawn({'DELPHI_MCP_GIT_REMOTES': 'example.com'})
 r = B.call('delphi_git', {'repo': REPOD, 'command': 'fetch', 'args': 'https://otro.example.org/x.git'})

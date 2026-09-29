@@ -169,6 +169,10 @@ begin
     ResultJSON.AddPair('serverInfo', ServerInfo);
     ServerInfo.AddPair('name', FSettings.ServerName);
     ServerInfo.AddPair('version', FSettings.ServerVersion);
+    // [local change] the machine this server runs on: two servers of the same
+    // name and version answer with nothing else that tells them apart
+    if FSettings.MachineName <> '' then
+      ServerInfo.AddPair('host', FSettings.MachineName);
 
     // [local change] server instructions handed to the model at connect time
     if Assigned(Instructions) then

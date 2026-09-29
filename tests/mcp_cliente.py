@@ -137,6 +137,105 @@ def limpia_caches_lsp():
     return quitadas
 
 
+def hijos_lsp(ppid):
+    """Los DelphiLSP.exe cuyo padre es ESE proceso (sus pids). Filtrar por
+    padre es obligatorio: en esta maquina suele haber un servidor de produccion
+    con los suyos, y contar o matar los de otro seria mucho peor que el bug
+    buscado. Estaba en test_tray y se escribio otra vez, distinta y sin tope
+    de tiempo, en test_round14 (revision de la 1.7.7): UNA.
+
+    Si la pregunta FALLA, lo dice (RuntimeError): devolvia [] y "no queda
+    ningun motor" pasaba sin haber mirado (segunda revision de la 1.7.7)."""
+    p = subprocess.run(
+        ['powershell', '-NoProfile', '-Command',
+         "$ErrorActionPreference = 'Stop'; "
+         "Get-CimInstance Win32_Process -Filter \"Name='DelphiLSP.exe'\" | "
+         "ForEach-Object { \"$($_.ProcessId),$($_.ParentProcessId)\" }"],
+        capture_output=True, text=True, timeout=60)
+    if p.returncode != 0:
+        raise RuntimeError('no se pudo preguntar por los motores (powershell rc=%d): %s'
+                           % (p.returncode, ' '.join(p.stderr.split())[:200]))
+    out = p.stdout
+    r = []
+    for l in out.splitlines():
+        p = l.strip().split(',')
+        if len(p) == 2 and p[1].isdigit() and int(p[1]) == ppid:
+            r.append(int(p[0]))
+    return sorted(r)
+
+
+def cwd_de(pid):
+    """El directorio de trabajo REAL de otro proceso, leido de su PEB ('' si
+    no se deja leer: ya no esta, o no es nuestro). Es lo que RETIENE una
+    carpeta: Windows no deja renombrar ni borrar el directorio de trabajo de
+    un proceso vivo, y DelphiLSP hace suyo el de la carpeta del .dpr cuando
+    carga la configuracion del proyecto (medido el 29-sep-2026). DelphiLSP es
+    de 32 bits; la rama de 64 es para cualquier otro."""
+    import ctypes.wintypes as wt
+    import struct
+    k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    nt = ctypes.WinDLL('ntdll')
+    k32.OpenProcess.restype = wt.HANDLE
+    k32.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
+    k32.ReadProcessMemory.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t,
+                                      ctypes.POINTER(ctypes.c_size_t)]
+    k32.CloseHandle.argtypes = [wt.HANDLE]
+    nt.NtQueryInformationProcess.argtypes = [wt.HANDLE, ctypes.c_int, ctypes.c_void_p, ctypes.c_ulong,
+                                             ctypes.c_void_p]
+
+    def leer(h, addr, n):
+        buf = ctypes.create_string_buffer(n)
+        leidos = ctypes.c_size_t(0)
+        if not k32.ReadProcessMemory(h, ctypes.c_void_p(addr), buf, n, ctypes.byref(leidos)):
+            raise OSError('ReadProcessMemory %d' % ctypes.get_last_error())
+        return buf.raw
+
+    h = k32.OpenProcess(0x0400 | 0x0010, False, pid)   # QUERY_INFORMATION | VM_READ
+    if not h:
+        return ''
+    try:
+        peb32 = ctypes.c_void_p(0)
+        r = nt.NtQueryInformationProcess(h, 26, ctypes.byref(peb32), ctypes.sizeof(peb32), None)
+        if r == 0 and peb32.value:                       # proceso de 32 bits (WOW64)
+            pp = struct.unpack('<I', leer(h, peb32.value + 0x10, 4))[0]
+            ln, _mx, buf = struct.unpack('<HHI', leer(h, pp + 0x24, 8))
+            return leer(h, buf, ln).decode('utf-16-le')
+
+        class PBI(ctypes.Structure):
+            _fields_ = [('r1', ctypes.c_void_p), ('peb', ctypes.c_void_p), ('r2', ctypes.c_void_p * 2),
+                        ('pid', ctypes.c_void_p), ('r3', ctypes.c_void_p)]
+        pbi = PBI()
+        nt.NtQueryInformationProcess(h, 0, ctypes.byref(pbi), ctypes.sizeof(pbi), None)
+        pp = struct.unpack('<Q', leer(h, pbi.peb + 0x20, 8))[0]
+        ln, _mx = struct.unpack('<HH', leer(h, pp + 0x38, 4))
+        buf = struct.unpack('<Q', leer(h, pp + 0x40, 8))[0]
+        return leer(h, buf, ln).decode('utf-16-le')
+    except Exception:
+        return ''
+    finally:
+        k32.CloseHandle(h)
+
+
+def motores_en(ppid, carpeta):
+    """Los motores de ESE servidor que RETIENEN la carpeta: su directorio de
+    trabajo es ella o esta dentro (por la forma larga de las dos rutas: una
+    corta frente a una larga dejo vacia la primera matriz de las sondas)."""
+    base = os.path.normcase(larga(os.path.abspath(carpeta))).rstrip('\\') + '\\'
+    r = []
+    for pid in hijos_lsp(ppid):
+        d = cwd_de(pid)
+        if d and (os.path.normcase(larga(d)).rstrip('\\') + '\\').startswith(base):
+            r.append(pid)
+    return r
+
+
+def es_esta_maquina(host):
+    """El "host" que dice un servidor lanzado AQUI es el nombre de esta
+    maquina (el NetBIOS, el de %COMPUTERNAME%, que es el que da
+    GetComputerName). Vacio no vale. Estaba escrito tres veces."""
+    return bool(host) and host.lower() == os.environ.get('COMPUTERNAME', '').lower()
+
+
 def borra(ruta):
     """Borra un arbol aunque tenga ficheros de SOLO LECTURA (los objetos de un
     .git los son): rmtree con ignore_errors los dejaba ahi, y la pasada

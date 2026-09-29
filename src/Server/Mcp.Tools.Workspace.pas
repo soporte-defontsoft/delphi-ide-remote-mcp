@@ -249,6 +249,10 @@ var
   GModoServidor: string = 'console';     // console | service | tray
   GTransporteServidor: string = 'stdio'; // stdio | http
 
+{ En que MAQUINA corre este proceso: lo cuenta delphi_workspace ("host") y
+  Lsp.Host lo pasa al vendor para serverInfo. Un solo lector para los dos. }
+function NombreDeMaquina: string;
+
 implementation
 
 uses
@@ -826,16 +830,19 @@ end;
   reescribe el fichero; restore --staged solo toca el indice). '' = bien;
   si no, la negativa con los textos de ESE comando (AComando: 'stash' o
   'restore'; cada texto sale por su helper, aqui dentro). Era el bucle de
-  stash push y restore iba a ser su gemelo (1.7.6). }
+  stash push y restore iba a ser su gemelo (1.7.6). ACarpetas: la carpeta de
+  cada ruta (ella misma si es una carpeta), para quien tiene que soltar lo
+  nuestro de ahi antes de que git la reescriba. }
 function RutasDeGit(const ARepo, AArgs: string; const ATrozos: TArray<string>;
   ADesde: Integer; AEscribeFicheros: Boolean; const AComando: string;
-  out ARutas: string): string;
+  out ARutas: string; out ACarpetas: TArray<string>): string;
 var
   Base, Ruta, Rel: string;
   I: Integer;
 begin
   Result := '';
   ARutas := '';
+  ACarpetas := nil;
   Base := IncludeTrailingPathDelimiter(TPath.GetFullPath(ARepo));
   for I := ADesde to High(ATrozos) do
   begin
@@ -876,6 +883,409 @@ begin
       Rel := '.'; // la carpeta del propio repo
     // :(literal): el nombre es el nombre, sin comodines ni magia.
     ARutas := ARutas + ' ' + EnComillas(':(literal)' + Rel);
+    // la carpeta de la ruta, UNA vez cada una (dos ficheros de la misma
+    // carpeta eran dos avisos, uno detras de otro)
+    if not TDirectory.Exists(Ruta) then
+      Ruta := ExtractFileDir(Ruta);
+    if not MatchText(Ruta, ACarpetas) then
+      ACarpetas := ACarpetas + [Ruta];
+  end;
+end;
+
+{ LA LINEA de git, por UN compositor: git.exe, -C con la carpeta de la
+  llamada - por el compositor de la casa (EnComillas), como todo argumento -,
+  lo que lo fija (AFijado: --git-dir...) y el comando. Se componia a mano en
+  cada sitio, con -C "%s": una carpeta acabada en barra invertida se comia
+  la comilla de cierre y el resto de la linea entraba en el argumento de -C
+  (medido en la 1.7.6: GIT-036, "cannot change to ..."; cuarta revision de
+  la 1.7.7). }
+function GitLinea(const ARepo, AFijado, AResto: string): string;
+begin
+  Result := 'git.exe -C ' + EnComillas(ARepo) + AFijado + ' ' + AResto;
+end;
+
+{ DONDE VIVE el repo de ARepo (o de una carpeta de dentro), preguntado a git:
+  su carpeta de git (AGitDir: la de ESTA copia de trabajo), la comun (AComun:
+  la del repo principal, cuando ARepo es un worktree enlazado) y la raiz del
+  arbol de trabajo (ARaiz: '' en un repo bare y dentro de la propia .git).
+  Con barras de Windows. False si git no lo da: ASalida y ACodigo son
+  entonces su respuesta ("not a git repository").
+
+  Es la pregunta de la JAULA de git (la tool no deja trabajar en un repo que
+  vive fuera de las raices) y la de quien suelta lo nuestro antes de que git
+  reescriba el arbol; worktree add ya preguntaba la raiz.
+
+  git contesta una carpeta por linea y su salida llega mezclada con la de
+  errores: cuentan SOLO las lineas que son una carpeta que existe, en su
+  orden. Un aviso de git con exit 0 hacia la raiz de varias lineas, y no
+  casaba con nada, en silencio. }
+function DondeViveElRepo(const ARepo: string; out AGitDir, AComun, ARaiz,
+  ASalida: string; out ACodigo: Cardinal): Boolean;
+var
+  Linea, Ruta: string;
+  Carpetas: TArray<string>;
+begin
+  AGitDir := '';
+  AComun := '';
+  ARaiz := '';
+  ASalida := RunCaptured(GitLinea(ARepo, '', 'rev-parse --absolute-git-dir ' +
+    '--git-common-dir --show-toplevel'), 60000, ACodigo);
+  Carpetas := nil;
+  for Linea in ASalida.Split([#10]) do
+  begin
+    Ruta := Linea.Trim.Replace('/', '\');
+    if Ruta = '' then
+      Continue;
+    try
+      // la comun llega RELATIVA a ARepo (..\..\.git) fuera de un worktree
+      // enlazado (medido, git 2.53)
+      Ruta := ExcludeTrailingPathDelimiter(
+        TPath.GetFullPath(TPath.Combine(ARepo, Ruta)));
+      if TDirectory.Exists(Ruta) then
+        Carpetas := Carpetas + [Ruta];
+    except
+      // lo que no es una ruta es un aviso de git
+    end;
+  end;
+  // las tres, o las dos primeras cuando no hay arbol de trabajo (git sale
+  // entonces con 128 y las ha dado igual)
+  Result := (Length(Carpetas) = 2) or (Length(Carpetas) = 3);
+  if not Result then
+    Exit;
+  AGitDir := Carpetas[0];
+  AComun := Carpetas[1];
+  if Length(Carpetas) = 3 then
+    ARaiz := Carpetas[2];
+end;
+
+{ Las opciones que ADMITEN los comandos de red (fetch, pull, push). Una lista
+  de lo que vale, no de lo que no: la opcion que no esta aqui no pasa. Las de
+  la BAJADA para fetch y pull; pull lleva ademas --ff-only, siempre. }
+const
+  OPCIONES_DE_BAJADA = '--tags, --no-tags, --prune, --depth=<n>, --unshallow';
+  OPCIONES_DE_FETCH = OPCIONES_DE_BAJADA + ', --all';
+  OPCIONES_DE_PUSH = '--tags, -u, --set-upstream, --dry-run';
+
+function OpcionDeRed(const ACmd, AOpcion: string): Boolean;
+begin
+  if ACmd = 'push' then
+    Exit(IndexStr(AOpcion, ['--tags', '-u', '--set-upstream', '--dry-run']) >= 0);
+  Result := (IndexStr(AOpcion, ['--tags', '--no-tags', '--prune', '--unshallow']) >= 0) or
+    TRegEx.IsMatch(AOpcion, '^--depth=\d+$') or
+    ((ACmd = 'pull') and (AOpcion = '--ff-only')) or
+    ((ACmd = 'fetch') and (AOpcion = '--all'));
+end;
+
+{ Los trozos de args que no son opciones, en su orden: el remoto y lo que se
+  trae o se envia. Por los trozos que lee la puerta (TrocearArgs). }
+function TrozosSinGuion(const AArgs: string): TArray<string>;
+var
+  Trozo: string;
+begin
+  Result := nil;
+  for Trozo in TrocearArgs(AArgs) do
+    if not Trozo.StartsWith('-') then
+      Result := Result + [Trozo];
+end;
+
+{ UN NOMBRE de rama, de tag o de commit, y nada mas que un nombre. Con
+  AConRevision vale tambien la forma relativa (HEAD~3, v1^): para NOMBRAR
+  una version que ya esta en el repo. }
+function EsNombreDeRef(const ANombre: string; AConRevision: Boolean): Boolean;
+begin
+  if AConRevision then
+    Result := TRegEx.IsMatch(ANombre, '^[A-Za-z0-9][A-Za-z0-9._/~^-]*$')
+  else
+    Result := TRegEx.IsMatch(ANombre, '^[A-Za-z0-9][A-Za-z0-9._/-]*$');
+end;
+
+{ LO QUE push ENVIA: los trozos sin guion de detras del remoto. push ANADE
+  al remoto; lo que ya hay alli no se reescribe ni se borra por esta tool
+  (David, 29-sep-2026: "nada de destruccion remota"). Una lista de lo que
+  vale: cada trozo es un nombre (main, v1.7.7) o dos con dos puntos en medio
+  (local:remoto) - a la izquierda una version que ya esta en el repo, a la
+  derecha el nombre que tendra alli. True si hay uno que no (AMalo).
+
+  Medido ese dia por la tool, con --force y --delete ya negados por su
+  nombre: args="origin +main", con las historias divergidas, reescribia la
+  rama del remoto, y args="origin :sobra" la borraba. }
+function EnvioQueNoVale(const AArgs: string; out AMalo: string): Boolean;
+var
+  Trozos: TArray<string>;
+  I, P: Integer;
+  Vale: Boolean;
+begin
+  Result := False;
+  AMalo := '';
+  Trozos := TrozosSinGuion(AArgs);
+  // (el primero es el remoto: lo juzga RemotoDenegado)
+  for I := 1 to High(Trozos) do
+  begin
+    P := Trozos[I].IndexOf(':');
+    if P >= 0 then
+      Vale := EsNombreDeRef(Trozos[I].Substring(0, P), True) and
+        EsNombreDeRef(Trozos[I].Substring(P + 1), False)
+    else
+      Vale := EsNombreDeRef(Trozos[I], False);
+    if not Vale then
+    begin
+      AMalo := Trozos[I];
+      Exit(True);
+    end;
+  end;
+end;
+
+{ Lo que git contesta a una pregunta, linea a linea (las que traen algo).
+  False si git sale con error o no contesta en su plazo: quien pregunta para
+  JUZGAR no toma un fallo por un "no hay" (cuarta revision de la 1.7.7: una
+  pregunta que fallaba acababa en "se puede"). Por eso las preguntas se
+  hacen de forma que "no hay" salga con 0: el que se queda sin plazo sale
+  con 1, que es tambien con lo que git config dice que una clave no esta. }
+function GitContesta(const ARepo, AFijado, APregunta: string;
+  out ALineas: TArray<string>): Boolean;
+var
+  Salida, Linea: string;
+  Codigo: Cardinal;
+begin
+  ALineas := nil;
+  Salida := RunCaptured(GitLinea(ARepo, AFijado, APregunta), 60000, Codigo);
+  Result := Codigo = 0;
+  if Result then
+    for Linea in Salida.Split([#10]) do
+      if Linea.Trim <> '' then
+        ALineas := ALineas + [Linea.Trim];
+end;
+
+{ Una direccion de RED con su esquema. La lista es la de clone. }
+function EsUrlDeRed(const ADireccion: string): Boolean;
+begin
+  Result := ADireccion.StartsWith('https://') or ADireccion.StartsWith('http://') or
+    ADireccion.StartsWith('git://') or ADireccion.StartsWith('ssh://');
+end;
+
+{ QUE ES la direccion de un remoto. Una lista de lo que vale:
+    drRed      una direccion de red: con su esquema (EsUrlDeRed) o en la
+               forma corta de ssh, [usuario@]maquina:ruta
+    drCarpeta  una carpeta (ACarpeta, tal como viene): su ruta, o
+               file:///<unidad>:/<ruta> sin nada codificado, que es la forma
+               de file:// que se lee igual aqui que en git
+    drOtra     lo demas, que no se admite
+  Medido el 29-sep-2026 por la tool (cuarta revision): git DECODIFICA los
+  %xx de un file:// y aqui se leian tal cual - "mi%20repo.git" era para el
+  juez una carpeta y para git otra -, y un remoto del repo con su direccion
+  en file://C:/... (dos barras) pasaba por direccion de red: fetch traia la
+  historia de una carpeta de fuera de las raices y push escribia en ella. }
+type
+  TDireccionDeRemoto = (drRed, drCarpeta, drOtra);
+
+function ClaseDeDireccion(const ADireccion: string; out ACarpeta: string): TDireccionDeRemoto;
+begin
+  ACarpeta := '';
+  if StartsText('file:', ADireccion) then
+  begin
+    if not TRegEx.IsMatch(ADireccion, '^file:///[A-Za-z]:/[^%]*$') then
+      Exit(drOtra);
+    ACarpeta := ADireccion.Substring(8);
+    Exit(drCarpeta);
+  end;
+  if EsUrlDeRed(ADireccion) then
+    Exit(drRed);
+  if ADireccion.Contains('://') then
+    Exit(drOtra);
+  // la forma corta de ssh: una maquina (dos letras o mas: una sola es una
+  // unidad de disco), dos puntos y la ruta
+  if TRegEx.IsMatch(ADireccion, '^([A-Za-z0-9._-]+@)?[A-Za-z0-9][A-Za-z0-9.-]+:[^:\\]') then
+    Exit(drRed);
+  ACarpeta := ADireccion;
+  Result := drCarpeta;
+end;
+
+{ Los remotos del repo, por su nombre. False si git no lo dice. }
+function RemotosDelRepo(const ARepo, AFijado: string; out ANombres: TArray<string>): Boolean;
+begin
+  Result := GitContesta(ARepo, AFijado, 'remote', ANombres);
+end;
+
+{ UNA CARPETA que hace de remoto, juzgada: '' = se puede usar. La puerta de
+  lectura para traer, la de escritura para enviar. Pasa la carpeta y pasa EL
+  REPO QUE VIVE ALLI, con sus tres carpetas, como el de la llamada
+  (DondeViveElRepo): una carpeta de dentro de las raices cuyo .git es un
+  puntero - un worktree enlazado - sirve y escribe el repo al que apunta.
+  Medido el 29-sep-2026 por la tool (cuarta revision): con un worktree de
+  dentro de un repo de fuera por remoto, fetch traia la historia de fuera y
+  push escribia una rama alli. }
+function CarpetaDeRemotoDenegada(const ACmd, ACarpeta: string;
+  out ANoEsta: Boolean): string;
+
+  function Puerta(const ASitio: string): string;
+  begin
+    if ACmd = 'push' then
+      Result := PathDenied(ASitio)
+    else
+      Result := ReadPathDenied(ASitio);
+    if Result <> '' then
+      Result := MsgFmt(SR_GIT_REMOTO_FUERA_FMT, [ACmd, ASitio,
+        IfThen(ACmd = 'push', 'write', 'read')]);
+  end;
+
+var
+  GitDir, Comun, Raiz, Salida, Sitio: string;
+  Codigo: Cardinal;
+begin
+  ANoEsta := False;
+  Result := Puerta(ACarpeta);
+  if Result <> '' then
+    Exit;
+  // UNA CARPETA QUE ESTA. git abre mas cosas que una carpeta - el fichero
+  // puntero de un worktree enlazado, o una ruta a la que el le pone el
+  // sufijo .git -, y lo que abre entonces no es lo que aqui se ha mirado.
+  // Medido el 29-sep-2026 por la tool (el revisor de este mismo arreglo):
+  // con el remoto en "<worktree>\.git", que es un fichero, fetch traia la
+  // historia del repo de fuera y push escribia una rama alli.
+  // (de lo que NO esta, solo despues de la puerta: de una ruta de fuera no
+  // se dice ni si existe)
+  if not TDirectory.Exists(ACarpeta) then
+  begin
+    ANoEsta := True;
+    Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, ACarpeta]));
+  end;
+  if not DondeViveElRepo(ACarpeta, GitDir, Comun, Raiz, Salida, Codigo) then
+    Exit(MsgFmt(SR_GIT_EXIT_FMT, [Codigo, Salida.Trim]));
+  for Sitio in TArray<string>.Create(GitDir, Comun, Raiz) do
+    if Sitio <> '' then
+    begin
+      Result := Puerta(Sitio);
+      if Result <> '' then
+        Exit;
+    end;
+end;
+
+{ EL REMOTO de una llamada de red, juzgado: '' = se puede usar.
+
+  El remoto es adonde git va a leer (fetch, pull) o a escribir (push). En la
+  llamada se da por el NOMBRE que tiene en el repo o por su direccion, y una
+  direccion es una de dos cosas (ClaseDeDireccion): de RED, o una CARPETA,
+  que pasa por la jaula (CarpetaDeRemotoDenegada). Lo que no es ni lo uno ni
+  lo otro se niega.
+
+  Un nombre se cambia por sus direcciones - TODAS las que tenga: git envia a
+  cada una - y se juzgan esas. Sin remoto en la llamada, git usa uno de los
+  del repo: se juzgan todos. Las de red de un remoto del repo valen, como
+  siempre (las puso el operador, o un clone que paso por su lista de hosts);
+  la de red que se escribe en la llamada la juzga esa lista, en la puerta, y
+  tiene que ser de las que la lista entiende: con su esquema, o con usuario.
+
+  Si git no contesta a lo que se le pregunta para juzgar, no se usa.
+
+  Medido el 29-sep-2026 por la tool: con una carpeta de fuera de las raices,
+  por su ruta o por su nombre, fetch traia su historia y push escribia ramas
+  alli. La lista de hosts solo entiende direcciones de red, y una carpeta no
+  la miraba nadie. }
+function RemotoDenegado(const ACmd, ARepo, AFijado, ABase, AArgs: string): string;
+var
+  Trozos, Nombres, Mirar, Lineas: TArray<string>;
+  Nombre, Direccion, Carpeta, Pregunta: string;
+  EscritaEnLaLlamada, NoEsta: Boolean;
+begin
+  Result := '';
+  Pregunta := 'remote get-url --all ';
+  if ACmd = 'push' then
+    Pregunta := 'remote get-url --push --all ';
+  if not RemotosDelRepo(ARepo, AFijado, Nombres) then
+    Exit(MsgFmt(SR_GIT_REMOTO_SIN_RESPUESTA_FMT, [ACmd]));
+  // el remoto de la llamada: su primer trozo que no es una opcion
+  Trozos := TrozosSinGuion(AArgs);
+  EscritaEnLaLlamada := (Length(Trozos) > 0) and (IndexStr(Trozos[0], Nombres) < 0);
+  if EscritaEnLaLlamada then
+    Mirar := nil
+  else if Length(Trozos) > 0 then
+    Mirar := [Trozos[0]]
+  else
+    Mirar := Nombres;
+  var Direcciones: TArray<string> := nil;
+  if EscritaEnLaLlamada then
+    Direcciones := [Trozos[0]];
+  for Nombre in Mirar do
+  begin
+    if not GitContesta(ARepo, AFijado, Pregunta + EnComillas(Nombre), Lineas) or
+       (Length(Lineas) = 0) then
+      Exit(MsgFmt(SR_GIT_REMOTO_SIN_RESPUESTA_FMT, [ACmd]));
+    Direcciones := Direcciones + Lineas;
+  end;
+  for Direccion in Direcciones do
+    case ClaseDeDireccion(Direccion, Carpeta) of
+      drRed:
+        // la escrita en la llamada, de las que la lista de hosts entiende
+        if EscritaEnLaLlamada and (GitUrlHost(Direccion) = '') then
+          Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, Direccion]));
+      drCarpeta:
+        begin
+          try
+            // Una ruta relativa, desde ABase (la raiz del arbol): es desde
+            // donde la resuelve git
+            Carpeta := ExcludeTrailingPathDelimiter(TPath.GetFullPath(
+              TPath.Combine(ABase, Carpeta.Replace('/', '\'))));
+          except
+            Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, Direccion]));
+          end;
+          Result := CarpetaDeRemotoDenegada(ACmd, Carpeta, NoEsta);
+          // lo que se escribio en la llamada y no es un remoto del repo ni
+          // una carpeta que este: se dice asi, con los remotos que hay
+          if NoEsta and EscritaEnLaLlamada then
+            Result := MsgFmt(SR_GIT_REMOTO_NO_ESTA_FMT, [Direccion,
+              IfThen(Length(Nombres) = 0, '(none)', string.Join(', ', Nombres)),
+              Carpeta]);
+          if Result <> '' then
+            Exit;
+        end;
+    else
+      Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, Direccion]));
+    end;
+end;
+
+{ LO QUE push ENVIA CUANDO NO SE LE DICE: sin nombres en la llamada lo
+  decide la configuracion del repo, y tambien se juzga. '' = vale. Un repo
+  ESPEJO (remote.<n>.mirror) envia a la fuerza y quita del remoto lo que
+  aqui ya no esta; un remote.<n>.push dice que enviar, y tiene que ser de
+  nombres, como lo que se escribe en la llamada. Medido el 29-sep-2026 por
+  la tool (cuarta revision): desde un repo espejo, push a secas borro del
+  remoto una rama. }
+function EnvioConfiguradoDenegado(const ARepo, AFijado, AArgs: string): string;
+var
+  Trozos, Nombres, Lineas, Todas: TArray<string>;
+  Nombre, Linea, Malo, Clave: string;
+begin
+  Result := '';
+  Trozos := TrozosSinGuion(AArgs);
+  if Length(Trozos) > 1 then
+    Exit; // con nombres en la llamada mandan ellos (EnvioQueNoVale)
+  if not RemotosDelRepo(ARepo, AFijado, Nombres) then
+    Exit(MsgFmt(SR_GIT_REMOTO_SIN_RESPUESTA_FMT, ['push']));
+  if Length(Trozos) = 1 then
+  begin
+    if IndexStr(Trozos[0], Nombres) < 0 then
+      Exit; // una direccion: no tiene configuracion en el repo
+    Nombres := [Trozos[0]];
+  end;
+  // La configuracion ENTERA, de una vez: sale con 0 haya lo que haya, y de
+  // sus lineas cuentan las de cada remoto (un aviso de git mezclado en la
+  // salida no empieza por el nombre de una clave).
+  if not GitContesta(ARepo, AFijado, 'config --list', Todas) then
+    Exit(MsgFmt(SR_GIT_REMOTO_SIN_RESPUESTA_FMT, ['push']));
+  for Nombre in Nombres do
+  begin
+    // espejo: lo dice git, que sabe leer sus si y sus no (true, yes, on, 1)
+    if not GitContesta(ARepo, AFijado, 'config --type=bool --default false --get ' +
+         EnComillas('remote.' + Nombre + '.mirror'), Lineas) then
+      Exit(MsgFmt(SR_GIT_REMOTO_SIN_RESPUESTA_FMT, ['push']));
+    if IndexStr('true', Lineas) >= 0 then
+      Exit(MsgFmt(SR_GIT_PUSH_CONFIG_FMT, [Nombre, 'mirror', Nombre]));
+    Clave := 'remote.' + Nombre + '.push=';
+    for Linea in Todas do
+      if Linea.StartsWith(Clave) and
+         EnvioQueNoVale('remoto ' + Linea.Substring(Length(Clave)), Malo) then
+        Exit(MsgFmt(SR_GIT_PUSH_CONFIG_FMT, [Nombre,
+          'push = ' + Linea.Substring(Length(Clave)), Nombre]));
   end;
 end;
 
@@ -884,8 +1294,17 @@ var
   Cmd, GitArgs, Repo, Output, MsgFile: string;
   ExitCode: Cardinal;
   Destino, Enlace: string; // worktree
+  GitDir, Comun, Raiz: string; // donde vive el repo (DondeViveElRepo)
+  Fijado: string; // --git-dir y --work-tree: git trabaja donde la puerta miro
+  SeQuitan: TArray<string>; // las carpetas que git puede quitar: lo nuestro, fuera
+  Sitio: string;
 begin
   MsgFile := '';
+  SeQuitan := nil;
+  GitDir := '';
+  Comun := '';
+  Raiz := '';
+  Fijado := '';
   Repo := Params.Repo;
   if Repo = '' then
     Exit(MsgText(SR_GIT_MISSING_REPO));
@@ -972,6 +1391,54 @@ begin
       Muestra := Cmd + ' args=' + Copy(ModoGit, Length(Cmd) + 2, MaxInt);
     Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, Muestra, Muestra, ONinguno(SuyosGit)]));
   end;
+  // Un comando que no es de la lista se dice ANTES de preguntar nada a git
+  // (la lista de abajo acaba en el mismo texto: esta es la que manda, y un
+  // comando nuevo que no se apunte aqui no funciona - cerrado).
+  if not MatchText(Cmd, ['status', 'diff', 'log', 'show', 'branch', 'add',
+       'commit', 'clone', 'pull', 'fetch', 'init', 'config', 'switch', 'merge',
+       'stash', 'restore', 'push', 'tag', 'worktree']) then
+    Exit(MsgFmt(SR_GIT_UNKNOWN_COMMAND_FMT, [Params.Command]));
+
+  // LA JAULA DEL REPO. git no trabaja sobre la carpeta que se le da: sube
+  // desde ella hasta dar con el repo, y lee y reescribe ESE arbol entero. La
+  // puerta de arriba miraba solo la carpeta: con la raiz del repo por encima
+  // de las raices de la sesion, status y diff ensenaban lo de fuera, y
+  // stash, switch y commit lo reescribian (medido el 29-sep-2026: una sesion
+  // con mono\a por unica raiz reescribio mono\b y escribio en mono\.git).
+  // Las TRES carpetas del repo pasan por la misma puerta que paso la suya -
+  // la raiz del arbol, su carpeta de git y la comun (la del repo principal
+  // de un worktree enlazado) -, y git corre FIJADO a ellas: trabaja donde
+  // la puerta miro, no donde el encuentre un repo al volver a buscar. clone
+  // e init no tienen repo todavia: hacen el suyo en la carpeta que se les da.
+  if not MatchText(Cmd, ['clone', 'init']) then
+  begin
+    if not DondeViveElRepo(Repo, GitDir, Comun, Raiz, Output, ExitCode) then
+      Exit(MsgFmt(SR_GIT_EXIT_FMT, [ExitCode, Output.Trim]));
+    for Sitio in TArray<string>.Create(Raiz, GitDir, Comun) do
+      if Sitio <> '' then
+      begin
+        if (ReadOnlyRootOf(Sitio) <> '') and
+           GitCommandIsQuery(Params.Command, Params.Args, Params.Message) then
+          Result := ReadPathDenied(Sitio)
+        else
+          Result := PathDenied(Sitio);
+        if Result <> '' then
+          Exit(MsgFmt(SR_GIT_REPO_FUERA_FMT, [Params.Repo, Sitio]));
+      end;
+    // por el compositor de la casa (EnComillas), como todo argumento
+    Fijado := ' --git-dir=' + EnComillas(GitDir);
+    if Raiz <> '' then
+      Fijado := Fijado + ' --work-tree=' + EnComillas(Raiz)
+    else
+      // SIN arbol de trabajo (un repo bare, o "repo" apuntando a la propia
+      // .git): --bare. Con --git-dir solo, git toma el directorio actual por
+      // arbol de trabajo: status ensenaba el contenido de .git como si
+      // fueran los fuentes y switch escribia los ficheros de la rama DENTRO
+      // de .git (medido con git a pelo el 29-sep-2026, tercera revision).
+      // Con --bare contesta lo que contesta sin fijar: log y branch van, y
+      // lo que necesita un arbol dice que no lo tiene.
+      Fijado := Fijado + ' --bare';
+  end;
   if Cmd = 'status' then
     GitArgs := 'status --porcelain=v1 -b ' + ArgvSeguro(Params.Args)
   else if Cmd = 'diff' then
@@ -1013,8 +1480,7 @@ begin
     var Url := Params.Message.Trim;
     if Url = '' then
       Exit(MsgText(SR_GIT_CLONE_NEEDS_REPOSITORY_URL));
-    if not (Url.StartsWith('https://') or Url.StartsWith('http://') or
-            Url.StartsWith('git://') or Url.StartsWith('ssh://')) then
+    if not EsUrlDeRed(Url) then
       Exit(MsgText(SR_GIT_CLONE_URLS_ACCEPTED));
     if ShellArgDenied(Url) <> '' then
       Exit(MsgText(SR_GIT_SHELL_METACHARS_URL));
@@ -1040,9 +1506,26 @@ begin
     GitArgs := Format('clone %s -- %s .', [ArgvSeguro(Params.Args), EnComillas(Url)]);
   end
   else if Cmd = 'pull' then
-    GitArgs := 'pull ' + ArgvSeguro(Params.Args)
+  begin
+    // SIEMPRE --ff-only, como merge: pull es bajar e integrar, y lo segundo
+    // lo hacia como git quisiera. Con las historias divergidas y sin ninguna
+    // opcion dejaba un commit de mezcla; con --rebase reescribia la
+    // historia, y con --squash dejaba el arbol a medias (medido el
+    // 29-sep-2026). Y la opcion del que llama iba DETRAS y ganaba: de las
+    // opciones, solo las de la bajada (por los trozos que lee la puerta).
+    for var Trozo in TrocearArgs(Params.Args) do
+      if Trozo.StartsWith('-') and not OpcionDeRed(Cmd, Trozo) then
+        Exit(MsgFmt(SR_GIT_PULL_ARGS_FMT, [Trozo]));
+    GitArgs := 'pull --ff-only ' + ArgvSeguro(Params.Args);
+    SeQuitan := [Raiz]; // reescribe el arbol: puede quitar carpetas
+  end
   else if Cmd = 'fetch' then
-    GitArgs := 'fetch ' + ArgvSeguro(Params.Args)
+  begin
+    for var Trozo in TrocearArgs(Params.Args) do
+      if Trozo.StartsWith('-') and not OpcionDeRed(Cmd, Trozo) then
+        Exit(MsgFmt(SR_GIT_RED_OPCION_FMT, [Cmd, Trozo, OPCIONES_DE_FETCH]));
+    GitArgs := 'fetch ' + ArgvSeguro(Params.Args);
+  end
   else if Cmd = 'init' then
     GitArgs := 'init ' + ArgvSeguro(Params.Args)
   else if Cmd = 'config' then
@@ -1068,9 +1551,12 @@ begin
     if Params.Args.Trim = '' then
       Exit(MsgText(SR_GIT_SWITCH_NEEDS));
     if Params.Create then
-      GitArgs := 'switch -c ' + ArgvSeguro(Params.Args)
+      GitArgs := 'switch -c ' + ArgvSeguro(Params.Args) // el arbol se queda como esta
     else
+    begin
       GitArgs := 'switch ' + ArgvSeguro(Params.Args);
+      SeQuitan := [Raiz]; // la otra rama puede no tener la carpeta de un proyecto
+    end;
   end
   else if Cmd = 'merge' then
   begin
@@ -1083,6 +1569,7 @@ begin
     // landed after --ff-only, so `--no-ff <branch>` won and left the repo in
     // MERGING with conflict markers and no way back through this tool
     // (measured 2026-08-25). A branch name, or --abort. Nothing else.
+    SeQuitan := [Raiz]; // lo que entra (o lo que se deshace) puede quitar carpetas
     if SameText(Params.Args.Trim, '--abort') then
       GitArgs := 'merge --abort'
     else if Params.Args.Trim.StartsWith('-') or
@@ -1105,7 +1592,12 @@ begin
     if Length(Trozos) > 0 then
       Sub := Trozos[0].ToLower;
     if MatchText(Sub, ['pop', 'list']) and (Length(Trozos) = 1) then
-      GitArgs := 'stash ' + Sub
+    begin
+      GitArgs := 'stash ' + Sub;
+      // list solo ENSENA; pop reescribe el arbol con lo aparcado
+      if Sub = 'pop' then
+        SeQuitan := [Raiz];
+    end
     else if Sub = 'push' then
     begin
       GitArgs := 'stash push';
@@ -1114,11 +1606,18 @@ begin
       // las rutas, por el helper de los comandos con rutas (RutasDeGit):
       // cada una pasa por la puerta del escritor (se reescribe el fichero)
       var Rutas: string;
-      Result := RutasDeGit(Repo, Params.Args, Trozos, 1, True, 'stash', Rutas);
+      var Carpetas: TArray<string>;
+      Result := RutasDeGit(Repo, Params.Args, Trozos, 1, True, 'stash', Rutas, Carpetas);
       if Result <> '' then
         Exit;
+      // Vuelve a HEAD lo que se aparca, y lo que HEAD no tiene se va: con
+      // rutas, solo bajo sus carpetas; sin ellas, en todo el arbol.
+      SeQuitan := [Raiz];
       if Rutas <> '' then
+      begin
         GitArgs := GitArgs + ' --' + Rutas;
+        SeQuitan := Carpetas;
+      end;
     end
     else
       Exit(MsgFmt(SR_GIT_STASH_ARGS_FMT, [Params.Args.Trim]));
@@ -1133,7 +1632,8 @@ begin
     // puerta ya paso por Repo): las rutas no vuelven a preguntar.
     var Trozos := TrocearArgs(Params.Args);
     var Rutas: string;
-    Result := RutasDeGit(Repo, Params.Args, Trozos, 0, False, 'restore', Rutas);
+    var Carpetas: TArray<string>; // el indice no quita carpetas: no se usan
+    Result := RutasDeGit(Repo, Params.Args, Trozos, 0, False, 'restore', Rutas, Carpetas);
     if Result <> '' then
       Exit;
     if Rutas = '' then
@@ -1141,9 +1641,18 @@ begin
     GitArgs := 'restore --staged --' + Rutas;
   end
   else if Cmd = 'push' then
+  begin
     // uses the SERVER's stored credentials/remotes - consistent with the
     // centralized model (the repo lives next to the compiler)
-    GitArgs := 'push ' + ArgvSeguro(Params.Args)
+    for var Trozo in TrocearArgs(Params.Args) do
+      if Trozo.StartsWith('-') and not OpcionDeRed(Cmd, Trozo) then
+        Exit(MsgFmt(SR_GIT_RED_OPCION_FMT, [Cmd, Trozo, OPCIONES_DE_PUSH]));
+    // ...y lo que se envia, nombres: push anade, no reescribe ni borra
+    var Malo: string;
+    if EnvioQueNoVale(Params.Args, Malo) then
+      Exit(MsgFmt(SR_GIT_PUSH_NOMBRE_FMT, [Malo]));
+    GitArgs := 'push ' + ArgvSeguro(Params.Args);
+  end
   else if Cmd = 'tag' then
   begin
     if Params.Message.Trim <> '' then
@@ -1186,18 +1695,16 @@ begin
       begin
         if TDirectory.Exists(Destino) or TFile.Exists(Destino) then
           Exit(MsgFmt(SR_GIT_WORKTREE_EXISTS_FMT, [Destino]));
-        if not TRegEx.IsMatch(Params.Ref.Trim, '^[A-Za-z0-9][A-Za-z0-9._/~^-]*$') then
+        if not EsNombreDeRef(Params.Ref.Trim, True) then
           Exit(MsgText(SR_GIT_WORKTREE_REF));
         // Nunca DENTRO del propio repo: el arbol principal la veria como una
         // carpeta sin seguimiento, y un add -A se la llevaria.
-        var Raiz := RunCaptured(Format('git.exe -C "%s" rev-parse --show-toplevel',
-          [Repo]), 60000, ExitCode).Trim.Replace('/', '\');
         // Por la ruta REAL de los dos: git da nombres largos y el agente
         // puede pasar la forma 8.3 (medido: C:\Users\DFONTA~1 frente a
         // C:/Users/dfontanet - el texto no casaba y lo dejaba dentro).
         var RaizReal := ExcludeTrailingPathDelimiter(RealPath(Raiz));
         var DestinoReal := ExcludeTrailingPathDelimiter(RealPath(Destino));
-        if (ExitCode = 0) and (Raiz <> '') and
+        if (Raiz <> '') and
            (SameText(DestinoReal, RaizReal) or
             StartsText(IncludeTrailingPathDelimiter(RaizReal), DestinoReal)) then
           Exit(MsgFmt(SR_GIT_WORKTREE_INSIDE_FMT, [Raiz]));
@@ -1207,8 +1714,8 @@ begin
       begin
         // Solo lo que git lista como worktree de ESTE repo, y nunca el
         // principal (el primero): remove no sirve para borrar otra cosa.
-        var Lista := RunCaptured(Format('git.exe -C "%s" worktree list --porcelain',
-          [Repo]), 60000, ExitCode);
+        var Lista := RunCaptured(GitLinea(Repo, Fijado, 'worktree list --porcelain'),
+          60000, ExitCode);
         var Listado := False;
         var DestinoReal := ExcludeTrailingPathDelimiter(RealPath(Destino));
         var Primero := True;
@@ -1238,6 +1745,11 @@ begin
           end);
         if Enlace <> '' then
           Exit(MsgFmt(SR_GIT_WORKTREE_LINK_FMT, [Enlace]));
+        // Lo NUESTRO, fuera antes de que git la borre: con un DelphiLSP vivo
+        // en el worktree (un hover basta) git borraba el contenido, no podia
+        // con la carpeta y salia con 255 (medido el 29-sep-2026). Se suelta
+        // abajo, junto al git y con el cerrojo de escritura ya cogido.
+        SeQuitan := [Destino];
         // Sin --force: con cambios, git se niega y lo dice.
         GitArgs := Format('worktree remove "%s"', [Destino]);
       end;
@@ -1247,6 +1759,24 @@ begin
   end
   else
     Exit(MsgFmt(SR_GIT_UNKNOWN_COMMAND_FMT, [Params.Command]));
+
+  // EL REMOTO de los que hablan con uno: de red (la lista de hosts, en la
+  // puerta) o una carpeta que pase por la jaula (RemotoDenegado)
+  if MatchText(Cmd, ['pull', 'fetch', 'push']) then
+  begin
+    // Una ruta relativa, desde la RAIZ del arbol (la carpeta de git en un
+    // repo sin arbol): es desde donde la resuelve git, se le llame desde la
+    // subcarpeta que sea (medido con git a pelo, fijado y sin fijar). El
+    // juez y git tienen que mirar la MISMA carpeta.
+    Result := RemotoDenegado(Cmd, Repo, Fijado, IfThen(Raiz <> '', Raiz, GitDir),
+      Params.Args);
+    // ...y lo que push envia cuando la llamada no lo dice: lo que tenga
+    // configurado el repo
+    if (Result = '') and (Cmd = 'push') then
+      Result := EnvioConfiguradoDenegado(Repo, Fijado, Params.Args);
+    if Result <> '' then
+      Exit;
+  end;
 
   if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push']) then
     TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT,
@@ -1261,16 +1791,55 @@ begin
   // escriben.
   var ConCerrojo := not GitCommandIsQuery(Params.Command, Params.Args, Params.Message) and
     not MatchText(Cmd, ['clone', 'pull', 'fetch', 'push']);
+  // Lo que REESCRIBE el arbol puede QUITAR carpetas: una rama sin la carpeta
+  // de un proyecto, y git borraba sus ficheros, no podia con la carpeta -el
+  // motor de ese proyecto la tiene de directorio de trabajo- y la dejaba
+  // vacia, con exit=0 (medido el 29-sep-2026). Los motores de lo que se
+  // reescribe se paran antes (SeQuitan: lo apunta cada comando, arriba,
+  // donde sabe lo que hace - una consulta como stash list, o switch con
+  // create, no paran a nadie); vuelven a arrancar en la siguiente peticion.
+  //
+  // pull es red Y arbol. Lo de la red se hace ANTES, con un fetch: sin
+  // marca, porque dura lo que dure la red y en ese rato nadie podria
+  // arrancar un motor en el repo. El pull de despues encuentra lo suyo ya
+  // bajado y es casi todo local: ese va con la marca, como los demas. (Se
+  // soltaba y se quitaba la marca antes de empezar: el motor que arrancaba
+  // durante la red volvia a retener su carpeta.) Solo el pull sin opciones:
+  // con ellas (--depth, --tags...) el fetch previo bajaria otra cosa.
+  if SameText(Cmd, 'pull') and (Raiz <> '') then
+  begin
+    // por los trozos que lee la puerta (TrocearArgs), no por el texto
+    var ConOpciones := False;
+    for var Trozo in TrocearArgs(Params.Args) do
+      if Trozo.StartsWith('-') then
+        ConOpciones := True;
+    if not ConOpciones then
+    begin
+      var Previo: Cardinal;
+      RunCaptured(GitLinea(Repo, Fijado, 'fetch ' + ArgvSeguro(Params.Args)),
+        600000, Previo);
+      // si falla, el pull lo dira con sus palabras
+    end;
+  end;
   if ConCerrojo then
     EnterFileEdit;
   try
+    for Sitio in SeQuitan do
+      if Sitio <> '' then
+        SueltaLoNuestroBajo(Sitio);
     try
-      Output := RunCaptured(Format('git.exe -C "%s" %s', [Repo, GitArgs]),
-        IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch']), 600000, 60000),
-        ExitCode);
+      try
+        Output := RunCaptured(GitLinea(Repo, Fijado, GitArgs),
+          IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch']), 600000, 60000),
+          ExitCode);
+      finally
+        if (MsgFile <> '') and TFile.Exists(MsgFile) then
+          TFile.Delete(MsgFile);
+      end;
     finally
-      if (MsgFile <> '') and TFile.Exists(MsgFile) then
-        TFile.Delete(MsgFile);
+      for Sitio in SeQuitan do
+        if Sitio <> '' then
+          YaNoSeQuita(Sitio);
     end;
   finally
     if ConCerrojo then
@@ -1320,7 +1889,7 @@ begin
   // Un merge que no puede ir en fast-forward muere con exit 128 y "Not
   // possible to fast-forward": git no sugiere nada y la respuesta era el
   // codigo a pelo (abierto menor del 22-sep). Se dice que significa.
-  if (ExitCode <> 0) and SameText(Cmd, 'merge') and Output.Contains('fast-forward') then
+  if (ExitCode <> 0) and MatchText(Cmd, ['merge', 'pull']) and Output.Contains('fast-forward') then
     Result := Result + #10 + MsgText(SN_GIT_MERGE_DIVERGED);
   if (ExitCode <> 0) and not DiffConCambios and (Output.Contains('--no-ff') or Output.Contains('rebase') or
      Output.Contains('specify the URL')) then
@@ -1446,6 +2015,24 @@ begin
     GetEnvironmentVariable('USERPROFILE').ToLower.EndsWith('\config\systemprofile');
 end;
 
+{ En que MAQUINA corre ESTE proceso. Con dos servidores del mismo nombre y
+  version (28-sep-2026: el 13.1 de este PC y el 13.2 de la VM, mismo token)
+  ninguna respuesta decia cual contestaba: serverInfo identico, el workspace
+  con el mismo nombre y la cuenta como unica pista. Es el dato que los separa.
+  GetComputerName es el lector oficial (el nombre NetBIOS, el mismo que
+  USERDOMAIN muestra sin dominio); COMPUTERNAME solo de reserva. }
+function NombreDeMaquina: string;
+var
+  Buf: array[0..256] of Char;
+  Len: DWORD;
+begin
+  Len := Length(Buf);
+  if GetComputerName(Buf, Len) then
+    Result := Buf
+  else
+    Result := GetEnvironmentVariable('COMPUTERNAME');
+end;
+
 procedure AnadirFichaDelServidor(ADestino: TJSONObject);
 var
   Srv: TJSONObject;
@@ -1474,6 +2061,9 @@ begin
     Srv.AddPair('settingsChangedNote', MsgFmt(SN_SERVER_INI_CHANGED_FMT,
       [FormatDateTime('yyyy-mm-dd hh:nn:ss', TFile.GetLastWriteTime(SettingsIniPath)),
        FormatDateTime('yyyy-mm-dd hh:nn:ss', GArranque)]));
+  // La maquina y la cuenta, juntas: son lo que distingue dos despliegues del
+  // mismo binario (el mismo dato va en serverInfo.host, por Lsp.Host).
+  Srv.AddPair('host', NombreDeMaquina);
   var EsSistema: Boolean;
   Srv.AddPair('account', CuentaDelProceso(EsSistema));
   if EsSistema then

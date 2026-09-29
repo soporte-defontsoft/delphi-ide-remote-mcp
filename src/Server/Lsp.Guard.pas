@@ -472,6 +472,56 @@ function EnlaceLegible(const P: string): Boolean;
   papelera de delphi_delete pasan por aqui. Lanza si no debe o no puede. }
 procedure MueveArbol(const AOrigen, ADestino: string);
 
+{ Lo que ESTE SERVIDOR tiene abierto bajo una carpeta se suelta antes de
+  mudarla. El mudador no sabe quien lo tiene. Hoy, los motores DelphiLSP, uno
+  por proyecto: al cargar la configuracion del proyecto el motor cambia SU
+  directorio de trabajo a la carpeta del proyecto, y Windows no deja renombrar
+  ni borrar el directorio de trabajo de un proceso vivo (medido con el motor
+  lanzado a mano: libre tras initialize, retenida tras
+  workspace/didChangeConfiguration). Quien tenga algo se
+  apunta aqui con su soltador y los DOS que quitan una carpeta de su sitio
+  (MueveArbol y BorraArbol) los llaman a todos, pasado el guard y antes de
+  tocar nada. Medido el 29-sep-2026 (Hermes, en campo): tras UN hover, borrar
+  la carpeta del proyecto daba FILE-036 y moverla SYS-027, y el agente no
+  tenia como cerrar un proceso que era nuestro; la purga y git worktree
+  remove eran peores: el contenido se iba y quedaba el cascaron. Un soltador
+  nunca lanza: lo que no se suelte deja fallar la operacion como antes. Se
+  apunta al arrancar (initialization), nunca con peticiones en marcha.
+
+  Son DOS avisos, y van en pareja: "se va a quitar" (AEmpieza) y "ya esta".
+  Entre uno y otro la carpeta esta SALIENDO y quien tenia algo no vuelve a
+  cogerlo: soltar y quitar no era una sola cosa, y un motor que arrancaba en
+  medio (el primer hover de otro agente) volvia a retener la carpeta. El
+  segundo aviso va SIEMPRE, en un finally: sin el, la carpeta se quedaria
+  saliendo. }
+type
+  TSoltadorDeCarpeta = procedure(const ACarpeta: string; AEmpieza: Boolean);
+
+procedure RegistraSoltadorDeCarpeta(ASoltador: TSoltadorDeCarpeta);
+
+{ Los dos avisos. MueveArbol y BorraArbol los dan solos; estan en la
+  interface para quien quita una carpeta por OTRO camino que los del guard
+  (la rama de carpeta vacia de delphi_delete; git, que borra el mismo).
+  Nunca lanzan. }
+procedure SueltaLoNuestroBajo(const ACarpeta: string);
+procedure YaNoSeQuita(const ACarpeta: string);
+
+{ ADestino cae DENTRO de AOrigen (o es el), por las rutas REALES (la nota
+  larga, en la implementacion). En la interface desde el 29-sep-2026: la
+  sesion LSP pregunta con ella que clientes viven bajo la carpeta que se va a
+  mudar. UN lector de "esto cae dentro de aquello": no se escribe otro. Lanza
+  si una ruta no se puede resolver. }
+function DentroDeSiMismo(const AOrigen, ADestino: string;
+  AOrigenEsElEnlace: Boolean = False): Boolean;
+
+{ Las dos mitades de DentroDeSiMismo, para quien tiene que comparar con un
+  cerrojo cogido: RutaParaComparar RESUELVE (pregunta al disco; con
+  AEsElEnlace, la ruta por donde ESTA y no por adonde apunta) y CaeDentro
+  COMPARA dos rutas ya resueltas: texto, y nada mas. DentroDeSiMismo es las
+  dos seguidas: sigue habiendo UN lector. }
+function RutaParaComparar(const ARuta: string; AEsElEnlace: Boolean = False): string;
+function CaeDentro(const AOrigenResuelto, ADestinoResuelto: string): Boolean;
+
 { La decision de MueveArbol, sola: '' = se puede. Las dos rutas pasan la
   puerta de escritura (PathDenied), el origen ni ES ni CONTIENE un lugar
   protegido (ProtegidoDenegado) y las dos estan en la misma unidad: entre
@@ -986,7 +1036,7 @@ type
 function AccesoDeTool(const ATool: string): TAccesoDeTool;
 { '' si una credencial de solo lectura puede hacer ESTA llamada; si no, la
   negativa READ-002 con lo que pedia. delphi_git decide por argumentos
-  (GitCommandIsQuery: branch/tag sin ellos listan, worktree solo list), el
+  (GitCommandIsQuery: branch/tag sin ellos listan, worktree y stash solo list), el
   resto por la tabla. Fuera del modo solo lectura, siempre ''. }
 { LA clasificacion de una llamada: LEE o ESCRIBE, por la tabla ACCESOS y los
   argumentos (el comando de una mixta, ComandoDeTest, logcat out=, la mitad
@@ -1059,6 +1109,13 @@ function ShellArgDenied(const AText: string): string;
   origin main` names a remote, not a URL): the decision about where this
   machine may talk to belongs to whoever owns the machine. }
 function GitRemoteDenied(const AText: string): string;
+
+{ El host de una direccion de RED de git; '' si no lo es (un nombre, una
+  rama, una carpeta). El lector de GitRemoteDenied, en la interface desde la
+  1.7.7: la tool de git pregunta con el si el remoto de una llamada es de red
+  o es una carpeta, que pasa por la jaula. UN lector de "esto es una
+  direccion de red". }
+function GitUrlHost(const AToken: string): string;
 
 implementation
 
@@ -3686,7 +3743,10 @@ begin
   Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show']) or
     (MatchText(Trim(ACmd), ['branch', 'tag']) and (Trim(AArgs) = '') and (Trim(AMessage) = '')) or
     // worktree list solo ENSENA las copias de trabajo (1.4.0)
-    (SameText(Trim(ACmd), 'worktree') and SameText(Trim(AArgs), 'list'));
+    (SameText(Trim(ACmd), 'worktree') and SameText(Trim(AArgs), 'list')) or
+    // ...y stash list, lo aparcado: pasaba por escritura, con el cerrojo
+    // de los escritores y parando los motores del repo (1.7.7)
+    (SameText(Trim(ACmd), 'stash') and SameText(Trim(AArgs), 'list'));
 end;
 
 var
@@ -3750,13 +3810,14 @@ begin
     ['logcat', 'without out= (out= writes the log to a file)']);
   // git decide por ARGUMENTOS (GitCommandIsQuery): se anuncia lo
   // INCONDICIONAL como lectura y lo condicionado con su condicion (branch y
-  // tag listan solo sin args ni message; worktree solo args=list). Se
+  // tag listan solo sin args ni message; worktree y stash solo args=list). Se
   // anunciaban branch/tag como lecturas y la puerta los negaba con args
   // (r11b H1, r11c H3)
   AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show'], 'command',
     ['branch', 'without args or message (then it lists)',
      'tag', 'without args or message (then it lists)',
-     'worktree', 'with args=list']);
+     'worktree', 'with args=list',
+     'stash', 'with args=list']);
   // lecturas para la puerta, con un EFECTO fuera del workspace: el hint MCP
   // "no modifica su entorno" es falso y se dice (r11e H6)
   AnadeAcceso('delphi_report', atLectura, [], 'command', nil,
@@ -4597,17 +4658,25 @@ end;
   un MOVE renombra el enlace mismo, y por su destino una junction a un
   antepasado caia "dentro de si misma" y no se podia ni borrar ni mover
   (septima revision). Una copia lee a traves del enlace: la real. }
+function RutaParaComparar(const ARuta: string; AEsElEnlace: Boolean = False): string;
+begin
+  if AEsElEnlace then
+    Result := RutaDelEnlace(ExcludeTrailingPathDelimiter(TPath.GetFullPath(ARuta)))
+  else
+    Result := RealPath(ExcludeTrailingPathDelimiter(ARuta));
+  Result := IncludeTrailingPathDelimiter(Result);
+end;
+
+function CaeDentro(const AOrigenResuelto, ADestinoResuelto: string): Boolean;
+begin
+  Result := StartsText(AOrigenResuelto, ADestinoResuelto);
+end;
+
 function DentroDeSiMismo(const AOrigen, ADestino: string;
   AOrigenEsElEnlace: Boolean = False): Boolean;
-var
-  O: string;
 begin
-  if AOrigenEsElEnlace then
-    O := RutaDelEnlace(ExcludeTrailingPathDelimiter(TPath.GetFullPath(AOrigen)))
-  else
-    O := RealPath(ExcludeTrailingPathDelimiter(AOrigen));
-  Result := StartsText(IncludeTrailingPathDelimiter(O),
-    IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(ADestino))));
+  Result := CaeDentro(RutaParaComparar(AOrigen, AOrigenEsElEnlace),
+    RutaParaComparar(ADestino));
 end;
 
 { LA regla de seguir un enlace al COPIAR, para el copiador (CopiaArbol) y
@@ -4750,7 +4819,14 @@ begin
   Motivo := BorradoDenegado(ADir);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
-  BorraArbolDentro(ADir);
+  // ...y lo NUESTRO, fuera, como en MueveArbol: con un DelphiLSP vivo en la
+  // carpeta se borraba el contenido y quedaba el cascaron (29-sep-2026)
+  SueltaLoNuestroBajo(ADir);
+  try
+    BorraArbolDentro(ADir);
+  finally
+    YaNoSeQuita(ADir);
+  end;
 end;
 
 function ProtegidoDenegado(const ADir: string): string;
@@ -4801,6 +4877,39 @@ begin
     Result := MsgFmt(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]);
 end;
 
+var
+  GSoltadores: TArray<TSoltadorDeCarpeta>;
+
+procedure RegistraSoltadorDeCarpeta(ASoltador: TSoltadorDeCarpeta);
+begin
+  if not Assigned(ASoltador) then
+    Exit;
+  SetLength(GSoltadores, Length(GSoltadores) + 1);
+  GSoltadores[High(GSoltadores)] := ASoltador;
+end;
+
+procedure AvisaALosSoltadores(const ACarpeta: string; AEmpieza: Boolean);
+var
+  I: Integer;
+begin
+  for I := 0 to High(GSoltadores) do
+    try
+      GSoltadores[I](ACarpeta, AEmpieza);
+    except
+      // lo que no se suelte deja fallar la mudanza, entera, como antes
+    end;
+end;
+
+procedure SueltaLoNuestroBajo(const ACarpeta: string);
+begin
+  AvisaALosSoltadores(ACarpeta, True);
+end;
+
+procedure YaNoSeQuita(const ACarpeta: string);
+begin
+  AvisaALosSoltadores(ACarpeta, False);
+end;
+
 procedure MueveArbol(const AOrigen, ADestino: string);
 var
   Motivo: string;
@@ -4809,6 +4918,9 @@ begin
   Motivo := MovidoDenegado(AOrigen, ADestino);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
+  // ...y lo NUESTRO, fuera: una mudanza que el guard niega no suelta nada
+  SueltaLoNuestroBajo(AOrigen);
+  try
   // MoveFile a secas: ni MOVEFILE_COPY_ALLOWED ni TDirectory.Move. En la
   // misma unidad renombra de un golpe; si no puede, devuelve False sin
   // haber tocado nada. Entre unidades falla con ERROR_NOT_SAME_DEVICE: el
@@ -4819,6 +4931,9 @@ begin
     if GetLastError = ERROR_NOT_SAME_DEVICE then
       raise Exception.Create(MsgFmt(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]));
     RaiseLastOSError;
+  end;
+  finally
+    YaNoSeQuita(AOrigen);
   end;
 end;
 

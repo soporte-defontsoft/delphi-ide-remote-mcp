@@ -350,6 +350,10 @@ try:
           srv.get('startedAt', '').startswith('20') and
           srv.get('exe', '').lower().endswith('delphilspmcp.exe') and
           srv.get('uptime', '') != '', str(srv)[:200])
+    # 28-sep-2026: dos servidores del mismo nombre y version (13.1 aqui, 13.2 en
+    # la VM, mismo token) contestaban sin nada que los distinguiera
+    check('workspace: dice en que maquina corre (host = COMPUTERNAME)',
+          mc.es_esta_maquina(srv.get('host', '')), str(srv)[:200])
 except Exception:
     check('workspace: parsea', False, out[:200])
 

@@ -15,7 +15,8 @@ uses
   LspTests.Pascal in 'LspTests.Pascal.pas',
   LspTests.Mensajes in 'LspTests.Mensajes.pas',
   LspTests.Foto in 'LspTests.Foto.pas',
-  LspTests.Log in 'LspTests.Log.pas';
+  LspTests.Log in 'LspTests.Log.pas',
+  LspTests.Motor in 'LspTests.Motor.pas';
 
 var
   Runner: ITestRunner;

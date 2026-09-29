@@ -5,7 +5,7 @@ per task, commit, back to main).
 
 Usage:  python tests/test_git_branches.py [path-to-DelphiLspMcp.exe]
 """
-import os
+import os, subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -150,6 +150,73 @@ check('merge sin rama rechazado', mc.rechazado(r) and mc.es(r, 'SR_GIT_MERGE_NEE
 r = git({'command': 'switch', 'args': 'tarea-1; rm -rf /'})
 check('metacaracteres rechazados',
       mc.fallo(r) and mc.es(r, 'SR_GIT_SHELL_METACHARS_ARGS'), r[:200])
+
+# ---- pull: siempre por fast-forward, como merge (1.7.7) ----
+# pull es bajar e INTEGRAR, y lo segundo lo hacia como git quisiera: con las
+# dos historias divergidas, sin ninguna opcion, dejaba un commit de mezcla
+# (lo que merge promete aqui que no puede pasar); con --rebase reescribia la
+# historia y con --squash dejaba el arbol a medias. Medido el 29-sep-2026.
+# El remoto es una carpeta de la bateria: lo monta el git de la maquina.
+def fuera(*a, cwd):
+    r = subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com'] + list(a),
+                       cwd=cwd, capture_output=True, text=True)
+    return (r.stdout + r.stderr).strip()
+
+
+def cabeza():
+    return fuera('rev-parse', 'HEAD', cwd=REPO_T)
+
+
+ORIGEN = os.path.join(BASE, 'origen.git')
+OTRO = os.path.join(BASE, 'otro')
+rama = fuera('branch', '--show-current', cwd=REPO_T)
+fuera('clone', '-q', '--bare', REPO_T, ORIGEN, cwd=BASE)
+fuera('remote', 'add', 'origin', ORIGEN, cwd=REPO_T)
+fuera('clone', '-q', ORIGEN, OTRO, cwd=BASE)
+fuera('switch', '-q', rama, cwd=OTRO)
+
+
+def llega_al_remoto(nombre, etiqueta=None):
+    open(os.path.join(OTRO, nombre), 'w').write('del remoto\n')
+    fuera('add', '.', cwd=OTRO)
+    fuera('commit', '-qm', 'remoto: ' + nombre, cwd=OTRO)
+    if etiqueta:
+        fuera('tag', etiqueta, cwd=OTRO)
+    return fuera('push', '-q', '--tags', 'origin', rama, cwd=OTRO)
+
+
+llega_al_remoto('r1.txt')
+r = git({'command': 'pull', 'args': 'origin ' + rama})
+check('pull de lo que va por delante (fast-forward): integra',
+      'exit=0' in r and os.path.exists(os.path.join(REPO_T, 'r1.txt')), r[:250])
+llega_al_remoto('r2.txt', 'v-remoto')
+r = git({'command': 'pull', 'args': '--tags origin ' + rama})
+check('pull con una opcion de la BAJADA (--tags): integra y trae la etiqueta',
+      'exit=0' in r and os.path.exists(os.path.join(REPO_T, 'r2.txt'))
+      and 'v-remoto' in git({'command': 'tag'}), r[:250])
+# ahora DIVERGEN: el remoto avanza por un lado y el repo por otro
+llega_al_remoto('r3.txt')
+open(os.path.join(REPO_T, 'local.txt'), 'w').write('local\n')
+git({'command': 'add', 'args': '.'})
+git({'command': 'commit', 'message': 'local, por su lado'})
+partida = cabeza()
+r = git({'command': 'pull', 'args': 'origin ' + rama})
+check('pull con las historias DIVERGIDAS: rechazado, sin commit de mezcla y sin dejarlo a medias',
+      mc.abre(r, 'SR_GIT_EXIT_FMT') and mc.es(r, 'SN_GIT_MERGE_DIVERGED') and cabeza() == partida
+      and not os.path.exists(os.path.join(REPO_T, '.git', 'MERGE_HEAD'))
+      and not os.path.exists(os.path.join(REPO_T, 'r3.txt')), r[:300])
+mal = []
+for opcion in ('--rebase', '-r', '--no-rebase', '--no-ff', '--squash', '--no-commit', '--autostash'):
+    r = git({'command': 'pull', 'args': '%s origin %s' % (opcion, rama)})
+    limpio = git({'command': 'status', 'args': '--porcelain'})
+    if not (mc.rechazado(r) and mc.es(r, 'SR_GIT_PULL_ARGS_FMT') and cabeza() == partida
+            and 'r3.txt' not in limpio):
+        mal.append('%s: %s | %s' % (opcion, ' '.join(r.split())[:120], ' '.join(limpio.split())[:60]))
+        fuera('rebase', '--abort', cwd=REPO_T)
+        fuera('merge', '--abort', cwd=REPO_T)
+        fuera('reset', '-q', '--hard', partida, cwd=REPO_T)
+check('pull con una opcion que cambia COMO se integra (rebase, mezcla, squash...): rechazado, y '
+      'la historia y el arbol como estaban', not mal, mal[:3])
 
 srv.mata()
 

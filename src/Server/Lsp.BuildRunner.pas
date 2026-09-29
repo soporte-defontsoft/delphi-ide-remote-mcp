@@ -250,8 +250,21 @@ var
   Cmd: string;
   Deadline: UInt64;
   Launched: Boolean;
+  Job: THandle; // declared here: it outlives the launch block below
 begin
   ASandboxed := False;
+  // Label the working directory Low so the confined program can write its
+  // OWN output there (and nowhere else on the system). Relabel EXISTING
+  // entries too, so a file created earlier at Medium (a log/csv/ini next to
+  // the exe) stays writable by the confined run instead of an unexplained
+  // "Acceso denegado" (field round 6, R6-C). BEFORE the launch lock: it walks
+  // a whole tree, and every other launch of the server waited behind it.
+  if ALowIntegrity and (AWorkDir <> '') then
+    LabelDirTreeLowIntegrity(AWorkDir);
+  // From the pipe to the closing of the child's end, nobody else launches:
+  // another child would take this end with it (see Lsp.Sandbox, 2026-09-29).
+  EnterSpawn;
+  try
   FillChar(SA, SizeOf(SA), 0);
   SA.nLength := SizeOf(SA);
   SA.bInheritHandle := True;
@@ -275,20 +288,14 @@ begin
   // Create SUSPENDED so we can put the process into a confining Job Object
   // BEFORE it runs (otherwise a fast child could spawn a grandchild that
   // escapes the job). Then resume.
-  var Job: THandle := CreateConfinedJob;
+  Job := CreateConfinedJob;
   Launched := False;
   if ALowIntegrity then
   begin
-    // Label the working directory Low so the confined program can write its
-    // OWN output there (and nowhere else on the system), then launch at Low
-    // integrity. Relabel EXISTING entries too, so a file created earlier at
-    // Medium (a log/csv/ini next to the exe) stays writable by the confined
-    // run instead of an unexplained "Acceso denegado" (field round 6, R6-C).
-    // If the OS refuses the lowered launch, fall back to a normal launch and
-    // report ASandboxed=False - never leave the caller thinking a confinement
-    // is in place when it is not.
-    if AWorkDir <> '' then
-      LabelDirTreeLowIntegrity(AWorkDir);
+    // The working directory is labelled Low already (above). Launch at Low
+    // integrity; if the OS refuses the lowered launch, fall back to a normal
+    // launch and report ASandboxed=False - never leave the caller thinking
+    // a confinement is in place when it is not.
     if CreateProcessLowIntegrity(Cmd, WorkDirPtr,
       CREATE_NO_WINDOW or CREATE_SUSPENDED, True, SI, PI) then
     begin
@@ -309,6 +316,9 @@ begin
     AssignProcessToJobObject(Job, PI.hProcess);
   ResumeThread(PI.hThread);
   CloseHandle(WriteH); // ours no more; EOF arrives when the child exits
+  finally
+    LeaveSpawn;
+  end;
 
   SetLength(Bytes, 0);
   Deadline := GetTickCount64 + UInt64(ATimeoutMs);

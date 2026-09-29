@@ -94,7 +94,8 @@ uses
   Mcp.Tools.Messages,
   Mcp.Vault.Session,
   Mcp.Vault.Seed,
-  Lsp.LogSink;
+  Lsp.LogSink,
+  Mcp.Tools.Workspace; // NombreDeMaquina: the one reader of the host name
 
 constructor TMcpHost.Create;
 begin
@@ -103,6 +104,9 @@ begin
   FSettings := TMCPSettings.Create('', False); // no settings.ini side effects
   FSettings.ServerName := SERVER_NAME;
   FSettings.ServerVersion := SERVER_VERSION;
+  // serverInfo.host: two servers of the same name and version (a 13.1 and a
+  // 13.2, same token) answered with nothing that told them apart (2026-09-28)
+  FSettings.MachineName := NombreDeMaquina;
 end;
 
 destructor TMcpHost.Destroy;

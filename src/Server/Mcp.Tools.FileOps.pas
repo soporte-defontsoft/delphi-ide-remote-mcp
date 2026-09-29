@@ -461,11 +461,19 @@ begin
   if TDirectory.Exists(Params.Path) and
      (Length(TDirectory.GetFileSystemEntries(Params.Path)) = 0) then
   begin
-    ClearReadOnlyTree(Params.Path);
+    // la carpeta VACIA no pasa por el mudador: lo NUESTRO se suelta aqui. Una
+    // carpeta que algo de fuera vacio (git, al cambiar de rama) con el motor
+    // dentro era un cascaron que no se dejaba quitar (29-sep-2026)
+    SueltaLoNuestroBajo(Params.Path);
     try
-      TDirectory.Delete(Params.Path, False);
-    except
-      // fall through to the honest report below
+      ClearReadOnlyTree(Params.Path);
+      try
+        TDirectory.Delete(Params.Path, False);
+      except
+        // fall through to the honest report below
+      end;
+    finally
+      YaNoSeQuita(Params.Path);
     end;
     if not TDirectory.Exists(Params.Path) then
       Exit(MsgFmt(SN_FILE_DELETE_EMPTY_OK_FMT,

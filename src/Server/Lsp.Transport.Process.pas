@@ -18,6 +18,12 @@ uses
   System.SyncObjs,
   Winapi.Windows;
 
+const
+  // How long Stop waits for the reader to see the end of its pipe before it
+  // cancels the read. Public: a stop that takes this long is how a test
+  // tells that somebody else held the pipe (LspTests.Motor).
+  READER_EOF_WAIT_MS = 1000;
+
 type
   TLspMessageEvent = reference to procedure(const AJson: string);
 
@@ -34,11 +40,17 @@ type
     FOnMessage: TLspMessageEvent;
     FWriteLock: TCriticalSection;
     FRunning: Boolean;
+    FAbandoned: Boolean; // the reader was left behind: see Stop and FreeInstance
     procedure ReaderLoop;
     procedure CloseHandles;
+    function CloseStdIn(AWaitMs: Cardinal): Boolean;
   public
     constructor Create(const AExePath: string);
     destructor Destroy; override;
+    { A transport whose reader was left behind (Stop) keeps its MEMORY: that
+      thread runs on this object, and freed memory under a thread that may
+      still wake is worse than a leaked object. }
+    procedure FreeInstance; override;
     procedure Start;
     procedure Stop;
     procedure SendJson(const AJson: string);
@@ -51,6 +63,7 @@ type
 implementation
 
 uses
+  Lsp.Sandbox, // EnterSpawn / LeaveSpawn: one handle-inheriting launch at a time
   Lsp.Texts;
 
 const
@@ -75,6 +88,13 @@ begin
   inherited;
 end;
 
+procedure TLspProcessTransport.FreeInstance;
+begin
+  if FAbandoned then
+    Exit;
+  inherited;
+end;
+
 procedure TLspProcessTransport.Start;
 var
   SA: TSecurityAttributes;
@@ -87,6 +107,10 @@ begin
   if not FileExists(FExePath) then
     raise ELspTransport.Create(MsgFmt(SE_LSP_LSP_EXECUTABLE_FOUND_FMT, [FExePath]));
 
+  // From the pipes to the closing of the child's ends, nobody else launches:
+  // another child would take these ends with it (see Lsp.Sandbox).
+  EnterSpawn;
+  try
   FillChar(SA, SizeOf(SA), 0);
   SA.nLength := SizeOf(SA);
   SA.bInheritHandle := True;
@@ -132,6 +156,9 @@ begin
   // These ends now belong to the child.
   CloseHandle(ChildStdInRead);
   CloseHandle(ChildStdOutWrite);
+  finally
+    LeaveSpawn;
+  end;
 
   FRunning := True;
   FReader := TThread.CreateAnonymousThread(ReaderLoop);
@@ -141,33 +168,98 @@ end;
 
 procedure TLspProcessTransport.Stop;
 begin
-  if not FRunning then
-  begin
-    CloseHandles;
-    Exit;
-  end;
+  // By what there IS, not by FRunning: the reader clears that flag when it
+  // ends by itself, and a stop that left at once then neither ended a
+  // process that was still alive nor collected the thread (2026-09-29).
   FRunning := False;
 
-  // Closing the child's stdin signals EOF; give it a moment, then force.
-  if FChildStdInWrite <> INVALID_HANDLE_VALUE then
+  if FProcInfo.hProcess <> 0 then
   begin
-    CloseHandle(FChildStdInWrite);
-    FChildStdInWrite := INVALID_HANDLE_VALUE;
+    // Closing the child's stdin signals EOF; give it a moment, then force.
+    // A writer stuck in the pipe (an engine that stopped reading) holds the
+    // lock: ending the process breaks the pipe and lets that writer go.
+    if not CloseStdIn(2000) then
+      TerminateProcess(FProcInfo.hProcess, 1);
+    if WaitForSingleObject(FProcInfo.hProcess, 2000) = WAIT_TIMEOUT then
+    begin
+      TerminateProcess(FProcInfo.hProcess, 1);
+      // TerminateProcess only ASKS. What the process held - its current
+      // directory, the reason an engine is stopped before its folder moves -
+      // is released when it has really ended.
+      WaitForSingleObject(FProcInfo.hProcess, 3000);
+    end;
   end;
-  if WaitForSingleObject(FProcInfo.hProcess, 2000) = WAIT_TIMEOUT then
-    TerminateProcess(FProcInfo.hProcess, 1);
 
   if Assigned(FReader) then
   begin
-    FReader.WaitFor;
-    FreeAndNil(FReader);
+    // The reader ends when the pipe breaks, and the pipe breaks when the
+    // LAST write end closes. If somebody else holds one (measured
+    // 2026-09-29: another child that inherited it) the read never returns:
+    // it is cancelled, and the join is BOUNDED. Stop used to run only when
+    // the server stopped; now it runs in a request thread that holds the
+    // global write lock, and a wait with no end there hangs every writer.
+    if WaitForSingleObject(FReader.Handle, READER_EOF_WAIT_MS) = WAIT_TIMEOUT then
+    begin
+      CancelIoEx(FChildStdOutRead, nil);
+      if WaitForSingleObject(FReader.Handle, 3000) = WAIT_TIMEOUT then
+      begin
+        // Left behind, with the handle it reads from: a leaked thread and a
+        // leaked handle, never a hung server. It delivers nothing more (the
+        // client it delivered to may be freed), and this object is never
+        // released under it (FreeInstance).
+        FAbandoned := True;
+        FOnMessage := nil;
+        FReader := nil;
+        FChildStdOutRead := INVALID_HANDLE_VALUE;
+      end;
+    end;
+    if Assigned(FReader) then
+    begin
+      FReader.WaitFor;
+      FreeAndNil(FReader);
+    end;
   end;
   CloseHandles;
 end;
 
+{ Under the write lock: a writer on another thread either finishes before the
+  handle closes or finds it closed - never a closed handle VALUE, which
+  Windows may already have handed to somebody else. Since 2026-09-29 a client
+  can be stopped while another agent's request is in flight (the session
+  retires the clients of a folder that is about to be moved).
+
+  The wait is BOUNDED: WriteFile on a pipe blocks while the engine does not
+  read, and a writer blocked there keeps the lock. False = not closed, a
+  writer is still inside; the caller ends the process, which frees it. }
+function TLspProcessTransport.CloseStdIn(AWaitMs: Cardinal): Boolean;
+var
+  T0: UInt64;
+begin
+  T0 := GetTickCount64;
+  Result := FWriteLock.TryEnter;
+  while (not Result) and (GetTickCount64 - T0 < AWaitMs) do
+  begin
+    Sleep(10);
+    Result := FWriteLock.TryEnter;
+  end;
+  if not Result then
+    Exit;
+  try
+    if FChildStdInWrite <> INVALID_HANDLE_VALUE then
+    begin
+      CloseHandle(FChildStdInWrite);
+      FChildStdInWrite := INVALID_HANDLE_VALUE;
+    end;
+  finally
+    FWriteLock.Leave;
+  end;
+end;
+
 procedure TLspProcessTransport.CloseHandles;
 begin
-  if FChildStdInWrite <> INVALID_HANDLE_VALUE then
+  // by now the engine is gone (or never started): nobody can stay inside a
+  // write for long. If somebody does, close it as it was always closed.
+  if (not CloseStdIn(5000)) and (FChildStdInWrite <> INVALID_HANDLE_VALUE) then
   begin
     CloseHandle(FChildStdInWrite);
     FChildStdInWrite := INVALID_HANDLE_VALUE;
@@ -217,6 +309,9 @@ begin
 
   FWriteLock.Enter;
   try
+    // asked again HERE: Stop may have closed it since the check above
+    if FChildStdInWrite = INVALID_HANDLE_VALUE then
+      raise ELspTransport.Create(MsgText(SE_LSP_TRANSPORT_STARTED));
     if not WriteFile(FChildStdInWrite, Frame[0], Length(Frame), Written, nil) then
       raise ELspTransport.Create(MsgFmt(SE_LSP_WRITEFILE_LSP_STDIN_FAILED_FMT, [GetLastError]));
   finally
@@ -286,7 +381,8 @@ begin
       BodyText := TEncoding.UTF8.GetString(Acc, HeaderEnd, ContentLen);
       Acc := Copy(Acc, Total, Length(Acc) - Total);
 
-      if Assigned(FOnMessage) then
+      // nothing is delivered once the stop has begun
+      if FRunning and Assigned(FOnMessage) then
       try
         FOnMessage(BodyText);
       except

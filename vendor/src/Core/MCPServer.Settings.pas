@@ -14,6 +14,7 @@ type
     FHost: string;
     FServerName: string;
     FServerVersion: string;
+    FMachineName: string; // [local change] the machine this server runs on
     FEndpoint: string;
     FCorsEnabled: Boolean;
     FCorsAllowedOrigins: string;
@@ -38,6 +39,9 @@ type
     property Protocol: string read GetProtocol;
     property ServerName: string read FServerName write FServerName;
     property ServerVersion: string read FServerVersion write FServerVersion;
+    // [local change] reported as serverInfo.host; a runtime fact, never read
+    // from or written to the ini
+    property MachineName: string read FMachineName write FMachineName;
     property Endpoint: string read FEndpoint write FEndpoint;
     property CorsEnabled: Boolean read FCorsEnabled write FCorsEnabled;
     property CorsAllowedOrigins: string read FCorsAllowedOrigins write FCorsAllowedOrigins;

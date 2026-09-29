@@ -56,6 +56,14 @@ try:
     code, body = post(INIT, TOKEN)
     ok = code == 200 and 'delphi-lsp-mcp-service' in body
     check('http: initialize con token', ok, '%s %s' % (code, body[:150]))
+    # 28-sep-2026: dos servidores del mismo nombre y version (13.1 aqui, 13.2 en
+    # la VM, mismo token) contestaban sin nada que los distinguiera
+    try:
+        host = json.loads(body)['result']['serverInfo'].get('host', '')
+    except (ValueError, KeyError, TypeError):
+        host = ''
+    check('http: serverInfo.host es la maquina que contesta (COMPUTERNAME)',
+          mc.es_esta_maquina(host), '%s vs %s' % (host, os.environ.get('COMPUTERNAME')))
     # streamable-HTTP clients ask with Accept: text/event-stream and read the
     # session from the Mcp-Session-Id header (v0.46: the SSE path emits it too)
     _, h, sse = mc.post(URL, INIT, TOKEN, accept=mc.ACCEPT_STREAMABLE, t=60)
@@ -341,7 +349,7 @@ try:
         check('anuncio: readOnlyHint == (access read-only sin sideEffect)', not mal_hint, mal_hint)
         cuando = {t['name']: (t.get('_meta') or {}).get('readOnlyWhen') for t in anunciadas}
         check('anuncio: git y adb anuncian sus lecturas CONDICIONADAS (readOnlyWhen)',
-              set((cuando.get('delphi_git') or {})) == {'branch', 'tag', 'worktree'} and
+              set((cuando.get('delphi_git') or {})) == {'branch', 'tag', 'worktree', 'stash'} and
               set((cuando.get('delphi_adb') or {})) == {'logcat'}, cuando)
         efectos = {t['name']: (t.get('_meta') or {}).get('sideEffect') for t in anunciadas}
         check('anuncio: report y messages dicen su efecto y readOnlyHint false',

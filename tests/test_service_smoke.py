@@ -21,6 +21,8 @@ prueba del despliegue, no del build; la version que contesta sale en una NOTA.
     V4 initialize + delphi_workspace dice mode=servicio, transport=http
     V5 dice con que CUENTA corre, y no es LocalSystem (el IDE guarda su
        configuracion en HKCU: como LocalSystem todo "funciona" y no ve nada)
+    V5b dice en que MAQUINA corre (host = COMPUTERNAME de aqui): dos servidores
+        del mismo nombre y version no se distinguian por nada (28-sep-2026)
     V6 una lectura de verdad (delphi_list de la primera raiz)
     V7 una escritura de verdad, y su limpieza (delphi_textedit create + delete)
 """
@@ -110,6 +112,20 @@ else:
         check('V5 dice con que cuenta corre, y NO es LocalSystem',
               bool(srv.get('account')) and 'accountWarning' not in srv,
               json.dumps(srv)[:240])
+    # "host" nacio en la 1.7.7: de ahi en adelante su FALTA es un fallo, no una
+    # nota. La nota por la ausencia del campo no podia salir roja nunca, y
+    # con una respuesta que no se deja leer decia "el servidor es anterior"
+    # (revision de la 1.7.7). Se decide por la VERSION que contesta.
+    try:
+        ver = tuple(int(x) for x in str(srv.get('version', '')).split('.')[:3])
+    except ValueError:
+        ver = ()
+    if ver and ver < (1, 7, 7) and 'host' not in srv:
+        print('NOTA: el servidor desplegado (%s) es anterior a "host" (1.7.7); '
+              'V5b no se mide hasta desplegar este build.' % srv.get('version'))
+    else:
+        check('V5b dice en que MAQUINA corre (host = COMPUTERNAME de aqui)',
+              mc.es_esta_maquina(srv.get('host', '')), json.dumps(srv)[:240])
     roots = j.get('roots') or []
     escribible = j.get('access') == 'read-write'
     if roots:

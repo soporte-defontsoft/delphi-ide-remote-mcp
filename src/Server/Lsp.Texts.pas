@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.7.6';
+  SERVER_VERSION = '1.7.7';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -397,6 +397,28 @@ const
     literal de la primera, y este texto llevaba la segunda: al agente que se
     equivocaba de nombre se le decia que se rindiera (medido 2026-09-20).
     delphi_list y delphi_search ya lo hacen bien sobre la misma entrada. }
+  { El motor de ese proyecto lo paro el propio servidor: su carpeta se movia
+    o se borraba, o git reescribia el arbol (switch, merge, stash, pull de
+    otro agente). Quien tenia una peticion en vuelo lo recibe AL INSTANTE, no
+    al acabar su plazo de 30 o 60 s (29-sep-2026). Con etiqueta: lo lee un
+    agente, que tiene que saber que basta con repetir. Y el motor que se
+    acabo SOLO: el servidor lo retira igual, y a quien tenia una peticion en
+    vuelo no se le dice que su carpeta se movia (sexta revision). }
+  SR_LSP_ENGINE_STOPPED =
+    '[LSP-033 DENIED] The LSP engine of that project is not running any ' +
+    'more: this server stopped it - its folder was being moved or ' +
+    'deleted, or git was rewriting the tree (switch, merge, stash, pull) ' +
+    '- or its process had ended by itself. Repeat the request - at the ' +
+    'new place if the folder was moved.';
+
+  { Una carpeta que se esta yendo no arranca motores: el que arrancase
+    volveria a retenerla (29-sep-2026). }
+  SR_LSP_FOLDER_LEAVING_FMT =
+    '[LSP-032 DENIED] "%s" is inside a folder that is being moved, ' +
+    'deleted or rewritten by git right now, and no LSP engine is started ' +
+    'there. Repeat the request in a moment - at the new place if the ' +
+    'folder was moved.';
+
   SR_LSP_NO_FILE_FMT =
     '[LSP-011 NOT_FOUND] %s does not exist. Check the name and the ' +
     'folder: delphi_list root=<folder> shows what is really there, and ' +
@@ -4635,6 +4657,108 @@ const
     'repository in MERGING with half-resolved conflicts, which is ' +
     'exactly what this command promises cannot happen.';
 
+  { pull es bajar e INTEGRAR, y lo segundo lo hacia como git quisiera: con
+    las historias divergidas y sin ninguna opcion dejaba un commit de mezcla
+    -lo que merge promete aqui que no puede pasar-, con --rebase reescribia
+    la historia y con --squash dejaba el arbol a medias (medido el
+    29-sep-2026). Se corre SIEMPRE con --ff-only, como merge, y de las
+    opciones admite las de la bajada. }
+  SR_GIT_PULL_ARGS_FMT =
+    '[GIT-042 DENIED] pull does not take "%s". It integrates by ' +
+    'fast-forward and nothing else (it is run with --ff-only, like ' +
+    'merge): what would need a merge commit or a rebase is refused, not ' +
+    'left half-done. It takes a remote and a branch (args="origin ' +
+    'main") and, of the options, those of the download: --tags, ' +
+    '--no-tags, --prune, --depth=<n>, --unshallow (and --ff-only, which ' +
+    'it has anyway). Nothing was done.';
+
+  { Las opciones de fetch y de push: una lista de las que valen (la de pull
+    es la de fetch mas --ff-only, y tiene su texto). }
+  SR_GIT_RED_OPCION_FMT =
+    '[GIT-043 DENIED] %s does not take "%s". Of the options it takes ' +
+    'these and no other: %s. The rest of "args" is the remote and what ' +
+    'to bring or send (args="origin main"). Nothing was done.';
+
+  { EL REMOTO es adonde git va a leer o a escribir. Era de la jaula y no lo
+    miraba nadie cuando era una CARPETA: la lista de hosts solo entiende
+    direcciones de red. Medido el 29-sep-2026 por la tool: con una carpeta
+    de fuera de las raices, por su ruta o por el nombre de un remoto, fetch
+    traia su historia y push escribia ramas alli. }
+  SR_GIT_REMOTO_FUERA_FMT =
+    '[GIT-044 DENIED] The remote of this %s reaches the folder "%s", ' +
+    'where this session may not %s: it is outside your roots, or it is ' +
+    'there only to be read. A remote that is a folder is looked at ' +
+    'whole - the folder and the repository that lives there, which may ' +
+    'be somewhere else (a linked worktree) - and given by its path or by ' +
+    'the name it has in the repository it is the same folder. Nothing ' +
+    'was done.';
+
+  { Las formas que se ADMITEN de la direccion de un remoto. Medido el
+    29-sep-2026 por la tool (cuarta revision): git decodifica los %xx de un
+    file:// y aqui se leian tal cual, y un remoto del repo con su direccion
+    en file://C:/... (dos barras) pasaba por direccion de red. }
+  SR_GIT_REMOTO_ILEGIBLE_FMT =
+    '[GIT-045 DENIED] The remote of this %s, "%s", is not in a form this ' +
+    'tool takes (if you gave a name, that is the address the name has in ' +
+    'the repository). A remote is the NAME it has in the repository ' +
+    '(args="origin"); a network address the operator allows, written ' +
+    'with its scheme (https://, http://, ssh://, git://) or as ' +
+    'user@host:path; or a FOLDER that is there, inside your roots, by ' +
+    'its path - the folder itself, with its whole name - or as ' +
+    'file:///<drive>:/<path> with nothing percent-encoded. Nothing was ' +
+    'done.';
+
+  { Lo que se escribe en la llamada y no es NI un remoto del repo NI una
+    carpeta que este. Lo mas corriente: un repo recien hecho con init, sin
+    remotos, y "push origin main". Llegaba a git, que decia que "origin" no
+    parecia un repositorio; desde que una carpeta-remoto tiene que ser una
+    carpeta que esta, se dice aqui, con los remotos que el repo SI tiene. }
+  SR_GIT_REMOTO_NO_ESTA_FMT =
+    '[GIT-049 NOT_FOUND] "%s" is not a remote of this repository (its ' +
+    'remotes: %s), and it is not a folder that is there either ("%s"). A ' +
+    'remote is given by the name it has in the repository, as a network ' +
+    'address the operator allows, or as a folder inside your roots - the ' +
+    'folder itself, with its whole name. This tool does not add remotes: ' +
+    'a clone brings its own, and the operator configures the others. ' +
+    'Nothing was done.';
+
+  { Si git no contesta a lo que se le pregunta para JUZGAR el remoto (sus
+    remotos, la direccion de uno, su configuracion), el remoto no se usa: un
+    fallo de la pregunta acababa en "se puede" (cuarta revision de la 1.7.7,
+    leido en el codigo). }
+  SR_GIT_REMOTO_SIN_RESPUESTA_FMT =
+    '[GIT-047 DENIED] git did not answer what this server asks it before ' +
+    'a %s (the remotes of the repository, their addresses, what they are ' +
+    'configured to send), and a remote that cannot be looked at is not ' +
+    'used. Repeat in a moment; if it goes on, command=status says how ' +
+    'the repository is. Nothing was done.';
+
+  { Lo que push envia cuando la llamada no lo dice lo decide la configuracion
+    del repo. Medido el 29-sep-2026 (cuarta revision): desde un repo espejo
+    (clone --mirror), push a secas borro del remoto una rama. }
+  SR_GIT_PUSH_CONFIG_FMT =
+    '[GIT-048 DENIED] With no names in the call, what goes to the remote ' +
+    '"%s" is what this repository is configured to send (%s), and that ' +
+    'overwrites or deletes what is there. push ADDS to the remote ' +
+    'through this tool: say what to send by its name (args="%s main"). ' +
+    'Nothing was done.';
+
+  { Lo que push ENVIA, detras del remoto: nombres. push anade al remoto; lo
+    que ya hay alli no se reescribe ni se borra por esta tool (David,
+    29-sep-2026). Medido ese dia, con --force y --delete ya negados por su
+    nombre: args="origin +main" reescribia la rama del remoto y
+    args="origin :sobra" la borraba. }
+  SR_GIT_PUSH_NOMBRE_FMT =
+    '[GIT-046 DENIED] push does not take "%s". After the remote come the ' +
+    'names of what to send: a branch or a tag (args="origin main"), or ' +
+    'local:remote with a name on each side (args="origin ' +
+    'HEAD:refs/heads/copy"). A name starts with a letter or a digit and ' +
+    'goes on with letters, digits and . _ / - ; what is on the left of ' +
+    'local:remote may be a version of the repository too (HEAD~1). ' +
+    'push ADDS to the remote: what is already there is ' +
+    'never overwritten or deleted through this tool - if the remote has ' +
+    'moved on, bring it first (command=pull). Nothing was done.';
+
   SN_GIT_MERGE_DIVERGED =
     '[GIT-008] MERGE REFUSED BY GIT: the two branches have diverged and ' +
     'this tool only integrates by fast-forward (no merge commit, no ' +
@@ -4694,6 +4818,21 @@ const
     'repository (%s). It takes files or folders INSIDE the repo, ' +
     'relative to "repo" or absolute, with their name as is: no ' +
     'wildcards. Nothing was done.';
+
+  { git no trabaja sobre la carpeta que se le da: sube desde ella hasta dar
+    con el repo, y lee y reescribe ESE arbol entero. Con la raiz del repo por
+    encima de las raices de la sesion, status y diff ensenaban lo de fuera y
+    stash, switch y commit lo reescribian (medido el 29-sep-2026: una sesion
+    con mono\a por unica raiz reescribio mono\b). Las tres carpetas del repo
+    -la raiz del arbol, su .git y la comun de un worktree enlazado- pasan por
+    la puerta. }
+  SR_GIT_REPO_FUERA_FMT =
+    '[GIT-041 DENIED] "%s" belongs to a git repository that lives at ' +
+    '"%s", outside your workspace: git would read and rewrite that ' +
+    'whole tree, not just the folder you name. delphi_git works on a ' +
+    'repository whose root and whose .git folder are inside your roots ' +
+    '(delphi_workspace lists them): command=init makes one in a folder ' +
+    'of yours, and command=clone brings one. Nothing was done.';
 
   // ---- delphi_git worktree (1.4.0) ----
 
@@ -7003,8 +7142,10 @@ const
     'nextOffset of the previous answer to get the next page';
 
   SP_WS_REPO =
-    'Path of the git repository (or any path inside it). For clone: the ' +
-    'DESTINATION directory (created if needed, must be inside the ' +
+    'Path of the git repository (or any path inside it). The repository ' +
+    'ITSELF has to be inside your roots - its root folder and its .git: ' +
+    'git works on the whole tree, not on the folder you name. For clone: ' +
+    'the DESTINATION directory (created if needed, must be inside the ' +
     'workspace roots)';
 
   SP_WS_COMMAND =
@@ -7012,7 +7153,15 @@ const
     'stash | add | restore | commit | init | push | tag | config | clone | ' +
     'pull | fetch | worktree. switch: args=<branch> (create=true for a new ' +
     'one). merge: args=<branch>, always --ff-only (a merge needing a ' +
-    'commit is refused, not left half-done). stash: args=push|pop|list ' +
+    'commit is refused, not left half-done). pull: args=<remote> ' +
+    '<branch>, always --ff-only too; of the options, only those of the ' +
+    'download (--tags, --no-tags, --prune, --depth=<n>, --unshallow). ' +
+    'fetch takes those and --all; push takes --tags, -u, --set-upstream ' +
+    'and --dry-run, and after the remote the NAMES of what to send ' +
+    '(main, v1.3.2, or local:remote): it adds to the remote and never ' +
+    'overwrites or deletes what is there. The remote of the three is a ' +
+    'network address the operator allows or a folder inside your roots. ' +
+    'stash: args=push|pop|list ' +
     '(never drop); push -- <paths> parks ONLY those paths and sets them ' +
     'back to HEAD - how you discard one file''s changes without losing ' +
     'them (pop brings them back); its label goes in message. config: ' +
@@ -7128,8 +7277,11 @@ const
     'machine without touching anybody''s working tree; args=list shows ' +
     'them and args=remove takes one away (it is yours to clean up). ' +
     'commit/tag messages and config values also travel in "message"; ' +
-    'push/pull use the credentials and remotes stored on the server. No ' +
-    'arbitrary git commands, no shell.';
+    'push/pull use the credentials and remotes stored on the server. The ' +
+    'repository has to live inside your roots, root folder and .git: git ' +
+    'works on the whole repository it finds from "repo" upwards, so one ' +
+    'that starts above your roots is refused (GIT-041). No arbitrary git ' +
+    'commands, no shell.';
 
   SD_WS_INSTALLS =
     'List EVERY RAD Studio / Delphi installation discovered on this ' +
@@ -7244,6 +7396,9 @@ const
 
   SE_LSP_TRANSPORT_STARTED =
     'Transport not started';
+
+  { (el motor parado por el servidor: SR_LSP_ENGINE_STOPPED, con etiqueta,
+    junto a SR_LSP_FOLDER_LEAVING_FMT) }
 
   SE_LSP_WRITEFILE_LSP_STDIN_FAILED_FMT =
     'WriteFile to LSP stdin failed (%d)';
@@ -7360,8 +7515,9 @@ const
     'Edition / Build, read from the installation - use them when you ' +
     'look anything up for this Delphi). It also says WHO is answering ' +
     '("server"): version, how this process was started (tray / service / ' +
-    'console), transport, pid, uptime, the open sessions and the Windows ' +
-    'account it runs as - the way to check a deployment without looking ' +
+    'console), transport, pid, uptime, the open sessions, the machine it ' +
+    'runs on ("host", also in serverInfo) and the Windows account it runs ' +
+    'as - the way to check a deployment without looking ' +
     'at the machine from outside. %s Call this FIRST. Read-only, no ' +
     'parameters.';
 

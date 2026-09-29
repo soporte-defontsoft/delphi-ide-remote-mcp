@@ -69,21 +69,8 @@ def contesta(r):
     return 'error' not in (r or {}) and res.get('isError') is not True and bool(c[0].get('text'))
 
 
-def hijos_lsp(ppid):
-    """Los DelphiLSP.exe cuyo padre es ESTE proceso. Filtrar por padre es
-    obligatorio: en esta maquina suele haber una bandeja de produccion con
-    los suyos, y matar los de otro seria mucho peor que el bug buscado."""
-    out = subprocess.run(
-        ['powershell', '-NoProfile', '-Command',
-         "Get-CimInstance Win32_Process -Filter \"Name='DelphiLSP.exe'\" | "
-         "ForEach-Object { \"$($_.ProcessId),$($_.ParentProcessId)\" }"],
-        capture_output=True, text=True, timeout=60).stdout
-    r = []
-    for l in out.splitlines():
-        p = l.strip().split(',')
-        if len(p) == 2 and p[1].isdigit() and int(p[1]) == ppid:
-            r.append(int(p[0]))
-    return r
+# los DelphiLSP.exe hijos de un proceso: el lector comun (era de aqui)
+hijos_lsp = mc.hijos_lsp
 
 
 def vivo(pid):
