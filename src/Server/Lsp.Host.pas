@@ -82,6 +82,7 @@ const
 implementation
 
 uses
+  Winapi.Windows, // SetErrorMode
   System.StrUtils,
   MCPServer.Logger,
   MCPServer.ToolsManager,
@@ -100,6 +101,17 @@ uses
 constructor TMcpHost.Create;
 begin
   inherited;
+  // A "there is no disk in the drive" dialog is never for a server: nobody
+  // is there to answer it. NOT the crash dialog's bit, SEM_NOGPFAULTERRORBOX:
+  // with it Windows writes nothing to the event log when the process dies
+  // (measured 2026-09-30: a crashing program leaves an Application Error
+  // event without the bit and nothing with it), and a server that dies has
+  // to leave that trace. What this server LAUNCHES gets both bits, set on
+  // each child (Lsp.Sandbox.NoErrorDialogs): a child inherits its parent's
+  // mode (measured: a server launched by a parent in mode 0 was in mode 0,
+  // and so was its engine), and this process's does not stay put under
+  // parallel load.
+  SetErrorMode(GetErrorMode or SEM_FAILCRITICALERRORS);
   StartLogSink; // first: everything from here on reaches the disk
   FSettings := TMCPSettings.Create('', False); // no settings.ini side effects
   FSettings.ServerName := SERVER_NAME;

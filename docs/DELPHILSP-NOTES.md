@@ -66,6 +66,21 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
 - **Indexing latency**: requests sent while a freshly opened document is being indexed return `-32800 "Request removed"`. Retry with escalating delays; a ~12k-line unit needed ~10–30 s on first open.
 - `hover`/`definition` return `null` (not an error) when no project settings are loaded; `documentSymbol` still works.
 - Without keeping stdin open the process exits before answering (pipe-close on EOF).
+- **Closing stdin with a request in flight crashes the agent** (measured 2026-09-30, engine
+  launched by hand): access violation `0xC0000005` in `dcc64370.dll`, 8 of 8 with a `definition`
+  in flight, 0 of 8 twenty milliseconds after sending it, 0 of 25 idle. Ask `shutdown` first: it
+  answers in 60 ms on a busy 60-unit project (0 ms idle) and the process then ends clean when its
+  input is closed - 0 crashes of 48. It does NOT end on the `exit` notification (10 s watched):
+  close its input. The linter answers `shutdown` at once and ends clean either way.
+  An engine nobody has asked anything yet ends clean when its input is closed: 0 of 8 with
+  `initialize` still in flight, 0 of 8 just initialized, 0 of 8 with its settings just sent;
+  and `shutdown` sent while `initialize` is in flight is answered in 20 ms.
+- The process inherits its parent's **error mode**; with one that allows crash dialogs, an engine
+  that dies of an unhandled exception goes through the system's crash reporting (a second or
+  more) and may leave a dialog. Set `SEM_NOGPFAULTERRORBOX` on the child and it ends at once -
+  and Windows then writes NO Application Error event for it (measured 2026-09-30 with a program
+  that raises the engine's exception code: event 1000 without the bit, nothing with it), so
+  whoever sets the bit has to record the exit code itself.
 - Positions are 0-based, UTF-16 code units. Content in `didOpen` is UTF-8 JSON — decode legacy CP1252 sources correctly before sending.
 - An external DelphiLSP instance coexists fine with the IDE's own instances; each agent holds hundreds of MB on a mid-size project.
 - The LSP reads **disk state**; unsaved IDE editor buffers are invisible to it (for a document the engine itself has open, see the next point).

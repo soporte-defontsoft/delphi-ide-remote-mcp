@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.7.9';
+  SERVER_VERSION = '1.7.10';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -413,6 +413,14 @@ const
     'deleted, or git was rewriting the tree (switch, merge, stash, pull) ' +
     '- or its process had ended by itself. Repeat the request - at the ' +
     'new place if the folder was moved.';
+
+  { Como acabo un motor que este servidor paro, cuando no acabo limpio o no
+    contesto a `shutdown` en su plazo (30-sep-2026). Al log del servidor: con
+    el modo sin cuadro puesto al motor, Windows ya no apunta su caida en el
+    Visor de eventos (medido ese dia), que es donde se encontraron. Sin
+    etiqueta: no lo lee un agente. }
+  SL_LSP_ENGINE_ENDED_FMT =
+    'lsp: ENGINE %s exit=$%x shutdown asked=%s answered=%s';
 
   { Una carpeta que se esta yendo no arranca motores: el que arrancase
     volveria a retenerla (29-sep-2026). }

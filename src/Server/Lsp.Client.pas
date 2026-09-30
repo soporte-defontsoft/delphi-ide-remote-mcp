@@ -26,6 +26,13 @@ uses
   Winapi.Windows,
   Lsp.Transport.Process;
 
+const
+  // How long StopEngine waits for the answer to `shutdown`. A busy engine
+  // answers in 60 ms on a 60-unit project (measured 2026-09-30); one that
+  // has not answered in this is not waited for. Public: a test tells by it
+  // that the wait is there, and that it is bounded (LspTests.Motor).
+  SHUTDOWN_WAIT_MS = 1000;
+
 type
   ELspClient = class(Exception);
 
@@ -48,9 +55,13 @@ type
     FNotifications: TObjectList<TJSONObject>;
     FNotifyEvent: TEvent;
     FStopped: Boolean;
+    FRootUri: string;  // what Initialize was given: the engine's name in the log
+    FEndSaid: Boolean; // StopEngine has said how this engine ended
     procedure HandleRawMessage(const AJson: string);
     function NextId: Integer;
     procedure Send(const AJson: string);
+    function AskToShutDown(out AAnswered: Boolean): TThread;
+    procedure SayHowItEnded(AAsked, AAnswered: Boolean);
   public
     constructor Create(ATransport: TLspProcessTransport; AOwnsTransport: Boolean = True);
     destructor Destroy; override;
@@ -74,6 +85,8 @@ type
       transport's ProcessAlive). An engine may end by itself, or be ended
       from outside: the session asks before it hands a client out. }
     function EngineAlive: Boolean;
+    { What the engine's process ended with (the transport's ExitCode). }
+    function EngineExitCode: Cardinal;
 
     // Raw JSON-RPC. AParamsJson is an already-serialized JSON value; pass
     // "{}" when there are no params. Returns the full response object;
@@ -130,6 +143,7 @@ uses
   Lsp.Patch,
   Lsp.DesignerBin,
   System.StrUtils,
+  MCPServer.Logger,
   Lsp.Texts; // DecodeSourceBytes: el detector de encoding de delphi_read
 
 const
@@ -167,8 +181,19 @@ end;
 
 destructor TLspClient.Destroy;
 begin
+  // A client that comes here without StopEngine was never handed out - the
+  // one that lost the race to be registered, the one whose folder was
+  // leaving, the one that did not answer `initialize` - so nobody has a
+  // question in flight on it, and its input is just closed (the transport's
+  // Stop). Measured 2026-09-30 with the engine launched by hand: 0 crashes
+  // of 8 with `initialize` in flight, 0 of 8 just built, 0 of 8 with its
+  // settings just sent. If it ended badly all the same, it is said.
   if FOwnsTransport then
+  begin
+    FTransport.Stop;
+    SayHowItEnded(False, False);
     FTransport.Free;
+  end;
   FNotifyEvent.Free;
   FNotifications.Free;
   FPending.Free;
@@ -198,12 +223,125 @@ begin
   Result := FTransport.ProcessAlive;
 end;
 
+function TLspClient.EngineExitCode: Cardinal;
+begin
+  Result := FTransport.ExitCode;
+end;
+
 procedure TLspClient.StopEngine;
+var
+  Asker: TThread;
+  Asked, Answered: Boolean;
 begin
   // First the word, then the process: stopping it takes seconds, and nobody
   // has to wait for that to know.
   Retire;
+  // Then the engine is ASKED to shut down - the protocol's request - and
+  // only after that is its input closed. Closed with a question IN FLIGHT
+  // (how the server usually stops one: under another agent's request) it
+  // died of an access violation inside the compiler. Measured 2026-09-30
+  // with the engine launched by hand: closing alone, 8 of 8 with a
+  // definition in flight, 0 of 8 twenty milliseconds after sending it, 0 of
+  // 8 after a change alone and 0 of 25 idle; with `shutdown` answered
+  // first, 0 of 48. The machine's event log had 1,645 of those crashes in
+  // eight days, 1,358 of them the day the server began to stop its engines.
+  Asker := nil;
+  Answered := False;
+  try
+    Asker := AskToShutDown(Answered);
+  except
+    // no event, no thread to be had: stopped as it always was - never left
+    // running - and said below
+  end;
+  Asked := Asker <> nil;
   FTransport.Stop;
+  // the one that asked wrote on a thread of its own (AskToShutDown): with
+  // the process gone its write has returned, whatever it was waiting for
+  if Asker <> nil then
+    if WaitForSingleObject(Asker.Handle, 3000) = WAIT_OBJECT_0 then
+      Asker.Free;
+    // else left behind, as the transport leaves a reader: a leaked thread,
+    // never a server that does not come back
+  SayHowItEnded(Asked, Answered);
+end;
+
+{ How the engine ended goes to the server's log, once per engine, from the
+  two places that see it end (StopEngine and the destructor). An engine with
+  the no-dialog mode (Lsp.Sandbox.NoErrorDialogs) dies without a line in the
+  system's event log (measured 2026-09-30: a crashing program leaves an
+  Application Error event without the mode and nothing with it), and that
+  log is where these crashes were found. Said when it did not end clean, and
+  when it was asked and SHUTDOWN_WAIT_MS went by with no answer: that is its
+  input closed on whatever it was doing, as before. After the transport's
+  Stop, which is what keeps the code. }
+procedure TLspClient.SayHowItEnded(AAsked, AAnswered: Boolean);
+const
+  YesNo: array [Boolean] of string = ('no', 'yes');
+var
+  Code: Cardinal;
+begin
+  if FEndSaid then
+    Exit;
+  FEndSaid := True;
+  Code := FTransport.ExitCode;
+  if ((Code <> 0) and (Code <> STILL_ACTIVE)) or (AAsked and not AAnswered) then
+    TLogger.Warning(MsgFmt(SL_LSP_ENGINE_ENDED_FMT,
+      [FRootUri, Code, YesNo[AAsked], YesNo[AAnswered]]));
+end;
+
+{ Sends `shutdown` and waits for its answer, SHUTDOWN_WAIT_MS at most. The
+  client is already stopped for everybody else, so this goes straight to the
+  transport, with an entry of its own for the answer. The WRITE runs on a
+  thread of its own: a write to an engine that stopped reading does not
+  return until the process ends, and whoever stops an engine must not be
+  held by it - ending the process is what frees that write. Returns the
+  thread, for StopEngine to collect once the process is gone; nil when there
+  was no process to ask. AAnswered: the ANSWER came (not the time, and not
+  the word of a Retire, which wakes every entry). May raise - no event, no
+  thread to be had - and leaves no entry behind when it does. }
+function TLspClient.AskToShutDown(out AAnswered: Boolean): TThread;
+var
+  Id: Integer;
+  Call: TPendingCall;
+  Json: string;
+  Transport: TLspProcessTransport;
+begin
+  Result := nil;
+  AAnswered := False;
+  if not FTransport.ProcessAlive then
+    Exit;
+  Id := NextId;
+  Call := TPendingCall.Create;
+  FLock.Enter;
+  try
+    FPending.Add(Id, Call); // dictionary owns Call
+  finally
+    FLock.Leave;
+  end;
+  try
+    Json := Format('{"jsonrpc":"2.0","id":%d,"method":"shutdown","params":null}', [Id]);
+    Transport := FTransport;
+    Result := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          Transport.SendJson(Json);
+        except
+          // an engine that is going, or gone: nothing to ask
+        end;
+      end);
+    Result.FreeOnTerminate := False;
+    Result.Start;
+    Call.Event.WaitFor(SHUTDOWN_WAIT_MS);
+  finally
+    FLock.Enter;
+    try
+      AAnswered := Call.ResponseJson <> ''; // Call lives while it is in the table
+      FPending.Remove(Id);
+    finally
+      FLock.Leave;
+    end;
+  end;
 end;
 
 { THE sender: what goes to a stopped engine is refused with the words of a
@@ -377,6 +515,7 @@ const
 var
   Params: string;
 begin
+  FRootUri := ARootUri;
   Params := Format(
     '{"processId":%d,"rootUri":"%s","initializationOptions":' +
     '{"serverType":"%s","agentCount":%d},"capabilities":{}}',

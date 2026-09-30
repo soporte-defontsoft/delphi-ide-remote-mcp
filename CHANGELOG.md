@@ -6,6 +6,94 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.10] - 2026-09-30
+
+The server was crashing its own engines when it stopped them, and an engine that crashed could leave an error dialog waiting for nobody. Both found the same morning from one dialog on the operator's desktop and the machine's event log behind it: 1,650 crashes of DelphiLSP.exe in eight days, 1,645 of them the access violation below.
+
+### Fixed
+
+- **An engine stopped while it was working died of an access violation
+  inside the compiler.** The server stopped an engine by closing its input
+  and, if that was not enough, ending the process; it never sent the
+  protocol's `shutdown`. Measured 2026-09-30 with the engine launched by
+  hand: input closed with a `definition` in flight, 8 crashes of 8
+  (`$C0000005` in `dcc64370.dll`); twenty milliseconds after sending it, 0 of
+  8; idle, 0 of 25. With `shutdown` asked and answered first - 60 ms on a
+  busy 60-unit project, 0 ms idle - 0 of 48; the engine does not end on
+  `exit`, its input still has to be closed. That is what stopping an engine
+  under another agent's request is, and what the server has done since 1.7.7
+  before a folder goes: the Windows event log had 1,645 such crashes in
+  eight days, 1,358 of them the day 1.7.7 was written, and one for each
+  engine alive at the two deploys of this morning. Now `StopEngine` asks
+  first, 1 s at most, on a thread of its own - a write to an engine that
+  stopped reading returns only when the process ends, and whoever stops an
+  engine must not be held by it. The worst case of a stop is now 20 s, not
+  16. The linter engine answers `shutdown` at once and ended clean either
+  way. An engine that is freed without ever having been handed out - the one
+  that lost the race to be built, the one whose folder was leaving, the one
+  that did not answer `initialize` - still has its input just closed: nobody
+  can have a request in flight on it, and measured the same way it ends
+  clean (0 of 8 with `initialize` in flight, 0 of 8 just built, 0 of 8 with
+  its settings just sent).
+- **A crashed child could leave an error dialog that nobody would answer.**
+  The error mode that decides it is inherited from whoever launched the
+  server - with a launcher in mode 0, the server and its engine were in mode
+  0 - and the server's own does not stay where it is put: a build that set
+  it to "no dialogs" at start-up read "dialogs" after the parallel phases of
+  a battery (somebody saves and restores it with no exclusion). So it is set
+  ON EACH CHILD as it is created (`Lsp.Sandbox.NoErrorDialogs`, on a child
+  created suspended): the engines, everything the runner launches - msbuild,
+  git, a test executable - and the detached `adb start-server`. Measured
+  with a program that raises the engine's own exception code from a bare
+  thread: it ends in 0.0 s with the mode and after 1.3 s of crash reporting
+  without it. The dialog itself - one was on the operator's desktop this
+  morning, and another while the check below ran with the fix taken out -
+  was not reproduced in isolation: what is measured is the mode. The server
+  itself gets only `SEM_FAILCRITICALERRORS` at start-up, NOT the crash
+  dialog's bit: measured with the same program, a process that dies with
+  that bit leaves no Application Error event in the Windows log (and leaves
+  one without it), and a server that dies has to leave that trace. Not
+  covered: the program a remote run starts on a Windows target
+  (`McpRunJob`), which runs with the mode PAServer gives it.
+
+### Added
+
+- **How an engine ended goes to the server's log** when it did not end
+  clean, or did not answer `shutdown` in its second:
+  `lsp: ENGINE <root> exit=$C0000005 shutdown asked=yes answered=no`. From
+  the two places that see an engine end: the stop, and the release of one
+  that was never handed out.
+  With the no-dialog mode the system's event log no longer records an
+  engine's crash (measured, above) - and that log is where this one was
+  found - so the server writes it down itself.
+- `TLspProcessTransport.ExitCode` / `TLspClient.EngineExitCode`: what the
+  engine's process ended with, kept past the stop. What the unit tests read
+  (the HTTP battery reads the code through a handle of its own).
+- Three unit tests. `PararUnMotorOcupadoNoLoTumba`: the real engine, two
+  threads asking without pause and without retries, the folder leaves - exit
+  code 0 and nothing logged, five rounds; each round first sees the
+  definition resolve, and counts the answers its threads got.
+  `ElQueNoContestaSeParaIgualYSeApunta`: an engine that never answers is
+  stopped in its second, and logged once. `ElQueAcaboMalSeApunta`: one that
+  ended with a code of its own is logged with it, stopped or just released.
+  `LaPeticionEnVueloSeEnteraAlInstante`
+  now takes the instant inside the waiting thread: the word goes before the
+  wait for the engine. `test_lsp_paralelo` +4: P8, four projects deleted
+  with three agents asking - each round warm and answering with a location,
+  the engine's exit code read through a handle taken before the stop; P9,
+  the engine's error mode read from outside with the server's forced to 0 at
+  that moment; P10, the same for the runner, by a test program that prints
+  its own error mode. Each one red with its fix taken out: without
+  `shutdown`, the unit test in round 1 (`$C0000005`) and four engines of
+  four in P8; without the mode, the engine ran in mode 0 and the program
+  said 0; without the log line, or with only its unanswered half, no line;
+  with the word given after the wait, the request in flight learned it
+  1000 ms late. The first version of
+  the unit test stayed GREEN without the fix - it stopped the engine 20 ms
+  after its requests - which is how the width of the window was measured.
+  Guards, not measured red: the start-up `SEM_FAILCRITICALERRORS` and the
+  mode on `adb start-server`.
+
 ## [1.7.9] - 2026-09-30
 
 What the measurements after 1.7.8 asked for, the same morning: the engine forgets a document whose file is gone and one nobody has asked about for half an hour, the disk fingerprint is one call, and a hint of the engine's own that is now measured.

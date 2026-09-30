@@ -44,6 +44,8 @@ Measured on a real ~12k-line unit: DelphiLSP takes seconds to index after `didOp
 
 - keeps indexes **warm across sessions** and across multiple concurrent AI clients;
 - keeps the engine's copy of every open document in step with the disk: DelphiLSP reads a unit from disk only while nobody has it open, and never re-reads one it has open (measured 2026-09-30), so before every question the server sends `didChange` for each open document whose disk stamp moved — the one asked about and the others alike — and `didClose` for one whose file is gone or that nobody has asked about for 30 minutes, so the open set, and what each request pays to keep it in step, stays bounded (`TSessionClient.Refresh`);
+- stops an engine that may be working the way the protocol asks — `shutdown`, its answer, then its input closed — because one whose input is just closed under a request in flight dies of an access violation (measured 2026-09-30; an engine that was never handed out has its input just closed, which measured clean), and writes to its own log how an engine ended when it was not clean or did not answer;
+- sets the no-dialog error mode on each child it launches — engines, builds, git, test executables, adb — because a crashed child's dialog would wait for nobody (not covered: the program a remote run starts on a Windows target);
 - centralizes resource policy (max workspaces, idle shutdown — planned, not implemented).
 
 Running with no switch (stdio) remains available for clients that cannot speak HTTP; it simply hosts the same core with session lifetime.

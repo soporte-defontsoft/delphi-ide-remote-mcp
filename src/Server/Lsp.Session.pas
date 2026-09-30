@@ -278,9 +278,11 @@ begin
 end;
 
 { Stops the engines ALL AT ONCE and waits for them. A stop is bounded, and
-  its bounds add up to 16 s for an engine that neither ends nor lets go of
-  its pipes (see TLspProcessTransport.Stop); one engine after another, those
-  16 s were multiplied by the engines of a whole repository, with the global
+  its bounds add up to 20 s for an engine that neither answers, ends nor
+  lets go of its pipes (1 s for its answer to `shutdown` and 3 s for the
+  thread that asked, in TLspClient.StopEngine; 16 s in
+  TLspProcessTransport.Stop); one engine after another, those seconds were
+  multiplied by the engines of a whole repository, with the global
   write lock held by whoever was taking the folder away. Healthy engines go
   at once (measured 2026-09-29: a folder with two of them under it, stopped
   one after the other, was deleted in 0,7-0,9 s). Never raises. }

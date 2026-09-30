@@ -55,6 +55,21 @@ moment the OTHER engine was killed from outside. It needs the server over HTTP
       LSP-033. The session had one lock for everything, held while an engine
       was written to (fourth review of 1.7.7: it was read, and a probe
       measured it)
+  P8  an engine stopped under OTHER agents' requests in flight ends clean
+      (exit code 0). With its input just closed while a request was in
+      flight it died of an access violation inside the compiler (measured
+      2026-09-30 with the engine launched by hand: 8 of 8 with a definition
+      in flight, 0 of 8 twenty milliseconds after sending it; 1,645 such
+      crashes in the machine's event log in eight days). Now the engine is
+      asked to `shutdown` first
+  P9  an engine runs in the no-dialog error mode although the server does
+      not: the mode is set ON the engine when it is created, not inherited.
+      The server is launched here by a parent in mode 0 and put to 0 from
+      outside at that moment (its own mode does not stay where it is put:
+      measured here, set to 3 at start-up it read 1 after the phases above)
+  P10 the same for what the RUNNER launches (msbuild, git, a test
+      executable): a test program that prints its own error mode, run with
+      delphi_test
   P3  with the server gone, none of its engines stays alive: an engine that
       holds another one's pipe keeps it from seeing that the server left
 
@@ -66,8 +81,9 @@ from mcp_cliente import check
 
 RONDAS = 8
 # segundos: un borrado sano tarda menos de uno; colgado, no vuelve. Por encima
-# de lo que el servidor puede tardar SIN estar colgado: parar los motores (16,
-# todos a la vez), esperar a los que se construyen (6) y lo suyo
+# de lo que el servidor puede tardar SIN estar colgado: parar los motores (20,
+# todos a la vez: 1 de esperar su respuesta a shutdown, 16 de la parada y 3
+# del hilo que pregunto), esperar a los que se construyen (6) y lo suyo
 TOPE = 30
 BASE = mc.carpeta('lsp-paralelo')
 SRVDIR = os.path.join(BASE, 'srv')
@@ -77,8 +93,21 @@ TOKEN = 'test-token-paralelo'
 with open(os.path.join(SRVDIR, 'settings.ini'), 'w') as f:
     f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10) * 2
             + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
-            + 'Roots=%s' % BASE + chr(10) + 'DelphiVersion=37.0' + chr(10))
-proc = mc.lanza_http(EXE, None, mc.entorno(), espera_en=PORT)
+            + 'Roots=%s' % BASE + chr(10) + 'DelphiVersion=37.0' + chr(10)
+            + 'AllowTests=1' + chr(10))
+# El servidor nace con el modo de error de quien lo lanza. Aqui se le lanza en
+# el 0 (con informe de caida y con cuadro), que no es el de esta bateria: asi
+# ni el ni lo que lance HEREDAN el modo sin cuadro, y P9 y P10 miden que a
+# cada hijo se le fija.
+import ctypes
+K32, NT = ctypes.windll.kernel32, ctypes.windll.ntdll
+K32.OpenProcess.restype = ctypes.c_void_p
+_modo = ctypes.windll.kernel32.SetErrorMode(0)
+try:
+    MODO_DEL_LANZADOR = ctypes.windll.kernel32.GetErrorMode()
+    proc = mc.lanza_http(EXE, None, mc.entorno(), espera_en=PORT)
+finally:
+    ctypes.windll.kernel32.SetErrorMode(_modo)
 
 
 def cliente(t=200):
@@ -339,6 +368,170 @@ def p7(uno, colgados):
           '%s | %s' % (' '.join(r.split())[:100], dicho))
 
 
+def modo_error(pid):
+    # el modo de error de OTRO proceso, leido desde fuera (el nucleo guarda el
+    # bit 1 al reves); None si no se deja leer
+    h = K32.OpenProcess(0x1000, False, pid)              # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return None
+    v = ctypes.c_ulong(0)
+    st = NT.NtQueryInformationProcess(ctypes.c_void_p(h), 12, ctypes.byref(v), 4, None)
+    K32.CloseHandle(ctypes.c_void_p(h))
+    return (v.value ^ 1) if st == 0 else None
+
+
+def fuerza_modo(pid, modo):
+    # ANDAMIO: el modo de error de OTRO proceso, puesto desde fuera. Lo que un
+    # hijo HEREDA es el modo de su padre en el momento de nacer
+    h = K32.OpenProcess(0x0200, False, pid)              # PROCESS_SET_INFORMATION
+    if not h:
+        return False
+    v = ctypes.c_ulong(modo ^ 1)
+    st = NT.NtSetInformationProcess(ctypes.c_void_p(h), 12, ctypes.byref(v), 4)
+    K32.CloseHandle(ctypes.c_void_p(h))
+    return st == 0
+
+
+def con_cuadro(m):
+    # leido, y SIN la mascara 0x2 (SEM_NOGPFAULTERRORBOX): quien nazca de el
+    # heredando su modo pasaria, al caerse, por el informe de errores
+    return m is not None and not m & 2
+
+
+def p8(uno, colgados):
+    # P8 - parar un motor bajo las peticiones EN VUELO de otros agentes no lo tumba
+    k32 = K32
+    codigos, por_ronda, dichos, calientes, sitios, paradas = [], [], [], [], [], []
+    for ronda in range(4):
+        n = 'Vuelo%d' % ronda
+        d = os.path.join(BASE, n)
+        uno.call('delphi_create', {'kind': 'project-vcl', 'name': n, 'dir': d})
+        dpr = os.path.join(d, n + '.dpr')
+        cal = False
+        for _ in range(6):
+            cal = caliente(uno.call('delphi_hover', {'path': dpr, 'line': 9, 'character': 4}))
+            if cal:
+                break
+            time.sleep(2)
+        calientes.append(cal)
+        pids = mc.motores_en(proc.pid, d)
+        por_ronda.append(len(pids))
+        # un asa ANTES de pararlo, para leer despues con que codigo salio
+        asas = [k32.OpenProcess(0x1000 | 0x100000, False, p) for p in pids]   # QUERY_LIMITED | SYNCHRONIZE
+        sigue = [True]
+        vistas = []           # (cuando, que) contesto el servidor a los que preguntan
+
+        def pregunta():
+            try:
+                c = cliente(t=TOPE)
+            except Exception:
+                return
+            while sigue[0]:
+                try:
+                    v = c.call('delphi_definition', {'path': dpr, 'line': 9, 'character': 4})
+                except Exception as e:
+                    v = 'EXCEPCION %s: %s' % (type(e).__name__, e)
+                vistas.append((time.time(), v))
+
+        hilos = [threading.Thread(target=pregunta) for _ in range(3)]
+        for h in hilos:
+            h.start()
+        # hasta que contesten con un sitio (no un tiempo fijo: bajo carga la
+        # primera respuesta puede tardar), y un poco mas
+        t_espera = time.time()
+        while time.time() - t_espera < 10 and not any('Vcl.Forms.pas' in v for _, v in list(vistas)):
+            time.sleep(0.05)
+        time.sleep(0.3)       # los tres, preguntando: al parar hay alguna en vuelo
+        t_borra = time.time()
+        try:
+            dichos.append(cliente(t=TOPE).call('delphi_delete', {'path': d}))
+        except Exception as e:
+            dichos.append('EXCEPCION %s: %s' % (type(e).__name__, e))
+        sigue[0] = False
+        for h in hilos:
+            h.join(TOPE)
+        # TESTIGOS de que el motor estaba OCUPADO cuando se le paro: antes del
+        # borrado contestaba con un sitio, y a quien tenia la pregunta en vuelo
+        # se le dijo que el motor se paro debajo (LSP-033)
+        sitios.append(sum(1 for t, v in vistas if t < t_borra and 'Vcl.Forms.pas' in v))
+        paradas.append(sum(1 for t, v in vistas if mc.es(v, 'SR_LSP_ENGINE_STOPPED')))
+        for a in asas:
+            if a:
+                c = ctypes.c_ulong(259)
+                k32.WaitForSingleObject(ctypes.c_void_p(a), 5000)
+                k32.GetExitCodeProcess(ctypes.c_void_p(a), ctypes.byref(c))
+                k32.CloseHandle(ctypes.c_void_p(a))
+                codigos.append(c.value)
+    check('P8 (preparacion) cuatro rondas: un motor por proyecto, caliente y contestando con un sitio a los tres '
+          'agentes que preguntan, y su carpeta se borra debajo',
+          por_ronda == [1] * 4 and all(calientes) and all(s > 0 for s in sitios) and len(codigos) == 4
+          and all(mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') for r in dichos),
+          'motores %s, calientes %s, respuestas con sitio antes de borrar %s, LSP-033 %s, codigos %s | %s' % (
+              por_ronda, calientes, sitios, paradas, [hex(c) for c in codigos],
+              ' | '.join(' '.join(r.split())[:70] for r in dichos)))
+    if not all(paradas):
+        print('NOTA: P8: en alguna ronda a ninguno de los que preguntaban se le dijo LSP-033 (%s por ronda): esa '
+              'ronda pudo parar un motor sin nada en vuelo' % paradas)
+    check('P8 un motor parado bajo las peticiones en vuelo de otros agentes sale LIMPIO (codigo 0): ni una '
+          'violacion de acceso (0xc0000005) ni matado por no irse (1)',
+          codigos != [] and all(c == 0 for c in codigos), [hex(c) for c in codigos])
+
+
+def p9(uno, colgados):
+    # P9 - al motor se le FIJA el modo de error sin cuadro al crearlo: no lo hereda
+    d = os.path.join(BASE, 'Modo')
+    uno.call('delphi_create', {'kind': 'project-vcl', 'name': 'Modo', 'dir': d})
+    dpr = os.path.join(d, 'Modo.dpr')
+    # ANDAMIO: el modo del servidor, puesto a 0 desde fuera justo antes de que
+    # arranque el motor. Lo que un hijo HEREDA es eso; si nace sin cuadro es
+    # porque se le fija a el
+    forzado, antes = fuerza_modo(proc.pid, 0), modo_error(proc.pid)
+    for _ in range(6):
+        if caliente(uno.call('delphi_hover', {'path': dpr, 'line': 9, 'character': 4})):
+            break
+        time.sleep(2)
+    pids = mc.motores_en(proc.pid, d)
+    ms, mm = modo_error(proc.pid), [modo_error(p) for p in pids]
+    # El VALOR del modo del servidor no se afirma: deriva bajo carga en paralelo
+    # (medido aqui mismo el 30-sep-2026: puesto a 3 al arrancar, se leia 1 tras
+    # las fases de arriba - alguien lo guarda y lo restaura sin exclusion). Se
+    # afirma que NO tiene la mascara 0x2, ni antes ni despues de que arranque
+    # el motor; y que el motor SI: se le fijo a el.
+    check('P9 con el servidor SIN el modo sin cuadro (puesto a 0 desde fuera en ese momento), el motor que '
+          'arranca corre CON el (mascara 0x2, SEM_NOGPFAULTERRORBOX): se le fija a EL, y una caida suya no deja '
+          'un dialogo esperando a nadie',
+          forzado and con_cuadro(antes) and con_cuadro(ms) and len(pids) == 1
+          and all(m is not None and m & 2 for m in mm),
+          'lanzador %s, servidor forzado a 0: %s (leido %s; despues %s), motores %s %s' % (
+              MODO_DEL_LANZADOR, forzado, antes, ms, pids, mm))
+
+
+PROGRAMA_MODO = chr(10).join([
+    'program ModoTest;', '', '{$APPTYPE CONSOLE}', '', 'uses', '  Winapi.Windows;', '',
+    'begin', "  Writeln('PASS modo=', GetErrorMode);", 'end.', ''])
+
+
+def p10(uno, colgados):
+    # P10 - lo que lanza el CORREDOR (msbuild, git, el ejecutable de unos
+    # tests) tambien nace sin cuadro: un programa de prueba dice su propio modo
+    import re
+    d = os.path.join(BASE, 'ModoTest')
+    uno.call('delphi_create', {'kind': 'project-console', 'name': 'ModoTest', 'dir': d})
+    dpr = os.path.join(d, 'ModoTest.dpr')
+    with open(dpr, 'w', encoding='utf-8-sig', newline='\r\n') as f:
+        f.write(PROGRAMA_MODO)
+    forzado, antes = fuerza_modo(proc.pid, 0), modo_error(proc.pid)
+    raw = uno.call('delphi_test', {'command': 'run', 'project': dpr}, t=300)
+    ms = modo_error(proc.pid)
+    m = re.search(r'modo=(\d+)', raw)
+    modo = int(m.group(1)) if m else None
+    check('P10 con el servidor SIN el modo sin cuadro, el ejecutable de unos tests que lanza el corredor corre '
+          'CON el (mascara 0x2): lo dice el mismo, con GetErrorMode',
+          forzado and con_cuadro(antes) and con_cuadro(ms) and modo is not None and modo & 2 == 2,
+          'servidor forzado a 0: %s (leido %s; despues %s), el programa dice modo=%s | %s' % (
+              forzado, antes, ms, modo, ' '.join(raw.split())[:300]))
+
+
 def p2():
     try:
         w = cliente(t=TOPE).call('delphi_workspace', {})
@@ -359,7 +552,7 @@ try:
     except Exception as ex:
         uno = None
         colgados.append('el servidor no abre sesion: %s' % ex)
-    for paso in (p1, p5, p4, p6, p7):
+    for paso in (p1, p5, p4, p6, p7, p8, p9, p10):
         nombre = paso.__name__.upper()
         if colgados:
             print('NOTA: %s no se mide: el servidor no contesta (%s)' % (nombre, colgados[0][:80]))

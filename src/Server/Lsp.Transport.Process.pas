@@ -41,6 +41,8 @@ type
     FWriteLock: TCriticalSection;
     FRunning: Boolean;
     FAbandoned: Boolean; // the reader was left behind: see Stop and FreeInstance
+    FEnded: Boolean;      // Stop saw the process end, and kept what it ended with
+    FExitCode: Cardinal;
     procedure ReaderLoop;
     procedure CloseHandles;
     function CloseStdIn(AWaitMs: Cardinal): Boolean;
@@ -55,6 +57,11 @@ type
     procedure Stop;
     procedure SendJson(const AJson: string);
     function ProcessAlive: Boolean;
+    { What the process ended with: STILL_ACTIVE while it runs or when there
+      never was one, 1 when Stop had to end it, otherwise the engine's own
+      code - 0 for a clean exit, an exception code when it died (measured
+      2026-09-30: $C0000005 when its input was closed while it was busy). }
+    function ExitCode: Cardinal;
     property OnMessage: TLspMessageEvent read FOnMessage write FOnMessage;
     property Running: Boolean read FRunning;
     property ExePath: string read FExePath;
@@ -144,7 +151,7 @@ begin
   UniqueString(CmdLine); // CreateProcessW may modify the buffer
 
   if not CreateProcess(nil, PChar(CmdLine), nil, nil, True,
-    CREATE_NO_WINDOW, nil, nil, SI, FProcInfo) then
+    CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, nil, SI, FProcInfo) then
   begin
     CloseHandle(ChildStdInRead);
     CloseHandle(ChildStdOutWrite);
@@ -152,6 +159,10 @@ begin
     raise ELspTransport.Create(MsgFmt(SE_LSP_CREATEPROCESS_FAILED_FMT,
       [GetLastError, FExePath]));
   end;
+
+  // Suspended until it is told never to open an error dialog (Lsp.Sandbox).
+  NoErrorDialogs(FProcInfo.hProcess);
+  ResumeThread(FProcInfo.hThread);
 
   // These ends now belong to the child.
   CloseHandle(ChildStdInRead);
@@ -188,6 +199,8 @@ begin
       // is released when it has really ended.
       WaitForSingleObject(FProcInfo.hProcess, 3000);
     end;
+    // what it ended with is kept: the handle is closed below
+    FEnded := GetExitCodeProcess(FProcInfo.hProcess, FExitCode) and (FExitCode <> STILL_ACTIVE);
   end;
 
   if Assigned(FReader) then
@@ -288,6 +301,14 @@ var
 begin
   Result := (FProcInfo.hProcess <> 0) and
     GetExitCodeProcess(FProcInfo.hProcess, Code) and (Code = STILL_ACTIVE);
+end;
+
+function TLspProcessTransport.ExitCode: Cardinal;
+begin
+  if FEnded then
+    Result := FExitCode
+  else if (FProcInfo.hProcess = 0) or not GetExitCodeProcess(FProcInfo.hProcess, Result) then
+    Result := STILL_ACTIVE;
 end;
 
 procedure TLspProcessTransport.SendJson(const AJson: string);

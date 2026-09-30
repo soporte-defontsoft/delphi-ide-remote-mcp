@@ -48,6 +48,8 @@ type
     [Test] procedure RetirarEsLaPalabraSinElProceso;
     [Test] procedure DosMotoresALaVezNoSeLlevanLasTuberias;
     [Test] procedure PararDosVecesNoHaceNada;
+    [Test] procedure ElQueNoContestaSeParaIgualYSeApunta;
+    [Test] procedure ElQueAcaboMalSeApunta;
   end;
 
   [TestFixture]
@@ -62,6 +64,7 @@ type
     [Test] procedure BajoUnaCarpetaQueSeVaNoSeArrancaMotor;
     [Test] procedure ElPreguntadoIlegibleNoSeCallaYElOtroSeDejaParaLuego;
     [Test] procedure LosSinUsoYLosQueSeFueronSeCierran;
+    [Test] procedure PararUnMotorOcupadoNoLoTumba;
   end;
 
 implementation
@@ -73,6 +76,7 @@ uses
   System.SyncObjs,
   System.IOUtils,
   System.JSON,
+  MCPServer.Logger,
   Lsp.Texts,
   Lsp.Discovery,
   Lsp.ConfigFabricator,
@@ -84,14 +88,35 @@ const
   TOPE_MS = 5000;   // una parada sana tarda decimas; el plazo de la peticion es de 30 s
   PLAZO_MS = 30000;
 
-function MotorMudo: TLspClient;
+// Un programa del sistema haciendo de motor
+function MotorFalso(const AExe: string): TLspClient;
 var
   T: TLspProcessTransport;
 begin
   T := TLspProcessTransport.Create(
-    IncludeTrailingPathDelimiter(GetEnvironmentVariable('WINDIR')) + 'System32\sort.exe');
+    IncludeTrailingPathDelimiter(GetEnvironmentVariable('WINDIR')) + 'System32\' + AExe);
   T.Start;
   Result := TLspClient.Create(T, True);
+end;
+
+function MotorMudo: TLspClient;
+begin
+  Result := MotorFalso('sort.exe');
+end;
+
+// Lo que el servidor APUNTA de un motor al pararlo (TLspClient.StopEngine lo
+// dice por TLogger cuando no acabo limpio o no contesto a `shutdown`): las
+// lineas se recogen mientras dura la prueba. Devuelve el oyente que habia,
+// para dejarlo como estaba.
+function EscuchaMotores(ALineas: TStrings): TLogMessageProc;
+begin
+  Result := TLogger.OnLogMessage;
+  TLogger.OnLogMessage :=
+    procedure(const ALinea: string)
+    begin
+      if Pos('lsp: ENGINE', ALinea) > 0 then
+        ALineas.Add(ALinea); // bajo el cerrojo del propio TLogger
+    end;
 end;
 
 procedure TMotorParadoTests.LaPeticionEnVueloSeEnteraAlInstante;
@@ -99,11 +124,12 @@ var
   C: TLspClient;
   H: TThread;
   Dicho: string;
-  T0: UInt64;
+  T0, Supo: UInt64;
 begin
   C := MotorMudo;
   try
     Dicho := '(sin terminar)';
+    Supo := 0;
     H := TThread.CreateAnonymousThread(
       procedure
       begin
@@ -114,6 +140,7 @@ begin
           on E: Exception do
             Dicho := E.Message;
         end;
+        Supo := GetTickCount64;
       end);
     H.FreeOnTerminate := False;
     try
@@ -126,6 +153,11 @@ begin
         ' ms despues de parar el motor');
       Assert.AreEqual(MsgText(SR_LSP_ENGINE_STOPPED), Dicho,
         'y lo que recibe es que el motor se paro, no un plazo agotado');
+      // ...y al EMPEZAR la parada, no al acabarla: la palabra va antes de
+      // pedirle nada al motor, y este no contesta (StopEngine le espera
+      // SHUTDOWN_WAIT_MS). El instante se toma dentro del hilo.
+      Assert.IsTrue(Supo - T0 < 500, Format(
+        'la peticion en vuelo se entero %d ms despues de empezar la parada', [Supo - T0]));
     finally
       H.WaitFor;
       H.Free;
@@ -197,6 +229,86 @@ begin
     end;
   finally
     C.Free;
+  end;
+end;
+
+// Un motor que NO CONTESTA a `shutdown` (sort.exe no contesta a nada) se para
+// igual, por el camino de siempre - cerrarle la entrada -, en lo que dura la
+// espera de esa respuesta y poco mas. Y queda APUNTADO en el log del servidor,
+// una vez: es donde se ve que el plazo se quedo corto, que con el modo sin
+// cuadro Windows ya no apunta la caida de un motor en su Visor de eventos
+// (medido el 30-sep-2026).
+procedure TMotorParadoTests.ElQueNoContestaSeParaIgualYSeApunta;
+var
+  C: TLspClient;
+  Apuntes: TStringList;
+  Antes: TLogMessageProc;
+  T0, Dt: UInt64;
+begin
+  Apuntes := TStringList.Create;
+  Antes := EscuchaMotores(Apuntes);
+  try
+    C := MotorMudo;
+    try
+      T0 := GetTickCount64;
+      C.StopEngine;
+      Dt := GetTickCount64 - T0;
+      Assert.IsTrue((Dt >= SHUTDOWN_WAIT_MS - 100) and (Dt < SHUTDOWN_WAIT_MS + 1500), Format(
+        'parar un motor que no contesta tardo %d ms: ni sin esperar su respuesta, ni mucho mas que su plazo (%d)',
+        [Dt, SHUTDOWN_WAIT_MS]));
+      Assert.AreEqual(Cardinal(0), C.EngineExitCode, 'sort.exe acaba solo al cerrarle la entrada');
+      Assert.AreEqual(1, Apuntes.Count, 'una linea en el log: ' + Apuntes.Text);
+      Assert.IsTrue(Pos('exit=$0 shutdown asked=yes answered=no', Apuntes[0]) > 0, Apuntes[0]);
+      C.StopEngine; // otra vez: no se apunta dos veces
+      Assert.AreEqual(1, Apuntes.Count, 'parado dos veces, apuntado una: ' + Apuntes.Text);
+    finally
+      C.Free;
+    end;
+  finally
+    TLogger.OnLogMessage := Antes;
+    Apuntes.Free;
+  end;
+end;
+
+// Un motor que ACABO MAL el solo (find.exe sin argumentos sale con el codigo 2
+// nada mas nacer: medido) queda apuntado con su codigo, por los dos sitios que
+// lo ven acabar: la parada (la sesion retira asi al motor que encuentra
+// muerto) y el destructor (el que nunca llego a entregarse). Es la linea que
+// dice que un motor se CAYO, ahora que Windows no lo apunta.
+procedure TMotorParadoTests.ElQueAcaboMalSeApunta;
+var
+  C: TLspClient;
+  Apuntes: TStringList;
+  Antes: TLogMessageProc;
+  K: Integer;
+begin
+  Apuntes := TStringList.Create;
+  Antes := EscuchaMotores(Apuntes);
+  try
+    C := MotorFalso('find.exe');
+    try
+      for K := 1 to 100 do
+        if C.EngineAlive then
+          Sleep(50);
+      Assert.IsFalse(C.EngineAlive, 'find.exe sin argumentos acaba solo');
+      C.StopEngine;
+      Assert.AreEqual(Cardinal(2), C.EngineExitCode, 'el codigo con el que acabo se guarda');
+      Assert.AreEqual(1, Apuntes.Count, 'parado: una linea en el log: ' + Apuntes.Text);
+      Assert.IsTrue(Pos('exit=$2 shutdown asked=no answered=no', Apuntes[0]) > 0, Apuntes[0]);
+    finally
+      C.Free;
+    end;
+    Assert.AreEqual(1, Apuntes.Count, 'liberar el ya parado no apunta otra vez: ' + Apuntes.Text);
+    C := MotorFalso('find.exe');
+    for K := 1 to 100 do
+      if C.EngineAlive then
+        Sleep(50);
+    C.Free; // sin StopEngine: el que nunca se entrego
+    Assert.AreEqual(2, Apuntes.Count, 'liberado sin parar: tambien se apunta: ' + Apuntes.Text);
+    Assert.IsTrue(Pos('exit=$2 shutdown asked=no answered=no', Apuntes[1]) > 0, Apuntes[1]);
+  finally
+    TLogger.OnLogMessage := Antes;
+    Apuntes.Free;
   end;
 end;
 
@@ -684,6 +796,139 @@ begin
     Assert.AreEqual(1, TLspSession.Instance.OpenDocuments(Dpr), 'la unidad cuyo fichero se fue se cerro');
   finally
     LspDocIdleMs := Antes;
+  end;
+end;
+
+// Parar un motor OCUPADO - con una pregunta en vuelo: el de una carpeta que
+// se va bajo la peticion de otro agente - cerrandole la entrada sin mas lo hacia
+// morir con una violacion de acceso dentro del compilador: medido el
+// 30-sep-2026 con el motor lanzado a mano, 8 de 8 con una definition en vuelo
+// y 0 de 25 en reposo; y con `shutdown` contestado antes, 0 de 48. El registro
+// de eventos de la maquina tenia 1.645 caidas asi en ocho dias. Ahora
+// StopEngine se lo pide primero. Se mide por el codigo con el que sale el
+// motor de verdad, y por lo que el servidor apunta de el: nada, si contesto.
+
+// Un hilo que pregunta SIN PARAR por una definicion, hasta que el motor se
+// para debajo (LSP-033). Con Request y no con Definition: sin los reintentos,
+// que duermen 2 y 5 s y dejarian al motor sin nada en vuelo. Cuenta las
+// respuestas: el testigo de que el motor contestaba cuando se le paro.
+function HiloQuePregunta(AClient: TLspClient; AParams: string; ACuenta: PInteger): TThread;
+begin
+  Result := TThread.CreateAnonymousThread(
+    procedure
+    begin
+      try
+        while True do
+        begin
+          AClient.Request('textDocument/definition', AParams, PLAZO_MS).Free;
+          TInterlocked.Increment(ACuenta^);
+        end;
+      except
+        // el motor se para debajo: LSP-033, que es lo que tiene que pasar
+      end;
+    end);
+  Result.FreeOnTerminate := False;
+end;
+
+procedure TFabricaTests.PararUnMotorOcupadoNoLoTumba;
+const
+  RONDAS = 5;
+var
+  Dpr, Unidad, Usado, Uri, Texto, Params: string;
+  C: TLspClient;
+  R, K, Cuenta: Integer;
+  Codigo: Cardinal;
+  Relleno: TStringBuilder;
+  O: TJSONObject;
+  Visto: Boolean;
+  H1, H2: TThread;
+  Apuntes: TStringList;
+  Antes: TLogMessageProc;
+begin
+  Assert.IsTrue(DiscoverRadStudio.Found, 'sin RAD Studio en la maquina no hay motor que parar');
+  Dpr := FDir + '\proyecto\P.dpr';
+  Unidad := FDir + '\proyecto\U.pas';
+  // un proyecto con algo que compilar: una unidad de 600 lineas y su llamada
+  Relleno := TStringBuilder.Create;
+  try
+    Relleno.AppendLine('unit U;').AppendLine('interface').AppendLine('function Doble(A: Integer): Integer;')
+      .AppendLine('implementation');
+    for K := 1 to 600 do
+      Relleno.AppendLine('// relleno ' + IntToStr(K));
+    Relleno.AppendLine('function Doble(A: Integer): Integer;').AppendLine('begin').AppendLine('  Result := A * 2;')
+      .AppendLine('end;').AppendLine('end.');
+    TFile.WriteAllText(Unidad, Relleno.ToString);
+  finally
+    Relleno.Free;
+  end;
+  Texto := 'program P;' + sLineBreak + 'uses U;' + sLineBreak + 'begin' + sLineBreak +
+    '  Writeln(Doble(3));' + sLineBreak + 'end.' + sLineBreak;
+  TFile.WriteAllText(Dpr, Texto);
+  Uri := TLspClient.PathToUri(Dpr);
+  Params := Format('{"textDocument":{"uri":"%s"},"position":{"line":3,"character":12}}', [Uri]);
+  Apuntes := TStringList.Create;
+  Antes := EscuchaMotores(Apuntes);
+  try
+    for R := 1 to RONDAS do
+    begin
+      C := TLspSession.Instance.AcquireFor(Dpr, Usado);
+      // TESTIGO: antes de parar nada la pregunta SE CONTESTA, con un sitio de
+      // U.pas (un motor recien abierto contesta -32800 mientras indexa, y una
+      // ronda sobre uno asi no mediria un motor ocupado)
+      Visto := False;
+      for K := 1 to 20 do
+      begin
+        O := C.Definition(Uri, 3, 12);
+        try
+          Visto := Pos('U.pas', O.ToJSON) > 0;
+        finally
+          O.Free;
+        end;
+        if Visto then
+          Break;
+        Sleep(500);
+      end;
+      Assert.IsTrue(Visto, Format('ronda %d de %d: la definicion de Doble no llega a resolverse', [R, RONDAS]));
+      // La ventana es de milisegundos (medido el mismo dia: con una definition
+      // EN VUELO al cerrar la entrada, 8 caidas de 8; 20 ms despues de
+      // mandarla, 0 de 8; con un didChange solo, 0 de 8). Dos hilos preguntan
+      // sin parar, y asi al parar siempre hay una en vuelo: es parar el motor
+      // bajo la peticion de otro agente.
+      Cuenta := 0;
+      H1 := HiloQuePregunta(C, Params, @Cuenta);
+      H2 := HiloQuePregunta(C, Params, @Cuenta);
+      try
+        H1.Start;
+        H2.Start;
+        // hasta que contesten (no un tiempo fijo: bajo carga la primera
+        // respuesta puede tardar), y un poco mas: los dos, preguntando
+        for K := 1 to 500 do
+          if Cuenta = 0 then
+            Sleep(10);
+        Sleep(100);
+        TLspSession.FolderLeaves(FDir + '\proyecto', True);
+        TLspSession.FolderLeaves(FDir + '\proyecto', False);
+      finally
+        // se recogen: corren sobre el cliente, y no sobreviven a la prueba
+        H1.WaitFor;
+        H2.WaitFor;
+        H1.Free;
+        H2.Free;
+      end;
+      Codigo := C.EngineExitCode;
+      Assert.AreEqual(Cardinal(0), Codigo, Format(
+        'ronda %d de %d: el motor parado ocupado salio con el codigo $%x (C0000005 = se cayo; 1 = hubo que matarlo)',
+        [R, RONDAS, Codigo]));
+      Assert.IsTrue(Cuenta > 0, Format(
+        'ronda %d de %d: los dos hilos no recibieron ni una respuesta antes de la parada: no se paro un motor ocupado',
+        [R, RONDAS]));
+      // ...y `shutdown` se CONTESTO: el servidor no tiene nada que apuntar
+      Assert.AreEqual(0, Apuntes.Count, Format('ronda %d de %d: el servidor apunto algo de su motor: %s',
+        [R, RONDAS, Apuntes.Text]));
+    end;
+  finally
+    TLogger.OnLogMessage := Antes;
+    Apuntes.Free;
   end;
 end;
 

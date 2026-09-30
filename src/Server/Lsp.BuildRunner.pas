@@ -108,10 +108,15 @@ begin
   // Sin job: ese es el punto. BREAKAWAY por si el propio servidor corriera
   // dentro de uno (el SCM no lo hace); si el job padre no lo permite, sin el.
   if not CreateProcess(nil, PChar(Cmd), nil, nil, False,
-    CREATE_NO_WINDOW or CREATE_BREAKAWAY_FROM_JOB, nil, nil, SI, PI) then
+    CREATE_NO_WINDOW or CREATE_SUSPENDED or CREATE_BREAKAWAY_FROM_JOB, nil, nil, SI, PI) then
     if not CreateProcess(nil, PChar(Cmd), nil, nil, False,
-      CREATE_NO_WINDOW, nil, nil, SI, PI) then
+      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, nil, SI, PI) then
       Exit;
+  // Suspendido hasta decirle que no abra nunca un cuadro de error
+  // (Lsp.Sandbox): lo que se lanza aqui vive mas que la peticion - el
+  // demonio de adb, que hereda el modo - y nadie le contestaria
+  NoErrorDialogs(PI.hProcess);
+  ResumeThread(PI.hThread);
   try
     Result := WaitForSingleObject(PI.hProcess, ATimeoutMs) = WAIT_OBJECT_0;
   finally
@@ -314,6 +319,7 @@ begin
     end;
   if Job <> 0 then
     AssignProcessToJobObject(Job, PI.hProcess);
+  NoErrorDialogs(PI.hProcess); // msbuild, git, a test exe: none may wait behind a dialog (Lsp.Sandbox)
   ResumeThread(PI.hThread);
   CloseHandle(WriteH); // ours no more; EOF arrives when the child exits
   finally
