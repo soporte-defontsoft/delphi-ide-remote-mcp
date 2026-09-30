@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.7.8';
+  SERVER_VERSION = '1.7.9';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -290,13 +290,16 @@ const
     leer cuesta una llamada, y a veces tres. }
   SN_LSP_NULL_NOTE =
     '[LSP-029] null - the engine resolved nothing there. It is not an ' +
-    'error: it simply has no answer. The three causes, most frequent ' +
+    'error: it simply has no answer. The four causes, most frequent ' +
     'first: (1) the position does not fall INSIDE an identifier - lines ' +
     'are 0-BASED here and 1-based in delphi_read, so line N of a read is ' +
     'N-1 here; (2) the file has no project configuration and the engine ' +
     'cannot cross units (the warning next to this says so, if it ' +
     'appears); (3) there is a reserved word, a literal or a comment ' +
-    'there, and no symbol to resolve. To see what is on that line, ' +
+    'there, and no symbol to resolve; (4) rarely, the engine has no answer ' +
+    'at THIS position and has one at another occurrence of the same ' +
+    'symbol (measured 2026-09-30: 9 of 10 on one line, 0 of 10 on three ' +
+    'others) - ask at another one. To see what is on that line, ' +
     'delphi_read; to locate a symbol by name, delphi_symbols ' +
     'filter=<name>, which gives you the line already split into 1-based ' +
     'and 0-based.';

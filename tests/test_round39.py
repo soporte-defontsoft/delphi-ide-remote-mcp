@@ -118,7 +118,7 @@ try:
     n = call('delphi_definition', {'path': pas, 'line': 4, 'character': 2})
     check('D6 un null viene explicado, no a secas',
           mc.abre(n, 'SN_LSP_NULL_NOTE') and len(n) > 200, n[:220])
-    check('D6b ...y dice las tres causas, que se arreglan distinto',
+    check('D6b ...y dice las causas, que se arreglan distinto',
           ('delphi_read' in n) and ('delphi_symbols' in n), n[:260])
 finally:
     try:

@@ -61,6 +61,7 @@ type
     [Test] procedure ElFicheroDelIdeRechazadoSeVuelveAMirar;
     [Test] procedure BajoUnaCarpetaQueSeVaNoSeArrancaMotor;
     [Test] procedure ElPreguntadoIlegibleNoSeCallaYElOtroSeDejaParaLuego;
+    [Test] procedure LosSinUsoYLosQueSeFueronSeCierran;
   end;
 
 implementation
@@ -637,6 +638,53 @@ begin
   end;
   // legible otra vez: la siguiente peticion la pone al dia y pasa
   TLspSession.Instance.AcquireFor(Unidad, Usado);
+end;
+
+// Un documento del que nadie pregunta en un rato se cierra (el motor lee del
+// disco, al dia, la unidad que no tiene abierta: medido 30-sep-2026), y uno
+// cuyo fichero se fue tambien: abierto, el motor seguia contestando
+// definitions HACIA el (UCalc.pas:8 sin UCalc.pas en el disco, medido el
+// mismo dia). El preguntado no se cierra nunca. Se mide por lo que el motor
+// tiene abierto (OpenDocuments), con el plazo acortado.
+procedure TFabricaTests.LosSinUsoYLosQueSeFueronSeCierran;
+var
+  Dpr, Unidad, Usado: string;
+  Antes: UInt64;
+begin
+  Assert.IsTrue(DiscoverRadStudio.Found, 'sin RAD Studio en la maquina no hay motor que abrir');
+  Dpr := FDir + '\proyecto\P.dpr';
+  Unidad := FDir + '\proyecto\U.pas';
+  TFile.WriteAllText(Unidad, 'unit U;' + sLineBreak + 'interface' + sLineBreak +
+    'implementation' + sLineBreak + 'end.' + sLineBreak);
+  Antes := LspDocIdleMs;
+  try
+    TLspSession.Instance.AcquireFor(Dpr, Usado);
+    TLspSession.Instance.AcquireFor(Unidad, Usado);
+    Assert.AreEqual(2, TLspSession.Instance.OpenDocuments(Dpr), 'los dos abiertos');
+    // El plazo corto SOLO para este paso, y lejos del medio segundo de
+    // margen de indexado que lleva cada apertura (segundo revisor de la
+    // 1.7.9: con 700 ms en toda la prueba habia 200 de margen a cada lado, y
+    // el ultimo paso podia pasar por el cierre de inactivos sin el del
+    // fichero que se fue).
+    LspDocIdleMs := 1500;
+    Sleep(2000);
+    TLspSession.Instance.AcquireFor(Dpr, Usado);
+    LspDocIdleMs := Antes;
+    Assert.AreEqual(1, TLspSession.Instance.OpenDocuments(Dpr), 'la unidad sin uso se cerro; queda el preguntado');
+    TLspSession.Instance.AcquireFor(Unidad, Usado);
+    Assert.AreEqual(2, TLspSession.Instance.OpenDocuments(Dpr), 'preguntada otra vez, abierta otra vez');
+    // Una CARPETA con su nombre: algo hay, pero no se le puede preguntar
+    // (STAMP_UNKNOWN). Eso NO se cierra: se mira otra vez en la siguiente.
+    TFile.Delete(Unidad);
+    TDirectory.CreateDirectory(Unidad);
+    TLspSession.Instance.AcquireFor(Dpr, Usado);
+    Assert.AreEqual(2, TLspSession.Instance.OpenDocuments(Dpr), 'lo que no se puede preguntar no se cierra');
+    TDirectory.Delete(Unidad);
+    TLspSession.Instance.AcquireFor(Dpr, Usado);
+    Assert.AreEqual(1, TLspSession.Instance.OpenDocuments(Dpr), 'la unidad cuyo fichero se fue se cerro');
+  finally
+    LspDocIdleMs := Antes;
+  end;
 end;
 
 initialization

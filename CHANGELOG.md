@@ -6,6 +6,76 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.9] - 2026-09-30
+
+What the measurements after 1.7.8 asked for, the same morning: the engine forgets a document whose file is gone and one nobody has asked about for half an hour, the disk fingerprint is one call, and a hint of the engine's own that is now measured.
+
+### Fixed
+
+- **A unit deleted or renamed while the engine had it open stayed there with
+  its last text**, and a `delphi_definition`, `delphi_hover` or
+  `delphi_references` from the `.dpr` kept landing in it: measured
+  2026-09-30, `UCalc.pas:8` with no `UCalc.pas` on the disk. The refresh now
+  closes it (`textDocument/didClose`, new in the client) and the engine has
+  nothing there - `[LSP-029]` from definition, `[LSP-003]` from references -
+  until the file comes back, when it answers today's text again. The
+  document the request is about is never closed by the refresh: its failure
+  is still raised. A path where something is but cannot be asked (a folder
+  of that name, access denied) is not closed: it is looked at again on the
+  next request.
+
+### Changed
+
+- **Documents nobody has asked about for 30 minutes are closed too.** The
+  engine reads a unit it does not have open from the disk, fresh, whenever
+  a question crosses it, and answers a question INSIDE one it does not have
+  open as well (both measured), so nothing is lost; what is gained is a
+  bounded open set, because every request pays one disk fingerprint per
+  open document to keep the engine in step. Asked about again, a document
+  is opened again and pays the indexing head start once. The threshold is a
+  variable the unit tests shorten (`LspDocIdleMs`); the operator's setting
+  arrives with the life of the engines.
+- **The disk fingerprint is one call and one composer.** `DiskStamp`
+  (`GetFileAttributesEx`: last write time and size together) lives in
+  `Lsp.ShaCache` and serves its three readers - the sha cache, the
+  session's document tables and its settings cache - which were two twins
+  with two sentinels; it tells a file that is gone from something that
+  cannot be asked. Measured with the server's roots on an SMB share (a UNC
+  root, which the server accepts; loopback, so a floor for a real network):
+  the same request took 58 ms with one document open and 104 ms with 59
+  when the fingerprint was two calls, and 68 ms with 59 now; on a local
+  disk, 52 ms with 59. A link to a file is still asked through the link,
+  the way it was (the one call answers with the link's own date, which does
+  not move when its target is edited): read in the RTL, not measured here -
+  this account cannot create one.
+- `[LSP-029]` names a fourth cause: at one exact position the engine
+  answers nothing while it answers at another occurrence of the same
+  symbol (measured: 9 of 10 on one line, 0 of 10 on three others, one of
+  them another inline `var`). It is the engine's; the hint says to ask at
+  another occurrence.
+
+### Added
+
+- `TLspSession.OpenDocuments(path)`, for the unit tests: how many documents
+  the engine of that file's project has open (-1 without an engine).
+- `test_rename` +7: hover from the `.dpr` as the FIRST question after the
+  hand edit (the new signature), references from the `.dpr` counting the
+  new call, and the ghost with its control - the unit open and resolving
+  before it is deleted, `[LSP-029]` and `[LSP-003]` after, today's line when
+  the file comes back, and again after it is reopened and edited. One unit
+  test: the idle document closed and the asked one kept, reopened when
+  asked, a folder of its name not closed, the gone one closed. Red with the
+  refresh leaving the ghost, red with the idle closing taken out, and the
+  hover check red with the refresh limited to the asked document.
+- Measured and not changed (three theories of this patch's reviewers and two
+  of 1.7.8's): with two agents linting two files of one project, 0 of 16
+  answers crossed; a lint by a path in another letter case sees the current
+  text; a linter engine publishes nothing for a document after its
+  `didClose`; a document reopened at version 1 accepts version 2 after
+  having had version 6. Read and not measured: over SMB the client caches
+  what it answers about a file changed from ANOTHER machine (10 s, 5 s for
+  "not found") - the virtual machine's case, to measure there.
+
 ## [1.7.8] - 2026-09-30
 
 One thing, found by Hermes' battery of 1.7.7 the night it shipped: a unit edited on disk stayed at its OLD text inside the engine for as long as nobody asked a question inside that unit, so every answer that crossed it from another file - a definition from the .dpr, the references a rename stands on, a lint of a caller - was computed on a source that no longer existed. The report that came with it blamed the engine (a stale answer after the change was sent); measured, the engine was never sent the change.

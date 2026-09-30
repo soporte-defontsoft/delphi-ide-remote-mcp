@@ -94,6 +94,7 @@ type
     procedure DidOpenFile(const AFilePath: string);
     { Full-document change (DelphiLSP announces textDocumentSync=1 = full). }
     procedure DidChangeText(const AUri, AText: string; AVersion: Integer);
+    procedure DidClose(const AUri: string);
 
     { Language features (positions are 0-based, LSP style) }
     function Hover(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
@@ -429,6 +430,13 @@ begin
   finally
     Change.Free;
   end;
+end;
+
+{ The engine forgets the document: from here on it reads that unit from the
+  disk when a question crosses it, as it does with one never opened. }
+procedure TLspClient.DidClose(const AUri: string);
+begin
+  Notify('textDocument/didClose', Format('{"textDocument":{"uri":"%s"}}', [AUri]));
 end;
 
 function TLspClient.Hover(const AUri: string; ALine, ACharacter: Integer): TJSONObject;

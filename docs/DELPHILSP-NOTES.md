@@ -68,7 +68,23 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
 - Without keeping stdin open the process exits before answering (pipe-close on EOF).
 - Positions are 0-based, UTF-16 code units. Content in `didOpen` is UTF-8 JSON — decode legacy CP1252 sources correctly before sending.
 - An external DelphiLSP instance coexists fine with the IDE's own instances; each agent holds hundreds of MB on a mid-size project.
-- The LSP reads **disk state**; unsaved IDE editor buffers are invisible to it.
+- The LSP reads **disk state**; unsaved IDE editor buffers are invisible to it (for a document the engine itself has open, see the next point).
+- **An OPEN document is never re-read from disk** (measured 2026-09-30): after `didOpen`, the
+  engine answers from the text it was given until a `didChange` arrives, for as long as that takes
+  (25 s measured, no bound) — a definition from another file into the edited unit answered the old
+  line. A unit the engine does NOT have open is read from disk on every question that crosses it,
+  fresh. After a `didChange` the engine answered the new text at once: 27 edits, 60 questions right
+  after them, 0 stale. So the client owns freshness: send `didChange` for every open document whose
+  disk changed before asking, and `didClose` for one whose file is gone — kept open, the engine went
+  on answering definitions into a file that no longer existed.
+- **`hover`/`definition` can answer `null` at one exact position and resolve the same symbol at
+  another occurrence** (measured 2026-09-30 on a 60-unit project: 9 of 10 `null` at one call inside
+  an inline `var X := F(...)`, 0 of 10 at three other call sites, one of them another inline `var`).
+  Position-specific, not tied to the construct; ask at another occurrence.
+- **A position request works on a document that is NOT open** (measured 2026-09-30, engine launched
+  by hand with only the `.dpr` open): `definition` and `hover` inside a unit never opened answer,
+  from the disk. And after `didClose` a linter engine publishes nothing more for that uri (5 s
+  watched), and a document reopened at version 1 accepts version 2 after having had version 6.
 - **No section legality for `{$I}` includes** (measured 2026-09-23, field battery): a procedure
   BODY, or an identifier declared twice, inside an include pulled into the interface part passes
   `diagnostics` with zero errors, while dcc rejects the same unit (E2050 "Statements not allowed in

@@ -16,9 +16,27 @@ interface
 function CachedFileSha256(const APath: string): string;
 function Sha256DeBytes(const ABytes: TArray<Byte>): string;
 
+{ The disk fingerprint of a file - last write time and size - in ONE call
+  (GetFileAttributesEx opens no handle: a file another process holds
+  exclusively still gives its stamp, and a network share pays one round trip
+  instead of two). STAMP_GONE when the file is not there; STAMP_UNKNOWN when
+  it is there but cannot be asked (a folder, access denied...). One composer
+  for its readers - this cache, and the LSP session's document tables and
+  settings cache - which were two twins with two sentinels (first review of
+  1.7.8). A LINK to a file is asked the way it always was, through the link:
+  the one call answers with the link's own date and size 0, which do not
+  move when the file it points to is edited (second review of 1.7.9; read in
+  the RTL, not measured here: this account cannot create a link). }
+const
+  STAMP_GONE = '';
+  STAMP_UNKNOWN = '?';
+function DiskStamp(const APath: string): string;
+function HasStamp(const AStamp: string): Boolean;
+
 implementation
 
 uses
+  Winapi.Windows,
   System.SysUtils,
   System.IOUtils,
   System.Hash,
@@ -30,14 +48,37 @@ var
   // full path (lower) -> (stamp, sha)
   GCache: TDictionary<string, TPair<string, string>>;
 
-function StampOf(const AFull: string): string;
+function DiskStamp(const APath: string): string;
+var
+  Data: TWin32FileAttributeData;
+  Err: DWORD;
 begin
-  try
-    Result := FloatToStr(TFile.GetLastWriteTimeUtc(AFull)) + '|' +
-      IntToStr(TFile.GetSize(AFull));
-  except
-    Result := '';
+  if GetFileAttributesEx(PChar(APath), GetFileExInfoStandard, @Data) then
+  begin
+    if (Data.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+      Exit(STAMP_UNKNOWN); // a folder has a date, but it is not a file
+    if (Data.dwFileAttributes and FILE_ATTRIBUTE_REPARSE_POINT) <> 0 then
+      try
+        Exit(FloatToStr(TFile.GetLastWriteTimeUtc(APath)) + '|' + IntToStr(TFile.GetSize(APath)));
+      except
+        Exit(STAMP_UNKNOWN);
+      end;
+    Result := UIntToStr((UInt64(Data.ftLastWriteTime.dwHighDateTime) shl 32) or Data.ftLastWriteTime.dwLowDateTime)
+      + '|' + UIntToStr((UInt64(Data.nFileSizeHigh) shl 32) or Data.nFileSizeLow);
+  end
+  else
+  begin
+    Err := GetLastError;
+    if (Err = ERROR_FILE_NOT_FOUND) or (Err = ERROR_PATH_NOT_FOUND) or (Err = ERROR_INVALID_NAME) then
+      Result := STAMP_GONE
+    else
+      Result := STAMP_UNKNOWN;
   end;
+end;
+
+function HasStamp(const AStamp: string): Boolean;
+begin
+  Result := (AStamp <> STAMP_GONE) and (AStamp <> STAMP_UNKNOWN);
 end;
 
 // El sha de un trozo en memoria (delphi_upload chunkSha256): mismo sitio
@@ -59,8 +100,8 @@ var
 begin
   Full := TPath.GetFullPath(APath);
   Key := Full.ToLower;
-  Stamp := StampOf(Full);
-  if Stamp <> '' then
+  Stamp := DiskStamp(Full);
+  if HasStamp(Stamp) then
   begin
     GLock.Enter;
     try
@@ -71,7 +112,7 @@ begin
     end;
   end;
   Result := THashSHA2.GetHashStringFromFile(Full, THashSHA2.TSHA2Version.SHA256);
-  if Stamp <> '' then
+  if HasStamp(Stamp) then
   begin
     GLock.Enter;
     try

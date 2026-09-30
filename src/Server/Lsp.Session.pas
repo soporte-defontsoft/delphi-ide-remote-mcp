@@ -27,6 +27,15 @@ uses
   Lsp.ConfigFabricator,
   Lsp.Guard;
 
+var
+  { A document the engine has open that nobody has asked about for this long
+    is closed on the next request of its engine (didClose): the engine then
+    reads it from the disk when a question crosses it, fresh, and it is
+    opened again when asked about. A variable, not a constant, so a unit
+    test can shorten it; the operator's setting comes with the life of the
+    engines. }
+  LspDocIdleMs: UInt64 = 30 * 60 * 1000;
+
 type
   ELspSession = class(Exception);
 
@@ -102,6 +111,8 @@ type
       out ARootDir, ASource, ASourceStamp, ARejected, ARejectedStamp: string): string;
     function CreateClient(const ARootDir, ASettingsFile: string;
       AServerType: TLspServerType): TLspClient;
+    function ClientKey(const AFullPath: string; ALinter: Boolean;
+      out ASettingsUsed, ARootDir: string): string;
     function GetClient(const AFullPath: string; ALinter: Boolean;
       out ASettingsUsed, AClientKey, ARootDir: string): TLspClient;
     function Leaving(const AHeldReal: string): Boolean;
@@ -170,12 +181,20 @@ type
       nil on timeout. Re-lints on every call via didChange. }
     function LintFile(const AFilePath: string; ATimeoutMs: Integer;
       out ASettingsUsed: string): TJSONObject;
+
+    { How many documents the agent engine of AFilePath's project has open;
+      -1 when there is no engine for it (none is started to answer). For
+      the unit tests: it resolves the project's settings as a request does
+      and does not go through the gate, so it is not for a path an agent
+      gives. }
+    function OpenDocuments(const AFilePath: string): Integer;
   end;
 
 implementation
 
 uses
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.ShaCache; // DiskStamp: one composer of the disk fingerprint
 
 type
   { What the engine holds of one document. }
@@ -183,6 +202,7 @@ type
     Path: string;    // as the engine was given it: its uri is made from this
     Version: Integer;
     Stamp: string;   // DiskStamp taken just before the text the engine has
+    LastUsed: UInt64; // GetTickCount64 of the last question about it
   end;
 
   { The session's client: a client, and what the session knows of ITS
@@ -208,6 +228,8 @@ type
     // restart the lint, just wait for (or collect) the pending diagnostics
     FLintText: TDictionary<string, string>;
     function Refresh(const AExceptKey, AStrictKey: string): Boolean;
+    procedure Close(const AKey: string; const AD: TDocState);
+    procedure Touch(const AKey: string);
   public
     constructor Create(ATransport: TLspProcessTransport);
     destructor Destroy; override;
@@ -335,34 +357,26 @@ begin
   inherited;
 end;
 
-{ mtime ticks + size: cheap fingerprint of the file's disk state. }
-function DiskStamp(const APath: string): string;
-begin
-  try
-    Result := FloatToStr(TFile.GetLastWriteTimeUtc(APath)) + '|' +
-      IntToStr(TFile.GetSize(APath));
-  except
-    Result := '?';
-  end;
-end;
-
 { The three things the engine's copy of a document is known by, in one. }
 function DocState(const APath: string; AVersion: Integer; const AStamp: string): TDocState;
 begin
   Result.Path := APath;
   Result.Version := AVersion;
   Result.Stamp := AStamp;
+  Result.LastUsed := TThread.GetTickCount64;
 end;
 
-{ Brings the engine up to date with the disk: every document it has open
+{ Brings the engine up to date with the disk. Every document it has open
   whose file changed since it was last given its text is sent again
   (didChange), and a lint of it pending by text is forgotten (it would be
-  compared with a text the engine no longer has). AExceptKey is left to its
-  caller, who sends it by itself. AStrictKey is the document the request is
-  about: what fails for it is raised, as it always was - the answer would be
-  computed on the old text, in silence -; for the others a file gone or
-  unreadable right now is left for the next request (first review of
-  1.7.8). Called with FDocLock held. True when something was sent.
+  compared with a text the engine no longer has); one nobody has asked about
+  for LspDocIdleMs, and one whose file is gone, are closed (didClose).
+  AExceptKey is left to its caller, who sends it by itself. AStrictKey is
+  the document the request is about: it is never closed here, and what fails
+  for it is raised, as it always was - the answer would be computed on the
+  old text, in silence -; for the others a file that cannot be read right
+  now is left for the next request (first review of 1.7.8). Called with
+  FDocLock held. True when something was SENT (a close is not).
   Measured 2026-09-30 (Hermes, RENAME-017): only the document asked about
   used to be refreshed, so a unit edited on disk kept its old text in the
   engine for as long as nobody asked INSIDE it, and a definition from the
@@ -374,20 +388,42 @@ var
   Key, Stamp: string;
   D: TDocState;
   Strict: Boolean;
+  Tick: UInt64;
 begin
   Result := False;
+  Tick := TThread.GetTickCount64;
   for Key in FDocs.Keys.ToArray do
   begin
     if Key = AExceptKey then
       Continue;
     Strict := Key = AStrictKey;
     D := FDocs[Key];
-    // the stamp BEFORE the text: a write between the two is seen next time.
-    // '?' is a file gone or unreadable right now: for another document,
-    // nothing to send and it is looked at again on the next request; for the
-    // asked one, the read below says what is wrong
+    // Nobody has asked about it for a while: closed, without a look at the
+    // disk. The engine reads a unit it does not have open from the disk,
+    // fresh, whenever a question crosses it (measured 2026-09-30), so the
+    // open set - and what every request pays to keep it in step, one stamp
+    // per document, a round trip each on a network share - stays bounded.
+    // Asked about again, it is opened again.
+    if (not Strict) and (Tick - D.LastUsed > LspDocIdleMs) then
+    begin
+      Close(Key, D);
+      Continue;
+    end;
+    // the stamp BEFORE the text: a write between the two is seen next time
     Stamp := DiskStamp(D.Path);
-    if (Stamp = D.Stamp) or ((Stamp = '?') and not Strict) then
+    // Its file is gone (deleted, renamed, a branch without it): closed too.
+    // Kept open, the engine went on answering definitions INTO it, at its
+    // last text (measured 2026-09-30: UCalc.pas:8 with no UCalc.pas on the
+    // disk); closed, the engine has nothing there, and the file coming back
+    // is opened anew. For the asked one, the read below says what is wrong.
+    if (Stamp = STAMP_GONE) and not Strict then
+    begin
+      Close(Key, D);
+      Continue;
+    end;
+    // a file there but not to be asked right now: for another document,
+    // looked at again on the next request
+    if (Stamp = D.Stamp) or ((Stamp = STAMP_UNKNOWN) and not Strict) then
       Continue;
     try
       Inc(D.Version);
@@ -401,6 +437,31 @@ begin
       if Strict then
         raise;
     end;
+  end;
+end;
+
+{ The engine forgets the document, and so do the tables. Called with
+  FDocLock held. Never raises: an engine that cannot be told is one that is
+  going, and its tables go with it. }
+procedure TSessionClient.Close(const AKey: string; const AD: TDocState);
+begin
+  FDocs.Remove(AKey);
+  FLintText.Remove(AKey);
+  try
+    DidClose(PathToUri(AD.Path));
+  except
+  end;
+end;
+
+{ The document was asked about now: not idle. Called with FDocLock held. }
+procedure TSessionClient.Touch(const AKey: string);
+var
+  D: TDocState;
+begin
+  if FDocs.TryGetValue(AKey, D) then
+  begin
+    D.LastUsed := TThread.GetTickCount64;
+    FDocs[AKey] := D;
   end;
 end;
 
@@ -857,8 +918,10 @@ begin
   end;
 end;
 
-function TLspSession.GetClient(const AFullPath: string; ALinter: Boolean;
-  out ASettingsUsed, AClientKey, ARootDir: string): TLspClient;
+{ The key of the client that serves a file: agent or linter, the RAD Studio
+  version and the settings file (or the root when there is none). }
+function TLspSession.ClientKey(const AFullPath: string; ALinter: Boolean;
+  out ASettingsUsed, ARootDir: string): string;
 const
   Prefix: array [Boolean] of string = ('agent|', 'linter|');
 begin
@@ -867,9 +930,38 @@ begin
   // (DelphiVersion=) necesita SU DelphiLSP, no el que ya corre para otro.
   var Ver := DiscoverRadStudio.Version;
   if ASettingsUsed <> '' then
-    AClientKey := Prefix[ALinter] + Ver + '|' + ASettingsUsed.ToLower
+    Result := Prefix[ALinter] + Ver + '|' + ASettingsUsed.ToLower
   else
-    AClientKey := Prefix[ALinter] + Ver + '|(nosettings)' + ARootDir.ToLower;
+    Result := Prefix[ALinter] + Ver + '|(nosettings)' + ARootDir.ToLower;
+end;
+
+function TLspSession.OpenDocuments(const AFilePath: string): Integer;
+var
+  Settings, RootDir: string;
+  C: TLspClient;
+begin
+  Result := -1;
+  var Key := ClientKey(TPath.GetFullPath(AFilePath), False, Settings, RootDir);
+  FTables.Enter;
+  try
+    if not FClients.TryGetValue(Key, C) then
+      Exit;
+  finally
+    FTables.Leave;
+  end;
+  var Mine := C as TSessionClient;
+  Mine.FDocLock.Enter;
+  try
+    Result := Mine.FDocs.Count;
+  finally
+    Mine.FDocLock.Leave;
+  end;
+end;
+
+function TLspSession.GetClient(const AFullPath: string; ALinter: Boolean;
+  out ASettingsUsed, AClientKey, ARootDir: string): TLspClient;
+begin
+  AClientKey := ClientKey(AFullPath, ALinter, ASettingsUsed, ARootDir);
 
   // Fast path under the lock; the SLOW path (spawn DelphiLSP + initialize +
   // settings load, seconds) runs UNLOCKED, so warming one project no longer
@@ -1026,7 +1118,9 @@ begin
       Result.DidOpenFile(FullPath);
       Mine.FDocs.Add(DocKey, DocState(FullPath, 1, Stamp));
       HeadStart := True;
-    end;
+    end
+    else
+      Mine.Touch(DocKey);
   finally
     Mine.FDocLock.Leave;
   end;
@@ -1096,6 +1190,7 @@ begin
       end;
       Mine.FLintText.AddOrSetValue(DocKey, Text);
     end;
+    Mine.Touch(DocKey);
   finally
     Mine.FDocLock.Leave;
   end;

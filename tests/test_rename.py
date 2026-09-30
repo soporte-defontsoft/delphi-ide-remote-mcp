@@ -184,13 +184,28 @@ impl0 = [i for i, l in enumerate(ls_uc) if l.startswith('function Duplica(')][1]
 j = J(call('delphi_definition', {'path': UCALC, 'line': decl, 'character': 11}))
 check('UCalc abierta en el motor y al dia (definition dentro de ella, decl -> impl)',
       ((j.get('range') or {}).get('start') or {}).get('line') == impl0, (str(j)[:200], impl0))
+# la edicion a pelo: una linea mas encima de la implementacion, la FIRMA con un
+# parametro mas (S3: hover desde el .dpr) y una llamada mas en el .dpr (S4:
+# references desde el .dpr)
 uc = open(UCALC, encoding='utf-8-sig').read()
 open(UCALC, 'w', encoding='utf-8-sig', newline='').write(uc.replace(
-    'implementation\n', 'implementation\n// una linea mas: la implementacion baja una\n', 1))
+    'implementation\n', 'implementation\n// una linea mas: la implementacion baja una\n', 1).replace(
+    'function Duplica(A: Integer): Integer;', 'function Duplica(A: Integer; B: Integer = 0): Integer;'))
+dp = open(DPR, encoding='utf-8-sig').read()
+open(DPR, 'w', encoding='utf-8-sig', newline='').write(dp.replace(
+    'Writeln(Duplica(3));', 'Writeln(Duplica(3));\n  Writeln(Duplica(4));', 1))
 ls_uc, ls_dp = lineas(UCALC), lineas(DPR)
 impl = [i for i, l in enumerate(ls_uc) if l.startswith('function Duplica(')][1]
 ld = next(i for i, l in enumerate(ls_dp) if 'Duplica(3)' in l)
 cd = ls_dp[ld].index('Duplica') + 2
+# El ORDEN importa (segundo revisor de la 1.7.9): hover y definition desde el
+# .dpr no abren UCalc, asi que son las que miden el refresco; el preview la
+# refresca el solo al validar sus candidatos, y lo que venga detras ya la
+# encuentra al dia sin necesidad del arreglo. Por eso hover va LO PRIMERO, y
+# references, que va detras del preview, solo cuenta.
+h = call('delphi_hover', {'path': DPR, 'line': ld, 'character': cd})
+check('unidad editada en disco: hover desde el .dpr, la PRIMERA pregunta, ve la firma de HOY (B: Integer)',
+      'B: Integer' in h, h[:200])
 j = J(call('delphi_definition', {'path': DPR, 'line': ld, 'character': cd}))
 check('unidad editada en disco: definition desde el .dpr contesta la linea de HOY, no la que tenia el motor',
       ((j.get('range') or {}).get('start') or {}).get('line') == impl and str(j.get('path', '')).endswith('UCalc.pas'),
@@ -199,6 +214,9 @@ j = J(call('delphi_rename_symbol', {'path': DPR, 'line': ld, 'character': cd, 'n
 check('unidad editada en disco: el PRIMER preview desde el .dpr es aplicable (era RENAME-017 hasta la 1.7.7)',
       j.get('applicable') is True and not j.get('blockers') and (j.get('definition') or {}).get('line') == impl + 1,
       str(j)[:400])
+j = J(call('delphi_references', {'path': DPR, 'line': ld, 'character': cd}))
+check('references desde el .dpr cuenta las cinco (decl, impl, Existente y las dos llamadas del .dpr)',
+      len(j.get('confirmed') or []) == 5 and not j.get('unverified'), str(j)[:300])
 
 # 10. El motor del LINTER cruza unidades igual: con UCalc abierta en el (un
 # diagnostics), una funcion NUEVA en UCalc y su llamada en el .dpr, escritas
@@ -225,6 +243,51 @@ open(DPR, 'w', encoding='utf-8-sig', newline='').write(dp.replace(
 d2 = J(call('delphi_diagnostics', {'path': DPR}, t=120))
 check('linter (control): una funcion que no existe si da exactamente un E2003',
       d2.get('errors') == 1 and 'E2003' in str(d2.get('diagnostics')), str(d2)[:300])
+
+# 11. FANTASMA: la unidad se BORRA del disco con el motor teniendola abierta
+# (lo esta desde el punto 9). Hasta la 1.7.8 definition, hover y references
+# desde el .dpr seguian apuntando a UCalc.pas:N, un fichero que no existia
+# (medido 30-sep-2026). Hoy el refresco la cierra (didClose): el motor no
+# tiene nada ahi; y si el fichero vuelve con otro texto, se abre de nuevo y
+# contesta la linea de hoy.
+def linea_de(j):
+    return ((j.get('range') or {}).get('start') or {}).get('line')
+def impl_hoy():
+    ls = lineas(UCALC)
+    return (next(i for i, l in enumerate(ls) if l.startswith('function Duplica(')),
+            [i for i, l in enumerate(ls) if l.startswith('function Duplica(')][1])
+# La precondicion y el control, medidos y no heredados de los puntos 9 y 10
+# (segundo revisor de la 1.7.9): una pregunta DENTRO de UCalc la deja abierta
+# en el motor, y desde el .dpr la pregunta SI resuelve hacia ella. Sin esto,
+# un null despues de borrarla no dice nada.
+decl, impl = impl_hoy()
+j1 = J(call('delphi_definition', {'path': UCALC, 'line': decl, 'character': 11}))
+j2 = J(call('delphi_definition', {'path': DPR, 'line': ld, 'character': cd}))
+check('fantasma (control): antes de borrarla, UCalc abierta en el motor y definition desde el .dpr apunta a ella',
+      linea_de(j1) == impl and linea_de(j2) == impl and str(j2.get('path', '')).endswith('UCalc.pas'),
+      (str(j1)[:120], str(j2)[:120], impl))
+uc_bytes = open(UCALC, 'rb').read()
+os.remove(UCALC)
+r = call('delphi_definition', {'path': DPR, 'line': ld, 'character': cd})
+check('fantasma: borrada UCalc.pas, definition desde el .dpr contesta LSP-029 (no un fichero que no existe, ni otro fallo)',
+      mc.abre(r, 'SN_LSP_NULL_NOTE'), r[:200])
+r = call('delphi_references', {'path': DPR, 'line': ld, 'character': cd})
+check('fantasma: y references desde el .dpr, LSP-003', mc.abre(r, 'SR_REFS_NO_DEFINITION_FMT'), r[:200])
+vuelta = uc_bytes.replace(b'implementation\n', b'implementation\n// vuelta\n', 1)
+assert vuelta != uc_bytes, 'la vuelta tiene que traer otro texto'
+open(UCALC, 'wb').write(vuelta)
+decl, impl = impl_hoy()
+j = J(call('delphi_definition', {'path': DPR, 'line': ld, 'character': cd}))
+check('fantasma: el fichero vuelve con otro texto y definition desde el .dpr da la linea de HOY',
+      linea_de(j) == impl and str(j.get('path', '')).endswith('UCalc.pas'), (str(j)[:200], impl))
+# reabierta (una pregunta dentro: el documento vuelve a nacer en la version 1)
+# y editada otra vez: el motor tiene que aceptar ese cambio tras reabrir
+j = J(call('delphi_definition', {'path': UCALC, 'line': decl, 'character': 11}))
+open(UCALC, 'wb').write(vuelta.replace(b'// vuelta\n', b'// vuelta\n// y otra\n', 1))
+decl2, impl2 = impl_hoy()
+j2 = J(call('delphi_definition', {'path': DPR, 'line': ld, 'character': cd}))
+check('fantasma: reabierta y editada otra vez, definition desde el .dpr da la linea de HOY',
+      linea_de(j) == impl and impl2 == impl + 1 and linea_de(j2) == impl2, (str(j)[:120], str(j2)[:120], impl2))
 
 srv.mata()
 mc.fin('rename battery')
