@@ -22,6 +22,17 @@ no una reimplementacion nuestra de lo que creemos que hace.
 """
 import os, shutil, subprocess, sys, time
 
+# PAServer corre en modo de error 0 y lo que arranca lo hereda (medido el
+# 30-sep-2026 contra uno de verdad: un programa lanzado por remote-run decia
+# modo 0). Aqui el lanzador nace del anfitrion de WMI (ver arranca()), no de
+# este proceso, y trae SU modo, que no lleva la mascara sin cuadro:
+# test_remoterun lo mide antes de afirmar nada. Esto es para el camino de
+# reserva (sin WMI, lanzado directo): este stub nace del corredor del servidor,
+# que ya le fija el modo sin cuadro, y el lanzador lo heredaria
+if os.name == 'nt':
+    import ctypes
+    ctypes.windll.kernel32.SetErrorMode(0)
+
 SCRATCH = os.environ['MCP_STUB_SCRATCH']
 
 

@@ -6,6 +6,83 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.11] - 2026-09-30
+
+What 1.7.10 left written down, closed the same day: the service process stayed thirty seconds after every stop, a program started by a remote run on a Windows target could wait behind an error dialog, and what the reviewers' notes measured out to.
+
+### Fixed
+
+- **The service process stayed for thirty seconds after every stop, until
+  the system ended it.** Measured 2026-09-30: "stopped" in the server's log
+  1.5 s after `sc stop`, and the process gone at 31 s - three deploys out of
+  three. Not the clients, which were the suspect: a copy in terminal mode
+  stops in 0.0 to 0.6 s with nobody connected, after a session, with an idle
+  keep-alive connection and with an event stream open. The cause is in how
+  the service framework ends the program: it posts `WM_QUIT` to the window
+  of the VCL application object, and this exe is a console application (the
+  stdio transport needs it), where that object has no window. A message
+  posted to window 0 goes to the queue of the thread that posts it, so the
+  main thread never left its loop, and no finalization ever ran in service
+  mode. A copy started by hand with `--service` never left: one thread
+  alive, and no line in the event log from the end of its loop. Now the
+  application is given a window of the main thread before the service
+  starts, and that copy leaves in under a second.
+- **A program started by a remote run on a Windows target ran in error mode
+  0**, the one PAServer has. Measured against a real PAServer with a program
+  that crashes: it said "mode 0" and took 2.4 s to die, through the system's
+  crash reporting; on an unattended target a dialog there would wait for
+  nobody. Now the launcher (`McpRunJob`) creates it suspended and sets the
+  no-dialog mode on it, with the helper the server uses for its own
+  children; the agent gets the program's exit code as before, and that is
+  the record - with the mode, Windows writes no event for the crash.
+- **A client retired a second time while it was being stopped had its
+  engine's input closed before the answer to `shutdown`.** A retire wakes
+  every waiting entry, and the one that waits for that answer was one of
+  them. Latent: today only a session that closes while a folder is leaving
+  retires twice. Now it waits until the answer or the time.
+- **A stop could wait for as long as another process kept the engine's
+  pipe.** With the engine gone and a writer still inside its write - the
+  engine was not reading, the pipe was full, and somebody else held its
+  other end - the transport closed the handle anyway, and closing a handle
+  under a blocked synchronous write waits for that write (measured on a bare
+  pipe: `CloseHandle` still waiting at 4 s, 3 of 3). Measured on the
+  transport, with `cmd.exe` as the engine and a 45 s `ping` holding its
+  input: the stop came back after 42.4 s, when the ping let go - and a stop
+  runs with the global write lock held when a folder is leaving. Now that
+  writer is left behind with its handle, as a reader already was, and the
+  transport keeps its memory and its write lock. Not reachable between this
+  server's own children since 1.7.7 launches them one at a time, which is
+  why nobody had seen it.
+- `shutdown` goes without `params`, what JSON-RPC asks of a method that
+  takes none. The engine answers both forms alike - measured, 8 of 8 each,
+  in 11 to 17 ms with a definition in flight - and a stricter one might not.
+
+### Added
+
+- `Lsp.ErrorMode`: `NoErrorDialogs` in a unit of its own, with no dependency
+  but the system, so that the server and the launcher share ONE helper (it
+  lived in `Lsp.Sandbox`, which brings the whole guard with it).
+- `test_tray` +1 (T6: the service host started without the SCM leaves by
+  itself, in under the thirty seconds the system gave it), `test_remoterun`
+  +2 (the program says its own error mode; the launcher is born there
+  from the WMI host, in a mode without the bit, which the battery
+  measures first), two unit tests (`RetirarOtraVezNoAcortaLaEspera`,
+  `UnEscritorAtascadoNoCuelgaLaParada`), and the threads of
+  `PararUnMotorOcupadoNoLoTumba` are collected with a bound. Each red with
+  its fix taken out: the copy still alive at 20 s (the 1.7.10 exe), the
+  program in a mode without the bit, the stop back after 219 ms, the
+  stop with a stuck writer back after 42,391 ms.
+- A guard, not measured red: the service says in its log when the window
+  it gives the application could not be created, which is the thirty
+  seconds back.
+- Measured, and closed with no code: **the engine sends no requests to its
+  client** - 0 messages with both `id` and `method` in a session with start,
+  settings, open, hover, definition, references, documentSymbol and change,
+  agent and linter - so nothing goes unanswered while the server waits for
+  `shutdown`. Not done, and why: a check on the LINTER's exit code when git
+  stops it could not go red - the linter ends clean with and without the
+  fix (measured by hand, 6 of 6 each way).
+
 ## [1.7.10] - 2026-09-30
 
 The server was crashing its own engines when it stopped them, and an engine that crashed could leave an error dialog waiting for nobody. Both found the same morning from one dialog on the operator's desktop and the machine's event log behind it: 1,650 crashes of DelphiLSP.exe in eight days, 1,645 of them the access violation below.

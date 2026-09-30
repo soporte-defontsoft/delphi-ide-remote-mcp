@@ -93,9 +93,9 @@
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>1</VerInfo_MajorVer>
         <VerInfo_MinorVer>7</VerInfo_MinorVer>
-        <VerInfo_Release>10</VerInfo_Release>
+        <VerInfo_Release>11</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=DelphiLSP MCP Service (stdio host);FileVersion=1.7.10.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=DelphiLSP MCP Service;ProductVersion=1.7.10.0;Comments=</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=DelphiLSP MCP Service (stdio host);FileVersion=1.7.11.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=DelphiLSP MCP Service;ProductVersion=1.7.11.0;Comments=</VerInfo_Keys>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Winapi;System.Win;$(DCC_Namespace)</DCC_Namespace>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android)'!=''">
@@ -224,6 +224,7 @@
         <DCCReference Include="Lsp.Base64.pas"/>
         <DCCReference Include="Lsp.InlineImages.pas"/>
         <DCCReference Include="Lsp.LogSink.pas"/>
+        <DCCReference Include="Lsp.ErrorMode.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

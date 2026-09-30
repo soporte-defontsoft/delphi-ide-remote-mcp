@@ -261,13 +261,15 @@ begin
     if WaitForSingleObject(Asker.Handle, 3000) = WAIT_OBJECT_0 then
       Asker.Free;
     // else left behind, as the transport leaves a reader: a leaked thread,
-    // never a server that does not come back
+    // never a server that does not come back. It waits for the transport's
+    // write lock, or is inside the write: the transport, which has just
+    // found that writer inside, keeps what it stands on (CloseHandles)
   SayHowItEnded(Asked, Answered);
 end;
 
 { How the engine ended goes to the server's log, once per engine, from the
   two places that see it end (StopEngine and the destructor). An engine with
-  the no-dialog mode (Lsp.Sandbox.NoErrorDialogs) dies without a line in the
+  the no-dialog mode (Lsp.ErrorMode.NoErrorDialogs) dies without a line in the
   system's event log (measured 2026-09-30: a crashing program leaves an
   Application Error event without the mode and nothing with it), and that
   log is where these crashes were found. Said when it did not end clean, and
@@ -305,6 +307,8 @@ var
   Call: TPendingCall;
   Json: string;
   Transport: TLspProcessTransport;
+  T0: UInt64;
+  Left: Int64;
 begin
   Result := nil;
   AAnswered := False;
@@ -319,7 +323,10 @@ begin
     FLock.Leave;
   end;
   try
-    Json := Format('{"jsonrpc":"2.0","id":%d,"method":"shutdown","params":null}', [Id]);
+    // Without "params": what JSON-RPC asks of a method that takes none. This
+    // engine answers both forms alike (measured 2026-09-30: 8 of 8 each, in
+    // 11 to 17 ms with a definition in flight); a stricter one might not.
+    Json := Format('{"jsonrpc":"2.0","id":%d,"method":"shutdown"}', [Id]);
     Transport := FTransport;
     Result := TThread.CreateAnonymousThread(
       procedure
@@ -332,7 +339,25 @@ begin
       end);
     Result.FreeOnTerminate := False;
     Result.Start;
-    Call.Event.WaitFor(SHUTDOWN_WAIT_MS);
+    // Until the ANSWER or the time. A Retire wakes every entry, this one
+    // too: woken with no answer - somebody retired the client again while
+    // it was being stopped - it goes back to wait, or the engine would have
+    // its input closed on a request in flight after all.
+    T0 := GetTickCount64;
+    repeat
+      Left := Int64(SHUTDOWN_WAIT_MS) - Int64(GetTickCount64 - T0);
+      if Left <= 0 then
+        Break;
+      Call.Event.WaitFor(Cardinal(Left));
+      FLock.Enter;
+      try
+        AAnswered := Call.ResponseJson <> '';
+        if not AAnswered then
+          Call.Event.ResetEvent;
+      finally
+        FLock.Leave;
+      end;
+    until AAnswered;
   finally
     FLock.Enter;
     try

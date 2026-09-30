@@ -53,6 +53,7 @@ uses
   System.IOUtils,
   System.StrUtils,
   System.Win.Registry,
+  Vcl.Forms, // the application object's window: see ServiceStart
   MCPServer.Logger,
   Lsp.Guard,
   Lsp.Session,
@@ -129,6 +130,10 @@ begin
     TLogger.Info(MsgFmt(SL_SYS_STARTING_WINDOWS_SERVICE_FMT,
       [SERVER_NAME, SERVER_VERSION]));
     FHost.LogStartupNotes;
+    // (RunService in the .dpr gives the VCL application a window, which is
+    // how this process leaves after a stop: said here, where the log is up)
+    if Vcl.Forms.Application.Handle = 0 then
+      TLogger.Warning(MsgText(SL_SYS_SERVICE_NO_WINDOW));
 
     FHttp := FHost.CreateHttpServer(0); // port from settings.ini / default
     FHttp.Start;

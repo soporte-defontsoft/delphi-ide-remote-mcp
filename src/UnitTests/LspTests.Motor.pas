@@ -50,6 +50,8 @@ type
     [Test] procedure PararDosVecesNoHaceNada;
     [Test] procedure ElQueNoContestaSeParaIgualYSeApunta;
     [Test] procedure ElQueAcaboMalSeApunta;
+    [Test] procedure RetirarOtraVezNoAcortaLaEspera;
+    [Test] procedure UnEscritorAtascadoNoCuelgaLaParada;
   end;
 
   [TestFixture]
@@ -88,15 +90,18 @@ const
   TOPE_MS = 5000;   // una parada sana tarda decimas; el plazo de la peticion es de 30 s
   PLAZO_MS = 30000;
 
-// Un programa del sistema haciendo de motor
-function MotorFalso(const AExe: string): TLspClient;
-var
-  T: TLspProcessTransport;
+// Un programa del sistema haciendo de motor: su transporte, ya arrancado...
+function TransporteFalso(const AExe: string): TLspProcessTransport;
 begin
-  T := TLspProcessTransport.Create(
+  Result := TLspProcessTransport.Create(
     IncludeTrailingPathDelimiter(GetEnvironmentVariable('WINDIR')) + 'System32\' + AExe);
-  T.Start;
-  Result := TLspClient.Create(T, True);
+  Result.Start;
+end;
+
+// ...y el cliente sobre el
+function MotorFalso(const AExe: string): TLspClient;
+begin
+  Result := TLspClient.Create(TransporteFalso(AExe), True);
 end;
 
 function MotorMudo: TLspClient;
@@ -309,6 +314,99 @@ begin
   finally
     TLogger.OnLogMessage := Antes;
     Apuntes.Free;
+  end;
+end;
+
+// Retirar el cliente OTRA VEZ mientras se le esta parando no acorta la espera
+// de la respuesta a `shutdown`. Retire despierta a todas las entradas, tambien
+// a la de esa pregunta, y despertada sin respuesta se le cerraba la entrada al
+// motor en ese momento: con una peticion en vuelo, lo que lo tumba. (Latente:
+// hoy retira dos veces solo la sesion que se cierra en carrera con una carpeta
+// que se va.) sort.exe no contesta nunca: la espera tiene que durar su plazo.
+procedure TMotorParadoTests.RetirarOtraVezNoAcortaLaEspera;
+var
+  C: TLspClient;
+  H: TThread;
+  T0, Dt, Retirado: UInt64;
+begin
+  C := MotorMudo;
+  try
+    Retirado := 0;
+    H := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        Sleep(200);
+        C.Retire;
+        Retirado := GetTickCount64;
+      end);
+    H.FreeOnTerminate := False;
+    try
+      T0 := GetTickCount64;
+      H.Start;
+      C.StopEngine;
+      Dt := GetTickCount64 - T0;
+    finally
+      H.WaitFor;
+      H.Free;
+    end;
+    // TESTIGO: la segunda Retire cayo DENTRO de la espera (si el hilo se
+    // retrasase hasta despues, la prueba pasaria sin medir nada)
+    Assert.IsTrue((Retirado >= T0) and (Retirado - T0 < SHUTDOWN_WAIT_MS - 200), Format(
+      'la segunda Retire llego %d ms despues de empezar la parada: no cayo dentro de la espera', [Retirado - T0]));
+    Assert.IsTrue((Dt >= SHUTDOWN_WAIT_MS - 100) and (Dt < SHUTDOWN_WAIT_MS + 1500), Format(
+      'retirado otra vez a los 200 ms, la parada tardo %d ms: tiene que esperar la respuesta su plazo (%d), ni menos ni mucho mas',
+      [Dt, SHUTDOWN_WAIT_MS]));
+  finally
+    C.Free;
+  end;
+end;
+
+// Un escritor ATASCADO dentro de su escritura cuando el motor ya no esta no
+// cuelga la parada. Pasa cuando el motor no leia, la tuberia esta llena y OTRO
+// proceso retiene su extremo de lectura: acabar el motor no la rompe, y la
+// escritura no vuelve. Cerrar el asa bajo una escritura sincrona bloqueada
+// ESPERA a esa escritura (medido el 30-sep-2026 con una tuberia a pelo:
+// CloseHandle seguia esperando a los 4 s, 3 de 3), y la parada corre con el
+// cerrojo global de escritura tomado. El "motor" es cmd.exe: se le manda un
+// ping de 45 s, que hereda su entrada y no la lee; y cmd, esperandole, tampoco.
+procedure TMotorParadoTests.UnEscritorAtascadoNoCuelgaLaParada;
+var
+  T: TLspProcessTransport;
+  C: TLspClient;
+  H: TThread;
+  T0, Dt: UInt64;
+  Salio: Boolean;
+begin
+  T := TransporteFalso('cmd.exe');
+  C := TLspClient.Create(T, True);
+  try
+    T.SendJson(#13#10'ping -n 45 127.0.0.1 >nul'#13#10);
+    Sleep(1500); // cmd ya espera al ping: nadie lee la tuberia
+    Salio := False;
+    H := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          T.SendJson(StringOfChar('x', 300000)); // no cabe: se queda dentro
+        except
+          // la tuberia rota, cuando el ping se va
+        end;
+        Salio := True;
+      end);
+    H.FreeOnTerminate := True; // se queda atras, sobre el transporte (que conserva su memoria)
+    H.Start;
+    Sleep(500);
+    Assert.IsFalse(Salio, 'el escritor no se quedo dentro de su escritura: la prueba no mediria nada');
+    T0 := GetTickCount64;
+    C.StopEngine;
+    Dt := GetTickCount64 - T0;
+    Assert.IsTrue(Dt < 25000, Format(
+      'parar con un escritor atascado tardo %d ms: espero a que el otro proceso soltase la tuberia (un ping de 45 s)', [Dt]));
+    Assert.IsFalse(Salio, 'el escritor salio antes de acabar la parada: no estaba atascado');
+    Assert.AreEqual(Cardinal(1), C.EngineExitCode,
+      'y al motor, que no leia, lo acabo la parada (1 = TerminateProcess)');
+  finally
+    C.Free;
   end;
 end;
 
@@ -836,11 +934,12 @@ const
 var
   Dpr, Unidad, Usado, Uri, Texto, Params: string;
   C: TLspClient;
-  R, K, Cuenta: Integer;
+  R, K, Contadas: Integer;
+  Cuenta: PInteger;
   Codigo: Cardinal;
   Relleno: TStringBuilder;
   O: TJSONObject;
-  Visto: Boolean;
+  Visto, Recogidos: Boolean;
   H1, H2: TThread;
   Apuntes: TStringList;
   Antes: TLogMessageProc;
@@ -894,32 +993,44 @@ begin
       // mandarla, 0 de 8; con un didChange solo, 0 de 8). Dos hilos preguntan
       // sin parar, y asi al parar siempre hay una en vuelo: es parar el motor
       // bajo la peticion de otro agente.
-      Cuenta := 0;
-      H1 := HiloQuePregunta(C, Params, @Cuenta);
-      H2 := HiloQuePregunta(C, Params, @Cuenta);
+      // el contador, en el monton: si los hilos no se recogen (abajo) siguen
+      // escribiendo en el, y no puede ser una variable de esta rutina
+      New(Cuenta);
+      Cuenta^ := 0;
+      H1 := HiloQuePregunta(C, Params, Cuenta);
+      H2 := HiloQuePregunta(C, Params, Cuenta);
       try
         H1.Start;
         H2.Start;
         // hasta que contesten (no un tiempo fijo: bajo carga la primera
         // respuesta puede tardar), y un poco mas: los dos, preguntando
         for K := 1 to 500 do
-          if Cuenta = 0 then
+          if Cuenta^ = 0 then
             Sleep(10);
         Sleep(100);
         TLspSession.FolderLeaves(FDir + '\proyecto', True);
         TLspSession.FolderLeaves(FDir + '\proyecto', False);
       finally
-        // se recogen: corren sobre el cliente, y no sobreviven a la prueba
-        H1.WaitFor;
-        H2.WaitFor;
-        H1.Free;
-        H2.Free;
+        // se recogen: corren sobre el cliente, y no sobreviven a la prueba.
+        // Con plazo: si la carpeta que se va no retirase al cliente seguirian
+        // preguntando para siempre, y la prueba se colgaria en vez de fallar
+        Recogidos := (WaitForSingleObject(H1.Handle, TOPE_MS) = WAIT_OBJECT_0) and
+          (WaitForSingleObject(H2.Handle, TOPE_MS) = WAIT_OBJECT_0);
+        if Recogidos then
+        begin
+          H1.Free;
+          H2.Free;
+        end;
       end;
+      Assert.IsTrue(Recogidos, Format(
+        'ronda %d de %d: los hilos siguen preguntando tras irse la carpeta: el cliente no se retiro', [R, RONDAS]));
+      Contadas := Cuenta^;
+      Dispose(Cuenta);
       Codigo := C.EngineExitCode;
       Assert.AreEqual(Cardinal(0), Codigo, Format(
         'ronda %d de %d: el motor parado ocupado salio con el codigo $%x (C0000005 = se cayo; 1 = hubo que matarlo)',
         [R, RONDAS, Codigo]));
-      Assert.IsTrue(Cuenta > 0, Format(
+      Assert.IsTrue(Contadas > 0, Format(
         'ronda %d de %d: los dos hilos no recibieron ni una respuesta antes de la parada: no se paro un motor ocupado',
         [R, RONDAS]));
       // ...y `shutdown` se CONTESTO: el servidor no tiene nada que apuntar

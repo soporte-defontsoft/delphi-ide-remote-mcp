@@ -120,7 +120,8 @@ uses
   Lsp.DesignerBinding in 'Lsp.DesignerBinding.pas',
   Lsp.Base64 in 'Lsp.Base64.pas',
   Lsp.InlineImages in 'Lsp.InlineImages.pas',
-  Lsp.LogSink in 'Lsp.LogSink.pas';
+  Lsp.LogSink in 'Lsp.LogSink.pas',
+  Lsp.ErrorMode in 'Lsp.ErrorMode.pas';
 
 {$R *.res}
 
@@ -250,6 +251,20 @@ begin
   if not Vcl.SvcMgr.Application.DelayInitialize or
      Vcl.SvcMgr.Application.Installing then
     Vcl.SvcMgr.Application.Initialize;
+  // The VCL application object has NO window in this exe: it is
+  // {$APPTYPE CONSOLE} (the stdio transport needs it) and
+  // TApplication.CreateHandle does nothing when IsConsole. The service
+  // framework ends the main loop by POSTING WM_QUIT TO THAT WINDOW
+  // (TServiceStartThread.DoTerminate), and a message posted to window 0
+  // goes to the queue of the thread that posts it: the main thread never
+  // left its loop, and after every stop the process stayed until the SCM
+  // ended it thirty seconds later, with no finalization run. Measured
+  // 2026-09-30: "stopped" in the log 1.5 s after sc stop and the process
+  // gone at 31 s, three deploys out of three; a copy started by hand with
+  // --service never left, one thread alive after thirty seconds. So
+  // the application is given a window, one of this thread.
+  Vcl.Forms.Application.Handle := CreateWindowEx(0, 'STATIC', nil, 0, 0, 0, 0, 0,
+    HWND_MESSAGE, 0, HInstance, nil);
   Vcl.SvcMgr.Application.CreateForm(TDelphiLspMcpService, DelphiLspMcpService);
   Vcl.SvcMgr.Application.Run;
 end;

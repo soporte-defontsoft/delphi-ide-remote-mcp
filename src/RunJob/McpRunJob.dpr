@@ -65,6 +65,7 @@ uses
   System.SysUtils,
   System.IOUtils,
   Mld.Textos in '..\DesktopNode\Mld.Textos.pas', // EL catalogo de mensajes, el del nodo
+  Lsp.ErrorMode in '..\Server\Lsp.ErrorMode.pas', // NoErrorDialogs: el mismo que usa el servidor con sus hijos
   System.Classes;
 
 {$IFDEF MSWINDOWS}
@@ -614,11 +615,19 @@ begin
   UniqueString(Linea);
   try
     if not CreateProcess(nil, PChar(Linea), nil, nil, AHeredar,
-      CREATE_NO_WINDOW, nil, PChar(ACarpeta), SI, PI) then
+      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, PChar(ACarpeta), SI, PI) then
     begin
       AError := SysErrorMessage(GetLastError);
       Exit;
     end;
+    // Suspendido hasta decirle que no abra nunca un cuadro de error
+    // (Lsp.ErrorMode). PAServer corre en modo de error 0 y lo que arranca lo
+    // hereda: medido el 30-sep-2026 con un programa que se cae, decia modo 0
+    // y tardaba 2,4 s en morir, por el informe de errores de Windows. En un
+    // destino desatendido nadie contestaria a un cuadro, y el agente recibe
+    // igual el codigo con el que acabo el programa.
+    NoErrorDialogs(PI.hProcess);
+    ResumeThread(PI.hThread);
     Result := PI.dwProcessId;
     CloseHandle(PI.hThread);
     if AProceso <> nil then

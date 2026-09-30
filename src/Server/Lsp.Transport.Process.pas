@@ -41,6 +41,7 @@ type
     FWriteLock: TCriticalSection;
     FRunning: Boolean;
     FAbandoned: Boolean; // the reader was left behind: see Stop and FreeInstance
+    FWriterLeft: Boolean; // a writer was left behind inside SendJson: see CloseHandles
     FEnded: Boolean;      // Stop saw the process end, and kept what it ended with
     FExitCode: Cardinal;
     procedure ReaderLoop;
@@ -71,6 +72,7 @@ implementation
 
 uses
   Lsp.Sandbox, // EnterSpawn / LeaveSpawn: one handle-inheriting launch at a time
+  Lsp.ErrorMode, // NoErrorDialogs
   Lsp.Texts;
 
 const
@@ -91,7 +93,8 @@ end;
 destructor TLspProcessTransport.Destroy;
 begin
   Stop;
-  FWriteLock.Free;
+  if not FWriterLeft then
+    FWriteLock.Free;
   inherited;
 end;
 
@@ -160,7 +163,7 @@ begin
       [GetLastError, FExePath]));
   end;
 
-  // Suspended until it is told never to open an error dialog (Lsp.Sandbox).
+  // Suspended until it is told never to open an error dialog (Lsp.ErrorMode).
   NoErrorDialogs(FProcInfo.hProcess);
   ResumeThread(FProcInfo.hThread);
 
@@ -248,6 +251,10 @@ function TLspProcessTransport.CloseStdIn(AWaitMs: Cardinal): Boolean;
 var
   T0: UInt64;
 begin
+  // nothing to close: never opened, closed already, or left to a writer that
+  // is stuck inside (CloseHandles) - whose lock is not waited for again
+  if FChildStdInWrite = INVALID_HANDLE_VALUE then
+    Exit(True);
   T0 := GetTickCount64;
   Result := FWriteLock.TryEnter;
   while (not Result) and (GetTickCount64 - T0 < AWaitMs) do
@@ -270,11 +277,20 @@ end;
 
 procedure TLspProcessTransport.CloseHandles;
 begin
-  // by now the engine is gone (or never started): nobody can stay inside a
-  // write for long. If somebody does, close it as it was always closed.
-  if (not CloseStdIn(5000)) and (FChildStdInWrite <> INVALID_HANDLE_VALUE) then
+  // By now the engine is gone (or never started). A writer that is STILL
+  // inside its write - the process ended and the write did not return:
+  // somebody else holds the other end of the pipe - is left behind WITH the
+  // handle, as the reader is (Stop). Closing a handle under a blocked
+  // synchronous write waits for that write (measured 2026-09-30 on a bare
+  // pipe: CloseHandle still waiting at 4 s, 3 of 3; it came back when the
+  // read end was closed), and a stop that does not come back holds whoever
+  // asked for it - with the global write lock, when a folder is leaving.
+  // This object then keeps its memory and its write lock, which that thread
+  // holds (FreeInstance, Destroy).
+  if not CloseStdIn(5000) then
   begin
-    CloseHandle(FChildStdInWrite);
+    FWriterLeft := True;
+    FAbandoned := True;
     FChildStdInWrite := INVALID_HANDLE_VALUE;
   end;
   if FChildStdOutRead <> INVALID_HANDLE_VALUE then

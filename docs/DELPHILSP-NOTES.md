@@ -75,6 +75,13 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
   An engine nobody has asked anything yet ends clean when its input is closed: 0 of 8 with
   `initialize` still in flight, 0 of 8 just initialized, 0 of 8 with its settings just sent;
   and `shutdown` sent while `initialize` is in flight is answered in 20 ms.
+  `shutdown` is answered alike with `"params":null` and with no `params` at all (8 of 8 each,
+  11 to 17 ms with a `definition` in flight); the server sends it without.
+- **The engine sends no requests to its client** (measured 2026-09-30: 0 messages with both
+  `id` and `method` in a session with start, settings, open, hover, definition, references,
+  documentSymbol and change; the agent sends no notifications either, the linter only
+  `textDocument/publishDiagnostics`). The client answers `null` to any that came, except while
+  the engine is being stopped.
 - The process inherits its parent's **error mode**; with one that allows crash dialogs, an engine
   that dies of an unhandled exception goes through the system's crash reporting (a second or
   more) and may leave a dialog. Set `SEM_NOGPFAULTERRORBOX` on the child and it ends at once -

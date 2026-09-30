@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.7.10';
+  SERVER_VERSION = '1.7.11';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -421,6 +421,14 @@ const
     etiqueta: no lo lee un agente. }
   SL_LSP_ENGINE_ENDED_FMT =
     'lsp: ENGINE %s exit=$%x shutdown asked=%s answered=%s';
+
+  { El servicio sin la ventana que RunService le da a la aplicacion de la
+    VCL (30-sep-2026): sin ella el bucle principal no recibe el WM_QUIT del
+    marco de servicios y el proceso no se va al parar. }
+  SL_SYS_SERVICE_NO_WINDOW =
+    'service: the application window could not be created - after a stop ' +
+    'this process will not leave by itself, and the system ends it about ' +
+    'thirty seconds later';
 
   { Una carpeta que se esta yendo no arranca motores: el que arrancase
     volveria a retenerla (29-sep-2026). }

@@ -23,6 +23,9 @@ cubria nadie:
       incluida una que arranca un hijo DelphiLSP
   T5  cerrar la bandeja A LO BRUTO (taskkill /F, que es como se cierra de
       verdad) no deja hijos DelphiLSP huerfanos
+  T6  el host de SERVICIO, en lo unico que se deja medir sin el SCM: el
+      proceso SE VA cuando el despachador de servicios vuelve. En produccion
+      se quedaba 30 s tras cada parada, hasta que el SCM lo mataba
 
 Usage:  python tests/test_tray.py [path-to-DelphiLspMcp.exe]
 """
@@ -182,5 +185,34 @@ finally:
                            capture_output=True, timeout=60)
         except Exception:
             pass
+
+# ---------------------------------------------------------------- T6
+# Lanzado a mano, el despachador de servicios falla al instante (no lo lanzo
+# el SCM); el hilo de arranque manda entonces WM_QUIT a la ventana de la
+# aplicacion de la VCL y el hilo principal tiene que salir de su bucle. El exe
+# es de consola y esa aplicacion NO TENIA ventana: el WM_QUIT iba a la cola de
+# quien lo mandaba, el principal no salia nunca, y en produccion el proceso
+# seguia 30 s tras cada parada, sin pasar por las finalizaciones, hasta que el
+# SCM lo mataba (medido el 30-sep-2026: tres despliegues de tres; y esta misma
+# copia, lanzada asi, no se iba nunca). Deja una linea en el Visor de eventos
+# (la aplicacion de servicio apunta el error del despachador al acabar).
+# El tope, por DEBAJO de los 30 s a los que el SCM lo mataba: uno que se fuese a
+# los 35 seguiria muriendo sin finalizar en produccion. Y un TESTIGO de que
+# corrio la rama de servicio: no escribe nada en stderr (si --service dejase
+# de reconocerse, el modo terminal veria el fin de su entrada y saldria tambien
+# con 0, pero habiendo escrito su arranque ahi).
+t0 = time.time()
+svc = subprocess.Popen([EXE, '--service'], env=mc.entorno(), stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, creationflags=0x08000000)
+try:
+    _, err = svc.communicate(timeout=20)
+    rc = svc.returncode
+except subprocess.TimeoutExpired:
+    rc = None
+    svc.kill()
+    _, err = svc.communicate()
+check('T6 el host de servicio lanzado sin el SCM se va SOLO (%.1f s): su bucle principal acaba cuando el '
+      'despachador de servicios vuelve' % (time.time() - t0), rc == 0 and not err,
+      'rc=%s (None = seguia vivo a los 20 s y se le mato), stderr=%r' % (rc, (err or b'')[:160]))
 
 mc.fin('test_tray')

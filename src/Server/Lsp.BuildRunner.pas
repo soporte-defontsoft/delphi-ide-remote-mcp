@@ -85,6 +85,7 @@ uses
   Lsp.Patch,
   Lsp.Texts,
   Lsp.Sandbox,
+  Lsp.ErrorMode,
   Lsp.PackageMap,
   Lsp.ProjectUnits;
 
@@ -113,7 +114,7 @@ begin
       CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, nil, SI, PI) then
       Exit;
   // Suspendido hasta decirle que no abra nunca un cuadro de error
-  // (Lsp.Sandbox): lo que se lanza aqui vive mas que la peticion - el
+  // (Lsp.ErrorMode): lo que se lanza aqui vive mas que la peticion - el
   // demonio de adb, que hereda el modo - y nadie le contestaria
   NoErrorDialogs(PI.hProcess);
   ResumeThread(PI.hThread);
@@ -319,7 +320,7 @@ begin
     end;
   if Job <> 0 then
     AssignProcessToJobObject(Job, PI.hProcess);
-  NoErrorDialogs(PI.hProcess); // msbuild, git, a test exe: none may wait behind a dialog (Lsp.Sandbox)
+  NoErrorDialogs(PI.hProcess); // msbuild, git, a test exe: none may wait behind a dialog (Lsp.ErrorMode)
   ResumeThread(PI.hThread);
   CloseHandle(WriteH); // ours no more; EOF arrives when the child exits
   finally

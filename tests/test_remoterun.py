@@ -48,7 +48,8 @@ APP = os.path.join(DEPLOY, PROJNAME + '.exe')
 shutil.copy(sys.executable, APP)
 SCRIPT = os.path.join(DEPLOY, 'run.py')
 open(SCRIPT, 'w', encoding='utf-8').write(
-    'import sys\nprint("hola desde el target, args=", sys.argv[1:])\nsys.exit(7)\n')
+    'import sys, ctypes\nprint("hola desde el target, args=", sys.argv[1:])\n'
+    'print("modo=%d" % ctypes.windll.kernel32.GetErrorMode())\nsys.exit(7)\n')
 # a script sitting in the same folder: must be REFUSED (not a native binary)
 # the project on THIS server (remote-run takes the .dproj, not a path)
 PRJDIR = os.path.join(BASE, 'proj'); os.makedirs(PRJDIR)
@@ -92,6 +93,33 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project'
 j = json.loads(r) if r.startswith('{') else {}
 check('exitCode del programa (7)', j.get('exitCode') == 7, r[:300])
 check('output capturado', 'hola desde el target' in (j.get('output') or ''), r[:300])
+# 1.7.11: el programa nace en modo SIN cuadro de error aunque el lanzador no
+# lo tenga: se lo fija el. En un destino el lanzador nace de PAServer, que
+# corre en modo 0 (medido contra uno de verdad); aqui nace del anfitrion de WMI
+# (asi lo arranca el stub, para sacarlo del Job del servidor). Primero se MIDE
+# con que modo nace lo que crea WMI en esta maquina: si trajese la mascara, el
+# check de debajo pasaria heredando y no mediria nada.
+TESTIGO = os.path.join(BASE, 'testigo.py')
+T_OUT = os.path.join(BASE, 'testigo.txt')
+open(TESTIGO, 'w', encoding='utf-8').write(
+    'import ctypes, sys\nopen(sys.argv[1], "w").write(str(ctypes.windll.kernel32.GetErrorMode()))\n')
+subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments "
+                "@{CommandLine='\"%s\" \"%s\" \"%s\"'}; exit $r.ReturnValue" % (sys.executable, TESTIGO, T_OUT)],
+               capture_output=True, timeout=60)
+for _ in range(200):
+    if os.path.exists(T_OUT) and os.path.getsize(T_OUT):
+        break
+    time.sleep(0.1)
+_wmi = int(open(T_OUT).read()) if os.path.exists(T_OUT) and os.path.getsize(T_OUT) else None
+check('(preparacion) lo que crea el anfitrion de WMI -de el nace el lanzador en esta bateria- NO trae la mascara '
+      '0x2 del modo sin cuadro', _wmi is not None and _wmi & 2 == 0,
+      'modo=%s (None = WMI no lanzo el testigo en 20 s: sin saber con que modo nace el lanzador, el check de '
+      'debajo no mide)' % _wmi)
+# ...y lo dice el propio programa, con GetErrorMode
+_modo = [int(l.split('=')[1]) for l in (j.get('output') or '').splitlines() if l.startswith('modo=')]
+check('el programa lanzado en el destino corre en modo SIN cuadro de error (mascara 0x2), con el lanzador nacido '
+      'en un modo sin ella', _modo != [] and _modo[0] & 2 == 2, 'modo=%s | %s' % (_modo, r[:200]))
 check('note explica el mecanismo', mc.es(j.get('note'), 'SN_REMOTERUN_NOTE'), r[:200])
 # v1.0.16: el lanzador cuenta el entorno grafico y el servidor lo traduce. El
 # que corre aqui es el de Windows, que dice en que SESION corre (la 0, de los
