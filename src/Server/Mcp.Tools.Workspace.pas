@@ -904,6 +904,33 @@ begin
   Result := 'git.exe -C ' + EnComillas(ARepo) + AFijado + ' ' + AResto;
 end;
 
+{ git, LANZADO por un solo sitio: la linea del compositor por el lanzador de
+  la casa. Y el servidor SIN git lo dice aqui. CreateProcess no encuentra
+  git.exe (error 2) y la llamada acababa en "[SYS-006 INTERNAL]
+  ... CreateProcess failed (2)", que no dice ni que falta ni de quien es el
+  arreglo (medido el 30-sep-2026 en una maquina sin git: init y status). Se
+  decide con el fallo del lanzamiento DE VERDAD y no preguntando antes si
+  git esta: quien lo busca por su cuenta no lo busca como CreateProcess.
+  Sigue siendo una excepcion - quien pregunta para juzgar no toma un fallo
+  por un "no hay" -, con el mensaje ya etiquetado. }
+function GitCorre(const ARepo, AFijado, AResto: string; ATimeoutMs: Integer;
+  out ACodigo: Cardinal): string;
+begin
+  try
+    Result := RunCaptured(GitLinea(ARepo, AFijado, AResto), ATimeoutMs, ACodigo);
+  except
+    on E: EOSError do
+    begin
+      // solo el 2, que es el medido: git se lanza por su nombre a secas y
+      // un 3 no tiene de donde salir. Un git que ESTA y no arranca (5,
+      // 193) no es "no hay git": sigue con el mensaje de siempre
+      if E.ErrorCode = ERROR_FILE_NOT_FOUND then
+        raise Exception.Create(MsgFmt(SR_GIT_NO_HAY_GIT_FMT, [E.ErrorCode]));
+      raise;
+    end;
+  end;
+end;
+
 { DONDE VIVE el repo de ARepo (o de una carpeta de dentro), preguntado a git:
   su carpeta de git (AGitDir: la de ESTA copia de trabajo), la comun (AComun:
   la del repo principal, cuando ARepo es un worktree enlazado) y la raiz del
@@ -928,8 +955,8 @@ begin
   AGitDir := '';
   AComun := '';
   ARaiz := '';
-  ASalida := RunCaptured(GitLinea(ARepo, '', 'rev-parse --absolute-git-dir ' +
-    '--git-common-dir --show-toplevel'), 60000, ACodigo);
+  ASalida := GitCorre(ARepo, '', 'rev-parse --absolute-git-dir ' +
+    '--git-common-dir --show-toplevel', 60000, ACodigo);
   Carpetas := nil;
   for Linea in ASalida.Split([#10]) do
   begin
@@ -1048,7 +1075,7 @@ var
   Codigo: Cardinal;
 begin
   ALineas := nil;
-  Salida := RunCaptured(GitLinea(ARepo, AFijado, APregunta), 60000, Codigo);
+  Salida := GitCorre(ARepo, AFijado, APregunta, 60000, Codigo);
   Result := Codigo = 0;
   if Result then
     for Linea in Salida.Split([#10]) do
@@ -1714,8 +1741,7 @@ begin
       begin
         // Solo lo que git lista como worktree de ESTE repo, y nunca el
         // principal (el primero): remove no sirve para borrar otra cosa.
-        var Lista := RunCaptured(GitLinea(Repo, Fijado, 'worktree list --porcelain'),
-          60000, ExitCode);
+        var Lista := GitCorre(Repo, Fijado, 'worktree list --porcelain', 60000, ExitCode);
         var Listado := False;
         var DestinoReal := ExcludeTrailingPathDelimiter(RealPath(Destino));
         var Primero := True;
@@ -1816,11 +1842,14 @@ begin
     if not ConOpciones then
     begin
       var Previo: Cardinal;
-      RunCaptured(GitLinea(Repo, Fijado, 'fetch ' + ArgvSeguro(Params.Args)),
-        600000, Previo);
+      GitCorre(Repo, Fijado, 'fetch ' + ArgvSeguro(Params.Args), 600000, Previo);
       // si falla, el pull lo dira con sus palabras
     end;
   end;
+  // (el try de fuera no sangra lo de dentro, como el de RunCore: es solo la
+  // regla del clone que no ocurrio, abajo)
+  var GitCorrio := False;
+  try
   if ConCerrojo then
     EnterFileEdit;
   try
@@ -1829,9 +1858,10 @@ begin
         SueltaLoNuestroBajo(Sitio);
     try
       try
-        Output := RunCaptured(GitLinea(Repo, Fijado, GitArgs),
+        Output := GitCorre(Repo, Fijado, GitArgs,
           IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch']), 600000, 60000),
           ExitCode);
+        GitCorrio := True;
       finally
         if (MsgFile <> '') and TFile.Exists(MsgFile) then
           TFile.Delete(MsgFile);
@@ -1845,14 +1875,18 @@ begin
     if ConCerrojo then
       LeaveFileEdit;
   end;
+  finally
+    // A clone that did not happen must not leave its empty destination lying
+    // around for the caller to clean up by hand (field round 10).
+    // Todas las que creo (n1\n2\n3 dejaba n1\n2), vacias y por la puerta de
+    // escritura: la regla de la foto (septima revision). Y el que no llego
+    // ni a lanzar git - un servidor sin git, GIT-050 - tampoco ocurrio: se
+    // iba por la excepcion y dejaba sus carpetas (medido el 30-sep-2026).
+    if (not GitCorrio or (ExitCode <> 0)) and SameText(Cmd, 'clone') and CreadaPorElClone then
+      QuitaCarpetasCreadas(Repo, AncestroDelClone);
+  end;
   if Length(Output) > 30000 then
     Output := Copy(Output, 1, 30000) + #10 + MsgText(SF_GIT_TRUNCATED);
-  // A clone that did not happen must not leave its empty destination lying
-  // around for the caller to clean up by hand (field round 10).
-  // Todas las que creo (n1\n2\n3 dejaba n1\n2), vacias y por la puerta de
-  // escritura: la regla de la foto (septima revision)
-  if (ExitCode <> 0) and SameText(Cmd, 'clone') and CreadaPorElClone then
-    QuitaCarpetasCreadas(Repo, AncestroDelClone);
   // Un git que dice que no (exit<>0) es un fallo: salia como exito y el
   // agente no lo distinguia de uno que funciono (revision 27-sep-2026). Su
   // salida va detras, que es la que explica que paso.

@@ -246,4 +246,49 @@ r = git({'command': 'stash', 'args': 'push -- a.txt'})
 check('...y una ruta escribible del mismo repo si se descarta',
       'exit=0' in r and 'otra vez' not in leer('a.txt'), r[:200])
 srv.mata()
+
+# ---- un servidor SIN git (1.8.1) ----
+# Medido el 30-sep-2026 en una maquina sin git instalado: init y status
+# contestaban "[SYS-006 INTERNAL] Error executing tool: CreateProcess failed
+# (2)", que no dice ni que falta ni de quien es el arreglo. El servidor lanza
+# git.exe por su nombre y Windows lo busca: con un PATH donde no esta (y sin
+# un git.exe junto al exe ni en las carpetas del sistema), esta maquina es
+# aquella. TESTIGO: el mismo servidor, con el PATH de la maquina, llega a git.
+env_red = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_GIT_REMOTES': 'allowed.example'})
+srv = mc.Stdio(EXE, env_red, nombre='gb4')
+call = srv.call
+r = git({'command': 'status'})
+check('TESTIGO: con el PATH de la maquina, status llega a git',
+      mc.llego_a_git(r) and not mc.fallo(r), r[:200])
+# La regla del clone que no ocurrio tiene dos mitades, y la de siempre - git
+# ARRANCA y acaba con error - no la media ninguna bateria (revisor de la
+# 1.8.1). El host no existe (.example no resuelve nunca): git sale con error.
+FALLA = os.path.join(BASE, 'clon-falla', 'dentro')
+r = call('delphi_git', {'repo': FALLA, 'command': 'clone', 'message': 'https://allowed.example/a.git'})
+check('un clone que git empieza y no acaba (el host no existe) no deja las carpetas que creo',
+      mc.abre(r, 'SR_GIT_EXIT_FMT') and not os.path.exists(os.path.dirname(FALLA)),
+      '%s | queda: %s' % (' '.join(r.split())[:240], os.path.exists(os.path.dirname(FALLA))))
+srv.mata()
+env_sin = dict(env_red, PATH=os.path.join(os.environ['SystemRoot'], 'System32'))
+srv = mc.Stdio(EXE, env_sin, nombre='gb5')
+call = srv.call
+r = git({'command': 'status'})
+check('sin git en el servidor: status lo DICE, con su etiqueta (no un "CreateProcess failed")',
+      mc.abre(r, 'SR_GIT_NO_HAY_GIT_FMT') and mc.resultado(r) == 'INTERNAL' and 'CreateProcess' not in r
+      and '(error 2)' in r,
+      r[:300])
+SIN_GIT = os.path.join(BASE, 'sin-git')
+os.makedirs(SIN_GIT)
+r = call('delphi_git', {'repo': SIN_GIT, 'command': 'init'})
+check('...e init tambien (no pasa por la jaula del repo: otro camino al mismo lanzador)',
+      mc.abre(r, 'SR_GIT_NO_HAY_GIT_FMT'), r[:300])
+CLON = os.path.join(BASE, 'clon-sin-git', 'dentro')
+r = call('delphi_git', {'repo': CLON, 'command': 'clone', 'message': 'https://allowed.example/a.git'})
+check('...y un clone que no pudo ni empezar lo dice y no deja las carpetas que creo',
+      mc.abre(r, 'SR_GIT_NO_HAY_GIT_FMT') and not os.path.exists(os.path.dirname(CLON)),
+      '%s | queda: %s' % (r[:240], os.path.exists(os.path.dirname(CLON))))
+r = call('delphi_list', {'root': BASE, 'dirs': True})
+check('...y lo que no es git sigue funcionando en ese servidor',
+      not mc.fallo(r) and os.path.basename(REPO_T) in r and 'clon-' not in r, r[:300])
+srv.mata()
 mc.fin('git branches battery')

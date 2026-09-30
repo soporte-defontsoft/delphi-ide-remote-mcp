@@ -313,10 +313,19 @@ begin
     if not CreateProcess(nil, PChar(Cmd), nil, nil, True,
       CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, WorkDirPtr, SI, PI) then
     begin
+      // What Windows said, read before anything else is called, and CARRIED
+      // by the exception: EOSError.ErrorCode is how a caller tells "the
+      // program is not there" (2) from the rest - delphi_git on a server
+      // with no git (GIT-050). Its message is the one it always had; where
+      // a tool prints the class too (delphi_test, delphi_styles: SYS-009)
+      // it reads EOSError now.
+      var LaunchError := GetLastError;
       if Job <> 0 then CloseHandle(Job);
       CloseHandle(ReadH);
       CloseHandle(WriteH);
-      raise Exception.Create(MsgFmt(SE_BUILD_CREATEPROCESS_FAILED_FMT, [GetLastError]));
+      var NotLaunched := EOSError.Create(MsgFmt(SE_BUILD_CREATEPROCESS_FAILED_FMT, [LaunchError]));
+      NotLaunched.ErrorCode := LaunchError;
+      raise NotLaunched;
     end;
   if Job <> 0 then
     AssignProcessToJobObject(Job, PI.hProcess);

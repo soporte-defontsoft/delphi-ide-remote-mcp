@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.8.0';
+  SERVER_VERSION = '1.8.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -5769,6 +5769,23 @@ const
     'the working tree (a merge or a stash pop with conflicts): look at ' +
     'git status before repeating it.'#10 +
     '%s';
+
+  { Un servidor SIN git: CreateProcess no encuentra git.exe y la llamada
+    acababa en SYS-006 "CreateProcess failed (2)", que no dice ni que falta
+    ni de quien es el arreglo (medido el 30-sep-2026 en una maquina sin git
+    instalado: init y status). INTERNAL: al servidor le falta una pieza.
+    NO dice que la llamada este bien: sale en la primera pregunta a git,
+    antes de las reglas de cada comando (un commit sin mensaje lo recibe
+    igual). Ni que baste reiniciar: solo que un proceso no ve un PATH
+    posterior a su arranque (revision de la 1.8.1). }
+  SR_GIT_NO_HAY_GIT_FMT =
+    '[GIT-050 INTERNAL] This server has no git: Windows did not find ' +
+    'git.exe when the server tried to launch it (error %d), so no ' +
+    'delphi_git command can run here. It does not depend on your call, ' +
+    'and repeating it will not help: git has to be installed on the ' +
+    'server machine, in the PATH the server process starts with (a ' +
+    'running process keeps the PATH it was started with). Everything ' +
+    'that is not delphi_git works as usual.';
 
   SL_GIT_NETWORK_FMT =
     'delphi_git: NETWORK %s repo=%s %s';

@@ -6,6 +6,62 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.8.1] - 2026-09-30
+
+What a second machine found: a server with RAD Studio and no git, and its roots on a network drive.
+
+### Fixed
+
+- **`delphi_git` on a server with no git says so**: `[GIT-050 INTERNAL]
+  This server has no git: Windows did not find git.exe when the server
+  tried to launch it`, with what has to be done about it and by whom.
+  Until now every command answered `[SYS-006 INTERNAL] Error executing
+  tool: CreateProcess failed (2)` - measured 2026-09-30 on a machine with
+  RAD Studio 13.2 and no git (`init`, `status`), and reproduced here by
+  starting the server with a PATH that has no git in it. git is launched
+  from one place now (`GitCorre`; five calls went to the runner each on
+  its own), and it is the launch itself that decides: nobody asks first
+  whether git is there. Only Windows error 2 is taken for "no git": a
+  git that is there and cannot be launched keeps the old answer. The
+  message does not say the call is right - it leaves at the first
+  question to git, before the rules of each command.
+- **A `clone` that could not start git no longer leaves its destination
+  folders.** The cleanup of a clone that did not happen ran only when git
+  had answered; with no git the call left through the exception and the
+  folders it had just created stayed (measured by the same battery). One
+  rule now, in a `finally`: a clone whose git did not run, or ended with
+  an error, takes away what it created. The second half - git starts and
+  fails - had no check in any battery, and has one now.
+- The runner read `GetLastError` after closing three handles; it reads it
+  first now, and carries it in the exception (`EOSError.ErrorCode`). Where
+  a tool prints the class of an exception nobody expected (`delphi_test`,
+  `delphi_styles`: `SYS-009`), a program that could not be launched reads
+  `EOSError` where it read `Exception`.
+
+  Six checks in `test_git_branches`: a server started with a PATH
+  without git, next to a witness with the machine's PATH. Red with the
+  fix out: three with the message taken out (what the 1.8.0 exe answers),
+  and each of the two folder checks with its half of the rule taken out -
+  and with it the listing check, which sees the folder that stayed.
+
+### Documentation
+
+- README (Requirements) and QUICKSTART (the table of what goes wrong):
+  git on the server machine, only for `delphi_git`.
+- README, configuration: **roots on a network drive**, with what was
+  measured 2026-09-30 between two virtual machines of one local network
+  (the server with RAD Studio 13.2 in tray mode, its roots on a drive
+  mapped to a share of the other): 3 ms to read a file of its own disk
+  and 9 ms one of the share; the engine's first answer on a copy of this
+  server's project 2.4 s after the request, 19 ms once warm; the 118 unit
+  tests, built and run there, green. What the machine that hosts the
+  share writes is seen at the first read (25 of 25), except a file the
+  server had just been told does not exist: about 5 s (5 of 5). Not
+  measured: the server as a service with its roots on a share, and a
+  share that stalls.
+- README, key design points: they still said that stopping idle engines
+  was roadmap. Since 1.8.0 it is not; the cap on warm engines still is.
+
 ## [1.8.0] - 2026-09-30
 
 The life of the LSP engines, which until now ended only when their folder left or the server stopped: the server stops the ones nobody uses and the ones that hang, and the next request starts another.

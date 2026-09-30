@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: stable (1.8.0).** Covered by 91 end-to-end batteries — 2,901 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: stable (1.8.1).** Covered by 91 end-to-end batteries — 2,907 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -511,6 +511,18 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   `RemoteHosts`, `RemoteRunProjects`. Nothing is inherited from anywhere: an absent switch
   is off, an absent list is empty — one workspace can be a CI space that executes and dials
   its build machine while every other space stays compile-only and offline.
+- **Roots on a network drive.** Measured 2026-09-30 between two virtual machines of one local network:
+  the server on one (RAD Studio 13.2, tray mode), its roots on a drive letter mapped to a share of
+  the other. A call that reads a file answers in 3 ms from the server's own disk and in 9 ms from
+  the share; on a copy of this server's own project in the share, the engine's first answer comes
+  2.4 s after the request and 19 ms once warm; the 118 unit tests, built and run there, pass. What
+  the machine that hosts the share writes in it is seen at the first read - new content (20 of 20),
+  a new file in a listing (5 of 5) - with one exception: a file the server was just told does not
+  exist, created then on the other machine, takes about 5 s to appear to a read (5 of 5). That
+  matches the five seconds Windows documents for its share client's memory of a "not found"
+  (`FileNotFoundCacheLifetime`); the cause itself was not measured. Not measured either: the
+  server as a Windows Service with its roots on a share, and a share that stalls (an engine
+  waiting on it could look like a hung one).
 - **ReadOnlyPaths**: folders INSIDE the jail that may be read but never written — a `vendor/`, a submodule, a reference clone. Semicolon-separated; a relative entry resolves against each root, an absolute one is taken as is; absent means none. It is not the jail and the server says so differently: the jail is "you don't go in there", this is "you look, you don't touch". Third-party code often has to live inside the project — that is where whoever clones it will look for it — and when that folder is *another git repository*, a careless write does not even show up in the main repo's `git status`, so it can go a whole session unnoticed. This turns that into a rule the server enforces instead of one the agent has to remember.
 - **ReadOnlyRoots**: **reference projects** — folders OUTSIDE the jail that the workspace may read as if they were its own (read, search, symbols, definition, git query, fetch) and never write: no edit, no build (a build writes dcu and exe), no move, no temp files. To bring a unit or a folder in from one, `delphi_move copy=true`: the copy is yours, the original stays untouched, and a folder holding a whole project is refused (a project never lives in two places). Same syntax as `Roots`, absolute. The idea: an agent works in its roots and can also *see other projects of the house to learn how things are done here*. Deliberately separate from `Roots`, so the write jail never sees them, and it **wins over `Roots`**: a folder in both lists, or a root inside a reference, is read-only. `delphi_workspace` lists them as `readOnlyRoots` and `delphi_projects` flags their projects with `readOnly:true`.
 - **AgentConfinement**: *cooperative* subdivision inside one credential's
@@ -686,6 +698,7 @@ Each security fix is paired with the vector it closes **and** with a counter-tes
 
 - Windows
 - A **licensed installation of RAD Studio / Delphi 11+** (`DelphiLSP.exe` ships with it and is **not redistributable** — this project does not include or replace it)
+- **git** on that machine, in the `PATH` of the server process — only for `delphi_git`. Without it everything else works, and `delphi_git` says what is missing (`GIT-050`)
 
 ## About this project
 
