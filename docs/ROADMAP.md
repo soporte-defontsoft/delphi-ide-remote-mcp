@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-09-30 (current release v1.7.11; 41 tools - `delphi_run` retired).
+Status page as of 2026-09-30 (current release v1.8.0; 41 tools - `delphi_run` retired).
 
 ## Delivered
 
@@ -31,9 +31,11 @@ Status page as of 2026-09-30 (current release v1.7.11; 41 tools - `delphi_run` r
 - Every message tagged with its outcome from one catalog, the server in English, and ten review rounds of all or nothing, the jail and the contract (1.7.0)
 - The changeset preview rehearses with the engines; a unit move whose project cannot be re-pointed is all or nothing (`MOVE-019`); `docs/TOOLS.md` contract blocks generated from `tools/list`; one access table that the gate consults and `tools/list` announces (`annotations.readOnlyHint`, `_meta.access`); `clean` for domain verdicts; long paths refused honestly (1.7.1-1.7.3)
 
+- The life of the engines: asked to `shutdown` before their input is closed and launched so that no child can open an error dialog (1.7.10); stopped when nobody uses them for `[Server] EngineIdleMinutes`, and stopped and replaced when they hang (1.8.0)
+
 ## Open
 
-- Workspace Manager: LRU / idle shutdown of warm DelphiLSP clients, and kill+respawn on hang
+- Workspace Manager: a cap on warm DelphiLSP engines (LRU)
 - KDE and other non-GNOME Linux desktops on the desktop node
 - The two-Delphi-versions case, measured on a machine that has them
 - Completion prefix filter

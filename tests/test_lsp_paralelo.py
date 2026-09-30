@@ -293,13 +293,8 @@ def p6(uno, colgados):
         print('NOTA: P6 no se mide: en seis intentos ningun diagnostics estaba en vuelo cuando git paro su motor')
 
 
-def suspende(pid):
-    # el motor sigue vivo y deja de leer su tuberia (andamio, no lo que se mide)
-    import ctypes
-    h = ctypes.windll.kernel32.OpenProcess(0x0800, False, pid)   # PROCESS_SUSPEND_RESUME
-    rc = ctypes.windll.ntdll.NtSuspendProcess(h)
-    ctypes.windll.kernel32.CloseHandle(h)
-    return rc == 0
+# el motor sigue vivo y deja de leer su tuberia (andamio, no lo que se mide)
+suspende = mc.suspende
 
 
 def p7(uno, colgados):

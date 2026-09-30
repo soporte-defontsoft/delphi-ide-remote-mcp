@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.7.11';
+  SERVER_VERSION = '1.8.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -410,9 +410,10 @@ const
   SR_LSP_ENGINE_STOPPED =
     '[LSP-033 DENIED] The LSP engine of that project is not running any ' +
     'more: this server stopped it - its folder was being moved or ' +
-    'deleted, or git was rewriting the tree (switch, merge, stash, pull) ' +
-    '- or its process had ended by itself. Repeat the request - at the ' +
-    'new place if the folder was moved.';
+    'deleted, git was rewriting the tree (switch, merge, stash, pull), ' +
+    'or the engine had stopped answering - or its process had ended by ' +
+    'itself. Repeat the request - at the new place if the folder was ' +
+    'moved: a new engine starts with it.';
 
   { Como acabo un motor que este servidor paro, cuando no acabo limpio o no
     contesto a `shutdown` en su plazo (30-sep-2026). Al log del servidor: con
@@ -421,6 +422,15 @@ const
     etiqueta: no lo lee un agente. }
   SL_LSP_ENGINE_ENDED_FMT =
     'lsp: ENGINE %s exit=$%x shutdown asked=%s answered=%s';
+
+  { Los motores que para el barrendero de la sesion (30-sep-2026): el COLGADO
+    -algo en vuelo y ninguna senal de vida en su plazo- y el que nadie usa. }
+  SL_LSP_ENGINE_HUNG_FMT =
+    'lsp: ENGINE %s stopped by the server: something in flight and no sign ' +
+    'of life (no message, no CPU, no I/O) for %d s, and no answer when asked';
+
+  SL_LSP_ENGINE_IDLE_FMT =
+    'lsp: ENGINE %s stopped by the server: not used for %s min';
 
   { El servicio sin la ventana que RunService le da a la aplicacion de la
     VCL (30-sep-2026): sin ella el bucle principal no recibe el WM_QUIT del

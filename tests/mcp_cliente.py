@@ -229,6 +229,21 @@ def motores_en(ppid, carpeta):
     return r
 
 
+def suspende(pid):
+    """Suspende un proceso: sigue vivo y deja de leer, de contestar y de gastar
+    CPU. Asi se ve un motor COLGADO. Andamio, no lo que se mide. Estaba en
+    test_lsp_paralelo y lo necesita tambien test_motor_vida: UNA."""
+    import ctypes
+    k32 = ctypes.windll.kernel32
+    k32.OpenProcess.restype = ctypes.c_void_p
+    h = k32.OpenProcess(0x0800, False, pid)              # PROCESS_SUSPEND_RESUME
+    if not h:
+        return False
+    rc = ctypes.windll.ntdll.NtSuspendProcess(ctypes.c_void_p(h))
+    k32.CloseHandle(ctypes.c_void_p(h))
+    return rc == 0
+
+
 def es_esta_maquina(host):
     """El "host" que dice un servidor lanzado AQUI es el nombre de esta
     maquina (el NetBIOS, el de %COMPUTERNAME%, que es el que da

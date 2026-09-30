@@ -57,10 +57,21 @@ type
     FStopped: Boolean;
     FRootUri: string;  // what Initialize was given: the engine's name in the log
     FEndSaid: Boolean; // StopEngine has said how this engine ended
+    // What is IN FLIGHT on the engine, and since when nothing has been heard
+    // of it (see Hung). Under FLock.
+    FInFlight: Integer;    // requests waiting for their answer + writes inside the transport
+    FWaitingSince: UInt64; // when that wait began, or the engine's last sign of life since
+    FSeenCpuMs, FSeenIoOps: UInt64; // the process's counters at the last look
+    FWaiters: Integer;     // calls waiting for a notification right now (under FLock)
+    procedure BeginWait;
+    procedure EndWait;
     procedure HandleRawMessage(const AJson: string);
     function NextId: Integer;
     procedure Send(const AJson: string);
-    function AskToShutDown(out AAnswered: Boolean): TThread;
+    function Ask(const AMethod: string; AWaitMs: Cardinal; AKeepThread: Boolean;
+      out AAnswered: Boolean): TThread;
+    function DoWaitForNotification(const AMethod: string; ATimeoutMs: Integer;
+      const AUriFilter: string): TJSONObject;
     procedure SayHowItEnded(AAsked, AAnswered: Boolean);
   public
     constructor Create(ATransport: TLspProcessTransport; AOwnsTransport: Boolean = True);
@@ -87,6 +98,39 @@ type
     function EngineAlive: Boolean;
     { What the engine's process ended with (the transport's ExitCode). }
     function EngineExitCode: Cardinal;
+    { Is the engine HUNG? Something has been in flight on it - a request
+      waiting for its answer, a write inside the transport - for more than
+      ALimitMs with NO sign of life in all that time: not one message from
+      it, no CPU used, no I/O done. An engine that works uses CPU, one that
+      reads a slow disk does I/O (not measured over a network), and one that answers anything at all is
+      alive; an engine at rest shows none of the three, which is why they
+      only count with something in flight (measured 2026-09-30: requests
+      answer in 10 to 30 ms on a 60-unit project, and a suspended engine
+      shows 0 CPU, 0 I/O and 0 messages). Each call is a LOOK: it keeps the
+      counters it saw, for the next one. False for a stopped client. }
+    function Hung(ALimitMs: UInt64): Boolean;
+    { Does the engine ANSWER? It is asked something the protocol obliges a
+      server to refuse - a request whose method starts with "$/" - and waited
+      for AWaitMs. One that answers is alive and NOT WORKING on a request:
+      DelphiLSP serves them one at a time (measured 2026-09-30: a probe sent
+      behind a definition of 60 to 100 ms is answered right after it), and
+      answers this in 0 to 2 ms when it has none (agent and linter, 10 of
+      10; in 19 ms before `initialize`) - also while a request it could not
+      parse stays unanswered for good: to one of those it says NOTHING, and
+      goes on with the rest. So an engine with something in flight that
+      answers this has dropped the request, and one that does not is working
+      on it - or hung: that is told by its CPU and its I/O (Hung). Sent like
+      `shutdown`, on a thread of its own: an engine that does not read does
+      not hold whoever asks. }
+    function AnswersProbe(AWaitMs: Cardinal): Boolean;
+    { Is somebody using it right now? Something in flight, or a call waiting
+      for a notification of it (a lint waits for its diagnostics that way). }
+    function Busy: Boolean;
+    { The engine's process id while there is one (0 otherwise). For the tests. }
+    function EngineProcessId: Cardinal;
+    { The transport left a writer behind inside its write (its WriterLeft):
+      this object must not be freed under that thread. }
+    function WriterLeft: Boolean;
 
     // Raw JSON-RPC. AParamsJson is an already-serialized JSON value; pass
     // "{}" when there are no params. Returns the full response object;
@@ -228,6 +272,95 @@ begin
   Result := FTransport.ExitCode;
 end;
 
+procedure TLspClient.BeginWait;
+var
+  Cpu, Io: UInt64;
+begin
+  FTransport.Activity(Cpu, Io); // outside the lock: it asks the system
+  FLock.Enter;
+  try
+    Inc(FInFlight);
+    if FInFlight = 1 then
+    begin
+      // the clock of "nothing heard" starts with the wait, and so does what
+      // the process's counters are compared with
+      FWaitingSince := GetTickCount64;
+      FSeenCpuMs := Cpu;
+      FSeenIoOps := Io;
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TLspClient.EndWait;
+begin
+  FLock.Enter;
+  try
+    Dec(FInFlight);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TLspClient.Hung(ALimitMs: UInt64): Boolean;
+const
+  CPU_ALIVE_MS = 15; // one tick of the scheduler: less than this is not work
+var
+  Cpu, Io, Tick: UInt64;
+begin
+  Result := False;
+  if FStopped or (ALimitMs = 0) then
+    Exit;
+  FTransport.Activity(Cpu, Io); // outside the lock: it asks the system
+  FLock.Enter;
+  try
+    if FInFlight = 0 then
+      Exit;
+    Tick := GetTickCount64; // under the lock, like the one it is compared with
+    if (Io <> FSeenIoOps) or (Cpu >= FSeenCpuMs + CPU_ALIVE_MS) then
+    begin
+      // it has worked, or read or written, since the last look: alive
+      FSeenCpuMs := Cpu;
+      FSeenIoOps := Io;
+      FWaitingSince := Tick;
+    end;
+    Result := Tick - FWaitingSince > ALimitMs;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TLspClient.AnswersProbe(AWaitMs: Cardinal): Boolean;
+begin
+  Result := False;
+  try
+    Ask('$/alive', AWaitMs, False, Result);
+  except
+    // it could not even be asked: not answered
+  end;
+end;
+
+function TLspClient.Busy: Boolean;
+begin
+  FLock.Enter;
+  try
+    Result := (FInFlight > 0) or (FWaiters > 0);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TLspClient.WriterLeft: Boolean;
+begin
+  Result := FTransport.WriterLeft;
+end;
+
+function TLspClient.EngineProcessId: Cardinal;
+begin
+  Result := FTransport.ProcessId;
+end;
+
 procedure TLspClient.StopEngine;
 var
   Asker: TThread;
@@ -248,14 +381,14 @@ begin
   Asker := nil;
   Answered := False;
   try
-    Asker := AskToShutDown(Answered);
+    Asker := Ask('shutdown', SHUTDOWN_WAIT_MS, True, Answered);
   except
     // no event, no thread to be had: stopped as it always was - never left
     // running - and said below
   end;
   Asked := Asker <> nil;
   FTransport.Stop;
-  // the one that asked wrote on a thread of its own (AskToShutDown): with
+  // the one that asked wrote on a thread of its own (Ask): with
   // the process gone its write has returned, whatever it was waiting for
   if Asker <> nil then
     if WaitForSingleObject(Asker.Handle, 3000) = WAIT_OBJECT_0 then
@@ -291,22 +424,27 @@ begin
       [FRootUri, Code, YesNo[AAsked], YesNo[AAnswered]]));
 end;
 
-{ Sends `shutdown` and waits for its answer, SHUTDOWN_WAIT_MS at most. The
-  client is already stopped for everybody else, so this goes straight to the
-  transport, with an entry of its own for the answer. The WRITE runs on a
-  thread of its own: a write to an engine that stopped reading does not
-  return until the process ends, and whoever stops an engine must not be
-  held by it - ending the process is what frees that write. Returns the
-  thread, for StopEngine to collect once the process is gone; nil when there
-  was no process to ask. AAnswered: the ANSWER came (not the time, and not
-  the word of a Retire, which wakes every entry). May raise - no event, no
-  thread to be had - and leaves no entry behind when it does. }
-function TLspClient.AskToShutDown(out AAnswered: Boolean): TThread;
+{ Asks the engine one thing that takes no parameters and waits for its
+  answer, AWaitMs at most: `shutdown` before it is stopped (StopEngine), and
+  the probe of an engine that looks hung (AnswersProbe). It goes straight to
+  the transport, with an entry of its own for the answer - the client may be
+  stopped already for everybody else. The WRITE runs on a thread of its own:
+  a write to an engine that stopped reading does not return until the
+  process ends, and whoever asks must not be held by it - ending the process
+  is what frees that write. With AKeepThread the thread is returned, for the
+  caller to collect once the process is gone; without it the thread frees
+  itself. nil when there was no process to ask. AAnswered: the ANSWER came
+  (not the time, and not the word of a Retire, which wakes every entry). May
+  raise - no event, no thread to be had - and leaves no entry behind when it
+  does. }
+function TLspClient.Ask(const AMethod: string; AWaitMs: Cardinal; AKeepThread: Boolean;
+  out AAnswered: Boolean): TThread;
 var
   Id: Integer;
   Call: TPendingCall;
   Json: string;
   Transport: TLspProcessTransport;
+  T: TThread;
   T0: UInt64;
   Left: Int64;
 begin
@@ -326,9 +464,9 @@ begin
     // Without "params": what JSON-RPC asks of a method that takes none. This
     // engine answers both forms alike (measured 2026-09-30: 8 of 8 each, in
     // 11 to 17 ms with a definition in flight); a stricter one might not.
-    Json := Format('{"jsonrpc":"2.0","id":%d,"method":"shutdown"}', [Id]);
+    Json := Format('{"jsonrpc":"2.0","id":%d,"method":"%s"}', [Id, AMethod]);
     Transport := FTransport;
-    Result := TThread.CreateAnonymousThread(
+    T := TThread.CreateAnonymousThread(
       procedure
       begin
         try
@@ -337,15 +475,17 @@ begin
           // an engine that is going, or gone: nothing to ask
         end;
       end);
-    Result.FreeOnTerminate := False;
-    Result.Start;
+    T.FreeOnTerminate := not AKeepThread;
+    if AKeepThread then
+      Result := T;
+    T.Start; // (not touched after this: it may free itself)
     // Until the ANSWER or the time. A Retire wakes every entry, this one
     // too: woken with no answer - somebody retired the client again while
     // it was being stopped - it goes back to wait, or the engine would have
     // its input closed on a request in flight after all.
     T0 := GetTickCount64;
     repeat
-      Left := Int64(SHUTDOWN_WAIT_MS) - Int64(GetTickCount64 - T0);
+      Left := Int64(AWaitMs) - Int64(GetTickCount64 - T0);
       if Left <= 0 then
         Break;
       Call.Event.WaitFor(Cardinal(Left));
@@ -376,12 +516,19 @@ procedure TLspClient.Send(const AJson: string);
 begin
   if FStopped then
     raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
+  // a write is something in flight: an engine that stopped reading keeps it
+  // inside the transport for as long as the pipe is full (see Hung)
+  BeginWait;
   try
-    FTransport.SendJson(AJson);
-  except
-    if FStopped then
-      raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
-    raise;
+    try
+      FTransport.SendJson(AJson);
+    except
+      if FStopped then
+        raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
+      raise;
+    end;
+  finally
+    EndWait;
   end;
 end;
 
@@ -397,6 +544,13 @@ var
   Id: Integer;
   Call: TPendingCall;
 begin
+  // whatever the engine says is a sign of life (see Hung)
+  FLock.Enter;
+  try
+    FWaitingSince := GetTickCount64;
+  finally
+    FLock.Leave;
+  end;
   Msg := TJSONObject.ParseJSONValue(AJson) as TJSONObject;
   if Msg = nil then
     Exit;
@@ -449,6 +603,7 @@ var
   Id: Integer;
   Call: TPendingCall;
   Raw: string;
+  Signaled: Boolean;
 begin
   Id := NextId;
   Call := TPendingCall.Create;
@@ -479,7 +634,14 @@ begin
     raise;
   end;
 
-  if Call.Event.WaitFor(ATimeoutMs) <> wrSignaled then
+  // the wait for the answer is something in flight (see Hung)
+  BeginWait;
+  try
+    Signaled := Call.Event.WaitFor(ATimeoutMs) = wrSignaled;
+  finally
+    EndWait;
+  end;
+  if not Signaled then
   begin
     FLock.Enter;
     try
@@ -650,7 +812,18 @@ var
   Ctx: string;
 begin
   if ATriggerCharacter <> '' then
-    Ctx := Format(',"context":{"triggerKind":2,"triggerCharacter":"%s"}', [ATriggerCharacter])
+  begin
+    // As JSON, not as it comes: a quote or a backslash in it made the whole
+    // request unparseable, and the engine answers NOTHING to a request it
+    // cannot parse (measured 2026-09-30: not one message in 6 s) - the
+    // caller waited out its 30 s.
+    var Quoted := TJSONString.Create(ATriggerCharacter);
+    try
+      Ctx := Format(',"context":{"triggerKind":2,"triggerCharacter":%s}', [Quoted.ToJSON]);
+    finally
+      Quoted.Free;
+    end;
+  end
   else
     Ctx := ',"context":{"triggerKind":1}';
   Result := RequestWithRetry('textDocument/completion', Format(
@@ -658,7 +831,31 @@ begin
     [AUri, ALine, ACharacter, Ctx]), 30000);
 end;
 
+{ Whoever waits for a notification is USING the engine (Busy): a lint waits
+  for its diagnostics here, and an engine "nobody uses" must not be stopped
+  under it. }
 function TLspClient.WaitForNotification(const AMethod: string;
+  ATimeoutMs: Integer; const AUriFilter: string): TJSONObject;
+begin
+  FLock.Enter;
+  try
+    Inc(FWaiters);
+  finally
+    FLock.Leave;
+  end;
+  try
+    Result := DoWaitForNotification(AMethod, ATimeoutMs, AUriFilter);
+  finally
+    FLock.Enter;
+    try
+      Dec(FWaiters);
+    finally
+      FLock.Leave;
+    end;
+  end;
+end;
+
+function TLspClient.DoWaitForNotification(const AMethod: string;
   ATimeoutMs: Integer; const AUriFilter: string): TJSONObject;
 var
   Deadline: UInt64;

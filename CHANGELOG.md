@@ -6,6 +6,101 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.8.0] - 2026-09-30
+
+The life of the LSP engines, which until now ended only when their folder left or the server stopped: the server stops the ones nobody uses and the ones that hang, and the next request starts another.
+
+### Added
+
+- **`[Server] EngineIdleMinutes`** (or `DELPHI_MCP_ENGINE_IDLE_MINUTES`;
+  default 30, 0 = never, decimals accepted): an LSP engine nobody has used
+  for that long is stopped, and the next request of its project starts
+  another. "Used" is handed out to a request, with something in flight, or
+  with somebody waiting for a notification of it (a lint waits for its
+  diagnostics that way). Measured 2026-09-30 on a 60-unit project with the
+  engine launched by hand: an engine at rest keeps 125 MB (135 MB of working
+  set) and does nothing - 0 CPU, 0 I/O, 0 messages in 20 s -, and a new one
+  gives its first answer 1.7 s after it is started; through the server, the
+  first answer of the engine that replaces a stopped one came 2.1 s after
+  the request. The same time now closes a document the engine has open and
+  nobody asks about (the fixed half hour of 1.7.9).
+- **A hung engine is stopped and replaced.** An engine with something in
+  flight - a request waiting for its answer, or a write the engine is not
+  reading - that shows no sign of life for 20 s (not one message, no CPU
+  used, no I/O done) is ASKED, a request the protocol obliges it to refuse;
+  if it does not answer that either in two seconds it is stopped, whoever
+  waited on it is told `LSP-033` at that moment, and the request repeated
+  starts another engine. Measured through the server on a suspended engine:
+  `LSP-033` 23 s after a hover, 26 s after a request that opens a file too
+  big for the engine's pipe. Until now, measured with the same checks
+  against a server without this: the hover answered `timed out after 30000
+  ms`, and so did the one after it - the hung engine stayed in its place -,
+  and the request stuck in the write had no answer at all (none in 90 s).
+  The signs are three because an engine that works uses CPU (it is slow,
+  not hung, and is left alone) and one at rest shows none (measured:
+  requests answer in 10 to 30 ms, a suspended engine shows 0, 0 and 0), so
+  they count only with something in flight; I/O operations count too, for an
+  engine reading a slow disk - that one is not measured over a network. 20 s,
+  because it has to come before the shortest request timeout, 30 s: above
+  that, an engine asked one request at a time would never be seen hung.
+- **The engine is asked before it is taken for hung**, because a healthy
+  engine answers NOTHING to a request it cannot parse - measured: not one
+  message in 6 s, while it goes on answering everything else, a probe in 0
+  to 2 ms - and with that request in flight it is as silent and as still as
+  a hung one. Without the question, such a request stopped a healthy engine
+  under every agent of its project at 20 s. The engine serves one request
+  at a time - measured: a probe sent behind a definition of 60 to 100 ms
+  is answered right after it -, so one that answers the probe is not
+  working on anything: the request it dropped waits out its own timeout,
+  as before 1.8.0. And one that is working on a request and shows no CPU
+  and no I/O for 22 s is taken for hung. Not covered: the wait for the
+  linter's diagnostics, which is not a request.
+- A sweeper thread in the session does all of it, every two seconds, and
+  frees the retired clients nobody can be on any more (until now, when a
+  folder left or a dead engine was found). The server's log says each engine
+  it stops and why: `lsp: ENGINE <key> stopped by the server: ...`.
+- `LSP-033` names the new cause ("the engine had stopped answering").
+- Five unit tests (`ColgadoEsEnVueloCalladoYQuieto`,
+  `QuienEsperaUnaNotificacionLoEstaUsando`,
+  `ElMotorSinUsoSeParaYElSiguienteContesta`, `ElMotorColgadoSeRelanza`,
+  `ElQueNoContestaUnaPeticionNoEstaColgado`) and a new battery,
+  `test_motor_vida`, 13 checks with servers of its own: the engine nobody
+  uses for twelve seconds is gone, the log says why and the next request
+  starts another; the environment wins over the ini; the completion with a
+  quote is answered by the same engine; the two requests on a suspended
+  engine are answered `LSP-033` by the server itself, the suspended process
+  is gone, and the request repeated answers. Red with its part taken out:
+  with a sweeper that decides nothing, the two session unit tests and six
+  checks of the battery's first version; without the question, the unit
+  test of the unparseable request (the healthy engine was stopped); with the
+  notification wait not counted, its unit test; "hung" without looking at
+  what is in flight, and without CPU and I/O, the client's unit test; with
+  the trigger raw and writes not counted, V3 (timed out at 30 s) and V2b (no
+  answer in 90 s). Not of those: V0 (it tells "the environment wins", not
+  "never") and the preparation checks.
+
+### Fixed
+
+- **`delphi_completion` with a trigger that is a double quote or a
+  backslash waited 30 s and answered "timed out".** The trigger went raw
+  into the request, which stopped being JSON, and the engine answers
+  nothing to what it cannot parse. It goes as a JSON string now, and is
+  answered at once.
+- **A client whose transport left a writer behind is not freed under it**
+  (the note the last review of 1.7.11 left): that thread comes back to the
+  client - its locks, the session's documents - when whoever holds the
+  engine's pipe lets go, and the client was freed five minutes after it was
+  retired. It is kept, as the transport keeps itself. A guard: it needs a
+  second holder of the pipe for more than five minutes.
+
+### Changed
+
+- `SessionTimeoutMinutes` and `EngineIdleMinutes` are read by one helper
+  (environment over ini, decimals, the default for what cannot be read, ten
+  weeks at most). `shutdown` and the probe are asked by one routine of the
+  client (`Ask`). `suspende`, the batteries' scaffold to make an engine look
+  hung, lives in `mcp_cliente` (it was in `test_lsp_paralelo`).
+
 ## [1.7.11] - 2026-09-30
 
 What 1.7.10 left written down, closed the same day: the service process stayed thirty seconds after every stop, a program started by a remote run on a Windows target could wait behind an error dialog, and what the reviewers' notes measured out to.

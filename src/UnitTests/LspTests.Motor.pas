@@ -52,12 +52,15 @@ type
     [Test] procedure ElQueAcaboMalSeApunta;
     [Test] procedure RetirarOtraVezNoAcortaLaEspera;
     [Test] procedure UnEscritorAtascadoNoCuelgaLaParada;
+    [Test] procedure ColgadoEsEnVueloCalladoYQuieto;
+    [Test] procedure QuienEsperaUnaNotificacionLoEstaUsando;
   end;
 
   [TestFixture]
   TFabricaTests = class
   private
     FDir, FLocalAppData: string;
+    procedure ProyectoPequeno(out ADpr, AUri: string);
   public
     [Setup] procedure Prepara;
     [TearDown] procedure Limpia;
@@ -67,6 +70,9 @@ type
     [Test] procedure ElPreguntadoIlegibleNoSeCallaYElOtroSeDejaParaLuego;
     [Test] procedure LosSinUsoYLosQueSeFueronSeCierran;
     [Test] procedure PararUnMotorOcupadoNoLoTumba;
+    [Test] procedure ElMotorSinUsoSeParaYElSiguienteContesta;
+    [Test] procedure ElMotorColgadoSeRelanza;
+    [Test] procedure ElQueNoContestaUnaPeticionNoEstaColgado;
   end;
 
 implementation
@@ -405,6 +411,113 @@ begin
     Assert.IsFalse(Salio, 'el escritor salio antes de acabar la parada: no estaba atascado');
     Assert.AreEqual(Cardinal(1), C.EngineExitCode,
       'y al motor, que no leia, lo acabo la parada (1 = TerminateProcess)');
+    // ...y el transporte lo DICE: quien tenga algo a lo que ese hilo vuelve
+    // (la sesion: el cliente, sus documentos) no lo libera debajo de el
+    Assert.IsTrue(C.WriterLeft, 'el transporte no dice que dejo un escritor atras');
+  finally
+    C.Free;
+  end;
+end;
+
+// Una peticion que espera su respuesta, en un hilo (con su plazo: no contesta nadie)
+function HiloQuePide(AClient: TLspClient; APlazoMs: Integer): TThread;
+begin
+  Result := TThread.CreateAnonymousThread(
+    procedure
+    begin
+      try
+        AClient.Request('textDocument/hover', '{}', APlazoMs).Free;
+      except
+        // plazo agotado, o el motor parado: aqui da igual
+      end;
+    end);
+  Result.FreeOnTerminate := False;
+end;
+
+// COLGADO es: algo en vuelo, y el motor callado Y quieto todo un plazo. Las
+// tres cosas: un motor en reposo esta igual de callado y de quieto (medido el
+// 30-sep-2026: 0 de CPU, 0 de E/S y 0 mensajes en 20 s), y uno que trabaja sin
+// contestar esta lento, no colgado. Cada llamada a Hung es una MIRADA: lo que
+// el proceso ha hecho desde la anterior cuenta como senal de vida.
+procedure TMotorParadoTests.ColgadoEsEnVueloCalladoYQuieto;
+var
+  T: TLspProcessTransport;
+  C: TLspClient;
+  H: TThread;
+begin
+  // sort.exe: ni contesta ni trabaja
+  C := MotorMudo;
+  try
+    Sleep(700);
+    Assert.IsFalse(C.Hung(300), 'sin nada en vuelo no hay motor colgado, por callado que este');
+    H := HiloQuePide(C, 4000);
+    try
+      H.Start;
+      Sleep(1000);
+      C.Hung(300); // la primera mirada ve que LEYO la peticion: eso es una senal de vida
+      Sleep(600);
+      Assert.IsTrue(C.Hung(300), 'con una peticion en vuelo, callado y quieto 600 ms: eso es colgado (plazo 300)');
+      Assert.IsFalse(C.Hung(60000), 'callado y quieto, pero DENTRO de su plazo (60 s): todavia no');
+    finally
+      H.WaitFor;
+      H.Free;
+    end;
+    Assert.IsFalse(C.Hung(300), 'la peticion agoto su plazo: ya no hay nada en vuelo');
+  finally
+    C.Free;
+  end;
+  // cmd.exe en un bucle sin fin: no contesta, pero GASTA CPU
+  T := TransporteFalso('cmd.exe');
+  C := TLspClient.Create(T, True);
+  try
+    T.SendJson(#13#10'for /l %i in (1,0,2) do @rem'#13#10);
+    Sleep(800);
+    H := HiloQuePide(C, 4000);
+    try
+      H.Start;
+      Sleep(1000);
+      C.Hung(300);
+      Sleep(600);
+      Assert.IsTrue(C.Busy, 'la peticion no esta en vuelo: esta mitad no mediria nada');
+      Assert.IsFalse(C.Hung(300), 'el motor que gasta CPU sin contestar esta lento, no colgado');
+    finally
+      H.WaitFor;
+      H.Free;
+    end;
+  finally
+    C.Free;
+  end;
+end;
+
+// Quien espera una notificacion del motor lo esta USANDO (Busy): un lint
+// espera asi sus diagnosticos, y el barrendero no para por "sin uso" un motor
+// del que alguien espera algo.
+procedure TMotorParadoTests.QuienEsperaUnaNotificacionLoEstaUsando;
+var
+  C: TLspClient;
+  H: TThread;
+begin
+  C := MotorMudo;
+  try
+    Assert.IsFalse(C.Busy, 'nadie le ha pedido nada todavia');
+    H := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          C.WaitForNotification('textDocument/publishDiagnostics', 1500).Free;
+        except
+        end;
+      end);
+    H.FreeOnTerminate := False;
+    try
+      H.Start;
+      Sleep(500);
+      Assert.IsTrue(C.Busy, 'con alguien esperando una notificacion suya, el motor esta en uso');
+    finally
+      H.WaitFor;
+      H.Free;
+    end;
+    Assert.IsFalse(C.Busy, 'la espera acabo: ya no');
   finally
     C.Free;
   end;
@@ -1040,6 +1153,236 @@ begin
   finally
     TLogger.OnLogMessage := Antes;
     Apuntes.Free;
+  end;
+end;
+
+function NtSuspendProcess(ProcessHandle: THandle): Integer; stdcall; external 'ntdll.dll';
+
+// Un proyecto de dos ficheros en la carpeta de la prueba: P.dpr llama a Doble,
+// de U.pas. La pregunta de las pruebas: linea 3, columna 12 del .dpr (Doble).
+procedure TFabricaTests.ProyectoPequeno(out ADpr, AUri: string);
+begin
+  ADpr := FDir + '\proyecto\P.dpr';
+  TFile.WriteAllText(FDir + '\proyecto\U.pas',
+    'unit U;' + sLineBreak + 'interface' + sLineBreak + 'function Doble(A: Integer): Integer;' + sLineBreak +
+    'implementation' + sLineBreak + 'function Doble(A: Integer): Integer;' + sLineBreak + 'begin' + sLineBreak +
+    '  Result := A * 2;' + sLineBreak + 'end;' + sLineBreak + 'end.' + sLineBreak);
+  TFile.WriteAllText(ADpr, 'program P;' + sLineBreak + 'uses U;' + sLineBreak + 'begin' + sLineBreak +
+    '  Writeln(Doble(3));' + sLineBreak + 'end.' + sLineBreak);
+  AUri := TLspClient.PathToUri(ADpr);
+end;
+
+// TESTIGO de un motor que contesta: la definicion de Doble llega a resolverse
+// en U.pas (uno recien abierto contesta -32800 mientras indexa)
+function SeResuelve(AClient: TLspClient; const AUri: string): Boolean;
+var
+  K: Integer;
+  O: TJSONObject;
+begin
+  Result := False;
+  for K := 1 to 20 do
+  begin
+    O := AClient.Definition(AUri, 3, 12);
+    try
+      Result := Pos('U.pas', O.ToJSON) > 0;
+    finally
+      O.Free;
+    end;
+    if Result then
+      Exit;
+    Sleep(500);
+  end;
+end;
+
+// Un motor que nadie usa desde hace LspEngineIdleMs lo para el barrendero
+// (TLspSession.Sweep), LIMPIO - en reposo contesta a `shutdown` -, y queda
+// apuntado; la siguiente peticion de su proyecto arranca otro y contesta. Uno
+// recien usado no se toca. Un motor en reposo retiene 125 MB (medido el
+// 30-sep-2026), y uno nuevo da su primera respuesta 1,7 s despues de arrancar.
+procedure TFabricaTests.ElMotorSinUsoSeParaYElSiguienteContesta;
+var
+  Dpr, Uri, Usado: string;
+  C1, C2: TLspClient;
+  Antes: UInt64;
+  AntesBarrido: Cardinal;
+  Apuntes: TStringList;
+  Oyente: TLogMessageProc;
+begin
+  Assert.IsTrue(DiscoverRadStudio.Found, 'sin RAD Studio en la maquina no hay motor que parar');
+  ProyectoPequeno(Dpr, Uri);
+  Apuntes := TStringList.Create;
+  Oyente := EscuchaMotores(Apuntes);
+  Antes := LspEngineIdleMs;
+  AntesBarrido := LspSweepMs;
+  try
+    // el hilo barrendero, parado: aqui barre la prueba, y una pasada suya en
+    // medio decidiria antes que la de ella
+    LspSweepMs := 0;
+    C1 := TLspSession.Instance.AcquireFor(Dpr, Usado);
+    Assert.IsTrue(SeResuelve(C1, Uri), 'la definicion de Doble no llega a resolverse');
+    LspEngineIdleMs := 1500;
+    // recien usado (la sesion lo acaba de entregar): no se toca
+    C1 := TLspSession.Instance.AcquireFor(Dpr, Usado);
+    TLspSession.Instance.Sweep;
+    Assert.IsFalse(C1.Stopped, 'el barrendero paro un motor recien usado');
+    Assert.IsTrue(TLspSession.Instance.OpenDocuments(Dpr) >= 1, 'y su proyecto sigue teniendo motor');
+    // sin uso mas que su plazo: se para
+    Sleep(2000);
+    TLspSession.Instance.Sweep;
+    Assert.IsTrue(C1.Stopped, 'el motor sin uso 2 s (plazo 1,5) sigue en servicio');
+    Assert.AreEqual(-1, TLspSession.Instance.OpenDocuments(Dpr), 'y ya no es el motor de su proyecto');
+    Assert.AreEqual(Cardinal(0), C1.EngineExitCode, 'parado limpio: en reposo contesta a shutdown');
+    Assert.IsTrue(Pos('not used for', Apuntes.Text) > 0, 'y queda apuntado por que: ' + Apuntes.Text);
+    // la siguiente peticion arranca otro, que contesta
+    LspEngineIdleMs := Antes;
+    C2 := TLspSession.Instance.AcquireFor(Dpr, Usado);
+    Assert.IsTrue((C2 <> C1) and not C2.Stopped, 'la peticion siguiente no tiene un motor nuevo');
+    Assert.IsTrue(SeResuelve(C2, Uri), 'el motor nuevo no resuelve la definicion');
+  finally
+    LspEngineIdleMs := Antes;
+    LspSweepMs := AntesBarrido;
+    TLogger.OnLogMessage := Oyente;
+    Apuntes.Free;
+  end;
+end;
+
+// Un motor COLGADO - aqui suspendido, con una peticion en vuelo: ni un mensaje,
+// ni CPU, ni E/S - lo para el barrendero a su plazo (LspHungMs); quien esperaba
+// recibe que el motor se paro (LSP-033) en segundos, no al agotar los 30 de su
+// peticion; y la siguiente peticion arranca otro, que contesta. Hasta aqui las
+// peticiones de un proyecto cuyo motor dejaba de leer esperaban sin tope.
+procedure TFabricaTests.ElMotorColgadoSeRelanza;
+var
+  Dpr, Uri, Usado, Dicho: string;
+  C1, C2: TLspClient;
+  Antes, T0, Dt: UInt64;
+  AntesBarrido: Cardinal;
+  Asa: THandle;
+  H: TThread;
+  K: Integer;
+  Acabo: Boolean;
+  Apuntes: TStringList;
+  Oyente: TLogMessageProc;
+begin
+  Assert.IsTrue(DiscoverRadStudio.Found, 'sin RAD Studio en la maquina no hay motor que colgar');
+  ProyectoPequeno(Dpr, Uri);
+  Apuntes := TStringList.Create;
+  Oyente := EscuchaMotores(Apuntes);
+  Antes := LspHungMs;
+  AntesBarrido := LspSweepMs;
+  try
+    LspSweepMs := 0; // barre la prueba, no el hilo
+    C1 := TLspSession.Instance.AcquireFor(Dpr, Usado);
+    Assert.IsTrue(SeResuelve(C1, Uri), 'la definicion de Doble no llega a resolverse');
+    LspHungMs := 1500;
+    Asa := OpenProcess($0800, False, C1.EngineProcessId); // PROCESS_SUSPEND_RESUME
+    Assert.IsTrue((Asa <> 0) and (NtSuspendProcess(Asa) = 0), 'no se pudo suspender el motor');
+    CloseHandle(Asa);
+    Dicho := '(sin terminar)';
+    H := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          C1.Definition(Uri, 3, 12).Free;
+          Dicho := '(contesto)';
+        except
+          on E: Exception do
+            Dicho := E.Message;
+        end;
+      end);
+    H.FreeOnTerminate := False;
+    T0 := GetTickCount64;
+    H.Start;
+    Acabo := False;
+    for K := 1 to 120 do
+    begin
+      Acabo := WaitForSingleObject(H.Handle, 100) = WAIT_OBJECT_0;
+      if Acabo then
+        Break;
+      TLspSession.Instance.Sweep;
+    end;
+    Dt := GetTickCount64 - T0;
+    Assert.IsTrue(Acabo, Format('%d ms despues la peticion sigue esperando a un motor colgado', [Dt]));
+    H.Free;
+    Assert.AreEqual(MsgText(SR_LSP_ENGINE_STOPPED), Dicho, 'lo que recibe quien esperaba');
+    Assert.IsTrue(Dt < 12000, Format('se entero a los %d ms: a su plazo (1,5 s) y poco mas, no a los 30 s de la peticion', [Dt]));
+    Assert.IsTrue(C1.Stopped, 'el motor colgado sigue en servicio');
+    Assert.IsTrue(Pos('no sign of life', Apuntes.Text) > 0, 'y queda apuntado por que: ' + Apuntes.Text);
+    C2 := TLspSession.Instance.AcquireFor(Dpr, Usado);
+    Assert.IsTrue((C2 <> C1) and not C2.Stopped, 'la peticion siguiente no tiene un motor nuevo');
+    Assert.IsTrue(SeResuelve(C2, Uri), 'el motor nuevo no resuelve la definicion');
+  finally
+    LspHungMs := Antes;
+    LspSweepMs := AntesBarrido;
+    TLogger.OnLogMessage := Oyente;
+    Apuntes.Free;
+  end;
+end;
+
+// Un motor SANO que no contesta a UNA peticion no esta colgado. A una que no
+// puede leer (el JSON roto) el motor no le contesta NADA, y sigue contestando
+// a las demas (medido el 30-sep-2026: ni un mensaje en 6 s; un sondeo, en 0-2
+// ms). Con esa peticion en vuelo esta callado y quieto, como uno colgado: el
+// barrendero, antes de pararlo, le PREGUNTA, y como contesta lo deja. Quien
+// hizo la peticion agota su plazo, y el motor sigue sirviendo a su proyecto.
+procedure TFabricaTests.ElQueNoContestaUnaPeticionNoEstaColgado;
+var
+  Dpr, Uri, Usado, Dicho: string;
+  C1: TLspClient;
+  Antes: UInt64;
+  AntesBarrido: Cardinal;
+  H: TThread;
+  K: Integer;
+  Sospechoso: Boolean;
+begin
+  Assert.IsTrue(DiscoverRadStudio.Found, 'sin RAD Studio en la maquina no hay motor');
+  ProyectoPequeno(Dpr, Uri);
+  Antes := LspHungMs;
+  AntesBarrido := LspSweepMs;
+  try
+    LspSweepMs := 0; // barre la prueba, no el hilo
+    C1 := TLspSession.Instance.AcquireFor(Dpr, Usado);
+    Assert.IsTrue(SeResuelve(C1, Uri), 'la definicion de Doble no llega a resolverse');
+    LspHungMs := 1000;
+    Dicho := '(sin terminar)';
+    H := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          // los parametros, cortados a medias: el marco entero deja de ser JSON
+          C1.Request('textDocument/hover', '{"textDocument":{"uri":"', 6000).Free;
+          Dicho := '(contesto)';
+        except
+          on E: Exception do
+            Dicho := E.Message;
+        end;
+      end);
+    H.FreeOnTerminate := False;
+    try
+      H.Start;
+      // seis segundos de pasadas, con el plazo de "colgado" en uno
+      Sospechoso := False;
+      for K := 1 to 40 do
+      begin
+        if WaitForSingleObject(H.Handle, 200) = WAIT_OBJECT_0 then
+          Break;
+        // TESTIGO: el motor llega a verse callado y quieto con algo en vuelo;
+        // si no, el barrendero no tendria a quien preguntar y esto no mediria nada
+        if C1.Hung(LspHungMs) then
+          Sospechoso := True;
+        TLspSession.Instance.Sweep;
+      end;
+    finally
+      H.WaitFor;
+      H.Free;
+    end;
+    Assert.IsTrue(Sospechoso, 'el motor no llego a verse callado y quieto con la peticion en vuelo: nadie le pregunto nada');
+    Assert.IsFalse(C1.Stopped, 'el barrendero paro un motor sano que solo no contestaba a una peticion ilegible');
+    Assert.IsTrue(Pos('timed out', Dicho) > 0, 'quien hizo la peticion ilegible agota SU plazo: ' + Dicho);
+    Assert.IsTrue(SeResuelve(C1, Uri), 'y el motor sigue contestando a lo demas');
+  finally
+    LspHungMs := Antes;
+    LspSweepMs := AntesBarrido;
   end;
 end;
 

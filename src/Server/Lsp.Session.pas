@@ -35,6 +35,25 @@ var
     test can shorten it; the operator's setting comes with the life of the
     engines. }
   LspDocIdleMs: UInt64 = 30 * 60 * 1000;
+  { An engine nobody has used for this long, with nothing in flight, is
+    stopped by the sweeper, and the next request of its project starts
+    another: measured 2026-09-30 on a 60-unit project, 1.7 s to the first
+    answer of a new engine, and 125 MB held by each one at rest. 0 = never.
+    Both come from [Server] EngineIdleMinutes when the session is created
+    (LspDocIdleMs only when it is not 0); variables, so a unit test can
+    shorten them. }
+  LspEngineIdleMs: UInt64 = 30 * 60 * 1000;
+  { An engine with something in flight and no sign of life for this long is
+    HUNG (TLspClient.Hung): the sweeper stops it, whoever waited on it is told
+    LSP-033 and the next request starts another. Until now a request to an
+    engine that had stopped reading waited with no bound once its pipe was
+    full. BELOW the shortest request timeout (30 s): above it, an engine
+    asked one request at a time would never be seen hung. 0 = never. }
+  LspHungMs: UInt64 = 20 * 1000;
+  { How often the sweeper looks. 0 = its thread does not sweep: the unit
+    tests call Sweep themselves, and a pass of the thread in between would
+    decide before theirs. }
+  LspSweepMs: Cardinal = 2000;
 
 type
   ELspSession = class(Exception);
@@ -95,8 +114,9 @@ type
     // Clients taken out of service while somebody may still hold them: the
     // process is stopped and whoever was waiting on it has been told. The
     // object is freed when no request can still be on it (RETIRED_KEEP_MS),
-    // at the next folder that leaves: they used to pile up until the server
-    // stopped. Under FTables, like the four tables around it.
+    // by the sweeper's next pass (and when a folder leaves, or a dead engine
+    // is found): they used to pile up until the server stopped. Under
+    // FTables, like the four tables around it.
     FRetired: TList<TRetiredClient>;
     // The folders being taken away right now, between the guard's two
     // notices: no engine is started or registered under one of them.
@@ -106,6 +126,7 @@ type
     // waits for the ones under it, which are refused when they finish.
     FBuilding: TList<string>;
     FSettingsCache: TDictionary<string, TSettingsEntry>;
+    FSweeper: TThread; // calls Sweep every LspSweepMs
     function EnsureExe: string;
     function ResolveSettingsWalk(const AFilePath: string;
       out ARootDir, ASource, ASourceStamp, ARejected, ARejectedStamp: string): string;
@@ -188,11 +209,18 @@ type
       and does not go through the gate, so it is not for a path an agent
       gives. }
     function OpenDocuments(const AFilePath: string): Integer;
+
+    { Stops the engines that are HUNG and the ones nobody has used for
+      LspEngineIdleMs, and frees the retired clients nobody can be on any
+      more. The session's own thread calls it every LspSweepMs; public for
+      the unit tests, which call it themselves. Never raises. }
+    procedure Sweep;
   end;
 
 implementation
 
 uses
+  MCPServer.Logger,
   Lsp.Texts,
   Lsp.ShaCache; // DiskStamp: one composer of the disk fingerprint
 
@@ -227,6 +255,9 @@ type
     // text the LSP is linting per doc: a retry with the same text must NOT
     // restart the lint, just wait for (or collect) the pending diagnostics
     FLintText: TDictionary<string, string>;
+    // GetTickCount64 of the last time the session handed this client out
+    // (under the session's FTables): what the sweeper calls "not used"
+    FLastUsed: UInt64;
     function Refresh(const AExceptKey, AStrictKey: string): Boolean;
     procedure Close(const AKey: string; const AD: TDocState);
     procedure Touch(const AKey: string);
@@ -251,6 +282,50 @@ begin
   inherited;
 end;
 
+type
+  { The session's sweeper: a thread that calls Sweep every LspSweepMs. }
+  TEngineSweeper = class(TThread)
+  private
+    FSession: TLspSession;
+    FStop: TEvent;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(ASession: TLspSession);
+    destructor Destroy; override;
+  end;
+
+constructor TEngineSweeper.Create(ASession: TLspSession);
+begin
+  FSession := ASession;
+  FStop := TEvent.Create(nil, True, False, '');
+  inherited Create(False);
+end;
+
+destructor TEngineSweeper.Destroy;
+begin
+  FStop.SetEvent;
+  inherited; // waits for Execute to leave
+  FStop.Free;
+end;
+
+procedure TEngineSweeper.Execute;
+var
+  Every: Cardinal;
+begin
+  NameThreadForDebugging('LspSweeper');
+  repeat
+    // 0 = no pass (see LspSweepMs): it only goes on looking at the variable
+    Every := LspSweepMs;
+    if Every = 0 then
+      Every := 200;
+    if FStop.WaitFor(Every) <> wrTimeout then
+      Break;
+    if LspSweepMs <> 0 then
+      FSession.Sweep;
+  until False;
+end;
+
 { Frees clients that are in no table any more. Never raises. }
 procedure FreeClients(const AClients: TArray<TLspClient>);
 var
@@ -258,7 +333,12 @@ var
 begin
   for C in AClients do
     try
-      C.Free;
+      // one whose transport left a writer behind inside its write is KEPT:
+      // that thread comes back to this object - its locks, its documents -
+      // when whoever holds the engine's pipe lets go (the transport keeps
+      // itself the same way)
+      if not C.WriterLeft then
+        C.Free;
     except
     end;
 end;
@@ -317,6 +397,94 @@ begin
     end;
 end;
 
+{ The sweeper's pass, in three steps. Under the tables' lock - where a
+  request takes its client and renews its use, so a client handed out is
+  never one being taken out - the engines nobody uses are taken out, and the
+  ones that LOOK hung are set aside: looking at an engine asks the system
+  for two counters and takes that client's own lock for a moment, and
+  nothing waits. Those are stopped at once. Then each suspect is ASKED,
+  outside the lock (that waits for an answer): an engine that answers is
+  alive and not working - it serves one request at a time, and to one it
+  cannot parse it never answers and goes on with the rest (both measured
+  2026-09-30) -, and only the one that answers nothing is taken out, under
+  the lock again, and stopped, always; what was done is said last. }
+procedure TLspSession.Sweep;
+const
+  PROBE_WAIT_MS = 2000; // the engine answers a probe in 0 to 2 ms (measured)
+var
+  K: string;
+  C: TSessionClient;
+  Still: TLspClient;
+  Gone, Old, Suspects: TArray<TLspClient>;
+  SuspectKeys, Said: TArray<string>;
+  Tick: UInt64;
+  I: Integer;
+begin
+  Gone := nil;
+  Said := nil;
+  Old := nil;
+  Suspects := nil;
+  SuspectKeys := nil;
+  try
+    try
+      FTables.Enter;
+      try
+        Tick := TThread.GetTickCount64;
+        Old := TakeRetired(False);
+        for K in FClients.Keys.ToArray do
+        begin
+          C := FClients[K] as TSessionClient;
+          if C.Hung(LspHungMs) then
+          begin
+            Suspects := Suspects + [C];
+            SuspectKeys := SuspectKeys + [K];
+          end
+          else if (LspEngineIdleMs > 0) and (Tick - C.FLastUsed > LspEngineIdleMs) and not C.Busy then
+          begin
+            Said := Said + [MsgFmt(SL_LSP_ENGINE_IDLE_FMT, [K,
+              FormatFloat('0.##', LspEngineIdleMs / 60000, TFormatSettings.Invariant)])];
+            TakeOut(K);
+            Gone := Gone + [C];
+          end;
+        end;
+      finally
+        FTables.Leave;
+      end;
+      FreeClients(Old);
+      // The ones nobody uses are stopped NOW, before anybody is asked
+      // anything: asking takes up to two seconds per silent suspect, and a
+      // client out of the tables with its engine alive is one a folder that
+      // leaves does not find.
+      StopAll(Gone);
+      Gone := nil;
+      for I := 0 to High(Suspects) do
+        if not Suspects[I].AnswersProbe(PROBE_WAIT_MS) then
+        begin
+          FTables.Enter;
+          try
+            // still the client of its key: a folder that left meanwhile took it
+            if FClients.TryGetValue(SuspectKeys[I], Still) and (Still = Suspects[I]) then
+            begin
+              Said := Said + [MsgFmt(SL_LSP_ENGINE_HUNG_FMT, [SuspectKeys[I], LspHungMs div 1000])];
+              TakeOut(SuspectKeys[I]);
+              Gone := Gone + [Suspects[I]];
+            end;
+          finally
+            FTables.Leave;
+          end;
+        end;
+    finally
+      // whatever happened above, what was taken out is stopped: a client out
+      // of the tables with its engine alive is one nobody can find any more
+      StopAll(Gone);
+    end;
+    for I := 0 to High(Said) do
+      TLogger.Info(Said[I]);
+  except
+    // a pass that fails is the next pass's work
+  end;
+end;
+
 function TLspSession.EnsureExe: string;
 var
   Info: TRadStudioInfo;
@@ -341,13 +509,32 @@ begin
   FRetired := TList<TRetiredClient>.Create;
   FLeaving := TList<TLeavingFolder>.Create;
   FBuilding := TList<string>.Create;
+  // [Server] EngineIdleMinutes (Lsp.Guard): the engines nobody uses and the
+  // documents nobody asks about, by one key. 0 leaves the engines alone (and
+  // the documents with their half hour).
+  var Min := EngineIdleMinutes;
+  if Min > 0 then
+  begin
+    LspEngineIdleMs := Round(Min * 60000);
+    if LspEngineIdleMs = 0 then
+      LspEngineIdleMs := 1; // under a millisecond is still "at once", not "never"
+    LspDocIdleMs := LspEngineIdleMs;
+  end
+  else
+    LspEngineIdleMs := 0;
+  FSweeper := TEngineSweeper.Create(Self);
 end;
 
 destructor TLspSession.Destroy;
 begin
   // all at once first, like the ones of a folder that leaves: freed one
   // after another, the bounds of each stop added up while the server stopped
+  FreeAndNil(FSweeper); // first: it walks the tables
   StopAll(FClients.Values.ToArray);
+  // (one whose transport left a writer behind is not freed under it: see FreeClients)
+  for var K in FClients.Keys.ToArray do
+    if FClients[K].WriterLeft then
+      FClients.ExtractPair(K);
   FClients.Free; // frees clients, which stop their transports (and children)
   FreeClients(TakeRetired(True)); // already stopped; nobody can hold one at this point
   FRetired.Free;
@@ -978,7 +1165,10 @@ begin
     if FClients.TryGetValue(AClientKey, Result) then
     begin
       if Result.EngineAlive then
+      begin
+        (Result as TSessionClient).FLastUsed := TThread.GetTickCount64;
         Exit;
+      end;
       // Its process is GONE - it ended by itself, or somebody ended it from
       // outside: out of the table, like the one of a folder that leaves,
       // and another one is built below. It stayed in the table, and every
@@ -1017,7 +1207,10 @@ begin
   FTables.Enter;
   try
     if FClients.TryGetValue(AClientKey, Result) then
+    begin
+      (Result as TSessionClient).FLastUsed := TThread.GetTickCount64;
       Exit; // built by somebody else in the meantime
+    end;
     // a folder that is leaving starts no engine: it would hold it again
     if Leaving(HeldReal) then
       raise ELspSession.Create(MsgFmt(SR_LSP_FOLDER_LEAVING_FMT, [AFullPath]));
@@ -1059,6 +1252,8 @@ begin
         Fresh := nil; // registered: it is the table's now
       end;
       // else: refused, gone, or lost the race (the winner's client is public)
+      if Result <> nil then
+        (Result as TSessionClient).FLastUsed := TThread.GetTickCount64;
     finally
       FTables.Leave;
     end;

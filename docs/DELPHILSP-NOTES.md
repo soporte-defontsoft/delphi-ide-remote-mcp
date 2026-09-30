@@ -77,6 +77,23 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
   and `shutdown` sent while `initialize` is in flight is answered in 20 ms.
   `shutdown` is answered alike with `"params":null` and with no `params` at all (8 of 8 each,
   11 to 17 ms with a `definition` in flight); the server sends it without.
+- **What an engine costs and how it looks** (measured 2026-09-30 on a 60-unit project, engine
+  launched by hand, local disk): first useful answer 1.7 s after it is started (0.5 s of CPU;
+  1.5 s of it is the wait this server gives it to load the project settings); at rest it keeps
+  125 MB private (135 MB of working set) and does nothing at all - 0 CPU, 0 I/O operations,
+  0 messages in 20 s; `documentSymbol` on an 8,500-line unit answers in 10 ms and `hover` in
+  30 ms; a request for a method that does not exist gets error `-32601`. A SUSPENDED engine
+  with a hover in flight: 0 CPU, 0 I/O, 0 messages, no answer; resumed, it answers.
+- **To a request it cannot parse the engine answers NOTHING** (measured 2026-09-30: a frame
+  whose body is broken JSON, not one message in 6 s - no error, no `id: null` answer) and it
+  goes on answering everything else. A probe - a request for a method that does not exist,
+  `$/alive`, with or without `params` - is answered `-32601` in 0 to 2 ms when the engine is
+  not working on another request (agent and linter, 10 of 10), `-32002` in 19 ms before
+  `initialize`, and also while the broken one stays unanswered.
+- **The engine serves one request at a time** (measured 2026-09-30 on a 60-unit project: a
+  probe sent right behind a `definition` of 60 to 100 ms is answered at the same moment as the
+  definition, not 2 ms after it was sent). `textDocument/references` is not implemented by
+  the agent (`-32601`).
 - **The engine sends no requests to its client** (measured 2026-09-30: 0 messages with both
   `id` and `method` in a session with start, settings, open, hover, definition, references,
   documentSymbol and change; the agent sends no notifications either, the linter only

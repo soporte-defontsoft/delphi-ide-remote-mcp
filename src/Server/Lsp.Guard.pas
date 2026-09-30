@@ -852,6 +852,12 @@ type
   end;
 function SessionState(const ASessionId: string): TSessionState; // viva = la toca
 function SessionTimeoutMinutes: Double;                         // 0 = nunca caduca
+{ [Server] EngineIdleMinutes en settings.ini o DELPHI_MCP_ENGINE_IDLE_MINUTES
+  en el entorno (que gana): los minutos sin uso tras los que el servidor para
+  un motor LSP y cierra un documento abierto en el (Lsp.Session). 30 por
+  defecto; 0 = los motores no se paran por falta de uso. Decimales admitidos,
+  como en la de arriba. Fontaneria, no permiso: por eso vive en [Server]. }
+function EngineIdleMinutes: Double;
 function LiveSessionCount: Integer;                             // purga las caducadas
 
 { Dead copies are not a scratchpad. The recoverable trash, and the IDE's own
@@ -1196,6 +1202,8 @@ var
   GSessionTimeoutMin: Double = -1; // -1 = sin leer todavia
   GIniBindIP: string;              // [Server] BindIP
   GIniSessionTimeout: string;      // [Server] SessionTimeoutMinutes, sin parsear
+  GIniEngineIdle: string;          // [Server] EngineIdleMinutes, sin parsear
+  GEngineIdleMin: Double = -1;     // -1 = sin leer todavia
   GIniLogLines: Integer = 2000;    // [Log] LinesPerFile
   GIniLogMaxFiles: Integer = 10;   // [Log] MaxFiles
 
@@ -1759,6 +1767,7 @@ begin
       // abrian el fichero cada uno por su cuenta (tres lectores mas).
       GIniBindIP := Ini.ReadString('Server', 'BindIP', '');
       GIniSessionTimeout := Ini.ReadString('Server', 'SessionTimeoutMinutes', '').Trim;
+      GIniEngineIdle := Ini.ReadString('Server', 'EngineIdleMinutes', '').Trim;
       GIniLogLines := Ini.ReadInteger('Log', 'LinesPerFile', 2000);
       GIniLogMaxFiles := Ini.ReadInteger('Log', 'MaxFiles', 10);
       // [Workspace.<name>] sections: token-scoped sandboxes. Parsed once,
@@ -1976,25 +1985,46 @@ begin
     end;
 end;
 
-function SessionTimeoutMinutes: Double;
+{ Los minutos de una clave de fontaneria: el entorno gana al ini. Decimales
+  admitidos (0.05 = tres segundos): asi una bateria mide sin esperar minutos.
+  Negativo o ilegible = el defecto. UN lector para las dos claves que hay
+  (SessionTimeoutMinutes y EngineIdleMinutes). }
+function MinutosDeClave(const AEnvVar, AIniValue: string; ADefault: Double): Double;
 var
   S: string;
 begin
+  S := GetEnvironmentVariable(AEnvVar).Trim;
+  if S = '' then
+    S := AIniValue;
+  Result := StrToFloatDef(S.Replace(',', '.'), ADefault, TFormatSettings.Invariant);
+  if Result < 0 then
+    Result := ADefault;
+  // ten weeks at most: whoever multiplies these minutes must not overflow
+  // on a figure like 1e30
+  if Result > 100000 then
+    Result := 100000;
+end;
+
+function SessionTimeoutMinutes: Double;
+begin
   if GSessionTimeoutMin >= 0 then
     Exit(GSessionTimeoutMin);
-  S := GetEnvironmentVariable('DELPHI_MCP_SESSION_TIMEOUT_MINUTES').Trim;
-  if S = '' then
-  begin
-    LoadSecurity;
-    S := GIniSessionTimeout;
-  end;
-  { Decimales admitidos (0.05 = tres segundos): asi una bateria mide la
-    caducidad sin esperar minutos. Negativo o ilegible = el defecto. }
-  Result := StrToFloatDef(S.Replace(',', '.'), SESSION_TIMEOUT_DEFAULT_MIN,
-    TFormatSettings.Invariant);
-  if Result < 0 then
-    Result := SESSION_TIMEOUT_DEFAULT_MIN;
+  LoadSecurity;
+  Result := MinutosDeClave('DELPHI_MCP_SESSION_TIMEOUT_MINUTES', GIniSessionTimeout,
+    SESSION_TIMEOUT_DEFAULT_MIN);
   GSessionTimeoutMin := Result;
+end;
+
+function EngineIdleMinutes: Double;
+const
+  ENGINE_IDLE_DEFAULT_MIN = 30;
+begin
+  if GEngineIdleMin >= 0 then
+    Exit(GEngineIdleMin);
+  LoadSecurity;
+  Result := MinutosDeClave('DELPHI_MCP_ENGINE_IDLE_MINUTES', GIniEngineIdle,
+    ENGINE_IDLE_DEFAULT_MIN);
+  GEngineIdleMin := Result;
 end;
 
 procedure BindSessionIdentity(const ASessionId, AName: string);

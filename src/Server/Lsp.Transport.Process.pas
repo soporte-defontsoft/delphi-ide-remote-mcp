@@ -63,6 +63,19 @@ type
       code - 0 for a clean exit, an exception code when it died (measured
       2026-09-30: $C0000005 when its input was closed while it was busy). }
     function ExitCode: Cardinal;
+    { The process's signs of life besides what it says: the CPU time it has
+      used (ms) and the I/O operations it has done since it was born. An
+      engine at rest moves neither, and neither does a suspended one
+      (measured 2026-09-30: 0 and 0 in 20 s idle, 0 and 0 in 10 s suspended
+      with a hover in flight); one that works moves the first, and one that
+      reads a disk, the second. False, and zeros, when there is
+      no process to ask. }
+    function Activity(out ACpuMs, AIoOps: UInt64): Boolean;
+    { The process id while there is a process (0 otherwise). For the tests. }
+    function ProcessId: Cardinal;
+    { A writer was left behind inside SendJson (CloseHandles): whoever holds
+      something that thread will come back to must keep it. }
+    property WriterLeft: Boolean read FWriterLeft;
     property OnMessage: TLspMessageEvent read FOnMessage write FOnMessage;
     property Running: Boolean read FRunning;
     property ExePath: string read FExePath;
@@ -325,6 +338,31 @@ begin
     Result := FExitCode
   else if (FProcInfo.hProcess = 0) or not GetExitCodeProcess(FProcInfo.hProcess, Result) then
     Result := STILL_ACTIVE;
+end;
+
+function TLspProcessTransport.Activity(out ACpuMs, AIoOps: UInt64): Boolean;
+var
+  Born, Ended, Kernel, User: TFileTime;
+  Io: TIoCounters;
+begin
+  ACpuMs := 0;
+  AIoOps := 0;
+  Result := (FProcInfo.hProcess <> 0) and
+    GetProcessTimes(FProcInfo.hProcess, Born, Ended, Kernel, User) and
+    GetProcessIoCounters(FProcInfo.hProcess, Io);
+  if not Result then
+    Exit;
+  ACpuMs := (((UInt64(Kernel.dwHighDateTime) shl 32) or Kernel.dwLowDateTime) +
+    ((UInt64(User.dwHighDateTime) shl 32) or User.dwLowDateTime)) div 10000;
+  AIoOps := Io.ReadOperationCount + Io.WriteOperationCount + Io.OtherOperationCount;
+end;
+
+function TLspProcessTransport.ProcessId: Cardinal;
+begin
+  if FProcInfo.hProcess <> 0 then
+    Result := FProcInfo.dwProcessId
+  else
+    Result := 0;
 end;
 
 procedure TLspProcessTransport.SendJson(const AJson: string);

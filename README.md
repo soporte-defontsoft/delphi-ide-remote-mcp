@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: stable (1.7.11).** Covered by 90 end-to-end batteries — 2,888 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: stable (1.8.0).** Covered by 91 end-to-end batteries — 2,901 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -425,6 +425,7 @@ section is completely inert.
 [Server]
 Port=3000                               ; HTTP port for --http and the tray (-gui)
 SessionTimeoutMinutes=720               ; idle HTTP sessions expire after this (0 = never)
+EngineIdleMinutes=30                    ; an LSP engine nobody uses for this long is stopped (0 = never)
 
 ; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
 ; workspaces' roots are not even readable. Overlap is allowed and never
@@ -580,6 +581,15 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   streamable-HTTP contract, and the same answer an id this process never issued gets
   (a server restart). Generous on purpose: every re-initialize costs an agent a whole
   `tools/list`. `delphi_workspace` reports the live `sessions` and the timeout in force.
+- **`[Server] EngineIdleMinutes`** (or `DELPHI_MCP_ENGINE_IDLE_MINUTES`): an LSP engine
+  (`DelphiLSP.exe`) nobody has used for this long (default 30 minutes; 0 = never) is stopped,
+  and the next request of its project starts another. Measured: an engine at rest keeps
+  about 125 MB (a 60-unit project), and the first answer of the one that replaces it came
+  2.1 s after the request (a small project). The same time closes a document an engine
+  has open and nobody asks about. Apart from this, and with no setting: an engine with a
+  request in flight that shows no sign of life for 20 s - no message, no CPU, no I/O -
+  and does not answer when the server asks it is taken for hung and stopped; whoever
+  waited gets `LSP-033` ("repeat"), and the repeat starts another engine.
 - **`[Log]`** — the server's log on disk, the **same in every mode** (service, terminal and
   tray), in `logs\` next to the exe. `logs\actual.log` is the live tail, appended every half
   second, so a process killed from outside loses half a second, not hours. Every
