@@ -1,4 +1,6 @@
-"""E2E battery for v0.53.0-beta - delphi_rename_symbol, preview only.
+"""E2E battery - delphi_rename_symbol (preview and apply since 1.0.17), and
+since 1.7.8 the engine's freshness across files: a unit edited on disk is
+refreshed in the engine before any question, from whichever file it comes.
 
 The adopted rule as tests: applicable=true ONLY with zero unverified
 references, no designer hits, no string-literal hits, no collision, and a
@@ -158,6 +160,71 @@ r = call('delphi_build', {'project': os.path.join(PRJ, 'Ren.dproj')}, t=600)
 check('apply: el proyecto COMPILA despues del rename', '"success":true' in r.replace(' ', ''), r[:300])
 # the note says to rebuild, and the answer never floods: changes is capped in the answer
 check('apply: la nota manda recompilar', 'delphi_build' in j.get('note', ''), j.get('note'))
+
+# 9. La unidad cambia en DISCO mientras el motor la tiene abierta y se
+# pregunta desde OTRO fichero (Hermes, 2026-09-30, RENAME-017). El motor no
+# vuelve a mirar el disco de un documento abierto, y el servidor solo le
+# mandaba el fichero por el que se preguntaba: medido, definition desde el
+# .dpr contestaba la linea VIEJA mientras nadie preguntara DENTRO de la
+# unidad (25 s, sin tope), y el preview resolvia el destino con la unidad
+# vieja y validaba las ocurrencias con la nueva: negado como parecido, y
+# aplicable al segundo intento sin tocar nada. Hoy el servidor pone al dia
+# TODOS los documentos abiertos de ese motor antes de contestar.
+# Primero UNA pregunta dentro de UCalc: la deja abierta en el motor CON el
+# texto de despues del rename del punto 8 (segundo revisor de la 1.7.8: sin
+# esto el motor la tenia con 'Doble', y el mutante fallaba por 'Duplica sin
+# declarar', no por la linea vieja que se quiere medir). Luego una linea mas
+# encima de la implementacion de Duplica, escrita a pelo, y se pregunta SOLO
+# desde el .dpr.
+def lineas(p):
+    return open(p, encoding='utf-8-sig').read().replace('\r\n', '\n').split('\n')
+ls_uc = lineas(UCALC)
+decl = next(i for i, l in enumerate(ls_uc) if l.startswith('function Duplica('))
+impl0 = [i for i, l in enumerate(ls_uc) if l.startswith('function Duplica(')][1]
+j = J(call('delphi_definition', {'path': UCALC, 'line': decl, 'character': 11}))
+check('UCalc abierta en el motor y al dia (definition dentro de ella, decl -> impl)',
+      ((j.get('range') or {}).get('start') or {}).get('line') == impl0, (str(j)[:200], impl0))
+uc = open(UCALC, encoding='utf-8-sig').read()
+open(UCALC, 'w', encoding='utf-8-sig', newline='').write(uc.replace(
+    'implementation\n', 'implementation\n// una linea mas: la implementacion baja una\n', 1))
+ls_uc, ls_dp = lineas(UCALC), lineas(DPR)
+impl = [i for i, l in enumerate(ls_uc) if l.startswith('function Duplica(')][1]
+ld = next(i for i, l in enumerate(ls_dp) if 'Duplica(3)' in l)
+cd = ls_dp[ld].index('Duplica') + 2
+j = J(call('delphi_definition', {'path': DPR, 'line': ld, 'character': cd}))
+check('unidad editada en disco: definition desde el .dpr contesta la linea de HOY, no la que tenia el motor',
+      ((j.get('range') or {}).get('start') or {}).get('line') == impl and str(j.get('path', '')).endswith('UCalc.pas'),
+      (str(j)[:200], impl))
+j = J(call('delphi_rename_symbol', {'path': DPR, 'line': ld, 'character': cd, 'newname': 'Triplica'}))
+check('unidad editada en disco: el PRIMER preview desde el .dpr es aplicable (era RENAME-017 hasta la 1.7.7)',
+      j.get('applicable') is True and not j.get('blockers') and (j.get('definition') or {}).get('line') == impl + 1,
+      str(j)[:400])
+
+# 10. El motor del LINTER cruza unidades igual: con UCalc abierta en el (un
+# diagnostics), una funcion NUEVA en UCalc y su llamada en el .dpr, escritas
+# a pelo, y el diagnostics del .dpr no puede inventarse un E2003 con la
+# UCalc que el linter tenia.
+d0 = J(call('delphi_diagnostics', {'path': UCALC}, t=120))
+check('linter: UCalc limpia antes de tocar nada', d0.get('errors') == 0, str(d0)[:200])
+uc = open(UCALC, encoding='utf-8-sig').read()
+uc = uc.replace('function ConCadena(A: Integer): Integer;\n',
+                'function ConCadena(A: Integer): Integer;\nfunction Cuadruple(A: Integer): Integer;\n', 1)
+uc = uc.replace('\nend.', '\nfunction Cuadruple(A: Integer): Integer;\nbegin\n  Result := A * 4;\nend;\n\nend.', 1)
+open(UCALC, 'w', encoding='utf-8-sig', newline='').write(uc)
+dp = open(DPR, encoding='utf-8-sig').read()
+open(DPR, 'w', encoding='utf-8-sig', newline='').write(dp.replace(
+    'Writeln(Duplica(3));', 'Writeln(Duplica(3));\n  Writeln(Cuadruple(3));', 1))
+d1 = J(call('delphi_diagnostics', {'path': DPR}, t=120))
+check('linter: el .dpr que llama a una funcion RECIEN escrita en UCalc no da E2003 (la UCalc del linter era la vieja)',
+      d1.get('errors') == 0, str(d1)[:300])
+# y el control: una llamada a algo que NO existe en ninguna parte si da UN
+# error, o sea que el linter del .dpr mira de verdad a traves de las unidades
+dp = open(DPR, encoding='utf-8-sig').read()
+open(DPR, 'w', encoding='utf-8-sig', newline='').write(dp.replace(
+    'Writeln(Cuadruple(3));', 'Writeln(Cuadruple(3));\n  Writeln(Quintuple(3));', 1))
+d2 = J(call('delphi_diagnostics', {'path': DPR}, t=120))
+check('linter (control): una funcion que no existe si da exactamente un E2003',
+      d2.get('errors') == 1 and 'E2003' in str(d2.get('diagnostics')), str(d2)[:300])
 
 srv.mata()
 mc.fin('rename battery')

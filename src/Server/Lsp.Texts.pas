@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.7.7';
+  SERVER_VERSION = '1.7.8';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)

@@ -6,6 +6,55 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.7.8] - 2026-09-30
+
+One thing, found by Hermes' battery of 1.7.7 the night it shipped: a unit edited on disk stayed at its OLD text inside the engine for as long as nobody asked a question inside that unit, so every answer that crossed it from another file - a definition from the .dpr, the references a rename stands on, a lint of a caller - was computed on a source that no longer existed. The report that came with it blamed the engine (a stale answer after the change was sent); measured, the engine was never sent the change.
+
+### Fixed
+
+- **The engine kept the old text of a unit edited on disk until somebody
+  asked inside it.** The server refreshed the engine's copy of ONE document
+  per request - the one the request was about - and the engine never looks
+  at the disk of a document it has open. Measured 2026-09-30 with the unit
+  open in the engine and edited on disk: `delphi_definition` from the `.dpr`
+  answered the old line for 25 s in a toy project and 10 s in the server's
+  own (60 units, a unit of 6,088 lines) - the length of the probe, not a
+  bound - and the right line the instant any request touched the unit. A
+  `delphi_rename_symbol` preview from the call site resolved its target on
+  the old unit and validated the occurrences on the new one (the validation
+  opens each file, which is what refreshed it): two lines for one function,
+  refused as `[RENAME-017]`, and applicable at the second try with nothing
+  changed (Hermes, reports 004944, 012314, 013511). The linter's engine had
+  the same door: a `delphi_diagnostics` of a `.dpr` calling a function just
+  written into a unit the linter had open answered `E2003 Undeclared
+  identifier`. The other theory - the engine answering with the previous
+  version after receiving the change - was measured and not seen: 27 edits
+  across both projects, 60 questions right after them, 0 stale answers.
+  Now one helper (`TSessionClient.Refresh`) brings EVERY document the engine
+  has open up to date with the disk before a question is asked, and both
+  places that talk to an engine call it (`AcquireFor` and `LintFile`); what
+  the engine holds of a document is one record (`TDocState`: path, version,
+  stamp) instead of two tables. Cost measured on a local disk: 55 ms per
+  request with 59 documents open against 53 ms before; the first request
+  after an edit pays the 500 ms indexing head start that the edited file
+  itself always paid, once. Not measured on a network share. A document
+  whose file is gone or cannot be read at that instant is left as it was
+  and looked at again on the next request - except the one the request is
+  about, whose failure is raised as it always was (silence there would be
+  an answer on the old text; first review of this patch, unit test with the
+  file held exclusively) - and a lint pending on a document the refresh
+  resent is forgotten, so the next lint sends its own text. `test_rename`
+  +6 (the two cases from the .dpr, the linter with its control, the
+  precondition that the unit is open in the engine), one unit test; the
+  checks of the fix red with the refresh limited to the asked document
+  again, the unit test red with the asked document's failure swallowed.
+  Read and not measured, noted for the next patch: a unit deleted or
+  renamed while open stays in the engine with its last text (as before this
+  patch; closing it needs a `didClose` the client does not send yet); and
+  with two agents linting two files of one project, a lint the refresh
+  itself triggered could be the one answered to a later lint of the same
+  file edited again in between.
+
 ## [1.7.7] - 2026-09-29
 
 Three things. The server could not take away a folder that its own engine had as current directory - delete, move, purge, git worktree remove and a git command that drops the folder, after a single hover - and now it stops its engines first. delphi_git worked on the whole repository it found by climbing from the folder it was given, also when that repository started above the session's roots: a matter of the jail, as old as the tool, found by a reviewer of this patch and closed here. And every server says which machine it runs on (host), in serverInfo and in delphi_workspace. The first version of the first fix was written with the cause deduced; measuring it afterwards corrected the theory, and four rounds of reviewers before the tag found that it hung the server when two engines started together, twenty-one things more in what was written to fix that, fourteen more in the third round, and in the fourth five more doors in the jail of the remote, which had been closed that same afternoon - the fifth one in the fix of the other four. Each one was measured, or is said here to be read and not measured.

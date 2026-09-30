@@ -43,7 +43,7 @@
 Measured on a real ~12k-line unit: DelphiLSP takes seconds to index after `didOpen` and holds ~550 MB per agent. A per-session stdio MCP pays that cost on **every** agent session. A resident service:
 
 - keeps indexes **warm across sessions** and across multiple concurrent AI clients;
-- lets `enableFileWatcher` (default `true`) handle cache invalidation — DelphiLSP refreshes itself on disk changes;
+- keeps the engine's copy of every open document in step with the disk: DelphiLSP reads a unit from disk only while nobody has it open, and never re-reads one it has open (measured 2026-09-30), so before every question the server sends `didChange` for each open document whose disk stamp moved — the one asked about and the others alike (`TSessionClient.Refresh`);
 - centralizes resource policy (max workspaces, idle shutdown — planned, not implemented).
 
 Running with no switch (stdio) remains available for clients that cannot speak HTTP; it simply hosts the same core with session lifetime.

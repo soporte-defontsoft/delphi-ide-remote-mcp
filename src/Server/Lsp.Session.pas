@@ -178,6 +178,13 @@ uses
   Lsp.Texts;
 
 type
+  { What the engine holds of one document. }
+  TDocState = record
+    Path: string;    // as the engine was given it: its uri is made from this
+    Version: Integer;
+    Stamp: string;   // DiskStamp taken just before the text the engine has
+  end;
+
   { The session's client: a client, and what the session knows of ITS
     documents, under a lock of its own. They used to live in three tables of
     the session, keyed by the project, under the one lock that was held
@@ -192,14 +199,15 @@ type
   TSessionClient = class(TLspClient)
   private
     FDocLock: TCriticalSection;
-    FDocVersions: TDictionary<string, Integer>;
-    // disk fingerprint (mtime|size) at the moment the LSP last saw the file:
-    // when it changes, the buffer is refreshed with didChange (the LSP must
-    // always see the CURRENT disk truth, e.g. after a delphi_edit).
-    FDocStamps: TDictionary<string, string>;
+    // every document the engine has open, and what it was last given. The
+    // engine never looks at the disk of a document it has open: the CURRENT
+    // disk truth reaches it only through didChange, from Refresh, and a
+    // request that crosses a unit edited on disk must find it there already.
+    FDocs: TDictionary<string, TDocState>;
     // text the LSP is linting per doc: a retry with the same text must NOT
     // restart the lint, just wait for (or collect) the pending diagnostics
     FLintText: TDictionary<string, string>;
+    function Refresh(const AExceptKey, AStrictKey: string): Boolean;
   public
     constructor Create(ATransport: TLspProcessTransport);
     destructor Destroy; override;
@@ -209,16 +217,14 @@ constructor TSessionClient.Create(ATransport: TLspProcessTransport);
 begin
   inherited Create(ATransport, True);
   FDocLock := TCriticalSection.Create;
-  FDocVersions := TDictionary<string, Integer>.Create;
-  FDocStamps := TDictionary<string, string>.Create;
+  FDocs := TDictionary<string, TDocState>.Create;
   FLintText := TDictionary<string, string>.Create;
 end;
 
 destructor TSessionClient.Destroy;
 begin
   FLintText.Free;
-  FDocStamps.Free;
-  FDocVersions.Free;
+  FDocs.Free;
   FDocLock.Free;
   inherited;
 end;
@@ -337,6 +343,64 @@ begin
       IntToStr(TFile.GetSize(APath));
   except
     Result := '?';
+  end;
+end;
+
+{ The three things the engine's copy of a document is known by, in one. }
+function DocState(const APath: string; AVersion: Integer; const AStamp: string): TDocState;
+begin
+  Result.Path := APath;
+  Result.Version := AVersion;
+  Result.Stamp := AStamp;
+end;
+
+{ Brings the engine up to date with the disk: every document it has open
+  whose file changed since it was last given its text is sent again
+  (didChange), and a lint of it pending by text is forgotten (it would be
+  compared with a text the engine no longer has). AExceptKey is left to its
+  caller, who sends it by itself. AStrictKey is the document the request is
+  about: what fails for it is raised, as it always was - the answer would be
+  computed on the old text, in silence -; for the others a file gone or
+  unreadable right now is left for the next request (first review of
+  1.7.8). Called with FDocLock held. True when something was sent.
+  Measured 2026-09-30 (Hermes, RENAME-017): only the document asked about
+  used to be refreshed, so a unit edited on disk kept its old text in the
+  engine for as long as nobody asked INSIDE it, and a definition from the
+  .dpr answered the old line - 25 s measured, with no bound. The rename
+  resolved its target before the unit was refreshed and validated the
+  occurrences after it: two lines for one function, refused as lookalikes. }
+function TSessionClient.Refresh(const AExceptKey, AStrictKey: string): Boolean;
+var
+  Key, Stamp: string;
+  D: TDocState;
+  Strict: Boolean;
+begin
+  Result := False;
+  for Key in FDocs.Keys.ToArray do
+  begin
+    if Key = AExceptKey then
+      Continue;
+    Strict := Key = AStrictKey;
+    D := FDocs[Key];
+    // the stamp BEFORE the text: a write between the two is seen next time.
+    // '?' is a file gone or unreadable right now: for another document,
+    // nothing to send and it is looked at again on the next request; for the
+    // asked one, the read below says what is wrong
+    Stamp := DiskStamp(D.Path);
+    if (Stamp = D.Stamp) or ((Stamp = '?') and not Strict) then
+      Continue;
+    try
+      Inc(D.Version);
+      D.Stamp := Stamp;
+      DidChangeText(PathToUri(D.Path), LoadSourceText(D.Path), D.Version);
+      FDocs[Key] := D;
+      FLintText.Remove(Key);
+      Result := True;
+    except
+      // unreadable half way (a writer in the middle): left as it was
+      if Strict then
+        raise;
+    end;
   end;
 end;
 
@@ -940,8 +1004,6 @@ begin
   Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
   var Mine := Result as TSessionClient;
   DocKey := FullPath.ToLower;
-  var Stamp := DiskStamp(FullPath);
-  var Old := '';
   var HeadStart := False;
   // The lock of THIS client's documents: the engine is written to with it
   // held, and one that stops reading keeps whoever comes for ITS project.
@@ -951,23 +1013,18 @@ begin
     // its is written down, and the caller is told at once
     if Result.Stopped then
       raise ELspSession.Create(MsgText(SR_LSP_ENGINE_STOPPED));
-    if not Mine.FDocVersions.ContainsKey(DocKey) then
+    // Every document this engine has open is brought up to date with the
+    // disk FIRST - the one asked about and the others alike (delphi_edit,
+    // scaffolding, git, an external editor...): an answer must reflect the
+    // CURRENT source of every unit it crosses, never a stale snapshot. The
+    // engine reads the disk itself only for units it does NOT have open.
+    HeadStart := Mine.Refresh('', DocKey);
+    if not Mine.FDocs.ContainsKey(DocKey) then
     begin
+      // the stamp BEFORE the text: a write between the two is seen next time
+      var Stamp := DiskStamp(FullPath);
       Result.DidOpenFile(FullPath);
-      Mine.FDocVersions.Add(DocKey, 1);
-      Mine.FDocStamps.AddOrSetValue(DocKey, Stamp);
-      HeadStart := True;
-    end
-    else if Mine.FDocStamps.TryGetValue(DocKey, Old) and (Old <> Stamp) then
-    begin
-      // The disk changed since the LSP last saw this file (delphi_edit,
-      // scaffolding, an external editor...): refresh the buffer so every
-      // answer reflects the CURRENT source, never a stale snapshot.
-      var Version := Mine.FDocVersions[DocKey] + 1;
-      Mine.FDocVersions[DocKey] := Version;
-      Result.DidChangeText(TLspClient.PathToUri(FullPath),
-        TLspClient.LoadSourceText(FullPath), Version);
-      Mine.FDocStamps[DocKey] := Stamp;
+      Mine.FDocs.Add(DocKey, DocState(FullPath, 1, Stamp));
       HeadStart := True;
     end;
   finally
@@ -985,7 +1042,6 @@ function TLspSession.LintFile(const AFilePath: string; ATimeoutMs: Integer;
 var
   FullPath, Key, DocKey, RootDir, Uri, Text: string;
   Client: TLspClient;
-  Version: Integer;
   Stale: TJSONObject;
   Prev: string;
   SameText_: Boolean;
@@ -999,6 +1055,8 @@ begin
 
   Client := GetClient(FullPath, True, ASettingsUsed, Key, RootDir);
   Uri := TLspClient.PathToUri(FullPath);
+  // the stamp BEFORE the text: a write between the two is seen next time
+  var Stamp := DiskStamp(FullPath);
   Text := TLspClient.LoadSourceText(FullPath);
   var Mine := Client as TSessionClient;
   DocKey := FullPath.ToLower;
@@ -1011,6 +1069,9 @@ begin
     // A retry on the SAME text (the client timed out before a slow lint
     // finished) must not restart the lint: the LSP is still working, or the
     // diagnostics are already queued - just wait for them below.
+    // The other units this engine has open first: a lint reads across them
+    // (see AcquireFor). This one goes below, by its text, not by its stamp.
+    Mine.Refresh(DocKey, '');
     SameText_ := Mine.FLintText.TryGetValue(DocKey, Prev) and (Prev = Text);
     if not SameText_ then
     begin
@@ -1020,16 +1081,18 @@ begin
         Stale.Free;
       until Stale = nil;
 
-      if Mine.FDocVersions.TryGetValue(DocKey, Version) then
+      var D: TDocState;
+      if Mine.FDocs.TryGetValue(DocKey, D) then
       begin
-        Inc(Version);
-        Mine.FDocVersions[DocKey] := Version;
-        Client.DidChangeText(Uri, Text, Version);
+        Inc(D.Version);
+        D.Stamp := Stamp;
+        Client.DidChangeText(Uri, Text, D.Version);
+        Mine.FDocs[DocKey] := D; // after the send, as Refresh: a send that fails writes nothing down
       end
       else
       begin
-        Mine.FDocVersions.Add(DocKey, 1);
         Client.DidOpenText(Uri, Text);
+        Mine.FDocs.Add(DocKey, DocState(FullPath, 1, Stamp));
       end;
       Mine.FLintText.AddOrSetValue(DocKey, Text);
     end;

@@ -60,6 +60,7 @@ type
     [Test] procedure FabricarALaVezNoChoca;
     [Test] procedure ElFicheroDelIdeRechazadoSeVuelveAMirar;
     [Test] procedure BajoUnaCarpetaQueSeVaNoSeArrancaMotor;
+    [Test] procedure ElPreguntadoIlegibleNoSeCallaYElOtroSeDejaParaLuego;
   end;
 
 implementation
@@ -591,6 +592,51 @@ begin
   Assert.IsTrue(Dicho.StartsWith('[LSP-032'), 'con la carpeta saliendo, LSP-032; y dijo: ' + Dicho);
   Assert.IsTrue(Tardo < 1000,
     Format('y se niega ANTES de construir ningun motor (tardo %d ms)', [Tardo]));
+end;
+
+// El fichero por el que se pregunta, editado en disco y ademas ilegible en
+// ese instante (otro proceso lo tiene abierto en exclusiva): antes de la
+// 1.7.8 AcquireFor lo decia y la tool contestaba un error. Al poner al dia
+// TODOS los documentos abiertos del motor, lo ilegible de los OTROS se deja
+// para la siguiente peticion - la pregunta no es sobre ellos -, pero lo del
+// preguntado se sigue diciendo: callarlo seria contestar sobre el texto
+// viejo, en silencio (primer revisor de la 1.7.8). Se mide con el fichero
+// abierto en exclusiva desde aqui.
+procedure TFabricaTests.ElPreguntadoIlegibleNoSeCallaYElOtroSeDejaParaLuego;
+var
+  Dpr, Unidad, Usado, Dicho: string;
+  H: THandle;
+begin
+  Assert.IsTrue(DiscoverRadStudio.Found, 'sin RAD Studio en la maquina no hay motor que abrir');
+  Dpr := FDir + '\proyecto\P.dpr';
+  Unidad := FDir + '\proyecto\U.pas';
+  TFile.WriteAllText(Unidad, 'unit U;' + sLineBreak + 'interface' + sLineBreak +
+    'implementation' + sLineBreak + 'end.' + sLineBreak);
+  // los dos abiertos en el motor (el primero lo arranca)
+  TLspSession.Instance.AcquireFor(Dpr, Usado);
+  TLspSession.Instance.AcquireFor(Unidad, Usado);
+  // los dos cambian en disco, y la unidad queda ilegible para todos
+  TFile.AppendAllText(Dpr, '// cambio' + sLineBreak);
+  TFile.AppendAllText(Unidad, '// cambio' + sLineBreak);
+  H := CreateFile(PChar(Unidad), GENERIC_READ, 0, nil, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+  Assert.IsTrue(H <> INVALID_HANDLE_VALUE, 'la unidad se abre en exclusiva desde la prueba');
+  try
+    // preguntar por el .dpr: la unidad ilegible es de los OTROS y se deja
+    TLspSession.Instance.AcquireFor(Dpr, Usado);
+    // preguntar por la unidad: es la preguntada, y se dice
+    Dicho := 'no se dijo';
+    try
+      TLspSession.Instance.AcquireFor(Unidad, Usado);
+    except
+      on E: Exception do
+        Dicho := E.Message;
+    end;
+    Assert.AreNotEqual('no se dijo', Dicho, 'el preguntado ilegible se dice, no se contesta sobre lo viejo');
+  finally
+    CloseHandle(H);
+  end;
+  // legible otra vez: la siguiente peticion la pone al dia y pasa
+  TLspSession.Instance.AcquireFor(Unidad, Usado);
 end;
 
 initialization
