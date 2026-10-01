@@ -553,6 +553,20 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   the retry. Not measured: a connection Windows refuses, the tray mode started at sign-in
   before the network is up, a share that stalls later (an engine waiting on it could look like
   a hung one). The cleaning of the temporary folders of a root on a network drive, which walks its tree (2.6 ms per folder measured on that service), runs apart from the startup, and leaves what was written there in the last hour: a server on another machine may be using it.
+- **Network shares are opt-in.** If a share is part of the Delphi environment, the operator maps
+  it to a drive letter on the RAD Studio machine, with "reconnect at sign-in", and declares a
+  place on that letter; a share nobody mapped is outside the boundary on purpose. The machine
+  decides which shares exist, and each workspace decides which folders of them its agents get.
+  The server is not a client of the network at large: all it does there is connect, for its own
+  session and passing no credentials, the letters the account already mapped. A path that names
+  a share (`\\host\share\...`) is outside to every tool (`GUARD-002`), and the server answers
+  without going to that host: measured 2026-10-01 with eight tools (list, read, search,
+  textedit, delete, move, git, build) and a host that does not route, each answered in 0.02 s
+  or less. The network path of a declared place is refused too (`GUARD-029`): a place is taken
+  in the form it was declared in. One exception, by decision and for reading only: with
+  `LibraryZone=1`, a folder of the IDE's Library Path that the IDE's owner wrote as a network
+  path is read like the rest of that zone - the host is one the IDE already uses, not one an
+  agent names. That one is read in the code, not measured.
 - **A place is declared by a path with its drive letter** (`D:\...`), since 1.9.0. An entry of
   `Roots`, `ReadOnlyRoots`, `ReadOnlyPaths` or `VaultPath` - or of their `DELPHI_MCP_*`
   variables - that is not one (a network path `\\host\share\...`, a device path `\\?\...`) is
