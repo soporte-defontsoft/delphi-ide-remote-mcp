@@ -968,6 +968,10 @@ begin
       // enlazado (medido, git 2.53)
       Ruta := ExcludeTrailingPathDelimiter(
         TPath.GetFullPath(TPath.Combine(ARepo, Ruta)));
+      // git contesta la ruta REAL: bajo una raiz declarada en una letra de
+      // red es su UNC, y la puerta juzga por la forma declarada. Se le da
+      // escrita asi (Lsp.Guard.FormaDeclarada; era GIT-041, 30-sep-2026)
+      Ruta := FormaDeclarada(Ruta);
       if TDirectory.Exists(Ruta) then
         Carpetas := Carpetas + [Ruta];
     except

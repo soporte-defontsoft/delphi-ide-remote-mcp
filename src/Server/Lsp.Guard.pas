@@ -591,6 +591,40 @@ function EsPrefijoDeDispositivo(const APath: string): Boolean;
   SMB; novena revision). }
 function RutaSinTocarElDisco(const APath: string): Boolean;
 
+{ La forma DECLARADA de una ruta que llega RESUELTA. Un programa que el
+  servidor lanza contesta con la ruta real (git: la raiz de un repo), y la
+  real de un sitio declarado en una letra de red CONECTADA (L:\...) es su
+  UNC (\\host\recurso\...). La puerta juzga por la forma declarada y negaba
+  esa respuesta: en una maquina con las raices en una letra de red,
+  delphi_git contestaba GIT-041 a todo lo que trabaja sobre un repo que ya
+  existe (medido el 30-sep-2026: status, config, add, commit, log, branch,
+  diff, stash, switch).
+  Si ARuta es un UNC que cae bajo la ruta de red de una raiz o de una
+  referencia DECLARADA CON LETRA, vuelve escrita con lo declarado; si no,
+  vuelve como llego. No abre nada: lo que devuelve pasa despues por la
+  puerta de siempre, una ruta con letra no se toca, y un UNC que no es de
+  ningun sitio declarado tampoco. Y no toca el disco ni la red: la ruta de
+  red de un sitio sale de la tabla de unidades de la sesion (GetDriveType,
+  WNetGetConnection), que es local - medido el 1-oct-2026: 0,1 ms, y el
+  mismo recurso que escribe git. Solo las letras que son unidades de red:
+  un enlace local hacia un recurso se queda como estaba. }
+function FormaDeclarada(const ARuta: string): string;
+{ Lo mismo sobre unas listas dadas (los sitios declarados y su ruta de red,
+  por indice): la regla sin la maquina, para quien la prueba. }
+function FormaDeclaradaDe(const ARuta: string;
+  const ADeclaradas, AReales: TArray<string>): string;
+{ La misma regla sobre un TEXTO, para la SALIDA: donde aparece la ruta de red
+  de un sitio declarado en una letra - como la escribe git
+  (//host/recurso/...), con las barras de Windows, o dobladas dentro de un
+  JSON - se pone la forma declarada, con las barras con que venia. El
+  enmascarador la llama antes de su barrido, que le pone su unidad virtual:
+  lo que git ensenaba salia con el nombre real de la maquina y en una forma
+  que el agente no puede devolver (worktree list). Reconoce SOLO esas
+  rutas, por su texto: reconocer "//algo" por su forma se llevaria los
+  comentarios de Pascal de un diff. }
+function FormaDeclaradaEnTexto(const ATexto: string;
+  const ADeclaradas, AReales: TArray<string>): string;
+
 { La primera carpeta que YA existe por encima de ARuta (ARuta incluida): lo
   que una operacion cree debajo es suyo, y QuitaCarpetasCreadas lo quita si
   queda vacio. UNA regla para la foto (un create en a\b\c.txt) y para el
@@ -3741,9 +3775,30 @@ begin
     end);
 end;
 
+{ LA negativa de un UNC que no es de ningun sitio declarado, por UN sitio: la
+  daban la pasada de la entrada y la jaula, cada una la suya. Si es la ruta
+  de RED de un sitio declarado con su letra (una unidad de red), lo dice
+  con su mensaje (GUARD-029) y AEsFormaDeRed lo cuenta. Sigue negada -
+  cada sitio vale en la forma en que se declaro -, pero el mensaje de la
+  jaula saldria ya traducido a esa letra por el enmascarador: "srvx:\a
+  esta FUERA; solo se trabaja en srvx:\" (segundo revisor de la 1.8.2;
+  medido con J17 de test_git_jaula). Sin abrir nada: FormaDeclarada mira
+  la tabla de unidades de la sesion. }
+function NegativaDeUnc(const APath: string; out AEsFormaDeRed: Boolean): string;
+var
+  Declarada: string;
+begin
+  Declarada := FormaDeclarada(APath);
+  AEsFormaDeRed := not SameText(Declarada, APath);
+  if AEsFormaDeRed then
+    Result := MsgFmt(SR_JAIL_FORMA_DE_RED_FMT, [Declarada])
+  else
+    Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', WorkspaceRoots)]);
+end;
+
 { La pasada de los UNC ajenos en la ENTRADA, sobre las rutas marcadas
   [RutaDelServidor]: antes de alargarlas (AlargaRutas las resuelve) y antes de
-  que la tool haga nada con ellas. La negativa es la de la jaula (GUARD-002). }
+  que la tool haga nada con ellas. La negativa, la de NegativaDeUnc. }
 function UncAjenoEnArgumentos(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
@@ -3751,6 +3806,7 @@ var
   Tool: string;
   I: Integer;
   P: TJSONPair;
+  EsFormaDeRed: Boolean;
 begin
   Result := '';
   if not Assigned(AArguments) then
@@ -3763,8 +3819,7 @@ begin
     if (P.JsonValue is TJSONString) and
        Mapa.ContainsKey(Tool + '|' + TMCPSerializer.NormalizeKey(P.JsonString.Value)) and
        UncFueraDeLugares(TJSONString(P.JsonValue).Value) then
-      Exit(MsgFmt(SR_JAIL_FMT, [TJSONString(P.JsonValue).Value,
-        string.Join(' | ', WorkspaceRoots)]));
+      Exit(NegativaDeUnc(TJSONString(P.JsonValue).Value, EsFormaDeRed));
   end;
 end;
 
@@ -5226,8 +5281,12 @@ begin
   // la puerta desde dentro, no solo para la entrada.
   if UncFueraDeLugares(APath) then
   begin
-    AFueraDeJaula := True;
-    Exit(MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', WorkspaceRoots)]));
+    // (la ruta de red de un sitio declarado con su letra NO es "fuera de
+    // las raices": no lleva la pista de la zona de biblioteca)
+    var EsFormaDeRed: Boolean;
+    Result := NegativaDeUnc(APath, EsFormaDeRed);
+    AFueraDeJaula := not EsFormaDeRed;
+    Exit;
   end;
   // Un FICHERO que llega con separador final (x.txt\) nombrado como carpeta:
   // se leia como el fichero y fallaba dentro de Windows (INTERNAL, septima
@@ -5625,6 +5684,14 @@ begin
   Result := UncFueraDeLugares(APath) or EsPrefijoDeDispositivo(APath);
 end;
 
+{ Un UNC de verdad (\\host\...), no un prefijo de dispositivo (\\?\, \\.\).
+  Con barras de Windows. LA pregunta de quien mira un UNC por su texto:
+  estaba escrita en cuatro sitios (tercer revisor de la 1.8.2). }
+function EsUnc(const APath: string): Boolean;
+begin
+  Result := APath.StartsWith('\\') and not EsPrefijoDeDispositivo(APath);
+end;
+
 { Los lugares que el operador declaro (raices, referencias, solo lectura, el
   vault, la zona de biblioteca): UNA lista para quien pregunta por un UNC
   (UncFueraDeLugares) y para el host que vuelve de srvhost (HostUncDeclarado). }
@@ -5650,7 +5717,7 @@ begin
   for L in LugaresDeclarados do
   begin
     H := L.Trim.Replace('/', '\');
-    if not H.StartsWith('\\') or EsPrefijoDeDispositivo(H) then
+    if not EsUnc(H) then
       Continue;
     H := H.Substring(2);
     I := H.IndexOf('\');
@@ -5672,7 +5739,7 @@ var
 begin
   P := APath.Trim.Replace('/', '\');
   // los prefijos de dispositivo son de PathAnomaly (GUARD-022), no de aqui
-  if not P.StartsWith('\\') or EsPrefijoDeDispositivo(P) then
+  if not EsUnc(P) then
     Exit(False);
   if Length(WorkspaceRoots) = 0 then
     Exit(False);
@@ -5699,6 +5766,223 @@ begin
       Exit(False);
   end;
   Result := True;
+end;
+
+{ UN sitio de letra de red: declarado con letra y con un UNC por ruta de red.
+  LA pregunta de las tres funciones de abajo (eran tres condiciones, y no la
+  misma; segundo revisor de la 1.8.2). Con las dos rutas ya sin separador
+  final y con barras de Windows. }
+function EsSitioDeLetraDeRed(const ADecl, AReal: string): Boolean;
+begin
+  Result := (ADecl <> '') and not ADecl.StartsWith('\\') and
+    EsUnc(AReal);
+end;
+
+{ El caracter de ANTES de la posicion AI de un texto que puede ser un JSON:
+  alli un salto de linea son los dos caracteres \ y n, y lo que abre una
+  linea no esta pegado a la letra n. Lo preguntan el barrido del enmascarador
+  y la regla de las rutas de red (estaba escrito en los dos). }
+function CaracterPrevio(const ATexto: string; AI: Integer): Char;
+begin
+  if AI <= 1 then
+    Exit(#0);
+  Result := ATexto[AI - 1];
+  if (AI >= 3) and CharInSet(Result, ['n', 'r', 't']) and (ATexto[AI - 2] = '\') then
+    Result := #10;
+end;
+
+function FormaDeclaradaDe(const ARuta: string;
+  const ADeclaradas, AReales: TArray<string>): string;
+var
+  P, Decl, Real, Mejor, MejorReal: string;
+  I: Integer;
+begin
+  Result := ARuta;
+  P := ExcludeTrailingPathDelimiter(ARuta.Trim.Replace('/', '\'));
+  // solo un UNC: una ruta con letra ya esta en la forma en que se declara
+  if not EsUnc(P) then
+    Exit;
+  Mejor := '';
+  MejorReal := '';
+  for I := 0 to High(ADeclaradas) do
+  begin
+    if I > High(AReales) then
+      Break;
+    Decl := ExcludeTrailingPathDelimiter(ADeclaradas[I].Trim.Replace('/', '\'));
+    Real := ExcludeTrailingPathDelimiter(AReales[I].Trim.Replace('/', '\'));
+    // solo un sitio de letra de red. Uno declarado en UNC se queda con la
+    // regla de siempre: vale en la forma en que se escribio
+    if not EsSitioDeLetraDeRed(Decl, Real) then
+      Continue;
+    // bajo ESE sitio: el mismo, o lo que sigue a su separador (\\h\r\ab
+    // no esta bajo \\h\r\a). De dos que casan, el mas hondo
+    if (SameText(P, Real) or StartsText(Real + '\', P)) and
+       (Length(Real) > Length(MejorReal)) then
+    begin
+      Mejor := Decl;
+      MejorReal := Real;
+    end;
+  end;
+  if Mejor <> '' then
+  begin
+    Result := Mejor + P.Substring(Length(MejorReal));
+    // la raiz de la unidad misma: "L:" a secas es la carpeta ACTUAL de L:
+    if (Length(Result) = 2) and (Result[2] = ':') then
+      Result := Result + '\';
+  end;
+end;
+
+{ La ruta de RED de un sitio declarado con letra, por la tabla de unidades de
+  ESTA sesion y sin abrir nada: si la letra es una unidad de red conectada,
+  su recurso mas el resto de la ruta; '' si no lo es. (Abrir el sitio para
+  pedirle su ruta real daba lo mismo, y con el recurso caido dejaba
+  esperando a quien lo pidiese: el enmascarador lo pide en cada respuesta.
+  Segundo revisor de la 1.8.2.) }
+function RutaDeRedDe(const ASitio: string): string;
+var
+  Unidad: string;
+  Buf: array [0 .. 1023] of Char;
+  N: DWORD;
+begin
+  Result := '';
+  if (Length(ASitio) < 2) or (ASitio[2] <> ':') or
+     not CharInSet(ASitio[1], ['A' .. 'Z', 'a' .. 'z']) then
+    Exit;
+  Unidad := UpCase(ASitio[1]) + ':';
+  if GetDriveType(PChar(Unidad + '\')) <> DRIVE_REMOTE then
+    Exit;
+  N := Length(Buf);
+  if WNetGetConnection(PChar(Unidad), Buf, N) <> NO_ERROR then
+    Exit;
+  Result := ExcludeTrailingPathDelimiter(string(PChar(@Buf[0]))) + ASitio.Substring(2);
+end;
+
+{ Los sitios de la sesion (raices y referencias) que son de una letra de red,
+  con su ruta de red. UNA lista para quien traduce lo que contesta git y para
+  el enmascarador. }
+procedure SitiosEnLetraDeRed(out ADeclaradas, AReales: TArray<string>);
+var
+  L, Sitio, Real: string;
+begin
+  ADeclaradas := nil;
+  AReales := nil;
+  for L in WorkspaceRoots + WorkspaceReadOnlyRoots do
+  begin
+    Sitio := ExcludeTrailingPathDelimiter(L.Trim.Replace('/', '\'));
+    Real := RutaDeRedDe(Sitio);
+    if EsSitioDeLetraDeRed(Sitio, Real) then
+    begin
+      ADeclaradas := ADeclaradas + [Sitio];
+      AReales := AReales + [Real];
+    end;
+  end;
+end;
+
+function FormaDeclarada(const ARuta: string): string;
+var
+  Declaradas, Reales: TArray<string>;
+begin
+  // (lo que no es un UNC lo devuelve tal cual FormaDeclaradaDe; la lista
+  // sale de la tabla de unidades, sin abrir nada)
+  SitiosEnLetraDeRed(Declaradas, Reales);
+  Result := FormaDeclaradaDe(ARuta, Declaradas, Reales);
+end;
+
+function FormaDeclaradaEnTexto(const ATexto: string;
+  const ADeclaradas, AReales: TArray<string>): string;
+var
+  Agujas, Cambios, Barras: TArray<string>;
+  Decl, Real, Tmp: string;
+  Sb: TStringBuilder;
+  I, J, K, L, N: Integer;
+  Hecho: Boolean;
+
+  // ABarra: con que se separa en esa escritura. Solo se guarda para la raiz de
+  // la unidad ("L:"), que la necesita cuando la ruta acaba ahi
+  procedure Anade(const AReal, ADecl, ABarra: string);
+  begin
+    Agujas := Agujas + [AReal];
+    Cambios := Cambios + [ADecl];
+    if (Length(Decl) = 2) and (Decl[2] = ':') then
+      Barras := Barras + [ABarra]
+    else
+      Barras := Barras + [''];
+  end;
+
+begin
+  Result := ATexto;
+  Agujas := nil;
+  Cambios := nil;
+  Barras := nil;
+  for K := 0 to High(ADeclaradas) do
+  begin
+    if K > High(AReales) then
+      Break;
+    Decl := ExcludeTrailingPathDelimiter(ADeclaradas[K].Trim.Replace('/', '\'));
+    Real := ExcludeTrailingPathDelimiter(AReales[K].Trim.Replace('/', '\'));
+    if not EsSitioDeLetraDeRed(Decl, Real) then
+      Continue;
+    // las tres escrituras de la misma ruta: dobladas dentro de un JSON, las
+    // de git y las de Windows. Cada una vuelve con SUS barras
+    Anade(Real.Replace('\', '\\'), Decl.Replace('\', '\\'), '\\');
+    Anade(Real.Replace('\', '/'), Decl.Replace('\', '/'), '/');
+    Anade(Real, Decl, '\');
+  end;
+  if Length(Agujas) = 0 then
+    Exit;
+  // la mas larga primero: de dos sitios anidados, el mas hondo
+  for I := 1 to High(Agujas) do
+    for J := I downto 1 do
+      if Length(Agujas[J]) > Length(Agujas[J - 1]) then
+      begin
+        Tmp := Agujas[J]; Agujas[J] := Agujas[J - 1]; Agujas[J - 1] := Tmp;
+        Tmp := Cambios[J]; Cambios[J] := Cambios[J - 1]; Cambios[J - 1] := Tmp;
+        Tmp := Barras[J]; Barras[J] := Barras[J - 1]; Barras[J - 1] := Tmp;
+      end;
+  L := Length(ATexto);
+  Sb := TStringBuilder.Create(L + 16);
+  try
+    I := 1;
+    while I <= L do
+    begin
+      Hecho := False;
+      // una ruta EMPIEZA ahi: no detras de otra barra (la mitad de una
+      // doblada, o el %(prefix)///host que git propone al operador), ni de
+      // dos puntos (https://host), ni pegada a una palabra
+      if CharInSet(ATexto[I], ['\', '/']) and
+         not CharInSet(CaracterPrevio(ATexto, I), ['\', '/', ':', 'A' .. 'Z', 'a' .. 'z', '0' .. '9']) then
+        for K := 0 to High(Agujas) do
+        begin
+          N := Length(Agujas[K]);
+          // ...y ACABA ahi o sigue por una barra: \\h\r\ab no es \\h\r\a
+          if (I + N - 1 <= L) and
+             (StrLIComp(PChar(ATexto) + I - 1, PChar(Agujas[K]), N) = 0) and
+             ((I + N > L) or CharInSet(ATexto[I + N],
+                ['\', '/', '"', '''', ' ', #9, #10, #13, ')', ',', ';', '<', '>', '|'])) then
+          begin
+            Sb.Append(Cambios[K]);
+            // la raiz de la unidad, cuando la ruta acaba ahi: "L:" a secas no
+            // es una ruta, y el barrido la dejaba con su letra de verdad.
+            // Acaba ahi si NO sigue por la barra de su escritura: detras de
+            // //h/r, el \n de un JSON no es un separador (tercer revisor)
+            if (Barras[K] <> '') and
+               (StrLComp(PChar(ATexto) + I + N - 1, PChar(Barras[K]), Length(Barras[K])) <> 0) then
+              Sb.Append(Barras[K]);
+            Inc(I, N);
+            Hecho := True;
+            Break;
+          end;
+        end;
+      if not Hecho then
+      begin
+        Sb.Append(ATexto[I]);
+        Inc(I);
+      end;
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
 end;
 
 function LibraryReadRoots: TArray<string>;
@@ -5939,6 +6223,21 @@ begin
   Letters := ServedDriveLetters;
   if (Letters = '') or (AText = '') then
     Exit(AText);
+  // ANTES del barrido: la ruta real de un sitio declarado en una letra de
+  // red vuelve a su forma declarada, y el barrido le pone su unidad virtual.
+  // git escribe //host/recurso/..., que este barrido no reconoce por su
+  // forma (se llevaria los comentarios de un diff): salia el nombre de la
+  // maquina, y worktree list daba rutas que el agente no podia devolver
+  // (medido el 30-sep-2026). Lo traducido vuelve a entrar, ya sin nada que
+  // traducir, para el barrido de siempre.
+  var RedDecl, RedReal: TArray<string>;
+  SitiosEnLetraDeRed(RedDecl, RedReal);
+  if Length(RedDecl) > 0 then
+  begin
+    var Traducido := FormaDeclaradaEnTexto(AText, RedDecl, RedReal);
+    if Traducido <> AText then
+      Exit(MaskDriveText('', Traducido));
+  end;
   Sb := TStringBuilder.Create(Length(AText) + 64);
   try
     I := 1;
@@ -5955,19 +6254,13 @@ begin
       // and learns nothing about where.
       if CharInSet(UpCase(C), ['A' .. 'Z']) then
       begin
-        if I = 1 then
-          PrevC := #0
-        else
-          PrevC := AText[I - 1];
         // ...but by the time this runs the text is already JSON, where a line
         // break is the two characters \ and n. That made the LETTER 'n' the
         // previous char for every path that starts a line, and the guard below
         // let it through unmasked: the real C:\Program Files... leaked in
         // multi-line fields (build outputTail) while the same path masked fine
         // inside single-line ones (errors[]). Measured, field round 8.
-        if (I >= 3) and CharInSet(PrevC, ['n', 'r', 't']) and
-           (AText[I - 2] = '\') then
-          PrevC := #10;
+        PrevC := CaracterPrevio(AText, I);
         // A drive prefix only starts where the previous char is not a
         // letter/digit (keeps git's "HEAD:" and words intact).
         if not CharInSet(PrevC, ['A'..'Z', 'a'..'z', '0'..'9']) then

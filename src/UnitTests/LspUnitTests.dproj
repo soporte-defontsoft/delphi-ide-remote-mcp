@@ -178,6 +178,7 @@
         <DCCReference Include="LspTests.Foto.pas"/>
         <DCCReference Include="LspTests.Log.pas"/>
         <DCCReference Include="LspTests.Motor.pas"/>
+        <DCCReference Include="LspTests.Rutas.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.8.1';
+  SERVER_VERSION = '1.8.2';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1164,6 +1164,18 @@ const
     '[GUARD-002 DENIED] "%s" is OUTSIDE the allowed workspaces. This ' +
     'server only operates inside: %s (configured in DELPHI_MCP_ROOTS or ' +
     'settings.ini [Workspace.<name>] Roots).';
+
+  { La ruta de RED de un sitio que el operador declaro con su letra (una
+    unidad de red conectada), mandada por un agente. Sigue negada: cada
+    sitio vale en la forma en que se declaro. Con el mensaje de la jaula,
+    el enmascarador de salida la ensenaba ya traducida a esa letra, y la
+    negativa se contradecia: "srvx:\a esta FUERA; solo se trabaja en
+    srvx:\" (segundo revisor de la 1.8.2). El %s es la forma declarada:
+    sale con su unidad virtual, que es la que el agente puede usar. }
+  SR_JAIL_FORMA_DE_RED_FMT =
+    '[GUARD-029 DENIED] That is the network path of "%s", a place this ' +
+    'server declares by its drive. A place is taken only in the form it ' +
+    'was declared in: use that one.';
 
   SR_ROOTS_INVALID =
     '[WS-004 DENIED] [Workspace.<name>] Roots is configured but none of ' +

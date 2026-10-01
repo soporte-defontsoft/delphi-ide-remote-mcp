@@ -6,6 +6,94 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.8.2] - 2026-10-01
+
+`delphi_git` on a workspace whose roots are a network drive letter.
+
+### Fixed
+
+- **`delphi_git` works when the roots are on a connected network drive
+  letter.** git says where a repository lives by its REAL path, and under
+  a root declared as `L:\...` the real path is the network path of the
+  share (`//host/share/...`). The gate judges by the form a place was
+  declared in, so git's answer was taken for a repository outside the
+  workspace: `GIT-041` to every command that works on an existing
+  repository (measured 2026-09-30 on a machine with its roots on such a
+  letter: status, config, add, commit, log, branch, diff, stash, switch),
+  while `init` made a repository nothing could then be done with.
+  Reproduced here with the 1.8.1 exe and a letter connected to this
+  machine's own share. git's answer is now written in the declared form
+  before it is judged (`Lsp.Guard.FormaDeclarada`): a network path that
+  falls under a root, or a reference, declared with a network drive
+  letter. Which share a letter is comes from the session's own table of
+  drives (`GetDriveType`, `WNetGetConnection`), and the place is not
+  opened for it. Measured: 0.1 ms and the same share git writes; that the
+  call stays off the network is inferred from that time, not measured with
+  a share down. The result goes through the same gate; a repository that
+  lives above the root is still `GIT-041`; a root declared as a UNC is
+  left alone. Not recognised, by the code and with no check, so `GIT-041`
+  as before: a local folder that links to a share, a `subst` letter, and
+  a root declared with short (8.3) names or through a link on the share.
+
+  Measured 2026-10-01 on that machine with the new exe - tray mode, a
+  `[Workspace]` section, git distrusting the share and told to trust it:
+  init, status (also from a subfolder), config, add, commit, log, branch,
+  diff, stash and its pop, switch, and a worktree added, listed and
+  removed with the path as listed, all work.
+
+- **What git writes about such a place leaves with its virtual unit.**
+  git prints the network path too: the message of `init` and the output
+  of `worktree list` carried the name of the server machine, in a form the
+  agent could not send back - `worktree remove` with the very path
+  `worktree list` had shown was refused (measured). Before it masks, the
+  outbound mask now writes the network path of those places in their
+  declared form, and the letter then gets its virtual unit as always
+  (`srvx:/...` for a drive X:). It knows those paths alone, by their text:
+  a `//word` taken by its shape would rewrite the Pascal comments of a
+  diff. Handled in git's spelling (measured through git), in Windows' and
+  doubled inside a JSON (unit-tested, not seen arriving from a tool). As
+  with a drive letter, a diff whose CONTENT holds that very path shows it
+  rewritten. Left as they were: the command git proposes to the operator
+  for `safe.directory`, which needs the real path; a `file://` address;
+  the place itself glued to more text or followed by `:` or `.`; and any
+  other UNC written with forward slashes.
+
+- **A network path of a place declared with its letter, sent by an agent,
+  is refused with its own message** (`GUARD-029`), which names the
+  declared form. It was refused before and still is - a place is taken
+  only in the form it was declared in -, but with the jail's message the
+  new translation turned the refusal against itself: "`srvx:\a` is OUTSIDE
+  the allowed workspaces; this server only operates inside `srvx:\`". The
+  entrance and the jail each wrote that refusal; one function writes it
+  now.
+
+  Nineteen unit tests on the two rules (`LspTests.Rutas`, with names that
+  are no machine's), twelve mutants each red in its test. And J17 in
+  `test_git_jaula`, with git itself: eight checks, run when the battery is
+  given a folder of a connected network drive (`DELPHI_MCP_TEST_NETDIR`)
+  and a NOTA when it is not - a gate run without it measures the rules
+  alone. Five of them are red against the 1.8.1 exe; the three about what
+  git writes, also with the call taken out of the mask; the one about
+  `GUARD-029`, with the message taken out. The battery runs in terminal
+  mode with the roots in the environment. Not measured: a reference, a
+  linked worktree or a folder remote on the letter, and the refusal as
+  written by the jail (the battery reaches the entrance's).
+
+### Documentation
+
+- README, roots on a network drive: git may have to be told to trust the
+  share first. Measured on a machine working on another machine's share:
+  git refused the repository ("detected dubious ownership") until the
+  server's user added the share to `safe.directory` there, which
+  `delphi_git` cannot do; on a machine's own share git did not ask for
+  it. And a Windows Service does not see the letters connected in the
+  user's desktop session. Measured 2026-10-01: a program run by the
+  service - the same account - got "not connected" for a letter
+  connected in that session, and saw the local drives alone; run from
+  the session, the same program saw it. (What was taken for that
+  measurement the day before - `srvx:` "is not a drive of this server" -
+  comes from the list of declared places and proves nothing about it.)
+
 ## [1.8.1] - 2026-09-30
 
 What a second machine found: a server with RAD Studio and no git, and its roots on a network drive.

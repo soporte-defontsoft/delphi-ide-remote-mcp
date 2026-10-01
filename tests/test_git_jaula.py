@@ -62,10 +62,20 @@ main repository's, for a linked worktree) - and git runs PINNED to them
   J16 with no names in the call, what push sends is decided by the
       repository's configuration, and that is judged too: from a MIRROR
       repository a bare push deleted a branch of the remote
+  J17 the roots on a NETWORK DRIVE LETTER (X: connected to a share): git
+      answers where the repository lives with its REAL path, which there is
+      the UNC (//host/share/...), and the gate judges by the declared form.
+      Measured 2026-09-30 on a machine with its roots on such a letter:
+      GIT-041 to every command that works on an existing repository. git's
+      answer is now written in the declared
+      form before it is judged (Lsp.Guard.FormaDeclarada). Needs a connected
+      network drive in the session that runs the battery:
+      DELPHI_MCP_TEST_NETDIR names a folder of it to work in; without it the
+      battery says so (NOTA) and the rule alone is in LspTests.Rutas
 
 Usage:  python tests/test_git_jaula.py [path-to-DelphiLspMcp.exe]
 """
-import os, subprocess
+import os, re, subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -467,6 +477,83 @@ check('J16 ...y en el remoto sigue todo como estaba', refs(ENVIO_GIT) == alli an
       '%s | antes: %s' % (corto(refs(ENVIO_GIT)), corto(alli)))
 
 srv.cierra()
+
+# J17 - las raices en una LETRA DE RED
+NETDIR = os.environ.get('DELPHI_MCP_TEST_NETDIR', '').strip()
+RED = os.path.join(NETDIR, 'bateria-git-red') if NETDIR else ''
+if not NETDIR or not os.path.isdir(NETDIR):
+    print('NOTA J17: sin DELPHI_MCP_TEST_NETDIR (una carpeta de una unidad de red conectada) no se '
+          'mide con git una raiz en una letra de red; la regla sola, en LspTests.Rutas')
+else:
+    mc.borra(RED)
+    MONO_R = os.path.join(RED, 'mono')              # el repo de OTRO, en la misma unidad
+    A_R = os.path.join(MONO_R, 'a')                 # ...con una raiz de la sesion dentro
+    DENTRO_R = os.path.join(RED, 'dentro')          # y otra raiz, con un repo que vive entero en ella
+    REPO_R = os.path.join(DENTRO_R, 'repo')
+    os.makedirs(A_R)
+    os.makedirs(os.path.join(REPO_R, 'sub'))
+    open(os.path.join(A_R, 'uno.txt'), 'w').write('uno\n')
+    open(os.path.join(REPO_R, 'sub', 'f.txt'), 'w').write('f\n')
+    git('init', '-q', '-b', 'main', cwd=MONO_R)
+    git('add', '.', cwd=MONO_R)
+    git('commit', '-qm', 'base', cwd=MONO_R)
+    donde = git('rev-parse', '--show-toplevel', cwd=MONO_R)
+    check('J17 TESTIGO: en esa unidad git contesta la raiz del repo como UNC, no con la letra '
+          '(si no, lo de abajo no mide nada)', donde.startswith('//') and donde.endswith('/mono'), donde)
+    srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': A_R + ';' + DENTRO_R}), nombre='git-red', t=120)
+    call = srv.call
+    pasos = [('init', g(REPO_R, command='init')),
+             ('status', g(REPO_R, command='status', args='--porcelain')),
+             ('config', g(REPO_R, command='config', args='user.name', message='Red')),
+             ('config', g(REPO_R, command='config', args='user.email', message='red@example.com')),
+             ('add', g(REPO_R, command='add', args='.')),
+             ('commit', g(REPO_R, command='commit', message='desde la letra de red')),
+             ('log', g(REPO_R, command='log', args='--oneline')),
+             ('status desde una subcarpeta', g(os.path.join(REPO_R, 'sub'), command='status', args='--porcelain'))]
+    mal = ['%s: %s' % (n, corto(r)) for n, r in pasos if mc.fallo(r) or not mc.llego_a_git(r)]
+    check('J17 un repo que vive dentro de una raiz declarada con la letra de red: init, status, config, '
+          'add, commit y log trabajan, tambien desde una subcarpeta',
+          not mal and 'desde la letra de red' in pasos[6][1], mal[:3] or corto(pasos[6][1]))
+    # la SALIDA: git escribe la ruta de red (//host/recurso/...), que salia con el
+    # nombre de la maquina y en una forma que el agente no puede devolver
+    host = donde.split('/')[2].lower()
+    unidad = 'srv%s:' % NETDIR[0].lower()
+    check('J17 lo que git escribe (init) sale con la unidad virtual y sin el nombre de la maquina',
+          unidad in pasos[0][1].lower() and host not in pasos[0][1].lower(), corto(pasos[0][1], 300))
+    WT = os.path.join(DENTRO_R, 'wt')
+    r = g(REPO_R, command='worktree', args='add', path=WT, ref='HEAD')
+    lista = g(REPO_R, command='worktree', args='list')
+    listada = [l.split()[0] for l in lista.splitlines() if l.strip() and l.split()[0].rstrip('/').endswith('/wt')]
+    check('J17 worktree list ensena el worktree con la unidad virtual, sin el nombre de la maquina',
+          not mc.fallo(r) and len(listada) == 1 and listada[0].lower().startswith(unidad)
+          and host not in lista.lower(), '%s | %s' % (corto(r), corto(lista, 300)))
+    r = g(REPO_R, command='worktree', args='remove', path=listada[0] if listada else WT)
+    check('J17 ...y esa ruta, tal como la ensena, se puede devolver: worktree remove la quita',
+          bool(listada) and not mc.fallo(r) and not os.path.exists(WT),
+          '%s | queda: %s' % (corto(r, 300), os.path.exists(WT)))
+    # lo que NO cambia: el repo de otro sigue fuera, y un agente no entra por el UNC
+    rs = [g(A_R, command='status'), g(A_R, command='log'), g(A_R, command='add', args='.')]
+    check('J17 ...y el repo que vive POR ENCIMA de la raiz, en la misma unidad, sigue negado (GIT-041)',
+          all(mc.abre(r, 'SR_GIT_REPO_FUERA_FMT') for r in rs), [corto(r) for r in rs][:3])
+    unc = (donde[:-len('/mono')] + '/dentro/repo/sub/f.txt').replace('/', '\\')
+    r = call('delphi_read', {'path': unc})
+    # la negativa DICE la forma declarada (con el mensaje de la jaula salia ya
+    # traducida por el enmascarador, y se contradecia), y esa forma se puede usar
+    m = re.search(r'"([^"]+)"', r)
+    ofrecida = m.group(1) if m else ''
+    r2 = call('delphi_read', {'path': ofrecida}) if ofrecida else '<sin forma ofrecida>'
+    check('J17 ...y ese mismo fichero pedido por su ruta de red sigue negado, con su mensaje (GUARD-029), '
+          'que dice su forma declarada; y por esa forma se lee',
+          mc.abre(r, 'SR_JAIL_FORMA_DE_RED_FMT') and host not in r.lower()
+          and ofrecida.lower().startswith(unidad) and not mc.fallo(r2) and '1|f' in r2,
+          '%s | %s' % (corto(r, 260), corto(r2)))
+    r = call('delphi_read', {'path': (donde[:-len('/mono')] + '/fuera/x.txt').replace('/', '\\')})
+    check('J17 ...y una ruta de red de ese mismo recurso que no es de ningun sitio declarado sigue fuera '
+          '(GUARD-002), como siempre', mc.abre(r, 'SR_JAIL_FMT'), corto(r, 260))
+    srv.cierra()
+    # en la unidad de red no se deja nada, tampoco en rojo: no es la carpeta
+    # temporal de las baterias (lo que fallo ya esta dicho en el check)
+    mc.borra(RED)
 if mc.F == 0:
     git('worktree', 'remove', '--force', ENLAZADO, cwd=MONO)
     mc.borra(BASE)

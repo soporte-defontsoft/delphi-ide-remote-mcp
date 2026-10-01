@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: stable (1.8.1).** Covered by 91 end-to-end batteries — 2,907 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: stable (1.8.2).** Covered by 91 end-to-end batteries — 2,915 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -520,9 +520,20 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   a new file in a listing (5 of 5) - with one exception: a file the server was just told does not
   exist, created then on the other machine, takes about 5 s to appear to a read (5 of 5). That
   matches the five seconds Windows documents for its share client's memory of a "not found"
-  (`FileNotFoundCacheLifetime`); the cause itself was not measured. Not measured either: the
-  server as a Windows Service with its roots on a share, and a share that stalls (an engine
-  waiting on it could look like a hung one).
+  (`FileNotFoundCacheLifetime`); the cause itself was not measured. **git on such roots**: on
+  that machine git refused a repository of the share ("detected dubious ownership") until the
+  server's user told it to trust the share - `git config --global --add safe.directory
+  '%(prefix)///host/share/*'`, run there, was enough for the repository measured - and
+  `delphi_git` cannot do that for you (on a machine's own share git did not ask for it). Until
+  1.8.2 `delphi_git` then answered `GIT-041` to every command that works on an existing
+  repository, because git names it by its UNC; since 1.8.2 that answer is read in the form the
+  root was declared in, and the paths git prints of those places (`init`, `worktree list`) leave
+  with their virtual unit, which the agent can send back. **A Windows Service does not see the letters connected in the user's
+  desktop session** (measured 2026-10-01: a program run by the service, under the same account,
+  got "not connected" for such a letter and saw the local drives alone), so roots on a drive
+  letter of a share are for the tray and the terminal modes. Not measured: the server as a
+  service with its roots declared by their UNC, and a share that stalls (an engine waiting on
+  it could look like a hung one).
 - **ReadOnlyPaths**: folders INSIDE the jail that may be read but never written — a `vendor/`, a submodule, a reference clone. Semicolon-separated; a relative entry resolves against each root, an absolute one is taken as is; absent means none. It is not the jail and the server says so differently: the jail is "you don't go in there", this is "you look, you don't touch". Third-party code often has to live inside the project — that is where whoever clones it will look for it — and when that folder is *another git repository*, a careless write does not even show up in the main repo's `git status`, so it can go a whole session unnoticed. This turns that into a rule the server enforces instead of one the agent has to remember.
 - **ReadOnlyRoots**: **reference projects** — folders OUTSIDE the jail that the workspace may read as if they were its own (read, search, symbols, definition, git query, fetch) and never write: no edit, no build (a build writes dcu and exe), no move, no temp files. To bring a unit or a folder in from one, `delphi_move copy=true`: the copy is yours, the original stays untouched, and a folder holding a whole project is refused (a project never lives in two places). Same syntax as `Roots`, absolute. The idea: an agent works in its roots and can also *see other projects of the house to learn how things are done here*. Deliberately separate from `Roots`, so the write jail never sees them, and it **wins over `Roots`**: a folder in both lists, or a root inside a reference, is read-only. `delphi_workspace` lists them as `readOnlyRoots` and `delphi_projects` flags their projects with `readOnly:true`.
 - **AgentConfinement**: *cooperative* subdivision inside one credential's
