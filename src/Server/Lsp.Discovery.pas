@@ -135,7 +135,8 @@ uses
   System.Win.Registry,
   Lsp.Guard, // PreferredDelphiVersion: la version que pide el workspace activo
   Lsp.Texts,
-  Winapi.Windows;
+  Winapi.Windows,
+  Lsp.NetDrives;
 
 function TRadStudioInfo.Found: Boolean;
 begin
@@ -321,7 +322,7 @@ begin
   Common := BdsCommonDir(AInfo);
   if Common = '' then
     Exit;
-  Shared := ExcludeTrailingPathDelimiter(TPath.GetSharedDocumentsPath);
+  Shared := PrefijoSinBarra(TPath.GetSharedDocumentsPath);
   if StartsText(IncludeTrailingPathDelimiter(Shared), Common) then
     Result := TPath.Combine(TPath.GetDocumentsPath,
       Common.Substring(Length(Shared) + 1));
@@ -531,7 +532,7 @@ begin
     Vars.Free;
   end;
   if (Result <> '') and not Result.Contains('$(') then
-    Exit(ExcludeTrailingPathDelimiter(Result));
+    Exit(SinBarraFinal(Result)); // (la raiz de una unidad, con su barra: se le unen nombres)
   // 2. donde estan los SDK que ESA version ya tiene registrados
   Reg := TRegistry.Create(KEY_READ);
   Claves := TStringList.Create;
@@ -549,9 +550,9 @@ begin
           // solo sirve el que apunte a una carpeta <algo>.sdk: los SDK de
           // Android viven en el CatalogRepository, que es otra cosa
           if (Raiz <> '') and not Raiz.Contains('$(') and
-             TPath.GetFileName(ExcludeTrailingPathDelimiter(Raiz)).ToLower.EndsWith('.sdk') then
-            Exit(ExcludeTrailingPathDelimiter(TPath.GetDirectoryName(
-              ExcludeTrailingPathDelimiter(Raiz))));
+             TPath.GetFileName(PrefijoSinBarra(Raiz)).ToLower.EndsWith('.sdk') then
+            Exit(SinBarraFinal(TPath.GetDirectoryName(
+              PrefijoSinBarra(Raiz))));
         except
           // una entrada sin SystemRoot no dice nada
         end;

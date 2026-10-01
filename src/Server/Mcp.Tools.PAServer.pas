@@ -121,7 +121,8 @@ uses
   MCPServer.Registration,
   Lsp.Discovery,
   Lsp.Dproj,
-  Lsp.BuildRunner;
+  Lsp.BuildRunner,
+  Lsp.NetDrives;
 
 constructor TDelphiPAServerTool.Create;
 begin
@@ -171,7 +172,7 @@ var
   Vars: TStringList;
   Cat, Sub: string;
 begin
-  ADirs.Add(TPath.Combine(ExcludeTrailingPathDelimiter(AInfo.RootDir), 'PAServer'));
+  ADirs.Add(TPath.Combine(SinBarraFinal(AInfo.RootDir), 'PAServer'));
   Vars := TStringList.Create;
   try
     IdeEnvironmentVars(AInfo.Version, Vars);
@@ -692,7 +693,7 @@ begin
   begin
     if not Info.Found then Continue;
     P := TPath.Combine(TPath.Combine(
-      ExcludeTrailingPathDelimiter(Info.RootDir), 'bin'), 'paclient.exe');
+      SinBarraFinal(Info.RootDir), 'bin'), 'paclient.exe');
     if TFile.Exists(P) then
     begin
       AInfo := Info;
@@ -773,7 +774,7 @@ var
 begin
   Result := False;
   Fichero := TPath.Combine(TPath.Combine(
-    ExcludeTrailingPathDelimiter(ARootDir), 'bin'), 'Linux64.defaultsdkpaths');
+    SinBarraFinal(ARootDir), 'bin'), 'Linux64.defaultsdkpaths');
   if not TFile.Exists(Fichero) then
     Exit;
   Xml := TFile.ReadAllText(Fichero);
@@ -792,7 +793,7 @@ begin
     R.WriteString('SDKDisplayName', 'Linux64 ' + ASdkName + ' (MCP get-sdk)');
     R.WriteString('PlatformName', 'Linux64');
     R.WriteString('Version', '');
-    R.WriteString('SystemRoot', ExcludeTrailingPathDelimiter(ASysRoot));
+    R.WriteString('SystemRoot', PrefijoSinBarra(ASysRoot));
     R.WriteString('SDKStartupObj', TagValue(Xml, 'Profile_startupobj'));
     R.WriteString('SDKEndCodeObj', TagValue(Xml, 'Profile_endcodeobj'));
     R.WriteString('SDKStartupObjS', TagValue(Xml, 'Profile_startupobjS'));

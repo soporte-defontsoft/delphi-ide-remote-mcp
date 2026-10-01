@@ -161,7 +161,8 @@ uses
   MCPServer.Logger,
   Lsp.Guard,
   Lsp.Patch,   // DecodeSourceBytes: el lector de la casa
-  Mcp.Vault.Session;
+  Mcp.Vault.Session,
+  Lsp.NetDrives;
 
 const
   // Per-result budget. A client caps what one tool result may carry (~25K
@@ -247,7 +248,7 @@ end;
   enlace en backups\ sin mirar (quinta revision). }
 function DentroDelVault(const AFull: string): Boolean;
 begin
-  Result := StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(VaultPath))),
+  Result := StartsText(IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(VaultPath))),
     IncludeTrailingPathDelimiter(RealPath(AFull)));
 end;
 
@@ -303,7 +304,7 @@ begin
   begin
     try
       var RaizLarga := IncludeTrailingPathDelimiter(
-        LongCanonical(ExcludeTrailingPathDelimiter(Root)));
+        LongCanonical(SinBarraFinal(Root)));
       var Largo := LongCanonical(Full);
       if not StartsText(RaizLarga, Largo) then
         Exit(MsgText(SR_VAULT_JAIL));

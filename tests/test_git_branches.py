@@ -260,6 +260,36 @@ call = srv.call
 r = git({'command': 'status'})
 check('TESTIGO: con el PATH de la maquina, status llega a git',
       mc.llego_a_git(r) and not mc.fallo(r), r[:200])
+# ---- el CONTENIDO de un diff viaja como esta en el disco (1.9.0) ----
+# El enmascarador de unidades reescribia las lineas de un diff como si fueran
+# rutas del servidor: '%s:' salia '%srv0:' y un '\\equipo' de un literal,
+# '\\srvhost' (visto repasando un diff por la tool). Las lineas de contenido
+# (las que empiezan por +, - o espacio) no se tocan; las de git, si.
+CONT = "S := Format('%s: %d', [A, B]); P := '\\\\equipo\\f.txt'; Q := 'Z:\\x';"
+open(os.path.join(REPO_T, 'cont.pas'), 'w').write('uno\n')
+git({'command': 'add', 'args': 'cont.pas'}); git({'command': 'commit', 'message': 'cont'})
+open(os.path.join(REPO_T, 'cont.pas'), 'w').write(CONT + '\n')
+r = git({'command': 'diff', 'args': 'cont.pas'})
+check('diff: las lineas de contenido salen como estan en el disco (ni %srv0: ni \\\\srvhost)',
+      'exit=0' in r and ('+' + CONT) in r, r[-300:])
+git({'command': 'add', 'args': 'cont.pas'}); git({'command': 'commit', 'message': 'cont 2'})
+r = git({'command': 'diff', 'args': 'HEAD~1 HEAD'})
+check('...y entre dos commits, lo mismo', 'exit=0' in r and ('+' + CONT) in r, r[-300:])
+# ...y el otro lado de la regla: una linea que NO empieza como el contenido
+# es de git y se enmascara. El log de la tool pone el mensaje detras del
+# hash: esa linea no es contenido
+RUTA = BASE[0].upper() + ':\\carpeta\\de\\nadie'
+open(os.path.join(REPO_T, 'cont.pas'), 'a').write('otra\n')
+git({'command': 'add', 'args': 'cont.pas'}); git({'command': 'commit', 'message': 'mirar ' + RUTA})
+r = git({'command': 'log', 'args': '-1'})
+check('log: la linea que no empieza como el contenido (hash + mensaje) sigue enmascarada',
+      'exit=0' in r and RUTA not in r and ('mirar srv%s:' % BASE[0].lower()) in r, r[:200])
+NUEVO = os.path.join(BASE, 'repo-nuevo')
+os.makedirs(NUEVO)
+r = call('delphi_git', {'repo': NUEVO, 'command': 'init'})
+check('(control) ...y lo que dice GIT sigue enmascarado: la ruta del repo, en init, con su unidad virtual',
+      'exit=0' in r and (NUEVO[0].upper() + ':') not in r.upper().replace('SRV' + NUEVO[0].upper() + ':', '')
+      and ('srv%s:' % NUEVO[0].lower()) in r, r[:300])
 # La regla del clone que no ocurrio tiene dos mitades, y la de siempre - git
 # ARRANCA y acaba con error - no la media ninguna bateria (revisor de la
 # 1.8.1). El host no existe (.example no resuelve nunca): git sale con error.

@@ -272,7 +272,8 @@ uses
   Lsp.Dproj,      // RutasDeBusqueda: el search path de un .dproj, resuelto
   Lsp.Files,
   Mcp.Tools.Messages,
-  Lsp.DesignerBin; // DirectedMessagesPending, para la ficha del servidor
+  Lsp.DesignerBin,
+  Lsp.NetDrives; // DirectedMessagesPending, para la ficha del servidor
 
 // la tool git va por delante de su compositor
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
@@ -860,7 +861,7 @@ begin
     Ruta := '';
     try
       if not (ATrozos[I].Contains('*') or ATrozos[I].Contains('?')) then
-        Ruta := ExcludeTrailingPathDelimiter(TPath.GetFullPath(
+        Ruta := SinBarraFinal(TPath.GetFullPath(
           TPath.Combine(Base, ATrozos[I].Replace('/', '\'))));
     except
       Ruta := '';
@@ -966,7 +967,7 @@ begin
     try
       // la comun llega RELATIVA a ARepo (..\..\.git) fuera de un worktree
       // enlazado (medido, git 2.53)
-      Ruta := ExcludeTrailingPathDelimiter(
+      Ruta := SinBarraFinal(
         TPath.GetFullPath(TPath.Combine(ARepo, Ruta)));
       // git contesta la ruta REAL: bajo una raiz declarada en una letra de
       // red es su UNC, y la puerta juzga por la forma declarada. Se le da
@@ -1254,7 +1255,7 @@ begin
           try
             // Una ruta relativa, desde ABase (la raiz del arbol): es desde
             // donde la resuelve git
-            Carpeta := ExcludeTrailingPathDelimiter(TPath.GetFullPath(
+            Carpeta := SinBarraFinal(TPath.GetFullPath(
               TPath.Combine(ABase, Carpeta.Replace('/', '\'))));
           except
             Exit(MsgFmt(SR_GIT_REMOTO_ILEGIBLE_FMT, [ACmd, Direccion]));
@@ -1714,7 +1715,7 @@ begin
     begin
       if Params.Path.Trim = '' then
         Exit(MsgText(SR_GIT_WORKTREE_PATH));
-      Destino := ExcludeTrailingPathDelimiter(TPath.GetFullPath(Params.Path.Trim));
+      Destino := SinBarraFinal(TPath.GetFullPath(Params.Path.Trim));
       // Crear o quitar una copia de trabajo es ESCRIBIR alli: la pregunta de
       // todo escritor, por la ruta real, y nunca en una carpeta muerta.
       Result := EscrituraDenegada(Destino);
@@ -1733,8 +1734,8 @@ begin
         // Por la ruta REAL de los dos: git da nombres largos y el agente
         // puede pasar la forma 8.3 (medido: C:\Users\DFONTA~1 frente a
         // C:/Users/dfontanet - el texto no casaba y lo dejaba dentro).
-        var RaizReal := ExcludeTrailingPathDelimiter(RealPath(Raiz));
-        var DestinoReal := ExcludeTrailingPathDelimiter(RealPath(Destino));
+        var RaizReal := SinBarraFinal(RealPath(Raiz));
+        var DestinoReal := SinBarraFinal(RealPath(Destino));
         if (Raiz <> '') and
            (SameText(DestinoReal, RaizReal) or
             StartsText(IncludeTrailingPathDelimiter(RaizReal), DestinoReal)) then
@@ -1747,13 +1748,13 @@ begin
         // principal (el primero): remove no sirve para borrar otra cosa.
         var Lista := GitCorre(Repo, Fijado, 'worktree list --porcelain', 60000, ExitCode);
         var Listado := False;
-        var DestinoReal := ExcludeTrailingPathDelimiter(RealPath(Destino));
+        var DestinoReal := SinBarraFinal(RealPath(Destino));
         var Primero := True;
         for var Linea in Lista.Split([#10]) do
           if Linea.StartsWith('worktree ') then
           begin
             // por la ruta real, como arriba: git lista nombres largos
-            if not Primero and SameText(DestinoReal, ExcludeTrailingPathDelimiter(
+            if not Primero and SameText(DestinoReal, SinBarraFinal(
                  RealPath(Linea.Substring(9).Trim.Replace('/', '\')))) then
               Listado := True;
             Primero := False;
@@ -1937,6 +1938,13 @@ begin
   if (ExitCode <> 0) and not DiffConCambios and Output.Contains('Author identity unknown') then
     Result := Result + #10 +
       MsgText(SN_GIT_PISTA_CONFIGURA_IDENTIDAD);
+  // El CONTENIDO de un diff, de un show o de un log - las lineas de un
+  // fichero o de un mensaje de commit, que empiezan por +, - o espacio -
+  // viaja como esta en el disco: el barrido de unidades las reescribia
+  // (Lsp.Guard.EnmascaraSalvoContenido). Lo que dice git - cabeceras,
+  // avisos, que si pueden nombrar una ruta del servidor - sigue enmascarado.
+  if ((ExitCode = 0) or DiffConCambios) and MatchText(Cmd, ['diff', 'show', 'log']) then
+    Result := EnmascaraSalvoContenido(Result, '+- ');
 end;
 
 { TDelphiInstallsTool }
@@ -2146,6 +2154,10 @@ begin
     Roots := WorkspaceRoots;
     RootsArr := TJSONArray.Create;
     Return.AddPair('roots', RootsArr);
+    // La raiz que es la unidad entera sale CON su barra (srvn:\), que es lo
+    // que el agente puede devolver: sin ella - "srvn:" - la respuesta era
+    // GUARD-021, y para Windows "N:" a secas es otra carpeta (1.9.0,
+    // SinBarraFinal).
     // Aqui NO se enmascara nada. El enmascarado es UN solo punto de salida
     // (MaskDriveText, montado como ResultFilter en Lsp.Host) y esa es la
     // arquitectura: un sitio, una regla. La primera version de este arreglo
@@ -2156,7 +2168,7 @@ begin
     // cubre "D:" a secas; parchear los emisores uno a uno es exactamente
     // como sobrevive esta clase de fallo.
     for R in Roots do
-      RootsArr.Add(ExcludeTrailingPathDelimiter(R));
+      RootsArr.Add(SinBarraFinal(R));
     // Proyectos de REFERENCIA (ReadOnlyRoots): se leen, nunca se escriben,
     // no son raices (la jaula de escritura no los ve) y mandan sobre Roots.
     if Length(WorkspaceReadOnlyRoots) > 0 then
@@ -2164,10 +2176,14 @@ begin
       var RefArr := TJSONArray.Create;
       Return.AddPair('readOnlyRoots', RefArr);
       for R in WorkspaceReadOnlyRoots do
-        RefArr.Add(ExcludeTrailingPathDelimiter(R));
+        RefArr.Add(SinBarraFinal(R));
       Return.AddPair('readOnlyRootsNote', MsgText(SN_WORKSPACE_REFERENCE_NOTE));
     end;
-    if Length(Roots) = 0 then
+    if ModoLocalCerrado <> '' then
+      // el modo local cerrado al cargar: decia "may look at any path" y cada
+      // llamada contestaba GUARD-030 (segunda revision de la 1.9.0)
+      Return.AddPair('jail', MsgFmt(SF_WS_JAIL_CERRADA_FMT, [ModoLocalCerrado]))
+    else if Length(Roots) = 0 then
       // Sin Roots solo queda el proceso local sin token: mira, no toca. Decir
       // "unrestricted" al lado de access=read-only era contradecirse (22-sep).
       Return.AddPair('jail', MsgText(SF_WS_JAIL_NONE))
@@ -2222,9 +2238,9 @@ begin
       for var I := 0 to Tops.Count - 1 do
         if Counts[I] > 0 then
           ExtraArr.Add(MsgFmt(SF_WS_SUBCARPETAS_REGISTRADAS_FMT,
-            [ExcludeTrailingPathDelimiter(Tops[I]), Counts[I]]))
+            [SinBarraFinal(Tops[I]), Counts[I]]))
         else
-          ExtraArr.Add(ExcludeTrailingPathDelimiter(Tops[I]));
+          ExtraArr.Add(SinBarraFinal(Tops[I]));
     finally
       Counts.Free;
       Tops.Free;
@@ -2373,6 +2389,11 @@ begin
     // configured by environment variable answered "no roots configured"
     // while every other tool was correctly jailed (measured 2026-08-24).
     Roots := WorkspaceRoots;
+    // el modo local cerrado no tiene raices, y lo dice con SU motivo: "no
+    // roots configured" mandaba a configurarlas (tercera revision, 1.9.0)
+    Result := NegativaDeCierre;
+    if Result <> '' then
+      Exit;
     if Length(Roots) = 0 then
       Exit(MsgText(SR_WS_NO_ROOT_GIVEN));
     // ...y los proyectos de REFERENCIA, marcados abajo como readOnly. Si se
@@ -2445,8 +2466,8 @@ begin
           if (Filt <> '') and not TPath.GetFileName(F).ToLower.Contains(Filt) then
             Continue;
           Inc(Total);
-          var Carpeta := ExcludeTrailingPathDelimiter(TPath.GetDirectoryName(F));
-          var Raiz := ExcludeTrailingPathDelimiter(RootDir.Trim);
+          var Carpeta := SinBarraFinal(TPath.GetDirectoryName(F));
+          var Raiz := SinBarraFinal(RootDir.Trim);
           var Rel: string;
           if SameText(Carpeta, Raiz) then
             // el proyecto vive en la propia raiz (un .groupproj, tipicamente).
@@ -2928,9 +2949,14 @@ begin
 
   if Params.OutFile <> '' then
     OutZip := TPath.GetFullPath(Params.OutFile)
+  // la raiz de una unidad no tiene "al lado": el nombre por defecto quedaba
+  // en "-deploy.zip" a secas y la negativa era la de una ruta relativa
+  // (GUARD-021), que no decia que hacer (revision de la 1.9.0)
+  else if TPath.GetFileName(SinBarraFinal(Dir)) = '' then
+    Exit(MsgFmt(SR_PACKAGE_RAIZ_SIN_OUTFILE_FMT, [SinBarraFinal(Dir)]))
   else
-    OutZip := TPath.Combine(TPath.GetDirectoryName(ExcludeTrailingPathDelimiter(Dir)),
-      TPath.GetFileName(ExcludeTrailingPathDelimiter(Dir)) + '-deploy.zip');
+    OutZip := TPath.Combine(TPath.GetDirectoryName(SinBarraFinal(Dir)),
+      TPath.GetFileName(SinBarraFinal(Dir)) + '-deploy.zip');
   // el zip es un destino: la puerta de destino (jaula + carpetas muertas)
   Result := WriteTargetDenied(OutZip);
   if Result <> '' then

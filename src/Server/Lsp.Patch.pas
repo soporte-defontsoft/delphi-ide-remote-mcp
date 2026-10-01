@@ -485,7 +485,8 @@ uses
   Lsp.DesignerMeta,
   Lsp.DesignerBin,
   Lsp.DesignerBinding,
-  Lsp.ProjectUnits; // LlavesAnidadas: el lexico Pascal de la casa
+  Lsp.ProjectUnits,
+  Lsp.NetDrives; // LlavesAnidadas: el lexico Pascal de la casa
 
 const
   BACKUP_SUB = '__delphi-patch';
@@ -1255,7 +1256,7 @@ end;
 function TrashDayDir(const APath, ASub: string): string;
 begin
   Result := TPath.Combine(
-    TPath.Combine(TPath.GetDirectoryName(ExcludeTrailingPathDelimiter(APath)),
+    TPath.Combine(TPath.GetDirectoryName(SinBarraFinal(APath)),
       BACKUP_SUB),
     FormatDateTime('yyyymmdd', Now));
   if ASub <> '' then
@@ -1272,7 +1273,7 @@ var
   Veto: string;
 begin
   Result := TPath.Combine(TrashDayDir(APath, ACajon),
-    TrashStampedName(TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
+    TrashStampedName(TPath.GetFileName(SinBarraFinal(APath))));
   // Un nombre NUEVO siempre: el sello sale de Now, que avanza a golpes de
   // ~15 ms, y dos sustituciones del mismo fichero en el mismo golpe (to-binary
   // y enseguida to-text) tenian el mismo nombre: la copia no pisa y la segunda
@@ -1285,7 +1286,7 @@ begin
     Sleep(5);
     Inc(Espera);
     Result := TPath.Combine(TrashDayDir(APath, ACajon),
-      TrashStampedName(TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))));
+      TrashStampedName(TPath.GetFileName(SinBarraFinal(APath))));
   end;
   // La papelera es un DESTINO: por la puerta de escribir, sobre la ruta REAL.
   Veto := EscrituraDenegada(TPath.GetDirectoryName(Result));

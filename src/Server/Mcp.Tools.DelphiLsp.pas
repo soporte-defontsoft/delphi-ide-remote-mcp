@@ -126,7 +126,8 @@ uses
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.References,
-  Lsp.Patch;
+  Lsp.Patch,
+  Lsp.NetDrives;
 
 const
   MAX_COMPLETION_ITEMS = 50;
@@ -817,7 +818,7 @@ begin
   // Delphi ()" - with an empty extension - for a trailing separator cost a
   // call and read as "folders are not supported", which is the opposite of
   // what this now does (field round 12).
-  Folder := ExcludeTrailingPathDelimiter(Params.Path.Trim);
+  Folder := SinBarraFinal(Params.Path.Trim);
   if TDirectory.Exists(Folder) then
   begin
     Result := ReadPathDenied(Folder);

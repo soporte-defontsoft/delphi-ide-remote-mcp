@@ -184,6 +184,15 @@ function WorkspaceStartupNotes: TArray<string>;
   (Roots= had text but resolved to nothing). Paths are shown REAL here - the
   log goes to the operator's own stderr on the server, not to a client. }
 function WorkspaceJailSummary(out AWarning: Boolean): string;
+{ Por que ESTA llamada no admite nada, '' si no esta cerrada: el modo local
+  (un proceso sin workspace activo) cerrado al cargar - una proteccion del
+  entorno que no se cargo, o el token de un workspace cerrado. UN lector: la
+  jaula, el resumen del arranque y delphi_workspace. }
+function ModoLocalCerrado: string;
+{ ...y su negativa (GUARD-030), '' si no esta cerrada: LA frase de quien
+  niega por el cierre - la jaula, la pasada de los UNC y lo que recorre las
+  raices sin pasar por una ruta (delphi_projects sin root). }
+function NegativaDeCierre: string;
 
 { The READ-ONLY library zone (RAD Studio installations, IDE library search
   paths, GetIt catalog repositories). Readable by reading tools, never
@@ -393,8 +402,16 @@ function BorradoDenegado(const ADir: string): string;
   borrarla, por el borrador con guard. Nunca una que sea un enlace (seria
   vaciar lo de detras) ni una de otro nombre. Nunca lanza. EL vaciador: la
   purga del arranque y la copia de carpetas (que no se lleva la papelera del
-  origen) pasan por aqui (25-sep-2026). }
-procedure VaciaDesechable(const ADir: string);
+  origen) pasan por aqui (25-sep-2026).
+  ACorte (CorteDePurga; 0 = todo): se deja lo que tenga algo creado o
+  escrito desde ese momento - un fichero, o una carpeta con CUALQUIER cosa
+  reciente debajo, entera. Es la purga de una raiz en una unidad de red,
+  donde el servidor de OTRA maquina puede estar usando esa temporal y no
+  hay cerrojo que cruce de una maquina a otra (1.9.0). }
+procedure VaciaDesechable(const ADir: string; ACorte: UInt64 = 0);
+{ El momento de hace AHoras, en la forma en que Windows guarda las fechas de
+  un fichero (FILETIME, UTC): el corte de VaciaDesechable. }
+function CorteDePurga(AHoras: Integer): UInt64;
 
 { EL copiador de arboles: copia AOrigen en ADestino SIN FUGAS DE LECTURA. Un
   enlace (junction o symlink, de carpeta o de fichero) se sigue SOLO si su
@@ -426,6 +443,11 @@ function CopiaDenegada(const AOrigen, ADestino: string): string;
 { P es un enlace (junction o symlink, de carpeta o de fichero). LA
   comprobacion: estaba escrita cuatro veces en esta unidad. }
 function EsEnlace(const P: string): Boolean;
+{ La ruta de un enlace se juzga por DONDE ESTA: la ruta REAL del padre + el
+  nombre. Para quien tiene que saber donde esta DE VERDAD lo que le nombran
+  (la purga de la papelera: un fichero nombrado a traves de un enlace que
+  esta en la papelera es el vivo de detras). }
+function RutaDelEnlace(const AFull: string): string;
 
 { El primer trozo de S partido por ASeps; '' si S es ''. S.Split(...)[0] a
   secas lee fuera del array cuando S es '' (Delphi devuelve un array
@@ -1108,6 +1130,16 @@ function ToolCallDenied(const AToolName: string;
     reach the client verbatim (an edit anchor built from masked text would
     not match the disk). }
 function MaskDriveText(const AToolName, AText: string): string;
+{ Para la tool cuya respuesta mezcla lineas SUYAS con lineas de CONTENIDO del
+  disco (delphi_git diff / show / log: las de un fichero o de un mensaje de
+  commit empiezan por +, - o espacio): enmascara las demas, una a una, y
+  deja el contenido como esta. El filtro de salida de ESTA llamada deja pasar
+  ese texto, y solo ese, tal cual (lo recuerda el hilo; OlvidaSalidaHecha lo
+  borra al empezar cada llamada). El barrido entero reescribia las lineas de
+  un diff como si fueran rutas del servidor: un '\\equipo' de un literal
+  salia '\\srvhost' y un 'Z:\x', 'srv0:\x' (medido el 1-oct-2026). }
+function EnmascaraSalvoContenido(const ATexto, AEmpiezaPor: string): string;
+procedure OlvidaSalidaHecha;
 
 { Inbound expansion of ONE value ('srvd:\x' -> 'D:\x'; anything else
   untouched, an unserved unit stays literal). Exposed for the /files download
@@ -1177,6 +1209,7 @@ uses
   System.RegularExpressions,
   System.Hash,
   Lsp.Patch,            // TrashFolderName: el nombre de la papelera, de SU nombrador
+  Lsp.NetDrives,        // las letras de red de los sitios declarados
   Lsp.Texts;
 
 type
@@ -1224,6 +1257,10 @@ var
   // con todo lo demas. Sin banderas perezosas por clave (25-sep-2026).
   GRoots: TArray<string>;
   GRootsInvalid: Boolean = False; // Roots= had text but NO valid root: fail closed
+  // El modo local (sin workspace activo) no admite nada, y por que (un
+  // SF_CIERRE_* ya formado); '' = abierto. Lo pone el cargador: una
+  // proteccion del entorno que no se cargo, o el token de un workspace cerrado.
+  GLocalCerrado: string = '';
   GRoPaths: TArray<string>;       // ReadOnlyPaths del modo local
   GRoRoots: TArray<string>;       // ReadOnlyRoots del modo local
   GVaultEnvWritable: Boolean = False; // DELPHI_MCP_VAULT_READONLY=0
@@ -1266,9 +1303,11 @@ threadvar
   TCurrentAgent: string; // WHO is calling on THIS thread (the HTTP request)
   GRequestReadOnly: Boolean;
   TRequestWorkspaceIx1: Integer; // workspace de la peticion HTTP (lo pone el transporte)
+  TSalidaHecha: string; // lo que la tool de ESTA llamada ya enmascaro (EnmascaraSalvoContenido)
 
 var
   GStdioIx1: Integer = 0; // workspace abierto por DELPHI_MCP_TOKEN (proceso stdio)
+  GStdioSoloLectura: Boolean = False; // ...y lo abrio su token de LECTURA
 
 { El workspace activo de ESTA llamada, indice+1; 0 = ninguno. El transporte
   HTTP lo fija por peticion; en un proceso local (stdio) vale el que abrio
@@ -1299,6 +1338,34 @@ end;
 function ActiveWS: TWorkspaceDef;
 begin
   Result := GWorkspaces[TWorkspaceIx1 - 1];
+end;
+
+function ModoLocalCerrado: string;
+begin
+  // un workspace con su token tiene su propia jaula y no lee nada del
+  // entorno: el cierre del modo local no le toca
+  if HasActiveWS then
+    Result := ''
+  else
+    Result := GLocalCerrado;
+end;
+
+function NegativaDeCierre: string;
+begin
+  // unas Roots del entorno con texto y nada cargado cierran desde siempre
+  // (GRootsInvalid), con su negativa: es el mismo estado, y va por aqui
+  // para que tambien se diga ANTES de mirar nada en el disco (su comprobacion
+  // iba detras de la del vault, y la pasada de los UNC la dejaba pasar).
+  // Como el otro cierre, es del modo LOCAL: a quien entra con el token de
+  // un workspace - su jaula es la suya, no lee las raices del entorno - no
+  // le toca. Se le negaba todo (medido: con unas DELPHI_MCP_ROOTS en ruta
+  // de red, que hasta la 1.8.2 cargaban, un workspace abierto contestaba
+  // WS-004 a cada llamada, por stdio y por HTTP)
+  if GRootsInvalid and not HasActiveWS then
+    Exit(MsgText(SR_ROOTS_INVALID));
+  Result := ModoLocalCerrado;
+  if Result <> '' then
+    Result := MsgFmt(SR_LOCAL_CERRADO_FMT, [Result]);
 end;
 
 { 'a;b;c' -> resolved roots with trailing delimiter; quotes tolerated,
@@ -1402,7 +1469,10 @@ var
 begin
   Result := APath;
   try
-    Base := ExcludeTrailingPathDelimiter(TPath.GetFullPath(APath));
+    // (la raiz de una unidad, con su barra: una unidad a secas es para
+    // Windows su carpeta ACTUAL, y de ahi salia la ruta real de la carpeta
+    // desde la que corre el servidor en vez de la de la raiz. Lsp.NetDrives)
+    Base := SinBarraFinal(TPath.GetFullPath(RaizSiUnidad(APath)));
   except
     Exit;
   end;
@@ -1424,14 +1494,56 @@ begin
       begin
         Result := NombreFinal(TPath.GetDirectoryName(ADir), ASalida);
         if Result then
-          ASalida := IncludeTrailingPathDelimiter(ExcludeTrailingPathDelimiter(ASalida)) +
+          ASalida := IncludeTrailingPathDelimiter(PrefijoSinBarra(ASalida)) +
             TPath.GetFileName(LongCanonical(ADir));
         Exit;
       end;
       Result := NombreFinal(ADir, ASalida);
       if Result then
-        ASalida := ExcludeTrailingPathDelimiter(ASalida);
+        ASalida := SinBarraFinal(ASalida);
     end);
+end;
+
+function VaultNormalizado(const ACrudo: string): string; forward;
+
+{ Un sitio se declara con su LETRA (David, 1-oct-2026): X:\... y nada mas.
+  Una entrada de Roots, ReadOnlyRoots, ReadOnlyPaths o VaultPath que, ya
+  completa, no tiene esa forma - una ruta de red (\\host\recurso\...), un
+  prefijo de dispositivo (\\?\..., \\.\...) - NO se carga: la letra es lo
+  que el agente ve como unidad virtual y sobre lo que esta hecho el
+  enmascarador, y la de red la conecta el servidor al arrancar
+  (Lsp.NetDrives). La regla dice lo que VALE, no lo que no: una lista de
+  formas prohibidas dejaba pasar \\?\GLOBALROOT\Device\Mup\... (revision de
+  la 1.9.0). AFull: la entrada ya pasada por GetFullPath.
+  Los dos lectores de abajo dejan fuera lo que no vale - y lo que no parsea -
+  y lo devuelven, como se escribio, en ARechazadas: el arranque lo dice
+  (AvisaDeSitiosNoCargados). }
+function EsSitioConLetra(const AFull: string): Boolean;
+begin
+  Result := (LetraDeRuta(AFull) <> #0) and (Length(AFull) >= 3) and
+    (AFull[3] = '\');
+end;
+
+{ La entrada, como se ESCRIBIO, puede ser un sitio: sin comodines (GetFullPath
+  los acepta: "vendor\*" se cargaba tal cual, no casaba con nada y no
+  protegia nada, sin un aviso), y si empieza por una unidad, con su raiz
+  (X:\...) o la unidad a secas (X: = su raiz, RaizSiUnidad): "X:carpeta" es
+  relativa a la carpeta ACTUAL de esa unidad, y no es un sitio. (Segunda
+  revision de la 1.9.0.) Tampoco la que empieza por una barra: "\vendor" es
+  la raiz de la unidad ACTUAL del proceso, se cargaba contra ella sin un
+  aviso y lo que el operador creia protegido se escribia (medido, tercera
+  revision; una ruta de red empieza por dos y tampoco es un sitio).
+  ARelativaVale: solo en ReadOnlyPaths, donde "vendor" es la carpeta vendor
+  de cada raiz. En Roots, ReadOnlyRoots y VaultPath una relativa se cargaba
+  contra la carpeta del PROCESO (system32 bajo el gestor de servicios): no
+  esta escrita con su letra, y no es un sitio (medido, tercera revision). }
+function EntradaDeSitio(const V: string; ARelativaVale: Boolean): Boolean;
+begin
+  Result := (V <> '') and (V.IndexOfAny(['*', '?']) < 0) and
+    not CharInSet(V[1], ['\', '/']) and
+    (ARelativaVale or (LetraDeRuta(V) <> #0)) and
+    not ((LetraDeRuta(V) <> #0) and (Length(V) > 2) and
+      not CharInSet(V[3], ['\', '/']));
 end;
 
 { Las rutas de SOLO LECTURA de un workspace. Una entrada ABSOLUTA vale tal
@@ -1442,10 +1554,10 @@ end;
   los roots - con barra final - para que la comparacion de despues sea la
   misma y no una parecida. }
 function ParseReadOnlyList(const ARaw: string;
-  const ARoots: TArray<string>): TArray<string>;
+  const ARoots: TArray<string>; var ARechazadas: TArray<string>): TArray<string>;
 var
   List: TStringList;
-  E, R, V: string;
+  E, R, V, Full: string;
 begin
   List := TStringList.Create;
   try
@@ -1455,14 +1567,26 @@ begin
       if V = '' then
         Continue;
       try
-        if TPath.IsPathRooted(V) then
-          List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(V)))
+        if not EntradaDeSitio(V, True) then
+          ARechazadas := ARechazadas + [V]
+        else if TPath.IsPathRooted(V) then
+        begin
+          Full := TPath.GetFullPath(RaizSiUnidad(V));
+          if EsSitioConLetra(Full) then
+            List.Add(IncludeTrailingPathDelimiter(Full))
+          else
+            ARechazadas := ARechazadas + [V];
+        end
         else
           for R in ARoots do
             List.Add(IncludeTrailingPathDelimiter(
               TPath.GetFullPath(TPath.Combine(R, V))));
       except
-        // una entrada que no parsea se ignora, nunca tumba el servidor
+        // una entrada que no parsea (un comodin, un caracter que Windows no
+        // admite) nunca tumba el servidor, pero tampoco se calla: se
+        // ignoraba, y lo que nombraba se quedaba sin proteger (revision de
+        // la 1.9.0)
+        ARechazadas := ARechazadas + [V];
       end;
     end;
     Result := List.ToStringArray;
@@ -1471,21 +1595,33 @@ begin
   end;
 end;
 
-function ParseRootsList(const ARaw: string): TArray<string>;
+function ParseRootsList(const ARaw: string;
+  var ARechazadas: TArray<string>): TArray<string>;
 var
   List: TStringList;
-  R: string;
+  R, V, Full: string;
 begin
   List := TStringList.Create;
   try
     for R in ARaw.Split([';']) do
-      if R.Trim.Trim(['"']).Trim <> '' then
+    begin
+      V := R.Trim.Trim(['"']).Trim;
+      if V = '' then
+        Continue;
       try
-        List.Add(IncludeTrailingPathDelimiter(
-          TPath.GetFullPath(R.Trim.Trim(['"']).Trim)));
+        // (la unidad a secas es su raiz: con el servidor en esa unidad,
+        // GetFullPath de "N:" era la carpeta del servidor, y la jaula, ella)
+        Full := TPath.GetFullPath(RaizSiUnidad(V));
+        if EntradaDeSitio(V, False) and EsSitioConLetra(Full) then
+          List.Add(IncludeTrailingPathDelimiter(Full))
+        else
+          ARechazadas := ARechazadas + [V];
       except
-        // an unparseable root is ignored, never crashes the server
+        // an unparseable entry never crashes the server; it is not loaded,
+        // and the startup says so
+        ARechazadas := ARechazadas + [V];
       end;
+    end;
     Result := List.ToStringArray;
   finally
     List.Free;
@@ -1612,7 +1748,13 @@ end;
 
 function IsReadOnlyNow: Boolean;
 begin
-  Result := GProcessReadOnly or GRequestReadOnly;
+  // (el token de lectura del ENTORNO ata al cliente LOCAL, el que no trae
+  // workspace en su peticion. Ponia el proceso entero en solo lectura, y un
+  // servidor HTTP con esa variable en su entorno negaba la escritura tambien
+  // a quien entraba con el token de escritura de su workspace - medido en la
+  // revision de la 1.9.0)
+  Result := GProcessReadOnly or GRequestReadOnly or
+    (GStdioSoloLectura and (TRequestWorkspaceIx1 = 0));
   if not Result then
     // Excepcion local sin token, SOLO LECTURA (David 2026-09-19, "menos
     // sustos"): sin workspace activo y sin jaula declarada en el entorno
@@ -1741,10 +1883,49 @@ begin
   end;
 end;
 
+{ Las entradas que un lector dejo fuera (no son una ruta con letra, o no
+  parsean), dichas en el arranque: donde estaban (la clave) y cual era. Vacia
+  la lista y devuelve si habia alguna.
+  AProtege: la clave dice lo que NO se escribe (ReadOnlyRoots, ReadOnlyPaths,
+  VaultPath). Una raiz que no se carga cierra; una proteccion que no se carga
+  ABRE - lo que nombraba podria escribirse -, asi que quien la declara queda
+  CERRADO (fail closed), y el aviso lo dice. }
+function AvisaDeSitiosNoCargados(const ADonde: string; AProtege: Boolean;
+  var AFuera: TArray<string>): Boolean;
+var
+  S, Msg: string;
+begin
+  Result := Length(AFuera) > 0;
+  if AProtege then
+    Msg := SL_GUARD_PROTECCION_NO_CARGADA_FMT
+  else
+    Msg := SL_GUARD_SITIO_NO_CARGADO_FMT;
+  for S in AFuera do
+    GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(Msg, [ADonde, S])];
+  AFuera := nil;
+end;
+
+{ Un VaultPath= con texto que no vale como sitio: completo, no es una ruta
+  con letra, o no parsea. El vault es un sitio protegido - las tools de
+  codigo no entran en el -: lleva la regla de los demas (David, 1-oct-2026). }
+function VaultSinLetra(const ACrudo: string): Boolean;
+var
+  V: string;
+begin
+  V := ACrudo.Trim.Trim(['"']).Trim;
+  if V = '' then
+    Exit(False);
+  if not EntradaDeSitio(V, False) then
+    Exit(True);
+  V := VaultNormalizado(ACrudo);
+  Result := (V = '') or not EsSitioConLetra(IncludeTrailingPathDelimiter(V));
+end;
+
 procedure LoadSecurity;
 var
   IniPath: string;
   Ini: TIniFile;
+  Fuera: TArray<string>;
 begin
   if GSecLoaded then
     Exit;
@@ -1774,11 +1955,26 @@ begin
   // leian cada una en su primer uso, con su propia cache - cuatro
   // cargadores mas que este, y cuatro sitios donde olvidar una mitad.
   var RawRootsEnv := GetEnvironmentVariable('DELPHI_MCP_ROOTS');
-  GRoots := ParseRootsList(RawRootsEnv);
+  Fuera := nil;
+  GRoots := ParseRootsList(RawRootsEnv, Fuera);
+  AvisaDeSitiosNoCargados('DELPHI_MCP_ROOTS', False, Fuera);
   // Fail CLOSED: Roots con texto pero nada parseado = nada permitido.
   GRootsInvalid := (RawRootsEnv.Trim <> '') and (Length(GRoots) = 0);
-  GRoPaths := ParseReadOnlyList(GetEnvironmentVariable('DELPHI_MCP_READONLY_PATHS'), GRoots);
-  GRoRoots := ParseRootsList(GetEnvironmentVariable('DELPHI_MCP_READONLY_ROOTS'));
+  // ...y una PROTECCION del entorno que no se cargo cierra el modo local,
+  // con su motivo (GLocalCerrado): dejarla fuera sin mas abria lo que nombraba
+  GRoPaths := ParseReadOnlyList(GetEnvironmentVariable('DELPHI_MCP_READONLY_PATHS'), GRoots, Fuera);
+  if AvisaDeSitiosNoCargados('DELPHI_MCP_READONLY_PATHS', True, Fuera) then
+    GLocalCerrado := MsgText(SF_CIERRE_PROTECCION);
+  GRoRoots := ParseRootsList(GetEnvironmentVariable('DELPHI_MCP_READONLY_ROOTS'), Fuera);
+  if AvisaDeSitiosNoCargados('DELPHI_MCP_READONLY_ROOTS', True, Fuera) then
+    GLocalCerrado := MsgText(SF_CIERRE_PROTECCION);
+  if VaultSinLetra(GVaultPath) then
+  begin
+    Fuera := [GVaultPath.Trim];
+    AvisaDeSitiosNoCargados('DELPHI_MCP_VAULT_PATH', True, Fuera);
+    GVaultPath := '';
+    GLocalCerrado := MsgText(SF_CIERRE_PROTECCION);
+  end;
   // El entorno gana en AMBOS sentidos para el vault del modo local (las
   // baterias fuerzan un vault de solo lectura por encima de cualquier ini).
   GVaultEnvWritable := GetEnvironmentVariable('DELPHI_MCP_VAULT_READONLY') = '0';
@@ -1824,11 +2020,15 @@ begin
             W.ReadOnlyToken := Ini.ReadString(S, 'ReadOnlyToken', '').Trim;
             W.Profile := LowerCase(Ini.ReadString(S, 'Profile', '').Trim);
             var RawRoots := Ini.ReadString(S, 'Roots', '');
-            W.Roots := ParseRootsList(RawRoots);
+            W.Roots := ParseRootsList(RawRoots, Fuera);
+            AvisaDeSitiosNoCargados('[' + S + '] Roots=', False, Fuera);
             W.ReadOnlyPaths := ParseReadOnlyList(
-              Ini.ReadString(S, 'ReadOnlyPaths', ''), W.Roots);
+              Ini.ReadString(S, 'ReadOnlyPaths', ''), W.Roots, Fuera);
+            var SinProteccion := AvisaDeSitiosNoCargados('[' + S + '] ReadOnlyPaths=', True, Fuera);
             // Mismo lector que Roots: son raices, solo que de lectura.
-            W.ReadOnlyRoots := ParseRootsList(Ini.ReadString(S, 'ReadOnlyRoots', ''));
+            W.ReadOnlyRoots := ParseRootsList(Ini.ReadString(S, 'ReadOnlyRoots', ''), Fuera);
+            if AvisaDeSitiosNoCargados('[' + S + '] ReadOnlyRoots=', True, Fuera) then
+              SinProteccion := True;
             W.Invalid := (RawRoots.Trim <> '') and (Length(W.Roots) = 0);
             // capability overrides; absent key = inherit the default
             W.OvAllowTests := ReadTriState(Ini, S, 'AllowTests');
@@ -1842,6 +2042,13 @@ begin
             W.RemoteProjects := Ini.ReadString(S, 'RemoteRunProjects', '')
               .Split([';'], TStringSplitOptions.ExcludeEmpty);
             W.VaultPath := Ini.ReadString(S, 'VaultPath', '').Trim;
+            if VaultSinLetra(W.VaultPath) then
+            begin
+              Fuera := [W.VaultPath];
+              AvisaDeSitiosNoCargados('[' + S + '] VaultPath=', True, Fuera);
+              W.VaultPath := '';
+              SinProteccion := True;
+            end;
             W.OvVaultReadOnly := ReadTriState(Ini, S, 'VaultReadOnly');
             W.AdbDevices := Ini.ReadString(S, 'AdbAllowedDevices', '')
               .Split([';'], TStringSplitOptions.ExcludeEmpty);
@@ -1852,6 +2059,9 @@ begin
             if W.Invalid then
               GWorkspaceNotes := GWorkspaceNotes +
                 [MsgFmt(SL_GUARD_ROOTS_NO_PARSEA_FMT, [W.Name])];
+            // (una proteccion que no se cargo: cerrado, y ya dicho en su aviso)
+            if SinProteccion then
+              W.Invalid := True;
             if (W.Token <> '') or (W.ReadOnlyToken <> '') then
               GWorkspaces := GWorkspaces + [W]
             else
@@ -1888,23 +2098,73 @@ begin
   // lectura) y coincide con un workspace, el proceso stdio queda ligado a
   // ESA jaula, exactamente como un Bearer en HTTP (David, 2026-09-19).
   // Sin coincidencia no abre nada: el par de entorno sigue inerte.
+  // ...salvo que coincida con un workspace CERRADO (sin jaula valida): ese
+  // proceso no admite nada. Se saltaba el workspace y quedaba el modo local
+  // de confianza - sin DELPHI_MCP_ROOTS, toda la maquina en solo lectura -
+  // para un cliente al que su operador habia puesto una jaula (revision de la
+  // 1.9.0: con la regla de la letra, un workspace que ayer valia hoy cierra).
   for var K := 0 to High(GWorkspaces) do
   begin
-    if GWorkspaces[K].Invalid or (Length(GWorkspaces[K].Roots) = 0) then
+    var EsSuToken := (GAuthToken <> '') and (GWorkspaces[K].Token <> '') and
+      (GAuthToken = GWorkspaces[K].Token);
+    // (de solo lectura: su token de lectura en cualquiera de las dos
+    // variables - en DELPHI_MCP_TOKEN no ataba nada y quedaba el modo local,
+    // que sin DELPHI_MCP_ROOTS lee toda la maquina -, o su token de escritura
+    // puesto en la de solo lectura: como el Bearer de HTTP, el secreto dice
+    // el workspace. Tercera revision de la 1.9.0)
+    var EsSuLector := ((GWorkspaces[K].ReadOnlyToken <> '') and
+      ((GReadOnlyToken = GWorkspaces[K].ReadOnlyToken) or
+       (GAuthToken = GWorkspaces[K].ReadOnlyToken))) or
+      ((GWorkspaces[K].Token <> '') and (GReadOnlyToken = GWorkspaces[K].Token));
+    if not (EsSuToken or EsSuLector) then
       Continue;
-    if (GAuthToken <> '') and (GWorkspaces[K].Token <> '') and
-       (GAuthToken = GWorkspaces[K].Token) then
+    if GWorkspaces[K].Invalid or (Length(GWorkspaces[K].Roots) = 0) then
     begin
-      GStdioIx1 := K + 1;
-      Break;
+      GLocalCerrado := MsgFmt(SF_CIERRE_WORKSPACE_FMT, [GWorkspaces[K].Name]);
+      Continue;
     end;
-    if (GReadOnlyToken <> '') and (GWorkspaces[K].ReadOnlyToken <> '') and
-       (GReadOnlyToken = GWorkspaces[K].ReadOnlyToken) then
+    GStdioIx1 := K + 1;
+    if not EsSuToken then
+      GStdioSoloLectura := True;
+    Break;
+  end;
+  // El modo local CERRADO no tiene raices: lo que las recorre sin pasar por
+  // la jaula (delphi_projects sin root) no tiene que encontrar nada, igual
+  // que con unas Roots invalidas (segunda revision de la 1.9.0). Con un
+  // workspace atado por su token, las del entorno no se usan.
+  if (GLocalCerrado <> '') and (GStdioIx1 = 0) then
+  begin
+    GRoots := nil;
+    GRoPaths := nil;
+    GRoRoots := nil;
+  end;
+  // Las letras de RED de los sitios declarados (Lsp.NetDrives): la que este
+  // proceso no ve - un servicio no ve las del escritorio - se conecta desde
+  // el mapeo persistente de la cuenta, y se comprueba que se entra a lo
+  // declarado: raices, referencias y vaults. Aqui, con todo cargado y antes
+  // de que nadie use una raiz; lo que pasa sale con las notas de arranque, y
+  // lo que llegue despues (pasado el plazo, o al reintentar), al log. Un
+  // workspace cerrado no cuenta: no admite a nadie.
+  var Sitios: TArray<string> := GRoots + GRoRoots;
+  if VaultNormalizado(GVaultPath) <> '' then
+    Sitios := Sitios + [IncludeTrailingPathDelimiter(VaultNormalizado(GVaultPath))];
+  for var K := 0 to High(GWorkspaces) do
+    if not GWorkspaces[K].Invalid then
     begin
-      GStdioIx1 := K + 1;
-      GProcessReadOnly := True;
-      Break;
+      Sitios := Sitios + GWorkspaces[K].Roots + GWorkspaces[K].ReadOnlyRoots;
+      if VaultNormalizado(GWorkspaces[K].VaultPath) <> '' then
+        Sitios := Sitios + [IncludeTrailingPathDelimiter(
+          VaultNormalizado(GWorkspaces[K].VaultPath))];
     end;
+  try
+    GWorkspaceNotes := GWorkspaceNotes + VigilaLetrasDeRed(Sitios, ManosDeWindows,
+      PLAZO_LETRAS_DE_RED_MS, REINTENTO_LETRAS_DE_RED_MS, NotaAlLog);
+  except
+    // (no poder lanzar el hilo no deja la carga a medias: GSecLoaded se
+    // quedaba a False y la siguiente llamada cargaba los workspaces otra vez)
+    on E: Exception do
+      GWorkspaceNotes := GWorkspaceNotes +
+        [MsgFmt(SL_NET_REVISION_FALLO_FMT, [E.ClassName, E.Message])];
   end;
   GSecLoaded := True;
 end;
@@ -2236,7 +2496,7 @@ function EnCarpetaLlamada(const APath, ANombre: string;
 var
   P, T: string;
 begin
-  P := ExcludeTrailingPathDelimiter(LongCanonical(APath)).ToLower.Replace('/', '\');
+  P := SinBarraFinal(LongCanonical(APath)).ToLower.Replace('/', '\');
   T := '\' + ANombre.ToLower;
   AEsLaCarpeta := P.EndsWith(T);
   Result := AEsLaCarpeta or P.Contains(T + '\');
@@ -2308,7 +2568,7 @@ begin
       // Un FICHERO en el camino (U.pas\sub) es una ruta equivocada, no un
       // fallo del servidor: salia EInOutError como INTERNAL en cinco tools
       // (tercera revision, 27-sep-2026)
-      D := ExcludeTrailingPathDelimiter(ADir);
+      D := SinBarraFinal(ADir);
       while (D <> '') and (D <> TPath.GetDirectoryName(D)) do
       begin
         if TFile.Exists(D) then
@@ -2329,7 +2589,7 @@ function LongCanonical(const APath: string): string;
 var
   Full: string;
 begin
-  Full := TPath.GetFullPath(APath).Replace('/', '\');
+  Full := TPath.GetFullPath(RaizSiUnidad(APath)).Replace('/', '\');
   if Full.IndexOf('~') < 0 then
     Exit(Full); // sin 8.3 que deshacer, no se paga el paseo
   Result := CanonicalSubiendo(Full,
@@ -2472,7 +2732,7 @@ begin
   Result := ACrudo.Trim.Trim(['"']).Trim;
   if Result <> '' then
     try
-      Result := ExcludeTrailingPathDelimiter(TPath.GetFullPath(Result));
+      Result := SinBarraFinal(TPath.GetFullPath(RaizSiUnidad(Result)));
     except
       Result := '';
     end;
@@ -2509,6 +2769,11 @@ begin
   // entorno / [Workspace].
   if HasActiveWS then
     Result := VaultNormalizado(ActiveWS.VaultPath)
+  // el modo local CERRADO no tiene vault: vault_read leia el del entorno
+  // (medido, tercera revision de la 1.9.0). Sigue en TodosLosVaults: las
+  // tools de codigo de un workspace cuya raiz lo contenga no entran en el
+  else if GLocalCerrado <> '' then
+    Result := ''
   else
     Result := VaultNormalizado(GVaultPath);
 end;
@@ -2574,7 +2839,7 @@ end;
 function EscrituraDenegada(const APath: string): string;
 begin
   if IsReadOnlyNow then
-    Exit(WriteDenied(MsgFmt(SF_GUARD_ESCRIBIR_FMT, [TPath.GetFileName(ExcludeTrailingPathDelimiter(APath))])));
+    Exit(WriteDenied(MsgFmt(SF_GUARD_ESCRIBIR_FMT, [TPath.GetFileName(SinBarraFinal(APath))])));
   Result := PathDenied(APath);
 end;
 
@@ -3351,7 +3616,7 @@ begin
   var FullLargo := FormaLarga(Full);
   for R in WorkspaceRoots do
     if SameText(R, Full) or SameText(FormaLarga(R), FullLargo) then
-      Exit(MsgFmt(SR_ROOT_ITSELF_FMT, [ExcludeTrailingPathDelimiter(R)]));
+      Exit(MsgFmt(SR_ROOT_ITSELF_FMT, [SinBarraFinal(R)]));
 end;
 
 // Parameter ALIASES, per tool, applied only when the real name is absent:
@@ -3788,6 +4053,11 @@ function NegativaDeUnc(const APath: string; out AEsFormaDeRed: Boolean): string;
 var
   Declarada: string;
 begin
+  // el modo local cerrado no tiene sitios: su negativa es la del cierre
+  AEsFormaDeRed := False;
+  Result := NegativaDeCierre;
+  if Result <> '' then
+    Exit;
   Declarada := FormaDeclarada(APath);
   AEsFormaDeRed := not SameText(Declarada, APath);
   if AEsFormaDeRed then
@@ -4178,8 +4448,8 @@ begin
   end;
   for R in WorkspaceReadOnlyRoots do
     if StartsText(FormaLarga(R), Full) or
-       StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(R))), Real) then
-      Exit(ExcludeTrailingPathDelimiter(R));
+       StartsText(IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(R))), Real) then
+      Exit(SinBarraFinal(R));
 end;
 
 function WorkspaceJailSummary(out AWarning: Boolean): string;
@@ -4189,7 +4459,12 @@ var
   I: Integer;
 begin
   Roots := WorkspaceRoots;
-  if GRootsInvalid then
+  if ModoLocalCerrado <> '' then
+  begin
+    AWarning := True;
+    Result := MsgFmt(SN_GUARD_WORKSPACE_JAIL_CERRADA_FMT, [ModoLocalCerrado]);
+  end
+  else if GRootsInvalid then
   begin
     AWarning := True;
     Result := MsgText(SN_GUARD_WORKSPACE_JAIL_INVALID_ROOTS);
@@ -4205,7 +4480,7 @@ begin
     // Roots are stored with a trailing delimiter; drop it for readability.
     SetLength(Shown, Length(Roots));
     for I := 0 to High(Roots) do
-      Shown[I] := ExcludeTrailingPathDelimiter(Roots[I]);
+      Shown[I] := SinBarraFinal(Roots[I]);
     Result := MsgFmt(SL_GUARD_WORKSPACE_JAIL_ROOTS_FMT, [Length(Roots),
       string.Join('  |  ', Shown)]);
   end;
@@ -4262,7 +4537,7 @@ begin
   // EVERY segment, not just the last: a folder named "notas " normalizes the
   // same way, and checking only the file name left the rest of the path to
   // slip through (field round 9 hit the same class in the vault resolver).
-  for Name in ExcludeTrailingPathDelimiter(Rest).Split(['\', '/']) do
+  for Name in PrefijoSinBarra(Rest).Split(['\', '/']) do
   begin
     if Name = '' then
       Continue;
@@ -4405,7 +4680,7 @@ begin
     if ReadOnlyRootOf(R) <> '' then // raiz dentro de una referencia: manda la referencia
       SoloLectura := True;
     if not SoloLectura then
-      Result := Result + [TPath.Combine(ExcludeTrailingPathDelimiter(R), TempFolderName)];
+      Result := Result + [TPath.Combine(SinBarraFinal(R), TempFolderName)];
   end;
 end;
 
@@ -4454,7 +4729,7 @@ begin
   if O = '' then
     Carpeta := AgentTempDir(ASub)
   else if O.EndsWith('\') or O.EndsWith('/') or TDirectory.Exists(O) then
-    Carpeta := ExcludeTrailingPathDelimiter(O)
+    Carpeta := SinBarraFinal(O)
   else
   begin
     Ext := TPath.GetExtension(O);
@@ -4622,9 +4897,9 @@ begin
   begin
     if P.Trim = '' then
       Continue;
-    PReal := ExcludeTrailingPathDelimiter(RealPath(P.Trim));
+    PReal := SinBarraFinal(RealPath(P.Trim));
     if StartsText(IncludeTrailingPathDelimiter(AReal), IncludeTrailingPathDelimiter(PReal)) then
-      Exit(ExcludeTrailingPathDelimiter(P.Trim));
+      Exit(SinBarraFinal(P.Trim));
   end;
 end;
 
@@ -4639,7 +4914,7 @@ begin
   if (ADir.Trim = '') or not EsRutaAbsoluta(ADir.Trim) then
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_RUTA_VACIA_O_RELATIVA)]));
   try
-    Full := ExcludeTrailingPathDelimiter(TPath.GetFullPath(ADir.Trim));
+    Full := SinBarraFinal(TPath.GetFullPath(ADir.Trim));
   except
     Exit(MsgFmt(SR_BORRADO_DENEGADO_FMT, [ADir, MsgText(SF_GUARD_RUTA_INVALIDA)]));
   end;
@@ -4746,9 +5021,9 @@ end;
 function RutaParaComparar(const ARuta: string; AEsElEnlace: Boolean = False): string;
 begin
   if AEsElEnlace then
-    Result := RutaDelEnlace(ExcludeTrailingPathDelimiter(TPath.GetFullPath(ARuta)))
+    Result := RutaDelEnlace(SinBarraFinal(TPath.GetFullPath(ARuta)))
   else
-    Result := RealPath(ExcludeTrailingPathDelimiter(ARuta));
+    Result := RealPath(SinBarraFinal(ARuta));
   Result := IncludeTrailingPathDelimiter(Result);
 end;
 
@@ -4832,7 +5107,7 @@ begin
   NoSeg := TStringList.Create;
   try
     Vistos.Sorted := True;
-    Copia(ExcludeTrailingPathDelimiter(AOrigen), ExcludeTrailingPathDelimiter(ADestino));
+    Copia(SinBarraFinal(AOrigen), SinBarraFinal(ADestino));
     ANoSeguidos := NoSeg.ToStringArray;
   finally
     NoSeg.Free;
@@ -4883,7 +5158,7 @@ begin
     Vistos := TStringList.Create;
     try
       Vistos.Sorted := True;
-      Busca(ExcludeTrailingPathDelimiter(AOrigen));
+      Busca(SinBarraFinal(AOrigen));
     finally
       Vistos.Free;
     end;
@@ -4920,7 +5195,7 @@ var
 begin
   Result := '';
   try
-    Full := ExcludeTrailingPathDelimiter(TPath.GetFullPath(ADir.Trim));
+    Full := SinBarraFinal(TPath.GetFullPath(ADir.Trim));
   except
     Exit; // una ruta que no parsea es cosa de PathDenied
   end;
@@ -4952,7 +5227,7 @@ begin
     Exit(MsgFmt(SR_COPIA_DENTRO_DE_SI_FMT, [ADestino, AOrigen]));
   // la unidad REAL de cada lado: un junction en el camino no la disfraza
   try
-    UO := ExtractFileDrive(RutaDelEnlace(ExcludeTrailingPathDelimiter(
+    UO := ExtractFileDrive(RutaDelEnlace(SinBarraFinal(
       TPath.GetFullPath(AOrigen))));
     UD := ExtractFileDrive(RealPath(ADestino));
   except
@@ -5010,8 +5285,8 @@ begin
   // misma unidad renombra de un golpe; si no puede, devuelve False sin
   // haber tocado nada. Entre unidades falla con ERROR_NOT_SAME_DEVICE: el
   // mismo rechazo, por si la unidad llego disfrazada (un punto de montaje).
-  if not MoveFile(PChar(ExcludeTrailingPathDelimiter(AOrigen)),
-       PChar(ExcludeTrailingPathDelimiter(ADestino))) then
+  if not MoveFile(PChar(SinBarraFinal(AOrigen)),
+       PChar(SinBarraFinal(ADestino))) then
   begin
     if GetLastError = ERROR_NOT_SAME_DEVICE then
       raise Exception.Create(MsgFmt(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]));
@@ -5022,33 +5297,74 @@ begin
   end;
 end;
 
+function CorteDePurga(AHoras: Integer): UInt64;
+var
+  FT: TFileTime;
+begin
+  GetSystemTimeAsFileTime(FT);
+  Result := (UInt64(FT.dwHighDateTime) shl 32) or FT.dwLowDateTime;
+  Result := Result - UInt64(AHoras) * 36000000000; // 1 h en unidades de 100 ns
+end;
+
+{ True si AEntrada - un fichero, o una carpeta con todo lo de debajo, sin
+  cruzar enlaces - tiene algo creado o escrito desde ACorte. En la duda (no
+  se puede mirar), True: lo que no se sabe viejo no se borra. }
+function TieneAlgoDesde(const AEntrada: string; ACorte: UInt64): Boolean;
+var
+  FD: TWin32FileAttributeData;
+  E: string;
+
+  function Momento(const F: TFileTime): UInt64;
+  begin
+    Result := (UInt64(F.dwHighDateTime) shl 32) or F.dwLowDateTime;
+  end;
+
+begin
+  if not GetFileAttributesEx(PChar(AEntrada), GetFileExInfoStandard, @FD) then
+    Exit(True);
+  if (Momento(FD.ftLastWriteTime) >= ACorte) or (Momento(FD.ftCreationTime) >= ACorte) then
+    Exit(True);
+  if (FD.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY = 0) or EsEnlace(AEntrada) then
+    Exit(False); // un fichero, o un enlace: lo de detras no se mira
+  Result := False;
+  try
+    for E in TDirectory.GetFileSystemEntries(AEntrada) do
+      if TieneAlgoDesde(E, ACorte) then
+        Exit(True);
+  except
+    Result := True;
+  end;
+end;
+
 { (la nota, en la interface) Nunca lanza: no poder tirar un temporal no es
   motivo para que falle lo que lo pedia. }
-procedure VaciaDesechable(const ADir: string);
+procedure VaciaDesechable(const ADir: string; ACorte: UInt64);
 var
   E: string;
 begin
   // El guard del unico que vacia (David, 25-sep-2026): solo una carpeta de la
   // lista central de desechables, y con el __ delante. Una ruta mal
   // calculada nunca vacia otra cosa.
-  var Nombre := TPath.GetFileName(ExcludeTrailingPathDelimiter(ADir));
+  var Nombre := TPath.GetFileName(SinBarraFinal(ADir));
   if not (Nombre.StartsWith('__') and MatchText(Nombre, CarpetasDesechables)) then
     Exit;
   // ...y si la propia temporal es un ENLACE, lo de detras no es nuestro:
   // enumerarla seria vaciar el destino (25-sep-2026).
-  if EsEnlace(ExcludeTrailingPathDelimiter(ADir)) then
+  if EsEnlace(SinBarraFinal(ADir)) then
     Exit;
   try
     if not TDirectory.Exists(ADir) then
       Exit;
     for E in TDirectory.GetFiles(ADir) do
       try
-        TFile.Delete(E);
+        if (ACorte = 0) or not TieneAlgoDesde(E, ACorte) then
+          TFile.Delete(E);
       except
       end;
     for E in TDirectory.GetDirectories(ADir) do
       try
-        BorraArbol(E);
+        if (ACorte = 0) or not TieneAlgoDesde(E, ACorte) then
+          BorraArbol(E);
       except
       end;
   except
@@ -5085,7 +5401,7 @@ var
   H: THandle;
 begin
   Clave := 'tmp-' + THashMD5.GetHashString(
-    LowerCase(ExcludeTrailingPathDelimiter(LongCanonical(ADir))));
+    LowerCase(SinBarraFinal(LongCanonical(ADir))));
   if not Assigned(GTemporalesMias) then
     GTemporalesMias := TStringList.Create;
   if GTemporalesMias.IndexOf(Clave) >= 0 then
@@ -5168,11 +5484,28 @@ begin
   try
     if (ARoot.Trim <> '') and TDirectory.Exists(ARoot.Trim) and
        not Protegida(ARoot.Trim) then
-      Baja(ExcludeTrailingPathDelimiter(ARoot.Trim), 0);
+      Baja(SinBarraFinal(ARoot.Trim), 0);
     Result := Acc.ToStringArray;
   finally
     Acc.Free;
   end;
+end;
+
+{ Las temporales bajo UNA raiz, vaciadas (con ACorte, lo anterior a el:
+  VaciaDesechable). Devuelve cuantas ha encontrado que son de este proceso. }
+function PurgaRaiz(const ARaiz: string; const ANoSeTocan: TArray<string>;
+  ACorte: UInt64): Integer;
+var
+  T: string;
+begin
+  Result := 0;
+  TemporalEsMia(TPath.Combine(ARaiz, TempFolderName));
+  for T in TemporalesBajo(ARaiz, ANoSeTocan) do
+    if TemporalEsMia(T) then
+    begin
+      VaciaDesechable(T, ACorte);
+      Inc(Result);
+    end;
 end;
 
 procedure PurgeServerTemp;
@@ -5203,21 +5536,46 @@ begin
     // Solo lo que es de ESTE proceso (TemporalEsMia): la temporal de cada
     // raiz se reclama aunque aun no exista -las llamadas la crearan-, y una
     // que ya es de otro servidor vivo no se toca.
+    var Raices: TArray<string> := nil;
     for W in GWorkspaces do
-      for R in W.Roots do
-      begin
-        TemporalEsMia(TPath.Combine(R, TempFolderName));
-        for var T in TemporalesBajo(R, NoSeTocan) do
-          if TemporalEsMia(T) then
-            VaciaDesechable(T);
-      end;
-    for R in GRoots do // modo local de lanzamiento (baterias)
-    begin
-      TemporalEsMia(TPath.Combine(R, TempFolderName));
-      for var T in TemporalesBajo(R, NoSeTocan) do
-        if TemporalEsMia(T) then
-          VaciaDesechable(T);
-    end;
+      Raices := Raices + W.Roots;
+    Raices := Raices + GRoots; // modo local de lanzamiento (baterias)
+    // La raiz en una unidad de RED, aparte (1.9.0). Buscar sus temporales
+    // es recorrer el arbol entero por la red - 2,6 ms por carpeta medidos
+    // en el servicio de produccion con una raiz que es un recurso de un
+    // NAS: el arranque esperaba a eso, y crece con el recurso -, y el
+    // cerrojo de TemporalEsMia es de ESTA maquina: el servidor de otra, con
+    // una raiz en el mismo recurso, se quedaba sin lo que tuviese a medias.
+    // Va en un hilo, despues de las locales (nadie mas toca la lista de
+    // TemporalEsMia), y deja lo de la ultima hora (VaciaDesechable).
+    var DeRed: TArray<string> := nil;
+    for R in Raices do
+      // (tambien la letra que AUN no esta: si la conecta el reintento
+      // mientras tanto, se recorre igual de aparte y con el mismo corte)
+      if ClaseDeLetra(LetraDeRuta(R)) <> clLocal then
+        DeRed := DeRed + [R]
+      else
+        PurgaRaiz(R, NoSeTocan, 0);
+    if Length(DeRed) > 0 then
+      TThread.CreateAnonymousThread(
+        procedure
+        var
+          Rd: string;
+          T0: UInt64;
+          N: Integer;
+        begin
+          for Rd in DeRed do
+            try
+              if not TDirectory.Exists(Rd) then
+                Continue; // la letra sigue sin estar: nada que limpiar ni que decir
+              T0 := GetTickCount64;
+              N := PurgaRaiz(Rd, NoSeTocan, CorteDePurga(1));
+              NotaAlLog(MsgFmt(SL_NET_PURGA_FMT, [SinBarraFinal(Rd), N,
+                Integer(GetTickCount64 - T0)]));
+            except
+              // limpiar nunca tumba nada
+            end;
+        end).Start;
   except
     // limpiar no puede impedir arrancar
   end;
@@ -5251,8 +5609,9 @@ end;
 function LibraryRoots: TArray<string>; forward; // la zona, definida mas abajo
 
 { La jaula, con AFueraDeJaula = True cuando la negativa es "fuera de las
-  raices" (la pista de la zona de biblioteca va solo ahi). }
-function JaulaDenegada(const APath: string; out AFueraDeJaula: Boolean): string; overload;
+  raices" (la pista de la zona de biblioteca va solo ahi). Quien pregunta
+  es JaulaDenegada, justo debajo. }
+function JaulaDecide(const APath: string; out AFueraDeJaula: Boolean): string;
 var
   Roots: TArray<string>;
   Full, R: string;
@@ -5275,6 +5634,12 @@ begin
   Result := RutaRelativaDenegada(APath);
   if Result <> '' then
     Exit;
+  // El modo local cerrado al cargar, con su motivo, ANTES de mirar nada en
+  // el disco (iba mas abajo; tercera revision). Un workspace con su token
+  // tiene su propia jaula y no lee nada del entorno: no le toca
+  Result := NegativaDeCierre;
+  if Result <> '' then
+    Exit;
   // Un UNC que no es de ningun sitio declarado: fuera, por TEXTO, antes de
   // InVault / ReadOnlyRootOf, que lo resuelven en el disco (SMB hacia el
   // host que diga el agente; septima revision). Tambien para quien llama a
@@ -5288,12 +5653,6 @@ begin
     AFueraDeJaula := not EsFormaDeRed;
     Exit;
   end;
-  // Un FICHERO que llega con separador final (x.txt\) nombrado como carpeta:
-  // se leia como el fichero y fallaba dentro de Windows (INTERNAL, septima
-  // revision). Una carpeta con su separador es lo normal.
-  if (APath.EndsWith('\') or APath.EndsWith('/')) and
-     TFile.Exists(ExcludeTrailingPathDelimiter(APath.Replace('/', '\'))) then
-    Exit(MsgFmt(SR_GUARD_BARRA_FINAL_FMT, [APath]));
   // The knowledge vault belongs to the vault_* tools ALONE, wherever it sits.
   // If it happens to live inside a workspace root, the code tools must still
   // keep out - otherwise delphi_edit could rewrite a note behind the vault's
@@ -5301,8 +5660,6 @@ begin
   if InVault(APath) then
     Exit(MsgText(SR_VAULT_NOT_CODE));
   Roots := WorkspaceRoots;
-  if GRootsInvalid then
-    Exit(MsgText(SR_ROOTS_INVALID));
   if Length(Roots) = 0 then
     Exit; // no jail configured
   try
@@ -5344,7 +5701,7 @@ begin
       var DentroDeVerdad := False;
       for var RR in Roots do
         if StartsText(IncludeTrailingPathDelimiter(
-             RealPath(ExcludeTrailingPathDelimiter(RR))), Verdad) then
+             RealPath(SinBarraFinal(RR))), Verdad) then
         begin
           DentroDeVerdad := True;
           Break;
@@ -5368,6 +5725,20 @@ begin
         Exit('');
   AFueraDeJaula := True;
   Result := MsgFmt(SR_JAIL_FMT, [APath, string.Join(' | ', Roots)]);
+end;
+
+function JaulaDenegada(const APath: string; out AFueraDeJaula: Boolean): string; overload;
+begin
+  Result := JaulaDecide(APath, AFueraDeJaula);
+  // Un FICHERO que llega con separador final (x.txt\) nombrado como carpeta:
+  // se leia como el fichero y fallaba dentro de Windows (INTERNAL, septima
+  // revision). Una carpeta con su separador es lo normal. Y DESPUES de la
+  // jaula, solo de lo que se puede leer: se miraba antes, y de cualquier
+  // ruta de la maquina se contestaba si alli habia un fichero (tercera
+  // revision de la 1.9.0)
+  if (Result = '') and (APath.EndsWith('\') or APath.EndsWith('/')) and
+     TFile.Exists(SinBarraFinal(APath.Replace('/', '\'))) then
+    Result := MsgFmt(SR_GUARD_BARRA_FINAL_FMT, [APath]);
 end;
 
 function JaulaDenegada(const APath: string): string; overload;
@@ -5411,10 +5782,10 @@ begin
       // apunte a una carpeta de solo lectura no la vuelve escribible.
       for var Ro in WorkspaceReadOnlyPaths do
         if StartsText(Ro, IncludeTrailingPathDelimiter(Full)) or
-           StartsText(IncludeTrailingPathDelimiter(RealPath(ExcludeTrailingPathDelimiter(Ro))), Verdad) then
-          Exit(MsgFmt(SR_READONLY_PATH_FMT, [APath, ExcludeTrailingPathDelimiter(Ro)]));
+           StartsText(IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(Ro))), Verdad) then
+          Exit(MsgFmt(SR_READONLY_PATH_FMT, [APath, SinBarraFinal(Ro)]));
       // las dos en la forma larga: el tramo del agente se cuenta desde la raiz
-      Exit(AgentConfineDenied(ExcludeTrailingPathDelimiter(FullLargo), FormaLarga(R)));
+      Exit(AgentConfineDenied(SinBarraFinal(FullLargo), FormaLarga(R)));
     end;
   // la jaula lo dejo pasar sin estar en una raiz: es zona de biblioteca,
   // que se lee y nunca se escribe
@@ -5461,9 +5832,9 @@ begin
   // Values that are NOT in that key (authoritative from rsvars.bat /
   // the install itself), added without overwriting the IDE's own.
   if ADest.Values['BDS'] = '' then
-    ADest.Values['BDS'] := ExcludeTrailingPathDelimiter(AInfo.RootDir);
+    ADest.Values['BDS'] := PrefijoSinBarra(AInfo.RootDir);
   if ADest.Values['BDSLIB'] = '' then
-    ADest.Values['BDSLIB'] := ExcludeTrailingPathDelimiter(AInfo.RootDir) + '\lib';
+    ADest.Values['BDSLIB'] := PrefijoSinBarra(AInfo.RootDir) + '\lib';
   UserDocs := BdsUserDir(AInfo);
   if (UserDocs <> '') and (ADest.Values['BDSUSERDIR'] = '') then
     ADest.Values['BDSUSERDIR'] := UserDocs;
@@ -5502,7 +5873,7 @@ begin
            not TPath.IsPathRooted(Expanded) then
           Continue;
         try
-          Expanded := ExcludeTrailingPathDelimiter(TPath.GetFullPath(Expanded));
+          Expanded := PrefijoSinBarra(TPath.GetFullPath(Expanded));
         except
           Continue;
         end;
@@ -5579,7 +5950,7 @@ begin
                 // libzbar.so in Library\Linux64, unreadable because only
                 // Source\ was registered). One level up, never a drive root,
                 // never above the IDE's own documents trees.
-                Expanded := ExcludeTrailingPathDelimiter(Expanded);
+                Expanded := PrefijoSinBarra(Expanded);
                 Expanded := TPath.GetDirectoryName(Expanded);
                 if (Expanded <> '') and (Length(Expanded) > 3) and
                    (TPath.GetDirectoryName(Expanded) <> '') then
@@ -5656,9 +6027,9 @@ procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string);
 var
   D: string;
 begin
-  D := ExcludeTrailingPathDelimiter(ADesde);
+  D := SinBarraFinal(ADesde);
   try
-    while (AAncestro <> '') and (Length(D) > Length(ExcludeTrailingPathDelimiter(AAncestro))) and
+    while (AAncestro <> '') and (Length(D) > Length(SinBarraFinal(AAncestro))) and
           (EscrituraDenegada(D) = '') do
     begin
       // un enlace no lo creo nadie aqui: nunca se quita (decima revision)
@@ -5694,7 +6065,13 @@ end;
 
 { Los lugares que el operador declaro (raices, referencias, solo lectura, el
   vault, la zona de biblioteca): UNA lista para quien pregunta por un UNC
-  (UncFueraDeLugares) y para el host que vuelve de srvhost (HostUncDeclarado). }
+  (UncFueraDeLugares) y para el host que vuelve de srvhost (HostUncDeclarado).
+  Desde la 1.9.0 las raices, las referencias, lo de solo lectura y el vault
+  son SIEMPRE de letra (el cargador no carga otra cosa): lo unico de esta
+  lista que puede ser un UNC es una carpeta de la zona de biblioteca - un
+  Library Path del IDE en un recurso. Lo que en las dos funciones de abajo
+  trata un sitio declarado en UNC queda solo para eso, y SIN check propio:
+  lo media una raiz UNC (A13 y A14 de test_alias83), que ya no existe. }
 function LugaresDeclarados: TArray<string>;
 begin
   Result := WorkspaceRoots + WorkspaceReadOnlyRoots + WorkspaceReadOnlyPaths;
@@ -5741,8 +6118,11 @@ begin
   // los prefijos de dispositivo son de PathAnomaly (GUARD-022), no de aqui
   if not EsUnc(P) then
     Exit(False);
+  // sin jaula no hay "fuera"; el modo local CERRADO no tiene sitios, y todo
+  // UNC lo esta: se llegaba al host que nombrase el agente antes de negarlo
+  // (1,3 s medidos con uno que no existe; tercera revision de la 1.9.0)
   if Length(WorkspaceRoots) = 0 then
-    Exit(False);
+    Exit(NegativaDeCierre <> '');
   Lugares := LugaresDeclarados;
   P := IncludeTrailingPathDelimiter(P);
   for L in Lugares do
@@ -5751,7 +6131,7 @@ begin
        StartsText(IncludeTrailingPathDelimiter(L.Trim.Replace('/', '\')), P) then
       Exit(False);
     // ...y por la forma LARGA de un sitio declarado en 8.3: la entrada ya
-    // alargo la ruta del agente y una raiz UNC declarada con ~ lo negaba
+    // alargo la ruta del agente y un sitio UNC declarado con ~ lo negaba
     // TODO (octava revision). La E/S es sobre el sitio del operador, no
     // sobre lo que manda el agente.
     if (L.IndexOf('~') >= 0) and StartsText(FormaLarga(L.Trim.Replace('/', '\')), P) then
@@ -5759,7 +6139,8 @@ begin
     // ...y una ruta del agente con segmentos en 8.3 (C$\Users\DAVID~1\...\largo):
     // se alarga ELLA, pero solo si su recurso (\\servidor\recurso) es el de
     // un sitio declarado - la E/S va a un host que declaro el operador, nunca
-    // a uno que nombre el agente (octava revision, A13 de test_alias83)
+    // a uno que nombre el agente (octava revision; lo media el A13 de
+    // test_alias83 con una raiz UNC, hasta la 1.8.2)
     if (P.IndexOf('~') >= 0) and
        SameText(ExtractFileDrive(P), ExtractFileDrive(L.Trim.Replace('/', '\'))) and
        StartsText(FormaLarga(L.Trim.Replace('/', '\')), FormaLarga(P)) then
@@ -5781,14 +6162,30 @@ end;
 { El caracter de ANTES de la posicion AI de un texto que puede ser un JSON:
   alli un salto de linea son los dos caracteres \ y n, y lo que abre una
   linea no esta pegado a la letra n. Lo preguntan el barrido del enmascarador
-  y la regla de las rutas de red (estaba escrito en los dos). }
+  y la regla de las rutas de red (estaba escrito en los dos).
+  Un escape es UNA barra - un numero impar de ellas -: con dos, es una barra
+  ESCRITA y la letra es la de una carpeta ("C:\\t\\x" es C:\t\x, no un
+  tabulador). Sin contarlas, la carpeta de una letra n, r o t hacia de salto
+  de linea (1.9.0, al dar a la forma de red esta misma pregunta). }
 function CaracterPrevio(const ATexto: string; AI: Integer): Char;
+var
+  K, Barras: Integer;
 begin
   if AI <= 1 then
     Exit(#0);
   Result := ATexto[AI - 1];
   if (AI >= 3) and CharInSet(Result, ['n', 'r', 't']) and (ATexto[AI - 2] = '\') then
-    Result := #10;
+  begin
+    Barras := 0;
+    K := AI - 2;
+    while (K >= 1) and (ATexto[K] = '\') do
+    begin
+      Inc(Barras);
+      Dec(K);
+    end;
+    if Odd(Barras) then
+      Result := #10;
+  end;
 end;
 
 function FormaDeclaradaDe(const ARuta: string;
@@ -5798,7 +6195,7 @@ var
   I: Integer;
 begin
   Result := ARuta;
-  P := ExcludeTrailingPathDelimiter(ARuta.Trim.Replace('/', '\'));
+  P := PrefijoSinBarra(ARuta.Trim.Replace('/', '\'));
   // solo un UNC: una ruta con letra ya esta en la forma en que se declara
   if not EsUnc(P) then
     Exit;
@@ -5808,9 +6205,10 @@ begin
   begin
     if I > High(AReales) then
       Break;
-    Decl := ExcludeTrailingPathDelimiter(ADeclaradas[I].Trim.Replace('/', '\'));
-    Real := ExcludeTrailingPathDelimiter(AReales[I].Trim.Replace('/', '\'));
-    // solo un sitio de letra de red. Uno declarado en UNC se queda con la
+    Decl := PrefijoSinBarra(ADeclaradas[I].Trim.Replace('/', '\'));
+    Real := PrefijoSinBarra(AReales[I].Trim.Replace('/', '\'));
+    // solo un sitio de letra de red. Uno en UNC (desde la 1.9.0 solo puede
+    // serlo una carpeta de la zona de biblioteca) se queda con la
     // regla de siempre: vale en la forma en que se escribio
     if not EsSitioDeLetraDeRed(Decl, Real) then
       Continue;
@@ -5845,16 +6243,16 @@ var
   N: DWORD;
 begin
   Result := '';
-  if (Length(ASitio) < 2) or (ASitio[2] <> ':') or
-     not CharInSet(ASitio[1], ['A' .. 'Z', 'a' .. 'z']) then
+  // (la letra y lo que es para esta sesion, por sus lectores: Lsp.NetDrives)
+  if LetraDeRuta(ASitio) = #0 then
     Exit;
-  Unidad := UpCase(ASitio[1]) + ':';
-  if GetDriveType(PChar(Unidad + '\')) <> DRIVE_REMOTE then
+  Unidad := LetraDeRuta(ASitio) + ':';
+  if ClaseDeLetra(Unidad[1]) <> clDeRed then
     Exit;
   N := Length(Buf);
   if WNetGetConnection(PChar(Unidad), Buf, N) <> NO_ERROR then
     Exit;
-  Result := ExcludeTrailingPathDelimiter(string(PChar(@Buf[0]))) + ASitio.Substring(2);
+  Result := PrefijoSinBarra(string(PChar(@Buf[0]))) + ASitio.Substring(2);
 end;
 
 { Los sitios de la sesion (raices y referencias) que son de una letra de red,
@@ -5868,7 +6266,7 @@ begin
   AReales := nil;
   for L in WorkspaceRoots + WorkspaceReadOnlyRoots do
   begin
-    Sitio := ExcludeTrailingPathDelimiter(L.Trim.Replace('/', '\'));
+    Sitio := PrefijoSinBarra(L.Trim.Replace('/', '\'));
     Real := RutaDeRedDe(Sitio);
     if EsSitioDeLetraDeRed(Sitio, Real) then
     begin
@@ -5918,8 +6316,8 @@ begin
   begin
     if K > High(AReales) then
       Break;
-    Decl := ExcludeTrailingPathDelimiter(ADeclaradas[K].Trim.Replace('/', '\'));
-    Real := ExcludeTrailingPathDelimiter(AReales[K].Trim.Replace('/', '\'));
+    Decl := PrefijoSinBarra(ADeclaradas[K].Trim.Replace('/', '\'));
+    Real := PrefijoSinBarra(AReales[K].Trim.Replace('/', '\'));
     if not EsSitioDeLetraDeRed(Decl, Real) then
       Continue;
     // las tres escrituras de la misma ruta: dobladas dentro de un JSON, las
@@ -6014,43 +6412,71 @@ end;
 // ---------------------------------------------------------------------------
 
 var
-  GDrvLoaded: Boolean = False;
-  GDrvLetters: string; // uppercase letters of every served drive, e.g. 'DC'
+  GDrvLock: TCriticalSection;
+  // uppercase letters of every served drive, e.g. 'DC': [0] el modo local,
+  // [i] el workspace i
+  GDrvLetters: TArray<string>;
+  GDrvLoaded: TArray<Boolean>;
 
 { The drives that can legitimately appear in tool output: those hosting the
   workspace roots, the library zone (RAD Studio + components) and the
-  knowledge vault. Cached. }
+  knowledge vault. Cached, POR WORKSPACE: se calculaban una vez por proceso,
+  con el workspace de la PRIMERA llamada, y a otro con su raiz en otra unidad
+  le salia esa raiz como srv0:\ y su srvn:\ como "not a drive of this
+  server" hasta reiniciar (apuntado en la 1.8.2; medido el 1-oct-2026 con
+  dos workspaces en dos unidades: dependia de quien llamase primero). }
 function ServedDriveLetters: string;
+var
+  Letras: string;
 
   procedure AddDriveOf(const APath: string);
   begin
     if (Length(APath) >= 2) and (APath[2] = ':') and
        CharInSet(APath[1], ['A'..'Z', 'a'..'z']) and
-       (Pos(UpCase(APath[1]), GDrvLetters) = 0) then
-      GDrvLetters := GDrvLetters + UpCase(APath[1]);
+       (Pos(UpCase(APath[1]), Letras) = 0) then
+      Letras := Letras + UpCase(APath[1]);
   end;
 
 var
   R: string;
+  Ix: Integer;
 begin
-  if not GDrvLoaded then
-  begin
-    GDrvLetters := '';
-    for R in WorkspaceRoots do
-      AddDriveOf(R);
-    for R in LibraryRoots do
-      AddDriveOf(R);
-    for R in WorkspaceReadOnlyRoots do
-      AddDriveOf(R);
-    // The vault is a served root of its OWN: it sits deliberately outside the
-    // code jail and outside the library zone, so neither list carries it. A
-    // vault on another letter used to leak that letter unmasked, and its
-    // srvX: form did not resolve on the way in - it goes through the same
-    // door as everybody else.
-    AddDriveOf(VaultPath);
-    GDrvLoaded := True;
+  Ix := 0;
+  if HasActiveWS then
+    Ix := TWorkspaceIx1; // las letras de ESTE workspace
+  GDrvLock.Enter;
+  try
+    if (Ix <= High(GDrvLoaded)) and GDrvLoaded[Ix] then
+      Exit(GDrvLetters[Ix]);
+  finally
+    GDrvLock.Leave;
   end;
-  Result := GDrvLetters;
+  Letras := '';
+  for R in WorkspaceRoots do
+    AddDriveOf(R);
+  for R in LibraryRoots do
+    AddDriveOf(R);
+  for R in WorkspaceReadOnlyRoots do
+    AddDriveOf(R);
+  // The vault is a served root of its OWN: it sits deliberately outside the
+  // code jail and outside the library zone, so neither list carries it. A
+  // vault on another letter used to leak that letter unmasked, and its
+  // srvX: form did not resolve on the way in - it goes through the same
+  // door as everybody else.
+  AddDriveOf(VaultPath);
+  GDrvLock.Enter;
+  try
+    if Ix > High(GDrvLoaded) then
+    begin
+      SetLength(GDrvLoaded, Ix + 1);
+      SetLength(GDrvLetters, Ix + 1);
+    end;
+    GDrvLetters[Ix] := Letras;
+    GDrvLoaded[Ix] := True;
+  finally
+    GDrvLock.Leave;
+  end;
+  Result := Letras;
 end;
 
 { EL NOMBRADOR de la unidad virtual, y la inversa exacta de la funcion que
@@ -6200,6 +6626,15 @@ begin
   // absolutas", que era FALSO y es justo lo que hizo que nadie mirara. Lo
   // caza ya la bateria test_round40, en las dos direcciones: que no salga la
   // letra real, y que el contenido del disco NO venga enmascarado.
+  // Lo que la propia tool ya enmascaro linea a linea (EnmascaraSalvoContenido):
+  // ESE texto, y solo ese, pasa como esta. Se gasta al mirarlo.
+  if (AToolName <> '') and (TSalidaHecha <> '') then
+  begin
+    var Hecha := TSalidaHecha;
+    TSalidaHecha := '';
+    if AText = Hecha then
+      Exit(AText);
+  end;
   if MatchText(AToolName, TOOLS_ECO) and
      // la RESPUESTA no es una negativa: se mira como EMPIEZA (MsgOutcome +
      // la regla de la marca), nunca una etiqueta de DENTRO: un delphi_read de
@@ -6327,10 +6762,13 @@ begin
       // collapsed into srvhost after srvhost (sweep10's report, reproduced
       // 2026-08-26: 227 masks in one outputTail). A genuine UNC never starts
       // glued to a letter; a re-doubled path separator always does.
+      // (el delimitador de antes, por CaracterPrevio: un UNC que ABRE LINEA
+      // dentro de un JSON va detras de los caracteres \ y n, y salia con el
+      // nombre de la maquina; apuntado en la 1.8.2, medido en la 1.9.0)
       if (C = '\') and (I + 4 <= L) and (AText[I + 1] = '\') and
          (AText[I + 2] = '\') and (AText[I + 3] = '\') and
          CharInSet(AText[I + 4], ['A'..'Z', 'a'..'z', '0'..'9']) and
-         ((I = 1) or CharInSet(AText[I - 1],
+         ((I = 1) or CharInSet(CaracterPrevio(AText, I),
             [' ', #9, '"', '''', '(', ',', '=', #10, #13])) then
       begin
         Sb.Append('\\\\srvhost');
@@ -6396,8 +6834,28 @@ begin
   Result := False; // full, or an unknown profile name: hide nothing
 end;
 
+function EnmascaraSalvoContenido(const ATexto, AEmpiezaPor: string): string;
+var
+  Lineas: TArray<string>;
+  K: Integer;
+begin
+  Lineas := ATexto.Split([#10]);
+  for K := 0 to High(Lineas) do
+    // (la linea vacia y la que no empieza como el contenido son de la tool)
+    if (Lineas[K] = '') or (Pos(Lineas[K][1], AEmpiezaPor) = 0) then
+      Lineas[K] := MaskDriveText('', Lineas[K]);
+  Result := string.Join(#10, Lineas);
+  TSalidaHecha := Result;
+end;
+
+procedure OlvidaSalidaHecha;
+begin
+  TSalidaHecha := '';
+end;
+
 initialization
   GIdentLock := TCriticalSection.Create;
+  GDrvLock := TCriticalSection.Create;
   GSesiones := TList<TSesion>.Create;
   GCaducadas := TStringList.Create;
   ConstruyeAccesos; // la tabla de accesos, antes de la primera llamada
@@ -6407,5 +6865,7 @@ finalization
   GSesiones.Free;
   GCaducadas.Free;
   GIdentLock.Free;
+  // (GDrvLock no se libera: el enmascarador lo usa desde cualquier hilo que
+  // aun este contestando, y se va con el proceso)
 
 end.

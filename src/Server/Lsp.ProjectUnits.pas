@@ -219,7 +219,8 @@ uses
   System.Generics.Defaults,
   Lsp.DesignerBin, // ReadPathDenied: hasta donde se puede subir buscando un .dpr
   Lsp.Dproj,       // XmlUnescape: el lector de la casa
-  Lsp.References;  // SkipIdeArtifacts: una mudanza no entra en artefactos
+  Lsp.References,
+  Lsp.NetDrives;  // SkipIdeArtifacts: una mudanza no entra en artefactos
 
 { TUnitInfo }
 
@@ -2318,7 +2319,7 @@ begin
     Exit;
   Barra := V.EndsWith('\') or V.EndsWith('/');
   try
-    Viejo := ExcludeTrailingPathDelimiter(TPath.GetFullPath(TPath.Combine(ABaseVieja, V)));
+    Viejo := SinBarraFinal(TPath.GetFullPath(TPath.Combine(ABaseVieja, V)));
   except
     Exit;
   end;
@@ -2642,8 +2643,8 @@ var
 
 begin
   Result := '';
-  Viejo := ExcludeTrailingPathDelimiter(TPath.GetFullPath(AViejo));
-  Nuevo := ExcludeTrailingPathDelimiter(TPath.GetFullPath(ANuevo));
+  Viejo := PrefijoSinBarra(TPath.GetFullPath(AViejo));
+  Nuevo := PrefijoSinBarra(TPath.GetFullPath(ANuevo));
   NUnits := 0; NRutas := 0; NDirect := 0; NGrupos := 0; NFuera := 0;
   Tocados := [];
   Fallos := [];

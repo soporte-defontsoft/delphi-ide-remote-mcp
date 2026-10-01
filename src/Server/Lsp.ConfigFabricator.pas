@@ -50,7 +50,8 @@ uses
   Lsp.Client, // PathToUri / UriToPath
   Lsp.Guard,  // ExpandIdeMacros
   Lsp.Dproj,
-  Lsp.Texts;  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
+  Lsp.Texts,
+  Lsp.NetDrives;  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
 
 const
   STANDARD_ALIASES =
@@ -83,8 +84,8 @@ begin
     for Item in ARaw.Split([';']) do
     begin
       Expanded := Item.Trim
-        .Replace('$(BDS)', ExcludeTrailingPathDelimiter(ABdsRoot), [rfReplaceAll, rfIgnoreCase])
-        .Replace('$(BDSLIB)', ExcludeTrailingPathDelimiter(ABdsRoot) + '\lib', [rfReplaceAll, rfIgnoreCase])
+        .Replace('$(BDS)', PrefijoSinBarra(ABdsRoot), [rfReplaceAll, rfIgnoreCase])
+        .Replace('$(BDSLIB)', PrefijoSinBarra(ABdsRoot) + '\lib', [rfReplaceAll, rfIgnoreCase])
         .Replace('$(Platform)', APlatform, [rfReplaceAll, rfIgnoreCase])
         .Replace('$(Config)', 'Release', [rfReplaceAll, rfIgnoreCase]);
       if (Expanded = '') or Expanded.Contains('$(') then
@@ -242,7 +243,7 @@ begin
   else
     DllName := 'dcc32' + Suffix + '.dll';
 
-  Lib := ExcludeTrailingPathDelimiter(AInfo.RootDir) + '\lib\' + Plat + '\release';
+  Lib := PrefijoSinBarra(AInfo.RootDir) + '\lib\' + Plat + '\release';
 
   SearchRaw := MergeProperty(Xml, 'DCC_UnitSearchPath');
 
@@ -322,7 +323,7 @@ begin
     Settings.AddPair('browsingPaths', Browsing);
     for Sub in BROWSING_SUBDIRS do
     begin
-      P := ExcludeTrailingPathDelimiter(AInfo.RootDir) + '\' + Sub;
+      P := PrefijoSinBarra(AInfo.RootDir) + '\' + Sub;
       if TDirectory.Exists(P) then
         Browsing.Add(TLspClient.PathToUri(P));
     end;

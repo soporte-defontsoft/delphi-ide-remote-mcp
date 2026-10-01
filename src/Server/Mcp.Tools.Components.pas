@@ -54,14 +54,15 @@ uses
   MCPServer.Registration,
   Lsp.Discovery,
   Lsp.Dproj,
-  Lsp.Guard;
+  Lsp.Guard,
+  Lsp.NetDrives;
 
 { The install root a registered library entry belongs to: one level above
   the entry (X\Source -> X, X\Lib\Linux64 -> X\Lib), the same rule the
   read jail applies. '' for a drive root. }
 function ComponentRootOf(const APath: string): string;
 begin
-  Result := TPath.GetDirectoryName(ExcludeTrailingPathDelimiter(APath));
+  Result := TPath.GetDirectoryName(PrefijoSinBarra(APath));
   if (Length(Result) <= 3) or (TPath.GetDirectoryName(Result) = '') then
     Result := '';
 end;
@@ -95,8 +96,8 @@ begin
   if Plat = '' then
     Exit(MsgFmt(SR_COMPONENTS_PLATFORM_FMT, [ARawPlatform, KnownPlatformsList]));
   Mine := IdePlatformLibraryPaths(AInfo.Version, Plat);
-  UserDocs := ExcludeTrailingPathDelimiter(BdsUserDir(AInfo));
-  CommonDocs := ExcludeTrailingPathDelimiter(BdsCommonDir(AInfo));
+  UserDocs := PrefijoSinBarra(BdsUserDir(AInfo));
+  CommonDocs := PrefijoSinBarra(BdsCommonDir(AInfo));
   Sb := TStringBuilder.Create;
   MineRoots := TList<string>.Create;
   Missing := TDictionary<string, string>.Create;

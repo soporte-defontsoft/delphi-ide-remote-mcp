@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: stable (1.8.2).** Covered by 91 end-to-end batteries — 2,915 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: stable (1.9.0).** Covered by 93 end-to-end batteries — 2,983 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -437,8 +437,9 @@ ReadOnlyToken=galatea-reviewer-secret   ; optional read-only twin, same roots
 Roots=D:\Projects\Galatea;D:\Projects\Shared
 ReadOnlyPaths=vendor;third-party\libx   ; INSIDE the jail: read, never write
 ReadOnlyRoots=D:\Projects\ReferenceERP    ; OUTSIDE the jail: reference projects, read only, win over Roots
-; Declare each place in ONE form: a UNC alias of a local folder (\\server\share\x for D:\x) is a different
-; place to the jail, so what is protected in one form is not protected in the other.
+; Declare each place by a path with its DRIVE LETTER. An entry written as a network path (\\server\share\x)
+; is NOT loaded, and the startup log says so: map the share to a letter with "reconnect at sign-in" - at
+; startup the server tries to connect that letter for itself.
 LibraryZone=1                           ; ITS declaration - nothing is inherited
 AllowTests=1                            ; may build+run ITS test suites
 VaultPath=D:\Vaults\TeamMemory          ; ITS persistent memory (vault_* tools)
@@ -530,11 +531,52 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   root was declared in, and the paths git prints of those places (`init`, `worktree list`) leave
   with their virtual unit, which the agent can send back. **A Windows Service does not see the letters connected in the user's
   desktop session** (measured 2026-10-01: a program run by the service, under the same account,
-  got "not connected" for such a letter and saw the local drives alone), so roots on a drive
-  letter of a share are for the tray and the terminal modes. Not measured: the server as a
-  service with its roots declared by their UNC, and a share that stalls (an engine waiting on
-  it could look like a hung one).
-- **ReadOnlyPaths**: folders INSIDE the jail that may be read but never written — a `vendor/`, a submodule, a reference clone. Semicolon-separated; a relative entry resolves against each root, an absolute one is taken as is; absent means none. It is not the jail and the server says so differently: the jail is "you don't go in there", this is "you look, you don't touch". Third-party code often has to live inside the project — that is where whoever clones it will look for it — and when that folder is *another git repository*, a careless write does not even show up in the main repo's `git status`, so it can go a whole session unnoticed. This turns that into a rule the server enforces instead of one the agent has to remember.
+  got "not connected" for such a letter and saw the local drives alone). Until 1.9.0 a root on
+  such a letter did not work there - a write under it answered "the drive cannot be found" - and
+  the startup log said nothing. **Since 1.9.0 the server connects those letters for itself.** At
+  startup, for each drive letter of a root, a reference or a vault that its process does not
+  see, it looks up the account's persistent mapping of that letter (`HKCU\Network\<letter>`:
+  what Windows records for a drive mapped with "reconnect at sign-in"), connects the letter for
+  its own session, passing no credentials, and checks that each declared place on it is a
+  folder that opens. Each step is a line of the log; what does not work is a warning there: a
+  letter with no persistent mapping, a connection Windows refused (with its error number), a
+  place that does not open. A letter that has a mapping and did not connect because the network
+  or the share was not there - a service started before the network, a NAS that was off - is
+  tried again every 30 s in the background, and the log says when it connects; an error of
+  credentials or of permission is said once and not retried (insisting would be two failed
+  logons a minute against the share). Nothing of this goes in `settings.ini`. Measured 2026-10-01
+  on this project's own production service, with a root on a letter of a NAS share whose
+  credentials are not the account's: the log says the letter was connected in 16 ms and the
+  root is reachable, and the write that failed went through. The startup waits 15 s at most for
+  this check and then goes on, saying so; what the check finds afterwards goes to the log.
+  Measured with a simulated share only (unit tests): a share that is down, the 15 s limit and
+  the retry. Not measured: a connection Windows refuses, the tray mode started at sign-in
+  before the network is up, a share that stalls later (an engine waiting on it could look like
+  a hung one). The cleaning of the temporary folders of a root on a network drive, which walks its tree (2.6 ms per folder measured on that service), runs apart from the startup, and leaves what was written there in the last hour: a server on another machine may be using it.
+- **A place is declared by a path with its drive letter** (`D:\...`), since 1.9.0. An entry of
+  `Roots`, `ReadOnlyRoots`, `ReadOnlyPaths` or `VaultPath` - or of their `DELPHI_MCP_*`
+  variables - that is not one (a network path `\\host\share\...`, a device path `\\?\...`) is
+  not loaded, and the startup log names the key and the entry; until 1.8.2 a root written as a
+  network path was accepted. Nor is an entry with a wildcard, one that starts with a single slash (`\vendor`: to Windows, the root of the drive the server runs from), a relative entry of `Roots`, `ReadOnlyRoots` or `VaultPath` (it would be relative to the folder of the process), or one relative to the current
+  folder of a drive (`N:folder`); a bare drive (`N:`) is its root. The agent sees drive letters
+  as virtual units (`srvd:`), and a place with no letter has none. A workspace left with no
+  root admits nobody. An entry of
+  `ReadOnlyRoots`, `ReadOnlyPaths` or `VaultPath` that is not loaded - also one that does not
+  parse (a wildcard, a character Windows does not allow), which used to be dropped in silence -
+  closes its workspace too: those keys say what must not be written, and with the entry left out
+  it could be. In the local launch mode that closes the process (`GUARD-030`: no root, no vault, and the refusal comes before anything is looked up on disk), and so does
+  starting it with the token of a workspace that is closed: it used to fall back to the trusted
+  local mode, which reads the whole machine.
+- **A root is a folder, and a whole drive is one more** (`Roots=N:\`), since 1.9.0. Until then
+  it was not: the server took the final backslash off its places to compare and to show them,
+  and `N:\` without it is `N:`, which to Windows is the CURRENT folder of the drive, not its
+  root. It worked only while the server ran from another drive, and `delphi_workspace` showed
+  such a root as `srvn:`, which sent back was refused (`GUARD-021`); it now shows `srvn:\`.
+  Measured with test drives made with `subst` and the server running from the drive that is
+  its root: list, read, write, move, delete, a reference and a vault that are whole drives, a
+  project built there. Not measured there: git (to git a `subst` drive is the folder under
+  it: `GIT-041`, as for any `subst` letter) and the root of a real volume.
+- **ReadOnlyPaths**: folders INSIDE the jail that may be read but never written — a `vendor/`, a submodule, a reference clone. Semicolon-separated; a relative entry resolves against each root, an absolute one is a path with its drive letter; absent means none. An entry that is not loaded closes the workspace (see above). It is not the jail and the server says so differently: the jail is "you don't go in there", this is "you look, you don't touch". Third-party code often has to live inside the project — that is where whoever clones it will look for it — and when that folder is *another git repository*, a careless write does not even show up in the main repo's `git status`, so it can go a whole session unnoticed. This turns that into a rule the server enforces instead of one the agent has to remember.
 - **ReadOnlyRoots**: **reference projects** — folders OUTSIDE the jail that the workspace may read as if they were its own (read, search, symbols, definition, git query, fetch) and never write: no edit, no build (a build writes dcu and exe), no move, no temp files. To bring a unit or a folder in from one, `delphi_move copy=true`: the copy is yours, the original stays untouched, and a folder holding a whole project is refused (a project never lives in two places). Same syntax as `Roots`, absolute. The idea: an agent works in its roots and can also *see other projects of the house to learn how things are done here*. Deliberately separate from `Roots`, so the write jail never sees them, and it **wins over `Roots`**: a folder in both lists, or a root inside a reference, is read-only. `delphi_workspace` lists them as `readOnlyRoots` and `delphi_projects` flags their projects with `readOnly:true`.
 - **AgentConfinement**: *cooperative* subdivision inside one credential's
   jail — each agent (by its self-declared `clientInfo.name`) writes only under
@@ -669,11 +711,11 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   work), so an agent can never mistake server paths for its own local disks. One generic rule
   at the dispatch gate covers every tool's output, compiler/git messages and 8.3 short forms
   included. Exception: file CONTENT is byte-exact by design and travels verbatim
-  (`delphi_read`, `delphi_fetch`, search hits, the vault readers, the verification echo of
+  (`delphi_read`, `delphi_fetch`, search hits, the vault readers, the lines of content of a `delphi_git` diff, the verification echo of
   the editors - see "Byte fidelity beats the drive mask" below). A path on a drive this
   server does not serve leaves as `srv0:` - it says there is a path and not where - and
-  is refused by name if it comes back (it was `srvx:` until 1.0.13, which is exactly what
-  a genuinely served `X:` drive masks to).
+  is refused by name if it comes back. The letters served are those of each workspace's own places (until 1.9.0 they were worked out once, with the workspace of the first call). (It was `srvx:` until 1.0.13, which is exactly what
+  a genuinely served `X:` drive masks to.)
 - **Library read zone** (off unless the workspace declares `LibraryZone=1`; absent, reads are confined to the roots exactly
   like writes): READING tools (read/search/list/fetch/LSP navigation) additionally
   accept, for **every installed Delphi**, its installation directory, the Library Search Path
@@ -701,7 +743,7 @@ Each security fix is paired with the vector it closes **and** with a counter-tes
 - **What a tool answers is what the agent sees** — tools reply in prose or in JSON, and both travel in the MCP `content`. `structuredContent` is published only when the answer IS a JSON object, or when a prose call FAILED (there it carries `ok`, a machine-readable `code` — `DENIED`, `NOT_FOUND`, `INVALID_PARAM`, `INTERNAL` — and the refusal text). A prose success publishes none: a client that understands the field shows it *instead of* `content`, so a status placeholder there made the real answer invisible (measured against production and fixed in v1.0.1-beta). A refusal carried INSIDE a JSON object gets the same treatment since v1.0.4-beta: the object's `error` field decides, so `ok` is never `true` on a refusal, whatever the tool put there.
 - **Every message says what it is and how it ended** (v1.7.0). Every refusal, failure and note of the server STARTS with a tag: `[CFG-058]` for a success message or a note, `[EDIT-093 NOT_FOUND]` for a refusal (a listing or a file's content carries none; a JSON answer carries it in its `error` field). The outcome — `INVALID_PARAM` (the call itself is malformed: fix it and repeat), `NOT_FOUND` (the call is right but what it names is not there), `DENIED` (a rule refuses it or something stands in the way: the same call will fail again, do what the reason says), `INTERNAL` (the server broke or misses a piece: report it) — is the same `code` that `structuredContent` carries, and it is DECLARED by the code that writes the message: the server never guesses it by reading the text, so rewording a message cannot change a result. The id stays when the wording changes, so an agent or a test recognizes a message by its id, not by its phrase. Every text lives in one catalog (`src/Server/Lsp.Texts.pas`, and `src/DesktopNode/Mld.Textos.pas` for the programs that run on the target) and goes out through one helper; the product speaks English.
 - **"It isn't there" and "it isn't that kind of thing" are different answers** (v1.0.4-beta). A folder handed to `delphi_read`, a file handed to `delphi_list`, a markdown file handed to `delphi_build`: each says what the path actually is and which tool handles it, instead of reporting it missing. And the outcome follows rule 11 — a path that is simply not there is `NOT_FOUND` ("correct it and repeat"), never `DENIED` (a rule refuses it: the same call fails again); and a path of the wrong kind is `INVALID_PARAM`.
-- **Byte fidelity beats the drive mask** (v1.0.4-beta). Server drive letters leave as virtual units (`D:\` → `srvd:\`) in every textual result, EXCEPT where the text is file content an agent will copy as an edit anchor: `delphi_read`, `delphi_search` hits, the vault readers, and the verification echo of `delphi_edit` / `delphi_textedit`. Those tools mask their own `path` fields instead. A mask that rewrites the line you are about to anchor on guarantees the anchor cannot match.
+- **Byte fidelity beats the drive mask** (v1.0.4-beta). Server drive letters leave as virtual units (`D:\` → `srvd:\`) in every textual result, EXCEPT where the text is file content an agent will copy as an edit anchor: `delphi_read`, `delphi_search` hits, the vault readers, and the verification echo of `delphi_edit` / `delphi_textedit`. Those tools mask their own `path` fields instead. A mask that rewrites the line you are about to anchor on guarantees the anchor cannot match. Since 1.9.0 the same goes for the lines of content of `delphi_git` `diff` / `show` / `log` (those that start with `+`, `-` or a space): a `'Z:\x'` in a string literal came out `'srv0:\x'`. The lines that are git's are masked as before.
 - **The jail is measured on where a path really goes** (v1.0.5-beta). Not on what it is called: a junction or a symlink inside a root used to escape it for reading *and* for writing, because the check validated the path as text while the file system followed the link. A `git clone` with `core.symlinks` was enough to plant one without leaving the MCP. Boundaries are now decided on the resolved destination. Two corners of the same rule fell in v1.0.13-beta, both found by audit and both measured with real junctions: the ReadOnlyPaths pardon re-checked the path as TEXT and forgave the very refusal the link check had just produced (pardons went by the refusal's *reason* from then on; since 1.7.4 there is no pardon to get right: reading is one question, `JaulaDenegada`, and the write rules - a reference, `ReadOnlyPaths`, the confinement - are added after it in `PathDenied`), and every recursive delete - the startup purge included - followed a junction and deleted on the other side, because the RTL's recursive delete never looks at the reparse bit. There is one tree deleter now, and a link falls as an entry: its target is never looked at.
 - **A batch of edits answers with what happened, not with what you asked for** (v1.0.5-beta). Every entry comes back with the resulting line re-read from disk, the same evidence a single edit has always returned — and `occurrence` inside a batch is resolved once against the ORIGINAL file and then dragged as earlier entries add or remove lines, which is what its description always promised and did not do.
 

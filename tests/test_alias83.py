@@ -28,8 +28,10 @@ A11 las tools vault_* por el alias 8.3: el fichero de gobierno y la
     carpeta excluida siguen siendolo
 A12 copy=true y delphi_package de una carpeta con el vault de OTRO
     workspace: el vault no va (los otros recorredores ya lo saltaban)
-A13 una raiz UNC declarada en 8.3: se lee por su forma larga y por la
-    corta (todo era GUARD-002), y un UNC fuera de ella sigue fuera
+A13 una raiz declarada por su ruta de red (UNC) NO se carga, aunque el recurso
+    exista y responda: su token da 401 (desde la 1.9.0 un sitio se declara con
+    su letra; antes se leia por su forma larga y por la corta, y \\\\srvhost\\
+    volvia a su host); y el UNC de una carpeta de MI raiz sigue fuera
 A5 y A10 llevan su control: una temporal normal SI se purgo (sin el, un
     arranque que no purgara nada los dejaba en verde)
 
@@ -98,7 +100,7 @@ def unc(p):
     return '\\\\localhost\\%s$%s' % (p[0], p[2:])
 
 
-# A13: una raiz UNC, declarada por su alias 8.3 si lo tiene
+# A13: una raiz escrita por su ruta de red (por su alias 8.3 si lo tiene)
 UNCDIR = os.path.join(BASE, 'uncrootfolder')
 os.makedirs(UNCDIR)
 open(os.path.join(UNCDIR, 'f.txt'), 'w').write('por unc\n')
@@ -268,30 +270,21 @@ try:
           not res.get('isError') and any(n.endswith('propio.txt') for n in nombres) and
           not any('vaultdeotro' in n for n in nombres), '%s | %s' % (t[:160], nombres))
 
-    # A13 una raiz UNC declarada (en 8.3 si tiene alias): el control positivo de
-    # E84 (un UNC de un sitio declarado SI se lee) y la regresion de la octava
-    # revision (declarada en 8.3, todo salia GUARD-002)
+    # A13 una raiz declarada por su ruta de red NO se carga (1.9.0: un sitio se
+    # declara con su letra), aunque el recurso exista y responda: su workspace
+    # queda cerrado. Y el UNC de una carpeta de MI raiz sigue fuera.
+    st, _, _ = mc.Http(PORT, TOK3).post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2025-06-18", "capabilities": {},
+        "clientInfo": {"name": "alias83-unc", "version": "1"}}})
     if HAYUNC:
-        cu = mc.Http(PORT, TOK3, t=180, respaldo_json=True)
-        cu.session('alias83-unc')
-        for nombre, ruta in (('mixta', unc(UNCDIR)), ('larga', unc(mc.larga(UNCDIR))), ('declarada', UNC_DECL)):
-            r = cu.call_msg('delphi_read', {'path': ruta + '\\f.txt'}, 120)
-            t = mc.texto(r, True)
-            check('A13 una raiz UNC declarada como %s se lee por su forma %s' % (UNC_DECL, nombre),
-                  'por unc' in t and not mc.fallo(t), t[:200])
-        # un fichero que EXISTE, fuera de la raiz UNC: el control honesto
-        r = cu.call_msg('delphi_read', {'path': unc(CONOTRO) + '\\propio.txt'}, 120)
-        check('A13 ...y un UNC fuera de ella sigue fuera (GUARD-002)',
+        # (con el recurso contestando: que no se carga no es porque no este)
+        check('A13 una raiz declarada por su ruta de red (%s) no se carga: su token da 401' % UNC_DECL,
+              st == 401, st)
+        r = cli.call_msg('delphi_read', {'path': unc(CONOTRO) + '\\propio.txt'}, 120)
+        check('A13 ...y el UNC de una carpeta de mi raiz sigue fuera (GUARD-002)',
               mc.abre(mc.texto(r, True), 'SR_JAIL_FMT'), mc.texto(r, True)[:200])
-        # A14 el host que el servidor enmascara como srvhost VUELVE: con un solo
-        # host UNC declarado, \\srvhost\... es ese host (nadie lo leia de vuelta
-        # y el agente no podia repetir lo que le ensenaban; novena revision)
-        r = cu.call_msg('delphi_read', {'path': '\\\\srvhost' + UNC_DECL[len('\\\\localhost'):] + '\\f.txt'}, 120)
-        t = mc.texto(r, True)
-        check('A14 \\\\srvhost\\... vuelve al unico host UNC declarado y se lee',
-              'por unc' in t and not mc.fallo(t), t[:200])
     else:
-        print('NOTA: A13 sin medir: %s no responde' % unc(UNCDIR))
+        print('NOTA: A13 (el UNC de una carpeta de la raiz) sin medir: %s no responde' % unc(CONOTRO))
 
     # A6 vault_read: la nota de 3 lineas es de 3 (salia de 4, con un 4| vacio)
     open(os.path.join(VAULT, 'nota.md'), 'w', newline='\n').write('# t\nuno\ndos\n')

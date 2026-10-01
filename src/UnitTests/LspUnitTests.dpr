@@ -17,7 +17,8 @@ uses
   LspTests.Foto in 'LspTests.Foto.pas',
   LspTests.Log in 'LspTests.Log.pas',
   LspTests.Motor in 'LspTests.Motor.pas',
-  LspTests.Rutas in 'LspTests.Rutas.pas';
+  LspTests.Rutas in 'LspTests.Rutas.pas',
+  LspTests.LetrasDeRed in 'LspTests.LetrasDeRed.pas';
 
 var
   Runner: ITestRunner;

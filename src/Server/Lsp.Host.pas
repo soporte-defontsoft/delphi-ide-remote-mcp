@@ -187,6 +187,7 @@ begin
     function(const ToolName: string; const Arguments: TJSONObject): string
     begin
       ClearAttachedImages; // nada de una llamada anterior en este hilo
+      OlvidaSalidaHecha;   // ...ni lo que otra dejo dicho al filtro de salida
       Result := ToolCallDenied(ToolName, Arguments);
     end;
   // Outbound twin of the gate: server drive letters leave as virtual units

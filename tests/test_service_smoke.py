@@ -23,7 +23,8 @@ prueba del despliegue, no del build; la version que contesta sale en una NOTA.
        configuracion en HKCU: como LocalSystem todo "funciona" y no ve nada)
     V5b dice en que MAQUINA corre (host = COMPUTERNAME de aqui): dos servidores
         del mismo nombre y version no se distinguian por nada (28-sep-2026)
-    V6 una lectura de verdad (delphi_list de la primera raiz)
+    V6 una lectura de verdad de CADA raiz (delphi_list): una en una letra de
+       red solo se lee si el servicio la conecto el mismo al arrancar (1.9.0)
     V7 una escritura de verdad, y su limpieza (delphi_textedit create + delete)
 """
 import json
@@ -129,11 +130,17 @@ else:
     roots = j.get('roots') or []
     escribible = j.get('access') == 'read-write'
     if roots:
-        l = call('delphi_list', {'root': roots[-1], 'dirs': True})
-        check('V6 una lectura de verdad (delphi_list de una raiz)',
-              not mc.fallo(l) and 'total' in mc.como_json(l), l[:200])
+        malas = []
+        for raiz in roots:
+            l = call('delphi_list', {'root': raiz, 'dirs': True})
+            if mc.fallo(l) or 'total' not in mc.como_json(l):
+                malas.append('%s: %s' % (raiz, l[:120]))
+        check('V6 una lectura de verdad de CADA raiz (delphi_list de las %d)' % len(roots),
+              not malas, malas)
     if roots and escribible:
-        f = roots[-1] + '\\__humo-servicio.txt'
+        # (la raiz que es una unidad entera viene con su barra: srvn:\)
+        raiz = roots[-1].rstrip('\\')
+        f = raiz + '\\__humo-servicio.txt'
         c = call('delphi_textedit', {'path': f, 'create': True,
                                      'content': 'humo\r\n'})
         d = call('delphi_delete', {'path': f})
@@ -141,7 +148,7 @@ else:
         # quedaba una por pasada en produccion (revision del 26-sep-2026)
         # la copia es la ruta que empieza por la raiz del fichero borrado: el
         # DATO, no el rotulo que la presenta (texto del catalogo, que se traduce)
-        m = re.search(re.escape(roots[-1]) + r'\\[^\r\n]*__humo-servicio\.txt\S*', d)
+        m = re.search(re.escape(raiz) + r'\\[^\r\n]*__humo-servicio\.txt\S*', d)
         copia = m.group(0) if m else ''
         pu = call('delphi_delete', {'path': copia, 'purge': True}) if copia else '(sin copia)'
         check('V7 una escritura de verdad, y su limpieza (la copia de la papelera tambien)',

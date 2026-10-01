@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.8.2';
+  SERVER_VERSION = '1.9.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1176,6 +1176,22 @@ const
     '[GUARD-029 DENIED] That is the network path of "%s", a place this ' +
     'server declares by its drive. A place is taken only in the form it ' +
     'was declared in: use that one.';
+
+  { El modo local (un proceso sin workspace activo) cerrado al cargar: por
+    que (SF_CIERRE_*). A quien llama se le dice que no es cosa suya. }
+  SR_LOCAL_CERRADO_FMT =
+    '[GUARD-030 DENIED] This server process admits nothing in its local ' +
+    'mode: %s. It does not depend on your call: it is the operator''s to ' +
+    'fix, and the startup log of the server names what.';
+
+  SF_CIERRE_PROTECCION =
+    'an entry of DELPHI_MCP_READONLY_ROOTS, DELPHI_MCP_READONLY_PATHS or ' +
+    'DELPHI_MCP_VAULT_PATH was not loaded, and what it names could be ' +
+    'written';
+
+  SF_CIERRE_WORKSPACE_FMT =
+    'the token it was started with is the one of [Workspace.%s], and that ' +
+    'workspace is closed';
 
   SR_ROOTS_INVALID =
     '[WS-004 DENIED] [Workspace.<name>] Roots is configured but none of ' +
@@ -4159,6 +4175,12 @@ const
     'is a zip, and an existing .zip there is replaced. Nothing was ' +
     'written.';
 
+  SR_PACKAGE_RAIZ_SIN_OUTFILE_FMT =
+    '[PKG-004 INVALID_PARAM] "dir" is the root of a drive (%s) and no ' +
+    '"outfile" was given: the default zip goes NEXT to the folder, and a ' +
+    'drive has nothing next to it. Pass "outfile" (a .zip inside your ' +
+    'roots). Nothing was written.';
+
   SP_FETCH_MAXBYTES =
     'NOTE: asking for maxbytes<=1048576 (1 MB) FORCES inline base64 ' +
     'chunks - exactly the opposite of what you want with a large file. ' +
@@ -5269,6 +5291,10 @@ const
     'disk-touching tool is refused. Check DELPHI_MCP_ROOTS (local ' +
     'launch).';
 
+  SN_GUARD_WORKSPACE_JAIL_CERRADA_FMT =
+    '[GUARD-031] Workspace jail: CLOSED (fail-closed) - every ' +
+    'disk-touching tool is refused in the local mode: %s.';
+
   SN_GUARD_WORKSPACE_JAIL_NONE_MODO =
     '[GUARD-008] Workspace jail: NONE - trusted LOCAL mode (it only ' +
     'exists in a stdio process launched by the operator; every HTTP ' +
@@ -6038,8 +6064,8 @@ const
 
   SL_GUARD_ROOTS_NO_PARSEA_FMT =
     SL_MARCA_AVISO +
-    ': [Workspace.%s] Roots= does not parse: that workspace admits ' +
-    'NOBODY (fail closed). Check the path.';
+    ': [Workspace.%s] Roots= has no entry that could be loaded: that ' +
+    'workspace admits NOBODY (fail closed).';
 
   SL_GUARD_SIN_TOKEN_IGNORADA_FMT =
     SL_MARCA_AVISO +
@@ -6057,6 +6083,85 @@ const
     SL_MARCA_AVISO +
     ': section [%s] looks like a misspelled workspace and is IGNORED. ' +
     'The format is [Workspace.<name>] (with the dot).';
+
+  { Una entrada de Roots / ReadOnlyRoots / ReadOnlyPaths / VaultPath que el
+    cargador dejo fuera: no parsea, o no es una ruta con letra. %s: la clave
+    ('[Workspace.X] Roots=', 'DELPHI_MCP_ROOTS') y la entrada como se escribio. }
+  SL_GUARD_SITIO_NO_CARGADO_FMT =
+    SL_MARCA_AVISO +
+    ': %s has an entry that is NOT loaded, %s: it does not parse, or it ' +
+    'is not a path with a drive letter. A place is declared by its drive ' +
+    'letter (D:\...), never by a network or a device path. For a share, ' +
+    'map it to a letter with "reconnect at sign-in" and declare the place ' +
+    'by that letter: at startup the server tries to connect it for itself.';
+
+  SL_GUARD_PROTECCION_NO_CARGADA_FMT =
+    SL_MARCA_AVISO +
+    ': %s has an entry that is NOT loaded, %s: it does not parse, or it ' +
+    'is not a path with a drive letter (a place is declared by its drive ' +
+    'letter, never by a network or a device path). That key says what ' +
+    'must not be written, and without the entry it could be: its ' +
+    'workspace - or, for an entry of the environment, the local mode of ' +
+    'this process - admits NOBODY (fail closed) until the entry is fixed ' +
+    'or removed.';
+
+  // Las letras de red de los sitios declarados, al arrancar (Lsp.NetDrives)
+  SL_NET_LETRA_CONECTADA_FMT =
+    'Network drive %s: was not connected for this process: connected to %s ' +
+    '(this account''s persistent mapping, HKCU\Network\%s) in %d ms.';
+
+  SL_NET_LETRA_YA_CONECTADA_FMT =
+    'Network drive %s: was not connected for this process when the server ' +
+    'looked, and it is now: something else connected it meanwhile.';
+
+  SL_NET_LETRA_NO_CONECTA_FMT =
+    SL_MARCA_AVISO +
+    ': network drive %s: is not connected for this process, and connecting ' +
+    'it to %s (this account''s persistent mapping, HKCU\Network\%s) failed ' +
+    'after %d ms with Windows error %d (%s). Declared on it: %s. %s';
+
+  { ...y lo que sigue, segun el error: solo se reintenta el que dice que la
+    red o el recurso no estan. }
+  SF_NET_SE_REINTENTA =
+    'Windows says the network or the share is not there: the server keeps ' +
+    'trying in the background and says here when it connects.';
+
+  SF_NET_NO_SE_REINTENTA =
+    'That is not the error of a network that is not there yet, so the ' +
+    'server does not try again: fix it and restart the server.';
+
+  SL_NET_LETRA_SIN_MAPEO_FMT =
+    SL_MARCA_AVISO +
+    ': drive %s: does not exist for this process, and HKCU\Network\%s ' +
+    'names no share for it (this account has no persistent network ' +
+    'mapping of that letter). Declared on it: %s. A network drive belongs ' +
+    'to the logon session that connected it; one mapped with "reconnect ' +
+    'at sign-in" is recorded for the account, and at startup the server ' +
+    'tries to connect it for itself.';
+
+  SL_NET_SITIO_ENTRA_FMT =
+    'Network drive %s: %s is reachable (%d ms).';
+
+  SL_NET_SITIO_NO_ENTRA_FMT =
+    SL_MARCA_AVISO +
+    ': %s, on network drive %s:, could not be opened: Windows error %d ' +
+    '(%s), after %d ms.';
+
+  SL_NET_PLAZO_FMT =
+    SL_MARCA_AVISO +
+    ': checking the drive letters (%s) of the declared places did not ' +
+    'finish in %d s. The startup goes on without waiting for it; the check ' +
+    'goes on in the background, and what it finds will be said here.';
+
+  SL_NET_REVISION_FALLO_FMT =
+    SL_MARCA_AVISO +
+    ': checking the drive letters of the declared places failed: %s: %s';
+
+  SL_NET_PURGA_FMT =
+    'Temporary folders under %s, on a network drive, were cleaned apart ' +
+    'from the startup: %d found, in %d ms. What was created or written ' +
+    'there in the last hour is left: a server on another machine may be ' +
+    'using it.';
 
   SR_GUARD_RUTA_INVALIDA_FMT =
     '[GUARD-011 INVALID_PARAM] Invalid path: %s';
@@ -7578,6 +7683,9 @@ const
     'as - the way to check a deployment without looking ' +
     'at the machine from outside. %s Call this FIRST. Read-only, no ' +
     'parameters.';
+
+  SF_WS_JAIL_CERRADA_FMT =
+    'closed (%s): every path is refused (GUARD-030)';
 
   SF_WS_JAIL_NONE =
     'none (no [Workspace.<name>] Roots: a tokenless local process may ' +

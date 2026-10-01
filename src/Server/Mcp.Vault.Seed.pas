@@ -38,7 +38,8 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.Types,
-  Lsp.Guard;      // CrearCarpeta: crear la carpeta tolerando la carrera
+  Lsp.Guard,
+  Lsp.NetDrives;      // CrearCarpeta: crear la carpeta tolerando la carrera
 
 var
   GNote: string = '';
@@ -277,7 +278,7 @@ begin
   if APath.Trim = '' then
     Exit;
   try
-    Root := ExcludeTrailingPathDelimiter(TPath.GetFullPath(APath.Trim));
+    Root := SinBarraFinal(TPath.GetFullPath(APath.Trim));
     if TDirectory.Exists(Root) then
     begin
       if HasNotes(Root) then

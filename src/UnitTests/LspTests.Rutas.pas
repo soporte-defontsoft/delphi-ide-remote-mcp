@@ -46,6 +46,22 @@ type
     [Test] procedure SinSitiosDeRedElTextoEsElMismo;
   end;
 
+  { El barrido del enmascarador de salida sobre un texto que ya es JSON: alli
+    un salto de linea son los caracteres \ y n, y lo que abre la linea
+    siguiente - una ruta con letra, una ruta de red - no esta pegado a una
+    palabra. Y una barra ESCRITA (dos) delante de una n, una r o una t no es
+    un salto: es una carpeta de una letra. Las dos reglas del salto estaban
+    sin una prueba que saliese roja, y la de la ruta de red no se cumplia
+    (apuntado en la 1.8.2). La unidad es la del ejecutable de pruebas: la de
+    su raiz, que es la que este proceso sirve. }
+  [TestFixture]
+  TBarridoDeUnidadesTests = class
+  public
+    [Test] procedure LaRutaQueAbreLineaEnUnJsonSeEnmascara;
+    [Test] procedure ElUncQueAbreLineaEnUnJsonSeEnmascara;
+    [Test] procedure UnaCarpetaDeUnaLetraNoEsUnSaltoDeLinea;
+  end;
+
 implementation
 
 uses
@@ -280,8 +296,47 @@ begin
     TArray<string>.Create('C:\ws\'), TArray<string>.Create('C:\ws')));
 end;
 
+{ TBarridoDeUnidadesTests }
+
+function Letra: string;
+begin
+  Result := Copy(ParamStr(0), 1, 1);
+end;
+
+function Virtual: string;
+begin
+  Result := 'srv' + Letra.ToLower + ':';
+end;
+
+procedure TBarridoDeUnidadesTests.LaRutaQueAbreLineaEnUnJsonSeEnmascara;
+begin
+  Assert.AreEqual('{"t":"uno\n' + Virtual + '\\dir\\f.pas(3)"}',
+    MaskDriveText('', '{"t":"uno\n' + Letra + ':\\dir\\f.pas(3)"}'));
+  // (control) la misma, pegada a una palabra, no es una unidad
+  Assert.AreEqual('{"t":"uno' + Letra + ':\\dir"}',
+    MaskDriveText('', '{"t":"uno' + Letra + ':\\dir"}'));
+end;
+
+procedure TBarridoDeUnidadesTests.ElUncQueAbreLineaEnUnJsonSeEnmascara;
+begin
+  Assert.AreEqual('{"t":"uno\n\\\\srvhost\\rec\\f"}',
+    MaskDriveText('', '{"t":"uno\n\\\\equipo\\rec\\f"}'));
+end;
+
+procedure TBarridoDeUnidadesTests.UnaCarpetaDeUnaLetraNoEsUnSaltoDeLinea;
+begin
+  // "X:\\t\\\\resto": detras de la carpeta t, un separador doblado otra vez
+  // (lo que escribe el enlazador de Linux64). No es un UNC que abra linea
+  Assert.AreEqual('{"t":"' + Virtual + '\\t\\\\resto\\x"}',
+    MaskDriveText('', '{"t":"' + Letra + ':\\t\\\\resto\\x"}'));
+  // ...ni una unidad: "\\n" + letra + ":" va pegada a la carpeta n
+  Assert.AreEqual('{"t":"' + Virtual + '\\n' + Letra + ':"}',
+    MaskDriveText('', '{"t":"' + Letra + ':\\n' + Letra + ':"}'));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
+  TDUnitX.RegisterTestFixture(TBarridoDeUnidadesTests);
 
 end.

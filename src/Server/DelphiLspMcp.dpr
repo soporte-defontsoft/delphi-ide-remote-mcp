@@ -121,7 +121,8 @@ uses
   Lsp.Base64 in 'Lsp.Base64.pas',
   Lsp.InlineImages in 'Lsp.InlineImages.pas',
   Lsp.LogSink in 'Lsp.LogSink.pas',
-  Lsp.ErrorMode in 'Lsp.ErrorMode.pas';
+  Lsp.ErrorMode in 'Lsp.ErrorMode.pas',
+  Lsp.NetDrives in 'Lsp.NetDrives.pas';
 
 {$R *.res}
 

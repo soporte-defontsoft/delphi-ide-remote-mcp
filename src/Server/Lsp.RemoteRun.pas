@@ -134,7 +134,8 @@ uses
   Lsp.Discovery,
   Lsp.Patch,     // DecodeSourceBytes: el lector de la casa
   Lsp.Dproj,     // TagValue: el lector del .profile
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.NetDrives;
 
 var
   GNodoLock: TCriticalSection;
@@ -159,7 +160,7 @@ begin
     if not Info.Found then
       Continue;
     P := TPath.Combine(TPath.Combine(
-      ExcludeTrailingPathDelimiter(Info.RootDir), 'bin'), 'paclient.exe');
+      SinBarraFinal(Info.RootDir), 'bin'), 'paclient.exe');
     if TFile.Exists(P) then
       Exit(P);
   end;

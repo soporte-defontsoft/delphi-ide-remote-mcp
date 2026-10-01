@@ -72,7 +72,8 @@ uses
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.Patch,
-  Lsp.ProjectUnits;
+  Lsp.ProjectUnits,
+  Lsp.NetDrives;
 
 var
   // El nombre de la carpeta de copias estaba escrito DOS veces, aqui y en
@@ -310,12 +311,36 @@ begin
   except
     on E: Exception do
       Exit(MsgFmt(SR_FILE_PURGE_FAILED_FMT,
-        [TPath.GetFileName(ExcludeTrailingPathDelimiter(APath)), E.Message]));
+        [TPath.GetFileName(SinBarraFinal(APath)), E.Message]));
   end;
   if StillThere(APath) then
     Result := MsgFmt(SR_FILE_PURGE_FAILED_FMT,
-      [TPath.GetFileName(ExcludeTrailingPathDelimiter(APath)),
+      [TPath.GetFileName(SinBarraFinal(APath)),
        MsgText(SF_FILE_SIGUE_AHI_DESPUES_BORRARLO)]);
+end;
+
+{ Las carpetas de la papelera que una purga deja VACIAS, de abajo arriba y
+  hasta la propia papelera: purgar la ultima copia dejaba "deleted", la del
+  dia y __delphi-patch en la raiz para siempre (vistas en la raiz de un NAS,
+  1-oct-2026). RemoveDir solo quita una carpeta vacia (y de un enlace, el
+  enlace): se para en la primera que no lo esta, y nunca sube de la papelera. }
+procedure RecogeVacias(const ADesde: string);
+var
+  P: string;
+  EsLaPapelera: Boolean;
+begin
+  P := SinBarraFinal(ADesde);
+  while (P <> '') and IsBackupPath(P) do
+  begin
+    EsLaPapelera := IsBackupRoot(P);
+    // un ENLACE no es una carpeta vacia: RemoveDir lo quitaria tenga lo que
+    // tenga detras (revision de la 1.9.0). Ahi se para
+    if EsEnlace(P) or not RemoveDir(P) then
+      Break;
+    if EsLaPapelera then
+      Break;
+    P := TPath.GetDirectoryName(P);
+  end;
 end;
 
 { TDelphiDeleteTool }
@@ -390,6 +415,17 @@ begin
   begin
     if not IsBackupPath(Params.Path) then
       Exit(MsgText(SR_FILE_PURGE_ONLY_TRASH));
+    // ...y que este en la papelera DE VERDAD, no solo por su texto: un enlace
+    // que se borra va a la papelera como enlace, y un fichero nombrado a
+    // traves de el es el VIVO de detras. Se purgaba - borrado para siempre,
+    // sin copia, con un "it was a copy in the trash" (medido en la revision
+    // de la 1.9.0). El enlace mismo si esta alli: se juzga por donde esta.
+    try
+      if not IsBackupPath(RutaDelEnlace(SinBarraFinal(TPath.GetFullPath(Params.Path)))) then
+        Exit(MsgText(SR_FILE_PURGE_ONLY_TRASH));
+    except
+      Exit(MsgText(SR_FILE_PURGE_ONLY_TRASH)); // lo que no se puede resolver no se purga
+    end;
     if IsBackupRoot(Params.Path) then
       Exit(MsgText(SR_FILE_PURGE_NOT_ROOT));
     if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then
@@ -418,8 +454,9 @@ begin
     if Denied <> '' then
       Exit(Denied);
     QuitaMarcaDeDueno(Params.Path);
+    RecogeVacias(TPath.GetDirectoryName(SinBarraFinal(CanonPurge)));
     Exit(MsgFmt(SN_FILE_PURGED_FMT,
-      [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
+      [TPath.GetFileName(SinBarraFinal(Params.Path))]));
   end;
   // De un temporal no se restaura nada (lo dicen la purga del arranque y
   // los listados): la copia a la papelera era un temporal mas, guardado
@@ -440,7 +477,7 @@ begin
     if Denied <> '' then
       Exit(Denied);
     Exit(MsgFmt(SN_FILE_DELETE_TEMP_FMT,
-      [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
+      [TPath.GetFileName(SinBarraFinal(Params.Path))]));
   end;
   if IsBackupPath(Params.Path) then
     Exit(MsgFmt(SR_FILE_PAPELERA_NO_SE_BORRA_FMT, [BACKUP_SUB]));
@@ -477,9 +514,9 @@ begin
     end;
     if not TDirectory.Exists(Params.Path) then
       Exit(MsgFmt(SN_FILE_DELETE_EMPTY_OK_FMT,
-        [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
+        [TPath.GetFileName(SinBarraFinal(Params.Path))]));
     Exit(MsgFmt(SR_FILE_DELETE_STUCK_FMT,
-      [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path))]));
+      [TPath.GetFileName(SinBarraFinal(Params.Path))]));
   end;
   ProjNote := '';
   DesignerNote := '';
@@ -647,10 +684,10 @@ begin
           Exit(E.Message);
         if MotivoDelSistema(E.Message) <> '' then
           Exit(MsgFmt(SR_FILE_DELETE_LOCKED_FMT,
-            [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
+            [TPath.GetFileName(SinBarraFinal(Params.Path)),
              E.Message]));
         Exit(MsgFmt(SR_FILE_CARPETA_NO_MOVIDA_FMT,
-          [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)),
+          [TPath.GetFileName(SinBarraFinal(Params.Path)),
            E.Message]));
       end;
       // una unit: sus proyectos y su form vuelven (todo o nada)
@@ -675,10 +712,10 @@ begin
     if TDirectory.Exists(Params.Path) and
        (Length(TDirectory.GetFileSystemEntries(Params.Path)) = 0) then
       Result := MsgFmt(SN_FILE_DELETE_EMPTY_SHELL_FMT,
-        [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash])
+        [TPath.GetFileName(SinBarraFinal(Params.Path)), Trash])
     else
       Result := MsgFmt(SR_FILE_DELETE_PARTIAL_FMT,
-        [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash]);
+        [TPath.GetFileName(SinBarraFinal(Params.Path)), Trash]);
     if DesignerNote <> '' then
       Result := Result + #10 + DesignerNote;
     if ProjNote <> '' then
@@ -686,7 +723,7 @@ begin
     Exit;
   end;
   Result := MsgFmt(SK_FILE_BORRADO_PAPELERA_FMT,
-    [TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path)), Trash]);
+    [TPath.GetFileName(SinBarraFinal(Params.Path)), Trash]);
   if DesignerNote <> '' then
     Result := Result + #10 + DesignerNote;
   if ProjNote <> '' then
@@ -856,7 +893,7 @@ begin
   // REAL esta detras del sello de hora. Sin esto, restaurar un formulario
   // dejaba el .dfm dentro de la papelera y la unit fuera, sin designer.
   var DesdePapelera := IsBackupPath(Params.Path);
-  var NombreReal := TPath.GetFileName(ExcludeTrailingPathDelimiter(Params.Path));
+  var NombreReal := TPath.GetFileName(SinBarraFinal(Params.Path));
   if DesdePapelera then
   begin
     var Orig := TrashOriginalName(NombreReal);
@@ -908,7 +945,7 @@ begin
       BackupNote := ''
     else if DesdePapelera then
       BackupNote := '' // su nota es otra (SN_FILE_SIN_COPIA_DESDE_PAPELERA)
-    else if EsEnlace(ExcludeTrailingPathDelimiter(Params.Path)) then
+    else if EsEnlace(SinBarraFinal(Params.Path)) then
       // un ENLACE se mueve como enlace y lo de detras no se toca: nada que
       // guardar, y copiarlo era copiar su destino (una junction a un
       // antepasado copiaba la jaula en su papelera y fallaba; octava revision)
