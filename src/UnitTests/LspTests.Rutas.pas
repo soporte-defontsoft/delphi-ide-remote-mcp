@@ -60,6 +60,10 @@ type
     [Test] procedure LaRutaQueAbreLineaEnUnJsonSeEnmascara;
     [Test] procedure ElUncQueAbreLineaEnUnJsonSeEnmascara;
     [Test] procedure UnaCarpetaDeUnaLetraNoEsUnSaltoDeLinea;
+    [Test] procedure ElUncDeUnaListaDeRutasSeEnmascara;
+    [Test] procedure ElUncPegadoAUnaOpcionSeEnmascara;
+    [Test] procedure ElUncDobladoDosVecesSeEnmascara;
+    [Test] procedure ElUncExtendidoYElHostRaroSeEnmascaran;
   end;
 
 implementation
@@ -332,6 +336,54 @@ begin
   // ...ni una unidad: "\\n" + letra + ":" va pegada a la carpeta n
   Assert.AreEqual('{"t":"' + Virtual + '\\n' + Letra + ':"}',
     MaskDriveText('', '{"t":"' + Letra + ':\\n' + Letra + ':"}'));
+end;
+
+{ Los UNC que se escapaban (revision de la 1.10.0, leidos por un revisor y
+  medidos aqui): detras de un ';', pegados a una opcion del compilador, el eco
+  del enlazador doblado otra vez dentro de un JSON, el \\?\UNC\ y un host que
+  no empieza por letra o digito. En todos, el nombre de la maquina salia. }
+
+procedure TBarridoDeUnidadesTests.ElUncDeUnaListaDeRutasSeEnmascara;
+var
+  S: string;
+begin
+  S := MaskDriveText('', '{"t":"' + Letra + ':\\a;\\\\nas\\s"}');
+  Assert.DoesNotContain(S, 'nas', S);
+  Assert.Contains(S, ';\\\\srvhost\\s', S);
+end;
+
+procedure TBarridoDeUnidadesTests.ElUncPegadoAUnaOpcionSeEnmascara;
+var
+  S: string;
+begin
+  S := MaskDriveText('', '{"t":"dcc64 -U\\\\nas\\lib x.dpr"}');
+  Assert.DoesNotContain(S, 'nas', S);
+  S := MaskDriveText('', 'dcc64 -U\\nas\lib -NU.\dcu x.dpr');
+  Assert.DoesNotContain(S, 'nas', S);
+  // (control) un separador doblado pegado a una carpeta no es un UNC
+  Assert.AreEqual('{"t":".\\\\Linux64\\\\\\\\Debug"}',
+    MaskDriveText('', '{"t":".\\\\Linux64\\\\\\\\Debug"}'));
+end;
+
+procedure TBarridoDeUnidadesTests.ElUncDobladoDosVecesSeEnmascara;
+var
+  S: string;
+begin
+  // el enlazador de Linux64 dobla sus barras y el JSON las vuelve a doblar
+  S := MaskDriveText('', '{"t":"-L \\\\\\\\nas\\\\s\\\\lib"}');
+  Assert.DoesNotContain(S, 'nas', S);
+end;
+
+procedure TBarridoDeUnidadesTests.ElUncExtendidoYElHostRaroSeEnmascaran;
+var
+  S: string;
+begin
+  S := MaskDriveText('', 'copia en \\?\UNC\nas\s\x.dcu');
+  Assert.DoesNotContain(S, 'nas', S);
+  S := MaskDriveText('', '{"t":"\\\\?\\UNC\\nas\\s"}');
+  Assert.DoesNotContain(S, 'nas', S);
+  S := MaskDriveText('', 'copia en \\_nas\s\x.dcu');
+  Assert.DoesNotContain(S, '_nas', S);
 end;
 
 initialization

@@ -80,7 +80,8 @@ uses
   Lsp.Texts,
   System.RegularExpressions,
   Lsp.Dproj,        // RutasDeBusqueda: el search path de un .dproj, resuelto
-  Lsp.ProjectUnits;
+  Lsp.ProjectUnits,
+  Lsp.Pascal;
 
 type
   TCandidate = record
@@ -283,81 +284,10 @@ end;
   unverified, las SEIS comentarios.
 
   Se decide por lexico y no preguntando al motor, porque el motor ya ha dicho
-  lo unico que sabe decir. Y se calcula DENTRO del barrido secuencial que ya
-  existe, no en una segunda pasada, porque un comentario de bloque cruza
-  lineas y el estado tiene que viajar con ellas. }
-type
-  TEstadoLex = (elCodigo, elLlave, elParen);
-
-{ Marca que posiciones (1-based, como las que devuelve Pos) de ALine son
-  codigo de verdad. AEstado entra con el comentario de bloque que venga
-  abierto de la linea anterior y sale con el que quede abierto para la
-  siguiente. }
-procedure MarcaCodigo(const ALine: string; var AEstado: TEstadoLex;
-  var ACodigo: TArray<Boolean>);
-var
-  I, N: Integer;
-  EnCadena: Boolean;
-begin
-  N := Length(ALine);
-  SetLength(ACodigo, N + 1);    // 1-based: la posicion 0 no se usa
-  EnCadena := False;            // una cadena Pascal no cruza lineas
-  I := 1;
-  while I <= N do
-  begin
-    ACodigo[I] := (AEstado = elCodigo) and not EnCadena;
-    case AEstado of
-      elLlave:
-        if ALine[I] = '}' then
-          AEstado := elCodigo;
-      elParen:
-        if (ALine[I] = '*') and (I < N) and (ALine[I + 1] = ')') then
-        begin
-          Inc(I);
-          ACodigo[I] := False;
-          AEstado := elCodigo;
-        end;
-      elCodigo:
-        // El orden importa: dentro de una cadena, // y { son texto y nada
-        // mas. Asi 'http://x' no abre un comentario hasta fin de linea.
-        if EnCadena then
-        begin
-          // La comilla cierra... o es el escape '' y la siguiente vuelve a
-          // abrir, que da igual: la cadena sigue.
-          if ALine[I] = '''' then
-            EnCadena := False;
-        end
-        else if ALine[I] = '''' then
-          EnCadena := True
-        else if ALine[I] = '{' then
-        begin
-          // Una directiva {$...} tampoco es una referencia: mismo saco.
-          ACodigo[I] := False;
-          AEstado := elLlave;
-        end
-        else if (ALine[I] = '(') and (I < N) and (ALine[I + 1] = '*') then
-        begin
-          ACodigo[I] := False;
-          Inc(I);
-          ACodigo[I] := False;
-          AEstado := elParen;
-        end
-        else if (ALine[I] = '/') and (I < N) and (ALine[I + 1] = '/') then
-        begin
-          // Hasta el final de la linea, y se sale sin mirar mas: un apostrofe
-          // dentro del comentario ("don't") no puede abrir una cadena que
-          // envenene el resto de la linea.
-          while I <= N do
-          begin
-            ACodigo[I] := False;
-            Inc(I);
-          end;
-          Break;
-        end;
-    end;
-    Inc(I);
-  end;
-end;
+  lo unico que sabe decir: por EL lexico de la casa (Lsp.Pascal), sobre el
+  fichero entero, porque un comentario de bloque cruza lineas y el estado
+  tiene que viajar con ellas. Aqui vivia su propia copia (MarcaCodigo); el
+  censo del 2-oct-2026 las junto en una. }
 
 { LA SEGUNDA CLASE DE GEMELO.
 
@@ -494,8 +424,8 @@ var
   I, P, ScanCol, FilesOpened: Integer;
   Confirmed, Unverified: TJSONArray;
   Menciones: TList<TCandidate>;   // el nombre aparece, pero en prosa
-  Estado: TEstadoLex;
-  Codigo: TArray<Boolean>;
+  VistaLines: TStringList;        // las lineas de su CODIGO (Lsp.Pascal)
+  VistaLine: string;
   Rejected, Scanned: Integer;
   RejectedArr: TJSONArray;
   ScopeDirs: TArray<string>;
@@ -590,7 +520,9 @@ begin
   begin
     var TwinLines := TStringList.Create;
     try
-      TwinLines.Text := TLspClient.LoadSourceText(TargetPath);
+      // la vista del codigo: lo que se busca aqui es estructura (la clase
+      // del metodo) y la columna del identificador en codigo
+      TwinLines.Text := CodigoPascal(TLspClient.LoadSourceText(TargetPath));
       ClaseObjetivo := ClaseDeMetodo(TwinLines, TargetLine, Ident);
       if (TargetLine >= 0) and (TargetLine < TwinLines.Count) then
       begin
@@ -708,17 +640,23 @@ begin
       if Candidates.Count >= AMaxCandidates then
         Break;
       Text := TLspClient.LoadSourceText(F);
+      // lo que es codigo lo dice EL lexico (Lsp.Pascal): la vista del codigo
+      // tiene el mismo largo y los mismos saltos, y un identificador es
+      // codigo si su primera letra sigue en ella. Aqui habia una copia del
+      // lexico (MarcaCodigo, 2026-09-21); el censo del 2-oct-2026 las junto
+      var Vista := CodigoPascal(Text);
       // La jerarquia se apunta AQUI, del fuente que ya se ha leido para
       // buscar candidatos: el parentesco entre clases sale gratis.
-      AnotaHerencia(Text, Herencia);
+      AnotaHerencia(Vista, Herencia);
       Lines := TStringList.Create;
+      VistaLines := TStringList.Create;
       try
         Lines.Text := Text;
-        Estado := elCodigo;   // el estado lexico empieza limpio en cada fichero
+        VistaLines.Text := Vista;
         for I := 0 to Lines.Count - 1 do
         begin
           LineText := Lines[I];
-          MarcaCodigo(LineText, Estado, Codigo);
+          VistaLine := VistaLines[I];
           ScanCol := 1;
           repeat
             P := Pos(Ident.ToLower, LineText.ToLower, ScanCol);
@@ -737,7 +675,7 @@ begin
               // presupuesto de candidatos ni hace abrir un fichero para
               // validarla: ese era el otro coste, callado, de meterlas en
               // el mismo saco que lo que no se pudo comprobar.
-              if (P <= High(Codigo)) and Codigo[P] then
+              if (P <= Length(VistaLine)) and (VistaLine[P] <> ' ') then
               begin
                 Candidates.Add(Cand);
                 if Candidates.Count >= AMaxCandidates then
@@ -753,6 +691,7 @@ begin
         end;
       finally
         Lines.Free;
+        VistaLines.Free;
       end;
     end;
 
@@ -795,7 +734,7 @@ begin
             begin
               CandLines := TStringList.Create;
               try
-                CandLines.Text := TLspClient.LoadSourceText(CandPath);
+                CandLines.Text := CodigoPascal(TLspClient.LoadSourceText(CandPath));
               except
               end;
               Textos.Add(CandPath.ToLower, CandLines);

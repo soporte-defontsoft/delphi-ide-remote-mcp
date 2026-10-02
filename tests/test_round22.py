@@ -13,6 +13,8 @@ form.
   M1  linker-style re-doubled paths survive legibly (no srvhost cascade)
   M2  a genuine UNC host is still masked (after quote, raw and JSON forms)
   M3  drive letters still masked in the same text
+  M6  inside a JSON answer a path hanging from the drive root (one leading backslash) is not a
+      UNC, and a genuine UNC there is still masked (1.10.0)
   M4  (live, only if this machine holds the Linux64 SDK) a real Linux64 link
       asked with verbosity=verbose, the only mode that carries the whole line:
       outputTail carries ZERO srvhost and a legible "Linker command line"
@@ -91,6 +93,35 @@ r = call('delphi_workspace', {})
 check('M5b no se enmascara de mas: la respuesta normal sigue siendo JSON '
       'valido y sin srvsrv',
       'srvsrv' not in r and r.lstrip().startswith('{'), r[:200])
+
+# M6 (1.10.0): dentro de un JSON cada barra va doble, asi que \\x es UNA barra
+# (una ruta que cuelga de la raiz de la unidad) y la ruta de red es \\\\host.
+# La regla del texto plano tomaba la primera por una ruta de red: la ruta de
+# busqueda \Shared\Lib de un .dproj salia \srvhost\Lib en delphi_config view
+# (medido el 2-oct-2026). El .dproj, escrito a mano como el de cualquiera:
+# add-searchpath no deja poner una ruta asi, y con razon.
+call('delphi_create', {'kind': 'project-console', 'name': 'RaizM', 'dir': BASE})
+raiz = glob.glob(os.path.join(BASE, '**', 'RaizM.dproj'), recursive=True)
+M6 = 'M6 una ruta que cuelga de la raiz, en un JSON, no es una ruta de red'
+if not raiz:
+    check(M6, False, 'no se pudo crear el proyecto de la prueba')
+else:
+    marca = "<PropertyGroup Condition=\"'$(Base)'!=''\">"
+    # en binario: su BOM y sus CRLF tal cual (en modo texto salia \r\r\n)
+    b = open(raiz[0], 'rb').read()
+    bom = b'\xef\xbb\xbf' if b.startswith(b'\xef\xbb\xbf') else b''
+    t = b[len(bom):].decode('utf-8')
+    t = t.replace(marca, marca + '\r\n        <DCC_UnitSearchPath>' + BS + 'Shared' + BS + 'Lib;'
+                  + BS + BS + 'equipo' + BS + 'recurso' + BS + 'lib;$(DCC_UnitSearchPath)'
+                  '</DCC_UnitSearchPath>', 1)
+    open(raiz[0], 'wb').write(bom + t.encode('utf-8'))
+    v = mc.como_json(call('delphi_config', {'project': raiz[0], 'command': 'view',
+                                            'section': 'searchpaths'}))
+    base_ = (v.get('searchPaths') or {}).get('base') or []
+    check(M6, BS + 'Shared' + BS + 'Lib' in base_, base_)
+    check('M6b ...y la ruta de red de verdad, en el mismo JSON, se sigue tapando',
+          BS + BS + 'srvhost' + BS + 'recurso' + BS + 'lib' in base_
+          and not any('equipo' in x for x in base_), base_)
 
 # M4 live: a real Linux64 link on machines that hold the SDK
 r = call('delphi_create', {'kind': 'project-console', 'name': 'TailM', 'dir': BASE})

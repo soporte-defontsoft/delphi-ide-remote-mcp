@@ -444,33 +444,16 @@ begin
 end;
 
 { Los Default_<Plataforma> de esa version: que SDK usa el IDE cuando el
-  proyecto no dice nada. Es una eleccion del operador y se informa tal cual. }
+  proyecto no dice nada. Es una eleccion del operador y se informa tal cual.
+  Por EL lector de los valores de una clave del IDE (IdeValoresDeClave), solo
+  la del usuario: aqui habia otra copia del mismo bucle, y un valor que no
+  fuera texto lanzaba (revision de la 1.10.0). }
 function DefaultsDeSdk(const AVersion: string): TArray<string>;
-var
-  R: TRegistry;
-  L, Nombres: TStringList;
-  V: string;
 begin
   Result := nil;
-  R := TRegistry.Create(KEY_READ);
-  L := TStringList.Create;
-  Nombres := TStringList.Create;
-  try
-    R.RootKey := HKEY_CURRENT_USER;
-    if R.OpenKeyReadOnly(Format('Software\Embarcadero\BDS\%s\PlatformSDKs',
-      [AVersion])) then
-    begin
-      R.GetValueNames(Nombres);
-      for V in Nombres do
-        if V.StartsWith('Default_', True) then
-          L.Add(V.Substring(8) + ' = ' + R.ReadString(V));
-      Result := L.ToStringArray;
-    end;
-  finally
-    Nombres.Free;
-    L.Free;
-    R.Free;
-  end;
+  for var V in IdeValoresDeClave(AVersion, 'PlatformSDKs', False) do
+    if V.Nombre.StartsWith('Default_', True) then
+      Result := Result + [V.Nombre.Substring(8) + ' = ' + V.Dato];
 end;
 
 function AsientoDeSdkExiste(const AVersion, ANombre: string): Boolean;

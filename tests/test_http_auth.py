@@ -149,7 +149,7 @@ try:
                 'delphi_adb', 'delphi_desktop',
                 'delphi_components', 'delphi_styles', 'delphi_messages',
                 'delphi_changeset', 'delphi_designer', 'delphi_rename_symbol',
-                'delphi_test', 'delphi_help']
+                'delphi_test', 'delphi_help', 'delphi_docs']
     check('http: tools/list = %d tools' % len(expected), sorted(names) == sorted(expected), names)
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",

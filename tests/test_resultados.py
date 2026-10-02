@@ -610,9 +610,12 @@ try:
           res.get('isError') is True and sc.get('code') == 'DENIED' and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT'),
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
+    # sin sitio DE VERDAD: una unit sin implementation (el cuerpo va delante
+    # del end., la declaracion no tiene donde ir). Hasta la 1.10.0 se forzaba
+    # con un 'implementation' DENTRO de un comentario, que el lector de
+    # entonces contaba como un segundo; el lexico de la casa ya no lo cuenta
     VIS = os.path.join(JAIL, 'Vis.pas')
-    open(VIS, 'w', newline='\r\n').write('unit Vis;\n\ninterface\n\n{\nimplementation\n}\n\n'
-                                          'implementation\n\nend.\n')
+    open(VIS, 'w', newline='\r\n').write('unit Vis;\n\ninterface\n\nend.\n')
     VIS_ANTES = open(VIS, 'rb').read()
     res, sc, t = llama('delphi_edit', {'path': VIS, 'insert': 'rutina-global', 'visible': True,
                                        'code': 'procedure Hola;\nbegin\nend;'})

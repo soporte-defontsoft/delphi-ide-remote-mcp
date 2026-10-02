@@ -99,13 +99,6 @@ function ProjectsUsingUnit(const APasPath: string; const AAlsoDir: string = ''):
   sin comprobar dcp ni instalacion - compilar el paquete es cosa del agente. }
 function WorkspacePackagesWithUnit(const ADpkPath, AUnitName: string): TArray<string>;
 
-// The Pascal text with every comment (brace, paren-star, slash-slash) and
-// compiler directive replaced by spaces - same length, same line breaks, so
-// positions and line numbers survive. String literals are left intact. For
-// scanners that must not read commented-out code (field 2026-08-23: a
-// StyleLookup mentioned in a comment became a lint "finding").
-function BlankComments(const S: string): string;
-
 { La cabecera "unit X;" de un .pas: el nombre tal cual y donde empieza
   (1-based), fuera de comentarios y con las directivas que admite detras
   (platform, deprecated, library, experimental). False si no la hay. UN
@@ -114,33 +107,6 @@ function BlankComments(const S: string): string;
   registraba ni se reescribia, y MOVE-015 decia que si (decima revision). }
 function CabeceraDeUnit(const ASrc: string; out ANombre: string;
   out AInicio: Integer): Boolean;
-
-type
-  // Una directiva de compilacion DE VERDAD de un texto Pascal, en sus dos
-  // formas (llave-dolar y parentesis-asterisco-dolar): nunca la que va dentro
-  // de un comentario (llaves, parentesis-asterisco o //) ni de una cadena.
-  TDirectivaPascal = record
-    Nombre: string;         // en mayusculas: I, INCLUDE, IFDEF, APPTYPE...
-    Argumento: string;      // lo que va detras del nombre, tal cual
-    Inicio, Largo: Integer; // la directiva entera en el texto (1-based)
-    InicioArg: Integer;     // donde empieza Argumento en el texto
-  end;
-
-// LAS directivas reales de ATexto, en orden: el UNICO lector de directivas
-// (las de fichero I/R/L de la mudanza y de la puerta del build, los
-// condicionales de un uses partido en ramas, el detector de tests). Con el
-// mismo lexico que el resto (CommentLen/QuoteLen): cuatro lectores con su
-// regex sobre el texto crudo veian una directiva COMENTADA -tambien con //- o
-// dentro de una cadena, y no la forma parentesis-asterisco (revision del
-// 27-sep-2026, David: "incluso //").
-function DirectivasPascal(const ATexto: string): TArray<TDirectivaPascal>;
-
-// Las lineas (1-based) de ATexto donde empieza un comentario de LLAVE que
-// lleva otra llave abierta dentro. Pascal no anida llaves: el primer cierre
-// acaba el comentario y lo que sigue es codigo, o una directiva de verdad
-// si citaba una de llave-dolar (la trampa en la que se cayo cuatro veces
-// entre el 25 y el 27-sep-2026). Solo lo mira; quien lo usa decide.
-function LlavesAnidadas(const ATexto: string): TArray<Integer>;
 
 { adduses de delphi_edit: nombres de unit al uses de una seccion (interface o
   implementation) de un .pas; la clausula la escribe el motor. }
@@ -220,7 +186,8 @@ uses
   Lsp.DesignerBin, // ReadPathDenied: hasta donde se puede subir buscando un .dpr
   Lsp.Dproj,       // XmlUnescape: el lector de la casa
   Lsp.References,
-  Lsp.NetDrives;  // SkipIdeArtifacts: una mudanza no entra en artefactos
+  Lsp.NetDrives,  // SkipIdeArtifacts: una mudanza no entra en artefactos
+  Lsp.Pascal;
 
 { TUnitInfo }
 
@@ -416,7 +383,10 @@ begin
   if AInfo.Designer = '' then
     Exit;
 
-  // the designer's root object names the form; the .pas gives the ancestor
+  // the designer's root object names the form; the .pas gives the ancestor -
+  // de su CODIGO: una clase comentada ('TViejo = class(TForm)' entre llaves)
+  // no es la del formulario (censo del lexico, 2-oct-2026)
+  Src := CodigoPascal(Src);
   if DesignerHeaderName(AInfo.Designer, DName, DClass) then
   begin
     AInfo.FormName := DName;
@@ -457,101 +427,6 @@ type
     OtrasRamas: TArray<string>;
   end;
 
-// Length of the comment or directive starting at S[I] (0 when none): the
-// slash-slash line comment, the paren-star block and the brace block
-// (compiler directives included - the compiler treats them as comments
-// inside a uses clause).
-function CommentLen(const S: string; I: Integer): Integer;
-var
-  J: Integer;
-begin
-  Result := 0;
-  if I > Length(S) then
-    Exit;
-  if (S[I] = '/') and (I < Length(S)) and (S[I + 1] = '/') then
-  begin
-    J := I;
-    while (J <= Length(S)) and (S[J] <> #10) and (S[J] <> #13) do
-      Inc(J);
-    Exit(J - I);
-  end;
-  if (S[I] = '(') and (I < Length(S)) and (S[I + 1] = '*') then
-  begin
-    J := Pos('*)', S, I + 2);
-    if J = 0 then
-      Exit(Length(S) - I + 1);
-    Exit(J + 2 - I);
-  end;
-  if S[I] = '{' then
-  begin
-    J := Pos('}', S, I + 1);
-    if J = 0 then
-      Exit(Length(S) - I + 1);
-    Exit(J + 1 - I);
-  end;
-end;
-
-{ Length of the quoted string starting at S[I] ('' escapes), 0 when none. }
-function QuoteLen(const S: string; I: Integer): Integer;
-var
-  J: Integer;
-begin
-  Result := 0;
-  if (I > Length(S)) or (S[I] <> '''') then
-    Exit;
-  J := I + 1;
-  while J <= Length(S) do
-  begin
-    if S[J] = '''' then
-    begin
-      if (J < Length(S)) and (S[J + 1] = '''') then
-        Inc(J, 2)
-      else
-        Exit(J + 1 - I);
-    end
-    else
-      Inc(J);
-  end;
-  Result := Length(S) - I + 1;
-end;
-
-function BlankComments(const S: string): string;
-var
-  I, N, K: Integer;
-  Sb: TStringBuilder;
-begin
-  Sb := TStringBuilder.Create(Length(S));
-  try
-    I := 1;
-    while I <= Length(S) do
-    begin
-      N := QuoteLen(S, I);
-      if N > 0 then
-      begin
-        Sb.Append(S, I - 1, N);
-        Inc(I, N);
-        Continue;
-      end;
-      N := CommentLen(S, I);
-      if N > 0 then
-      begin
-        for K := I to I + N - 1 do
-          if CharInSet(S[K], [#10, #13]) then
-            Sb.Append(S[K])
-          else
-            Sb.Append(' ');
-        Inc(I, N);
-        Continue;
-      end;
-      Sb.Append(S[I]);
-      Inc(I);
-    end;
-    Result := Sb.ToString;
-  finally
-    Sb.Free;
-  end;
-end;
-
 function CabeceraDeUnit(const ASrc: string; out ANombre: string;
   out AInicio: Integer): Boolean;
 var
@@ -559,7 +434,7 @@ var
 begin
   ANombre := '';
   AInicio := 0;
-  M := TRegEx.Match(BlankComments(ASrc),
+  M := TRegEx.Match(CodigoPascal(ASrc),
     '^\s*unit\s+([^\s;]+)(?:\s+(?:platform|deprecated|library|experimental)\b[^;]*)?\s*;',
     [roIgnoreCase, roMultiline]);
   Result := M.Success;
@@ -567,91 +442,6 @@ begin
   begin
     AInicio := M.Groups[1].Index;
     ANombre := Copy(ASrc, AInicio, M.Groups[1].Length);
-  end;
-end;
-
-function DirectivasPascal(const ATexto: string): TArray<TDirectivaPascal>;
-var
-  I, N, P, Q, Fin: Integer;
-  D: TDirectivaPascal;
-begin
-  Result := [];
-  I := 1;
-  while I <= Length(ATexto) do
-  begin
-    N := QuoteLen(ATexto, I);
-    if N > 0 then
-    begin
-      Inc(I, N); // una cadena: nada de dentro es una directiva
-      Continue;
-    end;
-    N := CommentLen(ATexto, I);
-    if N = 0 then
-    begin
-      Inc(I);
-      Continue;
-    end;
-    // un comentario de llave o de parentesis-asterisco que empieza por $ es
-    // una directiva; uno de // nunca lo es, y lo de dentro de un comentario
-    // tampoco
-    P := 0;
-    if (ATexto[I] = '{') and (I < Length(ATexto)) and (ATexto[I + 1] = '$') then
-      P := I + 2
-    else if (ATexto[I] = '(') and (I + 2 <= Length(ATexto)) and (ATexto[I + 2] = '$') then
-      P := I + 3;
-    if P > 0 then
-    begin
-      Q := P;
-      while (Q <= Length(ATexto)) and
-            CharInSet(ATexto[Q], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
-        Inc(Q);
-      // el contenido acaba antes del cierre: la llave, o el '*' de '*)'
-      Fin := I + N - 1;
-      if (ATexto[I] = '(') and (Fin > I) and (ATexto[Fin] = ')') then
-        Dec(Fin)
-      else if (ATexto[I] = '{') and (ATexto[Fin] <> '}') then
-        Inc(Fin); // sin cerrar: hasta el final
-      D.Nombre := UpperCase(Copy(ATexto, P, Q - P));
-      D.InicioArg := Q;
-      D.Argumento := Copy(ATexto, Q, Fin - Q);
-      D.Inicio := I;
-      D.Largo := N;
-      Result := Result + [D];
-    end;
-    Inc(I, N);
-  end;
-end;
-
-function LlavesAnidadas(const ATexto: string): TArray<Integer>;
-var
-  I, N, Dentro, Linea: Integer;
-begin
-  Result := [];
-  I := 1;
-  while I <= Length(ATexto) do
-  begin
-    N := QuoteLen(ATexto, I);
-    if N = 0 then
-      N := CommentLen(ATexto, I);
-    if N = 0 then
-    begin
-      Inc(I);
-      Continue;
-    end;
-    if ATexto[I] = '{' then
-    begin
-      // otra llave abierta ANTES del cierre de esta
-      Dentro := Pos('{', ATexto, I + 1);
-      if (Dentro > 0) and (Dentro < I + N - 1) then
-      begin
-        Linea := 1;
-        for var K := 1 to I - 1 do
-          if ATexto[K] = #10 then
-            Inc(Linea);
-        Result := Result + [Linea];
-      end;
-    end;
-    Inc(I, N);
   end;
 end;
 
@@ -762,7 +552,10 @@ begin
     I := AFrom
   else
   begin
-    M := TRegEx.Match(Dpr, '^\s*(program|library|package)\b', [roIgnoreCase, roMultiline]);
+    // en la vista del codigo: un 'program viejo; uses X;' dentro de un
+    // comentario de arriba era la cabecera, y add-unit escribia en el uses
+    // COMENTADO diciendo que lo habia hecho (sonda del lexico, 2-oct-2026)
+    M := TRegEx.Match(CodigoPascal(Dpr), '^\s*(program|library|package)\b', [roIgnoreCase, roMultiline]);
     if M.Success then
     begin
       I := M.Index + M.Length;
@@ -931,24 +724,87 @@ begin
   end;
 end;
 
+// La entrada AEntrada reescrita con ANueva (renombrada; completada con su
+// in): conserva lo que la precede (su comentario o su directiva) y lo que
+// lleva DETRAS de lo suyo - el nombre, el in y el comentario del form, que
+// ANueva trae -: una directiva o un comentario. Los dos escritores la
+// rehacian con lo de delante solo, y renombrar "Unit1 in 'Unit1.pas'
+// {$IFDEF DEBUG}," perdia el IFDEF: el .dpr no compilaba y la tool decia
+// que si (revision de la 1.10.0, medido con delphi_move y con add-unit)
+function EntradaReescrita(const AEntrada, ANueva: string): string;
+var
+  Prefix, Core: string;
+  M: TMatch;
+begin
+  SplitEntryPrefix(AEntrada, Prefix, Core);
+  Result := ANueva;
+  M := TRegEx.Match(Core, '^\s*[A-Za-z_][\w.]*(\s+in\s*''[^'']*''(\s*\{\s*[A-Za-z_]\w*\s*(:\s*[A-Za-z_][\w.]*\s*)?\})?)?',
+    [roIgnoreCase]);
+  if M.Success then
+    Result := Result + Copy(Core, M.Length + 1, MaxInt);
+  if Prefix <> '' then
+    Result := Prefix + #10 + Result;
+end;
+
 { Rewrites the clause with AEntries, keeping the text before/after intact.
   Entries go one per line with the indent the clause already used (the IDE's
   two spaces when it had none). Measured 2026-08-23: the indent was applied
   TWICE (join + a second replace) and every add/remove-unit re-indented the
   whole clause to four spaces - a 40-line cosmetic diff on a real project. }
-{ Donde empieza el comentario // de una linea (1-based), fuera de comillas;
-  0 si no tiene. }
-function ComentarioDeLinea(const ALinea: string): Integer;
+// Una entrada envuelta ENTERA en su condicional, en lineas suyas: la primera
+// abre (IFDEF X, IFNDEF X, IF ..., IFOPT ...), la ultima cierra (ENDIF /
+// IFEND) y en medio esta la unit. Lo dice EL lector de directivas: con su
+// propia regex no veia la forma parentesis-asterisco ni un // detras de la
+// directiva, y quitar la entrada de detras dejaba 'UA, ;' sin DEBUG
+// (revision de la 1.10.0, medido)
+function EsEnvuelta(const AEntrada: string): Boolean;
 var
-  EnCadena: Boolean;
+  L: TArray<string>;
+
+  // la linea es UNA directiva de esas y nada de codigo (un comentario si)
+  function SoloDirectiva(const ALinea: string; const ANombres: array of string): Boolean;
+  var
+    Ds: TArray<TDirectivaPascal>;
+  begin
+    Ds := DirectivasPascal(ALinea);
+    Result := (Length(Ds) = 1) and MatchText(Ds[0].Nombre, ANombres) and
+      (CodigoPascal(ALinea).Trim = '');
+  end;
+
 begin
-  EnCadena := False;
-  for var I := 1 to Length(ALinea) - 1 do
-    if ALinea[I] = '''' then
-      EnCadena := not EnCadena
-    else if not EnCadena and (ALinea[I] = '/') and (ALinea[I + 1] = '/') then
-      Exit(I);
-  Result := 0;
+  L := [];
+  for var S in SplitToLines(AEntrada) do
+    if S.Trim <> '' then
+      L := L + [S.Trim];
+  Result := (Length(L) >= 3) and SoloDirectiva(L[0], ['IFDEF', 'IFNDEF', 'IFOPT', 'IF']) and
+    SoloDirectiva(L[High(L)], ['ENDIF', 'IFEND']);
+end;
+
+// Que entrada NUEVA es cada una de la clausula ORIGINAL (-1: se quito). Los
+// escritores la cambian de tres maneras: anaden al final, cambian una entrada
+// EN SU SITIO (completarla; renombrarla, con otro nombre) o quitan por el
+// nombre, y entonces la lista se acorta. Se casan por el nombre; sin quitar
+// ninguna, la que no casa es la misma en su sitio con otro nombre. Iba solo
+// por el nombre, y el rename acertaba porque su lista ES la de la clausula
+// (un array dinamico se asigna por referencia), no por metodo (revision de
+// la 1.10.0)
+function EntradaNuevaDe(const AOriginal, ANuevas: TArray<string>): TArray<Integer>;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(AOriginal));
+  I := 0;
+  for var K := 0 to High(AOriginal) do
+  begin
+    Result[K] := -1;
+    if (I <= High(ANuevas)) and
+       (SameText(EntryUnitName(AOriginal[K]), EntryUnitName(ANuevas[I])) or
+        (Length(ANuevas) >= Length(AOriginal))) then
+    begin
+      Result[K] := I;
+      Inc(I);
+    end;
+  end;
 end;
 
 function ReplaceUses(const Dpr: string; const U: TUsesClause; const AEntries: TArray<string>): string;
@@ -957,6 +813,47 @@ var
   M: TMatch;
   Parts: TArray<string>;
   I: Integer;
+  Mapa: TArray<Integer>;
+  ClasesClausula: TArray<TClasePascal>;
+
+  // la primera linea de una entrada cuando va sola (con un salto detras)
+  function PrimeraLinea(const AEntrada: string): string;
+  begin
+    var T := ConSalto(AEntrada, #10); // tambien el CR suelto (decima revision)
+    var P := T.IndexOf(#10);
+    Result := IfThen(P >= 0, Copy(T, 1, P), '').Trim;
+  end;
+
+  // si el // con el que empieza la entrada NUEVA AI iba, en la clausula
+  // ORIGINAL, detras de la coma de la que ahora es la AI-1. Por si hay uno
+  // asi, no por el primero con ese texto: con dos '// TODO' iguales detras
+  // de dos comas, el segundo se daba a la duena del primero y bajaba a una
+  // linea suya (revision de la 1.10.0, medido con adduses)
+  function EsDeLaAnterior(AI: Integer; const AComentario: string): Boolean;
+  begin
+    for var K := 1 to High(U.Entries) do
+      if (PrimeraLinea(U.Entries[K]) = AComentario) and (Mapa[K - 1] = AI - 1) then
+        Exit(True);
+    Result := False;
+  end;
+
+  // el hueco que habia en la clausula ORIGINAL entre un separador de ASeps y
+  // el comentario //; False si ese comentario no iba detras de uno. Un
+  // separador DE CODIGO y un // DE VERDAD, segun el lexico: el mismo texto
+  // dentro de una llave o de una cadena no cuenta
+  function HuecoTrasSeparador(const ASeps, AComentario: string; out AHueco: string): Boolean;
+  begin
+    AHueco := '';
+    for var MM in TRegEx.Matches(Clause, '[' + ASeps + ']([ \t]*)' + TRegEx.Escape(AComentario)) do
+      if (ClasesClausula[MM.Index] = cpCodigo) and
+         (ClasesClausula[MM.Index + MM.Length - Length(AComentario)] = cpLinea) then
+      begin
+        AHueco := MM.Groups[1].Value;
+        Exit(True);
+      end;
+    Result := False;
+  end;
+
 begin
   // EL escritor pregunta el mismo, como AtomicWrite: una clausula partida en
   // ramas no se reescribe - la unit caeria en la rama que no toca, o la
@@ -976,36 +873,85 @@ begin
   NL := SaltoDominante(Dpr);
   // the indent of the first entry line of the existing clause
   Clause := Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1);
+  ClasesClausula := ClasesPascal(Clause);
   M := TRegEx.Match(Clause, '\n([ \t]+)\S');
   if M.Success then
     Indent := M.Groups[1].Value
   else
     Indent := '  ';
   SetLength(Parts, Length(AEntries));
+  Mapa := EntradaNuevaDe(U.Entries, AEntries);
   // un // que va detras de la coma es de la entrada de ANTES (esta en su
   // misma linea), aunque el troceo por comas lo deje al principio de la
   // siguiente: se le devuelve a su dueno, y el separador (la coma o el ;)
   // va DELANTE de el. Si no, quitar la ultima entrada dejaba el ; dentro
   // del comentario y la clausula sin cerrar, y cada reescritura bajaba el
-  // comentario a una linea suya (medido 27-sep con removeuses).
+  // comentario a una linea suya (medido 27-sep con removeuses). Y a SU
+  // dueno, no a la de antes en la lista nueva: quitada la duena, se pegaba a
+  // la anterior ('UA, // de UB', medido el 2-oct-2026 con remove-unit) y se
+  // queda en una linea suya, como el del ; final de una quitada.
   var Entradas := Copy(AEntries);
   var Colas: TArray<string>;
   SetLength(Colas, Length(Entradas));
   for I := 1 to High(Entradas) do
   begin
-    var Texto := ConSalto(Entradas[I], #10); // tambien el CR suelto (decima revision)
+    var Texto := ConSalto(Entradas[I], #10);
     var P := Texto.IndexOf(#10);
-    var Primera := IfThen(P >= 0, Copy(Texto, 1, P), '').Trim;
+    var Primera := PrimeraLinea(Entradas[I]);
     // solo si en el original iba detras de SU coma: uno que estaba en una
     // linea suya no sube; y con el hueco que tenia (las entradas llegan
     // recortadas: el hueco sale del texto original de la clausula)
-    var MC := TRegEx.Match(Clause, ',([ \t]*)' + TRegEx.Escape(Primera));
-    if Primera.StartsWith('//') and MC.Success then
+    var HC: string;
+    if Primera.StartsWith('//') and HuecoTrasSeparador(',', Primera, HC) and
+       EsDeLaAnterior(I, Primera) then
     begin
-      Colas[I - 1] := IfThen(MC.Groups[1].Value <> '', MC.Groups[1].Value, ' ') + Primera;
+      Colas[I - 1] := IfThen(HC <> '', HC, ' ') + Primera;
       Entradas[I] := Copy(Texto, P + 2, MaxInt);
     end;
   end;
+  // el comentario que va DETRAS del ; final, en su misma linea, es de la
+  // ULTIMA entrada original, y queda fuera de la clausula: con una unit
+  // anadida detras se iba a la nueva ('Lsp.NetDrives; // PrefijoSinBarra'
+  // salio 'Lsp.Texts; // PrefijoSinBarra', medido el 2-oct-2026 con adduses,
+  // y lo mismo add-unit en un .dpr), y quitada su entrada se pegaba a la que
+  // quedaba ('// de SysUtils // de Classes'). Se queda con su entrada; si su
+  // entrada se fue, en una linea suya, como el de una quitada de en medio:
+  // un comentario no se borra
+  var Resto := U.EndPos + 1;   // desde donde sigue el texto de detras
+  var Suelto := '';            // el de una entrada que ya no esta
+  var PosCom := U.EndPos + 1;
+  while (PosCom <= Length(Dpr)) and CharInSet(Dpr[PosCom], [' ', #9]) do
+    Inc(PosCom);
+  var LargoCom := CommentLen(Dpr, PosCom);
+  // (una directiva no es un comentario de nadie: {$ o (*$ no viaja)
+  if (LargoCom > 0) and (Length(U.Entries) > 0) and
+     (Copy(Dpr, PosCom, LargoCom).IndexOfAny([#10, #13]) < 0) and
+     not Copy(Dpr, PosCom, 2).Equals('{$') and not Copy(Dpr, PosCom, 3).Equals('(*$') then
+  begin
+    // la que corresponde a la ultima original, no por su texto: el de una
+    // entrada lleva delante el comentario de la anterior, que quitar esa
+    // anterior cambia (medido)
+    var Duena := Mapa[High(U.Entries)];
+    if Duena < High(Entradas) then
+    begin
+      var Coment := Copy(Dpr, PosCom, LargoCom);
+      if Duena >= 0 then
+        Colas[Duena] := Colas[Duena] + IfThen(PosCom > U.EndPos + 1,
+          Copy(Dpr, U.EndPos + 1, PosCom - U.EndPos - 1), ' ') + Coment
+      else
+        Suelto := Coment;
+      Resto := PosCom + LargoCom;
+    end;
+  end;
+  // la COLA de entradas envueltas cada una en su condicional ({$IFDEF X} /
+  // la unit / {$ENDIF}) al final de la clausula: el separador de la de antes
+  // tiene que ir DENTRO de cada condicional (A {$IFDEF X}, B {$ENDIF};), o
+  // con X apagado queda 'A, ;' y no compila. Quitar la ultima C de 'A,
+  // {$IFDEF DEBUG} DebugU, {$ENDIF} C;' lo dejaba asi (medido en la revision
+  // de la 1.10.0; venia de antes)
+  var InicioCola := Length(Entradas);
+  while (InicioCola - 1 >= 1) and EsEnvuelta(Entradas[InicioCola - 1]) do
+    Dec(InicioCola);
   for I := 0 to High(Entradas) do
   begin
     // a multi-line entry (directives around it) keeps its lines indented too:
@@ -1015,22 +961,34 @@ begin
     var Lineas := SplitToLines(Entradas[I]);
     for var J := 0 to High(Lineas) do
       Lineas[J] := Lineas[J].Trim;
-    // el separador, detras de la ultima linea con codigo y delante de su //
-    var K := High(Lineas);
-    while (K > 0) and Lineas[K].StartsWith('//') do
-      Dec(K);
     var Sep := IfThen(I < High(Entradas), ',', ';');
-    var C := ComentarioDeLinea(Lineas[K]);
+    if InicioCola < Length(Entradas) then
+    begin
+      if (I = InicioCola - 1) or ((I >= InicioCola) and (I < High(Entradas))) then
+        Sep := '';
+      if I >= InicioCola then
+        Lineas[1] := ', ' + Lineas[1]; // la coma, dentro del condicional
+    end;
+    // el separador, detras de la ultima linea con codigo y delante de su //.
+    // Lo que es un // lo dice el lexico, con el estado de las lineas de antes:
+    // el de '{ver https://x}' no lo es, y la coma caia DENTRO de la llave
+    // (adduses acababa en SYS-006, medido el 2-oct-2026)
+    var Coms := ComentariosDeLinea(Lineas);
+    var K := High(Lineas);
+    while (K > 0) and (Coms[K] = 1) do
+      Dec(K);
+    var C := Coms[K];
     if C > 0 then
     begin
       var Codigo := Copy(Lineas[K], 1, C - 1);
       var Hueco := Copy(Codigo, Length(Codigo.TrimRight) + 1, MaxInt);
-      if Hueco = '' then
-      begin
-        // el que tenia en el original, detras de su separador
-        var MH := TRegEx.Match(Clause, '[,;]([ \t]*)' + TRegEx.Escape(Copy(Lineas[K], C, MaxInt)));
-        Hueco := IfThen(MH.Success and (MH.Groups[1].Value <> ''), MH.Groups[1].Value, ' ');
-      end;
+      // el que tenia en el original, detras de su separador. (Era un IfThen
+      // con MH.Groups[1] de argumento: IfThen es una funcion, sus argumentos
+      // se evaluan todos, y sin casar el grupo lanzaba 'Index out of bounds
+      // (1)': el SYS-006 de la sonda)
+      if (Hueco = '') and
+         (not HuecoTrasSeparador(',;', Copy(Lineas[K], C, MaxInt), Hueco) or (Hueco = '')) then
+        Hueco := ' ';
       Lineas[K] := Codigo.TrimRight + Sep + Hueco + Copy(Lineas[K], C, MaxInt);
     end
     else
@@ -1041,7 +999,8 @@ begin
   end;
   Body := IfThen(U.Keyword <> '', U.Keyword, 'uses') + NL + string.Join(NL, Parts);
   Body := TRegEx.Replace(Body, '[ \t]+(\r?\n)', '$1'); // no trailing blanks
-  Result := Copy(Dpr, 1, U.StartPos - 1) + Body + Copy(Dpr, U.EndPos + 1, MaxInt);
+  Result := Copy(Dpr, 1, U.StartPos - 1) + Body +
+    IfThen(Suelto <> '', NL + Indent + Suelto, '') + Copy(Dpr, Resto, MaxInt);
 end;
 
 function CreateFormLine(const AInfo: TUnitInfo): string;
@@ -1050,26 +1009,31 @@ begin
 end;
 
 { Inserts the CreateForm after the last existing CreateForm, else right
-  before Application.Run. Returns False when neither anchor exists. }
+  before Application.Run. Returns False when neither anchor exists. Lo que
+  busca, en el CODIGO: un Application.Run comentado encima del de verdad
+  se llevaba el CreateForm DENTRO del comentario, y uno comentado de la
+  misma clase pasaba por "ya esta" (revision de la 1.10.0, medido con
+  delphi_create form-vcl). }
 function InsertCreateForm(var Dpr: string; const AInfo: TUnitInfo): Boolean;
 var
-  Lines: TArray<string>;
+  Lines, Vista: TArray<string>;
   I, Last, RunAt: Integer;
   NL, Indent: string;
   L: TStringList;
 begin
   Result := False;
-  if TRegEx.IsMatch(Dpr, '\bCreateForm\s*\(\s*' + TRegEx.Escape(AInfo.ClassName) + '\s*,', [roIgnoreCase]) then
+  if TRegEx.IsMatch(CodigoPascal(Dpr), '\bCreateForm\s*\(\s*' + TRegEx.Escape(AInfo.ClassName) + '\s*,', [roIgnoreCase]) then
     Exit(True); // already there
   NL := SaltoDominante(Dpr);
   Lines := SplitToLines(Dpr); // el troceador del motor: un CR suelto es salto
+  Vista := SplitToLines(CodigoPascal(Dpr));
   Last := -1;
   RunAt := -1;
   for I := 0 to High(Lines) do
   begin
-    if TRegEx.IsMatch(Lines[I], '^\s*Application\.CreateForm\s*\(', [roIgnoreCase]) then
+    if TRegEx.IsMatch(Vista[I], '^\s*Application\.CreateForm\s*\(', [roIgnoreCase]) then
       Last := I;
-    if (RunAt = -1) and TRegEx.IsMatch(Lines[I], '^\s*Application\.Run\b', [roIgnoreCase]) then
+    if (RunAt = -1) and TRegEx.IsMatch(Vista[I], '^\s*Application\.Run\b', [roIgnoreCase]) then
       RunAt := I;
   end;
   if (Last = -1) and (RunAt = -1) then
@@ -1096,10 +1060,16 @@ begin
   Result := True;
 end;
 
-{ Drops every Application.CreateForm line naming AClass or AVar. }
+{ Drops every Application.CreateForm line naming AClass or AVar - del
+  CODIGO: uno comentado se queda, y de una linea que lleva algo mas (el
+  cierre de un comentario de encima) se va la sentencia sola: la llave que
+  cerraba el comentario detras de un CreateForm se iba con el, y el
+  comentario quedaba abierto hasta el final (revision de la 1.10.0, medido
+  con remove-unit). }
 function RemoveCreateForm(var Dpr: string; const AClassName, AFormName: string): Integer;
 var
-  Lines: TArray<string>;
+  Lines, Vista: TArray<string>;
+  M: TMatch;
   I: Integer;
   NL: string;
   L: TStringList;
@@ -1108,19 +1078,32 @@ begin
   Result := 0;
   NL := SaltoDominante(Dpr);
   Lines := SplitToLines(Dpr);
+  Vista := SplitToLines(CodigoPascal(Dpr));
   if AClassName <> '' then
-    Pat := '^\s*Application\.CreateForm\s*\(\s*' + TRegEx.Escape(AClassName) + '\s*,'
+    Pat := '^\s*(Application\.CreateForm\s*\(\s*' + TRegEx.Escape(AClassName) + '\s*,[^)]*\)\s*;?)'
   else if AFormName <> '' then
-    Pat := '^\s*Application\.CreateForm\s*\(\s*\w+\s*,\s*' + TRegEx.Escape(AFormName) + '\s*\)'
+    Pat := '^\s*(Application\.CreateForm\s*\(\s*\w+\s*,\s*' + TRegEx.Escape(AFormName) + '\s*\)\s*;?)'
   else
     Exit;
   L := TStringList.Create;
   try
     for I := 0 to High(Lines) do
-      if TRegEx.IsMatch(Lines[I], Pat, [roIgnoreCase]) then
-        Inc(Result)
-      else
+    begin
+      M := TRegEx.Match(Vista[I], Pat, [roIgnoreCase]);
+      if not M.Success then
+      begin
         L.Add(Lines[I]);
+        Continue;
+      end;
+      Inc(Result);
+      // la sentencia sola (el grupo): lo de delante en la vista son blancos,
+      // y entre ellos puede ir el cierre del comentario de encima (medido:
+      // con el match entero se iba la llave)
+      var G := M.Groups[1];
+      var Resto := Copy(Lines[I], 1, G.Index - 1) + Copy(Lines[I], G.Index + G.Length, MaxInt);
+      if Resto.Trim <> '' then
+        L.Add(Resto.TrimRight);
+    end;
     if Result > 0 then
       Dpr := string.Join(NL, L.ToStringArray);
   finally
@@ -1202,7 +1185,7 @@ end;
 
 function AddProjectUnitNucleo(const AProject, APasPath: string): string;
 var
-  Dpr, Dproj, Enc, Text, Include, Entry, Note, Prefix, Core: string;
+  Dpr, Dproj, Enc, Text, Include, Entry, Note: string;
   Info: TUnitInfo;
   U: TUsesClause;
   E: string;
@@ -1229,7 +1212,7 @@ begin
     if SameText(U.Keyword, 'contains') then
     begin
       Estrenada := True;
-      var MEnd := TRegEx.Match(Text, '(?im)^\s*end\s*\.');
+      var MEnd := TRegEx.Match(CodigoPascal(Text), '(?im)^\s*end\s*\.');
       if not MEnd.Success then
         Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
       var NL := SaltoDominante(Text);
@@ -1243,7 +1226,7 @@ begin
     begin
       // Un programa al que se le quito su ULTIMA unit tampoco la tiene (se va
       // entera: decima revision): la estrena justo tras la cabecera.
-      var MCab := TRegEx.Match(Text, '(?im)^\s*(program|library)\b[^;]*;');
+      var MCab := TRegEx.Match(CodigoPascal(Text), '(?im)^\s*(program|library)\b[^;]*;');
       if MCab.Success then
       begin
         Estrenada := True;
@@ -1278,8 +1261,7 @@ begin
         // carpeta (F2613). Medido 2026-09-23 (Hermes, bateria 1.2). Se
         // completa la entrada como la escribiria el IDE, conservando la
         // directiva o comentario que la preceda.
-        SplitEntryPrefix(Entries[I], Prefix, Core);
-        Entries[I] := IfThen(Prefix <> '', Prefix + #10, '') + BuildEntry(Info, Include);
+        Entries[I] := EntradaReescrita(Entries[I], BuildEntry(Info, Include));
         Completada := True;
       end;
     end;
@@ -1437,6 +1419,13 @@ begin
     begin
       SplitEntryPrefix(E, Prefix, Core);
       Carry := Prefix; // its directive/comment stays, glued to the next entry
+      // ...y las directivas que la entrada lleva DETRAS: 'DebugU{$ENDIF}'
+      // perdia su ENDIF y el IFDEF de la de antes quedaba abierto (medido en
+      // la revision de la 1.10.0; venia de antes). Por el lector UNICO de
+      // directivas, cada una en su linea: aqui se escribio un gemelo suyo
+      // (DirectivasDe) y lo encontro el censo del lexico, el mismo dia
+      for var D in DirectivasPascal(Core) do
+        Carry := IfThen(Carry <> '', Carry + #10, '') + Copy(Core, D.Inicio, D.Largo);
     end;
   if (Carry <> '') and (Length(Result) > 0) then
   begin
@@ -1546,7 +1535,7 @@ end;
 function RenameProjectUnitNucleo(const AProject, AOldPasPath, ANewPasPath: string;
   const AFicheros, ANoEscritos: TArray<string>): string;
 var
-  Dpr, Dproj, Enc, Text, OldName, OldInclude, Entry, NewInclude, Prefix, Core: string;
+  Dpr, Dproj, Enc, Text, OldName, OldInclude, Entry, NewInclude: string;
   U: TUsesClause;
   Entries: TArray<string>;
   E: string;
@@ -1579,10 +1568,7 @@ begin
   for I := 0 to High(Entries) do
     if SameText(EntryUnitName(Entries[I]), OldName) then
     begin
-      SplitEntryPrefix(Entries[I], Prefix, Core);
-      Entries[I] := BuildEntry(Info, NewInclude);
-      if Prefix <> '' then
-        Entries[I] := Prefix + #10 + Entries[I];
+      Entries[I] := EntradaReescrita(Entries[I], BuildEntry(Info, NewInclude));
     end;
   Text := ReplaceUses(Text, U, Entries);
   PatchSaveText(Dpr, Text, Enc);
@@ -1718,7 +1704,7 @@ begin
       NL := SaltoDominante(Text);
       // la clausula se localiza sobre el texto con los comentarios en blanco
       // (mismas posiciones) y se reescribe entera, un nombre por linea
-      M := TRegEx.Match(BlankComments(Text), '^[ \t]*requires\b\s*(.*?);', [roIgnoreCase, roMultiline, roSingleline]);
+      M := TRegEx.Match(CodigoPascal(Text), '^[ \t]*requires\b\s*(.*?);', [roIgnoreCase, roMultiline, roSingleline]);
       Existentes := [];
       if M.Success then
         for E in M.Groups[1].Value.Split([',']) do
@@ -1743,7 +1729,7 @@ begin
         Text := Copy(Text, 1, M.Index - 1) + Clausula + Copy(Text, M.Index + M.Length, MaxInt)
       else
       begin
-        MPos := TRegEx.Match(Text, '^[ \t]*(contains\b|end\s*\.)', [roIgnoreCase, roMultiline]);
+        MPos := TRegEx.Match(CodigoPascal(Text), '^[ \t]*(contains\b|end\s*\.)', [roIgnoreCase, roMultiline]);
         if not MPos.Success then
           Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
         Text := Copy(Text, 1, MPos.Index - 1) + Clausula + NL + NL + Copy(Text, MPos.Index, MaxInt);
@@ -1876,7 +1862,7 @@ begin
     if not TFile.Exists(APasPath) then
       Exit(NoEsFichero(APasPath, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath])));
     Text := PatchLoadText(APasPath, Enc);
-    Blank := BlankComments(Text);
+    Blank := CodigoPascal(Text);
     M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
     if not M.Success then
       Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
@@ -1919,17 +1905,17 @@ begin
     else
     begin
       // sin clausula: nace justo debajo de la palabra de seccion, con su
-      // linea en blanco, como la escribe el IDE
-      FinLinea := PosSec;
-      while (FinLinea <= Length(Text)) and not CharInSet(Text[FinLinea], [#10, #13]) do
-        Inc(FinLinea);
+      // linea en blanco, como la escribe el IDE; debajo de donde ACABA esa
+      // linea, que un comentario abierto en ella se la llevaba dentro
+      // (revision de la 1.10.0, medido)
+      FinLinea := FinDeLinea(Text, PosSec);
       Text := Copy(Text, 1, FinLinea - 1) + NL + NL + 'uses' + NL + '  ' +
         string.Join(', ', Faltan) + ';' + Copy(Text, FinLinea, MaxInt);
     end;
     PatchSaveText(APasPath, Text, Enc);
     // el eco, releido del disco: la clausula tal y como ha quedado
     Text := PatchLoadText(APasPath, Enc);
-    Blank := BlankComments(Text);
+    Blank := CodigoPascal(Text);
     M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
     Clausula := '(?)';
     if M.Success then
@@ -1981,7 +1967,7 @@ begin
     if not TFile.Exists(APasPath) then
       Exit(NoEsFichero(APasPath, MsgFmt(SR_ADDUSES_NO_FILE_FMT, [APasPath])));
     Text := PatchLoadText(APasPath, Enc);
-    Blank := BlankComments(Text);
+    Blank := CodigoPascal(Text);
     M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
     if not M.Success then
       Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [Sec, TPath.GetFileName(APasPath)]));
@@ -2009,7 +1995,7 @@ begin
     PatchSaveText(APasPath, Text, Enc);
     // el eco, releido del disco
     Text := PatchLoadText(APasPath, Enc);
-    Blank := BlankComments(Text);
+    Blank := CodigoPascal(Text);
     M := TRegEx.Match(Blank, '^[ \t]*' + Sec + '\b', [roIgnoreCase, roMultiline]);
     Clausula := MsgFmt(SN_REMOVEUSES_GONE_FMT, [Sec]);
     if M.Success then
@@ -2158,20 +2144,23 @@ end;
 
 { Reescribe el NOMBRE de una unit como identificador entero en un fuente: las
   entradas de sus uses (interface e implementation) y las referencias
-  cualificadas UnitVieja.Identificador. Fuera de cadenas (comillas impares
-  antes del match en su linea = dentro de una cadena, no se toca); los
-  comentarios si se reescriben, que un comentario que nombra la unit vieja
-  tambien miente. La cabecera "unit X;" no se toca: la reescribe el que mueve
+  cualificadas UnitVieja.Identificador. Solo en el CODIGO, segun el lexico:
+  ni en cadenas ni en comentarios (David, 2-oct-2026; hasta entonces los
+  comentarios si, "que un comentario que nombra la unit vieja tambien
+  miente", y las cadenas se contaban por comillas impares en la linea, que
+  un apostrofo dentro de un comentario de llave despistaba: la referencia de
+  detras se quedaba sin renombrar y el build caia con E2003, medido con la
+  sonda del lexico). La cabecera "unit X;" no se toca: la reescribe el que mueve
   el fichero. Devuelve cuantas ocurrencias cambio (0 = fichero intacto, no se
   reescribe). Medido por Hermes el 2026-09-22 (test 19): tras el rename el
   .dpr conservaba UBatHelper.Bat11Sum y el build caia con E2003. }
 function RenombrarIdentificadorUnit(const APath, AViejo, ANuevo: string): Integer;
 var
   Enc, Texto, Linea: string;
-  Lineas, Saltos: TArray<string>;
+  Lineas, Saltos, Vistas, SaltosVista: TArray<string>;
   Re: TRegEx;
   M: TMatch;
-  I, J, Comillas, Ultimo: Integer;
+  I, Ultimo: Integer;
   Partes: TStringBuilder;
 begin
   Result := 0;
@@ -2181,22 +2170,19 @@ begin
   // troceaba solo por LF, y un fichero de CR sueltos era UNA linea que empezaba
   // por "unit" y no se reescribia (MOVED y el build caia; novena revision)
   Lineas := SplitToLinesConSalto(Texto, Saltos);
+  // el nombre se busca en la vista del codigo (mismo largo y mismos saltos:
+  // sus lineas son las del texto) y se cambia en el texto, en esa posicion
+  Vistas := SplitToLinesConSalto(CodigoPascal(Texto), SaltosVista);
   for I := 0 to High(Lineas) do
   begin
     Linea := Lineas[I];
-    if Linea.TrimLeft.StartsWith('unit ', True) then
+    if Vistas[I].TrimLeft.StartsWith('unit ', True) then
       Continue;
     Partes := TStringBuilder.Create;
     try
       Ultimo := 0; // 0-based: hasta donde se ha copiado ya la linea
-      for M in Re.Matches(Linea) do
+      for M in Re.Matches(Vistas[I]) do
       begin
-        Comillas := 0;
-        for J := 1 to M.Index - 1 do
-          if Linea[J] = '''' then
-            Inc(Comillas);
-        if Odd(Comillas) then
-          Continue; // dentro de una cadena
         Partes.Append(Linea.Substring(Ultimo, M.Index - 1 - Ultimo));
         Partes.Append(ANuevo);
         Ultimo := M.Index - 1 + M.Length;

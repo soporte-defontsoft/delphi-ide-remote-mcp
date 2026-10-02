@@ -38,7 +38,8 @@ uses
   System.RegularExpressions,
   Lsp.Texts,
   Lsp.Patch,
-  Lsp.DesignerBin;
+  Lsp.DesignerBin,
+  Lsp.Pascal;
 
 const
   // UNA expresion para "evento cableado por nombre": la lee el informe y la
@@ -340,9 +341,12 @@ begin
     DesignerFileToText(ADfm, DfmTxt) // sano: comprobado arriba
   else
     DfmTxt := PatchLoadText(ADfm, Enc);
-  // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto)
+  // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto); de
+  // la unit, la vista de su CODIGO (Lsp.Pascal): las clases y sus campos se
+  // buscan ahi, y un bloque comentado no declara componentes (censo del
+  // lexico, 2-oct-2026)
   Result := BindingReport(SplitToLines(DfmTxt),
-    SplitToLines(PatchLoadText(Pas, Enc)), Pas);
+    SplitToLines(CodigoPascal(PatchLoadText(Pas, Enc))), Pas);
 end;
 
 function DesignerBindingWarnings(const ADfm: string;
@@ -359,7 +363,7 @@ begin
   Pas := TPath.ChangeExtension(ADfm, '.pas');
   if not TFile.Exists(Pas) then
     Exit;
-  S := BindingReport(ADfmLines, SplitToLines(PatchLoadText(Pas, Enc)), Pas);
+  S := BindingReport(ADfmLines, SplitToLines(CodigoPascal(PatchLoadText(Pas, Enc))), Pas);
   J := TJSONObject.ParseJSONValue(S);
   if not (J is TJSONObject) then
   begin

@@ -15,7 +15,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 ## Index
 
 - **Understand the code (semantic, DelphiLSP-backed)** — [`delphi_symbols`](#delphi_symbols), [`delphi_definition`](#delphi_definition), [`delphi_signature`](#delphi_signature), [`delphi_hover`](#delphi_hover), [`delphi_completion`](#delphi_completion), [`delphi_references`](#delphi_references), [`delphi_diagnostics`](#delphi_diagnostics)
-- **Read files & explore** — [`delphi_read`](#delphi_read), [`delphi_search`](#delphi_search), [`delphi_list`](#delphi_list), [`delphi_projects`](#delphi_projects), [`delphi_installs`](#delphi_installs), [`delphi_workspace`](#delphi_workspace)
+- **Read files & explore** — [`delphi_read`](#delphi_read), [`delphi_docs`](#delphi_docs), [`delphi_search`](#delphi_search), [`delphi_list`](#delphi_list), [`delphi_projects`](#delphi_projects), [`delphi_installs`](#delphi_installs), [`delphi_workspace`](#delphi_workspace)
 - **Edit code safely  (read-write only)** — [`delphi_edit`](#delphi_edit), [`delphi_textedit`](#delphi_textedit), [`delphi_create`](#delphi_create)
 - **Manage files  (read-write only)** — [`delphi_delete`](#delphi_delete), [`delphi_move`](#delphi_move)
 - **Build, package  (read-write only)** — [`delphi_build`](#delphi_build), [`delphi_package`](#delphi_package)
@@ -157,6 +157,26 @@ Read a Delphi source file DECODED CORRECTLY (CP1252 / UTF-8 with or without BOM 
 | `fromline` | integer | optional | First line to show, 1-based (0 = from the start) |
 | `toline` | integer | optional | Last line to show, 1-based (0 = to the end; capped at 400 lines per call) |
 <!-- /contract -->
+
+### `delphi_docs`
+
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+THE DELPHI DOCUMENTATION installed with RAD Studio - the help the IDE opens with F1, of the version installed here: classes, routines and properties (RTL, VCL, FMX, FireDAC, Indy...), the language, the IDE and code examples, plus the help of the installed components that register one. command=search query=\<a concept or a class> gives a short list of pages (id + title), the best first, one per page: a qualified name (System.SysUtils.FormatDateTime, FMX.StdCtrls.TButton) lands on the exact page, a bare one (TButton, TStringList.Sort) or a concept ("class helpers") finds it too, and framework=vcl|fmx puts the page of that framework first when both have one (without it, neither is preferred). command=read id=\<an id of that list> gives the page as plain text, in chunks (offset). A long page first gives its introduction and its sections: \<its id>#\<section> reads one alone. related gives the pages around it: a class its unit and its member lists (methods, properties, events), a topic its parent index; the other pages it names (See Also, code examples) are found with search. Read-only, in any workspace: it opens only the help files the IDE registers, and an id never leaves its file. It says what something is for and how it is used; for its exact signature, what the installed sources declare wins (delphi_hover, delphi_definition). The manual of THIS server is delphi_help.
+
+*Access: read-only OK.*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | search (find pages: query) \| read (one page: id). Without it: read when there is an id (a query beside it is ignored), search when there is only a query |
+| `query` | string | optional | search: a concept or a class, as you would type it in the IDE help: FormatDateTime, TStringList.Sort, FMX.StdCtrls.TButton, "anonymous methods" |
+| `id` | string | optional | read: the id of a page, as a search gives it (system:System.SysUtils.FormatDateTime.htm); with #section, that section alone |
+| `framework` | string | optional | search optional: vcl \| fmx - the page of that framework first, when VCL and FMX both have one (TButton, TEdit) |
+| `offset` | integer | optional | read optional: where to start in the text of the page (the nextOffset of the previous chunk) |
+| `limit` | integer | optional | search optional: how many results (default 10, at most 25) |
+<!-- /contract -->
+
+The help files are the IDE's own list (`Help\HtmlHelp1Files` of the active Delphi, current user then machine), opened in any workspace - no switch: only the files the IDE registers, and an id never leaves its file - and read in place through Windows' help storage: nothing is extracted and nothing is cached, so a search reads the indexes again (0.4-0.7 s measured over 37 concepts and classes; a lone word found almost everywhere, such as `e` or `object`, takes 3-4 s). A typical walk: `search query=TEdit framework=fmx` → `read id=fmx:FMX.Edit.TEdit.htm` (its ancestors, its description, and `related` with its unit and its member lists) → `read id=fmx:FMX.Edit.TEdit_Events.htm` (one member per line). A long page answers first with its introduction and `sections`; `read id=<page>#<section>` gives one. The help can be older than the code: for an exact signature, `delphi_hover` / `delphi_definition` on the installed sources (1.10.0).
 
 ### `delphi_search`
 
@@ -428,7 +448,7 @@ Deploy declares the built `.apk` as `output`.
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-THE MAP of this server, so you do not have to work it out by trial and error. command=tasks (default) gives the task -> tool table, one line each: what to use to read, to edit, to build, for several files at once, to rename, for tests, to deploy. command=tool name=\<tool> gives ONE whole tool (description + parameters) without asking for tools/list again, which brings them ALL at once. command=conventions gives the rules that apply to all of them: paths and virtual drives, the jail, how editing by anchor works, backups and encodings. Start here if you have just connected.
+THE MAP of this server, so you do not have to work it out by trial and error. command=tasks (default) gives the task -> tool table, one line each: what to use to read, to edit, to build, for several files at once, to rename, for tests, to deploy. command=tool name=\<tool> gives ONE whole tool (description + parameters) without asking for tools/list again, which brings them ALL at once. command=conventions gives the rules that apply to all of them: paths and virtual drives, the jail, how editing by anchor works, backups and encodings. The Delphi documentation itself (classes, routines, the language) is delphi_docs. Start here if you have just connected.
 
 *Access: read-only OK.*
 
@@ -442,7 +462,7 @@ THE MAP of this server, so you do not have to work it out by trial and error. co
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-TESTS: the difference between "it compiles" and "it works". command=discover path=\<folder or project> lists the test projects underneath (a .dpr that uses DUnitX, or a console one whose name says test/spec). command=run project=<.dproj of the test> builds and runs that runner and returns the STRUCTURED result: total, passed, failed, the list of failures, exitCode, duration and the tail of what it printed. It understands two dialects: the DUnitX summary and the PASS/FAIL + ExitCode convention of a hand-written console runner. The verdict says where it comes from (verdictFrom: counts or exitCode) and never invents it. Running tests is RUNNING, and it is the only thing that runs on this server: it has its own switch [Workspace.\<name>] AllowTests; the binary is built here, comes from a project in the jail and runs in a low-integrity sandbox, with a timeout. Without that switch, discover works and run is refused.
+TESTS: the difference between "it compiles" and "it works". command=discover path=\<folder or project> lists the test projects underneath (a .dpr that uses DUnitX, or a console one whose name says test/spec). command=run project=<.dproj of the test> builds and runs that runner and returns the STRUCTURED result: total, passed, failed, errored (DUnitX: a test that raised - it fails the run too; present when there is one), the list of failures, exitCode, duration and the tail of what it printed. It understands two dialects: the DUnitX summary and the PASS/FAIL + ExitCode convention of a hand-written console runner. The verdict says where it comes from (verdictFrom: counts or exitCode) and never invents it. Running tests is RUNNING, and it is the only thing that runs on this server: it has its own switch [Workspace.\<name>] AllowTests; the binary is built here, comes from a project in the jail and runs in a low-integrity sandbox, with a timeout. Without that switch, discover works and run is refused.
 
 *Access: mixed (`command` discover read-only; every other command read-write, refused to a read-only credential).*
 

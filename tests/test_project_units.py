@@ -116,6 +116,17 @@ check('add-unit: idempotente', mc.es(out, 'SN_UNIT_PRESENT_FMT'), out[:200])
 check('add-unit: sin duplicar en el .dpr', rd(DPR).count("UManual in") == 1, rd(DPR))
 check('add-unit: sin duplicar en el .dproj', rd(DPROJ).count('Include="UManual.pas"') == 1, '')
 
+# el // que va detras del ; final del .dpr es de su ULTIMA entrada (1.10.0):
+# la unit anadida va detras y no se lo lleva (salia en la nueva, medido el
+# 2-oct-2026 con add-unit y con adduses, el mismo escritor)
+_b = open(DPR, 'rb').read()
+_bom = b'\xef\xbb\xbf' if _b.startswith(b'\xef\xbb\xbf') else b''
+_t = _b[len(_bom):].decode('utf-8')
+_n = _t.count("UManual in 'UManual.pas';")
+open(DPR, 'wb').write(_bom + _t.replace("UManual in 'UManual.pas';",
+                                        "UManual in 'UManual.pas'; // a mano", 1).encode('utf-8'))
+check('add-unit: la prueba del // final parte de UManual como ultima entrada', _n == 1, _t)
+
 # subfolder unit -> relative include with backslash
 sub = os.path.join(VDIR, 'src')
 os.makedirs(sub, exist_ok=True)
@@ -124,6 +135,8 @@ open(subpas, 'wb').write('unit USub;\r\n\r\ninterface\r\n\r\nimplementation\r\n\
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": subpas})
 check('add-unit: subcarpeta', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:200])
 check('add-unit: include relativo con backslash', "USub in 'src\\USub.pas'" in rd(DPR), rd(DPR))
+check('add-unit: el // del ; final se queda con su entrada, la nueva va detras',
+      "UManual in 'UManual.pas', // a mano" in rd(DPR) and "USub in 'src\\USub.pas';" in rd(DPR), rd(DPR))
 check('add-unit: DCCReference relativo', 'Include="src\\USub.pas"' in rd(DPROJ), '')
 ok, err = build_ok(DPROJ)
 check('build: con add-unit x2 COMPILA', ok, err)
@@ -145,6 +158,121 @@ out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": si
 check('add-unit: completada es idempotente', mc.es(out, 'SN_UNIT_PRESENT_FMT'), out[:200])
 ok, err = build_ok(DPROJ)
 check('build: con la entrada completada COMPILA', ok, err)
+
+# ---- la cabecera y el uses de un .dpr se buscan en su CODIGO (1.10.0) ----
+# un 'program viejo; uses X;' dentro de un comentario de arriba era la
+# cabecera, y add-unit escribia en el uses COMENTADO contestando ADDED (sonda
+# del lexico, 2-oct-2026). Un proyecto aparte: el de arriba lo cuentan otros
+CDIR = os.path.join(BASE, 'Cab')
+out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "PCab"})
+CDPR = os.path.join(CDIR, 'PCab.dpr')
+_b = open(CDPR, 'rb').read()
+_bom = b'\xef\xbb\xbf' if _b.startswith(b'\xef\xbb\xbf') else b''
+open(CDPR, 'wb').write(_bom + b'{\r\nprogram viejo;\r\nuses UNoExiste;\r\n}\r\n' + _b[len(_bom):])
+open(os.path.join(CDIR, 'UCab.pas'), 'wb').write(b'unit UCab;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n')
+out = call('delphi_config', {"project": os.path.join(CDIR, 'PCab.dproj'), "command": "add-unit",
+                             "path": os.path.join(CDIR, 'UCab.pas')})
+_d = rd(CDPR)
+check('add-unit: al uses de verdad, no al comentado de arriba',
+      mc.abre(out, 'SN_UNIT_ADDED_FMT') and '{\r\nprogram viejo;\r\nuses UNoExiste;\r\n}' in _d
+      and "UCab in 'UCab.pas'" in _d and _d.index('UCab in') > _d.index('program PCab;'), out[:200] + ' | ' + _d)
+# la clase de un form se lee en su CODIGO (1.10.0): una declaracion comentada
+# con otro ancestro, delante de la de verdad, lo hacia pasar por un frame
+out = call('delphi_create', {"kind": "form-vcl", "name": "UFormCom", "project": DPR})
+fpas = os.path.join(VDIR, 'UFormCom.pas')
+out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": fpas})
+_s = open(fpas, 'rb').read()
+_n = _s.count(b'  TFormUFormCom = class(TForm)')
+open(fpas, 'wb').write(_s.replace(b'  TFormUFormCom = class(TForm)',
+                                  b'  { TFormUFormCom = class(TFrame) era antes }\r\n  TFormUFormCom = class(TForm)', 1))
+check('add-unit: la prueba de la clase comentada parte de su linea de clase', _n == 1, _s[:300])
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": fpas})
+check('add-unit: la clase del form se lee en su codigo, no en un comentario',
+      mc.abre(out, 'SN_UNIT_ADDED_FORM_FMT') and "UFormCom in 'UFormCom.pas' {FormUFormCom}" in rd(DPR)
+      and 'TFrame' not in rd(DPR), out[:200] + ' | ' + rd(DPR))
+
+# ---- lo que encontro el revisor de codigo de la 1.10.0 (medido antes con una
+# sonda contra el exe de entonces) ----
+# una entrada se reescribe con lo que lleva DETRAS: renombrar (delphi_move) y
+# completar (add-unit) la rehacian con lo de delante solo, el {$IFDEF DEBUG}
+# se iba, el .dpr no compilaba y la tool decia que si
+def pon_uses(dpr, clausula):
+    _d = rd(dpr)
+    _i = _d.index('uses')
+    open(dpr, 'wb').write((_d[:_i] + clausula + _d[_d.index(';', _i) + 1:]).encode('utf-8-sig'))
+
+
+DDIR = os.path.join(BASE, 'Dir')
+call('delphi_create', {"kind": "project-console", "dir": DDIR, "name": "PDir"})
+DDPR = os.path.join(DDIR, 'PDir.dpr')
+for _u in ('UnitA', 'UnitB', 'DebugU'):
+    open(os.path.join(DDIR, _u + '.pas'), 'wb').write(
+        ('unit %s;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n' % _u).encode('ascii'))
+pon_uses(DDPR, "uses\r\n  System.SysUtils,\r\n  UnitA in 'UnitA.pas' {$IFDEF DEBUG},\r\n"
+               "  DebugU in 'DebugU.pas' {$ENDIF},\r\n  UnitB {$IFDEF DEBUG},\r\n"
+               "  DebugU2 {$ENDIF};")
+out = call('delphi_move', {"path": os.path.join(DDIR, 'UnitA.pas'), "dest": os.path.join(DDIR, 'UnitZ.pas')})
+check('move rename: la directiva de DETRAS de la entrada se queda',
+      mc.abre(out, 'SK_MOVE_MOVIDO_FMT') and "UnitZ in 'UnitZ.pas' {$IFDEF DEBUG},\r\n" in rd(DDPR),
+      out[:200] + ' | ' + rd(DDPR))
+out = call('delphi_config', {"project": os.path.join(DDIR, 'PDir.dproj'), "command": "add-unit",
+                             "path": os.path.join(DDIR, 'UnitB.pas')})
+check('add-unit: completar una entrada conserva la directiva de detras',
+      mc.abre(out, 'SN_UNIT_COMPLETED_FMT') and "UnitB in 'UnitB.pas' {$IFDEF DEBUG},\r\n" in rd(DDPR),
+      out[:200] + ' | ' + rd(DDPR))
+# DebugU2 no existe: el condicional entero fuera para compilar lo que queda
+pon_uses(DDPR, rd(DDPR)[rd(DDPR).index('uses'):].split(';')[0].replace(
+    "  UnitB in 'UnitB.pas' {$IFDEF DEBUG},\r\n  DebugU2 {$ENDIF}", "  UnitB in 'UnitB.pas'") + ';')
+ok, err = build_ok(os.path.join(DDIR, 'PDir.dproj'))
+check('build: la renombrada con su condicional COMPILA', ok, err + ' | ' + rd(DDPR))
+# el CreateForm se escribe y se quita en el CODIGO del .dpr: un
+# Application.Run comentado encima del de verdad se lo llevaba DENTRO del
+# comentario, uno comentado de la misma clase pasaba por "ya esta", y quitar
+# uno que esta en un comentario que cierra en su linea se llevaba la llave
+FDIR = os.path.join(BASE, 'Frm')
+call('delphi_create', {"kind": "project-vcl", "dir": FDIR, "name": "PFrm"})
+FDPR = os.path.join(FDIR, 'PFrm.dpr')
+_d = rd(FDPR)
+_n = _d.count('  Application.Initialize;')
+open(FDPR, 'wb').write(_d.replace('  Application.Initialize;',
+                                  '  (* la vieja:\r\n  Application.Run;\r\n  *)\r\n'
+                                  '  //Application.CreateForm(TFormUF3, FormUF3);\r\n'
+                                  '  Application.Initialize;', 1).encode('utf-8-sig'))
+check('CreateForm: la prueba parte de un Application.Initialize', _n == 1, _d)
+out = call('delphi_create', {"kind": "form-vcl", "name": "UF2", "project": FDPR})
+_d = rd(FDPR)
+check('CreateForm: delante del Application.Run de verdad, no del comentado',
+      mc.abre(out, 'SK_CREATE_CREADO_FORM_FMT') and
+      '(* la vieja:\r\n  Application.Run;\r\n  *)' in _d and
+      _d.index('Application.CreateForm(TFormUF2') > _d.index('*)'), _d)
+out = call('delphi_create', {"kind": "form-vcl", "name": "UF3", "project": FDPR})
+_d = rd(FDPR)
+check('CreateForm: uno comentado de la misma clase no es "ya esta"',
+      mc.abre(out, 'SK_CREATE_CREADO_FORM_FMT') and _d.count('Application.CreateForm(TFormUF3, FormUF3);') == 2,
+      _d)
+open(FDPR, 'wb').write(_d.replace('  Application.Initialize;',
+                                  '  { quitado:\r\n  Application.CreateForm(TFormUF2, FormUF2); }\r\n'
+                                  '  Application.Initialize;', 1).encode('utf-8-sig'))
+out = call('delphi_config', {"project": os.path.join(FDIR, 'PFrm.dproj'), "command": "remove-unit",
+                             "path": os.path.join(FDIR, 'UF2.pas')})
+_d = rd(FDPR)
+check('remove-unit: el CreateForm de un comentario se queda, y su llave con el',
+      mc.abre(out, 'SN_UNIT_REMOVED_FMT') and
+      '  { quitado:\r\n  Application.CreateForm(TFormUF2, FormUF2); }\r\n' in _d and
+      _d.count('CreateForm(TFormUF2') == 1, _d)
+# ...y de una linea que lleva algo mas que el CreateForm (el cierre de un
+# comentario de encima) se va la sentencia sola, no la linea
+_n = _d.count('  Application.CreateForm(TFormUF3, FormUF3);')
+open(FDPR, 'wb').write(_d.replace('  Application.CreateForm(TFormUF3, FormUF3);',
+                                  '  { nota\r\n  } Application.CreateForm(TFormUF3, FormUF3);', 1).encode('utf-8-sig'))
+out = call('delphi_config', {"project": os.path.join(FDIR, 'PFrm.dproj'), "command": "remove-unit",
+                             "path": os.path.join(FDIR, 'UF3.pas')})
+_d = rd(FDPR)
+check('remove-unit: de una linea con el cierre de un comentario se va el CreateForm, no la llave',
+      _n == 1 and mc.abre(out, 'SN_UNIT_REMOVED_FMT') and '  { nota\r\n  }\r\n' in _d and
+      '//Application.CreateForm(TFormUF3, FormUF3);' in _d, _d)
+ok, err = build_ok(os.path.join(FDIR, 'PFrm.dproj'))
+check('build: el .dpr con sus CreateForm comentados COMPILA', ok, err + ' | ' + _d)
 
 # ---- refusals ----
 bad = os.path.join(VDIR, 'UMal.pas')
@@ -172,6 +300,12 @@ check('add-unit: fuera de la jaula rechazado', mc.rechazado(out) and mc.es(out, 
 out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": hand})
 check('remove-unit: QUITADA', mc.abre(out, 'SN_UNIT_REMOVED_FMT'), out[:300])
 check('remove-unit: fuera del .dpr', 'UManual' not in rd(DPR), rd(DPR))
+# el '// a mano' iba detras de la coma de UManual: quitada ella, se pegaba a la
+# de antes ('{FormUClientes}, // a mano', medido el 2-oct-2026); se queda en
+# una linea suya (un comentario no se borra)
+_lin = [l for l in rd(DPR).splitlines() if '// a mano' in l]
+check('remove-unit: el // de la quitada se queda en una linea suya, no pegado a otra entrada',
+      len(_lin) == 1 and _lin[0].strip() == '// a mano', rd(DPR))
 check('remove-unit: fuera del .dproj', 'UManual' not in rd(DPROJ), '')
 check('remove-unit: el fichero sigue en disco', os.path.exists(hand))
 out = call('delphi_config', {"project": DPROJ, "command": "remove-unit", "path": hand})
@@ -213,9 +347,19 @@ check('create form UVenta', mc.abre(out, 'SK_CREATE_CREADO_FORM_FMT'), out[:200]
 # (Hermes, 2026-09-22, test 19: the .dpr kept UBatHelper.Bat11Sum and the
 # build died with E2003). A 'UVenta.' inside a string literal must NOT move.
 usa = os.path.join(VDIR, 'UUsaVenta.pas')
-open(usa, 'wb').write(b"unit UUsaVenta;\r\n\r\ninterface\r\n\r\nuses\r\n  UVenta;\r\n\r\nfunction HayVenta: string;\r\n\r\nimplementation\r\n\r\nfunction HayVenta: string;\r\nbegin\r\n  if UVenta.FormUVenta <> nil then\r\n    Result := 'UVenta.FormUVenta'\r\n  else\r\n    Result := '';\r\nend;\r\n\r\nend.\r\n")
+open(usa, 'wb').write(b"unit UUsaVenta;\r\n\r\ninterface\r\n\r\nuses\r\n  UVenta;\r\n\r\nfunction HayVenta: string;\r\n\r\nimplementation\r\n\r\nfunction HayVenta: string;\r\nbegin\r\n  { it's } Result := UVenta.FormUVenta.Name; // de UVenta\r\n  if UVenta.FormUVenta <> nil then\r\n    Result := 'UVenta.FormUVenta'\r\n  else\r\n    Result := '';\r\nend;\r\n\r\nend.\r\n")
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": usa})
 check('unit que usa UVenta anadida al proyecto', mc.abre(out, 'SN_UNIT_ADDED_FMT'), out[:200])
+# un // detras de la coma de UVenta es suyo y la sigue con su nombre nuevo (la
+# entrada se cambia EN SU SITIO: 1.10.0, la duena del // ya no se busca por el
+# nombre, que el rename cambia)
+_b = open(DPR, 'rb').read()
+_bom = b'\xef\xbb\xbf' if _b.startswith(b'\xef\xbb\xbf') else b''
+_t = _b[len(_bom):].decode('utf-8')
+_n = _t.count("UVenta in 'UVenta.pas' {FormUVenta},")
+open(DPR, 'wb').write(_bom + _t.replace("UVenta in 'UVenta.pas' {FormUVenta},",
+                                        "UVenta in 'UVenta.pas' {FormUVenta}, // la venta", 1).encode('utf-8'))
+check('move rename: la prueba del // parte de UVenta en medio de la clausula', _n == 1, _t)
 out = call('delphi_move', {"path": os.path.join(VDIR, 'UVenta.pas'), "dest": os.path.join(VDIR, 'UVentas.pas')})
 check('move rename: MOVIDO', mc.abre(out, 'SK_MOVE_MOVIDO_FMT'), out[:400])
 check('move rename: designer movido', os.path.exists(os.path.join(VDIR, 'UVentas.dfm')) and not os.path.exists(os.path.join(VDIR, 'UVenta.dfm')), out)
@@ -224,6 +368,8 @@ check('move rename: cabecera reescrita', 'unit UVentas;' in src, src[:80])
 check('move rename: proyecto reapuntado', mc.es(out, 'SN_FILE_PROJECTS_UPDATED_FMT') and mc.ids(out).count(mc.id_de('SN_UNIT_RENAMED_FMT')) == 1, out)
 dpr = rd(DPR)
 check('move rename: uses nuevo con form', "UVentas in 'UVentas.pas' {FormUVenta}" in dpr and "UVenta in" not in dpr, dpr)
+check('move rename: el // de la renombrada se queda con ella',
+      "UVentas in 'UVentas.pas' {FormUVenta}, // la venta" in dpr, dpr)
 check('move rename: CreateForm intacto (la clase no cambia)', 'CreateForm(TFormUVenta, FormUVenta)' in dpr, dpr)
 xml = rd(DPROJ)
 check('move rename: DCCReference nuevo, viejo fuera', 'Include="UVentas.pas"' in xml and 'Include="UVenta.pas"' not in xml, '')
@@ -231,6 +377,11 @@ usa_src = rd(usa)
 check('move rename: el uses de OTRA unit sigue el rename', '  UVentas;' in usa_src and '  UVenta;' not in usa_src, usa_src)
 check('move rename: el calificador UVenta.X sigue el rename', 'if UVentas.FormUVenta' in usa_src, usa_src)
 check('move rename: dentro de una cadena NO se toca', "'UVenta.FormUVenta'" in usa_src, usa_src)
+# una referencia detras de un comentario de llave con un apostrofo se quedaba
+# sin renombrar (E2003) y el // que nombra la unit si se renombraba; ahora
+# solo el CODIGO (sonda del lexico y David, 2-oct-2026)
+check('move rename: la referencia detras de un comentario con apostrofo SI, el comentario NO',
+      "{ it's } Result := UVentas.FormUVenta.Name; // de UVenta\r\n" in usa_src, usa_src)
 check('move rename: la respuesta cuenta las referencias reescritas', mc.es(out, 'SN_UNIT_RENAMED_FMT'), out)
 ok, err = build_ok(DPROJ)
 check('build: tras rename COMPILA', ok, err)

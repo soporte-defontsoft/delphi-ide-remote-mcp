@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.9.1';
+  SERVER_VERSION = '1.10.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -3344,6 +3344,138 @@ const
     '(what delphi_read shows and what delphi_changeset''s atline expects) ' +
     'and "line0" is the language server''s 0-based one. Use "line".';
 
+  // ---- delphi_docs ----
+
+  SD_DOCS =
+    'THE DELPHI DOCUMENTATION installed with RAD Studio - the help the IDE ' +
+    'opens with F1, of the version installed here: classes, routines and ' +
+    'properties (RTL, VCL, FMX, FireDAC, Indy...), the language, the IDE ' +
+    'and code examples, plus the help of the installed components that ' +
+    'register one. command=search query=<a concept or a class> gives a ' +
+    'short list of pages (id + title), the best first, one per page: a ' +
+    'qualified name (System.SysUtils.FormatDateTime, FMX.StdCtrls.TButton) ' +
+    'lands on the exact page, a bare one (TButton, TStringList.Sort) or a ' +
+    'concept ("class helpers") finds it too, and framework=vcl|fmx puts the ' +
+    'page of that framework first when both have one (without it, neither ' +
+    'is preferred). command=read id=<an id of that list> gives the ' +
+    'page as plain text, in chunks (offset). A long page first gives its ' +
+    'introduction and its sections: <its id>#<section> reads one alone. ' +
+    'related gives the pages around it: a class its unit and its member ' +
+    'lists (methods, properties, events), a topic its parent index; the ' +
+    'other pages it names (See Also, code examples) are found with search. ' +
+    'Read-only, in any workspace: it opens only the help files the IDE ' +
+    'registers, and an id never leaves its file. It says what something is ' +
+    'for and how it is used; for its exact signature, what the installed ' +
+    'sources declare wins (delphi_hover, delphi_definition). The manual of ' +
+    'THIS server is delphi_help.';
+
+  SP_DOCS_COMMAND =
+    'search (find pages: query) | read (one page: id). Without it: read ' +
+    'when there is an id (a query beside it is ignored), search when there ' +
+    'is only a query';
+
+  SP_DOCS_QUERY =
+    'search: a concept or a class, as you would type it in the IDE help: ' +
+    'FormatDateTime, TStringList.Sort, FMX.StdCtrls.TButton, "anonymous ' +
+    'methods"';
+
+  SP_DOCS_ID =
+    'read: the id of a page, as a search gives it ' +
+    '(system:System.SysUtils.FormatDateTime.htm); with #section, that ' +
+    'section alone';
+
+  SP_DOCS_FRAMEWORK =
+    'search optional: vcl | fmx - the page of that framework first, when ' +
+    'VCL and FMX both have one (TButton, TEdit)';
+
+  SP_DOCS_OFFSET =
+    'read optional: where to start in the text of the page (the nextOffset ' +
+    'of the previous chunk)';
+
+  SP_DOCS_LIMIT =
+    'search optional: how many results (default 10, at most 25)';
+
+  SR_DOCS_SIN_AYUDA_FMT =
+    '[DOCS-001 NOT_FOUND] The Delphi in use (%s) has no help installed: ' +
+    'none of the help files its IDE registers (Help\HtmlHelp1Files) is on ' +
+    'disk - the documentation is an option of the RAD Studio installer. ' +
+    'The declarations are still there: delphi_hover or delphi_definition ' +
+    'on the symbol, or its unit with delphi_read (library zone).';
+
+  SR_DOCS_CMD =
+    '[DOCS-002 INVALID_PARAM] command must be search (with query) or read ' +
+    '(with id).';
+
+  SR_DOCS_SIN_CONSULTA =
+    '[DOCS-003 INVALID_PARAM] command=search needs "query": a concept or a ' +
+    'class (FormatDateTime, TStringList.Sort, "class helpers").';
+
+  SR_DOCS_SIN_ID =
+    '[DOCS-004 INVALID_PARAM] command=read needs "id": one that a ' +
+    'delphi_docs search gave.';
+
+  SR_DOCS_FRAMEWORK_FMT =
+    '[DOCS-005 INVALID_PARAM] framework "%s" is not one of vcl | fmx.';
+
+  SR_DOCS_NADA_FMT =
+    '[DOCS-006 NOT_FOUND] Nothing in the installed help for "%s". Try the ' +
+    'class or routine alone (TStringList, FormatDateTime), its qualified ' +
+    'name (System.Classes.TStringList), or fewer words for a concept.';
+
+  SR_DOCS_NO_PAGINA_FMT =
+    '[DOCS-007 NOT_FOUND] There is no page "%s" in the installed help. ' +
+    'Take the id from a delphi_docs search (it looks like ' +
+    'system:System.SysUtils.FormatDateTime.htm).';
+
+  SN_DOCS_BUSQUEDA =
+    '[DOCS-008] total = the pages of the index that matched. Read one with ' +
+    'command=read id=<its id>.';
+
+  { %s: el fichero de ayuda y su fecha }
+  SN_DOCS_FUENTE_FMT =
+    '[DOCS-009] From the RAD Studio help installed here (%s, %s). It says ' +
+    'what this is for and how it is used; for an exact signature, what the ' +
+    'installed sources declare wins: delphi_hover or delphi_definition on ' +
+    'the symbol.';
+
+  SN_DOCS_SIN_SECCION_FMT =
+    '[DOCS-010] There is no section "%s" in this page: this is the page ' +
+    'from its start (a long one, its introduction and its sections).';
+
+  { %d: lo dado, el total, por donde seguir }
+  SN_DOCS_SIGUE_FMT =
+    '[DOCS-011] It goes on: up to character %d of %d. The rest: the same ' +
+    'id with offset=%d.';
+
+  { %s: el id tal como llego (enmascarado). DOCS-012 era la negativa de un
+    workspace sin LibraryZone, retirada antes de publicar: la ayuda no pide
+    interruptor (David, 2-oct-2026) }
+  SR_DOCS_ID_MAL_FMT =
+    '[DOCS-013 INVALID_PARAM] "%s" is not the id of a page: it looks like ' +
+    '<help>:<page>.htm, optionally with #<section> ' +
+    '(system:System.SysUtils.FormatDateTime.htm) - take it from a ' +
+    'delphi_docs search.';
+
+  { %s: el fichero de ayuda, sin carpeta }
+  SR_DOCS_NO_ABRE_FMT =
+    '[DOCS-014 INTERNAL] The help file %s is registered and on disk, but ' +
+    'Windows'' help storage (itss.dll) does not open it: it may be damaged. ' +
+    'Report it with delphi_report.';
+
+  SR_DOCS_NINGUNA_ABRE =
+    '[DOCS-015 INTERNAL] The help files are registered and on disk, but ' +
+    'Windows'' help storage (itss.dll) opens none of them. Report it with ' +
+    'delphi_report.';
+
+  { %s: los antepasados de una clase, el mas cercano primero, unidos por ' > ' }
+  SF_DOCS_ANCESTROS_FMT =
+    'Ancestors: %s';
+
+  { %s la ruta del .chm, %x el HRESULT: la excepcion de Lsp.Chm (no sale al
+    agente: quien abre una ayuda la recoge) }
+  SE_CHM_NO_ABRE_FMT =
+    'the help file %s did not open (HRESULT %.8x)';
+
   // ---- delphi_help ----
 
   SD_HELP =
@@ -3355,7 +3487,9 @@ const
     'asking for tools/list again, which brings them ALL at once. ' +
     'command=conventions gives the rules that apply to all of them: ' +
     'paths and virtual drives, the jail, how editing by anchor works, ' +
-    'backups and encodings. Start here if you have just connected.';
+    'backups and encodings. The Delphi documentation itself (classes, ' +
+    'routines, the language) is delphi_docs. Start here if you have just ' +
+    'connected.';
 
   SP_HELP_COMMAND =
     'tasks (task -> tool table; default) | tool (one whole tool, with ' +
@@ -3407,6 +3541,7 @@ const
     '  errors without compiling ........... delphi_diagnostics'#10 +
     '  what components are installed ...... delphi_components'#10 +
     '  what IS this (type and doc) ........ delphi_hover'#10 +
+    '  what the RAD Studio help says ...... delphi_docs'#10 +
     '  what parameters this call takes .... delphi_signature'#10 +
     '  what can I write here .............. delphi_completion'#10#10 +
     'WRITING'#10 +
@@ -3549,7 +3684,9 @@ const
     'underneath (a .dpr that uses DUnitX, or a console one whose name ' +
     'says test/spec). command=run project=<.dproj of the test> builds ' +
     'and runs that runner and returns the STRUCTURED result: total, ' +
-    'passed, failed, the list of failures, exitCode, duration and the ' +
+    'passed, failed, errored (DUnitX: a test that raised - it fails the ' +
+    'run too; present when there is one), the list of failures, ' +
+    'exitCode, duration and the ' +
     'tail of what it printed. It understands two dialects: the DUnitX ' +
     'summary and the PASS/FAIL + ExitCode convention of a hand-written ' +
     'console runner. The verdict says where it comes from (verdictFrom: ' +

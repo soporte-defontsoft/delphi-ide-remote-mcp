@@ -26,6 +26,11 @@ el fuente como texto y acierta-; el camino de UN fichero lo ignoraba.
   S8  mode=full tambien lleva la declaracion real
   S9  una linea que es solo comentario no se pega dentro de la firma
   S10 el rechazo del ancla multilinea dice por donde SI se puede
+  S11 el digest lee la estructura sin comentarios (1.10.0, el lexico de la
+      casa): lo comentado no se declara, un // no se come la siguiente y un
+      '(' de una cadena no deja la union abierta; y (revisor de la 1.10.0)
+      la linea que cierra un comentario abierto en la firma va con ella, y
+      el // de una firma partida no comenta lo que se le une
 
 Usage:  python tests/test_round36.py [path-to-DelphiLspMcp.exe]
 """
@@ -99,6 +104,18 @@ PAS = os.path.join(JAIL, 'u', 'Sonda.pas')
 open(PAS, 'w', newline='\r\n').write(SONDA)
 DPRP = os.path.join(JAIL, 'u', 'Sonda2.dpr')
 open(DPRP, 'w', newline='\r\n').write(DPR)
+# S11: medido el 2-oct-2026 con la sonda del lexico, la 'Vieja' comentada
+# salia como declaracion y 'Otra' desaparecia pegada a la nota de 'Alta'
+os.makedirs(os.path.join(JAIL, 'd'))
+open(os.path.join(JAIL, 'd', 'UDig.pas'), 'w', newline='\r\n').write('\n'.join([
+    'unit UDig;', '', 'interface', '', '{', 'procedure Vieja;', '}', '',
+    'function Alta(const A: string; B: Integer = 0): Boolean; // la nota',
+    'procedure Otra;', '', 'const', "  Abre = '(';", 'procedure Tercera;', '',
+    'function Tres(A: Integer { the a', '  param }', '  ): Integer;',
+    'function Baz(X: Integer; // la x', '  Y: Integer): Integer;',
+    'function Cuatro(A: Integer;', '  { una nota', '    larga }', '  B: Integer): Integer;',
+    'function Cinco(A: Integer;', '  { otra', '    nota } B: Integer): Integer;', '',
+    'implementation', '', 'end.', '']))
 
 TOK = 'r36'
 PORT = mc.puerto_libre()
@@ -163,6 +180,27 @@ try:
           any('property Larga' in d for d in decls) and
           not any('una nota justo en medio' in d for d in decls),
           str(decls)[:300])
+
+    dg = json.loads(sinaviso(call('delphi_symbols', {'path': os.path.join(JAIL, 'd')})))
+    dd = [d['decl'] for u in dg['units'] for d in u['declares']]
+    check('S11a una declaracion dentro de un comentario de llave no sale en el digest',
+          not any('Vieja' in d for d in dd), str(dd)[:300])
+    check('S11b un // detras de una firma no le pega la declaracion de la linea siguiente',
+          'procedure Otra;' in dd and
+          any(d.startswith('function Alta') and 'Otra' not in d for d in dd), str(dd)[:300])
+    check("S11c un '(' dentro de una cadena no deja la union abierta",
+          'procedure Tercera;' in dd, str(dd)[:300])
+    # revisor de codigo de la 1.10.0, medido con una sonda: la linea que
+    # cierra el comentario se saltaba ('function Tres(A: Integer { the a ):
+    # Integer;'), y el // de la primera linea comentaba lo que se le unia
+    check('S11d la linea que cierra un comentario abierto en la firma va con ella',
+          'function Tres(A: Integer { the a param } ): Integer;' in dd, str(dd)[-400:])
+    check('S11e el // de una firma partida no se queda en medio de la declaracion',
+          'function Baz(X: Integer; Y: Integer): Integer;' in dd, str(dd)[-400:])
+    check('S11f ...y una nota de varias lineas en una linea suya se salta entera',
+          'function Cuatro(A: Integer; B: Integer): Integer;' in dd, str(dd)[-400:])
+    check('S11g ...tambien cuando cierra delante de codigo: va el codigo, no el resto de la nota',
+          'function Cinco(A: Integer; B: Integer): Integer;' in dd, str(dd)[-400:])
 
     # ------------------------------------------------------------------ S5
     fi = json.loads(sinaviso(call('delphi_symbols',

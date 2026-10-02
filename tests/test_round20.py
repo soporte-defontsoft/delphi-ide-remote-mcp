@@ -7,7 +7,7 @@ explicit allowlist Only= that overrides the profile. LISTING only: hidden
 tools stay callable - permissions remain the access levels and the jail.
 delphi_help / delphi_messages / delphi_report are always listed.
 
-  T1  default: all 41 tools listed (no behavior change)
+  T1  default: the whole census listed (no behavior change)
   T2  reader: only the reading/navigation set; edit/build/adb absent
   T3  reader: a HIDDEN tool is still callable (delphi_textedit works)
   T4  coder: everything except adb/paserver/package
@@ -50,7 +50,7 @@ READER = {'delphi_read', 'delphi_list', 'delphi_search', 'delphi_symbols',
           'delphi_completion', 'delphi_diagnostics', 'delphi_references',
           'delphi_projects', 'delphi_installs', 'delphi_workspace',
           'delphi_fetch', 'delphi_help', 'delphi_messages', 'delphi_report',
-          'vault_read', 'vault_search'}
+          'vault_read', 'vault_search', 'delphi_docs'}
 DEPLOY = {'delphi_adb', 'delphi_paserver', 'delphi_package'}
 
 # T1 default (the test jail has no vault, so vault_* are not registered:

@@ -60,7 +60,8 @@ uses
   Lsp.Changeset,
   Lsp.Guard,
   Lsp.Session,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.Pascal;
 
 const
   RESERVED: array [0 .. 64] of string = (
@@ -85,43 +86,29 @@ end;
   a 1 MB RTL unit blew the stack. }
 function StringLiteralHits(const AText, AIdent: string): Integer;
 var
-  I, J: Integer;
-  Lit: string;
+  Clases: TArray<TClasePascal>;
+  I, Ini: Integer;
 begin
+  // las cadenas las dice EL lexico (Lsp.Pascal): una comilla dentro de un
+  // comentario ('// don''t') no abre ninguna, y la cadena de varias lineas
+  // es una. Un literal es una tira seguida de caracteres de cadena; cuenta
+  // si el nombre esta dentro. Aqui se buscaban las comillas a mano, sin
+  // mirar comentarios (censo del lexico, 2-oct-2026)
   Result := 0;
+  Clases := ClasesPascal(AText);
   I := 1;
   while I <= Length(AText) do
   begin
-    if AText[I] = '''' then
+    if Clases[I] <> cpCadena then
     begin
-      // find the closing quote ('' escapes)
-      J := I + 1;
-      while J <= Length(AText) do
-      begin
-        if AText[J] = '''' then
-        begin
-          if (J < Length(AText)) and (AText[J + 1] = '''') then
-            Inc(J, 2)
-          else
-            Break;
-        end
-        else if CharInSet(AText[J], [#10, #13]) then
-          Break // unterminated on this line: not a literal
-        else
-          Inc(J);
-      end;
-      if (J <= Length(AText)) and (AText[J] = '''') then
-      begin
-        Lit := Copy(AText, I, J - I + 1);
-        if TRegEx.IsMatch(Lit, '(?i)\b' + TRegEx.Escape(AIdent) + '\b') then
-          Inc(Result);
-        I := J + 1;
-      end
-      else
-        I := J;
-    end
-    else
       Inc(I);
+      Continue;
+    end;
+    Ini := I;
+    while (I <= Length(AText)) and (Clases[I] = cpCadena) do
+      Inc(I);
+    if TRegEx.IsMatch(Copy(AText, Ini, I - Ini), '(?i)\b' + TRegEx.Escape(AIdent) + '\b') then
+      Inc(Result);
   end;
 end;
 
@@ -288,7 +275,8 @@ begin
             Chg.AddPair('kind', 'definition');
             // a qualified implementation header (TClass.Method) must keep the
             // class part: say it instead of letting the agent replace the lot
-            if TRegEx.IsMatch(Lines[DefLine],
+            // (en su codigo: un 'X.Nombre' de un comentario no la cualifica)
+            if TRegEx.IsMatch(CodigoPascal(Lines[DefLine]),
               '(?i)\b\w+\.' + TRegEx.Escape(Ident) + '\b') then
               Warnings.Add(MsgFmt(SN_RENAME_QUALIFIED_FMT, [Lines[DefLine].Trim]));
           end;
@@ -411,12 +399,14 @@ begin
     if StringHits > 0 then
       Blockers.Add(MsgFmt(SR_RENAME_STRINGS_FMT, [StringHits]));
 
-    // 4. collision: the new name already lives in an affected file
+    // 4. collision: the new name already lives in an affected file - en su
+    // CODIGO: nombrado en un comentario no choca con nada, y bloqueaba
+    // (revision de la 1.10.0, medido)
     N := 0;
     for P in Touched do
     begin
       Text := PatchLoadText(P, EncName);
-      Inc(N, TRegEx.Matches(Text, '(?i)\b' + TRegEx.Escape(ANewName) + '\b').Count);
+      Inc(N, TRegEx.Matches(CodigoPascal(Text), '(?i)\b' + TRegEx.Escape(ANewName) + '\b').Count);
     end;
     if N > 0 then
       Blockers.Add(MsgFmt(SR_RENAME_COLLISION_FMT, [ANewName, N]));
@@ -447,8 +437,10 @@ var
   Ident, Id, R, P, EncName, Vieja, Nueva: string;
   Hechas: TStringList;          // path|line0 ya apiladas: dos apariciones en una linea = UNA edicion
   Textos: TDictionary<string, TArray<string>>; // lineas de cada fichero, leidas una vez
+  Vistas: TDictionary<string, TArray<string>>; // y las de su codigo, alineadas
   I, L0, Apiladas: Integer;
-  Lineas: TArray<string>;
+  Lineas, Vista: TArray<string>;
+  Ms: TMatchCollection;
 
   procedure PonResultado(const AClave: string; AValor: TJSONValue);
   begin
@@ -487,6 +479,7 @@ begin
   Ident := Result.GetValue('symbol').Value;
   Hechas := TStringList.Create;
   Textos := TDictionary<string, TArray<string>>.Create;
+  Vistas := TDictionary<string, TArray<string>>.Create;
   try
     Hechas.CaseSensitive := False;
     Id := ChangesetBegin;
@@ -506,21 +499,31 @@ begin
       Hechas.Add(P + '|' + IntToStr(L0));
       if not Textos.TryGetValue(P.ToLower, Lineas) then
       begin
-        Lineas := SplitToLines(PatchLoadText(P, EncName));
+        var Fuente := PatchLoadText(P, EncName);
+        Lineas := SplitToLines(Fuente);
         Textos.Add(P.ToLower, Lineas);
+        Vistas.Add(P.ToLower, SplitToLines(CodigoPascal(Fuente)));
       end;
+      Vista := Vistas[P.ToLower];
       if (L0 < 0) or (L0 >= Length(Lineas)) then
       begin
         Fallo(MsgFmt(SR_RENAME_LINE_GONE_FMT, [L0 + 1, P]));
         Exit;
       end;
-      { La linea entera, con el identificador cambiado como PALABRA: la
-        cabecera cualificada (TClase.Metodo) conserva la clase, y una
-        aparicion doble en la misma linea se cambia de una vez. Todo lo
-        que hay en esa linea con ese nombre es el simbolo, porque una sola
-        referencia sin confirmar ya ha hecho el rename no aplicable. }
+      { La linea entera, con el identificador cambiado como PALABRA de su
+        CODIGO: la cabecera cualificada (TClase.Metodo) conserva la clase,
+        y una aparicion doble en la misma linea se cambia de una vez. Todo
+        lo que hay en el codigo de esa linea con ese nombre es el simbolo,
+        porque una sola referencia sin confirmar ya ha hecho el rename no
+        aplicable. Un comentario no se toca: el '// see Foo' de detras de una
+        llamada cambiaba y el de la linea de al lado no (revision de la
+        1.10.0, medido; la regla del rename de una unit, David 2-oct-2026). }
       Vieja := Lineas[L0];
-      Nueva := TRegEx.Replace(Vieja, '(?i)\b' + TRegEx.Escape(Ident) + '\b', ANewName);
+      Nueva := Vieja;
+      Ms := TRegEx.Matches(Vista[L0], '(?i)\b' + TRegEx.Escape(Ident) + '\b');
+      for var Q := Ms.Count - 1 downto 0 do
+        Nueva := Copy(Nueva, 1, Ms[Q].Index - 1) + ANewName +
+          Copy(Nueva, Ms[Q].Index + Ms[Q].Length, MaxInt);
       if Nueva = Vieja then
         Continue; // una fila que no lleva el nombre (no deberia pasar): nada que apilar
       R := ChangesetExecute('stage', Id, 'edit', P, '', Vieja, Nueva, '', L0 + 1);
@@ -570,6 +573,7 @@ begin
       PonResultado('changesTruncated', TJSONBool.Create(True));
     end;
   finally
+    Vistas.Free;
     Textos.Free;
     Hechas.Free;
   end;

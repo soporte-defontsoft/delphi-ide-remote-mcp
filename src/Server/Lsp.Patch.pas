@@ -486,7 +486,8 @@ uses
   Lsp.DesignerBin,
   Lsp.DesignerBinding,
   Lsp.ProjectUnits,
-  Lsp.NetDrives; // LlavesAnidadas: el lexico Pascal de la casa
+  Lsp.NetDrives,
+  Lsp.Pascal; // LlavesAnidadas, VistaPascal: el lexico Pascal de la casa
 
 const
   BACKUP_SUB = '__delphi-patch';
@@ -834,15 +835,19 @@ end;
 
 function ContenidoDeUnitNoValido(const AUnitName, AContent: string): string;
 var
-  M: TMatch;
+  Nombre: string;
+  Ini: Integer;
 begin
   Result := '';
-  M := TRegEx.Match(AContent, '(?im)^\s*unit\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;');
-  if not M.Success then
+  // la cabecera (EL lector: CabeceraDeUnit) y el end., los del CODIGO: con
+  // su regex sobre el texto, un 'unit Vieja;' comentado encima negaba la
+  // unit por su nombre y un end. comentado pasaba por el final (revision de
+  // la 1.10.0, medido con delphi_create kind=unit content=)
+  if not CabeceraDeUnit(AContent, Nombre, Ini) then
     Exit(MsgText(SR_CREATE_CONTENT_NOUNIT));
-  if not SameText(M.Groups[1].Value, AUnitName) then
-    Exit(MsgFmt(SR_CREATE_CONTENT_NAME_FMT, [M.Groups[1].Value, AUnitName]));
-  if not TRegEx.IsMatch(AContent, '(?im)^\s*end\s*\.') then
+  if not SameText(Nombre, AUnitName) then
+    Exit(MsgFmt(SR_CREATE_CONTENT_NAME_FMT, [Nombre, AUnitName]));
+  if not TRegEx.IsMatch(CodigoPascal(AContent), '(?im)^\s*end\s*\.') then
     Exit(MsgText(SR_CREATE_CONTENT_NOEND));
 end;
 
@@ -2586,20 +2591,27 @@ begin
           Exit(MsgText(SR_EDIT_INSERT_DEBE_SER_RUTINA));
         if A.Code.Trim = '' then
           Exit(MsgText(SR_EDIT_MODO_INSERT_NECESITA_CODE));
-        if TRegEx.IsMatch(A.Code, '^[ \t]*end\.[ \t]*$', [roMultiLine]) then
+        if TRegEx.IsMatch(CodigoPascal(A.Code), '^[ \t]*end\.[ \t]*$', [roMultiLine]) then
           Exit(MsgText(SR_EDIT_BLOQUE_TRAE_END_SOLO));
 
         CodeLines := SplitToLines(A.Code.TrimRight);
+        // EL lexico (Lsp.Pascal): lo que se busca en el bloque se busca en su
+        // vista de CODIGO, linea a linea con CodeLines (mismo largo, mismos
+        // saltos). Cada lectura llevaba su trozo de la regla: el // de
+        // 'http://x' cortaba la firma y la daba por no cerrada, y un parentesis
+        // dentro de un comentario descuadraba la cuenta (EDIT-071 falso, sonda
+        // del lexico, 2-oct-2026)
+        var CodeVista := SplitToLines(CodigoPascal(A.Code.TrimRight));
         var LastLine := '';
+        var NoComment := '';
         for I := High(CodeLines) downto 0 do
-          if CodeLines[I].Trim <> '' then
+          if CodeVista[I].Trim <> '' then
           begin
             LastLine := CodeLines[I].Trim;
+            NoComment := CodeVista[I].Trim;
             Break;
           end;
-        var NoComment := TRegEx.Replace(LastLine, '//.*$', '').Trim;
-        if not TRegEx.IsMatch(LastLine, '(^|[^\w])end\s*;$', [roIgnoreCase]) and
-           not TRegEx.IsMatch(NoComment, '(^|[^\w])end\s*;$', [roIgnoreCase]) then
+        if not TRegEx.IsMatch(NoComment, '(^|[^\w])end\s*;$', [roIgnoreCase]) then
         begin
           if TRegEx.IsMatch(NoComment, '(^|[^\w])end$', [roIgnoreCase]) then
             Exit(MsgText(SR_EDIT_BLOQUE_TERMINA_END_SIN));
@@ -2618,31 +2630,20 @@ begin
         // "identificador no declarado" lejos del sitio real, con el informe
         // diciendo "las DOS mitades".
         var IFirmaIni := -1;
-        var EnComentario := False;
-        for I := 0 to High(CodeLines) do
-        begin
-          var T := CodeLines[I].Trim;
-          if EnComentario then
+        for I := 0 to High(CodeVista) do
+          if CodeVista[I].Trim <> '' then
           begin
-            if T.Contains('}') or T.Contains('*)') then
-              EnComentario := False;
-            Continue;
+            IFirmaIni := I;
+            Break;
           end;
-          if (T = '') or T.StartsWith('//') then
-            Continue;
-          if T.StartsWith('{') or T.StartsWith('(*') then
-          begin
-            if not (T.Contains('}') or T.Contains('*)')) then
-              EnComentario := True;
-            Continue;
-          end;
-          IFirmaIni := I;
-          Break;
-        end;
         var Firma := '';
+        var FirmaCodigo := '';
         if IFirmaIni >= 0 then
+        begin
           Firma := CodeLines[IFirmaIni].Trim;
-        var MF := TRegEx.Match(Firma,
+          FirmaCodigo := CodeVista[IFirmaIni].Trim;
+        end;
+        var MF := TRegEx.Match(FirmaCodigo,
           '^(procedure|function|constructor|destructor)\s+([A-Za-z_]\w*)\s*([.(;:])?', [roIgnoreCase]);
         if not MF.Success then
           Exit(MsgFmt(SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT, [Copy(Firma, 1, 80)]));
@@ -2652,27 +2653,21 @@ begin
         var PosCierre := 0;
         var FirmaCerrada := False;
         var ProfPar := 0;
-        var EnCadena := False;
         for I := IFirmaIni to High(CodeLines) do
         begin
-          var Ln := TRegEx.Replace(CodeLines[I], '//.*$', '');
+          var Ln := CodeVista[I]; // sin cadenas ni comentarios: lo que queda cuenta
           var Col := 0;
           for var Ch in Ln do
           begin
             Inc(Col);
-            if Ch = '''' then
-              EnCadena := not EnCadena
-            else if not EnCadena then
+            if Ch = '(' then
+              Inc(ProfPar)
+            else if Ch = ')' then
+              Dec(ProfPar)
+            else if (Ch = ';') and (ProfPar <= 0) then
             begin
-              if Ch = '(' then
-                Inc(ProfPar)
-              else if Ch = ')' then
-                Dec(ProfPar)
-              else if (Ch = ';') and (ProfPar <= 0) then
-              begin
-                FirmaCerrada := True;
-                PosCierre := Col;
-              end;
+              FirmaCerrada := True;
+              PosCierre := Col;
             end;
             if FirmaCerrada then
               Break;
@@ -2691,6 +2686,13 @@ begin
             FirmaLineas := FirmaLineas + [CodeLines[I].Trim];
 
         Lines := SplitToLines(Text);
+        // la estructura del fichero (uses, cabecera, frontera, la clase, sus
+        // secciones, lo que ya esta) se BUSCA en la vista del codigo, alineada
+        // con Lines, y se ANCLA en Lines: un 'uses ...;' dentro de un
+        // comentario recibia la rutina (INSERT en un .dpr, escrito DENTRO del
+        // comentario y contestado como hecho) y un end. comentado negaba la
+        // frontera (EDIT-049; sonda del lexico, 2-oct-2026)
+        var Codigo := SplitToLines(CodigoPascal(Text));
 
         // A program/library (.dpr) has no interface/implementation: a routine
         // is legal only BETWEEN the uses clause and the main begin..end.
@@ -2704,7 +2706,7 @@ begin
           var IUses := -1;
           var IAfter := -1;
           for I := 0 to High(Lines) do
-            if TRegEx.IsMatch(Lines[I], '^[ \t]*uses\b', [roIgnoreCase]) then
+            if TRegEx.IsMatch(Codigo[I], '^[ \t]*uses\b', [roIgnoreCase]) then
             begin
               IUses := I;
               Break;
@@ -2712,7 +2714,7 @@ begin
           if IUses >= 0 then
           begin
             for I := IUses to High(Lines) do
-              if TRegEx.Replace(Lines[I], '//.*$', '').TrimRight.EndsWith(';') then
+              if Codigo[I].TrimRight.EndsWith(';') then
               begin
                 IAfter := I;
                 Break;
@@ -2720,14 +2722,18 @@ begin
           end
           else
             for I := 0 to High(Lines) do
-              if TRegEx.IsMatch(Lines[I], '^[ \t]*(program|library)\b', [roIgnoreCase]) and
-                 TRegEx.Replace(Lines[I], '//.*$', '').TrimRight.EndsWith(';') then
+              if TRegEx.IsMatch(Codigo[I], '^[ \t]*(program|library)\b', [roIgnoreCase]) and
+                 Codigo[I].TrimRight.EndsWith(';') then
               begin
                 IAfter := I;
                 Break;
               end;
           if IAfter = -1 then
             Exit(MsgText(SR_EDIT_ENCUENTRO_FINAL_CABECERA_USES));
+          // detras de donde ACABA esa linea: un comentario que se abre en ella
+          // y cierra mas abajo se llevaba la rutina DENTRO, contestada como
+          // colocada (revision de la 1.10.0, medido)
+          IAfter := LineaQueCierra(Lines, IAfter);
           var AnclaDpr := Lines[IAfter];
           var RDpr := DoEdit(A.Path, AnclaDpr,
             AnclaDpr + #10#10 + string.Join(#10, CodeLines), IAfter + 1, False);
@@ -2744,13 +2750,13 @@ begin
         end;
 
         var FrontIdx: Integer;
-        var FoundFront := FindUniqueLine(Lines,
+        var FoundFront := FindUniqueLine(Codigo,
           function(L: string): Boolean
           begin
             Result := L.Trim.ToLower = 'initialization';
           end, FrontIdx);
         if not FoundFront then
-          FoundFront := FindUniqueLine(Lines,
+          FoundFront := FindUniqueLine(Codigo,
             function(L: string): Boolean
             begin
               Result := TRegEx.IsMatch(L, '^[ \t]*end\.[ \t]*$');
@@ -2770,8 +2776,8 @@ begin
           var YaEsta := '';
           var RutinaRe := TRegEx.Create('^\s*(class\s+)?(procedure|function)\s+' +
             TRegEx.Escape(MF.Groups[2].Value) + '\s*[(;:]', [roIgnoreCase]);
-          for I := 0 to High(Lines) do
-            if RutinaRe.IsMatch(Lines[I]) then
+          for I := 0 to High(Codigo) do
+            if RutinaRe.IsMatch(Codigo[I]) then
             begin
               YaEsta := #10 + MsgFmt(SN_EDIT_RUTINA_YA_EXISTE_FMT, [MF.Groups[2].Value, I + 1]);
               Break;
@@ -2796,7 +2802,7 @@ begin
             try
               FotoVis.Vigila(A.Path);
               var ImpIdx: Integer;
-              if FindUniqueLine(SplitToLines(DecodeBytes(TFile.ReadAllBytes(A.Path), K)),
+              if FindUniqueLine(SplitToLines(CodigoPascal(DecodeBytes(TFile.ReadAllBytes(A.Path), K))),
                 function(L: string): Boolean
                 begin
                   Result := L.Trim.ToLower = 'implementation';
@@ -2839,8 +2845,8 @@ begin
           Exit(MsgText(SR_EDIT_INSERT_METODO_NECESITA_INCLASS));
         var ClsRe := TRegEx.Create('\b' + TRegEx.Escape(A.ClassName_) + '\s*=\s*class\b', [roIgnoreCase]);
         var IClase := -1;
-        for I := 0 to High(Lines) do
-          if ClsRe.IsMatch(Lines[I]) then
+        for I := 0 to High(Codigo) do
+          if ClsRe.IsMatch(Codigo[I]) then
           begin
             IClase := I;
             Break;
@@ -2858,7 +2864,7 @@ begin
         var Prof := 0;
         for I := IClase + 1 to High(Lines) do
         begin
-          var L := Lines[I].Trim;
+          var L := Codigo[I].Trim;
           if L.ToLower = 'end;' then
           begin
             if Prof = 0 then
@@ -2885,7 +2891,7 @@ begin
           TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
         var IDeclExiste := -1;
         for I := IClase + 1 to IFin - 1 do
-          if DeclRe.IsMatch(Lines[I]) then
+          if DeclRe.IsMatch(Codigo[I]) then
           begin
             IDeclExiste := I;
             Break;
@@ -2893,8 +2899,8 @@ begin
         var ImplRe := TRegEx.Create('^\s*(class\s+)?(procedure|function|constructor|destructor)\s+' +
           TRegEx.Escape(A.ClassName_) + '\.' + TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
         var IImplExiste := -1;
-        for I := 0 to High(Lines) do
-          if ImplRe.IsMatch(Lines[I]) then
+        for I := 0 to High(Codigo) do
+          if ImplRe.IsMatch(Codigo[I]) then
           begin
             IImplExiste := I;
             Break;
@@ -2943,7 +2949,7 @@ begin
         begin
           var IVis := -1;
           for I := IClase + 1 to IFin - 1 do
-            if Lines[I].Trim.ToLower = Vis then
+            if Codigo[I].Trim.ToLower = Vis then
             begin
               IVis := I;
               Break;
@@ -2961,7 +2967,7 @@ begin
               IDecl := IFin;
               for I := IClase + 1 to IFin - 1 do
               begin
-                var TrimL := Lines[I].Trim.ToLower;
+                var TrimL := Codigo[I].Trim.ToLower;
                 var IsSec := False;
                 for var S2 in Secs do
                   if (S2 = TrimL) or TrimL.StartsWith(S2 + ' ') then IsSec := True; // 'private type', 'public const'...
@@ -2981,7 +2987,7 @@ begin
             IDecl := IFin;
             for I := IVis + 1 to IFin - 1 do
             begin
-              var TrimL := Lines[I].Trim.ToLower;
+              var TrimL := Codigo[I].Trim.ToLower;
               var IsSec := False;
               for var S2 in Secs do
                 if (S2 = TrimL) or TrimL.StartsWith(S2 + ' ') then IsSec := True;
@@ -2996,7 +3002,7 @@ begin
         var Sangria := '    ';
         for I := IClase + 1 to IFin - 1 do
         begin
-          var TrimL := Lines[I].Trim;
+          var TrimL := Codigo[I].Trim;
           var IsSec := False;
           for var S2 in Secs do
             if (S2 = TrimL.ToLower) or TrimL.ToLower.StartsWith(S2 + ' ') then IsSec := True;
@@ -3015,14 +3021,28 @@ begin
         if not EsMsg(R1, SK_EDIT_ESCRITO_EN_FMT) then
           Exit(MsgConCausa(SR_EDIT_INSERT_FALLO_MITAD1_FMT, R1, [A.ClassName_, R1]));
         end;
-        var FirmaCual := TRegEx.Replace(Firma,
-          '^(procedure|function|constructor|destructor)(\s+)', '$1$2' + A.ClassName_ + '.', [roIgnoreCase]);
+        // la clase, detras de la palabra de la rutina que da la vista: una
+        // firma con su comentario delante en la misma linea se quedaba sin
+        // cualificar
+        var MQ := TRegEx.Match(CodeVista[IFirmaIni],
+          '\b(procedure|function|constructor|destructor)\s+', [roIgnoreCase]);
+        var FirmaCual := CodeLines[IFirmaIni];
+        if MQ.Success then
+          Insert(A.ClassName_ + '.', FirmaCual, MQ.Index + MQ.Length);
+        FirmaCual := FirmaCual.Trim;
         CodeLines[IFirmaIni] := FirmaCual;
         FotoMet.Anota(A.Path);
+        // la frontera, en SU linea: la declaracion recien escrita la bajo
+        // tantas lineas como tiene. Sin numero, un 'end.' dentro de un
+        // comentario hacia el ancla doble y se deshacian las dos mitades
+        // (revision de la 1.10.0, medido; la rutina-global ya lo llevaba)
+        var LineaFront := FrontIdx + 1;
+        if IDeclExiste < 0 then
+          Inc(LineaFront, Length(DeclLinea.Split([#10])));
         var R2 := '';
         try
           FotoMet.Vigila(A.Path);
-          R2 := DoEdit(A.Path, FrontLine, string.Join(#10, CodeLines) + #10#10 + FrontLine, 0, False);
+          R2 := DoEdit(A.Path, FrontLine, string.Join(#10, CodeLines) + #10#10 + FrontLine, LineaFront, False);
         except
           on E: Exception do
             R2 := MsgExcepcion(E.ClassName, E.Message);
@@ -3174,7 +3194,9 @@ var
 
   function CountEndDot(const T: string): Integer;
   begin
-    Result := TRegEx.Matches(T, '^[ \t]*end\.[ \t]*$', [roMultiLine]).Count;
+    // en el CODIGO: un end. comentado contaba, la cuenta salia 2 y la
+    // auditoria de estructura no miraba nada (censo del lexico, 2-oct-2026)
+    Result := TRegEx.Matches(CodigoPascal(T), '^[ \t]*end\.[ \t]*$', [roMultiLine]).Count;
   end;
 
 begin
@@ -3418,24 +3440,29 @@ begin
         Warnings.Add(MsgFmt(SN_EDIT_ESTRUCTURA_ROTA_END_FMT, [ED]))
       else if EA = 1 then
       begin
-        var Ult := High(AfterLines);
-        while (Ult >= 0) and (AfterLines[Ult].Trim = '') do
+        // la ultima linea de CODIGO (un comentario detras del end. no la cambia)
+        var AfterCodigo := LineasDelTexto(CodigoPascal(AfterText));
+        var Ult := High(AfterCodigo);
+        while (Ult >= 0) and (AfterCodigo[Ult].Trim = '') do
           Dec(Ult);
-        if (Ult >= 0) and not TRegEx.IsMatch(AfterLines[Ult], '^[ \t]*end\.[ \t]*$') then
+        if (Ult >= 0) and not TRegEx.IsMatch(AfterCodigo[Ult], '^[ \t]*end\.[ \t]*$') then
           Warnings.Add(MsgText(SN_EDIT_ESTRUCTURA_ROTA_ULTIMA));
       end;
+      // lo que mira, en el CODIGO del fichero escrito: una firma dentro de un
+      // comentario, o un comentario con ':=' encima de una de verdad,
+      // avisaban de una insercion en un metodo que no habia (revision de la
+      // 1.10.0)
+      var AfterVista := LineasDelTexto(CodigoPascal(AfterText));
       var NewLines := Replacement.Split([#10]);
       for var J := 0 to High(NewLines) do
       begin
-        if not TRegEx.IsMatch(NewLines[J], '^(procedure|function|constructor|destructor)\b', [roIgnoreCase]) then
+        if (Idx < 0) or (Idx + J > High(AfterVista)) then
+          Break;
+        if not TRegEx.IsMatch(AfterVista[Idx + J], '^(procedure|function|constructor|destructor)\b', [roIgnoreCase]) then
           Continue;
-        var Encima: string;
-        if J = 0 then
-        begin
-          if Idx > 0 then Encima := AfterLines[Idx - 1].Trim else Encima := '';
-        end
-        else
-          Encima := NewLines[J - 1].Trim;
+        var Encima := '';
+        if Idx + J > 0 then
+          Encima := AfterVista[Idx + J - 1].Trim;
         var EsStmt := Encima.Contains(':=') or TRegEx.IsMatch(Encima, '\);?$') or
           TRegEx.IsMatch(Encima, '^[A-Za-z_][\w.]*\.[A-Za-z_]\w*\s*;$') or
           TRegEx.IsMatch(Encima, '^(if|while|for|case|repeat|until|raise|exit|inc|dec|with|begin|try)\b', [roIgnoreCase]);

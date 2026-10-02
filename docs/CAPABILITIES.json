@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/gen-capabilities.py (from the live tools/list)",
-  "version": "1.9.1",
-  "tools": 41,
-  "coreTools": 36,
+  "version": "1.10.0",
+  "tools": 42,
+  "coreTools": 37,
   "optionalTools": 5,
   "toolNames": [
     "delphi_adb",
@@ -17,6 +17,7 @@
     "delphi_designer",
     "delphi_desktop",
     "delphi_diagnostics",
+    "delphi_docs",
     "delphi_edit",
     "delphi_fetch",
     "delphi_git",
@@ -67,6 +68,7 @@
     "delphi_designer": "mixed",
     "delphi_desktop": "read-write",
     "delphi_diagnostics": "read-only",
+    "delphi_docs": "read-only",
     "delphi_edit": "read-write",
     "delphi_fetch": "read-only",
     "delphi_git": "mixed",

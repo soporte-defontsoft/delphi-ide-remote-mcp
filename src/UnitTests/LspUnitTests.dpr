@@ -18,7 +18,8 @@ uses
   LspTests.Log in 'LspTests.Log.pas',
   LspTests.Motor in 'LspTests.Motor.pas',
   LspTests.Rutas in 'LspTests.Rutas.pas',
-  LspTests.LetrasDeRed in 'LspTests.LetrasDeRed.pas';
+  LspTests.LetrasDeRed in 'LspTests.LetrasDeRed.pas',
+  LspTests.Docs in 'LspTests.Docs.pas';
 
 var
   Runner: ITestRunner;

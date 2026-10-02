@@ -150,12 +150,22 @@ with open(CLS, 'wb') as f:
         'end.', '']).encode('cp1252'))
 out = call('delphi_edit', {"path": CLS, "insert": "metodo", "code": mcode,
                             "inclass": "TCosa", "visibility": "public"})
-check('insert metodo: DOS mitades', 'BOTH halves' in out and 'Half 2' in out, out)
+check('insert metodo: DOS mitades', mc.abre(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT'), out)
 ctx = open(CLS, 'rb').read().decode('cp1252')
 check('insert metodo: declaracion en clase',
       '    procedure Ping;' in ctx and ctx.index('procedure Ping;') < ctx.index('implementation'), ctx)
 check('insert metodo: implementacion cualificada',
       'procedure TCosa.Ping;' in ctx and ctx.rstrip().endswith('end.'), ctx[-120:])
+# la firma con su comentario DELANTE en la misma linea se cualifica igual
+# (1.10.0: la firma se busca en la vista del codigo; la clase se ponia con
+# '^procedure' sobre el texto y se quedaba sin poner)
+out = call('delphi_edit', {"path": CLS, "insert": "metodo",
+                           "code": "{ la doc } procedure Pong;\nbegin\nend;",
+                           "inclass": "TCosa", "visibility": "public"})
+ctx = open(CLS, 'rb').read().decode('cp1252')
+check('insert metodo: la firma con su comentario delante, cualificada',
+      mc.abre(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and '{ la doc } procedure TCosa.Pong;' in ctx,
+      out[:300] + ' | ' + ctx[-200:])
 
 # --- insert metodo con un TIPO ANIDADO en la clase (medido 2026-09-22 en
 # Lsp.Client: el primer 'end;' era el del tipo anidado y la declaracion caia
@@ -367,6 +377,66 @@ _src = open(CMT, 'rb').read().decode('ascii')
 check('removeuses: quitar una del medio deja el // en SU linea',
       mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA,   // la de antes, con su nota\r\n  UC;   // otra nota\r\n' in _src,
       _src)
+# el // que va DETRAS del ; final es de la ultima entrada (1.10.0): anadir otra
+# detras no se lo lleva (salia 'Lsp.Texts; // PrefijoSinBarra', medido el
+# 2-oct-2026), y quitar la suya no lo pega a la que queda (salia
+# '// de UA // de UB' en una linea): se queda en una linea suya
+FIN = os.path.join(DIR, 'ConColaFinal.pas')
+open(FIN, 'wb').write(CRLF.join([
+    'unit ConColaFinal;', '', 'interface', '', 'implementation', '', 'uses',
+    '  UA,  // de UA', '  UB;  // de UB', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": FIN, "adduses": "UC"})
+_src = open(FIN, 'rb').read().decode('ascii')
+check('adduses: el // del ; final se queda con SU entrada, la nueva va detras',
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'uses\r\n  UA,  // de UA\r\n  UB,  // de UB\r\n  UC;\r\n\r\nend.' in _src,
+      _src)
+out = call('delphi_edit', {"path": FIN, "removeuses": "UC"})
+_src = open(FIN, 'rb').read().decode('ascii')
+check('removeuses: quitar la nueva devuelve el ; a su sitio, delante del //',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA,  // de UA\r\n  UB;  // de UB\r\n\r\nend.' in _src,
+      _src)
+out = call('delphi_edit', {"path": FIN, "removeuses": "UB"})
+_src = open(FIN, 'rb').read().decode('ascii')
+check('removeuses: quitar la del // final no se lo pega a la que queda',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA;  // de UA\r\n  // de UB\r\n\r\nend.' in _src,
+      _src)
+# ...y quitar una del MEDIO no mueve el // final de la ultima: su duena se busca
+# por el NOMBRE, porque el texto de una entrada lleva delante el // de la de
+# antes (medido el 2-oct-2026: el '// de UC' bajaba a una linea suya)
+MED = os.path.join(DIR, 'ConColaMedio.pas')
+open(MED, 'wb').write(CRLF.join([
+    'unit ConColaMedio;', '', 'interface', '', 'implementation', '', 'uses',
+    '  UA, // de UA', '  UB, // de UB', '  UC; // de UC', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": MED, "removeuses": "UB"})
+_src = open(MED, 'rb').read().decode('ascii')
+check('removeuses: quitar una del medio deja el // final con la ultima',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and '  UC; // de UC\r\n' in _src, _src)
+# ...y el // de la quitada, que iba detras de SU coma, no se pega a la de
+# antes: se queda en una linea suya (se pegaba a la de antes: 'UA, // de UB',
+# medido el 2-oct-2026 con remove-unit, el mismo escritor)
+check('removeuses: el // de la quitada del medio se queda en una linea suya',
+      'uses\r\n  UA, // de UA\r\n  // de UB\r\n  UC; // de UC\r\n' in _src, _src)
+# ...y sin comentario en la de antes: ese de arriba pasaba igual con el
+# arreglo quitado (el // de UA se colaba primero y tapaba el caso; lo vio la
+# mutacion de la 1.10.0)
+MED2 = os.path.join(DIR, 'ConColaMedio2.pas')
+open(MED2, 'wb').write(CRLF.join([
+    'unit ConColaMedio2;', '', 'interface', '', 'implementation', '', 'uses',
+    '  UA,', '  UB, // de UB', '  UC;', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": MED2, "removeuses": "UB"})
+_src = open(MED2, 'rb').read().decode('ascii')
+check('removeuses: el // de la quitada no se pega a la de antes sin comentario',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  UA,\r\n  // de UB\r\n  UC;\r\n' in _src, _src)
+# ...pero una DIRECTIVA detras del ; no es de ninguna entrada: se queda detras
+# del ; de la clausula, como estaba
+DIR2 = os.path.join(DIR, 'ConDirectivaFinal.pas')
+open(DIR2, 'wb').write(CRLF.join([
+    'unit ConDirectivaFinal;', '', 'interface', '', 'implementation', '', 'uses',
+    '  UA; {$WARNINGS ON}', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DIR2, "adduses": "UB"})
+_src = open(DIR2, 'rb').read().decode('ascii')
+check('adduses: una directiva detras del ; final se queda detras del ; nuevo',
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and '  UA,\r\n  UB; {$WARNINGS ON}\r\n' in _src, _src)
 # la vecina de una entrada envuelta en directiva: la directiva se queda y la
 # vecina conserva UNA sangria (medido en vivo: salia con dos)
 IFD = os.path.join(DIR, 'ConIfdef.pas')
@@ -377,6 +447,160 @@ out = call('delphi_edit', {"path": IFD, "removeuses": "Winapi.Windows", "section
 _src = open(IFD, 'rb').read().decode('cp1252')
 check('removeuses: la directiva se queda y la vecina con una sola sangria',
       mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and '  {$IFDEF MSWINDOWS}\r\n  {$ENDIF}\r\n  System.SysUtils;' in _src, _src)
+# la directiva de cierre que va DETRAS de la entrada quitada se queda con la de
+# apertura (1.10.0, revisor: se iba el {$ENDIF} con DebugU y el {$IFDEF} quedaba
+# abierto hasta el final de la unidad)
+DIR3 = os.path.join(DIR, 'ConCierreDetras.pas')
+open(DIR3, 'wb').write(CRLF.join([
+    'unit ConCierreDetras;', '', 'interface', '', 'implementation', '', 'uses',
+    '  A', '  {$IFDEF DEBUG}, DebugU{$ENDIF};', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DIR3, "removeuses": "DebugU"})
+_src = open(DIR3, 'rb').read().decode('ascii')
+check('removeuses: el {$ENDIF} de detras se queda con su {$IFDEF}',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  A\r\n  {$IFDEF DEBUG}\r\n  {$ENDIF};\r\n' in _src, _src)
+# quitar la ULTIMA cuando la de antes va envuelta: la coma de la envuelta se
+# queda DENTRO del condicional y el ; detras del {$ENDIF} (1.10.0, revisor: el ;
+# caia dentro, en 'DebugU;', y sin DEBUG la clausula quedaba en 'A,' sin cerrar)
+DIR4 = os.path.join(DIR, 'ConEnvueltaDelante.pas')
+open(DIR4, 'wb').write(CRLF.join([
+    'unit ConEnvueltaDelante;', '', 'interface', '', 'implementation', '', 'uses',
+    '  A,', '  {$IFDEF DEBUG}', '  DebugU,', '  {$ENDIF}', '  C;', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DIR4, "removeuses": "C"})
+_src = open(DIR4, 'rb').read().decode('ascii')
+check('removeuses: quitar la ultima tras una envuelta deja la coma dentro del condicional',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT')
+      and 'uses\r\n  A\r\n  {$IFDEF DEBUG}\r\n  , DebugU\r\n  {$ENDIF};\r\n' in _src, _src)
+
+# --- EL lexico (Lsp.Pascal, 1.10.0): cada caso, medido antes con la sonda del
+# lexico el 2-oct-2026 contra el exe de entonces ---
+# un // dentro de una llave no es un comentario de linea: la coma caia dentro
+# de la llave y adduses acababa en SYS-006 'Index out of bounds (1)'
+LLA = os.path.join(DIR, 'ConLlaveUrl.pas')
+open(LLA, 'wb').write(CRLF.join([
+    'unit ConLlaveUrl;', '', 'interface', '', 'implementation', '', 'uses',
+    '  UA {ver https://docwiki};', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": LLA, "adduses": "UB"})
+_src = open(LLA, 'rb').read().decode('ascii')
+check('adduses: un // dentro de una llave no se lleva la coma',
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and 'uses\r\n  UA {ver https://docwiki},\r\n  UB;\r\n' in _src,
+      out[:200] + ' | ' + _src)
+# INSERT: el // de una cadena no corta la firma (EDIT-071 falso)...
+FIR = os.path.join(DIR, 'ConFirmaUrl.pas')
+open(FIR, 'wb').write(CRLF.join(['unit ConFirmaUrl;', '', 'interface', '', 'implementation', '',
+                                 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": FIR, "insert": "rutina-global",
+                           "code": "procedure Abre(const U: string = 'http://x');\nbegin\nend;"})
+_src = open(FIR, 'rb').read().decode('ascii')
+check('insert: una firma con // en una cadena se cierra en su ;',
+      mc.abre(out, 'SK_EDIT_INSERT_RUTINA_ANTES_FMT') and
+      "procedure Abre(const U: string = 'http://x');\r\nbegin\r\nend;\r\n\r\nend." in _src, out[:200])
+# ...ni un parentesis dentro de un comentario descuadra la cuenta
+FIR2 = os.path.join(DIR, 'ConFirmaNota.pas')
+open(FIR2, 'wb').write(CRLF.join(['unit ConFirmaNota;', '', 'interface', '', 'implementation', '',
+                                  'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": FIR2, "insert": "rutina-global",
+                           "code": "procedure Cuenta(N: Integer { (sic });\nbegin\nend;"})
+_src = open(FIR2, 'rb').read().decode('ascii')
+check('insert: un parentesis dentro de un comentario de la firma no la deja abierta',
+      mc.abre(out, 'SK_EDIT_INSERT_RUTINA_ANTES_FMT') and
+      'procedure Cuenta(N: Integer { (sic });\r\nbegin\r\nend;\r\n\r\nend.' in _src, out[:200] + ' | ' + _src)
+# un end. comentado no es la frontera (EDIT-049 falso): la rutina va delante
+# del de verdad y el comentario se queda como estaba
+FIN2 = os.path.join(DIR, 'ConFinComentado.pas')
+open(FIN2, 'wb').write(CRLF.join(['unit ConFinComentado;', '', 'interface', '', 'implementation', '',
+                                  '{ lo de antes:', 'end.', '}', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": FIN2, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+_src = open(FIN2, 'rb').read().decode('ascii')
+check('insert: un end. comentado no es la frontera de la unit',
+      mc.abre(out, 'SK_EDIT_INSERT_RUTINA_ANTES_FMT') and
+      '{ lo de antes:\r\nend.\r\n}\r\n\r\nprocedure P;\r\nbegin\r\nend;\r\n\r\nend.\r\n' in _src,
+      out[:200] + ' | ' + _src)
+# .dpr: un 'uses ...;' dentro de un comentario no es la clausula: la rutina
+# caia DENTRO del comentario y la respuesta decia que estaba colocada
+DPRU = os.path.join(DIR, 'ConUsesComentado.dpr')
+open(DPRU, 'wb').write(CRLF.join(['program ConUsesComentado;', '', '{$APPTYPE CONSOLE}', '', '{',
+                                  'uses antiguos: ninguno;', '}', '', 'uses', '  System.SysUtils;', '',
+                                  'begin', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DPRU, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+_src = open(DPRU, 'rb').read().decode('ascii')
+check('insert en un .dpr: detras del uses de verdad, no dentro del comentado',
+      mc.abre(out, 'SK_EDIT_INSERT_RUTINA_DPR_FMT') and
+      '{\r\nuses antiguos: ninguno;\r\n}\r\n' in _src and
+      'uses\r\n  System.SysUtils;\r\n\r\nprocedure P;' in _src, out[:200] + ' | ' + _src)
+
+# --- lo que encontro el revisor de codigo de la 1.10.0, cada caso medido
+# antes con una sonda contra el exe de entonces ---
+# escribir "detras de una linea" es detras de donde ACABA: un comentario que
+# se abre en ella se llevaba dentro la rutina del .dpr...
+DPRN = os.path.join(DIR, 'ConUsesNota.dpr')
+open(DPRN, 'wb').write(CRLF.join(['program ConUsesNota;', '', '{$APPTYPE CONSOLE}', '', 'uses',
+                                  '  System.SysUtils; { las units', '  de arriba }', '',
+                                  'begin', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DPRN, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+_src = open(DPRN, 'rb').read().decode('ascii')
+check('insert en un .dpr: detras del comentario que se abre en la linea del uses, no dentro',
+      mc.abre(out, 'SK_EDIT_INSERT_RUTINA_DPR_FMT') and
+      '  System.SysUtils; { las units\r\n  de arriba }\r\n\r\nprocedure P;' in _src, out[:200] + ' | ' + _src)
+# ...y el uses que adduses crea debajo de 'interface { la parte'
+INTN = os.path.join(DIR, 'ConInterfazNota.pas')
+open(INTN, 'wb').write(CRLF.join(['unit ConInterfazNota;', '', 'interface { la parte', '  publica }', '',
+                                  'implementation', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": INTN, "adduses": "System.Classes", "section": "interface"})
+_src = open(INTN, 'rb').read().decode('ascii')
+check('adduses: la clausula nueva va debajo del comentario de la linea de interface, no dentro',
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and
+      'interface { la parte\r\n  publica }\r\n\r\nuses\r\n  System.Classes;\r\n\r\nimplementation' in _src,
+      out[:200] + ' | ' + _src)
+# INSERT metodo con un 'end.' dentro de un comentario: la segunda escritura iba
+# sin su linea, el ancla salia doble y se deshacian las dos mitades
+MFC = os.path.join(DIR, 'ConMetFinComentado.pas')
+open(MFC, 'wb').write(CRLF.join(['unit ConMetFinComentado;', '', 'interface', '', 'type',
+                                 '  TCosa = class', '  public', '    procedure Uno;', '  end;', '',
+                                 'implementation', '', '{', 'end.', '}', '', 'procedure TCosa.Uno;',
+                                 'begin', 'end;', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": MFC, "insert": "metodo", "inclass": "TCosa",
+                           "code": "procedure Dos;\nbegin\nend;"})
+_src = open(MFC, 'rb').read().decode('ascii')
+check('insert metodo: un end. comentado no deshace las dos mitades',
+      mc.abre(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and '    procedure Dos;' in _src and
+      '{\r\nend.\r\n}\r\n' in _src and 'procedure TCosa.Dos;\r\nbegin\r\nend;\r\n\r\nend.' in _src,
+      out[:300] + ' | ' + _src)
+# la cola envuelta, leida por EL lector de directivas: la forma
+# parentesis-asterisco y un // detras de la directiva dejaban 'UA, ;' sin DEBUG
+for _n, _abre, _cierra in (('ConEnvueltaParen', '(*$IFDEF DEBUG*)', '(*$ENDIF*)'),
+                           ('ConEnvueltaNota', '{$IFDEF DEBUG} // solo en depuracion', '{$ENDIF}')):
+    _p = os.path.join(DIR, _n + '.pas')
+    open(_p, 'wb').write(CRLF.join(['unit %s;' % _n, '', 'interface', '', 'implementation', '', 'uses',
+                                    '  A,', '  ' + _abre, '  DebugU,', '  ' + _cierra, '  C;', '',
+                                    'end.', '']).encode('ascii'))
+    out = call('delphi_edit', {"path": _p, "removeuses": "C"})
+    _src = open(_p, 'rb').read().decode('ascii')
+    check('removeuses: tras una envuelta en %s, la coma dentro del condicional' % _abre,
+          mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT')
+          and 'uses\r\n  A\r\n  %s\r\n  , DebugU\r\n  %s;\r\n' % (_abre, _cierra) in _src, _src)
+# dos comentarios IGUALES detras de dos comas: cada uno con su duena (el
+# segundo se daba a la del primero y bajaba a una linea suya)
+DUP = os.path.join(DIR, 'ConTodosIguales.pas')
+open(DUP, 'wb').write(CRLF.join(['unit ConTodosIguales;', '', 'interface', '', 'implementation', '', 'uses',
+                                 '  UA, // TODO', '  UB, // TODO', '  UC;', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DUP, "adduses": "UD"})
+_src = open(DUP, 'rb').read().decode('ascii')
+check('adduses: dos // iguales detras de dos comas, cada uno en su linea',
+      mc.abre(out, 'SN_ADDUSES_ADDED_FMT') and
+      'uses\r\n  UA, // TODO\r\n  UB, // TODO\r\n  UC,\r\n  UD;\r\n' in _src, _src)
+# el aviso de "posible metodo dentro de otro" mira el CODIGO: una firma dentro
+# de un comentario, con una asignacion comentada encima, avisaba
+AVI = os.path.join(DIR, 'ConAvisoComentado.pas')
+open(AVI, 'wb').write(CRLF.join(['unit ConAvisoComentado;', '', 'interface', '', 'implementation', '',
+                                 'procedure Haz;', 'var', '  X, Y: Integer;', 'begin', '  X := 0;',
+                                 'end;', '', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": AVI, "old": "  X := 0;",
+                           "new": "  X := 1;\n  {\n  Y := 2;\nprocedure Vieja;\n  }"})
+check('edit: una firma dentro de un comentario no avisa de un metodo partido',
+      mc.abre(out, 'SK_EDIT_ESCRITO_EN_FMT') and not mc.es(out, 'SN_EDIT_POSIBLE_INSERCION_METODO_FMT'), out)
+out = call('delphi_edit', {"path": AVI, "old": "  X := 1;", "new": "  X := 2;\nprocedure Suelta;"})
+check('edit: ...y una de verdad detras de una asignacion SI avisa (control)',
+      mc.es(out, 'SN_EDIT_POSIBLE_INSERCION_METODO_FMT'), out[-300:])
 
 # --- restore: two steps, byte-identical ---
 out = call('delphi_edit', {"path": PAS, "restore": True})

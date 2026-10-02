@@ -6,6 +6,285 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.10.0] - 2026-10-02
+
+`delphi_docs`: the RAD Studio help installed with Delphi - what the IDE opens with F1 - searched and read by an agent in small pieces.
+
+### Added
+
+- **`delphi_docs`, the documentation of the Delphi installed on the
+  server.** An agent that does not know an API guessed it, or read a
+  37,676-line RTL unit that carries 11 doc comments, or went to the web. The
+  help is already on the machine: the `.chm` files the IDE registers in
+  `Software\Embarcadero\BDS\<version>\Help\HtmlHelp1Files` (ten of
+  Embarcadero's - RTL, VCL, FMX, FireDAC and the other libraries, the
+  language and the IDE, Indy, TeeChart, code examples - and those of the
+  installed components that register one, EurekaLog here). The list is the
+  IDE's own, its `$(BDS)` macros expanded: no path is written in the
+  server. `command=search query=<a concept or a class>` gives a short list
+  of pages, id and title, the best first: a qualified name lands on the
+  exact page, a bare one (`TButton`, `TStringList.Sort`) or a concept
+  (`"class helpers"`, `"for in"`) finds it too, an inherited member is found
+  in the member list of its class (`TFDQuery.ExecSQL` ->
+  `TFDCustomQuery.ExecSQL`), a page whose name says C++ ranks 40 points
+  lower (it still comes up when nothing else matches), each page comes once
+  however many index entries lead to it (`total` counts pages), and
+  `framework=vcl|fmx` puts that framework's page first when both have one.
+  A page that only redirects (259 in `topics.chm`) answers as its
+  destination. `command=read id=<an id>` gives the page as plain text with
+  headings, lists, tables and code fences, without what is only for C++, in
+  chunks of 8,000 characters (`offset`, `nextOffset`): a long page first
+  gives its introduction and the list of its sections, and `<id>#<section>`
+  reads one alone (the index and the page do not agree on the case of an
+  anchor: it is matched without it); a class gives its ancestors and, in
+  `related`, its unit and its member lists; a topic gives its parent index
+  in `related`, recognised by its shape and not by the English phrase in
+  front of it (found on 7,282 of the 7,283 pages of `topics.chm` that have
+  one, and on no page that does not). Every page says which help file and of what date it comes
+  from, and that for an exact signature the installed sources win
+  (`delphi_hover`, `delphi_definition`): the help can be older than the
+  code. Read-only, and announced so in `tools/list`, in the `reader`
+  profile and in the task table of `delphi_help`. It asks for no switch,
+  in any workspace: it opens only the help files the IDE itself
+  registers, an id never leaves its file, and what comes back is the
+  product's documentation - `LibraryZone=0` keeps the SOURCES of the
+  installed components out of reach, and the help is not them (David,
+  2-oct-2026; a first version asked for `LibraryZone=1`, and a reviewer
+  found that it checked the switch and not the zone: the help of
+  EurekaLog, outside the zone, was read all the same). With no help
+  installed it says so (`DOCS-001`) and points at the sources.
+- **Measured before it was written, on this machine:** the `.chm` files are
+  read in place through Windows' own help storage (`itss.dll`) - opening one
+  2 ms, the 17.5 MB word index of `system.chm` 21 ms, a page 1 ms - so
+  nothing is extracted to disk and nothing is cached: a search reads the
+  indexes again, 0.42 s median and 0.69 s at most over 37 real concepts and
+  classes, the right page first in all of them; a lone word found almost
+  everywhere in the index (`e`, `object`) takes 3-4 s. What an agent pays for it:
+  2,299 characters in `tools/list` (2.2 % of it), 450-800 for a search, and
+  a first read of 1,823 characters median over 35 pages.
+- **What three reviewers found before the tag, fixed in it.** An id that
+  is not one (no help name, a control character) is `INVALID_PARAM`
+  (`DOCS-013`) and a page that is not there `NOT_FOUND`; a help file that
+  does not open - damaged, truncated - is `DOCS-014` for a read and is
+  skipped by a search (`DOCS-015` when none opens), and a bad stream inside
+  one no longer raises. Quotes and punctuation around a word are not part
+  of it (`"class helpers"`, `Sort,`). A word that also appears in the
+  markup of the index (`object`) skipped the entries after it. A redirect
+  read with `#section` keeps its section. The encoding of an index is
+  decided once for the whole index and that of a page by its own BOM or
+  `meta` - quoted or not: HTML5's `<meta charset="utf-8">` was read as
+  Windows-1252 -, and both are decoded by the server's one decoder;
+  `&laquo;` / `&raquo;` (the only named entities left in 397
+  real pages) and characters beyond U+FFFF are decoded. `itss.dll` is
+  created with `CoCreateInstance` and without `System.Win.ComObj`, whose
+  initialization puts the main thread in a single-threaded COM apartment
+  (read in the RTL). `related` is described as what it is: the pages
+  around a page (its parent, and for a class its unit and its member
+  lists); the others it names are found with `search`. Without
+  `framework`, neither VCL nor FMX is preferred (the description said
+  "alphabetical"; ties go by the shorter id).
+
+### Changed
+
+- **The help text leaves without the drive mask**, like the content of
+  `delphi_read`: its examples cite paths that are not this server's, and
+  `TPath.Combine('E:\somewhere\', ...)` came out `'srv0:\somewhere\'`. What
+  `delphi_docs` composes itself carries no path: the id is
+  `<help>:<page>` and the note names the help file without its folder;
+  the query and the section it echoes back go through the mask.
+- The reader of the IDE's registry values is one (`IdeValoresDeClave`): the
+  installed packages of `delphi_components`, the help files of
+  `delphi_docs` and the default SDKs of `delphi_paserver profiles`
+  (`ideSdkDefaults`) go through it, the current user's key first and then
+  the machine's. A reviewer found the third copy of the loop, where a value
+  that was not text raised.
+
+- `test_docs_consistency` checks that the task table of `delphi_help` - the
+  first call the manual asks for - names every tool of `tools/list`. It
+  was checked by hand; the next tool is checked by the battery.
+
+### Fixed
+
+- **A path that hangs from the drive root, inside a JSON answer, no longer
+  comes out as a network path.** The outbound drive mask knows a UNC path
+  in two forms: `\\host` in plain text and `\\\\host` inside JSON, where
+  every backslash is written twice. The plain-text form also fired inside
+  a JSON answer, on ONE escaped backslash after a quote: the search path
+  `\Shared\Lib` of a `.dproj` came out `\srvhost\Lib` in `delphi_config
+  view` (measured 2026-10-02), and the examples of the help the same way.
+  A tool's whole answer that is a JSON object or list now takes only the
+  JSON form; a refusal, which starts with its `[AREA-NNN]` tag, is plain
+  text and keeps both (the battery caught the first version of this fix
+  taking that `[` for a JSON list). `test_round22` M6.
+- **A comment after the final `;` of a `uses` clause stays with its
+  entry.** It belongs to the last entry, on its line, and it lies outside
+  the clause: adding a unit behind it (`delphi_edit adduses` on a unit,
+  `delphi_config add-unit` on a `.dpr` - the same writer) took the comment
+  to the new unit (`Lsp.NetDrives; // PrefijoSinBarra` came out
+  `Lsp.Texts; // PrefijoSinBarra`, measured while writing this release),
+  and removing its entry glued it to the one left (`// de SysUtils // de
+  Classes` on one line). It stays with its entry now - not found by the
+  entry's text, which carries the comment of the entry before it and a
+  removal changes -; with its entry removed it stays on a line of its own:
+  a comment is never deleted.
+  A directive after the `;` belongs to nobody and stays behind the clause.
+  The comment after a COMMA had the same defect one entry up: removing the
+  entry it belonged to glued it to the one before (`UA, // de UB`,
+  measured with `remove-unit`; the battery check written for the first
+  fix found it). The writer now knows which new entry each original one
+  became - by its name, or in its place when it was renamed - and gives
+  each comment back to its own. A rename got this right before only
+  because its list WAS the clause's (a dynamic array is assigned by
+  reference), not by method.
+- **Removing a unit keeps the conditional around it whole.** `delphi_edit
+  removeuses` and `delphi_config remove-unit` took the closing directive
+  written BEHIND the entry with it (`A {$IFDEF DEBUG}, DebugU{$ENDIF};`
+  lost its `{$ENDIF}`, and the `{$IFDEF}` stayed open to the end of the
+  unit), and removing the last entry after one wrapped in its own
+  conditional left the `;` inside it (`DebugU;` between `{$IFDEF DEBUG}`
+  and `{$ENDIF}`: without DEBUG the clause ended in `A,`). The directives
+  behind a removed entry stay, and the separator of a wrapped tail goes
+  inside each conditional (`, DebugU` / `{$ENDIF};`). Found by a reviewer
+  before the tag; both came from before.
+- **One reader for Pascal text: `Lsp.Pascal`.** A census of the code by
+  what it does found about a dozen places reading Pascal text, each with
+  its own piece of the rule (what is a comment, a string, a directive), and
+  a probe measured what came of it: nine faults in four tools. `delphi_edit adduses`
+  crashed (`SYS-006`, index out of bounds) after an entry like
+  `UA {ver https://docwiki};`: the `//` inside the brace was taken for a
+  line comment, and an `IfThen` - a function, so every argument is
+  evaluated - read a regex group that had not matched. Renaming a unit
+  (`delphi_move`) left a reference unrenamed after a brace comment with an
+  apostrophe (`{ it's } UVieja.Hola`: E2003 at the next build).
+  `delphi_edit insert` refused a signature with `'http://x'` in a default
+  value or a parenthesis inside a comment (`EDIT-071`), and a unit with an
+  `end.` inside a comment (`EDIT-049`); into a `.dpr` with a `uses ...;`
+  inside a comment it wrote the routine INSIDE the comment and said it was
+  placed. `delphi_config add-unit` on a `.dpr` with a `program` and a
+  `uses` commented out above the header added the unit to the commented
+  clause and said ADDED. The digest of `delphi_symbols` on a folder listed
+  a declaration commented out in braces and lost the one after a signature
+  with a trailing `//`. Now one unit knows the rule - `//` comments to the
+  end of its line whatever follows, a brace or a paren-star closes at its
+  first closer, a string ends at its line, and Delphi 12's `'''` string
+  spans lines - and every reader asks it: one walk (`ClasesPascal`) and
+  its views (`CodigoPascal` for structure, `BlankComments` for code and
+  strings), the same length and line breaks as the text, so a line or a
+  position found in a view is the same in the file. The twin of the
+  directive reader written earlier in this release went (the one reader
+  already existed), and so did the second lexer of `delphi_references`.
+  Also found on the way: the class of a form read from a commented-out
+  declaration, a field inside a comment vouching for a component in the
+  designer's binding report, and a `DUnitX.` in a comment making a test
+  project of a plain one (each with its check). Renaming a unit now
+  rewrites its name in code only, not in comments - until this release
+  comments were rewritten on purpose ("a comment that names the old unit
+  lies too"); David's decision, 2-oct-2026.
+  Two reviewers before the tag found the places that census had missed,
+  each measured with a probe before it was touched. Renaming a unit in a
+  `.dpr` (`delphi_move`) or completing its entry (`add-unit`) dropped a
+  directive written behind the entry (`Unit1 in 'Unit1.pas' {$IFDEF
+  DEBUG},`): the `.dpr` no longer compiled and the tool said it was done -
+  the entry is rewritten with what follows it now. `Application.CreateForm`
+  went INSIDE a commented-out block when an `Application.Run` was
+  commented above the real one, a commented-out `CreateForm` of the same
+  class passed for "already there", and removing one that sat in a comment
+  closing on its line took the brace with it. A routine inserted into a
+  `.dpr` and a clause created by `adduses` landed inside a brace comment
+  opened on the line they go after (`FinDeLinea`: where a line really
+  ends). `insert metodo` into a unit with an `end.` inside a comment undid
+  both halves. The wrapped tail of a `uses` was read by a regex of its
+  own, a third directive reader, that saw neither `(*$IFDEF*)` nor a `//`
+  after the directive, and left `A, ;`. Two identical `// TODO` after two
+  commas lost one owner. `delphi_create kind=unit content=` refused a unit
+  with a commented `unit Old;` above its header and took a commented
+  `end.` for its end. The digest dropped the line that closes a brace
+  comment opened in a signature - a regression of this release - and a
+  `//` in a split signature commented out what was joined after it.
+  `delphi_rename_symbol` renamed a comment on a line it changed and counted
+  the new name in a comment as a collision: it rewrites code only now, like
+  a unit rename. The warning about a method split in two read comments.
+  (One theory did not hold when measured: `delphi_definition
+  kind=declaration` took its column from a header with a comment before
+  it, inside the comment, but DelphiLSP answers from any column of the
+  header; the column is read in the code now all the same.) And the
+  lexicon itself: three
+  quotes followed by a blank do not open a multi-line string - dcc says
+  E2052, measured - so the lines after them are code for every reader, the
+  include gate of the build included; an unterminated `(*$` directive kept
+  its last character; and the nested-brace warning counts a lone CR as a
+  line break.
+- **`delphi_test` no longer calls a suite green when a test raises.** For
+  DUnitX a test that raises an exception is an ERROR, not a failure: it
+  prints `Tests Errored : 1` and lists it under `Tests With Errors`. The
+  verdict went by the counts and read `Tests Failed` only, so a suite with
+  a test that raised came back `pass`, while its runner exited with 1 -
+  found by the mutation of this release (`pass 16/17`, no failures). The
+  parser also looked for an `Errored Tests` block that DUnitX never
+  writes, so the name of a test that raised never reached `failures`. Now
+  `errored` is counted and fails the run, and the test is named with its
+  message; read in DUnitX's own sources (`DUnitX.ResStrs`) and measured
+  with a suite whose test raises on purpose.
+- **A network path no longer leaks through the drive mask in five more
+  shapes** (four unit tests red before the fix): after `;`, `<`, `>`, `|`
+  or `[` (a list of search paths), glued to a compiler option (`-I`, `/I`),
+  in the long form `\\?\UNC\host`, with a host that starts with `_`, `[`
+  or a non-ASCII letter, and in a JSON answer quoted inside another (each
+  backslash four times). It is one rule now, on the run of backslashes:
+  two or four in plain text, four or eight in JSON. `//host/share` is left
+  as it is on purpose: that shape is also a URL or a comment, and git's own
+  `//host` is already translated to its declared letter.
+
+`test_delphi_docs` is new: 63 checks against the help of this machine.
+Whether there is any help is decided by the battery itself, from the
+registry and the disk: a server that stops finding it is a failure, not a
+machine with nothing to measure (a reviewer found that a `DOCS-001` from a
+regression made the battery green with nothing measured). Then the right
+page first for twelve real queries, an inherited member, the framework -
+also where, without it, the other framework comes first -, a class with
+its ancestors and member lists, a long page by its introduction and
+sections, a section in either case, the whole page walked by
+`nextOffset` with nothing lost or repeated, by its text and not only its
+lengths, a topic's parent index, a redirect and the section it keeps, a
+missing section, the help text unmasked and the section it echoes
+masked, ids that are not ids - each refused by the rule it names - and
+pages that are not there, the refusals by their code, a read-only token,
+a workspace without `LibraryZone` reading it, a word of the index markup,
+a quoted concept, one result per page, and a search well under 2 s.
+`LspTests.Docs` has 17 unit tests on HTML shaped like the real pages
+(those that read this machine's files fail when the help is in the
+installation and the IDE's list does not give it), `LspTests.Rutas` four
+more on the drive mask and `LspTests.Pascal` ten on the lexicon (196 in
+the engine suite). The batteries of every tool the fixes touched carry
+the cases the probes measured: `test_round22`, `test_delphi_patch`,
+`test_project_units` (with two real builds of what the rewritten entries
+and the `CreateForm` left), `test_round36` (the digest), `test_round12`
+(the binding report), `test_rename`, `test_round8` (a unit created with
+its content), `test_sdk` (the default SDKs, read from the registry by the
+battery), `test_delphi_test` (a suite whose test raises). One check
+of `test_resultados` rested on the old reader - it made "no place for the
+declaration" with an `implementation` inside a comment - and now uses a
+unit that has none. 58 mutants, each built and run against its batteries:
+53 red, and the five that stay green are guards - the cut of a long page's
+introduction at `##` rather than `#` (no real page tells them apart), a
+`Stat` the truncated `.chm` never reaches, the gap before a `//` that only
+a duplicated comment would need, the `uses` of a `.dpr` (the `;` that
+closes it is already looked for in the code view), and the count of
+`end.` in the post-write audit; the first round of the tool had measured
+two more, D1's read-only announcement and D11 (a tool missing from the
+access table reads by default). The mutation also caught a check of this
+release passing for the wrong reason (`// de UVenta` is inside
+`// de UVentas`) and two mutants that did not reproduce the code they
+claimed to; both were redone. The fixes of the last two reviewers, 29
+mutants more: 27 red, and two guards - the column of a body's header
+(DelphiLSP answers from any) and the qualified-header warning of a rename
+(it only fires when the definition is not among the references). And
+their battery checks caught one of those fixes taking a brace with the
+`CreateForm` it removed, before it was ever run by hand. Two theories of
+the reviewers did not hold when measured: the `framework=fmx` check went
+red with its fix removed, and the units with LF line ends were so before
+this release. 94 batteries, 3,124 checks, 0 failures.
+
 ## [1.9.1] - 2026-10-02
 
 A `ReadOnlyPaths` entry outside every root of its workspace is said at startup: the key that lets an agent read a folder outside its roots is `ReadOnlyRoots`.

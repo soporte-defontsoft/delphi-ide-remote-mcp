@@ -53,7 +53,7 @@ uses
   Lsp.BuildRunner,
   Lsp.References,
   Lsp.Patch,
-  Lsp.ProjectUnits, // DirectivasPascal: el lector de directivas
+  Lsp.Pascal, // DirectivasPascal: el lector de directivas
   Lsp.Texts;
 
 type
@@ -74,7 +74,9 @@ begin
     Exit;
   end;
   Name := TPath.GetFileNameWithoutExtension(ADpr);
-  if TRegEx.IsMatch(Text, '(?i)\bDUnitX\.') then
+  // en su CODIGO: un DUnitX nombrado en un comentario no hace un proyecto de
+  // tests (censo del lexico, 2-oct-2026)
+  if TRegEx.IsMatch(CodigoPascal(Text), '(?i)\bDUnitX\.') then
   begin
     AWhy := MsgText(SF_TEST_USA_DUNITX);
     Exit(tkDUnitX);
@@ -162,6 +164,7 @@ end;
     Tests Found   : 12
     Tests Passed  : 11
     Tests Failed  : 1
+    Tests Errored : 0   (a test that RAISED: listed under "Tests With Errors")
   and lists failures. The hand-written console convention is one line per
   check: "PASS <name>" / "FAIL <name>", plus ExitCode <> 0 when something
   failed. Both are parsed; whatever is missing stays absent instead of
@@ -172,11 +175,11 @@ var
   M: TMatch;
   Fails: TJSONArray;
   L: string;
-  Found, Passed, Failed: Integer;
+  Found, Passed, Failed, Errored: Integer;
   HasNumbers: Boolean;
   Near: TStringList;
 begin
-  Found := -1; Passed := -1; Failed := -1;
+  Found := -1; Passed := -1; Failed := -1; Errored := 0;
   HasNumbers := False;
   Fails := TJSONArray.Create;
   ARet.AddPair('failures', Fails);
@@ -189,10 +192,19 @@ begin
     if M.Success then begin Passed := StrToIntDef(M.Groups[1].Value, -1); HasNumbers := True; end;
     M := TRegEx.Match(AOutput, '(?i)Tests?\s+Failed\s*:\s*(\d+)');
     if M.Success then begin Failed := StrToIntDef(M.Groups[1].Value, -1); HasNumbers := True; end;
-    // El bloque "Failing Tests" (y "Errored Tests") del logger de consola de
-    // DUnitX: el nombre del test en una linea y su "Message:" en la
-    // siguiente. Sin leerlo, failures venia VACIO con failed=1 (medido el
-    // 2026-09-22, el dia que DUnitX se instalo en esta maquina).
+    // Un test que LANZA es un error, no un fallo, y DUnitX lo cuenta aparte:
+    // sin leerlo, una suite con un test que lanzaba salia 'pass' por las
+    // cuentas (Failed: 0), con el ejecutable acabando en 1 (medido el
+    // 2-oct-2026 en la mutacion de la 1.10.0: 'pass 16/17' sin fallos)
+    M := TRegEx.Match(AOutput, '(?i)Tests?\s+Errored\s*:\s*(\d+)');
+    if M.Success then
+      Errored := StrToIntDef(M.Groups[1].Value, 0);
+    // Los bloques "Failing Tests" y "Tests With Errors" del logger de consola
+    // de DUnitX (DUnitX.ResStrs): el nombre del test en una linea y su
+    // "Message:" en la siguiente. Sin leerlo, failures venia VACIO con
+    // failed=1 (medido el 2026-09-22, el dia que DUnitX se instalo en esta
+    // maquina). Aqui ponia "Errored Tests", que DUnitX no escribe: los que
+    // lanzaban no salian nunca. "Tests With Memory Leak" cierra, no es fallo.
     var Rojos := TStringList.Create;
     try
       var EnFallos := False;
@@ -201,19 +213,19 @@ begin
         var T := L.Trim;
         if not EnFallos then
         begin
-          EnFallos := TRegEx.IsMatch(T, '(?i)^(Failing|Errored)\s+Tests\s*$');
+          EnFallos := TRegEx.IsMatch(T, '(?i)^(Failing\s+Tests|Tests\s+With\s+Errors)\s*$');
           Continue;
         end;
         // DUnitX deja una linea EN BLANCO justo despues de "Failing Tests"
         // (medido en la salida cruda): un blanco no cierra el bloque.
         if T = '' then
           Continue;
-        if TRegEx.IsMatch(T, '(?i)^(Tests?\s+[a-z]+\s*:|Done\b)') then
+        if TRegEx.IsMatch(T, '(?i)^(Tests?\s+[a-z]+\s*:|Done\b|Tests\s+With\s+Memory\s+Leak\s*$)') then
         begin
           EnFallos := False;
           Continue;
         end;
-        if TRegEx.IsMatch(T, '(?i)^(Failing|Errored)\s+Tests\s*$') then
+        if TRegEx.IsMatch(T, '(?i)^(Failing\s+Tests|Tests\s+With\s+Errors)\s*$') then
           Continue;
         if T.StartsWith('Message:', True) and (Rojos.Count > 0) then
           Rojos[Rojos.Count - 1] := Rojos[Rojos.Count - 1] + ' - ' + T.Substring(8).Trim
@@ -261,6 +273,8 @@ begin
     ARet.AddPair('passed', TJSONNumber.Create(Passed));
   if Failed >= 0 then
     ARet.AddPair('failed', TJSONNumber.Create(Failed));
+  if Errored > 0 then
+    ARet.AddPair('errored', TJSONNumber.Create(Errored));
   // The verdict never guesses: with numbers, they decide; without them, the
   // exit code does (0 = green), and we say which one spoke.
   try
@@ -275,7 +289,7 @@ begin
   end;
   if HasNumbers and (Failed >= 0) then
   begin
-    ARet.AddPair('result', IfThen(Failed = 0, 'pass', 'fail'));
+    ARet.AddPair('result', IfThen((Failed = 0) and (Errored = 0), 'pass', 'fail'));
     ARet.AddPair('verdictFrom', 'counts');
   end
   else

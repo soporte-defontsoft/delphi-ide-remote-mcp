@@ -233,6 +233,16 @@ o = J(binding(dfm7, pas7))
 check('F7 nombre de componente repetido (EComponentError)',
       o.get('clean') is False and len(o.get('duplicateNames', [])) == 1, o)
 
+# F8 - un campo dentro de un comentario no avala el componente (1.10.0: la
+# clase se leia en lineas crudas; ahora en la vista del codigo, el lexico de
+# la casa)
+dfm8 = ("object FormMain: TFormMain\r\n  object BtnViejo: TButton\r\n  end\r\nend\r\n")
+pas8 = PAS_HEAD + ("  TFormMain = class(TForm)\r\n  {\r\n    BtnViejo: TButton;\r\n  }\r\n"
+                   "  end;\r\n\r\nimplementation\r\n\r\nend.\r\n")
+o = J(binding(dfm8, pas8))
+check('F8 un campo dentro de un comentario no avala el componente',
+      o.get('clean') is False and len(o.get('componentsWithoutField', [])) == 1, o)
+
 # F8 - an event with no value is an invalid .dfm
 dfm8 = ("object FormMain: TFormMain\r\n  object Btn: TButton\r\n"
         "    OnClick = \r\n  end\r\nend\r\n")

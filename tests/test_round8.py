@@ -201,6 +201,20 @@ check('#C1 content cuyo "unit" no casa con el nombre: RECHAZADO',
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'UCorta', 'content': 'unit UCorta;\ninterface\n',
                               'project': os.path.join(PROJ, 'FugaTest.dproj')})
 check('#C1 content cortado (sin end.): RECHAZADO', mc.rechazado(r) and mc.es(r, 'SR_CREATE_CONTENT_NOEND'), r[:200])
+# la cabecera y el end. se leen en el CODIGO (revisor de codigo de la 1.10.0,
+# medido con una sonda): un 'unit Vieja;' comentado encima negaba la unit por
+# su nombre, y un end. comentado pasaba por el final
+r = A.call('delphi_create', {'kind': 'unit', 'name': 'UConNota', 'project': SANODPROJ,
+                              'content': '{\r\nunit Vieja;\r\n}\r\nunit UConNota;\r\n\r\ninterface\r\n\r\n'
+                                         'implementation\r\n\r\nend.\r\n'})
+check('#C1 un "unit" comentado encima de la cabecera no es la cabecera',
+      mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and os.path.exists(os.path.join(SANO, 'UConNota.pas')), r[:200])
+r = A.call('delphi_create', {'kind': 'unit', 'name': 'UFinNota', 'project': SANODPROJ,
+                              'content': 'unit UFinNota;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\n'
+                                         '{\r\nend.\r\n}\r\n'})
+check('#C1 un end. comentado no es el final: RECHAZADO',
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_CONTENT_NOEND') and not os.path.exists(os.path.join(SANO, 'UFinNota.pas')),
+      r[:200])
 
 # -------------------------------------------------------------------- #6 --
 SOLO = os.path.join(BASE, 'soloDpr')

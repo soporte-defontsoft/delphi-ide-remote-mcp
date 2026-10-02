@@ -127,7 +127,8 @@ uses
   Lsp.Guard,
   Lsp.References,
   Lsp.Patch,
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Pascal;
 
 const
   MAX_COMPLETION_ITEMS = 50;
@@ -193,7 +194,10 @@ begin
   except
     Exit;
   end;
-  Lines := LineasDelTexto(L); // las del LSP: CR, LF y CRLF son saltos
+  // las del LSP (CR, LF y CRLF son saltos), en el CODIGO: con '{ x }
+  // procedure TFoo.Bar;' la columna caia dentro del comentario (revision de
+  // la 1.10.0); la vista guarda las columnas
+  Lines := LineasDelTexto(CodigoPascal(L));
   if (ALine < 0) or (ALine > High(Lines)) then
     Exit;
   L := Lines[ALine];
@@ -322,45 +326,110 @@ end;
   puede hacer una tool de lectura es contestar algo FALSO con seguridad. El
   arbol, los kinds y las lineas siguen siendo del LSP: lo unico que se deja de
   creer es su forma de escribir una declaracion. }
-function StatementAt(const ALines: TArray<string>; ADesde: Integer;
+function StatementAt(const ALines, AVista: TArray<string>; ADesde: Integer;
   out AHasta: Integer): string;
 
-  // Cuantos '(' quedan abiertos en AText.
+  // Cuantos '(' quedan abiertos en AText (la vista: sin comentarios), fuera
+  // de sus cadenas: el '(' de una cadena no abre nada
   function Unbalanced(const AText: string): Integer;
   var
-    C: Char;
+    I, N: Integer;
   begin
     Result := 0;
-    for C in AText do
-      if C = '(' then
+    I := 1;
+    while I <= Length(AText) do
+    begin
+      N := QuoteLen(AText, I);
+      if N > 0 then
+      begin
+        Inc(I, N);
+        Continue;
+      end;
+      if AText[I] = '(' then
         Inc(Result)
-      else if C = ')' then
+      else if AText[I] = ')' then
         Dec(Result);
+      Inc(I);
+    end;
     if Result < 0 then
       Result := 0;
   end;
 
 var
-  K: Integer;
+  K, J: Integer;
+  Vista: string;
+  Ventana: TArray<string>;      // las lineas que se pueden unir, desde ADesde
+  Clases: TArray<TClasePascal>; // las de la ventana unida con #10
+  Ini: TArray<Integer>;         // donde empieza cada linea de la ventana
+  Incluida: TArray<Boolean>;
+  Partes: TArray<Integer>;      // las lineas que van, en orden
+
+  // la linea J de la ventana empieza dentro de un comentario (o de una cadena
+  // de varias lineas) que viene de la de antes
+  function EmpiezaDentro(AJ: Integer): Boolean;
+  begin
+    Result := (AJ > 0) and (Clases[Ini[AJ] - 1] <> cpCodigo);
+  end;
+
+  // lo que se une de la linea J: el fuente, sin el resto de un comentario
+  // que no va (el de una linea saltada) y sin su // si detras va otra (unido
+  // en una linea, el // comentaba lo que siguiera: medido en la revision de
+  // la 1.10.0, 'function Baz(X: Integer; // la x Y: Integer)...')
+  function Pieza(AJ: Integer; AUltima: Boolean): string;
+  var
+    Desde, Hasta: Integer;
+  begin
+    Desde := 1;
+    Hasta := Length(Ventana[AJ]);
+    if EmpiezaDentro(AJ) and not Incluida[AJ - 1] then
+      while (Desde <= Hasta) and (Clases[Ini[AJ] + Desde - 1] <> cpCodigo) do
+        Inc(Desde);
+    if not AUltima then
+      for var C := Desde to Hasta do
+        if Clases[Ini[AJ] + C - 1] = cpLinea then
+        begin
+          Hasta := C - 1;
+          Break;
+        end;
+    Result := Copy(Ventana[AJ], Desde, Hasta - Desde + 1).Trim;
+  end;
+
 begin
   AHasta := ADesde;
   if (ADesde < 0) or (ADesde > High(ALines)) then
     Exit('');
+  // las lineas que la union puede tocar (ADesde y ocho mas), leidas por EL
+  // lexico con el estado que traen: que linea sigue dentro de un comentario
+  Ventana := Copy(ALines, ADesde, Min(High(ALines), ADesde + 8) - ADesde + 1);
+  Clases := ClasesPascal(string.Join(#10, Ventana));
+  SetLength(Ini, Length(Ventana));
+  SetLength(Incluida, Length(Ventana));
+  Ini[0] := 1;
+  for J := 1 to High(Ventana) do
+    Ini[J] := Ini[J - 1] + Length(Ventana[J - 1]) + 1;
+  Incluida[0] := True;
+  Partes := [0];
+  // lo que se DEVUELVE es el fuente tal cual (ALines); lo que DECIDE es su
+  // vista sin comentarios (AVista: BlankComments, alineada con ALines). Un
+  // '// la nota' detras de una firma la dejaba sin su ';' final y se pegaba
+  // la declaracion de la linea siguiente, que desaparecia del digest
+  // (medido con la sonda del lexico, 2-oct-2026)
   Result := ALines[ADesde].Trim;
+  Vista := AVista[ADesde].Trim;
   K := ADesde;
   // Una cabecera de class/record/interface ABRE un bloque; no es una
   // sentencia a medias, y unirle lo que viene detras pegaba el primer campo
   // a la linea de la clase.
-  if TRegEx.IsMatch(Result,
+  if TRegEx.IsMatch(Vista,
     '(?i)^[A-Za-z_]\w*[ ]*=[ ]*(packed[ ]+)?(class|record|interface)\b') and
-     not Result.EndsWith(';') then
+     not Vista.EndsWith(';') then
     Exit;
   // Un ';' DENTRO de la lista de parametros es un separador, no el final de
   // nada: "function Alta(const A, B: string; C: Integer;" parece terminada y
   // no lo esta, asi que se perdian el tipo de retorno y el valor por defecto.
   while (K < High(ALines)) and (K - ADesde < 8) and
-        (not Result.EndsWith(';') or (Unbalanced(Result) > 0)) and
-        not Result.EndsWith('=') do
+        (not Vista.EndsWith(';') or (Unbalanced(Vista) > 0)) and
+        not Vista.EndsWith('=') do
   begin
     Inc(K);
     if ALines[K].Trim = '' then
@@ -369,13 +438,22 @@ begin
     // property partida en tres con una nota en medio volvia como
     // "property Cosa: string read FCosa { la nota } write FCosa;". No es
     // falso, pero es ruido dentro de lo unico que el lector va a copiar.
-    // Solo la linea ENTERA: quitar comentarios por dentro tocaria literales.
-    if ALines[K].TrimLeft.StartsWith('//') or
-       ALines[K].TrimLeft.StartsWith('{') then
+    // Solo la linea ENTERA (la que en la vista queda en blanco): los
+    // comentarios de dentro se quedan, que lo que se devuelve es el fuente.
+    // Y la que CIERRA un comentario abierto en una linea que si va, va: se
+    // saltaba, y 'function Tres(A: Integer { the a' salia sin su cierre
+    // (revision de la 1.10.0, medido)
+    J := K - ADesde;
+    Incluida[J] := (AVista[K].Trim <> '') or (EmpiezaDentro(J) and Incluida[J - 1]);
+    if not Incluida[J] then
       Continue;
-    Result := Result + ' ' + ALines[K].Trim;
+    Partes := Partes + [J];
+    Vista := Vista + ' ' + AVista[K].Trim;
   end;
   AHasta := K;
+  Result := '';
+  for J := 0 to High(Partes) do
+    Result := Result + IfThen(J > 0, ' ', '') + Pieza(Partes[J], J = High(Partes));
 end;
 
 { El identificador, sacado del "name" del LSP: lo que hay antes del primer
@@ -490,7 +568,7 @@ end;
 
   Solo los kinds que SON una declaracion: en la clausula uses cada unit es un
   simbolo de kind "file" y unir desde su linea se tragaria la clausula entera. }
-procedure DecorateSymbolDecls(V: TJSONValue; const ALines: TArray<string>);
+procedure DecorateSymbolDecls(V: TJSONValue; const ALines, AVista: TArray<string>);
 const
   DECLARAN = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 22, 23];
 var
@@ -502,7 +580,7 @@ begin
   if V is TJSONArray then
   begin
     for Item in TJSONArray(V) do
-      DecorateSymbolDecls(Item, ALines);
+      DecorateSymbolDecls(Item, ALines, AVista);
     Exit;
   end;
   if not (V is TJSONObject) then
@@ -517,12 +595,12 @@ begin
     if (Obj.GetValue<Integer>('kind', 0) in DECLARAN) and (Ln >= 0) and
        (Obj.GetValue('decl') = nil) then
     begin
-      Decl := StatementAt(ALines, Ln, Fin);
+      Decl := StatementAt(ALines, AVista, Ln, Fin);
       if Decl <> '' then
         Obj.AddPair('decl', Decl);
     end;
   end;
-  DecorateSymbolDecls(SymChildren(Obj), ALines);
+  DecorateSymbolDecls(SymChildren(Obj), ALines, AVista);
 end;
 
 { The compact skeleton: each top-level section with its direct members as
@@ -700,7 +778,7 @@ end;
 function InterfaceDigest(const APath: string): TJSONObject;
 var
   Text, Enc, L, Cur, Owner: string;
-  Lines: TArray<string>;
+  Lines, Vista: TArray<string>;
   Arr: TJSONArray;
   Obj: TJSONObject;
   I, J, Kept, Depth: Integer;
@@ -714,7 +792,7 @@ var
   var
     Fin: Integer;
   begin
-    Result := StatementAt(Lines, AIdx, Fin);
+    Result := StatementAt(Lines, Vista, AIdx, Fin);
     AIdx := Fin;
   end;
 
@@ -729,6 +807,11 @@ begin
     Exit;
   end;
   Lines := LineasDelTexto(Text); // las del LSP: CR, LF y CRLF son saltos
+  // la estructura (interface, uses, la clase, su end;, cada declaracion) se
+  // lee en la vista sin comentarios, alineada con Lines: un 'procedure
+  // Vieja;' dentro de un comentario de llave salia como declaracion (medido
+  // con la sonda del lexico, 2-oct-2026)
+  Vista := LineasDelTexto(BlankComments(Text));
   Arr := TJSONArray.Create;
   Result.AddPair('declares', Arr);
   Cur := '';
@@ -738,7 +821,7 @@ begin
   I := 0;
   while I <= High(Lines) do
   begin
-    L := Lines[I].Trim;
+    L := Vista[I].Trim;
     if TRegEx.IsMatch(L, '(?i)^interface[ ]*$') then
     begin
       Cur := 'interface';
@@ -886,7 +969,8 @@ begin
     // antes: esto anade verdad, no la sustituye.
     try
       var EncSim: string;
-      DecorateSymbolDecls(V, LineasDelTexto(PatchLoadText(Params.Path, EncSim)));
+      var TextoSim := PatchLoadText(Params.Path, EncSim);
+      DecorateSymbolDecls(V, LineasDelTexto(TextoSim), LineasDelTexto(BlankComments(TextoSim)));
     except
       // un fichero que el LSP si pudo abrir y nosotros no: mejor el arbol
       // pelado que ningun arbol

@@ -1,6 +1,6 @@
 # `src/Server/` — the server itself
 
-`DelphiLspMcp.dproj` is the Delphi IDE Remote MCP Server: 41 tools over stdio, HTTP
+`DelphiLspMcp.dproj` is the Delphi IDE Remote MCP Server: 42 tools over stdio, HTTP
 (`--http`) or tray (`-gui`), LSP core included. What ships in every release. Its
 `Lsp.*` units (the engine: encoding detector, safe editing, designer, build runner,
 remote run...) and `Mcp.Tools.*` units (one per tool) live here, and the other

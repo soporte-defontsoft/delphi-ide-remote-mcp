@@ -1125,10 +1125,14 @@ function ToolCallDenied(const AToolName: string;
     prefix match only, and never inside content-carrying parameters);
   - outbound: MaskDriveText rewrites every served drive prefix in a tool's
     textual result - one generic rule, so compiler/git/LSP output and even
-    8.3 short forms (D:\PROYEC~1) are covered - EXCEPT for byte-fidelity
-    tools (delphi_read / delphi_fetch), whose text is file content and must
-    reach the client verbatim (an edit anchor built from masked text would
-    not match the disk). }
+    8.3 short forms (D:\PROYEC~1) are covered - EXCEPT the ECHO of the tools
+    whose text is content (TOOLS_ECO: delphi_read, the hits of
+    delphi_search, vault_read / vault_search, the read-back of delphi_edit /
+    delphi_textedit, the help pages of delphi_docs), which must reach the
+    client verbatim (an edit anchor built from masked text would not match
+    the disk). What those tools compose themselves still goes through
+    MaskDriveText('', ...). delphi_fetch is NOT exempt: its payload is
+    base64, which the mask cannot corrupt. }
 function MaskDriveText(const AToolName, AText: string): string;
 { Para la tool cuya respuesta mezcla lineas SUYAS con lineas de CONTENIDO del
   disco (delphi_git diff / show / log: las de un fichero o de un mensaje de
@@ -6277,6 +6281,35 @@ begin
   end;
 end;
 
+{ Lo que puede ir delante de una ruta de red: el principio, un blanco, una
+  comilla, un parentesis, una coma, un igual, un ';' (una lista de rutas),
+  <, >, |, [ o un salto de linea - o una opcion de una linea de ordenes
+  pegada a ella (-U\nas\lib, -NU, /I) detras de un blanco o una comilla.
+  Pegada a una carpeta NO: es el separador doblado del eco del enlazador
+  (Linux64\\Debug), y tomarlo por una ruta de red se comia la cola entera
+  (227 srvhost en una salida, 2026-08-26). }
+function DelimitadorDeRed(const ATexto: string; AI: Integer): Boolean;
+const
+  ANTES: TSysCharSet = [' ', #9, '"', '''', '(', ',', '=', ';', '<', '>', '|', '[', #10, #13];
+var
+  K, Letras: Integer;
+begin
+  if AI <= 1 then
+    Exit(True);
+  if CharInSet(CaracterPrevio(ATexto, AI), ANTES) then
+    Exit(True);
+  K := AI - 1;
+  Letras := 0;
+  while (K >= 1) and CharInSet(ATexto[K], ['A'..'Z', 'a'..'z']) do
+  begin
+    Inc(Letras);
+    Dec(K);
+  end;
+  Result := (Letras >= 1) and (Letras <= 2) and (K >= 1) and
+    CharInSet(ATexto[K], ['-', '/']) and
+    ((K = 1) or CharInSet(CaracterPrevio(ATexto, K), [' ', #9, '"', '''', #10, #13]));
+end;
+
 function FormaDeclaradaDe(const ARuta: string;
   const ADeclaradas, AReales: TArray<string>): string;
 var
@@ -6659,15 +6692,16 @@ end;
 function MaskDriveText(const AToolName, AText: string): string;
 const
   // las tools cuyo ECO es contenido del disco (la nota de abajo dice por que)
-  TOOLS_ECO: array [0 .. 5] of string = ('delphi_read', 'vault_read', 'vault_search',
-    'delphi_search', 'delphi_edit', 'delphi_textedit');
+  TOOLS_ECO: array [0 .. 6] of string = ('delphi_read', 'vault_read', 'vault_search',
+    'delphi_search', 'delphi_edit', 'delphi_textedit', 'delphi_docs');
 var
   Sb: TStringBuilder;
   Letters: string;
   I, L: Integer;
   C, PrevC: Char;
+  EnJson: Boolean;
 begin
-  // delphi_read is the ONE exemption: its payload is the file's TEXT, which
+  // delphi_read was the FIRST exemption: its payload is the file's TEXT, which
   // may legitimately contain "D:\..." that an edit anchor must match
   // byte-for-byte. delphi_fetch is NOT exempt (fixed after field round 4):
   // its payload is base64, whose alphabet has neither ':' nor '%', so
@@ -6703,6 +6737,13 @@ begin
   // tenia bien, y el eco devolvia "srvd:\Projects\Galatea". Sus negativas
   // empiezan por su etiqueta con resultado y siguen enmascarandose por el test de
   // abajo.
+  // delphi_docs (1.10.0): su texto es la AYUDA instalada, y sus ejemplos citan
+  // rutas que no son de este servidor. Medido el 2-oct-2026 en la pagina de
+  // TPath.Combine: 'E:\somewhere\' salia 'srv0:\somewhere\' y la ruta que
+  // empieza por una barra, '\srvhost\file.txt': la documentacion de lo que
+  // hace Combine con cada ruta quedaba en un sinsentido. Lo que compone ella
+  // misma no lleva rutas: el id es <ayuda>:<pagina> y la nota da el nombre del
+  // fichero de ayuda, sin carpeta.
   //
   // LA OBLIGACION QUE VIENE CON ESTAR EN ESTA LISTA, y es facil de olvidar:
   // la exencion es por TOOL, pero solo el ECO merece exencion. Todo lo que
@@ -6766,6 +6807,21 @@ begin
   try
     I := 1;
     L := Length(AText);
+    // un JSON escribe cada barra doble: alli \\x es UNA barra (una ruta que
+    // cuelga de la raiz de la unidad) y la ruta de red es la de cuatro. La
+    // forma de dos barras, la del texto plano, convertia \Shared\Lib de un
+    // .dproj en \srvhost\Lib (delphi_config view, medido el 2-oct-2026), y
+    // los ejemplos de la ayuda igual. Lo que llega aqui como JSON es el
+    // resultado entero de una tool: los demas llamadores pasan una ruta o una
+    // linea de texto, y para ellos nada cambia. Un JSON de una tool es un
+    // objeto; una lista empezaria por [{, [" o []. Un [ a secas NO: es la
+    // etiqueta de una negativa ([GUARD-002 DENIED] ...), que es texto plano
+    // y lleva su ruta de red con dos barras (lo cazo test_round22, M2)
+    while (I <= L) and CharInSet(AText[I], [' ', #9, #10, #13]) do
+      Inc(I);
+    EnJson := (I <= L) and ((AText[I] = '{') or ((AText[I] = '[') and
+      (I + 1 <= L) and CharInSet(AText[I + 1], ['{', '"', ']'])));
+    I := 1;
     while I <= L do
     begin
       C := AText[I];
@@ -6854,28 +6910,39 @@ begin
       // (el delimitador de antes, por CaracterPrevio: un UNC que ABRE LINEA
       // dentro de un JSON va detras de los caracteres \ y n, y salia con el
       // nombre de la maquina; apuntado en la 1.8.2, medido en la 1.9.0)
-      if (C = '\') and (I + 4 <= L) and (AText[I + 1] = '\') and
-         (AText[I + 2] = '\') and (AText[I + 3] = '\') and
-         CharInSet(AText[I + 4], ['A'..'Z', 'a'..'z', '0'..'9']) and
-         ((I = 1) or CharInSet(CaracterPrevio(AText, I),
-            [' ', #9, '"', '''', '(', ',', '=', #10, #13])) then
+      // UNA regla para las dos formas, por la tira de barras (revision de la
+      // 1.10.0: medido con LspTests.Rutas, el nombre de la maquina salia
+      // detras de un ';' -una lista de rutas-, pegado a una opcion del
+      // compilador -dcc64 -U\\nas\lib-, en el eco del enlazador doblado otra
+      // vez dentro de un JSON -ocho barras-, en \\?\UNC\host y con un host
+      // que empieza por _). En texto plano un UNC son 2 barras (o 4, el eco
+      // doblado del enlazador); en JSON, 4 (u 8). Detras puede ir el prefijo
+      // largo de Windows, ?\UNC\, con su separador.
+      if (C = '\') and DelimitadorDeRed(AText, I) then
       begin
-        Sb.Append('\\\\srvhost');
-        Inc(I, 4);
-        while (I <= L) and not CharInSet(AText[I], ['\', '/', '"', ' ', #9]) do
-          Inc(I);
-        Continue;
-      end;
-      if (C = '\') and (I + 2 <= L) and (AText[I + 1] = '\') and
-         CharInSet(AText[I + 2], ['A'..'Z', 'a'..'z', '0'..'9']) and
-         ((I = 1) or CharInSet(AText[I - 1],
-            [' ', #9, '"', '''', '(', ',', '=', #10, #13])) then
-      begin
-        Sb.Append('\\srvhost');
-        Inc(I, 2);
-        while (I <= L) and not CharInSet(AText[I], ['\', '/', '"', ' ', #9]) do
-          Inc(I);
-        Continue;
+        var N := 0;
+        while (I + N <= L) and (AText[I + N] = '\') do
+          Inc(N);
+        if (EnJson and ((N = 4) or (N = 8))) or (not EnJson and ((N = 2) or (N = 4))) then
+        begin
+          var J := I + N;
+          var Sep := StringOfChar('\', N div 2);
+          var Largo := '';
+          if SameText(Copy(AText, J, 4 + 2 * Length(Sep)), '?' + Sep + 'UNC' + Sep) then
+          begin
+            Largo := Copy(AText, J, 4 + 2 * Length(Sep));
+            Inc(J, Length(Largo));
+          end;
+          if (J <= L) and (CharInSet(AText[J], ['A'..'Z', 'a'..'z', '0'..'9', '_', '[']) or
+             (Ord(AText[J]) >= $80)) then
+          begin
+            Sb.Append(StringOfChar('\', N)).Append(Largo).Append('srvhost');
+            I := J;
+            while (I <= L) and not CharInSet(AText[I], ['\', '/', '"', ' ', #9]) do
+              Inc(I);
+            Continue;
+          end;
+        end;
       end;
       Sb.Append(C);
       Inc(I);
@@ -6894,12 +6961,12 @@ const
   ALWAYS: array [0 .. 2] of string = ('delphi_help', 'delphi_messages',
     'delphi_report');
   // reader: understand and navigate, nothing that writes or ships
-  READER: array [0 .. 18] of string = ('delphi_read', 'delphi_list',
+  READER: array [0 .. 19] of string = ('delphi_read', 'delphi_list',
     'delphi_search', 'delphi_symbols', 'delphi_definition', 'delphi_hover',
     'delphi_signature', 'delphi_completion', 'delphi_diagnostics',
     'delphi_references', 'delphi_projects', 'delphi_installs',
     'delphi_workspace', 'delphi_fetch', 'delphi_help', 'delphi_messages',
-    'delphi_report', 'vault_read', 'vault_search');
+    'delphi_report', 'vault_read', 'vault_search', 'delphi_docs');
   // coder hides only the shipping trio; everything else is a coder's tool
   DEPLOY_ONLY: array [0 .. 2] of string = ('delphi_adb', 'delphi_paserver',
     'delphi_package');

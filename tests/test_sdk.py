@@ -159,6 +159,31 @@ try:
           'warning' in fichas.get('mezclado', {}), out[:400])
     check('sysroot limpio con /lib64 (Ubuntu): NO se marca',
           'warning' not in fichas.get('limpio', {}), out[:400])
+    # los Default_<Plataforma> del IDE, leidos AQUI del registro (solo se
+    # leen; el de verdad, del usuario): el servidor los da por EL lector de
+    # las claves del IDE desde la 1.10.0, y aqui ninguna bateria los miraba
+    import winreg
+    esperados = []
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r'Software\Embarcadero\BDS\%s\PlatformSDKs' % VER) as k:
+            i = 0
+            while True:
+                try:
+                    n, d, t = winreg.EnumValue(k, i)
+                except OSError:
+                    break
+                i += 1
+                if n.lower().startswith('default_') and t in (winreg.REG_SZ, winreg.REG_EXPAND_SZ):
+                    esperados.append('%s = %s' % (n[8:], d))
+    except OSError:
+        pass
+    try:
+        dados = json.loads(out).get('ideSdkDefaults', [])
+    except Exception:
+        dados = None
+    check('ideSdkDefaults: los Default_ del IDE, los mismos que el registro (%d aqui)' % len(esperados),
+          dados is not None and all(e in dados for e in esperados), (esperados, dados))
 
     # --- 5-bis) el proyecto se lo fija EL SOLO con set-sdk -----------------
     # Es el modelo del IDE: muchos SDK registrados y el proyecto elige. Hasta

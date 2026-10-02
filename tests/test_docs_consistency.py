@@ -26,6 +26,8 @@ env = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_VAULT_PATH': VAULT,
 srv = mc.Stdio(EXE, env, nombre='docs', t=60)
 resp = srv.request('tools/list', {})
 TOOLS = sorted(t['name'] for t in resp['result']['tools'])
+# la tabla de tareas de delphi_help, la primera llamada que el manual pide
+TAREAS = srv.call('delphi_help', {'command': 'tasks'})
 srv.mata()
 
 TOTAL = len(TOOLS)
@@ -39,6 +41,14 @@ NON_LSP_CORE = CORE - len(LSP_BACKED)
 check('tools/list responde', TOTAL > 0, TOTAL)
 check('las LSP-backed existen todas', all(t in TOOLS for t in LSP_BACKED),
       [t for t in LSP_BACKED if t not in TOOLS])
+
+# ---- delphi_help tasks (1.10.0) -----------------------------------------
+# Cada tool del servidor sale en la tabla de tareas: una tool que no esta ahi
+# no la encuentra el agente que empieza por donde el manual le dice. Se
+# comprobaba solo para delphi_docs, a mano; asi vale para la siguiente
+fuera = [t for t in TOOLS if not re.search(r'\b%s\b' % re.escape(t), TAREAS)]
+check('delphi_help tasks nombra TODAS las tools de tools/list',
+      mc.abre(TAREAS, 'SN_HELP_TASKS') and not fuera, fuera or TAREAS[:200])
 
 # ---- README ------------------------------------------------------------
 readme = open(os.path.join(REPO, 'README.md'), encoding='utf-8').read()

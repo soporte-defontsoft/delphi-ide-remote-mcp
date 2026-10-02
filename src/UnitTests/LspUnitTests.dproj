@@ -180,6 +180,7 @@
         <DCCReference Include="LspTests.Motor.pas"/>
         <DCCReference Include="LspTests.Rutas.pas"/>
         <DCCReference Include="LspTests.LetrasDeRed.pas"/>
+        <DCCReference Include="LspTests.Docs.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

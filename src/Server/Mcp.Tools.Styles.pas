@@ -77,7 +77,8 @@ uses
   Lsp.Patch,
   Lsp.ProjectUnits,
   Lsp.References,   // SkipIdeArtifacts: el filtro compartido de artefactos
-  Lsp.Styles;
+  Lsp.Styles,
+  Lsp.Pascal;
 
 constructor TDelphiStylesTool.Create;
 begin

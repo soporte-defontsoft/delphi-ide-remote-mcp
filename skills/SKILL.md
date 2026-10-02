@@ -37,6 +37,14 @@ handshake.
 
 - `delphi_read` pages at 400 lines per call - read in RANGES.
 - `delphi_search` / `delphi_list` to locate; never read whole trees.
+- **An API you do not know** (what a class or routine is for, how it is
+  used, which framework has it): `delphi_docs search query=<it>` and then
+  `read id=<a result>` - the RAD Studio help installed on the server, in
+  small pieces: a long page gives its introduction and sections first, a
+  class its member lists in `related`. Do not guess and do not read a whole
+  RTL unit for it. For the exact signature, the installed sources win:
+  `delphi_hover` / `delphi_definition`. It works in any workspace: it
+  opens only the help files the IDE registers.
 - Big dumps (logcat, long outputs) have a file mode (`out=`): use it,
   then read the file in ranges or download it.
 - **Getting a file onto YOUR machine** (an installer, an .apk, a

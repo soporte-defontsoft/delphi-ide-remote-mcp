@@ -112,6 +112,32 @@ type
   machine, 3 disabled. }
 function IdeKnownPackages(const AVersion: string): TArray<TIdePackage>;
 
+type
+  TValorIde = record
+    Nombre: string;   // el nombre del valor
+    Dato: string;     // lo que guarda (solo los de texto)
+  end;
+
+{ Los valores de texto de una clave de la configuracion del IDE de esa
+  version (SOFTWARE\Embarcadero\BDS\<ver>\<ASubKey>): los del usuario (HKCU)
+  y, con AConMaquina, despues los de la maquina (HKLM, sus dos vistas), en
+  ese orden y repetidos si estan en varias. EL lector de las listas que el
+  IDE guarda asi: los paquetes registrados y los ficheros de ayuda. }
+function IdeValoresDeClave(const AVersion, ASubKey: string;
+  AConMaquina: Boolean): TArray<TValorIde>;
+
+type
+  TIdeAyuda = record
+    Nombre: string;   // como la llama el IDE ("IDE Topics Help", "Indy Help")
+    Fichero: string;  // el .chm, tal como esta registrado
+  end;
+
+{ Los ficheros de ayuda que el IDE de esa version abre con F1: los que
+  registra en Help\HtmlHelp1Files (los suyos y los de los componentes
+  instalados), del usuario y de la maquina, sin repetir el mismo fichero.
+  Nunca una carpeta compuesta a mano: la lista es la del IDE. }
+function IdeHelpFiles(const AVersion: string): TArray<TIdeAyuda>;
+
 { $(BDSCOMMONDIR) as written by the installer in rsvars.bat - the
   AUTHORITATIVE value (no branding names composed by hand: Embarcadero
   renames its Documents folder between eras, e.g. "RAD Studio" ->
@@ -346,31 +372,15 @@ begin
 end;
 
 procedure IdeEnvironmentVars(const AVersion: string; ADest: TStrings);
-var
-  Reg: TRegistry;
-  Names: TStringList;
-  N: string;
 begin
   if ADest = nil then
     Exit;
-  Reg := TRegistry.Create(KEY_READ);
-  Names := TStringList.Create;
-  try
-    Reg.RootKey := HKEY_CURRENT_USER;
-    if not Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\Environment Variables',
-      [AVersion])) then
-      Exit;
-    Reg.GetValueNames(Names);
-    for N in Names do
-      try
-        ADest.Values[N] := Reg.ReadString(N);
-      except
-        // a non-string value is simply not a macro
-      end;
-  finally
-    Names.Free;
-    Reg.Free;
-  end;
+  // EL lector de los valores de una clave del IDE (IdeValoresDeClave), solo
+  // la del usuario, como el IDE: aqui habia otra copia del mismo bucle
+  // (revision de la 1.10.0). Un valor que no es texto llega vacio, y vaciar
+  // un Values lo quita: no es una macro
+  for var V in IdeValoresDeClave(AVersion, 'Environment Variables', False) do
+    ADest.Values[V.Nombre] := V.Dato;
 end;
 
 function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
@@ -400,47 +410,32 @@ var
   Off: TDictionary<string, Boolean>; // a set: filename(lower) -> present
   List: TList<TIdePackage>;
 
-  // One registry key's values into ADest as filename(lower) -> entry.
+  // One registry key's values into Map/Off as filename(lower) -> entry.
   // AsNames=True collects only the file names (the Disabled set).
-  procedure Collect(ARoot: HKEY; AAccess: Cardinal; const ASubKey: string;
-    AsNames: Boolean);
+  procedure Collect(const ASubKey: string; AConMaquina, AsNames: Boolean);
   var
-    Reg: TRegistry;
-    Names: TStringList;
-    N, FileKey: string;
+    V: TValorIde;
+    FileKey: string;
     P: TIdePackage;
   begin
-    Reg := TRegistry.Create(KEY_READ or AAccess);
-    Names := TStringList.Create;
-    try
-      Reg.RootKey := ARoot;
-      if not Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\%s',
-        [AVersion, ASubKey])) then
-        Exit;
-      Reg.GetValueNames(Names);
-      for N in Names do
+    for V in IdeValoresDeClave(AVersion, ASubKey, AConMaquina) do
+    begin
+      // The value NAME is the bpl path ($(BDSBIN)\dclx370.bpl or absolute);
+      // the DATA is the description the IDE shows.
+      FileKey := TPath.GetFileName(V.Nombre.Replace('/', '\'));
+      if FileKey = '' then
+        Continue;
+      if AsNames then
+        Off.AddOrSetValue(FileKey.ToLower, True)
+      else if not Map.ContainsKey(FileKey.ToLower) then
       begin
-        // The value NAME is the bpl path ($(BDSBIN)\dclx370.bpl or absolute);
-        // the DATA is the description the IDE shows.
-        FileKey := TPath.GetFileName(
-          N.Replace('/', '\'));
-        if FileKey = '' then
-          Continue;
-        if AsNames then
-          Off.AddOrSetValue(FileKey.ToLower, True)
-        else if not Map.ContainsKey(FileKey.ToLower) then
-        begin
-          P.Description := Reg.ReadString(N).Trim;
-          if P.Description = '' then
-            P.Description := FileKey;
-          P.BplFile := FileKey;
-          P.Disabled := False;
-          Map.Add(FileKey.ToLower, P);
-        end;
+        P.Description := V.Dato.Trim;
+        if P.Description = '' then
+          P.Description := FileKey;
+        P.BplFile := FileKey;
+        P.Disabled := False;
+        Map.Add(FileKey.ToLower, P);
       end;
-    finally
-      Names.Free;
-      Reg.Free;
     end;
   end;
 
@@ -455,14 +450,10 @@ begin
   try
     for var SubKey in TArray<string>.Create('Known Packages',
       'Known Packages x64') do
-    begin
-      Collect(HKEY_CURRENT_USER, 0, SubKey, False);
-      Collect(HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY, SubKey, False);
-      Collect(HKEY_LOCAL_MACHINE, KEY_WOW64_64KEY, SubKey, False);
-    end;
+      Collect(SubKey, True, False);
     for var SubKey in TArray<string>.Create('Disabled Packages',
       'Disabled Packages x64') do
-      Collect(HKEY_CURRENT_USER, 0, SubKey, True);
+      Collect(SubKey, False, True);
     for Key in Map.Keys do
     begin
       P := Map[Key];
@@ -481,6 +472,68 @@ begin
     List.Free;
     Off.Free;
     Map.Free;
+  end;
+end;
+
+function IdeValoresDeClave(const AVersion, ASubKey: string;
+  AConMaquina: Boolean): TArray<TValorIde>;
+
+  procedure Lee(ARoot: HKEY; AAccess: Cardinal);
+  var
+    Reg: TRegistry;
+    Names: TStringList;
+    V: TValorIde;
+  begin
+    Reg := TRegistry.Create(KEY_READ or AAccess);
+    Names := TStringList.Create;
+    try
+      Reg.RootKey := ARoot;
+      if not Reg.OpenKeyReadOnly(Format('SOFTWARE\Embarcadero\BDS\%s\%s',
+        [AVersion, ASubKey])) then
+        Exit;
+      Reg.GetValueNames(Names);
+      for var N in Names do
+      begin
+        V.Nombre := N;
+        try
+          V.Dato := Reg.ReadString(N);
+        except
+          V.Dato := ''; // un valor que no es texto: queda su nombre
+        end;
+        Result := Result + [V];
+      end;
+    finally
+      Names.Free;
+      Reg.Free;
+    end;
+  end;
+
+begin
+  Result := nil;
+  Lee(HKEY_CURRENT_USER, 0);
+  if AConMaquina then
+  begin
+    Lee(HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY);
+    Lee(HKEY_LOCAL_MACHINE, KEY_WOW64_64KEY);
+  end;
+end;
+
+function IdeHelpFiles(const AVersion: string): TArray<TIdeAyuda>;
+var
+  V: TValorIde;
+  A: TIdeAyuda;
+  Vistos: TArray<string>;
+begin
+  Result := nil;
+  Vistos := nil;
+  for V in IdeValoresDeClave(AVersion, 'Help\HtmlHelp1Files', True) do
+  begin
+    A.Nombre := V.Nombre;
+    A.Fichero := V.Dato.Trim;
+    if (A.Fichero = '') or (IndexText(A.Fichero, Vistos) >= 0) then
+      Continue;
+    Vistos := Vistos + [A.Fichero];
+    Result := Result + [A];
   end;
 end;
 

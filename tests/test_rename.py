@@ -49,6 +49,7 @@ implementation
 
 function Doble(A: Integer): Integer;
 begin
+  { it's what Doble's for }
   Result := A * 2;
 end;
 
@@ -88,6 +89,11 @@ check('changes INCLUYE la linea de la definicion',
       any(c.get('line') == _def.get('line') and c.get('path') == _def.get('path') for c in _chg),
       'definition=%s changes=%s' % (_def, [(c.get('path','')[-20:], c.get('line')) for c in _chg]))
 check('cero sin confirmar', j.get('unverified') == 0, r[:200])
+# el '{ it''s what Doble''s for }' del fixture: las comillas de dentro de un
+# comentario no abren una cadena (1.10.0, el lexico de la casa; antes "'s
+# what Doble'" contaba como un literal que lo nombraba y bloqueaba)
+check('un apostrofo dentro de un comentario no es un literal que bloquee',
+      not any(mc.es(b, 'SR_RENAME_STRINGS_FMT') for b in j.get('blockers', [])), str(j.get('blockers'))[:300])
 
 # 2. invalid ident / reserved
 r = call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': '9mal'})
@@ -288,6 +294,41 @@ decl2, impl2 = impl_hoy()
 j2 = J(call('delphi_definition', {'path': DPR, 'line': ld, 'character': cd}))
 check('fantasma: reabierta y editada otra vez, definition desde el .dpr da la linea de HOY',
       linea_de(j) == impl and impl2 == impl + 1 and linea_de(j2) == impl2, (str(j)[:120], str(j2)[:120], impl2))
+
+# 12. Los comentarios no son el simbolo (revisor de codigo de la 1.10.0,
+# medido con una sonda; la regla del rename de una unit: solo el codigo, David
+# 2-oct-2026): el nombre NUEVO escrito solo en un comentario no es una
+# colision, el '// see Foo' de la linea de una llamada no se renombra, un
+# 'X.Foo' de un comentario no hace cualificada la cabecera, y la columna del
+# cuerpo para ir a la declaracion se busca en su codigo (con '{ el cuerpo }'
+# delante caia dentro del comentario). Los dos ultimos son GUARDAS: DelphiLSP
+# contesta la declaracion desde cualquier columna de la cabecera, tambien
+# con '{ TCosa }' delante (medido contra el exe de antes), y el aviso de
+# cabecera cualificada solo sale cuando la definicion no vino entre las
+# referencias, que aqui viene (verdes sin su arreglo en la mutacion)
+COM = os.path.join(BASE, 'Com')
+call('delphi_create', {'kind': 'project-console', 'name': 'PCom', 'dir': COM})
+call('delphi_create', {'kind': 'unit', 'name': 'UCom', 'project': os.path.join(COM, 'PCom.dpr'),
+                       'content': 'unit UCom;\r\n\r\ninterface\r\n\r\nprocedure Foo(A: Integer);\r\n\r\n'
+                                  'implementation\r\n\r\n{ el cuerpo } procedure Foo(A: Integer); // no es X.Foo\r\n'
+                                  'begin\r\nend;\r\n\r\n'
+                                  'procedure Usa;\r\nbegin\r\n  Foo(1); // see Foo\r\n'
+                                  '  // Bar es el nombre que tendra\r\nend;\r\n\r\nend.\r\n'})
+UCOM = os.path.join(COM, 'UCom.pas')
+j = J(call('delphi_definition', {'path': UCOM, 'line': 14, 'character': 3, 'kind': 'declaration'}))
+check('declaration desde una llamada: llega a la de la interfaz aunque el cuerpo lleve un comentario delante',
+      linea_de(j) == 4, str(j)[:300])
+j = J(call('delphi_rename_symbol', {'path': UCOM, 'line': 4, 'character': 10, 'newname': 'Bar'}))
+check('un X.Foo dentro de un comentario no hace cualificada la cabecera',
+      not any(mc.es(w, 'SN_RENAME_QUALIFIED_FMT') for w in j.get('warnings', [])), str(j.get('warnings'))[:300])
+check('el nombre nuevo escrito solo en un comentario no es una colision',
+      j.get('applicable') is True and not any(mc.es(b, 'SR_RENAME_COLLISION_FMT') for b in j.get('blockers', [])),
+      str(j)[:400])
+j = J(call('delphi_rename_symbol', {'path': UCOM, 'line': 4, 'character': 10, 'newname': 'Bar', 'mode': 'apply'}))
+uc = open(UCOM, encoding='utf-8-sig').read()
+check('apply: el comentario de la linea de una llamada se queda como estaba',
+      j.get('applied') is True and '  Bar(1); // see Foo\n' in uc.replace('\r\n', '\n')
+      and uc.count('Bar(A: Integer);') == 2, uc)
 
 srv.mata()
 mc.fin('rename battery')

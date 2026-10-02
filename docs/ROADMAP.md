@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-02 (current release v1.9.1; 41 tools - `delphi_run` retired).
+Status page as of 2026-10-02 (current release v1.10.0; 42 tools - `delphi_run` retired, `delphi_docs` new).
 
 ## Delivered
 
@@ -32,6 +32,8 @@ Status page as of 2026-10-02 (current release v1.9.1; 41 tools - `delphi_run` re
 - The changeset preview rehearses with the engines; a unit move whose project cannot be re-pointed is all or nothing (`MOVE-019`); `docs/TOOLS.md` contract blocks generated from `tools/list`; one access table that the gate consults and `tools/list` announces (`annotations.readOnlyHint`, `_meta.access`); `clean` for domain verdicts; long paths refused honestly (1.7.1-1.7.3)
 
 - The life of the engines: asked to `shutdown` before their input is closed and launched so that no child can open an error dialog (1.7.10); stopped when nobody uses them for `[Server] EngineIdleMinutes`, and stopped and replaced when they hang (1.8.0)
+- `delphi_docs`: the RAD Studio help installed with Delphi, searched and read in pieces - the list of help files is the IDE's own (1.10.0)
+- One lexicon for Pascal text (`Lsp.Pascal`): what is code, a string, a comment or a directive, asked by every tool that reads Pascal instead of a dozen readers with a piece of the rule each (1.10.0)
 
 ## Open
 

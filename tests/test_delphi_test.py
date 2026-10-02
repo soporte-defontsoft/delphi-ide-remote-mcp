@@ -84,6 +84,59 @@ end.
 r = A.call('delphi_create', {'kind': 'project-console', 'name': 'NormalApp', 'dir': os.path.join(BASE, 'NormalApp')})
 check('NormalApp creado (sin el, "no cuenta un proyecto normal" no mide nada)',
       os.path.isfile(os.path.join(BASE, 'NormalApp', 'NormalApp.dpr')), r[:200])
+# ...y con DUnitX nombrado en un COMENTARIO: no lo hace una suite (1.10.0, el
+# lexico de la casa; se buscaba 'DUnitX.' en el texto entero)
+_n = os.path.join(BASE, 'NormalApp', 'NormalApp.dpr')
+_b = open(_n, 'rb').read()
+open(_n, 'wb').write(_b.replace(b'{$APPTYPE CONSOLE}',
+                                b'{$APPTYPE CONSOLE}\r\n// la version de antes usaba DUnitX.TestFramework', 1))
+check('NormalApp lleva DUnitX en un comentario', b'usaba DUnitX.TestFramework' in open(_n, 'rb').read(), '')
+
+# una suite DUnitX con un test que LANZA (1.10.0): para DUnitX un error no es
+# un fallo ('Tests Errored', bloque 'Tests With Errors'), y delphi_test solo
+# leia 'Tests Failed': la suite salia 'pass' con el ejecutable acabando en 1
+# (medido en la mutacion de la 1.10.0: 'pass 16/17' sin fallos)
+r = A.call('delphi_create', {'kind': 'project-test', 'name': 'LanzaTest', 'dir': os.path.join(BASE, 'LanzaTest')})
+check('LanzaTest creado', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
+LANZA = os.path.join(BASE, 'LanzaTest', 'LanzaTest.dproj')
+open(os.path.join(BASE, 'LanzaTest', 'ULanzaTest.pas'), 'w', encoding='utf-8-sig', newline='\r\n').write(
+"""unit ULanzaTest;
+
+interface
+
+uses
+  DUnitX.TestFramework;
+
+type
+  [TestFixture]
+  TLanzaTest = class
+  public
+    [Test]
+    procedure Bien;
+    [Test]
+    procedure Lanza;
+  end;
+
+implementation
+
+uses
+  System.SysUtils;
+
+procedure TLanzaTest.Bien;
+begin
+  Assert.AreEqual(4, 2 + 2);
+end;
+
+procedure TLanzaTest.Lanza;
+begin
+  raise Exception.Create('lanza a proposito');
+end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TLanzaTest);
+
+end.
+""")
 
 # ---- discover ----
 j = J(A.call('delphi_test', {'command': 'discover', 'path': BASE}))
@@ -113,6 +166,12 @@ j = J(B.call('delphi_test', {'command': 'run', 'project': ROJO}, t=900))
 check('suite roja: result=fail', j.get('result') == 'fail', str(j)[:400])
 check('suite roja: 1 de 2 y el fallo NOMBRADO', j.get('failed') == 1 and any('MAL' in f for f in j.get('failures', [])), str(j)[:350])
 check('suite roja: exitCode distinto de 0', j.get('exitCode') not in (0, None), str(j)[:200])
+
+# ---- run con un test que lanza ----
+j = J(B.call('delphi_test', {'command': 'run', 'project': LANZA}, t=900))
+check('suite con un test que lanza: result=fail', j.get('result') == 'fail', str(j)[:400])
+check('...con el error contado y NOMBRADO', j.get('errored') == 1 and j.get('failed') == 0
+      and any('Lanza' in f and 'a proposito' in f for f in j.get('failures', [])), str(j)[:400])
 
 # ---- contratos ----
 r = B.call('delphi_test', {'command': 'run', 'project': os.path.join(BASE, 'NormalApp', 'NormalApp.dpr')})
