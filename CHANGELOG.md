@@ -26,7 +26,17 @@ The description of `delphi_rename_symbol` says what 1.10.0 does: it renames code
 
 `test_rename` checks that the description and the note no longer promise a
 comment renamed on any line - red against 1.10.0, measured before the fix.
-94 batteries, 3,125 checks, 0 failures.
+
+The release gate of this version went red once in `test_concurrencia`:
+twelve `delphi_textedit` at once on one file, "12 successes, 11 on
+disk". It looked like a lost edit; the server's log said otherwise - it
+had received 11 requests, not 12, and done the 11. The twelfth never
+reached it (the client's connection failed under the burst), and the
+battery counted the exception of that thread as a success: its test of
+"not a success" knew the server's answers and not a request that never
+left. It counts as a failure now, with its text, and the battery checks
+that about itself. A guess at the cause would have gone to the server's
+write lock. 94 batteries, 3,126 checks, 0 failures.
 
 ## [1.10.0] - 2026-10-02
 

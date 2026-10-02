@@ -108,8 +108,16 @@ def burst(worker, n=N):
 
 def bad(text):
     """A tool answer that is NOT a success: mc.fallo ya cuenta tambien lo que
-    no llego (timeout, error JSON-RPC, sin contenido)."""
-    return mc.fallo(text or '')
+    no llego (timeout, error JSON-RPC, sin contenido) - y la EXCEPCION de un
+    hilo de burst() (la peticion ni salio o se corto), que mc.fallo no conoce:
+    contaba como exito. Medido en la puerta de la 1.10.1: '12 exitos, 11 en
+    disco', y el log del servidor tenia 11 peticiones, no 12 - la que faltaba
+    nunca llego y la bateria la daba por hecha."""
+    return (text or '').startswith('EXCEPCION ') or mc.fallo(text or '')
+
+
+check('arnes: la excepcion de un hilo cuenta como fallo, no como exito',
+      bad('EXCEPCION ' + repr(ConnectionResetError(10054, 'reset'))) and not bad('[TEXT-013] OK'))
 
 
 try:
