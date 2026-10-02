@@ -6,6 +6,87 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.9.1] - 2026-10-02
+
+A `ReadOnlyPaths` entry outside every root of its workspace is said at startup: the key that lets an agent read a folder outside its roots is `ReadOnlyRoots`.
+
+### Added
+
+- **The startup log warns about a `ReadOnlyPaths` entry that falls outside
+  every root of its workspace.** `ReadOnlyPaths` marks as read-only the
+  folders that are already INSIDE the roots - a `vendor/`, a submodule - and
+  for a folder outside them its agents get nothing, neither reading nor
+  protection. Measured 2026-10-02 on a second machine running this server:
+  two workspaces declared `ReadOnlyPaths=L:\...` so that their agents could
+  read the code of this project's machine without touching it, neither
+  could (`GUARD-002`), and the startup said nothing. The key for that is
+  `ReadOnlyRoots`. The entry is still loaded - it stays among the places no
+  workspace may delete or purge - but the startup now says, for an entry of
+  a `[Workspace.<name>]` and for one of `DELPHI_MCP_READONLY_PATHS`, the
+  key, the entry, and the key that does open a folder for reading, as it is
+  called there (`ReadOnlyRoots`, `DELPHI_MCP_READONLY_ROOTS`). Not for an
+  entry inside one of the workspace's own references, nor for one that
+  contains a root (it makes the whole root read-only); a relative entry is
+  said only when it resolves outside (`..\shared`), once even if it does
+  from several roots; a section with no token, which is ignored whole, says
+  nothing more. On a local drive the comparison is on the real path, which
+  is what the writers judge - a junction that enters a root or leaves it
+  counts, and so do 8.3 names; an entry that contains a root only by its
+  text, the root being a junction to somewhere else, protects nothing (the
+  write through that root goes through) and is said -; on a network drive,
+  on the text: the startup does not wait on a share for this. With no
+  roots - the trusted local mode, which reads the whole machine - there is
+  no outside, and nothing is said.
+
+`test_letras_red` has fourteen more checks. The entry outside is loaded -
+another workspace whose root contains it cannot delete it - and its agent
+gets `GUARD-002` for it; an entry that contains the root makes it
+read-only, and one that contains it only by its text does not (the write
+goes through). The warning comes with its key and entry - a whole drive
+with its backslash -, for the entry that leaves a root through a
+junction, for the one that contains a root only by its text, and once for
+a relative one that resolves to the same place from two roots; nothing
+for the entries inside (absolute, relative, in a reference of its own,
+containing the root, in 8.3, and written by the real path of a root that
+is a junction), nor for a section with no token; and the same for the
+environment of the local mode, with its own key, with and without roots.
+Twelve mutants of the warning, each built and run against that battery,
+all twelve red: no warning at all, every entry taken as outside, a
+warning with no roots, the workspace's own references not counted, the
+comparison on the text instead of the real path, a whole drive without
+its backslash, an entry containing a root taken as outside, one
+containing a root only by its text taken as inside, the same entry said
+once per root, a warning for a section with no token, the key of the
+`.ini` named to the environment, and an absolute entry not loaded at all -
+which the check of the delete catches: the folder was deleted.
+A first version compared on the text alone, and its first review found
+what that missed: an entry containing a root and an entry behind a
+junction were a false warning or a missing one, the message said "cannot
+even read" of a folder the library zone reads, it named the key of the
+`.ini` to the environment, and an 8.3 name on a network drive could make
+the startup wait on the share. The second review held that an entry
+containing a root only by its text protects it, as the jail compares the
+text too; measured, the write through that root goes through, and the
+comparison stayed on the real path.
+
+### Documentation
+
+- QUICKSTART: the two read-only keys where a workspace is first written,
+  with an example, and the symptom in its table of
+  problems. README and `settings.example.ini`: what a `ReadOnlyPaths`
+  entry outside the roots does and does not do, and `ReadOnlyRoots` as the
+  key for "read our code, wherever it is, and touch nothing".
+- README: **network shares are opt-in**, and why (published on 2026-10-01,
+  between versions). A share becomes part of the Delphi environment only
+  when the operator maps it to a drive letter on the RAD Studio machine and
+  declares a place on it in a workspace; a share nobody mapped stays
+  outside the boundary on purpose. Eight tools given a network path nobody
+  declared, on a host that does not route, answer `GUARD-002` in 0.02 s or
+  less: the refusal comes before the server goes to that host. One
+  exception, kept by decision: with `LibraryZone=1`, a folder of the IDE's
+  Library Path written as a network path is read like the rest of that
+  zone (read in the code, not measured).
+
 ## [1.9.0] - 2026-10-01
 
 A place is declared by a path with its drive letter; the server connects the network letters of its places for itself, and a root that is a whole drive works.

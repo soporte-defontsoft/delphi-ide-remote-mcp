@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.9.0';
+  SERVER_VERSION = '1.9.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -6104,6 +6104,21 @@ const
     'workspace - or, for an entry of the environment, the local mode of ' +
     'this process - admits NOBODY (fail closed) until the entry is fixed ' +
     'or removed.';
+
+  { Una entrada de ReadOnlyPaths FUERA de todas las raices de su workspace (y
+    de sus referencias): se carga, pero para sus agentes ni abre ni protege
+    nada. %s: la clave ('[Workspace.X] ReadOnlyPaths=',
+    'DELPHI_MCP_READONLY_PATHS'), la entrada ya completa, y la clave que SI
+    abre para leer, como se llama alli ('ReadOnlyRoots',
+    'DELPHI_MCP_READONLY_ROOTS'). No dice "no la leen": la zona de
+    biblioteca se lee igual (primera revision de la 1.9.1). }
+  SL_GUARD_SOLO_LECTURA_FUERA_FMT =
+    SL_MARCA_AVISO +
+    ': %s has an entry outside every root of its workspace, %s. ' +
+    'ReadOnlyPaths marks as read-only what is INSIDE the roots: for the ' +
+    'agents of that workspace this entry neither opens nor protects ' +
+    'anything. To let them read a folder outside their roots, and never ' +
+    'write it, the key is %s.';
 
   // Las letras de red de los sitios declarados, al arrancar (Lsp.NetDrives)
   SL_NET_LETRA_CONECTADA_FMT =

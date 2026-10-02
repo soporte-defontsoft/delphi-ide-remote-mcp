@@ -38,6 +38,12 @@ Roots=D:\Projects
   `powershell -c "[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N')"`.
 - `Roots=` is the jail: the folder (or folders, `;`-separated) that hold the
   projects the agent may touch. Backslashes, a real drive.
+- To let the agent **read** code it must not touch - your other projects, to
+  learn how things are done - add `ReadOnlyRoots=` with those folders, wherever
+  they are: `Roots=D:\Sandbox` and `ReadOnlyRoots=D:\Projects` is an agent
+  that writes in its sandbox and reads your projects. Its sibling
+  `ReadOnlyPaths=` is another thing: folders INSIDE the roots that are read and
+  never written (a `vendor\`); it opens nothing outside them.
 - Everything else is **off until you turn it on** (tests, remote execution,
   build scripts, git remotes...). The example file documents every key, one
   by one, when you want them.
@@ -91,6 +97,7 @@ tool reference is [docs/TOOLS.md](docs/TOOLS.md).
 | `delphi_projects` finds nothing | `Roots=` does not point where the projects are (typo, wrong drive, forward slashes). |
 | `401` with the right token, and the startup log says an entry is "NOT loaded" | A place is declared by a path with its drive letter (`D:\...`, also on a share: map it to a letter). A root written as a network path (`\\server\share\x`), or as a relative one (`projects`, `\projects`), is not loaded, and a workspace with no root, or with a `ReadOnlyRoots` / `ReadOnlyPaths` / `VaultPath` entry that could not be loaded, admits nobody. The warning names the key and the entry. |
 | A root on a network drive letter fails under the service ("the drive cannot be found") | The service does not see the letters of the desktop session; at startup the server connects the ones the account has mapped with "reconnect at sign-in", and its log says what happened with each. |
+| The agent answers `GUARD-002` for a folder you listed in `ReadOnlyPaths`, and the startup log says it is "outside every root" | `ReadOnlyPaths` only marks folders INSIDE the roots. To let the agent read a folder outside them, without writing it, list it in `ReadOnlyRoots`. |
 | Every call answers `GUARD-030` | A local (stdio) process that is closed: it was started with the token of a workspace that is closed, or one of its `DELPHI_MCP_READONLY_*` / `DELPHI_MCP_VAULT_PATH` entries could not be loaded. Its startup log names which. |
 | `delphi_git` answers `GIT-050` | There is no git on the server PC, or it is not in the `PATH` the server was started with. Only `delphi_git` needs it: everything else works without. |
 | A project with installed components fails with `F2613 unit not found` | The server runs as a user that is not the IDE's. Same exe, other account: no library paths. |

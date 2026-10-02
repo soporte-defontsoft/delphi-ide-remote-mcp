@@ -1905,6 +1905,88 @@ begin
   AFuera := nil;
 end;
 
+{ Las entradas de ReadOnlyPaths que caen FUERA de todas las raices de su
+  workspace y de sus referencias, dichas en el arranque. ReadOnlyPaths marca
+  de solo lectura lo que ya esta DENTRO de la jaula: una carpeta de fuera ni
+  la abre ni la protege para sus agentes, y quien la escribe queria casi
+  siempre ReadOnlyRoots (medido 2-oct-2026: dos workspaces de la VM con
+  ReadOnlyPaths=L:\... para leer codigo de fuera, y ninguno lo leia). Se
+  carga igual: sigue entre lo que no se toca de NINGUN workspace
+  (SitiosQueNoSeTocan). Sin raices no hay "fuera": el modo local de
+  confianza lee toda la maquina, y un workspace sin raices ya esta cerrado.
+  AClaveDeFuera: la que si abre para leer, como se llama alli (ReadOnlyRoots
+  en el ini, DELPHI_MCP_READONLY_ROOTS en el entorno). Primera revision de
+  la 1.9.1: una entrada que CONTIENE una raiz la deja entera de solo lectura
+  (no es de fuera), y la jaula mide la ruta REAL - un junction que entra o
+  que sale cuenta -; por el texto, las dos cosas eran un aviso falso o uno
+  que faltaba. }
+procedure AvisaDeSoloLecturaFuera(const ADonde, AClaveDeFuera: string;
+  const APaths, ARoots, AReferencias: TArray<string>);
+
+  // La ruta REAL en una unidad LOCAL, como la jaula (un junction cuenta, y
+  // un nombre 8.3 tambien); en otra - de red, o una que el proceso aun no ve -
+  // el TEXTO: por una letra de red el arranque no sale a la red (lo que la
+  // toca va despues, con su plazo: VigilaLetrasDeRed). Un enlace simbolico de
+  // una unidad local a un recurso de red se sigue, como lo sigue la jaula en
+  // cada peticion (segunda revision de la 1.9.1).
+  function Comparable(const ASitio: string): string;
+  begin
+    Result := IncludeTrailingPathDelimiter(ASitio);
+    if ClaseDeLetra(LetraDeRuta(ASitio)) = clLocal then
+    try
+      Result := IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(ASitio)));
+    except
+      // la que no se resuelve se compara por el texto
+    end;
+  end;
+
+var
+  P, PC, R, RC: string;
+  Dentro: Boolean;
+  Dichas: TArray<string>;
+begin
+  if Length(ARoots) = 0 then
+    Exit;
+  Dichas := nil;
+  for P in APaths do
+  begin
+    PC := Comparable(P);
+    Dentro := False;
+    // Por la ruta REAL, que es la que juzgan los escritores: la entrada
+    // dentro de una raiz, o una raiz dentro de ella ("D:\Proyectos" con la
+    // raiz "D:\Proyectos\App" la deja entera de solo lectura). Por el texto
+    // NO: la segunda revision de la 1.9.1 propuso contar la raiz que la
+    // entrada contiene solo por el texto (la raiz, un junction a otro sitio),
+    // y medido, la escritura por esa raiz PASA - lo que se escribe no esta
+    // de verdad bajo la entrada -: no protege nada, y el aviso es justo
+    for R in ARoots do
+    begin
+      RC := Comparable(R);
+      if StartsText(RC, PC) or StartsText(PC, RC) then
+      begin
+        Dentro := True;
+        Break;
+      end;
+    end;
+    // dentro de una referencia propia: lo que quien la escribe queria leer
+    // ya se lee
+    if not Dentro then
+      for R in AReferencias do
+        if StartsText(Comparable(R), PC) then
+        begin
+          Dentro := True;
+          Break;
+        end;
+    // (una relativa que sale al mismo sitio desde dos raices, una vez)
+    if not Dentro and (IndexText(PC, Dichas) < 0) then
+    begin
+      Dichas := Dichas + [PC];
+      GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(SL_GUARD_SOLO_LECTURA_FUERA_FMT,
+        [ADonde, SinBarraFinal(P), AClaveDeFuera])];
+    end;
+  end;
+end;
+
 { Un VaultPath= con texto que no vale como sitio: completo, no es una ruta
   con letra, o no parsea. El vault es un sitio protegido - las tools de
   codigo no entran en el -: lleva la regla de los demas (David, 1-oct-2026). }
@@ -1968,6 +2050,8 @@ begin
   GRoRoots := ParseRootsList(GetEnvironmentVariable('DELPHI_MCP_READONLY_ROOTS'), Fuera);
   if AvisaDeSitiosNoCargados('DELPHI_MCP_READONLY_ROOTS', True, Fuera) then
     GLocalCerrado := MsgText(SF_CIERRE_PROTECCION);
+  AvisaDeSoloLecturaFuera('DELPHI_MCP_READONLY_PATHS', 'DELPHI_MCP_READONLY_ROOTS',
+    GRoPaths, GRoots, GRoRoots);
   if VaultSinLetra(GVaultPath) then
   begin
     Fuera := [GVaultPath.Trim];
@@ -2063,7 +2147,12 @@ begin
             if SinProteccion then
               W.Invalid := True;
             if (W.Token <> '') or (W.ReadOnlyToken <> '') then
-              GWorkspaces := GWorkspaces + [W]
+            begin
+              // (de una seccion sin token, que se ignora entera, no se dice)
+              AvisaDeSoloLecturaFuera('[' + S + '] ReadOnlyPaths=', 'ReadOnlyRoots',
+                W.ReadOnlyPaths, W.Roots, W.ReadOnlyRoots);
+              GWorkspaces := GWorkspaces + [W];
+            end
             else
               GWorkspaceNotes := GWorkspaceNotes +
                 [MsgFmt(SL_GUARD_SIN_TOKEN_IGNORADA_FMT, [W.Name])];

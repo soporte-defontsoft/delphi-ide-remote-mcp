@@ -59,6 +59,35 @@ lo dice. El host de estas pruebas no existe: nada de esto sale a la red.
       cliente LOCAL: quien entra por HTTP con su token de escritura, escribe
       (dejaba el servidor entero en solo lectura)
 
+Y una entrada de ReadOnlyPaths que cae FUERA de las raices de su workspace
+(1.9.1). ReadOnlyPaths marca de solo lectura lo que ya esta DENTRO de la
+jaula; para leer una carpeta de fuera la clave es ReadOnlyRoots. Medido el
+2-oct-2026 en la VM: dos workspaces con ReadOnlyPaths=L:\\... para leer codigo
+de fuera, y ninguno lo leia, sin una palabra en el arranque.
+
+  R1  esa entrada se carga: el workspace atiende, otro workspace cuya raiz la
+      contiene no la borra (es un lugar que no se toca), y su agente no la
+      lee: esta fuera (GUARD-002)
+  R2  el arranque lo AVISA con la clave y la entrada, y dice que la clave para
+      leer fuera es ReadOnlyRoots; una unidad entera sale con su barra (X:\\);
+      la que esta en la raiz por el texto y sale por un junction, tambien (la
+      jaula mide la ruta real); la relativa que sale al mismo sitio desde dos
+      raices, una vez; de una seccion sin token, que se ignora, nada
+  R3  de las que caen dentro no se dice nada: absoluta dentro de la raiz,
+      relativa (la carpeta de cada raiz), dentro de una referencia propia, la
+      escrita en 8.3 cuya forma larga esta dentro, la que CONTIENE la raiz
+      (la deja entera de solo lectura: se mide) y la escrita por la ruta real
+      de una raiz que es un junction. La que contiene la raiz solo por el
+      TEXTO (la raiz, un junction a otro sitio) si se avisa: la escritura por
+      esa raiz pasa, se mide (la segunda revision creia que la protegia)
+  R4  las del entorno (modo local): con DELPHI_MCP_ROOTS se avisa igual, con
+      la clave del entorno (DELPHI_MCP_READONLY_ROOTS), sin cerrar nada; sin
+      raices no hay "fuera" (el modo local de confianza lee toda la maquina)
+      y no se dice nada
+  (R2-R4 vienen tambien de la primera revision de la 1.9.1: el primer aviso
+  comparaba por el texto, y una entrada que contenia la raiz o un junction
+  eran un aviso falso o uno que faltaba)
+
 Usage:  python tests/test_letras_red.py [path-to-DelphiLspMcp.exe]
 """
 import ctypes, os, string, subprocess, winreg
@@ -158,6 +187,70 @@ PROTEGEN = {
     'Protege13': ('ReadOnlyPaths', '%s:\\carpeta-lr\\nul' % JAIL[0]),
 }
 
+
+def forma(ruta, larga):
+    """La forma larga, o la 8.3, de una ruta que existe ('' si Windows no la da)."""
+    k = ctypes.windll.kernel32
+    buf = ctypes.create_unicode_buffer(1024)
+    return buf.value if (k.GetLongPathNameW if larga else k.GetShortPathNameW)(ruta, buf, 1024) else ''
+
+
+# (R) ReadOnlyPaths fuera de las raices de su workspace: workspace -> (raiz, lineas)
+FUERA_RO = os.path.join(JAIL, 'fuera-ro')
+os.makedirs(FUERA_RO)
+os.makedirs(os.path.join(JAIL, 'sub-ro'))
+JAIL2_LARGO = forma(JAIL2, True) or JAIL2
+CORTO_RO = forma(os.path.join(JAIL2, 'dentro'), False)
+# solo si el volumen da nombres 8.3 y el corto es otro texto que el largo
+HAY_CORTO = '~' in CORTO_RO and CORTO_RO.lower() != os.path.join(JAIL2_LARGO, 'dentro').lower()
+
+
+def enlace(link, destino):
+    """Un junction de Windows (mklink /J): True si quedo hecho."""
+    subprocess.run(['cmd', '/c', 'mklink', '/J', link, destino], capture_output=True)
+    return os.path.isdir(link)
+
+
+# una raiz que ES un junction a JAIL2; uno DENTRO de JAIL2 que sale fuera (a
+# otra carpeta que FUERA_RO: si apuntase a ella, la protegeria tambien y el
+# check del borrado de R1 tendria dos protectores; segunda revision); y una
+# caja con una raiz dentro que es un junction a JAIL2
+ENLACE_RAIZ = os.path.join(BASE, 'raiz-enlace')
+ENLAZADA_RO = os.path.join(JAIL, 'enlazada-ro')
+os.makedirs(ENLAZADA_RO)
+ENLACE_FUERA = os.path.join(JAIL2, 'ext')
+CAJA = os.path.join(BASE, 'caja')
+os.makedirs(CAJA)
+CAJA_RAIZ = os.path.join(CAJA, 'proj')
+HAY_ENLACES = (enlace(ENLACE_RAIZ, JAIL2) and enlace(ENLACE_FUERA, ENLAZADA_RO)
+               and enlace(CAJA_RAIZ, JAIL2))
+COMUN_RO = os.path.join(BASE, 'comun-ro')
+SOLO = {
+    'SoloFuera': (JAIL2, ['ReadOnlyPaths=%s' % FUERA_RO]),
+    'SoloUnidad': (JAIL2, ['ReadOnlyPaths=%s:\\' % FALTA]),
+    'SoloDentro': (JAIL2, ['ReadOnlyPaths=%s' % os.path.join(JAIL2, 'dentro')]),
+    'SoloRelativa': (JAIL2, ['ReadOnlyPaths=dentro']),
+    'SoloEnRef': (JAIL2, ['ReadOnlyRoots=%s' % JAIL, 'ReadOnlyPaths=%s' % os.path.join(JAIL, 'sub-ro')]),
+    # CONTIENE la raiz: la deja entera de solo lectura, no es de fuera
+    'SoloEncima': (os.path.join(JAIL2, 'dentro'), ['ReadOnlyPaths=%s' % JAIL2]),
+    # relativa que sale fuera, al mismo sitio desde las dos raices
+    'SoloRelFuera': ('%s;%s' % (JAIL, JAIL2), ['ReadOnlyPaths=..\\comun-ro']),
+}
+if HAY_CORTO:
+    SOLO['SoloCorto'] = (JAIL2_LARGO, ['ReadOnlyPaths=%s' % CORTO_RO])
+if HAY_ENLACES:
+    SOLO['SoloEnlaceRaiz'] = (ENLACE_RAIZ, ['ReadOnlyPaths=%s' % os.path.join(JAIL2, 'dentro')])
+    SOLO['SoloEnlaceFuera'] = (JAIL2, ['ReadOnlyPaths=%s' % ENLACE_FUERA])
+    # CONTIENE la raiz solo por el texto (la raiz sale a JAIL2): los escritores
+    # juzgan la ruta REAL, la escritura por esa raiz pasa, y no protege nada
+    # (la segunda revision de la 1.9.1 creia lo contrario; medido)
+    SOLO['SoloEncimaTexto'] = (CAJA_RAIZ, ['ReadOnlyPaths=%s' % CAJA])
+# de las que el arranque tiene que avisar; de las demas, nada
+SE_AVISAN = ('SoloFuera', 'SoloUnidad', 'SoloRelFuera', 'SoloEnlaceFuera', 'SoloEncimaTexto')
+FUERA_FMT = mc.catalogo()['SL_GUARD_SOLO_LECTURA_FUERA_FMT']
+# el trozo fijo del aviso, entre la clave y la entrada: para decir que NO esta
+FUERA_TROZO = FUERA_FMT.split('%s')[1]
+
 ini = [
     '[Workspace.Local]', 'Token=local-lr', 'Roots=%s' % JAIL,
     'ReadOnlyRoots=%s' % RAIZ_REF, 'VaultPath=%s' % RAIZ_VAULT, '',
@@ -173,6 +266,10 @@ for nombre, raiz in SIN_LETRA.items():
 for nombre, (clave, entrada) in PROTEGEN.items():
     ini += ['[Workspace.%s]' % nombre, 'Token=%s-lr' % nombre.lower(), 'Roots=%s' % JAIL2,
             '%s=%s' % (clave, entrada), '']
+for nombre, (raiz, lineas) in SOLO.items():
+    ini += ['[Workspace.%s]' % nombre, 'Token=%s-lr' % nombre.lower(), 'Roots=%s' % raiz] + lineas + ['']
+# sin token: la seccion se ignora entera (y se dice), de su ReadOnlyPaths nada
+ini += ['[Workspace.SoloSinToken]', 'Roots=%s' % JAIL2, 'ReadOnlyPaths=%s' % FUERA_RO, '']
 if NETDIR:
     ini += ['[Workspace.Red]', 'Token=red-lr', 'Roots=%s;%s' % (NETDIR, NET_FALTA), '']
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join(ini))
@@ -222,6 +319,34 @@ try:
     sts = {n: init('%s-lr' % n.lower()) for n in PROTEGEN}
     check('U4 una proteccion que no se carga CIERRA el workspace: 401 (referencia, solo lectura, vault, y sus comodines)',
           all(st == 401 for st in sts.values()), sts)
+    sts = {n: init('%s-lr' % n.lower()) for n in SOLO}
+    check('R1 (guarda) una entrada de ReadOnlyPaths fuera de las raices se carga: los %d workspaces atienden' % len(SOLO),
+          all(st == 200 for st in sts.values()), sts)
+    cf = mc.Http(PORT, 'solofuera-lr', t=120, respaldo_json=True)
+    cf.session('letras-red-solo-fuera')
+    t = mc.texto(cf.call_msg('delphi_list', {'root': FUERA_RO, 'dirs': True}, 120), True)
+    check('R1 (guarda) ...pero su agente no la lee: esta fuera (GUARD-002)',
+          mc.abre(t, 'SR_JAIL_FMT'), t[:200])
+    cl = mc.Http(PORT, 'local-lr', t=120, respaldo_json=True)
+    cl.session('letras-red-local')
+    t = mc.texto(cl.call_msg('delphi_delete', {'path': FUERA_RO}, 120), True)
+    check('R1 (guarda) ...y se CARGA: otro workspace cuya raiz la contiene no la borra (un lugar que no se toca)',
+          (mc.abre(t, 'SR_MUDANZA_PROTEGIDA_FMT') or mc.abre(t, 'SR_BORRADO_DENEGADO_FMT'))
+          and os.path.isdir(FUERA_RO), t[:300])
+    ce = mc.Http(PORT, 'soloencima-lr', t=120, respaldo_json=True)
+    ce.session('letras-red-solo-encima')
+    fe = os.path.join(JAIL2, 'dentro', 'escrito-encima.txt')
+    t = mc.texto(ce.call_msg('delphi_textedit', {'path': fe, 'create': True, 'content': 'x\n'}, 120), True)
+    check('R3 (guarda) una entrada que CONTIENE la raiz la deja entera de solo lectura: no es de fuera',
+          mc.abre(t, 'SR_READONLY_PATH_FMT') and not os.path.exists(fe), t[:200])
+    if HAY_ENLACES:
+        cx = mc.Http(PORT, 'soloencimatexto-lr', t=120, respaldo_json=True)
+        cx.session('letras-red-solo-encima-texto')
+        fx = os.path.join(CAJA_RAIZ, 'escrito-encima-texto.txt')
+        t = mc.texto(cx.call_msg('delphi_textedit', {'path': fx, 'create': True, 'content': 'x\n'}, 120), True)
+        check('R2 (guarda) la que contiene la raiz solo por el texto (un junction a otro sitio) NO la protege: '
+              'la escritura pasa, los escritores juzgan la ruta real',
+              not mc.fallo(t) and os.path.exists(os.path.join(JAIL2, 'escrito-encima-texto.txt')), t[:200])
 finally:
     proc.kill()
 
@@ -264,6 +389,36 @@ check('U3 ...y el arranque avisa de la entrada de Roots que no cargo, sin cerrar
 faltan = [n for n, (clave, entrada) in PROTEGEN.items()
           if not avisa_de(AVISOS, '[Workspace.%s] %s=' % (n, clave), entrada, 'NOBODY')]
 check('U4 ...y el aviso dice la clave, la entrada y que no admite a nadie', not faltan, faltan)
+check('R2 el arranque AVISA de la entrada de ReadOnlyPaths fuera de las raices: la clave, la entrada y ReadOnlyRoots',
+      any(FUERA_FMT % ('[Workspace.SoloFuera] ReadOnlyPaths=', FUERA_RO, 'ReadOnlyRoots') in l for l in AVISOS),
+      AVISOS)
+check('R2 ...y una unidad entera sale con su barra (%s:\\, no %s:)' % (FALTA, FALTA),
+      any(FUERA_FMT % ('[Workspace.SoloUnidad] ReadOnlyPaths=', FALTA + ':\\', 'ReadOnlyRoots') in l
+          for l in AVISOS), AVISOS)
+rel = [l for l in AVISOS if '[Workspace.SoloRelFuera]' in l and FUERA_TROZO in l]
+check('R2 ...y la relativa que sale al mismo sitio desde dos raices, UNA vez',
+      len(rel) == 1 and COMUN_RO in rel[0], rel)
+if HAY_ENLACES:
+    check('R2 ...y la que esta en la raiz por el texto y sale por un junction: la jaula mide la ruta real',
+          any(FUERA_FMT % ('[Workspace.SoloEnlaceFuera] ReadOnlyPaths=', ENLACE_FUERA, 'ReadOnlyRoots') in l
+              for l in AVISOS), AVISOS)
+    check('R2 ...y la que contiene la raiz solo por el texto: no protege nada (medido arriba)',
+          any(FUERA_FMT % ('[Workspace.SoloEncimaTexto] ReadOnlyPaths=', CAJA, 'ReadOnlyRoots') in l
+              for l in AVISOS), AVISOS)
+else:
+    print('NOTA R2/R3: no se pudo crear un junction aqui: no se miden las entradas por un junction')
+check('R2 (guarda) de una seccion sin token, que se ignora entera, no se dice nada (y la seccion se leyo)',
+      not any('[Workspace.SoloSinToken]' in l and FUERA_TROZO in l for l in AVISOS)
+      and any('SoloSinToken' in l for l in AVISOS), AVISOS)
+dichos = [n for n in SOLO if n not in SE_AVISAN
+          and any('[Workspace.%s]' % n in l and FUERA_TROZO in l for l in AVISOS)]
+check('R3 (guarda) de las que caen dentro no se dice nada: absoluta, relativa, en una referencia propia, la que contiene la raiz%s%s'
+      % (', en 8.3' if HAY_CORTO else '',
+         ' y por la ruta real de una raiz que es un junction' if HAY_ENLACES else ''),
+      not dichos, dichos)
+if not HAY_CORTO:
+    print('NOTA R3: este volumen no da un nombre 8.3 distinto para %s: no se mide la entrada escrita en 8.3'
+          % os.path.join(JAIL2, 'dentro'))
 if NETDIR:
     de_red = [l for l in lineas if NETDIR[0].upper() + ':' in l]
     check('L6 una raiz en una unidad de red conectada: el arranque dice que se entra',
@@ -371,5 +526,15 @@ check('U8 ...ni unas DELPHI_MCP_ROOTS de las que no cargo ninguna (se le negaba 
 t, _ = local({'DELPHI_MCP_ROOTS': UNC_ENTORNO}, 'lr-raices-sin-token', JAIL2)
 check('U8 (control) ...y sin token, esas raices cierran el modo local como siempre (WS-004)',
       mc.abre(t, 'SR_ROOTS_INVALID'), t[:200])
+t, av = local({'DELPHI_MCP_ROOTS': JAIL2, 'DELPHI_MCP_READONLY_PATHS': FUERA_RO}, 'lr-ro-fuera', JAIL2)
+check('R4 una DELPHI_MCP_READONLY_PATHS fuera de DELPHI_MCP_ROOTS se avisa igual, con la clave del entorno, y no cierra nada',
+      any(FUERA_FMT % ('DELPHI_MCP_READONLY_PATHS', FUERA_RO, 'DELPHI_MCP_READONLY_ROOTS') in l for l in av)
+      and 'dentro' in t and not mc.fallo(t), '%s | %s' % (t[:200], av))
+t, av = local({'DELPHI_MCP_READONLY_PATHS': FUERA_RO}, 'lr-ro-sin-raices', JAIL2)
+# (control: los avisos de ese proceso SI se leyeron - el del ini sale en los dos)
+check('R4 (guarda) ...y sin raices no hay fuera: el modo local de confianza no dice nada',
+      not any('DELPHI_MCP_READONLY_PATHS' in l and FUERA_TROZO in l for l in av)
+      and any('[Workspace.SoloFuera]' in l and FUERA_TROZO in l for l in av)
+      and 'dentro' in t and not mc.fallo(t), '%s | %s' % (t[:200], av))
 
 mc.fin('letras de red battery')
