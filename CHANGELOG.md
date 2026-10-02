@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.10.1] - 2026-10-02
+
+The description of `delphi_rename_symbol` says what 1.10.0 does: it renames code only, never a comment.
+
+### Fixed
+
+- **`delphi_rename_symbol` described the rule 1.10.0 retired.** Since
+  1.10.0 a rename rewrites code only - a comment keeps the old name, also
+  on the line of an occurrence - but the tool's description still said
+  that "mentions in comments are renamed only on the lines that also carry
+  a real occurrence", the note of an applied rename (`RENAME-004`) said
+  that a mention "on ANOTHER line" keeps the old name, and `docs/TOOLS.md`
+  said both. An agent reads the description as the contract. Found by
+  testing 1.10.0 on the Delphi 13.2 machine: the rename did the right thing
+  and its own answer described the old one. The collision refusal
+  (`RENAME-021`) now says too that it counts the code of the files, not
+  their comments or strings.
+
+`test_rename` checks that the description and the note no longer promise a
+comment renamed on any line - red against 1.10.0, measured before the fix.
+94 batteries, 3,125 checks, 0 failures.
+
 ## [1.10.0] - 2026-10-02
 
 `delphi_docs`: the RAD Studio help installed with Delphi - what the IDE opens with F1 - searched and read by an agent in small pieces.

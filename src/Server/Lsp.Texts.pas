@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.10.0';
+  SERVER_VERSION = '1.10.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -3217,9 +3217,9 @@ const
     'inside a string literal (FindComponent/RTTI/StyleLookup by name), a ' +
     'symbol whose definition lives outside the workspace (RTL/components), ' +
     'or a collision with the new name = applicable=false with the reasons, ' +
-    'and apply writes nothing. Mentions in comments are renamed only on the ' +
-    'lines that also carry a real occurrence; the rest are reported as ' +
-    'warnings for you to look at. Rebuild afterwards.';
+    'and apply writes nothing. It renames CODE only: a mention in a comment ' +
+    'keeps the old name, on the line of an occurrence too, and is reported ' +
+    'as a warning for you to look at. Rebuild afterwards.';
 
   SP_RENAME_PATH =
     'The .pas/.dpr with the symbol (any occurrence works)';
@@ -3269,7 +3269,7 @@ const
     'changeset engine (one edit per line, all or nothing, a backup of ' +
     'each file in __delphi-patch - "commit" has the detail). Recompile ' +
     '(delphi_build) to close the cycle, and review the "warnings": a ' +
-    'mention in a comment on ANOTHER line keeps the old name.';
+    'mention in a comment keeps the old name (only code is renamed).';
 
   SR_RENAME_BAD_IDENT_FMT =
     '[RENAME-013 INVALID_PARAM] "%s" is not a valid Delphi identifier (a ' +
@@ -3315,7 +3315,8 @@ const
 
   SR_RENAME_COLLISION_FMT =
     '[RENAME-021 DENIED] The new name "%s" already appears %d times in ' +
-    'the affected files: possible collision or homonym.';
+    'the code of the affected files (comments and strings do not count): ' +
+    'possible collision or homonym.';
 
   SN_RENAME_DESIGNER_HIT_FMT =
     '[RENAME-005] %d occurrences in %s';

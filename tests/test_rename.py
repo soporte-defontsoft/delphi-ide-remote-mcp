@@ -329,6 +329,16 @@ uc = open(UCOM, encoding='utf-8-sig').read()
 check('apply: el comentario de la linea de una llamada se queda como estaba',
       j.get('applied') is True and '  Bar(1); // see Foo\n' in uc.replace('\r\n', '\n')
       and uc.count('Bar(A: Integer);') == 2, uc)
+# ...y la tool lo DICE asi: su descripcion y la nota del apply contaban la regla
+# de antes (1.10.1: hallado probando la 1.10.0 en la VM de Delphi 13.2, el
+# rename hacia lo nuevo y su propia respuesta describia lo viejo). Las frases
+# retiradas, por su texto: es el contrato que lee un agente
+_tl = srv.request('tools/list') or {}
+_desc = next((x.get('description', '') for x in (_tl.get('result') or {}).get('tools', [])
+              if x.get('name') == 'delphi_rename_symbol'), '')
+check('la descripcion y la nota no prometen renombrar un comentario en ninguna linea',
+      bool(_desc) and 'renamed only on the' not in _desc and 'on ANOTHER line' not in j.get('note', '')
+      and mc.abre(j.get('note', ''), 'SN_RENAME_APPLIED_NOTE'), (_desc[-200:], j.get('note')))
 
 srv.mata()
 mc.fin('rename battery')
