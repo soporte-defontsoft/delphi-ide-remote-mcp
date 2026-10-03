@@ -793,8 +793,10 @@ need ourselves; issues and ideas are welcome and answered as time allows.
 ## Credits
 
 Designed and directed by **David Fontanet ([Defontsoft](https://www.defontsoft.com))**.
-Implemented collaboratively with **Claude Code** (Anthropic); every commit keeps its AI
-co-author tag.
+Implemented collaboratively with **Claude Code** (Anthropic) and **Codex** (OpenAI); each
+commit names the AI that co-wrote it, in its co-author tag or its message. Codex wrote the
+1.11.3 hardening of the launch, test-container, `delphi_git` and build jails, which Claude
+Opus 4.8 then reviewed independently.
 
 The safe-editing tool ports an internally battle-tested design measured over 30+ test
 rounds against several LLMs.

@@ -9,7 +9,8 @@ the MCP `initialize` response (`serverInfo.version`).
 ## [1.11.3] - 2026-10-03
 
 Hardening of the process-launch, `delphi_test` container, `delphi_git` and
-build jails, with an independent security review before the tag.
+build jails, with an independent security review before the tag. The hardening
+was written by **Codex** (OpenAI) and reviewed independently by Claude Opus 4.8.
 
 ### Fixed
 
