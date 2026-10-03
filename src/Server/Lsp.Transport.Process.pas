@@ -86,7 +86,8 @@ implementation
 uses
   Lsp.Sandbox, // EnterSpawn / LeaveSpawn: one handle-inheriting launch at a time
   Lsp.ErrorMode, // NoErrorDialogs
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.ProcessLaunch;
 
 const
   READ_CHUNK = 65536;
@@ -166,8 +167,8 @@ begin
   CmdLine := '"' + FExePath + '"';
   UniqueString(CmdLine); // CreateProcessW may modify the buffer
 
-  if not CreateProcess(nil, PChar(CmdLine), nil, nil, True,
-    CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, nil, SI, FProcInfo) then
+  if not CreateProcessConHandles(CmdLine, nil,
+    CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, SI, FProcInfo) then
   begin
     CloseHandle(ChildStdInRead);
     CloseHandle(ChildStdOutWrite);

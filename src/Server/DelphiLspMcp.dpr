@@ -76,6 +76,7 @@ uses
   Lsp.Session in 'Lsp.Session.pas',
   Lsp.References in 'Lsp.References.pas',
   Lsp.Sandbox in 'Lsp.Sandbox.pas',
+  Lsp.ProcessLaunch in 'Lsp.ProcessLaunch.pas',
   Lsp.BuildRunner in 'Lsp.BuildRunner.pas',
   Lsp.Patch in 'Lsp.Patch.pas',
   Lsp.TextEdit in 'Lsp.TextEdit.pas',

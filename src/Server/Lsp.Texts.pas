@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.11.2';
+  SERVER_VERSION = '1.11.3';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -6075,6 +6075,18 @@ const
     'running process keeps the PATH it was started with). Everything ' +
     'that is not delphi_git works as usual.';
 
+  { El repo no puede activar programas ni esconderlos en includes locales. }
+  SR_GIT_CONFIG_PROGRAMA_FMT =
+    '[GIT-051 DENIED] Local repository configuration "%s" can load another ' +
+    'configuration or run a program. delphi_git does not use repository ' +
+    'includes or custom repository programs. Remove this local setting before using ' +
+    'delphi_git; the setting value is deliberately not included here.';
+
+  SR_GIT_CONFIG_NO_VERIFICABLE =
+    '[GIT-052 DENIED] The local repository configuration could not be ' +
+    'verified. No requested git operation was run. Repair the repository ' +
+    'configuration before repeating the call.';
+
   SL_GIT_NETWORK_FMT =
     'delphi_git: NETWORK %s repo=%s %s';
 
@@ -8207,6 +8219,9 @@ const
     'the project is VCL and VCL only exists on Windows (Vcl.Forms does ' +
     'not compile for %s). For cross-platform with a UI use FMX; without ' +
     'a UI, a console app.';
+
+  SF_CFG_HAZARD_PROPERTY_FUNCTION =
+    'a static MSBuild property function (may read files or load code during evaluation)';
 
   SF_CFG_HAZARD_TASK_FMT =
     'a <%s> task (executes a program or writes files during build)';

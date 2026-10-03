@@ -902,7 +902,11 @@ end;
   la 1.7.7). }
 function GitLinea(const ARepo, AFijado, AResto: string): string;
 begin
-  Result := 'git.exe -C ' + EnComillas(ARepo) + AFijado + ' ' + AResto;
+  // Nunca ejecutar los hooks ni el monitor de un repo del workspace.
+  // El directorio del servidor no admite escrituras de los clientes.
+  Result := 'git.exe -c core.fsmonitor=false -c core.hooksPath=' +
+    EnComillas(ServerTempDir('git-hooks-off')) + ' -C ' +
+    EnComillas(ARepo) + AFijado + ' ' + AResto;
 end;
 
 { git, LANZADO por un solo sitio: la linea del compositor por el lanzador de
@@ -928,6 +932,62 @@ begin
       if E.ErrorCode = ERROR_FILE_NOT_FOUND then
         raise Exception.Create(MsgFmt(SR_GIT_NO_HAY_GIT_FMT, [E.ErrorCode]));
       raise;
+    end;
+  end;
+end;
+
+{ La configuracion LOCAL tambien manda programas aunque args sea limpio.
+  Se lee sin includes: una inclusion del repo puede sacar la lectura de la
+  jaula y esconder un filtro. La configuracion del servidor sigue siendo suya. }
+
+function ConfiguracionGitDenegada(const ARepo, AFijado: string): string;
+var
+  Salida, Registro, Clave: string;
+  Registros: TArray<string>;
+  Codigo: Cardinal;
+  P: Integer;
+begin
+  Result := '';
+  // Git resuelve los ficheros opcionales y dice el ambito de cada registro.
+  // --worktree --list falla con varias copias o si falta config.worktree.
+  Salida := GitCorre(ARepo, AFijado,
+    'config --no-includes --null --list --show-scope', 60000, Codigo);
+  if Codigo <> 0 then
+    Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+  Registros := Salida.Split([#0], TStringSplitOptions.ExcludeEmpty);
+  if Odd(Length(Registros)) then
+    Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+  for var I := 0 to Length(Registros) div 2 - 1 do
+  begin
+    if IndexStr(Registros[I * 2],
+      ['system', 'global', 'local', 'worktree', 'command']) < 0 then
+      Exit(MsgText(SR_GIT_CONFIG_NO_VERIFICABLE));
+    if IndexStr(Registros[I * 2], ['local', 'worktree']) >= 0 then
+    begin
+      Registro := Registros[I * 2 + 1];
+      P := Pos(#10, Registro);
+      // Una clave sin valor es un booleano true valido en la sintaxis de git.
+      if P = 0 then
+        Clave := LowerCase(Registro)
+      else
+        Clave := LowerCase(Copy(Registro, 1, P - 1));
+      // El valor no sale en el rechazo: podria llevar credenciales.
+      if (Clave = 'include.path') or
+         (Clave.StartsWith('includeif.') and Clave.EndsWith('.path')) or
+         (Clave.StartsWith('filter.') and
+           (Clave.EndsWith('.clean') or Clave.EndsWith('.smudge') or
+            Clave.EndsWith('.process'))) or
+         (Clave = 'diff.external') or
+         (Clave.StartsWith('diff.') and
+           (Clave.EndsWith('.command') or Clave.EndsWith('.textconv'))) or
+         (Clave.StartsWith('gpg.') and Clave.EndsWith('.program')) or
+         (Clave = 'core.sshcommand') or
+         (Clave = 'credential.helper') or
+         (Clave.StartsWith('credential.') and Clave.EndsWith('.helper')) or
+         (Clave = 'core.gitproxy') or
+         (Clave.StartsWith('remote.') and
+           (Clave.EndsWith('.uploadpack') or Clave.EndsWith('.receivepack'))) then
+        Exit(MsgFmt(SR_GIT_CONFIG_PROGRAMA_FMT, [Clave]));
     end;
   end;
 end;
@@ -1470,6 +1530,9 @@ begin
       // Con --bare contesta lo que contesta sin fijar: log y branch van, y
       // lo que necesita un arbol dice que no lo tiene.
       Fijado := Fijado + ' --bare';
+    Result := ConfiguracionGitDenegada(Repo, Fijado);
+    if Result <> '' then
+      Exit;
   end;
   if Cmd = 'status' then
     GitArgs := 'status --porcelain=v1 -b ' + ArgvSeguro(Params.Args)
@@ -1500,8 +1563,7 @@ begin
     // jaula; se borra siempre (mas abajo), pero mientras existe no tiene por
     // que estar donde lo vea cualquiera. Por el nombrador (Lsp.Guard).
     CrearCarpeta(ServerTempDir('git'));
-    MsgFile := TPath.Combine(ServerTempDir('git'),
-      'msg-' + TGUID.NewGuid.ToString + '.txt');
+    MsgFile := NombreDeMensajeGit;
     TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
     GitArgs := Format('commit -F "%s" %s', [MsgFile, ArgvSeguro(Params.Args)]);
   end
@@ -1692,8 +1754,7 @@ begin
       // -F makes it annotated (like -m) and keeps quotes byte-exact;
       // args = tag name (and options)
       CrearCarpeta(ServerTempDir('git'));
-      MsgFile := TPath.Combine(ServerTempDir('git'),
-        'msg-' + TGUID.NewGuid.ToString + '.txt');
+      MsgFile := NombreDeMensajeGit;
       TFile.WriteAllBytes(MsgFile, TEncoding.UTF8.GetBytes(Params.Message));
       GitArgs := Format('tag -F "%s" %s', [MsgFile, ArgvSeguro(Params.Args)]);
     end

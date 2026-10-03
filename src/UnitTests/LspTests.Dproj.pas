@@ -18,6 +18,12 @@ type
     [Test] procedure EventoDeBuildSeIgnoraSiSePide;
     [Test] procedure EventoVacioNoEsPeligro;
     [Test] procedure UnaTareaExecEsPeligroAunqueSeIgnorenEventos;
+    [Test] procedure ImportConComillasSimplesSeComprueba;
+    [Test] procedure ImportConEspaciosSeComprueba;
+    [Test] procedure ImportConComillasDoblesSeComprueba;
+    [Test] procedure ImportConEntidadesSeComprueba;
+    [Test] procedure DeployprojLocalSeComprueba;
+    [Test] procedure NombreParecidoAUserToolsSeComprueba;
   end;
 
   { UN escritor del texto de un elemento (XmlElemento) y sus lectores, que
@@ -35,7 +41,7 @@ type
 implementation
 
 uses
-  System.SysUtils,
+  System.SysUtils, System.IOUtils,
   Lsp.Dproj;
 
 const
@@ -141,6 +147,59 @@ begin
     '<Project><PropertyGroup><Profile_SysRoot>C:\R&amp;D\sysroot</Profile_SysRoot>' +
     '</PropertyGroup></Project>', 'Profile_sysroot'));
   Assert.AreEqual('', TagValue('<Project/>', 'Profile_sysroot'));
+end;
+
+procedure CompruebaImport(const AForma: string;
+  const AImportado: string = 'R&D.targets');
+var
+  Carpeta, Proyecto, Destino, Xml: string;
+begin
+  // Solo se analiza XML de una fixture propia; ninguna tarea se ejecuta.
+  Carpeta := TPath.Combine(ExtractFilePath(ParamStr(0)),
+    'import-' + TGUID.NewGuid.ToString);
+  TDirectory.CreateDirectory(Carpeta);
+  try
+    Proyecto := TPath.Combine(Carpeta, 'App.dproj');
+    Destino := TPath.Combine(Carpeta, AImportado);
+    Xml := CABECERA + Format(AForma, [XmlEscape(AImportado)]) + PIE;
+    TFile.WriteAllText(Destino, '<Project><Target Name="Fixture"><Message Text="fixture"/></Target></Project>');
+    Assert.AreEqual('', DprojBuildHazard(Xml, Proyecto, True), 'import local sin tareas peligrosas');
+    TFile.WriteAllText(Destino, '<Project><Target Name="Fixture"><Exec Command="fixture"/></Target></Project>');
+    Assert.AreNotEqual('', DprojBuildHazard(Xml, Proyecto, True), 'el import se lee con esta sintaxis');
+  finally
+    if TFile.Exists(Destino) then TFile.Delete(Destino);
+    TDirectory.Delete(Carpeta);
+  end;
+end;
+
+procedure TDprojHazardTests.ImportConComillasSimplesSeComprueba;
+begin
+  CompruebaImport('<Import Project=''%s''/>');
+end;
+
+procedure TDprojHazardTests.ImportConEspaciosSeComprueba;
+begin
+  CompruebaImport('<Import Project = "%s"/>');
+end;
+
+procedure TDprojHazardTests.ImportConComillasDoblesSeComprueba;
+begin
+  CompruebaImport('<Import Project="%s"/>');
+end;
+
+procedure TDprojHazardTests.ImportConEntidadesSeComprueba;
+begin
+  CompruebaImport('<Import Project'#9'='#9'"%s"/>');
+end;
+
+procedure TDprojHazardTests.DeployprojLocalSeComprueba;
+begin
+  CompruebaImport('<Import Project="%s"/>', 'fixture.deployproj');
+end;
+
+procedure TDprojHazardTests.NombreParecidoAUserToolsSeComprueba;
+begin
+  CompruebaImport('<Import Project="%s"/>', 'fixture-usertools.proj.targets');
 end;
 
 initialization

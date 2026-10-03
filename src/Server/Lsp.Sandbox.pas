@@ -34,6 +34,8 @@ type
   TContenedor = record
     Nombre: string;
     Sid: PSID;
+    // Handles prestados de esta ejecucion: no se cierran, solo se quita SU ACE.
+    Estacion, Escritorio: THandle;
   end;
   PContenedor = ^TContenedor;
 
@@ -95,7 +97,8 @@ uses
   System.Win.Registry,
   Lsp.Guard, // ServerDir y ClaveDeCarpeta: la marca de esta casa
   MCPServer.Logger,
-  Lsp.Texts;
+  Lsp.Texts,
+  Lsp.ProcessLaunch;
 
 var
   GSpawnLock: TObject;
@@ -116,22 +119,6 @@ const
   // en minusculas (medido 2-oct-2026; al borrarlo, la entrada se va)
   MAPPINGS_KEY = 'Software\Classes\Local Settings\Software\Microsoft\Windows\' +
     'CurrentVersion\AppContainer\Mappings';
-  PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES_ = $00020009;
-  PROC_THREAD_ATTRIBUTE_HANDLE_LIST_ = $00020002;
-  EXTENDED_STARTUPINFO_PRESENT_ = $00080000;
-
-type
-  TSecurityCapabilities = record
-    AppContainerSid: PSID;
-    Capabilities: Pointer; // ninguna: ni red ni nada
-    CapabilityCount: DWORD;
-    Reserved: DWORD;
-  end;
-
-  TStartupInfoExW_ = record
-    StartupInfo: TStartupInfo;
-    lpAttributeList: Pointer;
-  end;
 
 function CreateAppContainerProfile(pszAppContainerName, pszDisplayName,
   pszDescription: PWideChar; pCapabilities: Pointer; dwCapabilityCount: DWORD;
@@ -140,19 +127,6 @@ function CreateAppContainerProfile(pszAppContainerName, pszDisplayName,
 function DeleteAppContainerProfile(pszAppContainerName: PWideChar): HRESULT;
   stdcall; external 'userenv.dll';
 
-// Propias y no las de Winapi.Windows: alli lpReturnSize es un "var", y el API
-// lo quiere NULL (reservado)
-function InitializeProcThreadAttributeList_(lpAttributeList: Pointer;
-  dwAttributeCount, dwFlags: DWORD; var lpSize: NativeUInt): BOOL; stdcall;
-  external kernel32 name 'InitializeProcThreadAttributeList';
-
-function UpdateProcThreadAttribute_(lpAttributeList: Pointer; dwFlags: DWORD;
-  Attribute: NativeUInt; lpValue: Pointer; cbSize: NativeUInt;
-  lpPreviousValue, lpReturnSize: Pointer): BOOL; stdcall;
-  external kernel32 name 'UpdateProcThreadAttribute';
-
-procedure DeleteProcThreadAttributeList_(lpAttributeList: Pointer); stdcall;
-  external kernel32 name 'DeleteProcThreadAttributeList';
 
 function ConvertStringSecurityDescriptorToSecurityDescriptorW(
   StringSD: PWideChar; Revision: DWORD; out SD: PSECURITY_DESCRIPTOR;
@@ -279,6 +253,8 @@ var
   G: string;
 begin
   AC.Sid := nil;
+  AC.Estacion := GetProcessWindowStation;
+  AC.Escritorio := GetThreadDesktop(GetCurrentThreadId);
   // 'DelphiLspMcp.Test.' + 8 + '.' + 32 = 59: el limite de Windows es 64
   G := TGUID.NewGuid.ToString.Replace('{', '').Replace('}', '').Replace('-', '');
   AC.Nombre := PrefijoDeEstaCasa + LowerCase(G);
@@ -291,13 +267,22 @@ begin
   Result := DWORD(Hr);
 end;
 
+function PermisoDeVentanas(AObj: THandle; ASid: PSID; AMascara: DWORD;
+  const ATipo: string): DWORD; forward;
+
 procedure BorraContenedor(var AC: TContenedor);
 var
   Hr: HRESULT;
 begin
   if AC.Sid <> nil then
+  begin
+    PermisoDeVentanas(AC.Escritorio, AC.Sid, 0, 'desktop');
+    PermisoDeVentanas(AC.Estacion, AC.Sid, 0, 'window station');
     FreeSid(AC.Sid);
+  end;
   AC.Sid := nil;
+  AC.Estacion := 0;
+  AC.Escritorio := 0;
   if AC.Nombre <> '' then
   begin
     Hr := DeleteAppContainerProfile(PChar(AC.Nombre));
@@ -328,45 +313,14 @@ begin
     '(A;OICI;0x1301bf;;;' + Suyo + ')', DACL_SECURITY_INFORMATION);
 end;
 
-{ Los handles que el hijo debe heredar: los stdhandles del arranque y nada
-  mas. Con bInheritHandles=True, CreateProcess pasa al hijo TODO handle
-  heredable del servidor (el socket de escucha de Indy entre ellos) salvo que
-  se le de ESTA lista; la jaula hereda solo su tuberia (revision 1.11.0). }
-function HandlesDeArranque(const ASI: TStartupInfo): TArray<THandle>;
 
-  function YaEsta(const A: TArray<THandle>; H: THandle): Boolean;
-  var
-    X: THandle;
-  begin
-    Result := False;
-    for X in A do
-      if X = H then
-        Exit(True);
-  end;
-
-  procedure Anade(H: THandle);
-  begin
-    if (H <> 0) and (H <> INVALID_HANDLE_VALUE) and not YaEsta(Result, H) then
-      Result := Result + [H];
-  end;
-
-begin
-  Result := [];
-  if (ASI.dwFlags and STARTF_USESTDHANDLES) = 0 then
-    Exit;
-  Anade(ASI.hStdInput);
-  Anade(ASI.hStdOutput);
-  Anade(ASI.hStdError);
-end;
-
-{ Concede a los AppContainers (ALL APPLICATION PACKAGES, S-1-15-2-1) acceso al
-  objeto de ventanas AObj (una estacion o un escritorio), si no lo tiene ya.
-  Un proceso de AppContainer no pasa del init de user32 si su estacion Y su
-  escritorio no le conceden acceso (0xC0000142): WinSta0\Default lo trae, pero
-  la estacion de un SERVICIO (sesion 0) no, y por eso delphi_test fallaba en
-  produccion (medido 3-oct-2026, sonda_winsta: cambiando SOLO esa ACE se
-  encendia y apagaba el 0xC0000142). Idempotente: una sola ACE, la misma que
-  trae el escritorio interactivo. 0 o el error de Windows. }
+{ Una ACE para el SID de ESTA ejecucion, retirada por BorraContenedor.
+  La estacion y el escritorio deben admitirlo antes de iniciar user32
+  (0xC0000142 del servicio, medido 3-oct-2026). El permiso del escritorio
+  aparece solo durante el DUnitX: su SID, 0x81, y al terminar las ACE de antes.
+  Los permisos de Windows ya presentes se conservan. Mascara cero retira
+  solo el SID de esta ejecucion. El lock serializa las lecturas y escrituras
+  de la DACL: dos tests vivos no pueden perder la ACE del otro. }
 const
   ACL_REVISION_ = 2;
   ACCESS_ALLOWED_ACE_TYPE_ = 0;
@@ -386,21 +340,28 @@ type
     Mask: DWORD;
     SidStart: DWORD;
   end;
-function ConcedeAPaquetes(AObj: THandle): DWORD;
+function ActualizaPermisoDeVentanas(AObj: THandle; ASid: PSID;
+  AMascara: DWORD): DWORD;
 var
   Si, Nec, Bytes: DWORD;
   SdViejo, Buf: TBytes;
   PSd: PSECURITY_DESCRIPTOR;
   Hay, PorDefecto: BOOL;
   DaclVieja, DaclNueva: PACL;
-  Ac: PSID;
+  Paquetes: PSID;
   I: Integer;
   PAce: Pointer;
   Nuevo: TSecurityDescriptor;
+  Encontrada: Boolean;
 begin
+  if (AObj = 0) or (ASid = nil) then
+    Exit(ERROR_INVALID_PARAMETER);
   Si := DACL_SECURITY_INFORMATION;
-  if not ConvertStringSidToSidW('S-1-15-2-1', Ac) then
+  Paquetes := nil;
+  // Un permiso de Windows ya presente se conserva; nunca lo ampliamos.
+  if (AMascara <> 0) and not ConvertStringSidToSidW('S-1-15-2-1', Paquetes) then
     Exit(GetLastError);
+  EnterSpawn;
   try
     Nec := 0;
     GetUserObjectSecurity_(AObj, Si, nil, 0, Nec);
@@ -412,27 +373,48 @@ begin
     PSd := @SdViejo[0];
     if not GetSecurityDescriptorDacl(PSd, Hay, DaclVieja, PorDefecto) then
       Exit(GetLastError);
-    // Sin DACL = acceso para todos: el contenedor ya entra, nada que arreglar
-    // (y poner una DACL propia CERRARIA el objeto a los demas).
     if (not Hay) or (DaclVieja = nil) then
       Exit(0);
-    // Si ya esta la ACE de ALL APPLICATION PACKAGES, listo (idempotente)
+    Encontrada := False;
     for I := 0 to Integer(DaclVieja^.AceCount) - 1 do
-      if GetAce(DaclVieja^, I, PAce) then
-        if (PCabeceraAce(PAce)^.AceType = ACCESS_ALLOWED_ACE_TYPE_) and
-           EqualSid(PSID(@PAcePermiso(PAce)^.SidStart), Ac) then
+    begin
+      if not GetAce(DaclVieja^, I, PAce) then
+        Exit(GetLastError);
+      if PCabeceraAce(PAce)^.AceType <> ACCESS_ALLOWED_ACE_TYPE_ then
+        Continue;
+      if EqualSid(PSID(@PAcePermiso(PAce)^.SidStart), ASid) then
+        Encontrada := True;
+      if (Paquetes <> nil) and EqualSid(
+        PSID(@PAcePermiso(PAce)^.SidStart), Paquetes) then
+        // Una ACE parcial no sustituye a los derechos necesarios del objeto.
+        if (PAcePermiso(PAce)^.Mask and AMascara) = AMascara then
           Exit(0);
-    // DACL nueva = la vieja entera + una ACE de permiso para AC
-    Bytes := DaclVieja^.AclSize + SizeOf(TAcePermiso) + GetLengthSid(Ac) -
-      SizeOf(DWORD);
+    end;
+    if ((AMascara <> 0) and Encontrada) or
+       ((AMascara = 0) and not Encontrada) then
+      Exit(0);
+    Bytes := DaclVieja^.AclSize;
+    if AMascara <> 0 then
+      Inc(Bytes, SizeOf(TAcePermiso) + GetLengthSid(ASid) - SizeOf(DWORD));
     SetLength(Buf, Bytes);
     DaclNueva := PACL(@Buf[0]);
     if not InitializeAcl(DaclNueva^, Bytes, ACL_REVISION_) then
       Exit(GetLastError);
     for I := 0 to Integer(DaclVieja^.AceCount) - 1 do
-      if GetAce(DaclVieja^, I, PAce) then
-        AddAce(DaclNueva^, ACL_REVISION_, MAXDWORD, PAce, PCabeceraAce(PAce)^.AceSize);
-    if not AddAccessAllowedAce(DaclNueva^, ACL_REVISION_, GENERIC_ALL, Ac) then
+    begin
+      if not GetAce(DaclVieja^, I, PAce) then
+        Exit(GetLastError);
+      // Mascara cero retira solo las ACE de permiso de ESTE contenedor.
+      if (AMascara = 0) and
+         (PCabeceraAce(PAce)^.AceType = ACCESS_ALLOWED_ACE_TYPE_) and
+         EqualSid(PSID(@PAcePermiso(PAce)^.SidStart), ASid) then
+        Continue;
+      if not AddAce(DaclNueva^, ACL_REVISION_, MAXDWORD, PAce,
+        PCabeceraAce(PAce)^.AceSize) then
+        Exit(GetLastError);
+    end;
+    if (AMascara <> 0) and not AddAccessAllowedAce(DaclNueva^,
+      ACL_REVISION_, AMascara, ASid) then
       Exit(GetLastError);
     if not InitializeSecurityDescriptor(@Nuevo, SECURITY_DESCRIPTOR_REVISION) then
       Exit(GetLastError);
@@ -442,23 +424,30 @@ begin
       Exit(GetLastError);
     Result := 0;
   finally
-    LocalFree(HLOCAL(Ac));
+    LeaveSpawn;
+    if Paquetes <> nil then
+      LocalFree(HLOCAL(Paquetes));
   end;
+end;
+
+function PermisoDeVentanas(AObj: THandle; ASid: PSID; AMascara: DWORD;
+  const ATipo: string): DWORD;
+begin
+  Result := ActualizaPermisoDeVentanas(AObj, ASid, AMascara);
+  if Result <> 0 then
+    try
+      TLogger.Warning(MsgFmt(SL_TEST_ESTACION_FMT, [ATipo, Result]));
+    except
+      // Un fallo del log no sustituye al error de Windows.
+    end;
 end;
 
 function CreateProcessEnContenedor(const AC: TContenedor; const ACmdLine: string;
   AWorkDir: PChar; ACreateFlags: DWORD; const ASI: TStartupInfo;
   out API: TProcessInformation): Boolean;
 var
-  Caps: TSecurityCapabilities;
-  Tam: NativeUInt;
-  Lista: Pointer;
-  SIX: TStartupInfoExW_;
-  Cmd, Entorno: string;
+  Entorno: string;
   Err: DWORD;
-  H: TArray<THandle>;
-  NAttrs: DWORD;
-  Hereda: BOOL;
 begin
   Result := False;
   FillChar(API, SizeOf(API), 0);
@@ -467,59 +456,20 @@ begin
     SetLastError(ERROR_INVALID_SID);
     Exit;
   end;
-  FillChar(Caps, SizeOf(Caps), 0);
-  Caps.AppContainerSid := AC.Sid;
-  H := HandlesDeArranque(ASI);
-  Hereda := Length(H) > 0;
-  if Hereda then NAttrs := 2 else NAttrs := 1;
-  Tam := 0;
-  InitializeProcThreadAttributeList_(nil, NAttrs, 0, Tam);
-  GetMem(Lista, Tam);
-  try
-    if not InitializeProcThreadAttributeList_(Lista, NAttrs, 0, Tam) then
-      Exit;
-    try
-      if not UpdateProcThreadAttribute_(Lista, 0,
-        PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES_, @Caps, SizeOf(Caps),
-        nil, nil) then
-        Exit;
-      // SOLO la tuberia de salida se hereda: con bInheritHandles=True y sin
-      // esta lista el hijo heredaba TODO handle heredable del servidor
-      if Hereda and not UpdateProcThreadAttribute_(Lista, 0,
-        PROC_THREAD_ATTRIBUTE_HANDLE_LIST_, @H[0], Length(H) * SizeOf(THandle),
-        nil, nil) then
-        Exit;
-      // La jaula necesita que su estacion de ventanas Y su escritorio dejen
-      // entrar a los AppContainers o user32 no inicia (0xC0000142). Desde el
-      // servicio (sesion 0) no lo traen; se concede aqui, idempotente. Best-
-      // effort con aviso: si no se puede, el CreateProcess fallara y se dira.
-      Err := ConcedeAPaquetes(GetProcessWindowStation);
-      if Err <> 0 then
-        try TLogger.Warning(MsgFmt(SL_TEST_ESTACION_FMT, ['window station', Err])); except end;
-      Err := ConcedeAPaquetes(GetThreadDesktop(GetCurrentThreadId));
-      if Err <> 0 then
-        try TLogger.Warning(MsgFmt(SL_TEST_ESTACION_FMT, ['desktop', Err])); except end;
-      FillChar(SIX, SizeOf(SIX), 0);
-      SIX.StartupInfo := ASI;
-      SIX.StartupInfo.cb := SizeOf(SIX);
-      SIX.lpAttributeList := Lista;
-      Cmd := ACmdLine;
-      UniqueString(Cmd);
-      Entorno := EntornoSinConfiguracion;
-      Result := CreateProcess(nil, PChar(Cmd), nil, nil, Hereda,
-        ACreateFlags or EXTENDED_STARTUPINFO_PRESENT_ or
-        CREATE_UNICODE_ENVIRONMENT, PChar(Entorno), AWorkDir,
-        PStartupInfo(@SIX)^, API);
-    finally
-      Err := GetLastError;
-      DeleteProcThreadAttributeList_(Lista);
-      SetLastError(Err);
-    end;
-  finally
-    Err := GetLastError;
-    FreeMem(Lista);
+  // Minimo medido en estacion privada: leer seguridad y usar atomos globales.
+  Err := PermisoDeVentanas(AC.Estacion, AC.Sid,
+    READ_CONTROL or WINSTA_ACCESSGLOBALATOMS, 'window station');
+  if Err = 0 then
+    Err := PermisoDeVentanas(AC.Escritorio, AC.Sid,
+      DESKTOP_READOBJECTS or DESKTOP_WRITEOBJECTS, 'desktop');
+  if Err <> 0 then
+  begin
     SetLastError(Err);
+    Exit;
   end;
+  Entorno := EntornoSinConfiguracion;
+  Result := CreateProcessConHandles(ACmdLine, AWorkDir,
+    ACreateFlags or CREATE_UNICODE_ENVIRONMENT, PChar(Entorno), ASI, API, AC.Sid);
 end;
 
 procedure PurgaContenedoresHuerfanos;

@@ -90,7 +90,8 @@ uses
   Lsp.Texts,
   Lsp.ErrorMode,
   Lsp.PackageMap,
-  Lsp.ProjectUnits;
+  Lsp.ProjectUnits,
+  Lsp.ProcessLaunch;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -358,8 +359,8 @@ begin
     Launched := CreateProcessEnContenedor(AContenedor^, Cmd, WorkDirPtr,
       CREATE_NO_WINDOW or CREATE_SUSPENDED, SI, PI)
   else
-    Launched := CreateProcess(nil, PChar(Cmd), nil, nil, True,
-      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, WorkDirPtr, SI, PI);
+    Launched := CreateProcessConHandles(Cmd, WorkDirPtr,
+      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, SI, PI);
   if not Launched then
   begin
     // What Windows said, read before anything else is called, and CARRIED

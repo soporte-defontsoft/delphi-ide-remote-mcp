@@ -1112,6 +1112,7 @@ function TrocearArgs(const AArgs: string): TArray<string>;
   COMPONE una linea de git la usa; quien la LEE, TrocearArgs. Vivia en
   Mcp.Tools.Workspace y volvio aqui, con su inversa, el 26-sep-2026. }
 function EnComillas(const AValor: string): string;
+function NombreDeMensajeGit: string;
 
 { La mitad de CONSULTA de delphi_git: lo que una credencial de solo lectura
   y un proyecto de REFERENCIA (ReadOnlyRoots) pueden ejecutar. UNA lista:
@@ -3394,6 +3395,13 @@ begin
   Result := Result + '"';
 end;
 
+{ UN nombrador del fichero -F de git, junto a su filtro de argumentos. }
+function NombreDeMensajeGit: string;
+begin
+  Result := TPath.Combine(ServerTempDir('git'),
+    'msg-' + TGUID.NewGuid.ToString + '.txt');
+end;
+
 { Filtro de opciones peligrosas de git en la UNICA puerta: git tiene opciones
   que escriben ficheros, leen rutas FUERA del repo o ejecutan un programa - una
   fuga de la jaula usable hasta por un cliente de solo lectura (medido: `diff
@@ -3404,6 +3412,45 @@ end;
   cada token se juzga TAL COMO lo recibira git. Aqui, en la puerta, para que
   valga en AMBOS niveles de acceso (el -C <repo> no frena un --output absoluto).
   '' = limpio. }
+
+{ Las opciones que traen ficheros o configuracion ajena al filtro. Git admite
+  prefijos largos y grupos cortos (-aF, -qF, -nc): se juzgan las dos formas. }
+function OpcionDeFicheroGit(const ATok: string): Boolean;
+var
+  Opcion: string;
+  P, I: Integer;
+begin
+  Result := False;
+  if ATok.StartsWith('--') then
+  begin
+    Opcion := LowerCase(ATok);
+    P := Pos('=', Opcion);
+    if P > 0 then
+      Opcion := Copy(Opcion, 1, P - 1);
+    if Length(Opcion) > 2 then
+      Result := '--file'.StartsWith(Opcion) or
+        '--pathspec-from-file'.StartsWith(Opcion) or
+        '--config'.StartsWith(Opcion);
+  end
+  else if ATok.StartsWith('-') then
+  begin
+    // Mayusculas: -f no es -F, y -o no es -O.
+    Result := (Pos('F', ATok) > 0) or (Pos('O', ATok) > 0);
+    if Result then
+      Exit;
+    Opcion := LowerCase(ATok);
+    for I := 2 to Length(Opcion) do
+    begin
+      if Opcion[I] = 'c' then
+        Exit(True);
+      // Opciones sin valor de clone; -b/-u/-o/-j consumen lo que sigue.
+      // No tratar la c de -bfeaturec como otra opcion del grupo.
+      if not CharInSet(Opcion[I], ['n', 'v', 'q', 'l', 's']) then
+        Break;
+    end;
+  end;
+end;
+
 function GitArgDenied(const AArgs: string): string;
 var
   Tok, T: string;
@@ -3412,12 +3459,13 @@ begin
   for Tok in TrocearArgs(AArgs) do
   begin
     T := Tok.ToLower;
-    if T.StartsWith('--output') or          // writes a file (diff/show)
+    if OpcionDeFicheroGit(Tok) or
+       T.StartsWith('--output') or          // writes a file (diff/show)
        T.StartsWith('--no-index') or        // reads arbitrary paths, any dir
        T.StartsWith('--upload-pack') or T.StartsWith('--receive-pack') or
        T.StartsWith('--exec') or            // runs a remote/local command
        T.StartsWith('--ext-diff') or T.StartsWith('--textconv') or // ext program
-       T.StartsWith('--config') or T.StartsWith('-c') or  // arbitrary config -> RCE (--config is -c's long form on clone)
+       // Configuracion: tambien prefijos y grupos, en OpcionDeFicheroGit.
        T.StartsWith('--separate-git-dir') or T.StartsWith('--template') or // write/read outside the dest
        T.StartsWith('--git-dir') or T.StartsWith('--work-tree') or // redirect where git operates -> jail escape
        (T = '-o') or T.StartsWith('-o=') or T.StartsWith('-o/') or T.StartsWith('-o\') then

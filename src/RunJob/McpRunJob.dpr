@@ -50,6 +50,7 @@
 uses
 {$IFDEF MSWINDOWS}
   Winapi.Windows,
+  Lsp.ProcessLaunch in '..\Server\Lsp.ProcessLaunch.pas',
 {$ENDIF}
 {$IFDEF LINUX}
   Posix.Base,
@@ -577,7 +578,8 @@ end;
 { Arranca un programa con la salida en el fichero y sin ventana de consola.
   Devuelve el PID (0 si no pudo; AError dice por que). }
 function Arrancar(const ALinea, ACarpeta, ASalida: string; AHeredar: Boolean;
-  out AError: string; AProceso: PHandle = nil): DWORD;
+  out AError: string; AProceso: PHandle = nil;
+  AHandleHeredado: THandle = 0): DWORD;
 var
   SA: TSecurityAttributes;
   SI: TStartupInfo;
@@ -614,8 +616,9 @@ begin
   Linea := ALinea; // CreateProcess puede modificar el buffer: copia propia
   UniqueString(Linea);
   try
-    if not CreateProcess(nil, PChar(Linea), nil, nil, AHeredar,
-      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, PChar(ACarpeta), SI, PI) then
+    if not CreateProcessConHandles(Linea, PChar(ACarpeta),
+      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, SI, PI, nil,
+      [AHandleHeredado]) then
     begin
       AError := SysErrorMessage(GetLastError);
       Exit;
@@ -671,10 +674,10 @@ begin
     Exit;
   end;
   // el handle del programa viaja HEREDADO al vigia (ver Vigilar): por eso el
-  // vigia se arranca con herencia, y el numero del handle vale alli igual
+  // vigia declara ese handle en la lista, y su numero vale alli igual
   SetHandleInformation(HProc, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
   if Arrancar('"' + Vigia + '" --wait ' + IntToStr(Pid) + ' "' + ASalida + '" ' +
-    IntToStr(HProc), ACarpeta, ASalida, True, Err) = 0 then
+    IntToStr(HProc), ACarpeta, ASalida, True, Err, nil, HProc) = 0 then
     Vigilar(Pid, ASalida, HProc)
   else
     CloseHandle(HProc);

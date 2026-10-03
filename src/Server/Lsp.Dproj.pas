@@ -250,7 +250,8 @@ uses
   System.StrUtils,
   System.IOUtils,
   System.Generics.Collections,
-  Lsp.Texts;
+  Lsp.Texts,
+  System.Character;
 
 { El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
   entre comillas: un Condition="'$(A)'>'1'" no la cierra. 0 si no hay. }
@@ -410,11 +411,67 @@ begin
 end;
 
 function XmlUnescape(const S: string): string;
+var
+  B: TStringBuilder;
+  I, J: Integer;
+  Ent, Numero, Valor: string;
+  N: Int64;
 begin
-  // &amp; el ULTIMO: si va primero, el &amp;lt; que escribe XmlEscape('&lt;')
-  // se desescapa dos veces y sale '<' (no era la inversa, revision 26-sep)
-  Result := S.Replace('&lt;', '<').Replace('&gt;', '>').Replace('&quot;', '"')
-    .Replace('&apos;', '''').Replace('&amp;', '&');
+  // Una pasada: la entidad que produce '&' no vuelve a desescaparse.
+  // XML tambien admite referencias numericas, decimales y hexadecimales.
+  B := TStringBuilder.Create;
+  try
+    I := 1;
+    while I <= Length(S) do
+    begin
+      Valor := '';
+      J := 0;
+      if S[I] = '&' then
+      begin
+        J := Pos(';', S, I + 1);
+        if J > 0 then
+        begin
+          Ent := Copy(S, I + 1, J - I - 1);
+          if Ent = 'amp' then Valor := '&'
+          else if Ent = 'lt' then Valor := '<'
+          else if Ent = 'gt' then Valor := '>'
+          else if Ent = 'quot' then Valor := '"'
+          else if Ent = 'apos' then Valor := ''''
+          else if Ent.StartsWith('#') then
+          begin
+            Numero := Copy(Ent, 2, MaxInt);
+            if Numero.StartsWith('x') then
+              Numero := '$' + Copy(Numero, 2, MaxInt);
+            if TryStrToInt64(Numero, N) and
+               ((N = 9) or (N = 10) or (N = 13) or
+                ((N >= $20) and (N <= $D7FF)) or
+                ((N >= $E000) and (N <= $FFFD)) or
+                ((N >= $10000) and (N <= $10FFFF))) then
+            begin
+              if N <= $FFFF then
+                Valor := Char(N)
+              else
+                Valor := Char($D800 + ((N - $10000) shr 10)) +
+                         Char($DC00 + ((N - $10000) and $3FF));
+            end;
+          end;
+        end;
+      end;
+      if Valor <> '' then
+      begin
+        B.Append(Valor);
+        I := J + 1;
+      end
+      else
+      begin
+        B.Append(S[I]);
+        Inc(I);
+      end;
+    end;
+    Result := B.ToString;
+  finally
+    B.Free;
+  end;
 end;
 
 function TrozosEscritos(const AEscrito: string): TArray<string>;
@@ -598,10 +655,11 @@ const
   //   write*/downloadfile   -> write a file (a payload, a .targets for later)
   //   unzip/zipdirectory    -> materialise files from an archive
   //   csc/vbc/fsc/xslt/genres-> invoke a compiler / transform = run a program
-  DANGER_TASKS: array [0 .. 18] of string = (
-    'exec', 'usingtask', 'code',
+  DANGER_TASKS: array [0 .. 20] of string = (
+    'exec', 'usingtask', 'code', 'msbuild',
     'copy', 'move', 'delete', 'makedir', 'removedir', 'touch',
     'writelinestofile', 'writecodefragment', 'downloadfile',
+    'readlinesfromfile', // Lectura de una ruta arbitraria durante el build.
     'unzip', 'zipdirectory',
     'csc', 'vbc', 'fsc', 'xslttransformation', 'generateresource');
 
@@ -783,10 +841,10 @@ begin
   // our own evasion test while fixing field round 8).
   if APathLow.Contains('..') then
     Exit(False);
-  Result := (APathLow.Contains('$(bds)') and APathLow.Contains('\bin\codegear')
-             and APathLow.EndsWith('.targets')) or
-            APathLow.Contains('usertools.proj') or
-            APathLow.EndsWith('.deployproj');
+  // Solo rutas del IDE: el nombre de un fichero del proyecto no da confianza.
+  Result := (APathLow.StartsWith('$(bds)\bin\codegear.') and
+             (Pos('$(', APathLow, 2) = 0) and APathLow.EndsWith('.targets')) or
+    (APathLow = '$(appdata)\embarcadero\$(bdsappdatabasedir)\$(productversion)\usertools.proj');
 end;
 
 { Las macros comunes de una carpeta de salida, para una plataforma/config.
@@ -1163,7 +1221,7 @@ function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
   AIgnoreBuildEvents: Boolean): string;
 var
   Low, V, Resolved, Imported: string;
-  Scan, TagEnd, CloseP, AttrP, ValStart, ValEnd: Integer;
+  Scan, TagEnd, CloseP: Integer;
 begin
   Result := '';
   // The whole scan is CASE-INSENSITIVE on purpose. MSBuild itself is picky
@@ -1171,6 +1229,21 @@ begin
   // cost of being insensitive is nil (no real project has a <PreBuildEvent>
   // in odd casing) and the cost of being wrong is arbitrary execution.
   Low := LowerCase(AXml);
+
+  // Las funciones de propiedad se evaluan antes de los targets: tambien
+  // pueden leer disco. Desescapar UNA vez es la misma regla del lector XML.
+  var Evaluado := XmlUnescape(AXml);
+  var Funcion := Pos('$(', Evaluado);
+  while Funcion > 0 do
+  begin
+    var Inicio := Funcion + 2;
+    while (Inicio <= Length(Evaluado)) and
+          Evaluado[Inicio].IsWhiteSpace do
+      Inc(Inicio);
+    if (Inicio <= Length(Evaluado)) and (Evaluado[Inicio] = '[') then
+      Exit(MsgText(SF_CFG_HAZARD_PROPERTY_FUNCTION));
+    Funcion := Pos('$(', Evaluado, Funcion + 2);
+  end;
 
   // A custom <Target> is NOT a hazard in itself. Real projects legitimately use
   // targets to copy their OWN output, print a message or set a property after a
@@ -1215,50 +1288,30 @@ begin
   // AND resolves next to the project (field round 8, confirmed execution).
   // Rule: trust ONLY the IDE's own imports without reading them; resolve and
   // SCAN anything else; refuse what cannot be resolved.
-  Scan := 1;
-  while True do
+  // UN lector de atributos XML: comillas, blancos y entidades compartidos.
+  for var Importado in AllTagAttr(AXml, 'Import', 'Project') do
   begin
-    Scan := Pos('<import', Low, Scan);
-    if Scan = 0 then
-      Break;
-    TagEnd := Pos('>', Low, Scan);
-    if TagEnd = 0 then
-      Break;
-    AttrP := Pos('project="', Low, Scan);
-    if (AttrP > 0) and (AttrP < TagEnd) then
-    begin
-      ValStart := AttrP + Length('project="');
-      ValEnd := Pos('"', AXml, ValStart);
-      if (ValEnd > 0) and (ValEnd <= TagEnd) then
-      begin
-        V := Copy(AXml, ValStart, ValEnd - ValStart).Trim;
-        if V.StartsWith('\\') or V.StartsWith('//') then
-          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_UNC_FMT, [V]));
-        if IsStockImport(LowerCase(V)) then
-        begin
-          Scan := TagEnd + 1;
-          Continue; // the IDE's own targets: trusted, not read
-        end;
-        if ADepth >= 4 then
-          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_PROFUNDO_FMT, [V]));
-        Resolved := ResolveImportPath(V, AProjectFile);
-        if Resolved = '' then
-          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_VERIFICABLE_FMT, [V]));
-        if not TFile.Exists(Resolved) then
-          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_ESTA_FMT, [V]));
-        Imported := '';
-        try
-          Imported := TFile.ReadAllText(Resolved);
-        except
-          Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT, [V]));
-        end;
-        // Recurse: the imported file is held to exactly the same standard.
-        Result := HazardScan(Imported, Resolved, ADepth + 1, AIgnoreBuildEvents);
-        if Result <> '' then
-          Exit(MsgFmt(SF_CFG_HAZARD_POR_IMPORT_FMT, [Result, V]));
-      end;
+    V := Importado.Trim;
+    if V.StartsWith('\\') or V.StartsWith('//') then
+      Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_UNC_FMT, [V]));
+    if IsStockImport(LowerCase(V)) then
+      Continue;
+    if ADepth >= 4 then
+      Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_PROFUNDO_FMT, [V]));
+    Resolved := ResolveImportPath(V, AProjectFile);
+    if Resolved = '' then
+      Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_VERIFICABLE_FMT, [V]));
+    if not TFile.Exists(Resolved) then
+      Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_NO_ESTA_FMT, [V]));
+    Imported := '';
+    try
+      Imported := TFile.ReadAllText(Resolved);
+    except
+      Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT, [V]));
     end;
-    Scan := TagEnd + 1;
+    Result := HazardScan(Imported, Resolved, ADepth + 1, AIgnoreBuildEvents);
+    if Result <> '' then
+      Exit(MsgFmt(SF_CFG_HAZARD_POR_IMPORT_FMT, [Result, V]));
   end;
 end;
 

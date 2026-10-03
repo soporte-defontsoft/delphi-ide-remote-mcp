@@ -25,6 +25,11 @@ type
     [Test] procedure ComillasVaciasSonArgumentoVacio;
     [Test] procedure DobleComillaDentroEsLiteral;
     [Test] procedure GuionCComillado;
+    [Test] procedure NombreDelMensajeGitEsUnicoYEstaEnSuCarpeta;
+    [Test]
+    procedure ConfiguracionEnPrefijosYGruposNoPasa;
+    [Test]
+    procedure ValorDeUnaOpcionCortaNoEsUnGrupo;
   end;
 
   { EnComillas (compositor) y TrocearArgs (lector) tienen que ser INVERSOS: la
@@ -52,7 +57,8 @@ implementation
 
 uses
   System.SysUtils,
-  Lsp.Guard;
+  Lsp.Guard,
+  System.JSON;
 
 procedure TTrocearArgsTests.EspaciosSimples;
 var
@@ -225,6 +231,50 @@ end;
 procedure TIdaYVueltaTests.PathspecLiteralConEspacio;
 begin
   IdaYVuelta([':(literal)sub dir/f.txt']);
+end;
+
+procedure TTrocearArgsTests.NombreDelMensajeGitEsUnicoYEstaEnSuCarpeta;
+var
+  A, B, Nombre: string;
+  Id: TGUID;
+begin
+  A := NombreDeMensajeGit;
+  B := NombreDeMensajeGit;
+  Assert.AreNotEqual(A, B, 'cada mensaje tiene su propio fichero');
+  Assert.AreEqual(IncludeTrailingPathDelimiter(ServerTempDir('git')),
+    ExtractFilePath(A), 'el temporal del servidor');
+  Nombre := ExtractFileName(A);
+  Assert.IsTrue(Nombre.StartsWith('msg-') and Nombre.EndsWith('.txt'), Nombre);
+  Id := StringToGUID(Copy(Nombre, 5, Length(Nombre) - 8));
+  Assert.AreEqual(Copy(Nombre, 5, Length(Nombre) - 8), GUIDToString(Id),
+    'la parte variable es un GUID');
+end;
+
+function DenegacionDeArgumentosGit(const AArgs: string): string;
+var
+  Argumentos: TJSONObject;
+begin
+  Argumentos := TJSONObject.Create;
+  try
+    Argumentos.AddPair('command', 'status');
+    Argumentos.AddPair('args', AArgs);
+    Result := ToolCallDenied('delphi_git', Argumentos);
+  finally
+    Argumentos.Free;
+  end;
+end;
+
+procedure TTrocearArgsTests.ConfiguracionEnPrefijosYGruposNoPasa;
+begin
+  for var Args in ['--conf core.sshCommand=x', '-nc core.sshCommand=x',
+    '-vqnc core.sshCommand=x', '-c core.sshCommand=x'] do
+    Assert.AreNotEqual('', DenegacionDeArgumentosGit(Args), Args);
+end;
+
+procedure TTrocearArgsTests.ValorDeUnaOpcionCortaNoEsUnGrupo;
+begin
+  for var Args in ['-bfeaturec', '-nbfeaturec', '-j4', '--branch=featurec'] do
+    Assert.AreEqual('', DenegacionDeArgumentosGit(Args), Args);
 end;
 
 initialization

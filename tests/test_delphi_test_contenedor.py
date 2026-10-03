@@ -52,7 +52,7 @@ while the battery looks.
 
 Usage:  python tests/test_delphi_test_contenedor.py [path-to-DelphiLspMcp.exe]
 """
-import atexit, ctypes, hashlib, json, os, socket, subprocess, threading, time, uuid, winreg
+import atexit, ctypes, hashlib, json, os, re, socket, subprocess, threading, time, uuid, winreg
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -371,6 +371,92 @@ open(os.path.join(JAIL, 'CajaTest', 'CajaTest.dpr'), 'w', encoding='utf-8-sig', 
     PROGRAMA % {'jail': JAIL, 'fuera': FUERA, 'srv': SRV, 'puerto': PUERTO})
 # otra copia en la temporal del servidor, plantada DESPUES del arranque (que la vacia)
 os.makedirs(os.path.join(TEMP_SRV, 'vecina'), exist_ok=True)
+# Contratos con DUnitX REAL: token, datos externos de fixture y token del hijo.
+contrato = os.path.join(JAIL, 'ContratoApp')
+r = srv.call('delphi_create', {'kind': 'project-test', 'name': 'ContratoApp', 'dir': contrato})
+check('A1 fixture: proyecto DUnitX real', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
+unidades = J(srv.call('delphi_list', {'root': contrato, 'pattern': '*.pas'})).get('files', [])
+unidad = mc.real(unidades[0]['path'])
+leido = srv.call('delphi_read', {'path': unidad})
+texto = '\n'.join(l.split('|', 1)[1] for l in leido.splitlines() if re.match(r'^\d+\|', l))
+clase = re.search(r'\b(\w+)\s*=\s*class\b', texto).group(1)
+nombre_unidad = re.search(r'\bunit\s+([\w.]+)\s*;', texto).group(1)
+externo = os.path.join(FUERA, 'contrato-externo.txt')
+with open(externo, 'w') as f:
+    f.write('fixture del arnes')
+srv.call('delphi_edit', {'path': unidad, 'adduses': 'Winapi.Windows;System.IOUtils;System.SysUtils', 'section': 'implementation'})
+metodos = (
+r"""[Test] procedure TokenEstaConfinado;
+var
+  Token: THandle;
+  Flag, Len: DWORD;
+begin
+  Assert.IsTrue(OpenProcessToken(GetCurrentProcess, TOKEN_QUERY, Token));
+  try
+    Flag := 0;
+    // TokenIsAppContainer=29 (winnt.h); RAD 13 no declara ese miembro.
+    Assert.IsTrue(GetTokenInformation(Token, TTokenInformationClass(29), @Flag, SizeOf(Flag), Len));
+    Assert.AreEqual<Cardinal>(1, Flag, 'el token es AppContainer');
+    TFile.WriteAllText('token-' + IntToStr(GetCurrentProcessId) + '.txt', 'AppContainer');
+  finally
+    CloseHandle(Token);
+  end;
+end;""",
+r"""[Test] procedure NoAbreDatosExternosDelArnes;
+var
+  H: THandle;
+  Err: DWORD;
+begin
+  H := CreateFile('%s', GENERIC_READ, FILE_SHARE_READ or FILE_SHARE_WRITE,
+    nil, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+  Err := GetLastError;
+  if H <> INVALID_HANDLE_VALUE then CloseHandle(H);
+  Assert.IsTrue(H = INVALID_HANDLE_VALUE, 'no lee el testigo externo');
+  Assert.AreEqual<Cardinal>(ERROR_ACCESS_DENIED, Err, 'la lectura se niega por permisos');
+  H := CreateFile('%s', GENERIC_WRITE, FILE_SHARE_READ or FILE_SHARE_WRITE,
+    nil, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+  Err := GetLastError;
+  if H <> INVALID_HANDLE_VALUE then CloseHandle(H);
+  Assert.IsTrue(H = INVALID_HANDLE_VALUE, 'no escribe el testigo externo');
+  Assert.AreEqual<Cardinal>(ERROR_ACCESS_DENIED, Err, 'la escritura se niega por permisos');
+end;""" % (externo.replace("'", "''"), externo.replace("'", "''")),
+r"""[Test] procedure ElHijoSigueEnAppContainer;
+var
+  SI: TStartupInfo;
+  PI: TProcessInformation;
+  Cmd: string;
+  Codigo: DWORD;
+begin
+  FillChar(SI, SizeOf(SI), 0);
+  SI.cb := SizeOf(SI);
+  Cmd := '"' + ParamStr(0) + '" --run:%s.%s.TokenEstaConfinado';
+  UniqueString(Cmd);
+  Assert.IsTrue(CreateProcess(nil, PChar(Cmd), nil, nil, False,
+    CREATE_NO_WINDOW, nil, nil, SI, PI), 'lanza un hijo de la propia fixture');
+  try
+    Assert.AreEqual<Cardinal>(WAIT_OBJECT_0, WaitForSingleObject(PI.hProcess, 15000), 'el hijo termina');
+    Assert.IsTrue(GetExitCodeProcess(PI.hProcess, Codigo));
+    Assert.AreEqual<Cardinal>(0, Codigo, 'el test del token pasa en el hijo');
+    Assert.IsTrue(TFile.Exists('token-' + IntToStr(PI.dwProcessId) + '.txt'), 'el hijo ejecuto el contrato');
+  finally
+    TerminateProcess(PI.hProcess, 1);
+    CloseHandle(PI.hThread);
+    CloseHandle(PI.hProcess);
+  end;
+end;""" % (nombre_unidad, clase),
+)
+for metodo in metodos:
+    r = srv.call('delphi_edit', {'path': unidad, 'insert': 'metodo', 'inclass': clase, 'visibility': 'public', 'code': metodo})
+    check('A1 fixture: atributo y metodo DUnitX insertados', mc.es(r, 'SK_EDIT_ESCRITO_EN_FMT'), r[:300])
+r = srv.call('delphi_test', {'command': 'run', 'project': os.path.join(contrato, 'ContratoApp.dproj')}, 600)
+contrato_j = J(r)
+check('A1 DUnitX real: token, fichero externo y token del hijo pasan en AppContainer',
+      contrato_j.get('result') == 'pass' and contrato_j.get('sandboxed') is True and
+      contrato_j.get('total') == 4 and contrato_j.get('failed') == 0,
+      contrato_j.get('build', {}).get('firstError') or r[:1600])
+with open(externo) as f:
+    check('A1 el testigo externo sigue intacto', f.read() == 'fixture del arnes')
+
 out = srv.call('delphi_test', {'command': 'run', 'project': os.path.join(JAIL, 'CajaTest', 'CajaTest.dproj')}, 600)
 j = J(out)
 sonda = {}

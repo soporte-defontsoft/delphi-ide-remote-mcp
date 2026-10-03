@@ -6,6 +6,57 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.11.3] - 2026-10-03
+
+Hardening of the process-launch, `delphi_test` container, `delphi_git` and
+build jails, with an independent security review before the tag.
+
+### Fixed
+
+- **A long-lived or orphaned child could inherit the server's handles.** Every
+  Windows launch that inherits handles (the LSP transport, the build/git/test
+  runner, the per-run test container and the remote `McpRunJob`) now goes
+  through one helper that passes an explicit handle list, so a child inherits
+  only the pipes meant for it - not, for instance, the listening socket. A
+  launch that cannot install that list does not start the child.
+- **The per-run test container's window-station and desktop grant is now
+  minimal and scoped.** From a Windows Service the container needs access to
+  the session-0 window station and desktop (1.11.1); that access is now the
+  minimum measured (`READ_CONTROL | WINSTA_ACCESSGLOBALATOMS` on the station,
+  read/write objects on the desktop), granted to the AppContainer SID of that
+  single run and removed when it ends, even with tests overlapping. A
+  pre-existing broad grant is kept; a partial pre-existing one no longer passes
+  for the rights the object needs.
+- **`delphi_git` no longer lets a repo's own configuration run a program.**
+  Repo hooks and the filesystem monitor are turned off for every git call, and
+  local/worktree config that would run an external program (clean/smudge
+  filters, external diff, credential/ssh/proxy helpers, upload/receive-pack) is
+  refused before the call, read without includes so an include cannot hide it.
+  The subcommand set stays a whitelist and commit/tag always pass a message
+  file, so no editor is ever invoked.
+- **The build hazard scan reaches what a project evaluates, not only its
+  targets.** Property functions, numeric XML entities, Unicode whitespace and
+  more MSBuild tasks that read or run are now covered; stock imports stay an
+  allowlist and `AllowBuildScripts` keeps its opt-in.
+
+### Changed
+
+- The git commit/tag message file has a single namer shared by both.
+
+### Tests
+
+- New batteries for inherited handles, the launchers, the git config/program
+  readers and the build-import/evaluation scan; `test_delphi_test_servicio`
+  grew five checks for the station mask (measured in a private station). The
+  DUnitX engine suite is 210 tests (154 in their container). K16b is now a
+  real check (a symlink in a test's output is counted by its target), measured
+  with Developer Mode on; its mutant is red.
+- An independent security review of this release (handles, container station,
+  git and build) found no blocker; the git and build filters are denylists
+  layered behind the subcommand/stock-import allowlists and the
+  `AllowBuildScripts` opt-in, with the named gaps unreachable under the
+  server's invocation model. 103 batteries, 3,281 checks, 0 failures.
+
 ## [1.11.2] - 2026-10-03
 
 `delphi_edit` INSERT of a method takes its whole header, and the startup
