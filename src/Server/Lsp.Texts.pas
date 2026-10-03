@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.11.0';
+  SERVER_VERSION = '1.11.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -3978,6 +3978,14 @@ const
   SL_TEST_JOB_CONSULTAR_FMT =
     'delphi_test: could not query the test Job Object (error %d); stopped ' +
     'waiting for its processes - the copy is cleaned up anyway';
+
+  // El contenedor no arranca si su estacion/escritorio no concede acceso a
+  // los AppContainers (ALL APPLICATION PACKAGES): user32 falla al iniciar
+  // (0xC0000142). WinSta0\Default la trae; la estacion de un SERVICIO (sesion
+  // 0) no. Medido 3-oct-2026: era por que delphi_test fallaba en produccion.
+  SL_TEST_ESTACION_FMT =
+    'delphi_test: could not grant AppContainers access to the %s (error %d); ' +
+    'a test launched from a Windows Service would fail to start (0xC0000142)';
 
   // ---- delphi_designer ----
 

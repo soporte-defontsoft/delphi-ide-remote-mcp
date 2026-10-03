@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.11.1] - 2026-10-03
+
+`delphi_test` works again when the server runs as a Windows Service.
+
+### Fixed
+
+- **From a Windows Service, 1.11.0 could not start any test** (exit code
+  0xC0000142, STATUS_DLL_INIT_FAILED, with no output). The test's container
+  could not reach the window station and desktop of session 0: they do not
+  grant AppContainers access, while the desktop of an interactive session
+  does. Until 1.10 the test ran with the account's own token, which those
+  objects already admitted. Now the server grants AppContainers access to its
+  window station and desktop before it launches a test (once; it is the same
+  entry the interactive desktop has). Measured: changing only that entry
+  turns 0xC0000142 on and off; from the production service the test runs and
+  stays confined (it writes only its copy, reads nothing outside it, has no
+  network). Running the server in the tray or over stdio was not affected.
+- The 1.11.0 commit carried an earlier copy of `test_delphi_test_contenedor`
+  than the one its gate ran (the commit helper skipped a file added and then
+  modified); `417253b` put the right one in.
+
+### Tests
+
+- `test_delphi_test_servicio` is new: it starts the server on a desktop built
+  without access for AppContainers - what a service gets - and runs a real
+  DUnitX test through it. No battery reproduced that before: they all start
+  the server in the interactive session, which is why 1.11.0 shipped broken
+  and only the live test against the service caught it. Its mutant (the
+  grant taken out) turns it red with 0xC0000142. 96 batteries, 3,172
+  checks, 0 failures.
+
 ## [1.11.0] - 2026-10-03
 
 `delphi_test` runs every test in a Windows container of its own, on a copy of its output folder: the cage holds the same on every folder, local or network.

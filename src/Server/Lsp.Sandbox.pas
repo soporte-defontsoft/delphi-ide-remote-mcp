@@ -165,6 +165,18 @@ function ConvertSidToStringSidW(Sid: PSID; out StringSid: PWideChar): BOOL;
 function SetFileSecurityW(FileName: PWideChar; SecurityInformation: DWORD;
   SD: PSECURITY_DESCRIPTOR): BOOL; stdcall; external 'advapi32.dll';
 
+function ConvertStringSidToSidW(StringSid: PWideChar; out Sid: PSID): BOOL;
+  stdcall; external 'advapi32.dll';
+
+// El descriptor de un objeto de ventanas (estacion, escritorio): propias
+// porque Winapi.Windows pide el SI por valor y el API lo quiere por puntero
+function GetUserObjectSecurity_(hObj: THandle; var pSIRequested: DWORD;
+  pSD: Pointer; nLength: DWORD; var lpnLengthNeeded: DWORD): BOOL; stdcall;
+  external user32 name 'GetUserObjectSecurity';
+
+function SetUserObjectSecurity_(hObj: THandle; var pSIRequested: DWORD;
+  pSD: Pointer): BOOL; stdcall; external user32 name 'SetUserObjectSecurity';
+
 { La marca de esta casa del servidor (la carpeta del exe), en el nombre de
   cada contenedor: cada servidor de la misma cuenta purga solo los suyos.
   LA clave de una carpeta (ClaveDeCarpeta), sus 8 primeros: el nombre de un
@@ -347,6 +359,93 @@ begin
   Anade(ASI.hStdError);
 end;
 
+{ Concede a los AppContainers (ALL APPLICATION PACKAGES, S-1-15-2-1) acceso al
+  objeto de ventanas AObj (una estacion o un escritorio), si no lo tiene ya.
+  Un proceso de AppContainer no pasa del init de user32 si su estacion Y su
+  escritorio no le conceden acceso (0xC0000142): WinSta0\Default lo trae, pero
+  la estacion de un SERVICIO (sesion 0) no, y por eso delphi_test fallaba en
+  produccion (medido 3-oct-2026, sonda_winsta: cambiando SOLO esa ACE se
+  encendia y apagaba el 0xC0000142). Idempotente: una sola ACE, la misma que
+  trae el escritorio interactivo. 0 o el error de Windows. }
+const
+  ACL_REVISION_ = 2;
+  ACCESS_ALLOWED_ACE_TYPE_ = 0;
+type
+  // Winapi.Windows de RAD 13 no trae estos alias; el minimo para leer la
+  // cabecera de una ACE y el SID de una de permiso. El recuento y el tamano
+  // de la ACL salen del propio TACL (AceCount, AclSize), sin GetAclInformation.
+  PCabeceraAce = ^TCabeceraAce;
+  TCabeceraAce = packed record
+    AceType: Byte;
+    AceFlags: Byte;
+    AceSize: Word;
+  end;
+  PAcePermiso = ^TAcePermiso;
+  TAcePermiso = packed record
+    Cabecera: TCabeceraAce;
+    Mask: DWORD;
+    SidStart: DWORD;
+  end;
+function ConcedeAPaquetes(AObj: THandle): DWORD;
+var
+  Si, Nec, Bytes: DWORD;
+  SdViejo, Buf: TBytes;
+  PSd: PSECURITY_DESCRIPTOR;
+  Hay, PorDefecto: BOOL;
+  DaclVieja, DaclNueva: PACL;
+  Ac: PSID;
+  I: Integer;
+  PAce: Pointer;
+  Nuevo: TSecurityDescriptor;
+begin
+  Si := DACL_SECURITY_INFORMATION;
+  if not ConvertStringSidToSidW('S-1-15-2-1', Ac) then
+    Exit(GetLastError);
+  try
+    Nec := 0;
+    GetUserObjectSecurity_(AObj, Si, nil, 0, Nec);
+    if Nec = 0 then
+      Exit(GetLastError);
+    SetLength(SdViejo, Nec);
+    if not GetUserObjectSecurity_(AObj, Si, @SdViejo[0], Nec, Nec) then
+      Exit(GetLastError);
+    PSd := @SdViejo[0];
+    if not GetSecurityDescriptorDacl(PSd, Hay, DaclVieja, PorDefecto) then
+      Exit(GetLastError);
+    // Sin DACL = acceso para todos: el contenedor ya entra, nada que arreglar
+    // (y poner una DACL propia CERRARIA el objeto a los demas).
+    if (not Hay) or (DaclVieja = nil) then
+      Exit(0);
+    // Si ya esta la ACE de ALL APPLICATION PACKAGES, listo (idempotente)
+    for I := 0 to Integer(DaclVieja^.AceCount) - 1 do
+      if GetAce(DaclVieja^, I, PAce) then
+        if (PCabeceraAce(PAce)^.AceType = ACCESS_ALLOWED_ACE_TYPE_) and
+           EqualSid(PSID(@PAcePermiso(PAce)^.SidStart), Ac) then
+          Exit(0);
+    // DACL nueva = la vieja entera + una ACE de permiso para AC
+    Bytes := DaclVieja^.AclSize + SizeOf(TAcePermiso) + GetLengthSid(Ac) -
+      SizeOf(DWORD);
+    SetLength(Buf, Bytes);
+    DaclNueva := PACL(@Buf[0]);
+    if not InitializeAcl(DaclNueva^, Bytes, ACL_REVISION_) then
+      Exit(GetLastError);
+    for I := 0 to Integer(DaclVieja^.AceCount) - 1 do
+      if GetAce(DaclVieja^, I, PAce) then
+        AddAce(DaclNueva^, ACL_REVISION_, MAXDWORD, PAce, PCabeceraAce(PAce)^.AceSize);
+    if not AddAccessAllowedAce(DaclNueva^, ACL_REVISION_, GENERIC_ALL, Ac) then
+      Exit(GetLastError);
+    if not InitializeSecurityDescriptor(@Nuevo, SECURITY_DESCRIPTOR_REVISION) then
+      Exit(GetLastError);
+    if not SetSecurityDescriptorDacl(@Nuevo, True, DaclNueva, False) then
+      Exit(GetLastError);
+    if not SetUserObjectSecurity_(AObj, Si, @Nuevo) then
+      Exit(GetLastError);
+    Result := 0;
+  finally
+    LocalFree(HLOCAL(Ac));
+  end;
+end;
+
 function CreateProcessEnContenedor(const AC: TContenedor; const ACmdLine: string;
   AWorkDir: PChar; ACreateFlags: DWORD; const ASI: TStartupInfo;
   out API: TProcessInformation): Boolean;
@@ -390,6 +489,16 @@ begin
         PROC_THREAD_ATTRIBUTE_HANDLE_LIST_, @H[0], Length(H) * SizeOf(THandle),
         nil, nil) then
         Exit;
+      // La jaula necesita que su estacion de ventanas Y su escritorio dejen
+      // entrar a los AppContainers o user32 no inicia (0xC0000142). Desde el
+      // servicio (sesion 0) no lo traen; se concede aqui, idempotente. Best-
+      // effort con aviso: si no se puede, el CreateProcess fallara y se dira.
+      Err := ConcedeAPaquetes(GetProcessWindowStation);
+      if Err <> 0 then
+        try TLogger.Warning(MsgFmt(SL_TEST_ESTACION_FMT, ['window station', Err])); except end;
+      Err := ConcedeAPaquetes(GetThreadDesktop(GetCurrentThreadId));
+      if Err <> 0 then
+        try TLogger.Warning(MsgFmt(SL_TEST_ESTACION_FMT, ['desktop', Err])); except end;
       FillChar(SIX, SizeOf(SIX), 0);
       SIX.StartupInfo := ASI;
       SIX.StartupInfo.cb := SizeOf(SIX);
