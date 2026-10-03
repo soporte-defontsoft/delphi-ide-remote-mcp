@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.10.1';
+  SERVER_VERSION = '1.11.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1027,8 +1027,8 @@ const
 
   // delphi_build composes a cmd.exe line (rsvars.bat && msbuild ...) and
   // platform/config/target travel through it UNQUOTED: a metacharacter there
-  // IS a shell, and it would sail past the jail, the low-integrity
-  // sandbox and the .dproj hazard scanner in a single call. delphi_config
+  // IS a shell, and it would sail past the jail, the test container
+  // and the .dproj hazard scanner in a single call. delphi_config
   // already armoured the same token for the XML sink; this is its twin mouth.
   SR_BUILD_PLATFORM_FMT =
     '[BUILD-003 INVALID_PARAM] "%s" is not a valid Delphi platform. See the ' +
@@ -3693,10 +3693,19 @@ const
     'console runner. The verdict says where it comes from (verdictFrom: ' +
     'counts or exitCode) and never invents it. Running tests is RUNNING, ' +
     'and it is the only thing that runs on this server: it has its own ' +
-    'switch [Workspace.<name>] AllowTests; the binary is built here, ' +
-    'comes from a project in the jail and runs in a low-integrity ' +
-    'sandbox, with a timeout. Without that switch, discover works and ' +
-    'run is refused.';
+    'switch [Workspace.<name>] AllowTests. The binary is built here and ' +
+    'runs in a Windows container of its own, on a COPY of its output ' +
+    'folder: it reads and writes that copy and, besides it, only what ' +
+    'Windows gives every container (its own temp folder, deleted with ' +
+    'it, and the system files under Windows and Program Files) - no ' +
+    'other file, no network, no network drive - and it is cut off at the ' +
+    'timeout. So a ' +
+    'test here is for LOGIC: whatever it reads has to travel in its ' +
+    'output folder, and a test project built with runtime packages ' +
+    '(UsePackages) is refused before building: build it whole. What it ' +
+    'writes in that folder comes back in "files" ' +
+    '(text files with their content, capped). Without that switch, ' +
+    'discover works and run is refused.';
 
   SP_TEST_COMMAND =
     'discover (list the test projects under "path") | run (build and run ' +
@@ -3810,10 +3819,18 @@ const
     '[TEST-012] command=run builds AND runs the SAME platform: Win64 ' +
     'unless you pass platform=. Careful if you built by hand with ' +
     'delphi_build, which uses Win32 by default: they are different ' +
-    'binaries. The program runs in its own output folder, with it as the ' +
-    'current directory; THAT folder is the only place where it can WRITE ' +
-    '(the low-integrity sandbox denies it %TEMP% and the rest of the ' +
-    'disk). If your tests touch files, use them with RELATIVE paths.';
+    'binaries. The program runs in a Windows container on a COPY of its ' +
+    'output folder, with it as the current directory: it reads and ' +
+    'writes that copy and, besides it, only what Windows gives every ' +
+    'container (its own temp folder, deleted with it, and the system ' +
+    'files under Windows and Program Files). ' +
+    'TPath.GetTempPath comes back empty in there, so a file a Delphi ' +
+    'test puts in it lands in the copy. Data files your tests read have ' +
+    'to be in the output ' +
+    'folder (copied there by the build, or written by the test itself): ' +
+    'a path into the project (..\..\data) does not exist in there. No ' +
+    'network: a connection to localhost hangs until TCP gives up (about ' +
+    '21 s). What the test writes comes back in "files".';
 
   SN_TEST_NOBUILD_NOTE =
     '[TEST-013] nobuild=true: I did NOT build anything, I ran the binary ' +
@@ -3857,8 +3874,8 @@ const
     'turns it on with [Workspace.<name>] AllowTests=1 in the ' +
     'settings.ini next to the executable (or DELPHI_MCP_ALLOW_TESTS=1) ' +
     'and restarts. It is the only thing that runs on this machine: a ' +
-    'binary from a project in the jail, sandboxed and with a timeout. ' +
-    'command=discover does work without it.';
+    'binary from a project in the jail, in a container of its own and ' +
+    'with a timeout. command=discover does work without it.';
 
   SN_TEST_NONE =
     '[TEST-021] There are no test projects under there. What counts as ' +
@@ -3881,8 +3898,86 @@ const
     'gives no numbers; result=timeout means I killed it for time and ' +
     'result=no-tests means it finished fine without me being able to ' +
     'count anything. failures lists the failure lines as it printed ' +
-    'them. It ran in a low-integrity sandbox, with a timeout, in its ' +
-    'output folder, which is the only place where it can write.';
+    'them. It ran in a Windows container of its own, on a copy of its ' +
+    'output folder and with a timeout: besides that copy it only had ' +
+    'what Windows gives every container (its own temp folder and the ' +
+    'system files), and no network. "files" lists what it left in ' +
+    'that folder.';
+
+  { La jaula de delphi_test: un contenedor por ejecucion (Lsp.Sandbox,
+    2-oct-2026). Falla cerrado: sin contenedor, el test no corre. }
+  SR_TEST_CONTENEDOR_FMT =
+    '[TEST-026 INTERNAL] I could not prepare the Windows container the ' +
+    'test runs in (code %s: %s), so I did NOT run it: a test never runs ' +
+    'outside one. It is a problem of this server, not of your project: ' +
+    'tell the operator.';
+
+  SR_TEST_LANZAR_FMT =
+    '[TEST-027 INTERNAL] Windows did not start the test inside its ' +
+    'container (error %d: %s), and it was NOT run outside it either. ' +
+    'The build is fine; if it happens again, tell the operator.';
+
+  SR_TEST_PAQUETES_FMT =
+    '[TEST-028 INVALID_PARAM] %s is built with runtime packages in %s/%s ' +
+    '(UsePackages), and a test runs here as ONE whole binary: its ' +
+    'container reads no .bpl of components or of your project (only ' +
+    'those under Program Files), so the program would not even start. ' +
+    'Build the test project without runtime packages for that ' +
+    'configuration and run it again. Nothing was built.';
+
+  SR_TEST_COPIA_TOPE_FMT =
+    '[TEST-029 DENIED] The output folder of this test is too big to copy ' +
+    'into its container (more than %d MB without the .dcu and .rsm ' +
+    'files). Give the test project an output folder of its own ' +
+    '(DCC_ExeOutput) instead of one it shares with big binaries.';
+
+  SR_TEST_COPIA_FMT =
+    '[TEST-031 INTERNAL] I could not copy the output folder of this test ' +
+    'into its container (%s), so it did NOT run. Look at what that ' +
+    'folder holds - a broken link, a file another program keeps open - ' +
+    'and run it again.';
+
+  { El job object es obligatorio en el contenedor: si el test no se puede
+    confinar en uno, no corre (fail-closed, revision Opus 4.8 de la 1.11.0).
+    Sin el codigo de Windows: cuando el job no se crea, GetLastError es basura
+    de una llamada previa (medido: "error 18"). }
+  SR_TEST_SIN_JAULA =
+    '[TEST-032 INTERNAL] I could not confine the test to its Job Object, so ' +
+    'it was NOT run: a test never runs unconfined here. It is a problem of ' +
+    'this server, not of your project: tell the operator.';
+
+  SN_TEST_FICHEROS_RECORTE_FMT =
+    '[TEST-030] Not every file in "files" came back whole: the content of ' +
+    'each text file is capped at %d characters and all of them together ' +
+    'at %d (an emoji counts as two; "truncated" marks the cut ones), and ' +
+    'a file over %d MB, or one past the total, comes without it - ' +
+    '"noContent" says why for each file. Write a shorter log, or print ' +
+    'what matters to the output.';
+
+  SN_TEST_FICHEROS_FUERA_FMT =
+    '[TEST-033] The test left %d more files that are not in "files": the ' +
+    'list stops at %d. Write fewer files, or print what matters to the ' +
+    'output.';
+
+  // Un contenedor que Windows no quiso borrar: lo barre el siguiente
+  // arranque (PurgaContenedoresHuerfanos), y queda apuntado (revision de la
+  // 1.11.0: se perdia sin rastro)
+  SL_TEST_CONTENEDOR_NO_BORRADO_FMT =
+    'delphi_test: the container %s was not deleted (0x%s); the next start ' +
+    'of this server purges it';
+  // ...y su gemela, la copia que no se pudo borrar
+  SL_TEST_COPIA_NO_BORRADA_FMT =
+    'delphi_test: the copy %s was not deleted (%s); the next start of this ' +
+    'server purges it';
+
+  // EsperaJobVacio: el job del test no se pudo matar o consultar. No corta la
+  // limpieza (va acotada por plazo), pero queda en el log (revision Opus 4.8)
+  SL_TEST_JOB_TERMINAR_FMT =
+    'delphi_test: could not terminate the test Job Object (error %d); ' +
+    'waiting for its processes to end on their own';
+  SL_TEST_JOB_CONSULTAR_FMT =
+    'delphi_test: could not query the test Job Object (error %d); stopped ' +
+    'waiting for its processes - the copy is cleaned up anyway';
 
   // ---- delphi_designer ----
 

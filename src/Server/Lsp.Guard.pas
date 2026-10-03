@@ -253,6 +253,14 @@ function TempFolderName: string;
   el 26-sep lo componian a mano ocho sitios. Sin ASub, la carpeta. }
 function ServerDir(const ASub: string = ''): string;
 function ServerTempDir(const ASub: string = ''): string;
+
+{ LA clave corta de una carpeta, por su ruta CANONICA (larga, sin barra
+  final, en minusculas): la misma carpeta escrita en 8.3 o con otras
+  mayusculas da la misma clave, el MD5 en hexadecimal (32). La usan quien
+  reclama una carpeta mientras vive (TemporalEsMia, SoyLaPrimeraInstancia)
+  y la marca de los contenedores de delphi_test (Lsp.Sandbox). Estaba
+  compuesta de tres formas, dos sin canonizar (revision de la 1.11.0). }
+function ClaveDeCarpeta(const ADir: string): string;
 function AgentTempDir(const ASub: string = ''): string;
 
 { TRES CLASES DE ESCRITURA, y lo que las separa es QUIEN COMPONE LA RUTA
@@ -368,6 +376,26 @@ procedure BorraArbol(const ADir: string);
   __: es la tercera barrera de BorradoDenegado. }
 function CarpetasDesechables: TArray<string>;
 
+{ EL trozo unico de un nombre que el servidor crea para UNA operacion (una
+  carpeta de su temporal, el intermedio de una escritura, un zip a medias):
+  8 hexadecimales en minusculas de un GUID. Estaba escrito a mano en siete
+  sitios (revision de la 1.11.0, 2-oct-2026); su lector es
+  FRAGMENTO_UNICO_PATRON. }
+function FragmentoUnico: string;
+
+{ EL sello de UNA operacion que tiene que ordenarse por cuando nacio y no
+  chocar con otra del mismo milisegundo: 'yyyymmdd-hhnnsszzz-' +
+  FragmentoUnico. Lo llevan el id de un trabajo de remote-run y el nombre de
+  una captura; su lector es SELLO_UNICO_PATRON (la nota del deploy
+  bloqueado lo busca en lo que contesta msbuild). }
+function SelloUnico: string;
+
+const
+  // las formas de los dos de arriba, para quien las BUSCA: la inversa del
+  // nombrador, nunca otra copia escrita a mano
+  FRAGMENTO_UNICO_PATRON = '[0-9a-f]{8}';
+  SELLO_UNICO_PATRON = '[0-9]{8}-[0-9]{9}-' + FRAGMENTO_UNICO_PATRON;
+
 { EL nombrador de la carpeta de descarga temporal ('__tmp-' + 8 hex) que
   crea quien baja algo de un target, y su lector: la unica carpeta fuera de
   una desechable que BorraArbol acepta, porque la acaba de crear el servidor. }
@@ -413,6 +441,20 @@ procedure VaciaDesechable(const ADir: string; ACorte: UInt64 = 0);
   un fichero (FILETIME, UTC): el corte de VaciaDesechable. }
 function CorteDePurga(AHoras: Integer): UInt64;
 
+{ Tamano y fecha de escritura de un fichero SIN abrirlo (FindFirst): se leen
+  aunque otro proceso lo tenga abierto sin compartir. False si no esta. La
+  usan la foto de los escritores y la de la carpeta de un test. }
+function HuellaDeFichero(const ARuta: string; out ATam: Int64;
+  out AFecha: TDateTime): Boolean;
+
+type
+  { Lo que el copiador NO copia, lo dice quien llama: True = fuera (un
+    fichero o una carpeta, por su ruta de origen). Se pregunta LO ULTIMO,
+    por lo que se va a copiar de verdad (la regla de enlaces ya ha dicho
+    que si): quien cuenta lo copiado lo cuenta aqui, y puede lanzar para
+    cortar la copia entera - un tope de tamano. }
+  TOmiteAlCopiar = reference to function(const APath: string): Boolean;
+
 { EL copiador de arboles: copia AOrigen en ADestino SIN FUGAS DE LECTURA. Un
   enlace (junction o symlink, de carpeta o de fichero) se sigue SOLO si su
   destino real pasa la puerta de lectura de la sesion (ReadPathDenied): sus
@@ -427,9 +469,12 @@ function CorteDePurga(AHoras: Integer): UInt64;
   no puede copiar. ASigueEnlaces=False: un enlace de DENTRO no se sigue (va
   a ANoSeguidos): la copia de seguridad de un move, que los lleva como
   enlaces; una junction a la raiz dentro de la carpeta metia la copia en su
-  propia papelera y el move fallaba (novena revision). }
+  propia papelera y el move fallaba (novena revision). AOmite (opcional):
+  lo que quien llama deja fuera - delphi_test no se lleva los .dcu a la
+  carpeta de su contenedor. Un parametro del copiador, no otro copiador. }
 procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
-  out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean = True);
+  out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean = True;
+  const AOmite: TOmiteAlCopiar = nil);
 
 { La decision de copy=true, sola: '' = se puede copiar AOrigen en ADestino.
   No, si ADestino cae DENTRO de AOrigen (se copiaria sin fin), ni si lo que
@@ -856,8 +901,9 @@ function AllowRemoteRun: Boolean;   // DELPHI_MCP_ALLOW_REMOTE_RUN / AllowRemote
 { Whether delphi_test may RUN a test project's binary on this server. OFF by
   default, and the ONE thing that ever runs on this machine (delphi_run,
   arbitrary binaries, was retired 2026-09-23: one door): the binary comes
-  from a project of the jail, is built here, and goes through the
-  low-integrity sandbox with a timeout. Opt in with
+  from a project of the jail, is built here, and runs on a copy of its
+  output folder in a Windows container of its own (Lsp.Sandbox) with a
+  timeout. Opt in with
   DELPHI_MCP_ALLOW_TESTS=1 or AllowTests=1 en el workspace. }
 function AllowTests: Boolean;      // DELPHI_MCP_ALLOW_TESTS / AllowTests=1
 
@@ -1214,6 +1260,7 @@ uses
   System.Hash,
   Lsp.Patch,            // TrashFolderName: el nombre de la papelera, de SU nombrador
   Lsp.NetDrives,        // las letras de red de los sitios declarados
+  Lsp.Sandbox,          // PurgaContenedoresHuerfanos: la otra mitad de la casa
   Lsp.Texts;
 
 type
@@ -3497,7 +3544,7 @@ end;
 
 { delphi_build's platform/config/target reach a cmd.exe line UNQUOTED
   (rsvars.bat && msbuild ...), so a metacharacter there is arbitrary execution
-  that sails past the jail, the low-integrity sandbox and the .dproj
+  that sails past the jail, the test container and the .dproj
   hazard scanner at once. platform reuses the whitelist that ALREADY exists for
   the .dproj XML sink (Lsp.Dproj.CanonicalPlatform) instead of a second, weaker
   charset test; target is a fixed trio; config is NOT a fixed list - a project
@@ -4837,9 +4884,7 @@ begin
     // Milisegundos y un fragmento GUID: con resolucion de SEGUNDOS dos
     // capturas del mismo segundo compartian nombre y la segunda pisaba a la
     // primera - las dos llamadas se llevaban la misma imagen.
-    AFile := TPath.Combine(Carpeta, Format('%s-%s-%s%s', [APrefix,
-      FormatDateTime('yyyymmdd-hhnnsszzz', Now),
-      LowerCase(TGUID.NewGuid.ToString.Substring(1, 6)), AExt]));
+    AFile := TPath.Combine(Carpeta, Format('%s-%s%s', [APrefix, SelloUnico, AExt]));
   if O <> '' then
   begin
     // la puerta de ESCRIBIR, la de todas (solo lectura incluida): una sesion
@@ -4898,20 +4943,29 @@ begin
   Result := [TempFolderName, TrashFolderName];
 end;
 
+function FragmentoUnico: string;
+begin
+  Result := LowerCase(TGUID.NewGuid.ToString.Substring(1, 8));
+end;
+
+function SelloUnico: string;
+begin
+  Result := FormatDateTime('yyyymmdd"-"hhnnsszzz', Now) + '-' + FragmentoUnico;
+end;
+
 const
   DESCARGA_PREFIJO = '__tmp-'; // empieza por __, como toda zona borrable
 
 function NuevaCarpetaDescarga(const ADentroDe: string): string;
 begin
-  Result := TPath.Combine(ADentroDe, DESCARGA_PREFIJO +
-    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
+  Result := TPath.Combine(ADentroDe, DESCARGA_PREFIJO + FragmentoUnico);
 end;
 
 function EsCarpetaDescarga(const ANombre: string): Boolean;
 begin
   // la inversa exacta del nombrador: el prefijo y 8 hexadecimales
   Result := TRegEx.IsMatch(ANombre, '^' + TRegEx.Escape(DESCARGA_PREFIJO) +
-    '[0-9a-f]{8}$', [roIgnoreCase]);
+    FRAGMENTO_UNICO_PATRON + '$', [roIgnoreCase]);
 end;
 
 function Slug(const S: string): string;
@@ -5144,7 +5198,8 @@ begin
 end;
 
 procedure CopiaArbol(const AOrigen, ADestino: string; AConPapelera: Boolean;
-  out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean);
+  out ANoSeguidos: TArray<string>; ASigueEnlaces: Boolean;
+  const AOmite: TOmiteAlCopiar);
 var
   Vistos: TStringList;
   NoSeg: TStringList;
@@ -5166,7 +5221,8 @@ var
     Vistos.Add(LowerCase(RealPath(O)));
     CrearCarpeta(D);
     for E in TDirectory.GetFiles(O) do
-      if not EsEnlace(E) or SeSigue(E) then
+      if (not EsEnlace(E) or SeSigue(E)) and
+         (not Assigned(AOmite) or not AOmite(E)) then
         // la copia CON papelera es la de seguridad de un move (conserva los
         // atributos); la otra es la del agente (copy=true): sin el +R heredado
         if AConPapelera then
@@ -5186,7 +5242,8 @@ var
         NoSeg.Add(E);
         Continue;
       end;
-      if not EsEnlace(E) or SeSigue(E) then
+      if (not EsEnlace(E) or SeSigue(E)) and
+         (not Assigned(AOmite) or not AOmite(E)) then
         Copia(E, TPath.Combine(D, Nombre));
     end;
   end;
@@ -5484,6 +5541,14 @@ begin
   Result := AHandle <> 0;
 end;
 
+function ClaveDeCarpeta(const ADir: string): string;
+begin
+  // AnsiLowerCase y no LowerCase: la de la RTL solo pliega A-Z, y 'C:\Ñ' y
+  // 'C:\ñ' son la misma carpeta (revision de la 1.11.0)
+  Result := LowerCase(THashMD5.GetHashString(
+    AnsiLowerCase(SinBarraFinal(LongCanonical(ADir)))));
+end;
+
 { La temporal ADir es de ESTE proceso: si ningun otro servidor vivo la ha
   reclamado, la reclama (hasta morir) y True. La clave sale de la ruta
   canonica, asi que la misma carpeta escrita en 8.3 o con otras mayusculas
@@ -5493,8 +5558,7 @@ var
   Clave: string;
   H: THandle;
 begin
-  Clave := 'tmp-' + THashMD5.GetHashString(
-    LowerCase(SinBarraFinal(LongCanonical(ADir))));
+  Clave := 'tmp-' + ClaveDeCarpeta(ADir);
   if not Assigned(GTemporalesMias) then
     GTemporalesMias := TStringList.Create;
   if GTemporalesMias.IndexOf(Clave) >= 0 then
@@ -5516,7 +5580,7 @@ var
 begin
   if GPrimera <> 0 then
     Exit(True);
-  Result := ReclamaNombre(LowerCase(ServerDir).Replace('\', '/').Replace(':', ''), H);
+  Result := ReclamaNombre(ClaveDeCarpeta(ServerDir), H);
   if Result then
     GPrimera := H;
 end;
@@ -5610,6 +5674,11 @@ begin
     Exit;
   // La casa del servidor, la de siempre.
   VaciaDesechable(ServerTempDir);
+  // ...y los contenedores de delphi_test que dejo una caida de ESTA casa: sus
+  // copias se acaban de ir con la temporal, y el contenedor es la otra mitad.
+  // Aqui y no antes del if: un arranque stdio del mismo exe no borra los del
+  // servicio en marcha, como no borra sus temporales.
+  PurgaContenedoresHuerfanos;
   // ...Y LA DE CADA WORKSPACE. Primer intento: se vaciaba en el primer uso
   // de AgentTempDir, porque "al arrancar no hay workspace activo" - los
   // roots los elige el token de quien llama. Falso: los workspaces ESTAN

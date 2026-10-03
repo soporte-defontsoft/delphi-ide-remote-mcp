@@ -222,6 +222,14 @@ function BuildOutputDirs(const ADprojPath, APlatform, AConfig: string): TArray<T
   (EffectiveProperty). }
 function BuildOutputUndeclared(const ADprojPath, APlatform, AConfig: string): string;
 
+{ True si el build APlatform/AConfig de ADprojPath enlaza con paquetes en
+  tiempo de ejecucion (UsePackages=true en su valor EFECTIVO, en el .dproj o
+  en lo que importa del proyecto): el exe cargara .bpl de fuera al
+  arrancar. Basta con que uno de la cadena lo diga. Lo pregunta delphi_test,
+  cuya jaula no deja leer esos .bpl (David, 2-oct-2026: "lo compilas entero
+  o no molestes"). }
+function UsaPaquetesEnEjecucion(const ADprojPath, APlatform, AConfig: string): Boolean;
+
 { La propiedad de ENTORNO del IDE que este proyecto -o algo que importa-
   REDEFINE, o '' si no toca ninguna. Los <Import> de CodeGear.Common.Targets
   (EnvironmentSettings/EnvOptions/Profiles/GlobalOptionFile) y de
@@ -1015,6 +1023,16 @@ begin
     Exit('DCC_DcpOutput');
   if Cpp and not Declara('DCC_HppOutput') then
     Exit('DCC_HppOutput');
+end;
+
+function UsaPaquetesEnEjecucion(const ADprojPath, APlatform, AConfig: string): Boolean;
+var
+  Xml: string;
+begin
+  Result := False;
+  for Xml in ProjectXmlChain(ADprojPath) do
+    if SameText(EffectiveProperty(Xml, 'UsePackages', APlatform, AConfig), 'true') then
+      Exit(True);
 end;
 
 const

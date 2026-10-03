@@ -8,7 +8,15 @@ unit Lsp.BuildRunner;
 interface
 
 uses
-  System.JSON;
+  System.JSON,
+  System.SysUtils, // Exception: base de ETestNoConfinado
+  Lsp.Sandbox; // TContenedor: la jaula de delphi_test
+
+type
+  { El test no se pudo confinar en su Job Object: fail-closed, no corre.
+    CorreEnContenedor la distingue de un fallo de lanzamiento (TEST-032 vs
+    TEST-027). }
+  ETestNoConfinado = class(Exception);
 
 function RunMsBuild(const ADprojPath, APlatform, AConfig, ATarget: string;
   const AProfile: string = ''; const ADeviceId: string = '';
@@ -50,24 +58,20 @@ function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 
-{ Like RunCapturedIn but launches the process at LOW integrity (filesystem
-  write confinement for delphi_test). AWorkDir is labelled Low so the program
-  can write its own output there and nowhere else on the system. ASandboxed
-  reports whether the low-integrity launch actually took effect. }
-function RunCapturedSandboxed(const ACmdLine, AWorkDir: string;
-  ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean): string;
-
-{ Same, and says whether the process was KILLED for running out of time.
-  Without this a killed process was indistinguishable from one that failed
-  instantly: same exitCode 1, same empty output (measured 2026-08-25). }
-function RunCapturedSandboxedT(const ACmdLine, AWorkDir: string;
-  ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean;
+{ Como RunCapturedIn, pero DENTRO del contenedor AC (Lsp.Sandbox), que ya
+  tiene su carpeta preparada: AWorkDir. Falla cerrado: si Windows no lo lanza
+  dentro, NO se lanza fuera - EOSError con el codigo de Windows (hasta la
+  1.10 un lanzamiento a integridad baja que fallaba se repetia SIN jaula y
+  solo lo avisaba sandboxed=false). ATimedOut dice si se le mato por tiempo:
+  sin eso un proceso muerto era igual que uno que fallaba al instante, mismo
+  exitCode 1 y salida vacia (medido 2026-08-25). }
+function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;
+  const AC: TContenedor; ATimeoutMs: Integer; out AExitCode: Cardinal;
   out ATimedOut: Boolean): string;
 
 implementation
 
 uses
-  System.SysUtils,
   System.Classes,
   System.IOUtils,
   System.Win.Registry,
@@ -84,7 +88,6 @@ uses
   System.Diagnostics,
   Lsp.Patch,
   Lsp.Texts,
-  Lsp.Sandbox,
   Lsp.ErrorMode,
   Lsp.PackageMap,
   Lsp.ProjectUnits;
@@ -242,8 +245,62 @@ begin
   Result := HasHigh;
 end;
 
+// APIs de Job que la RTL de este Delphi no declara (como las constantes que
+// CreateConfinedJob define a mano): con su nombre real en kernel32.
+function QueryInformationJobObject_(hJob: THandle; InfoClass: DWORD;
+  Info: Pointer; Len: DWORD; RetLen: PDWORD): BOOL; stdcall;
+  external kernel32 name 'QueryInformationJobObject';
+
+function TerminateJobObject_(hJob: THandle; ExitCode: UINT): BOOL; stdcall;
+  external kernel32 name 'TerminateJobObject';
+
+const
+  JobObjectBasicAccountingInformation_ = 1;
+
+type
+  TJobAccounting_ = record
+    TotalUserTime: Int64;
+    TotalKernelTime: Int64;
+    ThisPeriodTotalUserTime: Int64;
+    ThisPeriodTotalKernelTime: Int64;
+    TotalPageFaultCount: DWORD;
+    TotalProcesses: DWORD;
+    ActiveProcesses: DWORD;
+    TotalTerminatedProcesses: DWORD;
+  end;
+
+{ Mata el arbol del job y NO vuelve hasta que no queda ninguno vivo (o se agota
+  APlazoMs): la foto y el borrado de la copia del test no deben correr con un
+  hijo del test aun escribiendo. Para el camino del contenedor. }
+procedure EsperaJobVacio(AJob: THandle; APlazoMs: Cardinal);
+var
+  Info: TJobAccounting_;
+  Fin: UInt64;
+  RetLen: DWORD;
+begin
+  if not TerminateJobObject_(AJob, 1) then
+  begin
+    var ErrT := GetLastError; // antes de llamar al log, que lo cambiaria
+    try TLogger.Warning(MsgFmt(SL_TEST_JOB_TERMINAR_FMT, [ErrT])); except end;
+  end;
+  Fin := GetTickCount64 + APlazoMs;
+  repeat
+    FillChar(Info, SizeOf(Info), 0);
+    if not QueryInformationJobObject_(AJob,
+      JobObjectBasicAccountingInformation_, @Info, SizeOf(Info), @RetLen) then
+    begin
+      var ErrQ := GetLastError;
+      try TLogger.Warning(MsgFmt(SL_TEST_JOB_CONSULTAR_FMT, [ErrQ])); except end;
+      Exit; // si no se puede preguntar, no colgar la limpieza por ello
+    end;
+    if Info.ActiveProcesses = 0 then
+      Exit;
+    Sleep(10);
+  until GetTickCount64 >= Fin;
+end;
+
 function RunCore(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
-  ALowIntegrity: Boolean; out AExitCode: Cardinal; out ASandboxed: Boolean;
+  AContenedor: PContenedor; out AExitCode: Cardinal;
   out ATimedOut: Boolean): string;
 var
   SA: TSecurityAttributes;
@@ -258,15 +315,6 @@ var
   Launched: Boolean;
   Job: THandle; // declared here: it outlives the launch block below
 begin
-  ASandboxed := False;
-  // Label the working directory Low so the confined program can write its
-  // OWN output there (and nowhere else on the system). Relabel EXISTING
-  // entries too, so a file created earlier at Medium (a log/csv/ini next to
-  // the exe) stays writable by the confined run instead of an unexplained
-  // "Acceso denegado" (field round 6, R6-C). BEFORE the launch lock: it walks
-  // a whole tree, and every other launch of the server waited behind it.
-  if ALowIntegrity and (AWorkDir <> '') then
-    LabelDirTreeLowIntegrity(AWorkDir);
   // From the pipe to the closing of the child's end, nobody else launches:
   // another child would take this end with it (see Lsp.Sandbox, 2026-09-29).
   EnterSpawn;
@@ -295,39 +343,55 @@ begin
   // BEFORE it runs (otherwise a fast child could spawn a grandchild that
   // escapes the job). Then resume.
   Job := CreateConfinedJob;
-  Launched := False;
-  if ALowIntegrity then
+  // Con contenedor el job es OBLIGATORIO: sin el no se corre (fail-closed).
+  // Para build/git es best-effort (es el toolchain de confianza).
+  if (AContenedor <> nil) and (Job = 0) then
   begin
-    // The working directory is labelled Low already (above). Launch at Low
-    // integrity; if the OS refuses the lowered launch, fall back to a normal
-    // launch and report ASandboxed=False - never leave the caller thinking
-    // a confinement is in place when it is not.
-    if CreateProcessLowIntegrity(Cmd, WorkDirPtr,
-      CREATE_NO_WINDOW or CREATE_SUSPENDED, True, SI, PI) then
-    begin
-      Launched := True;
-      ASandboxed := True;
-    end;
+    CloseHandle(ReadH);
+    CloseHandle(WriteH);
+    raise ETestNoConfinado.Create(MsgText(SR_TEST_SIN_JAULA));
   end;
+  // Con contenedor, DENTRO o nada (Lsp.Sandbox): no hay vuelta a un
+  // lanzamiento normal. Hasta la 1.10, si la jaula fallaba el test corria
+  // sin ella y solo lo decia sandboxed=false.
+  if AContenedor <> nil then
+    Launched := CreateProcessEnContenedor(AContenedor^, Cmd, WorkDirPtr,
+      CREATE_NO_WINDOW or CREATE_SUSPENDED, SI, PI)
+  else
+    Launched := CreateProcess(nil, PChar(Cmd), nil, nil, True,
+      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, WorkDirPtr, SI, PI);
   if not Launched then
-    if not CreateProcess(nil, PChar(Cmd), nil, nil, True,
-      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, WorkDirPtr, SI, PI) then
+  begin
+    // What Windows said, read before anything else is called, and CARRIED
+    // by the exception: EOSError.ErrorCode is how a caller tells "the
+    // program is not there" (2) from the rest - delphi_git on a server
+    // with no git (GIT-050). Its message is the one it always had; where
+    // a tool prints the class too (delphi_styles: SYS-009) it reads
+    // EOSError, and delphi_test answers it with its own tag (TEST-027).
+    var LaunchError := GetLastError;
+    if Job <> 0 then CloseHandle(Job);
+    CloseHandle(ReadH);
+    CloseHandle(WriteH);
+    var NotLaunched := EOSError.Create(MsgFmt(SE_BUILD_CREATEPROCESS_FAILED_FMT, [LaunchError]));
+    NotLaunched.ErrorCode := LaunchError;
+    raise NotLaunched;
+  end;
+  if AContenedor <> nil then
+  begin
+    // el proceso esta SUSPENDED: si no se puede confinar en el job, se mata
+    // sin haber ejecutado nada y se falla cerrado - nunca corre fuera del job
+    if not AssignProcessToJobObject(Job, PI.hProcess) then
     begin
-      // What Windows said, read before anything else is called, and CARRIED
-      // by the exception: EOSError.ErrorCode is how a caller tells "the
-      // program is not there" (2) from the rest - delphi_git on a server
-      // with no git (GIT-050). Its message is the one it always had; where
-      // a tool prints the class too (delphi_test, delphi_styles: SYS-009)
-      // it reads EOSError now.
-      var LaunchError := GetLastError;
-      if Job <> 0 then CloseHandle(Job);
+      TerminateProcess(PI.hProcess, 1);
+      CloseHandle(PI.hThread);
+      CloseHandle(PI.hProcess);
+      CloseHandle(Job);
       CloseHandle(ReadH);
       CloseHandle(WriteH);
-      var NotLaunched := EOSError.Create(MsgFmt(SE_BUILD_CREATEPROCESS_FAILED_FMT, [LaunchError]));
-      NotLaunched.ErrorCode := LaunchError;
-      raise NotLaunched;
+      raise ETestNoConfinado.Create(MsgText(SR_TEST_SIN_JAULA));
     end;
-  if Job <> 0 then
+  end
+  else if Job <> 0 then
     AssignProcessToJobObject(Job, PI.hProcess);
   NoErrorDialogs(PI.hProcess); // msbuild, git, a test exe: none may wait behind a dialog (Lsp.ErrorMode)
   ResumeThread(PI.hThread);
@@ -388,7 +452,13 @@ begin
     // Closing the job kills any process in the tree still alive (e.g. children
     // orphaned by a timeout): kill-on-close leaves nothing running behind us.
     if Job <> 0 then
+    begin
+      // Con contenedor no se vuelve hasta que el arbol del test este muerto:
+      // la foto y el borrado de la copia no deben correr con un hijo vivo.
+      if AContenedor <> nil then
+        EsperaJobVacio(Job, 5000);
       CloseHandle(Job);
+    end;
   end;
   // git and modern tools emit UTF-8 (measured mojibake in remote field
   // test: "AÃ±ade" for "Añade"); compilers emit OEM. Strictly valid UTF-8
@@ -456,26 +526,19 @@ end;
 function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   out AExitCode: Cardinal): string;
 var
-  Ignored, IgnoredToo: Boolean;
-begin
-  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, False, AExitCode, Ignored,
-    IgnoredToo);
-end;
-
-function RunCapturedSandboxed(const ACmdLine, AWorkDir: string;
-  ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean): string;
-var
   Ignored: Boolean;
 begin
-  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, True, AExitCode, ASandboxed,
-    Ignored);
+  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, nil, AExitCode, Ignored);
 end;
 
-function RunCapturedSandboxedT(const ACmdLine, AWorkDir: string;
-  ATimeoutMs: Integer; out AExitCode: Cardinal; out ASandboxed: Boolean;
+function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;
+  const AC: TContenedor; ATimeoutMs: Integer; out AExitCode: Cardinal;
   out ATimedOut: Boolean): string;
+var
+  Copia: TContenedor;
 begin
-  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, True, AExitCode, ASandboxed,
+  Copia := AC; // RunCore lo quiere por puntero, y AC es const
+  Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, @Copia, AExitCode,
     ATimedOut);
 end;
 
@@ -1843,7 +1906,9 @@ begin
     // Medido 2026-09-23 contra 192.168.1.10 con una GUI viva.
     if (ExitCode <> 0) and Target.Contains('Deploy') and Output.Contains('E0017') then
     begin
-      var MLock := TRegEx.Match(Output, '([0-9]{8}-[0-9]{9}-[0-9a-f]{8})\.wait(?:\.[0-9]+)?\.exe', [roIgnoreCase]);
+      // el id del trabajo por el patron de su nombrador (Lsp.Guard.SelloUnico)
+      var MLock := TRegEx.Match(Output, '(' + SELLO_UNICO_PATRON +
+        ')\.wait(?:\.[0-9]+)?\.exe', [roIgnoreCase]);
       if MLock.Success then
         Result.AddPair('deployLockedNote', MsgFmt(SN_BUILD_DEPLOY_LOCKED_FMT,
           [MLock.Groups[1].Value, AProfile.Trim, ADprojPath, MLock.Groups[1].Value]));

@@ -4,21 +4,20 @@ Two internal costs removed, with the ONE risk each removal introduces pinned
 by a check:
 
   - The low-integrity labeling of a run's workdir used to re-walk and relabel
-    the whole tree on EVERY run (delphi_run then, delphi_test now). Now once per root per process - the
-    SDDL label carries OICI inheritance, so children born after the first
-    labeling arrive Low already. The risk: a MEDIUM file created BETWEEN runs
-    by the server/agent (not by the confined program). If inheritance did not
-    cover it, the second run would hit "local-blocked" where the first said
-    LOCAL-OK. Measured here, not assumed.
+    the whole tree on EVERY run (delphi_run then, delphi_test until 1.10).
+    Since 1.11.0 there is no labeling of the agent's folder at all: the test
+    runs in a container of its own on a COPY of it (Lsp.Sandbox). What this
+    battery measured stays measured: a MEDIUM file created BETWEEN runs by
+    the server/agent travels with the copy and run #2 overwrites it there.
   - The designer fact tables (~14k facts, 14 dictionaries) used to be built
     in initialization even when no designer tool was ever called. Now lazy on
     the first designer call. The risk: the first call after startup breaking.
     Covered by calling designer FIRST thing on a fresh server.
 
   Z1  fresh server: the FIRST call is delphi_designer -> lazy tables work
-  Z2  run #1: sandboxed, writes its own folder (labels the tree, caches it)
+  Z2  run #1: sandboxed, writes its own folder (its copy)
   Z3  a NEW medium-integrity file created BETWEEN runs is still writable by
-      run #2 (OICI inheritance covers post-label children - the cache is safe)
+      run #2 (it travels with the copy, which is the container's)
 
 Usage:  python tests/test_round21.py [path-to-DelphiLspMcp.exe]
 """
@@ -80,13 +79,14 @@ if sbok:
     tail, sbx, raw = _run()
     check('Z2 run #1 sandboxed escribe en su carpeta', 'LOCAL-OK' in tail and sbx, raw[:200])
     # BETWEEN runs: this test process (MEDIUM integrity) creates the file the
-    # program will overwrite. With the label cache, run #2 does NOT relabel -
-    # only OICI inheritance can make this writable. Measure it.
+    # program will overwrite. It travels with the copy into the container's
+    # folder, where it is the container's. Measure it.
     open(os.path.join(rundir, 'entre.txt'), 'w').write('medium-file-created-between-runs')
     tail, sbx, raw = _run()
-    check('Z3 fichero MEDIUM creado ENTRE runs: run #2 lo sobrescribe '
-          '(la herencia OICI cubre a los hijos nuevos; el cache es seguro)',
-          'LOCAL-OK' in tail and sbx, raw[:220])
+    check('Z3 fichero MEDIUM creado ENTRE runs: run #2 lo sobrescribe en su copia, '
+          'y el original del agente queda como estaba',
+          'LOCAL-OK' in tail and sbx and
+          open(os.path.join(rundir, 'entre.txt')).read() == 'medium-file-created-between-runs', raw[:220])
 
 srv.mata()
 mc.fin('round-21 battery')

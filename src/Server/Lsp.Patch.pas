@@ -896,7 +896,7 @@ begin
   // serializa; esto protege ademas a quien escriba sin pasar por el.
   Tmp := TPath.Combine(TPath.GetDirectoryName(APath),
     '.' + TPath.GetFileName(APath) + '.' +
-    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)) + '.delphi-patch-tmp');
+    FragmentoUnico + '.delphi-patch-tmp');
   TFile.WriteAllBytes(Tmp, B);
   // Un lector de un instante (el preview de un changeset, una busqueda, el
   // antivirus) tiene el fichero abierto sin compartir el borrado y el rename

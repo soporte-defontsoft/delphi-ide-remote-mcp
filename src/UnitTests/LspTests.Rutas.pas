@@ -66,6 +66,18 @@ type
     [Test] procedure ElUncExtendidoYElHostRaroSeEnmascaran;
   end;
 
+  { LA clave de una carpeta (Lsp.Guard.ClaveDeCarpeta): la misma carpeta
+    escrita con otras mayusculas, tambien fuera de A-Z, o con la barra final,
+    da la misma clave - la marca de los contenedores de delphi_test y el
+    cerrojo de la primera instancia salen de ella (revision de la 1.11.0:
+    LowerCase solo plegaba A-Z). }
+  [TestFixture]
+  TClaveDeCarpetaTests = class
+  public
+    [Test] procedure OtrasMayusculasFueraDeAZDanLaMismaClave;
+    [Test] procedure LaBarraFinalNoCambiaLaClave;
+  end;
+
 implementation
 
 uses
@@ -386,9 +398,29 @@ begin
   Assert.DoesNotContain(S, '_nas', S);
 end;
 
+{ TClaveDeCarpetaTests }
+
+procedure TClaveDeCarpetaTests.OtrasMayusculasFueraDeAZDanLaMismaClave;
+var
+  A, B: string;
+begin
+  // C:\Nandu\Servidor con la enye y la u acentuada, en mayusculas y en minusculas
+  A := ClaveDeCarpeta('C:\' + #$00D1 + 'and' + #$00DA + '\Servidor');
+  B := ClaveDeCarpeta('C:\' + #$00F1 + 'AND' + #$00FA + '\servidor');
+  Assert.AreEqual(A, B);
+  Assert.AreEqual(32, Length(A), A);
+end;
+
+procedure TClaveDeCarpetaTests.LaBarraFinalNoCambiaLaClave;
+begin
+  Assert.AreEqual(ClaveDeCarpeta('C:\Casa\Servidor'),
+    ClaveDeCarpeta('C:\Casa\Servidor\'));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
   TDUnitX.RegisterTestFixture(TBarridoDeUnidadesTests);
+  TDUnitX.RegisterTestFixture(TClaveDeCarpetaTests);
 
 end.

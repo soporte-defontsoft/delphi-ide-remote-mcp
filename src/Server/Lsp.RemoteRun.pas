@@ -441,8 +441,9 @@ begin
   // Timestamp alone collided when two agents fired remote-run in the same
   // millisecond (hermes, release audit 2026-08-26, P2.8). The GUID fragment
   // makes each operation's files unique while the prefix stays sortable.
-  JobId := FormatDateTime('yyyymmdd"-"hhnnsszzz', Now) + '-' +
-    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8));
+  // Por EL nombrador (Lsp.Guard.SelloUnico): la nota del deploy bloqueado
+  // lo busca con su patron.
+  JobId := SelloUnico;
   // Temporal DEL SERVIDOR: este guion se manda al target y aqui no vuelve a
   // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Guard).
   TmpDir := ServerTempDir('remoterun');
@@ -740,7 +741,7 @@ begin
   // llevaba por delante la de otro - dos Linux a la vez y cada uno leyendo el
   // sello del contrario (analisis de concurrencia 2026-09-20).
   TmpDir := TPath.Combine(ServerTempDir('remoterun'), 'ver-' +
-    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
+    FragmentoUnico);
   CrearCarpeta(TmpDir);
   // el sello del target: ausente = nodo de antes de los sellos (o ninguno)
   RemotoSha := '';

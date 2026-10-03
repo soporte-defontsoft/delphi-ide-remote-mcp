@@ -104,6 +104,14 @@ handshake.
   loop: edit -> diagnostics -> build -> **test** -> commit.
 - It needs `AllowTests=1` declared in YOUR workspace on the server. Without
   it `discover` works and `run` says so - that is a switch, not a bug.
+- The test runs in a Windows container on a COPY of its output folder: it
+  sees that folder and, besides it, only what Windows gives every container
+  (its own temp, the system files), and has no network. Write tests of
+  LOGIC; a data file a test reads goes in the output folder, a project
+  built with runtime packages is refused (build it whole), and what the test
+  writes there comes back in `files`. A test that needs a database or the
+  network belongs on a
+  target machine (`delphi_paserver remote-run`).
 
 ## Renaming a symbol
 

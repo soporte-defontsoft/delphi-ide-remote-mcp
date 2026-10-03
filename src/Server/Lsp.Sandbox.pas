@@ -1,22 +1,24 @@
 unit Lsp.Sandbox;
 
-{ Filesystem confinement for delphi_test via Windows Mandatory Integrity
-  Control. A process launched at LOW integrity cannot WRITE to any object at
-  the normal (Medium) integrity level - i.e. the whole ordinary filesystem,
-  the user profile, other projects, Windows. It can still READ (read-down is
-  allowed) and produce stdout. To let the run program write its OWN output, a
-  single directory (inside the jail) is labelled Low so a low-IL process may
-  write THERE and nowhere else.
+{ La jaula de delphi_test: un AppContainer de Windows POR EJECUCION. El test
+  corre dentro, sobre una COPIA de su carpeta de salida en la casa del
+  servidor (ServerTempDir), y el contenedor no tiene ninguna capacidad: no ve
+  la red ni las unidades de red, y no lee ni escribe nada fuera de la carpeta
+  que se le da. Nace con la peticion y se borra con la respuesta.
 
-  This is the real answer to "a compiled program run through the MCP could
-  scribble anywhere the service account can" (B0b). It bounds WRITES; the Job
-  Object (Lsp.BuildRunner) bounds lifetime and resources. Together they
-  sandbox delphi_test (and, until 2026-09-23, delphi_run).
+  Por que no la baja integridad de antes (2-oct-2026, medido): la etiqueta de
+  integridad solo la hace cumplir Windows en el disco LOCAL. Un test a
+  integridad baja escribia en una unidad de red (N:) con las credenciales de
+  la sesion, leia cualquier fichero y abria conexiones; y en una raiz de red
+  ni su propia salida se podia etiquetar (Samba no guarda la etiqueta). En el
+  contenedor, medido: escribe solo en su carpeta y no sube de ella ni para
+  leer, N: no existe ni por letra ni por UNC, no hay red, y dos tests vivos en
+  contenedores distintos no se ven. Crear y borrar uno cuesta unos 30 ms.
 
-  Honest limits: it needs the launch to succeed with a lowered token (verified
-  at runtime; if the OS refuses, the caller is told the process ran WITHOUT
-  the sandbox rather than silently unconfined). build/git are NOT lowered -
-  they run the trusted toolchain, not arbitrary compiled output. }
+  Lo que NO hay, decidido asi (David, 2-oct-2026): red (localhost se queda
+  colgado hasta que TCP se rinde, unos 21 s), paquetes en tiempo de ejecucion
+  (los .bpl de fuera de Program Files no se leen) y nada del proyecto que no
+  viaje en su carpeta de salida. Es una jaula para tests de logica. }
 
 interface
 
@@ -25,31 +27,50 @@ uses
   System.SysUtils,
   System.IOUtils;
 
-{ Launches ACmdLine at LOW integrity, like CreateProcess (suspended-capable,
-  handle-inheriting, CREATE_NO_WINDOW). AWorkDir may be nil. Returns True and
-  fills API on success. ASandboxed reports whether the LOW-integrity token was
-  actually applied (False = the OS refused the lowered launch and the process
-  was NOT started; the caller must then decide). }
-function CreateProcessLowIntegrity(const ACmdLine: string; AWorkDir: PChar;
-  ACreateFlags: DWORD; AInheritHandles: Boolean; const ASI: TStartupInfo;
+type
+  { Un AppContainer de UNA ejecucion. Nombre es el perfil registrado (lo
+    compone CreaContenedor, con la marca de esta casa del servidor) y Sid el
+    suyo, que suelta BorraContenedor. }
+  TContenedor = record
+    Nombre: string;
+    Sid: PSID;
+  end;
+  PContenedor = ^TContenedor;
+
+{ Registra un contenedor nuevo, sin ninguna capacidad. 0 si lo hay; si no, el
+  codigo que dio Windows (un HRESULT) y AC queda vacio. }
+function CreaContenedor(out AC: TContenedor): DWORD;
+
+{ Lo borra (el perfil y la carpeta que le hace Windows) y suelta el SID. Con
+  AC vacio no hace nada, y nunca lanza. Se llama con el proceso ya muerto. }
+procedure BorraContenedor(var AC: TContenedor);
+
+{ Da al contenedor una carpeta VACIA recien creada por el servidor: permisos
+  PROPIOS, no los de donde vive (el sistema, los administradores y esta
+  cuenta con control total; el contenedor con modificar), heredables: lo
+  que se copie DESPUES dentro es del contenedor (medido con la base
+  preparada antes de copiar, 2-oct-2026). Sin etiqueta de integridad: el
+  proceso del contenedor es de integridad baja, y aun asi escribe con este
+  permiso y nada mas - medido con un mutante sin ella, la bateria entera
+  siguio verde; era una llamada de mas que podia fallar. 0 o el error. }
+function PreparaCarpetaDelContenedor(const AC: TContenedor;
+  const ADir: string): DWORD;
+
+{ CreateProcess DENTRO del contenedor, heredando handles (la tuberia de la
+  salida) como el de siempre, y con el entorno SIN la configuracion del
+  servidor (DELPHI_MCP_*: raices, tokens, interruptores): el test no ve con
+  que se configuro quien lo lanza - medido el 2-oct-2026, las unitarias del
+  propio servidor pasaban porque heredaban sus raices. False con GetLastError
+  si Windows no lo lanza; no lanza excepciones: quien llama decide, y no
+  poder lanzar dentro NO es lanzar fuera. }
+function CreateProcessEnContenedor(const AC: TContenedor; const ACmdLine: string;
+  AWorkDir: PChar; ACreateFlags: DWORD; const ASI: TStartupInfo;
   out API: TProcessInformation): Boolean;
 
-{ Labels a directory (and its new children) LOW integrity so a low-IL process
-  may write inside it. Non-destructive: it only lowers the write requirement,
-  medium/high writers are unaffected. Best-effort. }
-function LabelDirLowIntegrity(const ADir: string): Boolean;
-
-{ Like LabelDirLowIntegrity but ALSO relabels the files and subfolders that
-  ALREADY exist in ADir. The inherited (OICI) label only reaches NEW children,
-  so a file created earlier at Medium integrity (a log/csv/ini next to the exe)
-  would otherwise be un-writable by the confined process - "Acceso denegado"
-  with no hint (field round 6, R6-C). This makes the whole working tree
-  writable by the low-IL run, and only that tree: only where the session may
-  write (EscrituraDenegada), never across a link (RecorreSinEnlaces) and never
-  a file with a second name (a hard link shares its label) - a junction in the
-  working folder lowered the label of a file OUTSIDE the jail (measured live,
-  2026-09-25). Best-effort. }
-procedure LabelDirTreeLowIntegrity(const ADir: string);
+{ Al arrancar: borra los contenedores de ESTA casa que dejo una caida. Los
+  de otro servidor de la misma cuenta (una bateria, una segunda instalacion)
+  llevan otra marca y no se tocan: pueden estar en uso. Nunca lanza. }
+procedure PurgaContenedoresHuerfanos;
 
 { ONE handle-inheriting launch at a time. CreateProcess with
   bInheritHandles=True hands the child EVERY inheritable handle the process
@@ -70,11 +91,13 @@ implementation
 
 uses
   System.Classes,
-  Lsp.Guard; // EscrituraDenegada, RecorreSinEnlaces
+  System.StrUtils,
+  System.Win.Registry,
+  Lsp.Guard, // ServerDir y ClaveDeCarpeta: la marca de esta casa
+  MCPServer.Logger,
+  Lsp.Texts;
 
 var
-  GLabeled: TStringList; // canonical roots already tree-labeled this process
-  GLabeledLock: TObject;
   GSpawnLock: TObject;
 
 procedure EnterSpawn;
@@ -88,194 +111,349 @@ begin
 end;
 
 const
-  SE_GROUP_INTEGRITY_ = $00000020;
-  SECURITY_MANDATORY_LOW_RID_ = $00001000;
-  TokenIntegrityLevel_ = 25; // TOKEN_INFORMATION_CLASS
-  LABEL_SECURITY_INFORMATION_ = $00000010;
+  CONTENEDOR_PREFIJO = 'DelphiLspMcp.Test.';
+  // donde apunta Windows cada perfil: Mappings\<SID>\Moniker, con el nombre
+  // en minusculas (medido 2-oct-2026; al borrarlo, la entrada se va)
+  MAPPINGS_KEY = 'Software\Classes\Local Settings\Software\Microsoft\Windows\' +
+    'CurrentVersion\AppContainer\Mappings';
+  PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES_ = $00020009;
+  PROC_THREAD_ATTRIBUTE_HANDLE_LIST_ = $00020002;
+  EXTENDED_STARTUPINFO_PRESENT_ = $00080000;
 
 type
-  TSidIdentifierAuthority = record
-    Value: array [0 .. 5] of Byte;
+  TSecurityCapabilities = record
+    AppContainerSid: PSID;
+    Capabilities: Pointer; // ninguna: ni red ni nada
+    CapabilityCount: DWORD;
+    Reserved: DWORD;
   end;
 
-  TTokenMandatoryLabel = record
-    Sid: PSID;
-    Attributes: DWORD;
+  TStartupInfoExW_ = record
+    StartupInfo: TStartupInfo;
+    lpAttributeList: Pointer;
   end;
+
+function CreateAppContainerProfile(pszAppContainerName, pszDisplayName,
+  pszDescription: PWideChar; pCapabilities: Pointer; dwCapabilityCount: DWORD;
+  out ppSidAppContainerSid: PSID): HRESULT; stdcall; external 'userenv.dll';
+
+function DeleteAppContainerProfile(pszAppContainerName: PWideChar): HRESULT;
+  stdcall; external 'userenv.dll';
+
+// Propias y no las de Winapi.Windows: alli lpReturnSize es un "var", y el API
+// lo quiere NULL (reservado)
+function InitializeProcThreadAttributeList_(lpAttributeList: Pointer;
+  dwAttributeCount, dwFlags: DWORD; var lpSize: NativeUInt): BOOL; stdcall;
+  external kernel32 name 'InitializeProcThreadAttributeList';
+
+function UpdateProcThreadAttribute_(lpAttributeList: Pointer; dwFlags: DWORD;
+  Attribute: NativeUInt; lpValue: Pointer; cbSize: NativeUInt;
+  lpPreviousValue, lpReturnSize: Pointer): BOOL; stdcall;
+  external kernel32 name 'UpdateProcThreadAttribute';
+
+procedure DeleteProcThreadAttributeList_(lpAttributeList: Pointer); stdcall;
+  external kernel32 name 'DeleteProcThreadAttributeList';
 
 function ConvertStringSecurityDescriptorToSecurityDescriptorW(
   StringSD: PWideChar; Revision: DWORD; out SD: PSECURITY_DESCRIPTOR;
   SDSize: PULONG): BOOL; stdcall;
   external 'advapi32.dll';
 
+function ConvertSidToStringSidW(Sid: PSID; out StringSid: PWideChar): BOOL;
+  stdcall; external 'advapi32.dll';
+
 function SetFileSecurityW(FileName: PWideChar; SecurityInformation: DWORD;
   SD: PSECURITY_DESCRIPTOR): BOOL; stdcall; external 'advapi32.dll';
 
-function CreateLowToken(out AToken: THandle): Boolean;
-var
-  Cur, Dup: THandle;
-  Auth: TSidIdentifierAuthority;
-  LowSid: PSID;
-  Til: TTokenMandatoryLabel;
+{ La marca de esta casa del servidor (la carpeta del exe), en el nombre de
+  cada contenedor: cada servidor de la misma cuenta purga solo los suyos.
+  LA clave de una carpeta (ClaveDeCarpeta), sus 8 primeros: el nombre de un
+  contenedor no pasa de 64. }
+function MarcaDeEstaCasa: string;
 begin
-  Result := False;
-  AToken := 0;
-  if not OpenProcessToken(GetCurrentProcess,
-    TOKEN_DUPLICATE or TOKEN_ADJUST_DEFAULT or TOKEN_QUERY or TOKEN_ASSIGN_PRIMARY,
-    Cur) then
+  Result := ClaveDeCarpeta(ServerDir).Substring(0, 8);
+end;
+
+{ EL comienzo del nombre de todo contenedor de ESTA casa: lo compone quien
+  crea uno y lo busca la purga (estaba escrito en los dos sitios; revision
+  de la 1.11.0). En minusculas: asi lo guarda Windows en su Moniker. }
+function PrefijoDeEstaCasa: string;
+begin
+  Result := LowerCase(CONTENEDOR_PREFIJO + MarcaDeEstaCasa + '.');
+end;
+
+function SidComoTexto(ASid: PSID): string;
+var
+  P: PWideChar;
+begin
+  Result := '';
+  if (ASid <> nil) and ConvertSidToStringSidW(ASid, P) then
+  try
+    Result := P;
+  finally
+    LocalFree(HLOCAL(P));
+  end;
+end;
+
+function SidDeEstaCuenta: string;
+var
+  Tok: THandle;
+  Buf: array [0 .. 511] of Byte;
+  Len: DWORD;
+begin
+  Result := '';
+  if not OpenProcessToken(GetCurrentProcess, TOKEN_QUERY, Tok) then
     Exit;
   try
-    if not DuplicateTokenEx(Cur, MAXIMUM_ALLOWED, nil, SecurityImpersonation,
-      TokenPrimary, Dup) then
-      Exit;
-    Auth.Value[0] := 0; Auth.Value[1] := 0; Auth.Value[2] := 0;
-    Auth.Value[3] := 0; Auth.Value[4] := 0; Auth.Value[5] := 16; // MANDATORY_LABEL_AUTHORITY
-    LowSid := nil;
-    if not AllocateAndInitializeSid(PSIDIdentifierAuthority(@Auth), 1,
-      SECURITY_MANDATORY_LOW_RID_, 0, 0, 0, 0, 0, 0, 0, LowSid) then
+    if GetTokenInformation(Tok, TokenUser, @Buf, SizeOf(Buf), Len) then
+      Result := SidComoTexto(PTokenUser(@Buf)^.User.Sid);
+  finally
+    CloseHandle(Tok);
+  end;
+end;
+
+{ El bloque de entorno de este proceso sin las DELPHI_MCP_* (Unicode, cada
+  variable terminada en nulo y un nulo mas al final, como lo pide
+  CreateProcess). La temporal NO se toca: el AppContainer sobrescribe TMP/TEMP
+  con su propia AC\Temp -existente y escribible, borrada con el perfil- y la
+  API GetTempPath la devuelve (medido 2-oct-2026; solo TPath.GetTempPath de la
+  RTL sale vacio bajo AppContainer, y eso es del binario del test). }
+function EntornoSinConfiguracion: string;
+var
+  P, Q: PChar;
+  Linea: string;
+begin
+  Result := '';
+  P := GetEnvironmentStrings;
+  if P = nil then
+    Exit(#0#0); // un bloque de entorno vacio es DOS nulos, no uno
+  try
+    Q := P;
+    while Q^ <> #0 do
     begin
-      CloseHandle(Dup);
-      Exit;
-    end;
-    try
-      Til.Sid := LowSid;
-      Til.Attributes := SE_GROUP_INTEGRITY_;
-      if SetTokenInformation(Dup, TTokenInformationClass(TokenIntegrityLevel_),
-        @Til, SizeOf(Til) + GetLengthSid(LowSid)) then
-      begin
-        AToken := Dup;
-        Result := True;
-      end
-      else
-        CloseHandle(Dup);
-    finally
-      FreeSid(LowSid);
+      Linea := Q;
+      if not StartsText('DELPHI_MCP_', Linea) then
+        Result := Result + Linea + #0;
+      Inc(Q, Length(Linea) + 1);
     end;
   finally
-    CloseHandle(Cur);
+    FreeEnvironmentStrings(P);
   end;
+  Result := Result + #0;
 end;
 
-function CreateProcessLowIntegrity(const ACmdLine: string; AWorkDir: PChar;
-  ACreateFlags: DWORD; AInheritHandles: Boolean; const ASI: TStartupInfo;
-  out API: TProcessInformation): Boolean;
-var
-  Token: THandle;
-  Cmd: string;
-  SILocal: TStartupInfo;
-begin
-  Result := False;
-  FillChar(API, SizeOf(API), 0);
-  if not CreateLowToken(Token) then
-    Exit;
-  try
-    Cmd := ACmdLine;
-    UniqueString(Cmd);
-    SILocal := ASI;
-    // A lowered token is a RESTRICTED version of the caller's own primary
-    // token, so CreateProcessAsUser does NOT require SeAssignPrimaryToken.
-    Result := CreateProcessAsUser(Token, nil, PChar(Cmd), nil, nil,
-      AInheritHandles, ACreateFlags, nil, AWorkDir, SILocal, API);
-  finally
-    CloseHandle(Token);
-  end;
-end;
-
-function LabelDirLowIntegrity(const ADir: string): Boolean;
+{ Un descriptor de seguridad en SDDL puesto sobre ADir con AQue. 0 o el error. }
+function PonDescriptor(const ADir, ASddl: string; AQue: DWORD): DWORD;
 var
   SD: PSECURITY_DESCRIPTOR;
 begin
-  Result := False;
   SD := nil;
-  // S:(ML;OICI;NW;;;LW) = mandatory Low label, inherited by children,
-  // no-write-up policy. Setting the object to Low lets a low-IL process write.
-  if ConvertStringSecurityDescriptorToSecurityDescriptorW(
-    'S:(ML;OICI;NW;;;LW)', 1 {SDDL_REVISION_1}, SD, nil) then
+  if not ConvertStringSecurityDescriptorToSecurityDescriptorW(PWideChar(ASddl),
+    1 {SDDL_REVISION_1}, SD, nil) then
+    Exit(GetLastError);
   try
-    Result := SetFileSecurityW(PWideChar(ADir), LABEL_SECURITY_INFORMATION_, SD);
+    if SetFileSecurityW(PWideChar(ADir), AQue, SD) then
+      Result := 0
+    else
+      Result := GetLastError;
   finally
     LocalFree(HLOCAL(SD));
   end;
 end;
 
-{ Cuantos nombres tiene un fichero (hard links). Uno que no se deja abrir
-  cuenta como muchos: lo que no se sabe no se toca. }
-function NombresDelFichero(const APath: string): Cardinal;
+function CreaContenedor(out AC: TContenedor): DWORD;
 var
-  H: THandle;
-  Info: TByHandleFileInformation;
+  Hr: HRESULT;
+  G: string;
 begin
-  Result := High(Cardinal);
-  H := CreateFile(PChar(APath), 0, FILE_SHARE_READ or FILE_SHARE_WRITE or
-    FILE_SHARE_DELETE, nil, OPEN_EXISTING, 0, 0);
-  if H = INVALID_HANDLE_VALUE then
+  AC.Sid := nil;
+  // 'DelphiLspMcp.Test.' + 8 + '.' + 32 = 59: el limite de Windows es 64
+  G := TGUID.NewGuid.ToString.Replace('{', '').Replace('}', '').Replace('-', '');
+  AC.Nombre := PrefijoDeEstaCasa + LowerCase(G);
+  Hr := CreateAppContainerProfile(PChar(AC.Nombre), PChar(AC.Nombre),
+    PChar(AC.Nombre), nil, 0, AC.Sid);
+  if Hr = S_OK then
+    Exit(0);
+  AC.Nombre := '';
+  AC.Sid := nil;
+  Result := DWORD(Hr);
+end;
+
+procedure BorraContenedor(var AC: TContenedor);
+var
+  Hr: HRESULT;
+begin
+  if AC.Sid <> nil then
+    FreeSid(AC.Sid);
+  AC.Sid := nil;
+  if AC.Nombre <> '' then
+  begin
+    Hr := DeleteAppContainerProfile(PChar(AC.Nombre));
+    if Hr <> S_OK then
+      try
+        TLogger.Warning(MsgFmt(SL_TEST_CONTENEDOR_NO_BORRADO_FMT,
+          [AC.Nombre, IntToHex(Cardinal(Hr), 8)]));
+      except
+        // apuntarlo no puede hacer que borrar lance
+      end;
+  end;
+  AC.Nombre := '';
+end;
+
+function PreparaCarpetaDelContenedor(const AC: TContenedor;
+  const ADir: string): DWORD;
+var
+  Yo, Suyo: string;
+begin
+  Yo := SidDeEstaCuenta;
+  Suyo := SidComoTexto(AC.Sid);
+  if (Yo = '') or (Suyo = '') then
+    Exit(ERROR_INVALID_SID);
+  // D:P = permisos propios, no heredados de donde vive. 0x1301bf = modificar
+  // (leer, escribir, ejecutar y borrar lo suyo)
+  Result := PonDescriptor(ADir,
+    'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;' + Yo + ')' +
+    '(A;OICI;0x1301bf;;;' + Suyo + ')', DACL_SECURITY_INFORMATION);
+end;
+
+{ Los handles que el hijo debe heredar: los stdhandles del arranque y nada
+  mas. Con bInheritHandles=True, CreateProcess pasa al hijo TODO handle
+  heredable del servidor (el socket de escucha de Indy entre ellos) salvo que
+  se le de ESTA lista; la jaula hereda solo su tuberia (revision 1.11.0). }
+function HandlesDeArranque(const ASI: TStartupInfo): TArray<THandle>;
+
+  function YaEsta(const A: TArray<THandle>; H: THandle): Boolean;
+  var
+    X: THandle;
+  begin
+    Result := False;
+    for X in A do
+      if X = H then
+        Exit(True);
+  end;
+
+  procedure Anade(H: THandle);
+  begin
+    if (H <> 0) and (H <> INVALID_HANDLE_VALUE) and not YaEsta(Result, H) then
+      Result := Result + [H];
+  end;
+
+begin
+  Result := [];
+  if (ASI.dwFlags and STARTF_USESTDHANDLES) = 0 then
     Exit;
+  Anade(ASI.hStdInput);
+  Anade(ASI.hStdOutput);
+  Anade(ASI.hStdError);
+end;
+
+function CreateProcessEnContenedor(const AC: TContenedor; const ACmdLine: string;
+  AWorkDir: PChar; ACreateFlags: DWORD; const ASI: TStartupInfo;
+  out API: TProcessInformation): Boolean;
+var
+  Caps: TSecurityCapabilities;
+  Tam: NativeUInt;
+  Lista: Pointer;
+  SIX: TStartupInfoExW_;
+  Cmd, Entorno: string;
+  Err: DWORD;
+  H: TArray<THandle>;
+  NAttrs: DWORD;
+  Hereda: BOOL;
+begin
+  Result := False;
+  FillChar(API, SizeOf(API), 0);
+  if AC.Sid = nil then
+  begin
+    SetLastError(ERROR_INVALID_SID);
+    Exit;
+  end;
+  FillChar(Caps, SizeOf(Caps), 0);
+  Caps.AppContainerSid := AC.Sid;
+  H := HandlesDeArranque(ASI);
+  Hereda := Length(H) > 0;
+  if Hereda then NAttrs := 2 else NAttrs := 1;
+  Tam := 0;
+  InitializeProcThreadAttributeList_(nil, NAttrs, 0, Tam);
+  GetMem(Lista, Tam);
   try
-    if GetFileInformationByHandle(H, Info) then
-      Result := Info.nNumberOfLinks;
+    if not InitializeProcThreadAttributeList_(Lista, NAttrs, 0, Tam) then
+      Exit;
+    try
+      if not UpdateProcThreadAttribute_(Lista, 0,
+        PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES_, @Caps, SizeOf(Caps),
+        nil, nil) then
+        Exit;
+      // SOLO la tuberia de salida se hereda: con bInheritHandles=True y sin
+      // esta lista el hijo heredaba TODO handle heredable del servidor
+      if Hereda and not UpdateProcThreadAttribute_(Lista, 0,
+        PROC_THREAD_ATTRIBUTE_HANDLE_LIST_, @H[0], Length(H) * SizeOf(THandle),
+        nil, nil) then
+        Exit;
+      FillChar(SIX, SizeOf(SIX), 0);
+      SIX.StartupInfo := ASI;
+      SIX.StartupInfo.cb := SizeOf(SIX);
+      SIX.lpAttributeList := Lista;
+      Cmd := ACmdLine;
+      UniqueString(Cmd);
+      Entorno := EntornoSinConfiguracion;
+      Result := CreateProcess(nil, PChar(Cmd), nil, nil, Hereda,
+        ACreateFlags or EXTENDED_STARTUPINFO_PRESENT_ or
+        CREATE_UNICODE_ENVIRONMENT, PChar(Entorno), AWorkDir,
+        PStartupInfo(@SIX)^, API);
+    finally
+      Err := GetLastError;
+      DeleteProcThreadAttributeList_(Lista);
+      SetLastError(Err);
+    end;
   finally
-    CloseHandle(H);
+    Err := GetLastError;
+    FreeMem(Lista);
+    SetLastError(Err);
   end;
 end;
 
-procedure LabelDirTreeLowIntegrity(const ADir: string);
+procedure PurgaContenedoresHuerfanos;
 var
-  Key: string;
-  RootOk: Boolean;
+  R: TRegistry;
+  Sids: TStringList;
+  Mio, Moniker: string;
 begin
-  if (ADir = '') or not TDirectory.Exists(ADir) then
-    Exit;
-  // Bajar la etiqueta es ESCRIBIR (el descriptor de seguridad): solo donde
-  // esta sesion puede escribir, por la ruta REAL. Una carpeta de trabajo que
-  // es un enlace a fuera no se etiqueta (25-sep-2026).
-  if EscrituraDenegada(ADir) <> '' then
-    Exit;
-  // Once per root per process: the SDDL label carries OICI inheritance, so
-  // children created AFTER the first labeling are born Low already - only the
-  // first pass needs the full-tree sweep, which re-walked and re-labeled the
-  // whole workdir on EVERY run (hermes, release audit 2026-08-26, P2.9). A
-  // failed root labeling is never cached, so the next run retries in full.
-  Key := TPath.GetFullPath(ADir).ToLower;
-  System.TMonitor.Enter(GLabeledLock);
+  Mio := PrefijoDeEstaCasa;
   try
-    if GLabeled.IndexOf(Key) >= 0 then
-      Exit;
-  finally
-    System.TMonitor.Exit(GLabeledLock);
-  end;
-  RootOk := LabelDirLowIntegrity(ADir);
-  // Relabel existing children. Best-effort: an unreadable subtree is skipped,
-  // never fatal. Sin cruzar NUNCA un enlace (RecorreSinEnlaces): con
-  // soAllDirectories un junction en la carpeta de trabajo bajaba la etiqueta
-  // de ficheros de FUERA de la jaula (medido en vivo, 25-sep-2026). Un fichero
-  // con otro nombre (hard link) comparte la etiqueta con el: tampoco se toca.
-  RecorreSinEnlaces(ADir,
-    procedure(const APath: string)
-    begin
-      if TDirectory.Exists(APath) or (NombresDelFichero(APath) = 1) then
-        LabelDirLowIntegrity(APath);
-    end);
-  if RootOk then
-  begin
-    System.TMonitor.Enter(GLabeledLock);
+    R := TRegistry.Create(KEY_READ);
+    Sids := TStringList.Create;
     try
-      GLabeled.Add(Key);
+      R.RootKey := HKEY_CURRENT_USER;
+      if not R.OpenKeyReadOnly(MAPPINGS_KEY) then
+        Exit;
+      R.GetKeyNames(Sids);
+      R.CloseKey;
+      for var S in Sids do
+        if R.OpenKeyReadOnly(MAPPINGS_KEY + '\' + S) then
+        try
+          if R.ValueExists('Moniker') then
+          begin
+            Moniker := R.ReadString('Moniker');
+            if StartsText(Mio, Moniker) then
+              DeleteAppContainerProfile(PChar(Moniker));
+          end;
+        finally
+          R.CloseKey;
+        end;
     finally
-      System.TMonitor.Exit(GLabeledLock);
+      Sids.Free;
+      R.Free;
     end;
+  except
+    // arrancar no puede fallar por no poder limpiar
   end;
 end;
 
 initialization
   GSpawnLock := TObject.Create;
-  GLabeledLock := TObject.Create;
-  GLabeled := TStringList.Create;
-  GLabeled.Sorted := True;
-  GLabeled.Duplicates := dupIgnore;
 
 finalization
-  GLabeled.Free;
-  GLabeledLock.Free;
   GSpawnLock.Free;
 
 end.

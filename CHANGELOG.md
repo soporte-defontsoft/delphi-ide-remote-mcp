@@ -6,6 +6,109 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.11.0] - 2026-10-03
+
+`delphi_test` runs every test in a Windows container of its own, on a copy of its output folder: the cage holds the same on every folder, local or network.
+
+### Changed
+
+- **The cage of `delphi_test` is a Windows AppContainer, one per run.**
+  Until 1.10 the test ran at low integrity, with its output folder
+  labelled Low so it could write there. Measured on 2026-10-02, while
+  looking at why a test on a network root did not even start: Windows
+  enforces that label on the LOCAL disk only. A test at low integrity
+  wrote on a network drive with the session's credentials, read any file
+  of the machine and opened connections; on a network root not even its
+  own folder could be labelled (Samba keeps no label), and the tool's
+  note promised "the only place where it can write". Now the server
+  copies the test's output folder (without `.dcu`/`.rsm`) to a folder of
+  its own temp, gives that folder to a container created for this run
+  with no capability at all, runs the test inside, and deletes both with
+  the answer. Measured: the test writes its folder and nothing else, does
+  not climb out of it even to read, sees no network drive (by letter or
+  UNC) and no network, and two tests alive in two containers do not see
+  each other. A container costs about 30 ms per test.
+- **It fails closed.** If the container cannot be made or Windows does not
+  start the test in it, the test does not run (`TEST-026`, `TEST-027`).
+  Until 1.10 a failed low-integrity launch was repeated WITHOUT the cage
+  and only `sandboxed: false` said so.
+- **What the test writes comes back in the answer**: `files` lists what it
+  created or changed in its folder, with the content of every one that is
+  text - by the server's one rule for "not text", the one `delphi_read`
+  uses, not by its extension -, 16,384 characters each and 65,536 in all
+  (`TEST-030` says when something was cut), and a file without content
+  says why in `noContent` (binary, unreadable, too big, past the total -
+  past the total nothing more is read). The list itself stops at 500
+  entries and says how many were left out (`TEST-033`). Nothing is written
+  in the workspace, and the agent's output folder is no longer touched.
+  A copy that cannot be made (a broken link in the output folder, a file
+  another program keeps open) says so with its tag (`TEST-031`), and
+  `durationMs` is the test's own time, without the copy.
+- **A test does not see the server's configuration**: it starts without
+  the `DELPHI_MCP_*` variables of the process that launches it.
+- **A test inherits only its own pipe**, not every inheritable handle the
+  server holds at that moment; its Job Object is required (`TEST-032`:
+  without it the test does not run); and the server waits for the test's
+  whole process tree to end before it looks at the copy and deletes it.
+  A container, a copy or a Job Object the server cannot clean up leaves a
+  line in the log.
+- **A test project built with runtime packages is refused before
+  building** (`TEST-028`): the container reads no `.bpl` of components or
+  of the project (only those under Program Files). Build it whole, or not
+  here.
+- The container's limits are the tool's contract now (its description,
+  `TEST-012`, `TEST-024`, the README, the skill): no network - a
+  connection to localhost hangs until TCP gives up, about 21 s -, the data
+  files of a test travel in its output folder, and Windows gives the
+  container a temp folder of its own that goes with it (`TPath.GetTempPath`
+  comes back empty in there, so a Delphi test's temp file lands in the
+  copy). It is a cage for tests of logic; a test that needs a
+  database or the network belongs on a target machine (`remote-run`).
+- Containers a crash leaves behind are purged when the SAME server starts
+  again; each server marks its own, so a battery's server never purges
+  the containers of the service. The mark comes from the server's folder
+  by its canonical path, so the same folder written in 8.3, or with other
+  capitals (also beyond A-Z), is the same server.
+- The copy is capped at 256 MB (`TEST-029`); a file symlink in the output
+  folder counts what it points to (not measured here: this account cannot
+  create symlinks).
+
+### Internal
+
+- One namer each for what was written by hand: `FragmentoUnico` (the 8
+  hex of a name made for one operation, in eight places) and `SelloUnico`
+  (date, time and that fragment: a remote-run job, a capture), with their
+  patterns next to them for whoever reads them - the note of a locked
+  deploy and the download folders; `ClaveDeCarpeta`, the key of a folder
+  (the first-instance claim, the temp folders a server owns and the
+  container mark were three different forms, two of them not canonical).
+  The first-instance claim changed form with it: a 1.10 server still
+  running in the same folder is not seen during the upgrade - stop it
+  first, as the service deploy does.
+
+The server's own unit suite showed what "logic" means: 17 of its 196 tests
+fail inside the container. `LspTests.Foto` and part of `LspTests.Motor`
+build their fixtures next to the exe and ask the jail about them - they
+passed only because the exe sat inside the roots of whoever launched it,
+and inherited them through the environment -, and `LspTests.Motor` starts
+the real DelphiLSP engine. `test_engine_dunitx` now runs the logic part of
+the suite through `delphi_test` (the tool on a real DUnitX suite, every
+release) and the whole suite directly, as the harness.
+
+`test_delphi_test_contenedor` is new: every promise by name, the caps,
+a copy that cannot be made, a crash mid-run, the same server started by
+its 8.3 path and by its long one, a container of another server left
+alone. Two review rounds after the first battery (one of them, on the
+cage itself, by another session) turned into checks and mutants: 27
+mutants, 23 red, and 4 that stayed green - the Low label on the
+container's folder, which turned out not to be needed and was removed
+(one call less that could fail); leaving the `.dcu`/`.rsm` out of the
+copy, which is only efficiency; the copier asking what to leave out
+last, which since the size is measured without opening anything is
+only order; and waiting for the test's children, because closing its
+Job Object already kills them - the check of the cleanup (K19) stays as
+a named guard of the whole. 95 batteries, 3,168 checks, 0 failures.
+
 ## [1.10.1] - 2026-10-02
 
 The description of `delphi_rename_symbol` says what 1.10.0 does: it renames code only, never a comment.

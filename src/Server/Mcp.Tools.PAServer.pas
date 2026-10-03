@@ -303,7 +303,7 @@ begin
   // tira. El agente no lo ve nunca, asi que va junto al ejecutable y no en la
   // jaula de nadie (ver el nombrador en Lsp.Guard).
   Tmp := ServerTempDir('sdk-' +
-    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)));
+    FragmentoUnico);
   try
     CrearCarpeta(Tmp);
     RunCaptured(Format('"%s" --timeout=30 "--get=/etc/os-release,%s" "%s"',

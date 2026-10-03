@@ -159,7 +159,9 @@ check('suite verde: result=pass', j.get('result') == 'pass', str(j)[:400])
 check('suite verde: 3 de 3', j.get('total') == 3 and j.get('passed') == 3 and j.get('failed') == 0, str(j)[:300])
 check('suite verde: veredicto por numeros', j.get('verdictFrom') == 'counts', str(j)[:200])
 check('suite verde: dice el binario y la duracion', bool(j.get('binary')) and j.get('durationMs') is not None, str(j)[:250])
-check('suite verde: corrio en sandbox', j.get('sandboxed') is True, str(j)[:200])
+# el campo del contrato, que desde la 1.11.0 es siempre true (sin contenedor no
+# corre); lo que la jaula HACE lo mide test_delphi_test_contenedor
+check('suite verde: la respuesta declara sandboxed=true', j.get('sandboxed') is True, str(j)[:200])
 
 # ---- run rojo ----
 j = J(B.call('delphi_test', {'command': 'run', 'project': ROJO}, t=900))

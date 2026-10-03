@@ -2981,7 +2981,7 @@ begin
   // estaba escribiendo y saltaba "el proceso no tiene acceso al archivo"
   // (medido 2026-09-20). Ahora cada una arma el suyo y la ultima gana, entero.
   EnProceso := OutZip + '.' +
-    LowerCase(TGUID.NewGuid.ToString.Substring(1, 8)) + '.tmp';
+    FragmentoUnico + '.tmp';
 
   Count := 0;
   TotalBytes := 0;

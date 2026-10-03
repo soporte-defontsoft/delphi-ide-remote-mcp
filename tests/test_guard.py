@@ -23,7 +23,7 @@ open(os.path.join(OUTSIDE, 'Fuera.pas'), 'wb').write(SRC.replace('Dentro', 'Fuer
 
 env = {}
 env['DELPHI_MCP_ROOTS'] = INSIDE  # the jail
-# This battery exercises the RUN MECHANISM (jail + low-integrity sandbox)
+# This battery exercises the RUN MECHANISM (jail + the test's container)
 # through delphi_test, the one thing that executes on this server since
 # delphi_run was retired (2026-09-23), so it opts into tests.
 env['DELPHI_MCP_ALLOW_TESTS'] = '1'
@@ -105,8 +105,9 @@ check('run: delphi_run ya no existe (retirada 2026-09-23: una sola via de ejecuc
 
 # --- filesystem sandbox (B0b): a program run here cannot write outside its
 #     folder. Since 2026-09-23 the only thing that runs on this server is a
-#     test project through delphi_test (AllowTests), in the same low-integrity
-#     sandbox delphi_run used to measure - so the measurement moves there.
+#     test project through delphi_test (AllowTests), in a container of its
+#     own on a copy of its folder since 1.11.0 (a low-integrity sandbox until
+#     then) - so the measurement moves there.
 _q = chr(39)
 _pub = r'C:\Users\Public\PWNED_guard_test.txt'
 if os.path.exists(_pub):
@@ -127,8 +128,8 @@ except Exception:
 check('sandbox: proyecto de prueba compila', sbok, out[:150])
 if sbok:
     # R6-C: pre-create out.txt at MEDIUM integrity (this test process) in the
-    # run's own folder. Without the tree relabel, the low-IL run cannot
-    # overwrite a pre-existing medium file -> "local-blocked".
+    # run's own folder. It travels with the copy into the container's folder,
+    # and the run must still overwrite it there -> "LOCAL-OK".
     _rundir = os.path.join(INSIDE, 'SbxTest', 'Win64', 'Debug')
     os.makedirs(_rundir, exist_ok=True)
     open(os.path.join(_rundir, 'out.txt'), 'w').write('preexisting-medium-integrity')
@@ -139,7 +140,7 @@ if sbok:
     except Exception:
         _tj = {}
     _tail = _tj.get('outputTail', '')
-    check('sandbox: escritura al SISTEMA bloqueada (low integrity)',
+    check('sandbox: escritura al SISTEMA bloqueada (contenedor)',
           'sys-blocked' in _tail and not os.path.exists(_pub), out[:200])
     check('sandbox: escritura en su propia carpeta permitida', 'LOCAL-OK' in _tail, out[:200])
     check('R6-C: sobrescribe un fichero MEDIO pre-existente en su cwd', 'LOCAL-OK' in _tail, out[:200])

@@ -16,9 +16,11 @@ unit Lsp.TestRunner;
 // Running it is EXECUTION, and execution is opt-in on this server. It has its
 // own switch, AllowTests en el workspace, and it is the ONLY execution this
 // machine offers (delphi_run, arbitrary binaries, was retired 2026-09-23:
-// one door). The binary is built here, from a project of the jail, run in a
-// low-integrity sandbox (Lsp.Sandbox), with a timeout, and only ever the
-// artifact delphi_build declared.
+// one door). The binary is built here, from a project of the jail, and run in
+// a Windows container of its own on a COPY of its output folder in the
+// server's house (Lsp.Sandbox, 2-oct-2026: the low-integrity label it had
+// before did not hold on network folders), with a timeout - and only ever
+// the artifact delphi_build declared.
 //
 // The result is STRUCTURED, which is the whole point: an agent must be able
 // to act on "which test failed and why" without parsing prose. Two dialects
@@ -48,13 +50,19 @@ uses
   System.StrUtils,
   System.RegularExpressions,
   System.Generics.Collections,
+  System.Generics.Defaults,
+  System.Math,
   Lsp.Guard,
   Lsp.Dproj,
   Lsp.BuildRunner,
   Lsp.References,
   Lsp.Patch,
   Lsp.Pascal, // DirectivasPascal: el lector de directivas
-  Lsp.Texts;
+  Lsp.Sandbox, // la jaula: un contenedor por ejecucion
+  Lsp.Texts,
+  System.Character,
+  System.Diagnostics,
+  MCPServer.Logger;
 
 type
   TTestKind = (tkNone, tkDUnitX, tkConsole);
@@ -299,6 +307,254 @@ begin
   end;
 end;
 
+const
+  // La copia de la salida de un test, en la casa del servidor: con tope
+  TOPE_COPIA = Int64(256) * 1024 * 1024;
+  // Lo que el test deje vuelve EN LA RESPUESTA, con tope (David, 2-oct-2026):
+  // nombre y tamano de todo, y el contenido de los de texto, en CARACTERES
+  TOPE_POR_FICHERO = 16 * 1024;
+  TOPE_DE_FICHEROS = 64 * 1024;
+  TOPE_DE_LECTURA = 4 * 1024 * 1024; // un fichero mayor ni se lee
+  // y la lista misma: 100.000 ficheros de un byte la inundaban (revision de
+  // la 1.11.0); los que no caben se cuentan
+  TOPE_DE_ENTRADAS = 500;
+
+type
+  ETopeDeCopia = class(Exception);
+
+{ La foto de la carpeta del contenedor: ruta relativa -> tamano y fecha,
+  leidos sin abrir nada (HuellaDeFichero, la de la foto de los escritores).
+  Sin cruzar enlaces: si el test planta uno, ni se sigue ni se lee. }
+function FotoDe(const ADir: string): TDictionary<string, string>;
+var
+  Foto: TDictionary<string, string>;
+  Base: string;
+begin
+  Foto := TDictionary<string, string>.Create(TIStringComparer.Ordinal);
+  Base := IncludeTrailingPathDelimiter(ADir);
+  RecorreSinEnlaces(ADir,
+    procedure(const APath: string)
+    var
+      Tam: Int64;
+      Fecha: TDateTime;
+    begin
+      // uno que no se deja mirar no esta en la foto
+      if not TDirectory.Exists(APath) and HuellaDeFichero(APath, Tam, Fecha) then
+        Foto.AddOrSetValue(APath.Substring(Length(Base)),
+          IntToStr(Tam) + '|' + FormatDateTime('yyyymmddhhnnsszzz', Fecha));
+    end);
+  Result := Foto;
+end;
+
+{ Lo que el test ha dejado en su carpeta: lo nuevo o cambiado respecto a
+  AAntes, en orden, TOPE_DE_ENTRADAS como mucho (AFuera, los que no caben).
+  nil si nada. Con contenido, lo que es texto por LA regla de la casa
+  (LooksBinaryBytes, la de delphi_read), no por su extension, cortado en
+  caracteres y sin partir un par sustituto; el que viene sin el dice por que
+  en "noContent". Agotado el total no se lee nada mas. ARecortado: falta
+  texto que podia interesar (cortado, demasiado grande o fuera del total). }
+function FicherosDelTest(const ADir: string; AAntes: TDictionary<string, string>;
+  out ARecortado: Boolean; out AFuera: Integer): TJSONArray;
+var
+  Despues: TDictionary<string, string>;
+  Nombres: TArray<string>;
+  Quedan, Cabe: Integer;
+  V, Texto: string;
+  O: TJSONObject;
+  Tam: Int64;
+  B: TArray<Byte>;
+begin
+  Result := nil;
+  ARecortado := False;
+  AFuera := 0;
+  Despues := FotoDe(ADir);
+  try
+    Nombres := Despues.Keys.ToArray;
+    TArray.Sort<string>(Nombres);
+    Quedan := TOPE_DE_FICHEROS;
+    for var N in Nombres do
+    begin
+      if AAntes.TryGetValue(N, V) and (V = Despues[N]) then
+        Continue; // estaba y no ha cambiado
+      if (Result <> nil) and (Result.Count >= TOPE_DE_ENTRADAS) then
+      begin
+        Inc(AFuera);
+        Continue;
+      end;
+      if Result = nil then
+        Result := TJSONArray.Create;
+      O := TJSONObject.Create;
+      Result.AddElement(O);
+      O.AddPair('name', N);
+      Tam := StrToInt64Def(Despues[N].Split(['|'])[0], 0);
+      O.AddPair('size', TJSONNumber.Create(Tam));
+      // sin contenido, y por que: lo que ya no cabe ni se lee
+      if Tam > TOPE_DE_LECTURA then
+      begin
+        O.AddPair('noContent', 'too-big');
+        ARecortado := True;
+        Continue;
+      end;
+      if Quedan <= 0 then
+      begin
+        O.AddPair('noContent', 'past-total');
+        ARecortado := True;
+        Continue;
+      end;
+      try
+        B := TFile.ReadAllBytes(TPath.Combine(ADir, N));
+      except
+        O.AddPair('noContent', 'unreadable');
+        Continue;
+      end;
+      if LooksBinaryBytes(B) then
+      begin
+        O.AddPair('noContent', 'binary');
+        Continue;
+      end;
+      Texto := DecodeSourceBytes(B);
+      Cabe := Min(TOPE_POR_FICHERO, Quedan);
+      if Length(Texto) > Cabe then
+      begin
+        if Texto[Cabe].IsHighSurrogate then
+          Dec(Cabe); // el par entero o nada
+        Texto := Copy(Texto, 1, Cabe);
+        O.AddPair('truncated', TJSONBool.Create(True));
+        ARecortado := True;
+      end;
+      O.AddPair('content', Texto);
+      Dec(Quedan, Length(Texto));
+    end;
+  finally
+    Despues.Free;
+  end;
+end;
+
+{ Corre AExe (con AArgs) en un contenedor POR EJECUCION sobre una COPIA de su
+  carpeta de salida en la casa del servidor (Lsp.Sandbox): se crea el
+  contenedor, se le da la carpeta vacia, se copia la salida sin .dcu ni .rsm,
+  se lanza, se recoge lo que el test haya dejado y se borra todo. False con
+  el error ya en ARet si algo de eso no se pudo: falla cerrado, sin
+  contenedor no corre. ADuracionMs, lo que corrio el test: sin la copia. }
+function CorreEnContenedor(const AExe, AArgs: string; ATimeoutMs: Integer;
+  ARet: TJSONObject; out AOutput: string; out AExitCode: Cardinal;
+  out ATimedOut: Boolean; out AFicheros: TJSONArray;
+  out ARecortado: Boolean; out AFuera: Integer; out ADuracionMs: Int64): Boolean;
+var
+  AC: TContenedor;
+  Etapa: string;
+  Err: Cardinal;
+  NoSeguidos: TArray<string>;
+  Copiado: Int64;
+  Antes: TDictionary<string, string>;
+  Reloj: TStopwatch;
+begin
+  Result := False;
+  ADuracionMs := 0;
+  AFuera := 0;
+  AOutput := '';
+  AExitCode := 0;
+  ATimedOut := False;
+  AFicheros := nil;
+  ARecortado := False;
+  Err := CreaContenedor(AC);
+  if Err <> 0 then
+  begin
+    ARet.AddPair('error', MsgFmt(SR_TEST_CONTENEDOR_FMT,
+      [IntToHex(Err, 8), SysErrorMessage(Err)]));
+    Exit;
+  end;
+  Etapa := ServerTempDir('test-' + FragmentoUnico);
+  Antes := nil;
+  try
+    CrearCarpeta(Etapa);
+    Err := PreparaCarpetaDelContenedor(AC, Etapa);
+    if Err <> 0 then
+    begin
+      ARet.AddPair('error', MsgFmt(SR_TEST_CONTENEDOR_FMT,
+        [IntToHex(Err, 8), SysErrorMessage(Err)]));
+      Exit;
+    end;
+    Copiado := 0;
+    try
+      CopiaArbol(TPath.GetDirectoryName(AExe), Etapa, False, NoSeguidos, True,
+        function(const APath: string): Boolean
+        var
+          Tam: Int64;
+          Fecha: TDateTime;
+        begin
+          // ni las carpetas del servidor (CarpetasDesechables), ni los .dcu
+          // (son de compilar), ni los .rsm (los simbolos del depurador
+          // remoto: 18 MB en un test vacio, medido)
+          if TDirectory.Exists(APath) then
+            Exit(MatchText(TPath.GetFileName(APath), CarpetasDesechables));
+          Result := MatchText(TPath.GetExtension(APath), ['.dcu', '.rsm']);
+          // lo que SI se copia, se cuenta: el copiador pregunta esto lo
+          // ultimo, por lo que va a copiar de verdad
+          // (un enlace que se sigue copia lo de DETRAS: se cuenta eso, no
+          // la entrada del enlace, que mide 0)
+          if not Result and HuellaDeFichero(
+            IfThen(EsEnlace(APath), RealPath(APath), APath), Tam, Fecha) then
+          begin
+            Inc(Copiado, Tam);
+            if Copiado > TOPE_COPIA then
+              raise ETopeDeCopia.Create('');
+          end;
+        end);
+    except
+      on ETopeDeCopia do
+      begin
+        ARet.AddPair('error', MsgFmt(SR_TEST_COPIA_TOPE_FMT,
+          [TOPE_COPIA div (1024 * 1024)]));
+        Exit;
+      end;
+      // un enlace roto, un fichero que otro tiene cerrado: con su etiqueta,
+      // no como un fallo interno sin nombre (revision de la 1.11.0)
+      on E: Exception do
+      begin
+        ARet.AddPair('error', MsgFmt(SR_TEST_COPIA_FMT, [E.Message]));
+        Exit;
+      end;
+    end;
+    Antes := FotoDe(Etapa);
+    Reloj := TStopwatch.StartNew;
+    try
+      AOutput := RunCapturedEnContenedor(Format('"%s"%s',
+        [TPath.Combine(Etapa, TPath.GetFileName(AExe)), AArgs]), Etapa, AC,
+        ATimeoutMs, AExitCode, ATimedOut);
+    except
+      on E: ETestNoConfinado do
+      begin
+        ARet.AddPair('error', E.Message); // ya es TEST-032, sin codigo residual
+        Exit;
+      end;
+      on E: EOSError do
+      begin
+        ARet.AddPair('error', MsgFmt(SR_TEST_LANZAR_FMT,
+          [E.ErrorCode, SysErrorMessage(E.ErrorCode)]));
+        Exit;
+      end;
+    end;
+    ADuracionMs := Reloj.ElapsedMilliseconds;
+    AFicheros := FicherosDelTest(Etapa, Antes, ARecortado, AFuera);
+    Result := True;
+  finally
+    Antes.Free;
+    BorraContenedor(AC);
+    try
+      BorraArbol(Etapa);
+    except
+      // una copia huerfana se va con la temporal en el proximo arranque, y
+      // queda apuntada, como el contenedor que Windows no borra
+      on E: Exception do
+        try
+          TLogger.Warning(MsgFmt(SL_TEST_COPIA_NO_BORRADA_FMT, [Etapa, E.Message]));
+        except
+        end;
+    end;
+  end;
+end;
+
 function TestRun(const AProject, AConfig, AFilter, APlatform: string;
   ATimeoutMs: Integer; ANoBuild: Boolean): TJSONObject;
 var
@@ -307,8 +563,10 @@ var
   Build: TJSONObject;
   Info: TDprojInfo;
   ExitCode: Cardinal;
-  Sandboxed, TimedOut: Boolean;
-  T0: TDateTime;
+  TimedOut, Recortado: Boolean;
+  Ficheros: TJSONArray;
+  Fuera: Integer;
+  DuracionMs: Int64;
   Tail: TArray<string>;
   I, From: Integer;
   Sb: TStringBuilder;
@@ -395,6 +653,15 @@ begin
     ATimeoutMs := 120000;
   if ATimeoutMs > 600000 then
     ATimeoutMs := 600000;
+  // Sin paquetes en tiempo de ejecucion: la jaula no deja leer los .bpl de
+  // fuera y el exe ni arrancaria (David, 2-oct-2026: "lo compilas entero o
+  // no molestes"). Se dice ANTES de compilar.
+  if UsaPaquetesEnEjecucion(Dproj, Plat, Cfg) then
+  begin
+    Result.AddPair('error', MsgFmt(SR_TEST_PAQUETES_FMT,
+      [TPath.GetFileName(Dproj), Cfg, Plat]));
+    Exit;
+  end;
 
   // 1. build, unless told not to: running a stale binary is a lie
   if not ANoBuild then
@@ -440,17 +707,33 @@ begin
     end;
   end;
 
-  // 2. run it, sandboxed and bounded
+  // 2. run it: a COPY of its output folder in the server's house, inside an
+  //    AppContainer of its own, born with this call and gone with its answer
+  //    (Lsp.Sandbox). Falla cerrado: sin contenedor no corre.
   Args := '';
   if AFilter <> '' then
     Args := ' --run:' + AFilter; // DUnitX honours it; a plain runner ignores it
-  T0 := Now;
-  Output := RunCapturedSandboxedT(Format('"%s"%s', [Exe, Args]),
-    TPath.GetDirectoryName(Exe), ATimeoutMs, ExitCode, Sandboxed, TimedOut);
-  Result.AddPair('durationMs', TJSONNumber.Create(
-    Round((Now - T0) * 24 * 60 * 60 * 1000)));
+  if not CorreEnContenedor(Exe, Args, ATimeoutMs, Result, Output, ExitCode,
+    TimedOut, Ficheros, Recortado, Fuera, DuracionMs) then
+    Exit;
+  Result.AddPair('durationMs', TJSONNumber.Create(DuracionMs));
   Result.AddPair('exitCode', TJSONNumber.Create(Integer(ExitCode)));
-  Result.AddPair('sandboxed', TJSONBool.Create(Sandboxed));
+  Result.AddPair('sandboxed', TJSONBool.Create(True)); // no hay otra forma de correr
+  // lo que dejo el test es de Result desde YA: si algo de abajo falla, no se
+  // pierde con la lista en la mano (revision de la 1.11.0)
+  if Ficheros <> nil then
+  begin
+    Result.AddPair('files', Ficheros);
+    if Recortado then
+      Result.AddPair('filesNote', MsgFmt(SN_TEST_FICHEROS_RECORTE_FMT,
+        [TOPE_POR_FICHERO, TOPE_DE_FICHEROS, TOPE_DE_LECTURA div (1024 * 1024)]));
+    if Fuera > 0 then
+    begin
+      Result.AddPair('filesNotListed', TJSONNumber.Create(Fuera));
+      Result.AddPair('filesListNote', MsgFmt(SN_TEST_FICHEROS_FUERA_FMT,
+        [Fuera, TOPE_DE_ENTRADAS]));
+    end;
+  end;
 
   // 3. structured outcome + a bounded tail of what it printed
   ParseOutcome(Output, K, Integer(ExitCode), Result);

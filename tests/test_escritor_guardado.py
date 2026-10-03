@@ -407,10 +407,12 @@ except Exception:
 check('R un proyecto sin propiedades reservadas SI compila', ok, out[:300])
 bs.cierra()
 
-# ---- T: delphi_test lowers the integrity label of its working folder so the
-# confined run can write its own output there; the walk never crosses a link
-# (measured live 2026-09-25: a junction there lowered the label of a file
-# OUTSIDE the roots)
+# ---- T: until 1.10 delphi_test lowered the integrity label of its working
+# folder so the confined run could write its own output there, and the walk
+# never crossed a link (measured live 2026-09-25: a junction there lowered the
+# label of a file OUTSIDE the roots). Since 1.11.0 the run is in a container
+# of its own on a COPY of the folder (Lsp.Sandbox): nothing of the agent's is
+# relabelled at all, and a link inside it is not followed into the copy.
 ts = Server({'DELPHI_MCP_ROOTS': MINE, 'DELPHI_MCP_ALLOW_TESTS': '1'})
 TV = os.path.join(OUT, 'etiqueta')
 os.makedirs(TV, exist_ok=True)
@@ -432,7 +434,7 @@ check('T fixture: exe de test y junction en su carpeta', os.path.exists(os.path.
 check('T fixture: la victima empieza con su etiqueta normal', not etiqueta_baja(os.path.join(TV, 'v.txt')), '')
 out = ts.call('delphi_test', {'project': os.path.join(TA, 'AppTests.dproj'), 'platform': 'Win64', 'nobuild': True}, t=300)
 check('T delphi_test: el fichero de FUERA conserva su etiqueta', not etiqueta_baja(os.path.join(TV, 'v.txt')), out[:200])
-check('T ...y lo suyo SI se etiqueta (el exe, para el sandbox)', etiqueta_baja(os.path.join(TS, 'AppTests.exe')), out[:200])
+check('T ...y lo suyo TAMPOCO: la jaula trabaja sobre una copia (1.11)', not etiqueta_baja(os.path.join(TS, 'AppTests.exe')), out[:200])
 ts.cierra()
 
 borra(BASE)
