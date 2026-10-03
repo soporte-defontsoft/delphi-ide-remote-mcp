@@ -175,6 +175,20 @@ check('suite con un test que lanza: result=fail', j.get('result') == 'fail', str
 check('...con el error contado y NOMBRADO', j.get('errored') == 1 and j.get('failed') == 0
       and any('Lanza' in f and 'a proposito' in f for f in j.get('failures', [])), str(j)[:400])
 
+# un test NUEVO metido con delphi_edit INSERT metodo, con su atributo delante y
+# una directiva detras (1.11.2): se rechazaba con EDIT-070. Que DUnitX lo
+# CORRA es la prueba de que el [Test] cayo en la declaracion (medido: en la
+# implementacion compila y la RTTI no lo ve) y de que 'virtual' no fue a la
+# implementacion (alli es E2070 y la suite no compila)
+r = A.call('delphi_edit', {'path': os.path.join(BASE, 'LanzaTest', 'ULanzaTest.pas'), 'insert': 'metodo',
+                           'inclass': 'TLanzaTest', 'visibility': 'public',
+                           'code': "[Test]\nprocedure Insertado; virtual;\nbegin\n  Assert.AreEqual(9, 3 * 3);\nend;"})
+check('INSERT metodo con [Test] y virtual en la suite DUnitX: las dos mitades',
+      mc.abre(r, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT'), r[:300])
+j = J(B.call('delphi_test', {'command': 'run', 'project': LANZA}, t=900))
+check('...y DUnitX lo CORRE: 3 tests, 2 pasan (Bien e Insertado) y 1 lanza',
+      j.get('total') == 3 and j.get('passed') == 2 and j.get('errored') == 1, str(j)[:400])
+
 # ---- contratos ----
 r = B.call('delphi_test', {'command': 'run', 'project': os.path.join(BASE, 'NormalApp', 'NormalApp.dpr')})
 check('un proyecto que no es test: rechazado y explicado', mc.es(r, 'SR_TEST_NOTATEST_FMT'), r[:300])

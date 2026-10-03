@@ -253,6 +253,11 @@ function TempFolderName: string;
   el 26-sep lo componian a mano ocho sitios. Sin ASub, la carpeta. }
 function ServerDir(const ASub: string = ''): string;
 function ServerTempDir(const ASub: string = ''): string;
+{ <LOCALAPPDATA>\DelphiLspMcp\ASub: las caches del servidor que no van junto
+  al exe (las configuraciones que se fabrican para el motor, los estilos por
+  defecto de la plataforma). Las componian a mano dos sitios. Lee la
+  variable en cada llamada: quien la redirige (una prueba) la ve. }
+function ServerCacheDir(const ASub: string = ''): string;
 
 { LA clave corta de una carpeta, por su ruta CANONICA (larga, sin barra
   final, en minusculas): la misma carpeta escrita en 8.3 o con otras
@@ -1243,6 +1248,7 @@ implementation
 
 uses
   Winapi.Windows,
+  Winapi.TlHelp32,      // HayOtraInstanciaViva: los procesos por su nombre, sin abrirlos
   System.SysUtils,
   System.StrUtils,
   System.IniFiles,
@@ -4736,6 +4742,13 @@ begin
     Result := TPath.Combine(Result, ASub);
 end;
 
+function ServerCacheDir(const ASub: string): string;
+begin
+  Result := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'DelphiLspMcp');
+  if ASub <> '' then
+    Result := TPath.Combine(Result, ASub);
+end;
+
 { El workspace de quien llama. Con varias raices manda la PRIMERA
   ESCRIBIBLE - una raiz declarada entera en ReadOnlyPaths (el clon de
   referencia) no recibe entregables: seria escribir justo donde nuestra
@@ -5523,6 +5536,7 @@ end;
 
 var
   GPrimera: THandle = 0;
+  GPresencia: THandle = 0; // ApuntaPresencia: esta instancia, viva
   GTemporalesMias: TStringList = nil; // claves de las temporales de ESTE proceso
 
 { Reclama AClave para ESTE proceso mientras viva: un mutex global que se
@@ -5583,6 +5597,58 @@ begin
   Result := ReclamaNombre(ClaveDeCarpeta(ServerDir), H);
   if Result then
     GPrimera := H;
+end;
+
+{ La clave de la presencia de la instancia APid de ESTA casa (la carpeta del
+  exe): la escribe ApuntaPresencia y la lee HayOtraInstanciaViva. }
+function ClaveDePresencia(APid: DWORD): string;
+begin
+  Result := ClaveDeCarpeta(ServerDir) + '-pid-' + IntToStr(APid);
+end;
+
+{ Esta instancia se apunta como VIVA mientras viva, sea la primera o no: un
+  mutex con su PID. La primera no sabia de las demas: el servicio que
+  rearranca coge el mutex libre de la primera y vaciaba lo que una instancia
+  stdio del mismo exe tenia en vuelo (pendiente 2 de la 1.11.0, medido con
+  test_purga_instancias). }
+procedure ApuntaPresencia;
+begin
+  if GPresencia = 0 then
+    ReclamaNombre(ClaveDePresencia(GetCurrentProcessId), GPresencia);
+end;
+
+{ True si otra instancia de ESTA casa sigue viva. Los procesos se buscan por
+  el nombre del exe (Toolhelp, sin abrirlos: desde la sesion interactiva el
+  proceso del servicio NO se deja abrir, medido el 3-oct - acceso denegado)
+  y cada uno se pregunta por su presencia: si su mutex existe, o no se deja
+  abrir, esta vivo. Uno de otra carpeta no tiene presencia con esta clave:
+  el mutex se crea y se suelta al momento. En la duda, viva: no purgar es lo
+  que no rompe nada. }
+function HayOtraInstanciaViva: Boolean;
+var
+  Snap, H: THandle;
+  E: TProcessEntry32;
+  Mio: string;
+begin
+  Result := False;
+  Mio := TPath.GetFileName(ParamStr(0));
+  Snap := CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if Snap = INVALID_HANDLE_VALUE then
+    Exit(True);
+  try
+    E.dwSize := SizeOf(E);
+    if Process32First(Snap, E) then
+      repeat
+        if (E.th32ProcessID <> GetCurrentProcessId) and SameText(string(E.szExeFile), Mio) then
+        begin
+          if not ReclamaNombre(ClaveDePresencia(E.th32ProcessID), H) then
+            Exit(True);
+          CloseHandle(H);
+        end;
+      until not Process32Next(Snap, E);
+  finally
+    CloseHandle(Snap);
+  end;
 end;
 
 { TODAS las __delphi-temp bajo una raiz, la de arriba y las anidadas. Antes
@@ -5670,7 +5736,15 @@ var
   W: TWorkspaceDef;
   R: string;
 begin
+  // toda instancia se apunta como viva ANTES de decidir nada
+  ApuntaPresencia;
   if not SoyLaPrimeraInstancia then
+    Exit;
+  // ...y la primera purga solo si es la UNICA viva de esta casa: el servicio
+  // que rearranca es la primera aunque una instancia stdio del mismo exe siga
+  // con un test, la -F de un commit o una temporal de raiz a medias. Lo que
+  // queda se lo lleva el siguiente arranque a solas.
+  if HayOtraInstanciaViva then
     Exit;
   // La casa del servidor, la de siempre.
   VaciaDesechable(ServerTempDir);

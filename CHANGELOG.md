@@ -6,6 +6,60 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [1.11.2] - 2026-10-03
+
+`delphi_edit` INSERT of a method takes its whole header, and the startup
+purge leaves alone what another live instance of the same exe has in flight.
+
+### Fixed
+
+- **INSERT `metodo` with an attribute in front** (`[Test]`) was refused with
+  EDIT-070 (seen on the Delphi 13.2 VM). The attributes now go above the
+  declaration in the class. Measured with dcc: on the implementation an
+  attribute compiles without a warning and RTTI does not see it - a `[Test]`
+  there is a test DUnitX never runs.
+- **`class procedure` / `class function` / `class constructor` /
+  `class destructor`** were refused the same way; they are inserted now
+  (`EDIT-117` when asked for as a global routine).
+- **Directives after the signature** (`virtual; override; overload;
+  deprecated 'x';`...) went to the implementation, where a method directive
+  is E2070, and the declaration lost them - while the answer said both halves
+  were written. They now go to the declaration and the implementation goes
+  without them, as the IDE writes it (measured: an implementation without
+  directives compiles with all of them). A global routine with `visible=true`
+  gets them in both halves (one missing from the interface half is E2037).
+  When the class already declared the method, the answer says what the block
+  carried for the declaration (`EDIT-118`).
+- **The startup purge and a live instance of the same exe.** The purge runs
+  in the first instance (a mutex per exe folder). When the service restarted
+  while a stdio instance of the same exe was working, the new service process
+  took the free mutex and emptied `__delphi-temp`, the temp folder of every
+  root and the house's test containers - what the stdio instance had in
+  flight included. Every instance now registers itself as alive, and the
+  first one purges only when it is the only one; what is left goes with the
+  next start alone.
+- **`delphi_designer` and a table from another Delphi build.** The designer
+  tables were dumped from RAD Studio build 37.0.59082.6021 (13.1). With
+  another build active (13.2 shares the `37.0` key), `info` and the lint now
+  say so (`DSGN-049`) instead of promising that an absent property does not
+  stream.
+
+### Changed
+
+- `LOCALAPPDATA\DelphiLspMcp` (the engine's configuration cache and the
+  default styles) is composed by one function instead of by hand in two
+  places.
+
+### Tests
+
+- `test_purga_instancias` is new: two instances of one exe, the "service"
+  restarted with the other alive; its controls check that a start alone does
+  purge. `test_delphi_patch` +12 checks, `test_delphi_test` +2 (DUnitX runs a
+  `[Test]` inserted with `virtual`), the engine suite +3 (the designer note).
+  16 mutants, all red; the DSGN-049 wiring into `info` and the lint stays a
+  named guard (this machine has only the table's build). 97 batteries, 3,191
+  checks, 0 failures.
+
 ## [1.11.1] - 2026-10-03
 
 `delphi_test` works again when the server runs as a Windows Service.

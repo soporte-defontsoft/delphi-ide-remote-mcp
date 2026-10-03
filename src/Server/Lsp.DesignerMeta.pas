@@ -50,11 +50,27 @@ function DesignerMetaLint(const AIsFmx: Boolean;
   classes, published properties and enum members. Never nil. }
 function MetaTable(const AIsFmx: Boolean): TMetaTable;
 
+const
+  { La build de RAD Studio de la que salieron las tablas generadas: los
+    volcadores corrieron en esta maquina (13.1) el 21-ago-2026, y su bds.exe
+    es del 6-mar-2026. Cuando las tablas sean por build (decision
+    designer-meta-por-version del vault) cada tabla dira la suya. }
+  META_BUILD = '37.0.59082.6021';
+
+{ '' si la instalacion activa es la build de las tablas (o no se sabe cual
+  es); si no, la nota que lo dice: lo que esa build anada o quite no esta en
+  la tabla, y "no esta" deja de querer decir "no existe". }
+function NotaDeBuildDeLaTabla: string;
+{ La misma decision con la build activa dada: '' si es la de las tablas o
+  no se sabe ('' tambien); la nota DSGN-049 si es otra. }
+function NotaDeBuild(const ABuildActiva: string): string;
+
 implementation
 
 uses
   System.SysUtils, System.Classes, System.StrUtils, System.RegularExpressions,
-  Lsp.DesignerMeta.Fmx, Lsp.DesignerMeta.Vcl, Lsp.Texts;
+  Lsp.DesignerMeta.Fmx, Lsp.DesignerMeta.Vcl, Lsp.Texts,
+  Lsp.Discovery; // DiscoverRadStudio: la build activa, para NotaDeBuildDeLaTabla
 
 var
   GFmx, GVcl: TMetaTable;
@@ -351,11 +367,32 @@ begin
         end;
       end;
     end;
+    // con avisos, si la tabla es de otra build se dice una vez: en la VM 13.2
+    // una propiedad que esa build anada saldria como "no existe" sin mas
+    // (deducido, sin medir: el 3-oct el MCP de la VM no conectaba)
+    if Warns.Count > 0 then
+    begin
+      var NotaBuild := NotaDeBuildDeLaTabla;
+      if NotaBuild <> '' then
+        Warns.Add(NotaBuild);
+    end;
     Result := Warns.ToStringArray;
   finally
     Warns.Free;
     Stack.Free;
   end;
+end;
+
+function NotaDeBuild(const ABuildActiva: string): string;
+begin
+  Result := '';
+  if (ABuildActiva <> '') and not SameText(ABuildActiva, META_BUILD) then
+    Result := MsgFmt(SN_DESIGNER_TABLA_OTRA_BUILD_FMT, [META_BUILD, ABuildActiva]);
+end;
+
+function NotaDeBuildDeLaTabla: string;
+begin
+  Result := NotaDeBuild(DiscoverRadStudio.Build);
 end;
 
 initialization

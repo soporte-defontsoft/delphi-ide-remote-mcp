@@ -494,6 +494,13 @@ const
   RETENTION_DAYS = 15;
   MAX_EDITS = 50; // entradas de una tanda
   MAX_READ_LINES = 400;
+  // las directivas de la CABECERA de una rutina (no las del compilador, {$...}:
+  // esas son DirectivasPascal), las que pueden ir detras de la firma
+  DIRECTIVAS_DE_RUTINA: array[0..26] of string = ('abstract', 'assembler',
+    'cdecl', 'deprecated', 'dispid', 'dynamic', 'experimental', 'export', 'far',
+    'final', 'inline', 'library', 'local', 'message', 'near', 'overload',
+    'override', 'pascal', 'platform', 'register', 'reintroduce', 'safecall',
+    'static', 'stdcall', 'varargs', 'virtual', 'winapi');
   // SOURCE_EXTS / DESIGNER_EXTS / PROJECT_EXTS: en el interface
 
 var
@@ -2636,6 +2643,63 @@ begin
             IFirmaIni := I;
             Break;
           end;
+        // Los ATRIBUTOS ([Test], [TestCase('a', '1,2')]) van delante de la
+        // firma, en su linea o en la misma; se dejan en la suya para que la
+        // firma empiece donde empieza. En un metodo van con la DECLARACION:
+        // medido (sonda, 3-oct-2026), en la implementacion compilan sin aviso
+        // y la RTTI no los ve - un [Test] alli es un test que DUnitX no corre.
+        // El bloque entero se rechazaba (EDIT-070, visto en la VM 13.2).
+        var IAtrIni := IFirmaIni;
+        if (IFirmaIni >= 0) and CodeVista[IFirmaIni].TrimLeft.StartsWith('[') then
+        begin
+          var LA := IFirmaIni;
+          var CA := 1;
+          var ProfCor := 0;
+          var Empieza := False;
+          while (LA <= High(CodeVista)) and not Empieza and (ProfCor >= 0) do
+          begin
+            while CA <= Length(CodeVista[LA]) do
+            begin
+              var Ch := CodeVista[LA][CA];
+              if Ch = '[' then
+                Inc(ProfCor)
+              else if Ch = ']' then
+                Dec(ProfCor)
+              else if (ProfCor = 0) and not CharInSet(Ch, [' ', #9]) then
+              begin
+                Empieza := True;
+                Break;
+              end;
+              if ProfCor < 0 then
+                Break;
+              Inc(CA);
+            end;
+            if not Empieza then
+            begin
+              Inc(LA);
+              CA := 1;
+            end;
+          end;
+          // sin firma detras (solo atributos, o un corchete que no cierra): la
+          // primera linea util sigue siendo el atributo, y EDIT-070 lo dice
+          if Empieza then
+          begin
+            if Copy(CodeVista[LA], 1, CA - 1).Trim <> '' then
+            begin
+              // [Test] procedure X; -> el atributo en su linea, la firma en la suya
+              Insert(Copy(CodeLines[LA], CA, MaxInt), CodeLines, LA + 1);
+              Insert(Copy(CodeVista[LA], CA, MaxInt), CodeVista, LA + 1);
+              CodeLines[LA] := Copy(CodeLines[LA], 1, CA - 1).TrimRight;
+              CodeVista[LA] := Copy(CodeVista[LA], 1, CA - 1).TrimRight;
+              Inc(LA);
+            end;
+            IFirmaIni := LA;
+          end;
+        end;
+        var AtribLineas := TArray<string>.Create();
+        for I := IAtrIni to IFirmaIni - 1 do
+          if CodeVista[I].Trim <> '' then
+            AtribLineas := AtribLineas + [CodeLines[I].Trim];
         var Firma := '';
         var FirmaCodigo := '';
         if IFirmaIni >= 0 then
@@ -2643,11 +2707,15 @@ begin
           Firma := CodeLines[IFirmaIni].Trim;
           FirmaCodigo := CodeVista[IFirmaIni].Trim;
         end;
+        // 'class procedure/function/constructor/destructor': un metodo de
+        // clase (se rechazaba con EDIT-070, como si no fuera una firma)
         var MF := TRegEx.Match(FirmaCodigo,
-          '^(procedure|function|constructor|destructor)\s+([A-Za-z_]\w*)\s*([.(;:])?', [roIgnoreCase]);
+          '^(class\s+)?(procedure|function|constructor|destructor)\s+([A-Za-z_]\w*)\s*([.(;:])?', [roIgnoreCase]);
         if not MF.Success then
           Exit(MsgFmt(SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT, [Copy(Firma, 1, 80)]));
-        if MF.Groups[3].Value = '.' then
+        if (MF.Groups[1].Value <> '') and (A.Insert = 'rutina-global') then
+          Exit(MsgFmt(SR_EDIT_RUTINA_GLOBAL_DE_CLASE_FMT, [MF.Groups[2].Value.ToLower]));
+        if (MF.Groups.Count > 4) and (MF.Groups[4].Value = '.') then
           Exit(MsgText(SR_EDIT_FIRMA_VIENE_CUALIFICADA_CLASE));
         var IFirmaFin := IFirmaIni;
         var PosCierre := 0;
@@ -2684,6 +2752,80 @@ begin
             FirmaLineas := FirmaLineas + [Copy(CodeLines[I], 1, PosCierre).Trim]
           else
             FirmaLineas := FirmaLineas + [CodeLines[I].Trim];
+        // Las DIRECTIVAS detras de la firma (virtual; override; overload;
+        // stdcall; static; deprecated 'x'; message WM_X;...). Medido (sonda,
+        // 3-oct-2026): en un metodo van SOLO en la declaracion - la
+        // implementacion sin ninguna compila, y con 'virtual' es E2070 -; en
+        // una rutina global, en las DOS mitades (sin ellas en el interface,
+        // E2037). La firma se cortaba en su primer ';': la declaracion salia
+        // sin ellas, la implementacion con ellas, y la respuesta decia "las
+        // dos mitades".
+        var IDirFin := IFirmaFin;
+        var PosDirFin := PosCierre;
+        var Directivas := '';
+        var LD := IFirmaFin;
+        var CD := PosCierre + 1;
+        while True do
+        begin
+          // lo siguiente que no es blanco, tambien en las lineas de abajo
+          while (LD <= High(CodeVista)) and
+                ((CD > Length(CodeVista[LD])) or CharInSet(CodeVista[LD][CD], [' ', #9])) do
+            if CD > Length(CodeVista[LD]) then
+            begin
+              Inc(LD);
+              CD := 1;
+            end
+            else
+              Inc(CD);
+          if LD > High(CodeVista) then
+            Break;
+          var MD := TRegEx.Match(Copy(CodeVista[LD], CD, MaxInt), '^[A-Za-z_]\w*');
+          if not MD.Success or not MatchText(MD.Value, DIRECTIVAS_DE_RUTINA) then
+            Break;
+          // la directiva llega hasta su ';' (a profundidad de parentesis 0)
+          var LFin := LD;
+          var CFin := CD;
+          var ProfD := 0;
+          var Cierra := False;
+          while (LFin <= High(CodeVista)) and not Cierra do
+          begin
+            while CFin <= Length(CodeVista[LFin]) do
+            begin
+              if CodeVista[LFin][CFin] = '(' then
+                Inc(ProfD)
+              else if CodeVista[LFin][CFin] = ')' then
+                Dec(ProfD)
+              else if (CodeVista[LFin][CFin] = ';') and (ProfD <= 0) then
+              begin
+                Cierra := True;
+                Break;
+              end;
+              Inc(CFin);
+            end;
+            if not Cierra then
+            begin
+              Inc(LFin);
+              CFin := 1;
+            end;
+          end;
+          if not Cierra then
+            Break;
+          // su texto ORIGINAL: la cadena de un deprecated 'x' vive ahi
+          for var KD := LD to LFin do
+          begin
+            var Desde := 1;
+            if KD = LD then
+              Desde := CD;
+            var Hasta := Length(CodeLines[KD]);
+            if KD = LFin then
+              Hasta := CFin;
+            Directivas := (Directivas + ' ' + Copy(CodeLines[KD], Desde, Hasta - Desde + 1).Trim).Trim;
+          end;
+          IDirFin := LFin;
+          PosDirFin := CFin;
+          LD := LFin;
+          CD := CFin + 1;
+        end;
 
         Lines := SplitToLines(Text);
         // la estructura del fichero (uses, cabecera, frontera, la clase, sus
@@ -2775,11 +2917,11 @@ begin
           // somos la ninera (David, 23-sep). Se insertaba a ciegas (decima)
           var YaEsta := '';
           var RutinaRe := TRegEx.Create('^\s*(class\s+)?(procedure|function)\s+' +
-            TRegEx.Escape(MF.Groups[2].Value) + '\s*[(;:]', [roIgnoreCase]);
+            TRegEx.Escape(MF.Groups[3].Value) + '\s*[(;:]', [roIgnoreCase]);
           for I := 0 to High(Codigo) do
             if RutinaRe.IsMatch(Codigo[I]) then
             begin
-              YaEsta := #10 + MsgFmt(SN_EDIT_RUTINA_YA_EXISTE_FMT, [MF.Groups[2].Value, I + 1]);
+              YaEsta := #10 + MsgFmt(SN_EDIT_RUTINA_YA_EXISTE_FMT, [MF.Groups[3].Value, I + 1]);
               Break;
             end;
           var FotoVis: TFotoDeFicheros;
@@ -2810,6 +2952,8 @@ begin
               begin
                 var Decl := string.Join(#10, FirmaLineas);
                 if not Decl.EndsWith(';') then Decl := Decl + ';';
+                if Directivas <> '' then
+                  Decl := Decl + ' ' + Directivas;
                 var R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
                 if EsMsg(R2, SK_EDIT_ESCRITO_EN_FMT) then
                   Extra := #10 + MsgFmt(SF_EDIT_VISIBLE_DECLARACION_ANADIDA_FMT, [Decl]) + #10 + R2
@@ -2886,7 +3030,7 @@ begin
         // ciegas - si la clase YA declaraba el metodo, la segunda declaracion
         // es E2254/E2537 seguro. Se mira cada mitad por separado y solo se
         // escribe la que falta; entero = rechazo con el camino.
-        var Nombre := MF.Groups[2].Value;
+        var Nombre := MF.Groups[3].Value;
         var DeclRe := TRegEx.Create('^\s*(class\s+)?(procedure|function|constructor|destructor)\s+' +
           TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
         var IDeclExiste := -1;
@@ -2915,6 +3059,12 @@ begin
         // Dos escrituras (la declaracion y la implementacion): todo o nada.
         // Si la segunda falla o LANZA, la primera se deshace; quedaba "a
         // medias" y, por la excepcion, ni eso se decia (quinta revision)
+        // lo que el bloque traia para la declaracion (atributos, directivas)
+        // no se pierde en silencio cuando la declaracion ya estaba
+        var NotaCabecera := '';
+        if (IDeclExiste >= 0) and ((Length(AtribLineas) > 0) or (Directivas <> '')) then
+          NotaCabecera := #10 + MsgFmt(SN_EDIT_CABECERA_NO_ANADIDA_FMT,
+            [(string.Join(' ', AtribLineas) + ' ' + Directivas).Trim, IDeclExiste + 1]);
         var FotoMet: TFotoDeFicheros;
         FotoMet.Toma([A.Path]);
         var R1 := '';
@@ -3012,25 +3162,58 @@ begin
             Break;
           end;
         end;
-        DeclLinea := Sangria + FirmaLineas[0];
+        for var LAtr in AtribLineas do
+          DeclLinea := DeclLinea + Sangria + LAtr + #10;
+        DeclLinea := DeclLinea + Sangria + FirmaLineas[0];
         for I := 1 to High(FirmaLineas) do
           DeclLinea := DeclLinea + #10 + Sangria + '  ' + FirmaLineas[I];
         if not DeclLinea.EndsWith(';') then DeclLinea := DeclLinea + ';';
+        if Directivas <> '' then
+          DeclLinea := DeclLinea + ' ' + Directivas;
         var AnclaDecl := Lines[IDecl - 1];
         R1 := DoEdit(A.Path, AnclaDecl, AnclaDecl + #10 + DeclLinea, IDecl, False);
         if not EsMsg(R1, SK_EDIT_ESCRITO_EN_FMT) then
           Exit(MsgConCausa(SR_EDIT_INSERT_FALLO_MITAD1_FMT, R1, [A.ClassName_, R1]));
+        end;
+        // la implementacion, sin los atributos ni las directivas: van en la
+        // declaracion (medido: alli la RTTI ve el atributo, y una directiva de
+        // metodo en la implementacion es E2070)
+        var ImplLineas := TArray<string>.Create();
+        var IFirmaImpl := 0;
+        for I := 0 to High(CodeLines) do
+        begin
+          if (I >= IAtrIni) and (I < IFirmaIni) and (CodeVista[I].Trim <> '') then
+            Continue; // un atributo
+          var LnImpl := CodeLines[I];
+          if Directivas <> '' then
+          begin
+            if (I > IFirmaFin) and (I < IDirFin) then
+              Continue; // una linea solo de directivas
+            if (I = IFirmaFin) and (I = IDirFin) then
+              LnImpl := (Copy(LnImpl, 1, PosCierre) + Copy(LnImpl, PosDirFin + 1, MaxInt)).TrimRight
+            else if I = IFirmaFin then
+              LnImpl := Copy(LnImpl, 1, PosCierre).TrimRight
+            else if I = IDirFin then
+            begin
+              LnImpl := Copy(LnImpl, PosDirFin + 1, MaxInt);
+              if LnImpl.Trim = '' then
+                Continue;
+            end;
+          end;
+          if I = IFirmaIni then
+            IFirmaImpl := Length(ImplLineas);
+          ImplLineas := ImplLineas + [LnImpl];
         end;
         // la clase, detras de la palabra de la rutina que da la vista: una
         // firma con su comentario delante en la misma linea se quedaba sin
         // cualificar
         var MQ := TRegEx.Match(CodeVista[IFirmaIni],
           '\b(procedure|function|constructor|destructor)\s+', [roIgnoreCase]);
-        var FirmaCual := CodeLines[IFirmaIni];
+        var FirmaCual := ImplLineas[IFirmaImpl];
         if MQ.Success then
           Insert(A.ClassName_ + '.', FirmaCual, MQ.Index + MQ.Length);
         FirmaCual := FirmaCual.Trim;
-        CodeLines[IFirmaIni] := FirmaCual;
+        ImplLineas[IFirmaImpl] := FirmaCual;
         FotoMet.Anota(A.Path);
         // la frontera, en SU linea: la declaracion recien escrita la bajo
         // tantas lineas como tiene. Sin numero, un 'end.' dentro de un
@@ -3042,7 +3225,7 @@ begin
         var R2 := '';
         try
           FotoMet.Vigila(A.Path);
-          R2 := DoEdit(A.Path, FrontLine, string.Join(#10, CodeLines) + #10#10 + FrontLine, LineaFront, False);
+          R2 := DoEdit(A.Path, FrontLine, string.Join(#10, ImplLineas) + #10#10 + FrontLine, LineaFront, False);
         except
           on E: Exception do
             R2 := MsgExcepcion(E.ClassName, E.Message);
@@ -3058,7 +3241,7 @@ begin
         end;
         if DeclNota <> '' then
           Exit(MsgFmt(SK_EDIT_INSERT_METODO_SOLO_IMPL_FMT,
-            [A.ClassName_, DeclNota, Copy(FirmaCual, 1, 70), R2]));
+            [A.ClassName_, DeclNota, Copy(FirmaCual, 1, 70), R2]) + NotaCabecera);
         Exit(MsgFmt(SK_EDIT_INSERT_METODO_DOS_MITADES_FMT,
           [A.ClassName_, IfThen(NotaPublished <> '', #10'  ' + NotaPublished, ''),
            DeclLinea.Trim, R1, Copy(FirmaCual, 1, 70), R2]));

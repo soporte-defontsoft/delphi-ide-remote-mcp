@@ -185,7 +185,9 @@ begin
       Ret.AddPair('truncated', TJSONBool.Create(True));
       Ret.AddPair('hint', MsgText(SN_DESIGNER_INFO_TRUNCATED));
     end;
-    Ret.AddPair('note', MsgText(SN_DESIGNER_INFO_NOTE));
+    // con la tabla de otra build, la nota no promete (DSGN-049)
+    var NotaBuild := NotaDeBuildDeLaTabla;
+    Ret.AddPair('note', MsgText(SN_DESIGNER_INFO_NOTE) + IfThen(NotaBuild <> '', ' ' + NotaBuild, ''));
     Result := Ret.ToJSON;
   finally
     Names.Free;

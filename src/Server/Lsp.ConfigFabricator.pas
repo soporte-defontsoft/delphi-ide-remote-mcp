@@ -208,8 +208,7 @@ begin
   try
   // Cache: <name>-<pathhash>.delphilsp.json under LOCALAPPDATA. Reuse when
   // newer than the .dproj (and same tool generation baked into the name).
-  CacheDir := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'),
-    'DelphiLspMcp\configs');
+  CacheDir := ServerCacheDir('configs');
   CrearCarpeta(CacheDir);
   CacheFile := TPath.Combine(CacheDir, Format('%s-%x-%s-g%d.delphilsp.json',
     [TPath.GetFileNameWithoutExtension(ADprojPath),

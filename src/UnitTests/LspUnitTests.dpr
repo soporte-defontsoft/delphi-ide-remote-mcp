@@ -19,7 +19,8 @@ uses
   LspTests.Motor in 'LspTests.Motor.pas',
   LspTests.Rutas in 'LspTests.Rutas.pas',
   LspTests.LetrasDeRed in 'LspTests.LetrasDeRed.pas',
-  LspTests.Docs in 'LspTests.Docs.pas';
+  LspTests.Docs in 'LspTests.Docs.pas',
+  LspTests.DesignerMeta in 'LspTests.DesignerMeta.pas';
 
 var
   Runner: ITestRunner;

@@ -167,6 +167,92 @@ check('insert metodo: la firma con su comentario delante, cualificada',
       mc.abre(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and '{ la doc } procedure TCosa.Pong;' in ctx,
       out[:300] + ' | ' + ctx[-200:])
 
+# --- INSERT metodo: la cabecera entera (1.11.2). Se rechazaba con EDIT-070 un
+# bloque con atributos delante ([Test], visto en la VM 13.2) o un 'class
+# procedure', y la firma se cortaba en su primer ';': 'virtual;' iba a la
+# implementacion (E2070) y la declaracion salia sin el, contestando "las dos
+# mitades". Medido con dcc (sonda, 3-oct-2026): en la implementacion un
+# atributo compila y la RTTI NO lo ve, y la implementacion sin directivas
+# compila con todas; lo que corre de verdad lo mide test_delphi_test.
+def _impl(t):
+    return t[t.index('implementation'):]
+def _decl(t):
+    return t[:t.index('implementation')]
+out = call('delphi_edit', {"path": CLS, "insert": "metodo", "inclass": "TCosa", "visibility": "public",
+                           "code": "[Test]\n[TestCase('a', '1,2')]\nprocedure ConAtrib;\nbegin\nend;"})
+ctx = open(CLS, 'rb').read().decode('cp1252')
+check('INSERT metodo con atributos: DOS mitades, los atributos encima de la DECLARACION',
+      mc.abre(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and
+      "    [Test]\r\n    [TestCase('a', '1,2')]\r\n    procedure ConAtrib;\r\n" in _decl(ctx), out[:300] + ' | ' + ctx)
+check('INSERT metodo con atributos: la implementacion SIN ellos (alli la RTTI no los ve)',
+      'procedure TCosa.ConAtrib;\r\nbegin\r\nend;' in _impl(ctx) and '[Test' not in _impl(ctx), _impl(ctx))
+out = call('delphi_edit', {"path": CLS, "insert": "metodo", "inclass": "TCosa", "visibility": "public",
+                           "code": "[Test] procedure EnLinea;\nbegin\nend;"})
+ctx = open(CLS, 'rb').read().decode('cp1252')
+check('INSERT metodo con el atributo en la MISMA linea que la firma: cada uno a su sitio',
+      mc.abre(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and
+      '    [Test]\r\n    procedure EnLinea;\r\n' in _decl(ctx) and
+      'procedure TCosa.EnLinea;\r\nbegin\r\nend;' in _impl(ctx) and '[Test]' not in _impl(ctx), out[:300] + ' | ' + ctx)
+out = call('delphi_edit', {"path": CLS, "insert": "metodo", "inclass": "TCosa", "visibility": "public",
+                           "code": "class function Cuenta: Integer;\nbegin\n  Result := 0;\nend;"})
+ctx = open(CLS, 'rb').read().decode('cp1252')
+check('INSERT metodo: un class function entra (era EDIT-070) y se cualifica detras de function',
+      mc.abre(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and
+      '    class function Cuenta: Integer;\r\n' in _decl(ctx) and
+      'class function TCosa.Cuenta: Integer;\r\nbegin' in _impl(ctx), out[:300] + ' | ' + ctx)
+out = call('delphi_edit', {"path": CLS, "insert": "metodo", "inclass": "TCosa", "visibility": "public",
+                           "code": "procedure Virt(A: Integer); virtual; overload;\nbegin\nend;"})
+ctx = open(CLS, 'rb').read().decode('cp1252')
+check('INSERT metodo con directivas: TODAS en la declaracion',
+      mc.abre(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and
+      '    procedure Virt(A: Integer); virtual; overload;\r\n' in _decl(ctx), out[:300] + ' | ' + ctx)
+check('INSERT metodo con directivas: la implementacion sin ninguna (con virtual es E2070)',
+      'procedure TCosa.Virt(A: Integer);\r\nbegin\r\nend;' in _impl(ctx) and 'virtual' not in _impl(ctx), _impl(ctx))
+out = call('delphi_edit', {"path": CLS, "insert": "metodo", "inclass": "TCosa", "visibility": "public",
+                           "code": "function Viejo: string;\n  deprecated 'usa Nuevo; o no';\nbegin\n  Result := '';\nend;"})
+ctx = open(CLS, 'rb').read().decode('cp1252')
+check('INSERT metodo: una directiva en la linea de abajo, con su cadena (y un ; dentro), entera a la declaracion',
+      mc.abre(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and
+      "    function Viejo: string; deprecated 'usa Nuevo; o no';\r\n" in _decl(ctx) and
+      "function TCosa.Viejo: string;\r\nbegin\r\n  Result := '';\r\nend;" in _impl(ctx) and 'deprecated' not in _impl(ctx),
+      out[:300] + ' | ' + ctx)
+CAB = os.path.join(DIR, 'ConCabecera.pas')
+open(CAB, 'wb').write(CRLF.join(['unit ConCabecera;', '', 'interface', '', 'type', '  TOtra = class',
+                                 '  public', '    procedure SoloDecl;', '  end;', '', 'implementation', '',
+                                 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": CAB, "insert": "metodo", "inclass": "TOtra",
+                           "code": "[Test]\nprocedure SoloDecl; virtual;\nbegin\nend;"})
+_src = open(CAB, 'rb').read().decode('ascii')
+check('INSERT metodo con la declaracion YA puesta: solo la implementacion, sin directivas, y AVISA de lo que traia para la declaracion',
+      mc.abre(out, 'SK_EDIT_INSERT_METODO_SOLO_IMPL_FMT') and mc.es(out, 'SN_EDIT_CABECERA_NO_ANADIDA_FMT') and
+      '|[Test] virtual;|' in out and 'line 8' in out and
+      'procedure TOtra.SoloDecl;\r\nbegin\r\nend;' in _src and _src.count('procedure SoloDecl;') == 1,
+      out[:500] + ' | ' + _src)
+GLO = os.path.join(DIR, 'ConGlobal.pas')
+open(GLO, 'wb').write(CRLF.join(['unit ConGlobal;', '', 'interface', '', 'implementation', '',
+                                 'end.', '']).encode('ascii'))
+_g0 = open(GLO, 'rb').read()
+out = call('delphi_edit', {"path": GLO, "insert": "rutina-global",
+                           "code": "class procedure Suelta;\nbegin\nend;"})
+check('INSERT rutina-global de un class procedure: RECHAZADO nombrando insert=metodo, sin escribir',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_RUTINA_GLOBAL_DE_CLASE_FMT') and 'metodo' in out and
+      open(GLO, 'rb').read() == _g0, out[:300])
+out = call('delphi_edit', {"path": GLO, "insert": "rutina-global", "visible": True,
+                           "code": "procedure Exporta(A: Integer); stdcall;\nbegin\nend;"})
+_src = open(GLO, 'rb').read().decode('ascii')
+check('INSERT rutina-global visible con stdcall: la directiva en las DOS mitades (sin ella en el interface, E2037)',
+      mc.abre(out, 'SK_EDIT_INSERT_RUTINA_ANTES_FMT') and
+      'procedure Exporta(A: Integer); stdcall;\r\n\r\nimplementation' in _src and
+      'procedure Exporta(A: Integer); stdcall;\r\nbegin\r\nend;' in _src, out[:400] + ' | ' + _src)
+out = call('delphi_edit', {"path": CLS, "insert": "metodo", "inclass": "TCosa",
+                           "code": "[Test]\nbegin\nend;"})
+check('INSERT: atributos sin firma detras: EDIT-070 nombrando la linea que debia ser la firma',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT') and '|begin|' in out, out[:300])
+out = call('delphi_edit', {"path": CLS, "insert": "metodo", "inclass": "TCosa",
+                           "code": "[Test\nprocedure Roto;\nbegin\nend;"})
+check('INSERT: un corchete de atributo que no cierra: EDIT-070 nombrando el atributo',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT') and '|[Test|' in out, out[:300])
+
 # --- insert metodo con un TIPO ANIDADO en la clase (medido 2026-09-22 en
 # Lsp.Client: el primer 'end;' era el del tipo anidado y la declaracion caia
 # DENTRO de el, y la seccion 'public' pedida "no existia") ---

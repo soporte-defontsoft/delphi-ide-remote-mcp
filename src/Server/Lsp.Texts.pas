@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.11.1';
+  SERVER_VERSION = '1.11.2';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -4125,6 +4125,15 @@ const
     '(inherited included). A property absent here does NOT stream in a ' +
     '.dfm/.fmx: do not write it.';
 
+  { Las tablas del disenador salieron de UNA build de RAD Studio
+    (Lsp.DesignerMeta.META_BUILD): con otra activa, lo que esa build anada o
+    quite no esta, y "no esta" deja de querer decir "no existe". }
+  SN_DESIGNER_TABLA_OTRA_BUILD_FMT =
+    '[DSGN-049] NOTE: this table was dumped from RAD Studio build %s and the ' +
+    'active one is %s: a property that build added or removed is not known ' +
+    'here, so "absent" may be wrong - check the help (delphi_docs) or the ' +
+    'source before relying on it.';
+
   { Un filtro que no casa con nada devolvia properties:[] y total:0 sin mas,
     y un agente pequeno lo leia como un fallo de RTTI (Hermes, 28-sep-2026:
     TLabel FMX con filter=Font; la fuente va en TextSettings). }
@@ -6512,7 +6521,17 @@ const
 
   SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT =
     '[EDIT-070 INVALID_PARAM] The block does not start with a routine signature ' +
-    '(a comment above it is allowed). First useful line: |%s|';
+    '(a comment, or attributes such as [Test], above it are allowed). First ' +
+    'useful line: |%s|';
+
+  SR_EDIT_RUTINA_GLOBAL_DE_CLASE_FMT =
+    '[EDIT-117 INVALID_PARAM] ''class %s'' is a METHOD of a class, not a ' +
+    'global routine: insert="metodo" with inclass=<the class>.';
+
+  SN_EDIT_CABECERA_NO_ANADIDA_FMT =
+    '  [EDIT-118] NOTE: your block also carried |%s|, which belongs to the ' +
+    'declaration - and the declaration was already in the class and was NOT ' +
+    'touched: check that line %d has it (delphi_edit old/new).';
 
   SR_EDIT_FIRMA_NO_CIERRA_FMT =
     '[EDIT-071 INVALID_PARAM] The signature never closes with '';''. It starts at ' +
@@ -7127,7 +7146,10 @@ const
 
   SP_EDIT_CODE =
     'INSERT mode: the COMPLETE block (unqualified signature + ' +
-    'begin..end;). NEVER include end.';
+    'begin..end;). NEVER include end. For a method, attributes before the ' +
+    'signature ([Test]) and directives after it (virtual; override; static;...) ' +
+    'land in the class declaration, and the implementation goes without them, ' +
+    'as the IDE writes it.';
 
   SP_EDIT_INCLASS =
     'INSERT "metodo": exact class name (e.g. TOrderForm)';

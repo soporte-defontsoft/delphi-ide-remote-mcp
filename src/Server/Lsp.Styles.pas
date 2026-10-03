@@ -487,7 +487,7 @@ var
   L: TList<string>;
 begin
   Result := [];
-  Cache := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'DelphiLspMcp\win10-default.style');
+  Cache := ServerCacheDir('win10-default.style');
   if not TFile.Exists(Cache) then
   begin
     Exe := StyleConverterExe;
