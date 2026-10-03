@@ -20,23 +20,30 @@ of the new description is measured here by name:
   K6  it cannot READ outside its folder: a file of the jail, one of the house
   K7  it cannot see the folders next to its own (another test's copy)
   K8  no network: not even the port listening on this machine
-  K9  the temp folder lands in its own folder
+  K9  a Delphi test's temp file (TPath.GetTempPath, empty in a container)
+      lands in its own folder
   K10 a big log comes back cut: 16,384 characters, "truncated" and the note
       (TEST-030); a cut that falls inside a surrogate pair leaves the pair out
   K15 ...and all the contents together stop at 65,536 characters: the file
-      past the total comes with its name and size, without content
+      past the total comes with its name and size, without content, and
+      "noContent" says why
+  K20 the list itself stops at 500 entries and says how many are left out
+      (TEST-033)
   K14 it does not see the server's configuration: not ONE DELPHI_MCP_* in
       its environment (the server's own unit tests passed only because they
       inherited its roots - measured the day this battery was born)
   K11 a project built with runtime packages is refused BEFORE building
       (TEST-028): the container reads no .bpl of components or of the project
   K16 an output folder over the copy cap is refused (TEST-029) - a sparse
-      file, 300 MB that cost nothing on disk
+      file, 300 MB that cost nothing on disk; K16b the same through a
+      symlink, counted by what is behind it (a NOTA without the privilege)
   K17 a copy that cannot be made (a broken junction in the output folder)
       says so with its tag (TEST-031) and nothing runs
   K12 nothing is left: no container, no copy in the server's temp
   K13 a container a crash left behind (the server killed mid-run) is purged
-      at the next start of the SAME server, and one of another house is not
+      at the next start of the SAME server - launched by its long path after
+      the first one by its 8.3 path: the mark comes from the canonical
+      folder, not from its text -, and one of another house is not
 
 The containers are told apart by the MARK of this battery's server (the hash
 of its folder, the one Lsp.Sandbox puts in their names), not by the prefix:
@@ -45,7 +52,7 @@ while the battery looks.
 
 Usage:  python tests/test_delphi_test_contenedor.py [path-to-DelphiLspMcp.exe]
 """
-import atexit, ctypes, json, os, socket, subprocess, threading, time, uuid, winreg
+import atexit, ctypes, hashlib, json, os, socket, subprocess, threading, time, uuid, winreg
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -66,52 +73,19 @@ ue.CreateAppContainerProfile.restype = ctypes.c_long
 ue.DeleteAppContainerProfile.restype = ctypes.c_long
 
 
-def _rot(x, k):
-    return ((x << k) | (x >> (32 - k))) & 0xFFFFFFFF
-
-
-def bob_jenkins(datos, inicial=0):
-    """hashlittle de lookup3, el de THashBobJenkins.GetHashValue."""
-    M = 0xFFFFFFFF
-    n = len(datos)
-    a = b = c = (0xDEADBEEF + n + inicial) & M
-    i = 0
-    while n > 12:
-        a = (a + int.from_bytes(datos[i:i + 4], 'little')) & M
-        b = (b + int.from_bytes(datos[i + 4:i + 8], 'little')) & M
-        c = (c + int.from_bytes(datos[i + 8:i + 12], 'little')) & M
-        a = (a - c) & M; a ^= _rot(c, 4); c = (c + b) & M
-        b = (b - a) & M; b ^= _rot(a, 6); a = (a + c) & M
-        c = (c - b) & M; c ^= _rot(b, 8); b = (b + a) & M
-        a = (a - c) & M; a ^= _rot(c, 16); c = (c + b) & M
-        b = (b - a) & M; b ^= _rot(a, 19); a = (a + c) & M
-        c = (c - b) & M; c ^= _rot(b, 4); b = (b + a) & M
-        n -= 12
-        i += 12
-    if n == 0:
-        return c
-    cola = datos[i:] + b'\0' * (12 - n)
-    a = (a + int.from_bytes(cola[0:4], 'little')) & M
-    b = (b + int.from_bytes(cola[4:8], 'little')) & M
-    c = (c + int.from_bytes(cola[8:12], 'little')) & M
-    c ^= b; c = (c - _rot(b, 14)) & M
-    a ^= c; a = (a - _rot(c, 11)) & M
-    b ^= a; b = (b - _rot(a, 25)) & M
-    c ^= b; c = (c - _rot(b, 16)) & M
-    a ^= c; a = (a - _rot(c, 4)) & M
-    b ^= a; b = (b - _rot(a, 14)) & M
-    c ^= b; c = (c - _rot(b, 24)) & M
-    return c
-
-
 def _minusculas(s):
     # LowerCase de Delphi: solo A-Z
     return ''.join(ch.lower() if 'A' <= ch <= 'Z' else ch for ch in s)
 
 
-# la marca de ESTE servidor: MarcaDeEstaCasa sobre la carpeta de su exe
-MARCA = '%08x' % bob_jenkins(_minusculas(os.path.dirname(EXE)).encode('utf-16-le'))
+# la marca de ESTE servidor: MarcaDeEstaCasa = los 8 primeros de ClaveDeCarpeta
+# (el MD5 de la ruta canonica LARGA de su carpeta, en minusculas)
+MARCA = hashlib.md5(_minusculas(mc.larga(os.path.dirname(EXE))).rstrip('\\').encode('utf-8')).hexdigest()[:8]
 MIO = 'delphilspmcp.test.' + MARCA + '.'
+# la misma casa por dos caminos: el primer servidor se lanza por la ruta 8.3
+# y el segundo por la larga (K13), y la marca tiene que ser la misma
+EXE_CORTO = mc.corta(EXE) or EXE
+EXE_LARGO = mc.larga(EXE)
 
 
 def contenedores(todos=False):
@@ -168,8 +142,8 @@ VIVOS = []          # los servidores de la bateria, para la limpieza
 AJENO = 'DelphiLspMcp.Test.00000000.' + uuid.uuid4().hex   # la marca de OTRA casa
 
 
-def spawn():
-    s = mc.Stdio(EXE, ENTORNO, nombre='caja', t=600)
+def spawn(exe=EXE_CORTO):
+    s = mc.Stdio(exe, ENTORNO, nombre='caja', t=600)
     VIVOS.append(s)
     return s
 
@@ -186,6 +160,12 @@ def limpia():
         ue.DeleteAppContainerProfile(AJENO)
     except Exception:
         pass
+    # ...y los de ESTA bateria que hayan quedado (si K12 fallo, no se quedan)
+    for m in contenedores():
+        try:
+            ue.DeleteAppContainerProfile(m)
+        except Exception:
+            pass
     parar.set()
     try:
         oido.close()
@@ -311,7 +291,47 @@ begin
   Writeln('SONDA ', AQue, ' ', N);
 end;
 
+procedure Handles(const AQue: string);
+var
+  h: NativeUInt;
+  fl: DWORD;
+  malos, tipo, len: Integer;
+  o, e: THandle;
+  wsa: TWSAData;
 begin
+  // un guard que mide el DANO, no un numero magico: ningun handle heredable
+  // del test debe ser un SOCKET (el listener de Indy en produccion) ni un
+  // PIPE que no sea su propia tuberia (los stdio del servidor). Su stdout y
+  // su stderr son el MISMO handle, asi que no se cuentan como ajenos.
+  WSAStartup($0202, wsa);
+  o := GetStdHandle(STD_OUTPUT_HANDLE);
+  e := GetStdHandle(STD_ERROR_HANDLE);
+  malos := 0;
+  h := 4;
+  while h <= 16384 do
+  begin
+    try
+      if GetHandleInformation(THandle(h), fl) and ((fl and HANDLE_FLAG_INHERIT) <> 0) then
+      begin
+        len := SizeOf(tipo);
+        if getsockopt(TSocket(h), SOL_SOCKET, SO_TYPE, PAnsiChar(@tipo), len) = 0 then
+          Inc(malos)
+        else if (GetFileType(THandle(h)) = FILE_TYPE_PIPE) and
+                (THandle(h) <> o) and (THandle(h) <> e) then
+          Inc(malos);
+      end;
+    except
+    end;
+    Inc(h, 4);
+  end;
+  Writeln('SONDA ', AQue, ' ', malos);
+end;
+
+var
+  I: Integer;
+
+begin
+  Handles('K18');
   Escribe('K2', 'escrito.txt');
   Escribe('K4a', '..\arriba.txt');
   Escribe('K4b', '..\..\casa_escrita.txt');
@@ -334,6 +354,10 @@ begin
   TFile.WriteAllText('z2.log', StringOfChar('z', 20000));
   TFile.WriteAllText('z3.log', StringOfChar('z', 20000));
   TFile.WriteAllText('z4.log', StringOfChar('z', 20000));
+  // muchos ficheros, detras de todos: la lista para en 500 (TEST-033)
+  TDirectory.CreateDirectory('zz_muchos'); // ForceDirectories con un nivel relativo lanza
+  for I := 1000 to 1599 do
+    TFile.WriteAllText('zz_muchos\f' + IntToStr(I) + '.txt', 'm');
   Writeln('PASS caja');
 end.
 """
@@ -356,6 +380,10 @@ for _l in (j.get('outputTail') or '').splitlines():
         _p = _l.split()
         sonda[_p[1]] = ' '.join(_p[2:])
 files = {f.get('name'): f for f in (j.get('files') or [])}
+if j.get('result') != 'pass':
+    # lo que dijo el test, para saber POR QUE (el detalle del check lo corta)
+    print('SALIDA DEL TEST:', j.get('result'), j.get('exitCode'), j.get('error'), j.get('timedOut'),
+          (j.get('outputTail') or '')[-1500:])
 SALIDA = os.path.join(JAIL, 'CajaTest', 'Win64', 'Debug')
 
 check('K1 el test corre y pasa en su contenedor (sandboxed=true)',
@@ -372,6 +400,7 @@ check('K3 lo que escribio vuelve en "files", con su contenido',
       files.get('resultado.log', {}).get('content') == 'linea de log', str(list(files)))
 check('K3b es texto por la regla de la casa, no por la extension: un .txt binario sin contenido, un .out con el',
       'binario.txt' in files and 'content' not in files['binario.txt']
+      and files['binario.txt'].get('noContent') == 'binary'
       and files.get('notas.out', {}).get('content') == 'nota',
       '%s %s' % (files.get('binario.txt'), files.get('notas.out')))
 check('K4 no escribe encima de su carpeta: la temporal del servidor',
@@ -387,7 +416,10 @@ check('K6b ...ni uno de la casa del servidor', sonda.get('K6b') == 'NO', str(son
 check('K7 no ve las carpetas de al lado (otra copia)', sonda.get('K7') in ('NO', 'VE 0'), str(sonda))
 check('K8 sin red: no llega ni al puerto que escucha en esta maquina',
       sonda.get('K8') == 'NO' and not llegadas, '%s, llegadas=%d' % (sonda, len(llegadas)))
-check('K9 la temporal cae en su carpeta (vuelve en "files")', 'temporal.txt' in files, str(list(files)))
+check('K18 ningun handle heredable del test es un socket ni un pipe del servidor (solo su tuberia)',
+      sonda.get('K18') == '0', 'handles ajenos=%s (0 = solo su stdout/stderr; HANDLE_LIST)' % sonda.get('K18'))
+check('K9 la temporal de un test Delphi (TPath.GetTempPath, vacia en el contenedor) cae en su carpeta y vuelve en "files"',
+      'temporal.txt' in files, str(list(files)))
 _g = files.get('grande.log', {})
 check('K10 un log grande vuelve cortado: 16.384 caracteres, "truncated" y la nota (TEST-030)',
       _g.get('truncated') is True and len(_g.get('content', '')) == 16 * 1024
@@ -400,9 +432,17 @@ check('K10b ...y un corte en medio de un par sustituto deja el par fuera, entero
 _z = [files.get('z%d.log' % i, {}) for i in range(1, 5)]
 check('K15 ...y entre todos no pasan de 65.536 caracteres: el de detras del total, sin contenido',
       sum(len(f.get('content', '')) for f in files.values()) == 64 * 1024
-      and any(z.get('truncated') for z in _z) and 'content' not in _z[3] and _z[3].get('size') == 20000,
+      and any(z.get('truncated') for z in _z) and 'content' not in _z[3] and _z[3].get('size') == 20000
+      and _z[3].get('noContent') == 'past-total',
       '%d %s' % (sum(len(f.get('content', '')) for f in files.values()),
                  [{k: v for k, v in f.items() if k != 'content'} for f in _z]))
+# 11 ficheros de la sonda + 600 en zz_muchos = 611: 500 en la lista, 111 fuera
+_muchos = [f for f in files if f.startswith('zz_muchos')]
+check('K20 la lista para en 500 entradas y dice cuantos quedan fuera (TEST-033); los de detras del total, past-total',
+      len(files) == 500 and j.get('filesNotListed') == 111
+      and mc.abre(j.get('filesListNote', ''), 'SN_TEST_FICHEROS_FUERA_FMT')
+      and all(files[f].get('noContent') == 'past-total' for f in _muchos),
+      '%d listados (%d de zz_muchos), fuera %s' % (len(files), len(_muchos), j.get('filesNotListed')))
 _control = [k for k in ENTORNO if k.upper().startswith('DELPHI_MCP_')]
 check('K14 no ve la configuracion del servidor: NI UNA DELPHI_MCP_* en su entorno',
       sonda.get('K14') == '0' and len(_control) >= 2, '%s, el servidor tenia %s' % (sonda, _control))
@@ -435,6 +475,29 @@ check('K16 una salida por encima del tope de la copia se rechaza (TEST-029) y el
       mc.abre(out, 'SR_TEST_COPIA_TOPE_FMT') and '"total"' not in out, out[:300])
 os.remove(ENORME)
 
+# K16b: un SYMLINK a un fichero grande cuenta lo de DETRAS: antes contaba la
+# entrada del enlace (0 bytes) y copiaba los 300 MB. Crear un symlink pide
+# el privilegio (o el modo desarrollador): sin el, se dice y no se mide
+DISPERSO = os.path.join(JAIL, 'disperso.bin')
+open(DISPERSO, 'wb').close()
+subprocess.run(['fsutil', 'sparse', 'setflag', DISPERSO], capture_output=True)
+with open(DISPERSO, 'r+b') as _f:
+    _f.truncate(300 * 1024 * 1024)
+ENLACE = os.path.join(SALIDA, 'enlace.bin')
+try:
+    os.symlink(DISPERSO, ENLACE)
+    _sym = True
+except OSError:
+    _sym = False
+if _sym:
+    out = srv.call('delphi_test', {'command': 'run', 'project': CAJA, 'nobuild': True}, 300)
+    check('K16b ...y un symlink a 300 MB cuenta lo de detras, no su entrada: TEST-029 y no corre',
+          mc.abre(out, 'SR_TEST_COPIA_TOPE_FMT') and '"total"' not in out, out[:300])
+    os.remove(ENLACE)  # el enlace, nunca lo de detras
+else:
+    print('NOTA: K16b no se mide: esta cuenta no puede crear symlinks (privilegio o modo desarrollador)')
+os.remove(DISPERSO)
+
 # K17: un junction roto en la salida: la copia no se puede hacer, se dice con
 # su etiqueta y el test no corre (antes, una excepcion sin nombre)
 BORRADA = os.path.join(JAIL, 'borrada')
@@ -447,6 +510,48 @@ out = srv.call('delphi_test', {'command': 'run', 'project': CAJA, 'nobuild': Tru
 check('K17 una copia que no se puede hacer lo dice con su etiqueta (TEST-031) y el test no corre',
       mc.abre(out, 'SR_TEST_COPIA_FMT') and '"total"' not in out, out[:300])
 os.rmdir(ROTO)  # quita el enlace, nunca lo de detras
+
+# K19: un hijo PERSISTENTE del test (sigue vivo tras el padre) con un fichero
+# abierto en la copia. Al acabar no queda ni el hijo ni la copia: el job mata
+# el arbol y EsperaJobVacio aguarda a que muera ANTES de la foto y el borrado
+# (revision Opus 4.8). El mutante sin la espera no expone la carrera de forma
+# determinista -kill-on-close suele ganar el margen-: es garantia de orden.
+PROG_HIJO = r'''program HijoTest;
+{$APPTYPE CONSOLE}
+uses Winapi.Windows, System.SysUtils, System.Classes;
+var SI: TStartupInfo; PI: TProcessInformation; Cmd: string; f: TFileStream;
+begin
+  if (ParamCount >= 1) and (ParamStr(1) = 'child') then
+  begin
+    f := TFileStream.Create('abierto.lock', fmCreate);
+    Sleep(15000);
+    f.Free;
+    Halt(0);
+  end;
+  FillChar(SI, SizeOf(SI), 0); SI.cb := SizeOf(SI);
+  Cmd := '"' + ParamStr(0) + '" child'; UniqueString(Cmd);
+  if CreateProcess(nil, PChar(Cmd), nil, nil, False, CREATE_NO_WINDOW, nil, nil, SI, PI) then
+  begin
+    Writeln('CHILDPID ', PI.dwProcessId);
+    CloseHandle(PI.hThread); CloseHandle(PI.hProcess);
+  end
+  else
+    Writeln('CHILDPID 0');
+  Writeln('PASS hijo');
+end.'''
+HIJO = os.path.join(JAIL, 'HijoTest')
+srv.call('delphi_create', {'kind': 'project-console', 'name': 'HijoTest', 'dir': HIJO})
+open(os.path.join(HIJO, 'HijoTest.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(PROG_HIJO)
+out = srv.call('delphi_test', {'command': 'run', 'project': os.path.join(HIJO, 'HijoTest.dproj')}, 300)
+j19 = J(out)
+pid19 = next((l.strip().lstrip('.').split()[1] for l in (j19.get('outputTail') or '').splitlines()
+              if l.strip().lstrip('.').startswith('CHILDPID')), '0')
+time.sleep(0.3)
+vivo19 = pid19 not in ('0', '') and pid19 in subprocess.run(
+    ['tasklist', '/fi', 'PID eq ' + pid19], capture_output=True, text=True).stdout
+check('K19 un hijo persistente del test acaba muerto y su copia borrada (job + EsperaJobVacio)',
+      j19.get('result') == 'pass' and not vivo19 and not copias(),
+      'pid=%s vivo=%s copias=%s' % (pid19, vivo19, copias()))
 
 check('K12 no queda ningun contenedor', not (contenedores() - antes), str(contenedores() - antes))
 check('K12b ...ni copias en la temporal del servidor', not copias(), str(copias()))
@@ -478,9 +583,14 @@ time.sleep(1)
 check('K13 fixture: muerto el servidor a mitad de un test, su contenedor (con SU marca) queda huerfano',
       huerfano is not None and huerfano in contenedores(),
       'marca %s; los de la cuenta: %s' % (MARCA, contenedores(todos=True)))
-srv2 = spawn()
+# el mismo exe por OTRO camino: el primero se lanzo por la ruta 8.3, este por
+# la larga; la marca sale de la ruta canonica (ClaveDeCarpeta), no del texto
+check('K13 fixture: la CARPETA del exe se nombra de dos formas (8.3 y larga)',
+      os.path.dirname(EXE_CORTO).lower() != os.path.dirname(EXE_LARGO).lower(),
+      '%s | %s' % (EXE_CORTO, EXE_LARGO))
+srv2 = spawn(EXE_LARGO)
 srv2.call('delphi_workspace', {})
-check('K13 el siguiente arranque del MISMO servidor lo borra',
+check('K13 el siguiente arranque del MISMO servidor, por su ruta larga, lo borra',
       huerfano is not None and huerfano not in contenedores(), str(contenedores()))
 check('K13b ...y no toca el de otra casa (puede estar en uso)', AJENO.lower() in contenedores(todos=True),
       str(contenedores(todos=True)))
