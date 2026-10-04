@@ -229,7 +229,8 @@ end;
 procedure Lista(const AQue, ACarpeta: string);
 begin
   try
-    Writeln('SONDA ', AQue, ' VE ', Length(TDirectory.GetDirectories(ACarpeta)));
+    var Cuantas := Length(TDirectory.GetDirectories(ACarpeta));
+    Writeln('SONDA ', AQue, ' VE ', Cuantas);
   except
     Writeln('SONDA ', AQue, ' NO');
   end;
