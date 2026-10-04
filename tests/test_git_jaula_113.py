@@ -31,12 +31,35 @@ git('init', '-q', '-b', 'main', cwd=DEP)
 open(os.path.join(DEP, 'privado.txt'), 'w').write('intacto')
 git('add', '.', cwd=DEP)
 git('commit', '-qm', 'privado', cwd=DEP)
-git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', DEP, 'modulo')
+VICT = os.path.join(OUT, 'sub.git')
+git('clone', '-q', '--bare', DEP, VICT, cwd=OUT)
+git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', VICT, 'modulo')
 git('commit', '-qam', 'modulo')
+git('branch', 'antes')
 git('push', '-q', 'origin', 'main')
 git('config', 'fetch.recurseSubmodules', 'true')
 # Tambien un ajuste propio del submodulo: la opcion de la orden manda.
 git('config', 'submodule.modulo.fetchRecurseSubmodules', 'true')
+# Commit del submodulo que su remoto externo todavia no tiene.
+MOD = os.path.join(REPO, 'modulo')
+open(os.path.join(MOD, 'nuevo.txt'), 'w').write('nuevo')
+git('add', '.', cwd=MOD)
+git('commit', '-qm', 'nuevo', cwd=MOD)
+NUEVO_SUB = git('rev-parse', 'HEAD', cwd=MOD).strip()
+git('add', 'modulo')
+git('commit', '-qm', 'nuevo gitlink')
+git('config', 'submodule.recurse', 'true')
+git('config', 'submodule.recurse', 'true', cwd=MOD)
+git('config', 'push.recurseSubmodules', 'on-demand', cwd=MOD)
+GLOBAL = os.path.join(MINE, 'global.config')
+open(GLOBAL, 'w').write('[submodule]\n recurse=true\n[push]\n recurseSubmodules=on-demand\n')
+# La otra via: .git es un FICHERO y el gitdir vive fuera de la jaula.
+FICHA = os.path.join(MINE, 'repo-ficha')
+META = os.path.join(OUT, 'ficha.git')
+os.makedirs(FICHA)
+git('init', '-q', '--bare', '-b', 'main', META, cwd=OUT)
+open(os.path.join(FICHA, '.git'), 'w').write('gitdir: %s\n' % META)
+open(os.path.join(FICHA, 'dato.txt'), 'w').write('local')
 def snapshot(root):
     return {os.path.relpath(os.path.join(d, n), root):
             hashlib.sha256(open(os.path.join(d, n), 'rb').read()).hexdigest()
@@ -51,7 +74,8 @@ open(os.path.join(OUT, 'no_tocar.txt'), 'w').write('intacto')
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 before = snapshot(OUT)
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': MINE,
-    'GIT_ALLOW_PROTOCOL': 'file', 'GIT_TRACE': TRACE}), nombre='git-jaula-113', t=180)
+    'GIT_ALLOW_PROTOCOL': 'file', 'GIT_TRACE': TRACE,
+    'GIT_CONFIG_GLOBAL': GLOBAL, 'GIT_CONFIG_NOSYSTEM': '1'}), nombre='git-jaula-113', t=180)
 try:
     out = srv.call('delphi_git', {'repo': REPO, 'command': 'ls-remote', 'args': 'origin'})
     check('ls-remote local autorizado contesta las refs', out.startswith('exit=0') and 'refs/heads/main' in out, out)
@@ -66,6 +90,12 @@ try:
     check('ls-remote anunciado como consulta', 'ls-remote' in meta['readOnlyCommands'], meta)
     out = srv.call('delphi_git', {'repo': REPO, 'command': 'status'})
     check('status control dentro de la jaula', out.startswith('exit=0'), out)
+    for rama in ('antes', 'main'):
+        out = srv.call('delphi_git', {'repo': REPO, 'command': 'switch', 'args': rama})
+        check('switch ' + rama + ' no cambia el HEAD del submodulo',
+              out.startswith('exit=0') and git('rev-parse', 'HEAD', cwd=MOD).strip() == NUEVO_SUB, out)
+    # GIT_TRACE no conserva las opciones -c/-C del compositor: se mide el
+    # HEAD del hijo, que con la config recursiva cambiaba al cambiar de rama.
     out = srv.call('delphi_git', {'repo': SUB, 'command': 'fetch', 'args': '../../remote.git'})
     check('bare desde subcarpeta resuelve el remoto como Git', out.startswith('exit=0'), out)
     for cmd, args in (('fetch', 'origin'), ('pull', 'origin main')):
@@ -86,18 +116,51 @@ try:
     out = srv.call('delphi_git', {'repo': REPO, 'command': 'fetch', 'args': 'origin inexistente'})
     check('fallo de Git real se distingue del rechazo previo', mc.es(out, 'SR_GIT_EXIT_FMT') and
           'couldn' in out, out)
+    CFG = os.path.join(REPO, '.git', 'config')
+    out = srv.call('delphi_textedit', {'path': CFG, 'old': '[core]',
+        'new': '[push]\n\trecurseSubmodules = on-demand\n[core]'})
+    check('el agente pone push.recurseSubmodules por textedit',
+          not mc.fallo(out) and 'on-demand' in mc.lee(CFG), out)
+    open(TRACE, 'w').close()
+    out = srv.call('delphi_git', {'repo': REPO, 'command': 'push', 'args': 'origin main'})
+    trace = mc.lee(TRACE)
+    check('push del padre si llega al remoto permitido', out.startswith('exit=0') and
+          git('rev-parse', 'main', cwd=REMOTE).strip() == git('rev-parse', 'HEAD').strip(), out)
+    check('push no entrega el commit al bare externo del submodulo',
+          git('rev-parse', 'main', cwd=VICT).strip() != NUEVO_SUB, out)
+    check('push manda sin recursion aunque la config la pida',
+          any(' push ' in s and '--no-recurse-submodules' in s
+              for s in trace.splitlines() if 'built-in: git ' in s), trace[-800:])
+    for cmd, args in (('status', ''), ('add', 'dato.txt'), ('commit', ''),
+                      ('config', 'user.name'), ('fetch', ''), ('push', ''),
+                      ('init', '--shared=group')):
+        out = srv.call('delphi_git', {'repo': FICHA, 'command': cmd, 'args': args})
+        check('.git fichero externo: ' + cmd + ' lo para GIT-041',
+              mc.es(out, 'SR_GIT_REPO_FUERA_FMT'), out)
     check('victima intacta', snapshot(OUT) == before)
 finally:
     srv.cierra()
     os.rmdir(LINK)
 ALIAS = os.path.join(BASE, 'raiz_enlazada')
-check('fixture raiz declarada enlazada', mc.junction(ALIAS, REPO))
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': ALIAS}), nombre='git-raiz-enlazada')
+DEST_CORTO = mc.corta(REPO)
+HAY83 = bool(DEST_CORTO and DEST_CORTO.lower() != mc.larga(REPO).lower())
+if not HAY83:
+    print('NOTA: este volumen no da alias 8.3; la raiz enlazada solo se mide larga')
+check('fixture raiz declarada enlazada con destino corto explicito', mc.junction(ALIAS, DEST_CORTO or REPO))
+FORMAS = [('larga', mc.larga(ALIAS))]
+if HAY83:
+    FORMAS.append(('corta', mc.corta(ALIAS)))
 try:
-    out = srv.call('delphi_git', {'repo': ALIAS, 'command': 'status'})
-    check('raiz declarada por junction conserva su forma', out.startswith('exit=0'), out)
+    for nombre, raiz in FORMAS:
+        srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': raiz}), nombre='git-raiz-enlazada')
+        try:
+            for acceso, repo in FORMAS:
+                out = srv.call('delphi_git', {'repo': repo, 'command': 'status'})
+                check('raiz declarada por junction conserva su forma: %s / %s' % (nombre, acceso),
+                      out.startswith('exit=0'), out)
+        finally:
+            srv.cierra()
 finally:
-    srv.cierra()
     os.rmdir(ALIAS)
 PORT = mc.puerto_libre()
 RW, RO = uuid.uuid4().hex, uuid.uuid4().hex
@@ -117,4 +180,6 @@ finally:
     proc.terminate()
     proc.wait(timeout=20)
 check('victima intacta tras todos los clientes', snapshot(OUT) == before)
+mc.borra(BASE)
+check('BASE eliminada con su copia del exe', not os.path.exists(BASE), BASE)
 mc.fin('git jaula 113')

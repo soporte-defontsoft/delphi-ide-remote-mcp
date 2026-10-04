@@ -77,9 +77,9 @@ de fuera, y ninguno lo leia, sin una palabra en el arranque.
       relativa (la carpeta de cada raiz), dentro de una referencia propia, la
       escrita en 8.3 cuya forma larga esta dentro, la que CONTIENE la raiz
       (la deja entera de solo lectura: se mide) y la escrita por la ruta real
-      de una raiz que es un junction. La que contiene la raiz solo por el
-      TEXTO (la raiz, un junction a otro sitio) si se avisa: la escritura por
-      esa raiz pasa, se mide (la segunda revision creia que la protegia)
+      de una raiz que es un junction. La que contiene la raiz por el TEXTO
+      tambien protege: no se avisa, con nombres largos o alias 8.3.
+      La medida anterior dependia del TEMP corto (corregida el 4-oct-2026).
   R4  las del entorno (modo local): con DELPHI_MCP_ROOTS se avisa igual, con
       la clave del entorno (DELPHI_MCP_READONLY_ROOTS), sin cerrar nada; sin
       raices no hay "fuera" (el modo local de confianza lee toda la maquina)
@@ -241,12 +241,11 @@ if HAY_CORTO:
 if HAY_ENLACES:
     SOLO['SoloEnlaceRaiz'] = (ENLACE_RAIZ, ['ReadOnlyPaths=%s' % os.path.join(JAIL2, 'dentro')])
     SOLO['SoloEnlaceFuera'] = (JAIL2, ['ReadOnlyPaths=%s' % ENLACE_FUERA])
-    # CONTIENE la raiz solo por el texto (la raiz sale a JAIL2): los escritores
-    # juzgan la ruta REAL, la escritura por esa raiz pasa, y no protege nada
-    # (la segunda revision de la 1.9.1 creia lo contrario; medido)
+    # CONTIENE la raiz por el texto (la raiz sale a JAIL2): protege su
+    # descendencia tambien por el alias 8.3, igual que por el nombre largo.
     SOLO['SoloEncimaTexto'] = (CAJA_RAIZ, ['ReadOnlyPaths=%s' % CAJA])
 # de las que el arranque tiene que avisar; de las demas, nada
-SE_AVISAN = ('SoloFuera', 'SoloUnidad', 'SoloRelFuera', 'SoloEnlaceFuera', 'SoloEncimaTexto')
+SE_AVISAN = ('SoloFuera', 'SoloUnidad', 'SoloRelFuera', 'SoloEnlaceFuera')
 FUERA_FMT = mc.catalogo()['SL_GUARD_SOLO_LECTURA_FUERA_FMT']
 # el trozo fijo del aviso, entre la clave y la entrada: para decir que NO esta
 FUERA_TROZO = FUERA_FMT.split('%s')[1]
@@ -344,9 +343,9 @@ try:
         cx.session('letras-red-solo-encima-texto')
         fx = os.path.join(CAJA_RAIZ, 'escrito-encima-texto.txt')
         t = mc.texto(cx.call_msg('delphi_textedit', {'path': fx, 'create': True, 'content': 'x\n'}, 120), True)
-        check('R2 (guarda) la que contiene la raiz solo por el texto (un junction a otro sitio) NO la protege: '
-              'la escritura pasa, los escritores juzgan la ruta real',
-              not mc.fallo(t) and os.path.exists(os.path.join(JAIL2, 'escrito-encima-texto.txt')), t[:200])
+        check('R2 la que contiene la raiz por el texto protege aunque sea un junction a otro sitio',
+              mc.abre(t, 'SR_READONLY_PATH_FMT') and
+              not os.path.exists(os.path.join(JAIL2, 'escrito-encima-texto.txt')), t[:200])
 finally:
     proc.kill()
 
@@ -402,9 +401,9 @@ if HAY_ENLACES:
     check('R2 ...y la que esta en la raiz por el texto y sale por un junction: la jaula mide la ruta real',
           any(FUERA_FMT % ('[Workspace.SoloEnlaceFuera] ReadOnlyPaths=', ENLACE_FUERA, 'ReadOnlyRoots') in l
               for l in AVISOS), AVISOS)
-    check('R2 ...y la que contiene la raiz solo por el texto: no protege nada (medido arriba)',
-          any(FUERA_FMT % ('[Workspace.SoloEncimaTexto] ReadOnlyPaths=', CAJA, 'ReadOnlyRoots') in l
-              for l in AVISOS), AVISOS)
+    check('R2 la que contiene la raiz por el texto no da el aviso de fuera: protege (medido arriba)',
+          not any(FUERA_FMT % ('[Workspace.SoloEncimaTexto] ReadOnlyPaths=', CAJA, 'ReadOnlyRoots') in l
+                  for l in AVISOS), AVISOS)
 else:
     print('NOTA R2/R3: no se pudo crear un junction aqui: no se miden las entradas por un junction')
 check('R2 (guarda) de una seccion sin token, que se ignora entera, no se dice nada (y la seccion se leyo)',

@@ -31,4 +31,6 @@ try:
     check('victima intacta', os.listdir(VICTIM) == ['privado.txt'] and mc.lee(os.path.join(VICTIM, 'privado.txt')) == 'intacto')
 finally:
     os.rmdir(LINK)
+mc.borra(BASE)
+check('BASE eliminada con su copia del exe', not os.path.exists(BASE), BASE)
 mc.fin('ruta controles')

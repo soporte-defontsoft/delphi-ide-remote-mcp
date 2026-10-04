@@ -887,11 +887,12 @@ begin
   // La orden de red no hereda una recursion a remotos de submodulos sin juzgar.
   var Comando := PrimerTrozo(AResto, [' ']);
   var Resto := AResto;
-  if MatchText(Comando, ['fetch', 'pull']) then
+  if MatchText(Comando, ['fetch', 'pull', 'push']) then
     Resto := Comando + ' --no-recurse-submodules' + Copy(AResto, Length(Comando) + 1, MaxInt);
   // Nunca ejecutar los hooks ni el monitor de un repo del workspace.
   // El directorio del servidor no admite escrituras de los clientes.
-  Result := 'git.exe -c core.fsmonitor=false -c core.hooksPath=' +
+  // La regla general tambien manda en switch/restore y en los hijos de Git.
+  Result := 'git.exe -c submodule.recurse=false -c core.fsmonitor=false -c core.hooksPath=' +
     EnComillas(ServerTempDir('git-hooks-off')) + ' -C ' +
     EnComillas(ARepo) + AFijado + ' ' + Resto;
 end;
@@ -1538,8 +1539,11 @@ begin
   // la raiz del arbol, su carpeta de git y la comun (la del repo principal
   // de un worktree enlazado) -, y git corre FIJADO a ellas: trabaja donde
   // la puerta miro, no donde el encuentre un repo al volver a buscar. clone
-  // e init no tienen repo todavia: hacen el suyo en la carpeta que se les da.
-  if not MatchText(Cmd, ['clone', 'init']) then
+  // hace su repo. init tambien REINICIALIZA el .git que ya exista: su
+  // fichero gitdir puede apuntar fuera, y pasa por la misma puerta.
+  if (Cmd <> 'clone') and ((Cmd <> 'init') or
+     TFile.Exists(TPath.Combine(Repo, '.git')) or
+     TDirectory.Exists(TPath.Combine(Repo, '.git'))) then
   begin
     if not DondeViveElRepo(Repo, GitDir, Comun, Raiz, Output, ExitCode) then
       Exit(MsgFmt(SR_GIT_EXIT_FMT, [ExitCode, Output.Trim]));

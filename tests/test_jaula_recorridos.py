@@ -61,4 +61,6 @@ try:
 finally:
     srv.cierra()
     os.rmdir(LINK)
+mc.borra(BASE)
+check('BASE eliminada con su copia del exe', not os.path.exists(BASE), BASE)
 mc.fin('jaula recorridos')

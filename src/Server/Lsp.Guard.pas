@@ -2042,10 +2042,12 @@ end;
   confianza lee toda la maquina, y un workspace sin raices ya esta cerrado.
   AClaveDeFuera: la que si abre para leer, como se llama alli (ReadOnlyRoots
   en el ini, DELPHI_MCP_READONLY_ROOTS en el entorno). Primera revision de
-  la 1.9.1: una entrada que CONTIENE una raiz la deja entera de solo lectura
-  (no es de fuera), y la jaula mide la ruta REAL - un junction que entra o
-  que sale cuenta -; por el texto, las dos cosas eran un aviso falso o uno
-  que faltaba. }
+  la 1.9.1: una entrada que CONTIENE una raiz la deja entera de solo lectura.
+  Correccion medida el 4-oct: cuenta el texto con sus alias 8.3 Y la ruta
+  real; que la raiz sea un junction no quita la proteccion de su entrada. }
+function EnLugar(const APath, ALugar: string;
+  AResuelveAlias: Boolean = True): Boolean; forward;
+
 procedure AvisaDeSoloLecturaFuera(const ADonde, AClaveDeFuera: string;
   const APaths, ARoots, AReferencias: TArray<string>);
 
@@ -2068,7 +2070,7 @@ procedure AvisaDeSoloLecturaFuera(const ADonde, AClaveDeFuera: string;
 
 var
   P, PC, R, RC: string;
-  Dentro: Boolean;
+  Dentro, AliasLocal: Boolean;
   Dichas: TArray<string>;
 begin
   if Length(ARoots) = 0 then
@@ -2078,17 +2080,16 @@ begin
   begin
     PC := Comparable(P);
     Dentro := False;
-    // Por la ruta REAL, que es la que juzgan los escritores: la entrada
-    // dentro de una raiz, o una raiz dentro de ella ("D:\Proyectos" con la
-    // raiz "D:\Proyectos\App" la deja entera de solo lectura). Por el texto
-    // NO: la segunda revision de la 1.9.1 propuso contar la raiz que la
-    // entrada contiene solo por el texto (la raiz, un junction a otro sitio),
-    // y medido, la escritura por esa raiz PASA - lo que se escribe no esta
-    // de verdad bajo la entrada -: no protege nada, y el aviso es justo
+    // Una entrada que contiene la raiz por texto protege su descendencia.
+    // Una entrada dentro de la raiz que SALE por un enlace sigue siendo fuera.
+    // El arranque solo resuelve alias en unidades locales: no abre la red.
     for R in ARoots do
     begin
       RC := Comparable(R);
-      if StartsText(RC, PC) or StartsText(PC, RC) then
+      AliasLocal := (ClaseDeLetra(LetraDeRuta(P)) = clLocal) and
+        (ClaseDeLetra(LetraDeRuta(R)) = clLocal);
+      if EnLugar(R, P, AliasLocal) or
+         EnLugar(PC, RC, False) or EnLugar(RC, PC, False) then
       begin
         Dentro := True;
         Break;
@@ -2098,11 +2099,13 @@ begin
     // ya se lee
     if not Dentro then
       for R in AReferencias do
-        if StartsText(Comparable(R), PC) then
+      begin
+        if EnLugar(PC, Comparable(R), False) then
         begin
           Dentro := True;
           Break;
         end;
+      end;
     // (una relativa que sale al mismo sitio desde dos raices, una vez)
     if not Dentro and (IndexText(PC, Dichas) < 0) then
     begin
@@ -2851,13 +2854,20 @@ end;
 
 { APath ES ALugar o esta DENTRO, los dos en la forma larga: EL comparador
   de "esta en ese sitio". Un lugar vacio no contiene nada. }
-function EnLugar(const APath, ALugar: string): Boolean;
+function EnLugar(const APath, ALugar: string; AResuelveAlias: Boolean): Boolean;
 begin
   Result := False;
   if (APath.Trim = '') or (ALugar.Trim = '') then
     Exit;
   try
-    Result := StartsText(FormaLarga(ALugar.Trim), FormaLarga(APath.Trim));
+    var Ruta := IncludeTrailingPathDelimiter(APath.Trim);
+    var Lugar := IncludeTrailingPathDelimiter(ALugar.Trim);
+    if AResuelveAlias then
+    begin
+      Ruta := FormaLarga(APath.Trim);
+      Lugar := FormaLarga(ALugar.Trim);
+    end;
+    Result := StartsText(Lugar, Ruta);
   except
     Result := False; // una ruta que no parsea no esta en ningun sitio
   end;
@@ -6290,8 +6300,8 @@ begin
       // Por el texto Y por la ruta REAL (Verdad): un junction de la raiz que
       // apunte a una carpeta de solo lectura no la vuelve escribible.
       for var Ro in WorkspaceReadOnlyPaths do
-        if StartsText(Ro, IncludeTrailingPathDelimiter(Full)) or
-           StartsText(IncludeTrailingPathDelimiter(RealPath(SinBarraFinal(Ro))), Verdad) then
+        if EnLugar(Full, Ro) or
+           EnLugar(Verdad, RealPath(SinBarraFinal(Ro))) then
           Exit(MsgFmt(SR_READONLY_PATH_FMT, [APath, SinBarraFinal(Ro)]));
       // las dos en la forma larga: el tramo del agente se cuenta desde la raiz
       Exit(AgentConfineDenied(SinBarraFinal(FullLargo), FormaLarga(R)));
@@ -6735,6 +6745,10 @@ var
 begin
   Result := ARuta;
   P := PrefijoSinBarra(ARuta.Trim.Replace('/', '\'));
+  // El prefijo y el sufijo se cuentan en la misma forma larga, tambien
+  // cuando Git devuelve larga la ruta de un destino escrito en 8.3.
+  if AConLocales and not EsUnc(P) then
+    P := PrefijoSinBarra(FormaLarga(RaizSiUnidad(P)));
   // Por defecto solo UNC; los enlaces locales se traducen cuando lo piden.
   if not AConLocales and not EsUnc(P) then
     Exit;
@@ -6753,9 +6767,11 @@ begin
        not (AConLocales and EsSitioConLetra(RaizSiUnidad(Decl)) and
          EsRutaAbsoluta(RaizSiUnidad(Real))) then
       Continue;
+    if AConLocales and not EsUnc(Real) then
+      Real := PrefijoSinBarra(FormaLarga(RaizSiUnidad(Real)));
     // bajo ESE sitio: el mismo, o lo que sigue a su separador (\\h\r\ab
     // no esta bajo \\h\r\a). De dos que casan, el mas hondo
-    if (SameText(P, Real) or StartsText(Real + '\', P)) and
+    if EnLugar(RaizSiUnidad(P), RaizSiUnidad(Real), False) and
        (Length(Real) > Length(MejorReal)) then
     begin
       Mejor := Decl;
@@ -6827,8 +6843,9 @@ begin
   // Solo las raices que contienen el argumento ya admitido: no abrir las demas.
   if AReferencia <> '' then
     for var R in WorkspaceRoots + WorkspaceReadOnlyRoots do
-      if StartsText(IncludeTrailingPathDelimiter(R),
-        IncludeTrailingPathDelimiter(AReferencia)) then
+      if EnLugar(AReferencia, R,
+        (ClaseDeLetra(LetraDeRuta(R)) = clLocal) and
+        (ClaseDeLetra(LetraDeRuta(AReferencia)) = clLocal)) then
       begin
         Declaradas := Declaradas + [R];
         Reales := Reales + [RealPath(R)];

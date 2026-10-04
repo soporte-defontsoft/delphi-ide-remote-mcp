@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 adds tools/capabilities and PATCH fixes. The server reports its version in
 the MCP `initialize` response (`serverInfo.version`).
 
+## [Unreleased]
+
+### Fixed
+
+- Git never recurses into submodules: the common command composer sets
+  `submodule.recurse=false` for every command and `--no-recurse-submodules`
+  for fetch, pull and push, regardless of repository or global configuration.
+  Reinitializing an existing `.git` also checks its gitdir and common directory;
+  a `.git` file pointing outside the workspace is rejected with `GIT-041`.
+- `ReadOnlyPaths` protects its declared descendants using the existing location
+  comparator, equally with long names and 8.3 aliases. An entry containing a
+  root that is a junction protects that root and gets no false outside warning.
+  The 1.9.1 note below corrects a measurement that depended on a short TEMP path.
+- Git preserves a root declared through a junction with an 8.3 target or root.
+  Its declared-path translation uses the same location comparator and counts
+  the relative suffix in the long form; the battery constructs both forms.
+- Jail regression batteries remove their scratch directories, including exe copies.
+
 ## [1.12.1] - 2026-10-04
 
 What the live test of 1.12.0 found: the line that opens an object in a form
@@ -787,23 +805,23 @@ A `ReadOnlyPaths` entry outside every root of its workspace is said at startup: 
   contains a root (it makes the whole root read-only); a relative entry is
   said only when it resolves outside (`..\shared`), once even if it does
   from several roots; a section with no token, which is ignored whole, says
-  nothing more. On a local drive the comparison is on the real path, which
-  is what the writers judge - a junction that enters a root or leaves it
-  counts, and so do 8.3 names; an entry that contains a root only by its
-  text, the root being a junction to somewhere else, protects nothing (the
-  write through that root goes through) and is said -; on a network drive,
-  on the text: the startup does not wait on a share for this. With no
+  nothing more. Correction measured on 2026-10-04: protection compares the
+  declared path and the real path with the same 8.3-aware location rule.
+  An entry containing a root by its text protects it even if the root is a
+  junction elsewhere. The previous claim that it protected nothing came
+  from a TEMP path with an 8.3 component. Startup compares both forms on a
+  local drive, and only text on a network drive, without waiting on a share. With no
   roots - the trusted local mode, which reads the whole machine - there is
   no outside, and nothing is said.
 
 `test_letras_red` has fourteen more checks. The entry outside is loaded -
 another workspace whose root contains it cannot delete it - and its agent
 gets `GUARD-002` for it; an entry that contains the root makes it
-read-only, and one that contains it only by its text does not (the write
-goes through). The warning comes with its key and entry - a whole drive
-with its backslash -, for the entry that leaves a root through a
-junction, for the one that contains a root only by its text, and once for
-a relative one that resolves to the same place from two roots; nothing
+read-only, including one that contains it by its text (the latter check
+was corrected on 2026-10-04). The warning comes with its key and entry - a
+whole drive with its backslash -, for the entry that leaves a root through
+a junction, and once for a relative one that resolves to the same place
+from two roots; nothing
 for the entries inside (absolute, relative, in a reference of its own,
 containing the root, in 8.3, and written by the real path of a root that
 is a junction), nor for a section with no token; and the same for the
