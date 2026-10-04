@@ -73,7 +73,9 @@ uses
   Lsp.Guard,
   Lsp.Patch,
   Lsp.ProjectUnits,
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Pascal,
+  Lsp.Scaffold;
 
 var
   // El nombre de la carpeta de copias estaba escrito DOS veces, aqui y en
@@ -909,15 +911,19 @@ begin
   begin
     if TPath.GetExtension(Params.Dest).ToLower <> '.pas' then
       Exit(MsgFmt(SR_MOVE_UNIT_SOLO_SE_MUEVE_FMT, [TPath.GetFileName(Params.Dest)]));
-    if not TRegEx.IsMatch(NewStem, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+    if not EsIdentificador(NewStem, True) then // EL identificador (Lsp.Pascal)
       Exit(MsgFmt(SR_FILE_IDENTIFICADOR_UNIT_FMT, [NewStem]));
+    // un nombre NUEVO, la regla entera (Lsp.Scaffold): renombrar a Begin o a
+    // System pasaba; mover una unit que ya se llama asi, no se toca
+    if not MismoIdentificador(OldStem, NewStem) and (BadUnitName(NewStem) <> '') then
+      Exit(BadUnitName(NewStem));
     for Ext in DESIGNER_EXTS do
       if TFile.Exists(ChangeFileExt(Params.Dest, Ext)) then
         Exit(MsgFmt(SR_FILE_YA_EXISTE_NO_SOBREESCRIBO_FMT, [ChangeFileExt(Params.Dest, Ext)]));
     // renombrarla es reescribir su cabecera (unit X;): con el atributo +R no
     // se puede, y se movia igual - MOVED con "unit UOld;" en UNew.pas y el
     // proyecto roto. Se dice ANTES de mover (novena revision)
-    if not Params.Copy and not SameText(OldStem, NewStem) and (SoloLecturaDenegado(Params.Path) <> '') then
+    if not Params.Copy and not MismoIdentificador(OldStem, NewStem) and (SoloLecturaDenegado(Params.Path) <> '') then
       Exit(SoloLecturaDenegado(Params.Path));
     if not Params.Copy then
       Projects := ProjectsUsingUnit(Params.Path, TPath.GetDirectoryName(Params.Dest));
@@ -1059,7 +1065,7 @@ begin
       begin
         RutasFoto.Add(P);
         RutasFoto.Add(ChangeFileExt(P, '.dproj'));
-        if not SameText(OldStem, NewStem) then
+        if not MismoIdentificador(OldStem, NewStem) then
         begin
           var NoEscritos: TArray<string>;
           RutasFoto.AddStrings(FicherosDelRename(P, Params.Dest, NoEscritos));
@@ -1124,12 +1130,12 @@ begin
   // (con directivas detras: "unit X platform;"); si no esta o dice otro
   // nombre, no se toca y se DICE - MOVE-015 decia "rewritten" sin mirar si la
   // regex habia cambiado algo, y el build caia en E1038 (decima revision)
-  if not SameText(OldStem, NewStem) then
+  if not MismoIdentificador(OldStem, NewStem) then
   try
     Src := PatchLoadText(Params.Dest, Enc);
     var Cab: string;
     var Ini: Integer;
-    if CabeceraDeUnit(Src, Cab, Ini) and SameText(Cab, OldStem) then
+    if CabeceraDeUnit(Src, Cab, Ini) and MismoIdentificador(Cab, OldStem) then
     begin
       Src := Copy(Src, 1, Ini - 1) + NewStem + Copy(Src, Ini + Length(Cab), MaxInt);
       CopiaCabecera := CopiaDiariaDe(Params.Dest);
@@ -1177,7 +1183,7 @@ begin
     // la propia en su sitio nuevo): sin anotar, el deshacer las tomaba por
     // cambiadas "por otro" y dejaba la unit vieja con la cabecera nueva
     // (undecima revision, r11a: dos proyectos y una unit que se nombra)
-    if not SameText(OldStem, NewStem) then
+    if not MismoIdentificador(OldStem, NewStem) then
     begin
       var NoEsc: TArray<string>;
       for var Fr in FicherosDelRename(P, Params.Dest, NoEsc) do

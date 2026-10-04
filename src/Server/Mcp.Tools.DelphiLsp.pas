@@ -128,7 +128,8 @@ uses
   Lsp.References,
   Lsp.Patch,
   Lsp.NetDrives,
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.PascalDecl; // EL lector de clases: de quien es cada declaracion
 
 const
   MAX_COMPLETION_ITEMS = 50;
@@ -201,12 +202,15 @@ begin
   if (ALine < 0) or (ALine > High(Lines)) then
     Exit;
   L := Lines[ALine];
-  M := TRegEx.Match(L, '^\s*(?:procedure|function|constructor|destructor|property)\s+(?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*)', [roIgnoreCase]);
+  // los nombres, con EL identificador (Lsp.Pascal): con [A-Za-z_]\w* la
+  // columna de un nombre con enye caia en su primer trozo
+  M := TRegEx.Match(L, '^\s*(?:' + PatronPalabraDeRutina + '|property)\s+(?:' + PATRON_IDENT +
+    '\.)*(' + PATRON_IDENT + ')', [roIgnoreCase]);
   if M.Success then
     Result := M.Groups[1].Index - 1 // TMatch is 1-based; LSP columns 0-based
   else
   begin
-    M := TRegEx.Match(L, '[A-Za-z_]\w*');
+    M := TRegEx.Match(L, PATRON_IDENT);
     if M.Success then
       Result := M.Groups[0].Index - 1;
   end;
@@ -264,6 +268,19 @@ begin
     DecorateLocations(Pair.JsonValue);
 end;
 
+const
+  // los campos de una respuesta del motor que son TEXTO del fuente (la firma de
+  // signature, las etiquetas de completion, el markdown de hover): van tal
+  // cual (Lsp.Guard.EnmascaraJsonSalvo), y una constante con una ruta salia
+  // con la letra virtual; uri, path y lo demas, enmascarados
+  CONTENIDO_DEL_MOTOR: array [0 .. 8] of string = ('label', 'detail',
+    'documentation', 'value', 'insertText', 'filterText', 'sortText', 'newText',
+    'name');
+  // ...y los de symbols: la declaracion leida del fuente, sus etiquetas del
+  // resumen y los uses del digest
+  CONTENIDO_DE_SYMBOLS: array [0 .. 5] of string = ('decl', 'name', 'detail',
+    'ident', 'symbols', 'uses');
+
 { Extracts "result" from a full JSON-RPC response and renders it, adding a
   filesystem path next to any "uri" for agent convenience. Frees AResp. }
 function RenderResult(AResp: TJSONObject; const ANote: string): string;
@@ -279,7 +296,7 @@ begin
     if (V = nil) or (V is TJSONNull) then
       Exit(MsgText(SN_LSP_NULL_NOTE) + ANote);
     DecorateLocations(V);
-    Result := V.ToJSON + ANote;
+    Result := EnmascaraJsonSalvo(V.ToJSON, CONTENIDO_DEL_MOTOR, ANote);
   finally
     AResp.Free;
   end;
@@ -421,7 +438,7 @@ begin
   // sentencia a medias, y unirle lo que viene detras pegaba el primer campo
   // a la linea de la clase.
   if TRegEx.IsMatch(Vista,
-    '(?i)^[A-Za-z_]\w*[ ]*=[ ]*(packed[ ]+)?(class|record|interface)\b') and
+    '(?i)^' + PATRON_IDENT + '[ ]*=[ ]*(packed[ ]+)?(class|record|interface)\b') and
      not Vista.EndsWith(';') then
     Exit;
   // Un ';' DENTRO de la lista de parametros es un separador, no el final de
@@ -525,7 +542,7 @@ begin
 end;
 
 { 'function PathDenied(const APath: string): string @40', containers add
-  ' (+N dentro)', a uses clause collapses to 'uses (12 units) @1'. }
+  ' (+N inside)', a uses clause collapses to 'uses (12 units) @1'. }
 function SymLabel(const ANode: TJSONObject): string;
 var
   Ch: TJSONArray;
@@ -558,7 +575,7 @@ begin
   else
     Result := Format('%s %s @%d', [SymKindName(ANode), Nm, SymLine1(ANode)]);
   if (Ch <> nil) and (Ch.Count > 0) then
-    Result := Result + Format(' (+%d dentro)', [Ch.Count]);
+    Result := Result + MsgFmt(SF_SYMBOLS_DENTRO_FMT, [Ch.Count]);
 end;
 
 { Le pone a cada simbolo del arbol su declaracion REAL y su identificador
@@ -601,6 +618,37 @@ begin
     end;
   end;
   DecorateSymbolDecls(SymChildren(Obj), ALines, AVista);
+end;
+
+{ El arbol de un fichero tal como sale (mode=full, o el automatico de uno
+  pequeno): lo que el motor repite sin decir nada se quita - el
+  selectionRange igual al range (DelphiLSP los da iguales; SymLine cae al
+  range), los children vacios y el detail vacio (revisor de tokens,
+  4-oct-2026: casi la mitad del arbol). }
+procedure AdelgazaArbol(V: TJSONValue);
+var
+  Obj: TJSONObject;
+  C: TJSONArray;
+begin
+  if V is TJSONArray then
+  begin
+    for var Item in TJSONArray(V) do
+      AdelgazaArbol(Item);
+    Exit;
+  end;
+  if not (V is TJSONObject) then
+    Exit;
+  Obj := TJSONObject(V);
+  if (Obj.GetValue('selectionRange') <> nil) and (Obj.GetValue('range') <> nil) and
+     (Obj.GetValue('selectionRange').ToJSON = Obj.GetValue('range').ToJSON) then
+    Obj.RemovePair('selectionRange').Free;
+  C := SymChildren(Obj);
+  if (C <> nil) and (C.Count = 0) then
+    Obj.RemovePair('children').Free
+  else if C <> nil then
+    AdelgazaArbol(C);
+  if (Obj.GetValue('detail') <> nil) and (Obj.GetValue<string>('detail', '') = '') then
+    Obj.RemovePair('detail').Free;
 end;
 
 { The compact skeleton: each top-level section with its direct members as
@@ -777,11 +825,13 @@ end;
   the picture, 7 of them reads). }
 function InterfaceDigest(const APath: string): TJSONObject;
 var
-  Text, Enc, L, Cur, Owner: string;
+  Text, Enc, L, Cur: string;
   Lines, Vista: TArray<string>;
   Arr: TJSONArray;
   Obj: TJSONObject;
-  I, J, Kept, Depth: Integer;
+  I, J, Kept: Integer;
+  U: TUnidadPas;
+  Dueno: TTipoPas;
 
   // Una declaracion puede ocupar varias lineas y quien lee la necesita
   // ENTERA. El como vive ahora en StatementAt, ahi arriba, porque el camino
@@ -812,11 +862,15 @@ begin
   // Vieja;' dentro de un comentario de llave salia como declaracion (medido
   // con la sonda del lexico, 2-oct-2026)
   Vista := LineasDelTexto(BlankComments(Text));
+  // de quien es cada declaracion: EL lector de clases (Lsp.PascalDecl), con
+  // la linea donde empieza y acaba cada tipo. Aqui se abria con una regex y
+  // se cerraba en el primer 'end;': un record anidado cerraba la clase y lo
+  // de detras quedaba sin dueno (censo del 4-oct-2026)
+  U := LeeFuentePascal(Text);
+  try
   Arr := TJSONArray.Create;
   Result.AddPair('declares', Arr);
   Cur := '';
-  Owner := '';
-  Depth := 0;
   Kept := 0;
   I := 0;
   while I <= High(Lines) do
@@ -847,24 +901,16 @@ begin
       Inc(I);
       Continue;
     end;
-    // which class we are inside, and where it ends: a flat list left the
-    // reader guessing which member belonged to which class, and hid the
-    // private fields entirely - one of them being the subject of a refactor.
-    if TRegEx.IsMatch(L, '^[A-Za-z_]\w*[ ]*=[ ]*(class|record|interface)\b') then
-    begin
-      Owner := PrimerTrozo(L, ['=']).Trim;
-      Depth := 1;
-    end
-    else if (Owner <> '') and TRegEx.IsMatch(L, '(?i)^end;') then
-    begin
-      Owner := '';
-      Depth := 0;
-    end;
+    // which type we are inside: a flat list left the reader guessing which
+    // member belonged to which class, and hid the private fields entirely -
+    // one of them being the subject of a refactor. (La linea del nombre de un
+    // tipo es de donde se declara; un helper es un tipo con bloque tambien)
+    Dueno := U.TipoEnLinea(I, [ctClase, ctRegistro, ctInterfaz, ctOtro], True);
     J := I;
-    if TRegEx.IsMatch(L, '(?i)^(class[ ]+)?(function|procedure|constructor|destructor|property)\b') or
-       TRegEx.IsMatch(L, '^[A-Za-z_]\w*[ ]*=[ ]*(class|record|interface|packed|\()') or
-       TRegEx.IsMatch(L, '(?i)^[A-Za-z_]\w*[ ]*=[ ]*') or
-       ((Depth > 0) and TRegEx.IsMatch(L, '^[A-Za-z_]\w*[ ]*:[ ]*[A-Za-z_]')) then
+    if TRegEx.IsMatch(L, '(?i)^(class[ ]+)?(?:' + PatronPalabraDeRutina + '|property)\b') or
+       TRegEx.IsMatch(L, '^' + PATRON_IDENT + '[ ]*=[ ]*(class|record|interface|packed|\()') or
+       TRegEx.IsMatch(L, '(?i)^' + PATRON_IDENT + '[ ]*=[ ]*') or
+       ((Dueno <> nil) and TRegEx.IsMatch(L, '^' + PATRON_IDENT + '[ ]*:[ ]*' + PATRON_IDENT)) then
     begin
       Inc(Kept);
       if Arr.Count < 300 then
@@ -872,8 +918,8 @@ begin
         Obj := TJSONObject.Create;
         Arr.AddElement(Obj);
         Obj.AddPair('decl', WholeStatement(J));
-        if (Owner <> '') and not L.StartsWith(Owner) then
-          Obj.AddPair('of', Owner);
+        if Dueno <> nil then
+          Obj.AddPair('of', Dueno.NombreCompleto);
         Obj.AddPair('line', TJSONNumber.Create(I + 1));
         Obj.AddPair('line0', TJSONNumber.Create(I));
       end
@@ -887,7 +933,17 @@ begin
   Result.AddPair('total', TJSONNumber.Create(Kept));
   if Kept > Arr.Count then
     Result.AddPair('truncated', TJSONBool.Create(True));
+  finally
+    U.Free;
+  end;
 end;
+
+const
+  // el resumen de una carpeta, por TAMANO (~6K tokens) y no por numero de
+  // unidades: con 60 unidades src\Server daba 40K (revisor de tokens,
+  // 4-oct-2026); lo que no entra se NOMBRA, hasta tantos nombres
+  TOPE_DIGEST_CARPETA = 24000;
+  MAX_NOMBRES_FUERA = 200;
 
 function TDelphiSymbolsTool.ExecuteWithParams(const Params: TDelphiSymbolsParams): string;
 var
@@ -912,21 +968,41 @@ begin
       var Units := TJSONArray.Create;
       Ret.AddPair('folder', Folder);
       Ret.AddPair('units', Units);
+      var Fuera := TJSONArray.Create;
+      Ret.AddPair('notShown', Fuera);
       var N := 0;
+      var Peso := 0;
       for var F in TDirectory.GetFiles(Folder, '*.pas',
         TSearchOption.soAllDirectories) do
       begin
         if SkipIdeArtifacts(F) then
           Continue;
         Inc(N);
-        if Units.Count < 60 then
-          Units.AddElement(InterfaceDigest(F));
+        // en orden y hasta el tope (la primera entra siempre); a partir de la
+        // primera que no cabe, solo su nombre, relativo a la carpeta
+        if Fuera.Count = 0 then
+        begin
+          var D := InterfaceDigest(F);
+          var Largo := D.ToJSON.Length;
+          if (Units.Count = 0) or (Peso + Largo <= TOPE_DIGEST_CARPETA) then
+          begin
+            Units.AddElement(D);
+            Inc(Peso, Largo);
+            Continue;
+          end;
+          D.Free;
+        end;
+        if Fuera.Count < MAX_NOMBRES_FUERA then
+          Fuera.Add(Copy(F, Length(IncludeTrailingPathDelimiter(Folder)) + 1, MaxInt));
       end;
       Ret.AddPair('total', TJSONNumber.Create(N));
       if N > Units.Count then
-        Ret.AddPair('truncated', TJSONBool.Create(True));
+        Ret.AddPair('notShownNote', MsgFmt(SN_SYMBOLS_DIGEST_FUERA_FMT,
+          [TOPE_DIGEST_CARPETA, N - Units.Count]))
+      else
+        Ret.RemovePair('notShown').Free;
       Ret.AddPair('note', MsgText(SN_SYMBOLS_DIGEST_NOTE));
-      Exit(Ret.ToJSON);
+      Exit(EnmascaraJsonSalvo(Ret.ToJSON, CONTENIDO_DE_SYMBOLS));
     finally
       Ret.Free;
     end;
@@ -975,15 +1051,19 @@ begin
       // un fichero que el LSP si pudo abrir y nosotros no: mejor el arbol
       // pelado que ningun arbol
     end;
+    // la declaracion de cada simbolo es TEXTO del fuente: tal cual
+    // (EnmascaraJsonSalvo); las rutas, enmascaradas
     if not (V is TJSONArray) then
-      Exit(V.ToJSON + Note);
+      Exit(EnmascaraJsonSalvo(V.ToJSON, CONTENIDO_DE_SYMBOLS, Note));
     var Filt := Params.Filter.Trim.ToLower;
     if Filt <> '' then
-      Exit(FilterSymbols(TJSONArray(V), Filt) + Note);
+      Exit(EnmascaraJsonSalvo(FilterSymbols(TJSONArray(V), Filt), CONTENIDO_DE_SYMBOLS, Note));
+    AdelgazaArbol(V);
     var Full := V.ToJSON;
     if (Mode = 'full') or ((Mode = '') and (Length(Full) <= 6000)) then
-      Exit(Full + Note);
-    Result := SummaryOfSymbols(TJSONArray(V), Length(Full), Mode = '') + Note;
+      Exit(EnmascaraJsonSalvo(Full, CONTENIDO_DE_SYMBOLS, Note));
+    Result := EnmascaraJsonSalvo(SummaryOfSymbols(TJSONArray(V), Length(Full), Mode = ''),
+      CONTENIDO_DE_SYMBOLS, Note);
   finally
     Resp.Free;
   end;
@@ -1140,7 +1220,9 @@ begin
   V := Resp.FindValue('result.contents.value');
   if V <> nil then
   begin
-    Result := V.Value + NoSettingsNote(Settings);
+    // la declaracion, entre ```, es TEXTO del fuente: tal cual; el enlace y
+    // la nota, enmascarados (Lsp.Guard.EnmascaraSalvoCodigo)
+    Result := EnmascaraSalvoCodigo(V.Value + NoSettingsNote(Settings));
     Resp.Free;
   end
   else
@@ -1269,7 +1351,7 @@ begin
         if (Detail <> nil) and (Detail.Value <> '') then
           ItemObj.AddPair('detail', Detail.Value);
       end;
-      Result := Return.ToJSON + NoSettingsNote(Settings);
+      Result := EnmascaraJsonSalvo(Return.ToJSON, CONTENIDO_DEL_MOTOR, NoSettingsNote(Settings));
     finally
       Return.Free;
     end;

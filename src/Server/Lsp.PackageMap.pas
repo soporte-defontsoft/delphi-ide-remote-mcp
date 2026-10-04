@@ -23,7 +23,8 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.SyncObjs,
-  System.Generics.Collections;
+  System.Generics.Collections,
+  Lsp.Pascal; // ClaveDeIdentificador: el nombre de una unit, plegado entero
 
 const
   // no esta en Winapi.Windows: el modulo se mapea como imagen de recursos,
@@ -39,7 +40,7 @@ var
 procedure Recoge(const Name: string; NameType: TNameType; Flags: Byte; Param: Pointer);
 begin
   if NameType = ntContainsUnit then
-    TDictionary<string, string>(Param).AddOrSetValue(LowerCase(Name), GPaqueteActual);
+    TDictionary<string, string>(Param).AddOrSetValue(ClaveDeIdentificador(Name), GPaqueteActual);
 end;
 
 { vcl290.bpl -> vcl si existe lib\Win32\release\vcl.dcp; si no, el nombre
@@ -99,9 +100,9 @@ begin
     Exit;
   GLock.Enter;
   try
-    if not SameText(GRoot, ARootDir) then
+    if not AnsiSameText(GRoot, ARootDir) then // una ruta: tambien la Ñ
       CargaMapa(ARootDir);
-    if not GMapa.TryGetValue(LowerCase(AUnit), Result) then
+    if not GMapa.TryGetValue(ClaveDeIdentificador(AUnit), Result) then
       Result := '';
   finally
     GLock.Leave;

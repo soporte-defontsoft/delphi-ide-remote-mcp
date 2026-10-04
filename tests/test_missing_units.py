@@ -109,5 +109,46 @@ check('Linux64 build declares output (ELF without extension, v0.46)',
       out.endswith(os.sep + 'MissU') and 'Linux64' in out, r[:300])
 check('no missingUnits on success', 'missingUnits' not in j, r[:300])
 
+# --- BUILD-042: una unit del PROPIO workspace (3-oct-2026) ---------------------
+# solo se buscaba en la zona de biblioteca: una unit de una carpeta vendor del
+# proyecto (MCPServer.Types) salia sin ningun candidato. Y la copia de la
+# papelera del servidor no es un candidato
+VEND = os.path.join(BASE, 'vendor')
+os.makedirs(VEND, exist_ok=True)
+UNIDAD = 'unit UVendorX;\n\ninterface\n\nfunction Dame: Integer;\n\nimplementation\n\nfunction Dame: Integer;\nbegin\n  Result := 1;\nend;\n\nend.\n'
+open(os.path.join(VEND, 'UVendorX.pas'), 'w', encoding='utf-8').write(UNIDAD)
+PAPELERA = os.path.join(BASE, '__delphi-patch', '20261004')
+os.makedirs(PAPELERA, exist_ok=True)
+open(os.path.join(PAPELERA, 'UVendorX.pas'), 'w', encoding='utf-8').write(UNIDAD)
+s = open(dpr, encoding='utf-8-sig').read()
+open(dpr, 'w', encoding='utf-8').write(s.replace('uses', 'uses\n  UVendorX,', 1))
+r = call('delphi_build', {'project': dproj, 'platform': 'Win64', 'config': 'Debug'})
+try: j = json.loads(r)
+except Exception: j = {}
+uv = next((m for m in (j.get('missingUnits') or []) if m.get('unit') == 'UVendorX'), {})
+check('BUILD-042: la unit de una carpeta del workspace tiene su carpeta como candidata',
+      any(d.rstrip('\\').lower().endswith('vendor') for d in uv.get('sourceFolders', [])) and
+      not any('__delphi-patch' in d for d in uv.get('sourceFolders', [])), json.dumps(uv)[:300])
+
+# ...y el paseo por las raices no cruza a lo que no se puede leer: un junction
+# del workspace a una carpeta de FUERA de la jaula no da candidatas (la
+# respuesta nombraria carpetas de fuera; el paseo de la RTL sigue enlaces)
+FUERA = mc.carpeta('missingunits-fuera')
+open(os.path.join(FUERA, 'UFueraX.pas'), 'w', encoding='utf-8').write(UNIDAD.replace('UVendorX', 'UFueraX'))
+ENLACE = os.path.join(BASE, 'enlace-fuera')
+if mc.junction(ENLACE, FUERA):
+    s = open(dpr, encoding='utf-8-sig').read()
+    open(dpr, 'w', encoding='utf-8').write(s.replace('uses', 'uses\n  UFueraX,', 1))
+    r = call('delphi_build', {'project': dproj, 'platform': 'Win64', 'config': 'Debug'})
+    try: j = json.loads(r)
+    except Exception: j = {}
+    uf = next((m for m in (j.get('missingUnits') or []) if m.get('unit') == 'UFueraX'), None)
+    check('BUILD-042: un junction a una carpeta de fuera de la jaula no da candidatas',
+          uf is not None and not uf.get('sourceFolders'), json.dumps(uf or j)[:300])
+    os.rmdir(ENLACE)  # el enlace, no lo de detras
+else:
+    check('BUILD-042 (preparacion): el junction se pudo crear', False, ENLACE)
+mc.borra(FUERA)
+
 srv.mata()
 mc.fin('missing units battery')

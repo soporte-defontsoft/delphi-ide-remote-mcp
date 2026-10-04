@@ -130,7 +130,9 @@ rfull = call('delphi_symbols', {'path': big, 'mode': 'full'})
 check('S1 y de verdad es compacto (el resumen pesa < 25% del arbol completo)',
       len(rfull) > 0 and len(rbig) < 0.25 * len(rfull), (len(rbig), len(rfull)))
 check('S2 mode=full conserva el arbol completo con rangos',
-      rfull.lstrip().startswith('[') and 'selectionRange' in rfull and
+      # 1.13.0: el selectionRange igual al range ya no viaja (revisor de
+      # tokens); el rango, si
+      rfull.lstrip().startswith('[') and '"range"' in rfull and
       len(rfull) > 20000, len(rfull))
 
 # hermes (2026-08-26): full must stay byte-stable on an unchanged unit - the
@@ -141,7 +143,7 @@ check('S2b mode=full es byte-estable sobre una unit invariante',
 
 rsmall = call('delphi_symbols', {'path': small})
 check('S3 un arbol pequeno sigue viniendo entero sin pedirlo',
-      rsmall.lstrip().startswith('[') and 'selectionRange' in rsmall, rsmall[:200])
+      rsmall.lstrip().startswith('[') and '"range"' in rsmall, rsmall[:200])
 
 j = jload(call('delphi_symbols', {'path': big, 'filter': 'pathdenied'}))
 ms = j.get('matches', [])

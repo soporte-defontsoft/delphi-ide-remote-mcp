@@ -68,7 +68,11 @@ A = tool_info('delphi_adb_linux')
 check('el alias delphi_adb_linux ya no esta registrado',
       T is not None and A is None, (A or {}).get('description', '')[:120])
 
-desc = (T or {}).get('description', '')
+# 1.13.0 (revisor de tokens): lo que el parametro command ya explica no se
+# repite en la descripcion; el contrato es la descripcion MAS sus parametros,
+# y estos checks miran los dos
+desc = (T or {}).get('description', '') + ' ' + \
+    (T or {}).get('inputSchema', {}).get('properties', {}).get('command', {}).get('description', '')
 check('su descripcion ensena el flujo (captura -> mide -> pulsa)',
       'screenshot' in desc and 'measured on' in desc.lower(), desc[:200])
 check('avisa de que la escala la convierte el nodo',

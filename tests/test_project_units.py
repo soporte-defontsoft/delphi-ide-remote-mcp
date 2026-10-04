@@ -26,18 +26,12 @@ srv = mc.Stdio(EXE, env, nombre='punits-battery', t=300)  # el plazo de esta bat
 call = srv.call
 
 
+# los de la casa (mcp_cliente): un build y un fichero (vacio si no existe)
 def build_ok(dproj):
-    out = call('delphi_build', {"project": dproj, "platform": "Win64",
-                                "config": "Debug", "target": "Build"}, 600)
-    try:
-        d = json.loads(out)
-        return d['success'], json.dumps(d['errors'])[:200]
-    except Exception:
-        return False, out[:200]
+    return mc.build_ok(call, dproj)
 
 
-def rd(p):
-    return open(p, 'rb').read().decode('utf-8-sig')
+rd = mc.lee
 
 
 VDIR = os.path.join(BASE, 'App')
@@ -281,14 +275,38 @@ out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": ba
 check('add-unit: cabecera != fichero rechazado', mc.rechazado(out) and mc.es(out, 'SR_UNIT_HEADER_MISMATCH_FMT') and 'UOtroNombre' in out, out)
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": os.path.join(VDIR, 'App.dpr')})
 check('add-unit: no .pas rechazado', mc.rechazado(out) and mc.es(out, 'SR_UNIT_NOT_PAS_FMT'), out)
-# accented unit name: dcc compiles it (measured 2026-09-23) but this server's
-# parsers do not - the refusal says THAT, not "no header" (Hermes, 1.2 G.19)
+# accented unit name: dcc compiles it (measured 2026-09-23), and since
+# 4-oct-2026 the server reads it too (EL identificador, Lsp.Pascal): add-unit
+# takes it, and the builds below compile it. Until then it was refused with
+# CFG-038 (Hermes, 1.2 G.19); CFG-038 is now for a header that is not a unit
+# name at all - and it still says THAT, not "no header"
 acc = os.path.join(VDIR, 'UÁrbol.pas')
 open(acc, 'wb').write('unit UÁrbol;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n'.encode('utf-8-sig'))
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": acc})
-check('add-unit: unit acentuada -> RECHAZADO con la causa real', mc.rechazado(out) and mc.es(out, 'SR_UNIT_HEADER_NONASCII_FMT') and 'UÁrbol' in out, out)
-check('add-unit: unit acentuada no dice "no tiene cabecera"',
+check('add-unit: unit acentuada -> ANADIDA (dcc la compila y el servidor ya la lee)',
+      mc.abre(out, 'SN_UNIT_ADDED_FMT') and "UÁrbol in 'UÁrbol.pas'" in rd(DPR), out)
+mal = os.path.join(VDIR, 'U-Mal.pas')
+open(mal, 'wb').write('unit U-Mal;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n'.encode('utf-8-sig'))
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": mal})
+check('add-unit: cabecera que no es un nombre de unit -> RECHAZADO con la causa real',
+      mc.rechazado(out) and mc.es(out, 'SR_UNIT_HEADER_NONASCII_FMT') and 'U-Mal' in out and 'U-Mal' not in rd(DPR), out)
+check('add-unit: ...y no dice "no tiene cabecera"',
       mc.rechazado(out) and mc.es(out, 'SR_UNIT_HEADER_NONASCII_FMT') and not mc.es(out, 'SR_UNIT_NO_HEADER_FMT'), out)
+# un FRAME cuyo ancestro es 'class abstract(TFrame)': la cadena de ancestros
+# se leia con 'class\s*\(' y no pasaba de TMarcoBase, asi que add-unit lo
+# tomaba por un form y le escribia un CreateForm (medido el 4-oct-2026;
+# PATRON_ABRE_CLASE). Los builds de abajo lo compilan
+mar = os.path.join(VDIR, 'UMarcoAbs.pas')
+open(mar, 'wb').write(('unit UMarcoAbs;\r\n\r\ninterface\r\n\r\nuses\r\n  Vcl.Forms, Vcl.Controls, System.Classes;\r\n\r\n'
+                       'type\r\n  TMarcoBase = class abstract(TFrame)\r\n  end;\r\n  TMarcoAbs = class(TMarcoBase)\r\n  end;\r\n\r\n'
+                       'implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n').encode('utf-8-sig'))
+open(os.path.join(VDIR, 'UMarcoAbs.dfm'), 'wb').write(
+    b'object MarcoAbs: TMarcoAbs\r\n  Left = 0\r\n  Top = 0\r\n  Width = 320\r\n  Height = 240\r\n  TabOrder = 0\r\nend\r\n')
+out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": mar})
+check('add-unit: un frame de ancestro class abstract(TFrame) entra SIN CreateForm',
+      mc.abre(out, 'SN_UNIT_ADDED_FORM_FMT') and "UMarcoAbs in 'UMarcoAbs.pas'" in rd(DPR) and
+      'CreateForm(TMarcoAbs' not in rd(DPR) and 'TFrame' in rd(DPROJ)[rd(DPROJ).find('UMarcoAbs.pas'):][:300],
+      out + ' | ' + rd(DPR))
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit"})
 check('add-unit: sin path -> pide path y reconectar', mc.es(out, 'SR_UNIT_NEED_PATH'), out)
 out = call('delphi_config', {"project": DPROJ, "command": "add-unit", "path": os.path.join(VDIR, 'NoExiste.pas')})

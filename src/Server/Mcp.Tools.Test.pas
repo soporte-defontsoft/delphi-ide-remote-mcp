@@ -122,7 +122,8 @@ begin
     on E: Exception do
       Result := MsgExcepcion(E.ClassName, E.Message);
   end;
-  Result := MaskDriveText('delphi_test', Result);
+  // (lo enmascara el filtro de salida, Lsp.Host; una segunda pasada con el
+  // nombre de la tool gastaba lo que la llamada dejo anotado)
 end;
 
 initialization

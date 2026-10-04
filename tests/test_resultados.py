@@ -1300,7 +1300,7 @@ try:
     os.makedirs(D100)
     open(os.path.join(D100, 'cr.txt'), 'wb').write(b'uno\rdos\raguja\r')
     res, sc, t = llama('delphi_search', {'root': D100, 'query': 'aguja', 'pattern': '*.txt'})
-    lineas = [h.get('line') for h in mc.como_json(t).get('hits', [])]
+    lineas = [h.get('line') for h in mc.aciertos(t)]
     check('E100 buscar en un fichero de CR sueltos: linea 3 (el CR suelto es salto)',
           lineas == [3], '%s | %s' % (lineas, t[:200]))
 

@@ -53,7 +53,8 @@ uses
   MCPServer.Registration,
   Lsp.Guard,
   Lsp.Patch,      // PositionOutOfRange
-  Lsp.Rename;
+  Lsp.Rename,
+  Lsp.References; // CONTENIDO_DE_UN_USO: los campos que son la linea tal cual
 
 constructor TDelphiRenameTool.Create;
 begin
@@ -100,15 +101,15 @@ begin
       Ret := RenamePreview(Params.Path, Params.Line, Params.Character,
         Params.NewName.Trim);
     try
-      Result := Ret.ToJSON;
+      // la linea de cada cambio, tal cual (un ancla); lo demas, enmascarado
+      Result := EnmascaraJsonSalvo(Ret.ToJSON, CONTENIDO_DE_UN_USO);
     finally
       Ret.Free;
     end;
   except
     on E: Exception do
-      Result := MsgExcepcion(E.ClassName, E.Message);
+      Result := MaskDriveText('', MsgExcepcion(E.ClassName, E.Message));
   end;
-  Result := MaskDriveText('delphi_rename_symbol', Result);
 end;
 
 initialization

@@ -39,14 +39,24 @@ uses
   Lsp.Texts,
   Lsp.Patch,
   Lsp.DesignerBin,
-  Lsp.Pascal;
+  System.Generics.Collections,
+  Lsp.Pascal,
+  Lsp.PascalDecl; // EL lector de clases y LA cadena de ancestros
 
 const
   // UNA expresion para "evento cableado por nombre": la lee el informe y la
-  // consulta insert=metodo. Nadie la vuelve a escribir.
-  EVENT_LINE_RE = '^(On[A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*$';
+  // consulta insert=metodo. Nadie la vuelve a escribir. Los nombres, con EL
+  // identificador (Lsp.Pascal): un manejador con enye no casaba.
+  PATRON_EVENTO = 'On' + PATRON_IDENT; // la propiedad: OnClick
+  EVENT_LINE_RE = '^(' + PATRON_EVENTO + ')\s*=\s*(' + PATRON_IDENT + ')\s*$';
 
-function BindingReport(const DfmLines, PasLines: TArray<string>; const Pas: string): string;
+const
+  // las raices del RTL: sus miembros no son del programador ni salen en un
+  // .dfm como objetos
+  RAICES_DE_FORM: array [0 .. 5] of string = ('TForm', 'TFrame', 'TDataModule',
+    'TCustomForm', 'TComponent', 'TObject');
+
+function BindingReport(const DfmLines: TArray<string>; const APasTexto, Pas: string): string;
 var
   L, Nm, Cl2, Ev, Handler, RootClass, Chain, OClave: string;
   Ret: TJSONObject;
@@ -56,120 +66,70 @@ var
   I, Depth, SkipBelow: Integer;
   AncestorOutside, ClassFound, Complete: Boolean;
 
-  { Every class block in the unit: name=ancestor, remembering where it starts. }
-  procedure ScanClassHeaders(AHeaders: TStringList);
-  var
-    J: Integer;
-    Mt: TMatch;
+  { Los campos y metodos publicados de UNA clase, del lector de clases
+    (Lsp.PascalDecl): lo que va antes de cualquier palabra de visibilidad es
+    published en una clase $M+, que es justo donde el IDE escribe los campos
+    del designer. "A, B: TButton;" son dos componentes, y el tipo puede ir
+    cualificado (Vcl.StdCtrls.TButton); uno generico (una lista) no es un
+    componente. Cada clase con lo SUYO: se leia por lineas hasta el primer
+    'end;', y un record anidado la cortaba (censo del 4-oct-2026). }
+  procedure LeeMiembros(AClase: TTipoPas);
   begin
-    for J := 0 to High(PasLines) do
-    begin
-      Mt := TRegEx.Match(PasLines[J].Trim, '(?i)^([A-Za-z_]\w*)\s*=\s*(?:packed\s+)?class\b(?!\s*;)(?:\s*\(\s*([\w.]*))?');
-      if Mt.Success then
-        AHeaders.AddObject(Mt.Groups[1].Value + '=' + Mt.Groups[2].Value,
-          TObject(NativeInt(J)));
-    end;
+    for var C in AClase.Campos do
+      if (C.Visibilidad in [vpDefecto, vpPublicada]) and (C.Tipo <> '') and not C.Generico then
+        Fields.Values[C.Nombre] := UltimoTrozo(C.Tipo);
+    for var R in AClase.Rutinas do
+      if not R.DeClase and ((R.Rutina = 'procedure') or (R.Rutina = 'function')) then
+      begin
+        AnyMethods.Add(R.Nombre);
+        if R.Visibilidad in [vpDefecto, vpPublicada] then
+          PubMethods.Add(R.Nombre);
+      end;
   end;
 
-  { Published fields and methods of ONE class block. Members before any
-    visibility keyword are published in a $M+ class - that is exactly where
-    the IDE writes the designer's fields. }
-  procedure ScanClassBody(AFrom: Integer);
-  var
-    J, Vis: Integer;
-    Line, Names, Ty, One: string;
-    Mt: TMatch;
-  begin
-    Vis := 1; // 1 = published area
-    for J := AFrom + 1 to High(PasLines) do
-    begin
-      Line := PasLines[J].Trim;
-      if TRegEx.IsMatch(Line, '(?i)^end;') then
-        Break;
-      if TRegEx.IsMatch(Line, '(?i)^published\b') then
-      begin
-        Vis := 1;
-        Continue;
-      end;
-      if TRegEx.IsMatch(Line, '(?i)^(strict\s+)?(private|protected|public)\b') then
-      begin
-        Vis := 0;
-        Continue;
-      end;
-      Mt := TRegEx.Match(Line, '(?i)^(procedure|function)\s+([A-Za-z_]\w*)');
-      if Mt.Success then
-      begin
-        AnyMethods.Add(Mt.Groups[2].Value);
-        if Vis = 1 then
-          PubMethods.Add(Mt.Groups[2].Value);
-        Continue;
-      end;
-      if Vis <> 1 then
-        Continue;
-      // "A, B: TButton;" is one declaration of two components, and the type
-      // may be qualified ("Vcl.StdCtrls.TButton"). Either shape used to make
-      // the whole line unreadable, so every name on it was called missing.
-      // The names by what surrounds them, like the .dfm side (LineaDeObjeto):
-      // with \w (ASCII) 'lblDireccion' with its accent had no field. The type
-      // without '<', as before: a generic list is not a component
-      Mt := TRegEx.Match(Line, '^([^\s,:;]+(?:\s*,\s*[^\s,:;]+)*)\s*:\s*([^\s,:;<]+)\s*;');
-      if not Mt.Success then
-        Continue;
-      Names := Mt.Groups[1].Value;
-      Ty := Mt.Groups[2].Value;
-      if Ty.Contains('.') then
-        Ty := Copy(Ty, Ty.LastDelimiter('.') + 2, MaxInt);
-      for One in Names.Split([',']) do
-        if One.Trim <> '' then
-          Fields.Values[One.Trim] := Ty;
-    end;
-  end;
-
-  { Walk the class and its ancestors AS FAR AS THIS UNIT GOES. A form whose
-    ancestor lives in another unit inherits components this file cannot see:
-    calling them missing would be a lie, so we stop and say so instead. }
+  { La clase y sus ancestros HASTA DONDE LLEGA ESTA UNIDAD (LA cadena,
+    Lsp.PascalDecl.CadenaDeAncestros). Un form cuyo ancestro vive en otra
+    unidad hereda componentes que este fichero no ve: llamarlos ausentes seria
+    mentir, asi que se para y se dice. }
   procedure CollectClass(const AName: string);
   var
-    Headers: TStringList;
-    Cur, Anc: string;
-    Idx, Guard: Integer;
+    U: TUnidadPas;
+    Mapa: TDictionary<string, string>;
+    Cadena: TArray<string>;
+    Sale: Boolean;
+    T: TTipoPas;
   begin
-    Headers := TStringList.Create;
+    U := LeeFuentePascal(APasTexto);
+    Mapa := TDictionary<string, string>.Create;
     try
-      ScanClassHeaders(Headers);
-      Cur := AName;
-      Guard := 0;
-      while (Cur <> '') and (Guard < 32) do
+      AnotaAncestros(U, Mapa);
+      Cadena := CadenaDeAncestros(Mapa, AName, Sale);
+      for var K := 0 to High(Cadena) do
       begin
-        Inc(Guard);
-        Idx := Headers.IndexOfName(Cur);
-        if Idx < 0 then
+        if Sale and (K = High(Cadena)) then
         begin
-          if SameText(Cur, AName) then
+          // por donde sale de la unidad: o la clase no esta declarada aqui, o
+          // su cadena sigue en otra unidad (una raiz del RTL, por su nombre
+          // corto, no: Vcl.Forms.TForm tambien lo es)
+          if K = 0 then
             ClassFound := False
-          else
+          else if not MatchText(UltimoTrozo(Cadena[K]), RAICES_DE_FORM) then
           begin
             AncestorOutside := True;
-            if Chain <> '' then
-              Chain := Chain + ' -> ';
-            Chain := Chain + Cur;
+            Chain := Chain + ' -> ' + Cadena[K];
           end;
-          Exit;
+          Break;
         end;
-        ScanClassBody(Integer(NativeInt(Headers.Objects[Idx])));
-        Anc := Headers.ValueFromIndex[Idx].Trim;
         if Chain <> '' then
           Chain := Chain + ' -> ';
-        Chain := Chain + Cur;
-        // The RTL roots: their own members are not the programmer's and never
-        // show up in a .dfm as objects.
-        if (Anc = '') or MatchText(Anc, ['TForm', 'TFrame', 'TDataModule',
-          'TCustomForm', 'TComponent', 'TObject']) then
-          Exit;
-        Cur := Anc;
+        Chain := Chain + Cadena[K];
+        T := U.Clase(UltimoTrozo(Cadena[K]));
+        if T <> nil then
+          LeeMiembros(T);
       end;
     finally
-      Headers.Free;
+      Mapa.Free;
+      U.Free;
     end;
   end;
 
@@ -270,7 +230,7 @@ begin
       end;
       if (SkipBelow >= 0) and (Depth > SkipBelow) then
         Continue;
-      if TRegEx.IsMatch(L, '^(On[A-Za-z_]\w*)\s*=\s*$') then
+      if TRegEx.IsMatch(L, '^(' + PATRON_EVENTO + ')\s*=\s*$') then
       begin
         Empty.Add(MsgFmt(SF_DSGN_QUEDADO_SIN_VALOR_FMT, [L, I + 1]));
         Continue;
@@ -354,12 +314,10 @@ begin
     DesignerFileToText(ADfm, DfmTxt) // sano: comprobado arriba
   else
     DfmTxt := PatchLoadText(ADfm, Enc);
-  // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto); de
-  // la unit, la vista de su CODIGO (Lsp.Pascal): las clases y sus campos se
-  // buscan ahi, y un bloque comentado no declara componentes (censo del
-  // lexico, 2-oct-2026)
-  Result := BindingReport(SplitToLines(DfmTxt),
-    SplitToLines(CodigoPascal(PatchLoadText(Pas, Enc))), Pas);
+  // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto); la
+  // unit, entera: sus clases las lee EL lector (LeeFuentePascal, sobre su
+  // codigo: un bloque comentado no declara componentes)
+  Result := BindingReport(SplitToLines(DfmTxt), PatchLoadText(Pas, Enc), Pas);
 end;
 
 function DesignerBindingWarnings(const ADfm: string;
@@ -376,7 +334,7 @@ begin
   Pas := TPath.ChangeExtension(ADfm, '.pas');
   if not TFile.Exists(Pas) then
     Exit;
-  S := BindingReport(ADfmLines, SplitToLines(CodigoPascal(PatchLoadText(Pas, Enc))), Pas);
+  S := BindingReport(ADfmLines, PatchLoadText(Pas, Enc), Pas);
   J := TJSONObject.ParseJSONValue(S);
   if not (J is TJSONObject) then
   begin
@@ -424,7 +382,9 @@ begin
   for var Linea in SplitToLines(Txt) do
   begin
     M := TRegEx.Match(Linea.Trim, EVENT_LINE_RE);
-    if M.Success and SameText(M.Groups[2].Value, AMethod) then
+    // el mismo metodo aunque la caja de una letra acentuada difiera: asi lo
+    // encuentra el streaming (MethodAddress) al cargar el form
+    if M.Success and MismoIdentificador(M.Groups[2].Value, AMethod) then
       Exit(True);
   end;
 end;

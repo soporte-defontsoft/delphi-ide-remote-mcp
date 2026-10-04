@@ -66,15 +66,13 @@ for d, dirs, fs in os.walk(SAMPLES):
             copiados.append(dst)
 check('corpus: los forms de texto de los Samples (%d)' % len(copiados), len(copiados) > 100, str(len(copiados)))
 
-# que las dos tablas esten (se generan en segundo plano; info espera un rato)
-listo = False
-t0 = time.time()
-while time.time() - t0 < 300 and not listo:
-    a = call('delphi_designer', {'command': 'info', 'classname': 'TButton', 'framework': 'vcl', 'filter': 'Caption'}, t=120)
-    b = call('delphi_designer', {'command': 'info', 'classname': 'TButton', 'framework': 'fmx', 'filter': 'Text'}, t=120)
-    listo = 'Caption' in a and '"Text"' in b
-    if not listo:
-        time.sleep(3)
+# que las dos tablas esten (se generan en segundo plano; info espera un rato):
+# la espera de la casa, mc.espera_info (este bucle era su gemelo)
+a = mc.espera_info(call, {'command': 'info', 'classname': 'TButton', 'framework': 'vcl', 'filter': 'Caption'},
+                   cond=lambda r: 'Caption' in r, tope=300)
+b = mc.espera_info(call, {'command': 'info', 'classname': 'TButton', 'framework': 'fmx', 'filter': 'Text'},
+                   cond=lambda r: '"Text"' in r, tope=300)
+listo = 'Caption' in a and '"Text"' in b
 check('corpus: las tablas VCL y FMX del Delphi activo estan', listo, (a + ' | ' + b)[:300])
 
 falsos, familia, notas, ejemplos = 0, 0, 0, []

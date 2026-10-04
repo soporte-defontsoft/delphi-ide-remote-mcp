@@ -69,6 +69,11 @@ open(RESBIN, 'wb').write(b'\xff\x0a\x00FORMBIN\x00\x00\x00\x00'
                          b'TPF0\x08TFormBin\x00')
 
 # ---- info ----
+# las tablas, listas antes (la primera vez se generan del fuente, y info solo
+# espera un rato): con la cache fria esta bateria dependia de que otra se la
+# hubiera dejado caliente (4-oct-2026)
+for _fw, _r in mc.espera_tablas(call):
+    check('tablas del disenador listas (%s)' % _fw, not mc.tiene(_r, 'DSGN-051') and not mc.fallo(_r), _r[:300])
 j = J(call('delphi_designer', {'command': 'info', 'class': 'TButton', 'framework': 'vcl'}))
 props = [p['name'] for p in j.get('properties', [])]
 check('info TButton (VCL): Caption y TabOrder publicados', 'Caption' in props and 'TabOrder' in props, str(j)[:250])
@@ -110,6 +115,23 @@ check('tree: raiz FormMain', root.get('name') == 'FormMain' and root.get('class'
 check('tree: jerarquia (Panel con Button dentro)',
       any(k.get('name') == 'PanelTop' and any(g.get('name') == 'BotonUno' for g in k.get('children', [])) for k in kids), str(kids)[:300])
 check('tree: lineas 1-based', root.get('line') == 1, root.get('line'))
+check('tree sin maxdepth: entero, sin nota de corte', 'maxDepthNote' not in j and kids, str(j)[:200])
+# maxdepth (nota de Hermes, 4-oct-2026: un form grande daba un arbol enorme)
+j = J(call('delphi_designer', {'command': 'tree', 'path': DFM, 'maxdepth': 1}))
+r1 = j.get('root') or {}
+check('tree maxdepth=1: solo el form, con cuantos hijos tiene y la nota del corte',
+      'children' not in r1 and r1.get('childrenCount') == len(kids) and
+      mc.tiene(j.get('maxDepthNote', ''), 'DSGN-059'), str(j)[:300])
+j = J(call('delphi_designer', {'command': 'tree', 'path': DFM, 'maxdepth': 2}))
+k2 = (j.get('root') or {}).get('children', [])
+check('tree maxdepth=2: los hijos del form, y el panel dice cuantos lleva dentro',
+      any(k.get('name') == 'PanelTop' and 'children' not in k and k.get('childrenCount', 0) >= 1 for k in k2),
+      str(k2)[:300])
+r = call('delphi_designer', {'command': 'tree', 'path': DFM, 'maxdepth': -1})
+check('tree maxdepth negativo: lo niega la capa de parametros (SYS-016), como todo entero',
+      mc.rechazado(r) and mc.tiene(r, 'SYS-016'), r[:200])
+r = call('delphi_designer', {'command': 'lint', 'path': DFM, 'maxdepth': 2})
+check('maxdepth con otro comando: no va con el (DSGN-047)', mc.rechazado(r) and mc.tiene(r, 'DSGN-047'), r[:200])
 
 # ---- get ----
 r = call('delphi_designer', {'command': 'get', 'path': DFM, 'component': 'BotonUno'})
@@ -286,6 +308,94 @@ def _nodos(n):
 pares = [(x.get('name', ''), x.get('class', '')) for x in _nodos(mc.como_json(r).get('root', {}))]
 check('tree: el componente de nombre con acento sale con su nombre y su clase',
       ('lblDirecci\u00f3n', 'TLabel') in pares and not any(c.startswith('lblDirecci') for _, c in pares), pares)
+
+# 4-oct-2026 (Hermes, VM 13.2, un form de produccion de GalateaAPI): lint y
+# check-binding caian con SYS-006 'Index out of bounds (2)' si el .pas tenia
+# una cabecera de clase SIN parentesis detras de class: su ancestro iba en un
+# grupo opcional y Groups[2] no existia (Lsp.Regex). 'class of' no es un
+# bloque; class abstract(TBase) si, con su ancestro.
+COP = os.path.join(BASE, 'UClaseOf.pas')
+COD = os.path.join(BASE, 'UClaseOf.dfm')
+open(COP, 'w', encoding='utf-8-sig', newline='\r\n').write(
+"""unit UClaseOf;
+
+interface
+
+uses
+  Vcl.Forms, Vcl.StdCtrls, System.Classes;
+
+type
+  TEsquema = class
+  end;
+  TEsquemaClass = class of TEsquema;
+  TRaiz = class(TForm)
+    btnRaiz: TButton;
+  end;
+  TBase = class abstract(TRaiz)
+    btnBase: TButton;
+  end;
+  TFormClaseOf = class(TBase)
+    lblUno: TLabel;
+  end;
+
+implementation
+
+{$R *.dfm}
+
+end.
+""")
+open(COD, 'w', encoding='utf-8-sig', newline='\r\n').write(
+"""object FormClaseOf: TFormClaseOf
+  object btnRaiz: TButton
+  end
+  object btnBase: TButton
+  end
+  object lblUno: TLabel
+  end
+  object lblSinCampo: TLabel
+  end
+end
+""")
+r = call('delphi_designer', {'command': 'check-binding', 'path': COD})
+d = mc.como_json(r)
+check('check-binding: con class of y una clase sin ancestro en el .pas NO cae (SYS-006 Index out of bounds)',
+      not mc.es(r, 'SR_SYS_TOOL_FAILED_FMT') and 'Index out of bounds' not in r and d.get('form') == 'FormClaseOf', r[:400])
+check('check-binding: el ancestro de una class abstract(TRaiz) se sigue: el campo de TRaiz cuenta, el que falta se avisa',
+      d.get('inheritanceChain') == 'TFormClaseOf -> TBase -> TRaiz' and
+      'lblSinCampo' in ' '.join(d.get('componentsWithoutField', [])) and
+      'btnRaiz' not in ' '.join(d.get('componentsWithoutField', [])), r[:500])
+# un ancestro escrito con su unidad (Vcl.Forms.TForm) es una raiz como TForm:
+# no lo era, la clase salia "partial" y lo que falta no se avisaba (revision
+# del 4-oct-2026)
+NSP = os.path.join(BASE, 'UConUnidad.pas')
+NSD = os.path.join(BASE, 'UConUnidad.dfm')
+open(NSP, 'w', encoding='utf-8-sig', newline='\r\n').write(
+    'unit UConUnidad;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.StdCtrls;\n\ntype\n'
+    '  TFormNs = class(Vcl.Forms.TForm)\n    lblUno: TLabel;\n  end;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n')
+open(NSD, 'w', encoding='utf-8-sig', newline='\r\n').write(
+    'object FormNs: TFormNs\n  object lblUno: TLabel\n  end\n  object lblFaltaNs: TLabel\n  end\nend\n')
+d = mc.como_json(call('delphi_designer', {'command': 'check-binding', 'path': NSD}))
+check('check-binding: class(Vcl.Forms.TForm) es una raiz: no sale partial y lo que falta se avisa',
+      'partialNote' not in d and 'lblFaltaNs' in ' '.join(d.get('componentsWithoutField', [])), str(d)[:400])
+# una clase SIN cuerpo en la cadena ('TFormBase = class(TForm);') no tiene
+# miembros: se leian como suyos los de la clase de debajo, y un componente sin
+# campo quedaba tapado por el campo de otra clase (revision del 4-oct-2026)
+SCP = os.path.join(BASE, 'USinCuerpo.pas')
+SCD = os.path.join(BASE, 'USinCuerpo.dfm')
+open(SCP, 'w', encoding='utf-8-sig', newline='\r\n').write(
+    'unit USinCuerpo;\n\ninterface\n\nuses\n  Vcl.Forms, Vcl.StdCtrls;\n\ntype\n'
+    '  TFormBaseSc = class(TForm);\n  TOtraSc = class(TForm)\n    lblAjena: TLabel;\n  end;\n'
+    '  TFormSc = class(TFormBaseSc)\n    lblUno: TLabel;\n  end;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n')
+open(SCD, 'w', encoding='utf-8-sig', newline='\r\n').write(
+    'object FormSc: TFormSc\n  object lblUno: TLabel\n  end\n  object lblAjena: TLabel\n  end\nend\n')
+d = mc.como_json(call('delphi_designer', {'command': 'check-binding', 'path': SCD}))
+check('check-binding: una clase sin cuerpo en la cadena no se lleva los campos de la de debajo',
+      d.get('inheritanceChain') == 'TFormSc -> TFormBaseSc' and
+      'lblAjena' in ' '.join(d.get('componentsWithoutField', [])), str(d)[:400])
+r = call('delphi_designer', {'command': 'lint', 'path': COD})
+# (y llega al binding: el aviso del componente sin campo sale tambien sin tabla)
+check('lint: con class of en el .pas NO cae y mira el form contra su clase',
+      'Index out of bounds' not in r and not mc.es(r, 'SR_SYS_TOOL_FAILED_FMT') and 'lblSinCampo' in r, r[:300])
 
 r = call('delphi_designer', {'command': 'totext', 'path': BIN})
 # aceptado = llego al conversor (el BIN de prueba esta danado: lo dice el)

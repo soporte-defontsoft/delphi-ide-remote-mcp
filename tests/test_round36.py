@@ -31,11 +31,13 @@ el fuente como texto y acierta-; el camino de UN fichero lo ignoraba.
       '(' de una cadena no deja la union abierta; y (revisor de la 1.10.0)
       la linea que cierra un comentario abierto en la firma va con ella, y
       el // de una firma partida no comenta lo que se le une
+  S12 un contenedor dice '(+N inside)', como promete la descripcion
 
 Usage:  python tests/test_round36.py [path-to-DelphiLspMcp.exe]
 """
 import json
 import os
+import re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -163,6 +165,14 @@ try:
     # ------------------------------------------------------------------ S9
     check('S9 una linea que es solo comentario no se pega a la firma',
           'una nota justo en medio' not in todas, todas[:260])
+
+    # ------------------------------------------------------------------ S12
+    # un contenedor dice cuantos lleva dentro como lo promete la descripcion
+    # de la tool ('+N inside'): el arbol lo escribia en castellano, '(+3
+    # dentro)' (revisor de tokens del 4-oct-2026)
+    check('S12 el contenedor dice "(+N inside)", como su descripcion',
+          re.search(r'TCosa[^|]*\(\+\d+ inside\)', todas) is not None and 'dentro)' not in todas,
+          todas[:260])
 
     # ------------------------------------------------------------------ S3
     dig = json.loads(sinaviso(call('delphi_symbols',

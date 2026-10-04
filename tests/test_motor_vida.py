@@ -24,6 +24,10 @@ while they fitted in its pipe, and with no bound once it was full.
       and the request repeated starts another and answers
   V2b the same with a WRITE the engine is not reading - a request that opens
       a file too big for its pipe: the case that had no bound at all
+  V4  [Server] MaxEngines (DELPHI_MCP_MAX_ENGINES=1 here, 1.13.0): the engine
+      of a second project stops the least recently used one (the first
+      project's), the log says why, and going back to the first starts
+      another and answers
 
 Usage:  python tests/test_motor_vida.py [path-to-DelphiLspMcp.exe]
 """
@@ -214,6 +218,34 @@ try:
     colgado, dt = se_va(proc, motor3)
     check('V2b ...y el proceso colgado ya no esta, y el log lo dice otra vez',
           not colgado and len(apuntado('no sign of life', n_antes + 1)) > n_antes, 'sigue %s' % colgado)
+finally:
+    acaba(proc)
+
+# ---------------------------------------------------------------- V4
+# el tope de motores: uno solo vivo (y sin barrendero de inactivos, que no
+# se cruce)
+proc, puerto = lanza({'DELPHI_MCP_MAX_ENGINES': '1', 'DELPHI_MCP_ENGINE_IDLE_MINUTES': '0'})
+try:
+    uno = cliente(puerto)
+    d4, dpr4 = proyecto(uno, 'Cuatro')
+    d5, dpr5 = proyecto(uno, 'Cinco')
+    ok4, h = caliente(uno, dpr4)
+    m4 = mc.motores_en(proc.pid, d4)
+    check('V4 (preparacion) el primer proyecto con su motor', ok4 and len(m4) == 1, m4)
+    ok5, h = caliente(uno, dpr5)
+    quedan, dt = se_va(proc, m4, 20)
+    m5 = mc.motores_en(proc.pid, d5)
+    check('V4 con MaxEngines=1 el motor del segundo proyecto para el del primero, el menos usado '
+          '(%.0f s): queda uno, el suyo' % dt,
+          ok5 and len(m5) == 1 and not quedan and mc.hijos_lsp(proc.pid) == m5,
+          'primero %s (quedan %s), segundo %s, todos %s' % (m4, quedan, m5, mc.hijos_lsp(proc.pid)))
+    dicho = apuntado('MaxEngines=1 reached')
+    check('V4 ...y el log del servidor dice por que lo paro', len(dicho) >= 1, dicho)
+    ok4b, h = caliente(uno, dpr4)
+    m4b = mc.motores_en(proc.pid, d4)
+    check('V4 ...y volver al primero arranca OTRO motor y contesta',
+          ok4b and len(m4b) == 1 and not (set(m4b) & set(m4)) and len(mc.hijos_lsp(proc.pid)) == 1,
+          'antes %s, ahora %s, todos %s' % (m4, m4b, mc.hijos_lsp(proc.pid)))
 finally:
     acaba(proc)
 

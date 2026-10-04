@@ -20,14 +20,8 @@ srv = mc.Stdio(EXE, env, nombre='scaffold-battery', t=300)
 assert srv.init, 'no initialize response'
 call = srv.call
 
-def build_ok(dproj):
-    out = call('delphi_build', {"project": dproj, "platform": "Win64",
-                                "config": "Debug", "target": "Build"}, 600)
-    try:
-        d = json.loads(out)
-        return d['success'], json.dumps(d['errors'])[:180]
-    except Exception:
-        return False, out[:180]
+def build_ok(dproj):  # el de la casa (mcp_cliente)
+    return mc.build_ok(call, dproj)
 
 # --- console project ---
 CDIR = os.path.join(BASE, 'HolaConsola')
@@ -50,8 +44,12 @@ try:
           outp.lower().endswith('holaconsola.exe') and os.path.isfile(outp),
           d.get('output', '(sin output)'))
     check('build: outputSize > 0', d.get('outputSize', 0) > 0, out[:200])
-    check('build: outputNote guia package+fetch',
-          'delphi_package' in d.get('outputNote', ''), out[:200])
+    # 1.13.0 (revisor de tokens): la nota fija BUILD-002 (recogerlo con
+    # delphi_package) iba en cada build; lo dice delphi_package. Tampoco el
+    # eco del proyecto, ni la version de Delphi con una sola instalacion
+    check('build: sin las notas fijas ni el eco del proyecto',
+          'outputNote' not in d and 'project' not in d and 'warningsNote' not in d,
+          out[:300])
 except Exception as e:
     check('build: output parsea', False, '%s | %s' % (e, out[:200]))
 out = call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "HolaConsola"})

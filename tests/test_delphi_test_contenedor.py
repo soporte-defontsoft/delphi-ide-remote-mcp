@@ -118,11 +118,7 @@ def copias():
     return [d for d in os.listdir(TEMP_SRV) if d.startswith('test-')] if os.path.isdir(TEMP_SRV) else []
 
 
-def junction(link, target):
-    """mklink /J no necesita privilegios; devuelve True si el enlace quedo."""
-    r = subprocess.run(['cmd', '/c', 'mklink', '/J', link, target],
-                       capture_output=True)
-    return r.returncode == 0 and os.path.isdir(link)
+junction = mc.junction  # EL de mcp_cliente (vivia aqui)
 
 
 def etiqueta_baja(p):
@@ -456,6 +452,12 @@ check('A1 DUnitX real: token, fichero externo y token del hijo pasan en AppConta
       contrato_j.get('build', {}).get('firstError') or r[:1600])
 with open(externo) as f:
     check('A1 el testigo externo sigue intacto', f.read() == 'fixture del arnes')
+# 1.13.0 (revisor de tokens): el recuadro de DUnitX (copyright y licencia,
+# '*' a los dos lados) ya no viaja en la cola; el resumen, si
+_cola = contrato_j.get('outputTail') or ''
+check('A1 DUnitX: la cola sin el recuadro de copyright, con el resumen',
+      'License' not in _cola and '*****' not in _cola and 'Tests Passed' in _cola and
+      'note' not in contrato_j, _cola[:400])
 
 out = srv.call('delphi_test', {'command': 'run', 'project': os.path.join(JAIL, 'CajaTest', 'CajaTest.dproj')}, 600)
 j = J(out)

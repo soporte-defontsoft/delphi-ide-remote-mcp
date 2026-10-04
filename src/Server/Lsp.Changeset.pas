@@ -1049,7 +1049,7 @@ begin
             var D := 0;
             Deltas2.TryGetValue(FPath.ToLower, D);
             Audit.AppendLine(Format('  %s: %s%s',
-              [MaskDriveText('delphi_changeset', FPath), Kinds,
+              [MaskDriveText('', FPath), Kinds,
                IfThen(D = 0, MsgText(SF_CHSET_MISMO_NUMERO_LINEAS),
                  MsgFmt(SF_CHSET_LINEAS_EN_TOTAL_FMT,
                    [IfThen(D > 0, '+', ''), D]))]));

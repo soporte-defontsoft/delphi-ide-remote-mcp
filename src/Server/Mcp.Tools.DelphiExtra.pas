@@ -225,7 +225,8 @@ begin
     Exit;
   R := FindDelphiReferences(Params.Path, Params.Line, Params.Character);
   try
-    Result := R.ToJSON;
+    // la linea de cada uso, tal cual (un ancla); lo demas, enmascarado
+    Result := EnmascaraJsonSalvo(R.ToJSON, CONTENIDO_DE_UN_USO);
   finally
     R.Free;
   end;

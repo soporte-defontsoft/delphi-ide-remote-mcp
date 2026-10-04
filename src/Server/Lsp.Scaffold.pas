@@ -25,6 +25,14 @@ function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string;
   proyecto, en la carpeta ABSOLUTA ADir. No se registra en ningun sitio. }
 function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;
 
+{ LA regla de un nombre de unit NUEVO: un identificador (con puntos), y
+  ningun tramo palabra reservada, ni una unit de la RTL, ni colgando de un
+  espacio de nombres de Embarcadero. '' si vale; si no, la negativa. La usan
+  delphi_create, la creacion de units de delphi_edit y el move que renombra
+  una unit: los dos ultimos solo miraban que fuera un identificador, y
+  'Begin.pas' o 'System.pas' pasaban (revision de paisaje del 4-oct-2026). }
+function BadUnitName(const AName: string): string;
+
 implementation
 
 uses
@@ -37,12 +45,11 @@ uses
   Lsp.Dproj,
   Lsp.ProjectUnits,
   Lsp.Texts,
-  Lsp.Guard;
+  Lsp.Guard,
+  Lsp.Pascal;
 
 const
   CRLF = #13#10;
-  // Ident(.Ident)*: dotted namespaces are legal Delphi (MyApp.Forms.Main)
-  IDENT_RE = '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$';
 
 function NewGuidStr: string;
 var
@@ -363,17 +370,6 @@ end;
   asked "is this an identifier", which both of those pass. }
 function BadUnitName(const AName: string): string;
 const
-  // Delphi reserved words: a .dpr uses clause with one of these is E2029.
-  RESERVED: array [0 .. 64] of string = ('and', 'array', 'as', 'asm', 'begin',
-    'case', 'class', 'const', 'constructor', 'destructor', 'dispinterface',
-    'div', 'do', 'downto', 'else', 'end', 'except', 'exports', 'file',
-    'finalization', 'finally', 'for', 'function', 'goto', 'if',
-    'implementation', 'in', 'inherited', 'initialization', 'inline',
-    'interface', 'is', 'label', 'library', 'mod', 'nil', 'not', 'object',
-    'of', 'or', 'out', 'packed', 'procedure', 'program', 'property',
-    'raise', 'record', 'repeat', 'resourcestring', 'set', 'shl', 'shr',
-    'string', 'then', 'threadvar', 'to', 'try', 'type', 'unit', 'until',
-    'uses', 'var', 'while', 'with', 'xor');
   // Units of the RTL/VCL/FMX habitually reached unqualified. A file with one
   // of these names next to the project shadows the real one, and the error
   // the compiler then gives points anywhere but here.
@@ -391,13 +387,15 @@ var
   W, Head: string;
 begin
   Result := '';
-  if not TRegEx.IsMatch(AName, IDENT_RE) then
+  // Ident(.Ident)*: dotted namespaces are legal Delphi (MyApp.Forms.Main);
+  // EL identificador (Lsp.Pascal), con letras de cualquier alfabeto
+  if not EsIdentificador(AName, True) then
     Exit(MsgFmt(SR_CREATE_BADNAME_FMT, [AName]));
-  // every dotted segment must be clean, not just the whole thing
+  // every dotted segment must be clean, not just the whole thing: a reserved
+  // word (the lexicon's list, Lsp.Pascal) in a .dpr uses clause is E2029
   for Head in AName.Split(['.']) do
-    for W in RESERVED do
-      if SameText(Head, W) then
-        Exit(MsgFmt(SR_CREATE_RESERVED_FMT, [Head, AName]));
+    if EsPalabraReservada(Head) then
+      Exit(MsgFmt(SR_CREATE_RESERVED_FMT, [Head, AName]));
   for W in RTL do
     if SameText(AName, W) then
       Exit(MsgFmt(SR_CREATE_RTLNAME_FMT, [AName, AName, AName]));
@@ -425,7 +423,7 @@ begin
     // them to write kind=console, which is refused too. Name the values that
     // work (field round 10).
     Exit(MsgText(SR_CREATE_PROJECT_KIND));
-  if not TRegEx.IsMatch(AName, '^[A-Za-z_]\w*$') then
+  if not EsIdentificador(AName) then
     Exit(MsgFmt(SR_CREATE_IDENTIFICADOR_NOMBRE_PROYECTO_FMT, [AName]));
 
   Result := BadUnitName(AName);
@@ -772,9 +770,9 @@ begin
     else
       FormName := 'Form' + AUnitName;
   end;
-  if FormName.StartsWith('T') and (Length(FormName) > 1) and CharInSet(FormName[2], ['A'..'Z']) then
+  if TRegEx.IsMatch(FormName, '\A' + PATRON_NOMBRE_TIPO) then
     FormName := FormName.Substring(1); // the T prefix goes on the class only
-  if not TRegEx.IsMatch(FormName, '^[A-Za-z_]\w*$') then
+  if not EsIdentificador(FormName) then
     Exit(MsgFmt(SR_CREATE_IDENTIFICADOR_FORM_FMT, [FormName]));
 
   Result := CarpetaEnElProyecto(ADprPath, ASubDir, Dir);

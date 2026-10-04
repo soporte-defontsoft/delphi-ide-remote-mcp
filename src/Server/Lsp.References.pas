@@ -23,6 +23,13 @@ function FindDelphiReferences(const AFilePath: string;
   ALine, ACharacter: Integer; AMaxFiles: Integer = 40;
   AMaxCandidates: Integer = 400): TJSONObject;
 
+const
+  // los campos de un uso (references, rename_symbol) que son la LINEA del
+  // fichero tal cual: contenido, no van enmascarados (Lsp.Guard.
+  // EnmascaraJsonSalvo); un ancla copiada de ahi casaba con 'srvd:' y no con
+  // el disco (revision del 4-oct-2026)
+  CONTENIDO_DE_UN_USO: array [0 .. 1] of string = ('text', 'anchor');
+
 { True for IDE artifacts that must never be scanned/edited/reasoned about. }
 function SkipIdeArtifacts(const APath: string): Boolean; overload;
 
@@ -81,7 +88,8 @@ uses
   System.RegularExpressions,
   Lsp.Dproj,        // RutasDeBusqueda: el search path de un .dproj, resuelto
   Lsp.ProjectUnits,
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.PascalDecl; // EL lector de clases y LA cadena de ancestros
 
 type
   TCandidate = record
@@ -90,24 +98,20 @@ type
     Text: string;
   end;
 
-function IsIdentChar(C: Char): Boolean; inline;
-begin
-  Result := ((C >= 'a') and (C <= 'z')) or ((C >= 'A') and (C <= 'Z')) or
-    ((C >= '0') and (C <= '9')) or (C = '_');
-end;
-
 function IdentifierAt(const ALineText: string; ACol: Integer): string;
 var
   S, E: Integer;
 begin
-  // ACol is 0-based; string is 1-based.
+  // ACol is 0-based; string is 1-based. EL identificador (Lsp.Pascal): con
+  // A-Z a mano, el de debajo del cursor en un nombre con enye era un trozo
+  // (censo del 4-oct-2026)
   S := ACol + 1;
-  if (S < 1) or (S > Length(ALineText)) or not IsIdentChar(ALineText[S]) then
+  if (S < 1) or (S > Length(ALineText)) or not EsCaracterDeIdent(ALineText[S]) then
     Exit('');
-  while (S > 1) and IsIdentChar(ALineText[S - 1]) do
+  while (S > 1) and EsCaracterDeIdent(ALineText[S - 1]) do
     Dec(S);
   E := ACol + 1;
-  while (E < Length(ALineText)) and IsIdentChar(ALineText[E + 1]) do
+  while (E < Length(ALineText)) and EsCaracterDeIdent(ALineText[E + 1]) do
     Inc(E);
   Result := Copy(ALineText, S, E - S + 1);
 end;
@@ -306,72 +310,45 @@ end;
 
 { La clase a la que pertenece un metodo en ALine. '' cuando es una rutina
   global. Dos formas: "procedure TBase.Pinta;" lo dice en su propia linea, y
-  "procedure Pinta; virtual;" obliga a subir hasta el "X = class" que la
-  contiene - parando en el "end;" de la clase anterior, que significa que esa
-  linea no vive dentro de ninguna. }
-function ClaseDeMetodo(const ALines: TStringList; ALine: Integer;
+  "procedure Pinta; virtual;" vive DENTRO de la clase: el tipo que contiene
+  esa linea, de EL lector de clases (AUnidad, leida de ALines; un record no
+  tiene familia). Se subia linea a linea hasta un "X = class" y se paraba en
+  un "end;" de cuatro espacios: un record anidado o una clase de una linea lo
+  enganaban (censo del 4-oct-2026). }
+function ClaseDeMetodo(const ALines: TStringList; AUnidad: TUnidadPas; ALine: Integer;
   const AIdent: string): string;
 var
   M: TMatch;
-  I: Integer;
+  T: TTipoPas;
 begin
   Result := '';
   if (ALine < 0) or (ALine >= ALines.Count) or (AIdent = '') then
     Exit;
   M := TRegEx.Match(ALines[ALine],
-    '(?i)\b(procedure|function|constructor|destructor)\s+([A-Za-z_]\w*)\s*\.\s*' +
-    TRegEx.Escape(AIdent) + '\b');
+    '(?i)\b(' + PatronPalabraDeRutina + ')\s+(' + PATRON_IDENT + ')\s*\.\s*' +
+    PatronIdentEntero(AIdent));
   if M.Success then
     Exit(M.Groups[2].Value);
-  for I := ALine downto 0 do
-  begin
-    if TRegEx.IsMatch(ALines[I], '(?i)^\s*(implementation|initialization)\s*$') then
-      Exit('');
-    M := TRegEx.Match(ALines[I],
-      '(?i)^\s*([A-Za-z_]\w*)\s*=\s*(packed\s+)?(class|interface)\b');
-    if M.Success then
-      Exit(M.Groups[1].Value);
-    if (I < ALine) and TRegEx.IsMatch(ALines[I], '^\s{0,4}end;\s*$') then
-      Exit('');
-  end;
+  T := AUnidad.TipoEnLinea(ALine, [ctClase, ctInterfaz, ctRegistro]);
+  if (T <> nil) and (T.Clase <> ctRegistro) then
+    Result := T.Nombre;
 end;
 
-{ Apunta "clase -> padre" de un fuente ya leido. Se alimenta del mismo bucle
-  que busca candidatos: ni un fichero de mas. }
-procedure AnotaHerencia(const AText: string;
-  const AMapa: TDictionary<string, string>);
-var
-  M: TMatch;
-begin
-  for M in TRegEx.Matches(AText,
-    '(?im)^\s*([A-Za-z_]\w*)\s*=\s*(?:packed\s+)?class\s*\(\s*([A-Za-z_][\w.]*)') do
-    AMapa.AddOrSetValue(M.Groups[1].Value.ToLower, M.Groups[2].Value);
-end;
-
-{ true si una de las dos clases desciende de la otra. El tope de 20 saltos es
-  contra una jerarquia circular en fuentes a medio escribir. }
+{ true si una de las dos clases desciende de la otra, por LA cadena de
+  ancestros (Lsp.PascalDecl) sobre lo que el escaneo leyo (AnotaAncestros de
+  cada fuente). El tope de 20 saltos es contra una jerarquia circular en
+  fuentes a medio escribir. }
 function MismaFamilia(const AMapa: TDictionary<string, string>;
   const A, B: string): Boolean;
 
   function Desciende(const AHijo, AAbuelo: string): Boolean;
   var
-    Cur, Par: string;
-    N: Integer;
+    Sale: Boolean;
   begin
-    Result := False;
-    Cur := AHijo;
-    N := 0;
-    while (Cur <> '') and (N < 20) do
-    begin
-      if SameText(Cur, AAbuelo) then
+    for var C in CadenaDeAncestros(AMapa, AHijo, Sale, 21) do
+      if MismoIdentificador(UltimoTrozo(C), AAbuelo) then
         Exit(True);
-      if not AMapa.TryGetValue(Cur.ToLower, Par) then
-        Exit(False);
-      if Par.Contains('.') then // el padre puede venir cualificado
-        Par := Par.Substring(Par.LastIndexOf('.') + 1);
-      Cur := Par;
-      Inc(N);
-    end;
+    Result := False;
   end;
 
 begin
@@ -515,15 +492,19 @@ begin
   var Familia := False;
   var Herencia := TDictionary<string, string>.Create;
   var Textos := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
+  // y sus clases, leidas una vez por fichero (EL lector, Lsp.PascalDecl)
+  var Unidades := TObjectDictionary<string, TUnidadPas>.Create([doOwnsValues]);
   var TargetPath := TLspClient.UriToPath(TargetUri);
   if TFile.Exists(TargetPath) then
   begin
     var TwinLines := TStringList.Create;
+    var TwinU: TUnidadPas := nil;
     try
       // la vista del codigo: lo que se busca aqui es estructura (la clase
       // del metodo) y la columna del identificador en codigo
       TwinLines.Text := CodigoPascal(TLspClient.LoadSourceText(TargetPath));
-      ClaseObjetivo := ClaseDeMetodo(TwinLines, TargetLine, Ident);
+      TwinU := LeeFuentePascal(TwinLines.Text);
+      ClaseObjetivo := ClaseDeMetodo(TwinLines, TwinU, TargetLine, Ident);
       if (TargetLine >= 0) and (TargetLine < TwinLines.Count) then
       begin
         // Same 1-based-Pos-as-character convention the candidate loop uses
@@ -542,7 +523,7 @@ begin
               // La mitad declarada dentro de la clase no siempre dice de
               // quien es; la implementacion SIEMPRE lo dice, cualificada.
               if ClaseObjetivo = '' then
-                ClaseObjetivo := ClaseDeMetodo(TwinLines, TwinLine, Ident);
+                ClaseObjetivo := ClaseDeMetodo(TwinLines, TwinU, TwinLine, Ident);
             end;
           finally
             Resp.Free;
@@ -550,6 +531,7 @@ begin
         end;
       end;
     finally
+      TwinU.Free;
       TwinLines.Free;
     end;
   end;
@@ -646,8 +628,14 @@ begin
       // lexico (MarcaCodigo, 2026-09-21); el censo del 2-oct-2026 las junto
       var Vista := CodigoPascal(Text);
       // La jerarquia se apunta AQUI, del fuente que ya se ha leido para
-      // buscar candidatos: el parentesco entre clases sale gratis.
-      AnotaHerencia(Vista, Herencia);
+      // buscar candidatos: el parentesco entre clases sale gratis. Sus
+      // clases, de EL lector (tenia su propia regex)
+      var UVista := LeeFuentePascal(Vista);
+      try
+        AnotaAncestros(UVista, Herencia);
+      finally
+        UVista.Free;
+      end;
       Lines := TStringList.Create;
       VistaLines := TStringList.Create;
       try
@@ -663,9 +651,9 @@ begin
             if P = 0 then
               Break;
             // word boundaries
-            if ((P = 1) or not IsIdentChar(LineText[P - 1])) and
+            if ((P = 1) or not EsCaracterDeIdent(LineText[P - 1])) and
                ((P + Length(Ident) > Length(LineText)) or
-                not IsIdentChar(LineText[P + Length(Ident)])) then
+                not EsCaracterDeIdent(LineText[P + Length(Ident)])) then
             begin
               Cand.Path := F;
               Cand.Line := I;
@@ -712,7 +700,10 @@ begin
             Unverified.Add(CandidateJson(Cand));
             Continue;
           end;
-          Session.AcquireFor(Cand.Path, Settings); // didOpen + warm
+          // didOpen + warm, en el motor AL QUE SE PREGUNTA: AcquireFor buscaba
+          // el del candidato, y una unidad compartida arrancaba el de otro
+          // proyecto para nada (menor de la ronda 16, medido)
+          Session.AbreEn(Client, Cand.Path);
           OpenedFiles.Add(Cand.Path.ToLower, True);
           Inc(FilesOpened);
         end;
@@ -739,8 +730,14 @@ begin
               end;
               Textos.Add(CandPath.ToLower, CandLines);
             end;
+            var CandU: TUnidadPas;
+            if not Unidades.TryGetValue(CandPath.ToLower, CandU) then
+            begin
+              CandU := LeeFuentePascal(CandLines.Text);
+              Unidades.Add(CandPath.ToLower, CandU);
+            end;
             Pariente := MismaFamilia(Herencia, ClaseObjetivo,
-              ClaseDeMetodo(CandLines, CandLine, Ident));
+              ClaseDeMetodo(CandLines, CandU, CandLine, Ident));
           end;
           if EsElMismo then
             Confirmed.Add(CandidateJson(Cand))
@@ -851,6 +848,7 @@ begin
     Menciones.Free;
     AllFiles.Free;
     Herencia.Free;
+    Unidades.Free;
     Textos.Free;
   end;
 end;

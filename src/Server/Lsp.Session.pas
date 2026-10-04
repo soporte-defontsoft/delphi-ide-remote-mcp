@@ -69,6 +69,12 @@ type
   TSettingsEntry = record
     Settings, RootDir, SourceFile, SourceStamp: string;
     RejectedFile, RejectedStamp: string;
+    // Decidida por el .dproj (fabricada) sin ningun fichero del IDE: donde
+    // lo escribiria el IDE (<proyecto>.delphilsp.json junto al .dproj). La
+    // respuesta vale mientras NO aparezca: uno generado despues no se veia
+    // hasta que cambiase el .dproj (menor de la ronda 16, medido el
+    // 4-oct-2026: el mismo motor con los fabricados).
+    IdeEsperado: string;
   end;
 
   { A client taken out of service, and when. }
@@ -141,6 +147,7 @@ type
     function TakeOut(const AKey: string): TLspClient;
     procedure DoFolderLeaves(const AFolder: string);
     procedure DoFolderLeft(const AFolder: string);
+    function AbreDocumento(AClient: TLspClient; const AFullPath: string): Boolean;
   public
     constructor Create;
     destructor Destroy; override;
@@ -196,6 +203,15 @@ type
       needed) plus the settings file it runs with (''= unconfigured). Also
       ensures the document is open on that client. Thread-safe. }
     function AcquireFor(const AFilePath: string; out ASettingsUsed: string): TLspClient;
+
+    { Lo mismo que AcquireFor sobre un motor DADO (uno que dio AcquireFor):
+      el documento abierto y al dia en ESE motor, sin buscar el suyo. Lo
+      que references abre de sus candidatos va al motor al que luego
+      pregunta: con AcquireFor, una unidad compartida arrancaba el motor de
+      OTRO proyecto -el primero cuyo .dproj la nombra- para calentarla, y la
+      pregunta iba al de siempre (menor de la ronda 16, medido el
+      4-oct-2026: dos motores donde hacia falta uno). }
+    procedure AbreEn(AClient: TLspClient; const AFilePath: string);
 
     { Lints AFilePath (disk content) through a warm LINTER client of its
       project and returns the publishDiagnostics params (caller frees), or
@@ -1057,7 +1073,8 @@ begin
   end;
   if Found and (E.SourceFile <> '') and
      (DiskStamp(E.SourceFile) = E.SourceStamp) and
-     ((E.RejectedFile = '') or (DiskStamp(E.RejectedFile) = E.RejectedStamp)) then
+     ((E.RejectedFile = '') or (DiskStamp(E.RejectedFile) = E.RejectedStamp)) and
+     ((E.IdeEsperado = '') or not FileExists(E.IdeEsperado)) then
   begin
     ARootDir := E.RootDir;
     Exit(E.Settings);
@@ -1072,6 +1089,9 @@ begin
     E.SourceStamp := SrcStamp; // taken before the file was read (the walk)
     E.RejectedFile := Rejected;
     E.RejectedStamp := RejectedStamp;
+    E.IdeEsperado := '';
+    if (Rejected = '') and SameText(TPath.GetExtension(Src), '.dproj') then
+      E.IdeEsperado := TPath.ChangeExtension(Src, '.delphilsp.json');
     FTables.Enter;
     try
       if FSettingsCache.Count > 256 then
@@ -1221,6 +1241,8 @@ begin
   var Fresh: TLspClient := nil;
   var Refused := False;
   var Gone := False;
+  var Victima: TLspClient := nil;
+  var VictimaKey := '';
   try
     if ALinter then
       Fresh := CreateClient(ARootDir, ASettingsUsed, lstLinter)
@@ -1250,6 +1272,25 @@ begin
         FHeldFolders.AddOrSetValue(AClientKey, HeldReal);
         Result := Fresh;
         Fresh := nil; // registered: it is the table's now
+        // [Server] MaxEngines: pasado el tope, sale el menos usado de los que
+        // no estan trabajando (nunca el que acaba de llegar); se para FUERA
+        // del cerrojo, como en Sweep. Sin candidato (todos trabajando), el
+        // tope se pasa: parar uno en vuelo seria tirar una respuesta
+        if (MaxEngines > 0) and (FClients.Count > MaxEngines) then
+        begin
+          var Menor: UInt64 := High(UInt64);
+          for var K in FClients.Keys.ToArray do
+          begin
+            var C := FClients[K] as TSessionClient;
+            if (K <> AClientKey) and not C.Busy and (C.FLastUsed < Menor) then
+            begin
+              Menor := C.FLastUsed;
+              VictimaKey := K;
+            end;
+          end;
+          if VictimaKey <> '' then
+            Victima := TakeOut(VictimaKey);
+        end;
       end;
       // else: refused, gone, or lost the race (the winner's client is public)
       if Result <> nil then
@@ -1271,6 +1312,11 @@ begin
       end;
     end;
   end;
+  if Victima <> nil then
+  begin
+    StopAll([Victima]);
+    TLogger.Info(MsgFmt(SL_LSP_ENGINE_LRU_FMT, [VictimaKey, MaxEngines, AClientKey]));
+  end;
   // (gone first: a file that is not there is not "in a folder that leaves")
   if Gone then
     raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFullPath]));
@@ -1281,7 +1327,7 @@ end;
 function TLspSession.AcquireFor(const AFilePath: string;
   out ASettingsUsed: string): TLspClient;
 var
-  FullPath, Key, DocKey, RootDir: string;
+  FullPath, Key, RootDir: string;
 begin
   FullPath := TPath.GetFullPath(AFilePath);
   var Denied := ReadPathDenied(FullPath); // navigating RTL/components is reading
@@ -1291,40 +1337,62 @@ begin
     raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFilePath]));
 
   Result := GetClient(FullPath, False, ASettingsUsed, Key, RootDir);
-  var Mine := Result as TSessionClient;
-  DocKey := FullPath.ToLower;
-  var HeadStart := False;
+  // The indexing head start sleeps OUTSIDE the lock: it buys answer quality
+  // for THIS caller's first question and must not stall everyone else
+  // (retries on -32800 cover whatever 500ms does not).
+  if AbreDocumento(Result, FullPath) then
+    Sleep(500);
+end;
+
+{ El documento abierto y al dia en ESE motor (AcquireFor y AbreEn): True si
+  acaba de abrirse o de refrescarse, para la ventaja de indexado. }
+function TLspSession.AbreDocumento(AClient: TLspClient; const AFullPath: string): Boolean;
+var
+  DocKey: string;
+begin
+  var Mine := AClient as TSessionClient;
+  DocKey := AFullPath.ToLower;
   // The lock of THIS client's documents: the engine is written to with it
   // held, and one that stops reading keeps whoever comes for ITS project.
   Mine.FDocLock.Enter;
   try
     // retired between GetClient and here (its folder is leaving): nothing of
     // its is written down, and the caller is told at once
-    if Result.Stopped then
+    if AClient.Stopped then
       raise ELspSession.Create(MsgText(SR_LSP_ENGINE_STOPPED));
     // Every document this engine has open is brought up to date with the
     // disk FIRST - the one asked about and the others alike (delphi_edit,
     // scaffolding, git, an external editor...): an answer must reflect the
     // CURRENT source of every unit it crosses, never a stale snapshot. The
     // engine reads the disk itself only for units it does NOT have open.
-    HeadStart := Mine.Refresh('', DocKey);
+    Result := Mine.Refresh('', DocKey);
     if not Mine.FDocs.ContainsKey(DocKey) then
     begin
       // the stamp BEFORE the text: a write between the two is seen next time
-      var Stamp := DiskStamp(FullPath);
-      Result.DidOpenFile(FullPath);
-      Mine.FDocs.Add(DocKey, DocState(FullPath, 1, Stamp));
-      HeadStart := True;
+      var Stamp := DiskStamp(AFullPath);
+      AClient.DidOpenFile(AFullPath);
+      Mine.FDocs.Add(DocKey, DocState(AFullPath, 1, Stamp));
+      Result := True;
     end
     else
       Mine.Touch(DocKey);
   finally
     Mine.FDocLock.Leave;
   end;
-  // The indexing head start sleeps OUTSIDE the lock: it buys answer quality
-  // for THIS caller's first question and must not stall everyone else
-  // (retries on -32800 cover whatever 500ms does not).
-  if HeadStart then
+end;
+
+procedure TLspSession.AbreEn(AClient: TLspClient; const AFilePath: string);
+var
+  FullPath: string;
+begin
+  FullPath := TPath.GetFullPath(AFilePath);
+  // la misma puerta que AcquireFor: abrir es leer
+  var Denied := ReadPathDenied(FullPath);
+  if Denied <> '' then
+    raise ELspSession.Create(Denied);
+  if not FileExists(FullPath) then
+    raise ELspSession.Create(MsgFmt(SR_LSP_NO_FILE_FMT, [AFilePath]));
+  if AbreDocumento(AClient, FullPath) then
     Sleep(500);
 end;
 

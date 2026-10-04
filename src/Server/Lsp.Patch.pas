@@ -487,20 +487,25 @@ uses
   Lsp.DesignerBinding,
   Lsp.ProjectUnits,
   Lsp.NetDrives,
-  Lsp.Pascal; // LlavesAnidadas, VistaPascal: el lexico Pascal de la casa
+  Lsp.Pascal, // LlavesAnidadas, VistaPascal: el lexico Pascal de la casa
+  Lsp.PascalDecl, // EL lector de clases (insert=metodo)
+  Lsp.Regex,
+  Lsp.Scaffold;
 
 const
   BACKUP_SUB = '__delphi-patch';
   RETENTION_DAYS = 15;
   MAX_EDITS = 50; // entradas de una tanda
+  { LOS campos de una entrada de "edits": los que la tanda lee y los que
+    dice EDIT-012. Estaban escritos dos veces (la comprobacion y el
+    mensaje), y las descripciones de delphi_edit y delphi_textedit los
+    nombran: test_docs_tokens los saca de EDIT-012 y mira que las dos los
+    digan todos (4-oct-2026). }
+  CAMPOS_DE_UNA_EDICION: array [0 .. 6] of string = ('old', 'new', 'atline',
+    'toline', 'delete', 'occurrence', 'fragment');
   MAX_READ_LINES = 400;
-  // las directivas de la CABECERA de una rutina (no las del compilador, {$...}:
-  // esas son DirectivasPascal), las que pueden ir detras de la firma
-  DIRECTIVAS_DE_RUTINA: array[0..26] of string = ('abstract', 'assembler',
-    'cdecl', 'deprecated', 'dispid', 'dynamic', 'experimental', 'export', 'far',
-    'final', 'inline', 'library', 'local', 'message', 'near', 'overload',
-    'override', 'pascal', 'platform', 'register', 'reintroduce', 'safecall',
-    'static', 'stdcall', 'varargs', 'virtual', 'winapi');
+  // las directivas de la CABECERA de una rutina: DIRECTIVAS_DE_RUTINA, del
+  // lexico (Lsp.Pascal); aqui habia otra lista, sin noreturn ni unsafe
   // SOURCE_EXTS / DESIGNER_EXTS / PROJECT_EXTS: en el interface
 
 var
@@ -765,6 +770,33 @@ begin
     [M.Bytes, M.LF + M.CR - M.CRLF, M.CRLF, M.Loose, M.High, M.Corruption]);
 end;
 
+{ Lo que dicen los contadores en las respuestas (la cabecera de una lectura,
+  el eco de una escritura): cuando no hay nada que mirar -sin U+FFFD, sin CR
+  suelto, un solo tipo de salto- basta 'audit=clean' con los acentos; los
+  contadores enteros (Summary), solo cuando algo no cuadra. Iban siempre,
+  dos veces en cada edicion (revisor de tokens, 4-oct-2026). }
+function Limpio(const M: TMetrics): Boolean;
+begin
+  Result := (M.Corruption = 0) and (M.CR = M.CRLF) and ((M.Loose = 0) or (M.CRLF = 0));
+end;
+
+function Auditoria(const M: TMetrics): string;
+begin
+  if Limpio(M) then
+    Result := MsgFmt(SF_EDIT_AUDITORIA_LIMPIA_FMT, [M.High])
+  else
+    Result := Summary(M);
+end;
+
+// El antes y el despues de una escritura: una linea si los dos estan limpios
+function AuditoriaAntesYDespues(const AAntes, ADespues: TMetrics): string;
+begin
+  if Limpio(AAntes) and Limpio(ADespues) then
+    Result := '  ' + Auditoria(ADespues)
+  else
+    Result := MsgFmt(SF_EDIT_ANTES_DESPUES_FMT, [Summary(AAntes), Summary(ADespues)]);
+end;
+
 function ByteCp(C: Char): Integer;
 var
   B: Byte;
@@ -825,7 +857,11 @@ begin
     on E: Exception do
     begin
       Result := AEscrito;
-      ANota := MsgFmt(SN_EDIT_RELECTURA_FALLIDA_FMT, [E.Message]);
+      // E.Message lleva la ruta REAL (EFOpenError) y esta nota va dentro de
+      // un EXITO de delphi_edit/textedit, que el filtro de salida deja tal
+      // cual: lo que la tool compone, enmascarado a mano (Lsp.Guard,
+      // MaskDriveText; revision de paisaje del 4-oct-2026)
+      ANota := MsgFmt(SN_EDIT_RELECTURA_FALLIDA_FMT, [MaskDriveText('', E.Message)]);
     end;
   end;
 end;
@@ -836,7 +872,7 @@ begin
     Result := ReadNumbered(APath, AFrom, ATo);
   except
     on E: Exception do
-      Result := MsgFmt(SN_EDIT_RELECTURA_FALLIDA_FMT, [E.Message]);
+      Result := MsgFmt(SN_EDIT_RELECTURA_FALLIDA_FMT, [MaskDriveText('', E.Message)]);
   end;
 end;
 
@@ -852,7 +888,7 @@ begin
   // la 1.10.0, medido con delphi_create kind=unit content=)
   if not CabeceraDeUnit(AContent, Nombre, Ini) then
     Exit(MsgText(SR_CREATE_CONTENT_NOUNIT));
-  if not SameText(Nombre, AUnitName) then
+  if not MismoIdentificador(Nombre, AUnitName) then // (Lsp.Pascal: tambien la caja de un acento)
     Exit(MsgFmt(SR_CREATE_CONTENT_NAME_FMT, [Nombre, AUnitName]));
   if not TRegEx.IsMatch(CodigoPascal(AContent), '(?im)^\s*end\s*\.') then
     Exit(MsgText(SR_CREATE_CONTENT_NOEND));
@@ -1008,7 +1044,7 @@ begin
   if Motivo <> '' then
     raise Exception.Create(Motivo);
   if TFile.Exists(Dest) then
-    Exit(MsgFmt(SF_EDIT_COPIA_YA_EXISTIA_FMT, [MaskDriveText('', Dest)]));
+    Exit(MsgText(SF_EDIT_COPIA_YA_EXISTIA));
   CrearCarpeta(DayDir);
   // "Existe?" y "copia" no son un solo gesto: dos escrituras del mismo fichero
   // a la vez pasaban las dos por el if y la segunda moria con "Cannot create
@@ -1021,7 +1057,7 @@ begin
   except
     on E: Exception do
       if TFile.Exists(Dest) then
-        Exit(MsgFmt(SF_EDIT_COPIA_YA_EXISTIA_FMT, [MaskDriveText('', Dest)]))
+        Exit(MsgText(SF_EDIT_COPIA_YA_EXISTIA))
       else
         raise;
   end;
@@ -1480,7 +1516,7 @@ begin
   for I := 0 to High(ALines) do
     if ALines[I].Trim = Objetivo then
       Exit(#10 + MsgFmt(SN_ANCLA_INDENTACION_FMT, [I + 1]) +
-        Format(#10'  %d|%s', [I + 1, ALines[I]]));
+        #10'  ' + CitaDeLinea(I + 1, ALines[I]));
   // 2. un TROZO de una o mas lineas
   N := 0;
   for I := 0 to High(ALines) do
@@ -1488,7 +1524,7 @@ begin
     begin
       Inc(N);
       if N <= 5 then
-        Result := Result + Format(#10'  %d|%s', [I + 1, ALines[I]]);
+        Result := Result + #10'  ' + CitaDeLinea(I + 1, ALines[I]);
     end;
   if N > 0 then
   begin
@@ -1519,7 +1555,7 @@ begin
   end;
   if (Mejor >= 0) and (MejorLen >= 12) then
     Result := #10 + MsgFmt(SN_ANCLA_PARECIDA_FMT, [Mejor + 1]) +
-      Format(#10'  %d|%s', [Mejor + 1, ALines[Mejor]]);
+      #10'  ' + CitaDeLinea(Mejor + 1, ALines[Mejor]);
 end;
 
 function AnclaPerdida(const ALines: TArray<string>;
@@ -1752,9 +1788,9 @@ begin
     P := Pos(AFrag, Linea, P + 1); // solapadas tambien cuentan: "aa" en "aaa"
   end;
   if Veces = 0 then
-    Exit(MsgFmt(SR_FRAG_NOTFOUND_FMT, [AFrag, AAtLine, AAtLine, Linea]));
+    Exit(MsgFmt(SR_FRAG_NOTFOUND_FMT, [AFrag, AAtLine, CitaDeLinea(AAtLine, Linea)]));
   if Veces > 1 then
-    Exit(MsgFmt(SR_FRAG_SEVERAL_FMT, [AFrag, Veces, AAtLine, AAtLine, Linea]));
+    Exit(MsgFmt(SR_FRAG_SEVERAL_FMT, [AFrag, Veces, AAtLine, CitaDeLinea(AAtLine, Linea)]));
   P := Pos(AFrag, Linea);
   AOld := Linea;
   ANewLine := Copy(Linea, 1, P - 1) + ANew +
@@ -1809,6 +1845,23 @@ begin
     Exit;
   if TMCPSerializer.MotivoBooleano(V, Result) <> '' then
     Result := False;
+end;
+
+const
+  // la sangria de lo que va DEBAJO de una fila de la tanda: las lineas de su
+  // negativa y el eco de la linea releida
+  SANGRIA_FILA = '     ';
+
+{ Una fila de la tanda que no es un OK: '  N: texto' (la entrada que cayo y
+  sus avisos), con los saltos del texto sangrados (ConSalto), no pegados con
+  blancos: una cita del disco ('  15|texto') es una linea suya, y el
+  enmascarador la deja tal cual (4-oct-2026). Sin salto final: quien la
+  escribe pone un #10 (con AppendLine, CRLF en Windows, el eco mezclaba los
+  dos; test_round34). Los cuatro sitios de la tanda que la escribian llevaban
+  cada uno su forma, y uno la llevaba en el catalogo. }
+function FilaDeEntrada(N: Integer; const ATexto: string): string;
+begin
+  Result := Format('  %d: %s', [N, ConSalto(ATexto, #10 + SANGRIA_FILA)]);
 end;
 
 function AplicaTanda(const APath, AEditsJson: string;
@@ -1885,14 +1938,10 @@ begin
           // que tampoco puede pasar por bueno.
           for var Par in O2 do
           begin
-            var Conocido := False;
-            for var Cl in ['old', 'new', 'atline', 'toline', 'delete',
-                           'occurrence', 'fragment'] do
-              if Par.JsonString.Value = Cl then
-                Conocido := True;
-            if not Conocido then
+            // sin ignorar mayusculas: MatchStr, no MatchText
+            if not MatchStr(Par.JsonString.Value, CAMPOS_DE_UNA_EDICION) then
               Exit(MsgFmt(SR_PATCH_EDIT_KEY_FMT,
-                [N + 1, Par.JsonString.Value]));
+                [N + 1, Par.JsonString.Value, string.Join(', ', CAMPOS_DE_UNA_EDICION)]));
             // un "new" que llega como objeto se leia como '' y la linea
             // quedaba en blanco contestando OK (tercera revision, medido)
             if MatchStr(Par.JsonString.Value, ['old', 'new', 'fragment']) and
@@ -1977,7 +2026,7 @@ begin
         if not (V is TJSONObject) then
         begin
           Fallo := N;
-          Sb.AppendLine(MsgFmt(SF_EDIT_NO_ES_OBJETO_FMT, [N]));
+          Sb.Append(FilaDeEntrada(N, MsgText(SF_EDIT_NO_ES_OBJETO))).Append(#10);
           Break;
         end;
         Obj := TJSONObject(V);
@@ -2031,7 +2080,7 @@ begin
           begin
             Fallo := N;
             Causa := Mal;
-            Sb.AppendLine(Format('  %d: %s', [N, Mal.Replace(#10, ' ')]));
+            Sb.Append(FilaDeEntrada(N, Mal)).Append(#10);
             Break;
           end;
           Nue := NueLinea;
@@ -2041,7 +2090,7 @@ begin
         begin
           Fallo := N;
           Causa := MsgText(SR_RANGE_WITH_BLOCK);
-          Sb.AppendLine(Format('  %d: %s', [N, MsgText(SR_RANGE_WITH_BLOCK)]));
+          Sb.Append(FilaDeEntrada(N, MsgText(SR_RANGE_WITH_BLOCK))).Append(#10);
           Break;
         end;
         // Una excepcion es un fallo como otro cualquiera: se saltaba el
@@ -2093,9 +2142,11 @@ begin
           // es lo que PEDISTE, no lo que PASO. Y la propia tool recomienda
           // tandas para refactorizar, que es justo cuando hace mas falta: con
           // el bug de "occurrence" escribiendo en la linea equivocada, un
-          // agente no tenia forma de enterarse (medido 2026-09-20).
+          // agente no tenia forma de enterarse (medido 2026-09-20). Es una
+          // cita del disco (CitaDeLinea), recortada: verificacion, no un ancla
+          // para copiar (eso es delphi_read)
           if Cambio < Length(DespuesL) then
-            Eco := Format('%d| %s', [Cambio + 1, DespuesL[Cambio].Trim])
+            Eco := CitaDeLinea(Cambio + 1, Copy(DespuesL[Cambio].Trim, 1, 90))
           else if Delta < 0 then
             Eco := MsgFmt(SF_EDIT_LINEA_QUITADA_FMT, [Cambio + 1]);
         except
@@ -2109,7 +2160,7 @@ begin
           Causa := Una;
           // #10, no AppendLine (CRLF en Windows): el mensaje que lo envuelve
           // separa con #10 y el eco salia con los dos (test_round34, 26-sep)
-          Sb.Append(Format('  %d: %s', [N, Una.Replace(#10, ' ')])).Append(#10);
+          Sb.Append(FilaDeEntrada(N, Una)).Append(#10);
           Break;
         end;
         Foto.Anota(APath); // lo que dejo esta entrada: lo unico que el deshacer da por suyo
@@ -2118,22 +2169,35 @@ begin
         // va detras de la etiqueta del aviso (MsgCuerpo)
         for var LA in Una.Split([#10]) do
           if MsgCuerpo(LA.Trim).StartsWith('***') then
-            Avisos := Avisos + [Format('  %d: %s', [N, LA.Trim])];
+            Avisos := Avisos + [FilaDeEntrada(N, LA.Trim)];
+        // lo PEDIDO: en modo fragmento, el fragmento que tecleo el agente (Anc
+        // es ya la linea entera del disco que encontro FragmentoALinea, y la
+        // fila la mostraba como si la hubiera pedido; revision del 4-oct-2026)
+        var Pedido := Anc;
+        if Frag <> '' then
+          Pedido := Frag;
         if EsMsg(Una, SN_EDIT_SIN_CAMBIOS_FMT) then
         begin
           // no cambio nada: se dice, no se cuenta como OK (sexta revision)
           Inc(SinCambios);
           Una := MsgFmt(SF_EDIT_SIN_CAMBIOS_ANCLA_FMT,
-            [N, Anc.Trim.Substring(0, Min(70, Length(Anc.Trim)))]);
+            [N, Pedido.Trim.Substring(0, Min(70, Length(Pedido.Trim)))]);
         end
         else if EsBloque then
           Una := MsgFmt(SF_EDIT_OK_BLOQUE_LINEAS_FMT,
             [N, Length(LineasDelAncla(Anc))])
         else
           Una := MsgFmt(SF_EDIT_OK_ANCLA_FMT,
-            [N, Anc.Trim.Substring(0, Min(70, Length(Anc.Trim)))]);
+            [N, Pedido.Trim.Substring(0, Min(70, Length(Pedido.Trim)))]);
+        // EL ECO, en una linea SUYA ('N| texto', la forma de las citas del
+        // disco: el enmascarador deja tal cual en una negativa -un ROLLBACK-
+        // las lineas que empiezan por 'N|') mientras enmascara la de lo
+        // pedido. En la misma fila se enmascaraba entera y '[^\s:]' volvia
+        // '[^\srv0:]' (4-oct-2026); partir la fila en el lector abria la
+        // excepcion a cualquier texto del agente (revision). Es verificacion,
+        // recortada: no es un ancla para copiar, eso es delphi_read.
         if Eco <> '' then
-          Una := Una + '  ->  ' + Eco.Substring(0, Min(90, Length(Eco)));
+          Una := Una + '  ->'#10 + SANGRIA_FILA + Eco;
         Sb.Append(Una).Append(#10);
       end;
       if Fallo > 0 then
@@ -2259,12 +2323,12 @@ begin
   // INVALID_PARAM ("from=1 is past the end") (quinta revision)
   if (Length(Lines) = 0) and (AFrom <= 1) then
     Exit(NotaBin + MsgFmt(SK_EDIT_LECTURA_VACIO_FMT,
-      [TPath.GetFileName(APath), EncName(K), Eol, Summary(M)]));
+      [TPath.GetFileName(APath), EncName(K), Eol, Auditoria(M)]));
   IniL := AFrom;
   if IniL < 1 then IniL := 1;
   if IniL > Length(Lines) then
     Exit(MsgFmt(SR_EDIT_DESDE_MAS_ALLA_FINAL_FMT,
-      [TPath.GetFileName(APath), EncName(K), Eol, Summary(M), Length(Lines), IniL]));
+      [TPath.GetFileName(APath), EncName(K), Eol, Auditoria(M), Length(Lines), IniL]));
   FinL := ATo;
   if (FinL <= 0) or (FinL > Length(Lines)) then FinL := Length(Lines);
   // A range that runs backwards used to answer with a header and an EMPTY
@@ -2281,13 +2345,13 @@ begin
   Sb := TStringBuilder.Create;
   try
     for I := IniL to FinL do
-      Sb.Append(I).Append('|').Append(Lines[I - 1]).Append(#10);
+      Sb.Append(CitaDeLinea(I, Lines[I - 1])).Append(#10);
     Body := Sb.ToString.TrimRight([#10]);
   finally
     Sb.Free;
   end;
   Result := NotaBin + MsgFmt(SK_EDIT_LECTURA_NUMERADA_FMT,
-    [TPath.GetFileName(APath), EncName(K), Eol, Summary(M), IniL, FinL,
+    [TPath.GetFileName(APath), EncName(K), Eol, Auditoria(M), IniL, FinL,
      Length(Lines), Body, Cut]);
 end;
 
@@ -2409,9 +2473,15 @@ begin
           Exit(MsgFmt(SR_EDIT_EXISTE_CREATEUNIT_JAMAS_SOBREESCRIBE_FMT, [TPath.GetFileName(A.Path)]));
         var UnitName := TPath.GetFileNameWithoutExtension(A.Path);
         // Dotted namespaces are legal Delphi and REQUIRED by modern projects
-        // (Lsp.BuildRunner, System.SysUtils...): allow Ident(.Ident)*.
-        if not TRegEx.IsMatch(UnitName, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+        // (Lsp.BuildRunner, System.SysUtils...): allow Ident(.Ident)*, with
+        // EL identificador (Lsp.Pascal): una enye o un acento son legales.
+        if not EsIdentificador(UnitName, True) then
           Exit(MsgFmt(SR_EDIT_IDENTIFICADOR_PASCAL_VALIDO_NOMBRE_FMT, [UnitName]));
+        // ...y la regla entera de un nombre de unit nuevo (Lsp.Scaffold): una
+        // palabra reservada o una unit de la RTL pasaban (revision de paisaje)
+        var MalNombre := BadUnitName(UnitName);
+        if MalNombre <> '' then
+          Exit(MalNombre);
         var Skel: string;
         var Note: string;
         if A.Content <> '' then
@@ -2462,7 +2532,7 @@ begin
         var CM := Measure(RelecturaDe(A.Path, CreadoBytes, NotaCreada));
         Exit(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
           [TPath.GetFileName(A.Path), UnitName, Note, EncName(NewK),
-           IfThen(SameText(A.Eol, 'lf'), 'LF', 'CRLF'), Summary(CM)]) +
+           IfThen(SameText(A.Eol, 'lf'), 'LF', 'CRLF'), Auditoria(CM)]) +
           IfThen(NotaCreada <> '', #10 + NotaCreada, ''));
       end;
 
@@ -2523,7 +2593,7 @@ begin
             BkSet.AddOrSetValue(L, True);
           for I := 0 to High(NowLines) do
             if (NowLines[I].Trim <> '') and not BkSet.ContainsKey(NowLines[I]) then
-              Losses.Add(Format('  %d|%s', [I + 1, NowLines[I]]));
+              Losses.Add('  ' + CitaDeLinea(I + 1, NowLines[I]));
 
           if not A.Confirm then
           begin
@@ -2581,7 +2651,7 @@ begin
           var NotaRest: string;
           var Releido := RelecturaDe(A.Path, BkBytes, NotaRest);
           Exit(MsgFmt(SK_EDIT_RESTAURADO_DESDE_FMT,
-            [TPath.GetFileName(A.Path), MaskDriveText('', Src), Summary(Measure(Releido)),
+            [TPath.GetFileName(A.Path), MaskDriveText('', Src), Auditoria(Measure(Releido)),
              Losses.Count, MaskDriveText('', PreCopy)]) + IfThen(NotaRest <> '', #10 + NotaRest, ''));
         finally
           BkSet.Free;
@@ -2618,9 +2688,9 @@ begin
             NoComment := CodeVista[I].Trim;
             Break;
           end;
-        if not TRegEx.IsMatch(NoComment, '(^|[^\w])end\s*;$', [roIgnoreCase]) then
+        if not TRegEx.IsMatch(NoComment, PATRON_NO_IDENT_ANTES + 'end\s*;$', [roIgnoreCase]) then
         begin
-          if TRegEx.IsMatch(NoComment, '(^|[^\w])end$', [roIgnoreCase]) then
+          if TRegEx.IsMatch(NoComment, PATRON_NO_IDENT_ANTES + 'end$', [roIgnoreCase]) then
             Exit(MsgText(SR_EDIT_BLOQUE_TERMINA_END_SIN));
           Exit(MsgFmt(SR_EDIT_ULTIMA_LINEA_BLOQUE_RUTINA_FMT,
             [Copy(LastLine, 1, 80)]));
@@ -2708,14 +2778,17 @@ begin
           FirmaCodigo := CodeVista[IFirmaIni].Trim;
         end;
         // 'class procedure/function/constructor/destructor': un metodo de
-        // clase (se rechazaba con EDIT-070, como si no fuera una firma)
+        // clase (se rechazaba con EDIT-070, como si no fuera una firma). El
+        // nombre es EL identificador (Lsp.Pascal): con [A-Za-z_]\w* el de un
+        // 'procedure Anadir...' escrito con su enye era 'A', y las dos miradas
+        // de "ya existe" buscaban una rutina A (censo del 4-oct-2026)
         var MF := TRegEx.Match(FirmaCodigo,
-          '^(class\s+)?(procedure|function|constructor|destructor)\s+([A-Za-z_]\w*)\s*([.(;:])?', [roIgnoreCase]);
+          '^(class\s+)?(' + PatronPalabraDeRutina + ')\s+(' + PATRON_IDENT + ')\s*([.(;:])?', [roIgnoreCase]);
         if not MF.Success then
           Exit(MsgFmt(SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT, [Copy(Firma, 1, 80)]));
         if (MF.Groups[1].Value <> '') and (A.Insert = 'rutina-global') then
           Exit(MsgFmt(SR_EDIT_RUTINA_GLOBAL_DE_CLASE_FMT, [MF.Groups[2].Value.ToLower]));
-        if (MF.Groups.Count > 4) and (MF.Groups[4].Value = '.') then
+        if GrupoDe(MF, 4) = '.' then // un grupo opcional (Lsp.Regex)
           Exit(MsgText(SR_EDIT_FIRMA_VIENE_CUALIFICADA_CLASE));
         var IFirmaFin := IFirmaIni;
         var PosCierre := 0;
@@ -2779,7 +2852,7 @@ begin
               Inc(CD);
           if LD > High(CodeVista) then
             Break;
-          var MD := TRegEx.Match(Copy(CodeVista[LD], CD, MaxInt), '^[A-Za-z_]\w*');
+          var MD := TRegEx.Match(Copy(CodeVista[LD], CD, MaxInt), '^' + PATRON_IDENT);
           if not MD.Success or not MatchText(MD.Value, DIRECTIVAS_DE_RUTINA) then
             Break;
           // la directiva llega hasta su ';' (a profundidad de parentesis 0)
@@ -2987,61 +3060,63 @@ begin
         // insert = 'metodo'
         if A.ClassName_.Trim = '' then
           Exit(MsgText(SR_EDIT_INSERT_METODO_NECESITA_INCLASS));
-        var ClsRe := TRegEx.Create('\b' + TRegEx.Escape(A.ClassName_) + '\s*=\s*class\b', [roIgnoreCase]);
+        // LA clase, de EL lector de clases (Lsp.PascalDecl): la declarada,
+        // con la linea de su nombre, la de su 'end', sus secciones y sus
+        // rutinas - las SUYAS, no las de un tipo anidado. Leida por lineas, la
+        // primera 'TFoo = class' era una declaracion adelantada, y la de una
+        // sin cuerpo ('EMio = class(Exception);') o la de una linea tomaban el
+        // 'end;' de la clase siguiente: la declaracion caia dentro de un
+        // metodo de otra (E2070); el 'public' de un tipo anidado era el de la
+        // clase, y el metodo caia en el anidado (medido el 4-oct-2026)
         var IClase := -1;
-        for I := 0 to High(Codigo) do
-          if ClsRe.IsMatch(Codigo[I]) then
+        var IFin := -1;
+        var SinCuerpo := False;
+        var Secciones: TArray<TSeccionPas> := [];
+        var RutinasClase: TArray<TMiembroPas> := [];
+        var ClaseCompleta := A.ClassName_; // con su contenedor si va anidada
+        var Unidad := LeeFuentePascal(Text);
+        try
+          var Clase := Unidad.Clase(A.ClassName_);
+          if Clase <> nil then
           begin
-            IClase := I;
-            Break;
+            IClase := Clase.Linea;
+            IFin := Clase.LineaFin;
+            SinCuerpo := Clase.SinCuerpo;
+            Secciones := Clase.Secciones;
+            RutinasClase := Clase.Rutinas;
+            ClaseCompleta := Clase.NombreCompleto;
           end;
+        finally
+          Unidad.Free;
+        end;
         if IClase = -1 then
           Exit(MsgFmt(SR_EDIT_ENCUENTRO_CLASS_FMT, [A.ClassName_, TPath.GetFileName(A.Path)]));
-        // Un tipo ANIDADO (private type TPendingCall = class ... end;) cierra
-        // con su propio 'end;' antes que la clase, asi que el primer 'end;'
-        // no es el de la clase: la declaracion caia DENTRO del tipo anidado y
-        // la seccion pedida "no existia" (medido 2026-09-22 en Lsp.Client).
-        // Se lleva la profundidad: un tipo anidado abre en la linea que lo
-        // declara sin cerrarlo (sin ';' al final) y cierra con su 'end;'.
-        var IFin := -1;
-        var TipoAnidadoRe := TRegEx.Create('[=:]\s*(packed\s+)?(class|record|interface|dispinterface|object)\b', [roIgnoreCase]);
-        var Prof := 0;
-        for I := IClase + 1 to High(Lines) do
-        begin
-          var L := Codigo[I].Trim;
-          if L.ToLower = 'end;' then
-          begin
-            if Prof = 0 then
-            begin
-              IFin := I;
-              Break;
-            end;
-            Dec(Prof);
-          end
-          else if TipoAnidadoRe.IsMatch(L) and not L.EndsWith(';') and
-                  not L.ToLower.Contains(' end;') then
-            Inc(Prof);
-        end;
+        if SinCuerpo then
+          Exit(MsgFmt(SR_EDIT_CLASE_SIN_CUERPO_FMT, [A.ClassName_, IClase + 1, Lines[IClase].Trim]));
         if IFin = -1 then
           Exit(MsgFmt(SR_EDIT_ENCUENTRO_END_CIERRE_CLASE_FMT, [A.ClassName_]));
+        if IFin <= IClase then
+          Exit(MsgFmt(SR_EDIT_CLASE_EN_UNA_LINEA_FMT, [A.ClassName_, IClase + 1, Lines[IClase].Trim]));
 
         // COLISION (campo, hermes 17-sep): la firma de un metodo vive DOS
         // veces (interface + implementation) y la tool escribia las dos a
         // ciegas - si la clase YA declaraba el metodo, la segunda declaracion
         // es E2254/E2537 seguro. Se mira cada mitad por separado y solo se
         // escribe la que falta; entero = rechazo con el camino.
+        // La declaracion, entre las rutinas de LA clase (las de un tipo
+        // anidado no son suyas: con una linea por rutina de su rango, un
+        // metodo del mismo nombre en la anidada "ya estaba"); la
+        // implementacion, cualificada con su nombre completo
         var Nombre := MF.Groups[3].Value;
-        var DeclRe := TRegEx.Create('^\s*(class\s+)?(procedure|function|constructor|destructor)\s+' +
-          TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
         var IDeclExiste := -1;
-        for I := IClase + 1 to IFin - 1 do
-          if DeclRe.IsMatch(Codigo[I]) then
+        for var R in RutinasClase do
+          if MismoIdentificador(R.Nombre, Nombre) then
           begin
-            IDeclExiste := I;
+            IDeclExiste := R.Linea;
             Break;
           end;
-        var ImplRe := TRegEx.Create('^\s*(class\s+)?(procedure|function|constructor|destructor)\s+' +
-          TRegEx.Escape(A.ClassName_) + '\.' + TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
+        var ImplRe := TRegEx.Create('^\s*(class\s+)?' + PatronPalabraDeRutina + '\s+' +
+          TRegEx.Escape(ClaseCompleta) + '\.' + TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
         var IImplExiste := -1;
         for I := 0 to High(Codigo) do
           if ImplRe.IsMatch(Codigo[I]) then
@@ -3076,8 +3151,6 @@ begin
             [Nombre, IDeclExiste + 1])
         else
         begin
-        var Secs := TArray<string>.Create('private', 'protected', 'public', 'published',
-          'strict private', 'strict protected');
         var IDecl := IFin;
         var Vis := A.Visibility.Trim.ToLower;
         if Vis = 'default' then
@@ -3095,67 +3168,52 @@ begin
                 [TPath.GetFileName(ChangeFileExt(A.Path, ExtD)), Nombre]);
               Break;
             end;
+        // las secciones son las de LA clase (Secciones, del lector): su
+        // palabra, en orden; la pedida acaba donde empieza la siguiente
         if Vis <> '' then
         begin
-          var IVis := -1;
-          for I := IClase + 1 to IFin - 1 do
-            if Codigo[I].Trim.ToLower = Vis then
+          var KVis := -1;
+          for var KS := 0 to High(Secciones) do
+            if Secciones[KS].Palabra = Vis then
             begin
-              IVis := I;
+              KVis := KS;
               Break;
             end;
-          if IVis = -1 then
+          if KVis = -1 then
           begin
             // A form class keeps components and event handlers in the
             // IMPLICIT published section right after the class header, with
             // no keyword line. 'published' must land there - the most common
             // VCL case (round 2, C1). But it must go AFTER the last member of
             // that section (after the component fields), never right after the
-            // header: a method before a field is E2169 (round 3, C1-bis).
+            // header: a method before a field is E2169 (round 3, C1-bis). The
+            // first explicit visibility specifier ends the implicit section.
             if Vis = 'published' then
             begin
-              IDecl := IFin;
-              for I := IClase + 1 to IFin - 1 do
-              begin
-                var TrimL := Codigo[I].Trim.ToLower;
-                var IsSec := False;
-                for var S2 in Secs do
-                  if (S2 = TrimL) or TrimL.StartsWith(S2 + ' ') then IsSec := True; // 'private type', 'public const'...
-                if IsSec then // first explicit visibility specifier = end of
-                begin         // the implicit published section
-                  IDecl := I;
-                  Break;
-                end;
-              end;
+              if Length(Secciones) > 0 then
+                IDecl := Secciones[0].Linea;
             end
             else
               Exit(MsgFmt(SR_EDIT_CLASE_TIENE_SECCION_OMITE_FMT,
                 [A.ClassName_, Vis]));
           end
-          else
-          begin
-            IDecl := IFin;
-            for I := IVis + 1 to IFin - 1 do
-            begin
-              var TrimL := Codigo[I].Trim.ToLower;
-              var IsSec := False;
-              for var S2 in Secs do
-                if (S2 = TrimL) or TrimL.StartsWith(S2 + ' ') then IsSec := True;
-              if IsSec then
-              begin
-                IDecl := I;
-                Break;
-              end;
-            end;
-          end;
+          else if KVis < High(Secciones) then
+            IDecl := Secciones[KVis + 1].Linea;
         end;
+        // se escribe detras de la linea IDecl - 1: nunca encima de la cabecera
+        // (una palabra de visibilidad en la misma linea que el nombre)
+        if IDecl <= IClase then
+          IDecl := IClase + 1;
+        // la sangria, la del primer miembro (ni una linea en blanco o solo
+        // comentario, ni la de una palabra de visibilidad)
         var Sangria := '    ';
         for I := IClase + 1 to IFin - 1 do
         begin
           var TrimL := Codigo[I].Trim;
           var IsSec := False;
-          for var S2 in Secs do
-            if (S2 = TrimL.ToLower) or TrimL.ToLower.StartsWith(S2 + ' ') then IsSec := True;
+          for var S2 in Secciones do
+            if S2.Linea = I then
+              IsSec := True;
           if (TrimL <> '') and not IsSec then
           begin
             Sangria := Copy(Lines[I], 1, Length(Lines[I]) - Length(Lines[I].TrimLeft));
@@ -3208,10 +3266,10 @@ begin
         // firma con su comentario delante en la misma linea se quedaba sin
         // cualificar
         var MQ := TRegEx.Match(CodeVista[IFirmaIni],
-          '\b(procedure|function|constructor|destructor)\s+', [roIgnoreCase]);
+          '\b' + PatronPalabraDeRutina + '\s+', [roIgnoreCase]);
         var FirmaCual := ImplLineas[IFirmaImpl];
         if MQ.Success then
-          Insert(A.ClassName_ + '.', FirmaCual, MQ.Index + MQ.Length);
+          Insert(ClaseCompleta + '.', FirmaCual, MQ.Index + MQ.Length); // TOuter.TInner si va anidada
         FirmaCual := FirmaCual.Trim;
         ImplLineas[IFirmaImpl] := FirmaCual;
         FotoMet.Anota(A.Path);
@@ -3602,7 +3660,7 @@ begin
       var SbC := TStringBuilder.Create;
       try
         for I := IniC to FinC do
-          SbC.Append('  ').Append(I + 1).Append('|').Append(AfterLines[I]).Append(#10);
+          SbC.Append('  ').Append(CitaDeLinea(I + 1, AfterLines[I])).Append(#10);
         Ctx := SbC.ToString.TrimRight([#10]);
       finally
         SbC.Free;
@@ -3665,13 +3723,13 @@ begin
       begin
         if (Idx < 0) or (Idx + J > High(AfterVista)) then
           Break;
-        if not TRegEx.IsMatch(AfterVista[Idx + J], '^(procedure|function|constructor|destructor)\b', [roIgnoreCase]) then
+        if not TRegEx.IsMatch(AfterVista[Idx + J], '^' + PatronPalabraDeRutina + '\b', [roIgnoreCase]) then
           Continue;
         var Encima := '';
         if Idx + J > 0 then
           Encima := AfterVista[Idx + J - 1].Trim;
         var EsStmt := Encima.Contains(':=') or TRegEx.IsMatch(Encima, '\);?$') or
-          TRegEx.IsMatch(Encima, '^[A-Za-z_][\w.]*\.[A-Za-z_]\w*\s*;$') or
+          TRegEx.IsMatch(Encima, '^' + PATRON_IDENT + '(?:\.' + PATRON_IDENT + ')+\s*;$') or
           TRegEx.IsMatch(Encima, '^(if|while|for|case|repeat|until|raise|exit|inc|dec|with|begin|try)\b', [roIgnoreCase]);
         if EsStmt then
         begin
@@ -3699,7 +3757,7 @@ begin
       Accion := MsgFmt(SK_EDIT_BLANQUEADA_LINEA_FMT,
         [HitIdx + 1, TPath.GetFileName(APath)]);
     Result := MsgFmt(SF_EDIT_ECO_ESCRITURA_FMT,
-      [Accion, EncName(K), Eol, CopyNote, Summary(M), Summary(D), Ctx]);
+      [Accion, EncName(K), Eol, CopyNote, AuditoriaAntesYDespues(M, D), Ctx]);
     if Warnings.Count > 0 then
       Result := Result + #10 + Warnings.Text.TrimRight;
     if NotaRelectura <> '' then

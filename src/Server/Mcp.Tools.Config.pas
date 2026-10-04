@@ -102,7 +102,8 @@ uses
   Lsp.Dproj,
   Lsp.BuildRunner,
   Lsp.ProjectUnits,
-  Lsp.Patch;
+  Lsp.Patch,
+  Lsp.Regex;
 
 constructor TDelphiConfigTool.Create;
 begin
@@ -946,9 +947,10 @@ begin
       '<DCC_UnitSearchPath>(.*?)</DCC_UnitSearchPath>', [roIgnoreCase, roSingleLine]);
     if not TagM.Success then
       Continue;
-    if M.Groups[2].Success and (M.Groups[2].Value <> '') then
-      Name := M.Groups[2].Value
-    else
+    // el sufijo es un grupo opcional, y su Success es el de la coincidencia
+    // entera, no el suyo: GrupoDe (Lsp.Regex)
+    Name := GrupoDe(M, 2);
+    if Name = '' then
       Name := 'base';
     Arr := TJSONArray.Create;
     for P in SplitPaths(TagM.Groups[1].Value) do

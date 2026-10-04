@@ -93,7 +93,8 @@ try:
     ayuda = os.path.join(REPO, 'src', 'Server', 'Mcp.Tools.Help.pas')
     hits = json.loads(call('delphi_search', {
         'root': ayuda, 'query': 'OneTool', 'wholeword': True}))
-    lineas = sorted(h['line0'] for h in hits['hits'])
+    hits = mc.aciertos(hits)
+    lineas = sorted(h['line0'] for h in hits)
     check('R1 preparacion: OneTool aparece >=3 veces en Mcp.Tools.Help.pas',
           len(lineas) >= 3, lineas)
 
@@ -101,7 +102,7 @@ try:
         # La ULTIMA aparicion es una llamada; la del CUERPO es la que fallaba.
         # El cuerpo es la 2a (declaracion adelantada, cuerpo, llamadas...).
         cuerpo = lineas[1]
-        col = hits['hits'][[h['line0'] for h in hits['hits']].index(cuerpo)][
+        col = hits[[h['line0'] for h in hits].index(cuerpo)][
             'character0']
         refs = json.loads(call('delphi_references', {
             'path': ayuda, 'line': cuerpo, 'character': col + 1}))
@@ -147,8 +148,8 @@ try:
     # ----------------------------------------------------------------- R2
     r = json.loads(call('delphi_search', {
         'root': JAIL, 'query': 'Roots=', 'pattern': '*.md'}))
-    linea = r['hits'][0]['text'] if r.get('hits') else ''
-    ruta = r['hits'][0]['path'] if r.get('hits') else ''
+    linea = mc.aciertos(r)[0]['text'] if mc.aciertos(r) else ''
+    ruta = mc.aciertos(r)[0]['path'] if mc.aciertos(r) else ''
     check('R2 el texto del fichero llega VERBATIM (un ancla copiada de aqui '
           'casa con el disco)', linea.strip() == CEBO, repr(linea))
     check('R2b la RUTA si sale enmascarada como unidad virtual',

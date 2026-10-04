@@ -24,6 +24,7 @@ type
     [Test] procedure LoComentadoNoEsDirectiva;
     [Test] procedure UnIncludeSeMeteEnSuSitio;
     [Test] procedure LasExpresionesDeUnIf;
+    [Test] procedure LosTiposDelCompiladorEstanDeclarados;
   end;
 
   [TestFixture]
@@ -55,9 +56,27 @@ type
     [Test] procedure LoQueSeGuardaPorCodigo;
     [Test] procedure ElLintConUnaTabla;
     [Test] procedure LosAncestrosRaros;
+    [Test] procedure LosNombresConAcentos;
     [Test] procedure LosAyudantesDeUnDefineProperties;
+    [Test] procedure LaPlataformaDelIde;
+    [Test] procedure ElUsesSinPrefijoYElDelImplementation;
+    [Test] procedure UnaInstalacionSinFuente;
     [Test]
     procedure LoPublicadoAntesQueLoGuardado;
+  end;
+
+  { EL lector de clases de los que trabajan por lineas (LeeFuentePascal):
+    donde empieza y acaba cada tipo, las secciones, los campos y las rutinas
+    de una clase, y LA cadena de ancestros (4-oct-2026). }
+  [TestFixture]
+  TLectorDeClasesTests = class
+  public
+    [Test] procedure DondeEmpiezaYAcabaCadaTipo;
+    [Test] procedure SeccionesCamposYRutinasDeLaSuya;
+    [Test] procedure UnCRSueltoTambienEsUnSalto;
+    [Test] procedure LasClasesDeUnPrograma;
+    [Test] procedure LaCadenaDeAncestros;
+    [Test] procedure UnaEtiquetaDeAsmNoCierraLaRutina;
   end;
 
 implementation
@@ -70,7 +89,8 @@ uses
   Lsp.Preproceso,
   Lsp.PascalDecl,
   Lsp.DesignerMetaGen,
-  Lsp.DesignerMeta;
+  Lsp.DesignerMeta,
+  Lsp.Discovery;
 
 function Codigo(const S: string): string;
 begin
@@ -192,6 +212,27 @@ begin
     Assert.IsFalse(EvaluaCondicion('FPC_FULLVERSION >= 30000', S), 'lo que no se conoce vale 0');
     Assert.IsTrue(EvaluaCondicion('not CompilerVersion >= 38', S), 'not de una comparacion');
     Assert.IsTrue(EvaluaCondicion('RTLVersion >= 14.5', S));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TPreprocesoTests.LosTiposDelCompiladorEstanDeclarados;
+var
+  S: TSimbolosPascal;
+begin
+  // medido con dcc el 4-oct-2026: Declared() de un tipo es verdad, y el
+  // fuente del RTL pregunta por estos de System
+  S := SimbolosDeDelphi('37.0', 'Win32');
+  try
+    for var T in ['AnsiChar', 'WideString', 'UTF8Char', 'ShortString',
+      'PUTF8Char', 'TBytes', 'Float64', 'FixedInt', 'FixedUInt', 'AnsiString',
+      'System.AnsiChar'] do
+      Assert.IsTrue(EvaluaCondicion('Declared(' + T + ')', S), T);
+    Assert.IsFalse(EvaluaCondicion('Declared(TNoExiste)', S));
+    Assert.IsFalse(EvaluaCondicion('not Declared(UTF8Char)', S));
+    Assert.IsTrue(EvaluaCondicion('SizeOf(ShortString) = 256', S));
+    Assert.IsTrue(EvaluaCondicion('SizeOf(TBytes) = 4', S), 'un array dinamico es un puntero');
   finally
     S.Free;
   end;
@@ -499,6 +540,32 @@ begin
   Assert.IsFalse(Hechos(F, 'C Vcl.StdCtrls:TButton'), 'lo de Vcl no va a la FMX');
 end;
 
+{ Una unidad y una clase con acentos, escritas por quien las usa con otra
+  caja de su acento: dcc las toma por las mismas (medido el 4-oct-2026), y la
+  tabla tambien. Las claves eran LowerCase, que solo pliega A-Z: 'UaRBOL' no
+  encontraba 'UArbol' (con sus acentos) y el hijo se quedaba sin lo heredado. }
+procedure TDesignerMetaGenTests.LosNombresConAcentos;
+var
+  T: TTablasDeFuente;
+  V: TArray<string>;
+begin
+  Escribe('System.pas', 'unit System; interface type TObject = class end; implementation end.');
+  Escribe('System.Classes.pas', 'unit System.Classes; interface type TPersistent = class(TObject) end;'#13#10 +
+    'TComponent = class(TPersistent) published property Tag: Integer read FT; end;'#13#10 +
+    'implementation end.');
+  Escribe('UÁrbol.pas', 'unit UÁrbol; interface uses System.Classes; type'#13#10 +
+    'TÁrbolBase = class(TComponent) published property Tamaño: Integer read FT; end;'#13#10 +
+    'implementation end.');
+  Escribe('UHoja.pas', 'unit UHoja; interface uses System.Classes, UáRBOL; type'#13#10 +
+    'THoja = class(TáRBOLBASE) published property Color: Integer read FC; end;'#13#10 +
+    'implementation end.');
+  T := GeneraTablasDeFuente([FDir], '37.0', 'Z:\no-es-bds');
+  V := T.Hechos[mdVcl];
+  Assert.IsTrue(Hechos(V, 'H UHoja:THoja UÁrbol:TÁrbolBase'),
+    'su padre, escrito con otra caja de su acento: ' + string.Join(' / ', V));
+  Assert.IsTrue(Hechos(V, 'P UHoja:THoja Tamaño o Integer'), 'y lo que hereda de el');
+end;
+
 { Cada regla que hizo falta para que las tablas del fuente dieran lo mismo
   que las de la RTTI (100 % el 3-oct-2026), con el caso real que la pidio. }
 procedure TDesignerMetaGenTests.LasReglasQueSalieronDeMedir;
@@ -577,7 +644,8 @@ end;
 
 procedure TDesignerMetaGenTests.LaHuellaCambiaConElFuente;
 var
-  H1, H2: string;
+  H1, H2, H3: string;
+  Uno: string;
 begin
   Escribe('Uno.pas', 'unit Uno; interface implementation end.');
   H1 := HuellaDeCarpetas([FDir]);
@@ -587,6 +655,94 @@ begin
   Escribe('Dos.pas', 'unit Dos; interface implementation end.');
   H2 := HuellaDeCarpetas([FDir]);
   Assert.AreNotEqual(H1, H2, 'una unidad nueva cambia la huella');
+  // tocar una: otro tamano, o el mismo con otra fecha
+  Uno := TPath.Combine(FDir, 'Uno.pas');
+  Escribe('Uno.pas', 'unit Uno; interface implementation uses Dos; end.');
+  H3 := HuellaDeCarpetas([FDir]);
+  Assert.AreNotEqual(H2, H3, 'una unidad tocada (otro tamano) cambia la huella');
+  TFile.SetLastWriteTimeUtc(Uno, TFile.GetLastWriteTimeUtc(Uno) + 1 / 24);
+  Assert.AreNotEqual(H3, HuellaDeCarpetas([FDir]), 'la misma unidad con otra fecha tambien');
+  H3 := HuellaDeCarpetas([FDir]);
+  TFile.Delete(TPath.Combine(FDir, 'Dos.pas'));
+  Assert.AreNotEqual(H3, HuellaDeCarpetas([FDir]), 'una unidad quitada cambia la huella');
+  Assert.AreNotEqual(HuellaDeCarpetas([FDir], 'Win32'), HuellaDeCarpetas([FDir], 'Win64'),
+    'la misma carpeta leida con otra plataforma es otra tabla');
+end;
+
+{ La plataforma del IDE de la instalacion decide con que simbolos se lee el
+  fuente y que nombre tienen los tipos que dependen de ella. Antes era
+  siempre Win64, y una instalacion con el IDE de 32 bits solo tenia la tabla
+  de otro (4-oct-2026). }
+procedure TDesignerMetaGenTests.LaPlataformaDelIde;
+var
+  V32, V64: TArray<string>;
+begin
+  Assert.AreEqual('Win32', PlataformaDelIde(FDir), 'sin bin64\bds.exe');
+  TDirectory.CreateDirectory(TPath.Combine(FDir, 'bin64'));
+  Escribe('bin64\bds.exe', '');
+  Assert.AreEqual('Win64', PlataformaDelIde(FDir), 'con el IDE de 64 bits');
+  Escribe('System.pas', 'unit System; interface type TObject = class end; implementation end.');
+  Escribe('System.Classes.pas', 'unit System.Classes; interface type TPersistent = class(TObject) end;'#13#10 +
+    'TComponent = class(TPersistent) end;'#13#10 +
+    'TCosa = class(TComponent) published property Tag: NativeInt read FT;'#13#10 +
+    '  property Sin: NativeUInt read FS;'#13#10 +
+    '  {$IFDEF CPUX86} property Solo32: Integer read F3; {$ENDIF}'#13#10 +
+    '  {$IFDEF WIN64} property Solo64: Integer read F6; {$ENDIF} end;'#13#10 +
+    'implementation end.');
+  V32 := GeneraTablasDeFuente([FDir], '37.0', 'Z:\no-es-bds', 'Win32').Hechos[mdVcl];
+  V64 := GeneraTablasDeFuente([FDir], '37.0', 'Z:\no-es-bds', 'Win64').Hechos[mdVcl];
+  Assert.IsTrue(Hechos(V32, 'P System.Classes:TCosa Tag o Integer'), string.Join(' / ', V32));
+  Assert.IsTrue(Hechos(V32, 'P System.Classes:TCosa Sin o Cardinal'));
+  Assert.IsTrue(Hechos(V32, 'P System.Classes:TCosa Solo32 o Integer'));
+  Assert.IsFalse(Hechos(V32, 'P System.Classes:TCosa Solo64 o Integer'));
+  Assert.IsTrue(Hechos(V64, 'P System.Classes:TCosa Tag o Int64'), string.Join(' / ', V64));
+  Assert.IsTrue(Hechos(V64, 'P System.Classes:TCosa Sin o UInt64'));
+  Assert.IsTrue(Hechos(V64, 'P System.Classes:TCosa Solo64 o Integer'));
+  Assert.IsFalse(Hechos(V64, 'P System.Classes:TCosa Solo32 o Integer'));
+end;
+
+{ Dos reglas del alcance que no tenian prueba: un uses sin prefijo que
+  acaba igual que varias unidades es el de Vcl (un nombre sin prefijo es de
+  antes de FMX; por orden alfabetico ganaba FMX), y una unidad sin marco en
+  su interface es del marco que usa su implementation (4-oct-2026). }
+procedure TDesignerMetaGenTests.ElUsesSinPrefijoYElDelImplementation;
+var
+  T: TTablasDeFuente;
+begin
+  Escribe('System.pas', 'unit System; interface type TObject = class end; implementation end.');
+  Escribe('System.Classes.pas', 'unit System.Classes; interface type TPersistent = class(TObject) end;'#13#10 +
+    'TComponent = class(TPersistent) end; implementation end.');
+  Escribe('Vcl.Sub.Cosa.pas', 'unit Vcl.Sub.Cosa; interface uses System.Classes; type'#13#10 +
+    'TBase = class(TComponent) published property DeVcl: Integer read F; end; implementation end.');
+  Escribe('FMX.Sub.Cosa.pas', 'unit FMX.Sub.Cosa; interface uses System.Classes; type'#13#10 +
+    'TBase = class(TComponent) published property DeFmx: Integer read F; end; implementation end.');
+  Escribe('Usa.pas', 'unit Usa; interface uses System.Classes, Cosa; type'#13#10 +
+    'THija = class(TBase) end; implementation end.');
+  Escribe('Datos.pas', 'unit Datos; interface uses System.Classes; type'#13#10 +
+    'TDatos = class(TComponent) published property Activo: Boolean read FA; end;'#13#10 +
+    'implementation uses Vcl.Sub.Cosa; end.');
+  T := GeneraTablasDeFuente([FDir], '37.0', 'Z:\no-es-bds');
+  Assert.IsTrue(Hechos(T.Hechos[mdVcl], 'H Usa:THija Vcl.Sub.Cosa:TBase'),
+    'uses Cosa es Vcl.Sub.Cosa: ' + string.Join(' / ', T.Hechos[mdVcl]));
+  Assert.IsTrue(Hechos(T.Hechos[mdVcl], 'P Usa:THija DeVcl o Integer'));
+  Assert.IsFalse(Hechos(T.Hechos[mdFmx], 'C Usa:THija'), 'y por eso es de la VCL');
+  Assert.IsTrue(Hechos(T.Hechos[mdVcl], 'C Datos:TDatos'));
+  Assert.IsFalse(Hechos(T.Hechos[mdFmx], 'C Datos:TDatos'), 'su implementation usa la VCL');
+end;
+
+{ DSGN-050: una instalacion sin fuente no tiene tabla, y eso es lo que se
+  dice, sin pedir una generacion. Una version que el registro no conoce no
+  tiene ni Library Search Path ni Browsing Path (4-oct-2026). }
+procedure TDesignerMetaGenTests.UnaInstalacionSinFuente;
+var
+  Info: TRadStudioInfo;
+  F, D: string;
+begin
+  Info := Default(TRadStudioInfo);
+  Info.Version := '99.9';
+  Info.RootDir := IncludeTrailingPathDelimiter(FDir);
+  Assert.AreEqual(Ord(etSinFuente), Ord(TablaDeInstalacion(Info, mdVcl, 0, F, D)));
+  Assert.AreEqual('', F, 'sin fichero');
 end;
 
 procedure TDesignerMetaGenTests.LoQuePublicaUnDescendiente;
@@ -921,9 +1077,238 @@ begin
   end;
 end;
 
+{ TLectorDeClasesTests }
+
+const
+  // las lineas, 0-based, en el comentario de la derecha
+  FUENTE_CLASES =
+    'unit Clases;'#13#10 +                                        // 0
+    'interface'#13#10 +                                           // 1
+    'type'#13#10 +                                                // 2
+    '  TFoo = class;'#13#10 +                                     // 3
+    '  TFooClass = class of TFoo;'#13#10 +                        // 4
+    '  EMio = class(Exception);'#13#10 +                          // 5
+    '  TUna = class(TObject) end;'#13#10 +                        // 6
+    '  TFoo = class(TForm) // TFalsa = class'#13#10 +             // 7
+    '    btnUno, btnDos: TButton;'#13#10 +                        // 8
+    '    lblDirección: Vcl.StdCtrls.TLabel;'#13#10 +              // 9
+    '    procedure BotónClick(Sender: TObject);'#13#10 +          // 10
+    '  private'#13#10 +                                           // 11
+    '    type'#13#10 +                                            // 12
+    '      TInterno = class'#13#10 +                              // 13
+    '      public'#13#10 +                                        // 14
+    '        procedure DeDentro;'#13#10 +                         // 15
+    '      end;'#13#10 +                                          // 16
+    '      TReg = record'#13#10 +                                 // 17
+    '        A: Integer;'#13#10 +                                 // 18
+    '      end;'#13#10 +                                          // 19
+    '  strict private'#13#10 +                                    // 20
+    '    FLista: TList<Integer>;'#13#10 +                         // 21
+    '    FArr: array of Integer;'#13#10 +                         // 22
+    '    FR: record X: Integer; end;'#13#10 +                     // 23
+    '    class procedure DeClase;'#13#10 +                        // 24
+    '    procedure IUno.Hace = HaceUno;'#13#10 +                  // 25
+    '  public'#13#10 +                                            // 26
+    '    procedure Publica; virtual;'#13#10 +                     // 27
+    '    property Texto: string read FTexto;'#13#10 +             // 28
+    '  end;'#13#10 +                                              // 29
+    '  IUno = interface'#13#10 +                                  // 30
+    '    procedure Hace;'#13#10 +                                 // 31
+    '  end;'#13#10 +                                              // 32
+    'const'#13#10 +                                               // 33
+    '  S = ''TFalsa = class end;'';'#13#10 +                      // 34
+    'implementation'#13#10 +                                      // 35
+    'end.';                                                       // 36
+
+function Miembro(const AMiembros: TArray<TMiembroPas>; const ANombre: string;
+  out AM: TMiembroPas): Boolean;
+begin
+  for var M in AMiembros do
+    if M.Nombre = ANombre then
+    begin
+      AM := M;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+procedure TLectorDeClasesTests.DondeEmpiezaYAcabaCadaTipo;
+var
+  U: TUnidadPas;
+  T: TTipoPas;
+begin
+  U := LeeFuentePascal(FUENTE_CLASES);
+  try
+    T := U.Clase('TFoo');
+    Assert.IsNotNull(T, 'la de verdad, no la adelantada');
+    Assert.AreEqual<Integer>(7, T.Linea);
+    Assert.AreEqual<Integer>(29, T.LineaFin, 'su end, no el del record ni el de la anidada');
+    Assert.IsFalse(T.SinCuerpo);
+    T := U.Clase('EMio');
+    Assert.IsTrue(T.SinCuerpo and (T.Linea = 5) and (T.LineaFin = 5), 'la sin cuerpo');
+    T := U.Clase('TUna');
+    Assert.IsTrue(not T.SinCuerpo and (T.Linea = 6) and (T.LineaFin = 6),
+      'la de una linea abre y cierra en ella');
+    Assert.AreEqual(Ord(ctReferenciaClase), Ord(Tipo(U, 'TFooClass').Clase));
+    Assert.AreEqual<Integer>(13, Tipo(U, 'TFoo.TInterno').Linea);
+    Assert.AreEqual<Integer>(16, Tipo(U, 'TFoo.TInterno').LineaFin);
+    Assert.AreEqual<Integer>(19, Tipo(U, 'TFoo.TReg').LineaFin);
+    Assert.IsTrue(U.Clase('TFoo.TInterno') = U.Clase('TInterno'), 'por su nombre completo o el simple');
+    Assert.IsTrue(U.TipoEnLinea(15, [ctClase, ctRegistro, ctInterfaz]) = Tipo(U, 'TFoo.TInterno'));
+    Assert.IsTrue(U.TipoEnLinea(18, [ctClase, ctRegistro, ctInterfaz]) = Tipo(U, 'TFoo.TReg'));
+    Assert.IsTrue(U.TipoEnLinea(21, [ctClase, ctRegistro, ctInterfaz]) = U.Clase('TFoo'));
+    Assert.IsTrue(U.TipoEnLinea(31, [ctClase, ctRegistro, ctInterfaz]) = Tipo(U, 'IUno'));
+    Assert.IsNull(U.TipoEnLinea(34, [ctClase, ctRegistro, ctInterfaz]));
+    Assert.IsNull(Tipo(U, 'TFalsa'), 'ni la de un comentario ni la de una cadena');
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TLectorDeClasesTests.SeccionesCamposYRutinasDeLaSuya;
+var
+  U: TUnidadPas;
+  T: TTipoPas;
+  M: TMiembroPas;
+begin
+  U := LeeFuentePascal(FUENTE_CLASES);
+  try
+    T := U.Clase('TFoo');
+    Assert.AreEqual<Integer>(3, Length(T.Secciones), 'el public de la anidada es suyo');
+    Assert.IsTrue((T.Secciones[0].Palabra = 'private') and (T.Secciones[0].Linea = 11));
+    Assert.IsTrue((T.Secciones[1].Palabra = 'strict private') and (T.Secciones[1].Linea = 20));
+    Assert.IsTrue((T.Secciones[2].Palabra = 'public') and (T.Secciones[2].Linea = 26));
+    Assert.IsTrue(Miembro(T.Campos, 'btnDos', M) and (M.Tipo = 'TButton') and
+      (M.Visibilidad = vpDefecto) and (M.Linea = 8), 'dos campos en una declaracion');
+    Assert.IsTrue(Miembro(T.Campos, 'lblDirección', M) and (M.Tipo = 'Vcl.StdCtrls.TLabel'));
+    Assert.IsTrue(Miembro(T.Campos, 'FLista', M) and (M.Tipo = 'TList') and M.Generico and
+      (M.Visibilidad = vpPrivada));
+    Assert.IsTrue(Miembro(T.Campos, 'FArr', M) and (M.Tipo = ''), 'un array no es un nombre');
+    Assert.IsTrue(Miembro(T.Campos, 'FR', M) and (M.Tipo = ''));
+    Assert.IsTrue(Miembro(T.Rutinas, 'BotónClick', M) and (M.Rutina = 'procedure') and
+      (M.Visibilidad = vpDefecto) and (M.Linea = 10));
+    Assert.IsTrue(Miembro(T.Rutinas, 'DeClase', M) and M.DeClase);
+    Assert.IsTrue(Miembro(T.Rutinas, 'Publica', M) and (M.Visibilidad = vpPublica) and (M.Linea = 27));
+    Assert.IsFalse(Miembro(T.Rutinas, 'DeDentro', M), 'la de la anidada es de la anidada');
+    Assert.IsFalse(Miembro(T.Rutinas, 'IUno', M), 'la clausula de resolucion no declara');
+    Assert.AreEqual<Integer>(3, Length(T.Rutinas));
+    Assert.IsTrue(Miembro(U.Clase('TInterno').Rutinas, 'DeDentro', M));
+    Assert.AreEqual<Integer>(28, T.Propiedades[0].Linea);
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TLectorDeClasesTests.UnCRSueltoTambienEsUnSalto;
+var
+  U: TUnidadPas;
+begin
+  U := LeeFuentePascal('unit L;'#13'interface'#13'type'#13'  TA = class'#13#10'  end;'#10 +
+    'implementation'#13'end.');
+  try
+    Assert.AreEqual<Integer>(3, U.Clase('TA').Linea);
+    Assert.AreEqual<Integer>(4, U.Clase('TA').LineaFin);
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TLectorDeClasesTests.LasClasesDeUnPrograma;
+var
+  U: TUnidadPas;
+begin
+  U := LeeFuentePascal('program P;'#13#10'uses System.SysUtils;'#13#10'type'#13#10 +
+    '  TCosa = class(TObject)'#13#10'    procedure Hola;'#13#10'  end;'#13#10 +
+    'procedure TCosa.Hola; begin end;'#13#10'begin'#13#10'end.');
+  try
+    Assert.AreEqual('P', U.Programa);
+    Assert.AreEqual('', U.Nombre, 'no es una unidad');
+    Assert.IsNotNull(U.Clase('TCosa'));
+    Assert.AreEqual<Integer>(5, U.Clase('TCosa').LineaFin);
+    Assert.AreEqual('Hola', U.Clase('TCosa').Rutinas[0].Nombre);
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TLectorDeClasesTests.LaCadenaDeAncestros;
+var
+  U: TUnidadPas;
+  Mapa: TDictionary<string, string>;
+  Sale: Boolean;
+begin
+  U := LeeFuentePascal('unit C; interface type'#13#10 +
+    '  TBase = class(TForm) end;'#13#10 +
+    '  TMedio = class(TBase) end;'#13#10 +
+    '  THijo = class(TMedio) end;'#13#10 +
+    '  TSuelto = class end;'#13#10 +
+    '  TFuera = class(Otra.TLejana) end;'#13#10 +
+    '  TCicloA = class(TCicloB) end;'#13#10 +
+    '  TCicloB = class(TCicloA) end;'#13#10 +
+    '  TPack = packed class abstract(TBase)'#13#10 +
+    '  end;'#13#10 +
+    '  TSell = class sealed(TPack) end;'#13#10 +
+    'implementation end.');
+  Mapa := TDictionary<string, string>.Create;
+  try
+    AnotaAncestros(U, Mapa);
+    Assert.AreEqual('THijo,TMedio,TBase,TForm', string.Join(',', CadenaDeAncestros(Mapa, 'THijo', Sale)));
+    Assert.IsTrue(Sale, 'TForm no se ha leido: por ahi sale');
+    Assert.AreEqual('TSuelto', string.Join(',', CadenaDeAncestros(Mapa, 'TSuelto', Sale)));
+    Assert.IsFalse(Sale, 'sin ancestro escrito: TObject, no sale');
+    Assert.AreEqual('TFuera,Otra.TLejana', string.Join(',', CadenaDeAncestros(Mapa, 'TFuera', Sale)));
+    Assert.IsTrue(Sale);
+    Assert.AreEqual('TCicloA,TCicloB', string.Join(',', CadenaDeAncestros(Mapa, 'TCicloA', Sale)));
+    Assert.IsFalse(Sale, 'un ciclo para');
+    Assert.AreEqual<Integer>(4, Length(CadenaDeAncestros(Mapa, 'THIJO', Sale)), 'la caja no cuenta');
+    Assert.AreEqual('THijo,TMedio', string.Join(',', CadenaDeAncestros(Mapa, 'THijo', Sale, 2)));
+    Assert.IsFalse(Sale, 'el tope para, no sale');
+    Assert.AreEqual('TSell,TPack,TBase,TForm', string.Join(',', CadenaDeAncestros(Mapa, 'TSell', Sale)),
+      'packed, abstract y sealed');
+    Assert.AreEqual<Integer>(9, U.Clase('TPack').LineaFin);
+  finally
+    Mapa.Free;
+    U.Free;
+  end;
+end;
+
+{ La etiqueta @@END de un asm (Vcl.Graphics, Vcl.Imaging.GIFImg en su rama
+  de 32 bits) se contaba como el end del bloque: la rutina acababa ahi y la
+  clase de detras no se leia (4-oct-2026). Un asm dentro de un begin y un
+  asm que es el cuerpo entero. }
+procedure TLectorDeClasesTests.UnaEtiquetaDeAsmNoCierraLaRutina;
+var
+  U: TUnidadPas;
+begin
+  U := LeeFuentePascal('unit A; interface implementation'#13#10 +
+    'procedure Uno;'#13#10 +
+    'begin'#13#10 +
+    '  asm'#13#10 +
+    '        JS    @@END'#13#10 +
+    '        JMP   @end'#13#10 +
+    '    @@END:'#13#10 +
+    '  end;'#13#10 +
+    'end;'#13#10 +
+    'type TEntre = class(TObject) end;'#13#10 +
+    'function Dos: Integer;'#13#10 +
+    'asm'#13#10 +
+    '  @@END: MOV EAX, 1'#13#10 +
+    'end;'#13#10 +
+    'type TDetras = class(TObject) end;'#13#10 +
+    'end.');
+  try
+    Assert.IsNotNull(U.Clase('TEntre'), 'la de detras de un asm dentro de un begin');
+    Assert.IsNotNull(U.Clase('TDetras'), 'la de detras de un cuerpo asm');
+    Assert.AreEqual<Integer>(14, U.Clase('TDetras').Linea);
+  finally
+    U.Free;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TPreprocesoTests);
   TDUnitX.RegisterTestFixture(TPascalDeclTests);
   TDUnitX.RegisterTestFixture(TDesignerMetaGenTests);
+  TDUnitX.RegisterTestFixture(TLectorDeClasesTests);
 
 end.

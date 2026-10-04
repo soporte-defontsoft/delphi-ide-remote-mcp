@@ -102,7 +102,7 @@ try:
                                'query': 'agujaenelartefacto'})
     # una busqueda de VERDAD (su JSON con hits) que no trae el artefacto
     check('S1 desde arriba, la carpeta de compilacion sigue oculta',
-          isinstance(mc.como_json(a).get('hits'), list) and 'Generado.pas' not in a,
+          isinstance(mc.como_json(a).get('files'), list) and 'Generado.pas' not in a,
           a[:200])
     b = call('delphi_search', {'root': salida, 'query': 'agujaenelartefacto'})
     check('S2 nombrada como raiz, se busca dentro (como hace delphi_list)',

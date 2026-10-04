@@ -194,6 +194,13 @@ begin
       ClearAttachedImages; // nada de una llamada anterior en este hilo
       OlvidaSalidaHecha;   // ...ni lo que otra dejo dicho al filtro de salida
       Result := ToolCallDenied(ToolName, Arguments);
+      // Una negativa de la PUERTA nunca trae contenido de un fichero: sale
+      // enmascarada entera aqui, antes del filtro de salida, que en las tools
+      // de eco deja tal cual las lineas 'N|texto'. Una ruta con un salto y
+      // '1|' dentro sacaba las raices del servidor sin enmascarar (revision
+      // del 4-oct-2026; medido tambien en la 1.12.1)
+      if Result <> '' then
+        Result := MaskDriveText('', Result);
     end;
   // Outbound twin of the gate: server drive letters leave as virtual units
   // (D:\x -> srvd:\x) in every textual result.

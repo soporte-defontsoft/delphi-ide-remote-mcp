@@ -44,9 +44,9 @@ call = servidor.call
 out = call('delphi_search', {"root": SRC, "query": "RequestWithRetry", "wholeword": True})
 try:
     d = json.loads(out)
-    ok = d['total'] >= 3 and any('Lsp.Client.pas' in h['path'] for h in d['hits'])
+    ok = d['total'] >= 3 and any('Lsp.Client.pas' in h['path'] for h in mc.aciertos(d))
     check('search: encuentra en Lsp.Client', ok, out[:200])
-    check('search: linea 1-based y texto', all(h['line'] >= 1 and h['text'] for h in d['hits']), '')
+    check('search: linea 1-based y texto', all(h['line'] >= 1 and h['text'] for h in mc.aciertos(d)), '')
 except Exception as e:
     check('search: parsea', False, out[:200])
 
@@ -69,7 +69,7 @@ for _nom, _ruta, _esperado, _aguja in (
         ('utf-8 sin BOM', _u8, _TEXTO, 'acentos'),
         ('cp1252 legacy', _cp, _CP, 'accion')):
     _d = json.loads(call('delphi_search', {"root": _ruta, "query": _aguja}))
-    _hit = (_d.get('hits') or [{}])[0].get('text', '')
+    _hit = (mc.aciertos(_d) or [{}])[0].get('text', '')
     check('search: devuelve el texto real de un fichero %s' % _nom,
           _hit == _esperado, '%r != %r' % (_hit[:70], _esperado[:70]))
 
@@ -77,6 +77,36 @@ d = json.loads(out)
 out2 = call('delphi_search', {"root": SRC, "query": "retry", "wholeword": False})
 d2 = json.loads(out2)
 check('search: wholeword filtra', d2['total'] > d['total'], '%s vs %s' % (d['total'], d2['total']))
+
+# --- search: regex=true y el tope de tamano (muros del 4-oct-2026) ---------
+_rx = _fixed('regex')
+with open(os.path.join(_rx, 'URx.pas'), 'w', encoding='utf-8', newline='\r\n') as _f:
+    _f.write('unit URx;\ninterface\nprocedure Pinta1;\nprocedure PintaDos;\nfunction Pinta3: Integer;\n'
+             'implementation\nend.\n')
+_d = json.loads(call('delphi_search', {"root": _rx, "query": r"^procedure\s+Pinta\d+;", "regex": True}))
+check('search regex: casa por linea (^ es el principio de una linea), sin distinguir mayusculas',
+      _d.get('total') == 1 and mc.aciertos(_d)[0]['text'] == 'procedure Pinta1;' and mc.aciertos(_d)[0]['character0'] == 0,
+      str(_d)[:300])
+_d = json.loads(call('delphi_search', {"root": _rx, "query": r"pinta\w*", "regex": True, "wholeword": True}))
+check('search regex + wholeword: la palabra entera de lo que caso', _d.get('total') == 3, str(_d)[:300])
+_r = call('delphi_search', {"root": _rx, "query": "(sin cerrar", "regex": True})
+check('search regex mal escrita: rechazada antes de buscar (SEARCH-004)',
+      mc.rechazado(_r) and mc.tiene(_r, 'SEARCH-004'), _r[:200])
+with open(os.path.join(_rx, 'larga.txt'), 'w', encoding='utf-8') as _f:
+    _f.write('a' * 40 + 'b\n')
+_r = call('delphi_search', {"root": _rx, "query": "(a+)+$", "regex": True, "pattern": "*.txt"})
+check('search regex que se dispara: se dice donde y no cuelga el servidor (SEARCH-005)',
+      mc.rechazado(_r) and mc.tiene(_r, 'SEARCH-005') and 'larga.txt' in _r, _r[:300])
+_grande = os.path.join(_rx, 'grande.txt')
+with open(_grande, 'w', encoding='ascii') as _f:
+    _f.write(('x' * 1023 + '\n') * (9 * 1024))  # 9 MB
+_d = json.loads(call('delphi_search', {"root": _rx, "query": "x", "pattern": "*.txt"}))
+check('search: un fichero de mas de 8 MB en la carpeta se salta y se nombra (SEARCH-006)',
+      mc.tiene(_d.get('bigFilesNote', ''), 'SEARCH-006') and 'grande.txt' in _d.get('bigFilesNote', ''),
+      str(_d)[:300])
+_r = call('delphi_search', {"root": _grande, "query": "x"})
+check('search: ...y nombrado a solas, se dice por que no (SEARCH-007)',
+      mc.rechazado(_r) and mc.tiene(_r, 'SEARCH-007'), _r[:200])
 
 # --- projects: por paginas -----------------------------------------------
 # Sin paginar, una maquina de trabajo (7025 .dproj) contestaba 82 KB y
@@ -405,6 +435,34 @@ try:
     check('git: log muestra el commit', 'parentesis' in out, out[:200])
     check('git: acentos del mensaje SIN mojibake (utf-8 bien decodificado)',
           '¡signos!' in out and 'Ã' not in out, out[:200])
+    # la respuesta por paginas (muro del 4-oct-2026: un diff de mas de 30000
+    # caracteres salia cortado y no habia forma de ver el resto)
+    with open(os.path.join(tmpgit, 'nota.txt'), 'w') as f:
+        f.write(''.join('linea %04d %s\n' % (i, 'x' * 60) for i in range(1200)))
+    out = call('delphi_git', {"repo": tmpgit, "command": "diff"})
+    import re as _re
+    _m = _re.search(r'offset=(\d+)', out)
+    check('git diff largo: una pagina, y la nota dice que lineas son y como seguir (GIT-053)',
+          mc.tiene(out, 'GIT-053') and _m is not None and '+linea 0000' in out and '+linea 1199' not in out,
+          out[-300:])
+    # pagina a pagina hasta la ultima: juntas, las 1200 lineas en orden, sin
+    # huecos ni repetidas
+    _vistas, _pag, _n = [], out, 0
+    while True:
+        _vistas += _re.findall(r'\+linea (\d{4})', _pag)
+        _m2 = _re.search(r'offset=(\d+)', _pag) if mc.tiene(_pag, 'GIT-053') else None
+        _n += 1
+        if not _m2 or _n > 10:
+            break
+        _pag = call('delphi_git', {"repo": tmpgit, "command": "diff", "offset": int(_m2.group(1))})
+    check('git diff offset: pagina a pagina, todas las lineas, en orden y una vez',
+          _vistas == ['%04d' % i for i in range(1200)] and _n > 1, '%d paginas, %d lineas' % (_n, len(_vistas)))
+    out3 = call('delphi_git', {"repo": tmpgit, "command": "diff", "offset": 99999})
+    check('git diff offset pasado del final: se dice cuantas lineas tiene (GIT-054)',
+          mc.tiene(out3, 'GIT-054'), out3[:200])
+    out4 = call('delphi_git', {"repo": tmpgit, "command": "add", "args": ".", "offset": 5})
+    check('git offset con una orden que escribe: no va con ella (repetirla la volveria a ejecutar)',
+          mc.rechazado(out4) and mc.es(out4, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), out4[:200])
 finally:
     mc.borra(tmpgit)
 

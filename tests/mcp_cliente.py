@@ -22,6 +22,9 @@ REPO = os.path.abspath(os.path.join(HERE, '..'))
 EXE_COMPILADO = os.path.join(REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'DelphiLspMcp.exe')
 # La raiz temporal que comparten todas las baterias (run_all la barre).
 RAIZ = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests')
+# el LOCALAPPDATA de los servidores de prueba (entorno): su cache, no la de
+# produccion. Bajo RAIZ, que run_all vacia al empezar
+CACHE_BATERIAS = os.path.join(RAIZ, '_cache_servidor')
 PROTOCOLO = '2025-06-18'
 
 
@@ -109,13 +112,23 @@ def copias(carpeta, nombre=None, cajon=None, bajo=False):
                   if sello.match(os.path.basename(f)))
 
 
+def cache_servidor(sub='', appdata=None):
+    """<LOCALAPPDATA>\\DelphiLspMcp\\<sub>: la cache del servidor (ServerCacheDir).
+    Sin appdata, la de las BATERIAS (CACHE_BATERIAS, la que da entorno). El
+    compositor de esa ruta: estaba a mano en mcp_cliente y en una bateria."""
+    return os.path.join(appdata or CACHE_BATERIAS, 'DelphiLspMcp', sub)
+
+
 def limpia_caches_lsp():
-    """Las caches .delphilsp.json que el servidor deja en %LOCALAPPDATA%\\DelphiLspMcp\\configs
-    para los proyectos de las baterias (bajo RAIZ) o para proyectos que ya no
-    existen: basura de la maquina (131 medidas el 28-sep-2026). Devuelve cuantas
-    quito. Las de proyectos vivos fuera de RAIZ no se tocan."""
+    """Las caches .delphilsp.json de proyectos de las BATERIAS (bajo RAIZ) que
+    hayan caido en la cache REAL del usuario (%LOCALAPPDATA%\\DelphiLspMcp\\configs):
+    basura de la maquina (131 medidas el 28-sep-2026). Desde el 4-oct-2026 las
+    baterias tienen su propia cache (entorno), asi que una aqui es de una
+    bateria que no paso por entorno. Solo esas: la cache real es la del
+    servicio de produccion, y 'un proyecto que ya no existe' puede ser suyo
+    (una letra de red sin montar). Devuelve cuantas quito."""
     from urllib.parse import unquote
-    carpeta = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'DelphiLspMcp', 'configs')
+    carpeta = cache_servidor('configs', os.environ.get('LOCALAPPDATA', ''))
     if not os.path.isdir(carpeta):
         return 0
     quitadas = 0
@@ -128,7 +141,7 @@ def limpia_caches_lsp():
         if not proyecto.startswith('file:///'):
             continue
         ruta = unquote(proyecto[len('file:///'):]).replace('/', os.sep)
-        if os.path.normcase(os.path.abspath(ruta)).startswith(raiz) or not os.path.exists(ruta):
+        if os.path.normcase(os.path.abspath(ruta)).startswith(raiz):
             try:
                 os.remove(f)
                 quitadas += 1
@@ -564,6 +577,16 @@ def entorno(extra=None):
     heredados cambiaban lo que se mide sin que la bateria lo supiera-, mas lo
     que la bateria ponga en extra."""
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith('DELPHI_MCP_')}
+    # La cache del servidor (ServerCacheDir: tablas del disenador, configs del
+    # LSP, el estilo de Windows) es la de las BATERIAS, no la de produccion:
+    # con la del usuario, un servidor de prueba (otra huella, otra generacion)
+    # PURGABA las tablas del servicio, que tenia que regenerarlas (medido el
+    # 4-oct-2026: sus g4 desaparecieron tras una pasada y volvieron a las
+    # 11:07), y una bateria pasaba apoyada en las tablas que dejo otra. Bajo
+    # RAIZ: run_all la vacia al empezar, y la primera que la necesita la espera
+    # (espera_info). Una bateria que mide la cache la pone suya en extra.
+    env['LOCALAPPDATA'] = CACHE_BATERIAS
+    os.makedirs(env['LOCALAPPDATA'], exist_ok=True)
     env.update(extra or {})
     return env
 
@@ -584,6 +607,50 @@ def ids(t):
 def tiene(t, msg_id):
     """True si el texto trae el mensaje con ese id ('CFG-007')."""
     return msg_id in ids(t)
+
+
+def espera_tablas(call, tope=240):
+    """Las tablas del disenador VCL y FMX, listas: [(marco, respuesta)]. Para
+    las baterias que validan contra ellas (el bloque estaba escrito igual en
+    dos). Quien llama comprueba: not tiene(r, 'DSGN-051') and not fallo(r)."""
+    return [(fw, espera_info(call, {'command': 'info', 'classname': cls, 'framework': fw}, tope=tope))
+            for fw, cls in (('vcl', 'TButton'), ('fmx', 'TLabel'))]
+
+
+def build_ok(call, dproj):
+    """delphi_build de un proyecto (Win64 Debug Build): (exito, errores). Estaba
+    escrito en tres baterias."""
+    out = call('delphi_build', {"project": dproj, "platform": "Win64",
+                                "config": "Debug", "target": "Build"}, 600)
+    d = como_json(out)
+    if not d:
+        return False, out[:300]
+    return d.get('success') is True, json.dumps(d.get('errors'))[:300]
+
+
+def lee(p):
+    """El texto de un fichero (utf-8 con o sin BOM); '' si no existe: un check
+    rojo, no una bateria que se cae."""
+    if not os.path.exists(p):
+        return ''
+    return open(p, 'rb').read().decode('utf-8-sig')
+
+
+def espera_info(call, args, cond=lambda r: False, tope=240):
+    """delphi_designer con args (info o prop), repetido mientras diga DSGN-051:
+    la tabla del disenador se genera en segundo plano la primera vez (tras
+    instalar, actualizar o subir su generacion) y info espera un rato y, si no
+    ha acabado, lo dice. Para tambien en cuanto cond(respuesta). Una bateria
+    que valida contra las tablas las pide con esto antes: test_delphi_patch
+    solo pasaba si otra le habia dejado la cache caliente (4-oct-2026, al subir
+    GENERACION_TABLAS). Vivia en test_designer_tablas."""
+    t0, r = time.time(), ''
+    while time.time() - t0 < tope:
+        r = call('delphi_designer', args, t=120)
+        if cond(r) or not tiene(r, 'DSGN-051'):
+            return r
+        time.sleep(2)
+    return r
 
 
 def outcome(t):
@@ -806,6 +873,24 @@ def como_json(t):
         return v if isinstance(v, dict) else {}
     except Exception:
         return {}
+
+
+def junction(link, target):
+    """Un junction (mklink /J, sin privilegios); True si el enlace quedo. Lo
+    escribian a mano varias baterias (el plantado de un enlace a una victima
+    de fuera de las raices: CLAUDE.md, 'Nothing outside the workspace')."""
+    r = subprocess.run(['cmd', '/c', 'mklink', '/J', link, target], capture_output=True)
+    return r.returncode == 0 and os.path.isdir(link)
+
+
+def aciertos(t):
+    """Los aciertos de delphi_search, planos y cada uno con su path. Desde la
+    1.13.0 vienen agrupados por fichero (files = [{path, hits}]: la ruta iba
+    repetida en cada acierto); EL lector de esa forma para las baterias. t:
+    el texto de la tool o su JSON ya leido."""
+    j = como_json(t) if isinstance(t, str) else (t or {})
+    return [dict(h, path=f.get('path', '')) for f in j.get('files', [])
+            for h in f.get('hits', [])]
 
 
 # ---------------------------------------------------------------- stdio

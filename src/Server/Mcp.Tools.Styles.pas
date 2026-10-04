@@ -110,7 +110,7 @@ begin
   try
     Ret := TJSONObject.Create;
     try
-      Ret.AddPair('file', MaskDriveText('delphi_styles', Doc.Path));
+      Ret.AddPair('file', MaskDriveText('', Doc.Path));
       Ret.AddPair('container', Doc.Root.ClassName_);
       Arr := TJSONArray.Create;
       N := 0;
@@ -173,7 +173,7 @@ begin
   Result := (V <> '') and (
     TRegEx.IsMatch(V, '^-?\d+(\.\d+)?$') or                    // 12   -3.5
     TRegEx.IsMatch(V, '^\$[0-9A-Fa-f]+$') or                   // $FF00FF00
-    TRegEx.IsMatch(V, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') or    // claRed  True  TAlignLayout.Top
+    EsIdentificador(V, True) or                                // claRed  True  TAlignLayout.Top
     TRegEx.IsMatch(V, '^\[.*\]$') or                           // [a, b]
     TRegEx.IsMatch(V, '^<.*>$') or                             // inline collection
     V.StartsWith('''') or V.StartsWith('#') or                 // 'text'  #13#10
@@ -189,7 +189,7 @@ var
 begin
   if AProp.Trim = '' then
     Exit(MsgText(SR_STYLES_NEED_PROP));
-  if not TRegEx.IsMatch(AProp.Trim, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+  if not EsIdentificador(AProp.Trim, True) then
     Exit(MsgFmt(SR_STYLES_PROP_CHARS_FMT, [AProp]));
   if (not ADelete) and (AValue.Trim = '') then
     Exit(MsgText(SR_STYLES_NEED_VALUE));
@@ -243,7 +243,9 @@ var
 begin
   if ANew.Trim = '' then
     Exit(MsgText(SR_STYLES_NEED_NAME));
-  if not TRegEx.IsMatch(ANew.Trim, '^[A-Za-z_][\w.\-]*$') then
+  // una letra (de cualquier alfabeto, como EL identificador de Lsp.Pascal)
+  // o '_', y detras tambien puntos y guiones
+  if not TRegEx.IsMatch(ANew.Trim, '\A' + PATRON_LETRA_IDENT + '(?:' + PATRON_CAR_IDENT + '|[.\-])*\z') then
     Exit(MsgFmt(SR_STYLES_NAME_CHARS_FMT, [ANew]));
   Doc := TStyleDoc.Create(APath);
   try
@@ -414,7 +416,7 @@ begin
           end;
           Issue := TJSONObject.Create;
           Issue.AddPair('lookup', M.Groups[1].Value);
-          Issue.AddPair('file', MaskDriveText('delphi_styles', F));
+          Issue.AddPair('file', MaskDriveText('', F));
           Issue.AddPair('line', TJSONNumber.Create(I + 1));
           Missing.AddElement(Issue);
         end;
@@ -469,8 +471,8 @@ begin
           Rc.AddElement(Issue);
         end;
     end;
-    Ret.AddPair('stylesDir', MaskDriveText('delphi_styles', Dir));
-    Ret.AddPair('projectDir', MaskDriveText('delphi_styles', ProjDir));
+    Ret.AddPair('stylesDir', MaskDriveText('', Dir));
+    Ret.AddPair('projectDir', MaskDriveText('', ProjDir));
     Ret.AddPair('styleFiles', TJSONNumber.Create(Length(Files)));
     Ret.AddPair('styleNames', TJSONNumber.Create(Names.Count));
     Ret.AddPair('lookupsUsed', TJSONNumber.Create(Used));
@@ -539,7 +541,7 @@ begin
       end;
       Arr.AddElement(E);
     end;
-    Ret.AddPair('stylesDir', MaskDriveText('delphi_styles', Dir));
+    Ret.AddPair('stylesDir', MaskDriveText('', Dir));
     Ret.AddPair('converted', Arr);
     // Un estilo que no convirtio es un FALLO: salia exito con ok:false y una
     // nota que mandaba recompilar, y el .rc metia los .bin.style de antes
@@ -762,7 +764,8 @@ begin
   end;
   if (NotaCarpeta <> '') and not EsFallo(Result) then
     Result := ConNota(Result, 'folderNote', NotaCarpeta);
-  Result := MaskDriveText('delphi_styles', Result);
+  // (lo enmascara el filtro de salida, Lsp.Host; una segunda pasada con el
+  // nombre de la tool gastaba lo que la llamada dejo anotado)
 end;
 
 function TDelphiStylesTool.ExecuteWithParams(const Params: TDelphiStylesParams): string;

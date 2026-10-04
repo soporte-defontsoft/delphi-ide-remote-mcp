@@ -32,6 +32,7 @@ type
     FOffset: Integer;
     FWholeWord: Boolean;
     FPattern: string;
+    FRegex: Boolean;
   public
     [SchemaDescription(SP_WS_ROOT)]
     [Required]
@@ -50,6 +51,8 @@ type
     property WholeWord: Boolean read FWholeWord write FWholeWord;
     [SchemaDescription(SP_WS_PATTERN)]
     property Pattern: string read FPattern write FPattern;
+    [SchemaDescription(SP_WS_REGEX)]
+    property Regex: Boolean read FRegex write FRegex;
   end;
 
   TDelphiListParams = class
@@ -100,6 +103,7 @@ type
     FMessage: string;
     FPath: string;
     FRef: string;
+    FOffset: Integer;
   public
     [SchemaDescription(SP_WS_REPO)]
     [Required]
@@ -119,6 +123,8 @@ type
     property Path: string read FPath write FPath;
     [SchemaDescription(SP_WS_REF)]
     property Ref: string read FRef write FRef;
+    [SchemaDescription(SP_WS_OFFSET_GIT)]
+    property Offset: Integer read FOffset write FOffset;
   end;
 
   TDelphiSearchTool = class(TMCPToolBase<TDelphiSearchParams>)
@@ -273,7 +279,9 @@ uses
   Lsp.Files,
   Mcp.Tools.Messages,
   Lsp.DesignerBin,
-  Lsp.NetDrives; // DirectedMessagesPending, para la ficha del servidor
+  Lsp.NetDrives, // DirectedMessagesPending, para la ficha del servidor
+  Lsp.Pascal,
+  Lsp.Regex; // TExprDelAgente: la expresion de delphi_search regex=true
 
 // la tool git va por delante de su compositor
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
@@ -388,12 +396,6 @@ begin
   Result := WalkFiles(ADir, [AMask], AConPapelera);
 end;
 
-function IsIdentChar(C: Char): Boolean; inline;
-begin
-  Result := ((C >= 'a') and (C <= 'z')) or ((C >= 'A') and (C <= 'Z')) or
-    ((C >= '0') and (C <= '9')) or (C = '_');
-end;
-
 { TDelphiSearchTool }
 
 constructor TDelphiSearchTool.Create;
@@ -405,15 +407,21 @@ end;
 
 function RelToRoot(const AFull, ARoot: string): string; forward;
 
+const
+  // lo que una busqueda lee de un fichero: uno mayor (un volcado, un log
+  // dentro del arbol) se salta y se dice; se leia entero en memoria (muro de
+  // la lista del 4-oct-2026)
+  TOPE_BUSQUEDA_MB = 8;
+
 function TDelphiSearchTool.ExecuteWithParams(const Params: TDelphiSearchParams): string;
 var
   Return: TJSONObject;
-  Hits: TJSONArray;
-  Max, I, P, ScanFrom, Total, FilesScanned: Integer;
-  F, Text, Q, LineText: string;
+  Ficheros, Hits: TJSONArray;
+  Max, I, P, Len, ScanFrom, Total, FilesScanned, Mostrados: Integer;
+  F, Text, Q, LineText, GrupoDe: string;
   Lines: TArray<string>;
   Mask: string;
-  Entry: TJSONObject;
+  Entry, Grupo: TJSONObject;
 begin
   Result := ReadPathDenied(Params.Root); // searching may enter the library zone
   if Result <> '' then
@@ -430,10 +438,35 @@ begin
   if Max > 500 then Max := 500;
   Q := Params.Query.ToLower;
   var Ofs := Params.Offset;
+  // regex=true: la consulta es una expresion (PCRE, sin distinguir
+  // mayusculas, como la literal), que se aplica linea a linea; una que no
+  // compila se dice antes de leer nada. Es del AGENTE: Lsp.Regex.
+  // TExprDelAgente, que dice tambien cuando el motor se rinde (TRegEx lo
+  // tomaba por "no casa" y la busqueda daba cero en silencio)
+  var Expr: TExprDelAgente := nil;
+  if Params.Regex then
+  begin
+    var ErrRx: string;
+    Expr := TExprDelAgente.Create(Params.Query, ErrRx);
+    if ErrRx <> '' then
+    begin
+      Expr.Free;
+      Exit(MsgFmt(SR_SEARCH_REGEX_INVALID_FMT, [ErrRx]));
+    end;
+  end;
 
 
   Return := TJSONObject.Create;
-  Hits := TJSONArray.Create;
+  // los aciertos AGRUPADOS por fichero: la ruta iba repetida en cada uno
+  // (revisor de tokens, 4-oct-2026: el mayor ahorro de una sesion tipica)
+  // (con dueno desde ya: un Exit a media busqueda -SEARCH-005- dejaba sin
+  // liberar la lista, que solo se colgaba al final)
+  Ficheros := TJSONArray.Create;
+  Return.AddPair('files', Ficheros);
+  GrupoDe := '';
+  Grupo := nil;
+  Hits := nil;
+  Mostrados := 0;
   Total := 0;
   FilesScanned := 0;
   try
@@ -442,7 +475,9 @@ begin
       Masks := Masks + [Mask];
     if Params.Pattern.Trim <> '' then
     begin
-      if not TRegEx.IsMatch(Params.Pattern.Trim, '^[\w*?.\-]+$') then
+      // una mascara de nombre de fichero: letras de cualquier alfabeto (hay
+      // units acentuadas: UArbol con su tilde*.pas se negaba), digitos y * ? . - _
+      if not TRegEx.IsMatch(Params.Pattern.Trim, '\A(?:' + PATRON_CAR_IDENT + '|[*?.\-])+\z') then
         Exit(MsgText(SR_WS_PATTERN_DEBE_SER_MASCARA));
       Masks := [Params.Pattern.Trim];
     end;
@@ -464,6 +499,7 @@ begin
     // baterias, 26-sep-2026).
     var Ocultos := Default(THiddenCount);
     var Ilegibles: TArray<string> := [];
+    var Grandes: TArray<string> := [];
     for F in Targets do
       begin
         if not SingleFile and InVault(F) then
@@ -481,6 +517,17 @@ begin
         // carpeta: se salta y se dice (sexta revision). En la de UN
         // fichero, el fallo es la respuesta.
         try
+          // el tope, ANTES de leerlo: uno nombrado a solas se dice; en una
+          // carpeta, se salta y se cuenta
+          var Tam := TFile.GetSize(F);
+          if Tam > Int64(TOPE_BUSQUEDA_MB) * 1024 * 1024 then
+          begin
+            if SingleFile then
+              Exit(MsgFmt(SR_SEARCH_FICHERO_GRANDE_FMT,
+                [MaskDriveText('', F), Tam div (1024 * 1024), TOPE_BUSQUEDA_MB]));
+            Grandes := Grandes + [MaskDriveText('', F)];
+            Continue;
+          end;
           Text := TLspClient.LoadSourceText(F);
         except
           if SingleFile then
@@ -489,7 +536,7 @@ begin
           Continue;
         end;
         Inc(FilesScanned);
-        if not Text.ToLower.Contains(Q) then
+        if not Params.Regex and not Text.ToLower.Contains(Q) then
           Continue;
         Lines := LineasDelTexto(Text); // numeradas como delphi_read (un CR suelto es salto)
         for I := 0 to High(Lines) do
@@ -497,25 +544,53 @@ begin
           LineText := Lines[I];
           ScanFrom := 1;
           repeat
-            P := Pos(Q, LineText.ToLower, ScanFrom);
+            if Params.Regex then
+            begin
+              // una expresion que se dispara (backtracking) agota el limite de
+              // pasos del motor: se dice donde, en vez de un cero falso
+              case Expr.Busca(LineText, ScanFrom, P, Len) of
+                rbNoCasa:
+                  Break;
+                rbSeRinde:
+                  Exit(MsgFmt(SR_SEARCH_REGEX_CARA_FMT, [I + 1, MaskDriveText('', F)]));
+              end;
+            end
+            else
+            begin
+              P := Pos(Q, LineText.ToLower, ScanFrom);
+              Len := Length(Q);
+            end;
             if P = 0 then
               Break;
+            // la palabra entera es la de EL identificador (Lsp.Pascal): con
+            // A-Z a mano, el trozo de un nombre que sigue con una enye o un
+            // acento contaba como palabra entera (censo del 4-oct-2026)
             if (not Params.WholeWord) or
-               (((P = 1) or not IsIdentChar(LineText[P - 1])) and
-                ((P + Length(Q) > Length(LineText)) or
-                 not IsIdentChar(LineText[P + Length(Q)]))) then
+               (((P = 1) or not EsCaracterDeIdent(LineText[P - 1])) and
+                ((P + Len > Length(LineText)) or
+                 not EsCaracterDeIdent(LineText[P + Len]))) then
             begin
               Inc(Total);
-              if (Total > Ofs) and (Hits.Count < Max) then
+              if (Total > Ofs) and (Mostrados < Max) then
               begin
+                // el grupo de ESTE fichero: los aciertos de uno van seguidos
+                if (Grupo = nil) or (GrupoDe <> F) then
+                begin
+                  GrupoDe := F;
+                  Grupo := TJSONObject.Create;
+                  Ficheros.Add(Grupo);
+                  // This tool masks its OWN paths, because its answer is
+                  // exempt from the blanket outbound filter - see the
+                  // delphi_search note in MaskDriveText. Any path field
+                  // added from now on MUST go through MaskDriveText too, or
+                  // a real drive letter walks out.
+                  Grupo.AddPair('path', MaskDriveText('', F));
+                  Hits := TJSONArray.Create;
+                  Grupo.AddPair('hits', Hits);
+                end;
                 Entry := TJSONObject.Create;
                 Hits.Add(Entry);
-                // This tool masks its OWN paths, because its answer is
-                // exempt from the blanket outbound filter - see the
-                // delphi_search note in MaskDriveText. Any path field added
-                // to a hit from now on MUST go through MaskDriveText too,
-                // or a real drive letter walks out.
-                Entry.AddPair('path', MaskDriveText('', F));
+                Inc(Mostrados);
                 Entry.AddPair('line', TJSONNumber.Create(I + 1));
                 // The LSP tools want a 0-based line:character, and the hit
                 // used to arrive Trim'ed - so the column could not be derived
@@ -528,24 +603,27 @@ begin
               end;
               Break; // one hit per line is enough
             end;
-            ScanFrom := P + Length(Q);
+            ScanFrom := P + System.Math.Max(Len, 1); // (una coincidencia vacia avanza igual)
           until False;
         end;
       end;
     Return.AddPair('total', TJSONNumber.Create(Total));
-    Return.AddPair('shown', TJSONNumber.Create(Hits.Count));
+    Return.AddPair('shown', TJSONNumber.Create(Mostrados));
     if Ofs > 0 then
       Return.AddPair('offset', TJSONNumber.Create(Ofs));
     // Truncated searches used to be a wall: maxresults hit, no way to ask
     // for the rest (hermes, release audit 2026-08-26). hasMore + nextOffset
     // make the next page one deterministic call away.
-    Return.AddPair('hasMore', TJSONBool.Create(Total > Ofs + Hits.Count));
-    if Total > Ofs + Hits.Count then
-      Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Hits.Count));
+    Return.AddPair('hasMore', TJSONBool.Create(Total > Ofs + Mostrados));
+    if Total > Ofs + Mostrados then
+      Return.AddPair('nextOffset', TJSONNumber.Create(Ofs + Mostrados));
     Return.AddPair('filesScanned', TJSONNumber.Create(FilesScanned));
     if Length(Ilegibles) > 0 then
       Return.AddPair('unreadableNote', MsgFmt(SN_SEARCH_ILEGIBLES_FMT,
         [Length(Ilegibles), string.Join(', ', Copy(Ilegibles, 0, 5))]));
+    if Length(Grandes) > 0 then
+      Return.AddPair('bigFilesNote', MsgFmt(SN_SEARCH_GRANDES_FMT,
+        [Length(Grandes), TOPE_BUSQUEDA_MB, string.Join(', ', Copy(Grandes, 0, 5))]));
     // un "pattern" que no casa con ningun fichero: "total 0" se leia como
     // "el texto no esta" (delphi_list ya lo decia; verificacion de la
     // tercera ronda)
@@ -555,10 +633,12 @@ begin
        (Params.Pattern.Trim <> '') and not SingleFile then
       Return.AddPair('maskNote', MsgFmt(SN_SEARCH_MASK_NO_MATCH_FMT, [Params.Pattern.Trim]));
     Ocultos.Report(Return);
-    Return.AddPair('hits', Hits);
+    // la lista, detras de los contadores y las notas, como iba
+    Return.AddPair(Return.RemovePair('files'));
     Result := Return.ToJSON;
   finally
     Return.Free;
+    Expr.Free;
   end;
 end;
 
@@ -1381,6 +1461,42 @@ begin
   end;
 end;
 
+const
+  TOPE_SALIDA_GIT = 30000; // caracteres de una pagina de la respuesta de git
+
+{ Las lineas de AOutput desde la ADesde (0-based) que caben en una pagina, y
+  si queda algo, la nota que dice cuales son y como pedir el resto. Corta
+  siempre en un salto (una linea mas larga que la pagina, sola, se corta) }
+function PaginaDeSalidaGit(const AOutput: string; ADesde: Integer): string;
+var
+  Lineas: TArray<string>;
+  Sb: TStringBuilder;
+  K: Integer;
+begin
+  if (ADesde <= 0) and (Length(AOutput) <= TOPE_SALIDA_GIT) then
+    Exit(AOutput);
+  Lineas := AOutput.Split([#10]);
+  if (Length(Lineas) > 0) and (Lineas[High(Lineas)] = '') then
+    SetLength(Lineas, Length(Lineas) - 1); // el salto del final no es una linea
+  if ADesde >= Length(Lineas) then
+    Exit(MsgFmt(SN_GIT_OFFSET_FUERA_FMT, [ADesde, Length(Lineas)]));
+  Sb := TStringBuilder.Create;
+  try
+    K := ADesde;
+    while (K < Length(Lineas)) and
+          ((K = ADesde) or (Sb.Length + Length(Lineas[K]) + 1 <= TOPE_SALIDA_GIT)) do
+    begin
+      Sb.Append(Copy(Lineas[K], 1, TOPE_SALIDA_GIT)).Append(#10);
+      Inc(K);
+    end;
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+  if K < Length(Lineas) then
+    Result := Result + MsgFmt(SN_GIT_PAGINA_FMT, [ADesde + 1, K, Length(Lineas), K]);
+end;
+
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
 var
   Cmd, GitArgs, Repo, Output, MsgFile: string;
@@ -1466,14 +1582,16 @@ begin
     ModoGit := 'worktree ' + Params.Args.Trim.ToLower;
   var SuyosGit: string;
   var SobraGit := ParametroQueNoVa(ModoGit, [
-      'status', '', 'diff', '', 'log', '', 'show', '', 'branch', '', 'add', '',
+      'status', 'offset', 'diff', 'offset', 'log', 'offset', 'show', 'offset',
+      'branch', '', 'add', '',
       'pull', '', 'fetch', '', 'init', '', 'merge', '', 'push', '',
       'commit', 'message', 'clone', 'message', 'config', 'message',
-      'stash push', 'message', 'stash pop', '', 'stash list', '',
+      'stash push', 'message', 'stash pop', '', 'stash list', 'offset',
       'tag', 'message', 'switch', 'create', 'restore', '',
-      'worktree add', 'path ref', 'worktree list', '', 'worktree remove', 'path'],
+      'worktree add', 'path ref', 'worktree list', 'offset', 'worktree remove', 'path'],
     ['message', Params.Message, '', 'path', Params.Path, '', 'ref', Params.Ref, '',
-     'create', IfThen(Params.Create, 'true'), ''], SuyosGit);
+     'create', IfThen(Params.Create, 'true'), '',
+     'offset', IfThen(Params.Offset <> 0, IntToStr(Params.Offset)), ''], SuyosGit);
   if SobraGit <> '' then
   begin
     // como viaja en el cable: command=stash args=pop, no "command=stash pop"
@@ -1951,8 +2069,14 @@ begin
     if (not GitCorrio or (ExitCode <> 0)) and SameText(Cmd, 'clone') and CreadaPorElClone then
       QuitaCarpetasCreadas(Repo, AncestroDelClone);
   end;
-  if Length(Output) > 30000 then
-    Output := Copy(Output, 1, 30000) + #10 + MsgText(SF_GIT_TRUNCATED);
+  // Una pagina de la respuesta: la de una orden que solo LEE se puede pedir
+  // entera, por lineas (offset); se cortaba a 30000 caracteres y no habia
+  // forma de ver el resto (muro de la lista del 4-oct-2026). La de una que
+  // escribe, no: repetirla con offset la volveria a ejecutar
+  if GitCommandIsQuery(Cmd, Params.Args, Params.Message) then
+    Output := PaginaDeSalidaGit(Output, Params.Offset)
+  else if Length(Output) > TOPE_SALIDA_GIT then
+    Output := Copy(Output, 1, TOPE_SALIDA_GIT) + #10 + MsgText(SF_GIT_TRUNCATED);
   // Un git que dice que no (exit<>0) es un fallo: salia como exito y el
   // agente no lo distinguia de uno que funciono (revision 27-sep-2026). Su
   // salida va detras, que es la que explica que paso.
@@ -2722,7 +2846,7 @@ begin
         // talks to, and the server never guesses its own public address.
         // The path travels in its VIRTUAL form, URL-encoded (no real drive
         // letter ever leaves, encoded or not).
-        Return.AddPair('download', DownloadLinkFor(FName, FullPath));
+        Return.AddPair('download', DownloadLinkFor(FullPath));
         Return.AddPair('downloadNote', MsgText(SN_FETCH_DOWNLOAD));
       end;
       if LinkOnly then

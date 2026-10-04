@@ -20,7 +20,8 @@ uses
   LspTests.Rutas in 'LspTests.Rutas.pas',
   LspTests.LetrasDeRed in 'LspTests.LetrasDeRed.pas',
   LspTests.Docs in 'LspTests.Docs.pas',
-  LspTests.DesignerMetaGen in 'LspTests.DesignerMetaGen.pas';
+  LspTests.DesignerMetaGen in 'LspTests.DesignerMetaGen.pas',
+  LspTests.Regex in 'LspTests.Regex.pas';
 
 var
   Runner: ITestRunner;

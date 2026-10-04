@@ -981,6 +981,12 @@ function SessionTimeoutMinutes: Double;                         // 0 = nunca cad
   defecto; 0 = los motores no se paran por falta de uso. Decimales admitidos,
   como en la de arriba. Fontaneria, no permiso: por eso vive en [Server]. }
 function EngineIdleMinutes: Double;
+{ [Server] MaxEngines en settings.ini o DELPHI_MCP_MAX_ENGINES en el entorno
+  (que gana): cuantos motores LSP vivos admite el servidor a la vez; el que
+  pasa del tope para al menos usado de los que no estan trabajando (LRU,
+  Lsp.Session). 0 (el defecto) = sin tope: los para solo el barrendero de
+  EngineIdleMinutes. Fontaneria, como la de arriba. }
+function MaxEngines: Integer;
 function LiveSessionCount: Integer;                             // purga las caducadas
 
 { Dead copies are not a scratchpad. The recoverable trash, and the IDE's own
@@ -1200,7 +1206,12 @@ function ToolCallDenied(const AToolName: string;
     client verbatim (an edit anchor built from masked text would not match
     the disk). What those tools compose themselves still goes through
     MaskDriveText('', ...). delphi_fetch is NOT exempt: its payload is
-    base64, which the mask cannot corrupt. }
+    base64, which the mask cannot corrupt.
+  With a tool name it is THE outbound filter (Lsp.Host's ResultFilter, once
+  per answer): it spends what the call left noted (TSalidaHecha, the disk
+  citations of CitaDeLinea). A tool masking a piece of its own uses ''; four
+  tools masked their whole answer again with their own name, and the real
+  line of a delphi_changeset refusal left masked (4-oct-2026). }
 function MaskDriveText(const AToolName, AText: string): string;
 { Para la tool cuya respuesta mezcla lineas SUYAS con lineas de CONTENIDO del
   disco (delphi_git diff / show / log: las de un fichero o de un mensaje de
@@ -1212,6 +1223,33 @@ function MaskDriveText(const AToolName, AText: string): string;
   salia '\\srvhost' y un 'Z:\x', 'srv0:\x' (medido el 1-oct-2026). }
 function EnmascaraSalvoContenido(const ATexto, AEmpiezaPor: string): string;
 procedure OlvidaSalidaHecha;
+{ LA cita de una linea de un fichero, 'N|texto' (N 1-based, el texto tal
+  cual; la sangria de delante la pone quien la escribe): lo que un agente
+  copia para construir un ancla. La componen delphi_read, vault_read y las
+  pistas y los ecos de delphi_edit y delphi_changeset, y nadie mas a mano:
+  habia siete escritores con cuatro formas ('N|', '  N|', 'N| ' con el texto
+  recortado). Y el filtro de salida deja tal cual, en la respuesta de
+  CUALQUIER tool, las lineas que esta funcion compuso en ESTA llamada, y solo
+  esas: adivinaba por la forma ('^\s*\d+\|'), y en las negativas de las tools
+  de eco pasaba sin mascara toda linea que lo pareciera, la escribiera quien
+  la escribiera; las de las demas tools se enmascaraban, y una pista de
+  delphi_changeset no servia de ancla (revision del 4-oct-2026). }
+function CitaDeLinea(N: Integer; const ATexto: string): string;
+{ Para la tool que devuelve JSON con CONTENIDO de un fichero en algunos
+  campos (references y rename_symbol: "text" y "anchor", la linea tal cual;
+  symbols: las declaraciones; designer: los valores de las propiedades):
+  enmascara todas las demas cadenas y deja esos campos, con todo lo que cuelga
+  de ellos, como estan; el filtro de salida de ESTA llamada deja pasar el
+  resultado. Lo que no se nombra se enmascara: un campo nuevo no se escapa.
+  Si AJson no es JSON, sale entero enmascarado. ADetras: lo que la tool pega
+  detras del JSON (una nota), enmascarado entero. }
+function EnmascaraJsonSalvo(const AJson: string; const AClaves: array of string;
+  const ADetras: string = ''): string;
+{ Para un texto markdown con bloques de codigo (delphi_hover: la declaracion
+  que da el motor, entre ```): enmascara lo de fuera de los bloques y deja el
+  codigo como esta; el filtro de salida de ESTA llamada deja pasar el
+  resultado. Una constante con una ruta salia con la letra virtual. }
+function EnmascaraSalvoCodigo(const ATexto: string): string;
 
 { Inbound expansion of ONE value ('srvd:\x' -> 'D:\x'; anything else
   untouched, an unserved unit stays literal). Exposed for the /files download
@@ -1349,6 +1387,8 @@ var
   GIniSessionTimeout: string;      // [Server] SessionTimeoutMinutes, sin parsear
   GIniEngineIdle: string;          // [Server] EngineIdleMinutes, sin parsear
   GEngineIdleMin: Double = -1;     // -1 = sin leer todavia
+  GIniMaxEngines: string;          // [Server] MaxEngines, sin parsear
+  GMaxEngines: Integer = -1;       // -1 = sin leer todavia
   GIniLogLines: Integer = 2000;    // [Log] LinesPerFile
   GIniLogMaxFiles: Integer = 10;   // [Log] MaxFiles
 
@@ -1378,6 +1418,7 @@ threadvar
   GRequestReadOnly: Boolean;
   TRequestWorkspaceIx1: Integer; // workspace de la peticion HTTP (lo pone el transporte)
   TSalidaHecha: string; // lo que la tool de ESTA llamada ya enmascaro (EnmascaraSalvoContenido)
+  TCitasHechas: string; // las citas (CitaDeLinea) de ESTA llamada, cada una seguida de #0
 
 var
   GStdioIx1: Integer = 0; // workspace abierto por DELPHI_MCP_TOKEN (proceso stdio)
@@ -2156,6 +2197,7 @@ begin
       GIniBindIP := Ini.ReadString('Server', 'BindIP', '');
       GIniSessionTimeout := Ini.ReadString('Server', 'SessionTimeoutMinutes', '').Trim;
       GIniEngineIdle := Ini.ReadString('Server', 'EngineIdleMinutes', '').Trim;
+      GIniMaxEngines := Ini.ReadString('Server', 'MaxEngines', '').Trim;
       GIniLogLines := Ini.ReadInteger('Log', 'LinesPerFile', 2000);
       GIniLogMaxFiles := Ini.ReadInteger('Log', 'MaxFiles', 10);
       // [Workspace.<name>] sections: token-scoped sandboxes. Parsed once,
@@ -2442,11 +2484,12 @@ begin
     end;
 end;
 
-{ Los minutos de una clave de fontaneria: el entorno gana al ini. Decimales
-  admitidos (0.05 = tres segundos): asi una bateria mide sin esperar minutos.
-  Negativo o ilegible = el defecto. UN lector para las dos claves que hay
-  (SessionTimeoutMinutes y EngineIdleMinutes). }
-function MinutosDeClave(const AEnvVar, AIniValue: string; ADefault: Double): Double;
+{ El numero de una clave de fontaneria: el entorno gana al ini. Decimales
+  admitidos (0.05 minutos = tres segundos): asi una bateria mide sin esperar
+  minutos. Negativo o ilegible = el defecto. UN lector para las claves que
+  hay (SessionTimeoutMinutes, EngineIdleMinutes y MaxEngines; se llamaba
+  MinutosDeClave hasta que llego la tercera, que no son minutos). }
+function NumeroDeClave(const AEnvVar, AIniValue: string; ADefault: Double): Double;
 var
   S: string;
 begin
@@ -2467,7 +2510,7 @@ begin
   if GSessionTimeoutMin >= 0 then
     Exit(GSessionTimeoutMin);
   LoadSecurity;
-  Result := MinutosDeClave('DELPHI_MCP_SESSION_TIMEOUT_MINUTES', GIniSessionTimeout,
+  Result := NumeroDeClave('DELPHI_MCP_SESSION_TIMEOUT_MINUTES', GIniSessionTimeout,
     SESSION_TIMEOUT_DEFAULT_MIN);
   GSessionTimeoutMin := Result;
 end;
@@ -2479,9 +2522,18 @@ begin
   if GEngineIdleMin >= 0 then
     Exit(GEngineIdleMin);
   LoadSecurity;
-  Result := MinutosDeClave('DELPHI_MCP_ENGINE_IDLE_MINUTES', GIniEngineIdle,
+  Result := NumeroDeClave('DELPHI_MCP_ENGINE_IDLE_MINUTES', GIniEngineIdle,
     ENGINE_IDLE_DEFAULT_MIN);
   GEngineIdleMin := Result;
+end;
+
+function MaxEngines: Integer;
+begin
+  if GMaxEngines >= 0 then
+    Exit(GMaxEngines);
+  LoadSecurity;
+  Result := Trunc(NumeroDeClave('DELPHI_MCP_MAX_ENGINES', GIniMaxEngines, 0));
+  GMaxEngines := Result;
 end;
 
 procedure BindSessionIdentity(const ASessionId, AName: string);
@@ -6937,6 +6989,44 @@ begin
     end);
 end;
 
+type
+  // de una linea de una respuesta: es contenido (va tal cual) o no
+  TEsContenido = reference to function(const ALinea: string): Boolean;
+
+// ATexto linea a linea: lo que no es contenido, enmascarado. El nucleo de
+// EnmascaraSalvoContenido (git), EnmascaraSalvoCodigo (hover) y las citas
+function EnmascaraLineas(const ATexto: string; const AEsContenido: TEsContenido): string;
+var
+  Lineas: TArray<string>;
+begin
+  Lineas := ATexto.Split([#10]);
+  for var K := 0 to High(Lineas) do
+    if not AEsContenido(Lineas[K]) then
+      Lineas[K] := MaskDriveText('', Lineas[K]);
+  Result := string.Join(#10, Lineas);
+end;
+
+// la linea es una cita que CitaDeLinea compuso en esta llamada (con su
+// sangria delante y, si va en un texto CRLF, su CR detras)
+function EsCitaHecha(const ALinea: string): Boolean;
+var
+  L: string;
+begin
+  Result := False;
+  if TCitasHechas = '' then
+    Exit;
+  L := ALinea.TrimLeft;
+  if L.EndsWith(#13) then
+    L := L.Substring(0, L.Length - 1);
+  Result := (L <> '') and (Pos(#0 + L + #0, #0 + TCitasHechas) > 0);
+end;
+
+function CitaDeLinea(N: Integer; const ATexto: string): string;
+begin
+  Result := IntToStr(N) + '|' + ATexto;
+  TCitasHechas := TCitasHechas + Result + #0;
+end;
+
 function MaskDriveText(const AToolName, AText: string): string;
 const
   // las tools cuyo ECO es contenido del disco (la nota de abajo dice por que)
@@ -7011,7 +7101,10 @@ begin
     var Hecha := TSalidaHecha;
     TSalidaHecha := '';
     if AText = Hecha then
+    begin
+      TCitasHechas := '';
       Exit(AText);
+    end;
   end;
   if MatchText(AToolName, TOOLS_ECO) and
      // la RESPUESTA no es una negativa: se mira como EMPIEZA (MsgOutcome +
@@ -7020,18 +7113,18 @@ begin
      // enmascaraba el CONTENIDO ('%s:' salia '%srv0:', medido 27-sep)
      (MsgOutcome(AText) = '') then
     Exit(AText);
-  // ...y en la NEGATIVA de una de esas tools, las lineas que CITAN el disco
-  // ("  65|texto": el formato de delphi_read y de las pistas EDIT-094..096)
-  // son contenido y se dejan tal cual; el resto de la negativa (rutas del
-  // guard, mensajes) se enmascara linea a linea. Una pista enmascarada no
-  // servia de ancla (novena revision, M5a)
-  if MatchText(AToolName, TOOLS_ECO) and (AText.IndexOf(#10) >= 0) then
+  // ...y en lo demas (la NEGATIVA de una de esas tools, la respuesta de
+  // cualquier otra), las lineas que CITAN el disco y que la tool compuso en
+  // ESTA llamada (CitaDeLinea) son contenido y se dejan tal cual; el resto
+  // (rutas del guard, mensajes) se enmascara linea a linea. Una pista
+  // enmascarada no servia de ancla (novena revision, M5a). Solo las
+  // compuestas: se adivinaba por la forma ('^\s*\d+\|') y pasaba cualquier
+  // linea que lo pareciera (revision del 4-oct-2026)
+  if (AToolName <> '') and (TCitasHechas <> '') then
   begin
-    var Lineas := AText.Split([#10]);
-    for var K := 0 to High(Lineas) do
-      if not TRegEx.IsMatch(Lineas[K], '^\s*\d+\|') then
-        Lineas[K] := MaskDriveText('', Lineas[K]);
-    Exit(string.Join(#10, Lineas));
+    Result := EnmascaraLineas(AText, EsCitaHecha);
+    TCitasHechas := '';
+    Exit;
   end;
   Letters := ServedDriveLetters;
   if (Letters = '') or (AText = '') then
@@ -7240,21 +7333,96 @@ end;
 
 function EnmascaraSalvoContenido(const ATexto, AEmpiezaPor: string): string;
 var
-  Lineas: TArray<string>;
-  K: Integer;
+  Empieza: string;
 begin
-  Lineas := ATexto.Split([#10]);
-  for K := 0 to High(Lineas) do
-    // (la linea vacia y la que no empieza como el contenido son de la tool)
-    if (Lineas[K] = '') or (Pos(Lineas[K][1], AEmpiezaPor) = 0) then
-      Lineas[K] := MaskDriveText('', Lineas[K]);
-  Result := string.Join(#10, Lineas);
+  Empieza := AEmpiezaPor;
+  Result := EnmascaraLineas(ATexto,
+    function(const L: string): Boolean
+    begin
+      // (la linea vacia y la que no empieza como el contenido son de la tool)
+      Result := (L <> '') and (Pos(L[1], Empieza) > 0);
+    end);
+  TSalidaHecha := Result;
+end;
+
+function EnmascaraSalvoCodigo(const ATexto: string): string;
+var
+  EnBloque: Boolean;
+begin
+  EnBloque := False;
+  Result := EnmascaraLineas(ATexto,
+    function(const L: string): Boolean
+    begin
+      if L.TrimLeft.StartsWith('```') then
+      begin
+        EnBloque := not EnBloque;
+        Exit(False); // la valla es de la tool
+      end;
+      Result := EnBloque;
+    end);
+  TSalidaHecha := Result;
+end;
+
+function EnmascaraJsonSalvo(const AJson: string; const AClaves: array of string;
+  const ADetras: string): string;
+var
+  Claves: TArray<string>;
+
+  // una copia de AValor con sus cadenas enmascaradas, salvo lo que cuelga de
+  // un campo de Claves (que se copia tal cual)
+  function Transforma(AValor: TJSONValue): TJSONValue;
+  begin
+    if AValor is TJSONObject then
+    begin
+      var O := TJSONObject.Create;
+      for var P in TJSONObject(AValor) do
+        if MatchText(P.JsonString.Value, Claves) then
+          O.AddPair(P.JsonString.Value, TJSONValue(P.JsonValue.Clone))
+        else
+          O.AddPair(P.JsonString.Value, Transforma(P.JsonValue));
+      Result := O;
+    end
+    else if AValor is TJSONArray then
+    begin
+      var A := TJSONArray.Create;
+      for var E in TJSONArray(AValor) do
+        A.AddElement(Transforma(E));
+      Result := A;
+    end
+    // (un TJSONNumber ES un TJSONString en el RTL)
+    else if (AValor is TJSONString) and not (AValor is TJSONNumber) then
+      Result := TJSONString.Create(MaskDriveText('', TJSONString(AValor).Value))
+    else
+      Result := TJSONValue(AValor.Clone);
+  end;
+
+var
+  V, T: TJSONValue;
+begin
+  V := TJSONObject.ParseJSONValue(AJson);
+  if V = nil then
+    Exit(MaskDriveText('', AJson + ADetras));
+  try
+    Claves := [];
+    for var C in AClaves do
+      Claves := Claves + [C];
+    T := Transforma(V);
+    try
+      Result := T.ToJSON;
+    finally
+      T.Free;
+    end;
+  finally
+    V.Free;
+  end;
+  Result := Result + MaskDriveText('', ADetras);
   TSalidaHecha := Result;
 end;
 
 procedure OlvidaSalidaHecha;
 begin
   TSalidaHecha := '';
+  TCitasHechas := '';
 end;
 
 initialization

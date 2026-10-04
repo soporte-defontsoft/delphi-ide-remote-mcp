@@ -60,7 +60,7 @@ try:
     # caches, so it is NOT the yardstick)
     ra = cli.call('delphi_symbols', {'path': dpr['WarmA']})
     check('L1a un warm solo responde simbolos',
-          ra.lstrip().startswith('[') and 'selectionRange' in ra, ra[:150])
+          ra.lstrip().startswith('[') and '"range"' in ra, ra[:150])
     # the yardstick: ONE cold warm of another project, measured alone
     t0 = time.time()
     cli.call('delphi_symbols', {'path': dpr['WarmD']})
@@ -83,7 +83,7 @@ try:
     th2.join(120)
     t_both = time.time() - t0
     check('L1b ambos warms responden',
-          all(w[0].lstrip().startswith('[') and 'selectionRange' in w[0]
+          all(w[0].lstrip().startswith('[') and '"range"' in w[0]
               for w in walls.values()),
           (walls['alice'][0][:80], walls['bob'][0][:80]))
     # what makes L1c a measure: the two concurrent warms were COLD (each as
@@ -107,12 +107,12 @@ try:
           mc.abre(r, 'SN_CONFIG_PATH_ADDED_FMT') or mc.abre(r, 'SN_CONFIG_PATH_PRESENT_FMT'), r[:160])
     r = cli.call('delphi_symbols', {'path': dpr['WarmA']})
     check('L2 tras cambiar el .dproj, symbols sigue respondiendo (cache invalidada)',
-          r.lstrip().startswith('[') and 'selectionRange' in r, r[:150])
+          r.lstrip().startswith('[') and '"range"' in r, r[:150])
 
     # L3: hover on the program name still works on the warm client
     r = cli.call('delphi_symbols', {'path': dpr['WarmB']})
     check('L3 el cliente caliente reutilizado responde',
-          r.lstrip().startswith('[') and 'selectionRange' in r, r[:120])
+          r.lstrip().startswith('[') and '"range"' in r, r[:120])
 finally:
     proc.kill()
 

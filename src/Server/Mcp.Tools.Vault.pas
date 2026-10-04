@@ -484,7 +484,7 @@ begin
     begin
       if (Sb.Length > 0) and (Sb.Length + Length(Lines[I - 1]) > MAX_READ_CHARS) then
         Break; // budget spent: stop on a line boundary
-      Sb.AppendLine(I.ToString + '|' + Lines[I - 1]);
+      Sb.AppendLine(CitaDeLinea(I, Lines[I - 1])); // LA cita (Lsp.Guard)
       ALastLine := I;
     end;
     Result := Sb.ToString;

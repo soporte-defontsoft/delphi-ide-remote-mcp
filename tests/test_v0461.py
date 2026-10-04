@@ -23,7 +23,7 @@ open(os.path.join(BASE, 'U1.dfm'), 'w', encoding='utf-8').write('object F: TF\ne
 r = call('delphi_search', {'root': os.path.join(BASE, 'Big.dproj'), 'query': 'DCC_UnitSearchPath'})
 try: j = json.loads(r)
 except Exception: j = {}
-check('search root=file: one hit at the right line', j.get('total') == 1 and j['hits'][0]['line'] == 602, r[:300])
+check('search root=file: one hit at the right line', j.get('total') == 1 and mc.aciertos(j)[0]['line'] == 602, r[:300])
 check('search root=file: filesScanned = 1', j.get('filesScanned') == 1, r[:200])
 r = call('delphi_search', {'root': os.path.join(BASE, 'Nope.dproj'), 'query': 'x'})
 check('search root=missing file: error', mc.resultado(r) == 'NOT_FOUND' and mc.es(r, 'SR_WS_DIR_NOT_FOUND_FMT'), r)

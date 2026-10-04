@@ -121,6 +121,7 @@ var
   N: Integer;
 begin
   Result := TJSONObject.Create;
+  try
   Denied := ReadPathDenied(APath);
   if Denied <> '' then
   begin
@@ -165,6 +166,12 @@ begin
   begin
     Result.AddPair('note', MsgText(SN_TEST_DISCOVER_NOTE));
     Result.AddPair('runsOn', MsgText(SN_TEST_RUNS_ON));
+  end;
+  except
+    // una excepcion a medio camino dejaba sin liberar lo que se devuelve
+    // (el patron del Result de Rename, menor de la ronda 16)
+    Result.Free;
+    raise;
   end;
 end;
 
@@ -572,6 +579,7 @@ var
   Sb: TStringBuilder;
 begin
   Result := TJSONObject.Create;
+  try
   // A bare name ("InventarioTest") is what delphi_projects lists, so it is
   // the obvious thing to send - and it came back as "outside the allowed
   // workspaces", which is true of any relative name and explains nothing
@@ -781,7 +789,11 @@ begin
   Sb := TStringBuilder.Create;
   try
     for I := From to High(Tail) do
-      if Tail[I].Trim <> '' then
+      // el recuadro de DUnitX (copyright y licencia, '*' a los dos lados)
+      // iba en cada cola: cinco lineas que no dicen nada del resultado
+      // (revisor de tokens, 4-oct-2026)
+      if (Tail[I].Trim <> '') and not ((K = tkDUnitX) and Tail[I].Trim.StartsWith('*') and
+         Tail[I].Trim.EndsWith('*')) then
         Sb.AppendLine(Tail[I].TrimRight);
     Result.AddPair('outputTail', Sb.ToString.TrimRight);
   finally
@@ -789,7 +801,15 @@ begin
   end;
   if Length(Tail) > 40 then
     Result.AddPair('outputTruncated', TJSONBool.Create(True));
-  Result.AddPair('note', MsgText(SN_TEST_RUN_NOTE));
+  // TEST-024 (de donde sale el veredicto, el contenedor) iba en CADA
+  // ejecucion: lo dice la descripcion de la tool, y el tiempo agotado y el
+  // sin-tests llevan su propia nota (revisor de tokens, 4-oct-2026)
+  except
+    // una excepcion a medio camino dejaba sin liberar lo que se devuelve
+    // (el patron del Result de Rename, menor de la ronda 16)
+    Result.Free;
+    raise;
+  end;
 end;
 
 end.

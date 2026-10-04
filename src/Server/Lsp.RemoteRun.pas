@@ -412,6 +412,7 @@ var
   Terminado: Boolean;
 begin
   Result := TJSONObject.Create;
+  try
   Pc := PaClientPath;
   if Pc = '' then
   begin
@@ -573,6 +574,12 @@ begin
   Paclient(Pc, Ops, AProfile, Output);
 
   Result.AddPair('note', MsgText(SN_REMOTERUN_NOTE));
+  except
+    // una excepcion a medio camino dejaba sin liberar lo que se devuelve
+    // (el patron del Result de Rename, menor de la ronda 16)
+    Result.Free;
+    raise;
+  end;
 end;
 
 function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
@@ -605,6 +612,7 @@ var
   Terminado: Boolean;
 begin
   Result := TJSONObject.Create;
+  try
   if not JobIdValido(AJobId) then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
@@ -658,6 +666,12 @@ begin
     Result.AddPair('exitCode', TJSONNumber.Create(-1));
     Result.AddPair('output', Texto);
     Result.AddPair('note', MsgFmt(SN_REMOTERUN_OUTPUT_ALIVE_FMT, [AProfile, AJobId]));
+  end;
+  except
+    // una excepcion a medio camino dejaba sin liberar lo que se devuelve
+    // (el patron del Result de Rename, menor de la ronda 16)
+    Result.Free;
+    raise;
   end;
 end;
 

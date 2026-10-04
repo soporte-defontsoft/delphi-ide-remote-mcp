@@ -39,7 +39,7 @@ procedure ServeFile(RequestInfo: TIdHTTPRequestInfo;
   cuando la ruta /files no esta servida (stdio). Un agente pequeno que
   recompone la ruta a mano se equivoca (hermes, 25-sep-2026: metio su
   carpeta en medio y pidio un fichero que nunca existio); un enlace se copia. }
-function DownloadLinkFor(const AToolName, AFullPath: string): string;
+function DownloadLinkFor(const AFullPath: string): string;
 
 implementation
 
@@ -55,12 +55,14 @@ uses
   Lsp.Texts,
   Lsp.ShaCache;
 
-function DownloadLinkFor(const AToolName, AFullPath: string): string;
+function DownloadLinkFor(const AFullPath: string): string;
 begin
   if not GFilesServed then
     Exit('');
+  // un trozo, con '' (MaskDriveText con nombre de tool es el filtro de salida
+  // y gasta lo que la llamada dejo anotado: las citas del disco)
   Result := FILES_ROUTE + '?path=' +
-    TNetEncoding.URL.Encode(MaskDriveText(AToolName, AFullPath));
+    TNetEncoding.URL.Encode(MaskDriveText('', AFullPath));
 end;
 
 { El codigo HTTP de una negativa, por el RESULTADO que declara su etiqueta:
@@ -88,7 +90,7 @@ begin
   O := TJSONObject.Create;
   try
     // The message may quote a path: it leaves masked, like every tool answer.
-    O.AddPair('error', MaskDriveText('files', AMessage));
+    O.AddPair('error', MaskDriveText('', AMessage));
     ResponseInfo.ContentText := O.ToJSON;
   finally
     O.Free;

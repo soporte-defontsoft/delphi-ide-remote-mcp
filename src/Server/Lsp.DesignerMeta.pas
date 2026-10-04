@@ -152,7 +152,8 @@ uses
   Lsp.Texts,
   Lsp.Discovery,       // DiscoverRadStudio: el Delphi activo
   Lsp.DesignerMetaGen, // la tabla de ese Delphi, sacada de su fuente
-  Lsp.DesignerBin;
+  Lsp.DesignerBin,
+  Lsp.Pascal;
 
 type
   TJubilada = record
@@ -244,11 +245,11 @@ begin
     // 2026-08-26, P2.9), under a lock
     TMonitor.Enter(GMetaLock);
     try
-      if not GTablas.TryGetValue(LowerCase(Fichero), Result) then
+      if not GTablas.TryGetValue(AnsiLowerCase(Fichero), Result) then
       begin
         Result := TMetaTable.DeFichero(Fichero);
-        GTablas.Add(LowerCase(Fichero), Result);
-        JubilaLocked(LowerCase(Fichero));
+        GTablas.Add(AnsiLowerCase(Fichero), Result);
+        JubilaLocked(AnsiLowerCase(Fichero));
       end;
     finally
       TMonitor.Exit(GMetaLock);
@@ -269,7 +270,7 @@ const
 
 function ClaveProp(const AClase, ANombre: string): string;
 begin
-  Result := AClase.ToLower + SEP_CLAVE_PROP + ANombre.ToLower;
+  Result := ClaveDeIdentificador(AClase) + SEP_CLAVE_PROP + ClaveDeIdentificador(ANombre);
 end;
 
 constructor TMetaTable.Create(const AFacts: array of string);
@@ -300,10 +301,10 @@ begin
       Continue;
     if (P[0] = 'C') then
     begin
-      Classes.AddOrSetValue(P[1].ToLower, NombreDeIdDeTipo(P[1]));
-      IdEscrito.AddOrSetValue(P[1].ToLower, P[1]);
-      if not PorNombre.ContainsKey(NombreDeIdDeTipo(P[1]).ToLower) then
-        PorNombre.Add(NombreDeIdDeTipo(P[1]).ToLower, P[1].ToLower);
+      Classes.AddOrSetValue(ClaveDeIdentificador(P[1]), NombreDeIdDeTipo(P[1]));
+      IdEscrito.AddOrSetValue(ClaveDeIdentificador(P[1]), P[1]);
+      if not PorNombre.ContainsKey(ClaveDeIdentificador(NombreDeIdDeTipo(P[1]))) then
+        PorNombre.Add(ClaveDeIdentificador(NombreDeIdDeTipo(P[1])), ClaveDeIdentificador(P[1]));
     end
     else if (P[0] = 'P') and (Length(P) >= 4) then
     begin
@@ -315,43 +316,43 @@ begin
       R.TypeName := NombreDeIdDeTipo(R.TypeId);
       R.Name := P[2];
       Props.AddOrSetValue(ClaveProp(P[1], P[2]), R);
-      if PropNames.TryGetValue(P[1].ToLower, Names) then
+      if PropNames.TryGetValue(ClaveDeIdentificador(P[1]), Names) then
       begin
         if Length(Names) < 200 then
-          PropNames[P[1].ToLower] := Names + ', ' + P[2]
+          PropNames[ClaveDeIdentificador(P[1])] := Names + ', ' + P[2]
         else if not Names.EndsWith('...') then
-          PropNames[P[1].ToLower] := Names + '...';
+          PropNames[ClaveDeIdentificador(P[1])] := Names + '...';
       end
       else
-        PropNames.Add(P[1].ToLower, P[2]);
+        PropNames.Add(ClaveDeIdentificador(P[1]), P[2]);
     end
     else if (P[0] = 'E') and (Length(P) >= 3) then
     begin
-      Enums.AddOrSetValue(P[1].ToLower, ',' + P[2].ToLower + ',');
-      EnumShow.AddOrSetValue(P[1].ToLower, P[2].Replace(',', ', '));
+      Enums.AddOrSetValue(ClaveDeIdentificador(P[1]), ',' + ClaveDeIdentificador(P[2]) + ',');
+      EnumShow.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2].Replace(',', ', '));
     end
     else if (P[0] = 'S') and (Length(P) >= 3) then
     begin
-      Sets.AddOrSetValue(P[1].ToLower, ',' + P[2].ToLower + ',');
-      SetShow.AddOrSetValue(P[1].ToLower, P[2].Replace(',', ', '));
+      Sets.AddOrSetValue(ClaveDeIdentificador(P[1]), ',' + ClaveDeIdentificador(P[2]) + ',');
+      SetShow.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2].Replace(',', ', '));
     end
     else if (P[0] = 'N') and (Length(P) >= 3) then
       // el nombre que escribe un form es de OTRA que la primera C (la
       // registrada en la paleta, la que no es un modulo...): van al final
-      PorNombre.AddOrSetValue(P[1].ToLower, P[2].ToLower)
+      PorNombre.AddOrSetValue(ClaveDeIdentificador(P[1]), ClaveDeIdentificador(P[2]))
     else if (P[0] = 'X') and (Length(P) >= 3) then
-      Ambiguas.AddOrSetValue(P[1].ToLower, P[1] + '|' + P[2])
+      Ambiguas.AddOrSetValue(ClaveDeIdentificador(P[1]), P[1] + '|' + P[2])
     else if (P[0] = 'D') and (Length(P) >= 3) then
       Definidas.AddOrSetValue(ClaveProp(P[1], P[2]), P[2])
     else if (P[0] = 'H') and (Length(P) >= 3) then
     begin
-      Padres.AddOrSetValue(P[1].ToLower, P[2].ToLower);
-      if not Hijas.TryGetValue(P[2].ToLower, L) then
+      Padres.AddOrSetValue(ClaveDeIdentificador(P[1]), ClaveDeIdentificador(P[2]));
+      if not Hijas.TryGetValue(ClaveDeIdentificador(P[2]), L) then
       begin
         L := TList<string>.Create;
-        Hijas.Add(P[2].ToLower, L);
+        Hijas.Add(ClaveDeIdentificador(P[2]), L);
       end;
-      L.Add(P[1].ToLower);
+      L.Add(ClaveDeIdentificador(P[1]));
     end;
   end;
 end;
@@ -386,8 +387,8 @@ begin
   Vistas := TDictionary<string, Boolean>.Create;
   Nombres := TDictionary<string, Boolean>.Create;
   try
-    Cola.Enqueue(AClase.ToLower);
-    Vistas.Add(AClase.ToLower, True);
+    Cola.Enqueue(ClaveDeIdentificador(AClase));
+    Vistas.Add(ClaveDeIdentificador(AClase), True);
     while (Cola.Count > 0) and (Length(Result) < 200) do
     begin
       C := Cola.Dequeue;
@@ -398,9 +399,9 @@ begin
           var N := X;
           if N.EndsWith('...') then
             N := N.Substring(0, N.Length - 3);
-          if (N <> '') and not Nombres.ContainsKey(N.ToLower) then
+          if (N <> '') and not Nombres.ContainsKey(ClaveDeIdentificador(N)) then
           begin
-            Nombres.Add(N.ToLower, True);
+            Nombres.Add(ClaveDeIdentificador(N), True);
             if Result = '' then
               Result := N
             else
@@ -429,7 +430,7 @@ var
   L: string;
 begin
   AId := '';
-  L := ANombre.Trim.ToLower;
+  L := ClaveDeIdentificador(ANombre.Trim);
   if EsIdDeTipo(L) then
   begin
     Result := Classes.ContainsKey(L);
@@ -450,7 +451,7 @@ begin
   // los que lee un ayudante para alguna clase del marco ('D * Font.Size')
   if Definidas.ContainsKey(ClaveProp('*', ANombre)) then
     Exit(True);
-  C := AClase.ToLower;
+  C := ClaveDeIdentificador(AClase);
   N := 0;
   while (C <> '') and (N < 64) do
   begin
@@ -475,7 +476,7 @@ var
 begin
   Lista := TList<string>.Create;
   try
-    C := AClase.ToLower;
+    C := ClaveDeIdentificador(AClase);
     N := 0;
     while (C <> '') and (N < 64) do
     begin
@@ -511,7 +512,7 @@ begin
   Cola := TQueue<string>.Create;
   Vistas := TDictionary<string, Boolean>.Create;
   try
-    Cola.Enqueue(AClase.ToLower);
+    Cola.Enqueue(ClaveDeIdentificador(AClase));
     while Cola.Count > 0 do
     begin
       if not Hijas.TryGetValue(Cola.Dequeue, Hs) then
@@ -622,7 +623,7 @@ begin
       // (Lsp.DesignerBin), shared with binding, tree and the rename
       if LineaDeObjeto(L, OClave, ONombre, OClase) then
       begin
-        Cur := OClase.ToLower;
+        Cur := ClaveDeIdentificador(OClase);
         // The ROOT object and an inline frame are user classes by definition
         // (a form, a frame, a data module): never judged. With the tables
         // read from the library paths a user's TForm1 can share its name
@@ -637,7 +638,7 @@ begin
         // the NAME a form writes -> the class identity (with its unit)
         if not M.ClaseDeNombre(OClase, Cur) then
         begin
-          Cur := OClase.ToLower;
+          Cur := ClaveDeIdentificador(OClase);
           // Not judging an unknown class is right (a user form or a
           // third-party component is not an error), but saying NOTHING was
           // read as "checked and fine" - and lint's own description promises
@@ -669,7 +670,7 @@ begin
           Stack.Pop;
         Continue;
       end;
-      Mt := TRegEx.Match(L, '^([A-Za-z_][\w.]*) = (.*)$');
+      Mt := TRegEx.Match(L, '^(' + PATRON_IDENT_PUNTOS + ') = (.*)$');
       if not Mt.Success then
         Continue;
       Lhs := Mt.Groups[1].Value;
@@ -705,7 +706,7 @@ begin
       Segs := Lhs.Split(['.']);
       for SIdx := 0 to High(Segs) do
       begin
-        Seg := Segs[SIdx].ToLower;
+        Seg := ClaveDeIdentificador(Segs[SIdx]);
         Key := ClaveProp(Cur, Seg);
         // going down a class-typed property, the instance may be of a
         // DESCENDANT of the declared type (TLabel.TextSettings declares
@@ -767,7 +768,7 @@ begin
           // descend into the declared type (its descendants, above): one that
           // publishes nothing but has descendants is not "no data". By its
           // IDENTITY: TeeChart's TFont is not the VCL's
-          Cur := R.TypeId.ToLower;
+          Cur := ClaveDeIdentificador(R.TypeId);
           if (not M.Classes.TryGetValue(Cur, CurShow)) or
              (not M.PropNames.ContainsKey(Cur) and not M.Hijas.ContainsKey(Cur)) then
             Break; // no data for the subtree: silence
@@ -775,25 +776,23 @@ begin
         else
         begin
           // leaf value checks, only where the table can KNOW
-          if (R.Kind = 'e') and TRegEx.IsMatch(Rhs, '^[A-Za-z_][\w.]*$') then
+          if (R.Kind = 'e') and EsIdentificador(Rhs, True) then
           begin
-            V := Rhs;
-            if V.LastIndexOf('.') >= 0 then
-              V := V.Substring(V.LastIndexOf('.') + 1);
-            if M.Enums.TryGetValue(R.TypeId.ToLower, Members) and
-               (not Members.Contains(',' + V.ToLower + ',')) then
+            V := UltimoTrozo(Rhs);
+            if M.Enums.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) and
+               (not Members.Contains(',' + ClaveDeIdentificador(V) + ',')) then
               Warn(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT,
-                [Rhs, R.TypeName, M.EnumShow[R.TypeId.ToLower]]));
+                [Rhs, R.TypeName, M.EnumShow[ClaveDeIdentificador(R.TypeId)]]));
           end
-          else if (R.Kind = 's') and TRegEx.IsMatch(Rhs, '^[A-Za-z_]\w*$') then
+          else if (R.Kind = 's') and EsIdentificador(Rhs) then
             Warn(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [R.TypeName, Rhs]))
           else if (R.Kind = 's') and (Rhs <> '') and (Rhs[1] = '[') and
                   Rhs.EndsWith(']') and
-                  M.Sets.TryGetValue(R.TypeId.ToLower, Members) then
+                  M.Sets.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) then
           begin
             for V in Rhs.Substring(1, Length(Rhs) - 2).Split([',']) do
               if (V.Trim <> '') and
-                 (not Members.Contains(',' + V.Trim.ToLower + ',')) then
+                 (not Members.Contains(',' + ClaveDeIdentificador(V.Trim) + ',')) then
               begin
                 Warn(MsgFmt(SF_DSGN_NO_ES_ELEMENTO_FMT,
                   [V.Trim, R.TypeName]));

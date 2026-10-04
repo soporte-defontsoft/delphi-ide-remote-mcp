@@ -157,7 +157,7 @@ check('...y el fichero no se toco', open(U16, 'rb').read()[:2] == b'\xff\xfe', '
 open(U16, 'wb').write("object FormU: TFormU\r\n  Caption = 'acento: c\u00f3digo'\r\n  ClientHeight = 10\r\n  ClientWidth = 10\r\nend\r\n".encode('utf-16'))
 r = call('delphi_read', {'path': U16})
 check('delphi_read lee el UTF-16 LE y lo dice', 'encoding=utf16-le' in r and "Caption = 'acento: c\u00f3digo'" in r, r[:200])
-check('...con sus CRLF y sus 2 bytes altos (medido sobre el cuerpo UTF-8)', 'CRLF=5' in r and 'loneLF=0' in r and 'accents=2' in r, r[:200])
+check('...con sus CRLF y sus 2 bytes altos (medido sobre el cuerpo UTF-8; 1.13.0: limpio, "audit=clean")', 'eol=CRLF' in r and 'audit=clean accents=2' in r, r[:200])
 r = call('delphi_search', {'root': U16, 'query': 'c\u00f3digo'})
 check('delphi_search lo encuentra con el acento', '"total":1' in r and '"line":2' in r, r[:200])
 r = call('delphi_edit', {'path': U16, 'old': '  ClientHeight = 10', 'new': '  ClientHeight = 11'})

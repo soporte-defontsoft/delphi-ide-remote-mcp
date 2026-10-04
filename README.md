@@ -448,6 +448,7 @@ section is completely inert.
 Port=3000                               ; HTTP port for --http and the tray (-gui)
 SessionTimeoutMinutes=720               ; idle HTTP sessions expire after this (0 = never)
 EngineIdleMinutes=30                    ; an LSP engine nobody uses for this long is stopped (0 = never)
+MaxEngines=0                            ; at most this many LSP engines alive; past it, the least recently used one stops (0 = no cap)
 
 ; Token-scoped sandboxes: the SECRET decides the jail. Hard boundary - other
 ; workspaces' roots are not even readable. Overlap is allowed and never
@@ -703,6 +704,12 @@ Every key is documented in depth in [`settings.example.ini`](settings.example.in
   request in flight that shows no sign of life for 20 s - no message, no CPU, no I/O -
   and does not answer when the server asks it is taken for hung and stopped; whoever
   waited gets `LSP-033` ("repeat"), and the repeat starts another engine.
+- **`[Server] MaxEngines`** (or `DELPHI_MCP_MAX_ENGINES`): how many LSP engines may be alive at
+  once. An engine that would pass the cap stops the least recently used one that is not
+  working - never one with a request in flight; if every engine is busy the cap is passed
+  rather than throwing an answer away - and the log says which one and why. Its project's
+  next request starts it again (a few seconds). Default 0: no cap, only `EngineIdleMinutes`
+  stops engines. Worth setting on a machine with little memory or many projects at once.
 - **`[Log]`** — the server's log on disk, the **same in every mode** (service, terminal and
   tray), in `logs\` next to the exe. `logs\actual.log` is the live tail, appended every half
   second, so a process killed from outside loses half a second, not hours. Every
@@ -785,7 +792,7 @@ Each security fix is paired with the vector it closes **and** with a counter-tes
 
 - **Zero hardcoded paths** — RAD Studio installation (11/12/13+) is discovered via the Windows registry.
 - **Project config made automatic** — uses the IDE-generated `.delphilsp.json` when fresh, and can **fabricate one from the `.dproj`** when absent or stale (validated experimentally).
-- **Warm processes** — one `DelphiLSP` (controller + agents; DelphiLSP replaces its own dead/hung children) per workspace, kept alive between agent sessions and refreshed against disk on each use. An engine nobody uses for `[Server] EngineIdleMinutes` (30 by default) is stopped, and the next request of its project starts another; one that hangs is stopped too — whoever was waiting on it gets `LSP-033` — and replaced the same way (1.8.0). A cap on how many engines stay warm at once (LRU) is roadmap, not yet implemented.
+- **Warm processes** — one `DelphiLSP` (controller + agents; DelphiLSP replaces its own dead/hung children) per workspace, kept alive between agent sessions and refreshed against disk on each use. An engine nobody uses for `[Server] EngineIdleMinutes` (30 by default) is stopped, and the next request of its project starts another; one that hangs is stopped too — whoever was waiting on it gets `LSP-033` — and replaced the same way (1.8.0). How many engines stay warm at once can be capped with `[Server] MaxEngines`: past it, the least recently used one stops (1.13.0).
 - **Correct source encoding** — BOM detection with configurable ANSI fallback; legacy CP1252 sources are not corrupted.
 - **One executable, three modes** — Windows Service, terminal (`--http`/stdio) and VCL tray app (live log) are the same binary and the same 42 tools. They cannot drift: one project, one unit list, and the server itself is built once in `Lsp.Host` for all three.
 - **What a tool answers is what the agent sees** — tools reply in prose or in JSON, and both travel in the MCP `content`. `structuredContent` is published only when the answer IS a JSON object, or when a prose call FAILED (there it carries `ok`, a machine-readable `code` — `DENIED`, `NOT_FOUND`, `INVALID_PARAM`, `INTERNAL` — and the refusal text). A prose success publishes none: a client that understands the field shows it *instead of* `content`, so a status placeholder there made the real answer invisible (measured against production and fixed in v1.0.1-beta). A refusal carried INSIDE a JSON object gets the same treatment since v1.0.4-beta: the object's `error` field decides, so `ok` is never `true` on a refusal, whatever the tool put there.

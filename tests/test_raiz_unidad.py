@@ -201,7 +201,7 @@ try:
     check('D2 leer un fichero de la raiz', bien(res, t) and 'AGUJA-RU' in t, t[:200])
     res, sc, t = llama('delphi_search', {'root': VQ, 'query': 'AGUJA-RU', 'pattern': '*.txt'})
     check('D2 buscar desde la raiz encuentra lo de la UNIDAD',
-          bien(res, t) and any('raiz.txt' in h.get('path', '') for h in sc.get('hits', [])), t[:300])
+          bien(res, t) and any('raiz.txt' in h.get('path', '') for h in mc.aciertos(sc)), t[:300])
     res, sc, t = llama('delphi_list', {'root': VQ, 'pattern': '*.txt'})
     rutas = [f.get('path', '').lower() for f in sc.get('files', [])]
     check('D2 listar ficheros desde la raiz: con su unidad y su barra',

@@ -64,6 +64,7 @@ type
     [Test] procedure ElUncPegadoAUnaOpcionSeEnmascara;
     [Test] procedure ElUncDobladoDosVecesSeEnmascara;
     [Test] procedure ElUncExtendidoYElHostRaroSeEnmascaran;
+    [Test] procedure LaFilaDeUnaTandaDejaElDiscoComoEsta;
   end;
 
   { LA clave de una carpeta (Lsp.Guard.ClaveDeCarpeta): la misma carpeta
@@ -396,6 +397,43 @@ begin
   Assert.DoesNotContain(S, 'nas', S);
   S := MaskDriveText('', 'copia en \\_nas\s\x.dcu');
   Assert.DoesNotContain(S, '_nas', S);
+end;
+
+{ La negativa de una tanda de delphi_edit (un ROLLBACK), en la forma que la
+  escribe la tanda (Lsp.Patch): lo que PIDIO el agente se enmascara; la linea
+  releida del disco y la cita de la entrada que fallo van tal cual, como en
+  delphi_read. Iban en la misma fila y se enmascaraba entera: '[^\s:]' volvia
+  '[^\srv0:]' (4-oct-2026). Y van tal cual porque las compuso CitaDeLinea en
+  esta llamada, no por su forma: una linea que solo PARECE una cita se
+  enmascara (antes pasaba toda la que empezara por 'N|'), y las citas pasan
+  tambien en la respuesta de una tool que no es de eco (una pista de
+  delphi_changeset; revision del 4-oct-2026). }
+procedure TBarridoDeUnidadesTests.LaFilaDeUnaTandaDejaElDiscoComoEsta;
+var
+  S, Cita1, Cita2: string;
+begin
+  OlvidaSalidaHecha; // nada de otra prueba de este hilo
+  Cita1 := CitaDeLinea(12, 'R := ''[^\s:]'' + ''' + Letra + ':\disco'';');
+  Cita2 := CitaDeLinea(15, '  S := ''' + Letra + ':\otra'';');
+  S := MaskDriveText('delphi_edit', '[EDIT-099 INVALID_PARAM] ROLLBACK: edit 2 of 2 failed'#10 +
+    '  1 OK: R := ''' + Letra + ':\pedido''  ->'#10 +
+    '     ' + Cita1 + #10 +
+    '  2: [EDIT-007 NOT_FOUND] no esta: |x  ->  1|' + Letra + ':\tecleado|. La linea real:'#10 +
+    '       ' + Cita2 + #10 +
+    '     3|' + Letra + ':\parece una cita');
+  Assert.Contains(S, '1 OK: R := ''' + Virtual + '\pedido''', 'lo del agente, enmascarado: ' + S);
+  Assert.Contains(S, '     ' + Cita1, 'la linea del disco, tal cual: ' + S);
+  Assert.Contains(S, '       ' + Cita2, 'la cita del disco, tal cual: ' + S);
+  Assert.Contains(S, '1|' + Virtual + '\tecleado', 'un N| en medio de una linea no la exime: ' + S);
+  Assert.Contains(S, '3|' + Virtual + '\parece una cita', 'lo que solo PARECE una cita se enmascara: ' + S);
+  // las citas son de UNA llamada: la siguiente las enmascara
+  S := MaskDriveText('delphi_edit', '[EDIT-099 INVALID_PARAM] x'#10'     ' + Cita1);
+  Assert.Contains(S, Virtual + '\disco', 'una cita de la llamada anterior ya no exime: ' + S);
+  // ...y pasan en la respuesta de cualquier tool, no solo en las de eco
+  Cita1 := CitaDeLinea(7, 'X := ''' + Letra + ':\pista'';');
+  S := MaskDriveText('delphi_changeset', '[CHSET-0 NOT_FOUND] ' + Letra + ':\f.pas'#10'  ' + Cita1);
+  Assert.Contains(S, '  ' + Cita1, 'la pista de changeset, tal cual: ' + S);
+  Assert.Contains(S, Virtual + '\f.pas', 'su ruta, enmascarada: ' + S);
 end;
 
 { TClaveDeCarpetaTests }

@@ -19,6 +19,12 @@ recent and what a NEWER server wrote; what a class streams by code
 not warned about; info says what a class streams by code and, for one that
 publishes nothing, what its descendants publish.
 
+1.13.0 (4-oct-2026): the header names the platform the source was read for
+(the one of the installation's IDE: Win64 with bin64/bds.exe, else Win32); a
+table that is there but cannot be read says DSGN-054 and does not judge; a
+generation that fails says DSGN-053 and is remembered for a while (both
+rules had no check).
+
 Measured on 3-oct-2026 against the RTTI tables of 1.11.3: 100 % of the
 properties identical (VCL 7.117, FMX 11.779) - designer-meta-por-version in
 the vault. This battery checks what an agent sees.
@@ -33,7 +39,7 @@ BASE = mc.carpeta('designer-tablas')
 EXE = mc.copia_exe(BASE)
 APPDATA = os.path.join(BASE, 'appdata')
 os.makedirs(APPDATA, exist_ok=True)
-CACHE = os.path.join(APPDATA, 'DelphiLspMcp', 'designer')
+CACHE = mc.cache_servidor('designer', APPDATA)
 env = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'LOCALAPPDATA': APPDATA})
 
 
@@ -48,16 +54,9 @@ def tablas():
     return sorted(os.path.basename(f) for f in glob.glob(os.path.join(CACHE, '*')))
 
 
-def espera_info(call, args, cond, tope=240):
-    # la tabla se genera en segundo plano (segundos); info espera un rato y,
-    # si no ha acabado, dice DSGN-051: se vuelve a preguntar
-    t0, r = time.time(), ''
-    while time.time() - t0 < tope:
-        r = call('delphi_designer', args, t=120)
-        if cond(r) or not mc.tiene(r, 'DSGN-051'):
-            return r
-        time.sleep(2)
-    return r
+# la tabla se genera en segundo plano (segundos): mc.espera_info pregunta
+# otra vez mientras info diga DSGN-051
+espera_info = mc.espera_info
 
 
 # 1) cache VACIA: la primera edicion de un form no espera a la tabla ni la
@@ -99,6 +98,8 @@ cab = open(vcl[0], encoding='utf-8-sig').readline() if vcl else ''
 check('cache: la cabecera dice de que build salio y que servidor la genero',
       cab.startswith('# designer table VCL of RAD Studio') and 'units read from' in cab and
       'by DelphiLspMcp' in cab, cab[:250])
+check('cache: la cabecera dice con que plataforma se leyo el fuente (la del IDE)',
+      re.search(r'compiler [\d.]+, Win(32|64)\)', cab) is not None, cab[:250])
 
 # 4) lo que antes no estaba: los componentes de datos del propio RAD Studio
 r = call('delphi_designer', {'command': 'info', 'classname': 'TDataSource', 'framework': 'vcl'})
@@ -235,6 +236,47 @@ r = call('delphi_designer', {'command': 'info', 'classname': 'TButton', 'framewo
 check('con la nueva generada, contesta la nueva (la falsa ya no)',
       not any(p.get('name') == 'Marca' for p in J(r).get('properties', [])), r[:300])
 
+srv.cierra()
+
+# 10) una tabla que esta pero no se puede leer (un disco, otro proceso que la
+# tiene bloqueada): el disenador dice por que (DSGN-054) y no juzga, sin
+# lanzar. La de ahora, con un bloqueo de lectura de Windows
+import msvcrt
+actual = [n for n in tablas() if patron.match(n) and '_vcl_' in n and
+          not any(x in n for x in ('aaaa', 'bbbb', 'cccc'))]
+check('hay una tabla VCL de ahora que bloquear', len(actual) == 1, str(tablas())[:400])
+if actual:
+    ruta = os.path.join(CACHE, actual[0])
+    tam = os.path.getsize(ruta)
+    fh = open(ruta, 'r+b')
+    msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, tam)
+    try:
+        srv = mc.Stdio(EXE, env, nombre='dt3')
+        r = srv.call('delphi_designer', {'command': 'info', 'classname': 'TButton', 'framework': 'vcl'})
+        check('una tabla que no se puede leer: DSGN-054 con el motivo', mc.tiene(r, 'DSGN-054'), r[:300])
+        r = srv.call('delphi_designer', {'command': 'lint', 'path': DFM})
+        check('...y el lint no juzga: dice lo mismo, sin avisos', mc.tiene(r, 'DSGN-054') and
+              not mc.tiene(r, 'DSGN-038'), r[:300])
+        srv.cierra()
+    finally:
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, tam)
+        fh.close()
+
+# 11) una generacion que falla (aqui, un FICHERO donde va la carpeta de las
+# tablas) se dice con su motivo (DSGN-053) y se recuerda un rato: la llamada
+# siguiente contesta en el acto, sin otra generacion de segundos de CPU
+APPDATA2 = os.path.join(BASE, 'appdata-falla')
+os.makedirs(mc.cache_servidor('', APPDATA2), exist_ok=True)
+open(mc.cache_servidor('designer', APPDATA2), 'w').write('estorba')
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'LOCALAPPDATA': APPDATA2}), nombre='dt4')
+r = espera_info(srv.call, {'command': 'info', 'classname': 'TButton', 'framework': 'vcl'},
+                lambda x: mc.tiene(x, 'DSGN-053'))
+check('una generacion que falla: DSGN-053 con su motivo', mc.tiene(r, 'DSGN-053'), r[:400])
+t0 = time.time()
+r = srv.call('delphi_designer', {'command': 'info', 'classname': 'TLabel', 'framework': 'fmx'})
+check('...recordada: la siguiente contesta DSGN-053 en el acto (%.1f s)' % (time.time() - t0),
+      mc.tiene(r, 'DSGN-053') and time.time() - t0 < 5, r[:400])
 srv.cierra()
 mc.borra(BASE)
 mc.fin('designer-tablas battery')

@@ -59,8 +59,8 @@ try:
           r1.get('hasMore') is True and r1.get('nextOffset') == 3, r1)
     r2 = json.loads(cli.call('delphi_search',
                              {'root': sub, 'query': 'NeedleXyz', 'maxresults': 3, 'offset': 3}, sid=sid))
-    l1 = [h['line'] for h in r1['hits']]
-    l2 = [h['line'] for h in r2['hits']]
+    l1 = [h['line'] for h in mc.aciertos(r1)]
+    l2 = [h['line'] for h in mc.aciertos(r2)]
     check('E1 page 2 continues, no overlap',
           r2.get('offset') == 3 and l2 and not (set(l1) & set(l2)) and
           min(l2) > max(l1), (l1, l2))
@@ -68,7 +68,7 @@ try:
     while True:
         rp = json.loads(cli.call('delphi_search',
                                  {'root': sub, 'query': 'NeedleXyz', 'maxresults': 4, 'offset': ofs}, sid=sid))
-        seen += [h['line'] for h in rp['hits']]
+        seen += [h['line'] for h in mc.aciertos(rp)]
         if not rp.get('hasMore'):
             break
         ofs = rp['nextOffset']

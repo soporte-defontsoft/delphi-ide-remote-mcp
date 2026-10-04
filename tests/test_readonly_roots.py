@@ -139,7 +139,7 @@ check('search en la referencia', 'URefUtil' in out and not mc.fallo(out), out[:2
 out = call('delphi_list', {'path': os.path.join(REF, 'Ref')})
 check('list en la referencia', 'URefUtil.pas' in out, out[:200])
 out = call('delphi_symbols', {'path': REF_PAS})
-check('symbols (LSP) en la referencia', out.lstrip().startswith('[') and '"name":"interface"' in out and '"selectionRange"' in out, out[:200])
+check('symbols (LSP) en la referencia', out.lstrip().startswith('[') and '"name":"interface"' in out and '"range"' in out, out[:200])
 out = call('delphi_fetch', {'path': REF_PAS, 'offset': 0})
 check('fetch en la referencia', '"chunkBase64"' in out or '"download"' in out, out[:200])
 

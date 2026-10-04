@@ -138,13 +138,16 @@ begin
   ADll := '';
   if not FileExists(ASettingsFile) then
     Exit;
-  Root := TJSONObject.ParseJSONValue(TFile.ReadAllText(ASettingsFile)) as TJSONObject;
+  // un fichero que no es un objeto, o cuyo "settings" no lo es, no nombra
+  // proyecto: se fabrica el nuestro (salia SYS-006 INTERNAL en cada tool del
+  // motor: ObjetoJson)
+  Root := ObjetoJson(TFile.ReadAllText(ASettingsFile));
   if Root = nil then
     Exit;
   try
-    var Settings := Root.GetValue('settings') as TJSONObject;
-    if Settings = nil then
+    if not (Root.GetValue('settings') is TJSONObject) then
       Exit;
+    var Settings := TJSONObject(Root.GetValue('settings'));
     var ProjVal := Settings.GetValue('project');
     if ProjVal = nil then
       Exit;

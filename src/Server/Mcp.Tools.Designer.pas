@@ -44,6 +44,7 @@ type
     FUnit_: string;
     FFramework: string;
     FFilter: string;
+    FMaxDepth: Integer;
   public
     [SchemaDescription(SP_DESIGNER_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -62,6 +63,8 @@ type
     property Framework: string read FFramework write FFramework;
     [SchemaDescription(SP_DESIGNER_FILTER)]
     property Filter: string read FFilter write FFilter;
+    [SchemaDescription(SP_DESIGNER_MAXDEPTH)]
+    property MaxDepth: Integer read FMaxDepth write FMaxDepth;
   end;
 
   TDelphiDesignerTool = class(TMCPToolBase<TDelphiDesignerParams>)
@@ -88,7 +91,8 @@ uses
   Lsp.DesignerMeta,
   Lsp.DesignerBin,
   Lsp.DesignerBinding,
-  Lsp.DesignerMetaGen;
+  Lsp.DesignerMetaGen,
+  Lsp.Pascal;
 
 const
   MAX_PROPS = 400;
@@ -128,7 +132,7 @@ function ClaseQueNoEsta(M: TMetaTable; const AClass, AFramework: string): string
 var
   A: string;
 begin
-  if M.Ambiguas.TryGetValue(AClass.Trim.ToLower, A) then
+  if M.Ambiguas.TryGetValue(ClaveDeIdentificador(AClass.Trim), A) then
     Result := MsgFmt(SR_DESIGNER_CLASE_AMBIGUA_FMT, [A.Substring(0, A.IndexOf('|')),
       UpperCase(AFramework), A.Substring(A.IndexOf('|') + 1)])
   else
@@ -259,8 +263,8 @@ begin
     // Enums had their members; SETS did not, though the description promised
     // "the legal members when it is an enum/set" and lint could already name
     // them (field round 8).
-    if M.EnumShow.TryGetValue(R.TypeId.ToLower, Members) or
-       M.SetShow.TryGetValue(R.TypeId.ToLower, Members) then
+    if M.EnumShow.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) or
+       M.SetShow.TryGetValue(ClaveDeIdentificador(R.TypeId), Members) then
       Ret.AddPair('members', Members);
     if R.Kind = 's' then
       Ret.AddPair('membersNote', MsgText(SN_DESIGNER_SET_NOTE));
@@ -296,12 +300,15 @@ begin
   end;
 end;
 
-function TreeOf(const APath: string): string;
+{ AMaxDepth: los niveles que se ensenan (1 = solo el form; 0 = todos); un
+  objeto del ultimo nivel dice cuantos hijos tiene en vez de ensenarlos }
+function TreeOf(const APath: string; AMaxDepth: Integer): string;
 var
   Doc: TStyleDoc;
   Ret: TJSONObject;
+  Cortados: Integer;
 
-  function NodeJson(O: TStyleObj): TJSONObject;
+  function NodeJson(O: TStyleObj; ANivel: Integer): TJSONObject;
   var
     Kids: TJSONArray;
     K: TStyleObj;
@@ -313,10 +320,16 @@ var
     Result.AddPair('line', TJSONNumber.Create(O.StartLine));
     if O.Children.Count > 0 then
     begin
+      if (AMaxDepth > 0) and (ANivel >= AMaxDepth) then
+      begin
+        Result.AddPair('childrenCount', TJSONNumber.Create(O.Children.Count));
+        Inc(Cortados);
+        Exit;
+      end;
       Kids := TJSONArray.Create;
       Result.AddPair('children', Kids);
       for K in O.Children do
-        Kids.AddElement(NodeJson(K));
+        Kids.AddElement(NodeJson(K, ANivel + 1));
     end;
   end;
 
@@ -329,11 +342,14 @@ begin
     Ret := TJSONObject.Create;
     try
       Ret.AddPair('file', APath);
+      Cortados := 0;
       if Doc.Root <> nil then
-        Ret.AddPair('root', NodeJson(Doc.Root))
+        Ret.AddPair('root', NodeJson(Doc.Root, 1))
       else
         Ret.AddPair('root', TJSONNull.Create);
       Ret.AddPair('note', MsgText(SN_DESIGNER_TREE_NOTE));
+      if Cortados > 0 then
+        Ret.AddPair('maxDepthNote', MsgFmt(SN_DESIGNER_TREE_MAXDEPTH_FMT, [AMaxDepth, Cortados]));
       Result := Ret.ToJSON;
     finally
       Ret.Free;
@@ -347,7 +363,7 @@ function FindByName(O: TStyleObj; const AName: string): TStyleObj;
 var
   K: TStyleObj;
 begin
-  if SameText(O.ObjName, AName) then
+  if MismoIdentificador(O.ObjName, AName) then
     Exit(O);
   for K in O.Children do
   begin
@@ -439,8 +455,8 @@ begin
     if Skip then
       Continue;
     Line := ADoc.Lines[I - 1].Trim;
-    Mt := TRegEx.Match(Line, '^([A-Za-z_][\w.]*)\s*=\s*(.*)$');
-    if Mt.Success and SameText(Mt.Groups[1].Value, AName) then
+    Mt := TRegEx.Match(Line, '^(' + PATRON_IDENT_PUNTOS + ')\s*=\s*(.*)$');
+    if Mt.Success and MismoIdentificador(Mt.Groups[1].Value, AName) then
     begin
       AFound := True;
       Exit(Mt.Groups[2].Value.Trim);
@@ -1032,13 +1048,14 @@ begin
       // ensenaba con ese nombre (Hermes, 28-sep-2026, F2)
       'info', 'classname framework filter',
       'prop', 'classname framework prop',
-      'tree', 'path', 'lint', 'path', 'layout', 'path',
+      'tree', 'path maxdepth', 'lint', 'path', 'layout', 'path',
       'get', 'path component',
       'check-binding', 'path unit',
       'to-text', 'path', 'to-binary', 'path'],
     ['path', Params.Path, '', 'classname', Params.ClassName_, '', 'prop', Params.Prop, '',
      'component', Params.Component, '', 'unit', Params.Unit_, '',
-     'framework', Params.Framework, '', 'filter', Params.Filter, ''], Suyos);
+     'framework', Params.Framework, '', 'filter', Params.Filter, '',
+     'maxdepth', IfThen(Params.MaxDepth <> 0, IntToStr(Params.MaxDepth)), ''], Suyos);
   if Sobra <> '' then
     Exit(MsgFmt(SR_DESIGNER_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos]));
   if MatchText(Cmd, ['info', 'prop']) then
@@ -1067,7 +1084,7 @@ begin
     else if Cmd = 'layout' then
       Result := LayoutOf(Params.Path)
     else if Cmd = 'tree' then
-      Result := TreeOf(Params.Path)
+      Result := TreeOf(Params.Path, Params.MaxDepth) // (un negativo lo niega la capa de parametros, SYS-016)
     else if Cmd = 'lint' then
       Result := LintForm(Params.Path)
     else if Params.Component.Trim = '' then
@@ -1085,7 +1102,8 @@ begin
   end
   else
     Result := MsgText(SR_DESIGNER_CMD);
-  Result := MaskDriveText('delphi_designer', Result);
+  // (lo enmascara el filtro de salida, Lsp.Host; una segunda pasada con el
+  // nombre de la tool gastaba lo que la llamada dejo anotado)
 end;
 
 function TDelphiDesignerTool.ExecuteWithParams(const Params: TDelphiDesignerParams): string;

@@ -182,6 +182,7 @@
         <DCCReference Include="LspTests.LetrasDeRed.pas"/>
         <DCCReference Include="LspTests.Docs.pas"/>
         <DCCReference Include="LspTests.DesignerMetaGen.pas"/>
+        <DCCReference Include="LspTests.Regex.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

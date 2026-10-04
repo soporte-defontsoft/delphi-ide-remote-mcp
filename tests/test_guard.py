@@ -396,7 +396,7 @@ if RTL:
     out = call('delphi_search', {"root": os.path.dirname(RTL), "query": "SysUtils",
                                  "maxresults": 3})
     check('lib: buscar en fuentes RTL permitido',
-          not denied(out) and mc.como_json(out).get('hits'), out[:150])
+          not denied(out) and mc.aciertos(out), out[:150])
 else:
     print('SKIP - lib: fuentes RTL no encontradas en esta maquina')
 

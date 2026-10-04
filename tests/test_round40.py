@@ -138,7 +138,7 @@ try:
     # ------------------------------------------------------------------ L6
     s = call('delphi_search', {'root': JAIL, 'query': r'D:\Proyectos'})
     try:
-        hits = json.loads(s)['hits']
+        hits = mc.aciertos(json.loads(s))
     except Exception:
         hits = []
     check('L6 delphi_search enmascara su campo "path"',

@@ -108,16 +108,14 @@ const
   // ProductVersion) y el gate de release los compara: por eso es una
   // operacion curada y no una edicion por ancla.
   // El contrato de BuildWithParams.bat, el de la casa: quiet no le pide los
-  // warnings a msbuild, asi que no hay recuento que dar - se dice, en vez de
-  // poner un 0 que seria mentira.
-  SN_BUILD_QUIET_WARNINGS =
-    '[BUILD-001] quiet: msbuild was asked for ERRORS only, so nothing is ' +
-    'known about warnings. Repeat with verbosity=normal if you want them.';
-
+  // warnings a msbuild, asi que no hay recuento que dar. BUILD-001 lo decia
+  // en CADA build quiet; desde el 4-oct-2026 lo dice esta descripcion y la
+  // respuesta no lleva la clave (nunca un 0 que seria mentira).
   SP_BUILD_VERBOSITY =
     'How much of the build comes back, the same contract as the house build ' +
     'script: quiet (DEFAULT) = errors + the summary, a few lines, cheapest ' +
-    'for "does it still compile"; normal = warnings and msbuild milestones; ' +
+    'for "does it still compile" (msbuild is not asked for warnings, so ' +
+    'nothing is said about them); normal = warnings and msbuild milestones; ' +
     'verbose = everything, including the linker command line whole - use it ' +
     'when a quiet error is not clear enough. It picks the msbuild verbosity ' +
     'too, so quiet really does ask for less, it does not just hide it.';
@@ -161,6 +159,25 @@ const
   SN_SEARCH_ILEGIBLES_FMT =
     '[SEARCH-003] %d file(s) could not be read (another process holds ' +
     'them, or no permission) and were skipped: %s';
+
+  { regex=true y el tope de tamano de delphi_search (muros de la lista del
+    4-oct-2026: solo literal, y un fichero se leia entero fuera cual fuera) }
+  SR_SEARCH_REGEX_INVALID_FMT =
+    '[SEARCH-004 INVALID_PARAM] The query is not a valid regular expression: ' +
+    '%s. Nothing was searched.';
+
+  SR_SEARCH_REGEX_CARA_FMT =
+    '[SEARCH-005 INVALID_PARAM] The regular expression gave up on line %d of ' +
+    '%s: too much backtracking (the engine has a step limit). Make it more ' +
+    'specific - anchor it, avoid nested repetitions like (a+)+. Nothing ' +
+    'more was searched.';
+
+  SN_SEARCH_GRANDES_FMT =
+    '[SEARCH-006] %d file(s) larger than %d MB were not searched: %s';
+
+  SR_SEARCH_FICHERO_GRANDE_FMT =
+    '[SEARCH-007 INVALID_PARAM] %s is %d MB, more than the %d MB a search ' +
+    'reads. Read the part you need with delphi_read (fromline/toline).';
 
   SN_SEARCH_MASK_NO_MATCH_FMT =
     '[SEARCH-002] The mask "%s" matched no file here, so nothing was ' +
@@ -329,12 +346,28 @@ const
     'without bodies. That is what you need to find your way around code ' +
     'you did not write, and it costs ONE call instead of one per file.';
 
+  { El resumen de una carpeta tenia un tope de 60 UNIDADES y no de tamano:
+    src\Server daba 40K de una vez, y lo que no cabia solo decia
+    "truncated" (revisor de tokens, 4-oct-2026). %d: el tope en caracteres;
+    %d: cuantas no entraron. }
+  SN_SYMBOLS_DIGEST_FUERA_FMT =
+    '[LSP-034] The digest stops at about %d characters: %d units are not ' +
+    'in it, named in "notShown". Ask for one of them by its path, or for ' +
+    'a subfolder.';
+
   SN_SYMBOLS_DIGEST_NOTE =
     '[LSP-007] This is the DIGEST: only what each unit declares in its ' +
     'interface, read as text and without the semantic engine. For the ' +
     'detail of one unit (with ranges and nesting) call with the file; to ' +
     'read it whole, delphi_read. If a unit is missing or something looks ' +
     'odd, do not rely on the digest to edit: read the file.';
+
+  { Lo que un contenedor del arbol lleva dentro, detras de su linea: la
+    descripcion de delphi_symbols lo promete asi, en ingles ('+N inside'),
+    y el arbol lo escribia en castellano y en linea (revisor de tokens del
+    4-oct-2026). }
+  SF_SYMBOLS_DENTRO_FMT =
+    ' (+%d inside)';
 
   SP_SYMBOLS_MODE =
     'For a FILE only: "summary" = the skeleton (each section with its ' +
@@ -357,16 +390,11 @@ const
     creyera la nota apuntaba una linea mas abajo. Ahora se dicen las dos
     cosas, que es lo unico que no se malinterpreta. }
   SN_SYMBOLS_SUMMARY_NOTE =
-    '[LSP-008] This is the SUMMARY of the tree. Each line is the ' +
-    'declaration EXACTLY AS it is written in the source (default values ' +
-    'and array ranges included). The @N are 1-BASED lines, the same ones ' +
-    'delphi_read shows you - NOTE: the LSP tools (definition, hover, ' +
-    'references, completion, signature) take the 0-based line, that is ' +
-    '@N-1. Containers say how many members they hold (+N inside): ask ' +
-    'for filter="name" to find a specific one, and there you have line ' +
-    'and line0 already split, or mode="full" for the complete tree with ' +
-    'ranges. Top-level "symbols" are the ones that live in no section, ' +
-    'which is how DelphiLSP returns a whole .dpr.';
+    '[LSP-008] SUMMARY: each line is the declaration as written in the ' +
+    'source; @N is 1-based (delphi_read), the LSP tools take @N-1; (+N ' +
+    'inside) = members of a container: filter="name" finds one (line and ' +
+    'line0 split), mode="full" gives ranges. Top-level "symbols" live in ' +
+    'no section (a .dpr).';
 
   { El filtro busca por NOMBRE y antes buscaba dentro de la firma renderizada,
     asi que filter="string" sacaba nueve cosas por su TIPO. Al arreglarlo, esa
@@ -431,6 +459,13 @@ const
 
   SL_LSP_ENGINE_IDLE_FMT =
     'lsp: ENGINE %s stopped by the server: not used for %s min';
+
+  { El tope de motores ([Server] MaxEngines, 4-oct-2026): el menos usado de
+    los que no trabajan deja sitio al que llega. %s: el motor que se para;
+    %d: el tope; %s: el que llega. }
+  SL_LSP_ENGINE_LRU_FMT =
+    'lsp: ENGINE %s stopped by the server: MaxEngines=%d reached, and it ' +
+    'was the least recently used one; it makes room for %s';
 
   { El servicio sin la ventana que RunService le da a la aplicacion de la
     VCL (30-sep-2026): sin ella el bucle principal no recibe el WM_QUIT del
@@ -712,12 +747,12 @@ const
     '[EDIT-007 NOT_FOUND] The fragment |%s| does not appear on line %d (the ' +
     'comparison is case-sensitive). Nothing was written. The real line ' +
     'is:'#10 +
-    '  %d|%s';
+    '  %s'; // la cita, de su compositor (Lsp.Guard.CitaDeLinea)
   SR_FRAG_SEVERAL_FMT =
     '[EDIT-008 INVALID_PARAM] The fragment |%s| appears %d times on line %d, ' +
     'and I will not guess which one. Nothing was written. Lengthen it ' +
     'with what is next to it until it is unique. The real line is:'#10 +
-    '  %d|%s';
+    '  %s'; // la cita, de su compositor (Lsp.Guard.CitaDeLinea)
   // EDIT-009 ("new" igual a "fragment") se retiro el 28-sep: era un ERROR
   // donde la edicion suelta dice una NOTA (EDIT-113, sin cambios); ahora un
   // fragment que no cambia nada va por ese mismo camino.
@@ -750,6 +785,34 @@ const
     'is the whole call: old/new/fragment/delete are another mode ' +
     '(EDIT-111) and atline/toline go INSIDE each entry (EDIT-115).';
 
+  { Los mismos tres parametros en las hermanas (delphi_textedit y, el
+    fragmento, delphi_changeset): el texto largo vive en delphi_edit y aqui
+    va un resumen que se sostiene solo - un ToolsOnly= puede dar una hermana
+    sin delphi_edit, asi que "lo mismo que delphi_edit" no vale. El revisor
+    de tokens (4-oct-2026) midio los tres largos repetidos: ~2.100
+    caracteres de tools/list en cada sesion. }
+  SP_PATCH_EDITS_CORTO =
+    'SEVERAL edits on THIS SAME file in ONE all-or-nothing call: a JSON ' +
+    'array [{"old":"...","new":"...","atline":12}, ...] applied in order. ' +
+    'An entry anchors on ONE line or on a BLOCK of consecutive lines; ' +
+    '"occurrence": N breaks a tie (counted on the file BEFORE the batch, ' +
+    'so it does not move like atline); "delete": true removes; "toline" ' +
+    'makes the anchor the first line of a range; "fragment" + "atline" ' +
+    'changes a piece of a long line. If one entry fails, the file goes ' +
+    'back byte for byte and you are told which one. Several files: ' +
+    'delphi_changeset.';
+  SP_PATCH_FRAGMENT_CORTO =
+    'FRAGMENT mode for a LONG line: "fragment" = the exact piece to change ' +
+    '(case-sensitive, EXACTLY ONCE in that line), "atline" = its 1-based ' +
+    'line (MANDATORY) and "new" = what replaces just that piece; the rest ' +
+    'of the line stays byte for byte. One line only, and it goes INSTEAD ' +
+    'of "old".';
+  SP_PATCH_TOLINE_CORTO =
+    'RANGE (1-based, inclusive): with this, "old" becomes the FIRST line ' +
+    'of a range that ends here - delete:true removes it all, "new" ' +
+    'replaces it all. Refused if backwards, past the end or the whole ' +
+    'file.';
+
   { Los campos de una entrada de tanda se leen a mano, uno a uno, asi que un
     nombre que no existe no daba "Unknown parameter" como en los parametros
     de la tool: se IGNORABA. Una errata ("occurence" con una r, "atlines")
@@ -773,9 +836,8 @@ const
 
   SR_PATCH_EDIT_KEY_FMT =
     '[EDIT-012 INVALID_PARAM] Entry %d of "edits" has the field "%s", ' +
-    'which does not exist. The fields of an edit are: old, new, atline, ' +
-    'toline, delete, occurrence, fragment (all lowercase). Nothing was ' +
-    'written.';
+    'which does not exist. The fields of an edit are: %s (all ' +
+    'lowercase). Nothing was written.';
 
   SR_PATCH_EDIT_NO_TEXTO_FMT =
     '[EDIT-107 INVALID_PARAM] Entry %d: "%s" must be a text (a JSON ' +
@@ -981,11 +1043,12 @@ const
     'and %d their owner markers (.by), listed because includetrash=true; ' +
     'the rest are live files.';
 
+  { En cada list sin pattern: corta (revisor de tokens, 4-oct-2026). Saber si
+    el filtro escondio algo de verdad costaria otro paseo por el arbol; y un
+    filtro que nadie menciona se lee como "no hay nada mas". }
   SN_LIST_DEFAULT_MASK =
-    '[LIST-009] Without "pattern" only Delphi files are listed (*.pas, ' +
-    '*.dpr, *.dpk, *.inc, *.dfm, *.fmx, *.dproj, *.groupproj). If there ' +
-    'are .txt, .json, .bat or anything else, they are there but not ' +
-    'shown: ask for pattern=* to see everything.';
+    '[LIST-009] Delphi files only (no "pattern"): pattern=* lists ' +
+    'everything.';
 
   SN_LIST_CAPPED_FMT =
     '[LIST-010] The list is cut to %d entries ("total" says how many ' +
@@ -997,9 +1060,8 @@ const
     'to list. To see inside it use delphi_read; for its folder, pass the ' +
     'folder.';
 
-  SN_BUILD_OUTPUT =
-    '[BUILD-002] Retrieve it with delphi_package (zips its folder, dcu ' +
-    'excluded) + delphi_fetch (chunked download with sha256).';
+  // BUILD-002 (recoger el binario con delphi_package + delphi_fetch) iba en
+  // cada build correcto; se retiro el 4-oct-2026: lo dice delphi_package.
 
   // ---------------------------------------------------------------------
   // Access control
@@ -1458,25 +1520,21 @@ const
   // it stores the passfile PATH in the profile, leaving the password in
   // plain text on disk forever; --password stores it encrypted inside.
   // ---------------------------------------------------------------------
+  { Lo que cada subcomando hace vive en SP_PASERVER_COMMAND; aqui se contaba
+    otra vez (revisor de tokens, 4-oct-2026): queda el mapa y lo que solo
+    decia este texto. }
   SD_PASERVER =
     'The bridge for building and running on OTHER platforms (Linux, macOS) ' +
-    'through the Platform Assistant (PAServer). command=packages lists the ' +
-    'PAServer installers that ship with each Delphi install (download them ' +
-    'with delphi_fetch and run them on the target machine); ' +
-    'command=platforms shows which platforms this server can target; ' +
-    'command=profiles lists the registered connection profiles and SDKs; ' +
-    'command=add-profile registers a connection profile against a live ' +
-    'PAServer (name, host, password; optional port, platform) with the ' +
-    'password stored encrypted; command=test-connection with name dials ' +
-    'the PAServer of that profile (full handshake, credentials included), ' +
-    'and with host+port and NO name it is a raw TCP reachability probe - ' +
-    'the quick "does this server reach my PAServer at all?" answer, no ' +
-    'credentials involved; command=get-sdk pulls the platform SDK/sysroot ' +
-    '(the libraries the linker needs) from the PAServer of profile "name" ' +
-    'and registers it, so delphi_build can link for that platform - run it ' +
-    'once per target (can take minutes; re-run after OS upgrades on the ' +
-    'target). Building for the platform is delphi_build once profile and ' +
-    'SDK exist; enabling a platform in a project is delphi_config.';
+    'through the Platform Assistant (PAServer): its installers, the ' +
+    'connection profiles and SDKs of this server, and running what a ' +
+    'project deployed on the target - each subcommand is described in ' +
+    '"command". The first time: packages (download the installer with ' +
+    'delphi_fetch and run it on the target) -> add-profile (the password ' +
+    'is stored encrypted) -> test-connection -> get-sdk (the libraries the ' +
+    'linker needs, once per target and again after an OS upgrade there; ' +
+    'minutes) -> delphi_build for that platform -> delphi_build ' +
+    'target=Deploy -> remote-run. Enabling a platform in a project is ' +
+    'delphi_config.';
 
   SP_PASERVER_COMMAND =
     'platforms (what this server can target + profile/SDK status) | ' +
@@ -1946,36 +2004,23 @@ const
     'The desktop of the machine behind a PAServer profile - a Linux target, ' +
     'a Windows target, or THIS server itself when a PAServer runs in its own ' +
     'user session - the way adb gives you an Android one: SEE the screen and ' +
-    'ACT on it. The machine hangs off a PAServer profile (the same profiles ' +
-    'delphi_paserver builds and deploys with) and runs a small Delphi node ' +
-    'that this server deploys AND UPDATES there BY ITSELF, the right binary ' +
-    'for that system - leave "project" empty and the node bundled with the ' +
-    'server is pushed on first use, then refreshed whenever the server ships ' +
-    'a newer one; nothing else is installed on the target and nothing is ' +
-    'compiled. THE FLOW, and it is the whole trick: command=screenshot ' +
-    'brings the WHOLE desktop here as a PNG; you LOOK at it, measure the pixel ' +
-    'you want, and command=tap presses exactly there (x, y measured on that ' +
-    'screenshot - the node converts the screen scale itself, you never deal ' +
-    'with logical vs physical coordinates). command=type writes text, and ' +
-    'given x and y it presses there FIRST - the real gesture is "write this ' +
-    'here", and one trip pays the startup once instead of twice. ' +
-    'command=key presses one key: on a Linux target by its Linux code ' +
-    '(Escape 1, Tab 15, Enter 28), on a Windows target by NAME (escape, ' +
-    'enter, tab, f4) - the tool reads the profile''s platform and refuses the ' +
-    'other kind. Every answer with a capture carries "windows": title and ' +
+    'ACT on it. A small Delphi node does the work there, and this server ' +
+    'deploys AND UPDATES it BY ITSELF, the right binary for that system ' +
+    '(leave "project" empty): nothing else is installed on the target and ' +
+    'nothing is compiled. THE FLOW, and it is the whole trick: ' +
+    'command=screenshot brings the WHOLE desktop here; you LOOK at it, ' +
+    'measure the pixel you want, and tap (or type, which presses there ' +
+    'first) at exactly that x,y - the node converts the screen scale ' +
+    'itself, no logical vs physical pixels to deal with. Every answer ' +
+    'with a capture carries "windows": title and ' +
     'rectangle of each window in pixels of that capture (Windows: every ' +
     'visible top-level window; Linux: the X11/Xwayland ones, which is every ' +
     'FMX application - native Wayland windows are not listed, the capture ' +
-    'still shows them) - tap inside one, or crop to it with window=. ' +
-    'command=overview brings them ALL into view when one covers another ' +
-    '(Linux: the Super overview, every window reduced with its icon below - ' +
-    'tap one or Escape; Windows: a fresh capture with the list). ' +
-    'command=status says whether the desktop is reachable at all ' +
-    'and, when it is not, what to ask the operator for; every answer carries ' +
-    'graphicalEnv, the session the node ran in. The target needs a graphical ' +
-    'session open for the user PAServer runs as; a headless box, a locked ' +
-    'Windows or a Windows service (session 0) has nothing to show. It was ' +
-    'delphi_adb_linux until 1.0.15; that name no longer exists.';
+    'still shows them) - tap inside one, or crop to it with window=; every ' +
+    'answer carries graphicalEnv, the session the node ran in. The target ' +
+    'needs a graphical session open for the user PAServer runs as; a ' +
+    'headless box, a locked Windows or a Windows service (session 0) has ' +
+    'nothing to show (command=status says what to ask the operator for).';
   SP_ADBLINUX_COMMAND =
     'screenshot (the whole desktop, brought here as a PNG; default) | ' +
     'tap (press at x,y MEASURED ON THAT SCREENSHOT) | type (write "text" ' +
@@ -2243,25 +2288,17 @@ const
 
   SD_ADB =
     'Android devices for remote development: the phones/tablets hang off ' +
-    'THIS server (USB or wifi adb), while you program from anywhere. ' +
-    'command=discover finds devices ANNOUNCING wireless debugging on the ' +
-    'server''s network (mDNS) and hands you each one''s ip:port - so you ' +
-    'never need to know the address up front; command=devices lists what ' +
-    'adb has ATTACHED (the same list the IDE shows as deploy targets); ' +
-    'command=connect attaches one over the network (address ip:port from ' +
-    'discover; the device shows an authorize prompt the first time); ' +
-    'command=disconnect detaches it; command=install installs a built ' +
-    '.apk on a device (apk path inside the workspace; "device" names it ' +
-    '- every command that touches a device needs it, from the workspace ' +
-    'allowlist). The adb used is the one from the IDE''s own Android SDK, ' +
-    'discovered per install. Building the .apk is delphi_build ' +
-    'target=Deploy (the deployment manifest is generated when the ' +
-    'project has none). command=logcat hands you the device log (a ' +
-    'bounded dump - the last lines, optionally filtered), so you can ' +
-    'debug what your deployed app did on the device from anywhere. ' +
-    'command=screenshot (the device screen, in the same answer) plus ' +
-    'command=tap and command=key are your remote eyes and hands on the ' +
-    'device - enough to drive the deployed app. Typical flow: discover ' +
+    'THIS server (USB or wifi adb), while you program from anywhere. Each ' +
+    'subcommand is described in "command"; discover hands you the ' +
+    'ip:port of what announces wireless debugging, so you never need to ' +
+    'know the address up front, and connect makes the device ask to ' +
+    'authorize the first time. The adb used is the one from the IDE''s ' +
+    'own Android SDK, discovered per install. Building the .apk is ' +
+    'delphi_build target=Deploy (the deployment manifest is generated ' +
+    'when the project has none). screenshot (the device screen, in the ' +
+    'same answer) plus tap and key are your remote eyes and hands on the ' +
+    'device - enough to drive the deployed app - and logcat shows what it ' +
+    'did. Typical flow: discover ' +
     '-> connect -> devices -> delphi_build target=Deploy -> install -> ' +
     'run -> screenshot -> tap -> logcat.';
 
@@ -2721,16 +2758,17 @@ const
     '[CFG-037 DENIED] %s has no "unit X;" header - it is not a Delphi ' +
     'unit.';
 
-  { La cabecera existe pero el nombre lleva letras fuera de A-Z/0-9/_. El
-    compilador la acepta (medido 2026-09-23, RAD Studio 13: "unit UArtículos;"
-    compila y enlaza); los analizadores de este servidor, no, en ~40 sitios.
-    Se dice la causa real en vez de "no tiene cabecera". }
+  { La cabecera existe pero su nombre no es un nombre de unit. Se dice la
+    causa real en vez de "no tiene cabecera". Hasta el censo del 4-oct-2026
+    se negaba tambien uno con acentos, que el compilador acepta (medido el
+    23-sep, RAD Studio 13: "unit UArticulos;" con su i acentuada compila y
+    enlaza) y que los analizadores del servidor no sabian leer en ~40
+    sitios: ahora todos leen EL identificador (Lsp.Pascal). }
   SR_UNIT_HEADER_NONASCII_FMT =
-    '[CFG-038 DENIED] The header of %s says "unit %s;", with letters ' +
-    'outside A-Z/0-9/_ (accents, n with tilde...). The compiler accepts ' +
-    'them, but this server does not handle unit names like that yet: ' +
-    'rename the unit and the file to a name without accents ' +
-    '(delphi_move), or ask for the support with delphi_report.';
+    '[CFG-038 DENIED] The header of %s says "unit %s;", and that is not a ' +
+    'unit name: a Pascal identifier (an ASCII letter, _ or any non-ASCII ' +
+    'character, then also digits), or several joined by dots. Fix the header ' +
+    '(delphi_edit) or rename the unit and its file (delphi_move).';
 
   SR_UNIT_HEADER_MISMATCH_FMT =
     '[CFG-039 DENIED] The header says "unit %s;" but the file is named ' +
@@ -2791,8 +2829,8 @@ const
     '[CFG-049 INVALID_PARAM] %s is not a package (.dpk): the requires clause ' +
     'only exists in packages.';
   SR_REQUIRES_BAD_NAME_FMT =
-    '[CFG-050 INVALID_PARAM] "%s" is not a package name (letters, digits, _ and ' +
-    'dots, as in the IDE: vcl, dbrtl, fmx, IndyCore).';
+    '[CFG-050 INVALID_PARAM] "%s" is not a package name (a Pascal identifier, ' +
+    'dots allowed, as in the IDE: vcl, dbrtl, fmx, IndyCore).';
   SR_REQUIRES_NEED_NAMES =
     '[CFG-051 INVALID_PARAM] Missing "requires": the package names to add, ' +
     'separated by ; (the ones requiresSuggested from the build named).';
@@ -2815,8 +2853,8 @@ const
     '[USES-003 INVALID_PARAM] Missing "adduses": the unit names to add, ' +
     'separated by ; (System.SysUtils;UCustomer).';
   SR_ADDUSES_BAD_NAME_FMT =
-    '[USES-004 INVALID_PARAM] "%s" is not a unit name (letters, digits, _ and ' +
-    'dots: System.SysUtils, Modules.API).';
+    '[USES-004 INVALID_PARAM] "%s" is not a unit name (a Pascal identifier, ' +
+    'dots allowed: System.SysUtils, Modules.API).';
   SR_ADDUSES_BAD_SECTION_FMT =
     '[USES-005 INVALID_PARAM] "section"="%s" is not valid: interface or ' +
     'implementation (implementation by default, which is where a new ' +
@@ -3051,8 +3089,8 @@ const
     'command=get shows the style.';
 
   SR_STYLES_PROP_CHARS_FMT =
-    '[STYLE-004 INVALID_PARAM] "%s" is not a property name (letters, digits, ' +
-    'dots).';
+    '[STYLE-004 INVALID_PARAM] "%s" is not a property name (a Pascal ' +
+    'identifier, dots allowed: Font.Size).';
 
   SR_STYLES_NEED_VALUE =
     '[STYLE-033 INVALID_PARAM] "value" is missing: the value as it is ' +
@@ -3184,7 +3222,8 @@ const
 
   SN_BUILD_MISSING_UNITS_NOTE =
     '[BUILD-042] Units the compiler cannot find, and where their .pas ' +
-    'lives in the server''s library zone. Register the folder for this ' +
+    'lives (your workspace first, then the server''s library zone). ' +
+    'Register the folder for this ' +
     'platform with delphi_config command=add-searchpath ' +
     'platform=<platform> path=<folder> and repeat the build. No ' +
     'candidates: the component is not installed or ships no source for ' +
@@ -3272,8 +3311,8 @@ const
     'mention in a comment keeps the old name (only code is renamed).';
 
   SR_RENAME_BAD_IDENT_FMT =
-    '[RENAME-013 INVALID_PARAM] "%s" is not a valid Delphi identifier (a ' +
-    'letter or _ first, then letters/digits/_).';
+    '[RENAME-013 INVALID_PARAM] "%s" is not a valid Delphi identifier (an ' +
+    'ASCII letter, _ or any non-ASCII character first, then also digits).';
 
   SR_RENAME_RESERVED_FMT =
     '[RENAME-014 INVALID_PARAM] "%s" is a Delphi reserved word.';
@@ -3554,6 +3593,7 @@ const
     '  what parameters this call takes .... delphi_signature'#10 +
     '  what can I write here .............. delphi_completion'#10#10 +
     'WRITING'#10 +
+    '  before NEW code: look around ....... conventions, point 14'#10 +
     '  change Pascal by ANCHOR ............ delphi_edit'#10 +
     '  change text that is not Pascal ..... delphi_textedit'#10 +
     '  several files ALL-OR-NOTHING ....... delphi_changeset'#10 +
@@ -3683,7 +3723,19 @@ const
     '13. IF SOMETHING CANNOT BE DONE THROUGH HERE, THAT IS A FINDING. ' +
     'Report it with delphi_report (kind=limitation) with the exact call ' +
     'and what you expected: this whole server has been built from those ' +
-    'reports.';
+    'reports.'#10#10 +
+    '14. BEFORE WRITING NEW CODE, LOOK AT THE LANDSCAPE. One search ' +
+    'answers most of it: (a) search for what the code DOES - two or three ' +
+    'characteristic lines of its body, with delphi_search (regex=true ' +
+    'when needed) - not for the name you would give it; (b) where else ' +
+    'does this rule live? Fix it where it lives, not where you happen to ' +
+    'be looking (delphi_references gives the callers); (c) does something ' +
+    'like it exist already? Often it is a parameter on what exists, not a ' +
+    'sibling (delphi_symbols on a FOLDER says what each unit offers); (d) ' +
+    'written twice is a helper with parameters, and a FORMAT (a name, a ' +
+    'path, a key) has ONE function that writes it and one that reads it; ' +
+    '(e) a diagnosis is a theory until it is measured: measure the cause ' +
+    'before changing code for it.';
 
   // ---- delphi_test ----
 
@@ -3900,17 +3952,8 @@ const
     'to run: look at "build.errors" (and "missingUnits" if a unit is ' +
     'missing). Fix that first.';
 
-  SN_TEST_RUN_NOTE =
-    '[TEST-024] result=pass|fail comes from "verdictFrom": counts (the ' +
-    'numbers of the framework) or exitCode (0 = green) when the runner ' +
-    'gives no numbers; result=timeout means I killed it for time and ' +
-    'result=no-tests means it finished fine without me being able to ' +
-    'count anything. failures lists the failure lines as it printed ' +
-    'them. It ran in a Windows container of its own, on a copy of its ' +
-    'output folder and with a timeout: besides that copy it only had ' +
-    'what Windows gives every container (its own temp folder and the ' +
-    'system files), and no network. "files" lists what it left in ' +
-    'that folder.';
+  // TEST-024 (de donde sale el veredicto, el contenedor) iba en cada
+  // ejecucion; se retiro el 4-oct-2026: lo dice la descripcion de la tool.
 
   { La jaula de delphi_test: un contenedor por ejecucion (Lsp.Sandbox,
     2-oct-2026). Falla cerrado: sin contenedor, el test no corre. }
@@ -4008,11 +4051,10 @@ const
     'line). get path=... component=<Name>: that component''s block verbatim. ' +
     'lint path=...: properties the class does not publish and enum values ' +
     'that do not exist, and apart, as notes, the objects it could not check ' +
-    '(a class not in the table, or ambiguous). A BINARY .dfm is read on the fly (the ' +
-    'IDE''s own conversion, the answer says so) and to-text / to-binary ' +
-    'convert it on disk with a backup. Read-only otherwise: editing a form is phase 2 and will ' +
-    'go through delphi_changeset; today use delphi_edit on the .dfm/.fmx ' +
-    'with the property line as anchor, then this lint to verify.';
+    '(a class not in the table, or ambiguous). A BINARY .dfm is read on ' +
+    'the fly (to-text / to-binary convert it on disk). Read-only ' +
+    'otherwise: to edit a form, delphi_edit on the .dfm/.fmx with the ' +
+    'property line as anchor, then this lint to verify.';
 
   SP_DESIGNER_COMMAND =
     'info (what a class publishes) | prop (one property in detail) | tree ' +
@@ -4049,6 +4091,13 @@ const
 
   SP_DESIGNER_FILTER =
     'info optional: only properties whose name contains this text';
+
+  { tree con tope de niveles (nota de Hermes: un form grande daba un arbol
+    enorme y no habia forma de pedir solo lo de arriba; 4-oct-2026) }
+  SP_DESIGNER_MAXDEPTH =
+    'tree optional: how many levels to show (1 = only the form; 0 or empty ' +
+    '= all). An object on the last level shows childrenCount instead of its ' +
+    'children';
 
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
   SR_DESIGNER_NO_VA_CON_COMANDO_FMT =
@@ -4230,6 +4279,10 @@ const
     'component; lint checks classes, properties and enum values against ' +
     'the framework tables.';
 
+  SN_DESIGNER_TREE_MAXDEPTH_FMT =
+    '[DSGN-059] Cut at level %d: %d objects show only their childrenCount. ' +
+    'Raise maxdepth, or ask for one of them with command=get component=<name>.';
+
   SN_DESIGNER_LINT_OK_FMT =
     '[DSGN-020] LINT CLEAN: %s has no unknown classes, unpublished ' +
     'properties or invalid enum values, and if it has a paired .pas it ' +
@@ -4364,11 +4417,9 @@ const
     'in the queue, not what the compiler took.';
 
   SN_BUILD_FIRST_ERROR =
-    '[BUILD-038] Start with "firstError": one error can breed all the ' +
-    'others. An E2009 (assigning a standalone procedure to an event) ' +
-    'brings seven E2250 from Synchronize/Queue behind it that look like ' +
-    'a threading problem and are not. Fix the first one and compile ' +
-    'again before touching anything else.';
+    '[BUILD-038] Start with "firstError": one error can breed the others ' +
+    '(an E2009 brings seven E2250 that look like a threading problem). ' +
+    'Fix it and compile again before touching anything else.';
 
   { %s: el fichero; %d: cuantos objetos no se comprobaron. Va delante de las
     notas DSGN-039/055, en el lint y tras una edicion: no son avisos (iban
@@ -4691,8 +4742,9 @@ const
 
   SR_CREATE_BADNAME_FMT =
     '[CREATE-007 INVALID_PARAM] "%s" is not a valid Pascal identifier. A unit ' +
-    'name is a letter/_ followed by letters, digits or _, with dots ' +
-    'between segments if you want a namespace (MyApp.Data.Customers).';
+    'name is an ASCII letter, _ or any non-ASCII character, then also ' +
+    'digits, with dots between segments if you want a namespace ' +
+    '(MyApp.Data.Customers).';
 
   SR_CREATE_RESERVED_FMT =
     '[CREATE-008 INVALID_PARAM] "%s" is a Delphi reserved word, so "%s" cannot ' +
@@ -5783,6 +5835,24 @@ const
   SR_EDIT_ENCUENTRO_END_CIERRE_CLASE_FMT =
     '[EDIT-052 DENIED] The closing ''end;'' of class %s was not found.';
 
+  { La clase pedida no tiene cuerpo ('EMio = class(Exception);'): no hay
+    donde escribir la declaracion. Se escribia dentro de un metodo de la
+    clase siguiente, y la tool decia "las dos mitades" (medido el
+    4-oct-2026, E2070). }
+  SR_EDIT_CLASE_SIN_CUERPO_FMT =
+    '[EDIT-119 DENIED] Class %s is declared WITHOUT a body on line %d (%s): ' +
+    'there is no class block to put the method in. Give it a body first ' +
+    '(the declaration line without its '';'', then the members and ' +
+    '''end;'') and insert again. Nothing was written.';
+
+  { La clase pedida abre y cierra en UNA linea ('TX = class(TObject) end;'):
+    no hay linea dentro donde escribir. Leida por lineas, su 'end' era el de
+    la clase siguiente (censo del 4-oct-2026). }
+  SR_EDIT_CLASE_EN_UNA_LINEA_FMT =
+    '[EDIT-120 DENIED] Class %s opens and closes on line %d (%s): there is ' +
+    'no line inside it to put the method on. Put its ''end;'' on a line of ' +
+    'its own first and insert again. Nothing was written.';
+
   SR_EDIT_EXISTE_ENTERO_DECLARACION_LINEA_FMT =
     '[EDIT-053 DENIED] %s.%s already exists IN FULL (declaration at line ' +
     '%d, implementation at line %d). insert:"metodo" does not duplicate: ' +
@@ -6587,7 +6657,7 @@ const
 
   SN_EDIT_RECORTADO_EN_LINEA_FMT =
     '[EDIT-064] ... truncated at line %d of %d. Ask for another range ' +
-    'with from/to.';
+    'with fromline/toline.';
 
   SR_EDIT_CARPETA_COPIAS_SEGURIDAD_FMT =
     '[EDIT-065 DENIED] %s\ is the backup folder of this tool. Copies, ' +
@@ -6967,33 +7037,21 @@ const
     'A .groupproj (a project group) takes view, add-project, ' +
     'remove-project and fix-references; every other command is refused';
 
+  { La lista, y explicado SOLO lo que la descripcion de la tool (SD_CFG_CONFIG)
+    no cuenta: los dos textos explicaban lo mismo (revisor de tokens,
+    4-oct-2026). }
   SP_CFG_COMMAND =
     'view (default: project summary; section= brings the detail per ' +
-    'area) | add-platform (enable a platform) | remove-platform (disable ' +
-    'it again) | set-output (put every binary under one folder, e.g. ' +
-    'Compiled) | set-version (the project VERSION: the Windows ' +
-    'VERSIONINFO numbers and the FileVersion/ProductVersion keys, which ' +
-    'have to agree) | set-sdk (the SDK this project builds a remote ' +
-    'platform with, by name; "none" goes back to the SDK Manager ' +
-    'default) | set-profile (the PAServer profile it deploys and runs ' +
-    'that platform with; "none" falls back to the platform''s active ' +
-    'profile) | add-searchpath (add a unit search path for one platform, ' +
-    'or for all) | remove-searchpath (take it out again) | ' +
-    'add-deployfile (ship an extra file with the build on one platform: ' +
-    'a component''s runtime .so/.dll/.dylib) | remove-deployfile (take it ' +
-    'out again) | add-unit (register an existing .pas in the project: ' +
-    'uses of the .dpr, CreateForm for forms, DCCReference of the .dproj) ' +
-    '| remove-unit (take it out of the project; the file stays on disk) ' +
-    '| add-requires (packages only: add package names to the requires ' +
-    'clause of the .dpk - what the IDE offers after a build reports ' +
-    'W1033, and what delphi_build lists in requiresSuggested) | ' +
-    'fix-references (re-point what the project - or a .groupproj - lists ' +
-    'and is no longer where it says, moved by hand: the file is found ' +
-    'again by its name inside the workspace; one match is re-pointed, ' +
-    'none or several are reported, never guessed) | add-project / ' +
-    'remove-project (on a .groupproj, path = the .dproj: what the IDE''s ' +
-    'Add existing project writes - the <Projects> item, its three ' +
-    'targets and its name in Build/Clean/Make - or takes out)';
+    'area) | add-platform | remove-platform | set-output | set-version | ' +
+    'set-sdk (the SDK this project builds a remote platform with, by ' +
+    'name; "none" goes back to the SDK Manager default) | set-profile (the ' +
+    'PAServer profile it deploys and runs that platform with; "none" ' +
+    'falls back to the platform''s active profile) | add-searchpath | ' +
+    'remove-searchpath | add-deployfile | remove-deployfile | add-unit | ' +
+    'remove-unit | add-requires (packages only: add package names to the ' +
+    'requires clause of the .dpk - what delphi_build lists in ' +
+    'requiresSuggested after a W1033) | fix-references | add-project | ' +
+    'remove-project. What each one does is in the tool description.';
 
   SP_CFG_PLATFORM =
     'add/remove-platform: the Delphi platform name (Win32, Win64, ' +
@@ -7025,11 +7083,8 @@ const
     'whether it needs a remote PAServer profile. command=add-platform ' +
     'enables a platform in the .dproj (a curated edit of the <Platforms> ' +
     'block only); remove-platform disables it again. command=set-version ' +
-    'writes the project VERSION where it has to agree with itself: the ' +
-    'Windows VERSIONINFO numbers AND the FileVersion/ProductVersion ' +
-    'keys, which is exactly what drifts when a release is cut by hand (a ' +
-    '-beta suffix is accepted and ignored, and Android/iOS numbering is ' +
-    'not touched). On a .groupproj (a project group): view lists its ' +
+    'writes the project VERSION everywhere it has to agree with itself ' +
+    '(see version). On a .groupproj (a project group): view lists its ' +
     'projects, and add-project / remove-project (path = the .dproj) ' +
     'write what the IDE''s Add existing project writes. ' +
     'command=fix-references, on a project or a group, re-points what is ' +
@@ -7136,13 +7191,11 @@ const
 
   SD_BUILD_BUILD =
     'Build a Delphi project for real with MSBuild on this machine. How ' +
-    'much comes back is yours to choose with "verbosity": quiet ' +
-    '(DEFAULT) = errors and the summary, a few lines, which is what a ' +
-    '"does it still compile" build needs; normal = warnings too; verbose ' +
-    '= everything. It sets the msbuild verbosity as well, so quiet ' +
-    'really asks for less. Rsvars is located via the registry; the ' +
+    'much comes back is "verbosity" (quiet by default: errors and the ' +
+    'summary). Rsvars is located via the registry; the ' +
     'answer carries the success flag, the compiler errors/warnings, the ' +
-    'output tail and which Delphi built. Use this as the closing ' +
+    'output tail, where the binary landed and, on a machine with several ' +
+    'Delphi, which one built. Use this as the closing ' +
     'verification after editing - the linter does not link nor produce ' +
     'binaries. Compile-only: a project that would EXECUTE a shell during ' +
     'build (a custom <Target>/<Exec>, a foreign <Import>) is refused ' +
@@ -7332,12 +7385,9 @@ const
     'declaration and qualified implementation), CREATE (createunit=true; ' +
     'new files honour the encoding configured in the IDE) and RESTORE ' +
     '(restore=true, two-step), ADDUSES (adduses="UnitA;UnitB" + ' +
-    'section=interface|implementation: the units land in that section''s ' +
-    'uses clause, commas and terminator written by the engine, the ' +
-    'clause created under the section keyword when there is none, names ' +
-    'already there skipped) and REMOVEUSES (removeuses="UnitA", the ' +
-    'inverse: the clause goes whole when it empties; a .dpr/.dpk goes ' +
-    'through delphi_config add-unit / remove-unit). It refuses to ' +
+    'section=interface|implementation: commas, terminator and the clause ' +
+    'itself written by the engine) and REMOVEUSES (removeuses="UnitA", ' +
+    'the inverse). It refuses to ' +
     'rewrite whole files, refuses binary designer files (TPF0), makes ' +
     'automatic backups, writes atomically, and audits the result ' +
     '(encoding, EOLs, mojibake, end. structure, and a brace comment with ' +
@@ -7377,11 +7427,10 @@ const
 
   SD_FILE_MOVE =
     'Move or rename a file or folder inside the workspace, or COPY it ' +
-    'with copy=true. The destination must be inside the workspace roots, ' +
-    'and so must the source of a move; the source of a COPY only has to ' +
-    'be readable (your roots, your ReadOnlyRoots, the library zone): a ' +
-    'copy is how something is brought in from a reference project, its ' +
-    'original untouched. Parent folders of the destination are created. ' +
+    'with copy=true (see copy: how something is brought in from a ' +
+    'reference project). The destination must be inside the workspace ' +
+    'roots, and so must the source of a move. Parent folders of the ' +
+    'destination are created. ' +
     'The source is copied to the recoverable trash first. Jailed, ' +
     'refused in read-only mode. A FOLDER moves only as a rename on the ' +
     'same drive, whole or not at all (links inside travel as links); to ' +
@@ -7407,15 +7456,9 @@ const
     '(a sibling project, an {$I} from another unit, a group and its ' +
     'dependencies), whatever pointed inside - a project moved one level ' +
     'deeper still compiles. What it could not re-point is named, for ' +
-    'delphi_config command=fix-references. copy=true is the same door ' +
-    'with a different last step: the source stays, no trash copy is ' +
-    'taken, a copied unit named differently gets its "unit X;" header ' +
-    'rewritten and its .dfm/.fmx copied along, and NO project is made to ' +
-    'list the copy (a new unit nobody lists yet: delphi_config ' +
-    'add-unit); what the copy points to outside IS re-pointed, so it ' +
-    'compiles where it lands. Refused for a folder holding a .dproj/.dpk ' +
-    '- a project never lives in two places; start one from another with ' +
-    'delphi_create.';
+    'delphi_config command=fix-references. A copy goes through the same ' +
+    'door: what it points to outside IS re-pointed, so it compiles where ' +
+    'it lands; to start a project from another, delphi_create.';
 
   // Descripciones que estaban en linea en Mcp.Tools.Messages.pas (paso 3d, 27-sep-2026)
   SP_MSGS_COMMAND =
@@ -7431,17 +7474,12 @@ const
   // Descripciones que estaban en linea en Mcp.Tools.Scaffold.pas (paso 3d, 27-sep-2026)
   SP_CREATE_KIND =
     'What to create: project-console | project-vcl | project-fmx | ' +
-    'project-package (a runtime package: .dpk + .dproj, requires rtl; ' +
-    'its units go in with kind=unit or add-unit, into the contains ' +
-    'clause; it is built to BPL+DCP in its own folder and never ' +
-    'installed in the IDE) | project-test (a DUnitX console runner plus ' +
-    'its first fixture, green at birth - what delphi_test discovers and ' +
-    'runs; DUnitX ships with RAD Studio) | form-vcl | form-fmx | ' +
-    'frame-vcl | frame-fmx | datamodule | unit (a plain .pas) | include ' +
-    '(a .inc with its content; never registered, used with {$I}). ' +
-    'Everything but projects and includes is registered in the project ' +
-    'given - except a unit with NO project and an ABSOLUTE dir, created ' +
-    'standalone';
+    'project-package (requires rtl; its units go into the contains ' +
+    'clause with kind=unit or add-unit) | project-test (green at birth; ' +
+    'DUnitX ships with RAD Studio) | form-vcl | form-fmx | frame-vcl | ' +
+    'frame-fmx | datamodule | unit | include (never registered, used with ' +
+    '{$I}). What each one creates and where it is registered is in the ' +
+    'tool description';
 
   SP_CREATE_DIR =
     'Projects: ABSOLUTE target directory (created if missing). ' +
@@ -7640,7 +7678,13 @@ const
     '.dproj, .dpr, .inc, .xml...) to search inside it in a single call';
 
   SP_WS_QUERY =
-    'Literal text to find (case-insensitive - it is Pascal)';
+    'Literal text to find (case-insensitive - it is Pascal); with ' +
+    'regex=true, a regular expression';
+
+  SP_WS_REGEX =
+    'true = query is a regular expression (PCRE, case-insensitive), matched ' +
+    'line by line: ^ and $ are the ends of a line. \w and \b only see ASCII ' +
+    'letters';
 
   SP_WS_MAXRESULTS =
     'Maximum hits to return PER PAGE (default 100, cap 500 PER PAGE - it ' +
@@ -7750,6 +7794,20 @@ const
     'version to build and compare, not a place to work (v1.3.2, main, ' +
     'HEAD~3, a commit hash)';
 
+  { la salida de git por paginas (muro de la lista del 4-oct-2026: un diff
+    de mas de 30000 caracteres salia cortado y no habia forma de ver el resto) }
+  SP_WS_OFFSET_GIT =
+    'status/diff/log/show/stash list/worktree list: the line to start from ' +
+    'when the answer did not fit in one page (its note says which)';
+
+  SN_GIT_PAGINA_FMT =
+    '[GIT-053] Lines %d-%d of %d: the answer is longer than one page. The ' +
+    'rest: the same call with offset=%d - or narrow it (args="-- <path>", ' +
+    '--stat, -n <count>).';
+
+  SN_GIT_OFFSET_FUERA_FMT =
+    '[GIT-054] offset=%d is past the end: the answer has %d lines.';
+
   SP_WS_PATH_2 =
     'Absolute path of the file to download from the server';
 
@@ -7790,14 +7848,18 @@ const
     'inside the workspace roots';
 
   SD_WS_SEARCH =
-    'Search Delphi sources recursively for a literal text ' +
-    '(case-insensitive), skipping IDE artifacts BELOW the root ' +
+    'Search Delphi sources recursively for a text (case-insensitive; ' +
+    'literal, or a regular expression with regex=true), skipping IDE ' +
+    'artifacts BELOW the root ' +
     '(__history, Win32/Win64, dcu, .git, the server''s __delphi-temp...): ' +
     'naming such a folder as root searches inside it, and when files are ' +
     'skipped the result says how many and why ("hidden" + "note"). Files ' +
     'are decoded with their real encoding, so accented text matches ' +
-    'correctly. Returns path, 1-based line and the line text (same ' +
-    'numbering as delphi_read).';
+    'correctly. The hits come grouped by file: files = [{path, hits = ' +
+    '[{line (1-based, the numbering of delphi_read), line0 and character0 ' +
+    '(0-based, what the LSP tools take), text}]}]; total and shown count ' +
+    'hits. A file larger than 8 MB is not read: the ' +
+    'result names it.';
 
   SD_WS_LIST =
     'List Delphi files under a directory recursively (sources and ' +
@@ -7816,17 +7878,15 @@ const
     'Whitelisted git operations on a repository of this machine, so a ' +
     'remote agent can bring in code and version its work: status, diff, ' +
     'log, show, branch, switch, merge, stash, add, restore, commit, init, ' +
-    'push, tag, config, clone, pull, fetch, worktree. **clone** is the fast ' +
-    'way to get a whole repo onto the server (URL in "message", ' +
-    'destination directory in "repo", jailed to the workspace roots) - ' +
-    'far better than recreating files one by one. **worktree** puts ' +
-    'ANOTHER version of the repo next to it (args=add, path=<a new ' +
-    'folder inside your roots>, ref=<tag|branch|commit>) to build and ' +
-    'test it and compare - how you check an old release from a remote ' +
-    'machine without touching anybody''s working tree; args=list shows ' +
-    'them and args=remove takes one away (it is yours to clean up). ' +
-    'commit/tag messages and config values also travel in "message"; ' +
-    'push/pull use the credentials and remotes stored on the server. The ' +
+    'push, tag, config, clone, pull, fetch, worktree - the rules of each ' +
+    'are in "command". **clone** is the fast way to get a whole repo onto ' +
+    'the server - far better than recreating files one by one. ' +
+    '**worktree** puts ANOTHER version of the repo next to it to build ' +
+    'and compare - how you check an old release from a remote machine ' +
+    'without touching anybody''s working tree (it is yours to clean up). ' +
+    'Commit/tag messages, config values and the clone URL travel in ' +
+    '"message"; push/pull use the credentials and remotes stored on the ' +
+    'server. The ' +
     'repository has to live inside your roots, root folder and .git: git ' +
     'works on the whole repository it finds from "repo" upwards, so one ' +
     'that starts above your roots is refused (GIT-041). No arbitrary git ' +
@@ -8091,9 +8151,19 @@ const
   // Textos que estaban en linea en Lsp.Patch.pas (el resto, 27-sep-2026)
   SF_EDIT_METRICAS_FMT =
     'bytes=%d breaks=%d CRLF=%d loneLF=%d accents=%d corruption=%d';
+  // los contadores cuando no hay nada que mirar (Lsp.Patch.Auditoria): sin
+  // U+FFFD, sin CR suelto y un solo tipo de salto; los acentos se quedan,
+  // dicen si la codificacion importa (revisor de tokens, 4-oct-2026)
+  SF_EDIT_AUDITORIA_LIMPIA_FMT =
+    'audit=clean accents=%d';
+  SF_EDIT_ANTES_DESPUES_FMT =
+    '  before:  %s'#10 +
+    '  after:   %s';
 
-  SF_EDIT_COPIA_YA_EXISTIA_FMT =
-    'already existed (%s)';
+  // la ruta solo cuando la copia es NUEVA: en cada edicion del mismo fichero
+  // salia otra vez entera (revisor de tokens, 4-oct-2026)
+  SF_EDIT_COPIA_YA_EXISTIA =
+    'already existed (the first one of today stays)';
 
   SF_EDIT_EDAD_MIN_FMT =
     '%d min';
@@ -8107,8 +8177,8 @@ const
   SF_EDIT_PISTA_Y_MAS_FMT =
     '  ...and %d more';
 
-  SF_EDIT_NO_ES_OBJETO_FMT =
-    '  %d: not an {old,new} object';
+  SF_EDIT_NO_ES_OBJETO =
+    'not an {old,new} object';
 
   SF_EDIT_LINEA_QUITADA_FMT =
     '%d| (line removed)';
@@ -8212,8 +8282,7 @@ const
   SF_EDIT_ECO_ESCRITURA_FMT =
     '%s'#10 +
     '  encoding=%s  eol=%s  backup=%s'#10 +
-    '  before:  %s'#10 +
-    '  after:   %s'#10 +
+    '%s'#10 +
     '  resulting lines read back from disk:'#10 +
     '%s';
 
@@ -8956,7 +9025,8 @@ uses
   System.SysUtils,
   System.StrUtils,
   System.RegularExpressions,
-  MCPServer.Logger;
+  MCPServer.Logger,
+  Lsp.Regex;
 
 function MsgIds(const AText: string): TArray<string>;
 begin
@@ -8996,9 +9066,8 @@ begin
   // la etiqueta que ABRE el texto, y solo esa: lo que venga detras (un
   // mensaje anidado, un eco, un fichero leido) no declara nada
   M := TRegEx.Match(AText, '^\s*' + MSG_TAG_REGEX);
-  // un grupo opcional que no participa puede no contarse en Groups
-  if M.Success and (M.Groups.Count > 2) and M.Groups[2].Success then
-    Result := M.Groups[2].Value;
+  // el resultado es un grupo opcional: GrupoDe (Lsp.Regex)
+  Result := GrupoDe(M, 2);
 end;
 
 function MsgText(const AMsg: string): string;

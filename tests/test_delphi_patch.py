@@ -305,6 +305,15 @@ check('createunit: jamas sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_EDI
 # --- designer lint: known cross-framework property mistakes warn at edit
 # time (field, Fase 3: they crash the app at form-load, silently on Android;
 # the build only checks the text grammar and packages them without a word) ---
+# Las tablas del disenador, listas ANTES: una edicion no las espera (lo
+# escribe y dice DSGN-052, sin validar) y estos checks miden los avisos de la
+# validacion. Solo pasaban si otra bateria habia dejado la cache caliente: al
+# subir GENERACION_TABLAS (4-oct-2026) los tres de abajo salieron rojos
+for _fw, _r in mc.espera_tablas(call):
+    # (un INTERNAL -DSGN-050/053/054, el fallo recordado del generador- o un
+    # timeout tampoco es "lista": mc.fallo los cuenta, rechazado no)
+    check('tablas del disenador listas antes del lint (%s)' % _fw,
+          not mc.tiene(_r, 'DSGN-051') and not mc.fallo(_r), _r[:300])
 FMX = os.path.join(DIR, 'Lint.fmx')
 with open(FMX, 'wb') as f:
     f.write(('object FormMain: TFormMain\r\n'
@@ -345,7 +354,9 @@ out = call('delphi_edit', {"path": FMX2,
     "old": "    Text = 'Salir'", "new": "    Text = 'Cerrar'"})
 check('lint fmx: un designer LIMPIO no genera aviso',
       mc.es(out, 'SK_EDIT_ESCRITO_EN_FMT') and not mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT')
-      and not mc.es(out, 'SN_DESIGNER_BINDING_LINT_HEADER'), out[-300:])
+      and not mc.es(out, 'SN_DESIGNER_BINDING_LINT_HEADER')
+      # y SI se valido: sin tabla la edicion dice DSGN-052 y tampoco avisa
+      and not mc.tiene(out, 'DSGN-052'), out[-300:])
 VDFM = os.path.join(DIR, 'LintV.dfm')
 with open(VDFM, 'wb') as f:
     f.write(('object Form1: TForm1\r\n'

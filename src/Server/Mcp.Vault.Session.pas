@@ -83,8 +83,11 @@ begin
         try
           Body := DecodeSourceBytes(TFile.ReadAllBytes(Full)).TrimRight;
         except
+          // E.Message lleva la ruta real del vault, y prompts/get no pasa
+          // por el filtro de salida de las tools: enmascarada aqui (revision
+          // de paisaje del 4-oct-2026)
           on E: Exception do
-            Body := MsgFmt(SN_VAULT_BOOT_NO_PUDO_LEER_FMT, [E.Message]);
+            Body := MsgFmt(SN_VAULT_BOOT_NO_PUDO_LEER_FMT, [MaskDriveText('', E.Message)]);
         end
       else
         Body := MsgFmt(SN_VAULT_BOOT_NO_TIENE_FMT, [Boot]);

@@ -107,38 +107,38 @@ end;
 procedure TSimbolosPascal.Define(const ANombre: string);
 begin
   if ANombre <> '' then
-    FDefines.AddOrSetValue(UpperCase(ANombre), True);
+    FDefines.AddOrSetValue(ClaveDeIdentificador(ANombre), True);
 end;
 
 procedure TSimbolosPascal.Quita(const ANombre: string);
 begin
-  FDefines.Remove(UpperCase(ANombre));
+  FDefines.Remove(ClaveDeIdentificador(ANombre));
 end;
 
 function TSimbolosPascal.Definido(const ANombre: string): Boolean;
 begin
-  Result := FDefines.ContainsKey(UpperCase(ANombre));
+  Result := FDefines.ContainsKey(ClaveDeIdentificador(ANombre));
 end;
 
 procedure TSimbolosPascal.PonConstante(const ANombre: string; AValor: Double);
 begin
   if ANombre <> '' then
-    FConstantes.AddOrSetValue(UpperCase(ANombre), AValor);
+    FConstantes.AddOrSetValue(ClaveDeIdentificador(ANombre), AValor);
 end;
 
 function TSimbolosPascal.Constante(const ANombre: string; out AValor: Double): Boolean;
 begin
-  Result := FConstantes.TryGetValue(UpperCase(ANombre), AValor);
+  Result := FConstantes.TryGetValue(ClaveDeIdentificador(ANombre), AValor);
 end;
 
 procedure TSimbolosPascal.PonTamano(const ATipo: string; ABytes: Integer);
 begin
-  FTamanos.AddOrSetValue(UpperCase(ATipo), ABytes);
+  FTamanos.AddOrSetValue(ClaveDeIdentificador(ATipo), ABytes);
 end;
 
 function TSimbolosPascal.Tamano(const ATipo: string): Integer;
 begin
-  if not FTamanos.TryGetValue(UpperCase(ATipo), Result) then
+  if not FTamanos.TryGetValue(ClaveDeIdentificador(ATipo), Result) then
     Result := 0;
 end;
 
@@ -186,18 +186,27 @@ begin
     Variante := 16;
   end;
   // SizeOf() de los tipos del compilador en esa plataforma (son del
-  // lenguaje, no de una version)
+  // lenguaje, no de una version). Tambien son lo que Declared() sabe que esta
+  // declarado de System: el fuente pregunta Declared(AnsiChar),
+  // Declared(UTF8Char), Declared(TBytes)... y dcc dice que si en Windows
   for var T in ['Pointer', 'NativeInt', 'NativeUInt', 'string', 'UnicodeString',
-    'AnsiString', 'WideString', 'TObject', 'IInterface'] do
+    'AnsiString', 'WideString', 'RawByteString', 'UTF8String', 'TObject',
+    'IInterface', 'PChar', 'PAnsiChar', 'PWideChar', 'PUTF8Char', 'PByte',
+    'TBytes'] do
     Result.PonTamano(T, Puntero);
-  for var T in ['Byte', 'ShortInt', 'AnsiChar', 'Boolean', 'ByteBool'] do
+  for var T in ['Byte', 'ShortInt', 'Int8', 'UInt8', 'AnsiChar', 'UTF8Char',
+    'Boolean', 'ByteBool'] do
     Result.PonTamano(T, 1);
-  for var T in ['Word', 'SmallInt', 'Char', 'WideChar', 'WordBool'] do
+  for var T in ['Word', 'SmallInt', 'Int16', 'UInt16', 'Char', 'WideChar',
+    'WordBool'] do
     Result.PonTamano(T, 2);
-  for var T in ['Integer', 'Cardinal', 'LongInt', 'LongWord', 'Single', 'LongBool'] do
+  for var T in ['Integer', 'Cardinal', 'LongInt', 'LongWord', 'Int32', 'UInt32',
+    'FixedInt', 'FixedUInt', 'Single', 'Float32', 'LongBool'] do
     Result.PonTamano(T, 4);
-  for var T in ['Int64', 'UInt64', 'Double', 'Real', 'Currency', 'Comp', 'TDateTime'] do
+  for var T in ['Int64', 'UInt64', 'Double', 'Float64', 'Real', 'Currency',
+    'Comp', 'TDateTime'] do
     Result.PonTamano(T, 8);
+  Result.PonTamano('ShortString', 256);
   Result.PonTamano('Extended', Extendido);
   Result.PonTamano('Variant', Variante);
   Result.PonTamano('OleVariant', Variante);
@@ -252,11 +261,10 @@ begin
       C := AExpresion[I];
       if CharInSet(C, [' ', #9, #10, #13]) then
         Inc(I)
-      else if CharInSet(C, ['A'..'Z', 'a'..'z', '_']) then
+      else if EsLetraDeIdent(C) then // EL identificador (Lsp.Pascal)
       begin
         J := I;
-        while (J <= Length(AExpresion)) and
-              CharInSet(AExpresion[J], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+        while (J <= Length(AExpresion)) and EsCaracterDeIdent(AExpresion[J]) do
           Inc(J);
         Lista.Add(Copy(AExpresion, I, J - I));
         I := J;
@@ -348,13 +356,6 @@ begin
   end;
 end;
 
-function UltimoTrozo(const ANombre: string): string;
-begin
-  Result := ANombre;
-  if Result.LastIndexOf('.') >= 0 then
-    Result := Result.Substring(Result.LastIndexOf('.') + 1);
-end;
-
 function TEvaluador.Primario: Double;
 var
   T, L, Arg: string;
@@ -377,7 +378,7 @@ begin
     Toma;
     Exit(StrToFloatDef(T, 0, TFormatSettings.Invariant));
   end;
-  if not CharInSet(T[1], ['A'..'Z', 'a'..'z', '_']) then
+  if not EsLetraDeIdent(T[1]) then
   begin
     Toma; // un simbolo suelto: no vale nada
     Exit;
@@ -403,8 +404,12 @@ begin
       Result := Bool(FSim.Definido(Arg))
     else if L = 'declared' then
       // declarado = una constante que se conoce (las de System se le dan al
-      // lector): System.Embedded no lo esta en Windows, RTLVersion131 si
-      Result := Bool(FSim.Constante(Arg, V) or FSim.Constante(UltimoTrozo(Arg), V))
+      // lector: System.Embedded no lo esta en Windows, RTLVersion131 si) o un
+      // tipo del compilador. Los tipos de otras unidades (socklen_t,
+      // _OUTLINETEXTMETRICW) no: harian falta sus declaraciones leidas en el
+      // orden del uses, y ninguno cambia lo publicado
+      Result := Bool(FSim.Constante(Arg, V) or FSim.Constante(UltimoTrozo(Arg), V)
+        or (FSim.Tamano(UltimoTrozo(Arg)) > 0))
     else if L = 'sizeof' then
       Result := FSim.Tamano(UltimoTrozo(Arg));
     // otra funcion (Ord, Length...): 0
@@ -568,7 +573,7 @@ var
   I: Integer;
 begin
   I := 1;
-  while (I <= Length(S)) and CharInSet(S[I], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+  while (I <= Length(S)) and EsCaracterDeIdent(S[I]) do
     Inc(I);
   Result := Copy(S, 1, I - 1);
 end;

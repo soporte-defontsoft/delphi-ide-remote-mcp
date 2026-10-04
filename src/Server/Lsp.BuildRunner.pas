@@ -91,7 +91,9 @@ uses
   Lsp.ErrorMode,
   Lsp.PackageMap,
   Lsp.ProjectUnits,
-  Lsp.ProcessLaunch;
+  Lsp.ProcessLaunch,
+  Lsp.Regex,
+  Lsp.References; // SkipIdeArtifacts: lo que no es fuente de nadie (papelera, salidas)
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -919,9 +921,10 @@ begin
         [roIgnoreCase]);
       if not M.Success then
         Continue;
-      Name := M.Groups[1].Value;
+      // una rama de la alternativa: su grupo, por GrupoDe (Lsp.Regex)
+      Name := GrupoDe(M, 1);
       if Name = '' then
-        Name := M.Groups[2].Value;
+        Name := GrupoDe(M, 2);
       if (Name <> '') and not L.Contains(Name) then
         L.Add(Name);
       if L.Count >= 10 then
@@ -933,49 +936,69 @@ begin
   end;
 end;
 
-{ Where a unit's .pas lives inside the library zone (RAD Studio installs,
+{ Where a unit's .pas lives: in the session's own roots (its workspace and
+  its references) first, then in the library zone (RAD Studio installs,
   registered components, GetIt catalog): the folders to add-searchpath.
   Field 2026-08-22: a Linux64 build needed 2 failed builds per component to
-  locate OBR's and Steema's Source folders by hand. Shortest paths first,
-  at most 6; __history/__recovery/backup copies are skipped. }
+  locate OBR's and Steema's Source folders by hand. Shortest paths first in
+  each group, at most 6; IDE artifacts, build output and this server's
+  trash copies are skipped (SkipIdeArtifacts). Only the library zone was
+  searched, and a unit of the workspace itself (a vendor folder of the
+  project: MCPServer.Types) got no candidate (BUILD-042, 3-oct-2026). An
+  unrestricted session (no roots) does not walk the whole disk. }
 function UnitSourceFolders(const AUnit: string): TArray<string>;
-var
-  Root, F, Dir: string;
-  L: TList<string>;
-  Files: TArray<string>;
-begin
-  L := TList<string>.Create;
-  try
-    for Root in LibraryReadRoots do
-    begin
-      try
-        Files := TDirectory.GetFiles(Root, AUnit + '.pas', TSearchOption.soAllDirectories);
-      except
-        Continue; // an unreadable root is not the agent's problem
-      end;
-      for F in Files do
+
+  function Busca(const ARaices: TArray<string>): TArray<string>;
+  var
+    Root, F, Dir: string;
+    L: TList<string>;
+    Files: TArray<string>;
+  begin
+    L := TList<string>.Create;
+    try
+      for Root in ARaices do
       begin
-        Dir := TPath.GetDirectoryName(F);
-        if Dir.Contains('__history') or Dir.Contains('__recovery') or
-           ContainsText(Dir, '\backup') then
-          Continue;
-        if not L.Contains(Dir) then
-          L.Add(Dir);
+        try
+          Files := TDirectory.GetFiles(Root, AUnit + '.pas', TSearchOption.soAllDirectories);
+        except
+          Continue; // an unreadable root is not the agent's problem
+        end;
+        for F in Files do
+        begin
+          Dir := TPath.GetDirectoryName(F);
+          // y LA puerta de lectura sobre cada candidata: el paseo de la RTL
+          // sigue los enlaces, y un junction de las raices a una carpeta de
+          // fuera daba como candidata lo que la jaula no deja leer (medido el
+          // 4-oct-2026, test_missing_units)
+          if SkipIdeArtifacts(F) or Dir.Contains('__recovery') or ContainsText(Dir, '\backup') or
+             (ReadPathDenied(Dir) <> '') then
+            Continue;
+          if not L.Contains(Dir) then
+            L.Add(Dir);
+        end;
       end;
+      L.Sort(TComparer<string>.Construct(
+        function(const A, B: string): Integer
+        begin
+          Result := Length(A) - Length(B);
+          if Result = 0 then
+            Result := CompareText(A, B);
+        end));
+      Result := L.ToArray;
+    finally
+      L.Free;
     end;
-    L.Sort(TComparer<string>.Construct(
-      function(const A, B: string): Integer
-      begin
-        Result := Length(A) - Length(B);
-        if Result = 0 then
-          Result := CompareText(A, B);
-      end));
-    if L.Count > 6 then
-      L.Count := 6;
-    Result := L.ToArray;
-  finally
-    L.Free;
   end;
+
+begin
+  Result := [];
+  if Length(WorkspaceRoots) > 0 then
+    Result := Busca(WorkspaceRoots + WorkspaceReadOnlyRoots);
+  for var D in Busca(LibraryReadRoots) do
+    if IndexText(D, Result) < 0 then
+      Result := Result + [D];
+  if Length(Result) > 6 then
+    SetLength(Result, 6);
 end;
 
 // Compiler directives that pull a FILE into the build: {$I}/{$INCLUDE} for
@@ -1660,6 +1683,7 @@ begin
       end;
 
     Result := TJSONObject.Create;
+    try
     Result.AddPair('success', TJSONBool.Create(ExitCode = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Integer(ExitCode)));
     if QueuedMs >= 500 then
@@ -1667,14 +1691,18 @@ begin
       Result.AddPair('queuedMs', TJSONNumber.Create(QueuedMs));
       Result.AddPair('queuedNote', MsgText(SN_BUILD_QUEUED));
     end;
-    Result.AddPair('project', TPath.GetFullPath(ADprojPath));
     // Con QUE instalacion se compilo: vital para un agente en una maquina
     // con varias (DelphiVersion= por workspace), y nada obvio sin decirlo.
-    Result.AddPair('delphiVersion', Info.Version);
-    if Info.ProductName <> '' then
-      Result.AddPair('delphiName', Info.ProductName);
-    if Info.Build <> '' then
-      Result.AddPair('delphiBuild', Info.Build);
+    // Con una sola, ruido en cada build; y el proyecto, el eco de lo que se
+    // pidio (revisor de tokens, 4-oct-2026)
+    if Length(DiscoverAllRadStudios) > 1 then
+    begin
+      Result.AddPair('delphiVersion', Info.Version);
+      if Info.ProductName <> '' then
+        Result.AddPair('delphiName', Info.ProductName);
+      if Info.Build <> '' then
+        Result.AddPair('delphiBuild', Info.Build);
+    end;
     Result.AddPair('platform', Plat);
     // Two tools, two defaults: this one builds Win32 when nobody says, and
     // delphi_test runs Win64. An agent that built by hand and then ran the
@@ -1838,10 +1866,11 @@ begin
       end;
     end;
     // En quiet msbuild NI SIQUIERA imprime los warnings, asi que no se puede
-    // dar un recuento: se dice que no se pidieron, en vez de inventar un 0.
-    if SameText(AVerbosity, 'quiet') then
-      Result.AddPair('warningsNote', MsgText(SN_BUILD_QUIET_WARNINGS));
-    Result.AddPair('outputTail', Tail.ToString);
+    // dar un recuento: no va la clave (nunca un 0 inventado). Lo dice la
+    // descripcion de verbosity; la nota BUILD-001 iba en CADA build quiet
+    // (revisor de tokens, 4-oct-2026). La cola, solo si dice algo.
+    if Tail.Length > 0 then
+      Result.AddPair('outputTail', Tail.ToString);
     // A stateless protocol means the agent only knows what each result tells
     // it: say WHERE the artifact landed, or it has to hunt the disk for it
     // (measured in the field: 20 calls chasing a fresh exe that delphi_list
@@ -1849,7 +1878,9 @@ begin
     if (ExitCode = 0) and not SameText(Target, 'Clean') then
     begin
       var Artifact := ResolveBuildOutput(TPath.GetFullPath(ADprojPath), Plat, Cfg);
-      var Note := MsgText(SN_BUILD_OUTPUT);
+      // la nota de siempre (BUILD-002: recogerlo con delphi_package) iba en
+      // cada build: lo dice delphi_package; queda la del .apk
+      var Note := '';
       // An Android Deploy's real product is the .apk the packager left in
       // <Platform>\<Config>\<name>\bin - declare THAT, not the .so.
       if Plat.StartsWith('Android', True) and Target.Contains('Deploy') then
@@ -1872,7 +1903,8 @@ begin
         except
           // size is a courtesy: the path alone is already the answer
         end;
-        Result.AddPair('outputNote', Note);
+        if Note <> '' then
+          Result.AddPair('outputNote', Note);
       end;
       // Same statelessness rule for a remote deploy: say where the files
       // landed ON THE TARGET, or the agent has to guess PAServer's layout.
@@ -1923,6 +1955,12 @@ begin
         Result.AddPair('deployManifest', MsgFmt(SN_BUILD_MANIFEST_FILLED_FMT, [Plat]))
       else
         Result.AddPair('deployManifest', MsgText(SN_BUILD_MANIFEST_NEW));
+    except
+      // una excepcion a medio camino dejaba sin liberar lo que se devuelve
+      // (el patron del Result de Rename, menor de la ronda 16)
+      Result.Free;
+      raise;
+    end;
   finally
     YaDicho.Free;
     Tail.Free;

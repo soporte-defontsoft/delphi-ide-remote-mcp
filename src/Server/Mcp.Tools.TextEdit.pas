@@ -40,17 +40,19 @@ type
     property New: string read FNew write FNew;
     [SchemaDescription(SP_TEXT_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;
-    [SchemaDescription(SP_PATCH_TOLINE)]
+    [SchemaDescription(SP_PATCH_TOLINE_CORTO)]
     property ToLine: Integer read FToLine write FToLine;
     // La descripcion de "edits" estaba COPIADA aqui, palabra por palabra pero
-    // no del todo, de la de delphi_edit. Documentar el rango en una sola de
-    // las dos habria dejado la mitad de la funcion invisible para quien usa
-    // la otra, que es exactamente como se pierden las tools: una constante
-    // compartida y se acabo (2026-09-20).
-    [SchemaDescription(SP_PATCH_EDITS)]
+    // no del todo, de la de delphi_edit: el rango, documentado en una sola,
+    // era invisible para quien usaba la otra (2026-09-20). Desde el
+    // 4-oct-2026 aqui va el resumen corto (el revisor de tokens: el largo
+    // repetido costaba en cada sesion), y lo que no puede faltar en el lo
+    // vigila test_docs_tokens: cada campo de CAMPOS_DE_UNA_EDICION, en las
+    // dos descripciones.
+    [SchemaDescription(SP_PATCH_EDITS_CORTO)]
     [JsonComoTexto]
     property Edits: string read FEdits write FEdits;
-    [SchemaDescription(SP_PATCH_FRAGMENT)]
+    [SchemaDescription(SP_PATCH_FRAGMENT_CORTO)]
     property Fragment: string read FFragment write FFragment;
     [SchemaDescription(SP_TEXT_DELETE)]
     property Delete: Boolean read FDelete write FDelete;

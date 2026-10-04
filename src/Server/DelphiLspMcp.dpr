@@ -130,7 +130,8 @@ uses
   Lsp.Pascal in 'Lsp.Pascal.pas',
   Lsp.Preproceso in 'Lsp.Preproceso.pas',
   Lsp.PascalDecl in 'Lsp.PascalDecl.pas',
-  Lsp.DesignerMetaGen in 'Lsp.DesignerMetaGen.pas';
+  Lsp.DesignerMetaGen in 'Lsp.DesignerMetaGen.pas',
+  Lsp.Regex in 'Lsp.Regex.pas';
 
 {$R *.res}
 

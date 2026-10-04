@@ -128,15 +128,17 @@ if _dprojs:
     _tq = _q.get('content', [{}])[0].get('text', '')
     _tn = _n.get('content', [{}])[0].get('text', '')
     _jq, _jn = json.loads(_tq), json.loads(_tn)
+    # 1.13.0 (revisor de tokens): la nota BUILD-001 (warningsNote) iba en CADA
+    # build quiet; ahora lo dice la descripcion de verbosity y la respuesta
+    # quiet no lleva ni la clave warnings ni la nota
     check('R5b quiet no manda un warnings vacio (no es "no hay", es "no se pidieron")',
-          'warnings' not in _jq and 'warningsNote' in _jq and 'warnings' in _jn,
+          'warnings' not in _jq and 'warningsNote' not in _jq and 'warnings' in _jn,
           (list(_jq)[:8], list(_jn)[:8]))
-    # Ojo con lo que se mide: en un proyecto LIMPIO quiet NO es mas corto (la
-    # nota pesa mas que la cola vacia). El ahorro esta donde hay ruido; lo que
-    # se puede pinar siempre es la FORMA: quiet no trae cola, normal si.
+    # Lo que se puede pinar siempre es la FORMA: quiet no trae cola (ni la
+    # clave vacia), normal si.
     check('R5b quiet no trae cola de salida y normal si',
           _jq.get('success') is True and _jn.get('success') is True and
-          not _jq.get('outputTail') and bool(_jn.get('outputTail')),
+          'outputTail' not in _jq and bool(_jn.get('outputTail')),
           (len(_jq.get('outputTail', '')), len(_jn.get('outputTail', ''))))
 else:
     check('R5b verbosity: proyecto de prueba creado', False, _pr)

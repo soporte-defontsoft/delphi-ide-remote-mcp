@@ -75,7 +75,7 @@ type
 const
   { Sube cuando cambian las reglas del generador: una tabla de otra
     generacion no se reutiliza aunque el fuente sea el mismo. }
-  GENERACION_TABLAS = 4; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1)
+  GENERACION_TABLAS = 5; // 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina
   // lo que se recuerda un fallo del generador antes de intentarlo otra vez
   MINUTOS_REINTENTO_TABLA = 10;
 
@@ -122,11 +122,14 @@ function RegistradosEnPaleta(const ATexto: string): TArray<string>;
 
 { Las tablas sacadas del fuente que hay en ACarpetas (cada una sin bajar;
   las primeras ganan cuando dos tienen la misma unidad), con los simbolos
-  del compilador AVersionCompilador para Win64. ARaizBds: la carpeta de la
-  instalacion; lo suyo gana a lo de terceros cuando dos clases se llaman
-  igual. Pura: no mira el registro ni escribe nada. }
+  del compilador AVersionCompilador para APlataforma, la del IDE de esa
+  instalacion (PlataformaDelIde): lo publicado sale de la RTTI de su
+  disenador. ARaizBds: la carpeta de la instalacion; lo suyo gana a lo de
+  terceros cuando dos clases se llaman igual. Pura: no mira el registro ni
+  escribe nada. }
 function GeneraTablasDeFuente(const ACarpetas: TArray<string>;
-  const AVersionCompilador, ARaizBds: string): TTablasDeFuente;
+  const AVersionCompilador, ARaizBds: string;
+  const APlataforma: string = 'Win64'): TTablasDeFuente;
 
 { Las carpetas de fuente de una instalacion: el Library Search Path y el
   Browsing Path de su IDE, de Win32 y de Win64, expandidas con sus macros,
@@ -143,8 +146,11 @@ function VersionDelCompilador(const AInfo: TRadStudioInfo;
   const ACarpetas: TArray<string>): string;
 
 { La huella del fuente de esas carpetas: cambia si se anade, se quita o se
-  toca un .pas o un .inc de cualquiera de ellas. }
-function HuellaDeCarpetas(const ACarpetas: TArray<string>): string;
+  toca un .pas o un .inc de cualquiera de ellas. Y con la plataforma con la
+  que se lee (APlataforma): la misma instalacion con el IDE de 64 bits
+  anadido despues es otra tabla. }
+function HuellaDeCarpetas(const ACarpetas: TArray<string>;
+  const APlataforma: string = ''): string;
 
 { EL nombrador de una tabla en la cache, y su lector (la inversa): de que
   instalacion es, de que build, de que marco, de que fuente y de que
@@ -190,12 +196,6 @@ uses
   Lsp.ConfigFabricator, // DEFAULT_NAMESPACES
   Lsp.NetDrives,        // NotaAlLog
   Lsp.Texts;
-
-const
-  { La plataforma con la que se leen los IF del fuente: la del IDE de 64
-    bits y la de las tablas de la RTTI de antes (Tag es Int64). Lo
-    publicado no cambia de una a otra; el nombre de NativeInt si. }
-  PLATAFORMA = 'Win64';
 
 var
   // el servidor se cierra: el generador lo mira entre unidad y unidad
@@ -245,12 +245,12 @@ var
 begin
   Lista := TList<string>.Create;
   try
-    for var Mt in TRegEx.Matches(ATexto, '(?is)\bRegister(?:Components|NoIcon)\s*\((.*?)\)\s*;') do
+    for var Mt in TRegEx.Matches(ATexto, '(?is)' + PATRON_NO_IDENT_ANTES + 'Register(?:Components|NoIcon)\s*\((.*?)\)\s*;') do
     begin
       Lista2 := TRegEx.Match(Mt.Groups[1].Value, '\[([^\]]*)\]');
       if Lista2.Success then
         for var N in Lista2.Groups[1].Value.Split([',']) do
-          if TRegEx.IsMatch(N.Trim, '^[A-Za-z_][\w.]*$') and not Lista.Contains(N.Trim) then
+          if EsIdentificador(N.Trim, True) and not Lista.Contains(N.Trim) then
             Lista.Add(N.Trim);
     end;
     Result := Lista.ToArray;
@@ -310,10 +310,10 @@ begin
   Terminos := Terminos + [Copy(ATexto, Ini, I - Ini).Trim];
   Expr := Copy(ATexto, AP, I - AP).Trim;
   // una constante lista de cadenas con su indice
-  Mt := TRegEx.Match(Expr, '^([A-Za-z_]\w*)\s*\[[^\]]*\]$');
+  Mt := TRegEx.Match(Expr, '^(' + PATRON_IDENT + ')\s*\[[^\]]*\]$');
   if Mt.Success then
   begin
-    Mt := TRegEx.Match(ACuerpo, '(?is)\b' + Mt.Groups[1].Value +
+    Mt := TRegEx.Match(ACuerpo, '(?is)' + PatronIdentEntero(Mt.Groups[1].Value) +
       '\s*:\s*array\b[^=;]*?\bof\s+string\s*=\s*[\[(](.*?)[\])]\s*;');
     if Mt.Success then
       for var L in TRegEx.Matches(Mt.Groups[1].Value, '''((?:[^'']|'''')*)''') do
@@ -326,8 +326,8 @@ begin
   for var T in Terminos do
   begin
     Mt := TRegEx.Match(T, '^''((?:[^'']|'''')*)''$');
-    if not Mt.Success and TRegEx.IsMatch(T, '^[A-Za-z_]\w*$') then
-      Mt := TRegEx.Match(ACuerpo, '(?i)\b' + T +
+    if not Mt.Success and EsIdentificador(T) then
+      Mt := TRegEx.Match(ACuerpo, '(?i)' + PatronIdentEntero(T) +
         '\s*(?::\s*string\s*)?=\s*''((?:[^'']|'''')*)''\s*;');
     if not Mt.Success then
       Exit(nil);
@@ -354,10 +354,10 @@ begin
   try
     // el cuerpo de un metodo acaba en la siguiente rutina de la COLUMNA 0: las
     // locales van sangradas (TCustomForm.DefineProperties tiene la suya)
-    Fin := TRegEx.Create('(?im)^(?:(?:class\s+)?(?:procedure|function|constructor|' +
-      'destructor|operator)\s|initialization\b|finalization\b|end\.)');
+    Fin := TRegEx.Create('(?im)^(?:(?:class\s+)?' + PatronPalabraDeRutina +
+      '\s|initialization\b|finalization\b|end\.)');
     for var Mt in TRegEx.Matches(ATexto,
-      '(?im)^\s*(?:class\s+)?procedure\s+([A-Za-z_][\w.]*)\.DefineProperties\s*\(') do
+      '(?im)^\s*(?:class\s+)?procedure\s+(' + PATRON_IDENT_PUNTOS + ')\.DefineProperties\s*\(') do
     begin
       Clase := Mt.Groups[1].Value;
       Ini := Mt.Index + Mt.Length;
@@ -368,7 +368,7 @@ begin
         Hasta := Length(ATexto) + 1;
       Cuerpo := Copy(ATexto, Ini, Hasta - Ini);
       Cuerpos.Add(TPair<Integer, Integer>.Create(Ini, Hasta));
-      for var C in TRegEx.Matches(Cuerpo, '(?i)\bDefine(?:Binary)?Property\s*\(\s*') do
+      for var C in TRegEx.Matches(Cuerpo, '(?i)' + PATRON_NO_IDENT_ANTES + 'Define(?:Binary)?Property\s*\(\s*') do
       begin
         Nombres := NombresDelArgumento(Cuerpo, C.Index + C.Length, Cuerpo);
         if Length(Nombres) = 0 then
@@ -383,8 +383,11 @@ begin
       // los tipos que nombra: un ayudante que lee por ella (FMX:
       // TTextControl.DefineProperties crea un TTextSettingsInfo.TTextPropLoader)
       // (T y una MAYUSCULA, como se nombra un tipo: con T[A-Za-z_] entraban
-      // True o TextHeight como si fueran tipos; ruido, revision de la 1.12.0)
-      for var C in TRegEx.Matches(Cuerpo, '\bT[A-Z]\w*(?:\.T[A-Z]\w*)*\b') do
+      // True o TextHeight como si fueran tipos; ruido, revision de la 1.12.0).
+      // La mayuscula y lo de detras, de cualquier alfabeto (EL identificador,
+      // Lsp.Pascal)
+      for var C in TRegEx.Matches(Cuerpo, PATRON_NO_IDENT_ANTES + PATRON_NOMBRE_TIPO + PATRON_CAR_IDENT +
+        '*(?:\.' + PATRON_NOMBRE_TIPO + PATRON_CAR_IDENT + '*)*' + PATRON_NO_IDENT_DESPUES) do
       begin
         E := '>' + Clase + ' ' + C.Value;
         if not Lista.Contains(E) then
@@ -398,8 +401,8 @@ begin
     // como cabecera y sus literales iban a la clase del metodo de antes
     // (Data.Bind.Components ReadBufferProperties; revision)
     Cabeceras := TRegEx.Matches(ATexto,
-      '(?im)^(?:class\s+)?(?:procedure|function|constructor|destructor)\s+([A-Za-z_][\w.]*)');
-    for var C in TRegEx.Matches(ATexto, '(?i)\bDefine(?:Binary)?Property\s*\(\s*') do
+      '(?im)^(?:class\s+)?' + PatronPalabraDeRutina + '\s+(' + PATRON_IDENT_PUNTOS + ')');
+    for var C in TRegEx.Matches(ATexto, '(?i)' + PATRON_NO_IDENT_ANTES + 'Define(?:Binary)?Property\s*\(\s*') do
     begin
       P := C.Index + C.Length;
       Dentro := False;
@@ -477,6 +480,7 @@ type
   TGenerador = class
   private
     FBase: TSimbolosPascal;
+    FPlataforma: string;
     FRaizBds: string;
     FCarpetas: TArray<string>;
     FCandidatas: TList<TCandidata>;
@@ -517,7 +521,7 @@ type
     function HechosDeClase(ATipo: TTipoPas; const ACadena: TArray<TTipoPas>;
       AEnums, ASets: TDictionary<string, TArray<string>>): TArray<string>;
   public
-    constructor Create(const AVersionCompilador, ARaizBds: string);
+    constructor Create(const AVersionCompilador, ARaizBds, APlataforma: string);
     destructor Destroy; override;
     function Genera(const ACarpetas: TArray<string>): TTablasDeFuente;
   end;
@@ -543,10 +547,11 @@ end;
 
 { TGenerador }
 
-constructor TGenerador.Create(const AVersionCompilador, ARaizBds: string);
+constructor TGenerador.Create(const AVersionCompilador, ARaizBds, APlataforma: string);
 begin
   inherited Create;
-  FBase := SimbolosDeDelphi(AVersionCompilador, PLATAFORMA);
+  FPlataforma := APlataforma;
+  FBase := SimbolosDeDelphi(AVersionCompilador, APlataforma);
   FRaizBds := IncludeTrailingPathDelimiter(ARaizBds);
   FCandidatas := TList<TCandidata>.Create;
   FFicheros := TDictionary<string, string>.Create;
@@ -594,7 +599,7 @@ begin
     end;
     for var F in Ficheros do
     begin
-      N := LowerCase(ExtractFileName(F));
+      N := AnsiLowerCase(ExtractFileName(F));
       if FFicheros.ContainsKey(N) then
         Continue; // la misma unidad (o include) en otra carpeta: gana la primera
       FFicheros.Add(N, F);
@@ -630,7 +635,7 @@ begin
   Result := '';
   // lo ya buscado desde esa carpeta: jedi\jedi.inc lo piden cientos de
   // unidades, y cada busqueda son decenas de FileExists
-  Clave := LowerCase(ADir) + '|' + LowerCase(ANombre);
+  Clave := AnsiLowerCase(ADir) + '|' + AnsiLowerCase(ANombre);
   if FIncluidos.TryGetValue(Clave, Result) then
     Exit;
   try
@@ -645,31 +650,31 @@ begin
       // depende de quien la pide: una vez por nombre
       if ExtractFilePath(ANombre) <> '' then
       begin
-        if not FEnCarpetas.TryGetValue(LowerCase(ANombre), Ruta) then
+        if not FEnCarpetas.TryGetValue(AnsiLowerCase(ANombre), Ruta) then
         begin
           Ruta := '';
           for var C in FCarpetas do
             for var X in [TPath.Combine(C, ANombre), TPath.Combine(C, ANombre + '.inc')] do
               if (Ruta = '') and FileExists(X) then
                 Ruta := X;
-          FEnCarpetas.Add(LowerCase(ANombre), Ruta);
+          FEnCarpetas.Add(AnsiLowerCase(ANombre), Ruta);
         end;
         if Ruta <> '' then
           Candidatos := Candidatos + [Ruta];
       end;
     end;
-    if FFicheros.TryGetValue(LowerCase(ExtractFileName(ANombre)), Ruta) then
+    if FFicheros.TryGetValue(AnsiLowerCase(ExtractFileName(ANombre)), Ruta) then
       Candidatos := Candidatos + [Ruta];
-    if FFicheros.TryGetValue(LowerCase(ExtractFileName(ANombre)) + '.inc', Ruta) then
+    if FFicheros.TryGetValue(AnsiLowerCase(ExtractFileName(ANombre)) + '.inc', Ruta) then
       Candidatos := Candidatos + [Ruta];
     for var C in Candidatos do
     begin
-      if FTextos.TryGetValue(LowerCase(C), Result) then
+      if FTextos.TryGetValue(AnsiLowerCase(C), Result) then
         Break;
       if FileExists(C) then
       begin
         Result := LeeFuente(C);
-        FTextos.Add(LowerCase(C), Result);
+        FTextos.Add(AnsiLowerCase(C), Result);
         Break;
       end;
     end;
@@ -755,13 +760,13 @@ begin
     except
       Continue; // lo que no se sabe leer no tumba la tabla
     end;
-    if (Decl.Nombre = '') or FUnidades.ContainsKey(LowerCase(Decl.Nombre)) then
+    if (Decl.Nombre = '') or FUnidades.ContainsKey(ClaveDeIdentificador(Decl.Nombre)) then
     begin
       Decl.Free;
       Continue;
     end;
     U := TUnidadLeida.Create;
-    U.Clave := LowerCase(Decl.Nombre);
+    U.Clave := ClaveDeIdentificador(Decl.Nombre);
     U.Ruta := C.Ruta;
     U.Orden := C.Orden;
     if StartsText(FRaizBds, C.Ruta) then
@@ -806,7 +811,7 @@ function TGenerador.ResuelveUnidad(const ANombre: string): string;
 var
   L: string;
 begin
-  L := LowerCase(ANombre);
+  L := ClaveDeIdentificador(ANombre);
   if FUnidades.ContainsKey(L) then
     Exit(L);
   // lo ya resuelto (los nombres con punto la preguntan mucho, y abajo se
@@ -823,8 +828,8 @@ var
   Vistas: TList<string>;
 begin
   for var NS in DEFAULT_NAMESPACES.Split([';']) do
-    if FUnidades.ContainsKey(LowerCase(NS) + '.' + L) then
-      Exit(LowerCase(NS) + '.' + L);
+    if FUnidades.ContainsKey(ClaveDeIdentificador(NS) + '.' + L) then
+      Exit(ClaveDeIdentificador(NS) + '.' + L);
   Result := '';
   Sufijo := '.' + L;
   Vistas := TList<string>.Create;
@@ -873,11 +878,11 @@ begin
     begin
       FDueno.AddOrSetValue(T, U);
       if T.Contenedor <> '' then
-        Pon(U.Anidados, LowerCase(T.NombreCompleto), T)
+        Pon(U.Anidados, ClaveDeIdentificador(T.NombreCompleto), T)
       else if T.EnImplementation then
-        Pon(U.TiposImpl, LowerCase(T.Nombre), T)
+        Pon(U.TiposImpl, ClaveDeIdentificador(T.Nombre), T)
       else
-        Pon(U.TiposI, LowerCase(T.Nombre), T);
+        Pon(U.TiposI, ClaveDeIdentificador(T.Nombre), T);
     end;
     SetLength(U.UsesI, Length(U.Decl.UsesInterface));
     for var I := 0 to High(U.Decl.UsesInterface) do
@@ -895,7 +900,7 @@ begin
           if T.Clase = ctEnumerado then
             for var M in T.Miembros do
             begin
-              K := LowerCase(M);
+              K := ClaveDeIdentificador(M);
               if not FMiembro.ContainsKey(K) then
                 FMiembro.Add(K, T);
             end;
@@ -909,10 +914,10 @@ begin
   if (ATipo = nil) or (ATipo.Contenedor = '') or not FDueno.TryGetValue(ATipo, U) then
     Exit;
   if ATipo.Contenedor.Contains('.') then
-    U.Anidados.TryGetValue(LowerCase(ATipo.Contenedor), Result)
+    U.Anidados.TryGetValue(ClaveDeIdentificador(ATipo.Contenedor), Result)
   else if not (ATipo.EnImplementation and
-               U.TiposImpl.TryGetValue(LowerCase(ATipo.Contenedor), Result)) then
-    U.TiposI.TryGetValue(LowerCase(ATipo.Contenedor), Result);
+               U.TiposImpl.TryGetValue(ClaveDeIdentificador(ATipo.Contenedor), Result)) then
+    U.TiposI.TryGetValue(ClaveDeIdentificador(ATipo.Contenedor), Result);
 end;
 
 // Un tipo anidado en AClase o en uno de sus ancestros
@@ -925,7 +930,7 @@ begin
   ADonde := nil;
   for var X in Cadena(AClase) do
     if FDueno.TryGetValue(X, U) and
-       U.Anidados.TryGetValue(LowerCase(X.NombreCompleto + '.' + ANombre), Result) then
+       U.Anidados.TryGetValue(ClaveDeIdentificador(X.NombreCompleto + '.' + ANombre), Result) then
     begin
       ADonde := U;
       Exit;
@@ -961,7 +966,7 @@ begin
   ADonde := nil;
   if (ANombre = '') or (AUnidad = nil) then
     Exit;
-  L := LowerCase(ANombre);
+  L := ClaveDeIdentificador(ANombre);
   if L.Contains('.') then
   begin
     // Unidad.Tipo (o Unidad.Clase.Anidado): el prefijo mas largo que es una unidad
@@ -999,7 +1004,7 @@ begin
   while C <> nil do
   begin
     if FDueno.TryGetValue(C, UX) and
-       UX.Anidados.TryGetValue(LowerCase(C.NombreCompleto) + '.' + L, Result) then
+       UX.Anidados.TryGetValue(ClaveDeIdentificador(C.NombreCompleto) + '.' + L, Result) then
     begin
       ADonde := UX;
       Exit;
@@ -1073,7 +1078,7 @@ begin
             FDueno.TryGetValue(A, UB) do
       begin
         // el que se llama como su destino se busca fuera (como en Clasifica)
-        if SameText(A.Base.Substring(A.Base.LastIndexOf('.') + 1), A.Nombre) then
+        if MismoIdentificador(UltimoTrozo(A.Base), A.Nombre) then
           A := ResuelveTipo(A.Base, UB, nil, A.EnImplementation, UA)
         else
           A := ResuelveTipo(A.Base, UB, ContenedorDe(A), A.EnImplementation, UA);
@@ -1114,9 +1119,10 @@ begin
 end;
 
 { Los tipos que pone el compilador (no estan declarados en System.pas) con
-  el nombre que les da su informacion de tipo en Win64: un alias debil
-  toma el de su destino (LongInt es Integer, NativeInt es Int64). }
-function Intrinseco(const L: string; out AInfo: TInfoTipo): Boolean;
+  el nombre que les da su informacion de tipo en APlataforma: un alias
+  debil toma el de su destino (LongInt es Integer; NativeInt, Int64 en Win64
+  e Integer en Win32). }
+function Intrinseco(const L, APlataforma: string; out AInfo: TInfoTipo): Boolean;
 begin
   Result := True;
   if (L = 'string') or (L = 'unicodestring') then
@@ -1143,6 +1149,10 @@ begin
     AInfo := Info('o', 'Byte')
   else if L = 'word' then
     AInfo := Info('o', 'Word')
+  else if (L = 'nativeint') and not SameText(APlataforma, 'Win64') then
+    AInfo := Info('o', 'Integer')
+  else if (L = 'nativeuint') and not SameText(APlataforma, 'Win64') then
+    AInfo := Info('o', 'Cardinal')
   else if (L = 'int64') or (L = 'nativeint') then
     AInfo := Info('o', 'Int64')
   else if (L = 'uint64') or (L = 'nativeuint') then
@@ -1176,13 +1186,6 @@ begin
     Result := False;
 end;
 
-function UltimoTrozo(const ANombre: string): string;
-begin
-  Result := ANombre;
-  if Result.LastIndexOf('.') >= 0 then
-    Result := Result.Substring(Result.LastIndexOf('.') + 1);
-end;
-
 { Los miembros del enumerado de la base de un conjunto (o de un subrango
   de enumerado): los de su enumerado en linea, los de su base resuelta, o
   los que van de un miembro a otro. }
@@ -1212,15 +1215,15 @@ begin
       ATipo.EnImplementation, AProf + 1).Miembros;
     Exit;
   end;
-  if not FMiembro.TryGetValue(LowerCase(UltimoTrozo(Bajo)), E) then
+  if not FMiembro.TryGetValue(ClaveDeIdentificador(UltimoTrozo(Bajo)), E) then
     Exit;
   I := -1;
   J := -1;
   for var K := 0 to High(E.Miembros) do
   begin
-    if SameText(E.Miembros[K], UltimoTrozo(Bajo)) then
+    if MismoIdentificador(E.Miembros[K], UltimoTrozo(Bajo)) then
       I := K;
-    if SameText(E.Miembros[K], UltimoTrozo(Alto)) then
+    if MismoIdentificador(E.Miembros[K], UltimoTrozo(Alto)) then
       J := K;
   end;
   if (I >= 0) and (J >= I) then
@@ -1241,12 +1244,12 @@ var
 begin
   if (ATexto = '') or (AProf > 16) then
     Exit(Info('?', '?'));
-  if not ATexto.Contains('.') and Intrinseco(LowerCase(ATexto), Result) then
+  if not ATexto.Contains('.') and Intrinseco(ClaveDeIdentificador(ATexto), FPlataforma, Result) then
     Exit;
   T := ResuelveTipo(ATexto, AUnidad, AContexto, AEnImpl, UT);
   if T = nil then
   begin
-    if Intrinseco(LowerCase(UltimoTrozo(ATexto)), Result) then
+    if Intrinseco(ClaveDeIdentificador(UltimoTrozo(ATexto)), FPlataforma, Result) then
       Exit;
     // un tipo que el fuente no deja leer (su unidad no esta en las rutas: el
     // TUniConnection de UniDAC) es '?', no 'o': con 'o' el lint decia que no
@@ -1274,7 +1277,7 @@ begin
         // un anidado que se llama como su destino (TTouchInterceptingLayout.
         // TOverlayMode = TOverlayMode, el global): el destino se busca fuera
         // de la clase, o se encontraria a si mismo
-        if SameText(UltimoTrozo(T.Base), T.Nombre) then
+        if MismoIdentificador(UltimoTrozo(T.Base), T.Nombre) then
           Destino := Clasifica(T.Base, UT, nil, T.EnImplementation, AProf + 1)
         else
           Destino := Clasifica(T.Base, UT, ContenedorDe(T), T.EnImplementation, AProf + 1);
@@ -1346,7 +1349,7 @@ var
 
   function ClaveDe(const AClase: string): string;
   begin
-    Result := LowerCase(UltimoTrozo(AClase));
+    Result := ClaveDeIdentificador(UltimoTrozo(AClase));
   end;
 
   procedure Usa(const AClave: string);
@@ -1382,16 +1385,16 @@ begin
     // lo de los ayudantes de los que hereda cada uno
     for var U in FUnidades.Values do
       for var T in U.Decl.Tipos do
-        if (T.Clase = ctClase) and Nombres.TryGetValue(LowerCase(T.Nombre), L) then
+        if (T.Clase = ctClase) and Nombres.TryGetValue(ClaveDeIdentificador(T.Nombre), L) then
           for var A in Cadena(T) do
-            if (A <> T) and Nombres.TryGetValue(LowerCase(A.Nombre), LA) and (LA <> L) then
+            if (A <> T) and Nombres.TryGetValue(ClaveDeIdentificador(A.Nombre), LA) and (LA <> L) then
             begin
               for var N in LA do
                 if not L.Contains(N) then
                   L.Add(N);
-              if not Padres.ContainsKey(LowerCase(T.Nombre)) then
-                Padres.Add(LowerCase(T.Nombre), TList<string>.Create);
-              Padres[LowerCase(T.Nombre)].Add(LowerCase(A.Nombre));
+              if not Padres.ContainsKey(ClaveDeIdentificador(T.Nombre)) then
+                Padres.Add(ClaveDeIdentificador(T.Nombre), TList<string>.Create);
+              Padres[ClaveDeIdentificador(T.Nombre)].Add(ClaveDeIdentificador(A.Nombre));
             end;
     // quien lo nombra en su DefineProperties se lo queda
     for var U in FUnidades.Values do
@@ -1523,7 +1526,7 @@ begin
       C := ACadena[N];
       for var P in C.Propiedades do
       begin
-        K := LowerCase(P.Nombre);
+        K := ClaveDeIdentificador(P.Nombre);
         // una declaracion con tipo es una propiedad NUEVA que tapa a la del
         // ancestro (TCustomColorListBox.Selected: TColor tapa a
         // TCustomListBox.Selected[Index]: Boolean); solo la redeclarada sin
@@ -1597,7 +1600,7 @@ begin
   try
     for var H in AHechos do
       if (H.StartsWith('P ') or H.StartsWith('D ')) and (H.IndexOf(' ', 2) > 0) then
-        L.Add(H.Substring(0, 2) + LowerCase(H.Substring(H.IndexOf(' ', 2) + 1)));
+        L.Add(H.Substring(0, 2) + ClaveDeIdentificador(H.Substring(H.IndexOf(' ', 2) + 1)));
     L.Sort;
     Result := L.Text;
   finally
@@ -1686,10 +1689,10 @@ begin
           for var Def in U.Definidas do
             if Def.StartsWith('* ') then
               for M in Ms do
-                if not Emitidas[M].ContainsKey('d|' + LowerCase(Def)) then
+                if not Emitidas[M].ContainsKey('d|' + ClaveDeIdentificador(Def)) then
                 begin
                   Lineas[M].Add('D ' + Def);
-                  Emitidas[M].Add('d|' + LowerCase(Def), True);
+                  Emitidas[M].Add('d|' + ClaveDeIdentificador(Def), True);
                 end;
         for var T in U.Decl.Tipos do
         begin
@@ -1701,7 +1704,7 @@ begin
           // propiedad sabe de cual es (revision de la 1.12.0: por el nombre,
           // la primera tapaba a la otra)
           Id := IdDeClase(T);
-          K := LowerCase(Id);
+          K := ClaveDeIdentificador(Id);
           Cad := Cadena(T);
           if not EsPersistente(Cad) then
             Continue;
@@ -1713,13 +1716,13 @@ begin
             // lo que guarda por codigo, en ELLA (no en cada descendiente: el
             // lint sube por la herencia, y la tabla no engorda)
             for var Def in U.Definidas do
-              if SameText(Def.Substring(0, Def.IndexOf(' ')), T.NombreCompleto) then
+              if MismoIdentificador(Def.Substring(0, Def.IndexOf(' ')), T.NombreCompleto) then
                 Hechos := Hechos + ['D ' + Id + Def.Substring(Def.IndexOf(' '))];
             Lineas[M].AddRange(Hechos);
             Emitidas[M].Add(K, True);
             // ...pero un form escribe el NOMBRE ('object X: TScrollBar'):
             // quien se lo queda se decide abajo, con todas las que lo tienen
-            Nombre := LowerCase(T.NombreCompleto);
+            Nombre := ClaveDeIdentificador(T.NombreCompleto);
             Pri.Id := Id;
             Pri.Firma := FirmaDeClase(Hechos);
             Pri.Prioridad := U.Prioridad;
@@ -1791,11 +1794,11 @@ begin
 end;
 
 function GeneraTablasDeFuente(const ACarpetas: TArray<string>;
-  const AVersionCompilador, ARaizBds: string): TTablasDeFuente;
+  const AVersionCompilador, ARaizBds, APlataforma: string): TTablasDeFuente;
 var
   G: TGenerador;
 begin
-  G := TGenerador.Create(AVersionCompilador, ARaizBds);
+  G := TGenerador.Create(AVersionCompilador, ARaizBds, APlataforma);
   try
     Result := G.Genera(ACarpetas);
   finally
@@ -1817,9 +1820,9 @@ begin
     for var Valor in ['Search Path', 'Browsing Path'] do
       for var Plat in ['Win32', 'Win64'] do
         for var C in IdePlatformLibraryPaths(AInfo.Version, Plat, Valor) do
-          if not Vistas.ContainsKey(LowerCase(C)) and TDirectory.Exists(C) then
+          if not Vistas.ContainsKey(AnsiLowerCase(C)) and TDirectory.Exists(C) then
           begin
-            Vistas.Add(LowerCase(C), True);
+            Vistas.Add(AnsiLowerCase(C), True);
             Lista.Add(C);
           end;
     Result := Lista.ToArray;
@@ -1858,7 +1861,7 @@ begin
   Result := AInfo.Version;
 end;
 
-function HuellaDeCarpetas(const ACarpetas: TArray<string>): string;
+function HuellaDeCarpetas(const ACarpetas: TArray<string>; const APlataforma: string): string;
 var
   Sb: TStringBuilder;
   Sr: TSearchRec;
@@ -1895,9 +1898,11 @@ begin
       finally
         FindClose(Sr);
       end;
-      Sb.Append(LowerCase(C)).Append('|').Append(N).Append('|').Append(Tam)
+      Sb.Append(AnsiLowerCase(C)).Append('|').Append(N).Append('|').Append(Tam)
         .Append('|').Append(Ultima).Append(#10);
     end;
+    if APlataforma <> '' then
+      Sb.Append(APlataforma);
     Result := THashMD5.GetHashString(Sb.ToString).Substring(0, 12).ToLower;
   finally
     Sb.Free;
@@ -1953,6 +1958,7 @@ type
     Carpetas: TArray<string>;
     Huella: string;
     VersionCompilador: string;
+    Plataforma: string;  // la del IDE: PlataformaDelIde
     ConFuente: Boolean;
     Tick: UInt64;
   end;
@@ -2025,7 +2031,8 @@ begin
   if Result.ConFuente then
   begin
     Result.VersionCompilador := VersionDelCompilador(AInfo, Result.Carpetas);
-    Result.Huella := HuellaDeCarpetas(Result.Carpetas);
+    Result.Plataforma := PlataformaDelIde(AInfo.RootDir);
+    Result.Huella := HuellaDeCarpetas(Result.Carpetas, Result.Plataforma);
   end;
   Result.Tick := Ahora;
   TMonitor.Enter(GDatosLock);
@@ -2179,13 +2186,13 @@ begin
       end;
       if FileExists(Ficheros[mdVcl]) and FileExists(Ficheros[mdFmx]) then
         Exit; // la genero otro mientras se esperaba
-      Tablas := GeneraTablasDeFuente(D.Carpetas, D.VersionCompilador, AInfo.RootDir);
+      Tablas := GeneraTablasDeFuente(D.Carpetas, D.VersionCompilador, AInfo.RootDir, D.Plataforma);
       CrearCarpeta(Dir);
       for M := Low(TMarcoDisenador) to High(TMarcoDisenador) do
       begin
-        Cabecera := Format('# designer table %s of RAD Studio %s (build %s, compiler %s): ' +
+        Cabecera := Format('# designer table %s of RAD Studio %s (build %s, compiler %s, %s): ' +
           '%d units read from %d source folders in %d ms by DelphiLspMcp %s (generation %d)',
-          [UpperCase(NombreDeMarco(M)), AInfo.Version, AInfo.Build, D.VersionCompilador,
+          [UpperCase(NombreDeMarco(M)), AInfo.Version, AInfo.Build, D.VersionCompilador, D.Plataforma,
           Tablas.Unidades, Length(D.Carpetas), Tablas.Ms, SERVER_VERSION, GENERACION_TABLAS]);
         EscribeEnCasaDelServidor(Ficheros[M],
           Cabecera + sLineBreak + string.Join(sLineBreak, Tablas.Hechos[M]) + sLineBreak);

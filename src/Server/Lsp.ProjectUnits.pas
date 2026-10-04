@@ -187,7 +187,8 @@ uses
   Lsp.Dproj,       // XmlUnescape: el lector de la casa
   Lsp.References,
   Lsp.NetDrives,  // SkipIdeArtifacts: una mudanza no entra en artefactos
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.PascalDecl; // EL lector de clases y LA cadena de ancestros
 
 { TUnitInfo }
 
@@ -309,32 +310,26 @@ end;
   a custom base living elsewhere is classified by its NAME SUFFIX only
   (TBaseFrame -> frame, TDMBase -> form: the form side is the safe default
   because a spurious CreateForm on a frame breaks the build, a missing
-  DesignClass on a data module only changes the IDE's icon). }
-function DesignClassOf(const ASrc, AAncestor: string): string;
+  DesignClass on a data module only changes the IDE's icon). The chain is
+  THE one (Lsp.PascalDecl.CadenaDeAncestros) over the classes of this unit
+  (AnotaAncestros): its own regex did not follow 'class abstract(TFrame)'
+  and add-unit wrote a CreateForm for a frame (4-oct-2026). }
+function DesignClassOf(const AMapa: TDictionary<string, string>; const AAncestor: string): string;
 var
   Name: string;
-  M: TMatch;
-  Hops: Integer;
+  Sale: Boolean;
 begin
   Result := '';
-  Name := AAncestor;
-  Hops := 0;
-  while (Name <> '') and (Hops < 8) do
+  Name := '';
+  for var C in CadenaDeAncestros(AMapa, AAncestor, Sale, 9) do // 8 saltos
   begin
-    if Name.Contains('.') then
-      Name := Name.Substring(Name.LastIndexOf('.') + 1);
+    Name := UltimoTrozo(C);
     if SameText(Name, 'TFrame') or SameText(Name, 'TCustomFrame') then
       Exit('TFrame');
     if SameText(Name, 'TDataModule') then
       Exit('TDataModule');
     if SameText(Name, 'TForm') or SameText(Name, 'TCustomForm') or SameText(Name, 'TForm3D') then
       Exit('');
-    // declared in this unit? follow its ancestor
-    M := TRegEx.Match(ASrc, '\b' + TRegEx.Escape(Name) + '\s*=\s*class\s*\(\s*([\w.]+)', [roIgnoreCase]);
-    if not M.Success then
-      Break;
-    Name := M.Groups[1].Value;
-    Inc(Hops);
   end;
   if Name.EndsWith('Frame', True) then
     Result := 'TFrame'
@@ -345,8 +340,9 @@ end;
 function InspectUnit(const APasPath: string; out AInfo: TUnitInfo): string;
 var
   Enc, Src, Stem, DName, DClass, Cab: string;
-  M: TMatch;
   Ini: Integer;
+  U: TUnidadPas;
+  Mapa: TDictionary<string, string>;
 begin
   Result := '';
   AInfo := Default(TUnitInfo);
@@ -358,15 +354,16 @@ begin
   Src := PatchLoadText(AInfo.PasPath, Enc);
   if not CabeceraDeUnit(Src, Cab, Ini) then
     Exit(MsgFmt(SR_UNIT_NO_HEADER_FMT, [TPath.GetFileName(APasPath)]));
-  // Hay cabecera, pero con letras fuera de A-Z/0-9/_ (acentos): dcc la
-  // compila (medido 2026-09-23 con RAD Studio 13) y este servidor aun no
-  // la maneja. Decir "no tiene cabecera" era falso y mandaba al agente a
-  // buscar un fallo que no existia (Hermes, bateria 1.2).
-  if not TRegEx.IsMatch(Cab, '^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$') then
+  // Hay cabecera, pero su nombre no es un nombre de unit. Decir "no tiene
+  // cabecera" era falso y mandaba al agente a buscar un fallo que no existia
+  // (Hermes, bateria 1.2). Uno con acentos SI lo es (dcc lo compila, medido
+  // el 23-sep) y se negaba aqui porque el servidor no lo sabia leer: EL
+  // identificador (Lsp.Pascal) lo lee desde el censo del 4-oct-2026.
+  if not EsIdentificador(Cab, True) then
     Exit(MsgFmt(SR_UNIT_HEADER_NONASCII_FMT, [TPath.GetFileName(APasPath), Cab]));
   AInfo.UnitName := Cab;
   Stem := TPath.GetFileNameWithoutExtension(AInfo.PasPath);
-  if not SameText(Stem, AInfo.UnitName) then
+  if not MismoIdentificador(Stem, AInfo.UnitName) then
     Exit(MsgFmt(SR_UNIT_HEADER_MISMATCH_FMT, [AInfo.UnitName, TPath.GetFileName(APasPath)]));
 
   // designer pair?
@@ -383,32 +380,46 @@ begin
   if AInfo.Designer = '' then
     Exit;
 
-  // the designer's root object names the form; the .pas gives the ancestor -
-  // de su CODIGO: una clase comentada ('TViejo = class(TForm)' entre llaves)
-  // no es la del formulario (censo del lexico, 2-oct-2026)
-  Src := CodigoPascal(Src);
-  if DesignerHeaderName(AInfo.Designer, DName, DClass) then
-  begin
-    AInfo.FormName := DName;
-    AInfo.ClassName := DClass;
-    M := TRegEx.Match(Src, '\b' + TRegEx.Escape(DClass) + '\s*=\s*class\s*\(\s*([\w.]+)', [roIgnoreCase]);
-  end
-  else
-  begin
-    // binary designer: the first designer class in the .pas, then its variable
-    M := TRegEx.Match(Src, '\b(T\w+)\s*=\s*class\s*\(\s*((?:\w+\.)*T(?:Form|DataModule|Frame)\w*)', [roIgnoreCase]);
-    if M.Success then
+  // the designer's root object names the form; the .pas gives the ancestor,
+  // read by THE class reader (Lsp.PascalDecl) on its CODE: a commented class
+  // ('TViejo = class(TForm)' between braces) is not the form's (censo del
+  // lexico, 2-oct-2026)
+  U := LeeFuentePascal(Src);
+  Mapa := TDictionary<string, string>.Create;
+  try
+    AnotaAncestros(U, Mapa);
+    if DesignerHeaderName(AInfo.Designer, DName, DClass) then
     begin
-      AInfo.ClassName := M.Groups[1].Value;
-      var V := TRegEx.Match(Src, '^\s*(\w+)\s*:\s*' + TRegEx.Escape(AInfo.ClassName) + '\s*;',
-        [roIgnoreCase, roMultiline]);
-      if V.Success then
-        AInfo.FormName := V.Groups[1].Value;
+      AInfo.FormName := DName;
+      AInfo.ClassName := DClass;
+      var T := U.Clase(DClass);
+      if T <> nil then
+        AInfo.Ancestor := T.Ancestro;
+    end
+    else
+    begin
+      // binary designer: the first designer class of the unit, then its variable
+      for var T in U.Tipos do
+        if (T.Clase = ctClase) and (T.Contenedor = '') and T.Nombre.StartsWith('T', True) and
+           TRegEx.IsMatch(UltimoTrozo(T.Ancestro), '(?i)\AT(?:Form|DataModule|Frame)') then
+        begin
+          AInfo.ClassName := T.Nombre;
+          AInfo.Ancestor := T.Ancestro;
+          Break;
+        end;
+      if AInfo.ClassName <> '' then
+      begin
+        var V := TRegEx.Match(CodigoPascal(Src), '^\s*(' + PATRON_IDENT + ')\s*:\s*' +
+          TRegEx.Escape(AInfo.ClassName) + '\s*;', [roIgnoreCase, roMultiline]);
+        if V.Success then
+          AInfo.FormName := V.Groups[1].Value;
+      end;
     end;
+    AInfo.DesignClass := DesignClassOf(Mapa, AInfo.Ancestor);
+  finally
+    Mapa.Free;
+    U.Free;
   end;
-  if M.Success then
-    AInfo.Ancestor := M.Groups[M.Groups.Count - 1].Value;
-  AInfo.DesignClass := DesignClassOf(Src, AInfo.Ancestor);
 end;
 
 { ---- .dpr uses clause ---- }
@@ -484,11 +495,6 @@ begin
   finally
     L.Free;
   end;
-end;
-
-function IsIdentChar(C: Char): Boolean;
-begin
-  Result := C.IsLetterOrDigit or (C = '_');
 end;
 
 { La clausula de units del proyecto: `uses` tras `program X;` (o `library`),
@@ -585,21 +591,21 @@ begin
     end;
     if Start = 0 then
     begin
-      if ((I = 1) or not IsIdentChar(Dpr[I - 1])) and (I + K - 1 <= Length(Dpr)) and
+      if ((I = 1) or not EsCaracterDeIdent(Dpr[I - 1])) and (I + K - 1 <= Length(Dpr)) and
          SameText(Copy(Dpr, I, K), Result.Keyword) and
-         ((I + K > Length(Dpr)) or not IsIdentChar(Dpr[I + K])) then
+         ((I + K > Length(Dpr)) or not EsCaracterDeIdent(Dpr[I + K])) then
       begin
         Start := I;
         Inc(I, K);
         Continue;
       end;
-      if IsIdentChar(Dpr[I]) then
+      if EsCaracterDeIdent(Dpr[I]) then
       begin
         // another token before the clause (const, type, begin...): no clause.
         // Except `requires ...;` in a package, which comes BEFORE contains
         // and is skipped whole.
         Token := '';
-        while (I <= Length(Dpr)) and IsIdentChar(Dpr[I]) do
+        while (I <= Length(Dpr)) and EsCaracterDeIdent(Dpr[I]) do
         begin
           Token := Token + Dpr[I];
           Inc(I);
@@ -675,7 +681,7 @@ var
   Prefix, Core: string;
 begin
   SplitEntryPrefix(Entry, Prefix, Core);
-  M := TRegEx.Match(Core, '^([A-Za-z_][\w.]*)');
+  M := TRegEx.Match(Core, '^(' + PATRON_IDENT_PUNTOS + ')');
   if M.Success then
     Result := M.Groups[1].Value
   else
@@ -686,12 +692,12 @@ function EntryInclude(const Entry: string): string;
 var
   M: TMatch;
 begin
-  M := TRegEx.Match(Entry, '^\s*[A-Za-z_][\w.]*\s+in\s*''([^'']+)''', [roIgnoreCase]);
+  M := TRegEx.Match(Entry, '^\s*' + PATRON_IDENT_PUNTOS + '\s+in\s*''([^'']+)''', [roIgnoreCase]);
   if not M.Success then
   begin
     var Prefix, Core: string;
     SplitEntryPrefix(Entry, Prefix, Core);
-    M := TRegEx.Match(Core, '^[A-Za-z_][\w.]*\s+in\s*''([^'']+)''', [roIgnoreCase]);
+    M := TRegEx.Match(Core, '^' + PATRON_IDENT_PUNTOS + '\s+in\s*''([^'']+)''', [roIgnoreCase]);
   end;
   if M.Success then
     Result := M.Groups[1].Value
@@ -705,7 +711,7 @@ var
   Prefix, Core: string;
 begin
   SplitEntryPrefix(Entry, Prefix, Core);
-  M := TRegEx.Match(Core, '''\s*\{\s*(\w+)');
+  M := TRegEx.Match(Core, '''\s*\{\s*(' + PATRON_IDENT + ')');
   if M.Success then
     Result := M.Groups[1].Value
   else
@@ -738,7 +744,11 @@ var
 begin
   SplitEntryPrefix(AEntrada, Prefix, Core);
   Result := ANueva;
-  M := TRegEx.Match(Core, '^\s*[A-Za-z_][\w.]*(\s+in\s*''[^'']*''(\s*\{\s*[A-Za-z_]\w*\s*(:\s*[A-Za-z_][\w.]*\s*)?\})?)?',
+  // con EL identificador (Lsp.Pascal): con [A-Za-z_][\w.]* el nombre de una
+  // unit con acento casaba hasta el acento, y lo de detras (el resto del
+  // nombre y su in) se pegaba a la entrada nueva (censo del 4-oct-2026)
+  M := TRegEx.Match(Core, '^\s*' + PATRON_IDENT_PUNTOS + '(\s+in\s*''[^'']*''(\s*\{\s*' + PATRON_IDENT +
+    '\s*(:\s*' + PATRON_IDENT_PUNTOS + '\s*)?\})?)?',
     [roIgnoreCase]);
   if M.Success then
     Result := Result + Copy(Core, M.Length + 1, MaxInt);
@@ -798,7 +808,7 @@ begin
   begin
     Result[K] := -1;
     if (I <= High(ANuevas)) and
-       (SameText(EntryUnitName(AOriginal[K]), EntryUnitName(ANuevas[I])) or
+       (MismoIdentificador(EntryUnitName(AOriginal[K]), EntryUnitName(ANuevas[I])) or
         (Length(ANuevas) >= Length(AOriginal))) then
     begin
       Result[K] := I;
@@ -1022,7 +1032,7 @@ var
   L: TStringList;
 begin
   Result := False;
-  if TRegEx.IsMatch(CodigoPascal(Dpr), '\bCreateForm\s*\(\s*' + TRegEx.Escape(AInfo.ClassName) + '\s*,', [roIgnoreCase]) then
+  if TRegEx.IsMatch(CodigoPascal(Dpr), PATRON_NO_IDENT_ANTES + 'CreateForm\s*\(\s*' + PatronIdentEntero(AInfo.ClassName) + '\s*,', [roIgnoreCase]) then
     Exit(True); // already there
   NL := SaltoDominante(Dpr);
   Lines := SplitToLines(Dpr); // el troceador del motor: un CR suelto es salto
@@ -1082,7 +1092,7 @@ begin
   if AClassName <> '' then
     Pat := '^\s*(Application\.CreateForm\s*\(\s*' + TRegEx.Escape(AClassName) + '\s*,[^)]*\)\s*;?)'
   else if AFormName <> '' then
-    Pat := '^\s*(Application\.CreateForm\s*\(\s*\w+\s*,\s*' + TRegEx.Escape(AFormName) + '\s*\)\s*;?)'
+    Pat := '^\s*(Application\.CreateForm\s*\(\s*' + PATRON_IDENT + '\s*,\s*' + TRegEx.Escape(AFormName) + '\s*\)\s*;?)'
   else
     Exit;
   L := TStringList.Create;
@@ -1248,7 +1258,7 @@ begin
   Completada := False;
   Entries := U.Entries;
   for var I := 0 to High(Entries) do
-    if SameText(EntryUnitName(Entries[I]), Info.UnitName) then
+    if MismoIdentificador(EntryUnitName(Entries[I]), Info.UnitName) then
     begin
       Present := True;
       if EntryInclude(Entries[I]) <> '' then
@@ -1387,7 +1397,7 @@ var
   E: string;
 begin
   for E in U.Entries do
-    if SameText(EntryUnitName(E), AUnitName) then
+    if MismoIdentificador(EntryUnitName(E), AUnitName) then
     begin
       AEntry := E;
       Exit(True);
@@ -1407,7 +1417,7 @@ begin
   Result := [];
   Carry := '';
   for E in AEntries do
-    if not SameText(EntryUnitName(E), AUnitName) then
+    if not MismoIdentificador(EntryUnitName(E), AUnitName) then
     begin
       if Carry <> '' then
         Result := Result + [Carry + #10 + E]
@@ -1566,7 +1576,7 @@ begin
     OldInclude := IncludeFor(Dpr, TPath.GetFullPath(AOldPasPath));
   Entries := U.Entries;
   for I := 0 to High(Entries) do
-    if SameText(EntryUnitName(Entries[I]), OldName) then
+    if MismoIdentificador(EntryUnitName(Entries[I]), OldName) then
     begin
       Entries[I] := EntradaReescrita(Entries[I], BuildEntry(Info, NewInclude));
     end;
@@ -1596,7 +1606,7 @@ begin
   // y la cuenta decia "1 en 1 fichero" por sustituir X por X (medido en
   // vivo, 2026-09-23). La lista, y lo que no se escribe, las da
   // FicherosDelRename: la misma que fotografio el todo-o-nada
-  if not SameText(OldName, Info.UnitName) then
+  if not MismoIdentificador(OldName, Info.UnitName) then
     for var Fich in AFicheros do
     begin
       var N := RenombrarIdentificadorUnit(Fich, OldName, Info.UnitName);
@@ -1659,7 +1669,7 @@ begin
     // la propia en su sitio nuevo); un move sin renombrar no las toca
     Ficheros := [];
     NoEscritos := [];
-    if not SameText(TPath.GetFileNameWithoutExtension(AOldPasPath),
+    if not MismoIdentificador(TPath.GetFileNameWithoutExtension(AOldPasPath),
                     TPath.GetFileNameWithoutExtension(ANewPasPath)) then
       Ficheros := FicherosDelRename(AProject, ANewPasPath, NoEscritos);
     Result := ProyectoTodoONada(AProject, Ficheros,
@@ -1692,7 +1702,7 @@ begin
     for N in ANames.Split([';', ',', ' ']) do
       if N.Trim <> '' then
       begin
-        if not TRegEx.IsMatch(N.Trim, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+        if not EsIdentificador(N.Trim, True) then
           Exit(MsgFmt(SR_REQUIRES_BAD_NAME_FMT, [N.Trim]));
         Nombres.Add(N.Trim);
       end;
@@ -1714,7 +1724,7 @@ begin
       begin
         Ya := False;
         for E in Existentes do
-          if SameText(E, N) then
+          if MismoIdentificador(E, N) then
             Ya := True;
         if not Ya then
         begin
@@ -1850,7 +1860,7 @@ begin
   if Length(Names) = 0 then
     Exit(MsgText(SR_ADDUSES_NEED_NAMES));
   for Nombre in Names do
-    if not TRegEx.IsMatch(Nombre, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+    if not EsIdentificador(Nombre, True) then
       Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
   Sec := LowerCase(ASection.Trim);
   if Sec = '' then
@@ -1955,7 +1965,7 @@ begin
   if Length(Names) = 0 then
     Exit(MsgText(SR_REMOVEUSES_NEED_NAMES));
   for Nombre in Names do
-    if not TRegEx.IsMatch(Nombre, '^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$') then
+    if not EsIdentificador(Nombre, True) then
       Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
   Sec := LowerCase(ASection.Trim);
   if Sec = '' then
@@ -2089,7 +2099,7 @@ begin
       if SameText(TPath.GetFullPath(F), TPath.GetFullPath(ADpkPath)) then
         Continue;
       for P in UnitsParaBuscar(F, AUnitName) do // el .dpk decide; sin leer .dproj
-        if SameText(P.UnitName, AUnitName) then
+        if MismoIdentificador(P.UnitName, AUnitName) then
         begin
           Result := Result + [TPath.GetFullPath(F)];
           Break;
@@ -2133,7 +2143,7 @@ begin
     for F in TDirectory.GetFiles(D, '*.dp?') do // .dpr y .dpk, no .dproj
       if MatchText(TPath.GetExtension(F), ['.dpr', '.dpk']) then
       for P in UnitsParaBuscar(F, Stem) do // the .dpr decides; no .dproj read
-        if SameText(P.UnitName, Stem) and
+        if MismoIdentificador(P.UnitName, Stem) and
           (NormPath(TPath.Combine(TPath.GetDirectoryName(F), P.Include)) = NormPath(APasPath)) then
         begin
           Result := Result + [F];
@@ -2165,7 +2175,7 @@ var
 begin
   Result := 0;
   Texto := PatchLoadText(APath, Enc);
-  Re := TRegEx.Create('(?<![\w.])' + TRegEx.Escape(AViejo) + '(?![\w])', [roIgnoreCase]);
+  Re := TRegEx.Create('(?<!\.)' + PatronIdentEntero(AViejo), [roIgnoreCase]);
   // cada linea con SU salto, que vuelve intacto (Lsp.Patch.SplitToLinesConSalto):
   // troceaba solo por LF, y un fichero de CR sueltos era UNA linea que empezaba
   // por "unit" y no se reescribia (MOVED y el build caia; novena revision)

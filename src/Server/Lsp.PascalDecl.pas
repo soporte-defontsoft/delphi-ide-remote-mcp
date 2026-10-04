@@ -16,9 +16,16 @@
   Por que una unidad: el disenador necesita lo PUBLICADO de cada clase y eso
   solo lo dice la seccion del fuente donde se declara (el LSP no lo da:
   medido el 3-oct-2026 en crudo contra DelphiLSP, ni el completado ni el
-  hover traen la visibilidad). Lsp.DesignerBinding y la insercion de
-  Lsp.Patch leen las secciones de UNA clase de un form por lineas; esto lee
-  una unidad entera por tokens. }
+  hover traen la visibilidad).
+
+  Es tambien EL lector de clases de los que trabajan por lineas (check-binding,
+  insert=metodo, references, add-unit, el resumen de symbols): LeeFuentePascal
+  les da cada tipo con la linea de su nombre y la de su 'end', y cada clase
+  con sus secciones, sus campos y sus rutinas. Cada uno leia las clases con su
+  propia regex y decidia a su manera donde acababa una (el primer 'end;', o
+  contando profundidad): un record anidado, una clase sin cuerpo o una de una
+  linea los enganaban, y la regla de 'abre bloque' estaba escrita dos veces
+  (censo del 4-oct-2026). }
 
 interface
 
@@ -37,10 +44,32 @@ type
     Visibilidad: TVisibilidadPas;
     ConIndices: Boolean; // property X[I: Integer]: nunca va a un form
     DeClase: Boolean;    // class property: tampoco
+    Linea: Integer;      // 0-based, la de su nombre
+  end;
+
+  // una palabra de visibilidad del cuerpo de una clase, donde empieza su seccion
+  TSeccionPas = record
+    Visibilidad: TVisibilidadPas;
+    Palabra: string; // en minusculas, como va: 'public', 'strict private'
+    Linea: Integer;  // 0-based, la de la palabra ('strict' si la lleva)
+  end;
+
+  // un campo o una rutina declarados en una clase
+  TMiembroPas = record
+    Nombre: string;
+    // campo: su tipo cuando es un nombre (Vcl.StdCtrls.TButton), sin <...>;
+    // '' si es otra cosa (array, record, procedure...). Rutina: ''
+    Tipo: string;
+    Generico: Boolean; // el tipo lleva argumentos genericos (TList<X>)
+    Rutina: string;    // 'procedure', 'function', 'constructor'...; '' = campo
+    DeClase: Boolean;  // class procedure, class var
+    Visibilidad: TVisibilidadPas;
+    Linea: Integer;    // 0-based, la de su nombre
   end;
 
   TClaseTipoPas = (ctEnumerado, ctConjunto, ctSubrango, ctAlias, ctMetodo,
     ctClase, ctRegistro, ctInterfaz, ctReferenciaClase, ctProcedimiento, ctOtro);
+  TClasesTipoPas = set of TClaseTipoPas;
 
   TTipoPas = class
   public
@@ -61,8 +90,21 @@ type
     Aridad: Integer;
     AncestroAridad: Integer;
     EnImplementation: Boolean;
+    // donde esta, en lineas del texto leido (0-based): la de su nombre y la de
+    // su 'end' (clase, record, interfaz, object con cuerpo; -1 si su bloque no
+    // se cierra: un fuente a medio escribir) o la de su ';'
+    Linea: Integer;
+    LineaFin: Integer;
+    SinCuerpo: Boolean; // una clase declarada sin bloque: 'EMio = class(Exception);'
+    // las de una clase con cuerpo, en orden; las de sus tipos anidados van en
+    // los suyos
+    Secciones: TArray<TSeccionPas>;
+    Campos: TArray<TMiembroPas>;
+    Rutinas: TArray<TMiembroPas>;
     // 'TCustomButton.TButtonStyle' o 'TButton': el nombre con su contenedor
     function NombreCompleto: string;
+    // ALinea esta dentro: entre la linea de su nombre y la de su fin
+    function Contiene(ALinea: Integer): Boolean;
   end;
 
   TUnidadPas = class
@@ -74,16 +116,51 @@ type
     // las del interface con un valor simple (un numero, True, False): las
     // que puede preguntar un IF de otra unidad (RTLVersion131 = True)
     Constantes: TDictionary<string, string>;
+    // un programa o una biblioteca: su nombre (Nombre se queda en '': no es
+    // una unidad); sus tipos se leen igual
+    Programa: string;
     constructor Create;
     destructor Destroy; override;
+    // LA clase llamada ANombre: por su nombre completo (TOuter.TInner) o por el
+    // simple, la de la unidad antes que una anidada; las declaraciones
+    // adelantadas no estan. nil si no hay
+    function Clase(const ANombre: string): TTipoPas;
+    // el tipo mas de dentro de los de AClases que contiene ALinea; nil si
+    // ninguno. ASinCabecera: la linea del nombre de un tipo no es suya, es de
+    // donde se declara (el dueno de una declaracion)
+    function TipoEnLinea(ALinea: Integer; AClases: TClasesTipoPas;
+      ASinCabecera: Boolean = False): TTipoPas;
   end;
 
 function LeeUnidadPascal(const ATextoActivo: string): TUnidadPas;
 
+{ Un fuente TAL CUAL (el de un fichero, el de un editor): sus comentarios,
+  cadenas y directivas no cuentan, y las dos ramas de un IFDEF se leen, como
+  las ve quien lo edita. Las lineas de lo que devuelve son las de AFuente (un
+  CR suelto, un LF o un CRLF, un salto). Es el de los que trabajan por lineas. }
+function LeeFuentePascal(const AFuente: string): TUnidadPas;
+
+{ Las clases de AUnidad y su ancestro como esta escrito ('' = TObject), por
+  ClaveDeIdentificador de su nombre simple: el mapa de CadenaDeAncestros. Se
+  puede llenar con varias unidades; una clase de la unidad gana a una anidada
+  del mismo nombre. }
+procedure AnotaAncestros(const AUnidad: TUnidadPas; AMapa: TDictionary<string, string>);
+
+{ LA cadena de ancestros: AClase, su ancestro, el de este... por AMapa. Para en
+  una clase sin ancestro escrito (desciende de TObject), en un ciclo o a los
+  ATope eslabones; y en el primero que AMapa no tiene, que va el ultimo y deja
+  ASale = True: es por donde la cadena sale de lo leido. Un ancestro
+  cualificado (Vcl.Forms.TForm) se busca por su ultimo trozo y va en la cadena
+  como esta escrito. Habia tres recorridos, cada uno con sus topes y sus
+  raices (check-binding, add-unit, references). }
+function CadenaDeAncestros(const AMapa: TDictionary<string, string>;
+  const AClase: string; out ASale: Boolean; ATope: Integer = 32): TArray<string>;
+
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  Lsp.Pascal;
 
 type
   // ttIdentEsc: un identificador escrito con & (&Object, &End): nunca es la
@@ -99,7 +176,11 @@ type
     FUnidad: TUnidadPas;
     FEnImpl: Boolean;
     FUltimaAridad: Integer; // la de los <...> del ultimo LeeNombreDeTipo
+    // donde empieza cada linea de FTxt (1-based): la linea de un token
+    FLineas: TArray<Integer>;
     procedure Tokeniza;
+    function LineaDeTok(AIdx: Integer): Integer;
+    function FinDeBloque: Integer;
     function Mira(AK: Integer = 0): string;
     function EsIdent(AK: Integer = 0): Boolean;
     function EsIdentEn(AIdx: Integer): Boolean;
@@ -123,7 +204,7 @@ type
     procedure LeeSeccionConst(AGuarda: Boolean);
     procedure SaltaSeccionVar;
     procedure LeeDefinicionDeTipo(const ANombre, AContenedor: string;
-      AGenerica, AFuerte: Boolean; AAridad: Integer);
+      AGenerica, AFuerte: Boolean; AAridad, ALinea: Integer);
     procedure LeeCuerpoDeClase(ATipo: TTipoPas);
     procedure LeeCuerpoDeRegistro(ATipo: TTipoPas);
     function LeeMiembrosDeEnumerado: TArray<string>;
@@ -133,15 +214,8 @@ type
   end;
 
 const
-  RUTINAS: array [0 .. 4] of string = ('procedure', 'function', 'constructor',
-    'destructor', 'operator');
-  // lo que va detras del ';' de una cabecera de rutina y es suyo
-  DIRECTIVAS_DE_RUTINA: array [0 .. 30] of string = ('virtual', 'override',
-    'overload', 'reintroduce', 'abstract', 'dynamic', 'static', 'inline',
-    'final', 'message', 'stdcall', 'cdecl', 'safecall', 'register', 'pascal',
-    'winapi', 'deprecated', 'platform', 'experimental', 'library', 'dispid',
-    'varargs', 'export', 'far', 'near', 'assembler', 'unsafe', 'forward',
-    'external', 'local', 'noreturn');
+  // las palabras de una cabecera de rutina y sus directivas: PALABRAS_DE_RUTINA
+  // y DIRECTIVAS_DE_RUTINA, del lexico (Lsp.Pascal)
   DIRECTIVAS_DE_TIPO: array [0 .. 3] of string = ('deprecated', 'platform',
     'experimental', 'library');
   CONVENCIONES: array [0 .. 5] of string = ('stdcall', 'cdecl', 'safecall',
@@ -165,6 +239,11 @@ begin
     Result := Contenedor + '.' + Nombre;
 end;
 
+function TTipoPas.Contiene(ALinea: Integer): Boolean;
+begin
+  Result := (ALinea >= Linea) and (ALinea <= LineaFin);
+end;
+
 { TUnidadPas }
 
 constructor TUnidadPas.Create;
@@ -181,6 +260,37 @@ begin
   inherited;
 end;
 
+function TUnidadPas.Clase(const ANombre: string): TTipoPas;
+var
+  T: TTipoPas;
+begin
+  Result := nil;
+  for T in Tipos do
+    if (T.Clase = ctClase) and (MismoIdentificador(T.NombreCompleto, ANombre) or
+       MismoIdentificador(T.Nombre, ANombre)) then
+    begin
+      if (T.Contenedor = '') or MismoIdentificador(T.NombreCompleto, ANombre) then
+        Exit(T);
+      if Result = nil then
+        Result := T; // una anidada, si no hay otra
+    end;
+end;
+
+function TUnidadPas.TipoEnLinea(ALinea: Integer; AClases: TClasesTipoPas;
+  ASinCabecera: Boolean): TTipoPas;
+var
+  T: TTipoPas;
+begin
+  Result := nil;
+  // el de mas dentro empieza despues que los que lo contienen
+  for T in Tipos do
+    if (T.Clase in AClases) and T.Contiene(ALinea) and
+       (not ASinCabecera or (ALinea > T.Linea)) and
+       ((Result = nil) or (T.Linea > Result.Linea) or
+        ((T.Linea = Result.Linea) and (T.LineaFin < Result.LineaFin))) then
+      Result := T;
+end;
+
 { TLectorPas }
 
 constructor TLectorPas.Create(const ATexto: string; AUnidad: TUnidadPas);
@@ -189,17 +299,27 @@ begin
   FTxt := ATexto;
   FLow := LowerCase(ATexto);
   FUnidad := AUnidad;
+  // las lineas como las cuentan los que leen por lineas: CRLF, LF o un CR
+  // suelto, un salto
+  var N := 1;
+  SetLength(FLineas, 64);
+  FLineas[0] := 1;
+  var I := 1;
+  while I <= Length(FTxt) do
+  begin
+    if (FTxt[I] = #13) or (FTxt[I] = #10) then
+    begin
+      if (FTxt[I] = #13) and (I < Length(FTxt)) and (FTxt[I + 1] = #10) then
+        Inc(I);
+      if N = Length(FLineas) then
+        SetLength(FLineas, N * 2);
+      FLineas[N] := I + 1;
+      Inc(N);
+    end;
+    Inc(I);
+  end;
+  SetLength(FLineas, N);
   Tokeniza;
-end;
-
-function EsLetra(C: Char): Boolean; inline;
-begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']) or (Ord(C) >= $80);
-end;
-
-function EsLetraODigito(C: Char): Boolean; inline;
-begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_', '0'..'9']) or (Ord(C) >= $80);
 end;
 
 procedure TLectorPas.Tokeniza;
@@ -235,13 +355,17 @@ begin
       Inc(I);
       Continue;
     end;
-    if EsLetra(C) or ((C = '&') and (I < L) and EsLetra(FTxt[I + 1])) then
+    // EL identificador (Lsp.Pascal): aqui ya contaba como letra cualquier
+    // caracter no ASCII, y es lo que hace dcc (medido el 4-oct-2026: un euro o
+    // un espacio duro dentro de un nombre compilan); habia tres clasificadores
+    // de caracter en el servidor, cada uno con su regla
+    if EsLetraDeIdent(C) or ((C = '&') and (I < L) and EsLetraDeIdent(FTxt[I + 1])) then
     begin
       var Esc := C = '&';
       if Esc then
         Inc(I); // &Type es el identificador Type
       J := I;
-      while (J <= L) and EsLetraODigito(FTxt[J]) do
+      while (J <= L) and EsCaracterDeIdent(FTxt[J]) do
         Inc(J);
       if Esc then
         Pon(I, J - I, ttIdentEsc)
@@ -285,6 +409,39 @@ begin
     end;
   end;
   FI := 0;
+end;
+
+// Recien leido un bloque hasta su 'end' (consumido): la linea de ese 'end';
+// -1 si el texto se acabo sin el
+function TLectorPas.FinDeBloque: Integer;
+begin
+  if (FI > 0) and (FKind[FI - 1] = ttIdent) and SameText(Texto(FI - 1), 'end') then
+    Result := LineaDeTok(FI - 1)
+  else
+    Result := -1;
+end;
+
+// La linea (0-based) del token AIdx; la del ultimo si AIdx se pasa
+function TLectorPas.LineaDeTok(AIdx: Integer): Integer;
+var
+  Lo, Hi, Mid, P: Integer;
+begin
+  if AIdx >= FN then
+    AIdx := FN - 1;
+  if AIdx < 0 then
+    Exit(0);
+  P := FIni[AIdx];
+  Lo := 0;
+  Hi := High(FLineas);
+  while Lo < Hi do
+  begin
+    Mid := (Lo + Hi + 1) div 2;
+    if FLineas[Mid] <= P then
+      Lo := Mid
+    else
+      Hi := Mid - 1;
+  end;
+  Result := Lo;
 end;
 
 function TLectorPas.Mira(AK: Integer): string;
@@ -432,7 +589,7 @@ begin
   K := AIdx + 1;
   S := LowerCase(Texto(K));
   // ni 'class>' / 'class,': la restriccion de un generico (<T: class>)
-  if (S = 'of') or (S = ';') or EnLista(S, RUTINAS) or (S = 'var') or
+  if (S = 'of') or (S = ';') or EnLista(S, PALABRAS_DE_RUTINA) or (S = 'var') or
      (S = 'threadvar') or (S = 'property') or (S = '>') or (S = ',') then
     Exit(False);
   while (S = 'abstract') or (S = 'sealed') do
@@ -596,18 +753,40 @@ begin
   Result := SaltaDirectivas;
 end;
 
-// Un bloque de sentencias desde su begin/asm/try/case hasta su end
+{ Un bloque de sentencias desde su begin/asm/try/case hasta su end. Dentro
+  de un asm no hay Pascal: lo cierra el primer end que no es una etiqueta.
+  La de Vcl.Graphics y Vcl.Imaging.GIFImg en su rama de 32 bits se llama
+  @@END: contada como un end, la rutina acababa ahi y las clases que venian
+  detras no salian en la tabla (medido el 4-oct-2026 leyendo como Win32). }
 procedure TLectorPas.SaltaBloque;
 var
   Prof: Integer;
   T: string;
+  EnAsm: Boolean;
 begin
   Prof := 0;
+  EnAsm := False;
   while not Fin do
   begin
     T := Mira;
     Toma;
-    if (T = 'begin') or (T = 'try') or (T = 'case') or (T = 'asm') then
+    if EnAsm then
+    begin
+      // Mira(-2): lo que va delante del end recien tomado
+      if (T = 'end') and (Mira(-2) <> '@') then
+      begin
+        EnAsm := False;
+        Dec(Prof);
+        if Prof <= 0 then
+          Exit;
+      end;
+    end
+    else if T = 'asm' then
+    begin
+      EnAsm := True;
+      Inc(Prof);
+    end
+    else if (T = 'begin') or (T = 'try') or (T = 'case') then
       Inc(Prof)
     else if T = 'end' then
     begin
@@ -651,7 +830,7 @@ begin
       Toma;
       SaltaSeccionVar;
     end
-    else if EnLista(T, RUTINAS) then
+    else if EnLista(T, PALABRAS_DE_RUTINA) then
       SaltaRutina
     else if T = 'class' then
       Toma
@@ -750,15 +929,18 @@ begin
 end;
 
 procedure TLectorPas.LeeDefinicionDeTipo(const ANombre, AContenedor: string;
-  AGenerica, AFuerte: Boolean; AAridad: Integer);
+  AGenerica, AFuerte: Boolean; AAridad, ALinea: Integer);
 var
   T: TTipoPas;
   P: string;
   Ini, Fin_, K, Prof, Puntos: Integer;
-  EsNombre: Boolean;
+  EsNombre, FinLeido: Boolean;
 begin
+  FinLeido := False; // la linea de su 'end' (los de bloque); si no, la de su ';'
   T := TTipoPas.Create;
   T.Nombre := ANombre;
+  T.Linea := ALinea;
+  T.LineaFin := ALinea;
   T.Contenedor := AContenedor;
   T.Generica := AGenerica;
   T.Aridad := AAridad;
@@ -789,6 +971,8 @@ begin
       begin
         Toma;
         SaltaHastaEnd;
+        T.LineaFin := FinDeBloque;
+        FinLeido := True;
         SaltaHastaPuntoYComa;
       end
       else
@@ -820,10 +1004,15 @@ begin
           end;
         end;
         if Mira = ';' then
-          Toma // sin cuerpo: class(TX);
+        begin
+          Toma; // sin cuerpo: class(TX);
+          T.SinCuerpo := True;
+        end
         else
         begin
           LeeCuerpoDeClase(T);
+          T.LineaFin := FinDeBloque;
+          FinLeido := True;
           SaltaHastaPuntoYComa; // 'end' ya pasado; sus directivas y el ';'
         end;
       end;
@@ -836,6 +1025,8 @@ begin
         SaltaHastaEnd
       else
         LeeCuerpoDeRegistro(T);
+      T.LineaFin := FinDeBloque;
+      FinLeido := True;
       SaltaHastaPuntoYComa;
     end
     else if (P = 'interface') or (P = 'dispinterface') then
@@ -852,6 +1043,8 @@ begin
         if Mira = '(' then
           SaltaBalanceado('(', ')');
         SaltaHastaEnd;
+        T.LineaFin := FinDeBloque;
+        FinLeido := True;
         SaltaHastaPuntoYComa;
       end;
     end
@@ -862,6 +1055,8 @@ begin
       if Mira = '(' then
         SaltaBalanceado('(', ')');
       SaltaHastaEnd;
+      T.LineaFin := FinDeBloque;
+      FinLeido := True;
       SaltaHastaPuntoYComa;
     end
     else if P = '(' then
@@ -1017,7 +1212,15 @@ begin
         Toma;
     end;
     if T <> nil then
+    begin
+      if not FinLeido then
+      begin
+        T.LineaFin := LineaDeTok(FI - 1);
+        if T.LineaFin < ALinea then
+          T.LineaFin := ALinea;
+      end;
       FUnidad.Tipos.Add(T);
+    end;
   except
     T.Free;
     raise;
@@ -1028,6 +1231,8 @@ procedure TLectorPas.LeeCuerpoDeClase(ATipo: TTipoPas);
 var
   Vis: TVisibilidadPas;
   Props: TList<TPropiedadPas>;
+  Secs: TList<TSeccionPas>;
+  LosCampos, LasRutinas: TList<TMiembroPas>;
   T: string;
   DeClase: Boolean;
 
@@ -1037,6 +1242,7 @@ var
   begin
     Toma; // 'property'
     P := Default(TPropiedadPas);
+    P.Linea := LineaDeTok(FI);
     P.Nombre := Toma;
     P.Visibilidad := Vis;
     P.DeClase := DeClase;
@@ -1079,11 +1285,91 @@ var
       Result := False;
   end;
 
+  procedure AnotaSeccion(AVis: TVisibilidadPas; const APalabra: string; ALinea: Integer);
+  var
+    S: TSeccionPas;
+  begin
+    S.Visibilidad := AVis;
+    S.Palabra := APalabra;
+    S.Linea := ALinea;
+    Secs.Add(S);
+  end;
+
+  // la rutina que empieza aqui (Mira = su palabra); 'procedure IFoo.Bar = Baz;'
+  // (la clausula de resolucion de una interfaz) no declara ninguna
+  procedure AnotaRutina;
+  var
+    M: TMiembroPas;
+  begin
+    if not EsIdent(1) or (Mira(2) = '.') then
+      Exit;
+    M := Default(TMiembroPas);
+    M.Nombre := Texto(FI + 1);
+    M.Rutina := Mira;
+    M.DeClase := DeClase;
+    M.Visibilidad := Vis;
+    M.Linea := LineaDeTok(FI + 1);
+    LasRutinas.Add(M);
+  end;
+
+  // 'A, B: TButton;': los campos de una declaracion, con su tipo si es un
+  // nombre ('' si es un array, un record, un procedure...)
+  procedure LeeCampos;
+  var
+    Nuevos: TArray<TMiembroPas>;
+    M: TMiembroPas;
+    Tipo: string;
+    Generico: Boolean;
+    Ini: Integer;
+  begin
+    Nuevos := [];
+    while EsIdent do
+    begin
+      M := Default(TMiembroPas);
+      M.Linea := LineaDeTok(FI);
+      M.Nombre := Toma;
+      M.Visibilidad := Vis;
+      Nuevos := Nuevos + [M];
+      if Mira = ',' then
+        Toma
+      else
+        Break;
+    end;
+    if Mira <> ':' then
+    begin
+      SaltaHastaPuntoYComa; // no es un campo: lo que no se sabe leer
+      Exit;
+    end;
+    Toma;
+    // el tipo es un nombre si detras viene el ';' (o el end del ultimo); si
+    // no, se vuelve atras: un 'record' consumido aqui desbalanceaba el salto
+    Ini := FI;
+    Tipo := LeeNombreDeTipo;
+    Generico := FUltimaAridad > 0;
+    if (Tipo = '') or ((Mira <> ';') and (Mira <> 'end')) then
+    begin
+      FI := Ini;
+      Tipo := '';
+      Generico := False;
+    end;
+    SaltaHastaPuntoYComa;
+    for M in Nuevos do
+    begin
+      var C := M;
+      C.Tipo := Tipo;
+      C.Generico := Generico;
+      LosCampos.Add(C);
+    end;
+  end;
+
 var
   NuevaVis: TVisibilidadPas;
 begin
   Vis := vpDefecto;
   Props := TList<TPropiedadPas>.Create;
+  Secs := TList<TSeccionPas>.Create;
+  LosCampos := TList<TMiembroPas>.Create;
+  LasRutinas := TList<TMiembroPas>.Create;
   try
     while not Fin do
     begin
@@ -1096,11 +1382,13 @@ begin
       end;
       if T = 'strict' then
       begin
+        var LineaStrict := LineaDeTok(FI);
         Toma;
         if Mira = 'private' then
           Vis := vpPrivada
         else
           Vis := vpProtegida;
+        AnotaSeccion(Vis, 'strict ' + Mira, LineaStrict);
         Toma;
         Continue;
       end;
@@ -1108,6 +1396,7 @@ begin
          (Mira(1) <> '=') then
       begin
         Vis := NuevaVis;
+        AnotaSeccion(Vis, T, LineaDeTok(FI));
         Toma;
         Continue;
       end;
@@ -1123,14 +1412,18 @@ begin
         T := Mira;
         if T = 'property' then
           LeePropiedad
-        else if EnLista(T, RUTINAS) then
-          SaltaCabeceraDeRutina
+        else if EnLista(T, PALABRAS_DE_RUTINA) then
+        begin
+          AnotaRutina;
+          SaltaCabeceraDeRutina;
+        end
         else if (T = 'var') or (T = 'threadvar') then
           Toma;
         Continue;
       end;
-      if EnLista(T, RUTINAS) then
+      if EnLista(T, PALABRAS_DE_RUTINA) then
       begin
+        AnotaRutina;
         SaltaCabeceraDeRutina;
         Continue;
       end;
@@ -1167,13 +1460,19 @@ begin
         if (Mira(1) = '=') or (Mira(1) = '<') then
           LeeSeccionType(ATipo.NombreCompleto)
         else
-          SaltaHastaPuntoYComa;
+          LeeCampos;
         Continue;
       end;
       Toma; // lo que no se sabe leer
     end;
     ATipo.Propiedades := Props.ToArray;
+    ATipo.Secciones := Secs.ToArray;
+    ATipo.Campos := LosCampos.ToArray;
+    ATipo.Rutinas := LasRutinas.ToArray;
   finally
+    LasRutinas.Free;
+    LosCampos.Free;
+    Secs.Free;
     Props.Free;
   end;
 end;
@@ -1222,7 +1521,7 @@ procedure TLectorPas.LeeSeccionType(const AContenedor: string);
 var
   Nombre: string;
   Generica, Fuerte: Boolean;
-  Aridad: Integer;
+  Aridad, LineaNombre: Integer;
 begin
   while not Fin do
   begin
@@ -1238,6 +1537,7 @@ begin
     end;
     if not EsIdent or not ((Mira(1) = '=') or (Mira(1) = '<')) then
       Exit;
+    LineaNombre := LineaDeTok(FI);
     Nombre := Toma;
     Generica := False;
     Aridad := 0;
@@ -1258,7 +1558,7 @@ begin
       Toma;
       Fuerte := True;
     end;
-    LeeDefinicionDeTipo(Nombre, AContenedor, Generica, Fuerte, Aridad);
+    LeeDefinicionDeTipo(Nombre, AContenedor, Generica, Fuerte, Aridad, LineaNombre);
   end;
 end;
 
@@ -1295,7 +1595,7 @@ begin
       Toma;
       SaltaSeccionVar;
     end
-    else if EnLista(T, RUTINAS) then
+    else if EnLista(T, PALABRAS_DE_RUTINA) then
     begin
       if AInterface then
         SaltaCabeceraDeRutina
@@ -1313,6 +1613,22 @@ end;
 
 procedure TLectorPas.Lee;
 begin
+  // un programa o una biblioteca: sus tipos tambien (una clase de un .dpr de
+  // consola es tan clase como la de una unidad); sus rutinas llevan cuerpo
+  if (Mira = 'program') or (Mira = 'library') then
+  begin
+    Toma;
+    FUnidad.Programa := Toma;
+    while (Mira = '.') and EsIdent(1) do
+    begin
+      Toma;
+      FUnidad.Programa := FUnidad.Programa + '.' + Toma;
+    end;
+    SaltaHastaPuntoYComa;
+    FEnImpl := True;
+    LeeDeclaraciones(False);
+    Exit;
+  end;
   if Mira <> 'unit' then
     Exit;
   Toma;
@@ -1350,6 +1666,55 @@ begin
   except
     Result.Free;
     raise;
+  end;
+end;
+
+function LeeFuentePascal(const AFuente: string): TUnidadPas;
+begin
+  // CodigoPascal: comentarios, cadenas y directivas en blanco, con el mismo
+  // largo y los saltos en su sitio (las lineas del lector son las del fuente)
+  Result := LeeUnidadPascal(CodigoPascal(AFuente));
+end;
+
+procedure AnotaAncestros(const AUnidad: TUnidadPas; AMapa: TDictionary<string, string>);
+var
+  T: TTipoPas;
+  K: string;
+begin
+  for T in AUnidad.Tipos do
+    if T.Clase = ctClase then
+    begin
+      K := ClaveDeIdentificador(T.Nombre);
+      if (T.Contenedor = '') or not AMapa.ContainsKey(K) then
+        AMapa.AddOrSetValue(K, T.Ancestro);
+    end;
+end;
+
+function CadenaDeAncestros(const AMapa: TDictionary<string, string>;
+  const AClase: string; out ASale: Boolean; ATope: Integer): TArray<string>;
+var
+  Cur, Anc, K: string;
+  Vistas: TArray<string>;
+begin
+  ASale := False;
+  Result := [];
+  Vistas := [];
+  Cur := AClase;
+  while (Cur <> '') and (Length(Result) < ATope) do
+  begin
+    K := ClaveDeIdentificador(UltimoTrozo(Cur));
+    // un ciclo (un fuente a medio escribir): se para
+    for var V in Vistas do
+      if V = K then
+        Exit;
+    Vistas := Vistas + [K];
+    Result := Result + [Cur];
+    if not AMapa.TryGetValue(K, Anc) then
+    begin
+      ASale := True;
+      Exit;
+    end;
+    Cur := Anc;
   end;
 end;
 

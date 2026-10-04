@@ -115,11 +115,154 @@ function DirectivasPascal(const ATexto: string): TArray<TDirectivaPascal>;
 // entre el 25 y el 27-sep-2026). Solo lo mira; quien lo usa decide.
 function LlavesAnidadas(const ATexto: string): TArray<Integer>;
 
+// UN IDENTIFICADOR Pascal, como lo lee dcc: una letra ASCII, '_' o CUALQUIER
+// caracter no ASCII del plano basico, y detras tambien los digitos. Medido el
+// 4-oct-2026 compilando una funcion con cada clase de caracter: AñadirLinea,
+// lblDirección, Col·lecció (el punto volado catalan), una marca combinante,
+// un numeral romano, Precio€, Marca©, un espacio duro y hasta un BOM dentro
+// del nombre compilan, tambien al principio; una letra fuera del plano basico
+// (un par sustituto) no (E2038). La primera version de esta regla fue \p{L}
+// y no se habia medido: el punto volado partia el nombre en dos. El TRegEx
+// del RTL compila sin PCRE_UCP y su \w, su \b y [A-Za-z] solo ven ASCII
+// (medido: '\w' no casa con 'ñ', '\bÚltimo\b' no casa en ' Último '). Nadie
+// escribe su propio patron ni su propio bucle de identificador: se compone
+// con estos (censo del 4-oct: una sesentena de regex con \w ASCII y tres
+// clasificadores de caracter, cada uno con su regla, en catorce unidades).
+const
+  // un caracter de dentro: el \w de un identificador (los sustitutos fuera)
+  PATRON_CAR_IDENT = '[A-Za-z0-9_\x{80}-\x{D7FF}\x{E000}-\x{FFFF}]';
+  PATRON_LETRA_IDENT = '[A-Za-z_\x{80}-\x{D7FF}\x{E000}-\x{FFFF}]'; // el primero: sin digitos
+  PATRON_IDENT = PATRON_LETRA_IDENT + PATRON_CAR_IDENT + '*';
+  // varios unidos por puntos: Vcl.Forms, Font.Name, TForm1.Button1Click
+  PATRON_IDENT_PUNTOS = PATRON_IDENT + '(?:\.' + PATRON_IDENT + ')*';
+  // el \b de delante y el de detras de un identificador
+  PATRON_NO_IDENT_ANTES = '(?<!' + PATRON_CAR_IDENT + ')';
+  PATRON_NO_IDENT_DESPUES = '(?!' + PATRON_CAR_IDENT + ')';
+  // el nombre de un TIPO por la convencion de Delphi: T y una mayuscula (con
+  // T[A-Za-z_] entraban True o TextHeight)
+  PATRON_NOMBRE_TIPO = 'T\p{Lu}';
+  // LAS palabras que abren la cabecera de una rutina: las de una clase o
+  // global, y operator (el de un record). Y las directivas que pueden ir
+  // detras de su firma (virtual; overload; message WM_X;...; no las del
+  // compilador, {$...}, que son DirectivasPascal). Las palabras estaban
+  // escritas a mano en once sitios, unos con operator y otros sin el, y las
+  // directivas dos veces con listas distintas: la de insert=metodo no conocia
+  // noreturn ni unsafe (censo del 4-oct-2026). Su patron: PatronPalabraDeRutina
+  PALABRAS_DE_RUTINA: array [0 .. 4] of string = ('procedure', 'function',
+    'constructor', 'destructor', 'operator');
+  DIRECTIVAS_DE_RUTINA: array [0 .. 30] of string = ('virtual', 'override',
+    'overload', 'reintroduce', 'abstract', 'dynamic', 'static', 'inline',
+    'final', 'message', 'stdcall', 'cdecl', 'safecall', 'register', 'pascal',
+    'winapi', 'deprecated', 'platform', 'experimental', 'library', 'dispid',
+    'varargs', 'export', 'far', 'near', 'assembler', 'unsafe', 'forward',
+    'external', 'local', 'noreturn');
+
+// PALABRAS_DE_RUTINA como patron, sin grupo: (?:procedure|function|...)
+function PatronPalabraDeRutina: string;
+
+// La misma regla caracter a caracter, para los que recorren un texto: el
+// primero (letra ASCII, '_' o no ASCII) y los demas (tambien un digito)
+function EsLetraDeIdent(C: Char): Boolean;
+function EsCaracterDeIdent(C: Char): Boolean;
+// S entero es UN identificador; con APuntos, uno o varios unidos por puntos
+// (el nombre de una unit con su espacio de nombres)
+function EsIdentificador(const S: string; APuntos: Boolean = False): Boolean;
+// El patron de AIdent como PALABRA entera, escapado: ni delante ni detras
+// puede seguir el identificador. Es el '\b' + Escape + '\b' de antes, que no
+// casaba con un acento al principio o al final del nombre.
+function PatronIdentEntero(const AIdent: string): string;
+// El ultimo trozo de un nombre con puntos (Vcl.Forms.TForm -> TForm): el
+// lector de PATRON_IDENT_PUNTOS. Estaba dos veces con este cuerpo y en linea
+// en otros siete sitios (revision de paisaje del 4-oct-2026)
+function UltimoTrozo(const ANombre: string): string;
+// Una palabra reservada de Delphi (begin, unit, string...): no vale de
+// identificador ni de nombre de unit. La lista estaba dos veces
+function EsPalabraReservada(const S: string): Boolean;
+// Los dos son el MISMO identificador. Pascal no distingue mayusculas, y dcc
+// tampoco en las letras acentuadas (medido el 4-oct-2026: 'uses UaRBOL' con
+// su a acentuada compila contra 'unit UArbol' con su A acentuada, y TAMANO
+// en mayusculas llama a Tamano); SameText, CompareText y LowerCase solo
+// pliegan A-Z. Para nombres de unit, de clase, de metodo: esta.
+function MismoIdentificador(const A, B: string): Boolean;
+// La CLAVE de un identificador para un diccionario o un conjunto: dos tienen
+// la misma clave si son el mismo (MismoIdentificador es su lector)
+function ClaveDeIdentificador(const S: string): string;
+
 implementation
 
 uses
   System.SysUtils,
-  System.Math;
+  System.Math,
+  System.Character,
+  System.RegularExpressions;
+
+function PatronPalabraDeRutina: string;
+begin
+  Result := '(?:' + string.Join('|', PALABRAS_DE_RUTINA) + ')';
+end;
+
+function EsLetraDeIdent(C: Char): Boolean;
+begin
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']) or ((Ord(C) >= $80) and not C.IsSurrogate);
+end;
+
+function EsCaracterDeIdent(C: Char): Boolean;
+begin
+  Result := EsLetraDeIdent(C) or CharInSet(C, ['0'..'9']);
+end;
+
+function EsIdentificador(const S: string; APuntos: Boolean): Boolean;
+begin
+  // \A y \z, no ^ y $: el $ de PCRE casa tambien delante de un salto final
+  if APuntos then
+    Result := TRegEx.IsMatch(S, '\A' + PATRON_IDENT_PUNTOS + '\z')
+  else
+    Result := TRegEx.IsMatch(S, '\A' + PATRON_IDENT + '\z');
+end;
+
+function PatronIdentEntero(const AIdent: string): string;
+begin
+  Result := PATRON_NO_IDENT_ANTES + TRegEx.Escape(AIdent) + PATRON_NO_IDENT_DESPUES;
+end;
+
+function UltimoTrozo(const ANombre: string): string;
+begin
+  Result := ANombre;
+  if Result.LastIndexOf('.') >= 0 then
+    Result := Result.Substring(Result.LastIndexOf('.') + 1);
+end;
+
+function ClaveDeIdentificador(const S: string): string;
+begin
+  // en minusculas e invariante (sin el idioma del usuario: con el turco, la I
+  // no plegaba a i): en ASCII da lo mismo que LowerCase, y las claves que ya
+  // estaban escritas en minusculas (las tablas del disenador) no cambian
+  Result := S.ToLowerInvariant;
+end;
+
+function MismoIdentificador(const A, B: string): Boolean;
+begin
+  Result := (Length(A) = Length(B)) and (ClaveDeIdentificador(A) = ClaveDeIdentificador(B));
+end;
+
+function EsPalabraReservada(const S: string): Boolean;
+const
+  RESERVADAS: array [0 .. 64] of string = ('and', 'array', 'as', 'asm', 'begin',
+    'case', 'class', 'const', 'constructor', 'destructor', 'dispinterface',
+    'div', 'do', 'downto', 'else', 'end', 'except', 'exports', 'file',
+    'finalization', 'finally', 'for', 'function', 'goto', 'if',
+    'implementation', 'in', 'inherited', 'initialization', 'inline',
+    'interface', 'is', 'label', 'library', 'mod', 'nil', 'not', 'object',
+    'of', 'or', 'out', 'packed', 'procedure', 'program', 'property',
+    'raise', 'record', 'repeat', 'resourcestring', 'set', 'shl', 'shr',
+    'string', 'then', 'threadvar', 'to', 'try', 'type', 'unit', 'until',
+    'uses', 'var', 'while', 'with', 'xor');
+begin
+  Result := False;
+  for var W in RESERVADAS do
+    if SameText(S, W) then
+      Exit(True);
+end;
 
 function CommentLen(const S: string; I: Integer): Integer;
 var

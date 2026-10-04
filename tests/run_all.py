@@ -137,9 +137,11 @@ if not mc.ADB_ANTES and mc.adb_vivo():
 # que dejo la bateria que fallo es la evidencia.
 if not failed:
     mc.borra(RAIZ if not only else CLEAN)
-    # ...ni las caches del LSP de los proyectos de las baterias en %LOCALAPPDATA%
-    # (con una roja se conservan: para un fallo de symbols/definition son la evidencia)
+    # ...ni caches del LSP de proyectos de baterias en el %LOCALAPPDATA% REAL: las
+    # baterias tienen la suya (mc.entorno), asi que una ahi es de una bateria
+    # que no paso por entorno (con una roja se conservan: son la evidencia)
     n_caches = mc.limpia_caches_lsp()
     if n_caches:
-        print('NOTA: %d caches .delphilsp.json de proyectos de baterias quitadas de %%LOCALAPPDATA%%' % n_caches)
+        print('NOTA: %d caches .delphilsp.json de proyectos de baterias en el %%LOCALAPPDATA%% REAL '
+              '(quitadas): alguna bateria no paso por mc.entorno' % n_caches)
 sys.exit(1 if failed else 0)

@@ -47,7 +47,7 @@ type
     property Content: string read FContent write FContent;
     [SchemaDescription(SP_CHANGESET_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;
-    [SchemaDescription(SP_PATCH_FRAGMENT)]
+    [SchemaDescription(SP_PATCH_FRAGMENT_CORTO)]
     property Fragment: string read FFragment write FFragment;
     [SchemaDescription(SP_CHANGESET_N)]
     property N: Integer read FN write FN;
@@ -98,7 +98,9 @@ begin
   Result := ChangesetExecute(Params.Command, Params.Id, Params.Kind.Trim.ToLower,
     Params.Path, Params.Dest, Params.Old, Params.New, Params.Content,
     Params.AtLine, Params.N, Params.Fragment);
-  Result := MaskDriveText('delphi_changeset', Result);
+  // (lo enmascara el filtro de salida, Lsp.Host: aqui se enmascaraba otra vez
+  // con el nombre de la tool, que gasta las citas del disco de la llamada - la
+  // linea real de una negativa salia enmascarada; revision del 4-oct-2026)
 end;
 
 initialization

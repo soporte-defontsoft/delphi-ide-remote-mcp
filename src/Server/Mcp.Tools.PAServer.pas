@@ -122,7 +122,8 @@ uses
   Lsp.Discovery,
   Lsp.Dproj,
   Lsp.BuildRunner,
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Client;
 
 constructor TDelphiPAServerTool.Create;
 begin
@@ -388,7 +389,7 @@ begin
   if not TFile.Exists(F) then
     Exit;
   try
-    Result := TJSONObject.ParseJSONValue(TFile.ReadAllText(F)) as TJSONObject;
+    Result := ObjetoJson(TFile.ReadAllText(F));
   except
     Result := nil;
   end;
@@ -507,7 +508,7 @@ begin
   end;
   O := nil;
   try
-    O := TJSONObject.ParseJSONValue(TFile.ReadAllText(Ficha)) as TJSONObject;
+    O := ObjetoJson(TFile.ReadAllText(Ficha));
   except
     O := nil;
   end;

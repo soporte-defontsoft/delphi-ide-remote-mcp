@@ -219,7 +219,7 @@ begin
   // fichero + enlace listo para copiar: un agente que recompone la ruta a
   // mano se inventa carpetas (hermes, 25-sep-2026)
   PonFrame(W0, H0);
-  Enlace := DownloadLinkFor(AToolName, AFile);
+  Enlace := DownloadLinkFor(AFile);
   if Enlace <> '' then
   begin
     AReturn.AddPair('download', Enlace);

@@ -63,23 +63,6 @@ uses
   Lsp.Texts,
   Lsp.Pascal;
 
-const
-  RESERVED: array [0 .. 64] of string = (
-    'and', 'array', 'as', 'asm', 'begin', 'case', 'class', 'const',
-    'constructor', 'destructor', 'dispinterface', 'div', 'do', 'downto',
-    'else', 'end', 'except', 'exports', 'file', 'finalization', 'finally',
-    'for', 'function', 'goto', 'if', 'implementation', 'in', 'inherited',
-    'initialization', 'inline', 'interface', 'is', 'label', 'library',
-    'mod', 'nil', 'not', 'object', 'of', 'or', 'out', 'packed', 'procedure',
-    'program', 'property', 'raise', 'record', 'repeat', 'resourcestring',
-    'set', 'shl', 'shr', 'string', 'then', 'threadvar', 'to', 'try', 'type',
-    'unit', 'until', 'uses', 'var', 'while', 'with', 'xor');
-
-function IsValidIdent_(const S: string): Boolean;
-begin
-  Result := TRegEx.IsMatch(S, '^[A-Za-z_][A-Za-z0-9_]*$');
-end;
-
 { Occurrences of AIdent as a whole word INSIDE string literals of AText.
   LINEAR scan, never a regex over the whole text: the obvious '(...|'')*'
   pattern backtracks catastrophically on big files - measured 2026-08-24,
@@ -107,7 +90,7 @@ begin
     Ini := I;
     while (I <= Length(AText)) and (Clases[I] = cpCadena) do
       Inc(I);
-    if TRegEx.IsMatch(Copy(AText, Ini, I - Ini), '(?i)\b' + TRegEx.Escape(AIdent) + '\b') then
+    if TRegEx.IsMatch(Copy(AText, Ini, I - Ini), '(?i)' + PatronIdentEntero(AIdent)) then
       Inc(Result);
   end;
 end;
@@ -128,13 +111,17 @@ var
   DsgList: TStringList;
 begin
   Result := TJSONObject.Create;
+  try
   Blockers := TJSONArray.Create;
   Warnings := TJSONArray.Create;
   Changes := TJSONArray.Create;
   Touched := TList<string>.Create;
   try
     // 1. the new name must be legal before any work
-    if not IsValidIdent_(ANewName) then
+    // EL identificador (Lsp.Pascal): un nombre con una enye o un acento es
+    // legal, y aqui se negaba por llevar una letra fuera de A-Z (censo del
+    // 4-oct-2026)
+    if not EsIdentificador(ANewName) then
     begin
       Blockers.Add(MsgFmt(SR_RENAME_BAD_IDENT_FMT, [ANewName]));
       // un nombre ilegal es una llamada mal hecha, no "no aplicable"
@@ -144,7 +131,7 @@ begin
       Blockers := nil;
       Exit;
     end;
-    if MatchText(ANewName, RESERVED) then
+    if EsPalabraReservada(ANewName) then // la lista del lexico (Lsp.Pascal)
     begin
       Blockers.Add(MsgFmt(SR_RENAME_RESERVED_FMT, [ANewName]));
       Result.AddPair('error', MsgFmt(SR_RENAME_RESERVED_FMT, [ANewName]));
@@ -160,7 +147,7 @@ begin
       Ident := Refs.GetValue('identifier').Value;
       Result.AddPair('symbol', Ident);
       Result.AddPair('newName', ANewName);
-      if SameText(Ident, ANewName) then
+      if MismoIdentificador(Ident, ANewName) then
         Blockers.Add(MsgText(SR_RENAME_SAME_NAME));
       DefObj := Refs.GetValue('definition') as TJSONObject;
       DefPath := DefObj.GetValue('path').Value;
@@ -277,7 +264,7 @@ begin
             // class part: say it instead of letting the agent replace the lot
             // (en su codigo: un 'X.Nombre' de un comentario no la cualifica)
             if TRegEx.IsMatch(CodigoPascal(Lines[DefLine]),
-              '(?i)\b\w+\.' + TRegEx.Escape(Ident) + '\b') then
+              '(?i)' + PATRON_IDENT + '\.' + PatronIdentEntero(Ident)) then
               Warnings.Add(MsgFmt(SN_RENAME_QUALIFIED_FMT, [Lines[DefLine].Trim]));
           end;
         end;
@@ -384,7 +371,7 @@ begin
       for P in DsgList do
       begin
         Text := PatchLoadText(P, EncName);
-        N := TRegEx.Matches(Text, '(?i)\b' + TRegEx.Escape(Ident) + '\b').Count;
+        N := TRegEx.Matches(Text, '(?i)' + PatronIdentEntero(Ident)).Count;
         if N > 0 then
         begin
           Inc(DesignerHits, N);
@@ -406,7 +393,7 @@ begin
     for P in Touched do
     begin
       Text := PatchLoadText(P, EncName);
-      Inc(N, TRegEx.Matches(CodigoPascal(Text), '(?i)\b' + TRegEx.Escape(ANewName) + '\b').Count);
+      Inc(N, TRegEx.Matches(CodigoPascal(Text), '(?i)' + PatronIdentEntero(ANewName)).Count);
     end;
     if N > 0 then
       Blockers.Add(MsgFmt(SR_RENAME_COLLISION_FMT, [ANewName, N]));
@@ -426,6 +413,14 @@ begin
     Changes.Free;
     Warnings.Free;
     Blockers.Free;
+  end;
+  except
+    // una excepcion a medio camino (el motor de referencias, un fichero que
+    // no se deja leer) dejaba este Result sin liberar: lo devuelto no llega
+    // a nadie (menor de la ronda 16; leido en el codigo, una fuga no la ve
+    // una bateria)
+    Result.Free;
+    raise;
   end;
 end;
 
@@ -520,7 +515,7 @@ begin
         1.10.0, medido; la regla del rename de una unit, David 2-oct-2026). }
       Vieja := Lineas[L0];
       Nueva := Vieja;
-      Ms := TRegEx.Matches(Vista[L0], '(?i)\b' + TRegEx.Escape(Ident) + '\b');
+      Ms := TRegEx.Matches(Vista[L0], '(?i)' + PatronIdentEntero(Ident));
       for var Q := Ms.Count - 1 downto 0 do
         Nueva := Copy(Nueva, 1, Ms[Q].Index - 1) + ANewName +
           Copy(Nueva, Ms[Q].Index + Ms[Q].Length, MaxInt);

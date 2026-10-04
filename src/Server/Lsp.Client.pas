@@ -181,6 +181,14 @@ type
     class function LoadSourceText(const AFilePath: string): string;
   end;
 
+{ EL lector de un JSON que tiene que ser un OBJETO: nil si el texto no es
+  JSON o es otra cosa (un array, un numero) - y lo leido se libera. Eran
+  cinco 'ParseJSONValue(...) as TJSONObject': con un .delphilsp.json que era
+  un array, toda tool del motor contestaba SYS-006 INTERNAL "Invalid class
+  typecast" (menor de la ronda 16, medido el 4-oct-2026), y lo leido se
+  perdia sin liberar. Quien llama libera el resultado. }
+function ObjetoJson(const ATexto: string): TJSONObject;
+
 implementation
 
 uses
@@ -189,6 +197,17 @@ uses
   System.StrUtils,
   MCPServer.Logger,
   Lsp.Texts; // DecodeSourceBytes: el detector de encoding de delphi_read
+
+function ObjetoJson(const ATexto: string): TJSONObject;
+var
+  V: TJSONValue;
+begin
+  V := TJSONObject.ParseJSONValue(ATexto);
+  if V is TJSONObject then
+    Exit(TJSONObject(V));
+  V.Free;
+  Result := nil;
+end;
 
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);
@@ -551,7 +570,7 @@ begin
   finally
     FLock.Leave;
   end;
-  Msg := TJSONObject.ParseJSONValue(AJson) as TJSONObject;
+  Msg := ObjetoJson(AJson);
   if Msg = nil then
     Exit;
   try
@@ -663,7 +682,7 @@ begin
   // woken with no answer: the engine was stopped under this request
   if (Raw = '') and FStopped then
     raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
-  Result := TJSONObject.ParseJSONValue(Raw) as TJSONObject;
+  Result := ObjetoJson(Raw);
   if Result = nil then
     raise ELspClient.Create(MsgFmt(SE_LSP_LSP_RESPONSE_VALID_JSON_FMT, [AMethod]));
 end;

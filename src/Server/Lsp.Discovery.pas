@@ -154,6 +154,13 @@ function BdsUserDir(const AInfo: TRadStudioInfo): string;
   lleva. La de dcc32.exe es la del compilador. }
 function VersionDeFichero(const AExe: string): string;
 
+{ La plataforma del IDE de una instalacion (ARootDir, la de RootDir), la de
+  la RTTI de su disenador: 'Win64' si trae bin64\bds.exe, 'Win32' si solo
+  el de 32 bits. Con los dos, Win64: lo publicado es lo
+  mismo, y lo que cambia es el tipo de lo que depende de la plataforma
+  (NativeInt es Int64 o Integer). }
+function PlataformaDelIde(const ARootDir: string): string;
+
 implementation
 
 uses
@@ -272,6 +279,14 @@ var
   Edicion: string;
 begin
   InfoDelExe(AExe, Edicion, Result);
+end;
+
+function PlataformaDelIde(const ARootDir: string): string;
+begin
+  if FileExists(TPath.Combine(TPath.Combine(ARootDir, 'bin64'), 'bds.exe')) then
+    Result := 'Win64'
+  else
+    Result := 'Win32';
 end;
 
 function DiscoverAllRadStudios: TArray<TRadStudioInfo>;

@@ -150,7 +150,8 @@ uses
   Lsp.Guard,     // IdeMacroVars + ExpandIdeMacros: la lista del IDE trae $(BDS)
   Lsp.Patch,     // DecodeBytes: EL decodificador
   Lsp.Texts,     // SF_DOCS_ANCESTROS_FMT
-  System.Character;
+  System.Character,
+  Lsp.Pascal;
 
 { ---------------------------------------------------------------- bytes }
 
@@ -1466,7 +1467,7 @@ begin
     if (Cand.Count = 0) and (Length(Palabras) = 1) and Q.Contains('.') then
     begin
       Clase := Q.Substring(0, Q.LastIndexOf('.'));
-      Miembro := Q.Substring(Q.LastIndexOf('.') + 1);
+      Miembro := UltimoTrozo(Q);
       if (Clase <> '') and (Miembro <> '') then
         for var A in AAyudas do
         begin

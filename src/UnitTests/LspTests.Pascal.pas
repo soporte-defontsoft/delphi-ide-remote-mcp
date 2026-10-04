@@ -38,12 +38,29 @@ type
     [Test] procedure LaLineaAcabaDondeCierraSuComentario;
   end;
 
+  // EL identificador (Lsp.Pascal): una letra de cualquier alfabeto. El TRegEx
+  // del RTL no la ve con \w ni con \b (medido el 4-oct-2026), y una sesentena
+  // de regex del servidor la escribian asi.
+  [TestFixture]
+  TIdentificadorTests = class
+  public
+    [Test] procedure UnaLetraDeCualquierAlfabeto;
+    [Test] procedure LoQueAceptaDcc;
+    [Test] procedure LaPalabraEnteraConAcentos;
+    [Test] procedure ElCaracterYElPatronDicenLoMismo;
+    [Test] procedure ElMismoIdentificadorTambienConAcentos;
+    [Test] procedure ElUltimoTrozoYLasReservadas;
+    [Test] procedure LasPalabrasDeUnaRutina;
+  end;
+
 implementation
 
 uses
   System.SysUtils,
+  System.StrUtils,
   Lsp.Pascal,
-  Lsp.ProjectUnits;
+  Lsp.ProjectUnits,
+  System.RegularExpressions;
 
 procedure TDirectivasTests.SoloLasDeVerdad;
 var
@@ -215,8 +232,109 @@ begin
   Assert.AreEqual(5, FinDeLinea('uses', 1), 'sin salto: el final');
 end;
 
+procedure TIdentificadorTests.UnaLetraDeCualquierAlfabeto;
+begin
+  Assert.IsTrue(EsIdentificador('AñadirLineaTexto'), 'AñadirLineaTexto');
+  Assert.IsTrue(EsIdentificador('lblDirección'), 'lblDirección');
+  Assert.IsTrue(EsIdentificador('Último'), 'Último');
+  Assert.IsTrue(EsIdentificador('_x1'), '_x1');
+  Assert.IsFalse(EsIdentificador('1x'), '1x');
+  Assert.IsFalse(EsIdentificador(''), 'vacio');
+  Assert.IsFalse(EsIdentificador('a b'), 'a b');
+  // el $ de PCRE casa delante de un salto final: con su salto no lo es
+  Assert.IsFalse(EsIdentificador('Foo'#10), 'con salto');
+  Assert.IsFalse(EsIdentificador('Vcl.Forms'), 'puntos sin APuntos');
+  Assert.IsTrue(EsIdentificador('Vcl.Forms', True), 'Vcl.Forms');
+  Assert.IsTrue(EsIdentificador('Galatea.Año', True), 'Galatea.Año');
+  Assert.IsFalse(EsIdentificador('Vcl..Forms', True), 'dos puntos');
+  Assert.IsFalse(EsIdentificador('Vcl.', True), 'punto final');
+end;
+
+{ Lo que dcc compila como identificador y lo que no (medido el 4-oct-2026,
+  una funcion con cada clase de caracter): cualquier caracter no ASCII del
+  plano basico, tambien al principio; fuera del plano basico, E2038 }
+procedure TIdentificadorTests.LoQueAceptaDcc;
+begin
+  Assert.IsTrue(EsIdentificador('Col·lecció'), 'el punto volado catalan');
+  Assert.IsTrue(EsIdentificador('·Punto'), 'tambien al principio');
+  Assert.IsTrue(EsIdentificador('Cafe' + #$0301), 'una marca combinante');
+  Assert.IsTrue(EsIdentificador('Siglo' + #$216B), 'un numeral romano');
+  Assert.IsTrue(EsIdentificador('Precio€') and EsIdentificador('€Precio'), 'el euro');
+  Assert.IsTrue(EsIdentificador('Uno' + #$00A0 + 'Dos'), 'un espacio duro');
+  Assert.IsFalse(EsIdentificador('Equis' + #$D835#$DC65), 'una letra fuera del plano basico');
+  Assert.IsFalse(EsIdentificador('Uno Dos') or EsIdentificador('Uno-Dos'), 'el espacio y el guion ASCII no');
+  Assert.AreEqual(1, TRegEx.Matches('x := Col·lecció + 1;', PatronIdentEntero('Col·lecció')).Count,
+    'el patron lo lee entero');
+  Assert.AreEqual(0, TRegEx.Matches('x := Col·lecció;', PatronIdentEntero('Col')).Count,
+    'y Col no es una palabra entera dentro');
+end;
+
+procedure TIdentificadorTests.LaPalabraEnteraConAcentos;
+const
+  T = 'x := Añoñ + Año;';
+begin
+  // Pascal no distingue mayusculas, tampoco en la Ñ; ni AñoStr ni fAño son Año
+  Assert.AreEqual(2, TRegEx.Matches('Año := AñoStr + fAño + AÑO;',
+    '(?i)' + PatronIdentEntero('año')).Count, 'Año');
+  // con un acento al principio, '\b' no casaba nunca
+  Assert.AreEqual(1, TRegEx.Matches(' Último ', PatronIdentEntero('Último')).Count, 'al principio');
+  Assert.AreEqual(0, TRegEx.Matches('PenÚltimo', PatronIdentEntero('Último')).Count, 'dentro de otro');
+  // y con uno al final, '\b' casaba dentro de otro nombre (Caféx) y no en
+  // Café: tambien contaba uno, el equivocado. La posicion lo dice (revision)
+  Assert.AreEqual(1, TRegEx.Matches('Caféx := Café;', PatronIdentEntero('Café')).Count, 'al final');
+  Assert.AreEqual(Pos('Café;', 'Caféx := Café;'),
+    TRegEx.Match('Caféx := Café;', PatronIdentEntero('Café')).Index, 'al final, en su sitio');
+  // la posicion es la del texto (la del rename): detras de una ñ, la suya
+  Assert.AreEqual(Pos('Año;', T), TRegEx.Match(T, PatronIdentEntero('Año')).Index, 'la posicion');
+end;
+
+procedure TIdentificadorTests.ElCaracterYElPatronDicenLoMismo;
+const
+  MUESTRA = 'aZ_09ñÑáÜçßªº²µ·€-. ' + #$0301 + 'ЖλΣ中' + #$0663 + #$2163 + #9;
+begin
+  // los que recorren un texto y los que lo buscan con un patron: una regla
+  for var C in MUESTRA do
+  begin
+    Assert.IsTrue(TRegEx.IsMatch(C, '\A' + PATRON_CAR_IDENT + '\z') = EsCaracterDeIdent(C),
+      Format('de dentro: U+%.4x', [Ord(C)]));
+    Assert.IsTrue(EsIdentificador(C) = EsLetraDeIdent(C), Format('el primero: U+%.4x', [Ord(C)]));
+  end;
+end;
+
+procedure TIdentificadorTests.ElMismoIdentificadorTambienConAcentos;
+begin
+  // dcc pliega tambien la caja de una letra acentuada (medido el 4-oct-2026:
+  // 'uses UáRBOL' compila contra 'unit UÁrbol'); SameText solo A-Z
+  Assert.IsTrue(MismoIdentificador('UÁrbol', 'uáRBOL'), 'UÁrbol');
+  Assert.IsTrue(MismoIdentificador('Tamaño', 'TAMAÑO'), 'Tamaño');
+  Assert.IsFalse(MismoIdentificador('Tamaño', 'Tamano'), 'sin la enye es otro');
+  Assert.IsFalse(MismoIdentificador('Año', 'Años'), 'otro largo');
+  Assert.AreEqual(ClaveDeIdentificador('año'), ClaveDeIdentificador('AÑO'), 'la clave');
+end;
+
+procedure TIdentificadorTests.ElUltimoTrozoYLasReservadas;
+begin
+  Assert.AreEqual('TForm', UltimoTrozo('Vcl.Forms.TForm'));
+  Assert.AreEqual('TForm', UltimoTrozo('TForm'));
+  Assert.IsTrue(EsPalabraReservada('Begin'), 'Begin');
+  Assert.IsTrue(EsPalabraReservada('string'), 'string');
+  Assert.IsFalse(EsPalabraReservada('Beginning'), 'Beginning');
+end;
+
+procedure TIdentificadorTests.LasPalabrasDeUnaRutina;
+begin
+  for var S in ['procedure X;', 'function X: Integer;', 'constructor Create;',
+                'destructor Destroy;', 'operator Add(A, B: T): T;'] do
+    Assert.IsTrue(TRegEx.IsMatch(S, '(?i)^' + PatronPalabraDeRutina + '\s'), S);
+  Assert.IsFalse(TRegEx.IsMatch('property X;', '(?i)^' + PatronPalabraDeRutina + '\s'), 'property no');
+  // una sola lista de directivas, con las nuevas (insert=metodo no conocia estas)
+  Assert.IsTrue(MatchText('noreturn', DIRECTIVAS_DE_RUTINA) and MatchText('unsafe', DIRECTIVAS_DE_RUTINA));
+  Assert.IsTrue(MatchText('overload', DIRECTIVAS_DE_RUTINA) and MatchText('message', DIRECTIVAS_DE_RUTINA));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TDirectivasTests);
   TDUnitX.RegisterTestFixture(TLexicoTests);
+  TDUnitX.RegisterTestFixture(TIdentificadorTests);
 
 end.
