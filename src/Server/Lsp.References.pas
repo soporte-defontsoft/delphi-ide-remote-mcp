@@ -136,8 +136,7 @@ begin
     begin
       if (Root.Trim = '') or not TDirectory.Exists(Root.Trim) then
         Continue;
-      for var Dproj in TDirectory.GetFiles(Root.Trim, '*.dproj',
-        TSearchOption.soAllDirectories) do
+      for var Dproj in WalkFiles(Root.Trim, '*.dproj') do
       begin
         if SkipIdeArtifacts(Dproj) then
           Continue;
@@ -609,7 +608,7 @@ begin
       begin
         ScopeDirs := ScopeDirs + [D];
         for Ext in TArray<string>.Create('*.pas', '*.dpr', '*.inc') do
-          for F in TDirectory.GetFiles(D, Ext, TSearchOption.soAllDirectories) do
+          for F in WalkFiles(D, Ext) do
             if not SkipPath(F) and not AllFiles.Contains(F) then
               AllFiles.Add(F);
       end;

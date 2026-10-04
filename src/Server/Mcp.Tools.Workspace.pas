@@ -293,108 +293,7 @@ const
   // numero (la nota lo llevaba copiado a mano)
   LIST_CAP = 500;
 
-{ Recursive file walk that TOLERATES unreadable subdirectories. Delphi's
-  TDirectory.GetFiles(soAllDirectories) aborts the WHOLE enumeration on the
-  first failure - measured on the Android NDK, whose deep paths exceed the
-  classic limit and killed an entire delphi_list. One bad folder must never
-  hide the rest of the tree. }
-function WalkFiles(const ADir: string; const AMasks: TArray<string>;
-  AConPapelera: Boolean = False): TArray<string>; overload;
-var
-  Acc: TStringList;
-  Vistos: TStringList; // rutas REALES de los enlaces ya seguidos: corta ciclos
-  // Cada fichero UNA vez: dos mascaras que se solapan ("*;*.pas") o la
-  // pasada de la papelera (mascara + '-*', que "*" ya cubre) lo contaban dos
-  // veces - total 7 para 3 ficheros (quinta revision). Acc guarda el orden
-  // del paseo; esto solo responde "ya esta", en O(1): un arbol como el NDK
-  // tiene decenas de miles de ficheros.
-  Unicos: TDictionary<string, Boolean>;
-
-  procedure Anade(const F: string);
-  begin
-    if not Unicos.ContainsKey(LowerCase(F)) then
-    begin
-      Unicos.Add(LowerCase(F), True);
-      Acc.Add(F);
-    end;
-  end;
-
-  procedure Recurse(const D: string);
-  var
-    F, Sub: string;
-  begin
-    try
-      // Un enlace (de fichero o de carpeta) se sigue solo si lo de detras se
-      // puede LEER: EnlaceLegible, la regla del copiador. Un junction a
-      // cualquier sitio ensenaba, buscaba y empaquetaba lo que la puerta de
-      // lectura no deja leer (auditoria 25-sep-2026).
-      for var Mascara in AMasks do
-        for F in TDirectory.GetFiles(D, Mascara, TSearchOption.soTopDirectoryOnly) do
-          if not EsEnlace(F) or EnlaceLegible(F) then
-            Anade(F);
-    except
-      // unreadable folder: skip its files, still try its children
-    end;
-    // Dentro de la papelera cada copia lleva el sello de hora DETRAS de la
-    // extension ("UFicha.pas-215825250"), asi que la mascara "*.pas" no casa
-    // con ella. Resultado medido el 2026-09-20: includetrash=true ensenaba
-    // las copias de seguridad -que SI conservan su nombre- y escondia justo
-    // lo BORRADO, que es lo unico que ese flag promete. La mascara se abre
-    // solo aqui y solo cuando lo piden: los demas que llaman no se enteran.
-    if AConPapelera and EnPapelera(D) then
-    try
-      for var Mascara in AMasks do
-        for F in TDirectory.GetFiles(D, Mascara + '-*',
-          TSearchOption.soTopDirectoryOnly) do
-          if not EsMarcaDeDueno(F) then // el marcador de quien lo tiro
-            Anade(F);
-    except
-      // idem
-    end;
-    try
-      for Sub in TDirectory.GetDirectories(D) do
-      begin
-        // Una papelera por delante: se purga AL PASAR lo caducado, antes de
-        // entrar (la nota, con las medidas, en Lsp.Patch.PurgaAlPasar).
-        if SameText(TPath.GetFileName(Sub), TrashFolderName) then
-          PurgaAlPasar(Sub);
-        if EsEnlace(Sub) then
-        begin
-          if not EnlaceLegible(Sub) then
-            Continue;
-          var RealSub := LowerCase(RealPath(Sub));
-          if Vistos.IndexOf(RealSub) >= 0 then
-            Continue; // un ciclo de enlaces
-          Vistos.Add(RealSub);
-        end;
-        Recurse(Sub);
-      end;
-    except
-      // cannot enumerate children: nothing else to do here
-    end;
-  end;
-
-begin
-  Acc := TStringList.Create;
-  Vistos := TStringList.Create;
-  Unicos := TDictionary<string, Boolean>.Create;
-  try
-    Vistos.Sorted := True;
-    Vistos.Add(LowerCase(RealPath(ADir)));
-    Recurse(ADir);
-    Result := Acc.ToStringArray;
-  finally
-    Unicos.Free;
-    Vistos.Free;
-    Acc.Free;
-  end;
-end;
-
-function WalkFiles(const ADir, AMask: string;
-  AConPapelera: Boolean = False): TArray<string>; overload;
-begin
-  Result := WalkFiles(ADir, [AMask], AConPapelera);
-end;
+// WalkFiles vive en Lsp.Guard: la misma lectura para todas las tools.
 
 { TDelphiSearchTool }
 
@@ -985,11 +884,16 @@ end;
   la 1.7.7). }
 function GitLinea(const ARepo, AFijado, AResto: string): string;
 begin
+  // La orden de red no hereda una recursion a remotos de submodulos sin juzgar.
+  var Comando := PrimerTrozo(AResto, [' ']);
+  var Resto := AResto;
+  if MatchText(Comando, ['fetch', 'pull']) then
+    Resto := Comando + ' --no-recurse-submodules' + Copy(AResto, Length(Comando) + 1, MaxInt);
   // Nunca ejecutar los hooks ni el monitor de un repo del workspace.
   // El directorio del servidor no admite escrituras de los clientes.
   Result := 'git.exe -c core.fsmonitor=false -c core.hooksPath=' +
     EnComillas(ServerTempDir('git-hooks-off')) + ' -C ' +
-    EnComillas(ARepo) + AFijado + ' ' + AResto;
+    EnComillas(ARepo) + AFijado + ' ' + Resto;
 end;
 
 { git, LANZADO por un solo sitio: la linea del compositor por el lanzador de
@@ -1115,7 +1019,7 @@ begin
       // git contesta la ruta REAL: bajo una raiz declarada en una letra de
       // red es su UNC, y la puerta juzga por la forma declarada. Se le da
       // escrita asi (Lsp.Guard.FormaDeclarada; era GIT-041, 30-sep-2026)
-      Ruta := FormaDeclarada(Ruta);
+      Ruta := FormaDeclarada(Ruta, ARepo);
       if TDirectory.Exists(Ruta) then
         Carpetas := Carpetas + [Ruta];
     except
@@ -1595,7 +1499,7 @@ begin
   var SobraGit := ParametroQueNoVa(ModoGit, [
       'status', 'offset', 'diff', 'offset', 'log', 'offset', 'show', 'offset',
       'branch', 'offset', 'add', '',
-      'pull', '', 'fetch', '', 'init', '', 'merge', '', 'push', '',
+      'pull', '', 'fetch', '', 'ls-remote', 'offset', 'init', '', 'merge', '', 'push', '',
       'commit', 'message', 'clone', 'message', 'config', 'message',
       'stash push', 'message', 'stash pop', '', 'stash list', 'offset',
       'tag', 'message offset', 'switch', 'create', 'restore', '',
@@ -1621,7 +1525,7 @@ begin
   // comando nuevo que no se apunte aqui no funciona - cerrado).
   if not MatchText(Cmd, ['status', 'diff', 'log', 'show', 'branch', 'add',
        'commit', 'clone', 'pull', 'fetch', 'init', 'config', 'switch', 'merge',
-       'stash', 'restore', 'push', 'tag', 'worktree']) then
+       'stash', 'restore', 'push', 'tag', 'worktree', 'ls-remote']) then
     Exit(MsgFmt(SR_GIT_UNKNOWN_COMMAND_FMT, [Params.Command]));
 
   // LA JAULA DEL REPO. git no trabaja sobre la carpeta que se le da: sube
@@ -1671,6 +1575,15 @@ begin
     GitArgs := 'status --porcelain=v1 -b ' + ArgvSeguro(Params.Args)
   else if Cmd = 'diff' then
     GitArgs := 'diff ' + ArgvSeguro(Params.Args)
+  else if Cmd = 'ls-remote' then
+  begin
+    for var Trozo in TrocearArgs(Params.Args) do
+      if Trozo.StartsWith('-') and
+         (IndexStr(Trozo, ['--heads', '--tags', '--refs', '--symref', '--exit-code']) < 0) then
+        Exit(MsgFmt(SR_GIT_RED_OPCION_FMT, [Cmd, Trozo,
+          '--heads, --tags, --refs, --symref, --exit-code']));
+    GitArgs := 'ls-remote ' + ArgvSeguro(Params.Args);
+  end
   else if Cmd = 'log' then
   begin
     GitArgs := 'log --oneline -20 ' + ArgvSeguro(Params.Args);
@@ -1987,13 +1900,12 @@ begin
 
   // EL REMOTO de los que hablan con uno: de red (la lista de hosts, en la
   // puerta) o una carpeta que pase por la jaula (RemotoDenegado)
-  if MatchText(Cmd, ['pull', 'fetch', 'push']) then
+  if MatchText(Cmd, ['pull', 'fetch', 'push', 'ls-remote']) then
   begin
-    // Una ruta relativa, desde la RAIZ del arbol (la carpeta de git en un
-    // repo sin arbol): es desde donde la resuelve git, se le llame desde la
-    // subcarpeta que sea (medido con git a pelo, fijado y sin fijar). El
-    // juez y git tienen que mirar la MISMA carpeta.
-    Result := RemotoDenegado(Cmd, Repo, Fijado, IfThen(Raiz <> '', Raiz, GitDir),
+    // Con arbol, Git resuelve desde su raiz; sin arbol conserva el -C de
+    // la llamada, tambien si es una subcarpeta del repo bare (medido).
+    // El juez y git tienen que mirar la MISMA carpeta.
+    Result := RemotoDenegado(Cmd, Repo, Fijado, IfThen(Raiz <> '', Raiz, Repo),
       Params.Args);
     // ...y lo que push envia cuando la llamada no lo dice: lo que tenga
     // configurado el repo
@@ -2003,7 +1915,7 @@ begin
       Exit;
   end;
 
-  if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push']) then
+  if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push', 'ls-remote']) then
     TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT,
       [Cmd, Repo, Params.Message]));
 
@@ -2058,7 +1970,7 @@ begin
     try
       try
         Output := GitCorre(Repo, Fijado, GitArgs,
-          IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch']), 600000, 60000),
+          IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch', 'ls-remote']), 600000, 60000),
           ExitCode);
         GitCorrio := True;
       finally

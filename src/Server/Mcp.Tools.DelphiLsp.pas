@@ -983,8 +983,7 @@ begin
       Ret.AddPair('notShown', Fuera);
       var N := 0;
       var Peso := 0;
-      for var F in TDirectory.GetFiles(Folder, '*.pas',
-        TSearchOption.soAllDirectories) do
+      for var F in WalkFiles(Folder, '*.pas') do
       begin
         if SkipIdeArtifacts(F) then
           Continue;

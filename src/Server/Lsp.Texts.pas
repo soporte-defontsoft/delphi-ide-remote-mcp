@@ -5745,6 +5745,10 @@ const
     '("%s..."), and Windows allows at most 255 in one name. Use a ' +
     'shorter name.';
 
+  SR_GUARD_CONTROL_EN_RUTA_FMT =
+    '[GUARD-032 INVALID_PARAM] The path contains control character %d ' +
+    '(U+0000..U+001F). Use a path without control characters.';
+
   SR_GUARD_RUTA_CONTIENE_FUERA_UNIDAD_FMT =
     '[GUARD-009 INVALID_PARAM] The path "%s" contains ":" outside the drive ' +
     '(alternate data stream). Use a normal file name.';
@@ -6231,7 +6235,7 @@ const
   SR_GIT_UNKNOWN_COMMAND_FMT =
     '[GIT-034 INVALID_PARAM] Unknown command "%s". Allowed: status | ' +
     'diff | log | show | branch | switch | merge | stash | add | commit ' +
-    '| init | push | tag | config | clone | pull | fetch | worktree | restore';
+    '| init | push | tag | config | clone | pull | fetch | ls-remote | worktree | restore';
 
   SR_GIT_EXIT_FMT =
     '[GIT-036 DENIED] exit=%d - git ended with an error; its own answer ' +
@@ -7762,7 +7766,10 @@ const
   SP_WS_COMMAND =
     'One of: status | diff | log | show | branch | switch | merge | ' +
     'stash | add | restore | commit | init | push | tag | config | clone | ' +
-    'pull | fetch | worktree. switch: args=<branch> (create=true for a new ' +
+    'pull | fetch | ls-remote | worktree. ls-remote: args=<remote> [refs], ' +
+    'read-only, with the same remote policy as fetch/pull; options ' +
+    '--heads, --tags, --refs, --symref, --exit-code. switch: ' +
+    'args=<branch> (create=true for a new ' +
     'one). merge: args=<branch>, always --ff-only (a merge needing a ' +
     'commit is refused, not left half-done). pull: args=<remote> ' +
     '<branch>, always --ff-only too; of the options, only those of the ' +

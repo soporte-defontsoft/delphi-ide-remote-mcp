@@ -140,7 +140,7 @@ begin
   Arr := TJSONArray.Create;
   Result.AddPair('projects', Arr);
   N := 0;
-  for F in TDirectory.GetFiles(Dir, '*.dpr', TSearchOption.soAllDirectories) do
+  for F in WalkFiles(Dir, '*.dpr') do
   begin
     if SkipIdeArtifacts(F) then
       Continue;

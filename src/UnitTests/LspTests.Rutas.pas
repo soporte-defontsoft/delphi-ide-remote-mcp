@@ -66,6 +66,7 @@ type
     [Test] procedure ElUncExtendidoYElHostRaroSeEnmascaran;
     [Test] procedure LasClavesDeUnJsonTambienSeEnmascaran;
     [Test] procedure LaFilaDeUnaTandaDejaElDiscoComoEsta;
+    [Test] procedure LosControlesSonAnomaliasPorSiMismos;
   end;
 
   { LA clave de una carpeta (Lsp.Guard.ClaveDeCarpeta): la misma carpeta
@@ -448,6 +449,15 @@ begin
   S := MaskDriveText('delphi_changeset', '[CHSET-0 NOT_FOUND] ' + Letra + ':\f.pas'#10'  ' + Cita1);
   Assert.Contains(S, '  ' + Cita1, 'la pista de changeset, tal cual: ' + S);
   Assert.Contains(S, Virtual + '\f.pas', 'su ruta, enmascarada: ' + S);
+end;
+
+procedure TBarridoDeUnidadesTests.LosControlesSonAnomaliasPorSiMismos;
+begin
+  for var N := 0 to 31 do
+    for var P in TArray<string>.Create('C:\antes' + Char(N) + 'despues.pas',
+      'C:\carpeta' + Char(N), Char(N) + 'C:\carpeta') do
+      Assert.IsNotEmpty(PathAnomaly(P), 'Control ' + IntToStr(N));
+  Assert.AreEqual('', PathAnomaly('C:\carpeta\unidad.pas'));
 end;
 
 { TClaveDeCarpetaTests }

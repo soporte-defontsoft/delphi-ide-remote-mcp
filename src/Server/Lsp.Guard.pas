@@ -548,6 +548,13 @@ procedure RecorreSinEnlaces(const ADir: string; const AVisita: TVisitaRuta;
   se empaqueta es lo que se podia leer. }
 function EnlaceLegible(const P: string): Boolean;
 
+{ Recorrido de lectura compartido: solo enlaces legibles, ciclos cortados y
+  carpetas ilegibles toleradas. Las tools deciden sus filtros de artefactos. }
+function WalkFiles(const ADir: string; const AMasks: TArray<string>;
+  AConPapelera: Boolean = False): TArray<string>; overload;
+function WalkFiles(const ADir, AMask: string;
+  AConPapelera: Boolean = False): TArray<string>; overload;
+
 { EL mudador de carpetas: AOrigen pasa a ser ADestino RENOMBRANDOLA (MoveFile
   en la misma unidad) o NADA. No abre la carpeta ni toca sus ficheros: un
   junction de dentro viaja como enlace y lo de detras ni se mira; si algo
@@ -696,11 +703,12 @@ function RutaSinTocarElDisco(const APath: string): Boolean;
   WNetGetConnection), que es local - medido el 1-oct-2026: 0,1 ms, y el
   mismo recurso que escribe git. Solo las letras que son unidades de red:
   un enlace local hacia un recurso se queda como estaba. }
-function FormaDeclarada(const ARuta: string): string;
+// AReferencia: llamada ya admitida; devuelve tambien la forma de su raiz enlazada.
+function FormaDeclarada(const ARuta: string; const AReferencia: string = ''): string;
 { Lo mismo sobre unas listas dadas (los sitios declarados y su ruta de red,
   por indice): la regla sin la maquina, para quien la prueba. }
 function FormaDeclaradaDe(const ARuta: string;
-  const ADeclaradas, AReales: TArray<string>): string;
+  const ADeclaradas, AReales: TArray<string>; AConLocales: Boolean = False): string;
 { La misma regla sobre un TEXTO, para la SALIDA: donde aparece la ruta de red
   de un sitio declarado en una letra - como la escribe git
   (//host/recurso/...), con las barras de Windows, o dobladas dentro de un
@@ -4358,7 +4366,7 @@ end;
 
 function GitCommandIsQuery(const ACmd, AArgs, AMessage: string): Boolean;
 begin
-  Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show']) or
+  Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show', 'ls-remote']) or
     (MatchText(Trim(ACmd), ['branch', 'tag']) and (Trim(AArgs) = '') and (Trim(AMessage) = '')) or
     // worktree list solo ENSENA las copias de trabajo (1.4.0)
     (SameText(Trim(ACmd), 'worktree') and SameText(Trim(AArgs), 'list')) or
@@ -4431,7 +4439,7 @@ begin
   // tag listan solo sin args ni message; worktree y stash solo args=list). Se
   // anunciaban branch/tag como lecturas y la puerta los negaba con args
   // (r11b H1, r11c H3)
-  AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show'], 'command',
+  AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show', 'ls-remote'], 'command',
     ['branch', 'without args or message (then it lists)',
      'tag', 'without args or message (then it lists)',
      'worktree', 'with args=list',
@@ -4761,6 +4769,10 @@ var
   C: Char;
 begin
   Result := '';
+  // Los controles nunca nombran un fichero: NUL trunca el nombre en Win32.
+  for C in APath do
+    if Ord(C) < 32 then
+      Exit(MsgFmt(SR_GUARD_CONTROL_EN_RUTA_FMT, [Ord(C)]));
   // A virtual unit that survived the inbound expansion is one this server does
   // not serve: it must be refused BY NAME, never resolved against the real
   // filesystem (that is what leaked the host's drive letters). Only when a
@@ -5323,6 +5335,110 @@ end;
 function EnlaceLegible(const P: string): Boolean;
 begin
   Result := (ReadPathDenied(RealPath(P)) = '') or (ReadPathDenied(P) = '');
+end;
+
+{ Recursive file walk that TOLERATES unreadable subdirectories. Delphi's
+  TDirectory.GetFiles(soAllDirectories) aborts the WHOLE enumeration on the
+  first failure - measured on the Android NDK, whose deep paths exceed the
+  classic limit and killed an entire delphi_list. One bad folder must never
+  hide the rest of the tree. }
+function WalkFiles(const ADir: string; const AMasks: TArray<string>;
+  AConPapelera: Boolean): TArray<string>;
+var
+  Acc: TStringList;
+  Vistos: TStringList; // rutas REALES de los enlaces ya seguidos: corta ciclos
+  // Cada fichero UNA vez: dos mascaras que se solapan ("*;*.pas") o la
+  // pasada de la papelera (mascara + '-*', que "*" ya cubre) lo contaban dos
+  // veces - total 7 para 3 ficheros (quinta revision). Acc guarda el orden
+  // del paseo; esto solo responde "ya esta", en O(1): un arbol como el NDK
+  // tiene decenas de miles de ficheros.
+  Unicos: TDictionary<string, Boolean>;
+
+  procedure Anade(const F: string);
+  begin
+    if not Unicos.ContainsKey(LowerCase(F)) then
+    begin
+      Unicos.Add(LowerCase(F), True);
+      Acc.Add(F);
+    end;
+  end;
+
+  procedure Recurse(const D: string);
+  var
+    F, Sub: string;
+  begin
+    try
+      // Un enlace (de fichero o de carpeta) se sigue solo si lo de detras se
+      // puede LEER: EnlaceLegible, la regla del copiador. Un junction a
+      // cualquier sitio ensenaba, buscaba y empaquetaba lo que la puerta de
+      // lectura no deja leer (auditoria 25-sep-2026).
+      for var Mascara in AMasks do
+        for F in TDirectory.GetFiles(D, Mascara, TSearchOption.soTopDirectoryOnly) do
+          if not EsEnlace(F) or EnlaceLegible(F) then
+            Anade(F);
+    except
+      // unreadable folder: skip its files, still try its children
+    end;
+    // Dentro de la papelera cada copia lleva el sello de hora DETRAS de la
+    // extension ("UFicha.pas-215825250"), asi que la mascara "*.pas" no casa
+    // con ella. Resultado medido el 2026-09-20: includetrash=true ensenaba
+    // las copias de seguridad -que SI conservan su nombre- y escondia justo
+    // lo BORRADO, que es lo unico que ese flag promete. La mascara se abre
+    // solo aqui y solo cuando lo piden: los demas que llaman no se enteran.
+    if AConPapelera and EnPapelera(D) then
+    try
+      for var Mascara in AMasks do
+        for F in TDirectory.GetFiles(D, Mascara + '-*',
+          TSearchOption.soTopDirectoryOnly) do
+          if not EsMarcaDeDueno(F) and (not EsEnlace(F) or EnlaceLegible(F)) then
+            Anade(F);
+    except
+      // idem
+    end;
+    try
+      for Sub in TDirectory.GetDirectories(D) do
+      begin
+        if EsEnlace(Sub) then
+        begin
+          if not EnlaceLegible(Sub) then
+            Continue;
+          var RealSub := LowerCase(RealPath(Sub));
+          if Vistos.IndexOf(RealSub) >= 0 then
+            Continue; // un ciclo de enlaces
+          Vistos.Add(RealSub);
+        end;
+        // La papelera se purga solo despues de admitir la lectura del enlace.
+        if SameText(TPath.GetFileName(Sub), TrashFolderName) then
+          PurgaAlPasar(Sub);
+        Recurse(Sub);
+      end;
+    except
+      // cannot enumerate children: nothing else to do here
+    end;
+  end;
+
+begin
+  if ReadPathDenied(ADir) <> '' then
+    Exit(nil);
+  Acc := TStringList.Create;
+  Vistos := TStringList.Create;
+  Unicos := TDictionary<string, Boolean>.Create;
+  try
+    Vistos.Sorted := True;
+    Vistos.Add(LowerCase(RealPath(ADir)));
+    Recurse(ADir);
+    Result := Acc.ToStringArray;
+  finally
+    Unicos.Free;
+    Vistos.Free;
+    Acc.Free;
+  end;
+end;
+
+function WalkFiles(const ADir, AMask: string;
+  AConPapelera: Boolean): TArray<string>;
+begin
+  Result := WalkFiles(ADir, [AMask], AConPapelera);
 end;
 
 { ADestino cae DENTRO de AOrigen (o es el), por las rutas REALES. Con
@@ -6612,15 +6728,15 @@ begin
 end;
 
 function FormaDeclaradaDe(const ARuta: string;
-  const ADeclaradas, AReales: TArray<string>): string;
+  const ADeclaradas, AReales: TArray<string>; AConLocales: Boolean): string;
 var
   P, Decl, Real, Mejor, MejorReal: string;
   I: Integer;
 begin
   Result := ARuta;
   P := PrefijoSinBarra(ARuta.Trim.Replace('/', '\'));
-  // solo un UNC: una ruta con letra ya esta en la forma en que se declara
-  if not EsUnc(P) then
+  // Por defecto solo UNC; los enlaces locales se traducen cuando lo piden.
+  if not AConLocales and not EsUnc(P) then
     Exit;
   Mejor := '';
   MejorReal := '';
@@ -6633,7 +6749,9 @@ begin
     // solo un sitio de letra de red. Uno en UNC (desde la 1.9.0 solo puede
     // serlo una carpeta de la zona de biblioteca) se queda con la
     // regla de siempre: vale en la forma en que se escribio
-    if not EsSitioDeLetraDeRed(Decl, Real) then
+    if not EsSitioDeLetraDeRed(Decl, Real) and
+       not (AConLocales and EsSitioConLetra(RaizSiUnidad(Decl)) and
+         EsRutaAbsoluta(RaizSiUnidad(Real))) then
       Continue;
     // bajo ESE sitio: el mismo, o lo que sigue a su separador (\\h\r\ab
     // no esta bajo \\h\r\a). De dos que casan, el mas hondo
@@ -6699,14 +6817,23 @@ begin
   end;
 end;
 
-function FormaDeclarada(const ARuta: string): string;
+function FormaDeclarada(const ARuta: string; const AReferencia: string): string;
 var
   Declaradas, Reales: TArray<string>;
 begin
   // (lo que no es un UNC lo devuelve tal cual FormaDeclaradaDe; la lista
   // sale de la tabla de unidades, sin abrir nada)
   SitiosEnLetraDeRed(Declaradas, Reales);
-  Result := FormaDeclaradaDe(ARuta, Declaradas, Reales);
+  // Solo las raices que contienen el argumento ya admitido: no abrir las demas.
+  if AReferencia <> '' then
+    for var R in WorkspaceRoots + WorkspaceReadOnlyRoots do
+      if StartsText(IncludeTrailingPathDelimiter(R),
+        IncludeTrailingPathDelimiter(AReferencia)) then
+      begin
+        Declaradas := Declaradas + [R];
+        Reales := Reales + [RealPath(R)];
+      end;
+  Result := FormaDeclaradaDe(ARuta, Declaradas, Reales, AReferencia <> '');
 end;
 
 function FormaDeclaradaEnTexto(const ATexto: string;

@@ -267,7 +267,7 @@ begin
   try
     Others.Duplicates := dupIgnore;
     Others.Sorted := True;
-    for F in TDirectory.GetFiles(APath, '*' + MARCA_DUENO_EXT, TSearchOption.soAllDirectories) do
+    for F in WalkFiles(APath, '*' + MARCA_DUENO_EXT) do
     begin
       // A marker only OWNS the copy sitting next to it. An orphan .by (its copy
       // already restored or purged) or a file someone just renamed to .by marks

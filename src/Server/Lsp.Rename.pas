@@ -366,7 +366,7 @@ begin
       end;
       if (Root <> '') and TDirectory.Exists(Root) then
         for var Ext in TArray<string>.Create('*.dfm', '*.fmx') do
-          for var D in TDirectory.GetFiles(Root, Ext, TSearchOption.soAllDirectories) do
+          for var D in WalkFiles(Root, Ext) do
             if not SkipIdeArtifacts(D) and (DsgList.IndexOf(D) < 0) then
               DsgList.Add(D);
       for P in DsgList do
