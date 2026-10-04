@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
 
-> **Status: stable (1.11.3).** Covered by 103 end-to-end batteries — 3,281 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: stable (1.12.0).** Covered by 105 end-to-end batteries — 3,318 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -122,7 +122,7 @@ something is *not* solved, or only half solved, it says so.
 `TPF0` stream and the resource-wrapped form it actually takes on disk; `delphi_read` and the
 `delphi_designer` readers show it as text on the fly, with the IDE's own conversion, and say so;
 and `delphi_designer to-text` / `to-binary` convert it on disk, backup first. A **text** one is validated by
-`delphi_designer lint` against the framework's real RTTI tables (what the class actually
+`delphi_designer lint` against the framework tables of the active Delphi (what the class actually
 publishes, not a guessed list): properties that do not exist, properties that exist but are not
 published, bad enum values and bad set members, each with its line, *before* MSBuild ever sees
 the file. And `delphi_designer check-binding` answers the question the compiler never asks — does
@@ -132,6 +132,27 @@ methods), a duplicate component name, an event left without a value: every one o
 perfectly and throws when the form is created**, on a machine where nobody is watching. It follows
 inheritance as far as the unit goes and says so when the ancestor lives elsewhere, rather than
 reporting inherited members as missing.
+Those tables are **read from each installed Delphi's own source** — the IDE's Library Search Path
+and Browsing Path, Win32 and Win64, so the components you installed from source are in too —
+never compiled into the server for one version. Every class, enumeration and set is known by its
+**unit** (the VCL's `TFont` and TeeChart's are two classes; FireDAC's and IBX's `TIBProtocol` two
+enumerations), and what a class streams **by code** without publishing it is read as well — its
+`DefineProperties`: `Left`/`Top` of a non-visual component, `TField.Lookup`, the old FMX names a
+`TLabel` still loads (`Font.Size`). When two units declare a component with the same name, the one
+a source registers on the palette names it in a form; when nothing decides, the form line is not
+judged and the lint says so. At startup the server generates, in the background, the table of every
+Delphi that has none (≈14 s for the 3,938 units of a RAD Studio 13 with JVCL, QuickReport and ICS)
+and keeps it in `%LOCALAPPDATA%\DelphiLspMcp\designer` with a fingerprint of that source: install or
+touch a component and the first designer call after it regenerates the table in the background
+while the previous one answers. No call ever generates inside an edit: an edit of a form made
+before the first table exists says it did not check (`DSGN-052`). A Delphi with no source gets no
+table and the designer says so (`DSGN-050`) instead of checking a form against another version. The
+class a property *really* holds is chosen by code (`TLabel.TextSettings` holds a
+`TLabelTextSettings`), so going down such a property the lint accepts what a descendant of the
+declared type publishes. Measured on the 669 text forms of the RAD Studio Samples: no warning,
+except six lines whose class a package registers without source (`tests/test_designer_corpus.py`).
+The tables name the classes, published properties and enum members of every component in those
+paths, for every workspace whatever its `LibraryZone` - names, not source.
 *Not solved:* no tool renders a form — `layout` resolves the geometry and catches overlaps, zero-size
 controls and anything falling outside its container, but it cannot tell you the result is *pretty*.
 Nothing here edits a `.dfm` structurally (add/move/remove a component is hand-anchored text
@@ -194,7 +215,7 @@ switch and its own allowlist; it will not arrive by accident.
 | Tool | What it does |
 |---|---|
 | `delphi_help` | **The map** (right after `delphi_workspace`, the first call). `command=tasks` gives a task -> tool table ("I need to change a form", "the build failed"), `command=tool name=<x>` explains one tool and every parameter it really takes, and `command=conventions` is the house rules: how to read the `[AREA-NNN OUTCOME]` tag every refusal or failure starts with, how the recoverable trash and `purge` work, how agents identify themselves and share the mailbox |
-| `delphi_docs` | **The RAD Studio documentation** installed with Delphi — the help F1 opens: RTL, VCL, FMX, FireDAC, Indy, the language and the IDE, plus the help of installed components that register one. `search` a concept or a class (`FormatDateTime`, `TStringList.Sort`, `"class helpers"`) and get a short list; `read` one page by its id, as text, in chunks (`offset`): a long page first gives its introduction and its sections (`<id>#<section>` reads one), a class its ancestors and `related` (its unit, its methods, properties and events), a topic its parent index. Read-only, in any workspace: it opens only the help files the IDE registers (`LibraryZone` is about the component sources, not the help). The list of help files is the IDE's own |
+| `delphi_docs` | **The RAD Studio documentation** installed with Delphi — the help F1 opens: RTL, VCL, FMX, FireDAC, Indy, the language and the IDE, plus the help of installed components that register one. `search` a concept or a class (`FormatDateTime`, `TStringList.Sort`, `"class helpers"`) and get a short list; `read` one page by its id, as text, in chunks (`offset`): a long page first gives its introduction and its sections (`<id>#<section>` reads one, named by its anchor or by its title), a class its ancestors and `related` (its unit, its methods, properties and events), a topic its parent index. Read-only, in any workspace: it opens only the help files the IDE registers (`LibraryZone` is about the component sources, not the help). The list of help files is the IDE's own |
 | `delphi_symbols` | Document symbol tree of a unit (classes, methods, sections). Since v1.0.7 every symbol carries the declaration **as written in the source**: DelphiLSP's own `name` is a rendered signature that drops default values (`B: Integer = 0` → `B: Integer`) and array bounds (`array [0..7] of Byte` → `Byte`). A folder answers with the interface digest of every unit inside |
 | `delphi_definition` | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` jumps to the interface declaration of the target symbol (on call sites the tool chains definition→declaration, so you get the callee) |
 | `delphi_signature` | Signature help for the call under the cursor (parameter names/types) — the IDE's Ctrl+Shift+Space |
@@ -205,7 +226,7 @@ switch and its own allowlist; it will not arrive by accident.
 | `delphi_read` | Encoding-correct numbered reads (CP1252 / UTF-8±BOM / UTF-16 detected for real); a binary `.dfm` is shown as text, the IDE's own conversion, and the answer says so |
 | `delphi_edit` | **Safe editing**: one-line anchors, encoding preserved byte-for-byte, atomic writes, automatic backups + 2-step restore, ADDUSES / REMOVEUSES (`adduses`/`removeuses` put a unit into, or take it out of, the `uses` of a section: commas and terminator by the engine, the clause created when missing and dropped when it empties, idempotent; the mirror of `delphi_config add-unit`/`remove-unit` for a unit instead of a project), semantic INSERT (global routine / method with both halves — also inside a `.dpr`, and into the implicit published section of forms; since v0.94 it checks each half first: a declaration the class already has is not duplicated, and a method that fully exists is refused with both line numbers; since v0.95 the signature is read whole however many lines it spans, and a doc comment above it travels with the implementation), line DELETE mode, **range** delete/replace since v1.0.6 (`toline`: the anchor is the first line, `toline` the last — a whole method goes without pasting it as the anchor), TPF0 hard-reject, post-write audit; new units use the encoding configured in the IDE |
 | `delphi_changeset` | **Multi-file transactions**: stage edit/create/delete/move, `preview` resolves every anchor and fingerprints every file, `commit` applies all or nothing — a file changed since preview refuses the batch, any failure restores every file byte-exact |
-| `delphi_designer` | **Forms and components, structured**: `info`/`prop` answer what a class REALLY publishes (generated RTTI tables), `tree`/`get` walk a `.dfm`/`.fmx` (a binary `.dfm` is read on the fly; `to-text`/`to-binary` convert it on disk, backup first), `lint` catches non-published properties and invalid enum values before the IDE ever opens the form and, when the `.pas` is next to it, runs `check-binding` too (so does every write to a designer, and `delphi_edit insert=metodo` lands a handler the designer already wires in `published` by itself), and two checks the compiler never makes: `check-binding` (does the `.dfm` agree with the class - a component with no published field, an event naming a method that is not declared **or not published**, a duplicate name; all of which build fine and throw when the form is created) and `layout` (**where things actually end up**: resolves `Align` (the way the VCL does), returns the resolved rectangle of every control in `boxes`, and reports controls that overlap, controls with a side of zero and controls that fall outside their container - a form can bind perfectly and still be unusable) |
+| `delphi_designer` | **Forms and components, structured**: `info`/`prop` answer what a class REALLY publishes (tables read from the active Delphi's own source, installed components included), `tree`/`get` walk a `.dfm`/`.fmx` (a binary `.dfm` is read on the fly; `to-text`/`to-binary` convert it on disk, backup first), `lint` catches non-published properties and invalid enum values before the IDE ever opens the form and, when the `.pas` is next to it, runs `check-binding` too (so does every write to a designer, and `delphi_edit insert=metodo` lands a handler the designer already wires in `published` by itself), and two checks the compiler never makes: `check-binding` (does the `.dfm` agree with the class - a component with no published field, an event naming a method that is not declared **or not published**, a duplicate name; all of which build fine and throw when the form is created) and `layout` (**where things actually end up**: resolves `Align` (the way the VCL does), returns the resolved rectangle of every control in `boxes`, and reports controls that overlap, controls with a side of zero and controls that fall outside their container - a form can bind perfectly and still be unusable) |
 | `delphi_rename_symbol` | **Semantic rename**: every occurrence re-confirmed against the same definition; one unverified reference, a designer or string-literal hit, an RTL symbol or a collision = not applicable, with the reasons. `mode=apply` writes it through the changeset engine (all files or none, a backup of each) when - and only when - it is applicable |
 | `delphi_textedit` | Safe editing of **non-Delphi text files** (.md .html .js .css .py .ini ... any plain text): same anchor/encoding/backup/atomic discipline, so an agent can maintain docs, tests and web assets too. `edits` applies several changes to one file all-or-nothing, `delete` removes a line, `toline` turns the anchor into a **range**, and `fragment` + `atline` changes just a piece of one LONG line (it must appear exactly once in it) without retyping the line |
 | `delphi_create` | Scaffold NEW projects (console/VCL/FMX, and runtime packages: `.dpk` + `.dproj`, built to BPL+DCP in their own folder, never installed in the IDE; and DUnitX test projects: a console runner with its first fixture, green at birth, what `delphi_test` runs) and NEW forms, frames, data modules and plain units (VCL/FMX) with IDE-equivalent skeletons, registered in the `.dpr` uses or the `.dpk` contains **and** the `.dproj` on creation — buildable immediately |
@@ -297,9 +318,8 @@ whole family:
 | `LspUnitTests` | [`src/UnitTests/`](src/UnitTests) | The engine's **DUnitX suite**: unit tests of the encoding detector, the designer binary shape, the build-hazard scan, the git argument splitter and its inverse, the captures, the message catalog (tags and outcomes) and the Pascal lexer - the step below the black-box Python batteries. Born with `delphi_create kind=project-test`, run through `delphi_test` by `tests/test_engine_dunitx.py`, so it is part of the regression. |
 | `McpDesktopNode` | [`src/DesktopNode/`](src/DesktopNode) | The **desktop node** — the server's eyes and hands on a Linux (GNOME) or Windows target. Its compiled binaries travel as [`node/McpDesktopNode`](node) and `node/McpDesktopNode.exe` and self-deploy; the Linux build needs the Linux64 SDK (once, in the SDK Manager — or `delphi_build`, which links against the `get-sdk` sysroot by itself). |
 | `McpRunJob` | [`src/RunJob/`](src/RunJob) | The **run-job launcher** — what PAServer starts for every remote execution and every desktop gesture: it reads a job file and starts the native binary unattended, no shell anywhere. Travels as `node/McpRunJob` (Linux) and `node/McpRunJob.exe` (Windows). |
-| `DumpMetaVcl` / `DumpMetaFmx` | [`src/DesignerMetaDump/`](src/DesignerMetaDump) | The two **generators of the designer tables** (`Lsp.DesignerMeta.Vcl.pas` / `.Fmx.pas`): they walk the framework's RTTI once per RAD Studio version and write what `delphi_designer info`, `prop` and the lint answer from. In the group so they keep compiling; run again only when the framework changes. |
 
-[`src/README.md`](src/README.md) maps the seven projects (what each is for, whether it ships, when it runs) and each folder carries its own README with the detail. Build everything with one
+[`src/README.md`](src/README.md) maps the five projects (what each is for, whether it ships, when it runs) and each folder carries its own README with the detail. Build everything with one
 command: **`BuildGroup.bat`** (`BuildGroup.bat quiet build Release` compiles
 the seven legs — the node and the launcher against the Linux64 sysroot and for
 Win64 — and refreshes the four binaries in `node/` so the release payload and
@@ -797,6 +817,12 @@ Implemented collaboratively with **Claude Code** (Anthropic) and **Codex** (Open
 commit names the AI that co-wrote it, in its co-author tag or its message. Codex wrote the
 1.11.3 hardening of the launch, test-container, `delphi_git` and build jails, which Claude
 Opus 4.8 then reviewed independently.
+
+**Hermes**, our field agent, running the **Qwen3.8 27B** model locally, uses the server the
+way any MCP client would - nothing but the tools and what their descriptions say - and spends
+its nights running test rounds against it, now also on a second machine with Delphi 13.2. Its
+`delphi_report` findings are behind dozens of the fixes in the [CHANGELOG](CHANGELOG.md),
+each credited where it landed.
 
 The safe-editing tool ports an internally battle-tested design measured over 30+ test
 rounds against several LLMs.

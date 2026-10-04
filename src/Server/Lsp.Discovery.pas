@@ -149,6 +149,11 @@ function BdsCommonDir(const AInfo: TRadStudioInfo): string;
   suffix, user Documents instead of Public Documents). '' when underivable. }
 function BdsUserDir(const AInfo: TRadStudioInfo): string;
 
+{ La version de fichero de un exe de la instalacion ('37.0.59082.6021'),
+  leida de su recurso de version como la de bds.exe (Build); '' si no la
+  lleva. La de dcc32.exe es la del compilador. }
+function VersionDeFichero(const AExe: string): string;
+
 implementation
 
 uses
@@ -260,6 +265,13 @@ begin
     Keys.Free;
     Reg.Free;
   end;
+end;
+
+function VersionDeFichero(const AExe: string): string;
+var
+  Edicion: string;
+begin
+  InfoDelExe(AExe, Edicion, Result);
 end;
 
 function DiscoverAllRadStudios: TArray<TRadStudioInfo>;

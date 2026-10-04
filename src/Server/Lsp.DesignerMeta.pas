@@ -1,12 +1,14 @@
 unit Lsp.DesignerMeta;
 
-{ Resolves designer property paths against the GENERATED framework tables
-  (src\DesignerMetaDump): classes, published properties (classic
-  typinfo - the same metadata TReader streams against), enum and set
-  members, and instance aliases (the class a class-typed property REALLY
-  holds at runtime - TLabel.TextSettings declares TTextSettings but holds
-  TLabelTextSettings, measured). The framework describes itself; the
-  server hardcodes no error rules.
+{ Resolves designer property paths against the framework tables of the
+  ACTIVE Delphi, generated from ITS source (Lsp.DesignerMetaGen): classes,
+  published properties (what TReader streams against), enum and set
+  members, and who inherits from whom. The class a class-typed property
+  REALLY holds at runtime is chosen by code (TLabel.TextSettings declares
+  TTextSettings and holds a TLabelTextSettings), so going down such a
+  property, what a descendant of the declared type publishes is not
+  denied. The framework describes itself; the server hardcodes no error
+  rules.
 
   Silence policy (a lint false positive would poison trust): unknown
   classes (user forms, third-party components), classes without table
@@ -25,81 +27,244 @@ uses
 type
   TPropRec = record
     Kind: Char;         // c=class e=enum s=set m=method r=record o=other
-    TypeName: string;
+    TypeName: string;   // el que se ensena: 'TButtonLayout'
+    // la clave de su enumerado o conjunto en Enums/Sets, con su unidad
+    // ('Vcl.Buttons:TButtonLayout', Lsp.DesignerMetaGen.IdDeTipo): dos
+    // unidades declaran tipos con el mismo nombre y otros miembros (el
+    // TIBProtocol de FireDAC y el de IBX), y por el nombre solo ganaba el
+    // primero (2.121 avisos falsos en los forms de David: revision de la 1.12.0)
+    TypeId: string;
+    // su nombre como se declara ('Caption'): la clave va en minusculas, y un
+    // diccionario aparte solo para esto repetia las 138.000 claves de la
+    // tabla VCL (memoria: revision de la 1.12.0)
+    Name: string;
   end;
 
   TMetaTable = class
   public
-    Classes: TDictionary<string, string>;    // lower -> original name
-    Props: TDictionary<string, TPropRec>;    // 'class.prop' lower
+    // las clases por su IDENTIDAD, con su unidad ('vcl.graphics:tfont' ->
+    // 'TFont'): el TFont de la VCL y el de TeeChart son dos (revision de la
+    // 1.12.0); todas las claves de abajo que son de una clase, igual
+    Classes: TDictionary<string, string>;
+    // el NOMBRE que escribe un form ('tfont') -> la identidad de la primera
+    // (la de la instalacion antes que la de terceros: Lsp.DesignerMetaGen)
+    PorNombre: TDictionary<string, string>;
+    // la identidad como se escribe ('Vcl.StdCtrls:TButton'), por la clave
+    IdEscrito: TDictionary<string, string>;
+    Props: TDictionary<string, TPropRec>;    // ClaveProp(clase, prop)
     PropNames: TDictionary<string, string>;  // class lower -> 'A, B...' cap
     Enums: TDictionary<string, string>;      // enum lower -> ',a,b,' lower
     EnumShow: TDictionary<string, string>;   // enum lower -> 'A, B, C'
     Sets: TDictionary<string, string>;       // set lower -> ',a,b,' lower
     SetShow: TDictionary<string, string>;    // set lower -> 'A, B, C'
-    Alias: TDictionary<string, string>;      // 'class.prop' lower -> runtime
-    PropShow: TDictionary<string, string>;   // 'class.prop' lower -> Prop original
+    Padres: TDictionary<string, string>;     // clase lower -> su padre lower (H)
+    Hijas: TObjectDictionary<string, TList<string>>; // padre lower -> sus hijas
+    // lo que una clase guarda por codigo (D): ClaveProp(clase, nombre) -> el
+    // nombre original; ClaveProp(clase, '*') = nombres que se construyen al
+    // vuelo; ClaveProp('*', nombre) = de alguna clase (un ayudante suelto)
+    Definidas: TDictionary<string, string>;
+    // clase que varias unidades declaran con otras publicadas (X): lower ->
+    // 'Nombre|Unidad1,Unidad2'. No esta en Classes: no se juzga
+    Ambiguas: TDictionary<string, string>;
     constructor Create(const AFacts: array of string);
+    // la tabla de un fichero generado (una linea por hecho)
+    class function DeFichero(const AFichero: string): TMetaTable;
+    { Una hija, nieta... de AClase que publica AProp (la primera que se
+      encuentra, por generaciones): la instancia de una propiedad objeto
+      puede ser de un descendiente del tipo declarado. }
+    function PublicadaEnDescendiente(const AClase, AProp: string;
+      out ADescendiente: string): Boolean;
+    // Lo que publican AClase y todos sus descendientes, sin repetir, para el
+    // aviso de lo que no publica nadie de la familia (cortado como PropNames)
+    function PublicadasDeLaFamilia(const AClase: string): string;
+    { AClase o un ancestro suyo guarda ANombre por codigo (DefineProperties:
+      Left/Top de TComponent, los Explicit* de TControl...), o guarda nombres
+      que no se pueden leer ('*'): el form lo escribe sin publicarlo. }
+    function DefinidaPorCodigo(const AClase, ANombre: string): Boolean;
+    { La clase que nombra un form o quien pregunta: su nombre ('TButton') o
+      su identidad ('Vcl.StdCtrls:TButton'). AId, la identidad en minusculas;
+      False si no esta o si es ambigua (Ambiguas). }
+    function ClaseDeNombre(const ANombre: string; out AId: string): Boolean;
+    // Lo que AClase y sus ancestros guardan por codigo ('*' incluido)
+    function DefinidasDeLaCadena(const AClase: string): TArray<string>;
     destructor Destroy; override;
   end;
 
-function DesignerMetaLint(const AIsFmx: Boolean;
-  const ALines: TArray<string>): TArray<string>;
-
-{ The generated framework table itself - what delphi_designer asks about
-  classes, published properties and enum members. Never nil. }
-function MetaTable(const AIsFmx: Boolean): TMetaTable;
+{ LA clave de una propiedad, o de un nombre guardado por codigo, de una clase
+  en las tablas (Props, Definidas): su identidad y el nombre, en minusculas,
+  con un '|' en medio, que no sale ni en una identidad ('Unidad:Clase', con
+  puntos en las anidadas: TGridPanelLayout.TCellItem) ni en un nombre
+  (Viewport.Width). Con un '.' compuesto a mano en ocho sitios, buscar por
+  'clase.' cogia tambien lo de sus clases anidadas (info TGridPanelLayout
+  listaba lo de TCellItem; revision de la 1.12.0). ClaveProp(AClase, '') es
+  el prefijo de todas las de una clase. }
+function ClaveProp(const AClase, ANombre: string): string;
 
 const
-  { La build de RAD Studio de la que salieron las tablas generadas: los
-    volcadores corrieron en esta maquina (13.1) el 21-ago-2026, y su bds.exe
-    es del 6-mar-2026. Cuando las tablas sean por build (decision
-    designer-meta-por-version del vault) cada tabla dira la suya. }
-  META_BUILD = '37.0.59082.6021';
+  { Lo que espera una llamada del disenador (info, prop, lint) a una tabla
+    que se esta generando: la primera tras instalar, actualizar o tocar las
+    rutas del IDE tarda segundos. El lint que va detras de cada edicion de
+    un form no espera (0): dice que no valido. }
+  ESPERA_TABLA_MS = 30000; // hay clientes MCP que se rinden al minuto
 
-{ '' si la instalacion activa es la build de las tablas (o no se sabe cual
-  es); si no, la nota que lo dice: lo que esa build anada o quite no esta en
-  la tabla, y "no esta" deja de querer decir "no existe". }
-function NotaDeBuildDeLaTabla: string;
-{ La misma decision con la build activa dada: '' si es la de las tablas o
-  no se sabe ('' tambien); la nota DSGN-049 si es otra. }
-function NotaDeBuild(const ABuildActiva: string): string;
+type
+  { Por que no hay tabla, de las dos formas que hacen falta: la respuesta
+    entera de info/prop/lint (DSGN-050/051/053/054) y la razon de la nota
+    que va tras una edicion (DSGN-052), que nunca dice "vuelve a llamar": la
+    edicion ya esta escrita. Vacio = hay tabla. }
+  TFaltaTabla = record
+    Negativa: string;
+    Razon: string;
+  end;
+
+{ El lint de las lineas de un form contra la tabla del framework del Delphi
+  activo: los avisos. Nunca lanza: sin tabla, o con un fallo, no juzga y
+  AFalta dice por que (antes, una excepcion aqui salia por delphi_edit como
+  fallo de una edicion YA escrita: revision de la 1.12.0). ANotas, lo que NO
+  ha podido comprobar (un objeto de una clase que no esta en la tabla o que
+  es ambigua): no son avisos, y una edicion no los pone bajo "the app
+  CRASHES" (un form con el TSslContext de ICS lo decia en cada edicion:
+  revision de la 1.12.0). }
+function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
+  out ANotas: TArray<string>; out AFalta: TFaltaTabla;
+  AEsperaMs: Cardinal = ESPERA_TABLA_MS): TArray<string>;
+
+// El mismo lint contra una tabla dada (las pruebas le dan la suya)
+function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
+  const ALines: TArray<string>; out ANotas: TArray<string>): TArray<string>;
+
+{ The framework table of the ACTIVE Delphi - what delphi_designer asks about
+  classes, published properties and enum members. nil when there is none
+  (that install has no source, it is still being generated after
+  AEsperaMs, its generation failed or it cannot be read): AFalta then says
+  which, ready for the agent. Never raises. }
+function MetaTable(const AIsFmx: Boolean; out AFalta: TFaltaTabla;
+  AEsperaMs: Cardinal = ESPERA_TABLA_MS): TMetaTable;
 
 implementation
 
 uses
   System.SysUtils, System.Classes, System.StrUtils, System.RegularExpressions,
-  Lsp.DesignerMeta.Fmx, Lsp.DesignerMeta.Vcl, Lsp.Texts,
-  Lsp.Discovery; // DiscoverRadStudio: la build activa, para NotaDeBuildDeLaTabla
+  System.IOUtils, Lsp.Texts,
+  Lsp.Discovery,       // DiscoverRadStudio: el Delphi activo
+  Lsp.DesignerMetaGen; // la tabla de ese Delphi, sacada de su fuente
+
+type
+  TJubilada = record
+    Tabla: TMetaTable;
+    Tick: UInt64;
+  end;
+
+const
+  { Lo que vive una tabla sustituida (otra huella del mismo Delphi y marco)
+    despues de sustituirse: quien la tuviera en la mano la usa unos
+    milisegundos (un lint, un info). La de VCL ocupa ~95 MB leida (medido el
+    3-oct-2026): se quedaban todas hasta el final, una mas por regeneracion. }
+  VIDA_JUBILADA_MS = 5 * 60000;
 
 var
-  GFmx, GVcl: TMetaTable;
   GMetaLock: TObject;
+  // las tablas ya leidas, por su fichero (una huella nueva es otro fichero),
+  // y las sustituidas que esperan su hora; todo bajo GMetaLock
+  GTablas: TObjectDictionary<string, TMetaTable>;
+  GJubiladas: TList<TJubilada>;
 
-function MetaTable(const AIsFmx: Boolean): TMetaTable;
+// Bajo GMetaLock: las leidas de esa instalacion y marco que no son AFichero
+// se retiran, y se liberan las retiradas que ya cumplieron
+procedure JubilaLocked(const AFichero: string);
+var
+  V, B, H, V2, B2, H2: string;
+  M, M2: TMarcoDisenador;
+  G, G2: Integer;
+  J: TJubilada;
 begin
-  // Lazy: the two tables parse ~14k measured facts into 14 dictionaries, and
-  // they used to be built in initialization even when no designer tool was
-  // ever called (hermes, release audit 2026-08-26, P2.9). Built once, on the
-  // first designer call, under a lock; GFmx is assigned LAST and acts as the
-  // "ready" flag for the unlocked fast path.
-  if GFmx = nil then
-  begin
+  if LeeNombreDeTabla(AFichero, V, B, M, H, G) then
+    for var K in GTablas.Keys.ToArray do
+      if not SameText(K, AFichero) and LeeNombreDeTabla(K, V2, B2, M2, H2, G2) and
+         SameText(V, V2) and (M = M2) then
+      begin
+        J.Tabla := GTablas.ExtractPair(K).Value;
+        J.Tick := TThread.GetTickCount64;
+        GJubiladas.Add(J);
+      end;
+  for var I := GJubiladas.Count - 1 downto 0 do
+    if TThread.GetTickCount64 - GJubiladas[I].Tick > VIDA_JUBILADA_MS then
+    begin
+      GJubiladas[I].Tabla.Free;
+      GJubiladas.Delete(I);
+    end;
+end;
+
+function MetaTable(const AIsFmx: Boolean; out AFalta: TFaltaTabla;
+  AEsperaMs: Cardinal): TMetaTable;
+var
+  Info: TRadStudioInfo;
+  Fichero, Detalle, Nombre: string;
+  Marco: TMarcoDisenador;
+begin
+  Result := nil;
+  AFalta := Default(TFaltaTabla);
+  try
+    Info := DiscoverRadStudio;
+    Nombre := Trim(Info.DelphiName + ' ' + Info.Version);
+    if Nombre = '' then
+      Nombre := 'RAD Studio';
+    if AIsFmx then
+      Marco := mdFmx
+    else
+      Marco := mdVcl;
+    case TablaDeInstalacion(Info, Marco, AEsperaMs, Fichero, Detalle) of
+      etSinFuente:
+        begin
+          AFalta.Negativa := MsgFmt(SR_DESIGNER_SIN_FUENTE_FMT, [Nombre]);
+          AFalta.Razon := MsgFmt(SF_DSGN_RAZON_SIN_FUENTE_FMT, [Nombre]);
+          Exit;
+        end;
+      etGenerandose:
+        begin
+          AFalta.Negativa := MsgFmt(SR_DESIGNER_GENERANDOSE_FMT, [Nombre]);
+          AFalta.Razon := MsgFmt(SF_DSGN_RAZON_GENERANDOSE_FMT, [Nombre]);
+          Exit;
+        end;
+      etFallo:
+        begin
+          AFalta.Negativa := MsgFmt(SR_DESIGNER_TABLA_FALLO_FMT,
+            [Nombre, Detalle, MINUTOS_REINTENTO_TABLA]);
+          AFalta.Razon := MsgFmt(SF_DSGN_RAZON_FALLO_FMT, [Nombre, Detalle]);
+          Exit;
+        end;
+    end;
+    // Lazy: the facts become dictionaries once per table file, on the first
+    // designer call that needs them, never at startup (hermes, release audit
+    // 2026-08-26, P2.9), under a lock
     TMonitor.Enter(GMetaLock);
     try
-      if GFmx = nil then
+      if not GTablas.TryGetValue(LowerCase(Fichero), Result) then
       begin
-        GVcl := TMetaTable.Create(Lsp.DesignerMeta.Vcl.META);
-        GFmx := TMetaTable.Create(Lsp.DesignerMeta.Fmx.META);
+        Result := TMetaTable.DeFichero(Fichero);
+        GTablas.Add(LowerCase(Fichero), Result);
+        JubilaLocked(LowerCase(Fichero));
       end;
     finally
       TMonitor.Exit(GMetaLock);
     end;
+  except
+    // el fichero purgado por otro proceso entre mirarlo y leerlo, un disco...
+    on E: Exception do
+    begin
+      Result := nil;
+      AFalta.Negativa := MsgFmt(SR_DESIGNER_TABLA_ERROR_FMT, [E.Message]);
+      AFalta.Razon := MsgFmt(SF_DSGN_RAZON_ERROR_FMT, [E.Message]);
+    end;
   end;
-  if AIsFmx then
-    Result := GFmx
-  else
-    Result := GVcl;
+end;
+
+const
+  SEP_CLAVE_PROP = '|';
+
+function ClaveProp(const AClase, ANombre: string): string;
+begin
+  Result := AClase.ToLower + SEP_CLAVE_PROP + ANombre.ToLower;
 end;
 
 constructor TMetaTable.Create(const AFacts: array of string);
@@ -107,33 +272,44 @@ var
   F, Names: string;
   P: TArray<string>;
   R: TPropRec;
+  L: TList<string>;
 begin
   inherited Create;
   Classes := TDictionary<string, string>.Create;
+  PorNombre := TDictionary<string, string>.Create;
+  IdEscrito := TDictionary<string, string>.Create;
   Props := TDictionary<string, TPropRec>.Create;
   PropNames := TDictionary<string, string>.Create;
   Enums := TDictionary<string, string>.Create;
   EnumShow := TDictionary<string, string>.Create;
   Sets := TDictionary<string, string>.Create;
   SetShow := TDictionary<string, string>.Create;
-  Alias := TDictionary<string, string>.Create;
-  PropShow := TDictionary<string, string>.Create;
+  Padres := TDictionary<string, string>.Create;
+  Hijas := TObjectDictionary<string, TList<string>>.Create([doOwnsValues]);
+  Definidas := TDictionary<string, string>.Create;
+  Ambiguas := TDictionary<string, string>.Create;
   for F in AFacts do
   begin
     P := F.Split([' ']);
     if Length(P) < 2 then
       Continue;
     if (P[0] = 'C') then
-      Classes.AddOrSetValue(P[1].ToLower, P[1])
+    begin
+      Classes.AddOrSetValue(P[1].ToLower, NombreDeIdDeTipo(P[1]));
+      IdEscrito.AddOrSetValue(P[1].ToLower, P[1]);
+      if not PorNombre.ContainsKey(NombreDeIdDeTipo(P[1]).ToLower) then
+        PorNombre.Add(NombreDeIdDeTipo(P[1]).ToLower, P[1].ToLower);
+    end
     else if (P[0] = 'P') and (Length(P) >= 4) then
     begin
       R.Kind := P[3][1];
       if Length(P) >= 5 then
-        R.TypeName := P[4]
+        R.TypeId := P[4]
       else
-        R.TypeName := '?';
-      Props.AddOrSetValue(P[1].ToLower + '.' + P[2].ToLower, R);
-      PropShow.AddOrSetValue(P[1].ToLower + '.' + P[2].ToLower, P[2]);
+        R.TypeId := '?';
+      R.TypeName := NombreDeIdDeTipo(R.TypeId);
+      R.Name := P[2];
+      Props.AddOrSetValue(ClaveProp(P[1], P[2]), R);
       if PropNames.TryGetValue(P[1].ToLower, Names) then
       begin
         if Length(Names) < 200 then
@@ -154,33 +330,236 @@ begin
       Sets.AddOrSetValue(P[1].ToLower, ',' + P[2].ToLower + ',');
       SetShow.AddOrSetValue(P[1].ToLower, P[2].Replace(',', ', '));
     end
-    else if (P[0] = 'A') and (Length(P) >= 3) then
-      Alias.AddOrSetValue(P[1].ToLower, P[2]);
+    else if (P[0] = 'N') and (Length(P) >= 3) then
+      // el nombre que escribe un form es de OTRA que la primera C (la
+      // registrada en la paleta, la que no es un modulo...): van al final
+      PorNombre.AddOrSetValue(P[1].ToLower, P[2].ToLower)
+    else if (P[0] = 'X') and (Length(P) >= 3) then
+      Ambiguas.AddOrSetValue(P[1].ToLower, P[1] + '|' + P[2])
+    else if (P[0] = 'D') and (Length(P) >= 3) then
+      Definidas.AddOrSetValue(ClaveProp(P[1], P[2]), P[2])
+    else if (P[0] = 'H') and (Length(P) >= 3) then
+    begin
+      Padres.AddOrSetValue(P[1].ToLower, P[2].ToLower);
+      if not Hijas.TryGetValue(P[2].ToLower, L) then
+      begin
+        L := TList<string>.Create;
+        Hijas.Add(P[2].ToLower, L);
+      end;
+      L.Add(P[1].ToLower);
+    end;
   end;
 end;
 
 destructor TMetaTable.Destroy;
 begin
-  PropShow.Free;
-  Alias.Free;
+  Ambiguas.Free;
+  Definidas.Free;
+  Hijas.Free;
+  Padres.Free;
   Sets.Free;
   SetShow.Free;
   EnumShow.Free;
   Enums.Free;
   PropNames.Free;
   Props.Free;
+  IdEscrito.Free;
+  PorNombre.Free;
   Classes.Free;
   inherited;
 end;
 
-function DesignerMetaLint(const AIsFmx: Boolean;
-  const ALines: TArray<string>): TArray<string>;
+function TMetaTable.PublicadasDeLaFamilia(const AClase: string): string;
+var
+  Cola: TQueue<string>;
+  Vistas, Nombres: TDictionary<string, Boolean>;
+  Hs: TList<string>;
+  C, Lista: string;
+begin
+  Result := '';
+  Cola := TQueue<string>.Create;
+  Vistas := TDictionary<string, Boolean>.Create;
+  Nombres := TDictionary<string, Boolean>.Create;
+  try
+    Cola.Enqueue(AClase.ToLower);
+    Vistas.Add(AClase.ToLower, True);
+    while (Cola.Count > 0) and (Length(Result) < 200) do
+    begin
+      C := Cola.Dequeue;
+      if PropNames.TryGetValue(C, Lista) then
+        for var X in Lista.Split([', ']) do
+        begin
+          // PropNames va cortada con '...' PEGADO al ultimo nombre ('Foo...')
+          var N := X;
+          if N.EndsWith('...') then
+            N := N.Substring(0, N.Length - 3);
+          if (N <> '') and not Nombres.ContainsKey(N.ToLower) then
+          begin
+            Nombres.Add(N.ToLower, True);
+            if Result = '' then
+              Result := N
+            else
+              Result := Result + ', ' + N;
+          end;
+        end;
+      if Hijas.TryGetValue(C, Hs) then
+        for var H in Hs do
+          if not Vistas.ContainsKey(H) then
+          begin
+            Vistas.Add(H, True);
+            Cola.Enqueue(H);
+          end;
+    end;
+    if Length(Result) >= 200 then
+      Result := Result + '...';
+  finally
+    Nombres.Free;
+    Vistas.Free;
+    Cola.Free;
+  end;
+end;
+
+function TMetaTable.ClaseDeNombre(const ANombre: string; out AId: string): Boolean;
+var
+  L: string;
+begin
+  AId := '';
+  L := ANombre.Trim.ToLower;
+  if EsIdDeTipo(L) then
+  begin
+    Result := Classes.ContainsKey(L);
+    if Result then
+      AId := L;
+    Exit;
+  end;
+  if Ambiguas.ContainsKey(L) then
+    Exit(False);
+  Result := PorNombre.TryGetValue(L, AId);
+end;
+
+function TMetaTable.DefinidaPorCodigo(const AClase, ANombre: string): Boolean;
+var
+  C: string;
+  N: Integer;
+begin
+  // los que lee un ayudante para alguna clase del marco ('D * Font.Size')
+  if Definidas.ContainsKey(ClaveProp('*', ANombre)) then
+    Exit(True);
+  C := AClase.ToLower;
+  N := 0;
+  while (C <> '') and (N < 64) do
+  begin
+    if Definidas.ContainsKey(ClaveProp(C, ANombre)) or Definidas.ContainsKey(ClaveProp(C, '*')) then
+      Exit(True);
+    // la clave y la salida en variables distintas: un out de string se vacia
+    // ANTES de la llamada, y con la misma la clave llegaria vacia
+    var Padre: string;
+    if not Padres.TryGetValue(C, Padre) then
+      Break;
+    C := Padre;
+    Inc(N);
+  end;
+  Result := False;
+end;
+
+function TMetaTable.DefinidasDeLaCadena(const AClase: string): TArray<string>;
+var
+  C: string;
+  N: Integer;
+  Lista: TList<string>;
+begin
+  Lista := TList<string>.Create;
+  try
+    C := AClase.ToLower;
+    N := 0;
+    while (C <> '') and (N < 64) do
+    begin
+      for var Par in Definidas do
+        if Par.Key.StartsWith(ClaveProp(C, '')) and not Lista.Contains(Par.Value) then
+          Lista.Add(Par.Value);
+      var Padre: string;
+      if not Padres.TryGetValue(C, Padre) then
+        Break;
+      C := Padre;
+      Inc(N);
+    end;
+    Result := Lista.ToArray;
+  finally
+    Lista.Free;
+  end;
+end;
+
+class function TMetaTable.DeFichero(const AFichero: string): TMetaTable;
+begin
+  Result := TMetaTable.Create(TFile.ReadAllLines(AFichero, TEncoding.UTF8));
+end;
+
+function TMetaTable.PublicadaEnDescendiente(const AClase, AProp: string;
+  out ADescendiente: string): Boolean;
+var
+  Cola: TQueue<string>;
+  Vistas: TDictionary<string, Boolean>;
+  Hs: TList<string>;
+begin
+  Result := False;
+  ADescendiente := '';
+  Cola := TQueue<string>.Create;
+  Vistas := TDictionary<string, Boolean>.Create;
+  try
+    Cola.Enqueue(AClase.ToLower);
+    while Cola.Count > 0 do
+    begin
+      if not Hijas.TryGetValue(Cola.Dequeue, Hs) then
+        Continue;
+      for var H in Hs do
+      begin
+        if Vistas.ContainsKey(H) then
+          Continue;
+        Vistas.Add(H, True);
+        if Props.ContainsKey(ClaveProp(H, AProp)) then
+        begin
+          ADescendiente := H;
+          Exit(True);
+        end;
+        Cola.Enqueue(H);
+      end;
+    end;
+  finally
+    Vistas.Free;
+    Cola.Free;
+  end;
+end;
+
+function DesignerMetaLint(const AIsFmx: Boolean; const ALines: TArray<string>;
+  out ANotas: TArray<string>; out AFalta: TFaltaTabla; AEsperaMs: Cardinal): TArray<string>;
 var
   M: TMetaTable;
+begin
+  Result := nil;
+  ANotas := nil;
+  M := MetaTable(AIsFmx, AFalta, AEsperaMs);
+  if M = nil then
+    Exit;
+  try
+    Result := LintConTabla(M, AIsFmx, ALines, ANotas);
+  except
+    on E: Exception do
+    begin
+      Result := nil;
+      ANotas := nil;
+      AFalta.Negativa := MsgFmt(SR_DESIGNER_TABLA_ERROR_FMT, [E.Message]);
+      AFalta.Razon := MsgFmt(SF_DSGN_RAZON_ERROR_FMT, [E.Message]);
+    end;
+  end;
+end;
+
+function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;
+  const ALines: TArray<string>; out ANotas: TArray<string>): TArray<string>;
+var
   Stack: TStack<string>;    // owner class per nesting level ('' = unknown)
-  Warns: TStringList;
+  Warns, Notas: TStringList;
   I, SIdx, CollDepth: Integer;
-  L, Lhs, Rhs, Cur, CurShow, Seg, Key, Runtime, Have, Members, V: string;
+  L, Lhs, Rhs, Cur, CurShow, Seg, Key, Have, Members, V, Desc, Obj: string;
   Mt: TMatch;
   Segs: TArray<string>;
   R: TPropRec;
@@ -194,10 +573,18 @@ var
       [I + 1, ALines[I].Trim, AMsg]));
   end;
 
+  // lo que no se ha podido comprobar, con la misma forma de linea
+  procedure Nota(const AMsg: string);
+  begin
+    Notas.Add(MsgFmt(SF_DSGN_LINEA_AVISO_FMT,
+      [I + 1, ALines[I].Trim, AMsg]));
+  end;
+
 begin
-  M := MetaTable(AIsFmx);
+  ANotas := nil;
   Stack := TStack<string>.Create;
   Warns := TStringList.Create;
+  Notas := TStringList.Create;
   CollDepth := 0;
   Unknown := ',';
   InBlock := False;
@@ -224,12 +611,31 @@ begin
         Continue;
       end;
       Mt := TRegEx.Match(L,
-        '^(object|inherited|inline) +[A-Za-z_]\w* *: *([A-Za-z_][\w.]*)');
+        // the name is optional: 'object TMemo' is an unnamed component, and
+        // without it its properties went to the PARENT (and its end popped
+        // the parent: 1.12.0 review, a FireDAC sample). The name and the
+        // class by what surrounds them, not by \w: TRegEx's \w is ASCII, and
+        // 'lblDireccion' with its accent read 'lblDirecci' as the class
+        // (1.12.0 review)
+        '^(object|inherited|inline) +(?:[^\s:]+ *: *)?([^\s\[]+)');
       if Mt.Success then
       begin
         Cur := Mt.Groups[2].Value.ToLower;
-        if not M.Classes.ContainsKey(Cur) then
+        // The ROOT object and an inline frame are user classes by definition
+        // (a form, a frame, a data module): never judged. With the tables
+        // read from the library paths a user's TForm1 can share its name
+        // with a demo's (202 form classes there: TForm1, TAboutBox...), and
+        // judging it said TextHeight/PixelsPerInch did not exist (1.12.0
+        // review: 33 Samples forms).
+        if (Stack.Count = 0) or SameText(Mt.Groups[1].Value, 'inline') then
         begin
+          Stack.Push('');
+          Continue;
+        end;
+        // the NAME a form writes -> the class identity (with its unit)
+        if not M.ClaseDeNombre(Mt.Groups[2].Value, Cur) then
+        begin
+          Cur := Mt.Groups[2].Value.ToLower;
           // Not judging an unknown class is right (a user form or a
           // third-party component is not an error), but saying NOTHING was
           // read as "checked and fine" - and lint's own description promises
@@ -243,8 +649,12 @@ begin
              not Unknown.Contains(',' + Cur + ',') then
           begin
             Unknown := Unknown + Cur + ',';
-            Warn(MsgFmt(SN_LINT_UNKNOWN_CLASS_FMT,
-              [Mt.Groups[2].Value, IfThen(AIsFmx, 'FMX', 'VCL')]));
+            if M.Ambiguas.TryGetValue(Cur, Have) then
+              Nota(MsgFmt(SN_LINT_CLASE_AMBIGUA_FMT, [Mt.Groups[2].Value,
+                IfThen(AIsFmx, 'FMX', 'VCL'), Have.Substring(Have.IndexOf('|') + 1)]))
+            else
+              Nota(MsgFmt(SN_LINT_UNKNOWN_CLASS_FMT,
+                [Mt.Groups[2].Value, IfThen(AIsFmx, 'FMX', 'VCL')]));
           end;
           Cur := '';
         end;
@@ -289,51 +699,75 @@ begin
         Continue;
       if not M.Classes.TryGetValue(Cur, CurShow) then
         Continue;
+      Obj := Cur;
       Segs := Lhs.Split(['.']);
       for SIdx := 0 to High(Segs) do
       begin
         Seg := Segs[SIdx].ToLower;
-        Key := Cur + '.' + Seg;
+        Key := ClaveProp(Cur, Seg);
+        // going down a class-typed property, the instance may be of a
+        // DESCENDANT of the declared type (TLabel.TextSettings declares
+        // TTextSettings and holds a TLabelTextSettings, chosen by code): what
+        // a descendant publishes is not denied. The object of a form line is
+        // its exact class: no such leeway at segment 0.
+        if not M.Props.TryGetValue(Key, R) and (SIdx > 0) and
+           M.PublicadaEnDescendiente(Cur, Seg, Desc) then
+        begin
+          Cur := Desc;
+          Key := ClaveProp(Cur, Seg);
+          M.Classes.TryGetValue(Cur, CurShow);
+        end;
         if not M.Props.TryGetValue(Key, R) then
         begin
+          // lo que la clase guarda POR CODIGO (Filer.DefineProperty) lo
+          // escribe el IDE sin publicarlo: Left/Top de un no visual, los
+          // Explicit*, TextHeight, Viewport.Width (con su punto: es UN
+          // nombre de la clase del objeto), y bajando por una propiedad objeto
+          // lo que guarda ESA clase (FMX TPosition guarda Point). DESPUES de
+          // lo publicado: preguntado antes, el 'TCustomScrollBox *' callaba
+          // todo TListBox, valores incluidos (Align = alClient; revision)
+          if M.DefinidaPorCodigo(Cur, string.Join('.', Segs, SIdx, Length(Segs) - SIdx)) or
+             ((SIdx > 0) and M.DefinidaPorCodigo(Obj, Lhs)) then
+            Break;
+          // down a class-typed property whose type has descendants: what no
+          // class of the family publishes (TTextSettings publishes nothing;
+          // its descendants do)
+          if (SIdx > 0) and M.Hijas.ContainsKey(Cur) then
+          begin
+            Have := M.PublicadasDeLaFamilia(Cur);
+            if Have <> '' then
+              Warn(MsgFmt(SF_DSGN_NO_EXISTE_EN_LA_FAMILIA_FMT,
+                [Segs[SIdx], CurShow, Have]));
+            Break;
+          end;
           if not M.PropNames.TryGetValue(Cur, Have) then
             Break; // class without data: silence, never guess
-          // Left/Top on a NON-VISUAL component are the designer's own
-          // placement in the form editor: the IDE writes them in every
-          // .dfm/.fmx carrying a TImageList or a TPopupMenu, and no class
-          // publishes them. Warning about those is pure noise (field
-          // report 2026-08-24: 6 of 6 warnings on a real form were these).
-          if (SIdx = 0) and MatchText(Segs[SIdx], ['Left', 'Top']) then
-            Break;
-          // Properties the DESIGNER writes that classic RTTI never lists:
-          // FMX's Viewport.* on the scrolling controls is streamed by hand
-          // (DefineProperties), and the VCL's Explicit* are the anchors'
-          // bookkeeping. Both are written by the IDE into forms that load and
-          // compile - warning about them told an agent to DELETE good
-          // properties (field round 8, 5 false positives on real .fmx).
-          if (SIdx = 0) and MatchText(Segs[SIdx], ['Viewport', 'ExplicitLeft',
-            'ExplicitTop', 'ExplicitWidth', 'ExplicitHeight', 'DesignSize']) then
-            Break;
+          // (What the DESIGNER writes without publishing it - Left/Top of a
+          // non-visual component, the VCL's Explicit* and DesignSize, FMX's
+          // Viewport.Width - was a hand list here until 1.12.0, after field
+          // reports of 2026-08-24 and round 8. It is streamed by the class's
+          // own DefineProperties, and the table now reads those names from
+          // the source: DefinidaPorCodigo, at the top of this branch.)
           Warn(MsgFmt(SF_DSGN_NO_EXISTE_SEGUN_FRAMEWORK_FMT,
             [Segs[SIdx], CurShow, Have]));
           Break;
         end;
         if SIdx < High(Segs) then
         begin
+          if R.Kind = '?' then
+            Break; // a type the source did not let us read: silence
           if R.Kind <> 'c' then
           begin
             Warn(MsgFmt(SF_DSGN_SIN_SUBPROPIEDADES_FMT,
               [Segs[SIdx], R.TypeName]));
             Break;
           end;
-          // descend where the STREAMING descends: the instance alias
-          // (measured runtime class) wins over the declared type
-          if M.Alias.TryGetValue(Key, Runtime) then
-            Cur := Runtime.ToLower
-          else
-            Cur := R.TypeName.ToLower;
+          // descend into the declared type (its descendants, above): one that
+          // publishes nothing but has descendants is not "no data". By its
+          // IDENTITY: TeeChart's TFont is not the VCL's
+          Cur := R.TypeId.ToLower;
           if (not M.Classes.TryGetValue(Cur, CurShow)) or
-             (not M.PropNames.ContainsKey(Cur)) then
+             (not M.PropNames.ContainsKey(Cur) and not M.Hijas.ContainsKey(Cur)) then
             Break; // no data for the subtree: silence
         end
         else
@@ -344,16 +778,16 @@ begin
             V := Rhs;
             if V.LastIndexOf('.') >= 0 then
               V := V.Substring(V.LastIndexOf('.') + 1);
-            if M.Enums.TryGetValue(R.TypeName.ToLower, Members) and
+            if M.Enums.TryGetValue(R.TypeId.ToLower, Members) and
                (not Members.Contains(',' + V.ToLower + ',')) then
               Warn(MsgFmt(SF_DSGN_NO_ES_VALOR_FMT,
-                [Rhs, R.TypeName, M.EnumShow[R.TypeName.ToLower]]));
+                [Rhs, R.TypeName, M.EnumShow[R.TypeId.ToLower]]));
           end
           else if (R.Kind = 's') and TRegEx.IsMatch(Rhs, '^[A-Za-z_]\w*$') then
             Warn(MsgFmt(SF_DSGN_ES_UN_SET_FMT, [R.TypeName, Rhs]))
           else if (R.Kind = 's') and (Rhs <> '') and (Rhs[1] = '[') and
                   Rhs.EndsWith(']') and
-                  M.Sets.TryGetValue(R.TypeName.ToLower, Members) then
+                  M.Sets.TryGetValue(R.TypeId.ToLower, Members) then
           begin
             for V in Rhs.Substring(1, Length(Rhs) - 2).Split([',']) do
               if (V.Trim <> '') and
@@ -367,40 +801,25 @@ begin
         end;
       end;
     end;
-    // con avisos, si la tabla es de otra build se dice una vez: en la VM 13.2
-    // una propiedad que esa build anada saldria como "no existe" sin mas
-    // (deducido, sin medir: el 3-oct el MCP de la VM no conectaba)
-    if Warns.Count > 0 then
-    begin
-      var NotaBuild := NotaDeBuildDeLaTabla;
-      if NotaBuild <> '' then
-        Warns.Add(NotaBuild);
-    end;
     Result := Warns.ToStringArray;
+    ANotas := Notas.ToStringArray;
   finally
+    Notas.Free;
     Warns.Free;
     Stack.Free;
   end;
 end;
 
-function NotaDeBuild(const ABuildActiva: string): string;
-begin
-  Result := '';
-  if (ABuildActiva <> '') and not SameText(ABuildActiva, META_BUILD) then
-    Result := MsgFmt(SN_DESIGNER_TABLA_OTRA_BUILD_FMT, [META_BUILD, ABuildActiva]);
-end;
-
-function NotaDeBuildDeLaTabla: string;
-begin
-  Result := NotaDeBuild(DiscoverRadStudio.Build);
-end;
-
 initialization
   GMetaLock := TObject.Create;
+  GTablas := TObjectDictionary<string, TMetaTable>.Create([doOwnsValues]);
+  GJubiladas := TList<TJubilada>.Create;
 
 finalization
+  for var J in GJubiladas do
+    J.Tabla.Free;
+  GJubiladas.Free;
+  GTablas.Free;
   GMetaLock.Free;
-  GVcl.Free;
-  GFmx.Free;
 
 end.

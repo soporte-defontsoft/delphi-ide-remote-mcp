@@ -40,6 +40,11 @@ F1 opens - searched and read by an agent in small pieces.
   D15 the section it echoes goes through the drive mask: the help text is
       exempt, what the agent typed is not (a path of this server in it
       would leave with its real letter; a refusal is masked anyway)
+  D16 (Hermes, 4-oct-2026) a section named by its title as the text shows
+      it (spaces, another case, an anchor that is not its title with '_')
+      is found and answers with its anchor; Description of an API page,
+      the only title of its level, stops at its first sub-heading and says
+      which follow (it ran to the end of the page: See Also, Code Examples)
 
 Guards, not proof (green with their fix removed, measured): D1's read-only
 announcement and D11 (a tool missing from the access table reads by
@@ -343,6 +348,31 @@ try:
               str(r.get('id', '')).endswith('srv%s:\\Windows' % letra.lower())
               and '%s:\\Windows' % letra not in str(r.get('id', '')) + str(r.get('note', '')),
               str(r)[:300])
+
+        # D16 (Hermes, 4-oct-2026)
+        r = mc.como_json(docs({'id': 'topics:Class_and_Record_Helpers_(Delphi).htm#Helper Syntax'}))
+        check('D16 #<titulo como se lee> (con espacios): esa seccion, y el id con su ancla',
+              r.get('id') == 'topics:Class_and_Record_Helpers_(Delphi).htm#Helper_Syntax'
+              and r.get('text', '').startswith('## Helper Syntax')
+              and 'Using Helpers' not in r.get('text', '')
+              and not mc.es(r.get('note', ''), 'SN_DOCS_SIN_SECCION_FMT'), str(r)[:300])
+        r = mc.como_json(docs({'id': 'system:System.DynamicArray.htm#assigning, comparing and copying dynamic arrays'}))
+        check('D16 un ancla que no es su titulo con _ (.2C por la coma), en minusculas',
+              r.get('id') == 'system:System.DynamicArray.htm#Assigning.2C_comparing_and_copying_dynamic_arrays'
+              and r.get('text', '').startswith('### Assigning, comparing and copying'), str(r)[:300])
+        r = mc.como_json(docs({'id': 'system:System.SysUtils.FormatDateTime.htm#Description'}))
+        texto = r.get('text', '')
+        check('D16 Description de la API acaba en su primer subtitulo y dice los que siguen',
+              texto.startswith('## Description') and 'See Also' not in texto and 'Code Examples' not in texto
+              and 'nn |' in texto and r.get('subsections') == ['See_Also', 'Code_Examples']
+              and mc.es(r.get('note', ''), 'SN_DOCS_SUBSECCIONES'), str(r)[-400:])
+        r = mc.como_json(docs({'id': 'system:System.SysUtils.FormatDateTime.htm#See Also'}))
+        check('D16 ...y cada una se lee por su titulo',
+              r.get('text', '').startswith('### See Also') and 'subsections' not in r, str(r)[:300])
+        r = mc.como_json(docs({'id': 'topics:Anonymous_Methods_in_Delphi.htm#Anonymous_Methods_Variable_Binding'}))
+        check('D16 una de temas con otras de su nivel lleva dentro las suyas, como antes',
+              '### Variable Binding Mechanism' in r.get('text', '') and 'subsections' not in r
+              and '## Utility of Anonymous Methods' not in r.get('text', ''), str(r)[:300])
 finally:
     proc.kill()
 

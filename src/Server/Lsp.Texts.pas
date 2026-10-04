@@ -54,7 +54,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.11.3';
+  SERVER_VERSION = '1.12.0';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -3360,7 +3360,8 @@ const
     'page of that framework first when both have one (without it, neither ' +
     'is preferred). command=read id=<an id of that list> gives the ' +
     'page as plain text, in chunks (offset). A long page first gives its ' +
-    'introduction and its sections: <its id>#<section> reads one alone. ' +
+    'introduction and its sections: <its id>#<section> reads one alone, ' +
+    'named by its anchor or by its title as the text shows it. ' +
     'related gives the pages around it: a class its unit and its member ' +
     'lists (methods, properties, events), a topic its parent index; the ' +
     'other pages it names (See Also, code examples) are found with search. ' +
@@ -3383,7 +3384,7 @@ const
   SP_DOCS_ID =
     'read: the id of a page, as a search gives it ' +
     '(system:System.SysUtils.FormatDateTime.htm); with #section, that ' +
-    'section alone';
+    'section alone (its anchor or its title as the text shows it)';
 
   SP_DOCS_FRAMEWORK =
     'search optional: vcl | fmx - the page of that framework first, when ' +
@@ -3447,6 +3448,13 @@ const
   SN_DOCS_SIGUE_FMT =
     '[DOCS-011] It goes on: up to character %d of %d. The rest: the same ' +
     'id with offset=%d.';
+
+  { una seccion de la que cuelga el resto de la pagina (Description en las
+    de la API): acaba en su primer subtitulo }
+  SN_DOCS_SUBSECCIONES =
+    '[DOCS-016] The rest of the page hangs from this one title, so this ' +
+    'section stops where its first sub-section starts. subsections lists ' +
+    'them; <id>#<one of them> reads it.';
 
   { %s: el id tal como llego (enmascarado). DOCS-012 era la negativa de un
     workspace sin LibraryZone, retirada antes de publicar: la ayuda no pide
@@ -3993,12 +4001,14 @@ const
     'FORMS AND COMPONENTS, structured - never guess what a class publishes ' +
     'or what a form contains. command=info classname=TButton: every property ' +
     'the framework really publishes for that class (kind and type; events ' +
-    'apart), from RTTI tables generated at release time. prop classname=X ' +
+    'apart), read from the source of the active Delphi - its library and ' +
+    'browsing paths, so installed components with source are in too. prop classname=X ' +
     'prop=Y: one property in detail, with the legal members when it is an ' +
     'enum/set. tree path=<.dfm|.fmx>: the component tree (name, class, ' +
     'line). get path=... component=<Name>: that component''s block verbatim. ' +
-    'lint path=...: unknown classes, properties the class does not publish, ' +
-    'enum values that do not exist. A BINARY .dfm is read on the fly (the ' +
+    'lint path=...: properties the class does not publish and enum values ' +
+    'that do not exist, and apart, as notes, the objects it could not check ' +
+    '(a class not in the table, or ambiguous). A BINARY .dfm is read on the fly (the ' +
     'IDE''s own conversion, the answer says so) and to-text / to-binary ' +
     'convert it on disk with a backup. Read-only otherwise: editing a form is phase 2 and will ' +
     'go through delphi_changeset; today use delphi_edit on the .dfm/.fmx ' +
@@ -4108,8 +4118,9 @@ const
 
   SR_DESIGNER_CLASS_FMT =
     '[DSGN-015 NOT_FOUND] The class "%s" is not in the %s table of this ' +
-    'server (the framework does not publish it, or the component is not ' +
-    'linked into the generated tables). delphi_components lists the ' +
+    'Delphi (it is not a persistent class of the source its library and ' +
+    'browsing paths reach: a typo, a class of the other framework, or a ' +
+    'component whose source is not installed). delphi_components lists the ' +
     'installed packages.';
 
   SR_DESIGNER_PROP_FMT =
@@ -4121,18 +4132,81 @@ const
     '(command=tree lists them).';
 
   SN_DESIGNER_INFO_NOTE =
-    '[DSGN-018] Published properties from the framework''s own RTTI ' +
-    '(inherited included). A property absent here does NOT stream in a ' +
-    '.dfm/.fmx: do not write it.';
+    '[DSGN-018] Published properties read from the source of the active ' +
+    'Delphi (inherited included), and in definedByCode what the class streams ' +
+    'by code (its DefineProperties: written to the form without being ' +
+    'published). A property absent from both does NOT stream in a .dfm/.fmx: ' +
+    'do not write it - unless definedByCode has "*" (names built at run ' +
+    'time, which the source does not tell).';
 
-  { Las tablas del disenador salieron de UNA build de RAD Studio
-    (Lsp.DesignerMeta.META_BUILD): con otra activa, lo que esa build anada o
-    quite no esta, y "no esta" deja de querer decir "no existe". }
-  SN_DESIGNER_TABLA_OTRA_BUILD_FMT =
-    '[DSGN-049] NOTE: this table was dumped from RAD Studio build %s and the ' +
-    'active one is %s: a property that build added or removed is not known ' +
-    'here, so "absent" may be wrong - check the help (delphi_docs) or the ' +
-    'source before relying on it.';
+  { Una clase que no publica nada y tiene descendientes: la de una propiedad
+    cuya instancia elige el codigo (revision de la 1.12.0). }
+  SN_DESIGNER_INFO_FAMILIA_FMT =
+    '[DSGN-057] %s publishes nothing itself: a property of this type holds a ' +
+    'DESCENDANT chosen by code (TLabel.TextSettings holds a ' +
+    'TLabelTextSettings). descendantsPublish lists what its descendants ' +
+    'publish; which one a given property holds is not in the source.';
+
+  { Las tablas del disenador salen del FUENTE de cada Delphi
+    (Lsp.DesignerMetaGen). Sin fuente no hay tabla, y no se valida con la de
+    otro Delphi: "no esta" dejaria de querer decir "no existe". }
+  SR_DESIGNER_SIN_FUENTE_FMT =
+    '[DSGN-050 INTERNAL] No designer table for %s: this installation has no ' +
+    'Delphi source to read the published properties from (no System.pas in ' +
+    'the IDE''s library or browsing paths). The server does not check a ' +
+    'form against the table of another Delphi. Install the source with the ' +
+    'RAD Studio installer, or check the form in the IDE.';
+
+  { La primera vez tras instalar, actualizar o tocar las rutas del IDE la
+    tabla se genera del fuente (segundos); quien llama espera un rato y, si
+    no ha acabado, se le dice que vuelva. }
+  SR_DESIGNER_GENERANDOSE_FMT =
+    '[DSGN-051 DENIED] The designer table of %s is still being generated ' +
+    'from its source (the first use after an install, an update or a change ' +
+    'of the library paths). Try the same call again in a minute.';
+
+  { Un fallo del generador no se repite en cada llamada: se recuerda un rato
+    (Lsp.DesignerMetaGen) y se dice con su motivo. }
+  SR_DESIGNER_TABLA_FALLO_FMT =
+    '[DSGN-053 INTERNAL] The designer table of %s could not be generated from ' +
+    'its source: %s. The server log has it; it is tried again in %d minutes ' +
+    'or as soon as the source in the library paths changes.';
+
+  { Ni MetaTable ni el lint tumban nada (revision de la 1.12.0): una
+    excepcion (la tabla purgada por otro proceso entre mirarla y leerla...)
+    se dice como lo que es, no como un fallo de la herramienta. }
+  SR_DESIGNER_TABLA_ERROR_FMT =
+    '[DSGN-054 INTERNAL] The designer table could not be used: %s';
+
+  { El lint que va detras de cada edicion de un .dfm/.fmx no espera a la
+    tabla: dice que no valido, y por que - con la edicion YA escrita, asi que
+    nunca "vuelve a llamar" (un agente lo leia como repetir la edicion:
+    revision de la 1.12.0). Las razones van en SF_DSGN_RAZON_*. }
+  SN_DESIGNER_LINT_SIN_TABLA_FMT =
+    '[DSGN-052] NOTE: the properties of this form were NOT checked against ' +
+    'the framework: %s. The edit itself is done: do not repeat it.';
+  SF_DSGN_RAZON_SIN_FUENTE_FMT =
+    '%s has no Delphi source to read them from';
+  SF_DSGN_RAZON_GENERANDOSE_FMT =
+    'the table of %s is still being generated from its source (delphi_designer ' +
+    'command=lint checks this form once it is ready)';
+  SF_DSGN_RAZON_FALLO_FMT =
+    'the table of %s could not be generated (%s)';
+  SF_DSGN_RAZON_ERROR_FMT =
+    'the check itself failed (%s)';
+
+  { EscribeEnCasaDelServidor pregunta el mismo donde escribe (revision de la
+    1.12.0). }
+  SL_CASA_FUERA_FMT =
+    'Refused to write %s: it is not inside the server cache folder %s (or ' +
+    'that folder is not an absolute path: LOCALAPPDATA empty?).';
+
+  SL_DESIGNER_TABLAS_GENERADAS_FMT =
+    'Designer tables of %s (build %s) generated from its source: %d units ' +
+    'read in %d ms; VCL %d facts, FMX %d facts.';
+  SL_DESIGNER_TABLAS_FALLO_FMT =
+    SL_MARCA_AVISO +
+    ': the designer tables of %s could not be generated: %s';
 
   { Un filtro que no casa con nada devolvia properties:[] y total:0 sin mas,
     y un agente pequeno lo leia como un fallo de RTTI (Hermes, 28-sep-2026:
@@ -4163,7 +4237,7 @@ const
     'published method).';
 
   SN_DESIGNER_LINT_BAD_FMT =
-    '[DSGN-038] %d designer warnings in %s (unknown class, unpublished ' +
+    '[DSGN-038] %d designer warnings in %s (unpublished ' +
     'property or nonexistent enum value, or the .dfm does not match its ' +
     'class: event to a nonexistent or NOT published method, object ' +
     'without a field, repeated name):';
@@ -4296,11 +4370,33 @@ const
     'a threading problem and are not. Fix the first one and compile ' +
     'again before touching anything else.';
 
+  { %s: el fichero; %d: cuantos objetos no se comprobaron. Va delante de las
+    notas DSGN-039/055, en el lint y tras una edicion: no son avisos (iban
+    bajo "the app CRASHES" y contaban como avisos; revision de la 1.12.0) }
+  SN_DESIGNER_LINT_NOTAS_FMT =
+    '[DSGN-058] Not checked in %s: %d object(s) whose class is not in ' +
+    'this server''s table or is ambiguous - not an error in itself, but ' +
+    'nothing inside them was checked; everything else was:';
+
   SN_LINT_UNKNOWN_CLASS_FMT =
     '[DSGN-039] "%s" is not in this server''s %s table (it comes from a ' +
     'third-party package, or it does not exist). That is not an error in ' +
     'itself, but I have NOT checked any property of that object or of ' +
     'anything inside it.';
+
+  { Dos unidades declaran una clase persistente con el mismo nombre y otras
+    propiedades publicadas (con las tablas leidas de las rutas de biblioteca,
+    los forms de demo se llaman TForm1...): el form no dice de cual es, y no
+    se juzga (revision de la 1.12.0). }
+  SN_LINT_CLASE_AMBIGUA_FMT =
+    '[DSGN-055] "%s" is declared by more than one unit of this server''s %s ' +
+    'table, with different published properties (%s): the form does not say ' +
+    'which one it is, so I have NOT checked any property of that object or ' +
+    'of anything inside it.';
+  SR_DESIGNER_CLASE_AMBIGUA_FMT =
+    '[DSGN-056 NOT_FOUND] "%s" is declared by more than one unit of the %s ' +
+    'table, with different published properties (%s): which one a form means ' +
+    'depends on the uses of its unit, so this table does not answer for it.';
 
   SP_DESIGNER_UNIT =
     'check-binding, optional: the .pas with the form''s class. By ' +
@@ -8556,6 +8652,14 @@ const
 
   SF_DSGN_NO_EXISTE_SEGUN_FRAMEWORK_FMT =
     '"%s" does not exist in %s according to the framework (it publishes: %s)';
+
+  { Bajando por una propiedad objeto la instancia puede ser de un
+    descendiente del tipo declarado (TLabel.TextSettings declara
+    TTextSettings, que no publica nada, y guarda un TLabelTextSettings): el
+    aviso es para lo que no publica nadie de la familia. }
+  SF_DSGN_NO_EXISTE_EN_LA_FAMILIA_FMT =
+    '"%s" does not exist in %s nor in any class that descends from it, ' +
+    'according to the framework (between them they publish: %s)';
 
   SF_DSGN_NO_ES_VALOR_FMT =
     '"%s" is not a value of %s; valid: %s';

@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-02 (current release v1.10.0; 42 tools - `delphi_run` retired, `delphi_docs` new).
+Status page as of 2026-10-04 (current release v1.12.0; 42 tools).
 
 ## Delivered
 
@@ -34,6 +34,7 @@ Status page as of 2026-10-02 (current release v1.10.0; 42 tools - `delphi_run` r
 - The life of the engines: asked to `shutdown` before their input is closed and launched so that no child can open an error dialog (1.7.10); stopped when nobody uses them for `[Server] EngineIdleMinutes`, and stopped and replaced when they hang (1.8.0)
 - `delphi_docs`: the RAD Studio help installed with Delphi, searched and read in pieces - the list of help files is the IDE's own (1.10.0)
 - One lexicon for Pascal text (`Lsp.Pascal`): what is code, a string, a comment or a directive, asked by every tool that reads Pascal instead of a dozen readers with a piece of the rule each (1.10.0)
+- The designer tables read from the source of each installed Delphi - its own preprocessor and declarations reader, generated in the background and cached per version - instead of tables of one RAD Studio compiled into the exe (1.12.0)
 
 ## Open
 

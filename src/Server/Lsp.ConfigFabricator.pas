@@ -21,6 +21,16 @@ uses
 type
   ELspConfigFabricator = class(Exception);
 
+const
+  { Los prefijos de unidad (unit scope names) del compilador cuando un
+    proyecto no dice los suyos: con ellos 'Classes' es System.Classes. Los
+    usa tambien el generador de las tablas del disenador para los uses sin
+    prefijo del fuente de terceros (Lsp.DesignerMetaGen): una lista, dos
+    lectores. }
+  DEFAULT_NAMESPACES =
+    'Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;' +
+    'System;Xml;Data;Datasnap;Web;Soap';
+
 { True when an existing .delphilsp.json is unusable: its project file no
   longer exists, or it was generated for a different compiler generation. }
 function IsSettingsStale(const ASettingsFile: string;
@@ -41,14 +51,13 @@ function FabricateSettings(const ADprojPath: string;
 implementation
 
 uses
-  Winapi.Windows, // MoveFileEx: el fichero fabricado entra entero o no entra
   System.Classes,
   System.IOUtils,
   System.JSON,
   System.Hash,
   System.Generics.Collections,
   Lsp.Client, // PathToUri / UriToPath
-  Lsp.Guard,  // ExpandIdeMacros
+  Lsp.Guard,  // ExpandIdeMacros, EscribeEnCasaDelServidor (entero o nada)
   Lsp.Dproj,
   Lsp.Texts,
   Lsp.NetDrives;  // shared tolerant .dproj parser (AllTagValues/MergeProperty/XmlUnescape)
@@ -59,10 +68,6 @@ const
     'Generics.Defaults=System.Generics.Defaults;' +
     'WinTypes=Winapi.Windows;WinProcs=Winapi.Windows;' +
     'DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE';
-
-  DEFAULT_NAMESPACES =
-    'Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;' +
-    'System;Xml;Data;Datasnap;Web;Soap';
 
   BROWSING_SUBDIRS: array [0 .. 13] of string = (
     'source\rtl\common', 'source\rtl\sys', 'source\rtl\win',
@@ -332,18 +337,8 @@ begin
 
     // Whole or not at all: an engine reads this file the moment it is named
     // to it, and another thread may be reading it to know if it is stale.
-    // It is one of the server's own houses (its cache): no gate here.
-    var Tmp := CacheFile + '.' + IntToStr(GetCurrentThreadId) + '.tmp';
-    TFile.WriteAllText(Tmp, Root.Format(1), TEncoding.UTF8);
-    if not MoveFileEx(PChar(Tmp), PChar(CacheFile), MOVEFILE_REPLACE_EXISTING) then
-    begin
-      var Err := GetLastError;
-      System.SysUtils.DeleteFile(Tmp);
-      // somebody has it open (an engine reading it): the one that is there
-      // is used; with none, the failure is said
-      if not FileExists(CacheFile) then
-        RaiseLastOSError(Err);
-    end;
+    // Somebody that has it open keeps the one that is there.
+    EscribeEnCasaDelServidor(CacheFile, Root.Format(1));
   finally
     Root.Free;
   end;

@@ -1,7 +1,7 @@
-# `src/` — seven projects, one per folder
+# `src/` — five projects, one per folder
 
 Everything Delphi in this repository lives here, **one project per folder**, and
-all seven are in [`MCP-delphi.groupproj`](../MCP-delphi.groupproj), so a
+all five are in [`MCP-delphi.groupproj`](../MCP-delphi.groupproj), so a
 *Build All* in the IDE or `BuildGroup.bat` at the root compiles every one of
 them. What each is for, whether it ships, and when it runs:
 
@@ -12,7 +12,6 @@ them. What each is for, whether it ships, and when it runs:
 | [`DesktopNode/`](DesktopNode) | `McpDesktopNode` | The **desktop node**: the server's eyes and hands on a target machine (screenshot, tap, type, key, window list). One source, two binaries: Linux64 (GNOME, portal + libei) and Win64 (GDI + SendInput). | **Yes**, both binaries under `node/` | The server pushes it to each target on first use and runs it for every `delphi_desktop` gesture. |
 | [`RunJob/`](RunJob) | `McpRunJob` | The **run-job launcher**: what PAServer starts on a target for every remote execution and every desktop gesture. It reads a job file, starts the native binary unattended with its arguments and leaves a watcher that writes the exit code. No shell anywhere. | **Yes**, both binaries under `node/` | Every `remote-run` and every desktop gesture on a PAServer target. |
 | [`UnitTests/`](UnitTests) | `LspUnitTests` | The engine's **DUnitX suite**: unit tests of the encoding detector and its inverses, the designer binary shape and the RTL round trip, and the `.dproj` hazard scan. The step below the black-box Python batteries in `tests/`. | No | `tests/test_engine_dunitx.py` runs it through `delphi_test` in every regression; you can run it with `delphi_test command=run`. |
-| [`DesignerMetaDump/`](DesignerMetaDump) | `DumpMetaVcl` and `DumpMetaFmx` | The two **generators of the designer tables**: each starts with its framework loaded, walks the RTTI (classes, published properties, enums, sets, runtime aliases) and writes `Server/Lsp.DesignerMeta.Vcl.pas` or `.Fmx.pas`, the tables `delphi_designer info`, `prop` and the lint answer from. | No | Once per RAD Studio version, by hand, when the framework changes. In the group only so they keep compiling. |
 
 Two things ship that are **not** projects: `settings.example.ini` (the
 configuration template) and `docs/`. The Python batteries in `tests/` are the

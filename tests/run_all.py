@@ -118,7 +118,10 @@ for name, out, rc in failed:
     motivo = [line for line in out.splitlines()
               if line.lstrip().startswith('FAIL') or 'Error' in line or 'Traceback' in line]
     for line in motivo:
-        print('   ', line[:220])
+        # la linea FAIL ENTERA: recortada a 220 caracteres se perdio dos veces
+        # la causa del P8 de test_lsp_paralelo (pendientes 1.11.0, punto 5;
+        # 3-oct-2026). Lo demas (Error, Traceback), recortado como siempre
+        print('   ', line if line.lstrip().startswith('FAIL') else line[:220])
     # Roja sin decir por que: se ensena el final. El 26-sep-2026
     # test_readonly_roots salio roja con 57 PASS y 0 FAIL y aqui no quedo
     # ni una linea: una bateria roja tiene que decir por que.

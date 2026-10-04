@@ -39,6 +39,11 @@ type
     Secciones: TArray<TSeccion>; // las de su caja de contenidos
     Redirige: string;            // el enlace de una pagina que solo redirige
     AnclaEncontrada: Boolean;    // pedida una seccion: si estaba
+    Ancla: string;               // encontrada: su ancla (la pedida, o la de su titulo)
+    { Una seccion que envuelve la pagina (ningun otro titulo de su nivel o mas
+      alto: en las de la API, Description, de la que cuelga todo) acaba en su
+      primer subtitulo; aqui las anclas de los que siguen, en orden. }
+    Subsecciones: TArray<string>;
     { La barra de una clase o una unidad: su padre ("Up to Parent") y sus
       listas de miembros (Methods, Properties, Events...), heredados
       incluidos. Como texto no servia: eran enlaces sin id. En una pagina de
@@ -927,12 +932,194 @@ begin
   Result := True;
 end;
 
+{ ---------------------------------------------- las secciones de una pagina }
+
+type
+  { Un titulo de seccion: en las paginas de la ayuda (MediaWiki) su ancla va
+    en un <span class=mw-headline id=X> dentro del <hN>. }
+  TTituloDoc = record
+    Pos: Integer;     // el '<' de su <hN>
+    Nivel: Integer;
+    Ancla, Texto: string;
+  end;
+
+{ El <hN> donde esta la posicion AP: el primero hacia atras; 0 si no hay.
+  Tambien el que abre el contenido (posicion 1): antes no contaba, y la
+  primera seccion de una pagina que empieza por un titulo (Services.htm) "no
+  estaba" (lo encontro su prueba unitaria, 4-oct-2026). }
+function InicioDeTitulo(const AContenido: string; AP: Integer): Integer;
+begin
+  Result := AP;
+  while (Result >= 1) and not ((AContenido[Result] = '<') and (Result < Length(AContenido)) and
+    CharInSet(AContenido[Result + 1], ['h', 'H']) and (Result + 2 <= Length(AContenido)) and
+    CharInSet(AContenido[Result + 2], ['1' .. '6'])) do
+    Dec(Result);
+end;
+
+{ El primer <hN> desde ADesde (1 o mas) con N <= ANivel; 0 si no hay. ABajo
+  es el contenido en minusculas. }
+function SiguienteTitulo(const ABajo: string; ADesde, ANivel: Integer): Integer;
+begin
+  Result := PosEx('<h', ABajo, ADesde);
+  while (Result > 0) and not ((Result + 2 <= Length(ABajo)) and
+    CharInSet(ABajo[Result + 2], ['1' .. '6']) and
+    (Ord(ABajo[Result + 2]) - Ord('0') <= ANivel)) do
+    Result := PosEx('<h', ABajo, Result + 1);
+end;
+
+{ La caja de contenidos (<div id=toc>, con el h2 de su titulo, que no es una
+  seccion): desde su id hasta el </ul> al que sigue su </div> - lleva listas
+  dentro de listas: en el primer </ul> se quedaban 3 de 40 (medido). False si
+  la pagina no tiene, o no cierra. }
+function CajaDeContenidos(const AContenido, ABajo: string; out AIni, AFin: Integer): Boolean;
+begin
+  AIni := PosDeId(AContenido, 'toc');
+  AFin := AIni;
+  if AIni > 0 then
+    repeat
+      AFin := PosEx('</ul>', ABajo, AFin + 1);
+    until (AFin = 0) or Copy(ABajo, AFin + 5, 40).TrimLeft.StartsWith('</div>');
+  Result := (AIni > 0) and (AFin > 0);
+end;
+
+{ Los titulos con ancla del contenido, en orden (la caja de contenidos lleva
+  su propio h2 sin ancla: no sale). Son las secciones de la pagina: las que
+  lista "sections" y las que busca SeccionDe, de aqui las dos. }
+function TitulosDe(const AContenido, ABajo: string): TArray<TTituloDoc>;
+var
+  P, A, Q, F: Integer;
+  T: TTituloDoc;
+begin
+  Result := nil;
+  P := Pos('mw-headline', ABajo);
+  while P > 0 do
+  begin
+    T.Pos := InicioDeTitulo(AContenido, P);
+    A := P;
+    while (A > 1) and (AContenido[A] <> '<') do
+      Dec(A);
+    Q := PosEx('>', AContenido, P);
+    F := PosEx('</h', ABajo, Q);
+    if (T.Pos > 0) and (A > T.Pos) and (Q > 0) and (F > 0) then
+    begin
+      T.Nivel := Ord(AContenido[T.Pos + 2]) - Ord('0');
+      T.Ancla := AtributoDe(Copy(AContenido, A + 1, Q - A - 1), 'id');
+      // todo lo de dentro del titulo, como lo escribe el texto de la pagina
+      // (TextoDeEtiqueta hace lo mismo; un <span> anidado no lo corta)
+      T.Texto := HtmlATexto(Copy(AContenido, Q + 1, F - Q - 1)).Replace(#10, ' ').Trim;
+      if T.Ancla <> '' then
+        Result := Result + [T];
+    end;
+    P := PosEx('mw-headline', ABajo, P + 11);
+  end;
+end;
+
+{ Un titulo o un ancla para compararlos como los copiaria el agente: sin
+  mayusculas, '_', ' ' y el espacio duro dan igual, y sin las # de delante
+  ("## Helper Syntax" tal cual sale en el texto). }
+function NormalizaTitulo(const S: string): string;
+begin
+  Result := S.Replace('_', ' ').Replace(#$A0, ' ').Replace('`', '').Trim.TrimLeft(['#']).Trim.ToLower;
+end;
+
+{ La seccion AAncla del contenido: desde su titulo (AQ) hasta el siguiente de
+  su nivel o mas alto (AR, 0 = hasta el final). Se busca por su ancla y, si no
+  esta, por su titulo como se lee: el agente ve "## Helper Syntax" y el ancla
+  es Helper_Syntax, y en 826 paginas de topics.chm el ancla ni siquiera es el
+  titulo con '_' (Code_Insight_.28LSP.29_improvements; medido el 4-oct-2026).
+  La que envuelve la pagina -ningun otro titulo de su nivel o mas alto-
+  acababa al final de la pagina: en las de la API todo cuelga de Description
+  (See Also, Code Examples, Exceptions...; 10.806 paginas en system.chm y
+  18.571 en vcl.chm, 38 en topics.chm). Esa acaba en su primer subtitulo con
+  ancla, y ASubsecciones dice las anclas de los que siguen. AAnclaReal, la de
+  la pagina. ATitulos, los de TitulosDe. }
+function SeccionDe(const AContenido, ABajo, AAncla: string;
+  const ATitulos: TArray<TTituloDoc>; out AQ, AR: Integer;
+  out AAnclaReal: string; out ASubsecciones: TArray<string>): Boolean;
+var
+  P, Nivel, I, CajaIni, CajaFin: Integer;
+  T: TTituloDoc;
+  Real: string;
+  Caja, Envuelve: Boolean;
+begin
+  Result := False;
+  AQ := 0;
+  AR := 0;
+  AAnclaReal := '';
+  ASubsecciones := nil;
+  P := PosDeId(AContenido, AAncla);
+  if P > 0 then
+  begin
+    // contesta con el ancla de la pagina, no con la tecleada: el indice
+    // escribe ..._For_statements y la pagina ..._For_Statements (revision)
+    Real := AAncla;
+    for T in ATitulos do
+      if SameText(T.Ancla, AAncla) then
+      begin
+        Real := T.Ancla;
+        Break;
+      end;
+  end
+  else
+    for T in ATitulos do
+      if (NormalizaTitulo(T.Texto) = NormalizaTitulo(AAncla)) or
+         (NormalizaTitulo(T.Ancla) = NormalizaTitulo(AAncla)) then
+      begin
+        P := T.Pos;
+        Real := T.Ancla;
+        Break;
+      end;
+  if P = 0 then
+    Exit;
+  // un ancla de antes del primer titulo no tiene titulo, y el h2 de la caja
+  // de contenidos no es una seccion (pintaba la caja como texto; revision)
+  Caja := CajaDeContenidos(AContenido, ABajo, CajaIni, CajaFin);
+  AQ := InicioDeTitulo(AContenido, P);
+  if (AQ = 0) or (Caja and (AQ >= CajaIni) and (AQ <= CajaFin)) then
+  begin
+    AQ := 0;
+    Exit;
+  end;
+  Nivel := Ord(AContenido[AQ + 2]) - Ord('0');
+  AR := SiguienteTitulo(ABajo, AQ + 1, Nivel);
+  if AR = 0 then
+  begin
+    // envuelve la pagina si tampoco la precede ninguno de su nivel o mas
+    // alto, con ancla o sin ella: la misma cuenta que decide donde acaba
+    // (solo con los de ancla, uno sin ella delante la daba por envoltorio;
+    // revision). El de la caja de contenidos no cuenta
+    Envuelve := True;
+    I := SiguienteTitulo(ABajo, 1, Nivel);
+    while Envuelve and (I > 0) and (I < AQ) do
+    begin
+      if not (Caja and (I >= CajaIni) and (I <= CajaFin)) then
+        Envuelve := False;
+      I := SiguienteTitulo(ABajo, I + 1, Nivel);
+    end;
+    // corta en el primer subtitulo CON ancla: uno sin ella (1.043 en
+    // topics.chm) se queda dentro, porque no se puede pedir aparte; sin
+    // ninguno con ancla, la seccion entera, como antes
+    if Envuelve then
+      for T in ATitulos do
+        if T.Pos > AQ then
+        begin
+          if AR = 0 then
+            AR := T.Pos;
+          ASubsecciones := ASubsecciones + [T.Ancla];
+        end;
+  end;
+  AAnclaReal := Real;
+  Result := True;
+end;
+
 function PaginaComoTexto(const AHtml, AAncla: string): TPaginaDoc;
 var
   Contenido, Bajo: string;
-  P, Q, Nivel, R: Integer;
+  P, Q, R: Integer;
   S: TSeccion;
   E: TEnlace;
+  Titulos: TArray<TTituloDoc>;
+  T: TTituloDoc;
 begin
   Result := Default(TPaginaDoc);
   Result.Titulo := TextoDeEtiqueta(AHtml, 'h1');
@@ -973,31 +1160,16 @@ begin
   if EnlaceAlPadre(Contenido, E) then
     Result.Enlaces := [E];
   Bajo := Contenido.ToLower;
-  // las secciones, de la caja de contenidos: <a href=#X>..<span class=toctext>T</span>.
-  // Lleva listas dentro de listas: acaba en el </ul> al que sigue su </div>
-  // (en el primer </ul> se quedaban 3 de 40; medido)
-  P := PosDeId(Contenido, 'toc');
-  if P > 0 then
+  // las secciones: sus titulos con ancla. Antes salian de la caja de
+  // contenidos, que MediaWiki no pone con menos de cuatro titulos: una pagina
+  // larga sin ella no ofrecia secciones; ahora un lector para "sections" y
+  // para SeccionDe (revision de la 1.12.0)
+  Titulos := TitulosDe(Contenido, Bajo);
+  for T in Titulos do
   begin
-    R := P;
-    repeat
-      R := PosEx('</ul>', Bajo, R + 1);
-    until (R = 0) or Copy(Bajo, R + 5, 40).TrimLeft.StartsWith('</div>');
-    P := PosEx('href=', Bajo, P);
-    while (P > 0) and ((R = 0) or (P < R)) do
-    begin
-      S.Ancla := AtributoDe(Copy(Contenido, P - 1, 300), 'href').TrimLeft(['#']);
-      Q := PosEx('toctext', Bajo, P);
-      S.Titulo := '';
-      if Q > 0 then
-      begin
-        Q := PosEx('>', Contenido, Q) + 1;
-        S.Titulo := DecodificaEntidades(Copy(Contenido, Q, PosEx('<', Contenido, Q) - Q)).Trim;
-      end;
-      if (S.Ancla <> '') and (S.Titulo <> '') then
-        Result.Secciones := Result.Secciones + [S];
-      P := PosEx('href=', Bajo, P + 5);
-    end;
+    S.Ancla := T.Ancla;
+    S.Titulo := T.Texto;
+    Result.Secciones := Result.Secciones + [S];
   end;
   // la barra de una clase: <ul id=childlinks> con su padre y sus miembros
   P := PosDeId(Contenido, 'childlinks');
@@ -1016,31 +1188,14 @@ begin
     end;
   end;
   // una seccion: desde su titulo hasta el siguiente de su nivel o mas alto
-  if AAncla <> '' then
+  // (SeccionDe: por su ancla o su titulo, y la que envuelve la pagina)
+  if (AAncla <> '') and SeccionDe(Contenido, Bajo, AAncla, Titulos, Q, R,
+    Result.Ancla, Result.Subsecciones) then
   begin
-    P := PosDeId(Contenido, AAncla);
-    if P > 0 then
-    begin
-      Q := P;
-      while (Q > 1) and not ((Contenido[Q] = '<') and (Q < Length(Contenido)) and
-        CharInSet(Contenido[Q + 1], ['h', 'H']) and (Q + 2 <= Length(Contenido)) and
-        CharInSet(Contenido[Q + 2], ['1' .. '6'])) do
-        Dec(Q);
-      if Q > 1 then
-      begin
-        Nivel := Ord(Contenido[Q + 2]) - Ord('0');
-        R := Q + 3;
-        repeat
-          R := PosMin('<h', Contenido, R + 1);
-        until (R = 0) or ((R + 2 <= Length(Contenido)) and
-          CharInSet(Contenido[R + 2], ['1' .. '6']) and
-          (Ord(Contenido[R + 2]) - Ord('0') <= Nivel));
-        if R = 0 then
-          R := Length(Contenido) + 1;
-        Contenido := Copy(Contenido, Q, R - Q);
-        Result.AnclaEncontrada := True;
-      end;
-    end;
+    if R = 0 then
+      R := Length(Contenido) + 1;
+    Contenido := Copy(Contenido, Q, R - Q);
+    Result.AnclaEncontrada := True;
   end;
   Result.Texto := HtmlATexto(Contenido);
 end;

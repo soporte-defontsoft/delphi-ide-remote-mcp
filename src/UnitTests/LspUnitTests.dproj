@@ -181,7 +181,7 @@
         <DCCReference Include="LspTests.Rutas.pas"/>
         <DCCReference Include="LspTests.LetrasDeRed.pas"/>
         <DCCReference Include="LspTests.Docs.pas"/>
-        <DCCReference Include="LspTests.DesignerMeta.pas"/>
+        <DCCReference Include="LspTests.DesignerMetaGen.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

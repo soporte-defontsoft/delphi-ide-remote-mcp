@@ -15,7 +15,6 @@ Since 2026-09-24 every project of the repo has its own folder under `src/`:
 | `UnitTests/` | `LspUnitTests`, the DUnitX suite of the engine, run by `delphi_test` |
 | `DesktopNode/` | `McpDesktopNode`, the desktop node for Linux and Windows targets |
 | `RunJob/` | `McpRunJob`, the native launcher PAServer starts for every remote job |
-| `DesignerMetaDump/` | the two generators of `Lsp.DesignerMeta.Vcl/Fmx.pas` (run again on a new RAD Studio) |
 
 Build the server alone with **`BuildMcp.bat`** here (defaults: `quiet Win64 make Debug`;
 the shipping exe is `BuildMcp.bat quiet Win64 build Release`), or the whole group

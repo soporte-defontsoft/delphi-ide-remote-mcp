@@ -57,6 +57,10 @@ type
     procedure LaConsultaSinComillasNiSignos;
     [Test]
     procedure LasEntidadesYElMetaLejano;
+    [Test]
+    procedure UnaSeccionPorSuTituloComoSeLee;
+    [Test]
+    procedure LaQueEnvuelveLaPaginaAcabaEnSuPrimerSubtitulo;
   end;
 
 implementation
@@ -116,6 +120,23 @@ const
     'Up to Parent: Guide</a></li><li><a href="X_Methods.htm">Methods</a>' +
     '</li></ul></div><div id="catlinks">Categories: ignorar</div>' +
     '</body></html>';
+
+  // una de la API: Properties (h4) arriba y Description (h2), de la que
+  // cuelga todo en h3; la caja de contenidos con su h2 sin ancla; las anclas
+  // como las escriben las ayudas (con comillas o sin ellas, '(' como '.28')
+  API =
+    '<html><body><h1 id="firstHeading">System.X.Y</h1>' +
+    '<div id="mw-content-text"><div id="toc" class="toc"><div id="toctitle">' +
+    '<h2>Contents</h2></div><ul><li><a href="#Description"><span ' +
+    'class="toctext">Description</span></a></li></ul></div>' +
+    '<h4><span class="mw-headline" id="Properties">Properties</span></h4>' +
+    '<p>Props.</p>' +
+    '<h2><span class="mw-headline" id="Description">Description</span></h2>' +
+    '<p>Desc text.</p>' +
+    '<h3><span class=mw-headline id=Code_Insight_.28LSP.29>Code Insight (LSP)' +
+    '</span></h3><p>LSP text.</p>' +
+    '<h3><span class="mw-headline" id="See_Also">See Also</span></h3>' +
+    '<p>See text.</p></div><div id="catlinks">x</div></body></html>';
 
   // la que solo redirige (259 en topics.chm), aqui a otra ayuda
   REDIRIGE =
@@ -517,6 +538,97 @@ begin
   Cabeza := '<html><head>' + StringOfChar(' ', 2000) + '<meta charset=utf-8></head><body>';
   Assert.IsTrue(TextoDeBytes(TEncoding.UTF8.GetBytes(Cabeza + 'caf' + #$E9)).EndsWith('caf' + #$E9),
     'UTF-8 dicho pasado el primer KB');
+end;
+
+procedure TDocsPurasTests.UnaSeccionPorSuTituloComoSeLee;
+var
+  P: TPaginaDoc;
+begin
+  // el agente ve "## For Statements": con espacios y en minusculas tambien
+  P := PaginaComoTexto(PAGINA, 'for statements');
+  Assert.IsTrue(P.AnclaEncontrada);
+  Assert.AreEqual('For_Statements', P.Ancla, 'contesta con el ancla de la pagina');
+  Assert.StartsWith('## For Statements', P.Texto);
+  Assert.DoesNotContain(P.Texto, 'Decl text.');
+  // un ancla que no es su titulo con '_' (826 en topics.chm, medido)
+  P := PaginaComoTexto(API, 'Code Insight (LSP)');
+  Assert.IsTrue(P.AnclaEncontrada);
+  Assert.AreEqual('Code_Insight_.28LSP.29', P.Ancla);
+  Assert.Contains(P.Texto, 'LSP text.');
+  Assert.DoesNotContain(P.Texto, 'See text.', 'hasta el siguiente de su nivel');
+  // por su ancla sin mirar mayusculas: contesta con la de la pagina, no con
+  // la tecleada (el indice escribe ..._For_statements; revision)
+  P := PaginaComoTexto(PAGINA, 'for_statements');
+  Assert.AreEqual('For_Statements', P.Ancla);
+  // copiado tal cual sale en el texto, con sus # y un espacio duro
+  P := PaginaComoTexto(PAGINA, '## For'#$A0'Statements');
+  Assert.IsTrue(P.AnclaEncontrada);
+  Assert.AreEqual('For_Statements', P.Ancla);
+  // un ancla que no es de un titulo, entre la caja de contenidos y el primer
+  // titulo: el h2 de la caja no es su seccion (pintaba la caja como texto)
+  P := PaginaComoTexto('<div id="mw-content-text"><div id="toc"><div ' +
+    'id="toctitle"><h2>Contents</h2></div><ul><li>x</li></ul></div><p><span ' +
+    'id="Suelta">s</span></p><h2><span class="mw-headline" id="A">A</span>' +
+    '</h2><p>a</p></div>', 'Suelta');
+  Assert.IsFalse(P.AnclaEncontrada);
+end;
+
+procedure TDocsPurasTests.LaQueEnvuelveLaPaginaAcabaEnSuPrimerSubtitulo;
+var
+  P: TPaginaDoc;
+begin
+  // Description es el unico titulo de su nivel: cortar por nivel era hasta
+  // el final (10.806 paginas de system.chm, medido)
+  P := PaginaComoTexto(API, 'Description');
+  Assert.IsTrue(P.AnclaEncontrada);
+  Assert.Contains(P.Texto, 'Desc text.');
+  Assert.DoesNotContain(P.Texto, 'LSP text.', 'acaba en su primer subtitulo');
+  Assert.DoesNotContain(P.Texto, 'See text.');
+  Assert.AreEqual(2, Integer(Length(P.Subsecciones)), 'los que siguen, por su ancla');
+  Assert.AreEqual('Code_Insight_.28LSP.29', P.Subsecciones[0]);
+  Assert.AreEqual('See_Also', P.Subsecciones[1]);
+  // la de nivel 4 de arriba acaba en Description, como antes
+  P := PaginaComoTexto(API, 'Properties');
+  Assert.Contains(P.Texto, 'Props.');
+  Assert.DoesNotContain(P.Texto, 'Desc text.');
+  Assert.AreEqual(0, Integer(Length(P.Subsecciones)));
+  // con otro titulo de su nivel no envuelve nada: la ultima de una pagina de
+  // temas sigue hasta el final, y la primera lleva dentro las suyas
+  P := PaginaComoTexto(PAGINA, 'For_Statements');
+  Assert.IsTrue(P.AnclaEncontrada);
+  Assert.AreEqual(0, Integer(Length(P.Subsecciones)));
+  P := PaginaComoTexto(PAGINA, 'Declarations');
+  Assert.Contains(P.Texto, 'Hint text.');
+  Assert.AreEqual(0, Integer(Length(P.Subsecciones)));
+  // un subtitulo sin ancla se queda dentro (no se puede pedir aparte): corta
+  // en el primero con ancla; sin ninguno, la seccion entera
+  P := PaginaComoTexto('<div id="mw-content-text"><h2><span class="mw-headline" ' +
+    'id="A">A</span></h2><p>a1</p><h3>Sin ancla</h3><p>p1</p><h3><span ' +
+    'class="mw-headline" id="B">B</span></h3><p>b1</p></div>', 'A');
+  Assert.IsTrue(P.AnclaEncontrada, 'un titulo que abre el contenido tambien es una seccion');
+  Assert.Contains(P.Texto, 'p1', 'el subtitulo sin ancla, dentro');
+  Assert.DoesNotContain(P.Texto, 'b1');
+  Assert.AreEqual(1, Integer(Length(P.Subsecciones)));
+  Assert.AreEqual('B', P.Subsecciones[0]);
+  P := PaginaComoTexto('<div id="mw-content-text"><h2><span class="mw-headline" ' +
+    'id="A">A</span></h2><p>a1</p><h3>Sin ancla</h3><p>p1</p></div>', 'A');
+  Assert.IsTrue(P.AnclaEncontrada);
+  Assert.Contains(P.Texto, 'p1', 'sin subtitulos con ancla, la seccion entera');
+  Assert.AreEqual(0, Integer(Length(P.Subsecciones)));
+  // la ultima de su nivel con otra delante no envuelve nada: lleva dentro
+  // las suyas, con ancla o sin ella la de delante (revision)
+  P := PaginaComoTexto('<div id="mw-content-text"><h2><span class="mw-headline" ' +
+    'id="A">A</span></h2><p>a</p><h2><span class="mw-headline" id="B">B</span>' +
+    '</h2><p>b</p><h3><span class="mw-headline" id="B1">B1</span></h3><p>b1</p>' +
+    '</div>', 'B');
+  Assert.IsTrue(P.AnclaEncontrada);
+  Assert.Contains(P.Texto, 'b1', 'la ultima de su nivel lleva dentro las suyas');
+  Assert.AreEqual(0, Integer(Length(P.Subsecciones)));
+  P := PaginaComoTexto('<div id="mw-content-text"><h2>Sin ancla</h2><p>x</p>' +
+    '<h2><span class="mw-headline" id="Y">Y</span></h2><p>y</p><h3><span ' +
+    'class="mw-headline" id="Y1">Y1</span></h3><p>y1</p></div>', 'Y');
+  Assert.Contains(P.Texto, 'y1', 'uno sin ancla delante tambien cuenta');
+  Assert.AreEqual(0, Integer(Length(P.Subsecciones)));
 end;
 
 initialization

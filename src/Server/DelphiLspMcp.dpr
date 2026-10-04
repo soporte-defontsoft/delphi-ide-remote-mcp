@@ -127,7 +127,10 @@ uses
   Lsp.Chm in 'Lsp.Chm.pas',
   Lsp.Docs in 'Lsp.Docs.pas',
   Mcp.Tools.Docs in 'Mcp.Tools.Docs.pas',
-  Lsp.Pascal in 'Lsp.Pascal.pas';
+  Lsp.Pascal in 'Lsp.Pascal.pas',
+  Lsp.Preproceso in 'Lsp.Preproceso.pas',
+  Lsp.PascalDecl in 'Lsp.PascalDecl.pas',
+  Lsp.DesignerMetaGen in 'Lsp.DesignerMetaGen.pas';
 
 {$R *.res}
 

@@ -120,6 +120,27 @@ def caliente(h):
     return 'TApplication' in h
 
 
+def foto_procesos():
+    """Lo que hay vivo en la maquina al empezar P8: cada DelphiLSP y cada
+    DelphiLspMcp (nombre, pid, padre, segundos de CPU acumulados) y la carga
+    de la CPU. P8 se cae a veces dentro de run_all y nunca solo (pendientes
+    1.11.0, punto 5; David, 3-oct-2026: 'le viene el problema de la ejecucion
+    de otro test previo?'): un motor o un servidor que deja otra bateria y
+    sigue trabajando es el sospechoso que se mira aqui. Solo diagnostico."""
+    try:
+        p = subprocess.run(
+        ['powershell', '-NoProfile', '-Command',
+         "Get-CimInstance Win32_Process -Filter \"Name='DelphiLSP.exe' or Name='DelphiLspMcp.exe'\" | "
+         "ForEach-Object { \"$($_.Name):$($_.ProcessId)<$($_.ParentProcessId)"
+         "/$([math]::Round(($_.KernelModeTime+$_.UserModeTime)/1e7,1))s\" }; "
+         "'cpu=' + (Get-CimInstance Win32_Processor | Measure-Object LoadPercentage -Average).Average + '%'"],
+        capture_output=True, text=True, timeout=60)
+    except Exception as e:
+        # es diagnostico: si no se puede mirar, se dice y P8 sigue
+        return 'sin foto: %s: %s' % (type(e).__name__, e)
+    return ' '.join(p.stdout.split()) if p.returncode == 0 else 'powershell rc=%d' % p.returncode
+
+
 def choca(v):
     # SOLO el choque al fabricar la configuracion, o una peticion que no
     # vuelve: la negativa prevista de un motor frio (LSP-025, "warming up,
@@ -397,6 +418,14 @@ def p8(uno, colgados):
     # P8 - parar un motor bajo las peticiones EN VUELO de otros agentes no lo tumba
     k32 = K32
     codigos, por_ronda, dichos, calientes, sitios, paradas = [], [], [], [], [], []
+    # diagnostico: lo que dejaron las baterias de antes, EN UN HILO: hecha en
+    # linea, la foto (1-3 s de PowerShell) retrasaba P8, y con ella P8 salio
+    # verde tres vueltas seguidas (antes, 2 rojas de 6): el instrumento no
+    # puede ser el reposo que esconde lo que mide
+    foto = []
+    hilo_foto = threading.Thread(target=lambda: foto.append(foto_procesos()))
+    hilo_foto.start()
+    muestras = []            # lo que contesto el motor en una ronda sin sitio
     for ronda in range(4):
         n = 'Vuelo%d' % ronda
         d = os.path.join(BASE, n)
@@ -449,6 +478,9 @@ def p8(uno, colgados):
         # borrado contestaba con un sitio, y a quien tenia la pregunta en vuelo
         # se le dijo que el motor se paro debajo (LSP-033)
         sitios.append(sum(1 for t, v in vistas if t < t_borra and 'Vcl.Forms.pas' in v))
+        if sitios[-1] == 0:
+            muestras.append('ronda %d: %s' % (ronda, ' / '.join(
+                ' '.join(v.split())[:90] for _, v in vistas[:2]) or 'ninguna respuesta'))
         paradas.append(sum(1 for t, v in vistas if mc.es(v, 'SR_LSP_ENGINE_STOPPED')))
         for a in asas:
             if a:
@@ -457,13 +489,16 @@ def p8(uno, colgados):
                 k32.GetExitCodeProcess(ctypes.c_void_p(a), ctypes.byref(c))
                 k32.CloseHandle(ctypes.c_void_p(a))
                 codigos.append(c.value)
+    hilo_foto.join(60)
+    foto = foto[0] if foto else 'sin foto: no acabo en 60 s'
     check('P8 (preparacion) cuatro rondas: un motor por proyecto, caliente y contestando con un sitio a los tres '
           'agentes que preguntan, y su carpeta se borra debajo',
           por_ronda == [1] * 4 and all(calientes) and all(s > 0 for s in sitios) and len(codigos) == 4
           and all(mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') for r in dichos),
-          'motores %s, calientes %s, respuestas con sitio antes de borrar %s, LSP-033 %s, codigos %s | %s' % (
+          'motores %s, calientes %s, respuestas con sitio antes de borrar %s, LSP-033 %s, codigos %s | %s'
+          ' || al empezar P8: %s || rondas sin sitio: %s' % (
               por_ronda, calientes, sitios, paradas, [hex(c) for c in codigos],
-              ' | '.join(' '.join(r.split())[:70] for r in dichos)))
+              ' | '.join(' '.join(r.split())[:70] for r in dichos), foto, muestras or '-'))
     if not all(paradas):
         print('NOTA: P8: en alguna ronda a ninguno de los que preguntaban se le dijo LSP-033 (%s por ronda): esa '
               'ronda pudo parar un motor sin nada en vuelo' % paradas)

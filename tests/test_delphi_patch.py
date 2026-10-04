@@ -328,7 +328,10 @@ out = call('delphi_edit', {"path": FMX,
     "old": "    Size.X = 100.000000",
     "new": "    Size.Width = 100.000000000000000000"})
 check('lint fmx: cubre el fichero ENTERO (los defectos restantes siguen avisando)',
-      mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and 'does not exist in TLabel' in out, out[-600:])
+      mc.es(out, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and '"HorzAlignment" does not exist' in out, out[-600:])
+# (Font.Size en un TLabel de FMX ya no avisa: FMX lo sigue cargando por
+# TTextPropLoader, un DefineProperties que la tabla generada conoce; lo que
+# prueba el fichero ENTERO es el aviso de la linea 7, que esta edicion no toca)
 FMX2 = os.path.join(DIR, 'Limpio.fmx')
 with open(FMX2, 'wb') as f:
     f.write(('object FormMain: TFormMain\r\n'

@@ -1,5 +1,6 @@
 """E2E battery for v0.52.0-beta - delphi_designer phase 1 (read + lint):
-class metadata from the generated RTTI tables, component tree of text
+class metadata from the designer tables (since 1.12.0 read from the source
+of the active Delphi, Lsp.DesignerMetaGen), component tree of text
 designers, one component's block, and the designer lint on demand.
 
 Usage:  python tests/test_designer.py [path-to-DelphiLspMcp.exe]

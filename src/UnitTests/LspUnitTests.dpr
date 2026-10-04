@@ -20,7 +20,7 @@ uses
   LspTests.Rutas in 'LspTests.Rutas.pas',
   LspTests.LetrasDeRed in 'LspTests.LetrasDeRed.pas',
   LspTests.Docs in 'LspTests.Docs.pas',
-  LspTests.DesignerMeta in 'LspTests.DesignerMeta.pas';
+  LspTests.DesignerMetaGen in 'LspTests.DesignerMetaGen.pas';
 
 var
   Runner: ITestRunner;
@@ -37,6 +37,11 @@ begin
       SetEnvironmentVariable('DELPHI_MCP_ROOTS', PChar(ExtractFileDir(ParamStr(0))));
     // --run:<filtro> (el filter de delphi_test): sin esto corria todo
     TDUnitX.CheckCommandLine;
+    // las cadenas, con sus mayusculas: DUnitX las ignora por defecto
+    // (Assert.IgnoreCaseDefault, en AreEqual, Contains, StartsWith...) y "el
+    // ancla de la pagina, no la tecleada" seguia verde con el arreglo quitado
+    // (4-oct-2026). Quien compare sin ellas, que lo pida en su llamada
+    Assert.IgnoreCaseDefault := False;
     Runner := TDUnitX.CreateRunner;
     Logger := TDUnitXConsoleLogger.Create(True);
     Runner.AddLogger(Logger);

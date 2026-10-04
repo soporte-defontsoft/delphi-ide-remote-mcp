@@ -209,8 +209,11 @@ procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
   real folder (macros resolved, no trailing delimiter), in registry order.
   Entries that still carry an unresolved macro or are not rooted are left
   out. What "delphi_components platform=X" shows and what the F2613 helper
-  of delphi_build compares against. }
-function IdePlatformLibraryPaths(const AVersion, APlatform: string): TArray<string>;
+  of delphi_build compares against. AValor es la lista del IDE que se lee:
+  'Search Path' (la de siempre) o 'Browsing Path', la del fuente que el IDE
+  ensena (las tablas del disenador leen las dos: Lsp.DesignerMetaGen). }
+function IdePlatformLibraryPaths(const AVersion, APlatform: string;
+  const AValor: string = 'Search Path'): TArray<string>;
 
 { EL NOMBRADOR DE LOS TEMPORALES, hermana de __delphi-patch y con la misma
   disciplina: el nombre de la carpeta se escribe en UN SITIO y nadie compone
@@ -258,6 +261,14 @@ function ServerTempDir(const ASub: string = ''): string;
   defecto de la plataforma). Las componian a mano dos sitios. Lee la
   variable en cada llamada: quien la redirige (una prueba) la ve. }
 function ServerCacheDir(const ASub: string = ''): string;
+{ Un fichero de una de las casas del servidor (sus caches: la configuracion
+  fabricada para el motor, las tablas del disenador) ENTERO o nada: se
+  escribe al lado y se renombra encima, porque otro hilo puede estar
+  leyendolo en ese momento. Si el renombrado no puede (alguien lo tiene
+  abierto) y el fichero ya esta, vale el que esta; sin ninguno, se lanza el
+  error. Es casa del servidor: no pasa por la jaula. Las dos copias de esto
+  (Lsp.ConfigFabricator y el generador de las tablas) eran la segunda vez. }
+procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
 
 { LA clave corta de una carpeta, por su ruta CANONICA (larga, sin barra
   final, en minusculas): la misma carpeta escrita en 8.3 o con otras
@@ -266,6 +277,11 @@ function ServerCacheDir(const ASub: string = ''): string;
   y la marca de los contenedores de delphi_test (Lsp.Sandbox). Estaba
   compuesta de tres formas, dos sin canonizar (revision de la 1.11.0). }
 function ClaveDeCarpeta(const ADir: string): string;
+{ EL nombre del mutex de una clave del servidor ('Global\DelphiLspMcp-' +
+  AClave), el que ven todas sus instancias, el servicio y las de stdio: lo
+  usan quien reclama algo mientras vive (ReclamaNombre) y quien hace algo de
+  uno en uno entre procesos (la generacion de las tablas del disenador). }
+function NombreDeMutex(const AClave: string): string;
 function AgentTempDir(const ASub: string = ''): string;
 
 { TRES CLASES DE ESCRITURA, y lo que las separa es QUIEN COMPONE LA RUTA
@@ -4797,6 +4813,41 @@ begin
     Result := TPath.Combine(Result, ASub);
 end;
 
+procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
+var
+  Tmp: string;
+  Err: DWORD;
+begin
+  // el escritor pregunta EL MISMO (revision de la 1.12.0): escribe solo DENTRO
+  // de la casa de caches, y esa casa tiene que ser una ruta absoluta: con
+  // LOCALAPPDATA vacia ServerCacheDir es relativa y caeria en la carpeta de
+  // trabajo del proceso (System32 en el servicio). Por el TEXTO canonico, no
+  // por la ruta real: lo que se guarda es un error de composicion (esa
+  // carpeta no la toca ningun agente), y bajo la virtualizacion de un
+  // paquete MSIX una subcarpeta recien creada tiene OTRA ruta real que su
+  // padre (medido el 4-oct-2026 desde la app de escritorio de Claude:
+  // ...\Packages\Claude_...\LocalCache\Local\DelphiLspMcp\designer)
+  if not TPath.IsPathRooted(ServerCacheDir) or
+     not StartsText(IncludeTrailingPathDelimiter(TPath.GetFullPath(ServerCacheDir)),
+       TPath.GetFullPath(AFichero)) then
+    raise EInOutError.Create(MsgFmt(SL_CASA_FUERA_FMT, [AFichero, ServerCacheDir]));
+  Tmp := AFichero + '.' + IntToStr(GetCurrentThreadId) + '.tmp';
+  try
+    TFile.WriteAllText(Tmp, ATexto, TEncoding.UTF8);
+  except
+    // a medias no se queda: un .tmp suelto no lo ve nadie para borrarlo
+    System.SysUtils.DeleteFile(Tmp);
+    raise;
+  end;
+  if not MoveFileEx(PChar(Tmp), PChar(AFichero), MOVEFILE_REPLACE_EXISTING) then
+  begin
+    Err := GetLastError;
+    System.SysUtils.DeleteFile(Tmp);
+    if not FileExists(AFichero) then
+      RaiseLastOSError(Err);
+  end;
+end;
+
 { El workspace de quien llama. Con varias raices manda la PRIMERA
   ESCRIBIBLE - una raiz declarada entera en ReadOnlyPaths (el clon de
   referencia) no recibe entregables: seria escribir justo donde nuestra
@@ -5592,9 +5643,14 @@ var
   no se pudo crear (otra cuenta, otro fallo): en la duda no es nuestra, y
   no purgar es la opcion sin peligro. LA regla de "de quien es esto
   mientras vive": la usan la casa del servidor y las temporales de raiz. }
+function NombreDeMutex(const AClave: string): string;
+begin
+  Result := 'Global\DelphiLspMcp-' + AClave;
+end;
+
 function ReclamaNombre(const AClave: string; out AHandle: THandle): Boolean;
 begin
-  AHandle := CreateMutex(nil, False, PChar('Global\DelphiLspMcp-' + AClave));
+  AHandle := CreateMutex(nil, False, PChar(NombreDeMutex(AClave)));
   if (AHandle <> 0) and (GetLastError = ERROR_ALREADY_EXISTS) then
   begin
     CloseHandle(AHandle);
@@ -6132,7 +6188,8 @@ begin
       IncludeTrailingPathDelimiter(UserDocs) + 'CatalogRepository';
 end;
 
-function IdePlatformLibraryPaths(const AVersion, APlatform: string): TArray<string>;
+function IdePlatformLibraryPaths(const AVersion, APlatform: string;
+  const AValor: string): TArray<string>;
 var
   Installs: TArray<TRadStudioInfo>;
   Info: TRadStudioInfo;
@@ -6150,7 +6207,7 @@ begin
     try
       IdeMacroVars(Info, Vars);
       Vars.Values['Platform'] := APlatform;
-      for Item in IdeLibrarySearchPath(Info.Version, APlatform).Split([';']) do
+      for Item in IdeConfigValue(Info.Version, 'Library\' + APlatform, AValor).Split([';']) do
       begin
         Expanded := ExpandIdeMacros(Item.Trim, Vars);
         if (Expanded = '') or Expanded.Contains('$(') or

@@ -5,10 +5,10 @@ unit Mcp.Tools.Designer;
 
     info  <class>            what the framework really publishes for a class
                              (properties with kind and type, events apart) -
-                             straight from the GENERATED RTTI tables the
-                             designer lint already uses (tools/
-                             DesignerMetaDump: the framework describing
-                             itself, nothing hand-written).
+                             straight from the tables the designer lint
+                             already uses, read from the active Delphi's own
+                             source (Lsp.DesignerMetaGen: the framework
+                             describing itself, nothing hand-written).
     prop  <class> <prop>     one property in detail: type, kind, and the
                              legal members when it is an enum or a set.
     tree  <file>             the component tree of a TEXT .dfm/.fmx
@@ -87,7 +87,8 @@ uses
   Lsp.Styles,
   Lsp.DesignerMeta,
   Lsp.DesignerBin,
-  Lsp.DesignerBinding;
+  Lsp.DesignerBinding,
+  Lsp.DesignerMetaGen;
 
 const
   MAX_PROPS = 400;
@@ -100,6 +101,7 @@ begin
     's': Result := 'set';
     'm': Result := 'event';
     'r': Result := 'record';
+    '?': Result := 'unknown'; // un tipo que el fuente no deja leer
   else
     Result := 'simple';
   end;
@@ -120,30 +122,51 @@ begin
   Result := '';
 end;
 
+// Por que una clase no esta: no existe para esta tabla (DSGN-015), o dos
+// unidades la declaran con otras publicadas (DSGN-056)
+function ClaseQueNoEsta(M: TMetaTable; const AClass, AFramework: string): string;
+var
+  A: string;
+begin
+  if M.Ambiguas.TryGetValue(AClass.Trim.ToLower, A) then
+    Result := MsgFmt(SR_DESIGNER_CLASE_AMBIGUA_FMT, [A.Substring(0, A.IndexOf('|')),
+      UpperCase(AFramework), A.Substring(A.IndexOf('|') + 1)])
+  else
+    Result := MsgFmt(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]);
+end;
+
 function MetaClassInfo(const AFramework, AClass, AFilter: string): string;
 var
   M: TMetaTable;
   Ret, PObj: TJSONObject;
   PArr, EArr: TJSONArray;
-  Key, Cls, PName: string;
+  Key, Cls, ClsId, PName: string;
+  Falta: TFaltaTabla;
   R: TPropRec;
   Names: TStringList;
   N, Shown: Integer;
 begin
-  M := MetaTable(AFramework = 'fmx');
-  if not M.Classes.TryGetValue(AClass.Trim.ToLower, Cls) then
-    Exit(MsgFmt(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]));
+  M := MetaTable(AFramework = 'fmx', Falta);
+  if M = nil then
+    Exit(Falta.Negativa); // sin fuente, generandose o fallida: lo dice ella
+  // por su nombre o por su identidad con la unidad (dos unidades pueden
+  // tener una clase con el mismo nombre)
+  if not M.ClaseDeNombre(AClass, ClsId) then
+    Exit(ClaseQueNoEsta(M, AClass, AFramework));
+  Cls := M.Classes[ClsId];
   Ret := TJSONObject.Create;
   Names := TStringList.Create;
   try
     Ret.AddPair('class', Cls);
+    if EsIdDeTipo(ClsId) then
+      Ret.AddPair('unit', UnidadDeIdDeTipo(M.IdEscrito[ClsId]));
     Ret.AddPair('framework', UpperCase(AFramework));
     PArr := TJSONArray.Create;
     EArr := TJSONArray.Create;
     Ret.AddPair('properties', PArr);
     Ret.AddPair('events', EArr);
     for Key in M.Props.Keys do
-      if Key.StartsWith(AClass.Trim.ToLower + '.') then
+      if Key.StartsWith(ClaveProp(ClsId, '')) then
         Names.Add(Key);
     Names.Sort;
     N := 0;
@@ -151,8 +174,7 @@ begin
     for Key in Names do
     begin
       R := M.Props[Key];
-      if not M.PropShow.TryGetValue(Key, PName) then
-        PName := Copy(Key, Pos('.', Key) + 1, MaxInt);
+      PName := R.Name;
       if (AFilter <> '') and not ContainsText(PName, AFilter) then
         Continue;
       Inc(N);
@@ -171,6 +193,25 @@ begin
       end;
     end;
     Ret.AddPair('total', TJSONNumber.Create(N));
+    // lo que guarda por codigo (DefineProperties) tambien va al form, sin
+    // publicarse: Left/Top de un no visual, los Explicit*, TextHeight...
+    var Def := M.DefinidasDeLaCadena(ClsId);
+    if Length(Def) > 0 then
+    begin
+      var DArr := TJSONArray.Create;
+      for var D in Def do
+        DArr.Add(D);
+      Ret.AddPair('definedByCode', DArr);
+    end;
+    // una clase que no publica nada pero tiene descendientes (TTextSettings):
+    // la instancia de una propiedad de ese tipo es una descendiente que elige
+    // el codigo, y lo que hay que escribir es lo que publican ellas (sin esto
+    // el agente leia "0 propiedades, no escribas nada": revision de la 1.12.0)
+    if (Names.Count = 0) and M.Hijas.ContainsKey(ClsId) then
+    begin
+      Ret.AddPair('descendantsPublish', M.PublicadasDeLaFamilia(ClsId));
+      Ret.AddPair('descendantsNote', MsgFmt(SN_DESIGNER_INFO_FAMILIA_FMT, [Cls]));
+    end;
     // un filtro sin resultado lo dice (DSGN-048): total:0 a secas se leia
     // como un fallo de RTTI (Hermes, 28-sep-2026)
     if (AFilter <> '') and (N = 0) then
@@ -185,9 +226,7 @@ begin
       Ret.AddPair('truncated', TJSONBool.Create(True));
       Ret.AddPair('hint', MsgText(SN_DESIGNER_INFO_TRUNCATED));
     end;
-    // con la tabla de otra build, la nota no promete (DSGN-049)
-    var NotaBuild := NotaDeBuildDeLaTabla;
-    Ret.AddPair('note', MsgText(SN_DESIGNER_INFO_NOTE) + IfThen(NotaBuild <> '', ' ' + NotaBuild, ''));
+    Ret.AddPair('note', MsgText(SN_DESIGNER_INFO_NOTE));
     Result := Ret.ToJSON;
   finally
     Names.Free;
@@ -200,12 +239,16 @@ var
   M: TMetaTable;
   R: TPropRec;
   Ret: TJSONObject;
-  Cls, Members, Runtime: string;
+  Cls, ClsId, Members: string;
+  Falta: TFaltaTabla;
 begin
-  M := MetaTable(AFramework = 'fmx');
-  if not M.Classes.TryGetValue(AClass.Trim.ToLower, Cls) then
-    Exit(MsgFmt(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]));
-  if not M.Props.TryGetValue(AClass.Trim.ToLower + '.' + AProp.Trim.ToLower, R) then
+  M := MetaTable(AFramework = 'fmx', Falta);
+  if M = nil then
+    Exit(Falta.Negativa);
+  if not M.ClaseDeNombre(AClass, ClsId) then
+    Exit(ClaseQueNoEsta(M, AClass, AFramework));
+  Cls := M.Classes[ClsId];
+  if not M.Props.TryGetValue(ClaveProp(ClsId, AProp.Trim), R) then
     Exit(MsgFmt(SR_DESIGNER_PROP_FMT, [AProp, Cls]));
   Ret := TJSONObject.Create;
   try
@@ -216,13 +259,11 @@ begin
     // Enums had their members; SETS did not, though the description promised
     // "the legal members when it is an enum/set" and lint could already name
     // them (field round 8).
-    if M.EnumShow.TryGetValue(R.TypeName.ToLower, Members) or
-       M.SetShow.TryGetValue(R.TypeName.ToLower, Members) then
+    if M.EnumShow.TryGetValue(R.TypeId.ToLower, Members) or
+       M.SetShow.TryGetValue(R.TypeId.ToLower, Members) then
       Ret.AddPair('members', Members);
     if R.Kind = 's' then
       Ret.AddPair('membersNote', MsgText(SN_DESIGNER_SET_NOTE));
-    if M.Alias.TryGetValue(AClass.Trim.ToLower + '.' + AProp.Trim.ToLower, Runtime) then
-      Ret.AddPair('runtimeClass', Runtime);
     Result := Ret.ToJSON;
   finally
     Ret.Free;
@@ -861,14 +902,40 @@ begin
   // Tablas del framework + el form contra su clase (check-binding), en una
   // sola pasada: lint = todo lo que el compilador no mira.
   // las lineas como delphi_read: los avisos citan su numero (septima revision)
-  Warns := DesignerMetaLint(IsFmx, LineasDelTexto(Text)) +
+  var Falta: TFaltaTabla;
+  var Notas: TArray<string>;
+  Warns := DesignerMetaLint(IsFmx, LineasDelTexto(Text), Notas, Falta) +
     DesignerBindingWarnings(APath, LineasDelTexto(Text));
-  if Length(Warns) = 0 then
+  // sin tabla la respuesta es la negativa (DSGN-050/051/053/054), con lo del
+  // form contra su clase detras: antes salia "[DSGN-038] 1 designer
+  // warnings" con el motivo dentro, un exito (revision de la 1.12.0)
+  if Falta.Negativa <> '' then
+  begin
+    Result := Falta.Negativa;
+    if Length(Warns) > 0 then
+      Result := Result + #13#10 + string.Join(#13#10, Warns);
+    Exit;
+  end;
+  // lo que no se pudo comprobar va aparte y no cuenta como aviso: una clase
+  // de terceros no es un error (revision de la 1.12.0)
+  if (Length(Warns) = 0) and (Length(Notas) = 0) then
     Result := MsgFmt(SN_DESIGNER_LINT_OK_FMT, [TPath.GetFileName(APath)])
   else
-    Result := MsgFmt(SN_DESIGNER_LINT_BAD_FMT,
-      [Length(Warns), TPath.GetFileName(APath)]) + #13#10 +
-      string.Join(#13#10, Warns);
+  begin
+    Result := '';
+    if Length(Warns) > 0 then
+      Result := MsgFmt(SN_DESIGNER_LINT_BAD_FMT,
+        [Length(Warns), TPath.GetFileName(APath)]) + #13#10 +
+        string.Join(#13#10, Warns);
+    if Length(Notas) > 0 then
+    begin
+      if Result <> '' then
+        Result := Result + #13#10;
+      Result := Result + MsgFmt(SN_DESIGNER_LINT_NOTAS_FMT,
+        [TPath.GetFileName(APath), Length(Notas)]) + #13#10 +
+        string.Join(#13#10, Notas);
+    end;
+  end;
 end;
 
 { TDelphiDesignerTool }
@@ -1020,10 +1087,14 @@ end;
 
 function TDelphiDesignerTool.ExecuteWithParams(const Params: TDelphiDesignerParams): string;
 begin
-  // Media docena de comandos de aqui reescriben el .dfm/.fmx leyendolo entero,
-  // cambiando una propiedad y guardandolo: es una edicion como cualquier otra
-  // y va bajo el mismo cerrojo. Los de solo lectura (info, prop) pasan por el
-  // igual - miran tablas en memoria y no lo tienen ni un milisegundo.
+  // to-text y to-binary reescriben el .dfm entero: son una edicion como
+  // cualquier otra y van bajo el mismo cerrojo. Los de LECTURA no: info, prop
+  // y lint pueden esperar a la tabla del disenador mientras se genera
+  // (Lsp.DesignerMetaGen), y con el cerrojo cogido paraban todas las
+  // ediciones del servidor (revision de la 1.12.0); leen como delphi_read,
+  // que tampoco lo coge (lo que se escribe se escribe entero o nada).
+  if not MatchText(Params.Command.Trim, ['to-text', 'to-binary', 'totext', 'tobinary']) then
+    Exit(GestoDeDisenador(Params));
   EnterFileEdit;
   try
     Result := GestoDeDisenador(Params);

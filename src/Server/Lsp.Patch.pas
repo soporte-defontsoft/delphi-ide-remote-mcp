@@ -3278,13 +3278,13 @@ begin
 end;
 
 { Designer lint: every property line of the RESULTING file resolved against
-  the GENERATED framework tables (Lsp.DesignerMeta - classes, published
-  properties, enum/set members and instance aliases dumped from the
-  framework's own metadata by src\DesignerMetaDump). The framework
-  describes itself; no hand-written error rules. Field origin (Fase 3): a
-  hand-edited .fmx crashed at form-load on the device with no trace - the
-  build only checks a form resource's text grammar. Warnings, not
-  refusals. }
+  the framework tables of the active Delphi (Lsp.DesignerMeta - classes,
+  published properties, enum/set members and inheritance, read from that
+  Delphi's own source by Lsp.DesignerMetaGen). The framework describes
+  itself; no hand-written error rules. Field origin (Fase 3): a hand-edited
+  .fmx crashed at form-load on the device with no trace - the build only
+  checks a form resource's text grammar. Warnings, not refusals; and an edit
+  never waits for a table still being generated (it says it did not check). }
 function DesignerLint(const APath: string;
   const ALines: TArray<string>): TArray<string>;
 var
@@ -3294,14 +3294,21 @@ var
   ExtName: string;
 begin
   Result := [];
-  Raw := DesignerMetaLint(APath.ToLower.EndsWith('.fmx'), ALines);
+  var Falta: TFaltaTabla;
+  var Notas: TArray<string>;
+  Raw := DesignerMetaLint(APath.ToLower.EndsWith('.fmx'), ALines, Notas, Falta, 0);
   // El form contra su clase (Lsp.DesignerBinding): un OnClick a un metodo
   // en public compila y revienta al cargar el form. Se avisa AL ESCRIBIR.
   var Bind := DesignerBindingWarnings(APath, ALines);
-  if (Length(Raw) = 0) and (Length(Bind) = 0) then
+  if (Length(Raw) = 0) and (Length(Bind) = 0) and (Length(Notas) = 0) and
+     (Falta.Razon = '') then
     Exit;
   Res := TStringList.Create;
   try
+    // sin tabla, su nota sola: no es un aviso de propiedades (iba debajo de
+    // la cabecera EDIT-076, "the app CRASHES": revision de la 1.12.0)
+    if Falta.Razon <> '' then
+      Res.Add(MsgFmt(SN_DESIGNER_LINT_SIN_TABLA_FMT, [Falta.Razon]));
     if Length(Raw) > 0 then
     begin
     for I := 0 to High(Raw) do
@@ -3318,6 +3325,23 @@ begin
     else
       ExtName := '.dfm';
     Res.Insert(0, MsgFmt(SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT, [ExtName]));
+    end;
+    // lo que no se pudo comprobar, con su propia linea y fuera de EDIT-076:
+    // un objeto de una clase de terceros no hace que la app reviente (un
+    // form con el TSslContext de ICS lo decia en cada edicion; revision)
+    if Length(Notas) > 0 then
+    begin
+      Res.Add(MsgFmt(SN_DESIGNER_LINT_NOTAS_FMT,
+        [ExtractFileName(APath), Length(Notas)]));
+      for I := 0 to High(Notas) do
+      begin
+        if I >= 8 then
+        begin
+          Res.Add(MsgFmt(SF_EDIT_Y_MAS_FMT, [Length(Notas) - 8]));
+          Break;
+        end;
+        Res.Add(Notas[I]);
+      end;
     end;
     if Length(Bind) > 0 then
     begin

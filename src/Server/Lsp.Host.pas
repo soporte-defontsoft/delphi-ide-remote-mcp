@@ -96,7 +96,8 @@ uses
   Mcp.Vault.Session,
   Mcp.Vault.Seed,
   Lsp.LogSink,
-  Mcp.Tools.Workspace; // NombreDeMaquina: the one reader of the host name
+  Mcp.Tools.Workspace, // NombreDeMaquina: the one reader of the host name
+  Lsp.DesignerMetaGen; // CalientaTablasDelDisenador
 
 constructor TMcpHost.Create;
 begin
@@ -160,6 +161,10 @@ begin
   // maquina). Declarar la carpeta borrable no vale de nada si no la borra
   // nadie.
   PurgeServerTemp;
+  // Las tablas del disenador de cada Delphi instalado, sacadas de su fuente:
+  // en un hilo, de una en una, y solo la que falta (la primera vez tras
+  // instalar, actualizar o tocar las rutas del IDE). Nadie espera a esto.
+  CalientaTablasDelDisenador;
   FRegistry := TMCPManagerRegistry.Create;
   FRegistryIntf := FRegistry; // pin: from here, reference counting owns it
   FCore := TMCPCoreManager.Create(FSettings);

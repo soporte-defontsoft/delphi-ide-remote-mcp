@@ -147,6 +147,9 @@ begin
       Exit(MsgFmt(SR_DOCS_NO_ABRE_FMT, [ExtractFileName(Ayuda.Fichero)]));
   end;
   PartesDeId(Id, Corto, Pagina, Ancla);
+  // la seccion pedida por su titulo contesta con su ancla
+  if Pag.AnclaEncontrada then
+    Ancla := Pag.Ancla;
   Total := Length(Pag.Texto);
   Desde := EnsureRange(Params.Offset, 0, Total);
   Hasta := Min(Desde + TROZO, Total);
@@ -197,6 +200,14 @@ begin
         Arr.Add(S.Ancla);
       Ret.AddPair('sections', Arr);
     end;
+    // la que acaba en su primer subtitulo: los que siguen, por su ancla
+    if Length(Pag.Subsecciones) > 0 then
+    begin
+      Arr := TJSONArray.Create;
+      for var A in Pag.Subsecciones do
+        Arr.Add(A);
+      Ret.AddPair('subsections', Arr);
+    end;
     // las de alrededor: el padre y, en una clase, su unidad y sus listas de
     // miembros, con su id (de lo que cuelga Y lo que cuelga de ella)
     if (Desde = 0) and (Length(Pag.Enlaces) > 0) then
@@ -217,6 +228,8 @@ begin
       FormatDateTime('yyyy-mm-dd', Ayuda.Fecha)]);
     if (Ancla <> '') and not Pag.AnclaEncontrada then
       Nota := MsgFmt(SN_DOCS_SIN_SECCION_FMT, [Eco(Ancla)]) + ' ' + Nota;
+    if Length(Pag.Subsecciones) > 0 then
+      Nota := MsgText(SN_DOCS_SUBSECCIONES) + ' ' + Nota;
     if Hasta < Total then
       Nota := Nota + ' ' + MsgFmt(SN_DOCS_SIGUE_FMT, [Hasta, Total, Hasta]);
     Ret.AddPair('note', Nota);
