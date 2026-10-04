@@ -45,7 +45,7 @@ PORT = mc.puerto_libre()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R47]', 'Token=%s' % TOK, 'Roots=%s;%s' % (RO, RW),
-    'ReadOnlyPaths=%s' % RO, 'AllowDesktopControl=1', '']))
+    'ReadOnlyPaths=%s' % RO, '']))
 
 proc = mc.lanza_http(EXE, PORT, mc.entorno())
 # sin texto, el mensaje entero en JSON: es lo que ensena el detalle de un FAIL

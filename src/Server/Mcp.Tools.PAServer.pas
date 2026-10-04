@@ -1166,8 +1166,16 @@ begin
   Result := ProfileHostDenied(AProf);
   if Result <> '' then
     Exit;
+  // El nodo es NUESTRO (binario fijo, con su SHA): lo que el operador
+  // concede al ponerlo en la lista es VER y TECLEAR en ese escritorio, y la
+  // negativa lo dice asi. Salia el RUN-007 de un proyecto, que no explicaba
+  // que el nodo es un permiso aparte (Hermes, 4-oct-2026)
   if AProj = '' then
-    Exit(RemoteRunProjectDenied(NODE_PROJECT));
+  begin
+    if RemoteRunProjectDenied(NODE_PROJECT) <> '' then
+      Exit(MsgFmt(SR_REMOTERUN_NODO_DENIED_FMT, [NODE_PROJECT]));
+    Exit('');
+  end;
   // the project must be one this server may touch, and must exist
   Result := PathDenied(AProj);
   if Result <> '' then

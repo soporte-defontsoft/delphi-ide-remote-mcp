@@ -24,6 +24,18 @@ the MCP `initialize` response (`serverInfo.version`).
   the relative suffix in the long form; the battery constructs both forms.
 - Jail regression batteries remove their scratch directories, including exe copies.
 
+### Changed
+
+- `delphi_desktop` refused because the desktop node is not in
+  `RemoteRunProjects` now answers `RUN-020`, its own message: the node is this
+  server's own binary, and what the operator grants by listing `McpDesktopNode`
+  (or `all`) is seeing and typing on that desktop. It answered the `RUN-007` of
+  an agent's project, which did not say so (Hermes, field report of
+  2026-10-04). The tool description names the three switches it needs, and the
+  README, `settings.example.ini` and `CAPABILITIES.json` say it too: until now
+  only the skill did. Two batteries stop writing `AllowDesktopControl`, a key
+  gone since 1.0.16.
+
 ## [1.12.1] - 2026-10-04
 
 What the live test of 1.12.0 found: the line that opens an object in a form

@@ -553,7 +553,7 @@ end;
   Approximate, and it says how: a container's client area is its Width/Height
   (bevels and borders shave a few pixels), a form given only Width/Height (no
   ClientWidth) has its window frame estimated at 96 dpi, and Anchors - which
-  govern RESIZE - are not what this measures. VCL only; .fmx geometry (Size.X,
+  govern RESIZE - are not what this measures. VCL only; .fmx geometry (Size.Width,
   Position.Y) is a different model and is refused rather than answered wrongly. }
 function LayoutOf(const APath: string): string;
 type

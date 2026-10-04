@@ -1686,6 +1686,13 @@ const
     'in the server''s settings.ini: it is what may run on a target, so no ' +
     'tool changes it - ask the operator.';
 
+  SR_REMOTERUN_NODO_DENIED_FMT =
+    '[RUN-020 DENIED] delphi_desktop works through this server''s own ' +
+    'desktop node (%s), and seeing and typing on a target''s desktop is a ' +
+    'permission of its own: the operator grants it by adding %0:s (or all) ' +
+    'to [Workspace.<name>] RemoteRunProjects in the server''s settings.ini. ' +
+    'No tool changes that list - ask the operator.';
+
   SR_PASERVER_RUN_DISABLED =
     '[PAS-003 DENIED] Remote execution is OFF on this server. The ' +
     'operator turns it on with [Workspace.<name>] AllowRemoteRun=1 in ' +
@@ -2035,7 +2042,11 @@ const
     'answer carries graphicalEnv, the session the node ran in. The target ' +
     'needs a graphical session open for the user PAServer runs as; a ' +
     'headless box, a locked Windows or a Windows service (session 0) has ' +
-    'nothing to show (command=status says what to ask the operator for).';
+    'nothing to show (command=status says what to ask the operator for). ' +
+    'Seeing and typing on a desktop is a permission of its own: your ' +
+    'workspace needs AllowRemoteRun=1, the profile''s host in RemoteHosts ' +
+    'and McpDesktopNode (or all) in RemoteRunProjects - only the operator ' +
+    'sets them, and a refusal names the one that is missing.';
   SP_ADBLINUX_COMMAND =
     'screenshot (the whole desktop, brought here as a PNG; default) | ' +
     'tap (press at x,y MEASURED ON THAT SCREENSHOT) | type (write "text" ' +

@@ -198,7 +198,7 @@ PORT = mc.puerto_libre()
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R45]', 'Token=%s' % TOK, 'Roots=%s' % JAIL,
-    'AllowDesktopControl=1', 'AllowRemoteRun=1', 'AllowTests=1',
+    'AllowRemoteRun=1', 'AllowTests=1',
     'RemoteRunProjects=Ajeno;McpDesktopNode',
     'AdbAllowedDevices=%s' % DEV,
     'VaultPath=%s' % VAULT, '',
